@@ -1784,7 +1784,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                     <span className="mono text-2xs text-dim-300">
                       {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                       {!sameSpec && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">규격 다름</span>}
-                      {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                      {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}
                     </span>
                   </button>
                 );
@@ -1812,7 +1812,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </button>
           ) : !card.twin ? (
             <div className="bg-ink-900 border border-amber-700 rounded-pill p-2 space-y-2">
-              <div className="text-xxs text-amber-300 font-bold">실제 나온 컨테이너 번호 (끝 4자리 이상){mode === 'loading' && <span className="text-dim-400 font-normal"> · 이 자리({card.pos})로 배정되고 예측 컨은 미배정 처리</span>}</div>
+              <div className="text-xxs text-amber-300 font-bold">실제 나온 컨테이너 번호 (끝 4자리 이상){mode === 'loading' && <span className="text-dim-400 font-normal"> · 이 자리({card.pos})로 배정되고 예측 컨은 자리를 비움</span>}</div>
               <input autoFocus value={fixQuery} onChange={e => setFixQuery(e.target.value)}
                 placeholder="예: 1234 또는 SKLU1972626"
                 inputMode="numeric" autoComplete="off"
@@ -1826,7 +1826,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                       <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                         className="w-full flex justify-between items-center bg-ink-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                         <span className="mono font-bold text-dim-100">{c.cn}</span>
-                        <span className="mono text-dim-300">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                        <span className="mono text-dim-300">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}</span>
                       </button>
                     ))}
                   </div>
@@ -1844,7 +1844,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-dim-300'}`}>
                     {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
-                    {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                    {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}
                   </span>
                 </button>
               ))}
@@ -1878,7 +1878,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                           <span className="mono text-dim-300">
                             {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                             {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
-                            {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                            {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}
                           </span>
                         </button>
                       ))}
@@ -1920,7 +1920,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {unassigned.length > 0 && (
         <div className="bg-amber-950/40 border border-amber-700 rounded-pill p-2">
           <button onClick={() => setShowUnassigned(v => !v)} className="w-full flex items-center justify-center gap-1.5 text-xs2 font-bold text-amber-300">
-            <AlertTriangle className="w-3.5 h-3.5"/>위치 미배정 {unassigned.length}대 {showUnassigned ? '▲' : '▼'}
+            <AlertTriangle className="w-3.5 h-3.5"/>자리 없음 {unassigned.length}대 {showUnassigned ? '▲' : '▼'}
           </button>
           {showUnassigned && (
             <div className="mt-1.5 space-y-1">

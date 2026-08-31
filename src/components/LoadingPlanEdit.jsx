@@ -127,7 +127,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
         pos[c.cn] = p.storage ? { storage: true } : { bay: p.bay, row: p.row, tier: p.tier };
       }
       const r = await fbCommitPlan(voyageKey, pos, inspector);
-      alert(`확정 완료 — ${r.committed}건 반영 (미배정 ${r.storage}건).\n검수앱 선적 플랜이 갱신되었습니다.`);
+      alert(`확정 완료 — ${r.committed}건 반영 (자리 없음 ${r.storage}건).\n검수앱 선적 플랜이 갱신되었습니다.`);
       setSeq((n) => n + 1);
     } catch (e) { console.error(e); alert('확정 실패: ' + (e?.message || e)); }
     finally { setSaving(false); }

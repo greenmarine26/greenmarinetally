@@ -213,7 +213,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           ) : (
             <>
               실 {v.ptkTotal - v.virtualCount} + 가상E {v.virtualCount}
-              <span className="ml-1 font-normal text-purple-300/70">(가상E = 실번호 미배정 엠티 자리 — 누락 아님)</span>
+              <span className="ml-1 font-normal text-purple-300/70">(가상E = 실번호 없는 엠티 자리 — 누락 아님)</span>
             </>
           )}
         </div>

@@ -438,7 +438,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
         description: `${c.cn}\n왜 취소합니까? 실물이 배에 실렸는지에 따라 마감 숫자가 달라집니다.`,
         options: [
           { key: 'notLoaded', label: '잘못 눌렀다 (실물 안 실림)', desc: `${verb}을 지우고 계획 자리로 되돌립니다.`, recommended: true },
-          { key: 'wrongSlot', label: '실렸는데 자리가 틀렸다', desc: '실물은 배에 있습니다. 완료는 그대로 두고 자리만 비웁니다(미배정).' },
+          { key: 'wrongSlot', label: '실렸는데 자리가 틀렸다', desc: '실물은 배에 있습니다. 완료는 그대로 두고 자리만 비웁니다.' },
         ],
       });
       if (!pick) return;
@@ -446,9 +446,9 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
       if (!r || r.ok === false) {
         notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
       } else if (r.keptCompleted) {
-        notify('자리만 비웠습니다', `${c.cn}\n${verb}은 그대로 둡니다(실물은 배에 있음).\n미배정 목록에서 실제 자리를 지정하세요.`);
+        notify('자리만 비웠습니다', `${c.cn}\n${verb}은 그대로 둡니다(실물은 배에 있음).\n실제 자리를 지정해 주세요.`);
       } else if (r.origOccupied) {
-        notify('미배정으로 돌렸습니다', `원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
+        notify('자리를 비웠습니다', `원래 자리에 ${r.origOccupied}가 있어 자리를 비웠습니다.\n자리를 지정해 주세요.`);
       }
     } else {
       // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.

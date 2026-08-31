@@ -672,7 +672,7 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
       if (oa.startsWith('__') && !fromStorage) return;   // 창고 말고 다른 `__` 표식은 건드리지 않는다
       const same = oa === bI && String(cur.row_actual ?? '') === r && String(cur.tier_actual ?? '') === t;
       if (same) return;                                 // 이미 맞으면 줄만 늘린다
-      const pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '미배정');
+      const pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '자리 없음');
       const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
       moves.push({ at: Date.now(), by: by || '',
                    from: fromStorage ? STORAGE_TXT : pos(cur.bay_actual, cur.row_actual, cur.tier_actual),
@@ -974,7 +974,7 @@ async function _markPlanTaken(voyageKey, mode, cn, by, byCn) {
   const b = cur.bay !== undefined ? cur.bay : (edi.bay || '');
   const r = cur.row !== undefined ? cur.row : (edi.row || '');
   const t = cur.tier !== undefined ? cur.tier : (edi.tier || '');
-  const _pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '미배정');
+  const _pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '자리 없음');
   // 경로 한 줄 — **이동이 아니라 이름표가 내려온 사건**이다(why:'planTaken').
   const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
   moves.push({ at: Date.now(), by: by || '', from: _pos(b, r, t), to: STORAGE_TXT,

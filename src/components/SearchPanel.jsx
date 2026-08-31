@@ -844,7 +844,7 @@ function twinHintOf(c, allContainers, shipImo, shipName) {
   const mate = findTwinCandidate({ ...c, bay: p.bay, row: p.row, tier: p.tier }, allContainers, new Set(), shipImo, shipName);
   if (!mate || mate._comp) return null;   // 짝 자리가 비었거나 이미 실었으면 트윈이 아니다.
   const mp = effectivePos(mate);
-  const pos = mp.bay ? `${String(parseInt(mp.bay, 10)).padStart(2, '0')}-${mp.row}-${mp.tier}` : '미배정';
+  const pos = mp.bay ? `${String(parseInt(mp.bay, 10)).padStart(2, '0')}-${mp.row}-${mp.tier}` : '자리 없음';
   const samePod = String(c.pod || '') === String(mate.pod || '');
   const sameIso = isoToLabel(c.iso) === isoToLabel(mate.iso);
   return {
@@ -2088,7 +2088,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       const b0 = pf.bay ? String(parseInt(pf.bay, 10)) : '';
       if (b0 && pf.row && pf.tier) { setPickBay(b0); setBay(b0); setRow(pf.row); setTier(pf.tier); }
       setStep('pos');
-    } catch (e) { alert(`미배정 처리 실패: ${e?.message || e}`); }
+    } catch (e) { alert(`자리 비우기 실패: ${e?.message || e}`); }
     finally { setBusy(false); }
   };
 
@@ -2185,7 +2185,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
         <div className="mt-2 flex items-center justify-between bg-ink-800 rounded px-2 py-1.5">
           <div>
             <span className="mono text-sm font-bold text-dim-100">{cSel.cn}</span>
-            <span className="ml-2 text-2xs mono text-dim-300">기존 위치 {cSel.bay ? fmtPos(cSel) : '미배정'}</span>
+            <span className="ml-2 text-2xs mono text-dim-300">기존 위치 {cSel.bay ? fmtPos(cSel) : '자리 없음'}</span>
             {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-2xs font-bold">⚠ 완료기록</span>}
           </div>
           <button onClick={() => { setCSel(null); setQ(''); }} className="text-xxs text-dim-300 px-1.5">✕</button>
@@ -2304,7 +2304,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
               </div>
               <button onClick={() => confirmManual()} disabled={busy}
                 className="w-full py-3 rounded-pill font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
-                <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
+                <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 자리를 비우고 위치 지정'}
               </button>
             </>
           )}

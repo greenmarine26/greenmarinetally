@@ -360,10 +360,10 @@ export default function PositionEditModal({
     }
     if (r.displacedWasCompleted) {
       // V8.70: 밀려난 컨이 이미 선적확인된 컨이면 완료는 유지됨 — 검수사에게 알림만.
-      const to = _posTxt(r.swappedTo) || '미배정';
+      const to = _posTxt(r.swappedTo) || '자리 없음';
       return `⚠ ${r.displaced}는 이미 선적확인된 컨입니다.\n완료는 유지한 채 자리만 ${to}(으)로 이동했습니다.\n오선적이었다면 그 번호로 검색해 취소·수정하세요.`;
     }
-    if (r.displacedUnassigned) return `${r.displaced}는 자리를 잃고 미배정이 됐습니다 — 자리를 정해 주세요.`;
+    if (r.displacedUnassigned) return `${r.displaced}는 계획 자리를 내줬습니다 — 실을 자리를 정해 주세요.`;
     return '';
   };
 
@@ -472,9 +472,9 @@ export default function PositionEditModal({
 
   const oldPosLabel = container.bay
     ? `${String(parseInt(container.bay, 10)).padStart(2, '0')}-${container.row}-${container.tier}`
-    : '미배정';
+    : '자리 없음';
   const newPosLabel = isUnassign
-    ? '미배정 (선적대상)'
+    ? '자리 없음 (선적대상)'
     : `${String(parseInt(bay, 10) || 0).padStart(2, '0')}-${String(row).padStart(2,'0')}-${String(tier).padStart(2,'0')}`;
 
   const borderClr = step === 'confirm' && isFull ? 'border-rose-600' : 'border-amber-700';
@@ -591,10 +591,10 @@ export default function PositionEditModal({
             )}
             <button onClick={() => setManualOpen(v => !v)}
               className="w-full py-1.5 text-xxs text-dim-300 hover:text-dim-100 border border-dashed border-line rounded">
-              {manualOpen ? '▲ 직접 입력 닫기' : '▼ 직접 입력 / 미배정 처리'}
+              {manualOpen ? '▲ 직접 입력 닫기' : '▼ 직접 입력 / 자리 비우기'}
             </button>
             {manualOpen && (<>
-            <div className="text-xs text-dim-300">새 위치 (Bay-Row-Tier). 모두 비우면 미배정 처리(선적대상).</div>
+            <div className="text-xs text-dim-300">새 위치 (Bay-Row-Tier). 모두 비우면 자리를 비웁니다(선적대상).</div>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-2xs text-dim-400 font-bold">BAY</label>
@@ -754,7 +754,7 @@ export default function PositionEditModal({
                       <div>
                         <div className="mono text-sm font-bold text-cyan-200">{partnerPick.cn}</div>
                         <div className="text-2xs mono text-dim-300">
-                          계획 {partnerPick.bay ? `${parseInt(partnerPick.bay, 10)}-${partnerPick.row}-${partnerPick.tier}` : '미배정'} · {partnerPick.pod || '-'}
+                          계획 {partnerPick.bay ? `${parseInt(partnerPick.bay, 10)}-${partnerPick.row}-${partnerPick.tier}` : '자리 없음'} · {partnerPick.pod || '-'}
                           {partnerPick.bay && String(parseInt(partnerPick.bay, 10)) !== pairSlot.bay &&
                             <span className="ml-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
                         </div>
@@ -785,7 +785,7 @@ export default function PositionEditModal({
                           <span className="mono font-bold text-dim-100">{x.cn}</span>
                           <span className="mono text-dim-300">
                             {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
-                            {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}
+                            {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '자리 없음'} · {x.pod || '-'}
                           </span>
                         </button>
                       ))}

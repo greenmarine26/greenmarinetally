@@ -1044,14 +1044,14 @@ export default function BayGridEditor({
                 onDragOver={(e) => { e.preventDefault(); setStgOver(true); }}
                 onDragLeave={() => setStgOver(false)} onDrop={dropStorage}>
                 여기로 컨을 끌어다 놓기<br />= 임시창고 보관
-                <br /><span style={{ color: '#fbbf24' }}>미배정</span> = EDI에 자리 없는 컨 (호출해서 베이에 놓으십시오)
+                <br /><span style={{ color: '#fbbf24' }}>자리 없음</span> = EDI에 자리 없는 컨 (호출해서 베이에 놓으십시오)
               </div>
               <div className="bge-list">
                 {stgList.length === 0 && <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 16 }}>비어 있음</div>}
                 {stgList.map((cn) => (
                   <div key={cn} className="bge-chip" draggable onDragStart={(e) => dragStart(e, cn)} onDragEnd={clearOver} title="베이 칸으로 끌어 배치">
                     {cn} <span style={{ opacity: .55 }}>{isoToLabel(state.byCn.get(cn)?.iso) || ''}</span>
-                    {state.unplaced?.has(cn) && <span style={{ color: '#fbbf24', marginLeft: 4 }}>미배정</span>}
+                    {state.unplaced?.has(cn) && <span style={{ color: '#fbbf24', marginLeft: 4 }}>자리 없음</span>}
                   </div>
                 ))}
               </div>
@@ -1147,7 +1147,7 @@ export default function BayGridEditor({
                   }}>
                     <b>{cn}</b>
                     <span>{isoToLabel(c.iso) || c.iso || ''} {c.pol || ''}→{c.pod || ''}
-                      {state.unplaced?.has(cn) && <em> · 미배정</em>}</span>
+                      {state.unplaced?.has(cn) && <em> · 자리 없음</em>}</span>
                   </button>
                 );
               })}

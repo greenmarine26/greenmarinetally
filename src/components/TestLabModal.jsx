@@ -103,7 +103,7 @@ function PartialCancel({ voyage, voyageKey, busy, setBusy, setLog }) {
       const b = hasA ? r.bay_actual : (e.bay || r.bay || '');
       const row = hasA ? r.row_actual : (e.row || r.row || '');
       const tier = hasA ? r.tier_actual : (e.tier || r.tier || '');
-      const key = b ? String(parseInt(b, 10)) : '미배정';
+      const key = b ? String(parseInt(b, 10)) : '자리 없음';
       (m[key] = m[key] || []).push({ cn, row: String(row || ''), tier: String(tier || '') });
     }
     return m;
@@ -162,7 +162,7 @@ function PartialCancel({ voyage, voyageKey, busy, setBusy, setLog }) {
         {bays.map(b => (
           <button key={b} onClick={() => setSelBay(selBay === b ? null : b)}
             className={`px-2 py-1 rounded text-2xs font-black ${selBay === b ? 'bg-fuchsia-600 text-fuchsia-50' : 'bg-ink-800 text-dim-200'}`}>
-            {b === '미배정' ? '미배정' : `B${b}`} {byBay[b].length}
+            {b === '자리 없음' ? '자리 없음' : `B${b}`} {byBay[b].length}
           </button>
         ))}
       </div>
