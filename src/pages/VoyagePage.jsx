@@ -1560,6 +1560,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           containers={containers} ediMap={ediMap} recMap={recMap}
           xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
           inspector={inspector}
+          dischargeEdi={voyage?.discharge?.ediContainers || null}   /* 2.94: 통과화물 판정용 — ListTab 은 voyage 를 안 받는다(1.98 교훈) */
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
@@ -2212,7 +2213,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null }) {
+export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null }) {
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2361,6 +2362,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
         mode={mode}
         shiftingList={shiftingList}
         voyageKey={voyageKey}
+        dischargeEdi={dischargeEdi}   // 2.94: 통과화물 판정용(VoyagePage 에서 내려온 prop)
       />
 
       {/* ★ 1.84-01 (검수사 확정 2026-08-19): **검색창은 통합검색 하나로.**

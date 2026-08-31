@@ -78,7 +78,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   );
 }
 
-export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '' }) {
+export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null }) {
   const shiftCount = shiftingList.length;
   const [shiftOpen, setShiftOpen] = useState(false);
   const v = useMemo(() => {
@@ -95,7 +95,24 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     //   리스트의 엠티 실번호(E확정)가 그 자리를 채우는 짝이므로 '추가(EDI밖)' 경고에서도 뺀다.
     const virtualInEdi = ptkInEdi.filter(c => isVirtualCn(c.cn));
     const missingInList = ptkInEdi.filter(c => !isVirtualCn(c.cn) && !recCns.has(c.cn));
-    let extraInList = (records || []).filter(r => !ediCns.has(r.cn));
+    // ── TallyOne 2.94: **통과화물을 평택 선적으로 세지 않는다.** (검수사 지적 2026-08-31) ──
+    //   실측 MCSC 635S — 리스트 230 · EDI 213 이라 «리스트에 있는데 EDI에 없음 17대
+    //   (해당 선사 EDI 추가 필요)» 가 떴다. 그 17대는 **전부 양하 EDI에 있고 POD 가 CNTXG(톈진)** 였다.
+    //   평택에서 내리지도 싣지도 않는 화물 — 26·34번에서 38번 데크로 옮겨 싣는 **재적부(시프팅)** 다.
+    //   선사에게 EDI 를 더 달라고 할 것이 아니라 애초에 선적 EDI 에 있을 수 없는 물건이다.
+    //   검수사 확정 — *"카운트는 평택분만"*, *"시프팅은 평택 축과 섞지 않는다"*.
+    //   ⚠ 지우지 않는다. 이 컨들의 38번 데크 실물 기록은 여기 말고 남은 곳이 없다
+    //     (`computeShiftingMap` 은 선적 EDI 에도 있어야 잡는데 이들은 거기 없다).
+    //     세는 자리에서만 빼고 «통과화물» 로 따로 보여 준다.
+    const isThru = (r) => {
+      if (mode !== 'loading' || !dischargeEdi) return false;
+      if (ediCns.has(r.cn)) return false;                 // 선적 계획에 있으면 평택 선적분이다
+      const d = dischargeEdi[r.cn];
+      return !!(d && d.pod && !isPyeongtaekPort(d.pod));
+    };
+    const thruInList = (records || []).filter(isThru);
+    const thruSet = new Set(thruInList.map(r => r.cn));
+    let extraInList = (records || []).filter(r => !ediCns.has(r.cn) && !thruSet.has(r.cn));
     let emptyConfirmed = 0;
     if (virtualInEdi.length > 0) {
       // fe='E' 또는 공란(합본 F/E 공란 287행 실측 — 수집기 v2.17.11-17부터 엠티 출처는 E로 채움)을
@@ -122,7 +139,9 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     return {
       ediTotal: ediContainers.length,
       ptkTotal: ptkInEdi.length,
-      listTotal: (records || []).length,
+      listTotal: (records || []).length - thruInList.length,   // 2.94: 통과화물은 평택 선적 리스트가 아니다
+      thruCount: thruInList.length,
+      thruDetails: thruInList.slice(0, 6).map(r => r.cn),
       matched: ptkInEdi.filter(c => recCns.has(c.cn)).length,
       missingCount: missingInList.length,
       missingByOp,
@@ -133,7 +152,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       virtualCount: virtualInEdi.length,   // V9.04-01: 가상E(실번호 미배정 자리)
       emptyConfirmed,                      // V9.04-01: 리스트 엠티 실번호(가상 자리 확정분)
     };
-  }, [ediContainers, records, mode]);
+  }, [ediContainers, records, mode, dischargeEdi]);
 
   if (!v) return null;
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;
@@ -236,6 +255,21 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
               • {op}: {n}대 (해당 선사 EDI 추가 필요)
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 2.94: 통과화물은 «부족»이 아니라 «지나가는 짐»이다 — 색도 경고가 아닌 정보로 둔다. */}
+      {v.thruCount > 0 && (
+        <div className="bg-sky-950/40 border border-sky-800/50 rounded p-2">
+          <div className="text-xxs text-sky-300 font-bold mb-1">
+            ◆ 통과화물 {v.thruCount}대 — 평택 선적이 아닙니다 (내렸다 다시 싣는 재적부)
+          </div>
+          <div className="text-2xs text-sky-200/80 leading-tight">
+            양하 EDI 에 있고 목적지가 평택이 아닌 컨입니다. 선사 EDI 를 더 받을 것이 아닙니다.
+          </div>
+          <div className="text-2xs text-sky-200 mono mt-1">
+            {v.thruDetails.join(' · ')}{v.thruCount > v.thruDetails.length ? ` … 외 ${v.thruCount - v.thruDetails.length}대` : ''}
+          </div>
         </div>
       )}
 
