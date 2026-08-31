@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98'   // 2.98 베이상세 OOG 도형 — 안은 검수사가 실측 숫자를 적는 자리
+export const APP_VERSION = 'TallyOne 2.98-01'   // 2.98-01 베이상세 OOG 도형이 잘려 안 보이던 것 교정
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -1670,7 +1670,11 @@ export function parseAscFile(text) {
       //   ASC 파서만 따로 놀아 ASC 로 들어온 배는 치수가 통째로 비어 있었다(§0-Y-2 «없다고 말하지 않는다»).
       //   BAPLIE DIM: 5·6=길이 · 7·8=폭 · 9·13=높이 — 여기서도 같은 뜻으로 채운다.
       ovh: oogH || undefined,
-      ovw: Math.max(oogL, oogR) || undefined,
+      //  2.98-01: **BAPLIE 와 같은 뜻으로 넣는다.** BAPLIE DIM 7(우)·8(좌)은 합산해 ovw 를 만든다
+      //    (utils 1395~1396). ASC 만 max 로 넣으면 같은 배가 두 자료로 들어올 때 값이 달라진다
+      //    — 실측 STMJ 2651E SITU0403066: BAPLIE ovw 184(=92+92) vs ASC max 92.
+      //    한쪽 폭이 얼마인지는 아래 oogL/oogR 로 따로 남는다(도형·칸 판정은 그것을 쓴다).
+      ovw: (oogL + oogR) || undefined,
       oogL, oogR,            // 좌·우를 따로 알아야 어느 쪽 칸을 먹는지 그린다
       routeCode,
       podFinal,

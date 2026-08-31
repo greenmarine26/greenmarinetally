@@ -892,7 +892,11 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: stretch; justify-content: space-evenly; line-height: 1.15; overflow: hidden; font-weight: bold; padding: 2px 4px; }
         /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
         /* 2.98: OOG 도형 — 셀 밖(좌·우 한 칸, 위 한 단)으로 뻗는다. 선만, 채우지 않는다. */
-        .bd-cargo-wrap .cpv2-cell:has(.bd-oog) { overflow: visible; }
+        /* 2.98-01: :has() 대신 셀에 이미 붙는 OOG 클래스로 건다 — :has 가 안 먹으면
+           도형이 셀의 overflow:hidden 에 통째로 잘려 «베이플랜은 안보입니다»(검수사 실측).
+           그리고 형제 셀의 흰 배경이 나중에 그려져 덮으므로
+           z-index 로 올린다 — 둘 중 하나만 빠져도 안 보인다. */
+        .bd-cargo-wrap .cpv2-cell[class*="cpv2-oog-"] { overflow: visible; z-index: 3; }
         .bd-cargo-wrap .cpv2-cell .bd-oog { position: absolute; left: -100%; top: -100%; width: 300%; height: 200%; pointer-events: none; z-index: 2; }
         /* 2.98: 안은 **비워 둔다** — 검수사가 실측 숫자를 손으로 적는 자리다(검수사 확정).
            선은 인쇄에서 확실히 보이되 글씨를 방해하지 않을 굵기로. */
