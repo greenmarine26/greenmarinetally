@@ -186,13 +186,23 @@ export function generatePdfBays(matrixBays, trios, singles) {
    · 가장 넓은 두 글자 **DG**(Arial Bold 어드밴스 722+778 = 1.5em)가 들어가야 한다.
    · vw·clamp(vw) 금지 — 인쇄 뷰포트에서 최솟값으로 떨어진다(2.38-03 이 그 함정에 빠졌다).
    · 하한 6.0px — 그보다 작으면 종이에서 사람이 못 읽는다. 상한은 종전 9.6px(작은 배 불변). */
-export const CPV2_PAGE_W_PRINT = 1046.93;   // 277mm @96dpi — 인쇄 페이지 폭
+//  2.90-04 (검수사 인쇄 실물 «카고플랜 우측에 1CM의 공백이 있습니다») —
+//    A4 가로 297mm − @page margin 6mm×2 = **인쇄 가능 폭 285mm** 인데 페이지가 277mm 였다.
+//    남는 8mm 가 통째로 오른쪽에 남아 «1cm 공백»으로 보였다(축소가 아니라 덜 쓴 것).
+//    277 은 옛 참고본(ref.html) 값을 그대로 받은 것이고 실제 지면과 맞춰 본 적이 없다.
+//    ⇒ 285mm 로 되찾는다. 칸이 2.9% 넓어져 같은 여백에서 글자도 조금 커진다.
+export const CPV2_PAGE_W_MM = 285;
+export const CPV2_PAGE_W_PRINT = CPV2_PAGE_W_MM * 96 / 25.4;   // = 1077.17px @96dpi
 export const CPV2_PAGE_PAD = 4 * 96 / 25.4 * 2;   // padding 4mm 좌우 = 30.236px (2.90-01 교정 — 8px 은 mm→px 환산 누락이었다. 주석 실측 «MCSC 안쪽 8.89px»·«DXQD 28.5px» 가 이 값으로만 재현된다)
 export const CPV2_BOX_GAP = 3;              // 박스 사이 gap
 export const CPV2_BOX_CHROME = 24;          // 박스 테두리2 + 섹션패딩4 + gap2 + 단라벨16
 export const CPV2_MARK_FONT_MAX = 9.6;
-export const CPV2_MARK_FONT_MIN = 5.9;      // 2.90-01 검수사 확정 «2 잘 보이기만 하면 됩니다» — 다섯 마크(DG·RE·RF·FR·TK) 전부 들어가는 하한
+export const CPV2_MARK_FONT_MIN = 4.6;      // 2.90-03 — 여백을 준 뒤의 하한(12열 배가 4.8px). 종전 5.9 는 «꽉 참» 기준이었다
+// 2.90-01 검수사 확정 «2 잘 보이기만 하면 됩니다» — 다섯 마크(DG·RE·RF·FR·TK) 전부 들어가는 하한
 export const CPV2_WIDEST_MARK_EM = 1.5;     // 'DG'
+//  2.90-03 (검수사 인쇄 실물 «폰트가 좀더 작아져야 합니다. 구분은 되지만 부담을 줍니다 너무 꽉차서»)
+//    칸에 «겨우 들어가는» 크기는 종이에서 답답하다. 좌우로 숨 쉴 틈을 두고 그 안에 맞춘다.
+export const CPV2_MARK_BREATH = 1.6;        // 칸 안쪽에서 좌우로 비워 둘 폭(px 합계)
 
 /** 셀 폭(px) → 두 글자가 들어가는 글자 크기(px). 화면·인쇄·콘앱 공용 한 벌. */
 export function markFontForCellW(cellW) {
@@ -200,7 +210,7 @@ export function markFontForCellW(cellW) {
   if (!Number.isFinite(w) || w <= 0) return { font: CPV2_MARK_FONT_MAX, fits: false, need: 0 };
   const inner = Math.max(0, w - 1);                      // 테두리 0.5×2
   //  ⚠ 맞춤 계산은 **내림**이다(2.90-01). 반올림하면 0.005px 초과로 두 글자가 잘린다(11열 16척 실측).
-  const need = Math.floor((inner / CPV2_WIDEST_MARK_EM) * 10) / 10;
+  const need = Math.floor((Math.max(0, inner - CPV2_MARK_BREATH) / CPV2_WIDEST_MARK_EM) * 10) / 10;
   const font = Math.max(CPV2_MARK_FONT_MIN, Math.min(CPV2_MARK_FONT_MAX, need));
   //  fits=false 는 «하한으로 눌렀지만 두 글자가 안 들어간다» — 조용히 삼키지 않는다(3금지 ③).
   return { font, fits: font * CPV2_WIDEST_MARK_EM <= inner, need };
@@ -214,8 +224,13 @@ export function cargoPlanMetrics(gridCols, boxesPerRow, pageW) {
   const W = _n(pageW, CPV2_PAGE_W_PRINT);
   const boxW = Math.max(0, (W - CPV2_PAGE_PAD - CPV2_BOX_GAP * (per - 1)) / per);
   const cellW = Math.max(0, (boxW - CPV2_BOX_CHROME) / cols);
-  const m = markFontForCellW(cellW);
-  return { boxW, cellW, markFont: m.font, fits: m.fits, need: m.need };
+  //  2.90-03 (검수사 «격자가 삐뚤뺴뚤입니다 억지로 껴 맞출려고 하는게 보입니다») —
+  //    flex 균등분할은 남는 소수 픽셀을 칸마다 다르게 나눠 준다(테두리 0.5px 가 그 어긋남을 드러낸다).
+  //    베이상세 인쇄가 쓰는 «고정 셀 폭»(fixedCellVar) 한 벌을 카고플랜도 쓴다 — 칸을 0.01px 단위로
+  //    못박고 남는 폭은 줄 전체를 가운데로 민다. 열 적은 줄의 여백도 칸 폭 × 칸수로 정확히 맞는다.
+  const cellFix = Math.floor(cellW * 100) / 100;
+  const m = markFontForCellW(cellFix);
+  return { boxW, cellW, cellFix, markFont: m.font, fits: m.fits, need: m.need };
 }
 
 export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = null) {

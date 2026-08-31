@@ -134,7 +134,7 @@ function getMarkV2(c, pod, mode) {
 // ------------------------------------------------------------
 export const CARGO_V2_CSS = `
 .cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
-.cpv2-page { width: 277mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
+.cpv2-page { width: 285mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
@@ -153,7 +153,7 @@ export const CARGO_V2_CSS = `
 .cpv2-hold-area { flex: 1 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
-.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }   /* 2.90: --mf 는 .cpv2-page 가 셀 폭으로 내려준다(var() 폴백 9.6px 유지) */
+.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; justify-content: center; }   /* 2.90-03: 칸이 고정 폭이라 남는 폭은 줄을 가운데로 민다 */   /* 2.90: --mf 는 .cpv2-page 가 셀 폭으로 내려준다(var() 폴백 9.6px 유지) */
 /* 2.38-03 «--mf» = 칸 마크 글자 크기의 단일 소스. **9.6px 고정**(원래 8px 의 1.2배).
    ⛔ 이 CSS 는 JS 템플릿 문자열 안이다 — 주석에도 백틱을 쓰지 마라(문자열이 끊겨 빌드가 죽는다, 실측 2026-08-25).
 
@@ -172,10 +172,10 @@ export const CARGO_V2_CSS = `
       검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라고 한 것이
       전부 이 한 줄 때문이었다. em 은 폰트 크기를 정할 때 **자기 부모**를 본다. */
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: var(--mf, 9.6px);   /* 2.38-02 마크 전부 1.2배 — 값은 .cpv2-tier-row 의 --mf 한 곳에서만 정한다(폴백은 같은 값) */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
-.cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
-.cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
-.cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
+.cpv2-tier-row .cpv2-cell { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: var(--mf, 9.6px);   /* 2.38-02 마크 전부 1.2배 — 값은 .cpv2-tier-row 의 --mf 한 곳에서만 정한다(폴백은 같은 값) */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell-empty { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; min-height: 0; visibility: hidden; }
+.cpv2-row-labels { display: flex; flex: 0 0 auto; justify-content: center; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
+.cpv2-row-labels > span { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; text-align: center; line-height: 1.2; }   /* 2.90-03: 칸과 같은 고정 폭 — 라벨이 칸 위에 정확히 선다 */
 /* M6.94.19: XRAY는 ★ 별표만 표시, 배경은 선사 색 그대로 (연노랑 강제 제거) */
 .cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(7px, 1vw, 12px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V8.98: 쉬프팅(재적부) = 좌상단 파란 ◆ (XRAY ★는 우상단 — 동시 표기 가능) */
@@ -255,7 +255,7 @@ export const CARGO_V2_CSS = `
     box-shadow: none !important;
   }
   .cpv2-page {
-    width: 277mm !important;
+    width: 285mm !important;   /* 2.90-04: 인쇄 가능 폭(297 − 6×2) 전부 — 우측 8mm 공백 회수 */
     min-width: 0 !important;
     height: 195mm !important;
     min-height: 195mm !important;
@@ -892,9 +892,10 @@ export default function PrintableCargoPlanV2({
   /*  ★ 2.90 — 칸 마크 글자 크기(--mf). 종전 9.6px 고정이라 11열 이상 배(39척 중 21척)에서
       두 글자 마크(DG·RF·RE·FR·TK)가 칸을 넘쳐 좌우가 잘렸다. 계산은 cargoPlanCore 한 벌.
       기준 폭은 **인쇄**(277mm) — 화면(min-width:1200px)은 더 넓으니 저절로 안전하다. */
-  const markFont = useMemo(
-    () => cargoPlanMetrics(globalMaxCols, Math.max(layout[0]?.length || 1, 1)).markFont,
+  const cpMetrics = useMemo(
+    () => cargoPlanMetrics(globalMaxCols, Math.max(layout[0]?.length || 1, 1)),
     [globalMaxCols, layout]);
+  const markFont = cpMetrics.markFont;
 
   // M6.94.16: 전체 베이 중 (deck tier + hold tier) 최대 → 셀 높이 고정 기준.
   //   홀드 없는 베이는 deck만 그리되 아래 spacer로 빈 공간 → deck 셀 높이를 다른 베이와 통일.
@@ -1088,7 +1089,7 @@ export default function PrintableCargoPlanV2({
           ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (window.innerHeight - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
-      <div className="cpv2-page" style={{ '--mf': `${markFont}px` }}>
+      <div className="cpv2-page" style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px` }}>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
@@ -1227,9 +1228,9 @@ export default function PrintableCargoPlanV2({
                 const pairData = renderDataMap[box.pairKey];
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={false} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} fixedCellVar="--cpw" applyHatch={false} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={true} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} fixedCellVar="--cpw" applyHatch={true} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                   </div>
                 );
               } else {
@@ -1237,7 +1238,7 @@ export default function PrintableCargoPlanV2({
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
+                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} fixedCellVar="--cpw" globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     </div>
                     <div className="cpv2-empty-half">
                       {bi === leg3InBoxBi && (

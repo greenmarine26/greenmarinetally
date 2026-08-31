@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.90-01'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
+export const APP_VERSION = 'TallyOne 2.90-04'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5106,6 +5106,48 @@ export function shiftingMapForDisplay(voyageKey, voyage, dictEntry) {
 //  2.89-06 (검수사 «그안에서만 작업하는데 컨테이너가 증식을 하나요?») — 시프팅은 평택 축에서 뺀다.
 //    1.76-05 확정 «시프팅은 진행률·리스트 총계에서 빼고 별도 칸» 이 홈카드·수석통계·요약카드의
 //    완료/총계 계산에는 안 걸려 있었다. 재선적 기록이 생기자 완료 374/281(133%) 로 «증식»해 보였다.
+
+/*  ★ 2.90-02 병합 — 2026-08-31 10:14 다른 세션 판(daab289)의 작업량 축 두 함수를 되살린다.
+    10:15 내 판이 옛 베이스로 utils 를 덮어 이 둘이 사라졌고, 그것을 부르는 화면 셋
+    (HomePage·ChiefDashboard·VoyageSummaryCard)이 소스에 남아 **다음 빌드가 깨질 상태**였다.
+    ⚠ git 열차 충돌(작업표준 §3) — 빌드 직전 origin/main 최신 확인을 안 한 대가다. */
+
+//  2.89-07 (검수사 «항차목록은 변치 않습니다. 계획이 변하지 않는한 변하는건 작업내용이 실시간
+//    카운트 될뿐» · «작업량도 279+95 214+95» · «양하는 양하 선적은 선적이지») — 분모(작업량) 고정.
+//    리스트에서 온 기록인가 — 선사 자료(CLL·세관리스트)가 채우는 필드가 하나라도 있으면 리스트다.
+//    검수원 작업이 만든 기록(번호수정·맞바꿈 잔재 등 — 선사 필드 0)은 분모에 못 들어온다.
+//    BUG-2026-004: MCSC 633N 맞바꿈 때 작업생성 기록 2건이 양하 모수를 279→281로 불려
+//    서류상 로스 1이 잡혔다 — 실작업은 이상 없었다.
+export function isListOriginRecord(r) {
+  if (!r) return false;
+  //  1순위는 출처(_source = 수집기가 리스트 파일명을 적는다 — 실측 1,724건 중 1,705건 보유).
+  //  선사 필드는 폴백 — 번호만 있는 리스트 행(XTPG 538W LOADLIST 실측 2건)이 _source 로만 구분된다.
+  return !!(r._source || r.wt || r.sl || r.pol || r.pod || r.sh || r.bl || r.op || r.tmp || r.iso);
+}
+
+
+//  2.89-07: 진행 숫자 한 벌 — 홈 카드(HomePage)·수석 통계(ChiefDashboard)·현황 요약(VoyageSummaryCard)
+//    세 벌 사본이 2.89-06 «완료 374/281 = 133% 증식»을 낳았다. 분모·완료 계산은 여기 하나만 쓴다.
+//    · 작업량(total) = 리스트 + 시프팅  (리스트가 아직 없으면 EDI 평택분(ptkCns 폴백) + 시프팅)
+//    · 완료(done)   = 리스트완료 + 이 모드의 모브(시프팅∩completed — 양하=내림, 선적=실음)
+//    · extra        = 리스트에도 시프팅에도 없는 완료(무적 등) — 분모 밖, 바를 밀지 않는다
+export function progressOf(section, mode, shiftSet, ptkCns) {
+  const records = section?.records || {};
+  const completed = section?.completed || {};
+  const ss = shiftSet || new Set();
+  const listCns = new Set(ownDirCns(records, mode).filter((cn) => isListOriginRecord(records[cn]) && !ss.has(cn)));
+  const usePtk = listCns.size === 0 && ptkCns && ptkCns.size > 0;
+  const baseSet = usePtk ? new Set([...ptkCns].filter((cn) => !ss.has(cn))) : listCns;
+  let baseDone = 0, moves = 0, extra = 0;
+  for (const cn of Object.keys(completed)) {
+    if (ss.has(cn)) moves += 1;
+    else if (baseSet.has(cn)) baseDone += 1;
+    else extra += 1;
+  }
+  return { listTotal: listCns.size, base: baseSet.size, baseDone, shiftN: ss.size, moves, extra,
+           total: baseSet.size + ss.size, done: baseDone + moves, usePtk };
+}
+
 export function shiftCnSetOf(voyageKey, voyage) {
   try { return new Set(Object.keys(computeShiftingMapCached(voyageKey, voyage) || {}).filter((k) => !k.startsWith('_'))); }
   catch (e) { return new Set(); }

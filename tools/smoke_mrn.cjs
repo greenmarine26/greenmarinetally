@@ -36,6 +36,10 @@ T(mk('discharge', null, { mrnIn: '26SNKO2809E' }) === '26SNKO2809E', '손입력 
 //  ③ 배선 — 소스가 이 규칙을 갖고 있는가
 T(/_legOK/.test(src) && /info\.mrnOut : info\.mrnIn/.test(src), 'XrayTab 이 레그 판정·항차 기록 폴백을 안 갖고 있다');
 //  ④ 2.89-08(§0-Y-2) — «없음» 분기가 어디를 봤는지(mrnWhy)를 말하는가
-T(/mrnWhy/.test(src) && /head\.mrnWhy/.test(src), 'MRN 빈칸 사유(mrnWhy)가 화면에 배선돼 있지 않다');
+/*  ★ 2.90-02 병합 — 사유 필드 이름 한 벌(mrnWhy → mrnDiag). 내용은 더 센 쪽을 요구한다:
+    왜(why) · 본 곳(looked) · 채울 길(how) 셋을 다 말해야 §0-Y-2 를 지킨 것이다. */
+T(/mrnDiag/.test(src) && /head\.mrnDiag/.test(src), 'MRN 빈칸 사유(mrnDiag)가 화면에 배선돼 있지 않다');
+T(/looked/.test(src) && /how/.test(src) && /why/.test(src), '«왜·본 곳·채울 길» 셋이 다 있어야 한다(§0-Y-2)');
+T(!/setMrnEdit\(head\.mrnDiag\?\.cand/.test(src), '⛔ 레그 어긋난 값을 입력칸에 미리 채우면 안 된다(세관 서류 오기)');
 if (bad > 0) { console.error(`✗ MRN 연막검사 실패 ${bad}건`); process.exit(1); }
 console.log('✓ MRN 연막검사 통과 — 레그 3 · 폴백 3 · 배선 1');
