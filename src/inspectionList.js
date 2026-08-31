@@ -146,22 +146,36 @@ function renderRow(c, idx) {
       ? `${c.cgL || '-'}×${c.cgW || '-'}×${c.cgH || '-'}mm` : '';
     notes.push(`<span style="color:#166534;font-weight:bold">FR${_d.length ? ' ' + _d.join(' ') + 'cm' : ''}${_real ? ' ' + _real : ''}${(!_d.length && !_real) ? ' 치수 미신고' : ''}</span>`);
   }
-  if (type === 'ot' || c.ot) notes.push('OT');
+  /* ★ 2.91-03 (검수사 «OOG는 규격외 화물을 표기합니다. 그래서 따로 표기하지 않습니다. FR, OT로
+       표기해주세요 — 지금 화면은 이중표기») — OT 도 FR 과 같이 치수를 달고, OOG 줄은 없앤다. */
+  if (type === 'ot' || c.ot) {
+    const _d = [];
+    if (c.ovl) _d.push(`L+${c.ovl}`);
+    if (c.ovw) _d.push(`W+${c.ovw}`);
+    if (c.ovh) _d.push(`H+${c.ovh}`);
+    if (!_d.length) { const _o = overDims(c); if (_o && _o.over) _d.push(..._o.short); }
+    notes.push(`<span style="color:#166534;font-weight:bold">OT${_d.length ? ' ' + _d.join(' ') + 'cm' : ''}</span>`);
+  }
   if (type === 'tk' || c.tk) notes.push('TK');
   // TallyOne 2.00 (검수사 지시 2026-08-20 «검수용 리스트에 DG(클래스·유엔넘버)·리퍼온도·OOG(높이 폭)·특수화물 다 기록»):
   //   DG — 클래스·UN·포장등급 (nlSearch specialDetailLines 와 같은 필드 dgc/un/pg. TNJP 26360E 실측: cl.9 UN3480)
   // TallyOne 2.00-03 (검수사 지시 «DG 표기는 */**** 형식으로»): 클래스/UN 만 — 예 «9/3480». 번호 없으면 DG 로 폴백
   if (c.dg) notes.push(`<span style="color:#b91c1c;font-weight:bold">${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}</span>`);
   //   OOG — EDI DIM 초과 치수(cm, 1.84-04 가 담은 ovh/ovw/ovl), 없으면 치수 엑셀 실치수 폭×높이(mm)
-  const _ov = [];
-  if (c.ovh) _ov.push(`H+${c.ovh}`);
-  if (c.ovw) _ov.push(`W+${c.ovw}`);
-  if (c.ovl) _ov.push(`L+${c.ovl}`);
-  //  2.25: 선사가 DIM 을 안 적어도 실치수가 있으면 앱이 판정한다(단위 cm — 위 신고분과 같게).
-  if (!_ov.length) { const _o = overDims(c); if (_o && _o.over) _ov.push(..._o.short); }
-  if (_ov.length) notes.push(`<span style="color:#92400e;font-weight:bold">OOG ${_ov.join(' ')}cm</span>`);
-  else if (c.oog && type === 'normal' && !c.fr && !c.ot) notes.push('<span style="color:#92400e;font-weight:bold">OOG</span>');
-  if ((c.cgW || c.cgH) && !_ov.length) notes.push(`${c.cgW || '?'}×${c.cgH || '?'}mm`);
+  /*  2.91-03: OOG 는 **FR·OT 가 아닌 컨**이 규격을 넘겼을 때만 적는다(검수사 확정 — FR·OT 자체가
+      규격외 표기라 같이 적으면 이중표기다). FR·OT 는 위에서 제 치수를 이미 달고 나갔다. */
+  const _isSpecShape = (type === 'fr' || c.fr || type === 'ot' || c.ot);
+  if (!_isSpecShape) {
+    const _ov = [];
+    if (c.ovh) _ov.push(`H+${c.ovh}`);
+    if (c.ovw) _ov.push(`W+${c.ovw}`);
+    if (c.ovl) _ov.push(`L+${c.ovl}`);
+    //  2.25: 선사가 DIM 을 안 적어도 실치수가 있으면 앱이 판정한다(단위 cm — 위 신고분과 같게).
+    if (!_ov.length) { const _o = overDims(c); if (_o && _o.over) _ov.push(..._o.short); }
+    if (_ov.length) notes.push(`<span style="color:#92400e;font-weight:bold">OOG ${_ov.join(' ')}cm</span>`);
+    else if (c.oog && type === 'normal') notes.push('<span style="color:#92400e;font-weight:bold">OOG</span>');
+  }
+  if ((c.cgW || c.cgH) && !_isSpecShape) notes.push(`${c.cgW || '?'}×${c.cgH || '?'}mm`);   // 2.91-03: FR·OT 는 제 줄에 이미 치수가 있다
   /* ★ 2.91 (검수사 «긴급화물등 특수 표기 빠진게 보임») — 긴급(▲)·수화물은 카고플랜·베이플랜에는
        그려지는데 **검수용 리스트에만 없었다.** 자료에 있는 것을 안 적은 것이다(§0-Y-2). */
   if (c._urgent || c.urgent) notes.push('<span style="color:#b91c1c;font-weight:bold">▲긴급</span>');
