@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.97'   // 2.97 ASC 파서가 OOG 치수를 읽는다(종전 전량 누락)
+export const APP_VERSION = 'TallyOne 2.98'   // 2.98 베이상세 OOG 도형 — 안은 검수사가 실측 숫자를 적는 자리
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.

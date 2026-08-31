@@ -414,6 +414,23 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const p = formatCellParts(c);
     return (
       <div className="bd-cell-lines">
+        {/* ── TallyOne 2.98: **베이상세는 종이 원본처럼 도형으로 그린다.** (검수사 확정 2026-08-31) ──
+            검수사 — *"카고플랜은 그정도만 해도 됩니다. 베이플랜은?"*
+            선사 베이플랜(STMJ 2651E 실물)은 OOG 를 이렇게 그린다:
+              · 셀 **위 칸**에 빈 사각형   = 높이 초과 (그 단을 먹는다)
+              · 셀 **좌우 칸**으로 삼각형  = 폭 초과 (양옆을 먹는다)
+            카고플랜은 셀이 좁아 굵은 선으로만 냈지만(2.97), 베이상세는 칸이 커서 원본 그대로 낸다.
+            ⚠ 도형 **안은 비워 둔다** — 검수사 확정 *"그 그림 사이에 검수가 숫자를 기입 합니다"*.
+                앱이 선사 신고 치수를 찍어 두면 실측값을 적을 자리가 없어지고, 그 숫자에 눈이 끌린다. */}
+        {cell.oog && (
+          <svg className="bd-oog" viewBox="0 0 3 2" preserveAspectRatio="none" aria-hidden="true">
+            {cell.oog.includes('W') && (<>
+              <polygon points="1,1 0,1.5 1,2" />
+              <polygon points="2,1 3,1.5 2,2" />
+            </>)}
+            {cell.oog.includes('H') && <rect x="1.08" y="0.12" width="0.84" height="0.8" />}
+          </svg>
+        )}
         <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
         <div className="bd-r2">{p.cn}</div>
         <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
@@ -874,6 +891,13 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-bay-title-row { display: none !important; }
         .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: stretch; justify-content: space-evenly; line-height: 1.15; overflow: hidden; font-weight: bold; padding: 2px 4px; }
         /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
+        /* 2.98: OOG 도형 — 셀 밖(좌·우 한 칸, 위 한 단)으로 뻗는다. 선만, 채우지 않는다. */
+        .bd-cargo-wrap .cpv2-cell:has(.bd-oog) { overflow: visible; }
+        .bd-cargo-wrap .cpv2-cell .bd-oog { position: absolute; left: -100%; top: -100%; width: 300%; height: 200%; pointer-events: none; z-index: 2; }
+        /* 2.98: 안은 **비워 둔다** — 검수사가 실측 숫자를 손으로 적는 자리다(검수사 확정).
+           선은 인쇄에서 확실히 보이되 글씨를 방해하지 않을 굵기로. */
+        .bd-cargo-wrap .cpv2-cell .bd-oog polygon,
+        .bd-cargo-wrap .cpv2-cell .bd-oog rect { fill: none; stroke: #000; stroke-width: 0.8; vector-effect: non-scaling-stroke; }
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; font-size: 8.5pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: stretch; justify-content: space-evenly; }
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: 100%; padding: 0; }   /* V8.25-05: text-align 제거 — 줄별 정렬(bd-r2 좌/ bd-r4·r5 중앙)이 살도록 */
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
