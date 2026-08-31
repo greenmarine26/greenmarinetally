@@ -162,7 +162,7 @@ export function compareStaff(a, b) {
 //   ⚠ **로그인 화면에서는 보는 사람이 누군지 알 수 없으므로 무조건 숨긴다.**
 //     숨겨도 「목록에 없으면 이름 직접 입력」으로 그대로 로그인된다(화이트리스트는 손대지 않음).
 //   ⚠ 권한·집계에는 쓰지 않는다 — **보이기만** 가린다.
-export const HIDDEN_STAFF = ['클로드'];
+export const HIDDEN_STAFF = ['클로드', '클로드2'];   // 2.98-11: 클로드2 = 3호기 담당(검수사 «클로드2도 다른직원이 안보이게 하라»)
 export function isHiddenStaff(name) {
   return HIDDEN_STAFF.includes(String(name || '').trim());
 }

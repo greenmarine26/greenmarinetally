@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-10'   // 2.98-10 특수화물은 두 글자 — OT 표기(A→OT) + 별첨2 범례를 그림과 같은 값으로(R→RF·F→FR)
+export const APP_VERSION = 'TallyOne 2.98-11'   // 2.98-11 작업 보고 조용한 실패 제거 + 클로드2 숨김 + unassigned 잣대를 큐와 맞춤
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.

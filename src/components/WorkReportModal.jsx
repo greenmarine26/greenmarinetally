@@ -171,6 +171,19 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     activeByEquip[w.equip].push(w);
   });
 
+  /*  ★ 2.98-11 — **조용한 실패 금지** (3금지 ③).
+        작업 보고의 다섯 쓰기에 try/catch 가 없어, RTDB 쓰기가 거부되면(권한·오프라인)
+        프라미스가 그대로 죽고 뒤의 setView·onClose 가 안 돌아 **화면이 멈춘 채 아무 말도 안 했다.**
+        검수원은 «보고했다»고 믿고 배를 마친다. ⇒ 실패를 화면에 띄우고 false 를 돌려준다.
+      ⚠ 훅이 아니다 — «if (!open) return null» 뒤에 두어도 안전(2.88-01 error #310 함정 회피). */
+  const setActiveWorkSafe = async (path, val, what) => {
+    try { await set(ref(db, path), val); return true; }
+    catch (e) {
+      alert('\u26a0 ' + what + ' \uc800\uc7a5 \uc2e4\ud328\n\n\uc2e0\ud638\ub97c \ud655\uc778\ud558\uace0 \ub2e4\uc2dc \ub20c\ub7ec \uc8fc\uc138\uc694.\n(' + (e && e.message ? e.message : e) + ')');
+      return false;
+    }
+  };
+
   const handleStartWork = async () => {
     if (!selectedEquip) { alert('장비를 선택하세요'); return; }
     const voy = getVoy(selectedMode);  // M6.37: mode 기반 voy
@@ -181,12 +194,12 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     });
 
     // M3.5.6-fix: mode별로 별도 저장 (장비 1대가 양하+선적 동시 가능)
-    await set(ref(db, `activeWork/${voyageKey}/${selectedEquip}/${selectedMode}`), {
+    if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${selectedEquip}/${selectedMode}`, {
       mode: selectedMode,
       status: 'running',
       startedAt: time,
       vsl, voy,
-    });
+    }, '작업 시작 보고')) return;
 
     // 보고 이력 저장
     await fbAddWorkReport(voyageKey, {
@@ -213,12 +226,12 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       vsl, voy, action, time, reason: pauseReason, equip: equipNo,
     });
 
-    await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), {
+    if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${equipNo}/${modeArg}`, {
       ...aw,
       status: 'paused',
       pausedAt: time,
       pauseReason,
-    });
+    }, '작업 중단 보고')) return;
 
     await fbAddWorkReport(voyageKey, {
       type: 'work_status',
@@ -264,12 +277,12 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       vsl, voy, action, time, equip: equipNo,
     }) + '\n(재개)';
 
-    await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), {
+    if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${equipNo}/${modeArg}`, {
       ...aw,
       status: 'running',
       resumedAt: time,
       pauseReason: null,
-    });
+    }, '작업 재개 보고')) return;
 
     await fbAddWorkReport(voyageKey, {
       type: 'work_status',
@@ -301,7 +314,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         });
 
         // mode별로 활성 작업 종료 (이미 없는 경우도 null 세팅으로 안전)
-        await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), null);
+        if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${equipNo}/${modeArg}`, null, '작업 완료 보고')) return;
 
         await fbAddWorkReport(voyageKey, {
           type: 'work_status',
@@ -729,9 +742,9 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                   const aw = activeWork[manualEquip]?.[manualMode] || { mode: manualMode, vsl, voy };
                   const action = `${manualMode}_pause`;
                   const message = buildWorkStatusMessage({ vsl, voy, action, time, reason: manualReason, equip: manualEquip });
-                  await set(ref(db, `activeWork/${voyageKey}/${manualEquip}/${manualMode}`), {
+                  if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${manualEquip}/${manualMode}`, {
                     ...aw, status: 'paused', pausedAt: time, pauseReason: manualReason,
-                  });
+                  }, '수동 중단 보고')) return;
                   await fbAddWorkReport(voyageKey, {
                     type: 'work_status', action, mode: manualMode, equip: manualEquip,
                     reason: manualReason, message, manual: true,

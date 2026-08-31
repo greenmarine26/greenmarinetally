@@ -747,7 +747,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       ⚠ 이름표만 걸린 칸은 여기 안 온다(`o.done` 이 참일 때만). 아직 실리지 않은 계획 컨은 큐에 그대로 남는다. */
   const unassigned = useMemo(
     () => allContainers.filter(c => {
-      if (!(c._mode === mode && c._ptk && !c._comp)) return false;
+      //  2.98-11: 잣대를 큐(`remaining`)와 같은 `_isWork` 로 맞춘다 — 종전 `c._ptk` 는 시프팅(`_shift`)을 놓쳤다.
+      //    큐는 `_ptk || _shift` 로 받는데 이 그물만 `_ptk` 라, 시프팅 컨의 칸이 완료 실물로 차면
+      //    큐에서도 빠지고 여기서도 안 잡혀 **2.98-08 이 고친 것과 똑같은 구멍**이 한 부류 옆에 남아 있었다.
+      //    (현 21항차는 시프팅 0대라 노출은 없었다. 시프팅 있는 배가 오면 그대로 재발한다.)
+      if (!(c._mode === mode && _isWork(c) && !c._comp)) return false;
       if (!c.bay || !c.row || !c.tier) return true;            // 종전: 적부 좌표가 없다
       const o = _occDone.get(posKey(c));
       return !!(o && o.done && o.cn !== c.cn);                 // 2.98-08: 완료 실물이 그 칸을 차지했다
