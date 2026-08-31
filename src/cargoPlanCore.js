@@ -210,6 +210,23 @@ export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = nu
 //   - has_zero=false: evens + odds (00 없음)
 //   - cell_count 홀수 + has_zero=false: 홀수 row가 1개 더 (예: 7개 = evens[06,04,02] + odds[01,03,05,07])
 //   - cell_count 짝수 + has_zero=false: evens = odds 동수 (예: 8개 = [08..02] + [01..07])
+//  2.89-08 (검수사 «카고플랜 출력에서 MCSC처럼 큰배는 RF / RE 등 두글자는 깨져 보인다.
+//    셀수에 따라서 동적 크기 변환을 해야 한다») — 칸 마크 글자 크기 한 벌.
+//    기준은 **인쇄 지면**(277mm — @media print 에서 min-width 바닥이 전부 풀리는 그 판)이다.
+//    화면도 같은 값을 쓴다 — 화면 따로 인쇄 따로면 «시안과 인쇄가 다르다»(2.38-03 사고)가 재발한다.
+//    실측 비율: 가장 넓은 두 글자 DG = 글자크기 × 1.5 (9.6px → 14.4px, 2.38-03 주석 실측).
+//    ⚠ vw 금지 — 인쇄 뷰포트에서 바닥으로 떨어진다(2.38-03). 값은 배 구조에서만 나온다.
+//    작은 배(칸 폭 ≥ ~15.4px)는 종전 9.6px 그대로다 — 큰 배(MCSC 등)만 칸에 맞게 줄어든다.
+export function markFontPx(gridCols, boxesPerRow) {
+  const PAGE = 1047 - 30;                        // 277mm(1047px) − 페이지 padding 4mm×2(30px)
+  const n = Math.max(1, boxesPerRow || 1);
+  const boxW = (PAGE - 3 * (n - 1)) / n;         // .cpv2-page-row gap 3px
+  const FRAME = 24;                              // 박스 테두리 2 + 섹션 padding 4 + 단 라벨 16 + 격자 gap 2
+  const cellW = (boxW - FRAME) / Math.max(1, gridCols || 1);
+  const f = (cellW - 1) / 1.5;                   // 두 글자가 칸 안(테두리 1px 제외)에 들어가는 크기
+  return Math.min(9.6, Math.max(5, Math.round(f * 10) / 10));
+}
+
 export function getRowPositions(cellCount, hasZero) {
   if (cellCount <= 0) return [];
   const pad = (n) => String(n).padStart(2, '0');

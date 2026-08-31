@@ -394,6 +394,20 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const noWorkLeft = workFilter !== 'completed' && manualGroups.length === 0;
   // 작업 모드 바뀌면 선택 리셋
   useEffect(() => { setManualBay(null); setManualTier(null); }, [workFilter]);
+  //  2.90: 자동에서 물려받은 베이가 수동 묶음 center 와 안 맞으면 그 베이를 품은 묶음으로 —
+  //    품은 묶음도 없으면 비운다(게이트가 다시 묻는다). 미지정(-1)은 수동 전용이라 손대지 않는다.
+  //  ⚠ 2.90(감사 지적): 정리는 모드가 바뀌어 «물려받은 직후 1회»만 — 그룹 소진(마지막 컨 완료로
+  //    묶음이 목록에서 빠진 것)을 이탈로 오판해 «끝났습니다 — 다음 …» 안내를 지우지 않게 한다.
+  const _snapArmedRef = useRef(true);
+  useEffect(() => { _snapArmedRef.current = true; }, [guideMode]);
+  useEffect(() => {
+    if (guideMode || manualBay == null || manualBay < 0 || !manualGroups.length) return;
+    if (!_snapArmedRef.current) return;
+    _snapArmedRef.current = false;
+    if (manualGroups.some((g) => g.center === manualBay)) return;
+    const host = manualGroups.find((g) => g.bays && g.bays.has(parseInt(manualBay, 10)));
+    setManualBay(host ? host.center : null);
+  }, [guideMode, manualBay, manualGroups]);
   // 수동 작업 위치를 수석에게 전달 (가이드와 동일, auto=false). 베이/단 미선택이면 클리어.
   useEffect(() => {
     if (guideMode || !inspector) return;  // 가이드는 GuidedWorkPanel이 따로 기록
@@ -522,6 +536,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {guideMode && workFilter !== 'completed' && !isLoloShip ? (
         <GuidedWorkPanel
           slotGroups={manualGroups}
+          workCtx={{ bay: manualBay, tier: manualTier, setBay: setManualBay, setTier: setManualTier }}
           onPlaceUnassigned={onPlaceUnassigned}
           onOpenPlan={onOpenPlan}
           voyage={voyage} voyageKey={voyageKey} inspector={inspector}

@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -1403,10 +1403,13 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
     //   SHIFT 를 1 TIME / 2 TIME 으로 나눠 센다 — 양하 완료 1 + 선적 완료 1 = 2 TIME.
     //   1.76-05 카드 둘(_shift:'out'/'in') 구조가 그대로 답이다: 완료 도장(sec.completed)을 양쪽에서 센다.
     //   완료가 하나도 없으면(작업 전) 종전대로 ×2 를 보여주되 «예정»임을 밝힌다.
+    //  2.89-07 (검수사 «양하는 양하 선적은 선적이지») — 모브를 모드별로 가른다.
+    //    양하 줄 = 내림(시프팅∩양하완료)만, 선적 줄 = 실음(시프팅∩선적완료)만.
     const _dc = voyage.discharge?.completed || {}, _lc = voyage.loading?.completed || {};
-    let _mv = 0;
-    for (const _cn of Object.keys(_shiftMap)) { if (_dc[_cn]) _mv += 1; if (_lc[_cn]) _mv += 1; }
-    disStats.shiftMoves = _mv; loaStats.shiftMoves = _mv;
+    let _mvIn = 0, _mvOut = 0;
+    for (const _cn of Object.keys(_shiftMap)) { if (_dc[_cn]) _mvIn += 1; if (_lc[_cn]) _mvOut += 1; }
+    disStats.shiftMoves = _mvIn; disStats.shiftMoveLabel = '내림';
+    loaStats.shiftMoves = _mvOut; loaStats.shiftMoveLabel = '실음';
   }
 
   // M5.82: 부두 정보 (voyage._pier가 HomePage에서 채워짐)
@@ -2057,7 +2060,7 @@ function SectionBar({ label, color, stats, onClick }) {
         {stats.shiftCount > 0 && (
           <>
             <span className="text-dim-500">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 모브는 실제 완료로 센다 — 내림(양하) 1 + 실음(선적) 1 = 2모브(2 TIME). 내림만 했으면 1모브(1 TIME). 아직 작업 전이면 예정 ×2. 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoves}모브` : `예정 ${stats.shiftCount * 2}모브`})</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 작업량·완료 바에도 이 수가 더해진다(작업량 = 리스트+시프팅). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
           </>
         )}
         {stats.virtualFromList && (
@@ -2114,8 +2117,12 @@ function computeStats(section, mode, info, voyageKey, shiftSet) {   // 2.89-06: 
   // V9.37-02: 플랜 슬롯(자리)은 컨번호가 배정될 대상이지 '누락'이 아니다. 컨번호는 NOLIST 담당.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
   const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots);
-  const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
-  const done = Object.keys(completed).filter((cn) => !shiftSet || !shiftSet.has(cn)).length;   // 2.89-06: 시프팅 완료는 자기 칸(모브)에서 센다
+  //  2.89-07 (검수사 «항차목록은 변치 않습니다 … 변하는건 작업내용이 실시간 카운트 될뿐») —
+  //    작업량·완료는 progressOf 한 벌(작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브).
+  //    recordCns(위)는 매칭·수화물 판정용으로 그대로 둔다 — 분모에는 안 쓴다.
+  const prog = progressOf(section, mode, shiftSet, ptkCns);
+  const total = prog.total;
+  const done = prog.done;
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
   // V9.37-03: 배지는 **출처별로** 나눈다(사용자 지적 2026-08-02 "가상/리스트?").
   //   '가상/리스트'는 리스트로 채운 가상(베이 없음)을 뜻하는데, 플랜 슬롯은 리스트가 아니라

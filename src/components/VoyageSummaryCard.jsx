@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos , shiftCnSetOf} from '../utils.js';
+import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos , shiftCnSetOf, progressOf} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null }) {
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -50,8 +50,13 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     const _slotN = Object.values(ediMap).filter(c => c && !c.cn &&
       (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol))).length;
     const _realN = Math.max(containers.length - _slotN, 0);   // 자리 제외한 실컨(리스트) 수
-    const total = _slotN > 0 ? Math.max(_slotN, _realN) : containers.length;
-    const done = Object.keys(compMap).filter((cn) => !_shiftSet.has(cn)).length;   // 2.89-06
+    //  2.89-07: 분모 고정 — 리스트가 있으면 (리스트+시프팅)/(리스트완료+모브)를 progressOf 한 벌로.
+    //    리스트 전(EDI·플랜 슬롯만)이면 종전 계산을 유지하되 시프팅·모브를 같은 규칙으로 더한다.
+    const _prog = progressOf(sec, mode, _shiftSet);
+    const _base0 = _slotN > 0 ? Math.max(_slotN, _realN) : containers.length;
+    const _done0 = Object.keys(compMap).filter((cn) => !_shiftSet.has(cn)).length;
+    const total = _prog.listTotal > 0 ? _prog.total : _base0 + _shiftSet.size;
+    const done = _prog.listTotal > 0 ? _prog.done : _done0 + _prog.moves;
     // 2.08-02 (검수사 «전에 한번 수정한건 같습니다. 리퍼 엠티 알림건» — OBWH 선적 실측: 엠티 리퍼 26대가
     //   «리퍼 26대 · 위치미상26» 빨간 알림으로): 1.85-04 정책 «리퍼 전면 표시는 풀만»이 이 요약 카드에는
     //   빠져 있었다. 카운트·위치미상·온도X 전부 풀 리퍼 기준(F 또는 F/E 미상 — 조회·브리핑과 동일 판정).

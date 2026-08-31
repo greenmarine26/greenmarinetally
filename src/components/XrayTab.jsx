@@ -87,6 +87,19 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       || _legOK(pm && pm.mrn)
       || String((mode === 'loading' ? info.mrnOut : info.mrnIn) || '').trim().toUpperCase()
       || '';
+    //  ★ 2.89-08 (§0-Y-2 «없어서 못 한다는 말은 없다» — 검수사: «찾으면 있는데 없다고 거짓을 말한거나
+    //    다름없습니다») — «없음» 을 쓰기 전에 이 분기가 확인한 원천을 전부 밝힌다.
+    //    확인 순서: ①port_mis_data(베이매트릭스 신원 매칭) 레그별 ②동 대표값 ③voyages/{키}/info(손입력·CATOS).
+    //    셋 다 비었을 때만 mrnWhy 가 만들어지고, 화면은 «왜 + 채울 길(손입력)» 을 같이 보인다.
+    let mrnWhy = '';
+    if (!mrn) {
+      const _opp = String(pm ? ((mode === 'loading' ? pm.mrnIn : pm.mrnOut) || pm.mrn || '') : '').trim().toUpperCase();
+      const _up = pm && pm.updatedAt ? new Date(pm.updatedAt) : null;
+      const _upTxt = _up && isFinite(_up.getTime()) ? `${_up.getMonth() + 1}/${_up.getDate()} 업로드본` : '';
+      if (!pm) mrnWhy = 'PORT-MIS 목록(콜사인·IMO·선박명으로 조회)에 이 배 신고가 없고, 항차 기록(손입력·CATOS)도 비어 있습니다';
+      else if (_opp) mrnWhy = `PORT-MIS 에 ${mode === 'loading' ? '출항(E)' : '입항(I)'} MRN 이 없습니다 — 다른 방향 값만 있습니다(${_opp})`;
+      else mrnWhy = `PORT-MIS 신고는 찾았는데(${_upTxt || '기존 레코드'}) MRN 칸이 비어 있습니다 — PORT-MIS 엑셀을 새로 올리면 채워질 수 있습니다`;
+    }
     //  입항일자 — PORT-MIS 입항일시가 1순위, 없으면 항차 작업창 앞자리. «2026.08.24» 형태.
     const rawEta = String(pm?.eta || info.planDate || '').trim();
     const md = rawEta.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
@@ -103,7 +116,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       //  2.78: 전역 사전은 resolveShipDisplayName 이 스스로 읽는다(인자 없으면 window.__fbShipBayDict).
       name: resolveShipDisplayName(info, portMisData).name || code,
       callsign: String(info.callsign || pm?.callsign || shipIdentityOf(info).callsign || '').toUpperCase(),
-      mrn,
+      mrn, mrnWhy,
       //  2.41: 엑셀 「터미널」 열 — PCTC/PNCT. 인쇄물 머리에는 없고 엑셀에만 쓴다.
       pier: info.pier || '',
     };
@@ -243,7 +256,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       ) : !head.mrn ? (
         <button onClick={() => setMrnEdit('')} disabled={!voyageKey}
           className="w-full text-left rounded-pill border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xxs text-amber-200 disabled:opacity-60">
-          ⚠ MRN 이 비어 있습니다 — <b>여기를 눌러 적어 넣으십시오</b>. PORT-MIS 에 이 배 등록이 없으면 엑셀을 다시 올려도 안 채워집니다.
+          ⚠ MRN 이 비어 있습니다. {head.mrnWhy}. <b>여기를 눌러 적어 넣으십시오</b> — PORT-MIS 사이트에 보이는 MRN 을 그대로 옮기면 됩니다.
         </button>
       ) : (
         <div className="flex items-center gap-2 text-xxs text-dim-300">

@@ -4,7 +4,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf} from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf} from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -2258,14 +2258,12 @@ function computeStats(section, mode, shiftSet) {   // 2.89-06
   // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
   const missing = Math.max(0, ptkCns.size - matched - planSlots);
-  const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
-  // V9.57(I4): done을 completed 전체 개수로 세면 모수(리스트) 밖 완료(추가컨·리스트 교체 잔재)까지
-  //   더해져 진행률이 100%를 넘었다. done은 모수(리스트 있으면 recordCns, 없으면 ptkCns)와의
-  //   교집합으로 제한하고, 모수 밖 완료는 extra로 따로 센다(MiniBar "+N 초과" 표기).
-  const compKeys = Object.keys(completed).filter((cn) => !shiftSet || !shiftSet.has(cn));   // 2.89-06
-  const baseSet = recordCns.size > 0 ? recordCns : ptkCns;
-  const done = compKeys.filter(cn => baseSet.has(cn)).length;
-  const extra = compKeys.length - done;
+  //  2.89-07: 작업량·완료는 progressOf 한 벌(홈 카드·현황 요약과 같은 숫자) —
+  //    작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브 · extra = 분모 밖 완료(V9.57 I4 유지).
+  const prog = progressOf(section, mode, shiftSet, ptkCns);
+  const total = prog.total;
+  const done = prog.done;
+  const extra = prog.extra;
   // V8.90: 예상 EDI 판정(홈 카드와 동일 규칙) — 리스트가 있는데 매칭 0이면 예상(프리스토우) EDI.
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
   const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;

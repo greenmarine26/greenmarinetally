@@ -64,7 +64,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null }) {   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null }) {   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -91,8 +91,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     setEquipStep(false);
   };
 
-  const [selectedGroup, setSelectedGroup] = useState(null); // 그룹 center 베이 번호
-  const [selectedTier, setSelectedTier] = useState(null);   // V7.99-8 (메모6): 'hold'|'deck' — 검수사가 누른 작업 단
+  //  2.90 (검수사 «수동작업 크레인 지정해서 작업하다 자동가이드로 넘어가면 재지정하게 한다 …
+  //    자동이든 수동이든 이중지정은 피한다») — 베이·단 선택을 부모(SearchPanel) 한 벌(workCtx)로 올린다.
+  //    작업 맥락(호기·베이·단)은 모드가 아니라 작업에 붙는다 — 모드를 오가도 안 사라진다.
+  //    workCtx 가 없으면 종전 로컬 상태 그대로(단독 사용 보호). 갱(호기)은 이미 localStorage 한 벌이다.
+  //    ⚠ 수동 전용 값은 걸러 받는다 — 미지정 그룹(center -1)·'none' 단은 자동에 없는 개념이다.
+  const [_locGroup, _setLocGroup] = useState(null);
+  const [_locTier, _setLocTier] = useState(null);
+  const selectedGroup = workCtx ? ((workCtx.bay != null && workCtx.bay > 0) ? workCtx.bay : null) : _locGroup; // 그룹 center 베이 번호
+  const setSelectedGroup = workCtx ? workCtx.setBay : _setLocGroup;
+  const selectedTier = workCtx ? (workCtx.tier === 'none' ? null : workCtx.tier) : _locTier;   // V7.99-8 (메모6): 'hold'|'deck' — 검수사가 누른 작업 단
+  const setSelectedTier = workCtx ? workCtx.setTier : _setLocTier;
   // V8.50: 갈림 선택 — 검수사(또는 무언 적응)가 고른 부류 스트림. null = 기본 층 순서.
   const [streamPref, setStreamPref] = useState(null);
   const [fixOpen, setFixOpen] = useState(false);
@@ -321,6 +330,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     }
     return Object.values(map).sort((a, b) => a.center - b.center);
   }, [remaining, bayPairs]);
+
+  //  2.90: 물려받은 베이가 이쪽 묶음 center 와 안 맞으면(짝 계산 입력 차이) 그 베이를 품은 묶음으로
+  //    옮겨 앉는다. 품은 묶음도 없으면 비운다 — 이쪽 모집단에 그 베이 일이 없는 것이라 게이트가 다시 묻는다.
+  //  ⚠ 2.90(감사 지적): 이 정리는 «물려받은 값 1회»만 한다(아래 ref 로 무장해제). groups 는 remaining
+  //    으로만 만들어서, 어느 그룹의 마지막 컨을 끝내면 그 그룹이 목록에서 사라진다 — 그 순간을 «이탈»로
+  //    오판해 비우면 방금 뜬 «양하 완료! 해치커버 클로즈» 카드가 한 프레임에 사라진다(소진 ≠ 이탈).
+  const _snapArmedRef = useRef(true);   // 마운트 = 물려받는 순간
+  useEffect(() => {
+    if (selectedGroup == null || !groups.length) return;
+    if (!_snapArmedRef.current) return;
+    _snapArmedRef.current = false;
+    if (groups.some((g) => g.center === selectedGroup)) return;
+    const host = groups.find((g) => g.bays && g.bays.has(parseInt(selectedGroup, 10)));
+    if (host) setSelectedGroup(host.center); else setSelectedGroup(null);
+  }, [selectedGroup, groups]);
 
   // ── TallyOne 1.55: **베이 묶음을 바꿀 때 갱(호기)을 되묻는다.** (검수사 확정 2026-08-12)
   //   원문 — *"카톡 내용을 보면 장비를 바꿔서 해야 하는데 4호기로 다함.
@@ -720,7 +744,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-16: 그룹(베이) 변경 시 프롬프트 플래그 리셋
   // 1.57: 베이 그룹·단이 바뀌면 최근 처리분(recentRef)도 비운다 — 앞 베이의 흐름을 끌고 오지 않게.
-  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); recentRef.current = []; }, [selectedGroup]);
+  //  2.90: 물려받은 선택(workCtx)으로 마운트될 때는 지우지 않는다 — 마운트 직후 이 effect 가 한 번 돌아
+  //    수동에서 고른 단(selectedTier)을 지우던 것이 «전환하면 재지정» 의 한 축이었다. 진짜 그룹 변경만 지운다.
+  const _prevGroupRef = useRef(selectedGroup);
+  useEffect(() => {
+    if (_prevGroupRef.current === selectedGroup) return;
+    _prevGroupRef.current = selectedGroup;
+    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); recentRef.current = [];
+  }, [selectedGroup]);
   useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
