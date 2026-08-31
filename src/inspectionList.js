@@ -108,7 +108,8 @@ function getRowColor(c) {
 }
 
 // 단일 줄 HTML
-function renderRow(c, idx) {
+function renderRow(c, idx, opts) {
+  const _noFlag = !!(opts && opts.noFlag);   // 2.92-01: 별첨 — 성질 아닌 표기(X-RAY·긴급) 제외
   const bg = getRowColor(c);
   const { len, type } = getContainerCategory(c);
   const spec = `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
@@ -123,7 +124,7 @@ function renderRow(c, idx) {
   // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
   const notes = [];
   if (isBooking) notes.push('<span style="color:#b45309;font-weight:bold">📝대기</span>');
-  if (c._xray) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
+  if (c._xray && !_noFlag) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
   // M6.94.18: 온도 필드는 c.tmp (CSVExport·diagnostics와 동일). 기존 c.temp는 비어서 표기 안 됐음.
   //   XRAY 대상이 리퍼면 ★XRAY + 온도 둘 다 비고에 표기 (선상 체크용).
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
@@ -178,7 +179,7 @@ function renderRow(c, idx) {
   if ((c.cgW || c.cgH) && !_isSpecShape) notes.push(`${c.cgW || '?'}×${c.cgH || '?'}mm`);   // 2.91-03: FR·OT 는 제 줄에 이미 치수가 있다
   /* ★ 2.91 (검수사 «긴급화물등 특수 표기 빠진게 보임») — 긴급(▲)·수화물은 카고플랜·베이플랜에는
        그려지는데 **검수용 리스트에만 없었다.** 자료에 있는 것을 안 적은 것이다(§0-Y-2). */
-  if (c._urgent || c.urgent) notes.push('<span style="color:#b91c1c;font-weight:bold">▲긴급</span>');
+  if ((c._urgent || c.urgent) && !_noFlag) notes.push('<span style="color:#b91c1c;font-weight:bold">▲긴급</span>');
   if (c._lugg || c.lugg) notes.push('<span style="color:#6d28d9;font-weight:bold">수화물</span>');
   if (c._shift) notes.push('<span style="color:#1d4ed8;font-weight:bold">◆시프팅</span>');
   const note = notes.join(' ');
@@ -252,8 +253,12 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
   const special = list.filter(c => {
     const { type } = getContainerCategory(c);
-    // TallyOne 2.00: DG·OOG·FR·OT·TK 플래그도 별첨 대상 — 일반 ISO 에 실린 위험물이 별첨에서 빠졌다
-    return type !== 'normal' || c._xray || c.dg || c.oog || c.fr || c.ot || c.tk;
+    /* ★ 2.92-01 (검수사 확정 2026-08-31) — *«XRAY, 긴급화물은 특수 화물이 아닙니다.
+         거기에 기록할 필요가 없습니다»* — 별첨은 **화물의 성질**이 특수한 것만 모은다
+         (리퍼·FR·OT·탱크·위험물·규격초과). X-RAY 는 세관 검사 지정이고 긴급은 처리 순서라
+         둘 다 성질이 아니다 — 각자 제 서류(X-RAY 확인서·긴급 안내)가 따로 있다.
+       ⚠ 본문(시트1) 표기는 그대로 둔다 — 거기서는 알아야 할 정보다. */
+    return type !== 'normal' || c.dg || c.oog || c.fr || c.ot || c.tk;
   });
 
   let sheet2Html = special.length > 0 ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
@@ -299,7 +304,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
     const sheet2PagesList = [];
     for (let i = 0; i < special.length; i += PER_PAGE) {
       const chunk = special.slice(i, i + PER_PAGE);
-      const rows = chunk.map((c, j) => renderRow(c, i + j + 1));
+      const rows = chunk.map((c, j) => renderRow(c, i + j + 1, { noFlag: true }));   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
       sheet2PagesList.push(rows);
     }
     sheet2Html = `<div class="ititle">[별첨] 특수화물·X-RAY (${special.length}대)</div>` +

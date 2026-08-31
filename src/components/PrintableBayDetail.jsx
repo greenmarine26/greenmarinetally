@@ -1019,10 +1019,16 @@ export default function PrintableBayDetail({
           flex-shrink: 0;
         }
         .bd-header {
-          display: flex; justify-content: space-between;
+          /* 2.92-01 (검수사 «베이 정중앙에 베이넘버가 있는데 위에 항차수는 벗어나 보입니다») —
+             space-between 은 세 칸의 **글자 길이**로 위치가 정해져 가운데 칸이 진짜 중앙이 아니다.
+             선박명·항구 칸을 같은 폭으로 잡고 항차를 그 사이 정중앙에 세운다 — 아래 BAY 번호와 한 줄로 맞는다. */
+          display: flex; align-items: baseline;
           font-size: 10pt; margin-bottom: 3px;
           flex-shrink: 0;
         }
+        .bd-header > span:nth-child(1) { flex: 1 1 0; text-align: left; }
+        .bd-header > span:nth-child(2) { flex: 0 0 auto; text-align: center; }
+        .bd-header > span:nth-child(3) { flex: 1 1 0; text-align: right; }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
           font-size: 7pt;
