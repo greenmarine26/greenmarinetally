@@ -153,7 +153,7 @@ export const CARGO_V2_CSS = `
 .cpv2-hold-area { flex: 1 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
-.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; justify-content: center; }   /* 2.90-03: 칸이 고정 폭이라 남는 폭은 줄을 가운데로 민다 */   /* 2.90: --mf 는 .cpv2-page 가 셀 폭으로 내려준다(var() 폴백 9.6px 유지) */
+.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; justify-content: center; --mk: calc(var(--mf, 9.6px) * 1.05); }   /* 2.91-02: 칸 모서리 표식(★◆▲)은 **한 크기**로 — 종전 1.15·0.95·0.95 로 제각각이라 «크기가 제 각각»으로 보였다(검수사) */   /* 2.90-03: 칸이 고정 폭이라 남는 폭은 줄을 가운데로 민다 */   /* 2.90: --mf 는 .cpv2-page 가 셀 폭으로 내려준다(var() 폴백 9.6px 유지) */
 /* 2.38-03 «--mf» = 칸 마크 글자 크기의 단일 소스. **9.6px 고정**(원래 8px 의 1.2배).
    ⛔ 이 CSS 는 JS 템플릿 문자열 안이다 — 주석에도 백틱을 쓰지 마라(문자열이 끊겨 빌드가 죽는다, 실측 2026-08-25).
 
@@ -177,13 +177,13 @@ export const CARGO_V2_CSS = `
 .cpv2-row-labels { display: flex; flex: 0 0 auto; justify-content: center; font-size: calc(var(--mf, 9.6px) * 1.05)   /* 2.90-05: 칸 폭에 맞춘다 — 칸보다 라벨이 크면 겹친다 */; color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; text-align: center; line-height: 1.2; }   /* 2.90-03: 칸과 같은 고정 폭 — 라벨이 칸 위에 정확히 선다 */
 /* M6.94.19: XRAY는 ★ 별표만 표시, 배경은 선사 색 그대로 (연노랑 강제 제거) */
-.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: calc(var(--mf, 9.6px) * 1.15);   /* 2.90-05: clamp(vw) 금지 — 인쇄 뷰포트에서 칸보다 커진다(검수사 «시프팅 표기가 너무 큽니다»). 칸 글자에 비례시킨다 */ color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: 0; right: 0; line-height: 1;   /* 2.91-02: 칸 안으로 — top:-1px 로 내밀어 두면 overflow:hidden 에 잘리고, 행 높이가 소수라 칸마다 잘리는 양이 달라 «자리마다 크기가 달라» 보였다(검수사) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V8.98: 쉬프팅(재적부) = 좌상단 파란 ◆ (XRAY ★는 우상단 — 동시 표기 가능) */
-.cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: -1px; left: 0px; font-size: calc(var(--mf, 9.6px) * 0.95);   /* 2.90-05: 칸 글자 비례 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: 0; left: 0; line-height: 1;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
    V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서
    ★가 지워지던 충돌(사용자 지적 2026-07-23). 이제 ◆(before)·★(after)·▲(요소)·보라테두리 4종 완전 공존. */
-.cpv2-cell .cpv2-um { position: absolute; bottom: -1px; left: 0px; font-size: calc(var(--mf, 9.6px) * 0.95)   /* 2.90-05: 칸 글자 비례(clamp vw 금지) */; color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; font-style: normal; line-height: 1; }
+.cpv2-cell .cpv2-um { position: absolute; bottom: 0; left: 0;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; font-style: normal; line-height: 1; }
 .cpv2-cell.cpv2-lugg { box-shadow: inset 0 0 0 2px #7c3aed; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
