@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.94-08'   // 2.94-08 「미배정」이라는 말을 앱에서 없앤다 — 자리가 없을 뿐이다
+export const APP_VERSION = 'TallyOne 2.94-09'   // 2.94-09 지나온 자리 문장까지 「미배정」 제거 (옛 기록 호환 유지)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5385,7 +5385,12 @@ export function planWorkStart(info = {}, pierOverride = null, pilotArr = null) {
 //
 // moves 가 있으면 그대로 쓴다. 없는 옛 컨은 남아 있는 세 값(orig · actual · 현재)으로
 //   **세 점짜리 경로를 복원**한다 — 사유는 기록이 없으니 비운다(_guess 로 표시).
-const _mvPos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : '미배정');
+// TallyOne 2.94-08: 표시는 «자리 없음» 한 말로 통일한다(검수사 «미배정이 뜨면 안됩니다»).
+//   ⚠ 옛 `moves` 기록에는 '미배정' 문자열이 그대로 남아 있다 — 판정은 둘 다 인정한다.
+const _MV_NOPOS = '자리 없음';
+const _isNoPos = (v) => v === _MV_NOPOS || v === '미배정';
+const _mvTxt = (v) => (_isNoPos(v) ? _MV_NOPOS : v);
+const _mvPos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : _MV_NOPOS);
 // 숫자 끝자리 받침 — "06으로/02로", "1308이/2722가". 현장 문장이 어색하면 안 읽힌다.
 const _JONG = { '0': true, '1': true, '3': true, '6': true, '7': true, '8': true, '2': false, '4': false, '5': false, '9': false };
 const _ro = (t) => (_JONG[String(t).slice(-1)] ? '으로' : '로');
@@ -5416,7 +5421,7 @@ export const MOVE_WHY_KO = {
   move: '자리를 옮김',
   actual: '실제 실린 자리로 지정',
   displaced: '자리를 뺏겨 밀려남',
-  unassign: '미배정 처리',
+  unassign: '자리를 비움',
   // TallyOne 1.54: **이동이 아니다.** 이름표가 내려온 것이고 실물은 처음부터 창고에 있었다.
   //   검수사 확정 2026-08-12 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
   planTaken: '계획 자리를 내줌 (아직 안 실림)',
@@ -5432,7 +5437,7 @@ export function movePathOrigin(c) {
   //   "원래 창고 계획이었습니다" 는 거짓말이 된다 — 계획 좌표가 남아 있으면 그것을 쓴다.
   if (p.length && String(p[0].from) !== _MV_STORAGE) return p[0].from;
   const og = _mvPos(c?.bay_orig, c?.row_orig, c?.tier_orig);
-  if (og !== '미배정') return og;
+  if (!_isNoPos(og)) return og;
   return p.length ? p[0].from : og;
 }
 
@@ -5456,8 +5461,8 @@ export function describeMovePath(c, isCompleted = false) {
   const orig = movePathOrigin(c);
   // 1.50: 자리 없이 완료된 건은 그 사실을 드러낸다 — 오늘 TBJU2308214 가 그랬다
   //   (선적확인은 찍혔는데 좌표가 없어 카운터는 42/42인데 그림은 41칸).
-  const tail = cur === '미배정'
-    ? (isCompleted ? '⚠ 지금 자리가 없는데 선적확인만 되어 있습니다 — 자리를 지정해야 합니다.' : '지금은 자리가 없습니다 (미배정).')
+  const tail = _isNoPos(cur)
+    ? (isCompleted ? '⚠ 지금 자리가 없는데 선적확인만 되어 있습니다 — 자리를 지정해야 합니다.' : '지금은 실을 자리가 정해지지 않았습니다.')
     : (isCompleted ? `최종 ${cur}에 선적확인했습니다.` : `지금은 ${cur}에 있습니다.`);
   if (!path.length) {
     return `${c.cn} — 계획 자리 ${orig} 그대로입니다. 옮긴 적 없습니다.\n${tail}`;
@@ -5471,7 +5476,7 @@ export function describeMovePath(c, isCompleted = false) {
     const wasInStg = inStg;
     if (toStorage) inStg = true;
     else if (fromStorage) inStg = false;
-    const to = (m.to === '미배정' || toStorage) ? String(m.to) : `${m.to}${_ro(m.to)}`;
+    const to = (_isNoPos(m.to) || toStorage) ? _mvTxt(m.to) : `${m.to}${_ro(m.to)}`;
     let line;
     switch (m.why) {
       // 1.54: 이름표가 내려온 사건. 실물은 안 움직였다 — 문장이 그렇게 읽혀야 한다.
@@ -5482,20 +5487,20 @@ export function describeMovePath(c, isCompleted = false) {
           : `${m.from} 계획 자리를 내줬습니다. 그 컨은 아직 안 실렸습니다.`;
         return { m, line, nameOnly: true };   // byCn 꼬리말을 또 붙이지 않는다 — 문장에 이미 들어 있다.
       }
-      case 'displaced': line = (m.to === '미배정') ? '자리를 잃고 미배정이 됐습니다.' : `${to} 밀려났습니다.`; break;
-      case 'unassign':  line = `자리를 비웠습니다 (미배정).`; break;
+      case 'displaced': line = _isNoPos(m.to) ? '계획 자리를 내줬습니다 — 실을 자리를 정해야 합니다.' : `${to} 밀려났습니다.`; break;
+      case 'unassign':  line = `자리를 비웠습니다.`; break;
       case 'cancel':    line = `선적확인을 취소해 ${to} 되돌렸습니다.`; break;
       case 'restore':   line = `원래 계획 자리 ${to} 되돌렸습니다.`; break;
       // 1.54: 창고에서 꺼내 실은 경우도 마지막은 "실었습니다" 한 줄이다. 좌표 조사는 '에'로 통일한다.
       case 'loaded':    line = `${m.to}에 실었습니다.`; break;
       case 'actual':
       case 'move':
-        if (m.to === '미배정') { line = '자리를 비웠습니다 (미배정).'; break; }
+        if (_isNoPos(m.to)) { line = '자리를 비웠습니다.'; break; }
         // 창고에 있는 동안 좌표를 바꾼 것은 **계획을 고친 것**이지 실물을 옮긴 것이 아니다.
         line = wasInStg ? `${to} 계획을 바꿨습니다 (아직 안 실림).` : `${to} 옮겼습니다.`;
         break;
-      default:          line = (m.to === '미배정')
-                          ? '자리를 잃었습니다 (미배정). (사유 기록 없음 — 이력 도입 전)'
+      default:          line = _isNoPos(m.to)
+                          ? '자리를 비웠습니다. (사유 기록 없음 — 이력 도입 전)'
                           : `${to} 옮겼습니다. (사유 기록 없음 — 이력 도입 전)`; break;
     }
     if (m.byCn) { const b4 = String(m.byCn).slice(-4); line += ` 그 자리엔 ${b4}${_iga(b4)} 실렸습니다.`; }
@@ -5513,7 +5518,8 @@ export function describeMovePath(c, isCompleted = false) {
     out.push(`■ 실물이 움직인 것 — ${realRows.length}번`);
     realRows.forEach(r => out.push(`· ${r.line}`));
   } else {
-    out.push('■ 실물이 움직인 것 — 없습니다. 처음부터 창고에 있었습니다.');
+    // 2.94-09: 검수앱은 창고를 안 쓴다 — 아직 안 실은 컨은 실릴 차례를 기다릴 뿐이다.
+    out.push('■ 실물이 움직인 것 — 없습니다. 아직 안 실렸습니다.');
   }
   out.push('', `■ 이름이 걸렸던 자리 — ${nameRows.length}곳 (실물은 안 움직였습니다)`);
   nameRows.forEach(r => out.push(`· ${r.line}`));
