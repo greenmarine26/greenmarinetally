@@ -35,7 +35,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
   pendingSwap, onCancelSwap,   // TallyOne 2.89: 컨 맞교환 상대 고르기(배너만 — 셀 가로채기는 VoyagePage onOpenContainer)
-  enableSelection = false, onBatchToStorage,
+  // 2.94-01: enableSelection·onBatchToStorage 제거 — 「보관함으로」가 사라져 호출부가 없다.
+  //   ⚠ 아래 selectionMode/selectedCns 배선은 켜는 길이 없어 지금은 닿지 않는다(다음 판에서 정리 대상).
   preGoneInfo = null   // 1.69-06: 전항 양하 예정(평택 도착 전 하선) — {ports:Set, list, origin} 또는 null
 }) {
   const [pageIdx, setPageIdx] = useState(0);
@@ -626,30 +627,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         </div>
       )}
 
-      {/* M5.1 I: 영역 선택 진행 바 — 선택 모드 + 1개 이상 */}
-      {selectionMode && selectedCns.size > 0 && (
-        <div className="bg-sky-700 text-sky-50 rounded-pill p-3 flex items-center gap-2 sticky top-0 z-20 shadow-lg border-2 border-sky-400 flex-wrap">
-          <span className="text-base">🔲</span>
-          <span className="text-sm font-black">선택 {selectedCns.size}대</span>
-          <span className="text-xxs text-sky-200 flex-1 leading-tight min-w-[120px]">
-            컨 셀을 더 클릭해서 추가/제외하세요
-          </span>
-          <button onClick={() => {
-              const cns = Array.from(selectedCns);
-              onBatchToStorage?.(cns);
-              setSelectedCns(new Set());
-              setSelectionMode(false);
-            }}
-            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-black">
-            📦 보관함으로
-          </button>
-          <button onClick={() => setSelectedCns(new Set())}
-            className="px-2 py-1.5 bg-sky-900 hover:bg-sky-800 rounded text-xxs font-bold">
-            해제
-          </button>
-        </div>
-      )}
-
+      {/* 2.94-01: 영역 선택 진행 바 제거 — 「보관함으로」 하나만 하던 UI 였고, 검수앱에서 창고를 없앴다.
+          검수사 확정 «창고개념은 검수앱은 사용안합니다. 대쉬보드에서 수석이 사용합니다.» */}
       {/* 컨트롤 바 — M5.0: 산뜻하게 정리 (줌 컴팩트 + 인쇄 드롭다운 + 시각적 분리) */}
       {/* TallyOne 1.15: **고정 위치 교정** (검수사 신고 2026-08-06 — "스크롤 대상이 아니다. 베이만 스크롤되고
           이 부분은 고정되어야 한다"). sticky 는 걸려 있었지만 `top-0` 이라 앱 헤더(52px)와
@@ -717,16 +696,6 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           )}
         </div>
 
-        {/* M5.1 I: PC 영역 선택 토글 (모바일/이동중 비활성, 선적 전용) */}
-        {enableSelection && !isMobile && !pendingMove && (
-          <button onClick={() => setSelectionMode(v => !v)}
-            className={`px-2.5 py-1.5 rounded-pill text-xs font-bold ${
-              selectionMode ? 'bg-sky-600 text-sky-50' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'
-            }`}
-            title="선택 모드 — 컨 셀 클릭하여 다중 선택 → 보관함으로 일괄 이동">
-            🔲 {selectionMode ? '선택 ✓' : '선택'}
-          </button>
-        )}
 
         {/* 시각적 분리선 — 알림 배지 영역 시작 */}
         {(iso403Stats.total > 0 || (mode === 'loading' && unassignedCount > 0)) && (

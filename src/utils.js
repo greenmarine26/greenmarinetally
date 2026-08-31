@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.94-01'   // 2.94-01 창고 문구 6화면 통일(검수앱은 창고를 안 쓴다) + 매뉴얼 동반 수정
+export const APP_VERSION = 'TallyOne 2.94-02'   // 2.94-02 창고 잔재(선택→보관함 UI·기능목록·매뉴얼) 제거
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
