@@ -386,6 +386,22 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           이 한 줄이 B38·B26 을 수동에서 지우고 있었다(자동에는 남아 있어 «이중인격»으로 보였다). */
     return Object.values(map).filter(g => g.count > 0 || (g.contLeft || 0) > 0 || g.noBay).sort((a, b) => a.center - b.center);
   }, [allContainers, workFilter, manualBayPairs]);
+
+  /* ── TallyOne 2.93: **빈 칸이 있어도 갈 컨이 없으면 남은 작업이 아니다.** (검수사 지적 2026-08-31) ──
+       실측 MCSC 635S — B38 홀드 20대를 다 싣자 화면이 «같은 베이 데크 26대 남았습니다 — 이어서 →» 를 띄웠다.
+       38번 데크에 실을 화물은 EDI 계획도 CATOS 실적도 **0대**다. 26은 그 배 38번 데크의 **빈 칸 수**였다.
+       검수사 — *"데크 선적갯수? B3? 어디?"*
+       1.56 의 «남은 N대 = 빈 칸 수» 는 그대로 둔다(꽉 찬 베이에 유령 잔여가 남던 것을 고친 규칙이다).
+       다만 그 위에 게이트를 하나 세운다 — **실을 컨이 0이면 그 단은 0.**
+       ⚠ 2.88-02 의 시프팅 베이(계획 칸이 없어 빈 칸 0인데 실을 컨 36대)는 종전대로 컨 축이 진실이다. */
+  const tierLeftOf = React.useCallback((g, tier) => {
+    if (!g) return 0;
+    if (g.noBay) return g.count || 0;
+    const slot = tier === 'hold' ? (g.hold || 0) : (g.deck || 0);
+    const cont = tier === 'hold' ? (g.contHold || 0) : (g.contDeck || 0);
+    if (cont <= 0) return 0;                 // 실을 것이 없다 — 빈 칸이 몇이든 일이 아니다
+    return slot > 0 ? Math.min(slot, cont) : cont;
+  }, []);
   // TallyOne 1.53: **작업이 끝나면 검색창까지 사라졌다.**
   //   실측 2026-08-12(선적 335대 완주) — 남은 작업이 0이 되자 수동 모드가
   //   「선적 작업이 없습니다」만 띄우고 **조회창 자체가 없어졌다.** 「✓ 완료」 탭을 눌러야 검색창이 나왔다.
@@ -601,8 +617,8 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
                     시프팅 재선적분(계획 칸 없음)이 0으로 잠겼다. 같은 규칙으로 폴백한다 — 축은 섞지 않는다. */}
               {(() => {
                 const dkPlan = g ? g.deck : 0, hdPlan = g ? g.hold : 0;
-                const dk = dkPlan > 0 ? dkPlan : (g?.contDeck || 0);
-                const hd = hdPlan > 0 ? hdPlan : (g?.contHold || 0);
+                const dk = tierLeftOf(g, 'deck');   // 2.93: 갈 컨이 0인 단은 0
+                const hd = tierLeftOf(g, 'hold');
                 const dk20 = dkPlan > 0 ? g.deck20 : (g?.contDeck20 || 0), dk40 = dkPlan > 0 ? g.deck40 : (g?.contDeck40 || 0);
                 const hd20 = hdPlan > 0 ? g.hold20 : (g?.contHold20 || 0), hd40 = hdPlan > 0 ? g.hold40 : (g?.contHold40 || 0);
                 return (<>
@@ -640,7 +656,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         const noBay = !!g?.noBay;
         const bayLbl = noBay ? '자리 미지정' : (g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay));
         // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
-        const remain = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? (g.hold > 0 ? g.hold : (g.contHold || 0)) : (g.deck > 0 ? g.deck : (g.contDeck || 0))) : 0);   // 2.89-02: 컨 축 폴백
+        const remain = tierLeftOf(g, manualTier);   // 2.93: 빈 칸 ∩ 남은 컨 (한 곳에서 센다)
         return (
           <div className="flex items-center gap-2 text-xxs bg-ink-900 border border-line rounded-pill px-3 py-1.5">
             <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 자리 미지정 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
@@ -688,11 +704,11 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {workFilter !== 'completed' && !noWorkLeft && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
         const noBay = !!g?.noBay;
-        const left = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? (g.hold > 0 ? g.hold : (g.contHold || 0)) : (g.deck > 0 ? g.deck : (g.contDeck || 0))) : 0);   // 2.89-02: 컨 축 폴백
+        const left = tierLeftOf(g, manualTier);   // 2.93
         if (left > 0) return null;
         // 같은 베이의 다른 단이 남았으면 그쪽을 먼저 권한다(스프레더를 덜 바꾼다).
         const otherTier = manualTier === 'hold' ? 'deck' : 'hold';
-        const otherLeft = (!noBay && g) ? (otherTier === 'hold' ? (g.hold > 0 ? g.hold : (g.contHold || 0)) : (g.deck > 0 ? g.deck : (g.contDeck || 0))) : 0;   // 2.89-02
+        const otherLeft = noBay ? 0 : tierLeftOf(g, otherTier);   // 2.93
         const nextG = manualGroups.find(x => x.center !== manualBay && !x.noBay && x.count > 0)
                    || manualGroups.find(x => x.center !== manualBay && x.count > 0);
         const lbl = (x) => (x.noBay ? '자리 미지정' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);

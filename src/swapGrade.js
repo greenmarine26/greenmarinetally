@@ -45,6 +45,24 @@ export function sameBayGroup(bayA, bayB, bayPairs = {}) {
 
 const isEmptyCon = (c) => String(c?.fe || '').toUpperCase() === 'E';
 
+// TallyOne 2.93: **엠티 리퍼는 냉동이 아니다.** (검수사 확정 2026-08-31)
+//   원문 — *"여기서도 계속 놓치는것이 엠티는 냉동이 아닙니다. 안볼 화면을 계속 보고 있습니다"*
+//   엠티 리퍼는 전원을 안 꽂고 온도도 없다 — 전원 자리에 매일 이유가 없으므로
+//   *"엠티는 같은 포트면 자리를 바꿔도 된다"*(지침 Ⅱ)가 그대로 적용된다.
+//   실측 2026-08-31 MCSC 635S B38 — 20대가 전부 45RE 엠티인데 매 대마다 붉은
+//   🚫 "리퍼(냉동) 컨테이너입니다" 가 떠 검수원이 20번 안 볼 화면을 넘겨야 했다.
+//   ⚠ DG·FR·OT·TK·OOG 는 엠티여도 그대로 특수다 — 치수·고박·격리가 자리를 정한다.
+function isReeferOnlySpecial(c) {
+  if (!c) return false;
+  if (c.dg || c.fr || c.ot || c.oog || c.tk) return false;
+  if (String(c.dgc || '').trim() || String(c.un || '').trim()) return false;
+  const iso = String(c.iso || c.ediIso || '').toUpperCase();
+  if (/^[249LM][0-9A-Z][PUTSB]/.test(iso)) return false;   // 플랫·오픈탑·탱크·네임드·벌크
+  const tp = String(c.tp || '').toUpperCase();
+  if (/OT|FR|TK|OOG|PL/.test(tp)) return false;
+  return isSpecialCon(c);   // 남은 특수 사유는 리퍼뿐
+}
+
 // V9.53: 특수 컨은 **완화 규칙에서 뺀다**(사용자 확정 2026-08-03).
 //   리퍼는 전원 자리, 위험물은 격리 규정, FR/OT/TK/OOG 는 치수·고박이 자리를 정한다 —
 //   같은 베이·같은 포트라고 함부로 바꿀 수 있는 물건이 아니다. 언제나 강한 확인.
@@ -72,6 +90,7 @@ function specialWhy(c) {
   if (c.rf || (c.tmp !== undefined && c.tmp !== null && String(c.tmp).trim() !== '')) return '리퍼(냉동)';
   if (c.dg || String(c.dgc || '').trim() || String(c.un || '').trim()) return '위험물(DG)';
   if (c.fr) return 'FR(플랫랙)';
+  if (c.ot) return 'OT(오픈탑)';   // 2.93: 검수사 확정 — OOG 말고 FR·OT 로 적는다
   if (c.tk) return '탱크';
   if (c.oog) return 'OOG(규격초과)';
   return '특수 규격';
@@ -90,7 +109,9 @@ export function gradeSwap(incoming, planned, bayPairs = {}) {
   const empty = isEmptyCon(incoming) && isEmptyCon(planned);
 
   // ★ 특수 컨은 완화 대상이 아니다 — 어느 쪽이든 특수면 강한 확인
-  const sp = isSpecialCon(incoming) ? incoming : (isSpecialCon(planned) ? planned : null);
+  //   2.93: 단 **양쪽 다 엠티인 리퍼**는 특수가 아니다(엠티는 냉동이 아니다).
+  const _sp = (c) => isSpecialCon(c) && !(empty && isReeferOnlySpecial(c));
+  const sp = _sp(incoming) ? incoming : (_sp(planned) ? planned : null);
   if (sp) {
     return { level: 'strong', podSame, sameBay, empty, special: specialWhy(sp),
              reason: `${specialWhy(sp)} 컨테이너입니다 — 자리가 정해져 있어 함부로 바꿀 수 없습니다` };
@@ -113,11 +134,17 @@ export function gradeSwap(incoming, planned, bayPairs = {}) {
 }
 
 /** 강한 등급일 때 저장 전 한 번 더 묻는 문구 (없으면 묻지 않는다) */
+// TallyOne 2.93: **밀려난 컨이 어디로 가는지 사실대로 쓴다.** (검수사 지적 2026-08-31)
+//   종전 문구는 늘 *"원래 자리로 옮겨집니다"* 였는데, 실제로 그렇게 되는 것은
+//   검수사가 명시적으로 교환을 지시한 경우(`displacedMode:'swap'`)뿐이다.
+//   예약만 걸린 컨은 계획 자리를 내주고 **자리 미정**이 된다 — 몸은 아직 부두에 있다(§5-Y-B).
+//   같은 사건을 두 화면이 다르게 말하면 검수원은 곧 어느 쪽도 안 믿는다.
 export function confirmTextOf(g, incoming, planned) {
   if (!g || g.level !== 'strong') return '';
-  return `${incoming?.cn || ''} 를 이 자리에 넣습니다.\n\n${g.reason}\n\n`
-       + `이 자리의 계획 컨 ${planned?.cn || ''} 는 ${incoming?.cn || ''} 의 원래 자리로 옮겨집니다.\n`
-       + `진짜로 바꿉니까?`;
+  const tail = planned?._comp
+    ? `이 자리에는 ${planned?.cn || ''} 가 이미 선적확인돼 있습니다 — 완료는 유지되고 자리만 정리됩니다.\n`
+    : `이 자리의 계획 컨 ${planned?.cn || ''} 는 계획 자리를 내주고 「자리 미정」이 됩니다 (아직 안 실렸습니다).\n`;
+  return `${incoming?.cn || ''} 를 이 자리에 넣습니다.\n\n${g.reason}\n\n` + tail + `진짜로 바꿉니까?`;
 }
 
 export const GRADE_STYLE = {

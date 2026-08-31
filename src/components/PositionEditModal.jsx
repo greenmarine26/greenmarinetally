@@ -787,8 +787,9 @@ export default function PositionEditModal({
               )}
               {conflict && (
                 <div className="text-xxs text-orange-300 mt-2">
-                  {/* 1.55: 위 안내와 같은 잣대 — 밀려나는 컨은 창고로 간다(계획 자리는 그대로). */}
-                  ⚠ {conflict.cn} → 이름표만 내려옴 (계획 자리는 그대로 · 실물은 창고에)
+                  {/* 2.93: 확인창과 **같은 문장**을 쓴다. 종전엔 이 줄이 "실물은 창고에",
+                      확인창이 "원래 자리로 옮겨집니다" 라 서로 달랐다(검수사 지적 2026-08-31). */}
+                  ⚠ {conflict.cn} → 계획 자리를 내주고 「자리 미정」이 됩니다 (아직 안 실린 컨입니다)
                 </div>
               )}
             </div>

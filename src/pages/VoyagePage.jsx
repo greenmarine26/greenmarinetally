@@ -546,6 +546,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (r.tier_actual) safeR.tier_actual = r.tier_actual;
         if (r.actual_at) safeR.actual_at = r.actual_at;
         if (r.actual_by) safeR.actual_by = r.actual_by;
+        // 2.93: 계획 자리를 내준 표식 — 이 화이트리스트를 안 지나면 화면이 못 본다.
+        if (r.planTaken) safeR.planTaken = r.planTaken;
         // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.
         //   원인: 엠티 선적 엑셀(MCAT EMPTY)에는 진짜 선내 위치가 없고 그룹 카운트만 있어,
         //   파서가 만든 가짜 bay/row/tier가 EDI의 정확한 위치(BAPLIE LOC+147)를 덮어
@@ -584,7 +586,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //   실체(bay_actual)가 있으면 양하도 실체로 승격한다. 실체 없는 컨은 종전 그대로다.
     {
       return list.map(c => {
-        if (c.bay_actual === '__STG__') {
+        // 2.93: 계획 자리를 내준 컨(`planTaken`)도 **그림에서는 빠진다** — 이름표를 잃었기 때문이다.
+        //   계획 좌표는 아래 `_bay_planned`/`_edi_*` 로 그대로 살려 둔다(칸은 안 변한다, §5-Y-B).
+        //   이 줄이 없으면 새 컨과 밀려난 컨이 같은 칸을 그려 「한 칸 두 대」가 된다.
+        if (c.bay_actual === '__STG__' || c.planTaken) {
           // 보관함으로 빠진 컨 — 그리드에는 안 보이고 별도 StorageBox에서 처리
           return {
             ...c,

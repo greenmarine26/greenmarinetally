@@ -976,8 +976,19 @@ async function _markPlanTaken(voyageKey, mode, cn, by, byCn) {
                why: 'planTaken', byCn: byCn || '' });
   const patch = { moves: moves.slice(-40) };
   if (!recSnap.exists()) { patch.cn = cn; patch.l4 = cn.slice(-4); }   // EDI 만 있던 컨 — 레코드를 만든다
+  // ── TallyOne 2.93: **검수앱은 창고를 쓰지 않는다.** (검수사 확정 2026-08-30) ──
+  //   원문 — *"창고개념은 검수앱은 사용안합니다. 대쉬보드에서 수석이 사용합니다."*
+  //   1.54 는 이름표를 내준 컨을 `bay_actual='__STG__'` 로 찍었는데, 그것은
+  //   ① 검수앱이 안 쓰는 개념이고 ② 안 실은 컨에 «실체 위치»를 준다.
+  //   2.93 부터는 실체를 건드리지 않고 «이름표를 내줬다»는 사실만 남긴다 —
+  //   계획(`ediContainers`)은 그대로이므로 자리를 다시 정해 주면 그만이다.
+  patch.planTaken = { at: Date.now(), by: by || '', byCn: byCn || '', from: _pos(b, r, t) };
+  // 종전 창고 표식이 남아 있으면 걷어낸다(같은 컨을 두 번 밀어낸 경우).
+  if (String(cur.bay_actual ?? '') === STORAGE_BAY) {
+    patch.bay_actual = null; patch.row_actual = null; patch.tier_actual = null;
+    patch.actual_at = null; patch.actual_by = null;
+  }
   await update(recR, patch);
-  await fbBatchMoveToStorage(voyageKey, mode, [cn], by);   // 창고 표식은 기존 함수 하나로 통일
   return { cn, plan: { bay: b, row: r, tier: t } };
 }
 
@@ -1275,11 +1286,11 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     };
     if (explicitSwap && aOldBay && aOldRow && aOldTier) {
       // 명시적 자리 교환 — 옛 규칙 그대로 A 의 옛 자리로 보낸다(검수사가 지시한 교환).
-      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by, { why: 'swap', byCn: cn });
+      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by, { why: 'swap', byCn: cn, planOnly: true });
       displacedTo = { bay: aOldBay, row: aOldRow, tier: aOldTier };
     } else if (opts.displacedMode === 'unassign') {
       // 검수사가 명시적으로 미배정을 고른 경우.
-      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn, planOnly: true });
     } else if (displacedPlanOnly && isLoading) {
       // 예약만 하고 입실 안 한 컨 — **이동이 아니다. 이름표가 내려왔을 뿐이다.**
       //   계획(bay/row/tier)은 그대로 두고 실체만 창고로 찍는다.
@@ -1294,11 +1305,11 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       // 계획 자리가 지금 A 가 들어가는 바로 그 칸이면 갈 데가 없는 것과 같다.
       const sameAsTarget = !!pb && String(parseInt(pb, 10)) === newBayIntD && pr === newRow && pt === newTier;
       if (pb && pr && pt && !sameAsTarget && slotFree(pb, pr, pt)) {
-        await _updatePositionFields(voyageKey, mode, displaced, pb, pr, pt, by, { why: 'displaced', byCn: cn });
+        await _updatePositionFields(voyageKey, mode, displaced, pb, pr, pt, by, { why: 'displaced', byCn: cn, planOnly: true });
         displacedTo = { bay: pb, row: pr, tier: pt };
         displacedToOwnPlan = true;
       } else {
-        await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
+        await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn, planOnly: true });
       }
     }
     // 같은 칸에 이름표를 더 걸어 둔 컨(EDI 중복 등)도 이름표는 내려온다 — 안 하면 그림에서 한 칸에 두 대가 된다.
@@ -1450,8 +1461,20 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     //   그 조건이 곧 위 소멸의 원인이었다 — 조건을 없앤다.
     //   ⚠ 창고(`__STG__`)에 있던 컨도 새 자리를 주면 갱신한다 — 창고에서 꺼내 자리를 정하는 정상 흐름이다.
     //   ⚠ 미배정(`!nb && !nr && !nt`)·`why:'cancel'` 에서 실체를 지우는 위 분기는 그대로 둔다.
-    patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
-    patch.actual_at = Date.now(); patch.actual_by = by || '';
+    // ── TallyOne 2.93: **밀려난 컨은 실체를 얻지 않는다.** (검수사 지적 2026-08-31) ──
+    //   1.55 의 "자리가 주어지면 실체를 항상 쓴다"는 **검수원이 제 손으로 자리를 지정한 컨**에는 맞다.
+    //   그러나 앱이 밀어낸 컨(`why:'displaced'|'swap'|'planTaken'`)은 검수원이 지정한 적이 없고
+    //   실제로 아직 부두에 있다. 거기에 `bay_actual`+`actual_by` 를 박으면 화면·인쇄물·EDI 회신이
+    //   **안 실은 컨을 실렸다고 말한다.**
+    //   실측 2026-08-31 MCSC 635S — B38 20대를 실었더니 밀려난 20대에 전부 실체 위치가 박혔다
+    //   (18대는 `__STG__`, 2대는 34번 자리). 「한 칸 두 대」·「B38 홀드 0」의 근원이 이것이었다.
+    //   §5-Y-B 정본 — *컨(손님)은 창고→배 딱 한 번 움직인다.* 이름표를 내준 것은 이동이 아니다.
+    if (!meta.planOnly) {
+      patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
+      patch.actual_at = Date.now(); patch.actual_by = by || '';
+    }
+    // 2.93: 자리를 새로 받았으면 «이름표를 내줬다» 표식은 걷는다.
+    if (cur.planTaken) patch.planTaken = null;
   }
 
   // records가 없으면 새로 만듦 (cn은 키이지만 안전하게)

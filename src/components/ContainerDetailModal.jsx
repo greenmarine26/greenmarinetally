@@ -568,10 +568,14 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             {/* TallyOne 1.54: **「자리 미지정」과 「창고」는 다른 상태다.** (검수사 확정 2026-08-12)
                 *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."* — 창고 컨은 계획이 살아 있다.
                 종전엔 둘 다 「선적대상」 한 딱지였다. 계획 자리를 내준 컨이 계획도 없는 컨처럼 보였다. */}
-            {mode === 'loading' && c.bay_actual === '__STG__' && (
+            {/* 2.93: 검수앱은 창고를 안 쓴다 — «계획 자리를 내줬다»로 말한다(검수사 확정 2026-08-30). */}
+            {mode === 'loading' && c.planTaken && (
+              <span className="ml-2 bg-sky-800 text-sky-50 text-2xs px-1.5 py-0.5 rounded font-black">🏷 계획 자리를 내줬음 · 자리 미정</span>
+            )}
+            {mode === 'loading' && !c.planTaken && c.bay_actual === '__STG__' && (
               <span className="ml-2 bg-sky-800 text-sky-50 text-2xs px-1.5 py-0.5 rounded font-black">📦 창고 · 이름만 걸려 있음</span>
             )}
-            {!c.bay && mode === 'loading' && c.bay_actual !== '__STG__' && (
+            {!c.bay && mode === 'loading' && !c.planTaken && c.bay_actual !== '__STG__' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-2xs px-1.5 py-0.5 rounded font-black">선적대상</span>
             )}
             {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
@@ -616,7 +620,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               </div>
 
               {!editingActualPos ? (
-                c.bay_actual === '__STG__' ? (
+                c.planTaken ? (
+                  <div className="text-xs text-sky-300 font-bold">🏷 계획 자리{c.planTaken.from ? ` ${c.planTaken.from}` : ''} 를 {c.planTaken.byCn || '다른 컨'} 에게 내줬습니다 — 아직 안 실렸습니다. 자리를 다시 정해 주세요.</div>
+                ) : c.bay_actual === '__STG__' ? (
                   // 1.54: 창고는 좌표가 아니다 — `__STG__` 를 베이 번호처럼 그리면 안 된다.
                   <div className="text-xs text-sky-300 font-bold">📦 창고에 있습니다 — 계획 자리는 위에 그대로 남아 있습니다.</div>
                 ) : (c.bay_actual || c.row_actual || c.tier_actual) ? (
