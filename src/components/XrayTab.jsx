@@ -83,23 +83,34 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
     //    PORT-MIS 값은 기계가 준 것이라 레그가 어긋나면 버리는 게 맞지만(2.71), 손입력은
     //    검수사가 보고 고른 값이다. 걸러 버리면 «분명히 쳤는데 안 나온다» 가 된다.
     //    ⚠ 레그가 어긋나면 버리지 말고 **입력 칸에서 경고**한다(아래 mrnWarn).
-    const mrn = _legOK(pm && (mode === 'loading' ? pm.mrnOut : pm.mrnIn))
-      || _legOK(pm && pm.mrn)
-      || String((mode === 'loading' ? info.mrnOut : info.mrnIn) || '').trim().toUpperCase()
-      || '';
-    //  ★ 2.89-08 (§0-Y-2 «없어서 못 한다는 말은 없다» — 검수사: «찾으면 있는데 없다고 거짓을 말한거나
-    //    다름없습니다») — «없음» 을 쓰기 전에 이 분기가 확인한 원천을 전부 밝힌다.
-    //    확인 순서: ①port_mis_data(베이매트릭스 신원 매칭) 레그별 ②동 대표값 ③voyages/{키}/info(손입력·CATOS).
-    //    셋 다 비었을 때만 mrnWhy 가 만들어지고, 화면은 «왜 + 채울 길(손입력)» 을 같이 보인다.
-    let mrnWhy = '';
-    if (!mrn) {
-      const _opp = String(pm ? ((mode === 'loading' ? pm.mrnIn : pm.mrnOut) || pm.mrn || '') : '').trim().toUpperCase();
-      const _up = pm && pm.updatedAt ? new Date(pm.updatedAt) : null;
-      const _upTxt = _up && isFinite(_up.getTime()) ? `${_up.getMonth() + 1}/${_up.getDate()} 업로드본` : '';
-      if (!pm) mrnWhy = 'PORT-MIS 목록(콜사인·IMO·선박명으로 조회)에 이 배 신고가 없고, 항차 기록(손입력·CATOS)도 비어 있습니다';
-      else if (_opp) mrnWhy = `PORT-MIS 에 ${mode === 'loading' ? '출항(E)' : '입항(I)'} MRN 이 없습니다 — 다른 방향 값만 있습니다(${_opp})`;
-      else mrnWhy = `PORT-MIS 신고는 찾았는데(${_upTxt || '기존 레코드'}) MRN 칸이 비어 있습니다 — PORT-MIS 엑셀을 새로 올리면 채워질 수 있습니다`;
-    }
+    const _pmLeg = pm && (mode === 'loading' ? pm.mrnOut : pm.mrnIn);
+    const _pmTop = pm && pm.mrn;
+    const _hand = String((mode === 'loading' ? info.mrnOut : info.mrnIn) || '').trim().toUpperCase();
+    const mrn = _legOK(_pmLeg) || _legOK(_pmTop) || _hand || '';
+    /* ★ 2.90 (검수사 지시 2026-08-31, §0-Y-2 «없어서 못 한다는 말은 없다») —
+         MRN 이 비었을 때 **원인을 단정하지 않는다.** 종전 문구는 늘 «PORT-MIS 에 이 배 등록이 없으면»
+         이었는데, 실제로 비는 길은 넷이고(매칭 실패 · 레그 불일치로 버림 · 레코드에 MRN 칸이 빔 ·
+         아무 데도 없음) 셋은 «등록이 없다»가 **거짓**이다.
+       ⇒ 어디를 봤는지, 왜 못 찾았는지, 무엇을 하면 되는지를 그대로 말한다.
+         특히 «레그 불일치»는 **값이 눈앞에 있는데 버린 것**이라 그 값을 보여 준다(버리되 숨기지 않는다). */
+    const _other = pm && (mode === 'loading' ? pm.mrnIn : pm.mrnOut);
+    const _dropped = String(_pmLeg || _pmTop || _other || '').trim().toUpperCase();
+    const mrnDiag = mrn ? null : (
+      !pm ? {
+        why: `PORT-MIS 에서 이 배(${String(info.vsl || '').toUpperCase()}${info.callsign ? ' · ' + info.callsign : ''})를 못 찾았습니다`,
+        how: 'PORT-MIS 자료가 아직 안 올라왔거나 이 배 신고가 없습니다. 수석 대시보드 「📸 PORT-MIS 캡처」로 엑셀을 올리거나, 아래에 직접 적어 넣으십시오.',
+        looked: 'PORT-MIS 매칭 · 항차 손입력',
+      } : _dropped ? {
+        why: `PORT-MIS 에 ${_dropped} 가 있는데 ${mode === 'loading' ? '선적(E)' : '양하(I)'} 번호가 아니라 쓰지 않았습니다`,
+        how: `이 배는 ${mode === 'loading' ? '입항(I)' : '출항(E)'} 신고만 올라와 있습니다. 이 서류에 맞는 번호를 아래에 적어 넣으십시오.`,
+        cand: _dropped,
+        looked: `PORT-MIS ${mode === 'loading' ? 'mrnOut' : 'mrnIn'} · mrn · 반대 레그 · 항차 손입력`,
+      } : {
+        why: 'PORT-MIS 에 이 배는 있는데 MRN 칸이 비어 있습니다',
+        how: '올린 PORT-MIS 엑셀에 「MRN 번호」(적하목록관리번호) 열이 없었을 수 있습니다. 그 열이 있는 파일로 다시 올리거나, 아래에 직접 적어 넣으십시오.',
+        looked: 'PORT-MIS mrnIn · mrnOut · mrn · 항차 손입력',
+      }
+    );
     //  입항일자 — PORT-MIS 입항일시가 1순위, 없으면 항차 작업창 앞자리. «2026.08.24» 형태.
     const rawEta = String(pm?.eta || info.planDate || '').trim();
     const md = rawEta.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
@@ -116,7 +127,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       //  2.78: 전역 사전은 resolveShipDisplayName 이 스스로 읽는다(인자 없으면 window.__fbShipBayDict).
       name: resolveShipDisplayName(info, portMisData).name || code,
       callsign: String(info.callsign || pm?.callsign || shipIdentityOf(info).callsign || '').toUpperCase(),
-      mrn, mrnWhy,
+      mrn, mrnDiag,
       //  2.41: 엑셀 「터미널」 열 — PCTC/PNCT. 인쇄물 머리에는 없고 엑셀에만 쓴다.
       pier: info.pier || '',
     };
@@ -254,9 +265,19 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           {!!mrnWarn(mrnEdit) && <div className="text-2xs text-rose-300">⚠ {mrnWarn(mrnEdit)}</div>}
         </div>
       ) : !head.mrn ? (
+        /* ★ 2.90 — «없다»고 단정하지 않는다(§0-Y-2). 어디를 봤는지·왜 못 찾았는지·무엇을 하면 되는지. */
+        /*  ⚠ 2.90-01 (코드 감사 지적) — 찾은 값을 **입력칸에 미리 채우지 않는다.**
+            cand 는 레그가 어긋나 버린 값(예: 양하 서류인데 출항 E 번호)이고, 손입력은 레그 검사를
+            일부러 안 건다(2.77). 미리 채우면 경고 한 줄을 지나쳐 저장 → 세관 서류에 반대 레그가 나간다
+            (2.71 이 고친 그 병). 보여는 주되 넣는 것은 검수사가 직접 친다. */
         <button onClick={() => setMrnEdit('')} disabled={!voyageKey}
-          className="w-full text-left rounded-pill border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xxs text-amber-200 disabled:opacity-60">
-          ⚠ MRN 이 비어 있습니다. {head.mrnWhy}. <b>여기를 눌러 적어 넣으십시오</b> — PORT-MIS 사이트에 보이는 MRN 을 그대로 옮기면 됩니다.
+          className="w-full text-left rounded-pill border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xxs text-amber-200 disabled:opacity-60 space-y-0.5">
+          <div className="font-bold">⚠ MRN 을 못 찾았습니다 — {head.mrnDiag?.why || '어디에도 없습니다'}</div>
+          {!!head.mrnDiag?.cand && (
+            <div className="text-amber-100">찾은 값: <b className="mono">{head.mrnDiag.cand}</b> — 이 서류의 번호가 아닙니다. 맞는 번호를 직접 쳐 넣으십시오.</div>
+          )}
+          <div className="text-amber-300/90">{head.mrnDiag?.how || '여기를 눌러 적어 넣으십시오.'}</div>
+          <div className="text-2xs text-amber-400/70">본 곳: {head.mrnDiag?.looked || 'PORT-MIS · 항차 손입력'}</div>
         </button>
       ) : (
         <div className="flex items-center gap-2 text-xxs text-dim-300">

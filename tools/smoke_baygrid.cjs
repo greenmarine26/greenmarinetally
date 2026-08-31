@@ -142,5 +142,46 @@ const dicts = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/baygrid
   }
 }
 
+/* ★ 2.90-01 — **두 글자 마크가 잘리지 않는가** (검수사 «RF / RE 등 두글자는 깨져 보인다»)
+     칸 글자는 셀 폭이 정한다(cargoPlanMetrics). 39척 전수로, 가장 넓은 두 글자 DG(1.5em)가
+     칸 안쪽(셀폭−1px)에 들어가는지 본다. 하나라도 넘치면 배포 금지.
+   ⚠ 열 수는 화면이 쓰는 것과 같은 축이어야 한다 — `globalMaxCols` 는 **그 배 전 베이의 최댓값**이다
+     (베이 하나만 보면 MCSC 가 8열로 나와 통과해 버린다 — 2.90 재검증에서 실제로 갈렸다).
+   ⚠ 마크 폭(Arial Bold): DG 1.500 · RE 1.389 · RF/FR/TK 1.333 em. */
+{
+  const MARKS = { DG: 1.5, RE: 1.389, RF: 1.333, FR: 1.333, TK: 1.333 };
+  let worst = null, cut = 0, ships = 0;
+  for (const [code, e] of Object.entries(dicts)) {
+    const def = e?.bayDef || e;
+    let mb; try { mb = CP.summaryToMatrixBays(def); } catch (err) { continue; }
+    if (!Array.isArray(mb) || !mb.length) continue;
+    const pr = CP.autoPairBays(mb);
+    const trios = pr.trios || [], singles = pr.singles || [];
+    const pdfB = CP.generatePdfBays(mb, trios, singles);
+    const lay = CP.autoPageLayout(trios, singles);
+    //  화면과 같은 축: 전 베이 렌더데이터의 nDeckCols·nHoldCols 최댓값(globalMaxCols 와 동일)
+    let cols = 0;
+    for (const key of Object.keys(pdfB || {})) {
+      let rd0; try {
+        rd0 = CP.computeBayRenderData(key, pdfB, mb, CP.buildPosMap([]), 'KRPTK', CP.defaultGetSelfMark, {}, () => null, () => false, def, code, {});
+      } catch (err) { rd0 = null; }
+      for (const k of ['nDeckCols', 'nHoldCols']) if (rd0 && rd0[k] > cols) cols = rd0[k];
+    }
+    if (!cols) continue;
+    const per = Math.max(lay?.[0]?.length || 1, 1);
+    const m = CP.cargoPlanMetrics(cols, per);
+    const inner = m.cellW - 1;
+    ships++;
+    for (const [mk, em] of Object.entries(MARKS)) {
+      const over = m.markFont * em - inner;
+      if (over > 0) { cut++; T(false, `⛔ ${code}(${cols}열/${per}박스) ${mk} 가 ${over.toFixed(2)}px 넘친다 — 글자 ${m.markFont}px · 칸 안쪽 ${inner.toFixed(2)}px`); }
+      if (!worst || over > worst.over) worst = { code, mk, over, cols, per, font: m.markFont };
+    }
+    T(m.fits !== false, `⛔ ${code}: cargoPlanMetrics 가 fits=false — 하한으로 눌러도 두 글자가 안 들어간다`);
+  }
+  T(ships >= 30, `⛔ 두 글자 검사가 ${ships}척만 돌았다 — 사전 추출이 깨졌다`);
+  if (!cut) console.log(`  · 두 글자 마크 ${ships}척 전수 통과 — 최악 ${worst.code}(${worst.cols}열/${worst.per}박스) ${worst.mk} 여유 ${(-worst.over).toFixed(2)}px · 글자 ${worst.font}px`);
+}
+
 if (bad > 0) { console.error(`✗ 베이 격자 연막검사 실패 ${bad}건`); process.exit(1); }
 console.log('✓ 베이 격자 연막검사 통과 — 격자 한 벌(39척)·짝 한 벌·SWTD=CASP·소스 옛 벌 0');

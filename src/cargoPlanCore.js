@@ -170,6 +170,54 @@ export function generatePdfBays(matrixBays, trios, singles) {
 //   예시: N=10 → 6+4 (별첨 2), N=11 → 6+5 (별첨 1), N=12 → 7+5 (별첨 2)
 //   배치 원칙: 작은 번호(선수쪽) → 위 줄, 큰 번호(선미쪽) → 아래 줄
 //             각 행 안에서 큰 번호 좌측 (카스피 정답 양식)
+/* ★ TallyOne 2.90 (검수사 2026-08-31) — **칸 글자 크기는 셀 폭이 정한다.**
+     검수사 원문: *«카고플랜 출력에서 MCSC처럼 큰배는 RF / RE 등 두글자는 깨져 보인다.
+     셀수에 따라서 동적 크기 변환을 해야 한다»*
+
+   ── 왜 깨졌나 (실측)
+   `--mf` 가 **9.6px 고정**이었다. 칸은 flex 로 균등분할되므로 열이 많을수록 좁아지는데 글자는 안 줄었다.
+   두 글자 마크(DG·RF·RE·FR·TK)는 공백이 없어 min-content 가 두 글자 폭이라, 칸보다 넓으면
+   가운데 정렬 상태로 **좌우가 동시에 잘린다**. 한 글자는 안 잘린다 — 검수사가 본 그대로다.
+   MCSC(12열·줄당 7박스) 인쇄 칸 안쪽 8.89px 인데 DG 는 14.4px — 162% 다.
+   39척 중 **21척(11열 이상)** 이 같은 증상이었다. 2.38-03 이 DXQD(8열·28.5px) 하나로만 재고 굳혔다.
+
+   ── 기준
+   · 폭은 **인쇄 기준**(277mm = 1046.93px)으로 잡는다. 화면은 min-width:1200px 라 더 넓어 저절로 안전하다.
+   · 가장 넓은 두 글자 **DG**(Arial Bold 어드밴스 722+778 = 1.5em)가 들어가야 한다.
+   · vw·clamp(vw) 금지 — 인쇄 뷰포트에서 최솟값으로 떨어진다(2.38-03 이 그 함정에 빠졌다).
+   · 하한 6.0px — 그보다 작으면 종이에서 사람이 못 읽는다. 상한은 종전 9.6px(작은 배 불변). */
+export const CPV2_PAGE_W_PRINT = 1046.93;   // 277mm @96dpi — 인쇄 페이지 폭
+export const CPV2_PAGE_PAD = 4 * 96 / 25.4 * 2;   // padding 4mm 좌우 = 30.236px (2.90-01 교정 — 8px 은 mm→px 환산 누락이었다. 주석 실측 «MCSC 안쪽 8.89px»·«DXQD 28.5px» 가 이 값으로만 재현된다)
+export const CPV2_BOX_GAP = 3;              // 박스 사이 gap
+export const CPV2_BOX_CHROME = 24;          // 박스 테두리2 + 섹션패딩4 + gap2 + 단라벨16
+export const CPV2_MARK_FONT_MAX = 9.6;
+export const CPV2_MARK_FONT_MIN = 5.9;      // 2.90-01 검수사 확정 «2 잘 보이기만 하면 됩니다» — 다섯 마크(DG·RE·RF·FR·TK) 전부 들어가는 하한
+export const CPV2_WIDEST_MARK_EM = 1.5;     // 'DG'
+
+/** 셀 폭(px) → 두 글자가 들어가는 글자 크기(px). 화면·인쇄·콘앱 공용 한 벌. */
+export function markFontForCellW(cellW) {
+  const w = Number(cellW);
+  if (!Number.isFinite(w) || w <= 0) return { font: CPV2_MARK_FONT_MAX, fits: false, need: 0 };
+  const inner = Math.max(0, w - 1);                      // 테두리 0.5×2
+  //  ⚠ 맞춤 계산은 **내림**이다(2.90-01). 반올림하면 0.005px 초과로 두 글자가 잘린다(11열 16척 실측).
+  const need = Math.floor((inner / CPV2_WIDEST_MARK_EM) * 10) / 10;
+  const font = Math.max(CPV2_MARK_FONT_MIN, Math.min(CPV2_MARK_FONT_MAX, need));
+  //  fits=false 는 «하한으로 눌렀지만 두 글자가 안 들어간다» — 조용히 삼키지 않는다(3금지 ③).
+  return { font, fits: font * CPV2_WIDEST_MARK_EM <= inner, need };
+}
+
+/** 격자 크기 한 벌 — 열 수·줄당 박스 수로 칸 폭과 글자 크기를 낸다. */
+export function cargoPlanMetrics(gridCols, boxesPerRow, pageW) {
+  const _n = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
+  const cols = Math.max(1, Math.floor(_n(gridCols, 1)));
+  const per = Math.max(1, Math.floor(_n(boxesPerRow, 1)));
+  const W = _n(pageW, CPV2_PAGE_W_PRINT);
+  const boxW = Math.max(0, (W - CPV2_PAGE_PAD - CPV2_BOX_GAP * (per - 1)) / per);
+  const cellW = Math.max(0, (boxW - CPV2_BOX_CHROME) / cols);
+  const m = markFontForCellW(cellW);
+  return { boxW, cellW, markFont: m.font, fits: m.fits, need: m.need };
+}
+
 export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = null) {
   const allBoxes = [];
   trios.forEach(([topKey, pairKey]) => {
@@ -210,23 +258,6 @@ export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = nu
 //   - has_zero=false: evens + odds (00 없음)
 //   - cell_count 홀수 + has_zero=false: 홀수 row가 1개 더 (예: 7개 = evens[06,04,02] + odds[01,03,05,07])
 //   - cell_count 짝수 + has_zero=false: evens = odds 동수 (예: 8개 = [08..02] + [01..07])
-//  2.89-08 (검수사 «카고플랜 출력에서 MCSC처럼 큰배는 RF / RE 등 두글자는 깨져 보인다.
-//    셀수에 따라서 동적 크기 변환을 해야 한다») — 칸 마크 글자 크기 한 벌.
-//    기준은 **인쇄 지면**(277mm — @media print 에서 min-width 바닥이 전부 풀리는 그 판)이다.
-//    화면도 같은 값을 쓴다 — 화면 따로 인쇄 따로면 «시안과 인쇄가 다르다»(2.38-03 사고)가 재발한다.
-//    실측 비율: 가장 넓은 두 글자 DG = 글자크기 × 1.5 (9.6px → 14.4px, 2.38-03 주석 실측).
-//    ⚠ vw 금지 — 인쇄 뷰포트에서 바닥으로 떨어진다(2.38-03). 값은 배 구조에서만 나온다.
-//    작은 배(칸 폭 ≥ ~15.4px)는 종전 9.6px 그대로다 — 큰 배(MCSC 등)만 칸에 맞게 줄어든다.
-export function markFontPx(gridCols, boxesPerRow) {
-  const PAGE = 1047 - 30;                        // 277mm(1047px) − 페이지 padding 4mm×2(30px)
-  const n = Math.max(1, boxesPerRow || 1);
-  const boxW = (PAGE - 3 * (n - 1)) / n;         // .cpv2-page-row gap 3px
-  const FRAME = 24;                              // 박스 테두리 2 + 섹션 padding 4 + 단 라벨 16 + 격자 gap 2
-  const cellW = (boxW - FRAME) / Math.max(1, gridCols || 1);
-  const f = (cellW - 1) / 1.5;                   // 두 글자가 칸 안(테두리 1px 제외)에 들어가는 크기
-  return Math.min(9.6, Math.max(5, Math.round(f * 10) / 10));
-}
-
 export function getRowPositions(cellCount, hasZero) {
   if (cellCount <= 0) return [];
   const pad = (n) => String(n).padStart(2, '0');

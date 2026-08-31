@@ -23,7 +23,7 @@ import {
   computeBayRenderData,
   STANDARD_DECK,
   STANDARD_HOLD,
-  markFontPx,
+  cargoPlanMetrics,   // 2.90: 칸 글자 크기 한 벌
 } from '../cargoPlanCore.js';
 
 // ------------------------------------------------------------
@@ -153,14 +153,8 @@ export const CARGO_V2_CSS = `
 .cpv2-hold-area { flex: 1 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
-.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
-/* 2.38-03→2.89-08 «--mf» = 칸 마크 글자 크기의 단일 소스.
-   2.89-08 (검수사 «MCSC처럼 큰배는 RF / RE 등 두글자는 깨져 보인다. 셀수에 따라서 동적 크기 변환»):
-   고정 9.6px 선언을 여기서 빼고, .cpv2-page 의 인라인 --mf(markFontPx 계산값) 하나로 옮겼다.
-   9.6px 은 화면(min-width:1200px)에서는 맞지만 인쇄(@media print 가 min-width 바닥을 전부 푼다 —
-   아래 256행대)에서는 큰 배의 칸이 더 좁아져 두 글자가 잘렸다. 칸 폭은 배 구조(열 수·줄당 박스 수)가
-   정하므로 글자도 그 폭에서 계산한다 — 작은 배는 여전히 9.6px(천장)이라 종전과 같다.
-   var(--mf, 9.6px) 폴백은 그대로다 — 페이지 래퍼 없이 BayBoxV2 만 쓰는 화면(베이 편집기 등)은 종전값.
+.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }   /* 2.90: --mf 는 .cpv2-page 가 셀 폭으로 내려준다(var() 폴백 9.6px 유지) */
+/* 2.38-03 «--mf» = 칸 마크 글자 크기의 단일 소스. **9.6px 고정**(원래 8px 의 1.2배).
    ⛔ 이 CSS 는 JS 템플릿 문자열 안이다 — 주석에도 백틱을 쓰지 마라(문자열이 끊겨 빌드가 죽는다, 실측 2026-08-25).
 
    ⛔ clamp(vw) 를 뺀 이유 — 2026-08-25 인쇄본 실측.
@@ -178,7 +172,7 @@ export const CARGO_V2_CSS = `
       검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라고 한 것이
       전부 이 한 줄 때문이었다. em 은 폰트 크기를 정할 때 **자기 부모**를 본다. */
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: var(--mf, 9.6px);   /* 2.38-02→2.89-08 — 값은 .cpv2-page 인라인 --mf(markFontPx) 한 곳에서만 정한다(폴백 9.6 = 종전값) */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: var(--mf, 9.6px);   /* 2.38-02 마크 전부 1.2배 — 값은 .cpv2-tier-row 의 --mf 한 곳에서만 정한다(폴백은 같은 값) */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
@@ -895,10 +889,12 @@ export default function PrintableCargoPlanV2({
     return Math.max(m, 1);
   }, [renderDataMap]);
 
-  //  2.89-08: 칸 마크 글자도 «칸 폭에 맞춘다»(검수사 «셀수에 따라서 동적 크기 변환»). 값은
-  //    cargoPlanCore.markFontPx 한 벌 — 콘앱(같은 컴포넌트 번들)·화면·인쇄가 같은 값을 받는다.
-  //    선언은 .cpv2-page 의 인라인 --mf 하나뿐이다(.cpv2-tier-row 의 고정 선언은 2.89-08 에서 제거).
-  const markFont = useMemo(() => markFontPx(globalMaxCols, Math.max(layout[0]?.length || 1, 1)), [globalMaxCols, layout]);
+  /*  ★ 2.90 — 칸 마크 글자 크기(--mf). 종전 9.6px 고정이라 11열 이상 배(39척 중 21척)에서
+      두 글자 마크(DG·RF·RE·FR·TK)가 칸을 넘쳐 좌우가 잘렸다. 계산은 cargoPlanCore 한 벌.
+      기준 폭은 **인쇄**(277mm) — 화면(min-width:1200px)은 더 넓으니 저절로 안전하다. */
+  const markFont = useMemo(
+    () => cargoPlanMetrics(globalMaxCols, Math.max(layout[0]?.length || 1, 1)).markFont,
+    [globalMaxCols, layout]);
 
   // M6.94.16: 전체 베이 중 (deck tier + hold tier) 최대 → 셀 높이 고정 기준.
   //   홀드 없는 베이는 deck만 그리되 아래 spacer로 빈 공간 → deck 셀 높이를 다른 베이와 통일.
