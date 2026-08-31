@@ -241,7 +241,18 @@ export const CARGO_V2_CSS = `
 .cpv2-legend-table th, .cpv2-legend-table td { padding: calc(var(--lgf, 8px) * 0.12) calc(var(--lgf, 8px) * 0.3);
   border: 0.3px solid #aaa; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cpv2-legend-table th { background: #f5f5f5; font-size: calc(var(--lgf, 8px) * 0.88); font-weight: bold; }
-.cpv2-legend-mark { text-align: center; font-weight: bold; font-size: calc(var(--lgf, 8px)); }
+.cpv2-legend-mark { text-align: center; font-weight: bold; font-size: calc(var(--lgf, 8px));
+  padding-left: 0; padding-right: 0; text-overflow: clip; letter-spacing: -0.03em; }
+/*  ★ 2.98-09 — **두 글자 마크(DG·TK)가 «D…» 로 잘리던 것** (검수사 실물 보고 2026-08-31, 별첨2 양하).
+      마크 칸은 colgroup 9% 인데 위 공통 규칙의 좌우 패딩(--lgf*0.3 ×2)이 먹어
+      줄당 9칸(--lgf 8px)에서 글자에 남는 폭이 6px 뿐이었다. 8px bold 「DG」는 11~12px 라 안 들어가고,
+      공통 규칙의 «text-overflow: ellipsis» 가 그것을 «D…» 로 만들었다. 1글자(o·R·F·A)만 겨우 들어갔다.
+      ⚠ 이 CSS 블록은 JS 템플릿 문자열이다 — 주석에도 백틱을 쓰면 문자열이 끊겨 빌드가 죽는다(실측).
+      ⇒ 마크 칸만 패딩을 걷고, 두 글자는 글자를 줄인다. 잘려도 «…» 는 안 붙인다(점이 글자를 더 먹는다).
+      최악 조건 검산 — --lgf 5.5px 바닥(줄당 13칸): 칸 7.5px vs 「DG」 5.7px, 여유 1.8px.
+      ⚠ 이 표의 mark 는 그림(베이 박스)과 **같은 값**이어야 한다(2.38 검수사 확정 — 범례가 거짓말하면 안 된다).
+        그러니 «DG→D» 로 줄이는 해법은 금지다. 글자는 그대로 두고 칸을 맞춘다. */
+.cpv2-legend-mark2 { font-size: calc(var(--lgf, 8px) * 0.72); }
 .cpv2-legend-nm { font-size: calc(var(--lgf, 8px)); font-weight: bold; text-align: center; }
 .cpv2-legend-ct { font-size: calc(var(--lgf, 8px) * 0.94); text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
@@ -1359,7 +1370,8 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
             let markCell = null;
             if (useCargoColor) {
               const c = cargoColors[name] || cargoColors['일반'];
-              markCell = <td className="cpv2-legend-mark" style={{ background: c.bg, color: c.fg }}>{c.mark}</td>;
+              markCell = <td className={'cpv2-legend-mark' + (String(c.mark || '').length > 1 ? ' cpv2-legend-mark2' : '')}
+                style={{ background: c.bg, color: c.fg }}>{c.mark}</td>;   /* 2.98-09: 두 글자면 글자를 줄여 칸에 맞춘다 */
             } else if (useColorMap) {
               const bg = colorMap[name];
               // M6.94.23: 본문이 텍스트 색이므로 범례 견본도 색 글자 ■로 통일
