@@ -422,13 +422,15 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
             카고플랜은 셀이 좁아 굵은 선으로만 냈지만(2.97), 베이상세는 칸이 커서 원본 그대로 낸다.
             ⚠ 도형 **안은 비워 둔다** — 검수사 확정 *"그 그림 사이에 검수가 숫자를 기입 합니다"*.
                 앱이 선사 신고 치수를 찍어 두면 실측값을 적을 자리가 없어지고, 그 숫자에 눈이 끌린다. */}
-        {_oogDir(c) && (
+        {_oogDir(c).includes('W') && (
           <svg className="bd-oog" viewBox="0 0 3 2" preserveAspectRatio="none" aria-hidden="true">
-            {_oogDir(c).includes('W') && (<>
-              <polygon points="1,1 0,1.5 1,2" />
-              <polygon points="2,1 3,1.5 2,2" />
-            </>)}
-            {_oogDir(c).includes('H') && <rect x="1.08" y="0.12" width="0.84" height="0.8" />}
+            <polygon points="1,1 0,1.5 1,2" />
+            <polygon points="2,1 3,1.5 2,2" />
+            {/* 2.98-05: **위 직사각형은 그리지 않는다.** (검수사 확정 2026-08-31)
+                원문 — *"서로 겹치지 않고 일부로 위에 일부러 직사각형도 만드시지 않아도 됩니다"*
+                선사 원본에서 40FP 위에 보이던 사각형은 **그 위 빈 칸의 격자 테두리**였다.
+                격자가 이미 그리고 있으므로 우리가 또 그리면 이중이 된다.
+                카스피 FR 표기법 = 셀 좌우 삼각형 그것뿐이다. */}
           </svg>
         )}
         <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
