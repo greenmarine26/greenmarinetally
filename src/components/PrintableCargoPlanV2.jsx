@@ -136,8 +136,8 @@ export const CARGO_V2_CSS = `
 .cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 .cpv2-page { width: 285mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
-.cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
-.cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
+.cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1 1 auto; text-align: center; white-space: nowrap; }   /* 2.91-01: 검수사 «PLAN 4자가 밑줄로 내려와 한줄을 차지함» — 줄바꿈 금지 */
+.cpv2-page-header .col { padding: 0 8px; font-size: 9px; min-width: 0; }   /* 2.91-01: 제목이 먼저 자리를 잡게 옆 칸이 줄어든다 */
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-bay-box { flex: 1 1 0; min-width: 95px; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }

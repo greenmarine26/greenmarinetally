@@ -436,7 +436,8 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       {!isPrintTarget && (
         <div className="bd-noprint-badge no-print">인쇄 제외 (화면 표시용)</div>
       )}
-      <div className="bd-title">{title}</div>
+      {/* ★ 2.91-01 (검수사 인쇄 실물) — «베이넘버가 선박명·항차수·목적지 밑줄 아래, 항차수 밑에
+          있어야 함». 종전은 베이번호가 위, 머리가 아래로 뒤집혀 있었다. 순서를 바로잡는다. */}
       <div className="bd-header">
         {/* 2.90-05 (검수사 «선박명이 잘립니다») — 잘린 게 아니라 **코드만** 찍고 있었다.
             풀네임은 정본 한 벌(resolveShipDisplayName)이 안다 — X-RAY 머리와 같은 벌을 쓴다. */}
@@ -444,6 +445,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         <span>VOY NO : {voyDisplay}</span>
         <span>{portLabel}</span>
       </div>
+      <div className="bd-title">{title}</div>
 
       {matrixRender ? (
         /* V8.98-14: 카스피식 고정격자 — 항차 공통 셀크기(--bdc-w/h)로 전 셀 균일.
@@ -1013,7 +1015,7 @@ export default function PrintableBayDetail({
         }
         .bd-title {
           text-align: center; font-size: 20pt; font-weight: 500;
-          margin-bottom: 3px;
+          margin-top: 2px; margin-bottom: 3px;   /* 2.91-01: 머리 밑줄 아래로 내려왔다 */
           flex-shrink: 0;
         }
         .bd-header {

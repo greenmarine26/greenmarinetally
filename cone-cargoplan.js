@@ -40,8 +40,8 @@ XIN TAI PING`,bayDef:{sourceFile:"XTPG-stowage (M6.71 box-region)",parserVersion
 .cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 .cpv2-page { width: 285mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
-.cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
-.cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
+.cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1 1 auto; text-align: center; white-space: nowrap; }   /* 2.91-01: \uAC80\uC218\uC0AC \xABPLAN 4\uC790\uAC00 \uBC11\uC904\uB85C \uB0B4\uB824\uC640 \uD55C\uC904\uC744 \uCC28\uC9C0\uD568\xBB \u2014 \uC904\uBC14\uAFC8 \uAE08\uC9C0 */
+.cpv2-page-header .col { padding: 0 8px; font-size: 9px; min-width: 0; }   /* 2.91-01: \uC81C\uBAA9\uC774 \uBA3C\uC800 \uC790\uB9AC\uB97C \uC7A1\uAC8C \uC606 \uCE78\uC774 \uC904\uC5B4\uB4E0\uB2E4 */
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-bay-box { flex: 1 1 0; min-width: 95px; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }

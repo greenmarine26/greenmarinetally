@@ -1789,9 +1789,22 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   return (
     <div className="space-y-1 inline-block min-w-full">
       {/* 페이지 제목 */}
-      <div className="text-center font-black text-amber-300 mb-1" style={{ fontSize: fontSize + 4 }}>
-        {page.title}
-      </div>
+      {/* ★ 2.91-01 (검수사 «베이넘버는 항상 베이 그림 중간에 위치. 축소하든 확대하든 항상 베이상단 중앙») —
+          종전엔 제목이 **바깥 상자 전체 폭** 기준이라 격자가 좁으면 오른쪽으로 밀려 보였다.
+          격자와 같은 자리(왼쪽 라벨 LBL 만큼 밀고, 격자 폭 gridW 안)에서 가운데로 둔다. */}
+      {(() => {
+        //  격자와 같은 자리에서 가운데. 좌표 레이아웃이면 그 격자 폭(왼쪽 라벨 24 + nCols×STEP)을 쓰고,
+        //  아니면 종전대로 전체 폭 가운데(그 경우는 격자도 전체 폭을 쓴다).
+        const _lbl = 24, _step = cellW + 2;
+        const _gw = pageCoordLayout ? pageCoordLayout.nCols * _step : null;
+        const st = { fontSize: fontSize + 4 };
+        if (_gw) { st.marginLeft = _lbl; st.width = _gw; st.textAlign = 'center'; }
+        return (
+          <div className={`font-black text-amber-300 mb-1${_gw ? '' : ' text-center'}`} style={st}>
+            {page.title}
+          </div>
+        );
+      })()}
 
       {pageCoordLayout ? (() => {
         // ── 좌표 기반: 데크/홀드 각자 자기 축. 중심선 맞춤. 데크엔 00 칸 없음 ──
