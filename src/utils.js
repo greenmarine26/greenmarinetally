@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.95'   // 2.95 빈 칸이면 그냥 받는다(엠티·시프팅) — 밀려난 컨 허상 제거
+export const APP_VERSION = 'TallyOne 2.96'   // 2.96 검수원이 고친 자리를 시프팅도 본다
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5041,11 +5041,39 @@ export function swapFixGate(a, b) {
   return { ok: true };
 }
 
+// ── TallyOne 2.96: **검수원이 고친 자리를 시프팅도 본다.** (검수사 확정 2026-08-31) ──
+//   원문 — *"일단 위치가 틀릴경우 위치 수정 부터 해야하고 거기서 바뀐컨 넘버를
+//           양하 시프팅과 선적 시프팅에서 바꿔야 합니다."*
+//   종전 시프팅은 **EDI 지도만** 봤다. 그래서 검수원이 「위치 수정」으로 실제 자리를 적어도
+//   시프팅 대수가 안 따라왔다 — 계획과 실제가 어긋난 컨이 그대로 시프팅으로 남았다.
+//   실측 MCSC 635S — EDI만 보면 96대, 검수원 수정을 겹치면 95대.
+//   빠지는 것은 CAAU6532118 — 검수사가 «5660은 내리고 2118은 남겼다» 고 적어 둔 그 컨이다.
+//   95 × 2 = 190 = 배정표 이적(모브). §2.81 정본 등식이 이때 처음 성립한다.
+//   ⚠ 우선순위는 화면과 같다(effectivePos): 실체(`*_actual`) > 정해 준 자리(`*_assign`) > 계획(EDI).
+//     창고 표식(`__`)은 자리가 아니므로 건너뛴다.
+function _mergeRecPos(map, rec) {
+  if (!map || !rec) return map;
+  const out = {};
+  for (const [cn, c] of Object.entries(map)) {
+    const r = rec[cn];
+    if (!r) { out[cn] = c; continue; }
+    let b = '', rw = '', t = '';
+    if (r.bay_actual && !String(r.bay_actual).startsWith('__') && r.row_actual && r.tier_actual) {
+      b = r.bay_actual; rw = r.row_actual; t = r.tier_actual;
+    } else if (r.bay_assign && r.row_assign && r.tier_assign) {
+      b = r.bay_assign; rw = r.row_assign; t = r.tier_assign;
+    }
+    out[cn] = b ? { ...c, bay: b, row: rw, tier: t } : c;
+  }
+  return out;
+}
+
+//  2.89: 맞교환을 양하·선적 두 지도에 함께 겹친다 — 한쪽만 겹치면 95→66 붕괴(위 주석).
+//  2.96: 검수원이 고친 자리를 겹친 뒤 맞교환을 얹는다 — 양하·선적 두 축 모두.
+//  2.81: 배정표 이적(수집기가 배정목록에서 받아 적은 모브 수)을 같이 넘긴다 — 정본 판정용.
 export function computeShiftingFromVoyage(voyage) {
-  //  2.89: 맞교환을 양하·선적 두 지도에 함께 겹친다 — 한쪽만 겹치면 95→66 붕괴(위 주석).
   const sw = swapFixList(voyage);
-  const mapOf = (sec) => applySwapFix(ediMapFromRaw(sec) || sec?.ediContainers || null, sw);
-  //  2.81: 배정표 이적(수집기가 배정목록에서 받아 적은 모브 수)을 같이 넘긴다 — 정본 판정용.
+  const mapOf = (sec) => applySwapFix(_mergeRecPos(ediMapFromRaw(sec) || sec?.ediContainers || null, sec?.records || null), sw);
   return computeShiftingMap(mapOf(voyage?.discharge), mapOf(voyage?.loading),
                             { berthShift: voyage?.info?.berthShift });
 }
@@ -5173,6 +5201,18 @@ export function shiftCnSetOf(voyageKey, voyage) {
   catch (e) { return new Set(); }
 }
 
+// 2.96: 시프팅 캐시 서명용 — 검수원이 고친 자리만 뽑아 짧게 찍는다(레코드 전체를 넣으면 매 틱 무효화).
+function _recPosSig(rec) {
+  if (!rec) return '';
+  const out = [];
+  for (const [cn, r] of Object.entries(rec)) {
+    if (!r) continue;
+    const a = r.bay_actual, g = r.bay_assign;
+    if (a || g) out.push(`${cn}:${a || ''}-${r.row_actual || ''}-${r.tier_actual || ''}:${g || ''}-${r.row_assign || ''}-${r.tier_assign || ''}`);
+  }
+  return out.sort().join(',');
+}
+
 export function computeShiftingMapCached(voyageKey, voyage) {
   if (!voyage) return {};
   const d = voyage?.discharge, l = voyage?.loading;
@@ -5182,6 +5222,9 @@ export function computeShiftingMapCached(voyageKey, voyage) {
     Object.keys(d?.ediContainers || {}).length, Object.keys(l?.ediContainers || {}).length,
     voyage?.info?.berthShift ?? '',   // 2.81: 배정표 이적이 나중에 들어와도 다시 계산한다
     swapFixList(voyage).map((s) => s.id).join(','),   // 2.89: 맞교환이 더해지거나 되돌려지면 다시 계산한다
+    // 2.96: **검수원이 자리를 고치면 다시 계산한다.** 이 줄이 없으면 고쳐도 옛 대수가 붙어 있는다.
+    //   레코드 전체를 서명에 넣으면 매 틱마다 무효화되므로, **자리를 고친 컨의 좌표만** 모아 찍는다.
+    _recPosSig(d?.records) + '/' + _recPosSig(l?.records),
   ].join('|');
   const key = voyageKey || 'unknown';
   const hit = _shiftMapCache.get(key);
