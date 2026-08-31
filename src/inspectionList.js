@@ -88,9 +88,13 @@ function getSortKey(c) {
   const { len, type, fe } = getContainerCategory(c);
   // M5.52: 선사별 정렬 (1차 키) + 기존 사이즈/F-E (2차 키)
   const line = normalizeCarrier(c);
-  // 20풀(0) → 20엠티(1) → 20특수(2) → 40풀(3) → 40엠티(4) → 40특수(5)
-  const sizeGroup = len === 20 ? 0 : 3;
-  const typeOrder = type === 'normal' ? (fe === 'F' ? 0 : 1) : 2;
+  /* ★ 2.91 (검수사 인쇄 실물 «정렬 안됨 — 사이즈별 규격별 컨넘버별. 리퍼들 속에 FR 등이 들어가 있고
+       그러면 안됨») — 종전은 특수를 **한 덩어리(2)** 로 묶어 리퍼·FR·OT·탱크가 섞였다.
+       규격으로 갈라 같은 것끼리 모은다: 풀 → 엠티 → 리퍼 → FR → OT → 탱크.
+       ⚠ 사이즈(20/40)가 1차, 규격이 2차, 컨번호가 3차 — 검수사가 말한 그 순서다. */
+  const sizeGroup = len === 20 ? 0 : 10;
+  const TYPE_ORDER = { normal: 0, reefer: 2, fr: 3, ot: 4, tk: 5 };
+  const typeOrder = type === 'normal' ? (fe === 'F' ? 0 : 1) : (TYPE_ORDER[type] ?? 6);
   return { line, secondary: sizeGroup + typeOrder };
 }
 
@@ -129,7 +133,19 @@ function renderRow(c, idx) {
     const hasUnit = /℃|°|C$/i.test(reeferTmp);
     notes.push(hasUnit ? reeferTmp : `${reeferTmp}℃`);
   }
-  if (type === 'fr' || c.fr) notes.push('FR');
+  /* ★ 2.91 (검수사 «FR 폭 길이 높이 다 표기 해줘야 함») — FR 은 치수가 곧 작업 정보다.
+       초과분(DIM)만 적던 것을 **폭·길이·높이 세 칸**으로 바꾼다. 없는 값은 «-» 로 자리를 남긴다
+       (§2-0-D — 조용히 없애지 않는다). 치수가 하나도 없으면 «치수 미신고»라고 말한다(§0-Y-2). */
+  if (type === 'fr' || c.fr) {
+    const _d = [];
+    if (c.ovl) _d.push(`L+${c.ovl}`);
+    if (c.ovw) _d.push(`W+${c.ovw}`);
+    if (c.ovh) _d.push(`H+${c.ovh}`);
+    if (!_d.length) { const _o = overDims(c); if (_o && _o.over) _d.push(..._o.short); }
+    const _real = (c.cgL || c.cgW || c.cgH)
+      ? `${c.cgL || '-'}×${c.cgW || '-'}×${c.cgH || '-'}mm` : '';
+    notes.push(`<span style="color:#166534;font-weight:bold">FR${_d.length ? ' ' + _d.join(' ') + 'cm' : ''}${_real ? ' ' + _real : ''}${(!_d.length && !_real) ? ' 치수 미신고' : ''}</span>`);
+  }
   if (type === 'ot' || c.ot) notes.push('OT');
   if (type === 'tk' || c.tk) notes.push('TK');
   // TallyOne 2.00 (검수사 지시 2026-08-20 «검수용 리스트에 DG(클래스·유엔넘버)·리퍼온도·OOG(높이 폭)·특수화물 다 기록»):
@@ -146,6 +162,11 @@ function renderRow(c, idx) {
   if (_ov.length) notes.push(`<span style="color:#92400e;font-weight:bold">OOG ${_ov.join(' ')}cm</span>`);
   else if (c.oog && type === 'normal' && !c.fr && !c.ot) notes.push('<span style="color:#92400e;font-weight:bold">OOG</span>');
   if ((c.cgW || c.cgH) && !_ov.length) notes.push(`${c.cgW || '?'}×${c.cgH || '?'}mm`);
+  /* ★ 2.91 (검수사 «긴급화물등 특수 표기 빠진게 보임») — 긴급(▲)·수화물은 카고플랜·베이플랜에는
+       그려지는데 **검수용 리스트에만 없었다.** 자료에 있는 것을 안 적은 것이다(§0-Y-2). */
+  if (c._urgent || c.urgent) notes.push('<span style="color:#b91c1c;font-weight:bold">▲긴급</span>');
+  if (c._lugg || c.lugg) notes.push('<span style="color:#6d28d9;font-weight:bold">수화물</span>');
+  if (c._shift) notes.push('<span style="color:#1d4ed8;font-weight:bold">◆시프팅</span>');
   const note = notes.join(' ');
   return `<tr style="background:${bg}">
     <td>${idx}</td>
