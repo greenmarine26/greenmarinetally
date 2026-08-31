@@ -422,13 +422,13 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
             카고플랜은 셀이 좁아 굵은 선으로만 냈지만(2.97), 베이상세는 칸이 커서 원본 그대로 낸다.
             ⚠ 도형 **안은 비워 둔다** — 검수사 확정 *"그 그림 사이에 검수가 숫자를 기입 합니다"*.
                 앱이 선사 신고 치수를 찍어 두면 실측값을 적을 자리가 없어지고, 그 숫자에 눈이 끌린다. */}
-        {cell.oog && (
+        {_oogDir(c) && (
           <svg className="bd-oog" viewBox="0 0 3 2" preserveAspectRatio="none" aria-hidden="true">
-            {cell.oog.includes('W') && (<>
+            {_oogDir(c).includes('W') && (<>
               <polygon points="1,1 0,1.5 1,2" />
               <polygon points="2,1 3,1.5 2,2" />
             </>)}
-            {cell.oog.includes('H') && <rect x="1.08" y="0.12" width="0.84" height="0.8" />}
+            {_oogDir(c).includes('H') && <rect x="1.08" y="0.12" width="0.84" height="0.8" />}
           </svg>
         )}
         <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
@@ -439,13 +439,24 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       </div>
     );
   };
+  // 2.98-03: OOG 방향 판정 한 벌 — 높이(ovh) / 좌우폭(ovw·oogL·oogR)
+  const _oogDir = (c) => {
+    if (!c) return '';
+    const h = Number(c.ovh || 0) > 0;
+    const w = Number(c.ovw || 0) > 0 || Number(c.oogL || 0) > 0 || Number(c.oogR || 0) > 0;
+    return (h ? 'H' : '') + (w ? 'W' : '');
+  };
+
   const mrCellExtra = (cell, tier) => {
     const c = cellMap[`${String(tier).padStart(2, '0')}-${cell.rowLbl}`];
     if (!c) return {};
     const ptk = isPtk(c, mode);
     const colorKey = ptk ? getContainerColorKey(c, mode) : null;
     const bg = colorKey ? colorMap[colorKey] : null;
-    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}` };   // V8.25-03: 카스피식 흰 배경
+    // 2.98-03: **베이상세는 `buildBayGrid` 를 써서 cell.oog 가 없다** — 컨 객체로 직접 판정한다.
+    //   (2.98~2.98-02 가 안 보인 진짜 이유. buildBayMarks 를 쓰는 카고플랜과 경로가 다르다.)
+    const og = _oogDir(c);
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}` };   // V8.25-03: 카스피식 흰 배경
   };
 
   return (

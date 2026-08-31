@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-02'   // 2.98-02 cellExtra className 덮어쓰기 교정 — OOG 도형이 안 보인 진짜 원인 + 화면에도 OOG
+export const APP_VERSION = 'TallyOne 2.98-03'   // 2.98-03 베이상세는 buildBayGrid 라 cell.oog 가 없다 — 컨 객체로 직접 판정
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
