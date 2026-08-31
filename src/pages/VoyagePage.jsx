@@ -50,7 +50,6 @@ import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
-import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
@@ -1675,64 +1674,21 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
         //   컨 X가 actual 위치(11/11/11)로 이동 → 거기 원래 계획된 컨 Y는 자리 뺏김
         //   Y는 actual 없고, Y의 계획 위치를 다른 컨이 actual로 점유
-        const displaced = (() => {
-          if (mode !== 'loading') return [];
-          // 1) 그 칸을 실제로 차지한 컨 맵.
-          //   TallyOne 1.55: **실렸는지는 `completed` 로만 판단한다.**
-          //   1.55 부터 `_updatePositionFields` 가 선적확인 전에도 `bay_actual` 을 쓰므로
-          //   "실체가 있으면 실린 것"이라는 옛 암묵 규칙이 깨졌다. 실체 유무로 세면
-          //   아직 안 실은 컨이 남의 자리를 뺏은 것으로 잡힌다.
-          const occupiedBy = new Map();
-          allEdiContainers.forEach(c => {
-            if (!compMap[c.cn]) return;                   // 실린 것만 칸을 차지한다
-            const p = effectivePos(c);
-            if (!p.bay || !p.row || !p.tier) return;      // 창고(`__`)·미배정은 자리가 아니다
-            occupiedBy.set(`${p.bay}-${p.row}-${p.tier}`, c.cn);
-          });
-          // 2) 자기 계획 위치를 다른 컨이 점유했는데 자기는 actual 없음
-          return allEdiContainers.filter(c => {
-            if (compMap[c.cn]) return false;        // 이미 실린 컨은 이름표를 잃은 것이 아니다
-            // _bay_planned가 있으면 그것이 진짜 계획 (effective 변환된 경우)
-            // 없으면 c.bay (원본 그대로)
-            const planBay = c._bay_planned || c.bay;
-            const planRow = c._row_planned || c.row;
-            const planTier = c._tier_planned || c.tier;
-            if (!planBay || !planRow || !planTier) return false;
-            const key = `${planBay}-${planRow}-${planTier}`;
-            const occupier = occupiedBy.get(key);
-            if (!occupier || occupier === c.cn) return false;
-            // 점유자 컨번호 부착 (UI 표시용)
-            c._displacedBy = occupier;
-            return true;
-          });
-        })();
+        /* ⛔ 2.94-07: displaced 계산 제거 — 화면이 안 쓴다(위 사이드바와 함께 내렸다). */
 
         return (
           <div className="space-y-2">
             {/* V9.57: BayDictStatusWidget 제거 — bayNum 결함으로 오표시, 기능은 자료 탭 BayDictVerifyWidget으로 이관(팀I) */}
-            {/* 선적 모드 + 자리 뺏긴 컨 있을 때만 표시 */}
-            {mode === 'loading' && displaced.length > 0 && (
-              <DisplacedSidebar
-                displaced={displaced}
-                onOpenContainer={(c) => setDetailC(c)}
-                onStartMove={(c) => {
-                  // M4.9f 5단계: 이동 모드 진입 (토글)
-                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
-                  setPendingMove({
-                    cn: c.cn,
-                    fromBay: c._bay_planned || c.bay || '',
-                    fromRow: c._row_planned || c.row || '',
-                    fromTier: c._tier_planned || c.tier || '',
-                    fe: c.fe || '', iso: c.iso || c.tp || '',
-                  });
-                }}
-                pendingMoveCn={pendingMove?.cn}
-              />
-            )}
+            {/* ⛔ 2.94-07: 「계획 자리를 내준 컨」 사이드바 제거 (검수사 확정 2026-08-31)
+                원문 — *"야적장 표기도 필요 없는거고 20대든 18대든 목록이 필요 없는것입니다"*
+                아직 안 실은 컨은 **전부** 야적장에 있다. 이름표를 내준 것만 따로 세워 두면
+                정상 상태가 사고처럼 보이고, 「선적 대기 N대」와 같은 것을 두 번 센다.
+                2.94-05 부터 밀려난 컨은 «뺏은 컨이 비우는 자리»를 자동으로 받으므로
+                검수원이 손댈 일도 없다 — 자리가 정말 없는 컨은 아래 🅿 배치가 맡는다. */}
             {/* ── TallyOne 2.94-01: **검수앱 베이 탭에서 창고 박스를 내린다.** (검수사 지적 2026-08-31) ──
                 원문 — *"창고개념은 검수앱은 사용안합니다. 대쉬보드에서 수석이 사용합니다."*
                 실측 — 같은 18대가 「이름표가 내려온 컨 20대」와 「창고 18대」 **두 박스에 겹쳐** 떴다.
-                밀려난 컨은 위 DisplacedSidebar 하나가 맡는다(「이동」 버튼도 거기 있어 기능 손실 없음).
+                (2.94-07 에서 그 사이드바도 내렸다 — 밀려난 컨은 자동으로 자리를 받으므로 목록이 필요 없다.)
                 ⚠ 수석 대시보드(BayGridEditor·ChiefBayEdit)의 창고 탭은 그대로 둔다 — 거기서는 쓰는 개념이다.
                 아래 블록은 `false &&` 로 재우지 않고 통째로 지운다 — 죽은 화면을 남기지 않는다. */}
             {/* TallyOne 2.89: 맞교환 직후 되돌리기 — 되돌릴 창을 화면에 보인다(§2-0-B) */}

@@ -637,7 +637,7 @@ export default function PositionEditModal({
                 <div className="mt-1 text-2xs text-orange-300 leading-relaxed">
                   {vacating
                     ? <>→ 확인하면 그 컨은 <b className="text-emerald-300">{vacating}</b> 로 갑니다 — {container?.cn}이(가) 비우는 자리입니다.</>
-                    : <>→ 확인하면 그 컨은 <b>계획 자리를 내주고 야적장에서 대기</b>합니다 — 실을 자리를 정해 주세요.</>}
+                    : <>→ 확인하면 그 컨은 <b>계획 자리를 내줍니다</b> — 실을 자리를 정해 주세요.</>}
                   <br/>(이미 선적확인된 컨이면 완료는 그대로 두고 자리만 옮깁니다.)
                 </div>
               </div>
@@ -808,7 +808,7 @@ export default function PositionEditModal({
                       확인창이 "원래 자리로 옮겨집니다" 라 서로 달랐다(검수사 지적 2026-08-31). */}
                   {vacating
                     ? <>⚠ {conflict.cn} → <b className="text-emerald-300">{vacating}</b> 로 갑니다 ({container?.cn}이 비우는 자리)</>
-                    : <>⚠ {conflict.cn} → 계획 자리를 내주고 야적장에서 대기합니다 (실을 자리를 정해 주세요)</>}
+                    : <>⚠ {conflict.cn} → 계획 자리를 내줍니다 (실을 자리를 정해 주세요)</>}
                 </div>
               )}
             </div>

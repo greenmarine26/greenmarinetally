@@ -76,29 +76,10 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     // 2) 사고 — 한 칸에 실물이 둘. 이것만 경고다(STSE 2658W 사고와 같은 계열).
     const dupPos = [..._claim.entries()].filter(([, v]) => v.length > 1);
 
-    // 3) 정상 — **이름표가 내려온 컨**. 자기 계획 칸에 다른 컨이 이미 실렸고, 자기는 아직 안 실렸다.
-    //    실물은 창고에서 자기 차례를 기다린다. 사고가 아니므로 경고가 아니라 정보로만 알린다.
-    //    창고에 넣어 둔 컨(`__` 표식)은 이미 정리된 것이라 여기서 뺀다 — 보관함 화면이 따로 보여준다.
-    let nameOnly = [];
-    if (mode === 'loading') {
-      nameOnly = containers.filter(c => {
-        if (compMap[c.cn]) return false;              // 이미 실렸다
-        const _p = effectivePos(c);
-        if (_p.inStorage) return false;               // 창고에 넣어 둔 컨은 보관함이 따로 보여준다
-        const planB = c._edi_bay !== undefined ? c._edi_bay : c.bay;
-        const planR = c._edi_row !== undefined ? c._edi_row : c.row;
-        const planT = c._edi_tier !== undefined ? c._edi_tier : c.tier;
-        if (!planB || !planT) return false;
-        const k = _slotKey(planB, planR, planT);
-        if (k.startsWith('00-')) return false;
-        // 검수원이 **다른 칸**을 정해 준 컨은 이름표가 내려온 게 아니라 옮겨 간 것이다.
-        //   ⚠ `bay_actual` 이 계획과 같은 컨이 흔하다(완료 때 자리를 확정하며 같은 값을 쓴다) —
-        //     그래서 `bay_actual` 유무로 거르면 안 되고 **칸이 달라졌는지**로 걸러야 한다.
-        if (_p.bay && _p.tier && _slotKey(_p.bay, _p.row, _p.tier) !== k) return false;
-        const owners = _claim.get(k);
-        return !!(owners && owners.some(cn => cn !== c.cn));
-      });
-    }
+    /* ⛔ 2.94-07: nameOnly(이름표 내려온 컨) 계산·항목 제거 (검수사 확정 2026-08-31)
+       원문 — *"야적장 표기도 필요 없는거고 20대든 18대든 목록이 필요 없는것입니다"*
+       아직 안 실은 컨은 전부 야적장에 있다. 그중 이름표를 내준 것만 따로 세면 두 번 세는 것이고,
+       정상 상태가 사고처럼 보인다. 「선적 대기 N대」가 이미 그 말이다. */
 
     // ── TallyOne 1.55: 갱(호기) 보고 유무 — **인건비 근거** ────────────────
     //   검수사 원문 — *"장비를 바꿔서 해야 하는데 4호기로 다함. 이걸로 제출하면
@@ -209,20 +190,11 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         jumpTo: { tab: 'report' },
       }] : []),
       ...(mode === 'loading' ? [
-        {
-          // 1.55: 「자리 뺏김」이 아니다 — 이름만 빌려준 것이고 실물은 창고에서 차례를 기다린다.
-          //   사고가 아니라 정상 상태이므로 `info`로 두어 「마감 가능」을 막지 않는다.
-          id: 'nameOnly',
-          icon: MoveRight,
-          label: '계획 자리를 내준 컨',
-          count: nameOnly.length,
-          desc: nameOnly.length > 0
-            ? `${nameOnly.length}대 — 계획 자리를 내줬습니다. 아직 안 실렸으니 자리를 정해 주세요.`
-            : '없음',
-          color: nameOnly.length > 0 ? 'blue' : 'emerald',
-          info: true,
-          jumpTo: { tab: 'bay' },
-        },
+        /* ⛔ 2.94-07: 「계획 자리를 내준 컨」 항목 제거 (검수사 확정 2026-08-31)
+           원문 — *"야적장 표기도 필요 없는거고 20대든 18대든 목록이 필요 없는것입니다"*
+           아직 안 실은 컨은 **전부** 야적장에 있다. 그중 이름표를 내준 것만 따로 세는 것은
+           같은 것을 두 번 세는 일이고, 정상 상태를 사고처럼 보이게 한다.
+           「선적 대기 N대」가 이미 그 말이다. */
         {
           id: 'sealMissing',
           icon: Shield,

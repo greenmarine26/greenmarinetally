@@ -573,7 +573,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
               <button key="nobay" onClick={() => { setManualBay(g.center); setManualTier('none'); }}
                 className="py-3 rounded-pill bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
                 {/* 2.94-02: 창고 문구 마지막 한 곳 — 검수앱은 창고를 안 쓴다(검수사 지적 2026-08-31). */}
-                <div className="font-bold text-base">⚠ 야적장 대기{g.displaced ? '·계획 자리 내줌' : ''}</div>
+                <div className="font-bold text-base">⚠ 자리 없음{g.displaced ? '·계획 자리 내줌' : ''}</div>
                 <div className="text-2xs text-amber-300">남은 {g.count}대{g.displaced ? ` (계획 자리 내줌 ${g.displaced} — 그 칸에 다른 컨이 실렸습니다. 아직 안 실렸으니 빈 칸을 골라 자리를 정해 주세요)` : ' — 리스트엔 있는데 실을 자리가 아직 없습니다'}</div>
                 <div className="text-2xs text-dim-300 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
                 {g.swapHints && g.swapHints.length > 0 && (
@@ -655,12 +655,12 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
         const noBay = !!g?.noBay;
-        const bayLbl = noBay ? '야적장 대기' : (g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay));
+        const bayLbl = noBay ? '자리 없음' : (g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay));
         // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
         const remain = tierLeftOf(g, manualTier);   // 2.93: 빈 칸 ∩ 남은 컨 (한 곳에서 센다)
         return (
           <div className="flex items-center gap-2 text-xxs bg-ink-900 border border-line rounded-pill px-3 py-1.5">
-            <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 야적장 대기분 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
+            <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 자리 없는 컨 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
             {/* TallyOne 1.50: **싱글이 먼저다.** 검수사 확정 2026-08-11 —
                 *"그자리는 수동모드에서 싱글로 선적을 한후에 트윈으로 가서 선적 하여야 합니다."*
                 *"1단은 넣어도 되지만 스프레더를 두번을 더 바꿔야 합니다."*
@@ -712,7 +712,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         const otherLeft = noBay ? 0 : tierLeftOf(g, otherTier);   // 2.93
         const nextG = manualGroups.find(x => x.center !== manualBay && !x.noBay && x.count > 0)
                    || manualGroups.find(x => x.center !== manualBay && x.count > 0);
-        const lbl = (x) => (x.noBay ? '야적장 대기' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);
+        const lbl = (x) => (x.noBay ? '자리 없음' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);
         const hereLbl = g ? lbl(g) : `B${manualBay}`;
         return (
           <div className="bg-emerald-950/50 border-2 border-emerald-600 rounded-pill p-3 space-y-2">
@@ -760,11 +760,11 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
                         || (c.bay && c.row && c.tier ? `${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}` : '');
                       return (
                         <span className="ml-1 text-2xs font-bold text-sky-300">
-                          🏷 계획 자리를 내줬습니다{from ? ` (${from}${c.planTaken?.byCn ? ` → ${c.planTaken.byCn}` : ''})` : ''} · 야적장 대기
+                          🏷 계획 자리를 내줬습니다{from ? ` (${from}${c.planTaken?.byCn ? ` → ${c.planTaken.byCn}` : ''})` : ''}
                         </span>
                       );
                     })()
-                  : <span className="ml-1 text-2xs font-bold text-orange-300">야적장 대기</span>}
+                  : <span className="ml-1 text-2xs font-bold text-orange-300">자리 없음</span>}
               </button>
               {/* V9.51: 원래 계획 자리가 남아 있으면 한 번에 되돌린다 (빈 칸을 다시 찾을 필요 없음) */}
               <RestoreOrigButton c={c} allContainers={allContainers} voyageKey={voyageKey}

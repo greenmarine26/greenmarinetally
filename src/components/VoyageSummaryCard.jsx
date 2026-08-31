@@ -102,26 +102,8 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     // 사고 — 한 칸에 실물이 둘 (STSE 2658W 계열). 이것만 빨강이다.
     const dupPos = [..._claim.entries()].filter(([, v]) => v.length > 1);
 
-    // 정상 — 이름표가 내려온 컨. 계획 칸에 다른 컨이 실렸고 자기는 아직 안 실렸다(실물은 창고).
-    let nameOnly = 0;
-    if (mode === 'loading') {
-      containers.forEach(c => {
-        if (compMap[c.cn]) return;
-        const _p = effectivePos(c);
-        if (_p.inStorage) return;                     // 창고에 넣어 둔 컨은 보관함이 따로 보여준다
-        const planB = c._edi_bay !== undefined ? c._edi_bay : c.bay;
-        const planR = c._edi_row !== undefined ? c._edi_row : c.row;
-        const planT = c._edi_tier !== undefined ? c._edi_tier : c.tier;
-        if (!planB || !planT) return;
-        const k = _slotKey(planB, planR, planT);
-        if (k.startsWith('00-')) return;
-        // 검수원이 다른 칸을 정해 준 컨은 이름표가 내려온 게 아니라 옮겨 간 것이다(마감 점검과 같은 규칙).
-        if (_p.bay && _p.tier && _slotKey(_p.bay, _p.row, _p.tier) !== k) return;
-        const owners = _claim.get(k);
-        if (owners && owners.some(cn => cn !== c.cn)) nameOnly++;
-      });
-    }
-
+    /* ⛔ 2.94-07: nameOnly(이름표 내려온 컨) 계산 제거 — 화면이 안 쓴다.
+       검수사 확정 2026-08-31 *"20대든 18대든 목록이 필요 없는것입니다"* */
     return {
       total, done,
       pct: total ? Math.round(done / total * 100) : 0,
@@ -139,7 +121,6 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       xrayCount, xraySealed, xrayUnmatched,
       iso403Total: iso403Targets.length,
       iso403Pending: iso403Pending.length,
-      nameOnly,   // 1.55: 이름표가 내려온 컨 — 사고가 아니라 정보
       dupPos,   // V9.24: [[자리키, [cn,...]], ...]
     };
   }, [voyage, mode]);
@@ -211,24 +192,9 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
         )}
         {/* 1.55: 「자리 뺏김」이 아니다 — 이름만 빌려준 것이고 그 자리는 빈자리다.
             실물은 아직 부두에서 차례를 기다린다 → 경고색(orange)이 아니라 정보색(blue). */}
-        {mode === 'loading' && summary.nameOnly > 0 && (
-          <Chip
-            icon={MoveRight}
-            color="blue"
-            label="계획 자리를 내준 컨"
-            value={`${summary.nameOnly}대 — 아직 안 실림`}
-          />
-        )}
-        {/* TallyOne 1.15: **X-RAY 는 맨 뒤로** (검수사 지시 2026-08-06). 리퍼·사진이 앞, X-RAY 는 마지막. */}
-        {(summary.xrayCount > 0 || summary.xrayUnmatched?.length > 0) && (
-          <Chip
-            icon={Shield}
-            color={summary.xrayUnmatched?.length > 0 ? 'red' : 'purple'}
-            label="X-RAY"
-            value={`${summary.xraySealed}/${summary.xrayCount}${summary.xrayUnmatched?.length > 0 ? ` · ⚠${summary.xrayUnmatched.length} 미매칭` : ''}`}
-          />
-        )}
-        {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.nameOnly === 0 && (   /* 1.24: iso403 칩 삭제분 제외 */
+        {/* ⛔ 2.94-07: 「계획 자리를 내준 컨」 칩 제거 — 아직 안 실은 컨은 전부 야적장에 있다.
+            검수사 확정 2026-08-31 *"20대든 18대든 목록이 필요 없는것입니다"* */}
+        {summary.reeferTotal === 0 && summary.xrayCount === 0 && (   /* 1.24: iso403 칩 삭제분 제외 */
           <span className="text-xxs text-dim-400 px-2 py-1">특이 항목 없음</span>
         )}
       </div>
