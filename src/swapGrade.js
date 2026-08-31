@@ -139,11 +139,14 @@ export function gradeSwap(incoming, planned, bayPairs = {}) {
 //   검수사가 명시적으로 교환을 지시한 경우(`displacedMode:'swap'`)뿐이다.
 //   예약만 걸린 컨은 계획 자리를 내주고 **자리 미정**이 된다 — 몸은 아직 부두에 있다(§5-Y-B).
 //   같은 사건을 두 화면이 다르게 말하면 검수원은 곧 어느 쪽도 안 믿는다.
-export function confirmTextOf(g, incoming, planned) {
+export function confirmTextOf(g, incoming, planned, vacating) {
   if (!g || g.level !== 'strong') return '';
   const tail = planned?._comp
     ? `이 자리에는 ${planned?.cn || ''} 가 이미 선적확인돼 있습니다 — 완료는 유지되고 자리만 정리됩니다.\n`
-    : `이 자리의 계획 컨 ${planned?.cn || ''} 는 계획 자리를 내주고 「자리 미정」이 됩니다 (아직 안 실렸습니다).\n`;
+    // 2.94-05: 갈 자리가 있으면 그것을 말한다(검수사 «미배정이 뜨면 안됩니다»).
+    : vacating
+      ? `이 자리의 계획 컨 ${planned?.cn || ''} 는 ${vacating} 로 갑니다 — ${incoming?.cn || ''} 이 비우는 자리입니다.\n`
+      : `이 자리의 계획 컨 ${planned?.cn || ''} 는 계획 자리를 내주고 야적장에서 대기합니다 — 실을 자리를 정해 주세요.\n`;
   return `${incoming?.cn || ''} 를 이 자리에 넣습니다.\n\n${g.reason}\n\n` + tail + `진짜로 바꿉니까?`;
 }
 

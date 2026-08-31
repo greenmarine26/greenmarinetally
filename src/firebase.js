@@ -655,9 +655,12 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
         get(recR), get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`)),
       ]);
       const cur = recSnap.val() || {}, edi = ediSnap.val() || {};
-      const b = cur.bay !== undefined ? cur.bay : (edi.bay || '');
-      const r = cur.row !== undefined ? cur.row : (edi.row || '');
-      const t = cur.tier !== undefined ? cur.tier : (edi.tier || '');
+      // 2.94-06: **여기가 이름표 → 실물로 바뀌는 유일한 지점이다.**
+      //   자리는 «검수원이 정해 준 자리»(`*_assign`)가 있으면 그것, 없으면 지정/계획 순.
+      const hasAssign = cur.bay_assign !== undefined && cur.bay_assign !== null && cur.bay_assign !== '';
+      const b = hasAssign ? cur.bay_assign  : (cur.bay  !== undefined ? cur.bay  : (edi.bay  || ''));
+      const r = hasAssign ? cur.row_assign  : (cur.row  !== undefined ? cur.row  : (edi.row  || ''));
+      const t = hasAssign ? cur.tier_assign : (cur.tier !== undefined ? cur.tier : (edi.tier || ''));
       if (!b || !r || !t) return;                       // 자리 없이 완료된 건은 손대지 않는다
       const bI = String(parseInt(b, 10));
       const oa = String(cur.bay_actual ?? '');
@@ -677,6 +680,8 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
       await update(recR, {
         bay_actual: bI, row_actual: r, tier_actual: t,
         actual_at: Date.now(), actual_by: by || '',
+        // 2.94-06: 실물이 됐으니 «정해 준 자리»는 걷는다 — 한 컨에 자리가 둘일 수 없다.
+        bay_assign: null, row_assign: null, tier_assign: null, assign_at: null, assign_by: null,
         moves: moves.slice(-40),
       });
     } catch { /* 경로 기록 실패가 선적확인을 막지 않는다 */ }
@@ -1292,10 +1297,26 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       // 검수사가 명시적으로 미배정을 고른 경우.
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn, planOnly: true });
     } else if (displacedPlanOnly && isLoading) {
-      // 예약만 하고 입실 안 한 컨 — **이동이 아니다. 이름표가 내려왔을 뿐이다.**
-      //   계획(bay/row/tier)은 그대로 두고 실체만 창고로 찍는다.
-      await _markPlanTaken(voyageKey, mode, displaced, by, cn);
-      displacedToStorage = true;
+      // ── TallyOne 2.94-05: **밀려난 컨은 «자리를 뺏은 컨이 비우는 자리»로 간다.** ──
+      //   검수사 확정(1.96-01 인용) — *"자리를 빼앗은컨이 갖고있던자리로 가면됩니다.
+      //     그래야 빼앗긴 베이도 갯수가 맞습니다."*
+      //   이 규칙은 자동 가이드(`displacedMode:'swap'`)에만 있었고 **수동 「위치 지정」에는 없었다.**
+      //   실측 MCSC 635S B38 — 자동으로 간 2대는 34번 자리를 받았는데 수동으로 간 18대는
+      //   전부 「자리 미정」이 됐다. 검수사 지적 2026-08-31 — *"왜 미배정인지?"*, *"미배정이 뜨면 안됩니다."*
+      //   18대 전부 갈 자리(뺏은 컨의 원계획, 34번)가 있었고 그 자리는 전부 비어 있었다.
+      //   같은 일인데 경로가 다르다고 결과가 달라서는 안 된다 — 두 경로를 한 규칙으로 모은다.
+      //   ⚠ A 가 떠나는 자리가 없거나(미배정에서 온 컨) 이미 다른 컨이 차지했으면 종전대로
+      //     이름표만 내려온 것으로 둔다 — 없는 자리를 지어내지 않는다.
+      if (aOldBay && aOldRow && aOldTier && slotFree(aOldBay, aOldRow, aOldTier)) {
+        await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by,
+          { why: 'displaced', byCn: cn, planOnly: true });
+        displacedTo = { bay: aOldBay, row: aOldRow, tier: aOldTier };
+      } else {
+        // 예약만 하고 입실 안 한 컨 — **이동이 아니다. 이름표가 내려왔을 뿐이다.**
+        //   계획(bay/row/tier)은 그대로 두고 «계획 자리를 내줬다»만 남긴다(2.93: 창고로 안 보낸다).
+        await _markPlanTaken(voyageKey, mode, displaced, by, cn);
+        displacedToStorage = true;
+      }
     } else {
       // 진짜 충돌(이미 실린 컨) 또는 양하 — 1.53 규칙 그대로.
       //   자기 계획 자리가 비어 있으면 거기로, 아니면 미배정으로 두고 검수사가 정한다.
@@ -1474,16 +1495,28 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     //   실측 2026-08-31 MCSC 635S — B38 20대를 실었더니 밀려난 20대에 전부 실체 위치가 박혔다
     //   (18대는 `__STG__`, 2대는 34번 자리). 「한 칸 두 대」·「B38 홀드 0」의 근원이 이것이었다.
     //   §5-Y-B 정본 — *컨(손님)은 창고→배 딱 한 번 움직인다.* 이름표를 내준 것은 이동이 아니다.
-    if (!meta.planOnly) {
+    // ── TallyOne 2.94-06: **선적확인이 눌려야 실물이다.** (검수사 확정 2026-08-31) ──
+    //   원문 — *"그냥 실물없이 이름만 이동하는것입니다. 앱은 그걸 실물이라고 믿고 있다는것입니다."*
+    //          *"선적확인이 눌려야 실물이 실린거란 말입니다"*
+    //   1.55 는 «자리가 주어지면 실체를 항상 쓴다. 선적확인 전이어도 쓴다»고 정했는데,
+    //   그것이 곧 앱이 **이름표 이동을 실물 이동으로 믿게 된** 원인이다.
+    //   2.94-06 부터 선적확인 전 자리 지정은 전부 «정해 준 자리»(`*_assign`)로 간다.
+    //   실체(`*_actual`)는 `_markLoadedPos` 가 선적확인 순간에만 찍는다 — 창고→배 한 번(§5-Y-B).
+    //   화면은 `effectivePos` 가 실체→지정→계획 순으로 읽으므로 보이는 것은 종전과 같다.
+    const _isLoaded = await (async () => {
+      try { return (await get(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`))).exists(); }
+      catch { return false; }
+    })();
+    if (!meta.planOnly && _isLoaded) {
       patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
       patch.actual_at = Date.now(); patch.actual_by = by || '';
-      // 2.94-04: 실제로 실었으면 «지정만 해 둔 자리»는 걷는다 — 실체가 진실이다.
+      // 실린 컨의 자리를 고쳤으면 «정해 준 자리»는 걷는다 — 실체가 진실이다.
       if (cur.bay_assign !== undefined && cur.bay_assign !== null) {
         patch.bay_assign = null; patch.row_assign = null; patch.tier_assign = null;
         patch.assign_at = null; patch.assign_by = null;
       }
     } else {
-      // ── TallyOne 2.94-04: **실체는 안 주되 «정해 준 자리»는 보여야 한다.** ──
+      // ── TallyOne 2.94-04/06: **실체는 안 주되 «정해 준 자리»는 보여야 한다.** ──
       //   2.93 이 밀려난 컨의 실체 기록을 막았는데(맞다), 화면은 자리를 `bay_actual` 로만 읽어서
       //   **맞바꿈으로 새 자리를 받은 컨이 「자리 미정」으로 되돌아갔다**(검수사 지적 2026-08-31
       //   — *"17대 18대 20대 창고????"* — 같은 것이 18·20 두 숫자로 세어졌다).

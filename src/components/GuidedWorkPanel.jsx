@@ -1345,7 +1345,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {unassigned.length > 0 && (
             <button onClick={() => setShowUnassigned(v => !v)}
               className="w-full py-3 rounded-pill bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100">
-              <div className="font-bold text-base">⚠ 자리 미지정 {unassigned.length}대</div>
+              <div className="font-bold text-base">⚠ 야적장 대기 {unassigned.length}대</div>
               <div className="text-2xs text-amber-300">리스트엔 있는데 적부 좌표가 없습니다 — 눌러서 목록 보기</div>
             </button>
           )}

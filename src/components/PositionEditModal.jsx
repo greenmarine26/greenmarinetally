@@ -248,6 +248,20 @@ export default function PositionEditModal({
   const findByCn = (cn) => cn ? allContainers.find(x => x?.cn === cn && sameMode(x)) : null;
   const findAtPos = (b, r, t) => allContainers.find(x => x && x.cn !== container?.cn && x.bay && sameMode(x) &&
     String(parseInt(x.bay, 10)) === String(parseInt(b, 10)) && x.row === String(r).padStart(2, '0') && x.tier === String(t).padStart(2, '0'));
+  // ── TallyOne 2.94-05: **밀려난 컨이 갈 자리를 말한다.** (검수사 지적 2026-08-31 «미배정이 뜨면 안됩니다») ──
+  //   규칙(검수사 확정) — *"자리를 빼앗은컨이 갖고있던자리로 가면됩니다."*
+  //   이 컨(A)이 떠나며 비우는 자리가 곧 밀려난 컨의 행선지다. 그 자리가 비어 있을 때만 말한다.
+  const vacating = useMemo(() => {
+    const b = container?._bay_planned || container?.bay;
+    const r = container?._row_planned || container?.row;
+    const t = container?._tier_planned || container?.tier;
+    if (!b || !r || !t) return '';
+    // 같은 자리로 되돌리는 경우는 비우는 것이 아니다
+    if (bay && String(parseInt(bay, 10)) === String(parseInt(b, 10)) && row === r && tier === t) return '';
+    if (findAtPos(b, r, t)) return '';                       // 이미 다른 컨이 차지했다
+    return `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}`;
+  }, [container, bay, row, tier, allContainers]);
+
   const bayWarn = useMemo(() => {
     if ((!bay && !row && !tier) || !container?.bay || !bay) return false;
     return String(parseInt(container.bay, 10)) !== String(parseInt(bay, 10));
@@ -308,7 +322,7 @@ export default function PositionEditModal({
     // TallyOne 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다 — 검수원에게는 "앱이 굳은" 것으로 보인다.
     //   실측 2026-08-12: 이 자리에서 앱이 30분 멈췄다(대화상자가 떠 있었다). 앱 안 모달로 바꾼다.
     const slotCon = findByCn(pickedSlotCn) || findAtPos(bay, row, tier) || conflict;
-    const t0 = confirmTextOf(swapG, container, slotCon);
+    const t0 = confirmTextOf(swapG, container, slotCon, vacating);   // 2.94-05: 갈 자리를 문구에 싣는다
     if (t0) {
       askConfirm({
         title: '자리를 바꿉니다',
@@ -621,7 +635,9 @@ export default function PositionEditModal({
                     검수사 개념 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
                     자리를 뺏는 것이 아니라 **이름을 빌려주고 몸은 창고에 그대로** 있는 것이다. */}
                 <div className="mt-1 text-2xs text-orange-300 leading-relaxed">
-                  → 확인하면 그 컨은 <b>계획 자리를 내주고 「자리 미정」</b>이 됩니다 — 아직 안 실린 컨입니다.
+                  {vacating
+                    ? <>→ 확인하면 그 컨은 <b className="text-emerald-300">{vacating}</b> 로 갑니다 — {container?.cn}이(가) 비우는 자리입니다.</>
+                    : <>→ 확인하면 그 컨은 <b>계획 자리를 내주고 야적장에서 대기</b>합니다 — 실을 자리를 정해 주세요.</>}
                   <br/>(이미 선적확인된 컨이면 완료는 그대로 두고 자리만 옮깁니다.)
                 </div>
               </div>
@@ -788,9 +804,11 @@ export default function PositionEditModal({
               )}
               {conflict && (
                 <div className="text-xxs text-orange-300 mt-2">
-                  {/* 2.93: 확인창과 **같은 문장**을 쓴다. 종전엔 이 줄이 "실물은 창고에",
+                  {/* 2.93/2.94-05: 확인창과 **같은 문장**을 쓴다. 종전엔 이 줄이 "실물은 창고에",
                       확인창이 "원래 자리로 옮겨집니다" 라 서로 달랐다(검수사 지적 2026-08-31). */}
-                  ⚠ {conflict.cn} → 계획 자리를 내주고 「자리 미정」이 됩니다 (아직 안 실린 컨입니다)
+                  {vacating
+                    ? <>⚠ {conflict.cn} → <b className="text-emerald-300">{vacating}</b> 로 갑니다 ({container?.cn}이 비우는 자리)</>
+                    : <>⚠ {conflict.cn} → 계획 자리를 내주고 야적장에서 대기합니다 (실을 자리를 정해 주세요)</>}
                 </div>
               )}
             </div>

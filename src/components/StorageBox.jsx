@@ -22,7 +22,7 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
       <div className="bg-ink-750/50 px-3 py-2 flex items-center gap-2 border-b border-line-strong/40">
         <Archive className="w-4 h-4 text-dim-100"/>
         <span className="text-xxs font-black uppercase text-dim-100 flex-1">
-          계획 자리를 내준 컨 {stored.length}대 <span className="font-normal text-dim-300 normal-case">— 아직 안 실렸습니다. 자리를 다시 정해 주세요</span>
+          계획 자리를 내준 컨 {stored.length}대 <span className="font-normal text-dim-300 normal-case">— 야적장에서 대기 중입니다. 실을 자리를 정해 주세요</span>
         </span>
         {onBatchRestore && (
           <button onClick={onBatchRestore}
@@ -64,7 +64,7 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
                       <span className="mono">
                         {has
                           ? `창고 · 이름 걸린 자리 ${String(parseInt(pb, 10)).padStart(2, '0')}-${pr}-${pt}`
-                          : '창고 · 걸린 자리 없음 (자리 미지정)'}
+                          : '야적장 대기 · 걸린 자리 없음'}
                       </span>
                     </div>
                   );

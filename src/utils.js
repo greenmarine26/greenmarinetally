@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.94-04'   // 2.94-04 정해 준 자리(bay_assign)를 화면이 읽는다 + 이름 한 벌
+export const APP_VERSION = 'TallyOne 2.94-06'   // 2.94-06 선적확인이 눌려야 실물이다 — 그 전 자리는 «정해 준 자리»
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
