@@ -15,6 +15,7 @@
 //   * 베이 지정 (single): 1개 베이 선택
 
 import React, { useMemo, useState, useRef } from 'react';
+import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다
@@ -368,8 +369,22 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     else voyDisplay = voyD || voyL || voyGeneric;
   }
 
-  // M4.9b: POL 빈칸 (샘플 PDF와 동일 — 검수원이 수기 또는 향후 자동 채움)
-  const portLabel = 'POL : ';
+  /* ★ 2.90-05 (검수사 인쇄 실물 «선적분이면 POL : PTK 가 보여야 하는데 POL: 만 보임») —
+       M4.9b 가 «향후 자동 채움»으로 남겨 둔 자리다. 값은 처음부터 자료에 있었다(§0-Y-2 — 없어서
+       못 넣은 것이 아니라 안 넣은 것). 선적은 출발지가 평택이고, 양하는 도착지가 평택이다.
+     ⚠ 라벨도 모드에 맞춘다 — 양하 서류에 POL 을 찍으면 뜻이 뒤집힌다. */
+  //  2.90-05: 머리 선박명 — 풀네임(SEASPAN CALICANTO) 우선, 못 찾으면 코드로 물러선다.
+  const shipHeadName = (() => {
+    try { return resolveShipDisplayName(voyageInfo || {}).name || voyageInfo?.vsl || shipName || ''; }
+    catch (e) { return voyageInfo?.vsl || shipName || ''; }
+  })();
+
+  const portLabel = (() => {
+    const PTK = 'PTK';
+    if (mode === 'loading') return `POL : ${PTK}`;
+    if (mode === 'discharge') return `POD : ${PTK}`;
+    return `POL : ${PTK}`;
+  })();
 
   const renderCell = (t, r) => {
     const c = cellMap[`${t}-${r}`];
@@ -423,7 +438,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       )}
       <div className="bd-title">{title}</div>
       <div className="bd-header">
-        <span>{voyageInfo?.vsl || shipName || ''}</span>
+        {/* 2.90-05 (검수사 «선박명이 잘립니다») — 잘린 게 아니라 **코드만** 찍고 있었다.
+            풀네임은 정본 한 벌(resolveShipDisplayName)이 안다 — X-RAY 머리와 같은 벌을 쓴다. */}
+        <span>{shipHeadName}</span>
         <span>VOY NO : {voyDisplay}</span>
         <span>{portLabel}</span>
       </div>

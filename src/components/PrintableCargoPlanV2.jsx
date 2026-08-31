@@ -174,16 +174,16 @@ export const CARGO_V2_CSS = `
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
 .cpv2-tier-row .cpv2-cell { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: var(--mf, 9.6px);   /* 2.38-02 마크 전부 1.2배 — 값은 .cpv2-tier-row 의 --mf 한 곳에서만 정한다(폴백은 같은 값) */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; min-height: 0; visibility: hidden; }
-.cpv2-row-labels { display: flex; flex: 0 0 auto; justify-content: center; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
+.cpv2-row-labels { display: flex; flex: 0 0 auto; justify-content: center; font-size: calc(var(--mf, 9.6px) * 1.05)   /* 2.90-05: 칸 폭에 맞춘다 — 칸보다 라벨이 크면 겹친다 */; color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 0 0 var(--cpw, auto); width: var(--cpw, auto); min-width: 0; text-align: center; line-height: 1.2; }   /* 2.90-03: 칸과 같은 고정 폭 — 라벨이 칸 위에 정확히 선다 */
 /* M6.94.19: XRAY는 ★ 별표만 표시, 배경은 선사 색 그대로 (연노랑 강제 제거) */
-.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(7px, 1vw, 12px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: calc(var(--mf, 9.6px) * 1.15);   /* 2.90-05: clamp(vw) 금지 — 인쇄 뷰포트에서 칸보다 커진다(검수사 «시프팅 표기가 너무 큽니다»). 칸 글자에 비례시킨다 */ color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V8.98: 쉬프팅(재적부) = 좌상단 파란 ◆ (XRAY ★는 우상단 — 동시 표기 가능) */
-.cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: -1px; left: 0px; font-size: calc(var(--mf, 9.6px) * 0.95);   /* 2.90-05: 칸 글자 비례 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
    V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서
    ★가 지워지던 충돌(사용자 지적 2026-07-23). 이제 ◆(before)·★(after)·▲(요소)·보라테두리 4종 완전 공존. */
-.cpv2-cell .cpv2-um { position: absolute; bottom: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; font-style: normal; line-height: 1; }
+.cpv2-cell .cpv2-um { position: absolute; bottom: -1px; left: 0px; font-size: calc(var(--mf, 9.6px) * 0.95)   /* 2.90-05: 칸 글자 비례(clamp vw 금지) */; color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; font-style: normal; line-height: 1; }
 .cpv2-cell.cpv2-lugg { box-shadow: inset 0 0 0 2px #7c3aed; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
