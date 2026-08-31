@@ -198,7 +198,8 @@ export const CPV2_BOX_GAP = 3;              // 박스 사이 gap
 export const CPV2_BOX_CHROME = 24;          // 박스 테두리2 + 섹션패딩4 + gap2 + 단라벨16
 export const CPV2_MARK_FONT_MAX = 9.6;
 export const CPV2_MARK_FONT_MIN = 4.6;      // 2.90-03 — 여백을 준 뒤의 하한(12열 배가 4.8px). 종전 5.9 는 «꽉 참» 기준이었다
-// 2.90-01 검수사 확정 «2 잘 보이기만 하면 됩니다» — 다섯 마크(DG·RE·RF·FR·TK) 전부 들어가는 하한
+// 2.90-01 검수사 확정 «2 잘 보이기만 하면 됩니다» — 여섯 마크(DG·RE·OT·RF·FR·TK) 전부 들어가는 하한
+//   2.98-10: OT 편입(1.445em) — 검수사 «특수화물은 두글자 표기입니다». 가장 넓은 것은 여전히 DG 1.5em.
 export const CPV2_WIDEST_MARK_EM = 1.5;     // 'DG'
 //  2.90-03 (검수사 인쇄 실물 «폰트가 좀더 작아져야 합니다. 구분은 되지만 부담을 줍니다 너무 꽉차서»)
 //    칸에 «겨우 들어가는» 크기는 종이에서 답답하다. 좌우로 숨 쉴 틈을 두고 그 안에 맞춘다.
@@ -350,7 +351,7 @@ export function getActiveColsSymmetric(cellCount, nTotal) {
 // ------------------------------------------------------------
 // containers: [{ bay, row, tier, pod, iso, dg, awk, oog, ... }, ...]
 // posMap: Map("bay|tier" → Map(rowLbl → container))
-// getSelfMarkFn: (container, pod) => 'o'|'R'|'D'|'P'|'U'|'T'|'A'|'G'|'X'
+// getSelfMarkFn: (container, pod) => 'o'|'RF'|'RE'|'DG'|'FR'|'TK'|'OT'|'F'|'e'|'E'|'X' 등 (2.98-10: 특수화물은 두 글자)
 //   (검수앱 자체 마크 로직을 호출자가 주입 — AWK, OOG 등 검수앱 고유 마크 보존)
 export function buildPosMap(containers) {
   // bay/tier는 string("01") or number(1) 양쪽 케이스 안전 처리 — Number로 통일

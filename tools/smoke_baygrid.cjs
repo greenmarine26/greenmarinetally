@@ -149,7 +149,7 @@ const dicts = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/baygrid
      (베이 하나만 보면 MCSC 가 8열로 나와 통과해 버린다 — 2.90 재검증에서 실제로 갈렸다).
    ⚠ 마크 폭(Arial Bold): DG 1.500 · RE 1.389 · RF/FR/TK 1.333 em. */
 {
-  const MARKS = { DG: 1.5, RE: 1.389, RF: 1.333, FR: 1.333, TK: 1.333 };
+  const MARKS = { DG: 1.5, RE: 1.389, OT: 1.445, RF: 1.333, FR: 1.333, TK: 1.333 };   // 2.98-10: OT 추가(Arial Bold O 778 + T 667 = 1.445em)
   let worst = null, cut = 0, ships = 0;
   for (const [code, e] of Object.entries(dicts)) {
     const def = e?.bayDef || e;

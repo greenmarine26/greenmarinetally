@@ -4,7 +4,7 @@
 // M6.86.5~M6.86.7 회귀 (globalRowRange 페이지 통일, STD baseline 폐기 등) 폐기.
 // M6.81 Python 검증 알고리즘 (cargoPlanCore.js) 그대로 사용.
 //
-// 보존: 검수앱 고유 마크 (AWK='A', OOG='A', Empty='E', Reefer 빈='r'), POD 컬러
+// 보존: 검수앱 고유 마크 (OOG/오픈탑='OT', Empty='E', Reefer 빈='RE'), POD 컬러
 // 미통합 (다음 패치 예정): 선사별 별첨, 화물 종류별 별첨, 선적 모드 POD 컬러 매핑
 // ============================================================
 import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
@@ -34,17 +34,17 @@ import {
 //     이제 «칠했나»가 그 일을 한다 — 검수사 «엠티이니 색이 없으나 풀로 오해 안함».
 //     세 글자가 두 글자가 되면서 좁은 배(MCSC 한 줄 12칸 = 칸 17px)에서도 글자를 키울 수 있다.
 //     ⚠ 리스트·서류 표기는 R/F·R/E·R/D 그대로다(2026-08-04 확정, utils.js 2226행).
-//   - FR = 'FR' (2글자), DG = 'D', Tank = 'T', OOG = 'A'
+//   - 특수화물은 **전부 두 글자** (검수사 확정 2026-09-01): DG · RF/RE · FR · TK · OT
 //   - 양하/선적 동일 마크. 색만 다름 (양하=선사별, 선적=POD별).
 //   - PTK = 컬러 배경 + 글자. 통과 = 회색 + 빈(일반) / 글자(특수).
 // M6.94.23: 특수화물 마크 여부 — true면 선사/포트 색 대신 특수화물 색(기호) 우선.
-//   특수화물: D(위험물) R/r(리퍼) FR(플랫랙) T(탱크) A(OOG/오픈탑).
+//   특수화물: DG(위험물) RF/RE(리퍼) FR(플랫랙) TK(탱크) OT(OOG/오픈탑) — 전부 두 글자.
 //   일반 표기(F/E/o/X/L/K/P/S/M 등 PTK·선사 마커)는 false → 선사색 적용 허용.
 function isSpecialMark(mark) {
   if (!mark) return false;
   const m = String(mark).toUpperCase();
   return m === 'D' || m === 'R' || m === 'RF' || m === 'RE' ||
-         m.startsWith('R') || m === 'FR' || m === 'T' || m === 'A';
+         m.startsWith('R') || m === 'FR' || m === 'T' || m === 'OT';
 }
 
 // V8.88: 20피트 판정 — iso 앞자리(2x=20ft), 없으면 베이 홀수 폴백. 2.38부터 엠티 e/E 분기용.
@@ -91,7 +91,7 @@ const SPECIAL_FILL = {
   'DG': '#ffa1aa',   // 위험물 = 빨강 계열
   'RF': '#75dbe8',   // 리퍼 풀 = 청록 계열
   'FR': '#9fd3a1',   // 플랫랙 = 초록 계열
-  'A': '#d8aae0',    // 오픈탑/OOG = 보라 계열
+  'OT': '#d8aae0',   // 오픈탑/OOG = 보라 계열 (2.98-10: 키를 'A'→'OT' 로. cell.mark 로 조회하므로 글자와 같아야 한다)
   'TK': '#ffb445',   // 탱크 = 주황 계열
 };
 const PLAIN_FULL_BG = '#7dd3fc';   // 일반 풀 = 하늘색
@@ -112,7 +112,7 @@ function getMarkV2(c, pod, mode) {
   else if (isReeferContainer(c)) specialLetter = isEmpty ? 'RE' : 'RF';   // 2.38-01: 그림은 RE·RF (리스트는 R/E·R/F 유지)
   else if (c.fr) specialLetter = 'FR';
   else if (c.tk) specialLetter = 'TK';   // 2.38 (검수사): 탱크도 TK 2글자
-  else if (c.ot || c.oog) specialLetter = 'A';
+  else if (c.ot || c.oog) specialLetter = 'OT';   // 2.98-10 (검수사): «OT를 A로 표기하는데 OT로» · «특수화물은 두글자 표기입니다»
 
   // ★ 2.79-03 (검수사 확정 2026-08-28) — **통과화물은 글자를 안 쓴다. 회색 자리만 남긴다.**
   //   원문 둘을 같이 읽어야 뜻이 맞는다:
@@ -190,16 +190,35 @@ export const CARGO_V2_CSS = `
    *"치수도 플랜에 있어서는 안됩니다 — 검수사의 눈으로 실측해서 기록합니다"*
    종이 베이플랜의 «위 사각형 = 높이 초과 · 좌우 삼각형 = 폭 초과» 를 굵은 선으로 낸다.
    글자를 늘리지 않는다 — 셀 폭이 좁은 큰 배에서 마크가 깨진다(2.90 교훈). */
-.cpv2-cell.cpv2-oog-H { box-shadow: inset 0 3px 0 0 #000; }
-.cpv2-cell.cpv2-oog-W { box-shadow: inset 3px 0 0 0 #000, inset -3px 0 0 0 #000; }
-.cpv2-cell.cpv2-oog-HW { box-shadow: inset 0 3px 0 0 #000, inset 3px 0 0 0 #000, inset -3px 0 0 0 #000; }
+/*  ★ 2.98-10 — **치수 초과 표시가 글자를 덮던 것** (검수사 실물 보고 2026-09-01).
+      원문 — «카고 플랜에 굵은 테두리 때문에 FR 글자 구분이 안됩니다.
+              베이상세 처럼 직사각형 세로로 경계선에만 붙혀주세요» · «FR 풀만 적용합니다.
+              FR 엠티는 그냥 FR로만 직사각형 추가 없이»
+      종전 안쪽 굵은 선 3px 는 좌우로 6px 을 먹었다. 최악 칸(MCSC 12열·줄당 7박스)의 안쪽이 8.89px 이라
+      두 글자 «FR» 에 2.9px 만 남아 못 읽었다(cargoPlanCore.js:182 실측).
+      ⇒ 높이 초과(H)는 **위 경계선에 붙은 세로 직사각형** — 베이상세 PrintableBayDetail.jsx:444 의 그 모양
+        (연장 스프레더를 쓰라는 뜻). 폭 초과(W)는 굵은 선을 3px→1px 로 얇게 해 글자 자리를 되찾는다.
+      ⚠ FR 엠티는 손댈 것이 없다 — 실데이터 전수(FR 엠티 5대)가 **치수 초과 0건**이라 애초에 안 붙는다.
+        도형은 «치수가 있는 것»에만 붙는다(tagOog, cargoPlanCore.js:435). FR 여부로 가르지 않는다. */
+.cpv2-cell.cpv2-oog-W  { box-shadow: inset 1px 0 0 0 #000, inset -1px 0 0 0 #000; }
+.cpv2-cell.cpv2-oog-HW { box-shadow: inset 1px 0 0 0 #000, inset -1px 0 0 0 #000; }
+/*  ⚠ 직사각형은 칸 **안쪽이 아니라 경계선 바로 위 바깥**이다 (검수사 정정 2026-09-01 —
+      «직사각형이 FR 안쪽으로 오는게 아니고 바로 위쪽으로»). 베이상세도 그렇다:
+      PrintableBayDetail.jsx:444 의 rect 는 아래 끝(y=1.0)이 셀 윗변에 정확히 닿는다.
+      그래서 «bottom: 100%» — 셀 밖으로 나가므로 그 칸만 overflow 를 풀고 z-index 를 올린다
+      (베이상세 :929 와 같은 처리. 안 올리면 이웃 칸의 흰 배경이 나중에 그려져 도형을 덮는다 — 2.98-01 사고). */
+.cpv2-cell.cpv2-oog-H, .cpv2-cell.cpv2-oog-HW { overflow: visible; z-index: 3; }
+.cpv2-cell.cpv2-oog-H::after, .cpv2-cell.cpv2-oog-HW::after {
+  content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: 100%;
+  width: 26%; height: 34%; border: 0.9px solid #000; border-bottom: none; background: #fff;
+  box-sizing: border-box; pointer-events: none; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
 .cpv2-cell.cpv2-mark-R { color: #006064; }
 .cpv2-cell.cpv2-mark-r { color: #00838f; }
 .cpv2-cell.cpv2-mark-DG { color: #b71c1c; }
 .cpv2-cell.cpv2-mark-F { color: #1b5e20; }
-.cpv2-cell.cpv2-mark-A { color: #4a148c; }
+.cpv2-cell.cpv2-mark-OT { color: #4a148c; }
 .cpv2-cell.cpv2-mark-TK { color: #e65100; }
 .cpv2-cell.cpv2-mark-E { color: #555; }
 .cpv2-cell.cpv2-mark-e { color: #555; }
@@ -1323,10 +1342,10 @@ function FeLegend({ fe }) {
 function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
   const cargoColors = {
     '일반': { bg: PLAIN_FULL_BG, fg: MARK_FG, mark: 'o' },   // 2.38-01: 일반 풀 = 하늘색 (그림과 같은 값)
-    'Reefer': { bg: SPECIAL_FILL['RF'], fg: MARK_FG, mark: 'R' },
+    'Reefer': { bg: SPECIAL_FILL['RF'], fg: MARK_FG, mark: 'RF' },   // 2.98-10: 그림이 RF 라 범례도 RF
     'DG': { bg: SPECIAL_FILL['DG'], fg: MARK_FG, mark: 'DG' },   // 2.38: 그림이 DG 2글자라 범례도 DG
-    'FR': { bg: SPECIAL_FILL['FR'], fg: MARK_FG, mark: 'F' },
-    'OT': { bg: SPECIAL_FILL['A'], fg: MARK_FG, mark: 'A' },
+    'FR': { bg: SPECIAL_FILL['FR'], fg: MARK_FG, mark: 'FR' },   // 2.98-10: 그림이 FR 라 범례도 FR
+    'OT': { bg: SPECIAL_FILL['OT'], fg: MARK_FG, mark: 'OT' },   // 2.98-10: 그림이 OT 라 범례도 OT
     'Tank': { bg: SPECIAL_FILL['TK'], fg: MARK_FG, mark: 'TK' },   // 2.38: 그림이 TK 2글자라 범례도 TK
   };
   // kind: 'carrier' / 'pod' = colorMap 사용 / 'cargo' = cargoColors / 'carrier-bw' = 흑백 (선사 표는 흑백 처리, 사용자 약속)
