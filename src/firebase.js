@@ -1428,7 +1428,7 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
   // 1.50: 경로 한 줄 — 자리가 실제로 바뀐 때만 쌓는다(같은 자리 재저장은 줄만 늘린다).
   //   1.53-02: 단 `meta.force` 면 자리가 그대로여도 남긴다. **취소는 자리를 안 옮겨도 사건이다** —
   //   실측 2026-08-12 WFHU1403890 은 계획 자리 그대로 실렸다가 취소돼 아무 기록도 안 남았다.
-  const _pos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : '미배정');
+  const _pos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : '자리 없음');   // 2.94-09
   const _from = _pos(oldBay, oldRow, oldTier);
   const _to = _pos(nb, nr, nt);
   if (_from !== _to || meta.force) {
