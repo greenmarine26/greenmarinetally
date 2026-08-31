@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.96'   // 2.96 검수원이 고친 자리를 시프팅도 본다
+export const APP_VERSION = 'TallyOne 2.97'   // 2.97 ASC 파서가 OOG 치수를 읽는다(종전 전량 누락)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -1597,7 +1597,10 @@ export function parseAscFile(text) {
     //   2) OOG 감지: 'AK' 토큰 (FR/OT의 out-of-gauge 표시)
     //   3) OOG 치수: AK 다음 6자리 숫자
     //   4) routeCode: 끝 10-11자 영문 (POL+VIA+POD)
-    const metaArea = line.substring(54).trim();
+    //  2.97: 시작을 52 로 넓힌다 — 실측 STMJ 2651E 에서 `AK` 는 **컬럼 53** 이라
+    //   종전 substring(54) 은 'K' 부터 읽어 `\bAK\b` 가 **한 건도 안 걸렸다**(OOG 전량 누락).
+    //   넓혀도 타입 블록 끝 두 글자만 더 들어올 뿐, 온도 정규식(`-?\d{3}C`)과 겹치지 않는다.
+    const metaArea = line.substring(52).trim();
     let tmp = '';
     if (tp && tp.startsWith('RF')) {
       // M6.48 보강: 리퍼 온도 추출 — 사용자 명시: 반드시 소수점 1자리 (-18.0℃, 15.0℃)
@@ -1613,11 +1616,33 @@ export function parseAscFile(text) {
         if (tmpMatch2) tmp = parseFloat(tmpMatch2[1]).toFixed(1) + '℃';
       }
     }
+    // ── TallyOne 2.97: **OOG 치수를 제대로 읽는다.** (검수사 자료 2026-08-31 STMJ 2651E) ──
+    //   검수사 — *"여러칸을 먹기도 합니다. 보통은 좌우로 각 1칸 이내입니다.
+    //             그래서 치수를 리스트에 적어 달라고 했던것입니다"*
+    //   종전 `/AK\s*(\d{6})/` 는 **한 건도 못 잡았다**(실측 null). AK 뒤에 오는 것은
+    //   6자리가 아니라 **높이 3자리 → 공백 → 좌 3자리 + 우 3자리** 다.
+    //   실측 STMJ 2651E ASC — 컬럼 고정: 53=AK · 92=높이(cm) · 101=좌(cm) · 104=우(cm)
+    //     100106 SITU0407230 … 40FP145F AK      149      062062   → 높이 149 · 좌 62 · 우 62
+    //     180006 SITU0406300 … 40FP212F AK      005      072072   → 높이  5 · 좌 72 · 우 72
+    //   좌우 62~97cm 는 칸 폭(8ft=244cm) 안이라 좌우 한 칸씩 — 종이 베이플랜 그림과 일치한다.
+    //   ⚠ 컬럼이 밀린 자료를 대비해 정규식 폴백을 함께 둔다(고정 컬럼 → 실패 시 패턴).
     const oog = /\bAK\b/.test(metaArea);
-    let oogDim = '';
+    let oogDim = '', oogH = 0, oogL = 0, oogR = 0;
     if (oog) {
-      const oogM = metaArea.match(/AK\s*(\d{6})/);
-      if (oogM) oogDim = oogM[1];
+      const num = (v) => { const n = parseInt(String(v).trim(), 10); return Number.isFinite(n) ? n : 0; };
+      oogH = num(line.substr(92, 3));
+      oogL = num(line.substr(101, 3));
+      oogR = num(line.substr(104, 3));
+      if (!oogH && !oogL && !oogR) {
+        // 폴백 — AK 뒤 «3자리 … 6자리» 또는 «6자리» 어느 쪽이든 받는다.
+        const m2 = metaArea.match(/AK\s+(\d{3})\s+(\d{3})(\d{3})/);
+        if (m2) { oogH = num(m2[1]); oogL = num(m2[2]); oogR = num(m2[3]); }
+        else {
+          const m1 = metaArea.match(/AK\s+(\d{3})(\d{3})/);
+          if (m1) { oogL = num(m1[1]); oogR = num(m1[2]); }
+        }
+      }
+      if (oogL || oogR) oogDim = String(oogL).padStart(3, '0') + String(oogR).padStart(3, '0');
     }
     // routeCode (끝 10-11자) — POD 백업용
     const rcMatch = line.match(/([A-Z]{10,11})\s*$/);
@@ -1625,7 +1650,7 @@ export function parseAscFile(text) {
     const podFinal = routeCode.length >= 3 ? routeCode.slice(-3) : '';
 
     // FR/OT 자동 oog 판정 — 장비 코드만으로도 OOG 처리
-    const isFROrOT = tp && (tp.startsWith('FR') || tp.startsWith('OT') || tp.startsWith('PL'));
+    const isFROrOT = tp && (tp.startsWith('FR') || tp.startsWith('OT') || tp.startsWith('PL') || tp.startsWith('FP'));   // 2.97: 40FP(플랫랙)도 OOG 계열
 
     containers.push({
       cn, bay, row, tier,
@@ -1641,6 +1666,12 @@ export function parseAscFile(text) {
       sl: '', sh: '', bl: '',
       tmp,
       oogDim,
+      // 2.97: 방향별 초과(cm). **이름을 BAPLIE 와 맞춘다** — 검수 리스트·인쇄물은 `ovh/ovw` 를 읽는데
+      //   ASC 파서만 따로 놀아 ASC 로 들어온 배는 치수가 통째로 비어 있었다(§0-Y-2 «없다고 말하지 않는다»).
+      //   BAPLIE DIM: 5·6=길이 · 7·8=폭 · 9·13=높이 — 여기서도 같은 뜻으로 채운다.
+      ovh: oogH || undefined,
+      ovw: Math.max(oogL, oogR) || undefined,
+      oogL, oogR,            // 좌·우를 따로 알아야 어느 쪽 칸을 먹는지 그린다
       routeCode,
       podFinal,
     });

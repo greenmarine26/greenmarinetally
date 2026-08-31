@@ -387,6 +387,14 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   //   ⚠ 자기 셀에만 단다 — 옆 짝수 40피트가 차지한 홀수 자리(X)는 그 자리 화물이 아니라
   //   40피트가 풀이어도 칠하지 않는다(«풀이라고 해도 홀수베이에는 셀색을 넣지 않습니다»).
   const fulls = new Map();
+  // ── TallyOne 2.97: **OOG 는 방향만 그린다.** (검수사 확정 2026-08-31) ──
+  //   원문 — *"플랜은 간단하게 높이 화물이며 좌우폭이 오버 여부만 보여 주면 됩니다.
+  //           너무 깊이 안들어 가도 됩니다"* · *"치수도 플랜에 있어서는 안됩니다.
+  //           이유는 검수사의 눈으로 실측해서 기록합니다"*
+  //   종이 베이플랜은 셀 위 사각형(높이 초과) · 좌우 삼각형(폭 초과)으로 그린다.
+  //   우리는 같은 뜻을 **셀 테두리 굵은 선**으로 낸다 — 숫자는 넣지 않는다.
+  const oogs = new Map();
+  const ensureOogTier = (tier) => { if (!oogs.has(tier)) oogs.set(tier, new Map()); return oogs.get(tier); };
   const ensureTier = (tier) => {
     if (!marks.has(tier)) marks.set(tier, new Map());
     return marks.get(tier);
@@ -423,9 +431,17 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   };
   const ensureUrgentTier = (tier) => { if (!urgents.has(tier)) urgents.set(tier, new Map()); return urgents.get(tier); };
   const ensureLuggTier = (tier) => { if (!luggs.has(tier)) luggs.set(tier, new Map()); return luggs.get(tier); };
+  //  2.97: OOG 방향 — 높이(ovh) / 좌우폭(ovw·oogL·oogR). 값이 아니라 **여부**만 남긴다.
+  const tagOog = (c, tier, rowLbl) => {
+    if (!c) return;
+    const h = Number(c.ovh || 0) > 0;
+    const w = Number(c.ovw || 0) > 0 || Number(c.oogL || 0) > 0 || Number(c.oogR || 0) > 0;
+    if (h || w) ensureOogTier(tier).set(rowLbl, (h ? 'H' : '') + (w ? 'W' : ''));
+  };
   const tagUrgentLugg = (c, tier, rowLbl) => {   // V9.03: 컨테이너 플래그 기반 (예보 저장 시 태깅)
     if (c && c.urgent) ensureUrgentTier(tier).set(rowLbl, true);
     if (c && c.lugg) ensureLuggTier(tier).set(rowLbl, true);
+    tagOog(c, tier, rowLbl);   // 2.97: 같은 자리에서 함께 태깅 — 호출부를 늘리지 않는다
   };
   const ensureFullTier = (tier) => { if (!fulls.has(tier)) fulls.set(tier, new Map()); return fulls.get(tier); };
   const tagFull = (c, tier, rowLbl) => {
@@ -531,7 +547,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
       }
     }
   }
-  return { marks, xrays, shifts, urgents, luggs, colors, throughs, shadow20s, fulls };
+  return { marks, xrays, shifts, urgents, luggs, colors, throughs, shadow20s, fulls, oogs };
 }
 
 // ------------------------------------------------------------
@@ -829,6 +845,7 @@ export function assembleBayRows(spec, marksBundle) {
   const bayThroughs = _mb.throughs || new Map();
   const bayShadow20s = _mb.shadow20s || new Map();
   const bayFulls = _mb.fulls || new Map();
+  const bayOogs = _mb.oogs || new Map();   // 2.97: OOG 방향(H/W)
   const { deckTiers, holdTiers, deckCells, holdCells, deckRowPos, holdRowPos, nDeckCols, nHoldCols } = spec;
   const _blkDeckC = spec.blkDeck || new Set();
   const _blkHoldC = spec.blkHold || new Set();
@@ -848,6 +865,7 @@ export function assembleBayRows(spec, marksBundle) {
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const rowFulls = bayFulls.get(stdT) || new Map();
+      const rowOogs = bayOogs.get(stdT) || new Map();   // 2.97: OOG 방향
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         const rowLbl = deckRowPos[c];
@@ -861,7 +879,7 @@ export function assembleBayRows(spec, marksBundle) {
         }
         if (inActive) {
           // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -889,6 +907,7 @@ export function assembleBayRows(spec, marksBundle) {
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const rowFulls = bayFulls.get(stdT) || new Map();
+      const rowOogs = bayOogs.get(stdT) || new Map();   // 2.97: OOG 방향
       const cells = [];
       for (let c = 0; c < nHoldCols; c++) {
         const inActive = activeInHold.has(c);
@@ -901,7 +920,7 @@ export function assembleBayRows(spec, marksBundle) {
             cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
             continue;
           }
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }

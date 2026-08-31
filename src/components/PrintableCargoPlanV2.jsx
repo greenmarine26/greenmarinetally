@@ -185,6 +185,14 @@ export const CARGO_V2_CSS = `
    ★가 지워지던 충돌(사용자 지적 2026-07-23). 이제 ◆(before)·★(after)·▲(요소)·보라테두리 4종 완전 공존. */
 .cpv2-cell .cpv2-um { position: absolute; bottom: 0; left: 0;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; font-style: normal; line-height: 1; }
 .cpv2-cell.cpv2-lugg { box-shadow: inset 0 0 0 2px #7c3aed; }
+/* ── TallyOne 2.97: OOG 는 **방향만** 그린다 (검수사 확정 2026-08-31) ──
+   *"플랜은 간단하게 높이 화물이며 좌우폭이 오버 여부만 보여 주면 됩니다"*
+   *"치수도 플랜에 있어서는 안됩니다 — 검수사의 눈으로 실측해서 기록합니다"*
+   종이 베이플랜의 «위 사각형 = 높이 초과 · 좌우 삼각형 = 폭 초과» 를 굵은 선으로 낸다.
+   글자를 늘리지 않는다 — 셀 폭이 좁은 큰 배에서 마크가 깨진다(2.90 교훈). */
+.cpv2-cell.cpv2-oog-H { box-shadow: inset 0 3px 0 0 #000; }
+.cpv2-cell.cpv2-oog-W { box-shadow: inset 3px 0 0 0 #000, inset -3px 0 0 0 #000; }
+.cpv2-cell.cpv2-oog-HW { box-shadow: inset 0 3px 0 0 #000, inset 3px 0 0 0 #000, inset -3px 0 0 0 #000; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
 .cpv2-cell.cpv2-mark-R { color: #006064; }
@@ -370,7 +378,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     if (renderCellContent) {
                       return (
-                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
                           {renderCellContent(cell, row.tier)}
                           {cell.isUrgent && <i className="cpv2-um">▲</i>}
                         </span>
@@ -402,7 +410,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
@@ -442,7 +450,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     if (renderCellContent) {
                       return (
-                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
                           {renderCellContent(cell, row.tier)}
                           {cell.isUrgent && <i className="cpv2-um">▲</i>}
                         </span>
@@ -474,7 +482,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
