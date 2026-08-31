@@ -907,7 +907,10 @@ export default function PrintableBayDetail({
            도형이 셀의 overflow:hidden 에 통째로 잘려 «베이플랜은 안보입니다»(검수사 실측).
            그리고 형제 셀의 흰 배경이 나중에 그려져 덮으므로
            z-index 로 올린다 — 둘 중 하나만 빠져도 안 보인다. */
-        .bd-cargo-wrap .cpv2-cell[class*="cpv2-oog-"] { overflow: visible; z-index: 3; }
+        .bd-cargo-wrap .cpv2-cell[class*="cpv2-oog-"] { overflow: visible; z-index: 3; box-shadow: none !important; }
+        /* 2.98-04: 카고플랜용 «안쪽 굵은 선»(2.97)을 베이상세에서는 끈다 — 도형과 이중이 된다.
+           검수사 확정 *"아까 보신대로만 그려 주세요. FR 표기법이 공용 표기법입니다"* —
+           선사 베이플랜 원본은 셀 테두리를 굵게 하지 않고 **도형만** 그린다. */
         .bd-cargo-wrap .cpv2-cell .bd-oog { position: absolute; left: -100%; top: -100%; width: 300%; height: 200%; pointer-events: none; z-index: 2; }
         /* 2.98: 안은 **비워 둔다** — 검수사가 실측 숫자를 손으로 적는 자리다(검수사 확정).
            선은 인쇄에서 확실히 보이되 글씨를 방해하지 않을 굵기로. */
