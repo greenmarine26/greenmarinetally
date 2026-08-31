@@ -216,7 +216,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
             icon={MoveRight}
             color="blue"
             label="이름표가 내려온 컨"
-            value={`${summary.nameOnly}대 — 실물은 창고`}
+            value={`${summary.nameOnly}대 — 아직 안 실림`}
           />
         )}
         {/* TallyOne 1.15: **X-RAY 는 맨 뒤로** (검수사 지시 2026-08-06). 리퍼·사진이 앞, X-RAY 는 마지막. */}

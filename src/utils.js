@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.94-02'   // 2.94-02 창고 잔재(선택→보관함 UI·기능목록·매뉴얼) 제거
+export const APP_VERSION = 'TallyOne 2.94-03'   // 2.94-03 통과화물 대수를 세지 않는다(근거 없는 숫자) + 창고 문구 잔재 정리
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5419,7 +5419,7 @@ export const MOVE_WHY_KO = {
   unassign: '미배정 처리',
   // TallyOne 1.54: **이동이 아니다.** 이름표가 내려온 것이고 실물은 처음부터 창고에 있었다.
   //   검수사 확정 2026-08-12 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
-  planTaken: '계획 자리를 내줌 (실물은 창고)',
+  planTaken: '계획 자리를 내줌 (아직 안 실림)',
   cancel: '완료 취소로 계획 자리 복귀',
   restore: '원래 계획 자리로 되돌림',
   loaded: '선적확인',
@@ -5492,7 +5492,7 @@ export function describeMovePath(c, isCompleted = false) {
       case 'move':
         if (m.to === '미배정') { line = '자리를 비웠습니다 (미배정).'; break; }
         // 창고에 있는 동안 좌표를 바꾼 것은 **계획을 고친 것**이지 실물을 옮긴 것이 아니다.
-        line = wasInStg ? `${to} 계획을 바꿨습니다 (실물은 창고).` : `${to} 옮겼습니다.`;
+        line = wasInStg ? `${to} 계획을 바꿨습니다 (아직 안 실림).` : `${to} 옮겼습니다.`;
         break;
       default:          line = (m.to === '미배정')
                           ? '자리를 잃었습니다 (미배정). (사유 기록 없음 — 이력 도입 전)'

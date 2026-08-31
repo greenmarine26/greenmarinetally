@@ -140,8 +140,6 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       ediTotal: ediContainers.length,
       ptkTotal: ptkInEdi.length,
       listTotal: (records || []).length - thruInList.length,   // 2.94: 통과화물은 평택 선적 리스트가 아니다
-      thruCount: thruInList.length,
-      thruDetails: thruInList.slice(0, 6).map(r => r.cn),
       matched: ptkInEdi.filter(c => recCns.has(c.cn)).length,
       missingCount: missingInList.length,
       missingByOp,
@@ -258,21 +256,9 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
         </div>
       )}
 
-      {/* 2.94: 통과화물은 «부족»이 아니라 «지나가는 짐»이다 — 색도 경고가 아닌 정보로 둔다. */}
-      {v.thruCount > 0 && (
-        <div className="bg-sky-950/40 border border-sky-800/50 rounded p-2">
-          <div className="text-xxs text-sky-300 font-bold mb-1">
-            ◆ 통과화물 {v.thruCount}대 — 평택 선적이 아닙니다 (내렸다 다시 싣는 재적부)
-          </div>
-          <div className="text-2xs text-sky-200/80 leading-tight">
-            양하 EDI 에 있고 목적지가 평택이 아닌 컨입니다. 선사 EDI 를 더 받을 것이 아닙니다.
-          </div>
-          <div className="text-2xs text-sky-200 mono mt-1">
-            {v.thruDetails.join(' · ')}{v.thruCount > v.thruDetails.length ? ` … 외 ${v.thruCount - v.thruDetails.length}대` : ''}
-          </div>
-        </div>
-      )}
-
+      {/* ⛔ 2.94-02: 「◆ 통과화물 N대」 블록 제거 — 근거 없는 숫자였다(검수사 지적 2026-08-31).
+          이 배의 통과화물은 880대인데 선적 리스트에 섞여 든 17대만 세고 있었다.
+          평택 선적이 아니므로 listTotal/extraCount 에서 빼기만 하고 따로 보여주지 않는다. */}
       {shiftOpen && (
         <ShiftingModal list={shiftingList} voyageKey={voyageKey} onClose={() => setShiftOpen(false)} />
       )}

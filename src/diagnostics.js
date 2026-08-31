@@ -280,16 +280,11 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           details: { lugCns: lugFound },
         });
       }
-      if (thruFound.length > 0) {
-        alerts.push({
-          level: 'info',
-          code: 'thru',
-          msg: `통과화물 ${thruFound.length}대 별도 — 평택 선적이 아닙니다(재적부)`,
-          voice: '',
-          count: thruFound.length,
-          details: { thruCns: thruFound.slice(0, 20) },
-        });
-      }
+      // ⛔ 2.94-02: **통과화물 대수를 화면에 세지 않는다.** (검수사 지적 2026-08-31)
+      //   원문 — *"통과화물 17대는 보여서 안되는것입니다 … 17대라는것은 근거가?"*
+      //   실측 MCSC 635S — 이 배의 통과화물은 **880대**다(양하 EDI 1,159 중 POD≠평택).
+      //   시프팅 95도 그 880 안에 있다. 선적 records 에 어쩌다 섞여 든 17대만 골라
+      //   「통과화물 17대」라 부르면 **거짓 숫자**다. 평택 선적이 아니니 조용히 빼기만 한다.
       if (extraCns.length > 0) {
         alerts.push({
           level: 'warning',

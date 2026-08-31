@@ -572,8 +572,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             {manualGroups.map(g => g.noBay ? (
               <button key="nobay" onClick={() => { setManualBay(g.center); setManualTier('none'); }}
                 className="py-3 rounded-pill bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
-                <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·이름표 내려옴' : ''}</div>
-                <div className="text-2xs text-amber-300">남은 {g.count}대{g.displaced ? ` (이름표 내려옴 ${g.displaced} — 계획 칸에 실물이 실렸고 이 컨은 창고에 있습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
+                {/* 2.94-02: 창고 문구 마지막 한 곳 — 검수앱은 창고를 안 쓴다(검수사 지적 2026-08-31). */}
+                <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·계획 자리 내줌' : ''}</div>
+                <div className="text-2xs text-amber-300">남은 {g.count}대{g.displaced ? ` (계획 자리 내줌 ${g.displaced} — 그 칸에 다른 컨이 실렸습니다. 아직 안 실렸으니 빈 칸을 골라 자리를 정해 주세요)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
                 <div className="text-2xs text-dim-300 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
                 {g.swapHints && g.swapHints.length > 0 && (
                   <div className="mt-1 text-left text-2xs text-emerald-300 mono">
@@ -2315,7 +2316,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
           {/* TallyOne 1.55: 칸의 세 갈래를 그대로 적어 준다 — 「이름표만 걸린 칸」은 고를 수 있다. */}
           <div className="text-2xs text-dim-300 leading-snug">
             <span className="text-dim-400">✓회색</span> = 그 칸에 <b>실린 컨</b>이 있습니다(선택 불가) ·
-            <span className="text-sky-300"> 🏷파랑</span> = <b>이름표만</b> 걸린 칸(주인은 창고, 선택 가능) · 나머지 = 빈 칸
+            <span className="text-sky-300"> 🏷파랑</span> = <b>이름표만</b> 걸린 칸(주인은 아직 안 실림, 선택 가능) · 나머지 = 빈 칸
           </div>
           {/* V8.83: 위치수정 창과 같은 자리 선택 그리드 — 직접 입력은 접이식으로 (사용자 확정) */}
           {!pickBay ? (

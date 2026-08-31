@@ -529,7 +529,7 @@ export default function PositionEditModal({
 
                       칸 세 갈래는 그대로 (TallyOne 1.33, 검수사 지적 2026-08-09):
                         ✓회색 = 완료된 컨이 실제로 있다(입실) — 선택 불가          [done]
-                        흐림  = 이름표만 걸렸다(실물은 창고) — 누를 수 있고 끝4자리를 보여준다  [named]
+                        흐림  = 이름표만 걸렸다(주인은 아직 안 실림) — 누를 수 있고 끝4자리를 보여준다  [named]
                         밝음  = 진짜 빈 칸                                          [empty]
                       1.55: 판정은 SearchPanel 과 같은 벌(buildOccupancy)로 낸다. */}
                   {(() => {
