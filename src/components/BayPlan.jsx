@@ -1659,6 +1659,17 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
 
     // M5.1 I: 선택 모드 시 선택된 컨 시각 표시
     const isSelected = selectionMode && selectedCns && selectedCns.has(c.cn);
+    // ── TallyOne 2.98-02: **화면에도 OOG 방향을 낸다.** (검수사 지적 2026-08-31) ──
+    //   원문 — *"화면은 안보여주나요 인쇄만?"*
+    //   2.97/2.98 은 인쇄물(카고플랜·베이상세)에만 넣었다. 현장에서 먼저 보는 것은 화면이다.
+    //   셀이 작고 `overflow-hidden` 이라 도형은 못 그린다 — 카고플랜과 같은 **안쪽 굵은 선**으로.
+    //     위 선 = 높이 초과 · 좌우 선 = 폭 초과 (선사 베이플랜의 위 사각형·좌우 삼각형과 같은 뜻)
+    const _ovh = Number(c.ovh || 0) > 0;
+    const _ovw = Number(c.ovw || 0) > 0 || Number(c.oogL || 0) > 0 || Number(c.oogR || 0) > 0;
+    const oogShadow = (_ovh || _ovw)
+      ? [_ovh ? 'inset 0 3px 0 0 #000' : '', _ovw ? 'inset 3px 0 0 0 #000' : '', _ovw ? 'inset -3px 0 0 0 #000' : '']
+          .filter(Boolean).join(', ')
+      : '';
 
     return (
       <button
@@ -1667,7 +1678,9 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
           isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
         }`}
-        style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize }}
+        style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize,
+                 ...(oogShadow ? { boxShadow: oogShadow } : {}) }}
+        title={oogShadow ? `규격 초과 — ${_ovh ? '높이' : ''}${_ovh && _ovw ? '·' : ''}${_ovw ? '좌우폭' : ''}` : undefined}
       >
         {/* M3.78: 좌측 컬러 바 - 두껍고 흰색 테두리로 어떤 셀 색깔에도 잘 보임 */}
         {typeBarBg && !compactCell && (

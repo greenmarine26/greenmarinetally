@@ -378,7 +378,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     if (renderCellContent) {
                       return (
-                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                        <span key={ci} {...(cellExtra ? cellExtra(cell, row.tier) : {})}
+                          className={[`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`,
+                                      (cellExtra ? (cellExtra(cell, row.tier) || {}).className : '')].filter(Boolean).join(' ')}>
                           {renderCellContent(cell, row.tier)}
                           {cell.isUrgent && <i className="cpv2-um">▲</i>}
                         </span>
@@ -450,7 +452,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     if (renderCellContent) {
                       return (
-                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                        <span key={ci} {...(cellExtra ? cellExtra(cell, row.tier) : {})}
+                          className={[`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`,
+                                      (cellExtra ? (cellExtra(cell, row.tier) || {}).className : '')].filter(Boolean).join(' ')}>
                           {renderCellContent(cell, row.tier)}
                           {cell.isUrgent && <i className="cpv2-um">▲</i>}
                         </span>
