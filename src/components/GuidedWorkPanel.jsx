@@ -736,9 +736,28 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const fixMatches2 = useMemo(() => matchFor(fixQuery2, [fixPickFront?.cn, card?.twin?.cn]), [fixQuery2, remaining, card, fixPickFront]);
 
   // V7.94-08: 미배정(위치 빠진) 컨 — 수정으로 밀려난 컨테이너 추적 표시 (사용자 메모 ④)
+  /*  ★ 2.98-08 — **큐에서 걸러낸 컨을 여기서 받는다** (검수사 확정 2026-08-31, STSE 2666W 실적용 시뮬).
+        `remaining`(233행)은 «완료 실물이 찬 칸의 계획 컨»을 큐에서 뺀다 — **그 판정은 옳다.**
+        검수사 확정 — *«모든 선적 자리는 비어 있다. 계획은 보여 주는 것이고 확정은 실물이 실려야 확정이다.
+        다만 풀과 특수화물은 예외다.»*
+        문제는 뺀 **다음**이었다. 아무 데도 안 내놓아 베이 목록이 비고 「남은 선적 작업이 없습니다」로 끝났다.
+        실측(STSE 2666W, 456대) — 자동 가이드는 「없습니다」인데 실제 미완 **8대**. 검수원은 그대로 마감한다.
+        수동(SearchPanel:305)은 **같은 판정을 하고도 버리지 않는다** — noBay 그룹으로 옮겨 재배정시킨다.
+        자동만 버렸다. ⇒ 좌표 없는 컨과 «계획 자리를 내준 컨»을 **한 그물**로 받는다.
+      ⚠ 이름표만 걸린 칸은 여기 안 온다(`o.done` 이 참일 때만). 아직 실리지 않은 계획 컨은 큐에 그대로 남는다. */
   const unassigned = useMemo(
-    () => allContainers.filter(c => c._mode === mode && c._ptk && !c._comp && (!c.bay || !c.row || !c.tier)),
-    [allContainers, mode]
+    () => allContainers.filter(c => {
+      if (!(c._mode === mode && c._ptk && !c._comp)) return false;
+      if (!c.bay || !c.row || !c.tier) return true;            // 종전: 적부 좌표가 없다
+      const o = _occDone.get(posKey(c));
+      return !!(o && o.done && o.cn !== c.cn);                 // 2.98-08: 완료 실물이 그 칸을 차지했다
+    }),
+    [allContainers, mode, _occDone]
+  );
+  //  2.98-08: 두 부류를 갈라 문구를 정확히 낸다 — 「좌표 없음」과 「자리 내줌」은 검수원이 할 일이 다르다.
+  const unassignedTaken = useMemo(
+    () => unassigned.filter(c => c.bay && c.row && c.tier).length,
+    [unassigned]
   );
   const [showUnassigned, setShowUnassigned] = useState(false);
 
@@ -1345,8 +1364,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {unassigned.length > 0 && (
             <button onClick={() => setShowUnassigned(v => !v)}
               className="w-full py-3 rounded-pill bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100">
-              <div className="font-bold text-base">⚠ 자리 없음 {unassigned.length}대</div>
-              <div className="text-2xs text-amber-300">리스트엔 있는데 적부 좌표가 없습니다 — 눌러서 목록 보기</div>
+              <div className="font-bold text-base">⚠ 자리 없음 {unassigned.length}대{unassignedTaken > 0 ? '·계획 자리 내줌' : ''}</div>
+              {/* 2.98-08: ⚠ 수동(SearchPanel:578)과 **문구가 다르다** — 수동은 «빈 칸을 골라 자리를 정해 주세요»,
+                  여기는 «실제로 실은 자리에서 넣어 주세요». 동작은 둘 다 같은 🅿 배치로 간다.
+                  일부러 다르게 뒀다: 빈 칸을 찾아 넣는 것은 검수사 확정 위반이다 —
+                  *«컨테이너는 자리를 옮기는 것이지 빈자리를 찾아가는 것이 아니다»*.
+                  ⇒ **다음 판에서 수동 문구를 이쪽으로 맞춘다.** 두 화면이 다르게 말하면 검수원이 갈린다. */}
+              <div className="text-2xs text-amber-300">{unassignedTaken > 0
+                ? `계획 자리 내줌 ${unassignedTaken}대 — 그 칸엔 다른 컨이 실렸습니다. 실제로 실은 자리에서 넣어 주세요`
+                : '리스트엔 있는데 적부 좌표가 없습니다'} — 눌러서 목록 보기</div>
             </button>
           )}
           {unassigned.length > 0 && showUnassigned && (
@@ -1920,7 +1946,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {unassigned.length > 0 && (
         <div className="bg-amber-950/40 border border-amber-700 rounded-pill p-2">
           <button onClick={() => setShowUnassigned(v => !v)} className="w-full flex items-center justify-center gap-1.5 text-xs2 font-bold text-amber-300">
-            <AlertTriangle className="w-3.5 h-3.5"/>자리 없음 {unassigned.length}대 {showUnassigned ? '▲' : '▼'}
+            <AlertTriangle className="w-3.5 h-3.5"/>자리 없음 {unassigned.length}대{unassignedTaken > 0 ? '·계획 자리 내줌' : ''} {showUnassigned ? '▲' : '▼'}
           </button>
           {showUnassigned && (
             <div className="mt-1.5 space-y-1">

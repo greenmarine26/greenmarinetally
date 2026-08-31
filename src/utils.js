@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-07'   // 2.98-07 미르가 «오늘 뭐 바뀌었나»에 답한다 + FR 표기법 안내
+export const APP_VERSION = 'TallyOne 2.98-08'   // 2.98-08 자동 가이드가 «계획 자리를 내준 컨»을 버리지 않는다 (STSE 2666W 실적용 시뮬)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
