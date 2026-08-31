@@ -1442,6 +1442,11 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
       patch.bay_actual = null; patch.row_actual = null; patch.tier_actual = null;
       patch.actual_at = null; patch.actual_by = null;
     }
+    // 2.94-04: 지정 자리도 함께 걷는다 — 미배정·취소는 «자리가 없다»는 뜻이다.
+    if (cur.bay_assign !== undefined && cur.bay_assign !== null) {
+      patch.bay_assign = null; patch.row_assign = null; patch.tier_assign = null;
+      patch.assign_at = null; patch.assign_by = null;
+    }
   } else if (nb && nr && nt) {
     // TallyOne 1.53: **이미 실린 컨의 자리를 고치면 실체 위치도 함께 옮긴다.**
     //   실측 2026-08-12 — UXXU2413110 을 11-07-06 → 07-01-06 으로 옮겼는데 `bay_actual` 이 11-07-06 에 남았다.
@@ -1472,6 +1477,21 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     if (!meta.planOnly) {
       patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
       patch.actual_at = Date.now(); patch.actual_by = by || '';
+      // 2.94-04: 실제로 실었으면 «지정만 해 둔 자리»는 걷는다 — 실체가 진실이다.
+      if (cur.bay_assign !== undefined && cur.bay_assign !== null) {
+        patch.bay_assign = null; patch.row_assign = null; patch.tier_assign = null;
+        patch.assign_at = null; patch.assign_by = null;
+      }
+    } else {
+      // ── TallyOne 2.94-04: **실체는 안 주되 «정해 준 자리»는 보여야 한다.** ──
+      //   2.93 이 밀려난 컨의 실체 기록을 막았는데(맞다), 화면은 자리를 `bay_actual` 로만 읽어서
+      //   **맞바꿈으로 새 자리를 받은 컨이 「자리 미정」으로 되돌아갔다**(검수사 지적 2026-08-31
+      //   — *"17대 18대 20대 창고????"* — 같은 것이 18·20 두 숫자로 세어졌다).
+      //   `records.bay` 는 EDI 계획이 있으면 화면이 안 읽는다(1.55 `ediHasPos` 차단, 그건 그대로 옳다).
+      //   그래서 «검수원이 정한 자리»를 따로 둔다 — 실체(`*_actual`)와 계획(EDI) 사이의 한 단계다.
+      //   ⚠ 이것은 «실렸다»는 뜻이 아니다. 실림 판정은 종전대로 `completed` 로만 한다(1.55).
+      patch.bay_assign = nb; patch.row_assign = nr; patch.tier_assign = nt;
+      patch.assign_at = Date.now(); patch.assign_by = by || '';
     }
     // 2.93: 자리를 새로 받았으면 «이름표를 내줬다» 표식은 걷는다.
     if (cur.planTaken) patch.planTaken = null;

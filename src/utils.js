@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.94-03'   // 2.94-03 통과화물 대수를 세지 않는다(근거 없는 숫자) + 창고 문구 잔재 정리
+export const APP_VERSION = 'TallyOne 2.94-04'   // 2.94-04 정해 준 자리(bay_assign)를 화면이 읽는다 + 이름 한 벌
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5586,6 +5586,12 @@ export function effectivePos(c) {
   if (ba.startsWith('__')) return { bay: '', row: '', tier: '', src: 'none', inStorage: true };
   if (ba && s(c.row_actual) && s(c.tier_actual)) {
     return { bay: ba, row: s(c.row_actual), tier: s(c.tier_actual), src: 'actual', inStorage: false };
+  }
+  // 2.94-04: 실체 다음은 «검수원이 정한 자리»다(실체보다 약하고 계획보다 세다).
+  //   맞바꿈으로 새 자리를 받았는데 아직 안 실은 컨이 여기 해당한다 — 「자리 미정」이 아니다.
+  const bg = s(c.bay_assign);
+  if (bg && !bg.startsWith('__') && s(c.row_assign) && s(c.tier_assign)) {
+    return { bay: bg, row: s(c.row_assign), tier: s(c.tier_assign), src: 'assign', inStorage: false };
   }
   //   _bay_planned 가 있으면 이미 상위에서 승격된 객체다 — 그 값(c.bay)이 곧 EDI 자리다.
   const eb = s(c._edi_bay !== undefined ? c._edi_bay : c.bay);

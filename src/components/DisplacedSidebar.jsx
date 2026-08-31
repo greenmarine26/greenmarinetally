@@ -14,7 +14,7 @@ export default function DisplacedSidebar({ displaced, onOpenContainer, onStartMo
   if (!displaced || displaced.length === 0) {
     return (
       <div className="bg-ink-800/40 border border-line rounded-pill p-3">
-        <div className="text-xxs font-bold uppercase text-dim-300 mb-1">이름표가 내려온 컨</div>
+        <div className="text-xxs font-bold uppercase text-dim-300 mb-1">계획 자리를 내준 컨</div>
         <div className="text-xs text-dim-400">없음</div>
       </div>
     );

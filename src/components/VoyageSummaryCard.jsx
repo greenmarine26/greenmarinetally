@@ -215,7 +215,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
           <Chip
             icon={MoveRight}
             color="blue"
-            label="이름표가 내려온 컨"
+            label="계획 자리를 내준 컨"
             value={`${summary.nameOnly}대 — 아직 안 실림`}
           />
         )}

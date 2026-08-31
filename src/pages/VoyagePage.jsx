@@ -546,6 +546,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (r.actual_by) safeR.actual_by = r.actual_by;
         // 2.93: 계획 자리를 내준 표식 — 이 화이트리스트를 안 지나면 화면이 못 본다.
         if (r.planTaken) safeR.planTaken = r.planTaken;
+        // 2.94-04: 검수원이 정해 준 자리(실체 아님)
+        if (r.bay_assign) safeR.bay_assign = r.bay_assign;
+        if (r.row_assign) safeR.row_assign = r.row_assign;
+        if (r.tier_assign) safeR.tier_assign = r.tier_assign;
+        if (r.assign_at) safeR.assign_at = r.assign_at;
+        if (r.assign_by) safeR.assign_by = r.assign_by;
         // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.
         //   원인: 엠티 선적 엑셀(MCAT EMPTY)에는 진짜 선내 위치가 없고 그룹 카운트만 있어,
         //   파서가 만든 가짜 bay/row/tier가 EDI의 정확한 위치(BAPLIE LOC+147)를 덮어

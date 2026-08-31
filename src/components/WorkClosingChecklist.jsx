@@ -214,7 +214,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
           //   사고가 아니라 정상 상태이므로 `info`로 두어 「마감 가능」을 막지 않는다.
           id: 'nameOnly',
           icon: MoveRight,
-          label: '이름표가 내려온 컨',
+          label: '계획 자리를 내준 컨',
           count: nameOnly.length,
           desc: nameOnly.length > 0
             ? `${nameOnly.length}대 — 계획 자리를 내줬습니다. 아직 안 실렸으니 자리를 정해 주세요.`
