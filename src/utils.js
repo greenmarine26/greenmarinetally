@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.94'   // 2.94 통과화물을 평택 선적 리스트에서 뺀다
+export const APP_VERSION = 'TallyOne 2.94-01'   // 2.94-01 창고 문구 6화면 통일(검수앱은 창고를 안 쓴다) + 매뉴얼 동반 수정
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5148,6 +5148,26 @@ export function progressOf(section, mode, shiftSet, ptkCns) {
            total: baseSet.size + ss.size, done: baseDone + moves, usePtk };
 }
 
+// ── TallyOne 2.94-01: **통과화물 판정 한 벌.** (검수사 지적 2026-08-31) ──
+//   선적 리스트(records)에 있는데 선적 EDI 에는 없고, **양하 EDI 에 있으면서 그 POD 가 평택이 아닌** 컨.
+//   평택에서 내리지도 싣지도 않는다 — 자리만 옮겨 다시 싣는 재적부(시프팅)다.
+//   실측 MCSC 635S 17대(POD 전부 CNTXG) — 26·34번 → 38번 데크.
+//   선사에게 EDI 를 더 달라고 할 물건이 아니므로 «EDI 에 없음» 경고에서 빼고 따로 센다.
+//   ⚠ 지우지 않는다. 이 컨들의 실물 자리 기록은 records 말고 남은 곳이 없다
+//     (computeShiftingMap 은 선적 EDI 에도 있어야 잡는데 이들은 거기 없다).
+export function thruCnSetOf(mode, recMap, loadEdiMap, dischEdiMap) {
+  const out = new Set();
+  if (mode !== 'loading' || !recMap || !dischEdiMap) return out;
+  const ediHas = (cn) => !!(loadEdiMap && loadEdiMap[cn]);
+  for (const cn of Object.keys(recMap)) {
+    if (ediHas(cn)) continue;
+    const d = dischEdiMap[cn];
+    if (!d || !d.pod || isPyeongtaekPort(d.pod)) continue;
+    out.add(cn);
+  }
+  return out;
+}
+
 export function shiftCnSetOf(voyageKey, voyage) {
   try { return new Set(Object.keys(computeShiftingMapCached(voyageKey, voyage) || {}).filter((k) => !k.startsWith('_'))); }
   catch (e) { return new Set(); }
@@ -5458,8 +5478,8 @@ export function describeMovePath(c, isCompleted = false) {
       case 'planTaken': {
         const b4 = m.byCn ? String(m.byCn).slice(-4) : '';
         line = b4
-          ? `${m.from}는 ${b4}${_iga(b4)} 가져갔습니다. 실물은 창고에 그대로 있었습니다.`
-          : `${m.from} 계획 자리를 내줬습니다. 실물은 창고에 그대로 있었습니다.`;
+          ? `${m.from}는 ${b4}${_iga(b4)} 가져갔습니다. 그 컨은 아직 안 실렸습니다.`
+          : `${m.from} 계획 자리를 내줬습니다. 그 컨은 아직 안 실렸습니다.`;
         return { m, line, nameOnly: true };   // byCn 꼬리말을 또 붙이지 않는다 — 문장에 이미 들어 있다.
       }
       case 'displaced': line = (m.to === '미배정') ? '자리를 잃고 미배정이 됐습니다.' : `${to} 밀려났습니다.`; break;

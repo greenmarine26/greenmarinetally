@@ -25,7 +25,7 @@ export default function DisplacedSidebar({ displaced, onOpenContainer, onStartMo
       <div className="bg-amber-800/40 px-3 py-2 flex items-center gap-2 border-b border-amber-700/40">
         <AlertTriangle className="w-4 h-4 text-amber-300"/>
         <span className="text-xxs font-black uppercase text-amber-100">
-          이름표가 내려온 컨 {displaced.length}대 — 실물은 창고에 있습니다
+          계획 자리를 내준 컨 {displaced.length}대 — 아직 안 실렸습니다
         </span>
       </div>
       <div className="text-2xs text-amber-200/70 px-3 py-1 border-b border-amber-700/30 leading-tight">

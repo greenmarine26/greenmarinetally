@@ -22,12 +22,12 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
       <div className="bg-ink-750/50 px-3 py-2 flex items-center gap-2 border-b border-line-strong/40">
         <Archive className="w-4 h-4 text-dim-100"/>
         <span className="text-xxs font-black uppercase text-dim-100 flex-1">
-          창고 {stored.length}대 <span className="font-normal text-dim-300 normal-case">— 몸만 와 있고 이름은 계획 자리에 걸려 있습니다</span>
+          계획 자리를 내준 컨 {stored.length}대 <span className="font-normal text-dim-300 normal-case">— 아직 안 실렸습니다. 자리를 다시 정해 주세요</span>
         </span>
         {onBatchRestore && (
           <button onClick={onBatchRestore}
             className="px-2 py-0.5 bg-ink-900/60 hover:bg-ink-850 text-dim-100 rounded text-2xs font-bold flex items-center gap-1"
-            title="창고의 모든 컨을 계획 자리로 되돌립니다">
+            title="이 컨들을 원래 계획 자리로 되돌립니다">
             <RotateCcw className="w-3 h-3"/>일괄 복원
           </button>
         )}

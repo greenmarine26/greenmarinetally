@@ -341,7 +341,8 @@ export default function PositionEditModal({
     if (!r || !r.displaced) return '';
     if (r.displacedToStorage) {
       const pl = _planTxt(r);
-      return `📦 ${r.displaced}는 창고로 보냈습니다 — 계획 자리${pl ? ` ${pl}` : ''} 는 그대로입니다.\n실물은 원래부터 창고에 있었고, 이름표만 내려왔습니다.`;
+      // 2.94: 검수앱은 창고를 안 쓴다 — 밀려난 컨은 «계획 자리를 내주고 자리 미정»이다(2.93 과 한 문장).
+      return `🏷 ${r.displaced}는 계획 자리${pl ? ` ${pl}` : ''} 를 내줬습니다 — 아직 안 실렸습니다.\n자리를 다시 정해 주세요.`;
     }
     if (r.displacedWasCompleted) {
       // V8.70: 밀려난 컨이 이미 선적확인된 컨이면 완료는 유지됨 — 검수사에게 알림만.
@@ -620,7 +621,7 @@ export default function PositionEditModal({
                     검수사 개념 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
                     자리를 뺏는 것이 아니라 **이름을 빌려주고 몸은 창고에 그대로** 있는 것이다. */}
                 <div className="mt-1 text-2xs text-orange-300 leading-relaxed">
-                  → 확인하면 그 컨은 <b>이름표만 내려옵니다</b> — 계획 자리는 그대로 두고 실물은 창고에 있습니다.
+                  → 확인하면 그 컨은 <b>계획 자리를 내주고 「자리 미정」</b>이 됩니다 — 아직 안 실린 컨입니다.
                   <br/>(이미 선적확인된 컨이면 완료는 그대로 두고 자리만 옮깁니다.)
                 </div>
               </div>

@@ -573,7 +573,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               <span className="ml-2 bg-sky-800 text-sky-50 text-2xs px-1.5 py-0.5 rounded font-black">🏷 계획 자리를 내줬음 · 자리 미정</span>
             )}
             {mode === 'loading' && !c.planTaken && c.bay_actual === '__STG__' && (
-              <span className="ml-2 bg-sky-800 text-sky-50 text-2xs px-1.5 py-0.5 rounded font-black">📦 창고 · 이름만 걸려 있음</span>
+              <span className="ml-2 bg-sky-800 text-sky-50 text-2xs px-1.5 py-0.5 rounded font-black">🏷 계획 자리를 내줬음 · 자리 미정</span>
             )}
             {!c.bay && mode === 'loading' && !c.planTaken && c.bay_actual !== '__STG__' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-2xs px-1.5 py-0.5 rounded font-black">선적대상</span>
@@ -624,7 +624,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   <div className="text-xs text-sky-300 font-bold">🏷 계획 자리{c.planTaken.from ? ` ${c.planTaken.from}` : ''} 를 {c.planTaken.byCn || '다른 컨'} 에게 내줬습니다 — 아직 안 실렸습니다. 자리를 다시 정해 주세요.</div>
                 ) : c.bay_actual === '__STG__' ? (
                   // 1.54: 창고는 좌표가 아니다 — `__STG__` 를 베이 번호처럼 그리면 안 된다.
-                  <div className="text-xs text-sky-300 font-bold">📦 창고에 있습니다 — 계획 자리는 위에 그대로 남아 있습니다.</div>
+                  <div className="text-xs text-sky-300 font-bold">🏷 계획 자리를 내줬습니다 — 아직 안 실렸습니다. 계획 자리는 위에 그대로 있습니다.</div>
                 ) : (c.bay_actual || c.row_actual || c.tier_actual) ? (
                   // 수정된 실체 위치 표시 — 본위치 → 수정위치
                   <div className="flex items-center gap-2">

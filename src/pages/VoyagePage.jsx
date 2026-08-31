@@ -17,15 +17,14 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
   fbCompleteContainer, fbCancelComplete, fbToggleXray,
   fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
-  fbSetActualPosition, fbClearActualPosition,
-  fbBatchMoveToStorage, fbBatchClearActual
+  fbSetActualPosition, fbClearActualPosition
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
   , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
@@ -52,7 +51,6 @@ import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
-import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
@@ -1166,6 +1164,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       listRecords: recMap,
       xrayList: xrayMap,
       mode,
+      // 2.94-01: 통과화물은 «EDI에 없는 컨» 경고에서 뺀다 — 판정은 utils 한 벌.
+      thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
       carrier: voyage?.info?.carrier || '',
       sealPolicy: shipPolicy,  // M3.5.5
       lugCount: shipLuggageCount(voyageKey),  // 1.56-02: 수화물은 검증 대상이 아니다(검수사 확정)
@@ -1701,11 +1701,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           });
         })();
 
-        // M5.1 I: STG 보관 컨 검출 (선적 전용)
-        const storedContainers = mode === 'loading'
-          ? allEdiContainers.filter(c => c._in_storage)
-          : [];
-
         return (
           <div className="space-y-2">
             {/* V9.57: BayDictStatusWidget 제거 — bayNum 결함으로 오표시, 기능은 자료 탭 BayDictVerifyWidget으로 이관(팀I) */}
@@ -1728,36 +1723,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 pendingMoveCn={pendingMove?.cn}
               />
             )}
-            {/* M5.1 I: 보관함 박스 (선적 전용)
-                TallyOne 1.54: 여기 들어오는 컨은 **계획이 살아 있는** 컨이다 —
-                StorageBox 가 `_bay_planned` 를 읽어 「이름 걸린 자리」를 같이 보여준다. */}
-            {mode === 'loading' && storedContainers.length > 0 && (
-              <StorageBox
-                stored={storedContainers}
-                onOpenContainer={(c) => setDetailC(c)}
-                onStartMove={(c) => {
-                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
-                  // 보관함에서 이동: 본위치는 계획 위치 사용 (짝/홀 매칭용)
-                  setPendingMove({
-                    cn: c.cn,
-                    fromBay: c._bay_planned || '',
-                    fromRow: c._row_planned || '',
-                    fromTier: c._tier_planned || '',
-                    fe: c.fe || '', iso: c.iso || c.tp || '',
-                  });
-                }}
-                pendingMoveCn={pendingMove?.cn}
-                onBatchRestore={async () => {
-                  if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-                  if (!confirm(`보관함의 ${storedContainers.length}대를 모두 계획 위치로 복원하시겠습니까?`)) return;
-                  try {
-                    await fbBatchClearActual(voyageKey, mode, storedContainers.map(c => c.cn));
-                  } catch (e) {
-                    alert('복원 실패: ' + (e?.message || e));
-                  }
-                }}
-              />
-            )}
+            {/* ── TallyOne 2.94-01: **검수앱 베이 탭에서 창고 박스를 내린다.** (검수사 지적 2026-08-31) ──
+                원문 — *"창고개념은 검수앱은 사용안합니다. 대쉬보드에서 수석이 사용합니다."*
+                실측 — 같은 18대가 「이름표가 내려온 컨 20대」와 「창고 18대」 **두 박스에 겹쳐** 떴다.
+                밀려난 컨은 위 DisplacedSidebar 하나가 맡는다(「이동」 버튼도 거기 있어 기능 손실 없음).
+                ⚠ 수석 대시보드(BayGridEditor·ChiefBayEdit)의 창고 탭은 그대로 둔다 — 거기서는 쓰는 개념이다.
+                아래 블록은 `false &&` 로 재우지 않고 통째로 지운다 — 죽은 화면을 남기지 않는다. */}
             {/* TallyOne 2.89: 맞교환 직후 되돌리기 — 되돌릴 창을 화면에 보인다(§2-0-B) */}
             {lastSwapFix && (
               <div className="bg-violet-700 text-white rounded-pill p-3 flex items-center gap-3 mb-2 border-2 border-violet-300">
@@ -1808,19 +1779,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                   alert('이동 저장 실패: ' + (e?.message || e));
                 }
               }}
-              // M5.1 I: 영역 선택 → 일괄 보관 (선적 전용)
-              enableSelection={mode === 'loading'}
-              onBatchToStorage={async (cns) => {
-                if (!cns || cns.length === 0) return;
-                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-                if (!confirm(`선택된 ${cns.length}대를 보관함으로 보내시겠습니까?\n(언제든 보관함에서 [이동] 버튼으로 다시 배치 가능)`)) return;
-                try {
-                  await fbBatchMoveToStorage(voyageKey, mode, cns, inspector);
-                } catch (e) {
-                  console.error(e);
-                  alert('보관 실패: ' + (e?.message || e));
-                }
-              }}
+              /* 2.94-01: 「선택 → 보관함으로」 제거 — 검수앱이 창고를 만드는 마지막 경로였다.
+                 검수사 확정 «창고개념은 검수앱은 사용안합니다. 대쉬보드에서 수석이 사용합니다.»
+                 선택 모드는 보관함 보내기 하나만 하던 기능이라 함께 내린다.
+                 수석 대시보드(ChiefBayEdit)의 창고 경로는 그대로 살아 있다. */
             />
           </div>
         );

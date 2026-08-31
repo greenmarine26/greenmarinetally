@@ -747,14 +747,22 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {workFilter !== 'completed' && manualBay != null && manualGroups.find(x => x.center === manualBay)?.noBay && onPlaceUnassigned && (
         <div className="bg-ink-900 border border-amber-800/60 rounded-pill p-2 space-y-1">
           <div className="text-xxs text-amber-300 font-bold">🅿 배치 — 누르면 베이 화면으로 가서 빈 칸(📦+)을 고릅니다</div>
-          {allContainers.filter(c => c._mode === workFilter && !c._comp && (!c.bay || c.bay_actual === '__STG__')).map(c => (
+          {/* 2.93/2.94-01: 창고 대신 «계획 자리를 내줬다»(`planTaken`)를 본다 — 검수앱은 창고를 쓰지 않는다.
+              옛 표식(`__STG__`)이 남은 자료도 같이 잡아 같은 말을 한다(검수사 지적 2026-08-31). */}
+          {allContainers.filter(c => c._mode === workFilter && !c._comp && (!c.bay || c.bay_actual === '__STG__' || c.planTaken)).map(c => (
             <div key={c.cn} className="flex items-center gap-1.5">
               <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-ink-800 rounded px-2 py-1.5 text-xs mono font-bold text-dim-100">
                 {c.cn} <span className="text-2xs text-dim-300 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
-                {c.bay_actual === '__STG__'
-                  ? <span className="ml-1 text-2xs font-bold text-sky-300">
-                      📦 창고{c.bay && c.row && c.tier ? ` · 이름 걸린 자리 ${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}` : ''}
-                    </span>
+                {(c.planTaken || c.bay_actual === '__STG__')
+                  ? (() => {
+                      const from = c.planTaken?.from
+                        || (c.bay && c.row && c.tier ? `${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}` : '');
+                      return (
+                        <span className="ml-1 text-2xs font-bold text-sky-300">
+                          🏷 계획 자리를 내줬습니다{from ? ` (${from}${c.planTaken?.byCn ? ` → ${c.planTaken.byCn}` : ''})` : ''} · 아직 안 실렸습니다
+                        </span>
+                      );
+                    })()
                   : <span className="ml-1 text-2xs font-bold text-orange-300">자리 미지정</span>}
               </button>
               {/* V9.51: 원래 계획 자리가 남아 있으면 한 번에 되돌린다 (빈 칸을 다시 찾을 필요 없음) */}

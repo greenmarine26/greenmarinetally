@@ -217,7 +217,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
           label: '이름표가 내려온 컨',
           count: nameOnly.length,
           desc: nameOnly.length > 0
-            ? `${nameOnly.length}대 — 실물은 창고에 있습니다. 그 자리는 빈자리입니다.`
+            ? `${nameOnly.length}대 — 계획 자리를 내줬습니다. 아직 안 실렸으니 자리를 정해 주세요.`
             : '없음',
           color: nameOnly.length > 0 ? 'blue' : 'emerald',
           info: true,

@@ -45,12 +45,18 @@ function extractDg(containers) {
 //   carrier:       선사 코드 (TDT에서)
 //   sealPolicy:    선박 엠티 실 정책 (matchShipPolicy 결과) — M3.5.5
 // 결과: 경고 배열
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [] }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [] }) {
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
   const _lugSet = new Set((lugCns || []).map(c => String(c || '').trim().toUpperCase()));
   const _isLug = (cn) => isLuggageCn(cn) || _lugSet.has(String(cn || '').trim().toUpperCase());
+  // ── TallyOne 2.94-01: **통과화물은 «EDI에 없는 컨»이 아니다.** (검수사 지적 2026-08-31) ──
+  //   MCSC 635S 실측 — 「리스트에 EDI 평택과 매칭 안되는 컨 17개」 경고의 17대는 전부
+  //   양하 EDI에 있고 POD 가 CNTXG(톈진)인 통과화물이었다. 26·34번에서 38번 데크로 옮겨 싣는
+  //   재적부(시프팅)라 **선적 EDI 에 있을 수 없다.** 수화물과 같은 자리에서 뺀다.
+  const _thruSet = new Set((thruCns || []).map(c => String(c || '').trim().toUpperCase()));
+  const _isThru = (cn) => _thruSet.has(String(cn || '').trim().toUpperCase());
   const ediArr = Object.values(ediContainers || {});
   const ediPtk = filterPyeongtaek(ediContainers || {}, mode);
   const ediCount = ediPtk.length;
@@ -255,6 +261,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       //    그러므로 선적에도 같이 별도 1개를 표기하고 저 메시지는 없어야 할것입니다.")
       //   EDI로 오지 않는 것이 정상 — 경고에서 빼고 info 로 따로 센다. 번호는 항차마다 바뀌므로
       //   ① 알려진 번호(isLuggageCn) ② 선박 상시 대수(lugCount) 이내의 잔여 — 두 겹으로 잡는다.
+      const thruFound = extraCns.filter(cn => _isThru(cn));
+      extraCns = extraCns.filter(cn => !_isThru(cn));       // 2.94-01: 통과화물 먼저 뺀다
       let lugFound = extraCns.filter(cn => _isLug(cn));
       extraCns = extraCns.filter(cn => !_isLug(cn));
       const lugRemain = Math.max(0, (lugCount || 0) - lugFound.length);
@@ -270,6 +278,16 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           voice: '',
           count: lugFound.length,
           details: { lugCns: lugFound },
+        });
+      }
+      if (thruFound.length > 0) {
+        alerts.push({
+          level: 'info',
+          code: 'thru',
+          msg: `통과화물 ${thruFound.length}대 별도 — 평택 선적이 아닙니다(재적부)`,
+          voice: '',
+          count: thruFound.length,
+          details: { thruCns: thruFound.slice(0, 20) },
         });
       }
       if (extraCns.length > 0) {

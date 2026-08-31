@@ -210,7 +210,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
           />
         )}
         {/* 1.55: 「자리 뺏김」이 아니다 — 이름만 빌려준 것이고 그 자리는 빈자리다.
-            실물은 창고에서 차례를 기다린다 → 경고색(orange)이 아니라 정보색(blue). */}
+            실물은 아직 부두에서 차례를 기다린다 → 경고색(orange)이 아니라 정보색(blue). */}
         {mode === 'loading' && summary.nameOnly > 0 && (
           <Chip
             icon={MoveRight}
