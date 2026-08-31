@@ -52,7 +52,7 @@ const isEmptyCon = (c) => String(c?.fe || '').toUpperCase() === 'E';
 //   실측 2026-08-31 MCSC 635S B38 — 20대가 전부 45RE 엠티인데 매 대마다 붉은
 //   🚫 "리퍼(냉동) 컨테이너입니다" 가 떠 검수원이 20번 안 볼 화면을 넘겨야 했다.
 //   ⚠ DG·FR·OT·TK·OOG 는 엠티여도 그대로 특수다 — 치수·고박·격리가 자리를 정한다.
-function isReeferOnlySpecial(c) {
+export function isReeferOnlySpecial(c) {
   if (!c) return false;
   if (c.dg || c.fr || c.ot || c.oog || c.tk) return false;
   if (String(c.dgc || '').trim() || String(c.un || '').trim()) return false;
@@ -155,3 +155,15 @@ export const GRADE_STYLE = {
   mild:   { box: 'bg-amber-950/30 border-amber-700/50',     text: 'text-amber-300',   icon: '⚠' },
   strong: { box: 'bg-rose-950/50 border-rose-600',          text: 'text-rose-200',    icon: '🚫' },
 };
+
+// ── TallyOne 2.95: **「빈 칸이면 그냥 받는다」의 대상 판정 — 한 벌.** (검수사 확정 2026-08-31) ──
+//   *"지금 말한건 엠티와 시프팅 관련입니다"* · *"특수화물 풀컨은 기존과 같습니다"* · *"풀은 바꿔치기기능으로"*
+//   엠티는 포트만 같으면 어느 칸이든 되고(지침 Ⅱ), 시프팅은 내렸다 다시 싣는 것이라 자리가 유동적이다.
+//   ⚠ 엠티 리퍼는 냉동이 아니다(2.93, 검수사 확정) — 완화 대상이다.
+//   ⚠ DG·FR·OT·TK·OOG 는 엠티여도 치수·고박·격리가 자리를 정한다 — 종전 게이트.
+export function isSlotRelaxed(c) {
+  if (!c) return false;
+  if (c._shift) return true;                                   // 시프팅(재적부)
+  if (String(c.fe || '').toUpperCase() !== 'E') return false;   // 풀은 「⇄ 컨 맞교환」으로 한다
+  return !isSpecialCon(c) || isReeferOnlySpecial(c);
+}

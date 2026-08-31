@@ -3,8 +3,8 @@
 //   - 빈 입력 = 미배정 (선적대상으로 분류)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
-import { bayParityError, seqFullConfirmText, buildSlotUniverse, buildOccupancy } from '../utils.js';   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌) · 1.55: 칸·점유는 utils 한 벌
-import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
+import { bayParityError, seqFullConfirmText, buildSlotUniverse, buildOccupancy, effectivePos } from '../utils.js';   // 2.95: 충돌은 실물이 실린 칸 하나뿐   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌) · 1.55: 칸·점유는 utils 한 벌
+import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter, isSlotRelaxed } from '../swapGrade.js';   // 2.95: 완화는 엠티·시프팅만   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
 
@@ -232,16 +232,37 @@ export default function PositionEditModal({
   const sameMode = (x) => !x?._mode || !container?._mode || x._mode === container._mode;
 
   // 충돌 검사: 같은 자리에 있는 다른 컨
+  // ── TallyOne 2.95: **충돌은 «실물이 실린 칸» 하나뿐이다.** (검수사 확정 2026-08-31) ──
+  //   원문 — *"앱은 선적할 자리를 빈곳이라는것을 항상 인지 합니다 … 검수사가 다르게 입력하면
+  //           어차피 비어 있는곳이니 받아서 선적하면 됩니다"*
+  //   계획 이름표가 걸린 칸은 **비어 있는 칸**이다 — 경고할 일이 아니다.
+  //   종전엔 이름표만 보고 「이미 배정된 자리」라 경고했고, 그 경고가 밀어내기 로직을 불러
+  //   「18대/20대」·「창고」·「미배정」이 줄줄이 생겼다.
+  // ── TallyOne 2.95: **「빈 칸이면 그냥 받는다」는 엠티와 시프팅에만.** (검수사 확정 2026-08-31) ──
+  //   원문 — *"앱은 선적할 자리를 빈곳이라는것을 항상 인지 합니다 … 검수사가 다르게 입력하면
+  //           어차피 비어 있는곳이니 받아서 선적하면 됩니다"* / *"특수화물 풀컨은 기존과 같습니다."*
+  //           *"지금 말한건 엠티와 시프팅 관련입니다"*
+  //   엠티는 포트만 같으면 어느 칸이든 되고(지침 Ⅱ), 시프팅은 내렸다 다시 싣는 것이라 자리가 유동적이다.
+  //   반면 풀·특수화물(리퍼 풀·DG·FR·OT·TK·OOG)은 자리가 화물 성질로 정해진다 — 이름표도 자리를 지킨다.
+  const _loadedOnly = (c) => !!c._comp;
+  const _relaxed = isSlotRelaxed;   // 판정은 swapGrade 한 벌 (화면·firebase 공용)
+
   const conflict = useMemo(() => {
     if (!bay || !row || !tier) return null;
     const bayInt = String(parseInt(bay, 10));
     const rowPad = String(row).padStart(2, '0');
     const tierPad = String(tier).padStart(2, '0');
-    return allContainers.find(c => {
+    const hit = (test) => allContainers.find(c => {
       if (!c || c.cn === container?.cn || !sameMode(c)) return false;
-      const cBay = c.bay ? String(parseInt(c.bay, 10)) : '';
-      return cBay === bayInt && c.row === rowPad && c.tier === tierPad;
+      if (!test(c)) return false;
+      const p = test === _loadedOnly ? effectivePos(c) : { bay: c.bay, row: c.row, tier: c.tier };
+      const cBay = p.bay ? String(parseInt(p.bay, 10)) : '';
+      return cBay === bayInt && p.row === rowPad && p.tier === tierPad;
     }) || null;
+    // 2.95: **엠티·시프팅만** 「빈 칸이면 받는다」. 이름표만 걸린 칸은 막지 않는다.
+    //   특수화물·풀 컨은 종전 그대로 — 계획 이름표도 자리를 지킨다(검수사 확정 2026-08-31).
+    if (_relaxed(container)) return hit(_loadedOnly);
+    return hit(() => true);
   }, [bay, row, tier, allContainers, container]);
 
   // V7.94-10: 경고 — ① 다른 베이에서 옮겨오는 컨 ② EDI 계획상 그 자리 목적지(POD) 구역 이탈
