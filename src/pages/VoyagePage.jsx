@@ -2212,6 +2212,11 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
+  /* ★ 2.92 (검수사 «이렇게 강제적으로 화면을 띄우면 사용자는 불편해 합니다. 한번은 그렇다고 하더라도
+       반복해서 보이면 짜증납니다. 강조문구와 볼려면 클릭하게 만들어 주세요») —
+     시프팅 목록 95줄이 늘 펼쳐져 있어 그 아래 것을 보려면 매번 지나쳐야 했다. 접어 두고 눌러서 연다.
+     ⚠ 이 파일은 컴포넌트가 여럿이다 — 이 목록을 그리는 **ListTab 안**에 둔다(위 filter 와 같은 자리). */
+  const [shiftOpen, setShiftOpen] = useState(false);
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
   const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
   useEffect(() => {
@@ -2447,7 +2452,8 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
       {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
         <div className="mt-3 bg-ink-900 border border-blue-800/50 rounded-pill overflow-hidden">
-          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
+          <button type="button" onClick={() => setShiftOpen(v => !v)}
+            className="w-full text-left px-3 py-2 bg-blue-950/60 hover:bg-blue-900/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
             {/* 2.79 (검수사 확정 2026-08-28): 삼자 일치는 «불일치»가 아니라 **결론이 난 것**이다.
                 *«선사 세관 항만(배정) 그러므르 시프팅은 없습니다»* — ⛔ 를 띄우면 안 된다. */}
@@ -2466,7 +2472,10 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
               </span>
             )}
             <span className="ml-auto text-2xs font-normal text-dim-400">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>
-          </div>
+            {shiftingList.length > 0 && (
+              <span className="text-2xs font-bold text-blue-300">{shiftOpen ? '▲ 접기' : `▼ 목록 보기 (${shiftingList.length}대)`}</span>
+            )}
+          </button>
           {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
           {shiftInfo?.truthChk?.pending && (
             <div className="px-3 py-1.5 text-xxs text-dim-200 bg-ink-950/60 border-b border-line">
@@ -2579,6 +2588,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
                 : ' — 로테이션 미확인: 평택 전 기항 양하분이 섞여 있을 수 있음'}
             </div>
           )}
+          {shiftOpen && (
           <div className="divide-y divide-line">
             {shiftingList.map(sc => (
               <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-xs2">
@@ -2589,6 +2599,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
     </div>
