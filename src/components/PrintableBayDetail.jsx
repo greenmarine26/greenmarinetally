@@ -18,7 +18,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다
+import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
@@ -329,6 +329,16 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     }
     return 1;
   }, [matrixRender, odd, even, dictBaysSummary]);
+  //  2.98-14: 실측 커버 경계 — hatchCount와 같은 원천 우선순위(격자 한 벌 → 사전 짝수→홀수).
+  const hatchSegs = useMemo(() => {
+    let hr = (matrixRender && Array.isArray(matrixRender.hatchRows)) ? matrixRender.hatchRows : null;
+    if (!hr) for (const bn of [even, odd]) {
+      if (bn == null) continue;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (db && Array.isArray(db.hatchRows)) { hr = db.hatchRows; break; }
+    }
+    return hatchSegCols(hr, null);
+  }, [matrixRender, odd, even, dictBaysSummary]);
   const allTiersSet = hasDictTiers
     ? Array.from(new Set([
         ...pageBayDictTiers.deck,
@@ -532,7 +542,10 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
               ))}
               {hasDeck && hasHold && (
                 <div className="bd-hatch">
-                  {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
+                  {/* 2.98-14: 실측 경계가 있으면 열수 비례 — 등분 그림이 «두 장 다 개방» 오판을 만들었다 */}
+                  {(hatchSegs || Array.from({ length: hatchCount }).map(() => 0)).map((n, i) => (
+                    <div key={i} className="bd-hatch-seg" style={n > 0 ? { flex: `${n} 1 0` } : undefined}></div>
+                  ))}
                 </div>
               )}
               {hasHold && holdTiers.map(t => (

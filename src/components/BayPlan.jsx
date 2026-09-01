@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -1804,6 +1804,15 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           const db = dictBaysSummary[parseInt(bn, 10)];
           if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }
         }
+        /* 2.98-14 (검수사 «판단은 눈으로 … 4.5 4.5 로우로 보임») — 실측 경계(hatchRows)가 있으면
+           막대를 그 열수 비례·홀드 열 구간 위에 그린다. 판정(_panelOf)과 같은 원천 — 그림 따로 판정 따로 금지. */
+        let hr = (pageMatrixRender && Array.isArray(pageMatrixRender.hatchRows)) ? pageMatrixRender.hatchRows : null;
+        if (!hr) for (const bn of [page.evenBay, page.oddBay]) {
+          if (bn == null) continue;
+          const db = dictBaysSummary[parseInt(bn, 10)];
+          if (db && Array.isArray(db.hatchRows)) { hr = db.hatchRows; break; }
+        }
+        const hatchSegs = hatchSegCols(hr, holdAxis);
         const HATCH = 10;
         const deckH = deckRows.length * rowH;
         const holdH = holdRows.length * rowH;
@@ -1841,11 +1850,15 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                 );
               })}
               {/* 해치 구분선 */}
-              {holdH > 0 && (
-                <div style={{ position: 'absolute', top: deckH + HATCH / 2 - 2, left: 0, width: gridW, display: 'flex', gap: 6 }}>
-                  {Array.from({ length: hc }).map((_, i) => <div key={i} className="border-t-4 border-slate-100" style={{ flex: 1 }} />)}
-                </div>
-              )}
+              {holdH > 0 && (hatchSegs ? (
+                  <div style={{ position: 'absolute', top: deckH + HATCH / 2 - 2, left: holdOff * STEP, width: holdAxis.length * STEP - 2, display: 'flex', gap: 6 }}>
+                    {hatchSegs.map((n, i) => <div key={i} className="border-t-4 border-slate-100" style={{ flex: `${n} 1 0` }} />)}
+                  </div>
+                ) : (
+                  <div style={{ position: 'absolute', top: deckH + HATCH / 2 - 2, left: 0, width: gridW, display: 'flex', gap: 6 }}>
+                    {Array.from({ length: hc }).map((_, i) => <div key={i} className="border-t-4 border-slate-100" style={{ flex: 1 }} />)}
+                  </div>
+                ))}
               {/* 홀드 셀 (자기 축, 00 가운데) */}
               {holdRows.map((tr, ti) => {
                 const y = deckH + HATCH + ti * rowH;
@@ -1913,10 +1926,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           const db = dictBaysSummary[parseInt(bn, 10)];
           if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }
         }
+        /* 2.98-14: 폴백 경로도 실측 경계 열수 비례 — 축을 모르니 패널 정의 열수 그대로 쓴다. */
+        let hr = (pageMatrixRender && Array.isArray(pageMatrixRender.hatchRows)) ? pageMatrixRender.hatchRows : null;
+        if (!hr) for (const bn of [page.evenBay, page.oddBay]) {
+          if (bn == null) continue;
+          const db = dictBaysSummary[parseInt(bn, 10)];
+          if (db && Array.isArray(db.hatchRows)) { hr = db.hatchRows; break; }
+        }
+        const segs = hatchSegCols(hr, null);
         return (
           <div className="my-2 flex gap-1.5">
-            {Array.from({ length: hc }).map((_, i) => (
-              <div key={i} className="border-t-4 border-slate-100 flex-1"></div>
+            {(segs || Array.from({ length: hc }).map(() => 1)).map((n, i) => (
+              <div key={i} className="border-t-4 border-slate-100" style={{ flex: `${n} 1 0` }}></div>
             ))}
           </div>
         );

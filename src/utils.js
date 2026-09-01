@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-13'   // 2.98-13 리스트 SIZE 열 ISO 크기코드 판별 — «45»를 45피트(L5)로 오판해 규격 불일치 43건 허수(XTPG 0538W CLL)
+export const APP_VERSION = 'TallyOne 2.98-14'   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4082,6 +4082,25 @@ export function hatchOpenableFor(voyage, mode, bayNo, dictEntry) {
     const comp = sec.completed || {};
     return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn]);
   } catch (e) { return null; }
+}
+
+/** 2.98-14 (검수사 «판단은 눈으로 하는데 … 커버 크기가 4.5 4.5 로우를 갖는걸로 보임») —
+ *  커버 막대를 그릴 때 장별 «열 개수»를 낸다. 실측 경계(hatchRows)가 있으면 각 장이 무는 열 수
+ *  ([[10,8,6,4,2],[0,1,3,5,7,9]] → [5,6])를 주고, 없으면 null — 부르는 쪽은 종전 등분으로 그린다.
+ *  판정(_panelOf)과 같은 원천을 그림이 그대로 쓰게 하는 것이 목적이다 — 판정 따로 그림 따로면
+ *  검수사가 그림을 보고 «홀드 양하 = 2장 다 개방»으로 오판해 대량 시프팅을 계획하게 된다.
+ *  holdCols(그 그림의 홀드 열 라벨, 물리 순서)를 주면 교집합으로 세고, 없으면 패널 정의 열수 그대로. */
+export function hatchSegCols(hatchRows, holdCols) {
+  if (!Array.isArray(hatchRows) || !hatchRows.length) return null;
+  const panels = hatchRows.map((p) => (Array.isArray(p) ? p.map(Number) : []));
+  const cols = (holdCols || []).map((r) => parseInt(r, 10)).filter(Number.isFinite);
+  let counts;
+  if (cols.length) {
+    counts = panels.map((p) => { const s = new Set(p); return cols.filter((c) => s.has(c)).length; });
+    if (!counts.some((n) => n > 0)) counts = panels.map((p) => p.length);   // 축 불일치 — 정의 열수로
+  } else counts = panels.map((p) => p.length);
+  //  빈 장(0열)이 생기면 그 장이 화면에서 사라져 그림이 더 큰 거짓이 된다 — 그때는 등분 유지.
+  return counts.every((n) => n > 0) ? counts : null;
 }
 
 /** 2.98-12 — 해치 보고의 베이 표기 한 벌. 도메인 불변 «(작은 짝수)(큰 홀수)» (지침서 §5-1B,

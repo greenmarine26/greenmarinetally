@@ -13,7 +13,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
+import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
@@ -331,7 +331,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
     deckRowPos, holdRowPos, deckRows, holdRows,
     deckAlign, deckPadLeft, deckPadRight,
-    holdAlign, holdPadLeft, holdPadRight, hatchCount,
+    holdAlign, holdPadLeft, holdPadRight, hatchCount, hatchRows,
   } = data;
 
   // M6.94.14: 셀 폭 통일은 gridCols 기준 % padding으로 (정수 padCenter 폐기).
@@ -465,11 +465,23 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         </div>
         {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
         {nHold > 0 && (<>
-        <div className="cpv2-hatch-break">
-          {Array.from({ length: applyHatch ? Math.max(0, Math.min(3, (typeof hatchCount === 'number' ? hatchCount : 1))) : 1 }).map((_, i) => (
-            <div key={i} className="cpv2-hatch-seg"></div>
-          ))}
-        </div>
+        {/* 2.98-14: 실측 경계(hatchRows)가 있으면 열수 비례 + 홀드 그리드와 같은 패딩으로 정렬 —
+            등분 막대가 «커버 크기 4.5/4.5»로 읽혀 대량 시프팅 오판을 만들었다(검수사 «판단은 눈으로»). */}
+        {(() => {
+          const segs = applyHatch ? hatchSegCols(hatchRows, null) : null;
+          if (segs) return (
+            <div className="cpv2-hatch-break" style={{ paddingLeft: holdPadStyle.paddingLeft, paddingRight: holdPadStyle.paddingRight }}>
+              {segs.map((n, i) => <div key={i} className="cpv2-hatch-seg" style={{ flex: `${n} 1 0` }}></div>)}
+            </div>
+          );
+          return (
+            <div className="cpv2-hatch-break">
+              {Array.from({ length: applyHatch ? Math.max(0, Math.min(3, (typeof hatchCount === 'number' ? hatchCount : 1))) : 1 }).map((_, i) => (
+                <div key={i} className="cpv2-hatch-seg"></div>
+              ))}
+            </div>
+          );
+        })()}
         <div className="cpv2-hold-area" style={{ flex: `${globalHatch ? globalHatch.maxHold : Math.max(holdTiers.length, 1)} 1 0` }}>
           <div
             className="cpv2-grid-row-wrap"

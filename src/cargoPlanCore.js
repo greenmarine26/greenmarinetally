@@ -816,7 +816,8 @@ export function computeBayGridSpec(bayKey, pdfBays, matrixBays, posMap, shipBayD
     holdPadLeft: typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0,
     holdPadRight: typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0,
     // V7.57: 해치커버 수 복구. M6.94.15: 페어는 짝수(even) 베이 우선, 없으면 홀수(odd). M6.94.44: 0 허용, 홀드 없으면 0.
-    hatchCount: (() => {
+    // 2.98-14: 같은 원천에서 실측 커버 경계(hatchRows)도 함께 싣는다 — 막대를 등분이 아니라 경계 열수로 그린다.
+    ...(() => {
       const findBay = (n) => {
         if (n == null || Number.isNaN(n)) return null;
         const k2 = String(n).padStart(2, '0');
@@ -829,7 +830,15 @@ export function computeBayGridSpec(bayKey, pdfBays, matrixBays, posMap, shipBayD
         const e = findBay(n);
         if (e && typeof e.hatchCount === 'number') { src = e; break; }
       }
-      return Math.max(0, Math.min(3, (typeof src?.hatchCount === 'number') ? src.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0)));
+      let hrSrc = (src && Array.isArray(src.hatchRows)) ? src : null;
+      if (!hrSrc) for (const n of [evenNum, oddNum]) {
+        const e = findBay(n);
+        if (e && Array.isArray(e.hatchRows)) { hrSrc = e; break; }
+      }
+      return {
+        hatchCount: Math.max(0, Math.min(3, (typeof src?.hatchCount === 'number') ? src.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0))),
+        hatchRows: hrSrc ? hrSrc.hatchRows : null,
+      };
     })(),
   };
 }
@@ -956,6 +965,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     holdPadLeft: spec.holdPadLeft,
     holdPadRight: spec.holdPadRight,
     hatchCount: spec.hatchCount,
+    hatchRows: spec.hatchRows || null,   // 2.98-14: 막대 경계용
   };
 }
 
@@ -1050,6 +1060,7 @@ export function buildBayGrid(shipBayDef, bayKey, opts = {}) {
     holdPadLeft: spec.holdPadLeft,
     holdPadRight: spec.holdPadRight,
     hatchCount: spec.hatchCount,
+    hatchRows: spec.hatchRows || null,   // 2.98-14: 막대 경계용
   };
 }
 
@@ -1194,6 +1205,7 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     deckAlign, deckPadLeft, deckPadRight,
     holdAlign, holdPadLeft, holdPadRight,
     hatchCount: Math.max(0, Math.min(3, (typeof bayEntry?.hatchCount === 'number' ? bayEntry.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0)))),  // M6.94.44: 0 허용. 홀드 없으면 0.
+    hatchRows: Array.isArray(bayEntry?.hatchRows) ? bayEntry.hatchRows : null,   // 2.98-14: 막대 경계용
   };
 }
 
