@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-12'   // 2.98-12 해치 장수를 해치 단위로(트리오 6장→2장) + 보고 베이 표기 17 (18)19 + 시프팅 예측이 사전 없이 돌던 경합 제거
+export const APP_VERSION = 'TallyOne 2.98-13'   // 2.98-13 리스트 SIZE 열 ISO 크기코드 판별 — «45»를 45피트(L5)로 오판해 규격 불일치 43건 허수(XTPG 0538W CLL)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -2152,7 +2152,9 @@ export async function parseListExcel(arrayBuffer) {
     if (/^(BU|BULK)$/.test(c)) return prefix + 'B0';
     return '';
   };
-  const deriveIso = (sizeRaw, typeRaw) => {
+  //  2.98-13 (BUG-2026-005): sizeCodeMode = 이 시트 SIZE 열이 ISO 크기코드 표기(22/42/45=40HC)라는 판별.
+  //    같은 «45»가 피트 표기(20/40/45)면 45피트, 크기코드 표기면 40피트 9'6"(40HC)다.
+  const deriveIso = (sizeRaw, typeRaw, sizeCodeMode) => {
     const clean = (v) => String(v || '').toUpperCase().replace(/[\s\-\/]/g, '').replace(/FT$/, '');
     const sz = clean(sizeRaw);
     const tp = clean(typeRaw);
@@ -2230,7 +2232,10 @@ export async function parseListExcel(arrayBuffer) {
       if (/^(20|22)/.test(sz)) lenS = '20';
       else if (/^(40|42)/.test(sz)) lenS = '40';
       else if (/^4[HG]/.test(sz)) lenS = '40HC';
-      else if (/^45/.test(sz)) lenS = '45';
+      //  2.98-13 (검수사 실측 XTPG 0538W CLL 천경1): SIZE «45» 43대가 전부 L5GE(45피트)로 읽혀
+      //    EDI 45GE(40HC)와 «규격 다름 43건» 허수 경고 — 45피트는 그 배에 한 대도 없었다.
+      //    같은 열의 20피트가 «22»로 적혀 있으면 이 열은 ISO 크기코드다(22·42피트 컨은 세상에 없다).
+      else if (/^45/.test(sz)) lenS = sizeCodeMode ? '40HC' : '45';
       else if (/^4L/.test(sz)) lenS = '45';
       if (lenS) { const r = composeIso(lenS, tp); if (r) return r; }
     }
@@ -2369,6 +2374,19 @@ export async function parseListExcel(arrayBuffer) {
     // M3.86: type_i에 "Tp/Sz", "Tp.Sz", "Type/Size" 추가 (CDL 양식)
     const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^sztp$|^tpsz$|^sz\/?tp$|^sz\s*tp$|^tp\/?sz$|^tp\s*sz$|^ty\/?sz$|^ty\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);   // V9.30: SzTp(천경 CDL) 추가 — 35대가 규격미상으로 등록되던 결함
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
+    //  2.98-13 (BUG-2026-005): SIZE 열 표기 방식을 시트 단위로 판별한다 — 행마다는 못 가린다.
+    //    «22» 또는 «42»가 하나라도 있고 «20»·«40»이 하나도 없으면 ISO 크기코드 표기(45=40HC).
+    //    피트 표기가 하나라도 섞이면 종전(45=45피트) 그대로 — 보수적으로 잰다.
+    let _sizeCodeMode = false;
+    if (size_i >= 0) {
+      let _isoTok = false, _feetTok = false;
+      for (let i = headerRow + 1; i < grid.length; i++) {
+        const v = String((grid[i] || [])[size_i] || '').trim().toUpperCase().replace(/FT$/, '');
+        if (v === '22' || v === '42') _isoTok = true;
+        else if (v === '20' || v === '40') _feetTok = true;
+      }
+      _sizeCodeMode = _isoTok && !_feetTok;
+    }
     let op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
     // V9.04-06: 선사·씰 겸용 헤더 가드 (STMJ 2639E 사건 2026-07-20) — 세관 X-RAY 조회 파일
     //   '검수업체컨테이너목록조회'의 B열 헤더가 "선사SEAL NO"라 op(/^선사/)와 sl(SEAL NO)이
@@ -2530,7 +2548,7 @@ export async function parseListExcel(arrayBuffer) {
       // 타입 (M3.86: deriveIso로 표준화 - "DC43"/"4H+RF"/"42HQ" 모두 처리)
       const sizeRaw = size_i >= 0 ? String(row[size_i] || '').trim() : '';
       const typeRaw = type_i >= 0 ? String(row[type_i] || '').trim() : '';
-      let iso = deriveIso(sizeRaw, typeRaw);
+      let iso = deriveIso(sizeRaw, typeRaw, _sizeCodeMode);
       // fallback: 기존 키워드 매칭 (deriveIso가 못 잡은 케이스용)
       // M5.81: NSL "4HDC", DJS "D5" 등 명시적 패턴 추가 (40DC 잘못 분류 방지)
       if (!iso) {
