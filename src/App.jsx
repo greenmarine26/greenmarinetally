@@ -158,8 +158,17 @@ export default function App() {
     //   로컬에 이미 더 최신(updatedAt) user entry가 있으면 덮어쓰지 않는다.
     // V9.05: 베이사전 쓰기 게이트용 권한자 명단 캐시 (bayDictGuard.js가 참조)
     const u7 = fbSubscribeMatrixEditors(list => { window.__gmMatrixEditors = Array.isArray(list) ? list : []; });
+    // 2.98-12: 구독이 오기 전 예측(시프팅)이 사전 없이 돌던 경합 제거 — 미러 캐시로 먼저 채운다.
+    //   (NSDC 2608N 실측 — 사전에 커버 경계가 있는데도 부팅 직후 카고플랜이 유령 시프팅 16을 그렸다)
+    try {
+      if (!window.__fbShipBayDict || !Object.keys(window.__fbShipBayDict).length) {
+        const _c = localStorage.getItem('gm_fb_baydict_cache');
+        if (_c) window.__fbShipBayDict = JSON.parse(_c) || {};
+      }
+    } catch (e) { /* 캐시가 없으면 구독 도착까지 종전과 동일 — 조용한 실패 아님(아래 이벤트가 갱신을 보장) */ }
     const u5 = fbSubscribeShipBayDict(data => {
       window.__fbShipBayDict = data || {};
+      try { window.dispatchEvent(new Event('gm-fbdict')); } catch (e) { /* 이벤트 미지원 브라우저 — 표시 갱신만 늦어진다 */ }
       // V7.94-07: 콘앱(Firebase 미로드, 같은 오리진)이 읽을 수 있게 localStorage에 미러.
       //   용량 초과(QuotaExceeded) 시 조용히 생략 — 메인 앱 동작에는 영향 없음.
       try { localStorage.setItem('gm_fb_baydict_cache', JSON.stringify(data || {})); } catch (e) { /* skip */ }

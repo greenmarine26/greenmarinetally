@@ -13,7 +13,7 @@ import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo, hatchOpenableFor } from '../utils.js';
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays } from '../utils.js';
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -126,11 +126,21 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const bays = String(bayInput || '').split(/[,\s]+/).map((b) => parseInt(b, 10)).filter(Number.isFinite);
     if (!bays.length) return null;
     const md = selectedMode === 'loading' ? 'loading' : 'discharge';
-    const out = [];
+    /* 2.98-12 — 같은 해치(물리 커버)를 베이 수만큼 다시 세지 않는다. 트리오 «21, 22, 23» 입력이
+       종전엔 같은 커버를 3줄로 보여주고 합산도 3배(6장)로 했다. 그룹(r.group)당 한 줄만. */
+    const byGroup = new Map();
     for (const b of bays) {
       const r = hatchOpenableFor(voyage, md, b, null);
-      if (r) out.push({ bay: b, ...r });
+      if (!r) continue;
+      const g = r.group ?? b;
+      if (!byGroup.has(g)) { byGroup.set(g, { bay: b, bays: [b], ...r }); continue; }
+      const e = byGroup.get(g);
+      e.bays.push(b);
+      //  감사 지적(2.98-12): 대표는 **아는 쪽** — total 큰 답 우선(1.69-07 «큰 장수로 올림» 한 벌,
+      //    MCAP 0/3/0 → 3장 · STMJ 2/1/1 → 2장), 같으면 그룹 중심(b === g) 베이의 답.
+      if (r.total > e.total || (r.total === e.total && b === g)) Object.assign(e, r, { bay: e.bay, bays: e.bays });
     }
+    const out = [...byGroup.values()];
     return out.length ? out : null;
   }, [bayInput, voyage, selectedMode]);
   //  센 값이 있으면 장수 버튼을 그 값으로 맞춰 둔다 — 검수사가 다르게 보면 눌러서 바꾼다.
@@ -812,7 +822,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               <div className="rounded-card border border-cyan-700/50 bg-cyan-950/30 px-3 py-2 space-y-1">
                 {hatchHint.map((h) => (
                   <div key={h.bay} className="text-xs2">
-                    <span className="font-black text-cyan-200">{h.bay}번 — {h.total}장 중 </span>
+                    <span className="font-black text-cyan-200">{formatHatchBays(h.bays) || h.bay}번 — {h.total}장 중 </span>
                     <span className="font-black text-amber-300">{h.openable}장</span>
                     <span className="text-dim-300"> 열 수 있습니다</span>
                     {h.panels.filter((x) => x.blocked).map((x) => (

@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-11'   // 2.98-11 작업 보고 조용한 실패 제거 + 클로드2 숨김 + unassigned 잣대를 큐와 맞춤
+export const APP_VERSION = 'TallyOne 2.98-12'   // 2.98-12 해치 장수를 해치 단위로(트리오 6장→2장) + 보고 베이 표기 17 (18)19 + 시프팅 예측이 사전 없이 돌던 경합 제거
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4036,7 +4036,9 @@ export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
     if (blockers[p]) blockers[p].push(String(c.cn || ''));
   }
   const panels = blockers.map((b, i) => ({ idx: i, blocked: b.length > 0, blockers: b }));
-  return { total, openable: panels.filter((x) => !x.blocked).length, panels };
+  //  2.98-12: 정규화한 그룹을 같이 알린다 — 트리오(21·22·23)를 베이별로 물어도 같은 g 가 나오므로
+  //    부르는 쪽이 «같은 물리 커버를 몇 번 셌는지» 를 이 값으로 가려낼 수 있다(6장 중복 수리의 근거).
+  return { total, openable: panels.filter((x) => !x.blocked).length, panels, group: _g };
 }
 
 /** ★ 2.88-01 — 화면용 한 줄 진입점. 항차·모드·베이만 주면 «몇 장 열 수 있는가» 를 낸다.
@@ -4062,6 +4064,33 @@ export function hatchOpenableFor(voyage, mode, bayNo, dictEntry) {
     const comp = sec.completed || {};
     return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn]);
   } catch (e) { return null; }
+}
+
+/** 2.98-12 — 해치 보고의 베이 표기 한 벌. 도메인 불변 «(작은 짝수)(큰 홀수)» (지침서 §5-1B,
+ *  검수사 원문 «모든 선적의 베이 표기는 17 (18)19 이런식입니다. 단독베이만 따로 표기»).
+ *  [21,22,23] → «21 (22)23» · [18,19] → «(18)19» · [17,18] → «17 (18)» · 짝 없는 베이는 그대로. */
+export function formatHatchBays(bays) {
+  const ns = [...new Set((bays || []).map((b) => parseInt(b, 10)).filter(Number.isFinite))].sort((a, b) => a - b);
+  if (!ns.length) return '';
+  const set = new Set(ns); const used = new Set(); const parts = [];
+  const p2 = (n) => String(n).padStart(2, '0');
+  for (const n of ns) {
+    if (used.has(n)) continue;
+    if (n % 2 === 1 && set.has(n + 1)) continue;          // 홀수는 뒤 짝수가 거둔다
+    if (n % 2 === 0) {
+      //  감사 지적(2.98-12): 짝-홀-짝 연속(예 2,3,4)에서 앞 짝수가 이미 거둔 홀수를 다시 세지 않는다.
+      const lo = set.has(n - 1) && !used.has(n - 1), hi = set.has(n + 1);
+      used.add(n);
+      if (lo) used.add(n - 1);
+      if (hi) used.add(n + 1);
+      if (lo && hi) { parts.push(`${p2(n - 1)} (${p2(n)})${p2(n + 1)}`); continue; }
+      if (hi) { parts.push(`(${p2(n)})${p2(n + 1)}`); continue; }
+      if (lo) { parts.push(`${p2(n - 1)} (${p2(n)})`); continue; }
+      parts.push(p2(n)); continue;
+    }
+    used.add(n); parts.push(p2(n));
+  }
+  return parts.join(', ');
 }
 
 /** 양하 EDI 맵 하나로 시프팅(치워야 할 통과화물)을 예측한다.

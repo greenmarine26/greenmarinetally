@@ -23,8 +23,8 @@ const RE_EQUIP = /(\d)\s*호기/;
 
 /** `26번베이` `18번 베이` */
 const RE_BAYNO = /(\d{1,2})\s*번\s*베이/;
-/** 앱 형식 `베이: 18` 또는 `베이: 25, 26, 27` */
-const RE_APPBAY = /베이\s*[:：]\s*([\d,\s]+)/;
+/** 앱 형식 `베이: 18` 또는 `베이: 25, 26, 27` — 2.98-12부터 `베이: 21 (22)23` 표기도 낸다 */
+const RE_APPBAY = /베이\s*[:：]\s*([\d,\s()]+)/;
 /** `2장` `1장` */
 const RE_PANEL = /(\d+)\s*장/;
 
@@ -40,7 +40,8 @@ const RE_PANEL = /(\d+)\s*장/;
  */
 function extractBays(body) {
   const app = RE_APPBAY.exec(body);
-  if (app) return app[1].split(',').map(s => s.trim()).filter(Boolean);
+  //  2.98-12: 신 표기 «21 (22)23» 의 괄호를 벗겨 숫자만 — 종전 «25, 26, 27» 도 같은 식으로 읽힌다.
+  if (app) return app[1].split(/[^\d]+/).map(s => s.trim()).filter(Boolean);
 
   const bn = RE_BAYNO.exec(body);
   if (bn) return [bn[1]];

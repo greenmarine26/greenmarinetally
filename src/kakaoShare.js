@@ -1,5 +1,6 @@
 // 작업 보고 카톡 공유 헬퍼 (M3.5.6-fix)
 // Web Share API + 사진 위에 자막 합성
+import { formatHatchBays } from './utils.js';   // 2.98-12: 해치 보고 베이 표기 «17 (18)19» 한 벌
 
 // 텍스트 메시지 공유
 export async function shareText(message, title = '검수 보고') {
@@ -196,7 +197,8 @@ export function buildWorkStatusMessage({ vsl, voy, action, time, reason, equip }
 
 export function buildHatchMessage({ vsl, voy, bays, action, time, equip, panelCount }) {
   const verb = action === 'open' ? '🔓 해치커버 OPEN' : '🔒 해치커버 CLOSE';
-  const bayList = (bays || []).join(', ');
+  // 2.98-12: 현장 표기 그대로 «21 (22)23» — (작은 짝수)(큰 홀수) 도메인 불변.
+  const bayList = formatHatchBays(bays) || (bays || []).join(', ');
   const lines = [];
   if (equip) lines.push(`🏗 ${equip}`);
   lines.push(`📍 ${vsl || ''} ${voy || ''}`.trim());

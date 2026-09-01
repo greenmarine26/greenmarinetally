@@ -314,6 +314,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   *"홀드 양하를 하려면 커버를 열어야 하는데, 그 컨테이너들을 치워야만 알 수 있습니다."*
   //   → 두 EDI 대조가 비면 **양하 EDI 하나로 예측**한다(utils.predictShifting · 현측 커버 규칙).
   //     선적 EDI 가 오면 대조값이 채워지고 그쪽이 자동으로 우선한다 — 예측은 그때까지의 다리다.
+  // 2.98-12: 베이사전(커버 경계)이 예측보다 늦게 오면 예측이 등분·현측 근사로 돌아 유령 시프팅을 만든다.
+  //   실측 NSDC 2608N — 사전엔 hatchRows(좌4/우5)가 8-13부터 있는데, 부팅 직후 예측이 사전 없이 돌아
+  //   «쉬프팅 16»(BAY10 짝수열 12 + BAY22 00열 4, 전부 통과화물)이 화면에 남았다. 1.45 lane 과 같은 처방.
+  const [dictTick, setDictTick] = useState(0);
+  useEffect(() => {
+    const f = () => setDictTick((t) => t + 1);
+    window.addEventListener('gm-fbdict', f);
+    return () => window.removeEventListener('gm-fbdict', f);
+  }, []);
   const shiftingMap = useMemo(
     () => {
       // 2.08-15: 확정∨예측 폴백은 utils 한 벌(shiftingMapForDisplay)로 — 배정표 확정 이적 0이면
@@ -322,7 +331,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     },
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
-     voyage?.info?.lane]   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산
+     voyage?.info?.lane, dictTick]   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도
   );
 
   // 평택 대상 (양하=POD, 선적=POL)

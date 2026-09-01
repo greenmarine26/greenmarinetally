@@ -807,10 +807,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
        구하지 못하면(사전 없음·자료 없음) 종전대로 사전 합산으로 돌아간다. */
   const hatchPanelsOf = (bays) => {
     try {
-      const _open = (bays || []).reduce((sum, b) => {
-        const r = hatchOpenableFor(voyage, mode, parseInt(b, 10), getShipBayDictData(shipImo, shipName));
-        return r ? sum + r.openable : sum;
-      }, 0);
+      /* 2.98-12 (메모 «21 (22)23번베이 해치 커버 열면 6장?») — 트리오는 **같은 물리 커버**라
+         베이마다 다시 세면 2+2+2=6 이 된다. V7.99-6 이 잡았던 그 병을 2.88-01 합산이 되살렸다.
+         hatchOpenable 이 정규화한 그룹(r.group)당 **한 번만** 센다. */
+      /* 감사 지적(2.98-12): 대표를 «입력 첫 베이»로 잡으면 사전 장수가 베이마다 다른 배에서
+         모르는 베이의 기본값(total=1)이 아는 베이의 답을 밀어낸다(MCAP 21:0/22:3/23:0).
+         반대형도 실재한다 — STMJ 사전 9:2/10:1 인데 현장 실측(kakaoWorkLog «09&11 은 2장»)은 2장.
+         ⇒ 대표는 **아는 쪽** — total 큰 답 우선(1.69-07 «더 큰 hatchCount 로 올린다, 내림 없음»과
+         같은 벌), 같으면 그룹 중심(b === r.group) 우선. */
+      const _byG = new Map();
+      for (const b of (bays || [])) {
+        const bn = parseInt(b, 10);
+        const r = hatchOpenableFor(voyage, mode, bn, getShipBayDictData(shipImo, shipName));
+        if (!r) continue;
+        const g = r.group ?? bn;
+        const cur = _byG.get(g);
+        if (!cur || r.total > cur.total || (r.total === cur.total && bn === g)) _byG.set(g, r);
+      }
+      const _open = [..._byG.values()].reduce((s, r) => s + r.openable, 0);
       if (_open > 0) return _open;
     } catch (e) { /* 아래 종전 경로 */ }
     try {
