@@ -599,6 +599,9 @@ export function matrixToBayDictEntry(matrix, code, name, imo, callsign, carrier 
       hasDeck: e.deckTiers && e.deckTiers.length > 0,
       hasHold: e.holdTiers && e.holdTiers.length > 0,
       hatchCount: (typeof e.hatchCount === 'number') ? e.hatchCount : ((e.holdTiers && e.holdTiers.length > 0) ? 1 : 0),  // M6.94.44: 0=해치 없음. 홀드 없는 베이 기본 0.
+      // 2.99 (BUG-2026-006): 실측 커버 경계는 정본의 값이다 — 빌더가 모르는 채 저장하면 통째로 지워졌다(bayDef 가 배열째 교체됨).
+      ...(Array.isArray(e.hatchRows) && e.hatchRows.length ? { hatchRows: e.hatchRows } : {}),
+      ...(e.hatchSpans ? { hatchSpans: e.hatchSpans } : {}),
       pairEven: e.pairEven || null,
       source: e.source,
       // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (사용자 시각 편집 저장)
@@ -671,6 +674,8 @@ export function bayDictEntryToMatrix(entry) {
       deckCells: Array.isArray(bs.deckCells) ? [...bs.deckCells] : [],
       holdCells: Array.isArray(bs.holdCells) ? [...bs.holdCells] : [],
       hatchCount: (typeof bs.hatchCount === 'number') ? bs.hatchCount : ((Array.isArray(bs.holdTiers) && bs.holdTiers.length > 0) ? 1 : 0),   // M6.94.44: 저장된 해치 수 복원(0 보존). 홀드 없으면 0.
+      ...(Array.isArray(bs.hatchRows) && bs.hatchRows.length ? { hatchRows: bs.hatchRows.map((p) => (Array.isArray(p) ? [...p] : [])) } : {}),   // 2.99: 경계 복원
+      ...(bs.hatchSpans ? { hatchSpans: bs.hatchSpans } : {}),
       pairEven: bs.pairEven || null,
       source: bs.source || 'saved',
       // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (기본값으로 fallback, 기존 데이터 호환)

@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.98-14'   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
+export const APP_VERSION = 'TallyOne 2.99'   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -3999,7 +3999,24 @@ export function makePanelResolver(rows, baysInfo) {
     for (let p = 0; p < n; p++) { cum += sizes[p]; if (i < cum) return p; }
     return n - 1;
   };
-  return { panelOf: _panelOf, groupAxis: _groupAxis, groupOf: _groupOf, info: _info };
+  /* 2.99 (검수사 확정 2026-09-02) — «3.5 3.5» 처럼 경계가 00열 한가운데를 지나는 배는 **00열이 두 장에 다 걸린다.**
+       검수사 원문: *«개념은 중앙홀드에 양하분이 있다면 두장 다 열어야 합니다»*. hatchRows 에 0 이 두 패널에 들어 있으면
+       그 열은 두 패널 모두다. 중복이 없으면 panelOf 와 같은 답(한 원소)이라 종전 판정과 동일. */
+  const _panelsOf = (bay, row) => {
+    const bn = parseInt(bay, 10);
+    const inf = _info[bn];
+    const hr = inf && Array.isArray(inf.hatchRows) ? inf.hatchRows : null;
+    if (hr) {
+      const r0 = parseInt(row, 10);
+      if (!Number.isFinite(r0)) return [];
+      const out = [];
+      for (let p = 0; p < hr.length; p++) if ((hr[p] || []).map(Number).includes(r0)) out.push(p);
+      return out;
+    }
+    const p = _panelOf(bay, row);
+    return p == null ? [] : [p];
+  };
+  return { panelOf: _panelOf, panelsOf: _panelsOf, groupAxis: _groupAxis, groupOf: _groupOf, info: _info };
 }
 
 /** ★ 2.88-01 — **지금 몇 장을 열 수 있는가.**
@@ -4046,12 +4063,12 @@ export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
     /*  ⚠ 패널 정보(hatchCount·hatchRows)는 사전에 **짝수 베이만** 있다(실측 MCSC: 022·030·034·038).
         37·39 번으로 실린 20ft 데크를 그 번호로 물으면 «사전에 없음» → null → 전부 막힘이 되어
         38번이 «0장» 으로 나왔다(실측). 열 판정에 쓰는 것은 row 이므로 **그룹 대표로 묻는다.** */
-    const p = R.panelOf(String(_g).padStart(2, '0'), c.row);
-    if (p == null) {                             // 어느 장인지 모르면 **보수적으로 전부 막는다**
+    const ps = R.panelsOf(String(_g).padStart(2, '0'), c.row);   // 2.99: 00열 두 장 걸침이면 둘 다
+    if (!ps.length) {                            // 어느 장인지 모르면 **보수적으로 전부 막는다**
       for (let i = 0; i < total; i++) blockers[i].push(String(c.cn || ''));
       continue;
     }
-    if (blockers[p]) blockers[p].push(String(c.cn || ''));
+    for (const p of ps) if (blockers[p]) blockers[p].push(String(c.cn || ''));
   }
   const panels = blockers.map((b, i) => ({ idx: i, blocked: b.length > 0, blockers: b }));
   //  2.98-12: 정규화한 그룹을 같이 알린다 — 트리오(21·22·23)를 베이별로 물어도 같은 g 가 나오므로
@@ -4082,6 +4099,41 @@ export function hatchOpenableFor(voyage, mode, bayNo, dictEntry) {
     const comp = sec.completed || {};
     return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn]);
   } catch (e) { return null; }
+}
+
+/** 2.99 (검수사 확정 2026-09-02) — 베이매트릭스 해치 줄의 «커버 폭» 입력을 경계(hatchRows)로 바꾸는 한 벌.
+ *  형식: «3 4 3» «4 5» «3.5 3.5» (구분: 공백·쉼표·/ ). 축 = 그 베이 전체 열(짝수 내림 → 00(있으면) → 홀수 오름).
+ *  · 폭 합이 축보다 짝수만큼 작으면(홀드 폭으로 적은 것) 바깥 장이 남은 열을 흡수 — «3 4 3»(홀드10) → 축12 «4 4 4».
+ *  · «x.5 x.5» 는 00열 있는 축에서 «같은 값 두 장»만 — 00열이 두 장에 다 들어간다(두 장 다 걸림).
+ *  · 폭 합이 축보다 크거나 차가 홀수면 오류(err) — 조용히 맞추지 않는다. */
+export function hatchSpansToRows(spansStr, rowCount, hasZero) {
+  const rc = parseInt(rowCount, 10);
+  if (!Number.isFinite(rc) || rc < 1) return { err: '축(rowCount)을 모릅니다' };
+  const w = String(spansStr || '').trim().split(/[\s,/·]+/).filter(Boolean).map(Number);
+  if (!w.length || w.some((x) => !(x > 0))) return { err: '폭은 양수 숫자로 «3 4 3» 처럼' };
+  const axis = hasZero
+    ? [...Array(Math.floor(rc / 2))].map((_, i) => 2 * (Math.floor(rc / 2) - i)).concat([0], [...Array(rc - Math.floor(rc / 2) - 1)].map((_, i) => 2 * i + 1))
+    : [...Array(Math.floor(rc / 2))].map((_, i) => 2 * (Math.floor(rc / 2) - i)).concat([...Array(rc - Math.floor(rc / 2))].map((_, i) => 2 * i + 1));
+  if (w.some((x) => x % 1 !== 0)) {
+    if (!(w.length === 2 && w[0] === w[1] && hasZero && w[0] * 2 === rc)) return { err: 'x.5 는 00열 있는 축에서 «같은 값 두 장»만(예: 축7 → 3.5 3.5)' };
+    const k = Math.floor(w[0]);
+    return { rows: [[...axis.slice(0, k), 0], [0, ...axis.slice(k + 1)]], shared0: true, extended: false };
+  }
+  const sum = w.reduce((a, b) => a + b, 0);
+  const pad = rc - sum;
+  if (pad < 0) return { err: `폭 합 ${sum} 이 축 ${rc} 보다 큽니다` };
+  if (pad % 2) return { err: `폭 합 ${sum} 과 축 ${rc} 의 차가 홀수(${pad}) — 어느 쪽 장이 넓은지 적어 주세요` };
+  const w2 = w.slice(); w2[0] += pad / 2; w2[w2.length - 1] += pad / 2;
+  const rows = []; let i = 0;
+  for (const k of w2) { rows.push(axis.slice(i, i + k)); i += k; }
+  return { rows, shared0: false, extended: pad > 0 };
+}
+/** 2.99 — 경계(hatchRows) → 화면에 보일 폭 문자열. 00열이 두 장에 있으면 «x.5 x.5». */
+export function hatchRowsToSpans(hatchRows) {
+  if (!Array.isArray(hatchRows) || !hatchRows.length) return '';
+  const zeros = hatchRows.filter((p) => (p || []).map(Number).includes(0)).length;
+  if (zeros >= 2 && hatchRows.length === 2) return `${hatchRows[0].length - 0.5} ${hatchRows[1].length - 0.5}`;
+  return hatchRows.map((p) => (p || []).length).join(' ');
 }
 
 /** 2.98-14 (검수사 «판단은 눈으로 하는데 … 커버 크기가 4.5 4.5 로우를 갖는걸로 보임») —
@@ -4149,6 +4201,7 @@ export function predictShifting(dischEdiMap, baysInfo) {
       아래 로직은 종전과 **한 글자도 다르지 않다**. */
   const _RES = makePanelResolver(rows, baysInfo);
   const _panelOf = _RES.panelOf;
+  const _panelsOf = _RES.panelsOf;   // 2.99
   const _info = _RES.info;
   // ① 홀드에 평택 양하분이 있는 베이 → 열어야 할 커버 (패널 정보 있으면 패널, 없으면 현측)
   const openSides = {};
@@ -4158,8 +4211,8 @@ export function predictShifting(dischEdiMap, baysInfo) {
     if (!isPyeongtaekPort(c.pod)) continue;
     const b = normalizeBay(c.bay || '');
     if (!b) continue;
-    const p = _panelOf(b, c.row);
-    if (p != null) { (openPanels[b] = openPanels[b] || new Set()).add(p); continue; }
+    const ps = _panelsOf(b, c.row);   // 2.99: 00열 두 장 걸침(«3.5 3.5»)이면 두 장 다 연다
+    if (ps.length) { openPanels[b] = openPanels[b] || new Set(); for (const p of ps) openPanels[b].add(p); continue; }
     const sd = _sideOf(c.row);
     if (!sd) continue;
     (openSides[b] = openSides[b] || new Set()).add(sd);
@@ -4189,8 +4242,8 @@ export function predictShifting(dischEdiMap, baysInfo) {
     let hit = false;
     for (const cb of _coverBays) {
       if (openPanels[cb]) {
-        const p = _panelOf(cb, c.row);
-        if (p == null || openPanels[cb].has(p)) { hit = true; break; }   // 패널 미상은 보수적으로 포함
+        const ps = _panelsOf(cb, c.row);   // 2.99: 두 장 걸침이면 어느 한 장이라도 열리면 걸린다
+        if (!ps.length || ps.some((p) => openPanels[cb].has(p))) { hit = true; break; }   // 패널 미상은 보수적으로 포함
       } else if (openSides[cb]) {
         const sd = _sideOf(c.row);
         if (sd && (sd === 'C' || openSides[cb].has(sd))) { hit = true; break; }

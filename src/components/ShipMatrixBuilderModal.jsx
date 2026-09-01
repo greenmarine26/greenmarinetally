@@ -29,7 +29,7 @@ import {
   fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSaveShipBayDict,
   fbBatchSaveShipBayDict, fbDeleteShipBayDict,
 } from '../firebase.js';
-import { _storage, SK } from '../utils.js';
+import { _storage, SK, hatchSpansToRows, hatchRowsToSpans } from '../utils.js';   // 2.99: 해치 줄 커버 폭 ↔ 경계 한 벌
 // M6.94.0: 빈 카고플랜 박스 시각 미리보기 (베이플랜)
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
@@ -550,7 +550,51 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const setGroupCovers = (g, v) => {
     setMatrix(m => {
       const cp = { ...m, byBay: { ...m.byBay } };
-      g.keys.forEach(k => { if (cp.byBay[k]) cp.byBay[k] = { ...cp.byBay[k], hatchCount: v }; });
+      g.keys.forEach(k => {
+        if (!cp.byBay[k]) return;
+        const e = cp.byBay[k];
+        // 2.99: 장수를 경계(폭)와 다르게 바꾸면 경계는 지운다 — 장수 2인데 경계 3장이면 판정이 갈린다(hatchCount·hatchRows 두 벌 금지).
+        if (Array.isArray(e.hatchRows) && e.hatchRows.length && e.hatchRows.length !== v) {
+          const { hatchRows, hatchSpans, ...rest } = e; cp.byBay[k] = { ...rest, hatchCount: v };
+        } else cp.byBay[k] = { ...e, hatchCount: v };
+      });
+      return cp;
+    });
+  };
+  /* 2.99 (검수사 확정 2026-09-02 — «홀드10 3 4 3 · 홀드 7 3.5 3.5 이런식으로 넣을수 있게») — 해치 줄 «커버 폭».
+     표시는 그 해치 첫 베이(짝수 우선)의 경계에서 나오고, 입력은 해치 3베이 전부에 각자 축으로 저장한다.
+     오류는 그 자리에서 붉게 — 조용히 맞추지 않는다. */
+  const [spanDraft, setSpanDraft] = useState({});
+  const [spanErr, setSpanErr] = useState({});
+  const groupEntries = (g) => g.keys.map(k => [k, matrix?.byBay?.[k]]).filter(([, e]) => e);
+  const groupSpans = (g) => {
+    const es = groupEntries(g).map(([, e]) => e);
+    const ev = es.find(e => parseInt(e.bayNum, 10) % 2 === 0) || es[0];
+    return ev && Array.isArray(ev.hatchRows) && ev.hatchRows.length ? hatchRowsToSpans(ev.hatchRows) : '';
+  };
+  const groupAxis = (g) => {
+    const es = groupEntries(g).map(([, e]) => e);
+    const ev = es.find(e => parseInt(e.bayNum, 10) % 2 === 0) || es[0];
+    return ev ? (ev.rowCount || 0) : 0;
+  };
+  const applyGroupSpans = (g, text) => {
+    const t = String(text || '').trim();
+    const next = {}; let err = null;
+    for (const [k, e] of groupEntries(g)) {
+      if (!t) { next[k] = null; continue; }
+      const r = hatchSpansToRows(t, e.rowCount, !!(e.holdHasZero != null ? e.holdHasZero : e.hasZero));
+      if (r.err) { err = `베이 ${parseInt(k, 10)}: ${r.err}`; break; }
+      next[k] = r.rows;
+    }
+    if (err) { setSpanErr(s => ({ ...s, [g.no]: err })); return; }
+    setSpanErr(s => ({ ...s, [g.no]: null }));
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      for (const [k, rows] of Object.entries(next)) {
+        const e = cp.byBay[k]; if (!e) continue;
+        if (!rows) { const { hatchRows, hatchSpans, ...rest } = e; cp.byBay[k] = rest; }
+        else cp.byBay[k] = { ...e, hatchRows: rows, hatchSpans: t, hatchCount: rows.length };
+      }
       return cp;
     });
   };
@@ -1227,12 +1271,24 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                             <option value={2}>2</option>
                             <option value={3}>3</option>
                           </select>
+                          {/* 2.99: 커버 폭 — 경계(hatchRows)를 현장에서 고친다 */}
+                          <span className="text-dim-500">축 {groupAxis(g)}</span>
+                          <input
+                            value={spanDraft[g.no] != null ? spanDraft[g.no] : groupSpans(g)}
+                            onChange={ev => setSpanDraft(s => ({ ...s, [g.no]: ev.target.value }))}
+                            onBlur={ev => { applyGroupSpans(g, ev.target.value); setSpanDraft(s => { const c = { ...s }; delete c[g.no]; return c; }); }}
+                            onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            placeholder="폭 예: 3 4 3"
+                            title="커버 폭(열 수) — 홀드 폭으로 적어도 됩니다(바깥 장이 데크 열까지 자동 확장). «3.5 3.5» = 00열이 두 장에 걸림(두 장 다 열어야). 비우면 경계 삭제(등분으로 돌아감)"
+                            className={`w-24 px-1 py-0.5 rounded text-center mono ${spanErr[g.no] ? 'bg-red-900/60 text-red-100' : (groupSpans(g) ? 'bg-emerald-900/40 text-emerald-100' : 'bg-ink-750')}`} />
+                          {spanErr[g.no] && <span className="text-2xs text-red-300">⚠ {spanErr[g.no]}</span>}
                         </label>
                       );
                     })}
                   </div>
                   <div className="text-2xs text-dim-500 mt-1">
                     0 = 홀드 없음(상시 개방). 커버는 현측마다 열리므로 보통 2장, 좁은 해치는 1장입니다.
+                    폭은 왼쪽부터 «3 4 3»처럼 열 수로 — 홀드 열로 적으면 데크 열까지 자동 확장되고, «3.5 3.5»는 00열이 두 장에 걸린 배입니다. 초록 = 실측 경계 있음.
                   </div>
                 </div>
               )}
