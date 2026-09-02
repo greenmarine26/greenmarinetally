@@ -1,6 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 2.99-02';
+const VERSION = 'TallyOne 2.99-03';
+const NOTE = '브리핑 자료 수정 — OBWH·RZOR 주야 구분 없음 반영 · 업데이트 배너에 변경 내용 표시';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
@@ -48,7 +49,7 @@ self.addEventListener('message', (e) => {
   if (e.data.type === 'SKIP_WAITING') self.skipWaiting();
   if (e.data.type === 'GET_VERSION') {
     // 조용히 실패하지 않는다 — 포트가 없으면 전체 클라이언트로라도 알린다.
-    const payload = { type: 'VERSION', version: VERSION };
+    const payload = { type: 'VERSION', version: VERSION, note: NOTE };
     if (e.ports && e.ports[0]) { try { e.ports[0].postMessage(payload); return; } catch (err) { /* 아래로 */ } }
     self.clients.matchAll().then((cs) => cs.forEach((c) => { try { c.postMessage(payload); } catch (err) {} }));
   }

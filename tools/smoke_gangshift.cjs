@@ -50,6 +50,18 @@ const vc = { ...voyage, discharge: { ...voyage.discharge, completed: comp } };
 const ga = CA.buildGangShift(vc, fx.bayDef, { now: MID , nGangs: 2 });
 T(!!ga && ga.gangs.reduce((a, g) => a + (g.cnt || 0), 0) === gm.gangs.reduce((a, g) => a + (g.cnt || 0), 0), 'voyage.completed 자동 흡수가 compMap 과 다르다');
 // ④-2 (2.62-01) 낮(주간조)에 물어도 작업 시작이 밤이면 «다가오는 야간조»로 미리 보기가 선다.
+//  2.99-03: 주야 구분 없는 배(OBWH·RZOR) — 조 창 = 계획 작업 시간 전체, 17:30 에서 안 끊고, 다가오는 조로 안 굴린다.
+{
+  const vo = { ...voyage, info: { ...voyage.info, vsl: 'OBWH', planDate: '2026-08-27 11:30 ~ 2026-08-27 19:30', gangsShift: {} } };
+  const AT16 = new Date('2026-08-27T16:00:00+09:00').getTime();
+  const go = CA.buildGangShift(vo, fx.bayDef, { now: AT16, nGangs: 2 });
+  T(!!go && go.shift.noShift === true && /주야 구분 없음/.test(go.shift.name), `OBWH 조 창이 «작업 전체»가 아니다 (${go && go.shift.name})`);
+  T(!!go && /~19:30$/.test(go.shift.label) && !go.shift.upcoming, `OBWH 조 창 끝이 계획 끝(19:30)이 아니다 (${go && go.shift.label})`);
+  T(!!go && go.availH >= 1.9 && go.availH < 3.6, `OBWH 16:00 남은 창이 17:30 에서 끊겼다 (${go && go.availH})`);   // 17:30~19:00 휴게를 빼면 2h, 안 빼면 3.5h
+  const vs = { ...vo, info: { ...vo.info, vsl: 'STSE' } };
+  const gsd = CA.buildGangShift(vs, fx.bayDef, { now: AT16, nGangs: 2 });
+  T(!!gsd && gsd.shift.name === '주간조' && gsd.availH < go.availH, `보통 배는 종전대로 17:30 에서 끊겨야 한다 (${gsd && gsd.shift.name} ${gsd && gsd.availH})`);
+}
 const DAY = new Date('2026-08-27T10:30:00+09:00').getTime();
 const gd = CA.buildGangShift(voyage, fx.bayDef, { now: DAY , nGangs: 2 });
 T(!!gd && gd.shift.name === '야간조' && gd.shift.upcoming === true, `낮 미리 보기가 안 선다 (${gd && gd.shift.name})`);

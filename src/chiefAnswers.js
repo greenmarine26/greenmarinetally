@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled } from './utils.js';   // 2.65-01: 조 경계 한 벌
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
@@ -342,6 +342,16 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //  조 창 — 지금(또는 조 시작, 또는 작업 시작 중 늦은 것)부터 조 끝까지 실근무시간.
   //  ⚠ 2.69: **조를 먼저 정한다** — 갱 수를 조별로 기억하므로(야간 3갱·내일 주간 2갱) 어느 조인지 알아야 몇 갱인지 안다.
   let shift = _currentShift(nowMs);
+  //  ★ 2.99-03 (검수사 «OBWH와 RZOR은 주야 구분이 없습니다»): 카페리는 한 조가 끝까지 한다 —
+  //    조 창 = 계획 작업 시간 전체(planDate 앞~뒤). 17:30 에서 끊어 «남은 1.5시간»이라 말하던 것을 막는다.
+  //    끝 시각이 없으면 앞 시각 +12h. 조 굴리기(다가오는 조)도 안 한다 — 다음 조가 없다.
+  if (!shipHasShifts(voyage?.info?.vsl)) {
+    const ps = voyagePlanMs(voyage), pe = voyagePlanEndMs(voyage) || (ps ? ps + 12 * 3600000 : 0);
+    if (ps && pe > ps) {
+      const hm = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+      shift = { name: '작업 전체(주야 구분 없음)', label: `${hm(ps)}~${hm(pe)}`, startMs: ps, endMs: pe, noShift: true };
+    }
+  }
   let fromMs = Math.max(nowMs, shift.startMs || 0);
   //  ★ 2.73: 검수사가 말로 알린 시작 시각이 있으면 **그 시각부터** 센다(창을 앞당기지는 않는다).
   //    수집기 workStartAt(터미널 실제 시작)이 오면 아래에서 그것이 다시 이긴다 — 정본이 우선.
@@ -371,7 +381,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //  ★ 2.62-01: 작업 시작이 이번 조 뒤면(낮에 야간 배를 물으면) 창이 0 — 다가오는 조로 굴려서
   //    «출근 전 미리 보기»가 되게 한다. 최대 3조까지(그 너머는 자료가 더 확실해진 뒤 볼 일).
   let rolled = 0;
-  while (availH <= 0.01 && rolled < 3) {
+  while (availH <= 0.01 && rolled < 3 && !shift.noShift) {   // 2.99-03: 주야 구분 없는 배는 굴릴 다음 조가 없다
     const nb = new Date(shift.endMs);
     const nm = nb.getHours() * 60 + nb.getMinutes();
     if (nm === 1050) { //  주간 끝 17:30 → 야간 19:00~익일 06:30
@@ -410,7 +420,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //  ★ 2.62-04 (검수사 실측 «입항계획 변경을 놓치신듯 — 앱은 판단을 했는데 미르는 앱과 틀린 답»):
   //    SWTD 가 19:00→21:00 으로 밀렸을 때 계산(availH 8.0h)은 21:00 을 반영했는데 **라벨이
   //    «19:00~06:30» 고정**이라 말이 옛 시각을 했다. 실제 시작이 조 명목 시작보다 늦으면 라벨에 쓴다.
-  {
+  if (!shift.noShift) {   // 2.99-03: 주야 구분 없는 배는 조 명목 시작(08:00/19:00)이 없다 — 계획 시간 라벨 그대로
     const _end = new Date(shift.endMs);
     const _nom = new Date(shift.endMs);
     if (shift.name === '야간조') { _nom.setTime(shift.endMs - 86400000); _nom.setHours(19, 0, 0, 0); }

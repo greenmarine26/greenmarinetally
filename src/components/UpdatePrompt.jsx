@@ -16,6 +16,7 @@ function askVersion(sw, timeoutMs = 1500) {
       if (done) return;
       done = true; clearTimeout(t);
       resolve(String(e.data?.version || ''));
+      askVersion._note = String(e.data?.note || '');   // 2.99-03: 새 판의 변경 내용 한 줄(sw.js NOTE)
     };
     try { sw.postMessage({ type: 'GET_VERSION' }, [ch.port2]); }
     catch (err) { clearTimeout(t); done = true; console.warn('[sw] 버전 조회 실패', err); resolve(''); }
@@ -25,6 +26,7 @@ function askVersion(sw, timeoutMs = 1500) {
 export default function UpdatePrompt() {
   const [waiting, setWaiting] = useState(null); // 대기 중인 SW
   const [hidden, setHidden] = useState(false);
+  const [note, setNote] = useState({ v: '', note: '' });   // 2.99-03: 새 판 번호·변경 내용(검수사 «업데이트 내용을 모릅니다»)
   const regRef = useRef(null);
 
   useEffect(() => {
@@ -52,6 +54,7 @@ export default function UpdatePrompt() {
         return;
       }
       setWaiting(sw);
+      setNote({ v, note: askVersion._note || '' });   // 2.99-03: 배너에 «무엇이 바뀌었는지»
       setHidden(false);
     };
 
@@ -141,8 +144,8 @@ export default function UpdatePrompt() {
           <Download className="w-5 h-5 text-emerald-200"/>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-black text-sm text-emerald-50">🆕 새 버전 출시</div>
-          <div className="text-xxs text-emerald-100/90">탭 한 번으로 최신 버전 적용</div>
+          <div className="font-black text-sm text-emerald-50">🆕 새 버전 출시{note.v ? ` — ${String(note.v).replace(/^TallyOne\s*/, '')}` : ''}</div>
+          <div className="text-xxs text-emerald-100/90">{note.note || '탭 한 번으로 최신 버전 적용'}</div>
         </div>
         <button onClick={handleUpdate}
           className="bg-emerald-100 text-emerald-900 px-3 py-2 rounded font-black text-xs flex items-center gap-1 active:scale-95 transition">

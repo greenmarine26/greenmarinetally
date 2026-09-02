@@ -85,6 +85,12 @@ fi
 if [ -n "$APPVER" ]; then
   sed -i "s/^const VERSION = '.*';/const VERSION = '$APPVER';/" public/sw.js
   echo "✓ sw.js VERSION → $APPVER 동기화"
+  # 2.99-03: 변경 내용 한 줄(APP_NOTE)도 sw.js NOTE 로 — 업데이트 배너가 «무엇이 바뀌었는지» 보여 준다(검수사 요청).
+  APPNOTE=$(grep -E "^export const APP_NOTE" src/utils.js | sed -E "s/.*=\s*'([^']*)'.*/\1/")
+  if [ -n "$APPNOTE" ]; then
+    sed -i "s|^const NOTE = '.*';.*|const NOTE = '$APPNOTE';   // build.sh 가 utils APP_NOTE 로 채운다|" public/sw.js
+    grep -q "^const NOTE = '$APPNOTE';" public/sw.js && echo "✓ sw.js NOTE → $APPNOTE" || { echo "✗ sw.js NOTE 동기화 실패 — 배포 금지"; exit 1; }
+  fi
   # 콘앱 화면 버전 라벨도 동기화 — 라벨로 신/구버전 구분 가능하게.
   #   (이전: 코드는 고쳐도 라벨이 V7.01로 박혀 업데이트 여부를 화면에서 알 수 없었음)
   # V7.91: V[0-9.]* → V[0-9.-]* — 빌드번호 하이픈을 패턴이 못 잡아 라벨이 누적 오염되던 버그 수정.

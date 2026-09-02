@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -2454,7 +2454,11 @@ export function bothCounts(pool, ctx, mode) {
     //  2.65-01 (검수사 교정): 원인을 **지어내지 않는다**. 종전 «전근무자 작업분 등» 은 틀린 짐작이었다 —
     //    검수사 원문 *«지금 근무자가 앱에 기록안한것입니다. 전근무자는 없습니다. 지금 근무자들이 첫조입니다»*
     //    *«그럴때 검수사들이 앱 미사용이라고 적어주세요»* · *«주간조 앱 미사용이 좋을듯 합니다»* ⇒ 조 이름 + 사실만.
-    if (gap > 0) L.push(`⚠ ${gap}대는 실제로 작업했는데 앱에 안 찍혔습니다 (${workingShiftName()} 앱 미사용).`);
+    //  2.99-03: 주야 구분 없는 배(OBWH·RZOR)는 조 이름을 안 붙인다 — 검수사 «OBWH와 RZOR은 주야 구분이 없습니다».
+    //    ⚠ 감사 지적(2.99-03): 브리핑·진행 답 경로는 ctx 에 { tw } 만 싣는다 — 배 코드는 **터미널 실적 레코드 자체**(code/vessel, 수집기가 적음)에서도 읽는다.
+    const _shipCode = ctx?.vsl || ctx?.info?.vsl || tw?.code || tw?.vessel || '';
+    const _shiftTag = shipHasShifts(_shipCode) ? `${workingShiftName()} 앱 미사용` : '앱 미사용';
+    if (gap > 0) L.push(`⚠ ${gap}대는 실제로 작업했는데 앱에 안 찍혔습니다 (${_shiftTag}).`);
     else if (gap < 0) L.push(`⚠ 앱이 ${-gap}대 더 많습니다 — 터미널 피드가 아직 안 따라왔을 수 있어요.`);
     else L.push('✅ 두 숫자가 같습니다 — 앱 기록이 실제와 맞습니다.');
   } else if (!hasTer) {

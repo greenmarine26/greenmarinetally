@@ -175,5 +175,21 @@ for (const q of ['얼마나 남았어', '남은 갯수', '몇 대 남았어']) {
   }
 }
 
+// ── ⑪ 2.99-03 «OBWH와 RZOR은 주야 구분이 없습니다» — 차이 줄에 조 이름을 안 붙인다 ─────
+{
+  const fresh = { startAt: '2026-09-02 11:30', updatedAt: Date.now() - 60000, disDone: 120, disPlan: 260, lodDone: 0, lodPlan: 144 };
+  const pool = conts.slice(0, 260).map((c, i) => ({ ...c, _comp: i < 100 ? { by: '김성일', at: Date.now() } : null }));
+  const mk = (vsl) => ({ terminalWork: { [vsl]: fresh }, vsl, vslFull: vsl, pier: 'PNCT', info: { vsl, planDate: '2026-01-01 00:00 ~ 2026-01-01 12:00' }, mode: 'discharge' });
+  const sO = (NS.bothCounts(pool, mk('OBWH'), 'discharge') || []).join('\n');
+  T(/20대는 실제로 작업했는데 앱에 안 찍혔습니다 \(앱 미사용\)/.test(sO), `⛔ OBWH 차이 줄에 조 이름이 붙는다 — ${(sO.match(/⚠.*/) || [''])[0]}`);
+  //  감사 지적 — 브리핑·진행 답 경로는 ctx 에 { tw } 만 싣는다. 레코드의 code/vessel(수집기 terminal_work 가 적음)로도 가려야 한다.
+  const sT = (NS.bothCounts(pool, { tw: { ...fresh, code: 'OBWH', vessel: 'OBWH' } }, 'discharge') || []).join('\n');
+  T(/\(앱 미사용\)/.test(sT) && !/조 앱 미사용/.test(sT), `⛔ {tw} 만 넘기는 브리핑 경로에서 OBWH 에 조 이름이 붙는다 — ${(sT.match(/⚠.*/) || [''])[0]}`);
+  const sB = NS.generateBriefing ? String((() => { try { return NS.generateBriefing(pool.map((c) => ({ ...c, _ptk: true })), 'discharge', { vsl: 'OBWH' }, null, null, 'PNCT', { tw: { ...fresh, code: 'OBWH' } }); } catch (e) { return 'ERR ' + e.message; } })()) : '';
+  if (sB && !/^ERR/.test(sB) && /앱에 안 찍혔/.test(sB)) T(!/조 앱 미사용/.test(sB), '⛔ generateBriefing 경로에서 OBWH 에 조 이름이 붙는다');
+  const sS = (NS.bothCounts(pool, mk('STSE'), 'discharge') || []).join('\n');
+  T(/\((주간조|야간조) 앱 미사용\)/.test(sS), `⛔ 보통 배(STSE)는 조 이름이 있어야 한다 — ${(sS.match(/⚠.*/) || [''])[0]}`);
+}
+
 if (bad) { console.error(`\n✗ 두 숫자 연막검사 ${bad}건 실패`); process.exit(1); }
 console.log('✅ 두 숫자 연막검사 통과 — 실제·앱 두 숫자 · compMap 구멍 · 판정 한 벌 · 가로채지 않음 · 작업 시작 전 터미널 실적 차단(2.99-01)');
