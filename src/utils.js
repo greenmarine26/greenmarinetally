@@ -32,12 +32,12 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 3.1'   // 3.1 ATPR 선적 플랜에서 위해(WEI)행 컨을 노란 빗금으로 — 같은 엠티인데 씰을 따로 달아야 해서(검수사 긴급 지시 2026-09-02). 베이플랜·카고플랜·베이상세 한 벌(podHighlightKeys)   // 3.0-01 SMC YANTAI 선박코드 RZSY→SMYA(터미널 배정목록 정본: 선사 RZF·항로 RZPT·항차 635W) — 내장 .def 사전 키·주야 구분 없음 목록·연막검사   // 3.0 미르 자체 학습 — 못 알아들은 말을 이어진 말에서 그 자리에서 배우고(별칭·일반화), 못 배운 말은 mir_misses 로 모아 매일 클로드가 결산해 가르친다(TASK-2026-012)   // 2.99-03 OBWH·RZOR 주야 구분 없음(검수사) — 브리핑 «○○조 앱 미사용» 조 이름 생략 · 갱 배분 조 창 = 계획 작업 시간 전체   // 2.99-02 X-RAY 엑셀 첫 장 기본 양식 = 굴림체 10·가운데 정렬·네 변 실선(검수사 샘플 그대로 — 받을 때마다 손으로 다시 그리던 것)   // 2.99-01 터미널 실적은 작업 시작 시점부터만 — 지난 기항 트레드링스 피드(OBWH 2727E 278/278)가 2729E 브리핑에 «278대 앱 미입력»으로 붙던 것(BUG-2026-008)   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
+export const APP_VERSION = 'TallyOne 3.2'   // 3.2 선적 플랜에서 목적지(POD)별 무늬 — 최다 POD 무늬 없음, 나머지 대수 순 빗금·줄·점(검정 가는 선이라 흑백 인쇄·컬러 화면 동일). 평택 선적분만, 베이플랜·카고플랜·베이상세 한 벌(buildPodPatternMap). 3.1 ATPR 전용 노란 빗금을 흡수(검수사 «선적시 포트 구분이 안돼서 선적위치를 못잡는 경우»)   // 3.1 ATPR 선적 플랜에서 위해(WEI)행 컨을 노란 빗금으로 — 같은 엠티인데 씰을 따로 달아야 해서(검수사 긴급 지시 2026-09-02). 베이플랜·카고플랜·베이상세 한 벌(podHighlightKeys)   // 3.0-01 SMC YANTAI 선박코드 RZSY→SMYA(터미널 배정목록 정본: 선사 RZF·항로 RZPT·항차 635W) — 내장 .def 사전 키·주야 구분 없음 목록·연막검사   // 3.0 미르 자체 학습 — 못 알아들은 말을 이어진 말에서 그 자리에서 배우고(별칭·일반화), 못 배운 말은 mir_misses 로 모아 매일 클로드가 결산해 가르친다(TASK-2026-012)   // 2.99-03 OBWH·RZOR 주야 구분 없음(검수사) — 브리핑 «○○조 앱 미사용» 조 이름 생략 · 갱 배분 조 창 = 계획 작업 시간 전체   // 2.99-02 X-RAY 엑셀 첫 장 기본 양식 = 굴림체 10·가운데 정렬·네 변 실선(검수사 샘플 그대로 — 받을 때마다 손으로 다시 그리던 것)   // 2.99-01 터미널 실적은 작업 시작 시점부터만 — 지난 기항 트레드링스 피드(OBWH 2727E 278/278)가 2729E 브리핑에 «278대 앱 미입력»으로 붙던 것(BUG-2026-008)   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = 'ATPR 선적 플랜에서 위해(WEI)행 컨테이너를 노란 빗금으로 표시 · 베이플랜 카고플랜 베이상세 전부';
+export const APP_NOTE = '선적 플랜에서 목적지별 무늬 표시(최다 목적지는 무늬 없음, 나머지는 빗금 줄 점) · 흑백 인쇄용 · 베이플랜 카고플랜 베이상세 전부';
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -2889,22 +2889,35 @@ export const podColorMap = {
   'NLRTM': { bg: 'bg-zinc-500', text: 'text-zinc-50' },        // 로테르담
 };
 
-// ★ 3.1 (검수사 긴급 지시 2026-09-02) — 선박별 «목적지 강조»: ATPR 은 선적 플랜에서 WEIHAI(CNWEI) 컨을 따로 칠한다.
-//   검수사 원문: «ATPR 이선박만 선적 각종 플랜에서 WEIHAI 포트 컨테이너만 별도 색 표시가 필요 합니다» · «셀표시를 해주세요» ·
-//   «같은 엠티인데 포트가 구분이 안됩니다. 실을 별도로 달아야 하는데» — 위해행 엠티는 씰을 따로 다는데, 카고플랜은
-//   «칠은 풀에만»(2.38-01)이라 엠티끼리 목적지가 안 갈렸다(2640W: 엠티 361/366 · WEI 140·DLC 226).
-//   게이트 = 이 표 하나. 다른 배는 빈 집합이라 공용 경로에 배 이름이 안 들어간다(규범 §4-2).
-//   칠은 **노란 빗금**(줄무늬) — ①흑백 인쇄에서 «풀 칠(회색 190)»·흰 엠티와 구분되고 ②풀·특수화물 제 색 위에도 얹혀
-//   «풀이냐(칠)»·«무슨 화물이냐(색·글자)»를 안 잃는다. 화면 베이플랜·카고플랜·베이상세 셋이 이 한 벌을 본다.
-export const POD_HIGHLIGHT = { ATPR: ['CNWEI'] };
-export const POD_HL_STRIPES = 'repeating-linear-gradient(135deg, #fde047 0 4px, rgba(255,255,255,0) 4px 8px)';
-const _EMPTY_SET = new Set();
-export function podHighlightKeys(shipCode, mode) {
-  if (mode !== 'loading') return _EMPTY_SET;
-  const list = POD_HIGHLIGHT[String(shipCode || '').toUpperCase().trim()];
-  if (!list || !list.length) return _EMPTY_SET;
-  return new Set(list.map((p) => { const u = String(p).toUpperCase(); return u.length >= 5 ? u.slice(2, 5) : u.slice(0, 3); }));
+// ★ 3.2 (검수사 확정 2026-09-02) — 선적 플랜에서 **목적지(POD)별 무늬**. 3.1 의 ATPR 전용 노란 빗금을 이것이 흡수했다.
+//   왜: *«선적시 포트 구분이 안돼서 선적위치를 못잡는 경우 때문입니다»* — 조건 *«1. 흑백 레이저 프린터로 출력합니다.
+//   2. 컨 표기가 풀 엠티 특수화물 확실히 보여야 합니다»*. 그래서 색이 아니라 **검정 가는 선 무늬**다 — 모니터(컬러)와 인쇄(흑백)가
+//   똑같이 보이고, 칠(풀 하늘·특수화물 제 색, 2.38-01 흑백 회색 190)과 글자(e·E·F·DG·RF…)는 그대로 둔 채 무늬만 얹는다.
+//   규칙: 평택 선적분(getContainerColorKey 가 키를 주는 컨)만 대상 — 전체선적/일부선적 구분은 이것으로 자동 · **가장 많은 POD 는 무늬 없음**,
+//   나머지는 대수 순(동률이면 코드 순)으로 \\ → // → 가로 → 세로 → 점 · 여섯째부터는 무늬 없음(범례 «그 밖») · 통과화물·X·그림자 칸 제외.
+//   실측(2026-09-02, 300dpi 비율 시뮬): 다섯 무늬가 흑백에서 서로 갈리고 풀(회색)·엠티(흰)·글자 전부 살아남는다.
+export const POD_PATTERNS = [
+  { id: 'd135', name: '\\\\ 빗금', image: 'repeating-linear-gradient(135deg, #333 0 1px, transparent 1px 5px)', size: 'auto' },
+  { id: 'd45',  name: '// 빗금',  image: 'repeating-linear-gradient(45deg, #333 0 1px, transparent 1px 5px)',  size: 'auto' },
+  { id: 'horiz', name: '가로줄', image: 'repeating-linear-gradient(0deg, #333 0 1px, transparent 1px 5px)',   size: 'auto' },
+  { id: 'vert',  name: '세로줄', image: 'repeating-linear-gradient(90deg, #333 0 1px, transparent 1px 5px)',  size: 'auto' },
+  { id: 'dots',  name: '점',     image: 'radial-gradient(#333 0.9px, transparent 1.1px)',                      size: '5px 5px' },
+];
+const _NO_PAT = Object.freeze({});
+/** 항차의 선적분에서 POD 키(3자) → 무늬. 선적 모드가 아니거나 POD 가 하나뿐이면 빈 객체(무늬 없음). 최다 POD 는 들어가지 않는다. */
+export function buildPodPatternMap(containers, mode) {
+  if (mode !== 'loading' || !Array.isArray(containers) || !containers.length) return _NO_PAT;
+  const cnt = {};
+  for (const c of containers) { const k = getContainerColorKey(c, mode); if (k) cnt[k] = (cnt[k] || 0) + 1; }
+  const keys = Object.keys(cnt).sort((a, b) => (cnt[b] - cnt[a]) || (a < b ? -1 : a > b ? 1 : 0));
+  if (keys.length < 2) return _NO_PAT;
+  const out = {};
+  keys.slice(1, 1 + POD_PATTERNS.length).forEach((k, i) => { out[k] = { ...POD_PATTERNS[i], rank: i + 1, count: cnt[k] }; });
+  out.__top = { key: keys[0], count: cnt[keys[0]] };   // 범례용: 무늬 없는 최다 POD
+  out.__rest = keys.slice(1 + POD_PATTERNS.length);    // 범례용: 무늬 못 받은 «그 밖»
+  return out;
 }
+export function podPatternOf(map, key) { return (map && key && key !== '__top' && key !== '__rest' && map[key]) || null; }
 
 // 항구 코드 → 색깔 (3자/5자 모두 매핑)
 // 예: 'KRPTK' → 정확 매칭, 'PTK' → 끝 3자 매칭 (LOC+11이 3자만 줄 때)

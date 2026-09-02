@@ -18,7 +18,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { podHighlightKeys, POD_HL_STRIPES, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
+import { buildPodPatternMap, podPatternOf, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
@@ -221,8 +221,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, dictBayDef = null, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true, uniformCell = null }) {
-  const podHl = podHighlightKeys(voyageInfo?.vsl || String(voyageKey || '').split('_')[0], mode);   // 3.1: 선박별 목적지 강조(카고플랜과 같은 한 벌)
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, dictBayDef = null, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, podPat = {}, isPrintTarget = true, uniformCell = null }) {   // 3.2: podPat
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -486,8 +485,8 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     // 2.98-03: **베이상세는 `buildBayGrid` 를 써서 cell.oog 가 없다** — 컨 객체로 직접 판정한다.
     //   (2.98~2.98-02 가 안 보인 진짜 이유. buildBayMarks 를 쓰는 카고플랜과 경로가 다르다.)
     const og = _oogDir(c);
-    const hl = !!(podHl.size && colorKey && podHl.has(colorKey));   // 3.1: 위해행 빗금(카고플랜과 같은 한 벌)
-    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}`, ...(hl ? { style: { backgroundImage: POD_HL_STRIPES } } : {}) };   // V8.25-03: 카스피식 흰 배경
+    const _pat = podPatternOf(podPat, colorKey);   // 3.2: 목적지 무늬(카고플랜과 같은 한 벌)
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}${_pat ? ' cpv2-pat' : ''}`, ...(_pat ? { style: { backgroundImage: _pat.image, backgroundSize: _pat.size } } : {}) };   // V8.25-03: 카스피식 흰 배경
   };
 
   return (
@@ -623,6 +622,7 @@ export default function PrintableBayDetail({
 
   // M6.92.0: 공통 색 함수 — 양하=선사, 선적=POD (베이플랜/카고플랜과 동일)
   const colorMap = useMemo(() => buildContainerColorMap(containers || [], mode), [containers, mode]);
+  const podPat = useMemo(() => buildPodPatternMap(containers || [], mode), [containers, mode]);   // 3.2: 목적지 무늬 — 카고플랜과 같은 한 벌
 
   // M6.77 → M6.78: voyage 전체 deck/hold 별 row range
   const computedRowRange = useMemo(() => {
@@ -919,6 +919,7 @@ export default function PrintableBayDetail({
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 colorMap={colorMap}
+                podPat={podPat}
                 isPrintTarget={isPrintTarget.has(p.key)}
                 uniformCell={uniformCell}
                 dictShipMeta={dictShipMeta} />
