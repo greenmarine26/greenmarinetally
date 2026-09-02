@@ -8,12 +8,12 @@ import {
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
-, fbSubscribeLaneRoutes } from './firebase.js';
+, fbSubscribeLaneRoutes, fbSubscribeMirLexicon, fbWriteMirLexicon, fbLogMirMiss } from './firebase.js';   // 3.0: 미르 자체 학습 사전·결산 기록
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
 import { parseHash, exitApp } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6)
-import { setActivityUser, logActivity, logView } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
+import { setActivityUser, logActivity, logView, activityUserName } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
@@ -166,6 +166,23 @@ export default function App() {
         if (_c) window.__fbShipBayDict = JSON.parse(_c) || {};
       }
     } catch (e) { /* 캐시가 없으면 구독 도착까지 종전과 동일 — 조용한 실패 아님(아래 이벤트가 갱신을 보장) */ }
+    //  ★ 3.0 미르 자체 학습 — 배운 사전을 부팅 즉시 로컬 사본으로 채우고(오프라인·홀드 안), RTDB 구독으로 전 기기 동기화.
+    //    nlSearch 는 Firebase 를 모른다 — window.__mirLexicon(읽기) · window.__mirLexiconWrite(쓰기) 두 고리만 여기서 심는다.
+    try {
+      if (!window.__mirLexicon) { const _m = localStorage.getItem('gm_mir_lexicon'); window.__mirLexicon = _m ? (JSON.parse(_m) || {}) : {}; }
+    } catch (e) { window.__mirLexicon = window.__mirLexicon || {}; }
+    window.__mirLexiconWrite = (k, e) => { fbWriteMirLexicon(k, e).catch((err) => console.warn('[3.0 미르 학습] 사전 저장 실패', err)); };
+    const u8 = fbSubscribeMirLexicon((data) => {
+      window.__mirLexicon = data || {};
+      try { localStorage.setItem('gm_mir_lexicon', JSON.stringify(data || {})); } catch (e) { /* 용량 — 다음 구독에 다시 */ }
+    });
+    //  못 알아들은 말 — 세 화면 어디서 물어도 한 벌로 mir_misses/{날짜} 에 남긴다(결산은 클로드가 매일).
+    const _onMiss = (ev) => {
+      const d = (ev && ev.detail) || {};
+      fbLogMirMiss({ q: d.q, key: d.key, at: d.at, who: d.who || activityUserName(), mode: d.mode, voyageKey: d.voyageKey, route: (typeof location !== 'undefined' ? location.hash : '') })
+        .catch((err) => console.warn('[3.0 미르 학습] 미학습 기록 실패', err));
+    };
+    window.addEventListener('gm-mir-miss', _onMiss);
     const u5 = fbSubscribeShipBayDict(data => {
       window.__fbShipBayDict = data || {};
       try { window.dispatchEvent(new Event('gm-fbdict')); } catch (e) { /* 이벤트 미지원 브라우저 — 표시 갱신만 늦어진다 */ }
@@ -202,7 +219,7 @@ export default function App() {
       //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
       //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
-    return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); unsub2(); unsub3(); unsubDev(); };
+    return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); };
   }, []);
 
   useEffect(() => {

@@ -8,7 +8,9 @@ import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeong
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
-import { mirKnowledge } from './data/mirKnowledge.js';   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
+import { mirKnowledge } from './data/mirKnowledge.js';
+import { mirRewrite, mirLearnedDef, mirObserve } from './mirLearn.js';
+export { _mirReset } from './mirLearn.js';   // 연막검사용(기억 초기화)   // ★ 3.0: 미르 자체 학습 — 못 알아듣는 말만 사전으로 되쓰기·이어진 말에서 배우기   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
 import { HELP_DATA_CHIEF } from './data/helpDataChief.js';   // 2.30: 미르가 수석 권도 안다(가르치진 않고 «있다»고 알린다)
 
 // ─── 항구 코드 매핑 ───
@@ -618,8 +620,23 @@ export function parseNaturalQuery(text) {
       : ((!_howBusy && _howTail.test(t)) ? 'how' : null);
   }
 
+  //  ★ 3.0 미르 자체 학습 (검수사 «한번 답 못한 걸 다음에는 반복 안 하게») — **못 알아듣는 말일 때만** 배운 사전으로
+  //    되써서 한 번 더 읽는다. 알아듣는 말은 한 글자도 안 건드린다(폴백). 되쓴 결과도 못 알아들으면 원문 결과를 돌려준다.
+  //    실측 — «MCSC 카고플랜»(못 알아들음) → «MCSC 양하 카고플랜»(답함)이 세 번 반복됐다(activity_log 08-29).
+  if (!_mirDepth && !result.mirHello && !result.deviceCmd && !result.asking && !hasAnyCondition(result)) {
+    const _rw = mirRewrite(text);
+    if (_rw && _rw !== String(text)) {
+      _mirDepth = 1;
+      let r2 = null;
+      try { r2 = parseNaturalQuery(_rw); } finally { _mirDepth = 0; }
+      if (r2 && (r2.asking || r2.mirHello || r2.deviceCmd || hasAnyCondition(r2))) { r2._learnedFrom = String(text); r2._raw0 = String(text); return r2; }
+    }
+    const _def = mirLearnedDef(text);
+    if (_def) { result.asking = 'def'; result._learnedDef = _def; }
+  }
   return result;
 }
+let _mirDepth = 0;   // 되쓰기 재귀 가드(A→B, B→A)
 
 // ─── 필터 적용 ───
 export function applyNLFilter(containers, parsed) {
@@ -1151,8 +1168,9 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   //   화면(통합검색·작업창)만 뜻이 나오고 양하·선적 탭은 «FR이 뭐야»에 위치를 답했다(검수사 실측).
   //   본체에 넣으면 세 화면이 자동으로 같은 답을 낸다 — 화법 규칙 4 «어디서 물어도 같은 답».
   if (parsed.asking === 'def') {
-    let d = null;
-    try { d = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.57] 실무지식 답안지 실패:', e); }
+    let d = parsed._learnedDef || null;   // 3.0: 클로드가 결산으로 써 준 뜻풀이(mir_lexicon def)가 먼저 — 없으면 종전 답안지
+    if (!d) { try { d = mirLearnedDef(parsed._raw || ''); } catch (e) { d = null; } }
+    if (!d) { try { d = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.57] 실무지식 답안지 실패:', e); } }
     if (!d) { try { d = generateHowToAnswer(parsed._raw || '', parsed); } catch (e) { console.warn('[2.57] 용어집 답안지 실패:', e); } }
     if (d) {
       //  ★ 2.58 전문가 화법 — 정의에 «지금 이 화면 현황» 한 줄을 얹는다(검수사 «전문지식을 갖고 있는데
@@ -3208,7 +3226,17 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
     allContainers = allContainers.map(_wear);
     if (Array.isArray(results)) results = results.map(_wear);
   }
-  const out = _localAnswerCore(parsed, results, allContainers, ctx);
+  let out = _localAnswerCore(parsed, results, allContainers, ctx);
+  //  ★ 3.0 미르 자체 학습 — 내보내는 문 하나에서 «알아들었나»를 보고, 못 알아들은 말은 기억·기록하고,
+  //    이어진 말이 답을 얻으면 앞말을 배운다(mirLearn.mirObserve). 배우면 답 끝에 한 줄 붙인다.
+  try {
+    const _understood = !!(parsed && (parsed.mirHello || parsed.deviceCmd || parsed.asking || hasAnyCondition(parsed)));
+    const _missed = !_understood || /못 배웠습니다/.test(String(out || ''));
+    const _q0 = (parsed && (parsed._raw0 || parsed._raw)) || '';
+    const _note = mirObserve(_q0, _missed, { who: (ctx && (ctx.who || ctx.inspector)) || '', mode: (ctx && ctx.mode) || '', voyageKey: (ctx && (ctx.voyageKey || (ctx.info && ctx.info.key))) || '' });
+    if (_note && typeof out === 'string') out = out + '\n' + _note;
+    else if (_note && !out) out = _note;
+  } catch (e) { console.warn('[3.0 미르 학습] 관찰 실패', e); }
   if (!out || typeof out !== 'string') return out;
   //  위치를 묻는 갈래에서만 본다 — 대수·온도 질문에까지 붙이면 잔소리가 된다.
   const asksPos = !!(parsed && (parsed.posQuery || parsed.digits || parsed.listQuery || parsed.bayDistQuery));

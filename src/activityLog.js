@@ -8,6 +8,7 @@
 
 // ── 현재 검수원 — App(로그인·로그아웃 지점)이 주입한다. 미로그인이면 기록하지 않는다 ──
 let _user = '';
+export function activityUserName() { return _user; }   // 3.0: 미르 학습 기록에 «누가»를 싣는다
 export function setActivityUser(name) {
   _user = String(name || '').trim();
 }

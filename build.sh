@@ -88,8 +88,9 @@ if [ -n "$APPVER" ]; then
   # 2.99-03: 변경 내용 한 줄(APP_NOTE)도 sw.js NOTE 로 — 업데이트 배너가 «무엇이 바뀌었는지» 보여 준다(검수사 요청).
   APPNOTE=$(grep -E "^export const APP_NOTE" src/utils.js | sed -E "s/.*=\s*'([^']*)'.*/\1/")
   if [ -n "$APPNOTE" ]; then
-    sed -i "s|^const NOTE = '.*';.*|const NOTE = '$APPNOTE';   // build.sh 가 utils APP_NOTE 로 채운다|" public/sw.js
-    grep -q "^const NOTE = '$APPNOTE';" public/sw.js && echo "✓ sw.js NOTE → $APPNOTE" || { echo "✗ sw.js NOTE 동기화 실패 — 배포 금지"; exit 1; }
+    #  ⚠ LC_ALL=C — C.UTF-8 로케일의 sed 가 한글·«—» 가 든 줄에서 '.*' 를 못 맞춰 조용히 안 바꾼다(3.0 빌드 실측). grep 은 -F 로 문자 그대로.
+    LC_ALL=C sed -i "s|^const NOTE = '.*';.*|const NOTE = '$APPNOTE';   // build.sh 가 utils APP_NOTE 로 채운다|" public/sw.js
+    LC_ALL=C grep -qF "const NOTE = '$APPNOTE';" public/sw.js && echo "✓ sw.js NOTE → $APPNOTE" || { echo "✗ sw.js NOTE 동기화 실패 — 배포 금지"; exit 1; }
   fi
   # 콘앱 화면 버전 라벨도 동기화 — 라벨로 신/구버전 구분 가능하게.
   #   (이전: 코드는 고쳐도 라벨이 V7.01로 박혀 업데이트 여부를 화면에서 알 수 없었음)
@@ -493,6 +494,8 @@ fi
     #  2.55: **두 숫자** — 대수를 물으면 실제(터미널)와 앱 기록이 둘 다 나오는가.
     #    같은 번들을 쓴다. 가로채지 않는 것까지 잰다(겹을 넓히는 판은 그쪽이 더 위험하다).
     node tools/smoke_bothcounts.cjs "$SMOKE_NS" || { echo "✗ 두 숫자 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.0: 미르 자체 학습 — 같은 번들로 실측 순서(못 알아들음→배움→답함)·일반화·무관 짝 거절·뜻풀이·재귀 가드를 잰다.
+    node tools/smoke_mirlearn.cjs "$SMOKE_NS" || { echo "✗ 미르 자체 학습 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.57: **미르 화법 시험지** — 뜻/위치/개수 갈래·요약+후속·가로채기 0·모른다 고백·세 화면 배선.
     #    검수사 지시 «가르치고 시험하고 보강하고 재시험» — 이 시험이 매 빌드 그 반복을 강제한다.
     node tools/smoke_mirspeak.cjs "$SMOKE_NS" "$(pwd)" || { echo "✗ 미르 화법 시험 실패 — 배포 금지"; exit 1; }

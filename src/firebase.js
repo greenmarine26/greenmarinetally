@@ -3304,6 +3304,30 @@ export function fbSubscribeProcessDone(key, callback) {
 //   memo = { text, inspector, route, voyageKey, mode, appVersion, at, status:'new' }
 
 // 메모 1건 저장 — 실패는 상위로 던진다. 호출부(ClaudeMemoModal)가 오프라인 큐로 보관한다.
+//  ★ 3.0 미르 자체 학습 (TASK-2026-012) — 사전 mir_lexicon 구독·쓰기, 못 알아들은 말 mir_misses/{날짜} 기록.
+//    검수사 «한번 답 못한 걸 다음에는 반복 안 하게» · «하루를 결산해서 미르가 답 못한 걸 모아서 클로드가 알려주는 것».
+export function fbSubscribeMirLexicon(callback) {
+  const r = ref(db, 'mir_lexicon');
+  const handler = onValue(r, (snap) => { callback(snap.exists() ? (snap.val() || {}) : {}); });
+  return () => off(r, 'value', handler);
+}
+export async function fbWriteMirLexicon(key, entry) {
+  const k = String(key || '').replace(/[.#$/[\]]/g, '_').trim();
+  if (!k || !entry) return false;
+  await set(ref(db, `mir_lexicon/${k}`), { ...entry, at: entry.at || Date.now() });
+  return true;
+}
+export async function fbLogMirMiss(rec) {
+  if (!rec || !rec.q) return false;
+  const d = new Date(rec.at || Date.now());
+  const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const r = push(ref(db, `mir_misses/${day}`));
+  const payload = {};
+  for (const [k, v] of Object.entries(rec)) { if (v !== undefined && v !== null && v !== '') payload[k] = v; }
+  await set(r, { ...payload, at: rec.at || Date.now() });
+  return true;
+}
+
 export async function fbAddClaudeMemo(memo) {
   const r = push(ref(db, 'claude_inbox'));
   await set(r, { status: 'new', at: Date.now(), ...memo });
