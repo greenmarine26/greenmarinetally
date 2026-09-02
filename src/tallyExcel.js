@@ -1218,8 +1218,16 @@ function _download(buf, fname) {
    ★ 둘째 줄부터 선박명·입항일자·MRN·터미널은 **`"` 한 글자**다.
      검수사 확답 — *«이건 위와 아래가 같다는 표시 입니다»*. 빈칸이 아니다.
    ══════════════════════════════════════════════════════════ */
-const XRAY_FONT = { name: '굴림', size: 10 };
+const XRAY_FONT = { name: '굴림체', size: 10 };
 const DITTO = '"';   // 위와 같음 — 검수사 표기
+/*  ★ 2.99-02 기본 양식 — 검수사 확정 2026-09-02 (샘플 XRAY리스트_OCEANBLUEWHALE_2729E 「샘플」 실측):
+      *«샘플양식처럼 선과 중앙정렬 굴림체 10포인트를 기본양식으로 정해 주세요
+        일일이 다시 정렬하고 글꼴수정하고 선을 다시 그리지 않게»*
+    첫 장(XRAY) 표 전체 = 굴림체 10 · 가로세로 가운데 · 네 변 가는 실선. 머리 줄도 굵게 안 한다(샘플 그대로).
+    종전(2.41)은 폰트만 넣고 정렬·테두리가 없어 검수사가 받을 때마다 손으로 다시 그렸다. */
+const XRAY_ALIGN = { horizontal: 'center', vertical: 'middle' };
+const XRAY_BORDER = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+function _xrayStyle(cell) { cell.font = XRAY_FONT; cell.alignment = XRAY_ALIGN; cell.border = XRAY_BORDER; }
 
 export async function generateXrayExcel(rows, head = {}, opts = {}) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
@@ -1230,7 +1238,7 @@ export async function generateXrayExcel(rows, head = {}, opts = {}) {
                 { width: 9 }, { width: 15 }, { width: 12 }, { width: 10 }];
 
   const HD = ['No.', '선박명', '입항일자', 'MRN', '터미널', '컨테이너번호', '봉인번호', '봉인자'];
-  HD.forEach((v, i) => { const c = ws.getRow(1).getCell(i + 1); c.value = v; c.font = XRAY_FONT; });
+  HD.forEach((v, i) => { const c = ws.getRow(1).getCell(i + 1); c.value = v; _xrayStyle(c); });
 
   (rows || []).forEach((r, i) => {
     const first = i === 0;
@@ -1240,7 +1248,7 @@ export async function generateXrayExcel(rows, head = {}, opts = {}) {
                   first ? (head.mrn || '') : DITTO,
                   first ? (head.pier || '') : DITTO,
                   r.cn || '', r.cSeal || '', r.sealer || ''];
-    vals.forEach((v, c) => { const cell = ws.getRow(i + 2).getCell(c + 1); cell.value = v; cell.font = XRAY_FONT; });
+    vals.forEach((v, c) => { const cell = ws.getRow(i + 2).getCell(c + 1); cell.value = v; _xrayStyle(cell); });
   });
 
   /*  ── 둘째 장 「상세」 ──────────────────────────────────────

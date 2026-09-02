@@ -382,6 +382,8 @@ node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검�
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
+#  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.
+node tools/smoke_xrayxlsx.cjs || { echo "✗ X-RAY 엑셀 양식 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_progress.cjs || { echo "✗ 작업량 고정(2.89-07) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_markfont.cjs || { echo "✗ 카고플랜 글자(2.89-08) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_list6.cjs || { echo "✗ 목록 기본 6개 연막검사 실패 — 배포 금지"; exit 1; }
