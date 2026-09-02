@@ -189,3 +189,6 @@ svg.lucide {
   font-size: 11px; line-height: 1; white-space: nowrap; flex-shrink: 0;
 }
 @media (min-width: 640px) { .bdg { height: 20px; padding: 0 6px; font-size: 10px; gap: 2px; } }
+
+/* 3.1: 선박별 목적지 강조 — ATPR 위해(WEI)행 셀 노란 빗금(utils.podHighlightKeys 한 벌, 카고플랜 인쇄는 POD_HL_STRIPES 인라인) */
+.cell-podhl { background-color: #fff; background-image: repeating-linear-gradient(135deg, #fde047 0 5px, #ffffff 5px 10px); }

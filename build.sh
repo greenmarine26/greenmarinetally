@@ -263,6 +263,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ BayPlan 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  # 3.1: 선박별 목적지 강조(ATPR 위해행 빗금) — 실데이터(ATPR 2640W EDI 366)로 카고플랜·베이플랜·베이상세를 그려 WEI 140 과 맞는지 센다.
+  SMOKE_HL=$(mktemp /tmp/_smokehl_XXXXXX.js)
+  if npx esbuild tools/smoke_podhl.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --outfile="$SMOKE_HL" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_podhl.cjs "$SMOKE_HL" || { echo "✗ 위해행 빗금 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "✗ 위해행 빗금 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+  fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.

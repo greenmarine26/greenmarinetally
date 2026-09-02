@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podHighlightKeys } from '../utils.js';   // 3.1: 선박별 목적지 강조   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -441,6 +441,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
+  // 3.1: 선박별 목적지 강조(ATPR 위해행) — 표에 없는 배는 빈 집합
+  const podHl = useMemo(() => podHighlightKeys(_vslCode || voyageInfo?.vsl || String(voyageKey || '').split('_')[0], mode), [_vslCode, voyageInfo?.vsl, voyageKey, mode]);
 
   // V7.32: 셀 배경색 폐지 — XRAY/선사 배경색이 보라 계열로 겹쳐 혼동(양하 중단 유발).
   //   약속: 셀 배경색은 XRAY 전용. 선사는 글자색(opLabel 색)으로 구분. (cellColor/opColor로 이동)
@@ -482,6 +484,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
          표본 MRKU4002140 — 26/04/02 에서 내려 26/02/82 에 다시 실린다.
        그러니 모드를 가리지 않고 같은 컨번호로 칠하면 양쪽이 맞는다. */
     if (restowMap && restowMap[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
+    // 3.1: 선박별 목적지 강조 — 완료·XRAY·시프팅 표시는 그대로 두고, 그 밖의 위해행 셀만 노란 빗금.
+    if (podHl.size && podHl.has(getContainerColorKey(c, mode))) return 'cell-podhl text-ink-950 border-yellow-500 ring-1 ring-yellow-400';
     const isOurContainer = isPtk(c) || (!!c.cn && dischargeCns.has(c.cn));   // V9.39: undefined 오염 차단
     if (isOurContainer) return 'bg-white text-ink-950 border-line-strong';
     return 'bg-slate-50 text-dim-300 border-slate-200';
@@ -817,6 +821,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           <span className="text-red-400 font-bold">★ 붉은별 = X-RAY</span>
           <Legend color="bg-orange-400" label="시프팅"/>
           <Legend color="bg-emerald-200" label="✔ 완료"/>
+          {podHl.size > 0 && <span className="flex items-center gap-1"><span className="cell-podhl w-3 h-3 inline-block rounded-sm border border-yellow-500"/><span className="text-yellow-300 font-bold">노란 빗금 = 위해(WEI)행 — 씰 따로</span></span>}
           <span className="text-dim-400 font-bold">검정 글자 = 비평택</span>
           {/* TallyOne 1.29: 빈 자리와 '배에 칸이 없는 곳'을 눈으로 가른다 */}
           <Legend color="bg-slate-100" label="빈 자리 (아직 안 실림)"/>

@@ -13,7 +13,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
+import { podHighlightKeys, POD_HL_STRIPES, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
@@ -94,6 +94,7 @@ const SPECIAL_FILL = {
   'OT': '#d8aae0',   // 오픈탑/OOG = 보라 계열 (2.98-10: 키를 'A'→'OT' 로. cell.mark 로 조회하므로 글자와 같아야 한다)
   'TK': '#ffb445',   // 탱크 = 주황 계열
 };
+const _NO_HL = new Set();          // 3.1: 강조 없음(기본값)
 const PLAIN_FULL_BG = '#7dd3fc';   // 일반 풀 = 하늘색
 const MARK_FG = '#000';            // 글자는 전부 진한 검정 (검수사 확정)
 
@@ -325,7 +326,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra, fixedCellVar = null }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra, fixedCellVar = null, podHl = _NO_HL }) {   // 3.1: podHl — 선박별 목적지 강조(빈 집합이면 종전 그대로)
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -438,6 +439,12 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
                         : { color: MARK_FG };
                     }
+                    if (podHl.size && cell.colorKey && podHl.has(cell.colorKey) && !cell.isShadow20 && !cell.isThrough && cell.mark !== 'X') {
+                      // 3.1: 위해행 빗금 — 풀 칠·특수색 위에도 얹힌다. X(옆 40피트 자리)는 2.38-01 대로 안 칠한다.
+                      //   감사 지적: 단축(background)과 롱핸드(backgroundImage)를 섞으면 재렌더에서 빗금이 지워진다 — 칠은 backgroundColor 로.
+                      const { background: _fill, ...rest } = style || {};
+                      style = { ...rest, ...(_fill ? { backgroundColor: _fill } : {}), backgroundImage: POD_HL_STRIPES };
+                    }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
                       <span
@@ -523,6 +530,12 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = cell.isFull
                         ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
                         : { color: MARK_FG };
+                    }
+                    if (podHl.size && cell.colorKey && podHl.has(cell.colorKey) && !cell.isShadow20 && !cell.isThrough && cell.mark !== 'X') {
+                      // 3.1: 위해행 빗금 — 풀 칠·특수색 위에도 얹힌다. X(옆 40피트 자리)는 2.38-01 대로 안 칠한다.
+                      //   감사 지적: 단축(background)과 롱핸드(backgroundImage)를 섞으면 재렌더에서 빗금이 지워진다 — 칠은 backgroundColor 로.
+                      const { background: _fill, ...rest } = style || {};
+                      style = { ...rest, ...(_fill ? { backgroundColor: _fill } : {}), backgroundImage: POD_HL_STRIPES };
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -866,6 +879,8 @@ export default function PrintableCargoPlanV2({
   // M6.92.0: 공통 색 함수 (utils.js) 사용 — 베이플랜/카고플랜/베이상세 통일
   const colorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
   const getColorKey = (c) => getContainerColorKey(c, mode);
+  // 3.1: 선박별 목적지 강조(ATPR 위해행) — 셀 colorKey(POD 3자)가 표에 있으면 노란 빗금을 얹는다. 표에 없는 배는 빈 집합.
+  const podHl = useMemo(() => podHighlightKeys(dictData?.code || voyageInfo?.vsl || '', mode), [dictData?.code, voyageInfo?.vsl, mode]);
   // M6.86.8.14: 통과화물 판정 — 양하 mode에서 c.pod가 PTK 아니면 통과, 선적은 c.pol이 PTK 아니면 통과
   const getIsThrough = (c) => !matchPodC(c);
 
@@ -1147,7 +1162,7 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
-          <div className="col" style={{ fontSize: 8, color: '#555' }}>칠한 칸=풀(하늘색=일반, 특수화물은 제 색) · 안 칠한 칸=엠티 · e=20ft·E=40ft · X=옆 40ft가 차지 · 회색=통과{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
+          <div className="col" style={{ fontSize: 8, color: '#555' }}>칠한 칸=풀(하늘색=일반, 특수화물은 제 색) · 안 칠한 칸=엠티{podHl.size > 0 ? ' · 노란 빗금=위해(WEI)행(씰 따로)' : ''} · e=20ft·E=40ft · X=옆 40ft가 차지 · 회색=통과{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
           {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.
               시프팅이 0이면 종전대로 대수만(없는 줄을 만들지 않는다). */}
           <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }}>
@@ -1234,7 +1249,7 @@ export default function PrintableCargoPlanV2({
             //   3칸 이상은 지금 배분에서는 안 나오지만, 배분이 바뀌어도 알아서 펼쳐지게 미리 받아 둔다.
             if (emptySlots >= 1) {
               const legend1 = (
-                <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']}
+                <Legend podHl={podHl} title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']}
                   rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
               );
               const legend2 = (
@@ -1282,9 +1297,9 @@ export default function PrintableCargoPlanV2({
                 const pairData = renderDataMap[box.pairKey];
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} fixedCellVar="--cpw" applyHatch={false} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} podHl={podHl} gridCols={globalMaxCols} fixedCellVar="--cpw" applyHatch={false} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} fixedCellVar="--cpw" applyHatch={true} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} podHl={podHl} gridCols={globalMaxCols} fixedCellVar="--cpw" applyHatch={true} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                   </div>
                 );
               } else {
@@ -1292,7 +1307,7 @@ export default function PrintableCargoPlanV2({
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} fixedCellVar="--cpw" globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
+                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} podHl={podHl} gridCols={globalMaxCols} fixedCellVar="--cpw" globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     </div>
                     <div className="cpv2-empty-half">
                       {bi === leg3InBoxBi && (
@@ -1351,7 +1366,7 @@ function FeLegend({ fe }) {
 }
 
 // 별첨 렌더링 (선사별 / 화물 종류별)
-function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
+function Legend({ title, headers, rows, totalRow, kind, colorMap = {}, podHl = _NO_HL }) {   // 3.1
   const cargoColors = {
     '일반': { bg: PLAIN_FULL_BG, fg: MARK_FG, mark: 'o' },   // 2.38-01: 일반 풀 = 하늘색 (그림과 같은 값)
     'Reefer': { bg: SPECIAL_FILL['RF'], fg: MARK_FG, mark: 'RF' },   // 2.98-10: 그림이 RF 라 범례도 RF
@@ -1406,7 +1421,8 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
             } else if (useColorMap) {
               const bg = colorMap[name];
               // M6.94.23: 본문이 텍스트 색이므로 범례 견본도 색 글자 ■로 통일
-              markCell = <td className="cpv2-legend-mark" style={bg ? { color: bg } : undefined}>{bg ? '■' : ''}</td>;
+              // 3.1: 강조 목적지(위해)는 본문과 같은 노란 빗금 견본
+              markCell = <td className="cpv2-legend-mark" style={podHl.size && podHl.has(name) ? { backgroundImage: POD_HL_STRIPES, color: bg || '#000' } : (bg ? { color: bg } : undefined)}>{bg ? '■' : ''}</td>;
             }
             return (
               <tr key={name}>

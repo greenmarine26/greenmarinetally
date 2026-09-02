@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.0-01';
-const NOTE = 'SMC YANTAI 선박코드를 터미널대로 SMYA로 정정(선사 RZF·항로 RZPT) · RZOR 대체 카페리로 주야 구분 없음';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.1';
+const NOTE = 'ATPR 선적 플랜에서 위해(WEI)행 컨테이너를 노란 빗금으로 표시 · 베이플랜 카고플랜 베이상세 전부';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
