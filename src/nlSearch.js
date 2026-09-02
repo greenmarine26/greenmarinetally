@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -2404,13 +2404,28 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 export function twOfCtx(ctx) {
   if (!ctx) return null;
   if (ctx.tw && typeof ctx.tw === 'object') return ctx.tw;   // 두 갈래 함수는 레코드를 직접 넘긴다
-  const tws = ctx.terminalWork;
-  if (!tws || typeof tws !== 'object') return null;
   const info = ctx.info || {};
-  const a = String(ctx.vsl || info.vsl || '').toUpperCase();
-  const b = String(ctx.vslFull || info.vslFull || '').toUpperCase();
-  const tw = (a && tws[a]) || (b && tws[b]) || null;
-  return (tw && typeof tw === 'object') ? tw : null;
+  return terminalWorkFor({ ...info, vsl: ctx.vsl || info.vsl, vslFull: ctx.vslFull || info.vslFull }, ctx.terminalWork);
+}
+
+//  ★ 2.99-01 (BUG-2026-008) — 터미널 실적은 **작업 시작 시점부터만** 쓴다. 찾기 + 문지기 한 벌.
+//    검수사 — *«터미널 실적은 작업시작시점부터 적용하게 해주세요. 작업도 안했는데 실적이 보일리가 없으니»*
+//    🔴 실측 09-02 08:30 OBWH 2729E(11:30 예정, 시작 전) 브리핑 — `terminal_work/OBWH` 는 **지난 기항 2727E**
+//      (08-31 20:46 갱신, 양하 278/278)인데 선박 코드로만 찾아 붙였고, 앱 기록 0/260 과 견줘
+//      «278대는 실제로 작업했는데 앱에 안 찍혔습니다 (주간조 앱 미사용)» 로 나갔다. 검수사 — *«278대 앱 미입력은 어디서 나온 자료인가요?»*
+//    트레드링스 피드에는 항차 번호가 없다(voySeq 는 터미널 순번) ⇒ **피드 갱신 시각이 이 항차 시작보다 앞이면 지난 기항 것**이다.
+//    ⚠ 배가 일찍 시작해 planDate 전에 실적이 붙으면 planDate 까지 안 보인다 — 틀릴 거면 늦게 틀리는 쪽(isWorkingNow 와 같은 원칙).
+//    ⚠ 시작 시각을 모르는 항차(planDate 없음)는 문지기를 안 세운다(종전 그대로).
+export function terminalWorkFor(info, terminalWork) {
+  if (!info || !terminalWork || typeof terminalWork !== 'object') return null;
+  const a = String(info.vsl || '').toUpperCase();
+  const b = String(info.vslFull || '').toUpperCase();
+  const tw = (a && terminalWork[a]) || (b && terminalWork[b]) || null;
+  if (!tw || typeof tw !== 'object') return null;
+  const st = voyageWorkStartMs({ info });
+  if (st === -1) return null;                                       // 터미널이 «아직 시작 안 함» — 실적이 있을 리 없다
+  if (st > 0 && (Number(tw.updatedAt) || 0) < st) return null;     // 이 항차 시작 전에 갱신된 피드 = 지난 기항 실적
+  return tw;
 }
 
 //  두 숫자 블록을 줄 배열로 낸다. 낼 것이 없으면 null (있는 척하지 않는다).
@@ -2567,8 +2582,7 @@ export function workMinutesBetween(aMs, bMs, pier) {
 //    «아직 시작 전이에요» 라고 답했다**(2.54 라이브 실측). 절반만 고친 것이었다.
 //  ⇒ 계산을 여기로 옮겨 **양쪽이 같은 한 벌을 쓴다.** 판정을 두 벌로 만들면 반드시 갈린다.
 export function speedFromTerminal(info, terminalWork) {
-  const code = String(info.vsl || '').toUpperCase();
-  const tw = terminalWork && (terminalWork[code] || terminalWork[String(info.vslFull || '').toUpperCase()]);
+  const tw = terminalWorkFor(info || {}, terminalWork);            // 2.99-01: 작업 시작 전·지난 기항 피드는 안 쓴다(BUG-2026-008)
   if (!tw || typeof tw !== 'object') return null;
   const st = _tsOf(tw.startAt);
   if (!st) return null;                                   // 시작 시각이 없으면 잴 수가 없다
@@ -2628,7 +2642,7 @@ function formatEta(parsed, allContainers, ctx) {
   //    ⚠ 실측으로 이 자리에서 걸렸다 — 완료 67대인 STSE 가 «아직 시작 전이에요» 라고 답했다.
   //      (양하 탭 검색바는 answerShipSpeed 를 안 부르고 여기로 온다 — 경로가 셋이다.)
   try {
-    const _T = speedFromTerminal({ vsl: ctx?.vsl, vslFull: ctx?.vslFull, pier: ctx?.pier }, ctx?.terminalWork);
+    const _T = speedFromTerminal({ ...(ctx?.info || {}), vsl: ctx?.vsl, vslFull: ctx?.vslFull, pier: ctx?.pier }, ctx?.terminalWork);   // 2.99-01: planDate·workStartAt 도 넘겨야 문지기가 선다
     if (_T) {
       const wh = Math.floor(_T.workedMin / 60), wm = _T.workedMin % 60;
       const head = `터미널 실적으로 보면 지금까지 ${_T.done}대 했어요 — 실작업 ${wh}시간${wm ? ' ' + wm + '분' : ''}(쉬는 시간 뺀 것).`;

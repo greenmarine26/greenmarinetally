@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.99'   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
+export const APP_VERSION = 'TallyOne 2.99-01'   // 2.99-01 터미널 실적은 작업 시작 시점부터만 — 지난 기항 트레드링스 피드(OBWH 2727E 278/278)가 2729E 브리핑에 «278대 앱 미입력»으로 붙던 것(BUG-2026-008)   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4979,6 +4979,16 @@ export function isWorkingNow(voyage, now = Date.now()) {
   const s = voyagePlanMs(voyage);
   if (!s) return true;
   return now >= s;
+}
+
+/** ★ 항차 작업 시작 시각(ms) — 터미널 실적을 «작업 시작 시점부터» 적용하는 문지기 (2.99-01, BUG-2026-008).
+ *  검수사 2026-09-02 — *«터미널 실적은 작업시작시점부터 적용하게 해주세요. 작업도 안했는데 실적이 보일리가 없으니»*
+ *  `workStartAt` 이 문자열로 있으면 그것(빈칸이면 -1 = 터미널이 «아직 시작 안 함»이라고 적어 준 것 — isWorkingNow ② 와 같은 뜻),
+ *  없으면 planDate 앞부분. 둘 다 없으면 0(모름 — 문지기를 세우지 않는다). */
+export function voyageWorkStartMs(voyage) {
+  const info = voyage?.info || {};
+  if (typeof info.workStartAt === 'string') return _dtMs(info.workStartAt) || -1;
+  return voyagePlanMs(voyage);
 }
 
 /** '2026-08-25 13:05' · '2026-08-25T13:05' → ms. 못 읽으면 0. */

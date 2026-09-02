@@ -4,7 +4,7 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled} from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
@@ -100,7 +100,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         //  ★ 2.66-01 (검수사 «이유는 다른선박에 실릴때 컨번호 중복이 일어납니다»):
         //    전량 캔슬된 쪽 컨은 **검색에서도 빠져야 한다**. 그 컨들은 다른 배에 실리므로
         //    남겨 두면 끝 4자리 조회에 두 배가 걸린다 — 검수사가 현장에서 엉뚱한 배를 본다.
-        if (sideCancelled(v.info, mode, (terminalWork || {})[String(v.info?.vsl || '').toUpperCase()] || null)) return;
+        if (sideCancelled(v.info, mode, terminalWorkFor(v.info, terminalWork))) return;
         const ediMap = sec.ediContainers || {};
         const recMap = sec.records || {};
         const xrayMap = sec.xrayList || {};
@@ -397,7 +397,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         && !/자료/.test(debouncedQuery)) {
       const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
       // ★ 2.55: 항차 화면(SearchPanel)과 **같은 벌** — 어느 갈래로 가든 두 숫자가 다 나온다.
-      const _tw = (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()] || null;
+      const _tw = terminalWorkFor(shipCtx.info, terminalWork);
       const _pool = flat.filter((c) => c.voyageKey === shipCtx.key);
       const _md = _pool.some((c) => c._mode === 'loading') && !_pool.some((c) => c._mode !== 'loading') ? 'loading' : 'discharge';
       if (isRealtimeProgressQuery(debouncedQuery)) {
@@ -464,7 +464,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         if (isFirstQ) return answerFirstStart(_voy, _bayDef, _ship);
         if (isXrayShiftQ) return answerXrayShifts(_voy, _bayDef, { shipName: _ship, pier: shipCtx.info.pier });
         if (isShiftBriefQ) return answerShiftBriefing(_voy, _bayDef, { shipName: _ship, voyages });
-        if (p.gangQuery) { try { const _a = answerGangShift(_voy, _bayDef, { nGangs: p.gangQuery.n || null, tw: (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null }); if (_a) return `${_ship}\n` + _a; } catch (e) { /* 아래로 */ } }   // 2.62
+        if (p.gangQuery) { try { const _a = answerGangShift(_voy, _bayDef, { nGangs: p.gangQuery.n || null, tw: terminalWorkFor(shipCtx.info, terminalWork) }); if (_a) return `${_ship}\n` + _a; } catch (e) { /* 아래로 */ } }   // 2.62
       }
     }
     // ★ 2.57-02 (검수사 시험 «두 곳에서 FR을 물었습니다. 답이 같았습니까?» — 달랐다):
@@ -532,7 +532,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         if (pm.pier || pm.berth) L.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
         if (pm.nextPort) L.push(`다음 항구: ${pm.nextPort}`);
         // 1.68-01: 터미널 ETD가 PORT-MIS와 다르면 병기 — 실측: STSE 출항이 21:00 신고 후 12:00으로 당겨졌는데 터미널 피드에만 있었다.
-        const _tw = (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()];
+        const _tw = terminalWorkFor(shipCtx.info, terminalWork);
         if (_tw?.depEtd && String(_tw.depEtd).slice(0, 16) !== String(pm.etd || '').slice(0, 16))
           L.push(`⚠ 터미널 기준 출항 ${String(_tw.depEtd).slice(5, 16)} — 신고(${f(pm.etd) || '?'})와 다릅니다`);
         return L.join('\n');
@@ -586,7 +586,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
           if (wantMode && mode !== wantMode) continue;
           const arr = mine.filter((c) => c._mode === mode);
           if (!arr.length) continue;
-          try { const _gde = (() => { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(shipCtx.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; })(); const _gtw = (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null; const _gg = (() => { try { return gangBriefLines(buildGangShift(shipCtx.v, _gde, { tw: _gtw })); } catch (e) { return null; } })(); parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: _gtw, gang: _gg, cancelled: sideCancelled(shipCtx.info || shipCtx.v?.info, mode, _gtw) })); } catch (e) { /* 폴백 아래로 */ }
+          try { const _gde = (() => { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(shipCtx.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; })(); const _gtw = terminalWorkFor(shipCtx.info, terminalWork); const _gg = (() => { try { return gangBriefLines(buildGangShift(shipCtx.v, _gde, { tw: _gtw })); } catch (e) { return null; } })(); parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: _gtw, gang: _gg, cancelled: sideCancelled(shipCtx.info || shipCtx.v?.info, mode, _gtw) })); } catch (e) { /* 폴백 아래로 */ }
         }
         if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
       }

@@ -132,5 +132,48 @@ for (const q of ['얼마나 남았어', '남은 갯수', '몇 대 남았어']) {
   T(/실제\(터미널\) 0대 \/ 456대/.test(s), '⛔ 선적인데 양하 수(181/449)를 낸다');
 }
 
+// ── ⑨ 2.99-01 (BUG-2026-008) 터미널 실적은 **작업 시작 시점부터만** ───────────────
+//   실측 09-02 OBWH 2729E(11:30 예정, 시작 전) — terminal_work/OBWH 는 지난 기항 2727E(08-31 20:46 갱신, 278/278).
+//   선박 코드로만 찾아 «278대는 실제로 작업했는데 앱에 안 찍혔습니다» 가 나갔다. 검수사 — «작업도 안 했는데 실적이 보일 리가 없으니».
+{
+  const fmt = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const now = Date.now();
+  const stale = { startAt: fmt(now - 46 * 3600000), updatedAt: now - 40 * 3600000, disDone: 278, disPlan: 278, lodDone: 108, lodPlan: 144, voySeq: '101' };
+  const pool = conts.slice(0, 260).map((c) => ({ ...c, _comp: null }));
+  const mk = (info) => ({ terminalWork: { OBWH: stale }, vsl: 'OBWH', vslFull: 'OCEAN BRIDGE WH', pier: 'PCTC', info: { vsl: 'OBWH', ...info }, mode: 'discharge' });
+  T(typeof NS.terminalWorkFor === 'function', 'terminalWorkFor 가 없다');
+  // ⓐ 시작 전(planDate 가 3시간 뒤) + 지난 기항 피드 → 안 쓴다
+  const c1 = mk({ planDate: `${fmt(now + 3 * 3600000)} ~ ${fmt(now + 11 * 3600000)}` });
+  T(NS.twOfCtx(c1) === null, '⛔ 시작 전 항차에 지난 기항 피드(278/278)가 붙는다');
+  const s1 = (NS.bothCounts(pool, c1, 'discharge') || []).join('\n');
+  T(!/실제\(터미널\)/.test(s1) && !/실제로 작업했는데/.test(s1) && /앱 기록 0대 \/ 260대/.test(s1), '⛔ 시작 전 브리핑에 «278대 앱 미입력» 류가 나간다');
+  T(NS.speedFromTerminal(c1.info, c1.terminalWork) === null, '⛔ 시작 전인데 지난 기항 실적으로 속도를 낸다');
+  // ⓑ 터미널이 «아직 시작 안 함»(workStartAt 빈칸) → 피드가 새것이어도 안 쓴다
+  const fresh = { ...stale, updatedAt: now - 60000, startAt: fmt(now - 3600000) };
+  const c2 = { ...mk({ planDate: `${fmt(now - 3600000)} ~ ${fmt(now + 7 * 3600000)}`, workStartAt: '' }), terminalWork: { OBWH: fresh } };
+  T(NS.twOfCtx(c2) === null, '⛔ 배정목록 작업시작 빈칸(아직 시작 안 함)인데 터미널 실적을 쓴다');
+  // ⓒ 작업 시작(ATW 지남) + 그 뒤 갱신된 피드 → 쓴다
+  const c3 = { ...mk({ planDate: `${fmt(now - 3600000)} ~ ${fmt(now + 7 * 3600000)}`, workStartAt: fmt(now - 50 * 60000) }), terminalWork: { OBWH: fresh } };
+  T(NS.twOfCtx(c3) === fresh, '⛔ 작업 시작 뒤 갱신된 피드를 안 쓴다 — 문지기가 너무 세다');
+  // ⓓ 시작 시각을 모르는 항차(planDate 없음) → 종전대로 쓴다(막지 않는다)
+  T(NS.twOfCtx(mk({})) === stale, '⛔ 시작 시각을 모르는 항차까지 막는다 — 종전 답이 사라진다');
+  // ⓔ 작업 시작 뒤인데 피드가 아직 시작 전 것(갱신 전) → 안 쓴다(다음 갱신을 기다린다)
+  const c5 = mk({ planDate: `${fmt(now - 20 * 60000)} ~ ${fmt(now + 7 * 3600000)}` });
+  T(NS.twOfCtx(c5) === null, '⛔ 시작 20분 지났는데 40시간 전 피드(지난 기항)를 쓴다');
+}
+
+// ── ⑩ 2.99-01 감사 지적 — 화면 호출부가 `{tw: 원시 레코드}` 로 넘기면 문지기를 건너뛴다(twOfCtx 는 ctx.tw 를 그대로 믿는다).
+//   그래서 화면단의 원시 조회 `(terminalWork || {})[…vsl…]` 를 전부 terminalWorkFor 로 바꿨다. 남아 있으면 같은 사고가 재발한다.
+{
+  const fs = require('fs');
+  for (const f of ['src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx', 'src/pages/GlobalSearchPage.jsx']) {
+    let src = '';
+    try { src = fs.readFileSync(path.resolve(f), 'utf8'); } catch { T(false, `${f} 를 못 읽는다`); continue; }
+    const raw = (src.match(/terminalWork \|\| \{\}\)\[/g) || []).length;
+    T(raw === 0, `⛔ ${f} 에 터미널 실적 원시 조회가 ${raw}곳 남아 있다 — terminalWorkFor 문지기를 건너뛴다(2.99-01 감사 지적)`);
+    T(/terminalWorkFor\(/.test(src), `⛔ ${f} 가 terminalWorkFor 를 안 쓴다`);
+  }
+}
+
 if (bad) { console.error(`\n✗ 두 숫자 연막검사 ${bad}건 실패`); process.exit(1); }
-console.log('✅ 두 숫자 연막검사 통과 — 실제·앱 두 숫자 · compMap 구멍 · 판정 한 벌 · 가로채지 않음');
+console.log('✅ 두 숫자 연막검사 통과 — 실제·앱 두 숫자 · compMap 구멍 · 판정 한 벌 · 가로채지 않음 · 작업 시작 전 터미널 실적 차단(2.99-01)');

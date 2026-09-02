@@ -8,7 +8,7 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
@@ -1064,7 +1064,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       //   *«이제 작업한 갯수를 물어보거나 남은갯수를 물어보면 두가지 답이 나와야 합니다»*
       //   1.69-02 는 «실제» 라고 말해야 터미널 수를 보여 줬다 — 그 말을 모르면 앱 수만 봤고,
       //   앱에 안 찍힌 전근무자 작업분(실측 65대)이 통째로 안 보였다.
-      const _tw = (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null;
+      const _tw = terminalWorkFor(voyage?.info, terminalWork);
       const _md = workFilter === 'loading' ? 'loading' : 'discharge';
       if (isRealtimeProgressQuery(query)) {
         return formatTerminalWorkAnswer(ship, _tw, allContainers, _md);
@@ -1177,7 +1177,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     }
     // ★ 2.62: 갱 배분 재료 — 사전은 전역 __fbShipBayDict, 완료는 buildGangShift 가 voyage 에서 직접 읽는다.
     const _gangDe = (() => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; } catch (e) { return null; } })();
-    const _gangTw = (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null;
+    const _gangTw = terminalWorkFor(voyage?.info, terminalWork);
     // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
@@ -1749,7 +1749,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           </div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
-          {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
+          {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null, tw: terminalWorkFor(voyage?.info, terminalWork) }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
           {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다 */}
           {needsModeChoice(parsed, results) && modeChoice === null && (
             <div className="mt-2 flex gap-2">
