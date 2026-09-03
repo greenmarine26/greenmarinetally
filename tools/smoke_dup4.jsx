@@ -8,6 +8,7 @@ import SearchPanel from '../src/components/SearchPanel.jsx';
 import ContainerDetailModal from '../src/components/ContainerDetailModal.jsx';
 import FX from './fixtures/dup4_nsdc.json';
 import FXL from './fixtures/dup4_pcbj.json';   // 선적(PCBJ 2609N) — 위치 지정 트윈·리스트 전용 컨
+import FXK from './fixtures/dup4_kskm.json';   // 양하(KSKM 2616N) — 평택 작업분끼리 끝4 겹침 두 쌍(3.3-01)
 
 try { localStorage.setItem('gm_equip_no', '1호기'); } catch (e) { /* jsdom 저장소 없음 */ }
 const root = createRoot(document.getElementById('root'));
@@ -31,6 +32,15 @@ window.__renderLoading = (completed) => {
   }));
 };
 window.__unmountLoading = () => { lr.unmount(); lr = null; };
+//  3.3-01 — 작업분끼리 끝4 겹침(KSKM 2616N «7075»·«1992»). 하나를 완료해도 남은 하나가 큰 카드로 승격되면 안 된다.
+const kroot = document.createElement('div'); kroot.id = 'kskm'; document.body.appendChild(kroot);
+let kr = createRoot(kroot);
+window.__renderKskm = (completed) => {
+  const voyage = { info: FXK.info, discharge: { ediContainers: FXK.ediContainers, records: FXK.records, completed: completed || {} } };
+  if (!kr) kr = createRoot(kroot);
+  kr.render(React.createElement(SearchPanel, { voyage, voyageKey: 'KSKM_2616N', inspector: '김성일', mode: 'discharge',
+    onOpenContainer: (c) => { window.__calls.push({ fn: 'openDetail', cn: c && c.cn }); } }));
+};
 //  옆길(감사 P1-2 a) — 베이플랜→상세창 모양(플래그 없는 컨 객체)으로 통과분을 열어 [양하확인]을 눌러 본다.
 const droot = document.createElement('div'); droot.id = 'detail'; document.body.appendChild(droot);
 const dr = createRoot(droot);

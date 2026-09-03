@@ -153,6 +153,42 @@ const FX = require('./fixtures/dup4_nsdc.json');
   lt = L().textContent || '';
   if (lbig.length !== 1 || !/CRTU7600877/.test(lt)) fail(`리스트 전용 컨 0877(CRTU7600877, 항구 빈칸)이 선적확인 카드가 아니다 (버튼 ${lbig.length}) — 재감사 P1-1 재현: ` + lt.slice(0, 200));
   if (/통과\s+\d/.test(lt) || /통과 /.test(lt) && /CRTU7600877/.test(lt) && /통과 \d{1,2}-/.test(lt)) fail('리스트 전용 컨에 «통과» 배지가 붙었다');
-  console.log(`✓ 끝4자리 중복 연막검사 통과 (0320: 완료 카드 FFAU 1개 · SEGU 통과 표시 · 완료 뒤 승격 0 · 대조군 ${solo.cn.slice(-4)} 큰 카드 · 9526 통과 조회 · 트윈 뒤 칸 차단 · 상세창 옆길 차단 · 선적 위치지정 통과짝 차단·평택짝 확인 · 리스트 전용 0877 카드 · 오류 0)`);
+  // ── ⑪ 작업분끼리 끝4 겹침(3.3-01) — KSKM 2616N «7075» = FTAU2807075(3-02-04)·SEGU2477075(5-06-08), 둘 다 평택 ──
+  //     검수사 2026-09-03 «중복 컨테이너 나올시 맞는거 선택시 다른컨이 화면에 남는건 처리 하셨나요?»
+  const FXK = require('./fixtures/dup4_kskm.json');
+  dom.window.__renderKskm({});
+  await wait(700);
+  const K = () => doc.querySelector('#kskm');
+  const kclick = (re) => { const b = [...K().querySelectorAll('button')].find(x => re.test((x.textContent || '').trim())); if (!b) return false; b.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); return true; };
+  const kbig = () => [...K().querySelectorAll('button')].filter(b => /^양하확인$/.test((b.textContent || '').trim()));
+  if (!kclick(/^B3·5/)) fail('KSKM B3·5 베이 버튼이 없다: ' + (K().textContent || '').slice(0, 200));
+  await wait(300);
+  if (!kclick(/^🟠 홀드/)) fail('KSKM 홀드 단 버튼이 없다');
+  await wait(400);
+  const kin = () => [...K().querySelectorAll('input')].find(i => /4777/.test(i.placeholder || ''));
+  if (!kin()) fail('KSKM 검색칸이 없다');
+  const ktype = async (v) => { const el = kin(); setVal.call(el, v); el.dispatchEvent(new dom.window.Event('input', { bubbles: true })); await wait(450); };
+  await ktype('7075');
+  let kt = K().textContent || '';
+  if (kbig().length !== 0) fail(`«7075» 에 [양하확인] 큰 카드가 섰다 (${kbig().length}) — 끝4가 겹치면 자리를 보고 골라야 한다`);
+  if (!/끝자리 같은 컨 2대/.test(kt)) fail('«끝자리 같은 컨 2대» 경고가 없다: ' + kt.slice(0, 200));
+  if (!/3-02-04/.test(kt) || !/5-06-08/.test(kt)) fail('후보에 자리(3-02-04 · 5-06-08)가 안 보인다 — 고를 근거가 없다: ' + kt.slice(0, 240));
+  //  하나를 완료(상세창에서 눌렀다고 치고 재렌더) — 남은 하나가 큰 카드로 승격되면 사고가 그대로다
+  dom.window.__renderKskm({ FTAU2807075: { by: '김성일', at: Date.now(), equip: '1호기' } });
+  await wait(700);
+  kt = K().textContent || '';
+  if (kbig().length !== 0) fail('하나를 완료하자 남은 컨이 큰 [양하확인] 카드로 승격됐다(사고 재현) — SEGU2477075');
+  if (!/끝자리 같은 컨 2대/.test(kt)) fail('완료 뒤에도 경고는 남아 있어야 한다');
+  if (!/SEGU2477075/.test(kt) || !/FTAU2807075/.test(kt)) fail('완료분·미완료분이 자리와 함께 나란히 보여야 한다: ' + kt.slice(0, 240));
+  //  전체 번호를 치면 종전대로 큰 카드
+  await ktype('');
+  await ktype('SEGU2477075');
+  if (kbig().length !== 1) fail(`전체 번호를 쳤는데 큰 카드가 안 선다 (${kbig().length}) — 이 길까지 막으면 일을 못 한다`);
+  if (/끝자리 같은 컨/.test(K().textContent || '')) fail('전체 번호 조회에 중복 경고가 남았다');
+  //  겹치지 않는 컨은 종전대로 한 번에
+  await ktype('');
+  const solo2 = Object.keys(FXK.ediContainers).find(cn => !['7075', '1992'].includes(cn.slice(-4)) && Object.keys(FXK.ediContainers).filter(x => x.slice(-4) === cn.slice(-4)).length === 1 && parseInt(FXK.ediContainers[cn].bay, 10) <= 5);
+  if (solo2) { await ktype(solo2.slice(-4)); if (kbig().length !== 1) fail(`대조군 «${solo2.slice(-4)}» 이 큰 카드로 안 뜬다 (${kbig().length})`); }
+  console.log(`✓ 끝4자리 중복 연막검사 통과 (0320: 완료 카드 FFAU 1개 · SEGU 통과 표시 · 완료 뒤 승격 0 · 대조군 ${solo.cn.slice(-4)} 큰 카드 · 9526 통과 조회 · 트윈 뒤 칸 차단 · 상세창 옆길 차단 · 선적 위치지정 통과짝 차단·평택짝 확인 · 리스트 전용 0877 카드 · 작업분끼리 겹침 7075 큰카드 0·자리 표시·완료 뒤 승격 0 · 오류 0)`);
   process.exit(0);
 })();

@@ -1873,14 +1873,32 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         //   ※ 같은 번호가 양하·선적 양쪽에 완료로 있으면(중계) 종전대로 현재 모드 쪽을 편다.
         const doneAll = (main.length === 0 && parsed.digits) ? results.filter(c => c._comp) : [];
         const doneSolo = doneAll.length > 1 ? doneAll.filter(c => c._mode === workFilter) : doneAll;
-        const othersRest = (doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others;
+        /* ★ 3.3-01 (검수사 2026-09-03 «중복 컨테이너 나올시 맞는거 선택시 다른컨이 화면에 남는건 처리 하셨나요?»)
+             3.2-01 은 **통과화물**이 완료 카드가 되던 것을 막았다. 그런데 **작업분끼리** 끝4가 겹치면 같은 일이 남아 있었다 —
+             실측 KSKM 2616N 양하 «7075» = FTAU2807075(3-02-04) · SEGU2477075(5-06-08) 둘 다 평택(ATPR 2640W 선적은 9쌍 18대).
+             처음엔 «⚠ 2개 일치»로 두 장이 뜨지만 **하나를 완료하면 남은 하나가 곧바로 큰 [양하확인] 카드로 승격**됐다(조회는 «7075» 그대로).
+             ⇒ 끝4 조회가 작업분 **둘 이상**을 가리키면(완료분 포함) **큰 카드를 세우지 않는다.** 자리를 붙여 나란히 보이고 고르게 한다.
+             전체 컨번호를 치면 narrowByFullCn 이 한 대로 좁히므로 종전대로 큰 카드가 선다(자동 가이드 «⚠️ 끝자리 같은 컨 N대»와 같은 벌). */
+        const workHits = results.filter(c => c._mode === workFilter && _isWork(c));
+        const dupL4 = !!parsed.digits && !doneTab && workHits.length > 1;
+        //  감사 지적(3.3-01) — 완료 탭에서도 끝4가 겹치면 자리가 있어야 [취소]·위치수정 대상을 고른다. 큰 카드는 원래 안 선다(main 2대).
+        const dupDone = doneTab && !!parsed.digits && main.length > 1;
+        const othersRest = dupL4 ? others.filter(c => !workHits.includes(c))
+                                 : ((doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others);
         // TallyOne 1.53: 완료 탭에서는 접힌 쪽이 '아직 안 한 작업'이다 — 라벨이 반대로 읽히면 안 눌러 본다.
         const othersLabel = (n) => (doneTab ? `아직 안 한 작업에 ${n}건 — 보기` : `다른 작업·완료·통과분에 ${n}건 — 보기`);   // 3.2-01: 통과분도 여기
         return (
           <>
+            {/* 3.3-01: 끝4가 겹치면 자리를 보고 고른다 — 한 번 누르면 완료되는 큰 카드는 안 세운다. */}
+            {dupL4 && (
+              <div className="text-xxs text-rose-300 font-bold bg-rose-950/40 border border-rose-800 rounded px-2 py-1.5 text-center">
+                ⚠️ 끝자리 같은 컨 {workHits.length}대 — 자리를 확인하고 고르십시오
+                <div className="text-2xs text-dim-300 font-normal mt-0.5">전체 번호를 치면 바로 확인 카드가 뜹니다</div>
+              </div>
+            )}
             {/* TallyOne 1.53: 싱글로 하려는데 트윈이 되면 한 줄로 알린다(막지 않는다). */}
-            {main.length === 1 && <TwinPossibleHint c={main[0]} allContainers={allContainers} voyage={voyage}/>}
-            {main.length === 1 && (
+            {!dupL4 && main.length === 1 && <TwinPossibleHint c={main[0]} allContainers={allContainers} voyage={voyage}/>}
+            {!dupL4 && main.length === 1 && (
               <BigResultCard voyagePhotos={voyage?.photos || null} c={main[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(main[0])}
@@ -1893,7 +1911,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
-            {main.length === 0 && doneSolo.length === 1 && (
+            {!dupL4 && main.length === 0 && doneSolo.length === 1 && (
               /* TallyOne 1.53: 완료분도 위치·지나온 자리·버튼이 다 있는 정식 카드로 편다(요약 한 줄 금지). */
               <BigResultCard voyagePhotos={voyage?.photos || null} c={doneSolo[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
@@ -1904,8 +1922,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
-            {main.length > 1 && main.slice(0, 30).map(c => (
-              <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
+            {(dupL4 ? workHits : (main.length > 1 ? main.slice(0, 30) : [])).map(c => (
+              <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} showPos={dupL4 || dupDone} />
             ))}
             {othersRest.length > 0 && results.length > 0 && (
               <div className="mt-1">
@@ -2628,7 +2646,8 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
               {r1.slice(0, 8).map(c => (
                 <button key={c.cn} onClick={() => { setC1(c); setC2(findTwinCandidate(c, allContainers, new Set(), shipImo, shipName)); }}
                   className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
-                  {c.cn}
+                  {c.cn}{/* 3.3-01: 자리까지 보여야 고른다 */}
+                  <span className="ml-1 text-3xs text-rose-300 font-black">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}</span>
                 </button>
               ))}
             </div>
@@ -2768,7 +2787,7 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
   );
 }
 
-function SmallResultCard({ c, onOpen }) {
+function SmallResultCard({ c, onOpen, showPos = false }) {
   const isDone = !!c._comp;
   const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
@@ -2791,6 +2810,8 @@ function SmallResultCard({ c, onOpen }) {
       {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&
         <span className="px-1 rounded text-3xs font-black bg-indigo-900 text-indigo-200">수정</span>}
       <span className="text-2xs text-dim-300 mono truncate flex-1">{c.cn}</span>
+      {/* 3.3-01: 끝4가 겹칠 때는 **자리**가 고르는 근거다 — 번호만 보여 주면 못 고른다(검수사 지적 2026-09-03) */}
+      {showPos && <span className={`text-3xs mono font-black px-1 rounded ${c._comp ? 'bg-emerald-900 text-emerald-200' : 'bg-rose-900 text-rose-200'}`}>{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}</span>}
       <span className="text-3xs mono text-dim-300">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
       <span className={`text-3xs mono px-1 rounded font-bold ${
         c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :

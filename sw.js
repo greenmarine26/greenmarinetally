@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.3';
-const NOTE = '양하 순서에 해상부터 추가 — 자동 가이드 접안 칩 옆 [해상부터] 버튼(케빈이 해상부터 내릴 때)';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.3-01';
+const NOTE = '끝자리 같은 컨이 두 대면 자리를 보고 고르게 바꿨습니다 — 하나를 확인해도 남은 컨이 확인 카드로 안 올라옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
