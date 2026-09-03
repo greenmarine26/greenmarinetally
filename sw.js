@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.6';
-const NOTE = '작업 속도를 전체 작업 시간으로 계산합니다. 손으로 친 컨번호는 검산해서 오타를 짚어 드립니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.6-01';
+const NOTE = '작업 속도를 접안부터 이안까지 일한 시간으로 나눕니다 — 몰아 찍으셔도 같은 값이 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

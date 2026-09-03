@@ -2605,21 +2605,28 @@ export function workMinutesBetween(aMs, bMs, pier) {
   return Math.round(total);
 }
 
-// ── ★ 3.6 — **앱 완료 기록으로 페이스를 재는 단 한 벌. 몰아 입력에 속지 않는다.**
-//  검수사 실측 2026-09-03 — NSDC 2608N 선적 마지막, 3호기 이종부 로그인.
-//    종전 코드는 «최근 20대 완료 간격»으로 쟀는데 그 20대가 **28초 안에** 찍혀
-//    **시간당 2,410대**가 나왔다. 검수사 원문 —
-//    *«작업속도를 전체 작업 시간으로 계산 안하고 그시점만을 계산해서
-//      시간당 몇천개를 작업할수 있다는 메시지를 보였습니다»*.
-//  원인은 «간격»을 쓴 것이다. 앱 완료 시각은 **크레인이 움직인 시각이 아니라 검수원이 찍은 시각**이고
-//  몰아 입력이 섞인다(실측 NSDC 114대 중 79대가 1초 간격 = 69%). 간격으로 재면 그 순간만 본다.
-//  ⇒ **첫 완료 ~ 마지막 완료의 실작업 시간(쉬는 시간 뺀 것)으로 전체 대수를 나눈다.**
-//     같은 자료로 다시 재면 시간당 35.6대(2갱이면 갱당 17.8대) — 정상범위 8~45무브/크레인h 안이다.
-//  ⚠ 그래도 전부 한 번에 찍은 날은 값이 튄다 — 그때는 **숫자를 지어내지 않고 «못 잰다»고 밝힌다**
-//    (조용히 감추지도 않는다 — 왜 못 재는지 화면에 쓴다).
+// ── ★ 3.6-01 — **앱 완료 기록으로 페이스를 재는 단 한 벌. 분모는 «배가 일한 시간»이다.**
+//
+//  ⛔ 3.6 이 여기서 틀렸다. 검수사 정정 2026-09-03 —
+//     *«이건 회피입니다. 1초에 몰아 찍건 정확히 실시간으로 입력하든 총 걸린 작업시간은 같습니다.
+//       1시간에 800개를 해도 10시간을 일했으면 시간당 80개입니다.»*
+//     3.6 은 분모를 «첫 완료 ~ 마지막 완료»로 잡았다. 그것은 **검수원이 앱을 처음 누른 때부터
+//     마지막으로 누른 때까지**일 뿐, 배가 일한 시간이 아니다. 몰아 찍으면 그 구간이 쪼그라들어
+//     값이 튀고, 그래서 «몰아 입력이라 못 잰다»는 **회피**를 붙였다. 분모를 제대로 잡으면 그럴 일이 없다.
+//
+//  ⇒ **분모 = 작업 시작 ~ 작업 끝(또는 지금) 의 실작업 시간**(터미널 근무시간표로 쉬는 시간 제외).
+//     시작·끝은 항차 자료에 이미 있다 — `workStartAt` · `atbActual`(접안) · `atdActual`(이안).
+//     실측 NSDC 2608N — 접안 09-02 22:00 ~ 이안 09-03 04:40 = 실작업 310분.
+//       양하 124 + 선적 114 = 238대 → **시간당 46.1대(2갱이면 갱당 23.0대)**.
+//       몰아 찍은 이종부 90대도 그대로 잰다 → 시간당 17.4대. 김성일 136대 → 26.3대.
+//       (3.6 은 192분으로 나눠 35.6대를 냈고, 이종부는 아예 «못 잼»이라 했다.)
+//
+//  ★ 그래서 터미널 실시간 조회가 있는 것이다 (검수사) — 앱 기록은 «찍은 시각»이라 몰아 입력이 섞이지만
+//    터미널 실적은 시작 시각과 처리 대수를 그대로 준다. **1순위는 언제나 `speedFromTerminal` 이고,**
+//    이 함수는 터미널 자료가 아직 없을 때 쓰는 폴백이다.
+//
 //  ⚠ 상한은 «무브»가 아니라 «컨테이너 대수» 기준이다 — 20피트 트윈은 한 무브에 두 대가 올라간다.
 //    마감텔리 23항차 실측 정상범위가 8~45무브/크레인h 이므로, 대수로는 그 두 배까지 정상일 수 있다.
-//    (연막검사가 잡았다 — 45로 두면 트윈이 많은 날 «몰아 입력»으로 잘못 몰릴 수 있다.)
 export const MAX_BOXES_PER_CRANE_HOUR = 90;   // 45무브 × 트윈 2대
 //  ⚠ 부두는 여기서 고른다 — 문지기 자리다. 호출부는 «PNCT 13번 선석» 처럼 지저분한 값을 주거나 아예 비운다.
 //    완전일치로 찾으면 조용히 PCTC 표로 떨어져 같은 자료가 36대 → 42대(+18%)로 부푼다(감사 실측).
@@ -2632,10 +2639,72 @@ export function normPier(pier, berth) {
   const b = String(getPierFromBerth(berth || '') || '').toUpperCase();
   return b.includes('PNCT') ? 'PNCT' : b.includes('PCTC') ? 'PCTC' : '';
 }
+/** 항차의 «일한 구간»을 뽑는다. [시작ms, 끝ms] · 못 구하면 [0,0].
+ *
+ *  ★ 3.6-01(감사 정정) — **1순위는 터미널 실적의 `startAt`·`endAt` 이다.**
+ *    `atbActual`·`atdActual`(접안·이안)은 수집기가 **배가 떠난 뒤에야** 채운다
+ *    (`collector/pnctpull.py:209` — `atd` 나 상태 D 가 아니면 그 블록에 못 간다).
+ *    그래서 그것만 믿으면 **검수사가 실제로 보는 «작업 중»에는 분모가 없다** — 감사가 잡았다.
+ *    터미널 실적은 작업 중에도 `startAt` 이 살아 있다(실측 SMYA 13:15 · endAt 빈 채).
+ *    이것이 검수사가 말한 «그이유로 터미널 실시간 조회를 하는것입니다» 다.
+ *
+ *  시작 — 터미널 `startAt` → `atbActual`(접안) → `workStartAt`.
+ *  끝  — 터미널 `endAt` → `atdActual`(이안) → 지금(단, 마지막 완료에서 하루 넘게 지났으면 마지막 완료).
+ *  ⚠ 시작이 마지막 완료보다 뒤면 버린다 — 다음 기항 값이 들어 있는 경우가 있다
+ *    (실측 NSDC 2608N: `workStartAt` 09-03 22:00 인데 작업은 09-03 04:40 에 끝났다). */
+export function workWindowOf(info, lastAtMs, tw) {
+  //  ⚠ 끝은 **그 항차의** 마지막 완료다 — 사람별로 자른 배열의 마지막을 쓰면 분모가 사람마다 갈린다
+  //    (실측: 김성일 286분 vs 이종부 312분). 호출부가 `info.paceTo` 로 항차 마지막을 준다.
+  const last = Number((info && info.paceTo) || lastAtMs) || 0;
+  const sane = (t) => (t > 0 && last > 0 && t < last && last - t < 30 * 24 * 3600000 ? t : 0);
+  const st = sane(_tsOf(tw && tw.startAt))
+    || sane(_tsOf(info && info.atbActual))
+    || sane(_tsOf(info && info.workStartAt));
+  if (!st) return [0, 0];
+  //  끝이 없으면 «지금»이다(작업 중). 다만 **끝났다고 표시된 배**는 마지막 완료에서 멈춘다 —
+  //  안 그러면 떠난 배의 분모가 시계를 따라 계속 늘어 페이스가 점점 낮아진다(감사 P2 · 실측 310분 → 772분).
+  //  «끝났다»는 추측하지 않고 자료로 본다 — 터미널이 떠났다고 하거나, 양하·선적이 둘 다 마감됐거나, 진척 100%.
+  //  ⚠ `pct>=100` 에는 신선도 걸쇠를 건다 — 지난 기항 피드가 100 인 채로 남아 있을 수 있다
+  //    (2.99-01·BUG-2026-008 과 같은 계열). 미래 시각은 «신선»이 아니다.
+  const up = Number(tw && tw.updatedAt) || 0;
+  const twFresh = up > 0 && Date.now() - up >= 0 && Date.now() - up < 24 * 3600000;
+  //  ★ «끝났다» 판정은 앱의 다른 자리와 **한 벌**이어야 한다 — ChiefDashboard 는
+  //    `dischargeDone || loadingDone || inspectorDone` (OR) 로 본다. 여기만 AND 로 두면
+  //    양하 전용선·선적 전용선이 안 걸려 **떠난 배의 분모가 시계를 따라 계속 늘어난다**
+  //    (감사 실측 — 마지막 완료 1주 뒤 46대/h 가 1.9대/h 로 내려앉는다).
+  const over = !!(info && (String(info.terminalStatus || '').trim().toLowerCase() === 'departed'
+    || info.dischargeDone || info.loadingDone || info.inspectorDone || info.workEndAt))
+    || (twFresh && Number(tw && tw.pct) >= 100);
+  //  끝 시각 후보 — 터미널 endAt · 이안(PNCT 는 떠난 뒤에야 온다) · workEndAt(PCTC 작업완료 정본).
+  const done = _tsOf(tw && tw.endAt) || _tsOf(info && info.atdActual) || _tsOf(info && info.workEndAt);
+  //  그래도 표시를 못 찾으면, **마지막 완료에서 하루 넘게 지났으면 끝난 것으로 본다**
+  //  (2665 주석이 약속했는데 구현에 없던 걸쇠 — 감사 P2-B).
+  const stale = last > 0 && Date.now() - last > 24 * 3600000;
+  const ed = done || (over || stale ? last : Math.max(last, Date.now()));
+  return ed > st ? [st, ed] : [0, 0];
+}
+
+/** 항차의 **양하+선적** 완료 시각을 모두 모은다(3.6-01).
+ *  왜 합치나 — 분모가 «접안~이안 전체 작업 시간»이므로 분자도 그 시간에 처리한 전부여야 앞뒤가 맞는다.
+ *  크레인 한 대가 양하도 하고 선적도 한다. 한쪽만 세면 그 시간에 딴 일을 안 한 것처럼 보인다.
+ *  터미널 실적을 쓰는 `speedFromTerminal` 도 `disDone + lodDone` 으로 같이 센다 — 잣대를 맞춘다. */
+export function voyageDoneAts(voyage) {
+  const out = [];
+  for (const m of ['discharge', 'loading']) {
+    const comp = (voyage && voyage[m] && voyage[m].completed) || null;
+    if (!comp) continue;
+    for (const k of Object.keys(comp)) {
+      const at = comp[k] && comp[k].at;
+      if (typeof at === 'number' && at > 0) out.push(at);
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+
 //  ★ 재감사 지적 — 두 번째 인자는 **항차 info 를 통째로** 받는다(문자열도 받는다).
 //    부두·선석·갱 수를 화면마다 따로 뽑아 넘기게 두면 반드시 하나를 빠뜨린다 — 실제로 그랬다
 //    (통계탭·미르는 선석 폴백이 없어 +18.5%, 「질문 답변」 패널은 갱 수가 안 닿아 몰아 입력이 통과했다).
-export function paceFromRecords(doneAts, src, gangs) {
+export function paceFromRecords(doneAts, src, gangs, tw) {
   const info = (src && typeof src === 'object') ? src : { pier: src };
   const src0 = Array.isArray(doneAts) ? doneAts : [];   // 3.6: 배열이 아니면 던지던 것(감사 P2-6)
   const raw = src0.length;
@@ -2643,27 +2712,33 @@ export function paceFromRecords(doneAts, src, gangs) {
   if (ats.length < 3) return { ok: false, why: 'few', n: ats.length };
   //  절반 넘게 버려졌으면 그 기록으로 자신 있게 숫자를 내지 않는다(감사 지적 — 살아남은 3건으로 답하던 길).
   if (raw >= 3 && ats.length < raw * 0.5) return { ok: false, why: 'dirty', n: ats.length, raw };
-  const spanMin = (ats[ats.length - 1] - ats[0]) / 60000;
+  const last = ats[ats.length - 1];
   //  기록이 통째로 망가진 경우 — 한 기항이 30일을 넘을 수는 없다(초 단위 시각이 섞이면 이렇게 된다).
-  if (spanMin > 30 * 24 * 60) return { ok: false, why: 'dirty', n: ats.length };
+  if ((last - ats[0]) / 60000 > 30 * 24 * 60) return { ok: false, why: 'dirty', n: ats.length };
   const pierN = normPier(info.pier, info.berth);
-  const workedMin = workMinutesBetween(ats[0], ats[ats.length - 1], pierN);
   const g = Math.max(1, Number(gangs != null ? gangs : info.gangs) || 2);
-  //  ⚠ 재는 데 쓸 분(分). 쉬는 시간을 뺀 실작업분이 정석이지만, 기록이 쉬는 시간 안에만 들어가면
-  //    0분이 된다 — 그때는 벽시계 간격을 쓴다(«아직 시간이 안 지났다»는 거짓 설명을 막는다).
-  const mins = workedMin > 0 ? workedMin : spanMin;
-  if (!(mins > 0)) return { ok: false, why: 'batch', n: ats.length, workedMin, mins: 0, pier: pierN };   // 전부 같은 순간 = 몰아 입력
+  //  ★ 3.6-01 — 분모는 **배가 일한 시간**이다. 검수원이 앱을 누른 구간이 아니다.
+  //    작업 구간을 알면 그것으로, 모르면 그때만 완료 기록 구간으로 잰다(그 사실을 `basis` 로 알린다).
+  const [ws, we] = workWindowOf(info, last, tw);
+  const basis = ws ? 'work' : 'records';
+  //  분자가 자른 구간(예: 홈 「오늘의 나」는 오늘 것만 센다)이면 분모도 같이 잘라야 한다 —
+  //  안 그러면 어제 접안부터 나눠 값이 낮게 나온다(감사 P1-B).
+  const floor = Number(info.paceFrom) || 0;
+  const from = Math.max(ws || ats[0], floor);
+  //  ⚠ 끝은 «이안»까지다 — 이안 뒤에 몰아 찍은 기록으로 분모를 늘리면 사람마다 값이 갈린다
+  //    (실측 NSDC: 이종부의 마지막 입력이 이안 04:40 보다 16분 늦어 327분 vs 310분으로 어긋났다).
+  const to = ws ? we : last;
+  let mins = workMinutesBetween(from, to, pierN);
+  //  쉬는 시간 안에만 든 짧은 구간은 실작업 0분이 된다 — 그때만 벽시계로 잰다.
+  if (!(mins > 0)) mins = (to - from) / 60000;
+  if (!(mins > 0)) return { ok: false, why: 'short', n: ats.length, mins: 0, basis, pier: pierN };
   const perHour = ats.length / (mins / 60);
-  //  ★ 순서가 중요하다 — **몰아 입력을 «시간이 안 지났다»보다 먼저 가린다.**
-  //    감사(다른 클로드)가 잡았다 — 이종부 80대가 107초 안에 있어 종전 순서로는 'short' 로 빠졌고,
-  //    미르가 «아직 페이스를 잴 만큼 시간이 안 지났어요» 라고 **거짓 설명**을 했다(3시간 11분 일한 배에).
-  //    몰아 입력이 심할수록 «몰아 입력»에서 멀어지는 구조였다.
-  if (perHour > MAX_BOXES_PER_CRANE_HOUR * g) return { ok: false, why: 'batch', n: ats.length, workedMin, mins: Math.round(mins), perHour, pier: pierN };
-  //  시간당 1대 미만은 고장·시프팅으로 느린 날의 정상 기록일 수 있다(감사 지적) — 0.2대 미만만 «망가짐»으로 본다.
-  if (perHour < 0.2) return { ok: false, why: 'dirty', n: ats.length, workedMin, perHour, pier: pierN };
-  //  ⚠ 짧음 판정도 mins 로 본다 — workedMin 으로 보면 쉬는 시간 안 기록이 «시간이 안 지났다»로 빠진다(감사 지적).
-  if (mins < 30) return { ok: false, why: 'short', n: ats.length, workedMin, mins: Math.round(mins), pier: pierN };
-  return { ok: true, perHour, perGangHour: perHour / g, workedMin, mins: Math.round(mins), gangs: g, n: ats.length, pier: pierN, from: ats[0], to: ats[ats.length - 1] };
+  //  ⚠ 3.6 의 «몰아 입력이라 못 잼»은 없앴다 — 검수사 정정. 분모가 작업 시간이면 몰아 찍어도 안 튄다.
+  //    남은 것은 «자료가 망가졌을 때»뿐이고, 그때만 숫자를 안 낸다.
+  if (perHour > MAX_BOXES_PER_CRANE_HOUR * g * 3) return { ok: false, why: 'dirty', n: ats.length, mins: Math.round(mins), perHour, basis, pier: pierN };
+  if (perHour < 0.05) return { ok: false, why: 'dirty', n: ats.length, mins: Math.round(mins), perHour, basis, pier: pierN };
+  if (mins < 30) return { ok: false, why: 'short', n: ats.length, mins: Math.round(mins), basis, pier: pierN };
+  return { ok: true, perHour, perGangHour: perHour / g, mins: Math.round(mins), workedMin: Math.round(mins), gangs: g, n: ats.length, basis, pier: pierN, from, to };
 }
 
 // ── ★ 2.54-01 — **터미널 실적으로 페이스를 재는 단 한 벌.**
@@ -2684,14 +2759,19 @@ export function speedFromTerminal(info, terminalWork) {
   const pier = String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC';
   const workedMin = workMinutesBetween(st, upto, pier);
   if (workedMin < 30) return null;                        // 너무 짧으면 페이스가 튄다
-  const perGangHour = (done / 2) / (workedMin / 60);      // 2갱 기준 — 갱당 시간당
+  //  3.6-01: 갱 수를 2 로 못 박지 않는다 — 앱 기록 경로(paceFromRecords)와 잣대를 맞춘다.
+  const g = Math.max(1, Number(info && info.gangs) || 2);
+  const perHour = done / (workedMin / 60);
+  const perGangHour = perHour / g;
   if (!(perGangHour > 0)) return null;
-  return { st, upto, done, plan, left: Math.max(0, plan - done), workedMin, perGangHour, pier, tw };
+  return { st, upto, done, plan, left: Math.max(0, plan - done), workedMin, perHour, perGangHour, gangs: g, pier, tw };
 }
 function _tsOf(v) {
   if (!v) return 0;
   if (typeof v === 'number') return v;
-  const s = String(v).trim().replace(' ', 'T');
+  //  3.6-01: 접안·이안 시각(`atbActual`)은 «2026/09/02 22:00» 처럼 **슬래시**로 온다 —
+  //    종전엔 이 형식을 못 읽고 0 을 돌려줘, 작업 구간을 아는데도 못 쓰던 길이 있었다(실측).
+  const s = String(v).trim().replace(/\//g, '-').replace(' ', 'T');
   const t = Date.parse(s.length <= 16 ? s + ':00+09:00' : s);
   return Number.isFinite(t) ? t : 0;
 }
@@ -2715,6 +2795,17 @@ export function addWorkMinutes(startMs, workMin, pier) {
   return t;
 }
 
+/** ctx 에서 항차 info 를 복원한다 (3.6-01).
+ *  ⚠ 키를 골라 리터럴을 짜지 마라 — 감사가 두 번 잡았다. 고를 때마다 하나씩 빠뜨려
+ *    통계탭과 미르가 다른 답을 냈다(43.7 vs 17.8, 2.46배). info 를 통째로 깔고 평평한 키로 덮는다. */
+function _infoOf(ctx) {
+  const out = { ...((ctx && ctx.info) || {}) };
+  const KEYS = ['pier', 'berth', 'gangs', 'workStartAt', 'atbActual', 'atdActual', 'planDate',
+    'terminalStatus', 'dischargeDone', 'loadingDone', 'vsl', 'vslFull'];
+  for (const k of KEYS) if (ctx && ctx[k] != null && out[k] == null) out[k] = ctx[k];
+  return out;
+}
+
 function formatEta(parsed, allContainers, ctx) {
   // allContainers는 호출부에서 이미 평택분만 넘어옴(SearchPanel _ptk 필터).
   //   반환은 다른 답변과 동일하게 '문자열' — 첫 줄이 음성으로 읽히므로 첫 줄에 대화체 한 문장.
@@ -2732,18 +2823,21 @@ function formatEta(parsed, allContainers, ctx) {
   //    ⚠ 실측으로 이 자리에서 걸렸다 — 완료 67대인 STSE 가 «아직 시작 전이에요» 라고 답했다.
   //      (양하 탭 검색바는 answerShipSpeed 를 안 부르고 여기로 온다 — 경로가 셋이다.)
   try {
-    const _T = speedFromTerminal({ ...(ctx?.info || {}), vsl: ctx?.vsl, vslFull: ctx?.vslFull, pier: ctx?.pier }, ctx?.terminalWork);   // 2.99-01: planDate·workStartAt 도 넘겨야 문지기가 선다
+    const _T = speedFromTerminal(_infoOf(ctx), ctx?.terminalWork);   // 3.6-01: info 를 통째로 — 키를 골라 짜면 반드시 하나 빠뜨린다(감사 P1-D)   // 2.99-01: planDate·workStartAt 도 넘겨야 문지기가 선다
     if (_T) {
       const wh = Math.floor(_T.workedMin / 60), wm = _T.workedMin % 60;
       const head = `터미널 실적으로 보면 지금까지 ${_T.done}대 했어요 — 실작업 ${wh}시간${wm ? ' ' + wm + '분' : ''}(쉬는 시간 뺀 것).`;
       if (_T.left <= 0) return `${head}\n계획 ${_T.plan}대를 다 채웠습니다. 수고 많으셨어요.`;
-      const rMin = Math.round((_T.left / (_T.perGangHour * 2)) * 60);
+      const rMin = Math.round((_T.left / _T.perHour) * 60);   // 3.6-01: 갱 수는 _T 가 안다
       const e = addWorkMinutes(Date.now(), rMin, _T.pier);
       const p2 = (n) => String(n).padStart(2, '0');
       const rh = Math.floor(rMin / 60), rm = rMin % 60;
       return `${head}\n남은 ${_T.left}대 — 이 페이스면 **약 ${rh ? rh + '시간 ' : ''}${rm}분** 뒤, `
         + `**${p2(e.getMonth() + 1)}-${p2(e.getDate())} ${p2(e.getHours())}:${p2(e.getMinutes())}** 쯤 끝나요.\n`
-        + `2갱 기준 갱당 시간당 ${_T.perGangHour.toFixed(1)}대 (1갱이면 ×2) · 중식·야식·티타임·조 경계는 빼고 계산했어요.`;
+        //  갱 수를 자료에서 알면 그대로 말하고, 모르면 검수사 확정 표기(«2갱 기준 … 1갱이면 ×2»)를 쓴다.
+        + `이 배 시간당 ${_T.perHour.toFixed(1)}대 — ${_T.gangs}갱 기준 갱당 ${_T.perGangHour.toFixed(1)}대`
+        + `${_T.gangs === 2 ? ' (1갱이면 ×2)' : ''} · 중식·야식·티타임·조 경계는 빼고 계산했어요.\n`
+        + `(터미널 실적입니다 — 앱에 안 찍은 다른 검수원 몫까지 들어 있어요.)`;
     }
   } catch (e) { /* 터미널 자료가 없으면 아래 앱 기록 경로로 */ }
 
@@ -2787,11 +2881,17 @@ function formatEta(parsed, allContainers, ctx) {
   }
 
   //  ★ 3.6 — 최근 20대 «간격»이 아니라 **전체 실작업 시간**으로 잰다(몰아 입력 방어). 위 paceFromRecords 참조.
-  const _P = paceFromRecords(doneAts, { pier: ctx?.pier, berth: ctx?.berth, gangs: ctx?.gangs });   // 3.6: 부두·선석·갱 수를 한 덩어리로 — 하나씩 넘기면 빠뜨린다(재감사)
+  //  3.6-01: 페이스는 **이 배 전체**(양하+선적)로 잰다 — 분모가 접안~이안이므로 분자도 그래야 한다.
+  //    항차 전체 완료를 못 받았으면(옛 호출) 이 화면 것으로라도 잰다.
+  const _paceAts = (Array.isArray(ctx?.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
+  //  ⚠ 여기서 **키를 골라 리터럴을 짜지 마라.** 감사가 두 번 잡은 자리다 —
+  //    고를 때마다 하나씩 빠뜨려 통계탭과 미르가 다른 답을 냈다(43.7 vs 17.8, 2.46배).
+  //    항차 info 를 통째로 깔고 ctx 의 평평한 키로 덮는다. 그러면 새 키가 늘어도 저절로 따라온다.
+  const _info = _infoOf(ctx);
+  const _tw = (() => { try { return terminalWorkFor(_info, ctx?.terminalWork); } catch (e) { return null; } })();
+  const _P = paceFromRecords(_paceAts, _info, undefined, _tw);   // 3.6: 부두·선석·갱 수를 한 덩어리로 — 하나씩 넘기면 빠뜨린다(재감사)
   if (!_P.ok) {
-    const why = _P.why === 'batch'
-      ? `완료를 몰아서 찍으신 것 같아 페이스를 못 재요 — 앱에 찍힌 시각이 실제 작업 시각과 달라서예요(완료 ${_P.n}대가 ${_P.mins}분 안에 들어와 있어요).`
-      : _P.why === 'dirty'
+    const why = _P.why === 'dirty'
       ? '완료 시각 기록이 고르지 않아 페이스를 못 재요.'
       : '아직 페이스를 잴 만큼 시간이 안 지났어요. 조금 더 진행되면 다시 물어봐 주세요.';
     return `${remain}대 남았어요.\n${why}\n완료 ${doneCount} / 전체 ${total} — 터미널 실적이 들어오면 그것으로 알려드릴게요.`;
@@ -2822,7 +2922,8 @@ function formatEta(parsed, allContainers, ctx) {
     `${remain}대 남았어요. 지금 페이스면 ${durKo}, ${etaShort}쯤 끝나겠네요.${cheer}\n` +
     `⏱ 예상 완료: ${etaStr}쯤\n` +
     `남은 작업: ${remain}대 (완료 ${doneCount} / 전체 ${total})\n` +
-    `현재 페이스: 시간당 약 ${rate}대 (완료 ${_P.n}대 · ${_P.workedMin > 0 ? `실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 기준 — 쉬는 시간 뺀 것` : `${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 기준 — 쉬는 시간에 찍힌 기록이라 시계로 쟀어요`})\n` +
+    `현재 페이스: 시간당 약 ${rate}대 (앱에 찍힌 양하+선적 ${_P.n}대 ÷ ${_P.basis === 'work' ? '작업 시작부터의 ' : ''}실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 — 쉬는 시간 뺀 것${_P.basis === 'work' ? '' : ' · 작업 시각을 몰라 완료 기록 구간으로 쟀어요'})\n` +
+    `※ 터미널 실적이 아직 없어 **앱에 찍힌 것만** 셌어요 — 다른 검수원이 한 몫은 안 들어 있습니다.\n` +
     `남은 시간: ${durKo}`
   );
 }

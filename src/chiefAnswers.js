@@ -877,9 +877,10 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', terminalWork =
     const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 터미널 실적 기준`];
     const hh = Math.floor(T.workedMin / 60), mm = T.workedMin % 60;
     L.push(`시작 ${String(T.tw.startAt || '').slice(5, 16)} — 지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
-    L.push(`**2갱 기준 갱당 시간당 ${T.perGangHour.toFixed(1)}대** (1갱이면 ×2 하시면 됩니다)`);
+    //  3.6-01: 갱 수를 2 로 못 박지 않는다 — speedFromTerminal 이 항차 갱 수로 나눈다(모르면 2).
+    L.push(`**${T.gangs}갱 기준 갱당 시간당 ${T.perGangHour.toFixed(1)}대**${T.gangs === 2 ? ' (1갱이면 ×2 하시면 됩니다)' : ` · 이 배 시간당 ${T.perHour.toFixed(1)}대`}`);
     if (T.left > 0) {
-      const remainMin = Math.round((T.left / (T.perGangHour * 2)) * 60);
+      const remainMin = Math.round((T.left / T.perHour) * 60);   // 3.6-01: ×2 가 아니라 실제 갱 수(perHour 가 이미 전체다)
       const eta = addWorkMinutes(Date.now(), remainMin, T.pier);
       const rh = Math.floor(remainMin / 60), rm = remainMin % 60;
       const p = (n) => String(n).padStart(2, '0');

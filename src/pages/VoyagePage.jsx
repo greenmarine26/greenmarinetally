@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer } from '../nlSearch.js';   // 2.65: briefingVoiceLines
+import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer } from '../nlSearch.js';   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
@@ -1074,6 +1074,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    🔴 2.50-01 이 그 자리에서 `voyage?.info` 를 그대로 참조해 **앱 전체 크래시**를 냈다.
     //      898행 주석이 «시그니처 전부 갱신 (1.98 교훈)» 이라고 이미 경고하고 있었는데 또 밟았다.
     info: voyage?.info || null,
+    //  ★ 3.6-01: 페이스 분자 — 이 항차의 **양하+선적 전부**. 분모가 접안~이안이므로 분자도 그래야 한다.
+    //    (같은 이유로 여기서 실어 내린다 — InlineAnswerCard 는 voyage 를 안 받는다. 위 2.50-01 교훈.)
+    doneAtsAll: voyageDoneAts(voyage),
     //  ★ 2.62: 조 단위 갱 배분 — **함수로** 싣는다(값으로 실으면 memo 가 낡아 «일이 끝나가도 답이 같다»).
     //    InlineAnswerCard 는 voyage 를 안 받는다(1.98·2.50-01 교훈) — 여기서 클로저로 감싼다.
     gangBrief: () => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return gangBriefLines(buildGangShift(voyage, de, { tw: terminalWorkFor(voyage?.info, terminalWork), compMap: compMap || null })); } catch (e) { return null; } },
@@ -1770,7 +1773,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'stats' && (
         <div className="space-y-3">
           {/* V9.15: BayDictVerifyWidget(자료 진단)은 업로드 탭으로 — 통계 탭 첫 화면은 통계여야 한다(전면 점검 2-5) */}
-          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} info={voyage?.info || null}/>
+          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} voyage={voyage} terminalWork={terminalWork}/>
         </div>
       )}
       {!_sideCanc && tab === 'xray' && (
@@ -2719,7 +2722,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
       //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
       //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
-      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, berth: briefCtx?.info?.berth, gangs: briefCtx?.info?.gangs, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
+      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, info: briefCtx?.info || null, voyageDoneAts: briefCtx?.doneAtsAll || null, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
   const readRef = useRef('');

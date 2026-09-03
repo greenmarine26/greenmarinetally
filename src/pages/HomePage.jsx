@@ -6,7 +6,7 @@ import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
-import { paceFromRecords } from '../nlSearch.js';   // 3.6: 페이스는 한 벌로 — 몰아 입력 방어
+import { paceFromRecords, terminalWorkFor, voyageDoneAts } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -726,7 +726,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
       {/* V9.16: 오늘의 나 — 내 처리량·페이스 (완료 기록이 있을 때만) */}
       {(() => {
-        const me = computeMyToday(voyages, inspector);
+        const me = computeMyToday(voyages, inspector, Date.now(), terminalWork);
         if (!me || me.count === 0) return null;
         const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
         return (
@@ -734,7 +734,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-ink-950 text-xs2 font-black shrink-0">{inspector[0]}</span>
             <div className="flex items-baseline gap-3 flex-wrap text-xs2">
               <span className="text-dim-200">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
-              {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대<span className="text-dim-500"> (오늘 평균)</span></span>}
+              {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대<span className="text-dim-500"> (내 몫)</span></span>}
               {me.perHour == null && me.paceNote && <span className="text-dim-400">페이스 못 잼 · {me.paceNote}</span>}
               {ago != null && <span className="text-dim-400">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
             </div>
@@ -2258,36 +2258,47 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
 //   모든 항차의 completed에서 by=나·오늘 것만 센다.
 //   ★ 3.6 — 페이스는 «최근 20건 간격»이 아니라 **첫 완료~마지막 완료 실작업 시간**으로 잰다.
 //     몰아 입력(한 번에 여러 대 찍기)이 섞이면 간격은 시간당 수천 대를 낸다(NSDC 2608N 선적 실측).
-//     한 사람은 크레인 한 대에 붙으므로 갱 수는 1로 본다 — 상한을 넘으면 숫자 대신 안 보여준다.
-export function computeMyToday(voyages, inspector, now = Date.now()) {
+//     한 사람은 크레인 한 대에 붙으므로 갱 수는 1로 본다.
+//   ★ 3.6-01 — 분모는 «내가 앱을 누른 구간»이 아니라 **그 배가 일한 시간**(접안~이안, 쉬는 시간 뺀 것)이다.
+//     검수사 정정 — «1초에 몰아 찍건 실시간으로 입력하든 총 걸린 작업시간은 같습니다».
+export function computeMyToday(voyages, inspector, now = Date.now(), terminalWork = null) {
   if (!inspector) return null;
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   const t0 = dayStart.getTime();
   const mine = [];
-  const pierHits = {}; const pierInfo = {};
+  const hits = {}; const infoOf = {};
   Object.values(voyages || {}).forEach(v => {
-    //  3.6: 부두 폴백은 문지기(normPier)가 한다 — 화면마다 붙이면 또 갈린다(재감사 P1-A).
-    //    여기서는 «오늘 내 기록이 가장 많은 항차»의 info 를 고르기만 한다.
-    const _pr = String(v?.info?.pier || v?.info?.berth || '');
+    const key = String(v?.info?.vsl || '') + '_' + String(v?.info?.voy || '');
     ['discharge', 'loading'].forEach(m => {
       const comp = v?.[m]?.completed || {};
       Object.values(comp).forEach(r => {
-        if (r && r.by === inspector && r.at >= t0 && r.at <= now && _pr) {
-          pierHits[_pr] = (pierHits[_pr] || 0) + 1;
-          pierInfo[_pr] = { pier: v?.info?.pier, berth: v?.info?.berth };
-        }
-        if (r && r.by === inspector && r.at >= t0 && r.at <= now) mine.push(r.at);
+        if (!(r && r.by === inspector && r.at >= t0 && r.at <= now)) return;
+        mine.push(r.at);
+        hits[key] = (hits[key] || 0) + 1;
+        //  3.6-01: 분모는 «그 배가 일한 시간»이다 — 부두·선석뿐 아니라 접안·이안 시각까지 넘긴다.
+        //  ⚠ 분자는 **오늘 것만** 세므로 분모도 오늘 자정부터로 자른다(paceFrom) —
+        //    안 자르면 어제 접안부터 나눠 통계탭·미르보다 25% 낮게 나온다(감사 P1-B 실측).
+        //  분모의 끝은 «그 배의 마지막 완료»다 — 내 마지막으로 자르면 사람마다 분모가 갈린다(감사 실측).
+        if (!infoOf[key]) infoOf[key] = { ...(v?.info || {}), paceFrom: t0, paceTo: 0 };
+        const vAll = voyageDoneAts(v);
+        if (vAll.length) infoOf[key].paceTo = vAll[vAll.length - 1];
       });
     });
   });
   mine.sort((a, b) => a - b);
-  const topKey = Object.keys(pierHits).sort((a, b) => pierHits[b] - pierHits[a])[0] || '';
+  //  오늘 내 기록이 가장 많은 항차의 작업 구간으로 잰다(두 배를 뛴 날은 그 배 기준 — 인계함에 적어 둔다).
+  const topKey = Object.keys(hits).sort((a, b) => hits[b] - hits[a])[0] || '';
   const count = mine.length;
   //  갱 수 1 — 한 사람은 크레인 한 대에 붙는다(다른 두 화면은 항차 갱 수를 쓴다).
-  const _P = paceFromRecords(mine, pierInfo[topKey] || {}, 1);
-  const perHour = _P.ok ? Math.round(_P.perHour) : null;
+  //  터미널 실적의 시작 시각을 분모에 쓴다(접안 시각은 배가 떠난 뒤에야 온다 — 감사 P1-A).
+  const _tw = (() => { try { return terminalWorkFor(infoOf[topKey] || {}, terminalWork); } catch (e) { return null; } })();
+  const _P = paceFromRecords(mine, infoOf[topKey] || {}, 1, _tw);
+  //  ⚠ 개인 몫은 **배가 일한 시간을 알 때만** 낸다(감사 P1-A).
+  //    작업 구간을 모르면 분모가 «내가 찍은 구간»이 되어, 몰아 찍은 사람이 시간당 77대로 나온다.
+  //    그때는 «오늘 N대»만 보여준다 — 숫자를 지어내지 않는다.
+  const perHour = (_P.ok && _P.basis === 'work') ? Math.round(_P.perHour) : null;
   //  못 잰 이유가 «기록이 오해를 부르는 것»이면 밝힌다. «아직 안 쌓였다»(few·short)면 조용히 둔다.
-  const paceNote = _P.why === 'batch' ? '몰아 입력' : _P.why === 'dirty' ? '기록 고르지 않음' : '';
+  const paceNote = _P.why === 'dirty' ? '기록 고르지 않음' : '';
   const lastAt = count ? mine[mine.length - 1] : null;
   return { count, perHour, paceNote, lastAt };
 }

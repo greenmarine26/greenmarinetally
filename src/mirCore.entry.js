@@ -159,6 +159,20 @@ function _answerCore(query, ctx) {
   /* ③ 기본 경로 — 조회·집계·용어·실무지식. 검수앱과 **같은 한 벌**이다. */
   try {
     const r = applyNLFilter(cs, parsed);
+    //  3.6-01: 페이스 분자는 항차 전체(양하+선적)다 — 콘앱도 같은 잣대를 쓴다.
+    //    콘앱 ctx 에는 `records`(양하·선적 완료 맵)가 이미 실려 온다(cone.html) — 그것으로 만든다.
+    if (!c.voyageDoneAts && c.records) {
+      const ats = [];
+      for (const m of ['discharge', 'loading']) {
+        const comp = c.records[m];
+        if (!comp) continue;
+        for (const k of Object.keys(comp)) {
+          const at = comp[k] && comp[k].at;
+          if (typeof at === 'number' && at > 0) ats.push(at);
+        }
+      }
+      if (ats.length) c.voyageDoneAts = ats.sort((x, y) => x - y);
+    }
     const a = generateLocalAnswer(parsed, r, cs, c);
     if (a) return a;
   } catch (e) { /* 마지막 안내로 */ }
