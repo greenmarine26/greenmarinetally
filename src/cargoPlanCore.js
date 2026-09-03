@@ -211,6 +211,38 @@ export const CPV2_MARK_BREATH = 1.6;        // 칸 안쪽에서 좌우로 비워
 //    이보다 납작하게 그리는 것은 자리가 남을 때뿐이고, 자리가 모자라면 CSS 가 알아서 더 줄인다.
 export const CPV2_CELL_ASPECT = 0.75;
 
+//  ★ 3.7-05 별첨 글자 크기 — **표가 몇 줄인지**로 정한다(검수사 «선사가 많거나 포트가 많거나
+//    특수 화물이 많으면 겹칩이 일어납니다. 최대 발생조건을 생각하셔야 합니다»).
+//    종전 식은 «한 줄에 박스 몇 개냐»만 봤고 줄 수는 아예 없었다 — 포트 다섯인 항차에서 별첨2·3 이 잘렸다.
+export const CPV2_PAGE_H_PRINT = 195 * 96 / 25.4;   // = 737.01px (A4 가로 195mm)
+const _LG_HDR = 30;      // 머리글(제목 한 줄 + 밑줄 + 여백)
+const _LG_FTR = 26;      // 바닥글(두 줄까지 + 테두리 + 여백)
+const _LG_BOX = 10;      // 상자 테두리 2 + 안쪽 여백 8
+const _LG_GAP = 5;       // 별첨끼리 사이
+//  한 줄·한 제목이 차지하는 높이 — 글자 크기 f 에 대해 «기울기 × f + 상수». 넉넉히 잡아 안 넘치게 한다.
+const _LG_TITLE_K = 1.5, _LG_TITLE_C = 7;
+const _LG_ROW_K = 1.6, _LG_ROW_C = 1;
+
+/** 별첨 상자에 표 legends 개·모두 rows 줄이 들어갈 때 넘치지 않는 글자 크기(px).
+ *  pageRows 는 페이지가 몇 줄로 나뉘는지(보통 2). 계산이므로 시험으로 잴 수 있다 —
+ *  실제 렌더 오차는 fitLegend.js 가 브라우저에 물어 한 번 더 줄인다(안전망). */
+/** 별첨 상자를 한 칸으로 쓸지 두 칸으로 나눌지. 두 칸이면 높이 요구가 «합»이 아니라 «둘 중 큰 쪽»이 된다.
+ *  실측 최대(2026-09-04, 활성+보관 항차) — 목적지 5 · 선사 10 · 화물 종류 5 ⇒ 24줄.
+ *  여유를 얹어 36줄까지 한 상자에서 버티게 한다. */
+export function legendTwoCols(rowsLeft, rowsRight, pageRows) {
+  return legendFontFor(rowsLeft + rowsRight, 3, pageRows) < 6.5;
+}
+
+export function legendFontFor(rows, legends, pageRows) {
+  const L = Math.max(1, Number(legends) || 1);
+  const N = Math.max(0, Number(rows) || 0);
+  const R = Math.max(1, Number(pageRows) || 1);
+  const avail = (CPV2_PAGE_H_PRINT - CPV2_PAGE_PAD - _LG_HDR - _LG_FTR - 3 * (R - 1)) / R
+    - _LG_BOX - _LG_GAP * (L - 1);
+  const f = (avail - _LG_TITLE_C * L - _LG_ROW_C * N) / (_LG_TITLE_K * L + _LG_ROW_K * N);
+  return Math.min(9.5, Math.max(4.6, Math.floor(f * 10) / 10));
+}
+
 /** 셀 폭(px) → 두 글자가 들어가는 글자 크기(px). 화면·인쇄·콘앱 공용 한 벌. */
 export function markFontForCellW(cellW) {
   const w = Number(cellW);

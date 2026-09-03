@@ -13,6 +13,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
+import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
 import { podBgOf, podCodeLen, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
@@ -24,6 +25,8 @@ import {
   STANDARD_DECK,
   STANDARD_HOLD,
   cargoPlanMetrics,   // 2.90: 칸 글자 크기 한 벌
+  legendFontFor,       // 3.7-05: 별첨 글자 크기 — 표 줄 수로 정한다
+  legendTwoCols,       // 3.7-05: 줄이 많으면 상자를 두 칸으로 — 높이 요구가 «합»이 아니라 «큰 쪽»이 된다
   CPV2_PAGE_W_PRINT,   // 3.7: 인쇄 폭 — 코드가 종이에서 몇 pt 로 찍히는지 재는 데 쓴다
 } from '../cargoPlanCore.js';
 
@@ -914,6 +917,10 @@ export default function PrintableCargoPlanV2({
   //   별첨 칸 폭 = 페이지 폭 ÷ 줄당 박스 수. 박스가 많을수록 칸이 좁으니 글자도 같이 줄여야 한다.
   //   실측 기준점: 줄당 9칸(HAYN 17베이)에서 8px 가 지금 보기 좋다 → 9칸=8px 로 놓고 반비례.
   //   너무 작아지지 않게 5.5px 바닥, 너무 커지지 않게 9.5px 천장을 둔다.
+  //  3.7-05: 그린 뒤 별첨 상자를 실제로 재서 맞춘다 — 계산만으로는 배마다 어긋난다.
+  const pageRef = useRef(null);
+  useLayoutEffect(() => { fitLegendBoxes(pageRef.current); });
+
   const legendFont = useMemo(() => {
     const perRow = Math.max(layout[0]?.length || 1, 1);
     // 별첨이 여러 칸으로 흩어지면 한 칸이 지는 표가 줄어 세로 여유가 생긴다 → 글자를 조금 키운다.
@@ -1287,7 +1294,7 @@ export default function PrintableCargoPlanV2({
           ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (window.innerHeight - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
-      <div className="cpv2-page" style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
+      <div ref={pageRef} className="cpv2-page" style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
         {/*  ★ 3.7-03 — 매번 같은 설명은 **바닥글**로 내렸다(검수사 «설명이 길어서 상단이 두줄 또는 세줄로
             되어 있습니다. 매번 같은 설명은 하단 아래 바닥글로 처리 바랍니다»). 머리글에는 이 항차의 것만 남는다. */}
         <div className="cpv2-page-header">
@@ -1394,8 +1401,17 @@ export default function PrintableCargoPlanV2({
               //    종전엔 빈 자리가 셋이면 셋을 **따로 흩어** 놓아(SWMM) 눈이 세 곳을 오갔고,
               //    한 상자에 넣을 때는 별첨3 만 `0 0 auto`, 1·2 는 `1 1 0` 이라 자리가 모자라면 3 이 상자 밖으로 밀려 잘렸다(OBWH).
               //    이제 셋 다 «제 줄수만큼»(0 1 auto)이라, 모자라면 셋이 같이 조금씩 줄고 남으면 아래를 비운다.
-              const cell = (key, items) => (
-                <div key={key} className="cpv2-bay-box cpv2-legend-box" style={{ '--lgf': `${legendFont}px` }}>
+              //  ★ 3.7-05 — 자리 배정도 **줄 수**로 정한다(검수사 «선사가 많거나 포트가 많거나 특수 화물이
+              //    많으면 겹칩이 일어납니다. 최대 발생조건을 생각하셔야 합니다»).
+              //    한 상자에 셋을 넣었을 때 글자가 읽을 수 있는 크기(7.0px)로 나오면 그대로 붙여 둔다.
+              //    안 나오면 옆 빈 자리로 나눈다 — **같은 줄에 나란히**라 위가 맞고 흩어지지 않는다.
+              //    나눌 자리가 없으면 그대로 두고 글자를 더 줄인다(하한 4.6px). 잘리는 것보다 낫다.
+              const _r1 = leg1Rows.length + 2, _r2 = leg2Rows.length + 2, _r3 = 5;   // 표마다 머리줄+합계줄
+              const _pr = Math.max(1, layout.length);
+              const _fAll = legendFontFor(_r1 + _r2 + _r3, 3, _pr);
+              const cell = (key, items, rows) => (
+                <div key={key} className="cpv2-bay-box cpv2-legend-box"
+                  style={{ '--lgf': `${legendFontFor(rows, items.length, _pr)}px` }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', height: '100%' }}>
                     {items.map((it, k) => (
                       <div key={k} style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>
@@ -1405,9 +1421,39 @@ export default function PrintableCargoPlanV2({
                   </div>
                 </div>
               );
-              slots.push(cell('leg123', [{ node: legend1 }, { node: legend2 }, { node: legend3 }]));
-              //  남는 빈 자리는 그냥 비운다 — 카스피처럼 «억지로 채우지 않는다».
-              for (let i = 1; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+              if (_fAll >= 7.0 || emptySlots < 2) {
+                //  줄이 많아 한 칸으로는 글자가 너무 작아지면 **상자를 두 칸으로** 나눈다.
+                //    왼쪽 별첨1 · 오른쪽 별첨2+3 — 높이 요구가 «셋의 합»이 아니라 «둘 중 큰 쪽»이라
+                //    실측 최대(24줄)는 물론 그 1.5배까지도 읽을 수 있는 크기로 들어간다.
+                //    자리를 옆으로 흩지 않으므로 «최대한 같이»도 지킨다.
+                const two = legendTwoCols(_r1, _r2 + _r3, _pr);
+                if (two) {
+                  const fL = legendFontFor(_r1, 1, _pr), fR = legendFontFor(_r2 + _r3, 2, _pr);
+                  slots.push(
+                    <div key="leg123" className="cpv2-bay-box cpv2-legend-box"
+                      style={{ '--lgf': `${Math.min(fL, fR)}px` }}>
+                      <div style={{ display: 'flex', flexDirection: 'row', gap: '5px', height: '100%' }}>
+                        <div style={{ flex: '1 1 0', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>{legend1}</div>
+                        <div style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <div style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>{legend2}</div>
+                          <div style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>{legend3}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  slots.push(cell('leg123', [{ node: legend1 }, { node: legend2 }, { node: legend3 }], _r1 + _r2 + _r3));
+                }
+                for (let i = 1; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+              } else if (emptySlots === 2) {
+                slots.push(cell('leg1', [{ node: legend1 }], _r1));
+                slots.push(cell('leg23', [{ node: legend2 }, { node: legend3 }], _r2 + _r3));
+              } else {
+                slots.push(cell('leg1', [{ node: legend1 }], _r1));
+                slots.push(cell('leg2', [{ node: legend2 }], _r2));
+                slots.push(cell('leg3', [{ node: legend3 }], _r3));
+                for (let i = 3; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+              }
             }
             // 그 다음 실제 박스들
             // M6.94.12: 박스 폭은 모두 동일(flex 1). 셀 폭 통일은 grid를 전체 최대 칸 수로

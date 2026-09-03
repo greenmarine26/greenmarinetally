@@ -441,6 +441,14 @@ rm -f "$SMOKE_PP"
 # 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
 node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
 rm -f "$SMOKE_IS"
+# 3.7-05: 별첨이 최대 발생조건(선사·포트·특수화물 많음)에서도 안 넘치는가
+SMOKE_LF=$(mktemp /tmp/_lf_XXXXXX.cjs)
+if npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_LF" --log-level=error; then
+  node tools/smoke_legendfit.cjs "$SMOKE_LF" || { echo "✗ 별첨 맞춤 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LF"; exit 1; }
+  rm -f "$SMOKE_LF"
+else
+  echo "✗ 별첨 맞춤 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LF"; exit 1
+fi
 # 3.7-04: 업데이트 새로고침에 로그인이 살아남는가(검수사 «업데이트 마다 자동 로그아웃»)
 SMOKE_UR=$(mktemp /tmp/_ur_XXXXXX.cjs)
 if npx esbuild src/updateResume.js --bundle --platform=node --format=cjs --outfile="$SMOKE_UR" --log-level=error; then
