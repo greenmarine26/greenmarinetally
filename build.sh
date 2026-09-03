@@ -395,6 +395,41 @@ node tools/smoke_hooks.cjs || { echo "✗ 훅 순서 검사 실패 — 배포 �
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }
+# 3.5-01: 작업 속도 페이스 — 몰아 입력에 속지 않는가(NSDC 2608N 선적 실완료 114대)
+SMOKE_PC=$(mktemp /tmp/_smokepace_XXXXXX.cjs)
+if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs \
+     --external:firebase --external:firebase/* --outfile="$SMOKE_PC" --log-level=error; then
+  node tools/smoke_pace.cjs "$SMOKE_PC" || { echo "✗ 작업 속도 페이스 연막검사 실패 — 배포 금지"; exit 1; }
+else
+  echo "✗ 페이스 번들 실패 — 배포 금지"; exit 1
+fi
+rm -f "$SMOKE_PC"
+# 3.5-01: 통계 탭 제목이 «시간당 몇천 대»를 못 찍는지 실제 DOM 으로
+SMOKE_PR=$(mktemp /tmp/_pacerender_XXXXXX.js)
+if npx esbuild tools/smoke_pacerender.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --outfile="$SMOKE_PR" --log-level=error; then
+  node tools/smoke_pacerender.cjs "$SMOKE_PR" || { echo "✗ 페이스 화면 연막검사 실패 — 배포 금지"; exit 1; }
+else
+  echo "✗ 페이스 화면 번들 실패 — 배포 금지"; exit 1
+fi
+rm -f "$SMOKE_PR"
+# 3.6: 컨번호 검산(ISO 6346) — 실번호 120개 + 화면
+SMOKE_IS=$(mktemp /tmp/_iso_XXXXXX.cjs)
+if npx esbuild src/utils.js --bundle --platform=node --format=cjs \
+     --external:firebase --external:firebase/* --outfile="$SMOKE_IS" --log-level=error; then
+  node tools/smoke_isocheck.cjs "$SMOKE_IS" || { echo "✗ 컨번호 검산 연막검사 실패 — 배포 금지"; exit 1; }
+else
+  echo "✗ 검산 번들 실패 — 배포 금지"; exit 1
+fi
+rm -f "$SMOKE_IS"
+SMOKE_IR=$(mktemp /tmp/_isor_XXXXXX.js)
+if npx esbuild tools/smoke_isorender.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --outfile="$SMOKE_IR" --log-level=error; then
+  node tools/smoke_isorender.cjs "$SMOKE_IR" || { echo "✗ 검산 화면 연막검사 실패 — 배포 금지"; exit 1; }
+else
+  echo "✗ 검산 화면 번들 실패 — 배포 금지"; exit 1
+fi
+rm -f "$SMOKE_IR"
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
 #  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.

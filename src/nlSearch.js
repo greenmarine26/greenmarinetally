@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -2605,6 +2605,67 @@ export function workMinutesBetween(aMs, bMs, pier) {
   return Math.round(total);
 }
 
+// ── ★ 3.6 — **앱 완료 기록으로 페이스를 재는 단 한 벌. 몰아 입력에 속지 않는다.**
+//  검수사 실측 2026-09-03 — NSDC 2608N 선적 마지막, 3호기 이종부 로그인.
+//    종전 코드는 «최근 20대 완료 간격»으로 쟀는데 그 20대가 **28초 안에** 찍혀
+//    **시간당 2,410대**가 나왔다. 검수사 원문 —
+//    *«작업속도를 전체 작업 시간으로 계산 안하고 그시점만을 계산해서
+//      시간당 몇천개를 작업할수 있다는 메시지를 보였습니다»*.
+//  원인은 «간격»을 쓴 것이다. 앱 완료 시각은 **크레인이 움직인 시각이 아니라 검수원이 찍은 시각**이고
+//  몰아 입력이 섞인다(실측 NSDC 114대 중 79대가 1초 간격 = 69%). 간격으로 재면 그 순간만 본다.
+//  ⇒ **첫 완료 ~ 마지막 완료의 실작업 시간(쉬는 시간 뺀 것)으로 전체 대수를 나눈다.**
+//     같은 자료로 다시 재면 시간당 35.6대(2갱이면 갱당 17.8대) — 정상범위 8~45무브/크레인h 안이다.
+//  ⚠ 그래도 전부 한 번에 찍은 날은 값이 튄다 — 그때는 **숫자를 지어내지 않고 «못 잰다»고 밝힌다**
+//    (조용히 감추지도 않는다 — 왜 못 재는지 화면에 쓴다).
+//  ⚠ 상한은 «무브»가 아니라 «컨테이너 대수» 기준이다 — 20피트 트윈은 한 무브에 두 대가 올라간다.
+//    마감텔리 23항차 실측 정상범위가 8~45무브/크레인h 이므로, 대수로는 그 두 배까지 정상일 수 있다.
+//    (연막검사가 잡았다 — 45로 두면 트윈이 많은 날 «몰아 입력»으로 잘못 몰릴 수 있다.)
+export const MAX_BOXES_PER_CRANE_HOUR = 90;   // 45무브 × 트윈 2대
+//  ⚠ 부두는 여기서 고른다 — 문지기 자리다. 호출부는 «PNCT 13번 선석» 처럼 지저분한 값을 주거나 아예 비운다.
+//    완전일치로 찾으면 조용히 PCTC 표로 떨어져 같은 자료가 36대 → 42대(+18%)로 부푼다(감사 실측).
+//    ★ 재감사 지적 — `info.pier` 가 비고 `berth` 만 있는 상태가 실제로 만들어진다(VoyagePage 가 그렇게 저장한다).
+//      그 폴백을 화면마다 따로 붙이면 또 갈린다 ⇒ **문지기 안에서 선석까지 본다.**
+export function normPier(pier, berth) {
+  const p = String(pier || '').toUpperCase();
+  if (p.includes('PNCT')) return 'PNCT';
+  if (p.includes('PCTC')) return 'PCTC';
+  const b = String(getPierFromBerth(berth || '') || '').toUpperCase();
+  return b.includes('PNCT') ? 'PNCT' : b.includes('PCTC') ? 'PCTC' : '';
+}
+//  ★ 재감사 지적 — 두 번째 인자는 **항차 info 를 통째로** 받는다(문자열도 받는다).
+//    부두·선석·갱 수를 화면마다 따로 뽑아 넘기게 두면 반드시 하나를 빠뜨린다 — 실제로 그랬다
+//    (통계탭·미르는 선석 폴백이 없어 +18.5%, 「질문 답변」 패널은 갱 수가 안 닿아 몰아 입력이 통과했다).
+export function paceFromRecords(doneAts, src, gangs) {
+  const info = (src && typeof src === 'object') ? src : { pier: src };
+  const src0 = Array.isArray(doneAts) ? doneAts : [];   // 3.6: 배열이 아니면 던지던 것(감사 P2-6)
+  const raw = src0.length;
+  const ats = src0.filter((n) => typeof n === 'number' && n > 0 && Number.isFinite(n)).sort((a, b) => a - b);
+  if (ats.length < 3) return { ok: false, why: 'few', n: ats.length };
+  //  절반 넘게 버려졌으면 그 기록으로 자신 있게 숫자를 내지 않는다(감사 지적 — 살아남은 3건으로 답하던 길).
+  if (raw >= 3 && ats.length < raw * 0.5) return { ok: false, why: 'dirty', n: ats.length, raw };
+  const spanMin = (ats[ats.length - 1] - ats[0]) / 60000;
+  //  기록이 통째로 망가진 경우 — 한 기항이 30일을 넘을 수는 없다(초 단위 시각이 섞이면 이렇게 된다).
+  if (spanMin > 30 * 24 * 60) return { ok: false, why: 'dirty', n: ats.length };
+  const pierN = normPier(info.pier, info.berth);
+  const workedMin = workMinutesBetween(ats[0], ats[ats.length - 1], pierN);
+  const g = Math.max(1, Number(gangs != null ? gangs : info.gangs) || 2);
+  //  ⚠ 재는 데 쓸 분(分). 쉬는 시간을 뺀 실작업분이 정석이지만, 기록이 쉬는 시간 안에만 들어가면
+  //    0분이 된다 — 그때는 벽시계 간격을 쓴다(«아직 시간이 안 지났다»는 거짓 설명을 막는다).
+  const mins = workedMin > 0 ? workedMin : spanMin;
+  if (!(mins > 0)) return { ok: false, why: 'batch', n: ats.length, workedMin, mins: 0, pier: pierN };   // 전부 같은 순간 = 몰아 입력
+  const perHour = ats.length / (mins / 60);
+  //  ★ 순서가 중요하다 — **몰아 입력을 «시간이 안 지났다»보다 먼저 가린다.**
+  //    감사(다른 클로드)가 잡았다 — 이종부 80대가 107초 안에 있어 종전 순서로는 'short' 로 빠졌고,
+  //    미르가 «아직 페이스를 잴 만큼 시간이 안 지났어요» 라고 **거짓 설명**을 했다(3시간 11분 일한 배에).
+  //    몰아 입력이 심할수록 «몰아 입력»에서 멀어지는 구조였다.
+  if (perHour > MAX_BOXES_PER_CRANE_HOUR * g) return { ok: false, why: 'batch', n: ats.length, workedMin, mins: Math.round(mins), perHour, pier: pierN };
+  //  시간당 1대 미만은 고장·시프팅으로 느린 날의 정상 기록일 수 있다(감사 지적) — 0.2대 미만만 «망가짐»으로 본다.
+  if (perHour < 0.2) return { ok: false, why: 'dirty', n: ats.length, workedMin, perHour, pier: pierN };
+  //  ⚠ 짧음 판정도 mins 로 본다 — workedMin 으로 보면 쉬는 시간 안 기록이 «시간이 안 지났다»로 빠진다(감사 지적).
+  if (mins < 30) return { ok: false, why: 'short', n: ats.length, workedMin, mins: Math.round(mins), pier: pierN };
+  return { ok: true, perHour, perGangHour: perHour / g, workedMin, mins: Math.round(mins), gangs: g, n: ats.length, pier: pierN, from: ats[0], to: ats[ats.length - 1] };
+}
+
 // ── ★ 2.54-01 — **터미널 실적으로 페이스를 재는 단 한 벌.**
 //  ⚠ 2.54 는 이것을 `chiefAnswers` 안에 두었다. 그런데 검수사가 실제로 쓰는 **양하 탭 검색바**는
 //    `answerShipSpeed` 를 아예 안 부르고 `formatEta` 로 간다 — 그래서 **완료 67대인 배가
@@ -2725,17 +2786,21 @@ function formatEta(parsed, allContainers, ctx) {
     return `${remain}대 남았어요. 조금 더 진행되면 끝날 시각을 알려드릴게요.\n완료 ${doneCount}대 · 남은 ${remain}대 — 아직 페이스를 잴 기록이 부족해요.`;
   }
 
-  // 최근 페이스 우선 — 최근 20개(없으면 전체) 완료 간격으로 시간당 처리량.
-  const recent = doneAts.slice(-Math.min(20, doneAts.length));
-  const spanMs = recent[recent.length - 1] - recent[0];
-  const perHour = spanMs > 0 ? (recent.length - 1) / (spanMs / 3600000) : 0;
-  if (!(perHour > 0)) {
-    return `${remain}대 남았어요.\n완료 간격이 너무 짧아 페이스를 계산하기 어려워요. 조금 더 진행되면 다시 물어봐 주세요.`;
+  //  ★ 3.6 — 최근 20대 «간격»이 아니라 **전체 실작업 시간**으로 잰다(몰아 입력 방어). 위 paceFromRecords 참조.
+  const _P = paceFromRecords(doneAts, { pier: ctx?.pier, berth: ctx?.berth, gangs: ctx?.gangs });   // 3.6: 부두·선석·갱 수를 한 덩어리로 — 하나씩 넘기면 빠뜨린다(재감사)
+  if (!_P.ok) {
+    const why = _P.why === 'batch'
+      ? `완료를 몰아서 찍으신 것 같아 페이스를 못 재요 — 앱에 찍힌 시각이 실제 작업 시각과 달라서예요(완료 ${_P.n}대가 ${_P.mins}분 안에 들어와 있어요).`
+      : _P.why === 'dirty'
+      ? '완료 시각 기록이 고르지 않아 페이스를 못 재요.'
+      : '아직 페이스를 잴 만큼 시간이 안 지났어요. 조금 더 진행되면 다시 물어봐 주세요.';
+    return `${remain}대 남았어요.\n${why}\n완료 ${doneCount} / 전체 ${total} — 터미널 실적이 들어오면 그것으로 알려드릴게요.`;
   }
+  const perHour = _P.perHour;
 
   const remainMin = Math.round((remain / perHour) * 60);
   // 1.68: 중식·야식·티타임·조 사이 공백을 건너뛰어 계산한다(터미널별 근무시간표 — 검수사 확정).
-  const eta = addWorkMinutes(Date.now(), remainMin, ctx?.pier);
+  const eta = addWorkMinutes(Date.now(), remainMin, _P.pier || ctx?.pier);   // 3.6: 잰 부두와 그리는 부두를 같게(재감사 P2-1)
   const hh = eta.getHours(), mm = eta.getMinutes();
   const ampm = hh < 12 ? '오전' : '오후';
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
@@ -2757,7 +2822,7 @@ function formatEta(parsed, allContainers, ctx) {
     `${remain}대 남았어요. 지금 페이스면 ${durKo}, ${etaShort}쯤 끝나겠네요.${cheer}\n` +
     `⏱ 예상 완료: ${etaStr}쯤\n` +
     `남은 작업: ${remain}대 (완료 ${doneCount} / 전체 ${total})\n` +
-    `현재 페이스: 시간당 약 ${rate}대 (최근 ${recent.length}대 기준)\n` +
+    `현재 페이스: 시간당 약 ${rate}대 (완료 ${_P.n}대 · ${_P.workedMin > 0 ? `실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 기준 — 쉬는 시간 뺀 것` : `${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 기준 — 쉬는 시간에 찍힌 기록이라 시계로 쟀어요`})\n` +
     `남은 시간: ${durKo}`
   );
 }
@@ -3234,6 +3299,21 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
     if (Array.isArray(results)) results = results.map(_wear);
   }
   let out = _localAnswerCore(parsed, results, allContainers, ctx);
+  //  ★ 3.6 — 온전한 컨번호(영문4+숫자7)를 물었는데 못 찾았으면 **검산으로 오타를 짚는다.**
+  //    화면(SearchPanel)과 같은 말을 해야 한다 — 판정이 두 벌이면 반드시 갈린다.
+  //    막지 않는다. 규칙을 안 지킨 번호도 드물게 오므로 «다시 보시라»까지만 한다.
+  try {
+    if ((!results || results.length === 0) && typeof out === 'string') {
+      const _q = String((parsed && (parsed._raw0 || parsed._raw)) || '').toUpperCase().replace(/[\s-]/g, '');
+      const _m = _q.match(/[A-Z]{4}\d{7}/);
+      if (_m && isoCheckDigit(_m[0]) === false) {
+        const _fix = isoFixLastDigit(_m[0]);
+        out += `\n\n⚠ 그 번호는 검산(ISO 6346)이 안 맞아요 — 한 글자 잘못 치신 것일 수 있어요.`
+          + (_fix ? ` 마지막 자리가 ${_fix.slice(-1)} 이면 맞습니다 — ${_fix}` : '')
+          + `\n실물이 그 번호가 맞으면 리스트에 없는 컨(초과분)일 수 있어요.`;
+      }
+    }
+  } catch (e) { /* 검산은 곁다리다 — 답을 막지 않는다 */ }
   //  ★ 3.0 미르 자체 학습 — 내보내는 문 하나에서 «알아들었나»를 보고, 못 알아들은 말은 기억·기록하고,
   //    이어진 말이 답을 얻으면 앞말을 배운다(mirLearn.mirObserve). 배우면 답 끝에 한 줄 붙인다.
   try {

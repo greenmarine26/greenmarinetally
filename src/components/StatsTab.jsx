@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { isoToLabel, fmtPos} from '../utils.js';
+import { paceFromRecords } from '../nlSearch.js';   // 3.6: 페이스는 한 벌로 — 몰아 입력 방어
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
-export default function StatsTab({ containers, compMap, xrayMap, mode }) {
-  const stats = useMemo(() => computeAllStats(containers, compMap, xrayMap, mode), [containers, compMap, xrayMap, mode]);
+export default function StatsTab({ containers, compMap, xrayMap, mode, info }) {
+  const stats = useMemo(() => computeAllStats(containers, compMap, xrayMap, mode, info), [containers, compMap, xrayMap, mode, info]);
 
   if (containers.length === 0) {
     return (
@@ -34,7 +35,7 @@ export default function StatsTab({ containers, compMap, xrayMap, mode }) {
 
       {/* V9.16: 시간대별 처리량 + 페이스 */}
       {Object.keys(stats.byHour).length > 0 && (
-        <Section title={`시간대별 처리량${stats.paceHour != null ? ` — 지금 페이스 시간당 ${stats.paceHour}대` : ''}`}>
+        <Section title={`시간대별 처리량${stats.paceHour != null ? ` — 페이스 시간당 ${stats.paceHour}대` : (stats.paceNote ? ` — ${stats.paceNote}` : '')}`}>
           <div className="space-y-1">
             {Object.entries(stats.byHour).slice(-12).map(([h, n]) => {
               const max = Math.max(...Object.values(stats.byHour));
@@ -224,7 +225,7 @@ function SpecialRow({ type, stats, containers }) {
   );
 }
 
-function computeAllStats(containers, compMap, xrayMap, mode) {
+function computeAllStats(containers, compMap, xrayMap, mode, info) {
   const total = containers.length;
   const done = containers.filter(c => compMap[c.cn]).length;
 
@@ -278,7 +279,7 @@ function computeAllStats(containers, compMap, xrayMap, mode) {
   const xrayDone = xrayList.filter(c => compMap[c.cn]).length;
 
   // ── V9.16: 시간·사람·항구·이상 축 (전면 점검 §6-1 — 데이터는 있는데 통계에 없던 것들) ──
-  // 시간대별 처리량 (완료 시각 1시간 버킷) + 시간당 페이스(최근 20건)
+  // 시간대별 처리량 (완료 시각 1시간 버킷) + 시간당 페이스(3.6: 전체 실작업 시간 기준 — paceFromRecords 한 벌)
   const byHour = {};
   const doneAts = [];
   const byInspector = {};
@@ -298,11 +299,16 @@ function computeAllStats(containers, compMap, xrayMap, mode) {
     else if (r.flag === 'swapped') anomaly.swapped++;
   });
   doneAts.sort((a, b) => a - b);
+  //  ★ 3.6 — 최근 20건 «간격»이 아니라 전체 실작업 시간으로 잰다(nlSearch.paceFromRecords 한 벌).
+  //    몰아 입력이 섞이면 간격은 «시간당 2,410대» 같은 값을 낸다(NSDC 2608N 선적 실측 2026-09-03).
   let paceHour = null;
-  if (doneAts.length >= 3) {
-    const recent = doneAts.slice(-20);
-    const span = recent[recent.length - 1] - recent[0];
-    if (span > 0) paceHour = Math.round((recent.length - 1) / (span / 3600000));
+  let paceNote = '';
+  {
+    const _P = paceFromRecords(doneAts, info);   // 3.6: 부두·선석·갱 수를 한 덩어리로(재감사 P1-A)
+    if (_P.ok) paceHour = Math.round(_P.perHour);
+    else if (_P.why === 'batch') paceNote = '몰아 입력이라 페이스 못 잼';
+    else if (_P.why === 'dirty') paceNote = '완료 시각이 고르지 않아 페이스 못 잼';
+    //  'few'·'short' 는 «아직 안 쌓였다»일 뿐이라 제목에 아무 말도 안 붙인다(잔소리가 된다).
   }
 
   // POD/POL별 (양하=POD, 선적=POD(목적항)) — 양하 순서·목적항 협의용
@@ -320,5 +326,5 @@ function computeAllStats(containers, compMap, xrayMap, mode) {
     (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
 
   return { total, done, bySize, byFE, bySpecial, byOp, xrayTotal, xrayDone, xrayList,
-           byHour, byInspector, anomaly, paceHour, byPort, reeferTempMissing };
+           byHour, byInspector, anomaly, paceHour, paceNote, byPort, reeferTempMissing };
 }

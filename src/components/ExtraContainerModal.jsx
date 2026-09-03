@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { engChange, ENG_INPUT_PROPS, NUM_INPUT_PROPS, DECIMAL_INPUT_PROPS } from '../inputUtils.js';
+import { isoCheckDigit, isoFixLastDigit } from '../utils.js';   // 3.6: 손으로 친 번호 검산(오타·초과분 구분)
 
 const SIZES = ['20', '40ST', '40HC', '45'];
 const FES = [['F', '적 (Full)'], ['E', '공 (Empty)']];
@@ -40,7 +41,10 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
   const [saving, setSaving] = useState(false);
   if (!open) return null;
 
-  const cnClean = cn.trim().toUpperCase().replace(/\s/g, '');
+  const cnClean = cn.trim().toUpperCase().replace(/[\s-]/g, '');   // 3.6: 검산과 같은 잣대 — 하이픈도 지운다(화면은 «맞음»인데 저장값에 하이픈이 남던 것)
+  //  3.6: ISO 6346 검산 — 막지는 않는다(규칙 안 지킨 번호도 드물게 온다). 알리기만 한다.
+  const isoOk = isoCheckDigit(cnClean);          // true 맞음 · false 틀림 · null 형식 밖(아직 치는 중)
+  const isoFix = isoOk === false ? isoFixLastDigit(cnClean) : '';
   const canSave = cnClean.length >= 4 && size && fe && ctype && damage && !saving;
 
   const handleSave = async () => {
@@ -81,7 +85,19 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
           <div className="mb-3">
             <div className="text-xs font-bold text-amber-200 mb-1.5">컨테이너 번호 *</div>
             <input value={cn} onChange={engChange(setCn)} {...ENG_INPUT_PROPS} placeholder="예: ABCD1234567"
-              className="w-full bg-ink-900 border-2 border-line focus:border-amber-500 rounded-pill px-3 py-2 text-sm mono text-dim-100 outline-none" />
+              className={`w-full bg-ink-900 border-2 rounded-pill px-3 py-2 text-sm mono text-dim-100 outline-none ${
+                isoOk === false ? 'border-red-600 focus:border-red-500' : 'border-line focus:border-amber-500'}`} />
+            {/* 3.6: 검산 결과 — 저장을 막지 않는다. «다시 보시라»는 알림이다. */}
+            {isoOk === true && (
+              <div className="mt-1 text-2xs text-emerald-400">✓ 번호 검산 맞음</div>
+            )}
+            {isoOk === false && (
+              <div className="mt-1 text-2xs text-red-300">
+                ⚠ 번호 검산이 안 맞습니다 — 한 글자 잘못 치신 것일 수 있어요.
+                {isoFix && <> 마지막 자리가 <b className="mono text-red-200">{isoFix.slice(-1)}</b> 이면 맞습니다(<span className="mono">{isoFix}</span>).</>}
+                <div className="text-dim-400 mt-0.5">실물이 이 번호가 맞으면 그대로 저장하셔도 됩니다.</div>
+              </div>
+            )}
           </div>
 
           <Field label="규격 *">

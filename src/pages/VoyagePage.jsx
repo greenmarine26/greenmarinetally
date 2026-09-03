@@ -1770,7 +1770,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'stats' && (
         <div className="space-y-3">
           {/* V9.15: BayDictVerifyWidget(자료 진단)은 업로드 탭으로 — 통계 탭 첫 화면은 통계여야 한다(전면 점검 2-5) */}
-          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
+          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} info={voyage?.info || null}/>
         </div>
       )}
       {!_sideCanc && tab === 'xray' && (
@@ -2719,7 +2719,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
       //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
       //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
-      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
+      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, berth: briefCtx?.info?.berth, gangs: briefCtx?.info?.gangs, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
   const readRef = useRef('');

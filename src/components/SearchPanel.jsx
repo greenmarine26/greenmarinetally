@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
-import { isTransitContainer, canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -439,7 +439,8 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo]);
   // 1.26: shipLib(본선 구조·실적)을 ctx 로 내려보낸다 — "몇 대까지 싣나" 답변 근거.
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib,
-    pier: voyage?.info?.pier || '' };   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
+    pier: voyage?.info?.pier || '',   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
+    gangs: voyage?.info?.gangs };   // 3.6: 페이스 문지기가 갱 수를 봐야 상한이 맞다 — 종전 ctx.info.gangs 는 아무도 안 넣던 죽은 값이었다(감사 지적)
 
   return (
     <div className="space-y-3">
@@ -1220,7 +1221,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
       { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || null, tw: _gangTw, compMap: null }); } catch (e) { return null; } },   // 2.70-01: 2 로 못 박지 않는다 — 기억·되묻기가 살아야 한다
-        carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
+        carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, berth: voyage?.info?.berth, gangs: voyage?.info?.gangs, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈
@@ -1633,6 +1634,20 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           {!isListening && query.length >= 2 && results.length === 1 && !parsed.isStat && !localAnswer && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
           {!isListening && query.length >= 2 && results.length > 1 && !parsed.isStat && !localAnswer && <span   /* 2.34-08: 즉답 있으면 숨김 */ className="text-amber-400 font-bold">⚠ {results.length}개 일치</span>}
           {isListening && <span className="text-red-300 font-bold">🎙 듣는 중...</span>}
+          {/* 3.6: 온전한 컨번호를 쳤는데 못 찾았다 — 검산으로 «오타인지 진짜 없는 컨인지» 짚어 준다. */}
+          {(() => {
+            if (isListening || results.length !== 0) return null;
+            const q = String(query || '').toUpperCase().replace(/[\s-]/g, '');
+            const ok = isoCheckDigit(q);
+            if (ok !== false) return null;
+            const fix = isoFixLastDigit(q);
+            return (
+              <div className="mt-1 text-2xs text-red-300">
+                ⚠ 이 번호는 검산(ISO 6346)이 안 맞습니다 — 한 글자 잘못 치신 것일 수 있어요.
+                {fix && <> 마지막 자리가 <b className="mono text-red-200">{fix.slice(-1)}</b> 이면 맞습니다 — <span className="mono">{fix}</span></>}
+              </div>
+            );
+          })()}
           {askedAt && !isListening && <span className="text-emerald-400 font-bold ml-2">✓ 질문 접수 {_hm(askedAt)}</span>}
         </div>
       </div>
