@@ -14,9 +14,11 @@
 // 이 화면은 수석 대시보드(권한 화면) 안에 있고, 목록은 **보관소(정본) 하나만** 읽는다.
 
 import React, { useState, useMemo } from 'react';
-import { X, Search, Plus, Lock, Wrench } from 'lucide-react';
+import { X, Search, Plus, Lock, Wrench, Trash2, StickyNote } from 'lucide-react';
 import ShipMatrixBuilderModal from './ShipMatrixBuilderModal.jsx';
 import { canWriteBayDict } from '../bayDictGuard.js';
+import { fbSetShipBayDictNote, fbTrashShipBayDict, fbSetShipBayDictSpare } from '../firebase.js';   // 3.5: 비고 얕은 저장 · 휴지통 이동 · 보조 보관함
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
 const U = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
 
@@ -48,20 +50,59 @@ function rowsFromMaster() {
       bays: n,
       hasMatrix,
       provisional: e.provisional === true || bd?.provisional === true,
+      note: String(e.note || '').trim(),        // 3.5: 비고(쪽지) — 왜 남겨 두는 배인지 적는 자리
+      noteBy: e.noteBy || '',
+      spare: e.spare === true,                  // 3.5: 보조 보관함 — 메인 목록에서 가린다(자료는 그대로)
     });
   }
   return out.sort((a, b) => a.code.localeCompare(b.code));
 }
 
-export default function BayMatrixManagerModal({ onClose }) {
+/* ★ 3.5 — 이 사전 항목이 «실제로 쓰이는 배»인가.
+     검수사 지시 2026-09-03 — 08-11 마이그레이션(fbBatchSaveShipBayDict 92건)이 콜사인 앞4자·선박명 앞4자·도면
+     제목을 키로 만들어 107키가 됐고, 그중 실제로 불리는 것은 36키뿐이다(실측). 어느 것을 지울지 검수사가
+     고를 수 있게 상태를 보인다.
+   ⚠ **단정하지 않는다.** 화면이 읽을 수 있는 것은 활성 항차·마감 대기 색인·선박 라이브러리(IMO)뿐이고
+     보관소 전수는 요청 폭주라 못 읽는다(firebase.js:1999 사고 기록). 실측 커버리지(2026-09-03 GET, 활성 19·보관 243·
+     사전 107·ships 61·마감대기 87) — 실제로 기항한 36척 중 **PCBJ 1척**이 이 재료로 «못 찾음»으로 나온다.
+     마감 대기 색인이 없으면(수석 아닌 열람) 5척까지 는다. 그래서 «없다»가 아니라 «기록 못 찾음»이라고 쓰고,
+     재료가 덜 왔으면 화면이 그 사실을 함께 말한다. */
+function usageOf(code, imo, live, seen) {
+  const c = U(code);
+  if (live.has(c)) return 'live';
+  if (seen.has(c) || (imo && seen.has(U(imo)))) return 'seen';
+  return 'unknown';
+}
+
+export default function BayMatrixManagerModal({ onClose, voyages = null, shipLib = null, arcList = null, inspector = '' }) {
   const [q, setQ] = useState('');
   const [target, setTarget] = useState(null);      // 빌더에 넘길 선박 {code,name,callsign,imo}
   const [adding, setAdding] = useState(false);     // 신규 추가 입력 폼
   const [newShip, setNewShip] = useState({ code: '', name: '', callsign: '', imo: '' });
   const [msg, setMsg] = useState('');
+  const [sel, setSel] = useState(() => new Set());     // 3.5: 고른 선박(코드)
+  const [filter, setFilter] = useState('all');         // 3.5: all | live | seen | unknown
+  const [noteOpen, setNoteOpen] = useState(null);      // 3.5: 비고를 펼친 코드
+  const [noteText, setNoteText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0);                 // 저장·삭제 뒤 목록 다시 읽기
+  const [confirmState, askConfirm] = useConfirm();   // 1.53 한 벌 — 브라우저 confirm 은 화면을 멈춘다
+  const ask = (opts) => new Promise((resolve) => {
+    askConfirm({ ...opts, onConfirm: () => resolve(true), onCancel: () => resolve(false) });
+  });
   const canEdit = canWriteBayDict();
 
-  const all = useMemo(() => rowsFromMaster(), [target]);   // 저장 후 닫으면 다시 읽는다
+  /* 3.5: «지금 기항»(live) 과 «기항 기록 있음»(seen) 의 재료 — 부모가 이미 들고 있는 것만 쓴다(추가 요청 0). */
+  const live = useMemo(() => new Set(Object.values(voyages || {})
+    .map(v => U(v?.info?.vsl)).filter(Boolean)), [voyages]);
+  const seen = useMemo(() => {
+    const s = new Set();
+    for (const a of (arcList || [])) { if (a?.vsl) s.add(U(a.vsl)); if (a?.voyageKey) s.add(U(String(a.voyageKey).split('_')[0])); }
+    for (const k of Object.keys(shipLib || {})) s.add(U(k));   // ships/{imo}
+    return s;
+  }, [arcList, shipLib]);
+  const all = useMemo(() => rowsFromMaster().map(r => ({ ...r, use: usageOf(r.code, r.imo, live, seen) })),
+    [target, tick, live, seen]);   // 저장 후 닫으면 다시 읽는다
   // 1.60-02: 콜사인은 배마다 유일하다 — 겹치면 하나는 남의 것이다(검수사 신고로 PCBJ/PCSZ 실측).
   const csDupes = useMemo(() => {
     const by = {};
@@ -73,10 +114,72 @@ export default function BayMatrixManagerModal({ onClose }) {
   }, [all]);
   const hits = useMemo(() => {
     const s = U(q);
-    if (!s) return all;
-    return all.filter(r => U(r.code).includes(s) || U(r.name).includes(s)
-      || U(r.callsign).includes(s) || U(r.imo).includes(s) || U(r.carrier).includes(s));
-  }, [all, q]);
+    /* 3.5 (검수사 지시 2026-09-03) — 보조 보관함은 **메인 목록에서 뺀다.**
+       ⚠ 단 **입항하면 자동으로 돌아온다** — 항차에 뜬 배(use==='live')는 보조 표가 붙어 있어도 메인에 보인다.
+         «입항하면 수정해서 사용할수 있게» 라는 뜻 그대로다. 표는 그대로 두고 화면만 되돌린다. */
+    let r0 = filter === 'spare' ? all.filter(r => r.spare && r.use !== 'live')
+      : (filter === 'all' ? all.filter(r => !r.spare || r.use === 'live')
+        : all.filter(r => r.use === filter && (!r.spare || r.use === 'live')));
+    if (!s) return r0;
+    return r0.filter(r => U(r.code).includes(s) || U(r.name).includes(s)
+      || U(r.callsign).includes(s) || U(r.imo).includes(s) || U(r.carrier).includes(s) || U(r.note).includes(s));
+  }, [all, q, filter]);
+  const counts = useMemo(() => {
+    const main = all.filter(r => !r.spare || r.use === 'live');
+    return {
+      all: main.length,
+      live: main.filter(r => r.use === 'live').length,
+      seen: main.filter(r => r.use === 'seen').length,
+      unknown: main.filter(r => r.use === 'unknown').length,
+      spare: all.filter(r => r.spare && r.use !== 'live').length,
+    };
+  }, [all]);
+  const toggle = (code) => setSel(prev => { const n = new Set(prev); if (n.has(code)) n.delete(code); else n.add(code); return n; });
+
+  /* 3.5: 비고 저장 — 매트릭스를 건드리지 않는 얕은 쓰기(firebase.fbSetShipBayDictNote). */
+  const saveNote = async (code) => {
+    setBusy(true);
+    const okSave = await fbSetShipBayDictNote(code, noteText, inspector);
+    setBusy(false);
+    if (!okSave) { setMsg(`${code} 비고를 저장하지 못했습니다 — 권한·신호를 확인하세요.`); return; }
+    //  전역 사전에도 즉시 반영해 목록이 바로 바뀐다(구독이 오기 전에도).
+    try { if (window.__fbShipBayDict?.[code]) window.__fbShipBayDict[code].note = noteText.slice(0, 300); } catch (e) { /* 창 없음 */ }
+    setMsg(`${code} 비고를 저장했습니다.`); setNoteOpen(null); setTick(t => t + 1);
+  };
+
+  /* 3.5: 고른 선박을 보조 보관함으로 넣거나 뺀다 — 자료는 그대로 두고 목록에서만 가린다. */
+  const setSpareSelected = async (on) => {
+    const codes = [...sel];
+    if (!codes.length) return;
+    setBusy(true);
+    let done = 0, failed = [];
+    for (const c of codes) {
+      const r = await fbSetShipBayDictSpare(c, on, inspector);
+      if (r) { done++; try { if (window.__fbShipBayDict?.[c]) window.__fbShipBayDict[c].spare = on ? true : undefined; } catch (e) { /* 창 없음 */ } }
+      else failed.push(c);
+    }
+    setBusy(false); setSel(new Set()); setTick(t => t + 1);
+    setMsg(failed.length ? `${done}척 ${on ? '보조로' : '메인으로'} · 실패 ${failed.join(', ')}`
+      : `${done}척을 ${on ? '보조 보관함으로 옮겼습니다 — 입항하면 자동으로 돌아옵니다.' : '메인 목록으로 되돌렸습니다.'}`);
+  };
+
+  /* 3.5: 고른 선박을 휴지통으로 — 지우는 것이 아니라 옮긴다(되돌릴 수 있다). */
+  const trashSelected = async () => {
+    const codes = [...sel];
+    if (!codes.length) return;
+    const okGo = await ask({
+      title: `선박 ${codes.length}척을 휴지통으로`,
+      danger: true,
+      message: `${codes.join(' · ')}\n\n사전에서 내립니다. 지우는 것이 아니라 휴지통(ship_bay_dict_trash)으로 옮기는 것이라 되돌릴 수 있습니다.\n항차에 쓰이는 배가 섞여 있지 않은지 한 번 더 보십시오.`,
+      confirmLabel: '휴지통으로', cancelLabel: '취소',
+    });
+    if (!okGo) return;
+    setBusy(true);
+    let done = 0, failed = [];
+    for (const c of codes) { const r = await fbTrashShipBayDict(c, inspector); if (r) { done++; try { delete window.__fbShipBayDict[c]; } catch (e) { /* 창 없음 */ } } else failed.push(c); }
+    setBusy(false); setSel(new Set()); setTick(t => t + 1);
+    setMsg(failed.length ? `${done}척 옮김 · 실패 ${failed.join(', ')}` : `${done}척을 휴지통으로 옮겼습니다. 되돌리려면 개발자에게 말씀하세요.`);
+  };
 
   // 빌더는 항차를 받도록 만들어져 있다 — 선박만 담은 최소 항차 모양으로 넘긴다.
   //   `info.vsl` 이 곧 선박 약자이고, extractShipMetaFromVoyage 가 그것을 코드로 쓴다(1.58-01).
@@ -131,8 +234,39 @@ export default function BayMatrixManagerModal({ onClose }) {
           </div>
 
           <div className="text-xxs text-dim-400">
-            보관소 {all.length}척 · 검색 결과 {hits.length}척
+            보관소 {all.length}척 · 검색 결과 {hits.length}척{sel.size > 0 && <span className="text-amber-300 font-bold"> · 고른 {sel.size}척</span>}
           </div>
+
+          {/* 3.5: 상태 칩 — «기록 못 찾음»만 골라 보고 지울 것을 고른다(검수사 지시 2026-09-03). */}
+          <div className="flex gap-1.5 flex-wrap">
+            {[['all', `전체 ${counts.all}`], ['live', `지금 기항 ${counts.live}`], ['seen', `기록 있음 ${counts.seen}`], ['unknown', `기록 못 찾음 ${counts.unknown}`], ['spare', `📦 보조 보관함 ${counts.spare}`]].map(([k, label]) => (
+              <button key={k} onClick={() => { setFilter(k); setSel(new Set()); }}   /* 감사 P2-2: 칩을 바꾸면 고른 것을 푼다 — 안 보이는 배에 쓰기가 가지 않게 */
+                className={`px-2.5 py-1 rounded-pill text-xxs font-bold border ${filter === k
+                  ? (k === 'unknown' ? 'bg-rose-900/60 border-rose-600 text-rose-200'
+                    : k === 'spare' ? 'bg-violet-900/60 border-violet-600 text-violet-200'
+                      : 'bg-emerald-900/60 border-emerald-600 text-emerald-200')
+                  : 'bg-ink-800 border-line text-dim-300 hover:bg-ink-750'}`}>{label}</button>
+            ))}
+          </div>
+          {filter === 'spare' && (
+            <div className="text-2xs text-violet-200 bg-violet-950/40 border border-violet-800 rounded px-2 py-1.5">
+              📦 지금 다니지 않는 배를 넣어 두는 자리입니다. 자료는 그대로 있고 목록에서만 빠져 있습니다 — <b>입항해 항차가 뜨면 저절로 메인으로 돌아옵니다.</b> 그때 매트릭스를 고쳐 쓰시면 됩니다.
+            </div>
+          )}
+          <div className="text-2xs text-dim-400">
+            «기록 못 찾음» = 활성 항차·마감 대기·선박 이력에서 이 배를 못 찾았다는 뜻입니다. 보관소 전체를 뒤지지는 않으니 <b>없다는 단정이 아닙니다</b> — 지우기 전에 배 이름을 보십시오.
+            {/* 3.5 감사 지적(P2-1): 마감 대기 색인은 수석 화면에서만 채워진다. 재료가 덜 온 채로 열리면 실제로 기항한 배가 «못 찾음»으로 늘어난다 — 그 사실을 화면이 말한다. */}
+            {!arcList && <span className="text-amber-300"> · ⚠ 마감 대기 목록을 아직 못 읽어 «못 찾음»이 실제보다 많이 보일 수 있습니다.</span>}
+          </div>
+
+
+          {/* 3.5: 비고 저장·휴지통 결과를 여기서 알린다 — 종전 msg 자리는 «신규 추가» 폼 안이라 목록에서는 안 보였다. */}
+          {msg && !adding && (
+            <div className="bg-ink-800/70 border border-line rounded-pill px-3 py-2 text-xs2 text-dim-100 flex items-start gap-2">
+              <span className="flex-1">{msg}</span>
+              <button onClick={() => setMsg('')} className="text-xxs text-dim-400 shrink-0">닫기</button>
+            </div>
+          )}
 
           {csDupes.length > 0 && (
             <div className="bg-rose-900/40 border border-rose-700/50 rounded-pill px-3 py-2 text-xs2 text-rose-200">
@@ -146,24 +280,85 @@ export default function BayMatrixManagerModal({ onClose }) {
           {/* 목록 */}
           <div className="max-h-[46vh] overflow-y-auto rounded-pill border border-line divide-y divide-line">
             {hits.map(r => (
-              <button key={r.code} disabled={!canEdit}
-                onClick={() => setTarget({ code: r.code, name: r.name, callsign: r.callsign, imo: r.imo, carrier: r.carrier })}
-                className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-ink-750 disabled:opacity-60 disabled:hover:bg-transparent">
-                <span className="font-bold text-dim-100 text-sm w-16 shrink-0">{r.code}</span>
-                <span className="flex-1 text-xs2 text-dim-300 truncate">{r.name || '—'}</span>
-                {r.carrier && <span className="text-2xs font-bold text-sky-300 shrink-0">{r.carrier}</span>}
-                <span className="text-xxs text-dim-400 shrink-0">{r.bays ? `${r.bays}베이` : '매트릭스 없음'}</span>
-                {r.hasMatrix && (r.provisional
-                  ? <span className="text-2xs font-bold text-amber-400 shrink-0 flex items-center gap-0.5"><Wrench className="w-3 h-3" />보정중</span>
-                  : <span className="text-2xs font-bold text-emerald-400 shrink-0 flex items-center gap-0.5"><Lock className="w-3 h-3" />확정</span>)}
-              </button>
+              <div key={r.code} className="bg-transparent">
+                <div className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-ink-750">
+                  {/* 3.5: 고르는 칸 — 카톡 기록 가져오기(KakaoLogImportModal)와 같은 벌. 진짜 체크박스가 아니라 눌리는 사각형. */}
+                  {canEdit && (
+                    <button onClick={() => toggle(r.code)} aria-label={`${r.code} 고르기`}
+                      className={`w-5 h-5 shrink-0 rounded border flex items-center justify-center text-2xs font-black ${sel.has(r.code)
+                        ? 'bg-amber-500 border-amber-400 text-ink-950' : 'bg-ink-800 border-line text-transparent'}`}>✓</button>
+                  )}
+                  <button disabled={!canEdit}
+                    onClick={() => setTarget({ code: r.code, name: r.name, callsign: r.callsign, imo: r.imo, carrier: r.carrier })}
+                    className="flex-1 min-w-0 flex items-center gap-3 text-left disabled:opacity-60">
+                    <span className="font-bold text-dim-100 text-sm w-16 shrink-0">{r.code}</span>
+                    <span className="flex-1 text-xs2 text-dim-300 truncate">{r.name || '—'}</span>
+                    {r.carrier && <span className="text-2xs font-bold text-sky-300 shrink-0">{r.carrier}</span>}
+                    <span className="text-xxs text-dim-400 shrink-0">{r.bays ? `${r.bays}베이` : '매트릭스 없음'}</span>
+                    {/* 3.5: 쓰이는 배인지 — 단정하지 않는 세 갈래 */}
+                    <span className={`text-2xs font-bold shrink-0 ${r.use === 'live' ? 'text-emerald-300' : r.use === 'seen' ? 'text-dim-300' : 'text-rose-300'}`}>
+                      {r.use === 'live' ? '지금 기항' : r.use === 'seen' ? '기록 있음' : '기록 못 찾음'}
+                    </span>
+                    {r.spare && <span className="text-2xs font-bold text-violet-300 shrink-0">📦{r.use === 'live' ? ' 보조→복귀' : ''}</span>}
+                    {r.hasMatrix && (r.provisional
+                      ? <span className="text-2xs font-bold text-amber-400 shrink-0 flex items-center gap-0.5"><Wrench className="w-3 h-3" />보정중</span>
+                      : <span className="text-2xs font-bold text-emerald-400 shrink-0 flex items-center gap-0.5"><Lock className="w-3 h-3" />확정</span>)}
+                  </button>
+                  {/* 3.5: 비고 — 왜 남겨 두는 배인지 적는 쪽지 */}
+                  {canEdit && (
+                    <button onClick={() => { setNoteOpen(noteOpen === r.code ? null : r.code); setNoteText(r.note || ''); }}
+                      aria-label={`${r.code} 비고`}
+                      className={`p-1 rounded shrink-0 ${r.note ? 'text-amber-300' : 'text-dim-500 hover:text-dim-300'}`}>
+                      <StickyNote className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {r.note && noteOpen !== r.code && (
+                  <div className="px-3 pb-2 -mt-1 text-2xs text-amber-200/90 truncate">📝 {r.note}</div>
+                )}
+                {noteOpen === r.code && (
+                  <div className="px-3 pb-3 space-y-1.5">
+                    <textarea value={noteText} onChange={e => setNoteText(e.target.value.slice(0, 300))} rows={2} autoFocus
+                      placeholder="예: 아직 평택에 안 오는 배 · 대체선 · 도면 확인 필요"
+                      className="w-full bg-ink-800 border border-line rounded p-2 text-xs2 text-dim-100 placeholder-dim-500" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-3xs text-dim-500 flex-1">{noteText.length}/300{r.noteBy ? ` · 마지막 ${r.noteBy}` : ''}</span>
+                      <button onClick={() => setNoteOpen(null)} className="px-2 py-1 rounded text-xxs bg-ink-800 text-dim-300">취소</button>
+                      <button onClick={() => saveNote(r.code)} disabled={busy}
+                        className="px-3 py-1 rounded text-xxs font-bold bg-emerald-700 text-white disabled:opacity-50">비고 저장</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
             {hits.length === 0 && (
               <div className="px-3 py-6 text-center text-xs2 text-dim-400">
-                「{q}」 로 찾은 선박이 없습니다. 아래에서 새로 추가하세요.
+                「{q}」 로 찾은 선박이 없습니다.
+                {/* 감사 P2-3: 보조 보관함에 있는 배는 이 칩에서 안 보인다 — 새로 만들라고 하면 사전이 또 갈라진다 */}
+                {all.some(r => (U(r.code).includes(U(q)) || U(r.name).includes(U(q))) && r.spare)
+                  ? <><br/><span className="text-violet-300 font-bold">📦 보조 보관함에 있습니다 — 위 칩에서 보십시오.</span></>
+                  : <> 아래에서 새로 추가하세요.</>}
               </div>
             )}
           </div>
+
+          {/* 3.5: 고른 선박 일괄 처리 — 지우는 것이 아니라 휴지통으로 옮긴다(되돌릴 수 있다). */}
+          {canEdit && sel.size > 0 && (
+            <div className="bg-amber-950/30 border border-amber-700/50 rounded-pill px-3 py-2 flex items-center gap-2 flex-wrap">
+              <span className="text-xs2 font-bold text-amber-200 flex-1">고른 {sel.size}척</span>
+              <button onClick={() => setSel(new Set(hits.map(r => r.code)))}
+                className="px-2 py-1 rounded text-xxs bg-ink-800 text-dim-300">보이는 것 전부</button>
+              <button onClick={() => setSel(new Set())} className="px-2 py-1 rounded text-xxs bg-ink-800 text-dim-300">해제</button>
+              <button onClick={() => setSpareSelected(filter !== 'spare')} disabled={busy}
+                className="px-3 py-1.5 rounded-pill text-xxs font-bold bg-violet-800 text-white disabled:opacity-50">
+                {filter === 'spare' ? '메인으로' : '📦 보조로'}
+              </button>
+              <button onClick={trashSelected} disabled={busy}
+                className="px-3 py-1.5 rounded-pill text-xxs font-bold bg-rose-800 text-white disabled:opacity-50 flex items-center gap-1">
+                <Trash2 className="w-3.5 h-3.5" />휴지통으로
+              </button>
+            </div>
+          )}
 
           {/* 신규 추가 — 조회가 안 되는 선박 */}
           {canEdit && (adding ? (
@@ -216,6 +411,9 @@ export default function BayMatrixManagerModal({ onClose }) {
 
         </div>
       </div>
+
+      {/* 3.5: 확인 모달은 앱 안에서(1.53 한 벌) — 브라우저 confirm 은 화면을 멈춘다 */}
+      <ConfirmModal {...confirmState} />
 
       {/* 빌더 — 항차 없이, 고른 선박으로 연다 */}
       {target && (

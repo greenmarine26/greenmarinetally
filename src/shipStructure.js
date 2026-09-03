@@ -442,7 +442,7 @@ function _dictIdentityConflict(entry, opts) {
  *  왜 따로 두는가 (검수사 «이 문제도 해결한 거 같은데 또 나오고») —
  *  `getShipBayDictData` 는 «베이 구조»를 주는 함수라, 구조가 없는 항목(껍데기)을 일부러 버린다.
  *      const _byCode = (_fb[_key] && _fb[_key].bayDef) ? _fb[_key] : null;   // 껍데기 제외
- *  그래서 **RZOR(RIZHAO ORIENT)** 처럼 LOLO 라 베이 매트릭스가 애초에 없는 배는
+ *  그래서 **RZOR(RIZHAO ORIENT)** 처럼 RORO/LOLO 혼용선이라 셀 베이 매트릭스가 애초에 없는 배는
  *  사전에 콜사인(HOAG)이 멀쩡히 있는데도 조회가 **언제나 null** 이었다.
  *  PORT-MIS 카드는 콜사인만 있으면 되는데 구조 조회에 얹혀 있어서 매번 «콜사인: 없음» 이 떴다.
  *  실측 2026-08-23: 사전 39척 중 껍데기는 RZOR **한 척**, 그 한 척이 계속 안 잡히던 배다.

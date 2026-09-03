@@ -565,7 +565,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       ) : (
       <>
       {/* V7.99-10 (메모6 수동): 베이→홀드/데크 선택 게이트 (A안). 완료 탭은 게이트 없이 자유 조회. */}
-      {/* V8.11: LOLO선(RZOR 등)은 베이가 없으므로 게이트를 건너뛰고 바로 조회창으로. 베이만 못 알려줄 뿐 실번호·규격·F/E·온도·XRAY는 정상 조회. */}
+      {/* V8.11: RORO/LOLO 혼용선(RZOR 등)은 셀 좌표가 없으므로 게이트를 건너뛰고 바로 조회창으로. 베이만 못 알려줄 뿐 실번호·규격·F/E·온도·XRAY는 정상 조회. */}
       {workFilter !== 'completed' && !noWorkLeft && manualBay == null && !isLoloShip ? (
         <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
           <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-xxs text-dim-400 font-normal">(수동)</span></div>
@@ -648,10 +648,10 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           ✅ 남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다 — 조회·검색은 그대로 됩니다. 끝 4자리를 넣어 보세요.
         </div>
       )}
-      {/* V8.11: LOLO선 안내 — 베이(위치)만 없고 나머지 정보는 정상 조회됨을 알림. */}
+      {/* V8.11: RORO/LOLO 혼용선 안내 — 베이(위치)만 없고 나머지 정보는 정상 조회됨을 알림. */}
       {isLoloShip && (
         <div className="bg-teal-950/50 border border-teal-700 rounded-pill px-3 py-2 text-xxs text-teal-200">
-          🚢 LOLO 선박 — 끝 4자리로 조회하세요. 덱플랜이 올라오면 <b className="text-lime-300">자리(D덱 3줄 5칸)</b>와 <b className="text-lime-300">🏗갠트리 대상</b>까지 함께 나옵니다.
+          🚢 RORO/LOLO 혼용선 — 끝 4자리로 조회하세요. 덱플랜이 올라오면 <b className="text-lime-300">자리(D덱 3줄 5칸)</b>와 <b className="text-lime-300">🏗갠트리 대상</b>까지 함께 나옵니다.
         </div>
       )}
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {

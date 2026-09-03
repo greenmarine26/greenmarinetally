@@ -1787,7 +1787,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const tb = [...new Set(transit.map(c => parseInt(c.bay, 10)).filter(b => Number.isFinite(b) && bays.has(b)))].sort((a, b) => a - b);
     if (tb.length) warns.push({ k: null, line: `🔁 통과화물이 작업 베이(${tb.join(', ')})에 혼재 — ${mode === 'discharge' ? '내리지 말 것' : '자리 주의'}` });
   }
-  // V8.06-02: LOLO 선박(베이 없는 IFCSUM) 리스트 검증 — 작업 시작 전 확인 메시지.
+  // V8.06-02: RORO/LOLO 혼용선(셀 좌표 없는 IFCSUM) 리스트 검증 — 작업 시작 전 확인 메시지.
   //   추측·자동변환 대신 검수사가 현장에서 직접 확인하도록 브리핑에 띄운다(사용자 원칙: 데이터·사람이 확정).
   const isLoloBrief = cs.length > 0 && cs.every(c => !c.bay && !c.row && !c.tier);
   if (isLoloBrief) {
@@ -1816,7 +1816,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     (done > 0 ? `, 잔여 ${total - done}` : '');
   const szStr = ['20', '40', '45'].filter(s => sz[s]).map(s => `${s}ft ${sz[s]}`).join(', ');
   const lines = [head];
-  // V8.06-02: LOLO 선박(베이 없음)은 베이/갑판/홀드 표기 생략 — undefined·0 표시 방지.
+  // V8.06-02: RORO/LOLO 혼용선(셀 좌표 없음)은 베이/갑판/홀드 표기 생략 — undefined·0 표시 방지.
   if (isLoloBrief) {
     lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · LOLO(리스트 검수)`);
   } else {

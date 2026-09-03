@@ -1,0 +1,922 @@
+{
+"_src": "ship_bay_dict_v3 실측(RTDB 2026-09-03 GET)에서 표본 10척 — 정본(KSKM·NSDC·KKAK) · 같은 배 중복 키(STAR·V7A5 = NSDC) · 도면 제목/빈 이름(ARTO·GUBR) · 실선박이나 기항 기록 없음(SWAL·NBTD·PCSG) · 3.5 보조 보관함: GUBR·ARTO·STAR 보조, KSKM 은 보조 표가 붙었으나 활성 항차라 메인 복귀",
+"dict": {
+"KSKM": {
+"name": "SUNNY KALMIA",
+"callsign": "3E8980",
+"imo": "1034979",
+"carrier": "KMD",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 22,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "04"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "08"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "12"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "16"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "20"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "24"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "28"
+},
+{
+"bayNo": "29"
+}
+]
+},
+"spare": true
+},
+"NSDC": {
+"name": "STARSHIP DRACO",
+"callsign": "",
+"imo": "9939292",
+"carrier": "NSS",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 28,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "33"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "35"
+},
+{
+"bayNo": "38"
+}
+]
+}
+},
+"KKAK": {
+"name": "KMTC OSAKA",
+"callsign": "3EHZ9",
+"imo": "9848883",
+"carrier": "KMT",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 26,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "38"
+}
+]
+}
+},
+"STAR": {
+"name": "STARSHIP DRACO",
+"callsign": "V7A5451",
+"imo": "9939292",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 28,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "33"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "35"
+},
+{
+"bayNo": "38"
+}
+]
+},
+"spare": true
+},
+"V7A5": {
+"name": "NSDC",
+"callsign": "V7A5151",
+"imo": "9939292",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 28,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "33"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "35"
+},
+{
+"bayNo": "38"
+}
+]
+}
+},
+"ARTO": {
+"name": "STOWAGE INSTRUCTION\nYOKOHAMA TRADER",
+"callsign": "",
+"imo": "",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 24,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+}
+]
+},
+"spare": true
+},
+"GUBR": {
+"name": "",
+"callsign": "",
+"imo": "",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": null,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "37"
+},
+{
+"bayNo": "38"
+},
+{
+"bayNo": "39"
+}
+]
+},
+"spare": true
+},
+"SWAL": {
+"name": "SAWASDEE ALTAIR",
+"callsign": "V7A6141",
+"imo": "9946635",
+"carrier": "SKR",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 28,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "18"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "22"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "26"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "33"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "35"
+},
+{
+"bayNo": "38"
+}
+]
+}
+},
+"NBTD": {
+"name": "NINGBO TRADER",
+"callsign": "D7JA",
+"imo": "9347968",
+"carrier": "SKR",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 24,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "12"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "16"
+},
+{
+"bayNo": "17"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "20"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "24"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "29"
+},
+{
+"bayNo": "30"
+},
+{
+"bayNo": "31"
+},
+{
+"bayNo": "33"
+},
+{
+"bayNo": "34"
+},
+{
+"bayNo": "35"
+}
+]
+}
+},
+"PCSG": {
+"name": "PACIFIC SINGAPORE",
+"callsign": "9V7740",
+"imo": "9433937",
+"carrier": "SKR",
+"source": "user",
+"provisional": false,
+"bayDef": {
+"recordCount": 21,
+"verified": true,
+"source": "user",
+"baysSummary": [
+{
+"bayNo": "01"
+},
+{
+"bayNo": "02"
+},
+{
+"bayNo": "03"
+},
+{
+"bayNo": "05"
+},
+{
+"bayNo": "06"
+},
+{
+"bayNo": "07"
+},
+{
+"bayNo": "09"
+},
+{
+"bayNo": "10"
+},
+{
+"bayNo": "11"
+},
+{
+"bayNo": "13"
+},
+{
+"bayNo": "14"
+},
+{
+"bayNo": "15"
+},
+{
+"bayNo": "19"
+},
+{
+"bayNo": "20"
+},
+{
+"bayNo": "21"
+},
+{
+"bayNo": "23"
+},
+{
+"bayNo": "24"
+},
+{
+"bayNo": "25"
+},
+{
+"bayNo": "27"
+},
+{
+"bayNo": "28"
+},
+{
+"bayNo": "29"
+}
+]
+}
+}
+},
+"voyages": {
+"KSKM_2616N": {
+"info": {
+"vsl": "KSKM",
+"vslFull": "SUNNY KALMIA"
+}
+}
+},
+"shipLib": {
+"9939292": {}
+},
+"arcList": [
+{
+"voyageKey": "KKAK_2608N",
+"vsl": "KKAK"
+}
+]
+}

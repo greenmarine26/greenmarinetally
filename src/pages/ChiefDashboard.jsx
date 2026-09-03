@@ -690,7 +690,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
       {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
       {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
-      {showBayMatrix && <BayMatrixManagerModal onClose={() => setShowBayMatrix(false)} />}
+      {showBayMatrix && (
+        /* 3.5: «쓰이는 배»를 화면이 알 수 있게 — 부모가 이미 들고 있는 재료만 넘긴다(추가 요청 0).
+           ⚠ fbListArchive 는 부르지 않는다(키 1건당 GET 4회 — firebase.js:1999 요청 폭주 기록). */
+        <BayMatrixManagerModal onClose={() => setShowBayMatrix(false)}
+          voyages={voyages} shipLib={shipLib} arcList={arcList} inspector={inspector} />
+      )}
 
       {/* V8.27: 검수원 공지 (흐르는 띠) */}
       <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
@@ -1024,7 +1029,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <div className="flex items-center gap-2 mb-3">
             <Truck className="w-4 h-4 text-cyan-400"/>
             <div className="text-sm font-bold text-dim-100">LOLO 검수 제출 리스트</div>
-            <span className="text-2xs text-cyan-300/70">베이 없는 LOLO 선박 · 처리분만 내보냄</span>
+            <span className="text-2xs text-cyan-300/70">셀 좌표 없는 RORO/LOLO 혼용선 · 처리분만 내보냄</span>
           </div>
           {/* TallyOne 1.0(L5): 내보내기 결과 인라인 통지 */}
           <InlineNotice notice={loloNotice} onClose={() => setLoloNotice(null)} />

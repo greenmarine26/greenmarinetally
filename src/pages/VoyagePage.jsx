@@ -951,7 +951,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return isLoloShipByPolicy(vsl, extraPolicies, hints);
   }, [voyage, extraPolicies]);
 
-  // V8.06: LOLO 선박(베이 없는 IFCSUM)이면 최초 1회 자동으로 LOLO 탭으로 전환.
+  // V8.06: RORO/LOLO 혼용선(셀 좌표 없는 IFCSUM)이면 최초 1회 자동으로 LOLO 탭으로 전환.
   //   양하 탭의 EDI↔리스트 매칭 경고("리스트에 없음")는 이 선박엔 부적절(EDI가 곧 리스트)하므로
   //   LOLO 탭을 기본으로 열어 검수사가 바로 작업하게 한다. 이후 사용자가 탭을 바꾸면 그 선택을 존중.
   const loloAutoSwitched = useRef(false);
@@ -1841,7 +1841,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         // M5.87: voyage.info.callsign 우선 (EDI 자동 추출), 없으면 베이사전
         // ★ 2.23 (검수사 «이 문제도 해결한 거 같은데 또 나오고») — **껍데기 항목에서도 신원을 읽는다.**
         //   `getShipBayDictData` 는 «베이 구조»를 주는 함수라 구조 없는 항목을 일부러 버린다.
-        //   RZOR(RIZHAO ORIENT)는 LOLO 라 베이 매트릭스가 애초에 없다 — 사전에 콜사인 HOAG 가
+        //   RZOR(RIZHAO ORIENT)는 RORO/LOLO 혼용선이라 셀 베이 매트릭스가 애초에 없다 — 사전에 콜사인 HOAG 가
         //   멀쩡히 있는데도 조회가 언제나 null 이라 이 카드가 매번 «콜사인: 없음» 을 띄웠다.
         //   PORT-MIS 에는 그 배가 키 HOAG 로 들어와 있었다 — **콜사인만 있으면 붙는 자리였다.**
         const identData = (() => {

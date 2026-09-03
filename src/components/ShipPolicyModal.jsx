@@ -22,7 +22,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
   const [target, setTarget] = useState(initial?.target || 'all_empty');  // 'all_empty' | 'empty_with_pod'
   const [selectedPods, setSelectedPods] = useState(Array.isArray(initial?.pod) ? initial.pod : []);
   const [customPod, setCustomPod] = useState('');
-  const [lolo, setLolo] = useState(!!initial?.lolo);   // V8.09-08: LOLO 선박(베이 없는 IFCSUM 명세선). 대체선 대응.
+  const [lolo, setLolo] = useState(!!initial?.lolo);   // V8.09-08: RORO/LOLO 혼용선(셀 좌표 없는 IFCSUM 명세선). 대체선 대응.
   const [rfSkip, setRfSkip] = useState(!!initial?.rfSkip);   // 1.86: 리퍼 체크 안 함(머스크류 — 리퍼 다수)
   const [saving, setSaving] = useState(false);
 
@@ -69,7 +69,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
         mode,
         target,
         pod: finalPods,
-        lolo: lolo === true,   // V8.09-08: LOLO 선박 플래그 (대체선 대응)
+        lolo: lolo === true,   // V8.09-08: RORO/LOLO 혼용선 플래그 (대체선 대응)
         rfSkip: rfSkip === true,   // 1.86: 리퍼 체크 안 함
         label: lolo ? `${baseLabel} · LOLO` : baseLabel,
         description: '',
@@ -220,7 +220,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
             </>
           )}
 
-          {/* V8.09-08: LOLO 선박 토글 — 대체선 대응. 본선 수리·고장 시 대체선을 LOLO로 지정.
+          {/* V8.09-08: RORO/LOLO 혼용선 토글 — 대체선 대응. 본선 수리·고장 시 대체선을 LOLO로 지정.
               엠티 실 정책(위 mode)과 독립. LOLO만 켜고 mode=none도 가능. */}
           <button
             onClick={() => setLolo(v => !v)}
@@ -235,9 +235,9 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
               {lolo && <CheckCircle2 className="w-3.5 h-3.5 text-white"/>}
             </div>
             <div>
-              <div className="font-bold text-sm">LOLO 선박 (베이플랜 없음)</div>
+              <div className="font-bold text-sm">RORO/LOLO 혼용선 (셀 베이플랜 없음)</div>
               <div className="text-2xs text-dim-300 mt-0.5">
-                베이 그림 없이 리스트로만 검수하는 IFCSUM 명세선. 본선 수리·고장 시 대체선을 여기에 지정하면 LOLO 검수 리스트가 생성됩니다.
+                차량은 램프로 싣고 갠트리 적재분만 덱플랜으로 보는 배 — 셀 좌표가 없어 리스트로 검수한다. 본선 수리·고장 시 대체선을 여기에 지정하면 LOLO 검수 리스트가 생성됩니다.
               </div>
             </div>
           </button>

@@ -2951,6 +2951,78 @@ export async function fbDeleteShipBayDict(code) {
   }
 }
 
+/** ★ 3.5 — 선박 **비고** 한 줄만 얕게 저장한다 (검수사 지시 2026-09-03 «선박마다 비고란을 만들어 주세요»).
+ *
+ *  ⛔ `fbSaveShipBayDict` 를 쓰지 않는다. 그 함수는 확정본 잠금·user 보호 분기에서 **entry 를 통째로 버리고**
+ *     조기 return 하므로 비고가 저장되지 않고, 통과하더라도 무변경 판정·provisional 재판정을 흔든다.
+ *     비고는 매트릭스가 아니라 **쪽지**다 — 그 자리만 건드린다(선례: ship_prefs·tally_pending 얕은 update).
+ *  @returns true | false
+ */
+export async function fbSetShipBayDictNote(code, note, by = '') {
+  if (!gateBayDictWrite('비고 저장')) return false;
+  const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
+  if (!cleanCode) return false;
+  const text = String(note ?? '').slice(0, 300);   // 쪽지다 — 길면 목록이 읽히지 않는다
+  try {
+    await update(ref(db, `ship_bay_dict_v3/${cleanCode}`), {
+      note: text,
+      noteBy: text ? (by || '') : '',
+      noteAt: text ? Date.now() : null,
+    });
+    return true;
+  } catch (e) {
+    console.error('[fbSetShipBayDictNote] 비고 저장 실패', cleanCode, e);
+    return false;
+  }
+}
+
+/** ★ 3.5 — **보조 보관함 표시**(검수사 지시 2026-09-03 «메인화면에 넣지말고 보조리스트를 만들어 보관 — 입항하면 수정해서 사용»).
+ *
+ *  ⚠ **자료를 다른 노드로 옮기지 않는다.** 사전은 베이플랜·인쇄·시프팅·PORT-MIS 조회가 모두 물려 있는 정본이라
+ *    옮기는 순간 그 배가 입항했을 때 조회가 죽고, EDI 자동 등록(VoyagePage edi-auto)이 껍데기로 되살린다.
+ *    표(spare)만 달고 **관리 화면 목록에서만** 가른다 — 조회 경로는 한 줄도 바뀌지 않는다.
+ */
+export async function fbSetShipBayDictSpare(code, on, by = '') {
+  if (!gateBayDictWrite('보조 보관함')) return false;
+  const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
+  if (!cleanCode) return false;
+  try {
+    await update(ref(db, `ship_bay_dict_v3/${cleanCode}`), {
+      spare: on ? true : null,
+      spareAt: on ? Date.now() : null,
+      spareBy: on ? (by || '') : null,
+    });
+    return true;
+  } catch (e) {
+    console.error('[fbSetShipBayDictSpare] 보조 표시 실패', cleanCode, e);
+    return false;
+  }
+}
+
+/** ★ 3.5 — 사전 항목을 **휴지통으로 옮긴다**(지우지 않는다).
+ *
+ *  검수사 지시 2026-09-03 — 08-11 마이그레이션(fbBatchSaveShipBayDict 92건)이 만든 허상 키를 정리하는 자리다.
+ *  ⚠ 되돌릴 수 없는 삭제는 만들지 않는다 — 원본을 `ship_bay_dict_trash/{code}` 에 통째로 옮겨 두고 지운다.
+ *    잘못 지웠으면 그 노드에서 그대로 되살릴 수 있다(누가·언제 지웠는지도 같이 남는다).
+ */
+export async function fbTrashShipBayDict(code, by = '') {
+  if (!gateBayDictWrite('휴지통 이동')) return false;
+  const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
+  if (!cleanCode) return false;
+  try {
+    const snap = await get(ref(db, `ship_bay_dict_v3/${cleanCode}`));
+    if (!snap.exists()) return false;
+    await set(ref(db, `ship_bay_dict_trash/${cleanCode}`), {
+      ...snap.val(), _trashedAt: Date.now(), _trashedBy: by || '',
+    });
+    await remove(ref(db, `ship_bay_dict_v3/${cleanCode}`));
+    return true;
+  } catch (e) {
+    console.error('[fbTrashShipBayDict] 휴지통 이동 실패', cleanCode, e);
+    return false;
+  }
+}
+
 /**
  * 베이사전 전체 일괄 저장 (마이그레이션용)
  */

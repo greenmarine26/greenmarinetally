@@ -480,6 +480,19 @@ fi
       && node tools/smoke_dg8hold.cjs "$SMOKE_D8U" "$SMOKE_D8D" "$SMOKE_NS" \
       || { rm -f "$SMOKE_D8U" "$SMOKE_D8D"; echo "✗ 고려해운 클래스 8 홀드 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_D8U" "$SMOKE_D8D"
+    #  3.5: **베이매트릭스 관리 화면** — 상태 칩·고르는 칸·휴지통·비고를 실제로 눌러 본다(실사전 표본 10척).
+    SMOKE_BM=$(mktemp /tmp/_smokebm_XXXXXX.js)
+    cp src/firebase.js "$SMOKE_BM.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+    if npx esbuild tools/smoke_baymatrix.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+         --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+         --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_BM"; then
+      cp "$SMOKE_BM.fbbak" src/firebase.js && rm -f "$SMOKE_BM.fbbak"
+      node tools/smoke_baymatrix.cjs "$SMOKE_BM" || { echo "✗ 베이매트릭스 관리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BM"; exit 1; }
+      rm -f "$SMOKE_BM"
+    else
+      cp "$SMOKE_BM.fbbak" src/firebase.js; rm -f "$SMOKE_BM.fbbak"
+      echo "✗ 베이매트릭스 관리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BM"; exit 1
+    fi
     #  2.77: **밀린 버그 셋** — X-RAY MRN 입력 · 복구 코드 안내 · 컨 상세 두 값.
     SMOKE_PD="tools/_smokepd_tmp.cjs"
     npx esbuild src/adminGuard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PD" --log-level=error \
