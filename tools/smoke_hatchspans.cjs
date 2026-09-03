@@ -40,6 +40,35 @@ const path = require('path');
   ok(Object.keys(ps2).length === 1, '왼쪽 06열 데크 통과분도 걸린다(두 장 다 열리므로)');
   const ps3 = U.predictShifting({ ABCU1234567: { ...conts[0], row: '06' }, ABCU7654321: conts[1] }, info2);
   ok(Object.keys(ps3).length === 0, '00이 오른쪽 한 장뿐이면 왼쪽 06열은 안 걸린다(종전)');
+  console.log('[5] 3.2-01 열어야 할 장(needed) — NSDC 2608N 실데이터 (김성일 메모 «1장이면 되는데 2장오픈»)');
+  //  실측: 10번 그룹 평택 홀드 12대 전부 00·01·03열(둘째 장) · 22번 그룹 26대 전부 02·04·06·08열(첫째 장). 검수사는 각각 1장을 열었다.
+  const FX = require(path.resolve('tools/fixtures/hatch_nsdc.json'));
+  const mkVoy = (completed) => ({ info: FX.info, discharge: { ediContainers: FX.ediContainers, completed } });
+  const deckDone = {};   // 데크 평택분 전부 내린 시점(자동 가이드가 커버 배너를 띄우는 순간)
+  for (const [cn, c] of Object.entries(FX.ediContainers)) if (c.pod === 'KRPTK' && parseInt(c.tier, 10) >= 80) deckDone[cn] = { by: '시험' };
+  const h10 = U.hatchOpenableFor(mkVoy(deckDone), 'discharge', 10, FX.dict);
+  ok(h10 && h10.total === 2 && h10.openable === 1 && h10.panels[0].blocked, `10번 첫째 장은 통과분(KRPUS·KRKAN 12대)이 막고 있다 (openable=${h10 && h10.openable})`);
+  ok(h10 && h10.needed === 1 && h10.panels[1].holdWork.length === 12 && h10.panels[0].holdWork.length === 0, `10번 열어야 할 장은 1(둘째 장·홀드 평택 12대) — needed=${h10 && h10.needed}`);
+  const h10z = U.hatchOpenableFor(mkVoy({}), 'discharge', 10, FX.dict);
+  ok(h10z && h10z.openable === 0 && h10z.needed === 1, `10번 데크를 아직 안 내렸어도(열 수 있는 장 0) 열어야 할 장은 1 — 종전엔 0→사전 합산 2장으로 떨어졌다 (needed=${h10z && h10z.needed})`);
+  const h22 = U.hatchOpenableFor(mkVoy(deckDone), 'discharge', 22, FX.dict);
+  ok(h22 && h22.needed === 1 && h22.panels[0].holdWork.length === 26 && h22.panels[1].holdWork.length === 0, `22번 열어야 할 장은 1(첫째 장·홀드 평택 26대) — needed=${h22 && h22.needed}`);
+  const h22c = U.hatchOpenableFor(mkVoy(FX.completed), 'discharge', 22, FX.dict);
+  ok(h22c && h22c.needed === 1, `22번 닫기 보고 시점(실제 완료 기록 그대로)에도 1장 — needed=${h22c && h22c.needed}`);
+  const h14 = U.hatchOpenableFor(mkVoy(deckDone), 'discharge', 14, FX.dict);
+  ok(h14 && h14.needed === h14.openable, `14번 홀드 평택분 0 → 종전대로 열 수 있는 장 수(needed=openable=${h14 && h14.openable})`);
+  //  선적(2609S) 닫기 보고 실측 — 04:56 «09 (10)11 총 2장»·«13 (14)15 총 2장»·04:29 «21 (22)23 총 2장». 홀드 선적분: 10번 24대 전부 둘째 장 · 14번 8+8 · 22번 17대 전부 첫째 장.
+  const mkLod = (completed) => ({ info: FX.info, loading: { ediContainers: FX.loadingEdiContainers, completed } });
+  const l10 = U.hatchOpenableFor(mkLod(FX.loadingCompleted), 'loading', 10, FX.dict);
+  ok(l10 && l10.needed === 1 && l10.openable === 2, `선적 10번 닫기: 종전 2장(openable=${l10 && l10.openable}) → 1장 (needed=${l10 && l10.needed})`);
+  const l14 = U.hatchOpenableFor(mkLod(FX.loadingCompleted), 'loading', 14, FX.dict);
+  ok(l14 && l14.needed === 2, `선적 14번 닫기: 홀드 선적분이 두 장에 걸쳐 있어 2장 그대로 (needed=${l14 && l14.needed})`);
+  const l22 = U.hatchOpenableFor(mkLod(FX.loadingCompleted), 'loading', 22, FX.dict);
+  ok(l22 && l22.needed === 1, `선적 22번 닫기: 1장 (needed=${l22 && l22.needed})`);
+  const l10m = U.hatchOpenableFor(mkLod({}), 'loading', 10, FX.dict);
+  ok(l10m && l10m.needed === 1, `선적 10번 작업 전(아직 하나도 안 실음)에도 1장 (needed=${l10m && l10m.needed})`);
+  const hNo = U.hatchOpenable(Object.values(FX.ediContainers), Object.fromEntries(FX.dict.bayDef.baysSummary.map(b => [parseInt(b.bayNo, 10), b])), 10, () => true);
+  ok(hNo.needed === hNo.openable && hNo.openable === 2, 'isWork 없이 부르면 needed = openable (종전 호출부 호환)');
   console.log(fail ? `✗ ${fail}건 실패` : '✓ 해치 폭 연막검사 통과');
   process.exit(fail ? 1 : 0);
 })();

@@ -1,0 +1,4658 @@
+{
+"_src": "NSDC 2608N 양하 실데이터(RTDB 2026-09-03 06:20 GET) — 베이 그룹 10·14·22, 사전 hatchRows 도면 실측(09-01) · 선적(2609S) 같은 그룹",
+"info": {
+"vsl": "NSDC",
+"voy": "2608N",
+"berthSide": "starboard"
+},
+"dict": {
+"code": "NSDC",
+"name": "STARSHIP DRACO",
+"bayDef": {
+"baysSummary": [
+{
+"bay": "009",
+"bayNo": "09",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "010",
+"bayNo": "10",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "011",
+"bayNo": "11",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "013",
+"bayNo": "13",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+90,
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "014",
+"bayNo": "14",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+90,
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "015",
+"bayNo": "15",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+90,
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "021",
+"bayNo": "21",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+90,
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "022",
+"bayNo": "22",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+90,
+88,
+86,
+84,
+82
+]
+},
+{
+"bay": "023",
+"bayNo": "23",
+"rowCount": 11,
+"hasZero": true,
+"hatchCount": 2,
+"hatchRows": [
+[
+10,
+8,
+6,
+4,
+2
+],
+[
+0,
+1,
+3,
+5,
+7,
+9
+]
+],
+"holdTiers": [
+10,
+8,
+6,
+4,
+2
+],
+"deckTiers": [
+90,
+88,
+86,
+84,
+82
+]
+}
+]
+}
+},
+"ediContainers": {
+"BEAU2314219": {
+"cn": "BEAU2314219",
+"bay": "21",
+"row": "08",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU2834083": {
+"cn": "BEAU2834083",
+"bay": "15",
+"row": "07",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU2841122": {
+"cn": "BEAU2841122",
+"bay": "11",
+"row": "04",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU2842448": {
+"cn": "BEAU2842448",
+"bay": "9",
+"row": "06",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU2939870": {
+"cn": "BEAU2939870",
+"bay": "9",
+"row": "05",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU2942853": {
+"cn": "BEAU2942853",
+"bay": "9",
+"row": "02",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU2949523": {
+"cn": "BEAU2949523",
+"bay": "11",
+"row": "07",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"BEAU4735259": {
+"cn": "BEAU4735259",
+"bay": "10",
+"row": "00",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU4856142": {
+"cn": "BEAU4856142",
+"bay": "22",
+"row": "00",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU4866520": {
+"cn": "BEAU4866520",
+"bay": "14",
+"row": "06",
+"tier": "08",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU4926379": {
+"cn": "BEAU4926379",
+"bay": "22",
+"row": "10",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU5035075": {
+"cn": "BEAU5035075",
+"bay": "22",
+"row": "07",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU5140126": {
+"cn": "BEAU5140126",
+"bay": "22",
+"row": "01",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU5157237": {
+"cn": "BEAU5157237",
+"bay": "10",
+"row": "03",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU1319571": {
+"cn": "BMOU1319571",
+"bay": "21",
+"row": "08",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"BMOU1390590": {
+"cn": "BMOU1390590",
+"bay": "21",
+"row": "07",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"BMOU5863393": {
+"cn": "BMOU5863393",
+"bay": "22",
+"row": "07",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6348762": {
+"cn": "BMOU6348762",
+"bay": "22",
+"row": "04",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6351719": {
+"cn": "BMOU6351719",
+"bay": "10",
+"row": "03",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6362842": {
+"cn": "BMOU6362842",
+"bay": "14",
+"row": "08",
+"tier": "10",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6377945": {
+"cn": "BMOU6377945",
+"bay": "22",
+"row": "03",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6921262": {
+"cn": "BMOU6921262",
+"bay": "10",
+"row": "10",
+"tier": "82",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6922000": {
+"cn": "BMOU6922000",
+"bay": "10",
+"row": "01",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"BSIU2926343": {
+"cn": "BSIU2926343",
+"bay": "13",
+"row": "08",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"CAAU5371913": {
+"cn": "CAAU5371913",
+"bay": "22",
+"row": "08",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"CAIU4934949": {
+"cn": "CAIU4934949",
+"bay": "22",
+"row": "02",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"CAIU4936330": {
+"cn": "CAIU4936330",
+"bay": "22",
+"row": "04",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"CAIU6900254": {
+"cn": "CAIU6900254",
+"bay": "11",
+"row": "06",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"DFSU1590585": {
+"cn": "DFSU1590585",
+"bay": "9",
+"row": "08",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"DFSU1897078": {
+"cn": "DFSU1897078",
+"bay": "9",
+"row": "06",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"DFSU1897930": {
+"cn": "DFSU1897930",
+"bay": "23",
+"row": "07",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"DFSU1987870": {
+"cn": "DFSU1987870",
+"bay": "23",
+"row": "04",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"DFSU1996790": {
+"cn": "DFSU1996790",
+"bay": "21",
+"row": "05",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"DFSU7698094": {
+"cn": "DFSU7698094",
+"bay": "10",
+"row": "03",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"DYLU2107273": {
+"cn": "DYLU2107273",
+"bay": "15",
+"row": "08",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"DYLU2147928": {
+"cn": "DYLU2147928",
+"bay": "15",
+"row": "07",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"FBIU5894786": {
+"cn": "FBIU5894786",
+"bay": "10",
+"row": "01",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"FBIU5945158": {
+"cn": "FBIU5945158",
+"bay": "10",
+"row": "00",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"FBIU5965895": {
+"cn": "FBIU5965895",
+"bay": "10",
+"row": "05",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"FBLU0231050": {
+"cn": "FBLU0231050",
+"bay": "22",
+"row": "01",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7080287": {
+"cn": "FCIU7080287",
+"bay": "22",
+"row": "07",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7126979": {
+"cn": "FCIU7126979",
+"bay": "22",
+"row": "04",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7317743": {
+"cn": "FCIU7317743",
+"bay": "22",
+"row": "02",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7478985": {
+"cn": "FCIU7478985",
+"bay": "22",
+"row": "08",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7534899": {
+"cn": "FCIU7534899",
+"bay": "10",
+"row": "03",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1022060": {
+"cn": "FFAU1022060",
+"bay": "22",
+"row": "03",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1026044": {
+"cn": "FFAU1026044",
+"bay": "22",
+"row": "02",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1040340": {
+"cn": "FFAU1040340",
+"bay": "22",
+"row": "03",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1053796": {
+"cn": "FFAU1053796",
+"bay": "10",
+"row": "01",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1063860": {
+"cn": "FFAU1063860",
+"bay": "22",
+"row": "03",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1097855": {
+"cn": "FFAU1097855",
+"bay": "10",
+"row": "06",
+"tier": "84",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1097990": {
+"cn": "FFAU1097990",
+"bay": "14",
+"row": "06",
+"tier": "10",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1098872": {
+"cn": "FFAU1098872",
+"bay": "10",
+"row": "06",
+"tier": "82",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1099740": {
+"cn": "FFAU1099740",
+"bay": "22",
+"row": "03",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU2583424": {
+"cn": "FFAU2583424",
+"bay": "22",
+"row": "05",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU4351217": {
+"cn": "FFAU4351217",
+"bay": "22",
+"row": "03",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "450E",
+"fe": "E"
+},
+"FFAU4376642": {
+"cn": "FFAU4376642",
+"bay": "22",
+"row": "08",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU4440320": {
+"cn": "FFAU4440320",
+"bay": "10",
+"row": "03",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU6063312": {
+"cn": "FFAU6063312",
+"bay": "14",
+"row": "08",
+"tier": "08",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"FTAU1018920": {
+"cn": "FTAU1018920",
+"bay": "9",
+"row": "04",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"FTAU1059214": {
+"cn": "FTAU1059214",
+"bay": "23",
+"row": "04",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"FTAU1086400": {
+"cn": "FTAU1086400",
+"bay": "13",
+"row": "04",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"FTAU1125790": {
+"cn": "FTAU1125790",
+"bay": "21",
+"row": "05",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"FTAU1138083": {
+"cn": "FTAU1138083",
+"bay": "13",
+"row": "04",
+"tier": "04",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"GCXU2038986": {
+"cn": "GCXU2038986",
+"bay": "9",
+"row": "06",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"GCXU2163078": {
+"cn": "GCXU2163078",
+"bay": "11",
+"row": "06",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"HPCU5332560": {
+"cn": "HPCU5332560",
+"bay": "22",
+"row": "01",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU7351638": {
+"cn": "KMTU7351638",
+"bay": "23",
+"row": "06",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7433588": {
+"cn": "KMTU7433588",
+"bay": "21",
+"row": "06",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7445444": {
+"cn": "KMTU7445444",
+"bay": "13",
+"row": "06",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7450060": {
+"cn": "KMTU7450060",
+"bay": "15",
+"row": "04",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7453162": {
+"cn": "KMTU7453162",
+"bay": "23",
+"row": "06",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7456583": {
+"cn": "KMTU7456583",
+"bay": "23",
+"row": "08",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7475916": {
+"cn": "KMTU7475916",
+"bay": "9",
+"row": "07",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7487033": {
+"cn": "KMTU7487033",
+"bay": "15",
+"row": "04",
+"tier": "04",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7507525": {
+"cn": "KMTU7507525",
+"bay": "23",
+"row": "08",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7567308": {
+"cn": "KMTU7567308",
+"bay": "11",
+"row": "07",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7568069": {
+"cn": "KMTU7568069",
+"bay": "11",
+"row": "05",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7568351": {
+"cn": "KMTU7568351",
+"bay": "11",
+"row": "07",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU7589544": {
+"cn": "KMTU7589544",
+"bay": "11",
+"row": "08",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"KMTU9288832": {
+"cn": "KMTU9288832",
+"bay": "10",
+"row": "05",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9290948": {
+"cn": "KMTU9290948",
+"bay": "10",
+"row": "07",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9294202": {
+"cn": "KMTU9294202",
+"bay": "22",
+"row": "06",
+"tier": "10",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9330568": {
+"cn": "KMTU9330568",
+"bay": "22",
+"row": "10",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9331060": {
+"cn": "KMTU9331060",
+"bay": "10",
+"row": "00",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9334162": {
+"cn": "KMTU9334162",
+"bay": "22",
+"row": "06",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9351982": {
+"cn": "KMTU9351982",
+"bay": "22",
+"row": "01",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9353352": {
+"cn": "KMTU9353352",
+"bay": "10",
+"row": "09",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9378469": {
+"cn": "KMTU9378469",
+"bay": "10",
+"row": "01",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9382514": {
+"cn": "KMTU9382514",
+"bay": "22",
+"row": "00",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9398568": {
+"cn": "KMTU9398568",
+"bay": "22",
+"row": "04",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9421987": {
+"cn": "KMTU9421987",
+"bay": "22",
+"row": "00",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9422387": {
+"cn": "KMTU9422387",
+"bay": "10",
+"row": "09",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9431769": {
+"cn": "KMTU9431769",
+"bay": "14",
+"row": "04",
+"tier": "10",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9464192": {
+"cn": "KMTU9464192",
+"bay": "22",
+"row": "04",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9486951": {
+"cn": "KMTU9486951",
+"bay": "14",
+"row": "03",
+"tier": "10",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9487109": {
+"cn": "KMTU9487109",
+"bay": "10",
+"row": "07",
+"tier": "86",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9633923": {
+"cn": "KMTU9633923",
+"bay": "14",
+"row": "07",
+"tier": "08",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9663738": {
+"cn": "KMTU9663738",
+"bay": "10",
+"row": "02",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"NSDU2005487": {
+"cn": "NSDU2005487",
+"bay": "11",
+"row": "08",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSDU2006061": {
+"cn": "NSDU2006061",
+"bay": "15",
+"row": "06",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0057793": {
+"cn": "NSSU0057793",
+"bay": "15",
+"row": "06",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0064112": {
+"cn": "NSSU0064112",
+"bay": "21",
+"row": "05",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"NSSU0084340": {
+"cn": "NSSU0084340",
+"bay": "11",
+"row": "02",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0084593": {
+"cn": "NSSU0084593",
+"bay": "13",
+"row": "07",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0085943": {
+"cn": "NSSU0085943",
+"bay": "11",
+"row": "06",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0094734": {
+"cn": "NSSU0094734",
+"bay": "23",
+"row": "05",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"NSSU0104468": {
+"cn": "NSSU0104468",
+"bay": "13",
+"row": "08",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0109583": {
+"cn": "NSSU0109583",
+"bay": "13",
+"row": "05",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0113520": {
+"cn": "NSSU0113520",
+"bay": "15",
+"row": "05",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0142241": {
+"cn": "NSSU0142241",
+"bay": "11",
+"row": "02",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0145929": {
+"cn": "NSSU0145929",
+"bay": "13",
+"row": "06",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0148276": {
+"cn": "NSSU0148276",
+"bay": "11",
+"row": "04",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0149539": {
+"cn": "NSSU0149539",
+"bay": "13",
+"row": "05",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0152152": {
+"cn": "NSSU0152152",
+"bay": "23",
+"row": "07",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"NSSU0156760": {
+"cn": "NSSU0156760",
+"bay": "21",
+"row": "07",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"NSSU0156841": {
+"cn": "NSSU0156841",
+"bay": "13",
+"row": "05",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0164636": {
+"cn": "NSSU0164636",
+"bay": "11",
+"row": "08",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0170921": {
+"cn": "NSSU0170921",
+"bay": "15",
+"row": "05",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0171872": {
+"cn": "NSSU0171872",
+"bay": "23",
+"row": "07",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"NSSU0173833": {
+"cn": "NSSU0173833",
+"bay": "15",
+"row": "07",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0173941": {
+"cn": "NSSU0173941",
+"bay": "9",
+"row": "04",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0188767": {
+"cn": "NSSU0188767",
+"bay": "15",
+"row": "08",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU7081153": {
+"cn": "NSSU7081153",
+"bay": "10",
+"row": "04",
+"tier": "82",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7082123": {
+"cn": "NSSU7082123",
+"bay": "10",
+"row": "08",
+"tier": "82",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7082313": {
+"cn": "NSSU7082313",
+"bay": "10",
+"row": "02",
+"tier": "84",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7090134": {
+"cn": "NSSU7090134",
+"bay": "10",
+"row": "00",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7090793": {
+"cn": "NSSU7090793",
+"bay": "10",
+"row": "05",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7091655": {
+"cn": "NSSU7091655",
+"bay": "22",
+"row": "01",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7099213": {
+"cn": "NSSU7099213",
+"bay": "22",
+"row": "09",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "450E",
+"fe": "E"
+},
+"NSSU7123984": {
+"cn": "NSSU7123984",
+"bay": "22",
+"row": "07",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7129513": {
+"cn": "NSSU7129513",
+"bay": "10",
+"row": "01",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7154558": {
+"cn": "NSSU7154558",
+"bay": "10",
+"row": "07",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7155636": {
+"cn": "NSSU7155636",
+"bay": "10",
+"row": "01",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7165948": {
+"cn": "NSSU7165948",
+"bay": "22",
+"row": "05",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"NSSU7169882": {
+"cn": "NSSU7169882",
+"bay": "22",
+"row": "05",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"OTPU6661122": {
+"cn": "OTPU6661122",
+"bay": "10",
+"row": "03",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"PHRU2504011": {
+"cn": "PHRU2504011",
+"bay": "23",
+"row": "00",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU1866149": {
+"cn": "SEGU1866149",
+"bay": "11",
+"row": "06",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU1889289": {
+"cn": "SEGU1889289",
+"bay": "21",
+"row": "06",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2421672": {
+"cn": "SEGU2421672",
+"bay": "13",
+"row": "03",
+"tier": "02",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2424310": {
+"cn": "SEGU2424310",
+"bay": "13",
+"row": "03",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2427454": {
+"cn": "SEGU2427454",
+"bay": "23",
+"row": "05",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"SEGU2435980": {
+"cn": "SEGU2435980",
+"bay": "11",
+"row": "05",
+"tier": "02",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2466039": {
+"cn": "SEGU2466039",
+"bay": "13",
+"row": "03",
+"tier": "04",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2471652": {
+"cn": "SEGU2471652",
+"bay": "21",
+"row": "04",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2508957": {
+"cn": "SEGU2508957",
+"bay": "11",
+"row": "08",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2523099": {
+"cn": "SEGU2523099",
+"bay": "9",
+"row": "02",
+"tier": "02",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2969326": {
+"cn": "SEGU2969326",
+"bay": "21",
+"row": "04",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2982400": {
+"cn": "SEGU2982400",
+"bay": "11",
+"row": "04",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2999932": {
+"cn": "SEGU2999932",
+"bay": "9",
+"row": "08",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU3153105": {
+"cn": "SEGU3153105",
+"bay": "9",
+"row": "07",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU3228565": {
+"cn": "SEGU3228565",
+"bay": "21",
+"row": "05",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"SEGU3244951": {
+"cn": "SEGU3244951",
+"bay": "13",
+"row": "07",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU3953622": {
+"cn": "SEGU3953622",
+"bay": "15",
+"row": "04",
+"tier": "02",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU4287475": {
+"cn": "SEGU4287475",
+"bay": "10",
+"row": "07",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU5567439": {
+"cn": "SEGU5567439",
+"bay": "10",
+"row": "00",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU5569386": {
+"cn": "SEGU5569386",
+"bay": "22",
+"row": "06",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU5573072": {
+"cn": "SEGU5573072",
+"bay": "10",
+"row": "01",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6148231": {
+"cn": "SEGU6148231",
+"bay": "14",
+"row": "01",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6153182": {
+"cn": "SEGU6153182",
+"bay": "10",
+"row": "10",
+"tier": "84",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6521469": {
+"cn": "SEGU6521469",
+"bay": "22",
+"row": "02",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6576306": {
+"cn": "SEGU6576306",
+"bay": "22",
+"row": "04",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6635862": {
+"cn": "SEGU6635862",
+"bay": "22",
+"row": "08",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU9643943": {
+"cn": "SEGU9643943",
+"bay": "10",
+"row": "03",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"SEGU9911856": {
+"cn": "SEGU9911856",
+"bay": "10",
+"row": "02",
+"tier": "82",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4530",
+"fe": "F"
+},
+"SEGU9913329": {
+"cn": "SEGU9913329",
+"bay": "10",
+"row": "05",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"SEKU1297514": {
+"cn": "SEKU1297514",
+"bay": "15",
+"row": "08",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEKU1475848": {
+"cn": "SEKU1475848",
+"bay": "13",
+"row": "04",
+"tier": "02",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"SEKU5224100": {
+"cn": "SEKU5224100",
+"bay": "22",
+"row": "06",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU5232131": {
+"cn": "SEKU5232131",
+"bay": "22",
+"row": "00",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU5843444": {
+"cn": "SEKU5843444",
+"bay": "22",
+"row": "02",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU5948023": {
+"cn": "SEKU5948023",
+"bay": "10",
+"row": "00",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU6802537": {
+"cn": "SEKU6802537",
+"bay": "22",
+"row": "05",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU6816227": {
+"cn": "SEKU6816227",
+"bay": "10",
+"row": "09",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU9031644": {
+"cn": "SEKU9031644",
+"bay": "10",
+"row": "01",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"SEKU9031855": {
+"cn": "SEKU9031855",
+"bay": "10",
+"row": "07",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"SEKU9040590": {
+"cn": "SEKU9040590",
+"bay": "10",
+"row": "00",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4530",
+"fe": "F"
+},
+"SEKU9255270": {
+"cn": "SEKU9255270",
+"bay": "22",
+"row": "09",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "453E",
+"fe": "E"
+},
+"SEKU9408928": {
+"cn": "SEKU9408928",
+"bay": "22",
+"row": "09",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "453E",
+"fe": "E"
+},
+"SZLU3894570": {
+"cn": "SZLU3894570",
+"bay": "23",
+"row": "05",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "223E",
+"fe": "E"
+},
+"SZLU9934979": {
+"cn": "SZLU9934979",
+"bay": "22",
+"row": "09",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "453E",
+"fe": "E"
+},
+"TCLU6919678": {
+"cn": "TCLU6919678",
+"bay": "9",
+"row": "08",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TCLU6921736": {
+"cn": "TCLU6921736",
+"bay": "9",
+"row": "04",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TCLU6926764": {
+"cn": "TCLU6926764",
+"bay": "15",
+"row": "05",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"TCNU3330871": {
+"cn": "TCNU3330871",
+"bay": "22",
+"row": "01",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "450E",
+"fe": "E"
+},
+"TCNU3689563": {
+"cn": "TCNU3689563",
+"bay": "22",
+"row": "01",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU0372488": {
+"cn": "TEMU0372488",
+"bay": "21",
+"row": "07",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU0374921": {
+"cn": "TEMU0374921",
+"bay": "9",
+"row": "06",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0386727": {
+"cn": "TEMU0386727",
+"bay": "15",
+"row": "03",
+"tier": "02",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0391528": {
+"cn": "TEMU0391528",
+"bay": "23",
+"row": "05",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU0410850": {
+"cn": "TEMU0410850",
+"bay": "11",
+"row": "05",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0428041": {
+"cn": "TEMU0428041",
+"bay": "21",
+"row": "07",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU0444269": {
+"cn": "TEMU0444269",
+"bay": "21",
+"row": "00",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0448238": {
+"cn": "TEMU0448238",
+"bay": "23",
+"row": "08",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0460450": {
+"cn": "TEMU0460450",
+"bay": "23",
+"row": "06",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0460552": {
+"cn": "TEMU0460552",
+"bay": "9",
+"row": "05",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU0496489": {
+"cn": "TEMU0496489",
+"bay": "13",
+"row": "06",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU1562862": {
+"cn": "TEMU1562862",
+"bay": "9",
+"row": "02",
+"tier": "06",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU4221617": {
+"cn": "TEMU4221617",
+"bay": "21",
+"row": "06",
+"tier": "04",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU5025630": {
+"cn": "TEMU5025630",
+"bay": "15",
+"row": "06",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU5727826": {
+"cn": "TEMU5727826",
+"bay": "15",
+"row": "03",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU5732859": {
+"cn": "TEMU5732859",
+"bay": "21",
+"row": "08",
+"tier": "02",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "2200",
+"fe": "F"
+},
+"TEMU5754483": {
+"cn": "TEMU5754483",
+"bay": "23",
+"row": "07",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU6643720": {
+"cn": "TEMU6643720",
+"bay": "14",
+"row": "03",
+"tier": "08",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU7212985": {
+"cn": "TEMU7212985",
+"bay": "10",
+"row": "05",
+"tier": "10",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU7216471": {
+"cn": "TEMU7216471",
+"bay": "22",
+"row": "08",
+"tier": "10",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU7594105": {
+"cn": "TEMU7594105",
+"bay": "22",
+"row": "06",
+"tier": "84",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU7798789": {
+"cn": "TEMU7798789",
+"bay": "22",
+"row": "01",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU7799002": {
+"cn": "TEMU7799002",
+"bay": "22",
+"row": "10",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"TEMU8981665": {
+"cn": "TEMU8981665",
+"bay": "14",
+"row": "05",
+"tier": "10",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"TEXU8930276": {
+"cn": "TEXU8930276",
+"bay": "10",
+"row": "04",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4363",
+"fe": "F"
+},
+"TEXU8931246": {
+"cn": "TEXU8931246",
+"bay": "10",
+"row": "08",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4363",
+"fe": "F"
+},
+"TGBU2530812": {
+"cn": "TGBU2530812",
+"bay": "11",
+"row": "02",
+"tier": "02",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TGBU2536343": {
+"cn": "TGBU2536343",
+"bay": "15",
+"row": "03",
+"tier": "04",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "2200",
+"fe": "F"
+},
+"TGBU5802452": {
+"cn": "TGBU5802452",
+"bay": "10",
+"row": "00",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"TGBU6402867": {
+"cn": "TGBU6402867",
+"bay": "10",
+"row": "05",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"TRHU1213416": {
+"cn": "TRHU1213416",
+"bay": "11",
+"row": "06",
+"tier": "02",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU1216210": {
+"cn": "TRHU1216210",
+"bay": "9",
+"row": "04",
+"tier": "02",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU1474739": {
+"cn": "TRHU1474739",
+"bay": "11",
+"row": "04",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU3394988": {
+"cn": "TRHU3394988",
+"bay": "9",
+"row": "02",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU3634374": {
+"cn": "TRHU3634374",
+"bay": "9",
+"row": "04",
+"tier": "08",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU3701873": {
+"cn": "TRHU3701873",
+"bay": "11",
+"row": "04",
+"tier": "02",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU3708097": {
+"cn": "TRHU3708097",
+"bay": "11",
+"row": "02",
+"tier": "04",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "2200",
+"fe": "F"
+},
+"TRHU4154092": {
+"cn": "TRHU4154092",
+"bay": "22",
+"row": "00",
+"tier": "88",
+"pod": "KRKAN",
+"pol": "KRINC",
+"iso": "450E",
+"fe": "E"
+},
+"TRHU5688359": {
+"cn": "TRHU5688359",
+"bay": "22",
+"row": "02",
+"tier": "88",
+"pod": "KRPTK",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"TRHU5694407": {
+"cn": "TRHU5694407",
+"bay": "14",
+"row": "04",
+"tier": "08",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU4495251": {
+"cn": "TXGU4495251",
+"bay": "10",
+"row": "04",
+"tier": "84",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU5013610": {
+"cn": "TXGU5013610",
+"bay": "10",
+"row": "03",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU5033047": {
+"cn": "TXGU5033047",
+"bay": "10",
+"row": "08",
+"tier": "84",
+"pod": "KRPUS",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU5037084": {
+"cn": "TXGU5037084",
+"bay": "10",
+"row": "09",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "VNSGN",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU5037757": {
+"cn": "TXGU5037757",
+"bay": "22",
+"row": "02",
+"tier": "06",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU6064593": {
+"cn": "TXGU6064593",
+"bay": "22",
+"row": "02",
+"tier": "08",
+"pod": "KRPTK",
+"pol": "HKHKG",
+"iso": "4500",
+"fe": "F"
+},
+"TXGU6068006": {
+"cn": "TXGU6068006",
+"bay": "22",
+"row": "03",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"UETU5446403": {
+"cn": "UETU5446403",
+"bay": "22",
+"row": "00",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+},
+"UETU5448047": {
+"cn": "UETU5448047",
+"bay": "14",
+"row": "00",
+"tier": "82",
+"pod": "KRPTK",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"UETU5453110": {
+"cn": "UETU5453110",
+"bay": "14",
+"row": "05",
+"tier": "08",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"UETU5453547": {
+"cn": "UETU5453547",
+"bay": "14",
+"row": "07",
+"tier": "10",
+"pod": "PHMNN",
+"pol": "KRINC",
+"iso": "4500",
+"fe": "F"
+},
+"WBPU7080682": {
+"cn": "WBPU7080682",
+"bay": "22",
+"row": "00",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "CNSHK",
+"iso": "4500",
+"fe": "F"
+}
+},
+"completed": {
+"BEAU2314219": {
+"at": 1788374694695,
+"by": "김성일",
+"equip": "1호기"
+},
+"BEAU4735259": {
+"at": 1788356472645,
+"by": "김성일",
+"equip": "1호기"
+},
+"BEAU4926379": {
+"at": 1788369850596,
+"by": "김성일",
+"equip": "1호기"
+},
+"BEAU5157237": {
+"at": 1788355745422,
+"by": "김성일",
+"equip": "1호기"
+},
+"BMOU1319571": {
+"at": 1788373869434,
+"by": "김성일",
+"equip": "1호기"
+},
+"BMOU6348762": {
+"at": 1788369126555,
+"by": "김성일",
+"equip": "1호기"
+},
+"BMOU6351719": {
+"at": 1788359160300,
+"by": "김성일",
+"equip": "1호기"
+},
+"BMOU6922000": {
+"at": 1788358905576,
+"by": "김성일",
+"equip": "1호기"
+},
+"CAAU5371913": {
+"at": 1788370549729,
+"by": "김성일",
+"equip": "1호기"
+},
+"CAIU4934949": {
+"at": 1788369741063,
+"by": "김성일",
+"equip": "1호기"
+},
+"CAIU4936330": {
+"at": 1788370819938,
+"by": "김성일",
+"equip": "1호기"
+},
+"DFSU1987870": {
+"at": 1788373767547,
+"by": "김성일",
+"equip": "1호기"
+},
+"DFSU7698094": {
+"at": 1788374801243,
+"by": "이종부",
+"equip": "3호기"
+},
+"FBIU5894786": {
+"at": 1788357559041,
+"by": "김성일",
+"equip": "1호기"
+},
+"FBIU5945158": {
+"at": 1788357838655,
+"by": "김성일",
+"equip": "1호기"
+},
+"FBIU5965895": {
+"at": 1788357000237,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7126979": {
+"at": 1788370195861,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7317743": {
+"at": 1788373443242,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7478985": {
+"at": 1788369441158,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7534899": {
+"at": 1788374799003,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1026044": {
+"at": 1788373135862,
+"by": "김성일",
+"equip": "1호기"
+},
+"FFAU1053796": {
+"at": 1788356006445,
+"by": "김성일",
+"equip": "1호기"
+},
+"FFAU4376642": {
+"at": 1788372230717,
+"by": "김성일",
+"equip": "1호기"
+},
+"FFAU4440320": {
+"at": 1788354978695,
+"by": "김성일",
+"equip": "1호기"
+},
+"FTAU1059214": {
+"at": 1788373658864,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7351638": {
+"at": 1788374077906,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7433588": {
+"at": 1788374077906,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7453162": {
+"at": 1788374210614,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7456583": {
+"at": 1788374528679,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7507525": {
+"at": 1788373869434,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9288832": {
+"at": 1788355145436,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9290948": {
+"at": 1788354967779,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9294202": {
+"at": 1788372109383,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9330568": {
+"at": 1788369330764,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9331060": {
+"at": 1788358640802,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9334162": {
+"at": 1788369534436,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9353352": {
+"at": 1788355181484,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9378469": {
+"at": 1788358389614,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9398568": {
+"at": 1788369634544,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9422387": {
+"at": 1788355562353,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9464192": {
+"at": 1788372519592,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9487109": {
+"at": 1788355831554,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU7090134": {
+"at": 1788356153937,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU7090793": {
+"at": 1788355273243,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU7129513": {
+"at": 1788354952261,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU7154558": {
+"at": 1788355645733,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU7155636": {
+"at": 1788358777344,
+"by": "김성일",
+"equip": "1호기"
+},
+"OTPU6661122": {
+"at": 1788357128913,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU1889289": {
+"at": 1788374331369,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU2471652": {
+"at": 1788373767547,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU2969326": {
+"at": 1788373658864,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU5567439": {
+"at": 1788359070953,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU5569386": {
+"at": 1788372443560,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU5573072": {
+"at": 1788358141091,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU6148231": {
+"at": 1788374788714,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU6521469": {
+"at": 1788370321125,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU6576306": {
+"at": 1788372786572,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU6635862": {
+"at": 1788369968274,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU9643943": {
+"at": 1788357323670,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU9913329": {
+"at": 1788356922677,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEKU5224100": {
+"at": 1788370704818,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEKU5843444": {
+"at": 1788370930968,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEKU5948023": {
+"at": 1788374802602,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEKU6816227": {
+"at": 1788355923317,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEKU9031644": {
+"at": 1788357464139,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEKU9031855": {
+"at": 1788356837640,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEKU9040590": {
+"at": 1788357690794,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU0448238": {
+"at": 1788374661842,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU0460450": {
+"at": 1788374331369,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU4221617": {
+"at": 1788374210614,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU5732859": {
+"at": 1788374690124,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU7216471": {
+"at": 1788371289774,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU7594105": {
+"at": 1788370073758,
+"by": "김성일",
+"equip": "1호기"
+},
+"TEMU7799002": {
+"at": 1788370437404,
+"by": "김성일",
+"equip": "1호기"
+},
+"TGBU5802452": {
+"at": 1788358245008,
+"by": "김성일",
+"equip": "1호기"
+},
+"TRHU5688359": {
+"at": 1788369211133,
+"by": "김성일",
+"equip": "1호기"
+},
+"TXGU5013610": {
+"at": 1788358509019,
+"by": "김성일",
+"equip": "1호기"
+},
+"TXGU5037084": {
+"at": 1788355422848,
+"by": "김성일",
+"equip": "1호기"
+},
+"TXGU5037757": {
+"at": 1788372951541,
+"by": "김성일",
+"equip": "1호기"
+},
+"TXGU6064593": {
+"at": 1788372672282,
+"by": "김성일",
+"equip": "1호기"
+},
+"UETU5448047": {
+"at": 1788374789487,
+"by": "이종부",
+"equip": "3호기"
+}
+},
+"loadingEdiContainers": {
+"BEAU2949190": {
+"cn": "BEAU2949190",
+"bay": "9",
+"row": "03",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"BEAU4877187": {
+"cn": "BEAU4877187",
+"bay": "14",
+"row": "00",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BEAU4930851": {
+"cn": "BEAU4930851",
+"bay": "14",
+"row": "10",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"BMOU6212204": {
+"cn": "BMOU6212204",
+"bay": "14",
+"row": "03",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6214850": {
+"cn": "BMOU6214850",
+"bay": "10",
+"row": "01",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6225937": {
+"cn": "BMOU6225937",
+"bay": "14",
+"row": "09",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"BMOU6264764": {
+"cn": "BMOU6264764",
+"bay": "14",
+"row": "07",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"BMOU6354575": {
+"cn": "BMOU6354575",
+"bay": "14",
+"row": "01",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6367910": {
+"cn": "BMOU6367910",
+"bay": "10",
+"row": "05",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6374782": {
+"cn": "BMOU6374782",
+"bay": "14",
+"row": "01",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6379763": {
+"cn": "BMOU6379763",
+"bay": "22",
+"row": "02",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"BMOU6921853": {
+"cn": "BMOU6921853",
+"bay": "14",
+"row": "06",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6923394": {
+"cn": "BMOU6923394",
+"bay": "10",
+"row": "03",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"BMOU6926602": {
+"cn": "BMOU6926602",
+"bay": "22",
+"row": "04",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"BSIU3040658": {
+"cn": "BSIU3040658",
+"bay": "23",
+"row": "08",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"CAIU4938414": {
+"cn": "CAIU4938414",
+"bay": "14",
+"row": "02",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"CAIU4952433": {
+"cn": "CAIU4952433",
+"bay": "10",
+"row": "00",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"CAIU4952731": {
+"cn": "CAIU4952731",
+"bay": "22",
+"row": "06",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"CAIU6928457": {
+"cn": "CAIU6928457",
+"bay": "11",
+"row": "01",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"CXDU1823880": {
+"cn": "CXDU1823880",
+"bay": "10",
+"row": "09",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"DFSU1725016": {
+"cn": "DFSU1725016",
+"bay": "15",
+"row": "02",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"DFSU1987799": {
+"cn": "DFSU1987799",
+"bay": "9",
+"row": "03",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"DFSU7696276": {
+"cn": "DFSU7696276",
+"bay": "14",
+"row": "08",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"DFSU7697307": {
+"cn": "DFSU7697307",
+"bay": "14",
+"row": "00",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"DFSU7698284": {
+"cn": "DFSU7698284",
+"bay": "14",
+"row": "01",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FBLU0231403": {
+"cn": "FBLU0231403",
+"bay": "22",
+"row": "02",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FCIU7123141": {
+"cn": "FCIU7123141",
+"bay": "14",
+"row": "00",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7135570": {
+"cn": "FCIU7135570",
+"bay": "10",
+"row": "03",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7143831": {
+"cn": "FCIU7143831",
+"bay": "22",
+"row": "04",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FCIU7179048": {
+"cn": "FCIU7179048",
+"bay": "10",
+"row": "05",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7228733": {
+"cn": "FCIU7228733",
+"bay": "22",
+"row": "02",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FCIU7277553": {
+"cn": "FCIU7277553",
+"bay": "10",
+"row": "00",
+"tier": "10",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FCIU7537352": {
+"cn": "FCIU7537352",
+"bay": "22",
+"row": "04",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FCIU7538786": {
+"cn": "FCIU7538786",
+"bay": "10",
+"row": "07",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FFAU1015610": {
+"cn": "FFAU1015610",
+"bay": "14",
+"row": "04",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FFAU1015646": {
+"cn": "FFAU1015646",
+"bay": "14",
+"row": "00",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1069180": {
+"cn": "FFAU1069180",
+"bay": "10",
+"row": "05",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FFAU1071568": {
+"cn": "FFAU1071568",
+"bay": "10",
+"row": "03",
+"tier": "10",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1079975": {
+"cn": "FFAU1079975",
+"bay": "10",
+"row": "01",
+"tier": "10",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"FFAU1092806": {
+"cn": "FFAU1092806",
+"bay": "14",
+"row": "10",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"FTAU1029945": {
+"cn": "FTAU1029945",
+"bay": "11",
+"row": "00",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"FTAU1100560": {
+"cn": "FTAU1100560",
+"bay": "9",
+"row": "00",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"GCXU5875796": {
+"cn": "GCXU5875796",
+"bay": "14",
+"row": "09",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"GCXU5903917": {
+"cn": "GCXU5903917",
+"bay": "14",
+"row": "04",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"GESU6846304": {
+"cn": "GESU6846304",
+"bay": "22",
+"row": "02",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"KMTU7425957": {
+"cn": "KMTU7425957",
+"bay": "23",
+"row": "04",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU7457804": {
+"cn": "KMTU7457804",
+"bay": "11",
+"row": "03",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU7492641": {
+"cn": "KMTU7492641",
+"bay": "9",
+"row": "01",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU7541258": {
+"cn": "KMTU7541258",
+"bay": "11",
+"row": "00",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU7569091": {
+"cn": "KMTU7569091",
+"bay": "9",
+"row": "01",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU7574586": {
+"cn": "KMTU7574586",
+"bay": "11",
+"row": "00",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU7588147": {
+"cn": "KMTU7588147",
+"bay": "9",
+"row": "00",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"KMTU9280750": {
+"cn": "KMTU9280750",
+"bay": "22",
+"row": "06",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"KMTU9328621": {
+"cn": "KMTU9328621",
+"bay": "22",
+"row": "04",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"KMTU9335908": {
+"cn": "KMTU9335908",
+"bay": "10",
+"row": "09",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"KMTU9347302": {
+"cn": "KMTU9347302",
+"bay": "10",
+"row": "03",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9425806": {
+"cn": "KMTU9425806",
+"bay": "14",
+"row": "02",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9478030": {
+"cn": "KMTU9478030",
+"bay": "10",
+"row": "07",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9478914": {
+"cn": "KMTU9478914",
+"bay": "14",
+"row": "02",
+"tier": "10",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9500406": {
+"cn": "KMTU9500406",
+"bay": "10",
+"row": "00",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9514652": {
+"cn": "KMTU9514652",
+"bay": "10",
+"row": "00",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9516824": {
+"cn": "KMTU9516824",
+"bay": "14",
+"row": "05",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"KMTU9662773": {
+"cn": "KMTU9662773",
+"bay": "10",
+"row": "01",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9663722": {
+"cn": "KMTU9663722",
+"bay": "10",
+"row": "01",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"KMTU9663764": {
+"cn": "KMTU9663764",
+"bay": "14",
+"row": "02",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"KMTU9664225": {
+"cn": "KMTU9664225",
+"bay": "14",
+"row": "06",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"NSDU2002934": {
+"cn": "NSDU2002934",
+"bay": "21",
+"row": "08",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0090765": {
+"cn": "NSSU0090765",
+"bay": "13",
+"row": "02",
+"tier": "02",
+"pod": "PHMNN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0123283": {
+"cn": "NSSU0123283",
+"bay": "23",
+"row": "08",
+"tier": "06",
+"pod": "VNSGN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0166006": {
+"cn": "NSSU0166006",
+"bay": "15",
+"row": "02",
+"tier": "04",
+"pod": "PHMNN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0176513": {
+"cn": "NSSU0176513",
+"bay": "13",
+"row": "02",
+"tier": "06",
+"pod": "PHMNN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0198723": {
+"cn": "NSSU0198723",
+"bay": "21",
+"row": "08",
+"tier": "04",
+"pod": "VNSGN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"NSSU0203408": {
+"cn": "NSSU0203408",
+"bay": "13",
+"row": "02",
+"tier": "04",
+"pod": "PHMNN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU1663558": {
+"cn": "SEGU1663558",
+"bay": "9",
+"row": "03",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"SEGU1849814": {
+"cn": "SEGU1849814",
+"bay": "11",
+"row": "03",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"SEGU1877415": {
+"cn": "SEGU1877415",
+"bay": "21",
+"row": "04",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"SEGU2145471": {
+"cn": "SEGU2145471",
+"bay": "23",
+"row": "08",
+"tier": "02",
+"pod": "VNSGN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU2985266": {
+"cn": "SEGU2985266",
+"bay": "9",
+"row": "00",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"SEGU3510481": {
+"cn": "SEGU3510481",
+"bay": "15",
+"row": "02",
+"tier": "02",
+"pod": "PHMNN",
+"pol": "KRPTK",
+"iso": "2200",
+"fe": "F"
+},
+"SEGU4120256": {
+"cn": "SEGU4120256",
+"bay": "14",
+"row": "03",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"SEGU4792034": {
+"cn": "SEGU4792034",
+"bay": "10",
+"row": "01",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"SEGU4792477": {
+"cn": "SEGU4792477",
+"bay": "14",
+"row": "00",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU4799785": {
+"cn": "SEGU4799785",
+"bay": "14",
+"row": "07",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"SEGU4800016": {
+"cn": "SEGU4800016",
+"bay": "22",
+"row": "06",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"SEGU4803015": {
+"cn": "SEGU4803015",
+"bay": "14",
+"row": "01",
+"tier": "84",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"SEGU5541706": {
+"cn": "SEGU5541706",
+"bay": "14",
+"row": "01",
+"tier": "08",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6578274": {
+"cn": "SEGU6578274",
+"bay": "14",
+"row": "01",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"SEGU6579183": {
+"cn": "SEGU6579183",
+"bay": "10",
+"row": "07",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"SEKU5220995": {
+"cn": "SEKU5220995",
+"bay": "10",
+"row": "00",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"SEKU5829050": {
+"cn": "SEKU5829050",
+"bay": "10",
+"row": "09",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"TEMU0398733": {
+"cn": "TEMU0398733",
+"bay": "11",
+"row": "03",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU0441439": {
+"cn": "TEMU0441439",
+"bay": "9",
+"row": "01",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU4181129": {
+"cn": "TEMU4181129",
+"bay": "11",
+"row": "01",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"TEMU5026030": {
+"cn": "TEMU5026030",
+"bay": "11",
+"row": "01",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "220E",
+"fe": "E"
+},
+"TGBU5803314": {
+"cn": "TGBU5803314",
+"bay": "14",
+"row": "00",
+"tier": "04",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+},
+"TLLU5233824": {
+"cn": "TLLU5233824",
+"bay": "10",
+"row": "03",
+"tier": "86",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"TRHU7020646": {
+"cn": "TRHU7020646",
+"bay": "22",
+"row": "02",
+"tier": "06",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"TXGU5003145": {
+"cn": "TXGU5003145",
+"bay": "14",
+"row": "08",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"TXGU6058918": {
+"cn": "TXGU6058918",
+"bay": "22",
+"row": "06",
+"tier": "02",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "450E",
+"fe": "E"
+},
+"UETU5443195": {
+"cn": "UETU5443195",
+"bay": "14",
+"row": "05",
+"tier": "82",
+"pod": "KRKAN",
+"pol": "KRPTK",
+"iso": "4500",
+"fe": "F"
+}
+},
+"loadingCompleted": {
+"BEAU2949190": {
+"at": 1788378908458,
+"by": "이종부",
+"equip": "3호기"
+},
+"BEAU4877187": {
+"at": 1788378973745,
+"by": "이종부",
+"equip": "3호기"
+},
+"BEAU4930851": {
+"at": 1788378979764,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6212204": {
+"at": 1788378975007,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6214850": {
+"at": 1788379005575,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6225937": {
+"at": 1788378979081,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6264764": {
+"at": 1788378978452,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6354575": {
+"at": 1788378946370,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6367910": {
+"at": 1788379000894,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6374782": {
+"at": 1788378922798,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6379763": {
+"at": 1788377421447,
+"by": "김성일",
+"equip": "1호기"
+},
+"BMOU6921853": {
+"at": 1788378971700,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6923394": {
+"at": 1788379000219,
+"by": "이종부",
+"equip": "3호기"
+},
+"BMOU6926602": {
+"at": 1788375696486,
+"by": "김성일",
+"equip": "1호기"
+},
+"BSIU3040658": {
+"at": 1788377077082,
+"by": "김성일",
+"equip": "1호기"
+},
+"CAIU4938414": {
+"at": 1788378973062,
+"by": "이종부",
+"equip": "3호기"
+},
+"CAIU4952433": {
+"at": 1788378998800,
+"by": "이종부",
+"equip": "3호기"
+},
+"CAIU4952731": {
+"at": 1788376313098,
+"by": "김성일",
+"equip": "1호기"
+},
+"CAIU6928457": {
+"at": 1788378907817,
+"by": "이종부",
+"equip": "3호기"
+},
+"CXDU1823880": {
+"at": 1788379004080,
+"by": "이종부",
+"equip": "3호기"
+},
+"DFSU1725016": {
+"at": 1788378940204,
+"by": "이종부",
+"equip": "3호기"
+},
+"DFSU1987799": {
+"at": 1788378909957,
+"by": "이종부",
+"equip": "3호기"
+},
+"DFSU7696276": {
+"at": 1788378980426,
+"by": "이종부",
+"equip": "3호기"
+},
+"DFSU7697307": {
+"at": 1788378982958,
+"by": "이종부",
+"equip": "3호기"
+},
+"DFSU7698284": {
+"at": 1788378939237,
+"by": "이종부",
+"equip": "3호기"
+},
+"FBLU0231403": {
+"at": 1788375816596,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7123141": {
+"at": 1788378947818,
+"by": "이종부",
+"equip": "3호기"
+},
+"FCIU7135570": {
+"at": 1788378915247,
+"by": "이종부",
+"equip": "3호기"
+},
+"FCIU7143831": {
+"at": 1788376544387,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7179048": {
+"at": 1788379006860,
+"by": "이종부",
+"equip": "3호기"
+},
+"FCIU7228733": {
+"at": 1788375452917,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7277553": {
+"at": 1788378915884,
+"by": "이종부",
+"equip": "3호기"
+},
+"FCIU7537352": {
+"at": 1788376124466,
+"by": "김성일",
+"equip": "1호기"
+},
+"FCIU7538786": {
+"at": 1788379013314,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1015610": {
+"at": 1788378981721,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1015646": {
+"at": 1788378945556,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1069180": {
+"at": 1788379012585,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1071568": {
+"at": 1788378917101,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1079975": {
+"at": 1788378916517,
+"by": "이종부",
+"equip": "3호기"
+},
+"FFAU1092806": {
+"at": 1788378970407,
+"by": "이종부",
+"equip": "3호기"
+},
+"FTAU1029945": {
+"at": 1788378907163,
+"by": "이종부",
+"equip": "3호기"
+},
+"FTAU1100560": {
+"at": 1788378908987,
+"by": "이종부",
+"equip": "3호기"
+},
+"GCXU5875796": {
+"at": 1788378986315,
+"by": "이종부",
+"equip": "3호기"
+},
+"GCXU5903917": {
+"at": 1788378972403,
+"by": "이종부",
+"equip": "3호기"
+},
+"GESU6846304": {
+"at": 1788376584415,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7425957": {
+"at": 1788377439214,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU7457804": {
+"at": 1788378908458,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU7492641": {
+"at": 1788378907817,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU7541258": {
+"at": 1788378908987,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU7569091": {
+"at": 1788378909495,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU7574586": {
+"at": 1788378910389,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU7588147": {
+"at": 1788378910389,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9280750": {
+"at": 1788375650423,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9328621": {
+"at": 1788375452032,
+"by": "김성일",
+"equip": "1호기"
+},
+"KMTU9335908": {
+"at": 1788379009691,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9347302": {
+"at": 1788379006192,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9425806": {
+"at": 1788378947084,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9478030": {
+"at": 1788379007573,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9478914": {
+"at": 1788378949171,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9500406": {
+"at": 1788378913937,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9514652": {
+"at": 1788379004834,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9516824": {
+"at": 1788378984899,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9662773": {
+"at": 1788378914639,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9663722": {
+"at": 1788378999485,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9663764": {
+"at": 1788378982321,
+"by": "이종부",
+"equip": "3호기"
+},
+"KMTU9664225": {
+"at": 1788378981076,
+"by": "이종부",
+"equip": "3호기"
+},
+"NSDU2002934": {
+"at": 1788376898039,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU0090765": {
+"at": 1788378921347,
+"by": "이종부",
+"equip": "3호기"
+},
+"NSSU0123283": {
+"at": 1788377205010,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU0166006": {
+"at": 1788378923697,
+"by": "이종부",
+"equip": "3호기"
+},
+"NSSU0176513": {
+"at": 1788378940204,
+"by": "이종부",
+"equip": "3호기"
+},
+"NSSU0198723": {
+"at": 1788377077082,
+"by": "김성일",
+"equip": "1호기"
+},
+"NSSU0203408": {
+"at": 1788378923697,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU1663558": {
+"at": 1788378911240,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU1849814": {
+"at": 1788378911240,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU1877415": {
+"at": 1788377439214,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU2145471": {
+"at": 1788376898039,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU2985266": {
+"at": 1788378907163,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU3510481": {
+"at": 1788378921347,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU4120256": {
+"at": 1788378984263,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU4792034": {
+"at": 1788379011173,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU4792477": {
+"at": 1788378922082,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU4799785": {
+"at": 1788378985608,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU4800016": {
+"at": 1788376013214,
+"by": "김성일",
+"equip": "1호기"
+},
+"SEGU4803015": {
+"at": 1788378983585,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU5541706": {
+"at": 1788378948513,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU6578274": {
+"at": 1788378974349,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEGU6579183": {
+"at": 1788379001572,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEKU5220995": {
+"at": 1788379010449,
+"by": "이종부",
+"equip": "3호기"
+},
+"SEKU5829050": {
+"at": 1788379013985,
+"by": "이종부",
+"equip": "3호기"
+},
+"TEMU0398733": {
+"at": 1788378909957,
+"by": "이종부",
+"equip": "3호기"
+},
+"TEMU0441439": {
+"at": 1788378910824,
+"by": "이종부",
+"equip": "3호기"
+},
+"TEMU4181129": {
+"at": 1788378910824,
+"by": "이종부",
+"equip": "3호기"
+},
+"TEMU5026030": {
+"at": 1788378909495,
+"by": "이종부",
+"equip": "3호기"
+},
+"TGBU5803314": {
+"at": 1788378925563,
+"by": "이종부",
+"equip": "3호기"
+},
+"TLLU5233824": {
+"at": 1788379011885,
+"by": "이종부",
+"equip": "3호기"
+},
+"TRHU7020646": {
+"at": 1788376252192,
+"by": "김성일",
+"equip": "1호기"
+},
+"TXGU5003145": {
+"at": 1788378971041,
+"by": "이종부",
+"equip": "3호기"
+},
+"TXGU6058918": {
+"at": 1788375351923,
+"by": "김성일",
+"equip": "1호기"
+},
+"UETU5443195": {
+"at": 1788378975640,
+"by": "이종부",
+"equip": "3호기"
+}
+}
+}

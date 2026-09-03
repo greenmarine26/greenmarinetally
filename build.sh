@@ -418,6 +418,20 @@ else
   cp "$SMOKE_SL.fbbak" src/firebase.js; rm -f "$SMOKE_SL.fbbak"
   echo "✗ 자리 확인 모드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SL"; exit 1
 fi
+#  3.2-01: **끝4자리 중복** — NSDC 2608N 실데이터(0320 = 평택 FFAU4440320 vs 부산 SEGU2520320)로 SearchPanel 을 그려
+#    평택 것만 완료 카드가 되고, 완료 뒤 부산 것이 승격되지 않는지 실제로 쳐 본다(김성일 메모 09-03 «컨번호 중복적으로 문제»).
+#    firebase 는 tools/fb_stub_search.js(전수 스텁, tools/gen_fb_stub.py 가 만든다).
+SMOKE_D4=$(mktemp /tmp/_smoked4_XXXXXX.js)
+cp src/firebase.js "$SMOKE_D4.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_dup4.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_D4"; then
+  cp "$SMOKE_D4.fbbak" src/firebase.js && rm -f "$SMOKE_D4.fbbak"
+  node tools/smoke_dup4.cjs "$SMOKE_D4" || { echo "✗ 끝4자리 중복 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_D4"; exit 1; }
+  rm -f "$SMOKE_D4"
+else
+  cp "$SMOKE_D4.fbbak" src/firebase.js; rm -f "$SMOKE_D4.fbbak"
+  echo "✗ 끝4자리 중복 번들 실패 — 검사를 못 돌렸다(스텁에 이름이 빠졌으면 python3 tools/gen_fb_stub.py). 배포 금지"; rm -f "$SMOKE_D4"; exit 1
+fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).
@@ -434,6 +448,19 @@ fi
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.2-01: **플랜 명령(동사 없음)·항차번호≠끝자리·«미르 점심은?»** — 받은함 08-29 무응답 7건 재생.
+    SMOKE_PCM="tools/_smokepcm_tmp.cjs"; SMOKE_MCH="tools/_smokemch_tmp.cjs"
+    npx esbuild src/planCommand.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PCM" --log-level=error \
+      && npx esbuild src/mirChat.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MCH" --log-level=error \
+      && node tools/smoke_plancmd.cjs "$SMOKE_PCM" "$SMOKE_NS" "$SMOKE_MCH" \
+      || { rm -f "$SMOKE_PCM" "$SMOKE_MCH"; echo "✗ 플랜 명령 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_PCM" "$SMOKE_MCH"
+    #  3.2-01: **통과분 판정 한 벌**(isTransitContainer·canCompleteContainer) — 항구 빈칸·리스트 등재·시프팅·초과는 작업분(감사 P1-1·P1-2).
+    SMOKE_TRU="tools/_smoketru_tmp.cjs"
+    npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_TRU" --log-level=error \
+      && node tools/smoke_transit.cjs "$SMOKE_TRU" \
+      || { rm -f "$SMOKE_TRU"; echo "✗ 통과분 판정 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_TRU"
     #  2.77: **밀린 버그 셋** — X-RAY MRN 입력 · 복구 코드 안내 · 컨 상세 두 값.
     SMOKE_PD="tools/_smokepd_tmp.cjs"
     npx esbuild src/adminGuard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PD" --log-level=error \

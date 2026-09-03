@@ -3,6 +3,7 @@ import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
+import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
@@ -54,7 +55,7 @@ const ISO_OPTIONS = [
   { iso: '45T1', label: '40HC 탱크',                  flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null }) {
+export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null, records = null, shiftCns = null }) {   // 3.2-01: records·shiftCns — 통과분 문지기 재료(리스트 등재·시프팅은 작업분)
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -214,6 +215,15 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
       if (mode === 'discharge' && isXray && !String(xSeal || '').trim()) {
         alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
+        return;
+      }
+      //  ★ 3.2-01 (NSDC 2608N 실측 — 부산행 SEGU2520320 이 양하 완료로 기록됨): 통과분은 완료할 수 없다.
+      //    _ptk 는 SearchPanel 병합이 붙인 판정(양하=POD 평택·선적=POL 평택). 그 판정이 «아님»으로 온 것만 막는다
+      //    (판정 없이 온 컨·시프팅·초과는 종전 그대로). 실제로 내렸으면 [초과 컨 등록]이 그 자리다.
+      if (!canCompleteContainer(c, mode, records, shiftCns)) {
+        const port = mode === 'loading' ? `POL ${c.pol || '?'}` : `POD ${c.pod || '?'}`;
+        const w = mode === 'loading' ? '선적' : '양하';
+        alert(`평택 ${w} 대상이 아닙니다 (${port}) — 통과화물은 ${w}확인할 수 없습니다.\n실제로 ${mode === 'loading' ? '실었' : '내렸'}으면 [초과 컨 등록]으로 남겨 주세요.`);
         return;
       }
       // TallyOne 1.55: 마지막 인자는 **갱(호기)** — 인건비 근거다(검수사 확정 2026-08-12).

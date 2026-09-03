@@ -824,7 +824,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         const cur = _byG.get(g);
         if (!cur || r.total > cur.total || (r.total === cur.total && bn === g)) _byG.set(g, r);
       }
-      const _open = [..._byG.values()].reduce((s, r) => s + r.openable, 0);
+      //  3.2-01 (김성일 메모 «1장이면 되는데 2장오픈»): 열 수 있는 장(openable)이 아니라 **열어야 할 장**(needed).
+      const _open = [..._byG.values()].reduce((s, r) => s + (r.needed ?? r.openable), 0);
       if (_open > 0) return _open;
     } catch (e) { /* 아래 종전 경로 */ }
     try {

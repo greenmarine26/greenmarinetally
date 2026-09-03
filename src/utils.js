@@ -32,12 +32,12 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 3.2'   // 3.2 선적 플랜에서 목적지(POD)별 무늬 — 최다 POD 무늬 없음, 나머지 대수 순 빗금·줄·점(검정 가는 선이라 흑백 인쇄·컬러 화면 동일). 평택 선적분만, 베이플랜·카고플랜·베이상세 한 벌(buildPodPatternMap). 3.1 ATPR 전용 노란 빗금을 흡수(검수사 «선적시 포트 구분이 안돼서 선적위치를 못잡는 경우»)   // 3.1 ATPR 선적 플랜에서 위해(WEI)행 컨을 노란 빗금으로 — 같은 엠티인데 씰을 따로 달아야 해서(검수사 긴급 지시 2026-09-02). 베이플랜·카고플랜·베이상세 한 벌(podHighlightKeys)   // 3.0-01 SMC YANTAI 선박코드 RZSY→SMYA(터미널 배정목록 정본: 선사 RZF·항로 RZPT·항차 635W) — 내장 .def 사전 키·주야 구분 없음 목록·연막검사   // 3.0 미르 자체 학습 — 못 알아들은 말을 이어진 말에서 그 자리에서 배우고(별칭·일반화), 못 배운 말은 mir_misses 로 모아 매일 클로드가 결산해 가르친다(TASK-2026-012)   // 2.99-03 OBWH·RZOR 주야 구분 없음(검수사) — 브리핑 «○○조 앱 미사용» 조 이름 생략 · 갱 배분 조 창 = 계획 작업 시간 전체   // 2.99-02 X-RAY 엑셀 첫 장 기본 양식 = 굴림체 10·가운데 정렬·네 변 실선(검수사 샘플 그대로 — 받을 때마다 손으로 다시 그리던 것)   // 2.99-01 터미널 실적은 작업 시작 시점부터만 — 지난 기항 트레드링스 피드(OBWH 2727E 278/278)가 2729E 브리핑에 «278대 앱 미입력»으로 붙던 것(BUG-2026-008)   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
+export const APP_VERSION = 'TallyOne 3.2-01'   // 3.2-01 끝4자리 중복(통과화물이 완료 카드로 승격되던 것·NSDC 2608N 0320)·해치커버 장수는 평택 홀드분이 있는 장만·미르 «MCSC 카고플랜»(동사 없음) 플랜 열기·항차번호(633N)≠끝자리·«미르 점심은?»   // 3.2 선적 플랜에서 목적지(POD)별 무늬 — 최다 POD 무늬 없음, 나머지 대수 순 빗금·줄·점(검정 가는 선이라 흑백 인쇄·컬러 화면 동일). 평택 선적분만, 베이플랜·카고플랜·베이상세 한 벌(buildPodPatternMap). 3.1 ATPR 전용 노란 빗금을 흡수(검수사 «선적시 포트 구분이 안돼서 선적위치를 못잡는 경우»)   // 3.1 ATPR 선적 플랜에서 위해(WEI)행 컨을 노란 빗금으로 — 같은 엠티인데 씰을 따로 달아야 해서(검수사 긴급 지시 2026-09-02). 베이플랜·카고플랜·베이상세 한 벌(podHighlightKeys)   // 3.0-01 SMC YANTAI 선박코드 RZSY→SMYA(터미널 배정목록 정본: 선사 RZF·항로 RZPT·항차 635W) — 내장 .def 사전 키·주야 구분 없음 목록·연막검사   // 3.0 미르 자체 학습 — 못 알아들은 말을 이어진 말에서 그 자리에서 배우고(별칭·일반화), 못 배운 말은 mir_misses 로 모아 매일 클로드가 결산해 가르친다(TASK-2026-012)   // 2.99-03 OBWH·RZOR 주야 구분 없음(검수사) — 브리핑 «○○조 앱 미사용» 조 이름 생략 · 갱 배분 조 창 = 계획 작업 시간 전체   // 2.99-02 X-RAY 엑셀 첫 장 기본 양식 = 굴림체 10·가운데 정렬·네 변 실선(검수사 샘플 그대로 — 받을 때마다 손으로 다시 그리던 것)   // 2.99-01 터미널 실적은 작업 시작 시점부터만 — 지난 기항 트레드링스 피드(OBWH 2727E 278/278)가 2729E 브리핑에 «278대 앱 미입력»으로 붙던 것(BUG-2026-008)   // 2.99 베이매트릭스 해치 줄에 커버 «폭» 입력(홀드10 3 4 3 · 3.5 3.5=00열 두 장) + 빌더 저장이 경계를 지우던 구멍(BUG-2026-006) + 00열 두 장 판정   // 2.98-14 커버 막대를 실측 경계(hatchRows) 열수 비례로 — 등분 그림이 «두 장 다 열어야» 오판을 만들던 것(검수사 «판단은 눈으로»)
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '선적 플랜에서 목적지별 무늬 표시(최다 목적지는 무늬 없음, 나머지는 빗금 줄 점) · 흑백 인쇄용 · 베이플랜 카고플랜 베이상세 전부';
+export const APP_NOTE = '컨번호 끝자리 중복 버그 해결(통과화물은 양하확인 안 됨) · 해치커버 장수는 평택 홀드분 있는 장만 · 미르가 MCSC 카고플랜 한마디에 플랜을 엽니다';
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -3487,6 +3487,29 @@ const PYEONGTAEK_CODES = ['PTK', 'KRPTK', 'KRPYT', 'PYT', 'KRPYOTM', 'PYOTM', 'K
 //   → 511건이 평택인데 평택이 아닌 것으로 판정되고 있었다. 부두번호 접미(PTK02 = 평택 2부두)와
 //   철자 그대로 쓰는 리스트(PYONGTAEK/PYEONGTAEK, 뒤에 국가명이 붙기도 한다)를 흡수한다.
 const RE_PTK_SPELL = /^(KR)?P(Y|YE)ONGTAEK$/;              // PYONGTAEK · PYEONGTAEK · KRPYEONGTAEK
+/** ★ 3.2-01 — **통과분 판정 한 벌** (김성일 메모 2026-09-03 «컨번호 중복적으로 문제» · NSDC 2608N 0320 사고).
+ *  통과분 = 항구가 **적혀 있고** 평택이 아닌 컨. 항구 빈칸(리스트 전용 컨 — 감사 실측 PCBJ 2609N 18대)은 통과가 아니다.
+ *  리스트 등재분(records[cn])은 평택분이다(V9.29 isPtk 규칙과 같은 벌) · 시프팅(_shift)·초과(_extra)는 작업분.
+ *  @param mode 'discharge'(POD) | 'loading'(POL)  @param records 그 모드 리스트 맵(없으면 안 본다)  @param shiftCns 시프팅 컨 Set(없으면 _shift 만) */
+export function isTransitContainer(c, mode, records, shiftCns) {
+  if (!c || !c.cn) return false;
+  if (c._shift || c._extra) return false;
+  if (shiftCns && typeof shiftCns.has === 'function' && shiftCns.has(c.cn)) return false;
+  if (records && records[c.cn]) return false;
+  const port = String((mode === 'loading' ? c.pol : c.pod) || '').trim();
+  if (!port) return false;
+  return !isPyeongtaekPort(port);
+}
+/** ★ 3.2-01 — 이 컨을 완료(양하확인·선적확인)해도 되는가. 통과분만 «아니오».
+ *  SearchPanel 병합이 붙인 `_transit` 이 있으면 그것을, 없는 객체(베이플랜→상세 등)는 pod/pol 로 직접 본다 —
+ *  문지기가 한 길(SearchPanel)만 막고 옆길(베이플랜 상세·트윈 뒤 컨·짝꿍 지정)이 열려 있던 것(감사 P1-2). */
+export function canCompleteContainer(c, mode, records, shiftCns) {
+  if (!c) return false;
+  if (c._shift || c._extra) return true;
+  if (c._transit === true) return false;
+  if (c._transit === false) return true;
+  return !isTransitContainer(c, mode || c._mode, records, shiftCns);
+}
 export function isPyeongtaekPort(code) {
   if (!code) return false;
   let t = String(code).toUpperCase().trim();
@@ -4072,9 +4095,19 @@ export function makePanelResolver(rows, baysInfo) {
  *  @param baysInfo 베이사전 baysSummary 를 베이번호로 키한 것
  *  @param bayNo   베이 번호
  *  @param isGone  (c) => 이미 내렸는가. 없으면 전부 남은 것으로 본다.
- *  @returns {{ total, openable, panels: [{idx, blocked, blockers:[cn]}] }}
+ *  @param isWork  (c) => 평택 작업분인가(양하=POD 평택 · 선적=POL 평택). 3.2-01 — 없으면 needed = openable.
+ *  @returns {{ total, openable, needed, panels: [{idx, blocked, blockers:[cn], holdWork:[cn]}] }}
+ *
+ *  ★ 3.2-01 (김성일 메모 2026-09-03 «커버 문제 1장이면 되는데 2장오픈» — NSDC 2608N 실측)
+ *    openable 은 «열 수 있는 장 수»다. 보고에 쓸 것은 «열어야 할 장 수»(needed) — **평택 홀드분이 아래에 있는 장**만이다.
+ *    실측 10번: hatchRows 두 장, 평택 홀드 12대가 전부 00·01·03열(둘째 장)에만 있는데 데크가 비어 두 장 다 열 수 있으니
+ *    2장이라 보고했다. 22번도 같다(26대 전부 02·04·06·08열 = 첫째 장). 검수사는 각각 1장을 열었다.
+ *    needed = 평택 홀드분이 아래에 있는 장 수(내렸든 안 내렸든·위가 막혔든 아니든 — 닫기 보고 때도, 통과분을 치우고
+ *    열어야 하는 장도 같은 수여야 한다). 막힘(blocked)은 «지금 열 수 있는가»의 답이지 «몇 장 여는가»의 답이 아니다.
+ *    선적 닫기 실측(2609S 09-03 04:56 «09 (10)11 총 2장»): 홀드 선적분 24대가 전부 둘째 장 아래인데 데크가 다 실려
+ *    «내린 것»(gone)으로 잡혀 두 장 다 열 수 있다고 봤다 — 정답 1장. 평택 홀드분이 한 대도 없으면 종전대로 openable.
  */
-export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
+export function hatchOpenable(conts, baysInfo, bayNo, isGone, isWork) {
   const bn = parseInt(bayNo, 10);
   const inf = (baysInfo || {})[bn] || {};
   const total = Math.max(1, parseInt(inf.hatchCount, 10) || 1);
@@ -4083,7 +4116,9 @@ export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
     .map((c) => [String(c.cn || ''), c]);
   const R = makePanelResolver(rows, baysInfo);
   const blockers = Array.from({ length: total }, () => []);
+  const holdWork = Array.from({ length: total }, () => []);   // 3.2-01: 장별 평택 홀드분
   const gone = typeof isGone === 'function' ? isGone : () => false;
+  const work = typeof isWork === 'function' ? isWork : null;
   /*  ⚠ 커버 위 데크는 **홀드 묶음 전체**다 — 베이 하나만 보면 안 된다.
       실측 MCSC 633N 38번: 데크 12칸 중 40ft 4칸(01·02·03·04)만 38번에 들어 있고,
       양옆 8칸은 20ft 라 **37번·39번**으로 실려 있다. 화면이 «BAY (38)39» 로 묶어 그리는 그것이다.
@@ -4091,9 +4126,18 @@ export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
   const _g = R.groupOf(bn);
   const _members = (_g % 2 === 0) ? [_g - 1, _g, _g + 1] : [_g];
   for (const [, c] of rows) {
-    if (!_isDeckTier(c.tier)) continue;
     const cb = normalizeBay(c.bay || '');
     if (!_members.includes(parseInt(cb, 10))) continue;
+    if (!_isDeckTier(c.tier)) {
+      //  3.2-01: 홀드의 평택분 — 그 열이 든 장은 «열어야 할 장»이다(내렸어도 센다 — 닫기 보고의 장수).
+      if (work && work(c)) {
+        const hp = R.panelsOf(String(_g).padStart(2, '0'), c.row);
+        //  어느 장인지 모르는 열은 데크와 같은 벌로 **보수적으로 전부**(감사 P2-4 — 조용히 빠지면 needed 가 준다)
+        const ps = hp.length ? hp : holdWork.map((_, i) => i);
+        for (const p of ps) if (holdWork[p]) holdWork[p].push(String(c.cn || ''));
+      }
+      continue;
+    }
     if (gone(c)) continue;                       // 이미 내린 것은 커버를 막지 않는다
     /*  ⚠ 패널 정보(hatchCount·hatchRows)는 사전에 **짝수 베이만** 있다(실측 MCSC: 022·030·034·038).
         37·39 번으로 실린 20ft 데크를 그 번호로 물으면 «사전에 없음» → null → 전부 막힘이 되어
@@ -4105,10 +4149,14 @@ export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
     }
     for (const p of ps) if (blockers[p]) blockers[p].push(String(c.cn || ''));
   }
-  const panels = blockers.map((b, i) => ({ idx: i, blocked: b.length > 0, blockers: b }));
+  const panels = blockers.map((b, i) => ({ idx: i, blocked: b.length > 0, blockers: b, holdWork: holdWork[i] }));
+  const openable = panels.filter((x) => !x.blocked).length;
+  //  3.2-01: 열어야 할 장 = 평택 홀드분이 아래에 있는 장(막혔든 아니든 — 막힘은 «지금 열 수 있나»의 답). 홀드 평택분이 없으면 종전(openable).
+  const anyHold = panels.some((x) => x.holdWork.length > 0);
+  const needed = anyHold ? panels.filter((x) => x.holdWork.length > 0).length : openable;
   //  2.98-12: 정규화한 그룹을 같이 알린다 — 트리오(21·22·23)를 베이별로 물어도 같은 g 가 나오므로
   //    부르는 쪽이 «같은 물리 커버를 몇 번 셌는지» 를 이 값으로 가려낼 수 있다(6장 중복 수리의 근거).
-  return { total, openable: panels.filter((x) => !x.blocked).length, panels, group: _g };
+  return { total, openable, needed, panels, group: _g };
 }
 
 /** ★ 2.88-01 — 화면용 한 줄 진입점. 항차·모드·베이만 주면 «몇 장 열 수 있는가» 를 낸다.
@@ -4132,7 +4180,9 @@ export function hatchOpenableFor(voyage, mode, bayNo, dictEntry) {
     const conts = Object.values(applySwapFix(fullEdiMapOf(sec) || {}, swapFixList(voyage)) || {});   // 2.89: 맞교환 겹침
     if (!conts.length) return null;
     const comp = sec.completed || {};
-    return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn]);
+    //  3.2-01: 평택 작업분 판정 — 양하=POD 평택 · 선적=POL 평택 (SearchPanel _ptk 와 같은 규칙).
+    const isWork = (c) => (mode === 'loading' ? isPyeongtaekPort(c.pol) : isPyeongtaekPort(c.pod));
+    return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn], isWork);
   } catch (e) { return null; }
 }
 

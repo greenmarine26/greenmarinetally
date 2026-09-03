@@ -1,7 +1,7 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
 import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber } from '../utils.js';   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
+import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -146,6 +146,8 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 그 갱 인원의 인건비 근거가 없다(검수사 확정).
       //   가이드 화면만 갱을 강제하고 나머지 경로는 조용히 통과하던 것을 막는다(독립 재검증).
       if (!getEquipNumber()) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
+      //  3.2-01: 통과분은 완료할 수 없다 — 카드가 어느 길로 왔든 여기서 한 번 더(감사 P1-2).
+      if (!canCompleteContainer(c, c._mode)) { alert(`평택 ${isDischarge ? '양하' : '선적'} 대상이 아닙니다 (${isDischarge ? 'POD ' + (c.pod || '?') : 'POL ' + (c.pol || '?')}) — 통과화물은 ${verb}할 수 없습니다.`); return; }
       await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
       // 완료 후 자동 비우기 콜백
@@ -533,6 +535,10 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         slotSource={slotSource}
         onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
         onCompleteBoth={async (cns) => {
+          //  3.2-01: 짝꿍이 통과분이면 둘 다 안 찍는다(감사 P1-2).
+          const _src = slotSource || allContainers || [];
+          const _bad = cns.map(cn => _src.find(x => x && x.cn === cn)).filter(o => o && !canCompleteContainer(o, c._mode));
+          if (_bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_bad.map(o => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
           for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));

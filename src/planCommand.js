@@ -24,7 +24,20 @@ export function parseViewCommand(query) {
      ⚠ 영어는 PLAN 한 낱말만 있어도 «열어라»로 본다 — 한글의 «플랜»은 조회일 수 있지만
        («5번 베이 플랜에 뭐 있어»), 영어로 PLAN 을 치는 자리는 도면을 볼 때뿐이다. */
   const T = t.toUpperCase();
-  const isCmd = /보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)
+  /* ★ 3.2-01 (받은함 08-29 «MCSC 카고플랜»×4 · «MCSC 633N 양하 카고 플랜» — 미르 무응답 6건)
+       검수사는 동사 없이 «MCSC 카고플랜» 이라고만 친다. 배·항차·양하/선적·카고플랜/베이플랜 말고 아무것도
+       없는 말은 «열어라»다 — 남는 낱말이 하나라도 있으면(«5번 베이 플랜에 뭐 있어») 종전대로 조회로 둔다.
+       ⚠ 여기서는 «카고플랜·베이플랜» 만 받는다. 맨 «플랜»은 조회일 수 있다. */
+  const _bare = T
+    .replace(/카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b/g, ' ')
+    .replace(/양하|선적|\b(LOADING|DISCHARGE|DIS|LDG)\b/g, ' ')
+    .replace(/\b\d{3,4}[NSEW]\b/g, ' ')           // 항차번호 633N·2608N (글자 없는 «0320 카고플랜»은 조회 — 재감사 P2-B)
+    .replace(/\bB?\d{1,2}\s*번?/g, ' ')            // 베이 번호 «5번»·«22»·«B22» (bay 는 아래서 따로 읽는다)
+    .replace(/\b[A-Z]{3,8}\b/g, ' ')                // 선박 약자·이름 토큰
+    .replace(/미르야?|좀|의|을|를|은|는|[\s?？.!'"]/g, '');
+  const bareCmd = _bare === '' && /카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b/.test(T);
+  const isCmd = bareCmd
+    || /보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)
     || /\b(SHOW|OPEN|VIEW|DISPLAY)\b/.test(T)
     || /\bPLANS?\b/.test(T);
   if (!isCmd) return null;

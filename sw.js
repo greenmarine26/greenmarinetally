@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.2';
-const NOTE = '선적 플랜에서 목적지별 무늬 표시(최다 목적지는 무늬 없음, 나머지는 빗금 줄 점) · 흑백 인쇄용 · 베이플랜 카고플랜 베이상세 전부';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.2-01';
+const NOTE = '컨번호 끝자리 중복 버그 해결(통과화물은 양하확인 안 됨) · 해치커버 장수는 평택 홀드분 있는 장만 · 미르가 MCSC 카고플랜 한마디에 플랜을 엽니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

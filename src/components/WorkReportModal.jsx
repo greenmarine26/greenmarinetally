@@ -146,7 +146,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   //  센 값이 있으면 장수 버튼을 그 값으로 맞춰 둔다 — 검수사가 다르게 보면 눌러서 바꾼다.
   useEffect(() => {
     if (!hatchHint) return;
-    const sum = hatchHint.reduce((a, x) => a + x.openable, 0);
+    const sum = hatchHint.reduce((a, x) => a + (x.needed ?? x.openable), 0);   // 3.2-01: 열어야 할 장
     if (sum >= 1 && sum <= 3) setHatchPanels(sum);
   }, [hatchHint]);
 
@@ -823,8 +823,10 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 {hatchHint.map((h) => (
                   <div key={h.bay} className="text-xs2">
                     <span className="font-black text-cyan-200">{formatHatchBays(h.bays) || h.bay}번 — {h.total}장 중 </span>
-                    <span className="font-black text-amber-300">{h.openable}장</span>
-                    <span className="text-dim-300"> 열 수 있습니다</span>
+                    <span className="font-black text-amber-300">{h.needed ?? h.openable}장</span>
+                    <span className="text-dim-300"> 열면 됩니다</span>
+                    {/* 3.2-01: 평택 홀드분이 있는 장만 센다 — 열 수 있는 장이 더 많으면 그 수도 같이 */}
+                    {(h.needed != null && h.needed !== h.openable) && <span className="text-dim-400"> (열 수 있는 장 {h.openable})</span>}
                     {h.panels.filter((x) => x.blocked).map((x) => (
                       <div key={x.idx} className="text-2xs text-dim-400 mt-0.5">
                         · {x.idx + 1}번째 장 — 위에 화물 {x.blockers.length}대 (치워야 열립니다)

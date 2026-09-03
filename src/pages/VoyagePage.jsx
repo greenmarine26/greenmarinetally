@@ -409,6 +409,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     }).sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
   }, [shiftingMap, fullEdiMap]);
 
+  //  3.2-01: 상세창 통과분 문지기 재료 — 시프팅 컨은 통과분이어도 작업분이다.
+  const shiftCnSet = useMemo(() => new Set(shiftingList.map((x) => x.cn)), [shiftingList]);
+
   // TallyOne 1.69-10: 선적 EDI 미도착(=평택 출항본 아님) — 조용히 0 으로 두지 않고 화면에 말한다.
   //   판정은 utils.loadEdiIsDeparture 한 벌만 쓴다(같은 판정을 두 기준으로 하지 않는다).
   const loadEdiPending = useMemo(() => {
@@ -1238,6 +1241,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         sealMode={sealTargets.byCn[detailC.cn] || null}
         onClose={() => setDetailC(null)}
         allContainers={allContainersForMode}
+        records={recMap}
+        shiftCns={shiftCnSet}
         onStartSwap={(cc) => { setDetailC(null); setTab('bay'); setPendingSwap({ cn: cc.cn, bay: cc.bay || '', row: cc.row || '', tier: cc.tier || '' }); }}
       />
     );
@@ -2683,6 +2688,13 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
   }, [parsed, briefCtx, q]);
   const answer = useMemo(() => {
     try {
+      //  3.2-01: 플랜 명령이면 «열었어요» 한 줄 — 위 useEffect 가 연다. 종전엔 답 자리에 컨 목록이 통째로 나왔다(통합검색과 한 벌).
+      const _pc = onOpenPlan ? parseViewCommand(q || '') : null;
+      if (_pc) {
+        const _md = _pc.mode || mode;
+        const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
+        return `🗺 ${vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+      }
       //  ★ 2.50-01 — **여기가 검수사가 실제로 쓰는 검색줄이다.**
       //    2.50 은 `SearchPanel`(수동 모드 안쪽)과 통합검색에만 겹을 붙였는데, 양하 탭 검색줄은
       //    이 자리(VoyagePage:2495)가 직접 답한다. 그래서 «미르야 순서대로 양하하자» 를 쳐도
@@ -2705,7 +2717,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
       return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
     } catch (e) { return null; }
-  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q]);
+  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
   const readRef = useRef('');
   useEffect(() => {
     //  ⚠ 2.65-02 (라이브 실측): 브리핑은 **물을 때마다 지금 기준으로 다시 계산**된다(2.62) —

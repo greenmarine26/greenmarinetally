@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
+import { isTransitContainer, canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -152,6 +153,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           ...c, _mode: m,
           // V7.92-02: 평택분 여부 — 양하=POD평택, 선적=POL평택 (7.1). 집계는 평택분만.
           _ptk: m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol),
+          _transit: isTransitContainer(c, m, recMap),   // 3.2-01: 통과분(항구 적혀 있고 평택 아님·리스트 미등재) — 완료 카드가 되지 않는다
           _xray: m === 'discharge' && !!xrayMap[c.cn],
           _xraySeal: xraySeals[c.cn] || null,
           _comp: compMap[c.cn] || null,
@@ -1018,6 +1020,15 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
 
   const _localAnswerRaw = useMemo(() => {
     if (!query || query.length < 2) return null;
+    //  3.2-01: 플랜 명령이면 «열었어요» 한 줄 — 위 useEffect 가 연다. 셋째 쌍둥이(통합검색·양하탭과 한 벌, 감사 P2-2).
+    {
+      const _pc = onOpenPlan ? parseViewCommand(query) : null;
+      if (_pc) {
+        const _md = _pc.mode || workFilter;
+        const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
+        return `🗺 ${voyage?.info?.vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+      }
+    }
     // 1.23: **경고 문장을 그대로 물은 것인가**를 가장 먼저 본다.
     //   검색 파서보다 앞에 둬야 한다 — 뒤에 두면 `풀` 한 글자와 `5톤 이상` 이 먼저 잡혀
     //   "풀 5톤 이상 98대" 같은 엉뚱한 답이 나간다(오답 리포트 2건, 2026-08-07).
@@ -1211,7 +1222,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || null, tw: _gangTw, compMap: null }); } catch (e) { return null; } },   // 2.70-01: 2 로 못 박지 않는다 — 기억·되묻기가 살아야 한다
         carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts]);   // 2.41: 선박 연락처
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈
     const raw = mirTone(_localAnswerRaw);
     //  ★ 2.47 — **한 대를 묻는 말은 새 겹이 먼저 본다.** 못 보면 null 이라 옛 미르가 그대로 답한다.
@@ -1848,17 +1859,23 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         //   양하를 보다 선적 완료분을 찾으면 걸리지 않았다.
         //   → 완료 탭은 완료분이 본목록이고, 번호 조회로 완료분 한 건이 잡히면 모드와 무관하게 정식 카드로 편다.
         const doneTab = workFilter === 'completed';
+        /* ★ 3.2-01 (김성일 메모 2026-09-03 «컨번호 중복적으로 문제» — NSDC 2608N 22:16 실측)
+             «0320» 에 FFAU4440320(평택)과 SEGU2520320(부산·베이3 통과분)이 같이 잡혔고, 평택 것을 완료하자
+             부산 것이 «유일 후보»가 되어 큰 [양하확인] 카드로 자동 승격 → 4초 뒤 부산 컨이 완료로 기록됐다
+             (이 항차 평택 123대 중 12대가 타항 컨과 끝4자리가 겹친다). 완료 카드가 되는 것은 **작업분**
+             (평택분·시프팅·초과)뿐이다. 통과분은 조회로만 — 아래 목록에 «통과 POD·자리»를 달아 보인다(V7.53 «찾아서 알려줘야» 유지). */
+        const _isWork = (c) => canCompleteContainer(c, c._mode);   // utils 한 벌 — 통과분만 아니다(항구 빈칸·리스트 등재는 작업분)
         const main = doneTab ? results.filter(c => c._comp)
-                             : results.filter(c => !c._comp && c._mode === workFilter);
+                             : results.filter(c => !c._comp && c._mode === workFilter && _isWork(c));
         const others = doneTab ? results.filter(c => !c._comp)
-                               : results.filter(c => c._comp || c._mode !== workFilter);
+                               : results.filter(c => c._comp || c._mode !== workFilter || !_isWork(c));
         // V8.70: 완료된 컨도 번호 단일 매칭이면 큰 카드로 — 취소·위치수정 접근(완료 후 재검색 시 막다른 골목 제거).
         //   ※ 같은 번호가 양하·선적 양쪽에 완료로 있으면(중계) 종전대로 현재 모드 쪽을 편다.
         const doneAll = (main.length === 0 && parsed.digits) ? results.filter(c => c._comp) : [];
         const doneSolo = doneAll.length > 1 ? doneAll.filter(c => c._mode === workFilter) : doneAll;
         const othersRest = (doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others;
         // TallyOne 1.53: 완료 탭에서는 접힌 쪽이 '아직 안 한 작업'이다 — 라벨이 반대로 읽히면 안 눌러 본다.
-        const othersLabel = (n) => (doneTab ? `아직 안 한 작업에 ${n}건 — 보기` : `다른 작업·완료분에 ${n}건 — 보기`);
+        const othersLabel = (n) => (doneTab ? `아직 안 한 작업에 ${n}건 — 보기` : `다른 작업·완료·통과분에 ${n}건 — 보기`);   // 3.2-01: 통과분도 여기
         return (
           <>
             {/* TallyOne 1.53: 싱글로 하려는데 트윈이 되면 한 줄로 알린다(막지 않는다). */}
@@ -1896,7 +1913,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
                   className="w-full py-1.5 rounded bg-ink-800/60 border border-line text-xxs text-dim-300 font-bold">
                   {showOthers ? '▲ 접기' : `▼ ${othersLabel(othersRest.length)}`}
                 </button>
-                {showOthers && othersRest.slice(0, 20).map(c => (
+                {/* 3.2-01: 완료 후보가 없으면(통과분만 잡힘) 펼쳐 둔다 — 스캔한 통과화물을 «없습니다»로 만들지 않는다 */}
+                {(showOthers || (parsed.digits && main.length === 0 && doneSolo.length === 0)) && othersRest.slice(0, 20).map(c => (
                   <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
                 ))}
               </div>
@@ -1941,7 +1959,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const [busy, setBusy] = useState(false);
   const [pickBay, setPickBay] = useState(null);          // V8.83: 자리 선택 그리드 — 베이 먼저
   const [manualOpen, setManualOpen] = useState(false);   // V8.83: 직접 입력 접이식
-  const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading'), [allContainers]);
+  //  3.2-01(재감사 P1-A): 위치 지정 방식도 통과분(POL≠평택·리스트 미등재)은 후보가 아니다 — 선적 EDI(출항본)는 통과분 292/487(PCBJ 2609N)을 그대로 든다.
+  const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading' && canCompleteContainer(c, 'loading')), [allContainers]);
   const equipNo = useEquipNo();   // TallyOne 1.55: 완료 기록에 갱(호기)을 남긴다
   // V8.83: 자리 선택 그리드 — 20ft 계획 자리(완료=회색 선택불가). 위치수정 창과 같은 방식(사용자 확정).
   const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
@@ -2058,6 +2077,10 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
     if (done.length && !(await askYN('이미 선적확인된 컨입니다',
       `${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n계속할까요?`))) return;
+    {   //  3.2-01: 통과분 문지기 — 쓰는 자리 앞에서 한 번 더
+      const _tr = [c1, c2].filter(c => !canCompleteContainer(c, 'loading'));
+      if (_tr.length) { alert(`평택 선적 대상이 아닙니다 — 통과화물 ${_tr.map(c => `${c.cn?.slice(-4)}(${c.pol || '?'})`).join(', ')}은 선적확인할 수 없습니다.`); return; }
+    }
     setBusy(true);
     try {
       // TallyOne 1.55: 마지막 인자 = 갱(호기). 갱이 안 남으면 갱별 대수를 되살릴 수 없다(인건비가 걸린 값).
@@ -2165,6 +2188,10 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       if (!r1) return;
       const r2 = await _seqAsk(c2.cn, backPos.bay, backPos.row, backPos.tier);
       if (!r2) return;
+      {   //  3.2-01: 통과분 문지기
+        const _tr = [c1, c2].filter(c => !canCompleteContainer(c, 'loading'));
+        if (_tr.length) { alert(`평택 선적 대상이 아닙니다 — 통과화물 ${_tr.map(c => `${c.cn?.slice(-4)}(${c.pol || '?'})`).join(', ')}은 선적확인할 수 없습니다.`); return; }
+      }
       await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);   // 1.55: 갱(호기)
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();
@@ -2425,7 +2452,9 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const r1 = useMemo(() => {
     if (!q1 || q1.length < 2) return [];
     const Q = q1.toUpperCase();
+    //  3.2-01: 트윈 앞 컨 후보도 **작업분**(평택분·시프팅·초과)만 — 통과분이 «유일 후보»로 남아 자동 선택되던 자리(싱글과 한 벌).
     return allContainers.filter(c => {
+      if (!canCompleteContainer(c, c._mode)) return false;
       const last4 = c.l4 || c.cn?.slice(-4) || '';
       if (Q.length === 4) return last4 === Q;
       return last4.endsWith(Q) || c.cn?.includes(Q);
@@ -2452,7 +2481,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       // 짝꿍 탐색 시 완료된 컨도 후보에 포함(excludeCns 비움)해야
       //   앞을 먼저 완료해도 뒤 컨이 계속 보인다.
       const twin = findTwinCandidate(front, allContainers, new Set(), shipImo, shipName);
-      setC2(twin);
+      setC2(twin && canCompleteContainer(twin, twin._mode) ? twin : null);   // 3.2-01: 통과분은 짝꿍이 못 된다(수동 지정으로)
     } else if (r1.length === 0) {
       setC1(null);
       setC2(null);
@@ -2469,7 +2498,9 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     if (!c1) return;
     const isComp = (cn) => {
       const live = allContainers.find(x => x.cn === cn);
-      return !!(live && live._comp);
+      //  3.2-01: allContainers 는 완료분이 빠진 풀(filteredContainers)이라, 완료된 컨은 «없음»으로 온다 — 없으면 완료다.
+      //    종전엔 undefined → false 라 q1 이 안 비워져, 남은 후보(통과분)로 카드가 말없이 갈아 끼워졌다.
+      return !live || !!live._comp;
     };
     const c1Done = isComp(c1.cn);
     const c2Done = c2 ? isComp(c2.cn) : true; // 짝꿍 없으면 앞 컨만으로 판단
@@ -2484,6 +2515,9 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
     if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
+    //  3.2-01: 통과분은 완료할 수 없다(감사 P1-2 — 뒤 칸에 통과분이 남는 길).
+    const _tr = [c1, c2].filter(c => !c._comp && !canCompleteContainer(c, c._mode)).map(c => `${c.cn?.slice(-4)}(${c._mode === 'loading' ? c.pol : c.pod})`);
+    if (_tr.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_tr.join(', ')}은 확인할 수 없습니다.`); return; }
     // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
     const xMiss = (c) => c._mode === 'discharge' && c._xray && !String(c._xraySeal?.seal || '').trim();
     const miss = [c1, c2].filter(c => !c._comp && xMiss(c)).map(c => c.cn?.slice(-4));
@@ -2695,6 +2729,7 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
     const Q = q.toUpperCase();
     return allContainers.filter(c => {
       if (c.cn === c1.cn) return false;
+      if (!canCompleteContainer(c, c._mode)) return false;   // 3.2-01: 통과분은 짝꿍 후보가 아니다
       const last4 = c.l4 || c.cn?.slice(-4) || '';
       if (Q.length === 4) return last4 === Q;
       // TallyOne 1.55: 전체 컨번호도 받는다 — 다른 입력칸과 규칙을 하나로.
@@ -2750,6 +2785,9 @@ function SmallResultCard({ c, onOpen }) {
         : 'bg-ink-750 text-dim-200'
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+      {/* 3.2-01: 통과분(평택 작업 아님) — 끝4자리가 겹칠 때 어느 것이 평택분인지 한눈에. POD(양하)·POL(선적)·자리 */}
+      {!canCompleteContainer(c, c._mode) &&
+        <span className="px-1 rounded text-3xs font-black bg-ink-750 text-dim-300 whitespace-nowrap">통과 {c._mode === 'loading' ? (c.pol || '') : (c.pod || '')}{c.bay ? ` ${c.bay}-${c.row || ''}-${c.tier || ''}` : ''}</span>}
       {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&
         <span className="px-1 rounded text-3xs font-black bg-indigo-900 text-indigo-200">수정</span>}
       <span className="text-2xs text-dim-300 mono truncate flex-1">{c.cn}</span>

@@ -313,6 +313,21 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       if (_d) return explainEdiGap(_d, shipCtx.info?.vsl);
       if (_sec?.ediContainers && _sec?.records) return `${shipCtx.info?.vsl || ''} ${_mode === 'loading' ? '선적' : '양하'} — EDI와 리스트가 딱 맞아요. 어긋나는 컨이 없어요 😺`;
     }
+    /* ★ 3.2-01 (받은함 08-29 «MCSC 카고플랜»·«MCSC 633N 양하 카고 플랜» 무응답 6건) — 플랜 명령이면 «열었어요» 한 줄.
+         종전엔 플랜이 열려도(위 useEffect) 답 카드가 비어 _mirDontKnow 가 참이 되고 «무응답»으로 신고됐다.
+         배를 못 찾으면 무엇을 붙이라고 말한다 — 엉뚱한 배를 여느니 안 여는 편이 낫다(2.86). */
+    {
+      const _pc = onOpenPlan ? parseViewCommand(Q) : null;   // 여는 손(onOpenPlan)이 없는 자리에선 «열었어요»라 말하지 않는다
+      if (_pc) {
+        const _md = _pc.mode || 'discharge';
+        const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
+        if (shipCtx && shipCtx.key) {
+          const _voy = (_md === 'loading' ? shipCtx.info?.voy_l : shipCtx.info?.voy_d) || shipCtx.info?.voy || '';
+          return `🗺 ${shipCtx.info?.vsl || ''} ${_voy} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+        }
+        return `어느 배의 ${_what}인지 못 찾았어요 😿 «MCSC 카고플랜» 처럼 배 이름을 붙여 주세요.`;
+      }
+    }
     if (p.mirHello) return '네, 미르예요 🐱 뭐 확인해 드릴까요?\n(예: "미르야 OBWH 브리핑" · "미르야 이번 선적 계획 어떻게 진행 될것 같아")';
     // TallyOne 2.41: 미르 — 선박 연락처(이메일). «PCSZ 이메일»·«본선 메일»·«이 배 메일 주소 찾기».
     //   검수사 원문 «본선 일항사와 메일로 컨펌» · «답만 해주면 됩니다»(발송·추적은 범위 밖).
@@ -755,7 +770,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트 · 2.41: 선박 연락처
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts, onOpenPlan]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트 · 2.41: 선박 연락처 · 3.2-01: onOpenPlan
 
   // 2.33: 출구 한 겹 — 데이터는 그대로, 종결어미만 미르 말투로(검수사 확정 «살짝 친근»).
   //   업무 인텐트 전부 침묵일 때만 잡담 그물(검수사 제공 대본)이 받는다 —

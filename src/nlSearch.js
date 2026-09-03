@@ -139,7 +139,9 @@ export function parseNaturalQuery(text) {
   const skipDigits = hasTempCtx || hasBayCtx || hasUnCtx || hasClassCtx ||
                      hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx || hasCountFollowCtx;
   if (!skipDigits) {
-    const digits = String(text).replace(/\D/g, '');
+    //  3.2-01 (받은함 08-29 «MCSC 633N 양하 카고 플랜» → «양하 끝네자리 633 없음»): 항차번호(633N·2608N·635S)는
+    //    끝자리가 아니다. 항차 토큰만 걷어 내고 센다 — «MCSC 633N 0320» 은 그대로 0320.
+    const digits = String(text).replace(/\b\d{3,4}[NSEW]\b/gi, ' ').replace(/\D/g, '');
     if (digits.length >= 2) result.digits = digits.slice(-4);
   }
 
