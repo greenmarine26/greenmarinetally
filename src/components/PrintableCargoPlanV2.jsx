@@ -159,13 +159,17 @@ export const CARGO_V2_CSS = `
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1 1 auto; text-align: center; white-space: nowrap; }   /* 2.91-01: 검수사 «PLAN 4자가 밑줄로 내려와 한줄을 차지함» — 줄바꿈 금지 */
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; min-width: 0; }   /* 2.91-01: 제목이 먼저 자리를 잡게 옆 칸이 줄어든다 */
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
+.cpv2-page-footer { flex: 0 0 auto; margin-top: 3px; padding-top: 2px; border-top: 0.5px solid #999; font-size: 7.5px; line-height: 1.25; color: #555; text-align: center; }
 .cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-bay-box { flex: 1 1 0; min-width: 95px; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
 .cpv2-single-box .cpv2-single-half { flex: 1 1 0; display: flex; flex-direction: column; }
 .cpv2-single-box .cpv2-empty-half { flex: 1 1 0; }
 .cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; padding: 2px 2px; min-height: 0; position: relative; }
 .cpv2-trio-divider { border-top: 0.5px solid #999; }
-.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: clamp(10px, 0.85vw, 13px); padding: 0 50px 0 4px; margin-bottom: 1px; box-sizing: border-box; flex-shrink: 0; }
+.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: clamp(10px, 0.85vw, 13px); padding: 0 4px; margin-bottom: 1px; box-sizing: border-box; flex-shrink: 0; }
+/*  ★ 3.7-03 — 베이 번호는 **상자 정중앙**이다(검수사 «베이 넘버가 베이 마다 정 중앙에 위치 하여야 하는데 왼쪽으로 조금 치우쳐 있습니다»).
+    종전 padding 0 50px 0 4px 는 오른쪽만 50px 이라 가운데가 (50-4)/2 = 23px 왼쪽으로 밀렸다.
+    50px 은 오른쪽 대수 표시 자리를 비우려던 것인데, 그 표시는 position:absolute 라 애초에 흐름을 안 쓴다. */
 .cpv2-bay-title { display: inline-block; }
 .cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: clamp(8px, 0.65vw, 10px); font-weight: normal; white-space: nowrap; }
 .cpv2-bay-content { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; justify-content: flex-start; }
@@ -444,13 +448,17 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         <div className="cpv2-deck-area" style={{ flex: `${(nHold > 0 && globalHatch) ? globalHatch.maxDeck : Math.max(deckTiers.length, 1)} 1 0`,
             //  3.7: 이 영역이 가질 수 있는 최대 높이 = 제 단 수 × 칸 높이. 넘게 늘어나지 않는다.
             maxHeight: `calc(var(--cph, 999px) * ${(nHold > 0 && globalHatch) ? globalHatch.maxDeck : Math.max(deckTiers.length, 1)})` }}>
+          {/*  ★ 3.7-03 — 로우 표기는 **언제나 맨 위**다(검수사 «상단/하단 로우 표기 위치가 일정해야 합니다.
+              티어가 많고 적음에 따라 올라갔다 내려갔다 합니다. 항상 위치는 가장 높은것 과 가장 낮은것을 기준으로»).
+              종전엔 라벨이 여백칸(spacer) **아래**에 있어 데크 단이 적은 베이는 라벨이 그만큼 내려왔다.
+              라벨을 여백칸 위로 빼면 베이가 뭐든 같은 줄에 선다 — 카스피 도면이 그렇게 돼 있다. */}
+          <div className="cpv2-row-labels" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
+            {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
+          </div>
           {/* V7.58: 해치선 수평 — 데크는 아래(82)가 해치선에 붙음. 단수 부족분은 위 spacer */}
           {nHold > 0 && globalHatch && globalHatch.maxDeck > deckTiers.length && (
             <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxDeck - deckTiers.length} 1 0` }}></div>
           )}
-          <div className="cpv2-row-labels" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
-            {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
-          </div>
           <div className="cpv2-grid-row-wrap" style={nHold > 0 && globalHatch ? { flex: `${Math.max(deckTiers.length, 1)} 1 0` } : undefined}>
             <div className="cpv2-grid" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
               {deckRows.map((row, ri) => (
@@ -662,6 +670,11 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
               ))}
             </div>
           </div>
+          {/* V7.58: 홀드는 위가 해치선에 붙음 — 단수 부족분은 아래 spacer */}
+          {globalHatch && globalHatch.maxHold > holdTiers.length && (
+            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxHold - holdTiers.length} 1 0` }}></div>
+          )}
+          {/*  3.7-03: 아래 로우 표기도 여백칸 **밖**으로 — 홀드 단이 적어도 맨 아래 같은 줄에 선다. */}
           {nHold > 0 ? (
             <div className="cpv2-row-labels" style={{ paddingLeft: holdPadStyle.paddingLeft, paddingRight: holdPadStyle.paddingRight }}>
               {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
@@ -670,10 +683,6 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             <div className="cpv2-row-labels" style={{ visibility: 'hidden' }}>
               {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
-          )}
-          {/* V7.58: 홀드는 위가 해치선에 붙음 — 단수 부족분은 아래 spacer */}
-          {globalHatch && globalHatch.maxHold > holdTiers.length && (
-            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxHold - holdTiers.length} 1 0` }}></div>
           )}
         </div>
         </>)}
@@ -1279,13 +1288,12 @@ export default function PrintableCargoPlanV2({
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
       <div className="cpv2-page" style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
+        {/*  ★ 3.7-03 — 매번 같은 설명은 **바닥글**로 내렸다(검수사 «설명이 길어서 상단이 두줄 또는 세줄로
+            되어 있습니다. 매번 같은 설명은 하단 아래 바닥글로 처리 바랍니다»). 머리글에는 이 항차의 것만 남는다. */}
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
-          {/*  3.7: 선적은 «바탕색=목적지», 양하는 종전 «칠=풀» 규칙 그대로다. 한 문장으로 뭉치면 한쪽이 거짓말이 된다. */}
-          <div className="col" style={{ fontSize: 8, color: '#555' }}>{podMode
-            ? `바탕색=목적지(별첨1${podLen ? `, 칸 오른쪽 위 ${podLen}자` : ' — 이 배는 칸이 좁아 목적지 글자를 안 적는다'}) · 가운데 글자=종류(F 풀·e 20ft엠티·E 40ft엠티 · RF RE DGF DGE FRF FRE OTF OTE TKF TKE — 끝 글자 F=풀·E=엠티)`
-            : '칠한 칸=풀(하늘색=일반, 특수화물은 제 색·별첨2) · 안 칠한 칸=엠티 · 별첨1 ■ 색=선사 · 가운데 글자=종류(F 풀·e 20ft엠티·E 40ft엠티·RF RE DG FR OT TK)'} · X=옆 40ft가 차지 · 회색=통과{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
+
           {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.
               시프팅이 0이면 종전대로 대수만(없는 줄을 만들지 않는다). */}
           <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }}>
@@ -1381,35 +1389,25 @@ export default function PrintableCargoPlanV2({
               );
               const legend3 = <FeLegend fe={legends.feCounts} />;
               // 칸 하나를 세로로 채우는 껍데기 — 표가 여럿이면 높이를 나눠 갖는다.
+              //  ★ 3.7-03 — 별첨 1·2·3 은 **언제나 한 상자에 붙여** 놓는다(검수사 «별첨 1, 2, 3은 중첩되지
+              //    않아야 하며 최대한 같이 있어야 합니다. SWMM은 너무 각 각 떨어져 있으며 OWBH는 2, 3이 중첩되는 부분이 보입니다»).
+              //    종전엔 빈 자리가 셋이면 셋을 **따로 흩어** 놓아(SWMM) 눈이 세 곳을 오갔고,
+              //    한 상자에 넣을 때는 별첨3 만 `0 0 auto`, 1·2 는 `1 1 0` 이라 자리가 모자라면 3 이 상자 밖으로 밀려 잘렸다(OBWH).
+              //    이제 셋 다 «제 줄수만큼»(0 1 auto)이라, 모자라면 셋이 같이 조금씩 줄고 남으면 아래를 비운다.
               const cell = (key, items) => (
                 <div key={key} className="cpv2-bay-box cpv2-legend-box" style={{ '--lgf': `${legendFont}px` }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', height: '100%' }}>
                     {items.map((it, k) => (
-                      <div key={k} style={{ flex: it.grow ? '1 1 0' : '0 0 auto', minHeight: 0, overflow: 'hidden' }}>
+                      <div key={k} style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>
                         {it.node}
                       </div>
                     ))}
                   </div>
                 </div>
               );
-              if (emptySlots >= 3) {
-                slots.push(cell('leg1', [{ node: legend1, grow: true }]));
-                slots.push(cell('leg2', [{ node: legend2, grow: true }]));
-                slots.push(cell('leg3', [{ node: legend3, grow: true }]));
-                for (let i = 3; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
-              } else if (emptySlots === 2) {
-                slots.push(cell('leg1', [{ node: legend1, grow: true }]));
-                slots.push(cell('leg23', [{ node: legend2, grow: true }, { node: legend3, grow: false }]));
-              } else if (leg3InBoxBi >= 0) {
-                // 별첨3 은 아래 단독 박스 빈 반쪽으로 — 1·2 가 세로 두 단을 통째로 써서 한 단씩 커진다.
-                slots.push(cell('leg12', [
-                  { node: legend1, grow: true }, { node: legend2, grow: true },
-                ]));
-              } else {
-                slots.push(cell('leg123', [
-                  { node: legend1, grow: true }, { node: legend2, grow: true }, { node: legend3, grow: false },
-                ]));
-              }
+              slots.push(cell('leg123', [{ node: legend1 }, { node: legend2 }, { node: legend3 }]));
+              //  남는 빈 자리는 그냥 비운다 — 카스피처럼 «억지로 채우지 않는다».
+              for (let i = 1; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
             }
             // 그 다음 실제 박스들
             // M6.94.12: 박스 폭은 모두 동일(flex 1). 셀 폭 통일은 grid를 전체 최대 칸 수로
@@ -1447,6 +1445,12 @@ export default function PrintableCargoPlanV2({
               <div key={ri} className="cpv2-page-row">{slots}</div>
             );
           })}
+        </div>
+        {/*  ★ 3.7-03 바닥글 — 매번 같은 설명은 여기 한 줄로. 머리글이 두세 줄로 부푸는 것을 막는다. */}
+        <div className="cpv2-page-footer">{podMode
+          ? `바탕색=목적지(별첨1)${podLen ? ` · 칸 오른쪽 위 ${podLen}자=목적지` : ' · 이 배는 칸이 좁아 목적지 글자를 안 적는다'} · 가운데 글자=종류 — F 풀 · e 20ft엠티 · E 40ft엠티 · RF 리퍼풀 · RE 리퍼엠티 · DG 위험물 · FR 플랫랙 · OT 오픈탑 · TK 탱크 (이 넷은 글자만으로 풀, 엠티면 뒤에 E — FRE·DGE·OTE·TKE)`
+          : '칠한 칸=풀(하늘색=일반, 특수화물은 제 색·별첨2) · 안 칠한 칸=엠티 · 별첨1 ■ 색=선사 · 가운데 글자=종류(F 풀 · e 20ft엠티 · E 40ft엠티 · RF RE DG FR OT TK)'}
+          {' · X=옆 40ft가 차지 · 회색=통과'}{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}
         </div>
       </div>
       </div>

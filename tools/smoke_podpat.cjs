@@ -238,6 +238,37 @@ const bgs = (d, sel) => {
     ok(/flex:\s*0 1 auto/.test(rule), `⛔ 별첨이 제 줄수만큼 자리를 갖게 돼 있지 않다 (${rule})`);
   }
 
+  // ⑭ **종이 배치 넷** — 검수사 실물 지적(3.7-02 인쇄본).
+  for (const [ship, mode] of [['ATPR', 'loading'], ['MCSC', 'loading'], ['ATPR', 'discharge']]) {
+    const rr = await render('v2', ship, mode);
+    const tag = `${ship} ${mode}`;
+    //  ① 매번 같은 설명은 바닥글에 — 머리글이 두세 줄로 부풀면 안 된다.
+    const hdr = [...rr.d.querySelectorAll('.cpv2-page-header .col')].map((e) => e.textContent.trim());
+    ok(!hdr.some((t) => t.length > 60), `⛔ ${tag} 머리글에 긴 설명이 남아 있다 — 두세 줄로 부푼다 (${hdr.find((t) => t.length > 60) || ''})`);
+    const ft = rr.d.querySelector('.cpv2-page-footer');
+    ok(!!ft && /가운데 글자=종류/.test(ft.textContent), `⛔ ${tag} 바닥글에 설명이 없다`);
+    //  ② 베이 번호는 상자 정중앙 — 한쪽만 큰 안쪽 여백이면 글자가 밀린다.
+    const src5 = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    const tr = (src5.match(/\.cpv2-bay-title-row \{[^}]*\}/) || [''])[0];
+    const pad = (tr.match(/padding:\s*([^;]+);/) || [])[1] || '';
+    const nums = pad.trim().split(/\s+/);
+    ok(nums.length <= 2 || nums[1] === nums[3], `⛔ 베이 번호 안쪽 여백이 좌우 다르다 (${pad}) — 가운데가 밀린다`);
+    //  ③ 로우 표기는 언제나 맨 위·맨 아래 — 여백칸(spacer)보다 바깥에 있어야 단 수와 무관해진다.
+    const deck = rr.d.querySelector('.cpv2-bay-box:not(.cpv2-legend-box) .cpv2-deck-area');
+    const hold = rr.d.querySelector('.cpv2-bay-box:not(.cpv2-legend-box) .cpv2-hold-area');
+    if (deck) ok(deck.firstElementChild && /cpv2-row-labels/.test(deck.firstElementChild.className),
+      `⛔ ${tag} 데크 로우 표기가 맨 위가 아니다 (${deck.firstElementChild && deck.firstElementChild.className})`);
+    if (hold) ok(hold.lastElementChild && /cpv2-row-labels/.test(hold.lastElementChild.className),
+      `⛔ ${tag} 홀드 로우 표기가 맨 아래가 아니다 (${hold.lastElementChild && hold.lastElementChild.className})`);
+    //  ④ 별첨 1·2·3 은 한 상자에 붙어 있어야 한다.
+    const boxes = [...rr.d.querySelectorAll('.cpv2-legend-box')];
+    ok(boxes.length === 1, `⛔ ${tag} 별첨이 ${boxes.length}개 상자로 흩어졌다 — 한 상자여야 한다`);
+    if (boxes[0]) ok(boxes[0].querySelectorAll('.cpv2-legend').length === 3, `⛔ ${tag} 한 상자에 별첨이 셋이 아니다`);
+    //  누구도 «자리를 통째로» 요구하면 안 된다 — 그러면 나머지가 밀려 잘린다.
+    const grow = [...(boxes[0] ? boxes[0].querySelectorAll(':scope > div > div') : [])].map((e) => e.style.flex);
+    ok(grow.length === 0 || grow.every((f) => /0 1 auto/.test(f)), `⛔ ${tag} 별첨 칸이 제 줄수만큼이 아니다 (${grow})`);
+  }
+
   console.log(fail ? `\n3.7 목적지색 연막검사 실패 ${fail}건` : '\n3.7 목적지색 연막검사 통과');
   process.exit(fail ? 1 : 0);
 })();
