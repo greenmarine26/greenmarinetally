@@ -98,9 +98,15 @@ const SPECIAL_FILL = {
 //  3.7: 이 넷은 글자가 하나뿐이라 풀/엠티를 말하지 못한다(리퍼는 RF·RE 로 이미 갈린다).
 //    선적 플랜에서만 뒤에 F·E 를 붙여 세 글자로 적고, 그 칸의 글자를 2/3 로 줄인다.
 const FE_MARKS = new Set(['DG', 'FR', 'OT', 'TK']);
-//  3.7: 목적지 코드 글자 크기(마크 대비). 짧을수록 크게 — 한 자면 자리가 남으니 키운다.
-//    한 자 0.95 는 모서리 표식 ★(1.05)보다 작아 자리가 보장된다.
-const POD_CODE_SCALE = { 1: 0.95, 2: 0.75, 3: 0.58 };
+//  ★ 3.7-01 목적지 코드 글자 크기 — 검수사 *«삼각형 있던 부분에 포트가 붙어야 하는데 화물 표기랑
+//    붙어있어 헷갈립니다»* · *«포트 표기가 화물표기 보다 작아야 합니다.»*
+//    3.7 은 «짧을수록 크게»라며 한 자를 0.95 배로 키웠는데, 그러면 ① 화물 표기와 크기가 거의 같아
+//    한 덩어리로 읽히고(«DGF»+«D» → «DGFD») ② 코드 글자 상자가 **가운데 표기자의 세로 띠를 2.5px 파고든다**.
+//    실측(ATPR 칸 28.4×21.1px · 표기자 대문자 높이 6.9px, 세로 띠 7.1~14.0px) —
+//      0.95 배 ⛔ 2.5px 겹침 · 0.85 ⛔ 1.5 · 0.75 ⛔ 0.5 · **0.62 여유 0.8px** · 0.55 여유 1.5px.
+//    ⇒ 검수사가 처음 보고 «세자표기가 확실하니»라고 한 그 크기(0.62 · 인쇄 4.5pt)로 되돌린다.
+//    자릿수와 무관하게 한 크기다 — 코드는 «구석 표식»이지 표기자와 나란한 글이 아니다.
+const POD_CODE_SCALE = { 1: 0.62, 2: 0.62, 3: 0.62 };
 const PLAIN_FULL_BG = '#7dd3fc';   // 일반 풀 = 하늘색
 const MARK_FG = '#000';            // 글자는 전부 진한 검정 (검수사 확정)
 
@@ -195,10 +201,10 @@ export const CARGO_V2_CSS = `
 /* V8.98: 쉬프팅(재적부) = 좌상단 파란 ◆ (XRAY ★는 우상단 — 동시 표기 가능) */
 /* ★ 3.7: 목적지 3자 — 오른쪽 위 구석. 굵기 없이 크기로만 가운데 글자와 층을 가른다(검수사 «폰트를 굵게 하지 말아 주세요 겹쳐보입니다»). */
 .cpv2-cell.cpv2-mark3 { font-size: calc(var(--mf, 9.6px) * 0.667); }   /* 3.7: 특수화물 세 글자(DGF·DGE…) — 세 글자 × 2/3 = 두 글자 폭 그대로 */
-.cpv2-cell .cpv2-pod-1 { font-size: calc(var(--mf, 9.6px) * 0.95); }   /* 3.7: 한 자면 크게 — 실측 223항차 중 155(69.5%) */
-.cpv2-cell .cpv2-pod-2 { font-size: calc(var(--mf, 9.6px) * 0.75); }   /* 3.7: 두 자 — 68항차(30.5%) */
-.cpv2-cell .cpv2-pod-3 { font-size: calc(var(--mf, 9.6px) * 0.58); }   /* 3.7: 세 자까지 가야 갈리는 항차(실측 0건) */
-.cpv2-cell .cpv2-pod { position: absolute; top: 0; right: 0.5px; line-height: 1.05; font-weight: normal; font-style: normal; color: #222; letter-spacing: -0.2px; pointer-events: none; }
+.cpv2-cell .cpv2-pod-1,
+.cpv2-cell .cpv2-pod-2,
+.cpv2-cell .cpv2-pod-3 { font-size: calc(var(--mf, 9.6px) * 0.62); }   /* 3.7-01: 자릿수와 무관하게 한 크기 — 표기자(1em)보다 확실히 작고 세로 띠를 안 침범한다 */
+.cpv2-cell .cpv2-pod { position: absolute; top: 0; right: 0.5px; line-height: 1.05; font-weight: normal; font-style: normal; color: #333; letter-spacing: -0.2px; pointer-events: none;   /* 3.7-01: 흰 후광으로 바탕색·표기자에서 떨어뜨린다 — 검수사 «화물 표기랑 붙어있어 헷갈립니다» */ text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 2px #fff; }
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: 0; left: 0; line-height: 1;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
    V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서

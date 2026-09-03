@@ -183,6 +183,34 @@ const bgs = (d, sel) => {
     if (m) ok(Math.abs(m[2] / m[1] - 0.55) < 0.03, `⛔ ${ship} 베이상세 칸 비율 1:${(m[2] / m[1]).toFixed(2)} — 0.55 여야 한다`);
   }
 
+  // ⑪ **목적지 코드는 «구석 표식»이다** — 가운데 화물 표기와 붙으면 한 덩어리로 읽힌다.
+  //    검수사 3.7 실물 지적 — «삼각형 있던 부분에 포트가 붙어야 하는데 화물 표기랑 붙어있어 헷갈립니다» ·
+  //    «포트 표기가 화물표기 보다 작아야 합니다.» 두 가지를 치수로 잰다.
+  {
+    const src2 = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    const sc = [...src2.matchAll(/const POD_CODE_SCALE = \{([^}]*)\}/g)].map((m) => m[1])[0] || '';
+    const vals = [...sc.matchAll(/:\s*([0-9.]+)/g)].map((m) => parseFloat(m[1]));
+    ok(vals.length === 3, `코드 배율을 못 읽었다 (${sc})`);
+    //  ① 화물 표기보다 작아야 한다. 가장 작은 표기자는 특수화물 세 글자(0.667em)다.
+    const mk3 = parseFloat((src2.match(/\.cpv2-mark3 \{ font-size: calc\(var\(--mf, 9\.6px\) \* ([0-9.]+)\)/) || [])[1] || 0.667);
+    ok(vals.every((v) => v < mk3), `⛔ 목적지 코드(${vals})가 화물 표기(${mk3})보다 작지 않다`);
+    //  ② 코드 글자 상자가 가운데 표기자의 세로 띠를 침범하면 안 된다.
+    //     칸 안쪽 높이 = --cph − 테두리 · 표기자 대문자 높이 ≈ 0.72em · 코드 상자 = line-height 1.05
+    for (const ship of ['ATPR']) {
+      const rr = await render('v2', ship, 'loading');
+      const pg = rr.d.querySelector('.cpv2-page');
+      const mf = parseFloat(pg.style.getPropertyValue('--mf'));
+      const inH = parseFloat(pg.style.getPropertyValue('--cph')) - 1;
+      const band = (inH - 0.72 * mf) / 2;                 // 표기자가 시작하는 자리
+      for (const v of vals) {
+        const boxH = 1.05 * mf * v;
+        ok(boxH <= band, `⛔ 코드 배율 ${v} 는 상자 높이 ${boxH.toFixed(1)}px 로 표기자 띠(${band.toFixed(1)}px)를 ${(boxH - band).toFixed(1)}px 침범한다`);
+      }
+    }
+    //  ③ 흰 후광이 있어야 바탕색·표기자에서 떨어져 보인다.
+    ok(/\.cpv2-pod \{[^}]*text-shadow/.test(src2), '⛔ 목적지 코드에 흰 후광이 없다 — 바탕색에 묻힌다');
+  }
+
   console.log(fail ? `\n3.7 목적지색 연막검사 실패 ${fail}건` : '\n3.7 목적지색 연막검사 통과');
   process.exit(fail ? 1 : 0);
 })();
