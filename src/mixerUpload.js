@@ -166,10 +166,28 @@ export function parsePdfContainers(text) {
     result.vsl = vslMatch[1].trim();
     result.voy = vslMatch[2].trim();
   }
+  //  ★ 3.6-02 (2026-09-03 실측) — **표 머리글을 항구로 삼지 않는다.**
+  //    검수사가 잡았다 — SWMM 2609S 선적 리스트에서 7 대의 목적항이 «CLASS» 로 들어가 있었다.
+  //    `SWMM 2609S Summary.pdf` 의 특수화물 표 머리글이 «POD CLASS / UNNo. 10' 20' 40' …» 인데,
+  //    종전 정규식 `/POD\s*[:\-]?\s*([A-Z]{5})/` 이 «POD CLASS» 를 물어 **CLASS 를 그 문서 전체의
+  //    목적항**으로 삼았다(POL 도 같은 식으로 KRPTK 를 물어, 엑셀에서 온 나머지 698 대의 PTK02 와 어긋났다).
+  //    원본 엑셀에는 그 7 대도 `DISCHARGE = VNSGN` 으로 멀쩡히 적혀 있었다 — 파서만 틀린 것이다.
+  //  ⇒ 머리글에 흔히 오는 영문 낱말은 항구로 안 본다. 그리고 «POD CLASS / UNNo.» 처럼
+  //    **바로 뒤에 `/` 가 오면 그것은 합쳐 쓴 머리글**이지 값이 아니다.
+  const _HDR_WORDS = new Set(['CLASS', 'TOTAL', 'GROSS', 'EMPTY', 'UNITS', 'CARGO', 'WEIGHT',
+    'PLACE', 'FINAL', 'OTHER', 'NOTES', 'SEALS', 'OWNER', 'GRAND', 'SHORT']);
+  const _portOf = (m) => {
+    if (!m) return '';
+    const code = m[1];
+    if (_HDR_WORDS.has(code)) return '';          // 머리글 낱말
+    if (/^\s*\//.test(m.input.slice(m.index + m[0].length))) return '';   // 「POD CLASS / UNNo.」
+    return code;
+  };
   const polMatch = fullText.match(/POL\s*[:\-]?\s*([A-Z]{5})/);
   const podMatch = fullText.match(/POD\s*[:\-]?\s*([A-Z]{5})/);
-  if (polMatch) result.pol = polMatch[1];
-  if (podMatch) result.pod = podMatch[1];
+  const _pol = _portOf(polMatch), _pod = _portOf(podMatch);
+  if (_pol) result.pol = _pol;
+  if (_pod) result.pod = _pod;
 
   // 모드 판정
   if (isPyeongtaekPort(result.pol)) result.mode = 'loading';

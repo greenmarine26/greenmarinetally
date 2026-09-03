@@ -17,7 +17,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -504,7 +504,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   해결: LIST 데이터가 있으면 항상 우선 (검수원이 직접 다루는 정확한 자료).
         //         단 LIST가 비어있으면 EDI 값 보존.
         const safeR = {};
-        if (r.iso) safeR.iso = r.iso;
+        //  ★ 3.6-02 — **리스트 규격이 EDI 의 «특수화물»을 지우지 못한다.**
+        //    실측(보관 68항차) 466대 — EDI `45R8`(리퍼)을 리스트 `42HR` 가 덮어 카고플랜에서 리퍼가 통째로
+        //    사라졌다(MAMP 621N 240대 · MCSN 622N 226대). `42HR` 를 앱이 리퍼로 못 읽기 때문인데,
+        //    **모르는 코드로 아는 것을 덮는 것**이 잘못이다. M6.21 의 «리스트 우선»은 살리되,
+        //    EDI 가 리퍼라고 말하는데 리스트 규격이 리퍼가 아니면 EDI 를 지킨다.
+        if (r.iso && !(isReeferIso(merged[r.cn].iso) && !isReeferIso(r.iso) && r.rf !== true)) safeR.iso = r.iso;
         if (r.op)  safeR.op  = r.op;
         // M6.94.31: EDI에 pol/pod 있으면 리스트가 덮지 못함 (EDI = 단일 진실).
         //   원인: 엠티 선적 엑셀(MCAT EMPTY)은 헤더가 없어 fallback 파서가 목적지(CNDLC 등)를
@@ -537,8 +542,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         }
         if (r.desc && !merged[r.cn].desc) safeR.desc = r.desc;
         if (r.fe && !merged[r.cn].fe) safeR.fe = r.fe;
-        if (r.rf === true && merged[r.cn].rf !== true) safeR.rf = true;
-        if (r.fr === true && merged[r.cn].fr !== true) safeR.fr = true;
+        //  ★ 3.6-02 (검수사 신고 2026-09-03 «특수 화물 표기가 안된 카고플랜이 있었습니다.
+        //    그래서 리퍼 온도체크 미스를 낼뻔 했습니다») — **특수화물 판정이 두 벌이었다.**
+        //    메인 병합(containersBase)은 iso·rf·fr·ot·tk·dg·dgc·un·pg 를 다 채우고 «EDI 의 false 는
+        //    정보 없음이라 리스트의 true 가 이긴다»(TNJP 26360E 실측)까지 고쳐져 있는데,
+        //    **베이플랜 화면이 인쇄하는 카고플랜은 이 목록을 쓰면서 rf·fr 둘만** 채웠다.
+        //    실측(보관 68항차) — 리스트에만 있는 DG·OT 23대가 카고플랜에서 글자 없이 나갔다
+        //    (KBTR 2605E 선적 DG 2대 · STSE·STMJ·SWTD OT 21대).
+        //    ⇒ 메인과 같은 잣대로 맞춘다. false→true 승격만 허용(리스트가 EDI 를 뒤집지 못한다).
+        for (const _k of ['rf', 'fr', 'ot', 'tk', 'dg', 'oog']) {
+          if (r[_k] === true && merged[r.cn][_k] !== true) safeR[_k] = true;
+        }
+        for (const _k of ['dgc', 'un', 'pg']) {
+          if (r[_k] !== undefined && r[_k] !== '' && (merged[r.cn][_k] === undefined || merged[r.cn][_k] === '')) safeR[_k] = r[_k];
+        }
         // 엠티실/리씰
         if (r.eseal) safeR.eseal = r.eseal;
         if (r.eseal_wrong) safeR.eseal_wrong = r.eseal_wrong;

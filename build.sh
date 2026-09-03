@@ -430,6 +430,22 @@ else
   echo "✗ 검산 화면 번들 실패 — 배포 금지"; exit 1
 fi
 rm -f "$SMOKE_IR"
+# 3.6-02: PDF 표 머리글을 항구로 삼지 않는가
+SMOKE_PP=$(mktemp /tmp/_pdfport_XXXXXX.cjs)
+if npx esbuild src/mixerUpload.js --bundle --platform=node --format=cjs \
+     --external:firebase --external:firebase/* --outfile="$SMOKE_PP" --log-level=error; then
+  node tools/smoke_pdfport.cjs "$SMOKE_PP" || { echo "✗ PDF 항구 연막검사 실패 — 배포 금지"; exit 1; }
+else
+  echo "✗ PDF 항구 번들 실패 — 배포 금지"; exit 1
+fi
+rm -f "$SMOKE_PP"
+# 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
+node tools/smoke_special.cjs "$SMOKE_IS2" 2>/dev/null || {
+  SMOKE_S2=$(mktemp /tmp/_spc_XXXXXX.cjs)
+  npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_S2" --log-level=error || { echo "✗ 특수화물 번들 실패 — 배포 금지"; exit 1; }
+  node tools/smoke_special.cjs "$SMOKE_S2" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
+  rm -f "$SMOKE_S2"
+}
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
 #  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.

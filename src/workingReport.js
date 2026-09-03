@@ -7,7 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
-import { formatBerth, isPyeongtaekPort } from './utils.js';
+import { formatBerth, isPyeongtaekPort, isReeferIso} from './utils.js';
 const PORT_MAP = {
   // 표준 5자
   // V9.57(G13): 평택 표기 7종(utils.isPyeongtaekPort의 PYEONGTAEK_CODES)과 정합 —
@@ -126,7 +126,14 @@ function getFE(c) {
     return String(c.cargoType).toUpperCase() === 'F' ? 'F' : 'E';
   }
   // 3순위: ISO 끝자리 (E)
+  //  ⚠ 3.6-02 (검수사 확정 2026-09-03) — **리퍼는 규격 글자로 적/공을 짐작하지 않는다.**
+  //    *«45RE 이건 풀일수도 있습니다. 그땐 F/E구분을 보고 판단해야 합니다»* ·
+  //    *«R1 R3 R8 R*로 표현하는것들은 일단은 리퍼로 판단을 하고 풀인지 엠티인지 구분을 합니다»*
+  //    실측(활성·보관 전수) — 규격 끝이 E 인 리퍼 8,627대 중 **117대가 fe=F(적)** 이다
+  //    (OBWH 2725E `22RE` · RZOR R080E `40RE`). 드라이의 `45GE`·`453E` 는 E 가 엠티가 맞아 그대로 둔다.
+  //    ⇒ 리퍼면 여기서 결정하지 않는다(위 1·2순위가 답을 못 냈다면 «모른다»가 사실이다 — 기본값 F).
   const iso = String(c.iso || '').toUpperCase();
+  if (isReeferIso(iso)) return 'F';   // 리퍼는 규격으로 엠티라 단정하지 않는다
   if (iso.endsWith('E')) return 'E';
   return 'F';
 }
