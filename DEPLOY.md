@@ -71,9 +71,29 @@ origin 에는 있고 로컬 인덱스에는 없어 `D` 로 나온다. 그렇게 
    (`sed 's#/#\\#g'`). 지워지지 않아도 라이브는 안 깨지지만 저장소에 옛 자산이 계속 쌓인다.
 2. **한글 이름 파일이 tar 에서 사라졌다.** 통합지침서(`평택항_..._TallyOne 2.64.md`)를 payload 에 넣었는데
    윈도우 `tar -xzf` 가 그 항목을 풀지 못해 **저장소에서 지침서가 통째로 없어졌다**(옛 판은 del.txt 로 지워진 뒤였다).
-   ⇒ **한글 이름 파일은 payload 에 넣지 말고**, 배포 트리거 전에
-   `C:\TALLYTEST\_v90604_repo\` 에 **직접 복사**한다(untracked 라 `git reset --hard` 에 안 지워지고 `git add -A` 가 집어간다).
+   ⇒ 해법은 **§0-F-3 의 CP949 이름**이다. 여기 있던 «직접 복사» 방식은 **2026-09-03 에 폐기했다** — 아래를 보라.
 3. ✅ 배포 후 **`git ls-tree origin/main` 로 payload 파일이 실제로 들어갔는지** 센다 — 커밋 «성공»은 증거가 아니다.
+
+### 0-F-3. 한글 이름 파일은 **CP949 이름으로 tar 에 태워** 보낸다 (2026-09-03 실측·확정 — 옛 «직접 복사» 폐기)
+
+**옛 규칙(직접 복사)은 틀렸다.** «untracked 라 `reset --hard` 가 안 지운다»고 적혀 있었는데,
+지침서는 **저장소에 이미 있는 tracked 파일**이라 `_deploy.bat` 첫 줄의 `git reset --hard origin/main` 이
+**내가 복사해 둔 새 판을 origin 판으로 되돌려 버린다.** 그래서 3.5 배포에서 지침서 수정이 조용히 빠졌다
+(커밋은 «성공», 소스 30개는 다 들어갔는데 md 만 없었다 — `git show --stat` 으로 잡았다).
+
+**진짜 원인.** 윈도우 `tar`(bsdtar)는 아카이브 안의 이름을 **현재 코드페이지(한글 윈도우 = CP949)** 로 읽는다.
+리눅스에서 만든 tgz 는 이름이 UTF-8 바이트라 CP949 로 해석되지 않아 `Invalid empty pathname` 으로 **그 항목만 조용히 건너뛴다.**
+
+**해법 — 스테이징할 때 파일명을 CP949 바이트로 써서 tar 에 넣는다.**
+```python
+name = '평택항_검수_통합지침서_3앱통합본_TallyOne 2.90.md'
+shutil.copyfile(src, name.encode('cp949'))   # 파일명 자체가 CP949 바이트
+```
+그 폴더를 `tar -czf` 하면 윈도우가 CP949 로 읽어 **정확한 한글 이름**으로 푼다.
+실측 2026-09-03 — 커밋 `9c38726` 「1 file changed, 5 insertions(+), 2 deletions(-)」. 쓰레기 이름 파일은 생기지 않았다.
+
+⚠ 확인은 **`git show FETCH_HEAD --stat --name-only` 에 그 파일이 있는지**로 한다.
+`tar -tzf` 는 리눅스 쪽 목록이라 윈도우가 풀었다는 증거가 못 된다.
 
 ## 0. 절대 원칙
 
@@ -186,7 +206,7 @@ A는 사용자 PC의 GitHub Desktop git을 배치파일로 돌리는 방식이�
    → `dist/` 는 `.gitignore` — **루트 서빙이라 사이트에 안 쓰인다.** 649MB 를 그냥 먹고 있었다.
    → 배포 전 `du -sh assets` 를 한 번 보라. **수십 MB를 넘으면 뭔가 잘못된 것이다.**
 5. payload tgz는 `./` 접두사·디렉터리 엔트리 없이 파일만 (`tar -czf out.tgz --no-recursion -T list`).
-6. **한글 파일명은 tar에 안 태운다.** 워킹카피에 직접 복사 → `reset --hard`가 안 지우므로 `add -A`가 잡는다.
+6. **한글 파일명은 이름을 CP949 바이트로 바꿔 tar 에 태운다**(§0-F-3). 워킹카피 직접 복사는 tracked 파일에 안 통한다 — `reset --hard` 가 되돌린다.
 7. bat 작성 후 **CRLF 변환 필수** (`sed -i 's/$/\r/'`). 커밋 메시지는 영문 (코드페이지).
 8. 실행은 computer-use `open_application("실행")` → 입력칸 클릭 ×2 → `ctrl+a` → `Delete` → 경로 타이핑 → zoom 확인 → Enter.
    ⚠ `triple_click`으로는 기존 텍스트가 안 지워진다(실측, 경로 깨짐).
