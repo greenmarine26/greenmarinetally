@@ -44,7 +44,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos } from '../utils.js';   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip } from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -1181,6 +1181,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       listRecords: recMap,
       xrayList: xrayMap,
       mode,
+      //  3.4: 고려해운 «클래스 8 홀드 선적 금지» 게이트 — 판정은 utils 한 벌이 하고, 진단은 선박 이름을 모른다(sealPolicy 와 같은 방식).
+      //    선사 코드가 빈 항차가 많아 사전(carrier)도 같이 넘긴다.
+      dg8HoldRule: isKmtcShip(voyage?.info, (typeof window !== 'undefined' && window.__fbShipBayDict)
+        ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()]?.carrier : ''),
       // 2.94-01: 통과화물은 «EDI에 없는 컨» 경고에서 뺀다 — 판정은 utils 한 벌.
       thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
       carrier: voyage?.info?.carrier || '',

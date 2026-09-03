@@ -285,6 +285,25 @@ function AlertDetails({ alert, onOpenContainer }) {
     );
   }
 
+  /* 3.4 — 고려해운 클래스 8 홀드 선적. 검수사가 그 자리에서 컨을 열 수 있게 자리·UN·목적지를 같이 보인다. */
+  if (alert.code === 'dg8_hold') {
+    return (
+      <div className="mt-2 pt-2 border-t border-line text-2xs space-y-1">
+        <div className="text-rose-300 font-bold">고려해운 규정 — 클래스 8은 갑판 적재입니다(홀드 금지).</div>
+        {d.slice(0, 20).map((v, i) => (
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(v.cn); }}
+            className="w-full flex items-center justify-between gap-2 hover:text-amber-300"
+          >
+            <span className="mono font-bold">{v.cn} ✏️</span>
+            <span className="mono text-rose-300 font-bold">{v.bay ? `${parseInt(v.bay, 10)}-${v.row}-${v.tier}` : '자리 없음'}</span>
+            <span className="text-dim-300">Class {v.dgc || '8'}{v.un ? ` UN${v.un}` : ''}{v.pod ? ` · ${v.pod}` : ''}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   if (alert.code === 'xray_no_location') {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">

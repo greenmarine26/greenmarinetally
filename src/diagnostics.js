@@ -2,7 +2,7 @@
 // 자료 업로드 후 자동 호출 → 이상 징후 검출 → 경고 객체 배열 반환
 //
 // 경고 종류:
-//   🔴 critical: 리퍼 온도 미입력, 위험물 정보 누락, IMDG 격리 위반
+//   🔴 critical: 리퍼 온도 미입력, 위험물 정보 누락, IMDG 격리 위반, 클래스 8 홀드 선적(고려해운 규정 — 3.4)
 //   🟡 warning:  카운트 차이, 풀/엠티 불일치, 규격 불일치
 //   🔵 info:     실번호 불일치, X-RAY 매칭 안됨
 //
@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn } from './utils.js';
+import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn, isHoldTier } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
@@ -44,8 +44,10 @@ function extractDg(containers) {
 //   mode:          'discharge' | 'loading'
 //   carrier:       선사 코드 (TDT에서)
 //   sealPolicy:    선박 엠티 실 정책 (matchShipPolicy 결과) — M3.5.5
+//   dg8HoldRule:   이 배에 «클래스 8 홀드 선적 금지» 규정이 걸리는가 (3.4 — 고려해운). **선박 이름은 여기서 알지 않는다** —
+//                  판정은 utils.isKmtcShip 한 벌이 하고 부르는 쪽(VoyagePage)이 결과만 넣는다(sealPolicy·lugCns 와 같은 방식).
 // 결과: 경고 배열
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [] }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false }) {
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
@@ -190,6 +192,30 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           location: v.key,
           classes: v.classes,
           containers: v.list.map(c => c.cn),
+        })),
+      });
+    }
+  }
+
+  /* ─── 🔴 3-B. 클래스 8 홀드 선적 (선사 규정 — 3.4) ────────────────────────────────
+       검수사 지시 2026-09-03(고려해운 공문 «평택 기항 선박 위험물(DG) 적재 및 S/I, PN 작성 업무 협조 요청»,
+       09:44 접수) — *«고려선사는 홀드에 클래스 8이 선적이 되면 안된다는 말을 한것입니다.
+       그러므로 고려선박만 알림을 띄워 주세요»*.
+     ⚠ **선적 계획에만 건다.** 규정이 «실으면 안 된다»이고, 이미 실려 온 양하분은 우리가 바꿀 수 없다.
+     ⚠ 모수는 `dgs`(c.dg)가 아니라 **클래스 표기(dgc)** 로 따로 고른다 — EDI 에 dg 플래그가 없고 dgc 만 오는 자료가 있다.
+     ⚠ 기존 `imdg_violation`(위 3번)은 키가 `bay-row` 라 tier 를 안 본다. 거기에 얹지 않고 **별도 코드**로 세운다. */
+  if (dg8HoldRule && mode === 'loading') {
+    const hold8 = ediPtk.filter((c) => String(c.dgc || '').startsWith('8') && isHoldTier(c.tier));
+    if (hold8.length > 0) {
+      alerts.push({
+        level: 'critical',
+        code: 'dg8_hold',
+        msg: `고려해운 규정 위반 — 클래스 8 홀드 선적 ${hold8.length}대`,
+        voice: `클래스 8 위험물 ${hold8.length}대가 홀드에 잡혀 있습니다. 고려해운은 갑판 적재입니다. 즉시 확인 필요`,
+        count: hold8.length,
+        details: hold8.map((c) => ({
+          cn: c.cn, bay: c.bay, row: c.row, tier: c.tier,
+          un: c.un || '', dgc: c.dgc || '', pod: c.pod || '',
         })),
       });
     }

@@ -473,6 +473,13 @@ fi
       && node tools/smoke_transit.cjs "$SMOKE_TRU" \
       || { rm -f "$SMOKE_TRU"; echo "✗ 통과분 판정 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_TRU"
+    #  3.4: **고려해운 클래스 8 홀드 선적 경고** — 실데이터(KSKM 2613N·2615N 위반 2건 · KKAK·SWDN 대조군)로 게이트·판정·미르 설명·매뉴얼까지.
+    SMOKE_D8U="tools/_smoked8u_tmp.cjs"; SMOKE_D8D="tools/_smoked8d_tmp.cjs"
+    npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_D8U" --log-level=error \
+      && npx esbuild src/diagnostics.js --bundle --platform=node --format=cjs --outfile="$SMOKE_D8D" --log-level=error \
+      && node tools/smoke_dg8hold.cjs "$SMOKE_D8U" "$SMOKE_D8D" "$SMOKE_NS" \
+      || { rm -f "$SMOKE_D8U" "$SMOKE_D8D"; echo "✗ 고려해운 클래스 8 홀드 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_D8U" "$SMOKE_D8D"
     #  2.77: **밀린 버그 셋** — X-RAY MRN 입력 · 복구 코드 안내 · 컨 상세 두 값.
     SMOKE_PD="tools/_smokepd_tmp.cjs"
     npx esbuild src/adminGuard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PD" --log-level=error \
