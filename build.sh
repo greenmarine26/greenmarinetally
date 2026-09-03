@@ -432,6 +432,18 @@ else
   cp "$SMOKE_D4.fbbak" src/firebase.js; rm -f "$SMOKE_D4.fbbak"
   echo "✗ 끝4자리 중복 번들 실패 — 검사를 못 돌렸다(스텁에 이름이 빠졌으면 python3 tools/gen_fb_stub.py). 배포 금지"; rm -f "$SMOKE_D4"; exit 1
 fi
+#  3.3: **양하 «해상부터» 칩** — NSDC 2608N 10번 실데이터로 자동 가이드를 그려 칩을 누르고(확인 모달 → 저장 {seqRowFrom:sea}) 첫 카드가 바뀌는지 본다.
+SMOKE_RF=$(mktemp /tmp/_smokerf_XXXXXX.js)
+cp src/firebase.js "$SMOKE_RF.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_rowfrom.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_RF"; then
+  cp "$SMOKE_RF.fbbak" src/firebase.js && rm -f "$SMOKE_RF.fbbak"
+  node tools/smoke_rowfrom.cjs "$SMOKE_RF" || { echo "✗ 양하 해상부터 칩 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_RF"; exit 1; }
+  rm -f "$SMOKE_RF"
+else
+  cp "$SMOKE_RF.fbbak" src/firebase.js; rm -f "$SMOKE_RF.fbbak"
+  echo "✗ 양하 해상부터 칩 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_RF"; exit 1
+fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).

@@ -318,6 +318,7 @@ export function mirSee(q, ctx) {
       evenRowsSeaSide: side === 'starboard',    // 우현 접안 = 짝수 로우가 해상쪽
       findTwin: (t, arr, used) => findTwinCandidate(t, arr, used, info.imo || '', info.vsl || ''),
       streamPref: null,
+      rowFrom: info.seqRowFrom === 'sea' ? 'sea' : 'land',   // 3.3: 양하 «해상부터» — 자동 가이드와 한 벌
     }) || [];
   } catch (e) { return null; }
   if (!queue.length) return null;
@@ -329,7 +330,7 @@ export function mirSee(q, ctx) {
     //  2.51: 베이를 안 댔으면 **어느 베이부터인지 반드시 말한다.** 갱마다 베이가 다르다 —
     //    「4호기」를 단 검수사에게 남의 베이를 부르면 그것이 틀린 답이다.
     const b0 = queue[0] && queue[0].main ? String(queue[0].main.bay) : '';
-    lines.push(`${mode === 'loading' ? '선적' : '양하'} — 남은 ${remaining.length}대 (완료 ${done}대) · ${side === 'starboard' ? '우현' : '좌현'} 접안`
+    lines.push(`${mode === 'loading' ? '선적' : '양하'} — 남은 ${remaining.length}대 (완료 ${done}대) · ${side === 'starboard' ? '우현' : '좌현'} 접안${mode === 'discharge' && info.seqRowFrom === 'sea' ? ' · 해상부터' : ''}`
       + (b0 ? `\n  ${b0}번 베이부터입니다. 다른 베이면 «○번 베이 ${mode === 'loading' ? '선적' : '양하'}하자» 라고 하십시오.` : ''));
   }
   lines.push(sayCard(queue[0], wish ? null : (goneHere != null ? goneHere + 1 : done + 1), info.pier || ''));

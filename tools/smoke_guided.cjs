@@ -28,6 +28,28 @@ T(cns(mk({ frontCns: [] })) === base, '빈 목록에 순서가 흔들린다');
 T(cns(mk({ frontCns: null })) === base, '지정이 없으면 종전과 같아야 한다');
 //  ⚠ 순서 규칙 자체는 안 건드린다 — 맨 앞으로 끌어온 뒤 나머지 상대 순서는 그대로
 T(cns(mk({ frontCns: ['BBBU1000002'] })) === 'BBBU1000002,AAAU1000001,CCCU1000003', '나머지 상대 순서가 흐트러졌다');
+//  ── 3.3 양하 «해상부터»(rowFrom) — NSDC 2608N 실데이터(tools/fixtures/hatch_nsdc.json, 우현 접안 = 짝수 로우 해상쪽) ──
+//     10번 88단 평택분은 전부 육상쪽(홀수·00) 로우, 22번 86단 평택분은 전부 해상쪽(짝수) 로우 — 실제 배치 그대로.
+{
+  const FX = require(path.resolve(ROOT, 'tools/fixtures/hatch_nsdc.json'));
+  const gOf = (b) => { b = parseInt(b, 10); return b % 2 === 0 ? b : (((b + 1) % 4 === 2) ? b + 1 : b - 1); };
+  const pick = (grp, tier) => Object.values(FX.ediContainers).filter((c) => c.pod === 'KRPTK' && gOf(c.bay) === grp && c.tier === tier);
+  const rows = (q) => q.map((c) => parseInt(c.main.row, 10)).join(',');
+  const run = (cs, extra) => rows(GQ.buildGuidedQueue(Object.assign({ containers: cs, mode: 'discharge', evenRowsSeaSide: true }, extra || {})));
+  const d10 = pick(10, '88'), d22 = pick(22, '86');
+  T(d10.length === 6 && d22.length === 5, `실데이터 대수가 다르다 (10/88=${d10.length}, 22/86=${d22.length})`);
+  T(run(d10) === '9,7,5,3,1,0', `10번 88단 육상부터 = 바깥 홀수→안쪽→00 (${run(d10)})`);
+  T(run(d10, { rowFrom: 'sea' }) === '0,1,3,5,7,9', `10번 88단 해상부터 = 00→안쪽 홀수→바깥 (${run(d10, { rowFrom: 'sea' })})`);
+  T(run(d22) === '2,4,6,8,10', `22번 86단 육상부터 = 안쪽 짝수→바깥 (${run(d22)})`);
+  T(run(d22, { rowFrom: 'sea' }) === '10,8,6,4,2', `22번 86단 해상부터 = 바깥 짝수→안쪽 (${run(d22, { rowFrom: 'sea' })})`);
+  T(run(d22, { rowFrom: 'land' }) === run(d22) && run(d22, { rowFrom: null }) === run(d22), 'rowFrom:land·null 은 종전과 같다');
+  //  선적은 무관 — rowFrom 을 줘도 종전(해상→육상) 그대로
+  const lod = (extra) => rows(GQ.buildGuidedQueue(Object.assign({ containers: d22, mode: 'loading', evenRowsSeaSide: true }, extra || {})));
+  T(lod() === lod({ rowFrom: 'sea' }), `선적 순서는 rowFrom 과 무관해야 한다 (${lod()} / ${lod({ rowFrom: 'sea' })})`);
+  //  매뉴얼·기능 사전에 새 칩이 있다(0-B)
+  T(/⇄ 해상부터/.test(rd('src/data/helpData.js')), '매뉴얼에 [⇄ 해상부터] 칩이 없다');
+  T(/⇄ 육상부터 \/ ⇄ 해상부터/.test(rd('src/data/featureIndex.js')), '기능 사전에 육상부터/해상부터 항목이 없다');
+}
 
 //  ── 보류 판정(화면과 같은 셈) ──
 const HOLD_ASK_AFTER = 3, HOLD_LONG_MS = 3600000;

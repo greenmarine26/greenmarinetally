@@ -145,7 +145,7 @@ export const fbUnmarkDeletedStaff = async () => true;
 export const fbUpdateAdminGuard = async () => true;
 export const fbUpdateRecordField = async () => true;
 export const fbUpdateRecordSeal = async () => true;
-export const fbUpdateVoyageInfo = async () => true;
+export const fbUpdateVoyageInfo = async (vk, patch) => { window.__calls.push({ fn: 'updateInfo', vk, patch }); return true; };
 export const fbWriteMirLexicon = async () => true;
 function resolveSeqMode(info) {
   if (!info) return null;

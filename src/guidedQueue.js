@@ -1,6 +1,8 @@
 // 가이드 양하/선적 예측 큐 생성 — 베이·모드·접안방향 기준 크레인 순서 정렬
 // 규칙 (사용자 확정 2026-06-11):
 //   양하: 데크→홀드, 맨 위 티어부터, 같은 티어는 육상→해상 로우 순.
+//     ★ 3.3 (김성일 메모 2026-09-03 «양하순서 추가 해상부터»): 항차 info.seqRowFrom='sea' 면 같은 티어 안 로우를 해상→육상으로.
+//       케빈(크레인 기사)이 해상부터 내리는 날 자동 가이드가 그 순서를 따라가게 — 종전엔 수동으로밖에 못 썼다. 선적은 무관.
 //   선적: 홀드→데크, 맨 아래 티어부터, 같은 티어는 해상→육상 로우 순.
 //   로우 육상/해상 = 접안 방향 (우현 접안 = 짝수 로우가 해상쪽).
 //   트윈: 홀수베이 짝(findTwinCandidate) 한 카드로 묶음. 40ft는 일반 작업.
@@ -74,8 +76,8 @@ function _frontFirst(cards, frontCns) {
   return hit.length ? [...hit, ...rest] : cards;
 }
 
-export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null }) {
-  const landToSea = mode === 'discharge';
+export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null }) {
+  const landToSea = mode === 'discharge' && rowFrom !== 'sea';   // 3.3: 양하 «해상부터»면 해상→육상
   const topFirst = mode === 'discharge';
 
   // V7.94-23: 선적 시 같은 베이 안에서 POD(목적항)별로 묶어 제시 (현장: 포트별 선적).

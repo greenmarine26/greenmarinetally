@@ -25,6 +25,7 @@ special = {
     'fbCompleteContainersAtomic': "export const fbCompleteContainersAtomic = async (vk, mode, cns, by, equip) => { window.__calls.push({ fn: 'completeAtomic', vk, mode, cns, by, equip }); return true; };",
     'fbReassignContainerPosition': "export const fbReassignContainerPosition = async (vk, mode, cn, b, r, t, by, opts) => { window.__calls.push({ fn: 'reassign', cn, to: `${b}-${r}-${t}`, opts: opts || null }); return { ok: true }; };",
     'fbGetSimple': "export const fbGetSimple = async () => null;",
+    'fbUpdateVoyageInfo': "export const fbUpdateVoyageInfo = async (vk, patch) => { window.__calls.push({ fn: 'updateInfo', vk, patch }); return true; };",
     'resolveSeqMode': body('resolveSeqMode') + "\nexport { resolveSeqMode };",
     'tallyVoyagesByShip': body('tallyVoyagesByShip') + "\nexport { tallyVoyagesByShip };",
 }

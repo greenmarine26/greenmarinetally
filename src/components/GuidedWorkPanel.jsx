@@ -73,6 +73,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   네 선박은 해치 대신 주야간 작업갯수를 기록한다(작업보고 WorkReportModal의 주야간 보고). vsl/vslFull 어디든 매칭되면 해치 프롬프트·계산·보고를 건너뛴다.
   const isHatchSkipShip = isHatchSkipShipInfo(voyage?.info);   // 1.56-06: 단일 소스(utils) — ATPR 추가(자동 해치, 검수사 확정 2026-08-12)
   const berthSide = voyage?.info?.berthSide || '';          // 'starboard'(우현) | 'port'(좌현)
+  //  ★ 3.3 (김성일 메모 2026-09-03 «양하순서 추가 해상부터»): 양하 로우 순서 — 'land'(기본, 육상→해상) | 'sea'(해상→육상). 항차 info 에 저장.
+  const rowFrom = voyage?.info?.seqRowFrom === 'sea' ? 'sea' : 'land';
   // V8.10: 부두별 장비 목록. PCTC 1~4호기, PNCT 1~5호기(여객석 RORO 1대 추가). 부두 미상이면 1~5 전체.
   const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
 
@@ -200,6 +202,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     // V9.57(I8): fire-and-forget 저장 실패가 조용히 사라지던 것 — 실패를 알린다
     fbUpdateVoyageInfo(voyageKey, { berthSide: side })
       .catch(e => { console.warn('[V9.57] 접안 방향 저장 실패', e); alert('접안 방향 저장에 실패했습니다. 네트워크 확인 후 다시 선택해 주세요.'); });
+  };
+  //  3.3: 양하 로우 순서 토글(육상부터 ↔ 해상부터) — 오선택 방지: 확인 후 저장. 항차 info.seqRowFrom.
+  const toggleRowFrom = async () => {
+    const next = rowFrom === 'sea' ? 'land' : 'sea';
+    const ok = await ask({
+      title: '양하 순서 변경',
+      message: `같은 단 안 로우 순서를 [${next === 'sea' ? '해상부터' : '육상부터'}]로 바꿉니다.\n(${next === 'sea' ? '해상쪽 로우 → 육상쪽 로우' : '육상쪽 로우 → 해상쪽 로우'} · 데크 위층부터는 그대로)\n\n케빈이 그렇게 내리고 있을 때만 바꾸십시오. 맞습니까?`,
+      confirmLabel: '맞습니다', cancelLabel: '취소',
+    });
+    if (!ok) return;
+    fbUpdateVoyageInfo(voyageKey, { seqRowFrom: next })
+      .catch(e => { console.warn('[3.3] 양하 순서 저장 실패', e); alert('양하 순서 저장에 실패했습니다. 네트워크 확인 후 다시 눌러 주세요.'); });
   };
   const changeBerth = async () => {
     // 1.53: window.confirm → 앱 안 모달.
@@ -445,8 +459,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
       streamPref,                                           // V8.50: 갈림 선택 부류
       frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
+      rowFrom,                                              // 3.3: 양하 «해상부터»
     });
-  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns]);
+  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom]);
 
   const card = queue[0] || null;
 
@@ -1306,6 +1321,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         className="flex items-center gap-1 px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-sky-300 font-bold hover:bg-ink-750 disabled:opacity-40">
         <Anchor className="w-3.5 h-3.5"/>{berthSide ? (berthSide === 'starboard' ? '우현 접안' : '좌현 접안') : '접안?'}
       </button>
+      {/* 3.3: 양하 로우 순서 — 케빈이 해상부터 내리면 여기서 바꾼다(항차에 저장). 선적은 무관(해상→육상 고정). */}
+      {mode === 'discharge' && (
+        <button onClick={toggleRowFrom} disabled={!berthSide}
+          className={`flex items-center gap-1 px-2 py-1.5 rounded-pill bg-ink-800 border border-line font-bold hover:bg-ink-750 disabled:opacity-40 ${rowFrom === 'sea' ? 'text-orange-300 border-orange-700/60' : 'text-teal-300'}`}>
+          ⇄ {rowFrom === 'sea' ? '해상부터' : '육상부터'}
+        </button>
+      )}
       {selectedGroup != null && (
         <button onClick={() => setSelectedGroup(null)}
           className="flex items-center gap-1 px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-violet-300 font-bold hover:bg-ink-750">
