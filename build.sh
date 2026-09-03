@@ -441,6 +441,14 @@ rm -f "$SMOKE_PP"
 # 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
 node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
 rm -f "$SMOKE_IS"
+# 3.7-04: 업데이트 새로고침에 로그인이 살아남는가(검수사 «업데이트 마다 자동 로그아웃»)
+SMOKE_UR=$(mktemp /tmp/_ur_XXXXXX.cjs)
+if npx esbuild src/updateResume.js --bundle --platform=node --format=cjs --outfile="$SMOKE_UR" --log-level=error; then
+  node tools/smoke_updatelogin.cjs "$SMOKE_UR" || { echo "✗ 업데이트 로그인 유지 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_UR"; exit 1; }
+  rm -f "$SMOKE_UR"
+else
+  echo "✗ 업데이트 로그인 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_UR"; exit 1
+fi
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
 #  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.

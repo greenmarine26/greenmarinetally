@@ -2,6 +2,7 @@
 // 새 Service Worker 감지 시 화면 상단에 "🆕 새 버전 출시" 배너 표시
 // 클릭 → 즉시 적용 + 새로고침
 import React, { useState, useEffect, useRef } from 'react';
+import { stashForUpdate } from '../updateResume.js';   // 3.7-04: 업데이트 새로고침에 로그인·화면을 잃지 않게
 import { RefreshCw, X, Download } from 'lucide-react';
 import { APP_VERSION } from '../utils.js';   // 1.23: 지금 돌고 있는 판 — 배너 판정 기준
 
@@ -23,8 +24,11 @@ function askVersion(sw, timeoutMs = 1500) {
   });
 }
 
-export default function UpdatePrompt() {
+export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 쓰던 중인지 받아 새로고침 직전에 맡겨 둔다
   const [waiting, setWaiting] = useState(null); // 대기 중인 SW
+  //  3.7-04: effect 는 한 번만 도므로 inspector 를 ref 로 따라가게 둔다(닫힘 안에 옛 값이 갇히지 않게).
+  const inspRef = useRef(inspector);
+  useEffect(() => { inspRef.current = inspector; }, [inspector]);
   const [hidden, setHidden] = useState(false);
   const [note, setNote] = useState({ v: '', note: '' });   // 2.99-03: 새 판 번호·변경 내용(검수사 «업데이트 내용을 모릅니다»)
   const regRef = useRef(null);
@@ -117,12 +121,16 @@ export default function UpdatePrompt() {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
       refreshing = true;
+      //  3.7-04: 새 판이 활성화돼 스스로 새로고침한다 — 검수원과 보던 화면을 맡겨 둔다.
+      stashForUpdate(inspRef.current);
       window.location.reload();
     });
   }, []);
 
   const handleUpdate = () => {
     if (!waiting) return;
+    //  3.7-04: 「업데이트」를 누른 순간부터 맡겨 둔다 — 아래 4초 탈출구로 새로고침될 때도 같이 산다.
+    stashForUpdate(inspector);
     waiting.postMessage({ type: 'SKIP_WAITING' });
     // 1.23: 탈출구 — 4초 안에 controllerchange 가 안 오면 등록을 풀고 새로 받는다.
     //   버튼을 눌러도 아무 일이 없으면 검수사는 앱을 못 고친 채로 계속 쓴다.

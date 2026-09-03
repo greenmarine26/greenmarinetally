@@ -21,6 +21,7 @@ import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
 import FoodPage from './pages/FoodPage.jsx';       // V8.60: 맛집 수첩+돌림판
 import AuxPage from './pages/AuxPage.jsx';         // TallyOne 1.0: 보조기능 화면(#/aux — 팀M 구현)
+import { consumeUpdateResume } from './updateResume.js';   // 3.7-04: 업데이트 새로고침이면 로그인·화면을 되살린다
 import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
@@ -93,6 +94,8 @@ export default function App() {
   const [searchInitQ, setSearchInitQ] = useState('');   // 1.69-01: 홈 검색창 질문을 통합검색으로 들고 간다
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력 (TallyOne 1.0: 모달 → 로그인 화면으로 승격)
   const [inspector, setInspector] = useState('');
+  //  3.7-04: 업데이트 새로고침으로 되살릴 검수원 — handleSelectInspector 가 준비되면 그것으로 로그인한다.
+  const resumeRef = useRef('');
   const [showStaffManager, setShowStaffManager] = useState(false);  // M5.73
   const [online, setOnline] = useState(true);
   // TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 실시간 구독 재연결(로그인 유지).
@@ -128,7 +131,21 @@ export default function App() {
   //   원래 열려던 해시는 pendingHashRef에 보관 → 로그인 성공 시 권한 검사 후 그 해시로 진입.
   //   replaceState라 히스토리에 로그인 이전 엔트리가 쌓이지 않는다.
   useEffect(() => {
+    //  ★ 3.7-04 — 업데이트가 **스스로** 일으킨 새로고침이면 로그인과 보던 화면을 되살린다.
+    //    검수사 «업데이트 마다 자동 로그아웃이 됩니다… 작업중 업데이트 하면 로그인 부터 다 다시해야 합니다».
+    //    원인은 캐시가 아니라 이 자리다 — inspector 가 화면 상태뿐이라 reload 한 번에 날아갔다.
+    //    맡긴 자리는 sessionStorage(그 탭에서만·60초)라 **앱을 새로 켜면 종전대로 로그인 화면**이고,
+    //    폰을 넘겨받은 다음 사람도 로그인부터 한다 — «자동 로그인 없음» 확정 사양은 그대로다.
+    const resume = consumeUpdateResume();
     const h = window.location.hash;
+    if (resume) {
+      //  보던 화면을 pendingHash 에 넣어 두면, 아래 handleSelectInspector 가 종전 로그인 흐름
+      //  (활동 로그·역할 게이트·라우팅)을 **그대로 타고** 그 화면으로 데려다 준다.
+      const back = resume.hash && !resume.hash.startsWith('#/login') ? resume.hash : '';
+      if (back) pendingHashRef.current = back;
+      resumeRef.current = resume.inspector;
+      return;   // 로그인 화면으로 밀지 않는다 — 아래 효과가 이어 받는다.
+    }
     if (h && h !== '#' && h !== '#/' && !h.startsWith('#/login')) pendingHashRef.current = h;
     window.history.replaceState(null, '', '#/login');
     setRoute({ name: 'login' });
@@ -369,6 +386,16 @@ export default function App() {
     // M3.88: 로그인 인사 음성 제거 (호불호 많음 - 사용자 요청)
   }, []);
 
+  //  ★ 3.7-04 — 업데이트가 스스로 새로고침했으면 그 검수원으로 **한 번만** 다시 로그인한다.
+  //    종전 로그인 흐름(handleSelectInspector)을 그대로 타므로 활동 로그·역할 게이트·라우팅이 다 붙는다.
+  //    맡긴 자리가 없으면(=앱을 새로 켰다) 아무 일도 안 한다 — 로그인 화면 그대로다.
+  useEffect(() => {
+    if (!resumeRef.current) return;
+    const name = resumeRef.current;
+    resumeRef.current = '';
+    handleSelectInspector(name);
+  }, [handleSelectInspector]);
+
   // M3.6: 로그아웃 처리 — TallyOne 1.0 (B-7): 확인 단계는 Header(ConfirmModal)가 먼저 밟는다.
   //   여기 도달했다는 것은 사용자가 이미 [로그아웃]을 확인했다는 뜻 — 그때만 서버에 마킹한다.
   const handleLogout = useCallback(async () => {
@@ -418,7 +445,7 @@ export default function App() {
     //    안쪽 판이 스스로 구른다. 폰(lg 미만)은 손대지 않았다.
     return (
       <div className="min-h-screen bg-ink-950 text-dim-100 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col">
-        <UpdatePrompt/>
+        <UpdatePrompt inspector={inspector}/>
         <LoginPage
           pilotForecast={pilotForecast}   // 2.64: 로그인 타임라인 도선 마커
           current={inspector}
@@ -449,7 +476,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-ink-950 text-dim-100">
-      <UpdatePrompt/>
+      <UpdatePrompt inspector={inspector}/>
       <Header
         version={APP_VERSION}
         inspector={inspector}
