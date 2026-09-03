@@ -18,7 +18,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { buildPodPatternMap, podPatternOf, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
+import { podBgOf, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
@@ -26,6 +26,8 @@ import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 
+//  3.7: 베이상세 칸 가로:세로 — 카스피 ATPR 2520E BAY 도면 실측(≈29mm × 16mm).
+const BD_CELL_ASPECT = 0.55;
 // M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
 //   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
 // (STD_DECK / STD_HOLD 제거됨 — globalTiers 동적 사용)
@@ -221,7 +223,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, dictBayDef = null, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, podPat = {}, isPrintTarget = true, uniformCell = null }) {   // 3.2: podPat
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, dictBayDef = null, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true, uniformCell = null }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -485,8 +487,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     // 2.98-03: **베이상세는 `buildBayGrid` 를 써서 cell.oog 가 없다** — 컨 객체로 직접 판정한다.
     //   (2.98~2.98-02 가 안 보인 진짜 이유. buildBayMarks 를 쓰는 카고플랜과 경로가 다르다.)
     const og = _oogDir(c);
-    const _pat = podPatternOf(podPat, colorKey);   // 3.2: 목적지 무늬(카고플랜과 같은 한 벌)
-    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}${_pat ? ' cpv2-pat' : ''}`, ...(_pat ? { style: { backgroundImage: _pat.image, backgroundSize: _pat.size } } : {}) };   // V8.25-03: 카스피식 흰 배경
+    //  ★ 3.7 — 목적지 고정 바탕색(카고플랜과 같은 한 벌). 3.2 무늬는 폐기.
+    const _pb = podBgOf(colorKey, mode);
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}`, ...(_pb ? { style: { background: _pb } } : {}) };   // V8.25-03: 카스피식 흰 배경
   };
 
   return (
@@ -622,7 +625,6 @@ export default function PrintableBayDetail({
 
   // M6.92.0: 공통 색 함수 — 양하=선사, 선적=POD (베이플랜/카고플랜과 동일)
   const colorMap = useMemo(() => buildContainerColorMap(containers || [], mode), [containers, mode]);
-  const podPat = useMemo(() => buildPodPatternMap(containers || [], mode), [containers, mode]);   // 3.2: 목적지 무늬 — 카고플랜과 같은 한 벌
 
   // M6.77 → M6.78: voyage 전체 deck/hold 별 row range
   const computedRowRange = useMemo(() => {
@@ -772,8 +774,14 @@ export default function PrintableBayDetail({
     if (!gcMax) return null;   // 매트릭스 페이지 없음 → 폴백 경로만 (기존 동작)
     // bd-page 291mm(≈1100px) − 페이지·랩 패딩·tier라벨(16px)·여유 ≈ 1046px 가용.
     const w = Math.max(78, Math.min(118, Math.floor(1046 / gcMax)));
-    // bd-page 204mm(≈771px) − 제목·헤더·row라벨 2줄·해치·패딩 ≈ 655px 가용. 셀 5줄 최소 46px.
-    const h = Math.max(46, Math.min(84, Math.floor(655 / Math.max(rowsMax, 1))));
+    //  ★ 3.7 — 칸 세로를 **가로에 묶는다**(검수사 «가로폭이 줄면 세로폭도 줄어야 그림이 항상 같아 집니다»).
+    //    종전엔 가로와 세로를 따로 잘라(min(118,…) × min(84,…)) 비율이 배마다 흔들렸다 —
+    //    실측 ATPR 118×72(1:0.61) · MCSC 87×50(1:0.57). 카스피 베이상세는 1:0.55 다(ATPR 2520E 도면 실측).
+    //    그 값으로 못 박으면 어느 배를 뽑아도 같은 그림이 나오고, 세로가 줄어 종이에 숨 쉴 틈이 생긴다
+    //    (검수사 «난잡해 보여서요» — 카스피가 깔끔한 것은 칸을 키우고 남는 자리를 비우기 때문이다).
+    //    자리가 모자라면 종전 상한이 먼저 걸린다 — 넘치지 않는다. 5줄이 들어갈 최소 46px 는 지킨다.
+    const hFit = Math.floor(655 / Math.max(rowsMax, 1));
+    const h = Math.max(46, Math.min(84, hFit, Math.round(w * BD_CELL_ASPECT)));
     return { w, h };
   }, [allPages, dictBaysSummary]);
 
@@ -919,7 +927,6 @@ export default function PrintableBayDetail({
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 colorMap={colorMap}
-                podPat={podPat}
                 isPrintTarget={isPrintTarget.has(p.key)}
                 uniformCell={uniformCell}
                 dictShipMeta={dictShipMeta} />

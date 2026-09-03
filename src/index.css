@@ -190,10 +190,3 @@ svg.lucide {
 }
 @media (min-width: 640px) { .bdg { height: 20px; padding: 0 6px; font-size: 10px; gap: 2px; } }
 
-/* 3.2: 선적 플랜 목적지(POD)별 무늬 — utils.POD_PATTERNS 와 같은 그림(화면 베이플랜은 클래스, 인쇄물은 인라인). 글자 뒤 흰 후광으로 선이 글자를 안 가린다. */
-.cell-pat { text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; }
-.cell-pat-d135 { background-image: repeating-linear-gradient(135deg, #333 0 1px, transparent 1px 5px); }
-.cell-pat-d45 { background-image: repeating-linear-gradient(45deg, #333 0 1px, transparent 1px 5px); }
-.cell-pat-horiz { background-image: repeating-linear-gradient(0deg, #333 0 1px, transparent 1px 5px); }
-.cell-pat-vert { background-image: repeating-linear-gradient(90deg, #333 0 1px, transparent 1px 5px); }
-.cell-pat-dots { background-image: radial-gradient(#333 0.9px, transparent 1.1px); background-size: 5px 5px; }

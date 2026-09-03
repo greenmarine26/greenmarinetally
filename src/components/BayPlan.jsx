@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, buildPodPatternMap, podPatternOf } from '../utils.js';   // 3.2: 목적지별 무늬   // 2.98-14: 커버 막대 경계
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf } from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -441,8 +441,15 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
-  // 3.2: 목적지(POD)별 무늬 — 선적 모드에서 평택분 POD 가 둘 이상일 때만 채워진다(최다 POD 는 무늬 없음)
-  const podPat = useMemo(() => buildPodPatternMap(containers, mode), [containers, mode]);
+  //  ★ 3.7 — 이 항차에 실제로 있는 목적지와 대수(범례용).
+  //    문지기를 여기 세운다 — 양하에서 getContainerColorKey 는 «선사 3자»를 주므로,
+  //    막지 않으면 양하 범례에 선사코드 칩이 흰 바탕으로 붙는다(칠해진 칸은 하나도 없는데).
+  const [podKeys, podCnt] = useMemo(() => {
+    if (mode !== 'loading') return [[], {}];
+    const cnt = {};
+    (containers || []).forEach((c) => { const k = getContainerColorKey(c, mode); if (k) cnt[k] = (cnt[k] || 0) + 1; });
+    return [Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]), cnt];
+  }, [containers, mode]);
 
   // V7.32: 셀 배경색 폐지 — XRAY/선사 배경색이 보라 계열로 겹쳐 혼동(양하 중단 유발).
   //   약속: 셀 배경색은 XRAY 전용. 선사는 글자색(opLabel 색)으로 구분. (cellColor/opColor로 이동)
@@ -456,6 +463,9 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     const k = getContainerColorKey(c, mode);
     return k ? bayColorMap[k] : null;
   };
+
+  //  ★ 3.7 — 목적지 고정 바탕색·3자 코드. mode 를 아는 이 스코프에서 만들어 자식에 내려보낸다.
+  const podBg = (c) => podBgOf(getContainerColorKey(c, mode), mode);
 
   // 셀 Tailwind 클래스
   // V7.32: 선사 배경색 폐지 → 배경은 우리화물/통과만 구분. 선사는 글자색(getOpColor). XRAY만 배경 보라.
@@ -484,9 +494,11 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
          표본 MRKU4002140 — 26/04/02 에서 내려 26/02/82 에 다시 실린다.
        그러니 모드를 가리지 않고 같은 컨번호로 칠하면 양쪽이 맞는다. */
     if (restowMap && restowMap[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
-    // 3.2: 목적지별 무늬 — 완료·XRAY·시프팅 표시는 그대로 두고, 그 밖의 평택 선적분 셀에 POD 무늬(클래스)를 얹는다.
-    const _pat = podPatternOf(podPat, getContainerColorKey(c, mode));
-    if (_pat) return `bg-white cell-pat cell-pat-${_pat.id} text-ink-950 border-line-strong`;
+    //  ★ 3.7 — 무늬를 버리고 **목적지 고정 바탕색**을 쓴다(검수사 «격자를 없앱니다… 목적지별 색으로»).
+    //    실제 칠은 인라인 style 이라 여기서는 «색이 붙는 칸»이라는 표시만 준다.
+    //    ⚠ 색값은 `podBgKey` 가 따로 돌려준다 — 자식(BayPage)은 mode 를 안 받으므로
+    //      여기(부모 클로저)에서 mode 를 아는 함수를 하나 더 내려보낸다.
+    if (podBgOf(getContainerColorKey(c, mode), mode)) return 'cell-podbg text-ink-950 border-line-strong';
     const isOurContainer = isPtk(c) || (!!c.cn && dischargeCns.has(c.cn));   // V9.39: undefined 오염 차단
     if (isOurContainer) return 'bg-white text-ink-950 border-line-strong';
     return 'bg-slate-50 text-dim-300 border-slate-200';
@@ -822,13 +834,15 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           <span className="text-red-400 font-bold">★ 붉은별 = X-RAY</span>
           <Legend color="bg-orange-400" label="시프팅"/>
           <Legend color="bg-emerald-200" label="✔ 완료"/>
-          {podPat.__top && (<>
-            <span className="text-dim-400 font-bold">무늬=목적지 · {podPat.__top.key} 무늬 없음({podPat.__top.count})</span>
-            {Object.keys(podPat).filter((k) => !k.startsWith('__')).sort((a, b) => podPat[a].rank - podPat[b].rank).map((k) => (
-              <span key={k} className="flex items-center gap-1"><span className={`bg-white cell-pat-${podPat[k].id} w-4 h-3 inline-block rounded-sm border border-slate-400`}/><span className="text-dim-100 font-bold">{k}({podPat[k].count})</span></span>
-            ))}
-            {podPat.__rest.length > 0 && <span className="text-dim-400">그 밖 {podPat.__rest.join('·')} 무늬 없음</span>}
-          </>)}
+          {/* ★ 3.7 — 무늬 범례를 목적지 «색» 범례로. 견본을 따로 펼치지 않고 색 칸에 코드를 얹는다
+              (검수사 «색별첨은 원래 별첨 포트명에 입혀 주시고 따로 지금처럼 펼쳐주지 않아도 됩니다»). */}
+          {podKeys.length > 0 && podKeys.map((k) => (
+            <span key={k} className="flex items-center gap-1">
+              <span className="w-7 h-3.5 inline-block rounded-sm border border-slate-400 text-[8px] leading-[13px] text-center text-ink-950"
+                style={{ background: podBgOf(k, 'loading') || '#fff' }}>{k}</span>
+              <span className="text-dim-300">{podCnt[k]}</span>
+            </span>
+          ))}
           <span className="text-dim-400 font-bold">검정 글자 = 비평택</span>
           {/* TallyOne 1.29: 빈 자리와 '배에 칸이 없는 곳'을 눈으로 가른다 */}
           <Legend color="bg-slate-100" label="빈 자리 (아직 안 실림)"/>
@@ -885,6 +899,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                   dischargeCns={dischargeCns}
                   shiftingMap={shiftingMap}
                   isPtk={isPtk}
+                  podBg={podBg}
                   onCellClick={(c, multi) => {
                     // M5.1: 선택 모드면 컨 토글 (모달 안 열림)
                     if (selectionMode && c?.cn) {
@@ -929,6 +944,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             dischargeCns={dischargeCns}
             shiftingMap={shiftingMap}
             isPtk={isPtk}
+            podBg={podBg}
             onCellClick={(c, multi) => {
               if (selectionMode && c?.cn) {
                 toggleCnSelection(c.cn);
@@ -1033,7 +1049,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null,  // V9.57(I12): getCellBg 죽은 체인 제거
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null,  // V9.57(I12): getCellBg 죽은 체인 제거
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1683,6 +1699,9 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           .filter(Boolean).join(', ')
       : '';
 
+    //  ★ 3.7 — 목적지 고정 바탕색(카고플랜·베이상세와 같은 한 벌 `podBgOf`).
+    //    cellColor 가 'cell-podbg' 를 준 칸에만 얹는다 — 완료·XRAY·시프팅 표시는 그대로 이긴다.
+    const _podBg = /cell-podbg/.test(cellColor(c) || '') && podBg ? podBg(c) : '';
     return (
       <button
         key={key}
@@ -1691,6 +1710,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
         }`}
         style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize,
+                 //  3.7: 목적지 고정 바탕색 — 완료·XRAY·시프팅 칠이 있으면 그것이 이긴다(cellColor 가 그 경우 다른 클래스를 준다).
+                 ...(_podBg ? { background: _podBg } : {}),
                  ...(oogShadow ? { boxShadow: oogShadow } : {}) }}
         title={oogShadow ? `규격 초과 — ${_ovh ? '높이' : ''}${_ovh && _ovw ? '·' : ''}${_ovw ? '좌우폭' : ''}` : undefined}
       >

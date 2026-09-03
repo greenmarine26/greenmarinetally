@@ -204,6 +204,12 @@ export const CPV2_WIDEST_MARK_EM = 1.5;     // 'DG'
 //  2.90-03 (검수사 인쇄 실물 «폰트가 좀더 작아져야 합니다. 구분은 되지만 부담을 줍니다 너무 꽉차서»)
 //    칸에 «겨우 들어가는» 크기는 종이에서 답답하다. 좌우로 숨 쉴 틈을 두고 그 안에 맞춘다.
 export const CPV2_MARK_BREATH = 1.6;        // 칸 안쪽에서 좌우로 비워 둘 폭(px 합계)
+//  ★ 3.7 칸 가로:세로 — **카스피 실측**이 기준이다(검수사 «카스피가 권장안입니다»).
+//    같은 항차 ASC 로 대조한 값 — 머스크 8.8×6.6pt(1:0.75) · MCAP/MAMP 8.8×7.1(1:0.81) ·
+//    TMPZ 22.7×8.9(1:0.39) · DXQD 22.7×10.6(1:0.47) · ATPR 22.7×9.6(1:0.42).
+//    카스피는 배마다 다르지만 **언제나 가로가 더 넓다.** 그 중 가장 촘촘한 0.75 를 상한으로 쓴다 —
+//    이보다 납작하게 그리는 것은 자리가 남을 때뿐이고, 자리가 모자라면 CSS 가 알아서 더 줄인다.
+export const CPV2_CELL_ASPECT = 0.75;
 
 /** 셀 폭(px) → 두 글자가 들어가는 글자 크기(px). 화면·인쇄·콘앱 공용 한 벌. */
 export function markFontForCellW(cellW) {
@@ -231,7 +237,9 @@ export function cargoPlanMetrics(gridCols, boxesPerRow, pageW) {
   //    못박고 남는 폭은 줄 전체를 가운데로 민다. 열 적은 줄의 여백도 칸 폭 × 칸수로 정확히 맞는다.
   const cellFix = Math.floor(cellW * 100) / 100;
   const m = markFontForCellW(cellFix);
-  return { boxW, cellW, cellFix, markFont: m.font, fits: m.fits, need: m.need };
+  //  3.7: 칸 세로는 가로에 묶인다 — 남는 세로는 늘려 쓰지 않고 비워 둔다(카스피 방식).
+  const cellH = Math.floor(cellFix * CPV2_CELL_ASPECT * 100) / 100;
+  return { boxW, cellW, cellFix, cellH, markFont: m.font, fits: m.fits, need: m.need };
 }
 
 export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = null) {

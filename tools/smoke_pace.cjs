@@ -91,8 +91,14 @@ T(NS.paceFromRecords(fx.doneAtsAll, 'PNCT', 2).ok === true, '문자열 부두(�
   const tw = { startAt: '2026-09-02 22:15', endAt: '' };
   const over = { pier: INFO.pier, terminalStatus: 'departed', paceTo: fx.doneAtsAll[fx.doneAtsAll.length - 1] };
   const live = { pier: INFO.pier };
+  //  ⚠ 이 시험은 «지금»을 쓴다 — 픽스처(2026-09-02)가 묵으면 하루 걸쇠(24시간)에 걸려
+  //    작업 중인 배도 끝난 배와 같은 분모가 되고, 그때부터 **매일 빌드가 막힌다**(2026-09-04 실측).
+  //    시계를 마지막 완료 30분 뒤로 고정해 «작업 중»을 재현한다. 블록을 나가면 되돌린다.
+  const _now = Date.now;
+  Date.now = () => fx.doneAtsAll[fx.doneAtsAll.length - 1] + 30 * 60000;
   const O = NS.paceFromRecords(fx.doneAtsAll, over, 2, tw);
   const V = NS.paceFromRecords(fx.doneAtsAll, live, 2, tw);
+  Date.now = _now;
   T(O.mins < 400, `떠난 배인데 분모가 ${O.mins}분 — 시계를 따라 늘고 있다`);
   T(V.mins > O.mins, '작업 중인 배는 분모가 지금까지여야 한다');
 }

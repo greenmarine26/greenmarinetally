@@ -267,9 +267,9 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   SMOKE_HL=$(mktemp /tmp/_smokehl_XXXXXX.js)
   if npx esbuild tools/smoke_podpat.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
        --outfile="$SMOKE_HL" --define:process.env.NODE_ENV='"development"' --log-level=error; then
-    node tools/smoke_podpat.cjs "$SMOKE_HL" || { echo "✗ 목적지 무늬 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_podpat.cjs "$SMOKE_HL" || { echo "✗ 목적지색 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "✗ 목적지 무늬 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+    echo "✗ 목적지색 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
@@ -421,7 +421,6 @@ if npx esbuild src/utils.js --bundle --platform=node --format=cjs \
 else
   echo "✗ 검산 번들 실패 — 배포 금지"; exit 1
 fi
-rm -f "$SMOKE_IS"
 SMOKE_IR=$(mktemp /tmp/_isor_XXXXXX.js)
 if npx esbuild tools/smoke_isorender.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
      --outfile="$SMOKE_IR" --log-level=error; then
@@ -440,12 +439,8 @@ else
 fi
 rm -f "$SMOKE_PP"
 # 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
-node tools/smoke_special.cjs "$SMOKE_IS2" 2>/dev/null || {
-  SMOKE_S2=$(mktemp /tmp/_spc_XXXXXX.cjs)
-  npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_S2" --log-level=error || { echo "✗ 특수화물 번들 실패 — 배포 금지"; exit 1; }
-  node tools/smoke_special.cjs "$SMOKE_S2" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
-  rm -f "$SMOKE_S2"
-}
+node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
+rm -f "$SMOKE_IS"
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
 #  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.
