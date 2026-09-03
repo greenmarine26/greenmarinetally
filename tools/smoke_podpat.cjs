@@ -193,7 +193,12 @@ const bgs = (d, sel) => {
     ok(vals.length === 3, `코드 배율을 못 읽었다 (${sc})`);
     //  ① 화물 표기보다 작아야 한다. 가장 작은 표기자는 특수화물 세 글자(0.667em)다.
     const mk3 = parseFloat((src2.match(/\.cpv2-mark3 \{ font-size: calc\(var\(--mf, 9\.6px\) \* ([0-9.]+)\)/) || [])[1] || 0.667);
-    ok(vals.every((v) => v < mk3), `⛔ 목적지 코드(${vals})가 화물 표기(${mk3})보다 작지 않다`);
+    ok(vals.every((v) => v < 1), `⛔ 목적지 코드(${vals})가 화물 표기(1em)보다 작지 않다`);
+    //  세 글자 칸은 표기자가 0.667 로 줄어 있으므로 코드도 그보다 작아야 한다.
+    const m3p = parseFloat((src2.match(/\.cpv2-mark3 \.cpv2-pod \{ font-size: calc\(var\(--mf, 9\.6px\) \* ([0-9.]+)\)/) || [])[1] || 9);
+    ok(m3p < mk3, `⛔ 세 글자 칸에서 코드(${m3p})가 표기자(${mk3})보다 작지 않다`);
+    //  후광은 없어야 한다 — 4.5pt 글자에 3겹 후광을 씌우면 획이 먹힌다(3.7-01 실패).
+    ok(!/\.cpv2-pod \{[^}]*text-shadow/.test(src2), '⛔ 목적지 코드에 흰 후광이 남아 있다 — 작은 글자의 획을 먹는다');
     //  ② 코드 글자 상자가 가운데 표기자의 세로 띠를 침범하면 안 된다.
     //     칸 안쪽 높이 = --cph − 테두리 · 표기자 대문자 높이 ≈ 0.72em · 코드 상자 = line-height 1.05
     for (const ship of ['ATPR']) {
@@ -208,7 +213,29 @@ const bgs = (d, sel) => {
       }
     }
     //  ③ 흰 후광이 있어야 바탕색·표기자에서 떨어져 보인다.
-    ok(/\.cpv2-pod \{[^}]*text-shadow/.test(src2), '⛔ 목적지 코드에 흰 후광이 없다 — 바탕색에 묻힌다');
+
+  }
+
+  // ⑫ **FR·DG 는 그 자체가 풀이다** — 붙이는 것은 «엠티일 때 E» 하나뿐(검수사 «FR표기는 자체가 풀입니다»).
+  {
+    const src3 = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    ok(!/displayMark \+ \(cell\.isFull \? 'F'/.test(src3), '⛔ 풀에도 F 를 덧붙이고 있다 — FRF·DGF 가 나온다');
+    ok(/_mkE = podMode && FE_MARKS\.has\(displayMark\) && !cell\.isFull/.test(src3), '⛔ 엠티일 때만 붙이는 규칙이 없다');
+    for (const ship of ['ATPR', 'MCSC']) {
+      const rr = await render('v2', ship, 'loading');
+      const bad = [...rr.d.querySelectorAll('.cpv2-cell')].map((e) => {
+        const sp = e.querySelector('span'); if (!sp) return '';
+        return [...sp.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+      }).filter((t) => /^(DG|FR|OT|TK)F$/.test(t));
+      ok(bad.length === 0, `⛔ ${ship} 에 ${[...new Set(bad)]} 같은 «풀에 F 덧붙임» 표기가 있다`);
+    }
+  }
+  // ⑬ **별첨은 제 줄수만큼만** — 셋이 높이를 3분의 1씩 나눠 가지면 다섯 줄짜리가 잘린다.
+  {
+    const src4 = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    const rule = (src4.match(/\.cpv2-legend \{[^}]*\}/) || [''])[0];
+    ok(!/height:\s*100%/.test(rule), `⛔ 별첨이 height:100% 를 요구한다 — 셋이 3분의 1씩 나눠 가져 잘린다 (${rule})`);
+    ok(/flex:\s*0 1 auto/.test(rule), `⛔ 별첨이 제 줄수만큼 자리를 갖게 돼 있지 않다 (${rule})`);
   }
 
   console.log(fail ? `\n3.7 목적지색 연막검사 실패 ${fail}건` : '\n3.7 목적지색 연막검사 통과');

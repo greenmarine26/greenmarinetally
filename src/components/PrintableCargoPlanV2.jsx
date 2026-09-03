@@ -95,8 +95,12 @@ const SPECIAL_FILL = {
   'OT': '#d8aae0',   // 오픈탑/OOG = 보라 계열 (2.98-10: 키를 'A'→'OT' 로. cell.mark 로 조회하므로 글자와 같아야 한다)
   'TK': '#ffb445',   // 탱크 = 주황 계열
 };
-//  3.7: 이 넷은 글자가 하나뿐이라 풀/엠티를 말하지 못한다(리퍼는 RF·RE 로 이미 갈린다).
-//    선적 플랜에서만 뒤에 F·E 를 붙여 세 글자로 적고, 그 칸의 글자를 2/3 로 줄인다.
+//  ★ 3.7-02 — **붙이는 것은 «엠티일 때 E» 하나뿐이다.**
+//    검수사 *«FR표기는 자체가 풀입니다. 그런데 FRF라고 보입니다.»*
+//    3.7 은 넷 다 F·E 를 붙여 `FRF`·`DGF` 처럼 **당연한 것을 덧붙여** 읽기만 어지럽혔다.
+//    선적 EDI 실측 — DG 400대 **전부 적(100%)** · FR 17 · OT(oog) 71 · TK 77.
+//    ⇒ 규칙: 이 넷은 **글자만으로 풀**이고, 엠티일 때만 뒤에 `E` 를 붙인다(`FR` / `FRE`).
+//    덤으로 흔한 경우가 두 글자로 돌아가 글자를 줄일 일도 없어진다 — 세 글자(`FRE`)일 때만 2/3 로 줄인다.
 const FE_MARKS = new Set(['DG', 'FR', 'OT', 'TK']);
 //  ★ 3.7-01 목적지 코드 글자 크기 — 검수사 *«삼각형 있던 부분에 포트가 붙어야 하는데 화물 표기랑
 //    붙어있어 헷갈립니다»* · *«포트 표기가 화물표기 보다 작아야 합니다.»*
@@ -106,7 +110,10 @@ const FE_MARKS = new Set(['DG', 'FR', 'OT', 'TK']);
 //      0.95 배 ⛔ 2.5px 겹침 · 0.85 ⛔ 1.5 · 0.75 ⛔ 0.5 · **0.62 여유 0.8px** · 0.55 여유 1.5px.
 //    ⇒ 검수사가 처음 보고 «세자표기가 확실하니»라고 한 그 크기(0.62 · 인쇄 4.5pt)로 되돌린다.
 //    자릿수와 무관하게 한 크기다 — 코드는 «구석 표식»이지 표기자와 나란한 글이 아니다.
-const POD_CODE_SCALE = { 1: 0.62, 2: 0.62, 3: 0.62 };
+//  3.7-02: 0.62 → **0.70**. 종이 실측(ATPR 칸 7.79×5.84mm) — 0.62 는 대문자 높이 1.13mm 로
+//    카스피 글자(1.68mm)보다 한참 작아 «사라진건지 안보입니다»(검수사). 0.70 이면 1.28mm 이고
+//    글자 상자 아래끝 1.87mm 가 표기자 대문자 띠(1.88mm)에 **딱 안 닿는 최대치**다. 그 위는 겹친다.
+const POD_CODE_SCALE = { 1: 0.70, 2: 0.70, 3: 0.70 };
 const PLAIN_FULL_BG = '#7dd3fc';   // 일반 풀 = 하늘색
 const MARK_FG = '#000';            // 글자는 전부 진한 검정 (검수사 확정)
 
@@ -203,8 +210,11 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark3 { font-size: calc(var(--mf, 9.6px) * 0.667); }   /* 3.7: 특수화물 세 글자(DGF·DGE…) — 세 글자 × 2/3 = 두 글자 폭 그대로 */
 .cpv2-cell .cpv2-pod-1,
 .cpv2-cell .cpv2-pod-2,
-.cpv2-cell .cpv2-pod-3 { font-size: calc(var(--mf, 9.6px) * 0.62); }   /* 3.7-01: 자릿수와 무관하게 한 크기 — 표기자(1em)보다 확실히 작고 세로 띠를 안 침범한다 */
-.cpv2-cell .cpv2-pod { position: absolute; top: 0; right: 0.5px; line-height: 1.05; font-weight: normal; font-style: normal; color: #333; letter-spacing: -0.2px; pointer-events: none;   /* 3.7-01: 흰 후광으로 바탕색·표기자에서 떨어뜨린다 — 검수사 «화물 표기랑 붙어있어 헷갈립니다» */ text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 2px #fff; }
+.cpv2-cell .cpv2-pod-3 { font-size: calc(var(--mf, 9.6px) * 0.70); }   /* 3.7-02: 자릿수와 무관하게 한 크기 — 겹치지 않는 최대치 */
+/*  3.7-02: 세 글자 칸(FRE·OTE·TKE·DGE)은 표기자 자체가 0.667 로 줄어 있다.
+    코드가 그보다 커지면 검수사 규칙 «포트 표기가 화물표기 보다 작아야 합니다»를 어기므로 같이 줄인다. */
+.cpv2-cell.cpv2-mark3 .cpv2-pod { font-size: calc(var(--mf, 9.6px) * 0.55); }
+.cpv2-cell .cpv2-pod { position: absolute; top: 0; right: 0.5px; line-height: 1.05; font-weight: normal; font-style: normal; color: #000; letter-spacing: -0.2px; pointer-events: none; }   /* 3.7-02: 흰 후광을 뺐다 — 4.5pt 글자에 3겹 후광을 씌우니 획이 먹혀 «사라진 것처럼» 보였다(검수사). 색도 진한 검정으로. */
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: 0; left: 0; line-height: 1;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
    V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서
@@ -270,7 +280,11 @@ export const CARGO_V2_CSS = `
 .cpv2-banner { display: none; }
 .cpv2-empty-slot { border: none; background: transparent; }
 .cpv2-legend-box { border: 1px solid #000; background: white; padding: 4px; display: flex; flex-direction: column; overflow: hidden; }
-.cpv2-legend { width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+.cpv2-legend { width: 100%; flex: 0 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/*  ★ 3.7-02 — 별첨은 **제 줄수만큼만** 자리를 갖는다(검수사 «세째 별첨이 중첩되어 잘려 보이는것도 있습니다»).
+    종전 «height:100%» 는 상자 안에 표가 셋이면 셋 다 «상자 전체 높이»를 요구해 **똑같이 3분의 1씩** 나눠 가졌다.
+    별첨1·2 는 네 줄이라 남고 별첨3 «규격별 F/E» 는 다섯 줄이라 모자라 «overflow:hidden» 에 잘렸다.
+    이제 필요한 만큼만 쓰고 남는 세로는 상자 아래에 모인다 — 칸 비율(3.7)과 같은 «안 늘린다» 원칙이다. */
 .cpv2-legend-title { font-size: calc(var(--lgf, 8px) * 1.12); font-weight: bold; text-align: center; padding: 2px 0; border-bottom: 0.5px solid #888; margin-bottom: 2px; color: #333; flex-shrink: 0; }
 /* ★ TallyOne 1.63: 별첨 표를 비율로 짠다 (검수사 확정 2026-08-13).
    검수사 원문: "항상 크기는 A4수평 절반중 아래쪽입니다. 열과 폭 비율만 정하면 어떤 형태든
@@ -501,7 +515,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     //    검수사 «표기 크기를 조금 줄이면 안되나요?» — 세 글자(DGF·DGE…)로 적고 그 칸만 글자를 2/3 로 줄인다.
                     //    3자 × 0.75em × 2/3 = 1.5em 이라 **지금 DG 가 쓰는 폭과 똑같다** — 칸 자리 계산이 안 바뀐다.
                     //    리퍼는 이미 RF·RE 로 갈려 있어 그대로 둔다.
-                    const _mk3 = podMode && FE_MARKS.has(displayMark);
+                    //  3.7-02: 엠티일 때만 E 를 붙인다 — 풀은 글자 그대로가 곧 풀이다.
+                    const _mkE = podMode && FE_MARKS.has(displayMark) && !cell.isFull;
+                    const _mk3 = _mkE;
                     return (
                       <span
                         key={ci}
@@ -509,7 +525,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
-                        {_mk3 ? displayMark + (cell.isFull ? 'F' : 'E') : displayMark}
+                        {_mkE ? displayMark + 'E' : displayMark}
                         {/* 3.7 (검수사 «세자표기가 확실하니» · «3자가 구석에서 가운데로 가서 이상합니다»):
                             종류는 칸 가운데 그대로, 목적지 3자는 **오른쪽 위 구석**. 굵기는 안 쓴다(겹쳐 보인다). */}
                         {podLen > 0 && _podCell && <i className={`cpv2-pod cpv2-pod-${podLen}`}>{cell.colorKey.slice(0, podLen)}</i>}
@@ -617,7 +633,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     //    검수사 «표기 크기를 조금 줄이면 안되나요?» — 세 글자(DGF·DGE…)로 적고 그 칸만 글자를 2/3 로 줄인다.
                     //    3자 × 0.75em × 2/3 = 1.5em 이라 **지금 DG 가 쓰는 폭과 똑같다** — 칸 자리 계산이 안 바뀐다.
                     //    리퍼는 이미 RF·RE 로 갈려 있어 그대로 둔다.
-                    const _mk3 = podMode && FE_MARKS.has(displayMark);
+                    //  3.7-02: 엠티일 때만 E 를 붙인다 — 풀은 글자 그대로가 곧 풀이다.
+                    const _mkE = podMode && FE_MARKS.has(displayMark) && !cell.isFull;
+                    const _mk3 = _mkE;
                     return (
                       <span
                         key={ci}
@@ -625,7 +643,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
-                        {_mk3 ? displayMark + (cell.isFull ? 'F' : 'E') : displayMark}
+                        {_mkE ? displayMark + 'E' : displayMark}
                         {/* 3.7 (검수사 «세자표기가 확실하니» · «3자가 구석에서 가운데로 가서 이상합니다»):
                             종류는 칸 가운데 그대로, 목적지 3자는 **오른쪽 위 구석**. 굵기는 안 쓴다(겹쳐 보인다). */}
                         {podLen > 0 && _podCell && <i className={`cpv2-pod cpv2-pod-${podLen}`}>{cell.colorKey.slice(0, podLen)}</i>}
@@ -1062,7 +1080,10 @@ export default function PrintableCargoPlanV2({
   const podLen = useMemo(() => {
     if (!podMode || !_podLen0) return 0;
     const pt = markFont * POD_CODE_SCALE[_podLen0] * (285 / CPV2_PAGE_W_PRINT) / 25.4 * 72;
-    return pt >= 3.5 ? _podLen0 : 0;
+    //  3.7-02: 문턱 3.5 → 3.0pt. 3.7-01 이 배율을 0.95→0.62 로 내리면서 문턱은 그대로 둬,
+    //    --mf 7.5px 아래 배들은 코드가 **통째로 사라졌다**(검수사 «사라진건지 안보입니다»).
+    //    3.0pt 면 --mf 6.4px 부터 나온다 — 종전 0.95배 때와 비슷한 범위로 돌아온다.
+    return pt >= 3.0 ? _podLen0 : 0;   // 0.70 배에서는 --mf 5.7px 부터 나온다
   }, [podMode, _podLen0, markFont]);
 
   // M6.94.16: 전체 베이 중 (deck tier + hold tier) 최대 → 셀 높이 고정 기준.
