@@ -441,6 +441,14 @@ rm -f "$SMOKE_PP"
 # 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
 node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
 rm -f "$SMOKE_IS"
+# 3.7-07: 리스트 파서가 ISO 전용 열·F/E·무게를 읽는가 (머스크 StandardLoadList)
+SMOKE_LP=$(mktemp /tmp/_lp_XXXXXX.cjs)
+if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_LP" --log-level=error; then
+  node tools/smoke_listparse.cjs "$SMOKE_LP" || { echo "✗ 리스트 파서 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LP"; exit 1; }
+  rm -f "$SMOKE_LP"
+else
+  echo "✗ 리스트 파서 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1
+fi
 # 3.7-05: 별첨이 최대 발생조건(선사·포트·특수화물 많음)에서도 안 넘치는가
 SMOKE_LF=$(mktemp /tmp/_lf_XXXXXX.cjs)
 if npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_LF" --log-level=error; then
