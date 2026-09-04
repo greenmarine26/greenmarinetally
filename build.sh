@@ -441,6 +441,14 @@ rm -f "$SMOKE_PP"
 # 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
 node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
 rm -f "$SMOKE_IS"
+# 3.7-08: 터미널 앱(CATOS) 실제 자리가 실적으로 얹히는가
+SMOKE_CP=$(mktemp /tmp/_cp_XXXXXX.cjs)
+if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
+  node tools/smoke_catospos.cjs "$SMOKE_CP" || { echo "✗ CATOS 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
+  rm -f "$SMOKE_CP"
+else
+  echo "✗ CATOS 자리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
+fi
 # 3.7-07: 리스트 파서가 ISO 전용 열·F/E·무게를 읽는가 (머스크 StandardLoadList)
 SMOKE_LP=$(mktemp /tmp/_lp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_LP" --log-level=error; then

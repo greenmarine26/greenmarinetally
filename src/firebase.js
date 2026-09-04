@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply } from './utils.js';
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos} from './utils.js';
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
@@ -1535,7 +1535,16 @@ export function fbSubscribeHeartbeat(callback) {
 export function fbSubscribeVoyages(callback) {
   const r = ref(db, 'voyages');
   const unsub = onValue(r, (snap) => {
-    callback(snap.val() || {});
+    //  3.7-08: CATOS 가 보내 준 **실제 실린 자리**(termWork.pos)를 실적 자리로 얹는다.
+    //    전 화면이 이 한 벌을 props 로 받으므로 여기 한 곳이면 베이플랜·베이상세·검수 리스트·
+    //    텔리·검색이 같이 따라온다(카고플랜은 `_edi_*` 복원이 있어 계획 그대로다).
+    //    자세한 이유는 utils.applyCatosPos 머리말 — 검수사 «실제 입력된 데이터로 고치라».
+    const v = snap.val() || {};
+    for (const k of Object.keys(v)) {
+      //  한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
+      try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[CATOS 자리] 반영 실패 —', k, e); }
+    }
+    callback(v);
   });
   return unsub;
 }
@@ -1904,7 +1913,11 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
     //
     //   ⚠ 사진을 버리지 않는다. 본문 백업이 끝난 뒤 **한 건씩** 옮긴다. 한 건이 실패해도
     //     나머지와 본문은 남는다(조용히 삼키지 않고 로그를 남긴다).
-    const { photos: _photos, ...voyageNoPhotos } = voyage || {};
+    //  3.7-08: **CATOS 덧칠을 벗기고 보관한다.** `applyCatosPos` 는 구독 콜백에서 메모리에만 얹는데,
+    //    여기 오는 `voyage` 는 그 덧칠본이라 그대로 set 하면 «CATOS 가 채운 자리»가 보관본에서
+    //    «우리 앱으로 찍은 자리»로 굳는다(되살리면 CATOS 가 나중에 고쳐도 못 고친다).
+    //    termWork 원본은 같이 보관되므로 되살릴 때 다시 얹힌다 — 자료는 안 잃는다.
+    const { photos: _photos, ...voyageNoPhotos } = stripCatosPos(voyage) || {};
     const archivePayload = {
       ...voyageNoPhotos,               // 항차 데이터(discharge/loading/info/records 등) — 사진 제외
       _archivedAt: Date.now(),
