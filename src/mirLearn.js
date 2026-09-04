@@ -91,6 +91,12 @@ export function mirObserve(q, missed, meta = {}) {
     }
     return '';
   }
+  //  ★ 3.7-06 — **잡담이 받은 말은 앞말의 «정답»이 아니다.**
+  //    잡담을 «알아들었다»로 세면서(nlSearch 3.7-06) 학습 분기가 열렸다. 그대로 두면
+  //    «밥은?»(못 알아들음) → «밥 먹었어»(잡담이 받음) 로 `밥` → «밥 먹었어» 가 사전에 굳는다(감사 실측).
+  //    사전은 전역 노드라 한 폰의 오염이 전 기기로 퍼진다 — 검수사가 방금 걷어낸 것과 같은 종류다.
+  //    ⇒ 짝을 짓지 않고 기다리던 말만 버린다.
+  if (meta.smallTalk) { _pending = null; return ''; }
   //  알아들은 말 — 직전에 못 알아들은 말이 있으면 짝을 본다
   const p = _pending;
   if (!p || now - p.at > WINDOW_MS) { _pending = null; return ''; }

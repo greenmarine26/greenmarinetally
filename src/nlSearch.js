@@ -10,6 +10,7 @@ import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
 import { mirRewrite, mirLearnedDef, mirObserve } from './mirLearn.js';
+import { mirSmallTalk } from './mirChat.js';   // ★ 3.7-06: 잡담이 받은 말은 «못 알아들은 말»이 아니다(판정 한 벌)
 export { _mirReset } from './mirLearn.js';   // 연막검사용(기억 초기화)   // ★ 3.0: 미르 자체 학습 — 못 알아듣는 말만 사전으로 되쓰기·이어진 말에서 배우기   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
 import { HELP_DATA_CHIEF } from './data/helpDataChief.js';   // 2.30: 미르가 수석 권도 안다(가르치진 않고 «있다»고 알린다)
 
@@ -3418,10 +3419,27 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   //  ★ 3.0 미르 자체 학습 — 내보내는 문 하나에서 «알아들었나»를 보고, 못 알아들은 말은 기억·기록하고,
   //    이어진 말이 답을 얻으면 앞말을 배운다(mirLearn.mirObserve). 배우면 답 끝에 한 줄 붙인다.
   try {
-    const _understood = !!(parsed && (parsed.mirHello || parsed.deviceCmd || parsed.asking || hasAnyCondition(parsed)));
-    const _missed = !_understood || /못 배웠습니다/.test(String(out || ''));
     const _q0 = (parsed && (parsed._raw0 || parsed._raw)) || '';
-    const _note = mirObserve(_q0, _missed, { who: (ctx && (ctx.who || ctx.inspector)) || '', mode: (ctx && ctx.mode) || '', voyageKey: (ctx && (ctx.voyageKey || (ctx.info && ctx.info.key))) || '' });
+    let _understood = !!(parsed && (parsed.mirHello || parsed.deviceCmd || parsed.asking || hasAnyCondition(parsed)));
+    //  ★ 3.7-06 (검수사 정정 2026-09-04) — **잡담이 받은 말은 못 알아들은 말이 아니다.**
+    //    종전엔 여기서 조회 조건만 보고 «못 알아들었다»고 적었다. 그래서 미르가 화면에는 멀쩡히 답을 내놓고도
+    //    (mirSmallTalk 은 이 함수 바깥 mirCore.entry ③-C 에서 답한다) 뒤로는 miss 로 기록했고,
+    //    3분 안에 이어진 말과 엮여 **엉뚱한 자동 별칭**을 만들었다.
+    //    실측 260903 — «점심 먹었어»(제 끼니를 묻는 말)가 miss 로 적히고 다음 말 «점심 먹으러 가자»(맛집 돌림판)와
+    //    짝지어져 사전에 굳었다. 검수사 «이건 명백한 오류 입니다 … 순수하게 미르에게 묻는것입니다».
+    //    잡담 판정은 mirChat 한 벌을 그대로 부른다 — 두 벌로 만들면 반드시 갈린다(규범 §4-4).
+    //    ⚠ 그런데 **항차 화면은 잡담을 아예 안 불렀다**(SearchPanel·VoyagePage 에 mirSmallTalk 참조 0건 — 감사 실측).
+    //      검수사가 «점심 먹었어»를 물은 자리가 바로 거기다(miss 기록의 route = #/voyage/NSDC_2608N/discharge).
+    //      그래서 그 자리에서는 **답이 아예 없었고**, 그 무응답이 다음 말과 엮여 엉뚱한 별칭이 굳었다.
+    //      ⇒ 잡담 답을 여기서 실어 준다 — 네 화면(홈·항차 둘·콘앱)이 **한 벌로** 같은 말을 한다.
+    //      업무 질문은 mirSmallTalk 의 WORK 게이트가 물러서므로 조회를 가로채지 않는다.
+    //      ⚠ 답을 캐시하지 않는다 — 캐시하면 호칭이 바뀌어도 옛 이름으로 부르고(검수원 교대), 되묻기 3분 창도 얼어붙는다(감사 실측).
+    //        같은 질문에 같은 문장이 나오는 것은 mirChat 이 **질문으로 대본을 고르는** 방식으로 푼다(낭독 키가 «질문+답 길이»다).
+    let _st = null;
+    if (!_understood) { try { _st = mirSmallTalk(_q0) || null; } catch (e) { /* 잡담이 막혀도 결산 기록은 계속된다 */ } }
+    if (_st) { _understood = true; if (!out) out = _st; }
+    const _missed = !_understood || /못 배웠습니다/.test(String(out || ''));
+    const _note = mirObserve(_q0, _missed, { who: (ctx && (ctx.who || ctx.inspector)) || '', mode: (ctx && ctx.mode) || '', voyageKey: (ctx && (ctx.voyageKey || (ctx.info && ctx.info.key))) || '', smallTalk: !!_st });
     if (_note && typeof out === 'string') out = out + '\n' + _note;
     else if (_note && !out) out = _note;
   } catch (e) { console.warn('[3.0 미르 학습] 관찰 실패', e); }
