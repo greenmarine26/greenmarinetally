@@ -1565,7 +1565,17 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         style={{ width: cellW, height: cellH }}/>;
     }
     // M3.74: 다중 적재 검출
-    const cellList = getCellAll(row, tier);
+    //  ★ 3.12-01: 한 칸에 둘이면 **실제로 실린 컨이 앞**이다 — 검수사 실화면(DJCT 0224W 선적, 2026-09-06 00:0x) «아직도 자리 버그가 있습니다 …
+    //    이 베이 홀드에서만 3개째»: 19-06-04 에 카토스가 실었다고 준 DJLU2181897 이 있는데 그 칸 계획 컨 DYLU2125641(아직 안 실림)이 앞에 있어
+    //    그 칸이 «안 실린 계획 컨»으로 그려졌다(실린 컨은 ⊕ 뒤에 숨음). 2.95 «이름만 걸린 컨은 밀어내지 않는다»는 그대로다 — 이름표는 남기고
+    //    **그림의 앞자리만** 실린 컨(완료 또는 실적 자리 있음)에 준다. 순서: 완료(2) + 실적 자리(1) 큰 것부터, 같으면 종전 순서.
+    const cellList0 = getCellAll(row, tier);
+    const cellList = cellList0.length >= 2
+      ? cellList0.map((x, i) => [x, i]).sort((A, B) => {
+          const rk = (x) => ((completedMap && x.cn && completedMap[x.cn]) ? 2 : 0) + ((x.bay_actual != null && String(x.bay_actual) !== '' && !String(x.bay_actual).startsWith('__')) ? 1 : 0);
+          return (rk(B[0]) - rk(A[0])) || (A[1] - B[1]);
+        }).map(([x]) => x)
+      : cellList0;
     const c = cellList[0] || null;
     const stackCount = cellList.length;  // 1이면 단일, 2+면 다중
     if (!c && isXmark(row, tier)) {

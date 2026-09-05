@@ -20,7 +20,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (!/호기별 작업 베이/.test(t)) fail('오른쪽 «호기별 작업 베이» 칸이 없다');
   if (!/1호기/.test(t)) fail('1호기가 없다: ' + t.slice(0, 300));
   if (!/2호기/.test(t)) fail('2호기가 없다');
-  if (!/양하 \d+대/.test(t)) fail('호기별 대수가 없다');
+  if (!/(양하|선적) \d+대/.test(t)) fail('호기별 대수가 없다');
   if (/CATOS|카토스/.test(t)) fail('카드에 터미널(CATOS) 글자가 있다');
   if (!/미등록/.test(t)) fail('조 등록 전 이름 칸이 «미등록»이 아니다');
   //  호기 칸이 옆으로(2칸 격자)
@@ -28,13 +28,14 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (!grid) fail('호기 2개가 옆으로(grid-cols-2) 안 선다');
   //  ★ 3.11 — 호기 칸에 **베이 그림**(베이플랜 BayPage — «BAY (20)21» 머리·칸·완료 초록)이 실제로 선다
   const FX = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'fixtures', 'craneboard_djct.json'), 'utf8'));
-  const lastByEq = {}; for (const [cn, r] of Object.entries(FX.termWork)) { if (!r || !r.at) continue; const e = r.equip; if (!lastByEq[e] || r.at > lastByEq[e].at) lastByEq[e] = { at: r.at, bay: parseInt(String(r.pos).slice(0, 2), 10), cn }; }
+  const lastByEq = {}; for (const tw of [FX.termWork, FX.loading_termWork || {}]) for (const [cn, r] of Object.entries(tw)) { if (!r || !r.at || String(r.pos || '').length !== 6) continue; const e = r.equip; if (!lastByEq[e] || r.at > lastByEq[e].at) lastByEq[e] = { at: r.at, bay: parseInt(String(r.pos).slice(0, 2), 10), cn }; }   // 3.12-01: 양하·선적 중 최신
   const bays = Object.values(lastByEq).map(x => x.bay);
   const titles = [...doc.querySelectorAll('*')].map(n => n.childNodes.length === 1 && n.firstChild.nodeType === 3 ? n.textContent.trim() : '').filter(t => /^BAY /.test(t));
   if (titles.length < 2) fail('베이 그림 머리(BAY …)가 2장 안 선다: ' + JSON.stringify(titles));
   //  검수사 «베이 3 (4)5 11 (12)13을 다» — 호기마다 그 해치(40ft E 와 E-1·E+1)의 장 전부: 13 → 11·(12)13, 4 → 03·(04)05
   for (const b of bays) {
-    const E = b % 2 === 0 ? b : (b === 13 ? 12 : b + 1);   // 픽스처 실측: 13 은 (12)13 의 뒤홀수, 4 는 짝수
+    const pairedOdd = new Set((FX.bayDict.bayDef.baysSummary || []).filter(x => x.pairEven).map(x => parseInt(x.bay, 10)));   // 사전의 «짝수+뒤홀수» 짝
+    const E = b % 2 === 0 ? b : (pairedOdd.has(b) ? b - 1 : b + 1);
     const need = [String(E - 1).padStart(2, '0'), `(${String(E).padStart(2, '0')})${String(E + 1).padStart(2, '0')}`];
     for (const n of need) if (!titles.some(t => t === 'BAY ' + n)) fail(`호기 베이 ${b} 의 해치 장 «BAY ${n}» 이 없다(머리 ${JSON.stringify(titles)})`);
   }
@@ -60,6 +61,21 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   //  3.12: 선적은 표 넷 — 별첨4 목적지별(DJCT 0224W = HPH 274)
   for (const need of ['별첨1 · 선사별 (선적)', '별첨2 · 화물 종류별 (선적)', '별첨3 · 규격별 F/E (선적)', '별첨4 · 목적지별 (선적)']) if (!t.includes(need)) fail('선적 별첨에 «' + need + '» 가 없다');
   const hph = findRow('HPH'); if (!hph || den(hph[3]) !== 274) fail('별첨4 HPH 분모가 274 가 아니다: ' + JSON.stringify(hph));
+  //  ★ 3.12-01: 한 칸에 «실린 컨 + 안 실린 계획 컨»이면 실린 컨이 앞 — DJCT 0224W 실측 19-06-04: 실린 DJLU2181897 vs 계획 DYLU2125641
+  {
+    const twL = FX.loading_termWork || {}; const ediL = FX.loadingEdi || {};
+    const loadedAt = {}; for (const [cn, r] of Object.entries(twL)) if (r && r.at && String(r.pos || '').length === 6) loadedAt[cn] = String(r.pos);
+    const planned = {}; for (const [cn, e] of Object.entries(ediL)) planned[String(e.bay).padStart(2, '0') + String(e.row).padStart(2, '0') + String(e.tier).padStart(2, '0')] = cn;
+    const pairs = Object.entries(loadedAt).map(([cn, pos]) => [cn, planned[pos]]).filter(([cn, p]) => p && p !== cn && !loadedAt[p]);
+    if (!pairs.length) fail('픽스처에 «실린 컨 + 안 실린 계획 컨» 겹침이 없다(검사 무의미)');
+    const shownSet = new Set([...doc.querySelectorAll('span,div')].filter(n => n.childNodes.length === 1 && /^\d{4}$/.test(n.textContent.trim())).map(n => n.textContent.trim()));
+    for (const [cn, p] of pairs) {
+      const l4 = cn.slice(-4), p4 = p.slice(-4);
+      if (!shownSet.has(l4)) fail(`실린 컨 ${cn} 이 그림 앞에 안 보인다(계획 컨 ${p} 가 가렸나)`);
+      if (shownSet.has(p4)) fail(`안 실린 계획 컨 ${p} 가 실린 컨 ${cn} 의 칸 앞에 있다`);
+    }
+    console.log(`   한 칸 두 대 ${pairs.length}칸 — 실린 컨이 앞: ${pairs.map(([a, b]) => a.slice(-4) + '>' + b.slice(-4)).join(' · ')}`);
+  }
   const doneAll = Object.values(FX.completed).filter(c => c && c.at).length;
   if (num(sum1[3]) !== doneAll) fail(`별첨1 합계 완료 ${num(sum1[3])} ≠ completed ${doneAll}`);
   //  ★ 표 셋이 같은 열 수(«/» 가 표 사이에서도 한 세로줄) · 그림은 FitBox(transform scale ≤ 1) 안
