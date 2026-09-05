@@ -225,6 +225,22 @@ export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
   return list.length ? list.map((c) => `${c.no}호기 ${fmt(c.ms).slice(11)}`).join(' · ') : fmt(ms);
 }
 
+//  ★ 3.8 (검수사 2026-09-05 «미르에게 “OWBH 1호기 이인철 3호기 최관식” 이렇게 불러주면 앱에 등록해주기»):
+//    **호기–검수원을 조 단위로 항차에 적는다.** `info.craneCrew/{MM-DD 주간|야간}/{N호기} = { name, at }`.
+//    조 키는 갱 수(`gangsShift`)와 같은 벌(utils.crewShiftKey). 같은 조·같은 호기를 다시 말하면 뒤엣것으로 덮는다(PATCH — 다른 호기·다른 조는 그대로).
+//    ⚠ 등록자는 적지 않는다(검수사 «등록자는 등록할 필요가 없습니다»). `at` 은 등록 시각 — 집계가 연도를 여기서 얻는다.
+//    ⚠ 키를 «N호기» 로 두는 이유 — «1»·«2» 같은 숫자 키는 RTDB 가 배열로 돌려줘(실측 craneStart) 읽는 쪽이 갈린다.
+export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
+  if (!voyageKey || !shiftKey) return null;
+  const list = (Array.isArray(crew) ? crew : []).filter((c) => c && c.no >= 1 && c.no <= 9 && String(c.name || '').trim());
+  if (!list.length) return null;
+  const now = Date.now();
+  const patch = {};
+  list.forEach((c) => { patch[`craneCrew/${shiftKey}/${c.no}호기`] = { name: String(c.name).trim(), at: now }; });
+  await update(ref(db, `voyages/${voyageKey}/info`), patch);
+  return list.map((c) => `${c.no}호기 ${String(c.name).trim()}`).join(' · ');
+}
+
 //  ★ TallyOne 2.75 — **양하 불가(보류).** 검수사 실측 2026-08-27: 자동 가이드가 그날 세 번 멈췄고,
 //    그때마다 수동으로 넘어가야 했다 — *«콘이 잠겨 있어서 다음 컨테이너를 양하 하다 보니 자동가이드 멈추고»*.
 //    보류는 **완료가 아니다.** `completed` 를 건드리지 않고 따로 남긴다(대수·인건비 집계에 안 섞인다).

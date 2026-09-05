@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer } from '../nlSearch.js';   // 2.65: briefingVoiceLines
+import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
@@ -26,7 +26,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -44,7 +44,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip } from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, koJosa } from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -1100,6 +1100,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     gangShift: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return answerGangShift(voyage, de, { nGangs: n || null, tw: terminalWorkFor(voyage?.info, terminalWork), compMap: compMap || null }); } catch (e) { return null; } },
     //  2.63: 스트립용 구조 데이터 — 그림은 GangStrip 이 그린다(계산은 buildGangShift 한 벌).
     gangShiftData: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return buildGangShift(voyage, de, { nGangs: n || null, tw: terminalWorkFor(voyage?.info, terminalWork), compMap: compMap || null }); } catch (e) { return null; } },
+    //  ★ 3.8: 호기별 검수원·작업량 — 함수로 싣는다(InlineAnswerCard 는 voyage 를 안 받는다 · 값으로 실으면 memo 가 낡는다).
+    crewAnswer: (cq) => { try { return answerCraneCrew(voyage, cq); } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); return null; } },
     //  ★ 2.52-01 — **완료 표를 같이 싣는다.** 이 화면의 `containers` 에는 `_comp` 가 없다.
     //    완료는 별도 `compMap` 으로 다니는데(GuidedWorkPanel 도 둘을 따로 받는다), 미르는 `_comp` 를
     //    보고 있어서 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 실선에서 잡혔다.
@@ -2215,6 +2217,22 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
     startSetRef.current = key;
     fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [ask, voyageKey, inspector]);
+  //  ★ 3.8: «주간 1호기 김판석 2호기 송제욱» — 호기–검수원을 이 항차의 그 조에 적는다(확인 글은 인라인 카드 본체가 낸다).
+  const crewSetRef = useRef('');
+  useEffect(() => {
+    const q = String(ask?.q || '').trim();
+    if (!q || !voyageKey) return;
+    let cs = null;
+    try { cs = parseNaturalQuery(q).crewSet; } catch (e) { cs = null; }
+    if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
+    const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
+    const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
+    if (crewSetRef.current === key) return;
+    crewSetRef.current = key;
+    fbSetVoyageCraneCrew(voyageKey, sk.key, cs.crew)
+      .then((txt) => { try { speak(`${sk.key}조 ${koJosa(String(txt), '으로')} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+      .catch((e) => { console.warn('[3.8] 호기 검수원 저장 실패', e); crewSetRef.current = ''; try { speak('호기 검수원 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+  }, [ask, voyageKey]);
   const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);  // 조회 결과 1건이면 위치를 읽어준다
@@ -2739,7 +2757,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
       //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
       //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
-      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, info: briefCtx?.info || null, voyageDoneAts: briefCtx?.doneAtsAll || null, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
+      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, info: briefCtx?.info || null, voyageDoneAts: briefCtx?.doneAtsAll || null, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null, crewAnswer: briefCtx?.crewAnswer || null })) : null;   // 2.05-01 · 2.62 · 3.8
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
   const readRef = useRef('');
@@ -2898,6 +2916,22 @@ function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xray
     startSetRef.current = key;
     fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [ask, voyageKey, inspector]);
+  //  ★ 3.8: «주간 1호기 김판석 2호기 송제욱» — 호기–검수원을 이 항차의 그 조에 적는다(확인 글은 인라인 카드 본체가 낸다).
+  const crewSetRef = useRef('');
+  useEffect(() => {
+    const q = String(ask?.q || '').trim();
+    if (!q || !voyageKey) return;
+    let cs = null;
+    try { cs = parseNaturalQuery(q).crewSet; } catch (e) { cs = null; }
+    if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
+    const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
+    const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
+    if (crewSetRef.current === key) return;
+    crewSetRef.current = key;
+    fbSetVoyageCraneCrew(voyageKey, sk.key, cs.crew)
+      .then((txt) => { try { speak(`${sk.key}조 ${koJosa(String(txt), '으로')} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+      .catch((e) => { console.warn('[3.8] 호기 검수원 저장 실패', e); crewSetRef.current = ''; try { speak('호기 검수원 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+  }, [ask, voyageKey]);
   const [kb, setKb] = useState('numeric');
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);

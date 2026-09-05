@@ -3,8 +3,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled} from '../utils.js';
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled, crewShiftKey, koJosa} from '../utils.js';   // 3.8: crewShiftKey·koJosa
+import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer, answerCraneCrew, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
@@ -12,7 +12,7 @@ import { mirTone, mirSmallTalk } from '../mirChat.js';
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
-import { fbGetDamagePhoto, fbAddClaudeMemo } from '../firebase.js';   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
+import { fbGetDamagePhoto, fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -278,6 +278,25 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
   }, [debouncedQuery, shipCtx, onOpenPlan]);
 
+  /* ★ 3.8 (검수사 2026-09-05 «OWBH 1호기 이인철 3호기 최관식») — 홈에서 말하면 **그 배의 지금 항차**에 적는다.
+       배를 못 찾으면(shipCtx 없음) 적지 않는다 — 답 본문이 «배 이름을 붙여 주세요» 라고 말한다. 확인 글은 본문(crewSetText)이 낸다. */
+  const crewRanRef = useRef('');
+  useEffect(() => {
+    const t = String(debouncedQuery || '').trim();
+    if (!t) return;
+    let cs = null;
+    try { cs = parseNaturalQuery(t).crewSet; } catch (e) { cs = null; }
+    if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
+    if (!shipCtx || !shipCtx.key) return;
+    const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
+    const key = `${shipCtx.key}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
+    if (crewRanRef.current === key) return;
+    crewRanRef.current = key;
+    fbSetVoyageCraneCrew(shipCtx.key, sk.key, cs.crew)
+      .then((txt) => { try { speak(`${shipCtx.info?.vsl || ''} ${sk.key}조 ${koJosa(String(txt), '으로')} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+      .catch((e) => { console.warn('[3.8] 호기 검수원 저장 실패', e); crewRanRef.current = ''; try { speak('호기 검수원 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+  }, [debouncedQuery, shipCtx]);
+
   // ── 1.69-06: 진행 질문인데 배가 현재 항차에 없으면 — 보관소 메타 1회 GET (완료·보관 답 준비) ──
   //   검수사 신고(2026-08-14): "이미 완료된 작업을 물어보면 언제 작업 종료했는지 알려줘야 함."
   //   STSE처럼 수석 완료 저장으로 voyages에서 빠진 배는 종전엔 무응답이었다.
@@ -409,7 +428,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     //   SearchPanel과 근본 하나(nlSearch formatTerminalWorkAnswer·formatAppTallyAnswer).
     //   «실제·실시간·실황·터미널» → 터미널 실황 작업보드 / 없으면 → 앱 검수 기록 기준.
     if (shipCtx && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(debouncedQuery)
-        && !/자료/.test(debouncedQuery)) {
+        && !/자료/.test(debouncedQuery) && !p.crewQuery) {   // 3.8: 사람·호기를 댄 «어디까지·몇 대 했어» 는 아래 crew 분기가 낸다
       const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
       // ★ 2.55: 항차 화면(SearchPanel)과 **같은 벌** — 어느 갈래로 가든 두 숫자가 다 나온다.
       const _tw = terminalWorkFor(shipCtx.info, terminalWork);
@@ -471,7 +490,13 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       if (anyCalc && !shipCtx) {
         return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 계산합니다. (예: "HAYN 갱 2개로 분배")';
       }
+      //  ★ 3.8: 호기–검수원 등록·조회 — 홈은 배를 안 고른 자리라 배 이름이 있어야 적고 답한다.
+      if ((p.crewSet || p.crewQuery) && !shipCtx) {
+        return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 이인철 3호기 최관식» · «SWMM 김성일 몇 개 했어»';
+      }
       if (shipCtx) {
+        if (p.crewSet) return crewSetText(p.crewSet, _ship);
+        if (p.crewQuery) { try { const _a = answerCraneCrew(_voy, p.crewQuery); if (_a) return _a; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); } }
         if (isArrivalQ) return answerDataArrival(_voy, _ship);
         if (isHatchQ) return answerHatchStatus(_voy, _bayDef, _ship);
         if (isGangQ) return answerGangSplit(_voy, _bayDef, _ship);

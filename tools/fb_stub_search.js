@@ -113,6 +113,7 @@ export const fbSetShipSeqPref = async () => true;
 export const fbSetSimple = async () => true;
 export const fbSetStaffRole = async () => true;
 export const fbSetStowagePlan = async () => true;
+export const fbSetVoyageCraneCrew = async () => true;
 export const fbSetVoyageGangs = async () => true;
 export const fbSetVoyageSeqMode = async () => true;
 export const fbSetVoyageWorkStart = async () => true;

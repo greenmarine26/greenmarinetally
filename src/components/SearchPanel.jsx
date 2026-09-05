@@ -8,8 +8,8 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer, voyageDoneAts} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer, voyageDoneAts, answerCraneCrew} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
@@ -19,7 +19,7 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
@@ -1073,7 +1073,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     //   근본은 nlSearch 두 함수 하나 — 수석 통합검색(GlobalSearchPage)과 같은 뿌리다(1.69-01 원칙 유지).
     //   베이·조건이 붙은 진행 질문("20번 베이 남은 거")은 종전 formatProgress 그대로 둔다.
     if (/진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(query)
-        && !/자료|브리핑|요약/.test(query)
+        && !/자료|브리핑|요약/.test(query) && !parsed.crewQuery   // 3.8: «이인철 어디까지 했어»·«김성일 몇 대 했어» 는 사람·호기 답(본체)이 낸다
         && !parsed.digits && parsed.bay == null && !parsed.zone && !parsed.size && !parsed.fe && !parsed.type) {
       const ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
       // ★ 2.55 (검수사 확정 2026-08-26): 어느 갈래로 가든 **두 숫자가 다 나온다.**
@@ -1225,6 +1225,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
       { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || null, tw: _gangTw, compMap: null }); } catch (e) { return null; } },   // 2.70-01: 2 로 못 박지 않는다 — 기억·되묻기가 살아야 한다
+        crewAnswer: (cq) => { try { return answerCraneCrew(voyage, cq); } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); return null; } },   // 3.8: «김성일 몇 개 했어» — 항차를 감싼 클로저(gangShift 와 같은 방식)
         carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, info: voyage?.info || null, voyageDoneAts: voyageDoneAts(voyage), terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
@@ -1301,6 +1302,20 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       .then(() => { try { speak(`이 항차 ${g.n}갱으로 기억했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
       .catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
   }, [parsed.gangSet, voyageKey, inspector]);
+  //  ★ 3.8 (검수사 2026-09-05): «주간 1호기 김판석 2호기 송제욱» — 호기–검수원을 이 항차의 그 조에 적는다.
+  //    확인 글은 본체(crewSetText)가 내고, 여기서는 저장 뒤 음성으로 «기억했어요» 를 붙인다. 실패는 말과 콘솔로 드러낸다.
+  const crewSetRef = useRef('');
+  useEffect(() => {
+    const cs = parsed.crewSet;
+    if (!cs || !voyageKey || !Array.isArray(cs.crew) || !cs.crew.length) return;
+    const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
+    const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
+    if (crewSetRef.current === key) return;
+    crewSetRef.current = key;
+    fbSetVoyageCraneCrew(voyageKey, sk.key, cs.crew)
+      .then((txt) => { try { speak(`${sk.key}조 ${koJosa(String(txt), '으로')} 기억했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
+      .catch((e) => { console.warn('[3.8] 호기 검수원 저장 실패', e); crewSetRef.current = ''; try { speak('호기 검수원 저장이 안 됐어요 — 다시 말해 주세요'); } catch { /* 소리 꺼짐 */ } });
+  }, [parsed.crewSet, voyageKey]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
   const localAnswer = devAnswer || _mirAnswer;
 

@@ -79,6 +79,12 @@ export function getStaffRole(name) {
   return SERVER_ROLES[norm] || STAFF_ROLES[norm] || '';
 }
 
+//  ★ 3.8: **이름 전부 한 벌** — 코드 명단 + 서버 명단(앱에서 추가한 인원). 미르가 «1호기 박진우» 를 알아들으려면
+//    서버에만 있는 이름(실측 2026-09-05 staffList — 박진우·송제욱·고현석…)도 봐야 한다. 코드 명단만 보면 실제 검수원을 «명단 밖»으로 민다.
+export function allStaffNames() {
+  return [...new Set([...STAFF_NAMES, ...Object.keys(SERVER_ROLES)])];
+}
+
 // ─── TallyOne 1.71: 화면에 보이는 직책 (검수사 확정 2026-08-15) ────────────────
 //   *"이사급이상만 직급을 보여주고 그 이하는 직책만 보여주세요. 직책이 없는 인원은 검수로 적어주세요."*
 //   *"정렬순은 같은 직책이면 직급순위로 보여주시면 됩니다. (직급은 정렬용으로만, 보여주지 말고)"*

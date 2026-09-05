@@ -4,7 +4,8 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, crewShiftKey, crewWorkStats, parseCatosPos, koJosa } from './utils.js';
+import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -55,6 +56,23 @@ function findPortCode(text) {
   if (m3 && PORT_CODE3_TO_KR[m3[1]]) return m3[1];
   return null;
 }
+//  ★ 3.8: 질문 속 검수원 이름 — 긴 이름부터(«김석»이 «김석호»를 가로채지 않게). 없으면 ''.
+const _NAME_TAIL = /^(?:씨|님|이고|이며|하고|이랑|으로|에요|예요|입니다|이에요|이야|이다|이|가|은|는|을|를|랑|과|와|로|요|야|도|만|의|한테|에게)*(?:[^가-힣]|$)/;
+function _staffInText(t) {
+  const names = allStaffNames().slice().sort((a, b) => b.length - a.length);
+  const s = String(t || '');
+  for (const n of names) {
+    if (n.length < 2) continue;
+    let i = s.indexOf(n);
+    while (i >= 0) {
+      //  이름 뒤는 조사·호칭·비한글·끝이어야 한다 — «김석호» 는 «김석»이 아니다(감사 지적)
+      if (_NAME_TAIL.test(s.slice(i + n.length))) return n;
+      i = s.indexOf(n, i + 1);
+    }
+  }
+  return '';
+}
+
 export function portToKr(code) {
   if (!code) return '';
   const upper = String(code).toUpperCase();
@@ -103,6 +121,8 @@ export function parseNaturalQuery(text) {
     deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
     startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
+    crewSet: null,     // 3.8: { raw, shift, crew:[{no,name}], unknown:[{no,tok}] } — «주간 1호기 김판석 2호기 송제욱» 호기–검수원 등록
+    crewQuery: null,   // 3.8: { kind:'who'|'name'|'crane'|'all', no?, name? } — «1호기 누구야»·«김성일 몇 개 했어»
     //  ★ 2.41: 미르가 선박 연락처(이메일)를 **답한다** — 발송·확답 추적은 범위 밖(검수사 확정).
     //    *«우리는 선박에 자료를 주고 확답을 받아야 합니다»*(본선 일항사와 메일로 컨펌) ·
     //    *«수석이 PCSZ 이메일이 뭐지 물으면 답만 해주면 됩니다»* · *«그 주소가 있을것이니까 같이 보인다»*
@@ -359,6 +379,46 @@ export function parseNaturalQuery(text) {
     }
     if (_isGangQ || _gset || _bareGang || result.startSet || (_gm && /배분|작업량/.test(t))) {
       result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
+    }
+  }
+  //  ★ 3.8 (검수사 2026-09-05 «미르에게 “OWBH 1호기 이인철 3호기 최관식” 이렇게 불러주면 앱에 등록해주기 —
+  //    그래야 누가 몇개나 작업 했는지 알수 있고 어디까지 작업한걸 알수가 있음»):
+  //    ① 등록 — «(주간|야간) N호기 이름 …» → crewSet(파서는 utils.parseCraneCrew 한 벌 — 이름은 명단에 있는 것만).
+  //    ② 조회 — «N호기 누구야»·«김성일 몇 개 했어»·«누가 몇 개 했어»·«1호기 어디까지 했어» → crewQuery.
+  //    ⚠ «1호기 이인철 3호기 최관식» 의 숫자 1·3 이 끝 4자리(«13»)로 잡혀 컨 조회로 새던 것(실측 09-04 22:11 김성일 문장이
+  //      miss 로도 안 남고 «끝네자리 13» 으로 흘렀다) — 여기서 digits 를 지운다.
+  {
+    const _crew = result.startSet ? null : parseCraneCrew(t);   // «1호기 김성일 22시부터 시작했어» 는 시작 알림(2.74)이다
+    if (_crew) {
+      result.crewSet = { raw: String(text), shift: _crew.shift, dayOff: _crew.dayOff || 0, crew: _crew.crew, unknown: _crew.unknown };
+      result.digits = null; result.briefingQuery = false; result.posQuery = false;
+    } else if (!result.startSet && /호기/.test(t) && /취소|빼\s*줘|빼줘|빼라|지워|지우|삭제/.test(t) && (_staffInText(t) || /검수원|검수사|이름|등록/.test(t))) {
+      result.crewQuery = { kind: 'cancel' };   // 지우기는 아직 없다 — 조용히 등록으로 삼키지 않고 말한다(«2호기 양하 취소» 같은 딴 말은 안 잡는다 — 이름·검수원이 있을 때만)
+      result.digits = null;
+    } else if (!result.startSet && (/호기|검수원|누가\s*(?:몇|얼마|제일|가장)/.test(t) || _staffInText(t))) {
+      const _eq = t.match(/(\d)\s*호기/);
+      const _nm = _staffInText(t);
+      const _timeish = /\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시|몇\s*시|언제/.test(t);   // «몇 시에 시작했어»·«언제 끝나» 는 시각 질문
+      const _cargo = /리퍼|냉동|\bfr\b|\bot\b|\bdg\b|위험|엠티|공컨|풀컨|피트|\bft\b|\bhc\b|씰|실번호|봉인|무게|중량|온도|베이|홀드|데크|트윈|해치|커버|시프팅/i.test(t);
+      //  «남았어·남은» 은 잔여 질문(progressQuery pending)이다 — 한 개수로 답하면 뜻이 뒤집힌다(2차 시뮬 지적)
+      const _remain = /남았|남은|남아|남나|더\s*해야|미완료/.test(t);
+      const _cnt = !_remain && /몇\s*(?:개|대|건)|갯수|개수|대수|작업량|실적|얼마나|어디까지|했어|했나|했지|했습니|했는지|한\s*거/.test(t);
+      const _who = /누구|누가|담당|검수원|검수사|사람|맞아|맞나|맞지|맞습|아니야|아닌가|아니지/.test(t);   // «1호기 박진우 맞아?» 는 되묻기 — 지금 등록을 답한다
+      if (_eq && _who && !_timeish && !_cargo) {
+        result.crewQuery = { kind: 'who', no: +_eq[1] };   // «1호기 (검수원) 누구야» — 호기를 댔으면 그 호기
+      } else if (/호기\s*(?:별|마다)|검수원\s*(?:별|마다)|누가\s*(?:몇|얼마|제일|가장)|(?:검수원|호기)\s*(?:배정|등록)|검수원\s*(?:누구|누가|현황|목록)/.test(t) && !_cargo && !_remain) {
+        result.crewQuery = { kind: 'all' };
+      } else if (_nm && _cnt && !_cargo && !_timeish) {
+        result.crewQuery = { kind: 'name', name: _nm };   // «김성일 몇 시에 시작했어» 는 시각 질문이다
+      } else if (_eq && _cnt && !_timeish && !_cargo) {
+        result.crewQuery = { kind: 'crane', no: +_eq[1] };
+      }
+      if (result.crewQuery) {
+        //  «이인철 어디까지 했어» 가 브리핑·위치 갈래(briefingQuery·posQuery)로 새어 항차 화면에서 브리핑을 내던 것(감사 실측) — 사람·호기 답 한 갈래로
+        result.digits = null; result.progressQuery = null; result.briefingQuery = false; result.posQuery = false; result.etaQuery = false;
+        //  «김성일 작업량»·«1호기 작업량» — 사람·호기를 댔으면 갱 배분이 아니라 그 사람·호기 답이다
+        if (result.crewQuery.kind !== 'all') result.gangQuery = null;
+      }
     }
   }
   // 2.05-01 (검수사 «데미지·OOG도 버튼을 눌러 확인하게 — 재질문 감소»): 브리핑 후속 버튼용 로컬 인텐트 3종.
@@ -626,6 +686,12 @@ export function parseNaturalQuery(text) {
   //  ★ 3.0 미르 자체 학습 (검수사 «한번 답 못한 걸 다음에는 반복 안 하게») — **못 알아듣는 말일 때만** 배운 사전으로
   //    되써서 한 번 더 읽는다. 알아듣는 말은 한 글자도 안 건드린다(폴백). 되쓴 결과도 못 알아들으면 원문 결과를 돌려준다.
   //    실측 — «MCSC 카고플랜»(못 알아들음) → «MCSC 양하 카고플랜»(답함)이 세 번 반복됐다(activity_log 08-29).
+  //  ★ 3.8: 사람·호기 답은 **한 갈래**다 — 위(디지트·진행)뿐 아니라 아래에서 켜진 위치(«어디까지»)·통계(«몇 개»)·소개(«누구야»)·갱 배분 갈래도 끈다.
+  //    안 끄면 «1호기 누구야» 가 미르 자기소개로, «이인철 어디까지 했어» 가 위치·브리핑으로 샌다(감사 실측 — 항차 화면 브리핑).
+  if (result.crewQuery || result.crewSet) {
+    result.posQuery = false; result.isStat = false; result.introQuery = false; result.briefingQuery = false; result.etaQuery = false; result.progressQuery = null; result.digits = null;
+    result.gangQuery = null;
+  }
   if (!_mirDepth && !result.mirHello && !result.deviceCmd && !result.asking && !hasAnyCondition(result)) {
     const _rw = mirRewrite(text);
     if (_rw && _rw !== String(text)) {
@@ -794,7 +860,8 @@ export function describeQuery(parsed) {
 }
 
 export function hasAnyCondition(parsed) {
-  return !!(parsed.shiftingQuery ||   // TallyOne 1.27
+  return !!(parsed.crewSet || parsed.crewQuery ||   // 3.8: 호기–검수원 등록·조회
+            parsed.shiftingQuery ||   // TallyOne 1.27
             parsed.gangQuery ||   // 2.62-02: 갱 배분 — 이게 빠져 본체 도달 전에 null 로 잘렸다(라이브 실측: 질문 접수만 찍히고 무응답)
             parsed.digits || parsed.size || parsed.fe || parsed.type ||
             parsed.bay || parsed.pol || parsed.pod || parsed.portAny ||
@@ -1204,6 +1271,17 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
 
   // TallyOne 1.27: 시프팅 — 배정목록의 'N' 은 무브 수(양하 1 + 재선적 1)라 컨 대수의 2배다.
   // 2.05-01: 브리핑 후속 버튼 3종 — 수화물·긴급·데미지 (그 자리 즉답, 인라인 카드는 사진 썸네일 동반)
+  //  ★ 3.8: 호기–검수원 — 등록 문장은 확인 글(쓰기는 화면 effect), 조회는 ctx.crewAnswer(화면이 항차를 감싼 클로저 — gangShift 와 같은 방식). 갱 배분보다 앞 — «김성일 작업량» 은 사람 답이다.
+  {
+    const _canCrew = !!(ctx && typeof ctx.crewAnswer === 'function');
+    //  ⚠ 저장은 화면 effect 가 한다 — crewAnswer 가 없는 자리(콘앱 mirCore·홈 폴백)는 저장 배선도 없으므로 «기억할게요» 라고 말하면 거짓이다(감사 실측 콘앱)
+    if (parsed.crewSet) return _canCrew ? crewSetText(parsed.crewSet, (ctx && (ctx.vslFull || ctx.vsl)) || '') : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 김판석 2호기 송제욱», 홈에서는 배 이름을 붙여서요.';
+    if (parsed.crewQuery) {
+      if (parsed.crewQuery.kind === 'cancel') return '호기 검수원 지우기는 아직 없어요 — 다른 이름으로 다시 말하면 그 조·그 호기가 덮어써져요(«1호기 이인철»).';
+      if (_canCrew) { try { const _ca = ctx.crewAnswer(parsed.crewQuery); if (_ca) return _ca; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패:', e); } }
+      return '호기별 검수원은 검수앱 항차 화면(양하·선적 탭)이나 홈에서 배 이름을 붙여 물어봐 주세요 — 예: «SWMM 1호기 누구야».';
+    }
+  }
   //  ★ 2.62: 갱 배분 — 조 단위 «내 작업량». ctx.gangShift 는 화면이 싣는 계산 함수(재료: 베이사전·완료·터미널).
   if (parsed.gangQuery && ctx && typeof ctx.gangShift === 'function') {
     try { const _ga = ctx.gangShift(parsed.gangQuery.n || null); if (_ga) return _ga; } catch (e) { console.warn('[2.62] 갱 배분 실패:', e); }
@@ -2427,6 +2505,97 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 //     그때는 검수사가 «실제 진행 상황» 이라고 물어야 터미널 수를 봤다 — 그 말을 모르면 앱 수만 봤다.
 //     이제 묻는 말과 상관없이 둘 다 나온다. 두 갈래 함수는 남기되 서로의 숫자를 한 줄씩 싣는다.
 //   ⛔ 판정을 두 벌로 만들지 않는다 — 진행 답·앱 갈래·터미널 갈래·브리핑이 **전부 이 함수**를 부른다.
+//  ★ 3.8: 등록 문장에 화면이 내는 확인 글 — 실제 쓰기는 화면(SearchPanel·VoyagePage·GlobalSearchPage)의 effect 가
+//    fbSetVoyageCraneCrew 로 하고, 성공하면 음성으로 «…로 기억했어요» 를 붙인다. 여기서는 **무엇을 어디에 적는지**만 말한다.
+export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
+  if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return null;
+  const k = crewShiftKey(cs.shift, nowMs, cs.dayOff || 0);
+  const who = cs.crew.map((c) => `${c.no}호기 ${c.name}`).join(' · ');
+  let out = `📝 ${shipLabel ? shipLabel + ' ' : ''}${k.key}조 — ${koJosa(who, '으로')} 기억할게요.`;
+  if (Array.isArray(cs.unknown) && cs.unknown.length) {
+    out += `\n⚠ ${cs.unknown.map((u) => `${u.no}호기 «${u.tok}»`).join(' · ')} 은 검수원 명단에 없어 못 적었어요 — 명단에 있는 이름으로 다시 말해 주세요.`;
+  }
+  out += `\n(«김성일 몇 개 했어» · «1호기 누구야» · «누가 몇 개 했어» 로 물으시면 이 등록으로 답해요)`;
+  return out;
+}
+
+//  ★ 3.8: **누가 몇 개 · 어디까지** — 집계는 utils.crewWorkStats 한 벌. 여기서는 말로만 바꾼다.
+//    카토스 배는 컨별(호기+시각+자리)이라 조별·자리까지, 동방 배는 QC 합계라 «조별로는 못 나눠요»를 사실대로 말한다.
+const _hm = (ms) => { if (!ms || !isFinite(ms)) return ''; const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+//  날이 바뀌면 날짜를 붙인다 — «23:28~23:10» 처럼 끝이 시작보다 앞으로 보이던 것(감사 실측 SWTD)
+const _hmRange = (a, b) => { if (!a || !b) return ''; const da = new Date(a), db = new Date(b); const same = da.getMonth() === db.getMonth() && da.getDate() === db.getDate(); const md = (d) => `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} `; return same ? `${_hm(a)}~${_hm(b)}` : `${md(da)}${_hm(a)}~${md(db)}${_hm(b)}`; };
+const _posKo = (pos) => { const p = parseCatosPos(pos); return p ? `${p.bay}번 베이 ${p.row}열 ${p.tier}단` : ''; };
+export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
+  if (!voyage || !cq) return null;
+  const st = crewWorkStats(voyage);
+  const info = voyage.info || {};
+  const ship = info.vslFull || info.vsl || '';
+  const hint = '\n(등록은 «주간 1호기 김판석 2호기 송제욱» 처럼 말해 주세요 — 조를 안 대면 지금 조예요)';
+  const rowLine = (r) => {
+    const parts = [`${r.no ? r.no + '호기 ' : ''}${r.name || '(검수원 미등록)'} — ${r.n}대`];
+    if (r.dis && r.lod) parts.push(`양하 ${r.dis}·선적 ${r.lod}`);
+    if (r.src === 'cn' && r.firstAt && r.lastAt) parts.push(_hmRange(r.firstAt, r.lastAt));
+    const pk = r.lastPos ? _posKo(r.lastPos) : '';
+    if (pk) parts.push(`마지막 ${pk}`);
+    if (r.src === 'qc' && r.appN) parts.push(`앱으로 직접 찍은 것 ${r.appN}대`);
+    return parts.join(' · ');
+  };
+  const src = (st.qcOnly ? '동방 QC 합계 — 조별로는 못 나눠요, 자리도 안 와요' : '터미널 컨별 기록 + 앱 완료')
+    + (st.outside ? ` · 등록된 조 밖 ${st.outside}대는 «조 미상» — 다음 조 등록이 없어요` : '');
+  if (cq.kind === 'who') {
+    const no = cq.no;
+    const hits = st.shifts.filter((s) => s.cranes[no]);
+    if (!hits.length) {
+      //  등록은 없어도 앱 완료 기록(by+equip)이 있으면 그것으로 답한다 — 지어내지 않고 «기록으로는» 이라고 밝힌다.
+      const c = st.byCrane[no];
+      if (c && c.names.length) return `${ship} ${no}호기는 등록이 없지만 앱 완료 기록으로는 ${koJosa(c.names.join('·'), '이')} ${c.n}대 찍었어요.${hint}`;
+      return `${ship} ${no}호기 검수원이 아직 등록 안 됐어요 😿${hint}`;
+    }
+    const cur = crewShiftKey(null, nowMs).key;
+    const now = hits.find((s) => s.key === cur);
+    const L = hits.map((s) => `${s.key} ${s.cranes[no]}${s.key === cur ? ' (지금 조)' : ''}`);
+    const head = now ? `${ship} ${no}호기는 지금 ${koJosa(now.cranes[no], '이에요')} 🐱` : `${ship} ${no}호기 등록`;
+    return `${head}\n${L.join('\n')}`;
+  }
+  if (cq.kind === 'name') {
+    const b = st.byName[cq.name];
+    if (!b) {
+      const reg = st.shifts.some((s) => Object.values(s.cranes).includes(cq.name));
+      return reg ? `${cq.name} 몫으로 잡힌 작업이 아직 없어요 — 등록은 돼 있어요(${st.shifts.filter((s) => Object.values(s.cranes).includes(cq.name)).map((s) => `${s.key} ${Object.keys(s.cranes).find((k) => s.cranes[k] === cq.name)}호기`).join(' · ')}).`
+        : `${koJosa(cq.name, '은')} 이 항차에 등록이 없고 앱 완료 기록도 없어요 😿${hint}`;
+    }
+    const rows = st.rows.filter((r) => r.name === cq.name);
+    const L = [`${ship} ${cq.name} — ${b.n}대${b.dis && b.lod ? ` (양하 ${b.dis}·선적 ${b.lod})` : ''}${b.cranes.length ? ` · ${b.cranes.map((n) => n + '호기').join('·')}` : ''}`];
+    if (rows.length > 1) rows.forEach((r) => L.push(`  ${r.key || '조 미상'} ${rowLine(r)}`));
+    else if (rows.length === 1) { const r = rows[0]; const ex = [r.key, r.src === 'cn' && r.firstAt && r.lastAt ? _hmRange(r.firstAt, r.lastAt) : '', r.lastPos ? `마지막 ${_posKo(r.lastPos)}` : '', r.src === 'qc' && r.appN ? `앱으로 직접 찍은 것 ${r.appN}대` : ''].filter(Boolean); if (ex.length) L.push(`  ${ex.join(' · ')}`); }
+    L.push(`(${src})`);
+    return L.join('\n');
+  }
+  if (cq.kind === 'crane') {
+    const c = st.byCrane[cq.no];
+    if (!c) return `${ship} ${cq.no}호기로 잡힌 작업이 아직 없어요.${st.registered ? '' : hint}`;
+    const rows = st.rows.filter((r) => r.no === cq.no);
+    const L = [`${ship} ${cq.no}호기 — ${c.n}대${c.dis && c.lod ? ` (양하 ${c.dis}·선적 ${c.lod})` : ''}${c.lastPos ? ` · 마지막 ${_posKo(c.lastPos)} ${_hm(c.lastAt)}` : c.lastAt ? ` · 마지막 ${_hm(c.lastAt)}` : ''}`];
+    rows.forEach((r) => L.push(`  ${r.key || '조 미상'} ${r.name || '(검수원 미등록)'} ${r.n}대${r.src === 'cn' && r.firstAt ? ` · ${_hmRange(r.firstAt, r.lastAt)}` : ''}${r.src === 'qc' && r.appN ? ` · 앱으로 직접 찍은 것 ${r.appN}대` : ''}`));
+    L.push(`(${src})`);
+    return L.join('\n');
+  }
+  //  all — 조별로 호기·사람·대수
+  if (!st.rows.length && !st.registered) return `${ship} 호기별 검수원 등록이 아직 없어요 😿${hint}`;
+  const L = [`👷 ${ship} 호기별 검수원·작업량`];
+  const keys = [...new Set([...st.shifts.map((s) => s.key), ...st.rows.map((r) => r.key)])];
+  for (const k of keys) {
+    const sh = st.shifts.find((s) => s.key === k);
+    const rs = st.rows.filter((r) => r.key === k);
+    const names = sh ? Object.keys(sh.cranes).map(Number).sort((a, b) => a - b).map((n) => `${n}호기 ${sh.cranes[n]}`) : [];
+    L.push(`${k || '조 미상'}${names.length ? ' — ' + names.join(' · ') : ''}`);
+    rs.forEach((r) => L.push(`  ${rowLine(r)}`));
+    if (sh && !rs.length) L.push('  (아직 잡힌 작업 없음)');
+  }
+  L.push(`(${src})`);
+  return L.join('\n');
+}
+
 export function twOfCtx(ctx) {
   if (!ctx) return null;
   if (ctx.tw && typeof ctx.tw === 'object') return ctx.tw;   // 두 갈래 함수는 레코드를 직접 넘긴다

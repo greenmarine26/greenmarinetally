@@ -641,6 +641,12 @@ fi
     node tools/smoke_bothcounts.cjs "$SMOKE_NS" || { echo "✗ 두 숫자 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.0: 미르 자체 학습 — 같은 번들로 실측 순서(못 알아들음→배움→답함)·일반화·무관 짝 거절·뜻풀이·재귀 가드를 잰다.
     node tools/smoke_mirlearn.cjs "$SMOKE_NS" || { echo "✗ 미르 자체 학습 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
+    #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
+    SMOKE_CW=$(mktemp /tmp/_smokecw_XXXXXX.cjs)
+    npx esbuild tools/smoke_crew_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CW" --log-level=error \
+      && node tools/smoke_crew.cjs "$SMOKE_CW" "$(pwd)" || { rm -f "$SMOKE_CW"; echo "✗ 호기–검수원 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_CW"
     #  2.57: **미르 화법 시험지** — 뜻/위치/개수 갈래·요약+후속·가로채기 0·모른다 고백·세 화면 배선.
     #    검수사 지시 «가르치고 시험하고 보강하고 재시험» — 이 시험이 매 빌드 그 반복을 강제한다.
     node tools/smoke_mirspeak.cjs "$SMOKE_NS" "$(pwd)" || { echo "✗ 미르 화법 시험 실패 — 배포 금지"; exit 1; }
