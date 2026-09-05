@@ -575,7 +575,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         // 2.93: 계획 자리를 내준 표식 — 이 화이트리스트를 안 지나면 화면이 못 본다.
         if (r.planTaken) safeR.planTaken = r.planTaken;
         // 2.94-04: 검수원이 정해 준 자리(실체 아님)
-        if (r.bay_assign) safeR.bay_assign = r.bay_assign;
+        if (r.bay_assign) { safeR.bay_assign = r.bay_assign; safeR.row_assign = r.row_assign; safeR.tier_assign = r.tier_assign; if (r._assign_warn) safeR._assign_warn = r._assign_warn; if (r._assign_byCn) safeR._assign_byCn = r._assign_byCn; }   // 3.13: 자동 맞교환 자리
         if (r.row_assign) safeR.row_assign = r.row_assign;
         if (r.tier_assign) safeR.tier_assign = r.tier_assign;
         if (r.assign_at) safeR.assign_at = r.assign_at;
@@ -656,6 +656,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             _edi_tier: c.tier,
             _position_moved: true,
           };
+        }
+        //  3.13: «정해 준 자리»(bay_assign — 자동 맞교환·검수원 지정)는 실체 다음, 계획보다 앞 — 그 자리에 그린다(effectivePos 와 같은 순서)
+        if (c.bay_assign && c.row_assign && c.tier_assign && !String(c.bay_assign).startsWith('__')) {
+          return { ...c, bay: c.bay_assign, row: c.row_assign, tier: c.tier_assign,
+            _bay_planned: c.bay, _row_planned: c.row, _tier_planned: c.tier, _edi_bay: c.bay, _edi_row: c.row, _edi_tier: c.tier,
+            _assigned: true, _assign_warn: c._assign_warn || '' };
         }
         return c;
       });

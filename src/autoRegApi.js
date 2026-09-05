@@ -274,13 +274,21 @@ export async function buildAutoPayload(files, opts) {
         const ptkCount = cs.filter(c => c.cn && (mode === 'discharge'
           ? isPyeongtaekPort(c.pod)
           : (c._inList || isPyeongtaekPort(c.pol)))).length;
-        perFile.push({ name, kind, count: cs.length, cnCount, isoCount, ptkCount });
+        //  ★ 3.13(MailPilot 2.25 helper) — **다 같으면 나중에 받은 것(수신 시각 mtime)이 이긴다.**
+        //    검수사 실측 2026-09-06 00:3x DJCT 0224W 선적 — 수정본이 넷(17:21 PRE1 REVISED.ASC · 20:32 FILE-1.EDI · 20:54 PRE2 REVISED.ASC ·
+        //    21:12 FILE-3.EDI)인데 실번호·규격·총수가 전부 476 으로 같아 **먼저 온 순서**(ASC)가 남았고, 21:12 최신 EDI 가 등록되지 않았다.
+        //    앱 베이플랜이 옛 계획(20:54)을 그려 «자리 버그»로 보였다(검수사 «자료는 수집하고 등록은 수정본으로 안한듯»).
+        //    수집기는 v1.0-17 부터 mtime 을 helper 에 넘기고 있었는데(«나중에 받은 것 = 실적재도 · 선택 규칙의 마지막 근거») 여기서 안 쓰고 있었다.
+        //    같은 종류(EDI끼리·ASC끼리)는 수집기 _newest_per_edi_kind 가 이미 최신만 남긴다 — 이 줄은 **이종(EDI↔ASC) 동률**에서만 작동한다.
+        const mtime = Number(f.mtime) || 0;
+        perFile.push({ name, kind, count: cs.length, cnCount, isoCount, ptkCount, mtime });
         const _has = ptkCount > 0, _bestHas = (best?.ptkCount || 0) > 0;
         if (!best || (_has !== _bestHas ? _has
             : (cnCount > best.cnCount
                || (cnCount === best.cnCount && isoCount > (best.isoCount || 0))
-               || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length > best.containers.length)))) {
-          best = { name, text, containers: cs, cnCount, isoCount, ptkCount, virtual: isVirtual };
+               || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length > best.containers.length)
+               || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length === best.containers.length && mtime > (best.mtime || 0))))) {
+          best = { name, text, containers: cs, cnCount, isoCount, ptkCount, virtual: isVirtual, mtime };
         }
       }
     } catch (e) { perFile.push({ name, error: String(e && e.message || e) }); }

@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos} from './utils.js';
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap} from './utils.js';
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
@@ -1561,6 +1561,7 @@ export function fbSubscribeVoyages(callback) {
     for (const k of Object.keys(v)) {
       //  한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
       try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[CATOS 자리] 반영 실패 —', k, e); }
+      try { v[k] = applyAutoSwap(v[k]); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
     }
     callback(v);
   });

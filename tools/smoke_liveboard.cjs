@@ -69,12 +69,17 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
     const pairs = Object.entries(loadedAt).map(([cn, pos]) => [cn, planned[pos]]).filter(([cn, p]) => p && p !== cn && !loadedAt[p]);
     if (!pairs.length) fail('픽스처에 «실린 컨 + 안 실린 계획 컨» 겹침이 없다(검사 무의미)');
     const shownSet = new Set([...doc.querySelectorAll('span,div')].filter(n => n.childNodes.length === 1 && /^\d{4}$/.test(n.textContent.trim())).map(n => n.textContent.trim()));
+    //  3.13: 밀려난 계획 컨은 **비운 자리로 옮겨 보인다**(하늘색 테두리) — 둘 다 보이고, 겹침(⊕)이 없다
+    const sky = [...doc.querySelectorAll('.border-sky-400')].map(n => n.textContent.trim());
     for (const [cn, p] of pairs) {
       const l4 = cn.slice(-4), p4 = p.slice(-4);
-      if (!shownSet.has(l4)) fail(`실린 컨 ${cn} 이 그림 앞에 안 보인다(계획 컨 ${p} 가 가렸나)`);
-      if (shownSet.has(p4)) fail(`안 실린 계획 컨 ${p} 가 실린 컨 ${cn} 의 칸 앞에 있다`);
+      if (!shownSet.has(l4)) fail(`실린 컨 ${cn} 이 그림에 안 보인다`);
+      if (!shownSet.has(p4)) fail(`밀려난 계획 컨 ${p} 가 그림에 안 보인다(검수사 «남은 컨 넘버를 확인 할수가 있어야»)`);
+      if (!sky.some(t => t.includes(p4))) fail(`밀려난 계획 컨 ${p} 가 하늘색(옮겨 온 자리) 테두리가 아니다`);
     }
-    console.log(`   한 칸 두 대 ${pairs.length}칸 — 실린 컨이 앞: ${pairs.map(([a, b]) => a.slice(-4) + '>' + b.slice(-4)).join(' · ')}`);
+    const stacks = [...doc.querySelectorAll('span,div')].filter(n => n.childNodes.length === 1 && /^⊕\d+$/.test(n.textContent.trim())).length;
+    if (stacks) fail(`겹친 칸(⊕)이 ${stacks}개 남아 있다 — 검수사 «컨테이너가 겹쳐 있어도 안됩니다»`);
+    console.log(`   밀려난 계획 컨 ${pairs.length}대 → 비운 자리로(하늘색): ${pairs.map(([a, b]) => b.slice(-4) + '←' + a.slice(-4)).join(' · ')} · 겹침 0`);
   }
   const doneAll = Object.values(FX.completed).filter(c => c && c.at).length;
   if (num(sum1[3]) !== doneAll) fail(`별첨1 합계 완료 ${num(sum1[3])} ≠ completed ${doneAll}`);

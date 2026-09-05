@@ -479,6 +479,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-500 ring-1 ring-emerald-400';   // V8.85: XRAY 완료도 초록 배경
       return 'bg-white text-ink-950 border-red-400';
     }
+    if (c._assigned && !(compMap && compMap[c.cn])) return c._assign_warn ? 'bg-amber-100 text-ink-950 border-amber-500 ring-1 ring-amber-400' : 'bg-white text-ink-950 border-sky-400 ring-1 ring-sky-300';   // 3.13: 자동 맞교환으로 옮겨 온 자리(하늘) · 속성 다름(주황)
     if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
     /* ★ 2.84 (검수사 확정 2026-08-29) — **시프팅 칠하기는 정본(restowMap) 한 벌을 쓴다.**
          종전엔 이 화면이 «내 양하분 위에 얹힌 것»을 그 자리에서 세어 칠했다(shiftingMap.shiftCns).

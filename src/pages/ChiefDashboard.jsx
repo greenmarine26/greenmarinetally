@@ -2209,7 +2209,7 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, Object.keys(voyage?.discharge?.ediContainers || {}).length,
       voyage?.loading?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.sizeBytes, Object.keys(voyage?.loading?.ediContainers || {}).length, swapFixList(voyage).length]);
-  const recSig = ['discharge', 'loading'].map((mode) => { const r = voyage?.[mode]?.records || {}; let sg = mode; for (const cn of Object.keys(r)) { const x = r[cn] || {}; if (x.bay_actual != null || x.planTaken) sg += `|${cn}:${x.bay_actual}-${x.row_actual}-${x.tier_actual}${x.planTaken ? 'T' : ''}`; } return sg; }).join('#');
+  const recSig = ['discharge', 'loading'].map((mode) => { const r = voyage?.[mode]?.records || {}; let sg = mode; for (const cn of Object.keys(r)) { const x = r[cn] || {}; if (x.bay_actual != null || x.planTaken || x.bay_assign) sg += `|${cn}:${x.bay_actual}-${x.row_actual}-${x.tier_actual}${x.planTaken ? 'T' : ''}${x.bay_assign ? `>${x.bay_assign}-${x.row_assign}-${x.tier_assign}` : ''}`; } return sg; }).join('#');   // 3.13: 정해 준 자리도 서명에
   const boardContainers = useMemo(() => {
     const out = {};
     const pad2 = (x) => String(x ?? '').padStart(2, '0');
@@ -2221,8 +2221,9 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
         const rec = recMap[e.cn] || {};
         const gone = rec.bay_actual === '__STG__' || !!rec.planTaken;   // 감사: 임시창고·자리를 내준 컨은 탭처럼 격자에서 뺀다(한 칸 두 대 방지)
         const hasA = !gone && rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null && !String(rec.bay_actual).startsWith('__');
-        return { ...e, _inList: !!recMap[e.cn] || !!e._inList,
-          bay: gone ? '' : pad2(hasA ? rec.bay_actual : e.bay), row: gone ? '' : pad2(hasA ? rec.row_actual : e.row), tier: gone ? '' : pad2(hasA ? rec.tier_actual : e.tier) };
+        const hasG = !gone && !hasA && rec.bay_assign && rec.row_assign && rec.tier_assign && !String(rec.bay_assign).startsWith('__');   // 3.13: 자동 맞교환 자리
+        return { ...e, _inList: !!recMap[e.cn] || !!e._inList, _assigned: !!hasG, _assign_warn: hasG ? (rec._assign_warn || '') : '',
+          bay: gone ? '' : pad2(hasA ? rec.bay_actual : hasG ? rec.bay_assign : e.bay), row: gone ? '' : pad2(hasA ? rec.row_actual : hasG ? rec.row_assign : e.row), tier: gone ? '' : pad2(hasA ? rec.tier_actual : hasG ? rec.tier_assign : e.tier) };
       });
     }
     return out;

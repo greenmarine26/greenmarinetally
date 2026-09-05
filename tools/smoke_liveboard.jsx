@@ -3,15 +3,15 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { LiveShipCard } from '../src/pages/ChiefDashboard.jsx';
-import { craneBoardOf, applyCatosPos } from '../src/utils.js';   // applyCatosPos — 앱 구독 콜백이 얹는 카토스 실적 자리(3.7-08)를 여기서도 얹는다
+import { craneBoardOf, applyCatosPos, applyAutoSwap } from '../src/utils.js';   // applyCatosPos·applyAutoSwap — 앱 구독 콜백이 얹는 카토스 실적 자리(3.7-08)·자동 맞교환(3.13)을 여기서도 얹는다
 import FX from './fixtures/craneboard_djct.json';
 
 window.__calls = [];
 //  3.11: 베이 그림·별첨은 실제 항차 자료(ediContainers·records·completed)와 베이사전(ship_bay_dict_v3/DJCT 사본)이 있어야 그려진다.
 window.__fbShipBayDict = { DJCT: FX.bayDict };
-const voyage = applyCatosPos({ info: { ...FX.info, vsl: 'DJCT', voy_d: '0223E', voy_l: '0224W' },
+const voyage = applyAutoSwap(applyCatosPos({ info: { ...FX.info, vsl: 'DJCT', voy_d: '0223E', voy_l: '0224W' },
   discharge: { termWork: FX.termWork, completed: FX.completed, ediContainers: FX.ediContainers, records: FX.records },
-  loading: { ediContainers: FX.loadingEdi, termWork: FX.loading_termWork || {}, completed: FX.loading_completed || {}, records: FX.loading_records || {} } });   // 3.12: 선적 별첨(넷) · 3.12-01: 선적 실적(카토스 자리)도 — 한 칸 두 대 검사
+  loading: { ediContainers: FX.loadingEdi, termWork: FX.loading_termWork || {}, completed: FX.loading_completed || {}, records: FX.loading_records || {} } }));   // 3.12: 선적 별첨(넷) · 3.12-01: 선적 실적(카토스 자리) · 3.13: 자동 맞교환
 const dis = { total: 251, done: Object.keys(FX.completed).length, pct: 0 };
 const loa = { total: 274, done: 0, pct: 0 };
 const v = { key: 'DJCT_0223E', info: voyage.info, dis, loa, totalDone: dis.done, totalAll: 525 };
