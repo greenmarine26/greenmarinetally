@@ -3544,14 +3544,17 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               const { fbSaveShipBayDict } = await import('../firebase.js');
               const code = (voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '');
               if (code && code.length >= 2 && code.length <= 8) {
-                await fbSaveShipBayDict(code, {
+                const okReg = await fbSaveShipBayDict(code, {
                   code,
                   name: r.vsl,
                   callsign: r.callsign || '',
                   source: 'edi-auto',
                   _inspector: inspector || '',
                 });
-                results.push(`☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign || '(콜사인없음)'} · ${r.vsl})`);
+                // 3.8-01 감사: 반환값을 버리고 «자동 등록»을 무조건 찍던 것 — 휴지통·권한으로 막혔으면 그렇게 말한다.
+                results.push(okReg
+                  ? `☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign || '(콜사인없음)'} · ${r.vsl})`
+                  : `⚠ ${file.name}: 베이사전 자동 등록 안 됨 (${code} — 휴지통에 있거나 권한이 없습니다)`);
               }
             } catch (e) {
               console.warn('[M5.89] EDI 베이사전 자동 등록 실패:', e);

@@ -2776,6 +2776,18 @@ export async function fbSaveShipBayDict(code, entry) {
   const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
   if (!cleanCode) return false;
   try {
+    // ★ 3.8-01: **휴지통에 있는 배는 어떤 경로로도 되살리지 않는다.** 검수사 2026-09-05 «베이메트릭스에서 휴지통에
+    //   넣은게 자꾸 목록으로 다시올라옴 영구삭제 바랍니다». 실측 — BSDU·MARS·SAWA 가 휴지통 사본과 한 글자도
+    //   안 다른 채(updatedAt 까지 같음) 보관소에 되살아나 있었다. 기기 로컬 사본(userBayDict)이 「☁ 전체 동기화」로
+    //   그대로 올라간 것이다(1.57-01 이 updatedAt 을 존중하므로 도장까지 옛것 그대로). 3.5 의 휴지통은 «내리기»만
+    //   있고 «다시 못 오게 하는 문지기»가 없었다 — 1.60-01 이 부팅 자동 업로드는 없앴지만 이 버튼·EDI 자동 등록·
+    //   def 업로드는 전부 이 함수를 지난다. 문지기는 쓰기 입구 한 곳(여기)에 둔다(규범 §4-4). 휴지통 노드가 곧
+    //   «되살리지 말라는 표식»이다 — 지우면 표식이 없어져 또 올라온다. 되살리려면 사람이 그 노드에서 옮긴다(개발자).
+    if (await fbIsTrashedShipBayDict(cleanCode)) {
+      console.warn('[베이사전] 휴지통에 있는 배라 되살리지 않습니다 —', cleanCode,
+        '(들어온 출처:', entry?.bayDef?.sourceFile || entry?.source || '미상', ')');
+      return false;
+    }
     const r = ref(db, `ship_bay_dict_v3/${cleanCode}`);
     // 기존 데이터와 병합 (중요한 필드는 기존 보존)
     const snap = await get(r);
@@ -2993,6 +3005,9 @@ export async function fbSetShipBayDictNote(code, note, by = '') {
   if (!cleanCode) return false;
   const text = String(note ?? '').slice(0, 300);   // 쪽지다 — 길면 목록이 읽히지 않는다
   try {
+    // 3.8-01 감사: update 는 없는 키에 {note…} 유령 노드를 만든다 — 목록이 낡은 다른 기기에서 휴지통에 간 배에 비고를 적으면 «0베이» 줄로 되살아난다.
+    const _cur = await get(ref(db, `ship_bay_dict_v3/${cleanCode}`));
+    if (!_cur.exists()) { console.warn('[fbSetShipBayDictNote] 보관소에 없는 코드 — 유령 노드를 만들지 않습니다', cleanCode); return false; }
     await update(ref(db, `ship_bay_dict_v3/${cleanCode}`), {
       note: text,
       noteBy: text ? (by || '') : '',
@@ -3016,6 +3031,9 @@ export async function fbSetShipBayDictSpare(code, on, by = '') {
   const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
   if (!cleanCode) return false;
   try {
+    // 3.8-01 감사: 없는 키에 {spare…} 유령 노드를 만들지 않는다(비고와 같은 이유).
+    const _cur = await get(ref(db, `ship_bay_dict_v3/${cleanCode}`));
+    if (!_cur.exists()) { console.warn('[fbSetShipBayDictSpare] 보관소에 없는 코드 — 유령 노드를 만들지 않습니다', cleanCode); return false; }
     await update(ref(db, `ship_bay_dict_v3/${cleanCode}`), {
       spare: on ? true : null,
       spareAt: on ? Date.now() : null,
@@ -3034,6 +3052,20 @@ export async function fbSetShipBayDictSpare(code, on, by = '') {
  *  ⚠ 되돌릴 수 없는 삭제는 만들지 않는다 — 원본을 `ship_bay_dict_trash/{code}` 에 통째로 옮겨 두고 지운다.
  *    잘못 지웠으면 그 노드에서 그대로 되살릴 수 있다(누가·언제 지웠는지도 같이 남는다).
  */
+/** ★ 3.8-01 — 이 코드가 휴지통에 있는가(되살리지 말라는 표식). 읽기 **오류**(권한 등)는 «없다»로 보지 않고 true 로 막는다 — 조용히 되살리느니 한 번 더 막는 쪽이 싸다.
+ *  (오프라인은 오류가 아니다 — SDK 의 get() 은 연결이 없으면 대기했다가 재연결 때 답하므로 종전 set() 대기와 같은 흐름이다. 감사 실측 2026-09-05.) */
+export async function fbIsTrashedShipBayDict(code) {
+  const cleanCode = String(code || '').replace(/[.#$/[\]\s'"]/g, '_').trim();
+  if (!cleanCode) return false;
+  try {
+    const snap = await get(ref(db, `ship_bay_dict_trash/${cleanCode}/_trashedAt`));
+    return snap.exists();
+  } catch (e) {
+    console.warn('[fbIsTrashedShipBayDict] 휴지통 확인 실패 — 되살리지 않는 쪽으로 막습니다', cleanCode, e);
+    return true;
+  }
+}
+
 export async function fbTrashShipBayDict(code, by = '') {
   if (!gateBayDictWrite('휴지통 이동')) return false;
   const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
@@ -3061,12 +3093,15 @@ export async function fbBatchSaveShipBayDict(entries) {
   //   전 엔트리 updatedAt 을 한꺼번에 갱신했고, 검수사는 그날부터 헛경고 95건을 봤다.
   //   순차면 느리지만 사전은 백 건 규모라 문제가 안 되고, 무엇이 언제 올라갔는지가 남는다.
   //   (무변경 항목은 fbSaveShipBayDict 안에서 이미 걸러져 쓰지 않는다.)
-  let saved = 0, failed = 0;
+  //   3.8-01: 휴지통에 있는 배는 세어서 알린다(«실패»가 아니라 «되살리지 않은 것»이다). 문지기 자체는 fbSaveShipBayDict 에 있다.
+  let saved = 0, failed = 0, trashed = 0;
   for (const [code, entry] of Object.entries(entries)) {
+    const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
+    if (cleanCode && await fbIsTrashedShipBayDict(cleanCode)) { console.info('[베이사전] 휴지통에 있는 배라 되살리지 않음(전체 동기화)', cleanCode); trashed++; continue; }
     const ok = await fbSaveShipBayDict(code, entry);
     if (ok) saved++; else failed++;
   }
-  return { saved, failed };
+  return { saved, failed, trashed };
 }
 
 // ─── M6.94.20: 매트릭스 권한자 명단 (모든 기기 공유) ──────────────────────

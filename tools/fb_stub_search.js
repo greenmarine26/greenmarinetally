@@ -64,6 +64,7 @@ export const fbGetShipStructure = async () => true;
 export const fbGetSimple = async () => null;
 export const fbHoldContainers = async () => true;
 export const fbIsOnline = async () => true;
+export const fbIsTrashedShipBayDict = async () => true;
 export const fbListArchive = async () => true;
 export const fbListTallyPending = async () => true;
 export const fbLogMirMiss = async () => true;

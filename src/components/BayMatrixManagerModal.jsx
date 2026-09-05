@@ -178,7 +178,7 @@ export default function BayMatrixManagerModal({ onClose, voyages = null, shipLib
     let done = 0, failed = [];
     for (const c of codes) { const r = await fbTrashShipBayDict(c, inspector); if (r) { done++; try { delete window.__fbShipBayDict[c]; } catch (e) { /* 창 없음 */ } } else failed.push(c); }
     setBusy(false); setSel(new Set()); setTick(t => t + 1);
-    setMsg(failed.length ? `${done}척 옮김 · 실패 ${failed.join(', ')}` : `${done}척을 휴지통으로 옮겼습니다. 되돌리려면 개발자에게 말씀하세요.`);
+    setMsg(failed.length ? `${done}척 옮김 · 실패 ${failed.join(', ')}` : `${done}척을 휴지통으로 옮겼습니다. 휴지통에 둔 배는 전체 동기화·자동 등록으로 되살아나지 않습니다. 되돌리려면 개발자에게 말씀하세요.`);
   };
 
   // 빌더는 항차를 받도록 만들어져 있다 — 선박만 담은 최소 항차 모양으로 넘긴다.

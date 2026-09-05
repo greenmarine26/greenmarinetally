@@ -27,7 +27,7 @@ import { parseDefSections } from '../defSectionParser.js';
 import { addToUserBayDict, lookupUserBayDict, loadUserBayDict, removeFromUserBayDict } from '../data/userBayDict.js';
 import {
   fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSaveShipBayDict,
-  fbBatchSaveShipBayDict, fbDeleteShipBayDict,
+  fbBatchSaveShipBayDict, fbDeleteShipBayDict, fbIsTrashedShipBayDict,   // 3.8-01: 실패 사유가 휴지통이면 그렇게 말한다
 } from '../firebase.js';
 import { _storage, SK, hatchSpansToRows, hatchRowsToSpans } from '../utils.js';   // 2.99: 해치 줄 커버 폭 ↔ 경계 한 벌
 // M6.94.0: 빈 카고플랜 박스 시각 미리보기 (베이플랜)
@@ -699,7 +699,9 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         _inspector: currentInspector,
       }).then(r => {
         if (r) setSavingMsg(s => s + ' · ☁ 보관소에 저장됨 (폰·엣지·다른 기기에서도 같이 보입니다)');
-        else setSavingMsg(s => s + ' · ⛔ 보관소 저장 실패 — 화면에는 반영되지 않습니다. 인터넷을 확인하고 다시 저장하세요.');
+        else fbIsTrashedShipBayDict(entry.code).then(t => setSavingMsg(s => s + (t   // 3.8-01 감사: 원인이 휴지통인데 «인터넷 확인»이라고 거짓말하던 것
+          ? ` · ⛔ ${entry.code} 는 휴지통에 있는 배라 보관소에 올리지 않았습니다 — 되살리려면 개발자에게 말씀하세요(휴지통에서 꺼내야 저장됩니다).`
+          : ' · ⛔ 보관소 저장 실패 — 화면에는 반영되지 않습니다. 인터넷을 확인하고 다시 저장하세요.')));
         // ★ TallyOne 1.66-01: **약자를 바꿔 저장하면 옛 키를 지운다 — 저장은 「새로 만들기」가 아니라 「옮기기」다.**
         //   검수사 지적 2026-08-13 — *"3E34 = CNFM. CNFM 을 수정해서 만들었는데 3E34 가 없어지지 않는 이유는?"*
         //   종전엔 새 코드로 저장만 하고 옛 키를 그대로 뒀다. 그래서 한 배가 두 키로 갈라졌다
@@ -812,6 +814,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       const res = await fbBatchSaveShipBayDict(payload);
       setBulkSyncMsg(
         `✅ 동기화 완료 — 성공 ${res.saved}개${res.failed ? `, 실패 ${res.failed}개` : ''}` +
+        `${res.trashed ? ` (휴지통에 있는 배 ${res.trashed}척은 되살리지 않았습니다)` : ''}` +   // 3.8-01
         `${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}${autoSkipped ? ` (자동 생성본 ${autoSkipped}개 제외)` : ''}. 폰에서 새로고침하면 보입니다.`
       );
     } catch (err) {

@@ -441,6 +441,14 @@ rm -f "$SMOKE_PP"
 # 3.6-02: 카고플랜 특수화물 표기가 화면마다 갈리지 않는가
 node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
 rm -f "$SMOKE_IS"
+# 3.8-01: 휴지통에 있는 배가 어떤 저장 경로로도 보관소에 되살아나지 않는가(firebase 는 메모리 스텁 — 실제 쓰기 없음)
+SMOKE_BT=$(mktemp /tmp/_bt_XXXXXX.cjs)
+if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_BT" --log-level=error; then
+  node tools/smoke_baytrash.cjs "$SMOKE_BT" || { echo "✗ 베이사전 휴지통 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BT"; exit 1; }
+  rm -f "$SMOKE_BT"
+else
+  echo "✗ 베이사전 휴지통 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BT"; exit 1
+fi
 # 3.7-08: 터미널 앱(CATOS) 실제 자리가 실적으로 얹히는가
 SMOKE_CP=$(mktemp /tmp/_cp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
