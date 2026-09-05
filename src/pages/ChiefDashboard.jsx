@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
+import { Users, Anchor, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
 import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf} from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 호기별 작업 베이   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -136,6 +136,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
+  const [boardFocus, setBoardFocus] = useState(null);   // 3.10: 보드에서 고른 배 — 그 배만 전체(검수사 «선박을 선택하면 그 선박만 전체화면, 닫으면 다시 다»)
   // TallyOne 1.66 — 자료 현황. 검수사 지시: *"빠졌다면 뭐가 어느 선사 자료가 비었음을 알리고."*
   //   선사는 항차 info.carrier 가 비어 있는 일이 많아(2026-08-13 실측) 베이사전에서 보강한다.
   const [bayDictAll, setBayDictAll] = useState(null);
@@ -563,15 +564,31 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //   선박코드 매칭 = info.vsl 대문자(HomePage 908·913행과 동일), ±12h 작업창 가드(twOf).
   //   terminalStatus의 출항 별칭('departed'/'done')은 badgeRule 65행과 같은 판정.
   //   출항 항차는 보드 하단으로 내리고 카드를 흐리게 — 기존 최신순은 그룹 안에서 유지.
+  //  ★ 3.10 (검수사 2026-09-05 «실시간 작업보드는 지금 손봐야 합니다. 작업중인 선박만 보여야 하는데 16척을 다 올려놓고 있습니다»):
+  //    보드에는 **지금 일하는 배만** 올린다 — ①터미널이 «작업 중»이라고 적은 배(utils.isWorkingNow — 작업시작일시가 지났고 안 끝난 것,
+  //    미래 행의 work 는 아님) ②검수원이 앱에 붙어 있는 배(activeByVoyage, 90초) ③최근 30분 안에 앱 완료가 찍힌 배.
+  //    출항·예정 항차는 보드에서 뺀다(예정은 홈 카드·일정이 보여 준다). 실측 2026-09-05 20:59 — 활성 16척 중 DJCT 0223E 한 척만 남는다.
   const boardRows = useMemo(() => {
-    const rows = voyageStats.map(v => {
-      const sched = scheduleOf(v.info, pfMap);
-      const tw = twOf(v.info, twMap, sched);
-      const ts = String(v.info?.terminalStatus || '').trim().toLowerCase();
-      return { ...v, _tw: tw, _departed: ts === 'departed' || ts === 'done' };
-    });
+    const now = Date.now();
+    const lastCompAt = (key) => {
+      let t = 0;
+      for (const m of ['discharge', 'loading']) for (const r of Object.values(voyages?.[key]?.[m]?.completed || {})) if (r && r.at > t) t = r.at;
+      return t;
+    };
+    const rows = voyageStats
+      .filter(v => isWorkingNow(voyages?.[v.key], now)
+        || (activeByVoyage[v.key] || []).length > 0
+        || (now - lastCompAt(v.key)) < 30 * 60000)
+      .map(v => {
+        const sched = scheduleOf(v.info, pfMap);
+        const tw = twOf(v.info, twMap, sched);
+        const ts = String(v.info?.terminalStatus || '').trim().toLowerCase();
+        return { ...v, _tw: tw, _departed: ts === 'departed' || ts === 'done' };
+      });
     return [...rows.filter(r => !r._departed), ...rows.filter(r => r._departed)];
-  }, [voyageStats, pfMap, twMap]);
+  }, [voyageStats, pfMap, twMap, voyages, activeByVoyage]);
+  //  감사: 고른 배가 보드에서 빠지면(작업 끝·출항) 포커스도 풀어 다음에 그 배가 돌아와도 저절로 크게 안 뜬다
+  useEffect(() => { if (boardFocus && !boardRows.some(r => r.key === boardFocus)) setBoardFocus(null); }, [boardRows, boardFocus]);
 
   // ★ V9.44(사용자 확정 2026-08-02): **수석검수사만 진입한다.**
   //   종전엔 isChief 가 '완료 저장' 버튼에만 걸려 있어(V7.94-18) 일반 검수원도 화면에 들어와
@@ -790,26 +807,42 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       </Fold>
 
       {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
-      <Fold id="board" title={`⚓ 실시간 작업 보드 (${voyageStats.length}척)`} open={!!openSecs.board} onToggle={() => toggleSec('board')}>
+      <Fold id="board" title={`⚓ 실시간 작업 보드 (작업 중 ${boardRows.length}척)`} open={!!openSecs.board} onToggle={() => toggleSec('board')}>
       <div className="bg-ink-900 border border-blue-800/60 rounded-btn p-3">
         <div className="flex items-center gap-2 mb-3">
           <Anchor className="w-4 h-4 text-blue-400"/>
-          <div className="text-sm font-bold text-dim-100">실시간 작업 보드 ({voyageStats.length}척)</div>
+          <div className="text-sm font-bold text-dim-100">실시간 작업 보드 (작업 중 {boardRows.length}척{voyageStats.length > boardRows.length ? ` · 등록 ${voyageStats.length}척` : ''})</div>
           <span className="text-2xs text-dim-400">실시간</span>
         </div>
-        {voyageStats.length === 0 ? (
-          <div className="text-xs text-dim-400 text-center py-4">진행 중 항차 없음</div>
+        {boardRows.length === 0 ? (
+          <div className="text-xs text-dim-400 text-center py-4">
+            {hbView.state === 'down'
+              ? `수집기가 멈춰 «작업 중»을 판정할 수 없습니다 — 마지막 자료 ${hbView.ageMin}분 전 (앱을 쓰는 검수원이 있는 배는 그대로 뜹니다)`   /* 감사: 빈 보드가 «없다»로 단정하지 않게 */
+              : '지금 작업 중인 배가 없습니다 — 예정 항차는 홈 카드·일정에서 봅니다'}
+          </div>
         ) : (
-          <div className={`grid gap-2 grid-cols-1 ${voyageStats.length >= 2 ? 'sm:grid-cols-2' : ''} ${voyageStats.length >= 3 ? 'lg:grid-cols-3' : ''}`}>
-            {/* TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
-            {boardRows.map(v => (
-              <LiveShipCard key={v.key} v={v}
-                workers={activeByVoyage[v.key] || []}
-                lastReport={lastReportByVoyage[v.key]}
-                alerts={todayAlertsByVoyage[v.key]}
-                tw={v._tw} departed={v._departed}
-                onOpen={() => onOpenVoyage(v.key)}/>
-            ))}
+          <div className="flex flex-col gap-2 overflow-y-auto" style={{ height: 'calc(100vh - 12rem)', minHeight: '24rem' }}>
+            {/* 3.10: 한 척 = 가로로 긴 한 줄. 보드 높이를 척수(최대 4)로 등분하고 5척부터 아래로 스크롤 — 검수사 «세로로 4등분해서 최대 4척, 2척이면 2등분, 5척이면 스크롤» · «1척이면 전체화면»
+                · 배를 누르면 그 배만 전체(포커스), [닫기]로 돌아온다. 고른 배가 보드에서 빠지면(작업 끝) 포커스도 풀린다.
+                TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
+            {(() => {
+              const focusRow = boardFocus ? boardRows.find(r => r.key === boardFocus) : null;
+              const shown = focusRow ? [focusRow] : boardRows;
+              return shown.map(v => (
+                <div key={v.key} className="shrink-0 min-h-0 overflow-y-auto sm:[flex-basis:max(var(--fb),12rem)]" style={{ '--fb': `calc(${100 / Math.min(shown.length, 4)}% - ${shown.length > 1 ? '0.5rem' : '0px'})` }}>
+                  {/* 감사: sm 이상은 행 하한 12rem(작은 노트북 4척 겹침 방지) · sm 미만(폰, 세로 쌓임)은 자연 높이로 컨테이너가 스크롤 */}
+                  <LiveShipCard v={v}
+                    workers={activeByVoyage[v.key] || []}
+                    lastReport={lastReportByVoyage[v.key]}
+                    alerts={todayAlertsByVoyage[v.key]}
+                    tw={v._tw} departed={v._departed}
+                    cranes={craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])}
+                    focused={!!focusRow} canFocus={boardRows.length > 1}
+                    onFocus={() => setBoardFocus(focusRow ? null : v.key)}
+                    onOpen={() => onOpenVoyage(v.key)}/>
+                </div>
+              ));
+            })()}
           </div>
         )}
       </div>
@@ -2073,7 +2106,7 @@ function InspectorRow({ s }) {
 
 // V7.40: 실시간 작업 보드 카드 — 한 선박의 진행·작업자·최근 보고·경고를 한눈에
 // TallyOne 1.0(L2): tw(터미널 실적, ±12h 창 가드 통과분)·departed(터미널 출항 상태) 추가 — 옵셔널
-function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, departed = false }) {
+export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null }) {   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
   const repIcon = lastReport ? (
@@ -2081,8 +2114,48 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
     lastReport.type === 'conbox' ? '📦' : lastReport.type === 'damage' ? '⚠️' :
     lastReport.type === 'seal_error' ? '🚨' :
     lastReport.type === 'external_pause' ? '⛔' : '📋') : null;  // V9.57(I2): 작업중단 아이콘 추가
+  //  3.10: 카드 = 한 줄. 왼쪽 통계(진행·터미널 대조·검수원·경고) · 오른쪽 호기별 «지금 작업 베이» — 검수사 «좌측에 통계가 우측에 작업화면».
+  const fmtAgo = (t) => { if (!t) return ''; const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 전`; };
+  const cranePanel = (() => {
+    //  검수사 «최대 3갱까지 보이게 — 좌측 통계, 1 2 3호기, 그 밑에 다른 선박» → 호기는 옆으로 최대 3칸(그 이상은 +N).
+    const shown = cranes.slice(0, 3), more = cranes.length - shown.length;
+    return (
+      <div className="sm:w-[60%] sm:border-l sm:border-line sm:pl-3 flex flex-col gap-1 min-h-0">
+        <div className="text-2xs text-dim-400 font-bold">호기별 작업 베이{more > 0 ? ` (+${more}호기 더)` : ''}</div>
+        {shown.length === 0 ? (
+          <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 뜹니다</div>
+        ) : (
+          <div className={`grid gap-2 flex-1 min-h-0 ${shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {shown.map(c => (
+              <div key={c.no} className="flex flex-col items-center justify-center gap-0.5 bg-ink-900/60 border border-line rounded-btn px-2 py-2 mono text-center min-w-0">
+                <span className="text-base font-black text-cyan-200">{c.no}호기</span>
+                <span className={`text-sm font-bold truncate max-w-full ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || '미등록'}</span>
+                {c.qc ? (
+                  <>
+                    <span className="text-lg font-black text-dim-200">양 {c.dis} · 선 {c.lod}</span>
+                    {c.bay ? <span className="text-sm text-blue-200">{c.src === 'live' ? '앱 ' : ''}BAY {c.bay}{c.tier ? ` · ${c.tier}단` : ''}</span> : <span className="text-2xs text-dim-500">자리 없음(동방)</span>}
+                  </>
+                ) : (
+                  <>
+                    <span className={`text-2xl font-black leading-tight ${c.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}`}>{c.bay ? `BAY ${c.bay}` : '베이 미상'}</span>
+                    {(c.row || c.tier) && <span className="text-sm text-dim-300">{c.row || '--'}-{c.tier || '--'}</span>}
+                    <span className="text-2xs text-dim-400">{c.mode === 'loading' ? '선적' : c.mode === 'discharge' ? '양하' : ''} {c.done}대</span>
+                    <span className={`text-2xs ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  })();
+  //  3.10: 카드를 누르면 **그 배만 전체**(포커스) — 항차 화면은 오른쪽 위 [항차 열기 →] 로 간다. 배가 하나뿐이면 누르는 것이 곧 항차 열기다.
+  const clickCard = () => { if (canFocus && onFocus) onFocus(); else onOpen(); };
   return (
-    <button onClick={onOpen} className={`w-full text-left bg-ink-800/40 border border-line rounded-pill p-2.5 hover:bg-ink-750/70 flex flex-col gap-1.5 ${departed ? 'opacity-60' : ''}`}>
+    <div role="button" tabIndex={0} onClick={clickCard} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); clickCard(); } }}
+      className={`w-full h-full text-left bg-ink-800/40 border rounded-pill p-2.5 hover:bg-ink-750/70 flex flex-col sm:flex-row gap-2 cursor-pointer ${focused ? 'border-cyan-500/70' : 'border-line'} ${departed ? 'opacity-60' : ''}`}>
+      <div className="flex flex-col gap-1.5 sm:w-[40%] min-w-0 min-h-0">
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <div className="font-bold text-sm text-dim-100 truncate flex items-center gap-1.5">
@@ -2100,7 +2173,10 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
             {v.info.carrier ? ` · ${v.info.carrier}` : ''}
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-dim-500 shrink-0"/>
+        <div className="flex items-center gap-1 shrink-0">
+          {focused && <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold">✕ 닫기</button>}
+          <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="text-2xs bg-blue-900/60 text-blue-200 px-2 py-0.5 rounded font-bold">항차 열기 →</button>
+        </div>
       </div>
       <div className="space-y-1.5 text-2xs mono">
         {v.dis.total > 0 && <MiniBar label="양하" color="blue" stats={v.dis}/>}
@@ -2155,7 +2231,9 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
           <span className="text-dim-400 mono">{repIcon} {lastReport.equip || ''} {timeAgo(lastReport.ts)}</span>
         )}
       </div>
-    </button>
+      </div>
+      {cranePanel}
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.9';
-const NOTE = 'X-RAY 세관봉인 번호가 터미널 자료에서 자동으로 채워지고, 봉인자는 미르에게 등록한 그 조 호기 근무자로 적힙니다 — 등록 전에는 빈칸(수기)';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.10';
+const NOTE = '실시간 작업 보드가 지금 일하는 배만 한 줄씩 보여 줍니다 — 오른쪽에 호기별 작업 베이';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

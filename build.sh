@@ -454,6 +454,7 @@ SMOKE_CP=$(mktemp /tmp/_cp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
   node tools/smoke_catospos.cjs "$SMOKE_CP" || { echo "✗ CATOS 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
+  node tools/smoke_craneboard.cjs "$SMOKE_CP" || { echo "✗ 작업 보드 호기별 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.10
   rm -f "$SMOKE_CP"
 else
   echo "✗ CATOS 자리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
@@ -579,6 +580,20 @@ fi
     else
       cp "$SMOKE_BM.fbbak" src/firebase.js; rm -f "$SMOKE_BM.fbbak"
       echo "✗ 베이매트릭스 관리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BM"; exit 1
+    fi
+    #  3.10: **실시간 작업 보드 카드** — DJCT 실데이터로 한 척을 그려 «왼쪽 통계 · 오른쪽 호기별 작업 베이(1호기 BAY 20 · 2호기 BAY 4)»·포커스/닫기/항차 열기를 실제로 눌러 본다.
+    SMOKE_LB=$(mktemp /tmp/_smokelb_XXXXXX.js)
+    cp src/firebase.js "$SMOKE_LB.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+    if npx esbuild tools/smoke_liveboard.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+         --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+         --external:fs --external:path --external:url \
+         --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_LB"; then
+      cp "$SMOKE_LB.fbbak" src/firebase.js && rm -f "$SMOKE_LB.fbbak"
+      node tools/smoke_liveboard.cjs "$SMOKE_LB" || { echo "✗ 실시간 작업 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
+      rm -f "$SMOKE_LB"
+    else
+      cp "$SMOKE_LB.fbbak" src/firebase.js; rm -f "$SMOKE_LB.fbbak"
+      echo "✗ 실시간 작업 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1
     fi
     #  2.77: **밀린 버그 셋** — X-RAY MRN 입력 · 복구 코드 안내 · 컨 상세 두 값.
     SMOKE_PD="tools/_smokepd_tmp.cjs"
