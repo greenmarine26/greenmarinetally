@@ -7,7 +7,10 @@ import { craneBoardOf } from '../src/utils.js';
 import FX from './fixtures/craneboard_djct.json';
 
 window.__calls = [];
-const voyage = { info: { ...FX.info, vsl: 'DJCT', voy_d: '0223E', voy_l: '0224W' }, discharge: { termWork: FX.termWork, completed: FX.completed }, loading: {} };
+//  3.11: 베이 그림·별첨은 실제 항차 자료(ediContainers·records·completed)와 베이사전(ship_bay_dict_v3/DJCT 사본)이 있어야 그려진다.
+window.__fbShipBayDict = { DJCT: FX.bayDict };
+const voyage = { info: { ...FX.info, vsl: 'DJCT', voy_d: '0223E', voy_l: '0224W' },
+  discharge: { termWork: FX.termWork, completed: FX.completed, ediContainers: FX.ediContainers, records: FX.records }, loading: {} };
 const dis = { total: 251, done: Object.keys(FX.completed).length, pct: 0 };
 const loa = { total: 274, done: 0, pct: 0 };
 const v = { key: 'DJCT_0223E', info: voyage.info, dis, loa, totalDone: dis.done, totalAll: 525 };
@@ -18,9 +21,11 @@ function App() {
   window.__setFocused = setFocused;
   return React.createElement(LiveShipCard, {
     v, workers: [], lastReport: null, alerts: null, tw, departed: false, cranes,
+    voyage, rows: 1,
     focused, canFocus: true,
     onFocus: () => { window.__calls.push({ fn: 'focus' }); setFocused((f) => !f); },
     onOpen: () => { window.__calls.push({ fn: 'open' }); },
+    onOpenContainer: (c, mode) => { window.__calls.push({ fn: 'detail', cn: c && c.cn, mode }); },
   });
 }
 createRoot(document.getElementById('root')).render(React.createElement(App));

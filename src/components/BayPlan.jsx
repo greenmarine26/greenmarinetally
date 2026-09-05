@@ -37,7 +37,10 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   pendingSwap, onCancelSwap,   // TallyOne 2.89: 컨 맞교환 상대 고르기(배너만 — 셀 가로채기는 VoyagePage onOpenContainer)
   // 2.94-01: enableSelection·onBatchToStorage 제거 — 「보관함으로」가 사라져 호출부가 없다.
   //   ⚠ 아래 selectionMode/selectedCns 배선은 켜는 길이 없어 지금은 닿지 않는다(다음 판에서 정리 대상).
-  preGoneInfo = null   // 1.69-06: 전항 양하 예정(평택 도착 전 하선) — {ports:Set, list, origin} 또는 null
+  preGoneInfo = null,   // 1.69-06: 전항 양하 예정(평택 도착 전 하선) — {ports:Set, list, origin} 또는 null
+  //  ★ 3.11: 수석 실시간 작업 보드 — **베이 한 장만, 도구 없이** 그린다(검수사 «보이는 베이를 원한 것»).
+  //    onlyBay = 그 호기가 지금 작업 중인 베이 번호(짝이면 짝 장을 고른다) · compactZoom = 칸 배율(줄 높이에 맞춰 밖에서 정한다).
+  onlyBay = null, compactZoom = null
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
@@ -581,6 +584,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   }, []);
 
   if (containers.length === 0) {
+    if (onlyBay != null) return <div className="text-2xs text-dim-500 text-center py-3">자료 없음</div>;   // 3.11: 보드 호기 칸은 한 줄로
     return (
       <div className="bg-ink-900 border border-line rounded-pill p-8 text-center text-dim-400 text-sm">
         베이 데이터 없음 — 자료 탭에서 EDI/ASC 업로드
@@ -597,6 +601,37 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   }
 
   const curPage = pages[pageIdx] || pages[0];
+
+  //  ★ 3.11: 보드용 한 장 — 위 훅은 전부 돈 뒤다(조기 반환은 훅 뒤에만). 그 베이가 든 장이 없으면 빈 칸을 남기고 말한다.
+  if (onlyBay != null) {
+    //  감사: 접속 검수원의 workBay 는 «19-21»(구간)·«미지정» 일 수 있다 — 구간은 가운데 베이(20), 숫자가 없으면 «베이 미상»
+    const nums = (String(onlyBay).match(/\d+/g) || []).map(Number);
+    if (!nums.length) return <div className="text-2xs text-dim-500 text-center py-3">베이 미상</div>;
+    const want = nums.length >= 2 ? Math.round((nums[0] + nums[nums.length - 1]) / 2) : nums[0];
+    //  ★ 검수사 «밑에까지 늘려서 베이 3 (4)5 11 (12)13을 다 보여주십시요» — 크레인은 해치 하나(40ft 베이 E 와 앞뒤 20ft E-1·E+1)를 일한다.
+    //    실측 DJCT 0223E 카토스 실적 — 1호기 27/29 → 19/20/21 → 13, 2호기 12/11/13 → 4. 그래서 그 베이가 든 해치의 장을 전부(베이 순) 세로로 쌓는다.
+    //    짝은 «짝수+뒤홀수»(규범 §11) — 홀수 b 가 어느 장의 oddBay 면 E=b-1, 홀로 서면(앞홀수) E=b+1.
+    const has = (p, b) => [p.evenBay, p.oddBay].some((x) => x != null && parseInt(x, 10) === b);
+    let E = want;
+    if (want % 2 === 1) E = pages.some((p) => p.oddBay != null && parseInt(p.oddBay, 10) === want && p.evenBay != null) ? want - 1 : want + 1;
+    const hatch = [E - 1, E, E + 1];
+    const pgs = pages.filter((p) => hatch.some((b) => has(p, b)));
+    const pgList = pgs.length ? pgs : pages.filter((p) => has(p, want));
+    if (!pgList.length) return <div className="text-2xs text-dim-500 text-center py-4">베이 {want} 장이 사전에 없습니다</div>;
+    const z = compactZoom || zoom;
+    const cw = Math.round(baseW * z), ch = Math.round(baseH * z);
+    return (
+      <div className="flex flex-col gap-1">
+        {pgList.map((pg) => (
+          <BayPage key={pg.title} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
+            isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
+            isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
+            globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
+            pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -1049,7 +1084,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null,  // V9.57(I12): getCellBg 죽은 체인 제거
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null, compactCells = false,   // 3.11: 보드는 칸이 커도 끝4자리 꼴  // V9.57(I12): getCellBg 죽은 체인 제거
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1590,7 +1625,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     // V7.99-14: 셀이 좁아 전체 정보(5줄)가 안 들어가면 끝4자리 컴팩트 모드.
     //   기준은 줌 값이 아니라 실제 셀 폭(cellW) — baseW와 무관하게 일관 동작.
     //   monospace 4자(+여백) ≈ 폰트*2.6 이므로 폭에서 역산, 6~13px로 클램프.
-    const compactCell = cellW < 42;
+    const compactCell = compactCells || cellW < 42;   // 3.11: 보드(compactCells)는 칸 크기와 무관하게 끝4자리
     const compactFont = compactCell ? Math.max(6, Math.min(13, Math.floor((cellW - 4) / 2.6))) : fontSize;
     const ptk = isPtk(c);
     const fe = c.fe || 'F';

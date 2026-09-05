@@ -4,7 +4,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 호기별 작업 베이   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, legendLiveOf, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -23,6 +23,8 @@ import { buildReadiness } from '../dataReadiness.js';   // 1.66: 자료 다 왔�
 import { fbSubscribeShipBayDict } from '../firebase.js';   // 1.66: 선사를 베이사전에서 보강
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
+import BayPlan from '../components/BayPlan.jsx';   // 3.11: 실시간 작업 보드 — 호기가 지금 작업 중인 베이 한 장(onlyBay)
+import ContainerDetailModal from '../components/ContainerDetailModal.jsx';   // 3.11: 보드 그림의 칸을 누르면 컨 상세(베이플랜과 같은 모달 — 검수사 «베이플랜과 동일하게»)
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
@@ -136,7 +138,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
-  const [boardFocus, setBoardFocus] = useState(null);   // 3.10: 보드에서 고른 배 — 그 배만 전체(검수사 «선박을 선택하면 그 선박만 전체화면, 닫으면 다시 다»)
+  const [boardFocus, setBoardFocus] = useState(null);
+  const [boardDetail, setBoardDetail] = useState(null);   // 3.11: 보드 그림에서 누른 컨 {key, mode, c}   // 3.10: 보드에서 고른 배 — 그 배만 전체(검수사 «선박을 선택하면 그 선박만 전체화면, 닫으면 다시 다»)
   // TallyOne 1.66 — 자료 현황. 검수사 지시: *"빠졌다면 뭐가 어느 선사 자료가 비었음을 알리고."*
   //   선사는 항차 info.carrier 가 비어 있는 일이 많아(2026-08-13 실측) 베이사전에서 보강한다.
   const [bayDictAll, setBayDictAll] = useState(null);
@@ -589,6 +592,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   }, [voyageStats, pfMap, twMap, voyages, activeByVoyage]);
   //  감사: 고른 배가 보드에서 빠지면(작업 끝·출항) 포커스도 풀어 다음에 그 배가 돌아와도 저절로 크게 안 뜬다
   useEffect(() => { if (boardFocus && !boardRows.some(r => r.key === boardFocus)) setBoardFocus(null); }, [boardRows, boardFocus]);
+  //  3.11 감사: 100vw 는 세로 스크롤바를 포함한다(윈도 PC 17px) — 전폭 보드가 가로 스크롤을 만들지 않게 스크롤바 폭을 재 둔다
+  useEffect(() => {
+    const set = () => { try { document.documentElement.style.setProperty('--sbw', (window.innerWidth - document.documentElement.clientWidth) + 'px'); } catch (e) { console.warn('[작업 보드] 스크롤바 폭 측정 실패', e); } };
+    set(); window.addEventListener('resize', set); return () => window.removeEventListener('resize', set);
+  }, []);
 
   // ★ V9.44(사용자 확정 2026-08-02): **수석검수사만 진입한다.**
   //   종전엔 isChief 가 '완료 저장' 버튼에만 걸려 있어(V7.94-18) 일반 검수원도 화면에 들어와
@@ -807,9 +815,26 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       </Fold>
 
       {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
+      {/* 3.11: 보드 그림의 칸 → 컨 상세(VoyagePage renderDetail 과 같은 모양 — 같은 모드 전체 컨 병합, 완료·X-RAY·봉인) */}
+      {boardDetail && (() => {
+        const vy = voyages?.[boardDetail.key]; const sec = vy?.[boardDetail.mode] || {};
+        const ediMap = sec.ediContainers || {}, recMap = sec.records || {}, compMap = sec.completed || {};
+        const all = [...new Set([...Object.keys(ediMap), ...Object.keys(recMap)])].map(cn => ({ ...(ediMap[cn] || {}), ...Object.fromEntries(Object.entries(recMap[cn] || {}).filter(([, vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null }));
+        const dc = all.find(x => x.cn === boardDetail.c?.cn) || boardDetail.c;
+        if (!dc?.cn) return null;
+        return (
+          <ContainerDetailModal variant="modal" c={dc}
+            workBay={dc.bay || dc.bay_orig || recMap[dc.cn]?.bay_orig || null}
+            workTier={(() => { const t = parseInt(dc.tier || dc.tier_planned || recMap[dc.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
+            comp={compMap[dc.cn]} isXray={boardDetail.mode === 'discharge' && !!(sec.xrayList?.[dc.cn])} xraySeal={sec.xraySeals?.[dc.cn] || null}
+            mode={boardDetail.mode} voyageKey={boardDetail.key} voyageInfo={vy?.info} inspector={inspector} sealMode={null}
+            onClose={() => setBoardDetail(null)} allContainers={all} records={recMap} shiftCns={null} />
+        );
+      })()}
       <Fold id="board" title={`⚓ 실시간 작업 보드 (작업 중 ${boardRows.length}척)`} open={!!openSecs.board} onToggle={() => toggleSec('board')}>
-      <div className="bg-ink-900 border border-blue-800/60 rounded-btn p-3">
-        <div className="flex items-center gap-2 mb-3">
+      {/* 3.11: 보드는 화면 폭 전체(대시보드 max-w-3xl 밖으로) — 검수사 «좌우 여백을 최소화 하여 충분히 크게» */}
+      <div className="bg-ink-900 border border-blue-800/60 rounded-btn p-1" style={{ width: 'calc(100vw - var(--sbw, 0px) - 8px)', marginLeft: 'calc(50% - 50vw + var(--sbw, 0px) / 2 + 4px)' }}>
+        <div className="flex items-center gap-2 mb-1 px-1">
           <Anchor className="w-4 h-4 text-blue-400"/>
           <div className="text-sm font-bold text-dim-100">실시간 작업 보드 (작업 중 {boardRows.length}척{voyageStats.length > boardRows.length ? ` · 등록 ${voyageStats.length}척` : ''})</div>
           <span className="text-2xs text-dim-400">실시간</span>
@@ -821,7 +846,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               : '지금 작업 중인 배가 없습니다 — 예정 항차는 홈 카드·일정에서 봅니다'}
           </div>
         ) : (
-          <div className="flex flex-col gap-2 overflow-y-auto" style={{ height: 'calc(100vh - 12rem)', minHeight: '24rem' }}>
+          <div className="flex flex-col gap-1 overflow-y-auto" style={{ height: 'calc(100vh - 9rem)', minHeight: '24rem' }}>
             {/* 3.10: 한 척 = 가로로 긴 한 줄. 보드 높이를 척수(최대 4)로 등분하고 5척부터 아래로 스크롤 — 검수사 «세로로 4등분해서 최대 4척, 2척이면 2등분, 5척이면 스크롤» · «1척이면 전체화면»
                 · 배를 누르면 그 배만 전체(포커스), [닫기]로 돌아온다. 고른 배가 보드에서 빠지면(작업 끝) 포커스도 풀린다.
                 TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
@@ -829,7 +854,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               const focusRow = boardFocus ? boardRows.find(r => r.key === boardFocus) : null;
               const shown = focusRow ? [focusRow] : boardRows;
               return shown.map(v => (
-                <div key={v.key} className="shrink-0 min-h-0 overflow-y-auto sm:[flex-basis:max(var(--fb),12rem)]" style={{ '--fb': `calc(${100 / Math.min(shown.length, 4)}% - ${shown.length > 1 ? '0.5rem' : '0px'})` }}>
+                <div key={v.key} className="shrink-0 min-h-0 overflow-y-auto sm:[flex-basis:max(var(--fb),12rem)]" style={{ '--fb': `calc(${100 / Math.min(shown.length, 4)}% - ${shown.length > 1 ? '0.25rem' : '0px'})` }}>
                   {/* 감사: sm 이상은 행 하한 12rem(작은 노트북 4척 겹침 방지) · sm 미만(폰, 세로 쌓임)은 자연 높이로 컨테이너가 스크롤 */}
                   <LiveShipCard v={v}
                     workers={activeByVoyage[v.key] || []}
@@ -837,6 +862,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                     alerts={todayAlertsByVoyage[v.key]}
                     tw={v._tw} departed={v._departed}
                     cranes={craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])}
+                    voyage={voyages?.[v.key]} rows={shown.length}
+                    onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
                     focused={!!focusRow} canFocus={boardRows.length > 1}
                     onFocus={() => setBoardFocus(focusRow ? null : v.key)}
                     onOpen={() => onOpenVoyage(v.key)}/>
@@ -2106,7 +2133,52 @@ function InspectorRow({ s }) {
 
 // V7.40: 실시간 작업 보드 카드 — 한 선박의 진행·작업자·최근 보고·경고를 한눈에
 // TallyOne 1.0(L2): tw(터미널 실적, ±12h 창 가드 통과분)·departed(터미널 출항 상태) 추가 — 옵셔널
-export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null }) {   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
+//  3.11: 별첨 칸 — 완료(오른맞춤)·/전체(왼맞춤) 두 td 라 «/» 가 한 세로줄(검수사 «/ 가 수직으로 같아야 합니다»). 모듈 수준(렌더마다 새 타입이면 td 가 전부 재마운트).
+function LegendCell({ e }) {
+  if (!e || !e.n) return <><td className="pl-1 pr-0 text-right text-dim-600">-</td><td className="pl-0 pr-1"></td></>;
+  return <><td className="pl-1 pr-0 text-right whitespace-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}><span className={e.done === e.n ? 'text-emerald-300 font-bold' : e.done ? 'text-dim-100' : 'text-dim-500'}>{e.done}</span></td><td className="pl-0 pr-1 text-left text-dim-500 whitespace-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>/{e.n}</td></>;
+}
+//  3.11: 그림을 칸 **폭**에 맞춰 자동 축소 — 검수사 «베이그림은 너무 큽니다. 화면을 벗어남» · «전체화면으로 놓으면 베이가 안보입니다».
+//    폭만 재서 배율을 정하고 높이는 배율만큼 줄어든 자연 높이로 둔다(높이를 flex 에 맡기면 0 이 돼 그림이 통째로 잘린다 — 실측). 키우지는 않는다.
+//    검수사 «스크롤 없는상태 에서 최적의 화면을» — 폭뿐 아니라 **줄 높이(maxH)** 에도 맞춘다(둘 중 작은 배율). 그래서 해치 두 장을 쌓아도 한 줄 안에 든다.
+//    검수사 «밑에 여백이 너무 많습니다» — fill 이면(가로 배치 = 줄 높이가 정해진 PC) 칸이 실제로 받은 높이(box.clientHeight)를 재서 그 높이까지 꽉 채운다.
+//    fill 이 아니면(폰 세로 쌓임 = 높이가 안 정해짐) 폭 + maxH 추정으로 맞추고 높이를 명시한다(높이를 flex 에 맡기면 0 이 돼 통째로 잘린다 — 실측). 키우지는 않는다는 말은 틀렸다 — 칸에 맞춰 키운다(상한 2.5).
+//    ★ fill 의 높이는 flex 가 준 칸 높이가 아니라 **카드(줄) 바닥까지 남은 거리**로 잰다(boundsRef) — flex 사슬은 어디 하나만 auto 여도 칸 높이 = 내용 높이가 돼
+//      배율이 1 에 묶인다(검수사 «저와 보는 관점이 틀리신가 봅니다» — 큰 화면에서 밑·오른쪽이 비던 원인).
+function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null }) {
+  const boxRef = React.useRef(null); const innerRef = React.useRef(null);
+  const [fit, setFit] = useState({ s: 1, h: null, x: 0 });
+  useEffect(() => {
+    const box = boxRef.current, inner = innerRef.current; if (!box || !inner) return undefined;
+    const measure = () => {
+      const bw = box.clientWidth, iw = inner.scrollWidth, ih = inner.scrollHeight;
+      if (!bw || !iw || !ih) return;
+      let bh = 0;
+      if (fill) {
+        const bounds = boundsRef && boundsRef.current;
+        if (bounds) { const r = box.getBoundingClientRect(), c = bounds.getBoundingClientRect(); bh = Math.floor(c.bottom - r.top) - 6; }
+        if (!(bh > 0)) bh = box.clientHeight;
+      }
+      const mh = fill ? bh : (typeof maxH === 'function' ? maxH() : maxH);
+      //  검수사 «지금이 아까보다 밑과 우측에 여백이 더 생겼습니다» — 배율을 1 로 막아 두면 큰 화면에서 그림이 칸보다 작아 양쪽이 빈다. 칸에 맞춰 키우기도 한다(상한 2.5 — DOM 변환이라 글자는 또렷하다).
+      //  검수사 «베이를 중앙정렬 해주시고 1.05배를 해주세요» · «지금의 1.05배 더요» — 맞춘 배율에 1.157625(1.05³) 를 곱하고, 남는 폭의 절반만큼 오른쪽으로 밀어 가운데 둔다
+      const s = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5) * 1.157625; const h = Math.ceil(ih * s);   // 1.05³ — 검수사 «지금의 1.05배 더요» · «한번더 1.05 더요»
+      const x = Math.max(0, Math.floor((bw - iw * s) / 2));
+      setFit((f) => (Math.abs(f.s - s) < 0.005 && f.h === h && f.x === x) ? f : { s, h, x });
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro) { ro.observe(box); ro.observe(inner); }
+    window.addEventListener('resize', measure);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [children, maxH, fill]);
+  return (
+    <div ref={boxRef} className={`overflow-hidden w-full ${className}`} style={fit.h != null ? { height: fit.h } : undefined}>
+      <div ref={innerRef} style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
+    </div>
+  );
+}
+export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
   const repIcon = lastReport ? (
@@ -2116,32 +2188,73 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
     lastReport.type === 'external_pause' ? '⛔' : '📋') : null;  // V9.57(I2): 작업중단 아이콘 추가
   //  3.10: 카드 = 한 줄. 왼쪽 통계(진행·터미널 대조·검수원·경고) · 오른쪽 호기별 «지금 작업 베이» — 검수사 «좌측에 통계가 우측에 작업화면».
   const fmtAgo = (t) => { if (!t) return ''; const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 전`; };
+  //  ★ 3.11: 오른쪽 = 호기마다 **지금 작업 중인 베이 그림 한 장**(베이플랜과 같은 BayPlan, onlyBay) — 검수사 «앞에 베이를 원한게 아니고 보이는 베이를 원한것».
+  //    컨 목록은 ChiefBayEdit 와 같은 길(fullEdiMapOf + records 실적 자리 — 3.7-08 카토스 자리가 여기 들어 있다). 완료 초록은 completed 한 벌.
+  const modeOfBoard = cranes.find(c => c.mode)?.mode || (v.dis.total > 0 ? 'discharge' : 'loading');
+  //  감사(성능): voyages 구독은 어느 항차든 바뀌면 통째로 새 객체라 객체 참조를 deps 로 두면 틱마다 raw BAPLIE 를 다시 파싱하고 BayPlan 전부가 다시 돈다.
+  //  ⇒ ediMap 은 원시값(uploadedAt·sizeBytes·컨 수·맞교환 수)으로, 실적 자리는 서명 문자열(내용이 같으면 같은 배열)로 붙잡는다.
+  const ediMaps = useMemo(() => {
+    const out = {};
+    for (const mode of ['discharge', 'loading']) { const sec = voyage?.[mode]; out[mode] = sec ? applySwapFix(fullEdiMapOf(sec), swapFixList(voyage)) : {}; }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, Object.keys(voyage?.discharge?.ediContainers || {}).length,
+      voyage?.loading?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.sizeBytes, Object.keys(voyage?.loading?.ediContainers || {}).length, swapFixList(voyage).length]);
+  const recSig = ['discharge', 'loading'].map((mode) => { const r = voyage?.[mode]?.records || {}; let sg = mode; for (const cn of Object.keys(r)) { const x = r[cn] || {}; if (x.bay_actual != null || x.planTaken) sg += `|${cn}:${x.bay_actual}-${x.row_actual}-${x.tier_actual}${x.planTaken ? 'T' : ''}`; } return sg; }).join('#');
+  const boardContainers = useMemo(() => {
+    const out = {};
+    const pad2 = (x) => String(x ?? '').padStart(2, '0');
+    for (const mode of ['discharge', 'loading']) {
+      const sec = voyage?.[mode]; if (!sec) { out[mode] = []; continue; }
+      const recAll = sec.records || {};
+      const recMap = {}; for (const cn of ownDirCns(recAll, mode)) recMap[cn] = recAll[cn];   // 감사: 반대 방향 오염 기록은 베이플랜 탭처럼 거른다
+      out[mode] = Object.values(ediMaps[mode]).map((e) => {
+        const rec = recMap[e.cn] || {};
+        const gone = rec.bay_actual === '__STG__' || !!rec.planTaken;   // 감사: 임시창고·자리를 내준 컨은 탭처럼 격자에서 뺀다(한 칸 두 대 방지)
+        const hasA = !gone && rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null && !String(rec.bay_actual).startsWith('__');
+        return { ...e, _inList: !!recMap[e.cn] || !!e._inList,
+          bay: gone ? '' : pad2(hasA ? rec.bay_actual : e.bay), row: gone ? '' : pad2(hasA ? rec.row_actual : e.row), tier: gone ? '' : pad2(hasA ? rec.tier_actual : e.tier) };
+      });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ediMaps, recSig]);
+  //  그림에 줄 수 있는 높이 — 보드 높이(100vh − 9rem)를 줄 수(최대 4)로 나누고 카드·호기 머리(≈ 60px)를 뺀다. 포커스(그 배만)면 한 줄 전부.
+  const wide = typeof window !== 'undefined' && window.innerWidth >= 640;   // sm 이상 = 가로 배치(줄 높이가 정해짐) → 칸 높이를 재서 채운다
+  const fitMaxH = React.useCallback(() => {
+    const boardH = Math.max(320, window.innerHeight - 144);
+    const perRow = boardH / Math.max(1, Math.min(focused ? 1 : rows, 4));
+    return Math.max(120, Math.floor(perRow) - 60);
+  }, [rows, focused]);
+  const cardRef = React.useRef(null);   // 3.11: FitBox 가 «카드 바닥까지 남은 높이»를 재는 기준(cranePanel 보다 먼저 선언)
   const cranePanel = (() => {
     //  검수사 «최대 3갱까지 보이게 — 좌측 통계, 1 2 3호기, 그 밑에 다른 선박» → 호기는 옆으로 최대 3칸(그 이상은 +N).
     const shown = cranes.slice(0, 3), more = cranes.length - shown.length;
     return (
-      <div className="sm:w-[60%] sm:border-l sm:border-line sm:pl-3 flex flex-col gap-1 min-h-0">
+      <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">   {/* 2갱이면 75/2 · 3갱이면 75/3 (grid-cols-N) · PC 는 줄 높이를 다 쓴다 */}
         <div className="text-2xs text-dim-400 font-bold">호기별 작업 베이{more > 0 ? ` (+${more}호기 더)` : ''}</div>
         {shown.length === 0 ? (
-          <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 뜹니다</div>
+          <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 그 베이 그림이 뜹니다</div>
         ) : (
-          <div className={`grid gap-2 flex-1 min-h-0 ${shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {shown.map(c => (
-              <div key={c.no} className="flex flex-col items-center justify-center gap-0.5 bg-ink-900/60 border border-line rounded-btn px-2 py-2 mono text-center min-w-0">
-                <span className="text-base font-black text-cyan-200">{c.no}호기</span>
-                <span className={`text-sm font-bold truncate max-w-full ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || '미등록'}</span>
-                {c.qc ? (
-                  <>
-                    <span className="text-lg font-black text-dim-200">양 {c.dis} · 선 {c.lod}</span>
-                    {c.bay ? <span className="text-sm text-blue-200">{c.src === 'live' ? '앱 ' : ''}BAY {c.bay}{c.tier ? ` · ${c.tier}단` : ''}</span> : <span className="text-2xs text-dim-500">자리 없음(동방)</span>}
-                  </>
+              <div key={c.no} className="flex flex-col gap-0.5 bg-ink-900/60 border border-line rounded-btn px-0.5 py-1 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
+                  <span className="text-sm font-black text-cyan-200">{c.no}호기</span>
+                  <span className={`font-bold ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || '미등록'}</span>
+                  <span className={c.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{c.mode === 'loading' ? '선적' : '양하'} {c.done}대</span>
+                  {c.qc ? <span className="text-dim-400">양 {c.dis} · 선 {c.lod} · 자리 없음(동방)</span> : (c.row || c.tier) ? <span className="text-dim-400">{c.bay ? `베이 ${c.bay}` : ''} {c.row || '--'}-{c.tier || '--'}</span> : null}
+                  <span className={`ml-auto ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
+                </div>
+                {c.bay && /\d/.test(String(c.bay)) && voyage ? (
+                  <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH}>
+                    <BayPlan containers={boardContainers[c.mode || modeOfBoard] || []} compMap={voyage?.[c.mode || modeOfBoard]?.completed || {}}
+                      xrayMap={voyage?.[c.mode || modeOfBoard]?.xrayList || {}} mode={c.mode || modeOfBoard}
+                      shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
+                      onOpenContainer={(cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, c.mode || modeOfBoard); else onOpen(); }} onlyBay={c.bay} compactZoom={0.36} />
+                  </FitBox>
                 ) : (
-                  <>
-                    <span className={`text-2xl font-black leading-tight ${c.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}`}>{c.bay ? `BAY ${c.bay}` : '베이 미상'}</span>
-                    {(c.row || c.tier) && <span className="text-sm text-dim-300">{c.row || '--'}-{c.tier || '--'}</span>}
-                    <span className="text-2xs text-dim-400">{c.mode === 'loading' ? '선적' : c.mode === 'discharge' ? '양하' : ''} {c.done}대</span>
-                    <span className={`text-2xs ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
-                  </>
+                  <div className="text-2xs text-dim-500 py-3 text-center">{c.qc ? '동방 배는 컨별 자리가 안 와서 그림이 없습니다' : '베이 미상'}</div>
                 )}
               </div>
             ))}
@@ -2153,9 +2266,9 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
   //  3.10: 카드를 누르면 **그 배만 전체**(포커스) — 항차 화면은 오른쪽 위 [항차 열기 →] 로 간다. 배가 하나뿐이면 누르는 것이 곧 항차 열기다.
   const clickCard = () => { if (canFocus && onFocus) onFocus(); else onOpen(); };
   return (
-    <div role="button" tabIndex={0} onClick={clickCard} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); clickCard(); } }}
-      className={`w-full h-full text-left bg-ink-800/40 border rounded-pill p-2.5 hover:bg-ink-750/70 flex flex-col sm:flex-row gap-2 cursor-pointer ${focused ? 'border-cyan-500/70' : 'border-line'} ${departed ? 'opacity-60' : ''}`}>
-      <div className="flex flex-col gap-1.5 sm:w-[40%] min-w-0 min-h-0">
+    <div ref={cardRef} role="button" tabIndex={0} onClick={clickCard} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); clickCard(); } }}
+      className={`w-full h-full text-left bg-ink-800/40 border rounded-btn p-1 hover:bg-ink-750/70 flex flex-col sm:flex-row gap-1 cursor-pointer ${focused ? 'border-cyan-500/70' : 'border-line'} ${departed ? 'opacity-60' : ''}`}>
+      <div className="flex flex-col gap-1 sm:w-[25%] min-w-0 min-h-0">   {/* 검수사 «화면을 4등분해서 25% 통계 75%로 베이를» */}
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <div className="font-bold text-sm text-dim-100 truncate flex items-center gap-1.5">
@@ -2210,6 +2323,52 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
       ) : (
         <div className="text-2xs text-dim-500">터미널 실적 미수신</div>
       )}
+      {/* ★ 3.11: 별첨 표 실시간 — 검수사 «통계는 선박 밑에 빈공간에 별첨 자료처럼 실시간으로 채워 지는걸» · «/ 가 수직으로 같아야» · «통계 글씨는 작고».
+          입력은 그림과 같은 목록(boardContainers — 리스트 등재 _inList 포함, 감사: 인쇄 별첨 ptkContainers 와 같은 분모). 칸마다 완료/전체. */}
+      {voyage && (() => {
+        const modes = ['discharge', 'loading'].filter(m => (boardContainers[m] || []).length);
+        if (!modes.length) return null;
+        const has45All = modes.some(m => { const L = legendLiveOf(boardContainers[m], m, voyage[m]?.completed); return L.fe['45'].F.n + L.fe['45'].E.n > 0; });
+        const ncol = has45All ? 4 : 3;   // 20' 40' (45') 계 — 표 셋이 같은 열 수·같은 colgroup 이라 «/» 가 표 사이에서도 한 줄
+        //  검수사 «통계가 항목간 간격이 너무 넓습니다. 조금 줄이면 글자를 조금 키워도» — 라벨 28%, 값 쌍은 «완료|/전체» 붙여 쓰고 줄 여백 0
+        const colgroup = <colgroup><col style={{ width: '28%' }} />{Array.from({ length: ncol * 2 }).map((_, i) => <col key={i} style={{ width: `${72 / (ncol * 2)}%` }} />)}</colgroup>;
+        //  제목은 표 위 한 줄(첫 열 안에 넣으면 좁은 폭에서 «20'» 과 겹친다 — 미리보기 실측)
+        const head = (labels) => <thead><tr className="text-dim-400"><th className="text-left px-1"></th>{labels.map((l, i) => <th key={i} className="px-0 text-center" colSpan={2}>{l}</th>)}</tr></thead>;
+        return (
+          <div className="flex-1 min-h-0 overflow-auto space-y-1 text-base leading-tight">
+            {modes.map(m => {
+              const L = legendLiveOf(boardContainers[m], m, voyage[m]?.completed);
+              if (!L.n) return null;
+              const tot = (arr) => { const t = { '20': { n: 0, done: 0 }, '40': { n: 0, done: 0 }, '45': { n: 0, done: 0 }, total: { n: 0, done: 0 } }; for (const [, e] of arr) for (const k of ['20', '40', '45', 'total']) { t[k].n += e[k].n; t[k].done += e[k].done; } return t; };
+              const sizes = has45All ? ['20', '40', '45', 'total'] : ['20', '40', 'total'];
+              const mk = (title, rowsIn) => (
+                <div key={title}>
+                  <div className="font-bold text-dim-300 px-1">{title}</div>
+                  <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+                    {colgroup}{head(has45All ? ["20'", "40'", "45'", '계'] : ["20'", "40'", '계'])}
+                    <tbody>{rowsIn.map(([k, e]) => <tr key={k} className="border-t border-line/60"><td className="px-1 text-dim-200 whitespace-nowrap truncate">{k}</td>{sizes.map(sz => <LegendCell key={sz} e={e[sz]}/>)}</tr>)}</tbody>
+                  </table>
+                </div>
+              );
+              const feRows = ['20', '40', '45'].filter(sz => sz !== '45' || has45All).map(sz => [sz + "'", [L.fe[sz].F, L.fe[sz].E, ...(has45All ? [{ n: 0, done: 0 }] : []), { n: L.fe[sz].F.n + L.fe[sz].E.n, done: L.fe[sz].F.done + L.fe[sz].E.done }]]);
+              const modeK = m === 'loading' ? '선적' : '양하';
+              return (
+                <div key={m} className="space-y-1">
+                  {mk(`별첨1 · 선사별 (${modeK}) ${L.done}/${L.n}`, L.carriers.concat([['합계', tot(L.carriers)]]))}
+                  {mk(`별첨2 · 화물 종류별 (${modeK})`, L.cargos.concat([['합계', tot(L.cargos)]]))}
+                  <div>
+                    <div className="font-bold text-dim-300 px-1">{`별첨3 · 규격별 F/E (${modeK})`}</div>
+                    <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+                      {colgroup}{head(has45All ? ['Full', 'Empty', '', '계'] : ['Full', 'Empty', '계'])}
+                      <tbody>{feRows.map(([k, cells]) => <tr key={k} className="border-t border-line/60"><td className="px-1 text-dim-200">{k}</td>{cells.map((e, i) => <LegendCell key={i} e={e}/>)}</tr>)}</tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
       {/* 작업 중 검수원 */}
       <div className="flex items-center gap-1 flex-wrap min-h-[18px]">
         {workers.length > 0 ? workers.map(w => (

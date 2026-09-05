@@ -1030,7 +1030,7 @@ export default function PrintableCargoPlanV2({
       addTo(carrierCounts, carrier, size);
       let cat = '일반';
       if (c.dg) cat = 'DG';
-      else if (c.iso && c.iso[2] === 'R') cat = 'Reefer';
+      else if (isReeferContainer(c)) cat = 'Reefer';   // 3.11: 리퍼 판정 한 벌(3.6-02 isReeferContainer — rf·2230·4530). 종전 iso[2]==='R' 은 2230(20ft 리퍼)을 놓쳤다(DJCT 0223E 실측 18 → 20). 수석 보드 utils.legendLiveOf 와 같은 수
       else if (c.fr || (c.iso && c.iso[2] === 'P')) cat = 'FR';
       else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
       else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
