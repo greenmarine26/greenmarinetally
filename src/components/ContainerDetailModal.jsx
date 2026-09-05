@@ -4,6 +4,7 @@ import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, 
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
+import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
@@ -459,7 +460,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             )}
             {/* M5.79: 부킹 슬롯 (평택 적재 컨번호 미입력) */}
             {isBookingSlot(c) && <Badge color="amber">📝 컨번호 대기</Badge>}
-            {isDone && <Badge color="emerald">✓ 완료 [{comp.by}]</Badge>}
+            {isDone && <Badge color="emerald">✓ 완료 [{completedByLabel(comp, voyageInfo)}]</Badge>}
             {isXray && <Badge color="purple">🔍 X-RAY</Badge>}
             {/* M5.79: DG 뱃지에 UN 화물명 짧게 — 길어서 다른 뱃지와 별도 줄 처리는 아래 박스에서 */}
             {isDG && (() => {
@@ -652,9 +653,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     <span className="text-base font-bold mono text-cyan-200">{c.row_actual || '--'}</span>
                     <span className="text-dim-400">/</span>
                     <span className="text-base font-bold mono text-cyan-200">{c.tier_actual || '--'}</span>
-                    {c.actual_by && (
-                      <span className="text-2xs text-dim-300 ml-1">({c.actual_by})</span>
-                    )}
+                    {completedByLabel({ by: c.actual_by, at: c.actual_at, src: c._pos_src === 'catos' ? 'term' : undefined, equip: comp && comp.equip }, voyageInfo) && (
+                      <span className="text-2xs text-dim-300 ml-1">({completedByLabel({ by: c.actual_by, at: c.actual_at, src: c._pos_src === 'catos' ? 'term' : undefined, equip: comp && comp.equip }, voyageInfo)})</span>
+                    )}   {/* 3.16: 업체 글자 대신 사람 이름(없으면 조 등록 근무자, 그것도 없으면 «터미널 반영») */}
                   </div>
                 ) : (
                   <div className="text-xs text-dim-400">

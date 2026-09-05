@@ -94,8 +94,9 @@ ok(stripped.loading.records.C3 && stripped.loading.records.C3.bay_actual === '31
 ok(stripped.loading.termWork && Object.keys(stripped.loading.termWork).length === 4, 'termWork 원본은 안 건드린다(되살리면 다시 얹힌다)');
 ok(U.stripCatosPos(voy) === voy, '덧칠이 없으면 같은 객체를 그대로 돌려준다');
 
-//  ⑩ 완료자 표기는 한 벌 — TERM_APPLY_BY 와 같아야 한다(화면·매뉴얼이 그 문자열을 쓴다).
-ok(r.A1 && r.A1.actual_by === U.TERM_APPLY_BY, `완료자 표기가 «${U.TERM_APPLY_BY}» 한 벌이다`);
+//  ⑩ 3.16 — 기록자 자리는 비운다(업체 글자 금지). 출처는 _pos_src 표식이 말한다.
+ok(r.A1 && !String(r.A1.actual_by || ''), `3.16: 기록자 자리를 비운다 — 업체 글자를 안 넣는다(«${r.A1 && r.A1.actual_by}»)`);
+ok(r.A1 && r.A1._pos_src === 'catos', '출처는 _pos_src 표식이 말한다(이름 자리가 아니라)');
 
 console.log(fail ? `\n✗ CATOS 자리 연막검사 실패 ${fail}건` : '\nCATOS 자리 연막검사 통과');
 process.exit(fail ? 1 : 0);

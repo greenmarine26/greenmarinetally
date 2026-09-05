@@ -460,6 +460,7 @@ if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:fir
   npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_HK" --log-level=error \
     || { echo "✗ 해치 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }
   node tools/smoke_boardbays.cjs "$SMOKE_CP" "$SMOKE_HK" || { echo "✗ 동방 지금 작업 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 3.15
+  node tools/smoke_termby.cjs "$SMOKE_CP" "$PWD" || { echo "✗ 완료자 표기(터미널 업체 글자) 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 3.16
   rm -f "$SMOKE_HK"
   rm -f "$SMOKE_CP"
 else

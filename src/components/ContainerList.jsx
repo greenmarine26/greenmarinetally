@@ -7,6 +7,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
+import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -607,7 +608,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                   POD <span className={mode === 'loading' ? 'text-amber-300 font-bold' : 'text-dim-200'}>{c.pod}</span>
                 </span>
               )}
-              {comp?.by && <span className="text-emerald-400">[{comp.by}]</span>}
+              {completedByLabel(comp, voyageInfo) && <span className="text-emerald-400">[{completedByLabel(comp, voyageInfo)}]</span>}   {/* 3.16: 완료자 표기 한 벌 */}
             </div>
 
             {/* 실번호 (원본 vs 실제) */}

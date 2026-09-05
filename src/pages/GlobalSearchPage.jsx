@@ -437,7 +437,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       if (isRealtimeProgressQuery(debouncedQuery)) {
         return formatTerminalWorkAnswer(ship, _tw, _pool, _md);
       }
-      return formatAppTallyAnswer(ship, _pool, _tw, _md);
+      return formatAppTallyAnswer(ship, _pool, _tw, _md, shipCtx.info || null);
     }
     // 1.69-06: 완료·보관된 배의 진행 질문 — 보관소에서 찾아 «완료·보관됨»으로 결론부터 (검수사 신고 2026-08-14).
     if (!shipCtx && isChief

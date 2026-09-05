@@ -1,7 +1,7 @@
 // CSV 내보내기 — 결재용 + 세관 신고용
-import { isoToLabel, formatWt, fmtPos, isReeferContainer } from '../utils.js';
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
 
-export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals) {
+export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo = null) {   // 3.16: info 는 조 등록 근무자를 찾는 데 쓴다
   const headers = [
     '순번', '위치', '컨번호',
     '원실번호', '실제실번호', '실오류',
@@ -47,7 +47,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
       tmpMissing ? '⚠️미입력' : '',
       isX ? 'O' : '',
       comp ? 'O' : '',
-      comp?.by || '',
+      completedByLabel(comp, voyageInfo),   // 3.16: 업체 글자 대신 사람 이름(없으면 조 등록 근무자, 그것도 없으면 «터미널 반영»)
       completedAt,
       lastSlHist?.by || '',
       lastSlHist?.at ? new Date(lastSlHist.at).toLocaleString('ko-KR') : '',

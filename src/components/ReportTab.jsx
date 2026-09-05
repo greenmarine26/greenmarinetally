@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
 import { CheckCircle2, Clock, Download, ArrowDown, ArrowUp, AlertOctagon, FileWarning, Copy } from 'lucide-react';
 import { exportSectionToCSV, exportSealErrorsToCSV } from './CSVExport.jsx';
 
@@ -58,7 +59,7 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
     if (groupBy === 'inspector') {
       const g = {};
       records.forEach(r => {
-        const k = r.by || '미지정';
+        const k = completedByLabel(r, voyageInfo) || '미지정';   // 3.16: 터미널 반영분은 조 등록 근무자로 묶인다
         if (!g[k]) g[k] = [];
         g[k].push(r);
       });
@@ -77,7 +78,7 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
   }, [records, groupBy]);
 
   const handleExportFull = () => {
-    exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals);
+    exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo);
   };
 
   const handleExportErrors = () => {
@@ -174,7 +175,7 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
           ) : (
             <div className="space-y-2">
               {groups.map(([key, items]) => (
-                <ReportGroup key={key} title={key} items={items} groupBy={groupBy}/>
+                <ReportGroup key={key} title={key} items={items} groupBy={groupBy} voyageInfo={voyageInfo}/>
               ))}
             </div>
           )}
@@ -268,7 +269,7 @@ function SealErrorReport({ errors, voyageInfo, voy, mode, onExport, onCopy }) { 
   );
 }
 
-function ReportGroup({ title, items, groupBy }) {
+function ReportGroup({ title, items, groupBy, voyageInfo = null }) {   // 3.16: 완료자 표기 한 벌에 항차 자료가 필요하다(조 등록 근무자)
   const [expanded, setExpanded] = useState(true);
   return (
     <div className="bg-ink-900 border border-line rounded-pill overflow-hidden">
@@ -291,7 +292,7 @@ function ReportGroup({ title, items, groupBy }) {
               <span className="font-black text-amber-300 mono text-sm">{r.l4 || r.cn?.slice(-4)}</span>
               <span className="text-xxs mono text-dim-300 truncate flex-1">{r.cn}</span>
               {r.bay && <span className="text-2xs mono text-amber-400">{r.bay}-{r.row}-{r.tier}</span>}
-              {groupBy === 'time' && r.by && <span className="text-2xs text-emerald-400 font-bold">[{r.by}]</span>}
+              {groupBy === 'time' && completedByLabel(r, voyageInfo) && <span className="text-2xs text-emerald-400 font-bold">[{completedByLabel(r, voyageInfo)}]</span>}
               {r.completedAt && (
                 <span className="text-2xs text-dim-400 mono">{new Date(r.completedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
               )}

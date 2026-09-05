@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, crewShiftKey, crewWorkStats, parseCatosPos, koJosa } from './utils.js';
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -2699,7 +2699,7 @@ export function formatTerminalWorkAnswer(ship, tw, containers = null, mode = 'di
 }
 
 // 앱 검수 기록 답 — completed/전체 · % · 검수사별(기록에 by 가 있으면). 평택분 기준(7.1).
-export function formatAppTallyAnswer(ship, containers, tw = null, mode = 'discharge') {   // 2.55: 터미널 실적도 같이
+export function formatAppTallyAnswer(ship, containers, tw = null, mode = 'discharge', info = null) {   // 3.16: info — 완료자 표기 한 벌에 쓰는 조 등록   // 2.55: 터미널 실적도 같이
   const pool = (containers || []).filter((c) => c._ptk);
   const done = pool.filter((c) => c._comp);
   // ★ 2.55: 앱 기록이 없어도 **터미널 실적으로는 답할 수 있다** — 검수사가 앱을 안 쓴 항차가 대부분이다.
@@ -2727,7 +2727,7 @@ export function formatAppTallyAnswer(ship, containers, tw = null, mode = 'discha
   }
   out.push(`${ship} — 앱 검수 기록 기준 ${seg.join(' · ')}`);
   const by = {};
-  done.forEach((c) => { const n = c._comp && c._comp.by; if (n) by[n] = (by[n] || 0) + 1; });
+  done.forEach((c) => { const n = completedByLabel(c._comp, info); if (n) by[n] = (by[n] || 0) + 1; });   // 3.16: 업체 글자를 음성으로 읽지 않는다 — 조 등록 근무자, 없으면 «터미널 반영»
   const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
   if (names.length) out.push(`검수사별 — ${names.map(([n, k]) => `${n} ${k}대`).join(' · ')}`);
   // ★ 2.55: 터미널 실적을 **묻지 않아도** 같이 낸다(검수사 확정). 안내 문구로 미루지 않는다.

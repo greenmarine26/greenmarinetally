@@ -4,7 +4,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -322,7 +322,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             fe: r.fe || e.fe || '',
             sl: r.sl || e.sl || '',
             done: !!comp,
-            by: comp?.by || comp?.inspector || '',
+            by: completedByLabel(comp, v?.info || null),   // 3.16: 완료자 표기 한 벌(업체 글자 금지)
             at: comp?.at || comp?.ts || 0,
           };
         });
@@ -1585,7 +1585,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         parts.push(`${mode === 'discharge' ? '양하' : '선적'} ${res.applied}대`);
       }
       setNotice(total > 0
-        ? { kind: 'ok', text: `🏗 터미널 실적 반영 완료 — ${row.vsl} ${parts.join(' · ')} (완료자 «터미널(CATOS)», 시각은 터미널 반입시각). 베이플랜에서 초록·✔ 로 확인하세요.` }
+        ? { kind: 'ok', text: `🏗 터미널 실적 반영 완료 — ${row.vsl} ${parts.join(' · ')} (완료자는 그 조 등록 근무자로 표기되고, 등록이 없으면 «터미널 반영». 시각은 터미널 반입시각). 베이플랜에서 초록·✔ 로 확인하세요.` }
         : { kind: 'warn', text: `반영할 것이 없습니다 — ${row.vsl} 터미널 실적이 전부 앱 완료와 일치합니다.` });
     } catch (e) {
       //  조용한 실패 금지 — 실패는 화면에 드러낸다.
@@ -1846,7 +1846,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
                       onClick={() => setConfirmTermKey(r.key)}
                       style={{ minHeight: 36 }}
                       className="text-xxs px-3 rounded-pill bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 border border-amber-700/50 font-bold"
-                      title="CATOS 검수 입력(터미널 실적) 중 앱에 완료가 안 찍힌 컨을 일괄 완료로 — 완료자 «터미널(CATOS)», 검수원 기록은 덮지 않음"
+                      title="터미널 검수 입력(실적) 중 앱에 완료가 안 찍힌 컨을 일괄 완료로 — 완료자는 그 조 등록 근무자, 등록이 없으면 «터미널 반영». 검수원 기록은 덮지 않음"
                     >🏗 터미널 실적 반영 {r.termApplyD + r.termApplyL}{r.termApplyL > 0 ? ` (양하 ${r.termApplyD} · 선적 ${r.termApplyL})` : ''}</button>
                   ) : (
                     <span
@@ -2950,7 +2950,8 @@ function ActivityLogSection({ voyages }) {
     Object.values(voyages || {}).forEach(v => {
       ['discharge', 'loading'].forEach(md => {
         Object.values((v && v[md] && v[md].completed) || {}).forEach(c => {
-          if (c && c.by && (c.at || 0) >= range.from && (c.at || 0) < range.to) ensure(c.by).done++;
+          const _w = completedByLabel(c, (v && v.info) || null);   // 3.16: 터미널 반영분은 조 등록 근무자로
+          if (_w && (c.at || 0) >= range.from && (c.at || 0) < range.to) ensure(_w).done++;
         });
       });
     });

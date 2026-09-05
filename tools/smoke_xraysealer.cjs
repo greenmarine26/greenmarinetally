@@ -14,7 +14,7 @@ let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 console.log('X-RAY 봉인자 — 터미널 표기 금지 · 조 등록 근무자 · 없으면 빈칸');
 const cns = Object.keys(FX.termWork);
-ok(cns.length === 3 && cns.every((cn) => FX.completed[cn] && FX.completed[cn].by === U.TERM_APPLY_BY), '픽스처 — X-RAY 3대 전부 터미널 완료(by=TERM_APPLY_BY)');
+ok(cns.length === 3 && cns.every((cn) => FX.completed[cn] && U.isTermApplied(FX.completed[cn])), '픽스처 3대는 터미널 반영분이다(3.16: 표식·접두로 판별)');
 //  ① 등록 없음 → 빈칸(수기). 어떤 인자 모양이든 터미널 표기가 새어 나오지 않는다.
 for (const cn of cns) {
   const s1 = U.xraySealerOf({}, FX.completed[cn], FX.info), s2 = U.xraySealerOf(undefined, FX.completed[cn]), s3 = U.xraySealerOf({ seal: FX.termWork[cn].customsSeal }, FX.completed[cn], null);

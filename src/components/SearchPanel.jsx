@@ -1085,7 +1085,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       if (isRealtimeProgressQuery(query)) {
         return formatTerminalWorkAnswer(ship, _tw, allContainers, _md);
       }
-      return formatAppTallyAnswer(ship, allContainers, _tw, _md);
+      return formatAppTallyAnswer(ship, allContainers, _tw, _md, voyage?.info || null);
     }
     // 1.69-01: 브리핑 속 «N건» 후속 — "실 점검 필요 83건" 뒤 "83건이 뭐야"가 끝자리 검색으로
     //   빠졌다(검수사 신고). 직전 답 주제를 기억해 그 주제의 상세로 잇는다. howToQuery보다 앞.

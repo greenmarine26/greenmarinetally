@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { isoToLabel, fmtPos} from '../utils.js';
+import { isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
 import { paceFromRecords, voyageDoneAts, speedFromTerminal, terminalWorkFor } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
@@ -293,7 +293,7 @@ function computeAllStats(containers, compMap, xrayMap, mode, voyage, terminalWor
       const k = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}시`;
       byHour[k] = (byHour[k] || 0) + 1;
     }
-    if (r.by) byInspector[r.by] = (byInspector[r.by] || 0) + 1;
+    const _who = completedByLabel(r, voyage?.info || null); if (_who) byInspector[_who] = (byInspector[_who] || 0) + 1;   // 3.16
     if (r.flag === 'missing') anomaly.missing++;
     else if (r.flag === 'extra') anomaly.extra++;
     else if (r.flag === 'swapped') anomaly.swapped++;

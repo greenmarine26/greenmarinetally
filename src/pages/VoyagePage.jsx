@@ -2339,7 +2339,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
   }, [containers, compMap, xrayMap, mode]);
 
   const handleExport = () => {
-    exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals);
+    exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo);   // 3.16: 완료자 표기 한 벌에 조 등록을 넘긴다(ListTab 이 이미 받는 props)
   };
 
   return (

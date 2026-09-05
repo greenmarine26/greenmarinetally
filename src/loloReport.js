@@ -4,7 +4,7 @@
 //   ② LOADING LIST — 처리분 전체. NO·컨번호·실번호·규격·F/E·ACT(변경 시).
 //   기존 records(실번호 수정/리씰/실오류) + completed(처리)를 병합해 생성.
 
-import { isoToLabel } from './utils.js';
+import { isoToLabel, completedByLabel } from './utils.js';   // 3.16: 완료자 표기 한 벌
 
 // 모드 구역(discharge/loading)에서 처리된(=completed) 컨 목록을 만든다.
 //   records의 수정 필드(sl/sl_orig/eseal/eseal_wrong/reseal)를 ediContainers에 덮어쓴다.
@@ -41,7 +41,7 @@ export function buildLoloRows(sec) {
       hasReseal: !!reseal,
       damage: comp.flag === 'damage' || comp.damage === '있음' ? (comp.note || '데미지') : '',
       flag: comp.flag || 'normal',
-      by: comp.by || '',
+      by: completedByLabel(comp, null),   // 3.16: 업체 글자를 서류에 내지 않는다
     });
   });
   // 컨번호 정렬

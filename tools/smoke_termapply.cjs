@@ -9,7 +9,8 @@
 //   ① 반입시각(at) 없는 것은 반영 대상이 아니다.
 //   ② completed 에 이미 있는 컨은 대상이 아니다(덮지 않는다).
 //   ③ GC10x → «x호기». 그 외 장비 문자열은 그대로.
-//   ④ by 는 «터미널(CATOS)», at 은 터미널 반입시각 그대로.
+//   ④ **3.16 부터 `by` 는 비고 `src:'term'` 표식만 남는다** — 검수사 «by:'터미널(CATOS)' 어디든 이 문구는 없어야 됩니다».
+//      at 은 터미널 반입시각 그대로. 화면에 나갈 이름은 utils.completedByLabel 이 뽑는다(연막검사 smoke_termby).
 //
 // 쓰는 법: node tools/smoke_termapply.cjs
 
@@ -49,7 +50,8 @@ const bad = (msg) => { console.error('  ✗ ' + msg); fail += 1; };
   if (Object.keys(got).length !== 3) bad(`대상 수 3 이어야 하는데 ${Object.keys(got).length}`);
   if (!got.AAAA1111111 || got.AAAA1111111.equip !== '2호기') bad('GC102 → 2호기 매핑 실패');
   if (got.AAAA1111111 && got.AAAA1111111.at !== 1787865370000) bad('터미널 반입시각이 보존되지 않음');
-  if (got.AAAA1111111 && got.AAAA1111111.by !== '터미널(CATOS)') bad('by 가 «터미널(CATOS)» 가 아님');
+  if (got.AAAA1111111 && String(got.AAAA1111111.by || '')) bad(`3.16: by 는 비어 있어야 하는데 «${got.AAAA1111111.by}»`);
+  if (got.AAAA1111111 && got.AAAA1111111.src !== 'term') bad("3.16: 터미널 반영 표식 src:'term' 이 없다");
   if (got.BBBB2222222) bad('completed 에 있는 컨을 덮으려 함 — 현장 기록 보호 위반');
   if (got.CCCC3333333) bad('반입시각 없는 컨(Booking)을 반영하려 함');
   if (got.DDDD4444444 && 'equip' in got.DDDD4444444) bad('장비 없는 컨에 equip 키가 생김');
@@ -68,7 +70,8 @@ const bad = (msg) => { console.error('  ✗ ' + msg); fail += 1; };
     if (fix.completed[cn]) { bad(`completed 컨 ${cn} 이 대상에 들어옴`); break; }
     if (!rec.at) { bad(`at 없는 ${cn} 이 대상에 들어옴`); break; }
     if (/^GC/.test(rec.equip || '')) { bad(`장비 미매핑 잔존 ${cn} → ${rec.equip}`); break; }
-    if (rec.by !== '터미널(CATOS)') { bad(`by 오염 ${cn} → ${rec.by}`); break; }
+    if (String(rec.by || '')) { bad(`3.16: by 에 글자가 들어감 ${cn} → ${rec.by}`); break; }
+    if (rec.src !== 'term') { bad(`3.16: 표식 없음 ${cn}`); break; }
   }
   console.log(`  SWTD 실데이터 — termWork ${Object.keys(fix.termWork).length} · 반입 ${withAt.length} · 앱완료 ${Object.keys(fix.completed).length} · 반영 대상 ${entries.length}`);
 }
