@@ -64,7 +64,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (tables.length < 3 || new Set(colCounts).size !== 1) fail('별첨 표 셋의 열 수가 다르다: ' + JSON.stringify(colCounts));
   const fits = [...doc.querySelectorAll('[style*="transform-origin: top left"], [style*="transform-origin:top left"]')];
   if (fits.length < 2) fail('그림을 칸에 맞추는 FitBox 가 호기마다 없다(' + fits.length + ')');
-  if (!fits.every(f => { const m = /scale\(([\d.]+)\)/.exec(f.style.transform || ''); return m && parseFloat(m[1]) <= 2.8941 && parseFloat(m[1]) > 0; })) fail('FitBox 배율이 0~2.894(2.5×1.05³) 밖이다');
+  if (!fits.every(f => { const m = /scale\(([\d.]+)\)/.exec(f.style.transform || ''); return m && parseFloat(m[1]) <= 2.5001 && parseFloat(m[1]) > 0; })) fail('FitBox 배율이 0~2.5 밖이다');
   //  ★ 칸 클릭 → 컨 상세 콜백(베이플랜과 같은 모달로 이어진다) — 항차 열기가 아니다
   const cell4 = [...doc.querySelectorAll('span,div')].find(n => n.childNodes.length === 1 && /^\d{4}$/.test(n.textContent.trim()));
   const before0 = (W.__calls || []).length;

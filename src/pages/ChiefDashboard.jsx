@@ -592,6 +592,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   }, [voyageStats, pfMap, twMap, voyages, activeByVoyage]);
   //  감사: 고른 배가 보드에서 빠지면(작업 끝·출항) 포커스도 풀어 다음에 그 배가 돌아와도 저절로 크게 안 뜬다
   useEffect(() => { if (boardFocus && !boardRows.some(r => r.key === boardFocus)) setBoardFocus(null); }, [boardRows, boardFocus]);
+  //  3.11-01: 보드 높이 = **보드 위 끝에서 화면 바닥까지**(검수사 «밑에 다른 항목만큼 화면이 줄어 들었습니다» — 고정 9rem 은 헤더·접기 단추 높이를 추정한 값이라 실제보다 짧았다).
+  const boardScrollRef = React.useRef(null);
+  const [boardH, setBoardH] = useState(0);
+  useEffect(() => {
+    const fit = () => { const el = boardScrollRef.current; if (!el) return; const top = el.getBoundingClientRect().top; const h = Math.floor(window.innerHeight - top - 8); if (h > 200 && Math.abs(h - boardH) > 1) setBoardH(h); };
+    fit(); const t = setTimeout(fit, 300);   // 접기 애니메이션·폰트 로딩 뒤 한 번 더
+    window.addEventListener('resize', fit); return () => { clearTimeout(t); window.removeEventListener('resize', fit); };
+  }, [openSecs.board, boardRows.length, boardH]);
   //  3.11 감사: 100vw 는 세로 스크롤바를 포함한다(윈도 PC 17px) — 전폭 보드가 가로 스크롤을 만들지 않게 스크롤바 폭을 재 둔다
   useEffect(() => {
     const set = () => { try { document.documentElement.style.setProperty('--sbw', (window.innerWidth - document.documentElement.clientWidth) + 'px'); } catch (e) { console.warn('[작업 보드] 스크롤바 폭 측정 실패', e); } };
@@ -846,7 +854,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               : '지금 작업 중인 배가 없습니다 — 예정 항차는 홈 카드·일정에서 봅니다'}
           </div>
         ) : (
-          <div className="flex flex-col gap-1 overflow-y-auto" style={{ height: 'calc(100vh - 9rem)', minHeight: '24rem' }}>
+          <div ref={boardScrollRef} className="flex flex-col gap-1 overflow-y-auto" style={{ height: boardH ? boardH + 'px' : 'calc(100vh - 9rem)', minHeight: '20rem' }}>
             {/* 3.10: 한 척 = 가로로 긴 한 줄. 보드 높이를 척수(최대 4)로 등분하고 5척부터 아래로 스크롤 — 검수사 «세로로 4등분해서 최대 4척, 2척이면 2등분, 5척이면 스크롤» · «1척이면 전체화면»
                 · 배를 누르면 그 배만 전체(포커스), [닫기]로 돌아온다. 고른 배가 보드에서 빠지면(작업 끝) 포커스도 풀린다.
                 TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
@@ -2161,8 +2169,9 @@ function FitBox({ children, className = '', maxH = null, fill = false, boundsRef
       }
       const mh = fill ? bh : (typeof maxH === 'function' ? maxH() : maxH);
       //  검수사 «지금이 아까보다 밑과 우측에 여백이 더 생겼습니다» — 배율을 1 로 막아 두면 큰 화면에서 그림이 칸보다 작아 양쪽이 빈다. 칸에 맞춰 키우기도 한다(상한 2.5 — DOM 변환이라 글자는 또렷하다).
-      //  검수사 «베이를 중앙정렬 해주시고 1.05배를 해주세요» · «지금의 1.05배 더요» — 맞춘 배율에 1.157625(1.05³) 를 곱하고, 남는 폭의 절반만큼 오른쪽으로 밀어 가운데 둔다
-      const s = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5) * 1.157625; const h = Math.ceil(ih * s);   // 1.05³ — 검수사 «지금의 1.05배 더요» · «한번더 1.05 더요»
+      //  검수사 «베이를 중앙정렬 해주시고 1.05배를 해주세요» · «지금의 1.05배 더요» — 맞춘 배율 그대로(3.11-01 — ×1.05³ 는 잘림), 남는 폭의 절반만큼 오른쪽으로 밀어 가운데 둔다
+      //  3.11-01: ×1.05³ 는 미리보기(카드가 화면보다 컸다)에서 정한 값 — 실제 줄에선 높이가 먼저 닿아 밑 두 단이 잘렸다(검수사 화면 실측). 칸에 **딱** 맞춘다.
+      const s = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5); const h = Math.ceil(ih * s);
       const x = Math.max(0, Math.floor((bw - iw * s) / 2));
       setFit((f) => (Math.abs(f.s - s) < 0.005 && f.h === h && f.x === x) ? f : { s, h, x });
     };
@@ -2238,7 +2247,7 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
         ) : (
           <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {shown.map(c => (
-              <div key={c.no} className="flex flex-col gap-0.5 bg-ink-900/60 border border-line rounded-btn px-0.5 py-1 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
+              <div key={c.no} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
                   <span className="text-sm font-black text-cyan-200">{c.no}호기</span>
                   <span className={`font-bold ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || '미등록'}</span>
