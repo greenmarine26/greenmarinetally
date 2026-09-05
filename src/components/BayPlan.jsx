@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf } from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -129,9 +129,11 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // 평택 대상 (모드별)
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만.
   //   (양하에서 _inList 인정 시 타항 양하분이 평택으로 잘못 잡힘)
+  //  3.14: 선적은 «리스트 등재 = 평택»이되, EDI 가 «남의 항구 → 남의 항구»라 말하면 EDI 가 이긴다(판정 한 벌 utils.isTransitByEdi).
+  //    이 줄이 없으면 통과화물이 평택 선적분 색으로 칠해지고 남의 짐 자리에 그려진다(DJCF 0151S 24대·베이 5·7·10·17·19·25·27).
   const isPtk = (c) => mode === 'discharge'
     ? isPyeongtaekPort(c.pod)
-    : (c._inList || isPyeongtaekPort(c.pol));
+    : (isPyeongtaekPort(c.pol) ? true : (isTransitByEdi(c) ? false : !!c._inList));
 
   // 평택 컨번호 set
   // V9.39: **컨번호가 있는 것만** 넣는다. 컨펌전 플랜 슬롯(__SLOT_)은 컨번호가 없어서(확답 ④)

@@ -44,7 +44,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, koJosa } from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, koJosa, isTransitByEdi} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -346,7 +346,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       if (isPyeongtaekPort(c.pod)) return true;
       return !!(c.cn && recMap && recMap[c.cn]);   // 양하리스트 등재분(TS 포함)
     }
-    return (!!(c.cn && recMap && recMap[c.cn])) || isPyeongtaekPort(c.pol);
+    //  3.14: 선적에서 **EDI 가 «남의 항구에서 실려 남의 항구로 간다»고 말하면 리스트보다 EDI 가 이긴다**(utils.isTransitByEdi 한 벌).
+    //    실측 DJCF 0151S — 선사 CLL 이 통과화물 24대를 리스트에 얹어 화면 선적이 388대가 됐다(정본 362).
+    if (isPyeongtaekPort(c.pol)) return true;
+    if (isTransitByEdi(c)) return false;
+    return !!(c.cn && recMap && recMap[c.cn]);
   };
 
   // M3.89: 베이플랜 전용 - 전체 EDI 컨테이너 (isPtk 필터 X)
