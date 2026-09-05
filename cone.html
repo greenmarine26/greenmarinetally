@@ -390,6 +390,9 @@
   .ct-slot.on{background:var(--add); color:#04120c; border-color:var(--add); font-weight:700;}
   .ct-slot.x{background:transparent; border-style:dashed; color:#334155;}
   .ct-empty{font-size:15px; color:var(--dim); margin-top:8px; line-height:1.5;}
+  .ct-order{font-size:13px; color:var(--dim); margin-top:6px; line-height:1.5;} .ct-order b{color:var(--ink);}   /* 2.26 순서 */
+  .ct-count{font-size:14px; color:var(--ink); margin-top:6px; line-height:1.5; padding:8px 10px; border-radius:10px; background:#0b1222;}   /* 2.26 작업량 */
+  .ct-s small{font-size:12px; color:var(--dim); font-weight:600;}
   .ct-strip{position:sticky; top:58px; z-index:31; display:flex; flex-direction:column; gap:4px; padding:6px 0; background:var(--bg,#020617);}
   .ct-strip[hidden]{display:none;}
   .ct-s{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 12px; border-radius:12px; background:#111c33; border-left:6px solid var(--keep); font-size:15px; color:var(--ink);}
@@ -821,7 +824,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 3.10';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.25';   // ★ 2.25: **콘 타이밍(PCTC 카토스 실적 실시간)** — 검수사 «콘 을 꽂는 타이밍을 인력들이 볼수 있게» · «2단을 선적할려면 컨테이너에 콘을 장착하여야 합니다» · «양하는 반대로 콘은 빼는 타이밍이 있씁니다». 항차를 고르면 상태 4장 아래에 카드 하나 — 수집기 2.22 가 1분마다 카토스에서 넣는 termWork(pos·at·equip)를 30초마다 다시 받아 크레인별 «지금 베이·단»과 신호(선적: 1단 콘 없음 → 곧 2단 콘 준비(남은 ≤2칸) → 2단 콘 장착 / 양하: 84단~ 콘 빼기 → 1단 콘 없음)를 큰 글씨로. 82단 줄 그림(계획 칸 vs 실린 칸). 동방 배는 자리가 없어 «대수만». 실물 재생(SWTD 9012E 185+918대) — 예고가 2단 시작보다 4~14분 앞선다.   // 2.24: **카고플랜 그림이 TallyOne 3.7 을 따라 바뀐다** — 콘앱은 카고플랜을 검수앱과 같은 컴포넌트(PrintableCargoPlanV2)로 그리므로, 선적 플랜의 포트 무늬(빗금·줄·점)가 사라지고 **목적지 고정 바탕색 + 칸 오른쪽 위 세 글자**로 바뀐 것이 콘앱에도 그대로 나온다. 콘앱 자체 로직은 한 줄도 안 건드렸고, 판수만 올린다 — 안 올리면 화면이 바뀌었는데 콘 담당이 옛 판을 계속 보게 된다(자동 업데이트 감지 기준이 __CONEV 다).   // 2.23 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 2.26';   // ★ 2.26: **홀드콘도 콘이다 + 작업량** — 검수사 2026-09-05 «콘앱에서 홀드 작업에는 콘 회수 부분이 없습니다. 홀드콘도 회수해야 하는데» · «콘앱에서 작업한량이 카운트가 안되고 있습니다» · «선적시에도 역순입니다. 홀드콘 장착 데크콘 장착» · «회수 보다도 빼기로 통일 해주세요, 회수는 콘앱에 다른 용도로 쓰고 있습니다» · «빼기 꽂기». 2.25 는 홀드에 들어가면 «홀드 내리는 중/실는 중»이라고만 하고 콘을 말하지 않았고 작업량은 어디에도 없었다. ⇒ ①양하 «데크콘 빼기(2단↑) → 1단 콘 없음 → 홀드콘 빼기», 선적은 역순 «홀드콘 꽂기 → 1단 콘 없음 → 데크콘 꽂기». 홀드콘 유무는 콘 계산과 같은 holdConeCount(컨테이너선 20ft 1·40ft 0, 복합선 곳당 N) — 크기는 계획 rows 의 size(없으면 카토스 iso). ★ 감사 수리 — **받침이 있을 때만 콘**(콘 계산 hasBelow 와 같은 규칙, DJCT 홀드 20ft 72대 중 바닥 02단 26대는 콘 없음 → «홀드 바닥 내리는 중 — 콘 없음»), 동방 터미널 대수(자리 없음)도 작업량에 센다, 위 띠는 뒷 절만. ②작업량 — 모드별 «양하 172/251» · 호기별 대수 · 콘 작업 종류별(데크콘 빼기·1단 콘 없음·홀드콘 빼기(콘 개수)·40ft 홀드) 을 카드 위에, 호기 줄·위 띠에도 «이 호기 N대». 말은 «빼기·꽂기»로 통일(«회수»는 반납분·«장착»은 안 씀). 실측 DJCT 0223E 21:40 — 양하 172/251, 1호기 81·2호기 91, 데크콘 빼기 97·1단 47·홀드콘 빼기 9·40ft 홀드 19 / 2호기 베이 11 홀드 04단 20ft → «홀드콘 빼기», 1호기 베이 20 홀드 08단 40ft → «40ft 홀드콘 없음». 연막검사 tools/smoke_conetiming.cjs(소스에서 CT 블록을 그대로 꺼내 DJCT 사본으로 돌린다)   // ★ 2.25: **콘 타이밍(PCTC 카토스 실적 실시간)** — 검수사 «콘 을 꽂는 타이밍을 인력들이 볼수 있게» · «2단을 선적할려면 컨테이너에 콘을 장착하여야 합니다» · «양하는 반대로 콘은 빼는 타이밍이 있씁니다». 항차를 고르면 상태 4장 아래에 카드 하나 — 수집기 2.22 가 1분마다 카토스에서 넣는 termWork(pos·at·equip)를 30초마다 다시 받아 크레인별 «지금 베이·단»과 신호(선적: 1단 콘 없음 → 곧 2단 콘 준비(남은 ≤2칸) → 2단 콘 장착 / 양하: 84단~ 콘 빼기 → 1단 콘 없음)를 큰 글씨로. 82단 줄 그림(계획 칸 vs 실린 칸). 동방 배는 자리가 없어 «대수만». 실물 재생(SWTD 9012E 185+918대) — 예고가 2단 시작보다 4~14분 앞선다.   // 2.24: **카고플랜 그림이 TallyOne 3.7 을 따라 바뀐다** — 콘앱은 카고플랜을 검수앱과 같은 컴포넌트(PrintableCargoPlanV2)로 그리므로, 선적 플랜의 포트 무늬(빗금·줄·점)가 사라지고 **목적지 고정 바탕색 + 칸 오른쪽 위 세 글자**로 바뀐 것이 콘앱에도 그대로 나온다. 콘앱 자체 로직은 한 줄도 안 건드렸고, 판수만 올린다 — 안 올리면 화면이 바뀌었는데 콘 담당이 옛 판을 계속 보게 된다(자동 업데이트 감지 기준이 __CONEV 다).   // 2.23 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1411,15 +1414,42 @@ function ctAppPos(mode, cn){
   return null;
 }
 
-/* 크레인(또는 검수원)별 «지금 어디·무슨 신호» — 자료가 없으면 빈 배열. */
+/* ★ 2.26: 컨 크기('20'/'40') — 계획 rows 에서. 모르면 ''. 홀드콘 개수는 콘 계산과 같은 규칙(holdConeCount — 컨테이너선 20ft 1·40ft 0, 복합선 곳당 N). */
+function ctSize(mode, cn){
+  const p = ctPlanRows(mode).find(x=>x.cn===cn); if(p) return String(p.size||'');
+  const t = (CT.tw[mode]||{})[cn]; const iso = t && String(t.iso||''); return iso ? (iso[0]==='2' ? '20' : '40') : '';   // 감사: 계획에 없는 초과 컨은 카토스 iso 로
+}
+function ctHoldCone(size){ return holdConeCount(size==='40'?'40':'20', state.shipType||'container', state.multiCount); }
+/* 감사(2.26): **받침이 있을 때만 콘이다** — 콘 계산(ediToBayGroups hasBelow, V7.59·V7.65 검수사 확정)과 같은 규칙.
+   같은 베이 한 단 아래 컨이 있거나, 짝 베이(±1) 아래가 40ft 이거나, 양쪽(±1) 아래가 20ft 트윈이면 받침. 자료는 콘 계산처럼 전체 화물(ediRowsAll, 통과화물 포함) 우선.
+   바닥(받침 없음) 20ft 는 홀드콘이 없다 — 실측 DJCT 0223E 양하 홀드 20ft 72대 중 02단 26대(36%). */
+let _ctSizeAt = { discharge:{ref:null, n:0, map:null}, loading:{ref:null, n:0, map:null} };
+function ctSizeAt(mode){
+  const st = mode==='discharge' ? state.disch : state.stow; const rows = (st && (st.ediRowsAll && st.ediRowsAll.length ? st.ediRowsAll : st.ediRows)) || [];
+  const c = _ctSizeAt[mode]; if(c.map && c.ref===rows && c.n===rows.length) return c.map;
+  const m = new Map(); for(const r of rows) m.set(parseInt(r.bay,10)+'_'+String(r.row||'').padStart(2,'0')+'_'+String(r.tier).padStart(2,'0'), String(r.size||''));
+  c.ref = rows; c.n = rows.length; c.map = m; return m;
+}
+function ctHoldBelow(mode, bay, row, tier){
+  const m = ctSizeAt(mode); const b = parseInt(bay,10); const rowP = String(row||'').padStart(2,'0'); const below = String(parseInt(tier,10)-2).padStart(2,'0');
+  const is40 = (sz)=>sz==='40'||sz==='O40';
+  return m.has(b+'_'+rowP+'_'+below) || is40(m.get((b-1)+'_'+rowP+'_'+below)) || is40(m.get((b+1)+'_'+rowP+'_'+below))
+      || (m.has((b-1)+'_'+rowP+'_'+below) && m.has((b+1)+'_'+rowP+'_'+below));
+}
+/* 크레인(또는 검수원)별 «지금 어디·무슨 신호» — 자료가 없으면 빈 배열.
+   ★ 2.26: 홀드도 콘이다 — 양하 «데크콘 빼기 → 홀드콘 빼기», 선적은 역순 «홀드콘 꽂기 → 1단 콘 없음 → 2단부터 데크콘 꽂기»
+   (검수사 «홀드콘도 회수해야 하는데» · «선적시에도 역순입니다. 홀드콘 장착 데크콘 장착» · 말은 «빼기·꽂기» — «회수»는 콘앱에서 반납분 뜻으로 이미 쓴다).
+   작업량(count)도 여기서 센다 — 모드별 대수·호기별 대수·콘 작업 종류별 대수(deck 2단↑ · deck1 1단 · hold 콘 있는 홀드 · hold0 콘 없는 40ft 홀드). */
 function ctCompute(){
   const rows = []; const have = new Set(); let noPos = 0;
+  const count = { discharge:{n:0, byEq:{}, deck:0, deck1:0, hold:0, hold0:0, holdB:0, holdCones:0, term:0},
+                  loading:{n:0, byEq:{}, deck:0, deck1:0, hold:0, hold0:0, holdB:0, holdCones:0, term:0} };   // holdB 바닥(받침 없음) · term 동방 터미널 대수(자리 없음)
   for(const mode of ['discharge','loading']){
     const tw = CT.tw[mode]||{};
     for(const cn in tw){
       const t = tw[cn]; if(!t || !t.at) continue;
       const p = ctPos(t.pos);
-      if(!p){ if(String(t.src||'')!=='pnct') noPos++; continue; }   // 동방 termWork 는 대수만이라 자리 없음이 정상 — 세지 않는다
+      if(!p){ if(String(t.src||'')==='pnct') count[mode].term++; else noPos++; continue; }   // 동방 termWork 는 대수만이라 자리 없음이 정상 — 신호는 못 내지만 작업량(term)으로는 센다(감사)
       rows.push({mode, cn, at:Number(t.at)||0, eq:ctEquip(t.equip), src:'catos', bay:p.bay, row:p.row, tier:p.tier}); have.add(mode+cn);
     }
     const cp = CT.comp[mode]||{};
@@ -1440,6 +1470,15 @@ function ctCompute(){
     const pair = ctPair(r.bay); const t1 = ctDeck1(r.mode, pair, r.bay);
     const s = seen[r.mode][pair] || (seen[r.mode][pair] = {t1:new Set(), up:false, deck1:t1});
     if(r.tier>=80){ if(r.tier===t1) s.t1.add(r.bay+'-'+r.row); else if(r.tier>t1) s.up=true; }
+    // ★ 2.26 작업량 — 이 컨이 어떤 콘 작업이었나
+    const k = count[r.mode]; k.n++; k.byEq[r.eq] = (k.byEq[r.eq]||0)+1;
+    r.size = ctSize(r.mode, r.cn);
+    if(r.tier>=80){ if(r.tier>t1) k.deck++; else k.deck1++; }
+    else {
+      r.below = ctHoldBelow(r.mode, r.bay, r.row, r.tier);
+      r.holdCone = r.below ? ctHoldCone(r.size) : 0;                 // 받침 없는 바닥은 콘 없음(콘 계산과 같은 규칙)
+      if(r.holdCone>0){ k.hold++; k.holdCones += r.holdCone; } else if(!r.below && r.size!=='40') k.holdB++; else k.hold0++;
+    }
     cranes[r.eq] = r;
   }
   const now = Date.now(); const out = []; let lastAt = 0;
@@ -1450,22 +1489,44 @@ function ctCompute(){
     const stale = (now - c.at) > CT_STALE_MIN*60000;
     let cls='keep', sig='', sub='';
     const bayS = String(c.bay).padStart(2,'0'), tierS = String(c.tier).padStart(2,'0');
+    // ★ 2.26 홀드 — 컨테이너선은 20ft 만 홀드콘(40ft 없음), 복합선은 곳당 N개(콘 계산과 같은 holdConeCount)
+    const hc = c.tier<80 ? (c.holdCone!=null ? c.holdCone : 0) : 0;
+    const bottom = c.tier<80 && c.below===false && c.size!=='40';   // 20ft(또는 크기 미상) 바닥 — 받침 없음
+    const szS = c.size ? c.size+'ft' : '크기 미상';
+    const multi = state.shipType==='multi' || state.shipType==='general';
     if(c.mode==='loading'){
-      if(c.tier<80){ cls='keep'; sig='홀드 실는 중'; sub=`베이 ${bayS} 홀드 ${tierS}단 · 데크 1단(${t1}단) 시작 전`; }
-      else if(c.tier>t1){ cls='act'; sig=`${c.tier===t1+2?'2단':c.tier+'단'} 실는 중 — 콘 장착`; sub=`베이 ${bayS} · ${tierS}단 ${c.row}열`; }
-      else if(left!==null && left<=2 && !(s && s.up)){ cls='warn'; sig='곧 2단 — 콘 준비'; sub=`베이 ${bayS} 1단(${t1}단) ${filled}/${p1} · 남은 ${left}칸`; }
-      else { cls='ok'; sig=`1단(${t1}단) 실는 중 — 콘 없음`; sub=(p1?`베이 ${bayS} 1단 ${filled}/${p1}`:`베이 ${bayS} 1단 ${filled}칸(계획 미상)`) + ((s&&s.up)?' · 이 베이 윗단은 콘 장착':''); }
+      if(c.tier<80){
+        if(hc>0){ cls='act'; sig=`홀드 실는 중 — 홀드콘 꽂기${multi?` (곳당 ${hc}개)`:''}`; sub=`베이 ${bayS} 홀드 ${tierS}단 · ${szS} · 데크 1단(${t1}단) 시작 전`; }
+        else if(bottom){ cls='ok'; sig=`홀드 바닥(${tierS}단) 실는 중 — 콘 없음`; sub=`베이 ${bayS} · ${szS} 받침 없음 · 그 위 20ft 부터 홀드콘 꽂기`; }
+        else { cls='ok'; sig='홀드 실는 중 — 40ft 홀드콘 없음'; sub=`베이 ${bayS} 홀드 ${tierS}단 · 20ft 가 오면 홀드콘 꽂기 · 데크 1단(${t1}단) 시작 전`; }
+      }
+      else if(c.tier>t1){ cls='act'; sig=`${c.tier===t1+2?'2단':c.tier+'단'} 실는 중 — 데크콘 꽂기`; sub=`베이 ${bayS} · ${tierS}단 ${c.row}열`; }
+      else if(left!==null && left<=2 && !(s && s.up)){ cls='warn'; sig='곧 2단 — 데크콘 준비'; sub=`베이 ${bayS} 1단(${t1}단) ${filled}/${p1} · 남은 ${left}칸`; }
+      else { cls='ok'; sig=`1단(${t1}단) 실는 중 — 콘 없음`; sub=(p1?`베이 ${bayS} 1단 ${filled}/${p1}`:`베이 ${bayS} 1단 ${filled}칸(계획 미상)`) + ((s&&s.up)?' · 이 베이 윗단은 데크콘 꽂기':''); }
     }else{
-      if(c.tier<80){ cls='keep'; sig='홀드 내리는 중'; sub=`베이 ${bayS} · 홀드 ${tierS}단`; }
-      else if(c.tier>t1){ cls='act'; sig=`${tierS}단 내리는 중 — 콘 빼기`; sub=`베이 ${bayS} · ${c.row}열 · 1단은 ${t1}단`; }
+      if(c.tier<80){
+        if(hc>0){ cls='act'; sig=`홀드 내리는 중 — 홀드콘 빼기${multi?` (곳당 ${hc}개)`:''}`; sub=`베이 ${bayS} · 홀드 ${tierS}단 · ${szS}`; }
+        else if(bottom){ cls='ok'; sig=`홀드 바닥(${tierS}단) 내리는 중 — 콘 없음`; sub=`베이 ${bayS} · ${szS} 받침 없음`; }
+        else { cls='ok'; sig='홀드 내리는 중 — 40ft 홀드콘 없음'; sub=`베이 ${bayS} · 홀드 ${tierS}단 · 20ft 가 오면 홀드콘 빼기`; }
+      }
+      else if(c.tier>t1){ cls='act'; sig=`${tierS}단 내리는 중 — 데크콘 빼기`; sub=`베이 ${bayS} · ${c.row}열 · 1단은 ${t1}단`; }
       else { cls='ok'; sig=`1단(${t1}단) 내리는 중 — 콘 없음`; sub=`베이 ${bayS} · 1단 ${filled}칸 내림`; }
     }
     if(stale){ cls='keep'; sig=`${Math.round((now-c.at)/60000)}분째 기록 없음`; sub=`마지막 베이 ${bayS} ${tierS}단 — ` + sub; }
     out.push({eq, mode:c.mode, bay:c.bay, tier:c.tier, row:c.row, at:c.at, cn:c.cn, src:c.src, cls, sig, sub, filled, p1, t1,
-              rows1:s?s.t1:new Set(), pair, stale});
+              rows1:s?s.t1:new Set(), pair, stale, n:(count[c.mode].byEq[eq]||0), size:c.size||'', below:c.below, holdCone:c.holdCone});
   }
   out.sort((a,b)=>(a.stale-b.stale) || (b.at-a.at));
-  return {cranes:out, noPos, n:rows.length, lastAt};
+  return {cranes:out, noPos, n:rows.length, lastAt, count};
+}
+/* ★ 2.26 작업량 한 줄 — «양하 172/251 · 1호기 81 · 2호기 91 — 데크콘 빼기 97 · 1단 콘 없음 47 · 홀드콘 빼기 9(콘 9개) · 40ft 홀드 19». 계획이 없으면 분모 생략. */
+function ctCountLine(mode, k){
+  if(!k || (!k.n && !k.term)) return '';
+  const total = ctPlanRows(mode).length; const verb = mode==='loading' ? '꽂기' : '빼기';
+  const eqs = Object.keys(k.byEq).sort().map(e=>`${ctEsc(e)} ${k.byEq[e]}`).join(' · ');
+  const cones = [k.deck?`데크콘 ${verb} ${k.deck}`:'', k.deck1?`1단 콘 없음 ${k.deck1}`:'', k.hold?`홀드콘 ${verb} ${k.hold}(콘 ${k.holdCones}개)`:'', k.holdB?`홀드 바닥 ${k.holdB}`:'', k.hold0?`40ft 홀드 ${k.hold0}`:''].filter(Boolean).join(' · ');
+  const n = k.n + (k.term||0);
+  return `<b>${mode==='loading'?'선적':'양하'} ${n}${total?'/'+total:''}대</b>${eqs?' · '+eqs:''}${k.term?` · 터미널 ${k.term}대(자리 없음)`:''}${cones?' — '+cones:''}`;
 }
 
 function ctCard(){ const el = document.createElement('div'); el.className='ct-card'; el.id='ct-card'; return el; }
@@ -1482,7 +1543,7 @@ function ctRender(){
   // 위 고정 띠 — 크레인마다 한 줄(결과 화면을 보고 있어도 보인다)
   if(strip){
     strip.innerHTML = r.cranes.filter(c=>!c.stale).slice(0,3).map(c=>
-      `<div class="ct-s ${c.cls}"><span>${ctEsc(c.eq)} 베이${String(c.bay).padStart(2,'0')}</span><b>${ctEsc(c.sig)}</b></div>`).join('')
+      `<div class="ct-s ${c.cls}"><span>${ctEsc(c.eq)} 베이${String(c.bay).padStart(2,'0')} <small>${c.n}대</small></span><b>${ctEsc(c.sig.includes(' — ') ? c.sig.split(' — ').pop() : c.sig)}</b></div>`).join('')   // 감사: 띠는 뒷 절만(폰 폭)
       || (CT.err ? `<div class="ct-s keep"><b>⚠ ${ctEsc(CT.err)}</b></div>` : '');
     strip.hidden = !strip.innerHTML;
     try{
@@ -1494,6 +1555,13 @@ function ctRender(){
   if(!el) return;
   let html = `<div class="ct-head"><span>🔩 <b>콘 타이밍</b> · ${srcName} · 30초마다 갱신</span>`
            + `<span>${CT.err ? '⚠ '+ctEsc(CT.err) : (fresh || (CT.at ? '실적 없음' : '받는 중…'))}</span></div>`;
+  // ★ 2.26 순서와 작업량 — 양하 «데크콘 빼기 → 홀드콘 빼기», 선적은 역순
+  const hasD = ctPlanRows('discharge').length || r.count.discharge.n, hasL = ctPlanRows('loading').length || r.count.loading.n;
+  const orderD = '양하 <b>데크콘 빼기</b>(2단부터) → 1단 콘 없음 → <b>홀드콘 빼기</b>(20ft · 복합선은 전부)';
+  const orderL = '선적 <b>홀드콘 꽂기</b>(20ft · 복합선은 전부) → 1단 콘 없음 → <b>데크콘 꽂기</b>(2단부터)';
+  html += `<div class="ct-order">${[hasD?orderD:'', hasL?orderL:''].filter(Boolean).join('<br>') || orderD+'<br>'+orderL}</div>`;
+  const cl = [ctCountLine('discharge', r.count.discharge), ctCountLine('loading', r.count.loading)].filter(Boolean);
+  html += `<div class="ct-count">${cl.length ? '작업량 — '+cl.join('<br>') : '작업량 — 아직 실적 없음'}</div>`;
   if(!r.cranes.length){
     html += `<div class="ct-empty">${r.noPos ? `자리를 모르는 완료 ${r.noPos}대 — 계획에도 실적에도 자리가 없어 콘 타이밍을 못 냅니다.`
       : (CT.pier==='PCTC' ? '아직 카토스 실적이 없습니다 — 작업 전이거나 카토스 로그인이 풀린 것입니다.'
@@ -1512,7 +1580,7 @@ function ctRender(){
     html += `<div class="ct-crane ${c.cls}">`
           + `<div class="ct-l1">${ctEsc(c.eq)} · ${modeK} · 베이 ${String(c.bay).padStart(2,'0')} · ${c.tier<80?'홀드 ':''}${String(c.tier).padStart(2,'0')}단</div>`
           + `<div class="ct-l2">${ctEsc(c.sig)}</div>`
-          + `<div class="ct-l3">${ctEsc(c.sub)} · 마지막 ${hh(c.at)} ${ctEsc(c.cn||'')}${c.src==='app'?' (검수앱)':''}</div>`
+          + `<div class="ct-l3">${ctEsc(c.sub)} · 이 호기 ${c.n}대 · 마지막 ${hh(c.at)} ${ctEsc(c.cn||'')}${c.src==='app'?' (검수앱)':''}</div>`
           + stripRow + `</div>`;
   }
   el.innerHTML = html;
@@ -1689,7 +1757,8 @@ function render(){
     <div class="hint">베이플랜은 위의 <b>베이 번호</b>를 누르면 그 베이로 바로 갑니다. <b>⛶ 전체화면</b>으로 크게 보고, 닫을 때는 ✕ 하나입니다.<br>
       칸의 <b>★는 평택분</b>, <b>※는 시프팅</b>(내렸다 다시 싣는 것)입니다.</div>
     <div class="hint"><b>🔩 콘 타이밍</b> — 작업을 고르면 위 고정 띠와 «콘 타이밍» 카드에 크레인별 지금 베이·단과 신호가 30초마다 갱신됩니다.
-      선적은 <b>«곧 2단 — 콘 준비» → «2단 — 콘 장착»</b>, 양하는 <b>«콘 빼기» → «1단 — 콘 없음»</b>. PCTC는 카토스 실적, 동방은 검수앱 완료 기록이 자료입니다.</div>
+      양하는 <b>«데크콘 빼기»(2단부터) → «1단 — 콘 없음» → «홀드콘 빼기»</b>, 선적은 역순 <b>«홀드콘 꽂기» → «1단 — 콘 없음» → «곧 2단 — 데크콘 준비» → «데크콘 꽂기»</b>.
+      홀드콘은 컨테이너선 20ft 만(40ft 없음), 복합선은 곳당 개수대로. 카드 위에 <b>작업량</b>(양하·선적 대수, 호기별, 콘 작업 종류별)이 같이 셉니다(2.26). PCTC는 카토스 실적, 동방은 검수앱 완료 기록이 자료입니다.</div>
   `;
   fold.appendChild(steps);
 
