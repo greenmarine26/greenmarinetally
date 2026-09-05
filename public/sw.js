@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.8-01';
-const NOTE = '베이매트릭스 휴지통에 넣은 배는 다시 올라오지 않습니다 — 휴지통이 곧 영구 삭제입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.9';
+const NOTE = 'X-RAY 세관봉인 번호가 터미널 자료에서 자동으로 채워지고, 봉인자는 미르에게 등록한 그 조 호기 근무자로 적힙니다 — 등록 전에는 빈칸(수기)';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

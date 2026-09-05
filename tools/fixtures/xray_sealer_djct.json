@@ -1,0 +1,90 @@
+{
+"info": {
+"vsl": "DJCT",
+"pier": "PCTC",
+"planDate": "2026-09-05 19:00 ~ 2026-09-06 06:00",
+"voyage": null,
+"termVoy": "DJCT-0018"
+},
+"xrayList": {
+"DJLU5150170": {
+"at": 1788501409464,
+"dest": "평택 (신)제1컨테이너검색기",
+"iso": "45GP",
+"kind": "X-RAY",
+"seal": "DJHN225094"
+},
+"DYLU2150705": {
+"at": 1788501409464,
+"dest": "평택 (신)제1컨테이너검색기",
+"iso": "22GP",
+"kind": "X-RAY",
+"seal": "DYL726250"
+},
+"HLHU6412125": {
+"at": 1788501409464,
+"dest": "평택 (신)제1컨테이너검색기",
+"iso": "45GP",
+"kind": "X-RAY",
+"seal": "271282"
+}
+},
+"termWork": {
+"DJLU5150170": {
+"at": 1788605447000,
+"customsSeal": "521305",
+"equip": "GC102",
+"fe": "F",
+"hd": "D",
+"iso": "4510",
+"op": "DJS",
+"pod": "KRPTK",
+"pos": "120882",
+"seal": "DJHN225094",
+"status": "Stacking"
+},
+"DYLU2150705": {
+"at": 1788606039000,
+"customsSeal": "521361",
+"equip": "GC102",
+"fe": "F",
+"hd": "D",
+"iso": "2210",
+"op": "DYS",
+"pod": "KRPTK",
+"pos": "110482",
+"seal": "DYL726250",
+"status": "Stacking"
+},
+"HLHU6412125": {
+"at": 1788604056000,
+"customsSeal": "521321",
+"equip": "GC102",
+"fe": "F",
+"hd": "D",
+"iso": "4510",
+"op": "SKR",
+"pod": "KRPTK",
+"pos": "120888",
+"seal": "271282",
+"status": "Stacking"
+}
+},
+"completed": {
+"DJLU5150170": {
+"at": 1788605447000,
+"by": "터미널(CATOS)",
+"equip": "2호기"
+},
+"DYLU2150705": {
+"at": 1788606039000,
+"by": "터미널(CATOS)",
+"equip": "2호기"
+},
+"HLHU6412125": {
+"at": 1788604056000,
+"by": "터미널(CATOS)",
+"equip": "2호기"
+}
+}
+}

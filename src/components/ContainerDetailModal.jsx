@@ -1,4 +1,4 @@
-import React, { useState , useMemo} from 'react';
+import React, { useState , useMemo, useRef } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
@@ -78,7 +78,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
   //  2.39: 「봉인자 등록」 — 번호만 미리 넣는 것과 실제로 봉인을 단 것을 가른다.
   //  검수사 확정 *«번호는 입력했더라도 현장에서 봉인을 다 못할수도 있기 때문»*
-  const [xRegister, setXRegister] = useState(!!xraySeal?.sealer);
+  //  3.9 감사: 초기값은 **계산된 봉인자**(사람 등록 · 조 등록 근무자)다. 저장된 sealer 만 보면 조 근무자가 보이는 컨의 체크가 꺼져 있어,
+  //    전자봉인만 고쳐 저장해도 register:false 가 나가 «어제 조를 오늘 등록하면 채워진다»가 그 컨에서 영영 깨진다(감사 실측).
+  const xRegisterInit = !!xraySealerOf(xraySeal, comp, voyageInfo);
+  const [xRegister, setXRegister] = useState(xRegisterInit);   // 2.39: 「봉인자 등록」
+  const xRegTouched = useRef(false);   // 3.9 재감사: 사람이 체크를 눌렀을 때만 봉인자를 건드린다(패널 변형은 재마운트가 없어 앞 컨 값이 남는다 — 편집 열 때 되돌린다)
   // V7.94-09: 남은 자리 선택창용 — 트윈 짝꿍 후보·짝꿍 베이 매핑
   // V8.70: 출발지 기준 트윈 짝꿍 자동 계산 제거 — PositionEditModal이 도착지 기준 "트윈 지정"으로 처리.
   const posEditBayPairs = useMemo(() => {
@@ -263,7 +267,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
   const handleSaveXSeal = async () => {
     await fbSetXraySeal(voyageKey, c.cn, xSealVal.trim(), xEsealVal.trim(), inspector,
-                        { register: xRegister });   // 2.39: 체크한 사람이 봉인자가 된다
+                        xRegTouched.current && xRegister !== xRegisterInit ? { register: xRegister } : undefined);   // 2.39 · 3.9: 사람이 체크를 눌러 바꿨을 때만 봉인자를 건드린다
     setEditingXSeal(false);
   };
 
@@ -1220,7 +1224,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 {/*  2.39 봉인자 등록 — 체크해야 출력물에 이름이 찍힌다.
                      안 하면 봉인번호만 인쇄되고 봉인자 칸은 손글씨용 밑줄로 남는다. */}
                 <label className="flex items-center gap-2 px-1 py-1.5 cursor-pointer select-none">
-                  <input type="checkbox" checked={xRegister} onChange={(e) => setXRegister(e.target.checked)}
+                  <input type="checkbox" checked={xRegister} onChange={(e) => { xRegTouched.current = true; setXRegister(e.target.checked); }}
                     className="w-4 h-4 accent-emerald-500"/>
                   <span className="text-xxs text-dim-200">
                     봉인자 등록 <span className="text-emerald-300 font-bold">{inspector || '(로그인 필요)'}</span>
@@ -1229,11 +1233,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 </label>
                 <div className="flex gap-2">
                   <button onClick={handleSaveXSeal} className="flex-1 px-3 py-2 bg-emerald-700 text-emerald-100 rounded font-bold">저장</button>
-                  <button onClick={() => { setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(!!xraySeal?.sealer); }} className="px-3 py-2 bg-ink-750 text-dim-200 rounded">취소</button>
+                  <button onClick={() => { setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(xRegisterInit); xRegTouched.current = false; }} className="px-3 py-2 bg-ink-750 text-dim-200 rounded">취소</button>
                 </div>
               </div>
             ) : (
-              <button onClick={() => setEditingXSeal(true)} className="w-full text-left space-y-0.5">
+              <button onClick={() => { setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(xRegisterInit); xRegTouched.current = false; }} className="w-full text-left space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="text-2xs text-dim-400">세관:</span>
                   <span className={`text-base mono font-bold ${xSeal ? (xSealError ? 'text-red-300' : 'text-purple-200') : 'text-dim-500 italic'}`}>{xSeal || '미입력'}</span>
@@ -1246,8 +1250,8 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 {/*  2.39: 출력물에 찍힐 봉인자를 여기서 바로 확인한다. */}
                 <div className="flex items-center gap-2">
                   <span className="text-2xs text-dim-400">봉인자:</span>
-                  <span className={`text-base font-bold ${xraySealerOf(xraySeal, comp) ? 'text-emerald-300' : 'text-dim-500 italic'}`}>
-                    {xraySealerOf(xraySeal, comp) || '미등록'}
+                  <span className={`text-base font-bold ${xraySealerOf(xraySeal, comp, voyageInfo) ? 'text-emerald-300' : 'text-dim-500 italic'}`}>
+                    {xraySealerOf(xraySeal, comp, voyageInfo) || '미등록'}
                   </span>
                 </div>
               </button>

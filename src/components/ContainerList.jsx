@@ -4,7 +4,7 @@
 //  - 카드에 POD 도시명, 리퍼 온도 강조
 //  - 실번호/X-RAY 봉인 인라인 편집
 //  - 실오류 (원본 ≠ 실제) 빨강 강조
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
@@ -51,7 +51,7 @@ function shiftPosLabel(p) {
 
 // 1.76-05: dupSeals = utils.dupSealMap(그 모드 전체 컨) — **거른 목록이 아니라 전체**로 판정한다.
 //   필터로 짝이 화면에서 빠져도 중복 배지가 사라지면 안 된다(조용히 실패하는 화면 금지).
-export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer, dupSeals = null }) {
+export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer, dupSeals = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로 계산
   const [cargoFilter, setCargoFilter] = useState('all');
   const [opFilter, setOpFilter] = useState('all'); // 검수업체 필터
   const [podFilter, setPodFilter] = useState('all'); // POD 도시 필터 (선적용)
@@ -354,6 +354,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
           <ContainerCard
             key={c.cn}
             c={c}
+            voyageInfo={voyageInfo}
             comp={compMap[c.cn]}
             isXray={mode === 'discharge' && !!xrayMap[c.cn]}
             xraySeal={xraySeals?.[c.cn] || null}
@@ -369,13 +370,17 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   );
 }
 
-function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer, dupSeals = null }) {
+function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer, dupSeals = null, voyageInfo = null }) {   // 3.9
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
-  const [xRegister, setXRegister] = useState(!!xraySeal?.sealer);   // 2.39: 「봉인자 등록」
+  //  3.9 감사: 초기값은 **계산된 봉인자**(사람 등록 · 조 등록 근무자)다. 저장된 sealer 만 보면 조 근무자가 보이는 컨의 체크가 꺼져 있어,
+  //    전자봉인만 고쳐 저장해도 register:false 가 나가 «어제 조를 오늘 등록하면 채워진다»가 그 컨에서 영영 깨진다(감사 실측).
+  const xRegisterInit = !!xraySealerOf(xraySeal, comp, voyageInfo);
+  const [xRegister, setXRegister] = useState(xRegisterInit);   // 2.39: 「봉인자 등록」
+  const xRegTouched = useRef(false);   // 3.9 재감사: 사람이 체크를 눌렀을 때만 봉인자를 건드린다(조 등록이 뒤늦게 와도 저장이 봉인자를 안 지움)
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
   // TallyOne 1.53: 결과 알림도 앱 안에서 — 브라우저 alert/confirm 은 뜨는 순간 화면이 멈춘다(실측 2026-08-11).
@@ -476,7 +481,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const handleSaveXSeal = async (e) => {
     e?.stopPropagation();
     await fbSetXraySeal(voyageKey, c.cn, xSealVal.trim(), xEsealVal.trim(), inspector,
-                        { register: xRegister });   // 2.39
+                        xRegTouched.current && xRegister !== xRegisterInit ? { register: xRegister } : undefined);   // 2.39 · 3.9: 사람이 체크를 눌러 바꿨을 때만 봉인자를 건드린다
     setEditingXSeal(false);
   };
 
@@ -659,15 +664,15 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                       onKeyDown={e => e.key === 'Enter' && handleSaveXSeal(e)}/>
                     {/*  2.39: 체크해야 출력물에 봉인자가 찍힌다(검수사 «봉인을 다 못할수도 있기 때문»). */}
                     <label className="flex items-center gap-1 cursor-pointer select-none">
-                      <input type="checkbox" checked={xRegister} onChange={e => setXRegister(e.target.checked)}
+                      <input type="checkbox" checked={xRegister} onChange={e => { xRegTouched.current = true; setXRegister(e.target.checked); }}
                         className="w-3.5 h-3.5 accent-emerald-500"/>
                       <span className="text-3xs text-dim-300">봉인자</span>
                     </label>
                     <button onClick={handleSaveXSeal} className="text-emerald-400 text-xs px-1">저장</button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(!!xraySeal?.sealer); }} className="text-dim-400 text-xs px-1">×</button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(xRegisterInit); xRegTouched.current = false; }} className="text-dim-400 text-xs px-1">×</button>
                   </div>
                 ) : (
-                  <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="flex items-center gap-1 text-xxs mono">
+                  <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(xRegisterInit); xRegTouched.current = false; }} className="flex items-center gap-1 text-xxs mono">
                     {xSealError ? (
                       <>
                         <span className="text-dim-400 line-through">{xSealOrig}</span>
@@ -678,7 +683,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                       <span className={xSeal ? 'text-purple-200 font-bold' : 'text-dim-500 italic'}>
                         {xSeal || '미입력'}
                         {xraySeal?.eseal && <span className="text-cyan-300"> / {xraySeal.eseal}</span>}
-                        {xraySealerOf(xraySeal, comp) && <span className="text-emerald-300"> · 봉인자 {xraySealerOf(xraySeal, comp)}</span>}
+                        {xraySealerOf(xraySeal, comp, voyageInfo) && <span className="text-emerald-300"> · 봉인자 {xraySealerOf(xraySeal, comp, voyageInfo)}</span>}
                       </span>
                     )}
                     <Edit3 className="w-3 h-3 text-dim-500"/>

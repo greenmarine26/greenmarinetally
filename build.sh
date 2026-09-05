@@ -449,10 +449,11 @@ if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:fir
 else
   echo "✗ 베이사전 휴지통 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BT"; exit 1
 fi
-# 3.7-08: 터미널 앱(CATOS) 실제 자리가 실적으로 얹히는가
+# 3.7-08: 터미널 앱(CATOS) 실제 자리가 실적으로 얹히는가 · 3.9: X-RAY 봉인자(터미널 표기 금지·조 등록 근무자·없으면 빈칸)
 SMOKE_CP=$(mktemp /tmp/_cp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
   node tools/smoke_catospos.cjs "$SMOKE_CP" || { echo "✗ CATOS 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
+  node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   rm -f "$SMOKE_CP"
 else
   echo "✗ CATOS 자리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1

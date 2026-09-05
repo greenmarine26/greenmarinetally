@@ -149,11 +149,11 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
         eseal: xs.eseal || '',                           // 2.39: 저장할 때 전자봉인을 안 날리려고 들고 다닌다
         //  ★ 2.39 봉인자 — 판정은 utils.xraySealerOf 한 벌뿐이다(화면·인쇄·CSV 가 같은 값을 쓴다).
         //    「봉인자 등록」 체크한 사람 · 그 뒤 양하완료를 다른 사람이 누르면 그 사람 · 손으로 고치면 그것.
-        sealer: xraySealerOf(xs, compMap[cn]),
+        sealer: xraySealerOf(xs, compMap[cn], info),   // 3.9: 터미널 완료면 그 조·호기 근무자(없으면 빈칸)
       };
     });
     return sortByDischargePlan(out);   // 베이별순 + 우선양하순
-  }, [xrayMap, containers, xraySeals, compMap]);
+  }, [xrayMap, containers, xraySeals, compMap, info]);   // 3.9: 조 등록(info.craneCrew)이 바뀌면 봉인자도 다시
 
   //  ★ 2.39 — 봉인번호·봉인자 저장. 조용히 실패하지 않는다(3금지 ③): 실패하면 화면에 띄운다.
   const canEdit = mode === 'discharge' && !!voyageKey;

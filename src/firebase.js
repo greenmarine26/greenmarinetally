@@ -628,7 +628,9 @@ export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by, sealerOpt) {
 
   //  ⚠ 봉인자만 바뀌어도 저장해야 한다. 종전엔 봉인번호만 견줘 조기 반환해서
   //    «번호는 그대로 두고 봉인자만 고치기»가 통째로 막혀 있었다.
-  if (oldSeal === seal && oldEseal === eseal && oldSealer === nextSealer) return;
+  //  3.9 감사: 「봉인자 등록」 **해제**는 값이 그대로여도 저장한다 — 3.9 부터 봉인자가 조 등록으로 계산되므로 저장된 sealer 가 ''
+  //    이어도 화면엔 이름이 보인다. 해제는 sealerAt 을 찍어야 «빈칸으로 두라»가 실제로 남는다(안 찍으면 조용히 실패).
+  if (oldSeal === seal && oldEseal === eseal && oldSealer === nextSealer && o.register !== false) return;
 
   const now = Date.now();
   const history = Array.isArray(cur.history) ? [...cur.history] : [];

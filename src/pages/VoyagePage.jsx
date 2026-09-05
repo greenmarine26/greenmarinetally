@@ -1606,6 +1606,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
           inspector={inspector}
           dischargeEdi={voyage?.discharge?.ediContainers || null}   /* 2.94: 통과화물 판정용 — ListTab 은 voyage 를 안 받는다(1.98 교훈) */
+          voyageInfo={voyage?.info || null}   /* 3.9: X-RAY 봉인자 = 조 등록 근무자 */
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
@@ -1699,6 +1700,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
         <LoloTab
           onOpenPlan={_mirOpenPlan}
+          voyageInfo={voyage?.info || null}   /* 3.9 */
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           briefCtx={briefCtx}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
@@ -2177,7 +2179,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null }) {
+export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈)
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2429,6 +2431,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
         inspector={inspector}
         onOpenContainer={onOpenContainer}
         dupSeals={dupSeals}
+        voyageInfo={voyageInfo}
       />
       ) : (
         <div className="text-center text-sm2 sm:text-xs2 text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
@@ -2878,7 +2881,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
   );
 }
 
-function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null }) {
+function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -3106,6 +3109,7 @@ function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xray
         inspector={inspector}
         onOpenContainer={onOpenContainer}
         dupSeals={dupSeals}
+        voyageInfo={voyageInfo}
       />
       ) : (
         <div className="text-center text-sm2 sm:text-xs2 text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
