@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.11-01';
-const NOTE = '실시간 작업 보드가 화면 바닥까지 쓰고, 베이 그림이 잘리지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.12';
+const NOTE = '실시간 작업 보드 선적 별첨에 목적지별(POD) 표가 붙었습니다 — 완료/전체';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

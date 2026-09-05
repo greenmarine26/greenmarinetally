@@ -10,7 +10,8 @@ window.__calls = [];
 //  3.11: 베이 그림·별첨은 실제 항차 자료(ediContainers·records·completed)와 베이사전(ship_bay_dict_v3/DJCT 사본)이 있어야 그려진다.
 window.__fbShipBayDict = { DJCT: FX.bayDict };
 const voyage = { info: { ...FX.info, vsl: 'DJCT', voy_d: '0223E', voy_l: '0224W' },
-  discharge: { termWork: FX.termWork, completed: FX.completed, ediContainers: FX.ediContainers, records: FX.records }, loading: {} };
+  discharge: { termWork: FX.termWork, completed: FX.completed, ediContainers: FX.ediContainers, records: FX.records },
+  loading: { ediContainers: FX.loadingEdi, completed: {}, records: {} } };   // 3.12: 선적 별첨(넷) 도 그린다
 const dis = { total: 251, done: Object.keys(FX.completed).length, pct: 0 };
 const loa = { total: 274, done: 0, pct: 0 };
 const v = { key: 'DJCT_0223E', info: voyage.info, dis, loa, totalDone: dis.done, totalAll: 525 };

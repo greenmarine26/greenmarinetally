@@ -2372,6 +2372,8 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
                       <tbody>{feRows.map(([k, cells]) => <tr key={k} className="border-t border-line/60"><td className="px-1 text-dim-200">{k}</td>{cells.map((e, i) => <LegendCell key={i} e={e}/>)}</tr>)}</tbody>
                     </table>
                   </div>
+                  {/* 3.12: 선적은 표 넷 — 검수사 «선적은 표4개가 필요합니다 양하처럼 + 포트별» */}
+                  {m === 'loading' && L.pods.length > 0 && mk(`별첨4 · 목적지별 (${modeK})`, L.pods.concat([['합계', tot(L.pods)]]))}
                 </div>
               );
             })}

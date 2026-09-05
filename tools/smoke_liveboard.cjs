@@ -57,6 +57,9 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (!sum1 || den(sum1[1]) !== 110 || den(sum1[2]) !== 141 || den(sum1[3]) !== 251) fail('별첨1 합계 분모가 110/141/251 이 아니다: ' + JSON.stringify(sum1));
   if (!r20 || den(r20[1]) !== 80 || den(r20[2]) !== 30 || den(r20[3]) !== 110) fail("별첨3 20' 분모가 80/30/110 이 아니다: " + JSON.stringify(r20));
   if (!r40 || den(r40[1]) !== 141 || den(r40[2]) !== 0 || den(r40[3]) !== 141) fail("별첨3 40' 분모가 141/0/141 이 아니다: " + JSON.stringify(r40));
+  //  3.12: 선적은 표 넷 — 별첨4 목적지별(DJCT 0224W = HPH 274)
+  for (const need of ['별첨1 · 선사별 (선적)', '별첨2 · 화물 종류별 (선적)', '별첨3 · 규격별 F/E (선적)', '별첨4 · 목적지별 (선적)']) if (!t.includes(need)) fail('선적 별첨에 «' + need + '» 가 없다');
+  const hph = findRow('HPH'); if (!hph || den(hph[3]) !== 274) fail('별첨4 HPH 분모가 274 가 아니다: ' + JSON.stringify(hph));
   const doneAll = Object.values(FX.completed).filter(c => c && c.at).length;
   if (num(sum1[3]) !== doneAll) fail(`별첨1 합계 완료 ${num(sum1[3])} ≠ completed ${doneAll}`);
   //  ★ 표 셋이 같은 열 수(«/» 가 표 사이에서도 한 세로줄) · 그림은 FitBox(transform scale ≤ 1) 안
