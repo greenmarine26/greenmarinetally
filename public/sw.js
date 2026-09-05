@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.14';
-const NOTE = '선사 목록에 섞여 오던 남의 짐(통과화물)이 선적분에서 빠집니다 — 엉뚱한 베이에 뜨던 것도 같이';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.15';
+const NOTE = '동방 배도 실시간 작업 보드에 지금 작업 중인 베이 그림이 뜹니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -4,7 +4,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, legendLiveOf, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -24,6 +24,8 @@ import { fbSubscribeShipBayDict } from '../firebase.js';   // 1.66: 선사를 �
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 import BayPlan from '../components/BayPlan.jsx';   // 3.11: 실시간 작업 보드 — 호기가 지금 작업 중인 베이 한 장(onlyBay)
+import { getShipBayDictData } from '../shipStructure.js';   // ★ 3.15: 보드가 세는 해치를 그림과 같은 장으로 묶으려면 베이사전이 필요하다
+import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // ★ 3.15: 장 목록 — BayPlan 이 쓰는 것과 같은 한 벌
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';   // 3.11: 보드 그림의 칸을 누르면 컨 상세(베이플랜과 같은 모달 — 검수사 «베이플랜과 동일하게»)
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
@@ -2210,6 +2212,19 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
   }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, Object.keys(voyage?.discharge?.ediContainers || {}).length,
       voyage?.loading?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.sizeBytes, Object.keys(voyage?.loading?.ediContainers || {}).length, swapFixList(voyage).length]);
   const recSig = ['discharge', 'loading'].map((mode) => { const r = voyage?.[mode]?.records || {}; let sg = mode; for (const cn of Object.keys(r)) { const x = r[cn] || {}; if (x.bay_actual != null || x.planTaken || x.bay_assign) sg += `|${cn}:${x.bay_actual}-${x.row_actual}-${x.tier_actual}${x.planTaken ? 'T' : ''}${x.bay_assign ? `>${x.bay_assign}-${x.row_assign}-${x.tier_assign}` : ''}`; } return sg; }).join('#');   // 3.13: 정해 준 자리도 서명에
+  //  ★ 3.15: **그 배의 «장(해치)» 목록** — 보드가 세는 묶음과 BayPlan 이 그리는 장을 같게 만든다(`hatchEvenOf` 가 이것을 받는다).
+  //    BayPlan 안에서 하는 두 호출(getShipBayDictData → buildBayPagesFromSummary)과 같은 길이다. 사전이 없으면 null 이고,
+  //    그때는 홀수를 «홀로 선 앞홀수»로 보는 같은 폴백을 양쪽이 함께 쓴다.
+  const boardPages = useMemo(() => {
+    const imo = voyage?.info?.imo, nm = voyage?.info?.vsl;
+    if (!imo && !nm) return null;
+    try {
+      const dict = getShipBayDictData(imo, nm, { vslCode: String(v.key || '').split('_')[0], callsign: voyage?.info?.callsign || '', vslFull: voyage?.info?.vslFull || nm || '' });
+      if (!dict?.bayDef?.baysSummary) return null;
+      return buildBayPagesFromSummary(dict.bayDef) || null;
+    } catch (e) { console.warn('[보드] 베이사전 장 목록 실패 — 해치 묶기는 폴백으로 갑니다', e); return null; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voyage?.info?.imo, voyage?.info?.vsl, v.key]);
   const boardContainers = useMemo(() => {
     const out = {};
     const pad2 = (x) => String(x ?? '').padStart(2, '0');
@@ -2240,6 +2255,39 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
   const cranePanel = (() => {
     //  검수사 «최대 3갱까지 보이게 — 좌측 통계, 1 2 3호기, 그 밑에 다른 선박» → 호기는 옆으로 최대 3칸(그 이상은 +N).
     const shown = cranes.slice(0, 3), more = cranes.length - shown.length;
+    //  ★ 3.15: **컨별 자리가 안 오는 배(동방)도 그림을 낸다.** 검수사 2026-09-06 «그림도 보여주세요.
+    //    양하는 맞게 내려오고 있고 선적도 계획된 선적이면 맞게 보일테이고 검수앱을 사용하면 맞게보이니까요».
+    //    호기→베이를 이을 끈이 동방 자료엔 없으므로(적하목록에 pos·equip 없음) 칸을 **호기가 아니라 베이**로 세운다 —
+    //    방금 완료된 컨들의 계획 자리를 해치로 묶은 것(utils.boardBaysOf). 호기별 대수는 머리줄에 그대로 둔다.
+    //    ⚠ 게이트는 «동방이냐»가 아니라 «호기 자리가 하나도 없느냐»다(규범 §4-2 — 선박 전용 로직을 앞단에 두지 않는다).
+    //    ⚠ 호기 자료(QC 합계)가 **아예 없을 때도** 그린다 — 동방 피드는 완료가 먼저 오고 QC 합계가 늦거나 안 올 수 있다
+    //      (실측 ATPR 2640E — 양하 EDI 131대·자리 131, qcWork 아직 없음). 그때는 두 칸으로 본다(동방 기본 2갱).
+    const noCranePos = !cranes.some((c) => c.bay && /\d/.test(String(c.bay)));
+    const bays = noCranePos && voyage ? boardBaysOf(voyage, Math.min(3, Math.max(2, cranes.length)), 30, boardPages) : [];   // 감사: QC 가 한 대만 올라온 시점에도 두 갱을 본다(동방 기본 2갱)
+    if (bays.length) return (
+      <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">
+        <div className="text-2xs text-dim-400 font-bold">지금 작업 중인 베이
+          <span className="text-dim-500 font-normal"> · {cranes.length ? `${cranes.map((c) => `${c.no}호기 ${c.done}대`).join(' · ')} — ` : ''}호기별 자리가 안 와 베이로 묶었습니다</span>
+        </div>
+        <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${bays.length >= 3 ? 'grid-cols-3' : bays.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {bays.map((b) => (
+            <div key={`${b.mode}-${b.bay}`} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
+                <span className="text-sm font-black text-cyan-200">베이 {b.bay}</span>
+                <span className={b.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{b.mode === 'loading' ? '선적' : '양하'} {b.n}대</span>
+                <span className={`ml-auto ${(Date.now() - (b.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{fmtAgo(b.lastAt)}</span>
+              </div>
+              <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH}>
+                <BayPlan containers={boardContainers[b.mode] || []} compMap={voyage?.[b.mode]?.completed || {}}
+                  xrayMap={voyage?.[b.mode]?.xrayList || {}} mode={b.mode}
+                  shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
+                  onOpenContainer={(cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, b.mode); else onOpen(); }} onlyBay={b.bay} compactZoom={0.36} />
+              </FitBox>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
     return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">   {/* 2갱이면 75/2 · 3갱이면 75/3 (grid-cols-N) · PC 는 줄 높이를 다 쓴다 */}
         <div className="text-2xs text-dim-400 font-bold">호기별 작업 베이{more > 0 ? ` (+${more}호기 더)` : ''}</div>
@@ -2264,7 +2312,7 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
                       onOpenContainer={(cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, c.mode || modeOfBoard); else onOpen(); }} onlyBay={c.bay} compactZoom={0.36} />
                   </FitBox>
                 ) : (
-                  <div className="text-2xs text-dim-500 py-3 text-center">{c.qc ? '동방 배는 컨별 자리가 안 와서 그림이 없습니다' : '베이 미상'}</div>
+                  <div className="text-2xs text-dim-500 py-3 text-center">{c.qc ? '완료 기록이 와야 그림이 뜹니다' : '베이 미상'}</div>
                 )}
               </div>
             ))}

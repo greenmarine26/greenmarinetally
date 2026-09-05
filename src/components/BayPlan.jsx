@@ -19,7 +19,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
+import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
@@ -615,8 +615,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     //    실측 DJCT 0223E 카토스 실적 — 1호기 27/29 → 19/20/21 → 13, 2호기 12/11/13 → 4. 그래서 그 베이가 든 해치의 장을 전부(베이 순) 세로로 쌓는다.
     //    짝은 «짝수+뒤홀수»(규범 §11) — 홀수 b 가 어느 장의 oddBay 면 E=b-1, 홀로 서면(앞홀수) E=b+1.
     const has = (p, b) => [p.evenBay, p.oddBay].some((x) => x != null && parseInt(x, 10) === b);
-    let E = want;
-    if (want % 2 === 1) E = pages.some((p) => p.oddBay != null && parseInt(p.oddBay, 10) === want && p.evenBay != null) ? want - 1 : want + 1;
+    const E = hatchEvenOf(want, pages) ?? want;   // 3.15: 해치 대표 베이는 cargoPlanCore 한 벌(보드가 세는 묶음과 같아야 한다)
     const hatch = [E - 1, E, E + 1];
     const pgs = pages.filter((p) => hatch.some((b) => has(p, b)));
     const pgList = pgs.length ? pgs : pages.filter((p) => has(p, want));

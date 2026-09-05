@@ -390,6 +390,11 @@
   .ct-slot.on{background:var(--add); color:#04120c; border-color:var(--add); font-weight:700;}
   .ct-slot.x{background:transparent; border-style:dashed; color:#334155;}
   .ct-empty{font-size:15px; color:var(--dim); margin-top:8px; line-height:1.5;}
+  .ct-done{padding:6px 2px;}                                     /* 2.27 완료 화면 */
+  .ct-done-h{font-size:26px; font-weight:900; color:var(--add); line-height:1.2;}
+  .ct-done-n{font-size:18px; color:var(--ink); margin-top:6px;} .ct-done-n b{color:var(--add);}
+  .ct-done-c{font-size:14px; color:var(--dim); margin-top:6px; line-height:1.6;}
+  .ct-done-w{font-size:15px; color:var(--accent); margin-top:10px; font-weight:700;}
   .ct-order{font-size:13px; color:var(--dim); margin-top:6px; line-height:1.5;} .ct-order b{color:var(--ink);}   /* 2.26 순서 */
   .ct-count{font-size:14px; color:var(--ink); margin-top:6px; line-height:1.5; padding:8px 10px; border-radius:10px; background:#0b1222;}   /* 2.26 작업량 */
   .ct-s small{font-size:12px; color:var(--dim); font-weight:600;}
@@ -823,8 +828,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 3.14';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.26';   // ★ 2.26: **홀드콘도 콘이다 + 작업량** — 검수사 2026-09-05 «콘앱에서 홀드 작업에는 콘 회수 부분이 없습니다. 홀드콘도 회수해야 하는데» · «콘앱에서 작업한량이 카운트가 안되고 있습니다» · «선적시에도 역순입니다. 홀드콘 장착 데크콘 장착» · «회수 보다도 빼기로 통일 해주세요, 회수는 콘앱에 다른 용도로 쓰고 있습니다» · «빼기 꽂기». 2.25 는 홀드에 들어가면 «홀드 내리는 중/실는 중»이라고만 하고 콘을 말하지 않았고 작업량은 어디에도 없었다. ⇒ ①양하 «데크콘 빼기(2단↑) → 1단 콘 없음 → 홀드콘 빼기», 선적은 역순 «홀드콘 꽂기 → 1단 콘 없음 → 데크콘 꽂기». 홀드콘 유무는 콘 계산과 같은 holdConeCount(컨테이너선 20ft 1·40ft 0, 복합선 곳당 N) — 크기는 계획 rows 의 size(없으면 카토스 iso). ★ 감사 수리 — **받침이 있을 때만 콘**(콘 계산 hasBelow 와 같은 규칙, DJCT 홀드 20ft 72대 중 바닥 02단 26대는 콘 없음 → «홀드 바닥 내리는 중 — 콘 없음»), 동방 터미널 대수(자리 없음)도 작업량에 센다, 위 띠는 뒷 절만. ②작업량 — 모드별 «양하 172/251» · 호기별 대수 · 콘 작업 종류별(데크콘 빼기·1단 콘 없음·홀드콘 빼기(콘 개수)·40ft 홀드) 을 카드 위에, 호기 줄·위 띠에도 «이 호기 N대». 말은 «빼기·꽂기»로 통일(«회수»는 반납분·«장착»은 안 씀). 실측 DJCT 0223E 21:40 — 양하 172/251, 1호기 81·2호기 91, 데크콘 빼기 97·1단 47·홀드콘 빼기 9·40ft 홀드 19 / 2호기 베이 11 홀드 04단 20ft → «홀드콘 빼기», 1호기 베이 20 홀드 08단 40ft → «40ft 홀드콘 없음». 연막검사 tools/smoke_conetiming.cjs(소스에서 CT 블록을 그대로 꺼내 DJCT 사본으로 돌린다)   // ★ 2.25: **콘 타이밍(PCTC 카토스 실적 실시간)** — 검수사 «콘 을 꽂는 타이밍을 인력들이 볼수 있게» · «2단을 선적할려면 컨테이너에 콘을 장착하여야 합니다» · «양하는 반대로 콘은 빼는 타이밍이 있씁니다». 항차를 고르면 상태 4장 아래에 카드 하나 — 수집기 2.22 가 1분마다 카토스에서 넣는 termWork(pos·at·equip)를 30초마다 다시 받아 크레인별 «지금 베이·단»과 신호(선적: 1단 콘 없음 → 곧 2단 콘 준비(남은 ≤2칸) → 2단 콘 장착 / 양하: 84단~ 콘 빼기 → 1단 콘 없음)를 큰 글씨로. 82단 줄 그림(계획 칸 vs 실린 칸). 동방 배는 자리가 없어 «대수만». 실물 재생(SWTD 9012E 185+918대) — 예고가 2단 시작보다 4~14분 앞선다.   // 2.24: **카고플랜 그림이 TallyOne 3.7 을 따라 바뀐다** — 콘앱은 카고플랜을 검수앱과 같은 컴포넌트(PrintableCargoPlanV2)로 그리므로, 선적 플랜의 포트 무늬(빗금·줄·점)가 사라지고 **목적지 고정 바탕색 + 칸 오른쪽 위 세 글자**로 바뀐 것이 콘앱에도 그대로 나온다. 콘앱 자체 로직은 한 줄도 안 건드렸고, 판수만 올린다 — 안 올리면 화면이 바뀌었는데 콘 담당이 옛 판을 계속 보게 된다(자동 업데이트 감지 기준이 __CONEV 다).   // 2.23 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 3.15';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 2.27';   // ★ 2.27: **동방(PNCT)도 제 부두로 가린다 — 검수사 2026-09-06 «동방도 같이 넣어주세요 검수앱 사용할껄 대비해서».** `info.pier` 는 배가 다가와야 채워져 실측 활성 18척 중 넉 척뿐이었다 — 동방 여섯 척이 PCTC 시간표로 쉬고 PCTC 여덟 척이 «동방»으로 잘못 적히고 있었다. 부두 문지기 `ctPierOf` 한 벌(pier→berth 6~9·13~16→lane 항로표→termVoy 하이픈)로 가린다. 보관 248항차 전수 대조 어긋남 0 · 활성 18척 전부 판정(동방 6·PCTC 12). 동방은 중식이 11:30, 야식이 23:30 이고 컨별 자리가 안 와 원천이 «동방 — 검수앱 기록»이다. 연막검사 `tools/smoke_conedone.cjs`(부두 사례 22건 실데이터). ★감사 수리 셋 — ①선석 판정을 검수앱 `getPierFromBerth` 와 글자 그대로 같게(«N번선석»·타항 차단 — 부산·광양도 «N번선석»을 써서 콘앱만 평택으로 읽던 자리) ②부두를 못 가리면 PCTC 표로 폴백하지 않고 «부두 미상»이라 밝힌다(폴백은 동방 배에 하루 150분이 어긋난다) ③받은 termWork 의 `src:'pnct'` 표식으로 부두를 한 번 더 다진다(표기 관습이 뒤집혀도 스스로 고쳐진다). **상태 카드에 «완료/전체» · 끝난 배는 완료 화면 · 쉬는 시간을 «멈춤»이라 하지 않는다.** 검수사 2026-09-06 «콘앱에서 선박을 선택화면 양하 123/251 선적 12/274 이런식으로 해주고 그밑은 간단한 설명과 실시간 화면이 보여지게 해주세요. 그리고 지금처럼 작업이 완료되고 수석이 완료처리를 안해서 남아 있을경우 완료된 선박이라는걸 표시해주고 실시간으로도 완료가 되면 첫번째 화면처럼이 아니고 완료처리 화면으로 보여주세요». 실측 DJCT 0223E — 양하 251/251·선적 274/274 로 끝났는데 «73분째 기록 없음»이 떴다. ⇒ ①상태 카드 양하·선적을 «완료/전체»로(정본 `completed`, 30초마다 카드만 갈아 끼움 — 화면 전체를 다시 그리지 않는다) 부제는 «남은 N대 · N%» ②**완료 판정** — 자료가 있는 쪽이 다 찼으면 완료(양하만 있는 배는 양하만), 수석 완료 처리와 무관 ③완료면 콘 타이밍 카드 대신 **완료 화면**(양하·선적 대수 · 마지막 실적 · 콘 작업량 요약 · «수석 완료 처리 대기»), 위 띠도 «✅ 작업 완료» 한 줄 ④**근무시간표**(`CT_SHIFTS` — 검수사 2026-09-06 원문, 검수앱 `nlSearch.WORK_SHIFTS` 와 같은 값)를 물려 쉬는 시간이면 «쉬는 시간 — 01:00 재개»로 말하고 주황 경고를 안 쓴다. 연막검사 `tools/smoke_conedone.cjs`   // ★ 2.26: **홀드콘도 콘이다 + 작업량** — 검수사 2026-09-05 «콘앱에서 홀드 작업에는 콘 회수 부분이 없습니다. 홀드콘도 회수해야 하는데» · «콘앱에서 작업한량이 카운트가 안되고 있습니다» · «선적시에도 역순입니다. 홀드콘 장착 데크콘 장착» · «회수 보다도 빼기로 통일 해주세요, 회수는 콘앱에 다른 용도로 쓰고 있습니다» · «빼기 꽂기». 2.25 는 홀드에 들어가면 «홀드 내리는 중/실는 중»이라고만 하고 콘을 말하지 않았고 작업량은 어디에도 없었다. ⇒ ①양하 «데크콘 빼기(2단↑) → 1단 콘 없음 → 홀드콘 빼기», 선적은 역순 «홀드콘 꽂기 → 1단 콘 없음 → 데크콘 꽂기». 홀드콘 유무는 콘 계산과 같은 holdConeCount(컨테이너선 20ft 1·40ft 0, 복합선 곳당 N) — 크기는 계획 rows 의 size(없으면 카토스 iso). ★ 감사 수리 — **받침이 있을 때만 콘**(콘 계산 hasBelow 와 같은 규칙, DJCT 홀드 20ft 72대 중 바닥 02단 26대는 콘 없음 → «홀드 바닥 내리는 중 — 콘 없음»), 동방 터미널 대수(자리 없음)도 작업량에 센다, 위 띠는 뒷 절만. ②작업량 — 모드별 «양하 172/251» · 호기별 대수 · 콘 작업 종류별(데크콘 빼기·1단 콘 없음·홀드콘 빼기(콘 개수)·40ft 홀드) 을 카드 위에, 호기 줄·위 띠에도 «이 호기 N대». 말은 «빼기·꽂기»로 통일(«회수»는 반납분·«장착»은 안 씀). 실측 DJCT 0223E 21:40 — 양하 172/251, 1호기 81·2호기 91, 데크콘 빼기 97·1단 47·홀드콘 빼기 9·40ft 홀드 19 / 2호기 베이 11 홀드 04단 20ft → «홀드콘 빼기», 1호기 베이 20 홀드 08단 40ft → «40ft 홀드콘 없음». 연막검사 tools/smoke_conetiming.cjs(소스에서 CT 블록을 그대로 꺼내 DJCT 사본으로 돌린다)   // ★ 2.25: **콘 타이밍(PCTC 카토스 실적 실시간)** — 검수사 «콘 을 꽂는 타이밍을 인력들이 볼수 있게» · «2단을 선적할려면 컨테이너에 콘을 장착하여야 합니다» · «양하는 반대로 콘은 빼는 타이밍이 있씁니다». 항차를 고르면 상태 4장 아래에 카드 하나 — 수집기 2.22 가 1분마다 카토스에서 넣는 termWork(pos·at·equip)를 30초마다 다시 받아 크레인별 «지금 베이·단»과 신호(선적: 1단 콘 없음 → 곧 2단 콘 준비(남은 ≤2칸) → 2단 콘 장착 / 양하: 84단~ 콘 빼기 → 1단 콘 없음)를 큰 글씨로. 82단 줄 그림(계획 칸 vs 실린 칸). 동방 배는 자리가 없어 «대수만». 실물 재생(SWTD 9012E 185+918대) — 예고가 2단 시작보다 4~14분 앞선다.   // 2.24: **카고플랜 그림이 TallyOne 3.7 을 따라 바뀐다** — 콘앱은 카고플랜을 검수앱과 같은 컴포넌트(PrintableCargoPlanV2)로 그리므로, 선적 플랜의 포트 무늬(빗금·줄·점)가 사라지고 **목적지 고정 바탕색 + 칸 오른쪽 위 세 글자**로 바뀐 것이 콘앱에도 그대로 나온다. 콘앱 자체 로직은 한 줄도 안 건드렸고, 판수만 올린다 — 안 올리면 화면이 바뀌었는데 콘 담당이 옛 판을 계속 보게 된다(자동 업데이트 감지 기준이 __CONEV 다).   // 2.23 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -924,7 +929,7 @@ async function fbFetchVoyages(){
       berthShift: (info.berthShift!=null?Number(info.berthShift):null),   // ConeOne 2.5: 배정표 이적(모브) — 시프팅 정본 판정에 넘긴다
       departBadgeAt: info.departBadgeAt||0,   // V9.38: 출항 전환은 **검수앱이 판정**한 결과를 그대로 쓴다
       terminalStatus: info.terminalStatus||'',// V9.38: 터미널 상태(판B 수집기가 채움)
-      pier: info.pier||'',                    // ★ 2.25: 'PCTC' 면 카토스 실적, 아니면 검수앱 기록(동방)으로 콘 타이밍
+      pier: ctPierOf(info),                   // ★ 2.27: 부두 문지기 한 벌(pier→berth→lane→termVoy) — 'PCTC' 카토스 실적 · 'PNCT' 동방
       voy_d: info.voy_d||'', voy_l: info.voy_l||'',
       dischargeDoneAt: info.dischargeDone ? (info.dischargeDoneAt||0) : (info.inspectorDone ? (info.inspectorDoneAt||0) : 0),  // V7.90: 양하 완료 기록 (분리작업 자동 판정)
       hasD, hasL,
@@ -1283,7 +1288,71 @@ function setShipType(t){
 //     가장 낮은 데크단**을 1단으로 본다(ctDeck1). ⚠ 베이는 «짝수+뒤홀수» 짝으로 묶어 센다(규범 §11 — 20ft 21/23 위에 40ft 22).
 //   ⚠ 지연 1~3분(카토스 입력→수집기 1분→여기 30초 갱신) — 그래서 «곧 2단» 을 남은 2칸에서 미리 낸다.
 const CT = { key:null, timer:null, tw:{discharge:{}, loading:{}}, comp:{discharge:{}, loading:{}}, rec:{discharge:{}, loading:{}},
-             recAt:0, at:0, err:'', pier:'' };
+             recAt:0, at:0, err:'', pier:'', vsl:'', voy:'' };   // 2.27: vsl·voy — 완료 화면 제목
+//  ★ 2.27: **부두는 여기서 가린다 — 문지기 자리다.** 검수사 2026-09-06 «동방도 같이 넣어주세요 검수앱 사용할껄 대비해서».
+//    동방(PNCT)과 평택컨(PCTC)은 쉬는 시간도, 실적 원천도 다르다. 그런데 `info.pier`(PORT-MIS)는 **배가 다가와야** 채워진다 —
+//    실측 2026-09-06 활성 18척 중 넉 척뿐이었다. 그것만 보면 동방 여섯 척이 PCTC 시간표로 쉬고,
+//    자리가 아직 안 채워진 PCTC 여덟 척이 «검수앱 기록(동방)»으로 잘못 적힌다(2.25~2.26 이 그랬다).
+//  ⇒ 근거를 넷 겹친다. **보관 248항차 전수 대조 — 어긋남 0**(pier 를 가린 채 굴려 정답과 맞춰 봤다).
+//      ① `pier`(PORT-MIS)  ② `berth` «동부두 N번선석» 6~9 PCTC · 13~16 PNCT — 검수앱 `utils.getPierFromBerth` 와 같은 벌(208건 일치)
+//      ③ `lane` 항로표 — 규범 §11 «관할은 선박명이 아니라 항로». 실측 16항로 전부 한 부두로만 갈렸다(혼재 0)
+//      ④ `termVoy` 하이픈 — PCTC `DJCF-0011` · PNCT `OBWH104`(50건 갈림 0). 항로표에 없는 새 항로의 안전망이다.
+//    못 가리면 빈 문자열이고, 그때만 PCTC 시간표로 폴백한다(종전과 같음 — 조용히 틀린 답을 내지 않는다).
+//    ⚠ 항로가 늘면 이 표에 한 줄 넣는다. 표에 없어도 ④가 받으므로 조용히 죽지는 않는다.
+const CT_LANE_PIER = { PDX4:'PNCT', PLS:'PNCT', KPX:'PNCT', YTFF:'PNCT', RZPT:'PNCT', PNSX:'PNCT', PTLY:'PNCT', KMV:'PNCT',
+                       NTX:'PCTC', IHP:'PCTC', IA8:'PCTC', IHS1:'PCTC', PSS:'PCTC', PTK:'PCTC', TIS2:'PCTC', BTS:'PCTC' };
+function ctPierOf(info){
+  const i = info || {};
+  const p = String(i.pier||'').toUpperCase();
+  if(p.includes('PNCT')) return 'PNCT';
+  if(p.includes('PCTC')) return 'PCTC';
+  //  ⚠ 검수앱 `utils.extractBerthNo`·`isForeignPortBerth`·`getPierFromBerth` 와 **글자 그대로 같은 규칙**이다(감사 지적 2026-09-06 —
+  //    종전 `/(\d+)\s*번/` 은 «번선석»이 아닌 것도 물었고 타항을 안 걸렀다. 부산·광양 PORT-MIS 도 «N번선석»을 쓰므로
+  //    타항 신고가 붙으면 콘앱만 그것을 평택 부두로 읽는다 — 1.26-01 사고와 같은 자리다).
+  const bth = String(i.berth||'');
+  if(!/인천|부산|광양|울산|마산|군산|목포|포항|동해|대산|여수|삼천포|INCHEON|BUSAN|PUSAN|GWANGYANG|ULSAN|MASAN/i.test(bth)){
+    const m = /(\d+)\s*번선석/.exec(bth);
+    if(m){ const n = parseInt(m[1],10); if(n>=6 && n<=9) return 'PCTC'; if(n>=13 && n<=16) return 'PNCT'; }
+  }
+  const l = CT_LANE_PIER[String(i.lane||'').toUpperCase().trim()];
+  if(l) return l;
+  const tv = String(i.termVoy||'').trim();
+  if(tv) return tv.includes('-') ? 'PCTC' : 'PNCT';
+  return '';
+}
+//  ★ 2.27: 터미널 **근무시간표** — 쉬는 시간(중식·저녁·야식·티타임·아침)에 멈춘 것을 «자료가 멈췄다»로 말하지 않는다.
+//    검수사 2026-09-06 «작업시간을 알려 드렸는데 전달을 못받으신듯 합니다. PCTC 08:00~12:00 오전 작업 13:00~17:30 오후작업
+//    19:00~24:00 야간 전반 작업 01:00~03:30 야간 중간 작업 04:00~06:30 야간 후반 작업 중간 중간은 점심 저녁 야식 티타임(30분)
+//    아침시간 입니다. PNCT 08:00~11:30 주간 오전 작업 13:00~17:30 오후작업 19:00~23:30 야간 전반작업 01:00~05:30 야간 후반 작업입니다.»
+//    ⚠ 값은 검수앱 `nlSearch.WORK_SHIFTS`(2026-08-13 확정)와 **같은 한 벌**이다 — 한쪽만 고치지 마라(콘앱은 번들 밖이라 사본).
+const CT_SHIFTS = {
+  PCTC: [[480,720],[780,1050],[1140,1440],[60,210],[240,390]],
+  PNCT: [[480,690],[780,1050],[1140,1410],[60,330]],
+};
+/* 지금이 쉬는 시간인가 — {rest:true, until:'01:00'} 또는 {rest:false}. 자정을 넘는 창도 분으로 편다. */
+function ctRestNow(pier, at){
+  //  ⚠ 부두를 못 가렸으면 **쉬는 시간을 지어내지 않는다**(감사 지적 — PCTC 표로 폴백하면 동방 배에 하루 150분이 어긋난다.
+  //    11:30~12:00·23:30~24:00·05:30~06:30 은 거짓 «멈춤», 03:30~04:00 은 진짜 멈춤을 가린다). 모르면 모른다고 한다.
+  const wins = CT_SHIFTS[String(pier||'').toUpperCase()];
+  if(!wins) return { rest:false, unknown:true };
+  const d = new Date(at || Date.now()); const m = d.getHours()*60 + d.getMinutes();
+  for(const [a,b] of wins){ if(m >= a && m < b) return { rest:false }; }
+  let next = null;
+  for(const [a] of wins){ const diff = (a - m + 1440) % 1440; if(next===null || diff < next.diff) next = { diff, a }; }
+  const hh = String(Math.floor(next.a/60)).padStart(2,'0'), mm = String(next.a%60).padStart(2,'0');
+  return { rest:true, until: `${hh}:${mm}`, mins: next.diff };
+}
+//  ★ 2.27(감사 보강): **자료 자체가 부두를 말해 준다.** 동방 적하목록으로 들어온 termWork 행은 `src:'pnct'` 를 달고 온다
+//    (수집기 `pnctpull.to_termwork` — 실측 OBWH 2731E 양하 188·선적 282행 전부). 표기 관습(termVoy 하이픈)보다 이것이 세다.
+//    그래서 자료를 받은 뒤 한 번 더 다진다 — 관습이 뒤집혀도 스스로 고쳐진다.
+function ctPierFromTw(tw){
+  let pnct = 0, other = 0;
+  for(const m of ['discharge','loading']) for(const cn in (tw[m]||{})){
+    const t = tw[m][cn]; if(!t) continue;
+    if(String(t.src||'') === 'pnct') pnct++; else other++;
+  }
+  return pnct && !other ? 'PNCT' : (other && !pnct ? 'PCTC' : '');
+}
 const CT_STALE_MIN = 30;    // 이 시간 넘게 기록 없는 크레인은 «멈춤»으로 보인다
 const CT_FRESH_MIN = 15;    // 최근 실적이 이보다 오래되면 자료 신선도 경고
 
@@ -1294,7 +1363,7 @@ function ctEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp
 function ctStart(voyageKey){
   ctStop();
   const v=(state.voyages||[]).find(x=>x.key===voyageKey)||{};
-  CT.key = voyageKey; CT.pier = String(v.pier||'').toUpperCase();
+  CT.key = voyageKey; CT.pier = String(v.pier||'').toUpperCase(); CT.vsl = v.vsl||''; CT.voy = v.voy||'';
   CT.tw = {discharge:{}, loading:{}}; CT.comp = {discharge:{}, loading:{}}; CT.rec = {discharge:{}, loading:{}};
   CT.recAt = 0; CT.at = 0; CT.err = ''; CT.busy = false;
   _ctPlanCache = { key:null, discharge:{}, loading:{} };
@@ -1336,6 +1405,7 @@ async function ctFetch(){
       ctGet(`${base}/discharge/completed.json`), ctGet(`${base}/loading/completed.json`)]);
     if(CT.key !== key){ CT.busy = false; return; }   // 그 사이 다른 항차를 골랐다
     CT.tw = {discharge:twD, loading:twL}; CT.comp = {discharge:cpD, loading:cpL}; CT.at = Date.now(); CT.err = '';
+    const _pTw = ctPierFromTw(CT.tw); if(_pTw) CT.pier = _pTw;   // 2.27(감사): 자료 표식이 표기 관습보다 세다
     // 검수앱 실적 자리(bay_actual)는 5분마다 — records 는 크다. **검수원이 찍은 완료**가 있을 때만(터미널 반영분뿐이면 필요 없다).
     const own = (cp)=>Object.values(cp||{}).some(c=>c && c.at && !String(c.by||'').startsWith('터미널'));
     const needRec = (own(cpD) || own(cpL)) && (Date.now()-CT.recAt > 300000);
@@ -1440,6 +1510,7 @@ function ctHoldBelow(mode, bay, row, tier){
    ★ 2.26: 홀드도 콘이다 — 양하 «데크콘 빼기 → 홀드콘 빼기», 선적은 역순 «홀드콘 꽂기 → 1단 콘 없음 → 2단부터 데크콘 꽂기»
    (검수사 «홀드콘도 회수해야 하는데» · «선적시에도 역순입니다. 홀드콘 장착 데크콘 장착» · 말은 «빼기·꽂기» — «회수»는 콘앱에서 반납분 뜻으로 이미 쓴다).
    작업량(count)도 여기서 센다 — 모드별 대수·호기별 대수·콘 작업 종류별 대수(deck 2단↑ · deck1 1단 · hold 콘 있는 홀드 · hold0 콘 없는 40ft 홀드). */
+function pierOf(){ return CT.pier || ''; }
 function ctCompute(){
   const rows = []; const have = new Set(); let noPos = 0;
   const count = { discharge:{n:0, byEq:{}, deck:0, deck1:0, hold:0, hold0:0, holdB:0, holdCones:0, term:0},
@@ -1512,12 +1583,24 @@ function ctCompute(){
       else if(c.tier>t1){ cls='act'; sig=`${tierS}단 내리는 중 — 데크콘 빼기`; sub=`베이 ${bayS} · ${c.row}열 · 1단은 ${t1}단`; }
       else { cls='ok'; sig=`1단(${t1}단) 내리는 중 — 콘 없음`; sub=`베이 ${bayS} · 1단 ${filled}칸 내림`; }
     }
-    if(stale){ cls='keep'; sig=`${Math.round((now-c.at)/60000)}분째 기록 없음`; sub=`마지막 베이 ${bayS} ${tierS}단 — ` + sub; }
+    if(stale){
+      const rest = ctRestNow(pierOf());   // 2.27: 쉬는 시간이면 «멈춤»이 아니다
+      cls='keep';
+      sig = rest.rest ? `쉬는 시간 — ${rest.until} 재개` : `${Math.round((now-c.at)/60000)}분째 기록 없음${rest.unknown ? ' (부두 미상 — 쉬는 시간은 못 봅니다)' : ''}`;
+      sub = `마지막 베이 ${bayS} ${tierS}단 — ` + sub;
+    }
     out.push({eq, mode:c.mode, bay:c.bay, tier:c.tier, row:c.row, at:c.at, cn:c.cn, src:c.src, cls, sig, sub, filled, p1, t1,
               rows1:s?s.t1:new Set(), pair, stale, n:(count[c.mode].byEq[eq]||0), size:c.size||'', below:c.below, holdCone:c.holdCone});
   }
   out.sort((a,b)=>(a.stale-b.stale) || (b.at-a.at));
-  return {cranes:out, noPos, n:rows.length, lastAt, count};
+  //  ★ 2.27 완료 판정 — **자료가 있는 쪽이 다 찼으면 완료**(양하만 있는 배는 양하만). 수석 완료 처리와 무관하다.
+  //    검수사 «작업이 완료되고 수석이 완료처리를 안해서 남아 있을경우 완료된 선박이라는걸 표시해주고».
+  //    진행 수는 정본 `completed` 로 센다(터미널 반영분 포함) — 콘 타이밍의 자리 있는 실적(count.n)과 다르다.
+  const done = { discharge: Object.keys(CT.comp.discharge||{}).length, loading: Object.keys(CT.comp.loading||{}).length };
+  const total = { discharge: ctPlanRows('discharge').length, loading: ctPlanRows('loading').length };
+  const modesWith = ['discharge','loading'].filter(m => total[m] > 0);
+  const finished = modesWith.length > 0 && modesWith.every(m => done[m] >= total[m]);
+  return {cranes:out, noPos, n:rows.length, lastAt, count, done, total, have: modesWith, finished};
 }
 /* ★ 2.26 작업량 한 줄 — «양하 172/251 · 1호기 81 · 2호기 91 — 데크콘 빼기 97 · 1단 콘 없음 47 · 홀드콘 빼기 9(콘 9개) · 40ft 홀드 19». 계획이 없으면 분모 생략. */
 function ctCountLine(mode, k){
@@ -1537,12 +1620,18 @@ function ctRender(){
   if((!el && !strip) || !CT.key) return;
   const r = ctCompute();
   const hh = (ms)=>{ const d=new Date(ms); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
-  const srcName = CT.pier==='PCTC' ? '카토스(PCTC) 실적' : '검수앱 기록(동방)';
+  //  2.27: 동방은 컨별 자리·호기가 안 온다(적하목록에 대수만) — 콘 신호를 내는 자리는 검수원이 검수앱으로 찍은 기록뿐이다.
+  const srcName = CT.pier==='PCTC' ? '카토스(PCTC) 실적' : CT.pier==='PNCT' ? '동방 — 검수앱 기록' : '검수앱 기록';
   const lastAgo = r.lastAt ? Math.round((Date.now()-r.lastAt)/60000) : null;
-  const fresh = lastAgo===null ? '' : (lastAgo>CT_FRESH_MIN ? `⚠ 최근 실적 ${hh(r.lastAt)}(${lastAgo}분 전) — 자료가 멈췄을 수 있습니다` : `최근 실적 ${hh(r.lastAt)}(${lastAgo}분 전)`);
+  //  ★ 2.27: 쉬는 시간이면 «자료가 멈췄다»가 아니라 «쉬는 시간»이다(근무시간표 CT_SHIFTS).
+  const _rest = ctRestNow(CT.pier);
+  const fresh = lastAgo===null ? '' : ((lastAgo>CT_FRESH_MIN && !_rest.rest) ? `⚠ 최근 실적 ${hh(r.lastAt)}(${lastAgo}분 전) — 자료가 멈췄을 수 있습니다${_rest.unknown ? ' (부두 미상 — 쉬는 시간은 못 봅니다)' : ''}`
+    : (_rest.rest ? `최근 실적 ${hh(r.lastAt)} · 쉬는 시간 — ${_rest.until} 재개` : `최근 실적 ${hh(r.lastAt)}(${lastAgo}분 전)`));
   // 위 고정 띠 — 크레인마다 한 줄(결과 화면을 보고 있어도 보인다)
   if(strip){
-    strip.innerHTML = r.cranes.filter(c=>!c.stale).slice(0,3).map(c=>
+    strip.innerHTML = r.finished
+      ? `<div class="ct-s ok"><span>${ctEsc(CT.vsl||'')} 작업 완료</span><b>✅ 수석 완료 처리 대기</b></div>`
+      : r.cranes.filter(c=>!c.stale).slice(0,3).map(c=>
       `<div class="ct-s ${c.cls}"><span>${ctEsc(c.eq)} 베이${String(c.bay).padStart(2,'0')} <small>${c.n}대</small></span><b>${ctEsc(c.sig.includes(' — ') ? c.sig.split(' — ').pop() : c.sig)}</b></div>`).join('')   // 감사: 띠는 뒷 절만(폰 폭)
       || (CT.err ? `<div class="ct-s keep"><b>⚠ ${ctEsc(CT.err)}</b></div>` : '');
     strip.hidden = !strip.innerHTML;
@@ -1552,7 +1641,36 @@ function ctRender(){
       if(window.__bvChipFit) window.__bvChipFit();   // 베이플랜 칩도 따라 내려간다(띠 높이가 바뀔 때)
     }catch(e){}
   }
+  //  2.27: 상태 카드(양하·선적 «완료/전체»)도 30초마다 같이 갱신한다 — 화면 전체를 다시 그리지 않는다(입력·스크롤 보존).
+  try{
+    const kp = document.querySelector('.kpi-row');
+    if(kp && CT.key===state.voyageKey){
+      const set=(i,val,sub)=>{ const k=kp.children[i]; if(!k) return; const v=k.querySelector('.k-val'), b=k.querySelector('.k-sub'); if(v) v.textContent=val; if(b) b.textContent=sub; };
+      const D=r.total.discharge, L=r.total.loading, dd=r.done.discharge, dl=r.done.loading;
+      if(D>0) set(1, `${dd}/${D}`, `남은 ${Math.max(0,D-dd)}대 · ${Math.round(dd/D*100)}%`);
+      if(L>0) set(2, `${dl}/${L}`, `남은 ${Math.max(0,L-dl)}대 · ${Math.round(dl/L*100)}%`);
+      const k0=kp.children[0]; if(k0){ const b=k0.querySelector('.k-sub'); const voy=CT.voy?('항차 '+CT.voy):'항차 미상';
+        if(b) b.textContent = (r.finished?'✅ 작업 완료 · ':'') + voy; }
+    }
+  }catch(e){ console.warn('[콘 타이밍] 상태 카드 갱신 실패', e); }
   if(!el) return;
+  //  ★ 2.27 **완료 화면** — 검수사 «실시간으로도 완료가 되면 첫번째 화면처럼이 아니고 완료처리 화면으로 보여주세요».
+  //    «N분째 기록 없음»·주황 경고를 끝난 배에 띄우지 않는다(실측 DJCT 0223E — 양하 251/251·선적 274/274 인데 «73분째 기록 없음»).
+  if(r.finished){
+    const cl = ['discharge','loading'].filter(m=>r.total[m]>0)
+      .map(m=>`${m==='loading'?'선적':'양하'} <b>${r.done[m]}/${r.total[m]}</b>`).join(' · ');
+    const cones = ['discharge','loading'].map(m=>{ const k=r.count[m]; if(!k||!k.n) return '';
+      const verb = m==='loading' ? '꽂기' : '빼기';
+      const seg=[k.deck?`데크콘 ${verb} ${k.deck}`:'', k.hold?`홀드콘 ${verb} ${k.hold}(콘 ${k.holdCones}개)`:'', k.deck1?`1단 콘 없음 ${k.deck1}`:'', k.holdB?`홀드 바닥 ${k.holdB}`:'', k.hold0?`40ft 홀드 ${k.hold0}`:''].filter(Boolean).join(' · ');
+      return seg ? `<div>${m==='loading'?'선적':'양하'} — ${seg}</div>` : ''; }).filter(Boolean).join('');
+    el.innerHTML = `<div class="ct-done">`
+      + `<div class="ct-done-h">✅ 작업 완료된 선박입니다${CT.vsl?` — ${ctEsc(CT.vsl)}${CT.voy?' '+ctEsc(CT.voy):''}`:''}</div>`
+      + `<div class="ct-done-n">${cl}${r.lastAt?` · 마지막 실적 ${hh(r.lastAt)}`:''}</div>`
+      + (cones ? `<div class="ct-done-c">${cones}</div>` : '')
+      + `<div class="ct-done-w">⏳ 수석 완료 처리 대기 중입니다 — 처리되면 목록에서 내려갑니다.</div>`
+      + `</div>`;
+    return;
+  }
   let html = `<div class="ct-head"><span>🔩 <b>콘 타이밍</b> · ${srcName} · 30초마다 갱신</span>`
            + `<span>${CT.err ? '⚠ '+ctEsc(CT.err) : (fresh || (CT.at ? '실적 없음' : '받는 중…'))}</span></div>`;
   // ★ 2.26 순서와 작업량 — 양하 «데크콘 빼기 → 홀드콘 빼기», 선적은 역순
@@ -1565,6 +1683,7 @@ function ctRender(){
   if(!r.cranes.length){
     html += `<div class="ct-empty">${r.noPos ? `자리를 모르는 완료 ${r.noPos}대 — 계획에도 실적에도 자리가 없어 콘 타이밍을 못 냅니다.`
       : (CT.pier==='PCTC' ? '아직 카토스 실적이 없습니다 — 작업 전이거나 카토스 로그인이 풀린 것입니다.'
+         : CT.pier==='PNCT' ? '동방 배는 컨별 자리가 안 옵니다 — 검수원이 검수앱으로 찍으면 여기 나옵니다.'
                           : '아직 검수앱 완료 기록이 없습니다 — 검수원이 검수앱으로 찍으면 여기 나옵니다.')}</div>`;
   }
   for(const c of r.cranes){
@@ -1603,21 +1722,31 @@ function render(){
   const _sa = state._shiftAdded;   // ConeOne 2.7: 시프팅으로 더해진 대수(내림/실음 각각)
   const _dn=(state.disch&&state.disch.ediRows)?state.disch.ediRows.length:null;
   const _ln=(state.stow&&state.stow.ediRows)?state.stow.ediRows.length:null;
+  //  2.27: 진행 수(완료) — 콘 타이밍이 30초마다 받아 둔 정본 completed. 아직 못 받았으면 null(종전 표기).
+  const _kd=(CT.key===state.voyageKey && CT.at)?Object.keys(CT.comp.discharge||{}).length:null;
+  const _kl=(CT.key===state.voyageKey && CT.at)?Object.keys(CT.comp.loading||{}).length:null;
+  const _fin = _dn!=null && _ln!=null && _kd!=null && _kl!=null
+    && ((_dn>0||_ln>0)) && (_dn===0||_kd>=_dn) && (_ln===0||_kl>=_ln);
   const _typeShort = state.shipType==='container' ? '컨테이너선'
     : (state.shipType==='multi'||state.shipType==='general') ? ('복합선 '+state.multiCount+'개')
     : '미지정';
   const kpiRow=document.createElement('div');
   kpiRow.className='kpi-row';
   kpiRow.innerHTML=[
-    ['작업', _sel?(_sel.vsl||'—'):'미선택', _sel?(_sel.voy?('항차 '+_sel.voy):'항차 미상'):'아래에서 고르세요',
+    ['작업', _sel?(_sel.vsl||'—'):'미선택',
+      _sel?((_fin?'✅ 작업 완료 · ':'')+(_sel.voy?('항차 '+_sel.voy):'항차 미상')):'아래에서 고르세요',
       _sel?'var(--ink)':'var(--dim)', !!_sel],
     /* ConeOne 2.7: 대수에 시프팅이 **들어가 있다**(내리는 쪽·싣는 쪽 양쪽).
        그 사실을 부제로 밝힌다 — «374» 만 보면 어디서 온 수인지 모른다. */
-    ['양하', _dn==null?'—':String(_dn),
-      _dn==null?'자료 없음':(_sa&&_sa.disch? `평택 ${_dn-_sa.disch} + 시프팅 ${_sa.disch}` : '대'),
+    /* ★ 2.27 — 검수사 «콘앱에서 선박을 선택화면 양하 123/251 선적 12/274 이런식으로 해주고».
+       진행 수는 정본 `completed`(터미널 반영분 포함, 30초 갱신 CT.comp). 자료를 못 받았으면 종전처럼 대수만 보인다. */
+    ['양하', _dn==null?'—':(_kd==null?String(_dn):`${_kd}/${_dn}`),
+      _dn==null?'자료 없음':(_kd==null?(_sa&&_sa.disch? `평택 ${_dn-_sa.disch} + 시프팅 ${_sa.disch}` : '대')
+        : `남은 ${Math.max(0,_dn-_kd)}대 · ${_dn?Math.round(_kd/_dn*100):0}%` + (_sa&&_sa.disch? ` · 시프팅 ${_sa.disch}` : '')),
       'var(--accent2)', _dn!=null],
-    ['선적', _ln==null?'—':String(_ln),
-      _ln==null?'자료 없음':(_sa&&_sa.stow? `평택 ${_ln-_sa.stow} + 시프팅 ${_sa.stow}` : '대'),
+    ['선적', _ln==null?'—':(_kl==null?String(_ln):`${_kl}/${_ln}`),
+      _ln==null?'자료 없음':(_kl==null?(_sa&&_sa.stow? `평택 ${_ln-_sa.stow} + 시프팅 ${_sa.stow}` : '대')
+        : `남은 ${Math.max(0,_ln-_kl)}대 · ${_ln?Math.round(_kl/_ln*100):0}%` + (_sa&&_sa.stow? ` · 시프팅 ${_sa.stow}` : '')),
       'var(--add)', _ln!=null],
     ['선종', _typeShort, state.shipType?'확인됨':'②에서 고르세요',
       state.shipType?'var(--accent)':'var(--dim)', !!state.shipType],
@@ -1757,8 +1886,13 @@ function render(){
     <div class="hint">베이플랜은 위의 <b>베이 번호</b>를 누르면 그 베이로 바로 갑니다. <b>⛶ 전체화면</b>으로 크게 보고, 닫을 때는 ✕ 하나입니다.<br>
       칸의 <b>★는 평택분</b>, <b>※는 시프팅</b>(내렸다 다시 싣는 것)입니다.</div>
     <div class="hint"><b>🔩 콘 타이밍</b> — 작업을 고르면 위 고정 띠와 «콘 타이밍» 카드에 크레인별 지금 베이·단과 신호가 30초마다 갱신됩니다.
+      상태 카드의 양하·선적은 <b>«완료/전체»</b>입니다(2.27) — 30초마다 갱신되고 밑에 «남은 N대 · N%»가 붙습니다.
+      작업이 다 끝나면(수석 완료 처리 전이라도) <b>«✅ 작업 완료된 선박입니다»</b> 화면으로 바뀌고 «N분째 기록 없음»은 안 뜹니다.
+      중식·저녁·야식·티타임·아침처럼 <b>쉬는 시간에는 «쉬는 시간 — 01:00 재개»</b>라고 알려 줍니다(멈춘 것이 아닙니다).
       양하는 <b>«데크콘 빼기»(2단부터) → «1단 — 콘 없음» → «홀드콘 빼기»</b>, 선적은 역순 <b>«홀드콘 꽂기» → «1단 — 콘 없음» → «곧 2단 — 데크콘 준비» → «데크콘 꽂기»</b>.
-      홀드콘은 컨테이너선 20ft 만(40ft 없음), 복합선은 곳당 개수대로. 카드 위에 <b>작업량</b>(양하·선적 대수, 호기별, 콘 작업 종류별)이 같이 셉니다(2.26). PCTC는 카토스 실적, 동방은 검수앱 완료 기록이 자료입니다.</div>
+      홀드콘은 컨테이너선 20ft 만(40ft 없음), 복합선은 곳당 개수대로. 카드 위에 <b>작업량</b>(양하·선적 대수, 호기별, 콘 작업 종류별)이 같이 셉니다(2.26).
+      <b>부두를 가려 씁니다</b>(2.27) — PCTC는 카토스 실적이 자료이고 중식 12:00·야식 24:00, <b>동방(PNCT)</b>은 컨별 자리가 안 와서 검수앱 완료 기록이 자료이고 중식 <b>11:30</b>·야식 <b>23:30</b>입니다.
+      부두를 못 가린 배는 «부두 미상 — 쉬는 시간은 못 봅니다»라고 밝힙니다(엉뚱한 시간표로 쉬는 시간을 지어내지 않습니다).</div>
   `;
   fold.appendChild(steps);
 
@@ -2500,7 +2634,7 @@ async function mirAsk(q){
         info, compMap:comp, shiftMap,
         vsl: info.vsl || state.shipName || '',
         vslFull: info.vslFull || '',
-        pier: info.pier || '',
+        pier: ctPierOf(info),   // 2.27: 화면과 미르가 같은 부두를 본다(문지기 한 벌)
         terminalWork: info.termWork || info.terminalWork || null,
         voyageKey: state.voyageKey||'',
         records: { discharge:(mc&&mc.recD)||{}, loading:(mc&&mc.recL)||{} },

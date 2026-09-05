@@ -456,6 +456,11 @@ if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:fir
   node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_craneboard.cjs "$SMOKE_CP" || { echo "✗ 작업 보드 호기별 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.10
   node tools/smoke_ptk.cjs "$SMOKE_CP" || { echo "✗ 평택 선적분 판정·규격 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.14
+  SMOKE_HK=$(mktemp /tmp/_hk_XXXXXX.cjs)   # 3.15: 해치 한 벌(cargoPlanCore.hatchEvenOf) — 기준표를 «그리는 장»에서 뽑는다
+  npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_HK" --log-level=error \
+    || { echo "✗ 해치 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }
+  node tools/smoke_boardbays.cjs "$SMOKE_CP" "$SMOKE_HK" || { echo "✗ 동방 지금 작업 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 3.15
+  rm -f "$SMOKE_HK"
   rm -f "$SMOKE_CP"
 else
   echo "✗ CATOS 자리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
@@ -592,6 +597,20 @@ fi
       cp "$SMOKE_LB.fbbak" src/firebase.js && rm -f "$SMOKE_LB.fbbak"
       node tools/smoke_liveboard.cjs "$SMOKE_LB" || { echo "✗ 실시간 작업 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
       rm -f "$SMOKE_LB"
+      #  3.15: **동방(PNCT) 보드 카드** — OBWH 2731E 실데이터로 «지금 작업 중인 베이» 칸과 그 베이 그림이 서는지 본다(호기 칸이 아니어야 한다).
+      SMOKE_LP=$(mktemp /tmp/_smokelp_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_LP.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_liveboard_pnct.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_LP"; then
+        cp "$SMOKE_LP.fbbak" src/firebase.js && rm -f "$SMOKE_LP.fbbak"
+        node tools/smoke_liveboard_pnct.cjs "$SMOKE_LP" || { echo "✗ 동방 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LP"; exit 1; }
+        rm -f "$SMOKE_LP"
+      else
+        cp "$SMOKE_LP.fbbak" src/firebase.js; rm -f "$SMOKE_LP.fbbak"
+        echo "✗ 동방 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1
+      fi
     else
       cp "$SMOKE_LB.fbbak" src/firebase.js; rm -f "$SMOKE_LB.fbbak"
       echo "✗ 실시간 작업 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1
@@ -699,6 +718,7 @@ fi
   #  ConeOne 2.3: **콘앱이 약신호에서 영영 멈추지 않는가** — 응답 없는 서버에 실제로 붙여서 잰다.
   node tools/smoke_cone_net.cjs || { echo "✗ 콘앱 약신호 연막검사 실패 — 배포 금지"; exit 1; }
   node tools/smoke_conetiming.cjs || { echo "✗ 콘앱 콘 타이밍(홀드콘·작업량) 연막검사 실패 — 배포 금지"; exit 1; }   # 2.26
+  node tools/smoke_conedone.cjs || { echo "✗ 콘앱 완료 화면·쉬는 시간 연막검사 실패 — 배포 금지"; exit 1; }   # 2.27
   #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.
   #    ⚠ 「건너뜀」 분기를 만들지 않는다(§2-2-M) — 번들이 실패하면 그것도 배포 금지다.
   SMOKE_RC=$(mktemp /tmp/_smokerc_XXXXXX.cjs)

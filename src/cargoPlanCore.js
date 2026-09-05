@@ -1044,6 +1044,27 @@ export function summaryToMatrixBays(shipBayDef) {
 
 // 페이지(그리는 베이 목록 + 짝) — 짝 짓기는 autoPairBays 한 벌뿐이다.
 //   반환 [{ even, odd, bayKey, isStandalone }] (even/odd 는 정수 또는 null), 사전 없으면 null.
+//  ★ 3.15: **한 베이가 «어느 장(해치)»에 그려지는가 — 판정 한 벌.**
+//    BayPlan `onlyBay` 가 제 안에 들고 있던 규칙을 여기로 올렸다. 장은 `[E-1, E, E+1]` 셋이므로 그 대표 E 를 돌려준다.
+//  ⚠ 감사 지적(2026-09-06) — 보드가 «짝수+뒤홀수»만 묶어 세면(01→0 · 02·03→2) **한 장에 그려지는 01·(02)03 이 두 묶음으로 갈려
+//    두 칸이 같은 그림**이 된다. 실측 OBWH 2731E 470대 — 완료 시각마다 재굴려 2갱 7.4%(23/311) · 3갱 41.8%(130/311) 이 겹쳤다.
+//    사전 있는 63척 중 62척이 같은 구조라 선박 예외가 아니다. 그래서 세는 쪽(보드)과 그리는 쪽(BayPlan)이 이 함수 하나를 같이 쓴다.
+//    `pages` 는 `buildBayPagesFromSummary` 가 준 장 목록이다. 사전이 없으면 홀로 선 앞홀수로 본다(그림도 같은 답을 낸다).
+export function hatchEvenOf(bayNo, pages) {
+  const b = parseInt(bayNo, 10);
+  if (!(b > 0)) return null;
+  if (b % 2 === 0) return b;
+  //  ⚠ 장 목록의 모양이 둘이다 — 이 파일이 만드는 `{even, odd}`(숫자)와 BayPlan 이 화면용으로 바꾼 `{evenBay, oddBay}`(문자열).
+  //    둘 다 받는다. 한쪽만 받으면 «짝이 없다»로 읽혀 앞홀수·뒤홀수가 통째로 뒤바뀐다(실측으로 잡았다).
+  const paired = (pages || []).some((p) => {
+    if (!p) return false;
+    const odd = p.oddBay != null ? p.oddBay : p.odd;
+    const even = p.evenBay != null ? p.evenBay : p.even;
+    return odd != null && parseInt(odd, 10) === b && even != null;
+  });
+  return paired ? b - 1 : b + 1;
+}
+
 export function buildBayPagesFromSummary(shipBayDef) {
   const matrixBays = summaryToMatrixBays(shipBayDef);
   if (matrixBays.length === 0) return null;
