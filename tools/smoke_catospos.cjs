@@ -46,7 +46,28 @@ ok(r.A1 && r.A1._pos_src === 'catos', 'A1 출처가 catos 로 남는다');
 ok(r.B2 && r.B2.bay_actual === '22', 'B2 계획대로여도 실적 자리를 채운다');
 ok(r.C3 && r.C3.bay_actual === '31' && r.C3._pos_src !== 'catos', '우리 앱으로 찍은 C3(31-05-88)은 덮지 않는다');
 ok(!r.D4, 'CATOS 에 없는 D4 는 손대지 않는다');
-ok(r.X9 && r.X9.bay_actual === '38', 'EDI 에 없는 컨도 실적은 남긴다');
+//  ⚠ 3.20-05 로 **뒤집힌 항목이다.** 3.7-08 은 «EDI 에 없는 컨도 실적은 남긴다»로 두었는데,
+//    그것이 2026-09-06 MCAP 634N 의 «미완 1» 사건을 만들었다. 터미널 실적에는 시프팅(재적부)이
+//    같이 오므로(실측 326건 중 96건) 그 컨마다 행이 생겨 ①양하 리스트가 230 → 326 으로 부풀고
+//    ②새 행에 `cn` 이 없어 화면이 `merged[r.cn]` = `merged[undefined]` 한 칸에 96 건을 덮어썼다.
+//    남은 한 줄이 **컨번호 없는 유령**(26-01-88)이 되어, 완료 도장은 컨번호로 찍히니 영영 미완이었다.
+//    검수사 «선적 시프팅 리스트에 옮기셨으면 양하 리스트에서 지워 주셔야 됩니다».
+ok(!r.X9, 'EDI 에도 리스트에도 없는 컨(X9)에는 행을 만들지 않는다 — 시프팅·통과화물이다');
+ok(r.C3 === voy.loading.records.C3, '이미 자리가 있는 행(C3)은 원본 그대로 — 없던 필드를 더하지 않는다(외과성)');
+ok(voy.loading.termWork.X9 && voy.loading.termWork.X9.pos === '380102', '그 자리는 termWork 원본에 그대로 있다(버리는 것이 아니다)');
+
+//  ②-b 실사건 재현 — 리스트 밖 실적이 여럿이면 옛 방식은 «컨번호 없는 행»을 그 수만큼 만들었다.
+//     화면은 그것들을 한 칸(`merged[undefined]`)으로 뭉개므로, 여기서는 «행이 몇 개 생기나»로 잰다.
+{
+  const many = { discharge: { ediContainers: { L1: { bay: '10', row: '02', tier: '82', pod: 'KRPTK' } },
+                              records: { L1: {} },
+                              termWork: { L1: { pos: '100282', at: 1 },
+                                          S1: { pos: '260188', at: 2 }, S2: { pos: '260588', at: 3 },
+                                          S3: { pos: '221182', at: 4 } } } };
+  const rr = U.applyCatosPos(many).discharge.records;
+  ok(Object.keys(rr).length === 1 && rr.L1, `리스트 1대 + 시프팅 3대 → 리스트는 1대 그대로 (${Object.keys(rr).join(',')})`);
+  ok(Object.values(rr).filter((x) => !(x || {}).cn).length === 0, '컨번호 없는 행 0 — 유령 줄이 설 수 없다');
+}
 
 //  ③ 계획은 그대로 — 카고플랜이 보는 자리
 const e = out.loading.ediContainers;
@@ -92,6 +113,9 @@ ok(!(stripped.loading.records.A1 || {}).bay_actual, '보관 전 CATOS 자리는 
 ok(!(stripped.loading.records.A1), 'CATOS 로만 생긴 레코드는 통째로 빠진다');
 ok(stripped.loading.records.C3 && stripped.loading.records.C3.bay_actual === '31', '검수원이 찍은 자리(C3)는 그대로 남는다');
 ok(stripped.loading.termWork && Object.keys(stripped.loading.termWork).length === 4, 'termWork 원본은 안 건드린다(되살리면 다시 얹힌다)');
+
+//  ⑨-b 3.20-05 — EDI 에는 있는데 리스트가 아직 안 온 배에서는 여기서 행이 처음 생긴다. 그때도 컨번호가 박혀야 한다.
+ok(r.A1 && r.A1.cn === 'A1' && r.B2 && r.B2.cn === 'B2', '리스트에 없던 EDI 컨(A1·B2)도 컨번호가 박힌 채 생긴다');
 ok(U.stripCatosPos(voy) === voy, '덧칠이 없으면 같은 객체를 그대로 돌려준다');
 
 //  ⑩ 3.16 — 기록자 자리는 비운다(업체 글자 금지). 출처는 _pos_src 표식이 말한다.
