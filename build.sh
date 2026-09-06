@@ -725,6 +725,7 @@ fi
   node tools/smoke_coneholdview.cjs || { echo "✗ 콘앱 홀드 그림 연막검사 실패 — 배포 금지"; exit 1; }   # 2.35
   node tools/smoke_conedone.cjs || { echo "✗ 콘앱 완료 화면·쉬는 시간 연막검사 실패 — 배포 금지"; exit 1; }   # 2.27
   node tools/smoke_conestrip.cjs || { echo "✗ 콘앱 위 띠·카드 접기 연막검사 실패 — 배포 금지"; exit 1; }   # 2.38
+  node tools/smoke_dupl4bay.cjs || { echo "✗ 끝4 중복 — 고른 베이 우선 검사 실패 — 배포 금지"; exit 1; }   # 3.23
   #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.
   #    ⚠ 「건너뜀」 분기를 만들지 않는다(§2-2-M) — 번들이 실패하면 그것도 배포 금지다.
   SMOKE_RC=$(mktemp /tmp/_smokerc_XXXXXX.cjs)

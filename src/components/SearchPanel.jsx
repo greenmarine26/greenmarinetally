@@ -982,6 +982,19 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   useEffect(() => {
     if (!parsed.handoverQuery) { setHandoverFinalized(false); }
   }, [parsed.handoverQuery]);
+  //  ★ V7.99-10 → 3.23: **지금 고른 베이·단인가** — 한 벌로 올린다.
+  //    종전엔 `results` useMemo 안에 갇혀 «우선 정렬»에만 쓰였다. 3.23 이 큰 카드 판정에서도 같은 잣대를
+  //    써야 해서 밖으로 뺀다(같은 판정이 두 벌이 되면 화면과 카드가 갈린다 — 규범 §4-4).
+  //    ⚠ 베이·단을 아직 안 골랐으면 언제나 false — 그때는 종전대로 여럿을 나란히 보인다.
+  const inManualTier = React.useCallback((c) => {
+    if (!manualCtx || manualCtx.selectedGroup == null || !manualCtx.selectedTier) return false;
+    if (manualCtx.selectedGroup === -1) return !c.bay;   // V9.23-08: 자리 미지정 묶음
+    const bp = manualCtx.bayPairs || {};
+    const gc = (bs) => { const b = parseInt(bs, 10); if (!Number.isFinite(b)) return null; if (b % 2 === 0) return b; const p = bp[String(b)]; return p ? (b + parseInt(p, 10)) / 2 * 2 - (b % 2 === 0 ? 0 : 1) : b - 1; };
+    if (gc(c.bay) !== manualCtx.selectedGroup) return false;
+    return manualCtx.selectedTier === 'deck' ? parseInt(c.tier, 10) >= 80 : parseInt(c.tier, 10) < 80;
+  }, [manualCtx]);
+
   const results = useMemo(() => {
     if (!query || query.length < 2) return [];
     if (!hasAnyCondition(parsed)) return [];
@@ -995,22 +1008,12 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     //   (allContainers는 EDI 전체 = 통과화물 포함). 단, 컨번호(digits) 단건 조회는 전체 유지
     //   — 통과화물을 스캔했을 때 "없습니다"가 아니라 찾아서 알려줘야 함 (V7.53 회귀 방지).
     if (!parsed.digits) r = r.filter(c => c._ptk);
-    // V7.99-10 (메모6 수동): 작업 단 선택 시, 끝4자리 조회 후보 중 현재 단(베이+홀드/데크) 컨을 최우선.
-    //   완전히 숨기지 않음(통과화물·단 밖도 찾아줘야 함 — V7.53 회귀 방지) — 우선 정렬로 오선택만 방지.
-    const inManualTier = (c) => {
-      if (!manualCtx || manualCtx.selectedGroup == null || !manualCtx.selectedTier) return false;
-      if (manualCtx.selectedGroup === -1) return !c.bay;   // V9.23-08: 자리 미지정 묶음
-      const bp = manualCtx.bayPairs || {};
-      const gc = (bs) => { const b = parseInt(bs, 10); if (!Number.isFinite(b)) return null; if (b % 2 === 0) return b; const p = bp[String(b)]; return p ? (b + parseInt(p, 10)) / 2 : b; };
-      if (gc(c.bay) !== manualCtx.selectedGroup) return false;
-      return manualCtx.selectedTier === 'deck' ? parseInt(c.tier, 10) >= 80 : parseInt(c.tier, 10) < 80;
-    };
     const rank = (c) => {
       if (parsed.digits && inManualTier(c)) return -1;  // 현재 단 최우선
       return c._comp ? 2 : (c._mode === workFilter ? 0 : 1);
     };
     return [...r].sort((a, b) => rank(a) - rank(b));
-  }, [allContainers, query, parsed, workFilter, manualCtx]);
+  }, [allContainers, query, parsed, workFilter, manualCtx, inManualTier]);
 
   // M3.2: 로컬 답변 (AI 의존 없이 즉답)
   // 베이/POL/POD/구역/무게합/위치 질문은 모두 여기서 처리
@@ -1900,10 +1903,28 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
              (이 항차 평택 123대 중 12대가 타항 컨과 끝4자리가 겹친다). 완료 카드가 되는 것은 **작업분**
              (평택분·시프팅·초과)뿐이다. 통과분은 조회로만 — 아래 목록에 «통과 POD·자리»를 달아 보인다(V7.53 «찾아서 알려줘야» 유지). */
         const _isWork = (c) => canCompleteContainer(c, c._mode);   // utils 한 벌 — 통과분만 아니다(항구 빈칸·리스트 등재는 작업분)
-        const main = doneTab ? results.filter(c => c._comp)
-                             : results.filter(c => !c._comp && c._mode === workFilter && _isWork(c));
+        const mainAll = doneTab ? results.filter(c => c._comp)
+                                : results.filter(c => !c._comp && c._mode === workFilter && _isWork(c));
         const others = doneTab ? results.filter(c => !c._comp)
                                : results.filter(c => c._comp || c._mode !== workFilter || !_isWork(c));
+        const workHits = results.filter(c => c._mode === workFilter && _isWork(c));
+        /* ★ 3.23 — **베이를 지정하고 작업 중이면 그 베이 것이 우선이다.** 검수사 2026-09-07 05:40
+             «여기서 저라면 중복이 있더라도 우선권을 줍니다 베이를 지정해서 양하중입니다.
+               그러면 리퍼 3290만 보였어야 합니다» ·
+             «베이를 지정하지 않았더라면 중복이 많겠지만 베이를 지정한 상태라면 그베이껏이 우선이 되어야 합니다» ·
+             «자동 가이드 문제가 아닙니다. 수동양하도 마찬가지 입니다. 항상 베이를 선택하고 양하 합니다».
+           실측 ATPR 2640E 양하 — «3290» 이 FBIU5373290(14-08-82 · 리퍼) 과 SKHU8933290(06-04-86) 둘인데,
+           검수사는 **B14 를 골라 놓고** 있었다. 그런데 화면은 «자리를 확인하고 고르십시오»를 띄우고
+           «전체 번호를 치면 바로 확인 카드가 뜹니다» 라고 11자리를 요구했다 — 4자리로 끝나는 빠름이 사라진다.
+           ⚠ 3.3-01 의 금지(둘 이상이면 큰 카드 없음)는 **그대로 둔다** — 그 사고(KSKM 7075: 하나를 완료하면
+             남은 하나가 곧바로 큰 카드로 승격)는 «고른 베이 안에 둘»일 때 나는 것이라, 여기서 여는 문은
+             **그 베이·단에 정확히 하나일 때**뿐이다. 베이를 안 골랐으면 종전대로 나란히 보인다. */
+        const bayHits = workHits.filter(inManualTier);
+        const bayPick = (!!parsed.digits && !doneTab && workHits.length > 1 && bayHits.length === 1) ? bayHits[0] : null;
+        const dupL4 = !!parsed.digits && !doneTab && workHits.length > 1 && !bayPick;
+        //  ★ 3.23 — 고른 베이에 하나면 그 하나로 큰 카드를 세운다(아래 판정 전부가 이 `main` 을 쓴다).
+        const main = bayPick ? [bayPick] : mainAll;
+
         // V8.70: 완료된 컨도 번호 단일 매칭이면 큰 카드로 — 취소·위치수정 접근(완료 후 재검색 시 막다른 골목 제거).
         //   ※ 같은 번호가 양하·선적 양쪽에 완료로 있으면(중계) 종전대로 현재 모드 쪽을 편다.
         const doneAll = (main.length === 0 && parsed.digits) ? results.filter(c => c._comp) : [];
@@ -1914,12 +1935,12 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
              처음엔 «⚠ 2개 일치»로 두 장이 뜨지만 **하나를 완료하면 남은 하나가 곧바로 큰 [양하확인] 카드로 승격**됐다(조회는 «7075» 그대로).
              ⇒ 끝4 조회가 작업분 **둘 이상**을 가리키면(완료분 포함) **큰 카드를 세우지 않는다.** 자리를 붙여 나란히 보이고 고르게 한다.
              전체 컨번호를 치면 narrowByFullCn 이 한 대로 좁히므로 종전대로 큰 카드가 선다(자동 가이드 «⚠️ 끝자리 같은 컨 N대»와 같은 벌). */
-        const workHits = results.filter(c => c._mode === workFilter && _isWork(c));
-        const dupL4 = !!parsed.digits && !doneTab && workHits.length > 1;
         //  감사 지적(3.3-01) — 완료 탭에서도 끝4가 겹치면 자리가 있어야 [취소]·위치수정 대상을 고른다. 큰 카드는 원래 안 선다(main 2대).
         const dupDone = doneTab && !!parsed.digits && main.length > 1;
-        const othersRest = dupL4 ? others.filter(c => !workHits.includes(c))
-                                 : ((doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others);
+        //  ★ 3.23 — 베이로 좁혔으면 **가려낸 나머지를 접힌 목록에 넣는다.** 숨기면 «찾아서 알려줘야 한다»(V7.53)가 깨진다.
+        const othersRest = bayPick ? [...workHits.filter(c => c !== bayPick), ...others]
+                                   : (dupL4 ? others.filter(c => !workHits.includes(c))
+                                            : ((doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others));
         // TallyOne 1.53: 완료 탭에서는 접힌 쪽이 '아직 안 한 작업'이다 — 라벨이 반대로 읽히면 안 눌러 본다.
         const othersLabel = (n) => (doneTab ? `아직 안 한 작업에 ${n}건 — 보기` : `다른 작업·완료·통과분에 ${n}건 — 보기`);   // 3.2-01: 통과분도 여기
         return (
@@ -1929,6 +1950,16 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
               <div className="text-xxs text-rose-300 font-bold bg-rose-950/40 border border-rose-800 rounded px-2 py-1.5 text-center">
                 ⚠️ 끝자리 같은 컨 {workHits.length}대 — 자리를 확인하고 고르십시오
                 <div className="text-2xs text-dim-300 font-normal mt-0.5">전체 번호를 치면 바로 확인 카드가 뜹니다</div>
+              </div>
+            )}
+            {/* ★ 3.23: 고른 베이 것으로 좁혔으면 **왜 이 한 대인지**와 «다른 자리에도 있다»를 밝힌다.
+                   숨기지 않는다 — 아래 접힌 목록에 그대로 있고, 잘못 짚었으면 거기서 고른다. */}
+            {bayPick && (
+              <div className="text-xxs text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-800 rounded px-2 py-1.5 text-center">
+                📍 지금 하는 자리({String(bayPick.bay).padStart(2, '0')}-{bayPick.row}-{bayPick.tier}) 것으로 골랐습니다
+                <div className="text-2xs text-dim-300 font-normal mt-0.5">
+                  끝자리 같은 컨이 {workHits.length}대 — 다른 {workHits.length - 1}대는 다른 자리입니다(아래 목록)
+                </div>
               </div>
             )}
             {/* TallyOne 1.53: 싱글로 하려는데 트윈이 되면 한 줄로 알린다(막지 않는다). */}
