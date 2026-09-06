@@ -2220,7 +2220,7 @@ function FitBox({ children, className = '', maxH = null, fill = false, boundsRef
     return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
   }, [children, maxH, fill, boost, force]);
   return (
-    <div ref={boxRef} className={`${Number(boost) > 1 ? 'overflow-auto' : 'overflow-hidden'} w-full ${className}`} style={fit.h != null ? { height: Number(boost) > 1 ? Math.ceil(fit.h / Number(boost)) : fit.h } : undefined}>
+    <div ref={boxRef} className={`${Number(boost) > 1 ? 'overflow-auto' : 'overflow-hidden'} w-full ${className}`} style={fit.h != null ? { height: fit.h } : undefined}>
       <div ref={innerRef} style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
     </div>
   );
