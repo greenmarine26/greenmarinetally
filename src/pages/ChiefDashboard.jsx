@@ -2395,8 +2395,11 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
       </div>
     );
   })();
-  //  3.10: 카드를 누르면 **그 배만 전체**(포커스) — 항차 화면은 오른쪽 위 [항차 열기 →] 로 간다. 배가 하나뿐이면 누르는 것이 곧 항차 열기다.
-  const clickCard = () => { if (canFocus && onFocus) onFocus(); else onOpen(); };
+  //  ★ 3.20-04 — 검수사 2026-09-06 «두척이니 작게 보이고 원할때는 한척 작업하는것처럼 크게 보고 닫음 처음처럼 두척이 보이게» ·
+  //    «가고 싶을때 가야 하는데 클릭한번 실수로» · «수석에서 일반 검수앱을 왔다 갔다 하면 안됩니다».
+  //    3.10 은 «배가 하나뿐이면 눌러서 항차로»(onOpen 폴백)를 뒀는데, 그 탓에 카드를 누르면 검수원 화면으로 빠져
+  //    작업 보드를 못 보게 됐다. ⇒ **카드 클릭은 크게 보기 하나**다. 항차로 가는 길은 [항차 열기 →] 버튼뿐 — 눌러야 가는 것이지 스쳐서 가는 것이 아니다.
+  const clickCard = () => { if (canFocus && onFocus) onFocus(); };
   return (
     <div ref={cardRef} role="button" tabIndex={0} onClick={clickCard} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); clickCard(); } }}
       className={`w-full h-full text-left bg-ink-800/40 border rounded-btn p-1 hover:bg-ink-750/70 flex flex-col sm:flex-row gap-1 cursor-pointer ${focused ? 'border-cyan-500/70' : 'border-line'} ${departed ? 'opacity-60' : ''}`}>
@@ -2419,7 +2422,16 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {focused && <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold">✕ 닫기</button>}
+          {/*  ★ 3.20-04 — **크게 보는 단추를 눈에 보이게.** 검수사 2026-09-06 «트윈 작업할때 크게 보고 싶은데 …
+              선박을 클릭하면 전체화면으로 잘 볼수있고 닫으면 전체선박을 볼수있게 해달라고 했는데 그것만 안되었습니다» ·
+              «크게 하는 버튼이 없고 닫는 버튼도 없습니다».
+              3.10 은 «카드를 아무 데나 누르면 포커스» 로만 만들었다(clickCard). 그런데 카드 안은 별첨 표와 베이 그림으로 꽉 차 있고
+              **그림 칸을 누르면 컨 상세가 뜬다**(3.11) — 누를 빈 곳이 사실상 없어 포커스가 한 번도 안 걸렸고,
+              「✕ 닫기」 는 포커스일 때만 뜨니 **영영 안 보였다.** 기능은 있는데 들어가는 문이 없었던 셈이다.
+              ⇒ 항차 열기 옆에 **늘 보이는** 「⤢ 크게」 를 둔다. 포커스면 그 자리가 「✕ 닫기」 다(자리를 더 안 먹는다). */}
+          {focused
+            ? <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold" title="원래대로 — 작업 중인 배를 모두 봅니다">✕ 닫기</button>
+            : (canFocus && <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold" title="이 배만 화면 가득 — 트윈 작업 볼 때">⤢ 크게</button>)}
           <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="text-2xs bg-blue-900/60 text-blue-200 px-2 py-0.5 rounded font-bold">항차 열기 →</button>
         </div>
       </div>

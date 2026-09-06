@@ -98,12 +98,37 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (!det || !det.cn || !det.mode) fail('칸을 눌렀는데 컨 상세 콜백(detail)이 안 온다: ' + JSON.stringify((W.__calls || []).slice(before0)));
   if ((W.__calls || []).slice(before0).some(c => c.fn === 'focus')) fail('칸 클릭이 카드 포커스까지 토글한다');
   console.log(`   베이 그림 ${titles.length}장(${titles.join(' · ')}) · 초록 ${green}칸 · 별첨1 합계 ${sum1.slice(1).join(' ')} · DJS ${djs.slice(1).join(' ')} · 표 열 ${colCounts[0]} · 칸 클릭 → 상세 ${det && det.cn}`);
+  //  ★ 3.20-04 — **크게 보는 문이 눈에 보이는가.** 검수사 «크게 하는 버튼이 없고 닫는 버튼도 없습니다» ·
+  //    «두척이니 작게 보이고 원할때는 한척 작업하는것처럼 크게 보고 닫음 처음처럼 두척이 보이게».
+  //    기능(포커스)은 3.10 부터 있었는데 «카드를 아무 데나 누르면» 뿐이었다 — 카드 안이 표와 그림으로 꽉 차 있고
+  //    그림 칸은 컨 상세로 가므로 누를 빈 곳이 사실상 없었다. 단추가 실제로 서 있는지 여기서 잰다.
+  {
+    const big = [...doc.querySelectorAll('button')].find(b => /⤢ 크게/.test(b.textContent || ''));
+    if (!big) fail('[⤢ 크게] 버튼이 없다 — 크게 보는 문이 눈에 안 보인다');
+    const n0 = (W.__calls || []).filter(c => c.fn === 'focus').length;
+    big.dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
+    await wait(150);
+    if ((W.__calls || []).filter(c => c.fn === 'focus').length !== n0 + 1) fail('[⤢ 크게] 가 포커스를 안 건다');
+    if ((W.__calls || []).some(c => c.fn === 'open')) fail('[⤢ 크게] 가 항차까지 연다(stopPropagation 누락)');
+    await wait(150);
+    if (/⤢ 크게/.test(txt())) fail('포커스인데 [⤢ 크게] 가 그대로다 — 그 자리는 [✕ 닫기] 여야 한다');
+    W.__setFocused && W.__setFocused(false);   // 다음 항을 위해 되돌린다
+    await wait(150);
+  }
+
   //  카드 누르기 → 포커스 → [✕ 닫기]
   const card = doc.querySelector('[role="button"]');
   if (!card) fail('카드 루트가 없다');
   card.dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
   await wait(200);
   if (!(W.__calls || []).some(c => c.fn === 'focus')) fail('카드를 눌렀는데 포커스가 안 된다');
+  //  3.20-04: 카드 클릭이 **항차를 열면 안 된다** — 검수사 «가고 싶을때 가야 하는데 클릭한번 실수로»
+  //    · «수석에서 일반 검수앱을 왔다 갔다 하면 안됩니다». 3.10 의 onOpen 폴백을 걷은 자리다.
+  if ((W.__calls || []).some(c => c.fn === 'open')) fail('카드를 눌렀는데 항차 화면으로 넘어간다');
+  {
+    const src = fs.readFileSync(require('path').resolve('src/pages/ChiefDashboard.jsx'), 'utf8');
+    if (/const clickCard[^\n]*onOpen\(\)/.test(src)) fail('clickCard 에 onOpen 폴백이 남아 있다');
+  }
   t = txt();
   if (!/✕ 닫기/.test(t)) fail('포커스 뒤 [✕ 닫기] 가 없다');
   //  [항차 열기 →] 는 항차로(카드 포커스 토글을 건드리지 않는다)
