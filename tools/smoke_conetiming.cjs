@@ -69,7 +69,7 @@ for (const c of r.cranes) {
 // 바닥 20ft 만 마지막으로 두고 다시 — «홀드 바닥 내리는 중 — 콘 없음»(받침 없는 컨에 콘을 빼라 하지 않는다)
 { const b = FX.termWork[bottomCn]; const twB = { ...tw, [bottomCn]: { ...b, at: NOW + 1000 } };
   const rb = run({ tw: twB }); const cb = rb.r.cranes.find(c => c.cn === bottomCn);
-  T(!!cb && /홀드 바닥\(\d\d단\) 내리는 중 — 콘 없음/.test(cb.sig) && cb.cls === 'ok' && cb.holdCone === 0, `바닥 20ft ${bottomCn} → «${cb && cb.sig}»`); }
+  T(!!cb && /홀드 바닥\(홀드 \d단\(\d\d\)\) 내리는 중 — 콘 없음/.test(cb.sig) && cb.cls === 'ok' && cb.holdCone === 0, `바닥 20ft ${bottomCn} → «${cb && cb.sig}»`); }
 const l = line('discharge');
 T(/양하 172\/251대/.test(l) && /1호기 81/.test(l) && /2호기 91/.test(l) && new RegExp(`홀드콘 빼기 ${exp.hold}\\(콘 ${exp.hold}개\\)`).test(l) && new RegExp(`홀드 바닥 ${exp.holdB}`).test(l) && /40ft 홀드 19/.test(l), `작업량 줄: ${l.replace(/<[^>]+>/g, '')}`);
 // 통과화물이 받치는 컨 — 평택분에는 없는 아래 컨을 전체 화물에 넣으면 «홀드콘 빼기»로 바뀐다(ediRowsAll 우선)
@@ -108,7 +108,7 @@ T(by['1호기'] && /홀드콘 꽂기/.test(by['1호기'].sig) && by['1호기'].c
 T(by['2호기'] && /40ft 홀드콘 없음/.test(by['2호기'].sig), `선적 홀드 40ft → «${by['2호기'] && by['2호기'].sig}»`);
 T(by['3호기'] && /콘 없음/.test(by['3호기'].sig) && !/꽂기/.test(by['3호기'].sig.split('—')[1] || ''), `선적 데크 1단 → «${by['3호기'] && by['3호기'].sig}»`);
 T(by['4호기'] && /데크콘 꽂기/.test(by['4호기'].sig) && by['4호기'].cls === 'act', `선적 데크 2단 → «${by['4호기'] && by['4호기'].sig}»`);
-T(!h20b || (by['5호기'] && /홀드 바닥\(\d\d단\) 실는 중 — 콘 없음/.test(by['5호기'].sig)), `선적 홀드 바닥 20ft → «${by['5호기'] ? by['5호기'].sig : '(표본 없음)'}»`);
+T(!h20b || (by['5호기'] && /홀드 바닥\(홀드 \d단\(\d\d\)\) 실는 중 — 콘 없음/.test(by['5호기'].sig)), `선적 홀드 바닥 20ft → «${by['5호기'] ? by['5호기'].sig : '(표본 없음)'}»`);
 const ll = rl.line('loading');
 T(new RegExp(`선적 ${h20b ? 5 : 4}/\\d+대`).test(ll) && /홀드콘 꽂기 1\(콘 1개\)/.test(ll) && /데크콘 꽂기 1/.test(ll) && (!h20b || /홀드 바닥 1/.test(ll)), `선적 작업량 줄: ${ll.replace(/<[^>]+>/g, '')}`);
 // ── 말 — 회수·장착 금지
