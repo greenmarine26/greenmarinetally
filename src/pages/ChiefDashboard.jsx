@@ -610,10 +610,35 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     try { localStorage.setItem('gm_board_zoom', String(n)); } catch (e) { /* 기억 못 해도 이번 화면은 커진다 */ }
   };
   const [boardH, setBoardH] = useState(0);
+  //  ★ 3.20-01 — **보드 그릇 높이를 «한 번»이 아니라 «계속» 잰다.** 검수사 2026-09-06 «크롬하고 엣지하고 틀리게 보입니다.
+  //    크롬은 그나마 차보이는데 엣지는 많이 비어 보입니다» · «작업중인 작업 보드가 모니터 한 화면에 차 보였으면 좋겠습니다».
+  //    실화면 두 장으로 확정 — 크롬은 보드가 화면을 거의 다 쓰는데(2척 잘림 없음) 엣지는 **440px 에 굳어** 위 카드가 잘렸다.
+  //    3.11-01 이 «고정 9rem 추정 → 실측»으로 고쳤지만 **재는 때**가 모자랐다 — 아래 접이식 섹션을 펴거나(보드 위치가 내려간다)
+  //    페이지를 스크롤하면(보드가 위로 올라간다) 그릇이 따라 커져야 하는데 창 크기 변화에만 걸려 있었다.
+  //    브라우저마다 달리 보인 것도 이것이다(크롬은 우연히 맞게 잡혔을 뿐이다).
+  //  ⇒ 스크롤·레이아웃 변화에도 다시 잰다. 보드 머리가 화면 위로 나가면 top 이 음수가 되므로 0 으로 눌러 **화면보다 큰 그릇**을 만들지 않는다.
+  //    그릇이 커지면 그림 배율(FitBox)은 ResizeObserver 로 저절로 따라 커진다 — 좌우가 잘리지 않는다.
   useEffect(() => {
-    const fit = () => { const el = boardScrollRef.current; if (!el) return; const top = el.getBoundingClientRect().top; const h = Math.floor(window.innerHeight - top - 8); if (h > 200 && Math.abs(h - boardH) > 1) setBoardH(h); };
+    const fit = () => {
+      const el = boardScrollRef.current; if (!el) return;
+      const top = Math.max(0, el.getBoundingClientRect().top);
+      const h = Math.floor(window.innerHeight - top - 8);
+      if (h > 200 && Math.abs(h - boardH) > 1) setBoardH(h);
+    };
     fit(); const t = setTimeout(fit, 300);   // 접기 애니메이션·폰트 로딩 뒤 한 번 더
-    window.addEventListener('resize', fit); return () => { clearTimeout(t); window.removeEventListener('resize', fit); };
+    window.addEventListener('resize', fit);
+    window.addEventListener('scroll', fit, { passive: true });   // 스크롤하면 보드 위 끝이 바뀐다
+    //  다른 섹션을 펴고 접으면 보드가 위아래로 밀린다 — 문서 크기 변화로 잡는다(토글 상태를 일일이 의존성에 넣지 않는다).
+    let ro = null;
+    try {
+      if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(fit); ro.observe(document.body); }
+    } catch (e) { console.warn('[작업 보드] 높이 관찰자를 못 걸었다 — 창 크기·스크롤로만 다시 잽니다', e); }
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('scroll', fit);
+      if (ro) ro.disconnect();
+    };
   }, [openSecs.board, boardRows.length, boardH]);
   //  3.11 감사: 100vw 는 세로 스크롤바를 포함한다(윈도 PC 17px) — 전폭 보드가 가로 스크롤을 만들지 않게 스크롤바 폭을 재 둔다
   useEffect(() => {
@@ -2409,25 +2434,11 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
             그 버튼은 반영할 것이 있을 때만 이 카드 안에 뜨므로(1848행), 남은 격차는 대수 대조가 아니라 그 버튼이 말해 준다.
           ⚠ 줄 자체는 남긴다 — 「지연」과 «자료가 언제 것인가»는 대수가 아니고, 미수신은 자료가 안 오는 신호라 조용히 지우지 않는다(규범 §4-3).
           ⚠ 미르 답(nlSearch)·작업 속도(3.6-01 «1순위는 터미널 실적»)는 검수사 확정 사양이라 그대로 둔다. */}
-      {tw ? (
-        <div className="text-2xs mono text-dim-300 flex items-center gap-1.5 flex-wrap">
-          <span className="text-cyan-300 font-bold">🏗 터미널</span>
-          {tw.delayed && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">지연</span>}
-          {/* TallyOne 1.5: 신선도 — 이 값이 언제 것인지 화면이 말해주지 않아 새로고침하게 되던 문제.
-              수집기 사이클이 5분이므로 10분 넘으면 이상 신호. 실측(2026-08-04): 같은 화면에
-              9분 전(TNJP·DXQD)과 2일 전(XTPG)이 구분 없이 섞여 있었다. */}
-          {(() => {
-            const t = Number(tw.updatedAt) || 0;
-            if (!t) return <span className="text-dim-500" title="갱신 시각 정보 없음">시각 미상</span>;
-            const m = Math.floor((Date.now() - t) / 60000);
-            const txt = m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
-            const cls = m <= 10 ? 'text-emerald-300' : m <= 60 ? 'text-amber-300' : 'text-rose-300 font-bold';
-            return <span className={cls} title={`터미널 자료 갱신 ${new Date(t).toLocaleString('ko-KR')}`}>← {txt}</span>;
-          })()}
-        </div>
-      ) : (
-        <div className="text-2xs text-dim-500">터미널 실적 미수신</div>
-      )}
+      {/*  3.20-01 — **「🏗 터미널」 줄을 통째로 없앤다.** 검수사 2026-09-06 실화면 «🏗 터미널 지연 ←????» → «없애주세요»
+          · «그거 없애면서 작업중인 작업 보드가 모니터 한 화면에 차 보였으면 좋겠습니다».
+          3.20 이 대수를 빼자 꼬리(「지연」·«← 방금»)만 남아 뜻이 안 통했고, 카드마다 한 줄을 그냥 먹고 있었다.
+          ⚠ 조용히 사라지는 것이 아니다(규범 §4-3) — 터미널 자료가 멎은 것은 **보드 머리의 수집기 경고**(«수집기가 멈춰 …»)와
+            healthcheck 가 말하고, 그 배의 지연·진행은 항차 화면·미르가 답한다. 여기서 없앤 만큼이 그림 높이로 간다. */}
       {/* ★ 3.11: 별첨 표 실시간 — 검수사 «통계는 선박 밑에 빈공간에 별첨 자료처럼 실시간으로 채워 지는걸» · «/ 가 수직으로 같아야» · «통계 글씨는 작고».
           입력은 그림과 같은 목록(boardContainers — 리스트 등재 _inList 포함, 감사: 인쇄 별첨 ptkContainers 와 같은 분모). 칸마다 완료/전체. */}
       {voyage && (() => {
