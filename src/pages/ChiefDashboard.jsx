@@ -596,6 +596,19 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   useEffect(() => { if (boardFocus && !boardRows.some(r => r.key === boardFocus)) setBoardFocus(null); }, [boardRows, boardFocus]);
   //  3.11-01: 보드 높이 = **보드 위 끝에서 화면 바닥까지**(검수사 «밑에 다른 항목만큼 화면이 줄어 들었습니다» — 고정 9rem 은 헤더·접기 단추 높이를 추정한 값이라 실제보다 짧았다).
   const boardScrollRef = React.useRef(null);
+  //  ★ 3.17 — **보드 확대.** 검수사 2026-09-06 «작업이 2척이다 보니 수석 화면이 작아 졌습니다. 확대기능 가능한지요?»
+  //    보드 높이를 척수로 등분하므로 2척이면 그림이 절반이 된다. 사람이 배율을 정하고 그 값을 기억한다.
+  //    ⚠ 폰마다 화면이 다르니 기기에 남긴다(localStorage). 읽기·쓰기 모두 try 로 감싼다 — 사생활 모드에서 던진다.
+  const BOARD_ZOOMS = [0.8, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2];
+  const [boardZoom, setBoardZoom] = useState(() => {
+    try { const v = Number(localStorage.getItem('gm_board_zoom')); return BOARD_ZOOMS.includes(v) ? v : 1; } catch (e) { return 1; }
+  });
+  const bumpZoom = (dir) => {
+    const i = BOARD_ZOOMS.indexOf(boardZoom);
+    const n = BOARD_ZOOMS[Math.max(0, Math.min(BOARD_ZOOMS.length - 1, (i < 0 ? 2 : i) + dir))];
+    setBoardZoom(n);
+    try { localStorage.setItem('gm_board_zoom', String(n)); } catch (e) { /* 기억 못 해도 이번 화면은 커진다 */ }
+  };
   const [boardH, setBoardH] = useState(0);
   useEffect(() => {
     const fit = () => { const el = boardScrollRef.current; if (!el) return; const top = el.getBoundingClientRect().top; const h = Math.floor(window.innerHeight - top - 8); if (h > 200 && Math.abs(h - boardH) > 1) setBoardH(h); };
@@ -848,6 +861,16 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <Anchor className="w-4 h-4 text-blue-400"/>
           <div className="text-sm font-bold text-dim-100">실시간 작업 보드 (작업 중 {boardRows.length}척{voyageStats.length > boardRows.length ? ` · 등록 ${voyageStats.length}척` : ''})</div>
           <span className="text-2xs text-dim-400">실시간</span>
+          {/* 3.17: 확대 — 2척 이상이면 그림이 작아진다. 누르면 그 칸 안에서 커지고 넘치면 그 칸만 스크롤한다. */}
+          <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+            <span className="text-2xs text-dim-500 mr-0.5">확대</span>
+            <button type="button" onClick={() => bumpZoom(-1)} disabled={boardZoom <= BOARD_ZOOMS[0]}
+              className="w-6 h-6 rounded bg-ink-800 border border-line text-dim-200 font-black disabled:opacity-30" title="작게">−</button>
+            <button type="button" onClick={() => { setBoardZoom(1); try { localStorage.setItem('gm_board_zoom', '1'); } catch (e) { /* 기억 실패는 무시 */ } }}
+              className="px-1.5 h-6 rounded bg-ink-800 border border-line mono text-2xs text-dim-200 font-bold" title="눌러서 기본으로">{Math.round(boardZoom * 100)}%</button>
+            <button type="button" onClick={() => bumpZoom(1)} disabled={boardZoom >= BOARD_ZOOMS[BOARD_ZOOMS.length - 1]}
+              className="w-6 h-6 rounded bg-ink-800 border border-line text-dim-200 font-black disabled:opacity-30" title="크게">+</button>
+          </div>
         </div>
         {boardRows.length === 0 ? (
           <div className="text-xs text-dim-400 text-center py-4">
@@ -874,7 +897,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                     cranes={craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])}
                     voyage={voyages?.[v.key]} rows={shown.length}
                     onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
-                    focused={!!focusRow} canFocus={boardRows.length > 1}
+                    focused={!!focusRow} canFocus={boardRows.length > 1} zoom={boardZoom}
                     onFocus={() => setBoardFocus(focusRow ? null : v.key)}
                     onOpen={() => onOpenVoyage(v.key)}/>
                 </div>
@@ -2155,7 +2178,7 @@ function LegendCell({ e }) {
 //    fill 이 아니면(폰 세로 쌓임 = 높이가 안 정해짐) 폭 + maxH 추정으로 맞추고 높이를 명시한다(높이를 flex 에 맡기면 0 이 돼 통째로 잘린다 — 실측). 키우지는 않는다는 말은 틀렸다 — 칸에 맞춰 키운다(상한 2.5).
 //    ★ fill 의 높이는 flex 가 준 칸 높이가 아니라 **카드(줄) 바닥까지 남은 거리**로 잰다(boundsRef) — flex 사슬은 어디 하나만 auto 여도 칸 높이 = 내용 높이가 돼
 //      배율이 1 에 묶인다(검수사 «저와 보는 관점이 틀리신가 봅니다» — 큰 화면에서 밑·오른쪽이 비던 원인).
-function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null }) {
+function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null, boost = 1 }) {
   const boxRef = React.useRef(null); const innerRef = React.useRef(null);
   const [fit, setFit] = useState({ s: 1, h: null, x: 0 });
   useEffect(() => {
@@ -2173,8 +2196,12 @@ function FitBox({ children, className = '', maxH = null, fill = false, boundsRef
       //  검수사 «지금이 아까보다 밑과 우측에 여백이 더 생겼습니다» — 배율을 1 로 막아 두면 큰 화면에서 그림이 칸보다 작아 양쪽이 빈다. 칸에 맞춰 키우기도 한다(상한 2.5 — DOM 변환이라 글자는 또렷하다).
       //  검수사 «베이를 중앙정렬 해주시고 1.05배를 해주세요» · «지금의 1.05배 더요» — 맞춘 배율 그대로(3.11-01 — ×1.05³ 는 잘림), 남는 폭의 절반만큼 오른쪽으로 밀어 가운데 둔다
       //  3.11-01: ×1.05³ 는 미리보기(카드가 화면보다 컸다)에서 정한 값 — 실제 줄에선 높이가 먼저 닿아 밑 두 단이 잘렸다(검수사 화면 실측). 칸에 **딱** 맞춘다.
-      const s = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5); const h = Math.ceil(ih * s);
-      const x = Math.max(0, Math.floor((bw - iw * s) / 2));
+      //  ★ 3.17 — 검수사 «작업이 2척이다 보니 수석 화면이 작아 졌습니다. 확대기능 가능한지요?»
+      //    척수로 높이를 등분하니 2척이면 그림이 반이 된다. 맞춤 배율에 **사람이 정한 배율**을 곱한다.
+      //    1보다 크면 칸을 넘치므로 그 칸 안에서만 스크롤한다 — 보드 전체가 밀리지 않게.
+      const z = Number(boost) > 0 ? Number(boost) : 1;
+      const s = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5) * z; const h = Math.ceil(ih * s);
+      const x = z > 1 ? 0 : Math.max(0, Math.floor((bw - iw * s) / 2));
       setFit((f) => (Math.abs(f.s - s) < 0.005 && f.h === h && f.x === x) ? f : { s, h, x });
     };
     measure();
@@ -2182,14 +2209,14 @@ function FitBox({ children, className = '', maxH = null, fill = false, boundsRef
     if (ro) { ro.observe(box); ro.observe(inner); }
     window.addEventListener('resize', measure);
     return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [children, maxH, fill]);
+  }, [children, maxH, fill, boost]);
   return (
-    <div ref={boxRef} className={`overflow-hidden w-full ${className}`} style={fit.h != null ? { height: fit.h } : undefined}>
+    <div ref={boxRef} className={`${Number(boost) > 1 ? 'overflow-auto' : 'overflow-hidden'} w-full ${className}`} style={fit.h != null ? { height: Number(boost) > 1 ? Math.ceil(fit.h / Number(boost)) : fit.h } : undefined}>
       <div ref={innerRef} style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
     </div>
   );
 }
-export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
+export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
   const repIcon = lastReport ? (
@@ -2277,7 +2304,7 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
                 <span className={b.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{b.mode === 'loading' ? '선적' : '양하'} {b.n}대</span>
                 <span className={`ml-auto ${(Date.now() - (b.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{fmtAgo(b.lastAt)}</span>
               </div>
-              <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH}>
+              <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom}>
                 <BayPlan containers={boardContainers[b.mode] || []} compMap={voyage?.[b.mode]?.completed || {}}
                   xrayMap={voyage?.[b.mode]?.xrayList || {}} mode={b.mode}
                   shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
@@ -2305,7 +2332,7 @@ export function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null
                   <span className={`ml-auto ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
                 </div>
                 {c.bay && /\d/.test(String(c.bay)) && voyage ? (
-                  <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH}>
+                  <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom}>
                     <BayPlan containers={boardContainers[c.mode || modeOfBoard] || []} compMap={voyage?.[c.mode || modeOfBoard]?.completed || {}}
                       xrayMap={voyage?.[c.mode || modeOfBoard]?.xrayList || {}} mode={c.mode || modeOfBoard}
                       shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
