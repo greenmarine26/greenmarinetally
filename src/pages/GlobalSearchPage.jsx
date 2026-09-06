@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled, crewShiftKey, koJosa} from '../utils.js';   // 3.8: crewShiftKey·koJosa
+import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // 3.8: crewShiftKey·koJosa
 import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer, answerCraneCrew, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
@@ -285,9 +285,9 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     const t = String(debouncedQuery || '').trim();
     if (!t) return;
     let cs = null;
-    try { cs = parseNaturalQuery(t).crewSet; } catch (e) { cs = null; }
-    if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     if (!shipCtx || !shipCtx.key) return;
+    try { cs = resolveCrewSides(parseNaturalQuery(t).crewSet, shipCtx.v); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌
+    if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${shipCtx.key}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
     if (crewRanRef.current === key) return;
@@ -495,7 +495,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 이인철 3호기 최관식» · «SWMM 김성일 몇 개 했어»';
       }
       if (shipCtx) {
-        if (p.crewSet) return crewSetText(p.crewSet, _ship);
+        if (p.crewSet) return crewSetText(resolveCrewSides(p.crewSet, shipCtx.v), _ship);   // 3.21 감사: 저장부(:289)와 **같은 재료**를 봐야 한다 — 화면이 «못 가려요» 라면서 뒤로 저장하던 것
         if (p.crewQuery) { try { const _a = answerCraneCrew(_voy, p.crewQuery); if (_a) return _a; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); } }
         if (isArrivalQ) return answerDataArrival(_voy, _ship);
         if (isHatchQ) return answerHatchStatus(_voy, _bayDef, _ship);

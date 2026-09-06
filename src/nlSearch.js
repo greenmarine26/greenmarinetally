@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel } from './utils.js';
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -390,7 +390,9 @@ export function parseNaturalQuery(text) {
   {
     const _crew = result.startSet ? null : parseCraneCrew(t);   // «1호기 김성일 22시부터 시작했어» 는 시작 알림(2.74)이다
     if (_crew) {
-      result.crewSet = { raw: String(text), shift: _crew.shift, dayOff: _crew.dayOff || 0, crew: _crew.crew, unknown: _crew.unknown };
+      //  3.21: «선미 김판석 선수 이종부» 는 여기서 호기를 모른다 — needPos 로 실어 보내고 **저장하는 자리**가
+      //    그 배의 실적으로 유도한다(utils.resolveCrewSides 한 벌). 검수사 «처음에 호기를 이야기 안한 이유입니다».
+      result.crewSet = { raw: String(text), shift: _crew.shift, dayOff: _crew.dayOff || 0, crew: _crew.crew, unknown: _crew.unknown, needPos: _crew.needPos || [] };
       result.digits = null; result.briefingQuery = false; result.posQuery = false;
     } else if (!result.startSet && /호기/.test(t) && /취소|빼\s*줘|빼줘|빼라|지워|지우|삭제/.test(t) && (_staffInText(t) || /검수원|검수사|이름|등록/.test(t))) {
       result.crewQuery = { kind: 'cancel' };   // 지우기는 아직 없다 — 조용히 등록으로 삼키지 않고 말한다(«2호기 양하 취소» 같은 딴 말은 안 잡는다 — 이름·검수원이 있을 때만)
@@ -1275,7 +1277,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   {
     const _canCrew = !!(ctx && typeof ctx.crewAnswer === 'function');
     //  ⚠ 저장은 화면 effect 가 한다 — crewAnswer 가 없는 자리(콘앱 mirCore·홈 폴백)는 저장 배선도 없으므로 «기억할게요» 라고 말하면 거짓이다(감사 실측 콘앱)
-    if (parsed.crewSet) return _canCrew ? crewSetText(parsed.crewSet, (ctx && (ctx.vslFull || ctx.vsl)) || '') : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 김판석 2호기 송제욱», 홈에서는 배 이름을 붙여서요.';
+    if (parsed.crewSet) return _canCrew ? crewSetText(resolveCrewSides(parsed.crewSet, ctx && (ctx.bowStern || ctx.voyage))   /* 3.21 감사: 항차를 통째로 못 싣는 화면(InlineAnswerCard)은 {bow,stern} 만 준다 — 화면 글과 저장부가 같은 재료를 봐야 한다 */, (ctx && (ctx.vslFull || ctx.vsl)) || '') : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 김판석 2호기 송제욱», 홈에서는 배 이름을 붙여서요.';
     if (parsed.crewQuery) {
       if (parsed.crewQuery.kind === 'cancel') return '호기 검수원 지우기는 아직 없어요 — 다른 이름으로 다시 말하면 그 조·그 호기가 덮어써져요(«1호기 이인철»).';
       if (_canCrew) { try { const _ca = ctx.crewAnswer(parsed.crewQuery); if (_ca) return _ca; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패:', e); } }
@@ -2508,12 +2510,32 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 //  ★ 3.8: 등록 문장에 화면이 내는 확인 글 — 실제 쓰기는 화면(SearchPanel·VoyagePage·GlobalSearchPage)의 effect 가
 //    fbSetVoyageCraneCrew 로 하고, 성공하면 음성으로 «…로 기억했어요» 를 붙인다. 여기서는 **무엇을 어디에 적는지**만 말한다.
 export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
+  //  3.21: «선수·선미» 로 말했는데 그 배 실적이 아직 없어 못 가린 경우 — **조용히 버리지 않고 되묻는다**(§4-3).
+  //    유도는 저장하는 자리에서 `utils.resolveCrewSides` 가 한다(한 벌). 여기 needPos 가 남아 있으면 못 가린 것이다.
+  const _need = (cs && Array.isArray(cs.needPos)) ? cs.needPos : [];
+  const _hasCrew = !!(cs && Array.isArray(cs.crew) && cs.crew.length);
+  if (_need.length && !_hasCrew) {
+    const who = _need.map((q) => `${q.side} ${q.name}`).join(' · ');
+    let out = `🤔 ${shipLabel ? shipLabel + ' ' : ''}${who} 로 들었는데, **이 배는 아직 작업 기록이 없어 어느 호기가 선수·선미인지 못 가려요.**\n`
+      + `작업이 시작되면 내려놓은 베이로 제가 알아서 가립니다. 지금은 «${cs.shift || '야간'} 1호기 ${_need[0].name}» 처럼 호기로 알려 주세요.`;
+    if (Array.isArray(cs.unknown) && cs.unknown.length) {
+      out += `\n⚠ «${cs.unknown.map((u) => u.tok).join('» · «')}» 은 검수원 명단에 없어 못 적었어요.`;   // 3.21 감사: 유도 실패 경로에서도 이 말을 살린다
+    }
+    return out;
+  }
   if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return null;
   const k = crewShiftKey(cs.shift, nowMs, cs.dayOff || 0);
   const who = cs.crew.map((c) => `${c.no}호기 ${c.name}`).join(' · ');
   let out = `📝 ${shipLabel ? shipLabel + ' ' : ''}${k.key}조 — ${koJosa(who, '으로')} 기억할게요.`;
+  //  3.21: 선수·선미로 말한 것을 실적으로 가렸으면 그 근거를 밝힌다 — 사람이 «맞나» 를 눈으로 볼 수 있게.
+  if (cs._sideFrom && cs._sideFrom.bow) out += `\n(선수 ${cs._sideFrom.bow}호기 · 선미 ${cs._sideFrom.stern}호기 — 지금까지 내려놓은 베이로 가렸어요)`;
   if (Array.isArray(cs.unknown) && cs.unknown.length) {
     out += `\n⚠ ${cs.unknown.map((u) => `${u.no}호기 «${u.tok}»`).join(' · ')} 은 검수원 명단에 없어 못 적었어요 — 명단에 있는 이름으로 다시 말해 주세요.`;
+  }
+  //  3.21 감사: **부분 성공도 밝힌다** — 호기와 쪽을 섞어 말했는데 쪽만 못 가린 경우, 그 사람이
+  //    말에서도 저장에서도 소리 없이 사라지던 것(«1호기 김판석 선미 이종부» 실측).
+  if (_need.length) {
+    out += `\n⚠ ${_need.map((q) => `${q.side} ${q.name}`).join(' · ')} 은 **어느 호기인지 못 가려 아직 못 적었어요** — 작업 기록이 쌓이면 가려지고, 지금은 호기로 알려 주시면 됩니다.`;
   }
   out += `\n(«김성일 몇 개 했어» · «1호기 누구야» · «누가 몇 개 했어» 로 물으시면 이 등록으로 답해요)`;
   return out;

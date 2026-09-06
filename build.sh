@@ -691,6 +691,9 @@ fi
     SMOKE_CW=$(mktemp /tmp/_smokecw_XXXXXX.cjs)
     npx esbuild tools/smoke_crew_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CW" --log-level=error \
       && node tools/smoke_crew.cjs "$SMOKE_CW" "$(pwd)" || { rm -f "$SMOKE_CW"; echo "✗ 호기–검수원 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.21: **선수·선미 → 호기** — 검수사 «처음에 호기를 이야기 안한 이유입니다». 그날 실적(DJCF·MCAP)으로
+    #    가르는지·못 가리면 되묻는지·호기 꼴 회귀가 그대로인지. 같은 진입점 번들을 쓴다(파서·유도가 한 모듈).
+    node tools/smoke_bowstern.cjs "$SMOKE_CW" || { rm -f "$SMOKE_CW"; echo "✗ 선수·선미 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_CW"
     #  2.57: **미르 화법 시험지** — 뜻/위치/개수 갈래·요약+후속·가로채기 0·모른다 고백·세 화면 배선.
     #    검수사 지시 «가르치고 시험하고 보강하고 재시험» — 이 시험이 매 빌드 그 반복을 강제한다.

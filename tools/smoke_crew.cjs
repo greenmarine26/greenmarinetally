@@ -209,7 +209,14 @@ const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/crew_swmm.
   T((rd('src/pages/VoyagePage.jsx').match(/fbSetVoyageCraneCrew\(voyageKey, sk\.key, cs\.crew\)/g) || []).length === 2, '양하·LOLO 탭 중 한 곳이 저장을 안 한다');
   T(/fbSetVoyageCraneCrew\(shipCtx\.key, sk\.key, cs\.crew\)/.test(rd('src/pages/GlobalSearchPage.jsx')), '홈(배 이름으로) 배선이 없다');
   T(/crewAnswer: \(cq\) =>/.test(rd('src/components/SearchPanel.jsx')) && /crewAnswer: \(cq\) =>/.test(rd('src/pages/VoyagePage.jsx')) && /crewAnswer: briefCtx\?\.crewAnswer/.test(rd('src/pages/VoyagePage.jsx')), '조회 답 클로저(crewAnswer)가 화면에 안 실린다');
-  T(/answerCraneCrew\(_voy, p\.crewQuery\)/.test(rd('src/pages/GlobalSearchPage.jsx')) && /crewSetText\(p\.crewSet, _ship\)/.test(rd('src/pages/GlobalSearchPage.jsx')), '홈 답 배선이 없다');
+  //  3.21: 확인 글이 `resolveCrewSides` 를 지나도록 바뀌었다 — 배선이 **있는가**를 재되 그 유도까지 같이 본다
+  //    (옛 검사는 `crewSetText(p.crewSet, _ship)` 문자열 그대로를 찾아, 유도를 끼우자 «배선이 없다»고 했다).
+  {
+    const _gs = rd('src/pages/GlobalSearchPage.jsx');
+    T(/answerCraneCrew\(_voy, p\.crewQuery\)/.test(_gs), '홈 조회 답 배선이 없다');
+    T(/crewSetText\((?:resolveCrewSides\()?p\.crewSet/.test(_gs), '홈 등록 확인 글 배선이 없다');
+    T(/crewSetText\(resolveCrewSides\(p\.crewSet, shipCtx\.v\)/.test(_gs), '3.21: 홈 확인 글이 저장부와 같은 유도를 안 탄다');
+  }
   T(/parsed\.crewSet \|\| parsed\.crewQuery/.test(rd('src/nlSearch.js')), 'hasAnyCondition 에 없어 미르가 «못 알아들었다»고 적는다');
   T(/주간 1호기 김판석 2호기 송제욱/.test(rd('src/data/helpData.js')) && /김성일 몇 개 했어/.test(rd('src/data/helpData.js')), '매뉴얼(helpData)에 없다 — 만들어 두고 아무도 모르면 안 만든 것');
   T(/allStaffNames/.test(rd('src/staffList.js')) && /import \{ allStaffNames \} from '\.\/staffList\.js'/.test(rd('src/utils.js')), '이름 목록 한 벌(allStaffNames)을 안 쓴다');

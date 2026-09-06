@@ -44,7 +44,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, koJosa, isTransitByEdi} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -939,6 +939,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     },
     [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan, sec.luggConfirm]);
 
+  //  3.21: «선미 김판석 선수 이종부» 를 호기로 가릴 재료 — 항차 한 번만 재고 탭에 내린다(§4-4 한 벌).
+  //    ListTab·LoloTab 은 항차를 통째로 안 받으므로(빌드 스코프 검사가 잡았다) 여기서 구해 prop 으로 준다.
+  const _bowStern = useMemo(() => { try { return craneBowSternOf(voyage); } catch (e) { return null; } },
+    [voyage?.discharge?.termWork, voyage?.loading?.termWork, voyage?.discharge?.completed, voyage?.loading?.completed]);
+
   // ── TallyOne 1.8: 리퍼 온도 확인 ─────────────────────────────────────────
   //   "작업전 먼저 선박을 선택합니다. 그러면 앱은 리퍼 유무를 판단하고 있으면 리퍼메모 화면을
   //    띄워 줍니다"(검수사 확정 2026-08-04). 아직 확인 안 한 리퍼가 남아 있을 때만 자동으로 뜬다.
@@ -1610,6 +1615,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'list' && (
         <ListTab
           onOpenPlan={_mirOpenPlan}
+          bowStern={_bowStern}   /* 3.21: «선수·선미» → 호기 유도(항차를 통째로 안 받는 탭이라 상위가 한 번 구해 내린다) */
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           voyageKey={voyageKey} mode={mode}
           containers={containers} ediMap={ediMap} recMap={recMap}
@@ -1710,6 +1716,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
         <LoloTab
           onOpenPlan={_mirOpenPlan}
+          bowStern={_bowStern}   /* 3.21: «선수·선미» → 호기 유도(항차를 통째로 안 받는 탭이라 상위가 한 번 구해 내린다) */
           voyageInfo={voyage?.info || null}   /* 3.9 */
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           briefCtx={briefCtx}
@@ -2189,7 +2196,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈)
+export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈)
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2235,7 +2242,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
     const q = String(ask?.q || '').trim();
     if (!q || !voyageKey) return;
     let cs = null;
-    try { cs = parseNaturalQuery(q).crewSet; } catch (e) { cs = null; }
+    try { cs = resolveCrewSides(parseNaturalQuery(q).crewSet, bowStern); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌(상위가 구해 내린 값)
     if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
@@ -2409,7 +2416,7 @@ export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
 
       <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[
@@ -2770,7 +2777,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
       //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
       //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
-      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, info: briefCtx?.info || null, voyageDoneAts: briefCtx?.doneAtsAll || null, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null, crewAnswer: briefCtx?.crewAnswer || null })) : null;   // 2.05-01 · 2.62 · 3.8
+      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, info: briefCtx?.info || null, voyageDoneAts: briefCtx?.doneAtsAll || null, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null, crewAnswer: briefCtx?.crewAnswer || null, bowStern: briefCtx?.bowStern || null })) : null;   // 3.21 감사: 화면 글도 저장부와 같은 재료(선수·선미 유도)를 봐야 한다   // 2.05-01 · 2.62 · 3.8
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
   const readRef = useRef('');
@@ -2891,7 +2898,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
   );
 }
 
-function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자
+function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2935,7 +2942,7 @@ function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xray
     const q = String(ask?.q || '').trim();
     if (!q || !voyageKey) return;
     let cs = null;
-    try { cs = parseNaturalQuery(q).crewSet; } catch (e) { cs = null; }
+    try { cs = resolveCrewSides(parseNaturalQuery(q).crewSet, bowStern); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌(상위가 구해 내린 값)
     if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
@@ -3086,7 +3093,7 @@ function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xray
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
 
       <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[
