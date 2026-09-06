@@ -600,3 +600,4 @@ export function buildConeBayGrid(containers, shipInfo) {
 // ConeOne 1.2: 콘앱 베이뷰가 검수앱 베이플랜과 같은 격자를 쓰도록 노출.
 //   cone.html 베이뷰는 이 결과(pages)의 칸만 그린다 — 없는 칸은 아예 안 그림, X 그림자는 검수앱과 동일.
 window.ConeBayGrid = { buildGrid: buildConeBayGrid, ver: 'ConeOne 1.2' };
+
