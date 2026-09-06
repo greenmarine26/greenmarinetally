@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.19-03';
-const NOTE = '콘앱 위 띠가 한 줄로 줄었습니다 — 글자는 그대로입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.20';
+const NOTE = '시프팅 대수가 작업 중에 스스로 안 바뀝니다 — 수석 화면 터미널 대수는 뺐습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -132,6 +132,93 @@ const fs = require('fs');
        '캐시 서명에 swapFix 리비전이 들어 있다');
   }
 
+  console.log('[8] 3.20 — 터미널이 채운 자리는 시프팅 판정에 안 쓴다 (구독 경로 그대로 태워서 잰다)');
+  {
+    //  검수사 2026-09-06 «시프팅 갯수가 스스로 줄어들었습니다. 96에서 94로» → «시프팅은 96이 맞을것입니다».
+    //  ⛔ 감사(다른 클로드) 지적 — 첫 판의 검사는 `applyCatosPos`·`applyAutoSwap` 을 **한 번도 안 태우고** 쟀다.
+    //     라이브 구독(firebase.fbSubscribeVoyages)은 그 둘을 연달아 태우므로, 안 태우고 재면 옆문이 열린 채 통과한다.
+    //     여기서는 구독과 **같은 순서로** 태운 뒤 센다.
+    const x = FX.MCSC_633N;
+    const D = expand(x.d, 'pod'), L = expand(x.l, 'pol');
+    const A = 'CAAU6532118';                       // 시프팅으로 잡히는 실제 컨
+    const dest = L[A];                             // 그 컨의 선적(도착) 자리
+    const p6 = (c) => String(c.bay).padStart(2, '0') + String(c.row).padStart(2, '0') + String(c.tier).padStart(2, '0');
+    const base = () => ({ discharge: { ediContainers: { ...D } }, loading: { ediContainers: { ...L } },
+                          info: { berthShift: x.bs } });
+    const sub = (v) => U.applyAutoSwap(U.applyCatosPos(v));   // 구독이 태우는 순서 그대로
+
+    //  ⛔ **문이 둘이면 조합도 둘이어야 한다**(3차 감사 지적 — 한 조합만 두고 다른 문을 «못 잰다»고 잘못 적었다).
+    //     ① 실체(actual) 문 — «A 를 제 도착 자리에 실었다» → 게이트를 빼면 95 → **65**(A 가 목록에서 빠진다).
+    //     ② 배정(assign) 문 — «A 를 남의 계획칸에 실었다» → 자동 맞교환이 돌고, 게이트를 빼면 95 → **66**.
+    //     둘 다 걸어야 어느 문이 열려도 여기서 걸린다.
+    //  ⓐ 배정 문 — 터미널이 «남의 계획칸에 실었다»고 말해 자동 맞교환 사슬이 생기는 조합.
+    const HOLE = 'MRKU4002140', HOLE_AT = D['MSKU7177518'];   // 41-11-84 — 이 칸이 사슬을 만든다
+    const vT = base(); vT.discharge.termWork = { [HOLE]: { at: 1, pos: p6(HOLE_AT) } };
+    const mT = sub(vT);
+    const gotPos = !!(mT.discharge.records && mT.discharge.records[HOLE] && mT.discharge.records[HOLE]._pos_src);
+    ok(gotPos, '검사 전제 — 카토스 자리가 실제로 얹혔다(안 얹혔으면 아래는 헛 시험이다)');
+    const autoN = Object.values(mT.discharge.records || {}).filter((r) => r && r._assign_src === 'autoswap').length;
+    ok(autoN > 0, `검사 전제 — 자동 맞교환이 «정해 준 자리»를 실제로 만들었다(${autoN}건 — 0이면 옆문을 안 재는 것이다)`);
+    const nT = Object.keys(U.computeShiftingFromVoyage(mT) || {}).length;
+    ok(nT === 95, `카토스 자리 + 자동 맞교환을 다 태워도 95 그대로 (${nT} — 게이트를 빼면 66 이 나오는 조합이다)`);
+
+    //  ⓑ 동방(pnct) 표식도 같다.
+    const vP = base(); vP.discharge.termWork = { [HOLE]: { at: 1, pos: p6(HOLE_AT), src: 'pnct' } };
+    const mP = sub(vP);
+    const pMark = (mP.discharge.records && mP.discharge.records[HOLE] && mP.discharge.records[HOLE]._pos_src) || '';
+    ok(pMark === 'pnct', `검사 전제 — 동방 표식이 실제로 붙었다(${pMark || '안 붙음'}) · applyCatosPos 가 읽는 필드는 src 다`);
+    const nP = Object.keys(U.computeShiftingFromVoyage(mP) || {}).length;
+    ok(nP === 95, `동방 자리도 95 그대로 (${nP})`);
+
+    //  ⓒ 사람이 손으로 고친 자리는 **여전히** 반영된다(2.96 — 검수사 «5660은 내리고 2118은 남겼다» 그 길).
+    //     재는 것은 대수가 아니라 «그 컨이 시프팅 목록에서 빠지는가»다 — 대수는 배정표 정본 분기가 갈려 흔들린다.
+    const vH = base();
+    vH.discharge.records = { [A]: { bay_actual: dest.bay, row_actual: dest.row, tier_actual: dest.tier, actual_by: '김성일' } };
+    const mH = U.computeShiftingFromVoyage(vH) || {};
+    ok(!mH[A], `${A} 는 사람이 고치면 시프팅에서 빠진다`);
+    //     ⓒ 와 **같은 자리·같은 값**을 터미널이 말한 것으로만 바꿔 넣는다 — 이것이 실체 문을 재는 조합이다.
+    //       (게이트를 빼면 여기서 65 가 되고 A 가 빠진다. 앞의 HOLE 조합은 배정 문만 잰다.)
+    const vT2 = base(); vT2.discharge.termWork = { [A]: { at: 1, pos: p6(dest) } };
+    const wT2 = sub(vT2);
+    ok(!!(wT2.discharge.records && wT2.discharge.records[A] && wT2.discharge.records[A]._pos_src),
+       '검사 전제 — 실체 문 조합에서도 카토스 자리가 실제로 얹혔다');
+    const mT2 = U.computeShiftingFromVoyage(wT2) || {};
+    ok(!!mT2[A], `${A} 는 터미널이 채운 자리로는 안 빠진다(같은 자리·같은 값인데 출처만 다르다)`);
+    ok(Object.keys(mT2).length === 95, `실체 문 — 그 조합에서도 95 그대로 (${Object.keys(mT2).length} — 게이트를 빼면 65 가 되는 조합이다)`);
+
+    //  ⓔ **실체 문 × 동방 표식** — ⓐ·ⓑ 는 배정 문 조합이라 실체 문에 난 pnct 구멍에 둔감하다(5차 감사 지적).
+    //     게이트를 `_pos_src === 'catos'` 로 좁히는 회귀(3.16-01 재발)를 여기서 65 로 잡는다.
+    const vE = base(); vE.discharge.termWork = { [A]: { at: 1, pos: p6(dest), src: 'pnct' } };
+    const wE = sub(vE);
+    ok(((wE.discharge.records && wE.discharge.records[A] && wE.discharge.records[A]._pos_src) || '') === 'pnct',
+       '검사 전제 — 실체 문 조합에 동방 표식이 붙었다');
+    const mE = U.computeShiftingFromVoyage(wE) || {};
+    ok(!!mE[A] && Object.keys(mE).length === 95,
+       `동방 표식도 실체 문에서 막힌다 — ${Object.keys(mE).length}대(95) · A 남음 (게이트를 catos 전용으로 좁히면 65 가 된다)`);
+
+    //  ⓕ 소스 전수 — 문지기가 «자리를 고르는 그 자리»에 **두 짝 다** 서 있는가(규범 §4-4)
+    const u = fs.readFileSync(path.resolve('src/utils.js'), 'utf8');
+    ok(/const _fromTerm = !!r\._pos_src;/.test(u), '_mergeRecPos 에 터미널 출처 게이트가 있다');
+    ok(/if \(!_fromTerm && r\.bay_actual/.test(u), '실체 자리(actual) 문에 게이트가 걸려 있다');
+    ok(/_assign_src \|\| ''\) === 'autoswap'/.test(u) && /else if \(!_autoAssign && r\.bay_assign/.test(u),
+       '정해 준 자리(assign) 문에도 게이트가 걸려 있다 — 자동 맞교환은 안 쓴다');
+    ok(/if \(r && r\._pos_src\) \{/.test(u), "stripCatosPos 가 'catos'·'pnct' 를 가리지 않고 벗긴다");
+    //  ⛔ 재감사 지적 — 파일 전체 정규식은 «어디에 있든» 통과시킨다(첫 판이 그래서 엉뚱한 함수에 든 것을 못 잡았다).
+    //     사람이 자리를 고치는 길은 **두 함수**다. 둘 다 **제 본문 안에서** 표식을 걷는지 잰다.
+    const fb = fs.readFileSync(path.resolve('src/firebase.js'), 'utf8');
+    const body = (name) => {                       // 그 함수의 시작 ~ 다음 최상위 선언까지
+      const i = fb.indexOf(name); if (i < 0) return '';
+      const ends = [/\nexport /g, /\nasync function /g, /\nfunction /g].map((re) => {
+        re.lastIndex = i + name.length; const m = re.exec(fb); return m ? m.index : fb.length;
+      });
+      return fb.slice(i, Math.min(...ends));
+    };
+    ok(/_pos_src: null,/.test(body('export async function fbSetActualPosition')),
+       '컨 상세·베이 빈칸·수석 편집이 부르는 fbSetActualPosition 본문이 표식을 걷는다');
+    ok(/patch\._pos_src = null;/.test(body('function _updatePositionFields')),
+       '자리 재배정(_updatePositionFields) 본문도 표식을 걷는다');
+  }
+
   console.log(fail ? `\n✗ 실패 ${fail}건` : '\n✓ 전부 통과');
   process.exit(fail ? 1 : 0);
 })();

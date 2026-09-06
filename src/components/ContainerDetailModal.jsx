@@ -653,9 +653,10 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     <span className="text-base font-bold mono text-cyan-200">{c.row_actual || '--'}</span>
                     <span className="text-dim-400">/</span>
                     <span className="text-base font-bold mono text-cyan-200">{c.tier_actual || '--'}</span>
-                    {completedByLabel({ by: c.actual_by, at: c.actual_at, src: c._pos_src === 'catos' ? 'term' : undefined, equip: comp && comp.equip }, voyageInfo) && (
-                      <span className="text-2xs text-dim-300 ml-1">({completedByLabel({ by: c.actual_by, at: c.actual_at, src: c._pos_src === 'catos' ? 'term' : undefined, equip: comp && comp.equip }, voyageInfo)})</span>
-                    )}   {/* 3.16: 업체 글자 대신 사람 이름(없으면 조 등록 근무자, 그것도 없으면 «터미널 반영») */}
+                    {completedByLabel({ by: c.actual_by, at: c.actual_at, src: c._pos_src ? 'term' : undefined, equip: comp && comp.equip }, voyageInfo) && (
+                      <span className="text-2xs text-dim-300 ml-1">({completedByLabel({ by: c.actual_by, at: c.actual_at, src: c._pos_src ? 'term' : undefined, equip: comp && comp.equip }, voyageInfo)})</span>
+                    )}   {/* 3.16: 업체 글자 대신 사람 이름(없으면 조 등록 근무자, 그것도 없으면 «터미널 반영»)
+                        3.20: 표식을 안 가린다 — 'catos' 만 보던 탓에 **동방(pnct) 배는 이 자리가 조용히 빈칸**이었다 */}
                   </div>
                 ) : (
                   <div className="text-xs text-dim-400">

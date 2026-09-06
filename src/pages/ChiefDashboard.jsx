@@ -2402,18 +2402,16 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         {v.dis.total > 0 && <MiniBar label="양하" color="blue" stats={v.dis}/>}
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
       </div>
-      {/* TallyOne 1.0(L2): 터미널 실적 대조 — 앱 내부 완료수 vs 트레드링스 실적(disDone/disPlan·lodDone/lodPlan).
-          미수신도 조용히 비우지 않고 명시(±12h 창 밖 자료는 이 항차 것이 아니라 버려진 상태 포함). */}
+      {/*  3.20 — **터미널 대수는 화면에 안 쓴다.** 검수사 2026-09-06 «카토스(앱) 카운트는 놔두고 터미널 카운트는 이제 없어도 될듯합니다».
+          1.0(L2) 의 이 줄은 «앱 숫자를 믿어도 되나»를 트레드링스 실적(disDone/disPlan)과 대조하려던 것이다.
+          컨별 터미널 실적(termWork)이 완료로 들어오면 위 진행 막대가 곧 그 숫자라 대조가 두 벌이 된다.
+          ⚠ 들어오는 길은 부두마다 다르다 — PCTC 는 수집기(catos.apply_completed)가 1분마다 스스로 넣고, 동방은 수석이 주황 「터미널 실적 반영」을 눌러야 한다.
+            그 버튼은 반영할 것이 있을 때만 이 카드 안에 뜨므로(1848행), 남은 격차는 대수 대조가 아니라 그 버튼이 말해 준다.
+          ⚠ 줄 자체는 남긴다 — 「지연」과 «자료가 언제 것인가»는 대수가 아니고, 미수신은 자료가 안 오는 신호라 조용히 지우지 않는다(규범 §4-3).
+          ⚠ 미르 답(nlSearch)·작업 속도(3.6-01 «1순위는 터미널 실적»)는 검수사 확정 사양이라 그대로 둔다. */}
       {tw ? (
         <div className="text-2xs mono text-dim-300 flex items-center gap-1.5 flex-wrap">
           <span className="text-cyan-300 font-bold">🏗 터미널</span>
-          {(tw.disPlan > 0 || tw.disDone > 0) && (
-            <span>양하 {tw.disDone}/{tw.disPlan} <span className="text-dim-500">(앱 {v.dis.done})</span></span>
-          )}
-          {(tw.lodPlan > 0 || tw.lodDone > 0) && (
-            <span>선적 {tw.lodDone}/{tw.lodPlan} <span className="text-dim-500">(앱 {v.loa.done})</span></span>
-          )}
-          {typeof tw.pct === 'number' && tw.pct >= 0 && <span className="text-dim-400">{tw.pct}%</span>}
           {tw.delayed && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">지연</span>}
           {/* TallyOne 1.5: 신선도 — 이 값이 언제 것인지 화면이 말해주지 않아 새로고침하게 되던 문제.
               수집기 사이클이 5분이므로 10분 넘으면 이상 신호. 실측(2026-08-04): 같은 화면에

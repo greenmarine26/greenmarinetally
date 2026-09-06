@@ -917,6 +917,10 @@ export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actual
     tier_actual: actualTier || '',
     actual_at: Date.now(),
     actual_by: by || '',
+    //  3.20: 터미널이 채웠다는 표식은 걷는다 — 이제 사람이 고친 자리다(RTDB update 의 null 은 키 삭제).
+    //    보관본에 표식이 굳어 되살아난 경우 안 걷으면 시프팅이 이 자리를 계속 «터미널 것»으로 보고 건너뛴다.
+    //    이 함수를 부르는 사람 편집 세 길 — 컨 상세 「위치 지정」·베이 그림 빈 칸·수석 베이상세 편집.
+    _pos_src: null,
     moves: [..._mv, { at: Date.now(), by: by || '', why: 'actual', from: _from, to: _to, byCn: '' }],
   });
 }
@@ -1502,6 +1506,9 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     if (!meta.planOnly && _isLoaded) {
       patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
       patch.actual_at = Date.now(); patch.actual_by = by || '';
+      //  3.20: 터미널이 채웠다는 표식은 걷는다 — 이제 사람이 고친 자리다.
+      //    (보관본에 표식이 굳어 되살아난 경우, 안 걷으면 시프팅이 이 자리를 터미널 것으로 보고 건너뛴다.)
+      if (cur._pos_src !== undefined && cur._pos_src !== null) patch._pos_src = null;
       // 실린 컨의 자리를 고쳤으면 «정해 준 자리»는 걷는다 — 실체가 진실이다.
       if (cur.bay_assign !== undefined && cur.bay_assign !== null) {
         patch.bay_assign = null; patch.row_assign = null; patch.tier_assign = null;

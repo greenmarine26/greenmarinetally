@@ -62,7 +62,20 @@ ok(hits.length === 0, `화면·서류 소스에 그 글자가 남은 곳 ${hits.
 //  ⑤-2 **utils 소스에도 그 글자가 리터럴로 없다** — 옛 행 판별은 접두 «터미널»로 한다(검수사 «어디든»).
 {
   const u = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
-  const bad = u.split('\n').filter((l, i) => l.includes('터미널(CATOS)') && !/^\s*(\/\/|\*)/.test(l.trim()));
+  //  3.20: 줄 앞 주석뿐 아니라 **꼬리 주석**도 코드가 아니다 — APP_VERSION 한 줄에 이력이 전부 붙어 있어
+  //    3.16 의 검수사 원문 인용(«by:'터미널(CATOS)' 어디든 이 문구는 없어야 됩니다»)이 코드로 잡혔다.
+  //    원문은 고치면 인용이 아니므로(규범 §10-1) 검사가 코드만 보게 고친다. 따옴표 안의 «//» 는 안 자른다.
+  const codeOf = (l) => {
+    let q = '';
+    for (let i = 0; i < l.length; i++) {
+      const c = l[i];
+      if (q) { if (c === '\\') { i++; continue; } if (c === q) q = ''; continue; }
+      if (c === '"' || c === "'" || c === '`') { q = c; continue; }
+      if (c === '/' && l[i + 1] === '/') return l.slice(0, i);
+    }
+    return l;
+  };
+  const bad = u.split('\n').filter((l) => codeOf(l).includes('터미널(CATOS)') && !/^\s*(\/\/|\*)/.test(l.trim()));
   ok(bad.length === 0, `utils.js 코드 줄에 그 글자가 남은 곳 ${bad.length}곳` + (bad.length ? '\n     ' + bad.join('\n     ').slice(0, 300) : ''));
 }
 
