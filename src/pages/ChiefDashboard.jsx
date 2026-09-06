@@ -599,9 +599,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //  ★ 3.17 — **보드 확대.** 검수사 2026-09-06 «작업이 2척이다 보니 수석 화면이 작아 졌습니다. 확대기능 가능한지요?»
   //    보드 높이를 척수로 등분하므로 2척이면 그림이 절반이 된다. 사람이 배율을 정하고 그 값을 기억한다.
   //    ⚠ 폰마다 화면이 다르니 기기에 남긴다(localStorage). 읽기·쓰기 모두 try 로 감싼다 — 사생활 모드에서 던진다.
-  const BOARD_ZOOMS = [0.8, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2];
+  const BOARD_ZOOMS = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 3];   // 3.19: 검수사 «확대는 100-300%로 해주세요» — 줄이는 쪽은 안 쓴다(작아서 문제였다)
   const [boardZoom, setBoardZoom] = useState(() => {
-    try { const v = Number(localStorage.getItem('gm_board_zoom')); return BOARD_ZOOMS.includes(v) ? v : 1; } catch (e) { return 1; }
+    try { const v = Number(localStorage.getItem('gm_board_zoom')); return BOARD_ZOOMS.includes(v) ? v : 1; } catch (e) { return 1; }   // 옛 값(0.8·0.9 등)은 표에 없으므로 100% 로 돌아온다
   });
   const bumpZoom = (dir) => {
     const i = BOARD_ZOOMS.indexOf(boardZoom);
@@ -2178,7 +2178,11 @@ function LegendCell({ e }) {
 //    fill 이 아니면(폰 세로 쌓임 = 높이가 안 정해짐) 폭 + maxH 추정으로 맞추고 높이를 명시한다(높이를 flex 에 맡기면 0 이 돼 통째로 잘린다 — 실측). 키우지는 않는다는 말은 틀렸다 — 칸에 맞춰 키운다(상한 2.5).
 //    ★ fill 의 높이는 flex 가 준 칸 높이가 아니라 **카드(줄) 바닥까지 남은 거리**로 잰다(boundsRef) — flex 사슬은 어디 하나만 auto 여도 칸 높이 = 내용 높이가 돼
 //      배율이 1 에 묶인다(검수사 «저와 보는 관점이 틀리신가 봅니다» — 큰 화면에서 밑·오른쪽이 비던 원인).
-function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null, boost = 1 }) {
+//  ★ 3.19 — `onFit`·`force` 를 받는다. 검수사 2026-09-06 «이화면만 균등크기로 조정해주고 확대시 중앙정렬되게 해주시고».
+//    호기 칸마다 제 그림에 맞춰 배율을 따로 잡으니 **칸마다 그림 크기가 달랐다**(실화면 — 4호기만 크게 보였다).
+//    ⇒ 각 칸이 «나 혼자면 이 배율»을 알려 주고(`onFit`), 카드가 그중 **가장 작은 것**을 골라 전부에 되돌려 준다(`force`).
+//    그러면 한 배의 호기 칸들이 같은 크기로 선다.
+function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null, boost = 1, onFit = null, force = null }) {
   const boxRef = React.useRef(null); const innerRef = React.useRef(null);
   const [fit, setFit] = useState({ s: 1, h: null, x: 0 });
   useEffect(() => {
@@ -2200,16 +2204,21 @@ function FitBox({ children, className = '', maxH = null, fill = false, boundsRef
       //    척수로 높이를 등분하니 2척이면 그림이 반이 된다. 맞춤 배율에 **사람이 정한 배율**을 곱한다.
       //    1보다 크면 칸을 넘치므로 그 칸 안에서만 스크롤한다 — 보드 전체가 밀리지 않게.
       const z = Number(boost) > 0 ? Number(boost) : 1;
-      const s = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5) * z; const h = Math.ceil(ih * s);
-      const x = z > 1 ? 0 : Math.max(0, Math.floor((bw - iw * s) / 2));
+      const own = Math.min(2.5, bw / iw, (mh && mh > 0) ? mh / ih : 2.5);
+      if (onFit) onFit(own);                       // 3.19: «나 혼자면 이 배율» — 카드가 모아 가장 작은 것을 고른다
+      const base = (Number(force) > 0 ? Number(force) : own);
+      const s = base * z; const h = Math.ceil(ih * s);
+      //  3.19: 확대해도 가운데 — 칸보다 좁으면 여백을 반씩, 넓으면 스크롤을 가운데로 민다.
+      const x = Math.max(0, Math.floor((bw - iw * s) / 2));
       setFit((f) => (Math.abs(f.s - s) < 0.005 && f.h === h && f.x === x) ? f : { s, h, x });
+      if (z > 1 && iw * s > bw) { try { box.scrollLeft = Math.floor((iw * s - bw) / 2); } catch (e) { /* 스크롤 못 옮겨도 그림은 보인다 */ } }
     };
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     if (ro) { ro.observe(box); ro.observe(inner); }
     window.addEventListener('resize', measure);
     return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [children, maxH, fill, boost]);
+  }, [children, maxH, fill, boost, force]);
   return (
     <div ref={boxRef} className={`${Number(boost) > 1 ? 'overflow-auto' : 'overflow-hidden'} w-full ${className}`} style={fit.h != null ? { height: Number(boost) > 1 ? Math.ceil(fit.h / Number(boost)) : fit.h } : undefined}>
       <div ref={innerRef} style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
@@ -2279,6 +2288,19 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     return Math.max(120, Math.floor(perRow) - 60);
   }, [rows, focused]);
   const cardRef = React.useRef(null);   // 3.11: FitBox 가 «카드 바닥까지 남은 높이»를 재는 기준(cranePanel 보다 먼저 선언)
+  //  ★ 3.19 — **호기 칸을 균등 크기로.** 검수사 2026-09-06 «이화면만 균등크기로 조정해주고».
+  //    칸마다 제 그림에 맞춰 배율을 따로 잡으면 그림 크기가 제각각이 된다(실화면 — 4호기만 크게 보였다).
+  //    각 칸이 알려 준 «혼자면 이 배율» 중 **가장 작은 것**을 모두에 되돌려 준다.
+  const fitsRef = React.useRef({});
+  const [groupFit, setGroupFit] = useState(null);
+  const reportFit = React.useCallback((key) => (v) => {
+    if (!(v > 0)) return;
+    const cur = fitsRef.current;
+    if (cur[key] && Math.abs(cur[key] - v) < 0.005) return;
+    cur[key] = v;
+    const min = Math.min(...Object.values(cur));
+    setGroupFit((g) => (g != null && Math.abs(g - min) < 0.005 ? g : min));
+  }, []);
   const cranePanel = (() => {
     //  검수사 «최대 3갱까지 보이게 — 좌측 통계, 1 2 3호기, 그 밑에 다른 선박» → 호기는 옆으로 최대 3칸(그 이상은 +N).
     const shown = cranes.slice(0, 3), more = cranes.length - shown.length;
@@ -2304,7 +2326,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                 <span className={b.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{b.mode === 'loading' ? '선적' : '양하'} {b.n}대</span>
                 <span className={`ml-auto ${(Date.now() - (b.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{fmtAgo(b.lastAt)}</span>
               </div>
-              <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom}>
+              <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom} onFit={reportFit(`b${b.mode}-${b.bay}`)} force={groupFit}>
                 <BayPlan containers={boardContainers[b.mode] || []} compMap={voyage?.[b.mode]?.completed || {}}
                   xrayMap={voyage?.[b.mode]?.xrayList || {}} mode={b.mode}
                   shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
@@ -2332,7 +2354,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                   <span className={`ml-auto ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
                 </div>
                 {c.bay && /\d/.test(String(c.bay)) && voyage ? (
-                  <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom}>
+                  <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom} onFit={reportFit(`c${c.no}`)} force={groupFit}>
                     <BayPlan containers={boardContainers[c.mode || modeOfBoard] || []} compMap={voyage?.[c.mode || modeOfBoard]?.completed || {}}
                       xrayMap={voyage?.[c.mode || modeOfBoard]?.xrayList || {}} mode={c.mode || modeOfBoard}
                       shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
