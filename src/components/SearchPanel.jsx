@@ -9,7 +9,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOct
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer, voyageDoneAts, answerCraneCrew} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer, voyageDoneAts, answerCraneCrew, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
@@ -443,7 +443,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     gangs: voyage?.info?.gangs,
     //  3.6-01: 페이스 분모는 «접안~이안 실작업 시간»이다 — 그 시각과 항차 전체 완료를 같이 내린다.
     //  ⚠ 하나씩 고르지 말고 **항차 info 를 통째로** 싣는다 — 고르면 반드시 빠뜨린다(감사 두 번).
-    info: voyage?.info || null,
+    //  ★ 3.24 — 거기에 **검수 시작·완료(작업 보고)** 두 칸을 얹는다. 검수사 «작업 시작 시간은 검수 시작이 시작입니다».
+    //    `reports` 는 info 밖에 있어 통째로 실어도 안 따라온다 — 그래서 여기서 뽑아 붙인다(§4-4 판정 한 벌).
+    info: { ...(voyage?.info || {}), ...voyageReportSpan(voyage) },
     voyageDoneAts: voyageDoneAts(voyage) };   // 3.6: 페이스 문지기가 갱 수를 봐야 상한이 맞다 — 종전 ctx.info.gangs 는 아무도 안 넣던 죽은 값이었다(감사 지적)
 
   return (

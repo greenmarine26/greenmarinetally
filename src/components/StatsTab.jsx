@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
-import { paceFromRecords, voyageDoneAts, speedFromTerminal, terminalWorkFor } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
+import { paceFromRecords, voyageDoneAts, speedFromTerminal, terminalWorkFor, voyageReportSpan } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
 export default function StatsTab({ containers, compMap, xrayMap, mode, voyage, terminalWork }) {
@@ -312,7 +312,8 @@ function computeAllStats(containers, compMap, xrayMap, mode, voyage, terminalWor
     else {
       //  터미널 «대수»는 아직 못 믿어도 «시작 시각»은 쓴다 — 분모가 그것으로 서면 몰아 입력에 안 흔들린다.
       const _tw = (() => { try { return terminalWorkFor(info || {}, terminalWork); } catch (e) { return null; } })();
-      const _P = paceFromRecords(voyageDoneAts(voyage), info, undefined, _tw);
+      //  3.24: 검수 시작·완료(작업 보고)를 info 에 얹어 넘긴다 — 분모가 접안시각으로 잡히던 것(§4-4 한 벌).
+      const _P = paceFromRecords(voyageDoneAts(voyage), { ...info, ...voyageReportSpan(voyage) }, undefined, _tw);
       if (_P.ok) { paceHour = Math.round(_P.perHour); paceSrc = _P.basis === 'work' ? '앱 기록 · 작업시간 기준' : '앱 기록 · 찍힌 구간 기준'; }
       else if (_P.why === 'dirty') paceNote = '완료 시각이 고르지 않아 페이스 못 잼';
       //  'few'·'short' 는 «아직 안 쌓였다»일 뿐이라 제목에 아무 말도 안 붙인다(잔소리가 된다).

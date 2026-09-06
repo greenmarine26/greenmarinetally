@@ -107,6 +107,7 @@ export function parseNaturalQuery(text) {
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
     tierPlaceCountQuery: null,   // V7.99-10: 'hold'|'deck' — "홀드 몇 개 남았어"(에 없음) = 작업 남은 단(곳) 개수+베이 나열
     tierInContextQuery: null,    // V7.99-10: 'hold'|'deck' — "홀드에 몇 개 남았어"(에 있음) = 현재 작업 중인 단 컨 수
+    paceQuery: false,           // 3.24: «시간당 몇 개 했어?» — 페이스와 시간대별 분포로 답한다
     etaQuery: false,             // V7.99-15: "몇 시에 끝나?" — 완료 페이스로 예상 완료 시각 계산(대화체)
     customsReportQuery: false,   // V7.99-16: "양하신고할까?" — 그날 이상 건(누락/초과/바뀜/리씰/실오류) 정리
     handoverQuery: false,        // V8.00: "인수인계" — 남은 작업+양하신고+특이사항 정리 (되묻기 2단계)
@@ -273,6 +274,15 @@ export function parseNaturalQuery(text) {
 
   // V7.99-15: 완료 예정 시각 — "몇 시에 끝나?", "언제 끝나?", "이 속도면 얼마나?"
   //   시간·완료시각 의도가 분명할 때만 (그냥 "몇 개 남았어"는 progress='pending'로 둠).
+  //  ★ 3.24 — **«시간당 몇 개 했어?»** 를 알아듣는다. 검수사 2026-09-07 «미르는 오답을 주었습니다,
+  //    오늘 작업한것 즉 260대에서 시간별 몇대를 했냐고 물었는데 엉뚱한 대답을 했습니다».
+  //    페이스 계산(paceFromRecords)은 3.6-01 부터 있었는데 **«몇 시에 끝나?»로만 부를 수 있었다** —
+  //    «시간당»은 아무도 안 봐서 대수 질문(progressQuery)으로 떨어져 «작업한 대수 260/260» 을 답했다.
+  //  ⚠ etaQuery 보다 **먼저** 본다 — «시간당 몇개 했어»에 «했» 이 있어 대수로 먼저 잡히던 자리다.
+  if (/시간\s*당|시간\s*별|시간\s*마다|한\s*시간에|per\s*hour|속도|얼마나\s*빨리|페이스/i.test(t)) {
+    result.paceQuery = true;
+    result.progressQuery = null;   // 대수 질문으로 새지 않게(이 판의 오답이 정확히 그것이었다)
+  }
   //   진행 페이스(완료 타임스탬프)로 남은 시간·완료 시각을 계산해 대화체로 답한다.
   if (/몇\s*시(?:에|쯤|까지|쯤에|즈음)*\s*(?:끝|완료|마|종료)|언제\s*(?:끝|완료|마치|다\s*돼|다\s*해)|끝나(?:는|나|려|)\s*(?:시간|시각|시|때)?|완료\s*(?:예상|예정|시각|시간)|이\s*(?:속도|페이스)|얼마나\s*(?:걸|남았.*끝|더.*걸)|몇\s*시간\s*(?:남|걸|더)|예상\s*(?:완료|종료|시간)|퇴근|점심.*(?:전|까지).*(?:끝|돼)/i.test(t)) {
     result.etaQuery = true;
@@ -1333,6 +1343,11 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   // V7.99-16: 양하신고 점검 — 그날 이상 건 정리. 최우선.
   if (parsed.customsReportQuery) {
     return formatCustomsReport(parsed, allContainers, ctx);
+  }
+
+  //  ★ 3.24 — «시간당 몇 개 했어?» — 페이스 한 벌(paceFromRecords)로 답하고 시간대별로 펼친다.
+  if (parsed.paceQuery) {
+    return formatPace(parsed, allContainers, ctx);
   }
 
   // V7.99-15: 완료 예정 시각 — 진행 페이스로 계산해 대화체로. progress보다 먼저.
@@ -2849,7 +2864,12 @@ export function workWindowOf(info, lastAtMs, tw) {
   //    (실측: 김성일 286분 vs 이종부 312분). 호출부가 `info.paceTo` 로 항차 마지막을 준다.
   const last = Number((info && info.paceTo) || lastAtMs) || 0;
   const sane = (t) => (t > 0 && last > 0 && t < last && last - t < 30 * 24 * 3600000 ? t : 0);
-  const st = sane(_tsOf(tw && tw.startAt))
+  //  ★ 3.24 — **검수 시작이 첫째다**(검수사 «작업 시작 시간은 검수 시작이 시작입니다»).
+  //    종전 첫째였던 터미널 `startAt` 과 둘째 `atbActual`(접안)은 실측에서 둘 다 틀렸다 —
+  //    ATPR 2640E 는 트레드링스 23:15 · 접안 00:00 인데 검수는 **20:45** 에 시작했다(작업 보고).
+  //    접안을 시작으로 삼으면 «시작 3시간 전에 66대를 내린 것»이 되고 페이스가 2배 넘게 부푼다.
+  const st = sane(_tsOf(info && info.reportStartAt))
+    || sane(_tsOf(tw && tw.startAt))
     || sane(_tsOf(info && info.atbActual))
     || sane(_tsOf(info && info.workStartAt));
   if (!st) return [0, 0];
@@ -2868,7 +2888,8 @@ export function workWindowOf(info, lastAtMs, tw) {
     || info.dischargeDone || info.loadingDone || info.inspectorDone || info.workEndAt))
     || (twFresh && Number(tw && tw.pct) >= 100);
   //  끝 시각 후보 — 터미널 endAt · 이안(PNCT 는 떠난 뒤에야 온다) · workEndAt(PCTC 작업완료 정본).
-  const done = _tsOf(tw && tw.endAt) || _tsOf(info && info.atdActual) || _tsOf(info && info.workEndAt);
+  //  ★ 3.24 — 끝도 «검수 완료» 보고가 첫째다(`*_done`). 없으면 종전 순서.
+  const done = _tsOf(info && info.reportEndAt) || _tsOf(tw && tw.endAt) || _tsOf(info && info.atdActual) || _tsOf(info && info.workEndAt);
   //  그래도 표시를 못 찾으면, **마지막 완료에서 하루 넘게 지났으면 끝난 것으로 본다**
   //  (2665 주석이 약속했는데 구현에 없던 걸쇠 — 감사 P2-B).
   const stale = last > 0 && Date.now() - last > 24 * 3600000;
@@ -2880,6 +2901,87 @@ export function workWindowOf(info, lastAtMs, tw) {
  *  왜 합치나 — 분모가 «접안~이안 전체 작업 시간»이므로 분자도 그 시간에 처리한 전부여야 앞뒤가 맞는다.
  *  크레인 한 대가 양하도 하고 선적도 한다. 한쪽만 세면 그 시간에 딴 일을 안 한 것처럼 보인다.
  *  터미널 실적을 쓰는 `speedFromTerminal` 도 `disDone + lodDone` 으로 같이 센다 — 잣대를 맞춘다. */
+/** ★ 3.24 — **작업 시작은 «검수 시작»이다.** 검수사 확정 2026-09-07 «작업 시작 시간은 검수 시작이 시작입니다».
+ *  검수원이 앱에서 「작업 시작」을 누르면 `voyages/{키}/reports/{ts}` 에 `action:'discharge_start'` 로 남는다.
+ *  실측 ATPR 2640E — 20:45:33 `discharge_start` · 03:26:36 `discharge_done` 이 검수사 카톡 보고와 초까지 같다.
+ *  ⚠ 그런데 페이스는 그 기록을 **한 번도 안 봤다** — `workWindowOf` 가 접안시각(`atbActual`)을 시작으로 썼고,
+ *    ATPR 은 그것이 00:00 이라 분모가 3.5시간이 돼 **74대/시간**(실제 32~39대)으로 1.9~2.3배 부풀었다.
+ *  ⇒ 여기서 뽑아 `workWindowOf` 가 **맨 먼저** 본다. 보고가 없는 항차는 종전 폴백 그대로다.
+ *  ⚠ 호기가 여럿이면 **가장 이른 시작**과 **가장 늦은 완료**다(한 호기가 먼저 끝나도 배는 아직 일한다).
+ *  @returns {{reportStartAt:number, reportEndAt:number}} 없으면 0. */
+export function voyageReportSpan(voyage) {
+  const rp = (voyage && voyage.reports) || null;
+  let st = 0, ed = 0;
+  if (rp && typeof rp === 'object') {
+    for (const k of Object.keys(rp)) {
+      const r = rp[k];
+      if (!r || typeof r !== 'object') continue;
+      const a = String(r.action || '');
+      const ts = Number(r.ts) || Number(k) || 0;
+      if (!(ts > 0)) continue;
+      if (/_start$/.test(a)) { if (!st || ts < st) st = ts; }
+      else if (/_done$/.test(a)) { if (ts > ed) ed = ts; }
+    }
+  }
+  return { reportStartAt: st, reportEndAt: ed };
+}
+
+/** ★ 3.24 — «시간당 몇 개 했어?»의 답. 검수사 2026-09-07 «260대에서 시간별 몇대를 했냐».
+ *  ⚠ 숫자는 **페이스 한 벌**(paceFromRecords)에서 온다 — 여기서 따로 계산하면 통계탭과 갈린다(규범 §4-4).
+ *    분모는 3.24 부터 «검수 시작~완료»(작업 보고)이고 쉬는 시간을 뺀 실작업 시간이다.
+ *  그 위에 **시간대별 분포**를 얹는다 — 검수사가 물은 것이 «시간별 몇 대»였다.
+ *  ⚠ 못 재면 지어내지 않는다 — 왜 못 재는지 말한다. */
+function formatPace(parsed, allContainers, ctx) {
+  const md = parsed.mode || (ctx && ctx.mode) || 'discharge';
+  const modeK = md === 'loading' ? '선적' : '양하';
+  const pool = (Array.isArray(allContainers) ? allContainers : []).filter((c) => c && c._ptk !== false && (c._mode || 'discharge') === md);
+  //  ⚠ 2.55 가 짚은 자리 — **완료가 오는 길이 화면마다 다르다.** 통합검색은 `_comp` 가 붙어 오는데
+  //    항차 화면(VoyagePage)은 `ctx.compMap` 으로 따로 온다. 둘 다 본다(안 그러면 «완료 0» 이 된다).
+  const cm = (ctx && ctx.compMap) || null;
+  const compOf = (c) => (c && c._comp) || (cm && c && c.cn ? cm[c.cn] : null) || null;
+  const doneAts = pool.map(compOf).filter((r) => r && r.at > 0).map((r) => r.at).sort((a, b) => a - b);
+  const ats = (Array.isArray(ctx && ctx.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
+  if (!ats.length) return `아직 ${modeK} 완료 기록이 없어요. 몇 대 진행되면 시간당 몇 개인지 알려드릴게요.`;
+  const info = _infoOf(ctx);
+  const tw = (() => { try { return terminalWorkFor(info, ctx && ctx.terminalWork); } catch (e) { return null; } })();
+  const P = paceFromRecords(ats, info, undefined, tw);
+  const L = [];
+  //  ⚠ 시간대는 **작업 순서대로** 세운다. 자정을 넘기는 야간 작업이라 «시» 문자열로 정렬하면
+  //    01·02·20·21·22 처럼 뒤죽박죽이 된다 — 첫 완료를 기준으로 몇 시간째인지로 줄 세운다.
+  const hh = (ms) => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + '시'; };
+  if (P.ok) {
+    const h = Math.floor(P.mins / 60), m = P.mins % 60;
+    L.push(`⚡ 시간당 ${P.perHour.toFixed(1)}대 — 갱당 ${P.perGangHour.toFixed(1)}대 (갱 ${P.gangs}대 기준)`);
+    L.push(`   ${P.n}대를 ${h ? h + '시간 ' : ''}${m}분 동안 했어요${P.basis === 'work' ? '(쉬는 시간 뺀 실작업)' : '(완료 기록 구간)'}.`);
+    if (P.from) L.push(`   잰 구간: ${new Date(P.from).toTimeString().slice(0, 5)} ~ ${new Date(P.to || Date.now()).toTimeString().slice(0, 5)}`);
+  } else {
+    L.push(P.why === 'few' ? `아직 ${ats.length}대라 시간당을 재기엔 이릅니다.`
+      : P.why === 'short' ? '아직 잰 시간이 짧아 시간당이 흔들립니다.'
+      : '완료 시각 기록이 고르지 않아 시간당을 못 재요.');
+  }
+  //  시간대별 — 검수사가 물은 «시간별 몇 대». 앱 기록과 터미널 반영분을 갈라 보인다.
+  const byH = new Map();
+  for (const c of pool) {
+    const r = compOf(c); if (!r || !(r.at > 0)) continue;
+    const k = hh(r.at); const o = byH.get(k) || { n: 0, app: 0 };
+    o.n++; if (r.by) o.app++; byH.set(k, o);
+  }
+  //  화면이 컨 목록을 안 줬으면(통합검색 밖) 시각 배열만으로라도 시간대별을 낸다 — 빈손으로 돌려보내지 않는다.
+  if (!byH.size) for (const at of ats) { const k = hh(at); const o = byH.get(k) || { n: 0, app: 0 }; o.n++; byH.set(k, o); }
+  if (byH.size) {
+    L.push('');
+    L.push(`🕐 시간대별 ${modeK}`);
+    const mx = Math.max(...[...byH.values()].map((o) => o.n)) || 1;
+    const t0 = ats[0];
+    const rank = (k) => { const h = parseInt(k, 10); const d0 = new Date(t0).getHours(); return (h - d0 + 24) % 24; };
+    for (const [k, o] of [...byH.entries()].sort((a, b) => rank(a[0]) - rank(b[0]))) {
+      const bar = '█'.repeat(Math.max(1, Math.round((o.n / mx) * 10)));
+      L.push(`   ${k} ${String(o.n).padStart(3)}대 ${bar}${o.app ? `  (앱 ${o.app})` : ''}`);
+    }
+  }
+  return L.join('\n');
+}
+
 export function voyageDoneAts(voyage) {
   const out = [];
   for (const m of ['discharge', 'loading']) {
