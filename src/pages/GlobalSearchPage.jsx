@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // 3.8: crewShiftKey·koJosa
+import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled, crewShiftKey, resolveCrewSides, koJosa, isPtk, dropFilledBookingSlots, legendItemsOf} from '../utils.js';   // 3.8: crewShiftKey·koJosa
 import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer, answerCraneCrew, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
@@ -107,14 +107,14 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         const xraySeals = sec.xraySeals || {};
         const compMap = sec.completed || {};
         const merged = {};
-        Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c }; });
+        Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi' }; });
         Object.values(recMap).forEach(r => {
           const safeR = {};
           Object.keys(r).forEach(k => {
             const v = r[k];
             if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) safeR[k] = v;
           });
-          merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR };
+          merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(미르 «선적 몇 대» 가 한 번만 세게)
         });
         Object.values(merged).forEach(c => {
           if (!c.cn) return;
@@ -127,7 +127,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
             voy: v.info.voy,
             mode,
             _mode: mode,
-            _ptk: mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol),   // V7.93-02: 평택분 (7.1)
+            _ptk: mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, mode),   // V7.93-02: 평택분 (7.1) · 3.26: 선적은 리스트 등재 = 평택(항차 화면과 같은 벌)
             isXray: mode === 'discharge' && !!xrayMap[c.cn],
             _xray: mode === 'discharge' && !!xrayMap[c.cn],
             comp: compMap[c.cn] || null,
@@ -432,7 +432,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
       // ★ 2.55: 항차 화면(SearchPanel)과 **같은 벌** — 어느 갈래로 가든 두 숫자가 다 나온다.
       const _tw = terminalWorkFor(shipCtx.info, terminalWork);
-      const _pool = flat.filter((c) => c.voyageKey === shipCtx.key);
+      const _pool = dropFilledBookingSlots(flat.filter((c) => c.voyageKey === shipCtx.key));   // 3.26: 진행률 분모도 한 번만
       const _md = _pool.some((c) => c._mode === 'loading') && !_pool.some((c) => c._mode !== 'loading') ? 'loading' : 'discharge';
       if (isRealtimeProgressQuery(debouncedQuery)) {
         return formatTerminalWorkAnswer(ship, _tw, _pool, _md);
@@ -585,7 +585,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     }
     // 1.68: 배가 지정된 물량 질문 — "STSE 양하 몇 개야" 를 여기서 바로 센다(평택분).
     if (shipCtx && (p.isStat || p.isAll || /몇\s*(?:개|대)/.test(debouncedQuery))) {
-      const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
+      const mine = dropFilledBookingSlots(flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk));   // 3.26: 부킹 자리·실번호 한 번만
       if (mine.length) {
         const mk = (mode, kr) => {
           const arr = mine.filter((c) => c._mode === mode);
@@ -611,13 +611,14 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     }
     // 1.89 (검수사 예시 «이번 SWSP 관련선사는 몇군데이고 각각 몇대씩이고 담당자가 누구지?»)
     if (p.carrierQuery && shipCtx) {
-      const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
+      //  3.26: 선사는 자리(부킹 EDI)가 안다 — 리스트 행엔 op 가 없다. 별첨과 같은 벌(legendItemsOf: 자리=계획, 채운 실번호 제외)로 센다(3차 감사).
+      const mine = legendItemsOf(flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk));
       const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
       return `${ship}\n` + formatCarriers(mine, { carrierContacts });
     }
     // 1.85 (검수사 실측 «OWBH 브리핑»): 배가 지정된 브리핑은 통합검색에서도 즉답 — 종전엔 배 이름이 있어도 되물었다.
     if (p.briefingQuery && shipCtx) {
-      const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
+      const mine = dropFilledBookingSlots(flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk));   // 3.26
       if (mine.length) {
         const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
         const wantMode = p.mode || (/양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null);
@@ -767,7 +768,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
             if (!_blk) continue;
             const _lines = _blk.split('\n').filter(l => !l.startsWith('(컨테이너 상세'));   // 다척 나열에선 안내 줄 생략
             try {
-              const _mine = flat.filter(c => c.voyageKey === k && c._ptk);
+              const _mine = dropFilledBookingSlots(flat.filter(c => c.voyageKey === k && c._ptk));   // 3.26
               if (_mine.length) {
                 const _c = (f) => _mine.filter(f).length;
                 const _sp = [];

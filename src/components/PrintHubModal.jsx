@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -98,6 +98,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여
     merged.cn = (hasEdi && !e.cn && !recMap[cn]) ? `__SLOT_${e.bay || ''}_${e.row || ''}_${e.tier || ''}_${cn}` : cn;
     if (hasEdi && !e.cn && !recMap[cn]) { merged.pendingCn = true; merged._slot = true; }
+    merged._src = hasEdi ? (recMap[cn] ? 'both' : 'edi') : 'list';   // 3.26: 부킹 자리를 채우는 실번호(EDI 밖 리스트 행) 표식 — utils.bookingFillOf 가 본다
     merged._comp = compMap[cn] || null;
     // M6.94.29: 리스트(records) 등록 표식 — 카고플랜 별첨이 평택 판정에 사용.
     //   검수리스트와 동일 원칙: 리스트에 등록되면 무조건 평택분.
@@ -168,7 +169,11 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   });
 
   // 검수 리스트용 — 평택분만
-  const ptkContainers = allContainers.filter(isPtk);
+  //  3.26: 부킹 자리(예상 EDI)를 실번호가 다 채웠으면 자리는 목록에서 뺀다(검수 리스트·VGM = 실번호). 별첨은 반대로
+  //    자리(계획)를 세고 채운 실번호를 뺀다 — 칸(그림)과 같은 표. 둘 다 utils 한 벌(SWBT 2614N 316+316=632 사건).
+  const ptkAll = allContainers.filter(isPtk);
+  const ptkContainers = dropFilledBookingSlots(ptkAll);
+  //  별첨은 ptkAll 을 그대로 넘긴다 — 자리/실번호 가르기(legendItemsOf)는 PrintableCargoPlanV2 한 곳에서만 한다(두 번 걸면 계획 밖 추가분이 사라진다 — 2차 감사).
 
   // M5.31: 베이상세용 row/tier 계산 (BayPlan과 동일 패턴)
   //   "빈 슬롯도 표시"를 위해 — 베이가 한 컨만 있어도 모든 tier/row 슬롯 표시
@@ -203,15 +208,15 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     const s = voyage?.[m] || {};
     const ed = s.ediContainers || {};
     const rc = s.records || {};
-    const cnSet = new Set([...Object.keys(ed), ...Object.keys(rc)]);
-    let n = 0;
-    cnSet.forEach(cn => {
-      if (rc[cn]) { n++; return; }  // M5.51: 리스트에 있으면 무조건 평택
-      const c = { ...(ed[cn] || {}) };
+    //  3.26: 부킹 자리·실번호 중복 제거 한 벌(dropFilledBookingSlots) — 탭 라벨도 검수 리스트와 같은 수.
+    const items = [];
+    Object.entries(ed).forEach(([k, c]) => { if (c) items.push({ ...c, _src: rc[k] ? 'both' : 'edi', _inList: !!rc[k] }); });
+    Object.keys(rc).forEach(cn => { if (!ed[cn]) items.push({ ...(rc[cn] || {}), cn, _src: 'list', _inList: true }); });
+    return dropFilledBookingSlots(items).filter(c => {
+      if (c._inList) return true;  // M5.51: 리스트에 있으면 무조건 평택
       const target = m === 'discharge' ? c.pod : c.pol;
-      if (!target || isPyeongtaekPort(target)) n++;
-    });
-    return n;
+      return !target || isPyeongtaekPort(target);
+    }).length;
   };
   const dischargeCount = countMode('discharge');
   const loadingCount = countMode('loading');
@@ -241,7 +246,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintSub(null)}>
         <PrintableCargoPlanV2
           containers={printContainers}
-          legendContainers={ptkContainers}
+          legendContainers={ptkAll}
           mode={mode}
           voyageInfo={voyageInfo}
           shipImo={shipImo}

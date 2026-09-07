@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { paceFromRecords, terminalWorkFor, voyageDoneAts } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -380,11 +380,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           const _rec = new Set(ownDirCns(sec.records || {}, m));   // 1.11: 반대 방향 리스트 제외
           const matched = [...(_ptk)].filter(cn => _rec.has(cn)).length;
           // 플랜 슬롯(__SLOT_ — 컨번호 미배정 자리)은 매칭될 수 없으므로 모수에서 뺀다.
-          const slots = [...(_ptk)].filter(cn => String(cn).startsWith('__SLOT_')).length;
+          const slots = [...(_ptk)].filter(cn => String(cn).startsWith('__')).length;   // 3.26: `__BOOK_` 도 자리
           //   모수는 EDI 평택분과 리스트 중 **큰 쪽**. 한쪽만 있으면 완성율이 낮게 나오고,
           //   둘 다 있고 맞아떨어져야 1.0 이 된다.
-          const den = Math.max(_ptk.size - slots, _rec.size);
-          return den > 0 ? { matched, den } : null;    // 자료가 아예 없는 섹션
+          //   3.26: 부킹 자리가 있으면 «자리를 채운 실번호 수»가 매칭에 더해지고 분모는 실번호 EDI + 자리(계획 전체)와 리스트 중 큰 쪽
+          //     — 실번호 EDI 와 자리가 섞인 배(부분 부킹)에서도 실번호 매칭을 버리지 않는다(3차 감사).
+          const _bf = bookingFillOfSec(sec, m);
+          const matchedAll = matched + (_bf ? Math.min(_bf.real, _bf.slots) : 0);
+          const den = Math.max(_ptk.size - slots + (_bf ? _bf.slots : 0), _rec.size);
+          return den > 0 ? { matched: matchedAll, den } : null;    // 자료가 아예 없는 섹션
         };
         // TallyOne 1.13-01: **예정 섹션은 voy_d / voy_l 이 진실이다.** 섹션 노드 유무로 보면 안 된다.
         //   사건(검수사 신고 2026-08-06): 양하만 들어온 배가 `✅ 자료 확정`으로 떴다. 양하·선적을
@@ -2112,12 +2116,19 @@ function computeStats(section, mode, info, voyageKey, shiftSet) {   // 2.89-06: 
   //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
   //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
   const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !shiftSet || !shiftSet.has(cn)));   // 2.89-06
+  //  3.26: 부킹 자리를 실번호가 다 채운 모드 — 자리를 채운 실번호가 곧 EDI 평택 대상이다(자리는 빼고 실번호를 넣는다).
+  //    종전엔 `__BOOK_` 316 이 전부 «누락»으로 섰다(SWBT 2614N). 부분 리스트면 자리를 두고 아래 planSlots 로 «누락» 에서만 뺀다.
+  const _bfill = bookingFillOfSec(section, mode);
+  if (_bfill && _bfill.filled) {
+    [...ptkCns].filter(cn => String(cn).startsWith('__')).forEach(cn => ptkCns.delete(cn));
+    recordCns.forEach(cn => ptkCns.add(cn));
+  }
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
   //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)
   const dummyECount = mode === 'loading' ? [...ptkCns].filter(cn => isVirtualCn(cn)).length : 0;
   // V9.37-02: 플랜 슬롯(자리)은 컨번호가 배정될 대상이지 '누락'이 아니다. 컨번호는 NOLIST 담당.
-  const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
+  const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__')).length;   // 3.26: 부킹 자리 `__BOOK_` 도 자리다(부분 리스트 때 «누락»이 아니다)
   const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots);
   //  2.89-07 (검수사 «항차목록은 변치 않습니다 … 변하는건 작업내용이 실시간 카운트 될뿐») —
   //    작업량·완료는 progressOf 한 벌(작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브).

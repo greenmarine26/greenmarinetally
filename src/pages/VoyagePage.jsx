@@ -44,7 +44,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec } from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -843,21 +843,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //   실번호 리스트가 F/E 각각 가상 자리 수를 채우면 그 가상 자리는 작업 목록에서 뺀다.
     //   부분 리스트만 온 배(실번호 < 자리)는 보수적으로 유지 — 자리 그림(베이플랜·카고플랜)은
     //   raw 전문(fullEdiMap) 기준이라 여기서 빼도 그대로 그려진다. V9.08 원칙: 확정이 오면 그것이 진실.
-    {
-      const _isSlot = (c) => !!(c._slot || c.pendingCn || String(c.cn || '').startsWith('__'));
-      const _cnt = { F: { real: 0, slot: 0 }, E: { real: 0, slot: 0 } };
-      for (const c of Object.values(merged)) {
-        const fe = c.fe === 'E' ? 'E' : 'F';
-        if (_isSlot(c)) _cnt[fe].slot++;
-        else if (recMap[c.cn]) _cnt[fe].real++;
-      }
-      for (const [k, c] of Object.entries(merged)) {
-        if (!_isSlot(c)) continue;
-        const fe = c.fe === 'E' ? 'E' : 'F';
-        if (_cnt[fe].slot > 0 && _cnt[fe].real >= _cnt[fe].slot) delete merged[k];
-      }
-    }
-    const baseContainers = Object.values(merged).sort((a, b) => {
+    //   3.26: 그 규칙을 utils.dropFilledBookingSlots 한 벌로 — 실번호가 자리 **총수**를 채우면 자리 전부, 부분이면 F/E 별(종전).
+    //     F/E 별만 보면 F/E 칸이 없는 리스트(동진)에서 E 자리가 남아 목록이 두 배 가까이 됐다(SWBT 2614N 543행).
+    const baseContainers = dropFilledBookingSlots(Object.values(merged)).sort((a, b) => {
       const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
       const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
       return ka.localeCompare(kb);
@@ -1637,6 +1625,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           inspector={inspector}
           dischargeEdi={voyage?.discharge?.ediContainers || null}   /* 2.94: 통과화물 판정용 — ListTab 은 voyage 를 안 받는다(1.98 교훈) */
           voyageInfo={voyage?.info || null}   /* 3.9: X-RAY 봉인자 = 조 등록 근무자 */
+          bookingFill={bookingFillOfSec(sec, mode)}   /* 3.26: 부킹 자리 ↔ 실번호 채움 상태 — 검증박스가 «채움»으로 말한다 */
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
@@ -2210,7 +2199,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈)
+export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2374,6 +2363,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       <ValidationBox
         ediContainers={Object.values(ediMap)}
         records={Object.values(recMap)}
+        bookingFill={bookingFill}
         mode={mode}
         shiftingList={shiftingList}
         voyageKey={voyageKey}

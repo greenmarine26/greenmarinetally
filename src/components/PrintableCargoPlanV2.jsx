@@ -14,7 +14,7 @@ import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
-import { podBgOf, podCodeLen, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols } from '../utils.js';   // 2.98-14: 커버 막대 경계
+import { podBgOf, podCodeLen, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
@@ -1021,10 +1021,12 @@ export default function PrintableCargoPlanV2({
     // V8.87: 별첨은 리스트(검수 대상) 기준 — 카고플랜 그림(containers)은 베이 있는 컨만이라
     //   베이 미배정 리스트 컨(터미널 PRE 등)이 별첨에서 통째로 빠지던 문제 해결.
     //   legendContainers(검수앱 ptkContainers / 콘앱 records 합본)가 오면 그걸로 집계.
-    const legendSrc = (legendContainers && legendContainers.length) ? legendContainers : containers;
+    //  3.26: 자리(부킹 `__BOOK_`·PRE `__SLOT_`)가 있으면 **자리(계획)가 별첨**이고, 그 자리를 채운 실번호는 자리 수만큼 뺀다(utils.legendItemsOf 한 벌).
+    //    종전 V8.86 «자리는 별첨에서 제외»는 cn 이 `__BOOK_` 인 자리를 못 걸러 실번호와 두 번 세었고(SWBT 2614N 632),
+    //    걸러도 리스트는 선사마다 POD·규격 칸이 비어(남성 POD 없음·동진 규격 없음) 칸(그림)과 다른 표가 됐다. 칸과 범례는 같은 표를 본다(3.2).
+    const legendSrc = legendItemsOf((legendContainers && legendContainers.length) ? legendContainers : containers);
     for (const c of legendSrc) {
       if (!matchPodC(c)) continue;
-      if (c._slot || (typeof c.cn === 'string' && c.cn.startsWith('__SLOT_'))) continue;   // V8.86: 컨번호 미지정 자리는 별첨에서 제외 — 별첨은 리스트(실컨) 기준
       const size = sizeOfC(c);
       const carrier = (c.op && String(c.op).trim()) || 'UNK';
       addTo(carrierCounts, carrier, size);

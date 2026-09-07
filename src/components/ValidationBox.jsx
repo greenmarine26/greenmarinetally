@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ShieldCheck, AlertTriangle, Printer, FileDown, X } from 'lucide-react';
-import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn } from '../utils.js';
+import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry } from '../utils.js';
 
 // V8.98-08: 쉬프팅(재적부) 목록 모달 — 검증 카드의 ◆ 칸 클릭 시. 인쇄/PDF/엑셀 저장(청구 근거용).
 const _sp = (p) => `${String(p).slice(0, 3)}-${String(p).slice(3, 5)}-${String(p).slice(5, 7)}`;
@@ -78,18 +78,26 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   );
 }
 
-export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null }) {
+export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null }) {
   const shiftCount = shiftingList.length;
   const [shiftOpen, setShiftOpen] = useState(false);
   const v = useMemo(() => {
-    if (!ediContainers || ediContainers.length === 0) return null;
+    //  3.26: 부킹 자리(예상 EDI — `__BOOK_`·cn 없는 자리)는 실번호가 없어 리스트와 겹칠 수가 없다. «리스트에 없음»도
+    //    «EDI에 없음»도 아니다 — 자리를 실번호가 **채우는** 관계다(SWBT 2614N: 316/316 이 양쪽 경고로 떴다).
+    //    채움 상태는 VoyagePage 가 utils.bookingFillOfSec 로 넘긴다(반대 방향 리스트 제외). 안 넘어오면 여기서 센다.
+    const _slotsHere = (ediContainers || []).filter(isSlotEntry);
+    const _ediRealCns = new Set((ediContainers || []).map(c => c && c.cn).filter(cn => cn && !String(cn).startsWith('__')));
+    const fill = bookingFill || (_slotsHere.length
+      ? { slots: _slotsHere.length, real: (records || []).filter(r => r && r.cn && !_ediRealCns.has(r.cn)).length }
+      : null);
+    if ((!ediContainers || ediContainers.length === 0) && !fill) return null;
     const isPtk = (c) => {
       if (mode === 'discharge') return isPyeongtaekPort(c.pod);
       return isPyeongtaekPort(c.pol);
     };
-    const ptkInEdi = ediContainers.filter(isPtk);
+    const ptkInEdi = (ediContainers || []).filter(c => !isSlotEntry(c)).filter(isPtk);   // 3.26: 자리는 실컨 대조 밖
     const recCns = new Set((records || []).map(r => r.cn));
-    const ediCns = new Set(ediContainers.map(c => c.cn));
+    const ediCns = new Set((ediContainers || []).map(c => c.cn));
     // V9.04-01: 가상(더미) 컨번호 분리 — MCSN 629S 사건 2026-07-18.
     //   EDI의 엠티 예약자리(DUME·CASP 더미)는 '리스트에 없음(누락)' 대상이 아니고,
     //   리스트의 엠티 실번호(E확정)가 그 자리를 채우는 짝이므로 '추가(EDI밖)' 경고에서도 뺀다.
@@ -113,6 +121,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     const thruInList = (records || []).filter(isThru);
     const thruSet = new Set(thruInList.map(r => r.cn));
     let extraInList = (records || []).filter(r => !ediCns.has(r.cn) && !thruSet.has(r.cn));
+    //  3.26: 부킹 자리가 있으면 EDI 밖 실번호는 그 자리를 채우는 것이다 — 자리 수만큼은 «추가»가 아니다. 남는 만큼만 추가.
+    if (fill && fill.slots > 0) extraInList = extraInList.slice(fill.slots);
     let emptyConfirmed = 0;
     if (virtualInEdi.length > 0) {
       // fe='E' 또는 공란(합본 F/E 공란 287행 실측 — 수집기 v2.17.11-17부터 엠티 출처는 E로 채움)을
@@ -137,10 +147,11 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     });
 
     return {
-      ediTotal: ediContainers.length,
-      ptkTotal: ptkInEdi.length,
+      ediTotal: (ediContainers || []).length,
+      ptkTotal: ptkInEdi.length + (fill ? fill.slots : 0),                                  // 3.26: 부킹 자리도 EDI 평택 대상이다(ptkInEdi 는 자리를 뺀 뒤라 두 번 안 센다)
       listTotal: (records || []).length - thruInList.length,   // 2.94: 통과화물은 평택 선적 리스트가 아니다
-      matched: ptkInEdi.filter(c => recCns.has(c.cn)).length,
+      matched: ptkInEdi.filter(c => recCns.has(c.cn)).length + (fill ? Math.min(fill.real, fill.slots) : 0),   // 3.26: 자리를 채운 실번호 = 매칭
+      bookingFill: fill,
       missingCount: missingInList.length,
       missingByOp,
       missingDetails: missingInList.slice(0, 5),
@@ -150,7 +161,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       virtualCount: virtualInEdi.length,   // V9.04-01: 가상E(실번호 미배정 자리)
       emptyConfirmed,                      // V9.04-01: 리스트 엠티 실번호(가상 자리 확정분)
     };
-  }, [ediContainers, records, mode, dischargeEdi]);
+  }, [ediContainers, records, mode, dischargeEdi, bookingFill]);
 
   if (!v) return null;
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;
@@ -206,6 +217,15 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 들어오면 그것이 진실이고
           예상 수와 달라도 부족이 아니다(예상 202·확정 201이어도 정상, 확정 2면 2가 맞다).
           확정이 있으면 예상 자리수는 표시하지 않는다 — 남아 있으면 미확정으로 오해된다. */}
+      {/* 3.26: 부킹 자리 ↔ 실번호 — 채움 관계를 정보 줄로(경고가 아니다). */}
+      {v.bookingFill && (
+        <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-xxs text-purple-200 font-bold">
+          📝 부킹 자리 {v.bookingFill.slots} · 실번호 리스트 {v.bookingFill.real}
+          {v.bookingFill.real >= v.bookingFill.slots
+            ? <span className="ml-1 font-normal text-purple-300/70">— 자리를 실번호가 다 채웠습니다(목록·별첨은 한 번만 셉니다)</span>
+            : <span className="ml-1 font-normal text-purple-300/70">— 아직 {v.bookingFill.slots - v.bookingFill.real}자리가 비었습니다(리스트 대기)</span>}
+        </div>
+      )}
       {v.virtualCount > 0 && (
         <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-xxs text-purple-200 font-bold">
           {v.emptyConfirmed > 0 ? (

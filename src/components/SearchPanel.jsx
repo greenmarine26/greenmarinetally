@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer, voyageDoneAts, answerCraneCrew, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -145,14 +145,16 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           if (hasEdi && PROTECTED_EDI.has(k)) return;  // EDI 핵심 필드 보호
           safeR[k] = v;
         });
-        merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR };
+        merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: hasEdi ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(utils.bookingFillOf)
       });
       Object.values(merged).forEach(c => {
         if (!c.cn) return;
         arr.push({
-          ...c, _mode: m,
+          ...c, _mode: m, _src: c._src || 'edi',
           // V7.92-02: 평택분 여부 — 양하=POD평택, 선적=POL평택 (7.1). 집계는 평택분만.
-          _ptk: m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol),
+          //  3.26: 선적은 utils.isPtk 한 벌 — **리스트 등재 = 평택**(V8.86·M5.50, 항차 화면·인쇄허브와 같은 규칙). 종전엔 pol 만 봐서
+          //    POD·POL 열이 없는 리스트(남성 CLL 104대)가 평택분에서 빠져 «선적 N» 이 212 로 섰다(2차 감사 실측).
+          _ptk: m === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m),
           _transit: isTransitContainer(c, m, recMap),   // 3.2-01: 통과분(항구 적혀 있고 평택 아님·리스트 미등재) — 완료 카드가 되지 않는다
           _xray: m === 'discharge' && !!xrayMap[c.cn],
           _xraySeal: xraySeals[c.cn] || null,
@@ -254,8 +256,10 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   }, [allContainers, workFilter]);
 
   // 갯수 표시용
-  const dischCount = useMemo(() => allContainers.filter(c => c._mode === 'discharge' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
-  const loadCount = useMemo(() => allContainers.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
+  //  3.26: 대수는 부킹 자리·실번호를 한 번만 센다(utils.dropFilledBookingSlots — 풀 자체는 자리를 남긴다: 가이드·자리 확인 모드가 자리를 본다).
+  const countPool = useMemo(() => dropFilledBookingSlots(allContainers), [allContainers]);
+  const dischCount = useMemo(() => countPool.filter(c => c._mode === 'discharge' && c._ptk && !c._comp).length, [countPool]);   // V7.92-02: 평택분만
+  const loadCount = useMemo(() => countPool.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [countPool]);   // V7.92-02: 평택분만
   const completedCount = useMemo(() => allContainers.filter(c => c._comp).length, [allContainers]);
   // V8.04: 초과분만 따로 — 별도 집계·제출(검수리스트처럼) 및 색 강조용.
   const extraList = useMemo(() => allContainers.filter(c => c._extra), [allContainers]);
@@ -1090,7 +1094,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       if (isRealtimeProgressQuery(query)) {
         return formatTerminalWorkAnswer(ship, _tw, allContainers, _md);
       }
-      return formatAppTallyAnswer(ship, allContainers, _tw, _md, voyage?.info || null);
+      return formatAppTallyAnswer(ship, dropFilledBookingSlots(allContainers), _tw, _md, voyage?.info || null);   // 3.26: 부킹 자리·실번호 한 번만(SingleSearch 는 풀을 prop 으로 받는다)
     }
     // 1.69-01: 브리핑 속 «N건» 후속 — "실 점검 필요 83건" 뒤 "83건이 뭐야"가 끝자리 검색으로
     //   빠졌다(검수사 신고). 직전 답 주제를 기억해 그 주제의 상세로 잇는다. howToQuery보다 앞.

@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos , shiftCnSetOf, progressOf} from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry } from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null }) {
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -25,7 +25,8 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
     // V7.93-02: 평택분만 (7.1 — 양하=POD평택, 선적=POL평택). 현황 요약이 EDI 전체(통과화물 포함)를
     //   세어 목록(403)과 헤더(909)가 다르던 버그 (사용자 스크린샷 제보).
-    const containers = [...allCnSet].map(cn => {
+    //  3.26: 부킹 자리(`__BOOK_`·cn 빈 자리)를 실번호가 다 채웠으면 자리는 세지 않는다(utils 한 벌 — SWBT 2614N 316+316=632 사건).
+    const containers = dropFilledBookingSlots([...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
       // V8.20-01 fix: 리스트(records)는 실번호/무게 등 보강만. POL/POD(항구)는 EDI가 단일 진실(7.1).
@@ -43,13 +44,13 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       // V8.86: 선적 — 리스트 등록 = 평택(별첨·베이와 동일 원칙, M6.94.34). NOLIST류 pol 공란 누락 방지.
       if (recMap[c.cn]) return true;
       return isPyeongtaekPort(c.pol);
-    });
+    }), { ediMap, recMap, mode });
 
     // V8.86: 컨번호 없는 EDI '실제 자리'(터미널 PRE)는 항차수(분모)의 기준 — 자리수와 실컨수 중 큰 쪽.
     //   (자리는 배열 인덱스 키라 위 컨번호 병합에서 각각 세어지지만, 실컨과 이중계산되지 않게 분모를 재정의)
     const _slotN = Object.values(ediMap).filter(c => c && !c.cn &&
       (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol))).length;
-    const _realN = Math.max(containers.length - _slotN, 0);   // 자리 제외한 실컨(리스트) 수
+    const _realN = containers.filter(c => !isSlotEntry(c)).length;   // 자리 제외한 실컨(리스트) 수 — 3.26: 자리 판정 한 벌(자리가 이미 빠진 목록에서 _slotN 을 또 빼지 않게)
     //  2.89-07: 분모 고정 — 리스트가 있으면 (리스트+시프팅)/(리스트완료+모브)를 progressOf 한 벌로.
     //    리스트 전(EDI·플랜 슬롯만)이면 종전 계산을 유지하되 시프팅·모브를 같은 규칙으로 더한다.
     const _prog = progressOf(sec, mode, _shiftSet);

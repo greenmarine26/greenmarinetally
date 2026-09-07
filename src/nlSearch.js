@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, reeferTempOf, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel } from './utils.js';
+import { isoToLabel, reeferTempOf, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -1500,7 +1500,8 @@ function formatTierInContext(tier, allContainers, ctx) {
   return `${bayLbl} ${label}에 ${remain.length}개 남았습니다.`;
 }
 
-function formatStats(desc, results) {
+function formatStats(desc, results0) {
+  const results = dropFilledBookingSlots(results0);   // 3.26: 부킹 자리(예상 EDI)와 그 자리를 채운 실번호를 두 번 세지 않는다(항차·모드별)
   if (results.length === 0) return `📊 ${desc}: 0대`;
   const fCount = results.filter(c => c.fe === 'F').length;
   const eCount = results.filter(c => c.fe === 'E').length;

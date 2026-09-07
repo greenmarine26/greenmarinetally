@@ -4,7 +4,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -2626,9 +2626,15 @@ function computeStats(section, mode, shiftSet) {   // 2.89-06
   //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
   //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
   const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !shiftSet || !shiftSet.has(cn)));   // 2.89-06
+  //  3.26: 부킹 자리를 실번호가 다 채운 모드 — 자리를 빼고 실번호를 EDI 평택 대상으로(홈 카드 HomePage.computeStats 와 같은 규칙).
+  const _bfill = bookingFillOfSec(section, mode);
+  if (_bfill && _bfill.filled) {
+    [...ptkCns].filter(cn => String(cn).startsWith('__')).forEach(cn => ptkCns.delete(cn));
+    recordCns.forEach(cn => ptkCns.add(cn));
+  }
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
-  // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당.
-  const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
+  // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당. 3.26: 부킹 자리 `__BOOK_` 도 자리다.
+  const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__')).length;
   const missing = Math.max(0, ptkCns.size - matched - planSlots);
   //  2.89-07: 작업량·완료는 progressOf 한 벌(홈 카드·현황 요약과 같은 숫자) —
   //    작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브 · extra = 분모 밖 완료(V9.57 I4 유지).
