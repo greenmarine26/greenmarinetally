@@ -269,6 +269,88 @@ const bgs = (d, sel) => {
     ok(grow.length === 0 || grow.every((f) => /0 1 auto/.test(f)), `⛔ ${tag} 별첨 칸이 제 줄수만큼이 아니다 (${grow})`);
   }
 
+  // ⑫ ★ 3.27 — **표기자를 왼쪽으로 가른 것**과 **별첨이 빈 칸을 쓰는 것**이 살아 있는가(회귀 방지).
+  //    둘 다 검수사 확정이다 — «1안»(좌우로 가른다) · «XTPG는 별첨 1.2 한칸 3은 두번쨰 칸 상단에» ·
+  //    «최대한 한곳에 모으되 넘치거나 잘림 겹침이 생기면 빈곳을 이용해 보기 좋게 만든다»(2026-09-08).
+  {
+    const _p = require('path');
+    const c2 = fs.readFileSync(_p.join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    ok(/cpv2-podsplit/.test(c2), '⛔ 좌우 가르기 표식(cpv2-podsplit)이 없다');
+    ok(/\.cpv2-page\.cpv2-podsplit \.cpv2-cell:not\(\.cpv2-mark3\)[^{]*\{ justify-content: flex-start/.test(c2),
+      '⛔ 표기자를 왼쪽에 세우는 규칙이 없다');
+    ok(/:not\(\.cpv2-mark3\):not\(\.cpv2-shift\):not\(\.cpv2-urgent\)/.test(c2),
+      '⛔ ◆시프팅·▲긴급 칸 예외가 없다 — 좌상·좌하 표식 위에 글자가 얹힌다');
+    ok(/cpv2-cell\.cpv2-mark2[^{]*\{ font-size: calc\(var\(--mf, 9\.6px\) \* 0\.78\)/.test(c2),
+      '⛔ 두 글자 표기(DG·RF…)를 0.78배로 줄이는 규칙이 없다 — 그대로면 코드와 부딪힌다');
+    //  ★ 코드 배율은 **인쇄 문턱이 재는 값과 한 벌**이어야 한다. CSS 가 코드를 더 줄이면
+    //    게이트는 «적을 수 있다»고 통과시키고 종이에는 문턱 아래로 찍힌다(감사 실측 2.970pt).
+    ok(!/cpv2-mark2[^{]*\.cpv2-pod \{/.test(c2),
+      '⛔ 두 글자 칸에서 코드 배율을 따로 바꿨다 — 인쇄 문턱(podLen 게이트)이 재는 0.70 과 갈린다');
+    {
+      //  CSS 가 «코드(.cpv2-pod)»에 주는 배율을 전부 뽑아, 게이트가 재는 값보다 작은 것이 없는지 본다.
+      //    세 글자 칸(.cpv2-mark3)은 표기자도 0.667 로 같이 줄어 종전부터 예외다 — 그 줄만 뺀다.
+      const scales = [...c2.matchAll(/^([^\n{]*\.cpv2-pod(?:-[0-9])?(?![a-z])[^\n{]*)\{ font-size: calc\(var\(--mf, 9\.6px\) \* ([0-9.]+)\)/gm)]
+        .filter((m) => !/mark3/.test(m[1])).map((m) => parseFloat(m[2]));
+      const gate = parseFloat((c2.match(/POD_CODE_SCALE = \{\s*1:\s*([0-9.]+)/) || [])[1] || 0);
+      ok(gate > 0 && scales.length > 0 && Math.min(...scales) >= gate,
+        `⛔ 게이트(${gate})보다 작은 코드 배율이 CSS 에 있다 — 게이트는 «적을 수 있다»고 통과시키고 종이에는 3.0pt 아래로 찍힌다 (${scales})`);
+    }
+    ok(/\.cpv2-cell \.cpv2-pod \{ position: absolute; top: 0; right: 0\.5px;/.test(c2),
+      '⛔ 코드 자리(오른쪽 위)가 바뀌었다 — ★X-RAY(오른쪽 아래)와의 사이가 좁아진다');
+    ok(/if \(!legSplit \|\| emptySlots < 2\)/.test(c2),
+      '⛔ 별첨 나눔을 계산으로 미리 정하고 있다 — 그려 보고(legSplit) 정해야 한다(검수사 «한칸에 표기 불가능할 경우만»)');
+    ok(!/_fAll/.test(c2), '⛔ 죽은 문턱 계산(_fAll)이 남아 있다');
+    ok(/legEmptyRef/.test(c2), '⛔ «나눌 빈 칸이 있나»를 안 본다 — 빈 칸이 없으면 나누면 안 된다');
+    //  ★ 3.27 — 별첨은 **한 곳에만** 그린다. 빈 칸이 1개인 배(사전 35척 중 NBTD·NSFR·SWSP)에서
+    //    단독 베이 아래 반쪽에 별첨3 을 또 그리던 잔재를 걷었다(2.56-03 → 3.7-03 반만 지움).
+    ok(!/leg3InBoxBi/.test(c2), '⛔ 별첨3 을 베이 박스 아래 반쪽에 또 그리는 길이 살아 있다 — 한 장에 두 번 나온다');
+    ok(!/cpv2-empty-half[^]{0,200}FeLegend/.test(c2), '⛔ 빈 반쪽에 별첨을 그린다 — 별첨은 별첨 상자 한 곳에만');
+    ok(!/const legendFont = useMemo/.test(c2), '⛔ 별첨 글자 크기가 두 벌이다(legendFont ↔ legendFontFor)');
+    ok(/setLegSplit\(false\)/.test(c2), '⛔ 항차·모드가 바뀔 때 나눔 상태를 안 되돌린다');
+    ok(/cell\('leg12'/.test(c2), '⛔ 별첨1·2 를 한 칸에 두는 배치가 없다(검수사 «별첨 1.2 한칸 3은 두번쨰 칸 상단에»)');
+    ok(/cpv2-legend-slot/.test(c2), '⛔ 별첨 칸에 표식(cpv2-legend-slot)이 없다 — fitLegend 가 넘침을 못 잰다');
+    const fl = fs.readFileSync(_p.join(__dirname, '..', 'src', 'fitLegend.js'), 'utf8');
+    ok(!/firstElementChild/.test(fl), '⛔ fitLegend 가 상자의 첫 자식 하나만 본다 — 그 자식이 overflow:hidden 이라 한 번도 발동 못 한다');
+    ok(/cpv2-legend-slot/.test(fl), '⛔ fitLegend 가 별첨 칸들을 훑지 않는다');
+    ok(/box\.dataset && box\.dataset\.lgf0/.test(fl),
+      '⛔ fitLegend 가 «평상시 값»을 상자에 새겨 둔 것(data-lgf0)에서 안 읽는다 — 줄여 둔 값을 평상시로 오인한다');
+    ok(/:not\(\.cpv2-lugg\):not\(\.cpv2-oog-W\):not\(\.cpv2-oog-HW\)/.test(c2),
+      '⛔ 왼쪽 «변»에 그려지는 수화물 띠·폭 초과 막대 칸을 예외에서 빠뜨렸다 — 글자가 그 위에 얹힌다(2.98-10)');
+
+    ok(/const tight = over\(\);/.test(fl),
+      '⛔ fitLegend 가 «평상시 크기로 넘쳤는가»를 안 본다 — 검수사 «축소기능 사용 안하고 평상시대로 사용하면서»');
+    ok(/return \{ bad, tight \};/.test(fl), '⛔ fitLegend 가 tight 를 안 돌려준다 — 호출부가 나눌지 못 정한다');
+    //  단위 시험 — 가짜 상자로 «평상시 크기로 넘치면 tight» 를 실제로 확인한다(jsdom 은 레이아웃이 없어 이 길로 잰다).
+    {
+      const mk = (needH, boxH) => {
+        const leg = { className: 'cpv2-legend', scrollHeight: needH, clientHeight: boxH };
+        return {
+          _f: 9.5,
+          style: { getPropertyValue: function () { return this._v || '9.5px'; }, setProperty: function (k, v) { this._v = v; } },
+          scrollHeight: needH, clientHeight: boxH,
+          querySelectorAll: () => [leg],
+        };
+      };
+      const src = fl.replace(/export /g, '');
+      const mod = new Function(src + '; return { fitOne, MIN };')();
+      const a = mod.fitOne(mk(100, 300));   // 넉넉히 들어간다
+      const b = mod.fitOne(mk(400, 300));   // 평상시 크기로 넘친다
+      ok(a.tight === false, `⛔ 넉넉한 상자를 «넘쳤다»고 본다 (${JSON.stringify(a)})`);
+      ok(b.tight === true, `⛔ 넘치는 상자를 «들어갔다»고 본다 (${JSON.stringify(b)})`);
+    }
+  }
+
+  //  ⑬ ★ 3.27 — **양하는 한 픽셀도 안 바뀐다**를 렌더로 잰다(코드만 읽어서는 다음 판이 게이트를 건드려도 못 잡는다).
+  {
+    const rl = await render('v2', 'ATPR', 'loading');
+    const rd = await render('v2', 'ATPR', 'discharge');
+    const cl = rl.d.querySelector('.cpv2-page');
+    const cd = rd.d.querySelector('.cpv2-page');
+    ok(cl && /cpv2-podsplit/.test(cl.className), '⛔ 선적에 좌우 가르기(cpv2-podsplit)가 안 붙는다');
+    ok(cd && !/cpv2-podsplit/.test(cd.className), '⛔ 양하에 좌우 가르기가 붙었다 — 양하는 목적지 코드를 안 그리므로 안 바뀌어야 한다');
+    ok(rd.d.querySelectorAll('.cpv2-pod').length === 0, '⛔ 양하에 목적지 코드가 그려진다');
+  }
+
   console.log(fail ? `\n3.7 목적지색 연막검사 실패 ${fail}건` : '\n3.7 목적지색 연막검사 통과');
   process.exit(fail ? 1 : 0);
 })();

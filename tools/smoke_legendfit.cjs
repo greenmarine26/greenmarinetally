@@ -78,7 +78,11 @@ const fl = fs.readFileSync(path.join(__dirname, '..', 'src', 'fitLegend.js'), 'u
 ok(/scrollHeight/.test(fl) && /clientHeight/.test(fl), '⛔ 실제 높이를 안 재고 있다');
 ok(/console\.warn/.test(fl), '⛔ 하한까지 줄여도 넘치면 조용히 넘어간다 — 알려야 한다');
 const pc = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
-ok(/useLayoutEffect\(\(\) => \{ fitLegendBoxes/.test(pc), '⛔ 그린 뒤 재는 안전망이 안 붙었다');
+ok(/useLayoutEffect\(\(\) => \{[\s\S]{0,200}fitLegendBoxes\(pageRef\.current\)/.test(pc), '⛔ 그린 뒤 재는 안전망이 안 붙었다');
+//  ★ 3.27 — 그 안전망이 낸 «평상시 크기로 넘쳤다»(tight)를 실제로 받아 쓰는가.
+//    검수사 «나눔건은 조건이 한칸에 표기 불가능할 경우만입니다» · «축소기능 사용 안하고 평상시대로 사용하면서».
+ok(/r\.tight > 0/.test(pc), '⛔ 넘쳤다는 신호를 안 쓴다 — 계산으로 미리 나누면 XTPG 처럼 어긋난다');
+ok(/setLegSplit\(true\)/.test(pc), '⛔ 넘쳤을 때 빈 칸으로 나누는 길이 없다');
 ok(/legendFontFor\(rows, items\.length, _pr\)/.test(pc), '⛔ 상자마다 제 줄수로 크기를 안 정한다');
 
 console.log(fail ? `\n별첨 맞춤 연막검사 실패 ${fail}건` : '\n별첨 맞춤 연막검사 통과');

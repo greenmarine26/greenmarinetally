@@ -15,7 +15,6 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
 import { podBgOf, podCodeLen, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf } from '../utils.js';   // 2.98-14: 커버 막대 경계
-import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
   generatePdfBays,
@@ -222,6 +221,37 @@ export const CARGO_V2_CSS = `
     코드가 그보다 커지면 검수사 규칙 «포트 표기가 화물표기 보다 작아야 합니다»를 어기므로 같이 줄인다. */
 .cpv2-cell.cpv2-mark3 .cpv2-pod { font-size: calc(var(--mf, 9.6px) * 0.55); }
 .cpv2-cell .cpv2-pod { position: absolute; top: 0; right: 0.5px; line-height: 1.05; font-weight: normal; font-style: normal; color: #000; letter-spacing: -0.2px; pointer-events: none; }   /* 3.7-02: 흰 후광을 뺐다 — 4.5pt 글자에 3겹 후광을 씌우니 획이 먹혀 «사라진 것처럼» 보였다(검수사). 색도 진한 검정으로. */
+/*  ★ 3.27 — **표기자를 왼쪽으로 비켜 세워 목적지 글자와 가로로 가른다**(검수사 확정 2026-09-08 «1안»).
+    종전에는 표기자가 칸 «가운데», 코드가 «오른쪽 위» 라 칸이 좁아지면 둘이 한 덩어리로 읽혔다 —
+    검수사 3.7-01 «삼각형 있던 부분에 포트가 붙어야 하는데 화물 표기랑 붙어있어 헷갈립니다».
+    실측 여유가 ATPR 한 척만 +0.02px 이고 STSE 2669E −4.16 · SWBT 2614N −3.34 로,
+    지금 작업 중인 배가 전부 붙어 있었다(3.7-02 의 배율 0.70 은 ATPR 한 척으로 정한 값이다).
+    ⇒ **표기자만** 왼쪽으로 옮긴다. 코드 자리(오른쪽 위)는 한 글자도 안 건드린다 —
+      그래야 ★ X-RAY(오른쪽 아래)와의 관계가 지금 그대로 남아 퇴행이 없다.
+      실측 SWBT 2614N — 표기자 0~5.18px · 코드 8.93~11.95px 로 **3.75px 이 빈다.**
+    **코드는 0.70em 그대로**이고 표기자만 한 글자 칸에서 1em 그대로·두 글자 칸에서 0.78em 이다 —
+    어느 경우에도 코드가 더 작아 검수사 «포트 표기가 화물표기 보다 작아야 합니다»(3.7-02)를 지킨다.
+    ⚠ 두 글자 표기(DG·RF·RE·FR·OT·TK)는 1.5em 이라 그대로 두면 코드와 부딪힌다 — 그 칸만 **0.78배**.
+      **코드 배율은 0.70 그대로 둔다** — 그것이 인쇄 문턱(podLen 게이트, 아래 «3.0pt»)이 재는 바로 그 값이라,
+      코드를 더 줄이면 게이트는 «적을 수 있다»고 통과시키고 실제로는 문턱 아래로 찍힌다(감사 실측 — 0.55 로 줄였더니
+      SWBT 2614N 두 글자 칸이 2.970pt 였다). 게이트와 CSS 를 한 벌로 둔다(규범 §4-4).
+      배율 0.78 은 **코드를 그리는 37조합 전수 실측**에서 정했다 — 가로 여유 최소 **+0.31px**(9열·줄당6·칸 16.44·mf 9.2),
+      코드/표기자 비 **0.897** 로 «포트 표기가 화물표기 보다 작아야 합니다»(3.7-02)를 지킨다.
+      ⚠ 그 «+0.31px» 는 **코드가 한 글자일 때**다. «podCodeLen» 이 2·3 을 내는 항차는 코드가 그만큼 넓어
+        두 글자 칸에서 여전히 가로가 겹칠 수 있다(감사 실측 — 코드 2자면 최악 −2.51px). 그래도 3.7-02(표기자 가운데·1em)
+        대비 어느 경우에도 **+3.86px 개선**이라 퇴행은 아니다. 자릿수까지 완전히 가르려면 코드 자릿수별 배율이 필요하고
+        그것은 인쇄 문턱(3.0pt)과 한 벌로 다시 잡아야 하므로 **별도 판**이다 — 다음 클로드가 «다 갈렸다»고 읽지 않게 적어 둔다.
+      (0.80 은 여유가 0.04px 로 아슬하고, 0.75 는 비가 0.933 이라 3.7-01 이 되돌린 «거의 같은 크기»에 가깝다.)
+    ⚠ **칸 네 구석과 왼쪽 변이 이미 쓰인다** — ◆시프팅 좌상 · ▲긴급 좌하 · ★X-RAY 우하 · 목적지 우상(214행),
+      그리고 왼쪽 **변**에는 수화물 2px 보라 띠(.cpv2-lugg)와 폭 초과 1px 검은 막대(.cpv2-oog-W/HW)가 그려진다.
+      그래서 그 다섯 칸은 왼쪽을 비켜 주지 않는다(종전 가운데 그대로). 옮기면 표식·띠 위에 글자가 얹힌다 —
+      2.98-10 에서 검수사가 «카고 플랜에 굵은 테두리 때문에 FR 글자 구분이 안됩니다»(2026-09-01)라 짚어
+      3px→1px 로 되찾은 그 자리를 도로 내주는 셈이 된다.
+      실측 활성 8모드 — 코드를 그리는 755칸 중 ◆·▲ 가 같이 있는 칸은 0개였다(다만 픽스처가 EDI 뿐이라
+      시프팅·긴급 표식이 안 붙는 조건이었다. 그래서 «0» 을 믿지 않고 문을 세워 둔다).
+    ⚠ 세 글자 표기(DGE 류)도 좌우로 **못 가른다** — 3자 × 0.667em 이 칸 폭을 거의 다 쓴다. 종전대로 가운데.  */
+.cpv2-page.cpv2-podsplit .cpv2-cell:not(.cpv2-mark3):not(.cpv2-shift):not(.cpv2-urgent):not(.cpv2-lugg):not(.cpv2-oog-W):not(.cpv2-oog-HW) { justify-content: flex-start; }
+.cpv2-page.cpv2-podsplit .cpv2-cell.cpv2-mark2:not(.cpv2-shift):not(.cpv2-urgent):not(.cpv2-lugg):not(.cpv2-oog-W):not(.cpv2-oog-HW) { font-size: calc(var(--mf, 9.6px) * 0.78); }
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: 0; left: 0; line-height: 1;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
    V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서
@@ -529,10 +559,13 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     //  3.7-02: 엠티일 때만 E 를 붙인다 — 풀은 글자 그대로가 곧 풀이다.
                     const _mkE = podMode && FE_MARKS.has(displayMark) && !cell.isFull;
                     const _mk3 = _mkE;
+                    //  3.27: 좌우 가르기에서 **두 글자 표기만** 0.78배로 줄여 오른쪽 코드 자리를 낸다.
+                    //    한 글자(F·e·E·X)는 좁아 그대로 두고, 세 글자(DGE 류)는 폭이 없어 좌우로 못 가른다(아래 CSS).
+                    const _mk2 = !_mkE && String(displayMark).length === 2;
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${_mk2 ? ' cpv2-mark2' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
@@ -647,10 +680,13 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     //  3.7-02: 엠티일 때만 E 를 붙인다 — 풀은 글자 그대로가 곧 풀이다.
                     const _mkE = podMode && FE_MARKS.has(displayMark) && !cell.isFull;
                     const _mk3 = _mkE;
+                    //  3.27: 좌우 가르기에서 **두 글자 표기만** 0.78배로 줄여 오른쪽 코드 자리를 낸다.
+                    //    한 글자(F·e·E·X)는 좁아 그대로 두고, 세 글자(DGE 류)는 폭이 없어 좌우로 못 가른다(아래 CSS).
+                    const _mk2 = !_mkE && String(displayMark).length === 2;
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${_mk2 ? ' cpv2-mark2' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
@@ -919,15 +955,26 @@ export default function PrintableCargoPlanV2({
   //   너무 작아지지 않게 5.5px 바닥, 너무 커지지 않게 9.5px 천장을 둔다.
   //  3.7-05: 그린 뒤 별첨 상자를 실제로 재서 맞춘다 — 계산만으로는 배마다 어긋난다.
   const pageRef = useRef(null);
-  useLayoutEffect(() => { fitLegendBoxes(pageRef.current); });
+  //  ★ 3.27 — 별첨은 **평상시 크기로 한 칸에 안 들어갈 때만** 빈 칸으로 나눈다.
+  //    검수사 확정 2026-09-08 — *«최대한 한곳에 모으되 넘치거나 잘림 겹침이 생기면 빈곳을 이용해
+  //    보기 좋게 만든다»* · *«나눔건은 조건이 한칸에 표기 불가능할 경우만입니다»* ·
+  //    *«축소기능 사용 안하고 평상시대로 사용하면서»* · *«오늘 본건 1칸 별첨 2개 2칸1개가 맞습니다»*.
+  //    ⇒ 계산으로 미리 정하지 않는다(3.7-05 의 문턱 7.0 이 XTPG 539E 를 7.2px 로 «읽을 만하다» 판정해
+  //      빈 칸을 옆에 두고도 한 칸에 몰아넣었고 별첨1 합계 줄이 잘렸다). 한 칸으로 그려 보고
+  //      **줄이지 않은 크기로 넘치면** 그때 나눈다. 나눌 빈 칸이 없으면 그때만 줄인다(마지막 수단).
+  const [legSplit, setLegSplit] = useState(false);
+  const legEmptyRef = useRef(0);
+  useLayoutEffect(() => {
+    const r = fitLegendBoxes(pageRef.current) || {};
+    if (!legSplit && r.tight > 0 && legEmptyRef.current >= 2) setLegSplit(true);
+  });
+  //  ⚠ voyNo 는 호출부 다섯 중 하나만 넘긴다(감사 실측) — 항차가 바뀌어도 안 움직인다.
+  //    effVoyNo 는 항차에서 실제로 유도한 값이라 이것을 본다. 나눔 상태와 «빈 칸 수»를 같이 되돌린다.
+  useEffect(() => { setLegSplit(false); legEmptyRef.current = 0; }, [effVoyNo, mode]);
 
-  const legendFont = useMemo(() => {
-    const perRow = Math.max(layout[0]?.length || 1, 1);
-    // 별첨이 여러 칸으로 흩어지면 한 칸이 지는 표가 줄어 세로 여유가 생긴다 → 글자를 조금 키운다.
-    const slots = Math.max(0, perRow - (layout[1]?.length ?? perRow));
-    const bonus = slots >= 3 ? 1.25 : slots === 2 ? 1.12 : 1;
-    return Math.min(9.5, Math.max(5.5, Math.round((8 * 9 / perRow) * bonus * 10) / 10));
-  }, [layout]);
+  //  ★ 3.27 — 옛 legendFont(«줄당 박스 수»로 정하던 별첨 글자 크기)를 걷었다.
+  //    쓰던 곳이 «단독 베이 아래 반쪽에 별첨3 을 또 그리는» 자리 하나뿐이었고 그 자리를 없앴다.
+  //    별첨 글자 크기는 이제 legendFontFor(줄 수) 한 벌이다 — 두 벌이면 같은 표가 자리마다 다른 크기로 나온다(규범 §4-4).
 
   // 박스별 카운트 (M6.86.8.4: M6.81 정답 포맷)
   //   단독 베이 (single + trio top) = 총합 단일 숫자
@@ -1094,14 +1141,13 @@ export default function PrintableCargoPlanV2({
   //    자리는 이미 증명돼 있다. 모서리 표식 ★◆▲ 가 모든 배에서 1.05em 으로 들어가므로(--mk),
   //    그보다 작은 코드는 어느 배에서도 모서리에 앉는다. 겹칠지 말지는 폭이 아니라 크기 문제다.
   //    자릿수가 짧을수록 크게 적는다 — 한 자면 크게 써도 자리가 남으니 좁은 배가 이것으로 산다.
-  //    종이에서 3.5pt 아래로 떨어지면 못 읽으니 그때는 접고, 머리글에 접었다고 밝힌다.
+  //    종이에서 3.0pt 아래로 떨어지면 못 읽으니 그때는 접고, **바닥글**에 접었다고 밝힌다(3.7-03 에서 머리글→바닥글).
   const podLen = useMemo(() => {
     if (!podMode || !_podLen0) return 0;
     const pt = markFont * POD_CODE_SCALE[_podLen0] * (285 / CPV2_PAGE_W_PRINT) / 25.4 * 72;
     //  3.7-02: 문턱 3.5 → 3.0pt. 3.7-01 이 배율을 0.95→0.62 로 내리면서 문턱은 그대로 둬,
     //    --mf 7.5px 아래 배들은 코드가 **통째로 사라졌다**(검수사 «사라진건지 안보입니다»).
-    //    3.0pt 면 --mf 6.4px 부터 나온다 — 종전 0.95배 때와 비슷한 범위로 돌아온다.
-    return pt >= 3.0 ? _podLen0 : 0;   // 0.70 배에서는 --mf 5.7px 부터 나온다
+        return pt >= 3.0 ? _podLen0 : 0;   // 0.70 배에서는 --mf 5.72px 부터 나온다 (3.0 ÷ 0.70 ÷ 0.75)
   }, [podMode, _podLen0, markFont]);
 
   // M6.94.16: 전체 베이 중 (deck tier + hold tier) 최대 → 셀 높이 고정 기준.
@@ -1296,7 +1342,7 @@ export default function PrintableCargoPlanV2({
           ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (window.innerHeight - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
-      <div ref={pageRef} className="cpv2-page" style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
+      <div ref={pageRef} className={`cpv2-page${podLen > 0 ? ' cpv2-podsplit' : ''}`} style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
         {/*  ★ 3.7-03 — 매번 같은 설명은 **바닥글**로 내렸다(검수사 «설명이 길어서 상단이 두줄 또는 세줄로
             되어 있습니다. 매번 같은 설명은 하단 아래 바닥글로 처리 바랍니다»). 머리글에는 이 항차의 것만 남는다. */}
         <div className="cpv2-page-header">
@@ -1342,11 +1388,11 @@ export default function PrintableCargoPlanV2({
             //   짝수 N → 2자리 (별첨1 + 별첨2), 홀수 N → 1자리 (별첨1+2 통합)
             const topLen = layout[0]?.length || 0;
             const emptySlots = isLast && !isFirst ? Math.max(0, topLen - row.length) : 0;
+            if (emptySlots) legEmptyRef.current = emptySlots;   // 3.27: 위 useLayoutEffect 가 «나눌 자리가 있나»를 본다
             // ★ 2.56-03 (검수사 확정 2026-08-26): 빈 칸이 하나뿐이면 별첨3 은 하단 줄의
             //   **첫 단독 박스 빈 아래 반쪽**(cpv2-empty-half — 데크 전용 단독 베이 밑 빈 곳)으로 옮긴다.
             //   원문 — «빈곳을 이용하라고 했는데 별첨 1과 2를 같이 놓고 3을 34번 베이 하단에 놓으면 보기 좋을텐데».
             //   1.63 확정 «빈곳이 있으면 별첨 하나를 옮기면 됩니다» 의 «빈곳»에 단독 박스 아래 반쪽을 포함.
-            const leg3InBoxBi = (emptySlots === 1) ? row.findIndex(b => b.type !== 'trio') : -1;
             const slots = [];
             // M6.86.8.13: 별첨 구성 mode별
             //   양하: 별첨1(선사별 + 컬러), 별첨2(화물종류별, 흑백)
@@ -1386,7 +1432,7 @@ export default function PrintableCargoPlanV2({
             //     2칸 → [1] · [2+3]
             //     3칸 이상 → [1] · [2] · [3]  — 각자 한 칸을 통째로 쓴다
             //   자리 수 실측: `상단 − 하단`, `topCount=⌈(N+1)/2⌉` 이므로 박스 홀수면 1칸·짝수면 2칸이다.
-            //   3칸 이상은 지금 배분에서는 안 나오지만, 배분이 바뀌어도 알아서 펼쳐지게 미리 받아 둔다.
+            //   3.27: 빈 칸이 셋 이상이어도 «별첨1·2 한 칸 · 별첨3 한 칸» 둘로만 나눈다 — 나머지는 그냥 비운다.
             if (emptySlots >= 1) {
               const legend1 = (
                 <Legend podMode={podMode} title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']}
@@ -1405,25 +1451,30 @@ export default function PrintableCargoPlanV2({
               //    이제 셋 다 «제 줄수만큼»(0 1 auto)이라, 모자라면 셋이 같이 조금씩 줄고 남으면 아래를 비운다.
               //  ★ 3.7-05 — 자리 배정도 **줄 수**로 정한다(검수사 «선사가 많거나 포트가 많거나 특수 화물이
               //    많으면 겹칩이 일어납니다. 최대 발생조건을 생각하셔야 합니다»).
-              //    한 상자에 셋을 넣었을 때 글자가 읽을 수 있는 크기(7.0px)로 나오면 그대로 붙여 둔다.
-              //    안 나오면 옆 빈 자리로 나눈다 — **같은 줄에 나란히**라 위가 맞고 흩어지지 않는다.
-              //    나눌 자리가 없으면 그대로 두고 글자를 더 줄인다(하한 4.6px). 잘리는 것보다 낫다.
+              //    ⚠ 3.27 정정 — 아래 «빈 자리가 셋이면 셋으로 흩는다» 는 3.7-03 에서 이미 폐기됐다.
+              //      지금은 빈 칸이 몇이든 «별첨1·2 한 칸 · 별첨3 한 칸» 둘로만 나눈다(검수사 «1칸 별첨 2개 2칸1개»).
+              //    ⚠ 3.27 에서 이 «문턱으로 미리 정하기»는 폐기했다 — 계산이 실제와 어긋나 XTPG 539E 가
+              //    7.2px 로 «읽을 만하다» 판정을 받고도 잘렸다. 이제는 한 칸으로 그려 보고 넘치면 나눈다.
+              //    나눌 자리가 없으면 그대로 두고 글자를 줄인다(하한 4.6px). 잘리는 것보다 낫다.
               const _r1 = leg1Rows.length + 2, _r2 = leg2Rows.length + 2, _r3 = 5;   // 표마다 머리줄+합계줄
               const _pr = Math.max(1, layout.length);
-              const _fAll = legendFontFor(_r1 + _r2 + _r3, 3, _pr);
               const cell = (key, items, rows) => (
                 <div key={key} className="cpv2-bay-box cpv2-legend-box"
+                  data-lgf0={legendFontFor(rows, items.length, _pr)}
                   style={{ '--lgf': `${legendFontFor(rows, items.length, _pr)}px` }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', height: '100%' }}>
                     {items.map((it, k) => (
-                      <div key={k} style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>
+                      <div key={k} className="cpv2-legend-slot" style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>
                         {it.node}
                       </div>
                     ))}
                   </div>
                 </div>
               );
-              if (_fAll >= 7.0 || emptySlots < 2) {
+              //  ★ 3.27 — 나눌지 말지는 **그려 보고** 정한다(위 useLayoutEffect). 계산으로 미리 정하지 않는다.
+              //    첫 그림은 언제나 한 칸이고(«최대한 한곳에 모으되»), 줄이지 않은 크기로 넘쳤을 때만
+              //    다음 그림에서 «별첨1·2 한 칸 · 별첨3 둘째 칸 상단» 으로 나뉜다(검수사 «1칸 별첨 2개 2칸1개»).
+              if (!legSplit || emptySlots < 2) {
                 //  줄이 많아 한 칸으로는 글자가 너무 작아지면 **상자를 두 칸으로** 나눈다.
                 //    왼쪽 별첨1 · 오른쪽 별첨2+3 — 높이 요구가 «셋의 합»이 아니라 «둘 중 큰 쪽»이라
                 //    실측 최대(24줄)는 물론 그 1.5배까지도 읽을 수 있는 크기로 들어간다.
@@ -1433,12 +1484,13 @@ export default function PrintableCargoPlanV2({
                   const fL = legendFontFor(_r1, 1, _pr), fR = legendFontFor(_r2 + _r3, 2, _pr);
                   slots.push(
                     <div key="leg123" className="cpv2-bay-box cpv2-legend-box"
+                      data-lgf0={Math.min(fL, fR)}
                       style={{ '--lgf': `${Math.min(fL, fR)}px` }}>
                       <div style={{ display: 'flex', flexDirection: 'row', gap: '5px', height: '100%' }}>
-                        <div style={{ flex: '1 1 0', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>{legend1}</div>
+                        <div className="cpv2-legend-slot" style={{ flex: '1 1 0', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>{legend1}</div>
                         <div style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <div style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>{legend2}</div>
-                          <div style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>{legend3}</div>
+                          <div className="cpv2-legend-slot" style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>{legend2}</div>
+                          <div className="cpv2-legend-slot" style={{ flex: '0 1 auto', minHeight: 0, overflow: 'hidden' }}>{legend3}</div>
                         </div>
                       </div>
                     </div>
@@ -1447,14 +1499,13 @@ export default function PrintableCargoPlanV2({
                   slots.push(cell('leg123', [{ node: legend1 }, { node: legend2 }, { node: legend3 }], _r1 + _r2 + _r3));
                 }
                 for (let i = 1; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
-              } else if (emptySlots === 2) {
-                slots.push(cell('leg1', [{ node: legend1 }], _r1));
-                slots.push(cell('leg23', [{ node: legend2 }, { node: legend3 }], _r2 + _r3));
               } else {
-                slots.push(cell('leg1', [{ node: legend1 }], _r1));
-                slots.push(cell('leg2', [{ node: legend2 }], _r2));
+                //  빈 칸이 둘 이상 — 검수사 지시대로 별첨1·2 를 한 칸에, 별첨3 은 둘째 칸 «상단»에 둔다.
+                //    (칸 안 항목이 `flex: 0 1 auto` 라 위에서부터 쌓이고 남는 자리는 아래로 비워진다.)
+                //    빈 칸이 셋 이상이어도 셋으로 흩지 않는다 — 3.7-03 검수사 «최대한 같이 있어야 합니다».
+                slots.push(cell('leg12', [{ node: legend1 }, { node: legend2 }], _r1 + _r2));
                 slots.push(cell('leg3', [{ node: legend3 }], _r3));
-                for (let i = 3; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+                for (let i = 2; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
               }
             }
             // 그 다음 실제 박스들
@@ -1478,13 +1529,13 @@ export default function PrintableCargoPlanV2({
                     <div className="cpv2-single-half">
                       <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} podMode={podMode} podLen={podLen} gridCols={globalMaxCols} fixedCellVar="--cpw" globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     </div>
-                    <div className="cpv2-empty-half">
-                      {bi === leg3InBoxBi && (
-                        <div className="cpv2-legend-box" style={{ '--lgf': `${legendFont}px`, height: '100%', marginTop: '3px' }}>
-                          <FeLegend fe={legends.feCounts} />
-                        </div>
-                      )}
-                    </div>
+                    {/*  ★ 3.27 — 여기에 별첨3 을 또 그리던 것을 걷었다.
+                        2.56-03 주석은 «별첨3 을 빈 아래 반쪽으로 **옮긴다**» 였는데 3.7-03 이 «언제나 한 상자»로
+                        바꾸면서 옮기기의 반쪽만 지워, 빈 칸이 1개인 배에서는 별첨3 이 **한 장에 두 번** 나왔다
+                        (실측 사전 35척 중 NBTD·NSFR·SWSP 셋). 검수사 «별첨 1, 2, 3은 **중첩되지 않아야** 하며
+                        최대한 같이 있어야 합니다»(3.7-03) · «최대한 한곳에 모으되»(2026-09-08)를 정면으로 어긴다.
+                        별첨은 언제나 별첨 상자 한 곳에만 있다. 이 반쪽은 그냥 비운다(카스피 도면도 그렇다). */}
+                    <div className="cpv2-empty-half"></div>
                   </div>
                 );
               }
