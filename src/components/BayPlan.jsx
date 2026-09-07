@@ -734,7 +734,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                   <span className="text-base">🆕</span>
                   <div>
                     <div className="font-black">카고 플랜 V2 · M6.81 회귀</div>
-                    <div className="text-2xs text-emerald-300">카스피 양식 그대로</div>
+                    <div className="text-2xs text-emerald-300">표준 도면 양식 그대로</div>
                   </div>
                 </button>
                 <button onClick={() => { setPrintMode('detail'); setPrintMenuOpen(false); }}

@@ -254,7 +254,7 @@ export function analyzeDefFile(buffer) {
   const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
 
   if (!isCaspDefFile(bytes)) {
-    throw new Error('CASP SHIP DEFINE FILE 매직 시그니처 불일치 — .def 파일이 아닙니다');
+    throw new Error('선박 정의 파일 서명이 안 맞습니다 — .def 파일이 아닙니다');
   }
 
   const header = parseHeader(bytes);

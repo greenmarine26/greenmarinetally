@@ -4173,7 +4173,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         <div className="text-2xs text-dim-400 mt-1">
           현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
-          <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
+          <br/><span className="text-cyan-400">📚 .def 같이 올리면 베이사전 자동 등록</span>
         </div>
 
         {/* M6.43: PDF 등록 + 베이사전 라이브러리 현황 통합 위젯 (자료 탭 상단으로 이동) */}

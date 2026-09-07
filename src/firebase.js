@@ -1567,7 +1567,7 @@ export function fbSubscribeVoyages(callback) {
     const v = snap.val() || {};
     for (const k of Object.keys(v)) {
       //  한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
-      try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[CATOS 자리] 반영 실패 —', k, e); }
+      try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[터미널 자리] 반영 실패 —', k, e); }
       try { v[k] = applyAutoSwap(v[k]); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
     }
     callback(v);

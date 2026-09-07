@@ -85,5 +85,49 @@ ok(/function ctIsTerm\(/.test(cone), '콘앱에 터미널 판정 한 벌(ctIsTer
 ok(/c\.src === 'term'/.test(cone), "콘앱도 새 표식(src:'term')을 알아본다");
 ok(!/startsWith\('터미널'\)\s*\)\s*;?\s*$/m.test(cone.replace(/function ctIsTerm[\s\S]*?\n\}/, '')), '콘앱에서 옛 접두 판정이 ctIsTerm 밖에 남지 않았다');
 
+//  ⑦ ★ 3.28 — **외부 시스템 이름을 화면·인쇄·매뉴얼·미르 답변에 안 쓴다.**
+//    검수사 지시 2026-09-08 — *«앱 내용안에서 특수한 단어 사용을 제한한다. 카스피, 카토스, 트레드링스의 터미널 카운트등»*
+//    · 확답 «①카스피도 전부 지운다». 3.16 은 리터럴 「터미널(CATOS)」 하나만 막았고 그래서
+//    카스피 31곳·카토스 4곳이 그대로 남아 있었다(2026-09-08 전수 실측).
+//    ⚠ **주석과 내부 데이터 필드는 대상이 아니다** — 주석은 설계 근거(«카스피 도면이 그렇다»)라 지우면
+//      다음 클로드가 그 양식을 어긴다. 여기서는 주석을 걷어 낸 «코드가 쓰는 글자»만 본다.
+{
+  //  따옴표 «밖»의 // 만 잘라 낸다 — 주석 안에 따옴표가 있어도 제대로 걷힌다.
+  const cut = (l) => {
+    let q = '';
+    for (let i = 0; i < l.length; i++) {
+      const c = l[i];
+      if (q) { if (c === '\\') { i++; continue; } if (c === q) q = ''; continue; }
+      if (c === '"' || c === "'" || c === '`') { q = c; continue; }
+      if (c === '/' && l[i + 1] === '/') return l.slice(0, i);
+    }
+    return l;
+  };
+  const strip = (src) => src
+    .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, ' ')   // JSX 주석 {/* … */}
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')                // 블록 주석
+    .split('\n').map(cut).join('\n');
+  const WORDS = ['카스피', 'CASP', '카토스', 'CATOS', '트레드링스', 'Tradlinx'];
+  //  화면에 안 나가는 자리 — 베이사전에 저장되는 메타 필드(methodology)와 선사로 나가는 EDI 수신자 코드.
+  //  화면 글자가 아닌 것 — ①베이사전 메타 필드 ②선사로 나가는 EDI 의 UNB 수신자 코드
+  //  ③.def 파일을 가려내는 **매직 시그니처**(파일 첫 바이트열 그 자체라 바꾸면 .def 를 못 읽는다)
+  const ALLOW = [/methodology:\s*'CASP_/, /"methodology":\s*"CASP_/, /meta\.rcpt \|\| 'CASP'/,
+                 /'CASP SHIP DEFINE FILE'/];
+  const SCAN = ['src', 'public/cone.html'];
+  const hits = [];
+  const walk = (p) => {
+    const st = fs.statSync(p);
+    if (st.isDirectory()) { for (const f of fs.readdirSync(p)) walk(path.join(p, f)); return; }
+    if (!/\.(jsx?|html)$/.test(p)) return;
+    const src = strip(fs.readFileSync(p, 'utf8'));
+    src.split('\n').forEach((line, i) => {
+      if (ALLOW.some((re) => re.test(line))) return;
+      for (const w of WORDS) if (line.includes(w)) hits.push(`${path.relative(ROOT, p)}:${i + 1} ${w} — ${line.trim().slice(0, 90)}`);
+    });
+  };
+  for (const s2 of SCAN) walk(path.join(ROOT, s2));
+  ok(hits.length === 0, `⛔ 화면·매뉴얼에 외부 시스템 이름이 ${hits.length}곳 남았다` + (hits.length ? '\n     ' + hits.slice(0, 8).join('\n     ') : ''));
+}
+
 console.log(fail ? `\n✗ ${fail}건 실패` : '\n✓ 전부 통과');
 process.exit(fail ? 1 : 0);

@@ -1756,7 +1756,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
     const lsKey = 'ascShipCode_' + got.meta.vsl;
     let saved = '';
     try { saved = localStorage.getItem(lsKey) || ''; } catch { /* 무시 */ }
-    const input = window.prompt('ASC 선박코드(4자)\n기본은 검수앱 코드입니다. 카스피 코드가 따로 있으면 고쳐 주세요.', saved || got.meta.vsl);
+    const input = window.prompt('ASC 선박코드(4자)\n기본은 검수앱 코드입니다. 다른 코드를 쓰면 고쳐 주세요.', saved || got.meta.vsl);
     if (input == null) return;
     const shipCode = (input.trim().toUpperCase() || got.meta.vsl).slice(0, 4);
     try { localStorage.setItem(lsKey, shipCode); } catch { /* 무시 */ }
@@ -1912,10 +1912,10 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
                   <button onClick={() => exportActualEdi(r)} style={{ minHeight: 40 }}
                     className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
-                    title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
+                    title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 표준 형식이라 그대로 읽힙니다.">실선적 EDI</button>
                   <button onClick={() => exportActualAsc(r)} style={{ minHeight: 40 }}
                     className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
-                    title="실선적 ASC 내려받기 — 카스피와 같은 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
+                    title="실선적 ASC 내려받기 — 표준 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
                   <button onClick={() => exportEditExcel(r)} style={{ minHeight: 40 }}
                     className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
                     title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>

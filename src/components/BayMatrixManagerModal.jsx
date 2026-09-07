@@ -387,7 +387,7 @@ export default function BayMatrixManagerModal({ onClose, voyages = null, shipLib
                 </button>
               </div>
               <div className="text-xxs text-dim-400">
-                만드는 순서 — <b>.def 읽기 → CASP 플랜(PDF) 읽기 → 뼈대 → 매트릭스 → 확정</b>. 확정하면 그 뒤로 .def·PDF 가 못 고칩니다.
+                만드는 순서 — <b>.def 읽기 → 선박 도면(PDF) 읽기 → 뼈대 → 매트릭스 → 확정</b>. 확정하면 그 뒤로 .def·PDF 가 못 고칩니다.
               </div>
             </div>
           ) : (

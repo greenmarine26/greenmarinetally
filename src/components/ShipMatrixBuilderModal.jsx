@@ -265,7 +265,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       }
       if (matrix?._confirmed) {
         // 1.59: 확정된 매트릭스에는 CASP 플랜 PDF 도 반영하지 않는다 (검수사 확정 2026-08-13).
-        alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 CASP PDF·.def 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
+        alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 도면 PDF·.def 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
         return;
       }
       // ★ 1.62: PDF 에서 베이를 한 개도 못 읽으면 **조용히 넘어가지 않는다**(3금지 3번).
@@ -307,7 +307,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       }
       if (matrix?._confirmed) {
         // 1.59: 확정된 매트릭스에는 `.def` 를 반영하지 않는다 (검수사 확정 2026-08-13).
-        alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 .def·CASP PDF 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
+        alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 .def·도면 PDF 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
         return;
       }
       let merged = augmentMatrixFromDef({ ...matrix }, result);
@@ -666,7 +666,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     if (_provisional) {
       _provisional = !window.confirm(
         `${shipMeta.code} 베이매트릭스를 **확정**할까요?\n\n` +
-        `확정하면 이후 .def·CASP PDF·ASC 가 이 매트릭스를 고칠 수 없습니다.\n` +
+        `확정하면 이후 .def·도면 PDF·ASC 가 이 매트릭스를 고칠 수 없습니다.\n` +
         `(매트릭스에서 직접 고쳐 다시 저장하는 것은 계속 됩니다.)\n\n` +
         `확인 = 확정 · 취소 = 보정중으로 계속`);
     }
@@ -923,7 +923,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                   <div className="font-mono">{shipMeta.imo || <span className="text-dim-500">미상</span>}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-blue-300/70">CASP 코드 (자동 추론)</div>
+                  <div className="text-2xs text-blue-300/70">선박 약자 (자동 추론)</div>
                   <div className="font-mono font-bold text-emerald-300">{shipMeta.code || <span className="text-red-400">없음 — 입력 필요</span>}</div>
                 </div>
                 <div>
@@ -958,7 +958,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                          className="w-full mt-1 px-2 py-1 bg-ink-750 rounded font-mono" />
                 </label>
                 <label>
-                  <div className="text-2xs text-blue-300/70">CASP 코드 *</div>
+                  <div className="text-2xs text-blue-300/70">선박 약자 *</div>
                   <input value={shipMeta.code || ''} onChange={e => setShipMeta(m => ({ ...m, code: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
                          className="w-full mt-1 px-2 py-1 bg-ink-750 rounded font-mono font-bold" />
                 </label>
@@ -1133,7 +1133,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           )}
           {matrix.clonedFrom && (
             <div className="bg-violet-900/30 border border-violet-500/30 px-3 py-2 rounded mb-4 text-xs text-violet-200">
-              🔁 <span className="font-bold">{matrix.clonedFrom}</span> 의 베이 구조를 복제했습니다. 위에서 선박 정보(선박명·콜사인·CASP 코드)를 신규 선박으로 입력 후 저장하세요.
+              🔁 <span className="font-bold">{matrix.clonedFrom}</span> 의 베이 구조를 복제했습니다. 위에서 선박 정보(선박명·콜사인·선박 약자)를 신규 선박으로 입력 후 저장하세요.
             </div>
           )}
           {/* V7.99-3/4: 복제본 적합성 검증 — 4단계 결과 제시(수용률 + 중력 보정 + 적용/수정) */}
