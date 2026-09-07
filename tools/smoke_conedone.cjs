@@ -21,6 +21,8 @@ function run(opts) {
   C.key = 'DJCT_0223E'; C.pier = 'PCTC'; C.vsl = 'DJCT'; C.voy = '0224W'; C.at = Date.now();
   C.tw = { discharge: opts.twD || {}, loading: opts.twL || {} };
   C.comp = { discharge: opts.cpD || {}, loading: opts.cpL || {} };
+  //  2.39-01: «앱이 가진 대수»(목록의 ediD·ediL). 안 주면 «모른다»로 둔다 — 경고를 지어내지 않는지 본다.
+  C.edi = (opts.edi === null) ? undefined : (opts.edi || { discharge: FX.discharge_ediRows.length, loading: FX.loading_ediRows.length });
   return { r: ctx.__ctCompute(), rest: ctx.__rest, pierOf: ctx.__pierOf, pierTw: ctx.__pierTw };
 }
 console.log('콘앱 완료 화면·완료/전체·쉬는 시간 (DJCT 0223E 실데이터 사본)');
@@ -34,6 +36,23 @@ T(full.r.finished === true, '양하·선적이 다 찼으면 finished');
 const one = Object.fromEntries(Object.entries(FX.loading_completed).slice(0, L - 1));
 T(run({ cpD: FX.discharge_completed, cpL: one }).r.finished === false, '선적 한 대라도 남으면 완료가 아니다');
 T(run({ cpD: {}, cpL: {} }).r.finished === false, '아무것도 안 했으면 완료가 아니다');
+//  ②-2 2.39-01: 계획을 아직 못 받은 모드가 도는 중이면 «완료»가 아니다 (2026-09-07 OBWH 18:30 실제 장면)
+{
+  const half = Object.fromEntries(Object.entries(FX.loading_termWork).slice(0, 121));
+  const g = run({ cpD: FX.discharge_completed, cpL: {}, twD: FX.discharge_termWork, twL: half,
+                  edi: { discharge: FX.discharge_ediRows.length, loading: 0 } });
+  T(g.r.finished === false, '선적 자료가 아직 안 왔는데 실적이 돌면 완료가 아니다');
+  T(JSON.stringify(g.r.needReload) === JSON.stringify(['loading']), '그때 선적을 «자료 미도착»으로 짚는다');
+}
+//  ②-3 2.39-01 회귀: 자료는 다 있는데 이 화면이 EDI 를 아직 안 읽었을 뿐이면 경고하지 않는다
+//      (2.39 가 RZOR R097W — 양하 208·선적 197 이 다 있는 배에 경고를 띄운 자리)
+T(run({ cpD: FX.discharge_completed, cpL: FX.loading_completed,
+        twD: FX.discharge_termWork, twL: FX.loading_termWork }).r.needReload.length === 0,
+  '자료가 있으면 «아직 안 읽음»을 «자료 미도착»이라 하지 않는다');
+//  ②-4 «모른다»를 «없다»로 읽지 않는다 — CT.edi 가 없으면 경고를 지어내지 않는다
+T(run({ cpD: FX.discharge_completed, cpL: FX.loading_completed,
+        twD: FX.discharge_termWork, twL: FX.loading_termWork, edi: null }).r.needReload.length === 0,
+  '«앱이 가진 대수»를 모르면 경고를 지어내지 않는다');
 //  ③ 양하만 있는 배 — 양하만 차면 완료
 {
   const ctx = run({ cpD: FX.discharge_completed, cpL: {} });
