@@ -313,6 +313,14 @@ export default function App() {
   //   로그인 화면을 띄운다. 작업 기록은 그대로 남는다(로그아웃 마킹만).
   useEffect(() => {
     if (!inspector) return;
+    /*  3.25: 수석·부수석·테스터는 자동 로그아웃 대상이 아니다 — 검수사 확정 2026-09-07
+        «이렇게 하면 됩니다. 일반 검수원들만 로그아웃되게» · «수석은 하루종일 화면만 볼텐데».
+        활동으로 세는 것이 pointerdown·keydown·touchstart·wheel·scroll 다섯뿐이라
+        보기만 하는 수석에게는 하나도 안 일어난다(2026-09-07 실검수 중 두 번 쫓겨났다).
+        원 목적(«로그인해 두고 안 만져도 작업중으로 남는다»)은 inspectorStatus 의
+        신선도 판정(1.3-01)이 이미 달성했다. 일반 검수원은 종전 그대로 둔다 —
+        검수사 «검수원은 어차피 30분이상 작업안할때는 휴식시간이나 식사시간일테니». */
+    if (isChief(inspector)) return;
     lastInputRef.current = Date.now();
     const mark = () => { lastInputRef.current = Date.now(); };
     const evs = ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'];

@@ -491,7 +491,7 @@ export async function fbToggleXray(voyageKey, cn) {
 }
 // 실번호 현장 수정 — 원본(sl_orig)은 절대 변경 X, 이력 누적
 // ── TallyOne 1.8: 리퍼 온도 확인 (리퍼 메모 화면) ──────────────────────────
-//   rfSet = 실제 셋팅온도 · rfAct = 실제온도 · rfSrc = 'photo'(선원 리스트 판독) | 'manual'
+//   rfSet = 실제 셋팅온도 · rfAct = 실제온도 · rfSrc = 'photo'(검수 수기 리스트 판독) | 'manual'
 //   records 가 단일 진실 원천이라는 기존 원칙 그대로 여기에 적는다(ediContainers 는 EDI 원본이므로 안 건드린다).
 //   텔리 RF condition report 의 Setting/Actual 칸이 이 값을 읽는다.
 export async function fbSetReeferTemp(voyageKey, mode, cn, patch, by) {

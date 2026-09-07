@@ -9,7 +9,7 @@ import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트�
 import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
 import { mirTone } from '../mirChat.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
-import {
+import { Thermometer,
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
   AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
   BarChart3, FileCheck, Package as PackageIcon
@@ -44,7 +44,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -959,17 +959,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     [containers]);
   const rfUnchecked = useMemo(() => reefers.filter(c => !c.rfCheckedAt).length, [reefers]);
   const [showReefer, setShowReefer] = useState(false);
-  const rfAutoRef = React.useRef('');
-  React.useEffect(() => {
-    // 항차·모드가 바뀔 때 한 번만 판단한다(자료가 늦게 도착해 재렌더돼도 다시 띄우지 않는다).
-    const key = `${voyageKey}|${mode}`;
-    if (rfAutoRef.current === key) return;
-    if (!reefers.length) return;          // 리퍼 자체가 없으면 아무 일 없다
-    rfAutoRef.current = key;
-    /* 2.87: mirPlan — 홈 미르가 플랜만 보려고 덮어 띄운 화면이다. 여기서 온도 모달이 튀어나오면
-       검수사가 부른 적 없는 팝업이 플랜을 가린다(실측 KSKM 2617S — 카고플랜 위에 모달이 떴다). */
-    if (rfUnchecked > 0 && !shipPolicy?.rfSkip && !mirPlan) setShowReefer(true);   // 1.86: 리퍼 체크 안 함 배는 자동으로 안 띄움
-  }, [voyageKey, mode, reefers.length, rfUnchecked]);
+
+  //  3.25: 리퍼 온도 상태 한 벌 — 화면·마감점검이 같은 것을 본다(규범 §4-4).
+  const rfSummary = useMemo(() => reeferTempSummary(containers || []), [containers]);
 
   // V8.06: LOLO/IFCSUM 선박 판정 — 컨테이너에 베이 위치가 하나도 없으면 LOLO 전용.
   //   RIZHAO ORIENT 등 RORO/LOLO 혼용선은 IFCSUM(베이 없음)으로 명세만 제공된다.
@@ -1402,6 +1394,28 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           );
         } catch { return null; }
       })()}
+
+      {/*  3.25: 리퍼 온도 — **큰 화면 대신 상단 한 줄.** 검수사 확정 2026-09-07
+           «상단에 리퍼 검수여부를 알림으로 작게 보여주고 완료시 다시 한번 묻는걸로 대치»
+           작업을 막지 않는다. 누르면 그때 자세히 본다. */}
+      {!_sideCanc && !shipPolicy?.rfSkip && rfSummary.total > 0 && (
+        <button onClick={() => setShowReefer(true)}
+          className={'w-full mb-2 px-3 py-2 rounded-pill text-left flex items-center gap-2 border '
+            + (rfSummary.tone === 'ok'  ? 'bg-emerald-900/25 border-emerald-700/40'
+             : rfSummary.tone === 'gap' ? 'bg-amber-900/25 border-amber-600/40'
+             :                            'bg-amber-900/30 border-amber-500/50')}
+          style={{ minHeight: 40 }}>
+          <Thermometer className={'w-4 h-4 shrink-0 ' + (rfSummary.tone === 'ok' ? 'text-emerald-300' : 'text-amber-300')} />
+          <span className={'text-xs2 font-bold ' + (rfSummary.tone === 'ok' ? 'text-emerald-100' : 'text-amber-100')}>
+            {rfSummary.headline}
+          </span>
+          {rfSummary.tone !== 'ok' && (
+            <span className="text-xxs text-dim-300 ml-auto shrink-0">
+              {rfSummary.nNoBase ? '리스트를 기다립니다' : rfSummary.nUnverified ? '작업 중에 채웁니다' : '눌러서 보기'}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
       {!_sideCanc && <VoyageSummaryCard voyage={voyage} mode={mode} voyageKey={voyageKey}
@@ -2296,10 +2310,12 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     else if (filter === 'shift') arr = arr.filter(c => c._shift);   // 1.76-05: 시프팅만 보기
     else if (filter === 'lugg') arr = arr.filter(c => c._deckOnly || c.lugg);   // 2.06-04: 수화물(미정)만 보기
-    // V9.14: 마감 점검 「리퍼 온도 미입력」 점프용 — Full 리퍼인데 온도 빈 것만 (판정은 체크리스트와 동일)
-    else if (filter === 'reeferTemp') arr = arr.filter(c =>
-      (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry && !c.mkcon &&
-      (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
+    /*  마감 점검 「리퍼」 항목 점프용 — 3.25: **판정 한 벌**(규범 §4-4).
+        종전엔 여기서 `!c.tmp` 만 봐서 B(기준은 있고 안 잰 것)를 하나도 못 담았다 —
+        마감이 «미확인 74대»라 해도 목록은 0대였다(감사 실측 OBWH 29·STSE 69·SWBT 74·DXQD 19 전부 0). */
+    else if (filter === 'reeferTemp') arr = arr.filter(c => {
+      const st = reeferTempOf(c).state; return st === 'A' || st === 'B';
+    });
     //  ★ 2.55-01: **문장은 치는 중에 거르지 않는다.** «FR» 이 컨번호로 잡혀 100대를 뿌리고 있었다
     //    (검수사 신고 · activity_log 260826 12:34~35 에 8단계가 그대로 찍혀 있다).
     //    숫자·컨번호는 종전대로 즉답 — 갑판에서 쓰는 빠른 길이라 막지 않는다.

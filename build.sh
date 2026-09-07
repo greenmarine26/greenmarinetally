@@ -490,6 +490,17 @@ if npx esbuild src/updateResume.js --bundle --platform=node --format=cjs --outfi
 else
   echo "✗ 업데이트 로그인 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_UR"; exit 1
 fi
+#  3.25: 리퍼 온도 판정 한 벌 — 세팅과 실측은 짝이라야 뜻이 있다(검수사 확정 2026-09-07).
+#    «리스트대로» 로 베낀 값이 실측으로 세지지 않는지를 여기서 막는다(2026-09-07 DXQD 19대 사고).
+SMOKE_RT=$(mktemp /tmp/_rt_XXXXXX.cjs)
+if npx esbuild src/utils.js --bundle --platform=node --format=cjs \
+     --external:firebase --external:firebase/* --external:xlsx --external:exceljs \
+     --outfile="$SMOKE_RT" --log-level=error; then
+  node tools/smoke_reefertemp.cjs "$SMOKE_RT" || { echo "✗ 리퍼 온도 연막검사 실패 — 배포 금지"; exit 1; }
+  rm -f "$SMOKE_RT"
+else
+  echo "✗ 리퍼 온도 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+fi
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
 #  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.

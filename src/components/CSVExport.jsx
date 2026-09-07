@@ -1,5 +1,5 @@
 // CSV 내보내기 — 결재용 + 세관 신고용
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
+import { reeferTempOf, isoToLabel, formatWt, fmtPos, isReeferContainer, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
 
 export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo = null) {   // 3.16: info 는 조 등록 근무자를 찾는 데 쓴다
   const headers = [
@@ -26,10 +26,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
 
     // M3.5.4: 온도 미입력 체크 (리퍼인데 온도 없거나 0)
     // M3.75: 엠티 리퍼는 정상 (온도 없는 게 맞음) → 풀 리퍼만 경고
-    const isReefer = isReeferContainer(c);
-    const tmpStr = String(c.tmp || '').trim();
-    const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);
-    const tmpMissing = isFullReefer && !c.rfdry && !c.mkcon && (c.tmp_missing || tmpStr === '');
+    const tmpMissing = reeferTempOf(c).state === 'A';   // 3.25: 판정 한 벌(규범 §4-4)
 
     rows.push([
       i + 1,

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
+import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
 import { paceFromRecords, voyageDoneAts, speedFromTerminal, terminalWorkFor, voyageReportSpan } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
@@ -329,10 +329,8 @@ function computeAllStats(containers, compMap, xrayMap, mode, voyage, terminalWor
     if (compMap[c.cn]) byPort[port].done++;
   });
 
-  // 리퍼 온도 미입력 (Full만 — 마감 체크리스트와 동일 판정)
-  const reeferTempMissing = containers.filter(c =>
-    (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry && !c.mkcon &&
-    (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
+  //  3.25: 판정 한 벌 — utils.reeferTempSummary (규범 §4-4). 종전엔 여기서 또 세어 조건이 미묘하게 달랐다.
+  const reeferTempMissing = reeferTempSummary(containers).noBase;
 
   return { total, done, bySize, byFE, bySpecial, byOp, xrayTotal, xrayDone, xrayList,
            byHour, byInspector, anomaly, paceHour, paceNote, paceSrc, byPort, reeferTempMissing };

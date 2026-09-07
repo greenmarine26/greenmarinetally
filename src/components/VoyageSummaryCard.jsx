@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos , shiftCnSetOf, progressOf} from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos , shiftCnSetOf, progressOf} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null }) {
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -61,9 +61,10 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     //   «리퍼 26대 · 위치미상26» 빨간 알림으로): 1.85-04 정책 «리퍼 전면 표시는 풀만»이 이 요약 카드에는
     //   빠져 있었다. 카운트·위치미상·온도X 전부 풀 리퍼 기준(F 또는 F/E 미상 — 조회·브리핑과 동일 판정).
     const reefers = containers.filter(c => isReeferContainer(c) && (c.fe === 'F' || c.fe === '' || c.fe == null));
-    const reeferTempMissing = reefers.filter(c =>
-      !c.rfdry && !c.mkcon && (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
-    );
+    //  3.25: 판정 한 벌 — utils.reeferTempSummary (규범 §4-4). 종전엔 여기서 따로 셌다.
+    //    «미입력»은 곧 «기준(세팅)이 없다»는 뜻이다. 실측이 없는 것은 «검증 안 됨»으로 따로 센다.
+    const rfSum = reeferTempSummary(containers);
+    const reeferTempMissing = rfSum.noBase;
     // V7.94-03: X-RAY 카운트 기준 통일 (사용자 제보 — 상단 0/3 vs 리스트 2 불일치)
     //   원인: 여기는 xrayList 원본 키 전부, 리스트(ListTab stats.xray)는 현재 컨테이너와 매칭분만.
     //   매칭 안 되는 키(오타/다른 항차 잔존)는 숨기지 않고 ⚠미매칭으로 드러냄 — 검사 누락 방지.
@@ -109,6 +110,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       pct: total ? Math.round(done / total * 100) : 0,
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
+      rfSum,   // 3.25: 리퍼 온도 판정 한 벌 — 칩이 이것을 본다(규범 §4-4)
       reeferDry: reefers.filter(c => c.rfdry).length,   // V9.20-03: 리퍼드라이(넌플러그)
       // V9.28-08: EDI에 위치가 없는 리퍼 (TMPZ 2023E 실측 — 선사 EDI가 리퍼 6대 누락, 냉동리스트에만 존재.
       //   카고플랜에 못 그리는 건 어쩔 수 없지만 숨기면 안 된다 — 검수원이 위치 미상임을 알아야 현장에서 찾는다)
@@ -176,9 +178,14 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
         {reeferCheck && (
           <Chip
             icon={Snowflake}
-            color={reeferCheck.unchecked > 0 ? 'red' : 'emerald'}
+            /*  3.25: 칩도 판정 한 벌을 본다. 종전엔 `rfCheckedAt`(누가 «확인 완료»를 눌렀나)만 봐서
+                잰 적 없는 19대에도 «완료 19대 ✓» 초록이 떴다 — 그 착시가 2026-09-07 사고였다. */
+            color={(summary.rfSum.nNoBase + summary.rfSum.nUnverified) > 0 ? 'red' : summary.rfSum.nGaps ? 'amber' : 'emerald'}
             label="리퍼 확인"
-            value={reeferCheck.unchecked > 0 ? `미확인 ${reeferCheck.unchecked}/${reeferCheck.total}` : `완료 ${reeferCheck.total}대 ✓`}
+            value={summary.rfSum.nNoBase ? `기준없음 ${summary.rfSum.nNoBase}/${summary.rfSum.total}`
+                 : summary.rfSum.nUnverified ? `검증안됨 ${summary.rfSum.nUnverified}/${summary.rfSum.total}`
+                 : summary.rfSum.nGaps ? `확인 ${summary.rfSum.total}대 · 차이 ${summary.rfSum.nGaps}`
+                 : `확인 ${summary.rfSum.total}대 ✓`}
             onClick={reeferCheck.onOpen}
           />
         )}

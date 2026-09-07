@@ -4,7 +4,7 @@
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, MoveRight, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
-import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos } from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos } from '../utils.js';
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump }) {
   const items = useMemo(() => {
@@ -34,11 +34,11 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     const total = containers.length;
     const undone = containers.filter(c => !compMap[c.cn]);
 
-    // 리퍼 온도 미입력 (Full만 — 엠티는 정상 가능)
+    /*  3.25: 리퍼 온도 — 판정 한 벌(utils.reeferTempSummary · 규범 §4-4).
+        검수사 확정 2026-09-07 «완료시 다시 한번 묻는걸로 대치» — 묻는 자리가 여기다.
+        시작할 때는 안 막는다(컨이 배 위에 있어 잴 수가 없다). 다 내려온 지금 묻는다. */
     const reefers = containers.filter(isReeferContainer);
-    const reeferTempMissing = reefers.filter(c =>
-      !c.rfdry && !c.mkcon && (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
-    );
+    const rfSum = reeferTempSummary(containers);
 
     // ISO403 사진 미촬영
     const iso403Pending = containers.filter(c => isISO403(c) && !isISO403PhotoTaken(c));
@@ -128,15 +128,26 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         jumpTo: { tab: 'list', filter: 'undone' },
       },
       {
+        //  3.25: 한 항목에 상태 셋을 다 담는다 — «기준 없음»과 «검증 안 됨»은 다른 일이다.
         id: 'reefer',
         icon: Snowflake,
-        label: '리퍼 온도 미입력 (Full)',
-        count: reeferTempMissing.length,
-        desc: reefers.length > 0
-          ? `리퍼 ${reefers.length}대 중 ${reeferTempMissing.length}대 온도 X`
-          : '리퍼 없음',
-        color: reeferTempMissing.length > 0 ? 'red' : 'emerald',
-        jumpTo: { tab: 'list', filter: 'reeferTemp' },   // V9.14: search는 컨번호 검색이라 '리퍼'가 안 걸렸다 — 전용 필터로
+        label: rfSum.nNoBase ? '리퍼 기준 온도 없음'
+             : rfSum.nUnverified ? '리퍼 실물 온도 미확인'
+             : '리퍼 온도 확인',
+        count: rfSum.nNoBase + rfSum.nUnverified,
+        desc: rfSum.total === 0 ? '리퍼 없음'
+          : rfSum.nNoBase ? `리퍼 ${rfSum.total}대 중 ${rfSum.nNoBase}대에 기준(세팅)온도가 없습니다 — 선사 리스트가 오면 채워집니다`
+          : rfSum.nUnverified ? `리퍼 ${rfSum.total}대 중 ${rfSum.nUnverified}대를 아직 안 쟀습니다 — 검수 수기 리스트를 사진으로 올리십시오`
+          : rfSum.nGaps ? `리퍼 ${rfSum.total}대 확인 · 세팅과 차이 나는 것 ${rfSum.nGaps}대 (${rfSum.gaps.slice(0,3).map(r => `${r.cn} ${r.set}→${r.act}`).join(' · ')})`
+          : `리퍼 ${rfSum.total}대 전부 확인 · 세팅과 차이 없음`,
+        color: (rfSum.nNoBase + rfSum.nUnverified) > 0 ? 'red' : rfSum.nGaps ? 'amber' : 'emerald',
+        /*  3.25: **차이만 남았을 때도 마감 화면에 보여야 한다.** count 는 «막는 수»라
+            A·B 가 0 이면 0 이 되는데, 그러면 pending 에서 빠지고 «✅ 마감 가능» 화면은
+            info 항목만 그리므로 항목이 통째로 사라진다 — 오늘 RZOR 의 +3.2 가 그렇게 사라졌다.
+            차이는 «막을 일»이 아니라 «알릴 일»이므로 info 로 남긴다(마감은 막지 않는다). */
+        info: (rfSum.nNoBase + rfSum.nUnverified) === 0 && rfSum.nGaps > 0 ? true : undefined,
+        infoCount: rfSum.nGaps,
+        jumpTo: { tab: 'list', filter: 'reeferTemp' },
       },
       {
         id: 'iso403',

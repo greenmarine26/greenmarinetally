@@ -8,7 +8,7 @@
 //
 // 그래서 채우는 길이 셋이다. 어느 쪽이든 최종 확정은 사람이 한다.
 //   ① 사진   — 선원이 적어 준 리스트를 찍으면 Gemini가 읽어 두 칸을 채운다(초안).
-//   ② 일괄   — 「전부 리스트대로」: EDI 온도를 그대로 셋팅·실제로 인정한다.
+//   ② 일괄   — 「세팅온도 채우기」(3.25): 리스트 온도를 **기준 칸에만** 넣는다. 실측 칸은 안 건드린다.
 //   ③ 개별   — 틀린 줄만 직접 고친다.
 //
 // 저장은 records/{cn}.rfSet · rfAct (firebase.js fbSetReeferTemp*).
@@ -39,42 +39,58 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     () => (containers || []).filter(isReefer).sort((a, b) => String(a.cn).localeCompare(String(b.cn))),
     [containers]);
 
-  // 편집 중인 값 — 처음엔 저장된 값, 없으면 EDI 온도로 미리 채운다(맞으면 그대로 두면 된다).
+  /*  편집 중인 값.
+      ⚠ 3.25: **실측 칸(act)은 미리 채우지 않는다.** 3.24 까지는 EDI 온도를 act 에도 넣어 둬서
+      아무것도 손대지 않고 「확인 완료」만 눌러도 전 리퍼에 «잰 값»이 박혔다 —
+      2026-09-07 DXQD 19대가 실제로 그렇게 굳었다(잰 사람이 없는데 차이 0).
+      검수사 원문 — «실제온도만 기록하면 확인이 안됩니다» · 기준과 실측은 **짝**이라야 뜻이 있다.
+      기준(set)은 리스트·EDI 로 미리 채워 둔다 — 그것이 잣대이기 때문이다. */
   const [vals, setVals] = useState(() => {
     const o = {};
     for (const c of list) {
-      const edi = tempStr(c.tmp);
-      o[c.cn] = { set: tempStr(c.rfSet) || edi, act: tempStr(c.rfAct) || edi, src: c.rfSrc || '' };
+      o[c.cn] = { set: tempStr(c.rfSet) || tempStr(c.tmp), act: tempStr(c.rfAct), src: c.rfSrc || '' };
     }
     return o;
   });
+  //  3.25: 기준(세팅)이 한 대도 없으면 «세팅온도 채우기»는 빈 값을 확정하는 단추가 된다 — 잠근다.
+  const baseCount = list.filter((c) => tempStr(c.rfSet) || tempStr(c.tmp)).length;
+  const noBase = baseCount === 0;
   const [busy, setBusy] = useState('');
   // ★ 1.84 (검수사 확정 2026-08-19 시안): **방식 선택이 먼저다.**
   //   *"1개든 100개든 이걸 한줄로 보여주고 클릭하면 리스트 입력인지 개별 사진 촬영인지 수기 입력인지
   //    선택해서 할수있게. 처음부터 양이 많으면 스크롤하기 짜증납니다."*
-  //   열자마자 38줄이 아니라 [촬영 / 전부 리스트대로 / 수기] 세 버튼만. 목록은 고른 뒤에.
+  //   열자마자 38줄이 아니라 [촬영 / 세팅온도 채우기 / 수기] 세 버튼만. 목록은 고른 뒤에.
   const [step, setStep] = useState('pick');   // 'pick' | 'edit'
   const [note, setNote] = useState('');
   const camRef = useRef(null);
   const albumRef = useRef(null);
 
-  const setField = (cn, k, v) => setVals((o) => ({ ...o, [cn]: { ...o[cn], [k]: v, src: 'manual' } }));
+  /*  3.25: **한 칸 고쳤다고 옆 칸까지 «손입력»이 되면 안 된다.**
+      종전엔 어느 칸을 고치든 src 를 통째로 'manual' 로 바꿔서, 「세팅온도 채우기」로 베낀
+      실측값(rfSrc:'list')이 세팅 칸만 손대도 «잰 값»으로 세탁됐다(감사 지적 2026-09-07).
+      ⇒ **실측 칸(act)을 실제로 손댔을 때만** 손입력으로 올린다. */
+  const setField = (cn, k, v) => setVals((o) => ({
+    ...o, [cn]: { ...o[cn], [k]: v, src: k === 'act' ? 'manual' : (o[cn]?.src || '') },
+  }));
 
-  /** ② 전부 리스트대로 — EDI 온도를 셋팅·실제로 일괄 인정 */
+  /** ② 세팅온도 채우기 — 리스트·EDI 온도를 **기준 칸에만** 넣는다(3.25).
+      ⛔ 실측(act)에는 손대지 않는다. 베낀 값은 잰 값이 아니다 — 그것이 2026-09-07 사고였다. */
   const applyAll = () => {
+    if (noBase) { setNote('리스트에 세팅온도가 없습니다 — 채울 기준이 없어 그대로 둡니다.'); return; }
     setVals((o) => {
       const n = { ...o };
       for (const c of list) {
         const edi = tempStr(c.tmp);
-        n[c.cn] = { set: edi, act: edi, src: 'list' };
+        if (!edi) continue;                                  // 없는 것을 «채웠다»고 하지 않는다
+        n[c.cn] = { ...o[c.cn], set: edi, src: 'list' };      // act 는 건드리지 않는다
       }
       return n;
     });
-    setNote('EDI 온도를 전부 그대로 적용했습니다 — 다른 것만 고치세요.');
-    setStep('edit');   // 1.84: 일괄 적용 후 결과 확인 화면으로
+    setNote('세팅온도를 채웠습니다 — 실제 온도는 재고 나서 사진이나 손으로 넣으십시오.');
+    setStep('edit');
   };
 
-  /** ① 선원 리스트 사진 판독 */
+  /** ① 검수 수기 리스트 사진 판독 (검수사 정정 2026-09-07 — «선원리스트가 아니고 검수 수기 리스트입니다») */
   const onPhoto = async (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
@@ -145,14 +161,18 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
               className="w-full text-left px-4 py-3 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 border border-cyan-700/40 disabled:opacity-50" style={{ minHeight: 56 }}>
               <span className="text-[14px] font-bold text-cyan-100 flex items-center gap-2">
                 {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
-                {busy === 'photo' ? '읽는 중…' : '선원 리스트 촬영'}
+                {busy === 'photo' ? '읽는 중…' : '검수 수기 리스트 촬영'}
               </span>
               <span className="block text-xxs text-cyan-300/70 mt-0.5">종이 리스트를 찍으면 온도를 읽어 채웁니다 · <button onClick={(e) => { e.stopPropagation(); albumRef.current?.click(); }} className="underline">앨범에서</button>도 가능</span>
             </button>
-            <button onClick={() => applyAll()} disabled={!!busy}
+            <button onClick={() => applyAll()} disabled={!!busy || noBase}
               className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
-              <span className="text-[14px] font-bold text-dim-100">전부 리스트대로</span>
-              <span className="block text-xxs text-dim-300 mt-0.5">EDI 온도 그대로 인정 — 한 번에 {list.length}대 채우고 확인만 누르면 끝</span>
+              <span className="text-[14px] font-bold text-dim-100">세팅온도 채우기</span>
+              <span className="block text-xxs text-dim-300 mt-0.5">
+                {noBase
+                  ? '리스트에 세팅온도가 없습니다 — 채울 기준이 없습니다'
+                  : `리스트 세팅온도로 ${baseCount}대의 기준을 채웁니다 · 실제 온도는 재고 나서 넣습니다`}
+              </span>
             </button>
             <button onClick={() => setStep('edit')} disabled={!!busy}
               className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
@@ -175,14 +195,14 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             className="px-3 py-2 rounded-pill text-xs2 font-bold bg-violet-800 hover:bg-violet-700 text-violet-100 flex items-center gap-1 disabled:opacity-50"
             style={{ minHeight: 40 }}>
             {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
-            {busy === 'photo' ? '읽는 중…' : '선원 리스트 촬영'}
+            {busy === 'photo' ? '읽는 중…' : '검수 수기 리스트 촬영'}
           </button>
           <button onClick={() => albumRef.current?.click()} disabled={!!busy}
             className="px-3 py-2 rounded-pill text-xs2 bg-ink-800 hover:bg-ink-750 text-dim-200 disabled:opacity-50"
             style={{ minHeight: 40 }}>앨범에서</button>
           <label className="flex items-center gap-2 px-3 py-2 rounded-pill bg-ink-800/60 text-xs2 text-dim-200 cursor-pointer" style={{ minHeight: 40 }}>
-            <input type="checkbox" onChange={(e) => e.target.checked && applyAll()} className="w-4 h-4 accent-cyan-500"/>
-            전부 리스트대로 (EDI 온도 그대로 인정)
+            <input type="checkbox" disabled={noBase} onChange={(e) => e.target.checked && applyAll()} className="w-4 h-4 accent-cyan-500"/>
+            세팅온도 채우기 (실측 칸은 그대로 둡니다)
           </label>
           <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden"/>
           <input ref={albumRef} type="file" accept="image/*" onChange={onPhoto} className="hidden"/>
@@ -197,7 +217,9 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
           {list.map((c) => {
             const edi = tempStr(c.tmp);
             const v = vals[c.cn] || { set: '', act: '' };
-            const changed = (v.set !== edi) || (v.act !== edi);
+            //  3.25: «수정됨»은 «리스트와 다르다»는 뜻이다. 실측 칸은 원래 비어 있으므로
+            //    그것까지 비교하면 열자마자 전 줄에 배지가 붙는다(감사 지적).
+            const changed = (v.set !== edi) || (v.act !== '' && v.act !== edi);
             return (
               <div key={c.cn} className="grid grid-cols-[1fr_58px_72px_72px] gap-1 items-center py-1 border-b border-line-soft">
                 <div className="min-w-0">

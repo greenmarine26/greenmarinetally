@@ -341,7 +341,7 @@ export async function ocrReeferTemps(file, geminiApiKey) {
   //   → 셋팅은 `SET TEMP` 열 하나, **실제 온도는 시각별 격자**다. 'ACTUAL' 이라는 열은 없다.
   //     그래서 "가장 마지막에 채워진 칸"을 실제 온도로 삼는다(가장 최근 관측값).
   const prompt = `이 이미지는 선박 리퍼(냉동/냉장) 컨테이너 온도 점검 기록표입니다.
-본선 선원이 손으로 적어 넣은 값입니다.
+검수원이 손으로 적어 넣은 값입니다.
 
 표 구조는 보통 이렇습니다:
   NO. | CONTAINER NUMBER | SLOT | PLUG-IN DATE | POL | POD | SET TEMP | (날짜)0 4 8 12 16 20 | (다음날)0 4 8 12 16 20 ...
@@ -361,7 +361,7 @@ export async function ocrReeferTemps(file, geminiApiKey) {
   0 은 0 그대로 둔다(빈칸과 다르다).
 - 격자가 통째로 비어 있으면 act 는 빈 문자열. **SET TEMP 를 복사해 넣지 않는다.**
 - 값이 안 보이거나 흐리면 그 항목만 빈 문자열. 지어내지 않는다.
-- 손글씨가 인쇄값 위에 덧쓰여 있으면 **손글씨를 우선**한다(선원이 고친 값이다).`;
+- 손글씨가 인쇄값 위에 덧쓰여 있으면 **손글씨를 우선**한다(검수원이 잰 값이다).`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,

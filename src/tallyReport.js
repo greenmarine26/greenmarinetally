@@ -209,7 +209,9 @@ export function buildRF(containers) {
       //   창고에 있는 컨은 자리가 없으니 빈칸이 맞다(배에 없는 자리를 서류에 적지 않는다).
       loc: (() => { const p = effectivePos(c); return [p.bay, p.row, p.tier].filter(Boolean).join('/'); })(),
       setting: t(c.rfSet) || t(c.tmp),
-      actual: t(c.rfAct),
+      //  3.25: 「세팅온도 채우기」로 **베낀 값**(rfSrc:'list')은 잰 값이 아니다 — 서류의 Actual 로 안 나간다.
+      //    안 그러면 선사로 가는 RF condition report 에 «재지도 않은 실측»이 찍힌다(감사 지적 2026-09-07).
+      actual: (c.rfSrc === 'list') ? '' : t(c.rfAct),
       op: String(c.op || '').toUpperCase(),
       fe: c.fe === 'E' ? 'E' : 'F',
       dg: !!c.dg,   // V9.21: 페리 RF REMARKS(DG) 표기용

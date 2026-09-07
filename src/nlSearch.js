@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel } from './utils.js';
+import { isoToLabel, reeferTempOf, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -1787,7 +1787,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
     const t = parseInt(c.tier, 10);
     if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
-    if (isReeferContainer(c) && c.fe !== 'E') { rf.push(c); if (!c.rfdry && !c.mkcon && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
+    if (isReeferContainer(c) && c.fe !== 'E') { rf.push(c); if (reeferTempOf(c).state === 'A') noTmp.push(c); }   // 3.25: 판정 한 벌(규범 §4-4)   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
     if (c.dg) dg.push(c);
     if (c._xray) xr.push(c);
     if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
@@ -1836,7 +1836,12 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   }
   // 1.86 (검수사 확정): rfSkip 배(머스크류 — 리퍼 다수)는 리퍼 주의 줄 자체를 생략 — «리퍼 체크를 하지 않습니다».
   if (rf.length && !opts?.rfSkip) {
-    const tail = noTmp.length ? ` · ⚠ 온도 미입력 ${noTmp.length}대 — 조회 시 온도 입력` : ' — 조회 시 온도 확인';
+    //  3.25: 상태 셋을 그대로 말한다 — «기준이 없다»와 «아직 안 쟀다»는 할 일이 다르다.
+    const _s = reeferTempSummary(rf);
+    const tail = _s.nNoBase ? ` · ⚠ 기준(세팅)온도 없음 ${_s.nNoBase}대 — 선사 리스트를 기다립니다`
+      : _s.nUnverified ? ` · ⚠ 실물온도 미확인 ${_s.nUnverified}대 — 재고 사진으로 올리십시오`
+      : _s.nGaps ? ` · ⚠ 세팅과 차이 ${_s.nGaps}대 (${_s.gaps.slice(0, 3).map(r => `${r.cn} ${r.set}→${r.act}`).join(' · ')})`
+      : ' — 온도 전부 확인됨';
     warns.push({ k: `리퍼 ${rf.length}`, line: `❄ 리퍼 ${rf.length}대 (${baysOf(rf)})${tail}` });
   }
   if (dg.length) {
@@ -3402,13 +3407,17 @@ export function generateHandover(allContainers, handoverInfo = {}) {
   // 3) 특이사항 — 데이터로 잡히는 것 (리퍼 온도 미입력, 위험물, XRAY 미처리 등)
   const special = [];
   const reefers = cs.filter(c => isReeferContainer(c) && !c._comp);
-  const reeferNoTmp = reefers.filter(c => !c.tmp && c.fe !== 'E' && !c.rfdry && !c.mkcon);
+  //  3.25: 인계에는 «기준 없음»과 «아직 안 잼»을 둘 다 적는다 — 다음 조가 무엇을 해야 하는지 다르다.
+  const _rfS = reeferTempSummary(reefers);
+  const reeferNoTmp = _rfS.noBase;
+  const reeferUnverified = _rfS.unverified;
   // 1.86 (검수사 확정 «머스크는 리퍼가 다수입니다. 그래서 리퍼 체크를 하지 않습니다»): rfSkip 배는 온도 경고 억제.
   //  🔴 2.40 수리 — 여기 `opts` 는 **이 함수에 없는 변수**였다(generateBriefing 의 인자를 복사해 온 흔적).
   //    옵셔널 체이닝이라도 **선언 자체가 없으면 ReferenceError** 다 — 즉 「인계 알려줘」를 물었을 때
   //    리퍼 온도 미입력이 1대라도 있으면 그 자리에서 앱이 터진다. babel 스코프 검사로 잡았다.
   //    이 함수의 인자는 handoverInfo 다. rfSkip 을 받을 자리를 그쪽으로 옮긴다.
-  if (reeferNoTmp.length && !handoverInfo?.rfSkip) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
+  if (reeferNoTmp.length && !handoverInfo?.rfSkip) special.push(`냉동 기준(세팅)온도 없음 ${reeferNoTmp.length}대 — 선사 리스트 대기`);
+  if (reeferUnverified.length && !handoverInfo?.rfSkip) special.push(`냉동 실물온도 미확인 ${reeferUnverified.length}대 — 재고 사진으로 올릴 것`);
   const dg = cs.filter(c => c.dg && !c._comp);
   if (dg.length) special.push(`위험물 ${dg.length}대 — 별도 취급`);
   const fr = cs.filter(c => (c.fr || c.ot) && !c._comp);
