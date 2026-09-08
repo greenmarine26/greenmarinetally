@@ -386,7 +386,33 @@ function generateVoucherHTML(voyage, mode = 'settlement', overrides = {}) {
     return `<tr class="total-row">${c.join('')}</tr>`;
   };
 
+  //  ★ 3.29 — **행이 늘어도 한 장을 지킨다**(검수사 확답 2026-09-08 «①행 수에 맞춰 글자를 줄여 한 장 유지»).
+  //    이 파일은 머리말에 «A4 풀 1페이지 강제» 라고 적어 놓고도 행 수를 정하는 축(선사 × 포트 × F/E)을
+  //    어디서도 안 봤다. 45행에 맞춰 **빈 칸을 채우는** 코드만 있고 45행을 **넘을 때** 무엇을 할지가 없었다.
+  //    실측 최대 조건(선사 10 · POD 5)이면 10×5×2 + Total 2 = **102행 = 414mm** 로 본문 가용 200mm 의 2.07배다.
+  //    선사 10 × 포트 3 만 돼도 62행(252mm)이라 Remarks·서명이 배 이름 없는 둘째 장으로 밀린다.
+  //  ⇒ 행 높이와 글자를 **행 수에서 거꾸로** 낸다. 종이에서 못 읽는 크기(4.5pt)까지 줄여도 안 들어가면
+  //    조용히 넘기지 않고 서류 아래에 그 사실을 한 줄로 밝힌다(규범 §4-3).
+  //  머리부를 하나씩 세어 둔다 — 감사(다른 클로드)가 «73mm» 를 실측으로 뒤집었다.
+  //    제목 25.6 + 부제 29.6 + 정보 두 줄 38.0 + thead 23.0 + 표 테두리 3.0 + Remarks 65.0 + 서명 36.5 = 220.7pt = 77.9mm.
+  //    (Malgun Gothic 의 win 지표 1.33 을 쓰면 81mm.) 그래서 가용은 200 이 아니라 **190mm** 로 잡는다(안전 5mm).
+  const PAGE_MM = 297 - 16 - 8;   // A4 − @page margin 0.8cm×2 − .content padding 4mm×2 = 273mm
+  const HEAD_MM = 78;             // 위 실측(반올림)
+  const BODY_MM = PAGE_MM - HEAD_MM - 5;   // = 190mm — 안전 5mm
+  const PT_MM = 25.4 / 72;        // 1pt = 0.3528mm
+  const _nRows = rows.length + 2;                                   // 본문 + Total 두 줄
+  //  ⚠ 하한은 **본문 6pt** 다 — 검수사 확정(inspectionList «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다» ·
+  //    «최소 크기가 넘어가면 2장이 되면 됩니다»). 6pt 본문이면 행 높이는 6 ÷ 0.78 ≈ 7.7pt 다.
+  //    그 아래로는 안 줄인다 — 못 읽는 한 장보다 읽히는 두 장이 낫다.
+  const MIN_ROW_PT = 7.7;
+  const rowPt = Math.max(MIN_ROW_PT, Math.min(11.5, (BODY_MM / Math.max(1, _nRows)) / PT_MM));
+  const bodyPt = Math.max(6.0, Math.round(rowPt * 0.78 * 10) / 10);  // 지금 비(9pt / 11.5pt)를 그대로
+  const thPt = Math.max(5.4, Math.round(bodyPt * 0.89 * 10) / 10);
+  const opPt = Math.max(6.6, Math.round(bodyPt * 1.11 * 10) / 10);
+  const tooTall = _nRows * rowPt * PT_MM > BODY_MM + 0.5;            // 하한(6pt)까지 줄여도 안 들어가는가 → 두 장
+
   // 빈 행 (A4 풀 채우기, OPERATOR 셀 rowspan — Total 침범 방지)
+  //   3.29: 행이 이미 많으면 채울 것이 없다(아래 max(0, …)가 0 을 낸다).
   const PAD_TARGET = 45;
   const needed = Math.max(0, PAD_TARGET - rows.length - 2);
   const emptyRows = [];
@@ -424,10 +450,10 @@ body { font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 0; fon
 .subtitle { text-align: center; font-size: 13pt; font-weight: bold; border: 1pt solid #000; padding: 3pt; margin-bottom: 6pt; }
 .info-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8pt; margin-bottom: 6pt; font-size: 10pt; }
 .info-row b { display: inline-block; min-width: 60pt; }
-table.voucher { width: 100%; border-collapse: collapse; font-size: 9pt; border: 1.5pt solid #000; }
-table.voucher th, table.voucher td { border: 0.5pt solid #000; text-align: center; padding: 0 2pt; height: 11.5pt; line-height: 1.05; }
-table.voucher th { background: #f0f0f0; font-weight: bold; font-size: 8pt; }
-.op-cell { font-weight: bold; vertical-align: middle; font-size: 10pt; }
+table.voucher { width: 100%; border-collapse: collapse; font-size: ${bodyPt}pt; border: 1.5pt solid #000; }
+table.voucher th, table.voucher td { border: 0.5pt solid #000; text-align: center; padding: 0 2pt; height: ${rowPt.toFixed(2)}pt; line-height: 1.05; }
+table.voucher th { background: #f0f0f0; font-weight: bold; font-size: ${thPt}pt; }
+.op-cell { font-weight: bold; vertical-align: middle; font-size: ${opPt}pt; }
 .port-cell { font-weight: bold; vertical-align: middle; }
 .fe-cell { font-weight: bold; }
 .total-row { font-weight: bold; background: #f8f8f8; }
@@ -442,6 +468,7 @@ table.voucher tr.total-row:first-of-type > td { border-top: 1.5pt solid #000; }
 .bottom-row > div { border: 1pt solid #000; min-height: 55pt; padding: 4pt; font-size: 9pt; }
 .bottom-row > div:nth-child(2) { border-left: none; }
 .bottom-single > div { border: 1pt solid #000; min-height: 55pt; padding: 4pt; font-size: 9pt; }
+.too-tall { font-size: 7pt; color: #b23a2a; margin-top: 3pt; }   /* 3.29: 한 장에 못 넣었으면 조용히 넘기지 않는다 */
 .signs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 20pt; }
 .signs > div { text-align: center; padding-top: 4pt; font-weight: bold; font-size: 10pt; border-top: 0.5pt solid #000; }
 </style></head><body><div class="content">
@@ -467,7 +494,7 @@ table.voucher tr.total-row:first-of-type > td { border-top: 1.5pt solid #000; }
 <th class="shift-first">20'</th><th>40'</th><th>HC</th><th>45'</th>
 </tr></thead>
 <tbody>${rows.join('')}${emptyRows.join('')}${totalRow('F', true)}${totalRow('E', false)}</tbody></table>
-${remarksHtml}
+${remarksHtml}${tooTall ? `<div class="too-tall">※ 선사 ${sortedOps.length}곳 · ${_nRows}줄 — 읽을 수 있는 가장 작은 글자(${bodyPt}pt)로도 한 장에 안 들어갑니다. 둘째 장이 이어집니다.</div>` : ''}
 <div class="signs"><div>CHIEF CHECKER</div><div>CHIEF OFFICER</div></div>
 </div></body></html>`;
 }

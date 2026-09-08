@@ -492,8 +492,28 @@ async function fillTemplate(D, ExcelJS) {
   if (get('timeSheet')) {
     const cfg = M.sheets.timeSheet;
     const ws = get('timeSheet');
+    //  ★ 3.29 — **Time Sheet 창도 고정이라 넘친 줄이 조용히 사라지던 것.**
+    //    창은 실측 28~33줄인데 `buildTimeSheet` 는 **해치 open/close 두 줄 × 해치 장수 + 작업상태 전이**라
+    //    36베이 배(짝 묶음 최대 18해치)면 36줄이 넘는다 — 작업 시각 기록 12줄 이상이 서류에서 없어졌다.
+    //  ⚠ **행을 늘리는 것은 이 판에서 안 한다.** 처음엔 Seal 시트처럼 `duplicateRow` 를 쓰려 했는데,
+    //    감사(다른 클로드)가 템플릿 17개를 열어 세어 **전부 C:H 병합이 있고 15/17 은 복제 대상 행 자체가
+    //    병합의 주인**임을 밝혔다. ExcelJS 의 `spliceRows` 는 워크시트 병합 등록부(`_merges`)를 안 옮기므로
+    //    내용만 내려가고 병합 사각형은 제자리에 남아 **서명 칸 한복판에 빈 병합 상자**가 생긴다.
+    //    바로 위 OS 본문(521행)이 «duplicateRow 는 REMARKS 병합 행을 파괴(실측)» 라고 이미 적어 둔 함정이다.
+    //    제대로 늘리려면 `insertRows` + 행별 스타일 보존 `mergeCells` 로 가고 **실물 엑셀을 만들어 열어**
+    //    확인해야 한다 — 그것은 별도 판이다(인계함).
+    //  ⇒ 이 판은 **한 줄도 안 사라지게** 만든다 — 창을 넘치면 REMARKS 와 같은 방식으로 마지막 칸에 이어 적고,
+    //    조용히 넘어가지 않게 로그로도 알린다(규범 §4-3).
+    const tCap = cfg.dataEnd - cfg.dataStart + 1;
+    const tAll = D.timeSheet || [];
+    const tRows = tAll.slice();
+    if (tRows.length > tCap) {
+      const tail = tRows.splice(tCap - 1);
+      tRows.push({ time: tail[0] && tail[0].time, remark: tail.map((x) => `${x.time || ''} ${x.remark || ''}`.trim()).filter(Boolean).join('  /  ') });
+      console.warn('[탤리] Time Sheet 창', tCap, '줄인데 기록이', tAll.length, '줄 — 마지막 칸에 이어 적었다(양식은 안 늘렸다)');
+    }
     for (let r = cfg.dataStart, i = 0; r <= cfg.dataEnd; r++, i++) {
-      const row = D.timeSheet[i];
+      const row = tRows[i];
       ws.getRow(r).getCell(2).value = row ? row.time : null;
       ws.getRow(r).getCell(3).value = row ? row.remark : null;
     }
@@ -553,11 +573,27 @@ async function fillTemplate(D, ExcelJS) {
     tr.getCell(8).value = man; tr.getCell(10).value = wk;
     tr.getCell(11).value = 'NIL'; tr.getCell(12).value = (man - wk) ? (man - wk) : 'NIL';
     if (cfg.remarksRow > 0) {
+      //  ★ 3.29 — **REMARKS 창이 고정이라 넘친 줄이 아무 표시 없이 사라지던 것.**
+      //    이 파일의 Final Work(위)·Seal·OS 본문은 넘치면 duplicateRow/insertRows 로 양식을 늘리는데
+      //    여기만 «창 크기만큼» 돌았다. 창은 실측 8~9줄이고 remarks 는 **선사 1종당 1줄**이라
+      //    선사 10종이면 두 선사분 규격 요약이 통째로 빠진 서류가 나갔다(2026-09-08 실측).
+      //    ⚠ 여기서 행을 늘리지 않는 이유 — 바로 위 513행 주석대로 이 자리는 **병합 행**이라
+      //      duplicateRow 가 그것을 부순다(실측). 그래서 넘친 줄은 **마지막 칸에 이어 붙인다.**
+      //      한 줄도 사라지지 않고 양식도 안 깨진다.
+      const rCap = Math.max(1, cfg.remarksEnd - cfg.remarksRow);
+      const rLines = (os.remarks || []).slice();
+      if (rLines.length > rCap) {
+        const tail = rLines.splice(rCap - 1);       // 마지막 칸부터는 한 칸에 모아 적는다
+        rLines.push(tail.join('  /  '));
+      }
       for (let r = cfg.remarksRow + ins + 1, i = 0; r <= cfg.remarksEnd + ins; r++, i++) {
-        const line = os.remarks[i] || '';
+        const line = rLines[i] || '';
         const m = line.indexOf(':');
         ws.getRow(r).getCell(1).value = line ? line.slice(0, m + 1) : null;
-        ws.getRow(r).getCell(2).value = line ? line.slice(m + 1).trim() : null;
+        const c2 = ws.getRow(r).getCell(2);
+        c2.value = line ? line.slice(m + 1).trim() : null;
+        //  이어 붙인 칸은 길어질 수 있다 — 줄바꿈을 허용해 종이에서 잘리지 않게 한다(자료는 어차피 파일에 남는다).
+        if (line.length > 40) c2.alignment = { ...(c2.alignment || {}), wrapText: true, vertical: 'top' };
       }
     }
   }

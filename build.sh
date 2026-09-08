@@ -252,11 +252,11 @@ echo "✓ 루트 참조 파일 존재 확인: $REFJS, $REFCSS"
 # V9.23-06: 렌더 연막검사 — 실제로 한 번 그려 본다.
 #   빌드 성공·번들 grep 통과에도 앱이 죽은 사고(hidden→issues TDZ)를 겪었다.
 echo "[+] 렌더 연막검사 (BayGridEditor)..."
-SMOKE_OUT=$(mktemp /tmp/_smoke_XXXXXX.js)   # V9.24: 고정 경로가 타 세션 잔재(권한 다른 uid)와 충돌해 검사가 통째로 건너뛰어졌다
+SMOKE_OUT=$(mktemp /dev/shm/hometmp/_smoke_XXXXXX.js)   # V9.24: 고정 경로가 타 세션 잔재(권한 다른 uid)와 충돌해 검사가 통째로 건너뛰어졌다
 if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
      --outfile="$SMOKE_OUT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
   node tools/smoke_render.cjs "$SMOKE_OUT" || { echo "✗ 렌더 연막검사 실패 — 배포 금지"; exit 1; }
-  SMOKE_BP=$(mktemp /tmp/_smokebp_XXXXXX.js)
+  SMOKE_BP=$(mktemp /dev/shm/hometmp/_smokebp_XXXXXX.js)
   if npx esbuild tools/smoke_bayplan.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
        --outfile="$SMOKE_BP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_bayplan.cjs "$SMOKE_BP" || { echo "✗ BayPlan 연막검사 실패 — 배포 금지"; exit 1; }
@@ -264,7 +264,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     echo "✗ BayPlan 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 3.2: 선적 플랜 목적지(POD)별 무늬 — 실데이터 두 항차(ATPR 2640W 전체선적·MCSC 633N 일부선적)로 세 화면을 그려 무늬 배정·제외 규칙을 센다.
-  SMOKE_HL=$(mktemp /tmp/_smokehl_XXXXXX.js)
+  SMOKE_HL=$(mktemp /dev/shm/hometmp/_smokehl_XXXXXX.js)
   if npx esbuild tools/smoke_podpat.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
        --outfile="$SMOKE_HL" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_podpat.cjs "$SMOKE_HL" || { echo "✗ 목적지색 연막검사 실패 — 배포 금지"; exit 1; }
@@ -274,7 +274,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.
-  SMOKE_LT=$(mktemp /tmp/_smokelt_XXXXXX.js)
+  SMOKE_LT=$(mktemp /dev/shm/hometmp/_smokelt_XXXXXX.js)
   #  ⚠ 2.46 — X-RAY 와 **같은 병**이 여기서도 조용히 돌고 있었다.
   #    inspectionList → tallyExcel 로 이어지는 경로에 Node 전용 `await import('fs')` 가 있어
   #    esbuild 번들이 «Could not resolve fs» 로 깨졌고, 이 자리는 그걸 «건너뜀» 으로 삼켰다.
@@ -301,7 +301,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   " || { echo "✗ 미르 EDI 안내 검사 실패 — 배포 금지"; exit 1; }
   # 2.26: X-RAY 탭 연막검사 — 조인이 넷(xrayList·EDI·xraySeals·completed)이라 그려 봐야 안다.
   #   정렬(베이별순+우선양하순)·화물구분 4종·«미입력» 표시가 살아 있는지 본다.
-  SMOKE_XR=$(mktemp /tmp/_smokexr_XXXXXX.js)
+  SMOKE_XR=$(mktemp /dev/shm/hometmp/_smokexr_XXXXXX.js)
   #  ⚠ --external:fs — inspectionList 가 2.41 부터 tallyExcel(ExcelJS) 을 동적 import 하는데
   #    그 안에 Node 전용 `await import('fs')` 가 있다(템플릿 읽기용, 브라우저에서는 안 탄다).
   #    브라우저 빌드(vite)는 갈라 내지만 esbuild 연막 번들은 못 갈라 «Could not resolve fs» 로 깨진다.
@@ -316,7 +316,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   fi
   # 2.40: 화면 밝기·소리 연막검사 — 색은 «빌드 통과»로 증명되지 않는다.
   #   변수가 안 걸리면 화면만 캄캄한 채로 빌드는 성공한다. 눌러서 실제로 갈리는지 본다.
-  SMOKE_BR=$(mktemp /tmp/_smokebr_XXXXXX.cjs)
+  SMOKE_BR=$(mktemp /dev/shm/hometmp/_smokebr_XXXXXX.cjs)
   if npx esbuild tools/smoke_bright_entry.js --bundle --platform=node --format=cjs \
        --outfile="$SMOKE_BR" --log-level=error; then
     BUILT_CSS=$(ls -t assets/index-*.css 2>/dev/null | head -1)
@@ -327,7 +327,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
   #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.
-  SMOKE_HP=$(mktemp /tmp/_smokehelp_XXXXXX.js)
+  SMOKE_HP=$(mktemp /dev/shm/hometmp/_smokehelp_XXXXXX.js)
   if npx esbuild tools/smoke_help.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
        --outfile="$SMOKE_HP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_help.cjs "$SMOKE_HP" || { echo "✗ 매뉴얼 연막검사 실패 — 배포 금지"; exit 1; }
@@ -371,7 +371,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   echo "   ✓ 빌드본 파비콘 = ./icon-192.png"
   # 2.22: 로그인 목록 연막검사 — «지금 로그인한 사람 ∪ 오늘의 본인» 규칙이 살아 있는지 본다.
   #   검수사가 두 번 교정한 규칙이라(2.12-01 → 2.22) 조용히 되돌아가면 매번 이름을 쳐야 한다.
-  SMOKE_LG=$(mktemp /tmp/_smokelg_XXXXXX.js)
+  SMOKE_LG=$(mktemp /dev/shm/hometmp/_smokelg_XXXXXX.js)
   if npx esbuild tools/smoke_login.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
        --outfile="$SMOKE_LG" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_login.cjs "$SMOKE_LG" || { echo "✗ 로그인 목록 연막검사 실패 — 배포 금지"; exit 1; }
@@ -396,7 +396,7 @@ node tools/smoke_hooks.cjs || { echo "✗ 훅 순서 검사 실패 — 배포 �
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.5-01: 작업 속도 페이스 — 몰아 입력에 속지 않는가(NSDC 2608N 선적 실완료 114대)
-SMOKE_PC=$(mktemp /tmp/_smokepace_XXXXXX.cjs)
+SMOKE_PC=$(mktemp /dev/shm/hometmp/_smokepace_XXXXXX.cjs)
 if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs \
      --external:firebase --external:firebase/* --outfile="$SMOKE_PC" --log-level=error; then
   node tools/smoke_pace.cjs "$SMOKE_PC" || { echo "✗ 작업 속도 페이스 연막검사 실패 — 배포 금지"; exit 1; }
@@ -405,7 +405,7 @@ else
 fi
 rm -f "$SMOKE_PC"
 # 3.5-01: 통계 탭 제목이 «시간당 몇천 대»를 못 찍는지 실제 DOM 으로
-SMOKE_PR=$(mktemp /tmp/_pacerender_XXXXXX.js)
+SMOKE_PR=$(mktemp /dev/shm/hometmp/_pacerender_XXXXXX.js)
 if npx esbuild tools/smoke_pacerender.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
      --outfile="$SMOKE_PR" --log-level=error; then
   node tools/smoke_pacerender.cjs "$SMOKE_PR" || { echo "✗ 페이스 화면 연막검사 실패 — 배포 금지"; exit 1; }
@@ -414,14 +414,14 @@ else
 fi
 rm -f "$SMOKE_PR"
 # 3.6: 컨번호 검산(ISO 6346) — 실번호 120개 + 화면
-SMOKE_IS=$(mktemp /tmp/_iso_XXXXXX.cjs)
+SMOKE_IS=$(mktemp /dev/shm/hometmp/_iso_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs \
      --external:firebase --external:firebase/* --outfile="$SMOKE_IS" --log-level=error; then
   node tools/smoke_isocheck.cjs "$SMOKE_IS" || { echo "✗ 컨번호 검산 연막검사 실패 — 배포 금지"; exit 1; }
 else
   echo "✗ 검산 번들 실패 — 배포 금지"; exit 1
 fi
-SMOKE_IR=$(mktemp /tmp/_isor_XXXXXX.js)
+SMOKE_IR=$(mktemp /dev/shm/hometmp/_isor_XXXXXX.js)
 if npx esbuild tools/smoke_isorender.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
      --outfile="$SMOKE_IR" --log-level=error; then
   node tools/smoke_isorender.cjs "$SMOKE_IR" || { echo "✗ 검산 화면 연막검사 실패 — 배포 금지"; exit 1; }
@@ -430,7 +430,7 @@ else
 fi
 rm -f "$SMOKE_IR"
 # 3.6-02: PDF 표 머리글을 항구로 삼지 않는가
-SMOKE_PP=$(mktemp /tmp/_pdfport_XXXXXX.cjs)
+SMOKE_PP=$(mktemp /dev/shm/hometmp/_pdfport_XXXXXX.cjs)
 if npx esbuild src/mixerUpload.js --bundle --platform=node --format=cjs \
      --external:firebase --external:firebase/* --outfile="$SMOKE_PP" --log-level=error; then
   node tools/smoke_pdfport.cjs "$SMOKE_PP" || { echo "✗ PDF 항구 연막검사 실패 — 배포 금지"; exit 1; }
@@ -442,7 +442,7 @@ rm -f "$SMOKE_PP"
 node tools/smoke_special.cjs "$SMOKE_IS" || { echo "✗ 특수화물 연막검사 실패 — 배포 금지"; exit 1; }
 rm -f "$SMOKE_IS"
 # 3.8-01: 휴지통에 있는 배가 어떤 저장 경로로도 보관소에 되살아나지 않는가(firebase 는 메모리 스텁 — 실제 쓰기 없음)
-SMOKE_BT=$(mktemp /tmp/_bt_XXXXXX.cjs)
+SMOKE_BT=$(mktemp /dev/shm/hometmp/_bt_XXXXXX.cjs)
 if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_BT" --log-level=error; then
   node tools/smoke_baytrash.cjs "$SMOKE_BT" || { echo "✗ 베이사전 휴지통 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BT"; exit 1; }
   rm -f "$SMOKE_BT"
@@ -450,14 +450,14 @@ else
   echo "✗ 베이사전 휴지통 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BT"; exit 1
 fi
 # 3.7-08: 터미널 앱(CATOS) 실제 자리가 실적으로 얹히는가 · 3.9: X-RAY 봉인자(터미널 표기 금지·조 등록 근무자·없으면 빈칸)
-SMOKE_CP=$(mktemp /tmp/_cp_XXXXXX.cjs)
+SMOKE_CP=$(mktemp /dev/shm/hometmp/_cp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
   node tools/smoke_catospos.cjs "$SMOKE_CP" || { echo "✗ CATOS 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_craneboard.cjs "$SMOKE_CP" || { echo "✗ 작업 보드 호기별 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.10
   node tools/smoke_ptk.cjs "$SMOKE_CP" || { echo "✗ 평택 선적분 판정·규격 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.14
   node tools/smoke_bookingfill.cjs "$SMOKE_CP" || { echo "✗ 부킹 자리·실번호 중복 계산 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.26
-  SMOKE_HK=$(mktemp /tmp/_hk_XXXXXX.cjs)   # 3.15: 해치 한 벌(cargoPlanCore.hatchEvenOf) — 기준표를 «그리는 장»에서 뽑는다
+  SMOKE_HK=$(mktemp /dev/shm/hometmp/_hk_XXXXXX.cjs)   # 3.15: 해치 한 벌(cargoPlanCore.hatchEvenOf) — 기준표를 «그리는 장»에서 뽑는다
   npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_HK" --log-level=error \
     || { echo "✗ 해치 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }
   node tools/smoke_boardbays.cjs "$SMOKE_CP" "$SMOKE_HK" || { echo "✗ 동방 지금 작업 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 3.15
@@ -468,7 +468,7 @@ else
   echo "✗ CATOS 자리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
 fi
 # 3.7-07: 리스트 파서가 ISO 전용 열·F/E·무게를 읽는가 (머스크 StandardLoadList)
-SMOKE_LP=$(mktemp /tmp/_lp_XXXXXX.cjs)
+SMOKE_LP=$(mktemp /dev/shm/hometmp/_lp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_LP" --log-level=error; then
   node tools/smoke_listparse.cjs "$SMOKE_LP" || { echo "✗ 리스트 파서 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LP"; exit 1; }
   rm -f "$SMOKE_LP"
@@ -476,15 +476,17 @@ else
   echo "✗ 리스트 파서 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1
 fi
 # 3.7-05: 별첨이 최대 발생조건(선사·포트·특수화물 많음)에서도 안 넘치는가
-SMOKE_LF=$(mktemp /tmp/_lf_XXXXXX.cjs)
+SMOKE_LF=$(mktemp /dev/shm/hometmp/_lf_XXXXXX.cjs)
 if npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_LF" --log-level=error; then
   node tools/smoke_legendfit.cjs "$SMOKE_LF" || { echo "✗ 별첨 맞춤 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LF"; exit 1; }
   rm -f "$SMOKE_LF"
+# 3.29: 종이로 나가는 서류가 «조용히» 잘리지 않는가 (WORKING REPORT 한 장 · 탤리 엑셀 창 · 검수 리스트 단)
+node tools/smoke_docfit.cjs || { echo "✗ 서류 맞춤 연막검사 실패 — 배포 금지"; exit 1; }
 else
   echo "✗ 별첨 맞춤 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LF"; exit 1
 fi
 # 3.7-04: 업데이트 새로고침에 로그인이 살아남는가(검수사 «업데이트 마다 자동 로그아웃»)
-SMOKE_UR=$(mktemp /tmp/_ur_XXXXXX.cjs)
+SMOKE_UR=$(mktemp /dev/shm/hometmp/_ur_XXXXXX.cjs)
 if npx esbuild src/updateResume.js --bundle --platform=node --format=cjs --outfile="$SMOKE_UR" --log-level=error; then
   node tools/smoke_updatelogin.cjs "$SMOKE_UR" || { echo "✗ 업데이트 로그인 유지 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_UR"; exit 1; }
   rm -f "$SMOKE_UR"
@@ -493,7 +495,7 @@ else
 fi
 #  3.25: 리퍼 온도 판정 한 벌 — 세팅과 실측은 짝이라야 뜻이 있다(검수사 확정 2026-09-07).
 #    «리스트대로» 로 베낀 값이 실측으로 세지지 않는지를 여기서 막는다(2026-09-07 DXQD 19대 사고).
-SMOKE_RT=$(mktemp /tmp/_rt_XXXXXX.cjs)
+SMOKE_RT=$(mktemp /dev/shm/hometmp/_rt_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs \
      --external:firebase --external:firebase/* --external:xlsx --external:exceljs \
      --outfile="$SMOKE_RT" --log-level=error; then
@@ -511,7 +513,7 @@ node tools/smoke_markfont.cjs || { echo "✗ 카고플랜 글자(2.89-08) 연막
 node tools/smoke_list6.cjs || { echo "✗ 목록 기본 6개 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_scrolltop.cjs || { echo "✗ TOP 버튼 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_conepick.cjs || { echo "✗ 콘앱 선박 접기 연막검사 실패 — 배포 금지"; exit 1; }
-SMOKE_SL=$(mktemp /tmp/_smokesl_XXXXXX.js)
+SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
 #    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.
 #    2.80 사고의 재발 방지: 화면만 보고 «이론상 된다»로 넘기면 밀려난 계획 컨이 창고로 뜬다.
@@ -528,7 +530,7 @@ fi
 #  3.2-01: **끝4자리 중복** — NSDC 2608N 실데이터(0320 = 평택 FFAU4440320 vs 부산 SEGU2520320)로 SearchPanel 을 그려
 #    평택 것만 완료 카드가 되고, 완료 뒤 부산 것이 승격되지 않는지 실제로 쳐 본다(김성일 메모 09-03 «컨번호 중복적으로 문제»).
 #    firebase 는 tools/fb_stub_search.js(전수 스텁, tools/gen_fb_stub.py 가 만든다).
-SMOKE_D4=$(mktemp /tmp/_smoked4_XXXXXX.js)
+SMOKE_D4=$(mktemp /dev/shm/hometmp/_smoked4_XXXXXX.js)
 cp src/firebase.js "$SMOKE_D4.fbbak" && cp tools/fb_stub_search.js src/firebase.js
 if npx esbuild tools/smoke_dup4.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
      --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_D4"; then
@@ -540,7 +542,7 @@ else
   echo "✗ 끝4자리 중복 번들 실패 — 검사를 못 돌렸다(스텁에 이름이 빠졌으면 python3 tools/gen_fb_stub.py). 배포 금지"; rm -f "$SMOKE_D4"; exit 1
 fi
 #  3.3: **양하 «해상부터» 칩** — NSDC 2608N 10번 실데이터로 자동 가이드를 그려 칩을 누르고(확인 모달 → 저장 {seqRowFrom:sea}) 첫 카드가 바뀌는지 본다.
-SMOKE_RF=$(mktemp /tmp/_smokerf_XXXXXX.js)
+SMOKE_RF=$(mktemp /dev/shm/hometmp/_smokerf_XXXXXX.js)
 cp src/firebase.js "$SMOKE_RF.fbbak" && cp tools/fb_stub_search.js src/firebase.js
 if npx esbuild tools/smoke_rowfrom.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
      --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_RF"; then
@@ -554,7 +556,7 @@ fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).
-  SMOKE_ME=$(mktemp /tmp/_smokeme_XXXXXX.cjs)
+  SMOKE_ME=$(mktemp /dev/shm/hometmp/_smokeme_XXXXXX.cjs)
   if npx esbuild src/mirEyes.js --bundle --platform=node --format=cjs --outfile="$SMOKE_ME" --log-level=error; then
     node tools/smoke_mireyes.cjs "$SMOKE_ME" || { echo "✗ 미르의 눈 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.52-03: 무게 병합 — 리스트의 «빈칸/0» 이 EDI 무게를 지우면 안 된다(소스 직접 검사, 번들 불필요)
@@ -563,7 +565,7 @@ fi
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   #  2.54: **작업속도** — 앱 기록이 아니라 터미널 실적으로, 쉬는 시간을 빼고 재는가.
-  SMOKE_NS=$(mktemp /tmp/_smokens_XXXXXX.cjs); SMOKE_CA=$(mktemp /tmp/_smokeca_XXXXXX.cjs)
+  SMOKE_NS=$(mktemp /dev/shm/hometmp/_smokens_XXXXXX.cjs); SMOKE_CA=$(mktemp /dev/shm/hometmp/_smokeca_XXXXXX.cjs)
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
@@ -588,7 +590,7 @@ fi
       || { rm -f "$SMOKE_D8U" "$SMOKE_D8D"; echo "✗ 고려해운 클래스 8 홀드 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_D8U" "$SMOKE_D8D"
     #  3.5: **베이매트릭스 관리 화면** — 상태 칩·고르는 칸·휴지통·비고를 실제로 눌러 본다(실사전 표본 10척).
-    SMOKE_BM=$(mktemp /tmp/_smokebm_XXXXXX.js)
+    SMOKE_BM=$(mktemp /dev/shm/hometmp/_smokebm_XXXXXX.js)
     cp src/firebase.js "$SMOKE_BM.fbbak" && cp tools/fb_stub_search.js src/firebase.js
     if npx esbuild tools/smoke_baymatrix.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
          --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
@@ -601,7 +603,7 @@ fi
       echo "✗ 베이매트릭스 관리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BM"; exit 1
     fi
     #  3.10: **실시간 작업 보드 카드** — DJCT 실데이터로 한 척을 그려 «왼쪽 통계 · 오른쪽 호기별 작업 베이(1호기 BAY 20 · 2호기 BAY 4)»·포커스/닫기/항차 열기를 실제로 눌러 본다.
-    SMOKE_LB=$(mktemp /tmp/_smokelb_XXXXXX.js)
+    SMOKE_LB=$(mktemp /dev/shm/hometmp/_smokelb_XXXXXX.js)
     cp src/firebase.js "$SMOKE_LB.fbbak" && cp tools/fb_stub_search.js src/firebase.js
     if npx esbuild tools/smoke_liveboard.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
          --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
@@ -611,7 +613,7 @@ fi
       node tools/smoke_liveboard.cjs "$SMOKE_LB" || { echo "✗ 실시간 작업 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
       rm -f "$SMOKE_LB"
       #  3.15: **동방(PNCT) 보드 카드** — OBWH 2731E 실데이터로 «지금 작업 중인 베이» 칸과 그 베이 그림이 서는지 본다(호기 칸이 아니어야 한다).
-      SMOKE_LP=$(mktemp /tmp/_smokelp_XXXXXX.js)
+      SMOKE_LP=$(mktemp /dev/shm/hometmp/_smokelp_XXXXXX.js)
       cp src/firebase.js "$SMOKE_LP.fbbak" && cp tools/fb_stub_search.js src/firebase.js
       if npx esbuild tools/smoke_liveboard_pnct.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
            --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
@@ -688,7 +690,7 @@ fi
     npx esbuild src/components/WorkTimeline.jsx --bundle --platform=node --format=cjs --external:react --loader:.jsx=jsx --jsx=automatic --outfile="$SMOKE_TL" --log-level=error \
       && node tools/smoke_timeline.cjs "$SMOKE_TL" "$(pwd)" || { echo "✗ 타임라인 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.63-02: **PORT-MIS 매칭** — 자매선 앞5자 오매칭·낡은 자료 되살아남 금지.
-    SMOKE_PM=$(mktemp /tmp/_smokepm_XXXXXX.cjs)
+    SMOKE_PM=$(mktemp /dev/shm/hometmp/_smokepm_XXXXXX.cjs)
     npx esbuild src/portMisMatch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PM" --log-level=error \
       && node tools/smoke_portmis.cjs "$SMOKE_PM" "$(pwd)" || { echo "✗ PORT-MIS 매칭 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.62: **갱 배분** — 조 단위 «내 작업량»이 실데이터에서 서고 실시간으로 줄어드는가.
@@ -700,7 +702,7 @@ fi
     node tools/smoke_mirlearn.cjs "$SMOKE_NS" || { echo "✗ 미르 자체 학습 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
-    SMOKE_CW=$(mktemp /tmp/_smokecw_XXXXXX.cjs)
+    SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)
     npx esbuild tools/smoke_crew_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CW" --log-level=error \
       && node tools/smoke_crew.cjs "$SMOKE_CW" "$(pwd)" || { rm -f "$SMOKE_CW"; echo "✗ 호기–검수원 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.21: **선수·선미 → 호기** — 검수사 «처음에 호기를 이야기 안한 이유입니다». 그날 실적(DJCF·MCAP)으로
@@ -712,14 +714,14 @@ fi
     node tools/smoke_mirspeak.cjs "$SMOKE_NS" "$(pwd)" || { echo "✗ 미르 화법 시험 실패 — 배포 금지"; exit 1; }
     #  2.55-01: **타자** — 문자를 칠 때는 다 받고 답하는가. 숫자 즉답은 살아 있는가.
     #    소스도 같이 본다(옛 판정 잔재 · 인자 하나짜리 기록 호출 = 조용히 실패하던 자리).
-    SMOKE_UT=$(mktemp /tmp/_smokeut_XXXXXX.cjs)
+    SMOKE_UT=$(mktemp /dev/shm/hometmp/_smokeut_XXXXXX.cjs)
     if npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_UT" --log-level=error; then
       node tools/smoke_typing.cjs "$SMOKE_UT" "$(pwd)" || { echo "✗ 타자 연막검사 실패 — 배포 금지"; exit 1; }
     else
       echo "✗ 타자 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
     fi
     #  2.55-02: **베이 짝** — 한 홀수 베이가 두 트리오에 들어가지 않는가(SWTD 선미 31 중복).
-    SMOKE_CP=$(mktemp /tmp/_smokecp_XXXXXX.cjs)
+    SMOKE_CP=$(mktemp /dev/shm/hometmp/_smokecp_XXXXXX.cjs)
     if npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CP" --log-level=error; then
       node tools/smoke_baypair.cjs "$SMOKE_CP" "$(pwd)" || { echo "✗ 베이 짝 연막검사 실패 — 배포 금지"; exit 1; }
       #  2.56: **베이 격자 한 벌** — 실사전 39척 전 베이에서 buildBayGrid ≡ 카고플랜, 짝 한 벌, SWTD=CASP,
@@ -740,7 +742,7 @@ fi
   node tools/smoke_dupl4bay.cjs || { echo "✗ 끝4 중복 — 고른 베이 우선 검사 실패 — 배포 금지"; exit 1; }   # 3.23
   #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.
   #    ⚠ 「건너뜀」 분기를 만들지 않는다(§2-2-M) — 번들이 실패하면 그것도 배포 금지다.
-  SMOKE_RC=$(mktemp /tmp/_smokerc_XXXXXX.cjs)
+  SMOKE_RC=$(mktemp /dev/shm/hometmp/_smokerc_XXXXXX.cjs)
   if npx esbuild src/adminGuard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_RC" --log-level=error; then
     node tools/smoke_recovery.cjs "$SMOKE_RC" || { echo "✗ 복구 코드 연막검사 실패 — 배포 금지"; exit 1; }
   else

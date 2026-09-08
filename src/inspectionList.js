@@ -195,30 +195,38 @@ function renderRow(c, idx, opts) {
   </tr>`;
 }
 
-// 한 페이지 (좌 75 + 우 75 = 150대) HTML
-// M5.28: 페이지당 150대 명시 (좌 75 + 우 75)
-//   예: 155대 → 2페이지 (1페이지 150 + 2페이지 5)
-//   마지막 페이지에 5개만 있으면 좌 5 + 우 0 (좌측부터 순서대로 채움)
 const PER_COL = 75;
-const PER_PAGE = PER_COL * 2;  // 150
+//  3.29: PER_PAGE(150 고정)와 옛 renderPage(75/75 고정 자르기)는 걷어 냈다 —
+//    renderPage 는 3.28 에서도 호출부가 0 이었고, 남겨 두면 옛 규칙이 파일에 있는 채로
+//    «150 고정 자르기가 남지 않았다» 검사가 통과한다. 단 배분은 아래 packCols 한 벌이다.
 
-function renderPage(rows, pageNum, totalPages) {
-  const left = rows.slice(0, PER_COL);
-  const right = rows.slice(PER_COL);
-
-  const renderColumn = (rs) => `<table class="ilist">
-    <colgroup><col style="width:4%"><col style="width:20%"><col style="width:16%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:31%"><col style="width:12%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th><th>선사</th></tr></thead>
-    <tbody>${rs.join('')}</tbody>
-  </table>`;
-
-  return `<div class="ipage">
-    <div class="ihdr"><span>${pageNum}/${totalPages}</span></div>
-    <div class="icols">
-      <div class="icol">${renderColumn(left)}</div>
-      <div class="icol">${renderColumn(right)}</div>
-    </div>
-  </div>`;
-}
+//  ★ 3.29 — **«75행/단»은 비고가 한 줄일 때만 참이다.**
+//    비고 칸은 31%(≈31.1mm)인데 FR 은 최악 «FR L+120 W+80 H+150cm 12192×2438×2896mm 9/3480 PG2 ▲긴급 ◆시프팅»
+//    처럼 길어져 7pt 로 세 줄이 된다(행 3.4mm → 7.4mm). 특수화물 별첨은 **전 행이 특수화물**이라
+//    75행이 평균 두 줄 = 가용의 1.57배였다(2026-09-08 실측).
+//  ⇒ 단을 «행 수»가 아니라 **«차지하는 줄 수»**로 채운다. 한 줄도 안 자르고, 넘치면 페이지가 늘어난다.
+const _noteWeight = (rowHtml) => {
+  const tds = String(rowHtml).match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
+  const note = tds[6] || '';                                   // 7번째 칸이 비고
+  const txt = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim();
+  let w = 0; for (const ch of txt) w += ch.charCodeAt(0) > 0x2000 ? 2 : 1;   // 한글은 두 폭
+  return Math.max(1, Math.ceil(w / 25));                       // 31.1mm · 7pt 에서 한 줄 ≈ 25 폭단위
+};
+const packCols = (rows, perCol = PER_COL) => {
+  const cols = []; let cur = [], w = 0;
+  for (const r of rows) {
+    const L = _noteWeight(r);
+    if (w + L > perCol && cur.length) { cols.push(cur); cur = []; w = 0; }
+    cur.push(r); w += L;
+  }
+  if (cur.length) cols.push(cur);
+  return cols;
+};
+const packPages = (rows, perCol = PER_COL) => {
+  const cols = packCols(rows, perCol); const pages = [];
+  for (let i = 0; i < cols.length; i += 2) pages.push([cols[i], cols[i + 1] || []]);
+  return pages;
+};
 
 // 메인: 검수 리스트 HTML 생성
 export function generateInspectionListHTML(containers, mode, voyageInfo, shiftingList = []) {
@@ -242,12 +250,8 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   });
 
   // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
-  const allPages = [];
-  for (let i = 0; i < list.length; i += PER_PAGE) {
-    const chunk = list.slice(i, i + PER_PAGE);
-    const rows = chunk.map(c => renderRow(c, c._lineIdx));  // 전체 idx 대신 선사별 idx
-    allPages.push(rows);
-  }
+  //  3.29: 150 고정으로 자르지 않는다 — 비고가 긴 행이 자리를 더 먹으므로 «줄 수»로 채운다.
+  const allPages = packPages(list.map(c => renderRow(c, c._lineIdx)));   // 전체 idx 대신 선사별 idx
   // sheet1Pages는 아래 renderPageWithHdr로 계산 (헤더 포함)
 
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
@@ -277,9 +281,8 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
 
   // M5.29: 각 페이지 상단 헤더 (좌: 선박명 / 중: 항차 / 우: 날짜+페이지) — cover page 제거
   // 페이지 헤더 렌더링을 위해 renderPage에 정보 전달 필요 → 메인 함수에서 직접 조립
-  const renderPageWithHdr = (rows, pageNum, totalPages) => {
-    const left = rows.slice(0, 75);
-    const right = rows.slice(75);
+  const renderPageWithHdr = (pair, pageNum, totalPages) => {
+    const [left, right] = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL)];
     const col = (rs) => `<table class="ilist">
       <colgroup><col style="width:4%"><col style="width:20%"><col style="width:16%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:31%"><col style="width:12%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th><th>선사</th></tr></thead>
       <tbody>${rs.join('')}</tbody>
@@ -301,12 +304,8 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
 
   // 시트2 페이지도 헤더 포함 (전체 페이지 수는 시트1+시트2 합산하여 표기 가능하나, 별첨이라 별도 카운트)
   if (sheet2Html) {
-    const sheet2PagesList = [];
-    for (let i = 0; i < special.length; i += PER_PAGE) {
-      const chunk = special.slice(i, i + PER_PAGE);
-      const rows = chunk.map((c, j) => renderRow(c, i + j + 1, { noFlag: true }));   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
-      sheet2PagesList.push(rows);
-    }
+    //  3.29: 별첨은 **전 행이 특수화물**이라 비고가 길다 — 여기가 넘침이 가장 컸다.
+    const sheet2PagesList = packPages(special.map((c, j) => renderRow(c, j + 1, { noFlag: true })));   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
     sheet2Html = `<div class="ititle">[별첨] 특수화물·X-RAY (${special.length}대)</div>` +
       sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length)).join('');
   }
