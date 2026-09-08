@@ -46,6 +46,15 @@ const fsx = rule('.bv-fsx');
 const tR = num(top, 'right'); const tW = num(top, 'width'); const tB = num(top, 'bottom');
 const xL = num(fsx, 'left'); const xW = num(fsx, 'width'); const xB = num(fsx, 'bottom');
 const mq = (H.match(/@media \(max-width:420px\)\{(?:[^{}]|\{[^}]*\})*\}/) || [''])[0];   // 블록 전체(안에 규칙이 여럿일 수 있다)
+//  ★ 2.41-01 — **순서가 곧 승자다.** 미디어 쿼리도 덮어쓰기 규칙도 힘을 안 더하므로 기본 규칙 **뒤**에
+//    있어야 이긴다. 2.41 은 둘 다 앞에 두어 라이브에서 아무 일도 안 일어났다 — 그것을 여기서 잰다.
+const idxBase = H.search(/\.bv-top\{position:fixed/);
+const idxMq = H.search(/@media \(max-width:420px\)\{ ?\.bv-top/);
+const lastRule = (prop) => {
+  let last = null;
+  for (const m of H.matchAll(/\.bv-top\{[^}]*\}/g)) if (m[0].includes(prop)) last = m[0];
+  return last || '';
+};
 const tB2 = num(mq, 'bottom');
 for (const SW of [360, 320]) {
   const t1 = SW - tR - tW; const t2 = SW - tR;
@@ -55,9 +64,13 @@ for (const SW of [360, 320]) {
   ok(!yOver, `${SW}px 화면에서 TOP 을 위로 올려(bottom ${tB2}) 닫기(bottom ${xB} 높이 44)와 안 겹친다`);
 }
 ok(tB2 != null && tB2 > tB, `좁은 화면 규칙이 TOP 을 올린다 — 기본 ${tB}px → ${tB2}px`);
+ok(idxBase >= 0 && idxMq > idxBase, '좁은 화면 규칙이 기본 규칙 **뒤**에 있다 — 앞에 두면 뒤의 bottom 이 이겨 아무 일도 안 일어난다');
+ok(/z-index/.test(lastRule('z-index')) && lastRule('z-index').includes('position:fixed'),
+  'z-index 를 마지막에 정하는 것이 기본 규칙이다 — 앞에 따로 덮어쓰면 죽는다(2.41 이 그랬다)');
 ok(!/\.bv-fsx|\.mir-fab/.test(mq), '좁은 화면 규칙이 좌하단 줄·미르를 안 건드린다 — 검수사가 «언제든 쓸수 있어야 한다»고 정한 자리다');
 //  전체화면에서 TOP 이 패널 밑에 깔려 있던 것(감사 실측 — z-index 40 < .bv-fs 60)
-const zTop = (() => { const m = (H.match(/\.bv-top\{\s*z-index\s*:\s*(\d+)/) || [])[1]; return m ? +m : (parseInt((top.match(/z-index:\s*(\d+)/) || [])[1] || '0', 10)); })();
+//  **마지막에 값을 정하는 규칙**을 본다 — 앞에 덮어써 봐야 뒤가 이긴다.
+const zTop = parseInt((lastRule('z-index').match(/z-index\s*:\s*(\d+)/) || [])[1] || '0', 10);
 const zFs = num(rule('.bv-fs'), 'z-index') || parseInt((rule('.bv-fs').match(/z-index:\s*(\d+)/) || [])[1] || '0', 10);
 ok(zTop > zFs, `전체화면에서도 TOP 이 보인다 — TOP z ${zTop} > 전체화면 판 z ${zFs}`);
 ok(!/display\s*:\s*none/.test(mq), '좁은 화면 규칙이 아무것도 숨기지 않는다 — 가리는 것이 문제였지 있는 것이 문제가 아니었다');
@@ -78,7 +91,7 @@ ok(/window\.ConeParse = \{[^}]*normPortCode/.test(entry), '번들이 normPortCod
 ok(/import \{[^}]*normPortCode[^}]*\} from '\.\/utils\.js'/.test(entry), '그 함수를 utils 에서 가져온다(사본을 만들지 않는다)');
 
 //  ⑤ 판 올림
-ok(/__CONEV='ConeOne 2\.41'/.test(H), '콘앱 판이 2.41 이다 — 화면 갱신 감지 기준');
+ok(/__CONEV='ConeOne 2\.41-01'/.test(H), '콘앱 판이 2.41-01 이다 — 화면 갱신 감지 기준');
 
 console.log(fail ? `✗ ${fail}항 실패` : '✓ 전부 통과');
 process.exit(fail ? 1 : 0);
