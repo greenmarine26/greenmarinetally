@@ -11,21 +11,22 @@ let bad = 0; const T = (ok, why) => { console.log((ok ? '  ✓ ' : '  ✗ ') + w
 const blk = html.match(/let stripRow='';\n[\s\S]*?if\(lines\.length\) stripRow = [^\n]*\n\s*\}/);
 const tn  = html.match(/function ctTierName\(tier, ?t1\)\{[\s\S]*?\n\}\n/);
 const pr  = html.match(/^function ctPair\(b\)\{[^\n]*\n/m);
+const pos = html.match(/function ctPosOf\(mode, cn, p\)\{[\s\S]*?\n\}\n/);   // 2.44: 자리 판정 한 벌 — 그림 블록이 이것을 부른다
 const skel = html.match(/function bvRowPositions\(cellCount, hasZero\)\{[\s\S]*?\n\}\n/);
 const bay = html.match(/function bvBaySkeleton\(bs\)\{[\s\S]*?\n\}\n/);
-T(!!blk && !!skel && !!bay && !!tn && !!pr, '그림 블록·골격·단이름·짝 함수를 소스에서 그대로 꺼냈다(베껴 적지 않는다)');
-if (!blk || !skel || !bay || !tn || !pr) { console.log('✗ 홀드 그림 연막검사 실패'); process.exit(1); }
+T(!!blk && !!skel && !!bay && !!tn && !!pr && !!pos, '그림 블록·골격·단이름·짝·자리 함수를 소스에서 그대로 꺼냈다(베껴 적지 않는다)');
+if (!blk || !skel || !bay || !tn || !pr || !pos) { console.log('✗ 홀드 그림 연막검사 실패'); process.exit(1); }
 
 const mkState = (withDict) => ({ _bayDictBays: withDict ? new Map([[22, FX.bs]]) : new Map() });
-const run = (c, withDict = true) => {
+const run = (c, withDict = true, rec = {}) => {
   const sb = { console,
     state: mkState(withDict),
     ctPlanRows: () => FX.rows,
-    CT: { rec: {}, tw: {}, comp: { discharge: FX.completed } },
+    CT: { rec: { discharge: rec, loading: {} }, tw: {}, comp: { discharge: FX.completed } },
     ctPos: () => null,
     ctEsc: (s) => String(s == null ? '' : s), c };
   const ctx = vm.createContext(sb);
-  vm.runInContext(skel[0] + '\n' + bay[0] + '\n' + tn[0] + '\n' + pr[0] + '\n' + blk[0] + '\n;globalThis.__out = stripRow;', ctx);
+  vm.runInContext(skel[0] + '\n' + bay[0] + '\n' + tn[0] + '\n' + pr[0] + '\n' + pos[0] + '\n' + blk[0] + '\n;globalThis.__out = stripRow;', ctx);
   return ctx.__out || '';
 };
 const labsOf = (h) => (h.match(/>(\d단\(\d\d\)|H\d단\(\d\d\))</g) || []).map(x => x.slice(1, -1));
@@ -97,6 +98,26 @@ console.log('\n[8] **골격에 없는 열의 컨도 반드시 그린다** — �
   }
   T(mismatch === 0, `분모와 그린 칸이 모든 줄에서 같다(어긋난 줄 ${mismatch})`);
   T(h.includes('ZZZU0000001') && h.includes('ZZZU0000002'), '골격 밖 열에 실린 컨이 화면에서 사라지지 않는다');
+}
+
+//  ★ ConeOne 2.44 — **이 그림도 «정해 준 자리»를 따라야 한다.**
+//    검수앱은 제 자리를 뺏긴 계획 컨을 비운 자리로 옮겨(`applyAutoSwap` → `bay_assign`) 겹침을 0 으로 만든다.
+//    콘앱은 그 판정을 `ctPosOf` 한 벌로 받는데, **부르고 나서 값을 계획으로 되돌리면** 소스 훑기 검사는 다 통과하고
+//    이 그림만 옛날로 돌아간다(감사 실측 N3). 그래서 여기서 **실제로 그려** 칸이 옮겨졌는지 본다.
+console.log('\n[9] 정해 준 자리(맞교환)를 따라 그린다 — ConeOne 2.44');
+{
+  const seed = (FX.rows || []).find(r => parseInt(r.bay, 10) === 22 && parseInt(r.tier, 10) >= 80);
+  T(!!seed, '옮겨 볼 컨을 픽스처에서 골랐다' + (seed ? ` (${seed.cn} 베이 ${seed.bay}-${seed.row}-${seed.tier})` : ''));
+  if (seed) {
+    const rec = { [seed.cn]: { cn: seed.cn, bay_assign: '23', row_assign: seed.row, tier_assign: seed.tier, assign_by: 'auto', _assign_src: 'autoswap' } };
+    const h = run({ mode: 'discharge', tier: parseInt(seed.tier, 10), bay: 22, pair: 22, t1: 82, stale: false }, true, rec);
+    const title = (h.match(new RegExp('title="' + seed.cn + ' · 베이 (\\d+)')) || [])[1];
+    T(title === '23', `그 컨이 정해 준 자리(베이 23)에 그려진다 (그린 자리 베이 ${title || '없음'})`);
+    //  짝 소속도 정해 준 자리를 따른다 — 다른 짝(21번, 짝 20)으로 옮겨졌으면 이 그림(짝 22)에 나오면 안 된다.
+    const rec2 = { [seed.cn]: { cn: seed.cn, bay_assign: '21', row_assign: seed.row, tier_assign: seed.tier, assign_by: 'auto', _assign_src: 'autoswap' } };
+    const h2 = run({ mode: 'discharge', tier: parseInt(seed.tier, 10), bay: 22, pair: 22, t1: 82, stale: false }, true, rec2);
+    T(!h2.includes('title="' + seed.cn + ' ·'), '다른 짝으로 옮겨진 컨은 이 짝 그림에 안 나온다');
+  }
 }
 
 console.log(bad ? `\n✗ 홀드 그림 연막검사 실패 ${bad}건` : '\n✓ 홀드 그림 연막검사 통과');

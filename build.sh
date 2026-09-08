@@ -463,6 +463,7 @@ fi
 SMOKE_CP=$(mktemp /dev/shm/hometmp/_cp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
   node tools/smoke_catospos.cjs "$SMOKE_CP" || { echo "✗ CATOS 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
+  node tools/smoke_conepos.cjs "$SMOKE_CP" || { echo "✗ 콘앱 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # ConeOne 2.44: 콘앱 자리 = 검수앱 자리
   node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_craneboard.cjs "$SMOKE_CP" || { echo "✗ 작업 보드 호기별 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.10
   node tools/smoke_ptk.cjs "$SMOKE_CP" || { echo "✗ 평택 선적분 판정·규격 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.14

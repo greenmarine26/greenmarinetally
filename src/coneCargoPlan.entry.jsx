@@ -4,7 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
-import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode } from './utils.js';   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
+import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode, applyCatosPos, applyAutoSwap } from './utils.js';   // ConeOne 2.44: 자리 판정도 한 벌   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
@@ -57,7 +57,13 @@ window.ConeCargoPlan = { open, close };
 //   1.9 때 파서·평택판정을 합치면서 **시프팅만 빠뜨렸다** — 같은 처방을 여기에도 적용한다.
 // TallyOne 2.89 — **맞교환(swapFix)도 같이 내보낸다.** 검수앱이 두 컨 자리 기록을 맞바꾸면
 //   콘앱 시프팅도 같은 겹침을 봐야 한다 — 안 그러면 «콘앱 66 · 검수앱 95»(2.5 사고)가 재발한다.
-window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList };   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
+// ★ ConeOne 2.44 (검수사 2026-09-09 «검수앱은 빈칸없이 선적이 되는데 콘앱은 실시간 저장이 계획된 컨으로 지정 되는것 같습니다») —
+//   **자리 판정도 같이 내보낸다.** 검수앱은 구독 콜백에서 `applyCatosPos`(터미널 자리) 다음에 `applyAutoSwap`(3.13 —
+//   밀려난 계획 컨을 비운 자리로 맞교환)을 돌려 «검은곳이나 흰곳» 과 겹침을 0 으로 만든다(검수사 확정 2026-09-06).
+//   콘앱은 보관소를 따로 읽는 독립 화면이라 그 덧칠을 못 받아 **계획 자리에 그대로** 그렸다 —
+//   실측 STSE 2669E 선적(계획 426·실적 295) — 콘앱만 59대가 검수앱과 다른 칸이었고 그 59대가 그대로 겹침 59칸이었다(20번 30 · 16번 15 · 24번 9 · 4번 5).
+//   1.9(파서·평택판정)·2.23(시프팅)과 같은 처방이다 — 판정 두 벌 금지(규범 §4-4).
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap };   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.
 window.ConeShipPolicy = { isLolo: isLoloShipByPolicy };
