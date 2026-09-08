@@ -399,6 +399,8 @@ node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검
 node tools/smoke_opalias.cjs || { echo "✗ 마감텔리 선사·규격 칸 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.32: 리퍼 온도 사진 판독 — 양식 비의존·여러 장·판독 검산
 node tools/smoke_reeferphoto.cjs || { echo "✗ 리퍼 사진 판독 연막검사 실패 — 배포 금지"; exit 1; }
+# 2.41: 콘앱 베이뷰 — 컨번호 잘림·단추 겹침·진입 배율·항구 코드 한 벌
+node tools/smoke_conebayfit.cjs || { echo "✗ 콘앱 베이뷰 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.5-01: 작업 속도 페이스 — 몰아 입력에 속지 않는가(NSDC 2608N 선적 실완료 114대)
 SMOKE_PC=$(mktemp /dev/shm/hometmp/_smokepace_XXXXXX.cjs)
 if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs \

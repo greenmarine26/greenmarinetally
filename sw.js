@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.32';
-const NOTE = '리퍼 온도 사진을 여러 장 한 번에 읽습니다. 세팅온도가 자료와 다르면 그 줄에 알려 줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.32-01';
+const NOTE = '콘앱 베이뷰 — 컨번호 끝 4자리가 안 잘리고, 화면에 맞춰 열리고, TOP 단추가 늘 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
