@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.26';
-const NOTE = '예상EDI 컨자리와 컨넘버 중복계산 수리 — 목록·별첨·검증이 한 번만 셉니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.33';
+const NOTE = '콘앱 카고플랜이 낮은 베이부터 높은 베이로 — 검수앱과 반대 방향으로 섭니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

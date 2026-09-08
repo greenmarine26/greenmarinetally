@@ -268,6 +268,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild tools/smoke_podpat.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
        --outfile="$SMOKE_HL" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_podpat.cjs "$SMOKE_HL" || { echo "✗ 목적지색 연막검사 실패 — 배포 금지"; exit 1; }
+  # 3.33: 콘앱 카고플랜 베이 차례 뒤집기 — 같은 번들을 실렌더해 BAY 차례를 읽는다
+  node tools/smoke_coneflip.cjs "$SMOKE_HL" || { echo "✗ 콘앱 카고플랜 뒤집기 연막검사 실패 — 배포 금지"; exit 1; }
   else
     echo "✗ 목적지색 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi

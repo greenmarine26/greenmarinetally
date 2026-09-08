@@ -28,7 +28,12 @@ function open(props) {
   document.body.appendChild(_host);
   _root = createRoot(_host);
   _root.render(
-    <PrintableCargoPlanV2 {...props} onClose={close} />
+    //  ★ 3.33 — 콘앱 카고플랜은 **줄을 통째로 뒤집어** 낮은 베이부터 높은 베이로 간다(선수가 왼쪽).
+    //    검수사 확정 2026-09-08 «콘앱은 검수 카고플랜을 뒤집은 형태» · «우측으로» · «낮은베이부터 높은베이로».
+    //    검수앱은 `cargoPlanCore.autoPageLayout` 이 «큰 번호 좌측»(도면 규칙)이라 그 반대다.
+    //    ⚠ `flipBays` 를 앞에 두고 props 를 뒤에 편다 — 콘앱이 넘기는 8개 키에 `flipBays` 가 없으므로
+    //      지금은 언제나 켜진다. 훗날 호출부가 그 키를 넣으면 호출부가 이긴다(끄고 싶을 때의 문이다).
+    <PrintableCargoPlanV2 flipBays {...props} onClose={close} />
   );
 }
 

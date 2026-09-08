@@ -743,6 +743,21 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
 export default function PrintableCargoPlanV2({
+  /*  ★ 3.33 — **콘앱 카고플랜은 줄을 통째로 거울에 비춘다 — 선수가 왼쪽으로 간다.**
+      검수사 확정 2026-09-08 — «콘앱의 카고플랜을 뒤집어 주세요» · «검수앱의 카고플랜과 역방향으로» ·
+      «콘앱은 검수 카고플랜을 뒤집은 형태» · «거울에 비친것 처럼» · «우측으로» · «낮은베이부터 높은베이로».
+      이유 — «콘 인력이 보던 것이 검수앱과 반대였음».
+      검수앱(`cargoPlanCore.autoPageLayout` — «각 행 내부: 큰 번호 좌측, 카스피 정답»)은 한 줄이
+      21 (22)23 · 17 (18)19 · … · 01 (02)03 이라 **오른쪽에서 왼쪽으로** 읽는다.
+      콘앱은 그 거울이므로 01 (02)03 · 05 (06)07 · … · 21 (22)23 — **왼쪽에서 오른쪽으로** 읽는다.
+    ⇒ **줄 하나를 통째로 뒤집는다(별첨·빈 칸까지 함께).** 아래 render 의 `cpv2-page-row` 한 곳뿐이다.
+    ⚠ 안 건드리는 것 — ①칸(열) 좌우(10 08 06 … 09 그대로) ②한 칸 안 위·아래(17 위 · (18)19 아래).
+      둘 다 내가 한 번씩 잘못 손댔다가 검수사가 바로잡아 주신 자리다.
+    ⚠ 별첨은 «배 그림이 아니라 표»지만 **줄 안의 한 칸**이라 같이 간다. 상자만 뒤집으면 별첨이
+      아랫줄 왼쪽에 남아 배 그림이 1~2칸 들여쓰기 되고, 검수앱에서 «읽기가 끝나는 쪽»이던 자리가
+      콘앱에서는 «읽기가 시작되는 쪽»이 된다 — 거울이 아니다(감사 실측, 두 줄짜리 배 전부).
+    ⚠ 기본값 false — 검수앱 화면·인쇄는 한 픽셀도 안 바뀐다. 콘앱만 켠다. */
+  flipBays = false,
   containers = [],
   structureContainers = null,
   legendContainers = null,   // V8.87: 별첨 전용 목록(리스트=검수 대상 기준). 없으면 containers 폴백(하위호환).
@@ -1540,8 +1555,11 @@ export default function PrintableCargoPlanV2({
                 );
               }
             });
+            //  ★ 3.33 — 콘앱이면 이 줄을 **통째로** 뒤집는다(별첨 상자·빈 칸까지 함께).
+            //    상자 차례만 뒤집으면 거울이 아니다 — 별첨이 아랫줄 왼쪽에 남아 배가 들여쓰기 된다.
+            //    상자 **안**(열 좌우·위아래)은 여기서 안 건드린다 — slots 밖의 일이다.
             return (
-              <div key={ri} className="cpv2-page-row">{slots}</div>
+              <div key={ri} className="cpv2-page-row">{flipBays ? [...slots].reverse() : slots}</div>
             );
           })}
         </div>

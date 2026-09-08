@@ -20,5 +20,7 @@ createRoot(document.getElementById('root')).render(
     : which === 'bayplan'
     ? React.createElement(BayPlan, { containers, compMap: {}, xrayMap: {}, restowMap: { needsShift: {} }, mode, onOpenContainer: () => {},
         shipImo: fx.dict.imo || '', shipName: name, voyageInfo, voyageKey: key })
-    : React.createElement(PrintableCargoPlanV2, { containers, shipImo: fx.dict.imo || '', shipName: name, voyNo: voy, voyageInfo, mode, onClose: () => {} })
+    //  3.33: 콘앱 뒤집기 검사용 — 'omit' 이면 prop 을 아예 안 넘겨 **기본값 자체**를 잰다.
+    : React.createElement(PrintableCargoPlanV2, { containers, shipImo: fx.dict.imo || '', shipName: name, voyNo: voy, voyageInfo, mode, onClose: () => {},
+        ...(window.__SMOKE_FLIP === 'omit' ? {} : { flipBays: !!window.__SMOKE_FLIP }) })
 );
