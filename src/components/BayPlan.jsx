@@ -40,7 +40,12 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   preGoneInfo = null,   // 1.69-06: 전항 양하 예정(평택 도착 전 하선) — {ports:Set, list, origin} 또는 null
   //  ★ 3.11: 수석 실시간 작업 보드 — **베이 한 장만, 도구 없이** 그린다(검수사 «보이는 베이를 원한 것»).
   //    onlyBay = 그 호기가 지금 작업 중인 베이 번호(짝이면 짝 장을 고른다) · compactZoom = 칸 배율(줄 높이에 맞춰 밖에서 정한다).
-  onlyBay = null, compactZoom = null
+  onlyBay = null, compactZoom = null,
+  //  ★ 3.35 — 보드용 한 장(onlyBay)의 «BAY 12» 제목을 **밖에서** 그리게 넘긴다.
+  //    검수사 2026-09-09 — «그걸 한눈에 들어 오게 하되 **베이크기 확대 축소에 상관없이** 크게».
+  //    그림은 `FitBox` 가 `transform: scale()` 로 줄이는데 제목도 같이 줄어 6~8px 이 됐다(실측 — 제목 11px × 배율 0.6).
+  //    그래서 제목만 배율 **밖**으로 뺀다 — `titleOut` 이면 안에 안 그리고, `onTitles` 로 그 장들의 제목을 올려 준다.
+  titleOut = false, onTitles = null
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
@@ -586,6 +591,30 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     };
   }, []);
 
+  //  ★ 3.35 — onlyBay 한 장의 제목을 부모에게 올린다.
+  //  ⛔ **훅은 조기 반환보다 앞이어야 한다.** 처음 판은 `containers.length === 0` 반환 **뒤**에 두어,
+  //    자료가 «없다 ↔ 있다» 로 바뀌는 순간 렌더마다 훅 수가 달라져 React 가 통째로 죽었다
+  //    (감사 실측 — «Rendered more hooks than during the previous render» · 화면 0자).
+  //    EDI 가 늦게 오거나 양하↔선적 탭을 누르는 것만으로 걸리는 길이라 보드·베이플랜 탭이 같이 죽는다.
+  //    아래 onlyBay 갈래와 **같은 셈**을 쓴다 — 두 벌이 되면 제목과 그림이 갈린다(규범 §4-4).
+  const _onlyTitles = React.useMemo(() => {
+    if (onlyBay == null || !pages.length) return [];
+    const nums = (String(onlyBay).match(/\d+/g) || []).map(Number);
+    if (!nums.length) return [];
+    const want = nums.length >= 2 ? Math.round((nums[0] + nums[nums.length - 1]) / 2) : nums[0];
+    const has = (p, b) => [p.evenBay, p.oddBay].some((x) => x != null && parseInt(x, 10) === b);
+    const E = hatchEvenOf(want, pages) ?? want;
+    const hatch = [E - 1, E, E + 1];
+    const pgs = pages.filter((p) => hatch.some((b) => has(p, b)));
+    const pgList = pgs.length ? pgs : pages.filter((p) => has(p, want));
+    return pgList.map((p) => p.title);
+  }, [onlyBay, pages]);
+  const _titlesKey = _onlyTitles.join('|');
+  const _onTitlesRef = React.useRef(onTitles); _onTitlesRef.current = onTitles;
+  React.useEffect(() => {
+    if (_onTitlesRef.current) _onTitlesRef.current(_titlesKey ? _titlesKey.split('|') : []);
+  }, [_titlesKey]);
+
   if (containers.length === 0) {
     if (onlyBay != null) return <div className="text-2xs text-dim-500 text-center py-3">자료 없음</div>;   // 3.11: 보드 호기 칸은 한 줄로
     return (
@@ -629,7 +658,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
             isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
             globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
-            pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells />
+            pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells hideTitle={titleOut} />
         ))}
       </div>
     );
@@ -1086,7 +1115,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null, compactCells = false,   // 3.11: 보드는 칸이 커도 끝4자리 꼴  // V9.57(I12): getCellBg 죽은 체인 제거
+function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null, compactCells = false,   // 3.11: 보드는 칸이 커도 끝4자리 꼴  // V9.57(I12): getCellBg 죽은 체인 제거
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1854,7 +1883,9 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       {/* ★ 2.91-01 (검수사 «베이넘버는 항상 베이 그림 중간에 위치. 축소하든 확대하든 항상 베이상단 중앙») —
           종전엔 제목이 **바깥 상자 전체 폭** 기준이라 격자가 좁으면 오른쪽으로 밀려 보였다.
           격자와 같은 자리(왼쪽 라벨 LBL 만큼 밀고, 격자 폭 gridW 안)에서 가운데로 둔다. */}
-      {(() => {
+      {hideTitle ? null : (() => {
+        //  ★ 3.35 — `hideTitle` 이면 여기 안 그린다. 실시간 작업 보드는 이 제목을 **배율 밖에서** 크게 그리기 때문이다
+        //    (검수사 2026-09-09 «베이표기 글자… 한눈에 들어 오게 하되 베이크기 확대 축소에 상관없이 크게»).
         //  격자와 같은 자리에서 가운데. 좌표 레이아웃이면 그 격자 폭(왼쪽 라벨 24 + nCols×STEP)을 쓰고,
         //  아니면 종전대로 전체 폭 가운데(그 경우는 격자도 전체 폭을 쓴다).
         const _lbl = 24, _step = cellW + 2;

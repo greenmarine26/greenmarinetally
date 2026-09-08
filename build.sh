@@ -621,6 +621,23 @@ fi
          --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_LB"; then
       cp "$SMOKE_LB.fbbak" src/firebase.js && rm -f "$SMOKE_LB.fbbak"
       node tools/smoke_liveboard.cjs "$SMOKE_LB" || { echo "✗ 실시간 작업 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
+      # 3.35: BayPlan 훅 순서 — 자료가 «없다 ↔ 있다» 로 바뀌어도 화면이 안 죽는가(두 방향)
+      for _HK in smoke_bphooks smoke_bphooks_rev; do
+        SMOKE_HK=$(mktemp /dev/shm/hometmp/_smokehk_XXXXXX.js)
+        cp src/firebase.js "$SMOKE_HK.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+        if npx esbuild tools/$_HK.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+             --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+             --external:fs --external:path --external:url \
+             --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_HK"; then
+          cp "$SMOKE_HK.fbbak" src/firebase.js && rm -f "$SMOKE_HK.fbbak"
+          node tools/smoke_bphooks.cjs "$SMOKE_HK" $([ "$_HK" = smoke_bphooks_rev ] && echo rev) \
+            || { echo "✗ BayPlan 훅 순서 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_HK"; exit 1; }
+          rm -f "$SMOKE_HK"
+        else
+          cp "$SMOKE_HK.fbbak" src/firebase.js && rm -f "$SMOKE_HK.fbbak"
+          echo "✗ 훅 순서 연막 번들 실패 — 배포 금지"; exit 1
+        fi
+      done
       rm -f "$SMOKE_LB"
       #  3.15: **동방(PNCT) 보드 카드** — OBWH 2731E 실데이터로 «지금 작업 중인 베이» 칸과 그 베이 그림이 서는지 본다(호기 칸이 아니어야 한다).
       SMOKE_LP=$(mktemp /dev/shm/hometmp/_smokelp_XXXXXX.js)

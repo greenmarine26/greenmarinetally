@@ -68,6 +68,23 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log('  ✓ 왼쪽 별첨(선사별·규격별 F/E)도 동방에서 채워진다');
   //  ⑦ 카토스 글자는 동방 카드에 나오면 안 된다
   if (/카토스/.test(t)) fail('동방 카드에 «카토스» 글자가 있다');
+  //  ★ 3.35 — **동방 갈래도** 베이 표기가 배율 밖에서 크다. 검수사 «확대 축소에 상관없이 크게».
+  //    ⛔ 이 항이 없어 «동방만 옛 FitBox 로» 되돌려도 두 검사가 다 초록이었다(감사 실측 S6).
+  {
+    const scaled = [...doc.querySelectorAll('div')].filter(x => /scale\(/.test(x.getAttribute('style') || ''));
+    if (!scaled.length) fail('FitBox 의 scale() 상자를 못 찾았다 — 이 검사가 헛돈다');
+    const bigs = [...doc.querySelectorAll('span')].filter(x => /^BAY[\s(]/.test((x.textContent || '').trim()));
+    if (!bigs.length) fail('«BAY …» 큰 글자가 없다 — 동방 갈래가 제목을 배율 밖에서 안 그린다');
+    for (const b of bigs) {
+      const px = parseFloat((b.getAttribute('style') || '').match(/font-size:\s*([\d.]+)px/)?.[1] || '0');
+      if (!(px >= 16)) fail('동방 베이 표기가 작다 — ' + b.textContent + ' ' + px + 'px');
+      if (scaled.some(sc => sc.contains(b))) fail('동방 «' + b.textContent + '» 가 scale() 안에 있다');
+    }
+    const inner = scaled.flatMap(sc => [...sc.querySelectorAll('div')])
+      .filter(x => /^BAY[\s(]/.test((x.textContent || '').trim()) && !x.querySelector('div'));
+    if (inner.length) fail('동방 그림 안에 옛 제목이 ' + inner.length + '개 남았다');
+    console.log('  ✓ 동방 베이 표기 ' + bigs.length + '개가 배율 밖에서 ' + bigs.map(b => (b.getAttribute('style')||'').match(/font-size:\s*([\d.]+)px/)?.[1]).join('·') + 'px');
+  }
   console.log('\n✓ 전부 통과');
   process.exit(0);
 })();

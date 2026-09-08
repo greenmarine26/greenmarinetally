@@ -2251,6 +2251,34 @@ function FitBox({ children, className = '', maxH = null, fill = false, boundsRef
     </div>
   );
 }
+/*  ★ 3.35 — 실시간 작업 보드의 한 칸. **«BAY (12)13» 을 배율 밖에서 크게 그린다.**
+    검수사 2026-09-09 — «베이표기 글자 이야기 입니다» · «그걸 한눈에 들어 오게 하되 **베이크기 확대 축소에 상관없이** 크게».
+    ⚠ 그림은 `FitBox` 가 `transform: scale()` 로 줄인다. 제목이 그 안에 있으면 같이 줄어
+      실측 **11px × 배율 0.6 ≈ 6.6px** — 수석이 한눈에 못 읽었다. 확대해도 그림과 같은 비율로 커질 뿐이라
+      «확대 축소에 상관없이» 가 안 됐다.
+    ⇒ 제목만 `scale()` **밖**으로 뺀다 — `BayPlan` 이 `onTitles` 로 그 장들의 제목을 올려 주고 여기서 고정 px 로 그린다.
+      배율을 아무리 줄여도 이 글자는 그대로다. 그림 안 제목은 `titleOut` 으로 감춰 두 번 안 나오게 한다.
+    ⚠ 제목은 **BayPlan 이 만든 그것**이다(«BAY (12)13» 짝 표기 포함) — 여기서 다시 짓지 않는다(규범 §4-4). */
+//  칸이 몇이든 같은 자 — 호기 3대까지 24 · 4대 18 · 5대 이상 16px.
+export const boardTitlePx = (n) => (n >= 5 ? 16 : n === 4 ? 18 : 24);
+function BoardBayCell({ px = 24, fit = {}, plan = {} }) {
+  const [titles, setTitles] = useState([]);
+  //  ⚠ 제목은 **BayPlan 이 만든 그것 하나뿐**이다 — 여기서 `c.bay` 로 다시 짓지 않는다(규범 §4-4).
+  //    아직 안 올라왔거나(첫 렌더) 그 장이 사전에 없으면 **아무것도 안 적는다** — 그림이 그 사정을 말한다.
+  const show = titles;
+  return (
+    <>
+      {show.length ? (
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 py-0.5">
+          {show.map((t) => (
+            <span key={t} className="mono font-black text-amber-300" style={{ fontSize: px, lineHeight: 1.05 }}>{t}</span>
+          ))}
+        </div>
+      ) : null}
+      <FitBox {...fit}><BayPlan {...plan} titleOut onTitles={setTitles} /></FitBox>
+    </>
+  );
+}
 export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
@@ -2316,7 +2344,11 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
   const fitMaxH = React.useCallback(() => {
     const boardH = Math.max(320, window.innerHeight - 144);
     const perRow = boardH / Math.max(1, Math.min(focused ? 1 : rows, 4));
-    return Math.max(120, Math.floor(perRow) - 60);
+    //  ★ 3.35 — 베이 표기 줄이 그림 **위**에 새로 생겼으므로 그만큼 빼야 예산이 맞다(감사 지적).
+    //    안 빼면 칸이 줄 예산보다 그 높이만큼 커져 검수사 «스크롤 없는 상태에서 최적의 화면»(3.11)이 깎인다.
+    //    PC 경로(fill)는 `boundsRef` 를 FitBox 제 상단에서 재므로 저절로 빠진다 — 여기는 폰 경로다.
+    const titleRow = Math.ceil(24 * 1.05) + 4;   // 고정 px 중 가장 큰 것 + 위아래 여백(py-0.5)
+    return Math.max(120, Math.floor(perRow) - 60 - titleRow);
   }, [rows, focused]);
   const cardRef = React.useRef(null);   // 3.11: FitBox 가 «카드 바닥까지 남은 높이»를 재는 기준(cranePanel 보다 먼저 선언)
   //  ★ 3.19 — **호기 칸을 균등 크기로.** 검수사 2026-09-06 «이화면만 균등크기로 조정해주고».
@@ -2383,12 +2415,13 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                 <span className={b.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{b.mode === 'loading' ? '선적' : '양하'} {b.n}대</span>
                 <span className={`ml-auto ${(Date.now() - (b.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{fmtAgo(b.lastAt)}</span>
               </div>
-              <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom} onFit={reportFit(`b${b.mode}-${b.bay}`)} force={groupFit}>
-                <BayPlan containers={boardContainers[b.mode] || []} compMap={voyage?.[b.mode]?.completed || {}}
-                  xrayMap={voyage?.[b.mode]?.xrayList || {}} mode={b.mode}
-                  shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
-                  onOpenContainer={(cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, b.mode); else onOpen(); }} onlyBay={b.bay} compactZoom={0.36} />
-              </FitBox>
+              <BoardBayCell px={boardTitlePx(bays.length)}
+                fit={{ fill: wide, boundsRef: cardRef, maxH: wide ? null : fitMaxH, boost: zoom, onFit: reportFit(`b${b.mode}-${b.bay}`), force: groupFit }}
+                plan={{ containers: boardContainers[b.mode] || [], compMap: voyage?.[b.mode]?.completed || {},
+                  xrayMap: voyage?.[b.mode]?.xrayList || {}, mode: b.mode,
+                  shipImo: voyage?.info?.imo, shipName: voyage?.info?.vsl, voyageInfo: voyage?.info, voyageKey: v.key,
+                  onOpenContainer: (cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, b.mode); else onOpen(); },
+                  onlyBay: b.bay, compactZoom: 0.36 }} />
             </div>
           ))}
         </div>
@@ -2414,12 +2447,13 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                   <span className={`ml-auto ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
                 </div>
                 {c.bay && /\d/.test(String(c.bay)) && voyage ? (
-                  <FitBox fill={wide} boundsRef={cardRef} maxH={wide ? null : fitMaxH} boost={zoom} onFit={reportFit(`c${c.no}`)} force={groupFit}>
-                    <BayPlan containers={boardContainers[c.mode || modeOfBoard] || []} compMap={voyage?.[c.mode || modeOfBoard]?.completed || {}}
-                      xrayMap={voyage?.[c.mode || modeOfBoard]?.xrayList || {}} mode={c.mode || modeOfBoard}
-                      shipImo={voyage?.info?.imo} shipName={voyage?.info?.vsl} voyageInfo={voyage?.info} voyageKey={v.key}
-                      onOpenContainer={(cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, c.mode || modeOfBoard); else onOpen(); }} onlyBay={c.bay} compactZoom={0.36} />
-                  </FitBox>
+                  <BoardBayCell px={boardTitlePx(shown.length)}
+                    fit={{ fill: wide, boundsRef: cardRef, maxH: wide ? null : fitMaxH, boost: zoom, onFit: reportFit(`c${c.no}`), force: groupFit }}
+                    plan={{ containers: boardContainers[c.mode || modeOfBoard] || [], compMap: voyage?.[c.mode || modeOfBoard]?.completed || {},
+                      xrayMap: voyage?.[c.mode || modeOfBoard]?.xrayList || {}, mode: c.mode || modeOfBoard,
+                      shipImo: voyage?.info?.imo, shipName: voyage?.info?.vsl, voyageInfo: voyage?.info, voyageKey: v.key,
+                      onOpenContainer: (cc) => { if (onOpenContainer && cc?.cn) onOpenContainer(cc, c.mode || modeOfBoard); else onOpen(); },
+                      onlyBay: c.bay, compactZoom: 0.36 }} />
                 ) : (
                   <div className="text-2xs text-dim-500 py-3 text-center">{c.qc ? '완료 기록이 와야 그림이 뜹니다' : '베이 미상'}</div>
                 )}

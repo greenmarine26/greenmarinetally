@@ -144,6 +144,66 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   closeBtn.dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
   await wait(200);
   if (/✕ 닫기/.test(txt())) fail('[✕ 닫기] 뒤에도 닫기 버튼이 남는다');
+  //  ★ 3.35 — **베이 표기 글자가 배율 밖에 있고 크다.**
+  //    검수사 2026-09-09 «베이표기 글자 이야기 입니다» · «한눈에 들어 오게 하되 베이크기 확대 축소에 상관없이 크게».
+  //    그림은 FitBox 가 transform: scale() 로 줄인다 — 제목이 그 안에 있으면 같이 줄어 6~8px 이 된다(옛 판).
+  {
+    //  FitBox 의 안쪽 상자 — `transform: … scale(s)` 이 걸린 자리(jsdom 은 속성 문자열로 남긴다).
+    const scaled = [...doc.querySelectorAll('div')].filter(x => /scale\(/.test(x.getAttribute('style') || ''));
+    if (!scaled.length) fail('FitBox 의 scale() 상자를 못 찾았다 — 이 검사가 헛돈다');
+    const bigs = [...doc.querySelectorAll('span')].filter(x => /^BAY[\s(]/.test((x.textContent || '').trim()));
+    if (!bigs.length) fail('«BAY …» 큰 글자가 없다 — 제목을 배율 밖에서 안 그린다');
+    for (const b of bigs) {
+      const px = parseFloat((b.getAttribute('style') || '').match(/font-size:\s*([\d.]+)px/)?.[1] || '0');
+      if (!(px >= 16)) fail(`베이 표기가 작다 — ${b.textContent} ${px}px (16px 이상이어야 한다)`);
+      if (scaled.some(sc => sc.contains(b))) fail(`«${b.textContent}» 가 scale() 안에 있다 — 그림을 줄이면 같이 줄어든다`);
+    }
+    //  그림 안 옛 제목은 감춰야 두 번 안 나온다
+    const inner = scaled.flatMap(sc => [...sc.querySelectorAll('div')])
+      .filter(x => /^BAY[\s(]/.test((x.textContent || '').trim()) && !x.querySelector('div'));
+    if (inner.length) fail(`그림 안에 옛 제목이 ${inner.length}개 남아 두 번 나온다`);
+    console.log(`  ✓ 베이 표기 ${bigs.length}개가 배율 밖에서 ${bigs.map(b => (b.getAttribute('style')||'').match(/font-size:\s*([\d.]+)px/)?.[1]).join('·')}px`);
+  }
+  //  ★ 3.35 — **크기 자는 한 벌**이고 호기가 늘면 작아진다(24·18·16). 접힌 기본은 3칸까지라 24 만 보이므로
+  //    자 자체를 소스에서 꺼내 잰다 — 4·5호기 갈래를 아무도 안 재던 구멍이었다(감사 실측 S9).
+  {
+    const src2 = fs.readFileSync(require('path').resolve('src/pages/ChiefDashboard.jsx'), 'utf8');
+    const m = src2.match(/export const boardTitlePx = \(n\) => \(([^;]+)\);/);
+    if (!m) fail('boardTitlePx 자를 소스에서 못 찾았다');
+    const f = new Function('n', 'return (' + m[1] + ');');
+    if (!(f(1) === 24 && f(3) === 24 && f(4) === 18 && f(5) === 16 && f(6) === 16)) {
+      fail('크기 자가 어긋난다 — 1:' + f(1) + ' 3:' + f(3) + ' 4:' + f(4) + ' 5:' + f(5) + ' 6:' + f(6));
+    }
+    const uses = (src2.match(/boardTitlePx\(/g) || []).length;
+    if (uses < 2) fail('두 갈래(호기별·동방)가 다 그 자를 쓴다 — 지금 ' + uses + '곳');
+    console.log('  ✓ 베이 표기 크기 자 한 벌 — 3대까지 ' + f(3) + ' · 4대 ' + f(4) + ' · 5대 ' + f(5) + 'px, 두 갈래가 같이 쓴다');
+  }
+  //  ★ 3.35 — 폰 경로의 줄 예산(`fitMaxH`)에서 **베이 표기 줄 높이를 뺀다.**
+  //    안 빼면 칸이 예산보다 그 높이만큼 커져 검수사 «스크롤 없는 상태에서 최적의 화면»(3.11)이 깎인다(감사 지적).
+  //    ⚠ jsdom 은 레이아웃이 없어 이 차이를 그림으로는 못 잰다 — 그래서 **소스 모양**으로 못 박는다.
+  {
+    const src3 = fs.readFileSync(require('path').resolve('src/pages/ChiefDashboard.jsx'), 'utf8');
+    const fm = src3.match(/const fitMaxH = React\.useCallback\(\(\) => \{[\s\S]*?\n  \}, \[[^\]]*\]\);/);
+    if (!fm) fail('fitMaxH 를 소스에서 못 찾았다');
+    if (!/titleRow/.test(fm[0])) fail('⛔ fitMaxH 가 베이 표기 줄 높이를 안 뺀다 — 칸이 예산보다 커진다');
+    if (!/- 60 - titleRow/.test(fm[0])) fail('⛔ fitMaxH 의 마지막 셈에서 titleRow 를 안 뺀다');
+    const tr = fm[0].match(/const titleRow = Math\.ceil\((\d+) \* 1\.05\) \+ (\d+);/);
+    if (!tr) fail('titleRow 를 «가장 큰 고정 px × 줄높이 + 여백» 으로 안 낸다');
+    const src4 = src3.match(/export const boardTitlePx = \(n\) => \(([^;]+)\);/);
+    const f2 = new Function('n', 'return (' + src4[1] + ');');
+    const big = Math.max(f2(1), f2(3), f2(4), f2(5));
+    if (parseInt(tr[1], 10) !== big) fail(`titleRow 가 가장 큰 표기(${big}px)를 기준으로 하지 않는다 — 지금 ${tr[1]}px`);
+    console.log(`  ✓ 폰 줄 예산이 베이 표기 줄(${Math.ceil(big * 1.05) + parseInt(tr[2], 10)}px)을 뺀다`);
+  }
+  //  ★ 3.35 — `hideTitle` 은 **보드만** 켠다. 기본값이 뒤집히면 베이플랜 탭·카고플랜의 베이 번호가 통째로 사라진다(감사 S10).
+  {
+    const bp = fs.readFileSync(require('path').resolve('src/components/BayPlan.jsx'), 'utf8');
+    if (!/function BayPage\(\{ hideTitle = false,/.test(bp)) fail('⛔ BayPage 의 hideTitle 기본값이 false 가 아니다 — 다른 화면의 베이 번호가 사라진다');
+    if (!/titleOut = false,/.test(bp)) fail('⛔ BayPlan 의 titleOut 기본값이 false 가 아니다');
+    const hidden = (bp.match(/hideTitle=\{/g) || []).length;
+    if (hidden !== 1) fail('hideTitle 을 넘기는 곳은 보드용 한 곳뿐이어야 한다 — 지금 ' + hidden + '곳');
+    console.log('  ✓ 제목 감추기는 보드용 한 곳뿐 — 다른 화면은 종전대로 그림 안에 베이 번호가 있다');
+  }
   console.log('✓ 실시간 작업 보드 카드 렌더 연막검사 통과 (호기별 베이 그림 · 별첨 완료/전체 · 포커스/닫기/항차 열기)');
   process.exit(0);
 })();
