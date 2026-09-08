@@ -34,6 +34,43 @@ const isReefer = (c) => {
 /** 화면에 보일 온도 문자열 — 값이 없으면 빈 문자열(0으로 착각하게 두지 않는다) */
 const tempStr = (v) => (v == null || String(v).trim() === '' ? '' : String(v).trim());
 
+/** 3.32: 온도를 **숫자로** 읽는다 — 견줄 때만 쓴다(표시는 원문 그대로).
+ *  ⚠ 자료에 단위가 붙어 온다. `utils.parseAscFile` 은 `(raw/10).toFixed(1) + '℃'` 로 쓰고
+ *    리스트 파서는 단위를 뗀다 — 보관소 실측 8,110대 중 280대가 «-18.0℃» 꼴이고,
+ *    17개 항차·모드는 대조 가능한 것이 **전량** 그 꼴이다(감사 실측 2026-09-08).
+ *    `Number('-18.0℃')` 는 NaN 이라 그대로 견주면 **잘 읽은 판독에도 전량 경보**가 뜬다.
+ *  숫자로 못 읽으면 null — 그때는 아예 판정하지 않는다(모르는 것을 틀렸다고 하지 않는다). */
+export function tempNum(v) {
+  const t = String(v ?? '').replace(/[℃°CcＣ도\s]/g, '').replace(/[−–—]/g, '-').trim();
+  const m = t.match(/^-?\d+(?:\.\d+)?$/);
+  return m ? Number(m[0]) : null;
+}
+
+/** 3.32: **판독 검산** — 읽어 온 «설정온도»가 이 항차 자료(EDI 온도)와 같은가.
+ *
+ *  왜 — 배마다 표가 달라 판독기가 엉뚱한 칸을 읽을 수 있다. SWBT 2614N 종이에는 설정온도 옆에
+ *  `PLUG IN TEMP` 칸이 있고 REMARK 칸에는 손으로 적은 자리 번호(180184)가 있다. 그 칸을 읽어도
+ *  숫자라서 그대로 통과한다. 그런데 **설정온도는 맞춰 볼 잣대가 있다** — EDI 온도다
+ *  (실측 SWBT 2614N 6대 전부 종이 인쇄값과 같았다). 어긋나면 다른 칸을 읽은 것이다.
+ *
+ *  @param list  이 항차 리퍼 목록(EDI 온도 `tmp` 를 들고 있다)
+ *  @param byCn  판독 결과 Map(cn → {set, act})
+ *  @returns {{bad: Object, cmp: number}} bad = 어긋난 컨(설명 문구) · cmp = 맞춰 본 대수
+ */
+export function ocrSetMismatch(list, byCn) {
+  const bad = {}; let cmp = 0;
+  for (const c of (list || [])) {
+    const g = byCn && (byCn.get ? byCn.get(c.cn) : byCn[c.cn]);
+    const edi = tempStr(c.tmp);
+    if (!g || !g.set || !edi) continue;       // 견줄 것이 없으면 판정하지 않는다
+    const a = tempNum(g.set); const b = tempNum(edi);
+    if (a === null || b === null) continue;   // 숫자로 못 읽는 값은 판정하지 않는다
+    cmp += 1;
+    if (a !== b) bad[c.cn] = `${g.set} ≠ 자료 ${edi}`;
+  }
+  return { bad, cmp };
+}
+
 export default function ReeferMemoModal({ containers, voyageKey, mode, inspector, onClose }) {
   const list = useMemo(
     () => (containers || []).filter(isReefer).sort((a, b) => String(a.cn).localeCompare(String(b.cn))),
@@ -56,6 +93,8 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
   const baseCount = list.filter((c) => tempStr(c.rfSet) || tempStr(c.tmp)).length;
   const noBase = baseCount === 0;
   const [busy, setBusy] = useState('');
+  //  3.32: 판독 검산에 걸린 컨 — «읽어 온 세팅온도가 이 항차 자료와 다르다». 줄에 그대로 보여 준다.
+  const [badSet, setBadSet] = useState({});
   // ★ 1.84 (검수사 확정 2026-08-19 시안): **방식 선택이 먼저다.**
   //   *"1개든 100개든 이걸 한줄로 보여주고 클릭하면 리스트 입력인지 개별 사진 촬영인지 수기 입력인지
   //    선택해서 할수있게. 처음부터 양이 많으면 스크롤하기 짜증납니다."*
@@ -69,9 +108,13 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
       종전엔 어느 칸을 고치든 src 를 통째로 'manual' 로 바꿔서, 「세팅온도 채우기」로 베낀
       실측값(rfSrc:'list')이 세팅 칸만 손대도 «잰 값»으로 세탁됐다(감사 지적 2026-09-07).
       ⇒ **실측 칸(act)을 실제로 손댔을 때만** 손입력으로 올린다. */
-  const setField = (cn, k, v) => setVals((o) => ({
-    ...o, [cn]: { ...o[cn], [k]: v, src: k === 'act' ? 'manual' : (o[cn]?.src || '') },
-  }));
+  const setField = (cn, k, v) => {
+    //  3.32: 그 줄의 세팅온도를 고치면 그 줄의 판독 경고를 지운다 — 고쳤는데 붉은 글씨가 남으면 안 된다.
+    if (k === 'set') setBadSet((b) => (b[cn] ? (({ [cn]: _drop, ...rest }) => rest)(b) : b));
+    setVals((o) => ({
+      ...o, [cn]: { ...o[cn], [k]: v, src: k === 'act' ? 'manual' : (o[cn]?.src || '') },
+    }));
+  };
 
   /** ② 세팅온도 채우기 — 리스트·EDI 온도를 **기준 칸에만** 넣는다(3.25).
       ⛔ 실측(act)에는 손대지 않는다. 베낀 값은 잰 값이 아니다 — 그것이 2026-09-07 사고였다. */
@@ -90,46 +133,92 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     setStep('edit');
   };
 
-  /** ① 검수 수기 리스트 사진 판독 (검수사 정정 2026-09-07 — «선원리스트가 아니고 검수 수기 리스트입니다») */
+  /** ① 사진 판독 (검수사 정정 2026-09-07 — «선원리스트가 아니고 검수 수기 리스트입니다»)
+   *
+   *  ★ 3.32 — **여러 장을 한 번에 받고, 읽은 값을 이 항차 자료와 맞춰 본다.**
+   *    왜 (검수사 2026-09-08 «온도가 기록이 안됨 실제온도 SWBT 2614N») —
+   *    ① 종이가 한 장이 아니다. SWBT 2614N 은 55줄 3장, 어제 RZOR R097E 도 3장이었다.
+   *       종전엔 `files[0]` 하나만 받아 장마다 따로 찍어야 했다.
+   *    ② 배마다 표가 달라 판독기가 엉뚱한 칸을 읽을 수 있다(그 배 종이엔 `PLUG IN TEMP` 칸과
+   *       손으로 적은 자리 번호 칸이 더 있다). 그래서 **읽어 온 세팅온도를 EDI 온도와 대조**한다 —
+   *       실측 SWBT 2614N 은 종이 인쇄값과 EDI 가 뽑아 본 6대 전부 같았다. 어긋나면 다른 칸을 읽은 것이다.
+   *    ⛔ 조용히 통과시키지 않는다 — 틀린 기준 위에 «검증됨»이 찍히면 서류가 통째로 거짓이 된다.
+   */
   const onPhoto = async (e) => {
-    const f = e.target.files?.[0];
+    const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!f) return;
-    setBusy('photo'); setNote('');
-    try {
-      const key = _storage.get(SK.geminiKey) || '';
-      const { ocrReeferTemps } = await import('../mixerUpload.js');
-      const { items, note: n } = await ocrReeferTemps(f, key);
-      const byCn = new Map(items.map((i) => [i.cn, i]));
-      let hit = 0; const miss = [];
-      setVals((o) => {
-        const nx = { ...o };
-        for (const c of list) {
-          const g = byCn.get(c.cn);
-          if (!g) { miss.push(c.cn); continue; }
-          hit += 1;
-          nx[c.cn] = {
-            set: g.set || nx[c.cn].set,
-            act: g.act || nx[c.cn].act,
-            src: 'photo',
-          };
+    if (!files.length) return;
+    setBusy('photo'); setBadSet({});   // 다시 찍으면 옛 표시를 지운다(감사 지적)
+    setNote(files.length > 1 ? `사진 ${files.length}장 읽는 중…` : '');
+    const key = _storage.get(SK.geminiKey) || '';
+    const { ocrReeferTemps } = await import('../mixerUpload.js');
+    const all = new Map(); const errs = [];
+    for (let i = 0; i < files.length; i += 1) {
+      if (files.length > 1) setNote(`사진 ${i + 1}/${files.length} 읽는 중…`);
+      try {
+        const { items } = await ocrReeferTemps(files[i], key);
+        //  장마다 **칸 단위로** 누적한다 — 같은 컨이 두 장에 나와도 **빈 칸이 채워진 칸을 지우지 않는다**.
+        //  ⚠ 종전엔 항목을 통째로 갈아 끼워, 뒤 장에 그 컨이 빈 실측으로 나오면 앞 장에서 읽은 실측이
+        //    사라졌다(감사 실측 — 사진 순서가 값을 정했다).
+        for (const it of items) {
+          const prev = all.get(it.cn);
+          all.set(it.cn, prev
+            ? { cn: it.cn, set: it.set || prev.set || '', act: it.act || prev.act || '' }
+            : it);
         }
-        return nx;
-      });
-      // 사진에 있는데 이 항차 리퍼가 아닌 컨은 버렸다는 걸 숨기지 않는다.
-      const extra = items.filter((i) => !list.some((c) => c.cn === i.cn)).length;
-      setNote(`${n} → 이 항차 리퍼 ${hit}대 채움`
-        + (miss.length ? ` · 못 찾은 ${miss.length}대는 직접 확인하세요` : '')
-        + (extra ? ` · 이 항차에 없는 ${extra}대는 무시` : ''));
-    } catch (err) {
-      setNote(`판독 실패: ${err?.message || err}`);
-    } finally {
-      setBusy('');
-    setStep('edit');   // 1.84: 판독 결과 확인 화면으로(실패해도 note 를 보며 수기로 잇는다)
+      } catch (err) { errs.push(`${files.length > 1 ? `${i + 1}장 ` : ''}${err?.message || err}`); }
     }
+    if (!all.size) {
+      setNote(errs.length ? `판독 실패: ${[...new Set(errs.map((e) => e.replace(/^\d+장 /, '')))].join(' · ')}` : '사진에서 컨테이너를 못 찾았습니다.');
+      setBusy(''); setStep('edit'); return;
+    }
+    const { bad, cmp } = ocrSetMismatch(list, all);
+    setBadSet(bad);
+    //  ⚠ 세는 것은 업데이터 **밖**에서 한다 — 안에서 세면 업데이터가 렌더 때 불려서
+    //    안내 문구가 늘 «0대 채움»으로 나갔다(감사 실측 · 3.25 부터 있던 결함).
+    const hit = list.filter((c) => all.has(c.cn)).length;
+    const miss = list.filter((c) => !all.has(c.cn)).map((c) => c.cn);
+    setVals((o) => {
+      const nx = { ...o };
+      for (const c of list) {
+        const g = all.get(c.cn);
+        if (!g) continue;
+        //  ⚠ `vals` 는 열 때 한 번 만들고 `list` 는 살아 있는 목록을 따라간다 — 모달을 연 뒤
+        //    리스트가 늦게 와 리퍼로 승격된 컨은 `vals` 에 없다(VoyagePage FLAG_FILL). 감싸지 않으면
+        //    그 컨을 빈 칸으로 읽어 올 때 모달이 통째로 죽는다(감사 실렌더 실측).
+        const cur = nx[c.cn] || { set: '', act: '', src: '' };
+        nx[c.cn] = { set: g.set || cur.set, act: g.act || cur.act, src: 'photo' };
+      }
+      return nx;
+    });
+    const extra = [...all.keys()].filter((cn) => !list.some((c) => c.cn === cn)).length;
+    const nBad = Object.keys(bad).length;
+    setNote([
+      `사진 ${files.length}장에서 ${all.size}대 읽어 이 항차 리퍼 ${hit}대 채웠습니다`,
+      miss.length ? `못 찾은 ${miss.length}대는 직접 확인하세요` : '',
+      extra ? `이 항차에 없는 ${extra}대는 무시` : '',
+      nBad ? (cmp && nBad > cmp / 2
+        ? `⛔ ${nBad}대의 세팅온도가 자료와 다릅니다 — 판독기가 다른 칸(꽂을 때 온도·자리 번호)을 읽은 것 같습니다. 넣기 전에 꼭 확인하십시오`
+        : `⚠ ${nBad}대는 세팅온도가 자료와 다릅니다 — 줄에 표시했습니다`) : '',
+      errs.length ? `못 읽은 사진: ${[...new Set(errs)].join(' · ')}` : '',
+    ].filter(Boolean).join(' · '));
+    setBusy('');
+    setStep('edit');   // 1.84: 판독 결과 확인 화면으로(실패해도 note 를 보며 수기로 잇는다)
   };
 
   const save = async () => {
+    //  3.32: 판독 검산에 걸린 줄이 남아 있으면 **한 번 더 묻는다** — 종전엔 경고가 문구뿐이라
+    //    어긋난 값 위에 그대로 `rfCheckedAt` 이 찍혔다(감사 지적 §4-3).
+    //  ⚠ 대화상자가 없거나 막힌 환경(웹뷰·«추가 대화상자 표시 안 함»)에서는 조용히 안 죽는다 —
+    //    물을 수 없으면 그대로 저장하되 무엇을 저장했는지 밝힌다(규범 §4-3).
+    const nBad = Object.keys(badSet).length;
+    if (nBad) {
+      const ask = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+        ? window.confirm(`세팅온도가 자료와 다른 ${nBad}대가 그대로 있습니다.\n판독기가 다른 칸을 읽었을 수 있습니다 — 이대로 저장할까요?`)
+        : null;
+      if (ask === false) { setNote(`저장하지 않았습니다 — 세팅온도가 자료와 다른 ${nBad}대를 먼저 고치십시오.`); return; }
+      if (ask === null) setNote(`⚠ 세팅온도가 자료와 다른 ${nBad}대를 그대로 저장합니다(확인 창을 띄울 수 없었습니다).`);
+    }
     setBusy('save');
     try {
       const rows = list.map((c) => ({ cn: c.cn, set: vals[c.cn]?.set ?? '', act: vals[c.cn]?.act ?? '', src: vals[c.cn]?.src || 'manual' }));
@@ -163,7 +252,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
                 {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
                 {busy === 'photo' ? '읽는 중…' : '검수 수기 리스트 촬영'}
               </span>
-              <span className="block text-xxs text-cyan-300/70 mt-0.5">종이 리스트를 찍으면 온도를 읽어 채웁니다 · <button onClick={(e) => { e.stopPropagation(); albumRef.current?.click(); }} className="underline">앨범에서</button>도 가능</span>
+              <span className="block text-xxs text-cyan-300/70 mt-0.5">종이 리스트를 찍으면 온도를 읽어 채웁니다 · <b>여러 장 한 번에</b> 됩니다 · <button onClick={(e) => { e.stopPropagation(); albumRef.current?.click(); }} className="underline">앨범에서</button>도 가능</span>
             </button>
             <button onClick={() => applyAll()} disabled={!!busy || noBase}
               className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
@@ -182,8 +271,8 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             <div className="text-right">
               <button onClick={() => onClose?.(false)} className="text-xs2 text-dim-400 px-2 py-1">나중에</button>
             </div>
-            <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden"/>
-            <input ref={albumRef} type="file" accept="image/*" onChange={onPhoto} className="hidden"/>
+            <input ref={camRef} type="file" accept="image/*" capture="environment" multiple onChange={onPhoto} className="hidden"/>
+            <input ref={albumRef} type="file" accept="image/*" multiple onChange={onPhoto} className="hidden"/>
             {note && <div className="text-xxs text-amber-300">{note}</div>}
           </div>
         )}
@@ -204,8 +293,8 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             <input type="checkbox" disabled={noBase} onChange={(e) => e.target.checked && applyAll()} className="w-4 h-4 accent-cyan-500"/>
             세팅온도 채우기 (실측 칸은 그대로 둡니다)
           </label>
-          <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden"/>
-          <input ref={albumRef} type="file" accept="image/*" onChange={onPhoto} className="hidden"/>
+          <input ref={camRef} type="file" accept="image/*" capture="environment" multiple onChange={onPhoto} className="hidden"/>
+          <input ref={albumRef} type="file" accept="image/*" multiple onChange={onPhoto} className="hidden"/>
         </div>
         {note && <div className="px-4 py-1.5 text-xxs text-amber-300 border-b border-line">{note}</div>}
 
@@ -228,6 +317,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
                     {[c.bay, c.row, c.tier].filter(Boolean).join('/')}
                     {v.src === 'photo' && <span className="text-violet-400 ml-1">📷</span>}
                     {changed && <span className="text-amber-400 ml-1">수정</span>}
+                    {badSet[c.cn] && <span className="text-rose-400 ml-1">⚠ {badSet[c.cn]}</span>}
                   </div>
                 </div>
                 <div className="text-xs2 mono text-center text-dim-400">{edi || '—'}</div>

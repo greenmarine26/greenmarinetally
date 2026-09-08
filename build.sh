@@ -397,6 +397,8 @@ node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검�
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.31: 마감텔리 선사 칸(선적 DWS → CSC·DSL)·규격 칸(40HC → HC)
 node tools/smoke_opalias.cjs || { echo "✗ 마감텔리 선사·규격 칸 연막검사 실패 — 배포 금지"; exit 1; }
+# 3.32: 리퍼 온도 사진 판독 — 양식 비의존·여러 장·판독 검산
+node tools/smoke_reeferphoto.cjs || { echo "✗ 리퍼 사진 판독 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.5-01: 작업 속도 페이스 — 몰아 입력에 속지 않는가(NSDC 2608N 선적 실완료 114대)
 SMOKE_PC=$(mktemp /dev/shm/hometmp/_smokepace_XXXXXX.cjs)
 if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs \

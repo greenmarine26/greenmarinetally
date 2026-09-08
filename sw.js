@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.31';
-const NOTE = '마감텔리 선사 칸이 선적 DWS 를 CSC·DSL 로 가릅니다. 40HC 도 HC 칸으로 갑니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.32';
+const NOTE = '리퍼 온도 사진을 여러 장 한 번에 읽습니다. 세팅온도가 자료와 다르면 그 줄에 알려 줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
