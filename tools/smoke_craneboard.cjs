@@ -49,5 +49,32 @@ ok(r7[0].name === '나중', '이름은 가장 늦게 찍은 사람(나중)');
 ok(U.craneBoardOf(null, []).length === 0 && U.craneBoardOf({ info: {} }, null).length === 0, '빈 항차·null 도 조용히 빈 배열');
 //  터미널 표기·«카토스» 글자가 이름에 새지 않는다
 ok(rows.concat(r2, r3, r4, r5).every(r => !/CATOS|카토스|터미널/.test(r.name)), '이름 칸에 터미널 표기 없음');
+//  ★ 3.30 — **4·5호기가 조용히 사라지지 않는가**(검수사 확답 «③3 유지하고 «+N호기 더»를 누르면 펴지게»).
+//    부두 정본은 PCTC 4호기 · 동방 5호기다 — 상한 3 만 있고 여는 길이 없으면 25~40%가 화면에서 없어진다.
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const cd = fs2.readFileSync(path2.join(__dirname, '..', 'src', 'pages', 'ChiefDashboard.jsx'), 'utf8');
+  ok(/const \[craneOpen, setCraneOpen\] = useState\(false\);/.test(cd), '호기 펼침 상태가 있다(기본은 접힘 — 칸이 안 좁아진다)');
+  ok(/const shown = craneOpen \? cranes\.slice\(0, 5\) : cranes\.slice\(0, 3\);/.test(cd), '⛔ 접으면 3칸·펴면 5칸이 아니다');
+  ok(/setCraneOpen\(\(o\) => !o\)/.test(cd), '⛔ «+N칸 더»를 누를 수 없다 — 안내만 있고 여는 길이 없다');
+  ok(/const bays = craneOpen \? allBays : allBays\.slice\(0, bayCapShut\);/.test(cd),
+    '⛔ 동방 경로(boardBaysOf)가 언제나 3 으로 잘린다 — 총량을 뽑고 화면에서 잘라야 한다');
+  ok(/const openBtn = \(hidden\) =>/.test(cd) && (cd.match(/\{openBtn\(/g) || []).length >= 2,
+    '⛔ 단추가 호기 갈래에만 있다 — 동방 갈래(지금 작업 중인 베이)에서는 펼 길이 없다(감사가 잡은 절반 미배송)');
+  ok(/bays\.length >= 5 \? 'grid-cols-5'/.test(cd), '⛔ 동방 격자가 4·5칸을 모른다 — 펴도 세 칸에 2줄로 접힌다');
+  ok(/craneOpen \? cranes\.slice\(0, 5\)/.test(cd), '⛔ 펼치면 상한이 없다 — 6칸 이상이면 격자가 접혀 그림이 뭉갠다');
+  ok(/\{openBtn\(bayMore\)\}/.test(cd) && /\{openBtn\(more\)\}/.test(cd), '⛔ 두 갈래가 같은 단추를 쓰지 않는다');
+  ok(/shown\.length >= 5 \? 'grid-cols-5'/.test(cd) && /shown\.length === 4 \? 'grid-cols-4'/.test(cd),
+    '⛔ 격자가 4·5칸을 모른다 — 펴도 세 칸에 겹친다');
+  //  부두 정본이 정말 4·5 인지 — 상한을 3 으로 되돌리는 다음 판을 막는다
+  const uu = fs2.readFileSync(path2.join(__dirname, '..', 'src', 'utils.js'), 'utf8');
+  //  ⚠ 종전 정규식은 APP_VERSION **주석**을 먼저 물어 «4|5» 가 언제나 참인 항등식이었다(감사 실측).
+  //    함수 본문을 집어 정본을 읽는다 — 부두별 호기가 3 으로 줄면 여기서 걸린다.
+  const m = uu.match(/export function equipNumbersForPier[\s\S]{0,400}/);
+  ok(!!m, 'equipNumbersForPier 함수를 찾았다');
+  ok(!!m && /5/.test(m[0]) && /4/.test(m[0]),
+    `⛔ 부두별 호기 정본에 4·5호기가 없다 — 상한 3 으로 되돌아갔는가 (${m ? m[0].replace(/\s+/g, ' ').slice(0, 120) : ''})`);
+}
+
 console.log(fail ? `✗ 실패 ${fail}건` : '✓ 실시간 작업 보드 호기별 검사 통과');
 process.exit(fail ? 1 : 0);

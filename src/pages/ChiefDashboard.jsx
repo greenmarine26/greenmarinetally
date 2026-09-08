@@ -2318,6 +2318,12 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
   //    각 칸이 알려 준 «혼자면 이 배율» 중 **가장 작은 것**을 모두에 되돌려 준다.
   const fitsRef = React.useRef({});
   const [groupFit, setGroupFit] = useState(null);
+  //  ★ 3.30 — **호기 칸 상한 3 을 누르면 펴진다**(검수사 확답 2026-09-08 «③3 유지하고 «+N호기 더»를 누르면 펴지게»).
+  //    «최대 3갱까지» 는 2갱 시절 요구인데 부두 정본은 **PCTC 4호기 · 동방 5호기**(utils.equipNumbersForPier)다.
+  //    4갱이면 한 갱(25%), 5갱이면 두 갱(40%)의 작업 베이 그림이 화면에서 통째로 사라졌고,
+  //    동방 경로(boardBaysOf)는 «+N호기 더» 안내조차 없이 조용히 빠졌다(2026-09-08 감사).
+  //    ⇒ 기본은 3칸 그대로 두고(자리가 좁아지는 것을 검수사가 싫어하셨다), 누르면 전부 편다.
+  const [craneOpen, setCraneOpen] = useState(false);
   const reportFit = React.useCallback((key) => (v) => {
     if (!(v > 0)) return;
     const cur = fitsRef.current;
@@ -2328,7 +2334,9 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
   }, []);
   const cranePanel = (() => {
     //  검수사 «최대 3갱까지 보이게 — 좌측 통계, 1 2 3호기, 그 밑에 다른 선박» → 호기는 옆으로 최대 3칸(그 이상은 +N).
-    const shown = cranes.slice(0, 3), more = cranes.length - shown.length;
+    //  펼쳐도 상한은 둔다 — 부두 정본이 5호기까지이고, 6칸을 넘으면 격자가 두 줄로 접혀 그림이 뭉갠다.
+    const shown = craneOpen ? cranes.slice(0, 5) : cranes.slice(0, 3);
+    const more = cranes.length - shown.length;
     //  ★ 3.15: **컨별 자리가 안 오는 배(동방)도 그림을 낸다.** 검수사 2026-09-06 «그림도 보여주세요.
     //    양하는 맞게 내려오고 있고 선적도 계획된 선적이면 맞게 보일테이고 검수앱을 사용하면 맞게보이니까요».
     //    호기→베이를 이을 끈이 동방 자료엔 없으므로(적하목록에 pos·equip 없음) 칸을 **호기가 아니라 베이**로 세운다 —
@@ -2337,13 +2345,31 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     //    ⚠ 호기 자료(QC 합계)가 **아예 없을 때도** 그린다 — 동방 피드는 완료가 먼저 오고 QC 합계가 늦거나 안 올 수 있다
     //      (실측 ATPR 2640E — 양하 EDI 131대·자리 131, qcWork 아직 없음). 그때는 두 칸으로 본다(동방 기본 2갱).
     const noCranePos = !cranes.some((c) => c.bay && /\d/.test(String(c.bay)));
-    const bays = noCranePos && voyage ? boardBaysOf(voyage, Math.min(3, Math.max(2, cranes.length)), 30, boardPages) : [];   // 감사: QC 가 한 대만 올라온 시점에도 두 갱을 본다(동방 기본 2갱)
+    //  3.30: 펼치면 갱 수만큼 낸다 — 접혀 있을 때만 3칸으로 자른다(종전에는 언제나 3이라 4·5갱이 조용히 빠졌다).
+    //  3.30: **총량을 먼저 뽑고 화면에서 자른다.** boardBaysOf 는 정렬 뒤 slice(0, want) 만 하므로
+    //    크게 뽑아 뒤에서 자르는 것과 작게 뽑는 것이 같은 배열이다 — 접힘 결과가 3.29 와 한 글자도 안 달라진다.
+    const bayCapShut = Math.min(3, Math.max(2, cranes.length));   // 감사: QC 가 한 대만 올라온 시점에도 두 갱을 본다(동방 기본 2갱)
+    const allBays = noCranePos && voyage ? boardBaysOf(voyage, Math.max(2, cranes.length || 2), 30, boardPages) : [];
+    const bays = craneOpen ? allBays : allBays.slice(0, bayCapShut);
+    const bayMore = allBays.length - bays.length;
+    //  단추는 **두 갈래가 함께 쓰는 한 벌**이다 — 종전에는 호기 갈래에만 있어서 동방 배는
+    //  «+N 더»를 눌러 볼 길이 아예 없었다(감사가 잡은 «절반 미배송»).
+    const openBtn = (hidden) => ((hidden > 0 || craneOpen) && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setCraneOpen((o) => !o); }}
+        className="px-1.5 py-0.5 rounded-btn border border-line bg-ink-900/60 text-cyan-200 font-bold hover:bg-ink-800"
+        title={craneOpen ? '칸을 셋으로 되돌립니다' : `안 보이는 ${hidden}칸까지 폅니다`}
+      >{craneOpen ? '↩ 접기' : `+${hidden}칸 더 ▾`}</button>
+    ));
     if (bays.length) return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">
-        <div className="text-2xs text-dim-400 font-bold">지금 작업 중인 베이
+        <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5 flex-wrap">
+          <span>지금 작업 중인 베이</span>
           <span className="text-dim-500 font-normal"> · {cranes.length ? `${cranes.map((c) => `${c.no}호기 ${c.done}대`).join(' · ')} — ` : ''}호기별 자리가 안 와 베이로 묶었습니다</span>
+          {openBtn(bayMore)}
         </div>
-        <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${bays.length >= 3 ? 'grid-cols-3' : bays.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${bays.length >= 5 ? 'grid-cols-5' : bays.length === 4 ? 'grid-cols-4' : bays.length >= 3 ? 'grid-cols-3' : bays.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {bays.map((b) => (
             <div key={`${b.mode}-${b.bay}`} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
@@ -2364,11 +2390,14 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     );
     return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">   {/* 2갱이면 75/2 · 3갱이면 75/3 (grid-cols-N) · PC 는 줄 높이를 다 쓴다 */}
-        <div className="text-2xs text-dim-400 font-bold">호기별 작업 베이{more > 0 ? ` (+${more}호기 더)` : ''}</div>
+        <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5">
+          <span>호기별 작업 베이</span>
+          {openBtn(more)}
+        </div>
         {shown.length === 0 ? (
           <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 그 베이 그림이 뜹니다</div>
         ) : (
-          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${shown.length >= 5 ? 'grid-cols-5' : shown.length === 4 ? 'grid-cols-4' : shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {shown.map(c => (
               <div key={c.no} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
