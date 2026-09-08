@@ -3,7 +3,7 @@
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
 import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos } from './utils.js';   // TallyOne 1.55: 실적 자리 판정 단일 소스
-import { getTallyFormat, orderIndex } from './data/tallyFormats.js';
+import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
 
@@ -13,6 +13,23 @@ export const SIZE_COLS = ['20', '40', 'HC', '45'];
 export function tallySizeCol(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   const l = isoToLabel(iso) || '';
+  //  ★ 3.31 — **규격은 `isoToLabel` 이 낸 라벨로만 가른다.** 원본 iso 를 정규식으로 재는 것을 그만둔다.
+  //    왜 (정본 대조 2026-09-08, STSE 2653E 양하): 자료에 코드 계열이 둘이다 —
+  //      ① ISO 6346  `45GP`(둘째 자리 5 = 9'6" 하이큐브) ② 하역사 약식 `40HC`(앞 두 자리가 피트).
+  //    종전 `/^4[5-9]/` 는 ①만 잡아 ②의 `40HC`·`40HR` 이 «40'» 칸으로 떨어졌다. 그래서 같은 배인데
+  //    선적(45GP)은 HC 칸, 양하(40HC)는 40' 칸에 찍혔다 — 정본은 둘 다 HC 다(SIT 양하 HC 101).
+  //    `isoToLabel` 은 두 계열을 이미 한 벌로 정규화한다(45GP → 40HC · 40HR → 40RH · L5G1 → 45HC).
+  //  ⚠ `45GP` 는 두 계열에서 뜻이 갈린다 — ISO 6346 이면 40ft 하이큐브(둘째 자리 5), 약식이면 45ft.
+  //    실자료는 전부 앞쪽이다(45GP·45RE·45GE 가 정본에서 HC 칸). 그래서 **약식으로 읽는 것은
+  //    `20xx`·`40xx` 둘뿐**이고, 그 밖(45·43·L·95…)은 종전 규칙을 그대로 탄다.
+  //    실측 반례 `436E` — 정본은 40' 칸이다(9'0"). 라벨만 믿으면 HC 로 잘못 간다.
+  //  ⚠ HC 칸은 **40ft 짜리만** 간다(감사 지적 2026-09-08). `20HC`(하이큐 20ft, 실측
+  //    ZXJU0130421 — OBWH 세 항차 records)는 앱 확정 규칙대로 20' 칸이다
+  //    (ContainerList 1.55-01 «20HC(26xx)도 20피트 칸에»). 길이를 먼저 보고 높이를 나중에 본다.
+  if (/^(20|40)[A-Z]{2}$/.test(iso)) {
+    if (!iso.startsWith('40')) return '20';
+    return (l.includes('HC') || l.includes('RH')) ? 'HC' : '40';
+  }
   if (l.startsWith('45') || /^L/.test(iso) || /^9[05]\d\d$/.test(iso)) return '45';
   if (/^4[5-9]/.test(iso)) return 'HC';
   if (/^4/.test(iso)) return '40';
@@ -35,6 +52,10 @@ const vals = (o) => Object.values(o || {});
 export function ptkContainers(voyage, mode) {
   const edi = vals(sect(voyage, mode).ediContainers);
   const recs = sect(voyage, mode).records || {};
+  //  3.31: **배별 선사 별칭은 여기서 한 번만 씌운다** — 컨이 텔리로 들어오는 입구다.
+  //    답 함수 안에 세우면 옆길(OS·RF·씰목록)로 들어온 값을 못 막는다(규범 §4-4).
+  const _vsl = String(voyage?.info?.vsl || '').toUpperCase();
+  const _op = shipOpMapper(_vsl, [...edi.map((c) => c.op), ...Object.values(recs).map((r) => r && r.op)]);
   // TallyOne 1.8: **필드 보강** — records(양하/선적 리스트 + 검수원 입력)의 값을 EDI 컨에 덮는다.
   //   왜: BAPLIE에는 실번호도 리퍼 온도도 없다. 그 둘은 리스트에서 오고 records 에 있다.
   //   화면(VoyagePage 271~/624행)은 진작부터 병합해서 보여 주는데 텔리만 ediContainers 만 읽어서,
@@ -42,7 +63,8 @@ export function ptkContainers(voyage, mode) {
   //   Lug 키 사고(1.3-02)와 같은 계열 — 화면과 텔리가 서로 다른 소스를 보던 문제다.
   //   ⚠ 컨을 **추가하지 않는다**. 필드만 채운다 — 추가하면 Final Work·OS·PORTPERFORMANCE
   //     집계가 통째로 흔들린다. 여기 목적은 빈칸 채우기지 대수 변경이 아니다.
-  const merged = edi.map((c) => {
+  const merged = edi.map((c0) => {
+    const c = _op(c0.op) === c0.op ? c0 : { ...c0, op: _op(c0.op) };
     const r = recs[c.cn];
     if (!r) return c;
     const out = { ...c };
@@ -56,6 +78,7 @@ export function ptkContainers(voyage, mode) {
     if (r.rfAct != null && String(r.rfAct).trim() !== '') out.rfAct = r.rfAct;
     // 1.8-04: 리퍼드라이·제작컨 표시는 records 에만 있다(수집기 패치·검수원 입력). 텔리가
     //   RF 목록에서 이 둘을 빼려면 여기서 들고 가야 한다 — 안 그러면 EDI에 없어 항상 false 다.
+    if (r.op != null && String(r.op).trim() !== '') out.op = _op(r.op);
     if (r.rfdry === true) out.rfdry = true;
     if (r.mkcon === true) out.mkcon = true;
     // TallyOne 1.55: **실적 자리(bay_actual/row_actual/tier_actual)를 들고 온다.**
@@ -87,16 +110,29 @@ export function buildMatrix(containers, mode) {
 /** 매트릭스 → 사전 순서대로 행 배열 [{op, port, fe, sizes:{}}]. 사전에 없는 op/port는 뒤에. */
 export function matrixRows(matDis, matLoad, matShift, fmt) {
   const ops = new Set([...Object.keys(matDis), ...Object.keys(matLoad), ...Object.keys(matShift)]);
-  const opList = [...ops].sort((a, b) => orderIndex(fmt.ops, a) - orderIndex(fmt.ops, b) || a.localeCompare(b));
+  //  3.31: 자식 선사(CSC·DSL 등)는 **부모 이름으로 묶어 정렬**하고, 부모 안에서는 사전 순서를 지킨다.
+  //    실물 Final Work — OPERATOR 칸은 «DWS» 한 번, PORT 칸이 «(CSC) TAO» · «(DSL) TAO» 로 갈린다
+  //    (정본 실측 STSE 2653E&2654W · STMJ 2639E&2640W · TMPZ 는 «TJM» 아래 «(DWS)» · «(MAS)»).
+  const opList = [...ops].sort((a, b) =>
+    orderIndex(fmt.ops, opParent(fmt, a)) - orderIndex(fmt.ops, opParent(fmt, b)) ||
+    subIndex(fmt, a) - subIndex(fmt, b) || a.localeCompare(b));
   const rows = [];
   for (const op of opList) {
+    const parent = opParent(fmt, op);
+    const isSub = parent !== op;
     const ports = new Set([
       ...Object.keys(matDis[op] || {}), ...Object.keys(matLoad[op] || {}), ...Object.keys(matShift[op] || {})]);
     const portList = [...ports].sort((a, b) => orderIndex(fmt.ports, a) - orderIndex(fmt.ports, b) || a.localeCompare(b));
     for (const port of portList) {
       for (const fe of ['F', 'E']) {
         rows.push({
+          //  ⚠ `op`·`port` 는 **원래 값 그대로** 둔다 — 엑셀 변형 양식(TMPZ)이 `pairRows` 의
+          //    «자식|항구» 로 행을 찾기 때문이다(tallyExcel `fillVariantFinalWork`). 여기서 라벨을
+          //    박아 버리면 그 배 Final Work 가 행을 못 찾아 숫자를 통째로 버린다(감사 실측 4행).
+          //    표에 찍는 글자는 `opLabel`·`portLabel` 로 따로 낸다.
           op, port, fe,
+          opLabel: parent, portLabel: isSub ? `(${op}) ${port}` : port,
+          subOp: isSub ? op : '', parentOp: parent,
           dis: (matDis[op]?.[port]?.[fe]) || {},
           load: (matLoad[op]?.[port]?.[fe]) || {},
           shift: (matShift[op]?.[port]?.[fe]) || {},
@@ -155,7 +191,8 @@ export function buildOS(containers, compMap, mode, fmt) {
     if (c.dg) byOp[op]._dg = (byOp[op]._dg || 0) + 1;
   }
   const remarks = Object.entries(byOp)
-    .sort((a, b) => orderIndex(fmt.ops, a[0]) - orderIndex(fmt.ops, b[0]))
+    .sort((a, b) => orderIndex(fmt.ops, opParent(fmt, a[0])) - orderIndex(fmt.ops, opParent(fmt, b[0]))
+      || subIndex(fmt, a[0]) - subIndex(fmt, b[0]) || a[0].localeCompare(b[0]))
     .map(([op, o]) => {
       const parts = Object.entries(o).filter(([k]) => !k.startsWith('_'))
         .map(([k, n]) => `${k} x ${n}`);
@@ -170,6 +207,10 @@ export function buildOS(containers, compMap, mode, fmt) {
 /** Act. Cntr-Seal(실번호 상이) — sl_orig ≠ sl 또는 리씰 */
 export function buildSealList(voyage, mode) {
   const recs = vals(sect(voyage, mode).records);
+  //  3.31: 이 시트는 ptkContainers 를 안 지나므로 별칭을 여기서 따로 씌운다 —
+  //    안 그러면 같은 워크북 안에서 Final Work 는 «DSL·WDG», 이 시트는 «DWS·WDF» 가 된다(감사 실측).
+  const _op = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(),
+    [...recs.map((r) => r && r.op), ...vals(sect(voyage, mode).ediContainers).map((c) => c && c.op)]);
   const out = [];
   for (const r of recs) {
     const orig = String(r.sl_orig || '').trim();
@@ -179,7 +220,7 @@ export function buildSealList(voyage, mode) {
       out.push({
         cn: r.cn, manifestSeal: orig || act, size: tallySizeCol(r) === '20' ? "20'" : "40'",
         actualSeal: (orig && act && orig !== act) ? act : '',
-        reseal, remarks: String(r.op || '').toUpperCase(),
+        reseal, remarks: _op(r.op),
         fe: r.fe === 'E' ? 'EMPTY' : 'FULL',
       });
     }
@@ -309,7 +350,8 @@ export function buildPerformance(disCs, loadCs, fmt) {
   };
   const inb = agg(disCs), outb = agg(loadCs);
   const ops = [...new Set([...Object.keys(inb), ...Object.keys(outb)])]
-    .sort((a, b) => orderIndex(fmt.ops, a) - orderIndex(fmt.ops, b) || a.localeCompare(b));
+    .sort((a, b) => orderIndex(fmt.ops, opParent(fmt, a)) - orderIndex(fmt.ops, opParent(fmt, b))
+      || subIndex(fmt, a) - subIndex(fmt, b) || a.localeCompare(b));
   return { inbound: inb, outbound: outb, ops };
 }
 
@@ -317,9 +359,12 @@ export function buildPerformance(disCs, loadCs, fmt) {
 export function buildShifting(voyage) {
   let map = {};
   try { map = computeShiftingMapCached(voyage.key || voyage?.info?.vsl || 'k', voyage) || {}; } catch { /* 계산 실패 시 빈 목록 */ }
-  return Object.values(map).map((s, i) => ({
+  const _all = Object.values(map);
+  //  3.31: 시프팅도 같은 벌 — 안 씌우면 SHIFTING 시트와 Final Work 의 시프팅 칸이 옛 코드로 갈린다.
+  const _op = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _all.map((s) => s && s.op));
+  return _all.map((s, i) => ({
     no: i + 1, cn: s.cn || s.CN || '', type: s.iso ? (tallySizeCol(s) === '20' ? "20'" : "40'") : '',
-    fe: s.fe || '', wt: s.wt || '', op: String(s.op || '').toUpperCase(),
+    fe: s.fe || '', wt: s.wt || '', op: _op(s.op),
     oldPos: s.oldPos || [s.bay, s.row, s.tier].filter(Boolean).join(''),
     newPos: s.newPos || '', pod: port3(s.pod), pol: port3(s.pol),
   }));

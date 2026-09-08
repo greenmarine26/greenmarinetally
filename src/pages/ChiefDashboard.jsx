@@ -28,6 +28,7 @@ import { getShipBayDictData } from '../shipStructure.js';   // ★ 3.15: 보드�
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // ★ 3.15: 장 목록 — BayPlan 이 쓰는 것과 같은 한 벌
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';   // 3.11: 보드 그림의 칸을 누르면 컨 상세(베이플랜과 같은 모달 — 검수사 «베이플랜과 동일하게»)
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
+import { shipOpMapper } from '../data/tallyFormats.js';
 import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
 
@@ -2288,6 +2289,11 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
   }, [voyage?.info?.imo, voyage?.info?.vsl, v.key]);
   const boardContainers = useMemo(() => {
     const out = {};
+    //  3.31: 보드 별첨1(선사별)·베이 그림 색도 마감텔리와 같은 선사 코드로(감사 지적).
+    const _spOpB = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(),
+      ['discharge', 'loading'].flatMap((m) => [
+        ...Object.values(voyage?.[m]?.ediContainers || {}), ...Object.values(voyage?.[m]?.records || {}),
+      ]).map((c) => c && c.op));
     const pad2 = (x) => String(x ?? '').padStart(2, '0');
     for (const mode of ['discharge', 'loading']) {
       const sec = voyage?.[mode]; if (!sec) { out[mode] = []; continue; }
@@ -2298,13 +2304,13 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         const gone = rec.bay_actual === '__STG__' || !!rec.planTaken;   // 감사: 임시창고·자리를 내준 컨은 탭처럼 격자에서 뺀다(한 칸 두 대 방지)
         const hasA = !gone && rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null && !String(rec.bay_actual).startsWith('__');
         const hasG = !gone && !hasA && rec.bay_assign && rec.row_assign && rec.tier_assign && !String(rec.bay_assign).startsWith('__');   // 3.13: 자동 맞교환 자리
-        return { ...e, _inList: !!recMap[e.cn] || !!e._inList, _assigned: !!hasG, _assign_warn: hasG ? (rec._assign_warn || '') : '',
+        return { ...e, op: e.op ? _spOpB(e.op) : e.op, _inList: !!recMap[e.cn] || !!e._inList, _assigned: !!hasG, _assign_warn: hasG ? (rec._assign_warn || '') : '',
           bay: gone ? '' : pad2(hasA ? rec.bay_actual : hasG ? rec.bay_assign : e.bay), row: gone ? '' : pad2(hasA ? rec.row_actual : hasG ? rec.row_assign : e.row), tier: gone ? '' : pad2(hasA ? rec.tier_actual : hasG ? rec.tier_assign : e.tier) };
       });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ediMaps, recSig]);
+  }, [ediMaps, recSig, voyage?.info?.vsl]);   // 3.31: 배가 바뀌면 선사 별칭도 다시
   //  그림에 줄 수 있는 높이 — 보드 높이(100vh − 9rem)를 줄 수(최대 4)로 나누고 카드·호기 머리(≈ 60px)를 뺀다. 포커스(그 배만)면 한 줄 전부.
   const wide = typeof window !== 'undefined' && window.innerWidth >= 640;   // sm 이상 = 가로 배치(줄 높이가 정해짐) → 칸 높이를 재서 채운다
   const fitMaxH = React.useCallback(() => {

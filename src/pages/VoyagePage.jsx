@@ -66,6 +66,7 @@ import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';
+import { shipOpMapper } from '../data/tallyFormats.js';
 import PrintableCargoPlanV2 from '../components/PrintableCargoPlanV2.jsx';   // 2.87-01: 미르가 «카고플랜 보여줘» 하면 이것만 띄운다   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
@@ -606,6 +607,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         merged[r.cn] = { ...merged[r.cn], ...safeR, _inList: true };   // V8.87-01: 리스트 등록 표식(별첨 평택 판정)
       }
     });
+    //  3.31: 카고플랜·베이그리드도 같은 선사를 본다 — 색 키(getContainerColorKey)가 op 를 읽는다.
+    const _mv2 = Object.values(merged);
+    const _spOp2 = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _mv2.map((c) => c && c.op));
+    for (const c of _mv2) {
+      if (!c || !c.op) continue;
+      const _o = _spOp2(c.op);
+      if (_o !== c.op) c.op = _o;
+    }
     const list = Object.values(merged);
 
     // M4.9e-fix 2단계: 선적 모드 effective 위치 적용 (베이그리드도 실체 위치에 그려지게)
@@ -671,7 +680,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return list;
-  }, [fullEdiMap, recMap, mode]);
+  }, [fullEdiMap, recMap, mode, voyage?.info?.vsl]);   // 3.31: 배가 바뀌면 선사 별칭도 다시
 
   // V9.03: 베이플랜/카고플랜용 목록에 긴급/수화물 마커 주입
   const allEdiContainers = useMemo(
@@ -845,6 +854,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //   raw 전문(fullEdiMap) 기준이라 여기서 빼도 그대로 그려진다. V9.08 원칙: 확정이 오면 그것이 진실.
     //   3.26: 그 규칙을 utils.dropFilledBookingSlots 한 벌로 — 실번호가 자리 **총수**를 채우면 자리 전부, 부분이면 F/E 별(종전).
     //     F/E 별만 보면 F/E 칸이 없는 리스트(동진)에서 E 자리가 남아 목록이 두 배 가까이 됐다(SWBT 2614N 543행).
+    //  3.31 (김명보 부장 «선적 dws ==csc dsl로 구분»): 배별 선사 별칭을 **머지 끝에서 한 번** 씌운다.
+    //    화면·미르·카고플랜 색이 전부 이 목록을 보므로, 여기서 정해 두면 마감텔리·작업리포트·
+    //    검수리스트와 같은 선사가 나온다. 별칭이 없는 배는 값이 그대로다.
+    const _mv = Object.values(merged);
+    const _spOp = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _mv.map((c) => c && c.op));
+    for (const c of _mv) {
+      if (!c || !c.op) continue;
+      const _o = _spOp(c.op);
+      if (_o !== c.op) c.op = _o;
+    }
     const baseContainers = dropFilledBookingSlots(Object.values(merged)).sort((a, b) => {
       const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
       const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
@@ -881,7 +900,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix]);   // 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다
+  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl]);   // 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(

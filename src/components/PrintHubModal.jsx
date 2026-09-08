@@ -11,6 +11,7 @@ import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots } from '../utils.js';
 
+import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
   const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
@@ -171,7 +172,14 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // 검수 리스트용 — 평택분만
   //  3.26: 부킹 자리(예상 EDI)를 실번호가 다 채웠으면 자리는 목록에서 뺀다(검수 리스트·VGM = 실번호). 별첨은 반대로
   //    자리(계획)를 세고 채운 실번호를 뺀다 — 칸(그림)과 같은 표. 둘 다 utils 한 벌(SWBT 2614N 316+316=632 사건).
-  const ptkAll = allContainers.filter(isPtk);
+  //  3.31: 인쇄 카고플랜 별첨1 선사 라벨도 마감텔리와 같은 벌이어야 한다(감사 지적) —
+  //    이 화면은 제 목록을 따로 만들어 VoyagePage 의 별칭을 안 탄다.
+  const _spOpP = shipOpMapper(String(voyageInfo?.vsl || voyage?.info?.vsl || '').toUpperCase(),
+    allContainers.map((c) => c && c.op));
+  const ptkAll = allContainers.filter(isPtk).map((c) => {
+    const _o = c && c.op ? _spOpP(c.op) : null;
+    return (_o && _o !== c.op) ? { ...c, op: _o } : c;
+  });
   const ptkContainers = dropFilledBookingSlots(ptkAll);
   //  별첨은 ptkAll 을 그대로 넘긴다 — 자리/실번호 가르기(legendItemsOf)는 PrintableCargoPlanV2 한 곳에서만 한다(두 번 걸면 계획 밖 추가분이 사라진다 — 2차 감사).
 

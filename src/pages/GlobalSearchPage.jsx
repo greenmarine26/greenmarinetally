@@ -10,6 +10,7 @@ import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from 
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
 import { mirTone, mirSmallTalk } from '../mirChat.js';
 import { mirKnowledge } from '../data/mirKnowledge.js';
+import { shipOpMapper } from '../data/tallyFormats.js';
 import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
 import { fbGetDamagePhoto, fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
@@ -107,13 +108,18 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         const xraySeals = sec.xraySeals || {};
         const compMap = sec.completed || {};
         const merged = {};
-        Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi' }; });
+        //  3.31: 통합검색도 항차 화면·마감텔리와 같은 선사 코드로(감사 지적 — 같은 배를 두 화면이
+        //    다르게 답하면 안 된다). 배별 별칭이고 근거 없으면 원래 값 그대로다.
+        const _spOpG = shipOpMapper(String(v.info?.vsl || '').toUpperCase(),
+          [...Object.values(ediMap), ...Object.values(recMap)].map((c) => c && c.op));
+        Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi', op: c.op ? _spOpG(c.op) : c.op }; });
         Object.values(recMap).forEach(r => {
           const safeR = {};
           Object.keys(r).forEach(k => {
             const v = r[k];
             if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) safeR[k] = v;
           });
+          if (safeR.op) safeR.op = _spOpG(safeR.op);
           merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(미르 «선적 몇 대» 가 한 번만 세게)
         });
         Object.values(merged).forEach(c => {

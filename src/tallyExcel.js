@@ -67,8 +67,10 @@ function sheetFinalWork(wb, D) {
   let r = sub + 1;
   let lastOp = '', lastPort = '';
   for (const row of D.rows) {
-    ws.getCell(`A${r}`).value = row.op !== lastOp ? row.op : '';
-    ws.getCell(`B${r}`).value = (row.op !== lastOp || row.port !== lastPort) ? row.port : '';
+    //  3.31: 라벨(부모·«(자식) 항구»)로 찍는다 — 없는 배는 종전 값 그대로다.
+    const _ol = row.opLabel || row.op; const _pl = row.portLabel || row.port;
+    ws.getCell(`A${r}`).value = _ol !== lastOp ? _ol : '';
+    ws.getCell(`B${r}`).value = (_ol !== lastOp || _pl !== lastPort) ? _pl : '';
     ws.getCell(`C${r}`).value = row.fe;
     const put = (c0, o) => ['20', '40', 'HC', '45'].forEach((s, i) =>
       ws.getCell(`${String.fromCharCode(c0.charCodeAt(0) + i)}${r}`).value = nz(o[s]));
@@ -77,7 +79,7 @@ function sheetFinalWork(wb, D) {
       const cell = ws.getRow(r).getCell(c);
       cell.font = BODY_FONT; cell.border = BOX; cell.alignment = { horizontal: 'center' };
     }
-    lastOp = row.op; lastPort = row.port;
+    lastOp = _ol; lastPort = _pl;
     r++;
   }
   // Total 2행 (F/E) — 실물 규칙: Total 행만 0 표기
@@ -416,14 +418,18 @@ async function fillTemplate(D, ExcelJS) {
       const row = D.rows[i];
       const cells = ws.getRow(r);
       if (row) {
-        if (!opBlocks.length || opBlocks[opBlocks.length - 1].op !== row.op) {
-          cells.getCell(1).value = row.op;
-          opBlocks.push({ op: row.op, r1: r, r2: r });
+        //  3.31: 표에 찍는 글자는 `opLabel`(부모 한 번)·`portLabel`(«(자식) 항구»)이다.
+        //    `row.op`·`row.port` 는 자리 찾기용 원래 값이라 여기 쓰면 부모가 안 묶인다.
+        const _ol = row.opLabel || row.op;
+        const _pl = row.portLabel || row.port;
+        if (!opBlocks.length || opBlocks[opBlocks.length - 1].op !== _ol) {
+          cells.getCell(1).value = _ol;
+          opBlocks.push({ op: _ol, r1: r, r2: r });
         } else opBlocks[opBlocks.length - 1].r2 = r;
         const pb = portBlocks[portBlocks.length - 1];
-        if (!pb || pb.op !== row.op || pb.port !== row.port) {
-          cells.getCell(2).value = row.port;
-          portBlocks.push({ op: row.op, port: row.port, r1: r, r2: r });
+        if (!pb || pb.op !== _ol || pb.port !== _pl) {
+          cells.getCell(2).value = _pl;
+          portBlocks.push({ op: _ol, port: _pl, r1: r, r2: r });
         } else portBlocks[portBlocks.length - 1].r2 = r;
         cells.getCell(3).value = row.fe;
         ['20','40','HC','45'].forEach((sz, k) => {

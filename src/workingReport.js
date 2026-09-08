@@ -8,6 +8,7 @@
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
 import { formatBerth, isPyeongtaekPort, isReeferIso} from './utils.js';
+import { shipOpMapper } from './data/tallyFormats.js';
 const PORT_MAP = {
   // 표준 5자
   // V9.57(G13): 평택 표기 7종(utils.isPyeongtaekPort의 PYEONGTAEK_CODES)과 정합 —
@@ -55,9 +56,12 @@ function normalizePort(code) {
   return '?';
 }
 
-function normalizeOp(c) {
+//  3.31: `vsl` 은 배 코드다 — 배별 선사 별칭(STSE·STMJ 의 DWS→DSL · WDF→WDG)을 여기서 씌운다.
+//    안 씌우면 작업리포트만 옛 코드로 남아 마감텔리와 갈린다(규범 §4-4 «같은 판정 한 벌»).
+function normalizeOp(c, shipOp) {
   // M5.68 — 영구 규칙: voucher OPERATOR는 항상 3자 (4자 약자는 앞 3자만)
-  const to3 = (s) => String(s || '').slice(0, 3).toUpperCase();
+  const _sp = shipOp || ((x) => String(x || '').toUpperCase().trim());
+  const to3 = (s) => _sp(String(s || '').slice(0, 3).toUpperCase());
 
   // M5.79: 부킹 슬롯 (평택 적재 컨번호 미입력)은 선사 코드도 미정
   //   __BOOK_ 임시 ID의 앞 3자(__B/_BO)가 선사로 잡히는 사고 방지
@@ -67,22 +71,22 @@ function normalizeOp(c) {
   // 1순위: EDI에서 추출된 op (NAD+CA)
   if (c.op) {
     const op = String(c.op).toUpperCase();
-    if (CARRIER_MAP[op]) return CARRIER_MAP[op];  // 매핑된 값은 이미 3자
+    if (CARRIER_MAP[op]) return _sp(CARRIER_MAP[op]);  // 매핑된 값은 이미 3자
     return to3(op);
   }
   // 2순위: BL 번호 prefix (4자)
   if (c.bl && c.bl.length >= 4) {
     const blp = c.bl.slice(0, 4).toUpperCase();
-    if (CARRIER_MAP[blp]) return CARRIER_MAP[blp];
+    if (CARRIER_MAP[blp]) return _sp(CARRIER_MAP[blp]);
   }
   // 3순위: 선사부호 컬럼
   if (c.carrierCode) {
     const cc = String(c.carrierCode).toUpperCase();
-    if (CARRIER_MAP[cc]) return CARRIER_MAP[cc];
+    if (CARRIER_MAP[cc]) return _sp(CARRIER_MAP[cc]);
     return to3(cc);
   }
   // 폴백: cn prefix (앞 3자) — 부킹 슬롯이면 차단
-  if (!isBooking && c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
+  if (!isBooking && c.cn && c.cn.length >= 3) return to3(c.cn);
   return '?';
 }
 
@@ -164,6 +168,15 @@ function orderPorts(ports) {
 
 // ============ 데이터 집계 ============
 function buildBuckets(voyage, mode = 'settlement') {
+  //  3.31: 배별 선사 별칭 — 그 항차에 실제로 있는 코드를 보고 만든다(근거 없으면 안 가른다).
+  const _allOps = [];
+  for (const leg of ['discharge', 'loading']) {
+    const sec = voyage?.[leg] || {};
+    for (const src of [sec.ediContainers, sec.records]) {
+      for (const c of Object.values(src || {})) if (c && c.op) _allOps.push(c.op);
+    }
+  }
+  const _spOp = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _allOps);
   const disch = {}, load = {};
 
   const addToBucket = (bucket, op, port, size, fe) => {
@@ -184,7 +197,7 @@ function buildBuckets(voyage, mode = 'settlement') {
       if (!c) return;
       // 작업용 모드: records에 없으면 skip
       if (actualCns && c.cn && !actualCns.has(String(c.cn).toUpperCase())) return;
-      const op = normalizeOp(c);
+      const op = normalizeOp(c, _spOp);
       const port = getPort(c, mode);
       const size = getSizeKey(c);
       const fe = getFE(c);
@@ -243,7 +256,7 @@ function buildBuckets(voyage, mode = 'settlement') {
         }
         c.cn = cn;
         if (!c.cn) return;
-        const op = normalizeOp(c);
+        const op = normalizeOp(c, _spOp);
         const port = getPort(c, dlMode);
         const size = getSizeKey(c);
         const fe = getFE(c);

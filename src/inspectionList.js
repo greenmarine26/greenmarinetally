@@ -8,6 +8,7 @@
 //   - 시트1=전체, 시트2=특수화물 별첨
 
 import { openPrintWindow } from './printHelper.js';
+import { shipOpMapper } from './data/tallyFormats.js';
 import { isoToLabel, overDims} from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   full: '#ffffff',
@@ -229,8 +230,22 @@ const packPages = (rows, perCol = PER_COL) => {
 };
 
 // 메인: 검수 리스트 HTML 생성
+
+/** 3.31: 배별 선사 별칭을 **입구에서 한 번** 씌워 c.op 에 박아 둔다.
+ *  정렬·순번·인쇄·CSV 가 각자 normalizeCarrier 를 부르므로, 여기서 한 벌로 정해 두면
+ *  아래 어느 경로로 가도 같은 선사가 나온다(규범 §4-4). normalizeCarrier 는 c.op 가
+ *  있으면 그것을 쓰므로 두 번 돌려도 값이 안 바뀐다. */
+function withShipOp(containers, voyageInfo) {
+  const list = Array.isArray(containers) ? containers : Object.values(containers || {});
+  const sp = shipOpMapper(String(voyageInfo?.vsl || '').toUpperCase(), list.map((c) => c && c.op));
+  return list.map((c) => {
+    const op = sp(normalizeCarrier(c));
+    return (op && op !== '?' && op !== c.op) ? { ...c, op } : c;
+  });
+}
+
 export function generateInspectionListHTML(containers, mode, voyageInfo, shiftingList = []) {
-  const list = Array.isArray(containers) ? [...containers] : Object.values(containers || {});
+  const list = withShipOp(containers, voyageInfo);
   if (list.length === 0) return '<p>컨테이너 없음</p>';
 
   // M5.52: 선사별 정렬 (1차) → 사이즈/F-E (2차) → 컨번호 (3차)
@@ -534,6 +549,7 @@ export function openVgmListPrint(containers, voyageInfo) {
 }
 
 export function openInspectionListPrint(containers, mode, voyageInfo, shiftingList = []) {
+  containers = withShipOp(containers, voyageInfo);   // 3.31: CSV 도 화면과 같은 선사로
   const html = generateInspectionListHTML(containers, mode, voyageInfo, shiftingList);
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) {
