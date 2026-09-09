@@ -139,6 +139,15 @@ ok(rows.concat(r2, r3, r4, r5).every(r => !/CATOS|카토스|터미널/.test(r.na
   //    재감사 지적(2026-09-09) · 실측 근거 OBWH 2735E 에서 1호기가 베이 02·03 을 오갔다.
   const vAdj = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 2, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 2, lodDone: 0 } } },
     discharge: { termWork: { A: T(60000, '020384'), B: T(60000, '030484'), C: T(120000, '020584'), D: T(120000, '100686') } }, loading: {} };
+  //  ⛔ 3.38-01 라이브 실측 — 17·19 는 «BAY 17 BAY (18)19» 한 그림이다. 차 2 도 한 자리로 봐야 한다.
+  const vLive = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 78, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 94, lodDone: 0 } } },
+    discharge: { termWork: { P: T(60000, '170184'), Q: T(60000, '190284'), R: T(120000, '070384'), S: T(180000, '170484'), V: T(180000, '190584'),
+      W: T(240000, '070684'), X: T(240000, '180786') } }, loading: {} };
+  const tL = U.craneBaysByTime(vLive);
+  ok(tL.byBay['17'] === undefined && tL.byBay['19'] === undefined && tL.skipped >= 2,
+    `⛔ 한 그림에 그려지는 17·19 를 두 호기로 갈랐다 — 라이브에서 두 호기가 같은 그림을 그렸다 (byBay ${JSON.stringify(tL.byBay)} · skipped ${tL.skipped})`);
+  ok(tL.byBay['7'] === 1 && tL.byBay['18'] === 2, `떨어진 7·18 은 제대로 갈린다 (${JSON.stringify(tL.byBay)})`);
+
   const tA = U.craneBaysByTime(vAdj);
   ok(tA.skipped === 1 && tA.byBay['3'] === undefined && tA.byBay['2'] === 1 && tA.byBay['10'] === 2 && tA.at === 120000,
     `⛔ 붙은 베이 짝(02·03)을 두 호기로 갈랐다 — 한 크레인 자리다 (skipped ${tA.skipped} · byBay ${JSON.stringify(tA.byBay)})`);
