@@ -76,5 +76,79 @@ ok(rows.concat(r2, r3, r4, r5).every(r => !/CATOS|카토스|터미널/.test(r.na
     `⛔ 부두별 호기 정본에 4·5호기가 없다 — 상한 3 으로 되돌아갔는가 (${m ? m[0].replace(/\s+/g, ' ').slice(0, 120) : ''})`);
 }
 
+//  ★ 3.38: 동방(컨별 호기 없음)도 **같은 시각에 함께 찍힌 베이**로 호기·베이를 잇는다.
+//    검수사 확정 2026-09-09 «동시간대 … 하나는 02베이 하나는 10번베이라면 1호기 2번베이 2호기 10번 베이».
+//    ⚠ 소스를 훑지 않고 **실제로 돌려서 값을 본다**(인계함 교훈 — 이름만 바꾸면 뚫리는 검사를 만들지 않는다).
+{
+  const T = (at, pos) => ({ at, pos, src: 'pnct' });
+  const vP = { info: { vsl: 'OBWH', pier: 'PNCT', qcWork: { QC101: { qc: 'QC101', disDone: 24, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 28, lodDone: 0 } } },
+    discharge: { termWork: {
+      A1: T(1000 * 60 * 1, '020384'), B1: T(1000 * 60 * 1, '100786'),      // 같은 시각 — 작은 베이 02 = 1호기
+      A2: T(1000 * 60 * 3, '060486'), B2: T(1000 * 60 * 3, '140586'),      // 같은 시각 — 06 = 1호기 · 14 = 2호기
+      C1: T(1000 * 60 * 5, '140884'),                                      // 짝 없음 — 이름표(14→2호기)로 붙는다
+    } }, loading: {} };
+  const tb = U.craneBaysByTime(vP);
+  //  «그 순간»의 바구니 하나로 정한다 — 가장 늦은 성한 바구니(3분: 06·14)가 지금 자리다
+  ok(tb.pairs === 2 && tb.byBay['6'] === 1 && tb.byBay['14'] === 2 && Object.keys(tb.byBay).length === 2,
+    `가장 늦은 동시각 바구니로 베이→호기 (${JSON.stringify(tb.byBay)})`);
+  const rP = U.craneBoardOf(vP, []);
+  const c1 = rP.find((c) => c.no === 1), c2 = rP.find((c) => c.no === 2);
+  ok(!!c1 && c1.bay === '6' && c1.dis === 24 && c1.qc && c1.src === 'qcbay', `동방 1호기 = 베이 6 · 양하 24대 (${JSON.stringify(c1)})`);
+  ok(!!c2 && c2.bay === '14' && c2.dis === 28 && c2.qc && c2.src === 'qcbay', `동방 2호기 = 베이 14 · 양하 28대 (${JSON.stringify(c2)})`);
+  ok(!rP.some((c) => !(c.bay && /\d/.test(String(c.bay)))), '⛔ 자리가 안 붙은 호기가 있다 — 화면이 다시 «베이로 묶었습니다» 로 떨어진다');
+  //  사람이 찍은 자리를 터미널 추론이 덮지 않는다
+  const vH = JSON.parse(JSON.stringify(vP));
+  vH.discharge.completed = { Z9: { by: '김성일', at: 1000 * 60 * 9, equip: '1호기' } };
+  vH.discharge.records = { Z9: { bay_actual: '22' } };
+  const cH = U.craneBoardOf(vH, []).find((c) => c.no === 1);
+  ok(!!cH && cH.bay === '22', `사람이 찍은 자리(22)가 터미널 추론을 이긴다 (${cH && cH.bay})`);
+  //  호기가 하나뿐이면 가르지 않는다(짝이 없다)
+  const vOne = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 5, lodDone: 0 } } }, discharge: { termWork: { A1: T(60000, '020384') } }, loading: {} };
+  ok(U.craneBaysByTime(vOne).pairs === 0 && !Object.keys(U.craneBaysByTime(vOne).byBay).length, '호기 하나면 시각으로 가르지 않는다');
+  //  터미널 자료가 아예 없으면 종전대로 «자리 없음»
+  const vNo = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 3, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 4, lodDone: 0 } } }, discharge: {}, loading: {} };
+  ok(U.craneBoardOf(vNo, []).every((c) => c.bay === ''), '터미널 자료가 없으면 종전대로 자리 없음');
+
+  //  ── 감사 지적(2026-09-09) 회귀 — «조용히 틀리느니 안 붙인다» ─────────────────
+  //  ⛔ 3갱인데 두 대만 도는 바구니 — 종전 코드는 호기 목록 앞자리(1·2호기)에 꽂아 **남의 베이 그림**을 냈다.
+  const v3 = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 5, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 6, lodDone: 0 }, QC103: { qc: 'QC103', disDone: 7, lodDone: 0 } } },
+    discharge: { termWork: { A: T(60000, '100786'), B: T(60000, '140586'), C: T(120000, '100388') } }, loading: {} };
+  const t3 = U.craneBaysByTime(v3);
+  ok(t3.pairs === 0 && !Object.keys(t3.byBay).length && /못 가렸다|호기/.test(t3.why || ''),
+    `⛔ 3갱인데 두 대만 돈 바구니로 이름표를 만들었다 (pairs ${t3.pairs} · byBay ${JSON.stringify(t3.byBay)} · why «${t3.why}»)`);
+  ok(U.craneBoardOf(v3, []).every((c) => c.bay === ''), '⛔ 일부 호기만 자리가 붙어 나머지가 그림을 잃는다 — 전부 아니면 전무여야 한다');
+
+  //  ⛔ 한 분에 세 베이(한 크레인이 두 대를 낸 분) — 가운데가 틀리게 붙으면 안 된다
+  const vOver = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 2, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 2, lodDone: 0 } } },
+    discharge: { termWork: { A: T(60000, '020384'), B: T(60000, '030484'), C: T(60000, '100586'),
+      D: T(120000, '020684'), E: T(120000, '100786'), F: T(180000, '020884'), G: T(180000, '100986') } }, loading: {} };
+  const tO = U.craneBaysByTime(vOver);
+  ok(tO.skipped === 1 && tO.pairs === 2 && tO.byBay['3'] === undefined,
+    `⛔ 베이가 호기 수보다 많은 바구니를 썼다 — 가운데 베이가 남의 호기로 붙는다 (skipped ${tO.skipped} · pairs ${tO.pairs} · byBay ${JSON.stringify(tO.byBay)})`);
+  ok(tO.byBay['2'] === 1 && tO.byBay['10'] === 2, `성한 바구니로는 제대로 붙는다 (${JSON.stringify(tO.byBay)})`);
+
+  //  ⛔ 크레인이 옮겨 다닌 과거가 «지금 자리»를 흐리면 안 된다 — 베이 6 을 1호기가 하다 2호기가 이어받은 자료.
+  //    누적 표로 굳히면 6 이 1호기로 남는다(실측 OBWH 2735E 에서 베이 10 이 그랬다).
+  const vTie = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 2, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 2, lodDone: 0 } } },
+    discharge: { termWork: { A: T(60000, '060384'), B: T(60000, '140484'), C: T(120000, '020584'), D: T(120000, '060684') } }, loading: {} };
+  const tT = U.craneBaysByTime(vTie);
+  ok(tT.byBay['6'] === 2 && tT.byBay['2'] === 1 && tT.at === 120000,
+    `⛔ 과거 표가 지금 자리를 덮었다 — 마지막 순간(02·06)을 따라야 한다 (${JSON.stringify(tT.byBay)} · 기준 ${tT.at})`);
+
+  //  ⛔ 한 크레인이 한 분에 **붙은 베이 짝**(02·03)을 내리고 다른 호기가 침묵한 분 — 크기가 우연히 맞아 통과하면 안 된다.
+  //    재감사 지적(2026-09-09) · 실측 근거 OBWH 2735E 에서 1호기가 베이 02·03 을 오갔다.
+  const vAdj = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 2, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 2, lodDone: 0 } } },
+    discharge: { termWork: { A: T(60000, '020384'), B: T(60000, '030484'), C: T(120000, '020584'), D: T(120000, '100686') } }, loading: {} };
+  const tA = U.craneBaysByTime(vAdj);
+  ok(tA.skipped === 1 && tA.byBay['3'] === undefined && tA.byBay['2'] === 1 && tA.byBay['10'] === 2 && tA.at === 120000,
+    `⛔ 붙은 베이 짝(02·03)을 두 호기로 갈랐다 — 한 크레인 자리다 (skipped ${tA.skipped} · byBay ${JSON.stringify(tA.byBay)})`);
+  //  성한 순간이 하나도 없으면 아무도 안 붙는다
+  const vAllAdj = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 1, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 1, lodDone: 0 } } },
+    discharge: { termWork: { A: T(60000, '020384'), B: T(60000, '030484') } }, loading: {} };
+  const tAA = U.craneBaysByTime(vAllAdj);
+  ok(!Object.keys(tAA.byBay).length && /함께 찍힌 자료가 없다/.test(tAA.why || ''),
+    `⛔ 붙은 짝뿐인데도 이름표를 만들었다 (byBay ${JSON.stringify(tAA.byBay)} · why «${tAA.why}»)`);
+}
+
 console.log(fail ? `✗ 실패 ${fail}건` : '✓ 실시간 작업 보드 호기별 검사 통과');
 process.exit(fail ? 1 : 0);
