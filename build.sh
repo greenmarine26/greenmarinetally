@@ -289,6 +289,18 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 목적지색 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  # 3.39-03: 출력 허브가 열리고 검수 리스트 종이가 나오는가 — 실데이터 항차(KBTR 2606E)를 그려 단추를 눌러 본다.
+  #   3.31 이 넣은 «선언 전 참조» 한 줄 때문에 이 화면이 여덟 판 동안 **열리지도 않았다**
+  #   (검수사 2026-09-09 «검수앱에서 검수용리스트 출력 크러쉬»). 다른 화면은 다 그려 보면서 여기만 안 그려 봤다.
+  SMOKE_PH=$(mktemp /dev/shm/hometmp/_smokeph_XXXXXX.js)
+  if npx esbuild tools/smoke_printhub.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_PH" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_printhub.cjs "$SMOKE_PH" || { echo "✗ 출력 허브 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_PH"; exit 1; }
+    rm -f "$SMOKE_PH"
+  else
+    echo "✗ 출력 허브 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_PH"; exit 1
+  fi
   # 3.36: 시작보고 호기 = 앱 호기 — 작업 보고 창을 실제로 그려 단추를 눌러 본다.
   SMOKE_EQ=$(mktemp /dev/shm/hometmp/_smokeeq_XXXXXX.js)
   if npx esbuild tools/smoke_equipone.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \

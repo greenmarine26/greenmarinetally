@@ -176,7 +176,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   //    자리(계획)를 세고 채운 실번호를 뺀다 — 칸(그림)과 같은 표. 둘 다 utils 한 벌(SWBT 2614N 316+316=632 사건).
   //  3.31: 인쇄 카고플랜 별첨1 선사 라벨도 마감텔리와 같은 벌이어야 한다(감사 지적) —
   //    이 화면은 제 목록을 따로 만들어 VoyagePage 의 별칭을 안 탄다.
-  const _spOpP = shipOpMapper(String(voyageInfo?.vsl || voyage?.info?.vsl || '').toUpperCase(),
+  //  ⚠ 3.39-03 — 여기서 `voyageInfo` 를 쓰면 **화면이 열리자마자 죽는다.** 그 const 는 이 줄보다
+  //    한참 아래(«const voyageInfo = voyage?.info || {};» 줄)에 있어 아직 만들어지지 않았고,
+  //    `?.` 는 그 상태를 못 비켜 간다(TDZ —
+  //    «Cannot access 'voyageInfo' before initialization»). 3.31 이 그렇게 넣어 출력 허브 전체가
+  //    양하·선적 어느 쪽으로도 안 열렸다. 값은 어차피 같은 것이므로 `voyage?.info` 를 직접 읽는다.
+  const _spOpP = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(),
     allContainers.map((c) => c && c.op));
   const ptkAll = allContainers.filter(isPtk).map((c) => {
     const _o = c && c.op ? _spOpP(c.op) : null;
