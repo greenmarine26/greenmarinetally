@@ -4,7 +4,7 @@
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, MoveRight, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
-import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots } from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots , applySpecialMarks} from '../utils.js';
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump }) {
   const items = useMemo(() => {
@@ -18,7 +18,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
 
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
     //  3.26: 부킹 자리를 실번호가 다 채웠으면 자리는 세지 않는다(utils 한 벌 — 현황요약·검수 리스트와 같은 수).
-    const containers = dropFilledBookingSlots([...allCnSet].map(cn => {
+    const containersRaw = dropFilledBookingSlots([...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
       // V8.20-01 fix: POL/POD는 EDI가 단일 진실(7.1). 리스트 POL이 EDI 평택 POL을 덮어
@@ -31,6 +31,9 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
       if (!merged.pod && r.pod) merged.pod = r.pod;
       return merged;
     }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol)), { ediMap, recMap, mode });   // V7.93-02: 평택분만 (7.1)
+    //  ★ 3.37(감사 실측) — 마감 점검은 화면 목록을 안 쓰고 **제 목록을 따로 만든다.**
+    //    특수제작컨 표시(`mkcon`)를 여기서도 찍어야 리퍼 온도·사진 셈이 화면·진단과 갈리지 않는다(규범 §4-4).
+    const containers = applySpecialMarks(voyage, containersRaw);
 
     const total = containers.length;
     const undone = containers.filter(c => !compMap[c.cn]);

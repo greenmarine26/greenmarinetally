@@ -492,6 +492,16 @@ if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:fir
 else
   echo "✗ CATOS 자리 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
 fi
+# 3.37: 특수제작컨은 리퍼 온도 대상이 아니다 — 표기(utils)와 경고(diagnostics)를 한 번들로 묶어야 한다
+SMOKE_MK=$(mktemp /dev/shm/hometmp/_mk_XXXXXX.mjs)
+SMOKE_MKO=$(mktemp /dev/shm/hometmp/_mko_XXXXXX.cjs)
+printf 'export { tagForecastMarks, reeferTempOf, applySpecialMarks, isISO403 } from "%s/src/utils.js";\nexport { runDiagnostics } from "%s/src/diagnostics.js";\n' "$PWD" "$PWD" > "$SMOKE_MK"
+if npx esbuild "$SMOKE_MK" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_MKO" --log-level=error; then
+  node tools/smoke_mkcon.cjs "$SMOKE_MKO" || { echo "✗ 특수제작컨 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MK" "$SMOKE_MKO"; exit 1; }
+  rm -f "$SMOKE_MK" "$SMOKE_MKO"
+else
+  echo "✗ 특수제작컨 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MK" "$SMOKE_MKO"; exit 1
+fi
 # 3.7-07: 리스트 파서가 ISO 전용 열·F/E·무게를 읽는가 (머스크 StandardLoadList)
 SMOKE_LP=$(mktemp /dev/shm/hometmp/_lp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_LP" --log-level=error; then

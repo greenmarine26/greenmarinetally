@@ -116,8 +116,10 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   //   tagForecastMarks 가 그 모드 컨 목록에 실재하는 컨만 찍으므로 오적용 없음.
   const urgentSet = new Set(Array.isArray(_fc?.urgentCns) ? _fc.urgentCns : []);
   const luggSet = new Set(Array.isArray(_fc?.luggageCns) ? _fc.luggageCns : []);
+  //  3.37: 특수제작컨도 인쇄물에서 «제작컨» 으로 보이고 리퍼 온도 대상에서 빠진다 — 화면과 한 벌.
+  const specSet = new Set((Array.isArray(_fc?.specialCns) ? _fc.specialCns : []).map(x => String(x || '').trim().toUpperCase()).filter(Boolean));
   const allContainers = tagForecastMarks(
-    allContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null);
+    allContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null, specSet);
 
   // M5.30-fix: 베이 단위 필터
   //   평택 화물이 1개라도 있는 베이의 전체 슬롯 표시 (그 베이의 통과 화물 + 빈 슬롯 포함)

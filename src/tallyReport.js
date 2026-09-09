@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos } from './utils.js';   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks} from './utils.js';   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -91,7 +91,10 @@ export function ptkContainers(voyage, mode) {
     if (r.tier_actual != null && String(r.tier_actual) !== '') out.tier_actual = r.tier_actual;
     return out;
   });
-  return merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)));
+  //  ★ 3.37(감사 실측) — 마감텔리도 제 목록을 만든다. 특수제작컨 표시를 여기서 찍어야
+  //    RF condition report(`buildRF` 의 `!c.rfdry && !c.mkcon`)가 그 컨을 뺀다 —
+  //    안 찍으면 **선사로 나가는 종이에** 제작컨이 Setting·Actual 빈칸으로 실린다(규범 §4-4 — 입구에 문지기).
+  return applySpecialMarks(voyage, merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))));
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */

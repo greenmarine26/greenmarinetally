@@ -17,7 +17,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -480,6 +480,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     () => new Set(Array.isArray(_fc?.urgentCns) ? _fc.urgentCns : []), [_fc]);
   const luggSet = useMemo(
     () => new Set(Array.isArray(_fc?.luggageCns) ? _fc.luggageCns : []), [_fc]);
+  //  3.37: 특수제작컨(수집기 2.32 → forecast.specialCns) — 컨번호 마커라 모드 게이트 없이 그 모드 컨에만 찍힌다(위 2.08-07 과 같은 규칙).
+  const specSet = useMemo(
+    () => new Set((Array.isArray(_fc?.specialCns) ? _fc.specialCns : []).map(x => String(x || '').trim().toUpperCase()).filter(Boolean)), [_fc]);
 
   const allEdiContainersBase = useMemo(() => {
     const merged = {};
@@ -684,7 +687,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
   // V9.03: 베이플랜/카고플랜용 목록에 긴급/수화물 마커 주입
   const allEdiContainers = useMemo(
-    () => tagForecastMarks(allEdiContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null),   // 2.08-07: 씰도 컨 실재 기준
+    () => tagForecastMarks(allEdiContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null, specSet),   // 2.08-07: 씰도 컨 실재 기준
     [allEdiContainersBase, urgentSet, luggSet, _fc, _fcApply]);
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
@@ -905,7 +908,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(
     () => {
-      const base = tagForecastMarks(containersBase, urgentSet, luggSet, _fc?.luggageSeals || null);   // 2.08-07
+      const base = tagForecastMarks(containersBase, urgentSet, luggSet, _fc?.luggageSeals || null, specSet);   // 2.08-07
       // 1.85-06 (검수사 지적 «덱이 보이면 컨이 지정되어 있는거 아닙니까» — 맞다): 덱플랜(stowagePlan)의
       //   갠트리(lolo)·자리(pos)·2단(dbl) 지정을 조회용 컨 속성에 병합한다. RZOR R089E 실측 — 덱플랜은
       //   와 있는데(갠트리 49) ediContainers 엔 주입 전이라 «LOLO 리스트» 조회가 0건이었다.
@@ -1212,9 +1215,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       }
       ediPtkObj[c.cn] = merged;
     });
+    //  ★ 3.37(감사 실측) — **진단은 화면 목록을 안 쓴다.** 여기서 제 목록을 따로 만들므로
+    //    특수제작컨 표시(`mkcon`)를 이 자리에서도 찍어야 «풀 리퍼 N대 중 M대 온도 미입력» 이 그 8대를 뺀다.
+    //    ⚠ 기록(listRecords)도 같이 — 진단은 `c.mkcon || lr.mkcon` 둘 다 본다.
+    const _specMarked = applySpecialMarks(voyage, Object.values(ediPtkObj));
+    const _ediPtkObj2 = {}; _specMarked.forEach((c) => { _ediPtkObj2[c.cn] = c; });
+    const _recMarked = {};
+    applySpecialMarks(voyage, Object.entries(recMap).map(([cn, r]) => ({ ...r, cn }))).forEach((r) => { _recMarked[r.cn] = r; });
     return runDiagnostics({
-      ediContainers: ediPtkObj,
-      listRecords: recMap,
+      ediContainers: _ediPtkObj2,
+      listRecords: _recMarked,
       xrayList: xrayMap,
       mode,
       //  3.4: 고려해운 «클래스 8 홀드 선적 금지» 게이트 — 판정은 utils 한 벌이 하고, 진단은 선박 이름을 모른다(sealPolicy 와 같은 방식).

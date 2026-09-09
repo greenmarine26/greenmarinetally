@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry } from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null }) {
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -26,7 +26,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     // V7.93-02: 평택분만 (7.1 — 양하=POD평택, 선적=POL평택). 현황 요약이 EDI 전체(통과화물 포함)를
     //   세어 목록(403)과 헤더(909)가 다르던 버그 (사용자 스크린샷 제보).
     //  3.26: 부킹 자리(`__BOOK_`·cn 빈 자리)를 실번호가 다 채웠으면 자리는 세지 않는다(utils 한 벌 — SWBT 2614N 316+316=632 사건).
-    const containers = dropFilledBookingSlots([...allCnSet].map(cn => {
+    const containersRaw = dropFilledBookingSlots([...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
       // V8.20-01 fix: 리스트(records)는 실번호/무게 등 보강만. POL/POD(항구)는 EDI가 단일 진실(7.1).
@@ -45,6 +45,9 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       if (recMap[c.cn]) return true;
       return isPyeongtaekPort(c.pol);
     }), { ediMap, recMap, mode });
+    //  ★ 3.37(감사 실측) — 현황 요약도 제 목록을 따로 만든다. 특수제작컨 표시를 여기서도 찍어야
+    //    «온도 미입력»·«제작컨» 셈이 화면·진단·마감 점검과 갈리지 않는다(규범 §4-4 — 입구마다 같은 문지기).
+    const containers = applySpecialMarks(voyage, containersRaw);
 
     // V8.86: 컨번호 없는 EDI '실제 자리'(터미널 PRE)는 항차수(분모)의 기준 — 자리수와 실컨수 중 큰 쪽.
     //   (자리는 배열 인덱스 키라 위 컨번호 병합에서 각각 세어지지만, 실컨과 이중계산되지 않게 분모를 재정의)
