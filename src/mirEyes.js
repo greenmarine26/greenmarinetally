@@ -59,7 +59,7 @@
 import { buildGuidedQueue } from './guidedQueue.js';   // 순서는 화면이 쓰는 그 벌을 그대로 쓴다
 import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
-import { getEquipNumber, formatWt } from './utils.js';
+import { getEquipNumber, formatWt, berthSideOf } from './utils.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from './nlSearch.js';   // 트윈 무게 한계는 화면이 쓰는 그 상수를 그대로   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
 
 const RE_ORDER_START = /(순서대로|차례대로|순서\s*대로).{0,10}(양하|선적|하자|해줘|시작|가자|불러)|(양하|선적)\s*(하자|시작하자|가자)|다음\s*(컨|것|거)?\s*(뭐|알려|불러|줘)?$|^다음$/;
@@ -233,7 +233,9 @@ export function mirSee(q, ctx) {
   const remaining = all.filter((c) => c && c._ptk !== false && !compOf(c) && (c._mode || mode) === mode);
   if (!remaining.length) return `${mode === 'loading' ? '선적은' : '양하는'} 남은 것이 없습니다.`;
 
-  const side = String(info.berthSide || '').trim();
+  //  3.40: 화면(GuidedWorkPanel)과 **같은 한 벌**로 읽는다 — 미르가 한글 '우현' 을 못 알아보고
+  //    좌현 차례를 부르던 것을 막는다(검수사 «좌현으로 고정됨»).
+  const side = berthSideOf(info);
   if (!side) return '접안 방향이 아직 안 정해져 있습니다.\n자동 가이드를 켜면 좌현·우현을 묻습니다 — 그것부터 정해야 순서가 나옵니다.';
 
   //  2.51: 베이를 댔으면 그 **묶음**으로 좁힌다 — 갱마다 베이가 갈리고, 좁혀야 실작업과 맞는다.

@@ -13,7 +13,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor, buildOccupancy, posKey } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -72,7 +72,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   TMPZ는 해치가 자동(유압식)이고, TNJP·RZOR·OBWH도 해치커버 계산 대상이 아니다(사용자 확정 2026-06-19).
   //   네 선박은 해치 대신 주야간 작업갯수를 기록한다(작업보고 WorkReportModal의 주야간 보고). vsl/vslFull 어디든 매칭되면 해치 프롬프트·계산·보고를 건너뛴다.
   const isHatchSkipShip = isHatchSkipShipInfo(voyage?.info);   // 1.56-06: 단일 소스(utils) — ATPR 추가(자동 해치, 검수사 확정 2026-08-12)
-  const berthSide = voyage?.info?.berthSide || '';          // 'starboard'(우현) | 'port'(좌현)
+  //  3.40: 접안 현측은 utils 한 벌로 읽는다 — 수집기가 적는 한글('좌현'·'우현')과 앱이 적는 영문을
+  //    같은 답으로 만든다(검수사 «선박이 좌현으로 고정됨 바꿔도 다시바뀜»). 모르는 값은 ''(접안?) 이다.
+  const berthSide = berthSideOf(voyage?.info);              // 'starboard'(우현) | 'port'(좌현) | ''(모름)
   //  ★ 3.3 (김성일 메모 2026-09-03 «양하순서 추가 해상부터»): 양하 로우 순서 — 'land'(기본, 육상→해상) | 'sea'(해상→육상). 항차 info 에 저장.
   const rowFrom = voyage?.info?.seqRowFrom === 'sea' ? 'sea' : 'land';
   // V8.10: 부두별 장비 목록. PCTC 1~4호기, PNCT 1~5호기(여객석 RORO 1대 추가). 부두 미상이면 1~5 전체.
@@ -200,7 +202,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     });
     if (!ok) return;
     // V9.57(I8): fire-and-forget 저장 실패가 조용히 사라지던 것 — 실패를 알린다
-    fbUpdateVoyageInfo(voyageKey, { berthSide: side })
+    //  3.40: 검수사가 고른 것은 `berthSidePick` 에도 적는다 — 수집기는 `berthSide` 만 덮으므로
+    //    이 칸이 있어야 «바꿔도 다시 바뀌는» 일이 안 난다(utils.berthSideOf 가 이것을 먼저 본다).
+    fbUpdateVoyageInfo(voyageKey, { berthSide: side, berthSidePick: side })
       .catch(e => { console.warn('[V9.57] 접안 방향 저장 실패', e); alert('접안 방향 저장에 실패했습니다. 네트워크 확인 후 다시 선택해 주세요.'); });
   };
   //  3.3: 양하 로우 순서 토글(육상부터 ↔ 해상부터) — 오선택 방지: 확인 후 저장. 항차 info.seqRowFrom.
@@ -223,7 +227,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       confirmLabel: '변경', cancelLabel: '취소', danger: true,
     });
     if (!ok) return;
-    fbUpdateVoyageInfo(voyageKey, { berthSide: '' })
+    //  3.40: 검수사가 고른 칸도 같이 비운다 — 하나만 비우면 그 값이 남아 «다시 묻기» 가 안 된다.
+    fbUpdateVoyageInfo(voyageKey, { berthSide: '', berthSidePick: '' })
       .catch(e => { console.warn('[V9.57] 접안 방향 초기화 실패', e); alert('접안 방향 초기화에 실패했습니다. 네트워크 확인 후 다시 시도해 주세요.'); });  // V9.57(I8)
     setSelectedGroup(null);
   };

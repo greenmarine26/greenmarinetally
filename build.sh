@@ -612,6 +612,20 @@ else
   cp "$SMOKE_RF.fbbak" src/firebase.js; rm -f "$SMOKE_RF.fbbak"
   echo "✗ 양하 해상부터 칩 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_RF"; exit 1
 fi
+#  3.40: **접안 현측이 한 벌인가** — 수집기가 적는 한글(«좌현»·«우현»)과 앱이 적는 영문이 같은 답을 내는지,
+#    그리고 검수사가 고친 것이 수집 사이클에 안 밀리는지. 표시뿐 아니라 첫 카드 자리(작업 순서)까지 잰다.
+#    검수사 2026-09-09 «선박이 좌현으로 고정됨 바꿔도 다시바뀜» — 우현 5척이 좌현 기준으로 줄 서고 있었다.
+SMOKE_BS=$(mktemp /dev/shm/hometmp/_smokebs_XXXXXX.js)
+cp src/firebase.js "$SMOKE_BS.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_berthside.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_BS"; then
+  cp "$SMOKE_BS.fbbak" src/firebase.js && rm -f "$SMOKE_BS.fbbak"
+  node tools/smoke_berthside.cjs "$SMOKE_BS" || { echo "✗ 접안 현측 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BS"; exit 1; }
+  rm -f "$SMOKE_BS"
+else
+  cp "$SMOKE_BS.fbbak" src/firebase.js; rm -f "$SMOKE_BS.fbbak"
+  echo "✗ 접안 현측 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BS"; exit 1
+fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).
