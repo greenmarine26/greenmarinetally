@@ -4,7 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
-import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode, applyCatosPos, applyAutoSwap } from './utils.js';   // ConeOne 2.44: 자리 판정도 한 벌   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
+import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode, applyCatosPos, applyAutoSwap, craneBaysByTime} from './utils.js';   // ConeOne 2.44: 자리 판정도 한 벌   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
@@ -63,7 +63,13 @@ window.ConeCargoPlan = { open, close };
 //   콘앱은 보관소를 따로 읽는 독립 화면이라 그 덧칠을 못 받아 **계획 자리에 그대로** 그렸다 —
 //   실측 STSE 2669E 선적(계획 426·실적 295) — 콘앱만 59대가 검수앱과 다른 칸이었고 그 59대가 그대로 겹침 59칸이었다(20번 30 · 16번 15 · 24번 9 · 4번 5).
 //   1.9(파서·평택판정)·2.23(시프팅)과 같은 처방이다 — 판정 두 벌 금지(규범 §4-4).
-window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap };   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
+// ★ ConeOne 2.46 (검수사 2026-09-09 «콘앱이 동방의 갱호기를 못찾는이유 다른클로드가 갱호기를 지정했는데 반영이 안되는 이유?») —
+//   **호기↔베이 판정도 같이 내보낸다.** 동방 termWork 에는 `equip`(호기)이 아예 없어(실측 OBWH 2735E 52건 전부)
+//   콘앱은 «베이 14» 처럼 해치 이름으로 칸을 갈랐다(2.28). 검수앱은 3.38 에서 그 자리를 풀었다 —
+//   **크레인 하나는 같은 시각에 두 베이를 못 한다**는 규칙으로 시각 바구니를 갈라 호기를 되살린다(`craneBaysByTime`).
+//   그 함수가 `utils.js` 에 있는데 콘앱 번들이 안 내보내 콘앱은 그 답을 못 봤다(실측 — cone.html·번들에 이름 0건).
+//   ⇒ 콘앱이 **같은 함수**를 부른다. 콘앱이 제 규칙을 새로 만들면 두 화면이 또 갈린다(규범 §4-4).
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime };   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.
 window.ConeShipPolicy = { isLolo: isLoloShipByPolicy };
