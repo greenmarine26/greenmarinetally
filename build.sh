@@ -270,8 +270,22 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     node tools/smoke_podpat.cjs "$SMOKE_HL" || { echo "✗ 목적지색 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.33: 콘앱 카고플랜 베이 차례 뒤집기 — 같은 번들을 실렌더해 BAY 차례를 읽는다
   node tools/smoke_coneflip.cjs "$SMOKE_HL" || { echo "✗ 콘앱 카고플랜 뒤집기 연막검사 실패 — 배포 금지"; exit 1; }
+  # 3.36: 카고플랜 해치커버가 세로 한가운데인가 — 세 척(ATPR·MCSC·MAMP)을 실렌더한다. MAMP 만 «데크 전용 베이» 를 갖는다.
+  for _SHIP in ATPR MCSC MAMP; do
+    node tools/smoke_hatchmid.cjs "$SMOKE_HL" "$_SHIP" || { echo "✗ 카고플랜 해치 한가운데 연막검사 실패($_SHIP) — 배포 금지"; exit 1; }
+  done
   else
     echo "✗ 목적지색 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+  fi
+  # 3.36: 시작보고 호기 = 앱 호기 — 작업 보고 창을 실제로 그려 단추를 눌러 본다.
+  SMOKE_EQ=$(mktemp /dev/shm/hometmp/_smokeeq_XXXXXX.js)
+  if npx esbuild tools/smoke_equipone.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+       --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_EQ" --log-level=error; then
+    node tools/smoke_equipone.cjs "$SMOKE_EQ" || { echo "✗ 시작보고 호기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_EQ"; exit 1; }
+    rm -f "$SMOKE_EQ"
+  else
+    echo "✗ 시작보고 호기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_EQ"; exit 1
   fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 // TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
 // TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
 import { CloudOff, Home, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera, Sun } from 'lucide-react';
@@ -59,6 +59,15 @@ export default function Header({ version, inspector, online, route, voyages, onC
   };
   // TallyOne 1.0 (K4): 현재 역할 표시 — 소유자 > 수석 > 검수사
   const roleLabel = !inspector ? '' : isOwnerName(inspector) ? '소유자' : isTester(inspector) ? '테스터' : isChief(inspector) ? '수석' : '검수사';   // 1.79: 테스터 호칭 분리
+
+  //  ★ 3.36 (감사 지적) — **헤더 배지도 호기 바뀜을 듣는다.** 종전엔 첫 그림 때 한 번만 잡아,
+  //    시작보고 창에서 호기를 고르면 컨에는 새 호기가 박히는데 **배지는 옛 호기 그대로**였다.
+  //    (`GuidedWorkPanel`·`SearchPanel` 은 이미 듣고 있었다 — 셋째 값만 남아 있었던 것이다.)
+  useEffect(() => {
+    const onEq = (e) => setEquipNoState((e && e.detail) || getEquipNumber());
+    window.addEventListener('equipChanged', onEq);
+    return () => window.removeEventListener('equipChanged', onEq);
+  }, []);
 
   const handleSelectEquip = (num) => {
     setEquipNumber(num);

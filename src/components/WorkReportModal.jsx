@@ -13,7 +13,7 @@ import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays } from '../utils.js';
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -61,8 +61,17 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const dnReportD = useMemo(() => buildShiftReport(dnContainers.discharge, dnActiveShift, Date.now()), [dnContainers, dnActiveShift]);
   const dnReportL = useMemo(() => buildShiftReport(dnContainers.loading, dnActiveShift, Date.now()), [dnContainers, dnActiveShift]);
   const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
+  //  ★ 3.36 — **시작보고 호기 = 앱 호기.** 검수사 메모 2026-09-06 21:27
+  //    *«약간의 버그 4호기로 양하시작보고를 하고 3호기로 양하를 하는데 제재가 없음»* ·
+  //    확답 2026-09-09 *«보고 호기를 따라간다 — 갱진행상황에 따라 검수사 스스로 호기를 바꿀수 있다»*.
+  //    실사건 — `archive/ATPR_2640E` 09-06 20:45:33 «4호기 양하 시작» 뒤 같은 김성일이 21:10~21:24 **3호기**로 20대를 찍었다(메모 2분 전).
+  //    뿌리는 두 값이 **따로 놀았다**는 것이다 — 이 화면의 호기는 `selectedEquip`(제 state)이고,
+  //    컨을 찍을 때 박히는 호기는 `localStorage.gm_equip_no`(`getEquipNumber`)인데 서로 한 번도 안 만났다.
+  //    (헤더 장비 모달은 «작업 보고에 자동 포함됩니다» 라고 이미 적어 두었는데 코드가 그 약속을 안 지켰다.)
+  //    ⛔ **막지 않는다.** 2·3갱 동시작업이 정상이고(273항차 실측 — 어긋난 9건 중 7건이 정상 동시작업),
+  //      갱이 바뀌면 검수사가 스스로 호기를 바꾼다. 여기서는 **두 값을 한 벌로 묶기만** 한다.
   // 시작 화면
-  const [selectedEquip, setSelectedEquip] = useState(lastEquip || '1호기');
+  const [selectedEquip, setSelectedEquip] = useState(() => getEquipNumber() || lastEquip || '1호기');
   const [selectedMode, setSelectedMode] = useState('discharge');  // 'discharge' | 'loading'
   // 중단 사유
   const [pauseReason, setPauseReason] = useState('');
@@ -149,6 +158,21 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const sum = hatchHint.reduce((a, x) => a + (x.needed ?? x.openable), 0);   // 3.2-01: 열어야 할 장
     if (sum >= 1 && sum <= 3) setHatchPanels(sum);
   }, [hatchHint]);
+
+  //  3.36: 이 창은 항차 화면에서 **조건 없이 마운트**되므로 위 초기값은 첫 마운트 때 한 번만 잡힌다.
+  //    그 뒤 헤더에서 호기를 바꾸면 시작 화면은 옛 값을 그대로 들고 있었다 — 열 때마다 지금 앱 호기로 맞춘다.
+  useEffect(() => {
+    if (!open) return;
+    const now = getEquipNumber();
+    if (now) setSelectedEquip(now);
+  }, [open]);
+  //  3.36(감사 딸림): 창이 열려 있는 동안 **헤더에서** 호기를 바꿔도 따라간다 —
+  //    안 그러면 두 값이 다시 갈라져 이 판이 없앤 어긋남이 되살아난다(`Header`·`GuidedWorkPanel`·`SearchPanel` 과 같은 알림을 듣는다).
+  useEffect(() => {
+    const onEq = (e) => setSelectedEquip((e && e.detail) || getEquipNumber() || '1호기');
+    window.addEventListener('equipChanged', onEq);
+    return () => window.removeEventListener('equipChanged', onEq);
+  }, []);
 
   if (!open) return null;
 
@@ -540,9 +564,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
             <div>
               <div className="text-xs font-bold text-dim-200 mb-2">1) 장비 선택</div>
+              {/*  3.36: 아래 단추는 고르는 그 순간 **앱 호기도 같이 바꾼다** — 컨을 찍을 때 박히는 호기(`gm_equip_no`)와 한 벌이 된다.
+                   헤더 장비 모달과 같은 일을 한다(`Header.handleSelectEquip`) — 그래서 같은 알림(`equipChanged`)을 낸다. */}
               <div className="grid grid-cols-2 gap-2">
                 {equipNumbers.map(n => (
-                  <button key={n} onClick={() => setSelectedEquip(n)}
+                  <button key={n} onClick={() => { setSelectedEquip(n); setEquipNumber(n); try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); } catch (e) {} }}
                     className={`py-3 rounded-pill font-bold ${selectedEquip === n ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-ink-800 text-dim-200'}`}>
                     🏗 {n}
                   </button>

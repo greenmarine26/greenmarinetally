@@ -526,6 +526,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
             globalHatch={{
               maxDeck: Math.max((matrixRender.deckTiers || []).length, 1),
               maxHold: Math.max((matrixRender.holdTiers || []).length, 1),
+              //  3.36: 카고플랜이 읽는 것은 이제 **maxSide** 한 값이다(데크·홀드 같은 몫 → 해치가 한가운데).
+              //    안 주면 `flex: "undefined 1 0"` 이 되어 스타일시트 기본값으로 떨어진다(감사 지적 — 주는 쪽을 안 봤다).
+              maxSide: Math.max((matrixRender.deckTiers || []).length, (matrixRender.holdTiers || []).length, 1),
             }}
             renderCellContent={mrRenderCellContent}
             cellExtra={mrCellExtra}

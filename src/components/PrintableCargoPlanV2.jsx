@@ -477,10 +477,14 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         <span className="cpv2-bay-title">BAY {bayKey}</span>
         {count != null && <span className="cpv2-bay-count">{count}</span>}
       </div>
-      <div className="cpv2-bay-content">
-        <div className="cpv2-deck-area" style={{ flex: `${(nHold > 0 && globalHatch) ? globalHatch.maxDeck : Math.max(deckTiers.length, 1)} 1 0`,
+      {/*  ★ 3.36 — 남는 세로를 **위·아래로 나눈다**(종전 flex-start 는 전부 아래에 버려 그림이 위로 치우쳤다).
+           데크 전용 베이도 위 «빈 홀드 자리» 덕에 총 높이가 같으므로 **같이 가운데**로 둔다 —
+           그래야 옆 상자와 로우 표기 윗줄이 한 줄에 선다(검수사 확답 2026-09-09 «윗줄을 맞춘다»). */}
+      <div className="cpv2-bay-content" style={{ justifyContent: 'center' }}>
+        <div className="cpv2-deck-area" style={{ flex: `${globalHatch ? globalHatch.maxSide : Math.max(deckTiers.length, 1)} 1 0`,
             //  3.7: 이 영역이 가질 수 있는 최대 높이 = 제 단 수 × 칸 높이. 넘게 늘어나지 않는다.
-            maxHeight: `calc(var(--cph, 999px) * ${(nHold > 0 && globalHatch) ? globalHatch.maxDeck : Math.max(deckTiers.length, 1)})` }}>
+            //  3.36: 해치가 있는 베이는 데크·홀드가 **같은 몫**(maxSide) — 그래야 해치선이 한가운데 온다.
+            maxHeight: `calc(var(--cph, 999px) * ${globalHatch ? globalHatch.maxSide : Math.max(deckTiers.length, 1)})` }}>
           {/*  ★ 3.7-03 — 로우 표기는 **언제나 맨 위**다(검수사 «상단/하단 로우 표기 위치가 일정해야 합니다.
               티어가 많고 적음에 따라 올라갔다 내려갔다 합니다. 항상 위치는 가장 높은것 과 가장 낮은것을 기준으로»).
               종전엔 라벨이 여백칸(spacer) **아래**에 있어 데크 단이 적은 베이는 라벨이 그만큼 내려왔다.
@@ -489,8 +493,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
           {/* V7.58: 해치선 수평 — 데크는 아래(82)가 해치선에 붙음. 단수 부족분은 위 spacer */}
-          {nHold > 0 && globalHatch && globalHatch.maxDeck > deckTiers.length && (
-            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxDeck - deckTiers.length} 1 0` }}></div>
+          {globalHatch && globalHatch.maxSide > deckTiers.length && (
+            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxSide - deckTiers.length} 1 0` }}></div>
           )}
           <div className="cpv2-grid-row-wrap" style={nHold > 0 && globalHatch ? { flex: `${Math.max(deckTiers.length, 1)} 1 0` } : undefined}>
             <div className="cpv2-grid" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
@@ -589,6 +593,18 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             </div>
           </div>
         </div>
+        {/*  ★ 3.36 (검수사 확답 2026-09-09 «윗줄을 맞춘다») — **홀드 없는 데크 전용 베이도 «빈 홀드 자리»를 같이 잡는다.**
+             안 그러면 그 상자만 총 높이가 절반이라, 가운데 정렬에서 **옆 상자와 로우 표기 윗줄이 갈린다**
+             (감사 실측 — 63척 중 30척 · 평균 18.6px · 최대 38.9px). 검수사 3.7-03 «상단/하단 로우 표기 위치가 일정해야 합니다.
+             티어가 많고 적음에 따라 올라갔다 내려갔다 합니다» 를 되돌리는 것이라 그대로 둘 수 없었다.
+             ⇒ 빈 자리를 같이 잡으면 총 높이가 같아져 **윗줄이 한 줄**이고, 그림은 상자 위 반쪽에 놓이고 아래는 빈다.
+             ⚠ 해치선은 안 그린다 — 그 베이에는 해치가 없다. */}
+        {nHold === 0 && globalHatch && (<>
+          {/*  해치선이 먹는 자리(높이 0 + 상하 여백 3px)도 같이 잡는다 — 안 그러면 3.1px 만큼 윗줄이 남는다. */}
+          <div className="cpv2-hatch-break" aria-hidden="true" style={{ visibility: 'hidden' }}></div>
+          <div className="cpv2-hold-area" aria-hidden="true"
+               style={{ flex: `${globalHatch.maxSide} 1 0`, maxHeight: `calc(var(--cph, 999px) * ${globalHatch.maxSide})` }}></div>
+        </>)}
         {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
         {nHold > 0 && (<>
         {/* 2.98-14: 실측 경계(hatchRows)가 있으면 열수 비례 + 홀드 그리드와 같은 패딩으로 정렬 —
@@ -608,8 +624,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             </div>
           );
         })()}
-        <div className="cpv2-hold-area" style={{ flex: `${globalHatch ? globalHatch.maxHold : Math.max(holdTiers.length, 1)} 1 0`,
-            maxHeight: `calc(var(--cph, 999px) * ${globalHatch ? globalHatch.maxHold : Math.max(holdTiers.length, 1)})` }}>
+        <div className="cpv2-hold-area" style={{ flex: `${globalHatch ? globalHatch.maxSide : Math.max(holdTiers.length, 1)} 1 0`,
+            maxHeight: `calc(var(--cph, 999px) * ${globalHatch ? globalHatch.maxSide : Math.max(holdTiers.length, 1)})` }}>
           <div
             className="cpv2-grid-row-wrap"
             style={{ width: '100%', flex: `${Math.max(holdTiers.length, 1)} 1 0` }}
@@ -710,8 +726,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             </div>
           </div>
           {/* V7.58: 홀드는 위가 해치선에 붙음 — 단수 부족분은 아래 spacer */}
-          {globalHatch && globalHatch.maxHold > holdTiers.length && (
-            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxHold - holdTiers.length} 1 0` }}></div>
+          {globalHatch && globalHatch.maxSide > holdTiers.length && (
+            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxSide - holdTiers.length} 1 0` }}></div>
           )}
           {/*  3.7-03: 아래 로우 표기도 여백칸 **밖**으로 — 홀드 단이 적어도 맨 아래 같은 줄에 선다. */}
           {nHold > 0 ? (
@@ -726,8 +742,14 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         </div>
         </>)}
         {(() => {
-          // V7.58: 홀드 있는 베이는 maxDeck/maxHold spacer가 높이를 이미 통일 — 말단 spacer 불필요
-          if (nHold > 0 && globalHatch) return null;
+          //  V7.58: 홀드 있는 베이는 maxDeck/maxHold spacer가 높이를 이미 통일 — 말단 spacer 불필요
+          //  ★ 3.36(감사 실측) — **데크 전용 베이도 마찬가지다.** 종전엔 `nHold > 0` 일 때만 걸러서
+          //    데크 전용 베이에만 이 말단 여백칸이 붙었고, 이 칸은 CSS 상한이 없어 `flex: sp 1 0` 로
+          //    **남는 세로를 통째로 먹었다**. 그래서 남는 자리가 0 이 되어 `justifyContent: center` 가
+          //    데크 전용 베이에서는 아무 일도 안 했고, 옆 해치 베이만 내려가 **윗줄이 갈렸다**
+          //    (감사 실측 — 수리 전과 같은 30척 · 평균 19.2px · 최대 39.6px).
+          //    이제 maxSide 몫이 두 영역의 높이를 이미 통일하므로 이 칸은 어느 쪽에도 필요 없다.
+          if (globalHatch) return null;
           const used = deckTiers.length + (nHold > 0 ? holdTiers.length : 0);
           const sp = Math.max(0, (globalMaxTier || used) - used);
           return sp > 0 ? <div className="cpv2-tier-spacer" style={{ flex: `${sp} 1 0` }}></div> : null;
@@ -1187,7 +1209,17 @@ export default function PrintableCargoPlanV2({
       maxDeck = Math.max(maxDeck, d?.deckTiers?.length || 0);
       maxHold = Math.max(maxHold, nH);
     }
-    return { maxDeck: Math.max(maxDeck, 1), maxHold: Math.max(maxHold, 1) };
+    //  ★ 3.36 (검수사 2026-09-08 밤) — **해치커버가 세로 한가운데로.**
+    //    *«여백이 좌우는 정렬이 되어 보이는데 상하가 정렬이 안되어 보입니다. 대체적으로 보면 위쪽으로 치우친거 같습니다.
+    //      비율이라면 가장 큰배와 가장 작은배를 기준으로 맞춰 주시기 바랍니다»* ·
+    //    *«그 적색선에 데크 와 홀드의 경계인 해치커버가 위치하면 대략 위아래 여백이 균등할듯 합니다»*
+    //    종전엔 데크:홀드 = maxDeck:maxHold 라 해치선이 배마다 **16.8%~65.6%**(중앙 47.8%)로 흩어졌다(전 선단 63척 실측).
+    //    ⇒ 두 몫을 **같게**(maxSide) 잡으면 어느 배든 해치가 그림의 정확히 한가운데다.
+    //    감사 실측 — 해치선이 어느 배든 그림의 **정확히 50%** 가 된다(63척 전수 · 예외 0척 · 옛판은 9.1%~63.1%).
+    //    ⚠ 칸 높이는 배마다 갈린다 — **작아지는 배가 25척**(최대 −25.5%)이다. 첫 기록의 «46척 → 11척»·«MAMP 6.30→7.68px» 은
+    //      재현이 안 돼 지웠다(MAMP 는 maxDeck==maxHold==6 이라 이 판이 MAMP 에서는 아무것도 안 바꾼다).
+    const maxSide = Math.max(Math.max(maxDeck, 1), Math.max(maxHold, 1));
+    return { maxDeck: Math.max(maxDeck, 1), maxHold: Math.max(maxHold, 1), maxSide };
   }, [renderDataMap]);
 
   // V8.25: 화면 핀치 줌 (인쇄 무관) — 카고플랜에 두 손가락 확대/축소 추가

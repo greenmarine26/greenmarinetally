@@ -12,10 +12,11 @@ const blk = html.match(/let stripRow='';\n[\s\S]*?if\(lines\.length\) stripRow =
 const tn  = html.match(/function ctTierName\(tier, ?t1\)\{[\s\S]*?\n\}\n/);
 const pr  = html.match(/^function ctPair\(b\)\{[^\n]*\n/m);
 const pos = html.match(/function ctPosOf\(mode, cn, p\)\{[\s\S]*?\n\}\n/);   // 2.44: 자리 판정 한 벌 — 그림 블록이 이것을 부른다
+const stg = html.match(/function ctInStg\(mode, cn\)\{[\s\S]*?\n\}\n/);   // 2.45: 임시창고 판정 한 벌 — ctPosOf 가 이것을 부른다
 const skel = html.match(/function bvRowPositions\(cellCount, hasZero\)\{[\s\S]*?\n\}\n/);
 const bay = html.match(/function bvBaySkeleton\(bs\)\{[\s\S]*?\n\}\n/);
-T(!!blk && !!skel && !!bay && !!tn && !!pr && !!pos, '그림 블록·골격·단이름·짝·자리 함수를 소스에서 그대로 꺼냈다(베껴 적지 않는다)');
-if (!blk || !skel || !bay || !tn || !pr || !pos) { console.log('✗ 홀드 그림 연막검사 실패'); process.exit(1); }
+T(!!blk && !!skel && !!bay && !!tn && !!pr && !!pos && !!stg, '그림 블록·골격·단이름·짝·자리·창고 함수를 소스에서 그대로 꺼냈다(베껴 적지 않는다)');
+if (!blk || !skel || !bay || !tn || !pr || !pos || !stg) { console.log('✗ 홀드 그림 연막검사 실패'); process.exit(1); }
 
 const mkState = (withDict) => ({ _bayDictBays: withDict ? new Map([[22, FX.bs]]) : new Map() });
 const run = (c, withDict = true, rec = {}) => {
@@ -26,7 +27,7 @@ const run = (c, withDict = true, rec = {}) => {
     ctPos: () => null,
     ctEsc: (s) => String(s == null ? '' : s), c };
   const ctx = vm.createContext(sb);
-  vm.runInContext(skel[0] + '\n' + bay[0] + '\n' + tn[0] + '\n' + pr[0] + '\n' + pos[0] + '\n' + blk[0] + '\n;globalThis.__out = stripRow;', ctx);
+  vm.runInContext(skel[0] + '\n' + bay[0] + '\n' + tn[0] + '\n' + pr[0] + '\n' + stg[0] + '\n' + pos[0] + '\n' + blk[0] + '\n;globalThis.__out = stripRow;', ctx);
   return ctx.__out || '';
 };
 const labsOf = (h) => (h.match(/>(\d단\(\d\d\)|H\d단\(\d\d\))</g) || []).map(x => x.slice(1, -1));

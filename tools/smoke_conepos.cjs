@@ -44,12 +44,25 @@ function grab(name) {
 //    ⚠ 덩이 주석(/* … */) 안 설명 줄도 «코드»로 세면 안 된다 — 줄 수는 유지한 채 지운다.
 const LINES = SRC.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).split('\n');
 const isCode = (l) => !/^\s*(\/\/|\*|\/\*)/.test(l);
+//  ⚠ 줄 **끝에 붙은 주석**도 코드로 세면 안 된다 — 판 기록(`__CONEV='ConeOne 2.45'; // … bay_actual …`)이
+//    코드 줄이라 그 설명이 «자리를 읽는 줄»로 잡혔다(실측). `://`(URL)은 안 자른다.
+const noTail = (l) => l.replace(/(^|[^:])\/\/.*$/, '$1');
 const posFieldRe = /(bay|row|tier)_(actual|assign)/;
-const posLines = LINES.map((l, i) => [i + 1, l]).filter(([, l]) => isCode(l) && posFieldRe.test(l));
-const fnStart = LINES.findIndex(l => l.startsWith('function ctPosOf(')) + 1;
-const fnEnd = (() => { let d = 0; for (let i = fnStart - 1; i < LINES.length; i++) { for (const ch of LINES[i]) { if (ch === '{') d++; else if (ch === '}') d--; } if (d === 0 && i >= fnStart) return i + 1; } return -1; })();
-const outside = posLines.filter(([n]) => n < fnStart || n > fnEnd);
+const posLines = LINES.map((l, i) => [i + 1, noTail(l)]).filter(([, l]) => isCode(l) && posFieldRe.test(l));
+const spanOf = (name) => {
+  const a = LINES.findIndex(l => l.startsWith('function ' + name + '(')) + 1;
+  if (!a) return [0, -1];
+  let d = 0;
+  for (let i = a - 1; i < LINES.length; i++) { for (const ch of LINES[i]) { if (ch === '{') d++; else if (ch === '}') d--; } if (d === 0 && i >= a) return [a, i + 1]; }
+  return [a, -1];
+};
+//  2.45: 자리 판정(ctPosOf)과 **창고 판정(ctInStg)** 두 함수 안에서만 자리 필드를 읽는다.
+const [fnStart, fnEnd] = spanOf('ctPosOf');
+const [sgStart, sgEnd] = spanOf('ctInStg');
+const inOne = (n) => (n >= fnStart && n <= fnEnd) || (sgStart > 0 && n >= sgStart && n <= sgEnd);
+const outside = posLines.filter(([n]) => !inOne(n));
 ok(fnStart > 0 && fnEnd > fnStart, `ctPosOf(자리 판정 한 벌)가 있다 (${fnStart}~${fnEnd}행)`);
+ok(sgStart > 0 && sgEnd > sgStart, `ctInStg(임시창고 판정 한 벌)가 있다 (${sgStart}~${sgEnd}행)`);
 ok(outside.length === 0, `자리를 읽는 줄이 전부 ctPosOf 안에 있다 (밖 ${outside.length}줄)` + (outside.length ? '\n      ' + outside.map(([n, l]) => `${n}: ${l.trim().slice(0, 88)}`).join('\n      ') : ''));
 //    그리는 네 자리가 정말 그 한 벌을 부르는가 — 안 부르고 제 계산을 하면 위 검사는 통과하고 화면만 갈린다
 for (const [who, re] of [['콘 줄 그림 ctAppPos', /function ctAppPos\(mode, cn\)\{ return ctPosOf\(/],
@@ -70,7 +83,7 @@ for (const [who, re] of [['콘 줄 그림 ctAppPos', /function ctAppPos\(mode, c
   ];
   for (const [who, src] of sites) {
     const lines = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(isCode);
-    const other = lines.filter(l => /\bctPos\(/.test(l) || posFieldRe.test(l));
+    const other = lines.map(noTail).filter(l => /\bctPos\(/.test(l) || posFieldRe.test(l));   // ctInStg(…) 호출은 자리 원천이 아니라 허용
     ok(other.length === 0, `${who} 안에 다른 자리 원천이 없다 — 부르고 나서 덮는 길을 막는다 (${other.length}줄)` + (other.length ? '\n      ' + other.map(l => l.trim().slice(0, 84)).join('\n      ') : ''));
   }
 }
@@ -90,7 +103,9 @@ const CT = { rec: {}, tw: {} };
 let PLAN = {};
 const ctPlanRows = (m) => PLAN[m] || [];
 const ctPos = new Function('return ' + grab('ctPos'))();
-const ctPosOf = new Function('CT', 'ctPlanRows', 'ctPos', grab('ctPosOf') + '; return ctPosOf;')(CT, ctPlanRows, ctPos);
+//  2.45: ctPosOf 는 창고 판정 한 벌(ctInStg)을 부른다 — 같이 꺼낸다.
+const ctPosOf = new Function('CT', 'ctPlanRows', 'ctPos', grab('ctInStg') + '\n' + grab('ctPosOf') + '; return ctPosOf;')(CT, ctPlanRows, ctPos);
+const ctInStg = new Function('CT', grab('ctInStg') + '; return ctInStg;')(CT);
 
 // ── 옛 콘앱 판정(2.43): 실체 → 터미널 자리(실린 것인지 안 봄) → 계획. 정해 준 자리(assign)는 모른다.
 function oldPos(mode, cn, p) {
@@ -200,13 +215,18 @@ console.log('\n  ■ 자리 차례·문지기 — 성질 검사');
   ok(eq(at({ ...A }, T), 20, '06', 84, 'actual'), '실체가 터미널보다 세다');
   ok(eq(at({ ...G }, T), 40, '08', 86, 'assign'), '정해 준 자리가 터미널보다 세다 — 차례가 검수앱과 같다');
   ok(eq(at({ ...A, ...G }, T), 20, '06', 84, 'actual'), '실체가 정해 준 자리보다 세다');
-  //  임시창고 표식(`__STG__`)은 자리가 아니다 — 숫자로도 안 읽히고 문지기로도 걸러, 두 겹으로 막힌다.
-  //  ⚠ 여기서 검수앱과 **한 가지는 다르다** — 검수앱 `effectivePos` 는 창고에 있는 컨을 «자리 없음»으로 두고 아예 안 그리는데,
-  //    콘앱은 종전(2.43)부터 다음 차례(정해 준 자리 → 계획)로 넘어가 그린다. 이번 판이 만든 차이가 아니고
-  //    실데이터에 창고 컨이 0건이라 지금 화면 차이는 없다. 고치는 것은 다음 판 몫이다(인계함).
-  const stg = at({ bay_actual: '__STG__', row_actual: '00', tier_actual: '00', ...G }, T);
-  ok(eq(stg, 40, '08', 86, 'assign'), '임시창고 표식은 자리가 아니다 — 다음 차례로 넘어간다(종전과 같다)');
-  ok(!!stg && stg.bay !== 0 && Number.isFinite(stg.bay), '임시창고 표식이 베이 번호로 새지 않는다');
+  //  ★ 2.45 — **임시창고에 내린 컨은 자리가 없다.** 검수앱 `effectivePos` 의 첫 문과 같다.
+  //    2.44 는 그 표식을 건너뛰고 다음 차례로 넘어가 그렸다 — 실데이터 `SWSP_9003S` 선적 9대를
+  //    검수앱은 안 그리는데 콘앱은 22번 베이에 그렸다(정해 준 자리를 주워서).
+  ok(at({ bay_actual: '__STG__', row_actual: '00', tier_actual: '00', ...G }, T) === null,
+     '임시창고 컨은 자리가 없다 — 정해 준 자리도 터미널도 계획도 안 쓴다');
+  ok(at({ bay_actual: '__STG__', row_actual: '00', tier_actual: '00' }, null) === null,
+     '임시창고 컨은 계획 자리로도 안 돌아간다');
+  //  ⚠ 접두사는 검수앱 `effectivePos` 와 **글자 그대로 같아야** 한다(`startsWith('__')`). `__STG` 로 좁히면
+  //    다른 표식(`__HOLD__` 따위)이 생기는 날 두 앱이 갈린다 — 실데이터가 전부 `__STG__` 라 그냥은 안 잡힌다(감사 실측 C5).
+  ok(at({ bay_actual: '__OTHER__', row_actual: '00', tier_actual: '00', ...G }, T) === null,
+     '`__` 로 시작하는 표식이면 무엇이든 자리가 없다 — 검수앱과 같은 문이다');
+  ok(/startsWith\('__'\)/.test(grab('ctInStg')), 'ctInStg 가 `__` 로 잡는다(좁히면 검수앱과 갈린다)');
   ok(eq(at(null, { pos: '100482' }), 30, '02', 82, 'plan'), '아직 안 실은 예약 행(시각 없음)은 자리로 안 쓴다');
   ok(at(null, { at: 1, pos: '0' }) && at(null, { at: 1, pos: '0' }).src === 'plan', '읽을 수 없는 자리 문자열은 계획으로 물러난다');
   CT.rec = {}; CT.tw = {}; PLAN = {};
@@ -259,7 +279,7 @@ console.log('\n  ■ 그리는 자리 — 정해 준 자리가 그림에 나오�
   //  ── 베이플랜(_bvActual)
   const bvSrc = (SRC.match(/const _bvActual = \(mode, cn\)=>\{[\s\S]*?\n  \};/) || [''])[0];
   ok(!!bvSrc, '베이플랜 자리 함수를 소스에서 그대로 꺼냈다');
-  const _bvActual = new Function('CT', 'ctPosOf', '_bvSame', bvSrc + '\n return _bvActual;')(CT, ctPosOf, true);
+  const _bvActual = new Function('CT', 'ctPosOf', 'ctInStg', '_bvSame', bvSrc + '\n return _bvActual;')(CT, ctPosOf, ctInStg, true);
   setup('loading');
   const bv = _bvActual('loading', 'ABCU1234567');
   ok(!!bv && bv.bay === '19' && bv.row === '06' && bv.tier === '84' && bv.src === 'assign', '베이플랜 — 정해 준 자리로 옮겨 그린다(' + JSON.stringify(bv) + ')');
@@ -284,8 +304,8 @@ console.log('\n  ■ 그리는 자리 — 정해 준 자리가 그림에 나오�
   PLAN = { loading: Object.values(sec.ediContainers) };
   CT.rec = { loading: appRec2 }; CT.tw = { loading: sec.termWork }; CT.comp = { loading: sec.completed };
   const allRows = [];
-  const bag = new Function('CT', 'ctPosOf', '_bvSame', 'allRows',
-    bvSrc + '\n let _bvMoved = 0, _bvAssign = 0;\n' + prSrc + '\n return { pushRows, moved: () => _bvMoved, assign: () => _bvAssign };')(CT, ctPosOf, true, allRows);
+  const bag = new Function('CT', 'ctPosOf', 'ctInStg', '_bvSame', 'allRows',
+    bvSrc + '\n let _bvMoved = 0, _bvAssign = 0;\n' + prSrc + '\n return { pushRows, moved: () => _bvMoved, assign: () => _bvAssign };')(CT, ctPosOf, ctInStg, true, allRows);
   bag.pushRows(Object.values(sec.ediContainers), 'l');
   const drawn = {}; const seen = {};
   for (const { r } of allRows) {
@@ -298,6 +318,33 @@ console.log('\n  ■ 그리는 자리 — 정해 준 자리가 그림에 나오�
   ok(over === 0, `베이플랜에 겹친 칸이 없다 (겹침 ${over}칸) — 검수사 «컨테이너가 겹쳐 있어도 안됩니다»`);
   ok(diff.length === 0, `베이플랜이 그린 자리가 검수앱과 한 칸도 안 다르다 (다른 ${diff.length}대)` + (diff.length ? ' | 보기 ' + diff.slice(0, 3).map(cn => `${cn} 콘 ${drawn[cn]} ≠ 앱 ${APP2[cn]}`).join(' · ') : ''));
   ok(bag.assign() > 0, `머리글이 «정해 준 자리»를 갈라 센다 (${bag.assign()}대 / 옮긴 ${bag.moved()}대)`);
+
+  //  ── **임시창고 컨은 격자에서 뺀다.** 실데이터 `SWSP_9003S` 선적에 창고 컨이 9대 있다.
+  //     검수앱은 그 9대를 안 그리는데(`effectivePos` 첫 문 → `BayPlan` 이 `if(!c.bay) return`)
+  //     2.44 콘앱은 정해 준 자리를 주워 **22번 베이**에 그렸다. 그리는 자리까지 실제로 돌려 확인한다.
+  const sw = LIVE['SWSP_9003S|loading'];
+  const swStg = Object.keys(sw.records).filter(cn => String((sw.records[cn] || {}).bay_actual || '').startsWith('__'));
+  ok(swStg.length > 0, `픽스처에 임시창고 컨이 실제로 있다 (${swStg.length}대)`);
+  const swRec = U.applyAutoSwap(U.applyCatosPos({ loading: { ediContainers: sw.ediContainers, records: sw.records, termWork: sw.termWork, completed: sw.completed } })).loading.records;
+  PLAN = { loading: Object.values(sw.ediContainers) };
+  CT.rec = { loading: swRec }; CT.tw = { loading: sw.termWork }; CT.comp = { loading: sw.completed };
+  const swRows = [];
+  const bag2 = new Function('CT', 'ctPosOf', 'ctInStg', '_bvSame', 'allRows',
+    bvSrc + '\n let _bvMoved = 0, _bvAssign = 0;\n' + prSrc + '\n return { pushRows, moved: () => _bvMoved };')(CT, ctPosOf, ctInStg, true, swRows);
+  bag2.pushRows(Object.values(sw.ediContainers), 'l');
+  const drawnStg = swRows.filter(({ r }) => swStg.includes(r.cn));
+  ok(drawnStg.length === 0, `임시창고 컨 ${swStg.length}대를 베이플랜에 안 그린다 (그린 ${drawnStg.length}대)`
+     + (drawnStg.length ? ' | 보기 ' + drawnStg.slice(0, 3).map(({ r }) => `${r.cn} → ${r.bay}-${r.row}-${r.tier}`).join(' · ') : ''));
+  ok(swRows.length === Object.keys(sw.ediContainers).length - swStg.length,
+     `나머지 ${Object.keys(sw.ediContainers).length - swStg.length}대는 그대로 얹는다 (${swRows.length}대)`);
+  //  ⚠ 그림에서 빠지는 것만으로는 모자란다 — 창고 컨이 **«계획과 다른 자리 N대» 셈**에 끼면
+  //    검수원이 읽는 숫자가 틀어진다(감사 실측 C3 — `pushRows` 의 거르기를 빼면 0 → 9 로 부푼다).
+  const swPlanKey = (cn) => { const e = sw.ediContainers[cn]; return `${parseInt(e.bay, 10)}_${String(e.row).padStart(2, '0')}_${String(e.tier).padStart(2, '0')}`; };
+  const swExp = Object.keys(sw.ediContainers).filter(cn => !swStg.includes(cn)).filter(cn => {
+    const q = ctPosOf('loading', cn, sw.ediContainers[cn]);
+    return q && `${q.bay}_${q.row}_${String(q.tier).padStart(2, '0')}` !== swPlanKey(cn);
+  }).length;
+  ok(bag2.moved() === swExp, `«계획과 다른 자리» 셈에 창고 컨이 안 낀다 — 센 ${bag2.moved()}대 = 창고 뺀 실제 ${swExp}대`);
 }
 
 // ⑥ 못 했으면 화면이 말하는가 — 이 판이 새로 넣은 안전장치(§4-3)를 실제로 없애 보고 잰다.
@@ -314,6 +361,70 @@ console.log('\n  ■ 조용히 실패하지 않는가');
   mkSwap({ applyCatosPos: (v) => v, applyAutoSwap: (v) => v })();
   ok(CT3.swapOk === true, '제대로 돌면 «했다»가 된다');
   ok(LINES.some(l => isCode(l) && /CT\.swapOk\s*===\s*false/.test(l)), '화면이 그 «못 했다»를 읽어 검수원에게 보인다');
+}
+
+// ⑧ **콘 줄 그림(호기 카드)도 실제로 돌린다.** 여기만 «부르는 줄이 있나»로 잠겨 있어서
+//    `ctAppPos` 를 부르고 나서 계획으로 되돌리는 변조 네 가지가 전부 조용히 통과했다(감사 실측 N-A~N-D).
+//    ⇒ `ctCompute` 를 소스에서 통째로 꺼내 실데이터로 돌리고, **호기 카드가 가리키는 자리**가 검수앱과 같은지 본다.
+console.log('\n  ■ 콘 줄 그림(호기 카드) — 실제로 돌려 본다');
+{
+  const vm = require('vm');
+  const hcc = (SRC.match(/function holdConeCount\(size, shipType, multiCount\)\{[\s\S]*?\n\}\n/) || [''])[0];
+  const ctb = (SRC.match(/const CT = \{[\s\S]*?\nfunction ctCountLine\([\s\S]*?\n\}\n/) || [''])[0];
+  ok(!!hcc && !!ctb, `콘 타이밍 블록을 소스에서 그대로 꺼냈다 (${ctb.length}자)`);
+
+  const sec = LIVE['STSE_2669E|loading'];
+  const mk = () => ({ loading: { ediContainers: sec.ediContainers, records: sec.records, termWork: sec.termWork, completed: sec.completed } });
+  const appRec = U.applyAutoSwap(U.applyCatosPos(mk())).loading.records;
+  const APP = {};
+  for (const cn of Object.keys(sec.ediContainers)) {
+    const e = U.effectivePos({ ...sec.ediContainers[cn], ...(appRec[cn] || {}) });
+    APP[cn] = e.bay ? `${parseInt(e.bay, 10)}_${String(e.row).padStart(2, '0')}_${String(e.tier).padStart(2, '0')}` : '';
+  }
+  //  ⚠ 컨마다 호기를 다르게 준다 — 카드는 호기당 **마지막 한 대**만 남기므로, 한 호기로 묶으면 295대 중 두 대만 재게 된다.
+  //    그리고 termWork 갈래를 비워 «검수원이 앱으로 찍은 완료» 갈래(ctAppPos 를 부르는 그 줄)로 몰아넣는다.
+  const comp = {}; let i = 0;
+  for (const cn of Object.keys(sec.completed)) comp[cn] = { at: 1788000000000 + i, by: '김검수', equip: 'EQ' + (i++) };
+  const sb = {
+    console: { log() {}, warn() {}, error() {} }, Date, Math, JSON, String, Number, Object, Array, Set, Map, isNaN, parseInt, parseFloat,
+    //  ⚠ 꺼낸 블록 안에는 **제 ctPlanRows** 가 들어 있고 그것은 `state.stow/disch` 를 읽는다.
+    //    state 를 비워 두면 계획이 언제나 빈 배열이라, «부르고 나서 계획으로 되돌리는» 사보타주가 안 물린다(실측).
+    state: { shipType: 'container', multiCount: 0, stow: { ediRows: Object.values(sec.ediContainers) }, disch: null },
+    window: { addEventListener() {}, removeEventListener() {}, setTimeout, clearTimeout, innerWidth: 1200, innerHeight: 800 },
+    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, removeEventListener() {}, createElement: () => ({ style: {}, classList: { add() {}, remove() {} }, appendChild() {}, setAttribute() {} }), body: { appendChild() {}, classList: { add() {}, remove() {} } }, hidden: false },
+    setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, fetch: () => Promise.reject(new Error('no net')),
+    localStorage: { getItem: () => null, setItem() {} },
+    ctPosOf, ctInStg, ctPos,
+  };
+  const ctx = vm.createContext(sb);
+  vm.runInContext(hcc + '\n' + ctb + '\n;globalThis.__c = ctCompute; globalThis.__CT = CT;', ctx);
+  const CTv = ctx.__CT;
+  CTv.rec = { loading: appRec, discharge: {} };
+  CTv.tw = { loading: {}, discharge: {} };
+  CTv.comp = { loading: comp, discharge: {} };
+  CTv.key = 'STSE_2669E'; CTv.at = Date.now(); CTv.pier = 'PCTC'; CTv.code = 'STSE';
+  const r = ctx.__c();
+  ok(r && r.n === Object.keys(comp).length, `완료 ${Object.keys(comp).length}대를 한 대도 안 빠뜨린다 (${r && r.n}대)`);
+  ok(r && r.noPos === 0, `자리를 모르는 완료가 없다 (${r && r.noPos}대)`);
+  const cs = Object.values((r && r.cranes) || {});
+  ok(cs.length > 10, `호기 카드를 컨마다 냈다 (${cs.length}장)`);
+  const bad = cs.filter(c => `${c.bay}_${String(c.row).padStart(2, '0')}_${String(c.tier).padStart(2, '0')}` !== APP[c.cn]);
+  ok(bad.length === 0, `호기 카드가 가리키는 자리가 검수앱과 한 칸도 안 다르다 (다른 ${bad.length}장)`
+     + (bad.length ? ' | 보기 ' + bad.slice(0, 3).map(c => `${c.cn} 콘 ${c.bay}_${c.row}_${c.tier} ≠ 앱 ${APP[c.cn]}`).join(' · ') : ''));
+
+  //  ── 임시창고 컨은 «자리를 모르는 완료»가 아니라 «배에 자리가 없는 것»이다.
+  //     한 칸으로 뭉치면 화면이 «계획에도 실적에도 자리가 없어 콘 타이밍을 못 냅니다» 라고 잘못 말한다.
+  const sw = LIVE['SWSP_9003S|loading'];
+  const swStg = Object.keys(sw.records).filter(cn => String((sw.records[cn] || {}).bay_actual || '').startsWith('__'));
+  const swComp = {}; let j = 0;
+  for (const cn of swStg) swComp[cn] = { at: 1788000000000 + (j++), by: '김검수', equip: 'EQ' + j };
+  CTv.rec = { loading: sw.records, discharge: {} };
+  CTv.tw = { loading: {}, discharge: {} };
+  CTv.comp = { loading: swComp, discharge: {} };
+  sb.state.stow = { ediRows: Object.values(sw.ediContainers) };
+  const r2 = ctx.__c();
+  ok(r2 && r2.inStg === swStg.length, `임시창고 ${swStg.length}대를 «창고»로 따로 센다 (${r2 && r2.inStg}대)`);
+  ok(r2 && r2.noPos === 0, `그 ${swStg.length}대를 «자리를 모르는 완료»로 세지 않는다 (${r2 && r2.noPos}대)`);
 }
 
 // ⑦ 부르는 자리의 모양 — 여기를 건드리면 위 검사들이 다 통과하고 화면만 갈린다(감사 실측 N4·N5·N7).
