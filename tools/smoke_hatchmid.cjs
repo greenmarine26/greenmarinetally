@@ -135,6 +135,22 @@ setTimeout(() => {
   const leftHold = (SRC.match(/globalHatch\.maxHold\b/g) || []).length;
   ok(leftDeck === 0 && leftHold === 0, `옛 몫(maxDeck·maxHold)을 그리는 자리에서 한 곳도 안 쓴다 (maxDeck ${leftDeck}곳 · maxHold ${leftHold}곳)`);
 
+
+  //  ⚠ 3.39-01 — **데크 감싸개도 홀드 감싸개처럼 제 단수를 무조건 받아야 한다.**
+  //    검수사 2026-09-09 *«38번은 4단인데 옆베이 3단 보다도 낮아 보입니다»*. 종전 조건이
+  //    `nHold > 0 && globalHatch` 라 **데크 전용 베이만** CSS 기본 `flex: 1` 로 떨어졌고,
+  //    옆에 선 여백칸(`flex: maxSide - 단수`)이 줄들의 몫을 가져가 줄이 눌렸다.
+  //    ⚠ jsdom 은 `flex` 단축 속성을 통째로 버려 DOM 으로는 못 잰다 — **글자로** 잰다.
+  {
+    const CPV = fs.readFileSync(path.resolve(__dirname, '..', 'src/components/PrintableCargoPlanV2.jsx'), 'utf8');
+    const deckWrap = /<div className="cpv2-grid-row-wrap" style=\{\{ flex: `\$\{Math\.max\(deckTiers\.length, 1\)\} 1 0` \}\}>/.test(CPV);
+    ok(deckWrap, '데크 줄 감싸개가 제 단수를 **무조건** 받는다(홀드 쪽과 짝이 맞는다)');
+    ok(!/cpv2-grid-row-wrap" style=\{nHold > 0/.test(CPV),
+       '«홀드가 있을 때만» 이라는 옛 문지기가 안 남았다 — 데크 전용 베이가 눌리던 그 자리');
+    const holdWrap = /flex: `\$\{Math\.max\(holdTiers\.length, 1\)\} 1 0` \}/.test(CPV);
+    ok(holdWrap, '홀드 줄 감싸개도 그대로 제 단수를 받는다(이 판이 안 건드렸다)');
+  }
+
   console.log(fail ? `\n⛔ 해치 한가운데 검사 실패 ${fail}건` : `\n✅ 해치커버가 세로 한가운데 — ${pass}항 통과`);
   process.exit(fail ? 1 : 0);
 }, 600);

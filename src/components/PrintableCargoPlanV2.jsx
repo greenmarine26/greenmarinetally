@@ -496,7 +496,15 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
           {globalHatch && globalHatch.maxSide > deckTiers.length && (
             <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxSide - deckTiers.length} 1 0` }}></div>
           )}
-          <div className="cpv2-grid-row-wrap" style={nHold > 0 && globalHatch ? { flex: `${Math.max(deckTiers.length, 1)} 1 0` } : undefined}>
+          {/*  ⚠ 3.39-01 — **홀드 없는 베이에서 줄이 눌리던 자리.** 검수사 2026-09-09
+              *«제눈에는 셀 높이가 다른베이보다 낮아 보입니다»* · *«38번은 4단인데 옆베이 3단 보다도 낮아 보입니다»*.
+              종전 조건은 `nHold > 0 && globalHatch` 라 **데크 전용 베이만** 이 몫을 못 받고 CSS 기본 `flex: 1` 로 떨어졌다.
+              그 옆에는 여백칸이 `flex: maxSide - 단수` 로 서 있으므로, 줄들이 받는 몫이
+              `단수/maxSide` 가 아니라 `1/(1 + maxSide - 단수)` 로 줄어든다 — **단이 적을수록 더 눌린다.**
+              홀드 쪽 감싸개(아래 `cpv2-hold-area` 안)는 처음부터 **무조건** 제 단수를 받고 있었다.
+              그 짝을 맞춘다. 3.36 이 말단 여백칸에서 같은 모양(`nHold > 0 &&`)을 이미 한 번 걷어냈는데
+              **이 자리를 놓쳤다** — 같은 실수를 두 번 한 것이라 검사로 잠근다(`smoke_hatchmid` 감싸개 항). */}
+          <div className="cpv2-grid-row-wrap" style={{ flex: `${Math.max(deckTiers.length, 1)} 1 0` }}>
             <div className="cpv2-grid" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
               {deckRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
