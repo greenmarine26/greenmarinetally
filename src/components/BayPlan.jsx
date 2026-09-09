@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -1787,7 +1787,8 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
         }`}
         style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize,
                  //  3.7: 목적지 고정 바탕색 — 완료·XRAY·시프팅 칠이 있으면 그것이 이긴다(cellColor 가 그 경우 다른 클래스를 준다).
-                 ...(_podBg ? { background: _podBg } : {}),
+                 //  3.39: 화면 베이플랜도 칠한 칸=풀 · 테두리만=엠티(검수사 확정 «B» — 카고플랜과 한 벌).
+                 ...podFeStyle(_podBg, String(c.fe || '').toUpperCase() !== 'E'),
                  ...(oogShadow ? { boxShadow: oogShadow } : {}) }}
         title={oogShadow ? `규격 초과 — ${_ovh ? '높이' : ''}${_ovh && _ovw ? '·' : ''}${_ovw ? '좌우폭' : ''}` : undefined}
       >

@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
+import { isUserOwnedBayDict, podFeStyle} from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
 import { podBgOf, podCodeLen, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import {
@@ -549,8 +549,11 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       //    별첨2 견본이 그림에 없는 색을 보이게 만들어 범례가 거짓말이 된다.
                       //    풀·엠티는 가운데 글자(F·e·E)가 이미 말하므로 칠이 필요 없다(검수사 «표기자로도 확인이 됩니다»).
                       //    양하(podMode 아님)는 종전 그대로다.
+                      //  3.39: 선적도 «칠했나»가 풀·엠티를 말한다 — 칠한 칸=풀 · 테두리만=엠티(검수사 확정 «B»).
+                      //    목적지색은 그대로 두 경우 다 쓰므로 목적지 구분을 잃지 않는다.
+                      //    목적지를 모르는 칸은 종전 규칙(풀=하늘색/특수색 · 엠티=흰)으로 돌아간다.
                       style = podMode
-                        ? (_podBg ? { background: _podBg, color: MARK_FG } : { color: MARK_FG })
+                        ? { ...podFeStyle(_podBg, cell.isFull, SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG), color: MARK_FG }
                         : (cell.isFull
                           ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
                           : { color: MARK_FG });
@@ -682,8 +685,11 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       //    별첨2 견본이 그림에 없는 색을 보이게 만들어 범례가 거짓말이 된다.
                       //    풀·엠티는 가운데 글자(F·e·E)가 이미 말하므로 칠이 필요 없다(검수사 «표기자로도 확인이 됩니다»).
                       //    양하(podMode 아님)는 종전 그대로다.
+                      //  3.39: 선적도 «칠했나»가 풀·엠티를 말한다 — 칠한 칸=풀 · 테두리만=엠티(검수사 확정 «B»).
+                      //    목적지색은 그대로 두 경우 다 쓰므로 목적지 구분을 잃지 않는다.
+                      //    목적지를 모르는 칸은 종전 규칙(풀=하늘색/특수색 · 엠티=흰)으로 돌아간다.
                       style = podMode
-                        ? (_podBg ? { background: _podBg, color: MARK_FG } : { color: MARK_FG })
+                        ? { ...podFeStyle(_podBg, cell.isFull, SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG), color: MARK_FG }
                         : (cell.isFull
                           ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
                           : { color: MARK_FG });
@@ -1597,7 +1603,7 @@ export default function PrintableCargoPlanV2({
         </div>
         {/*  ★ 3.7-03 바닥글 — 매번 같은 설명은 여기 한 줄로. 머리글이 두세 줄로 부푸는 것을 막는다. */}
         <div className="cpv2-page-footer">{podMode
-          ? `바탕색=목적지(별첨1)${podLen ? ` · 칸 오른쪽 위 ${podLen}자=목적지` : ' · 이 배는 칸이 좁아 목적지 글자를 안 적는다'} · 가운데 글자=종류 — F 풀 · e 20ft엠티 · E 40ft엠티 · RF 리퍼풀 · RE 리퍼엠티 · DG 위험물 · FR 플랫랙 · OT 오픈탑 · TK 탱크 (이 넷은 글자만으로 풀, 엠티면 뒤에 E — FRE·DGE·OTE·TKE)`
+          ? `칠한 칸=풀 · 테두리만=엠티 · 색=목적지(별첨1)${podLen ? ` · 칸 오른쪽 위 ${podLen}자=목적지` : ' · 이 배는 칸이 좁아 목적지 글자를 안 적는다'} · 가운데 글자=종류 — F 풀 · e 20ft엠티 · E 40ft엠티 · RF 리퍼풀 · RE 리퍼엠티 · DG 위험물 · FR 플랫랙 · OT 오픈탑 · TK 탱크 (이 넷은 글자만으로 풀, 엠티면 뒤에 E — FRE·DGE·OTE·TKE)`
           : '칠한 칸=풀(하늘색=일반, 특수화물은 제 색·별첨2) · 안 칠한 칸=엠티 · 별첨1 ■ 색=선사 · 가운데 글자=종류(F 풀 · e 20ft엠티 · E 40ft엠티 · RF RE DG FR OT TK)'}
           {' · X=옆 40ft가 차지 · 회색=통과'}{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}
         </div>

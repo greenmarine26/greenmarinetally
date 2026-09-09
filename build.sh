@@ -270,6 +270,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     node tools/smoke_podpat.cjs "$SMOKE_HL" || { echo "✗ 목적지색 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.33: 콘앱 카고플랜 베이 차례 뒤집기 — 같은 번들을 실렌더해 BAY 차례를 읽는다
   node tools/smoke_coneflip.cjs "$SMOKE_HL" || { echo "✗ 콘앱 카고플랜 뒤집기 연막검사 실패 — 배포 금지"; exit 1; }
+  # 3.39: 선적 칸에서 «칠한 칸=풀 · 테두리만=엠티» 가 실제로 그려지는가 — 같은 번들(ATPR 366대·엠티 361)로 실렌더한다.
+  node tools/smoke_feborder.cjs "$SMOKE_HL" || { echo "✗ 풀·엠티 구분 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.36: 카고플랜 해치커버가 세로 한가운데인가 — 세 척(ATPR·MCSC·MAMP)을 실렌더한다. MAMP 만 «데크 전용 베이» 를 갖는다.
   for _SHIP in ATPR MCSC MAMP; do
     node tools/smoke_hatchmid.cjs "$SMOKE_HL" "$_SHIP" || { echo "✗ 카고플랜 해치 한가운데 연막검사 실패($_SHIP) — 배포 금지"; exit 1; }
