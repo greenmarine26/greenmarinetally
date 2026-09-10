@@ -125,7 +125,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
   check('검색패널 AI 버튼이 이벤트 객체를 질문으로 넘기지 않는다', /onClick=\{\(\) => handleAskAI\(\)\}/.test(src('src/components/SearchPanel.jsx')));
   check('🔑 설정창이 공용 키를 알아본다', /공용 키 사용 중/.test(src('src/components/GeminiKeyModal.jsx')) && /getMirConfig/.test(src('src/components/GeminiKeyModal.jsx')));
   check('매뉴얼(helpData)이 공용 키를 말한다', /공용 AI 키/.test(src('src/data/helpData.js')));
-  check('APP_NOTE 가 이번 판 문구', /공용 키/.test(M.APP_NOTE) && /3\.43/.test(M.APP_VERSION), M.APP_NOTE);
+  check('APP_VERSION 이 3.43 이상(공용 키 판 뒤)', parseFloat(String(M.APP_VERSION).replace(/^TallyOne /, '')) >= 3.43, M.APP_VERSION);   // APP_NOTE 는 판마다 바뀌므로 여기서 못 박지 않는다(3.43-01 에서 걸렸다)
 
   console.log(`\n${bad ? '✗' : '✔'} 공용 AI 키 연막검사 ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);

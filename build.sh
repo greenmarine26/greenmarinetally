@@ -822,6 +822,11 @@ fi
     npx esbuild tools/smoke_aikey_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AK" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_aikey.cjs "$SMOKE_AK" "$(pwd)" || { rm -f "$SMOKE_AK"; echo "✗ 공용 AI 키 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AK"
+    #  3.43-01: **두 앱 같은 답** — 검수앱(항차 열린 떠 있는 미르)·콘앱(cone.html mirAsk 모양) ctx 로 같은 문장(끝나는 시각·진행·도선·속도·창구) → 같은 답인가. 실데이터 KBTR 2606E + 터미널 실적·배 속도·도선 예보. 콘앱이 재료를 빼먹으면 여기서 갈린다.
+    SMOKE_MS=$(mktemp /dev/shm/hometmp/_smokems_XXXXXX.cjs)
+    npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MS" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_mirsame.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 두 앱 같은 답 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_MS"
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
     SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)

@@ -136,9 +136,14 @@ export function answerOneRaw(query, ctx) {
 
   //  ① 콘 이야기 — 콘앱이면 콘 지식이 먼저. 단 검수 속성(끝네자리·온도·실번호·엑스레이…)을 물으면 검수 답이 우선이다
   //    (2.48 — 종전엔 콘앱에서 «베이»만 들어가면 콘 답이 전부 가로챘다. 관문 2 실측).
+  //  ★ 3.43-01 — «진행» 을 묻는 말(«실제 진행 상황»·«얼마나 했어»)은 콘앱에서도 ⑥ 진행 두 갈래로 간다. 종전엔 nlSearch 가 «상황» 을
+  //    briefingQuery 로도 세워 콘앱만 ①이 브리핑을 먼저 냈다 — 검수앱은 ⑥, 콘앱은 ① 로 **같은 말에 다른 답**(검수사 2026-09-11
+  //    «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다», 실측 KBTR 2606E). 판정은 ⑥의 _progressLike 와 같은 식 한 벌.
+  const _progressLike = /진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(q)
+    || (/현황(?!\s*판)/.test(q) && !hasAnyCondition(p));
   if (c.cone && (app === 'cone' ? (/콘/.test(q) || !(p.digits || p.entityAttr || p.factQuery || p.type || p.sealAuditQuery)) : isConeQuery(q))) {
     try {
-      if (p.briefingQuery) {
+      if (p.briefingQuery && !(_progressLike && !/자료|브리핑|요약/.test(q))) {
         const parts = [];
         for (const m of ['discharge', 'loading']) {
           const sub = cs.filter((x) => (m === 'loading' ? x._mode === 'loading' : x._mode !== 'loading'));
@@ -154,7 +159,10 @@ export function answerOneRaw(query, ctx) {
         if (cb) parts.push('【콘】\n' + cb);
         if (parts.length) return (ship ? ship + '\n' : '') + parts.join('\n\n');
       }
-      if (app === 'cone' || isConeQuery(q)) { const a = coneAnswer(q, c.cone); if (a) return a; }
+      //  3.43-01: 콘 낱말이 있을 때만 콘 계산 답 — 종전엔 콘앱에서 «얼마나 남았어»·«다 했어» 가 콘 «남는 곳(반납)»·«전체 가감» 으로
+      //    가로채였다(감사 실측, 콘 작업표가 있을 때). 낱말 목록은 coneAnswer 의 작업표 없음 폴백과 같은 벌.
+      //    «전체» 는 홀말일 때만 콘 총가감(도움말 예시) — «전체 진행 상황» 은 진행 답. 가져갈·돌려줄·회수·더 필요는 콘 브리핑 본문 어휘(재감사).
+      if (isConeQuery(q) || /베이|모자|부족|남는|반납|가감|작업량|물량|가져|돌려|회수|챙겨|더\s*필요/.test(q) || /^(전체|전부)\s*[?!.~]*$/.test(String(q).trim())) { const a = coneAnswer(q, c.cone); if (a) return a; }
     } catch (e) { /* 콘 지식이 막혀도 미르는 계속 답한다 */ }
   }
 
@@ -257,8 +265,7 @@ export function answerOneRaw(query, ctx) {
 
   //  ⑥ 진행 — 두 갈래(1.69-02·2.55). 사람·호기·조건이 붙은 진행은 본체가 낸다.
   //  감사 지적(중 6·2차 시뮬 4) — «데미지 현황»·«선사 현황»·«수화물 현황»은 진행이 아니고, «시간당 몇 대 했어»는 페이스다.
-  const _progressLike = /진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(Q)
-    || (/현황(?!\s*판)/.test(Q) && !hasAnyCondition(p));
+  //  (_progressLike 는 ① 앞에서 한 번 계산한다 — 3.43-01, 콘앱 브리핑 가로채기와 한 벌)
   if (_progressLike && !/자료|브리핑|요약/.test(Q) && !p.crewQuery && !p.factQuery && !p.paceQuery
       && !p.dmgQuery && !p.carrierQuery && !p.luggQuery && !p.urgentQuery && !p.bayDistQuery && !p.sealAuditQuery
       && !p.digits && p.bay == null && !p.zone && !p.size && !p.fe && !p.type) {
