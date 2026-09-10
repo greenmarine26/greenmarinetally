@@ -3,21 +3,21 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled, crewShiftKey, resolveCrewSides, koJosa, isPtk, dropFilledBookingSlots, legendItemsOf} from '../utils.js';   // 3.8: crewShiftKey·koJosa
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer, answerCraneCrew, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { isoToLabel, fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // 3.8: crewShiftKey·koJosa
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
-import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
 import { mirTone, mirSmallTalk } from '../mirChat.js';
+import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌
+import { flattenVoyages, pickShipCtx } from '../mirCtx.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
+import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구
+import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
 import { mirKnowledge } from '../data/mirKnowledge.js';
-import { shipOpMapper } from '../data/tallyFormats.js';
 import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
 import { fbGetDamagePhoto, fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
-import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
@@ -90,61 +90,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   // 1.69-05: 방금 물어서 답이 붙은 질문을 기억 — 같은 질문 재제출(엔터·전송·음성) 판정용
   useEffect(() => { if (debouncedQuery.trim().length >= 2) lastAskRef.current = debouncedQuery.trim(); }, [debouncedQuery]);
 
-  // 모든 항차 양/선적 펼치기
-  const flat = useMemo(() => {
-    const arr = [];
-    Object.entries(voyages || {}).forEach(([vKey, v]) => {
-      if (!v || !v.info) return;
-      ['discharge', 'loading'].forEach(mode => {
-        const sec = v[mode];
-        if (!sec) return;
-        //  ★ 2.66-01 (검수사 «이유는 다른선박에 실릴때 컨번호 중복이 일어납니다»):
-        //    전량 캔슬된 쪽 컨은 **검색에서도 빠져야 한다**. 그 컨들은 다른 배에 실리므로
-        //    남겨 두면 끝 4자리 조회에 두 배가 걸린다 — 검수사가 현장에서 엉뚱한 배를 본다.
-        if (sideCancelled(v.info, mode, terminalWorkFor(v.info, terminalWork))) return;
-        const ediMap = sec.ediContainers || {};
-        const recMap = sec.records || {};
-        const xrayMap = sec.xrayList || {};
-        const xraySeals = sec.xraySeals || {};
-        const compMap = sec.completed || {};
-        const merged = {};
-        //  3.31: 통합검색도 항차 화면·마감텔리와 같은 선사 코드로(감사 지적 — 같은 배를 두 화면이
-        //    다르게 답하면 안 된다). 배별 별칭이고 근거 없으면 원래 값 그대로다.
-        const _spOpG = shipOpMapper(String(v.info?.vsl || '').toUpperCase(),
-          [...Object.values(ediMap), ...Object.values(recMap)].map((c) => c && c.op));
-        Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi', op: c.op ? _spOpG(c.op) : c.op }; });
-        Object.values(recMap).forEach(r => {
-          const safeR = {};
-          Object.keys(r).forEach(k => {
-            const v = r[k];
-            if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) safeR[k] = v;
-          });
-          if (safeR.op) safeR.op = _spOpG(safeR.op);
-          merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(미르 «선적 몇 대» 가 한 번만 세게)
-        });
-        Object.values(merged).forEach(c => {
-          if (!c.cn) return;
-          arr.push({
-            ...c,
-            /* 1.55-03: 실체 위치 승격 — fbSetActualPosition 은 bay_actual 만 쓰므로 승격이 없으면 계획 자리로 답했다(독립 재검증 P1-6). 창고(__)는 제외. */
-            ...((c.bay_actual && c.row_actual && c.tier_actual && !String(c.bay_actual).startsWith('__')) ? { bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual } : {}),
-            voyageKey: vKey,
-            vsl: v.info.vsl,
-            voy: v.info.voy,
-            mode,
-            _mode: mode,
-            _ptk: mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, mode),   // V7.93-02: 평택분 (7.1) · 3.26: 선적은 리스트 등재 = 평택(항차 화면과 같은 벌)
-            isXray: mode === 'discharge' && !!xrayMap[c.cn],
-            _xray: mode === 'discharge' && !!xrayMap[c.cn],
-            comp: compMap[c.cn] || null,
-            _comp: compMap[c.cn] || null,
-            xraySeal: xraySeals[c.cn] || null,
-          });
-        });
-      });
-    });
-    return arr;
-  }, [voyages]);
+  // 모든 항차 양/선적 펼치기 — 3.41: 떠 있는 미르와 **같은 벌**(mirCtx.flattenVoyages). 홈이 아는 컨을 미르가 모르면 안 된다(§4-4).
+  const flat = useMemo(() => flattenVoyages(voyages, terminalWork), [voyages, terminalWork]);
 
   // 자연어 파싱 (M6.10: debouncedQuery 사용)
   const parsed = useMemo(() => parseNaturalQuery(debouncedQuery), [debouncedQuery]);
@@ -205,66 +152,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
        배를 못 찾으면 아무것도 하지 않는다 — 엉뚱한 배를 여는 것보다 안 여는 편이 낫다. */
   const planRanRef = useRef('');
 
-  const shipCtx = useMemo(() => {
-    const Q = String(debouncedQuery || '').toUpperCase();
-    // 2.36: 항차 화면에 심긴 경우 — 질의에 배 이름이 없어도 **그 배**가 맥락이다.
-    //   («해치 열렸어?» 를 그 배 화면에서 물으면 그 배 답이 나와야 한다)
-    const _ctxFallback = () => {
-      if (!ctxVoyageKey) return null;
-      const v = (voyages || {})[ctxVoyageKey];
-      return v?.info ? { key: ctxVoyageKey, info: v.info, v, has: true } : null;
-    };
-    if (Q.length < 3) return _ctxFallback();
-    let best = null;
-    Object.entries(voyages || {}).forEach(([k, v]) => {
-      const i = v?.info; if (!i) return;
-      const names = [i.vsl, i.vslFull].filter(Boolean).map((x) => String(x).toUpperCase());
-      if (names.some((nm) => nm.length >= 3 && Q.includes(nm))) {
-        // 자료가 실린 항차 우선(같은 배 예정/진행 중복 대비)
-        const has = !!(v.discharge?.ediContainers || v.loading?.ediContainers);
-        if (!best || (has && !best.has)) best = { key: k, info: i, v, has };
-      }
-    });
-    // 1.85 (검수사 실측): «OWBH 브리핑» — 실제 코드는 OBWH(전위 오타)인데 정확 포함 매칭뿐이라 못 알아들었다.
-    //   질의의 영문 토큰과 편집거리(교환 포함) 1 이내인 선박이 **유일할 때만** 교정해 붙인다 —
-    //   두 배 이상 걸리면 오답 위험이므로 종전대로 되묻는다.
-    if (!best) {
-      const dl1 = (a, b) => {   // Damerau–Levenshtein ≤1 (교환 1회 포함)
-        if (a === b) return true;
-        const la = a.length, lb = b.length;
-        if (Math.abs(la - lb) > 1) return false;
-        if (la === lb) {
-          const diff = [];
-          for (let x = 0; x < la; x++) if (a[x] !== b[x]) diff.push(x);
-          if (diff.length === 1) return true;
-          if (diff.length === 2 && diff[1] === diff[0] + 1 && a[diff[0]] === b[diff[1]] && a[diff[1]] === b[diff[0]]) return true;
-          return false;
-        }
-        const [s, l] = la < lb ? [a, b] : [b, a];
-        let si = 0, li = 0, used = false;
-        while (si < s.length && li < l.length) {
-          if (s[si] === l[li]) { si++; li++; continue; }
-          if (used) return false;
-          used = true; li++;
-        }
-        return true;
-      };
-      const toks = Q.split(/[^A-Z0-9]+/).filter((w) => /^[A-Z]{3,8}$/.test(w));
-      const byShip = new Map();   // vsl → 후보 항차 (선박 단위 유일성 판정)
-      Object.entries(voyages || {}).forEach(([k, v]) => {
-        const i = v?.info; if (!i) return;
-        const names2 = [i.vsl, i.vslFull].filter(Boolean).map((x) => String(x).toUpperCase());
-        if (names2.some((nm) => nm.length >= 3 && toks.some((tk) => dl1(tk, nm)))) {
-          const has = !!(v.discharge?.ediContainers || v.loading?.ediContainers);
-          const shipId = String(i.vsl || names2[0] || k).toUpperCase();
-          const prev = byShip.get(shipId);
-          if (!prev || (has && !prev.has)) byShip.set(shipId, { key: k, info: i, v, has });
-        }
-      });
-      if (byShip.size === 1) best = [...byShip.values()][0];
-    }
-    return best || _ctxFallback();
-  }, [voyages, debouncedQuery, ctxVoyageKey]);
+  //  3.41: 질문 속 배 고르기는 mirCtx.pickShipCtx 한 벌(떠 있는 미르와 공용) — 정확 포함 → 편집거리 1 유일(1.85) → 심긴 항차(2.36).
+  const shipCtx = useMemo(() => pickShipCtx(debouncedQuery, voyages, ctxVoyageKey), [voyages, debouncedQuery, ctxVoyageKey]);
 
   /* 2.86 — «플랜 보여줘» 면 그 배를 열면서 신호를 남긴다. 여는 것은 부모(onOpenPlan)가 한다.
        ⚠ 홈은 **아직 배를 안 고른 자리**다. 질문에서 배를 못 찾으면(shipCtx 없음) 아무것도 열지 않는다 —
@@ -324,20 +213,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   //   항차 맥락이 필요한 질문(브리핑·점검·인계·ETA·날씨 등)은 어디서 물어야 하는지 안내한다.
   const _localAnswerRaw = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return null;
-    const p = parsed;
     const Q = debouncedQuery;
-    // 1.91-03 (검수사 실측 — 통합검색 «미르야»가 인사 대신 컨 100개 나열): 미르 호출 즉답을 최우선으로.
-    // 2.35 (검수사 실측 KBTR 2605E «양하갯수가 하나 틀리는데 뭐가 틀리는지»):
-    //   «대수가 안 맞아»·«몇 대 차이»·«왜 다르지» 류에 **어느 컨이 왜인지**를 답한다.
-    //   배 이름이 붙었을 때만(shipCtx) — 전 항차 스캔은 느리고 답도 흐려진다.
-    if (shipCtx && /(안\s*맞|다르|차이|틀리|어긋|왜\s*(달라|다르))/.test(Q) && /(대수|갯수|개수|양하|선적|EDI|리스트|숫자)/i.test(Q)) {
-      const _mode = /선적|LOLO|로딩/i.test(Q) ? 'loading' : 'discharge';
-      const _sec = shipCtx.v?.[_mode];
-      const _raw = shipCtx.v?.[_mode]?.raw?.edi?.text || shipCtx.v?.raw?.edi?.text || '';
-      const _d = diffEdiList(_sec, _raw);
-      if (_d) return explainEdiGap(_d, shipCtx.info?.vsl);
-      if (_sec?.ediContainers && _sec?.records) return `${shipCtx.info?.vsl || ''} ${_mode === 'loading' ? '선적' : '양하'} — EDI와 리스트가 딱 맞아요. 어긋나는 컨이 없어요 😺`;
-    }
     /* ★ 3.2-01 (받은함 08-29 «MCSC 카고플랜»·«MCSC 633N 양하 카고 플랜» 무응답 6건) — 플랜 명령이면 «열었어요» 한 줄.
          종전엔 플랜이 열려도(위 useEffect) 답 카드가 비어 _mirDontKnow 가 참이 되고 «무응답»으로 신고됐다.
          배를 못 찾으면 무엇을 붙이라고 말한다 — 엉뚱한 배를 여느니 안 여는 편이 낫다(2.86). */
@@ -353,456 +229,16 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         return `어느 배의 ${_what}인지 못 찾았어요 😿 «MCSC 카고플랜» 처럼 배 이름을 붙여 주세요.`;
       }
     }
-    if (p.mirHello) return '네, 미르예요 🐱 뭐 확인해 드릴까요?\n(예: "미르야 OBWH 브리핑" · "미르야 이번 선적 계획 어떻게 진행 될것 같아")';
-    // TallyOne 2.41: 미르 — 선박 연락처(이메일). «PCSZ 이메일»·«본선 메일»·«이 배 메일 주소 찾기».
-    //   검수사 원문 «본선 일항사와 메일로 컨펌» · «답만 해주면 됩니다»(발송·추적은 범위 밖).
-    //   ⚠ howToQuery·isChief 게이트보다 먼저 — "PCSZ 메일주소 뭐야"의 '뭐야'가 기능색인에 먹히면 안 된다.
-    if (p.contactQuery) {
-      if (shipContacts == null) return '연락처를 불러오는 중입니다 — 잠시 후 다시 물어봐 주세요.';
-      if (shipCtx) {
-        const code = String(shipCtx.info.vsl || '').toUpperCase();
-        const label = shipCtx.info.vslFull || shipCtx.info.vsl || '';
-        if (code) return generateContactAnswer(shipContacts[code] || null, label, p.contactQuery.onboardOnly);
-      }
-      const rawCand = p.contactQuery.code ? String(p.contactQuery.code).toUpperCase() : '';
-      if (rawCand && !/\s/.test(rawCand)) {
-        return generateContactAnswer(shipContacts[rawCand] || null, p.contactQuery.code, p.contactQuery.onboardOnly);
-      }
-      return '어느 배 말씀인지 배 이름을 붙여 주시면 연락처를 찾아 드립니다. (예: "PCSZ 이메일")';
-    }
-    // 1.69-01: 검수원 진입(홈 검색) — 컨 조회·용어·기능 설명은 그대로 답하고,
-    //   수석 전용 통계·자료현황은 1.69 유도 문구로 넘긴다(검수사 확정 계열).
-    //   ⚠ 기능 질문("마감 텔리 어디서 만들어")까지 막지 않게, 수석 통계 분기와 같은 모양만 잡는다.
-    if (!isChief && (
-      /오답|미회신|피드백|수집기|하트비트|mailpilot/i.test(Q)
-      || (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q))
-      || /이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*항차/.test(Q)
-      || /자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)/.test(Q)
-    )) {
-      return '수석 전용 정보입니다. 자세한 내용은 수석 검수사에게 문의하세요.';
-    }
-    // ── 1.69: 수석 통계·이력 — 배 이름 없이 묻는 것 (학습서 ②′) ──
-    //   ⚠ 전부 howToQuery 판정보다 앞이다 — '뭐 있어'·'어떻게' 류가 기능 색인에 먼저 먹히면 안 된다.
-    const _err = (v, what) => (v && v.__error) ? `${what}를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.` : null;
-    if (/오답|미회신|피드백/.test(Q)) {
-      return _err(chiefData.feedback, '오답 리포트') || answerFeedback(chiefData.feedback ?? null);
-    }
-    if (/수집기|메일\s*수집|하트비트|mailpilot/i.test(Q)) {
-      return answerCollector(heartbeat);
-    }
-    if (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q)) {
-      return _err(chiefData.tallyPending, '마감 목록') || answerTallyPending(chiefData.tallyPending ?? null);
-    }
-    if (/이번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위/.test(Q) || /지난\s*달|저번\s*달/.test(Q)) {
-      return _err(chiefData.archiveList, '보관소')
-        || answerArchiveStats(Array.isArray(chiefData.archiveList) ? chiefData.archiveList : null,
-             { bayDict: (typeof window !== 'undefined' && window.__fbShipBayDict) || {}, prevMonth: /지난\s*달|저번\s*달/.test(Q) });
-    }
-    if (/어제\s*실적|완료\s*(?:항차|된\s*배)/.test(Q)) {
-      return _err(chiefData.archiveList, '보관소')
-        || answerArchiveStats(Array.isArray(chiefData.archiveList) ? chiefData.archiveList : null,
-             { kind: /어제/.test(Q) ? 'yesterday' : 'recent' });
-    }
-    if (/(?:배|선박|항차|작업|시간).{0,10}겹치|겹치는\s*(?:배|선박|항차|시간)/.test(Q) && !/끝\s*자리|끝자리|번호/.test(Q)) {
-      return answerOverlaps(voyages);
-    }
-    // 2.37 (검수사 «쉽게 몇항차 텔리 보관하고 있어 등등»): 보관소에 무엇이 몇 건 있는지 — 배 이름 없이.
-    if (isChief && /(보관|아카이브)/.test(Q) && /(몇|얼마|있어|있나|현황|목록|뭐)/.test(Q) && !shipCtx) {
-      const arch = chiefData.archiveList;
-      if (arch === null || arch === undefined) return '보관소를 읽는 중이에요 — 잠시 후 다시 물어봐 주세요.';
-      if (arch && arch.__error) return '보관소를 읽지 못했어요 — 네트워크 확인 후 다시 물어봐 주세요.';
-      const list = Array.isArray(arch) ? arch : [];
-      if (!list.length) return '보관소에 완료 저장된 항차가 아직 없어요.';
-      const ships = new Set(list.map((a) => a.vsl));
-      const sorted = list.slice().sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
-      const _t = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()}`; };
-      const L = [`📦 보관소에 완료 항차 ${list.length}건이 있어요 (${ships.size}척).`];
-      L.push(`가장 최근: ${_t(sorted[0].archivedAt)} ${String(sorted[0].voyageKey || '').replace('_', ' ')}`);
-      L.push(`가장 오래된 것: ${_t(sorted[sorted.length - 1].archivedAt)} ${String(sorted[sorted.length - 1].voyageKey || '').replace('_', ' ')}`);
-      L.push('');
-      L.push('최근 5항차');
-      sorted.slice(0, 5).forEach((a) => L.push(`· ${_t(a.archivedAt)} ${String(a.voyageKey || '').replace('_', ' ')} — 양하 ${a.discharge_ptk ?? '?'} · 선적 ${a.loading_ptk ?? '?'}`));
-      L.push('');
-      L.push('배 이름을 붙여 물으면 그 배 것만 짚어 드려요 — 예: «DXQD 완료됐어?»');
-      return L.join('\n');
-    }
-    // TallyOne 1.66-03: **수석 화면에서도 기능 위치를 묻는다.**
-    //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*
-    //   1.65 에서 기능 설명을 항차 화면에만 붙였다. **수석 전용 기능일수록 수석이 묻는 자리에서 답해야 하는데 거꾸로였다.**
-    //   여기는 수석·소유자만 들어오는 라우트라(App.jsx 가드) 수석 기준으로 답한다.
-    // 1.69-02: 배가 지정된 «진행» 질문 — 두 갈래 (검수사 확정 2026-08-14). 항차 화면
-    //   SearchPanel과 근본 하나(nlSearch formatTerminalWorkAnswer·formatAppTallyAnswer).
-    //   «실제·실시간·실황·터미널» → 터미널 실황 작업보드 / 없으면 → 앱 검수 기록 기준.
-    if (shipCtx && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(debouncedQuery)
-        && !/자료/.test(debouncedQuery) && !p.crewQuery) {   // 3.8: 사람·호기를 댄 «어디까지·몇 대 했어» 는 아래 crew 분기가 낸다
-      const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-      // ★ 2.55: 항차 화면(SearchPanel)과 **같은 벌** — 어느 갈래로 가든 두 숫자가 다 나온다.
-      const _tw = terminalWorkFor(shipCtx.info, terminalWork);
-      const _pool = dropFilledBookingSlots(flat.filter((c) => c.voyageKey === shipCtx.key));   // 3.26: 진행률 분모도 한 번만
-      const _md = _pool.some((c) => c._mode === 'loading') && !_pool.some((c) => c._mode !== 'loading') ? 'loading' : 'discharge';
-      if (isRealtimeProgressQuery(debouncedQuery)) {
-        return formatTerminalWorkAnswer(ship, _tw, _pool, _md);
-      }
-      return formatAppTallyAnswer(ship, _pool, _tw, _md, shipCtx.info || null);
-    }
-    // 1.69-06: 완료·보관된 배의 진행 질문 — 보관소에서 찾아 «완료·보관됨»으로 결론부터 (검수사 신고 2026-08-14).
-    if (!shipCtx && isChief
-        && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(debouncedQuery)
-        && !/자료/.test(debouncedQuery)) {
-      const Q2 = String(debouncedQuery).toUpperCase();
-      const arch = chiefData.archiveList;
-      if (Array.isArray(arch)) {
-        const hits = arch.filter((a) => a && a.vsl && String(a.vsl).length >= 3 && Q2.includes(String(a.vsl).toUpperCase()));
-        if (hits.length) {
-          const h = hits.reduce((m, a) => (((a.archivedAt || 0) > (m.archivedAt || 0)) ? a : m));
-          const t = h.archivedAt ? new Date(h.archivedAt) : null;
-          const f = t ? `${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '';
-          const voy = String(h.voyageKey || '').split('_')[1] || '';
-          return `✅ ${h.vsl}${voy ? ' ' + voy : ''} — ${f ? f + ' ' : ''}완료·보관됨 (수석 완료 저장 기준).\n평택분 양하 ${h.discharge_ptk ?? '?'} · 선적 ${h.loading_ptk ?? '?'} — 상세는 보관소에서.`;
-        }
-      } else if (arch === null || arch === undefined) {
-        // 이펙트가 곧 채운다 — 배 이름이 보관소에 있을지 모르니 정직하게 '읽는 중'
-        if (/[A-Z]{3,}/.test(Q2)) return '보관소 기록을 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
-      } else if (arch && arch.__error) {
-        return '보관소를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.';
-      }
-    }
-    // 1.68: 배가 지정된 콜사인·IMO 질문 — 기능 설명(howTo)보다 먼저.
-    //   "STSE 콜사인 뭐야"의 '뭐야'가 기능 색인에 먼저 걸려 VRSC3 대신 기능 안내가 나왔다(시뮬 실측). — ship_bay_dict·info에 이미 있다.
-    if (/콜사인|호출\s*부호|\bIMO\b|아이엠오/i.test(debouncedQuery) && shipCtx) {
-      const dict = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
-      const d = dict[String(shipCtx.info.vsl || '').toUpperCase()] || {};
-      const L = [];
-      const cs = shipCtx.info.callsign || d.callsign; if (cs) L.push(`콜사인 ${cs}`);
-      if (d.imo) L.push(`IMO ${d.imo}`);
-      if (L.length) return `${shipCtx.info.vslFull || shipCtx.info.vsl} — ${L.join(' · ')}`;
-      return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 콜사인·IMO가 아직 등록 전입니다.`;
-    }
-    // ── 1.69: 배 지정 — 자료 도착 시각·해치 실황·작업 준비 계산(학습서 2-F 96~100) ──
-    //   ⚠ 전부 howToQuery·자료현황 판정보다 앞 — '언제 왔'은 자료현황 정규식에도 걸린다.
-    {
-      const _dict = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
-      const _bayDef = shipCtx ? (_dict[String(shipCtx.info.vsl || '').toUpperCase()] || {}).bayDef : null;
-      const _voy = shipCtx ? { ...shipCtx.v, key: shipCtx.key, _key: shipCtx.key } : null;
-      const _ship = shipCtx ? (shipCtx.info.vslFull || shipCtx.info.vsl) : '';
-      const isArrivalQ = isDataArrivalQuery(Q);   // 1.90: «받은거야»·«최종본 맞아» 포함 — 공용 트리거
-      const isHatchQ = /해치|커버/.test(Q) && /(?:열|오픈|개방|닫|몇\s*장|실황|상태|어디)/.test(Q);
-      const isGangQ = /(?:갱|크레인).{0,14}(?:분배|나눠|나누|분할)|분배.{0,10}(?:갱|크레인)|(?:갱|크레인)\s*2\s*개/.test(Q);
-      const isMoveQ = /무브/.test(Q) && /(?:몇|총|얼마)/.test(Q);
-      const isFirstQ = /(?:최초|처음|어디서?\s*부터|몇\s*번\s*부터).{0,10}(?:양하|시작|해)|양하.{0,12}(?:어디부터|어디서\s*시작|시작\s*어디|몇\s*번\s*부터)/.test(Q);
-      const isXrayShiftQ = /엑스레이|x[\s.\-]*ray|xray/i.test(Q) && /(?:조별|주간|야간|부착|몇\s*대\s*가능)/.test(Q);
-      const isShiftBriefQ = /교대.{0,8}브리핑|브리핑.{0,8}교대|교대\s*준비|인수\s*브리핑/.test(Q);
-      const anyCalc = isArrivalQ || isHatchQ || isGangQ || isMoveQ || isFirstQ || isXrayShiftQ || isShiftBriefQ;
-      if (anyCalc && !shipCtx) {
-        return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 계산합니다. (예: "HAYN 갱 2개로 분배")';
-      }
-      //  ★ 3.8: 호기–검수원 등록·조회 — 홈은 배를 안 고른 자리라 배 이름이 있어야 적고 답한다.
-      if ((p.crewSet || p.crewQuery) && !shipCtx) {
-        return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 이인철 3호기 최관식» · «SWMM 김성일 몇 개 했어»';
-      }
-      if (shipCtx) {
-        if (p.crewSet) return crewSetText(resolveCrewSides(p.crewSet, shipCtx.v), _ship);   // 3.21 감사: 저장부(:289)와 **같은 재료**를 봐야 한다 — 화면이 «못 가려요» 라면서 뒤로 저장하던 것
-        if (p.crewQuery) { try { const _a = answerCraneCrew(_voy, p.crewQuery); if (_a) return _a; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); } }
-        if (isArrivalQ) return answerDataArrival(_voy, _ship);
-        if (isHatchQ) return answerHatchStatus(_voy, _bayDef, _ship);
-        if (isGangQ) return answerGangSplit(_voy, _bayDef, _ship);
-        if (isMoveQ) return answerTotalMoves(_voy, _ship);
-        if (isFirstQ) return answerFirstStart(_voy, _bayDef, _ship);
-        if (isXrayShiftQ) return answerXrayShifts(_voy, _bayDef, { shipName: _ship, pier: shipCtx.info.pier });
-        if (isShiftBriefQ) return answerShiftBriefing(_voy, _bayDef, { shipName: _ship, voyages });
-        if (p.gangQuery) { try { const _a = answerGangShift(_voy, _bayDef, { nGangs: p.gangQuery.n || null, tw: terminalWorkFor(shipCtx.info, terminalWork) }); if (_a) return `${_ship}\n` + _a; } catch (e) { /* 아래로 */ } }   // 2.62
-      }
-    }
-    // ★ 2.57-02 (검수사 시험 «두 곳에서 FR을 물었습니다. 답이 같았습니까?» — 달랐다):
-    //   뜻 갈래(asking=def)는 **본체(_localAnswerCore) 한 벌**이 답한다 — 종전엔 이 화면만
-    //   아래 기능 색인(howTo)이 먼저 답해, 양하 탭의 용어 200선 답과 **답안지가 갈렸다**.
-    //   본체의 def 분기는 컨·ctx 를 안 쓰므로 빈 값으로 불러도 세 화면이 같은 답이다.
-    if (p.asking === 'def') {
-      try { const _d = generateLocalAnswer(p, [], [], null); if (_d) return _d; }
-      catch (e) { console.warn('[2.57-02] 뜻 본체 호출 실패 — 기능 색인으로 폴백:', e); }
-    }
-    // ★ 2.59-01 (검수사 실측 «천정에 구멍이 뚫렸다고 하는데 어떻게 처리해야 하지» — 답 없이 카드
-    //   100+대만 쏟아졌다): 방법 갈래(asking=how)도 본체와 같은 한 벌(answerHowCore)을 부른다.
-    //   ⚠ generateLocalAnswer 를 그대로 부르면 how 를 못 찾을 때 흘러내려 빈 컨 목록으로
-    //   «0대» 류 거짓 답이 나올 수 있어, how 답만 주는 한 벌을 쓴다. 홈은 조회 폴백이 없으므로
-    //   못 찾으면 고백한다 — «아직 못 배웠» 문구가 무응답 신고(mir_unanswered)에 잡힌다.
-    if (p.asking === 'how') {
-      try { const _h = answerHowCore(p); if (_h) return _h; }
-      catch (e) { console.warn('[2.59-01] 방법 본체 호출 실패:', e); }
-      return '그 방법은 아직 못 배웠습니다 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.';
-    }
-    if (p.howToQuery) {
-      const _a = generateHowToAnswer(debouncedQuery, p, { isChief });
-      if (_a) return _a;
-    }
-    // 자료 현황 — "어느 선박 자료 다 있어" · "어느 선사 것이 없지" · "빠진 자료"
-    //   항차 하나가 아니라 **전체를 가로질러** 봐야 하는 물음이라 통합 검색이 제자리다.
-    if (/자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)|어느\s*(?:선박|배|선사)[^?]*(?:없|빠|안\s*왔)|안\s*온\s*자료|EDI\s*(?:없|왔)|리스트\s*(?:없|왔)/.test(debouncedQuery)) {
-      try {
-        const rd = buildReadiness(voyages, (typeof window !== 'undefined' && window.__fbShipBayDict) || null);
-        // 1.68: 배가 지정되면 그 배만 — "STSE 양하 자료 다 있어" → 결론부터.
-        //   검수사 지적: "준비 되었으면 준비 되었다, 출력만 하면 된다고 답해야 하는데 필요없는 말만 합니다."
-        if (shipCtx) {
-          const wantMode = /양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null;
-          const mine = (rd.rows || []).filter((r) => r.key === shipCtx.key && (!wantMode || r.mode === wantMode));
-          if (mine.length) {
-            const lines = [];
-            let allReady = true;
-            mine.forEach((r) => {
-              if (r.state === 'ready') {
-                const cnt = r.edi && r.list && r.edi !== r.list ? ` (⚠ EDI ${r.edi} vs 리스트 ${r.list} — ${Math.abs(r.edi - r.list)}건 차이)` : ` — EDI ${r.edi || 0}건 = 리스트 ${r.list || 0}건`;
-                if (r.edi && r.list && r.edi !== r.list) allReady = false;
-                lines.push(`${r.modeKr}${cnt}`);
-              } else {
-                allReady = false;
-                lines.push(`${r.modeKr} — ${r.label}${r.carrier ? ` (${r.carrier})` : ''}`);
-              }
-            });
-            const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-            return (allReady ? `예. ${ship} 자료 준비돼 있습니다. 출력만 하면 됩니다.\n` : `⚠ ${ship} 자료가 아직입니다.\n`) + lines.join('\n');
-          }
-          return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 등록만 있고 자료가 아직 안 왔습니다.`;
-        }
-        return describeReadiness(rd);
-      }
-      catch (e) { /* 아래 종전 경로로 */ }
-    }
-    // 1.68: 배가 지정된 입출항 질문은 그 자리에서 답한다 — "STSE 출항 몇 시".
-    //   종전에는 PORT-MIS 데이터가 옆에 있는데도 안 읽고 떠넘겼다.
-    if (p.schedQuery && shipCtx) {
-      const pm = matchPortMis(portMisData || {}, shipCtx.info);
-      const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-      if (pm) {
-        const f = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? `${parseInt(m[2], 10)}월 ${parseInt(m[3], 10)}일 ${m[4]}:${m[5]}` : null; };
-        const L = [`${ship} — ` + [f(pm.eta) ? `입항 ${f(pm.eta)}` : null, f(pm.etd) ? `출항 ${f(pm.etd)}` : null].filter(Boolean).join(', ') + '.'];
-        if (pm.pier || pm.berth) L.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
-        if (pm.nextPort) L.push(`다음 항구: ${pm.nextPort}`);
-        // 1.68-01: 터미널 ETD가 PORT-MIS와 다르면 병기 — 실측: STSE 출항이 21:00 신고 후 12:00으로 당겨졌는데 터미널 피드에만 있었다.
-        const _tw = terminalWorkFor(shipCtx.info, terminalWork);
-        if (_tw?.depEtd && String(_tw.depEtd).slice(0, 16) !== String(pm.etd || '').slice(0, 16))
-          L.push(`⚠ 터미널 기준 출항 ${String(_tw.depEtd).slice(5, 16)} — 신고(${f(pm.etd) || '?'})와 다릅니다`);
-        return L.join('\n');
-      }
-      if (shipCtx.info.planDate) return `${ship} — 작업 계획 ${shipCtx.info.planDate} (PORT-MIS 신고는 아직).`;
-    }
-    // 1.92-04 (검수사 실측 «SWSP 작업 얼마나 걸릴까?» 가 물량 답으로 빠짐): 속도 질문은 물량(isStat)보다 먼저.
-    if (isSpeedQuery(debouncedQuery) && shipCtx) {
-      try { const a = answerShipSpeed(shipCtx.v, shipSpeed, shipCtx.info.vslFull || shipCtx.info.vsl, terminalWork); if (a) return a; } catch (e) { /* 아래로 */ }   // 2.54: 터미널 실적 우선
-    }
-    // 1.68: 배가 지정된 물량 질문 — "STSE 양하 몇 개야" 를 여기서 바로 센다(평택분).
-    if (shipCtx && (p.isStat || p.isAll || /몇\s*(?:개|대)/.test(debouncedQuery))) {
-      const mine = dropFilledBookingSlots(flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk));   // 3.26: 부킹 자리·실번호 한 번만
-      if (mine.length) {
-        const mk = (mode, kr) => {
-          const arr = mine.filter((c) => c._mode === mode);
-          if (!arr.length) return null;
-          const f = arr.filter((c) => c.fe === 'F').length;
-          const deck = arr.filter((c) => parseInt(String(c.tier || '0'), 10) >= 80).length;
-          return `${kr} 평택분 ${arr.length}대 — Full ${f} / Empty ${arr.length - f} · 데크 ${deck} / 홀드 ${arr.length - deck}`;
-        };
-        const wantMode = p.mode || (/양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null);
-        const L = wantMode ? [mk(wantMode, wantMode === 'discharge' ? '양하' : '선적')] : [mk('discharge', '양하'), mk('loading', '선적')];
-        const body = L.filter(Boolean).join('\n');
-        if (body) return `${shipCtx.info.vslFull || shipCtx.info.vsl}\n${body}`;
-      }
-    }
-    // 1.91-01: 배 지정 양하·선적 계획 전망 (공용)
-    if (isPlanOutlookQuery(debouncedQuery) && shipCtx) {
-      try {
-        const _m = outlookModeOf(debouncedQuery);
-        const _ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-        const a = _m ? answerPlanOutlook(shipCtx.v, _m, _ship) : answerPlanOutlookBoth(shipCtx.v, _ship);   // 1.91-02
-        if (a) return a;
-      } catch (e) { /* 아래로 */ }
-    }
-    // 1.89 (검수사 예시 «이번 SWSP 관련선사는 몇군데이고 각각 몇대씩이고 담당자가 누구지?»)
-    if (p.carrierQuery && shipCtx) {
-      //  3.26: 선사는 자리(부킹 EDI)가 안다 — 리스트 행엔 op 가 없다. 별첨과 같은 벌(legendItemsOf: 자리=계획, 채운 실번호 제외)로 센다(3차 감사).
-      const mine = legendItemsOf(flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk));
-      const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-      return `${ship}\n` + formatCarriers(mine, { carrierContacts });
-    }
-    // 1.85 (검수사 실측 «OWBH 브리핑»): 배가 지정된 브리핑은 통합검색에서도 즉답 — 종전엔 배 이름이 있어도 되물었다.
-    if (p.briefingQuery && shipCtx) {
-      const mine = dropFilledBookingSlots(flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk));   // 3.26
-      if (mine.length) {
-        const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-        const wantMode = p.mode || (/양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null);
-        const parts = [];
-        for (const [mode, kr] of [['discharge', '양하'], ['loading', '선적']]) {
-          if (wantMode && mode !== wantMode) continue;
-          const arr = mine.filter((c) => c._mode === mode);
-          if (!arr.length) continue;
-          try { const _gde = (() => { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(shipCtx.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; })(); const _gtw = terminalWorkFor(shipCtx.info, terminalWork); const _gg = (() => { try { return gangBriefLines(buildGangShift(shipCtx.v, _gde, { tw: _gtw })); } catch (e) { return null; } })(); parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: _gtw, gang: _gg, cancelled: sideCancelled(shipCtx.info || shipCtx.v?.info, mode, _gtw) })); } catch (e) { /* 폴백 아래로 */ }
-        }
-        if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
-      }
-      // 1.97 (검수사 확정): 컨 자료가 없으면 컨 나열 대신 **홈 카드 수준 개요 브리핑** — 부두·일정·자료 상태·EDI 도착 패턴.
-      try {
-        const pmv = matchPortMis(portMisData || {}, shipCtx.info);
-        const ov = answerShipOverview(shipCtx.v, shipCtx.info.vslFull || shipCtx.info.vsl, pmv, ediPattern);
-        if (ov) return ov;
-      } catch (e) { /* 아래로 */ }
-    }
-    // 2.01 (검수사 확정 «항차목록에서 브리핑은 선박명을 특정 안하면 그날 작업할 선박들 전부를 브리핑»):
-    //   배 미지정 «브리핑» = planDate 가 오늘과 겹치는 항차 전부 — 배별 개요 브리핑(1.97 answerShipOverview)
-    //   + 컨 자료가 있으면 특수화물 한 줄. 오늘 배가 없으면 아래 기존 안내로 폴백.
-    // 2.06 (검수사 실측 «실오류가 있는 선박은?» — 무응답·컨 100개 나열): 실오류/실번호 불일치 현황.
-    //   실오류 = 검수원이 실물로 고친 기록(sl_orig ≠ sl) · 불일치 = 리스트끼리 값이 다름(sl_conflict).
-    if (/[실씰]\s*오류|실번호\s*(불일치|오류)/.test(debouncedQuery)) {
-      try {
-        const _rows = [];
-        for (const c of flat) {
-          if (!c || !c.cn) continue;
-          const _fix = c.sl_orig && c.sl && String(c.sl) !== String(c.sl_orig);
-          const _cf = Array.isArray(c.sl_conflict) && [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))].length > 1;
-          if (_fix || _cf) _rows.push({ c, _fix, _cf });
-        }
-        if (!_rows.length) return '실오류·실번호 불일치로 기록된 컨이 없습니다 (앱 기록 기준 — 현장 발견분은 실오류 보고로 남겨 주세요).';
-        const _byShip = new Map();
-        for (const r of _rows) { const k = r.c.voyageKey || '?'; if (!_byShip.has(k)) _byShip.set(k, []); _byShip.get(k).push(r); }
-        const L = [`⚠ 실오류·실번호 불일치 ${_rows.length}건 — ${_byShip.size}척`];
-        for (const [k, arr] of _byShip) {
-          L.push(`【${k}】 ${arr.length}건`);
-          arr.slice(0, 10).forEach(({ c, _fix, _cf }) => {
-            const d = _fix ? `리스트 ${c.sl_orig} → 실물 ${c.sl}` :
-              `불일치 ${[...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`;
-            L.push(`  ${c.cn} — ${d}`);
-          });
-          if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`);
-        }
-        return L.join('\n');
-      } catch (e) { /* 아래로 */ }
-    }
-    // 2.03-04 (검수사 실측 «미르야 PCSZ 우리가 작업해야해?» — 무응답): «우리가 작업하는 배인가» 판정.
-    //   항차 목록(수집기가 배정·메일로 만든 카드 포함)에 있으면 = 저희 배 — 개요로 답.
-    //   없으면 = 저희 부두 배정·자료에 안 잡힌 배 — 근거와 함께 아니라고 답한다.
-    if (/(우리|저희)\s*(가|는|도)?\s*(작업|검수)|작업\s*해야|검수\s*해야|우리\s*배/.test(debouncedQuery)) {
-      if (shipCtx) {
-        // 2.04 (검수사 확정 «답은 이번 항차는 PSS입니다. 저희 작업 대상선박입니다. 라고 알리고
-        //   양하 선적 구분은 안하는게 좋습니다. 만약 물어보면 자세한건 수석검수사에게 물어 보라고 넘기십시요»):
-        //   항로(lane)는 수집기가 배정목록에서 info.lane 으로 실어 온다(push_sched_extras v1.1 — 이미 있었다).
-        //   같은 배라도 항로가 바뀔 수 있고 담당(양하만/선적만/둘다)은 입항 시점에야 확정되므로 구분하지 않는다.
-        try {
-          const _i = shipCtx.info || {};
-          const pmv = matchPortMis(portMisData || {}, _i);
-          const ov = answerShipOverview(shipCtx.v, _i.vslFull || _i.vsl, pmv, ediPattern);
-          const _detail = /양하|선적|하역만|어느\s*쪽/.test(debouncedQuery)
-            ? '\n양하·선적 구분 같은 자세한 것은 수석검수사에게 확인해 주세요.' : '';
-          if (_i.lane) {
-            return `이번 항차는 ${_i.lane}입니다. 저희 작업 대상 선박입니다.${_detail}\n\n${ov || ''}`.trim();
-          }
-          // lane 미수집 — 근거 등급 폴백(2.03-05)
-          const _assigned = _i.planDis != null || _i.planLod != null;
-          if (_assigned) {
-            return `저희 작업 대상 선박입니다 — 선석배정목록에 잡혀 있습니다. (항로는 다음 배정 수집 때 표시됩니다)${_detail}\n\n${ov || ''}`.trim();
-          }
-          if (pmv) {
-            return `입항 신고(PORT-MIS)는 있는데 선석배정에는 아직입니다 — 배정이 뜨면 확정입니다. 자세한 것은 수석검수사에게 확인해 주세요.\n\n${ov || ''}`.trim();
-          }
-          return `⚠ 판단 유보 — ${_i.vslFull || _i.vsl} 항차 카드는 있지만(메일 자료로 생성) 선석배정·PORT-MIS 에는 안 잡혔습니다. 자세한 것은 수석검수사에게 확인해 주세요.\n\n${ov || ''}`.trim();
-        } catch (e) { return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 항차 목록에는 있습니다 (${shipCtx.key}). 자세한 것은 수석검수사에게 확인해 주세요.`; }
-      }
-      // 배 이름 후보(영문 3~5자 토큰) — 항차 목록에 없다
-      const _tok = (String(debouncedQuery).toUpperCase().match(/\b[A-Z]{3,5}\b/g) || []).filter((t) => !['PTK', 'PCTC', 'PNCT'].includes(t));
-      if (_tok.length) {
-        return `${_tok[0]} — 지금 항차 목록·선석배정 자료에 없는 배입니다. 저희가 작업할 배로 잡혀 있지 않습니다.\n(배정목록·메일에 뜨면 수집기가 자동으로 항차 카드를 만듭니다 — 그때 다시 물으면 «네»라고 답합니다)`;
-      }
-      return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: "PCSZ 우리가 작업해야해?"';
-    }
-    // 2.03-02 (검수사 실측 «내일 작업 대상 선박은?» — 통합검색이 무응답): 오늘/내일/모레 작업 선박 질의.
-    //   «(오늘|내일|명일|모레) … 작업 … (선박|배|대상)» → 그날 planDate 가 겹치는 항차를 시작순으로 나열.
-    const _dayOff = /모레/.test(debouncedQuery) ? 2 : /내일|명일/.test(debouncedQuery) ? 1 : 0;
-    if (/오늘|내일|명일|모레/.test(debouncedQuery) && /작업|양하|선적|일정/.test(debouncedQuery) && /선박|배|대상|뭐|뭔|몇|무슨/.test(debouncedQuery) && !shipCtx) {
-      try {
-        const _now = new Date();
-        const _b0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + _dayOff).getTime();
-        const _b1 = _b0 + 24 * 3600 * 1000;
-        const _pT2 = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
-        const _ships = Object.entries(voyages || {}).map(([k, v]) => {
-          const seg = String(v?.info?.planDate || '').split('~');
-          const a = _pT2(seg[0]); const b = seg[1] ? _pT2(seg[1]) : a;
-          return { k, v, a, b: (b == null ? a : b) };
-        }).filter(x => x.a != null && x.a < _b1 && x.b >= _b0).sort((x, y) => x.a - y.a);
-        const _lbl = _dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘';
-        if (!_ships.length) return `${_lbl} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 아직이면 수집기가 잡는 대로 항차 카드에 뜹니다.`;
-        const L = [`${_lbl} 작업 선박 ${_ships.length}척`];
-        for (const { k, v, a } of _ships) {
-          const i2 = v?.info || {};
-          const t = new Date(a);
-          const hh = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-          const amt = [i2.planDis != null && Number(i2.planDis) > 0 ? `양하 ${i2.planDis}` : null, i2.planLod != null && Number(i2.planLod) > 0 ? `선적 ${i2.planLod}` : null].filter(Boolean).join(' · ');
-          // 2.03-05: 선석배정에 안 잡힌 배는 ⚠ — 수집기가 잘못 물어온 카드(항로 변경)일 수 있다(검수사 교정, PCSZ 사건)
-          const _mark = (i2.planDis != null || i2.planLod != null) ? '' : ' ⚠배정 미확인 — 저희 항차가 아닐 수 있음';
-          L.push(`${i2.vslFull || i2.vsl || k} — ${i2.pier || '?'} ${hh} 시작${amt ? ` (${amt})` : ''}${_mark}`);
-        }
-        L.push(`\n«${_lbl === '오늘' ? '' : _lbl + ' '}브리핑» 이라고 하면 배별 상세까지 답합니다.`);
-        return L.join('\n');
-      } catch (e) { /* 아래로 */ }
-    }
-    if (p.briefingQuery && !shipCtx) {
-      try {
-        const _now = new Date();
-        const _pT = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
-        const _shipsOf = (off) => {
-          const d0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + off).getTime();
-          const d1 = d0 + 24 * 3600 * 1000;
-          return Object.entries(voyages || {}).map(([k, v]) => {
-            const seg = String(v?.info?.planDate || '').split('~');
-            const a = _pT(seg[0]); const b = seg[1] ? _pT(seg[1]) : a;
-            return { k, v, a, b: (b == null ? a : b) };
-          }).filter(x => x.a != null && x.a < d1 && x.b >= d0).sort((x, y) => x.a - y.a);
-        };
-        // 2.05-03 (검수사 확정 «특정 선박명이 없으면 그날 작업할 선박 전부 브리핑 해야 하는데 없으면
-        //   작업할 선박이 없습니다. 내일 작업할것을 브리핑 할까요? 네 아니오 선택할수 있게»):
-        //   오늘 0척이면 자동 진행이 아니라 **되묻는다** — [네]는 «내일 브리핑» 질의로 이어진다(아래 버튼 렌더).
-        const _off = _dayOff;
-        const _today = _shipsOf(_off);
-        if (!_today.length) {
-          if (_dayOff === 0 && _shipsOf(1).length) {
-            return `오늘 작업할 선박이 없습니다. 내일 작업할 것을 브리핑할까요?`;
-          }
-          const _lbl0 = _dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘·내일';
-          return `${_lbl0} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 잡히면 항차 카드에 뜹니다.\n배 이름을 붙이면 그 배 브리핑을 바로 합니다 (예: "TNJP 브리핑").`;
-        }
-        if (_today.length) {
-          const _parts = [`📋 ${_off === 2 ? '모레' : _off === 1 ? '내일' : '오늘'} 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
-          for (const { k, v } of _today) {
-            const _ship = v?.info?.vslFull || v?.info?.vsl || k;
-            let _blk = null;
-            try { const _pmv = matchPortMis(portMisData || {}, v?.info || {}); _blk = answerShipOverview(v, _ship, _pmv, ediPattern); } catch (e) { /* 배 하나 실패해도 계속 */ }
-            if (!_blk) continue;
-            const _lines = _blk.split('\n').filter(l => !l.startsWith('(컨테이너 상세'));   // 다척 나열에선 안내 줄 생략
-            try {
-              const _mine = dropFilledBookingSlots(flat.filter(c => c.voyageKey === k && c._ptk));   // 3.26
-              if (_mine.length) {
-                const _c = (f) => _mine.filter(f).length;
-                const _sp = [];
-                const _rfF = _c(c => c.rf && String(c.fe).toUpperCase() === 'F'); if (_rfF) _sp.push(`리퍼 ${_rfF}`);
-                const _dg = _c(c => c.dg); if (_dg) _sp.push(`위험물 ${_dg}`);
-                const _fr = _c(c => c.fr); if (_fr) _sp.push(`FR ${_fr}`);
-                const _ot = _c(c => c.ot); if (_ot) _sp.push(`OT ${_ot}`);
-                const _tk = _c(c => c.tk); if (_tk) _sp.push(`탱크 ${_tk}`);
-                const _xr = _c(c => c._xray); if (_xr) _sp.push(`X-RAY ${_xr}`);
-                if (_sp.length) _lines.push(`특수: ${_sp.join(' · ')}`);
-              }
-            } catch (e) { /* 특수 줄만 생략 */ }
-            _parts.push(`【${_ship}】\n` + _lines.join('\n'));
-          }
-          if (_parts.length > 1) return _parts.join('\n\n');
-        }
-      } catch (e) { /* 아래 안내로 */ }
-    }
-    if ((p.briefingQuery && !shipCtx) || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
-        p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.foodQuery || (p.schedQuery && !shipCtx)) {
-      return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시")\n작업 중 상세(브리핑·ETA·인계)는 항차 화면 [▶ 작업 시작] 탭의 미르가 더 자세합니다.';
-    }
-    // TallyOne 1.21: 기상 시각 — 통합검색엔 항차 맥락이 없어 근무조(주간 08시·야간 19시) 기준으로 답한다.
-    if (p.wakeQuery) { try { return generateWakeAnswer({}); } catch { return null; } }
-    if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
-    if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
-    return null;
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts, onOpenPlan]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트 · 2.41: 선박 연락처 · 3.2-01: onOpenPlan
+    /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOneRaw` **한 벌**(검수사 «미르를 하나로»). 종전 이 자리의 450여 줄(EDI 차이·인사·연락처·
+         수석 통계·진행·보관·콜사인·배 지정 계산·뜻·방법·기능·자료현황·입출항·속도·물량·전망·선사·브리핑·실오류·우리 배·오늘 작업 선박)은
+         전부 그리로 옮겼다. 여기 남는 것은 재료(ctx)를 싣는 일뿐이다 — 판정을 여기서 다시 세우지 않는다(§4-4). */
+    return answerOneRaw(Q, {
+      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
+      voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, terminalWork, carrierContacts, shipSpeed, ediPattern, shipContacts,
+      bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
+      computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
+    });
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts, onOpenPlan, carrierContacts, shipSpeed, ediPattern]);   // 3.41: 한 벌 엔진 ctx
 
   // 2.33: 출구 한 겹 — 데이터는 그대로, 종결어미만 미르 말투로(검수사 확정 «살짝 친근»).
   //   업무 인텐트 전부 침묵일 때만 잡담 그물(검수사 제공 대본)이 받는다 —
@@ -829,7 +265,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     if (eyes) return eyes;
     //  ★ 2.57: 뜻 갈래(asking=def)는 본체가 이미 지식으로 답했다 — 여기서 또 붙이면 두 번 나온다.
     const know = (parsed && parsed.asking) ? null : mirKnowledge(debouncedQuery);   /* 2.59-01: def 만 거르니 how 가 새서 본체 답과 겹으로 두 번 나왔다(라이브 실측) — asking 갈래(def·how)는 본체가 답하므로 겹은 물러난다 */
-    if (know && raw) return know + '\n\n────────\n' + raw;
+    if (know && raw && raw !== know && mirTone(know) !== raw) return know + '\n\n────────\n' + raw;   // 3.41: 한 벌 엔진이 지식으로 답한 것을 또 붙이지 않는다
     return know || raw || mirSmallTalk(debouncedQuery);
   }, [_localAnswerRaw, debouncedQuery, flat, parsed, shipCtx]);   // ★ 2.57: shipCtx — 미르의 눈 배선
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
@@ -866,6 +302,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     // 알파벳 포함 → 선박명 검색도 포함
     if (parsed.mirHello) return [];   // 1.91-03: «미르야» 단독 — 컨 나열 억제(인사 카드만)
     if (parsed.briefingQuery) return [];   // 1.97: 브리핑 질의 — 컨 100개 나열이 답을 가리지 않게(검수사 실측 tnjp 브리핑)
+    if (parsed.factQuery && parsed.bay == null && !parsed.howToQuery) return [];   // 3.41: 항차 창구(마감텔리·해치·현측…) — 컨 나열은 답이 아니다(«12번 해치 몇 대»는 베이 조회라 남긴다)
     if (/[실씰]\s*오류|실번호\s*(불일치|오류)/.test(debouncedQuery)) return [];   // 2.06: 실오류 질의 — 컨 나열 억제
     const Q = debouncedQuery.toUpperCase();
     const isOnlyDigits = /^\d+$/.test(Q.replace(/\s/g, ''));

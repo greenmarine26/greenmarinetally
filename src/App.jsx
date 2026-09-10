@@ -24,6 +24,7 @@ import AuxPage from './pages/AuxPage.jsx';         // TallyOne 1.0: 보조기능
 import { consumeUpdateResume } from './updateResume.js';   // 3.7-04: 업데이트 새로고침이면 로그인·화면을 되살린다
 import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
+import MirFab from './components/MirFab.jsx';   // 3.41: 떠 있는 미르 — 어느 화면에서든 모든 질문(검수사 2026-09-10)
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
 import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
@@ -634,6 +635,11 @@ export default function App() {
             onGoHome={() => setMirPlan(null)}
           />
       )}
+
+      {/* ★ 3.41 — 떠 있는 미르. 어느 화면에서든 오른쪽 아래 얼굴을 누르면 시트가 올라온다(검수사 «앱 어디에든 항상 띄워서»).
+           답은 mirAnswer.answerOne 한 벌(작업창·양하선적 탭·홈·콘앱과 같은 함수). 플랜 명령은 위 mirPlan 덮개를 연다. */}
+      <MirFab voyages={voyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData} terminalWork={terminalWork}
+        pilotForecast={pilotForecast} heartbeat={heartbeat} onOpenPlan={(p) => setMirPlan(p)} />
 
       <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>

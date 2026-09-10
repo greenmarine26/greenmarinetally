@@ -44,7 +44,8 @@ T(/선적 평택 2대/.test(normal), '캔슬이 아닌 배까지 «없음» 으�
 //  ── 배선 (한 곳이라도 빠지면 그 화면만 허수를 센다) ──
 const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 T(/_cancL = sideCancelled/.test(rd('src/pages/LoginPage.jsx')), '로그인 카드 배지가 캔슬분을 그대로 센다');
-for (const f of ['src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx', 'src/pages/GlobalSearchPage.jsx']) {
+//  3.41: 브리핑은 세 화면이 아니라 mirAnswer 한 벌이 만든다(어디서 물어도 같은 답) — 그 한 벌이 캔슬을 알아야 한다.
+for (const f of ['src/mirAnswer.js']) {
   T(/cancelled: sideCancelled\(/.test(rd(f)), `${f} 브리핑이 캔슬을 모른다 — 화면마다 답이 갈린다`);
 }
 T(/if \(sideCancelled\(voyage\?\.info, mode, opts\.tw\)\) continue;/.test(rd('src/chiefAnswers.js')), '갱 배분이 캔슬된 쪽을 나눠 준다');
@@ -54,7 +55,7 @@ const vpg = rd('src/pages/VoyagePage.jsx');
 T(/이번 항차 \{mode === 'discharge' \? '양하' : '선적'\} 전량 캔슬/.test(vpg), '항차 화면에 «이번 항차 전량 캔슬» 표시가 없다');
 T((vpg.match(/\{!_sideCanc && tab === /g) || []).length >= 9, '캔슬인데 탭 본문(목록·검증·베이·통계…)이 그대로 뜬다');
 T(/\{!_sideCanc && <VoyageSummaryCard/.test(vpg), '캔슬인데 현황 요약(선적평택 81·예상EDI 80…)이 그대로 뜬다');
-T(/sideCancelled\(v\.info, mode,/.test(rd('src/pages/GlobalSearchPage.jsx')),
+T(/sideCancelled\(v\.info, mode,/.test(rd('src/mirCtx.js')),   // 3.41: 통합검색의 전 항차 펼치기는 mirCtx.flattenVoyages 한 벌(떠 있는 미르와 공용)
   '통합검색이 캔슬분을 그대로 검색한다 — 그 컨은 다른 배에 실리므로 끝 4자리 조회에 두 배가 걸린다');
 
 //  2.67-01 (검수사 «저걸로 인해 선적카드를 눌러보게 됩니다. 그후에야 캔슬사실을 알게 되죠»):

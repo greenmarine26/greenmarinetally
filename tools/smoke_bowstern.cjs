@@ -103,7 +103,8 @@ console.log('선수·선미 → 호기 (3.21)');
   ok(/bowStern: briefCtx\?\.bowStern \|\| null/.test(vp), '항차 화면이 ctx 에 bowStern 을 실어 준다(항차를 통째로 못 싣는 자리)');
   ok((vp.match(/briefCtx=\{\{ \.\.\.\(briefCtx \|\| \{\}\), bowStern \}\}/g) || []).length === 2,
      '두 탭(ListTab·LoloTab) 모두 그 재료를 내려보낸다');
-  ok(/crewSetText\(resolveCrewSides\(p\.crewSet, shipCtx\.v\)/.test(gs), '전체 검색도 화면 글에 같은 유도를 태운다');
+  //  3.41: 전체 검색의 화면 글은 mirAnswer 한 벌이 낸다(어디서 물어도 같은 답) — 그 한 벌이 같은 유도를 탄다.
+  ok(/crewSetText\(resolveCrewSides\(p\.crewSet, v\)/.test(rd('src/mirAnswer.js')), '전체 검색도 화면 글에 같은 유도를 태운다');
   ok(/const cs = resolveCrewSides\(parsed\.crewSet, voyage\)/.test(sp), '검색 패널 저장부가 유도를 탄다');
   ok((vp.match(/resolveCrewSides\(parseNaturalQuery\(q\)\.crewSet, bowStern\)/g) || []).length === 2,
      '항차 화면 저장부 두 자리가 같은 재료(bowStern prop)를 쓴다');

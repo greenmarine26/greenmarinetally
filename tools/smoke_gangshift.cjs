@@ -122,10 +122,11 @@ T(!!ans && /포맨 지시가 우선/.test(ans) && /FR 교체 15분/.test(ans), '
 }
 // ⑦ 소스 배선 — 세 화면 + 본체
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-T(/gangBrief\(\)/.test(read('src/pages/VoyagePage.jsx')) && /gangShift: briefCtx\?\.gangShift/.test(read('src/pages/VoyagePage.jsx')), 'VoyagePage 갱 배선이 없다');
-T(/gang: _gang/.test(read('src/components/SearchPanel.jsx')) && /gangShift: \(n\)/.test(read('src/components/SearchPanel.jsx')), 'SearchPanel 갱 배선이 없다');
+//  3.41: 답 고르기는 mirAnswer 한 벌 — 화면은 재료(gangBrief·gangShift 클로저)를 싣고, 브리핑 줄·갱 배분 분기는 그 한 벌이 낸다.
+T(/gangBrief: briefCtx\?\.gangBrief/.test(read('src/pages/VoyagePage.jsx')) && /gangShift: briefCtx\?\.gangShift/.test(read('src/pages/VoyagePage.jsx')), 'VoyagePage 갱 배선이 없다');
+T(/gang: c\.gangBrief \? c\.gangBrief\(\) : null/.test(read('src/mirAnswer.js')) && /c\.gangShift = \(n\) =>/.test(read('src/mirAnswer.js')), '한 벌 엔진(mirAnswer) 갱 배선이 없다 — 브리핑 갱 줄·갱 배분 클로저');
 T(/GangStrip/.test(read('src/components/SearchPanel.jsx')) && /GangStrip/.test(read('src/pages/VoyagePage.jsx')), '스트립(GangStrip) 배선이 없다 — 그림 없는 인계');
-T(/answerGangShift\(_voy, _bayDef/.test(read('src/pages/GlobalSearchPage.jsx')), 'GlobalSearchPage 갱 분기가 없다');
+T(/answerGangShift\(v, de/.test(read('src/mirAnswer.js')) && /p\.gangQuery && c\.gangShift/.test(read('src/mirAnswer.js')), '한 벌 엔진(mirAnswer) 갱 분기가 없다');
 const ns = read('src/nlSearch.js');
 T(/gangQuery/.test(ns) && /opts\.gang/.test(ns) && /ctx\.gangShift/.test(ns), 'nlSearch 갱 배선(파싱·브리핑 줄·본체 분기)이 없다');
 if (bad > 0) { console.error(`✗ 갱 배분 연막검사 실패 ${bad}건`); process.exit(1); }

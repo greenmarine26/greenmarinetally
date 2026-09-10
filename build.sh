@@ -176,8 +176,10 @@ cp public/mir-core.js dist/ 2>/dev/null || true
 cp public/mir-core.js ./
 _MIRKB=$(du -k public/mir-core.js | cut -f1)
 echo "✓ mir-core.js 생성·복사 (${_MIRKB} KB)"
-if [ "$_MIRKB" -gt 900 ]; then
-  echo "  ⚠ 미르 번들이 900KB를 넘었다 — xlsx 같은 것이 딸려 들어왔는지 --analyze 로 확인할 것"
+#  3.41: 답 고르기 한 벌(mirAnswer + chiefAnswers·cargoPlanCore)이 실려 747KB → 약 930KB. 베이사전(twin→shipStructure 1.2MB)·
+#    마감텔리(tallyReport)·PORT-MIS 매처는 검수앱이 ctx 로 실어 주고 번들에는 안 싣는다 — 이 선을 넘으면 그것이 딸려 온 것이다.
+if [ "$_MIRKB" -gt 1000 ]; then
+  echo "  ⚠ 미르 번들이 1000KB를 넘었다 — xlsx·베이사전(twin/shipStructure)·tallyReport 가 딸려 들어왔는지 --analyze 로 확인할 것"
 fi
 # M7.18b: sw.js·manifest도 루트로 복사. 이게 빠져서 루트 sw.js가 V7.13에 멈춰
 #   새 배포해도 캐시 무효화가 안 되던 문제 해결. 서비스워커 버전 갱신은 루트 sw.js 기준.
@@ -684,6 +686,20 @@ fi
          --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_LB"; then
       cp "$SMOKE_LB.fbbak" src/firebase.js && rm -f "$SMOKE_LB.fbbak"
       node tools/smoke_liveboard.cjs "$SMOKE_LB" || { echo "✗ 실시간 작업 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
+      #  3.41: **떠 있는 미르** — 실데이터(KBTR·NSFR)로 MirFab 을 그려 얼굴→시트→질문→답·항차 재료·플랜 덮개·고백·닫기를 실제로 눌러 본다.
+      SMOKE_MF=$(mktemp /dev/shm/hometmp/_smokemf_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_MF.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_mirfab.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_MF"; then
+        cp "$SMOKE_MF.fbbak" src/firebase.js && rm -f "$SMOKE_MF.fbbak"
+        node tools/smoke_mirfab.cjs "$SMOKE_MF" || { echo "✗ 떠 있는 미르 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MF"; exit 1; }
+        rm -f "$SMOKE_MF"
+      else
+        cp "$SMOKE_MF.fbbak" src/firebase.js; rm -f "$SMOKE_MF.fbbak"
+        echo "✗ 떠 있는 미르 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MF"; exit 1
+      fi
       # 3.35: BayPlan 훅 순서 — 자료가 «없다 ↔ 있다» 로 바뀌어도 화면이 안 죽는가(두 방향)
       for _HK in smoke_bphooks smoke_bphooks_rev; do
         SMOKE_HK=$(mktemp /dev/shm/hometmp/_smokehk_XXXXXX.js)
@@ -790,6 +806,12 @@ fi
     node tools/smoke_bothcounts.cjs "$SMOKE_NS" || { echo "✗ 두 숫자 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.0: 미르 자체 학습 — 같은 번들로 실측 순서(못 알아들음→배움→답함)·일반화·무관 짝 거절·뜻풀이·재귀 가드를 잰다.
     node tools/smoke_mirlearn.cjs "$SMOKE_NS" || { echo "✗ 미르 자체 학습 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.41: **미르 한 벌** — 콘앱 번들 진입점(mirCore.entry → mirAnswer)을 그대로 묶어 실데이터(KBTR 2606E·NSFR 2617N)로
+    #    창구 15건(끝네자리+온도·실번호·중량… · 마감텔리·현측·시작시각·엠티실·커트씰…)·끝네자리 문지기·다섯 입구 배선을 잰다.
+    SMOKE_MO=$(mktemp /dev/shm/hometmp/_smokemo_XXXXXX.cjs)
+    npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MO" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_mirone.cjs "$SMOKE_MO" "$(pwd)" || { rm -f "$SMOKE_MO"; echo "✗ 미르 한 벌 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_MO"
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
     SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)

@@ -130,6 +130,9 @@ export function parseNaturalQuery(text) {
     //    (본선 아닌 연락처도 버리지 않는다). ⚠ 실제 자료(RTDB shipContacts)는 화면이 갖고 있다 —
     //    여기서는 «누구를 찾는지»만 담는다(순수 함수 유지, deviceCmd와 같은 방식).
     contactQuery: null,   // { code, onboardOnly } — code: 원문에서 뽑은 선박 코드/풀네임 후보(없으면 "이 배" 맥락)
+    //  ★ 3.41 미르 창구 — 개체(끝네자리+속성)·항차 사실. 판정은 여기, 답은 mirFacts.js 한 벌.
+    entityAttr: null,   // 'temp'|'seal'|'weight'|'route'|'bl'|'dims'|'xray'|'status'|'spec' — digits 와 함께
+    factQuery: null,    // 'tally'|'hatch'|'berthSide'|'workTimes'|'oog'|'eseal'|'mkcon'|'storage'|'cutSeal'|'held'|'lugg'|'transship'
   };
   if (!text) return result;
   result._raw = String(text);   // ★ 2.57: 뜻 답안지(mirKnowledge·용어집)는 원문으로 찾는다
@@ -160,11 +163,27 @@ export function parseNaturalQuery(text) {
   const hasCountFollowCtx = /\d+\s*건\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(t);
   const skipDigits = hasTempCtx || hasBayCtx || hasUnCtx || hasClassCtx ||
                      hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx || hasCountFollowCtx;
+  //  ★ 3.41 (검수사 «앱이 갖고 있는 자료를 막힘없이») — «3426 온도»·«0230 중량»·«0230 몇 피트야»:
+  //    맥락 낱말(온도·톤·피트·단…)이 있어도 **홀로 선 네 자리**는 컨번호다. 종전엔 온도 낱말이 끝네자리를
+  //    통째로 지워 «답 없음»이 됐다(관문 2 실측 — 15건 창구가 막힌 직접 원인). 단위가 바로 붙은 숫자(«-18도»·«20피트»·
+  //    «3단»·«0830»)만 종전대로 안 센다. «N호기»는 컨번호가 아니다(«1호기 선수 2호기 선미» → 끝네자리 12 오답, 09-09 실측).
+  const _l4Alone = (() => {
+    //  컨번호 전체(«FBIU5093426 온도»)면 그 끝 네 자리다.
+    const _full = /\b[A-Z]{4}\s?(\d{7})\b/i.exec(String(text));
+    if (_full) return _full[1].slice(-4);
+    //  ⚠ 앞에 UN·IMO·클래스·베이·No 가 붙은 숫자는 그 번호다 — «UN 1805»(위험물 유엔번호)를 끝네자리로 잡으면 «없음» 거짓이 난다(감사·2차 시뮬 실측).
+    const s = String(text).replace(/\b\d{3,4}[NSEW]\b/gi, ' ').replace(/\d+\s*호기/g, ' ')
+      .replace(/(?:\bun|유엔|\bimo|아이엠오|클래스|\bclass|베이|\bbay|\bno\.?|번호)\s*-?\s*\d{1,7}/gi, ' ');
+    const m = /(?:^|[^0-9A-Za-z])(\d{4})(?![0-9]|\s*(?:도|℃|°|피트|ft|hc|단|층|번|톤|t\b|시|분|초|건|호|%|kg|키로|킬로|미터|m\b|mm|cm))/i.exec(s);
+    return m ? m[1] : '';
+  })();
   if (!skipDigits) {
     //  3.2-01 (받은함 08-29 «MCSC 633N 양하 카고 플랜» → «양하 끝네자리 633 없음»): 항차번호(633N·2608N·635S)는
     //    끝자리가 아니다. 항차 토큰만 걷어 내고 센다 — «MCSC 633N 0320» 은 그대로 0320.
-    const digits = String(text).replace(/\b\d{3,4}[NSEW]\b/gi, ' ').replace(/\D/g, '');
+    const digits = String(text).replace(/\b\d{3,4}[NSEW]\b/gi, ' ').replace(/\d+\s*호기/g, ' ').replace(/\D/g, '');
     if (digits.length >= 2) result.digits = digits.slice(-4);
+  } else if (_l4Alone) {
+    result.digits = _l4Alone;
   }
 
   // 사이즈
@@ -703,6 +722,41 @@ export function parseNaturalQuery(text) {
   if (result.crewQuery || result.crewSet) {
     result.posQuery = false; result.isStat = false; result.introQuery = false; result.briefingQuery = false; result.etaQuery = false; result.progressQuery = null; result.digits = null;
     result.gangQuery = null;
+  }
+  //  ★ 3.41 미르 창구 15건 (검수사 «어떤 질문이 들어 올지는 저도 모릅니다 … 적당한 답을») —
+  //    개체 창구는 «끝네자리 + 무엇을 묻는지», 항차 창구는 끝네자리 없이 사실을 묻는 말. 답은 mirFacts.js 가 낸다.
+  //    ⚠ 기존 갈래를 끄지 않는다 — 여기서 정한 것은 mirAnswer 가 **본체보다 먼저** 볼 뿐이다.
+  if (result.digits && !result.crewQuery && !result.crewSet) {
+    const _A = [
+      [/온도|몇\s*도|영하|영상|리퍼\s*(?:온도|세팅|실측)|세팅/, 'temp'],
+      [/실\s*번호|실번|씰|seal|커트/i, 'seal'],
+      [/중량|무게|몇\s*(?:kg|키로|킬로|톤)|vgm/i, 'weight'],
+      [/다음\s*(?:항|양하항|기항)|환적|최종\s*(?:목적|양하)|목적지|어디\s*(?:가|로\s*가)|행\s*(?:이야|인가|이니)?$/, 'route'],
+      [/비\s*엘|b\s*\/?\s*l\b|송하인|화주|shipper|품명/i, 'bl'],
+      [/치수|규격\s*초과|oog|오버|튀어|돌출/i, 'dims'],
+      [/x\s*-?\s*ray|엑스\s*레이|검사\s*대상|세관\s*검사/i, 'xray'],
+      [/보류|수화물|완료\s*(?:했|됐|됨|이야|야|인가)|끝났|상태|특수\s*제작|제작\s*컨|창고|긴급|양하야|선적이야|양하\s*(?:인가|이야|야)|선적\s*(?:인가|이야)/, 'status'],
+      [/규격|사이즈|몇\s*피트|피트야|풀이야|엠티야|풀\s*인가|엠티\s*인가|뭔\s*컨|무슨\s*컨/, 'spec'],
+    ];
+    for (const [re, k] of _A) { if (re.test(t)) { result.entityAttr = k; break; } }
+  }
+  //  ⚠ «마감텔리 어디서 만들어»·«엠티실 어디서 등록해»는 기능 위치 질문(howTo)이다 — 창구가 가로채면 안 된다(감사 지적).
+  if (!result.digits && !result.crewQuery && !result.crewSet && !result.deviceCmd && !result.asking && !result.howToQuery) {
+    const _F = [
+      [/마감\s*텔리|마감\s*수치|텔리\s*수치|파이널\s*(?:텔리|워크)|마감\s*집계/i, 'tally'],
+      [/해치\s*커버|해치|커버\s*(?:열|닫|상태|몇)/, 'hatch'],
+      [/현측|우현|좌현|접안\s*(?:방향|쪽|현)|어느\s*쪽\s*(?:접안|으로\s*붙)/, 'berthSide'],
+      [/(?:몇\s*시|언제|시각|시간).{0,8}(?:시작했|시작됐|끝났|종료했|종료됐|마쳤|완료됐|완료했)|(?:시작했|끝났|종료했|마쳤|완료됐).{0,4}(?:몇\s*시|언제|시각)|(?:실제|실적)\s*(?:시작|종료|끝)\s*(?:시각|시간)?/, 'workTimes'],
+      [/규격\s*초과|oog\s*(?:치수|몇|있|목록|리스트)|오버\s*(?:사이즈|치수|하이|와이드)|치수/i, 'oog'],
+      [/엠티\s*실|엠티실|e\s*-?\s*seal|이씰/i, 'eseal'],
+      [/특수\s*제작|제작\s*컨|마크\s*콘|32\s*ft|34\s*ft|32\s*피트|34\s*피트/i, 'mkcon'],
+      [/임시\s*창고|창고/, 'storage'],
+      [/커트\s*씰|커트씰|컷\s*씰|봉인자/, 'cutSeal'],
+      [/보류/, 'held'],
+      [/수화물\s*(?:확인|확정|체크)/, 'lugg'],
+      [/환적|다음\s*(?:양하)?항|최종\s*목적/, 'transship'],
+    ];
+    for (const [re, k] of _F) { if (re.test(t)) { result.factQuery = k; break; } }
   }
   if (!_mirDepth && !result.mirHello && !result.deviceCmd && !result.asking && !hasAnyCondition(result)) {
     const _rw = mirRewrite(text);

@@ -84,7 +84,7 @@ ok(/want\[`\$\{row\.op\}\|\$\{row\.port\}\|\$\{row\.fe\}`\]/.test(xl),
 
 //  ⑥ 판정 한 벌 — 제 목록을 따로 만드는 화면이 전부 같은 매퍼를 지난다(규범 §4-4)
 for (const f of ['src/tallyReport.js', 'src/workingReport.js', 'src/inspectionList.js',
-  'src/pages/VoyagePage.jsx', 'src/pages/ChiefDashboard.jsx', 'src/pages/GlobalSearchPage.jsx',
+  'src/pages/VoyagePage.jsx', 'src/pages/ChiefDashboard.jsx', 'src/mirCtx.js' /* 3.41: 홈의 전 항차 펼치기가 mirCtx.flattenVoyages 한 벌로 옮겨 갔다 — 홈·떠 있는 미르가 같이 쓴다 */,
   'src/components/PrintHubModal.jsx']) {
   ok(/shipOpMapper/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} 가 같은 매퍼를 지난다`);
 }

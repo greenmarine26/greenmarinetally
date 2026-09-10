@@ -11,6 +11,13 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
 (async () => {
   await wait(500);
   const doc = dom.window.document, W = dom.window;
+  //  3.41: 베이 그림은 BayPlan 이 사전·자리를 풀고 나서 선다 — 느린 상자(클라우드 빌드)에서는 500ms 로 부족해 «BAY … 0장» 으로
+  //    거짓 실패가 났다(같은 번들이 다른 때는 통과 — 실측 3회). 고정 대기가 아니라 **머리가 뜰 때까지** 최대 8초 기다린다.
+  for (let i = 0; i < 40; i++) {
+    const n = [...doc.querySelectorAll('*')].filter((x) => x.childNodes.length === 1 && x.firstChild.nodeType === 3 && /^BAY /.test(x.textContent.trim())).length;
+    if (n >= 2) break;
+    await wait(200);
+  }
   const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   const uniq = [...new Set(errs)];
   if (uniq.length) { console.log('✗ 렌더 중 오류 ' + uniq.length + '건'); uniq.slice(0, 3).forEach(e => console.log('   ' + e)); process.exit(1); }

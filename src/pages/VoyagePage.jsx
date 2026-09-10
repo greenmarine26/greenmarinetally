@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
+import { publishMirCtx, flattenVoyages } from '../mirCtx.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
+import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌
+import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
+import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
@@ -1108,6 +1111,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    🔴 2.50-01 이 그 자리에서 `voyage?.info` 를 그대로 참조해 **앱 전체 크래시**를 냈다.
     //      898행 주석이 «시그니처 전부 갱신 (1.98 교훈)» 이라고 이미 경고하고 있었는데 또 밟았다.
     info: voyage?.info || null,
+    //  ★ 3.41: 항차 원본·키 — 한 벌 엔진(mirAnswer)이 창구 15건(마감텔리·해치·현측·보류·커트씰…)을 보려면 필요하다.
+    //    InlineAnswerCard 가 voyage 를 직접 참조하지 않게(2.50-01 교훈) 여기 실어 내린다.
+    voyage: voyage || null, voyageKey: voyageKey || '',
+    portMisData: portMisData || {}, pilotForecast: pilotForecast || {}, inspector: inspector || '',   // 3.41(감사 8): 입출항·도선 답 재료 — 카드가 직접 답하므로 실어 내린다
+    isChief: (() => { try { return isChief(inspector); } catch (e) { return false; } })(),   // 3.41: 카드도 수석 통계 게이트를 지난다
     //  ★ 3.6-01: 페이스 분자 — 이 항차의 **양하+선적 전부**. 분모가 접안~이안이므로 분자도 그래야 한다.
     //    (같은 이유로 여기서 실어 내린다 — InlineAnswerCard 는 voyage 를 안 받는다. 위 2.50-01 교훈.)
     doneAtsAll: voyageDoneAts(voyage),
@@ -1137,7 +1145,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
       poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
     } : null,
-  }), [containers, voyage, shipPolicy, esealInfo, terminalWork, voyageKey]);   // ★ 2.57: terminalWork 가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료
+  }), [containers, voyage, shipPolicy, esealInfo, terminalWork, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: terminalWork 가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
 
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
@@ -1255,6 +1263,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       })(),
     });
   }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
+  /* ★ 3.41 — 떠 있는 미르(App 의 MirFab)에게 «지금 열린 항차» 재료를 놓아 둔다(검수사 «앱 어디에든 항상 띄워서»).
+       MirFab 은 prop 체인 밖(App)에 살아 이 화면의 컨·완료·시프팅·트윈 짝을 받을 길이 없다 — 여기서 publishMirCtx 로 건넨다.
+       컨은 홈 통합검색과 같은 벌(flattenVoyages)로 편다 — 홈에서 묻든 여기서 묻든 같은 재료(§4-4). 화면이 닫히면 비운다.
+       ⚠ mirPlan 덮개(홈에서 부른 플랜)는 놓지 않는다 — 뒤에 살아 있는 화면의 재료를 덮어쓰면 안 된다. */
+  useEffect(() => {
+    if (mirPlan) return undefined;
+    try {
+      publishMirCtx({
+        voyageKey, voyage, info: voyage?.info || null, mode,
+        containers: flattenVoyages({ [voyageKey]: voyage }, terminalWork),
+        compMap: briefCtx.comp || null, shiftMap: briefCtx.shiftMap || null, bayPairs: briefCtx.pairs || null,
+        rfSkip: !!briefCtx.rfSkip, esealBrief: briefCtx.eseal || null, photos: voyage?.photos || null,
+        gangShift: briefCtx.gangShift, gangBrief: briefCtx.gangBrief, crewAnswer: briefCtx.crewAnswer,
+        terminalWork: terminalWork || null, diagAlerts: diagAlerts || [],
+      });
+    } catch (e) { console.warn('[3.41] 미르 재료 놓기 실패:', e); }
+    return () => publishMirCtx(null);
+  }, [voyageKey, voyage, mode, terminalWork, briefCtx, diagAlerts, mirPlan]);
 
     // 2.18 — 컨테이너 상세는 **한 벌**만 만들고 담기는 자리만 바꾼다.
   //   넓은 화면(lg+) 이고 리스트 탭이면 → 우측 고정 칼럼(variant='panel').
@@ -2800,19 +2826,23 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       const _eyes = mirSee(q, { containers, info: briefCtx?.info || null, mode, compMap: briefCtx?.comp || null,
         bayPairs: briefCtx?.pairs || null });
       if (_eyes) return _eyes;
-      // TallyOne 2.01 (검수사 확정 «어디든 브리핑 해달라고 하면 그자리에서 해줘야 합니다. 굳이 작업시작을
-      //   누르는 불편함을 주어서는 안됩니다») — 브리핑·실번호 점검을 인라인에서 직접 낸다.
-      //   containers 는 이미 현재 모드 병합본(VoyagePage :704)이라 SearchPanel 의 modeCs 와 같은 재료.
-      if (parsed?.briefingQuery) {
-        //  ★ 2.57: 말투 출구 겹(mirTone) — 다른 화면(SearchPanel:1112)과 동일하게 여기도 입힌다
-        return mirTone(generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
-          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: terminalWorkFor({ ...(briefCtx?.info || {}), vsl }, briefCtx?.terminalWork), compMap: briefCtx?.comp || null, gang: (briefCtx?.gangBrief ? briefCtx.gangBrief() : null), cancelled: sideCancelled(briefCtx?.info, mode, terminalWorkFor({ ...(briefCtx?.info || {}), vsl }, briefCtx?.terminalWork)) }));   // 2.62: 호출 시점 계산 — 실시간
-      }
-      if (parsed?.sealAuditQuery) return mirTone(generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적'));   // ★ 2.57: 말투 한 겹
-      //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
-      //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
-      //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
-      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, info: briefCtx?.info || null, voyageDoneAts: briefCtx?.doneAtsAll || null, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null, crewAnswer: briefCtx?.crewAnswer || null, bowStern: briefCtx?.bowStern || null })) : null;   // 3.21 감사: 화면 글도 저장부와 같은 재료(선수·선미 유도)를 봐야 한다   // 2.05-01 · 2.62 · 3.8
+      /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOneRaw` 한 벌(검수사 «미르를 하나로»). 종전 브리핑·실 점검·본체 세 갈래를 그리로 옮겼다.
+           이 카드의 컨은 현재 탭(mode) 병합본이고 완료는 briefCtx.comp 로 따로 오므로(2.52-01) 여기서 `_comp` 를 입혀 넘긴다.
+           답이 없으면 종전대로 null → «▶ 작업 시작 탭» 릴레이. */
+      const _cs = (briefCtx && briefCtx.comp) ? containers.map((c) => (briefCtx.comp[c.cn] ? { ...c, _comp: briefCtx.comp[c.cn] } : c)) : containers;
+      const _raw = answerOneRaw(q, {
+        app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
+        limited: true,   // 이 카드가 못 싣는 재료(연락처·날씨·인계 메모)가 필요한 갈래는 null → 종전대로 «▶ 작업 시작 탭» 릴레이
+        isChief: !!(briefCtx && briefCtx.isChief),   // 수석 통계 게이트(«마감 텔리 안 나간 거»)를 카드도 지난다
+        portMisData: briefCtx?.portMisData || {}, pilotForecast: briefCtx?.pilotForecast || {}, inspector: briefCtx?.inspector || '', matchPortMis,
+        voyage: briefCtx?.voyage || null, voyageKey: briefCtx?.voyageKey || '', info: briefCtx?.info || null, mode,
+        containers: _cs, compMap: briefCtx?.comp || null, shiftMap: briefCtx?.shiftMap || null, bayPairs: briefCtx?.pairs || null,
+        rfSkip: !!briefCtx?.rfSkip, esealBrief: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null,
+        terminalWork: briefCtx?.terminalWork || null, voyageDoneAts: briefCtx?.doneAtsAll || null,
+        gangShift: briefCtx?.gangShift || null, gangBrief: briefCtx?.gangBrief || null, crewAnswer: briefCtx?.crewAnswer || null, bowStern: briefCtx?.bowStern || null,
+        vsl, vslFull: briefCtx?.info?.vslFull, pier, carrierContacts, shipSpeed, computeTallyData,
+      });
+      return _raw ? mirTone(_raw) : null;
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
   const readRef = useRef('');

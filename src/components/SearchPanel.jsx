@@ -8,12 +8,11 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer, voyageDoneAts, answerCraneCrew, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
-import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
+import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
-import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -28,6 +27,9 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 import { mirTone } from '../mirChat.js';
+import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
+import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌
+import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
 import mirFaceUrl from '../assets/mir-face.png';
@@ -1043,201 +1045,27 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         return `🗺 ${voyage?.info?.vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
       }
     }
-    // 1.23: **경고 문장을 그대로 물은 것인가**를 가장 먼저 본다.
-    //   검색 파서보다 앞에 둬야 한다 — 뒤에 두면 `풀` 한 글자와 `5톤 이상` 이 먼저 잡혀
-    //   "풀 5톤 이상 98대" 같은 엉뚱한 답이 나간다(오답 리포트 2건, 2026-08-07).
-    {
-      const a = answerAboutAlert(query, diagAlerts);
-      if (a) return a;
-    }
-    // TallyOne 2.41: 미르 — 선박 연락처(이메일). «PCSZ 이메일»·«본선 메일»·«이 배 메일 주소 찾기».
-    //   검수사 원문 «본선 일항사와 메일로 컨펌» · «답만 해주면 됩니다»(발송·추적은 범위 밖).
-    //   ⚠ howToQuery보다 먼저 — "PCSZ 메일주소 뭐야"의 '뭐야'가 기능색인에 먹히면 안 된다(위 answerAboutAlert 바로 다음).
-    if (parsed.contactQuery) {
-      if (shipContacts == null) return '연락처를 불러오는 중입니다 — 잠시 후 다시 물어봐 주세요.';
-      const info = voyage?.info || {};
-      const curCode = String(info.vsl || '').toUpperCase();
-      const curFull = String(info.vslFull || '').toUpperCase();
-      const curLabel = info.vslFull || info.vsl || '이 배';
-      const cq = parsed.contactQuery;
-      const rawCand = cq.code ? String(cq.code).toUpperCase() : '';
-      const candNoSp = rawCand.replace(/\s+/g, '');
-      //  이 화면이 보여주는 배(현재 항차)인지 — 코드 일치 또는 풀네임에 포함되면 "이 배"로 본다.
-      const isThisShip = !rawCand || candNoSp === curCode || (curFull && curFull.includes(rawCand));
-      if (isThisShip) {
-        if (!curCode) return '이 항차에 선박 코드가 없어 연락처를 찾을 수 없습니다.';
-        return generateContactAnswer(shipContacts[curCode] || null, curLabel, cq.onboardOnly);
-      }
-      //  다른 배 — 짧은 코드면 사전 없이도 바로 찾아본다. 풀네임(공백 포함)은 여기선 못 풀어 통합검색으로 안내.
-      if (!/\s/.test(rawCand)) {
-        return generateContactAnswer(shipContacts[candNoSp] || null, cq.code, cq.onboardOnly);
-      }
-      return `${cq.code} — 지금 보는 배(${curLabel})가 아닙니다. 다른 배 연락처는 통합검색에서 배 이름을 붙여 물어보세요.`;
-    }
-    // 1.69-02: **«진행» 질문은 두 갈래다** (검수사 확정 2026-08-14 — "그냥 진행 상태를 질문하면
-    //   앱대상이 맞고, 실제 진행 상황을 물으면 수석대쉬보드에 실시간 작업보드처럼 알려줘야 함.
-    //   현 진행 상황은/실제 진행 상황은 — 2가지 다른 답이 나와야 함").
-    //   «실제·실시간·실황·터미널»이 들어가면 → 터미널 실황(terminal_work) 작업보드형.
-    //   없으면(진행 상태·현 진행·얼마나 했어·몇 대 했어) → 앱 검수 기록 기준(completed/전체·%·검수사별).
-    //   근본은 nlSearch 두 함수 하나 — 수석 통합검색(GlobalSearchPage)과 같은 뿌리다(1.69-01 원칙 유지).
-    //   베이·조건이 붙은 진행 질문("20번 베이 남은 거")은 종전 formatProgress 그대로 둔다.
-    if (/진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(query)
-        && !/자료|브리핑|요약/.test(query) && !parsed.crewQuery   // 3.8: «이인철 어디까지 했어»·«김성일 몇 대 했어» 는 사람·호기 답(본체)이 낸다
-        && !parsed.digits && parsed.bay == null && !parsed.zone && !parsed.size && !parsed.fe && !parsed.type) {
-      const ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
-      // ★ 2.55 (검수사 확정 2026-08-26): 어느 갈래로 가든 **두 숫자가 다 나온다.**
-      //   *«이제 작업한 갯수를 물어보거나 남은갯수를 물어보면 두가지 답이 나와야 합니다»*
-      //   1.69-02 는 «실제» 라고 말해야 터미널 수를 보여 줬다 — 그 말을 모르면 앱 수만 봤고,
-      //   앱에 안 찍힌 전근무자 작업분(실측 65대)이 통째로 안 보였다.
-      const _tw = terminalWorkFor(voyage?.info, terminalWork);
-      const _md = workFilter === 'loading' ? 'loading' : 'discharge';
-      if (isRealtimeProgressQuery(query)) {
-        return formatTerminalWorkAnswer(ship, _tw, allContainers, _md);
-      }
-      return formatAppTallyAnswer(ship, dropFilledBookingSlots(allContainers), _tw, _md, voyage?.info || null);   // 3.26: 부킹 자리·실번호 한 번만(SingleSearch 는 풀을 prop 으로 받는다)
-    }
-    // 1.69-01: 브리핑 속 «N건» 후속 — "실 점검 필요 83건" 뒤 "83건이 뭐야"가 끝자리 검색으로
-    //   빠졌다(검수사 신고). 직전 답 주제를 기억해 그 주제의 상세로 잇는다. howToQuery보다 앞.
-    if (/(?:\d+\s*건|그게|그거|저거|아까\s*(?:그|말한)\s*거?)\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(query)) {
-      const topic = parsed.sealAuditQuery ? 'seal' : lastTopicRef.current;
-      if (topic === 'seal' || (topic === 'briefing' && /건/.test(query))) {
-        const modeCs = allContainers.filter(c => c._mode === workFilter);
-        return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
-      }
-    }
-    // V8.00: 인수인계 — 남은 작업+양하신고+특이사항 정리 + 되묻기. 최우선.
-    // TallyOne 1.65: "그 기능 어디서 하지?" — 컨 조회보다 **먼저** 답한다.
-    //   검수사 지적 — 자연어가 설명만 했더라면 현장에서 바로 풀렸을 일을 클로드에게 물어야 했다.
-    if (parsed.howToQuery) {
-      const _a = generateHowToAnswer(query, parsed, { isChief: _isChiefName(inspector) });
-      if (_a) return _a;
-      // 못 찾으면 종전 경로로 흘려보낸다 (막지 않는다)
-    }
-    // 1.69: **자료현황류 질문은 수석의 영역이다** (검수사 확정 — 인계함 「자연어 2차 판」 ③).
-    //   항차 화면에서 물으면 이 항차의 유무만 한 줄로 답하고 수석에게 유도한다.
-    if (/자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)|EDI\s*(?:없|왔|들어왔)|리스트\s*(?:없|왔|들어왔)|베이플랜\s*(?:없|왔)/.test(query)) {
-      const L = [];
-      [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
-        if (!voyage?.[md]) return;
-        const j = judgeMode(voyage[md]);
-        L.push(`${kr} — ${j.state === 'ready' ? `준비완료 (EDI ${j.edi} · 리스트 ${j.list})` : j.label}`);
-      });
-      if (L.length) return `${L.join(' · ')}\n자세한 내용은 수석 검수사에게 문의하세요.`;
-    }
-    if (parsed.handoverQuery) {
-      const ptk = allContainers.filter(c => c._ptk);
-      const info = {
-        byInspector: inspector || '',
-        shipName: voyage?.info?.vslFull || voyage?.info?.vsl || '',
-        voyageLabel: voyage?.info?.voyNo || voyage?.info?.voy || '',
-        extraNote: handoverFinalized ? handoverNote : '',
-      };
-      const body = generateHandover(ptk, info);
-      if (handoverFinalized) {
-        return `인계서 정리했어요. 다음 검수사에게 이 내용 전달하세요.\n\n${body}`;
-      }
-      // 1단계: 초안 + 되묻기 (첫 줄은 음성으로 읽힘)
-      return `인계서 초안이에요. 특이사항이나 더 전달할 내용 있으면 아래에 적어 주세요. 없으면 그대로 두셔도 됩니다.\n\n${body}\n\n— 더 전달할 내용이 있으면 아래 칸에 적고 [인계 메모 추가]를 누르세요.`;
-    }
-    // V7.92: 챗봇형 질문 — 자기소개·시간·입출항·날씨 (사용자 요청: "넌 뭐야"에 답하기)
-    if (parsed.foodQuery) return generateFoodAnswer(parsed.foodQuery);   // V8.60: 맛집 돌림판
-    if (parsed.introQuery) return generateIntroAnswer(voyage?.info?.vslFull || voyage?.info?.vsl || '');
-    // V9.18: 선박 소개·이름 유래 — ShipIntroCard가 캐시해 둔 소개가 있으면 바로 읽어준다.
-    if (parsed.shipIntroQuery) {
-      const _sid = (() => { try {
-        const inf = voyage?.info || {};
-        return resolveShipKey(inf.imo || inf.callsign || String(inf.vsl || '').toUpperCase().replace(/\s+/g, ''));
-      } catch { return ''; } })();
-      const cached = _sid && window.__shipIntroCache && window.__shipIntroCache[_sid];
-      if (cached) return `🚢 ${voyage?.info?.vslFull || voyage?.info?.vsl || ''}\n${cached}`;
-      return '이 배의 정보가 아직 없습니다.\n화면 아래 「🚢 이 배는?」 카드에서 [AI로 선박 정보 찾기]를 누르면 제원·선사·항로와 이름 유래를 정리해 드립니다.';
-    }
-    // ⚠ 입출항을 시간보다 먼저 — "입항 시간 알려줘"는 timeQuery에도 걸리므로 순서가 답을 가른다.
-    if (parsed.schedQuery) {
-      const pm = matchPortMis(portMisData, voyage?.info || {});
-      const fmtDT = (x) => {
-        if (!x) return null;
-        const m = String(x).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-        return m ? `${parseInt(m[2], 10)}월 ${parseInt(m[3], 10)}일 ${m[4]}:${m[5]}` : String(x);
-      };
-      if (!pm) return '입출항 정보가 아직 없습니다. PORT-MIS 데이터가 수집되면 자동으로 답합니다.';
-      const ship = voyage?.info?.vslFull || voyage?.info?.vsl || pm.vesselName || '이 선박';
-      const lines = [];
-      const eta = fmtDT(pm.eta), etd = fmtDT(pm.etd);
-      lines.push(`${ship} — ` + [eta ? `입항 ${eta}` : null, etd ? `출항 ${etd}` : null].filter(Boolean).join(', ') + '.');
-      if (pm.pier || pm.berth) lines.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
-      if (pm.nextPort) lines.push(`다음 항구: ${pm.nextPort}`);   // 1.68: "출항하고 어디 가?" — PORT-MIS에 이미 있었다
-      if (pm.port && pm.port !== '평택') lines.push(`⚠ ${pm.port} 항만 데이터입니다.`);
-      return lines.join('\n');
-    }
-    // TallyOne 1.22: 도선·작업개시 — 도선 시각은 입항 시각이라 부두별 소요(PCTC 90분·PNCT 120분)를 더해 답한다.
-    if (parsed.pilotQuery) return generatePilotAnswer(voyage?.info || {}, pilotForecast[String(voyage?.info?.vsl || '').toUpperCase()] || null);
-    // TallyOne 1.21: 기상 시각 — timeQuery보다 먼저. 그 선박 일정(planDate)으로 작업시작을 잡는다.
-    if (parsed.wakeQuery) return generateWakeAnswer(voyage?.info || {});
-    if (parsed.timeQuery) return generateTimeAnswer();
-    if (parsed.weatherQuery) return weatherText || '🌤 평택항 날씨 조회 중…';
-    // V7.93: 트윈 작업 무게 점검 — "20번 베이 트윈 가능해" (합계 55톤↑ 불가 + 불균형 수평 주의)
-    if (parsed.twinCheckQuery) {
-      const m = parsed.mode || workFilter;
-      const pool = allContainers.filter(c => c._ptk && c._mode === m && !c._comp);
-      const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');
-      return generateTwinCheckAnswer(parsed, pool, pairs, voyage?.info?.pier || '');   // V7.93-02: 부두별 무게차 한계
-    }
-    // 1.92 (검수사 확정 — PCTC 포함): «평균 속도»·«몇 시간 걸릴까» — 실측 shipSpeed 기반.
-    if (isSpeedQuery(query)) {
-      try { const a = answerShipSpeed(voyage, shipSpeed, voyage?.info?.vslFull || voyage?.info?.vsl || '', terminalWork); if (a) return a; } catch (e) { /* 아래로 */ }   // 2.54: 터미널 실적 우선
-    }
-    // 1.91-01 (검수사 확정 «선적 계획을 알면 양하 계획도 알겠죠?»): 양하·선적 계획 전망 공용.
-    if (isPlanOutlookQuery(query)) {
-      try {
-        const _m = outlookModeOf(query);   // 1.91-02: 미지정이면 양하·선적 둘 다
-        const _ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
-        const a = _m ? answerPlanOutlook(voyage, _m, _ship) : answerPlanOutlookBoth(voyage, _ship);
-        if (a) return a;
-      } catch (e) { /* 아래로 */ }
-    }
-    // 1.90 (검수사 테스트 «EDI 자료 몇시쯤에 받은거야? 최종본 맞아?»): 항차 화면 검색창에서도 즉답.
-    if (isDataArrivalQuery(query)) {
-      try { return answerDataArrival(voyage, voyage?.info?.vslFull || voyage?.info?.vsl || ''); } catch (e) { /* 아래로 */ }
-    }
-    // ★ 2.62: 갱 배분 재료 — 사전은 전역 __fbShipBayDict, 완료는 buildGangShift 가 voyage 에서 직접 읽는다.
-    const _gangDe = (() => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; } catch (e) { return null; } })();
-    const _gangTw = terminalWorkFor(voyage?.info, terminalWork);
-    // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
-    if (parsed.briefingQuery) {
-      const modeCs = allContainers.filter(c => c._mode === workFilter);
-      const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');   // V7.93: 트윈 무게 예견
-      const _gang = (() => { try { return gangBriefLines(buildGangShift(voyage, _gangDe, { tw: _gangTw })); } catch (e) { return null; } })();   // 2.62: 물을 때마다 «지금» 기준
-      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null, photos: voyage?.photos || null, tw: _gangTw, gang: _gang, cancelled: sideCancelled(voyage?.info, workFilter, _gangTw) });   // 1.86·1.87·2.05-01(사전 데미지) · 2.62 갱 줄
-    }
-    // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
-    if (parsed.sealAuditQuery) {
-      const modeCs = allContainers.filter(c => c._mode === workFilter);
-      return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
-    }
-    if (!hasAnyCondition(parsed)) return null;   // V9.14: 챗봇 8종이 hasAnyCondition에 흡수됨 — 수동 나열(구조적 부채) 제거
-    // 단순 컨번호만 입력한 경우는 BigResultCard 우선
-    const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
+    /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOne` **한 벌**이다(검수사 «미르를 하나로»). 종전 이 자리의 200여 줄(경고문·연락처·
+         진행·실점검·기능·자료현황·인계·맛집·소개·입출항·도선·기상·시각·날씨·트윈·속도·전망·자료도착·브리핑·본체)은 전부 그리로 옮겼다.
+         여기 남는 것은 **화면 결정** 둘뿐이다 — ① 끝네자리만 쳤으면 큰 카드(BigResultCard)가 답이다(문장 아님)
+         ② 재료(ctx)를 싣는 일. 판정을 여기서 다시 세우지 않는다(§4-4). */
+    const onlyDigits = parsed.digits && !parsed.entityAttr && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
                        !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
-    // TallyOne 1.27: 시프팅은 **평택분 필터 전** 원본 voyage 로 계산해 넘긴다(통과화물이 대상이라서).
-    // 1.91-02: 모드 미명시 + 양쪽 혼재 — 먼저 되묻는다(검수사: «되묻고 기다려 줘야 합니다»).
-    if (needsModeChoice(parsed, results) && modeChoice === null) {
-      return '양하인가요, 선적인가요? 🐱 아래 버튼으로 골라 주세요 — 잠시 뒤엔 둘 다 보여드릴게요.';
-    }
-    // 1.91-02: 되묻기에서 한쪽을 고르면 그 모드만, both 면 갈라서 둘 다(splitByModeAnswer).
-    const effParsed = (modeChoice && modeChoice !== 'both') ? { ...parsed, mode: modeChoice } : parsed;
-    const effResults = (modeChoice && modeChoice !== 'both')
-      ? results.filter(c => (modeChoice === 'loading' ? c._mode === 'loading' : c._mode !== 'loading'))
-      : results;
-    return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
-      { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || null, tw: _gangTw, compMap: null }); } catch (e) { return null; } },   // 2.70-01: 2 로 못 박지 않는다 — 기억·되묻기가 살아야 한다
-        crewAnswer: (cq) => { try { return answerCraneCrew(voyage, cq); } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); return null; } },   // 3.8: «김성일 몇 개 했어» — 항차를 감싼 클로저(gangShift 와 같은 방식)
-        voyage,   // 3.21: 확인 글이 «선수·선미» 를 이 배 실적으로 가리려면 항차가 필요하다(resolveCrewSides 한 벌)
-        carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, info: voyage?.info || null, voyageDoneAts: voyageDoneAts(voyage), terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
-        shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
+    return answerOneRaw(query, {
+      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice,
+      voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
+      containers: allContainers, photos: voyage?.photos || null,
+      shiftMap: shiftingMapForDisplay(voyageKey, voyage),   // V7.92-02 · 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
+      bayPairs: (manualCtx && manualCtx.bayPairs) || getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
+      rfSkip, esealBrief, terminalWork, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
+      inspector, isChief: _isChiefName(inspector), handover: { note: handoverNote, finalized: handoverFinalized }, lastTopic: lastTopicRef.current,
+      manualCtx, selectedGroup: manualCtx?.selectedGroup, selectedTier: manualCtx?.selectedTier, shipLib: manualCtx?.shipLib || null,
+      voyageDoneAts: (manualCtx && manualCtx.voyageDoneAts) || voyageDoneAts(voyage),
+      computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
+    });
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈
     const raw = mirTone(_localAnswerRaw);
@@ -1258,7 +1086,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     if (eyes) return eyes;
     //  ★ 2.57: 뜻 갈래(asking=def)는 본체(_localAnswerCore)가 이미 지식으로 답했다 — 여기서 또 붙이면 두 번 나온다.
     const know = (parsed && parsed.asking) ? null : mirKnowledge(query);   /* 2.59-01: def 만 거르니 how 가 새서 본체 답과 겹으로 두 번 나왔다(라이브 실측) — asking 갈래(def·how)는 본체가 답하므로 겹은 물러난다 */
-    if (know && raw) return know + '\n\n────────\n' + raw;
+    if (know && raw && raw !== know && mirTone(know) !== raw) return know + '\n\n────────\n' + raw;   // 3.41: 한 벌 엔진이 지식으로 답한 것을 또 붙이지 않는다
     return know || raw;
   }, [_localAnswerRaw, query, allContainers, manualCtx, voyage, workFilter, parsed]);
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
@@ -1359,22 +1187,11 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   }, [localAnswer, parsed]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
+  //   3.41: 문장 만들기는 src/weatherText.js 한 벌(떠 있는 미르와 공용) — 종전 인라인 fetch 를 그리로 옮겼다.
   useEffect(() => {
     if (!parsed.weatherQuery) { setWeatherText(null); return; }
     let alive = true;
-    const WMO = { 0: '맑음', 1: '대체로 맑음', 2: '구름 조금', 3: '흐림', 45: '안개', 48: '안개', 51: '이슬비', 53: '이슬비', 55: '이슬비', 61: '비', 63: '비', 65: '강한 비', 66: '진눈깨비', 67: '진눈깨비', 71: '눈', 73: '눈', 75: '강한 눈', 77: '눈날림', 80: '소나기', 81: '소나기', 82: '강한 소나기', 85: '소낙눈', 86: '소낙눈', 95: '뇌우', 96: '뇌우', 99: '뇌우' };
-    const dir16 = (d) => ['북', '북북동', '북동', '동북동', '동', '동남동', '남동', '남남동', '남', '남남서', '남서', '서남서', '서', '서북서', '북서', '북북서'][Math.round((((d % 360) + 360) % 360) / 22.5) % 16];
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=36.967&longitude=126.822&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&timezone=Asia%2FSeoul&wind_speed_unit=ms')
-      .then(r => r.ok ? r.json() : null)
-      .then(j => {
-        if (!alive) return;
-        const c = j?.current, d = j?.daily;
-        if (!c) { setWeatherText('날씨 정보를 가져오지 못했습니다. 신호를 확인해 주세요.'); return; }
-        const lines = [`평택항 날씨 — ${WMO[c.weather_code] ?? ''} 기온 ${Math.round(c.temperature_2m)}도, 바람 ${dir16(c.wind_direction_10m)}풍 초속 ${Math.round(c.wind_speed_10m)}미터.`];
-        if (d) lines.push(`오늘 최저 ${Math.round(d.temperature_2m_min?.[0])}° / 최고 ${Math.round(d.temperature_2m_max?.[0])}° · 강수확률 ${d.precipitation_probability_max?.[0] ?? '-'}%`);
-        setWeatherText(lines.join('\n'));
-      })
-      .catch(() => { if (alive) setWeatherText('날씨 정보를 가져오지 못했습니다. 신호를 확인해 주세요.'); });
+    fetchWeatherText().then((t) => { if (alive) setWeatherText(t); });
     return () => { alive = false; };
   }, [parsed.weatherQuery]);
 

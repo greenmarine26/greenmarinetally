@@ -15,18 +15,14 @@
 
    ── 판정 두 벌 금지
    콘앱의 옛 `coneQaAnswer` 는 폴백으로만 남는다(번들 미로드 시). 정본은 `coneKnowledge.js` 한 벌이다.
-   ⚠ 2단계에서 검수앱 두 화면도 `answerOne()` 을 부르게 하면 «어디서 물어도 같은 답» 이 완성된다.
-     그때까지는 검수앱을 건드리지 않는다 — 현장에서 매일 쓰는 길이라 한 판에 같이 흔들지 않는다.
+   ★ 3.41 / 2.48 — 2단계 완성: 검수앱 세 화면·떠 있는 미르·콘앱이 전부 `src/mirAnswer.js` 의 `answerOne()` 을 부른다.
 
    ── 크기
    ⛔ `export * from utils.js` 로 싸면 **xlsx 엑셀 라이브러리 1,219KB** 가 딸려온다(실측).
      미르와 아무 상관 없다. 그래서 **쓰는 것만 골라 내보낸다.** 633KB → gzip 160KB.
      (지금 콘앱이 이미 받고 있는 카고플랜 번들이 1,781KB다.) */
 
-import {
-  parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing,
-  generateIntroAnswer, generateTimeAnswer, describeQuery, hasAnyCondition,
-} from './nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing } from './nlSearch.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
 import { mirTone, mirSmallTalk } from './mirChat.js';
 /* ★ 2.17 — 미르 목소리. 검수사 *«콘앱의 미르는 말을 못합니다. 검수앱의 미르 목소리도 이쁜데»*
@@ -58,187 +54,11 @@ export function toMirContainers(rows, mode) {
  *   ctx = { app:'cone'|'tally', containers, cone:{rows,dischRows,stowRows},
  *           mode, modeLabel, pier, opts, ... 나머지는 엔진 ctx 로 그대로 흘러간다 }
  * 답을 못 내면 null.
+ *
+ * ★ 3.41 / 2.48 — **2단계 완성.** 답 고르기는 `src/mirAnswer.js` 한 벌로 옮겼다. 검수앱 세 화면·떠 있는 미르가
+ *   같은 함수를 부르므로 «어디서 물어도 같은 답»이다(검수사 «미르를 하나로 만들고 싶습니다»). 이 파일은 콘앱 번들 진입점으로만 남는다.
  */
-export function answerOne(query, ctx) {
-  const _a = _answerCore(query, ctx);
-  /* 말투 출구 — 검수앱은 화면마다 `mirTone()` 으로 감싸고 있다(SearchPanel:1118 · VoyagePage:2582).
-       콘앱 미르만 이게 없어 딱딱하게 답했다. 여기 한 자리로 모은다. */
-  try { return _a == null ? null : mirTone(_a); } catch (e) { return _a; }
-}
-
-function _answerCore(query, ctx) {
-  const q = String(query || '').trim();
-  if (!q) return null;
-  const c = ctx || {};
-  const app = c.app || 'tally';
-  const cs = c.containers || [];
-
-  /* ⓪ 잡담 — «미르야 뭐 잘 먹어?» 같은 것. 검수사 *«미르는 자기가 뭘 잘 먹는지도 알고 있습니다»*
-       ⚠ 이것을 안 실어서 콘앱 미르가 «기존 자연어 답 수준» 으로 보였다(2.13-02 에서 바로잡음).
-         `mirSmallTalk` 은 자기 게이트를 갖고 있어 조회 질문을 가로채지 않는다. */
-  /* ⚠ 잡담을 **맨 앞에 두는 것은 콘앱 기준**이다. 검수앱은 잡담을 맨 뒤에서 본다 —
-       앞에 두면 업무 질문을 잡담이 가로챌 수 있다(예: «미르야» 로 시작하는 조회).
-       그래서 순서를 `ctx.smallTalkLast` 로 가른다. 기본(콘앱)은 앞, 검수앱은 뒤. */
-  if (!c.smallTalkLast) {
-    try {
-      const st = mirSmallTalk(q);
-      if (st) return st;
-    } catch (e) { /* 잡담이 막혀도 일 이야기는 계속한다 */ }
-  }
-
-  let parsed = null;
-  try { parsed = parseNaturalQuery(q); } catch (e) { parsed = null; }
-
-  /* ① 콘 이야기는 콘 지식이 먼저 본다.
-       콘 계산은 검수앱 미르가 **전혀 모르는** 콘앱만의 지식이라 순서가 이래야 한다.
-       콘앱이 아니어도 `cone` 자료가 있고 콘을 물으면 답한다 — 검수앱에서도 콘을 물을 수 있게. */
-  if (c.cone && (app === 'cone' || isConeQuery(q))) {
-    try {
-      if (parsed && parsed.briefingQuery) {
-        /* ★ 2.16 — 콘앱 브리핑 = **검수 브리핑 + 콘 몫**.
-             검수사가 검수앱 미르 브리핑을 보이며 *«미르는 정말 똑똑합니다»* —
-             리퍼가 어느 베이인지, 통과화물이 작업 베이에 섞였는지는 **콘 작업에 그대로 필요하다.**
-             그래서 검수앱 것(generateBriefing)을 그대로 부르고 콘 몫을 얹는다.
-             ⛔ 새로 쓰지 않는다 — 새로 쓰면 그날부터 브리핑이 두 벌이 된다. */
-        const parts = [];
-        const cs2 = c.containers || [];
-        for (const m of ['discharge', 'loading']) {
-          const sub = cs2.filter((x) => (m === 'loading' ? x._mode === 'loading' : x._mode !== 'loading'));
-          if (!sub.length) continue;
-          try {
-            /* 브리핑 재료를 **검수앱이 넘기던 만큼** 받는다(pairs·rfSkip·eseal·photos·tw·gang·cancelled).
-                 이걸 안 받으면 검수앱이 이 함수를 부르는 순간 브리핑이 지금보다 가난해진다. */
-            const bOpts = Object.assign({}, c.opts || null, {
-              pairsMap: c.pairsMap || null, rfSkip: c.rfSkip, esealBrief: c.esealBrief,
-              photos: c.photos || null, tw: c.tw || c.terminalWork || null,
-              gangShift: c.gangShift || null, cancelled: c.cancelled || false,
-              compMap: c.compMap || null, shiftMap: c.shiftMap || null,
-            });
-            const b = generateBriefing(sub, m === 'loading' ? '선적' : '양하', m,
-              c.pairsMap || null, c.pier || '', bOpts);
-            if (b) parts.push('【' + (m === 'loading' ? '선적' : '양하') + '】\n' + b);
-          } catch (e) { /* 한쪽이 막혀도 다른 쪽은 낸다 */ }
-        }
-        const cb = coneBriefing(c.cone, { vsl: c.vslFull || c.vsl || '', shiftN: c.shiftN || 0 });
-        if (cb) parts.push('【콘】\n' + cb);
-        if (parts.length) {
-          const head = (c.vslFull || c.vsl) ? (c.vslFull || c.vsl) + '\n' : '';
-          return head + parts.join('\n\n');
-        }
-      }
-      const a = coneAnswer(q, c.cone);
-      if (a) return a;
-    } catch (e) { /* 콘 지식이 막혀도 미르는 계속 답한다 */ }
-  }
-
-  /* ①-B 화면 밝기·소리 — 엔진이 «무엇을 하라»(deviceCmd)만 담고, 실행은 utils 한 벌이 한다.
-       검수앱은 화면에서 이걸 불렀다. 콘앱 미르만 못 하던 것을 여기 한 자리로 모은다. */
-  if (parsed && parsed.deviceCmd) {
-    /* ⛔ **여기서 함부로 실행하지 않는다.** 검수사 질문에 답하며 바로잡은 것 —
-         검수앱은 이 자리를 `useMemo` 안에서 지난다. useMemo 는 화면을 다시 그릴 때마다 도니
-         실행을 여기 두면 **밝기가 저절로 계속 올라간다.**
-       정본은 «해석은 엔진, 실행은 화면»(nlSearch 가 deviceCmd 를 다루는 원칙 그대로).
-       콘앱처럼 부작용을 여기서 처리해도 되는 곳만 `ctx.execDevice: true` 를 준다. */
-    if (c.execDevice) {
-      try {
-        const r = runDeviceCmd(parsed.deviceCmd);
-        if (r) return r;
-      } catch (e) { console.warn('[미르] 화면 조절 실패:', e); }
-    }
-  }
-
-  /* ② 브리핑 — 검수 자료. 엔진이 «알아듣기만» 하던 자리를 여기서 이어 준다. */
-  if (parsed && parsed.briefingQuery && cs.length) {
-    try {
-      const b = generateBriefing(cs, c.modeLabel || (c.mode === 'loading' ? '선적' : '양하'),
-        c.mode || 'discharge', c.pairsMap || null, c.pier || '', c.opts || null);
-      if (b) return b;
-    } catch (e) { /* 아래 기본 경로로 */ }
-  }
-
-  /* ③ 기본 경로 — 조회·집계·용어·실무지식. 검수앱과 **같은 한 벌**이다. */
-  try {
-    const r = applyNLFilter(cs, parsed);
-    //  3.6-01: 페이스 분자는 항차 전체(양하+선적)다 — 콘앱도 같은 잣대를 쓴다.
-    //    콘앱 ctx 에는 `records`(양하·선적 완료 맵)가 이미 실려 온다(cone.html) — 그것으로 만든다.
-    if (!c.voyageDoneAts && c.records) {
-      const ats = [];
-      for (const m of ['discharge', 'loading']) {
-        const comp = c.records[m];
-        if (!comp) continue;
-        for (const k of Object.keys(comp)) {
-          const at = comp[k] && comp[k].at;
-          if (typeof at === 'number' && at > 0) ats.push(at);
-        }
-      }
-      if (ats.length) c.voyageDoneAts = ats.sort((x, y) => x - y);
-    }
-    const a = generateLocalAnswer(parsed, r, cs, c);
-    if (a) return a;
-  } catch (e) { /* 마지막 안내로 */ }
-
-  /* ③-B 알아듣고도 답을 못 고르던 갈래들 — 검수앱 화면(GlobalSearchPage:290·730)이 따로 처리하던 것.
-       검수사 *«인력들이 검수에게 묻는것이 많습니다. 기록하다 일일이 답해줘야 합니다. 그걸 미르가 해야 합니다»*
-       — 현장에서 던지듯 묻는 말이 안내문으로 새면 결국 검수사에게 다시 묻게 된다. */
-  if (parsed) {
-    try {
-      /* «미르야 안녕» 은 mirHello 가 아니라 mirCalled 로 잡힌다(실측).
-         뒤에 일이 붙지 않은 부름만 인사로 받는다 — «미르야 브리핑» 을 가로채면 안 된다. */
-      const _bareCall = parsed.mirCalled && !hasAnyCondition(parsed)
-        && !parsed.briefingQuery && !parsed.progressQuery && !parsed.etaQuery
-        && !parsed.introQuery && !parsed.shipIntroQuery && !parsed.timeQuery;
-      if (parsed.mirHello || _bareCall) {
-        return '네, 미르예요 🐱 뭐 확인해 드릴까요?\n(예: "5번 베이 콘" · "얼마나 남았어" · "리퍼 몇대" · "22G1이 뭐야")';
-      }
-      if (parsed.introQuery || parsed.shipIntroQuery) {
-        const a = generateIntroAnswer(c.vslFull || c.vsl || '');
-        if (a) return a;
-      }
-      if (parsed.timeQuery) {
-        const a = generateTimeAnswer();
-        if (a) return a;
-      }
-      /* 조건은 잡혔는데(«40피트 풀») 어미가 없어 답이 안 나오는 말 — 결과를 세어 준다.
-         현장은 «40피트 풀 몇 대입니까»가 아니라 «40피트 풀»이라고 던진다. */
-      if (hasAnyCondition(parsed) && cs.length) {
-        const r2 = applyNLFilter(cs, parsed);
-        if (r2 && r2.length >= 0) {
-          let label = '';
-          try { label = describeQuery(parsed) || ''; } catch (e2) { label = ''; }
-          return '📊 ' + (label || '조회') + ': ' + r2.length + '대';
-        }
-      }
-    } catch (e) { /* 아래로 */ }
-  }
-
-  /* ③-C 잡담을 뒤에서 보는 앱(검수앱)은 여기서 본다 — 업무 질문을 다 거른 뒤다. */
-  if (c.smallTalkLast) {
-    try {
-      const st = mirSmallTalk(q);
-      if (st) return st;
-    } catch (e) { /* 잡담이 막혀도 안내는 나간다 */ }
-  }
-
-  /* ④ 용어 292선 · 실무지식 43개 — «22G1이 뭐야», «코너캐스팅».
-       ⚠ 검수앱은 이것을 화면마다 따로 부르고 있다(GlobalSearchPage:758 · SearchPanel:1135 — **같은 줄이 두 벌**).
-         여기로 모아 두면 2단계에서 그 두 화면이 `answerOne` 을 부르는 순간 한 벌이 된다.
-       조회 질문을 가로채지 않도록 **기본 경로가 답을 못 냈을 때만** 본다(`parsed.asking` 게이트는 검수앱과 동일). */
-  if (!(parsed && parsed.asking)) {
-    try {
-      let k = mirKnowledge(q);
-      /* 낱말만 던진 말(«코너캐스팅»)도 뜻을 준다 — 현장은 «~이 뭐야»를 안 붙인다.
-         2~12자 한글/영문 한 낱말일 때만 «이 뭐야»를 붙여 한 번 더 물어본다. */
-      if (!k && /^[가-힣A-Za-z0-9]{2,12}$/.test(q)) {
-        try { k = mirKnowledge(q + '이 뭐야'); } catch (e2) { k = null; }
-      }
-      if (k) return k;
-    } catch (e) { /* 답안지가 막혀도 안내는 나간다 */ }
-  }
-
-  /* ⑤ 아무것도 못 답했을 때 — 콘앱에서는 콘 쪽 안내를 준다(그 자리에서 쓸 수 있는 말로). */
-  if (app === 'cone') return CONE_QA_HELP;
-  return null;
-}
+export { answerOne, answerOneRaw } from './mirAnswer.js';
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };

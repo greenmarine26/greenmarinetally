@@ -166,7 +166,8 @@ for (const q of ['얼마나 남았어', '남은 갯수', '몇 대 남았어']) {
 //   그래서 화면단의 원시 조회 `(terminalWork || {})[…vsl…]` 를 전부 terminalWorkFor 로 바꿨다. 남아 있으면 같은 사고가 재발한다.
 {
   const fs = require('fs');
-  for (const f of ['src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx', 'src/pages/GlobalSearchPage.jsx']) {
+  //  3.41: 홈은 실적 조회를 제 손으로 안 한다(답은 mirAnswer 한 벌, 전 항차 펼치기는 mirCtx 한 벌) — 그 두 벌이 문지기를 지나야 한다.
+  for (const f of ['src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx', 'src/mirAnswer.js', 'src/mirCtx.js']) {
     let src = '';
     try { src = fs.readFileSync(path.resolve(f), 'utf8'); } catch { T(false, `${f} 를 못 읽는다`); continue; }
     const raw = (src.match(/terminalWork \|\| \{\}\)\[/g) || []).length;
