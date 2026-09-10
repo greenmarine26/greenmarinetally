@@ -4,7 +4,8 @@
    - 재료: 항차 화면이 열려 있으면 그 화면이 `publishMirCtx` 로 놓아 둔 것(컨·완료·시프팅·트윈 짝…)을 읽고,
      아니면 질문 속 배 이름으로 항차를 고른다(홈 통합검색 pickShipCtx 와 같은 규칙). 배가 없으면 전 항차 재료로 답한다.
    - 플랜 명령(«KBTR 카고플랜 보여줘»)은 App 의 mirPlan 덮개를 연다(홈과 같은 길).
-   - 못 답하면 «못 배웠어요» + 받은함 자동 신고(mir_unanswered, 홈과 같은 규칙) — 판 B 에서 이 자리에 모델이 붙는다.
+   - 못 답하거나 약하게 답하면(3.42 판 B) mirModel.askMir 가 모델을 부른다 — ①미르 말로 번역해 규칙 재실행 ②자료 실어 문장 답(AI 표시).
+     그래도 없으면 «못 배웠어요» + 받은함 자동 신고(mir_unanswered, 홈과 같은 규칙).
    - 자리: 오른쪽 아래, TOP 버튼(ScrollTopButton bottom-5 right-4) 바로 위. 콘앱 미르 얼굴·마이크·목소리와 같은 벌.
    ★ 3.41-01 (검수사 라이브 신고 2026-09-10) — ①«질문은 하고나면 그 질문이 계속 남아 있음» → 묻고 나면 칸을 비우고
      물은 말은 답 위에 작게 남긴다. ②«답변이 화면을 연 후에 한참 있다가 말을 함» → 말하기 전에 쌓인 발화를 전부 끊고(stopSpeak),
@@ -12,7 +13,9 @@
      쳐달라고 함» → 이름 대신 «작업중인 배» 라고 부르면 지금 일하는 배(utils.isWorkingNow 한 벌)로 답하고, 여럿이면 «어느 배?» 하고 되묻는다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import mirFaceUrl from '../assets/mir-face.png';
-import { answerOne } from '../mirAnswer.js';
+import { answerOneRaw } from '../mirAnswer.js';
+import { askMir } from '../mirModel.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
+import { mirTone } from '../mirChat.js';
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
 import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE } from '../mirCtx.js';
@@ -148,7 +151,10 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         try { ctx.shipContacts = (await fbGetSimple('shipContacts')) || {}; } catch (e) { ctx.shipContacts = {}; }
       }
       let a = null;
-      try { a = answerOne(t, ctx); } catch (e) { console.warn('[미르] 답 실패:', e); a = null; }
+      try {
+        const r = await askMir(t, ctx, (cq, trace) => answerOneRaw(cq, { ...ctx, _trace: trace }), { who: inspector || '' });
+        a = (r && r.text != null) ? mirTone(r.text) : null;
+      } catch (e) { console.warn('[미르] 답 실패:', e); a = null; }
       const vk = useLive ? lv.voyageKey : (sc && sc.key) || null;
       try { applySideEffects(parseNaturalQuery(t), vk, useLive ? lv.voyage : (sc && sc.v), t); } catch (e) { /* */ }
       if (!a) {

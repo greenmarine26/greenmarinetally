@@ -106,11 +106,21 @@ export function mirObserve(q, missed, meta = {}) {
   const overlap = toks.filter((t) => p.toks.has(t)).length;
   const need = Math.max(1, Math.ceil(p.toks.size * 0.5));
   if (overlap < need) return '';
-  const entry = { kind: 'alias', from: p.q, to: mirTokens(text).map(mirSlot).join(' '), ok: text, by: meta.who || '', at: now, auto: true, hits: 0 };
-  try { if (typeof window !== 'undefined') { if (!window.__mirLexicon) window.__mirLexicon = {}; window.__mirLexicon[p.key] = entry; } } catch (e) { /* 창 없음(시험) */ }   // 제자리 갱신 — 구독이 오기 전에도 이 폰은 바로 안다
-  try { if (typeof window !== 'undefined' && typeof window.__mirLexiconWrite === 'function') window.__mirLexiconWrite(p.key, entry); }
-  catch (e) { console.warn('[미르 학습] 사전 쓰기 실패', e); }
+  mirLearnAlias(p.q, text, meta.who || '');
   return `(«${p.q}»는 «${text}» 뜻으로 배웠어요 — 다음엔 바로 답할게요)`;
+}
+/** ★ 3.42 — 별칭 한 벌: «from(못 알아들은 말)» 을 «to(미르가 아는 말)» 로 사전에 적는다. 즉석 학습(위)과 모델 번역(mirModel)이 같은 모양으로 쓴다.
+    이 폰 메모리(window.__mirLexicon)에 바로 넣고, 쓰기 손(window.__mirLexiconWrite — App 이 fbWriteMirLexicon 을 건다)이 있으면 보관소에도 적는다.
+    돌려주는 값은 사전 키(없으면 null). */
+export function mirLearnAlias(from, to, by = '', extra = {}) {
+  const key = mirKey(from);
+  if (!key || !to) return null;
+  const now = Date.now();
+  const entry = { kind: 'alias', from: String(from), to: mirTokens(to).map(mirSlot).join(' '), ok: String(to), by: by || '', at: now, auto: true, hits: 0, ...extra };
+  try { if (typeof window !== 'undefined') { if (!window.__mirLexicon) window.__mirLexicon = {}; window.__mirLexicon[key] = entry; } } catch (e) { /* 창 없음(시험) */ }   // 제자리 갱신 — 구독이 오기 전에도 이 폰은 바로 안다
+  try { if (typeof window !== 'undefined' && typeof window.__mirLexiconWrite === 'function') window.__mirLexiconWrite(key, entry); }
+  catch (e) { console.warn('[미르 학습] 사전 쓰기 실패', e); }
+  return key;
 }
 /** 시험용 — 기억 초기화 */
 export function _mirReset() { _pending = null; _lastMissAt = {}; }

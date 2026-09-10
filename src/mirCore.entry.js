@@ -59,6 +59,7 @@ export function toMirContainers(rows, mode) {
  *   같은 함수를 부르므로 «어디서 물어도 같은 답»이다(검수사 «미르를 하나로 만들고 싶습니다»). 이 파일은 콘앱 번들 진입점으로만 남는다.
  */
 export { answerOne, answerOneRaw } from './mirAnswer.js';
+export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATALOG } from './mirModel.js';   // 3.42 판 B: 콘앱도 같은 모델 창구(공용 키·문지기)
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };

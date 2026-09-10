@@ -3,12 +3,13 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // 3.8: crewShiftKey·koJosa
+import { isoToLabel, fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK } from '../utils.js';   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { mirTone, mirSmallTalk } from '../mirChat.js';
 import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌
+import { askMirModel, isWeakAnswer } from '../mirModel.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
 import { flattenVoyages, pickShipCtx } from '../mirCtx.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
@@ -67,6 +68,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   const lastSpokenRef = useRef(null);
   // 1.69-05: 같은 질문 두 번 — 재제출 판정·접수 표시 (검수사 신고 2026-08-14 "같은 질문 두 번 하면 반응 없음. 엔터 기능이 없어서 전달되었는지 모름")
   const lastAskRef = useRef('');                  // 마지막으로 물은 질문 — 재질문 판정
+  const traceRef = useRef({});                    // 3.42: 규칙이 어느 길에서 답했는지(mirAnswer _trace)
   const [askedAt, setAskedAt] = useState(null);   // 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
   const [reasked, setReasked] = useState(false);  // 같은 질문 재제출 — 답 박스에 «다시 확인했습니다»
 
@@ -232,13 +234,38 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOneRaw` **한 벌**(검수사 «미르를 하나로»). 종전 이 자리의 450여 줄(EDI 차이·인사·연락처·
          수석 통계·진행·보관·콜사인·배 지정 계산·뜻·방법·기능·자료현황·입출항·속도·물량·전망·선사·브리핑·실오류·우리 배·오늘 작업 선박)은
          전부 그리로 옮겼다. 여기 남는 것은 재료(ctx)를 싣는 일뿐이다 — 판정을 여기서 다시 세우지 않는다(§4-4). */
+    traceRef.current = {};
     return answerOneRaw(Q, {
-      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
+      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', _trace: traceRef.current,
       voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, terminalWork, carrierContacts, shipSpeed, ediPattern, shipContacts,
       bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
   }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts, onOpenPlan, carrierContacts, shipSpeed, ediPattern]);   // 3.41: 한 벌 엔진 ctx
+
+  /* ★ 3.42 (판 B) — 약한 답일 때만 모델. 접수된 질문(askedAt)만, 같은 문장은 한 번. 번역문은 같은 재료로 규칙을 다시 돌린다(두 벌 금지). */
+  const [modelState, setModelState] = useState({ q: '', pending: false, text: null, via: null });
+  const _rulesFor = (cq) => answerOneRaw(cq, {
+    app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
+    voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, terminalWork, carrierContacts, shipSpeed, ediPattern, shipContacts,
+    bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
+    computeTallyData, matchPortMis,
+  });
+  useEffect(() => {
+    const q = String(debouncedQuery || '').trim();
+    if (!q || q.length < 4 || !askedAt || !/[가-힣]{2,}|[A-Za-z]{3,}/.test(q) || /^[0-9\s]+$/.test(q)) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
+    if (parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) return undefined;
+    if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
+    let alive = true;
+    setModelState({ q, pending: true, text: null, via: null });
+    const _who = _storage.get(SK.activeInspector) || '';   // 이 화면은 inspector prop 이 없다 — 저장된 검수원 이름(App 과 같은 키)
+    const ctx = { app: 'tally', voyages, voyageKey: shipCtx && shipCtx.key, voyage: shipCtx && shipCtx.v, info: (shipCtx && shipCtx.info) || null,
+      containers: (shipCtx && shipCtx.key) ? flat.filter((c) => c.voyageKey === shipCtx.key) : flat, inspector: _who };
+    askMirModel(q, ctx, (cq) => _rulesFor(cq), { who: _who, weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
+      .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey: (shipCtx && shipCtx.key) || '', via: m.via }); })
+      .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
+    return () => { alive = false; };
+  }, [debouncedQuery, askedAt]);   // eslint-disable-line react-hooks/exhaustive-deps — 접수된 문장 하나에 한 번
 
   // 2.33: 출구 한 겹 — 데이터는 그대로, 종결어미만 미르 말투로(검수사 확정 «살짝 친근»).
   //   업무 인텐트 전부 침묵일 때만 잡담 그물(검수사 제공 대본)이 받는다 —
@@ -291,8 +318,13 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   }, [parsed.deviceCmd, debouncedQuery]);
   //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
   useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, debouncedQuery]);
-  //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
-  const localAnswer = devAnswer || _mirAnswer;
+  //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다. 3.42: 모델이 받은 답이 있으면 약한 규칙 답 대신 그것.
+  const _modelAnswer = (modelState.q === String(debouncedQuery || '').trim() && modelState.text) ? mirTone(modelState.text) : null;
+  //  3.42: 렌더 시점에 «이 문장은 모델로 간다»를 미리 안다 — effect 가 pending 을 세우기 전 첫 커밋에 발화·신고가 먼저 나가던 것(감사 jsdom 실측)
+  const _dq = String(debouncedQuery || '').trim();
+  const _willAskModel = !!(askedAt && _dq.length >= 4 && /[가-힣]{2,}|[A-Za-z]{3,}/.test(_dq) && !/^[0-9\s]+$/.test(_dq) && !(parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) && isWeakAnswer(_dq, _localAnswerRaw, traceRef.current));
+  const _modelPending = _willAskModel && !(modelState.q === _dq && !modelState.pending);
+  const localAnswer = devAnswer || _modelAnswer || _mirAnswer;
 
 
   // 검색 결과 (AI 자연어 적용)
@@ -326,8 +358,9 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     //  ⚠ 2.40-01: 조작 명령(밝기·소리)은 **할 수 있는 일**이다. 여기서 «못 한다»고 말하면
     //    검수사가 되는 기능을 안 되는 줄 알고 접는다. 실제로 2.40 에서 그렇게 보였다.
     if (parsed.deviceCmd) return false;
+    if (_modelPending) return false;   // 3.42: 모델이 생각 중 — 아직 «못 한다»가 아니다
     return !localAnswer && !dmgQ && matches.length === 0;
-  }, [debouncedQuery, localAnswer, dmgQ, matches, parsed.deviceCmd]);
+  }, [debouncedQuery, localAnswer, dmgQ, matches, parsed.deviceCmd, _modelPending]);
   // ★ 2.57: «아직 못 배웠습니다» 답(뜻 질문에 지식이 없을 때 nlSearch 가 내는 솔직 답)도 무응답으로 친다.
   //   답 카드가 떠서 _mirDontKnow 는 false 지만, 신고가 빠지면 «못 답한 질문 → 받은함 → 다음 클로드가
   //   가르침» 파이프라인(2.06 mir_unanswered)이 끊긴다. 화면 카드는 그대로 — 신고 조건만 넓힌다.
@@ -337,6 +370,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   useEffect(() => {
     // 질문이 «접수»(엔터·전송)된 것만 1회 자동 신고 — 타이핑 중 오발송 방지
     if ((!_mirDontKnow && !_unlearned) || !askedAt) return;
+    if (_modelPending) return;                                                    // 3.42: 모델이 생각 중 — 아직 «무응답»이 아니다
+    if (modelState.q === String(debouncedQuery || '').trim() && modelState.text) return;   // 3.42: 모델이 답했다 — 신고 안 한다(mir_misses 에는 mirModel 이 남긴다)
     const q = String(debouncedQuery || '').trim();
     if (!q || _reportedRef.current.has(q)) return;
     _reportedRef.current.add(q);
@@ -345,7 +380,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       inspector: '미르(자동)',
       text: `미르 무응답 질문 — "${q}" (통합검색). 답할 수 있게 배워서 반영할 것.`,
     }).catch(() => { /* 신고 실패는 무해 — 다음 질문 때 재시도 */ });
-  }, [_mirDontKnow, _unlearned, askedAt, debouncedQuery]);
+  }, [_mirDontKnow, _unlearned, askedAt, debouncedQuery, _modelPending, modelState]);
 
 
   // Web Speech API
@@ -417,6 +452,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     if (!autoSpeak) return;
     if (!debouncedQuery || debouncedQuery.length < 2) return;
     if (settledQuery !== debouncedQuery) return;   // 1.68: 아직 치는 중 — 침묵
+    if (_modelPending) return;   // 3.42: 모델이 생각 중 — 약한 답을 먼저 읽지 않는다
     const sig = `${debouncedQuery}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}-${(localAnswer || '').slice(0, 24)}`;   // 1.69: 비동기 답(보관소 조회)이 도착해도 읽는다
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
@@ -451,7 +487,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     } else {
       speak(`${matches.length}개 일치. 더 자세히`);
     }
-  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer, settledQuery, askedAt]);   // 1.69-05: 재제출 시 재발화
+  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer, settledQuery, askedAt, _modelPending]);   // 1.69-05: 재제출 시 재발화 · 3.42: 모델 결과
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -577,6 +613,9 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         </div>
       )}
 
+      {_modelPending && (
+        <div className="text-xxs text-center text-sky-300 font-bold animate-pulse mb-2">🐱 미르가 다시 생각하는 중…</div>
+      )}
       {/* 2.06: 미르가 모르는 질문 — 솔직하게 + 자동으로 개발에 전달됐음을 알림 (검수사 확정 문구 그대로) */}
       {_mirDontKnow && (
         <div className="bg-ink-900 border-2 border-line-strong rounded-btn p-4 mb-3">

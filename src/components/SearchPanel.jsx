@@ -15,7 +15,7 @@ import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.6
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
-import { fixQuestionWithAI } from '../gemini.js';
+import { askMirModel, isWeakAnswer } from '../mirModel.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
@@ -954,8 +954,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
   const lastTopicRef = useRef(null);  // 1.69-01: 직전 답 주제 — "83건이 뭐야"류 후속 연결용(간단 캐시)
-  const fixTriedRef = useRef('');     // V7.80: AI 복원 1회 제한
-  const [fixingVoice, setFixingVoice] = useState(false);
+  const traceRef = useRef({});        // 3.42: 규칙이 어느 길에서 답했는지(mirAnswer _trace) — 약한 답 판정 재료
+  const [modelState, setModelState] = useState({ q: '', pending: false, text: null, via: null });   // 3.42: 모델 답(번역→규칙 / 자료)
   const [showOthers, setShowOthers] = useState(false);  // V7.90: 반대 모드·완료분 접이식
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -1054,8 +1054,9 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
                        !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
+    traceRef.current = {};
     return answerOneRaw(query, {
-      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice,
+      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice, _trace: traceRef.current,
       voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
       containers: allContainers, photos: voyage?.photos || null,
       shiftMap: shiftingMapForDisplay(voyageKey, voyage),   // V7.92-02 · 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
@@ -1067,6 +1068,19 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
+  //  3.42: 모델이 «미르 말»로 바꾼 문장을 같은 재료로 규칙에 다시 돌린다(위 _localAnswerRaw 와 같은 ctx — 두 벌이 되면 안 된다).
+  const _rulesFor = (cq) => answerOneRaw(cq, {
+    app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
+    voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
+    containers: allContainers, photos: voyage?.photos || null,
+    shiftMap: shiftingMapForDisplay(voyageKey, voyage),
+    bayPairs: (manualCtx && manualCtx.bayPairs) || getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
+    rfSkip, esealBrief, terminalWork, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
+    inspector, isChief: _isChiefName(inspector), handover: { note: handoverNote, finalized: handoverFinalized }, lastTopic: lastTopicRef.current,
+    manualCtx, selectedGroup: manualCtx?.selectedGroup, selectedTier: manualCtx?.selectedTier, shipLib: manualCtx?.shipLib || null,
+    voyageDoneAts: (manualCtx && manualCtx.voyageDoneAts) || voyageDoneAts(voyage),
+    computeTallyData, matchPortMis,
+  });
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈
     const raw = mirTone(_localAnswerRaw);
     //  ★ 2.47 — **한 대를 묻는 말은 새 겹이 먼저 본다.** 못 보면 null 이라 옛 미르가 그대로 답한다.
@@ -1155,7 +1169,12 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       .catch((e) => { console.warn('[3.8] 호기 검수원 저장 실패', e); crewSetRef.current = ''; try { speak('호기 검수원 저장이 안 됐어요 — 다시 말해 주세요'); } catch { /* 소리 꺼짐 */ } });
   }, [parsed.crewSet, voyageKey]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
-  const localAnswer = devAnswer || _mirAnswer;
+  //  3.42: 모델이 받은 답(번역→규칙 / 자료 답)이 있으면 약한 규칙 답 대신 그것이다. 말투는 규칙 답과 같은 한 겹.
+  const _modelAnswer = (modelState.q === query.trim() && modelState.text) ? mirTone(modelState.text) : null;
+  const localAnswer = devAnswer || _modelAnswer || _mirAnswer;
+  //  3.42: 렌더 시점에 «이 문장은 모델로 간다»를 미리 안다 — effect 가 pending 을 세우기 전 첫 커밋에 발화·신고가 먼저 나가던 것(감사 jsdom 실측)
+  const _willAskModel = !!(askedAt && query.trim().length >= 4 && !/^[0-9\s]+$/.test(query.trim()) && !(parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) && isWeakAnswer(query.trim(), _localAnswerRaw, traceRef.current));
+  const _modelWait = _willAskModel && !(modelState.q === query.trim() && !modelState.pending);
 
   /* ★ 2.85 (검수사 지시 2026-08-29) — *«미르야 베이플랜/카고플랜 보여줘»*
        검수사 — *«검수앱은 간단 할것입니다. 양하자리에 있으면 양하 베이플랜 카고플랜을 열게 하면 되고
@@ -1225,34 +1244,24 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     return () => { try { r.abort(); } catch(_) {} };
   }, []);
 
-  // V7.80: 음성 질문 자동 복원 — 음성으로 들어온 문장에 못 알아들은 단어가 있으면
-  //   AI(질문 번역기)가 오인식을 교정한 문장으로 1회 재시도. AI는 답하지 않음(환각 차단).
-  //   ⚠ 완전 실패만 잡으면 안 됨: "20번 베이 잇퍼 몇대야"는 베이만 잡혀 전체 개수를
-  //   답해버림(사용자 증상) — 미해석 단어가 남아도 복원 대상.
+  /* ★ 3.42 (판 B) — **약한 답일 때만 모델.** 종전 V7.80 «음성 질문 자동 복원»(fixQuestionWithAI, 음성만·개인 키·문장 교정만)을
+       mirModel.askMirModel 한 함수로 바꿨다 — 타이핑도 받고, 공용 키(검수사 부담)로, ①미르 말로 번역해 규칙을 다시 돌리고 ②없으면 자료를 실어 답한다.
+       «약한 답» = 규칙 null · 잡아채는 길(사용법 매뉴얼·현재 시각·베이사전 타령·진행 잡답…, traceRef) · 모르는 낱말이 남음. 강한 규칙 답에는 모델이 끼지 않는다.
+       ⚠ 접수된 질문(askedAt — 엔터·전송·음성)만. 타이핑 중엔 부르지 않는다(모델 호출 한 번 = 값). 같은 문장은 mirModel 이 한 번만 부른다. */
   useEffect(() => {
     const q = query.trim();
-    if (!q || q.length < 4) return;
-    if (voiceQueryRef.current !== q) return;          // 음성으로 들어온 질문만
-    if (/^[0-9\s]+$/.test(q)) return;                 // 숫자(끝4자리)는 제외
-    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|누구|소개|시야|시간|지금|오늘|날씨|기온|바람|입항|출항|입출항|접안|언제|며칠|요일|날짜|트윈|가능|불가|초과|불균형|수평|크레인|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|끝|끝나|페이스|속도|퇴근|점심|걸려|걸리|쯤|예상|마치|종료|신고|세관|누락|초과|바뀜|리씰|이상|건|인계|인수|교대|넘겨|특이사항|전달|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
-    const leftover = q.replace(/[0-9A-Za-z\s.,?!]/g, ' ').replace(KNOWN, ' ').trim()
-      .split(/\s+/).filter(t => t.length >= 2);
-    const understood = hasAnyCondition(parsed) || !!localAnswer;
-    if (understood && leftover.length === 0) return;   // 전부 알아들음 — 그대로
-    if (fixTriedRef.current === q) return;             // 같은 문장 1회만
-    fixTriedRef.current = q;
+    if (!q || q.length < 4 || !askedAt) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
+    if (/^[0-9\s]+$/.test(q)) return undefined;                 // 숫자(끝4자리)는 화면 카드가 답한다
+    if (parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) return undefined;   // 조작·적는 말은 규칙이 다 한다
+    if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
     let alive = true;
-    setFixingVoice(true);
-    fixQuestionWithAI(q).then(fixed => {
-      if (!alive) return;
-      setFixingVoice(false);
-      if (fixed && fixed !== q) {
-        const p2 = parseNaturalQuery(fixed);
-        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setDraft(fixed); setQuery(fixed); logQuerySettled('nls', fixed, { voyageKey }); }
-      }
-    }).catch(() => { if (alive) setFixingVoice(false); });
+    setModelState({ q, pending: true, text: null, via: null });
+    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainers, inspector };
+    askMirModel(q, ctx, (cq) => _rulesFor(cq), { who: inspector || '', weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
+      .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey, via: m.via }); })
+      .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
     return () => { alive = false; };
-  }, [query, parsed, localAnswer]);
+  }, [query, askedAt]);   // eslint-disable-line react-hooks/exhaustive-deps — 접수된 문장 하나에 한 번
 
   // V8.60: 음성으로 식사 질문("점심 뭐 먹을까") → 맛집 돌림판 자동 오픈. 타이핑은 답변 카드의 버튼으로.
   useEffect(() => {
@@ -1269,7 +1278,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     if (aiLoading || aiAnswer) return; // AI 답변 중엔 안내 X
     if (chatMessages.length > 0) return;  // M5.80: 대화 중에도 안내 X (AI 답변에 자동 발음됨)
     //  2.65: 브리핑만 askedAt 을 섞는다 — 같은 «브리핑» 을 다시 말하면 처음부터 다시 읽어 준다(다시 듣기).
-    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}-${localAnswer ? '1' : '0'}${parsed.briefingQuery ? `-${askedAt}` : ''}`;
+    if (_modelWait) return;   // 3.42: 모델로 갈 문장은 결과가 올 때까지 읽지 않는다(약한 답을 먼저 읽고 또 읽던 것 — 감사 실측)
+    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}-${localAnswer ? '1' : '0'}${parsed.briefingQuery ? `-${askedAt}` : ''}-${modelState.q === query.trim() ? (modelState.via || 'r') : 'r'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 
@@ -1305,7 +1315,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     } else {
       speak(`${results.length}개 일치, 더 자세히`);
     }
-  }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer, localAnswer, askedAt]);   // 1.69-05: 재제출 시 재발화
+  }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer, localAnswer, askedAt, modelState, _modelWait]);   // 1.69-05: 재제출 시 재발화 · 3.42: 모델 결과
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -1458,11 +1468,11 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           </button>
         )}
 
-        {fixingVoice && (
-          <div className="mt-2 text-xxs text-center text-sky-300 font-bold animate-pulse">🎙 문장 복원 중…</div>
+        {_modelWait && (
+          <div className="mt-2 text-xxs text-center text-sky-300 font-bold animate-pulse">🐱 미르가 다시 생각하는 중…</div>
         )}
         {/* V7.54: 못 알아들었거나 일치 0인 질문 기록 — 나중에 지원 추가용 (사용자 요청) */}
-        {!isListening && !fixingVoice && query.length >= 4 && !aiLoading && !aiAnswer && chatMessages.length === 0 && !localAnswer
+        {!isListening && !_modelWait && query.length >= 4 && !aiLoading && !aiAnswer && chatMessages.length === 0 && !localAnswer
           && (!hasAnyCondition(parsed) || results.length === 0)
           && !/^\d+$/.test(query.trim()) && (
           <button onClick={() => {

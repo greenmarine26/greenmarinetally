@@ -31,6 +31,7 @@ import {
   describeQuery, hasAnyCondition, terminalWorkFor, voyageDoneAts, voyageReportSpan,
 } from './nlSearch.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
+import { mirLearnedDef } from './mirLearn.js';   // 3.42: 뜻 답이 사전에서 왔는지(약한 답 판정)
 import { mirTone, mirSmallTalk } from './mirChat.js';
 import { runDeviceCmd, resolveShipKey, sideCancelled, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf, resolveCrewSides, isPtk } from './utils.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
@@ -109,10 +110,14 @@ function _normalize(ctx) {
 }
 
 /** 질문 하나에 답한다(말투 없음). 못 내면 null. */
+/*  ★ 3.42 (판 B) — `ctx._trace` 를 주면 **어느 길에서 답이 나왔는지** 적어 준다(`_trace.via`).
+      «잡아채는 길»(사용법 매뉴얼·현재 시각·되묻기·베이사전 타령·진행 잡답·지식 추측·콘 안내)은 규칙이 자신 없이 낸 답이라,
+      mirModel.askMir 가 그때만 모델을 부른다(번역 → 규칙 재실행 → 자료 답). 그 밖의 답에는 모델이 끼지 않는다. */
 export function answerOneRaw(query, ctx) {
   const q = S(query);
   if (!q || q.length < 2) return null;
   const c = _normalize(ctx);
+  const _via = (v) => { if (c._trace && typeof c._trace === 'object') c._trace.via = v; };   // 3.42: 잡아채는 길 표시(판 B 문지기 재료)
   const app = c.app || 'tally';
   const cs = c.containers || [];
   const v = c.voyage || null;
@@ -258,6 +263,7 @@ export function answerOneRaw(query, ctx) {
       && !p.dmgQuery && !p.carrierQuery && !p.luggQuery && !p.urgentQuery && !p.bayDistQuery && !p.sealAuditQuery
       && !p.digits && p.bay == null && !p.zone && !p.size && !p.fe && !p.type) {
     if (hasShip && cs.length) {
+      _via('progress');   // 3.42: 조건 없는 진행 잡답 — «완료된 거 마지막 다섯 개»·«양하 끝난 시각» 이 여기로 떨어졌다(판 B 시뮬)
       const pool = dropFilledBookingSlots(cs);
       let _md = mode;
       if (!c.mode) _md = pool.some((x) => x._mode === 'loading') && !pool.some((x) => x._mode !== 'loading') ? 'loading' : 'discharge';
@@ -292,6 +298,7 @@ export function answerOneRaw(query, ctx) {
   //  ⑧ 사람·호기 등록·조회 — 배가 있어야 한다.
   if (p.crewSet || p.crewQuery) {
     if (!v) return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 이인철 3호기 최관식» · «SWMM 김성일 몇 개 했어»';
+    if (p.crewSet && app === 'cone') return '호기 검수원은 검수앱에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 재감사: 콘앱엔 fbSetVoyageCraneCrew 가 없다
     if (p.crewSet) { try { return crewSetText(resolveCrewSides(p.crewSet, v), ship); } catch (e) { /* 본체로 */ } }
     if (p.crewQuery && c.crewAnswer) { try { const a = c.crewAnswer(p.crewQuery); if (a) return a; } catch (e) { /* 본체로 */ } }
   }
@@ -318,7 +325,13 @@ export function answerOneRaw(query, ctx) {
         if (isFirstQ) return answerFirstStart(_voy, de, ship);
         if (isXrayShiftQ) return answerXrayShifts(_voy, de, { shipName: ship, pier: info.pier });
         if (isShiftBriefQ) return answerShiftBriefing(_voy, de, { shipName: ship, voyages: c.voyages || null });
-        if (p.gangQuery && c.gangShift) { const a = c.gangShift(p.gangQuery.n || null); if (a) return (hasShip && !c.mode ? `${ship}\n` : '') + a; }
+        //  3.42: «2호기 11:15 시작했어» 는 적는 말이다 — 종전엔 gangQuery(n:null) 가 같이 켜져 «베이사전이 필요해요» 가 답을 가로챘다(판 B 시뮬). 저장은 화면(부수효과)이 한다.
+        if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length && app === 'cone') return '시작 시각은 검수앱(작업 시작 탭)에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 감사: 콘앱엔 fbSetVoyageWorkStart 가 없다
+        if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length) {
+          const _fmt = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+          return `⏱ ${ship} ${p.startSet.cranes.map((x) => `${x.no}호기 ${_fmt(x.ms)}`).join(' · ')} 시작으로 적을게요 — 페이스·예상 완료를 그 시각부터 다시 계산해요.`;
+        }
+        if (p.gangQuery && c.gangShift) { const a = c.gangShift(p.gangQuery.n || null); if (a) { if (/베이사전이 필요/.test(a)) _via('gangDict'); return (hasShip && !c.mode ? `${ship}\n` : '') + a; } }
       } catch (e) { console.warn('[미르] 배 지정 계산 실패:', e); }
     }
   }
@@ -351,12 +364,22 @@ export function answerOneRaw(query, ctx) {
   }
 
   //  ⑪ 뜻·방법 — 본체 한 벌(2.57-02·2.59-01). 홈은 조회 폴백이 없으니 못 찾으면 고백한다.
-  if (p.asking === 'def') { try { const d = generateLocalAnswer(p, [], [], null); if (d) return d; } catch (e) { /* */ } }
+  if (p.asking === 'def') {
+    try {
+      const d = generateLocalAnswer(p, [], [], null);
+      if (d) {
+        //  3.42: 뜻풀이가 지식·사전이 아니라 **사용법 매뉴얼 추측**(generateHowToAnswer)에서 왔으면 약한 답 — «제일 무거운 컨 뭐야»가 «컨테이너 번호 수정» 매뉴얼로 잡혔다(판 B 시뮬)
+        let strong = null; try { strong = mirKnowledge(q) || mirLearnedDef(q) || (p._learnedDef || null); } catch (e) { strong = null; }
+        if (!strong) _via('howTo');
+        return d;
+      }
+    } catch (e) { /* */ }
+  }
   if (p.asking === 'how') {
     try { const h = answerHowCore(p); if (h) return h; } catch (e) { /* */ }
-    if (!hasShip) return '그 방법은 아직 못 배웠습니다 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.';
+    if (!hasShip) { _via('unlearned'); return '그 방법은 아직 못 배웠습니다 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.'; }
   }
-  if (p.howToQuery) { try { const a = generateHowToAnswer(Q, p, { isChief: !!c.isChief }); if (a) return a; } catch (e) { /* */ } }
+  if (p.howToQuery) { try { const a = generateHowToAnswer(Q, p, { isChief: !!c.isChief }); if (a) { _via('howTo'); return a; } } catch (e) { /* */ } }
 
   //  ⑫ 자료 현황 — 배가 있으면 그 배 한 줄(항차 화면) 또는 결론부터(홈), 없으면 전체 가로질러.
   if (READY_RE.test(Q) && app !== 'cone') {
@@ -424,7 +447,7 @@ export function answerOneRaw(query, ctx) {
   }
   if (p.pilotQuery && hasShip) return generatePilotAnswer(info || {}, (c.pilotForecast || {})[S(info.vsl).toUpperCase()] || null);
   if (p.wakeQuery) return generateWakeAnswer(hasShip ? (info || {}) : {});
-  if (p.timeQuery && !p.factQuery) return generateTimeAnswer();
+  if (p.timeQuery && !p.factQuery) { _via('time'); return generateTimeAnswer(); }
   if (p.weatherQuery) {
     if (c.weatherText) return c.weatherText;
     if (c.limited) return null;   // 탭 카드 — 날씨를 안 받는 자리, 작업 시작 탭으로 릴레이
@@ -552,7 +575,7 @@ export function answerOneRaw(query, ctx) {
     try {
       let results = applyNLFilter(cs, p);
       if (!p.digits) results = results.filter((x) => x._ptk !== false);
-      if (needsModeChoice(p, results) && c.modeChoice === null) return '양하인가요, 선적인가요? 🐱 아래 버튼으로 골라 주세요 — 잠시 뒤엔 둘 다 보여드릴게요.';
+      if (needsModeChoice(p, results) && c.modeChoice === null) { _via('modeChoice'); return '양하인가요, 선적인가요? 🐱 아래 버튼으로 골라 주세요 — 잠시 뒤엔 둘 다 보여드릴게요.'; }
       const eff = (c.modeChoice && c.modeChoice !== 'both') ? { ...p, mode: c.modeChoice } : p;
       const effRes = (c.modeChoice && c.modeChoice !== 'both') ? results.filter((x) => (c.modeChoice === 'loading' ? x._mode === 'loading' : x._mode !== 'loading')) : results;
       const a = generateLocalAnswer(eff, effRes, cs.filter((x) => x._ptk !== false), {
@@ -592,11 +615,12 @@ export function answerOneRaw(query, ctx) {
   if (!p.asking) {
     try {
       let k = mirKnowledge(q);
-      if (!k && /^[가-힣A-Za-z0-9]{2,12}$/.test(q)) { try { k = mirKnowledge(q + '이 뭐야'); } catch (e) { k = null; } }
-      if (k) return k;
+      if (k) { _via('knowledge'); return k; }
+      if (/^[가-힣A-Za-z0-9]{2,12}$/.test(q)) { try { k = mirKnowledge(q + '이 뭐야'); } catch (e) { k = null; } }
+      if (k) { _via('knowledgeGuess'); return k; }
     } catch (e) { /* */ }
   }
-  if (app === 'cone') return CONE_QA_HELP;
+  if (app === 'cone') { _via('coneHelp'); return CONE_QA_HELP; }
   return null;
 }
 

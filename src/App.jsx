@@ -200,7 +200,7 @@ export default function App() {
       fbLogMirMiss({ q: d.q, key: d.key, at: d.at, who: d.who || activityUserName(), mode: d.mode, voyageKey: d.voyageKey, route: (typeof location !== 'undefined' ? location.hash : '') })
         .catch((err) => console.warn('[3.0 미르 학습] 미학습 기록 실패', err));
     };
-    window.addEventListener('gm-mir-miss', _onMiss);
+    window.addEventListener('gm-mir-miss', _onMiss); window.__mirMissListener = true;   // 3.42: mirModel 이 «리스너가 있다»를 보고 이벤트로 남긴다(없는 콘앱은 REST)
     const u5 = fbSubscribeShipBayDict(data => {
       window.__fbShipBayDict = data || {};
       try { window.dispatchEvent(new Event('gm-fbdict')); } catch (e) { /* 이벤트 미지원 브라우저 — 표시 갱신만 늦어진다 */ }

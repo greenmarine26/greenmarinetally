@@ -812,6 +812,11 @@ fi
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MO" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_mirone.cjs "$SMOKE_MO" "$(pwd)" || { rm -f "$SMOKE_MO"; echo "✗ 미르 한 벌 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MO"
+    #  3.42 (판 B): **미르 모델 창구** — 규칙이 약할 때만 모델(번역 → 규칙 재실행 → 자료 답), 숫자 문지기·하루 상한·키 없음 침묵·재호출 없음. 모델·보관소는 fetch 스텁(배선·문지기를 잰다).
+    SMOKE_MM=$(mktemp /dev/shm/hometmp/_smokemm_XXXXXX.cjs)
+    npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MM" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_mirmodel.cjs "$SMOKE_MM" "$(pwd)" || { rm -f "$SMOKE_MM"; echo "✗ 미르 모델 창구 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_MM"
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
     SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)

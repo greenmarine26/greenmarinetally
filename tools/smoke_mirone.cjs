@@ -124,7 +124,7 @@ const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 T(/answerOneRaw\(query,/.test(src('src/components/SearchPanel.jsx')), '작업창(SearchPanel)이 answerOneRaw 를 부른다');
 T(/answerOneRaw\(q,/.test(src('src/pages/VoyagePage.jsx')), '양하선적 탭 카드(VoyagePage)가 answerOneRaw 를 부른다');
 T(/answerOneRaw\(Q,/.test(src('src/pages/GlobalSearchPage.jsx')), '홈(GlobalSearchPage)이 answerOneRaw 를 부른다');
-T(/answerOne\(t, ctx\)/.test(src('src/components/MirFab.jsx')), '떠 있는 미르(MirFab)가 answerOne 을 부른다');
+T(/askMir\(t, ctx, \(cq, trace\) => answerOneRaw\(cq/.test(src('src/components/MirFab.jsx')), '떠 있는 미르(MirFab)가 askMir(규칙 → 약하면 모델) 를 부르고 규칙은 answerOneRaw 한 벌이다(3.42)');
 T(/<MirFab /.test(src('src/App.jsx')), 'App 이 MirFab 을 띄운다(어디서나)');
 T(/publishMirCtx\(\{/.test(src('src/pages/VoyagePage.jsx')), '항차 화면이 떠 있는 미르에게 재료를 놓는다');
 T(/export \{ answerOne, answerOneRaw \} from '\.\/mirAnswer\.js'/.test(src('src/mirCore.entry.js')), '콘앱 번들 진입점이 mirAnswer 한 벌을 낸다');
