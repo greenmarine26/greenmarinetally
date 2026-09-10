@@ -12,6 +12,7 @@ import HelpModal from './HelpModal.jsx';
 //    판을 올리면 파일 이름이 바뀌어 **옛 로고가 캐시에 남지 않는다.**
 import logoUrl from '../assets/logo-tallyone.png';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
+import { getMirConfig } from '../mirModel.js';   // 3.43: 공용 키(검수사 부담)가 있으면 🔑 빨간 점·«설정 필요»를 띄우지 않는다
 import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
 import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: 데미지 예약(자료 도착 전 사전 등록)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -34,8 +35,10 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
-  // M6.14d: 사용자 키 미설정 시 경고 (헤더 키 버튼 점멸)
-  const hasUserKey = !!_storage.get(SK.geminiKey);
+  // M6.14d: 사용자 키 미설정 시 경고 (헤더 키 버튼 점멸). 3.43: 공용 키가 있으면 경고 없음 — 모달은 초록인데 헤더만 빨간 어긋남(감사 지적).
+  const [sharedKey, setSharedKey] = useState(null);   // null=아직 모름(경고 안 띄움 — 첫 읽기 1초 동안 빨간 점이 깜빡이지 않게)
+  useEffect(() => { let alive = true; getMirConfig().then((c) => { if (alive) setSharedKey(!!(c && c.sharedKey)); }).catch(() => { if (alive) setSharedKey(false); }); return () => { alive = false; }; }, [keyOpen]);
+  const hasUserKey = !!_storage.get(SK.geminiKey) || sharedKey !== false;
 
   // TallyOne 1.0 (K3·B-7): 로그아웃/앱 종료 2메뉴 분리 — 둘 다 확인 단계를 먼저 밟는다.
   //   종전에는 onLogout이 확인 없이 곧장 서버에 로그아웃을 마킹했다(B-7).

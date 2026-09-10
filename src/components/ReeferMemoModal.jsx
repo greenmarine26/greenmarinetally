@@ -16,7 +16,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk } from '../firebase.js';
-import { _storage, SK } from '../utils.js';
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
 //   공 리퍼는 전원을 안 꽂아 잴 것이 없다. 텔리 RF 시트(`fe !== 'E'` — 실물 관례 "양하 F 리퍼만
@@ -150,8 +149,9 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     if (!files.length) return;
     setBusy('photo'); setBadSet({});   // 다시 찍으면 옛 표시를 지운다(감사 지적)
     setNote(files.length > 1 ? `사진 ${files.length}장 읽는 중…` : '');
-    const key = _storage.get(SK.geminiKey) || '';
     const { ocrReeferTemps } = await import('../mixerUpload.js');
+    const { resolveAiKey } = await import('../gemini.js');
+    const key = await resolveAiKey();   // 3.43: 공용 키(검수사 부담) → 개인 키
     const all = new Map(); const errs = [];
     for (let i = 0; i < files.length; i += 1) {
       if (files.length > 1) setNote(`사진 ${i + 1}/${files.length} 읽는 중…`);

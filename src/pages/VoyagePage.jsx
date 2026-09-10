@@ -3858,17 +3858,16 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     // V9.32: 동적 import 실패를 삼키지 않는다 — 새 버전 배포 후 캐시가 옛 청크를 가리키면
     //   여기서 예외가 나고 함수가 조용히 죽어 화면이 "처리 중"에서 영영 멈춘다(사용자 신고 2026-07-31,
     //   OBWH 2702W). 실패하면 이유를 화면에 띄우고 새로고침을 안내한다.
-    let detectFileType, extractPdfText, parsePdfContainers, ocrImageContainers, GEMINI_API_KEY, _storage, SK;
+    let detectFileType, extractPdfText, parsePdfContainers, ocrImageContainers, resolveAiKey;
     try {
       ({ detectFileType, extractPdfText, parsePdfContainers, ocrImageContainers } = await import('../mixerUpload.js'));
-      ({ GEMINI_API_KEY } = await import('../gemini.js'));
-      ({ _storage, SK } = await import('../utils.js'));
+      ({ resolveAiKey } = await import('../gemini.js'));   // 3.43: 공용 키(검수사 부담) → 개인 키
     } catch (impErr) {
       setStatus(`❌ 업로드 모듈을 불러오지 못했습니다 — 앱이 새 버전으로 갱신되었습니다.\n화면을 새로고침한 뒤 다시 올려 주세요.\n(${impErr?.message || impErr})`);
       if (listRef.current) listRef.current.value = '';
       return;
     }
-    const geminiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
+    const geminiKey = await resolveAiKey();   // 3.43: 공용 키 → 개인 키
 
     for (const file of Array.from(files)) {
       try {

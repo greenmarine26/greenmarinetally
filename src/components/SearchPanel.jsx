@@ -1462,7 +1462,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
 
         {/* AI 자유 질문 버튼 */}
         {showAIButton && (
-          <button onClick={handleAskAI} disabled={aiLoading}
+          <button onClick={() => handleAskAI()} disabled={aiLoading}
             className="mt-2 w-full py-2 rounded bg-gradient-to-r from-purple-700 to-cyan-700 hover:from-purple-600 hover:to-cyan-600 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-1.5">
             {aiLoading ? <><Loader2 className="w-4 h-4 animate-spin"/>AI 생각 중...</> : <><Sparkles className="w-4 h-4"/>AI에게 물어보기 (Gemini)</>}
           </button>

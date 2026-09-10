@@ -14,6 +14,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Key, AlertTriangle, CheckCircle2, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { _storage, SK } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
+import { getMirConfig } from '../mirModel.js';   // 3.43: 공용 키(검수사 부담)가 있는지 — 있으면 «차단됨» 빨간 상자를 띄우지 않는다
 
 export default function GeminiKeyModal({ onClose }) {
   const [keyInput, setKeyInput] = useState('');
@@ -23,6 +24,7 @@ export default function GeminiKeyModal({ onClose }) {
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [shared, setShared] = useState(null);   // 3.43: null=아직 모름 · true=공용 키 있음 · false=없음
 
   // 마운트 시 현재 상태 로드
   useEffect(() => {
@@ -30,6 +32,9 @@ export default function GeminiKeyModal({ onClose }) {
     const lastSaved = _storage.get(SK.geminiKeyLast6) || '';
     setLast6(lastSaved);
     setUsingDefault(!userKey);
+    let alive = true;
+    getMirConfig().then((c) => { if (alive) setShared(!!(c && c.sharedKey)); }).catch(() => { if (alive) setShared(false); });
+    return () => { alive = false; };
   }, []);
 
   const handleSave = () => {
@@ -45,6 +50,7 @@ export default function GeminiKeyModal({ onClose }) {
     }
     const tail = k.slice(-6);
     _storage.set(SK.geminiKey, k);
+    getMirConfig(true).catch(() => {});   // 3.43: 개인 키가 캐시(10분)에 박혀 있지 않게 바로 다시 읽는다(감사 지적)
     _storage.set(SK.geminiKeyLast6, tail);
     setLast6(tail);
     setUsingDefault(false);
@@ -54,9 +60,10 @@ export default function GeminiKeyModal({ onClose }) {
   };
 
   const handleClear = () => {
-    if (!confirm('저장된 API 키를 삭제하시겠습니까?\n삭제 후엔 내장 키(이미 차단됨)로 폴백됩니다.')) return;
+    if (!confirm('저장된 API 키를 삭제하시겠습니까?\n삭제 후엔 공용 키(검수사 부담)로 돕니다.')) return;
     _storage.set(SK.geminiKey, '');
     _storage.set(SK.geminiKeyLast6, '');
+    getMirConfig(true).catch(() => {});   // 3.43: 지운 개인 키가 캐시(10분)에 남아 계속 불리지 않게(감사 지적)
     setLast6('');
     setUsingDefault(true);
   };
@@ -66,7 +73,7 @@ export default function GeminiKeyModal({ onClose }) {
     setTesting(true);
     setTestResult(null);
     try {
-      const k = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
+      const k = keyInput.trim() || _storage.get(SK.geminiKey) || GEMINI_API_KEY;   // 3.43: 입력한 키를 먼저 시험하고, 없으면 저장된 키(감사 지적 — 단추는 입력으로 켜지는데 시험은 저장된 키만 봤다)
       if (!k) {
         setTestResult({ ok: false, msg: '키가 없습니다' });
         setTesting(false);
@@ -118,12 +125,18 @@ export default function GeminiKeyModal({ onClose }) {
 
         <div className="p-4 space-y-3">
           {/* 현재 상태 */}
-          <div className={`rounded p-3 ${usingDefault ? 'bg-red-950/40 border border-red-700/40' : 'bg-emerald-950/40 border border-emerald-700/40'}`}>
+          <div className={`rounded p-3 ${(usingDefault && shared === false) ? 'bg-red-950/40 border border-red-700/40' : (usingDefault && shared === null) ? 'bg-ink-800/40 border border-line' : 'bg-emerald-950/40 border border-emerald-700/40'}`}>
             <div className="flex items-center gap-2 mb-1">
-              {usingDefault ? (
+              {usingDefault && shared ? (
                 <>
-                  <AlertTriangle className="w-4 h-4 text-red-300" />
-                  <span className="font-bold text-red-300">내장 키 사용 중 (차단됨)</span>
+                  {/* 3.43: 공용 키(검수사 부담)로 사진·PDF·선박 소개·검색패널 AI·미르가 전부 돈다 — 본인 키가 없어도 된다 */}
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                  <span className="font-bold text-emerald-300">공용 키 사용 중 (검수사 부담)</span>
+                </>
+              ) : usingDefault ? (
+                <>
+                  <AlertTriangle className={`w-4 h-4 ${shared === null ? 'text-dim-300' : 'text-red-300'}`} />
+                  <span className={`font-bold ${shared === null ? 'text-dim-300' : 'text-red-300'}`}>{shared === null ? '공용 키 확인 중…' : '쓸 수 있는 키 없음'}</span>
                 </>
               ) : (
                 <>
@@ -133,8 +146,10 @@ export default function GeminiKeyModal({ onClose }) {
               )}
             </div>
             <div className="text-xs text-dim-200">
-              {usingDefault ? (
-                <>코드 하드코딩 키가 GitHub public repo 노출 → Google 차단. 새 키 입력 필요.</>
+              {usingDefault && shared ? (
+                <>본인 키를 넣지 않아도 AI 기능이 됩니다. 본인 키는 공용 키가 비었을 때만 쓰입니다.</>
+              ) : usingDefault ? (
+                <>{shared === null ? '공용 키를 확인하는 중입니다.' : '공용 키가 없습니다(mir_config). 본인 키를 넣으면 그 키로 돕니다.'}</>
               ) : (
                 <>저장된 키 끝 6자리: <span className="mono font-bold text-emerald-200">...{last6}</span></>
               )}
@@ -215,14 +230,14 @@ export default function GeminiKeyModal({ onClose }) {
               onClick={handleClear}
               className="w-full py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded"
             >
-              저장된 키 삭제 (내장 키로 폴백)
+              저장된 키 삭제 (공용 키로 폴백)
             </button>
           )}
 
           {/* 설명 */}
           <div className="bg-ink-800/30 rounded p-2 text-2xs text-dim-400 leading-relaxed">
             <b className="text-dim-300">🔒 보안:</b> 키는 본인 폰의 localStorage에만 저장됩니다. 다른 검수원과 공유되지 않습니다.<br/>
-            각 검수원이 본인 키 발급해서 입력하세요. 무료 한도(1500회/일) 검수원당 충분합니다.
+            3.43부터 사진·PDF·선박 소개·검색패널 AI·미르는 공용 키(검수사 부담)로 돕니다. 본인 키는 공용 키가 비었을 때만 쓰입니다.
           </div>
         </div>
       </div>

@@ -7,8 +7,8 @@ import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet,
 import { ocrPortMisCapture } from '../mixerUpload.js';
 import { fbSavePortMisBatch, fbReplacePortMisBatch, fbSubscribePortMis, db } from '../firebase.js';
 import { ref, remove } from 'firebase/database';
-import { _storage, SK, parsePortMisExcel, getPierFromBerth, formatBerth } from '../utils.js';
-import { GEMINI_API_KEY } from '../gemini.js';
+import { parsePortMisExcel, getPierFromBerth, formatBerth } from '../utils.js';
+import { resolveAiKey } from '../gemini.js';   // 3.43: 공용 키(검수사 부담) → 개인 키
 
 export default function PortMisCaptureModal({ onClose }) {
   const [step, setStep] = useState('pick');  // pick → analyzing → review → saving → done | view
@@ -83,10 +83,10 @@ export default function PortMisCaptureModal({ onClose }) {
     setSourceType('capture');
     setStep('analyzing');
 
-    // M5.70: 사용자 입력 키 > 내장 키 폴백
-    const key = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
+    // 3.43: 공용 키(검수사 부담) → 개인 키
+    const key = await resolveAiKey();
     if (!key) {
-      setError('Gemini API 키 없음 (관리자에게 문의)');
+      setError('Gemini API 키 없음 (헤더 🔑 버튼에서 설정)');
       setStep('pick');
       return;
     }

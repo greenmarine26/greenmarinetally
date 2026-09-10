@@ -84,7 +84,7 @@ async function _fetchJson(url, opts = {}, ms = 8000) {
 export async function getMirConfig(force = false) {
   const now = Date.now();
   if (!force && _cfg && now - _cfgAt < CFG_TTL) return _cfg;
-  if (_cfgP) return _cfgP;
+  if (_cfgP && !force) return _cfgP;   // 3.43: 강제 갱신(🔑 저장·삭제 뒤)은 진행 중인 비강제 읽기를 기다리지 않고 새로 읽는다(감사 지적)
   _cfgP = (async () => {
     try {
       const r = await _fetchJson(`${FB}/mir_config.json`);

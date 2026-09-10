@@ -23,6 +23,7 @@
 
 import { fmtPos, normalizeBay } from './utils.js';
 import { lookupUN } from './dgUnDict.js';
+import { getMirConfig } from './mirModel.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
 
 // V9.57(G11): 하드코딩 폴백 키 삭제 — GitHub public repo 노출로 이미 차단된 키였고,
 //   소스에 실키를 두는 것 자체가 보안 위반. export 이름은 소비처 6곳(GeminiKeyModal·VoyagePage·
@@ -43,8 +44,55 @@ function getActiveGeminiKey() {
     return '';
   }
 }
-function getActiveGeminiUrl() {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${getActiveGeminiKey()}`;
+/* ★ TallyOne 3.43 (판 C) — **공용 키(검수사 부담) 한 벌.** 검수사 2026-09-10 «1번인데 회사 유료키가 아니고 제가 부담합니다».
+   미르(mirModel)가 판 B부터 쓰는 `mir_config/aiKey` 를 여섯 창구(검색패널 AI·선박 소개·PDF 베이·사진 리스트·리퍼 사진·
+   PORT-MIS 캡처)도 같이 쓴다 — 공용 키가 비어 있을 때만 개인 키(헤더 🔑). 키를 소스에 두지 않는다.
+   ⚠ 종전엔 여섯 곳이 각자 `_storage.get(SK.geminiKey) || GEMINI_API_KEY` 로 키를 찾아 **개인 키가 없는 검수원은 전부 조용히
+     막혔다**(«키 없음» 안내). 이제 판정은 이 함수 하나다(§4-4 «같은 판정은 한 벌»). */
+export async function resolveAiKey() {
+  try {
+    const cfg = await getMirConfig();   // 공용 키 → (비었으면) 개인 키 — getMirConfig 가 그 순서로 이미 고른다
+    if (cfg && cfg.aiKey) return cfg.aiKey;
+  } catch (e) {
+    console.warn('[AI 키] 공용 키를 못 읽었어요 — 개인 키로 갑니다:', e && e.message);
+  }
+  return getActiveGeminiKey();
+}
+/* 3.43: 여섯 창구가 전부 이 한 함수로 부른다 — 키 고르기 · **타임아웃**(종전엔 여섯 곳 모두 무한 대기 — «처리 중»에서 영영 멈춤) ·
+   `ai_call_log/{YYMMDD}` 한 줄(누가·어느 창구·몇 초·HTTP 코드 — 값이 어디서 새는지 결산의 눈). 응답 처리는 창구마다 다르니
+   Response 를 그대로 돌려준다. 시간 초과는 «네트워크 오류: aborted» 가 아니라 이유가 보이는 Error 로 던진다. */
+const FB_URL = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
+export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MODEL, key = '' } = {}) {
+  const k = key || await resolveAiKey();
+  if (!k) throw new Error(NO_KEY_MSG);
+  const ac = (typeof AbortController === 'function') ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
+  const t0 = Date.now();
+  let status = 0;
+  try {
+    //  키는 쿼리(?key=)가 아니라 헤더로 — 4xx 때 브라우저 콘솔 «Failed to load resource» 줄에 URL 째 찍히지 않게(감사 지적, 미르 mirModel 과 같은 길)
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify(body), signal: ac ? ac.signal : undefined,
+    });
+    status = res.status;
+    return res;
+  } catch (e) {
+    status = (e && e.name === 'AbortError') ? -1 : -2;
+    if (status === -1) throw new Error(`AI 응답 시간 초과(${Math.round(timeoutMs / 1000)}초) — 다시 시도해 주세요.`);
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+    let who = '';
+    try { who = localStorage.getItem('master_active_inspector_v1') || ''; } catch (e) { who = ''; }
+    const d = new Date();
+    const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    try {
+      //  keepalive 를 안 단다 — keepalive + JSON 프리플라이트를 거부하는 브라우저가 있어 기록이 조용히 빠진다(감사 지적). mirModel._logCall 과 같은 모양.
+      fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ at: Date.now(), kind, who, status, ms: Date.now() - t0, model }) })
+        .catch((e) => console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message));
+    } catch (e) { console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message); }
+  }
 }
 
 // ─── 도메인 지식 (systemInstruction에 들어감) ───────────────────────────────
@@ -431,8 +479,9 @@ function compressHistory(history) {
 //
 // 반환: { ok, answer, error, ragInfo }
 export async function askGemini(question, voyage, allContainers, opts = {}) {
-  // V9.57(G11): 키 없으면 명확한 안내로 즉시 반환 — 빈 키로 fetch해 400을 받는 조용한 실패 방지.
-  if (!getActiveGeminiKey()) return { ok: false, error: NO_KEY_MSG };
+  // V9.57(G11): 키 없으면 명확한 안내로 즉시 반환 — 빈 키로 fetch해 400을 받는 조용한 실패 방지. 3.43: 공용 키 → 개인 키.
+  const aiKey = await resolveAiKey();
+  if (!aiKey) return { ok: false, error: NO_KEY_MSG };
   const { history = [], shipLib = null, parsedQuery = {} } = opts;
 
   // === RAG: 질문 키워드로 후보 좁히기 ===
@@ -523,20 +572,17 @@ ${truncated ? `\n※ ${candidates.length}대 중 상위 ${MAX_CANDIDATES}대만 
   ];
 
   try {
-    const res = await fetch(getActiveGeminiUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }],
-        },
-        contents,
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 800,
-        },
-      }),
-    });
+    //  3.43: 공용 키 · 25초 타임아웃 · ai_call_log 한 줄 — aiCall 한 벌
+    const res = await aiCall('search', {
+      systemInstruction: {
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
+      contents,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 800,
+      },
+    }, { timeoutMs: 25000, key: aiKey });
     if (!res.ok) {
       const errTxt = await res.text();
       console.error('Gemini API error:', errTxt);
@@ -557,7 +603,7 @@ ${truncated ? `\n※ ${candidates.length}대 중 상위 ${MAX_CANDIDATES}대만 
     };
   } catch (e) {
     console.error('Gemini fetch error:', e);
-    return { ok: false, error: `네트워크 오류: ${e.message}` };
+    return { ok: false, error: /시간 초과/.test(String(e && e.message)) ? e.message : `네트워크 오류: ${e.message}` };   // 3.43: 시간 초과는 그 말 그대로
   }
 }
 
@@ -642,8 +688,9 @@ const STOWAGE_PROMPT = `이 PDF는 컨테이너 선박의 STOWAGE INSTRUCTION (�
 - tier 숫자는 PDF에 적힌 그대로 정수 추출
 - 데크와 hold 구분: tier >= 80 이면 deck, < 80 이면 hold`;
 
-export async function ocrStowagePdf(file, geminiApiKey) {
-  if (!geminiApiKey) throw new Error(NO_KEY_MSG);   // V9.57(G11): 설정 경로까지 안내
+export async function ocrStowagePdf(file, geminiApiKey = '') {
+  const aiKey = geminiApiKey || await resolveAiKey();   // 3.43: 공용 키 → 개인 키(부르는 쪽이 넘긴 키가 있으면 그것)
+  if (!aiKey) throw new Error(NO_KEY_MSG);   // V9.57(G11): 설정 경로까지 안내
   if (!file) throw new Error('PDF 파일 없음');
 
   // PDF 파일을 base64로 변환 (사진 변환 없음 — 그대로 전송)
@@ -667,39 +714,33 @@ export async function ocrStowagePdf(file, geminiApiKey) {
   // M6.14c (핫픽스): Pro → Flash (Pro 무료 할당량 50 RPD 즉시 소진 문제)
   //   Flash: 1500 RPD, 15 RPM — 검수원 15명이 공유해도 충분
   //   PDF 베이 격자 분석은 Flash로도 정확도 확보 가능 (Flash는 PDF 네이티브 지원)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: STOWAGE_PROMPT },
-          {
-            inline_data: {
-              mime_type: 'application/pdf',
-              data: base64,
-            },
+  //  3.43: 공용 키 · 180초 타임아웃(3만 토큰 JSON 이라 길다) · ai_call_log — aiCall 한 벌
+  const response = await aiCall('stowagePdf', {
+    contents: [{
+      parts: [
+        { text: STOWAGE_PROMPT },
+        {
+          inline_data: {
+            mime_type: 'application/pdf',
+            data: base64,
           },
-        ],
-      }],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 32768,
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
+        },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 32768,
+      responseMimeType: 'application/json',
+    },
+  }, { timeoutMs: 180000, key: aiKey });   // 큰 배(베이 60+)는 120초를 넘긴 적이 있을 수 있다(감사) — 180초
 
   if (!response.ok) {
     const errText = await response.text();
     // M6.14c: 주요 오류는 검수원이 이해하기 쉬운 메시지로 변환
     if (response.status === 429) {
       throw new Error(
-        'Gemini 무료 할당량 초과 (분당 15회 또는 일일 1500회).\n' +
-        '잠시 후(1~5분) 다시 시도하거나, 내일 다시 시도하세요.\n' +
-        '자주 발생하면 관리자에게 빌링 활성화 요청하세요.'
+        'AI 호출이 너무 잦습니다(429) — 잠시 후(1~5분) 다시 시도하세요.\n' +
+        '계속 나면 공용 키의 월 지출 상한에 닿았을 수 있으니 검수사에게 알려 주세요.'   // 3.43: 유료 공용 키 체제 문구
       );
     }
     if (response.status === 400) {
@@ -898,7 +939,8 @@ export const SHIP_CARRIER_KO = {
 export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '', code = '' }) {
   const shipName = String(name || '').trim();
   if (!shipName) return { ok: false, error: '선박명이 없습니다' };
-  if (!getActiveGeminiKey()) return { ok: false, error: NO_KEY_MSG };   // V9.57(G11)
+  const aiKey = await resolveAiKey();   // 3.43: 공용 키 → 개인 키
+  if (!aiKey) return { ok: false, error: NO_KEY_MSG };   // V9.57(G11)
   // V9.18-02: 앱 내부 약자(DXQD 등)로 검색하면 "확인되지 않았습니다"가 나온다(사용자 보고).
   //   IMO·콜사인이 있으면 그것을 우선 검색 키로 쓰고, 이름이 약자일 수 있음을 명시한다.
   const looksCode = /^[A-Z0-9]{2,5}$/.test(shipName);
@@ -959,9 +1001,8 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
       generationConfig: { temperature: 0.1, maxOutputTokens: 6000 },
     };
     if (useSearch) body.tools = [{ google_search: {} }];
-    const res = await fetch(getActiveGeminiUrl(), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
+    //  3.43: 공용 키 · 45초 타임아웃(웹 검색 그라운딩은 느리다) · ai_call_log — aiCall 한 벌
+    const res = await aiCall(useSearch ? 'shipIntro' : 'shipIntroPlain', body, { timeoutMs: 45000, key: aiKey });
     return res;
   };
 

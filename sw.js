@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.42';
-const NOTE = '미르가 못 알아들은 말은 AI가 미르 말로 바꿔 다시 답하고, 규칙에 없는 것은 자료를 보고 답합니다. 답 끝에 AI 표시가 붙으면 자료를 읽고 만든 문장이니 숫자는 화면에서 한 번 더 보세요';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.43';
+const NOTE = '사진 인식·PDF 베이·선박 소개·검색패널 AI가 이제 공용 키(검수사 부담)로 돕니다. 본인 키를 넣지 않아도 되고, 오래 걸리면 기다리다 멈추지 않고 시간 초과를 알립니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

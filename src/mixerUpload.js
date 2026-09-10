@@ -15,6 +15,7 @@ import { extractShipInfo } from './shipStructure.js';
 // M4.4: CASP .def 파서
 import { analyzeDefFile, analysisToBayDictEntry } from './defParser.js';
 import { addToUserBayDict } from './data/userBayDict.js';
+import { aiCall, resolveAiKey } from './gemini.js';   // 3.43 판 C: 공용 키(검수사 부담)·타임아웃·ai_call_log 한 벌
 
 // ─── 파일 종류 자동 판별 ───
 // 결과: 'edi' | 'asc' | 'excel' | 'csv' | 'pdf' | 'image' | 'def' | 'unknown'
@@ -330,8 +331,9 @@ export async function compressForReport(blob, maxDim = 1600) {
   return out || blob;
 }
 
-export async function ocrReeferTemps(file, geminiApiKey) {
-  if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
+export async function ocrReeferTemps(file, geminiApiKey = '') {
+  const aiKey = geminiApiKey || await resolveAiKey();   // 3.43: 공용 키 → 개인 키
+  if (!aiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
   let imageBlob;
   try { imageBlob = await compressImage(file, 1600); } catch { imageBlob = file; }
   const base64 = await blobToBase64(imageBlob);
@@ -376,17 +378,11 @@ export async function ocrReeferTemps(file, geminiApiKey) {
   옆 칸(꽂을 때 온도·자리 번호)의 손글씨를 끌어오지 마십시오.
 - 값이 안 보이거나 흐리면 그 항목만 빈 문자열. **지어내지 않습니다.**`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: 'application/json' },
-      }),
-    }
-  );
+  //  3.43: 공용 키 · 60초 타임아웃 · ai_call_log — aiCall 한 벌
+  const response = await aiCall('reeferPhoto', {
+    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+  }, { timeoutMs: 60000, key: aiKey });
   if (!response.ok) {
     const t = await response.text();
     throw new Error(`Gemini API 오류 ${response.status}: ${t.slice(0, 200)}`);
@@ -418,9 +414,10 @@ export async function ocrReeferTemps(file, geminiApiKey) {
   return { items, note: `사진에서 ${items.length}대 읽음` };
 }
 
-export async function ocrImageContainers(file, geminiApiKey) {
-  // V9.57(G11): 내장 폴백 키 삭제로 키 부재가 정상 상태가 됨 — 설정 경로를 정확히 안내.
-  if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
+export async function ocrImageContainers(file, geminiApiKey = '') {
+  // V9.57(G11): 내장 폴백 키 삭제로 키 부재가 정상 상태가 됨 — 설정 경로를 정확히 안내. 3.43: 공용 키 → 개인 키.
+  const aiKey = geminiApiKey || await resolveAiKey();
+  if (!aiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
 
   // 자동 축소 (4032×3024 → 1600×1200 정도, OCR 정확도 유지)
   let imageBlob;
@@ -459,22 +456,16 @@ export async function ocrImageContainers(file, geminiApiKey) {
 - 손글씨 메모는 무시하고 인쇄된 표 데이터만 추출
 - 행 번호(1, 2, 3...)는 무시`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64 } },
-          ],
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-      }),
-    }
-  );
+  //  3.43: 공용 키 · 60초 타임아웃 · ai_call_log — aiCall 한 벌
+  const response = await aiCall('listPhoto', {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType, data: base64 } },
+      ],
+    }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+  }, { timeoutMs: 60000, key: aiKey });
 
   if (!response.ok) {
     const errText = await response.text();
@@ -830,9 +821,10 @@ export function matchVoyage(ediVsl, ediVoy, existingVoyages) {
 // ─── M5.25: PORT-MIS 캡처 OCR (폰에서 활용) ───
 // 검수원이 폰 Chrome으로 PORT-MIS 입출항현황 캡처 → Gemini Vision으로 데이터 추출
 // 결과를 Firebase port_mis_data에 저장 → Chrome 확장 없이도 ⚓ 카드 표시
-export async function ocrPortMisCapture(file, geminiApiKey) {
-  // V9.57(G11): 키 부재 안내를 설정 경로까지.
-  if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
+export async function ocrPortMisCapture(file, geminiApiKey = '') {
+  // V9.57(G11): 키 부재 안내를 설정 경로까지. 3.43: 공용 키 → 개인 키.
+  const aiKey = geminiApiKey || await resolveAiKey();
+  if (!aiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
 
   let imageBlob;
   try { imageBlob = await compressImage(file, 1600); }
@@ -870,19 +862,13 @@ export async function ocrPortMisCapture(file, geminiApiKey) {
 - 계선장소는 "동부두 N번선석" 형식 그대로 (M5.82 추가)
 - 순번 컬럼은 무시`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }],
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-      }),
-    }
-  );
+  //  3.43: 공용 키 · 60초 타임아웃 · ai_call_log — aiCall 한 벌
+  const response = await aiCall('portMisCapture', {
+    contents: [{
+      parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }],
+    }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+  }, { timeoutMs: 60000, key: aiKey });
 
   if (!response.ok) {
     const errText = await response.text();

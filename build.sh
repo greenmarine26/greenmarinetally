@@ -817,6 +817,11 @@ fi
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MM" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_mirmodel.cjs "$SMOKE_MM" "$(pwd)" || { rm -f "$SMOKE_MM"; echo "✗ 미르 모델 창구 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MM"
+    #  3.43 (판 C): **공용 AI 키 한 벌** — 제미나이 여섯 창구(검색패널·선박 소개·PDF·사진 리스트·리퍼 사진·PORT-MIS)가 resolveAiKey(공용 → 개인)·aiCall(타임아웃·ai_call_log)로만 도는가. fetch 스텁(키 고르기·타임아웃·기록·배선을 잰다).
+    SMOKE_AK=$(mktemp /dev/shm/hometmp/_smokeak_XXXXXX.cjs)
+    npx esbuild tools/smoke_aikey_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AK" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_aikey.cjs "$SMOKE_AK" "$(pwd)" || { rm -f "$SMOKE_AK"; echo "✗ 공용 AI 키 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_AK"
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
     SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)
