@@ -462,7 +462,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             <span className="text-xs2 font-bold text-amber-300">💬 질문 답변</span>
             <button onClick={() => setAskMode(false)} className="text-xs2 text-dim-300 px-2 py-1 rounded hover:bg-ink-750">✕ 닫고 작업으로</button>
           </div>
-          <SingleSearch rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
+          <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
         </div>
       )}
 
@@ -806,7 +806,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
+        ? <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -1622,14 +1622,18 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
           {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null, tw: terminalWorkFor(voyage?.info, terminalWork) }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
-          {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다 */}
-          {needsModeChoice(parsed, results) && modeChoice === null && (
+          {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다
+              ★ 3.41-01 (검수사 «카고플랜하면 양하 선적 선택화면이 나오고 누른 후에 양하나 선적 중 선택하라고 함»):
+                뿌리는 2.85 의 배선 결함 — 이 SingleSearch 를 그리는 두 자리가 `onOpenPlan` 을 안 넘겨(감사 실측) 작업창에서는
+                «카고플랜 보여줘» 가 플랜을 **아예 못 열고** 목록 질문(listQuery)으로 떨어져 이 단추가 떴다. 배선을 잇고(위 두 자리),
+                플랜 명령이면 단추를 안 띄우며, 누르면 쌓인 발화(되묻는 말)를 끊는다 — 폰 TTS 가 늦게 나와 고른 뒤에 «양하인가요» 가 들렸다. */}
+          {needsModeChoice(parsed, results) && modeChoice === null && !(onOpenPlan && parseViewCommand(query)) && (
             <div className="mt-2 flex gap-2">
-              <button onClick={() => setModeChoice('discharge')}
+              <button onClick={() => { try { stopSpeak(); } catch (e) { /* */ } setModeChoice('discharge'); }}
                 className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-black text-base">⬇ 양하</button>
-              <button onClick={() => setModeChoice('loading')}
+              <button onClick={() => { try { stopSpeak(); } catch (e) { /* */ } setModeChoice('loading'); }}
                 className="flex-1 py-3 rounded-pill bg-emerald-700 hover:bg-emerald-600 text-white font-black text-base">⬆ 선적</button>
-              <button onClick={() => setModeChoice('both')}
+              <button onClick={() => { try { stopSpeak(); } catch (e) { /* */ } setModeChoice('both'); }}
                 className="flex-1 py-3 rounded-pill bg-ink-750 hover:bg-ink-700 text-dim-100 font-bold text-sm">둘 다</button>
             </div>
           )}

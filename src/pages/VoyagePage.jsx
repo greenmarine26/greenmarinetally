@@ -3,7 +3,7 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { publishMirCtx, flattenVoyages } from '../mirCtx.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
 import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
-import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
+import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
@@ -146,6 +146,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [planOv, setPlanOv] = useState(null);   // {what:'bay'|'cargo', bay:number|null} | null
   const _mirOpenPlan = React.useCallback(({ what, bay }) => {
     /* BayPlan 은 마운트하며 이 신호를 읽는다 — 오버레이를 켜기 **직전**에 세운다(같은 tick). */
+    try { stopSpeak(); } catch (e) { /* 3.41-01: 플랜을 열 때 쌓인 발화(되묻는 말)를 끊는다 — 검수사 «화면을 연 후에 한참 있다가 말을 함» */ }
     try {
       if (what === 'cargo') window.__mirOpenCargo = Date.now();
       if (bay != null) window.__mirGoBay = bay;
@@ -155,6 +156,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   /* 홈에서 물은 경우 — App 이 mirPlan 을 넘긴다. 마운트하자마자 그 플랜을 덮는다. */
   useEffect(() => {
     if (!mirPlan) return;
+    //  3.41-01: 여기서는 발화를 끊지 않는다 — 떠 있는 미르가 «열었어요» 를 말한 직후 이 effect 가 돌아, 끊으면 그 말이 지워진다(감사 jsdom 실측).
     try {
       if (mirPlan.what === 'cargo') window.__mirOpenCargo = Date.now();
       if (mirPlan.bay != null) window.__mirGoBay = mirPlan.bay;

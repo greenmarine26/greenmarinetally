@@ -189,6 +189,23 @@ const FX = require('./fixtures/dup4_nsdc.json');
   await ktype('');
   const solo2 = Object.keys(FXK.ediContainers).find(cn => !['7075', '1992'].includes(cn.slice(-4)) && Object.keys(FXK.ediContainers).filter(x => x.slice(-4) === cn.slice(-4)).length === 1 && parseInt(FXK.ediContainers[cn].bay, 10) <= 5);
   if (solo2) { await ktype(solo2.slice(-4)); if (kbig().length !== 1) fail(`대조군 «${solo2.slice(-4)}» 이 큰 카드로 안 뜬다 (${kbig().length})`); }
-  console.log(`✓ 끝4자리 중복 연막검사 통과 (0320: 완료 카드 FFAU 1개 · SEGU 통과 표시 · 완료 뒤 승격 0 · 대조군 ${solo.cn.slice(-4)} 큰 카드 · 9526 통과 조회 · 트윈 뒤 칸 차단 · 상세창 옆길 차단 · 선적 위치지정 통과짝 차단·평택짝 확인 · 리스트 전용 0877 카드 · 작업분끼리 겹침 7075 큰카드 0·자리 표시·완료 뒤 승격 0 · 오류 0)`);
+  // ── 3.41-01 작업창 플랜 명령 — «카고플랜 보여줘» 는 플랜을 열고(onOpenPlan) 양하/선적 되묻기 단추를 띄우지 않는다 ──
+  dom.window.__renderPlan(); await wait(300);
+  const P = () => doc.getElementById('plan');
+  const pclick = (re) => { const b = [...P().querySelectorAll('button')].find(x => re.test((x.textContent || '').trim())); if (!b) return false; b.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); return true; };
+  if (!pclick(/^B10/)) fail('[플랜 배선] B10 베이 버튼이 없다'); await wait(300);
+  if (!pclick(/^🔵 데크/)) fail('[플랜 배선] 데크 단 버튼이 없다'); await wait(400);
+  const pin = [...P().querySelectorAll('input')].find(i => /4777/.test(i.placeholder || ''));
+  if (!pin) fail('[플랜 배선] 검색 입력칸이 없다');
+  dom.window.__calls.length = 0;
+  setVal.call(pin, '카고플랜 보여줘'); pin.dispatchEvent(new dom.window.Event('input', { bubbles: true })); await wait(200);
+  pin.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await wait(900);   // 문장은 전송키(Enter)로 접수된다
+  const pcall = dom.window.__calls.find(c => c.fn === 'plan');
+  if (!pcall || pcall.what !== 'cargo') fail('[플랜 배선] 작업창 «카고플랜 보여줘» 가 플랜을 안 연다(SingleSearch 에 onOpenPlan 이 안 닿는다): ' + JSON.stringify(dom.window.__calls));
+  const pt = P().textContent || '';
+  if (!/카고플랜을 열었어요/.test(pt)) fail('[플랜 배선] «열었어요» 답이 없다: ' + pt.slice(0, 200));
+  if ([...P().querySelectorAll('button')].some(b => /^⬇ 양하$/.test((b.textContent || '').trim()))) fail('[플랜 배선] 플랜 명령에 양하/선적 되묻기 단추가 떴다(검수사 «양하 선적 선택화면»)');
+  if (/양하인가요, 선적인가요/.test(pt)) fail('[플랜 배선] 플랜 명령에 «양하인가요, 선적인가요» 가 나왔다');
+  console.log(`✓ 끝4자리 중복 연막검사 통과 (0320: 완료 카드 FFAU 1개 · SEGU 통과 표시 · 완료 뒤 승격 0 · 대조군 ${solo.cn.slice(-4)} 큰 카드 · 9526 통과 조회 · 트윈 뒤 칸 차단 · 상세창 옆길 차단 · 선적 위치지정 통과짝 차단·평택짝 확인 · 리스트 전용 0877 카드 · 작업분끼리 겹침 7075 큰카드 0·자리 표시·완료 뒤 승격 0 · 오류 0 · 3.41-01 작업창 플랜 명령 배선)`);
   process.exit(0);
 })();

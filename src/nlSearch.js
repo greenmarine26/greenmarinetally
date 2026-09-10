@@ -939,6 +939,7 @@ export function hasAnyCondition(parsed) {
             parsed.bottomQuery || parsed.topQuery || parsed.vacantQuery ||
             parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
+            parsed.paceQuery ||   // 3.41-01: «작업 속도» 홀로는 조건이 아니어서 본체에 못 닿아 null 이었다(3.24 부터 — 판 B 시뮬 실측)
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
             parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.mirHello || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
             parsed.dmgQuery || parsed.luggQuery || parsed.urgentQuery ||   // 2.05-01

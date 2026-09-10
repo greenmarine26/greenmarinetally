@@ -5,13 +5,17 @@
      아니면 질문 속 배 이름으로 항차를 고른다(홈 통합검색 pickShipCtx 와 같은 규칙). 배가 없으면 전 항차 재료로 답한다.
    - 플랜 명령(«KBTR 카고플랜 보여줘»)은 App 의 mirPlan 덮개를 연다(홈과 같은 길).
    - 못 답하면 «못 배웠어요» + 받은함 자동 신고(mir_unanswered, 홈과 같은 규칙) — 판 B 에서 이 자리에 모델이 붙는다.
-   - 자리: 오른쪽 아래, TOP 버튼(ScrollTopButton bottom-5 right-4) 바로 위. 콘앱 미르 얼굴·마이크·목소리와 같은 벌. */
+   - 자리: 오른쪽 아래, TOP 버튼(ScrollTopButton bottom-5 right-4) 바로 위. 콘앱 미르 얼굴·마이크·목소리와 같은 벌.
+   ★ 3.41-01 (검수사 라이브 신고 2026-09-10) — ①«질문은 하고나면 그 질문이 계속 남아 있음» → 묻고 나면 칸을 비우고
+     물은 말은 답 위에 작게 남긴다. ②«답변이 화면을 연 후에 한참 있다가 말을 함» → 말하기 전에 쌓인 발화를 전부 끊고(stopSpeak),
+     플랜 명령은 말부터 하고 화면을 열며 시트를 내린다(플랜 위에 시트가 남지 않는다). ③«작업중인 선박 언제 끝나 하면 선박명을
+     쳐달라고 함» → 이름 대신 «작업중인 배» 라고 부르면 지금 일하는 배(utils.isWorkingNow 한 벌)로 답하고, 여럿이면 «어느 배?» 하고 되묻는다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import mirFaceUrl from '../assets/mir-face.png';
 import { answerOne } from '../mirAnswer.js';
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
-import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx } from '../mirCtx.js';
+import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE } from '../mirCtx.js';
 import { computeTallyData } from '../tallyReport.js';
 import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
@@ -27,6 +31,7 @@ const CLEAN_RE = /[📋📌⚠↩·❄🔁📊📦📖🐱🐟😺😻🎵📍�
 export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, terminalWork = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [asked, setAsked] = useState('');   // 3.41-01: 방금 물은 말 — 칸은 비우고 이것을 답 위에 남긴다
   const [out, setOut] = useState('');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -90,25 +95,37 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const ask = useCallback(async (text) => {
     const t = String(text || '').trim();
     if (t.length < 2) return;
-    setBusy(true); setOut('…');
+    setBusy(true); setOut('…'); setAsked(t); setQ('');   // 3.41-01: 칸은 비우고 물은 말은 위에 남긴다
+    try { stopSpeak(); } catch (e) { /* */ }              // 3.41-01: 쌓인 발화를 끊는다 — 새 답이 옛 말 뒤에 줄 서지 않게
     try {
       //  ① 플랜 명령 — 열어 준다(홈 _askGlobal 과 같은 길). 배를 못 찾으면 붙이라고 말한다.
       const cmd = parseViewCommand(t);
       const lv = readMirCtx();
       const sc = pickShipCtx(t, voyages, lv && lv.voyageKey ? lv.voyageKey : null);
+      //  3.41-01: «작업중인 배» 라고 불렀는데 지금 일하는 배가 여럿이면 고르지 않고 되묻는다
+      if (!sc && !(lv && lv.voyageKey) && WORKING_SHIP_RE.test(t)) {
+        const w = workingShipCtx(voyages);
+        if (w && w.ambiguous && w.ambiguous.length > 1) {
+          const a = `지금 작업 중인 배가 ${w.ambiguous.length}척이에요 — ${w.ambiguous.join(' · ')}. 어느 배인지 이름을 붙여 주세요 🐱`;
+          lastRef.current = a; setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
+          return;
+        }
+      }
       if (cmd && onOpenPlan) {
         const vk = (sc && sc.key) || (lv && lv.voyageKey) || null;
         if (vk) {
           const md = cmd.mode || (lv && lv.mode) || 'discharge';
-          onOpenPlan({ voyageKey: vk, mode: md, what: cmd.what, bay: cmd.bay });
           const what = cmd.what === 'cargo' ? '카고플랜' : (cmd.bay != null ? `${cmd.bay}번 베이플랜` : '베이플랜');
           const a = `🗺 ${(voyages[vk] && voyages[vk].info && voyages[vk].info.vsl) || ''} ${md === 'loading' ? '선적' : '양하'} ${what}을 열었어요.`;
-          setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
+          //  3.41-01: 말부터 하고 연다 — 플랜 화면이 올리는 다른 발화 뒤에 줄 서지 않게. 시트는 내린다(플랜 위에 남아 있었다).
+          lastRef.current = a; setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
+          onOpenPlan({ voyageKey: vk, mode: md, what: cmd.what, bay: cmd.bay });
+          setOpen(false);
           logQuerySettled('nls', t, { voyageKey: vk, via: 'mir' });
           return;
         }
         const a = '어느 배의 플랜인지 못 찾았어요 😿 «KBTR 카고플랜» 처럼 배 이름을 붙여 주세요.';
-        setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
+        lastRef.current = a; setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
         return;
       }
       //  ② 재료 — 열린 항차(live) > 질문 속 배(shipCtx) > 전 항차(flat).
@@ -197,7 +214,10 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
             <button type="button" onClick={() => ask(q)} disabled={busy} className="px-3 rounded bg-amber-500 text-[#1a1206] font-black text-sm disabled:opacity-60">질문</button>
           </div>
           {out && (
-            <div className="mt-2 p-2.5 rounded bg-ink-950 text-[15px] leading-relaxed font-semibold text-white whitespace-pre-line select-text">{out}</div>
+            <div className="mt-2 p-2.5 rounded bg-ink-950 select-text">
+              {asked && <div className="text-2xs text-dim-300 mb-1 truncate">🗨 {asked}</div>}
+              <div className="text-[15px] leading-relaxed font-semibold text-white whitespace-pre-line">{out}</div>
+            </div>
           )}
         </div>
       )}

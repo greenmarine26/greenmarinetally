@@ -4,7 +4,7 @@
    그래서 항차 화면이 재료를 **여기에 놓고**(publishMirCtx) 미르가 물을 때 **읽는다**(readMirCtx). 화면이 닫히면 비운다.
    ⚠ 전 항차 컨 펼치기(flattenVoyages)는 종전 GlobalSearchPage 의 useMemo 본문을 그대로 옮긴 것이다 — 두 곳이 각자 펼치면
      «홈은 이 컨을 알고 미르는 모르는» 일이 생긴다(§4-4). 홈도 이 함수를 부른다. */
-import { isPyeongtaekPort, isPtk, sideCancelled } from './utils.js';
+import { isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow } from './utils.js';
 import { terminalWorkFor } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 
@@ -72,13 +72,31 @@ export function publishMirCtx(ctx) {
 export function readMirCtx() { return _live; }
 export function subscribeMirCtx(f) { _subs.add(f); return () => _subs.delete(f); }
 
+/*  ★ 3.41-01 — «작업중인 선박 언제 끝나» 처럼 이름 대신 **«지금 일하는 배»** 로 부른 말.
+    검수사 2026-09-10 «작업중인 선박 언제끝나 하면 선박명을 쳐달라고 함. 이미 작업중인 선박이라고 했는데...».
+    판정은 utils.isWorkingNow 한 벌(수석 보드·홈·로그인 화면이 쓰는 그것)이다. 한 척이면 그 배, 여럿이면
+    `ambiguous`(이름들)로 돌려 부르는 쪽이 «어느 배?» 하고 되묻는다 — 아무 배나 고르지 않는다. */
+export const WORKING_SHIP_RE = /작업\s*중인?\s*(선박|배)|지금\s*(하는|작업하는|일하는|작업\s*중인)\s*(선박|배)|(우리|이|지금|그)\s*(배|선박)/;
+export function workingShipCtx(voyages) {
+  const now = Date.now();
+  const list = Object.entries(voyages || {}).filter(([, v]) => v && v.info && isWorkingNow(v, now));
+  if (!list.length) return null;
+  if (list.length === 1) { const [k, v] = list[0]; return { key: k, info: v.info, v, has: !!(v.discharge?.ediContainers || v.loading?.ediContainers), working: true }; }
+  return { ambiguous: list.map(([, v]) => String(v.info.vsl || v.info.vslFull || '')).filter(Boolean), working: true };
+}
+
 /** 질문 속 배 이름으로 항차를 고른다 — 홈 통합검색(shipCtx)과 같은 규칙(정확 포함 → 편집거리 1 유일). */
 export function pickShipCtx(query, voyages, ctxVoyageKey = null) {
   const Q = String(query || '').toUpperCase();
   const _fallback = () => {
-    if (!ctxVoyageKey) return null;
-    const v = (voyages || {})[ctxVoyageKey];
-    return v?.info ? { key: ctxVoyageKey, info: v.info, v, has: true } : null;
+    if (ctxVoyageKey) {
+      const v = (voyages || {})[ctxVoyageKey];
+      if (v?.info) return { key: ctxVoyageKey, info: v.info, v, has: true };
+    }
+    //  이름도 열린 항차도 없는데 «작업중인 배» 라고 불렀으면 지금 일하는 배(3.41-01). 여럿이면 여기서는 고르지 않는다 —
+    //  떠 있는 미르가 workingShipCtx 로 «어느 배?» 하고 되묻는다.
+    if (WORKING_SHIP_RE.test(String(query || ''))) { const w = workingShipCtx(voyages); return (w && w.key) ? w : null; }
+    return null;
   };
   if (Q.length < 3) return _fallback();
   let best = null;

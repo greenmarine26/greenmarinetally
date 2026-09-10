@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.41';
-const NOTE = '미르가 오른쪽 아래에 늘 떠 있습니다. 3426 온도, 0230 실번호, 접안 현측, 마감텔리 수치처럼 앱에 있는 것은 어디서든 물어보세요';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.41-01';
+const NOTE = '미르에게 묻고 나면 칸이 비고 물은 말은 답 위에 남습니다. 카고플랜을 열 때 양하 선적을 다시 묻지 않고, 작업중인 배라고 하면 지금 일하는 배로 답합니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

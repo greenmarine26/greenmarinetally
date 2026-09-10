@@ -50,3 +50,15 @@ window.__renderDetail = (c, extra) => {
     onClose: () => {}, sealMode: null, allContainers: Object.values(FX.ediContainers), records: FX.records, ...(extra || {}),
   }));
 };
+//  3.41-01 — 작업창 플랜 명령 배선(감사 실측: SingleSearch 가 onOpenPlan 을 못 받아 «카고플랜 보여줘» 가 되묻기 단추로 떨어졌다).
+const proot = document.createElement('div'); proot.id = 'plan'; document.body.appendChild(proot);
+let pr = createRoot(proot);
+window.__renderPlan = () => {
+  const voyage = { info: FX.info, discharge: { ediContainers: FX.ediContainers, records: FX.records, completed: {} } };
+  if (!pr) pr = createRoot(proot);
+  pr.render(React.createElement(SearchPanel, {
+    voyage, voyageKey: 'NSDC_2608N', inspector: '김성일', mode: 'discharge',
+    onOpenContainer: (c) => { window.__calls.push({ fn: 'openDetail', cn: c && c.cn }); },
+    onOpenPlan: (p) => { window.__calls.push({ fn: 'plan', ...p }); },
+  }));
+};
