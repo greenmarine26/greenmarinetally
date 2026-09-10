@@ -27,12 +27,13 @@ const TRANSLATE = {
   '이 배 선장 이름이 뭐야': { canonical: '', window: '', confidence: 0 },
   '수고했어 미르야': { canonical: '', window: '잡담', confidence: 1 },
   '0230 이거 몇 킬로 나가': { canonical: '0230 중량', window: '컨 한 대', confidence: 1 },
-  '리퍼 몇 대 탔어': { canonical: '리퍼 몇 대 탔어', window: '대수', confidence: 1 },   // identity 번역(«탔어» 는 모르는 낱말)
+  '리퍼 몇 대 탔어': { canonical: '리퍼 몇 대 탔어', window: '대수', confidence: 1 },
+  '씰 잘림 어쩌지': { canonical: '실번호 의심', window: '항차 사실', confidence: 0.9 },   // 3.43-02: 원장 답을 번역이 덮던 사고 재현용(엉뚱한 번역)   // identity 번역(«탔어» 는 모르는 낱말)
   '화면 좀 밝게 해줘': { canonical: '화면 밝게', window: '기기', confidence: 1 },
 };
 let dataText = null;   // 자료 답 스텁(문장) — 검사마다 바꾼다
 global.fetch = async (url, opts = {}) => {
-  calls.fetch.push({ url: String(url), method: opts.method || 'GET' });
+  calls.fetch.push({ url: String(url), method: opts.method || 'GET', body: opts.body || '' });
   const ok = (j) => ({ ok: true, status: 200, json: async () => j });
   const u = String(url);
   if (u.includes('/mir_config.json')) return ok(cfg);
@@ -101,6 +102,16 @@ const gemCalls = () => calls.fetch.filter((f) => f.url.includes('generativelangu
   const before = gemCalls();
   r = await M.askMir('0230 이거 몇 킬로 나가', K, rules(K), { who: '김성일' });
   T(r.via === 'translate' && has(r.text, '18,000kg') && gemCalls() - before === 1, `«킬로» 는 번역 한 번으로 확인 — 자료 답으로 안 간다(호출 ${gemCalls() - before}회)`);
+
+  // ⑤-2 (3.43-02) 원장(mirKnowledge)이 답했는데 낱말(«어쩌지»)만 몰라 약하게 봤고, 모델이 엉뚱하게(«실번호 의심») 번역해도 원장 답을 지킨다 — 검수사 «씰 잘림 대처법을 물었는데 씰번호 틀림을 알립니다»
+  {
+    const b2 = gemCalls();
+    const t2 = {}; const raw2 = rules(K)('씰 잘림 어쩌지', t2);
+    T(t2.via === 'knowledge' && has(raw2, '씰이 없거나 잘려 있으면') && M.mirLeftover('씰 잘림 어쩌지').length > 0, `«씰 잘림 어쩌지» 는 원장 답 + 모르는 낱말(${M.mirLeftover('씰 잘림 어쩌지').join(',')})`);
+    r = await M.askMir('씰 잘림 어쩌지', K, rules(K), { who: '김성일' });
+    T(r.via === 'confirmed' && has(r.text, '씰이 없거나 잘려 있으면') && !has(r.text, 'Seal 번호') && gemCalls() - b2 === 1, `엉뚱한 번역(실번호 의심)이 원장 답을 덮지 않는다 — via=${r.via} · ${String(r.text).slice(0, 60)}`);
+    T(calls.events.some((e) => e && e.type === 'gm-mir-miss' && e.detail && /kept/.test(String(e.detail.how || ''))) || calls.fetch.some((f) => f.url.includes('/mir_misses') && /kept/.test(String(f.body || ''))), '지킨 번역도 mir_misses 에 남는다(결산의 눈)');
+  }
 
   // ⑥ 번역 없음 → 자료 답(AI 표시) — 숫자가 자료에 있으면 통과
   dataText = '제일 무거운 컨테이너는 HLHU8512530이며 30520kg이고 선적 작업이에요. 위치는 14-06-84예요.';

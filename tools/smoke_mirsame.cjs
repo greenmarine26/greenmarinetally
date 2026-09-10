@@ -109,6 +109,16 @@ check('cone.html loadMirCtx 가 terminal_work/{배}·shipSpeed·pilot_forecast/{
     const t = {}; const b = norm(M.answerOneRaw(q, coneCtx({ cone: { rows: coneRows, dischRows: [], stowRows: [] }, _trace: t })));
     check(`콘 작업표가 있으면 «${q}» 는 콘 답`, t.via !== 'progress' && t.via !== 'coneHelp' && /콘|가감|베이|반납|필요/.test(b) && !/이렇게 물어보세요/.test(b), `via=${t.via} · ${b.slice(0, 100)}`);
   }
+  //  ⑦ 3.43-02 — 씰 잘림·파손 «대처법» 은 현장 절차(원장)로, 두 앱 같은 답(검수사 «씰 잘림(씰 파손) 대처법을 물었는데 씰번호 틀림을 알립니다»)
+  for (const q of ['씰 잘림 대처법', '씰 파손 대처법', '봉인 훼손 조치', '실 파손 처리 방법', '씰 잘렸을 때 어떻게 해']) {
+    const t1 = {}, t2 = {}; const a = norm(M.answerOneRaw(q, Object.assign(tallyCtx(), { _trace: t1 }))), b = norm(M.answerOneRaw(q, coneCtx({ _trace: t2 })));
+    check(`«${q}» → 씰 현장 절차(사진·리씰), 두 앱 같은 답, via=knowledge`, /씰이 없거나 잘려 있으면/.test(a) && a === b && t1.via === 'knowledge' && t2.via === 'knowledge', `via=${t1.via}/${t2.via} · ${a.slice(0, 90)}`);
+  }
+  {
+    const d = norm(M.answerOneRaw('컨테이너 파손 어떻게', tallyCtx())), e = norm(M.answerOneRaw('씰 번호가 달라', tallyCtx()));
+    check('컨 파손은 여전히 데미지 절차, 씰 번호 다름은 여전히 씰 번호 안내', /데미지로 잡아요/.test(d) && /Seal 번호가 다르다면/.test(e), `${d.slice(0, 60)} | ${e.slice(0, 60)}`);
+    check('«씰 잘림 대처법» 은 규칙이 답하고 낱말도 다 아니 약한 답이 아니다(모델 안 감)', !M.isWeakAnswer('씰 잘림 대처법', M.answerOneRaw('씰 잘림 대처법', tallyCtx()), {}), JSON.stringify(M.mirLeftover('씰 잘림 대처법')));
+  }
   console.log(`\n${bad ? '✗' : '✔'} 두 앱 같은 답 연막검사 ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('✗ 연막검사 자체가 죽었다:', e && e.stack); process.exit(1); });
