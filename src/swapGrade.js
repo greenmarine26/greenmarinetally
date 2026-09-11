@@ -8,7 +8,7 @@
 //
 // 판정은 이 파일 한 벌만 쓴다 — 카드와 위치수정 창이 서로 다른 잣대를 대면 검수사가 헷갈린다.
 
-import { isReeferIso } from './utils.js';   // V9.57: 리퍼 판정 단일 소스 (ISO 가드 정비에 사용)
+import { isReeferIso, isFlatRackContainer } from './utils.js';   // V9.57: 리퍼 판정 단일 소스 (ISO 가드 정비에 사용)
 
 const bn = (v) => (v !== undefined && v !== null && v !== '' ? String(parseInt(v, 10)) : '');
 
@@ -89,7 +89,7 @@ function specialWhy(c) {
   if (!c) return '특수 컨테이너';
   if (c.rf || (c.tmp !== undefined && c.tmp !== null && String(c.tmp).trim() !== '')) return '리퍼(냉동)';
   if (c.dg || String(c.dgc || '').trim() || String(c.un || '').trim()) return '위험물(DG)';
-  if (c.fr) return 'FR(플랫랙)';
+  if (isFlatRackContainer(c)) return 'FR(플랫랙)';   // 3.43-03: FR 판정 한 벌 — fr 없는 FR(ASC)이 «OOG(규격초과)» 로 적히던 것
   if (c.ot) return 'OT(오픈탑)';   // 2.93: 검수사 확정 — OOG 말고 FR·OT 로 적는다
   if (c.tk) return '탱크';
   if (c.oog) return 'OOG(규격초과)';

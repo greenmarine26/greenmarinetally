@@ -14,7 +14,7 @@ import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict, podFeStyle} from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
-import { podBgOf, podCodeLen, isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf } from '../utils.js';   // 2.98-14: 커버 막대 경계
+import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import {
   autoPairBays,
   generatePdfBays,
@@ -132,7 +132,7 @@ function getMarkV2(c, pod, mode) {
   let specialLetter = null;
   if (c.dg) specialLetter = 'DG';   // 2.38 (검수사): DG는 D가 아니라 DG 2글자
   else if (isReeferContainer(c)) specialLetter = isEmpty ? 'RE' : 'RF';   // 2.38-01: 그림은 RE·RF (리스트는 R/E·R/F 유지)
-  else if (c.fr) specialLetter = 'FR';
+  else if (isFlatRackContainer(c)) specialLetter = 'FR';   // 3.43-03 (검수사 «SWTD 카고플랜에서 FR을 OT로 오류 표기»): ASC 로 들어온 FR 은 fr 없이 oog 만 있어 아래 OT 가지로 떨어졌다 — FR 판정 한 벌(utils)
   else if (c.tk) specialLetter = 'TK';   // 2.38 (검수사): 탱크도 TK 2글자
   else if (c.ot || c.oog) specialLetter = 'OT';   // 2.98-10 (검수사): «OT를 A로 표기하는데 OT로» · «특수화물은 두글자 표기입니다»
 
@@ -1131,7 +1131,7 @@ export default function PrintableCargoPlanV2({
       let cat = '일반';
       if (c.dg) cat = 'DG';
       else if (isReeferContainer(c)) cat = 'Reefer';   // 3.11: 리퍼 판정 한 벌(3.6-02 isReeferContainer — rf·2230·4530). 종전 iso[2]==='R' 은 2230(20ft 리퍼)을 놓쳤다(DJCT 0223E 실측 18 → 20). 수석 보드 utils.legendLiveOf 와 같은 수
-      else if (c.fr || (c.iso && c.iso[2] === 'P')) cat = 'FR';
+      else if (isFlatRackContainer(c)) cat = 'FR';   // 3.43-03: 칸(getMarkV2)과 같은 FR 판정 한 벌
       else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
       else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
       addTo(cargoCounts, cat, size);

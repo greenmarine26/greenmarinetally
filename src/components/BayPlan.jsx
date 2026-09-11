@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -1710,7 +1710,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
     } else if (c.tk) {
       specialLine = 'TANK';
       specialColor = 'text-orange-200 font-bold';
-    } else if (c.fr) {
+    } else if (isFlatRackContainer(c)) {   // 3.43-03: FR 판정 한 벌 — ASC FR(fr 없음·oog)이 OOG 로 떨어지던 것
       specialLine = 'FR';
       specialColor = 'text-purple-200 font-bold';
     } else if (c.oog) {
@@ -1744,7 +1744,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
       typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '❄';
       typeSymbolColor = c.fe === 'E' ? 'text-cyan-700' : 'text-cyan-600';
-    } else if (c.fr) {
+    } else if (isFlatRackContainer(c)) {   // 3.43-03: FR 판정 한 벌 — 종전 fr 없는 FR 은 아래 OT(△) 가지로 떨어졌다
       typeBarBg = 'bg-purple-600';
       typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '⊞';
@@ -1802,7 +1802,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
           <div className={`absolute top-0 right-0 z-20 bg-white ${typeSymbolColor} font-black leading-none rounded-bl border-2 ${
             isReefer ? 'border-cyan-500' :
             c.dg ? 'border-red-600' :
-            c.fr ? 'border-purple-600' :
+            isFlatRackContainer(c) ? 'border-purple-600' :
             c.tk ? 'border-orange-600' :
             'border-fuchsia-600'
           }`}

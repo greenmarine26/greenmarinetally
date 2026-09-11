@@ -91,7 +91,7 @@ ok(/window\.ConeParse = \{[^}]*normPortCode/.test(entry), '번들이 normPortCod
 ok(/import \{[^}]*normPortCode[^}]*\} from '\.\/utils\.js'/.test(entry), '그 함수를 utils 에서 가져온다(사본을 만들지 않는다)');
 
 //  ⑤ 판 올림
-ok(/__CONEV='ConeOne 2\.49-02'/.test(H), '콘앱 판이 2.49-02 이다 — 화면 갱신 감지 기준');
+ok(/__CONEV='ConeOne 2\.49-03'/.test(H), '콘앱 판이 2.49-03 이다 — 화면 갱신 감지 기준');
 
 console.log(fail ? `✗ ${fail}항 실패` : '✓ 전부 통과');
 process.exit(fail ? 1 : 0);

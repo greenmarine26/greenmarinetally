@@ -291,6 +291,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 목적지색 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  # 3.43-03 · ConeOne 2.49-03: FR 이 FR 로 그려지는가 — SWTD 9013E 실데이터(양하 859·선적 105)로 카고플랜·베이플랜을 그리고 콘앱 행(_ediRowOf)을 꺼내 돌린다.
+  #   검수사 2026-09-11 «SWTD 카고플랜에서 FR을 OT로 오류 표기 수정바람» — ASC FR(fr 없음·oog)이 칸에서 OT 로 떨어졌다(수정 전 OT 5칸·FR 0칸).
+  SMOKE_FR=$(mktemp /dev/shm/hometmp/_smokefr_XXXXXX.js)
+  if npx esbuild tools/smoke_frmark.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --outfile="$SMOKE_FR" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_frmark.cjs "$SMOKE_FR" || { echo "✗ FR 표기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_FR"; exit 1; }
+    rm -f "$SMOKE_FR"
+  else
+    echo "✗ FR 표기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_FR"; exit 1
+  fi
   # 3.39-03: 출력 허브가 열리고 검수 리스트 종이가 나오는가 — 실데이터 항차(KBTR 2606E)를 그려 단추를 눌러 본다.
   #   3.31 이 넣은 «선언 전 참조» 한 줄 때문에 이 화면이 여덟 판 동안 **열리지도 않았다**
   #   (검수사 2026-09-09 «검수앱에서 검수용리스트 출력 크러쉬»). 다른 화면은 다 그려 보면서 여기만 안 그려 봤다.
