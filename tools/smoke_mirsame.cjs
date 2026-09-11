@@ -15,6 +15,11 @@ global.fetch = () => Promise.reject(new Error('연막: 네트워크 없음'));
 const M = require(path.resolve(OUT));
 const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/mirsame_kbtr.json'), 'utf8'));
 const vk = FX.voyageKey, v = FX.voyage, info = v.info, tw = FX.terminalWork, ss = FX.shipSpeed, pf = FX.pilotForecast;
+//  ★ 3.44 — 피드 나이를 **검사 시각 기준**으로 다시 앉힌다. 보관한 `updatedAt` 은 달력이 지나면 낡아,
+//    24시간 문지기(formatTerminalWorkAnswer `_fresh`)가 닫히며 «작업 완료 … 터미널 실황(endAt) 기준» 줄이 사라진다.
+//    그러면 고친 것이 없는데 어느 날 아침 검사만 깨진다(2026-09-12 실측 — 피드 34시간). 나이만 옮기고 값은 그대로 둔다.
+const AGE_MIN = 12;   // 갓 받은 피드
+for (const _k of Object.keys(tw || {})) if (tw[_k] && tw[_k].updatedAt) tw[_k].updatedAt = Date.now() - AGE_MIN * 60000;
 let n = 0, bad = 0;
 const check = (name, cond, detail = '') => { n += 1; if (cond) console.log(`  ✔ ${name}`); else { bad += 1; console.log(`  ✘ ${name}${detail ? ' — ' + detail : ''}`); } };
 const norm = (s) => String(s == null ? '(null)' : s).replace(/\s+/g, ' ').trim();
@@ -53,6 +58,10 @@ for (const q of SAME) {
   check('콘앱 «몇시에 끝나» 가 터미널 실적(600대)으로 답한다', /터미널 실적/.test(b) && /600대/.test(b), b.slice(0, 120));
   const t = {}; const p = norm(M.answerOneRaw('실제 진행 상황', coneCtx({ _trace: t })));
   check('콘앱 «실제 진행 상황» 은 브리핑이 아니라 터미널 실황(진행 두 갈래)', t.via === 'progress' && /터미널 실황/.test(p) && !/【양하】/.test(p), `via=${t.via} · ${p.slice(0, 100)}`);
+  //  문지기가 살아 있는가 — 피드를 25시간 낡히면 «작업 완료» 결론이 사라져야 한다(직전 기항 실적일 수 있다).
+  const _old = JSON.parse(JSON.stringify(tw)); for (const _k of Object.keys(_old)) _old[_k].updatedAt = Date.now() - 25 * 3600 * 1000;
+  const pOld = norm(M.answerOneRaw('실제 진행 상황', coneCtx({ terminalWork: _old, _trace: {} })));
+  check('낡은 피드(25시간)면 «작업 완료» 결론을 내지 않는다 — 24시간 문지기', !/작업 완료/.test(pOld), pOld.slice(0, 80));
   const b0 = norm(M.answerOneRaw('몇시에 끝나', coneCtx({ terminalWork: null })));
   check('재료를 빼면 갈린다(검사가 헛돌지 않는다)', !/터미널 실적/.test(b0), b0.slice(0, 100));
 }

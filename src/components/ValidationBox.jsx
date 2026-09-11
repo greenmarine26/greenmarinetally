@@ -6,10 +6,12 @@ import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry } from 
 const _sp = (p) => `${String(p).slice(0, 3)}-${String(p).slice(3, 5)}-${String(p).slice(5, 7)}`;
 
 function ShiftingModal({ list, voyageKey, onClose }) {
+  //  3.44: 선사 시프팅 목록(RESTOW LIST)이 정본이면 종이에도 출처를 적는다 — 현장이 무엇을 보고 세는지 알게.
+  const docNote = list.some((x) => x && x.doc) ? ' · 선사 시프팅 목록(RESTOW LIST) 정본' : '';
   const title = `쉬프팅(재적부) 목록 — ${String(voyageKey || '').replace('_', ' ')}`;
   const openPrint = () => {
     const rows = list.map((s, i) =>
-      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${s.iso || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${_sp(s.to)}</td><td></td></tr>`).join('');
+      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${s.iso || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.same ? '제자리' : _sp(s.to)}</td><td></td></tr>`).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>
       body{font-family:'Malgun Gothic',sans-serif;margin:24px;color:#111}
       h2{font-size:16px;margin:0 0 2px}
@@ -20,7 +22,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
       @media print{body{margin:8mm}}
     </style></head><body>
       <h2>◆ ${title} · 총 ${list.length}대</h2>
-      <div class="sub">통과화물 선내 위치 이동(양하+재선적 실작업) — 양하·선적 공통 · 출력 ${new Date().toLocaleString('ko-KR')}</div>
+      <div class="sub">통과화물 선내 위치 이동(양하+재선적 실작업) — 양하·선적 공통${docNote} · 출력 ${new Date().toLocaleString('ko-KR')}</div>
       <table><thead><tr><th>No</th><th>컨테이너 번호</th><th>규격</th><th>F/E</th><th>POD</th><th>전 위치</th><th>후 위치</th><th>확인</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
@@ -33,7 +35,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
       const XLSX = await loadSheetJS();
       const aoa = [[title], [`총 ${list.length}대 · 통과화물 재적부(양하·선적 공통)`], [],
         ['No', '컨테이너 번호', '규격', 'F/E', 'POD', '전 위치', '후 위치'],
-        ...list.map((s, i) => [i + 1, s.cn, s.iso || '', s.fe || '', s.pod || '', _sp(s.from), _sp(s.to)])];
+        ...list.map((s, i) => [i + 1, s.cn, s.iso || '', s.fe || '', s.pod || '', _sp(s.from), s.same ? '제자리' : _sp(s.to)])];   // 3.44: 제자리 재적재
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 5 }, { wch: 8 }, { wch: 10 }, { wch: 10 }];
       const wb = XLSX.utils.book_new();
@@ -69,7 +71,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
               <span className="mono font-bold text-dim-100">{s.cn}</span>
               <span className="text-dim-400">{s.iso}</span>
               {s.pod && <span className="text-dim-400">{s.pod}</span>}
-              <span className="ml-auto mono text-blue-300">{_sp(s.from)} → {_sp(s.to)}</span>
+              <span className="ml-auto mono text-blue-300">{s.same ? `${_sp(s.from)} (제자리)` : `${_sp(s.from)} → ${_sp(s.to)}`}</span>
             </div>
           ))}
         </div>

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.43-03';
-const NOTE = '카고플랜과 베이플랜에서 플랫랙(FR)이 OT로 잘못 표시되던 것을 고쳤습니다. 콘앱 카고플랜과 베이뷰도 같이 고쳤습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.44';
+const NOTE = '선사가 보내는 시프팅 목록(RESTOW LIST)이 오면 그것을 정본으로 씁니다. 앱 추정과 다르면 둘 다 보여 줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

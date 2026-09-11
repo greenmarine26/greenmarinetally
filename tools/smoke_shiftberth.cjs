@@ -87,8 +87,17 @@ const fs = require('fs');
     //    computeShiftingMap 을 **직접** 부르는 곳은 둘뿐이다 — utils 의 래퍼와 콘앱. 둘 다 넘겨야 한다.
     const u = fs.readFileSync(path.resolve('src/utils.js'), 'utf8');
     const cone = fs.readFileSync(path.resolve('public/cone.html'), 'utf8');
-    ok(/_cs\(_dMap, _lMap, \{ berthShift: _v\.berthShift \}\)/.test(cone),
-       '콘앱: computeShiftingMap 에 배정표를 넘긴다');
+    //  ★ 2.50 — 세 자리가 각자 부르지 않고 판정 한 벌(ctShiftMap)만 부른다. 그 한 벌이 opts 를 그대로 넘겨야 배정표가 닿는다.
+    ok(/function ctShiftMap\(dMap, lMap, opts\)/.test(cone) &&
+       /P\.computeShiftingMap\(dMap, lMap, opts\|\|\{\}\)/.test(cone),
+       '콘앱: 판정 한 벌(ctShiftMap)이 배정표(opts)를 그대로 넘긴다');
+    const _ctCalls = (cone.match(/ctShiftMap\(/g) || []).length;   // 정의 1 + 호출부 3
+    const _ctWith  = (cone.match(/ctShiftMap\([^)]*,\s*\{ berthShift:/g) || []).length;
+    ok(_ctCalls === 4 && _ctWith === 3,
+       `콘앱: 호출부 ${_ctWith}곳이 전부 배정표를 넘긴다(등장 ${_ctCalls} = 정의 1 + 호출 3)`);
+    //  판정 한 벌 밖에서 computeShiftingMap 을 직접 부르면 또 갈린다 — ctShiftMap 안의 한 번뿐이어야 한다.
+    ok((cone.match(/computeShiftingMap\(/g) || []).length === 1,
+       '콘앱: computeShiftingMap 직접 호출은 판정 한 벌 안의 한 번뿐');
     ok(/berthShift: \(info\.berthShift!=null\?Number\(info\.berthShift\):null\)/.test(cone),
        '콘앱: 항차 목록이 info.berthShift 를 담는다(안 담으면 넘길 값이 없다)');
     //  직접 호출이 그 둘 말고 더 늘어나면 여기서 걸린다.

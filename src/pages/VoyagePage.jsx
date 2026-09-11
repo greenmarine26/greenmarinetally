@@ -335,7 +335,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       //   예측을 대수에서 빼되 «의심 자리»는 _meta.suspects 로 넘어와 화면이 커버 영역을 알린다.
       return shiftingMapForDisplay(voyageKey, voyage);
     },
-    [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+    //  3.44: 선사 시프팅 목록(restowList)이 들어오면 다시 본다.
+    [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
+     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
      voyage?.info?.lane, dictTick]   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도
   );
@@ -406,7 +408,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   (접안 8/17 예정, 아직 인천 작업 중) 같은 허수가 「치우라」는 작업 지시가 된다.
   const shiftingConfirmed = useMemo(() => {
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { return {}; }
-  }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+  }, [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
+      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
       voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix]);
 
   const shiftingList = useMemo(() => {
@@ -415,7 +418,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return keys.map(cn => {
       const c = fullEdiMap[cn] || {};
       const s = shiftingMap[cn] || {};   // 1.43-02: 예측 경로엔 from이 없었다 — 결측이 와도 안 죽게
-      return { cn, from: s.from || s.pos || '', to: s.to || '', iso: c.iso || '', pod: c.pod || '', fe: c.fe || '' };
+      //  3.44: 서류 정본 행은 EDI 에 없을 수 있다 — 규격·풀엠티는 서류 값으로 채우고 제자리 재적재를 표식한다.
+      return { cn, from: s.from || s.pos || '', to: s.to || '', iso: c.iso || s._iso || '', pod: c.pod || '', fe: c.fe || s._fe || '',
+               doc: !!s._doc, same: !!s._same };
     }).sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
   }, [shiftingMap, fullEdiMap]);
 
@@ -2525,6 +2530,21 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           <button type="button" onClick={() => setShiftOpen(v => !v)}
             className="w-full text-left px-3 py-2 bg-blue-950/60 hover:bg-blue-900/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            {/*  ★ 3.44 (검수사 2026-09-12 «둘 다 보이기») — 선사 서류가 정본이면 그것을 밝히고,
+                 앱 추정과 다르면 차이도 같이 적는다. 어느 쪽이 틀렸는지 화면에서 바로 보이게. */}
+            {shiftInfo?.meta?.source === 'carrier' && (
+              <span className="text-emerald-300">
+                · 선사 서류 정본
+                {shiftInfo.meta.estN != null && shiftInfo.meta.estN !== shiftingList.length
+                  ? ` · 앱 추정 ${shiftInfo.meta.estN} — 차이 ${Math.abs(shiftingList.length - shiftInfo.meta.estN)}` : ' · 앱 추정과 같음'}
+              </span>
+            )}
+            {/*  ⚠ 감사 지적(3.44) — 서류에 못 읽은 행이 있으면 조용히 모자란 대수가 정본이 된다. 화면이 밝힌다. */}
+            {shiftInfo?.meta?.source === 'carrier' && (shiftInfo.meta.dropped > 0 || (shiftInfo.meta.docTotal != null && shiftInfo.meta.docTotal !== shiftInfo.meta.read)) && (
+              <span className="text-amber-300">
+                {` · ⚠ 서류 ${shiftInfo.meta.docTotal != null ? shiftInfo.meta.docTotal : '?'}대 중 ${shiftInfo.meta.read}대만 읽음`}
+              </span>
+            )}
             {/* 2.79 (검수사 확정 2026-08-28): 삼자 일치는 «불일치»가 아니라 **결론이 난 것**이다.
                 *«선사 세관 항만(배정) 그러므르 시프팅은 없습니다»* — ⛔ 를 띄우면 안 된다. */}
             {/* ⛔ 2.82-03: «시프팅 없음»은 **실제로 0일 때만** 쓴다. 목록에 95대를 띄워 놓고
@@ -2665,7 +2685,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 <span className="mono font-bold text-dim-100">{sc.cn}</span>
                 <span className="text-dim-400">{sc.iso}</span>
                 {sc.pod && <span className="text-dim-400">{sc.pod}</span>}
-                <span className="ml-auto mono text-blue-300">{sc.to ? `${sc.from} → ${sc.to}` : `${sc.from} (예측)`}</span>
+                {/* 3.44: 제자리 재적재(도착 자리 = 선적 자리)는 «제자리» 라고 적는다 — 자리는 안 바뀌지만 크레인은 두 번 든다. */}
+                <span className="ml-auto mono text-blue-300">{sc.same ? `${sc.from} (제자리)` : sc.to ? `${sc.from} → ${sc.to}` : `${sc.from} (예측)`}</span>
               </div>
             ))}
           </div>
