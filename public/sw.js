@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.44';
-const NOTE = '선사가 보내는 시프팅 목록(RESTOW LIST)이 오면 그것을 정본으로 씁니다. 앱 추정과 다르면 둘 다 보여 줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.44-01';
+const NOTE = '선사 시프팅 목록과 배정표 대수가 다르면 배정표 숫자도 같이 보여 줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -2539,6 +2539,14 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                   ? ` · 앱 추정 ${shiftInfo.meta.estN} — 차이 ${Math.abs(shiftingList.length - shiftInfo.meta.estN)}` : ' · 앱 추정과 같음'}
               </span>
             )}
+            {/*  ★ 3.44-01 — **배정표가 서류와 다르면 그것을 말한다.** 검수사 2026-09-12 «배정이 바뀌었는데 앱은 그대로».
+                 배정목록 이적이 28 → 38 모브(14 → 19대)로 바뀌었는데 서류를 정본으로 쓰며 조용히 덮었다.
+                 규범 «배정표가 확정이면 배정표가 정본» — 덮지 말고 둘 다 보이고, 큰 쪽을 먼저 의심하게 한다. */}
+            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== shiftingList.length && (
+              <span className="text-amber-300 font-bold">
+                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - shiftingList.length)}`}
+              </span>
+            )}
             {/*  ⚠ 감사 지적(3.44) — 서류에 못 읽은 행이 있으면 조용히 모자란 대수가 정본이 된다. 화면이 밝힌다. */}
             {shiftInfo?.meta?.source === 'carrier' && (shiftInfo.meta.dropped > 0 || (shiftInfo.meta.docTotal != null && shiftInfo.meta.docTotal !== shiftInfo.meta.read)) && (
               <span className="text-amber-300">

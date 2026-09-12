@@ -91,5 +91,21 @@ ok(/ctHasRestow\(\) \|\| \(state\.disch && state\.stow\)/.test(cone) &&
 ok(/안 들어갔습니다.*선적 EDI 대기/.test(cone), '콘앱이 «아직 안 들어갔다»를 밝힌다(서류만 있고 합치지 못한 때)');
 ok(/서류 \$\{shiftInfo\.meta\.docTotal/.test(vp) && /대만 읽음/.test(vp), '항차 화면이 «못 읽은 행»을 밝힌다(조용히 모자란 정본 금지)');
 
+//  ★ 3.44-01 — 배정표가 서류와 다르면 화면이 말한다(검수사 «배정이 바뀌었는데 앱은 그대로»).
+{
+  const v = { info: FX.info, discharge: FX.discharge, loading: FX.loading, restowList: doc };
+  const m38 = U.computeShiftingMapCached('MCAT_635N__b38', { ...v, info: { ...FX.info, berthShift: 38 } });
+  const meta38 = Object.getOwnPropertyDescriptor(m38, '_meta').value;
+  ok(meta38.berthN === 19, `배정표 38모브 → 19대를 _meta 에 남긴다(${meta38.berthN})`);
+  const m28 = U.computeShiftingMapCached('MCAT_635N__b28', { ...v, info: { ...FX.info, berthShift: 28 } });
+  ok(Object.getOwnPropertyDescriptor(m28, '_meta').value.berthN === 14, '28모브 → 14대');
+  const m0 = U.computeShiftingMapCached('MCAT_635N__b0', { ...v, info: { ...FX.info, berthShift: 0 } });
+  ok(Object.getOwnPropertyDescriptor(m0, '_meta').value.berthN === null, '배정표가 0·없음이면 null(없는 숫자를 지어내지 않는다)');
+  const m39 = U.computeShiftingMapCached('MCAT_635N__b39', { ...v, info: { ...FX.info, berthShift: 39 } });
+  ok(Object.getOwnPropertyDescriptor(m39, '_meta').value.berthN === 20, '홀수 모브는 올림해 «적어도 이만큼»(39 → 20)');
+  ok(/배정표 \$\{shiftInfo\.meta\.berthN\}대/.test(vp) && /meta\?\.berthN != null && shiftInfo\.meta\.berthN !== shiftingList\.length/.test(vp),
+     '화면이 배정표와 다르면 그 차이를 적는다');
+}
+
 console.log(fail ? `\n✗ 선사 시프팅 목록 연막검사 실패 ${fail}건` : '\n✓ 선사 시프팅 목록 연막검사 통과');
 process.exit(fail ? 1 : 0);
