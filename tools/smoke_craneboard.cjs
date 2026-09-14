@@ -123,7 +123,9 @@ ok(rows.concat(r2, r3, r4, r5).every(r => !/CATOS|카토스|터미널/.test(r.na
     discharge: { termWork: { A: T(60000, '020384'), B: T(60000, '030484'), C: T(60000, '100586'),
       D: T(120000, '020684'), E: T(120000, '100786'), F: T(180000, '020884'), G: T(180000, '100986') } }, loading: {} };
   const tO = U.craneBaysByTime(vOver);
-  ok(tO.skipped === 1 && tO.pairs === 2 && tO.byBay['3'] === undefined,
+  //  ★ 3.47-02 — 02·03 은 **한 장**이라 02·03·10 은 «베이 셋»이 아니라 «장 둘»이다(= 호기 둘). 그래서 이 바구니는 이제 쓴다.
+  //    지켜야 할 것은 그대로다 — 가운데 03 이 **남의 호기로 붙지 않는 것**. 옛 기대값(skipped 1 · pairs 2)은 버린다(규범 §10-6).
+  ok(tO.skipped === 0 && tO.pairs === 3 && tO.byBay['3'] === undefined,
     `⛔ 베이가 호기 수보다 많은 바구니를 썼다 — 가운데 베이가 남의 호기로 붙는다 (skipped ${tO.skipped} · pairs ${tO.pairs} · byBay ${JSON.stringify(tO.byBay)})`);
   ok(tO.byBay['2'] === 1 && tO.byBay['10'] === 2, `성한 바구니로는 제대로 붙는다 (${JSON.stringify(tO.byBay)})`);
 
@@ -151,11 +153,22 @@ ok(rows.concat(r2, r3, r4, r5).every(r => !/CATOS|카토스|터미널/.test(r.na
   const tA = U.craneBaysByTime(vAdj);
   ok(tA.skipped === 1 && tA.byBay['3'] === undefined && tA.byBay['2'] === 1 && tA.byBay['10'] === 2 && tA.at === 120000,
     `⛔ 붙은 베이 짝(02·03)을 두 호기로 갈랐다 — 한 크레인 자리다 (skipped ${tA.skipped} · byBay ${JSON.stringify(tA.byBay)})`);
+  //  ★ 3.47-02 실측 모양 — DXQD 2636E 04:48 «2호기 11·13 · 4호기 19·21». 한 호기가 40ft 장 하나(홀수 둘)를 잡는 정상 작업이다.
+  //    3.38-01 의 옛 문지기는 이 바구니를 통째로 버려 동방 배에서 판정이 한 번도 성립하지 않았다.
+  //    대표 베이는 그 장의 짝수(11·13 → 12 · 19·21 → 20) — KKLC 타임시트가 커버를 «BAY# 25&27» 로 적는 그 장이다.
+  const vHatch = { info: { qcWork: { QC102: { qc: 'QC102', disDone: 0, lodDone: 42 }, QC104: { qc: 'QC104', disDone: 144, lodDone: 116 } } },
+    loading: { termWork: { A: T(60000, '110384'), B: T(60000, '130484'), C: T(60000, '190586'), D: T(60000, '210686') } }, discharge: {} };
+  const tHx = U.craneBaysByTime(vHatch);
+  ok(tHx.pairs === 1 && tHx.byNo[2] && tHx.byNo[2].bay === '12' && tHx.byNo[4] && tHx.byNo[4].bay === '20',
+    `⛔ 한 장(홀수 둘)을 잡은 두 호기를 못 갈랐다 — 동방 배가 다시 «베이로 묶었습니다» 로 떨어진다 (${JSON.stringify(tHx.byNo)} · why «${tHx.why}»)`);
+  ok(tHx.byBay['11'] === 2 && tHx.byBay['13'] === 2 && tHx.byBay['19'] === 4 && tHx.byBay['21'] === 4,
+    `한 장의 두 베이가 같은 호기로 붙는다 (${JSON.stringify(tHx.byBay)})`);
+
   //  성한 순간이 하나도 없으면 아무도 안 붙는다
   const vAllAdj = { info: { qcWork: { QC101: { qc: 'QC101', disDone: 1, lodDone: 0 }, QC102: { qc: 'QC102', disDone: 1, lodDone: 0 } } },
     discharge: { termWork: { A: T(60000, '020384'), B: T(60000, '030484') } }, loading: {} };
   const tAA = U.craneBaysByTime(vAllAdj);
-  ok(!Object.keys(tAA.byBay).length && /함께 찍힌 자료가 없다/.test(tAA.why || ''),
+  ok(!Object.keys(tAA.byBay).length && /서로 다른 장에 찍힌 자료가 없다/.test(tAA.why || ''),
     `⛔ 붙은 짝뿐인데도 이름표를 만들었다 (byBay ${JSON.stringify(tAA.byBay)} · why «${tAA.why}»)`);
 }
 
