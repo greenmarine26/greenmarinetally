@@ -992,5 +992,29 @@ if os.path.isdir('assets'):
     print(f"  \u2713 \ucc38\uc870 {len(keep)}\uac1c \uc720\uc9c0 \u00b7 \ubbf8\ucc38\uc870 {len(drop)}\uac1c \uc0ad\uc81c ({sz/1048576:.0f} MB)")
 PRUNE
 
+#  ★ 3.47-01 — **수집기 내장 헬퍼를 판마다 굽는다.**
+#    2026-09-14 실측 — 라이브 헬퍼가 **TallyOne 3.13 에 멈춰 있었다.** 3.14~3.46-01 동안 앱 파서가
+#    바뀐 것을 수집기는 하나도 못 봤다. 지침서에 «파서를 고친 판마다 재생성» 이라고 적혀만 있고
+#    **훅이 없어 아무도 안 지켰다** — 규칙을 사람 기억이 아니라 검사에 맡긴다.
+#    ⛔ merge_helper 는 여기서 굽지 않는다. 그쪽 GMmerge 는 수집기 계약이 정본이고,
+#       앱 mergeApi 로 갈아끼우면 merge.py 가 깨진다(지침서 «계약 필드 대조로 잡아 원복» 사건).
+echo ""
+echo "[+] 수집기 내장 헬퍼(autoreg) 굽기..."
+if npx vite build --config vite.helper.config.js >/dev/null 2>&1 && [ -f dist_helper/gm_helper.js ]; then
+  _HV=$(grep -o "TallyOne [0-9][0-9.-]*" dist_helper/gm_helper.js | head -1)
+  if [ "$_HV" != "$APPVER" ]; then
+    echo "  ✗ 헬퍼 번들의 버전이 «$_HV» 로 APP_VERSION «$APPVER» 과 다르다 — 배포 금지"; exit 1
+  fi
+  for _k in GMautoPayload ptkCount iso_edi; do
+    grep -q "$_k" dist_helper/gm_helper.js || { echo "  ✗ 헬퍼 번들에 계약 «$_k» 이 없다 — 배포 금지"; exit 1; }
+  done
+  echo "  ✓ dist_helper/gm_helper.js ($_HV) · 계약 GMautoPayload·ptkCount·iso_edi 확인"
+  echo "  ⚠ 이 판을 배포하면 **헬퍼도 기기에 올려야 한다** —"
+  echo "     HTML 래핑 → C:\\TALLYTEST\\TallymanMailCollector_v*\\collector\\autoreg_helper.html (백업 먼저)."
+  echo "     안 올리면 수집기는 옛 파서로 돈다. 수집기 재가동은 불요(사이클마다 헬퍼를 새로 연다)."
+else
+  echo "  ✗ 헬퍼 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+fi
+
 echo ""
 echo "ZIP 패키징 가능 상태 (옛 M6.71 흐름과 동일 구조)."
