@@ -190,7 +190,54 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await pg.goto('file://' + tmp);
     await pg.emulateMedia({ media: 'print' });
     const r = await pg.evaluate(() => {
-      const out = { over: [], n: 0, cls: {}, inner: 0, minPt: 99 };
+      const out = { over: [], n: 0, cls: {}, inner: 0, minPt: 99, oddGeo: [], nX: 0, nPlain: 0 };
+      //  ★ 3.46-01 — **칸 크기와 칸 안 줄 자리는 X-RAY 가 붙어도 그대로다.**
+      //    검수사 2026-09-14 «셀크기가 바뀌면 안되는데 바뀌었네요 셀크기는 절대 변경하면 안됩니다. 어렵게 맞춰 논것이라».
+      //    3.46 초판은 4번째 줄 글꼴만 줄였는데 line-height 가 «수» 라 그 줄 상자까지 작아지고
+      //    space-evenly 가 남는 자리를 나머지 네 줄에 나눠 줬다(실측 8.8px → 9.28px · 자리 1.45px 이동).
+      //    ⚠ 그때 내 검사는 칸 크기를 style 문자열로만 비교해 **그려진 픽셀을 안 쟀고** 그대로 통과시켰다.
+      //    ⇒ X-RAY 칸의 «칸 크기 + 다섯 줄 높이·자리» 가 그냥 칸의 그것과 하나라도 다르면 실패다.
+      {
+        const rows = [];
+        document.querySelectorAll('.bd-cell.filled, .bd-cell-lines').forEach((el) => {
+          const k = [...el.children].filter((x) => x.tagName === 'DIV');
+          const cn = ((k[1] || {}).textContent || '').trim();
+          if (!/^[A-Z]{4}\d{7}$/.test(cn)) return;
+          const box = el.getBoundingClientRect();
+          const r4 = ((k[3] || {}).textContent || '').replace(/\u00A0/g, '').trim();
+          //  ⚠ ★ 로 가리면 안 된다 — 칸이 좁아 ★ 를 떼어 낸 칸(가장 긴 글자·가장 눌린 칸 = 레이아웃이
+          //    제일 취약한 바로 그 칸)이 «그냥 칸» 으로 분류돼 **망가진 기하가 기준 집합에 섞인다**.
+          //    그러면 모든 X-RAY 칸이 그 기준과 맞아 초록이 뜬다(감사 실측 — padding 1.61px 이동이 통과했다).
+          rows.push({ cn, xray: (k[3] && k[3].classList && k[3].classList.contains('xr')) || /★/.test(r4),
+            key: JSON.stringify([
+              [Math.round(box.width * 100) / 100, Math.round(box.height * 100) / 100],
+              k.map((d) => Math.round(d.getBoundingClientRect().height * 100) / 100),
+              k.map((d) => Math.round((d.getBoundingClientRect().top - box.top) * 100) / 100)]) });
+        });
+        const plain = new Set(rows.filter((x) => !x.xray).map((x) => x.key));
+        out.nX = rows.filter((x) => x.xray).length;
+        out.nPlain = rows.length - out.nX;
+        out.oddGeo = rows.filter((x) => x.xray && !plain.has(x.key)).slice(0, 3).map((x) => x.cn);
+        //  노랑 — 색·칠한 자리·인쇄 보정을 실제로 계산된 값에서 읽는다
+        const yel = [...document.querySelectorAll('.bd-r4.xr')];
+        out.yellowOnXray = yel.length;
+        out.yellowOnPlain = rows.filter((x) => !x.xray).length
+          - rows.filter((x) => !x.xray).length;   // 기준상 0 — 아래 실측으로 다시 센다
+        let bad = 0;
+        document.querySelectorAll('.bd-cell.filled, .bd-cell-lines').forEach((el) => {
+          const k = [...el.children].filter((x) => x.tagName === 'DIV');
+          const d = k[3]; if (!d) return;
+          const isX = /★/.test(d.textContent) || d.classList.contains('xr');
+          const painted = getComputedStyle(d).backgroundColor === 'rgb(255, 224, 102)';
+          if (painted && !isX) bad += 1;
+        });
+        out.yellowOnPlain = bad;
+        if (yel[0]) {
+          const cs = getComputedStyle(yel[0]);
+          out.yellowBg = cs.backgroundColor;
+          out.yellowExact = (cs.printColorAdjust || cs.webkitPrintColorAdjust || '') === 'exact';
+        } else { out.yellowBg = '(없음)'; out.yellowExact = false; }
+      }
       document.querySelectorAll('.bd-cell-lines, .bd-cell.filled').forEach((el) => {
         const d = [...el.children].filter((x) => x.tagName === 'DIV')[3]; if (!d) return;
         const t = d.textContent.trim(); if (!t) return;
@@ -212,6 +259,15 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(r.inner > 0 && r.inner < 110, `칸 안폭이 실선 수준이다 (${r.inner}px)`, `${r.inner}px — 79px 부근이라야 진짜 좁은 배다`);
     ok(!/x4/.test(JSON.stringify(r.cls)), '6pt 아래 등급(x4)을 안 쓴다', JSON.stringify(r.cls));
     ok(r.minPt >= 6, `가장 작은 글꼴이 ${r.minPt}pt — 6pt 바닥을 지킨다`, `${r.minPt}pt`);
+    ok(r.yellowOnXray === r.nX && r.yellowOnPlain === 0 && r.nX > 0,
+       `노랑이 X-RAY ${r.nX}칸에만 칠해진다(리퍼 온도만 있는 칸엔 안 칠함)`,
+       `X-RAY 중 노랑 ${r.yellowOnXray} · X-RAY 아닌데 노랑 ${r.yellowOnPlain}`);
+    ok(r.yellowBg === 'rgb(255, 224, 102)', '노랑은 검수 리스트와 같은 #ffe066 한 벌이다', r.yellowBg);
+    ok(r.yellowExact, '인쇄에서 배경이 빠지지 않는다(print-color-adjust: exact)',
+       '이것이 없으면 화면만 노랗고 종이는 하얗게 나간다');
+    ok(r.nX > 0 && r.nPlain > 0 && r.oddGeo.length === 0,
+       `⛔ 칸 크기·줄 자리가 X-RAY(${r.nX}칸) 와 그냥 칸(${r.nPlain}칸) 에서 **똑같다**`,
+       r.oddGeo.length ? `다른 칸 ${r.oddGeo.join(', ')}` : `X ${r.nX} · 그냥 ${r.nPlain}`);
     ok(r.over.length === 0, '그 줄이 한 칸도 안 넘친다(넘치면 조용히 잘린다)',
        r.over.slice(0, 3).map((x) => `「${x.t}」 ${x.cls} ${x.sw}>${x.cw}`).join(' · '));
     console.log(`     등급 분포 ${JSON.stringify(r.cls)}`);

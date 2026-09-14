@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.46';
-const NOTE = '베이 상세 종이에도 X-RAY 세관봉인 번호가 칸 안에 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.46-01';
+const NOTE = '베이 상세 칸에 X-RAY 봉인번호가 노란 바탕으로 나옵니다 — 칸 크기는 종전 그대로입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
