@@ -586,6 +586,19 @@ fi
 SMOKE_LP=$(mktemp /dev/shm/hometmp/_lp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_LP" --log-level=error; then
   node tools/smoke_listparse.cjs "$SMOKE_LP" || { echo "✗ 리스트 파서 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LP"; exit 1; }
+  # 3.47: 규격이 EDI·선사리스트·세관리스트에서 갈리면 실제로 알림이 뜨는가 — ATPR 2641E 실 3종 자료.
+  #   검수사 «규격이 틀렸는데 어느곳에서도 알림이 없었습니다» — 종전 코드로는 여기서 0건이 나온다.
+  #   ⚠ 이 검사는 **진짜 runDiagnostics 를 부른다** — utils 만 넘기면 호출부 인자식을 검사 안에
+  #     베껴 재게 되고, 그러면 diagnostics 가 딴 값을 봐도 통과한다(3.35-01 에서 겪은 모양).
+  SMOKE_IT=$(mktemp /dev/shm/hometmp/_it_XXXXXX.mjs)
+  SMOKE_ITO=$(mktemp /dev/shm/hometmp/_ito_XXXXXX.cjs)
+  printf 'export * from "%s/src/utils.js";\nexport { runDiagnostics, isoConflictText } from "%s/src/diagnostics.js";\n' "$PWD" "$PWD" > "$SMOKE_IT"
+  if npx esbuild "$SMOKE_IT" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --outfile="$SMOKE_ITO" --log-level=error; then
+    node tools/smoke_isotriad.cjs "$SMOKE_ITO" || { echo "✗ 규격 3자 대조 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LP" "$SMOKE_IT" "$SMOKE_ITO"; exit 1; }
+    rm -f "$SMOKE_IT" "$SMOKE_ITO"
+  else
+    echo "✗ 규격 3자 대조 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP" "$SMOKE_IT" "$SMOKE_ITO"; exit 1
+  fi
   rm -f "$SMOKE_LP"
 else
   echo "✗ 리스트 파서 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1

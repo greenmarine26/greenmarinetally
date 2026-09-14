@@ -8,7 +8,7 @@ import { fmtPos } from '../utils';
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, AlertCircle, Info, Volume2, VolumeX, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { speak, stopSpeak } from '../voice.js';
-import { buildVoiceMessage, summarizeAlerts } from '../diagnostics.js';
+import { buildVoiceMessage, summarizeAlerts, isoConflictText } from '../diagnostics.js';
 
 export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer }) {
   const [expanded, setExpanded] = useState(false);
@@ -224,7 +224,7 @@ function AlertDetails({ alert, onOpenContainer }) {
     const why = alert.code === 'fe_conflict'
       ? 'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.'
       : alert.code === 'iso_conflict'
-        ? 'EDI 와 리스트의 규격이 서로 다릅니다. 실물을 확인하세요.'
+        ? 'EDI · 선사리스트 · 세관리스트의 규격이 서로 다릅니다. 실물을 보기 전에는 확정할 수 없습니다 — 양하·선적할 때 맞는 것을 고르세요.'
         : '';
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">
@@ -237,7 +237,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             <span className="font-bold">{w.cn}</span>
             <span className="text-dim-300">
               {w.ediFe && w.lrFe ? `EDI ${w.ediFe} / 리스트 ${w.lrFe}` : ''}
-              {w.ediIso && w.lrIso ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : ''}
+              {alert.code === 'iso_conflict' ? isoConflictText(w) : ''}
               {w.ediW != null && w.lrW != null ? `EDI ${(w.ediW/1000).toFixed(1)}t / 리스트 ${(w.lrW/1000).toFixed(1)}t` : ''}
               {w.bay ? ` · ${w.bay}-${w.row}-${w.tier}` : ''}
             </span>

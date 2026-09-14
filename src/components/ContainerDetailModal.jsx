@@ -4,8 +4,9 @@ import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, 
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
+import { isoConflictOf, ISO_SRC_NAME } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -383,6 +384,24 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     setEsealVal('');
   };
 
+  //  ★ 3.47 — 규격 3자 확정. 저장은 firebase 한 벌(fbPickIso) — 자동가이드 카드와 같은 길.
+  const [isoBusy, setIsoBusy] = useState(false);
+  const pickIso = async (src) => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!src || isoBusy) return;
+    setIsoBusy(true);
+    try { await fbPickIso(voyageKey, mode, c.cn, src.k, src.iso, src.label, inspector); }   // 원문이 아니라 **정규화한 ISO**
+    catch (e) { alert(`규격 확정을 저장하지 못했습니다. 다시 눌러 주세요.\n(${(e && e.message) || e})`); }   // §4-3
+    finally { setIsoBusy(false); }
+  };
+  const clearPickIso = async () => {
+    if (isoBusy) return;
+    setIsoBusy(true);
+    try { await fbClearPickIso(voyageKey, mode, c.cn); }
+    catch (e) { alert(`확정을 풀지 못했습니다.\n(${(e && e.message) || e})`); }
+    finally { setIsoBusy(false); }
+  };
+
   // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
   const handleChangeIso = async (newIso) => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
@@ -748,6 +767,35 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     <span className="text-2xs text-amber-400 mono">원본: {isoOrigShow} → 수정됨</span>
                   )}
                 </div>
+                {/*  ★ 3.47 — 규격 3자 불일치. 수동으로 작업하는 검수사도 여기서 고른다
+                     (자동가이드 카드와 **같은 판정**을 부른다 — utils.isoConflictOf 한 벌). */}
+                {(() => {
+                  //  EDI 자리는 **EDI 제 칸만** 본다 — `c.iso` 는 이 화면을 부르는 세 경로마다
+                  //    병합 규칙이 달라 어느 자료의 값인지 모른다(감사 지적 2026-09-14).
+                  const srcs = isoConflictOf(c.iso_edi || '', c);
+                  if (!srcs) return c.iso_pick ? (
+                    <div className="mt-1 text-2xs text-emerald-400 flex items-center gap-1.5">
+                      <span>규격 확정 — {ISO_SRC_NAME[c.iso_pick] || c.iso_pick} 것 {c.iso_pick_label || ''}{c.iso_picked_by ? ` (${c.iso_picked_by})` : ''}</span>
+                      {/* 오확정을 되돌릴 길 — 없으면 그 컨은 그 항차 내내 침묵한다(감사 지적). */}
+                      <button onClick={clearPickIso} disabled={isoBusy}
+                        className="px-1.5 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">다시 고르기</button>
+                    </div>
+                  ) : null;
+                  return (
+                    <div className="mt-2 px-3 py-2 bg-amber-950/50 border border-amber-600 rounded-pill">
+                      <div className="text-xs font-black text-amber-200">⚠ 규격이 자료마다 다릅니다 — 미확정</div>
+                      <div className="text-xxs text-amber-300/90 mt-0.5 leading-snug">실물을 보기 전에는 확정할 수 없습니다. 실물을 보고 맞는 것을 누르세요.</div>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {srcs.map(x => (
+                          <button key={x.k} onClick={() => pickIso(x)} disabled={isoBusy}
+                            className="px-2 py-1 rounded bg-ink-800 border border-amber-600 text-2xs mono font-bold text-amber-200 active:bg-amber-900 disabled:opacity-50">
+                            {x.name} <span className="text-dim-100">{x.spec}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* M3.6: 알 수 없는 ISO 표기 → 사진 보고 강력 유도 */}
                 {isUnknownIso(c.iso) && (
                   <div className="mt-2 px-3 py-2 bg-red-950/50 border-2 border-red-600 rounded-pill animate-pulse">

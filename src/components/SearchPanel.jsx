@@ -144,6 +144,10 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         Object.keys(r).forEach(k => {
           const v = r[k];
           if (v === '' || v === 0 || v === null || v === undefined || (Array.isArray(v) && v.length === 0)) return;
+          //  3.47: **검수사가 실물을 보고 고른 규격은 EDI 를 이긴다.** 서류보다 실물이 정본이다.
+          //    2차 시뮬 지적 2026-09-14 — 확정 뒤 수집기가 ediContainers 를 다시 쓰면 화면 규격이
+          //    EDI 값으로 되돌아가는데, `iso_pick` 때문에 알림은 계속 조용해 **틀린 값이 조용히 남았다.**
+          if (hasEdi && r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) { safeR[k] = v; return; }
           if (hasEdi && PROTECTED_EDI.has(k)) return;  // EDI 핵심 필드 보호
           safeR[k] = v;
         });

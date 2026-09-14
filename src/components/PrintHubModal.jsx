@@ -82,6 +82,10 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     const merged = { ...e };
     Object.entries(r).forEach(([k, v]) => {
       if (v === '' || v == null) return;
+      //  ★ 3.47: **검수사가 실물을 보고 고른 규격은 EDI 를 이긴다** — 종이에도 그 값이 나가야 한다.
+      //    감사 지적 2026-09-14 — SearchPanel 만 고치고 이 세 번째 병합 경로를 안 봤다. 그러면
+      //    작업카드만 확정값을, 목록·베이플랜·검수리스트·VGM 은 EDI 값을 본다(바로 2.52-03 사고 재판).
+      if (hasEdi && r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) { merged[k] = v; return; }
       // EDI에 있는 컨테이너는 핵심 필드를 리스트가 덮지 못함 (EDI가 진실)
       // TallyOne 2.00-01: 단, 특수화물 플래그는 EDI 의 false 가 «정보 없음»일 수 있다 — DGS 없는 EDI(연운항형)가
       //   리스트의 DG true 를 지워 검수 리스트·카고플랜에서 위험물 23대가 통째로 사라졌다(TNJP 26360E 실측).

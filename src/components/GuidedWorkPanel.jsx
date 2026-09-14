@@ -11,9 +11,9 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «몇 호기 화물인가» 안내 — 계산은 한 벌
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
-import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
+import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -188,6 +188,28 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (dup) { alert(`XRAY 실번호 중복입니다.\n${xVal.trim()} 은(는) 이미 ${dup.slice(-4)} 컨에 입력돼 있습니다.\n(실 부족이면 0000으로 입력하세요.)`); return; }
     await fbSetXraySeal(voyageKey, c.cn, xVal.trim(), xEVal.trim(), inspector);
     setEditXCn(null); setXVal(''); setXEVal('');
+  };
+
+  //  ★ 3.47 — **규격이 자료마다 다른 컨은 여기서 실물을 보고 확정한다.**
+  //    검수사 2026-09-14 «불일치가 나온다면 이들은 실물을 보기전에는 확정할수 없습니다. 그러므로
+  //    알림을 띄우고 그컨테이너가 **양하 되거나 선적될때** 세개중에 어느것이 맞는지 선택할수 있어야 합니다.»
+  //    ⚠ 판정은 만들지 않는다 — utils 의 isoConflictOf 한 벌을 부른다(진단 패널과 같은 답).
+  //    ⚠ EDI 자리는 **EDI 제 칸(`iso_edi`)만** 본다. `c.iso` 는 화면마다 병합 규칙이 달라
+  //      어느 자료의 값인지 모른다 — 그것을 EDI 라고 띄웠다가 틀린 값이 확정될 뻔했다(감사 지적).
+  //      제 칸이 없으면 EDI 자리는 **비운다.** 모르는 것을 지어내지 않는다.
+  //    ⚠ **고르기 전이라고 완료를 막지 않는다**(검수사 통보 2026-09-14) — 「미확정」만 보인다.
+  const isoPickOf = (c) => c ? isoConflictOf(c.iso_edi || '', c) : null;
+  const savePickIso = async (c, src) => {
+    if (!c || !src || busy) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요.'); return; }   // §5-3 신원 칸을 빈칸으로 남기지 않는다
+    setBusy(true);
+    try {
+      await fbPickIso(voyageKey, mode, c.cn, src.k, src.iso, src.label, inspector);   // 원문이 아니라 **정규화한 ISO**
+      try { speak(`${c.cn.slice(-4)} 규격 ${src.spec} 확정했습니다.`, { conversational: true }); } catch { /* 소리 꺼짐 */ }
+    } catch (e) {
+      //  §4-3 조용히 실패하지 않는다 — 안 저장됐는데 단추만 다시 켜지면 확정한 줄 안다.
+      alert(`규격 확정을 저장하지 못했습니다. 다시 눌러 주세요.\n(${(e && e.message) || e})`);
+    } finally { setBusy(false); }
   };
 
   // 접안 방향 저장 — 오선택 방지: 확인 후 저장
@@ -1549,6 +1571,28 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           </button>
         )}
       </div>
+      {/*  ★ 3.47 — 규격 3자 불일치. 실물을 보고 고른다(검수사 «세개중에 어느것이 맞는지 선택»).
+           고르기 전에도 완료는 막지 않는다 — 「미확정」만 보인다. */}
+      {(() => {
+        const srcs = isoPickOf(c);
+        if (!srcs) return c.iso_pick ? (
+          <div className="mt-1.5 text-xxs text-emerald-400">규격 확정 — {ISO_SRC_NAME[c.iso_pick] || c.iso_pick} 것 {c.iso_pick_label || ''}</div>
+        ) : null;
+        return (
+          <div className="mt-1.5 pt-1.5 border-t border-amber-700/60">
+            <div className="text-xxs font-bold text-amber-300">⚠ 규격이 자료마다 다름 — 미확정</div>
+            <div className="text-3xs text-dim-300 leading-snug mt-0.5">실물을 보고 맞는 것을 누르세요.</div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {srcs.map(x => (
+                <button key={x.k} onClick={() => savePickIso(c, x)} disabled={busy}
+                  className="px-2 py-1 rounded bg-ink-800 border border-amber-600 text-2xs mono font-bold text-amber-200 active:bg-amber-900 disabled:opacity-50">
+                  {x.name} <span className="text-dim-100">{x.spec}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       {/* XRAY 번호 — 대상만 표시·입력 */}
       {c._xray && (
         <div className="mt-1.5">

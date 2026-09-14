@@ -758,6 +758,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       //   ⚠ 바로 위 M4.9b-fix 주석의 엠티실 사고와 **같은 실수를 반복한 것**이다.
       //     records 에 새 필드를 만들면 이 목록에 넣었는지 반드시 확인할 것.
       'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',
+      //  ★ 3.47: 규격 3자 대조 — **여기 없으면 저장돼도 컨 상세가 못 읽는다.**
+      //    감사 지적 2026-09-14 — 진단은 «10건»인데 상세에는 고르기가 안 떠, 알림은 고르라 하고
+      //    고를 곳은 없는 상태였다. 바로 위 두 사고(엠티실·리퍼 온도)와 **같은 실수를 또 한 것**이다.
+      'iso_carrier', 'iso_customs', 'iso_pick', 'iso_pick_label', 'iso_picked_by', 'iso_picked_at',
       'sl_conflict',   // 1.8-03: 리스트끼리 실번호가 다를 때 두 값 모두 — 배지가 이걸 읽는다
       '_source',       // 2.06-06: 이 컨을 채운 리스트 파일명 — 세관리스트 존재 판정(sealIssuesOf)이 읽는다
       'sl_src',        // 2.06-07: 채택 씰(sl)의 진짜 출처 — _source 는 마지막 파일로 덮이므로 따로 지킨다
@@ -805,6 +809,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //   이미 있으면 리스트의 «미기재» 마킹(tmp_missing:true)을 얹지 않는다 — EDI 에 tmp_missing 이
           //   없어서(undefined) CORE_FILL 이 true 를 채우던 모순.
           if (k === 'tmp_missing' && v === true && ediBase.tmp) return;
+          //  ★ 3.47: **검수사가 실물을 보고 고른 규격은 EDI 를 이긴다.** 병합 경로 셋(여기·SearchPanel·
+          //    PrintHubModal)이 같은 규칙을 써야 한다 — 한 곳만 고치면 화면마다 규격이 갈린다(감사 지적).
+          if (r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) { safeR[k] = v; return; }
           if ((CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) || FLAG_FILL) {
             safeR[k] = v; return;
           }
@@ -3309,7 +3316,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             containerMode = polPtk ? 'loading' : 'transit';
           }
           const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
-          allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
+          allCns[key] = { ...c, iso_edi: String(c.iso || '').toUpperCase().trim(), _slotKey: key, _mode: containerMode };   // 3.47: EDI 제 칸 — 여기서 안 붙이면 fbSaveEdiContainers(전체 교체)가 수집기 것을 지운다
         });
         messages.push(`${f.name}: ${r.containers.length}대`);
       }
@@ -3614,7 +3621,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             else containerMode = 'transit';
           }
           const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
-          allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
+          allCns[key] = { ...c, iso_edi: String(c.iso || '').toUpperCase().trim(), _slotKey: key, _mode: containerMode };   // 3.47: EDI 제 칸 — 여기서 안 붙이면 fbSaveEdiContainers(전체 교체)가 수집기 것을 지운다
         });
         const ediKindLabel = ediKind === 'discharge' ? '양하' : '선적';
         // M7.14: 선박 통계용 — 이 파일의 평택분을 ediKind 기준으로 누적

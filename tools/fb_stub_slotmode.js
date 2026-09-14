@@ -21,3 +21,5 @@ export const fbCancelComplete = async () => true;
 export const STORAGE_BAY = '__STG__';
 export const db = {};
 export const fbSetInspectorActivity = async () => true;
+export const fbPickIso = async () => true;   // 3.47: 규격 3자 확정
+export const fbClearPickIso = async () => true;

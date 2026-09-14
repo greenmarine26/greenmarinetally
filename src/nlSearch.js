@@ -11,6 +11,7 @@ import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
 import { mirRewrite, mirLearnedDef, mirObserve } from './mirLearn.js';
+import { isoConflictText } from './diagnostics.js';   // ★ 3.47: 규격 불일치 문구 한 벌(진단 패널과 같은 말)
 import { mirSmallTalk } from './mirChat.js';   // ★ 3.7-06: 잡담이 받은 말은 «못 알아들은 말»이 아니다(판정 한 벌)
 export { _mirReset } from './mirLearn.js';   // 연막검사용(기억 초기화)   // ★ 3.0: 미르 자체 학습 — 못 알아듣는 말만 사전으로 되쓰기·이어진 말에서 배우기   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
 import { HELP_DATA_CHIEF } from './data/helpDataChief.js';   // 2.30: 미르가 수석 권도 안다(가르치진 않고 «있다»고 알린다)
@@ -1165,7 +1166,7 @@ function buildBaySlotMap(allContainers) {
  */
 const _WHY_BY_CODE = {
   fe_conflict:   'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.',
-  iso_conflict:  'EDI 와 리스트의 규격이 서로 다릅니다. 실물을 확인하세요.',
+  iso_conflict:  'EDI · 선사리스트 · 세관리스트의 규격이 서로 다릅니다. 실물을 보기 전에는 확정할 수 없습니다 — 양하·선적할 때 맞는 것을 고르세요.',
   reefer_no_temp:'풀 리퍼인데 온도가 없습니다. 현장에서 온도를 확인해 입력하세요.',
   unknown_iso:   '규격 표기를 앱이 해석하지 못했습니다. 사진을 찍고 1항사에게 확인하세요.',
   dg_no_class:   '위험물인데 클래스 정보가 없습니다.',
@@ -1247,7 +1248,7 @@ export function answerAboutAlert(query, alerts) {
       const pos = x.bay ? ` @ ${x.bay}-${x.row}-${x.tier}` : '';
       const extra =
         (x.ediFe && x.lrFe) ? ` · EDI ${x.ediFe} / 리스트 ${x.lrFe}` :
-        (x.ediIso && x.lrIso) ? ` · EDI ${x.ediIso} / 리스트 ${x.lrIso}` :
+        (hit.code === 'iso_conflict' && (x.srcs || x.ediIso)) ? ` · ${isoConflictText(x)}` :
         (x.ediSl && x.lrSl) ? ` · EDI ${x.ediSl} / 리스트 ${x.lrSl}` :
         (x.iso ? ` · ${x.iso}` : '');
       lines.push(`${i + 1}. ${x.cn || x.location || ''}${pos}${extra}`);

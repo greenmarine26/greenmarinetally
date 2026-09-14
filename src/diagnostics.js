@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn, isHoldTier } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
+import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn, isHoldTier } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
@@ -27,8 +27,19 @@ function filterPyeongtaek(containers, mode) {
 }
 
 // 리퍼 컨테이너 추출 (rf 플래그 또는 ISO에 R)
-function extractReefers(containers) {
-  return containers.filter(c => isReeferContainer(c));
+//  ★ 3.47 — **검수사가 실물을 보고 확정한 컨은 그 확정이 이긴다.**
+//    감사 실측 2026-09-14 — 확정은 `records` 에 들어가는데 진단은 `ediContainers` 를 **직접** 읽는다
+//    (VoyagePage 가 진단용 목록을 따로 만들면서 온도·F/E 만 보강하고 특수화물 표시는 안 건드린다).
+//    그래서 세관 42GP(드라이)로 확정해도 EDI 노드의 `rf:true` 가 남아 «풀 리퍼 온도 미입력» 이
+//    계속 떴다 — 화면은 드라이인데 진단은 리퍼다(§4-4 갈림). 끌 방법이 없었다.
+//    ⚠ 이 함수가 «화면 목록을 안 쓰는» 탓에 물린 것은 3.37(mkcon) 에 이어 **두 번째**다.
+//      새 표시를 만들면 여기도 보는지 반드시 확인할 것.
+function extractReefers(containers, listRecords) {
+  return containers.filter(c => {
+    const lr = (listRecords || {})[c.cn] || (listRecords || {})[String(c.cn).toUpperCase()] || null;
+    if (lr && lr.iso_pick) return isReeferContainer({ ...c, iso: lr.iso, rf: lr.rf });
+    return isReeferContainer(c);
+  });
 }
 
 // 위험물 컨테이너 추출
@@ -47,6 +58,17 @@ function extractDg(containers) {
 //   dg8HoldRule:   이 배에 «클래스 8 홀드 선적 금지» 규정이 걸리는가 (3.4 — 고려해운). **선박 이름은 여기서 알지 않는다** —
 //                  판정은 utils.isKmtcShip 한 벌이 하고 부르는 쪽(VoyagePage)이 결과만 넣는다(sealPolicy·lugCns 와 같은 방식).
 // 결과: 경고 배열
+//  ★ 3.47 — 규격 불일치 한 줄 문구는 **한 벌**이다.
+//    진단 패널·미르 답변이 각자 만들면 반드시 갈린다(규범 §4-4).
+//    옛 자료(3.46 이하 저장분)는 `srcs` 가 없으므로 종전 두 칸으로 푼다.
+export const isoConflictText = (w) => {
+  if (!w) return '';
+  if (Array.isArray(w.srcs) && w.srcs.length) {
+    return w.srcs.map(x => `${x.name} ${x.spec || x.label}`).join(' / ');
+  }
+  return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
+};
+
 export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false }) {
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
@@ -69,7 +91,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   // M3.71: 선적 모드는 검사 제외 (적재 전이라 온도 정보 없는 게 정상)
   // M3.73: 무게 추정 제거 - fe='F' 명시된 리퍼만 검사
   if (mode === 'discharge') {
-    const reefers = extractReefers(ediPtk);
+    const reefers = extractReefers(ediPtk, listRecords);   // 3.47: 확정 컨은 확정이 이긴다
     // 풀 리퍼만 추출 - fe='F'로 명시된 것만
     const fullReefers = reefers.filter(c => c.fe === 'F');
     if (fullReefers.length > 0) {
@@ -350,16 +372,41 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     return String(isoToLabel(x) || '').replace(/\s/g, '').toUpperCase();
   };
   const feConf = [], isoConf = [];
+  //  ★ 3.47 — 규격은 **EDI · 선사리스트 · 세관리스트 세 곳**을 나란히 본다.
+  //    검수사 2026-09-14 «확인대상이 EDI : 선사리스트 : 세관리스트 3곳입니다. 만약 불일치가
+  //    나온다면 이들은 실물을 보기전에는 확정할수 없습니다.»
+  //    ⚠ 종전에는 EDI ↔ `lr.iso` 두 자리만 봤는데, `lr.iso` 는 **셋이 돌려쓰는 한 칸**이라
+  //      세관 규격이 빈칸으로 들어오면 그 자리가 EDI 값으로 메워져 **EDI 와 EDI 를 비교**했다.
+  //      그래서 ATPR 2641E 에서 세관이 «40HC» 라 한 10대가 «불일치 0» 으로 지나갔다.
+  //    이제 출처마다 제 칸이 있다 — 선사 `iso_carrier` · 세관 `iso_customs` (utils.js 파서).
+  //    ⛔ 옛 항차(3.46 이하 저장분)는 제 칸이 없어 **EDI 한 자리뿐이라 알림이 안 뜬다.**
+  //      세관·선사 파일을 다시 올리면 뜬다(검수사에게 통보함 2026-09-14). `lr.iso` 로 메우지 않는다 —
+  //      그 칸이 누가 쓴 값인지 모르는 것이 이 사고의 뿌리였다.
   ediPtk.forEach(c => {
     const lr = listRecords?.[c.cn];
     if (!lr) return;
     const base = { cn: c.cn, bay: c.bay, row: c.row, tier: c.tier };
     const fe1 = feOf(c), fe2 = feOf(lr);
     if (fe1 && fe2 && fe1 !== fe2) feConf.push({ ...base, ediFe: fe1, lrFe: fe2 });
-    const i1 = isoKey(c.iso || c.tp), i2 = isoKey(lr.iso || lr.tp);
-    if (i1 && i2 && i1 !== i2) {
-      isoConf.push({ ...base, ediIso: c.iso || c.tp, lrIso: lr.iso || lr.tp, ediLabel: i1, lrLabel: i2 });
-    }
+
+    //  (고른 컨은 isoConflictOf 가 걸러 낸다 — 문지기는 거기 한 곳이다.)
+    //  ⚠ EDI 자리는 **제 칸(`iso_edi`)만** 본다 — 화면 둘과 **같은 규칙**이어야 한다.
+    //    감사 지적 2026-09-14: 여기만 `c.iso` 로 메웠더니 제 칸 없는 항차에서 «진단은 10건인데
+    //    카드엔 고르기 0» 이 됐다. 여기서 `c.iso` 가 EDI 인 것은 사실이지만, **화면이 못 따라오는
+    //    사실은 알림으로 쓰면 안 된다.** 셋이 같은 것을 보는 것이 먼저다.
+    const srcs = isoConflictOf(c.iso_edi, lr);   // utils 한 벌 — 작업카드·컨 상세도 같은 것을 부른다
+    if (!srcs) return;
+    //  옛 칸(ediIso·lrIso)에는 EDI 와 **실제로 다른** 출처를 담는다 — 같은 값 둘을 담으면
+    //    그 칸을 읽는 옛 화면이 «EDI 42GP / 리스트 42GP» 라는 말이 안 되는 줄을 낸다(2차 시뮬 지적).
+    const _e = srcs.find(x => x.k === 'edi');
+    const _ca = srcs.find(x => x.k !== 'edi' && (!_e || x.spec !== _e.spec)) || srcs.find(x => x.k !== 'edi') || srcs[0];
+    isoConf.push({
+      ...base,
+      srcs,
+      // 종전 화면이 읽던 칸 — 지우지 않는다(미르 답변·옛 저장분이 부른다).
+      ediIso: c.iso_edi || c.iso || c.tp, lrIso: _ca.raw,
+      ediLabel: isoKey(c.iso_edi || c.iso || c.tp), lrLabel: _ca.label,   // 옛 칸은 있는 대로 채운다(표시용)
+    });
   });
   if (feConf.length > 0) {
     alerts.push({
@@ -375,7 +422,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     alerts.push({
       level: 'warning',
       code: 'iso_conflict',
-      msg: `규격이 EDI 와 리스트에서 다름 ${isoConf.length}건`,
+      msg: `규격이 자료마다 다름 ${isoConf.length}건 — 실물 보고 확정`,
       voice: `규격 불일치 ${isoConf.length}건. 실물 확인 필요`,
       count: isoConf.length,
       details: isoConf.slice(0, 20),

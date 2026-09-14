@@ -304,7 +304,12 @@ export async function buildAutoPayload(files, opts) {
       const polPtk = c._inList || isPyeongtaekPort(c.pol);
       const containerMode = mode === 'discharge' ? (podPtk ? 'discharge' : 'transit') : (polPtk ? 'loading' : 'transit');
       const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
-      ediContainers[key] = { ...c, _slotKey: key, _mode: containerMode };
+      //  ★ 3.47 — **EDI 가 말한 규격을 제 칸에 따로 남긴다.**
+      //    감사 지적 2026-09-14 — 화면마다 병합 규칙이 달라(SearchPanel 은 EDI 보호, App·수석보드는
+      //    평면 병합) `c.iso` 가 어느 자료의 값인지 화면이 알 수 없었다. 그래서 «EDI» 단추에
+      //    EDI 가 아닌 값이 뜰 수 있었다. 셋을 나란히 보여 주려면 셋 다 제 칸이 있어야 한다.
+      //    ⛔ 없으면 «없음»이다 — 지어내지 않는다(3.46 이하 EDI 는 이 칸이 없어 EDI 자리가 빈다).
+      ediContainers[key] = { ...c, iso_edi: String(c.iso || '').toUpperCase().trim(), _slotKey: key, _mode: containerMode };
     });
   }
 

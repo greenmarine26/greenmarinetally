@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap} from './utils.js';
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso} from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
@@ -351,6 +351,9 @@ export async function fbGetEdiRaw(voyageKey, mode) {
 //   → sl·sl_orig 는 **검수원이 실제로 고친 흔적(sl_history)이 있을 때만** 통째로 지킨다.
 const _FIELD_WORK_KEYS = [
   'sl_history',                     // 실번호 수정 이력 (sl·sl_orig 는 아래에서 조건부로 지킨다)
+  //  ★ 3.47 — 규격 3자 불일치를 **검수사가 실물을 보고 고른 것**. 현장 입력이라 리스트가 못 덮는다.
+  //    `iso` 자체는 여기 넣지 않는다 — 고른 적 없는 컨까지 리스트 갱신이 막힌다. 아래에서 조건부로 지킨다.
+  'iso_pick', 'iso_pick_label', 'iso_picked_by', 'iso_picked_at',
   'eseal', 'eseal_orig',            // 엠티 실
   'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',   // 리퍼 온도 확인(1.8)
   'iso403', 'photo', 'photos', 'mkcon', 'memo',
@@ -372,7 +375,10 @@ const _emptyFor = (k, v) => _isEmptyVal(v) || (_ZERO_IS_EMPTY.has(k) && Number(v
 //   `eseal !== eseal_orig` 는 0건. 리스트가 자동으로 채운 값을 손댄 기록으로 착각한 것이다.
 //   검수사는 결국 **항차를 통째로 지우고 다시 등록**해야 했다(가드 없는 위험한 우회).
 //   → 실번호와 같은 규칙으로 바꾼다: 값이 있으면이 아니라 **고쳤으면** 흔적이다.
-const _FIELD_WORK_SIGNS = ['sl_history', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo'];
+//  3.47: `iso_pick` 도 흔적이다 — **검수사가 실물을 보고 고른 것**이라 자동으로 붙는 값이 아니다.
+//    2차 시뮬 지적 2026-09-14: 이게 빠져 있어 확정한 컨이 빠진 리스트를 올리면 records 에서 사라졌다
+//    (1.69-09 엠티실 사고와 같은 꼴 — 실물을 본 기록이 서류 교체로 없어진다).
+const _FIELD_WORK_SIGNS = ['sl_history', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo', 'iso_pick'];
 function _hasFieldWork(o) {
   if (!o) return false;
   if (Array.isArray(o.sl_history) && o.sl_history.length) return true;
@@ -444,6 +450,19 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     if (m.sl_conflict === undefined && ov.sl_conflict !== undefined) m.sl_conflict = ov.sl_conflict;
     for (const k of _FIELD_WORK_KEYS) {        // ② 현장 입력은 리스트가 못 덮는다
       if (ov[k] !== undefined) m[k] = ov[k];
+    }
+    //  ★ 3.47 — 규격도 같은 꼴이다. **검수사가 실물을 보고 고른 적이 있을 때만**(iso_pick) 지킨다.
+    //    검수사 «실물을 보기전에는 확정할수 없습니다» — 뒤집어 말하면 실물을 본 값이 정본이고,
+    //    나중에 올라온 서류가 그것을 덮으면 안 된다. 고른 적 없으면 종전대로 리스트가 갱신한다.
+    //  ⚠ 규격만 지키면 안 된다 — 표시(rf/fr/ot/tk)는 **그 규격에서 나온 값**이라 짝이다.
+    //    감사 실측 2026-09-14: 세관 42GP(드라이)로 확정한 뒤 선사 리스트를 올리면 rf 가 true 로
+    //    덮이고, 병합 셋이 «확정 컨은 records 가 이긴다» 로 그것을 화면·종이까지 내보냈다.
+    //    확정이 모순을 고정시키는 꼴이다. 규격과 표시는 같이 지킨다.
+    if (ov.iso_pick && ov.iso !== undefined) {
+      m.iso = ov.iso;
+      if (ov.iso_orig !== undefined) m.iso_orig = ov.iso_orig;
+      if (ov.edits !== undefined) m.edits = ov.edits;
+      for (const f of ['rf', 'fr', 'ot', 'tk']) if (ov[f] !== undefined) m[f] = ov[f];
     }
     // 실번호는 **검수원이 고친 적이 있을 때만** 리스트가 못 덮는다. 그때는 sl·sl_orig 를 짝으로 지킨다
     //   (한쪽만 지키면 `sl ≠ sl_orig` 가 되어 실오류로 오인된다 — 1.8-02 사고).
@@ -589,6 +608,47 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
     });
     await set(ediRef, newEdi);
   }
+}
+
+//  ★ 3.47 — **규격 3자 불일치를 검수사가 실물을 보고 확정한다.**
+//    검수사 2026-09-14 «불일치가 나온다면 이들은 실물을 보기전에는 확정할수 없습니다. 그러므로
+//    알림을 띄우고 그컨테이너가 양하 되거나 선적될때 세개중에 어느것이 맞는지 선택할수 있어야 합니다.»
+//    `iso` 갱신·이력은 fbUpdateRecordField 한 벌을 그대로 쓴다(두 벌 만들지 않는다).
+//    그 위에 «누가·언제·무엇을 골랐는가»만 덧붙인다 — 이 표식이 있어야 리스트 재업로드가 못 덮는다.
+//  ⚠ `isoValue` 는 **정규화된 ISO**(isoTriad 의 `iso`)여야 한다 — 세관 원문(`44GP`·`25GP`)을 그대로
+//    넣으면 파일로 올렸을 때보다 나쁜 값이 잠긴다(감사 지적). 부르는 쪽이 `src.iso` 를 넘긴다.
+export async function fbPickIso(voyageKey, mode, cn, srcKey, isoValue, label, by) {
+  if (!voyageKey || !cn || !srcKey || !isoValue) return;
+  await fbUpdateRecordField(voyageKey, mode, cn, 'iso', isoValue, by);
+  //  특수화물 표시도 같이 바로잡는다 — 안 하면 **강등이 안 된다**(감사 지적 2026-09-14).
+  //    EDI 가 리퍼라 했는데 실물이 드라이여서 세관 42GP 를 고르면 rf:true 가 남아 온도 미입력
+  //    경고가 계속 뜬다. 같은 화면의 규격 변경(handleChangeIso)은 이미 넷을 명시로 다시 쓴다.
+  //  ⚠ 판정을 여기서 새로 적지 마라 — utils 한 벌을 부른다(규범 §4-4).
+  //    감사 지적 2026-09-14: 손으로 다시 적은 정규식이 4283·FR40·PL40 을 플랫랙이 아니라고 해
+  //    3.43-03 사고(«FR 을 OT 로 표기»)가 되살아날 뻔했다.
+  const up = String(isoValue).toUpperCase();
+  const flags = { rf: isReeferIso(up), fr: isFlatRackIso(up), ot: isOpenTopIso(up), tk: isTankIso(up) };
+  const pick = { iso_pick: String(srcKey), iso_pick_label: String(label || '').toUpperCase(), iso_picked_by: by || '', iso_picked_at: Date.now() };
+  await update(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`), { ...pick, ...flags });
+  //  EDI 노드에는 **표식만** 남긴다 — 화면이 EDI 를 먼저 읽는 자리가 있어서다(fbUpdateRecordField 와 같은 이유).
+  //  ⛔ 표시(rf/fr/ot/tk)는 EDI 노드에 쓰지 않는다. 그 노드의 표시는 «EDI 가 뭐라 했나» 이고,
+  //     거기에 확정값을 덮으면 **되돌릴 근거가 사라진다** — 감사 실측: 리퍼를 드라이로 확정했다가
+  //     「다시 고르기」하면 EDI 의 rf:true 가 이미 파괴돼 리퍼가 영구 강등됐다.
+  //     화면은 «확정 컨은 records 가 이긴다»(병합 셋)로 이미 확정 표시를 본다.
+  //  ⛔ `iso_edi`(EDI 원문 칸)도 건드리지 않는다 — 같은 이유다.
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  if ((await get(ediRef)).exists()) await update(ediRef, pick);
+}
+
+//  확정을 푼다 — 오확정이면 그 컨이 그 항차 내내 침묵한다(감사 지적 2026-09-14).
+//  ⛔ `iso` 는 되돌리지 않는다. 되돌릴 «원래 값»이 어느 것인지 앱이 모른다 —
+//     확정을 풀면 알림이 다시 떠서 검수사가 그 자리에서 다시 고른다.
+export async function fbClearPickIso(voyageKey, mode, cn) {
+  if (!voyageKey || !cn) return;
+  const cleared = { iso_pick: null, iso_pick_label: null, iso_picked_by: null, iso_picked_at: null };
+  await update(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`), cleared);
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  if ((await get(ediRef)).exists()) await update(ediRef, cleared);
 }
 
 // X-RAY 봉인 수정 — seal (세관봉인) + eseal (전자봉인) + sealer (봉인자)
