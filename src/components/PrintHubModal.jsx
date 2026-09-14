@@ -285,8 +285,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   if (printSub === 'detail') {
     return (
       <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintSub(null)}>
+        {/*  3.46: 컨에 이미 _xray·_xraySealNo 가 얹혀 있지만(위 merge), 지도도 같이 넘긴다 —
+             붙이는 자리를 한 곳(PrintableBayDetail)으로 모으기 위해서다. */}
         <PrintableBayDetail
           containers={detailContainers}
+          xrayMap={sec.xrayList || {}}
+          xraySeals={sec.xraySeals || {}}
           mode={mode}
           voyageInfo={voyageInfo}
           voyageKey={voyageKey}

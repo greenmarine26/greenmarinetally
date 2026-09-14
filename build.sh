@@ -333,6 +333,18 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ X-RAY 세관봉인 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_XSM" "$SMOKE_XSO"; exit 1
   fi
+  # 3.46: 베이 상세 칸에 X-RAY 세관봉인 실번호가 나오는가 — 실데이터로 그리고 크로뮴으로 폭까지 잰다.
+  #   검수사 2026-09-14 «베이상세(출력포함)에도 XRAY 실번호는 표기 바랍니다 … 외관을 해치지 않게».
+  #   ⚠ 이 화면은 createPortal 로 body 에 붙어 세 경로를 한 자리에 못 그린다 — 검사가 세 번 나눠 돈다.
+  SMOKE_BDX=$(mktemp /dev/shm/hometmp/_bdx_XXXXXX.js)
+  if npx esbuild tools/smoke_baydetailxray.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_BDX" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_baydetailxray.cjs "$SMOKE_BDX" || { echo "✗ 베이 상세 X-RAY 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BDX"; exit 1; }
+    rm -f "$SMOKE_BDX"
+  else
+    echo "✗ 베이 상세 X-RAY 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BDX"; exit 1
+  fi
   # 3.39-03: 출력 허브가 열리고 검수 리스트 종이가 나오는가 — 실데이터 항차(KBTR 2606E)를 그려 단추를 눌러 본다.
   #   3.31 이 넣은 «선언 전 참조» 한 줄 때문에 이 화면이 여덟 판 동안 **열리지도 않았다**
   #   (검수사 2026-09-09 «검수앱에서 검수용리스트 출력 크러쉬»). 다른 화면은 다 그려 보면서 여기만 안 그려 봤다.

@@ -1362,7 +1362,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               className="ml-auto px-3 py-1.5 rounded-btn bg-ink-750 text-dim-200 text-xs2 font-bold">닫기</button>
           </div>
           <BayPlan
-            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
+            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
             preGoneInfo={preGoneInfo}
             onOpenContainer={(c) => setDetailC(c)}
             shipImo={voyage?.info?.imo}
@@ -1828,7 +1828,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               </div>
             )}
             <BayPlan
-              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
+              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
               preGoneInfo={preGoneInfo}
               onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}   // 2.89: 맞교환 상대 고르기 가로채기(SlotPicker 경유 포함)
               shipImo={voyage?.info?.imo}

@@ -125,6 +125,17 @@ export function buildBayPages(bays, summary) {
   return pages;
 }
 
+//  ★ 3.46 — 4번째 줄이 칸을 넘지 않게 줄여 담는 등급. 칸 폭은 78~118px 이고 8.5pt Courier 한 글자 ≈ 6.8px 라
+//    기본 8.5pt 로는 10자까지가 한계다(크로뮴 A4 가로 실측). 전각(★·℃)은 두 폭으로 센다.
+//    ⚠ .bd-fill 은 overflow:hidden 이라 넘치면 **조용히 잘린다** — 등급이 그것을 막는 장치다.
+export const MID_W = (t) => { let w = 0; for (const ch of String(t || '')) w += ch.charCodeAt(0) > 0x2000 ? 2 : 1; return w; };
+//  ⚠ **6pt 아래로는 안 줄인다.** 3.45 가 검수 리스트에서 세운 바닥을 여기서도 지킨다 —
+//    이 저장소는 «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다» 고 확정했다(generateXrayListHTML 주석).
+//    그래서 등급은 x3(6.3pt)이 끝이고, 그래도 안 들면 **★ 표식을 뗀다**(번호가 자료이고 별은 장식이다).
+//    실측(크로뮴 A4 가로 · 가장 좁은 배 MCSC 칸 87px · 안폭 79px) — 8.5pt 10자 · 7.2pt 13자 · 6.3pt 16자.
+export const MID_MAX = 15;
+export const MID_FIT = (t) => { const w = MID_W(t); return w <= 10 ? '' : w <= 12 ? ' x2' : ' x3'; };
+
 // 컨테이너 4-5줄 텍스트 포맷
 // M4.9: 모든 입력 String 변환 + try-catch로 방어 (한 셀 에러가 전체 페이지 크래시 방지)
 export function formatCellParts(c) {
@@ -150,17 +161,30 @@ export function formatCellParts(c) {
     const fewt = `${fe}${wt}`;
     const type = String(isoToPdfLabel(c.iso) || '');
     const _tmp = String(c.tmp ?? '').trim();
-    const mid = c.imdg ? `${String(c.imdg)}` : (_tmp ? `${_tmp}C` : '');
+    //  ★ 3.46 — **X-RAY 세관봉인 실번호를 4번째 줄에 적는다.**
+    //    검수사 2026-09-14 «베이상세(출력포함)에도 XRAY 실번호는 표기 바랍니다.
+    //    적정공간을 찾아서 외관을 해치지 않게 주의 하여 주시기 바랍니다.»
+    //    이 줄은 IMDG 코드나 리퍼 온도가 있을 때만 차고 **대개 비어 있다**(빈 줄 자리를 NBSP 로 지켜 왔다).
+    //    그래서 여기 얹으면 줄 수도 칸 크기도 안 바뀐다 — 외관을 한 픽셀도 안 건드린다.
+    //    번호가 아직 없으면 «★XRAY» 만 — 없는 것을 지어내지 않는다(검수 리스트와 같은 규칙).
+    const _xs = c._xray ? `★${String(c._xraySealNo || '').trim() || 'XRAY'}` : '';
+    const _mid0 = c.imdg ? `${String(c.imdg)}` : (_tmp ? `${_tmp}C` : '');
+    //  DG·리퍼와 겹치면 **둘 다** 적는다(검수 리스트에서 검수사가 확정한 규칙과 한 벌).
+    //    겹쳐서 길어진 줄은 아래 midCls 등급으로 줄여 담는다 — 잘라 버리지 않는다.
+    let mid = [_xs, _mid0].filter(Boolean).join(' ');
+    //  바닥(6.3pt)에서도 안 들면 ★ 를 떼어 한 글자를 번다 — 잘라서 번호를 잃는 것보다 낫다.
+    if (_xs && MID_W(mid) > MID_MAX) mid = [_xs.replace('★', ''), _mid0].filter(Boolean).join(' ');
+    const midCls = MID_FIT(mid);
     const bayInt = parseInt(c.bay, 10);
     const bay = Number.isFinite(bayInt) && bayInt >= 100 ? String(bayInt)
       : String(Number.isFinite(bayInt) ? bayInt : 0).padStart(2, '0');
     const row = String(c.row ?? '00').padStart(2, '0');
     const tier = String(c.tier ?? '00').padStart(2, '0');
     const pos = `....${bay}${row}${tier}`;
-    return { left1, right1, cn, carrier, fewt, type, mid, pos };
+    return { left1, right1, cn, carrier, fewt, type, mid, midCls, pos };
   } catch (e) {
     console.error('[formatCellParts] error', e, c);
-    return { left1: '', right1: '', cn: String((c && c.cn) || ''), carrier: '', fewt: '', type: '', mid: '', pos: '' };
+    return { left1: '', right1: '', cn: String((c && c.cn) || ''), carrier: '', fewt: '', type: '', mid: '', midCls: '', pos: '' };
   }
 }
 
@@ -407,7 +431,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
         <div className="bd-r2">{p.cn}</div>
         <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
-        <div className="bd-r4">{p.mid || '\u00A0'}</div>
+        <div className={`bd-r4${p.midCls || ''}`}>{p.mid || '\u00A0'}</div>
         <div className="bd-r5">{p.pos}</div>
       </div>
     );
@@ -465,7 +489,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
         <div className="bd-r2">{p.cn}</div>
         <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
-        <div className="bd-r4">{p.mid || '\u00A0'}</div>
+        <div className={`bd-r4${p.midCls || ''}`}>{p.mid || '\u00A0'}</div>
         <div className="bd-r5">{p.pos}</div>
       </div>
     );
@@ -579,7 +603,10 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
 export default function PrintableBayDetail({
-  containers: containersRaw, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, globalTiers, onClose
+  containers: containersRaw, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, globalTiers, onClose,
+  //  ★ 3.46 — X-RAY 대상과 세관봉인 실번호. 출력 허브는 컨 객체에 이미 _xray/_xraySealNo 를 얹어 보내고,
+  //    베이플랜 쪽은 안 얹으므로 여기서 지도를 받아 **한 자리에서** 붙인다(두 벌로 만들지 않는다).
+  xrayMap, xraySeals
 }) {
   // ── TallyOne 1.55: **베이 상세는 실적이다** ─────────────────────────────
   //   이 종이의 쓰임은 "베이별 슬롯 단위 컨테이너 위치 · 검수 현장용" 이다.
@@ -592,11 +619,21 @@ export default function PrintableBayDetail({
   //   계획 좌표는 `_planBay/_planRow/_planTier` 로 남겨 둔다(대조가 필요할 때를 위해).
   const containers = useMemo(() => (containersRaw || []).map(c => {
     if (!c) return c;
-    const p = effectivePos(c);
-    if (p.src === 'edi' || p.src === 'rec') return c;   // 실적이 따로 없으면 원본 그대로
-    return { ...c, bay: p.bay, row: p.row, tier: p.tier,
-             _planBay: c.bay, _planRow: c.row, _planTier: c.tier };
-  }), [containersRaw]);
+    //  3.46: X-RAY 표식이 아직 안 붙은 경로(베이플랜)면 여기서 붙인다. 이미 붙은 것은 그대로 둔다.
+    let c0 = c;
+    //  ⚠ 가드는 «번호가 없으면» 이다. «_xray 가 없으면» 으로 걸면, 깃발만 세우고 번호는 다른 이름에
+    //    담는 생산자(SearchPanel·mirCtx 의 _xraySeal 객체 등)를 만났을 때 손에 번호를 쥐고도
+    //    «★XRAY»(아직 봉인 안 달았다)로 찍는다(감사 실측).
+    if (!c0._xraySealNo && xrayMap && xrayMap[c0.cn]) {
+      const _s = String(((xraySeals || {})[c0.cn] || {}).seal
+        || ((c0._xraySeal || {}).seal) || '').trim();   // _xraySeal 은 3.45 가 가른 «레코드 객체» 쪽 이름이다
+      c0 = { ...c0, _xray: true, _xraySealNo: _s };
+    }
+    const p = effectivePos(c0);
+    if (p.src === 'edi' || p.src === 'rec') return c0;   // 실적이 따로 없으면 원본 그대로
+    return { ...c0, bay: p.bay, row: p.row, tier: p.tier,
+             _planBay: c0.bay, _planRow: c0.row, _planTier: c0.tier };
+  }), [containersRaw, xrayMap, xraySeals]);
 
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
@@ -1188,6 +1225,19 @@ export default function PrintableBayDetail({
         .bd-cell .bd-r2, .bd-cargo-wrap .cpv2-cell .bd-r2 { text-align: left; letter-spacing: 0.3px; }
         .bd-cell .bd-r4, .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { text-align: center; }
         .bd-cell .bd-r1, .bd-cell .bd-r3, .bd-cell .bd-r4, .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { letter-spacing: 0.7px; }
+        /*  ★ 3.46 — 4번째 줄(X-RAY 봉인번호 · IMDG · 리퍼 온도)이 칸을 넘으면 **조용히 잘린다**
+            (.bd-cell-lines > div 가 overflow:hidden). 그래서 길이에 따라 줄여 담는다.
+            ⚠ 자간이 0.7px 로 벌어져 있어 등급마다 자간도 같이 좁힌다 — 글꼴만 줄이면 모자란다.
+            ⚠ 선택자는 두 격자(.bd-cell = 폴백 · .cpv2-cell = 매트릭스)에 **둘 다** 건다.
+              이 파일의 옛 .bd-line3/.bd-pos 규칙은 JSX 가 내는 클래스(bd-r3·bd-r5)와 안 맞아 죽어 있다. */
+        /*  ⚠ 두 격자의 바탕 글꼴이 다르다 — 매트릭스 8.5pt · 폴백 7pt. 절대 크기만 쓰면 폴백에서
+            이 줄만 **더 커져** 다른 네 줄과 어긋난다(감사 실측). min() 으로 «바탕보다 크지 않게» 묶는다.
+            바닥은 6.3pt — 6pt 아래로는 안 내려간다. */
+        .bd-cell .bd-r4.x2, .bd-cargo-wrap .cpv2-cell .bd-r4.x2 { font-size: min(7.2pt, 1em); letter-spacing: 0.1px; }
+        /*  ⚠ 바닥에서는 **글꼴 대신 자간을 좁힌다.** 실봉인 최장 「DJHN225094」(10자)에 리퍼 온도가 겹치면
+            17자가 되는데 6.3pt·자간 -0.1px 로는 84px 라 79px 칸을 넘어 조용히 잘렸다(감사·연막 실측).
+            자간을 좁히면 글자 크기는 그대로 두고 들어간다 — 작게 만드는 것보다 낫다. */
+        .bd-cell .bd-r4.x3, .bd-cargo-wrap .cpv2-cell .bd-r4.x3 { font-size: min(6.3pt, 0.92em); letter-spacing: -0.45px; }
         .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r5 { color: #555; }
         /* M6.33: 3번째 줄(상태+무게+규격)만 폰트 축소 — 정보 밀도 높아 한 줄에 안 들어감
            예: "C_K E 2.2 DC20" → 14자 + 공백 → 6pt로 줄여서 한 줄 보장 */

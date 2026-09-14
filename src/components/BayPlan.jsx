@@ -31,7 +31,7 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
-export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
+export default function BayPlan({ containers, compMap, xrayMap, xraySeals, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
   pendingSwap, onCancelSwap,   // TallyOne 2.89: 컨 맞교환 상대 고르기(배너만 — 셀 가로채기는 VoyagePage onOpenContainer)
@@ -1085,8 +1085,11 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       )}
       {printMode === 'detail' && (
         <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintMode(null)}>
+          {/*  3.46: 베이플랜 경로는 컨에 X-RAY 표식이 안 얹혀 온다 — 지도를 넘겨 거기서 붙인다. */}
           <PrintableBayDetail
             containers={containers}
+            xrayMap={xrayMap}
+            xraySeals={xraySeals}
             mode={mode}
             voyageInfo={voyageInfo}
             voyageKey={voyageKey}
