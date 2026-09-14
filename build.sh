@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # M6.86.7.2 빌드 자동화 스크립트
+
+#  ★ 3.45 — **검사는 한국 시각으로 돈다.** 이 앱의 시각은 전부 KST(평택항)이고,
+#    연막검사 픽스처도 KST 로 적힌 실항차다. 빌드 기계가 UTC 면 «자정을 넘긴 야간 배»가
+#    UTC 에서는 같은 날이 되어 smoke_pace ⑪(분자를 오늘 것만 자르면 분모도 자른다)이
+#    **잴 것이 없어져 실패한다**(2026-09-14 실측 — 검사를 끄지 않고 환경을 맞춘다).
+export TZ=Asia/Seoul
 #
 # 운영 실측 (사용자 확인):
 #   - GitHub Pages는 main 브랜치 루트의 index.html을 직접 서빙하는 흐름으로 운영됨
@@ -300,6 +306,32 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     rm -f "$SMOKE_FR"
   else
     echo "✗ FR 표기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_FR"; exit 1
+  fi
+  # 3.44: 선사 RESTOW LIST 가 시프팅 정본이 되는가 — MCAT 635N 실서류 14행 + 실 BAPLIE 두 벌로 실소스를 돌린다.
+  #   검수사 2026-09-11 «카토스에 있는 MCAT 시프팅 자료를 찾아서 검수앱과 맞춰주세요 2개 차이납니다» — 서류 14 vs 앱 추정 12.
+  SMOKE_RSM=$(mktemp /dev/shm/hometmp/_rsm_XXXXXX.mjs)
+  SMOKE_RSO=$(mktemp /dev/shm/hometmp/_rso_XXXXXX.cjs)
+  printf 'export { computeShiftingMapCached, shiftingMapForDisplay, restowMapFromDoc } from "%s/src/utils.js";\n' "$PWD" > "$SMOKE_RSM"
+  if npx esbuild "$SMOKE_RSM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_RSO" --log-level=error; then
+    node tools/smoke_restow.cjs "$SMOKE_RSO" || { echo "✗ 선사 시프팅 정본 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_RSM" "$SMOKE_RSO"; exit 1; }
+    rm -f "$SMOKE_RSM" "$SMOKE_RSO"
+  else
+    echo "✗ 선사 시프팅 정본 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_RSM" "$SMOKE_RSO"; exit 1
+  fi
+  # 3.45: X-RAY 세관봉인이 검수 리스트 종이에 나오고 그 줄이 노랗게 칠해지는가 — PCSZ 2620E 실데이터(양하 608 · X-RAY 12)로 실소스를 그린다.
+  #   검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고 그대상컨테이너 줄을 노란색으로 색칠해 주세요».
+  SMOKE_XSM=$(mktemp /dev/shm/hometmp/_xsm_XXXXXX.mjs)
+  SMOKE_XSO=$(mktemp /dev/shm/hometmp/_xso_XXXXXX.cjs)
+  printf 'export { generateInspectionListHTML, openInspectionListPrint, memoFitOf } from "%s/src/inspectionList.js";\n' "$PWD" > "$SMOKE_XSM"
+  if npx esbuild "$SMOKE_XSM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --outfile="$SMOKE_XSO" --log-level=error; then
+    node tools/smoke_xrayseal.cjs "$SMOKE_XSO" || { echo "✗ X-RAY 세관봉인 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_XSM" "$SMOKE_XSO"; exit 1; }
+    #  3.45: 종이의 «모양» — 크로뮴으로 실제로 그려 칸이 넘치는지 잰다.
+    #    문자열만 파는 검사는 폭을 못 본다(초판이 머리 8칸·몸 7칸으로 어긋난 채 통과했고,
+    #    table-layout:fixed 를 넣으며 순번 칸이 좁아 괘선을 물은 것도 문자열 검사는 못 봤다).
+    node tools/smoke_ilistfit.cjs "$SMOKE_XSO" || { echo "✗ 검수 리스트 모양 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_XSM" "$SMOKE_XSO"; exit 1; }
+    rm -f "$SMOKE_XSM" "$SMOKE_XSO"
+  else
+    echo "✗ X-RAY 세관봉인 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_XSM" "$SMOKE_XSO"; exit 1
   fi
   # 3.39-03: 출력 허브가 열리고 검수 리스트 종이가 나오는가 — 실데이터 항차(KBTR 2606E)를 그려 단추를 눌러 본다.
   #   3.31 이 넣은 «선언 전 참조» 한 줄 때문에 이 화면이 여덟 판 동안 **열리지도 않았다**

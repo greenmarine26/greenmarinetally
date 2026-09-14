@@ -9,8 +9,12 @@
 
 import { openPrintWindow } from './printHelper.js';
 import { shipOpMapper } from './data/tallyFormats.js';
-import { isoToLabel, overDims} from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims} from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
+  //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
+  //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
+  //    OT 연노랑(#fff3cd)보다 진하게 — 흑백 인쇄에서도 갈린다.
+  xray: '#ffe066',
   full: '#ffffff',
   empty: '#e5e5e5',
   reefer: '#cce6ff',
@@ -55,6 +59,8 @@ function normalizeCarrier(c) {
 }
 
 
+//  isoToLabel 이 내는 라벨 끝 두 자 → 종류. VH(통풍컨)는 터미널이 DC 로 다룬다(utils 주석).
+const _LABEL_TYPE = { DC: 'normal', HC: 'normal', VH: 'normal', RF: 'reefer', RH: 'reefer', FR: 'fr', OT: 'ot', TK: 'tk' };
 function getContainerCategory(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   const first = iso[0] || '';
@@ -69,13 +75,18 @@ function getContainerCategory(c) {
     len = parseInt(c.cn[10]) >= 4 ? 40 : 20;
   }
 
-  // 종류: ISO 셋째 글자 기준 (정확한 ISO 6346)
-  let type = 'normal';  // G(GP) = 일반
-  if (third === 'R') type = 'reefer';
-  else if (third === 'P') type = 'fr';        // Platform/Flat Rack
-  else if (third === 'U') type = 'ot';        // Open Top
-  else if (third === 'T') type = 'tk';        // Tank
-  // G/B/S 또는 빈값 = normal (일반 처리)
+  //  ★ 3.45 — 종류도 **규격 칸과 같은 해석기**(isoToLabel)를 쓴다.
+  //    ⚠ 종전엔 ISO 셋째 글자만 봐서 숫자 ISO 를 못 읽었다 — 4530·453E(40피트 HC 리퍼)와
+  //      2270(탱크)이 «일반» 이었다. 3.45 가 규격 칸에 «45RE»·«22TN» 이라고 적기 시작하면서
+  //      같은 종이에 «리퍼다»(규격)와 «리퍼가 아니다»(흰 줄·특수화물 별첨 없음)가 나란히 찍혔다(재감사 실측 94대).
+  //    셋째 글자 규칙은 해석기가 모르는 표기(DC20 류)에서만 물러서서 쓴다.
+  const _lab2 = String(isoToLabel(iso) || '').slice(-2);
+  let type = _LABEL_TYPE[_lab2]
+          || (third === 'R' ? 'reefer' : third === 'P' ? 'fr' : third === 'U' ? 'ot' : third === 'T' ? 'tk' : 'normal');
+  //  ★ 3.45 — FR 판정은 저장소의 **한 벌**(3.43-03 utils.isFlatRackContainer)을 따른다.
+  //    ⚠ 그것이 FR 이라고 답하는 4261·4363·436E 를 검수 리스트만 «42GP»(일반) 라고 적고
+  //      흰 줄에 특수화물 별첨에서도 뺐다(4차 감사 실측 9대). 3.44 는 «40» 이라 GP 라고 주장하지는 않았다.
+  if (type !== 'fr' && isFlatRackContainer(c)) type = 'fr';
 
   // 리퍼 우선 판별 (EDI에 리퍼 플래그/실제 온도값 있으면 ISO와 무관하게 reefer)
   const hasTmpVal = (c.tmp != null && String(c.tmp).trim() !== '') || (c.temp != null && String(c.temp).trim() !== '');
@@ -99,7 +110,10 @@ function getSortKey(c) {
   return { line, secondary: sizeGroup + typeOrder };
 }
 
-function getRowColor(c) {
+function getRowColor(c, noFlag) {
+  //  ★ 3.45 — X-RAY 가 규격색을 이긴다. 규격은 «규격» 칸에서 보고, 색은 «지금 할 일»을 가리킨다.
+  //    별첨(noFlag)은 성질만 적는 표라 여기서도 뺀다(★XRAY 표기를 빼는 것과 같은 규칙 2.92-01).
+  if (c && c._xray && !noFlag) return COLOR.xray;
   const { type, fe } = getContainerCategory(c);
   if (type === 'reefer') return COLOR.reefer;
   if (type === 'fr') return COLOR.fr;
@@ -108,12 +122,59 @@ function getRowColor(c) {
   return fe === 'E' ? COLOR.empty : COLOR.full;
 }
 
+//  ★ 3.45 — 이스케이프 한 벌. 종전엔 봉인번호만 «꺾쇠를 지우는» 방식이라
+//    실봉인 «A&B-123» 이 «AB-123» 으로 찍혔다 — 없는 번호를 적는 셈이다(§5-3 신원 칸은 지어내지 않는다).
+const _esc = (v) => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+//  ★ 3.45 — **비고 폭 셈법 한 벌.** 화면 축소 등급과 페이지 배분이 같은 자를 쓴다.
+//    ⚠ 초판은 등급을 `_plain.length`(한글도 1자)로 매겨, 60줄 아래 _noteWeight 의 «한글 두 폭» 셈법과 갈렸다.
+//    ⚠ 초판은 m4 를 넘는 비고를 nowrap+overflow:hidden 으로 **조용히 잘랐다** —
+//      검수사 2026-09-14 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다» 를 정면으로 깬다.
+//      그래서 m4 로도 안 되면 m5(줄바꿈)로 넘겨 **한 글자도 잃지 않고**, 늘어난 줄은 배분기가 센다.
+//  ⚠ × (U+00D7) 은 0x2000 아래인데 한글 글꼴에서 **전각**으로 그려진다 — 실치수 «10914×3340×3150mm» 가
+//    이것 때문에 좁게 계산돼 잘렸다(재감사 크로뮴 실측). 별·마름모·℃ 는 0x2000 위라 이미 전각이다.
+//  ⚠ 전각은 반각의 **두 배가 아니라 1.5배**다(크로뮴 A4 실측 — 비고 칸 36.8mm 에 7pt 로 ASCII 21자 · 한글 14자).
+//    그래서 반각 2 · 전각 3 으로 센다. 종전 1:2 셈법은 ASCII 를 7폭이나 낙관해 두 줄 될 것을 한 줄로 봤다.
+const _memoW = (txt) => { let w = 0; for (const ch of txt) { const c = ch.charCodeAt(0); w += (c > 0x2000 || c === 0xD7) ? 3 : 2; } return w; };
+//  한 줄에 드는 폭단위 — 7pt(기본) · 6pt(m2). 비고 칸 35% ≈ 35.3mm 에서 크로뮴 **A4 실폭(763px)** 실측.
+//  ⚠ 1280px 기본 뷰포트로 재면 1.68배 넓은 자가 된다(4차 감사 — 그 때문에 실번호 41칸 침범을 «0» 이라고 봤다).
+//  ⚠ **6pt 아래로는 안 줄인다.** 이 저장소는 X-RAY 확인서에서 «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다» 고
+//    확정했다(generateXrayListHTML 주석). 더 줄이는 대신 **줄을 바꾼다** — 작게 만드는 것보다 낫다.
+const MEMO_FIT = [42, 52];
+const _memoFit = (plain) => {
+  const w = _memoW(plain);
+  for (let i = 0; i < MEMO_FIT.length; i++) if (w <= MEMO_FIT[i]) return { cls: i ? ` m${i + 1}` : '', lines: 1 };
+  return { cls: ' m2', lines: Math.max(1, Math.ceil(w / MEMO_FIT[MEMO_FIT.length - 1])) };
+};
+//  연막검사가 «내가 예상한 줄수» 와 «브라우저가 그린 줄수» 를 맞대 볼 수 있게 내보낸다 —
+//  이 예상이 틀리면 단·페이지 배분이 어긋나 종이가 한 장 더 나온다.
+export const memoFitOf = (plain) => _memoFit(String(plain || ''));
+
+//  ★ 3.45 — **규격은 이 함수 한 곳에서만 정한다.** 종이와 인쇄창 CSV 가 각자 계산하면 반드시 갈린다 —
+//    재감사 실측에서 폴백 행(빈 ISO·DCHC 류)이 종이 «40» · 엑셀 «빈칸» 으로 어긋났다.
+const _specOf = (c) => {
+  const s0 = isoToCustomsSpec(c && c.iso, c && c._xrayIso);
+  //  ⚠ 규격이 «일반(GP)» 이라는데 FR 한 벌이 «FR» 이라고 하면 규격을 고쳐 적지 않는다 —
+  //    같은 종이에 «일반» 과 «특수화물 별첨» 이 같이 나가면 검수사가 둘 중 뭘 믿어야 할지 모른다.
+  if (s0) return (/GP$/.test(s0) && isFlatRackContainer(c)) ? s0.slice(0, 2) + 'PF' : s0;
+  const { len, type } = getContainerCategory(c);
+  return `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
+};
+
 // 단일 줄 HTML
 function renderRow(c, idx, opts) {
   const _noFlag = !!(opts && opts.noFlag);   // 2.92-01: 별첨 — 성질 아닌 표기(X-RAY·긴급) 제외
-  const bg = getRowColor(c);
+  const bg = getRowColor(c, _noFlag);
   const { len, type } = getContainerCategory(c);
-  const spec = `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
+  //  ★ 3.45 — 규격은 **세관 리스트와 같은 표기**(검수사 2026-09-14 «규격은 세관리스트껄로 맞추시면 될듯합니다»).
+  //    세관 리스트 실측 — 45GP · 22GP · 44GP · 42RE 처럼 **ISO 4자리 그대로**다(검수업체컨테이너목록조회).
+  //    종전 자체 계산은 45GP(40피트 하이큐빅)와 42GP(40피트 일반)를 둘 다 «40» 으로 찍어 구분이 사라졌다.
+  //    ISO 가 없거나 4자리가 아닌 행(부킹 자리·숫자 ISO 등)만 종전 계산으로 물러선다.
+  //    ⚠ 초판은 문을 «4자리에 글자 하나» 로 열어 내부 공컨 마커(220E·450E·453E·45GE)와
+//      선사 약어(40HE)가 종이로 샜다 — 문은 utils.isoToCustomsSpec 한 벌이 지킨다.
+  const spec = _specOf(c);
   const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
   const sl = (c.sl || '').slice(0, 10);  // M5.52: 12→10자 (선사 칸 공간 확보)
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
@@ -125,7 +186,14 @@ function renderRow(c, idx, opts) {
   // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
   const notes = [];
   if (isBooking) notes.push('<span style="color:#b45309;font-weight:bold">📝대기</span>');
-  if (c._xray && !_noFlag) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
+  //  ★ 3.45 — 세관봉인 실번호를 ★XRAY 옆에 적는다(검수사 확정 «비고 칸에 ★XRAY 옆에»).
+  //    번호가 아직 없으면 표식만 — 없는 것을 지어내지 않는다.
+  if (c._xray && !_noFlag) {
+    //  ⚠ 이름은 _xraySealNo — SearchPanel·mirCtx 는 같은 이름 _xraySeal 에 **레코드 객체**를 담는다.
+//      거기에 문자열을 넣으면 mirFacts 의 x.seal.seal 이 undefined 가 되어 «커트씰 없음» 이라고 거짓말한다.
+    const _xs = _esc(String(c._xraySealNo || '').trim());
+    notes.push(`<span style="color:#dc2626;font-weight:bold">★XRAY${_xs ? ' ' + _xs : ''}</span>`);
+  }
   // M6.94.18: 온도 필드는 c.tmp (CSVExport·diagnostics와 동일). 기존 c.temp는 비어서 표기 안 됐음.
   //   XRAY 대상이 리퍼면 ★XRAY + 온도 둘 다 비고에 표기 (선상 체크용).
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
@@ -184,14 +252,16 @@ function renderRow(c, idx, opts) {
   if (c._lugg || c.lugg) notes.push('<span style="color:#6d28d9;font-weight:bold">수화물</span>');
   if (c._shift) notes.push('<span style="color:#1d4ed8;font-weight:bold">◆시프팅</span>');
   const note = notes.join(' ');
+  //  ★ 3.45 — 글자 수(태그 뺀 실제 길이)로 축소 등급. DG·XRAY·OOG 가 겹쳐도 둘 다 남는다.
+  const _plain = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ');
+  const _memoCls = _memoFit(_plain).cls;
   return `<tr style="background:${bg}">
     <td>${idx}</td>
     <td class="cn">${cn}</td>
     <td>${sl}</td>
     <td>${spec}</td>
-    <td>${fe === 'F' ? 'F' : ''}</td>
-    <td>${fe === 'E' ? 'E' : ''}</td>
-    <td>${note}</td>
+    <td>${fe}</td>
+    <td class="memo${_memoCls}">${note}</td>
     <td class="line">${line}</td>
   </tr>`;
 }
@@ -208,10 +278,10 @@ const PER_COL = 75;
 //  ⇒ 단을 «행 수»가 아니라 **«차지하는 줄 수»**로 채운다. 한 줄도 안 자르고, 넘치면 페이지가 늘어난다.
 const _noteWeight = (rowHtml) => {
   const tds = String(rowHtml).match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
-  const note = tds[6] || '';                                   // 7번째 칸이 비고
+  //  ★ 3.45 — F/E 가 한 칸이 되어 비고는 **6번째**다(tds[5]). 초판은 tds[6](선사)를 세고 있었다.
+  const note = tds[5] || '';
   const txt = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim();
-  let w = 0; for (const ch of txt) w += ch.charCodeAt(0) > 0x2000 ? 2 : 1;   // 한글은 두 폭
-  return Math.max(1, Math.ceil(w / 25));                       // 31.1mm · 7pt 에서 한 줄 ≈ 25 폭단위
+  return _memoFit(txt).lines;                                  // 축소 등급과 같은 자로 센다
 };
 const packCols = (rows, perCol = PER_COL) => {
   const cols = []; let cur = [], w = 0;
@@ -299,7 +369,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   const renderPageWithHdr = (pair, pageNum, totalPages) => {
     const [left, right] = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL)];
     const col = (rs) => `<table class="ilist">
-      <colgroup><col style="width:4%"><col style="width:20%"><col style="width:16%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:31%"><col style="width:12%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th><th>선사</th></tr></thead>
+      <colgroup><col style="width:6%"><col style="width:19%"><col style="width:16%"><col style="width:9%"><col style="width:4%"><col style="width:35%"><col style="width:11%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F/E</th><th>비고</th><th>선사</th></tr></thead>
       <tbody>${rs.join('')}</tbody>
     </table>`;
     return `<div class="ipage">
@@ -335,6 +405,9 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
       <td class="cn">${c.from || ''}</td><td class="cn">${c.to || ''}</td><td></td></tr>`).join('');
     shiftHtml = `<div class="ititle">[별첨2] ◆ 시프팅(재적부) ${shiftingList.length}대 — 평택 작업에 걸려 옮기는 화물 (양하·선적 공통, 1대=크레인 2모브)</div>
       <div class="ipage"><table class="ilist" style="max-width:120mm;margin:0 auto;">
+      <!--  ★ 3.45 — 이 표엔 colgroup 이 없어, table-layout:fixed 아래서 7칸이 **균등분할**돼
+            컨테이너번호 칸이 30mm→17mm 로 줄었다(재감사 실측). 3.44 의 내용폭 비율을 그대로 적어 둔다. -->
+      <colgroup><col style="width:6%"><col style="width:23%"><col style="width:10%"><col style="width:13%"><col style="width:20%"><col style="width:20%"><col style="width:8%"></colgroup>
       <tr><th>No</th><th>컨테이너</th><th>규격</th><th>POD</th><th>전 위치</th><th>후 위치</th><th>확인</th></tr>
       ${rows}</table></div>`;
   }
@@ -365,10 +438,18 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .icols { display: flex; gap: 1.5mm; }
 .icol { flex: 1; min-width: 0; }
 /* M5.30: 행 컴팩트 — 75행/단 보장 (이전 7.5pt + 1px padding으로 72행만 들어감) */
-table.ilist { width: 100%; border-collapse: collapse; font-size: 7pt; }
+table.ilist { width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
 table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: 3.4mm; }
 table.ilist th { background: #ddd; font-size: 6.5pt; font-weight: bold; height: 3.2mm; }
 table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0.3px; }
+/*  ★ 3.45 — 비고가 겹칠 때(검수사 2026-09-14 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다»).
+    표식이 늘수록 글자만 줄여 **한 줄에 둘 다** 남긴다 — 줄바꿈이나 잘림으로 하나를 잃지 않는다. */
+/*  ★ 3.45 — 비고는 **잘리지 않는다**(검수사 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다»).
+    ⚠ nowrap+overflow:hidden 은 글자폭 모델이 조금만 낙관해도 뒤를 **조용히 지운다** —
+      재감사 크로뮴 실측에서 OOG 실치수 6건이 m2 칸에서 15~24px 잘렸다. 그래서 숨기지 않고 줄을 바꾼다.
+      등급(m2~m5)은 «한 줄에 담으려는 노력» 이고, 못 담으면 줄이 늘 뿐 한 글자도 안 잃는다. */
+table.ilist td.memo { white-space: normal; overflow-wrap: anywhere; text-align: left; padding: 0 1.5px; }
+table.ilist td.memo.m2 { font-size: 6pt; letter-spacing: -0.2px; }   /* 3.45: 바닥은 6pt — 더 줄이지 않고 줄을 바꾼다 */
 @media print {
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .actions { display: none; }
@@ -436,8 +517,7 @@ export function generateVgmListHTML(containers, voyageInfo) {
  *  머리 여섯 칸은 **기존 출력물 그대로다**(검수사 «출력물이 기존자료에서 빠진게 없어야 합니다»).
  *  값이 없는 칸은 손글씨용 밑줄로 — 백지로 뽑아 현장에서 적는 쓰임을 위해서다. */
 export function generateXrayListHTML(rows, head = {}, perPage = 20) {
-  const esc = (v) => String(v == null ? '' : v)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = _esc;   // 3.45: 이스케이프 규칙은 모듈 한 곳(_esc)에 있다 — 종전 지역 정의는 그 진부분집합이었다
   const n = Math.max(1, Math.ceil(rows.length / perPage));
   const per = Math.ceil(rows.length / n) || 1;          // 균등 분할 — 40대는 20+20
   //  ★ 폰트 자동조절 — 시안 표 그대로(10대 9.5pt/pad8 · 20대 8pt/pad5).
@@ -580,14 +660,18 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     d.containers.forEach((c, i) => {
       const cn = (c.cn || '').replace(/,/g, '');
       const seal = String(c.sl || c.seal || '').replace(/,/g, '');   // TallyOne 2.00: 실번호 필드는 sl — seal 만 봐서 CSV 실번호가 늘 비었다
-      const iso = (c.iso || '').replace(/,/g, '');
-      const fe = c.fe === 'E' ? 'E' : 'F';
+      //  ★ 3.45 — 종이와 같은 규격·F/E 를 쓴다. 종전엔 규격이 iso 날것(4510)이고
+//    F/E 기본값이 종이(E)와 반대(F)여서 같은 배를 종이와 엑셀이 다르게 적었다.
+      const iso = _specOf(c).replace(/,/g, '');
+      const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
       const op = normalizeCarrier(c);
       const cat = getContainerCategory(c);
       const memo = [];
       if (c.dg) memo.push(`${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00-03: «9/3480» 형식(클래스/UN만)
       const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
       if (cat.type === 'reefer') memo.push('R' + (_t != null && String(_t).trim() !== '' ? _t + '℃' : ''));
+      //  ★ 3.45 — 인쇄물과 같은 표기를 CSV 에도(한쪽만 고치면 종이와 엑셀이 갈린다).
+      if (c._xray) memo.push('XRAY' + (String(c._xraySealNo || '').trim() ? ' ' + String(c._xraySealNo).trim().replace(/,/g, '') : ''));
       const _ov = [];
       if (c.ovh) _ov.push('H+' + c.ovh);
       if (c.ovw) _ov.push('W+' + c.ovw);

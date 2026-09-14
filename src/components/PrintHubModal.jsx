@@ -29,6 +29,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
   const xrayMap = sec.xrayList || {};
+  //  ★ 3.45 — X-RAY 세관봉인 실번호(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입»).
+  //    종전엔 xrayList(대상 여부)만 읽어 실번호가 종이까지 갈 통로가 아예 없었다.
+  const xraySealMap = sec.xraySeals || {};
   // V8.98-02: 카고플랜/베이상세는 선박 전체 적부도 — 수집기 등록 항차의 ediContainers엔 통과화물이 없어
   //   raw EDI 전문을 파싱해 전체 컨을 쓴다(저장본이 있는 키는 저장본 우선 — _slotKey 등 보존). raw 없으면 기존 그대로.
   // V9.07-03: 로직을 utils.fullEdiMapOf로 승격 — 편집기와 같은 소스를 쓴다
@@ -105,7 +108,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     //   검수리스트와 동일 원칙: 리스트에 등록되면 무조건 평택분.
     //   EDI가 KRPTK로 증명하거나 리스트에 있으면 평택 → pol 값에만 의존하지 않음.
     if (recMap[cn]) merged._inList = true;
-    if (xrayMap[cn]) merged._xray = true;
+    if (xrayMap[cn]) {
+      merged._xray = true;
+      //  ⚠ 이름이 _xraySealNo 다 — SearchPanel·mirCtx 는 _xraySeal 에 **레코드 객체**를 담는다(같은 이름에 다른 것).
+      merged._xraySealNo = String((xraySealMap[cn] || {}).seal || '').trim();   // 3.45: 없으면 빈 칸 — 지어내지 않는다
+      //  3.45: 세관 리스트가 준 규격 원문 — 있으면 그것이 정본이다(XrayTab 과 같은 우선순위).
+      merged._xrayIso = String((xrayMap[cn] || {}).iso || '').trim();
+    }
     return merged;
   });
 

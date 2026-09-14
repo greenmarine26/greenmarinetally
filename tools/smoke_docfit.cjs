@@ -74,17 +74,25 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
   ok(!/for \(let i = 0; i < list\.length; i \+= PER_PAGE\)/.test(il), '150 고정 자르기가 남지 않았다');
   ok(!/function renderPage\(/.test(il), '옛 75/75 고정 자르기 함수가 남지 않았다');
   //  단위 시험 — 소스에서 함수를 꺼내 돌린다
-  const src = il.slice(il.indexOf('const _noteWeight'), il.indexOf('const packPages'));
+  //  ★ 3.45 — 폭 셈법이 _memoFit 한 벌로 옮겨졌다(화면 축소 등급과 같은 자). 같이 꺼내야 돌아간다.
+  //  ★ 3.45 — 꺼낸 조각에 `export const memoFitOf` 가 섞이면 new Function 이 문법오류로 죽는다.
+  const helpers = il.slice(il.indexOf('const _memoW = '), il.indexOf('// 단일 줄 HTML')).replace(/^export /gm, '');
+  const src = helpers + il.slice(il.indexOf('const _noteWeight'), il.indexOf('const packPages'));
   const tail = il.slice(il.indexOf('const packPages'));
   const body = src + tail.slice(0, tail.indexOf('\n};') + 3) + '; return { _noteWeight, packCols, packPages };';
   const F = new Function('PER_COL', body.replace(/const PER_COL[^\n]*\n/, ''));
   const M = F(75);
-  const row = (note) => `<tr><td>1</td><td>ABCU1234567</td><td>SEAL</td><td>20DC</td><td>F</td><td></td><td>${note}</td><td>SKR</td></tr>`;
+  //  ★ 3.45 — 칸이 7개다(F/E 한 칸). 비고는 6번째 — 옛 8칸 모양으로 재면 선사 칸을 센다.
+  const row = (note) => `<tr><td>1</td><td>ABCU1234567</td><td>SEAL</td><td>22GP</td><td>F</td><td>${note}</td><td>SKR</td></tr>`;
   ok(M._noteWeight(row('')) === 1, '비고가 비면 한 줄');
   ok(M._noteWeight(row('RF -18C')) === 1, '짧은 비고도 한 줄');
   const longNote = 'FR L+120 W+80 H+150cm 12192×2438×2896mm 9/3480 PG2 <span>▲긴급</span> <span>◆시프팅</span>';
   const w = M._noteWeight(row(longNote));
-  ok(w >= 3, `⛔ 긴 비고를 한 줄로 본다 (${w}줄로 나와야 한다)`);
+  //  ★ 3.45 — 기준은 «세 줄» 이 아니라 «한 줄이 아니다» 다. 비고 칸이 31%→37% 로 넓어지고
+  //    m5(4.9pt)로 줄여 담은 뒤 줄을 바꾸므로 같은 비고가 이제 두 줄에 든다.
+  //    크로뮴 실측(2026-09-14) — 최악 «★XRAY 523533 FR L+120 W+80 H+150cm 12192×2438×2896mm
+  //    9/3480 PG2 ▲긴급 수화물 ◆시프팅» → memo m5 · 2줄 · 잘림 없음. 실측에서 뽑은 기준이다.
+  ok(w >= 2, `⛔ 긴 비고를 한 줄로 본다 (${w}줄)`);
   const cols = M.packCols(Array.from({ length: 40 }, () => row(longNote)), 75);
   ok(cols.length >= 2, `⛔ 긴 비고 40행이 한 단에 다 들어간다고 본다 (단 ${cols.length}개)`);
   ok(cols[0].length < 40, `⛔ 첫 단에 40행을 다 넣는다 (${cols[0].length}행)`);
