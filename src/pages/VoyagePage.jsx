@@ -18,7 +18,7 @@ import { Thermometer,
   BarChart3, FileCheck, Package as PackageIcon
 } from 'lucide-react';
 import {
-  parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
+  parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
 , formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
@@ -1259,6 +1259,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()]?.carrier : ''),
       // 2.94-01: 통과화물은 «EDI에 없는 컨» 경고에서 뺀다 — 판정은 utils 한 벌.
       thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
+      cancelReq: voyage?.info?.amend?.cancelReq || [],   // 3.50-02: 수집기가 읽은 선사 취소 요청분 — «EDI에 없는 컨» 이 아니다
       carrier: voyage?.info?.carrier || '',
       sealPolicy: shipPolicy,  // M3.5.5
       lugCount: shipLuggageCount(voyageKey),  // 1.56-02: 수화물은 검증 대상이 아니다(검수사 확정)
@@ -3874,7 +3875,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     const existingCount = Object.keys(existing).length;
     let startMap = { ...existing };
     let skipExisting = false;
-    if (existingCount > 0) {
+    //  ★ 3.50-02: 올린 것이 전부 캔슬 리스트면 «교체/병합» 을 묻지 않는다 — 교체를 고르면 빼는 대상(기존 리스트)이 사라져 리스트가 통째로 비기 때문이다.
+    const _allCancel = Array.from(files).every((f) => isCancelListName(f.name));
+    let _cancelRemoved = 0;   // 캔슬 리스트로 뺀 대수(전부 캔슬이면 이것이 0 일 때 저장하지 않는다)
+    let startMapReplaced = false;   // 3.50-02: «교체» 를 골랐는가 — 새 컨 0 이면 빈 리스트를 쓰지 않는다
+    if (existingCount > 0 && !_allCancel) {
       const choice = await askChoice({
         title: '기존 리스트 데이터 처리',
         description: `기존 리스트: ${existingCount}대\n\n어떻게 할까요?`,
@@ -3904,6 +3909,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       }
       if (choice === '1') {
         startMap = {};  // 교체: 기존 비우고 시작
+        startMapReplaced = true;
       }
       // 신규만 모드는 cn별 처리 시 기존 값 보존
       skipExisting = choice === '3';
@@ -3929,8 +3935,14 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     }
     const geminiKey = await resolveAiKey();   // 3.43: 공용 키 → 개인 키
 
-    for (const file of Array.from(files)) {
+    //  3.50-02: 일반 리스트를 먼저, 캔슬 리스트를 나중에 — 섞어 올렸을 때 대화상자 순서에 따라 캔슬이 먼저 돌아 «이미 빠짐» 이 되고 뒤 리스트가 도로 넣는 것을 막는다(감사 지적).
+    const _ordered = Array.from(files).sort((a, b) => (isCancelListName(a.name) ? 1 : 0) - (isCancelListName(b.name) ? 1 : 0));
+    for (const file of _ordered) {
       try {
+        if (cancelListKind(file.name) === 'mixed') {   // 캔슬·추가 한 파일 — 앱은 시트를 못 가른다
+          results.push(`ℹ️ ${file.name}: 캔슬·추가 혼합 리스트 — 앱에서 처리하지 않습니다(수집기가 취소·추가를 갈라 적고, 캔슬만 든 파일을 올리면 뺍니다)`);
+          continue;
+        }
         const ftype = await detectFileType(file);
         let records = [];
 
@@ -3996,6 +4008,23 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }
         }
 
+        //  ★ 3.50-02 (검수사 «켄슬 리스트를 받아 놓고도 왜 캔슬을 안시키고» · «선적 13개 캔슬»): 캔슬 리스트는 **빼라는 목록**이다 —
+        //    더하지 않고 그 컨번호를 리스트에서 뺀다(판정·제거는 utils 한 벌 isCancelListName·removeCancelledFromMap). 실측 SWSP 2609S 13대.
+        if (isCancelListName(file.name)) {
+          const _cns = records.map((r) => r.cn).filter(Boolean);
+          const _cur = Object.keys(cnMap).length;
+          const _hit = _cns.filter((cn) => cnMap[String(cn || '').replace(/[\s-]/g, '').toUpperCase()]).length;
+          //  파일명만 보고 빼는 일이라 한 번 묻는다 — 절반 넘게 빠지면 «취소 리스트가 맞는지» 를 같이 묻는다(취소를 반영한 최종본을 잘못 올린 경우).
+          const _half = _cur > 0 && _hit * 2 >= _cur;
+          const ok = window.confirm(`🚫 캔슬 리스트로 읽었습니다 — ${file.name}\n\n취소 ${_cns.length}대 중 현재 ${mode === 'discharge' ? '양하' : '선적'} 리스트(${_cur}대)에 있는 ${_hit}대를 리스트에서 뺍니다.` +
+            (_half ? '\n\n⚠ 리스트의 절반 이상이 빠집니다 — 취소 리스트가 맞습니까? (취소를 반영한 최종 리스트라면 [취소]를 누르고 파일 이름에서 «캔슬·취소» 를 빼서 올리세요)' : '') + '\n\n진행하시겠습니까?');
+          if (!ok) { results.push(`↩ ${file.name}: 캔슬 리스트 처리 취소(아무것도 빼지 않음)`); continue; }
+          const { removed, notFound } = removeCancelledFromMap(cnMap, _cns);
+          _cancelRemoved += removed.length;
+          results.push(`🚫 캔슬 리스트 ${file.name}: 취소 ${_cns.length}대 — 리스트에서 ${removed.length}대 뺌` +
+            (notFound.length ? (removed.length ? ` · ${notFound.length}대는 리스트에 없었음(이미 빠짐)` : ` · ${notFound.length}대 전부 이 리스트에 없음(이미 반영된 리스트이거나 양하/선적 탭이 다를 수 있음)`) : ''));
+          continue;
+        }
         // 공통: cnMap에 병합 (skipExisting이면 기존 컨번호는 건너뜀)
         // 2.06-10 (2719E 실측 — 검수사가 올린 세관 Excel 148건이 _source 공란): 인앱 업로드는 파일명을
         //   안 실어서, 세관리스트(Excel_타임스탬프)를 올려도 세관 기준 판정(sealIssuesOf hasCustoms)이
@@ -4069,6 +4098,25 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       results.push(`↩️ ${mode === 'discharge' ? '선적' : '양하'} 리스트 ${dirDropped.length}대 제외 — ${mode === 'discharge' ? 'POL' : 'POD'}만 평택인 컨은 이 화면 몫이 아닙니다`);
     }
 
+    //  3.50-02(감사): «교체» 를 골랐는데 새로 들어온 컨이 0 이면(예약 양식·인식 실패·캔슬·추가 혼합 파일뿐) 빈 리스트를 통째로 쓰지 않는다.
+    if (startMapReplaced && added === 0 && !_cancelRemoved) {
+      setStatus(results.join('\n') + '\n\n새로 들어온 컨이 없어 기존 리스트를 교체하지 않았습니다.');
+      if (listRef.current) listRef.current.value = '';
+      return;
+    }
+    //  3.50-02: 캔슬 리스트만 올렸으면 새로 들어온 컨이 없다 — 기존 리스트 전부를 EDI 와 다시 대조하는 검토 모달(실측 SWSP 무게차 144건)을 띄우지 않고 곧장 저장한다.
+    //    뺀 것이 없으면 저장도 하지 않는다(빈 리스트를 통째로 쓰는 일 방지 — 감사 지적).
+    if (_allCancel) {
+      if (!_cancelRemoved) { setStatus(results.join('\n') + '\n\n뺀 컨이 없어 리스트를 바꾸지 않았습니다.'); if (listRef.current) listRef.current.value = ''; return; }
+      try {
+        const _r = await fbSaveListRecords(voyageKey, mode, cnMap);
+        setStatus(results.join('\n') + `\n\n전체 ${Object.keys(cnMap).length}대 (캔슬로 ${_cancelRemoved}대 뺌)` + (_r && _r.kept ? `\n⚠ 검수 흔적(메모·사진·규격 확정 등)이 있어 남긴 컨 ${_r.kept}대 — 상세 화면에서 확인하세요` : ''));
+      } catch (e) {
+        setStatus(`❌ 리스트 저장 실패 — ${e?.message || e}\n다시 시도하거나 이 메시지를 개발자에게 알려 주세요.`);
+      }
+      if (listRef.current) listRef.current.value = '';
+      return;
+    }
     // M3.5.4-fix2: 충돌 검출 — EDI vs 리스트 비교
     const ediMap = sec.ediContainers || {};
     const newRecords = {};

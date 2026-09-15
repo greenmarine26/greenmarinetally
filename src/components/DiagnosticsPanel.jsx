@@ -193,7 +193,7 @@ function AlertDetails({ alert, onOpenContainer }) {
     );
   }
 
-  if (alert.code === 'list_short' || alert.code === 'list_extra') {
+  if (alert.code === 'list_short' || alert.code === 'list_extra' || alert.code === 'cancel_pending') {   // 3.50-02: 취소 요청분 목록도 여기서
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs">
         EDI {d.ediCount || '?'}대 / 리스트 {d.listCount || '?'}대 (매칭 {d.matchedCount ?? '?'}대)
@@ -204,6 +204,13 @@ function AlertDetails({ alert, onOpenContainer }) {
               <div key={i} className="mono">• {m.cn} {m.iso ? `(${m.iso})` : ''} {m.fe || ''}</div>
             ))}
             {d.missing.length > 10 && <div className="text-dim-400">... 외 {d.missing.length - 10}건</div>}
+          </div>
+        )}
+        {d.cancelCns && d.cancelCns.length > 0 && (
+          <div className="mt-1">
+            <div className="text-dim-300 mb-0.5">선사 취소 요청분(리스트에 남음):</div>
+            {d.cancelCns.slice(0, 10).map((cn, i) => <div key={i} className="mono">• {cn}</div>)}
+            {d.cancelCns.length > 10 && <div className="text-dim-400">... 외 {d.cancelCns.length - 10}건</div>}
           </div>
         )}
         {d.extraCns && d.extraCns.length > 0 && (

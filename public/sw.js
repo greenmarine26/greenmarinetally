@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.50-01';
-const NOTE = '로그인 뒤 작업 선박을 고릅니다(테스터 직책도 조회만·작업자를 고릅니다). 검수원은 고른 선박 안에서만 앱이 돌고, 수석과 검수사는 조회만 또는 작업자를 골라 들어옵니다. 조회만이면 호기가 기록되지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.50-02';
+const NOTE = '캔슬 리스트를 업로드 창에 올리면 그 컨을 리스트에서 뺍니다(더하지 않습니다). 수집기가 읽은 취소 요청분은 경고가 아니라 안내로 뜹니다. 로그인 뒤 작업 선박 선택과 조회만은 3.50 그대로입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

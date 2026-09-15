@@ -3,7 +3,7 @@
 //   - ediContainers 분류는 VoyagePage 재처리 로직과 동일(평택 POD/POL → discharge/loading, 그 외 transit).
 //   - records는 원시 파싱 결과만 반환(먼저 온 값 유지 + 빈칸 채움). 기존 records와의 병합·보존은 수집기 측 보수 머지 담당.
 //   - Firebase 쓰기는 여기서 하지 않는다 — 순수 함수라 시뮬·헬퍼 재사용이 쉽다.
-import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS } from './utils.js';
+import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
 import { APP_VERSION } from './utils.js';
 
 // V9.57(G5): 파일 분류기 단일화 — mergeApi.classify와 이 _kind가 서로 달라(cdl 허용·.txt 지원·
@@ -27,6 +27,7 @@ export function classifyTallyFile(name, head) {
     return 'skip';
   }
   if (e === 'xls' || e === 'xlsx') {
+    if (cancelListKind(n)) return 'skip';             // 3.50-02: 캔슬(·추가 혼합) 리스트는 «빼라는 목록» — 더하는 재료가 아니다(수집기 2.18 도 제외한다)
     if (/loadlist\.xlsx$/.test(n)) return 'merged';   // V8.32-01: 수집기 합본(평택 기준 검증본) — 전용 매핑으로 읽음
     if (/xray|x-ray/.test(n)) return 'xray';          // V9.57(G5): mergeApi가 쓰는 xray 분류 편입
     // V8.89: cdl 제외 해제 — CDL(양하 리스트)만 먼저 온 항차가 "인식된 자료 없음"으로 등록조차 안 되던

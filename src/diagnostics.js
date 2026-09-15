@@ -69,7 +69,7 @@ export const isoConflictText = (w) => {
   return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
 };
 
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false, cancelReq = [] }) {
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
@@ -81,6 +81,10 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   //   재적부(시프팅)라 **선적 EDI 에 있을 수 없다.** 수화물과 같은 자리에서 뺀다.
   const _thruSet = new Set((thruCns || []).map(c => String(c || '').trim().toUpperCase()));
   const _isThru = (cn) => _thruSet.has(String(cn || '').trim().toUpperCase());
+  //  ★ 3.50-02: **선사 취소 요청분(수집기 info/amend.cancelReq)은 «EDI에 없는 컨» 이 아니다** — 빼야 할 컨이 아직 리스트에 남은 것이다.
+  //    실측 SWSP 2609S — 캔슬 리스트 13대가 앱 리스트에 더해져 경고 13개. 경고 대신 «취소 요청 N대 리스트에 남아 있음» 안내로 가른다.
+  const _cancSet = new Set((Array.isArray(cancelReq) ? cancelReq : Object.entries(cancelReq || {}).map(([k, v]) => (typeof v === 'string' ? v : k))).map(c => String(c || '').replace(/[\s-]/g, '').toUpperCase()).filter(Boolean));
+  const _isCanc = (cn) => _cancSet.has(String(cn || '').replace(/[\s-]/g, '').toUpperCase());
   const ediArr = Object.values(ediContainers || {});
   const ediPtk = filterPyeongtaek(ediContainers || {}, mode);
   const ediCount = ediPtk.length;
@@ -288,6 +292,20 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       }
       // 리스트에는 있는데 EDI 평택에 없는 컨 (통과화물이거나 다른 항차)
       let extraCns = validListCns.filter(cn => !ediPtkCnSet.has(cn.toUpperCase()));
+      //  ★ 3.50-02: **취소 요청분을 맨 먼저 가른다** — 가상 E 자리(아래 empty_confirmed)가 fe≠F 인 EDI 밖 리스트분을 «E확정» 으로 삼키므로,
+      //    엠티 캔슬 리스트(전부 fe=E)가 그 뒤에 서면 취소분이 총 대수를 부풀리고 안내가 안 뜬다(감사 실측). 경고가 아니라 «아직 남아 있음» 안내다.
+      const cancFound = extraCns.filter(cn => _isCanc(cn));
+      extraCns = extraCns.filter(cn => !_isCanc(cn));
+      if (cancFound.length > 0) {
+        alerts.push({
+          level: 'info',
+          code: 'cancel_pending',
+          msg: `선사 취소 요청 ${cancFound.length}대가 리스트에 남아 있음 — 캔슬 리스트를 올리면 빠집니다`,
+          voice: '',
+          count: cancFound.length,
+          details: { cancelCns: cancFound.slice(0, 20), ediCount, realEdiCount, listCount: realListCount, matchedCount },
+        });
+      }
       // V9.04-02: 가상 자리(virtualEdiCount>0)가 있으면, EDI밖 리스트분 중 fe≠'F'는
       //   그 자리를 채우는 엠티 확정분(E확정) — 경고가 아니라 info로 분리 (629S: 187개 이중 경고 소멸).
       let emptyConfirmedCount = 0;
@@ -340,7 +358,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           msg: `리스트에 EDI 평택과 매칭 안되는 컨 ${extraCns.length}개`,
           voice: `리스트에 EDI에 없는 컨테이너가 ${extraCns.length}개 있습니다. 확인 필요`,
           count: extraCns.length,
-          details: { extraCns: extraCns.slice(0, 20) },
+          details: { extraCns: extraCns.slice(0, 20), ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 3.50-02: 패널의 «EDI ?대 / 리스트 ?대» 가 이 셋을 읽는다
         });
       }
     }

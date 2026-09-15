@@ -299,6 +299,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 해치 자동 판정 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HAM" "$SMOKE_HAO"; exit 1
   fi
+  # 3.50-02: 캔슬 리스트 — SWSP 2609S 실자료 사본(records 400 · EDI 813 · 취소 요청 13)으로 «취소분은 EDI에 없는 컨이 아니다»·파일명 판정·리스트에서 빼기·자동 등록 분류를 실소스 그대로 잰다.
+  SMOKE_CLM=$(mktemp /dev/shm/hometmp/_clm_XXXXXX.mjs)
+  SMOKE_CLO=$(mktemp /dev/shm/hometmp/_clo_XXXXXX.cjs)
+  printf 'export { isCancelListName, cancelListKind, removeCancelledFromMap, isPyeongtaekPort } from "%s/src/utils.js";\nexport { runDiagnostics } from "%s/src/diagnostics.js";\nexport { classifyTallyFile } from "%s/src/autoRegApi.js";\n' "$PWD" "$PWD" "$PWD" > "$SMOKE_CLM"
+  if npx esbuild "$SMOKE_CLM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CLO" --log-level=error; then
+    node tools/smoke_cancellist.cjs "$SMOKE_CLO" || { echo "✗ 캔슬 리스트 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CLM" "$SMOKE_CLO"; exit 1; }
+    rm -f "$SMOKE_CLM" "$SMOKE_CLO"
+  else
+    echo "✗ 캔슬 리스트 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CLM" "$SMOKE_CLO"; exit 1
+  fi
   # 3.39: 선적 칸에서 «칠한 칸=풀 · 테두리만=엠티» 가 실제로 그려지는가 — 같은 번들(ATPR 366대·엠티 361)로 실렌더한다.
   node tools/smoke_feborder.cjs "$SMOKE_HL" || { echo "✗ 풀·엠티 구분 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.36: 카고플랜 해치커버가 세로 한가운데인가 — 세 척(ATPR·MCSC·MAMP)을 실렌더한다. MAMP 만 «데크 전용 베이» 를 갖는다.
