@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.47-02';
-const NOTE = '동방 배도 작업 보드에 호기별 작업 장이 뜹니다. 한 호기가 잡은 20피트 베이 둘을 한 장으로 묶어 그 시각에 어느 호기가 어느 장에 있었는지 갈라 보여 드립니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.48';
+const NOTE = '베이뷰 작업이 생겼습니다. 작업 시작에서 베이뷰를 고르면 위는 컨테이너 자료, 아래는 작업 중인 베이가 실시간으로 보입니다. 기존 방식은 그대로입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

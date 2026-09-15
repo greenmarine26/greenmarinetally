@@ -45,7 +45,10 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
   //    검수사 2026-09-09 — «그걸 한눈에 들어 오게 하되 **베이크기 확대 축소에 상관없이** 크게».
   //    그림은 `FitBox` 가 `transform: scale()` 로 줄이는데 제목도 같이 줄어 6~8px 이 됐다(실측 — 제목 11px × 배율 0.6).
   //    그래서 제목만 배율 **밖**으로 뺀다 — `titleOut` 이면 안에 안 그리고, `onTitles` 로 그 장들의 제목을 올려 준다.
-  titleOut = false, onTitles = null
+  titleOut = false, onTitles = null,
+  //  ★ 3.48 «베이뷰 작업»(onlyBay 갈래에서만 쓴다) — brightTier: 'deck'|'hold' 면 그 단은 그대로, 다른 단은 흐리게(장 전체는 다 보인다 — 크레인 자리 대조용).
+  //    warnCells: Map('bay-row-tier' → 'conflict'|'noterm') — 검수원 기록과 터미널 실적이 다른 칸(utils.bayViewOverlayOf 한 벌)에 빨간/회색 테두리.
+  brightTier = null, warnCells = null
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
@@ -658,7 +661,8 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
             isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
             isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
             globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
-            pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells hideTitle={titleOut} />
+            pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells hideTitle={titleOut}
+            brightTier={brightTier} warnCells={warnCells} />
         ))}
       </div>
     );
@@ -1124,8 +1128,12 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
   selectionMode = false, selectedCns,
   // M6.92.5: 양하/선적 모드 (needsShift 표시 제어)
-  mode = 'discharge'
+  mode = 'discharge',
+  //  3.48 베이뷰 — 고른 단만 밝게 · 불일치 칸 테두리(BayPlan 이 onlyBay 갈래에서만 넘긴다)
+  brightTier = null, warnCells = null
 }) {
+  //  3.48: 단 흐리기 — 라벨·해치커버는 그대로 두고 칸만. 데크 = 80단 이상(BayPlan 전체가 쓰는 같은 기준).
+  const _dimStyle = (tier) => (brightTier && ((parseInt(tier, 10) >= 80 ? 'deck' : 'hold') !== brightTier)) ? { opacity: 0.32 } : undefined;
   const evenContainers = page.evenBay ? (bayGroups[page.evenBay] || []) : [];
   const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
   const allContainers = [...evenContainers, ...oddContainers];
@@ -1766,6 +1774,9 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
 
     // M5.1 I: 선택 모드 시 선택된 컨 시각 표시
     const isSelected = selectionMode && selectedCns && selectedCns.has(c.cn);
+    //  3.48 베이뷰 — 검수원 기록과 터미널 실적이 다른 칸(빨강) · 검수원이 찍었는데 터미널이 모르는 칸(회색). 판정은 utils.bayViewOverlayOf 한 벌.
+    const _warn = warnCells && warnCells.get(`${parseInt(c.bay, 10)}-${row}-${tier}`);
+    const _warnCls = _warn === 'conflict' ? 'ring-4 ring-red-500 ring-inset' : _warn === 'noterm' ? 'ring-4 ring-slate-400 ring-inset' : '';
     // ── TallyOne 2.98-02: **화면에도 OOG 방향을 낸다.** (검수사 지적 2026-08-31) ──
     //   원문 — *"화면은 안보여주나요 인쇄만?"*
     //   2.97/2.98 은 인쇄물(카고플랜·베이상세)에만 넣었다. 현장에서 먼저 보는 것은 화면이다.
@@ -1786,7 +1797,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
         key={key}
         onClick={handleCellClick}
         className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
-          isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
+          isSelected ? 'ring-4 ring-sky-400 ring-inset' : _warnCls
         }`}
         style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize,
                  //  3.7: 목적지 고정 바탕색 — 완료·XRAY·시프팅 칠이 있으면 그것이 이긴다(cellColor 가 그 경우 다른 클래스를 준다).
@@ -1956,7 +1967,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
                       const tier2 = String(tr.tier).padStart(2, '0');
                       if (!(c.active || (c.blocked && pageCellCns.has(`${lbl}-${tier2}`)))) return null;
                       return (
-                        <div key={`dc-${ti}-${lbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
+                        <div key={`dc-${ti}-${lbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center', ..._dimStyle(tier2) }}>
                           {renderCell(lbl, tier2)}
                         </div>
                       );
@@ -1988,7 +1999,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
                       const tier2 = String(tr.tier).padStart(2, '0');
                       if (!(c.active || (c.blocked && pageCellCns.has(`${lbl}-${tier2}`)))) return null;
                       return (
-                        <div key={`hc-${ti}-${lbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
+                        <div key={`hc-${ti}-${lbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center', ..._dimStyle(tier2) }}>
                           {renderCell(lbl, tier2)}
                         </div>
                       );
@@ -2020,7 +2031,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
           <div style={{ width: 24 }}></div>
         </div>
         {deckTiersPadded.map((tier, ti) => (
-          <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
+          <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center" style={tier ? _dimStyle(tier) : undefined}>
             <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {deckRowsArr.map((row, ri) => (
               <React.Fragment key={`d-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
@@ -2062,7 +2073,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
       <div>
         <div className="text-2xs text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
         {holdTiersPadded.map((tier, ti) => (
-          <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
+          <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center" style={tier ? _dimStyle(tier) : undefined}>
             <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {holdRowsArr.map((row, ri) => (
               <React.Fragment key={`h-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>

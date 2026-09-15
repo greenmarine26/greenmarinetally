@@ -78,7 +78,7 @@ function narrowByFullCn(list, q) {
   return list;
 }
 
-export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {}, relayQuery = '' }) {   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {}, relayQuery = '', bayView = null }) {   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -437,16 +437,41 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     setManualBay(host ? host.center : null);
   }, [guideMode, manualBay, manualGroups]);
   // 수동 작업 위치를 수석에게 전달 (가이드와 동일, auto=false). 베이/단 미선택이면 클리어.
+  const _suppressBay = !!(bayView && bayView.suppressBayActivity);   // 3.48 따라가기 — 터미널에서 받은 베이를 «사람이 고른 자리»로 올리지 않는다(수석 보드 live 되먹임 방지)
   useEffect(() => {
     if (guideMode || !inspector) return;  // 가이드는 GuidedWorkPanel이 따로 기록
-    if (manualBay == null || !manualTier) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch(() => {}); return; }
+    if (manualBay == null || !manualTier || _suppressBay) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch(() => {}); return; }
     const g = manualGroups.find(x => x.center === manualBay);
     const bays = g ? [...g.bays].sort((a, b) => a - b) : [manualBay];
     const bayLabel = g?.noBay ? '미지정' : (bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0'));
     const remain = g?.noBay ? (g.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
     // TallyOne 1.55: 갱(호기)을 같이 보낸다 — 종전엔 빈 문자열이라 수석 화면에서 어느 갱인지 알 수 없었다.
     fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: equipNo || '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
-  }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo]);
+  }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo, _suppressBay]);
+  //  ★ 3.48 베이뷰 — 덮개가 준 초기값(베이·단·자동·트윈)을 **위 리셋 효과 뒤에** 얹는다. 리셋 효과([workFilter])는 마운트 때도 한 번 돌아
+  //    먼저 넣은 값을 지우므로, 효과 순서상 그 뒤에 두어야 남는다(감사 실측). 베이는 raw 번호를 받아 여기 `manualGroupCenterOf` 한 벌로 묶음 center 로 바꾼다.
+  const _presetKey = bayView && bayView.presetCtx ? [bayView.presetCtx.seq, bayView.presetCtx.bay, bayView.presetCtx.tier, bayView.presetCtx.guide, bayView.presetCtx.twin].join('|') : '';
+  //  ⚠ «프리셋으로 바뀐 그룹»의 표식은 seq 가 아니라 **여기서 값을 넣는 순간** 올리는 셈이어야 한다 — seq 는 덮개가 재렌더될 때 한 커밋 먼저 내려오고
+  //    manualBay 는 아래 효과가 돈 다음 커밋에 바뀌므로, seq 로 가리면 GuidedWorkPanel 이 «진짜 그룹 변경»으로 읽어 단을 지운다(연막 실측).
+  const [_presetApplied, _setPresetApplied] = useState(0);
+  useEffect(() => {
+    if (!bayView || !bayView.presetCtx) return;
+    const p = bayView.presetCtx;
+    _setPresetApplied((n) => n + 1);
+    if (p.guide != null) setGuideMode(!!p.guide);
+    if (p.twin != null) setSearchMode(p.twin ? 'twin' : 'single');
+    if (p.bay !== undefined) { const c = p.bay == null ? null : manualGroupCenterOf(String(p.bay)); setManualBay(c); }
+    if (p.tier !== undefined) setManualTier(p.tier || null);
+    _snapArmedRef.current = false;   // «물려받은 직후 1회 정리»가 방금 넣은 값을 비우지 않게
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_presetKey]);
+  //  3.48 베이뷰 — 지금 작업 맥락을 덮개에 올린다(아래 칸 그림·띠 글자가 이것을 본다). 값이 바뀔 때만.
+  const _ctxCb = bayView && bayView.onWorkCtxChange;
+  useEffect(() => {
+    if (!_ctxCb) return;
+    _ctxCb({ bay: manualBay, tier: manualTier, guide: guideMode, twin: searchMode === 'twin', noWorkLeft });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_ctxCb, manualBay, manualTier, guideMode, searchMode, noWorkLeft]);
   // 1.26: shipLib(본선 구조·실적)을 ctx 로 내려보낸다 — "몇 대까지 싣나" 답변 근거.
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib,
     pier: voyage?.info?.pier || '',   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
@@ -474,6 +499,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           *"잘못해서 선적인데 양하를 누르고 안된다고 할 수 있죠"* — 선택지가 아닌 것을 선택지처럼 보였다.
           모드 전환은 화면 위 양하/선적 토글이 맡는다(검수사: *"따로 선적/양하 모드 변경탭은 필요합니다"* — 이미 있음).
           완료 보기는 작은 칸으로 유지. pickWorkFilter·setWorkFilter 배선은 그대로(표시만 줄임). */}
+      {!(bayView && bayView.compact) && (
       <div className="bg-ink-900 border border-line rounded-pill p-1.5 flex gap-1 items-stretch">
         {workFilter !== 'completed' ? (
           <div className={`flex-[3] py-2.5 rounded text-center font-bold ${
@@ -496,6 +522,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           <span className="text-2xs opacity-80">{completedCount}대</span>
         </button>
       </div>
+      )}
       {/* V7.99-16 / V8.04: 양하 — 신고 리스트에 없는데 내려진 컨(초과) 기록 (모달) */}
       {workFilter === 'discharge' && (
         <button
@@ -549,20 +576,20 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {workFilter !== 'completed' && !isLoloShip && (
         <div className={`rounded-pill p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
           <button onClick={() => setGuideMode(true)}
-            className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
+            className={`flex-1 ${bayView && bayView.compact ? 'py-1 text-xs' : 'py-2.5 text-sm'} rounded font-bold flex items-center justify-center gap-1.5 ${
               guideMode ? 'bg-violet-600 text-white shadow-lg' : 'text-dim-300 hover:bg-ink-750'
             }`}>
             🤖 자동 가이드
           </button>
           <button onClick={() => setGuideMode(false)}
-            className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
+            className={`flex-1 ${bayView && bayView.compact ? 'py-1 text-xs' : 'py-2.5 text-sm'} rounded font-bold flex items-center justify-center gap-1.5 ${
               !guideMode ? 'bg-amber-600 text-white shadow-lg' : 'text-dim-300 hover:bg-ink-750'
             }`}>
             ✋ 수동
           </button>
         </div>
       )}
-      {guideMode && workFilter !== 'completed' && (
+      {guideMode && workFilter !== 'completed' && !(bayView && bayView.compact) && (
         <div className="text-center text-xxs font-bold text-violet-300 -mt-1">
           자동 가이드 모드 — 앱이 다음 컨테이너를 순서대로 제시합니다
         </div>
@@ -571,13 +598,14 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {guideMode && workFilter !== 'completed' && !isLoloShip ? (
         <GuidedWorkPanel
           slotGroups={manualGroups}
-          workCtx={{ bay: manualBay, tier: manualTier, setBay: setManualBay, setTier: setManualTier }}
+          workCtx={{ bay: manualBay, tier: manualTier, setBay: setManualBay, setTier: setManualTier, presetSeq: _presetApplied }}   // 3.48: presetSeq — 베이뷰 프리셋으로 온 그룹 변경인지 GuidedWorkPanel 이 가린다
           onPlaceUnassigned={onPlaceUnassigned}
           onOpenPlan={onOpenPlan}
           voyage={voyage} voyageKey={voyageKey} inspector={inspector}
           allContainers={allContainers} workFilter={workFilter}
           onSwitchManual={() => setGuideMode(false)}
           onOpenContainer={onOpenContainer}
+          compact={!!(bayView && bayView.compact)} suppressBayActivity={_suppressBay}
         />
       ) : (
       <>
@@ -796,13 +824,13 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       )}
       <div className="bg-ink-900 border border-line rounded-pill p-1.5 flex gap-1">
         <button onClick={() => setSearchMode('single')}
-          className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
+          className={`flex-1 ${bayView && bayView.compact ? 'py-1 text-xs' : 'py-2 text-sm'} rounded font-bold flex items-center justify-center gap-1.5 ${
             searchMode === 'single' ? 'bg-amber-700 text-amber-100' : 'text-dim-300 hover:bg-ink-750'
           }`}>
           <Truck className="w-4 h-4"/>싱글 🎤
         </button>
         <button onClick={() => setSearchMode('twin')}
-          className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
+          className={`flex-1 ${bayView && bayView.compact ? 'py-1 text-xs' : 'py-2 text-sm'} rounded font-bold flex items-center justify-center gap-1.5 ${
             searchMode === 'twin' ? 'bg-blue-700 text-blue-100' : 'text-dim-300 hover:bg-ink-750'
           }`}>
           <Truck className="w-4 h-4"/><Truck className="w-4 h-4"/>트윈

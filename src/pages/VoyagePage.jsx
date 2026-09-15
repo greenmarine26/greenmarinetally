@@ -37,6 +37,7 @@ import { addToUserBayDict } from '../data/userBayDict.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
+import BayViewWork from '../components/BayViewWork.jsx';   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
 import GlobalSearchPage from './GlobalSearchPage.jsx';
 import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
 import BayPlan from '../components/BayPlan.jsx';
@@ -105,6 +106,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           : (voyage?.info?.mode || 'discharge'));
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
+  //  ★ 3.48 «베이뷰 작업» — 작업 시작 방식. 검수사 «작업 시작시 기존모드로 할것인지 새로운 베이뷰 모드로 시작할건지 선택할수있게».
+  //    'classic'(종전 그대로) | 'bayview'(전면 덮개). 폰에 기억하되 항차 화면을 열 때는 기존 방식으로 시작한다 — 덮개가 저절로 뜨면 화면을 가린다.
+  const [workStyle, setWorkStyle] = useState('classic');
   const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과·업로드 접이 메뉴(표시 전용)
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 (넓은 화면 = 우측 고정 칼럼 / 폰 = 바텀시트)
   const isWide = useIsWide();   // 2.18: **어디에 그릴지**를 JS 로 정한다 — 인스턴스는 하나(구독 중복 방지)
@@ -1717,7 +1721,27 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           ))}
         />
       )}
-      {!_sideCanc && tab === 'search' && (
+      {/* ★ 3.48 베이뷰 — «작업 시작» 탭에서 고른다. 베이뷰면 아래 SearchPanel 블록 대신 덮개를 그린다(인스턴스 하나). LOLO 배는 베이 그림이 없어 안 보인다. */}
+      {!_sideCanc && tab === 'search' && !isLoloShip && (
+        <div className="flex gap-1.5 mb-2" data-workstyle={workStyle}>
+          <button onClick={() => setWorkStyle('classic')} className={`flex-1 py-2 rounded-pill text-xs2 font-black border ${workStyle === 'classic' ? 'bg-amber-700 border-amber-300 text-white' : 'bg-ink-900 border-line text-dim-200'}`}>기존 방식</button>
+          <button onClick={() => setWorkStyle('bayview')} className={`flex-1 py-2 rounded-pill text-xs2 font-black border ${workStyle === 'bayview' ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-violet-200'}`}>베이뷰 작업 — 위 자료 · 아래 베이</button>
+        </div>
+      )}
+      {!_sideCanc && tab === 'search' && workStyle === 'bayview' && !isLoloShip && (
+        <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyage} voyageKey={voyageKey} inspector={inspector} mode={mode}
+          allEdiContainers={allEdiContainers} xrayMap={xrayMap} xraySeals={xraySeals} shiftingMap={shiftingMap} preGoneInfo={preGoneInfo}
+          onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}
+          onClose={() => setWorkStyle('classic')}
+          searchPanelProps={{
+            rfSkip: !!shipPolicy?.rfSkip,
+            esealBrief: esealInfo ? { n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges, poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length } : null,
+            relayQuery: relayQ, shipLib, portMisData, pilotForecast, terminalWork, isLoloShip, diagAlerts,
+            onWorkFilterChange: (m) => setMode(m), onOpenPlan: _mirOpenPlan,
+            onPlaceUnassigned: (c) => { setPendingMove({ cn: c.cn, fromBay: '', fromRow: '', fromTier: '', fe: c.fe || '', iso: c.iso || c.tp || '' }); setWorkStyle('classic'); setTab('bay'); },
+          }} />
+      )}
+      {!_sideCanc && tab === 'search' && !(workStyle === 'bayview' && !isLoloShip) && (
         // TallyOne 1.3: 조회(lookup)·자연어(nls) 기록 — 검색 실행부는 별도 파일
         //   (components/SearchPanel.jsx)이라 이번 판 수정 범위 밖. prop 계약을 건드리지 않고
         //   input 이벤트를 캡처해 질의를 기록한다. 숫자만이면 끝4 조회, 그 외는 자연어.

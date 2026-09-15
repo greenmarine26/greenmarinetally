@@ -799,6 +799,21 @@ fi
         cp "$SMOKE_LP.fbbak" src/firebase.js; rm -f "$SMOKE_LP.fbbak"
         echo "✗ 동방 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1
       fi
+      #  3.48: **베이뷰 작업** — DXQD 2636E 실자료로 선택 화면 → 따라가기 → 자동 카드·장 그림(완료 초록·남은 흰 칸·다른 단 흐리게) → 데크⇄홀드 → 수동 게이트 → ✕ 를 실제로 누른다.
+      #    완료 지도(앱 ∪ 터미널)·불일치 세 갈래(pos·cell·noterm)·따라가기(4호기 BAY (20)21·실적 없는 배) 판정도 같은 번들에서 센다.
+      SMOKE_BV=$(mktemp /dev/shm/hometmp/_smokebv_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_BV.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_bayview.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_BV"; then
+        cp "$SMOKE_BV.fbbak" src/firebase.js && rm -f "$SMOKE_BV.fbbak"
+        node tools/smoke_bayview.cjs "$SMOKE_BV" || { echo "✗ 베이뷰 작업 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BV"; exit 1; }
+        rm -f "$SMOKE_BV"
+      else
+        cp "$SMOKE_BV.fbbak" src/firebase.js; rm -f "$SMOKE_BV.fbbak"
+        echo "✗ 베이뷰 작업 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BV"; exit 1
+      fi
     else
       cp "$SMOKE_LB.fbbak" src/firebase.js; rm -f "$SMOKE_LB.fbbak"
       echo "✗ 실시간 작업 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1

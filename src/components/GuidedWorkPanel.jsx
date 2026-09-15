@@ -64,7 +64,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null }) {   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false }) {   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -610,15 +610,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
   useEffect(() => {
     if (!inspector) return;
-    if (selectedGroup == null || !selectedTier) {
-      // 베이/단 미선택 = 위치 정보 클리어(항차·모드는 유지)
+    if (selectedGroup == null || !selectedTier || suppressBayActivity) {
+      // 베이/단 미선택 = 위치 정보 클리어(항차·모드는 유지) · 3.48 따라가기도 클리어(터미널 추론을 사람 자리로 되먹이지 않는다)
       fbSetInspectorActivity(inspector, voyageKey, mode).catch(e => console.warn('[V9.57] 활동 위치 클리어 실패', e));  // V9.57(I8): 무음 catch → 로그
       return;
     }
     fbSetInspectorActivity(inspector, voyageKey, mode, {
       equip, bayLabel: bayLabelOf(selectedGroup), tier: selectedTier, remain: tierRemainList.length, auto: true,
     }).catch(e => console.warn('[V9.57] 활동 위치 보고 실패', e));  // V9.57(I8): 무음 catch → 로그
-  }, [inspector, voyageKey, mode, equip, selectedGroup, selectedTier, tierRemainList.length]);
+  }, [inspector, voyageKey, mode, equip, selectedGroup, selectedTier, tierRemainList.length, suppressBayActivity]);
 
   // 카드/선택지 음성 안내는 프롬프트 조건(deckDonePromptD 등) 정의 이후로 이동 — 아래 참조.
   const lastSpokenRef = useRef('');
@@ -812,11 +812,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  2.90: 물려받은 선택(workCtx)으로 마운트될 때는 지우지 않는다 — 마운트 직후 이 effect 가 한 번 돌아
   //    수동에서 고른 단(selectedTier)을 지우던 것이 «전환하면 재지정» 의 한 축이었다. 진짜 그룹 변경만 지운다.
   const _prevGroupRef = useRef(selectedGroup);
+  //  3.48 베이뷰 — 덮개가 프리셋(workCtx.presetSeq)으로 베이·단을 **같이** 넣은 그룹 변경은 단을 지우지 않는다.
+  //    감사 실측 — 따라가기 중 크레인이 (16)17 로 옮겨 가자 이 효과가 방금 넣은 단을 지워 위 칸이 «작업할 단을 선택하세요» 로 되돌아갔다(띠는 데크인데).
+  const _prevPresetRef = useRef(workCtx ? (workCtx.presetSeq || 0) : 0);
   useEffect(() => {
     if (_prevGroupRef.current === selectedGroup) return;
     _prevGroupRef.current = selectedGroup;
-    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); recentRef.current = [];
+    const byPreset = !!workCtx && (workCtx.presetSeq || 0) !== _prevPresetRef.current;
+    _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0;
+    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); if (!byPreset) setSelectedTier(null); setStreamPref(null); recentRef.current = [];
   }, [selectedGroup]);
+  useEffect(() => { _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0; }, [workCtx ? workCtx.presetSeq : 0]);   // 3.48: 단만 바뀐 프리셋도 기준을 맞춰 둔다(다음 «진짜» 그룹 변경이 프리셋으로 오해되지 않게)
   useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
@@ -1396,7 +1402,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   if (!berthSide) {
     return (
       <div className="space-y-2">
-        <SettingsBar/>
+        {!compact && <SettingsBar/>}
         <div className="bg-ink-900 border-2 border-violet-700 rounded-pill p-4 space-y-3">
           <div className="text-sm font-bold text-violet-300 text-center flex items-center justify-center gap-1.5">
             <Anchor className="w-4 h-4"/>접안 방향을 선택하세요
@@ -1423,7 +1429,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   if (selectedGroup == null) {
     return (
       <div className="space-y-2">
-        <SettingsBar/>
+        {!compact && <SettingsBar/>}
         <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
           <div className="text-sm font-bold text-violet-300">작업할 베이를 선택하세요</div>
           {groups.length === 0 && unassigned.length === 0 && <div className="text-xs text-dim-400 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
@@ -1494,7 +1500,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const deckFirstBlock = mode === 'discharge' && !!g && g.deck > 0;
     return (
       <div className="space-y-2">
-        <SettingsBar/>
+        {!compact && <SettingsBar/>}
         <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-3">
           <div className="flex items-center gap-2">
             <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-dim-300 hover:text-violet-300">
@@ -1624,7 +1630,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   return (
     <div className="space-y-2">
-      <SettingsBar/>
+      {!compact && <SettingsBar/>}
       <div className="flex items-center justify-between bg-ink-900 border border-line rounded-pill px-2 py-1.5">
         <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-dim-300 hover:text-violet-300">
           <ChevronLeft className="w-4 h-4"/>베이 선택
@@ -2017,8 +2023,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
 
-          {/* 다음 예정 미리보기 */}
-          {queue.length > 1 && (
+          {/* 다음 예정 미리보기 — 3.48: 베이뷰(compact)에서는 접는다(아래 칸 그림이 다음 자리를 보여 준다) */}
+          {!compact && queue.length > 1 && (
             <div className="bg-ink-900 border border-line rounded-pill p-2">
               <div className="text-2xs text-dim-400 font-bold mb-1">다음 예정</div>
               {queue.slice(1, 5).map((q, i) => (
