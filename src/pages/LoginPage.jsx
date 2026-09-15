@@ -12,7 +12,8 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled} from '../utils.js';   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled, getPierFromBerth, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
+import { isFreeRoamer, readWorkChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -25,7 +26,7 @@ import {
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 import { useBackHandler } from '../backHandler.js';
 
-export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, pilotForecast = {} }) {   // 2.64: pilotForecast — 타임라인 도선 마커
+export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, pilotForecast = {}, choiceFor = '', onCancelChoice = null }) {   // 3.50 choiceFor — 이미 로그인한 사람이 «선박 변경» 으로 왔다: 이름 단계를 건너뛰고 선택 단계만   // 2.64: pilotForecast — 타임라인 도선 마커
   const [newName, setNewName] = useState('');
   // TallyOne 1.0: 목록에서 이름을 고르면 선택만 되고, 하단 [로그인] 버튼으로 확정한다.
   const [selected, setSelected] = useState('');
@@ -65,7 +66,23 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   // 2.22: 로그인이 확정되는 지점이 여섯 곳이다(일반·세션통과·신뢰기기·설정·검증·소유자).
   //   전부 이 한 줄을 거치게 해 «오늘의 본인»을 기억한다 — 한 곳이라도 빠지면
   //   그 경로로 들어온 사람만 다음에 또 이름을 쳐야 한다.
-  const commitSelect = (name) => { rememberMe(name); onSelect(name); };
+  //  ★ 3.50 «작업자 / 조회만» 선택 단계 — 검수사 2026-09-15 «로그인후 작업선박 선택후 앱 작동» · «로그인후 작업 선박을 선택 안하면 진입이 안된다는 문구를».
+  //    이름이 확정된 뒤(비밀번호 게이트 통과 뒤) 이 단계가 선다. 오늘 이 기기에서 같은 이름이 이미 골랐으면(readWorkChoice) 건너뛴다 — 30분 자동 로그아웃 뒤 재로그인마다 다시 묻지 않는다.
+  //    자유 열람(수석·부수석·테스터·소유자)은 «조회만 / 작업자» 부터, 일반 검수원은 곧장 선박(+호기) 목록.
+  const [choiceName, setChoiceName] = useState(() => choiceFor || '');   // [변경] 으로 왔으면 첫 그림부터 선택 화면(이름 목록이 한 프레임 비치지 않게)
+  const [choiceStage, setChoiceStage] = useState(() => (choiceFor && isFreeRoamer(choiceFor) ? 'role' : 'vessel'));   // 'role'(조회만/작업자) | 'vessel'(선박·호기)
+  const [choiceVoyage, setChoiceVoyage] = useState('');
+  const [choiceEquip, setChoiceEquip] = useState('');
+  const openChoice = useCallback((name) => { setChoiceName(name); setChoiceStage(isFreeRoamer(name) ? 'role' : 'vessel'); setChoiceVoyage(''); setChoiceEquip(''); }, []);
+  useEffect(() => { if (choiceFor) openChoice(choiceFor); }, [choiceFor, openChoice]);
+  //  선택 화면을 띄운 채 30분 자동 로그아웃이 되면(current '' · choiceFor '') 이름 단계로 돌아간다 — 안 그러면 로그아웃 안내 없이 그 자리에서 «작업 시작» 이 재로그인이 된다(3.50 감사 지적).
+  useEffect(() => { if (!current && !choiceFor) setChoiceName(''); }, [current, choiceFor]);
+  const commitSelect = (name) => {
+    rememberMe(name);
+    const prev = readWorkChoice(name);
+    if (prev) { onSelect(name, prev); return; }
+    openChoice(name);
+  };
 
   const handlePick = (name) => {
     // V9.45 계승: 로딩 검사를 맨 앞으로 — guard가 null인 사이에 잠금 대상을 고르면
@@ -360,6 +377,83 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   }, [board, boardShown]);
   const hhmm = (ms) => (ms ? `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}` : '');
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
+
+  //  ── 3.50 선택 단계 화면 ── (훅은 전부 위에서 돌았다 — 조기 반환은 여기서만)
+  if (choiceName) {
+    const free = isFreeRoamer(choiceName);
+    const vlist = [...board.ships, ...board.soon, ...board.upcoming];
+    const infoOf = (key) => (voyages && voyages[key] && voyages[key].info) || {};
+    const pierOf = (key) => { const inf = infoOf(key); return inf.pier || getPierFromBerth(inf.berth || ''); };
+    const rankLabel = (r) => (r === 0 ? '작업중' : r === 1 ? '오늘' : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
+    const equips = choiceVoyage ? equipNumbersForPier(pierOf(choiceVoyage)) : [];
+    const chosen = choiceVoyage ? infoOf(choiceVoyage) : null;
+    const start = () => { if (!choiceVoyage) return; onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip }); };
+    const back = () => { if (choiceFor && onCancelChoice) { onCancelChoice(); return; } setChoiceName(''); };
+    return (
+      <div className="min-h-screen bg-ink-950 text-dim-100 px-3 py-4" data-login-choice={choiceStage}>
+        <div className="max-w-lg mx-auto space-y-3">
+          <div className="flex items-center gap-2">
+            <button onClick={back} className="px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-dim-200 text-xs font-bold flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5"/>{choiceFor && onCancelChoice ? '그대로 두기' : '이름 다시 고르기'}</button>
+            <div className="min-w-0">
+              <div className="text-sm font-black text-dim-100 truncate">{choiceName} 님 · {getStaffRole(choiceName) || ''}</div>
+              <div className="text-xxs text-dim-400">{choiceStage === 'role' ? '어떻게 들어오시겠습니까?' : '작업 선박 선택'}</div>
+            </div>
+          </div>
+          {choiceStage === 'role' && free && (
+            <div className="space-y-2">
+              <div className="text-xs text-dim-300 bg-ink-900 border border-line rounded-pill p-3 leading-relaxed">
+                수석·검수사·테스터는 <b className="text-dim-100">조회만</b>으로 들어오면 호기가 기록되지 않고 작업중으로 세지 않습니다(모든 선박 열람). <b className="text-dim-100">작업자</b>로 들어오면 선박·호기를 고르고 검수(완료·보고)가 기록됩니다 — 그래도 모든 선박을 볼 수 있습니다.
+              </div>
+              <button onClick={() => onSelect(choiceName, { mode: 'view' })} data-choice-role="view"
+                className="w-full py-4 rounded-pill bg-ink-800 border-2 border-sky-700 text-sky-100 font-black text-base">🔍 조회만 — 점검·열람 (호기 기록 없음)</button>
+              <button onClick={() => setChoiceStage('vessel')} data-choice-role="work"
+                className="w-full py-4 rounded-pill bg-violet-700 border-2 border-violet-400 text-white font-black text-base">🏗 작업자 — 선박·호기를 골라 검수</button>
+            </div>
+          )}
+          {choiceStage === 'vessel' && (
+            <div className="space-y-2">
+              <div className="bg-amber-950/60 border-2 border-amber-600 rounded-pill p-3 text-xs text-amber-100 leading-relaxed" data-choice-notice="1">
+                <div className="font-black text-sm text-amber-200">⚠ 작업 선박을 고르지 않으면 들어갈 수 없습니다.</div>
+                오늘 작업할 선박을 고르세요. {free ? '수석·검수사는 고른 뒤에도 모든 선박을 볼 수 있습니다.' : '앱은 고른 선박 안에서만 돕니다(다른 선박은 보이지 않습니다).'} 호기를 같이 고르면 작업 시작 때 호기를 다시 묻지 않습니다. 선박을 바꾸려면 헤더의 [변경]을 누르세요.
+              </div>
+              {vlist.length === 0 && <div className="text-xs text-dim-400 text-center py-4">등록된 항차가 없습니다 — 자료가 오면 다시 로그인하세요.</div>}
+              <div className="space-y-1.5">
+                {vlist.map((sh) => {
+                  const inf = infoOf(sh.key); const on = choiceVoyage === sh.key;
+                  const voyTxt = [inf.voy_d || inf.voy, inf.voy_l].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' / ');
+                  return (
+                    <button key={sh.key} onClick={() => { setChoiceVoyage(sh.key); setChoiceEquip(''); }} data-choice-voyage={sh.key}
+                      className={`w-full text-left rounded-pill px-3 py-2.5 border-2 ${on ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-dim-100'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-base truncate">{inf.vsl || sh.vsl || sh.key} <span className="font-bold text-sm opacity-80">{voyTxt}</span></span>
+                        <span className={`text-xxs font-bold px-1.5 py-0.5 rounded ${sh.rank === 0 ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>{rankLabel(sh.rank)}</span>
+                      </div>
+                      <div className="text-xxs opacity-80">{pierOf(sh.key) || '부두 미상'}{inf.berth ? ` · ${inf.berth}` : ''}{sh.boxes ? ` · ${sh.boxes}대` : ''}{sh.ms ? ` · ${hhmm(sh.ms)}` : ''}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {choiceVoyage && (
+                <div className="bg-ink-900 border border-amber-700 rounded-pill p-2" data-choice-equips="1">
+                  <div className="text-xxs font-bold text-amber-300 mb-1">호기(장비) — {pierOf(choiceVoyage) || '부두 미상'} · 선택하지 않아도 들어갈 수 있습니다</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {equips.map((n) => (
+                      <button key={n} onClick={() => setChoiceEquip(choiceEquip === n ? '' : n)} data-choice-equip={n}
+                        className={`px-3 py-1.5 rounded-pill border text-xs font-bold ${choiceEquip === n ? 'bg-amber-600 border-amber-300 text-white' : 'bg-ink-800 border-line text-amber-200'}`}>🏗 {n}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={start} disabled={!choiceVoyage} data-choice-start="1"
+                className="w-full py-3.5 rounded-pill bg-violet-600 disabled:bg-ink-800 disabled:text-dim-500 text-white font-black text-base">
+                {choiceVoyage ? `${(chosen && chosen.vsl) || choiceVoyage}${choiceEquip ? ` · ${choiceEquip}` : ''} 작업 시작` : '선박을 고르면 시작할 수 있습니다'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-ink-950 text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-4 lg:min-h-0 lg:flex-1 lg:flex lg:flex-col lg:overflow-hidden">

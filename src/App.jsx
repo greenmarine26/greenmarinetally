@@ -2,9 +2,10 @@
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { parseViewCommand, pickVoyageKey } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
-import { APP_VERSION, _storage, SK , setLaneRoutes } from './utils.js';
+import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber } from './utils.js';   // 3.50: 로그인 선택의 호기를 앱 호기로
+import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
 import {
-  fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
+  fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
@@ -79,22 +80,16 @@ export default function App() {
        라고 한 것이 ②다 — 열어 달라고 했는데 찾기까지 한 것이다.
      ⇒ 플랜 명령이고 배를 찾을 수 있으면 **아무 데도 가지 않고** 그 자리에서 덮개만 띄운다.
      ⚠ 배를 못 찾으면 종전대로 통합검색으로 넘긴다 — 엉뚱한 배를 여는 것보다 낫다. */
-  const _voyFromQuery = React.useCallback(
-    (q) => pickVoyageKey(q, Object.keys(voyages || {}), (k) => voyages[k]?.info?.vsl),
-    [voyages]);
-  const _askGlobal = React.useCallback((q) => {
-    const text = typeof q === 'string' ? q : '';
-    const cmd = parseViewCommand(text);
-    if (cmd) {
-      const vk = _voyFromQuery(text);
-      if (vk) { setMirPlan({ voyageKey: vk, mode: cmd.mode, what: cmd.what, bay: cmd.bay }); return; }
-    }
-    setSearchInitQ(text); navigate('search');
-  }, [_voyFromQuery]);
+  //   (_voyFromQuery·_askGlobal 은 3.50 부터 visibleVoyages 뒤에 선다 — 보이는 항차에서만 배를 고른다.)
 
   const [searchInitQ, setSearchInitQ] = useState('');   // 1.69-01: 홈 검색창 질문을 통합검색으로 들고 간다
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력 (TallyOne 1.0: 모달 → 로그인 화면으로 승격)
   const [inspector, setInspector] = useState('');
+  //  ★ 3.50 «작업자 / 조회만» — 로그인 뒤 고른 것. null 이면 아직 안 골랐다(선택 화면이 선다). 일반 검수원은 이것이 곧 «내 작업 선박».
+  //    검수사 2026-09-15 «저와 수석 그리고 테스터를 제외하곤 모두 본인 작업 선박만 볼수있게 … 로그인후 작업선박 선택후 앱 작동».
+  const [workChoice, setWorkChoice] = useState(null);
+  const prevChoiceRef = useRef(null);   // 헤더 [변경] 으로 선택 화면을 다시 열었다가 «그대로 두기» 하면 되돌린다
+  const rechoiceRef = useRef('');       // 3.50: [변경] 을 누른 사람 이름 — 같은 사람이 다시 고르면 로그인 절차를 다시 타지 않는다(handleSelectInspector 는 deps [] 라 state 를 못 본다)
   //  3.7-04: 업데이트 새로고침으로 되살릴 검수원 — handleSelectInspector 가 준비되면 그것으로 로그인한다.
   const resumeRef = useRef('');
   const [showStaffManager, setShowStaffManager] = useState(false);  // M5.73
@@ -253,6 +248,21 @@ export default function App() {
     () => canOpenChief(inspector, isOwnerName(inspector)),
     [inspector, devAccessMap],
   );
+  //  ★ 3.50 — 이 사람이 보는 항차: 자유 열람(수석·부수석·테스터·소유자)은 전부, 일반 검수원은 고른 선박 하나. 홈·통합검색·미르·건강점검·보조기능·항차 화면이 전부 이것을 받는다(한 자리).
+  const visibleVoyages = useMemo(() => visibleVoyagesOf(workChoice, inspector, voyages), [workChoice, inspector, voyages, devAccessMap]);
+  //  2.87-02 홈 검색창 플랜 명령 — 3.50: 배는 **보이는 항차**에서 고른다(검수원이 남의 배 플랜을 물으면 못 찾은 것으로 통합검색으로 넘어간다 — 조용히 무응답이 아니다).
+  const _voyFromQuery = React.useCallback(
+    (q) => pickVoyageKey(q, Object.keys(visibleVoyages || {}), (k) => visibleVoyages[k]?.info?.vsl),
+    [visibleVoyages]);
+  const _askGlobal = React.useCallback((q) => {
+    const text = typeof q === 'string' ? q : '';
+    const cmd = parseViewCommand(text);
+    if (cmd) {
+      const vk = _voyFromQuery(text);
+      if (vk) { setMirPlan({ voyageKey: vk, mode: cmd.mode, what: cmd.what, bay: cmd.bay }); return; }
+    }
+    setSearchInitQ(text); navigate('search');
+  }, [_voyFromQuery]);
 
   // 1.58: handleApproveBayDictSync 삭제 — 보관소가 정본이라 승인·반영 절차 자체가 없다.
 
@@ -282,8 +292,11 @@ export default function App() {
     return () => window.removeEventListener('popstate', handler);
   }, [route.name, inspector]);
 
+  //  ★ 3.50 — «조회만» 문지기(isViewOnlyNow)는 App 이 들고 있는 workChoice 를 1순위로 본다(모듈 캐시).
+  //    localStorage 만 보면 KST 자정·[검수원 변경] 뒤 meToday 가 남으로 바뀐 경우·저장 실패에서 조회만이 작업자로 둔갑한다(3.50 감사 지적).
+  useEffect(() => { setActiveWorkChoice(workChoice); }, [workChoice]);
   useEffect(() => {
-    if (!inspector) return;
+    if (!inspector || !workChoice) return;   // 3.50: 아직 작업자/조회만을 안 고른 사람(선택 화면)은 활동을 안 적는다 — 적으면 «작업중» 으로 센다
     const tick = () => {
       const voyageKey = route.name === 'voyage' ? route.voyageKey : null;
       const mode = route.name === 'voyage' ? (route.mode || null) : null;
@@ -292,7 +305,7 @@ export default function App() {
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
-  }, [inspector, route]);
+  }, [inspector, workChoice, route]);
 
   // TallyOne 1.3: 화면 열람 기록 — 라우트 변경마다 1건(30초 중복 생략은 activityLog가 처리).
   //   voyage는 VoyagePage가 탭·모드까지 붙여 기록하므로 여기서 빼고(이중 기록 방지), login도 제외.
@@ -335,6 +348,7 @@ export default function App() {
       clearLoginTime();
       _storage.set(SK.activeInspector, '');
       setInspector('');
+      prevChoiceRef.current = null; rechoiceRef.current = '';   // 3.50: 선택 화면을 띄운 채 잠들었어도 재로그인은 로그인이다(오늘 고른 선박은 localStorage 에 남아 다시 안 묻는다)
       setAutoLogoutNotice(`${Math.round(IDLE_LOGOUT_MS / 60000)}분 동안 사용이 없어 자동 로그아웃됐습니다. 이름을 다시 선택하세요.`);
       forceLoginScreen();   // TallyOne 1.0: 모달 대신 로그인 화면으로
     };
@@ -354,7 +368,28 @@ export default function App() {
   //   사용자 결정: 자동 폐기보다 라이브러리로 영구 보관이 더 가치 있음
   //   같은 선박 새 PDF 등록 시 이전 자동 삭제 (덮어쓰기) 정책은 유지 — fbUploadStowagePdf 내부 로직
 
-  const handleSelectInspector = useCallback(async (name) => {
+  const handleSelectInspector = useCallback(async (name, choice = null) => {
+    //  3.50: choice = { mode:'work', voyageKey, equip } | { mode:'view' } — LoginPage 선택 단계가 준다. 없으면(업데이트 재개 등) 오늘 기억한 것.
+    const ch = choice ? saveWorkChoice({ ...choice, name }) : readWorkChoice(name);
+    if (!ch) { setInspector(name); setWorkChoice(null); return; }   // 아직 안 골랐다 — 선택 화면이 선다(로그인 상태이지만 진입 전)
+    const rechoice = !!choice && rechoiceRef.current === name;   // 헤더 [변경]/«선박 변경» 으로 같은 사람이 다시 고른 것 — 로그인이 아니다
+    rechoiceRef.current = '';
+    setActiveWorkChoice(ch);   // 문지기 캐시를 렌더보다 먼저 세운다(이 뒤의 setEquipNumber 가 곧바로 새 판정을 본다)
+    setWorkChoice(ch);
+    prevChoiceRef.current = null;
+    if (ch.mode === 'view') { try { localStorage.removeItem('gm_equip_no'); } catch (e) { /* localStorage 가 막힌 기기 — 캐시(setActiveWorkChoice)가 문지기라 호기는 어차피 안 읽힌다 */ } window.dispatchEvent(new CustomEvent('equipChanged', { detail: '' })); }
+    else if (ch.equip) { setEquipNumber(ch.equip); window.dispatchEvent(new CustomEvent('equipChanged', { detail: ch.equip })); }
+    fbSetInspectorChoice(name, ch).catch((e) => console.warn('[3.50] 작업자/조회 선택 기록 실패', e));
+    if (rechoice) {
+      //  로그인 기록·로그인 시각·인사·#/chief 이동을 다시 하지 않는다. 일반 검수원이 다른 선박을 골랐으면 그 선박으로, 그 밖은 보던 자리 그대로.
+      const cur = parseHash(window.location.hash);   // 선택 화면이 떠 있는 동안 주소는 그대로다
+      if (!isFreeRoamer(name) && ch.mode === 'work' && ch.voyageKey && !(cur.name === 'voyage' && cur.voyageKey === ch.voyageKey)) {
+        const target = `#/voyage/${encodeURIComponent(ch.voyageKey)}`;
+        window.history.replaceState(null, '', target);
+        setRoute(parseHash(target));
+      }
+      return;
+    }
     setInspector(name);
     lastInputRef.current = Date.now();     // V9.13: 로그인 순간부터 무조작 시간 다시 셈
     setAutoLogoutNotice('');
@@ -375,6 +410,11 @@ export default function App() {
       const r = parseHash(target);
       if (r.name === 'login') target = '';
       else if (r.name === 'chief' && !roleGate) target = '';   // 1.69-01: #/search는 검수원도 연다(홈 검색 진입 복원)
+    }
+    //  3.50: 일반 검수원(자유 열람 아님)은 고른 선박으로 곧장 — 홈·다른 항차 딥링크는 그 선박으로 바꾼다.
+    if (!isFreeRoamer(name) && ch.mode === 'work' && ch.voyageKey) {
+      const r = target ? parseHash(target) : null;
+      if (!(r && r.name === 'voyage' && r.voyageKey === ch.voyageKey)) target = `#/voyage/${encodeURIComponent(ch.voyageKey)}`;
     }
     if (!target) target = roleGate ? '#/chief' : '#/';
     window.history.replaceState(null, '', target);
@@ -428,6 +468,7 @@ export default function App() {
       clearLoginTime();
       _storage.set(SK.activeInspector, '');
       setInspector('');
+      clearWorkChoice(); setWorkChoice(null); prevChoiceRef.current = null; rechoiceRef.current = '';   // 3.50: 다음 로그인 때 다시 고른다
       setActivityUser('');   // TallyOne 1.3: 로그아웃 완료 — 이후 열람은 기록하지 않는다
       forceLoginScreen();
     }
@@ -448,7 +489,9 @@ export default function App() {
 
   // ── TallyOne 1.0: 로그인 게이트 — 로그인 전에는 어떤 라우트도 렌더하지 않는다. ──
   //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).
-  if (!inspector || route.name === 'login') {
+  //  3.50: 로그인은 됐는데 «작업자/조회만» 을 아직 안 골랐으면(workChoice null) 선택 화면이 선다 — 진입 전이다. 헤더 [변경] 도 이 길로 온다.
+  const needChoice = !!inspector && !workChoice;
+  if (!inspector || route.name === 'login' || needChoice) {
     //  2.64-01 (검수사 «페이지 스크롤이 생기면 불편합니다 맞춤처럼 한화면에 보였으면»):
     //    PC 는 화면 높이에 딱 맞춘다 — 겉은 절대 안 구르고(overflow-hidden), 화면이 짧으면
     //    안쪽 판이 스스로 구른다. 폰(lg 미만)은 손대지 않았다.
@@ -465,6 +508,8 @@ export default function App() {
           notice={autoLogoutNotice}
           onSelect={handleSelectInspector}
           onCancel={inspector ? () => window.history.back() : null}
+          choiceFor={needChoice ? inspector : ''}
+          onCancelChoice={needChoice && prevChoiceRef.current ? () => { setActiveWorkChoice(prevChoiceRef.current); setWorkChoice(prevChoiceRef.current); prevChoiceRef.current = null; rechoiceRef.current = ''; } : null}   /* 캐시를 렌더보다 먼저 되돌린다 — 자식 효과(활동 기록)가 App 효과보다 먼저 돈다(감사 ⑩) */
         />
         {/* 로그아웃 작별 인사 모달 — 닫으면 로그인 화면 유지 */}
         {greeting && (
@@ -492,6 +537,8 @@ export default function App() {
         online={online}
         route={route}
         voyages={voyages}
+        workChoice={workChoice}
+        onChangeWork={() => { prevChoiceRef.current = workChoice; rechoiceRef.current = inspector; setWorkChoice(null); }}   /* 3.50: 선박·호기 다시 고르기(조회만 ↔ 작업자 전환도 여기서) */
         onChangeInspector={() => { setAutoLogoutNotice(''); navigate('login'); }}
         onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}
         onGoHome={() => navigate('home')}
@@ -507,7 +554,7 @@ export default function App() {
       <main className="pb-20">
         {route.name === 'home' && (
           <HomePage
-            voyages={voyages} inspectors={inspectors} inspector={inspector}
+            voyages={visibleVoyages} inspectors={inspectors} inspector={inspector}
             portMisData={portMisData}
             pilotForecast={pilotForecast}
             terminalWork={terminalWork}
@@ -524,7 +571,7 @@ export default function App() {
         )}
         {route.name === 'health' && (
           <HealthPage
-            voyages={voyages} heartbeat={heartbeat}
+            voyages={visibleVoyages} heartbeat={heartbeat}
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
           />
         )}
@@ -534,7 +581,7 @@ export default function App() {
             isChief로 걸러 1.69 유도 문구를 답한다. */}
         {route.name === 'search' && (
           <GlobalSearchPage
-            voyages={voyages}
+            voyages={visibleVoyages}
             onOpenContainer={(c) => setGlobalDetail(c)}
             portMisData={portMisData}
             terminalWork={terminalWork}
@@ -572,19 +619,29 @@ export default function App() {
             inspector={inspector}
             isChief={isChief(inspector)}
             isOwner={isOwnerName(inspector)}
-            voyages={voyages}
+            voyages={visibleVoyages}
             collectorHb={heartbeat}
           />
         )}
         {route.name === 'voyage' && (
-          voyages[route.voyageKey] ? (
+          (voyages[route.voyageKey] && !canSeeVoyage(workChoice, inspector, route.voyageKey)) ? (
+            /* 3.50: 일반 검수원이 고른 선박 밖 항차 — 주소 직접 입력·옛 딥링크·미르 플랜 등 */
+            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-300 space-y-3" data-denied-voyage="1">
+              <div className="font-bold text-dim-100">내 작업 선박이 아닙니다.</div>
+              <div className="text-xs text-dim-400">로그인 때 고른 선박 안에서만 앱이 돕니다. 선박을 바꾸려면 헤더의 [변경]을 누르세요.</div>
+              <div className="flex justify-center gap-2">
+                <button onClick={() => navigate({ voyageKey: workChoice && workChoice.voyageKey })} className="px-4 py-2 bg-violet-700 rounded-pill text-white font-bold">내 작업 선박으로</button>
+                <button onClick={() => { prevChoiceRef.current = workChoice; rechoiceRef.current = inspector; setWorkChoice(null); }} className="px-4 py-2 bg-ink-800 border border-line rounded-pill text-dim-100 font-bold">선박 변경</button>
+              </div>
+            </div>
+          ) : voyages[route.voyageKey] ? (
           <VoyagePage
             key={route.voyageKey}
             terminalWork={terminalWork}   /* 1.69-01: 진행 질문 — 터미널 실황 1순위(수석 통합검색과 답의 근본 통일) */   /* 1.55-03: 항차를 바꿔 열면 앞 항차의 모드·탭 state 가 남았다(선적 전용 항차가 빈 양하 화면에 갇힘 — 독립 재검증 P1-9). 재마운트로 initModeOverride 가 다시 읽힌다. */
             initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}
-            voyages={voyages}   /* 2.36: 통합검색 — 항차 화면 미르도 전 항차를 본다 */
+            voyages={visibleVoyages}   /* 2.36: 통합검색 — 항차 화면 미르도 전 항차를 본다 (3.50: 볼 수 있는 항차만) */
             heartbeat={heartbeat}
             inspector={inspector}
             inspectors={inspectors}
@@ -614,7 +671,7 @@ export default function App() {
            닫으면 이 덮개만 걷히므로 홈에서 물었으면 홈, 수석 화면에서 물었으면 수석 화면이다.
          ⚠ VoyagePage 는 주소(location.hash)를 전혀 쓰지 않는다(실측 0건). 그래서 이렇게 띄워도
            라우팅과 싸우지 않는다 — 이 방법을 고른 근거다. */}
-      {mirPlan && voyages[mirPlan.voyageKey] && (
+      {mirPlan && visibleVoyages[mirPlan.voyageKey] && (
         /* ⛔ 여기에 덮개 div 를 두지 않는다 — 2.87 은 z-[65] 껍데기를 씌웠다가
              카고플랜(createPortal → body 직속 z-50)을 **그 껍데기가 가렸다.**
              VoyagePage 가 mirPlan 이면 플랜 하나만 돌려주므로 껍데기가 필요 없다. */
@@ -625,7 +682,7 @@ export default function App() {
             initModeOverride={mirPlan.mode || null}
             voyageKey={mirPlan.voyageKey}
             voyage={voyages[mirPlan.voyageKey]}
-            voyages={voyages}
+            voyages={visibleVoyages}
             terminalWork={terminalWork}
             heartbeat={heartbeat}
             inspector={inspector}
@@ -638,7 +695,7 @@ export default function App() {
 
       {/* ★ 3.41 — 떠 있는 미르. 어느 화면에서든 오른쪽 아래 얼굴을 누르면 시트가 올라온다(검수사 «앱 어디에든 항상 띄워서»).
            답은 mirAnswer.answerOne 한 벌(작업창·양하선적 탭·홈·콘앱과 같은 함수). 플랜 명령은 위 mirPlan 덮개를 연다. */}
-      <MirFab voyages={voyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData} terminalWork={terminalWork}
+      <MirFab voyages={visibleVoyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData} terminalWork={terminalWork}
         pilotForecast={pilotForecast} heartbeat={heartbeat} onOpenPlan={(p) => setMirPlan(p)} />
 
       <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">

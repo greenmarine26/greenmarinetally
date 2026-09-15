@@ -32,6 +32,7 @@ special = {
     #  3.49: 해치 자동 기록(reports)·활동 기록 — 베이뷰·해치 연막이 «적었는가/안 적었는가»를 센다.
     'fbAddWorkReport': "export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };",
     'fbSetInspectorActivity': "export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };",
+    'fbSetInspectorChoice': "export const fbSetInspectorChoice = async (name, choice) => { window.__calls.push({ fn: 'choice', name, choice }); return true; };",   # 3.50
     'resolveSeqMode': body('resolveSeqMode') + "\nexport { resolveSeqMode };",
     'tallyVoyagesByShip': body('tallyVoyagesByShip') + "\nexport { tallyVoyagesByShip };",
 }

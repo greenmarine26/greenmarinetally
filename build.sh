@@ -825,6 +825,30 @@ fi
         cp "$SMOKE_BV.fbbak" src/firebase.js; rm -f "$SMOKE_BV.fbbak"
         echo "✗ 베이뷰 작업 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BV"; exit 1
       fi
+      #  3.50: **로그인 뒤 작업자/조회만 선택** — 실 명단·항차 15척 사본(tools/fixtures/workchoice_live.json)으로 LoginPage 선택 단계를 실제로 누른다
+      #    (검수원 → 선박·호기 필수, 자유 열람 → 조회만/작업자). 두 번째 번들은 src/firebase.js **실소스**에 SDK 만 스텁(tools/stub_fb_sdk.js)을 끼워
+      #    조회만 활동 기록이 항차·호기를 null 로 쓰는지(문지기가 데이터 들어오는 자리에 서 있는지) 잰다.
+      SMOKE_WC=$(mktemp /dev/shm/hometmp/_smokewc_XXXXXX.js)
+      SMOKE_WF=$(mktemp /dev/shm/hometmp/_smokewf_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_WC.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_workchoice.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_WC"; then
+        cp "$SMOKE_WC.fbbak" src/firebase.js && rm -f "$SMOKE_WC.fbbak"
+        if npx esbuild tools/smoke_workchoice_fb.js --bundle --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+             --external:fs --external:path --external:url \
+             --alias:firebase/app="$PWD/tools/stub_fb_sdk.js" --alias:firebase/database="$PWD/tools/stub_fb_sdk.js" --alias:firebase/storage="$PWD/tools/stub_fb_sdk.js" \
+             --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_WF"; then
+          node tools/smoke_workchoice.cjs "$SMOKE_WC" "$SMOKE_WF" || { echo "✗ 작업자/조회만 선택 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_WC" "$SMOKE_WF"; exit 1; }
+          rm -f "$SMOKE_WC" "$SMOKE_WF"
+        else
+          echo "✗ 조회만 문지기(firebase 실소스) 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_WC" "$SMOKE_WF"; exit 1
+        fi
+      else
+        cp "$SMOKE_WC.fbbak" src/firebase.js; rm -f "$SMOKE_WC.fbbak"
+        echo "✗ 작업자/조회만 선택 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_WC" "$SMOKE_WF"; exit 1
+      fi
     else
       cp "$SMOKE_LB.fbbak" src/firebase.js; rm -f "$SMOKE_LB.fbbak"
       echo "✗ 실시간 작업 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1

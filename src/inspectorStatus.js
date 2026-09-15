@@ -8,7 +8,8 @@ export function inspectorStatus(i, now = Date.now()) {
   if (!i) return null;
   if (i.loggedIn === false) return null;                       // 명시 로그아웃 — 배지 없음
   const recentlyActive = i.lastActive && (now - i.lastActive) < WORKING_WINDOW_MS;
-  if (recentlyActive) return 'working';
+  //  3.50: «조회만»(workMode 'view' — 로그인 뒤 그렇게 고른 수석·검수사)은 활동이 있어도 작업중이 아니다 — 접속(online)까지만. 검수사 «단순 조회로 분류하여 작업량 계산에 착오가 생기지 않도록».
+  if (recentlyActive && i.workMode !== 'view') return 'working';
   // TallyOne 1.3-01(사용자 신고 2026-08-03): 앱을 로그아웃 없이 닫으면 기기 쪽 자동 로그아웃(V9.13)이
   //   돌 수 없어 loggedIn=true가 영구 잔존 — 실측 3시간·12시간 전 활동자가 '로그인'으로 표시(허상).
   //   표시 판정에 신선도 추가: 마지막 활동이 30분(IDLE_LOGOUT_MS)을 넘으면 로그아웃 취급.

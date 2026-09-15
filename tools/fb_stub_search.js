@@ -107,6 +107,7 @@ export const fbSetDevAccess = async () => true;
 export const fbSetEmptySeal = async () => true;
 export const fbSetInspector = async () => true;
 export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };
+export const fbSetInspectorChoice = async (name, choice) => { window.__calls.push({ fn: 'choice', name, choice }); return true; };
 export const fbSetLuggConfirm = async () => true;
 export const fbSetMatrixEditors = async () => true;
 export const fbSetReeferTempBulk = async () => true;

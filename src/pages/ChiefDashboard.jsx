@@ -501,7 +501,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     Object.values(inspectors || {}).forEach(i => {
       if (!i?.name) return;
       if (!stats[i.name]) stats[i.name] = { name: i.name, total: 0, today: 0, lastAt: 0, dis: 0, loa: 0 };
-      stats[i.name].active = i.lastActive && (Date.now() - i.lastActive) < 90000;
+      stats[i.name].active = i.lastActive && (Date.now() - i.lastActive) < 90000 && i.workMode !== 'view';   // 3.50: 조회만은 작업중이 아니다
+      stats[i.name].viewOnly = i.workMode === 'view';   // 3.50: 표에 «조회» 로 보인다
       stats[i.name].lastVoyage = i.lastVoyage;
       stats[i.name].lastMode = i.lastMode;
     });
@@ -2170,7 +2171,7 @@ function InspectorRow({ s }) {
         {s.active && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-ink-900"/>}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="font-bold text-sm text-dim-100 truncate">{s.name}</div>
+        <div className="font-bold text-sm text-dim-100 truncate">{s.name}{s.viewOnly && <span className="ml-1.5 text-3xs font-bold text-sky-300 border border-sky-700/60 rounded px-1 align-middle" title="로그인 뒤 «조회만» 을 고른 사람 — 호기·작업량에 안 잡힌다(3.50)">조회</span>}</div>
         <div className="text-2xs text-dim-400 mono flex items-center gap-2 flex-wrap">
           <span><span className="text-emerald-400 font-bold">{s.today}</span> 오늘</span>
           <span>·</span>

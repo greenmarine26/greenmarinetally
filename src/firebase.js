@@ -13,6 +13,7 @@ import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, cur
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
+import { isViewOnlyNow } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -1649,6 +1650,19 @@ export async function fbSetInspector(name) {
     loginAt: Date.now(),
   });
 }
+//  3.50: 로그인 뒤 고른 «작업자(선박·호기) / 조회만» 을 명단에 적는다 — 수석 보드가 «누가 어느 배 작업자인지 / 조회만인지» 를 이 필드로 안다.
+//    workMode 'work'|'view' · assignVoyage 항차 키('' = 없음) · assignEquip 호기('' = 아직) · assignAt. 활동(fbSetInspectorActivity)의 workMode 와 같은 값이 유지된다.
+export async function fbSetInspectorChoice(name, choice) {
+  if (!name || !choice) return;
+  const view = choice.mode === 'view';
+  await update(ref(db, `inspectors/${name}`), {
+    workMode: view ? 'view' : 'work',
+    assignVoyage: view ? '' : String(choice.voyageKey || ''),
+    assignEquip: view ? '' : String(choice.equip || ''),
+    assignAt: Date.now(),
+    ...(view ? { lastVoyage: null, lastMode: null, workEquip: null, workBay: null, workTier: null, workRemain: null, workAuto: null } : {}),
+  });
+}
 // V7.94-14: 로그아웃 마킹 — 다른 기기 화면에서 즉시 '작업중' 배지 제거
 export async function fbLogoutInspector(name) {
   if (!name) return;
@@ -1689,10 +1703,15 @@ export function fbSubscribeBroadcastReads(id, callback) {
 export async function fbSetInspectorActivity(name, voyageKey, mode, detail = null) {
   // V7.99-8 (메모6): detail = { equip, bayLabel, tier('hold'|'deck'), remain, auto } —
   //   수석이 "몇 호기가 어느 베이의 홀드/데크를 작업 중·몇 개 남음"을 실시간으로 보게 함.
+  //  ★ 3.50 문지기(데이터 들어오는 자리) — «조회만» 으로 들어온 사람은 항차·호기·베이를 안 적는다(검수사 «단순 조회로 접속을 하면 호기에 기록이 안되게»).
+  //    lastActive 는 적어 «접속(online)» 은 보이되, workMode:'view' 로 «작업중» 에서 빠진다(inspectorStatus). 호출부(App 30초 틱·SearchPanel·GuidedWorkPanel)는 손대지 않는다.
+  const viewOnly = isViewOnlyNow();
+  if (viewOnly) { voyageKey = null; mode = null; detail = null; }
   const payload = {
     lastActive: Date.now(),
     lastVoyage: voyageKey || null,
     lastMode: mode || null,
+    workMode: viewOnly ? 'view' : 'work',
   };
   if (detail && typeof detail === 'object') {
     payload.workEquip = detail.equip || null;

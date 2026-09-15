@@ -19,7 +19,7 @@ import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux }) {
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, workChoice = null, onChangeWork = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   // V8.10: 현재 항차 부두 기준 장비 목록. 항차 없으면 1~5 전체.
@@ -125,10 +125,19 @@ export default function Header({ version, inspector, online, route, voyages, onC
             상시 노출은 장비·검수원 2개만, 도움말·Gemini 키·인원 관리·로그아웃은 ⋯ 메뉴로.
             버튼도 40px대로 키움(터치 타깃). 오프라인은 아이콘 대신 헤더 아래 빨간 띠(하단 렌더). */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* M3.5.6: 장비 번호 빠른 변경 */}
+          {/* ★ 3.50: «조회만» 이면 호기 자리가 [조회만] 이다 — 누르면 작업자(선박·호기)로 전환하는 선택 화면. 호기는 조회만인 동안 저장되지 않는다(utils.setEquipNumber 문지기).
+              작업자면 종전 호기 단추 그대로 + 옆에 작은 [변경](선박·호기 다시 고르기). 검수사 «단순 조회로 접속을 하면 호기에 기록이 안되게 하고 작업자로 선택을 하면 … 장비가 기록되어 검수가 될수 있게» */}
+          {workChoice && workChoice.mode === 'view' ? (
+            <button onClick={() => onChangeWork && onChangeWork()} title="조회만으로 들어와 있습니다 — 누르면 작업자(선박·호기)로 전환" data-work-mode="view"
+              className="px-2 py-2 rounded-pill text-sm font-bold flex items-center gap-1 bg-ink-800 text-sky-200 border border-sky-700">
+              🔍 조회만
+            </button>
+          ) : (
+          /* M3.5.6: 장비 번호 빠른 변경 */
           <button
             onClick={() => setEquipOpen(true)}
             title="장비 번호 변경"
+            data-work-mode={workChoice ? 'work' : ''}
             className={`px-2 py-2 rounded-pill text-sm font-bold flex items-center gap-1 ${
               equipNo
                 ? 'bg-st-lod text-ink-950 border border-st-lodHi'
@@ -138,6 +147,11 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <Truck className="w-4 h-4"/>
             {equipNo || '장비?'}
           </button>
+          )}
+          {workChoice && workChoice.mode === 'work' && onChangeWork && (
+            <button onClick={onChangeWork} title={`작업 선박 ${(voyages && voyages[workChoice.voyageKey] && voyages[workChoice.voyageKey].info && voyages[workChoice.voyageKey].info.vsl) || workChoice.voyageKey || ''} — 누르면 선박·호기를 다시 고릅니다`}
+              data-work-change="1" className="px-1.5 py-2 rounded-pill text-3xs font-bold bg-ink-800 text-dim-300 border border-line">변경</button>
+          )}
           <button
             onClick={onChangeInspector}
             className="bg-ink-800 border border-line px-2 py-1.5 rounded-pill text-xs flex items-center gap-1.5 active:bg-ink-750"

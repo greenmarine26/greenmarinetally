@@ -4,6 +4,7 @@
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { equipGateText } from '../workChoice.js';   // 3.50: 호기 없음 안내 — 조회만이면 그 이유를 말한다
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
@@ -913,7 +914,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         onClose={() => setExtraModalOpen(false)}
         onSave={async ({ cn, info }) => {
           // 1.56: 초과 컨도 완료 기록이다 — 갱 없이 기록 금지 + equip 동봉(유일하게 빠져 있던 쓰기 경로).
-          if (!getEquipNumber()) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
+          if (!getEquipNumber()) { alert(equipGateText()); return; }
           await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info, getEquipNumber());
         }}
       />
@@ -2078,7 +2079,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (busy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
-    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
+    if (!equipNo) { alert(equipGateText()); return; }
     const done = [c1, c2].filter(c => c._comp);
     // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
     if (done.length && !(await askYN('이미 선적확인된 컨입니다',
@@ -2146,7 +2147,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 인건비 근거가 없다(검수사 확정).
-    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.\n갱이 없는 완료는 그 갱의 작업 기록이 남지 않습니다 — 아주 중요한 값입니다.'); return; }
+    if (!equipNo) { alert(equipGateText() + '\n갱이 없는 완료는 그 갱의 작업 기록이 남지 않습니다 — 아주 중요한 값입니다.'); return; }
     setBusy(true);
     try {
       // ── 1.56: **이 배 자료에 없는 자리 확인** (검수사 확정 — "들어갈 자리 자체가 없는데 선적이 된다는게
@@ -2520,7 +2521,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     if (!c1 || !c2 || twinBusy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
-    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
+    if (!equipNo) { alert(equipGateText()); return; }
     //  3.2-01: 통과분은 완료할 수 없다(감사 P1-2 — 뒤 칸에 통과분이 남는 길).
     const _tr = [c1, c2].filter(c => !c._comp && !canCompleteContainer(c, c._mode)).map(c => `${c.cn?.slice(-4)}(${c._mode === 'loading' ? c.pol : c.pod})`);
     if (_tr.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_tr.join(', ')}은 확인할 수 없습니다.`); return; }

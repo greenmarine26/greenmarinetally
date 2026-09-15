@@ -10,6 +10,7 @@ import SearchPanel from './SearchPanel.jsx';
 import BayPlan from './BayPlan.jsx';
 import { FitBox } from './FitBox.jsx';
 import { bayViewOverlayOf, bayViewFollowOf, getEquipNumber, setEquipNumber, equipNumbersForPier, getPierFromBerth } from '../utils.js';
+import { isViewOnlyNow } from '../workChoice.js';   // 3.50: 조회만이면 호기 단추가 호기를 붙이지 않는다
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildBayPagesFromSummary, hatchEvenOf } from '../cargoPlanCore.js';
 import { useBackHandler } from '../backHandler.js';
@@ -156,8 +157,9 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
     //  ★ 3.49-02 검수사 «따라가기나 장비번호가 작업중인 베이를 누르면 자동으로 호기가 지정 되어야 하는데 호기 지정 메뉴가 나옵니다»
     //    — 호기(장비)가 비어 있으면 GuidedWorkPanel 이 «작업 장비(호기)를 선택하세요»(equipStep)를 먼저 띄웠다. 호기 단추(«N호기 · BAY …»)를 눌렀으면 그 호기가 곧 내 호기다 —
     //    헤더·작업 보고와 한 벌(localStorage + equipChanged)로 지정하고 들어간다. 따라가기도 호기가 비었는데 지금 일하는 호기가 하나뿐이면 그 호기로 지정한다(둘이면 위 단추로 고른다).
-    const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };
-    const needEquip = !equip && cranes.length >= 2;   // 실적 0 이면 종전 안내(fol.why)대로 — 누를 호기 단추가 없다
+    const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n || isViewOnlyNow()) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };   // 3.50: 조회만이면 호기를 붙이지 않는다(그림만 본다)
+    const viewOnly = isViewOnlyNow();
+    const needEquip = !equip && (cranes.length >= 2 || viewOnly);   // 실적 0 이면 종전 안내(fol.why)대로 — 누를 호기 단추가 없다. 조회만은 호기가 없어 따라가기 대신 장 단추로 그림만.
     return (
       <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 overflow-auto" data-bayview="pick">
         <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line">
@@ -173,10 +175,12 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
               <button key={c.no} onClick={() => { assignEquip(c.no); enter({ follow: false, bay: c.bay, tier: c.tier || 'deck', guide: true }); }}
                 className={`w-full text-left rounded-pill px-3 py-2 border ${fol.no === c.no ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-dim-100'}`}>
                 <div className="flex items-center justify-between"><span className="font-black text-base">{c.no}호기 · {hatchTitleOf(c.bay, pages)}</span><span className="text-xxs">{fmtT(c.at)}{c.mode && c.mode !== mode ? ` · ${c.mode === 'loading' ? '선적' : '양하'} 중` : ''}</span></div>
-                <div className="text-xxs">{c.tier === 'hold' ? '🟠 홀드' : c.tier === 'deck' ? '🔵 데크' : '단 미상'}{fol.no === c.no ? ' · 내 호기' : ` · 누르면 ${c.no}호기가 내 호기`} — 이 장으로(자동 가이드)</div>
+                <div className="text-xxs">{c.tier === 'hold' ? '🟠 홀드' : c.tier === 'deck' ? '🔵 데크' : '단 미상'}{fol.no === c.no ? ' · 내 호기' : viewOnly ? '' : ` · 누르면 ${c.no}호기가 내 호기`} — 이 장으로{viewOnly ? '(그림만)' : '(자동 가이드)'}</div>
               </button>
             ))}
-            {!equip ? (
+            {!equip && viewOnly ? (
+              <div className="bg-ink-900 border border-sky-700 rounded-pill p-2 text-xxs text-sky-200" data-view-only-note="1">🔍 조회만 — 호기는 기록되지 않습니다. 위 장을 누르면 그림만 봅니다(검수하려면 헤더 [조회만] → 작업자).</div>
+            ) : !equip ? (
               <div className="bg-ink-900 border border-amber-700 rounded-pill p-2">
                 <div className="text-xxs font-bold text-amber-300 mb-1">따라가려면 내 호기부터 — {pier || '부두 미상'}</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -191,7 +195,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
               className="w-full py-2.5 rounded-pill bg-violet-600 disabled:bg-ink-800 disabled:text-dim-500 text-white font-black text-sm">
               ▶ {equip ? `내 호기(${equip}) 따라가기` : (cranes.length === 1 ? `${cranes[0].no}호기 따라가기` : '내 호기 따라가기')} — 자동
             </button>
-            <div className="text-2xs text-dim-400">{needEquip ? '호기가 아직 없습니다 — 위 호기 단추를 누르면 그 호기가 내 호기가 됩니다(따라가기는 그 다음).' : (fol.bay == null && canFollow) ? `${cranes[0].no}호기 자리로 따라갑니다 — 누르면 그 호기가 내 호기가 됩니다.` : canFollow ? (fol.why || '터미널 실적이 옮겨 가면 화면도 따라갑니다(동방은 10분 안팎 늦을 수 있습니다).') : (fol.why || '따라갈 자리가 아직 없습니다 — 아래에서 손으로 고르세요.')}</div>
+            <div className="text-2xs text-dim-400">{needEquip ? (viewOnly ? '조회만은 따라가기 없이 위 장 단추로 그림만 봅니다.' : '호기가 아직 없습니다 — 위 호기 단추를 누르면 그 호기가 내 호기가 됩니다(따라가기는 그 다음).') : (fol.bay == null && canFollow) ? `${cranes[0].no}호기 자리로 따라갑니다 — 누르면 그 호기가 내 호기가 됩니다.` : canFollow ? (fol.why || '터미널 실적이 옮겨 가면 화면도 따라갑니다(동방은 10분 안팎 늦을 수 있습니다).') : (fol.why || '따라갈 자리가 아직 없습니다 — 아래에서 손으로 고르세요.')}</div>
           </div>
           <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
             <div className="text-sm font-black text-amber-300">손으로 고르기 — 베이·단은 다음 화면 위 칸에서</div>

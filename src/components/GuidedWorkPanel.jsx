@@ -13,6 +13,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { speak, spellKo } from '../voice.js';
+import { isViewOnlyNow } from '../workChoice.js';   // 3.50: 조회만이면 호기 메뉴 대신 안내
 import { hatchPanelCountOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
@@ -1332,6 +1333,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
 
   // ── 1단계: 장비(호기) 결정 ──
+  //  ★ 3.50: «조회만» 으로 들어온 사람에게는 호기 메뉴가 아니라 그 이유를 보인다 — 호기는 저장되지 않으니(utils 문지기) 골라 봐야 헛일이다. 검수하려면 헤더 [조회만] → 작업자.
+  if (equipStep && isViewOnlyNow()) {
+    return (
+      <div className="bg-ink-900 border-2 border-sky-700 rounded-pill p-4 space-y-2 text-center" data-view-only-gate="1">
+        <div className="text-sm font-bold text-sky-200">🔍 조회만으로 들어와 있습니다</div>
+        <div className="text-xxs text-dim-300 leading-relaxed">호기·완료·보고가 기록되지 않습니다. 검수하려면 헤더의 [조회만]을 눌러 작업자(선박·호기)로 전환하세요.</div>
+      </div>
+    );
+  }
   if (equipStep) {
     return (
       <div className="bg-ink-900 border-2 border-amber-700 rounded-pill p-4 space-y-3">
