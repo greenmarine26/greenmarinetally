@@ -91,7 +91,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
     //  opts = { follow, bay, tier, guide, twin }
     const f = !!opts.follow;
     setFollow(f);
-    setPreset({ seq: 1, bay: f ? fol.bay : (opts.bay === undefined ? null : opts.bay), tier: f ? (fol.tier || 'deck') : (opts.tier === undefined ? null : opts.tier), guide: f ? true : !!opts.guide, twin: opts.twin == null ? null : !!opts.twin });
+    const folBay = fol.bay != null ? fol.bay : (((fol.cranes || [])[0] || {}).bay ?? null);   // 3.49-02: 호기 비었고 일하는 호기 하나 → 그 자리(다음 렌더에서 fol 이 그 호기로 다시 잡힌다)
+    setPreset({ seq: 1, bay: f ? folBay : (opts.bay === undefined ? null : opts.bay), tier: f ? (fol.tier || 'deck') : (opts.tier === undefined ? null : opts.tier), guide: f ? true : !!opts.guide, twin: opts.twin == null ? null : !!opts.twin });
     writeLast(voyageKey, mode, { follow: f, guide: f ? true : !!opts.guide, twin: !!opts.twin });
     setShowConf(false);
     setStep('view');
@@ -149,8 +150,14 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
   const chip = (cls) => `px-2 py-0.5 rounded-pill text-xxs font-black ${cls}`;
 
   if (step === 'pick') {
-    const canFollow = fol.bay != null;
     const cranes = fol.cranes || [];
+    //  호기가 비었고 일하는 호기가 하나면 그 호기 자리로 따라간다 — fol 은 «recent»(앱 완료) 폴백이라 앱 완료 0건(항차 첫 작업)이면 비어 있어도 크레인 자리는 안다(감사 지적).
+    const canFollow = fol.bay != null || (!equip && cranes.length === 1 && cranes[0].bay != null);
+    //  ★ 3.49-02 검수사 «따라가기나 장비번호가 작업중인 베이를 누르면 자동으로 호기가 지정 되어야 하는데 호기 지정 메뉴가 나옵니다»
+    //    — 호기(장비)가 비어 있으면 GuidedWorkPanel 이 «작업 장비(호기)를 선택하세요»(equipStep)를 먼저 띄웠다. 호기 단추(«N호기 · BAY …»)를 눌렀으면 그 호기가 곧 내 호기다 —
+    //    헤더·작업 보고와 한 벌(localStorage + equipChanged)로 지정하고 들어간다. 따라가기도 호기가 비었는데 지금 일하는 호기가 하나뿐이면 그 호기로 지정한다(둘이면 위 단추로 고른다).
+    const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };
+    const needEquip = !equip && cranes.length >= 2;   // 실적 0 이면 종전 안내(fol.why)대로 — 누를 호기 단추가 없다
     return (
       <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 overflow-auto" data-bayview="pick">
         <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line">
@@ -163,10 +170,10 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
             <div className="text-sm font-black text-violet-200">터미널 기준 지금 작업 중인 장</div>
             {cranes.length === 0 && <div className="text-xxs text-dim-300">{fol.why || '터미널 실적이 아직 없습니다'}</div>}
             {cranes.map((c) => (
-              <button key={c.no} onClick={() => enter({ follow: false, bay: c.bay, tier: c.tier || 'deck', guide: true })}
+              <button key={c.no} onClick={() => { assignEquip(c.no); enter({ follow: false, bay: c.bay, tier: c.tier || 'deck', guide: true }); }}
                 className={`w-full text-left rounded-pill px-3 py-2 border ${fol.no === c.no ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-dim-100'}`}>
                 <div className="flex items-center justify-between"><span className="font-black text-base">{c.no}호기 · {hatchTitleOf(c.bay, pages)}</span><span className="text-xxs">{fmtT(c.at)}{c.mode && c.mode !== mode ? ` · ${c.mode === 'loading' ? '선적' : '양하'} 중` : ''}</span></div>
-                <div className="text-xxs">{c.tier === 'hold' ? '🟠 홀드' : c.tier === 'deck' ? '🔵 데크' : '단 미상'}{fol.no === c.no ? ' · 내 호기' : ''} — 누르면 이 장으로(자동 가이드)</div>
+                <div className="text-xxs">{c.tier === 'hold' ? '🟠 홀드' : c.tier === 'deck' ? '🔵 데크' : '단 미상'}{fol.no === c.no ? ' · 내 호기' : ` · 누르면 ${c.no}호기가 내 호기`} — 이 장으로(자동 가이드)</div>
               </button>
             ))}
             {!equip ? (
@@ -180,11 +187,11 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
                 </div>
               </div>
             ) : null}
-            <button onClick={() => enter({ follow: true })} disabled={!canFollow}
+            <button onClick={() => { if (!equip && cranes.length === 1) assignEquip(cranes[0].no); enter({ follow: true }); }} disabled={!canFollow || needEquip}
               className="w-full py-2.5 rounded-pill bg-violet-600 disabled:bg-ink-800 disabled:text-dim-500 text-white font-black text-sm">
-              ▶ {equip ? `내 호기(${equip}) 따라가기` : '터미널 따라가기'} — 자동
+              ▶ {equip ? `내 호기(${equip}) 따라가기` : (cranes.length === 1 ? `${cranes[0].no}호기 따라가기` : '내 호기 따라가기')} — 자동
             </button>
-            <div className="text-2xs text-dim-400">{canFollow ? (fol.why || '터미널 실적이 옮겨 가면 화면도 따라갑니다(동방은 10분 안팎 늦을 수 있습니다).') : (fol.why || '따라갈 자리가 아직 없습니다 — 아래에서 손으로 고르세요.')}</div>
+            <div className="text-2xs text-dim-400">{needEquip ? '호기가 아직 없습니다 — 위 호기 단추를 누르면 그 호기가 내 호기가 됩니다(따라가기는 그 다음).' : (fol.bay == null && canFollow) ? `${cranes[0].no}호기 자리로 따라갑니다 — 누르면 그 호기가 내 호기가 됩니다.` : canFollow ? (fol.why || '터미널 실적이 옮겨 가면 화면도 따라갑니다(동방은 10분 안팎 늦을 수 있습니다).') : (fol.why || '따라갈 자리가 아직 없습니다 — 아래에서 손으로 고르세요.')}</div>
           </div>
           <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
             <div className="text-sm font-black text-amber-300">손으로 고르기 — 베이·단은 다음 화면 위 칸에서</div>

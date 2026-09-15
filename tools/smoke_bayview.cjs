@@ -184,5 +184,27 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!doc.querySelector('[data-closed="1"]')) fail('✕ 로 안 닫혔다');
   if (!W.__calls.some((c) => c.fn === 'close')) fail('onClose 가 안 불렸다');
   noErr();
-  console.log(`✓ 베이뷰 연막검사 통과 (해치 자동 기록 ${rp.length}건·배너 ${H.mine.length}줄 · 좌우 분할 · 완료 지도 ${bv.overlay.comp} · 불일치 세 갈래 · 따라가기 4호기 BAY (20)21 데크 → 이동 «${titleM}» · 초록 ${greens}칸 · 남은 흰 칸 ${whiteTxt.length} · 흐린 칸 ${dimmed}→${dimmed2} · 수동 B15·16·17 → «${title2}» · history ${W.history.length})`);
+  // ⑩ 3.49-02 검수사 «장비번호가 작업중인 베이를 누르면 자동으로 호기가 지정 되어야 하는데 호기 지정 메뉴가 나옵니다» — 호기를 비운 새 브라우저처럼 다시 열어 «2호기 · BAY (08)09» 를 누른다
+  W.localStorage.removeItem('gm_equip_no');
+  W.__setOpen(true);
+  await wait(500); noErr();
+  if (!doc.querySelector('[data-bayview="pick"]')) fail('다시 열었는데 선택 화면이 아니다');
+  const pickT = txt();
+  if (!/내 호기 따라가기/.test(pickT) || !/호기가 아직 없습니다/.test(pickT)) fail('호기가 빈 선택 화면 문구가 아니다: ' + pickT.slice(0, 300));
+  const bFollow = byText(/내 호기 따라가기/);
+  if (!bFollow || !bFollow.disabled) fail('호기가 비었고 일하는 호기가 둘인데 따라가기가 눌린다');
+  const b2 = byText(/2호기 · BAY \(08\)09/);
+  if (!b2) fail('«2호기 · BAY (08)09» 단추가 없다: ' + pickT.slice(0, 300));
+  if (!/누르면 2호기가 내 호기/.test(b2.textContent)) fail('호기 단추 안내 문구가 없다: ' + b2.textContent);
+  b2.click();
+  for (let i = 0; i < 40; i++) { await wait(150); if (doc.querySelector('[data-bayview="view"]') && doc.querySelector('[data-bayview-title="1"]')) break; }
+  noErr();
+  if (W.localStorage.getItem('gm_equip_no') !== '2호기') fail('호기 단추를 눌렀는데 내 호기가 2호기로 안 됐다: ' + W.localStorage.getItem('gm_equip_no'));
+  const topE = doc.querySelector('[data-bayview-top="1"]').textContent;
+  if (/작업 장비\(호기\)를 선택하세요/.test(topE)) fail('호기를 지정했는데 호기 지정 메뉴가 뜬다');
+  if (!/BAY \(08\)09|BAY 7|B8 그룹|B7·8·9/.test(doc.querySelector('[data-bayview-title="1"]').textContent + topE)) fail('2호기 장(08)09 로 안 들어갔다: ' + doc.querySelector('[data-bayview-title="1"]').textContent + ' / ' + topE.slice(0, 200));
+  if (doc.querySelector('[data-bayview-follow="1"]')) fail('호기 단추 진입은 따라가기가 아니어야 한다');
+  W.localStorage.setItem('gm_equip_no', '4호기');
+  console.log(`✓ 베이뷰 연막검사 통과 (호기 단추 → 2호기 지정 · 해치 자동 기록 ${rp.length}건·배너 ${H.mine.length}줄 · 좌우 분할 · 완료 지도 ${bv.overlay.comp} · 불일치 세 갈래 · 따라가기 4호기 BAY (20)21 데크 → 이동 «${titleM}» · 초록 ${greens}칸 · 남은 흰 칸 ${whiteTxt.length} · 흐린 칸 ${dimmed}→${dimmed2} · 수동 B15·16·17 → «${title2}» · history ${W.history.length})`);
+  process.exit(0);   // SearchPanel 의 1분 tick(setInterval)이 살아 있어 열어 둔 채로는 node 가 안 끝난다(3.49-02 ⑩ 이 열어 둔다)
 })().catch((e) => { console.log('✗ 검사 스크립트 예외: ' + (e && e.stack || e)); process.exit(1); });
