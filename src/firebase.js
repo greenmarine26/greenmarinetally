@@ -144,7 +144,6 @@ export async function fbUpdateVoyageInfo(voyageKey, patch) {
 //   값이 없으면 **액츄얼**로 본다. 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
 //   읽기는 따로 두지 않는다 — 화면은 이미 항차 구독으로 `info` 를 통째로 받는다.
 export async function fbSetSeqFull(voyageKey, v, by) {
-  assertCanWork('시퀀스 방침 변경');
   if (!voyageKey) return;
   await update(ref(db, `voyages/${voyageKey}/info`), {
     seqFull: !!v,
@@ -198,7 +197,6 @@ export async function fbGetShipSeqPref(vsl) {
 }
 
 export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
-  assertCanWork('시퀀스 방침 변경');
   if (!voyageKey) return;
   const m = SEQ_MODES.includes(String(mode3)) ? String(mode3) : null;
   if (!m) throw new Error(`seqMode must be one of ${SEQ_MODES.join('|')} — got ${mode3}`);
@@ -214,7 +212,6 @@ export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
 //    갱 수는 **항차마다 근무배정으로 정해진다** — 앱 기본 2갱을 매번 «3갱이면» 으로 덮어 물어야 했다.
 //    한 번 정해 두면 브리핑·갱 배분·내 몫 계산이 전부 그 수로 나온다.
 export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
-  assertCanWork('갱 수 변경');
   if (!voyageKey) return;
   const g = Math.min(4, Math.max(1, parseInt(n, 10) || 0));
   if (!g) throw new Error(`gangs must be 1..4 — got ${n}`);
@@ -234,7 +231,6 @@ export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
 //    항차 시작(workStartManual)으로 삼고 ③**호기 수 = 갱 수**를 그 시각이 속한 조에 적는다.
 //    ⛔ 수집기 workStartAt(터미널 정본)은 안 건드린다.
 export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
-  assertCanWork('작업 시작 시각 기록');
   if (!voyageKey || !ms) return;
   const p2 = (n) => String(n).padStart(2, '0');
   const fmt = (x) => { const d = new Date(x); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
@@ -255,8 +251,11 @@ export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
 //    조 키는 갱 수(`gangsShift`)와 같은 벌(utils.crewShiftKey). 같은 조·같은 호기를 다시 말하면 뒤엣것으로 덮는다(PATCH — 다른 호기·다른 조는 그대로).
 //    ⚠ 등록자는 적지 않는다(검수사 «등록자는 등록할 필요가 없습니다»). `at` 은 등록 시각 — 집계가 연도를 여기서 얻는다.
 //    ⚠ 키를 «N호기» 로 두는 이유 — «1»·«2» 같은 숫자 키는 RTDB 가 배열로 돌려줘(실측 craneStart) 읽는 쪽이 갈린다.
+//  ⚠ 3.51-01 (검수사 2026-09-15 «방금 미르에게 작업자 등록했는데 왜 적용이 안된건지») — 여기에는 문지기를 두지 않는다.
+//    이것은 «내가 하는 검수 작업» 이 아니라 **누가 어느 호기에 있는지·언제 시작했는지를 적는 관리 기록**이다.
+//    검수사·수석이 현장을 돌며 조회만으로 등록하는 바로 그 일이라, 막으면 관리가 멈춘다(실측 — 네 항차 craneCrew 전부 빈칸).
+//    조회만이 작업량에 안 섞이는 것은 완료·보고 쪽 문지기가 이미 지킨다.
 export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
-  assertCanWork('호기 검수원 등록');
   if (!voyageKey || !shiftKey) return null;
   const list = (Array.isArray(crew) ? crew : []).filter((c) => c && c.no >= 1 && c.no <= 9 && String(c.name || '').trim());
   if (!list.length) return null;

@@ -275,9 +275,6 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
     ['보고 일괄 추가', () => fg.fbAddReportsAt('voyages/STMJ_2652E', [{ ts: 1, type: 'hatch' }])],
     ['보고 삭제', () => fg.fbDeleteWorkReport('STMJ_2652E', 1)],
     //  재감사(부) 지적 — info 를 **직접** 쓰는 길이라 fbUpdateVoyageInfo 용도 가름이 안 닿는다. 타임시트·인건비로 가는 값이다.
-    ['호기 검수원 등록', () => fg.fbSetVoyageCraneCrew('STMJ_2652E', '20260915주', { '1호기': '김판석' })],
-    ['작업 시작 시각', () => fg.fbSetVoyageWorkStart('STMJ_2652E', Date.now(), '김성일', null)],
-    ['시퀀스 방침', () => fg.fbSetVoyageSeqMode('STMJ_2652E', 'fullOnlySeq', '김성일')],
     ['선적 플랜 확정', () => fg.fbCommitPlan('STMJ_2652E', {}, '김성일')],
     ['덱 슬롯 지정', () => fg.fbAssignDeckSlot('STMJ_2652E', 'loading', '20-01-82', 'ABCD1234567')],
   ];
@@ -293,7 +290,7 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
     if (fg.writes().length) fail(`조회만인데 «${label}» 이 ${fg.writes().length}건을 썼다: ` + JSON.stringify(fg.writes().slice(0, 2)));
   }
   if (blockedEvents !== WRITES.length) fail(`문지기가 던지기 전에 알리지 않았다(조용한 실패) — ${blockedEvents}/${WRITES.length}`);
-  console.log(`  ⑥ 쓰기 문지기 — 조회만이면 ${WRITES.length}갈래(완료·트윈·초과·취소·보고·터미널반영·보류·자리·접안설정·규격·봉인·일괄취소·보고추가/삭제·호기검수원·작업시작·시퀀스·플랜·덱슬롯)가 전부 막히고 쓰기 0건 · 던지기 전에 ${blockedEvents}번 알림 ✔`);
+  console.log(`  ⑥ 쓰기 문지기 — 조회만이면 ${WRITES.length}갈래(완료·트윈·초과·취소·보고·터미널반영·보류·자리·접안설정·규격·봉인·일괄취소·보고추가/삭제·플랜·덱슬롯)가 전부 막히고 쓰기 0건 · 던지기 전에 ${blockedEvents}번 알림 ✔`);
   //  작업자면 그대로 써진다(문지기가 옛 동작을 막지 않는다)
   fg.saveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
   fg.setActiveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
@@ -319,6 +316,25 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   let autoErr = null;
   try { await fg.fbPromotePendingDamage('STMJ_2652E', 'ABCD1234567', [{ at: 1 }]); } catch (x) { autoErr = x; }
   if (autoErr && autoErr.viewOnly) fail('자동 반영(예약 데미지 승격)까지 막았다 — 조회만이 배를 보기만 해도 던진다');
+  fg.saveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
+  fg.setActiveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
+  //  ★ 3.51-01 (검수사 «방금 미르에게 작업자 등록했는데 왜 적용이 안된건지») — **관리 기록은 조회만도 적는다.**
+  //    내가 하는 검수 작업이 아니라 «누가 어느 호기에 있는지·언제 시작했는지» 를 적는 일이라, 막으면 검수사가 현장에서 관리를 못 한다(실측 — craneCrew 네 항차 전부 빈칸).
+  fg.saveWorkChoice({ name: '김성일', mode: 'view' }); fg.setActiveWorkChoice({ name: '김성일', mode: 'view' });
+  const ADMIN = [
+    ['호기 검수원 등록', () => fg.fbSetVoyageCraneCrew('STMJ_2652E', '20260915주', [{ no: 1, name: '김판석' }])],
+    ['작업 시작 시각', () => fg.fbSetVoyageWorkStart('STMJ_2652E', Date.now(), '김성일', null)],
+    ['갱 수', () => fg.fbSetVoyageGangs('STMJ_2652E', 2, '김성일')],
+    ['시퀀스 방침', () => fg.fbSetVoyageSeqMode('STMJ_2652E', 'fullOnlySeq', '김성일')],
+  ];
+  for (const [label, fn] of ADMIN) {
+    fg.writes().length = 0;
+    let err = null;
+    try { await fn(); } catch (x) { err = x; }
+    if (err && err.viewOnly) fail(`관리 기록 «${label}» 이 조회만에서 막혔다 — 검수사가 현장에서 등록을 못 한다`);
+    if (!fg.writes().length) fail(`관리 기록 «${label}» 이 아무것도 안 썼다`);
+  }
+  console.log(`  ⑥-E 관리 기록 — 조회만도 ${ADMIN.length}갈래(호기 검수원·작업 시작·갱 수·시퀀스)를 그대로 적는다 ✔`);
   fg.saveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
   fg.setActiveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
   console.log('  ⑥-D 자동 반영 — 예약 데미지 승격은 조회만이어도 막지 않는다 ✔');

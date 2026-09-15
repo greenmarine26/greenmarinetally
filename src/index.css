@@ -190,3 +190,30 @@ svg.lucide {
 }
 @media (min-width: 640px) { .bdg { height: 20px; padding: 0 6px; font-size: 10px; gap: 2px; } }
 
+
+/* ════════════════════════════════════════════════════════════════════
+   ★ 3.51-01 — 크롬 자동완성이 글자를 지우는 것 (검수사 2026-09-15
+     «특정 노트북에서 로그인 할때 이름을 칠때 보이지 않는이유는?»)
+
+   크롬은 저장된 값이 있는 입력칸에 `-webkit-autofill` 을 걸어 **배경을 흰색으로 덮고**
+   글자색도 제 마음대로 바꾼다. 이 앱 입력칸은 어두운 배경 + 흰 글자(text-white)라
+   그 순간 **흰 글자가 흰 배경에 묻혀 안 보인다.** 저장된 이름이 있는 기기에서만 나므로
+   «특정 노트북» 이 된다. 지금까지 이 대응이 저장소에 한 줄도 없었다.
+
+   ⇒ 글자색은 `-webkit-text-fill-color` 로 못 박고(크롬은 color 를 무시한다),
+     배경은 안쪽 그림자로 덮는다(크롬이 background-color 를 무시하므로 이 방법뿐).
+     색은 var(--ink-800) 을 그대로 써서 밝기 4단계를 따라간다.
+     transition 을 길게 두는 것은 크롬이 잠깐 노란 배경을 칠하고 넘어가는 것을 가리는 관용 수법이다.
+   ════════════════════════════════════════════════════════════════════ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: rgb(var(--dim-100, 226 232 240));
+  caret-color: rgb(var(--dim-100, 226 232 240));
+  -webkit-box-shadow: 0 0 0 1000px rgb(var(--ink-800)) inset !important;
+  box-shadow: 0 0 0 1000px rgb(var(--ink-800)) inset !important;
+  transition: background-color 100000s ease-in-out 0s;
+}
