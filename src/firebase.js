@@ -2370,8 +2370,9 @@ export async function fbAddReportsAt(base, items) {
   return { added, skipped };
 }
 
+let _lastReportTs = 0;   // 3.49: 같은 밀리초에 두 보고가 오면 경로 키가 겹쳐 앞 것이 덮였다(감사 실측: 자동 기록 9건 → 경로 2개). 키는 늘 앞 것보다 크게.
 export async function fbAddWorkReport(voyageKey, report) {
-  const ts = Date.now();
+  const ts = Math.max(Date.now(), _lastReportTs + 1); _lastReportTs = ts;
   const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);
   await set(r, {
     ...report,

@@ -16,6 +16,7 @@
 // ⚠ 베이 표기가 두 가지다. `13&15`(홀수 쌍 = 13-14-15 한 슬롯)와 `26번베이`(짝수 단독)가
 //   같은 슬롯을 가리킨다. 둘 다 그대로 담고, 그룹 판정은 읽는 쪽(bayGroupCenter)에 맡긴다.
 // ⚠ 사진·잡담(`사진 3장`, `넹`, `씰번호 리스트랑 맞아요`)은 버린다. 지어내지 않는다.
+import { hatchReportTs } from './utils.js';   // 3.49: 자동 해치 기록의 사건 시각(eventTs) 한 벌
 
 const RE_LINE = /^\[([^\]]*)\]\s*\[(\d{1,2}):(\d{2})\]\s*(.*)$/;
 const RE_DATE = /^(\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일/;
@@ -155,7 +156,7 @@ export function diffAgainstReports(items, reports, groupOf) {
   const have = [];
   for (const r of Object.values(reports || {})) {
     if (!r || !r.ts) continue;
-    if (r.type === 'hatch') have.push({ kind: 'hatch', action: r.action, ts: r.ts, groups: (r.bays || []).map(groupOf).filter(g => g != null) });
+    if (r.type === 'hatch') have.push({ kind: 'hatch', action: r.action, ts: hatchReportTs(r), groups: (r.bays || []).map(groupOf).filter(g => g != null) });   // 3.49: 자동 기록은 적힌 때가 아니라 사건 시각으로 대조
     else if (r.type === 'work_status') have.push({ kind: 'work_status', action: r.action, ts: r.ts });
   }
   const out = [];

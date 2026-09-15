@@ -18,6 +18,12 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { askMirModel, isWeakAnswer } from '../mirModel.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
+import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
+import { bayGroupCenter } from '../swapGrade.js';   // 3.49: 장수 셈의 그룹 center(GuidedWorkPanel 과 같은 벌)
+import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록·장수 사전
+import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 3.49: 장 묶기(hatchEvenOf 가 받는 목록)
+import { recordHatchEvent } from '../hatchReport.js';   // 3.49: 따라가기 자동 기록
+import HatchAlertBanner from './HatchAlertBanner.jsx';   // 3.49: 비따라가기 알림
 import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
@@ -77,6 +83,9 @@ function narrowByFullCn(list, q) {
   }
   return list;
 }
+
+//  3.49: 따라가기 자동 기록 «적는 중/적음» 표 — 모듈 수준(항차키|장|동작). 화면이 다시 마운트되거나(모드 전환 key) 언마운트 뒤에도 같은 사건을 두 번 적지 않는다(2차 감사). 실패하면 지워 다음 갱신에 다시.
+const _hatchInFlightAll = new Set();
 
 export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {}, relayQuery = '', bayView = null }) {   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
@@ -473,6 +482,45 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_ctxCb, manualBay, manualTier, guideMode, searchMode, noWorkLeft]);
   // 1.26: shipLib(본선 구조·실적)을 ctx 로 내려보낸다 — "몇 대까지 싣나" 답변 근거.
+  /* ★ 3.49 해치커버 자동 판정 — 검수사 «검수원 입력이 있으면 그건 우선 적용이고 입력이 없다면 따라가기 모드가 아닌 경우엔 알림».
+       판정(utils.hatchEventsOf)·보고 상태(hatchReportedOf)·장수(hatchPanelCountOf)는 전부 한 벌. 내 호기 사건만 다룬다(두 검수원이 같은 장을 두 번 적지 않게) — 호기 미지정이면 전부.
+       따라가기(bayView.follow)면 사람에게 묻지 않고 reports 에 auto:true 로 적는다(검수사 «틀리면 마지막에 수석이 수정»). 아니면 배너로 알리고 [보고]는 사람이 누른다. */
+  const _hatchShipImo = voyage?.info?.imo || '', _hatchShipName = voyage?.info?.vsl || '';
+  const _hatchDict = useMemo(() => { try { return getShipBayDictData(_hatchShipImo, _hatchShipName); } catch (e) { return null; } }, [_hatchShipImo, _hatchShipName]);
+  const _hatchPages = useMemo(() => { try { return _hatchDict?.bayDef?.baysSummary ? (buildBayPagesFromSummary(_hatchDict.bayDef) || null) : null; } catch (e) { return null; } }, [_hatchDict]);
+  //  1분 시계 — «크레인의 마지막 런 뒤 3분이 지났다»(닫힘 추정)는 새 실적이 안 와도 시간이 가면 성립한다. 실적이 멈춘 뒤에도 판정이 다시 돈다.
+  const [_hatchTick, _setHatchTick] = useState(0);
+  useEffect(() => { const id = setInterval(() => _setHatchTick((n) => n + 1), 60000); return () => clearInterval(id); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const _hatchAll = useMemo(() => (isLoloShip || workFilter === 'completed') ? [] : hatchEventsOf(voyage, _hatchPages, Date.now()).events, [voyage, _hatchPages, isLoloShip, workFilter, _hatchTick]);
+  const _hatchRep = useMemo(() => hatchReportedOf(voyage, _hatchPages), [voyage, _hatchPages]);
+  const _myCrane = crewCraneNo(equipNo);
+  const hatchPending = useMemo(() => _hatchAll.filter((e) => !_hatchRep.has(`${e.hatch}|${e.action}`) && (!_myCrane || !e.crane || e.crane === _myCrane)), [_hatchAll, _hatchRep, _myCrane]);
+  const _hatchFollow = !!(bayView && bayView.follow);
+  const _hatchGroupCenterOf = (b) => bayGroupCenter(b, manualBayPairs);
+  //  사건의 모드(양하/선적)로 항차번호·장수를 고른다 — 양하 탭에 뜬 선적 닫힘을 양하 항차로 적지 않게(감사 지적).
+  const hatchPanelCountFor = (bays, mode = workFilter) => hatchPanelCountOf(voyage, mode, bays, _hatchDict, _hatchGroupCenterOf);
+  const hatchVoyFor = (mode = workFilter) => (mode === 'discharge' ? (voyage?.info?.voy_d || voyage?.info?.voy || '') : (voyage?.info?.voy_l || voyage?.info?.voy || ''));
+  useEffect(() => {
+    if (!_hatchFollow || !voyageKey || !hatchPending.length) return;
+    const todo = hatchPending.filter((e) => !_hatchInFlightAll.has(`${voyageKey}|${e.hatch}|${e.action}`));
+    if (!todo.length) return;
+    for (const e of todo) _hatchInFlightAll.add(`${voyageKey}|${e.hatch}|${e.action}`);
+    //  차례로 적는다(await) — 한 루프에서 연달아 쏘면 reports 키(Date.now())가 겹쳐 덮어썼다(감사 실측: 9건 → 경로 2개).
+    (async () => {
+      for (const e of todo) {
+        const k = `${voyageKey}|${e.hatch}|${e.action}`;
+        try {
+          await recordHatchEvent(voyageKey, e, { vsl: _hatchShipName, voy: hatchVoyFor(e.mode), equip: equipNo || '', panelCount: hatchPanelCountFor(e.bays, e.mode), share: false, by: inspector || '' });
+        } catch (x) { console.warn('[3.49] 따라가기 해치 자동 기록 실패 — 다음 갱신에 다시', x); _hatchInFlightAll.delete(k); }
+      }
+    })();
+    //  현장은 화면을 안 본다 — 방금(30분 안) 일어난 것만 한 문장으로 알린다. 묵은 사건은 조용히 적는다.
+    const fresh = todo.filter((e) => Date.now() - e.from < 30 * 60000);
+    if (fresh.length) { try { speak(`${fresh.map((e) => `${e.bays.join(' ')}번 베이 커버 ${e.action === 'open' ? '열림' : '닫힘'}`).join(', ')} 자동 보고`); } catch (x) { /* 소리 꺼짐 */ } }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hatchFollow, voyageKey, hatchPending]);
+
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib,
     pier: voyage?.info?.pier || '',   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
     gangs: voyage?.info?.gangs,
@@ -573,6 +621,11 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           </div>
         </div>
       )}
+      {/* 3.49: 해치커버 알림 — 따라가기가 아닐 때만. 따라가기는 위 효과가 조용히 적는다. */}
+      {!_hatchFollow && hatchPending.length > 0 && (
+        <HatchAlertBanner events={hatchPending} voyageKey={voyageKey} vsl={_hatchShipName} voyOf={hatchVoyFor}
+          equip={equipNo || ''} inspector={inspector} panelCountOf={hatchPanelCountFor} />
+      )}
       {workFilter !== 'completed' && !isLoloShip && (
         <div className={`rounded-pill p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
           <button onClick={() => setGuideMode(true)}
@@ -605,7 +658,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           allContainers={allContainers} workFilter={workFilter}
           onSwitchManual={() => setGuideMode(false)}
           onOpenContainer={onOpenContainer}
-          compact={!!(bayView && bayView.compact)} suppressBayActivity={_suppressBay}
+          compact={!!(bayView && bayView.compact)} suppressBayActivity={_suppressBay} hatchAuto={_hatchFollow}
         />
       ) : (
       <>

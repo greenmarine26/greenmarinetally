@@ -29,11 +29,14 @@ special = {
     'fbTrashShipBayDict': "export const fbTrashShipBayDict = async (code, by) => { window.__calls.push({ fn: 'trash', code, by }); return true; };",
     'fbSetShipBayDictSpare': "export const fbSetShipBayDictSpare = async (code, on, by) => { window.__calls.push({ fn: 'spare', code, on, by }); return true; };",
     'fbUpdateVoyageInfo': "export const fbUpdateVoyageInfo = async (vk, patch) => { window.__calls.push({ fn: 'updateInfo', vk, patch }); return true; };",
+    #  3.49: 해치 자동 기록(reports)·활동 기록 — 베이뷰·해치 연막이 «적었는가/안 적었는가»를 센다.
+    'fbAddWorkReport': "export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };",
+    'fbSetInspectorActivity': "export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };",
     'resolveSeqMode': body('resolveSeqMode') + "\nexport { resolveSeqMode };",
     'tallyVoyagesByShip': body('tallyVoyagesByShip') + "\nexport { tallyVoyagesByShip };",
 }
 out = ["// 검색·완료 렌더 연막검사용 firebase 메모리 스텁(3.2-01) — src 가 firebase.js 에서 가져오는 이름 전부를 무해한 함수로. 실제 쓰기 없음.",
-       "//   fbCompleteContainer·fbCompleteContainersAtomic·fbReassignContainerPosition 만 window.__calls 에 남긴다.",
+       "//   fbCompleteContainer·fbCompleteContainersAtomic·fbReassignContainerPosition·fbAddWorkReport·fbSetInspectorActivity 만 window.__calls 에 남긴다.",
        "//   ⚠ 새 이름이 firebase.js 에 생기면 tools/gen_fb_stub.py 로 다시 만든다(빌드가 «is not exported» 로 막는다)."]
 for n in sorted(names):
     out.append(special.get(n, f"export const {n} = async () => true;"))

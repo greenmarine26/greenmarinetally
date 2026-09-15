@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs } from './utils.js';   // 2.65-01: 조 경계 한 벌
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
@@ -1055,7 +1055,7 @@ export function answerDataArrival(voyage, shipName = '') {
 
 // 해치 개폐 실황 — voyages/{key}/reports 의 type:'hatch' 최종 상태 (#12) + 구조(#11)
 export function answerHatchStatus(voyage, bayDef, shipName = '') {
-  const reports = _list(voyage?.reports).filter((r) => r && r.type === 'hatch').sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const reports = _list(voyage?.reports).filter((r) => r && r.type === 'hatch').sort((a, b) => hatchReportTs(a) - hatchReportTs(b));   // 3.49: 자동 기록은 사건 시각(eventTs)으로
   // 구조 — 페어 그룹 단위 해치 수(멤버 공유라 최댓값)
   let structLine = '';
   const plan = bayDef ? buildGangPlan(voyage, bayDef) : null;
@@ -1075,7 +1075,7 @@ export function answerHatchStatus(voyage, bayDef, shipName = '') {
   reports.forEach((r) => { const key = String(r.bays || r.bay || '?'); last[key] = r; });
   const open = Object.values(last).filter((r) => /open|열/.test(String(r.action || '')));
   const closed = Object.values(last).filter((r) => !/open|열/.test(String(r.action || '')));
-  const fmt = (r) => `${r.bays || ''}${r.equip ? ` (${r.equip}호기` : ''}${r.equip ? ` ${_fmtT(r.ts)})` : ` (${_fmtT(r.ts)})`}`;
+  const fmt = (r) => `${r.bays || ''}${r.equip ? ` (${r.equip}호기` : ''}${r.equip ? ` ${_fmtT(hatchReportTs(r))})` : ` (${_fmtT(hatchReportTs(r))})`}`;
   const L = [`${shipName ? shipName + ' — ' : ''}보고 기준 해치: 열림 ${open.length}곳 · 닫힘 ${closed.length}곳.`];
   if (open.length) L.push(`열림: ${open.map(fmt).join(' · ')}`);
   if (closed.length) L.push(`닫힘: ${closed.map(fmt).join(' · ')}`);

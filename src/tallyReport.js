@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks} from './utils.js';   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -472,7 +472,9 @@ export function buildTimeSheet(reports, opts = {}) {
       const gs = groupOf ? [...new Set((r.bays || []).map(groupOf).filter((g) => g != null))] : [];
       if (gs.length && gs.every((g) => hatchState.get(g) === act)) { dupHatch += 1; continue; }
       for (const g of gs) hatchState.set(g, act);
-      rows.push({ ts: r.ts, time: `${t(r.ts)}    HRS`,
+      //  3.49: 자동 판정 기록(auto)은 앱이 알아챈 시각(ts)이 아니라 사건 시각(eventTs = 터미널 실적 공백 첫머리)으로 적는다. 사람이 누른 보고는 종전대로 ts.
+      const _hts = hatchReportTs(r);   // 3.49: 자동 기록은 공백 첫머리(eventTs)가 사건 시각 — utils 한 벌
+      rows.push({ ts: _hts, time: `${t(_hts)}    HRS`,
         remark: `HATCH COVER ${act.toUpperCase()}${r.bays ? ` (BAY ${bayStr(r.bays)})` : ''}` });
     }
   }

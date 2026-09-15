@@ -2,11 +2,18 @@
 //   ① 완료 지도 = 앱 ∪ 터미널(합집합·터미널만 갈래) ② 불일치 세 갈래(pos·cell·noterm)와 칸 표식 ③ 따라가기(내 호기·호기 없음·실적 없는 배)
 //   ④ 선택 화면(호기별 장·따라가기 단추) ⑤ 따라가기로 들어간 화면 — 띠 제목은 BayPlan 이 올린 것, 위 칸은 자동 카드, 아래 칸은 완료 초록·남은 흰 칸·다른 단 흐리게
 //   ⑥ 데크⇄홀드 ⑦ ◀ → 수동·싱글 → 위 칸 게이트에서 베이·단을 고르면 아래 장이 바뀐다 ⑧ 압축 — «선적 시작» 큰 칸이 없다 ⑨ ✕ 로 닫힘
+//   3.49 — ⑤-H 따라가기면 해치 사건이 reports 에 auto:true 로 적히고 배너는 없다 · ⑤-W 넓은 화면(matchMedia 1024px)이면 좌/우 flex-row, 폰이면 위/아래
+//          ⑦-H 수동(비따라가기)이면 배너 [data-hatch-alert] 가 뜨고, 검수원 보고를 얹으면 그 장이 빠지고, [보고만] 을 누르면 reports 에 적힌다
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
 const errs = [];
 dom.window.addEventListener('error', (e) => errs.push(e.message));
+//  3.49: useIsWide 가 보는 matchMedia — jsdom 엔 없다. 폰(false)으로 시작해 검사 중에 넓은 화면으로 바꿔 본다.
+const mqListeners = new Set(); let WIDE = false;
+dom.window.matchMedia = (q) => ({ get matches() { return WIDE && /min-width:\s*1024px/.test(q); }, media: q, onchange: null,
+  addEventListener: (t, fn) => mqListeners.add(fn), removeEventListener: (t, fn) => mqListeners.delete(fn), addListener: (fn) => mqListeners.add(fn), removeListener: (fn) => mqListeners.delete(fn) });
+const setWide = (w) => { WIDE = w; for (const fn of [...mqListeners]) fn({ matches: w }); };
 console.error = (...a) => { const s = a.map(String).join(' '); if (/Error|Warning: /.test(s) && !/act\(\)/.test(s)) errs.push(s.split('\n')[0].slice(0, 200)); };
 try { dom.window.eval(fs.readFileSync(process.argv[2], 'utf8')); } catch (e) { errs.push('THROW: ' + e.message); }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -98,6 +105,32 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   // 되먹임 없음 — 이동 뒤 히스토리(가짜 항목)가 더 안 쌓인다
   await wait(600);
   if (W.history.length !== hist0) fail(`따라가기 이동 뒤 history 가 계속 는다: ${hist0} → ${W.history.length}`);
+  // ⑤-H 3.49 따라가기 — 해치 사건을 묻지 않고 reports 에 적는다(auto:true · eventTs = 공백 첫머리 · 판정 줄) · 배너 없음
+  const H = W.__bv.hatch;
+  if (!H || !H.all.length || !H.mine.length) fail('실자료(DXQD)에서 해치 사건이 안 나온다: ' + JSON.stringify(H));
+  const reps = () => W.__calls.filter((c) => c.fn === 'report' && c.report && c.report.type === 'hatch');
+  for (let i = 0; i < 20; i++) { await wait(100); if (reps().length >= H.mine.length) break; }
+  const rp = reps();
+  if (rp.length !== H.mine.length) fail(`따라가기 자동 기록 수가 내 호기 몫과 다르다: 적힘 ${rp.length} / 몫 ${H.mine.length} (${H.mine.join(' ')}) — 전체 ${H.all.length}`);
+  const bad = rp.find((c) => c.vk !== 'DXQD_2636E' || c.report.auto !== true || !(Number(c.report.eventTs) > 0) || !/판정: .*\(자동\)/.test(c.report.message) || !c.report.bays.every((b) => /^\d{2}$/.test(b)) || c.report.by !== '김성일');
+  if (bad) fail('자동 기록 내용이 틀리다: ' + JSON.stringify(bad));
+  if (rp.some((c) => c.report.eventTs > Date.now())) fail('자동 기록 eventTs 가 미래다');
+  if (doc.querySelector('[data-hatch-alert]')) fail('따라가기인데 해치 알림 배너가 떴다');
+  if (W.__calls.some((c) => c.fn === 'activity' && c.detail && c.detail.bayLabel)) fail('따라가기 중 활동 기록에 베이(bayLabel)가 실렸다(수석 보드 되먹임): ' + JSON.stringify(W.__calls.filter((c) => c.fn === 'activity').slice(0, 2)));
+  if (!W.__calls.some((c) => c.fn === 'activity')) fail('활동 기록(fbSetInspectorActivity) 호출이 하나도 없다 — 검사가 죽어 있다');
+  // ⑤-W 3.49 넓은 화면 — 좌(자료)/우(베이) · 손잡이 세로. 되돌리면 위/아래.
+  if (doc.querySelector('[data-bayview="view"]').getAttribute('data-bayview-wide') !== '0') fail('폰(좁은 화면)인데 wide 표식이 1 이다');
+  const split = () => doc.querySelector('[data-bayview-top="1"]').parentElement;
+  if (!/flex-col/.test(split().className) || /flex-row/.test(split().className)) fail('폰인데 위/아래(flex-col)가 아니다: ' + split().className);
+  setWide(true); await wait(300); noErr();
+  if (doc.querySelector('[data-bayview="view"]').getAttribute('data-bayview-wide') !== '1') fail('넓은 화면인데 wide 표식이 안 붙었다');
+  if (!/flex-row/.test(split().className)) fail('넓은 화면인데 좌/우(flex-row)가 아니다: ' + split().className);
+  const handle = split().children[1];
+  if (!handle || !/cursor-col-resize/.test(handle.className) || !/w-3\.5/.test(handle.className)) fail('넓은 화면 손잡이가 세로 막대가 아니다: ' + (handle && handle.className));
+  if (split().children[0] !== doc.querySelector('[data-bayview-top="1"]') || split().children[2] !== doc.querySelector('[data-bayview-bottom="1"]')) fail('좌=자료·우=베이 순서가 아니다');
+  if (!doc.querySelector('[data-bayview-title="1"]') || !/BAY \(16\)17/.test(doc.querySelector('[data-bayview-title="1"]').textContent)) fail('넓은 화면으로 바꾸자 베이 그림이 사라졌다');
+  setWide(false); await wait(300); noErr();
+  if (!/flex-col/.test(split().className) || /cursor-col-resize/.test(split().children[1].className)) fail('폰으로 되돌렸는데 위/아래로 안 돌아온다');
   // ⑦ ◀ → 수동·싱글 → 위 칸 게이트
   byText(/^◀$/).click();
   await wait(300);
@@ -108,6 +141,25 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!/작업할 베이를 선택하세요/.test(t)) fail('수동으로 들어갔는데 베이 게이트가 없다: ' + t.slice(0, 200));
   if (doc.querySelector('[data-bayview-follow="1"]')) fail('수동인데 따라가기 칩이 남아 있다');
   const topEl = () => doc.querySelector('[data-bayview-top="1"]');
+  // ⑦-H 3.49 비따라가기 — 배너가 뜨고(스텁은 reports 에 안 써서 앞서 자동 기록한 것도 아직 «미보고»), 검수원 보고를 얹으면 그 장이 빠지고, [보고만] 은 reports 에 적는다
+  const banner = () => topEl().querySelector('[data-hatch-alert]');
+  if (!banner()) fail('수동(비따라가기)인데 해치 알림 배너가 없다: ' + topEl().textContent.slice(0, 200));
+  const rowsB = () => [...banner().querySelectorAll('[data-hatch-key]')].map((n) => n.getAttribute('data-hatch-key'));
+  if (rowsB().length !== H.mine.length || rowsB().some((k) => !H.mine.includes(k))) fail(`배너 줄이 내 호기 몫과 다르다: ${rowsB().join(' ')} / ${H.mine.join(' ')}`);
+  const bt = banner().textContent;
+  if (!/공백 \d+분/.test(bt) || !/보고\+카톡/.test(bt) || !/보고만/.test(bt) || !/무시/.test(bt)) fail('배너 줄 문구가 빠졌다: ' + bt.slice(0, 200));
+  const [k0hatch, k0act] = rowsB()[0].split('|');
+  const trio = [k0hatch - 1, +k0hatch, +k0hatch + 1].map((b) => String(b).padStart(2, '0'));
+  W.__withReports({ 9999: { type: 'hatch', action: k0act.toUpperCase(), bays: trio, ts: Date.now(), by: '김성일' } });
+  await wait(400); noErr();
+  if (rowsB().includes(`${k0hatch}|${k0act}`)) fail('검수원이 보고한 장이 배너에서 안 빠진다: ' + rowsB().join(' '));
+  if (rowsB().length !== H.mine.length - 1) fail(`보고를 얹었는데 배너 줄 수가 하나만 줄지 않았다: ${rowsB().length} / ${H.mine.length - 1}`);
+  const nRep0 = W.__calls.filter((c) => c.fn === 'report').length;
+  const row1 = banner().querySelector('[data-hatch-key]'); const k1 = row1.getAttribute('data-hatch-key');
+  byTextIn(row1, /^보고만$/).click();
+  for (let i = 0; i < 20; i++) { await wait(100); if (W.__calls.filter((c) => c.fn === 'report').length > nRep0) break; }
+  const rp1 = W.__calls.filter((c) => c.fn === 'report').slice(nRep0);
+  if (rp1.length !== 1 || rp1[0].report.type !== 'hatch' || rp1[0].report.auto !== true || `${parseInt(rp1[0].report.bays[1], 10)}|${rp1[0].report.action}` !== k1) fail('[보고만] 이 그 장·동작을 reports 에 안 적는다: ' + JSON.stringify(rp1));
   const bayBtn = byTextIn(topEl(), /B15·16·17/);
   if (!bayBtn) fail('게이트에 B15·16·17 이 없다: ' + t.slice(0, 300));
   bayBtn.click();
@@ -128,5 +180,5 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!doc.querySelector('[data-closed="1"]')) fail('✕ 로 안 닫혔다');
   if (!W.__calls.some((c) => c.fn === 'close')) fail('onClose 가 안 불렸다');
   noErr();
-  console.log(`✓ 베이뷰 연막검사 통과 (완료 지도 ${bv.overlay.comp} · 불일치 세 갈래 · 따라가기 4호기 BAY (20)21 데크 → 이동 «${titleM}» · 초록 ${greens}칸 · 남은 흰 칸 ${whiteTxt.length} · 흐린 칸 ${dimmed}→${dimmed2} · 수동 B15·16·17 → «${title2}» · history ${W.history.length})`);
+  console.log(`✓ 베이뷰 연막검사 통과 (해치 자동 기록 ${rp.length}건·배너 ${H.mine.length}줄 · 좌우 분할 · 완료 지도 ${bv.overlay.comp} · 불일치 세 갈래 · 따라가기 4호기 BAY (20)21 데크 → 이동 «${titleM}» · 초록 ${greens}칸 · 남은 흰 칸 ${whiteTxt.length} · 흐린 칸 ${dimmed}→${dimmed2} · 수동 B15·16·17 → «${title2}» · history ${W.history.length})`);
 })().catch((e) => { console.log('✗ 검사 스크립트 예외: ' + (e && e.stack || e)); process.exit(1); });

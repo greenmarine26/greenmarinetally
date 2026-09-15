@@ -13,7 +13,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { speak, spellKo } from '../voice.js';
-import { isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { hatchPanelCountOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -64,7 +64,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false }) {   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false }) {   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -310,7 +310,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (!r || r.type !== 'hatch') continue;
       const bs = Array.isArray(r.bays) ? r.bays : [];
       if (!bs.some((b) => groupCenterOf(b) === center)) continue;
-      const ts = Number(r.ts) || 0;
+      const ts = hatchReportTs(r);   // 3.49: 자동 기록은 적힌 때가 아니라 사건 시각 — 나중에 적힌 옛 열림이 수동 닫힘을 덮지 않게(2차 감사)
       if (ts >= bestTs) { bestTs = ts; act = r.action; }
     }
     return act;
@@ -853,50 +853,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
      실측 MCSC 633N — 38번은 3장 중 **1장**(양옆은 통과화물 80대가 얹혀 있다), 34번은 **2장**.
      ⚠ 판정은 utils.hatchOpenableFor 한 벌이다 — 커버 로우 범위를 아는 _panelOf 를 그대로 쓴다.
        구하지 못하면(사전 없음·자료 없음) 종전대로 사전 합산으로 돌아간다. */
-  const hatchPanelsOf = (bays) => {
-    try {
-      /* 2.98-12 (메모 «21 (22)23번베이 해치 커버 열면 6장?») — 트리오는 **같은 물리 커버**라
-         베이마다 다시 세면 2+2+2=6 이 된다. V7.99-6 이 잡았던 그 병을 2.88-01 합산이 되살렸다.
-         hatchOpenable 이 정규화한 그룹(r.group)당 **한 번만** 센다. */
-      /* 감사 지적(2.98-12): 대표를 «입력 첫 베이»로 잡으면 사전 장수가 베이마다 다른 배에서
-         모르는 베이의 기본값(total=1)이 아는 베이의 답을 밀어낸다(MCAP 21:0/22:3/23:0).
-         반대형도 실재한다 — STMJ 사전 9:2/10:1 인데 현장 실측(kakaoWorkLog «09&11 은 2장»)은 2장.
-         ⇒ 대표는 **아는 쪽** — total 큰 답 우선(1.69-07 «더 큰 hatchCount 로 올린다, 내림 없음»과
-         같은 벌), 같으면 그룹 중심(b === r.group) 우선. */
-      const _byG = new Map();
-      for (const b of (bays || [])) {
-        const bn = parseInt(b, 10);
-        const r = hatchOpenableFor(voyage, mode, bn, getShipBayDictData(shipImo, shipName));
-        if (!r) continue;
-        const g = r.group ?? bn;
-        const cur = _byG.get(g);
-        if (!cur || r.total > cur.total || (r.total === cur.total && bn === g)) _byG.set(g, r);
-      }
-      //  3.2-01 (김성일 메모 «1장이면 되는데 2장오픈»): 열 수 있는 장(openable)이 아니라 **열어야 할 장**(needed).
-      const _open = [..._byG.values()].reduce((s, r) => s + (r.needed ?? r.openable), 0);
-      if (_open > 0) return _open;
-    } catch (e) { /* 아래 종전 경로 */ }
-    try {
-      const dict = getShipBayDictData(shipImo, shipName);
-      const summary = dict?.bayDef?.baysSummary;
-      if (!Array.isArray(summary) || !summary.length) return 0;
-      const byNo = {};
-      summary.forEach(bs => { const no = String(parseInt(bs.bayNo ?? bs.bay, 10)); if (Number.isFinite(parseInt(no,10))) byNo[no] = bs; });
-      // groupCenter별로 hatchCount 최댓값을 모은 뒤, 그룹 간 합산
-      const byGroup = {};
-      let found = false;
-      bays.forEach(b => {
-        const bs = byNo[String(parseInt(b, 10))];
-        if (bs && typeof bs.hatchCount === 'number') {
-          found = true;
-          const g = String(groupCenterOf(b));
-          byGroup[g] = Math.max(byGroup[g] || 0, bs.hatchCount);
-        }
-      });
-      const total = Object.values(byGroup).reduce((s, v) => s + v, 0);
-      return found ? total : 0;
-    } catch (e) { return 0; }
-  };
+  //  3.49: 장수 셈은 utils.hatchPanelCountOf 한 벌(자동 판정 기록·알림 배너도 같은 수를 쓴다). 본문은 그대로 옮겼다.
+  const hatchPanelsOf = (bays) => hatchPanelCountOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf);
 
   // TallyOne 1.8-18: **끝난 모드에서는 유도 해치 보고를 걸지 않는다.**
   //
@@ -1015,6 +973,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
+    if (hatchAuto) return false;        // 3.49: 따라가기 — 커버는 터미널 실적으로 자동 판정·기록(SearchPanel)
     if (isHatchSkipShip) return false;  // V8.10: TMPZ·TNJP·RZOR·OBWH 해치 계산/보고 안 함
     if (modeFinished) return false;   // 1.8-18: 끝난 모드엔 권하지 않는다
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
@@ -1032,7 +991,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //   «내린 것»이 없어 배너가 안 떴다. 그런데 홀드 버튼은 평택 잔여만 보고 바로 열려서,
     //   커버 안내를 한 번도 못 본 채 홀드로 들어갔다. 홀드에 평택 작업이 남았으면 커버는 열어야 한다.
     return deckRemain === 0 && holdRemain > 0;
-  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished]);
+  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished, hatchAuto]);
 
   // 1.76-05: 커버 위에서 **치워야 하는 것**만 고른다.
   //   ⚠ deckBlockers 는 베이 그룹 통째다. 커버는 그룹 하나가 아니라 `hatchCount` 장의 패널로 갈리므로
@@ -1076,6 +1035,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
   const holdDonePrompt = useMemo(() => {
+    if (hatchAuto) return false;        // 3.49: 따라가기 — 자동 판정
     if (isHatchSkipShip) return false;  // V8.10: 해치 닫기 제안 안 함
     if (modeFinished) return false;   // 1.8-18
     if (mode !== 'loading' || deckPromptDone || selectedGroup == null) return false;
@@ -1085,7 +1045,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
     return holdRemain === 0 && deckDone === 0 && groupDone > 0;
-  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished]);
+  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished, hatchAuto]);
 
   // V8.09-15 (사용자 점검 2026-06-18): 해치커버/베이 선택 갈림길 음성 처리.
   //   ① 선택 배너가 떠 있는 동안에는 "다음 컨테이너" 음성을 막는다(어디로 갈지 미정인데 앞서 말하던 버그).
@@ -1096,9 +1056,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //   음성 안내도 같이 사라졌다. 홀드가 남아 있으면 커버 안내는 나와야 한다.
     if (deckDonePromptD) return 'deckD';
     if (holdDonePrompt && card) return 'holdL';
-    if (mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') && !card) return 'holdCloseD';
+    if (!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') && !card) return 'holdCloseD';   // 3.49: 따라가기면 자동 판정
     return null;
-  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card]);
+  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card, hatchAuto]);
 
   const CHOICE_VOICE = {
     deckD: '데크 양하 완료. 해치커버를 열까요, 다른 데크로 갈까요.',
@@ -1744,7 +1704,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div className="bg-emerald-950/40 border border-emerald-700 rounded-pill p-6 text-center">
           <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>
           <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
-          {mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (
+          {!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (   // 3.49: 따라가기면 자동 판정이 적는다 — 버튼까지 숨겨 이중 보고를 막는다(감사 지적)
             <div className="mt-3 space-y-2">
               <div className="text-xxs text-dim-300">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
               <div className="flex gap-2 justify-center">

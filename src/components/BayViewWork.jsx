@@ -13,6 +13,7 @@ import { bayViewOverlayOf, bayViewFollowOf, getEquipNumber, setEquipNumber, equi
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildBayPagesFromSummary, hatchEvenOf } from '../cargoPlanCore.js';
 import { useBackHandler } from '../backHandler.js';
+import useIsWide from '../useIsWide.js';   // 3.49: 넓은 화면(태블릿·컴)은 좌/우 분할 — 리스트 탭 2단과 같은 기준(1024px)
 
 const pad2 = (x) => String(x ?? '').padStart(2, '0');
 const fmtT = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
@@ -44,6 +45,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
   const [ratio, setRatio] = useState(readRatio);
   const [zoom, setZoom] = useState(1);
   const [showConf, setShowConf] = useState(false);
+  const isWide = useIsWide();   // 3.49: 검수사 «폰화면은 수직 화면 이지만 컴은 수평화면으로 … 컴은 좌측에 컨테이너 자료가 우측에 베이»
   const [equip, setEquip] = useState(getEquipNumber());
   useEffect(() => {
     const h = (e) => setEquip((e && e.detail) || getEquipNumber());
@@ -110,8 +112,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
 
   //  칸 경계 끌기 — 폰에 기억. 두 번 두드리면 1/3 로.
   const boxRef = useRef(null); const dragRef = useRef(null);
-  const onHandleDown = (e) => { const box = boxRef.current; if (!box) return; dragRef.current = { top: box.getBoundingClientRect().top + 40, h: box.clientHeight - 40 }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { /* 캡처 못 해도 끌린다 */ } };
-  const onHandleMove = (e) => { const d = dragRef.current; if (!d || !(d.h > 0)) return; const r = Math.min(0.7, Math.max(0.2, (e.clientY - d.top) / d.h)); setRatio(r); };
+  const onHandleDown = (e) => { const box = boxRef.current; if (!box) return; const rc = box.getBoundingClientRect(); dragRef.current = isWide ? { left: rc.left, w: box.clientWidth } : { top: rc.top + 40, h: box.clientHeight - 40 }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { /* 캡처 못 해도 끌린다 */ } };
+  const onHandleMove = (e) => { const d = dragRef.current; if (!d) return; const r = d.w > 0 ? (e.clientX - d.left) / d.w : (d.h > 0 ? (e.clientY - d.top) / d.h : null); if (r == null) return; setRatio(Math.min(0.7, Math.max(0.2, r))); };
   const onHandleUp = () => { if (!dragRef.current) return; dragRef.current = null; try { localStorage.setItem(RATIO_KEY, String(ratio)); } catch (e) { /* 저장 못 해도 화면은 그대로 */ } };
   const resetRatio = () => { setRatio(RATIO_DEF); try { localStorage.setItem(RATIO_KEY, String(RATIO_DEF)); } catch (e) { /* */ } };
 
@@ -169,9 +171,9 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
     );
   }
 
-  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow };
+  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
   return (
-    <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" style={{ height: '100dvh' }}>
+    <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" data-bayview-wide={isWide ? '1' : '0'} style={{ height: '100dvh' }}>
       <div className="h-10 shrink-0 flex items-center gap-1.5 px-2 bg-ink-900 border-b border-line overflow-x-auto whitespace-nowrap">
         <button onClick={() => setStep('pick')} className={chip('bg-ink-800 border border-line text-dim-200')} title="선택 화면으로">◀</button>
         <span className={chip(mode === 'loading' ? 'bg-sky-800 text-sky-100' : 'bg-rose-800 text-rose-100')}>{modeLabel}</span>
@@ -200,14 +202,16 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
           ))}
         </div>
       )}
-      <div className="min-h-0 overflow-auto px-2 py-1.5" style={{ flex: `${ratio} 1 0px` }} data-bayview-top="1">
+      {/* 3.49: 폰은 위(자료)/아래(베이), 넓은 화면은 좌(자료)/우(베이) — 한 트리, 방향만 바뀐다 */}
+      <div className={`min-h-0 flex-1 flex ${isWide ? 'flex-row' : 'flex-col'}`}>
+      <div className="min-h-0 min-w-0 overflow-auto px-2 py-1.5" style={{ flex: `${ratio} 1 0px` }} data-bayview-top="1">
         <SearchPanel {...searchPanelProps} voyage={voyage} voyageKey={voyageKey} inspector={inspector} mode={mode} onOpenContainer={onOpenContainer} bayView={bayViewProps} />
       </div>
       <div onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp} onDoubleClick={resetRatio}
-        className="h-3.5 shrink-0 flex items-center justify-center bg-ink-800 border-y border-line cursor-row-resize touch-none select-none" title="끌어서 칸 크기 조절 · 두 번 누르면 1/3">
-        <div className="w-12 h-1 rounded bg-dim-500" />
+        className={`shrink-0 flex items-center justify-center bg-ink-800 touch-none select-none ${isWide ? 'w-3.5 border-x border-line cursor-col-resize' : 'h-3.5 border-y border-line cursor-row-resize'}`} title="끌어서 칸 크기 조절 · 두 번 누르면 1/3">
+        <div className={isWide ? 'h-12 w-1 rounded bg-dim-500' : 'w-12 h-1 rounded bg-dim-500'} />
       </div>
-      <div className="min-h-0 overflow-auto p-1" style={{ flex: `${1 - ratio} 1 0px` }} data-bayview-bottom="1">
+      <div className="min-h-0 min-w-0 overflow-auto p-1" style={{ flex: `${1 - ratio} 1 0px` }} data-bayview-bottom="1">
         <div className="flex items-center gap-1.5 px-1 text-2xs text-dim-400">
           <span>{follow ? (fol.why || `터미널 ${fmtT(fol.at)} 기준`) : (live.bay != null ? '위 칸에서 고른 장' : (gridBay != null ? '터미널 기준 지금 자리 — 위 칸에서 베이를 고르면 바뀝니다' : '위 칸에서 베이를 고르세요'))}</span>
           <span className="ml-auto">완료 = 앱 ∪ 터미널{overlay.termOnly ? ` (터미널만 ${overlay.termOnly})` : ''}</span>
@@ -225,6 +229,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
         ) : (
           <div className="text-xs text-dim-400 text-center py-6">아직 그릴 베이가 없습니다 — 위 칸에서 베이를 고르거나 ◀ 에서 따라가기를 켜세요.</div>
         )}
+      </div>
       </div>
     </div>
   );

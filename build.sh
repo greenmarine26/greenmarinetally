@@ -288,6 +288,17 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 콘앱 호기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CCM" "$SMOKE_CCO"; exit 1
   fi
+  # 3.49: 해치커버 자동 판정 — SWTD 9013E(PCTC)·KKLC 2608N(동방) 실적 사본으로 utils.hatchEventsOf 를 실소스 그대로 돌려 열림·닫힘 사건 24건을 실측 판독과 대조한다.
+  #   따라가기는 이 판정을 묻지 않고 reports 에 적으므로 판정이 소리 없이 바뀌면 타임시트가 틀린다. 문지기(해치 제외 배·미래 실적·workEndAt+2h)·보고 상태 한 벌도 같이 잰다.
+  SMOKE_HAM=$(mktemp /dev/shm/hometmp/_ham_XXXXXX.mjs)
+  SMOKE_HAO=$(mktemp /dev/shm/hometmp/_hao_XXXXXX.cjs)
+  printf 'export { hatchEventsOf, hatchReportedOf, isHatchSkipShipInfo } from "%s/src/utils.js";\nexport { buildBayPagesFromSummary } from "%s/src/cargoPlanCore.js";\n' "$PWD" "$PWD" > "$SMOKE_HAM"
+  if npx esbuild "$SMOKE_HAM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_HAO" --log-level=error; then
+    node tools/smoke_hatchauto.cjs "$SMOKE_HAO" || { echo "✗ 해치 자동 판정 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_HAM" "$SMOKE_HAO"; exit 1; }
+    rm -f "$SMOKE_HAM" "$SMOKE_HAO"
+  else
+    echo "✗ 해치 자동 판정 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HAM" "$SMOKE_HAO"; exit 1
+  fi
   # 3.39: 선적 칸에서 «칠한 칸=풀 · 테두리만=엠티» 가 실제로 그려지는가 — 같은 번들(ATPR 366대·엠티 361)로 실렌더한다.
   node tools/smoke_feborder.cjs "$SMOKE_HL" || { echo "✗ 풀·엠티 구분 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.36: 카고플랜 해치커버가 세로 한가운데인가 — 세 척(ATPR·MCSC·MAMP)을 실렌더한다. MAMP 만 «데크 전용 베이» 를 갖는다.

@@ -1,5 +1,5 @@
 // 검색·완료 렌더 연막검사용 firebase 메모리 스텁(3.2-01) — src 가 firebase.js 에서 가져오는 이름 전부를 무해한 함수로. 실제 쓰기 없음.
-//   fbCompleteContainer·fbCompleteContainersAtomic·fbReassignContainerPosition 만 window.__calls 에 남긴다.
+//   fbCompleteContainer·fbCompleteContainersAtomic·fbReassignContainerPosition·fbAddWorkReport·fbSetInspectorActivity 만 window.__calls 에 남긴다.
 //   ⚠ 새 이름이 firebase.js 에 생기면 tools/gen_fb_stub.py 로 다시 만든다(빌드가 «is not exported» 로 막는다).
 export const STORAGE_BAY = '__STG__';
 export const app = {};
@@ -14,7 +14,7 @@ export const fbAddShipStats = async () => true;
 export const fbAddShipVoyage = async () => true;
 export const fbAddStaff = async () => true;
 export const fbAddSwapFix = async () => true;
-export const fbAddWorkReport = async () => true;
+export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };
 export const fbApplyTermWork = async () => true;
 export const fbArchiveVoyageBeforeDelete = async () => true;
 export const fbAssignDeckSlot = async () => true;
@@ -106,7 +106,7 @@ export const fbSetBroadcast = async () => true;
 export const fbSetDevAccess = async () => true;
 export const fbSetEmptySeal = async () => true;
 export const fbSetInspector = async () => true;
-export const fbSetInspectorActivity = async () => true;
+export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };
 export const fbSetLuggConfirm = async () => true;
 export const fbSetMatrixEditors = async () => true;
 export const fbSetReeferTempBulk = async () => true;

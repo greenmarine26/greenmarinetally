@@ -1,9 +1,9 @@
-// 베이뷰 작업(3.48) 렌더 연막검사 진입점 — DXQD 2636E 실자료 사본(tools/fixtures/bayview_dxqd.json)으로 BayViewWork 를 실제로 그리고 누른다.
+// 베이뷰 작업(3.48 · 3.49 해치 자동 판정·좌우 분할) 렌더 연막검사 진입점 — DXQD 2636E 실자료 사본(tools/fixtures/bayview_dxqd.json)으로 BayViewWork 를 실제로 그리고 누른다.
 //   firebase 는 tools/fb_stub_search.js 스텁(쓰기 없음). 판정은 smoke_bayview.cjs 가 DOM 을 직접 읽어 한다.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import BayViewWork from '../src/components/BayViewWork.jsx';
-import { applyCatosPos, applyAutoSwap, bayViewOverlayOf, bayViewFollowOf, ownDirCns } from '../src/utils.js';
+import { applyCatosPos, applyAutoSwap, bayViewOverlayOf, bayViewFollowOf, ownDirCns, hatchEventsOf, hatchReportedOf } from '../src/utils.js';   // 3.49: 해치 자동 판정
 import { buildBayPagesFromSummary } from '../src/cargoPlanCore.js';
 import FX from './fixtures/bayview_dxqd.json';
 
@@ -66,6 +66,8 @@ window.__bv = {
   follow2: bayViewFollowOf(voyage, '2호기', pages),
   followNone: bayViewFollowOf(voyage, '', pages),
   followStmj: (() => { const v2 = { info: FX.stmj.info, discharge: FX.stmj.discharge, loading: {} }; return bayViewFollowOf(v2, '1호기', buildBayPagesFromSummary(FX.stmj.dict.bayDef) || null); })(),
+  //  3.49 해치 자동 판정 — 이 실자료(DXQD 동방)에서 나오는 사건과 «내 호기(4호기) 몫»(호기 미상 추정 + 4호기). SearchPanel 이 같은 함수를 부른다.
+  hatch: (() => { const ev = hatchEventsOf(voyage, pages).events; return { all: ev.map((e) => ({ hatch: e.hatch, action: e.action, crane: e.crane, src: e.src, from: e.from })), mine: ev.filter((e) => !e.crane || e.crane === 4).map((e) => `${e.hatch}|${e.action}`) }; })(),
 };
 
 //  크레인이 옮겨 간 뒤의 항차 — 실자료에 «다음 분» 터미널 실적 두 줄을 얹는다(2호기는 08 그대로·4호기는 (16)17 로).
@@ -89,6 +91,9 @@ function App() {
   const [voy, setVoy] = React.useState(voyage);
   window.__setOpen = setOpen;
   window.__moveCrane = () => { const v2 = movedVoyage(); if (v2) setVoy(v2); return !!v2; };
+  //  3.49: 검수원이 직접 보고한 것이 있는 항차 — reports 를 얹어 «보고된 장은 알림에서 빠진다» 갈래를 본다
+  window.__withReports = (reports) => setVoy((v) => ({ ...v, reports: { ...(v.reports || {}), ...reports } }));
+  window.__reportedKeys = () => [...hatchReportedOf(voy, pages).keys()];
   if (!open) return React.createElement('div', { 'data-closed': '1' }, '닫힘');
   return React.createElement(BayViewWork, {
     voyage: voy, voyageKey: 'DXQD_2636E', inspector: '김성일', mode: MODE,
