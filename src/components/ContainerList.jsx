@@ -5,7 +5,7 @@
 //  - 실번호/X-RAY 봉인 인라인 편집
 //  - 실오류 (원본 ≠ 실제) 빨강 강조
 import React, { useState, useMemo, useRef } from 'react';
-import { equipGateText } from '../workChoice.js';   // 3.50: 호기 없음 안내 — 조회만이면 그 이유를 말한다
+import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
 import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
@@ -449,6 +449,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
         ],
       });
       if (!pick) return;
+      if (!canWorkNow()) { alert(workGateText('완료 취소')); return; }   // 3.51: 조회만은 보기만 — 조용히 사라지지 않게 먼저 말한다
       const r = await fbCancelComplete(voyageKey, mode, c.cn, { reason: pick });
       if (!r || r.ok === false) {
         notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
@@ -468,6 +469,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
       //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다 —
       //   헤더·가이드 작업·자연어 탭이 이미 쓰는 그 값이다. 누를 때 읽으므로 항상 최신이다.
       // 1.56: 갱 없이 완료 금지 — 조용한 미기록이 인건비 사고의 뿌리다.
+      if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);

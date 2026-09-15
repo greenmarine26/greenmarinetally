@@ -125,19 +125,21 @@ export default function Header({ version, inspector, online, route, voyages, onC
             상시 노출은 장비·검수원 2개만, 도움말·Gemini 키·인원 관리·로그아웃은 ⋯ 메뉴로.
             버튼도 40px대로 키움(터치 타깃). 오프라인은 아이콘 대신 헤더 아래 빨간 띠(하단 렌더). */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* ★ 3.50: «조회만» 이면 호기 자리가 [조회만] 이다 — 누르면 작업자(선박·호기)로 전환하는 선택 화면. 호기는 조회만인 동안 저장되지 않는다(utils.setEquipNumber 문지기).
-              작업자면 종전 호기 단추 그대로 + 옆에 작은 [변경](선박·호기 다시 고르기). 검수사 «단순 조회로 접속을 하면 호기에 기록이 안되게 하고 작업자로 선택을 하면 … 장비가 기록되어 검수가 될수 있게» */}
-          {workChoice && workChoice.mode === 'view' ? (
-            <button onClick={() => onChangeWork && onChangeWork()} title="조회만으로 들어와 있습니다 — 누르면 작업자(선박·호기)로 전환" data-work-mode="view"
+          {/*  ★ 3.51 (검수사 «조회만으로 로그인해도 모든 기능 장비 지정등을 사용하게 해야만») — 조회만도 **호기 단추를 그대로 쓴다**(화면을 그 호기 관점으로 보려고).
+               그 앞에 [🔍 조회만] 칩이 서서 «보기만 된다» 를 알리고, 누르면 작업자(선박·호기)로 바꾼다. 작업자면 칩 없이 호기 단추 + 작은 [변경]. */}
+          {workChoice && workChoice.mode === 'view' && (
+            <button onClick={() => onChangeWork && onChangeWork()} title="조회만 — 보기만 됩니다(완료·보고가 기록되지 않습니다). 누르면 작업자(선박·호기)로 전환" data-work-mode="view"
               className="px-2 py-2 rounded-pill text-sm font-bold flex items-center gap-1 bg-ink-800 text-sky-200 border border-sky-700">
               🔍 조회만
             </button>
-          ) : (
+          )}
+          {(
           /* M3.5.6: 장비 번호 빠른 변경 */
           <button
             onClick={() => setEquipOpen(true)}
             title="장비 번호 변경"
-            data-work-mode={workChoice ? 'work' : ''}
+            data-equip-btn="1"
+            data-work-mode={workChoice && workChoice.mode === 'work' ? 'work' : ''}
             className={`px-2 py-2 rounded-pill text-sm font-bold flex items-center gap-1 ${
               equipNo
                 ? 'bg-st-lod text-ink-950 border border-st-lodHi'

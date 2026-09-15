@@ -4,7 +4,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import LoginPage from '../src/pages/LoginPage.jsx';
 import { setServerRoles } from '../src/staffList.js';
-import { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isViewOnlyNow, visibleVoyagesOf, canSeeVoyage, equipGateText } from '../src/workChoice.js';
+import { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, myWorkVoyageNow, canWorkNow, workGateText, isViewOnlyNow, visibleVoyagesOf, canSeeVoyage, equipGateText } from '../src/workChoice.js';
 import { getEquipNumber, setEquipNumber } from '../src/utils.js';
 import { inspectorStatus } from '../src/inspectorStatus.js';
 import { rememberMe } from '../src/meToday.js';
@@ -13,7 +13,7 @@ import FX from './fixtures/workchoice_live.json';
 window.__calls = [];
 setServerRoles(FX.staffList);
 try { localStorage.clear(); } catch (e) { /* */ }
-window.__wc = { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isViewOnlyNow, visibleVoyagesOf, canSeeVoyage, equipGateText, getEquipNumber, setEquipNumber, inspectorStatus, rememberMe, voyages: FX.voyages };
+window.__wc = { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, myWorkVoyageNow, canWorkNow, workGateText, isViewOnlyNow, visibleVoyagesOf, canSeeVoyage, equipGateText, getEquipNumber, setEquipNumber, inspectorStatus, rememberMe, voyages: FX.voyages };
 
 //  로그인 화면을 이름·choiceFor 바꿔 가며 다시 그릴 수 있게 둔다
 let root = null;

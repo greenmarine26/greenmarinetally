@@ -8,7 +8,7 @@
 //
 //  규칙 —
 //   · 자유 열람(freeRoamer) = 수석·부수석·테스터·소유자·개발 열람(canOpenChief 한 벌 — isChief 는 건드리지 않는다, 잠금 판정이 딸려 있다).
-//     로그인 뒤 «조회만 / 작업자» 를 고른다. 조회만이면 호기가 기록되지 않고(호기 저장·활동의 작업 자리 기록 차단) 작업중으로 세지 않는다. 작업자면 선박·호기가 기록돼 검수가 된다.
+//     로그인 뒤 «조회만 / 작업자» 를 고른다. **조회만은 보기만 된다(3.51)** — 호기 지정·자동 가이드·베이뷰까지 작업자와 똑같이 돌지만 쓰는 일(완료·보고·자리·설정)이 전부 막히고 활동의 작업 자리도 안 적혀 작업중으로 세지 않는다. 작업자면 선박·호기가 기록돼 검수가 된다.
 //     어느 쪽이든 모든 선박을 본다.
 //   · 그 밖(일반 검수원) = 작업자뿐. 작업 선박(+호기)을 고르지 않으면 들어갈 수 없고, 고른 선박 안에서만 앱이 돈다.
 //   · 기억은 기기·이름·오늘(KST) 단위 — meToday 와 같은 규칙. 로그아웃하면 지운다. 헤더 [변경] 으로 다시 고른다.
@@ -18,6 +18,7 @@ import { isOwnerName } from './adminGuard.js';
 import { getMeToday, ymdKST } from './meToday.js';
 
 export const WORK_CHOICE_KEY = 'tallyone_work_choice';
+
 
 //  ★ 문지기 캐시 — App 이 들고 있는 workChoice(화면이 보여 주는 그것)를 1순위로 본다. undefined = App 이 아직 안 세움(로그인 화면·연막검사) → localStorage 를 본다.
 //    localStorage 만 보면 ① KST 자정을 넘긴 조회만 수석이 작업자로 둔갑하고 ② [검수원 변경] 으로 남의 이름을 눌렀다 돌아오면 meToday 가 남이라 문지기가 열리고 ③ 저장이 막힌 기기에서는 처음부터 열려 있다(3.50 감사 지적).
@@ -62,6 +63,12 @@ export function isViewOnlyNow() {
   return !!(c && c.mode === 'view');
 }
 
+/** 지금 이 기기의 본인이 «작업자» 로 고른 작업 선박 키 — 조회만·미선택이면 ''. 활동 기록 문지기가 «지금 보는 화면이 내 작업 선박인가» 를 잴 때 부른다(판정 한 벌). */
+export function myWorkVoyageNow() {
+  const c = (_active !== undefined) ? _active : readWorkChoice(getMeToday());
+  return (c && c.mode === 'work' && c.voyageKey) ? String(c.voyageKey) : '';
+}
+
 /** 이 사람이 볼 수 있는 항차만 — 자유 열람이면 전부, 작업자면 고른 선박 하나. 선택이 없으면(로그인 직후) 빈 것. */
 export function visibleVoyagesOf(choice, name, voyages) {
   const all = voyages || {};
@@ -75,9 +82,19 @@ export function canSeeVoyage(choice, name, voyageKey) {
   return !!(choice && choice.mode === 'work' && choice.voyageKey && choice.voyageKey === voyageKey);
 }
 
-/** 호기 없이 완료를 누를 때 보이는 문구 — 조회만이면 그 이유를 말한다(«갱을 먼저 선택하세요» 는 조회만인 사람에게 틀린 안내다). */
+/** 호기 없이 완료를 누를 때 보이는 문구(3.51: 조회만도 호기를 쓰므로 이 문구는 «호기 없음» 한 뜻뿐이다). */
 export function equipGateText() {
-  return isViewOnlyNow()
-    ? '조회만으로 들어와 있습니다 — 검수하려면 헤더의 [조회만]을 눌러 작업자(선박·호기)로 전환하세요.'
-    : '갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.';
+  return '갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.';
+}
+
+//  ★ 3.51 (검수사 2026-09-15 확정) — *«전제는 조회만으로는 아무 작업을 할수 없습니다. 보기만 할뿐»* ·
+//    *«실테스트를 할려면 작업자로 들어 와야 합니다. 클로드나 저나 테스트후 자료는 초기화 시켜야 합니다»*
+//    ⇒ 조회만은 **보기는 전부** 된다(호기 지정·자동 가이드·베이뷰·따라가기 화면). **쓰는 것만** 못 한다 —
+//      완료·완료취소·초과 등록·위치 수정·작업 보고. 문지기는 화면이 아니라 **쓰는 자리**(firebase)에 세운다(옆길을 막는다).
+/** 지금 «작업»(현장 기록에 쓰는 일)을 할 수 있는가 — 조회만이면 false. */
+export function canWorkNow() { return !isViewOnlyNow(); }
+
+/** 조회만이라 막혔을 때 사람에게 보이는 문구 한 벌. what 을 주면 무엇이 막혔는지 앞에 붙는다. */
+export function workGateText(what) {
+  return `🔍 조회만으로 들어와 있습니다 — 보기만 됩니다.\n\n«${what || '작업'}» 은 기록되지 않습니다. 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.`;
 }

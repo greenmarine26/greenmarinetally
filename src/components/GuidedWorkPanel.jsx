@@ -12,8 +12,8 @@ import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «�
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
+import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import { speak, spellKo } from '../voice.js';
-import { isViewOnlyNow } from '../workChoice.js';   // 3.50: 조회만이면 호기 메뉴 대신 안내
 import { hatchPanelCountOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
@@ -215,6 +215,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // 접안 방향 저장 — 오선택 방지: 확인 후 저장
   const pickBerth = async (side) => {
+    if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
     const label = side === 'starboard' ? '우현' : '좌현';
     const seaRows = side === 'starboard' ? '짝수' : '홀수';
     // 1.53: window.confirm → 앱 안 모달 (렌더러 정지 제거).
@@ -232,6 +233,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
   //  3.3: 양하 로우 순서 토글(육상부터 ↔ 해상부터) — 오선택 방지: 확인 후 저장. 항차 info.seqRowFrom.
   const toggleRowFrom = async () => {
+    if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
     const next = rowFrom === 'sea' ? 'land' : 'sea';
     const ok = await ask({
       title: '양하 순서 변경',
@@ -243,6 +245,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       .catch(e => { console.warn('[3.3] 양하 순서 저장 실패', e); alert('양하 순서 저장에 실패했습니다. 네트워크 확인 후 다시 눌러 주세요.'); });
   };
   const changeBerth = async () => {
+    if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
     // 1.53: window.confirm → 앱 안 모달.
     const ok = await ask({
       title: '접안 방향 변경',
@@ -345,6 +348,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return false;
   };
   const markHatchDone = async (center, action) => {
+    if (!canWorkNow()) { alert(workGateText('해치 완료 표시')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
     if (center == null) return;
     const prev = voyage?.info?.hatchDone || {};
     // V9.57(I8): 빈 catch로 조용히 실패하던 것 — 저장 안 되면 모드 전환 때 프롬프트가 또 뜬다. 알린다.
@@ -644,6 +648,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // 확인 (트윈은 둘 다 한 번에)
   const handleConfirm = async () => {
     if (!card || busy) return;
+    if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;   // V8.09-06: XRAY 실번호 미입력 차단
     setBusy(true);
     try {
@@ -665,6 +670,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    앱은 순서를 정하지 않고 두 대를 나란히 놓고 고르게 한다. 고른 한 대만 완료되고 나머지는 다음 카드로.
   const handleConfirmOne = async (which) => {
     if (!card?.twin || busy) return;
+    if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;
     const one = which === 'twin' ? card.twin : card.main;
     setBusy(true);
@@ -954,6 +960,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       let dbOk = false;
       try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
       catch (e1) {
+        if (e1 && e1.viewOnly) { alert(e1.message); return; }   // 3.51: 조회만은 보기만 — 카톡도 내보내지 않는다
         console.warn('[V9.57] 해치 보고 DB 기록 실패 — 1회 재시도', e1);
         try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
         catch (e2) { console.warn('[V9.57] 해치 보고 DB 기록 재시도 실패', e2); }
@@ -1134,6 +1141,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         canSwap ? { swapWith: slot.cn, actualWork: true } : undefined);
       if (!r) return false;
     }
+    if (!canWorkNow()) { alert(workGateText('완료')); return false; }   // 3.51: 조회만은 보기만
     await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', equip);   // 1.55: 갱(호기)
     return true;
   };
@@ -1294,6 +1302,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       await fbCompleteContainersAtomic(voyageKey, mode,
         [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector, equip);   // 1.55: 갱(호기)
     } catch (e) {
+      if (e && e.viewOnly) { alert(e.message); setBusy(false); return; }   // 3.51: 조회만은 보기만
       alert(`수정 적용 중 오류 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n(${e?.message || e})`);
       setBusy(false);
       return;
@@ -1333,15 +1342,6 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
 
   // ── 1단계: 장비(호기) 결정 ──
-  //  ★ 3.50: «조회만» 으로 들어온 사람에게는 호기 메뉴가 아니라 그 이유를 보인다 — 호기는 저장되지 않으니(utils 문지기) 골라 봐야 헛일이다. 검수하려면 헤더 [조회만] → 작업자.
-  if (equipStep && isViewOnlyNow()) {
-    return (
-      <div className="bg-ink-900 border-2 border-sky-700 rounded-pill p-4 space-y-2 text-center" data-view-only-gate="1">
-        <div className="text-sm font-bold text-sky-200">🔍 조회만으로 들어와 있습니다</div>
-        <div className="text-xxs text-dim-300 leading-relaxed">호기·완료·보고가 기록되지 않습니다. 검수하려면 헤더의 [조회만]을 눌러 작업자(선박·호기)로 전환하세요.</div>
-      </div>
-    );
-  }
   if (equipStep) {
     return (
       <div className="bg-ink-900 border-2 border-amber-700 rounded-pill p-4 space-y-3">

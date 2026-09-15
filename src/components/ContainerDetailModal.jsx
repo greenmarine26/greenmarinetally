@@ -1,5 +1,5 @@
 import React, { useState , useMemo, useRef } from 'react';
-import { equipGateText } from '../workChoice.js';   // 3.50: 호기 없음 안내 — 조회만이면 그 이유를 말한다
+import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
@@ -210,6 +210,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         ],
       });
       if (!pick) return;
+      if (!canWorkNow()) { alert(workGateText('완료 취소')); return; }   // 3.51: 조회만은 보기만 — 조용히 사라지지 않게 먼저 말한다
       const r = await fbCancelComplete(voyageKey, mode, c.cn, { reason: pick });
       if (!r || r.ok === false) {
         notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
@@ -236,6 +237,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       // TallyOne 1.55: 마지막 인자는 **갱(호기)** — 인건비 근거다(검수사 확정 2026-08-12).
       //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다(헤더와 같은 값).
       // 1.56: 갱 없이 완료 금지 — 조용한 미기록이 인건비 사고의 뿌리다.
+      if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
@@ -1415,6 +1417,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
         onCompleteBoth={async (cns) => {
           // 1.55: 트윈 둘 다 같은 갱(호기)으로 남긴다 — 한 번에 든 것이니 같은 갱이다.
+          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
           for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());
           // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));

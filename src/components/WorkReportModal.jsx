@@ -10,6 +10,7 @@ import {
   buildConBoxMessage,
 } from '../kakaoShare.js';
 import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
+import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
@@ -175,6 +176,18 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   }, []);
 
   if (!open) return null;
+  //  ★ 3.51: 조회만은 보고를 쓰지 않는다 — 열어서 채우다 저장이 막히면 «보냈다»고 오해한다. 들어올 때 말한다(검수사 «조회만으로는 아무 작업을 할수 없습니다. 보기만 할뿐»).
+  if (!canWorkNow()) {
+    return (
+      <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4" onClick={onClose} data-view-only-report="1">
+        <div className="bg-ink-900 border-2 border-sky-700 rounded-card p-5 max-w-sm w-full space-y-3 text-center" onClick={(e) => e.stopPropagation()}>
+          <div className="text-base font-black text-sky-200">🔍 조회만으로 들어와 있습니다</div>
+          <div className="text-xs text-dim-300 leading-relaxed">보고는 기록되지 않습니다. 화면과 호기는 그대로 보실 수 있고, 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.</div>
+          <button onClick={onClose} className="w-full py-3 rounded-pill bg-ink-800 border border-line text-dim-100 font-bold">닫기</button>
+        </div>
+      </div>
+    );
+  }
 
   const vsl = voyage?.info?.vsl || '';
   // V9.57(I9): 미사용 shipImo 제거

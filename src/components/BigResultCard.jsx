@@ -1,6 +1,6 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
 import React, { useState, useMemo } from 'react';
-import { equipGateText } from '../workChoice.js';   // 3.50: 호기 없음 안내 — 조회만이면 그 이유를 말한다
+import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
@@ -101,6 +101,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       confirmLabel: '누락 완료',
       cancelLabel: '취소',
       onConfirm: async () => {
+        if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
         await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'missing', '선박에 없음', getEquipNumber());
         speak(`${(c.cn || '').slice(-4)} 누락 처리`, { conversational: true });
         if (onAfterComplete) setTimeout(() => onAfterComplete(c), 500);
@@ -129,6 +130,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         ],
       });
       if (!pick) return;
+      if (!canWorkNow()) { alert(workGateText('완료 취소')); return; }   // 3.51: 조회만은 보기만 — 조용히 사라지지 않게 먼저 말한다
       const r = await fbCancelComplete(voyageKey, c._mode, c.cn, { reason: pick });
       if (!r || r.ok === false) {
         notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
@@ -146,6 +148,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       }
       // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 그 갱 인원의 인건비 근거가 없다(검수사 확정).
       //   가이드 화면만 갱을 강제하고 나머지 경로는 조용히 통과하던 것을 막는다(독립 재검증).
+      if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       //  3.2-01: 통과분은 완료할 수 없다 — 카드가 어느 길로 왔든 여기서 한 번 더(감사 P1-2).
       if (!canCompleteContainer(c, c._mode)) { alert(`평택 ${isDischarge ? '양하' : '선적'} 대상이 아닙니다 (${isDischarge ? 'POD ' + (c.pod || '?') : 'POL ' + (c.pol || '?')}) — 통과화물은 ${verb}할 수 없습니다.`); return; }
@@ -540,6 +543,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           const _src = slotSource || allContainers || [];
           const _bad = cns.map(cn => _src.find(x => x && x.cn === cn)).filter(o => o && !canCompleteContainer(o, c._mode));
           if (_bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_bad.map(o => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
+          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
           for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));

@@ -409,10 +409,10 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           {choiceStage === 'role' && free && (
             <div className="space-y-2">
               <div className="text-xs text-dim-300 bg-ink-900 border border-line rounded-pill p-3 leading-relaxed">
-                수석·검수사·테스터는 <b className="text-dim-100">조회만</b>으로 들어오면 호기가 기록되지 않고 작업중으로 세지 않습니다(모든 선박 열람). <b className="text-dim-100">작업자</b>로 들어오면 선박·호기를 고르고 검수(완료·보고)가 기록됩니다 — 그래도 모든 선박을 볼 수 있습니다.
+                <b className="text-dim-100">조회만</b>은 <b className="text-dim-100">보기만</b> 됩니다 — 모든 선박을 보고 호기도 지정해 자동 가이드·베이뷰까지 그대로 보지만, 완료·보고가 기록되지 않고 작업중으로 세지 않습니다. <b className="text-dim-100">작업자</b>는 선박·호기를 골라 검수(완료·보고)가 기록됩니다 — 그래도 모든 선박을 볼 수 있습니다.
               </div>
               <button onClick={() => onSelect(choiceName, { mode: 'view' })} data-choice-role="view"
-                className="w-full py-4 rounded-pill bg-ink-800 border-2 border-sky-700 text-sky-100 font-black text-base">🔍 조회만 — 점검·열람 (호기 기록 없음)</button>
+                className="w-full py-4 rounded-pill bg-ink-800 border-2 border-sky-700 text-sky-100 font-black text-base">🔍 조회만 — 보기만 (완료·보고 기록 없음)</button>
               <button onClick={() => { setRoleDecided(true); setChoiceStage('vessel'); }} data-choice-role="work"
                 className="w-full py-4 rounded-pill bg-violet-700 border-2 border-violet-400 text-white font-black text-base">🏗 작업자 — 선박·호기를 골라 검수</button>
             </div>

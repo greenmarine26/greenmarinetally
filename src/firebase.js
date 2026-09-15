@@ -13,7 +13,7 @@ import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, cur
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
-import { isViewOnlyNow } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
+import { isViewOnlyNow, myWorkVoyageNow, workGateText } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -111,7 +111,27 @@ export async function fbDeleteSection(voyageKey, mode) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}`));
 }
 
+//  ★ 3.51 문지기 — **조회만은 아무 작업을 할 수 없다. 보기만 한다.** (검수사 2026-09-15 확정)
+//    화면에도 안내를 두지만 진짜 문지기는 **쓰는 자리**인 여기다 — 화면 게이트만 두면 옆길(누락 완료·«둘 다 완료»·모달 안쪽)로 들어온다.
+//    실측으로 게이트가 빠져 있던 세 자리(BigResultCard 누락 완료·양쪽 «둘 다 완료»)도 이 한 줄로 같이 닫힌다.
+//    ⚠ 조용히 넘기지 않는다 — 던져서 호출부가 사람에게 말하게 한다(`err.viewOnly` 로 구분).
+function assertCanWork(what) {
+  if (!isViewOnlyNow()) return;
+  const e = new Error(workGateText(what));
+  e.viewOnly = true;
+  //  ★ 호출부 중에는 catch 가 없거나 «저장 실패» 로만 말하는 자리가 많다(감사 실측 25곳). 25곳을 고치는 대신
+  //    **던지기 직전에 한 번 알린다** — App 이 받아 띠로 보여 준다(규범 §4-3 «조용히 실패하는 코드 금지»).
+  try { window.dispatchEvent(new CustomEvent('viewOnlyBlocked', { detail: { what: what || '작업', message: e.message } })); } catch (x) { /* 브라우저 밖(연막·노드)에서는 알릴 화면이 없다 */ }
+  throw e;
+}
+
 export async function fbUpdateVoyageInfo(voyageKey, patch) {
+  //  ★ 3.51 — 이 함수는 자료 업로드·항차 관리도 쓴다. 그래서 **작업 설정 칸이 들어올 때만** 막는다(검수사 «조회만으로는 아무 작업을 할수 없습니다»).
+  //    berthSide·seqRowFrom 은 그 배 검수원의 작업 순서를 통째로 바꾸고, hatchDone·gangs·craneCrew·status 는 작업 기록이다.
+  if (patch && typeof patch === 'object'
+      && ['berthSide', 'berthSidePick', 'seqRowFrom', 'hatchDone', 'gangs', 'gangsBy', 'craneCrew', 'workStart', 'status', 'startedAt', 'endedAt'].some((k) => k in patch)) {
+    assertCanWork('작업 설정 변경');
+  }
   await update(ref(db, `voyages/${voyageKey}/info`), patch);
 }
 
@@ -124,6 +144,7 @@ export async function fbUpdateVoyageInfo(voyageKey, patch) {
 //   값이 없으면 **액츄얼**로 본다. 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
 //   읽기는 따로 두지 않는다 — 화면은 이미 항차 구독으로 `info` 를 통째로 받는다.
 export async function fbSetSeqFull(voyageKey, v, by) {
+  assertCanWork('시퀀스 방침 변경');
   if (!voyageKey) return;
   await update(ref(db, `voyages/${voyageKey}/info`), {
     seqFull: !!v,
@@ -177,6 +198,7 @@ export async function fbGetShipSeqPref(vsl) {
 }
 
 export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
+  assertCanWork('시퀀스 방침 변경');
   if (!voyageKey) return;
   const m = SEQ_MODES.includes(String(mode3)) ? String(mode3) : null;
   if (!m) throw new Error(`seqMode must be one of ${SEQ_MODES.join('|')} — got ${mode3}`);
@@ -192,6 +214,7 @@ export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
 //    갱 수는 **항차마다 근무배정으로 정해진다** — 앱 기본 2갱을 매번 «3갱이면» 으로 덮어 물어야 했다.
 //    한 번 정해 두면 브리핑·갱 배분·내 몫 계산이 전부 그 수로 나온다.
 export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
+  assertCanWork('갱 수 변경');
   if (!voyageKey) return;
   const g = Math.min(4, Math.max(1, parseInt(n, 10) || 0));
   if (!g) throw new Error(`gangs must be 1..4 — got ${n}`);
@@ -211,6 +234,7 @@ export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
 //    항차 시작(workStartManual)으로 삼고 ③**호기 수 = 갱 수**를 그 시각이 속한 조에 적는다.
 //    ⛔ 수집기 workStartAt(터미널 정본)은 안 건드린다.
 export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
+  assertCanWork('작업 시작 시각 기록');
   if (!voyageKey || !ms) return;
   const p2 = (n) => String(n).padStart(2, '0');
   const fmt = (x) => { const d = new Date(x); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
@@ -232,6 +256,7 @@ export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
 //    ⚠ 등록자는 적지 않는다(검수사 «등록자는 등록할 필요가 없습니다»). `at` 은 등록 시각 — 집계가 연도를 여기서 얻는다.
 //    ⚠ 키를 «N호기» 로 두는 이유 — «1»·«2» 같은 숫자 키는 RTDB 가 배열로 돌려줘(실측 craneStart) 읽는 쪽이 갈린다.
 export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
+  assertCanWork('호기 검수원 등록');
   if (!voyageKey || !shiftKey) return null;
   const list = (Array.isArray(crew) ? crew : []).filter((c) => c && c.no >= 1 && c.no <= 9 && String(c.name || '').trim());
   if (!list.length) return null;
@@ -248,6 +273,7 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
 //    ⚠ 조·검수사가 바뀌어도 남아야 한다 — 화면 state 가 아니라 항차에 적는다.
 //    `doneAt` = 보류 당시 그 모드의 완료 대수. «몇 대 지났나»를 이것으로 센다(새로고침해도 유지).
 export async function fbHoldContainers(voyageKey, mode, cns, reason, by, equip = '', doneAt = 0) {
+  assertCanWork('보류');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const at = Date.now();
@@ -263,6 +289,7 @@ export async function fbHoldContainers(voyageKey, mode, cns, reason, by, equip =
 
 //  해제 — 검수사가 [해제]를 눌렀거나 되묻기에 «예»라고 답했을 때. 트윈은 짝까지 함께 푼다.
 export async function fbReleaseHold(voyageKey, mode, cns) {
+  assertCanWork('보류 해제');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const patch = {};
@@ -272,6 +299,7 @@ export async function fbReleaseHold(voyageKey, mode, cns) {
 
 //  «아직» — 되묻기를 뒤로 민다. 지금 완료 대수를 기준점으로 다시 잡아 그만큼 더 지나야 또 묻는다.
 export async function fbSnoozeHold(voyageKey, mode, cns, doneAt) {
+  assertCanWork('보류 미루기');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const patch = {};
@@ -504,6 +532,7 @@ async function chunkedReplace(path, obj) {
   await set(ref(db, path), obj);
 }
 export async function fbToggleXray(voyageKey, cn) {
+  assertCanWork('X-RAY 표시');
   const r = ref(db, `voyages/${voyageKey}/discharge/xrayList/${cn}`);
   const snap = await get(r);
   if (snap.exists()) await remove(r);
@@ -515,6 +544,7 @@ export async function fbToggleXray(voyageKey, cn) {
 //   records 가 단일 진실 원천이라는 기존 원칙 그대로 여기에 적는다(ediContainers 는 EDI 원본이므로 안 건드린다).
 //   텔리 RF condition report 의 Setting/Actual 칸이 이 값을 읽는다.
 export async function fbSetReeferTemp(voyageKey, mode, cn, patch, by) {
+  assertCanWork('리퍼 온도 입력');
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const f = { rfCheckedAt: Date.now(), rfCheckedBy: by || '' };
   if (patch.set !== undefined) f.rfSet = String(patch.set ?? '');
@@ -525,6 +555,7 @@ export async function fbSetReeferTemp(voyageKey, mode, cn, patch, by) {
 
 /** 여러 대를 한 번에 (사진 판독 결과 반영 · '전부 리스트대로' 일괄 적용) */
 export async function fbSetReeferTempBulk(voyageKey, mode, rows, by) {
+  assertCanWork('리퍼 온도 입력');
   const now = Date.now();
   const patch = {};
   for (const it of rows || []) {
@@ -542,6 +573,7 @@ export async function fbSetReeferTempBulk(voyageKey, mode, rows, by) {
 }
 
 export async function fbUpdateRecordSeal(voyageKey, mode, cn, newSl, by) {
+  assertCanWork('실번호 수정');
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const snap = await get(r);
   const cur = snap.val() || {};
@@ -568,6 +600,7 @@ export async function fbUpdateRecordSeal(voyageKey, mode, cn, newSl, by) {
 //   → records/{cn}/iso = '46P3' + iso_orig + edits.iso 이력
 //   → ediContainers/{cn}/iso = '46P3' (화면 즉시 반영)
 export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, by) {
+  assertCanWork('자료 수정');
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const snap = await get(r);
   const cur = snap.val() || {};
@@ -619,6 +652,7 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
 //  ⚠ `isoValue` 는 **정규화된 ISO**(isoTriad 의 `iso`)여야 한다 — 세관 원문(`44GP`·`25GP`)을 그대로
 //    넣으면 파일로 올렸을 때보다 나쁜 값이 잠긴다(감사 지적). 부르는 쪽이 `src.iso` 를 넘긴다.
 export async function fbPickIso(voyageKey, mode, cn, srcKey, isoValue, label, by) {
+  assertCanWork('규격 확정');
   if (!voyageKey || !cn || !srcKey || !isoValue) return;
   await fbUpdateRecordField(voyageKey, mode, cn, 'iso', isoValue, by);
   //  특수화물 표시도 같이 바로잡는다 — 안 하면 **강등이 안 된다**(감사 지적 2026-09-14).
@@ -645,6 +679,7 @@ export async function fbPickIso(voyageKey, mode, cn, srcKey, isoValue, label, by
 //  ⛔ `iso` 는 되돌리지 않는다. 되돌릴 «원래 값»이 어느 것인지 앱이 모른다 —
 //     확정을 풀면 알림이 다시 떠서 검수사가 그 자리에서 다시 고른다.
 export async function fbClearPickIso(voyageKey, mode, cn) {
+  assertCanWork('규격 확정 해제');
   if (!voyageKey || !cn) return;
   const cleared = { iso_pick: null, iso_pick_label: null, iso_picked_by: null, iso_picked_at: null };
   await update(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`), cleared);
@@ -670,6 +705,7 @@ export async function fbClearPickIso(voyageKey, mode, cn) {
 //   ⚠ 종전 set() 은 **넘기지 않은 키를 통째로 날렸다.** 봉인자를 넣어 둬도 봉인번호를
 //     한 번 고치면 사라졌다. 그래서 sealer/sealerAt 을 명시적으로 실어 보존한다.
 export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by, sealerOpt) {
+  assertCanWork('X-RAY 봉인 입력');
   const r = ref(db, `voyages/${voyageKey}/discharge/xraySeals/${cn}`);
   const snap = await get(r);
   const cur = snap.val() || {};
@@ -775,6 +811,7 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
 //   `completed/{cn}` = `{ at, by, equip }`. 빈 값이면 키를 아예 안 넣는다(옛 기록과 모양을 같게 둔다).
 //   ⚠ `equip` 은 **맨 뒤 선택 인자**다 — 기존 호출부는 안 넘겨도 종전과 똑같이 동작한다.
 export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '', equip = '') {
+  assertCanWork('완료');
   const rec = { by, at: Date.now() };
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   const eq = String(equip || '').trim();
@@ -813,6 +850,7 @@ function _tallyInspector(voyageKey, mode, by) {
 //   이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
 //   ⚠ `equip` 은 맨 뒤 선택 인자다 — 기존 호출부 4곳은 안 넘겨도 그대로 동작한다.
 export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip = '') {
+  assertCanWork('완료');
   const patch = {};
   const at = Date.now();
   const list = cns.filter(Boolean);
@@ -834,6 +872,7 @@ export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip
 //     찍은 컨을 덮지 않는다. 반영은 추가(add)뿐, 덮어쓰기(overwrite) 없음.
 //   ⚠ _tallyInspector·_markLoadedPos 는 부르지 않는다 — 터미널 반영분은 검수원 작업량이 아니다.
 export async function fbApplyTermWork(voyageKey, mode) {
+  assertCanWork('터미널 실적 반영');
   const base = `voyages/${voyageKey}/${mode}`;
   const [twSnap, compSnap] = await Promise.all([
     get(ref(db, `${base}/termWork`)),
@@ -848,6 +887,7 @@ export async function fbApplyTermWork(voyageKey, mode) {
 }
 
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {
+  assertCanWork('초과 컨 추가');
   const at = Date.now();
   const eq = String(equip || '').trim();
   const rec = {
@@ -868,13 +908,16 @@ export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, eq
 //   덱 전용 수화물(EDI·리스트에 없음)의 양하 확정 플래그. records 가 아니라 앱 자체 노드에 두는 이유 —
 //   수집기 리스트 병합이 records 를 다시 쓸 때 수동 확정이 증발하지 않게(통째 PUT 보존 원칙).
 export async function fbSetLuggConfirm(voyageKey, mode, cn, by) {
+  assertCanWork('수화물 확인');
   await set(ref(db, `voyages/${voyageKey}/${mode}/luggConfirm/${cn}`), { by: by || '', at: Date.now() });
 }
 export async function fbCancelLuggConfirm(voyageKey, mode, cn) {
+  assertCanWork('수화물 확인 취소');
   await remove(ref(db, `voyages/${voyageKey}/${mode}/luggConfirm/${cn}`));
 }
 // V8.04: 잘못 기록한 초과 컨 취소(삭제) — completed·extras 양쪽에서 제거.
 export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
+  assertCanWork('초과 컨 삭제');
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
   await remove(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`));
 }
@@ -890,6 +933,7 @@ export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
 //     `_updatePositionFields` 를 지나지 않아 **아무 기록도 안 남았다.**
 //   실패를 성공으로 보고하지 않는다 — 종전 `catch { return { ok: true } }` 는 취소가 안 됐는데도 됐다고 답했다.
 export async function fbCancelComplete(voyageKey, mode, cn, opts = {}) {
+  assertCanWork('완료 취소');
   const reason = opts.reason === 'wrongSlot' ? 'wrongSlot' : 'notLoaded';
   const by = opts.by || (reason === 'wrongSlot' ? '자리취소' : '취소원복');
   try {
@@ -962,6 +1006,7 @@ export async function fbUnassignContainer(voyageKey, mode, cn, by) {
 //   - 수정 안 하면 actual = 계획 (정상 흐름)
 //   - 위치 변경 시에만 actual ≠ 계획 (현장 적치 다름)
 export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actualRow, actualTier, by) {
+  assertCanWork('자리 수정');
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   // 1.56: 이력 없는 좌표 쓰기였다(독립 재검증 P1-5) — 다른 모든 위치 변경은 moves 를 남기는데
   //   이 직통 경로(상세 모달·베이 빈칸 클릭·수석 편집)만 안 남겨 "지나온 자리"가 끊겼다.
@@ -987,6 +1032,7 @@ export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actual
 }
 // 실체 위치 삭제 (수정 취소)
 export async function fbClearActualPosition(voyageKey, mode, cn, by) {
+  assertCanWork('자리 수정');
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   // 1.56: 삭제도 이력에 남긴다 — "실체 위치 → 삭제"가 어디서 왜 됐는지 되짚을 수 있게.
   let _mv = []; let _from = '';
@@ -1012,11 +1058,13 @@ export async function fbClearActualPosition(voyageKey, mode, cn, by) {
 //   기록↔실물 교정. EDI 원문·ediContainers·records·completed 는 건드리지 않는다 —
 //   겹쳐 보는 기록 한 줄이며, 지우면 그대로 되돌아간다. 게이트는 utils.swapFixGate 한 벌.
 export async function fbAddSwapFix(voyageKey, a, b, by) {
+  assertCanWork('맞교환 등록');
   const r = push(ref(db, `voyages/${voyageKey}/swapFix`));
   await set(r, { a: String(a).toUpperCase(), b: String(b).toUpperCase(), at: Date.now(), by: by || '' });
   return r.key;
 }
 export async function fbRemoveSwapFix(voyageKey, id) {
+  assertCanWork('맞교환 해제');
   if (!id) return;
   await remove(ref(db, `voyages/${voyageKey}/swapFix/${id}`));
 }
@@ -1026,6 +1074,7 @@ export const STORAGE_BAY = '__STG__';
 export const STORAGE_TXT = '창고';
 
 export async function fbBatchMoveToStorage(voyageKey, mode, cns, by) {
+  assertCanWork('자리 일괄 이동');
   const updates = {};
   const now = Date.now();
   cns.forEach(cn => {
@@ -1052,6 +1101,7 @@ export async function fbBatchMoveToStorage(voyageKey, mode, cns, by) {
 /* ⛔ 2.95: _markPlanTaken 제거 — 호출부 0 (검수사 확정 «이름만 걸린 컨은 밀어내지 않는다»). */
 
 export async function fbBatchClearActual(voyageKey, mode, cns) {
+  assertCanWork('자리 일괄 해제');
   const updates = {};
   cns.forEach(cn => {
     const path = `voyages/${voyageKey}/${mode}/records/${cn}`;
@@ -1073,6 +1123,7 @@ export async function fbBatchClearActual(voyageKey, mode, cns) {
 const PLAN_MODE = 'loading';   // 확정 플랜은 선적 전용 (사용자 확정 2026-07-25)
 
 export async function fbSavePlanDraft(voyageKey, draft, by) {
+  assertCanWork('선적 플랜 저장');
   const path = `voyages/${voyageKey}/${PLAN_MODE}/planDraft`;
   await set(ref(db, path), { ...draft, _at: Date.now(), _by: by || '' });
 }
@@ -1083,6 +1134,7 @@ export async function fbSavePlanDraft(voyageKey, draft, by) {
 //   최초 1회만 EDI 원본을 bay_edi0/row_edi0/tier_edi0에 백업한다(복원용).
 //   positions: { cn: {bay,row,tier} | {storage:true} }
 export async function fbCommitPlan(voyageKey, positions, by) {
+  assertCanWork('선적 플랜 확정');
   const base = `voyages/${voyageKey}/${PLAN_MODE}`;
   const snap = await get(ref(db, `${base}/ediContainers`));
   const edi = snap.val() || {};
@@ -1130,6 +1182,7 @@ export async function fbCommitPlan(voyageKey, positions, by) {
 
 // EDI 원본 복원 — bay_edi0가 있는 컨을 원 좌표로 되돌리고 백업 필드를 정리한다.
 export async function fbRestorePlanFromEdi(voyageKey) {
+  assertCanWork('선적 플랜 되돌리기');
   const base = `voyages/${voyageKey}/${PLAN_MODE}`;
   const snap = await get(ref(db, `${base}/ediContainers`));
   const edi = snap.val() || {};
@@ -1447,6 +1500,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
 //     force : 자리가 안 바뀌어도 한 줄 남긴다(취소 기록용)
 //     byCn  : 그 자리에 **대신 들어온 컨** — *"어떤 컨테이너로 바뀌어서"* 를 말하려면 이게 있어야 한다
 async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by, meta = {}) {
+  assertCanWork('자리 수정');
   const recR = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const ediR = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
   const [recSnap, ediSnap] = await Promise.all([get(recR), get(ediR)]);
@@ -1707,6 +1761,13 @@ export async function fbSetInspectorActivity(name, voyageKey, mode, detail = nul
   //    lastActive 는 적어 «접속(online)» 은 보이되, workMode:'view' 로 «작업중» 에서 빠진다(inspectorStatus). 호출부(App 30초 틱·SearchPanel·GuidedWorkPanel)는 손대지 않는다.
   const viewOnly = isViewOnlyNow();
   if (viewOnly) { voyageKey = null; mode = null; detail = null; }
+  //  ★ 3.50-03 (검수사 2026-09-15 «클로드가 원인인 버그 작업중이지도 않는 선박 노출» · «클로드가 작업중으로 보임») —
+  //    **자리 기록은 «내가 고른 작업 선박» 화면일 때만 적는다.** 자유 열람(수석·검수사·테스터)은 작업자로 골라도 모든 선박을 보므로,
+  //    남의 배를 한 번 열면 그 배에 «작업 중 검수원» 으로 붙고 수석 보드 boardRows 가 그 한 줄로 그 배를 «작업 중» 으로 센다
+  //    (실측 SWSP 2608N — isWorkingNow false·터미널 실적 0·완료 0 인데 보드에 «작업 중 3척»). 3.50 이 조회만 갈래만 막고 이쪽을 남겼다.
+  //    ⇒ 다른 배를 보는 동안은 홈 화면에 있을 때와 같이 비운다(호출부는 종전대로 보고 있는 항차를 넘긴다). 내 배로 돌아오면 다음 틱에 되살아난다.
+  const myVoy = myWorkVoyageNow();
+  if (!viewOnly && voyageKey && myVoy && voyageKey !== myVoy) { voyageKey = null; mode = null; detail = null; }
   const payload = {
     lastActive: Date.now(),
     lastVoyage: voyageKey || null,
@@ -2292,6 +2353,7 @@ export async function fbClearFeedback(tsList = null) {
 //   - eseal_at, eseal_by, eseal_mode
 // V9.22-02: 덱 플랜 빈자리 지정 (선적 현장 배치)
 export async function fbAssignDeckSlot(voyageKey, mode, slotKey, val) {
+  assertCanWork('덱 슬롯 지정');
   await set(ref(db, `voyages/${voyageKey}/${mode}/stowagePlan/assign/${slotKey}`), val);
 }
 
@@ -2301,6 +2363,7 @@ export async function fbSetStowagePlan(voyageKey, mode, plan) {
 }
 
 export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) {
+  assertCanWork('엠티 실 입력');
   // fields: { eseal, eseal_wrong, reseal }
   const eseal = String(fields.eseal || '').trim();
   const eseal_wrong = String(fields.eseal_wrong || '').trim();
@@ -2364,12 +2427,14 @@ export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) 
  * ⚠ 되돌릴 수 없다. 호출부는 반드시 확인을 한 번 받는다.
  */
 export async function fbDeleteReport(base, key) {
+  assertCanWork('보고 삭제');
   if (!base || key == null || key === '') throw new Error('삭제 대상이 없습니다');
   await remove(ref(db, `${base}/reports/${key}`));
   return true;
 }
 
 export async function fbAddReportsAt(base, items) {
+  assertCanWork('보고 일괄 추가');
   let added = 0, skipped = 0;
   for (const it of items || []) {
     const ts = Number(it?.ts);
@@ -2391,6 +2456,7 @@ export async function fbAddReportsAt(base, items) {
 
 let _lastReportTs = 0;   // 3.49: 같은 밀리초에 두 보고가 오면 경로 키가 겹쳐 앞 것이 덮였다(감사 실측: 자동 기록 9건 → 경로 2개). 키는 늘 앞 것보다 크게.
 export async function fbAddWorkReport(voyageKey, report) {
+  assertCanWork('작업 보고');
   const ts = Math.max(Date.now(), _lastReportTs + 1); _lastReportTs = ts;
   const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);
   await set(r, {
@@ -2428,6 +2494,7 @@ export function fbSubscribeAllReports(callback, limit = 100) {
 // 사진 데이터 저장 (Firebase Realtime DB - base64, 작은 사진만)
 //   대용량은 별도 Storage 권장이지만 일단 RTDB로
 export async function fbAddPhotoReport(voyageKey, photoData, meta) {
+  assertCanWork('사진 보고');
   const ts = Date.now();
   const r = ref(db, `voyages/${voyageKey}/photos/${ts}`);
   await set(r, {
@@ -2485,6 +2552,8 @@ export async function fbDeletePendingDamage(cn, ts) {
   const C = String(cn || '').toUpperCase().replace(/\s/g, '');
   await set(ref(db, `pendingDamage/${C}/${ts}`), null);
 }
+//  ⚠ 3.51: 여기에는 문지기를 두지 않는다 — 사람이 누르는 것이 아니라 **항차를 열면 도는 자동 반영**이다(VoyagePage 예약 데미지 승격).
+//    막으면 조회만이 배를 보기만 해도 던지고, 그 마운트 동안 재시도도 없어 예약이 영영 안 붙는다(감사 실측).
 export async function fbPromotePendingDamage(voyageKey, cn, entries) {
   const C = String(cn || '').toUpperCase().replace(/\s/g, '');
   for (const e of entries || []) {
@@ -2502,6 +2571,7 @@ export async function fbPromotePendingDamage(voyageKey, cn, entries) {
 //   - 컨테이너 records/ediContainers에 iso403_photo_ts, iso403_photo_url 마킹
 //   - 동일 컨번호 재촬영 가능 (덮어쓰기, 이력은 photos에 누적)
 export async function fbSaveISO403Photo(voyageKey, mode, cn, photoData, by) {
+  assertCanWork('규격 사진');
   const ts = Date.now();
   // 1) 사진 본체 저장
   const photoRef = ref(db, `voyages/${voyageKey}/photos/${ts}`);
@@ -2539,6 +2609,7 @@ export async function fbSaveISO403Photo(voyageKey, mode, cn, photoData, by) {
 
 // M4.9: ISO403 사진 삭제 (실수 등록 시 취소용)
 export async function fbDeleteISO403Photo(voyageKey, mode, cn, photoTs) {
+  assertCanWork('규격 사진 삭제');
   // 사진 본체 삭제
   if (photoTs) {
     await set(ref(db, `voyages/${voyageKey}/photos/${photoTs}`), null);
@@ -2562,6 +2633,7 @@ export async function fbDeleteISO403Photo(voyageKey, mode, cn, photoTs) {
 // M3.5.6-fix: 테스트 데이터 삭제 함수들 (수석검수만 사용)
 // 단일 보고 삭제
 export async function fbDeleteWorkReport(voyageKey, ts) {
+  assertCanWork('보고 삭제');
   await set(ref(db, `voyages/${voyageKey}/reports/${ts}`), null);
 }
 
@@ -2569,12 +2641,14 @@ export async function fbDeleteWorkReport(voyageKey, ts) {
 
 // 한 항차의 모든 작업 보고 삭제
 export async function fbClearAllReports(voyageKey) {
+  assertCanWork('보고 전체 삭제');
   await set(ref(db, `voyages/${voyageKey}/reports`), null);
   await set(ref(db, `voyages/${voyageKey}/photos`), null);
 }
 
 // 모든 항차의 작업 보고 일괄 삭제 (테스트 정리용)
 export async function fbClearAllReportsAllVoyages() {
+  assertCanWork('보고 전체 삭제');
   const snap = await get(ref(db, 'voyages'));
   const voyages = snap.val() || {};
   const ops = [];
@@ -3488,6 +3562,7 @@ function buildBulkCancelPatch(records) {
 }
 
 export async function fbBulkCancelComplete(voyageKey, mode, { resetActuals = false } = {}) {
+  assertCanWork('완료 일괄 취소');
   const base = `voyages/${voyageKey}/${mode}`;
   const compSnap = await get(ref(db, `${base}/completed`));
   const comp = compSnap.val() || {};

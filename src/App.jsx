@@ -62,6 +62,15 @@ export default function App() {
   // V9.13: 무조작 자동 로그아웃 — 마지막 화면 조작 시각(ref: 리렌더 없이 갱신) + 안내 문구
   const lastInputRef = React.useRef(Date.now());
   const [autoLogoutNotice, setAutoLogoutNotice] = useState('');
+  //  ★ 3.51 — 조회만인데 쓰는 일을 눌렀을 때 «조용히 아무 일도 안 일어나는» 것을 막는 띠 한 벌.
+  //    문지기(firebase.assertCanWork)가 던지기 직전에 이벤트를 쏘고, 호출부가 catch 를 안 하거나 «저장 실패» 로만 말해도 여기서 이유가 보인다.
+  const [viewOnlyMsg, setViewOnlyMsg] = useState('');
+  useEffect(() => {
+    const h = (e) => { setViewOnlyMsg((e && e.detail && e.detail.message) || '조회만으로 들어와 있습니다 — 보기만 됩니다.'); };
+    window.addEventListener('viewOnlyBlocked', h);
+    return () => window.removeEventListener('viewOnlyBlocked', h);
+  }, []);
+  useEffect(() => { if (!viewOnlyMsg) return undefined; const t = setTimeout(() => setViewOnlyMsg(''), 6000); return () => clearTimeout(t); }, [viewOnlyMsg]);
   // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
   const [portMisData, setPortMisData] = useState({});
   // V9.33: 평택도선사회 도선 예보(수집기 기록) — 선박코드 키
@@ -377,8 +386,8 @@ export default function App() {
     setActiveWorkChoice(ch);   // 문지기 캐시를 렌더보다 먼저 세운다(이 뒤의 setEquipNumber 가 곧바로 새 판정을 본다)
     setWorkChoice(ch);
     prevChoiceRef.current = null;
-    if (ch.mode === 'view') { try { localStorage.removeItem('gm_equip_no'); } catch (e) { /* localStorage 가 막힌 기기 — 캐시(setActiveWorkChoice)가 문지기라 호기는 어차피 안 읽힌다 */ } window.dispatchEvent(new CustomEvent('equipChanged', { detail: '' })); }
-    else if (ch.equip) { setEquipNumber(ch.equip); window.dispatchEvent(new CustomEvent('equipChanged', { detail: ch.equip })); }
+    //  3.51: 조회만을 골라도 **호기를 지우지 않는다** — 화면을 그 호기 관점으로 보기 위한 것이다(검수사 «장비 지정등을 사용하게 해야만»). 기록은 쓰기 문지기가 막는다.
+    if (ch.equip) { setEquipNumber(ch.equip); window.dispatchEvent(new CustomEvent('equipChanged', { detail: ch.equip })); }
     fbSetInspectorChoice(name, ch).catch((e) => console.warn('[3.50] 작업자/조회 선택 기록 실패', e));
     if (rechoice) {
       //  로그인 기록·로그인 시각·인사·#/chief 이동을 다시 하지 않는다. 일반 검수원이 다른 선박을 골랐으면 그 선박으로, 그 밖은 보던 자리 그대로.
@@ -530,6 +539,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-ink-950 text-dim-100">
+      {viewOnlyMsg && (
+        <div className="fixed top-0 left-0 right-0 z-[95] bg-sky-900/95 border-b-2 border-sky-500 px-3 py-2.5 text-xs text-sky-100 leading-relaxed whitespace-pre-line shadow-lg" data-view-only-toast="1" onClick={() => setViewOnlyMsg('')}>
+          {viewOnlyMsg}
+          <span className="block text-2xs text-sky-300 mt-0.5">눌러서 닫기</span>
+        </div>
+      )}
       <UpdatePrompt inspector={inspector}/>
       <Header
         version={APP_VERSION}

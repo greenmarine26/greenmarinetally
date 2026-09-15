@@ -3,6 +3,7 @@
 //   판정은 utils.hatchEventsOf, 기록은 hatchReport.recordHatchEvent 한 벌. 새 사건이 뜨면 한 번 소리로 알린다(현장은 화면을 안 본다).
 import React, { useEffect, useRef, useState } from 'react';
 import { recordHatchEvent, fmtHm } from '../hatchReport.js';
+import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
 import { speak } from '../voice.js';
 import { formatHatchBays } from '../utils.js';
 
@@ -29,6 +30,7 @@ export default function HatchAlertBanner({ events, voyageKey, vsl, voyOf = null,
   if (!list.length) return null;
   const doRecord = async (e, share) => {
     const k = `${e.hatch}|${e.action}`;
+    if (!canWorkNow()) { alert(workGateText('해치커버 보고')); return; }   // 3.51: 조회만은 보기만
     setBusy(k);
     try {
       await recordHatchEvent(voyageKey, e, { vsl, voy: voyOf ? voyOf(e.mode) : '', equip, panelCount: panelCountOf ? panelCountOf(e.bays, e.mode) : 0, share, by: inspector || '' });
@@ -36,7 +38,7 @@ export default function HatchAlertBanner({ events, voyageKey, vsl, voyOf = null,
       if (onRecorded) onRecorded(e);
     } catch (x) {
       console.warn('[3.49] 해치 자동 사건 기록 실패', x);
-      alert('해치커버 보고 기록에 실패했습니다. 신호를 확인하고 다시 누르세요.');
+      alert(x && x.viewOnly ? x.message : '해치커버 보고 기록에 실패했습니다. 신호를 확인하고 다시 누르세요.');
     } finally { setBusy(''); }
   };
   return (
