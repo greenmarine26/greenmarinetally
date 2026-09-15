@@ -2448,6 +2448,21 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo);   // 3.16: 완료자 표기 한 벌에 조 등록을 넘긴다(ListTab 이 이미 받는 props)
   };
 
+  //  3.51-02: 자료 점검 상자에 넘길 목록에 배별 선사 별칭을 씌운다(사본으로 — 원본 맵은 대조에 쓰인다).
+  //    ⚠ ListTab 은 `voyage` 를 통째로 안 받는다(1.98 교훈, 이 파일 2296행 주석) — 이미 받는 `vsl`·`voyageInfo` 를 쓴다.
+  //    ⚠ 매퍼는 **EDI ∪ 리스트 합집합으로 한 번만** 만든다(재감사 지적). 목록마다 따로 만들면
+  //      `opAliasNeeds`(CSC 가 있어야 DWS→DSL) 가 한쪽에만 걸려 두 표가 같은 선사를 다르게 적는다.
+  //      다른 호출부(tallyReport:58 · mirCtx:29 · ChiefDashboard:2271 · 이 파일 885)도 전부 합집합 한 벌이다.
+  const _vbEdi = Object.values(ediMap);
+  const _vbRec = Object.values(recMap);
+  const _vbSp = shipOpMapper(String(vsl || voyageInfo?.vsl || '').toUpperCase(),
+    [..._vbEdi.map((c) => c && c.op), ..._vbRec.map((r) => r && r.op)]);
+  const _vbList = (arr) => arr.map((c) => {
+    if (!c || !c.op) return c;
+    const o = _vbSp(c.op);
+    return o === c.op ? c : { ...c, op: o };
+  });
+
   return (
     /* 2.18 — **PC 는 2단, 폰은 1단.** 검수사 «컴용은 여백이 많은곳이 많다» 에 대한 답이다.
        컨을 고르면 오른쪽 340px 칼럼에 상세가 **붙어 있는다** — 종전엔 모달이 떴다 닫혔다 해서
@@ -2455,8 +2470,9 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     <div className={detailPanel ? 'lg:flex lg:gap-5 lg:items-start' : ''}>
     <div className="space-y-3 lg:flex-1 lg:min-w-0">
       <ValidationBox
-        ediContainers={Object.values(ediMap)}
-        records={Object.values(recMap)}
+        /* 3.51-02: 자료 점검 상자의 «선사별 누락·추가» 도 같은 선사를 본다 — 여기만 원본을 받아 SOC 로 섰다(감사 지적). */
+        ediContainers={_vbList(_vbEdi)}
+        records={_vbList(_vbRec)}
         bookingFill={bookingFill}
         mode={mode}
         shiftingList={shiftingList}

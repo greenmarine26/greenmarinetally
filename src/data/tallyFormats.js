@@ -20,6 +20,23 @@
 //     그때는 DWS 그대로 둔다. 실측 STSE 2653E 선적 20대는 정본이 CSC 8 + DSL 12 인데 자료에
 //     그 구분이 없다. 그것을 «DSL 20» 으로 적으면 8대가 아무 표식 없이 틀린 줄에 실린다.
 //     WDF → WDG 는 순수한 이름 바꿈이라 조건이 없다(정본 대조 9/9).
+// ─── 3.51-02 (김명보 부장 메모 2026-09-15 «TMPZ 양하 SOC는 TJM으로 바꾸시오») ──────────
+//   **SOC 는 선사 코드가 아니다.** Shipper's Own Container(화주 소유 컨) 표식이다.
+//   TMPZ 2027E 양하 EDI 원문 실측 — 5대가 `NAD+CA+SOC:172:20`, 나머지 260대는 `NAD+CA+TJM`.
+//   선사가 운송인(CA) 칸에 선사 코드 대신 소유 구분을 적어 보낸 것이라 파서는 원문대로 읽었다
+//   (파서 버그가 아니다 — 원문을 고치면 수집기가 다시 덮는다. 그래서 «그 배의 정본 코드로 읽는» 별칭이다).
+//   근거 셋 — ① 그 5대의 B/L 접두가 `TMSH…` 로 TJM 260대와 같은 계열이다(EAS 는 `EAST/EASS/EASP`).
+//                 검산법 — RTDB `voyages/TMPZ_2027E/discharge/records/{cn}/bl` 을 GET 해 접두 3~4자를 세면 된다
+//                 (컨 접두 `PKEU` 는 선사 접두가 아니라 오히려 화주 소유를 뒷받침한다).
+//            ② 이 사전의 TMPZ.ops 에 SOC 가 없다(실물 마감텔리 233건 분석분)
+//            ③ 실제로 Final Work 맨 뒤에 «SOC / SHA / F — HC 5» 라는 없어야 할 줄이 서 있었다.
+//   `opAliasNeeds` 는 걸지 않는다 — DWS→DSL 은 «둘 중 어느 쪽인지 가를 근거»가 필요했지만,
+//   SOC 는 애초에 선사가 아니라서 가를 것이 없다(WDF→WDG 와 같은 계열의 순수한 이름 바꿈).
+//   ⚠ 다른 배에서 SOC 가 나온 적은 아직 없다 — 2026-09-15 기준 RTDB `voyages` 에 살아 있는 전 항차의
+//     양하·선적 `ediContainers.op` 를 훑어 SOC 는 TMPZ_2027E 양하 5건이 전부였다(2차 시뮬도 같은 결과).
+//     ⇒ 공용 변환표가 아니라 **TMPZ 배별**로 둔다. 다른 배에서 나오면 그 배 사전에 따로 적는다.
+//   ⚠ 이 별칭은 **사본에만** 씌운다 — 보관소 `ediContainers` 와 선적 EDI 내보내기(`NAD+CA+`)는 원문 SOC 그대로다
+//     (원문을 고치면 수집기가 다음 사이클에 되돌린다. 화면·표만 그 배 정본 코드로 읽는 것이 맞다).
 // 시트 변형: damage = 'each'(DAMAGE-EACH) | 'report'(DAMAGE REPORT) | null
 //            shifting = SHIFTING 시트 포함 여부(쉬프팅 있을 때만 렌더)
 //            performance = Performance 시트 여부
@@ -27,7 +44,7 @@ export const TALLY_FORMATS = {
   ATPR: { ops: ['SKR'], ports: ['DLC', 'WEI'], damage: null, shifting: false, performance: true },
   PCSZ: { ops: ['SKR', 'EAS'], ports: ['SHA'], damage: null, shifting: false, performance: true },
   DXQD: { ops: ['DWS', 'EAS'], ports: ['DLC'], damage: 'report', shifting: false, performance: true },
-  TMPZ: { ops: ['TJM', 'EAS'], subOps: { TJM: ['DWS', 'MAS'] }, ports: ['NGB', 'SHA'], damage: 'report', shifting: false, performance: true },
+  TMPZ: { ops: ['TJM', 'EAS'], subOps: { TJM: ['DWS', 'MAS'] }, opAlias: { SOC: 'TJM' }, ports: ['NGB', 'SHA'], damage: 'report', shifting: false, performance: true },
   STSE: { ops: ['SIT', 'DWS', 'TJM', 'EAS', 'WDG', 'SKR'], subOps: { DWS: ['CSC', 'DSL'] },
          opAlias: { DWS: 'DSL', WDF: 'WDG' }, opAliasNeeds: { DWS: 'CSC' }, ports: ['TAO', 'SHD'], damage: 'each', shifting: true, performance: false },
   STMJ: { ops: ['SIT', 'DWS', 'TJM', 'EAS', 'WDG', 'SKR'], subOps: { DWS: ['CSC', 'DSL'] },

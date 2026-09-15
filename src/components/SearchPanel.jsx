@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
+import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
@@ -163,7 +164,14 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         });
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: hasEdi ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(utils.bookingFillOf)
       });
-      Object.values(merged).forEach(c => {
+      //  3.51-02: **이 패널이 제 목록을 따로 병합하므로 별칭도 여기서 씌운다**(§4-4 판정 한 벌).
+      //    감사 지적 — 항차 화면·인쇄허브·수석 보드·미르는 `shipOpMapper` 를 지나는데 여기만 안 지나서,
+      //    같은 화면의 리스트·마감텔리는 TJM 인데 **자동 가이드 카드·끝4자리 조회 카드·컨 상세는 SOC** 였다
+      //    (TMPZ 2027E 양하 5대 실측 — 전부 평택 양하 작업 대상이라 반드시 눈에 띈다).
+      const _mvS = Object.values(merged);
+      const _spOpS = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _mvS.map((c) => c && c.op));
+      for (const c of _mvS) { if (!c || !c.op) continue; const _o = _spOpS(c.op); if (_o !== c.op) c.op = _o; }
+      _mvS.forEach(c => {
         if (!c.cn) return;
         arr.push({
           ...c, _mode: m, _src: c._src || 'edi',

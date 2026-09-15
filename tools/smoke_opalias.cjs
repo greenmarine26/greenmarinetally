@@ -39,6 +39,18 @@ ok(B[5] === 'DWS', '배를 모르면 원래 값 — 모르는 배에 남의 규�
 ok(B[6] === 'SIT' && B[7] === 'DSL', '별칭 없는 코드·이미 자식인 코드는 안 바뀐다');
 ok(B[8] === 'DWS', 'TMPZ 의 DWS 는 그 배의 자식 이름이라 안 바꾼다');
 
+//  ②-B 3.51-02 — SOC 는 선사가 아니다(김명보 부장 «TMPZ 양하 SOC는 TJM으로 바꾸시오»)
+const C = run(`import('${FMT}').then(m=>{const M=(v,l)=>m.shipOpMapper(v,l);console.log(JSON.stringify([`
+  + `M('TMPZ',['TJM','EAS','SOC'])('SOC'),M('TMPZ',['SOC'])('SOC'),M('TMPZ',['TJM','SOC'])('TJM'),`
+  + `M('TMPZ',['TJM','SOC'])('EAS'),M('STSE',['DWS','CSC','SOC'])('SOC'),M('DXQD',['DWS','SOC'])('SOC'),`
+  + `M('',['SOC'])('SOC'),(m.TALLY_FORMATS.TMPZ.opAlias&&m.TALLY_FORMATS.TMPZ.opAlias.SOC)||null,m.TALLY_FORMATS.TMPZ.opAliasNeeds===undefined]))})`);
+ok(C[0] === 'TJM', 'TMPZ 의 SOC 는 TJM — EDI 운송인 칸의 «화주 소유» 표식이지 선사가 아니다');
+ok(C[1] === 'TJM', '⛔ 조건 없이 바꾼다 — DWS→DSL 과 달리 «가를 근거»가 필요한 일이 아니다');
+ok(C[2] === 'TJM' && C[3] === 'EAS', 'TMPZ 의 TJM·EAS 는 그대로 — 별칭이 남을 건드리지 않는다');
+ok(C[4] === 'SOC' && C[5] === 'SOC', '⛔ 다른 배의 SOC 는 안 바꾼다 — 배별 사전이지 공용 변환표가 아니다');
+ok(C[6] === 'SOC', '배를 모르면 그대로');
+ok(C[7] === 'TJM' && C[8] === true, 'TMPZ.opAlias.SOC=TJM · opAliasNeeds 없음(무조건)');
+
 //  ③ 규격 칸 — 코드 계열 둘을 다 읽되 HC 는 40ft 만
 const ISO = ['40HC', '40HR', '40GP', '40RF', '45GP', '45RE', '436E', '20GP', '20OT', 'L5G1', '9500', '22GE',
   '20HC', '20HR', '20HQ', '2280', '228E', '42G1', '4310'];
@@ -85,12 +97,24 @@ ok(/want\[`\$\{row\.op\}\|\$\{row\.port\}\|\$\{row\.fe\}`\]/.test(xl),
 //  ⑥ 판정 한 벌 — 제 목록을 따로 만드는 화면이 전부 같은 매퍼를 지난다(규범 §4-4)
 for (const f of ['src/tallyReport.js', 'src/workingReport.js', 'src/inspectionList.js',
   'src/pages/VoyagePage.jsx', 'src/pages/ChiefDashboard.jsx', 'src/mirCtx.js' /* 3.41: 홈의 전 항차 펼치기가 mirCtx.flattenVoyages 한 벌로 옮겨 갔다 — 홈·떠 있는 미르가 같이 쓴다 */,
-  'src/components/PrintHubModal.jsx']) {
+  'src/components/PrintHubModal.jsx',
+  'src/components/SearchPanel.jsx' /* 3.51-02 감사: 이 패널도 제 목록을 따로 병합한다 — 빠져 있어서 자동 가이드 카드·끝4자리 카드·컨 상세만 SOC 였다 */]) {
   ok(/shipOpMapper/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} 가 같은 매퍼를 지난다`);
 }
 const rpt = fs.readFileSync(path.join(ROOT, 'src/tallyReport.js'), 'utf8');
 ok(/remarks: _op\(r\.op\)/.test(rpt), 'Act. Cntr-Seal 시트도 같은 벌 — 한 워크북에서 코드가 두 벌이면 안 된다');
 ok(/fe: s\.fe \|\| '', wt: s\.wt \|\| '', op: _op\(s\.op\)/.test(rpt), 'SHIFTING 시트도 같은 벌');
+
+//  ⑦ 3.51-02 — 목록에 씌우면 실제로 0 이 되는가(문자열이 아니라 동작으로)
+const D = run(`import('${FMT}').then(m=>{`
+  + `const L=[{cn:'A',op:'TJM'},{cn:'B',op:'SOC'},{cn:'C',op:'EAS'},{cn:'D',op:'SOC'},{cn:'E',op:''},{cn:'F'}];`
+  + `const sp=m.shipOpMapper('TMPZ',L.map(c=>c&&c.op));`
+  + `for(const c of L){if(!c||!c.op)continue;const o=sp(c.op);if(o!==c.op)c.op=o;}`
+  + `console.log(JSON.stringify([L.filter(c=>c.op==='SOC').length,L.filter(c=>c.op==='TJM').length,`
+  + `L.filter(c=>c.op==='EAS').length,L.length,L[4].op,L[5].op===undefined]))})`);
+ok(D[0] === 0, '씌운 뒤 SOC 는 0대 — 문자열 검사가 아니라 목록을 실제로 돌린 결과다');
+ok(D[1] === 3 && D[2] === 1, 'TJM 1+2=3 · EAS 1 — 남의 코드는 안 건드린다');
+ok(D[3] === 6 && D[4] === '' && D[5] === true, '⛔ 대수가 안 변하고 빈 op·op 없는 줄도 안 깨진다');
 
 console.log(fail ? `✗ ${fail}항 실패` : '✓ 전부 통과');
 process.exit(fail ? 1 : 0);
