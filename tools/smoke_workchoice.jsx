@@ -17,15 +17,19 @@ window.__wc = { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, s
 
 //  로그인 화면을 이름·choiceFor 바꿔 가며 다시 그릴 수 있게 둔다
 let root = null;
+const elementOf = (props) => React.createElement(LoginPage, {
+  current: '', inspectors: FX.inspectors, voyages: FX.voyages, extraStaff: FX.staffList, deletedStaff: {}, notice: '',
+  onSelect: (name, choice) => { window.__calls.push({ fn: 'select', name, choice: choice || null }); },
+  onCancel: null,
+  ...(props || {}),
+});
 window.__mount = (props) => {
   if (root) { root.unmount(); root = null; }
   const el = document.getElementById('root'); el.innerHTML = '';
   root = createRoot(el);
-  root.render(React.createElement(LoginPage, {
-    current: '', inspectors: FX.inspectors, voyages: FX.voyages, extraStaff: {}, deletedStaff: {}, notice: '',
-    onSelect: (name, choice) => { window.__calls.push({ fn: 'select', name, choice: choice || null }); },
-    onCancel: null,
-    ...(props || {}),
-  }));
+  root.render(elementOf(props));
 };
+//  같은 인스턴스에 props 만 바꿔 다시 그린다(3.50-01 — 서버 직책이 늦게 도착하는 경우)
+window.__render = (props) => { if (!root) { window.__mount(props); return; } root.render(elementOf(props)); };
+window.__wc.setServerRoles = setServerRoles; window.__wc.staffList = FX.staffList;
 window.__mount({});

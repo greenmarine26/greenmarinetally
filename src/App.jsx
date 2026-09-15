@@ -246,10 +246,10 @@ export default function App() {
   //   devAccessMap 을 의존성에 넣어 명단이 바뀌면 다시 그린다 — 모듈 캐시만 바뀌면 렌더가 안 돈다.
   const chiefOrOwner = useMemo(
     () => canOpenChief(inspector, isOwnerName(inspector)),
-    [inspector, devAccessMap],
+    [inspector, devAccessMap, extraStaff],   // 3.50-01: 서버 직책(테스터)이 늦게 와도 다시 센다 — visibleVoyages 와 같은 잣대(감사 ⑪)
   );
   //  ★ 3.50 — 이 사람이 보는 항차: 자유 열람(수석·부수석·테스터·소유자)은 전부, 일반 검수원은 고른 선박 하나. 홈·통합검색·미르·건강점검·보조기능·항차 화면이 전부 이것을 받는다(한 자리).
-  const visibleVoyages = useMemo(() => visibleVoyagesOf(workChoice, inspector, voyages), [workChoice, inspector, voyages, devAccessMap]);
+  const visibleVoyages = useMemo(() => visibleVoyagesOf(workChoice, inspector, voyages), [workChoice, inspector, voyages, devAccessMap, extraStaff]);   // 3.50-01: 서버 직책(테스터 등)이 늦게 오면 다시 센다
   //  2.87-02 홈 검색창 플랜 명령 — 3.50: 배는 **보이는 항차**에서 고른다(검수원이 남의 배 플랜을 물으면 못 찾은 것으로 통합검색으로 넘어간다 — 조용히 무응답이 아니다).
   const _voyFromQuery = React.useCallback(
     (q) => pickVoyageKey(q, Object.keys(visibleVoyages || {}), (k) => visibleVoyages[k]?.info?.vsl),

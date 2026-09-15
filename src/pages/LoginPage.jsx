@@ -73,8 +73,15 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   const [choiceStage, setChoiceStage] = useState(() => (choiceFor && isFreeRoamer(choiceFor) ? 'role' : 'vessel'));   // 'role'(조회만/작업자) | 'vessel'(선박·호기)
   const [choiceVoyage, setChoiceVoyage] = useState('');
   const [choiceEquip, setChoiceEquip] = useState('');
-  const openChoice = useCallback((name) => { setChoiceName(name); setChoiceStage(isFreeRoamer(name) ? 'role' : 'vessel'); setChoiceVoyage(''); setChoiceEquip(''); }, []);
+  const [roleDecided, setRoleDecided] = useState(false);   // 3.50-01: 자유 열람이 [작업자]를 눌러 선박 단계로 온 것(직책이 늦게 와도 역할 단계로 되돌리지 않는다)
+  const openChoice = useCallback((name) => { setChoiceName(name); setChoiceStage(isFreeRoamer(name) ? 'role' : 'vessel'); setChoiceVoyage(''); setChoiceEquip(''); setRoleDecided(false); }, []);
   useEffect(() => { if (choiceFor) openChoice(choiceFor); }, [choiceFor, openChoice]);
+  //  ★ 3.50-01 (라이브 실측 2026-09-15 18:1x — 업데이트 뒤 «클로드»(서버 직책 테스터)가 역할 단계 없이 선박 단계로 떨어졌다) —
+  //    테스터·서버에서 준 직책은 staffList 구독(setServerRoles)이 온 뒤에야 isFreeRoamer 가 참이다. 업데이트 재개·첫 진입은 그보다 먼저 그리므로
+  //    직책(extraStaff)이 도착했을 때 아직 아무것도 안 고른 자유 열람이면 역할 단계로 올린다. [작업자]를 눌렀거나 선박을 골랐으면 그대로 둔다.
+  useEffect(() => {
+    if (choiceName && choiceStage === 'vessel' && !roleDecided && !choiceVoyage && isFreeRoamer(choiceName)) setChoiceStage('role');
+  }, [extraStaff, choiceName, choiceStage, roleDecided, choiceVoyage]);
   //  선택 화면을 띄운 채 30분 자동 로그아웃이 되면(current '' · choiceFor '') 이름 단계로 돌아간다 — 안 그러면 로그아웃 안내 없이 그 자리에서 «작업 시작» 이 재로그인이 된다(3.50 감사 지적).
   useEffect(() => { if (!current && !choiceFor) setChoiceName(''); }, [current, choiceFor]);
   const commitSelect = (name) => {
@@ -406,7 +413,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               </div>
               <button onClick={() => onSelect(choiceName, { mode: 'view' })} data-choice-role="view"
                 className="w-full py-4 rounded-pill bg-ink-800 border-2 border-sky-700 text-sky-100 font-black text-base">🔍 조회만 — 점검·열람 (호기 기록 없음)</button>
-              <button onClick={() => setChoiceStage('vessel')} data-choice-role="work"
+              <button onClick={() => { setRoleDecided(true); setChoiceStage('vessel'); }} data-choice-role="work"
                 className="w-full py-4 rounded-pill bg-violet-700 border-2 border-violet-400 text-white font-black text-base">🏗 작업자 — 선박·호기를 골라 검수</button>
             </div>
           )}

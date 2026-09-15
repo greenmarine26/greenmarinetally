@@ -1,6 +1,7 @@
 // «로그인 뒤 작업자/조회만» 선택(3.50) 연막검사 — jsdom 으로 로그인 선택 화면을 실제로 그리고 누른다. 실패하면 빌드를 세운다.
 //   ① 일반 검수원(박진우) — 이름 → 시작 → 선박 단계(역할 단추 없음·경고 문구·선박 전엔 시작 불가) → STMJ 2652E → PCTC 호기 4개 → 1호기 → 시작 = {work, STMJ_2652E, 1호기}
 //   ② 자유 열람(김성일, choiceFor) — 역할 단계 → 조회만 = {view} · 작업자 → 선박(호기 없이) 시작 = {work, TMPZ_2027E, ''} · «그대로 두기» = onCancelChoice
+//   ②-B (3.50-01) 서버 직책(테스터)이 첫 그림 뒤에 도착해도 역할 단계로 올라간다 — [작업자]를 누른 뒤에는 안 되돌아간다
 //   ③ 순수 — isFreeRoamer(소유자·테스터·검수·임원) · visibleVoyagesOf/canSeeVoyage(검수원 1척·자유 열람 15척) · readWorkChoice(이름·날짜) · 조회만이면 getEquipNumber ''·setEquipNumber 무시 · equipGateText 두 문구 · App 캐시(setActiveWorkChoice)가 localStorage 보다 앞선다
 //   ④ inspectorStatus — workMode 'view' 면 활동이 있어도 'online' 까지
 //   ⑤ 실소스 firebase.js(SDK 스텁) — 조회만이면 fbSetInspectorActivity 가 lastVoyage/lastMode/workEquip 을 null 로, workMode 'view' 로 쓴다. 작업자면 그대로. fbSetInspectorChoice 는 assign* 을 쓴다.
@@ -100,6 +101,22 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   s = lastSel();
   if (!s || s.name !== '김성일' || s.choice.mode !== 'work' || s.choice.voyageKey !== 'TMPZ_2027E' || s.choice.equip !== '') fail('자유 열람 작업자(호기 없이) 결과가 틀리다: ' + JSON.stringify(s));
   console.log(`  ② 김성일 — 조회만 {view} · 작업자 TMPZ_2027E(호기 없이) · 그대로 두기 ✔`);
+
+  // ── ②-B 3.50-01 서버 직책이 늦게 오는 경우(라이브 실측 — 업데이트 재개 뒤 테스터 «클로드»가 역할 단계 없이 선박 단계로 떨어졌다) ──
+  const FX = wc.staffList;
+  wc.setServerRoles({});
+  W.__mount({ choiceFor: '클로드', extraStaff: {} });
+  if (!(await until(() => doc.querySelector('[data-login-choice="vessel"]')))) fail('직책 전 테스터가 선박 단계로 안 뜬다(직책 없이는 일반 검수원)');
+  if (doc.querySelector('[data-choice-role]')) fail('직책 전인데 역할 단추가 있다');
+  wc.setServerRoles(FX);
+  W.__render({ choiceFor: '클로드', extraStaff: FX });
+  if (!(await until(() => doc.querySelector('[data-login-choice="role"]')))) fail('서버 직책(테스터)이 도착했는데 역할 단계로 안 올라간다: ' + txt().slice(0, 200));
+  doc.querySelector('[data-choice-role="work"]').click();
+  await until(() => doc.querySelector('[data-login-choice="vessel"]'));
+  W.__render({ choiceFor: '클로드', extraStaff: { ...FX, _x: { name: '_x', role: '검수' } } });   // 직책 목록이 또 바뀌어도
+  await wait(150);
+  if (!doc.querySelector('[data-login-choice="vessel"]')) fail('[작업자]를 누른 뒤 직책 목록이 바뀌자 역할 단계로 되돌아갔다');
+  console.log('  ②-B 클로드(테스터) — 직책 전 선박 단계 → 직책 도착 → 역할 단계 · [작업자] 뒤에는 안 되돌아감 ✔');
 
   // ── ③ 순수 함수 ──
   const fr = (n) => wc.isFreeRoamer(n);
