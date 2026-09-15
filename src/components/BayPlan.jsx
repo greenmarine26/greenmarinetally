@@ -46,6 +46,8 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
   //    그림은 `FitBox` 가 `transform: scale()` 로 줄이는데 제목도 같이 줄어 6~8px 이 됐다(실측 — 제목 11px × 배율 0.6).
   //    그래서 제목만 배율 **밖**으로 뺀다 — `titleOut` 이면 안에 안 그리고, `onTitles` 로 그 장들의 제목을 올려 준다.
   titleOut = false, onTitles = null,
+  //  ★ 3.49-01 — onlyBay 장들을 세로로 쌓을지(col, 기본 = 수석 보드·폰) 가로로 늘어놓을지(row = 베이뷰 컴 화면). 검수사 «베이가 통째로 들어 오게 하고 트윈일경우 두베이가 같이 보여야 합니다».
+  onlyLayout = 'col',
   //  ★ 3.48 «베이뷰 작업»(onlyBay 갈래에서만 쓴다) — brightTier: 'deck'|'hold' 면 그 단은 그대로, 다른 단은 흐리게(장 전체는 다 보인다 — 크레인 자리 대조용).
   //    warnCells: Map('bay-row-tier' → 'conflict'|'noterm') — 검수원 기록과 터미널 실적이 다른 칸(utils.bayViewOverlayOf 한 벌)에 빨간/회색 테두리.
   brightTier = null, warnCells = null
@@ -655,15 +657,19 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
     const z = compactZoom || zoom;
     const cw = Math.round(baseW * z), ch = Math.round(baseH * z);
     return (
-      <div className="flex flex-col gap-1">
-        {pgList.map((pg) => (
-          <BayPage key={pg.title} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
-            isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
-            isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
-            globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
-            pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells hideTitle={titleOut}
-            brightTier={brightTier} warnCells={warnCells} />
-        ))}
+      <div className={`flex ${onlyLayout === 'row' ? 'flex-row items-start' : 'flex-col'}`} style={{ gap: onlyLayout === 'row' ? 48 : 4 }} data-only-layout={onlyLayout}>   {/* row 는 앞 장 오른쪽 단 라벨(장 밖 24px)과 뒷 장 왼쪽 라벨이 붙지 않게 48px */}
+        {pgList.map((pg) => {
+          const page = (
+            <BayPage key={pg.title} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
+              isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
+              isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
+              globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
+              pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells hideTitle={titleOut}
+              brightTier={brightTier} warnCells={warnCells} />
+          );
+          //  row: BayPage 뿌리가 `min-w-full` 이라 flex 줄에서 장마다 줄 폭 전체로 늘어나 두 장이 2배 폭으로 겹쳤다(실렌더 1348×2=2700). 제 폭(max-content) 상자에 담는다.
+          return onlyLayout === 'row' ? <div key={pg.title} className="shrink-0" style={{ width: 'max-content' }}>{page}</div> : page;
+        })}
       </div>
     );
   }

@@ -23,7 +23,8 @@ export function FitBox({ children, className = '', maxH = null, fill = false, bo
       let bh = 0;
       if (fill) {
         const bounds = boundsRef && boundsRef.current;
-        if (bounds) { const r = box.getBoundingClientRect(), c = bounds.getBoundingClientRect(); bh = Math.floor(c.bottom - r.top) - 6; }
+        //  3.49-01: bounds 가 스크롤 칸이면(베이뷰 아래 칸) 스크롤한 만큼 box 가 위로 올라가 bh 가 부풀어 그림이 자란다(감사 실측 0.73→0.85) — 스크롤량을 뺀다. 안 스크롤한 칸(수석 보드 카드)은 0.
+        if (bounds) { const r = box.getBoundingClientRect(), c = bounds.getBoundingClientRect(); bh = Math.floor(c.bottom - r.top) - 6 - (bounds.scrollTop || 0); }
         if (!(bh > 0)) bh = box.clientHeight;
       }
       const mh = fill ? bh : (typeof maxH === 'function' ? maxH() : maxH);

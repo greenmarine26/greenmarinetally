@@ -128,9 +128,13 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   const handle = split().children[1];
   if (!handle || !/cursor-col-resize/.test(handle.className) || !/w-3\.5/.test(handle.className)) fail('넓은 화면 손잡이가 세로 막대가 아니다: ' + (handle && handle.className));
   if (split().children[0] !== doc.querySelector('[data-bayview-top="1"]') || split().children[2] !== doc.querySelector('[data-bayview-bottom="1"]')) fail('좌=자료·우=베이 순서가 아니다');
+  // 3.49-01 검수사 «베이가 통째로 들어 오게 하고 트윈일경우 두베이가 같이» — 컴은 장들을 가로로(row), 폰은 세로(col)
+  //   jsdom 은 배치 계산이 없어(offsetWidth 0) 자동 고르기가 col 에 머문다 — 여기서는 속성이 있는지만 잰다. row/col 배율 비교는 Playwright 실렌더(tools 밖)로 본다.
+  if (!doc.querySelector('[data-only-layout]')) fail('장 배치 속성(data-only-layout)이 없다');
   if (!doc.querySelector('[data-bayview-title="1"]') || !/BAY \(16\)17/.test(doc.querySelector('[data-bayview-title="1"]').textContent)) fail('넓은 화면으로 바꾸자 베이 그림이 사라졌다');
   setWide(false); await wait(300); noErr();
   if (!/flex-col/.test(split().className) || /cursor-col-resize/.test(split().children[1].className)) fail('폰으로 되돌렸는데 위/아래로 안 돌아온다');
+  if ((doc.querySelector('[data-only-layout]') || {}).getAttribute('data-only-layout') !== 'col') fail('폰인데 장이 세로(col)로 안 돌아온다');
   // ⑦ ◀ → 수동·싱글 → 위 칸 게이트
   byText(/^◀$/).click();
   await wait(300);

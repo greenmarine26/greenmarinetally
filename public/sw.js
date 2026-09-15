@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.49';
-const NOTE = '베이뷰가 컴에서는 좌우로 나뉩니다. 따라가기를 켜면 해치커버 열고 닫음을 터미널 실적으로 앱이 판정해 보고에 적고, 따라가기가 아니면 알림으로 묻습니다. 검수원이 먼저 보고한 것이 우선입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.49-01';
+const NOTE = '베이뷰 컴 화면에서 베이가 통째로 한눈에 들어옵니다. 두 베이를 같이 보되 칸이 넓으면 나란히, 아니면 위아래로 놓입니다. 따라가기를 켜면 해치커버 열고 닫음을 앱이 판정해 보고에 적습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
