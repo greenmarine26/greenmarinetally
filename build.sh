@@ -514,6 +514,8 @@ node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검�
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.31: 마감텔리 선사 칸(선적 DWS → CSC·DSL)·규격 칸(40HC → HC)
 node tools/smoke_opalias.cjs || { echo "✗ 마감텔리 선사·규격 칸 연막검사 실패 — 배포 금지"; exit 1; }
+# 3.52-01: 양하 PORT 칸 — «양하 직전 마지막 항구». 되돌아온 화물만 세관 적재항으로 바꾸고 환적분은 EDI 그대로
+node tools/smoke_dischargepol.cjs || { echo "✗ 양하 PORT 칸 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.32: 리퍼 온도 사진 판독 — 양식 비의존·여러 장·판독 검산
 node tools/smoke_reeferphoto.cjs || { echo "✗ 리퍼 사진 판독 연막검사 실패 — 배포 금지"; exit 1; }
 # 2.41: 콘앱 베이뷰 — 컨번호 잘림·단추 겹침·진입 배율·항구 코드 한 벌

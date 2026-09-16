@@ -5,7 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -877,6 +877,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           const _e = ediMap[cn] || {}, _r = recMap[cn] || {};
           const _m = { ..._e, ...Object.fromEntries(Object.entries(_r).filter(([, vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
           if (_r.op || _e.op) _m.op = pickCarrierOp(_r.op, _e.op, _vslB);
+          //  3.52-01: **POL 은 EDI 가 정본이다** — 위 스프레드가 리스트 POL 을 그냥 덮고 있었다(문지기 없음,
+          //    mirCtx 와 같은 구멍). 양하는 «양하 직전 마지막 항구» 규칙까지 태운다(utils 한 벌).
+          if (_e.pol) _m.pol = boardDetail.mode === 'discharge' ? pickDischargePol(_e.pol, _r.pol, _e.pod) : _e.pol;
           return _m;
         });
         //  3.52: 배별 선사 별칭도 지난다 — `pickCarrierOp` 만 지나면 `opAlias`(DXQD 의 NOL→DWS,

@@ -48,7 +48,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -540,6 +540,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   EDI에 pol/pod 없을 때만 리스트로 보강.
         if (r.pol && !merged[r.cn].pol) safeR.pol = r.pol;
         if (r.pod && !merged[r.cn].pod) safeR.pod = r.pod;
+        //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
+        if (mode === 'discharge' && merged[r.cn].pol) {
+          const _dp = pickDischargePol(merged[r.cn].pol, r.pol, merged[r.cn].pod);
+          if (_dp !== merged[r.cn].pol) safeR.pol = _dp;
+        }
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
         // M8.07: EDI 실번호가 잘린 경우(IFCSUM 20자 컷 등) records의 완전한 실번호 우선.
@@ -828,6 +833,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (k === 'pod' && v && String(v).toUpperCase() !== String(ediBase[k] || '').toUpperCase()) {
             safeR._podList = String(v).toUpperCase();
             safeR._podEdi = String(ediBase[k] || '').toUpperCase();
+          }
+          //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
+          //    ⚠ `pol` 은 아래 `ALLOWED_LIST_FIELDS` 에 없어 통째로 막힌다. **이 목록이 화면 본류다**
+          //      (컨 목록·컨 상세 POL·베이플랜 라벨·카고플랜·CSV·현황 집계). 여기를 안 지나면
+          //      마감텔리만 SHA 고 화면은 PTK 가 되어 판정이 두 벌이 된다(규범 §4-4).
+          if (k === 'pol') {
+            if (mode !== 'discharge' || !ediBase.pol) return;
+            const _dp = pickDischargePol(ediBase.pol, v, ediBase.pod);
+            if (_dp !== ediBase.pol) safeR.pol = _dp;
+            return;
           }
           // EDI 매칭됨 → 핵심 필드는 보호, 보강 필드만 허용
           if (!ALLOWED_LIST_FIELDS.has(k)) return;  // 핵심 필드 무시

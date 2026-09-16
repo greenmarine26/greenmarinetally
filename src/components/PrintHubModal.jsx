@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
@@ -92,6 +92,14 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       //   false→true 승격만 허용(반대 방향은 종전대로 EDI 보호). VoyagePage FLAG_FILL 과 같은 규칙.
       const _flagUp = (k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk' || k === 'dg' || k === 'oog') && v === true && e[k] !== true;
       if (k === 'tmp_missing' && v === true && e.tmp) return;   // 2.05-05: 자료 온도가 있으면 «미기재» 마킹을 얹지 않는다
+      //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
+      //    여기서 나오는 것이 **대외 문서**다 — 마감텔리와 같은 답을 내야 한다.
+      if (k === 'pol' && hasEdi) {
+        if (mode !== 'discharge' || !e.pol) return;
+        const _dp = pickDischargePol(e.pol, v, e.pod);
+        if (_dp !== e.pol) merged.pol = _dp;
+        return;
+      }
       if (hasEdi && PROTECTED_EDI_FIELDS.has(k) && !_flagUp) return;
       //  ★ 2.52-04 — **리스트 무게가 «빈칸/0» 이면 EDI 무게를 지우지 않는다.** 80행 가드는 `''`·null 만 걸러
       //    `0` 이 그대로 통과하고, `wt` 는 PROTECTED 목록에도 없어 EDI 27,600kg 이 0 으로 덮이고 있었다.

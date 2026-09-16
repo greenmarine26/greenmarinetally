@@ -9,7 +9,7 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -159,6 +159,16 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           //    2차 시뮬 지적 2026-09-14 — 확정 뒤 수집기가 ediContainers 를 다시 쓰면 화면 규격이
           //    EDI 값으로 되돌아가는데, `iso_pick` 때문에 알림은 계속 조용해 **틀린 값이 조용히 남았다.**
           if (hasEdi && r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) { safeR[k] = v; return; }
+          //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
+          //    ⚠ 모드는 바깥 프롭 `mode` 가 아니라 이 루프의 `m` 이다 — 이 목록은 양하·선적을 한 번에 돈다.
+          //    여기가 끝4자리·자동 가이드·컨 상세가 보는 목록이다.
+          if (k === 'pol' && hasEdi) {
+            const _e = merged[r.cn];
+            if (m !== 'discharge' || !_e.pol) return;
+            const _dp = pickDischargePol(_e.pol, v, _e.pod);
+            if (_dp !== _e.pol) safeR.pol = _dp;
+            return;
+          }
           if (hasEdi && PROTECTED_EDI.has(k)) return;  // EDI 핵심 필드 보호
           //  3.52: 선사는 «더 자세한 쪽» — 세관이 뭉쳐 준 값이 EDI 의 자식(DSL·CSC)을 덮지 않는다(utils 한 벌).
           if (k === 'op') { safeR.op = pickCarrierOp(v, merged[r.cn] && merged[r.cn].op, voyage?.info?.vsl); return; }

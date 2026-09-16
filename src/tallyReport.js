@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -80,6 +80,9 @@ export function ptkContainers(voyage, mode) {
     //   RF 목록에서 이 둘을 빼려면 여기서 들고 가야 한다 — 안 그러면 EDI에 없어 항상 false 다.
     //  3.52: 세관 «선사부호» 가 선사 기준이되 **자식을 부모로 뭉개지 않는다**(utils 한 벌 — pickCarrierOp).
     if (r.op != null && String(r.op).trim() !== '') out.op = _op(pickCarrierOp(r.op, c.op, _vsl));
+    //  3.52-01: **Final Work·OS·PERFORMANCE·SHIFTING·DAMAGE 의 PORT 칸이 여기서 정해진다**(port3(c.pol)).
+    //    검수사 «마감텔리랑 같게 수정 바랍니다» · «양하전 마지막 항구가 SHA 맞으니까요» — 되돌아온 화물만 바뀐다.
+    if (mode === 'discharge') { const _dp = pickDischargePol(c.pol, r.pol, c.pod); if (_dp !== c.pol) out.pol = _dp; }
     if (r.rfdry === true) out.rfdry = true;
     if (r.mkcon === true) out.mkcon = true;
     // TallyOne 1.55: **실적 자리(bay_actual/row_actual/tier_actual)를 들고 온다.**

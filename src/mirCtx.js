@@ -4,7 +4,7 @@
    그래서 항차 화면이 재료를 **여기에 놓고**(publishMirCtx) 미르가 물을 때 **읽는다**(readMirCtx). 화면이 닫히면 비운다.
    ⚠ 전 항차 컨 펼치기(flattenVoyages)는 종전 GlobalSearchPage 의 useMemo 본문을 그대로 옮긴 것이다 — 두 곳이 각자 펼치면
      «홈은 이 컨을 알고 미르는 모르는» 일이 생긴다(§4-4). 홈도 이 함수를 부른다. */
-import { isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp } from './utils.js';
+import { isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol } from './utils.js';
 import { terminalWorkFor } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 
@@ -36,6 +36,18 @@ export function flattenVoyages(voyages, terminalWork) {
         });
         //  3.52: 홈·미르도 항차 화면과 같은 선사를 본다 — «더 자세한 쪽»(utils 한 벌).
         if (safeR.op) safeR.op = _spOpG(pickCarrierOp(safeR.op, merged[r.cn] && merged[r.cn].op, v.info?.vsl));
+        //  3.52-01: **POL 은 EDI 가 정본이다.** 이 경로엔 POL 문지기가 **아예 없어서** 미르·홈 통합검색만
+        //    세관 «원적재항» 을 보이고 있었다(보관 291항차 실측 1,993대 — CNSHK→MYPKG · HKHKG→MYPEN …).
+        //    다른 다섯 경로는 EDI 를 지킨다. 양하는 «양하 직전 마지막 항구» 규칙까지 함께 태운다(utils 한 벌).
+        //    ⚠ `pod` 는 이 판에서 손대지 않는다 — 미르의 평택분 셈(`_ptk`)이 흔들린다. 인계함에 남겼다.
+        const _ebM = merged[r.cn];
+        if (_ebM && _ebM.pol) {
+          delete safeR.pol;
+          if (mode === 'discharge') {
+            const _dp = pickDischargePol(_ebM.pol, r.pol, _ebM.pod);
+            if (_dp !== _ebM.pol) safeR.pol = _dp;
+          }
+        }
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
       });
       Object.values(merged).forEach((c) => {

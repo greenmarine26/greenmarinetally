@@ -7,7 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
-import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp } from './utils.js';
+import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp, pickDischargePol } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 const PORT_MAP = {
   // 표준 5자
@@ -254,6 +254,9 @@ function buildBuckets(voyage, mode = 'settlement') {
           //    이 문서는 EDI 를 먼저 깔고 빈 칸만 채워서, EDI 에 `SOC`·`OLL` 처럼 선사가 아닌 값이
           //    차 있으면 세관 선사부호가 **영영 안 들어왔다**(감사 실측 — TMPZ 2026E 양하 OLL 1대).
           if (recC.op || ediC.op) c.op = pickCarrierOp(recC.op, ediC.op, voyage?.info?.vsl);
+          //  3.52-01: 양하 PORT 칸 — 이 문서의 항구 집계(`getPort`)가 마감텔리와 같은 답을 내야 한다(utils 한 벌).
+          //    ⚠ 이 스코프의 `mode` 는 settlement/actual 이다. 양하·선적은 `dlMode`('disch'/'load') 다.
+          if (dlMode === 'disch' && ediC.pol) c.pol = pickDischargePol(ediC.pol, recC.pol, ediC.pod);
         } else {
           // EDI에 없는 컨테이너 = LIST 단독
           c = { ...recC };
