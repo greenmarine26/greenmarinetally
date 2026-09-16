@@ -520,6 +520,9 @@ node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검
 node tools/smoke_opalias.cjs || { echo "✗ 마감텔리 선사·규격 칸 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.52-01: 양하 PORT 칸 — «양하 직전 마지막 항구». 되돌아온 화물만 세관 적재항으로 바꾸고 환적분은 EDI 그대로
 node tools/smoke_dischargepol.cjs || { echo "✗ 양하 PORT 칸 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.53-01: 카톡 작업기록 붙여넣기 — «[오후 10:16]» 이 한 줄도 안 읽혀 전량 0건이던 것(검수사 «여기에 왜 추가가 안되죠?»).
+#    실소스 파서를 불러 오전·오후·폰 내보내기·네 자리 연도를 동작으로 잰다(글자 검사 아님).
+node tools/smoke_kakaolog.cjs || { echo "✗ 카톡 작업기록 파서 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.53: POD 확정 — 자료가 갈릴 때 수석·검수사가 고른 목적지가 EDI 를 이긴다(대수가 바뀐다).
 #    두 번째 번들은 src/firebase.js **실소스**에 SDK 만 스텁을 끼워 «누가 막히고 무엇이 써지는지» 를 잰다.
 SMOKE_PP=$(mktemp /dev/shm/hometmp/_smokepp_XXXXXX.js)

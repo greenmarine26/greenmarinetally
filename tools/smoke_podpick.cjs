@@ -270,6 +270,36 @@ if (!FBB || !fs.existsSync(FBB)) {
       ok(!!P('KRINC', { pod: 'KRPTK' }), '★ 리스트가 평택인데 EDI 가 아니다 — **이때만 묻는다**(검수사가 짚은 그 꼴)');
       ok(!!P('KRKAN', { pod: 'KRPTK' }), '같은 꼴 하나 더');
 
+      //  ★ 3.53-01 — **카톡 교체가 원자적인가**(감사 지적 2026-09-17 [치명]).
+      //    종전엔 `set(옛키, null)` 뒤에 `set(새키, 값)` 을 따로 보내서, 그 사이에 끊기면
+      //    **앞 기록만 사라지고 새 기록은 안 들어갔다** — 되돌릴 근거(`ts_orig`)까지 같이 잃는다.
+      //    ⚠ 글자로 세지 않는다. 실소스를 불러 **스텁에 실제로 나간 쓰기**를 본다.
+      if (typeof g.fbAddReportsAt === 'function') {
+        g.setGets({ 'v/reports/1000': null, 'v/reports/2000': { ts: 2000, type: 'work_status', action: 'loading_start', equip: '1호기', message: '앱 기록' } });
+        const before = g.writes().length;
+        const r = await g.fbAddReportsAt('v', [{ ts: 1000, type: 'work_status', action: 'loading_start', equip: '1호기', message: '카톡', _replaceKey: '2000' }]);
+        const w = g.writes().slice(before);
+        const ups = w.filter((x) => x.op === 'update');
+        const sets = w.filter((x) => x.op === 'set');
+        ok(ups.length === 1 && sets.length === 0,
+          `★ 지우기와 넣기가 **한 번의 update** 로 나간다(중간에 끊겨도 둘 다 잃지 않는다) [update ${ups.length} · set ${sets.length}]`);
+        const v = (ups[0] || {}).value || {};
+        ok(v['2000'] === null, '★ 같은 update 안에서 앞 기록이 null 로 지워진다');
+        ok(v['1000'] && v['1000'].ts_orig === 2000 && v['1000']._replacedFrom === '2000',
+          '★ 되돌릴 근거(ts_orig·_replacedFrom)가 새 기록에 남는다');
+        ok(v['1000'] && v['1000']._replacedMessage === '앱 기록',
+          '★ 원 기록의 글도 옮겨 적는다(시각만으로는 무엇이 지워졌는지 모른다)');
+        ok(r && r.added === 1 && r.replaced === 1, `★ 셈이 맞는다 [added ${r && r.added} · replaced ${r && r.replaced}]`);
+
+        //  ★ 자기 자신을 지우지 않는다 — `_replaceKey` 가 새 키와 같으면 지우기가 새 값을 덮어쓴다.
+        g.setGets({ 'v/reports/3000': null });
+        const b2 = g.writes().length;
+        const r2 = await g.fbAddReportsAt('v', [{ ts: 3000, type: 'work_status', action: 'loading_done', equip: '1호기', _replaceKey: '3000' }]);
+        const v2 = ((g.writes().slice(b2).filter((x) => x.op === 'update')[0]) || {}).value || {};
+        ok(v2['3000'] && v2['3000'].ts === 3000 && r2 && r2.replaced === 0,
+          `★ 자기교체(_replaceKey === ts)는 지우지 않는다 [replaced ${r2 && r2.replaced} · 값 ${v2['3000'] ? '있음' : '없음'}]`);
+      } else ok(false, '카톡 교체 — fbAddReportsAt 가 번들에 없다');
+
       console.log(fail ? `✗ ${fail}건 실패` : '✓ 전부 통과');
       process.exit(fail ? 1 : 0);
     })().catch((e) => { console.log('✗ 예외: ' + (e && e.stack || e)); process.exit(1); });

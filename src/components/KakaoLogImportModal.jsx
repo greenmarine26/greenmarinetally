@@ -76,11 +76,12 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
     if (!take.length) { setMsg('추가할 항목이 없습니다.'); return; }
     setBusy(true); setMsg('');
     try {
+      //  3.53-01: `_replaceKey` 가 있으면 그 앱 기록을 카톡 시각으로 옮긴다(검수사 «카톡이 우선»).
       const items = take.map((r) => (r.kind === 'hatch'
-        ? { ts: r.ts, type: 'hatch', action: r.action, bays: r.bays, panelCount: r.panelCount ?? null, equip: r.equip || '', message: r.raw }
-        : { ts: r.ts, type: 'work_status', action: r.action, mode: r.mode || '', equip: r.equip || '', message: r.raw }));
-      const { added, skipped } = await fbAddReportsAt(base, items);
-      setMsg(`✅ ${added}건 기록에 추가${skipped ? ` · ${skipped}건 건너뜀(이미 있음)` : ''} — 마감 텔리를 다시 만들면 타임시트에 반영됩니다.`);
+        ? { ts: r.ts, type: 'hatch', action: r.action, bays: r.bays, panelCount: r.panelCount ?? null, equip: r.equip || '', message: r.raw, _replaceKey: r.replaces || undefined }
+        : { ts: r.ts, type: 'work_status', action: r.action, mode: r.mode || '', equip: r.equip || '', message: r.raw, _replaceKey: r.replaces || undefined }));
+      const { added, skipped, replaced } = await fbAddReportsAt(base, items);
+      setMsg(`✅ ${added}건 기록에 반영${replaced ? ` (그중 ${replaced}건은 앱 기록을 카톡 시각으로 바꿈)` : ''}${skipped ? ` · ${skipped}건 건너뜀(이미 있음)` : ''} — 마감 텔리를 다시 만들면 타임시트에 반영됩니다.`);
       setPicked(new Set());
       if (onDone) onDone();
     } catch (e) {
@@ -135,7 +136,11 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
         {text.trim() && (
           <div className="px-4 py-1.5 text-xxs border-b border-line flex items-center gap-3 flex-wrap">
             <span className="text-dim-300">읽음 <b className="text-dim-100">{rows.length}</b>건</span>
-            <span className="text-amber-300">앱에 없음 <b>{missing.length}</b>건</span>
+            <span className="text-amber-300">앱에 없음 <b>{missing.filter((r) => !r.replaces).length}</b>건</span>
+            {/* 3.53-01: 검수사 «자체기록과 중복이 되면 카톡이 우선하게» — 갈래를 눈에 보이게 나눈다 */}
+            {missing.some((r) => r.replaces) && (
+              <span className="text-sky-300">카톡이 우선 <b>{missing.filter((r) => r.replaces).length}</b>건</span>
+            )}
             <span className="text-dim-500">이미 있음 {rows.length - missing.length}건</span>
           </div>
         )}
@@ -151,16 +156,23 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
               <button key={k + Math.random()} onClick={() => !r.dup && toggle(r)} disabled={r.dup}
                 className={`w-full text-left px-2 py-1.5 rounded border flex items-start gap-2 ${
                   r.dup ? 'bg-ink-900 border-line opacity-50'
-                    : on ? 'bg-amber-900/25 border-amber-700/60' : 'bg-ink-800/40 border-line'}`}>
+                    : on ? (r.replaces ? 'bg-sky-900/25 border-sky-700/60' : 'bg-amber-900/25 border-amber-700/60')
+                      : 'bg-ink-800/40 border-line'}`}>
                 <span className={`mt-0.5 w-4 h-4 rounded shrink-0 flex items-center justify-center text-2xs ${
-                  r.dup ? 'bg-ink-750 text-dim-400' : on ? 'bg-amber-600 text-white' : 'border border-line-strong'}`}>
+                  r.dup ? 'bg-ink-750 text-dim-400' : on ? (r.replaces ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white') : 'border border-line-strong'}`}>
                   {r.dup ? '–' : on ? '✓' : ''}
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="text-xs2 text-dim-100">{HHMM(r.ts)}</span>
                   <span className="text-xs2 text-amber-200 ml-2">{label}</span>
                   {r.equip && <span className="text-xxs text-dim-400 ml-2">{r.equip}</span>}
-                  {r.dup && <span className="text-2xs text-dim-400 ml-2">이미 기록됨</span>}
+                  {r.dup && <span className="text-2xs text-dim-400 ml-2">{r.takenByEarlier ? '위의 카톡 줄이 이 자리를 옮겼습니다' : '이미 기록됨'}</span>}
+                  {/* 3.53-01: 앱 기록을 카톡 시각으로 옮긴다 — 무엇이 무엇으로 바뀌는지 그대로 적는다 */}
+                  {r.replaces && (
+                    <span className="text-2xs text-sky-300 ml-2">
+                      앱 {HHMM(r.prevTs)} → 카톡 {HHMM(r.ts)} 으로 바꿈
+                    </span>
+                  )}
                   <span className="block text-2xs text-dim-500 truncate">← {r.raw}</span>
                 </span>
               </button>

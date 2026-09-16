@@ -2,7 +2,7 @@
 //   `tools/stub_fb_sdk.js` 로 갈아 끼워, `fbPickPod`·`fbClearPickPod` 가 실제로 무엇을 쓰고 무엇을 막는지
 //   `globalThis.__fbWrites` 에서 잰다. 판정은 `smoke_podpick.cjs` 가 한다.
 //   ⚠ 이름으로 «있다» 를 세지 않는다 — **불러서 결과를 본다**(규범 §6-2).
-import { fbPickPod, fbClearPickPod, fbPickIso, fbSaveListRecords } from '../src/firebase.js';
+import { fbPickPod, fbClearPickPod, fbPickIso, fbSaveListRecords, fbAddReportsAt } from '../src/firebase.js';   // 3.53-01: 카톡 교체가 원자적인지 잰다
 import { runDiagnostics } from '../src/diagnostics.js';   // 3.53: 확정하면 경고가 사라지는가 — 동작으로 잰다
 import { podConflictOf } from '../src/utils.js';
 import { rememberMe } from '../src/meToday.js';
@@ -16,7 +16,7 @@ import { computeStats } from '../src/pages/HomePage.jsx';
 import { isPtkResolved } from '../src/utils.js';
 
 window.__podfb = {
-  fbPickPod, fbClearPickPod, fbPickIso, fbSaveListRecords, runDiagnostics, podConflictOf,
+  fbPickPod, fbClearPickPod, fbPickIso, fbSaveListRecords, fbAddReportsAt, runDiagnostics, podConflictOf,
   rememberMe, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, setServerRoles, isChief, isOwnerName,
   writes: () => (globalThis.__fbWrites || []),
   setGets: (m) => { globalThis.__fbGetValues = m || {}; },

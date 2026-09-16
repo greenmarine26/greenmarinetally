@@ -2532,25 +2532,56 @@ export async function fbDeleteReport(base, key) {
   return true;
 }
 
+//  ★ 3.53-01 — **카톡이 정본이다**(검수사 2026-09-16 «자체기록과 중복이 되면 카톡이 우선하게 하면 됩니다»).
+//    `_replaceKey` 가 오면 그 앱 기록을 **카톡 시각으로 옮긴다** — 그냥 지우는 것이 아니라 앞의 값을
+//    `ts_orig`·`_replacedFrom` 에 남긴다(§5-3D 의 `pod_orig` 와 같은 방식). 그래야 되돌릴 근거가 남는다.
+//    실측 ATPR 2642W — 앱이 «시작 없이 완료» 를 막아 1호기 시작이 04:49 로 박혔다. 카톡은 20:43 이다.
+//    ⚠ 앞 기록을 못 읽으면 **지우지 않는다** — 조용히 잃는 것보다 둘 다 남는 편이 낫다.
 export async function fbAddReportsAt(base, items) {
   assertCanWork('보고 일괄 추가');
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, replaced = 0;
   for (const it of items || []) {
     const ts = Number(it?.ts);
     if (!Number.isFinite(ts) || ts <= 0) { skipped += 1; continue; }
-    const path = `${base}/reports/${ts}`;
+    const { ts: _t, _replaceKey, ...rest } = it;
+    const key = String(ts);
     try {
-      const cur = await get(ref(db, path));
+      const cur = await get(ref(db, `${base}/reports/${key}`));
       if (cur.exists()) { skipped += 1; continue; }
-      const { ts: _t, ...rest } = it;
-      await set(ref(db, path), { ...rest, ts, created_at: new Date(ts).toISOString(), _src: 'kakao' });
+      const patch = {};
+      let extra = {}, dropKey = '';
+      if (_replaceKey && String(_replaceKey) !== key) {
+        //  앞 기록을 **먼저 읽는다.** 읽기가 던지면 아래 catch 로 빠져 그 항목은 통째로 건너뛴다
+        //  — 앞 기록은 그대로 살아 있고 새 것도 안 들어간다(잃는 것은 없다). 없으면 새로 넣기만 한다.
+        const old = await get(ref(db, `${base}/reports/${_replaceKey}`));
+        if (old.exists()) {
+          const ov = old.val() || {};
+          //  되돌릴 근거 — 시각뿐 아니라 원문·기록 시각까지 옮겨 적는다(감사 지적 2026-09-17).
+          extra = {
+            ts_orig: Number(ov.ts) || null,
+            _replacedFrom: String(_replaceKey),
+            _replacedAt: Date.now(),
+            _replacedMessage: String(ov.message || ''),
+            _replacedCreatedAt: String(ov.created_at || ''),
+          };
+          dropKey = String(_replaceKey);
+        }
+      }
+      if (dropKey) patch[dropKey] = null;
+      patch[key] = { ...rest, ...extra, ts, created_at: new Date(ts).toISOString(), _src: 'kakao' };
+      //  ★ 3.53-01(감사 수리) — **지우기와 넣기를 한 번의 update 로** 보낸다.
+      //    종전처럼 `set(null)` 뒤에 `set(값)` 을 따로 보내면, 그 사이에 탭이 죽거나 신호가 끊길 때
+      //    **앞 기록만 사라지고 새 기록은 안 들어간다** — 되돌릴 근거(`ts_orig`)까지 같이 잃는다.
+      //    RTDB 의 여러 자식 update 는 한 덩어리로 착지한다(원자적).
+      await update(ref(db, `${base}/reports`), patch);
       added += 1;
+      if (dropKey) replaced += 1;   // ⚠ 성공한 뒤에 센다 — 실패한 교체를 «바꿨다»고 보고하지 않는다
     } catch (e) {
-      console.error('[카톡 보강] 기록 추가 실패:', path, e);   // 조용히 삼키지 않는다
+      console.error('[카톡 보강] 기록 반영 실패:', `${base}/reports/${key}`, e);   // 조용히 삼키지 않는다
       skipped += 1;
     }
   }
-  return { added, skipped };
+  return { added, skipped, replaced };
 }
 
 let _lastReportTs = 0;   // 3.49: 같은 밀리초에 두 보고가 오면 경로 키가 겹쳐 앞 것이 덮였다(감사 실측: 자동 기록 9건 → 경로 2개). 키는 늘 앞 것보다 크게.
