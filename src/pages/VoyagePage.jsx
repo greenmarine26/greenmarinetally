@@ -59,6 +59,7 @@ import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
+import { consumePodFocus, setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { logView, logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 활동 로그(열람·조회 기록)
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
@@ -540,6 +541,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   EDI에 pol/pod 없을 때만 리스트로 보강.
         if (r.pol && !merged[r.cn].pol) safeR.pol = r.pol;
         if (r.pod && !merged[r.cn].pod) safeR.pod = r.pod;
+        //  3.53: **검수사·수석이 고른 POD 는 EDI 를 이긴다**(`pod_pick`) — 규격 확정과 같은 규칙(utils 한 벌).
+        //    ⚠ 이 한 줄이 **대수를 바꾼다** — 확정하면 그 컨이 평택분이 되어 별첨·카고플랜 수가 오른다.
+        if (r.pod_pick && r.pod) safeR.pod = r.pod;
         //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
         if (mode === 'discharge' && merged[r.cn].pol) {
           const _dp = pickDischargePol(merged[r.cn].pol, r.pol, merged[r.cn].pod);
@@ -772,6 +776,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       //    감사 지적 2026-09-14 — 진단은 «10건»인데 상세에는 고르기가 안 떠, 알림은 고르라 하고
       //    고를 곳은 없는 상태였다. 바로 위 두 사고(엠티실·리퍼 온도)와 **같은 실수를 또 한 것**이다.
       'iso_carrier', 'iso_customs', 'iso_pick', 'iso_pick_label', 'iso_picked_by', 'iso_picked_at',
+      //  ★ 3.53: POD 확정 표식 — **여기 없으면 저장돼도 컨 상세가 «확정됨» 을 못 읽어** 계속 고르라고 묻는다.
+      //    위 세 사고(엠티실·리퍼 온도·규격 3자)와 같은 자리다. records 에 새 필드를 만들면 이 목록을 확인할 것.
+      'pod_pick', 'pod_pick_label', 'pod_picked_by', 'pod_picked_at', 'pod_orig',
       'sl_conflict',   // 1.8-03: 리스트끼리 실번호가 다를 때 두 값 모두 — 배지가 이걸 읽는다
       '_source',       // 2.06-06: 이 컨을 채운 리스트 파일명 — 세관리스트 존재 판정(sealIssuesOf)이 읽는다
       'sl_src',        // 2.06-07: 채택 씰(sl)의 진짜 출처 — _source 는 마지막 파일로 덮이므로 따로 지킨다
@@ -838,6 +845,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //    ⚠ `pol` 은 아래 `ALLOWED_LIST_FIELDS` 에 없어 통째로 막힌다. **이 목록이 화면 본류다**
           //      (컨 목록·컨 상세 POL·베이플랜 라벨·카고플랜·CSV·현황 집계). 여기를 안 지나면
           //      마감텔리만 SHA 고 화면은 PTK 가 되어 판정이 두 벌이 된다(규범 §4-4).
+          //  ★ 3.53: **검수사·수석이 고른 POD 는 EDI 를 이긴다**(utils 한 벌 — 규격 확정과 같은 규칙).
+          //    `pod` 는 CORE_FILL 이라 «EDI 가 비었을 때만» 들어온다. 확정은 그 위에 선다.
+          //    ⚠ 이 목록이 화면 본류다 — 컨 목록·컨 상세·베이플랜 라벨·카고플랜·CSV·현황 집계가 이것을 본다.
+          if (k === 'pod' && r.pod_pick) { safeR.pod = v; return; }
           if (k === 'pol') {
             if (mode !== 'discharge' || !ediBase.pol) return;
             const _dp = pickDischargePol(ediBase.pol, v, ediBase.pod);
@@ -1024,6 +1035,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const hints = [voyage?.info?.voy, voyage?.info?.voyage, voyage?.info?.callsign].filter(Boolean);
     return isLoloShipByPolicy(vsl, extraPolicies, hints);
   }, [voyage, extraPolicies]);
+
+  //  ★ 3.53 — 홈 카드 «⚠ 목적지 확인» 배지로 들어왔으면 **그 컨 상세를 바로 편다.**
+  //    검수사 «둘중 한군데를 누르면 상세카드가 나오고 수정 할수 있게». 쪽지는 한 번만 읽힌다(podFocus).
+  //  ⛔ **이 블록은 `containers` useMemo «아래»에 있어야 한다.** 의존 배열은 콜백과 달리 **렌더 중
+  //     그 자리에서 평가**되므로, 위에 두면 `const containers` 의 TDZ 에 걸려
+  //     «Cannot access 'containers' before initialization» 으로 **항차 화면이 통째로 죽는다**
+  //     (재감사 실측 2026-09-16 — 실 KSKM 자료 렌더가 그대로 예외를 던졌다). 3.51-02 과 같은 계열이고,
+  //     `smoke_scope` 는 바인딩이 있으니 0건을 내서 못 잡는다. 옮기지 마라.
+  //  ⚠ 쪽지는 이 항차 것만 꺼낸다 — 자료가 아직 없으면 꺼내지 않고 다음 그림을 기다린다.
+  useEffect(() => {
+    //  ⚠ 자료가 아직 없으면 **꺼내지 않는다** — 먼저 꺼내면 그 쪽지를 읽고 버려 못 연다(재감사 지적 경7).
+    if (!Array.isArray(containers) || !containers.length) return;
+    const f = consumePodFocus(voyageKey);
+    if (!f) return;
+    if (f.mode && f.mode !== mode) { setMode(f.mode); setPodFocus(f); return; }   // 모드가 다르면 모드를 옮기고 다음 그림에서 연다
+    const hit = containers.find((x) => x && String(x.cn || '').toUpperCase() === f.cn);
+    if (hit) setDetailC(hit);
+  }, [containers, mode, voyageKey]);
 
   // V8.06: RORO/LOLO 혼용선(셀 좌표 없는 IFCSUM)이면 최초 1회 자동으로 LOLO 탭으로 전환.
   //   양하 탭의 EDI↔리스트 매칭 경고("리스트에 없음")는 이 선박엔 부적절(EDI가 곧 리스트)하므로
@@ -1327,7 +1356,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const detailPanelHere = isWide && tab === 'list' && !!detailC && !detailC._mode;
   const renderDetail = (variant) => {
         // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
-    const cMode = detailC._mode || mode;
+    //  ★ 3.53 — `_mode` 는 등록 때 붙는 값이라 **통과화물이면 `'transit'`** 이다. 그대로 쓰면
+    //    `voyage['transit']` 가 없어 **`records`·`completed`·`xrayList` 가 통째로 빈 채** 상세가 열리고,
+    //    거기서 한 저장은 `voyages/<키>/transit/...` 로 샌다. 재감사 실측 2026-09-16 —
+    //    그래서 정작 POD 가 갈리는 그 컨에서 «POD 확정» 단추가 안 떴다(이 판의 목적이 안 닿았다).
+    //  ⇒ 양하·선적 둘 중 하나일 때만 따르고, 아니면 지금 보고 있는 모드로 떨어뜨린다.
+    const cMode = (detailC._mode === 'discharge' || detailC._mode === 'loading') ? detailC._mode : mode;
     const cSec = voyage[cMode] || {};
     // M3.87: 위치 수정 충돌 검사용 - 같은 모드 전체 컨테이너 머지
     const ediMap = cSec.ediContainers || {};

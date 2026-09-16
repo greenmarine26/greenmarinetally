@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ShieldCheck, AlertTriangle, Printer, FileDown, X } from 'lucide-react';
-import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry } from '../utils.js';
+import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry, isPtkResolved } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
 
 // V8.98-08: 쉬프팅(재적부) 목록 모달 — 검증 카드의 ◆ 칸 클릭 시. 인쇄/PDF/엑셀 저장(청구 근거용).
 const _sp = (p) => `${String(p).slice(0, 3)}-${String(p).slice(3, 5)}-${String(p).slice(5, 7)}`;
@@ -93,10 +93,11 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       ? { slots: _slotsHere.length, real: (records || []).filter(r => r && r.cn && !_ediRealCns.has(r.cn)).length }
       : null);
     if ((!ediContainers || ediContainers.length === 0) && !fill) return null;
-    const isPtk = (c) => {
-      if (mode === 'discharge') return isPyeongtaekPort(c.pod);
-      return isPyeongtaekPort(c.pol);
-    };
+    //  ★ 3.53: **POD 확정을 반영한다**(utils 한 벌). 안 하면 확정해도 이 상자의 «EDI ?대» 가
+    //    안 움직여 마감텔리와 숫자가 두 벌이 된다(2차 시뮬 지적 2026-09-16).
+    const _recByCn = {};
+    for (const r of (records || [])) { if (r && r.cn) _recByCn[String(r.cn).toUpperCase()] = r; }
+    const isPtk = (c) => isPtkResolved(c, _recByCn[String(c && c.cn || '').toUpperCase()] || null, mode === 'discharge' ? 'discharge' : 'loading');
     const ptkInEdi = (ediContainers || []).filter(c => !isSlotEntry(c)).filter(isPtk);   // 3.26: 자리는 실컨 대조 밖
     const recCns = new Set((records || []).map(r => r.cn));
     const ediCns = new Set((ediContainers || []).map(c => c.cn));

@@ -257,6 +257,8 @@ function buildBuckets(voyage, mode = 'settlement') {
           //  3.52-01: 양하 PORT 칸 — 이 문서의 항구 집계(`getPort`)가 마감텔리와 같은 답을 내야 한다(utils 한 벌).
           //    ⚠ 이 스코프의 `mode` 는 settlement/actual 이다. 양하·선적은 `dlMode`('disch'/'load') 다.
           if (dlMode === 'disch' && ediC.pol) c.pol = pickDischargePol(ediC.pol, recC.pol, ediC.pod);
+          //  3.53: 고른 POD 가 EDI 를 이긴다 — 이 문서의 평택분 판정(234행)도 같은 답을 내야 한다.
+          if (recC.pod_pick && recC.pod) c.pod = recC.pod;
         } else {
           // EDI에 없는 컨테이너 = LIST 단독
           c = { ...recC };

@@ -94,6 +94,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       if (k === 'tmp_missing' && v === true && e.tmp) return;   // 2.05-05: 자료 온도가 있으면 «미기재» 마킹을 얹지 않는다
       //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
       //    여기서 나오는 것이 **대외 문서**다 — 마감텔리와 같은 답을 내야 한다.
+      //  3.53: 고른 POD 가 EDI 를 이긴다 — 검수 리스트·VGM 대수가 마감텔리와 같아야 한다.
+      if (hasEdi && r.pod_pick && k === 'pod') { merged.pod = v; return; }
       if (k === 'pol' && hasEdi) {
         if (mode !== 'discharge' || !e.pol) return;
         const _dp = pickDischargePol(e.pol, v, e.pod);

@@ -162,6 +162,8 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           //  3.52-01: 양하 PORT 칸은 «양하 직전 마지막 항구» — EDI POL 이 평택이면 되돌아온 화물이다(utils 한 벌).
           //    ⚠ 모드는 바깥 프롭 `mode` 가 아니라 이 루프의 `m` 이다 — 이 목록은 양하·선적을 한 번에 돈다.
           //    여기가 끝4자리·자동 가이드·컨 상세가 보는 목록이다.
+          //  3.53: 고른 POD 가 EDI 를 이긴다 — `iso_pick` 우대와 같은 자리·같은 규칙(utils 한 벌).
+          if (hasEdi && r.pod_pick && k === 'pod') { safeR.pod = v; return; }
           if (k === 'pol' && hasEdi) {
             const _e = merged[r.cn];
             if (m !== 'discharge' || !_e.pol) return;

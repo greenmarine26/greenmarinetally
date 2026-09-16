@@ -12,17 +12,19 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn, isHoldTier } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
+import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
-function filterPyeongtaek(containers, mode) {
+//  ★ 3.53 — **POD 확정을 반영한다**(utils 한 벌 `isPtkResolved`). 2차 시뮬 지적 2026-09-16 —
+//    진단은 화면 목록을 안 쓰고 제 목록을 만드는데 raw `ediContainers.pod` 만 봤다. 그래서 수석이
+//    확정해도 «리스트에 EDI 평택과 매칭 안되는 컨 1개» 가 그대로 떠, 검수사에게는
+//    «눌렀는데 아무 일도 안 일어났다» 로 보였다(검수사 «갯수가 변경되어야만 계획과 맞습니다»).
+function filterPyeongtaek(containers, mode, listRecords) {
+  const _r = listRecords || {};
   return Object.values(containers).filter(c => {
-    if (mode === 'discharge') {
-      return isPyeongtaekPort(c.pod);
-    } else if (mode === 'loading') {
-      return isPyeongtaekPort(c.pol);
-    }
-    return true;
+    if (mode !== 'discharge' && mode !== 'loading') return true;
+    const rec = _r[c.cn] || _r[String(c.cn || '').toUpperCase()] || null;
+    return isPtkResolved(c, rec, mode);
   });
 }
 
@@ -86,7 +88,13 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   const _cancSet = new Set((Array.isArray(cancelReq) ? cancelReq : Object.entries(cancelReq || {}).map(([k, v]) => (typeof v === 'string' ? v : k))).map(c => String(c || '').replace(/[\s-]/g, '').toUpperCase()).filter(Boolean));
   const _isCanc = (cn) => _cancSet.has(String(cn || '').replace(/[\s-]/g, '').toUpperCase());
   const ediArr = Object.values(ediContainers || {});
-  const ediPtk = filterPyeongtaek(ediContainers || {}, mode);
+  const ediPtk = filterPyeongtaek(ediContainers || {}, mode, listRecords);   // 3.53: 확정 반영
+  //  3.53: 그 컨이 «POD 를 고를 수 있는» 것인가 — 판정은 utils 한 벌(컨 상세와 같은 답).
+  const _podAsk = (cn) => {
+    const c = (ediContainers || {})[cn] || (ediContainers || {})[String(cn || '').toUpperCase()];
+    const r = (listRecords || {})[cn] || (listRecords || {})[String(cn || '').toUpperCase()];
+    return !!(c && r && podConflictOf(c.pod, r));
+  };
   const ediCount = ediPtk.length;
   const listCount = Object.keys(listRecords || {}).length;
   const carrierLabel = carrier ? `${carrier}` : '';
@@ -358,7 +366,12 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           msg: `리스트에 EDI 평택과 매칭 안되는 컨 ${extraCns.length}개`,
           voice: `리스트에 EDI에 없는 컨테이너가 ${extraCns.length}개 있습니다. 확인 필요`,
           count: extraCns.length,
-          details: { extraCns: extraCns.slice(0, 20), ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 3.50-02: 패널의 «EDI ?대 / 리스트 ?대» 가 이 셋을 읽는다
+          //  ★ 3.53 — **POD 가 갈리는 컨을 맨 앞으로 올린다.** 재감사 실측 2026-09-16 —
+          //    KSKM 2617N 의 `extraCns` 는 59건이고 앞 10건에 정작 그 컨(`SEGU2430571`)이 없어,
+          //    검수사가 말한 «둘 중 한 군데» 의 한쪽이 그 건에 못 닿았다. 20/10 절단은 그대로 두되 **순서**를 바꾼다.
+          details: { extraCns: [...extraCns].sort((a, b) => (_podAsk(b) ? 1 : 0) - (_podAsk(a) ? 1 : 0)).slice(0, 20),
+            podAskCns: extraCns.filter(_podAsk).slice(0, 20),   // 눌러서 고칠 수 있는 것만 따로 — 패널이 라벨을 가른다
+            ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 3.50-02: 패널의 «EDI ?대 / 리스트 ?대» 가 이 셋을 읽는다
         });
       }
     }

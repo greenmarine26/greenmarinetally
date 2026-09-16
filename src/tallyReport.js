@@ -83,6 +83,9 @@ export function ptkContainers(voyage, mode) {
     //  3.52-01: **Final Work·OS·PERFORMANCE·SHIFTING·DAMAGE 의 PORT 칸이 여기서 정해진다**(port3(c.pol)).
     //    검수사 «마감텔리랑 같게 수정 바랍니다» · «양하전 마지막 항구가 SHA 맞으니까요» — 되돌아온 화물만 바뀐다.
     if (mode === 'discharge') { const _dp = pickDischargePol(c.pol, r.pol, c.pod); if (_dp !== c.pol) out.pol = _dp; }
+    //  3.53: **검수사·수석이 고른 POD 가 EDI 를 이긴다.** 아래 98행 필터가 이 값을 보고 평택분을 가른다 —
+    //    즉 이 한 줄이 마감텔리·검수리스트·VGM 의 **대수**를 바꾼다(검수사 «갯수가 변경되어야만 계획과 맞습니다»).
+    if (r.pod_pick && r.pod) out.pod = r.pod;
     if (r.rfdry === true) out.rfdry = true;
     if (r.mkcon === true) out.mkcon = true;
     // TallyOne 1.55: **실적 자리(bay_actual/row_actual/tier_actual)를 들고 온다.**

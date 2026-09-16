@@ -215,8 +215,18 @@ function AlertDetails({ alert, onOpenContainer }) {
         )}
         {d.extraCns && d.extraCns.length > 0 && (
           <div className="mt-1">
-            <div className="text-dim-300 mb-0.5">EDI에 없는 컨번호:</div>
-            {d.extraCns.slice(0, 10).map((cn, i) => <div key={i} className="mono">• {cn}</div>)}
+            {/*  3.53: 눌러서 바로 컨 상세로 간다 — 검수사가 **여기서** 그 컨을 보고 POD 를 확정한다
+                 (검수사 2026-09-16 «이건을 앱에서 수정할수 있게»). 두 번 찾아 들어가지 않게 한다. */}
+            {/*  3.53: **고를 수 있는 것만** «눌러서 POD 확정» 으로 안내한다 — 나머지는 EDI 에 아예 없어
+                 눌러도 고를 것이 없다(재감사 지적). 갈리는 컨은 목록 맨 앞으로 올려 둔다. */}
+            <div className="text-dim-300 mb-0.5">EDI에 없는 컨번호{(d.podAskCns || []).length ? ` (⚠ 목적지 확인 ${(d.podAskCns || []).length}대 — 눌러서 POD 확정)` : ''}:</div>
+            {d.extraCns.slice(0, 10).map((cn, i) => {
+              const ask = (d.podAskCns || []).includes(cn);
+              return onOpenContainer
+                ? <button key={i} onClick={(e) => { e.stopPropagation(); onOpenContainer(cn); }} data-extra-cn={cn} data-pod-ask={ask ? '1' : undefined}
+                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• {cn}{ask ? ' ⚠' : ''}</button>
+                : <div key={i} className="mono">• {cn}</div>;
+            })}
             {d.extraCns.length > 10 && <div className="text-dim-400">... 외 {d.extraCns.length - 10}건</div>}
           </div>
         )}

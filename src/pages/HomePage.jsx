@@ -5,6 +5,8 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
+import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
+import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { paceFromRecords, terminalWorkFor, voyageDoneAts } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
@@ -1479,6 +1481,20 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
         <div className="text-left min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-black text-base sm:text-sm text-dim-100 truncate">{voyage.info.vsl}</span>
+            {/*  ★ 3.53 — **선박명 옆 문제 알림.** 검수사 2026-09-16 *«진행상황에서 선박명 옆빈곳에
+                 발생된 문제 알림을 주었으면 합니다. 둘중 한군데를 누르면 상세카드가 나오고 수정 할수 있게»*
+                 누르면 그 컨의 상세 카드로 바로 간다(수정은 거기서 — 수석·검수사만).
+                 ⚠ `<button>` 안이라 `<span role="button">` 으로 둔다(단추 속 단추는 HTML 이 아니다).
+                 ⚠ 세는 자리는 utils 한 벌(`podConflictOf`) — 진단 경고·컨 상세와 **같은 답**이다. */}
+            {(disStats.podIssueCns || []).length > 0 && (
+              <span role="button" tabIndex={0} data-pod-issue={(disStats.podIssueCns || []).length}
+                onClick={(e) => { e.stopPropagation(); setPodFocus({ voyageKey: voyage.key, mode: 'discharge', cn: disStats.podIssueCns[0] }); onOpen('discharge'); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setPodFocus({ voyageKey: voyage.key, mode: 'discharge', cn: disStats.podIssueCns[0] }); onOpen('discharge'); } }}
+                title="목적지(POD)가 자료마다 다른 컨이 있습니다 — 눌러서 확인·확정"
+                className="text-sm2 sm:text-xxs bg-amber-900/70 border border-amber-500 text-amber-100 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded-pill font-black leading-none active:bg-amber-800">
+                ⚠ 목적지 확인 {(disStats.podIssueCns || []).length}
+              </span>
+            )}
             {/* M5.82: 부두 배지 */}
             {pier === 'PCTC' && (
               <span className="text-sm2 sm:text-xxs bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-bold leading-none">
@@ -2090,7 +2106,7 @@ function SectionBar({ label, color, stats, onClick }) {
   );
 }
 
-function computeStats(section, mode, info, voyageKey, shiftSet) {   // 2.89-06: 시프팅 제외 집합
+export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)   // 2.89-06: 시프팅 제외 집합
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0, virtual: false };
   const ediContainers = section.ediContainers || {};
@@ -2106,9 +2122,11 @@ function computeStats(section, mode, info, voyageKey, shiftSet) {   // 2.89-06: 
   //   이었다(TMPZ 2023E 실측 2026-08-02, 슬롯 370 전부 pol=KRPTK).
   Object.entries(ediContainers).forEach(([key, c]) => {
     if (!c) return;
-    const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
+    //  ★ 3.53: **POD 확정을 반영한다**(utils 한 벌). 안 하면 홈 카드만 확정 전 숫자에 머문다.
+    const _rec = records[c.cn] || records[key] || records[String(c.cn || '').toUpperCase()] || null;
+    const isPtk = mode === 'discharge' ? isPyeongtaekPort(resolvedPod(c, _rec))
       : mode === 'loading' ? isPyeongtaekPort(c.pol)
-      : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
+      : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(resolvedPod(c, _rec)));
     if (isPtk) ptkCns.add(c.cn || key);
   });
   // TallyOne 1.11: 모수에서 **반대 방향 리스트**를 뺀다. 항차번호가 방향까지 같은 배(N_N 타입)는
@@ -2196,7 +2214,17 @@ function computeStats(section, mode, info, voyageKey, shiftSet) {   // 2.89-06: 
   //   → 자리의 **규격·개수는 신뢰**하되 **개별 컨의 위치는 확정이 아니다.**
   //     이 자료로 만든 위치를 확정처럼 다루면 안 된다(카고플랜·베이플랜 표기 시 주의).
   const planOnly = planSlots > 0 && matched === 0;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
+  //  ★ 3.53 — **자료가 갈리는 컨(POD 미확정)을 센다.** 검수사 «진행상황에서 선박명 옆빈곳에
+  //    발생된 문제 알림을 주었으면 합니다». 판정은 utils 한 벌(`podConflictOf`) — 진단·컨 상세와 같은 답이다.
+  const podIssueCns = [];
+  if (mode === 'discharge') {
+    for (const [key, c] of Object.entries(ediContainers)) {
+      if (!c) continue;
+      const _r = records[c.cn] || records[key] || records[String(c.cn || '').toUpperCase()] || null;
+      if (_r && podConflictOf(c.pod, _r)) podIssueCns.push(c.cn || key);
+    }
+  }
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

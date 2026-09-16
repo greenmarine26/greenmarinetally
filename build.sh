@@ -508,6 +508,10 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   #   ⚠ 두 번째는 스코프 검사를 돌리고도 통과했다 — `hasGlobal` 로 같은 파일 다른 컴포넌트의 같은 이름을 셌기 때문.
   #   ⇒ `hasBinding(name, noGlobals=true)` 로 엄격하게 본다. 작업표준 §2-2-D 가 요구하는 그 전수 대조다.
   node tools/smoke_scope.cjs || { echo "✗ 스코프 전수 검사 실패 — 배포 금지"; exit 1; }
+  #  ★ 3.53 — **훅 의존 배열의 선언 순서(TDZ).** 스코프 검사는 «바인딩이 있다» 며 0건을 내지만,
+  #    `useEffect(fn,[x])` 를 `const x` 위에 두면 렌더 중 그 자리에서 평가돼 화면이 통째로 죽는다.
+  #    재감사 실측 2026-09-16 — 3.53 이 VoyagePage 에 그 실수를 넣어 어느 항차도 못 여는 상태였다.
+  node tools/smoke_tdz.cjs || { echo "✗ 훅 의존 배열 TDZ 검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hooks.cjs || { echo "✗ 훅 순서 검사 실패 — 배포 금지"; exit 1; }
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
@@ -516,6 +520,19 @@ node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검
 node tools/smoke_opalias.cjs || { echo "✗ 마감텔리 선사·규격 칸 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.52-01: 양하 PORT 칸 — «양하 직전 마지막 항구». 되돌아온 화물만 세관 적재항으로 바꾸고 환적분은 EDI 그대로
 node tools/smoke_dischargepol.cjs || { echo "✗ 양하 PORT 칸 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.53: POD 확정 — 자료가 갈릴 때 수석·검수사가 고른 목적지가 EDI 를 이긴다(대수가 바뀐다).
+#    두 번째 번들은 src/firebase.js **실소스**에 SDK 만 스텁을 끼워 «누가 막히고 무엇이 써지는지» 를 잰다.
+SMOKE_PP=$(mktemp /dev/shm/hometmp/_smokepp_XXXXXX.js)
+if npx esbuild tools/smoke_podpick_fb.js --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+     --external:fs --external:path --external:url --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" \
+     --alias:firebase/app="$PWD/tools/stub_fb_sdk.js" --alias:firebase/database="$PWD/tools/stub_fb_sdk.js" --alias:firebase/storage="$PWD/tools/stub_fb_sdk.js" \
+     --outfile="$SMOKE_PP"; then
+  node tools/smoke_podpick.cjs "$PWD" "$SMOKE_PP" || { echo "✗ POD 확정 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_PP"; exit 1; }
+  rm -f "$SMOKE_PP"
+else
+  echo "✗ POD 확정 문지기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_PP"; exit 1
+fi
 # 3.32: 리퍼 온도 사진 판독 — 양식 비의존·여러 장·판독 검산
 node tools/smoke_reeferphoto.cjs || { echo "✗ 리퍼 사진 판독 연막검사 실패 — 배포 금지"; exit 1; }
 # 2.41: 콘앱 베이뷰 — 컨번호 잘림·단추 겹침·진입 배율·항구 코드 한 벌

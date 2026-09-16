@@ -6,8 +6,11 @@ import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
 import { isoConflictOf, ISO_SRC_NAME } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
+import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
+import { isChief } from '../staffList.js';
+import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
 import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -403,6 +406,27 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     try { await fbClearPickIso(voyageKey, mode, c.cn); }
     catch (e) { alert(`확정을 풀지 못했습니다.\n(${(e && e.message) || e})`); }
     finally { setIsoBusy(false); }
+  };
+
+  //  ★ 3.53 — **POD 확정.** 검수사 2026-09-16 «이건을 앱에서 수정할수 있게 해주세요. 다만 일반 검수사가
+  //    아니고 저랑 수석만 가능하게» · «갯수가 변경되어야만 계획과 맞습니다».
+  //    ⚠ 화면 게이트는 **보조**다 — 진짜 문지기는 `firebase.js` 의 `assertChief` 다(3.51 교훈).
+  const podCan = isChief(inspector) || isOwnerName(inspector);
+  const [podBusy, setPodBusy] = useState(false);
+  const pickPod = async (src) => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!src || podBusy) return;
+    setPodBusy(true);
+    try { await fbPickPod(voyageKey, mode, c.cn, src.k, src.value || src.label, inspector); }   // 저장은 **정규화 코드**(PTK02 같은 부두코드가 records 에 박히지 않게)
+    catch (e) { alert(`POD 확정을 저장하지 못했습니다.\n(${(e && e.message) || e})`); }   // §4-3 조용히 실패 금지
+    finally { setPodBusy(false); }
+  };
+  const clearPickPod = async () => {
+    if (podBusy) return;
+    setPodBusy(true);
+    try { await fbClearPickPod(voyageKey, mode, c.cn, inspector); }
+    catch (e) { alert(`POD 확정을 풀지 못했습니다.\n(${(e && e.message) || e})`); }
+    finally { setPodBusy(false); }
   };
 
   // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
@@ -1154,6 +1178,50 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     {!!c._podList && c._podList !== (c.pod || '').toUpperCase() && (
       <Field label="리스트 POD" value={c._podList} mono highlight="amber"/>
     )}
+            {/*  ★ 3.53 — **POD 확정.** 자료가 갈리면 후보 둘을 보여 주고 고르게 한다(검수사·수석만).
+                 ⚠ 규격 확정과 달리 이것은 **대수를 바꾼다** — 확정하면 그 컨이 평택분이 되어
+                   마감텔리·검수 리스트·VGM·별첨·현황·미르가 한 대씩 같이 움직인다.
+                 ⚠ 화면 게이트는 보조다. 진짜 문지기는 `firebase.js` 의 `assertChief` 다(3.51 교훈 — 화면만
+                   막으면 옆길로 들어온다). 일반 검수원에게는 단추가 아예 안 보인다. */}
+            {(() => {
+              //  ⚠ `records` 가 안 왔거나 섹션이 비었을 때를 대비해 **병합된 컨 자신**에서도 꺼낸다
+              //    (`_podList` 는 2.77 이 만드는 리스트 POD, 확정 표식은 ALLOWED_LIST_FIELDS 로 실려 온다).
+              const _pr = (records && (records[c.cn] || records[String(c.cn || '').toUpperCase()]))
+                || (c._podList ? { pod: c._podList, pod_pick: c.pod_pick, pod_pick_label: c.pod_pick_label, pod_picked_by: c.pod_picked_by } : null);
+              const _srcs = podConflictOf(c._podEdi || c.pod, _pr);
+              if (!_srcs) {
+                return (_pr && _pr.pod_pick) ? (
+                  <div className="col-span-2 mt-1 text-2xs text-emerald-400 flex items-center gap-1.5 flex-wrap" data-pod-pick="done">
+                    <span>POD 확정 — {_pr.pod_pick === 'edi' ? 'EDI' : '리스트'} 것 {_pr.pod_pick_label || ''}{_pr.pod_picked_by ? ` (${_pr.pod_picked_by})` : ''}</span>
+                    {podCan && (
+                      <button onClick={clearPickPod} disabled={podBusy} data-pod-clear="1"
+                        className="px-1.5 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">다시 고르기</button>
+                    )}
+                  </div>
+                ) : null;
+              }
+              if (!podCan) {
+                return (
+                  <div className="col-span-2 mt-1 px-3 py-2 bg-ink-900 border border-amber-800 rounded-pill text-2xs text-amber-200/90" data-pod-pick="locked">
+                    ⚠ 목적지가 자료마다 다릅니다 — {_srcs.map(x => `${x.name} ${x.label}`).join(' · ')}. 🔒 확정은 수석·검수사만 합니다.
+                  </div>
+                );
+              }
+              return (
+                <div className="col-span-2 mt-1 px-3 py-2 bg-amber-950/50 border border-amber-600 rounded-pill" data-pod-pick="ask">
+                  <div className="text-xs font-black text-amber-200">⚠ 목적지(POD)가 자료마다 다릅니다 — 미확정</div>
+                  <div className="text-xxs text-amber-300/90 mt-0.5 leading-snug">고르면 <b>평택분 대수가 바뀝니다</b>(마감텔리·홈 카드·수석 보드·자료검증이 같이 움직입니다). 맞는 것을 누르세요.</div>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {_srcs.map(x => (
+                      <button key={x.k} onClick={() => pickPod(x)} disabled={podBusy} data-pod-src={x.k}
+                        className="px-2 py-1 rounded bg-ink-800 border border-amber-600 text-2xs mono font-bold text-amber-200 active:bg-amber-900 disabled:opacity-50">
+                        {x.name} <span className="text-dim-100">{x.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {c.npod && <Field label="환적(76)" value={c.npod} mono/>}
             {/* M5.79: LOC+83 환적항 + LOC+97/98 최종 목적지 */}
             {c.tspot && c.tspot !== c.pod && (
@@ -1346,7 +1414,10 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
         {/* 액션 */}
         <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3 flex gap-2">
-          {mode === 'discharge' && (
+          {/*  3.53: 통과화물에는 X-RAY 추가를 안 보인다. 종전엔 `_mode:'transit'` 컨이 빈 섹션을 봐서
+               이 단추가 아예 안 떴는데, `cMode` 를 바로잡자 진짜 통과화물에도 보이게 됐다(재감사 지적 경5).
+               누르면 통과화물이 `xrayList` 에 들어간다 — 되돌릴 수 있지만 애초에 안 보이는 것이 맞다. */}
+          {mode === 'discharge' && canCompleteContainer(c, 'discharge', records, shiftCns) && (
             <button onClick={handleToggleXray}
               className={`px-4 py-3 rounded-pill font-bold text-sm ${
                 isXray ? 'bg-purple-700 text-purple-100' : 'bg-ink-800 text-dim-200 hover:bg-ink-750'

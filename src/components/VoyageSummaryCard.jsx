@@ -37,6 +37,9 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       const merged = { ...e, ...rEnrich, cn };
       if (!merged.pol && r.pol) merged.pol = r.pol;   // EDI에 POL 없을 때만 리스트 보강
       if (!merged.pod && r.pod) merged.pod = r.pod;
+      //  3.53: **검수사·수석이 고른 POD 는 EDI 를 이긴다** — 이 화면의 분모(평택분 대수)가
+      //    마감텔리·검수 리스트와 같아야 한다(검수사 «갯수가 변경되어야만 계획과 맞습니다»).
+      if (r.pod_pick && r.pod) merged.pod = r.pod;
       return merged;
     }).filter(c => {
       if (_shiftSet.has(c.cn)) return false;   // 2.89-06: 시프팅은 자기 칸에서 센다

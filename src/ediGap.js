@@ -4,7 +4,7 @@
 //   `tsport: KRINC` 로 찍힌 **인천 환적분**이라 셰코우 출항 시점 적부도에는 실려 있지 않다.
 //   ⇒ 인천 출항본 EDI가 오면 저절로 맞는다. 검수사가 헤매지 않도록 미르가 이걸 설명한다.
 //   ⚠ 진단만 한다 — 숫자를 고치거나 자료를 만들지 않는다. 리스트가 정본이라는 판단도 하지 않는다.
-import { isPyeongtaekPort } from './utils.js';
+import { isPyeongtaekPort, isPtkResolved } from './utils.js';   // 3.53: POD 확정 반영 한 벌
 
 const S = (x) => String(x || '').trim().toUpperCase();
 // 40ft 계열(4·L·9 시작) / 20ft(2 시작) — utils.isoToLabel 과 같은 앞자리 규칙
@@ -36,7 +36,8 @@ export function diffEdiList(sec, rawText) {
 
   // 평택분만 — 통과화물이 섞이면 숫자가 통째로 틀어진다(지침서 9.2-② 패턴)
   const ePtk = {};
-  for (const k of eKeys) if (isPyeongtaekPort(edi[k]?.pod)) ePtk[k] = edi[k];
+  //  3.53: 확정(pod_pick)을 반영한다 — 미르도 같은 수를 말해야 한다(utils 한 벌).
+  for (const k of eKeys) if (isPtkResolved(edi[k], list[k] || null, 'discharge')) ePtk[k] = edi[k];
   const lPtk = {};
   for (const k of lKeys) if (!list[k]?.pod || isPyeongtaekPort(list[k].pod)) lPtk[k] = list[k];
 

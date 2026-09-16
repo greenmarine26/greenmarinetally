@@ -9,10 +9,13 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
+import { resolvedPod } from './utils.js';   // 3.53: POD 확정 반영 한 벌
 import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso} from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
-import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
+import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
+import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
+import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, myWorkVoyageNow, workGateText } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 
 const firebaseConfig = {
@@ -122,6 +125,21 @@ function assertCanWork(what) {
   //  ★ 호출부 중에는 catch 가 없거나 «저장 실패» 로만 말하는 자리가 많다(감사 실측 25곳). 25곳을 고치는 대신
   //    **던지기 직전에 한 번 알린다** — App 이 받아 띠로 보여 준다(규범 §4-3 «조용히 실패하는 코드 금지»).
   try { window.dispatchEvent(new CustomEvent('viewOnlyBlocked', { detail: { what: what || '작업', message: e.message } })); } catch (x) { /* 브라우저 밖(연막·노드)에서는 알릴 화면이 없다 */ }
+  throw e;
+}
+
+//  ★ 3.53 문지기 — **POD 확정은 검수사·수석만 한다.** (검수사 2026-09-16 «일반 검수사가 아니고 저랑 수석만 가능하게»)
+//    ⚠ 진짜 문지기는 **쓰는 자리**인 여기다. 화면에서 단추를 감추는 것은 보조다 — 3.51 에서
+//      화면만 막았더니 옆길(모달 안쪽·누락 완료)로 들어온 것이 실측됐다(규범 §4-4 «입구에 문지기»).
+//    ⚠ `canOpenChief` 를 쓰지 않는다 — 그것은 «화면을 여는 권한» 이라 개발용 접근자까지 열린다.
+//      되돌릴 수 없고 **대수를 바꾸는** 행위라 `isChief || isOwnerName` 만 통과시킨다(staffList.js 주석이 못박은 바).
+//    ⚠ 조용히 넘기지 않는다 — 던져서 호출부가 사람에게 말하게 한다(`err.chiefOnly` 로 구분).
+function assertChief(what, by) {
+  const who = String(by || getMeToday() || '').trim();
+  if (isChief(who) || isOwnerName(who)) return;
+  const e = new Error(`${what || '이 작업'} 은 수석·검수사만 할 수 있습니다.`);
+  e.chiefOnly = true;
+  try { window.dispatchEvent(new CustomEvent('chiefOnlyBlocked', { detail: { what: what || '작업', message: e.message } })); } catch (x) { /* 브라우저 밖(연막·노드)에서는 알릴 화면이 없다 */ }
   throw e;
 }
 
@@ -382,6 +400,9 @@ const _FIELD_WORK_KEYS = [
   //  ★ 3.47 — 규격 3자 불일치를 **검수사가 실물을 보고 고른 것**. 현장 입력이라 리스트가 못 덮는다.
   //    `iso` 자체는 여기 넣지 않는다 — 고른 적 없는 컨까지 리스트 갱신이 막힌다. 아래에서 조건부로 지킨다.
   'iso_pick', 'iso_pick_label', 'iso_picked_by', 'iso_picked_at',
+  //  ★ 3.53 — POD 확정도 같다. **검수사·수석이 자료를 보고 고른 것**이라 리스트가 못 덮는다.
+  //    `pod` 자체는 여기 넣지 않는다 — 고른 적 없는 컨까지 리스트 갱신이 막힌다. 아래에서 조건부로 지킨다.
+  'pod_pick', 'pod_pick_label', 'pod_picked_by', 'pod_picked_at', 'pod_orig',
   'eseal', 'eseal_orig',            // 엠티 실
   'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',   // 리퍼 온도 확인(1.8)
   'iso403', 'photo', 'photos', 'mkcon', 'memo',
@@ -406,7 +427,7 @@ const _emptyFor = (k, v) => _isEmptyVal(v) || (_ZERO_IS_EMPTY.has(k) && Number(v
 //  3.47: `iso_pick` 도 흔적이다 — **검수사가 실물을 보고 고른 것**이라 자동으로 붙는 값이 아니다.
 //    2차 시뮬 지적 2026-09-14: 이게 빠져 있어 확정한 컨이 빠진 리스트를 올리면 records 에서 사라졌다
 //    (1.69-09 엠티실 사고와 같은 꼴 — 실물을 본 기록이 서류 교체로 없어진다).
-const _FIELD_WORK_SIGNS = ['sl_history', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo', 'iso_pick'];
+const _FIELD_WORK_SIGNS = ['sl_history', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo', 'iso_pick', 'pod_pick'];   // 3.53: pod_pick 도 사람이 고른 흔적이다 — 빠진 리스트를 올려도 그 컨을 안 지운다
 function _hasFieldWork(o) {
   if (!o) return false;
   if (Array.isArray(o.sl_history) && o.sl_history.length) return true;
@@ -491,6 +512,16 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
       if (ov.iso_orig !== undefined) m.iso_orig = ov.iso_orig;
       if (ov.edits !== undefined) m.edits = ov.edits;
       for (const f of ['rf', 'fr', 'ot', 'tk']) if (ov[f] !== undefined) m[f] = ov[f];
+    }
+    //  ★ 3.53 — **POD 도 같은 꼴이다.** 2차 시뮬 지적 2026-09-16 — 위 주석(`_FIELD_WORK_KEYS`)이
+    //    «pod 는 아래에서 조건부로 지킨다» 고 적어 놓고 **그 블록이 없었다.** 그래서 세관 리스트를 다시
+    //    올리면 확정한 `pod` 만 리스트 값으로 되돌아가고 표식(`pod_pick`)은 살아남았다 —
+    //    화면은 «POD 확정 — EDI 것 KRINC» 인데 실제 값은 KRPTK 고, `podConflictOf` 는 확정됐다고
+    //    보아 경고도 안 뜬다. **확정이 모순을 고정시키는 꼴** — 3.47 이 규격에서 고친 그 사고 그대로다.
+    //  ⚠ `pod_orig` 도 짝으로 지킨다. 안 지키면 「다시 고르기」가 돌아갈 곳을 잃는다.
+    if (ov.pod_pick && ov.pod !== undefined) {
+      m.pod = ov.pod;
+      if (ov.pod_orig !== undefined) m.pod_orig = ov.pod_orig;
     }
     // 실번호는 **검수원이 고친 적이 있을 때만** 리스트가 못 덮는다. 그때는 sl·sl_orig 를 짝으로 지킨다
     //   (한쪽만 지키면 `sl ≠ sl_orig` 가 되어 실오류로 오인된다 — 1.8-02 사고).
@@ -684,6 +715,71 @@ export async function fbClearPickIso(voyageKey, mode, cn) {
   await update(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`), cleared);
   const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
   if ((await get(ediRef)).exists()) await update(ediRef, cleared);
+}
+
+//  ★ 3.53 — **POD 확정: 자료가 갈릴 때 사람이 고른 목적지가 EDI 를 이긴다.**
+//    검수사 2026-09-16 *«이건을 앱에서 수정할수 있게 해주세요. 다만 일반 검수사가 아니고 저랑 수석만 가능하게»*
+//    · *«갯수가 변경되어야만 계획과 맞습니다»* — 즉 **표시만 바꾸는 것이 아니라 평택분 대수를 바꾼다**(C급).
+//    실물 KSKM 2617N 양하 `SEGU2430571` — EDI·카토스 `POD KRINC`, 세관리스트 `POD KRPTK`.
+//    자료검증이 «리스트에 EDI 평택과 매칭 안되는 컨 1개 / EDI 168 · 리스트 169» 로 떴고,
+//    확정하면 마감텔리 평택 양하가 **168 → 169**, Final Work `KMT/XMN/F 20` 이 39 → 40 이 된다(관문 4 실측).
+//
+//  ⛔ **EDI 노드의 `pod` 는 덮지 않는다 — 표식만 남긴다.** 그 칸은 «EDI 가 뭐라 했나» 이고 되돌릴 근거다.
+//     `fbPickIso` 가 같은 이유로 그렇게 한다(리퍼를 드라이로 확정했다가 「다시 고르기」하면 EDI 의
+//     rf:true 가 이미 파괴돼 리퍼가 영구 강등된 사고). 화면·서류는 «확정 컨은 records 가 이긴다» 로 본다.
+//  ⚠ `fbUpdateRecordField` 를 쓰지 않는 이유가 그것이다 — 그 함수는 ediContainers 까지 같이 덮는다.
+//  ⚠ `pod_orig` 는 **처음 한 번만** 적는다. 두 번 고르면 원본이 «직전 확정값» 으로 밀려 되돌릴 곳이 사라진다.
+export async function fbPickPod(voyageKey, mode, cn, srcKey, podValue, by) {
+  assertCanWork('POD 확정');
+  assertChief('POD 확정', by);
+  if (!voyageKey || !cn || !srcKey || !podValue) return;
+  const recRef = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const cur = (await get(recRef)).val() || {};
+  const _up = String(podValue).toUpperCase().trim();
+  const pick = {
+    cn,                                   // records 에 없던 컨(EDI 단독)이면 이 쓰기가 행을 만든다 — 컨번호가 없으면 화면이 못 읽는다
+    pod: _up,
+    pod_orig: (cur.pod_orig === undefined || cur.pod_orig === null) ? (cur.pod == null ? '' : cur.pod) : cur.pod_orig,
+    pod_pick: String(srcKey),
+    pod_pick_label: _up,
+    pod_picked_by: by || '',
+    pod_picked_at: Date.now(),
+  };
+  await update(recRef, pick);
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  if ((await get(ediRef)).exists()) {
+    await update(ediRef, {
+      pod_pick: pick.pod_pick, pod_pick_label: pick.pod_pick_label,
+      pod_picked_by: pick.pod_picked_by, pod_picked_at: pick.pod_picked_at,
+    });
+  }
+}
+
+//  확정을 푼다 — 오확정이면 그 컨의 대수가 그 항차 내내 틀린 채로 간다.
+//  ⚠ `iso` 와 달리 **`pod` 도 되돌린다** — 여기는 되돌릴 원래 값(`pod_orig`, 리스트가 적어 온 목적지)을 안다.
+//     되돌리면 자료 불일치 경고가 다시 떠서 검수사가 그 자리에서 다시 고른다.
+export async function fbClearPickPod(voyageKey, mode, cn, by) {
+  assertCanWork('POD 확정 해제');
+  assertChief('POD 확정 해제', by);
+  if (!voyageKey || !cn) return;
+  const recRef = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const cur = (await get(recRef)).val() || {};
+  const cleared = { pod_pick: null, pod_pick_label: null, pod_picked_by: null, pod_picked_at: null };
+  if (cur.pod_orig !== undefined && cur.pod_orig !== null && String(cur.pod_orig).trim() !== '') {
+    cleared.pod = cur.pod_orig;
+    cleared.pod_orig = null;
+  } else if (cur.pod_pick) {
+    //  2차 시뮬 지적 ⑤ — records 에 없던 컨(EDI 단독)을 확정하면 `pod_orig` 가 빈 값이라
+    //    해제해도 고른 값이 그대로 남아 **되돌리기가 반쪽**이었다. 그때는 `pod` 를 지워
+    //    EDI 값이 다시 보이게 한다(리스트가 원래 아무 말도 안 한 컨이다).
+    cleared.pod = null;
+    cleared.pod_orig = null;
+  }
+  await update(recRef, cleared);
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  if ((await get(ediRef)).exists()) {
+    await update(ediRef, { pod_pick: null, pod_pick_label: null, pod_picked_by: null, pod_picked_at: null });
+  }
 }
 
 // X-RAY 봉인 수정 — seal (세관봉인) + eseal (전자봉인) + sealer (봉인자)
@@ -2011,15 +2107,19 @@ export async function fbAddShipStats(imo, stats, voyageKey) {
 function _isPtk(code) {
   return isPyeongtaekPort(code);
 }
-function _ptkCountOfSection(section, mode) {
+export function _ptkCountOfSection(section, mode) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1·8.3 — 양하=POD평택, 선적=POL평택).
   //   이전: POL∨POD → 평택발 타항행/타항발 평택행이 양쪽에 이중 집계.
   if (!section || !section.ediContainers) return 0;
   const set = new Set();
+  //  3.53: **POD 확정을 반영한다**(utils 한 벌) — 선박 통계·보관도 마감텔리와 같은 수를 말해야 한다.
+  const _recs = section.records || {};
   for (const c of Object.values(section.ediContainers)) {
-    const isPtk = mode === 'discharge' ? _isPtk(c.pod)
+    const _rec = _recs[c.cn] || _recs[String(c.cn || '').toUpperCase()] || null;
+    const _pod = resolvedPod(c, _rec);
+    const isPtk = mode === 'discharge' ? _isPtk(_pod)
       : mode === 'loading' ? _isPtk(c.pol)
-      : (_isPtk(c.pol) || _isPtk(c.pod));
+      : (_isPtk(c.pol) || _isPtk(_pod));
     if (isPtk) set.add(c.cn || JSON.stringify(c));
   }
   return set.size;

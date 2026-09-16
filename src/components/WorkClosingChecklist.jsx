@@ -29,6 +29,9 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
       const merged = { ...e, ...rEnrich, cn };
       if (!merged.pol && r.pol) merged.pol = r.pol;
       if (!merged.pod && r.pod) merged.pod = r.pod;
+      //  3.53: **검수사·수석이 고른 POD 는 EDI 를 이긴다** — 이 화면의 분모(평택분 대수)가
+      //    마감텔리·검수 리스트와 같아야 한다(검수사 «갯수가 변경되어야만 계획과 맞습니다»).
+      if (r.pod_pick && r.pod) merged.pod = r.pod;
       return merged;
     }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol)), { ediMap, recMap, mode });   // V7.93-02: 평택분만 (7.1)
     //  ★ 3.37(감사 실측) — 마감 점검은 화면 목록을 안 쓰고 **제 목록을 따로 만든다.**

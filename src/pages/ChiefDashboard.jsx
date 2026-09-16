@@ -5,6 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
+import { resolvedPod } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
@@ -1953,12 +1954,14 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
 }
 
 // 한 섹션(discharge/loading)의 평택분 컨테이너 수 — UI용 (firebase _ptkCountOfSection과 동일 기준)
-function countPtkSection(section, mode) {
+export function countPtkSection(section, mode) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1·8.3 — 양하=POD평택, 선적=POL평택).
   if (!section || !section.ediContainers) return 0;
   const set = new Set();
+  const _recs = section.records || {};   // 3.53: POD 확정 반영 — 수석 보드도 같은 수를 말해야 한다
   for (const c of Object.values(section.ediContainers)) {
-    const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
+    const _rec = _recs[c.cn] || _recs[String(c.cn || '').toUpperCase()] || null;
+    const isPtk = mode === 'discharge' ? isPyeongtaekPort(resolvedPod(c, _rec))
       : mode === 'loading' ? isPyeongtaekPort(c.pol)
       : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
     if (isPtk) set.add(c.cn || JSON.stringify(c));
