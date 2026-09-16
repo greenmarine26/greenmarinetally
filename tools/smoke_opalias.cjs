@@ -102,7 +102,8 @@ for (const f of ['src/tallyReport.js', 'src/workingReport.js', 'src/inspectionLi
   ok(/shipOpMapper/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} 가 같은 매퍼를 지난다`);
 }
 const rpt = fs.readFileSync(path.join(ROOT, 'src/tallyReport.js'), 'utf8');
-ok(/remarks: _op\(r\.op\)/.test(rpt), 'Act. Cntr-Seal 시트도 같은 벌 — 한 워크북에서 코드가 두 벌이면 안 된다');
+ok(/remarks: _op\(pickCarrierOp\(r\.op,/.test(rpt),
+  'Act. Cntr-Seal 시트도 같은 벌 — 한 워크북에서 코드가 두 벌이면 안 된다(3.52: EDI 짝까지 보고 더 자세한 쪽)');
 ok(/fe: s\.fe \|\| '', wt: s\.wt \|\| '', op: _op\(s\.op\)/.test(rpt), 'SHIFTING 시트도 같은 벌');
 
 //  ⑦ 3.51-02 — 목록에 씌우면 실제로 0 이 되는가(문자열이 아니라 동작으로)
@@ -115,6 +116,90 @@ const D = run(`import('${FMT}').then(m=>{`
 ok(D[0] === 0, '씌운 뒤 SOC 는 0대 — 문자열 검사가 아니라 목록을 실제로 돌린 결과다');
 ok(D[1] === 3 && D[2] === 1, 'TJM 1+2=3 · EAS 1 — 남의 코드는 안 건드린다');
 ok(D[3] === 6 && D[4] === '' && D[5] === true, '⛔ 대수가 안 변하고 빈 op·op 없는 줄도 안 깨진다');
+
+//  ⑧ 3.52 — 세관 선사와 EDI 선사 중 «더 자세한 쪽» (규범 §4-4 · 자식을 부모로 뭉개지 않는다)
+//     실측 STMJ 2651E 양하 — 세관은 `DWS 17` 로 뭉치고 EDI 는 `DSL 10 + CSC 7` 로 가른다.
+//     세관이 그냥 이기면 목록에서 CSC 가 사라져 opAliasNeeds 가 «가를 근거 없음» 이 되고,
+//     정본 마감텔리의 «(CSC) TAO» · «(DSL) TAO» 두 줄이 통째로 사라진다(3.31 되돌리기).
+const UTL = url('src/utils.js');
+const E = run(`import('${UTL}').then(m=>{const P=m.pickCarrierOp;console.log(JSON.stringify([`
+  + `P('TJM','SOC','TMPZ'),P('TJM','OLL','TMPZ'),P('DWS','DSL','STMJ'),P('DWS','CSC','STMJ'),`
+  + `P('DWS','DSL','STSE'),P('TJM','DWS','TMPZ'),P('TJM','MAS','TMPZ'),P('SIT','SIT','STMJ'),`
+  + `P('','SOC','TMPZ'),P('TJM','','TMPZ'),P('DWS','SIT','STMJ'),P('TJM','DSL','TMPZ'),`
+  + `P('TJM','SOC',''),P('','','TMPZ')]))})`);
+ok(E[0] === 'TJM' && E[1] === 'TJM', '⛔ SOC·OLL 은 누구의 자식도 아니다 — 세관 선사가 이긴다');
+ok(E[2] === 'DSL' && E[3] === 'CSC', '⛔ EDI 가 자식이면 EDI 를 지킨다 — 세관이 뭉친 DWS 가 DSL·CSC 를 덮지 않는다');
+ok(E[4] === 'DSL', 'STSE 도 같다 — 배별 사전이 자식을 안다');
+ok(E[5] === 'DWS' && E[6] === 'MAS', 'TMPZ 의 DWS·MAS 도 TJM 의 자식이라 살아남는다');
+ok(E[7] === 'SIT', '같은 값이면 그대로');
+ok(E[8] === 'SOC' && E[9] === 'TJM', '한쪽이 비면 있는 쪽 — 세관이 안 온 항차는 종전대로다');
+ok(E[10] === 'DWS' && E[11] === 'TJM', '자식이 아닌 다른 선사면 세관이 기준');
+ok(E[12] === 'TJM' && E[13] === '', '배를 몰라도 세관이 기준 · 둘 다 비면 빈칸');
+
+//  ⑨ 3.52 — **`pickCarrierOp` 도 «한 벌» 이다.** 리스트 op 가 EDI op 를 덮는 자리는 전부 이것을 지나야 한다.
+//     감사 실측(3.52 1차) — `shipOpMapper` 만 세던 ⑥ 때문에, 화면 본류(VoyagePage 의 containersBase)와
+//     대외 인쇄물(PrintHubModal)이 안 지나는 채로 «전부 통과» 가 찍혔다. 세는 대상을 함수로 바꾼다.
+for (const f of ['src/pages/VoyagePage.jsx', 'src/components/SearchPanel.jsx', 'src/components/PrintHubModal.jsx',
+  'src/tallyReport.js', 'src/workingReport.js', 'src/mirCtx.js',
+  'src/pages/ChiefDashboard.jsx' /* 3.52 재감사: 보드 컨 상세가 리스트 op 를 EDI 위에 그냥 펼치고 있었다 */]) {
+  ok(/pickCarrierOp\(/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} 가 pickCarrierOp 를 지난다`);
+}
+{
+  const vp = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');
+  ok((vp.match(/pickCarrierOp\(/g) || []).length >= 2,
+    '⛔ VoyagePage 는 병합 경로가 둘이다 — 한 곳만 고치면 화면 본류로 샌다(감사 실측 17대)');
+  //  ⛔ 수석 보드도 병합 경로가 둘이다(보드 카드 · 컨 상세). 파일에 `shipOpMapper` 가 한 번만 있으면
+  //    컨 상세가 배별 사전을 안 지나 그 화면만 딴 선사를 보인다(재감사 실측 DXQD 250대).
+  const cd = fs.readFileSync(path.join(ROOT, 'src/pages/ChiefDashboard.jsx'), 'utf8');
+  ok((cd.match(/shipOpMapper\(/g) || []).length >= 2,
+    '⛔ ChiefDashboard 는 shipOpMapper 를 두 곳에서 부른다(보드 카드 · 컨 상세)');
+  ok((cd.match(/pickCarrierOp\(/g) || []).length >= 1, 'ChiefDashboard 가 pickCarrierOp 도 지난다');
+}
+
+//  ⑩ 3.52 — 선사 코드표가 **세 벌**이다. 셋이 갈리면 화면·검수리스트·정산 바우처가 다른 선사를 말한다.
+{
+  const grab = (f, name) => {
+    const t = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const i = t.indexOf(`const ${name} = {`);
+    if (i < 0) return null;
+    const body = t.slice(i, t.indexOf('};', i));
+    const m = {};
+    for (const mm of body.matchAll(/'([A-Z0-9]+)':\s*'([A-Z0-9]+)'/g)) m[mm[1]] = mm[2];
+    return m;
+  };
+  const A = grab('src/utils.js', 'CARRIER_MAP_COLOR');
+  const B = grab('src/inspectionList.js', 'CARRIER_MAP');
+  const C = grab('src/workingReport.js', 'CARRIER_MAP');
+  ok(!!A && !!B && !!C, '선사 코드표 셋을 다 찾았다');
+  if (A && B && C) {
+    ok(JSON.stringify(A) === JSON.stringify(B) && JSON.stringify(B) === JSON.stringify(C),
+      '⛔ 선사 코드표 세 벌이 같다(utils · inspectionList · workingReport)',
+      `${Object.keys(A).length}/${Object.keys(B).length}/${Object.keys(C).length}`);
+    ok(A.NOL === undefined, '⛔ NOL 은 공용 코드표에 없다 — 배별 사전이다(공용표에 넣었더니 마감텔리만 NOL 로 남았다)');
+  }
+}
+
+//  ⑪ 3.52 — **`NOL` 은 DXQD 배의 EDI 운송인 칸이다**(보관 실측 2631E 250대·2636E 144대 전량).
+//     검수사 «선사가 NOL로 오는것은 DWS 합니다». SOC 와 같은 꼴이라 **배별 사전**에 적는다.
+//     ⛔ 공용 코드표에 넣으면 마감텔리(`ptkContainers` → `shipOpMapper`)가 그 표를 안 지나
+//       화면은 DWS·Final Work 는 «NOL» 순서미확정 줄로 갈린다(감사 실측 394대).
+{
+  const N = run(`import('${FMT}').then(m=>{const M=(v,l)=>m.shipOpMapper(v,l);console.log(JSON.stringify([`
+    + `M('DXQD',['NOL'])('NOL'),M('DXQD',['NOL','EAS'])('EAS'),M('STMJ',['NOL'])('NOL'),`
+    + `M('TMPZ',['NOL'])('NOL'),M('',['NOL'])('NOL'),m.TALLY_FORMATS.DXQD.opAlias.NOL,`
+    + `m.TALLY_FORMATS.DXQD.ops.indexOf('DWS')]))})`);
+  ok(N[0] === 'DWS', 'DXQD 의 NOL 은 DWS — 그 배 정본 ops 가 DWS·EAS 다');
+  ok(N[1] === 'EAS', '같은 배의 EAS 는 그대로');
+  ok(N[2] === 'NOL' && N[3] === 'NOL' && N[4] === 'NOL',
+    '⛔ 다른 배·모르는 배의 NOL 은 안 바꾼다 — 공용 변환표가 아니다');
+  ok(N[5] === 'DWS' && N[6] === 0, 'DXQD.opAlias.NOL=DWS · DWS 가 정본 순서 첫 줄이라 «순서 미확정» 이 아니다');
+  const UTL2 = url('src/utils.js');
+  const G = run(`import('${UTL2}').then(m=>{const N2=m.normalizeCarrierCode;console.log(JSON.stringify([`
+    + `N2('NOL'),N2('DWIC'),N2('SNKO'),N2('TJMS'),N2('ABCD'),N2('')]))})`);
+  ok(G[0] === 'NOL', '공용 코드표는 NOL 을 안 건드린다(배별 사전이 한다)');
+  ok(G[1] === 'DWS' && G[2] === 'SKR' && G[3] === 'TJM' && G[4] === 'ABC' && G[5] === null,
+    '기존 코드 동작은 그대로 — 이 판이 공용 코드표를 바꾸지 않았다');
+}
 
 console.log(fail ? `✗ ${fail}항 실패` : '✓ 전부 통과');
 process.exit(fail ? 1 : 0);

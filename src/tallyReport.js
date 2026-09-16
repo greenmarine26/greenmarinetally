@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -78,7 +78,8 @@ export function ptkContainers(voyage, mode) {
     if (r.rfAct != null && String(r.rfAct).trim() !== '') out.rfAct = r.rfAct;
     // 1.8-04: 리퍼드라이·제작컨 표시는 records 에만 있다(수집기 패치·검수원 입력). 텔리가
     //   RF 목록에서 이 둘을 빼려면 여기서 들고 가야 한다 — 안 그러면 EDI에 없어 항상 false 다.
-    if (r.op != null && String(r.op).trim() !== '') out.op = _op(r.op);
+    //  3.52: 세관 «선사부호» 가 선사 기준이되 **자식을 부모로 뭉개지 않는다**(utils 한 벌 — pickCarrierOp).
+    if (r.op != null && String(r.op).trim() !== '') out.op = _op(pickCarrierOp(r.op, c.op, _vsl));
     if (r.rfdry === true) out.rfdry = true;
     if (r.mkcon === true) out.mkcon = true;
     // TallyOne 1.55: **실적 자리(bay_actual/row_actual/tier_actual)를 들고 온다.**
@@ -214,6 +215,11 @@ export function buildSealList(voyage, mode) {
   //    안 그러면 같은 워크북 안에서 Final Work 는 «DSL·WDG», 이 시트는 «DWS·WDF» 가 된다(감사 실측).
   const _op = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(),
     [...recs.map((r) => r && r.op), ...vals(sect(voyage, mode).ediContainers).map((c) => c && c.op)]);
+  //  3.52: 이 시트는 records 만 돈다 — 세관이 뭉쳐 준 op 를 그대로 쓰면 Final Work 는 «(CSC)» 인데
+  //    여기는 «DSL» 이 되어 **한 워크북 안에서 선사가 두 벌**이 된다(위 3.31 주석이 금지한 바로 그것).
+  //    그래서 EDI 의 짝을 찾아 «더 자세한 쪽» 을 고른다(utils 한 벌).
+  const _ediMap = sect(voyage, mode).ediContainers || {};
+  const _vslS = String(voyage?.info?.vsl || '').toUpperCase();
   const out = [];
   for (const r of recs) {
     const orig = String(r.sl_orig || '').trim();
@@ -223,7 +229,7 @@ export function buildSealList(voyage, mode) {
       out.push({
         cn: r.cn, manifestSeal: orig || act, size: tallySizeCol(r) === '20' ? "20'" : "40'",
         actualSeal: (orig && act && orig !== act) ? act : '',
-        reseal, remarks: _op(r.op),
+        reseal, remarks: _op(pickCarrierOp(r.op, _ediMap[r.cn] && _ediMap[r.cn].op, _vslS)),
         fe: r.fe === 'E' ? 'EMPTY' : 'FULL',
       });
     }

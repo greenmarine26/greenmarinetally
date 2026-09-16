@@ -30,6 +30,11 @@
 //                 (컨 접두 `PKEU` 는 선사 접두가 아니라 오히려 화주 소유를 뒷받침한다).
 //            ② 이 사전의 TMPZ.ops 에 SOC 가 없다(실물 마감텔리 233건 분석분)
 //            ③ 실제로 Final Work 맨 뒤에 «SOC / SHA / F — HC 5» 라는 없어야 할 줄이 서 있었다.
+//   ⚠ **3.52 부터 이것은 폴백이다.** 검수사 확정 «SOC가 있는 선박은 선사기준을 세관리스트로 합니다» —
+//     세관리스트 «선사부호» 칸이 선사 기준이고(파서 `parseCustomsSheet`), 그 자료가 오면 SOC 는 애초에
+//     나오지 않는다(실측 TMPZ 2027E 세관 — TJMS 284·EASK 44, SOC 0건). 이 별칭은 **세관리스트가 아직
+//     안 온 항차**에서만 일한다. 배마다 «그 코드는 이 선사» 를 손으로 박는 방식은 늘리지 마라 —
+//     EDI 선사 칸에는 `OLL`(2026E 1대) 같은 것도 온다. 늘려야 하면 세관 쪽을 보라.
 //   `opAliasNeeds` 는 걸지 않는다 — DWS→DSL 은 «둘 중 어느 쪽인지 가를 근거»가 필요했지만,
 //   SOC 는 애초에 선사가 아니라서 가를 것이 없다(WDF→WDG 와 같은 계열의 순수한 이름 바꿈).
 //   ⚠ 다른 배에서 SOC 가 나온 적은 아직 없다 — 2026-09-15 기준 RTDB `voyages` 에 살아 있는 전 항차의
@@ -37,13 +42,20 @@
 //     ⇒ 공용 변환표가 아니라 **TMPZ 배별**로 둔다. 다른 배에서 나오면 그 배 사전에 따로 적는다.
 //   ⚠ 이 별칭은 **사본에만** 씌운다 — 보관소 `ediContainers` 와 선적 EDI 내보내기(`NAD+CA+`)는 원문 SOC 그대로다
 //     (원문을 고치면 수집기가 다음 사이클에 되돌린다. 화면·표만 그 배 정본 코드로 읽는 것이 맞다).
+// ─── 3.52 (검수사 2026-09-15 «선사가 NOL로 오는것은 DWS 합니다» · 자리는 «카고플랜 선사별 별첨») ───
+//   **DXQD 의 양하 EDI 는 운송인 칸을 `NOL` 로 보낸다** — 보관 실측 2631E 250대·2636E 144대 **전량**이고
+//   그 배 정본 ops 는 `DWS`·`EAS` 다. SOC 와 같은 꼴이라 처방도 같다 — **배별 사전**에 적는다.
+//   ⛔ 3자 공용 코드표(utils `CARRIER_MAP_COLOR` 등)에 넣지 마라. 한 번 그렇게 했다가
+//     **마감텔리만 딴소리**를 했다 — `tallyReport.ptkContainers` 는 이 사전만 지나고 공용 코드표를 안 부른다.
+//     그래서 화면·검수리스트·바우처는 DWS 인데 Final Work 에는 `NOL` 이 «순서 미확정» 줄로 맨 뒤에 섰다
+//     (3.51-02 가 SOC 로 고친 바로 그 증상 · 감사 실측 394대). 배별 사전은 네 경로가 다 지난다.
 // 시트 변형: damage = 'each'(DAMAGE-EACH) | 'report'(DAMAGE REPORT) | null
 //            shifting = SHIFTING 시트 포함 여부(쉬프팅 있을 때만 렌더)
 //            performance = Performance 시트 여부
 export const TALLY_FORMATS = {
   ATPR: { ops: ['SKR'], ports: ['DLC', 'WEI'], damage: null, shifting: false, performance: true },
   PCSZ: { ops: ['SKR', 'EAS'], ports: ['SHA'], damage: null, shifting: false, performance: true },
-  DXQD: { ops: ['DWS', 'EAS'], ports: ['DLC'], damage: 'report', shifting: false, performance: true },
+  DXQD: { ops: ['DWS', 'EAS'], opAlias: { NOL: 'DWS' }, ports: ['DLC'], damage: 'report', shifting: false, performance: true },
   TMPZ: { ops: ['TJM', 'EAS'], subOps: { TJM: ['DWS', 'MAS'] }, opAlias: { SOC: 'TJM' }, ports: ['NGB', 'SHA'], damage: 'report', shifting: false, performance: true },
   STSE: { ops: ['SIT', 'DWS', 'TJM', 'EAS', 'WDG', 'SKR'], subOps: { DWS: ['CSC', 'DSL'] },
          opAlias: { DWS: 'DSL', WDF: 'WDG' }, opAliasNeeds: { DWS: 'CSC' }, ports: ['TAO', 'SHD'], damage: 'each', shifting: true, performance: false },

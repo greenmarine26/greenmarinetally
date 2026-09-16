@@ -7,7 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
-import { formatBerth, isPyeongtaekPort, isReeferIso} from './utils.js';
+import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 const PORT_MAP = {
   // 표준 5자
@@ -250,6 +250,10 @@ function buildBuckets(voyage, mode = 'settlement') {
           for (const [k, v] of Object.entries(recC)) {
             if ((c[k] === null || c[k] === undefined || c[k] === '') && v) c[k] = v;
           }
+          //  3.52: 선사만은 «빈 칸 채우기» 가 아니라 «더 자세한 쪽» 이다(utils 한 벌).
+          //    이 문서는 EDI 를 먼저 깔고 빈 칸만 채워서, EDI 에 `SOC`·`OLL` 처럼 선사가 아닌 값이
+          //    차 있으면 세관 선사부호가 **영영 안 들어왔다**(감사 실측 — TMPZ 2026E 양하 OLL 1대).
+          if (recC.op || ediC.op) c.op = pickCarrierOp(recC.op, ediC.op, voyage?.info?.vsl);
         } else {
           // EDI에 없는 컨테이너 = LIST 단독
           c = { ...recC };

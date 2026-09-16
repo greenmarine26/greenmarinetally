@@ -48,7 +48,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec } from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -532,7 +532,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //    **모르는 코드로 아는 것을 덮는 것**이 잘못이다. M6.21 의 «리스트 우선»은 살리되,
         //    EDI 가 리퍼라고 말하는데 리스트 규격이 리퍼가 아니면 EDI 를 지킨다.
         if (r.iso && !(isReeferIso(merged[r.cn].iso) && !isReeferIso(r.iso) && r.rf !== true)) safeR.iso = r.iso;
-        if (r.op)  safeR.op  = r.op;
+        //  3.52: 세관 «선사부호» 가 선사 기준이지만 **자식을 부모로 뭉개지 않는다** — utils 한 벌.
+        if (r.op)  safeR.op  = pickCarrierOp(r.op, merged[r.cn] && merged[r.cn].op, voyage?.info?.vsl);
         // M6.94.31: EDI에 pol/pod 있으면 리스트가 덮지 못함 (EDI = 단일 진실).
         //   원인: 엠티 선적 엑셀(MCAT EMPTY)은 헤더가 없어 fallback 파서가 목적지(CNDLC 등)를
         //   pol 자리에 넣음 → 리스트 pol=CNDLC가 EDI pol=KRPTK를 덮어 카고플랜에서 285대 누락.
@@ -856,6 +857,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //      양하 탭 리스트·미르(이 경로)는 무게 칸이 통째로 비어 있었다(실선 확인).
           //    ⚠ 0kg 컨테이너는 없다 — 타레만 2톤이다. 0 은 언제나 «값 없음»이지 «0킬로»가 아니다.
           if (k === 'wt') { const _w = parseListWeightKg(v); if (_w > 0) safeR.wt = _w; return; }   // 톤 보정 후 리스트 값 채택
+          //  3.52: 선사는 «더 자세한 쪽» — 세관이 뭉쳐 준 값이 EDI 의 자식(DSL·CSC·MAS)을 덮지 않는다(utils 한 벌).
+          //    ⚠ 이 목록이 화면 본류다(컨 목록·카고플랜 색·베이플랜 라벨·CSV). 536행만 고치면 여기로 새 나간다(감사 실측 17대).
+          if (k === 'op') { safeR.op = pickCarrierOp(v, ediBase && ediBase.op, voyage?.info?.vsl); return; }
           safeR[k] = v;
         } else {
           // EDI에 없는 컨번호 → 리스트만 있는 항목 (참고용으로 허용)

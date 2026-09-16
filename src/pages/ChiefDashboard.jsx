@@ -5,7 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList} from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -870,7 +870,20 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {boardDetail && (() => {
         const vy = voyages?.[boardDetail.key]; const sec = vy?.[boardDetail.mode] || {};
         const ediMap = sec.ediContainers || {}, recMap = sec.records || {}, compMap = sec.completed || {};
-        const all = [...new Set([...Object.keys(ediMap), ...Object.keys(recMap)])].map(cn => ({ ...(ediMap[cn] || {}), ...Object.fromEntries(Object.entries(recMap[cn] || {}).filter(([, vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null }));
+        //  3.52: 선사는 «더 자세한 쪽» — 여기도 리스트 op 를 EDI 위에 그냥 펼치던 자리다(utils 한 벌).
+        //    안 지나면 수석 보드 컨 상세만 세관이 뭉친 값을 보여 마감텔리와 갈린다(감사 실측 22대).
+        const _vslB = String(vy?.info?.vsl || '').toUpperCase();
+        const all = [...new Set([...Object.keys(ediMap), ...Object.keys(recMap)])].map(cn => {
+          const _e = ediMap[cn] || {}, _r = recMap[cn] || {};
+          const _m = { ..._e, ...Object.fromEntries(Object.entries(_r).filter(([, vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
+          if (_r.op || _e.op) _m.op = pickCarrierOp(_r.op, _e.op, _vslB);
+          return _m;
+        });
+        //  3.52: 배별 선사 별칭도 지난다 — `pickCarrierOp` 만 지나면 `opAlias`(DXQD 의 NOL→DWS,
+        //    STSE·STMJ 의 WDF→WDG)가 이 화면에만 안 걸려 **수석 보드 컨 상세만 딴 선사**를 보인다
+        //    (재감사 실측 — DXQD 2631E 250대가 여기만 NOL, 나머지 네 경로는 DWS).
+        const _spB2 = shipOpMapper(_vslB, all.map((c) => c && c.op));
+        for (const c of all) { if (!c || !c.op) continue; const o = _spB2(c.op); if (o !== c.op) c.op = o; }
         const dc = all.find(x => x.cn === boardDetail.c?.cn) || boardDetail.c;
         if (!dc?.cn) return null;
         return (

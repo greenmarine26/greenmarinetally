@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
@@ -101,6 +101,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       //    규칙은 그대로다(1.23 «무게는 리스트가 기준») — 리스트에 **값이 있을 때** 하는 말이다.
       //    0kg 컨테이너는 없다(타레만 2톤). 톤 보정도 VoyagePage 와 같은 벌로 건다.
       if (k === 'wt') { const _w = parseListWeightKg(v); if (_w > 0) merged.wt = _w; return; }
+      //  3.52: 선사는 «더 자세한 쪽»(utils 한 벌). 여기서 나오는 것이 **대외 문서**다 —
+      //    검수 리스트·VGM·카고플랜 별첨1(선사별)·베이 상세. 위 100행 주석이 경고한 «세 번째 병합 경로» 가 이것이다.
+      if (k === 'op') { merged.op = pickCarrierOp(v, e && e.op, voyage?.info?.vsl); return; }
       merged[k] = v;
     });
     // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여

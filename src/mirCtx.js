@@ -4,7 +4,7 @@
    그래서 항차 화면이 재료를 **여기에 놓고**(publishMirCtx) 미르가 물을 때 **읽는다**(readMirCtx). 화면이 닫히면 비운다.
    ⚠ 전 항차 컨 펼치기(flattenVoyages)는 종전 GlobalSearchPage 의 useMemo 본문을 그대로 옮긴 것이다 — 두 곳이 각자 펼치면
      «홈은 이 컨을 알고 미르는 모르는» 일이 생긴다(§4-4). 홈도 이 함수를 부른다. */
-import { isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow } from './utils.js';
+import { isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp } from './utils.js';
 import { terminalWorkFor } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 
@@ -34,7 +34,8 @@ export function flattenVoyages(voyages, terminalWork) {
           const x = r[k];
           if (x !== '' && x !== 0 && x !== null && x !== undefined && !(Array.isArray(x) && x.length === 0)) safeR[k] = x;
         });
-        if (safeR.op) safeR.op = _spOpG(safeR.op);
+        //  3.52: 홈·미르도 항차 화면과 같은 선사를 본다 — «더 자세한 쪽»(utils 한 벌).
+        if (safeR.op) safeR.op = _spOpG(pickCarrierOp(safeR.op, merged[r.cn] && merged[r.cn].op, v.info?.vsl));
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
       });
       Object.values(merged).forEach((c) => {

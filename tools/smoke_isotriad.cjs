@@ -140,6 +140,10 @@ const mergeInto = (store, recs) => recs.forEach(r => {
     ['22TN', '20TK', '탱크'],
     ['40HC', '40HC', '사람 표기(그룹꼴 아님)'],
     ['20HC', '20HC', '사람 표기(그룹꼴 아님)'],
+    //  3.52 — 세관이 40ft 하이큐브를 `42HQ` 로도 적는다(TMPZ 2027E 실측 129대(파일 원본 148행)). `HQ` 는 종류군이 아니라
+    //    구조 풀이가 못 잡고 빈칸을 냈고, 그 빈칸을 다른 값이 메워 **같은 원문이 두 규격으로 갈려 있었다**
+    //    (RTDB 실측 129대 — 45G1 90 · 40HQ 39. 세관 파일 원본은 148행이지만 앱에 남은 것은 129대다).
+    ['42HQ', '40HC', '세관 40ft 하이큐브 표기 — 빈칸이면 진단이 조용히 통과한다'],
   ];
   const probeGrid = [HEAD].concat(PROBE.map((x, i) => ROW(i + 1, `PRBU000000${i}`, x[0])));
   const probed = (await U.parseListExcel(sheetBuf(probeGrid, 'sheet1'))).records || [];
@@ -271,6 +275,39 @@ const mergeInto = (store, recs) => recs.forEach(r => {
     ok(`${code} 는 ${want} 하나만 켠다`, got[want] === true && Object.keys(got).filter(k => got[k]).length === 1,
        JSON.stringify(got));
   });
+
+  // ── ⑪ 3.52: 세관 «선사부호» 가 선사 기준인가 (§4-4 — 데이터 들어오는 자리) ──
+  //     검수사 확정 2026-09-15 «SOC가 있는 선박은 선사기준을 세관리스트로 합니다».
+  //     EDI 선사 칸에는 선사가 아닌 값이 온다 — 실측 `SOC`(화주 소유 컨 표식) · `OLL`.
+  //     ⚠ 소스 grep 이 아니라 **파서를 돌려** op 가 실제로 채워지는지 잰다.
+  {
+    //  ⚠ 픽스처 머리행에 이미 `선사부호` 가 있을 수 있다 — 중복 칸을 만들지 않게 뺀 뒤 붙인다.
+    const HEAD_NOOP = HEAD.filter((h) => h !== '선사부호' && h !== '상이내역유무' && h !== '상이내역코드');
+    const HEAD2 = HEAD_NOOP.concat(['상이내역유무', '상이내역코드', '선사부호']);
+    const ROW2 = (no, cn, code) => HEAD2.map((h) => (
+      h === 'No.' ? String(no) : h === '컨테이너번호' ? cn : h === '규격' ? '22GP'
+      : h === 'B/L TYPE' ? 'S' : h === '최종항' ? 'KRPTK' : h === '적재항' ? 'CNSHA'
+      : h === '선사부호' ? code : ''));
+    //  ⚠ `NOL`→DWS 는 **배별 사전**(tallyFormats.DXQD.opAlias)이지 이 공용표가 아니다 — smoke_opalias ⑩ 이 잰다.
+    const CASES = [['TJMS', 'TJM'], ['EASK', 'EAS'], ['DWIC', 'DWS'], ['SNKO', 'SKR'], ['EAS', 'EAS'], ['', ''], ['NOL', 'NOL']];
+    const g2 = [HEAD2].concat(CASES.map((c, i) => ROW2(i + 1, `OPRU000000${i}`, c[0])));
+    const r2 = (await U.parseListExcel(sheetBuf(g2, 'sheet1'))).records || [];
+    ok('선사부호 칸이 있으면 세관 레코드가 그 행 수만큼 나온다', r2.length === CASES.length, `${r2.length}행`);
+    CASES.forEach(([code, want], i) => {
+      const r = r2.find(x => x.cn === `OPRU000000${i}`);
+      ok(`세관 선사부호 ${code || '(빈칸)'} → ${want || '(빈칸)'}`, !!r && String(r.op || '') === want,
+         r ? `op=${JSON.stringify(r.op)}` : '레코드 없음');
+    });
+    //  ⛔ 선사부호 칸이 없는 옛 양식은 종전대로 빈칸이어야 한다 — 없는 것을 지어내지 않는다.
+    //  ⛔ **칸 자체가 없는** 옛 양식은 종전대로 빈칸이어야 한다(ci.op < 0 경로 — 값이 빈 것과 다르다).
+    const ROW_NOOP = (no, cn) => HEAD_NOOP.map((h) => (
+      h === 'No.' ? String(no) : h === '컨테이너번호' ? cn : h === '규격' ? '22GP'
+      : h === 'B/L TYPE' ? 'S' : h === '최종항' ? 'KRPTK' : h === '적재항' ? 'CNSHA' : ''));
+    const noOp = (await U.parseListExcel(sheetBuf([HEAD_NOOP, ROW_NOOP(1, 'NOPU0000001')], 'sheet1'))).records || [];
+    ok('선사부호 «칸이 없는» 옛 양식은 op 가 빈칸(지어내지 않는다)',
+       !HEAD_NOOP.includes('선사부호') && noOp.length === 1 && !noOp[0].op,
+       noOp[0] ? `op=${JSON.stringify(noOp[0].op)}` : '레코드 없음');
+  }
 
   console.log(`\n규격 3자 대조 연막검사 ${n - bad}/${n} 통과`);
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }
