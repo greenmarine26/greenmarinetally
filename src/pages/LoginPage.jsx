@@ -396,8 +396,17 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const chosen = choiceVoyage ? infoOf(choiceVoyage) : null;
     const start = () => { if (!choiceVoyage) return; onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip }); };
     const back = () => { if (choiceFor && onCancelChoice) { onCancelChoice(); return; } setChoiceName(''); };
+    //  ★ 3.52-02 — **이 판은 스스로 굴러야 한다.** (검수사 2026-09-16 «작업자를 선택하고 선박을 선택하고
+    //    진입을 할려고 하는데 화면 스크롤이 안돼 진입 지점을 클릭하지 못합니다» · «폰은 되는듯 한데 컴이 안됨»)
+    //    바깥 틀(App.jsx 508행)은 PC 에서 `lg:h-screen lg:overflow-hidden` 이다 — 2.64-01 검수사 확정
+    //    («페이지 스크롤이 생기면 불편합니다 맞춤처럼 한화면에 보였으면»)이라 겉은 안 구른다.
+    //    그 대신 **안쪽 판이 제 안에서 구르게** 해 두는 것이 그 설계의 짝인데, 3.50 이 새로 만든
+    //    이 선택 판에는 그 짝이 안 붙어 있었다. 선박이 16척이 되자 목록이 화면보다 길어져
+    //    맨 아래 «작업 시작» 단추가 잘려 나가고 손이 닿지 않았다(폰은 겉이 굴러서 멀쩡했다).
+    //  ⚠ `lg:flex-1 lg:min-h-0` 이 있어야 `overflow-y-auto` 가 산다 — 바깥이 `lg:flex lg:flex-col` 이라
+    //    높이를 안 주면 내용만큼 늘어나 다시 잘린다. 폰(lg 미만)은 종전 그대로 겉이 구른다.
     return (
-      <div className="min-h-screen bg-ink-950 text-dim-100 px-3 py-4" data-login-choice={choiceStage}>
+      <div className="min-h-screen bg-ink-950 text-dim-100 px-3 py-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto" data-login-choice={choiceStage}>
         <div className="max-w-lg mx-auto space-y-3">
           <div className="flex items-center gap-2">
             <button onClick={back} className="px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-dim-200 text-xs font-bold flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5"/>{choiceFor && onCancelChoice ? '그대로 두기' : '이름 다시 고르기'}</button>

@@ -339,6 +339,21 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   fg.setActiveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '1호기' });
   console.log('  ⑥-D 자동 반영 — 예약 데미지 승격은 조회만이어도 막지 않는다 ✔');
   console.log('  ⑥-B 작업자 — 보고·완료가 종전대로 써진다 ✔');
+  //  ★ ⑦ (3.52-02) **선택 판은 제 안에서 굴러야 한다** — 검수사 2026-09-16
+  //    «작업자를 선택하고 선박을 선택하고 진입을 할려고 하는데 화면 스크롤이 안돼 진입 지점을 클릭하지 못합니다»
+  //    «폰은 되는듯 한데 컴이 안됨». 바깥 틀(App.jsx)이 PC 에서 `lg:h-screen lg:overflow-hidden` 이라
+  //    이 판이 스스로 안 구르면 «작업 시작» 단추가 잘려 **손이 닿지 않는다**(선박 15척이면 단추가 화면 밖 648px).
+  //  ⚠ jsdom 은 높이를 안 재서 «잘렸는지» 는 못 본다 — 그래서 **클래스로** 잰다. 진짜 잣대는
+  //    `tools/lab_loginscroll.cjs`(실 브라우저 휠 시험)이고, 이 항은 그 수정이 지워지는 것을 막는 문지기다.
+  {
+    const panel = doc.querySelector('[data-login-choice]');
+    if (!panel) fail('⑦ 선택 판이 없다');
+    const cls = panel.className || '';
+    for (const need of ['lg:overflow-y-auto', 'lg:flex-1', 'lg:min-h-0']) {
+      if (!cls.includes(need)) fail(`⑦ 선택 판에 «${need}» 가 없다 — PC 에서 판이 안 굴러 «작업 시작» 단추에 손이 안 닿는다: ${cls}`);
+    }
+    console.log('  ⑦ 선택 판이 PC 에서 제 안에서 구른다(lg:flex-1 · lg:min-h-0 · lg:overflow-y-auto) ✔');
+  }
   noErr();
   console.log('✅ 작업자/조회만 선택 연막검사 PASS');
   process.exit(0);

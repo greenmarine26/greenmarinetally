@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.52-01';
-const NOTE = '나갔다 되돌아온 화물의 양하 출발지가 평택으로 찍히던 것을 고쳤습니다. 양하 출발지는 양하 직전 마지막 항구입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.52-02';
+const NOTE = 'PC 에서 작업 선박을 고를 때 화면이 안 굴러 작업 시작 단추를 못 누르던 것을 고쳤습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
