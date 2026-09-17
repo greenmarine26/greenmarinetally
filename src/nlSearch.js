@@ -613,7 +613,7 @@ export function parseNaturalQuery(text) {
   {
     const RE_SCREEN  = /(화면|밝기|스크린|눈이?\s*아프|눈\s*피로|침침|캄캄)/;
     const RE_UP      = /(밝게|밝혀|환하게|더\s*밝|밝은\s*쪽)/;
-    const RE_DOWN    = /(어둡게|어둡혀|눈부시|너무\s*밝|원래대로|기본으로)/;
+    const RE_DOWN    = /(어둡게|어둡혀|눈부(시|셔|신)|너무\s*밝|원래대로|기본으로)/;
     const RE_MAX     = /(제일|가장|최대|끝까지)/;
     const RE_MIN     = /(제일|가장|최소|원래대로|기본)/;
     const RE_SOUND   = /(소리|볼륨|음량|목소리|조용히|말\s*하지\s*마)/;
@@ -624,7 +624,18 @@ export function parseNaturalQuery(text) {
     const RE_WORK = /\d{4}|컨테이너|리퍼|엑스레이|x-?ray|베이|양하|선적|트윈|씰|실번호|봉인|어디서\s*(하|보)|어떻게\s*(하|해)/i;
     const hasScreen = RE_SCREEN.test(t);
     const hasSound = RE_SOUND.test(t);
-    if (RE_WORK.test(t) && !hasScreen && !hasSound) {
+    /*  ★ 2.41-01: «화면» 이라는 낱말 하나로는 조작이 아니다 — **밝기를 어떻게 하라는 의도**가 있어야 한다.
+        2.40 은 업무 게이트를 hasScreen 으로 껐다. 그래서 「베이 화면 어디야」·「홈 화면으로 어떻게 가」·
+        「수석 화면 볼 수 있어?」 같은 **매뉴얼 질문이 전부 밝기 되묻기로 덮였다.**
+        덮인다는 말 그대로다 — GlobalSearchPage 의 localAnswer 는 devAnswer 가 먼저라 매뉴얼 답을 가리고,
+        _mirDontKnow 도 deviceCmd 가 있으면 false 라 **무응답 신고조차 안 나간다**(조용히 틀린 답 = 3금지-③).
+        ⇒ 의도어(밝게/어둡게/호소)를 조작의 입장권으로 삼는다. */
+    const RE_BR_CRY = /(어두운|어두워|어둡다|어둡네|어둡습|침침|캄캄|안\s*보여|눈부(시|셔|신))/;
+    //  ⚠ 활용형까지 받는다 — `아프` 로만 잡으면 **«눈이 아파»·«눈이 아픈데» 를 놓친다**(2.40 부터 있던 구멍).
+    //    2.40 은 hasScreen 폴백이 우연히 「화면 때문에 눈이 아파」를 받아 줘 가려져 있었다.
+    const RE_EYE    = /(눈이?\s*(아프|아파|아퍼|아픈)|눈이?\s*(피로|시려|시린|뻑뻑))/;
+    const brIntent  = RE_UP.test(t) || RE_DOWN.test(t) || RE_BR_CRY.test(t) || RE_EYE.test(t);
+    if (RE_WORK.test(t) && !brIntent && !hasSound) {
       /* 업무 문맥 — 조작으로 보지 않는다 */
     } else if (hasSound) {
       if (RE_SND_OFF.test(t)) result.deviceCmd = { kind: 'volume', to: 'off' };
@@ -634,13 +645,14 @@ export function parseNaturalQuery(text) {
       result.deviceCmd = RE_MAX.test(t) ? { kind: 'bright', to: 4 } : { kind: 'bright', dir: +1 };
     } else if (RE_DOWN.test(t) && (hasScreen || !RE_WORK.test(t))) {
       result.deviceCmd = RE_MIN.test(t) ? { kind: 'bright', to: 1 } : { kind: 'bright', dir: -1 };
-    } else if (hasScreen && /(어두운|어두워|어둡다|어둡네|어둡습|침침|캄캄|안\s*보여)/.test(t)) {
+    } else if (hasScreen && RE_BR_CRY.test(t)) {
       //  검수사 원문이 이 형태다 — *«미르야 화면이 어두운데?»*. 되묻지 말고 한 단계 올린다.
       //  ⚠ 2.40-01: 여기를 «어두» 로 넓게 잡으면 안 된다 — 검수사가 「화면 어둡게」를 **치는 도중**
       //    「화면 어두」 에서 걸려 **반대로 밝아진다.** 서술형(어두운·어두워)만 받고 명령형은 위 RE_DOWN 이 받는다.
       result.deviceCmd = { kind: 'bright', dir: +1 };
-    } else if (hasScreen || /(눈이?\s*아프|눈\s*피로)/.test(t)) {
+    } else if (RE_EYE.test(t)) {
       //  ⚠ «눈이 아프다»는 **어두워서인지 눈부셔서인지 모른다.** 지어내지 말고 되묻는다(2-0-D).
+      //  ⛔ 2.41-01: 여기에 hasScreen 을 다시 넣지 마라 — 「화면」이 든 매뉴얼 질문이 통째로 여기로 샌다.
       result.deviceCmd = { kind: 'bright', ask: true };
     }
   }
