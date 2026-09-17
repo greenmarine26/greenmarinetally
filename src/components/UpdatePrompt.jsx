@@ -32,6 +32,8 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
   const [hidden, setHidden] = useState(false);
   const [note, setNote] = useState({ v: '', note: '' });   // 2.99-03: 새 판 번호·변경 내용(검수사 «업데이트 내용을 모릅니다»)
   const regRef = useRef(null);
+  //  3.53-05: «같은 판» 워커를 조용히 활성화할 때 controllerchange 새로고침을 한 번 건너뛴다(화면은 이미 그 판이다).
+  const silentRef = useRef(false);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -53,11 +55,18 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
       const v = await askVersion(sw);
       if (v && v === APP_VERSION) {
         // 같은 판이다 — 배너 대신 조용히 넘겨 대기 상태만 푼다.
-        try { sw.postMessage({ type: 'SKIP_WAITING' }); } catch { /* 무시 */ }
+        //  3.53-05: 이때 새로고침까지 하면 검수사 눈에는 «앱이 혼자 다시 떴다» 로 보인다(09-17 밤 23:16 실측).
+        //    화면은 이미 이 판(네트워크 우선이라 새로고침 때 새 번들을 받았다)이니 워커만 바꾸고 화면은 둔다.
+        silentRef.current = true;
+        //  감사 권고 — 메시지가 버려지거나 그 워커가 활성화 전에 폐기되면 플래그가 남아 다음 진짜 새로고침을 삼킨다. 8초 뒤 스스로 푼다.
+        setTimeout(() => { silentRef.current = false; }, 8000);
+        try { sw.postMessage({ type: 'SKIP_WAITING' }); } catch { silentRef.current = false; }
         setWaiting(null);
         return;
       }
       setWaiting(sw);
+      //  3.53-05: 이 워커가 (더 새 워커에 밀려) 폐기되면 배너도 걷는다 — 등록 시점의 reg.waiting 은 statechange 를 안 달아 두었다.
+      try { sw.addEventListener('statechange', () => { if (sw.state === 'redundant' || sw.state === 'activated') setWaiting(w => (w === sw ? null : w)); }); } catch { /* 무시 */ }
       setNote({ v, note: askVersion._note || '' });   // 2.99-03: 배너에 «무엇이 바뀌었는지»
       setHidden(false);
     };
@@ -101,9 +110,14 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
           if (sv && reg.waiting) {
             const wv = await askVersion(reg.waiting);
             if (wv && wv !== sv) {
-              console.log('[sw] 대기 워커가 낡음', wv, '→ 서버', sv, '— 갈아 끼운다');
-              try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) { /* 아래 update 로 재시도 */ }
-              setWaiting(null);
+              //  ★ 3.53-05 (검수사 2026-09-17 «컴에 업데이트 메시지 없이 3.53-04가 되어 있고 폰도 앱을 켜니 바로 그버전»):
+              //    종전엔 여기서 낡은 대기 워커(3.53-03)에 SKIP_WAITING 을 보내 **활성화 → controllerchange → 새로고침**이 났고,
+              //    새로고침은 네트워크 우선이라 화면이 곧장 서버 최신 판(3.53-04)이 됐다. 그다음 같은 판 워커는 «조용히 넘김»으로
+              //    또 새로고침 — 배너는 한 번도 안 뜨고 앱만 두 번 혼자 다시 떴다(활동 로그 23:07·23:16 로그인).
+              //    검수사 확정(08-09) «현장 작업 중에 앱이 제멋대로 새 판으로 바뀌면 안 된다» 에도 어긋난다.
+              //    ⇒ 낡은 대기 워커는 건드리지 않는다. 아래 reg.update() 가 더 새 워커를 받으면 브라우저가 낡은 것을 폐기하고
+              //      새 것이 installed 로 오며 배너가 뜬다. 새로고침은 검수사가 배너를 누를 때만.
+              console.log('[sw] 대기 워커가 낡음', wv, '→ 서버', sv, '— 새 워커를 받아 배너로 알린다(자동 새로고침 없음)');
             }
           }
           await reg.update();
@@ -119,6 +133,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
     // 컨트롤러 변경 (새 SW 활성화) → 새로고침
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (silentRef.current) { silentRef.current = false; return; }   // 3.53-05: 같은 판 워커의 조용한 교체 — 화면은 그대로
       if (refreshing) return;
       refreshing = true;
       //  3.7-04: 새 판이 활성화돼 스스로 새로고침한다 — 검수원과 보던 화면을 맡겨 둔다.
