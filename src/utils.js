@@ -38,12 +38,12 @@ export function isSentenceQuery(v) {
 //  ★ 3.35-01 — **콘앱이 검수앱과 같은 자리에 그린다.** 검수사 2026-09-09 «선적지점이 서로 틀리다는겁니다. 검수앱은 빈칸없이 선적이 되는데 콘앱은 실시간 저장이 계획된 컨으로 지정 되는것 같습니다». 검수앱은 구독 콜백에서 `applyCatosPos`(터미널 자리) → `applyAutoSwap`(3.13 밀려난 계획 컨을 비운 자리로 맞교환)을 돌리는데, 콘앱은 보관소를 따로 읽는 독립 화면이라 그 덧칠을 못 받아 계획 자리에 그대로 그렸다. 실측 STSE 2669E 선적 — 콘앱만 **59대**가 검수앱과 다른 칸이었고 그 59대가 그대로 **겹침 59칸**이었다(20번 30 · 16번 15 · 24번 9 · 4번 5). ⇒ 번들(`coneCargoPlan.entry.jsx`)이 두 함수를 내보내고 콘앱이 같은 차례로 돌린다 — 1.9(파서·평택판정)·2.23(시프팅)과 같은 처방. 콘앱 쪽 판정은 `ctPosOf` 한 벌로 모았다(넷이 각자 베껴 두고 있었다 — 규범 §4-4). 연막검사 `tools/smoke_conepos.cjs`(+`smoke_coneholdview.cjs` 에 두 항) — 항 수는 **검사가 스스로 찍는다**(손으로 적으면 어긋난다). 실데이터 두 항차 세 갈래(STSE 2669E 선적·양하 · XTPG 539E 양하)로 «콘앱 자리 = 검수앱 자리»를 한 칸씩 대조하고, 시각 없는 예약 행 94대(SWTD 9012E 918행 중)로 문지기를 재고, **트윈 전체화면·베이플랜·쌓은 그림을 실제로 그려** 정해 준 자리가 칸에도 짝 소속에도 반영되는지 보고, 베이플랜은 STSE 선적 426대를 통째로 얹어 **겹침 0**을 확인한다. ★ 다른 클로드 감사 **세 차례**의 «부» 일곱 건을 그 자리에서 수리했다 — ①옛 초안 숫자가 기록에 남아 같은 판의 다른 기록과 모순 ②검사가 이름으로만 «한 벌»을 세어 변수명만 바꾼 둘째 벌·주석 처리한 호출·import 줄만 있는 내보내기를 통과시킴 ③`ctPosOf` 를 **부르고 나서 뒤에서 덮는** 되돌림을 못 잡음 ④그 되돌림을 **부르는 쪽**(`pushRows`·짝 소속)에 두면 여전히 못 잡음 ⑤새 경고(`CT.swapOk`)가 하나도 안 재짐 ⑥`ensureMasterParser` 대기 뒤 항차 재대조 누락·`busy` 를 대기 앞에서 풂 ⑦항 수를 손으로 적어 또 틀림. ⚠ 아직 안 잠근 것 — 콘 줄 그림(`ctAppPos`) **부르는 쪽**의 되돌림은 검사가 못 잡는다(인계함).
 //  ★ 3.36 — **검수사가 지적한 셋을 한 판에.** ①**카고플랜 해치커버를 세로 한가운데로** — 검수사 2026-09-08 «상하가 정렬이 안되어 보입니다. 위쪽으로 치우친거 같습니다» · «적색선에 데크 와 홀드의 경계인 해치커버가 위치하면 대략 위아래 여백이 균등할듯». 종전엔 데크:홀드 = maxDeck:maxHold 라 해치가 배마다 **16.8%~65.6%**(중앙 47.8%)로 흩어졌고 남는 세로는 전부 아래에 버려졌다(63척 실측). 두 몫을 같게(maxSide) 잡고 남는 자리를 위·아래로 나눈다 — 해치선이 어느 배든 그림의 **정확히 50%** 다(감사가 63척 전수로 검산, 예외 0건 · A4 넘침 없음). ⚠ 칸 높이는 배마다 갈린다 — 데크·홀드 단 수가 다른 배에서는 **작아지는 쪽도 있다**(감사 실측 16척, 최대 −13%). 첫 기록의 «46척 → 11척»·«MAMP 6.30→7.68px» 은 재현이 안 돼 지웠다. ⛔ 홀드 없는 «데크 전용» 베이는 **빈 홀드 자리를 같이 잡아 윗줄을 맞춘다**(검수사 확답 2026-09-09 «윗줄을 맞춘다»). ★ 첫 판은 그 베이를 위에 붙이며 근거를 «카스피는 한 줄에 단 사다리가 하나» 라고 적었는데 **거짓이었다** — 감사가 같은 도면(ATPR2519E.PLAN.pdf)을 좌표로 재어 데크 전용 베이가 이웃보다 3행 아래에서 시작하고 한 줄에 사다리가 3벌인 것을 보였다. 카스피 자체가 배마다 갈린다(도면 10장 — STSE 아래 · DJCF·DJCT·TNJP·HAB·STBN 위). 그래서 «카스피에 준한다» 로는 못 정하고, 어느 쪽이든 옆 상자와 로우 표기 윗줄이 갈리는 것(30척·평균 18.6px)이 3.7-03 위반이라 검수사께 다시 여쭈어 확답을 받았다. ②**시작보고 호기 = 앱 호기** — 검수사 메모 2026-09-06 «4호기로 양하시작보고를 하고 3호기로 양하를 하는데 제재가 없음». 실사건 ATPR 2640E(메모 2분 전). 뿌리는 두 값이 따로 논 것 — 보고 화면 호기는 제 state, 컨에 박히는 호기는 `gm_equip_no` 였다. **막지 않고 한 벌로 묶는다**(검수사 «갱진행상황에 따라 검수사 스스로 호기를 바꿀수 있다»). 보관·활성 **274항차** 중 시작보고와 사람 기록이 둘 다 있어 대조되는 것은 **9항차**뿐이고 그 9건이 다 어긋나 보이지만, 대부분은 **2·3갱 동시작업**이라 어긋남이 아니다 — 그래서 막지 않는다(감사 지적으로 «9건 중 7건» 이라는 첫 셈은 규칙에 따라 6~7로 흔들려 지웠다). ③ConeOne 2.45 — 임시창고 컨을 검수앱처럼 안 그린다(실측 SWSP 9003S 9대). 연막검사 `smoke_hatchmid`(세 척 실렌더) · `smoke_equipone`(창을 그려 단추를 누른다) 신설.
 //  ★ 3.37 — **특수제작컨은 리퍼 온도 대상이 아니다.** 검수사 2026-09-09 «특수제작컨입니다. 기본 규격이 아닙니다. 따로표기» · «제작컨 온도 체크 대상 아님» (R098E 32尺 6대·34尺 2대 — 검수사 화면에 «풀 리퍼 40대 중 8대 온도 미입력» 으로 떠 있었다). 앱에는 이미 그 문이 있었다(`diagnostics` 의 제작컨 제외·`reeferTempOf`) — **뿌리는 배선**이었다(규범 §4-5). `mkcon` 이 **저절로** 붙는 길이 **리스트 엑셀 REMARK 하나뿐**이라(나머지 하나는 검수원이 손으로 누르는 「제작컨 지정」), 리스트에 «특수컨» 이 안 적혀 온 항차는 그대로 리퍼로 남았다 (실측 — R098E 는 뒤늦게 리스트에 «특수컨» 이 적혀 와 여덟 대가 잡혔고 지금은 경고가 없다. R096E 는 끝내 안 적혀 와 일곱 대가 그대로 경고 안에 있다 — 리퍼 21대 중 7대). 두 항차 다 **선사 메일 본문에는 «* 특수컨» 목록이 있었다.** ⇒ 수집기 2.32 가 그 절을 읽어 `forecast.specialCns` 로 올리고, 앱은 `tagForecastMarks` **한 자리**에서 그 번호에 `mkcon` 을 붙인다 — 리스트 경로와 같은 한 벌이라 온도 경고·사진 대상·«제작컨» 표기·마감 점검이 전부 그대로 따라온다(규범 §4-4). 연막검사 `tools/smoke_mkcon.cjs`(R096E 실데이터 — 경고 7대 → 0대).
-export const APP_VERSION = 'TallyOne 3.53-01'   // 3.53-01 **카톡 작업기록 보강이 아무것도 못 넣던 것**(검수사 «여기에 왜 추가가 안되죠?» 2026-09-16 ATPR 2642W) — 두 구멍이다. ①시각 표기: 정규식이 `[22:16]` 한 가지만 받아 카카오톡이 보통 내는 **«[오후 10:16]» 은 한 줄도 안 읽혔다**(전량 0건). 오전·오후·폰 내보내기·네 자리 연도 날짜선을 다 받는다. ②호기: 중복 판정이 `equip` 을 안 봐 **«1호기 20:43 선적시작» 이 «2호기 20:44 선적시작» 에 접혀** 추가 대상이 0건이 됐다(두 호기가 1~2분 차로 같이 시작하는 것이 평택의 보통 모습이다). 호기가 다르면 다른 사건이다. ③**겹치면 카톡이 이긴다**(검수사 «일단은 카톡보고가 바로 등록되게하고 자체기록과 중복이 되면 카톡이 우선하게 하면 됩니다») — 같은 호기·같은 동작이면 시각이 아무리 벌어져도 한 사건으로 보고 앱 기록을 카톡 시각으로 옮긴다(앞 값은 `ts_orig` 에 남긴다). ATPR 2642W 1호기 시작 04:49 → 20:43 · 3.53 **POD 확정** — 목적지가 자료마다 다를 때(EDI KRINC vs 세관 KRPTK) 수석·검수사가 직접 고른다. 고르면 평택분 대수가 바뀐다(검수사 «갯수가 변경되어야만 계획과 맞습니다» · KSKM 2617N 168→169). 문지기는 저장 함수 안(`assertChief`) · 3.52-02 PC 에서 «작업 선박 선택» 판이 화면보다 길어지면 통째로 잘려 «작업 시작» 단추를 누를 수 없던 것(검수사 «화면 스크롤이 안돼 진입 지점을 클릭하지 못합니다» · «폰은 되는듯 한데 컴이 안됨») — 그 판이 제 안에서 구르게 했다 · 3.52-01 나갔다 되돌아온 화물(COD)의 양하 PORT 칸이 «PTK» 로 나오던 것 — 양하 PORT 는 «양하 직전 마지막 항구»(검수사 «양하전 마지막 항구가 SHA 맞으니까요»)라 EDI POL 이 평택이면 세관 적재항으로 바꾼다. 미르·수석 보드만 세관 원적재항을 보이던 것도 같이 막음 · 3.52 ①세관리스트 «선사부호» 가 선사 기준이다(검수사 «SOC가 있는 선박은 선사기준을 세관리스트로 합니다») — EDI 선사 칸에 SOC·OLL 같은 선사 아닌 값이 와도 잡힌다 ②세관 규격 `42HQ`(40ft 하이큐브) 가 빈칸이 되어 같은 원문이 두 규격으로 갈리던 것
+export const APP_VERSION = 'TallyOne 3.53-02'   // 3.53-02 **항로 사전이 뺀 화물을 배정표가 되돌린다**(검수사 실물 2026-09-17 KSKM 2617N — «인천에서 출발 하였다면 인천분이 남아 있으면 안됩니다. 제외 하는게 맞죠 그런데 굳이 터미널은 시프팅1개를 잡았습니다. 그럼 다음 기항지로 가는지 확인을 해야 합니다.») — 사전 IHS1 이 «인천이 평택 직전»이라 해서 인천 양하 299대를 빼 예측이 0이 됐는데 배정표 이적은 2모브(1대)였다. 실물로 가리니 인천은 평택 **다음**이다(직전 항차 2616N 의 하문 출항본 인천행 319대가 평택 출항본에 컨번호·자리까지 그대로 — 인천을 들렀다면 내렸어야 한다). 제외를 풀면 1대(SEGU2523756 · 27베이 01열 90단)가 나와 배정표와 맞는다. ⇒ 사전은 안 고치고(항차마다 달라진다) **매 항차 배정표로 검증해 되돌린다**. 작업 시작 전에는 판정하지 않는다. 화면 숨김 판정도 같은 한 벌로 묶었다 — 종전엔 되돌려도 베이플랜이 그 컨을 계속 숨겨, 시프팅 1대라고 말하면서 그 한 대를 가리는 상태가 됐다 · 3.53-01 **카톡 작업기록 보강이 아무것도 못 넣던 것**(검수사 «여기에 왜 추가가 안되죠?» 2026-09-16 ATPR 2642W) — 두 구멍이다. ①시각 표기: 정규식이 `[22:16]` 한 가지만 받아 카카오톡이 보통 내는 **«[오후 10:16]» 은 한 줄도 안 읽혔다**(전량 0건). 오전·오후·폰 내보내기·네 자리 연도 날짜선을 다 받는다. ②호기: 중복 판정이 `equip` 을 안 봐 **«1호기 20:43 선적시작» 이 «2호기 20:44 선적시작» 에 접혀** 추가 대상이 0건이 됐다(두 호기가 1~2분 차로 같이 시작하는 것이 평택의 보통 모습이다). 호기가 다르면 다른 사건이다. ③**겹치면 카톡이 이긴다**(검수사 «일단은 카톡보고가 바로 등록되게하고 자체기록과 중복이 되면 카톡이 우선하게 하면 됩니다») — 같은 호기·같은 동작이면 시각이 아무리 벌어져도 한 사건으로 보고 앱 기록을 카톡 시각으로 옮긴다(앞 값은 `ts_orig` 에 남긴다). ATPR 2642W 1호기 시작 04:49 → 20:43 · 3.53 **POD 확정** — 목적지가 자료마다 다를 때(EDI KRINC vs 세관 KRPTK) 수석·검수사가 직접 고른다. 고르면 평택분 대수가 바뀐다(검수사 «갯수가 변경되어야만 계획과 맞습니다» · KSKM 2617N 168→169). 문지기는 저장 함수 안(`assertChief`) · 3.52-02 PC 에서 «작업 선박 선택» 판이 화면보다 길어지면 통째로 잘려 «작업 시작» 단추를 누를 수 없던 것(검수사 «화면 스크롤이 안돼 진입 지점을 클릭하지 못합니다» · «폰은 되는듯 한데 컴이 안됨») — 그 판이 제 안에서 구르게 했다 · 3.52-01 나갔다 되돌아온 화물(COD)의 양하 PORT 칸이 «PTK» 로 나오던 것 — 양하 PORT 는 «양하 직전 마지막 항구»(검수사 «양하전 마지막 항구가 SHA 맞으니까요»)라 EDI POL 이 평택이면 세관 적재항으로 바꾼다. 미르·수석 보드만 세관 원적재항을 보이던 것도 같이 막음 · 3.52 ①세관리스트 «선사부호» 가 선사 기준이다(검수사 «SOC가 있는 선박은 선사기준을 세관리스트로 합니다») — EDI 선사 칸에 SOC·OLL 같은 선사 아닌 값이 와도 잡힌다 ②세관 규격 `42HQ`(40ft 하이큐브) 가 빈칸이 되어 같은 원문이 두 규격으로 갈리던 것
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '카톡 작업방 기록을 붙여넣으면 바로 들어갑니다. 앱 기록과 겹치면 카톡 시각이 우선합니다'
+export const APP_NOTE = '터미널이 시프팅을 잡았는데 앱이 0이면 항로 사전 제외를 되돌려 다시 셉니다'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5214,6 +5214,32 @@ export function dischargeSourcesAgree(voyage) {
   return { agree: plan > 0 && list === plan && edi === plan, plan, list, edi };
 }
 
+/*  ★ 3.53-02 — 배정표 이적(berthShift)을 읽는 규칙 한 벌(§4-4). 종전엔 shiftingTruthCheck 안에만
+    있어서 다른 판정이 못 썼다. ⚠ 1대 = 크레인 2모브. ⚠ 작업 시작 전의 0 은 «이적 없음»이 아니라
+    «아직 안 나온 것»이다(§173) — pending 으로 돌려주고 판정에 쓰지 않는다.
+    ⚠ 감사 지적(3.53-02): 같은 값을 **올림**으로 읽는 두 벌째 `_berthShiftCount`(«적어도 이만큼»,
+      3.44 표시용)가 아직 남아 있다. 홀수 모브에서 답이 갈리는 자리라 통합은 인계함에 올렸다. */
+function _berthTruthRaw(voyage) {
+  const bs = voyage?.info?.berthShift;
+  if (bs === null || bs === undefined || bs === '') return null;      // 자료 자체가 없음
+  const n = Number(bs);
+  if (!Number.isFinite(n)) return null;
+  const ts = String(voyage?.info?.terminalStatus || '').trim().toLowerCase();
+  if (!_TRUTH_READY.has(ts)) return { pending: true, moves: n, terminalStatus: ts || '미상' };
+  return { truth: n / 2, moves: n };
+}
+
+/** 되돌림 판정에 쓸 배정표 확정 이적 «대수» — 확정된 정수 양수일 때만, 아니면 null.
+ *  ⚠ 감사 지적(3.53-02): shiftingTruthCheck 를 거쳐 읽으면 삼자 일치 갈래가 _TRUTH_READY 게이트
+ *    **앞**에 있어 작업 전에도 0 이 새어 나온다(§173 함정). 그래서 _berthTruthRaw 를 직접 쓴다.
+ *    EDI 를 다시 파싱하지 않는 효과도 있다(dischargeSourcesAgree 가 ediMapFromRaw 를 또 부른다).
+ *  ⚠ 홀수 모브(3 → 1.5)는 대수가 아니다 — null 을 내어 판정하지 않는다. */
+export function berthShiftTruth(voyage) {
+  const r = _berthTruthRaw(voyage);
+  if (!r || r.pending || !Number.isInteger(r.truth) || r.truth <= 0) return null;
+  return r.truth;
+}
+
 export function shiftingTruthCheck(voyage, predCount) {
   const pred = Number(predCount) || 0;
   //  2.79: 삼자가 일치하면 배정표 이적(berthShift)을 기다리지 않는다 — 그 값은 작업이 시작돼야
@@ -5232,17 +5258,14 @@ export function shiftingTruthCheck(voyage, predCount) {
     return { truth: 0, pred, ok: pred === 0, moves: 0, srcAgree: true, srcs: _src,
              reason: `선사·세관·배정 세 자료가 모두 ${_src.plan} 대로 같다 — 평택에서 내릴 짐이 확정됐다` };
   }
-  const bs = voyage?.info?.berthShift;
-  if (bs === null || bs === undefined || bs === '') return null;      // 자료 자체가 없음
-  const n = Number(bs);
-  if (!Number.isFinite(n)) return null;
-  const ts = String(voyage?.info?.terminalStatus || '').trim().toLowerCase();
-  if (!_TRUTH_READY.has(ts)) {
-    return { pending: true, pred, moves: n, terminalStatus: ts || '미상',
+  //  3.53-02: 배정표 이적을 읽는 규칙은 _berthTruthRaw 한 벌이다(§4-4). 동작은 종전과 같다.
+  const r = _berthTruthRaw(voyage);
+  if (!r) return null;                                                // 자료 자체가 없음
+  if (r.pending) {
+    return { pending: true, pred, moves: r.moves, terminalStatus: r.terminalStatus,
              reason: '작업 시작 전 — 배정표 이적이 아직 확정값이 아니다' };
   }
-  const truth = n / 2;
-  return { truth, pred, ok: truth === pred, moves: n };
+  return { truth: r.truth, pred, ok: r.truth === pred, moves: r.moves };
 }
 
 const _physRowKey = (r) => (r === 0 ? 0 : (r % 2 === 0 ? -r : r));
@@ -5288,7 +5311,8 @@ export function solveHatchRows(voyage, dictEntry, targetUnits, maxPanels = 4) {
       tried++;
       for (const b of bays) { b.hatchCount = n; b.hatchRows = cfg; }
       let got = -1;
-      try { got = Object.keys(predictShiftingFromVoyage(voyage, base) || {}).length; } catch (e) { got = -1; }
+      //  ⛔ noRevert — 되돌림은 «배정표와 맞는 수»를 만들어 주므로 어떤 분할이든 정답으로 만든다(감사 [치명]).
+      try { got = Object.keys(predictShiftingFromVoyage(voyage, base, { noRevert: true }) || {}).length; } catch (e) { got = -1; }
       if (got === targetUnits) solutions.push(cfg);
     }
   }
@@ -5428,7 +5452,7 @@ export function ptkCountCheck(voyage, mode = 'discharge') {
   return { plan, ediN, listN, gap: plan - ediN, known: true, listMatch: !!listN && listN === plan };
 }
 
-export function predictShiftingFromVoyage(voyage, dictEntry) {
+export function predictShiftingFromVoyage(voyage, dictEntry, opts) {
   const sec = voyage?.discharge;
   let map = ediMapFromRaw(sec) || sec?.ediContainers || null;
   const origin = ediOriginOf(sec);
@@ -5498,6 +5522,9 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
     }
     map = fixed;
   }
+  //  ★ 3.53-02 — 제외는 여기서 «해 두기만» 하고, 배정표 확정 이적으로 검증한 뒤에 확정한다(아래 ★★).
+  //    검증에 해치 정보(baysInfo)가 필요해 제외 전 맵을 함께 들고 간다.
+  let _pgAll = null, _pgList = null;
   if (map && (origin || nextPort)) {
     const before = portsBeforePtk(lane, origin, nextPort);
     if (before && before.length) {
@@ -5507,6 +5534,7 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
         if (gone.has(String(c?.pod || '').toUpperCase())) { excludedCnt++; continue; }
         kept[cn] = c;
       }
+      if (excludedCnt) { _pgAll = map; _pgList = before; }
       map = kept; excluded = before;
     }
   }
@@ -5545,9 +5573,96 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
       }
     }
   } catch (e) { baysInfo = null; }
-  const out = predictShifting(map, baysInfo);
+
+  /* ★★ 3.53-02 (검수사 실물 2026-09-17, KSKM 2617N) — **배정표가 심판이다.**
+       검수사 원문: *«인천에서 출발 하였다면 인천분이 남아 있으면 안됩니다. 제외 하는게 맞죠
+       그런데 굳이 터미널은 시프팅1개를 잡았습니다. 그럼 다음 기항지로 가는지 확인을 해야 합니다.»*
+
+     사건 — 항로 사전 `IHS1`([CNXMN,KRINC,KRPTK])은 «인천이 평택 직전»이라 해서 인천 양하 299대를
+     제외했고 앱 예측은 0이 됐다. 그런데 **배정표 이적이 2모브(=1대)** 였다. 실물로 가리니 인천은
+     평택 **다음**이었다 — 직전 항차 2616N 의 하문 출항본 인천행 319대가 평택 출항본에 컨번호·자리까지
+     한 칸도 안 바뀌고 그대로 있었다(인천을 들렀다면 내렸어야 한다). 제외를 풀면 예측 1대
+     (SEGU2523756 · 27베이 01열 90단 · 평택분 88단 위)가 나오고 **배정표 1대와 맞는다.**
+
+     ⇒ 사전을 뒤집어 다시 적지 않는다 — 검수사 확정 §1162 *«같은 항로라도 그 항차에 어디를 먼저
+        가는지는 선사가 이득을 보고 정한다»*. 사전은 그대로 두고 **매 항차 배정표로 검증**한다.
+     ⚠ 작업 시작 전에는 판정하지 않는다(berthShiftTruth 가 null) — §173 «대기 단계 자료로 확정 선박을
+        판정하지 마라». 이적 칸이 채워지기 전의 0 은 «이적 없음»이 아니라 «아직 안 나온 것»이다.
+     ⚠ 제외한 판이 배정표와 맞으면 아무것도 안 한다. **제외 안 한 판만 맞을 때** 되돌린다. */
+  //  ⚠ 감사 지적(3.53-02): 제외 적용본은 여기서 **한 번만** 센다. 종전 초안은 제외본과 map 이
+  //    같은 객체인데도 predictShifting 을 두 번 돌렸다(커버 역산 800회에서 그 배수가 곱해진다).
+  const outEx = predictShifting(map, baysInfo);
+  let exReverted = null, out = outEx;
+  /*  ⛔ 감사 지적 [치명](3.53-02) — **커버 역산(solveHatchRows)에서는 되돌리지 않는다.**
+      역산은 «예측 대수 == 배정표 이적»인 커버 분할을 정답으로 모은다. 그런데 되돌림은 바로 그
+      «배정표와 맞는 수»를 만들어 주므로, 되돌림이 걸린 분할은 **무엇이든 정답이 된다**(실측: 93가지
+      분할 중 78가지가 «정답»). 그러면 화면이 검수사에게 «이 값으로 베이매트릭스에 저장하라»고
+      권하고 선박 사전이 영구히 오염된다. 역산은 noRevert 로 부른다. */
+  /*  ⛔ 2차 시뮬 지적(3.53-02) — **EDI 가 직접 말한 다음 기항은 되돌리지 않는다.**
+      제외 명단의 **첫 항**이 그 배 EDI 의 다음 기항(LOC+61)이면 선사가 그 항차에 대해 적은 값이라
+      사전보다 강하다(YKTD 2610E — 사전이 개입한 적 없는데 되돌아갔다). 그 항은 계속 제외한다.
+      ⚠ 감사 재판정 [중대]B: 그렇다고 명단을 통째로 막으면 안 된다 — portsBeforePtk 규칙 ②는
+        «다음 기항부터 평택 전까지»라 **첫 항만 EDI 가 말한 것이고 나머지는 사전이 걸어 만든 것**이다.
+        LOC+61 이 하문이면 명단은 [하문, 인천]인데, «인천이 평택 앞»은 사전의 주장이고 그것이 바로
+        2617N 에서 틀렸던 말이다. EDI 에 그 줄이 있느냐 없느냐로 답이 갈리면 안 된다.
+      ⇒ EDI 가 말한 항만 남기고 **사전이 덧붙인 나머지만** 되살려 본다. */
+  const _ediPort = String(nextPort || '').toUpperCase();
+  const _revertPorts = _pgList ? _pgList.filter((p) => String(p).toUpperCase() !== _ediPort) : [];
+  if (_pgAll && _revertPorts.length && !(opts && opts.noRevert)) {
+    const truth = berthShiftTruth(voyage);
+    if (truth != null) {
+      const nEx = Object.keys(outEx).length;
+      if (nEx !== truth) {
+        //  사전이 덧붙인 항만 되살린 맵 — EDI 가 말한 항은 계속 제외한 상태로 둔다.
+        const _keepGone = new Set(_ediPort ? [_ediPort] : []);
+        let _cand = _pgAll;
+        if (_keepGone.size) {
+          _cand = {};
+          for (const [cn, c] of Object.entries(_pgAll)) {
+            if (_keepGone.has(String(c?.pod || '').toUpperCase())) continue;
+            _cand[cn] = c;
+          }
+        }
+        const allOut = predictShifting(_cand, baysInfo) || {};
+        const nAll = Object.keys(allOut).length;
+        /*  ⚠ 감사 재판정 [중대]A — **수가 맞는 것만으로는 안 된다.** 제외를 풀면 홀드 컨이 늘어
+            커버 등분 경계(hatchRows 가 없는 근사 선박)가 옮겨져, 제외본에서 잡히던 데크 컨이
+            전체본에서 **빠질 수 있다**(실측: outEx 1대 → allOut 0대). 그러면 제외분이 답에 한 대도
+            안 들어왔는데 수만 맞아 되돌아가고, 화면은 «그 화물은 지금 배에 실려 있습니다»라는
+            거짓을 말한다. 그래서 셋을 다 본다 —
+              ① 되돌려 «들어온» 컨이 실제로 있고(gained)
+              ② 그것이 전부 제외 대상 항의 화물이며
+              ③ 제외본에 있던 컨이 하나도 «사라지지» 않았다(lost 0 — 경계가 안 옮겨졌다는 뜻). */
+        const _goneSet = new Set(_revertPorts.map((p) => String(p).toUpperCase()));
+        const gained = Object.keys(allOut).filter((cn) => !outEx[cn]);
+        const lost = Object.keys(outEx).filter((cn) => !allOut[cn]);
+        const gainedOk = gained.length > 0
+          && gained.every((cn) => _goneSet.has(String(_pgAll[cn]?.pod || '').toUpperCase()));
+        //  ⚠ 선사 시프팅 서류가 있으면 **되돌아온 컨이 그 목록에 있어야** 한다(감사 1차 [중대]).
+        const _rl = voyage?.restowList;
+        const _rlKeys = (_rl && typeof _rl === 'object')
+          ? Object.keys(_rl).filter((k) => k && !k.startsWith('_')) : [];
+        const rlOk = !_rlKeys.length || gained.every((cn) => _rlKeys.includes(cn));
+        if (nAll === truth && gainedOk && !lost.length && rlOk) {
+          const _stillGone = Object.keys(_pgAll).length - Object.keys(_cand).length;   // EDI 항이라 계속 빼는 대수
+          const _revived = excludedCnt - _stillGone;                                   // 되살린 대수
+          exReverted = { ports: _revertPorts, n: _revived, truth, nEx, nAll, backIn: gained };
+          //  ⚠ map 은 여기서부터 아무도 안 읽는다(변이 시험 실측) — 되돌림의 실체는 out·excluded 다.
+          excluded = _stillGone ? [_ediPort] : null;
+          excludedCnt = _stillGone;
+          out = allOut;
+        }
+      }
+    }
+  }
   try {
     Object.defineProperty(out, '_meta', { value: { origin, nextPort, lane, excluded, excludedCnt, hatchInfo: !!baysInfo,
+      exReverted,   // 3.53-02: 배정표가 «제외가 틀렸다»고 말해 되돌린 건 — 화면이 근거로 보여 준다
+      //  ★ 3.53-02: 베이플랜 화면 숨김도 **이 판정 한 벌**을 쓴다(§4-4). 종전엔 VoyagePage 가
+      //     portsBeforePtk 를 따로 불러, 되돌려도 그 컨을 계속 숨겼다 — 시프팅 1대라고 말하면서
+      //     바로 그 한 대를 화면에서 가리는 상태가 된다.
+      preGone: (excludedCnt && excluded && excluded.length)
+        ? { ports: excluded.map(p => String(p).toUpperCase()), list: excluded, origin } : null,
       customsFixed,   // 2.21/2.76: 양하 리스트가 «평택에서 내린다»고 해서 POD 를 바로잡은 건 — 화면이 근거로 보여 준다
       //  ★ 2.76: **근거를 세어 보인다.** 검수사 확정 — *«추후에 업로드될 세관리스트와도 같다면 확정이겠죠.
       //    또한 평택항에서도 시프팅을 생각하지 않고 있습니다.»* 판정 하나를 던지지 말고 무엇이 맞아떨어졌는지 센다.
@@ -5559,7 +5674,10 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
         return { srcs, isCustoms, fe, n: customsFixed.length };
       })(),
       // rot: 판정 근거 — direct(EDI 다음 기항=평택) · edi(다음 기항 실측) · rotation(사전 걸음) · unknown(미확인)
-      rot: (nextPort === 'KRPTK') ? 'direct' : (excluded ? (nextPort ? 'edi' : 'rotation') : 'unknown') }, enumerable: false });
+      //  ⚠ 감사 지적(3.53-02): 되돌리면 excluded 가 비어 rot 이 «미확인»으로 떨어졌다 —
+      //    판정 근거 자체는 그대로이니 되돌린 뒤에도 원래 근거를 적는다.
+      rot: (nextPort === 'KRPTK') ? 'direct'
+         : ((excluded || exReverted) ? (nextPort ? 'edi' : 'rotation') : 'unknown') }, enumerable: false });
   } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
   return out;
 }

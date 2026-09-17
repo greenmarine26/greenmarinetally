@@ -1,0 +1,69 @@
+{
+ "_note": "KSKM 2617N 실물 — 27베이 01열 스택(평택분 88단 위에 인천행 90단). 배정표 이적 2모브=1대.",
+ "text": "$604KSKM/SUNNY KALMIA        /2617N       /            /POD:XMN/260914  /RECORD=0468/            /                                                                                                    \n$600PORT ROTATION/                                                                                                                                                                                    \n270184 TEMU0436767 KMD     XMNINC      KRINCDC20212F                                   21200                                            KMTCXMN1032572                           00413      CNXMNKRINC\n270186 DYLU2117008 NSS     XMNINC      KRINCDC20142F                                   14200                                            NSSLAXMN26I00213                         00414      CNXMNKRINC\n270188 SEGU2430571 KMD     XMNPTK      KRINCDC20049F                                   04990                                            KMTCXMN1020217                           00415      CNXMNKRPTK\n270190 SEGU2523756 KMD     XMNINC      KRINCDC20037F                                   03700                                            KMTCXMN1025345                           00416      CNXMNKRINC\n270284 TEMU0446235 KMD     XMNINC      KRINCDC20275F                                   27590                                            KMTCXMN1024903                           00417      CNXMNKRINC\n270286 TEMU5730460 KMD     XMNINC      KRINCDC20147F                                   14780                                            KMTCXMN1031153                           00418      CNXMNKRINC\n270288 SEGU1883505 KMD     XMNINC      KRINCDC20053F                                   05300                                            KMTCXMN1024841                           00419      CNXMNKRINC\n270290 BEAU2942489 KMD     XMNINC      KRINCDC20048F                                   04880                                            KMTCXMN1029218A                          00420      CNXMNKRINC\n270384 DYLU2102712 DYS     XMNINC      KRINCDC20155F                                   15500                                            PCSLAXNEQ2600031                         00421      CNXMNKRINC\n270386 BMOU1311101 KMD     XMNINC      KRINCDC20086F                                   08640                                            KMTCXMN1024583A                          00422      CNXMNKRINC\n270388 DYLU2106512 NSS     XMNINC      KRINCDC20070F                                   07080                                            NSSLAXMN26I00027                         00423      CNXMNKRINC\n270484 CAAU2150673 DYS     XMNINC      KRINCDC20272F                                   27200                                            PCSLAXNEQ2600026                         00424      CNXMNKRINC\n270486 DYLU2107801 DYS     XMNINC      KRINCDC20140F                                   14090                                            PCSLAXNEQ2600196                         00425      CNXMNKRINC\n270488 DYLU2144997 DYS     XMNINC      KRINCDC20067F                                   06730                                            PCSLAXNEQ2600086                         00426      CNXMNKRINC\n",
+ "info": {
+  "vsl": "KSKM",
+  "lane": "IHS1",
+  "berthShift": 2,
+  "terminalStatus": "working",
+  "planDis": 169
+ },
+ "bay27": [
+  {
+   "bay": "027",
+   "bayNo": "27",
+   "blockedCells": {
+    "deckBlocked": [
+     {
+      "row": "04",
+      "tier": 82
+     },
+     {
+      "row": "02",
+      "tier": 82
+     },
+     {
+      "row": "01",
+      "tier": 82
+     },
+     {
+      "row": "03",
+      "tier": 82
+     }
+    ]
+   },
+   "deckAlign": "center",
+   "deckCells": [
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
+    8
+   ],
+   "deckHasZero": false,
+   "deckPadLeft": 0,
+   "deckPadRight": 0,
+   "deckTiers": [
+    94,
+    92,
+    90,
+    88,
+    86,
+    84,
+    82
+   ],
+   "hasDeck": true,
+   "hasHold": false,
+   "hasZero": false,
+   "hatchCount": 0,
+   "holdAlign": "center",
+   "holdHasZero": false,
+   "holdPadLeft": 0,
+   "holdPadRight": 0,
+   "rowCount": 10,
+   "source": "edi"
+  }
+ ]
+}

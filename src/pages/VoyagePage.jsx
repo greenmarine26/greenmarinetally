@@ -20,7 +20,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -344,7 +344,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
-     voyage?.info?.lane, dictTick]   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도
+     voyage?.info?.lane, dictTick,   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도
+     //  ★ 3.53-02(감사 지적 [중대]) — 배정표 이적·작업 상태가 되돌림 판정을 바꾼다. 이 둘이 의존성에
+     //    없으면, 수집기가 berthShift 를 넣거나 planned→working 이 되는 **바로 그 순간** 베이플랜은
+     //    되돌린 그림을 그리는데 시프팅 패널만 옛 값에 머문다(한 화면에서 두 판정이 갈린다).
+     voyage?.info?.berthShift, voyage?.info?.terminalStatus]
   );
 
   // 평택 대상 (양하=POD, 선적=POL)
@@ -474,13 +478,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   근거는 1.45 예측 제외와 동일 — 출항본(LOC+5) + 항로 사전(portsBeforePtk). 판정 불가면 null(숨김 없음).
   //   1.69-07: 다음 기항(LOC+61)이 정본 — MAMP 631N 실측 «다바오→평택 직항»이라 신강분은 배에 실려
   //   온다(숨기면 안 됨 — 검수사 «30번 베이 1개» = 그 위 신강 엠티가 진짜 시프팅). 직항이면 before=[].
+  //   ★ 3.53-02 — 판정을 **한 벌**로(§4-4). 종전엔 여기서 portsBeforePtk 를 따로 불러, 예측 쪽이
+  //   배정표 검증으로 제외를 되돌려도 베이플랜은 그 컨을 계속 숨겼다 — «시프팅 1대»라고 말하면서
+  //   바로 그 한 대를 화면에서 가리는 상태가 된다(KSKM 2617N SEGU2523756).
+  //   최종 제외 집합은 예측이 _meta.preGone 으로 내준다. 되돌렸으면 null 이라 숨김도 없다.
   const preGoneInfo = useMemo(() => {
     if (mode !== 'discharge') return null;
-    const origin = ediOriginOf(sec);
-    const before = portsBeforePtk(voyage?.info?.lane, origin, ediNextPortOf(sec));
-    if (!before || !before.length) return null;
-    return { ports: new Set(before.map((p) => String(p).toUpperCase())), list: before, origin };
-  }, [mode, sec?.raw?.edi?.uploadedAt, voyage?.info?.lane]);
+    let pg = null;
+    try { pg = (predictShiftingFromVoyage(voyage) || {})._meta?.preGone || null; } catch (e) { pg = null; }
+    if (!pg || !Array.isArray(pg.list) || !pg.list.length) return null;
+    return { ports: new Set(pg.ports), list: pg.list, origin: pg.origin };
+    //   배정표 이적·작업 상태가 바뀌면 판정이 달라진다 — 의존성에 넣는다.
+    //   ⚠ 감사 지적: 세관리스트가 뒤늦게 오면 customsFixed 가 POD 를 평택으로 고쳐 제외 대수가
+    //     바뀐다 — records 도 의존성에 넣는다.
+  }, [mode, sec?.raw?.edi?.uploadedAt, voyage?.info?.lane,
+      voyage?.info?.berthShift, voyage?.info?.terminalStatus,
+      Object.keys(sec?.records || {}).length, dictTick]);
 
   // V9.03: 긴급/수화물 컨번호 세트 — forecast.mode가 현재 모드와 일치할 때만 적용
   //   (선적 예보 마커가 양하 리스트에 새지 않게). 상세는 tagForecastMarks 주석.
@@ -2783,8 +2796,31 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             <div className="px-3 py-1 text-2xs text-dim-300 bg-ink-950/60 border-b border-line">
               {shiftInfo.lane ? `항로 ${shiftInfo.lane} · ` : ''}{shiftInfo.meta.origin || '출항지 미상'} 출항본 기준
               {shiftInfo.meta.rot === 'direct' ? ' — 다음 기항 평택(EDI): 도착 전 하선 없음'
+                : shiftInfo.meta.exReverted ? ' — 항로 사전 제외를 배정표가 되돌렸습니다(아래)'
                 : shiftInfo.meta.excluded ? ` — 평택 전 기항(${shiftInfo.meta.excluded.join('·')}) 양하 ${shiftInfo.meta.excludedCnt}대 제외${shiftInfo.meta.rot === 'edi' ? ' (다음 기항 EDI 실측)' : ' (항로 사전)'}`
                 : ' — 로테이션 미확인: 평택 전 기항 양하분이 섞여 있을 수 있음'}
+            </div>
+          )}
+          {/* ★ 3.53-02 — **불일치만 말하지 않는다. 왜 그런지 짚는다.**
+              검수사 실물(KSKM 2617N): 사전이 인천분 299대를 뺐고 예측 0, 배정표는 이적 1대.
+              제외를 풀면 1대가 나와 배정표와 맞는다 ⇒ 이 항차에서 인천은 평택 «다음» 이었다. */}
+          {shiftInfo?.meta?.exReverted && (
+            <div className="px-3 py-1.5 text-xxs text-amber-100 bg-amber-950/40 border-b border-amber-800/50 space-y-0.5">
+              <div>↩ <b>항로 사전 제외를 되돌렸습니다</b> — 사전은 {shiftInfo.meta.exReverted.ports.join('·')} 을(를) 평택 앞이라 해서
+                양하 <b>{shiftInfo.meta.exReverted.n}대</b>를 뺐고, 그러면 예측이 {shiftInfo.meta.exReverted.nEx}대입니다.
+                그런데 <b>배정표 이적은 {shiftInfo.meta.exReverted.truth}대</b>이고 제외를 풀면 {shiftInfo.meta.exReverted.nAll}대로 <b>맞습니다</b>.</div>
+              <div className="text-2xs text-amber-200/80">
+                ⇒ 이 항차에서 {shiftInfo.meta.exReverted.ports.join('·')} 은(는) 평택 <b>다음</b> 기항입니다. 그 화물은 지금 배에 실려 있습니다.
+                배정표가 정본이라 그쪽을 따랐습니다 — 사전은 고치지 않습니다(항차마다 달라집니다).
+              </div>
+              {/*  ★ 감사 지적(3.53-02) — 부분 되살림이면 **계속 빼는 쪽도 밝힌다.** EDI 가 직접 말한
+                   다음 기항은 되살리지 않는데, 그 사실이 어디에도 안 나오면 대수가 안 맞아 보인다. */}
+              {shiftInfo.meta.excludedCnt > 0 && shiftInfo.meta.excluded && shiftInfo.meta.excluded.length > 0 && (
+                <div className="text-2xs text-amber-200/80">
+                  ↘ 다만 {shiftInfo.meta.excluded.join('·')} 양하 <b>{shiftInfo.meta.excludedCnt}대</b>는 계속 뺍니다 —
+                  사전이 아니라 이 배 EDI 가 «다음 기항»으로 직접 적은 항이라 그 말을 따릅니다.
+                </div>
+              )}
             </div>
           )}
           {shiftOpen && (

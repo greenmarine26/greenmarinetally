@@ -676,6 +676,7 @@ else
   echo "✗ 리퍼 온도 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
 fi
 node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_pregone.cjs || { echo "✗ 항로 사전 제외 되돌림(배정표 심판) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_hatchspans.cjs || { echo "✗ 해치 폭(커버 경계) 연막검사 실패 — 배포 금지"; exit 1; }
 #  2.99-02: X-RAY 엑셀 첫 장 기본 양식(굴림체 10·가운데·실선) — 실제 파일을 열어 32칸 전부 잰다.
 node tools/smoke_xrayxlsx.cjs || { echo "✗ X-RAY 엑셀 양식 연막검사 실패 — 배포 금지"; exit 1; }

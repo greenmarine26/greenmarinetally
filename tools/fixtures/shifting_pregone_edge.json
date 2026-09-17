@@ -1,0 +1,29 @@
+{
+ "_note": "3.53-02 감사 재판정 [중대]A 반례 — 합성. 실물 KSKM 2617N ASC 라인(270188 평택분·270190 인천분)의 고정폭을 그대로 쓰고 자리(앞 6자리)와 컨번호만 바꿨다. CNSHA 줄은 인천 줄의 KRINC 두 곳(규격칸·꼬리 POL/POD)을 CNSHA 로 바꾼 것이다. lane_routes IHS1 = [CNXMN,KRINC,KRPTK] 를 setLaneRoutes 로 주입해야 한다.",
+ "lost_case": {
+  "_why": "제외를 풀면 홀드 09열 인천분이 패널 축을 2행→9행으로 넓혀 등분 경계가 옮겨지고, 제외본에서 잡히던 데크 03열이 전체본에서 빠진다(lost 1 · gained 0).",
+  "text": "$604KSKM/SUNNY KALMIA        /2617N       /            /POD:XMN/260914  /RECORD=0468/            /                                                                                                    \n$600PORT ROTATION/                                                                                                                                                                                    \n270102 PTKU0000001 KMD     XMNPTK      KRINCDC20049F                                   04990                                            KMTCXMN1020217                           00415      CNXMNKRPTK\n270202 PTKU0000002 KMD     XMNPTK      KRINCDC20049F                                   04990                                            KMTCXMN1020217                           00415      CNXMNKRPTK\n270902 INCU0000009 KMD     XMNINC      KRINCDC20037F                                   03700                                            KMTCXMN1025345                           00416      CNXMNKRINC\n270286 SHAU0000002 KMD     XMNINC      CNSHADC20037F                                   03700                                            KMTCXMN1025345                           00416      CNXMNCNSHA\n270386 SHAU0000003 KMD     XMNINC      CNSHADC20037F                                   03700                                            KMTCXMN1025345                           00416      CNXMNCNSHA"
+ },
+ "gained_wrong_port_case": {
+  "_why": "되돌려 «들어온» 컨이 제외 대상 항(KRINC)이 아니라 CNSHA 다 — 수만 맞은 경우(gained 1 · lost 0).",
+  "text": "$604KSKM/SUNNY KALMIA        /2617N       /            /POD:XMN/260914  /RECORD=0468/            /                                                                                                    \n$600PORT ROTATION/                                                                                                                                                                                    \n270202 PTKU0000002 KMD     XMNPTK      KRINCDC20049F                                   04990                                            KMTCXMN1020217                           00415      CNXMNKRPTK\n270302 INCU0000003 KMD     XMNINC      KRINCDC20037F                                   03700                                            KMTCXMN1025345                           00416      CNXMNKRINC\n270086 SHAU0000001 KMD     XMNINC      CNSHADC20037F                                   03700                                            KMTCXMN1025345                           00416      CNXMNCNSHA"
+ },
+ "info": {
+  "vsl": "KSKM",
+  "lane": "IHS1",
+  "berthShift": 2,
+  "terminalStatus": "working",
+  "planDis": 169
+ },
+ "bay27": [
+  {
+   "bay": "027",
+   "bayNo": "27",
+   "rowCount": 10,
+   "hatchCount": 2,
+   "hasHold": true,
+   "hasDeck": true,
+   "hasZero": false
+  }
+ ]
+}

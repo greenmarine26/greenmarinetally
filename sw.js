@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.53-01';
-const NOTE = '카톡 작업방 기록을 붙여넣으면 바로 들어갑니다. 앱 기록과 겹치면 카톡 시각이 우선합니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.53-02';
+const NOTE = '터미널이 시프팅을 잡았는데 앱이 0이면 항로 사전 제외를 되돌려 다시 셉니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
