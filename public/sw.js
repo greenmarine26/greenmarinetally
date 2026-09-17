@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.53-03';
-const NOTE = '미르에게 베이 화면 어디야 같은 화면이 든 질문을 해도 밝기 되묻기로 넘어가지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.53-04';
+const NOTE = '미르에게 7배 8배 처럼 숫자에 배를 붙여 베이를 물어도 알아듣습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

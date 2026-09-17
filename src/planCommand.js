@@ -28,14 +28,18 @@ export function parseViewCommand(query) {
        검수사는 동사 없이 «MCSC 카고플랜» 이라고만 친다. 배·항차·양하/선적·카고플랜/베이플랜 말고 아무것도
        없는 말은 «열어라»다 — 남는 낱말이 하나라도 있으면(«5번 베이 플랜에 뭐 있어») 종전대로 조회로 둔다.
        ⚠ 여기서는 «카고플랜·베이플랜» 만 받는다. 맨 «플랜»은 조회일 수 있다. */
+  /* ★ 3.53-04 (검수사 2026-09-17 «일반적 플랜은 카고플랜이며 양하중이면 양하 카고 플랜 선적중이면 선적 카고플랜»)
+       맨 «플랜»(«플랜»·«MCSC 플랜»·«미르야 플랜»)도 «열어라»다 — 종전 «맨 플랜은 조회일 수 있다» 는 접었다.
+       받은함 09-10 «플랜»(떠 있는 미르) 무응답이 그 자리다. 무엇을 여는가는 카고플랜, 양하/선적은 부르는 쪽의 현재 모드(mode null). */
   const _bare = T
     .replace(/카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b/g, ' ')
+    .replace(/(?<![가-힣])플[랜렌](?![가-힣])/g, ' ')
     .replace(/양하|선적|\b(LOADING|DISCHARGE|DIS|LDG)\b/g, ' ')
     .replace(/\b\d{3,4}[NSEW]\b/g, ' ')           // 항차번호 633N·2608N (글자 없는 «0320 카고플랜»은 조회 — 재감사 P2-B)
     .replace(/\bB?\d{1,2}\s*번?/g, ' ')            // 베이 번호 «5번»·«22»·«B22» (bay 는 아래서 따로 읽는다)
     .replace(/\b[A-Z]{3,8}\b/g, ' ')                // 선박 약자·이름 토큰
     .replace(/미르야?|좀|의|을|를|은|는|[\s?？.!'"]/g, '');
-  const bareCmd = _bare === '' && /카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b/.test(T);
+  const bareCmd = _bare === '' && /카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b|(?<![가-힣])플[랜렌](?![가-힣])/.test(T);
   const isCmd = bareCmd
     || /보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)
     || /\b(SHOW|OPEN|VIEW|DISPLAY)\b/.test(T)
@@ -45,12 +49,15 @@ export function parseViewCommand(query) {
   const mode = (/선적|싣|적하|로딩/.test(t) || /\b(LOADING|LOAD|LDG|LOA)\b/.test(T)) ? 'loading'
     : ((/양하|내림|내리|디스차지/.test(t) || /\b(DISCHARGE|DISCH|DSCH|DIS|UNLOAD)\b/.test(T)) ? 'discharge' : null);
 
-  const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/) || T.match(/\bBAY\s*(\d{1,3})\b/);
+  //  3.53-04 감사 지적 — «5번 플랜»·«22 플랜»·«B22 플랜» 은 번호를 버리고 배 전체 카고플랜을 열면 안 된다. 번호+플랜은 그 베이의 베이플랜.
+  const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/) || T.match(/\bBAY\s*(\d{1,3})\b/) || T.match(/\bB?(\d{1,2})\s*번?\s*(?=플[랜렌])/);
   const bay = m ? parseInt(m[1] || m[2] || m[3], 10) : null;
 
   //  어느 화면을 여는가 — 카고플랜은 «전체 화물 비교», 베이플랜은 «양하·선적 비교»다.
+  //  ★ 3.53-04 — «베이플랜»·베이 번호가 없는 맨 «플랜» 은 카고플랜이다(검수사 확정). 베이 번호가 붙으면 종전대로 베이플랜.
   const what = (/카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t) || /\bCARGO\b/.test(T)) ? 'cargo'
-    : ((/베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || /\bPLANS?\b/.test(T) || bay != null) ? 'bay' : null);
+    : ((/베이\s*플랜|베이플렌|도면|계획도/.test(t) || /\bBAY\s*PLANS?\b/.test(T) || bay != null) ? 'bay'
+    : ((/플랜|플렌/.test(t) || /\bPLANS?\b/.test(T)) ? 'cargo' : null));
   if (!what) return null;
   return { mode, bay, what };
 }

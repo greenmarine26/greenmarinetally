@@ -87,6 +87,10 @@ export function portToKr(code) {
 export function parseNaturalQuery(text) {
   //  2.70-02: 마지막 질문을 남긴다 — 크래시 신고(ErrorBoundary)에 «무엇을 물었을 때» 가 실린다.
   try { if (typeof window !== 'undefined') window.__lastQuery = String(text || ''); } catch (e) { /* 무시 */ }
+  //  ★ 3.53-04 (검수사 2026-09-17 — 09-16 21:39 김판석 «1억이 다음 작업은 어디야» 는 «1호기» 를 음성이 «1억이» 로 받아쓴 것,
+  //    검수사 «1호기인데 잘못알아 들음»): 숫자 뒤 «억이»(일억이 ≒ 일호기) 는 호기다. 돈 얘기가 미르에 올 일은 없다.
+  //    «억» 단독(«1억 컨»)은 안 건드린다 — 이 오인은 «억이» 꼴로만 왔다. 아래 모든 판정(t·digits)이 이 text 를 쓰므로 여기서 한 번.
+  text = String(text || '').replace(/(\d)\s*억이(?![가-힣\d])/g, '$1호기');
   const result = {
     digits: '', size: null, fe: null, type: null, temp: null,
     bay: null, pol: null, pod: null, portAny: null, zone: null,
@@ -222,6 +226,10 @@ export function parseNaturalQuery(text) {
   //   현장에서 "20번 데크" "18번에" 처럼 '번'만 붙여 묻는 경우가 많음. 3자리 이상은 컨번호 끝자리와
   //   혼동 위험이 있어 2자리까지만(베이는 보통 1~99). 끝4자리 조회는 4자리라 구분됨.
   if (!bayMatch) bayMatch = t.match(/(?:^|\s)(\d{1,2})\s*번(?![호])/);  // "2번" O, "2번호" X(호기)
+  //  ★ 3.53-04 (미르 결산 2026-09-17 — 앱이 «6배 → 6번 베이» 를 스스로 배웠는데 6배에만 듣고 7배·8배는 컨 목록으로 샜다):
+  //    현장은 «N배» 로 베이를 부른다. 숫자 뒤 «배» 가 낱말 끝이거나 토씨(에·는·은·도·의·로·부터)로 이어지면 베이다.
+  //    «몇 배» 는 잡지 않는다(앞이 숫자여야 한다). 3자리는 컨번호 끝자리와 겹쳐 2자리까지만.
+  if (!bayMatch) bayMatch = t.match(/(?:^|\s)(\d{1,2})\s*배(?=$|\s|[에는은도의로부야]|까지)/);   // 감사 메모 — «7배야»·«7배까지» 도 받는다
   if (bayMatch) result.bay = normalizeBay(bayMatch[1]);
 
   // POL/POD

@@ -16,10 +16,16 @@ for (const q of ['MCSC 카고플랜', 'MCSC 카고 플랜', 'MCSC  카고 플랜
 { const r = P.parseViewCommand('STARSHIP DRACO 선적 베이플랜'); ok(r && r.what === 'bay' && r.mode === 'loading', '«STARSHIP DRACO 선적 베이플랜» → 선적 bay'); }
 { const r = P.parseViewCommand('MCSC LOADING CARGO PLAN'); ok(r && r.what === 'cargo' && r.mode === 'loading', '영어 «MCSC LOADING CARGO PLAN» 종전 그대로'); }
 console.log('[2] 낱말이 하나라도 더 붙으면 조회다 — 종전 동작 유지');
-for (const q of ['5번 베이 플랜에 뭐 있어', '카고플랜 어디서 뽑아', '플랜', 'MCSC 플랜', '카고플랜 보고 싶어', '리퍼 몇 대', '0320', '0320 카고플랜', '4440320 카고플랜']) {
+for (const q of ['5번 베이 플랜에 뭐 있어', '카고플랜 어디서 뽑아', '카고플랜 보고 싶어', '리퍼 몇 대', '0320', '0320 카고플랜', '4440320 카고플랜']) {
   ok(P.parseViewCommand(q) == null, `«${q}» → 명령 아님`);
 }
 ok(P.parseViewCommand('카고플랜 보여줘') && P.parseViewCommand('KSKM LOADING PLAN'), '동사·영어 PLAN 은 종전대로 명령');
+console.log('[2-0] 3.53-04 — 맨 «플랜» 은 카고플랜이다(검수사 «일반적 플랜은 카고플랜», mode 는 부르는 쪽 현재 모드)');
+for (const q of ['플랜', '미르야 플랜', 'MCSC 플랜', '플랜 열어', '플랜?']) {
+  const r = P.parseViewCommand(q); ok(r && r.what === 'cargo' && r.mode == null && r.bay == null, `«${q}» → cargo·모드 없음 (${JSON.stringify(r)})`);
+}
+{ const r = P.parseViewCommand('KSKM 선적 플랜'); ok(r && r.what === 'cargo' && r.mode === 'loading', `«KSKM 선적 플랜» → 선적 cargo (${JSON.stringify(r)})`); }
+for (const [q, bay] of [['5번 플랜', 5], ['22 플랜', 22], ['B22 플랜', 22], ['MCSC 5번 플랜', 5]]) { const r = P.parseViewCommand(q); ok(r && r.what === 'bay' && r.bay === bay, `«${q}» → bay ${bay} 베이플랜 (${JSON.stringify(r)})`); }
 console.log('[2-1] 베이 번호만 붙은 베이플랜도 명령 — bay 로 넘긴다(감사 P2-1)');
 for (const [q, bay] of [['5번 베이플랜', 5], ['22 베이플랜', 22], ['B22 베이플랜', 22], ['NSDC 10번 베이플랜', 10]]) {
   const r = P.parseViewCommand(q); ok(r && r.what === 'bay' && r.bay === bay, `«${q}» → bay ${bay} (${JSON.stringify(r)})`);
