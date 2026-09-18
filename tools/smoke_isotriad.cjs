@@ -144,6 +144,8 @@ const mergeInto = (store, recs) => recs.forEach(r => {
     //    구조 풀이가 못 잡고 빈칸을 냈고, 그 빈칸을 다른 값이 메워 **같은 원문이 두 규격으로 갈려 있었다**
     //    (RTDB 실측 129대 — 45G1 90 · 40HQ 39. 세관 파일 원본은 148행이지만 앱에 남은 것은 129대다).
     ['42HQ', '40HC', '세관 40ft 하이큐브 표기 — 빈칸이면 진단이 조용히 통과한다'],
+    //  3.53-06 — 세관이 40ft 하이큐브 리퍼를 `42HR` 로 적는다(MAMP 636N 실측 191대, EDI 는 전부 45R8·45R1).
+    ['42HR', '40RH', '세관 40HC 리퍼 표기 — 종전엔 42R1(40RF)로 풀려 191건 헛불일치'],
   ];
   const probeGrid = [HEAD].concat(PROBE.map((x, i) => ROW(i + 1, `PRBU000000${i}`, x[0])));
   const probed = (await U.parseListExcel(sheetBuf(probeGrid, 'sheet1'))).records || [];
@@ -153,7 +155,10 @@ const mergeInto = (store, recs) => recs.forEach(r => {
     ok(`${spec} → ${want} (${why})`, !!r && U.isoToLabel(r.iso) === want,
        r ? `${r.iso} → ${U.isoToLabel(r.iso) || '(빈칸)'}` : '레코드 없음');
   });
-  ok('리퍼 그룹은 리퍼 표시가 켜진다', ['45HR', '22HR', '45RE'].every(k => pby[k] && pby[k].rf === true));
+  //  3.53-06 감사 지적 — 콘앱·미르 번들은 normalizeSpecIso 없이 isoToLabel 원문 경로만 쓴다. 그 길을 직접 잰다.
+  [['42HR', '40RH'], ['40HR', '40RH'], ['44HR', '40RH'], ['46HR', '40RH'], ['22HR', '20RF'], ['20HR', '20RF'], ['4HRF', '40RF'], ['40HC', '40HC'], ['20HC', '20HC']]
+    .forEach(([raw, want]) => ok(`isoToLabel 원문 ${raw} → ${want}`, U.isoToLabel(raw) === want, `${U.isoToLabel(raw)}`));
+  ok('리퍼 그룹은 리퍼 표시가 켜진다', ['45HR', '22HR', '45RE', '42HR'].every(k => pby[k] && pby[k].rf === true));
   ok('플랫폼·오픈탑·탱크 표시가 켜진다', pby['42PC'] && pby['42PC'].fr === true && pby['42UT'] && pby['42UT'].ot === true && pby['22TN'] && pby['22TN'].tk === true);
 
   // ── ⑦ **표기 차이를 규격 차이로 만들지 않는가** (감사 지적 2026-09-14) ──
@@ -163,6 +168,9 @@ const mergeInto = (store, recs) => recs.forEach(r => {
     ['45GP', '44GP', '세관이 40HC 를 44GP 로 적는 관례'],
     ['2680', '25GP', '20피트 하이큐브 — 숫자꼴과 그룹꼴'],
     ['45RF', '45RE', '리퍼 표기 차이'],
+    ['45R8', '42HR', '3.53-06 — EDI 45R8 ↔ 세관 42HR (MAMP 636N 143대)'],
+    ['45R1', '42HR', '3.53-06 — EDI 45R1 ↔ 세관 42HR (MAMP 636N 48대)'],
+    ['45RE', '42HR', '3.53-06 — 검수사 «45RE 42RH 45RF 45R1 45R8 모두 같은 규격»'],
     ['45GP', '40HC', '사람 표기'],
   ];
   const DIFF = [
