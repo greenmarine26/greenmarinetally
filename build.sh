@@ -291,7 +291,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 3.53-07: 호기·장 짝짓기 — KKAK 2609N(동방) 실적·QC 사본으로 craneBaysByTime 이 대수로 짝을 고르는지(1호기→38 · 3호기→26) 잰다.
   SMOKE_CPM=$(mktemp /dev/shm/hometmp/_cpm_XXXXXX.mjs)
   SMOKE_CPO=$(mktemp /dev/shm/hometmp/_cpo_XXXXXX.cjs)
-  printf 'export { craneBaysByTime, craneBoardOf, pairCranesByCount } from "%s/src/utils.js";\n' "$PWD" > "$SMOKE_CPM"
+  printf 'export { craneBaysByTime, craneBoardOf, pairCranesByCount, pairCranesForGroups } from "%s/src/utils.js";\n' "$PWD" > "$SMOKE_CPM"
   if npx esbuild "$SMOKE_CPM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CPO" --log-level=error; then
     node tools/smoke_cranepair.cjs "$SMOKE_CPO" || { echo "✗ 호기·장 짝짓기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CPM" "$SMOKE_CPO"; exit 1; }
     rm -f "$SMOKE_CPM" "$SMOKE_CPO"

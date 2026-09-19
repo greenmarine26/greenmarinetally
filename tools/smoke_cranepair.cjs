@@ -11,10 +11,29 @@ const U = require(path.resolve(B));
 const FX = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'fixtures/cranepair_kkak2609n.json'), 'utf8'));
 let fail = 0, pass = 0;
 const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++; else fail++; };
-const tb = U.craneBaysByTime(FX);
+//  3.53-09 — 안벽 순서 × 접안 방향이 먼저다(검수사 2026-09-06 «바다를 바라보고 좌측부터 PNCT 4-2-1-3호기» · «우현접안이므로 3호기가 선수»).
+//    사본에는 berthSide·pier 가 없어 아래 ①~⑤는 대수 갈래를 잰다.
+const withSide = (side, pier = 'PNCT', qc) => ({ ...FX, info: { ...FX.info, berthSide: side, pier, ...(qc ? { qcWork: qc } : {}) } });
+const tS = U.craneBaysByTime(withSide('우현')), tP = U.craneBaysByTime(withSide('좌현'));
+ok(tS.byNo[3].bay === '26' && tS.byNo[1].bay === '38' && tS.side === 'starboard' && tS.pier === 'PNCT', `동방 우현 {1,3} — 3호기 선수(26) · 1호기 선미(38) (${tS.byNo[3].bay}/${tS.byNo[1].bay})`);
+ok(tP.byNo[1].bay === '26' && tP.byNo[3].bay === '38' && tP.side === 'port', `동방 좌현 {1,3} — 1호기 선수(26) · 3호기 선미(38) (${tP.byNo[1].bay}/${tP.byNo[3].bay})`);
+ok(U.craneBaysByTime(withSide('우현', 'PNCT', { QC101: { qc: 'QC101', disDone: 5 }, QC103: { qc: 'QC103', disDone: 5 } })).byNo[3].bay === '26', '우현이면 대수가 같아도(동점) 순서가 정한다');
+const PG = (v, nos, cnt) => JSON.stringify(U.pairCranesForGroups(v, nos, cnt));
+ok(PG({ info: { berthSide: '우현', pier: 'PNCT' } }, [1, 2], [10, 10]) === '[1,2]', '동방 우현 {1,2} — 1호기 선수(OBWH 2735E·KKLC 2608N 실측)');
+ok(PG({ info: { berthSide: '우현', pier: 'PNCT' } }, [2, 4], [10, 10]) === '[2,4]', '동방 우현 {2,4} — 2호기 선수(DXQD 2636E 실측 · 검수사 «선수가 2호기 선미가 4호기»)');
+ok(PG({ info: { berthSide: '좌현', pier: 'PNCT' } }, [2, 4], [10, 10]) === '[4,2]', '동방 좌현 {2,4} — 4호기 선수');
+ok(PG({ info: { berthSide: '우현', pier: 'PCTC' } }, [1, 2], [10, 10]) === '[2,1]', 'PCTC 우현 {1,2} — 우측(2호기)이 선수');
+ok(PG({ info: { berthSidePick: '좌현', berthSide: '우현', pier: 'PNCT' } }, [1, 3], [9, 7]) === '[1,3]', '검수사가 고른 방향(berthSidePick)이 수집기 값보다 먼저');
+ok(PG({ info: { berthSide: '좌현', pier: 'PNCT', qcWork: { QC103: { qc: 'QC103', disDone: 100 }, QC105: { qc: 'QC105', disDone: 260 } } } }, [3, 5], [260, 100]) === '[5,3]', 'RZOR {3,5} — 5호기가 안벽 순서에 없어 대수 갈래로');
+ok(PG({ info: { berthSide: '우현', qcWork: { QC101: { qc: 'QC101', disDone: 14 }, QC103: { qc: 'QC103', disDone: 17 } } } }, [1, 3], [17, 14]) === '[3,1]', '부두를 모르면 대수 갈래로');
+//  감사 [중대](3.53-09) — 콘앱이 같은 함수를 부르되 접안방향·부두를 안 넘기면 두 앱 답이 갈린다. cone.html 호출부가 그 재료를 넘기는지 글자로 잰다.
+const CONE = fs.readFileSync(path.resolve(__dirname, '../public/cone.html'), 'utf8');
+ok(/info\/berthSide\.json/.test(CONE) && /info\/berthSidePick\.json/.test(CONE) && /info\/pier\.json/.test(CONE) && /craneBaysByTime[\s\S]{0,400}qcWork: CT\.qc, \.\.\.\(_inf\|\|\{\}\)/.test(CONE),
+   '콘앱(cone.html)이 craneBaysByTime 에 berthSide·berthSidePick·pier 를 같이 넘긴다(두 앱 같은 답)');
+const tb = U.craneBaysByTime(FX);   // 방향 없음 → 대수 갈래
 ok(tb.byNo && tb.byNo[1] && tb.byNo[1].bay === '38', `KKAK 2609N 1호기 → 38번 장 (${tb.byNo && tb.byNo[1] && tb.byNo[1].bay})`);
 ok(tb.byNo && tb.byNo[3] && tb.byNo[3].bay === '26', `KKAK 2609N 3호기 → 26번 장 (${tb.byNo && tb.byNo[3] && tb.byNo[3].bay})`);
-ok(tb.byCount === true, '대수로 짝을 바꿨다는 표식(byCount)');
+ok(tb.byCount === true && tb.side === '', '방향 없음 — 대수로 짝을 바꿨다는 표식(byCount)');
 ok(['25', '26', '27'].every((b) => tb.byBay[b] == null || tb.byBay[b] === 3) && tb.byBay['38'] === 1, 'byBay 도 같은 짝(25·26·27→3호기 · 38→1호기)');
 ok(tb.byNo[3].bay === '26' && Object.keys(tb.byBay).some((b) => b !== '26'), '3.53-08 — 바구니에 장의 일부(25·27)만 찍혀도 장 전체 [E-1,E,E+1] 대수로 짝을 잰다');
 const cb = U.craneBoardOf(FX, []);

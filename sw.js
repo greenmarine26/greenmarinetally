@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.53-08';
-const NOTE = '수석 보드 호기 카드의 대수와 그림이 서로 바뀌어 보이던 것을 고쳤습니다 장 전체 대수로 호기를 맞춥니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.53-09';
+const NOTE = '호기 카드의 장은 안벽 순서와 접안 방향으로 정합니다 동방은 바다를 보고 4 2 1 3호기 순이고 우현접안이면 우측이 선수입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

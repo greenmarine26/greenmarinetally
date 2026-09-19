@@ -49,8 +49,9 @@ const ENTRY = fs.readFileSync(path.join(ROOT, 'src/coneCargoPlan.entry.jsx'), 'u
 {
   ok(typeof U.craneBaysByTime === 'function', '판정을 검사가 직접 부를 수 있다');
   //  콘앱이 넘기는 모양 — cone.html 의 그 줄과 같은 구조여야 한다.
-  const shape = /_cb\(\{ info:\{ qcWork: CT\.qc \}, discharge:\{ termWork: twD\|\|\{\} \}, loading:\{ termWork: twL\|\|\{\} \} \}\)/.test(CONE);
-  ok(shape, '콘앱이 넘기는 모양이 검수앱과 같다(info.qcWork · discharge/loading.termWork)');
+  //  2.50-01(TallyOne 3.53-09): info 에 접안방향·부두(berthSide·berthSidePick·pier)를 같이 넘긴다 — 안벽 순서 × 접안 방향 규칙의 재료.
+  const shape = /_cb\(\{ info:\{ qcWork: CT\.qc, \.\.\.\(_inf\|\|\{\}\) \}, discharge:\{ termWork: twD\|\|\{\} \}, loading:\{ termWork: twL\|\|\{\} \} \}\)/.test(CONE);
+  ok(shape, '콘앱이 넘기는 모양이 검수앱과 같다(info.qcWork+berthSide·pier · discharge/loading.termWork)');
 
   //  호기가 둘인데 termWork 가 비어 있으면 «자리 자료 없음» 으로 물러난다 — 조용히 틀리지 않는다.
   const empty = U.craneBaysByTime({ info: { qcWork: { QC101: { qc: 'QC101' }, QC102: { qc: 'QC102' } } },
@@ -121,7 +122,7 @@ const ENTRY = fs.readFileSync(path.join(ROOT, 'src/coneCargoPlan.entry.jsx'), 'u
 
 // ── 종전 동작을 안 깨뜨렸는가
 {
-  ok(/window\.__CONEV='ConeOne 2\.50'/.test(CONE), '콘앱 판이 2.50 이다(2.46 호기 되살리기 위에 쌓인 판 · 2.48 미르 한 벌)');
+  ok(/window\.__CONEV='ConeOne 2\.50-01'/.test(CONE), '콘앱 판이 2.50-01 이다(2.46 호기 되살리기 위에 쌓인 판 · 2.48 미르 한 벌 · 2.50-01 접안방향 재료)');
   ok((CONE.match(/ctEquip\(/g) || []).length >= 3, '종전 호기 이름 함수(ctEquip)를 그대로 쓴다 — PCTC 는 하나도 안 바뀐다');
   ok(/const eq = ctEquip\(c\.equip\) \|\| \('검수 '/.test(CONE),
      '검수원이 찍은 완료 쪽 이름 규칙은 안 건드렸다');
