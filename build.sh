@@ -288,6 +288,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 콘앱 호기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CCM" "$SMOKE_CCO"; exit 1
   fi
+  # 3.53-07: 호기·장 짝짓기 — KKAK 2609N(동방) 실적·QC 사본으로 craneBaysByTime 이 대수로 짝을 고르는지(1호기→38 · 3호기→26) 잰다.
+  SMOKE_CPM=$(mktemp /dev/shm/hometmp/_cpm_XXXXXX.mjs)
+  SMOKE_CPO=$(mktemp /dev/shm/hometmp/_cpo_XXXXXX.cjs)
+  printf 'export { craneBaysByTime, craneBoardOf, pairCranesByCount } from "%s/src/utils.js";\n' "$PWD" > "$SMOKE_CPM"
+  if npx esbuild "$SMOKE_CPM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CPO" --log-level=error; then
+    node tools/smoke_cranepair.cjs "$SMOKE_CPO" || { echo "✗ 호기·장 짝짓기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CPM" "$SMOKE_CPO"; exit 1; }
+    rm -f "$SMOKE_CPM" "$SMOKE_CPO"
+  else
+    echo "✗ 호기·장 짝짓기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CPM" "$SMOKE_CPO"; exit 1
+  fi
   # 3.49: 해치커버 자동 판정 — SWTD 9013E(PCTC)·KKLC 2608N(동방) 실적 사본으로 utils.hatchEventsOf 를 실소스 그대로 돌려 열림·닫힘 사건 24건을 실측 판독과 대조한다.
   #   따라가기는 이 판정을 묻지 않고 reports 에 적으므로 판정이 소리 없이 바뀌면 타임시트가 틀린다. 문지기(해치 제외 배·미래 실적·workEndAt+2h)·보고 상태 한 벌도 같이 잰다.
   SMOKE_HAM=$(mktemp /dev/shm/hometmp/_ham_XXXXXX.mjs)
