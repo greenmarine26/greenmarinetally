@@ -176,7 +176,11 @@ function renderRow(c, idx, opts) {
 //      선사 약어(40HE)가 종이로 샜다 — 문은 utils.isoToCustomsSpec 한 벌이 지킨다.
   const spec = _specOf(c);
   const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
-  const sl = (c.sl || '').slice(0, 10);  // M5.52: 12→10자 (선사 칸 공간 확보)
+  //  ★ 3.53-10 — **실번호를 자르지 않는다.** 검수사 2026-09-21 «검수리스트에서 셀 자리수 부족으로 실번호 잘림현상 해결바람»
+  //    (ATPR 2642E — 실번호 SINOKOR011526 이 종이에 «SINOKOR011» 로 나갔다). M5.52 가 선사 칸 공간을 위해 10자로 잘랐는데
+  //    검수는 실번호로 실물을 맞추는 일이라 뒷자리를 잃으면 종이가 거짓이 된다. 칸을 넓히고(실번호 16→18%, 컨번호 19→17%) 10자 넘으면 6pt 로 줄인다 — 줄바꿈은 장당 줄수를 깨므로 안 쓴다.
+  const sl = String(c.sl || '').trim();
+  const _slCls = sl.length > 10 ? ' s2' : '';
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
   const isBooking = c.isBooking === true || c.pendingCn === true ||
                     (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_'));
@@ -258,7 +262,7 @@ function renderRow(c, idx, opts) {
   return `<tr style="background:${bg}">
     <td>${idx}</td>
     <td class="cn">${cn}</td>
-    <td>${sl}</td>
+    <td class="sl${_slCls}">${_esc(sl)}</td>
     <td>${spec}</td>
     <td>${fe}</td>
     <td class="memo${_memoCls}">${note}</td>
@@ -369,7 +373,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   const renderPageWithHdr = (pair, pageNum, totalPages) => {
     const [left, right] = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL)];
     const col = (rs) => `<table class="ilist">
-      <colgroup><col style="width:6%"><col style="width:19%"><col style="width:16%"><col style="width:9%"><col style="width:4%"><col style="width:35%"><col style="width:11%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F/E</th><th>비고</th><th>선사</th></tr></thead>
+      <colgroup><col style="width:6%"><col style="width:17%"><col style="width:18%"><col style="width:9%"><col style="width:4%"><col style="width:35%"><col style="width:11%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F/E</th><th>비고</th><th>선사</th></tr></thead>
       <tbody>${rs.join('')}</tbody>
     </table>`;
     return `<div class="ipage">
@@ -450,6 +454,9 @@ table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0
       등급(m2~m5)은 «한 줄에 담으려는 노력» 이고, 못 담으면 줄이 늘 뿐 한 글자도 안 잃는다. */
 table.ilist td.memo { white-space: normal; overflow-wrap: anywhere; text-align: left; padding: 0 1.5px; }
 table.ilist td.memo.m2 { font-size: 6pt; letter-spacing: -0.2px; }   /* 3.45: 바닥은 6pt — 더 줄이지 않고 줄을 바꾼다 */
+/*  ★ 3.53-10 — 실번호도 잘리지 않는다. 10자 넘으면 6pt(바닥). 줄은 안 바꾼다(장당 줄수가 깨진다) — 15자까지 칸 안, 그보다 길면 숨기지 않고 옆 칸 위로 보인다(실측 최대 14자·보관 17자 1건). */
+table.ilist td.sl { white-space: nowrap; letter-spacing: -0.2px; }   /* 줄을 바꾸면 장당 줄수(고정)가 깨져 A4 를 넘친다 — 칸을 넓히고(16→18%, 컨번호 19→17%) 글자를 줄인다 */
+table.ilist td.sl.s2 { font-size: 6pt; letter-spacing: -0.4px; }
 @media print {
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .actions { display: none; }

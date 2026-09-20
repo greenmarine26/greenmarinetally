@@ -38,6 +38,9 @@ const rows = Object.entries(FX.edi).map(([k, e]) => {
 const worst = Object.assign({}, findCn(fx('liveboard_obwh.json'), 'SPRU1000458'),
   { pod: 'KRPTK', _xray: true, _xraySealNo: '523533', dg: true, dgc: '9', un: '3480', pg: '2', _urgent: true, _lugg: true, _shift: true });
 rows.unshift(worst);
+//  ★ 3.53-10 — 긴 실번호(ATPR 2642E 실측 SINOKOR011526 · 13자)를 끼운다. 종전 M5.52 는 10자로 잘랐다 — 종이에 «SINOKOR011».
+rows.splice(1, 0, Object.assign({}, rows[1] || rows[0], { cn: 'HALU2076346', sl: 'SINOKOR011526', pod: 'KRPTK', _xray: false }));
+rows.splice(2, 0, Object.assign({}, rows[2] || rows[0], { cn: 'HALU2081229', sl: 'SINOKOR01152612', pod: 'KRPTK', _xray: false }));
 //  순번이 세 자리가 되게 — 한 선사 100대를 넘기면 평택 실항차의 기본값이다
 //  별첨2 시프팅 표도 같이 그린다 — 이 표는 colgroup 이 따로라 fixed 아래서 모양이 바뀔 자리다
 const shift = rows.slice(0, 14).map((r, i) => ({ cn: r.cn, iso: r.iso, pod: 'KRPTK', from: '00' + (i + 6) + '0482', to: '00' + (i + 9) + '0688' }));
@@ -154,6 +157,9 @@ const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-b
   ok('6pt 아래로는 안 줄인다 — 더 줄이는 대신 줄을 바꾼다', !/m[345]/.test(r.memo.map((m) => m.cls).join(' ')),
      `축소 ${shrunk}칸 · 두 줄 이상 ${wrapped}칸`);
   ok('종이가 가로로 안 넘친다', !r.bodyX);
+  ok('3.53-10 — 실번호 13자가 한 글자도 안 잘린다(SINOKOR011526)', />SINOKOR011526<\/td>/.test(html), '종이에 SINOKOR011526 이 없다');
+  ok('3.53-10 — 실번호 15자도 안 잘린다', html.includes('SINOKOR01152612'));
+  ok('3.53-10 — 10자 넘는 실번호는 s2(6pt) 칸', /class="sl s2">SINOKOR011526</.test(html) && !/class="sl s2">010145</.test(html));
 
   console.log(bad ? `\n✗ 검수 리스트 모양 연막검사 실패 ${bad}건 / ${n}` : `\n✓ 검수 리스트 모양 연막검사 통과 (${n}항)`);
   process.exit(bad ? 1 : 0);
