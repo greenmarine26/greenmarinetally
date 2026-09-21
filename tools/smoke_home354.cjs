@@ -22,6 +22,8 @@ T(/setShowCreate\('discharge'\)/.test(H) && /setShowCreate\('loading'\)/.test(H)
 T(/\{topMenu && <div className="fixed inset-0/.test(H), '펼친 메뉴는 밖을 누르면 닫힌다');
 T(/const FOLD = more \? '' : 'max-lg:hidden'/.test(H) && (H.match(/\$\{FOLD\}|className=\{FOLD\}/g) || []).length >= 6, '카드 접기는 폰 전용 CSS 감추기다(PC 는 그대로) — 감추는 자리 여섯 이상', String((H.match(/\$\{FOLD\}|className=\{FOLD\}/g) || []).length));
 T(/setMore\(m => !m\)/.test(H) && /▾ 자세히/.test(H) && /fold=\{!more\}/.test(H), '«자세히» 버튼이 있고 막대가 접힌 모습을 따른다');
+//  3.55-01 — 조회만은 쓰는 버튼(새 항차·지금 처리·완료·삭제)을 그리지 않는다
+T(/const _viewOnly = isViewOnlyNow\(\)/.test(H) && /\{!_viewOnly && <div className="relative shrink-0">/.test(H) && (H.match(/onDelete=\{_viewOnly \? null :/g) || []).length === 2 && /\{onDelete && <div className=\{`flex items-center gap-1 lg:flex-col/.test(H), '조회만이면 새 항차 버튼과 카드의 지금 처리·완료·삭제 묶음을 그리지 않는다');
 T(/\{fold && \(/.test(H) && /stats\.missing > 0 && <span className="text-xs2 font-bold text-red-300/.test(H), '접힌 막대에도 완료·전체와 누락은 보인다');
 {
   const i = H.indexOf('const [more, setMore]'), seg = H.slice(i, H.indexOf('function MissingSideNote'));

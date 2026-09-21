@@ -8,7 +8,8 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
-import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
+import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
+import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -513,7 +514,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   }, [voyagesWithPier]);
 
   // M5.82: 부두별 그룹화 + 현 부두 우선
-  const _chiefBtn = canOpenChief(inspector, isOwnerName(inspector));   // 3.54: 수집기 줄 옆 절반 자리 — 보이는 사람에게만
+  const _chiefBtn = canOpenChief(inspector, isOwnerName(inspector));
+  const _viewOnly = isViewOnlyNow();   // 3.55-01   // 3.54: 수집기 줄 옆 절반 자리 — 보이는 사람에게만
   const effectivePier = pierFilter === 'auto' ? currentPier?.code : (pierFilter === 'all' ? null : pierFilter);
   const list = useMemo(() => {
     if (!effectivePier) return voyagesWithPier;
@@ -786,7 +788,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             </div>
           );
         })()}
-        <div className="relative shrink-0">
+        {/* 3.55-01(검수사 2026-09-22): 조회만은 보기만 — 새 항차·완료·삭제 버튼을 그리지 않는다(3.51 은 눌렀을 때 막았다). */}
+        {!_viewOnly && <div className="relative shrink-0">
           <button onClick={() => setTopMenu(m => (m === 'new' ? '' : 'new'))} aria-haspopup="menu" aria-expanded={topMenu === 'new'}
             className="px-2.5 py-2 rounded-pill text-xs font-bold whitespace-nowrap bg-ink-800 hover:bg-ink-750 border border-line text-dim-100 flex items-center gap-1" style={{ minHeight: 40 }}>
             <Plus className="ico-s"/>새 항차 ▾
@@ -802,7 +805,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-orange-200 hover:bg-ink-800">📋 물량 예보 붙여넣기</button>
             </div>
           )}
-        </div>
+        </div>}
         {/* TallyOne 1.5: 화면 데이터만 새로고침 — 로그인을 유지한 채 구독만 재연결한다. */}
         <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
       </div>
@@ -843,8 +846,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 pilotForecast={pilotForecast}
                 activeInspectors={activeInspectors[v.key] || []}
                 onOpen={(m) => onOpenVoyage(v.key, m)}
-                onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
-                onComplete={(mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
+                onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
+                onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
                 inspectorDone={isAllDone(v)}
                 modeDone={{
                   d: v.info?.inspectorDone || !!v.info?.dischargeDone,
@@ -893,8 +896,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                     pilotForecast={pilotForecast}
                     activeInspectors={activeInspectors[v.key] || []}
                     onOpen={(m) => onOpenVoyage(v.key, m)}
-                    onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
-                    onComplete={(mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
+                    onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
+                    onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
                     inspectorDone={isAllDone(v)}
                     modeDone={{
                       d: v.info?.inspectorDone || !!v.info?.dischargeDone,
@@ -1737,7 +1740,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             className="lg:hidden shrink-0 h-9 px-3 rounded-pill text-xs2 font-bold border border-line bg-ink-800 text-dim-200 whitespace-nowrap">
             {more ? '▴ 접기' : '▾ 자세히'}
           </button>
-          <div className={`flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5 ${more ? 'max-lg:basis-full' : 'max-lg:hidden'}`}>
+          {onDelete && <div className={`flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5 ${more ? 'max-lg:basis-full' : 'max-lg:hidden'}`}>
             {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈 카드에** 둔다.
                 "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" — 자료를 폴더에 넣은 직후
                 수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록시킨다.
@@ -1822,7 +1825,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             >
               <Trash2 className="w-4 h-4 mx-auto"/>
             </button>
-          </div>
+          </div>}
         </div>
       )}
     </div>

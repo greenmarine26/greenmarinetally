@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.55';
-const NOTE = '홈 화면이 짧아졌습니다 카드의 자세히를 누르면 항로와 대수 내역 완료 버튼이 나옵니다 새 항차와 부두 고르기는 위쪽 버튼 안에 있습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.55-01';
+const NOTE = '조회만으로 들어오면 새 항차와 완료 삭제 버튼이 보이지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
