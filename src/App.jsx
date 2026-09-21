@@ -6,7 +6,7 @@ import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber } from './uti
 import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
-  fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
+  fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
 , fbSubscribeLaneRoutes, fbSubscribeMirLexicon, fbWriteMirLexicon, fbLogMirMiss } from './firebase.js';   // 3.0: 미르 자체 학습 사전·결산 기록
@@ -76,7 +76,6 @@ export default function App() {
   // V9.33: 평택도선사회 도선 예보(수집기 기록) — 선박코드 키
   const [pilotForecast, setPilotForecast] = useState({});
   // V9.36: 터미널 작업 현황(진행률·출항 ETD) — 작업 마무리 시 출항시간 표기용
-  const [terminalWork, setTerminalWork] = useState({});
   /* ★ 2.87 (검수사 지시 2026-08-29) — 미르가 여는 플랜은 **덮개**다. 주소를 바꾸지 않는다.
        «사용자가 원하지 않았는데 위치이동이 됩니다. 홈화면에서 물었으면 홈화면에서 보여주고
          닫아도 홈화면이어야 합니다»
@@ -169,7 +168,6 @@ export default function App() {
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
     const u4b = fbSubscribePilotForecast(setPilotForecast);  // V9.33: 도선 예보
-    const u4c = fbSubscribeTerminalWork(setTerminalWork);   // V9.36: 터미널 작업 현황
     const u4d = fbSubscribeLaneRoutes(setLaneRoutes);       // 1.45: 항로 사전(utils 모듈 캐시)
     const u6 = fbSubscribeHeartbeat(setHeartbeat);  // V8.40: 수집기 하트비트
     // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
@@ -241,7 +239,7 @@ export default function App() {
       //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
       //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
-    return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); };
+    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); };
   }, []);
 
   useEffect(() => {
@@ -572,7 +570,6 @@ export default function App() {
             voyages={visibleVoyages} inspectors={inspectors} inspector={inspector}
             portMisData={portMisData}
             pilotForecast={pilotForecast}
-            terminalWork={terminalWork}
             onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
             onOpenChiefDashboard={() => navigate('chief')}
@@ -599,7 +596,6 @@ export default function App() {
             voyages={visibleVoyages}
             onOpenContainer={(c) => setGlobalDetail(c)}
             portMisData={portMisData}
-            terminalWork={terminalWork}
             heartbeat={heartbeat}
             isChief={chiefOrOwner}
             initialQuery={searchInitQ}
@@ -617,7 +613,6 @@ export default function App() {
               collectorHb={heartbeat}
               pilotForecast={pilotForecast}
               portMisData={portMisData}
-              terminalWork={terminalWork}
               onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
               onGoHome={() => navigate('home')}
@@ -652,7 +647,7 @@ export default function App() {
           ) : voyages[route.voyageKey] ? (
           <VoyagePage
             key={route.voyageKey}
-            terminalWork={terminalWork}   /* 1.69-01: 진행 질문 — 터미널 실황 1순위(수석 통합검색과 답의 근본 통일) */   /* 1.55-03: 항차를 바꿔 열면 앞 항차의 모드·탭 state 가 남았다(선적 전용 항차가 빈 양하 화면에 갇힘 — 독립 재검증 P1-9). 재마운트로 initModeOverride 가 다시 읽힌다. */
+            /* 1.55-03: 항차를 바꿔 열면 앞 항차의 모드·탭 state 가 남았다(선적 전용 항차가 빈 양하 화면에 갇힘 — 독립 재검증 P1-9). 재마운트로 initModeOverride 가 다시 읽힌다. */
             initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}
@@ -698,7 +693,6 @@ export default function App() {
             voyageKey={mirPlan.voyageKey}
             voyage={voyages[mirPlan.voyageKey]}
             voyages={visibleVoyages}
-            terminalWork={terminalWork}
             heartbeat={heartbeat}
             inspector={inspector}
             inspectors={inspectors}
@@ -710,7 +704,7 @@ export default function App() {
 
       {/* ★ 3.41 — 떠 있는 미르. 어느 화면에서든 오른쪽 아래 얼굴을 누르면 시트가 올라온다(검수사 «앱 어디에든 항상 띄워서»).
            답은 mirAnswer.answerOne 한 벌(작업창·양하선적 탭·홈·콘앱과 같은 함수). 플랜 명령은 위 mirPlan 덮개를 연다. */}
-      <MirFab voyages={visibleVoyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData} terminalWork={terminalWork}
+      <MirFab voyages={visibleVoyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData}
         pilotForecast={pilotForecast} heartbeat={heartbeat} onOpenPlan={(p) => setMirPlan(p)} />
 
       <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">

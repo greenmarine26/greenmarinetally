@@ -25,5 +25,5 @@ containers.forEach((c, i) => {
 const voyage = { info, loading: { completed }, discharge: { completed: {} } };
 
 createRoot(document.getElementById('root')).render(
-  React.createElement(StatsTab, { containers, compMap, xrayMap: {}, mode: 'loading', voyage, terminalWork: null })
+  React.createElement(StatsTab, { containers, compMap, xrayMap: {}, mode: 'loading', voyage })
 );

@@ -89,7 +89,7 @@ function narrowByFullCn(list, q) {
 //  3.49: 따라가기 자동 기록 «적는 중/적음» 표 — 모듈 수준(항차키|장|동작). 화면이 다시 마운트되거나(모드 전환 key) 언마운트 뒤에도 같은 사건을 두 번 적지 않는다(2차 감사). 실패하면 지워 다음 갱신에 다시.
 const _hatchInFlightAll = new Set();
 
-export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {}, relayQuery = '', bayView = null }) {   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, relayQuery = '', bayView = null }) {   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -563,7 +563,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             <span className="text-xs2 font-bold text-amber-300">💬 질문 답변</span>
             <button onClick={() => setAskMode(false)} className="text-xs2 text-dim-300 px-2 py-1 rounded hover:bg-ink-750">✕ 닫고 작업으로</button>
           </div>
-          <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
+          <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} relayQuery={relayQuery} />
         </div>
       )}
 
@@ -915,7 +915,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
+        ? <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -1003,7 +1003,7 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {}, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
+function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
   //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
@@ -1171,13 +1171,13 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       containers: allContainers, photos: voyage?.photos || null,
       shiftMap: shiftingMapForDisplay(voyageKey, voyage),   // V7.92-02 · 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
       bayPairs: (manualCtx && manualCtx.bayPairs) || getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
-      rfSkip, esealBrief, terminalWork, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
+      rfSkip, esealBrief, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
       inspector, isChief: _isChiefName(inspector), handover: { note: handoverNote, finalized: handoverFinalized }, lastTopic: lastTopicRef.current,
       manualCtx, selectedGroup: manualCtx?.selectedGroup, selectedTier: manualCtx?.selectedTier, shipLib: manualCtx?.shipLib || null,
       voyageDoneAts: (manualCtx && manualCtx.voyageDoneAts) || voyageDoneAts(voyage),
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
   //  3.42: 모델이 «미르 말»로 바꾼 문장을 같은 재료로 규칙에 다시 돌린다(위 _localAnswerRaw 와 같은 ctx — 두 벌이 되면 안 된다).
   const _rulesFor = (cq) => answerOneRaw(cq, {
     app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
@@ -1185,7 +1185,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     containers: allContainers, photos: voyage?.photos || null,
     shiftMap: shiftingMapForDisplay(voyageKey, voyage),
     bayPairs: (manualCtx && manualCtx.bayPairs) || getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
-    rfSkip, esealBrief, terminalWork, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
+    rfSkip, esealBrief, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
     inspector, isChief: _isChiefName(inspector), handover: { note: handoverNote, finalized: handoverFinalized }, lastTopic: lastTopicRef.current,
     manualCtx, selectedGroup: manualCtx?.selectedGroup, selectedTier: manualCtx?.selectedTier, shipLib: manualCtx?.shipLib || null,
     voyageDoneAts: (manualCtx && manualCtx.voyageDoneAts) || voyageDoneAts(voyage),

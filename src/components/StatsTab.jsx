@@ -3,8 +3,8 @@ import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel } from '../util
 import { paceFromRecords, voyageDoneAts, voyageReportSpan, voyageFirstTermAt } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
-export default function StatsTab({ containers, compMap, xrayMap, mode, voyage, terminalWork }) {
-  const stats = useMemo(() => computeAllStats(containers, compMap, xrayMap, mode, voyage, terminalWork), [containers, compMap, xrayMap, mode, voyage, terminalWork]);
+export default function StatsTab({ containers, compMap, xrayMap, mode, voyage }) {
+  const stats = useMemo(() => computeAllStats(containers, compMap, xrayMap, mode, voyage), [containers, compMap, xrayMap, mode, voyage]);
 
   if (containers.length === 0) {
     return (
@@ -225,7 +225,7 @@ function SpecialRow({ type, stats, containers }) {
   );
 }
 
-function computeAllStats(containers, compMap, xrayMap, mode, voyage, terminalWork) {
+function computeAllStats(containers, compMap, xrayMap, mode, voyage) {
   const total = containers.length;
   const done = containers.filter(c => compMap[c.cn]).length;
 
@@ -307,7 +307,7 @@ function computeAllStats(containers, compMap, xrayMap, mode, voyage, terminalWor
   let paceNote = '';
   let paceSrc = '';
   {
-    //  3.53-12: 페이스는 완료 기록 한 벌 — 트레드링스 합계 피드는 떼어 냈다(검수사 2026-09-15·09-21).
+    //  3.53-12: 페이스는 완료 기록 한 벌 — 외부 합계 피드는 떼어 냈다(검수사 2026-09-15·09-21).
     {
       //  3.24: 검수 시작·완료(작업 보고)를 info 에 얹어 넘긴다 — 분모가 접안시각으로 잡히던 것(§4-4 한 벌).
       const _P = paceFromRecords(voyageDoneAts(voyage), { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) });

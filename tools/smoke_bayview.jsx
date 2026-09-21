@@ -100,7 +100,7 @@ function App() {
     allEdiContainers, xrayMap: {}, xraySeals: {}, shiftingMap: {}, preGoneInfo: null,
     onOpenContainer: (c) => { window.__calls.push({ fn: 'detail', cn: c && c.cn }); },
     onClose: () => { window.__calls.push({ fn: 'close' }); setOpen(false); },
-    searchPanelProps: { terminalWork: {} },
+    searchPanelProps: {},
   });
 }
 createRoot(document.getElementById('root')).render(React.createElement(App));

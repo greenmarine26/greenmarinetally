@@ -98,7 +98,7 @@ const _voyCore = (x) => {
 
 // V9.57: 죽은 prop onOpenGlobalSearch 제거 — 이 컴포넌트 안에서 쓰는 곳이 없었다(App쪽 전달부 정리는 판2).
 // TallyOne 1.0 (K5): 맛집(onOpenFood)·건강점검(onOpenHealth) 개별 진입 → 보조기능(onOpenAux, #/aux) 하나로 교체
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0, onOpenGlobalSearch = null }) {   // 1.69-01: 홈 검색 진입 복원
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0, onOpenGlobalSearch = null }) {   // 1.69-01: 홈 검색 진입 복원
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [homeQ, setHomeQ] = useState('');   // 1.69-01: 홈 검색창 — 통합검색으로 들고 가는 질문
   const [vsl, setVsl] = useState('');
@@ -732,7 +732,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
       {/* V9.16: 오늘의 나 — 내 처리량·페이스 (완료 기록이 있을 때만) */}
       {(() => {
-        const me = computeMyToday(voyages, inspector, Date.now(), terminalWork);
+        const me = computeMyToday(voyages, inspector, Date.now());
         if (!me || me.count === 0) return null;
         const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
         return (
@@ -947,7 +947,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 voyage={v}
                 inspector={inspector}
                 pilotForecast={pilotForecast}
-                terminalWork={terminalWork}
                 activeInspectors={activeInspectors[v.key] || []}
                 onOpen={(m) => onOpenVoyage(v.key, m)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
@@ -998,7 +997,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                     voyage={v}
                     inspector={inspector}
                     pilotForecast={pilotForecast}
-                    terminalWork={terminalWork}
                     activeInspectors={activeInspectors[v.key] || []}
                     onOpen={(m) => onOpenVoyage(v.key, m)}
                     onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
@@ -1381,7 +1379,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {}, inspector = '', laneRow = null, showRoute = false }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, showRoute = false }) {
   // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 48 고정 · 한 줄 고정 · 폰 균등 / PC 전폭.
   //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
   const ACT_BTN = 'h-12 px-2.5 rounded-pill text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
@@ -1426,11 +1424,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
 
   // V9.57: 출항 배지 판정을 렌더 JSX 밖으로 끌어올림 — sticky 기록(Firebase 쓰기)을
   //   렌더 중 부수효과가 아니라 useEffect에서 하기 위함. 판정 자체는 badgeRule.decideBadge 그대로.
-  // V9.36 가드: 터미널 자료는 **선박코드**로만 오므로 그대로 쓰면 '직전 항차'의 작업/출항이
-  //   다음 기항 카드에 붙는다. 이 항차의 작업창(_etaMs~_etdMs) ±12h 안의 자료만 이 항차 것으로 본다.
   // V9.57: ±12h 창 검사 인라인 2벌 → badgeRule.inWindow(WINDOW_H) 한 곳으로 단일화.
-  const _tw0 = terminalWork[(voyage.info?.vsl || '').toUpperCase()];
-  const tw = (_tw0 && inWindow(parsePortMisDateTime(_tw0.startAt), voyage._etaMs, voyage._etdMs)) ? _tw0 : null;
   const pfDep = (() => {
     // V9.36-01: 도선 nextDep에도 같은 작업창 가드 — 도선 예보는 '다음 출항'으로 계속 갱신되므로
     //   이 항차 출항이 예보에서 빠지면 다음 기항 출항이 이번 카드에 붙는다.
@@ -1438,19 +1432,20 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
     const t = r ? parsePortMisDateTime(r.nextDep) : null;
     return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null;
   })();
-  const twDep = tw ? parsePortMisDateTime(tw.depEtd) : null;
+  //  3.53-13 (검수사 «출항 시간은 포트미스 도선협회 두곳자료로 사용합니다») — 도선 예보가 없으면 PORT-MIS 신고 출항. 같은 작업창(±12h) 가드.
+  const pmDep = (() => { const t = voyage._pm && voyage._pm.etd ? parsePortMisDateTime(voyage._pm.etd) : null; return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null; })();
   // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료).
   //   V9.57: disStats/loaStats(위에서 같은 인자로 계산)를 재사용 — IIFE 안 중복 computeStats 제거.
   const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0));
   const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
   // 2.15: 우측 액션 패널의 «남은 수» — 좌측 총계와 다른 숫자라야 두 번 쓰는 값이 안 된다.
   //  2.67-02: 캔슬된 쪽은 «남음» 도 없다 — 남은 일이 아니라 없는 일이다.
-  const remD = sideCancelled(voyage.info, 'discharge', _tw0) ? null : _rem(disStats);
-  const remL = sideCancelled(voyage.info, 'loading', _tw0) ? null : _rem(loaStats);
+  const remD = sideCancelled(voyage.info, 'discharge') ? null : _rem(disStats);
+  const remL = sideCancelled(voyage.info, 'loading') ? null : _rem(loaStats);
   const departBadge = decideBadge({
     remainLoad: _rem(loaStats), remainDis: _rem(disStats), hasLoad: _hasLoad,
     terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
-    tw, pfDep, twDep, stickyAt: voyage.info?.departBadgeAt || null,
+    pfDep, pmDep, stickyAt: voyage.info?.departBadgeAt || null,
     eta: voyage._etaMs, etd: voyage._etdMs, src: voyage._etaSrc,
   });
   // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — 렌더 IIFE 안 fire-and-forget에서 useEffect로 이동.
@@ -1518,7 +1513,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             {(() => {
               // V9.36: 작업이 마무리될 무렵이면 '작업일시' 대신 '출항시간'을 보여준다 (사용자 요청 2026-08-01).
               //   V9.38: 전환 기준은 **선적 잔여 ≤ DEPART_REMAIN_MAX(20)** — 규칙은 badgeRule.js 한 곳.
-              //   출항시각은 도선 예보 우선(사용자 확정) → 없으면 터미널 출항 ETD.
+              //   출항시각은 도선 예보 우선(사용자 확정) → 없으면 PORT-MIS 신고 출항(3.53-13).
               // V9.57: 판정(departBadge)·창 가드·sticky 기록은 컴포넌트 본문 상단으로 이동 —
               //   렌더 IIFE는 표시만 담당한다.
               const _b = departBadge;
@@ -1526,11 +1521,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 const dep = _b.at;
                 const day = dayLabel(dep);   // 2.09: 복제본 제거 — 모듈 공용 한 벌
                 const _hm = (ms) => { const x = new Date(ms); return `${_two(x.getHours())}:${_two(x.getMinutes())}`; };
-                const src = _b.src === 'pilot' ? '⚓도선' : '🏭터미널';
+                const src = _b.src === 'pilot' ? '⚓도선' : '🚢PORT-MIS';
                 const late = _b.delayed;
                 // V9.38: 한 번 뜨면 유지(사용자 확답) — sticky 기록은 V9.57에서 useEffect로 이동(위).
-                const _why = { departed: '터미널 출항 처리됨', sticky: '이미 출항 표시로 전환됨',
-                  pct: '터미널 진행률 기준(잔여 미상)' }[_b.reason]
+                const _why = { departed: '터미널 출항 처리됨', sticky: '이미 출항 표시로 전환됨' }[_b.reason]
                   || `선적 잔여 ${String(_b.reason).replace('remain', '')}개 이하 (기준 ${DEPART_REMAIN_MAX}개 · 갱당 시간당 20개 ≈ 1시간분)`;
                 return (
                   <span title={`출항 표시 이유: ${_why}`}
@@ -1738,10 +1732,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
         {/*  ★ 2.67-01 (검수사): 캔슬인데 카드에 «선적평택 81 · 예상EDI 80 · 확정 대기» 가 그대로 떠서
              *«저걸로 인해 선적카드를 눌러보게 됩니다. 그후에야 캔슬사실을 알게 되죠»* —
              누르기 **전에** 알아야 한다. 숫자를 지우고 캔슬 한 줄만 남긴다. */}
-        {dis && (sideCancelled(voyage.info, 'discharge', _tw0) 
+        {dis && (sideCancelled(voyage.info, 'discharge') 
           ? <CancelledSide label="양하"/>
           : <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>)}
-        {loa && (sideCancelled(voyage.info, 'loading', _tw0)
+        {loa && (sideCancelled(voyage.info, 'loading')
           ? <CancelledSide label="선적"/>
           : <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>)}
         {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건).
@@ -2300,7 +2294,7 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
 //     한 사람은 크레인 한 대에 붙으므로 갱 수는 1로 본다.
 //   ★ 3.6-01 — 분모는 «내가 앱을 누른 구간»이 아니라 **그 배가 일한 시간**(접안~이안, 쉬는 시간 뺀 것)이다.
 //     검수사 정정 — «1초에 몰아 찍건 실시간으로 입력하든 총 걸린 작업시간은 같습니다».
-export function computeMyToday(voyages, inspector, now = Date.now(), terminalWork = null) {
+export function computeMyToday(voyages, inspector, now = Date.now()) {
   if (!inspector) return null;
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   const t0 = dayStart.getTime();
@@ -2320,7 +2314,7 @@ export function computeMyToday(voyages, inspector, now = Date.now(), terminalWor
         //  분모의 끝은 «그 배의 마지막 완료»다 — 내 마지막으로 자르면 사람마다 분모가 갈린다(감사 실측).
         if (!infoOf[key]) infoOf[key] = { ...(v?.info || {}), paceFrom: t0, paceTo: 0 };
         const vAll = voyageDoneAts(v);
-        if (vAll.length) { infoOf[key].paceTo = vAll[vAll.length - 1]; infoOf[key].firstDoneAt = voyageFirstTermAt(v); }   // 3.53-12: 작업 시작의 대역 — 그 항차 첫 완료(트레드링스 startAt 을 뗀 자리)
+        if (vAll.length) { infoOf[key].paceTo = vAll[vAll.length - 1]; infoOf[key].firstDoneAt = voyageFirstTermAt(v); }   // 3.53-12: 작업 시작의 대역 — 그 항차 첫 완료(외부 합계 startAt 을 뗀 자리)
       });
     });
   });
@@ -2329,7 +2323,7 @@ export function computeMyToday(voyages, inspector, now = Date.now(), terminalWor
   const topKey = Object.keys(hits).sort((a, b) => hits[b] - hits[a])[0] || '';
   const count = mine.length;
   //  갱 수 1 — 한 사람은 크레인 한 대에 붙는다(다른 두 화면은 항차 갱 수를 쓴다).
-  //  3.53-12: 트레드링스 시작 시각은 분모에 쓰지 않는다(피드를 떼어 냈다) — 검수 시작 보고·접안·작업 시작 순.
+  //  3.53-12: 외부 합계 시작 시각은 분모에 쓰지 않는다(피드를 떼어 냈다) — 검수 시작 보고·접안·작업 시작 순.
   const _P = paceFromRecords(mine, infoOf[topKey] || {}, 1);
   //  ⚠ 개인 몫은 **배가 일한 시간을 알 때만** 낸다(감사 P1-A).
   //    작업 구간을 모르면 분모가 «내가 찍은 구간»이 되어, 몰아 찍은 사람이 시간당 77대로 나온다.

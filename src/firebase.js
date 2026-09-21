@@ -2812,9 +2812,6 @@ export function fbSubscribePilotForecast(callback) {
   return unsub;
 }
 
-// V9.36: 터미널 작업 현황 구독 (수집기 terminal_work.py가 기록 — 트레드링스 공개 API)
-//   경로: terminal_work/{선박코드} = { pct, endAt, expectEnd, depEtd, delayed, disDone/disPlan, lodDone/lodPlan, ... }
-//   용도: 작업이 마무리될 무렵(기본 90% 이상) 카드의 '작업일시'를 '출항시간'으로 바꾼다.
 // TallyOne 1.5: 화면 데이터만 새로고침 — 페이지를 다시 불러오지 않고 실시간 구독만 재연결한다.
 //   사유(사용자 확정 2026-08-04): 터미널 실시간 자료를 보려고 브라우저 새로고침을 하면
 //   로그인(App.jsx의 inspector 메모리 상태)이 풀려 로그인 화면으로 돌아간다.
@@ -2837,13 +2834,6 @@ export async function fbReconnect() {
     online = await fbIsOnline(5000);
   }
   return { at: Date.now(), online };
-}
-
-
-export function fbSubscribeTerminalWork(callback) {
-  const r = ref(db, 'terminal_work');
-  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
-  return unsub;
 }
 
 // 2.09: 항로표(lane_info) — 수집기가 PCTC 「코드조회 › 서비스 Lane」 표를 하루 1회 올린다.

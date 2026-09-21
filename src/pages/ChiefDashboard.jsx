@@ -8,7 +8,6 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
-import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
 import { folderName, fileNameFor } from '../data/tallyBoxRules.js';
@@ -50,14 +49,6 @@ function scheduleOf(info, pfMap) {
            etaMs: pdEta ?? pfArr, etdMs: pdEtd ?? pfDep };
 }
 
-// TallyOne 1.0(L2): 터미널 실적 레코드 선택 — 자료가 **선박코드로만** 오므로 직전/다음 기항 자료가
-//   붙는 것을 작업창(±12h, badgeRule.inWindow) 가드로 막는다(HomePage 908~909행과 같은 방식).
-function twOf(info, twMap, sched) {
-  const rec = (twMap || {})[(info?.vsl || '').toUpperCase()] || null;
-  if (!rec) return null;
-  return inWindow(parsePortMisDateTime(rec.startAt), sched.etaMs, sched.etdMs) ? rec : null;
-}
-
 // ── TallyOne 1.6: 마감 텔리 대상 판정 ─────────────────────────────────────────
 //   사고 (2026-08-04) — 수석이 마감 텔리 「엑셀 생성」을 눌렀는데 **엉뚱한 항차**가 나왔다.
 //     목록이 `info`만 있으면 전부 넣고 `createdAt` 내림차순으로 세웠다. 그래서
@@ -78,12 +69,12 @@ function twOf(info, twMap, sched) {
 //     즉 completed 는 지금은 항상 0이고 나중엔 중복이라 쓸 이유가 없다.
 //
 //   반환: null(입항 전 — 목록에 없음) | 'working'(작업중) | 'done'(검수 완료·수석 대기)
-export function tallyTargetState(v, pfMap, twMap, now = Date.now()) {
+export function tallyTargetState(v, pfMap, now = Date.now()) {
   const info = v?.info;
   if (!info) return null;
   if (info.dischargeDone || info.loadingDone || info.inspectorDone) return 'done';
   const sched = scheduleOf(info, pfMap);
-  if (twOf(info, twMap, sched)) return 'working';          // 터미널이 실제 작업을 잡고 있다
+  if (isWorkingNow(v, now)) return 'working';               // 터미널이 «작업 중»이라고 적었다(배정목록 작업시작·동방 호기별 실적 — utils 한 벌)
   if (sched.etaMs != null && sched.etaMs <= now) return 'working';  // 작업 시작 시각이 지났다
   return null;                                             // 아직 배가 없다
 }
@@ -97,7 +88,7 @@ export const TALLY_LIST_SINCE = new Date('2026-08-04T00:00:00+09:00').getTime();
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch,
   onMirPlan = null,   // 2.87: 미르 플랜 덮개 — 이 화면을 떠나지 않는다
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
-  collectorHb = null, pilotForecast = null, terminalWork = null, portMisData = null,   // 1.40-01: 🚢신고도착
+  collectorHb = null, pilotForecast = null, portMisData = null,   // 1.40-01: 🚢신고도착
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
 }) {
   const [chiefSearchQ, setChiefSearchQ] = useState('');   // 2.03-01: 대시보드 통합검색창
@@ -110,7 +101,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //   종전 이 자리의 가드는 isChief 뿐이라 **소유자조차 직책이 수석이 아니면 막혔다**(App 게이트와 불일치).
   const canOpen = canOpenChief(inspector, owner);
   const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
-  const twMap = terminalWork || _EMPTY_OBJ;    // TallyOne 1.0: null 방어
   // TallyOne 1.6-01: 마감 텔리 대기 목록 — **작은 색인 노드 하나만** 읽는다.
   //   1.6에서 fbListArchive()(키 1건당 get 7회 × 보관소 160건 = 1,120요청)를 대시보드 열 때마다
   //   돌려 화면이 멈췄다. 목록 때문에 보관소를 훑지 않는다.
@@ -589,13 +579,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         || (activeByVoyage[v.key] || []).length > 0
         || (now - lastCompAt(v.key)) < 30 * 60000)
       .map(v => {
-        const sched = scheduleOf(v.info, pfMap);
-        const tw = twOf(v.info, twMap, sched);
         const ts = String(v.info?.terminalStatus || '').trim().toLowerCase();
-        return { ...v, _tw: tw, _departed: ts === 'departed' || ts === 'done' };
+        return { ...v, _departed: ts === 'departed' || ts === 'done' };
       });
     return [...rows.filter(r => !r._departed), ...rows.filter(r => r._departed)];
-  }, [voyageStats, pfMap, twMap, voyages, activeByVoyage]);
+  }, [voyageStats, pfMap, voyages, activeByVoyage]);
   //  감사: 고른 배가 보드에서 빠지면(작업 끝·출항) 포커스도 풀어 다음에 그 배가 돌아와도 저절로 크게 안 뜬다
   useEffect(() => { if (boardFocus && !boardRows.some(r => r.key === boardFocus)) setBoardFocus(null); }, [boardRows, boardFocus]);
   //  3.11-01: 보드 높이 = **보드 위 끝에서 화면 바닥까지**(검수사 «밑에 다른 항목만큼 화면이 줄어 들었습니다» — 고정 9rem 은 헤더·접기 단추 높이를 추정한 값이라 실제보다 짧았다).
@@ -720,7 +708,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             <button onClick={() => { setDashQ(''); setDashOpen(false); }} className="text-dim-300 hover:text-dim-100 text-xxs font-bold px-2 py-1">✕ 닫기</button>
           </div>
           <GlobalSearchPage key={dashQ || '__open'} embedded
-            voyages={voyages} portMisData={portMisData} terminalWork={terminalWork}
+            voyages={voyages} portMisData={portMisData}
             heartbeat={collectorHb} isChief initialQuery={dashQ}
             onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}
             /* ★ 2.87 — 플랜은 **이동이 아니라 덮개**다 (검수사 지시 2026-08-29).
@@ -938,7 +926,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                     workers={activeByVoyage[v.key] || []}
                     lastReport={lastReportByVoyage[v.key]}
                     alerts={todayAlertsByVoyage[v.key]}
-                    tw={v._tw} departed={v._departed}
+                    departed={v._departed}
                     cranes={craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])}
                     voyage={voyages?.[v.key]} rows={shown.length}
                     onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
@@ -1000,7 +988,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
       <Fold id="tally" title="📑 마감 텔리 (DEP.TALLY)" open={!!openSecs.tally} onToggle={() => toggleSec('tally')}>
-        <TallyExportSection voyages={voyages} chief={chief} pfMap={pfMap} twMap={twMap}
+        <TallyExportSection voyages={voyages} chief={chief} pfMap={pfMap}
           archiveList={arcList} onArchiveChanged={reloadArchive}
           boxRoot={boxRoot} onPickBox={onPickBox} resolveBox={resolveBox}/>
       </Fold>
@@ -2247,7 +2235,7 @@ function BoardBayCell({ px = 24, fit = {}, plan = {} }) {
     </>
   );
 }
-export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, tw = null, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
+export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
   const repIcon = lastReport ? (
@@ -2478,7 +2466,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
       </div>
       {/*  3.20 — **터미널 대수는 화면에 안 쓴다.** 검수사 2026-09-06 «카토스(앱) 카운트는 놔두고 터미널 카운트는 이제 없어도 될듯합니다».
-          1.0(L2) 의 이 줄은 «앱 숫자를 믿어도 되나»를 트레드링스 실적(disDone/disPlan)과 대조하려던 것이다.
+          1.0(L2) 의 이 줄은 «앱 숫자를 믿어도 되나»를 외부 합계 실적(disDone/disPlan)과 대조하려던 것이다.
           컨별 터미널 실적(termWork)이 완료로 들어오면 위 진행 막대가 곧 그 숫자라 대조가 두 벌이 된다.
           ⚠ 들어오는 길은 부두마다 다르다 — PCTC 는 수집기(catos.apply_completed)가 1분마다 스스로 넣고, 동방은 수석이 주황 「터미널 실적 반영」을 눌러야 한다.
             그 버튼은 반영할 것이 있을 때만 이 카드 안에 뜨므로(1848행), 남은 격차는 대수 대조가 아니라 그 버튼이 말해 준다.
@@ -2769,7 +2757,7 @@ function ArchiveRestoreSection({ chief }) {
 
 // ── V9.19-01: 마감 텔리 엑셀 생성 (수석 전용) ─────────────────────────
 //   실물 DEP.TALLY 워크북을 배별 템플릿(실물 파일 서식 그대로)에 숫자만 채워 생성.
-function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchiveChanged, boxRoot, onPickBox, resolveBox }) {
+function TallyExportSection({ voyages, chief, pfMap, archiveList, onArchiveChanged, boxRoot, onPickBox, resolveBox }) {
   const [busyKey, setBusyKey] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -2788,7 +2776,7 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
     }
     for (const [key, v] of Object.entries(voyages || {})) {
       if (archKeys.has(key)) continue;           // 복원된 항차가 양쪽에 있으면 보관소 쪽을 쓴다
-      const st = tallyTargetState(v, pfMap, twMap, now);
+      const st = tallyTargetState(v, pfMap, now);
       if (!st) continue;                          // 입항 전 — 목록에 올리지 않는다
       const i = v.info || {};
       out.push({ key, vsl: i.vsl || key.split('_')[0] || '', voy: [i.voy_d, i.voy_l].filter(Boolean).join(' & '),
@@ -2796,7 +2784,7 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
     }
     const rank = { ready: 0, done: 1, working: 2 };
     return out.sort((a, b) => (rank[a.state] - rank[b.state]) || (b.at - a.at));
-  }, [voyages, pfMap, twMap, archiveList]);
+  }, [voyages, pfMap, archiveList]);
 
   const pickBox = async () => {
     try { await onPickBox(); setMsg('📁 TALLYBOX 폴더 연결됨 — 이제 만든 서류가 바로 그 안에 저장됩니다.'); }

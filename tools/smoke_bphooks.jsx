@@ -29,7 +29,7 @@ function App() {
   const [full, setFull] = React.useState(false);
   window.__setFull = setFull;
   return React.createElement(LiveShipCard, {
-    v, workers: [], lastReport: null, alerts: null, tw: null, departed: false, cranes,
+    v, workers: [], lastReport: null, alerts: null, departed: false, cranes,
     voyage: full ? vFull : vEmpty, rows: 1, focused: false, canFocus: true,
     onFocus: () => {}, onOpen: () => {}, onOpenContainer: () => {},
   });

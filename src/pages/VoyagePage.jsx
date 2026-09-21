@@ -75,11 +75,11 @@ import { shipOpMapper } from '../data/tallyFormats.js';
 import PrintableCargoPlanV2 from '../components/PrintableCargoPlanV2.jsx';   // 2.87-01: 미르가 «카고플랜 보여줘» 하면 이것만 띄운다   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null,
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null,
   /* ★ 2.87 (검수사 지시 2026-08-29) — «홈화면에서 물었으면 홈화면에서 보여주고 닫아도 홈화면이어야 합니다».
        홈 미르가 «플랜 보여줘» 하면 App 이 **주소를 바꾸지 않고** 홈 위에 이 화면을 덮어 띄운다.
        그때 mirPlan={what,bay} 이 들어온다 — 플랜만 보이면 되므로 그 화면의 자동 팝업은 재운다. */
-  mirPlan = null, onMirPlanClose = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
+  mirPlan = null, onMirPlanClose = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   // 1.94 (검수사 실측 SWSP — 선적 243 매칭까지 된 배가 들어가면 빈 양하부터 열림): 노드 껍데기가 아니라
   //   **실자료(ediContainers·records) 유무**로 판정한다 — 양하 없는 배는 선적이 바로 열린다.
@@ -1211,9 +1211,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    보고 있어서 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 실선에서 잡혔다.
     //    ⚠ SearchPanel 의 `allContainers` 는 `_comp` 가 붙어 오므로 그쪽은 안 넘긴다(그대로 동작).
     comp: compMap || null,
-    //  2.54-01: 터미널 실적(트레드링스) — 미르의 «얼마나 걸릴까» 가 앱 기록 대신 이것으로 잰다.
-    //    ⚠ `InlineAnswerCard` 는 `terminalWork` prop 을 안 받는다(briefCtx 만 받는다) — 여기 실어 보낸다.
-    terminalWork: terminalWork || null,
     photos: voyage?.photos || null,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다
     //  ★ 2.57: 시프팅 맵 — 이 화면 ctx 에만 빠져 있어 시프팅 질문이 «없다»로 나왔다. SearchPanel:1109 와 같은 벌.
     //    InlineAnswerCard 는 voyageKey·voyage 를 안 받으므로(1.98·2.50-01 교훈 — 부모 변수 직접 참조 금지) 여기 실어 내린다.
@@ -1224,7 +1221,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
       poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
     } : null,
-  }), [containers, voyage, shipPolicy, esealInfo, terminalWork, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: terminalWork 가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
+  }), [containers, voyage, shipPolicy, esealInfo, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: 합계 자료가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
 
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
@@ -1352,15 +1349,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     try {
       publishMirCtx({
         voyageKey, voyage, info: voyage?.info || null, mode,
-        containers: flattenVoyages({ [voyageKey]: voyage }, terminalWork),
+        containers: flattenVoyages({ [voyageKey]: voyage }),
         compMap: briefCtx.comp || null, shiftMap: briefCtx.shiftMap || null, bayPairs: briefCtx.pairs || null,
         rfSkip: !!briefCtx.rfSkip, esealBrief: briefCtx.eseal || null, photos: voyage?.photos || null,
         gangShift: briefCtx.gangShift, gangBrief: briefCtx.gangBrief, crewAnswer: briefCtx.crewAnswer,
-        terminalWork: terminalWork || null, diagAlerts: diagAlerts || [],
+        diagAlerts: diagAlerts || [],
       });
     } catch (e) { console.warn('[3.41] 미르 재료 놓기 실패:', e); }
     return () => publishMirCtx(null);
-  }, [voyageKey, voyage, mode, terminalWork, briefCtx, diagAlerts, mirPlan]);
+  }, [voyageKey, voyage, mode, briefCtx, diagAlerts, mirPlan]);
 
     // 2.18 — 컨테이너 상세는 **한 벌**만 만들고 담기는 자리만 바꾼다.
   //   넓은 화면(lg+) 이고 리스트 탭이면 → 우측 고정 칼럼(variant='panel').
@@ -1803,7 +1800,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           searchPanelProps={{
             rfSkip: !!shipPolicy?.rfSkip,
             esealBrief: esealInfo ? { n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges, poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length } : null,
-            relayQuery: relayQ, shipLib, portMisData, pilotForecast, terminalWork, isLoloShip, diagAlerts,
+            relayQuery: relayQ, shipLib, portMisData, pilotForecast, isLoloShip, diagAlerts,
             onWorkFilterChange: (m) => setMode(m), onOpenPlan: _mirOpenPlan,
             onPlaceUnassigned: (c) => { setPendingMove({ cn: c.cn, fromBay: '', fromRow: '', fromTier: '', fe: c.fe || '', iso: c.iso || c.tp || '' }); setWorkStyle('classic'); setTab('bay'); },
           }} />
@@ -1831,7 +1828,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             voyages={voyages || { [voyageKey]: voyage }}
             ctxVoyageKey={voyageKey}
             portMisData={portMisData}
-            terminalWork={terminalWork}
             heartbeat={heartbeat}
             isChief={isChief(inspector)}
             onOpenContainer={(c) => setDetailC(c)}/>
@@ -1850,7 +1846,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shipLib={shipLib}
           portMisData={portMisData}
           pilotForecast={pilotForecast}
-          terminalWork={terminalWork}
           isLoloShip={isLoloShip}
           diagAlerts={diagAlerts}
           mode={mode}
@@ -1974,7 +1969,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'stats' && (
         <div className="space-y-3">
           {/* V9.15: BayDictVerifyWidget(자료 진단)은 업로드 탭으로 — 통계 탭 첫 화면은 통계여야 한다(전면 점검 2-5) */}
-          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} voyage={voyage} terminalWork={terminalWork}/>
+          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} voyage={voyage}/>
         </div>
       )}
       {!_sideCanc && tab === 'xray' && (
@@ -3006,7 +3001,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
         voyage: briefCtx?.voyage || null, voyageKey: briefCtx?.voyageKey || '', info: briefCtx?.info || null, mode,
         containers: _cs, compMap: briefCtx?.comp || null, shiftMap: briefCtx?.shiftMap || null, bayPairs: briefCtx?.pairs || null,
         rfSkip: !!briefCtx?.rfSkip, esealBrief: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null,
-        terminalWork: briefCtx?.terminalWork || null, voyageDoneAts: briefCtx?.doneAtsAll || null,
+        voyageDoneAts: briefCtx?.doneAtsAll || null,
         gangShift: briefCtx?.gangShift || null, gangBrief: briefCtx?.gangBrief || null, crewAnswer: briefCtx?.crewAnswer || null, bowStern: briefCtx?.bowStern || null,
         vsl, vslFull: briefCtx?.info?.vslFull, pier, carrierContacts, shipSpeed, computeTallyData,
       });

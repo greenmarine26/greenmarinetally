@@ -70,9 +70,9 @@ for (const q of SAME) {
 }
 //  ③ cone.html 배선 — 재료 셋을 실제로 넘기는가
 const H = fs.readFileSync(path.join(ROOT, 'public/cone.html'), 'utf8');
-check('cone.html mirAsk 가 terminalWork·shipSpeed·pilotForecast 를 mc(loadMirCtx) 에서 넘긴다', /terminalWork: \(mc&&mc\.terminalWork\)\|\|null/.test(H) && /shipSpeed: \(mc&&mc\.shipSpeed\)\|\|null/.test(H) && /pilotForecast: \(mc&&mc\.pilotForecast\)\|\|null/.test(H));
-check('cone.html 에 옛 길(info.termWork) 이 없다', !/terminalWork: info\.termWork/.test(H));
-check('cone.html loadMirCtx 가 terminal_work/{배}·shipSpeed·pilot_forecast/{배} 를 받는다', /g\('terminal_work\/'/.test(H) && /g\('shipSpeed\.json'\)/.test(H) && /g\('pilot_forecast\/'/.test(H));
+check('cone.html mirAsk 가 shipSpeed·pilotForecast 를 mc(loadMirCtx) 에서 넘긴다', /shipSpeed: \(mc&&mc\.shipSpeed\)\|\|null/.test(H) && /pilotForecast: \(mc&&mc\.pilotForecast\)\|\|null/.test(H));
+check('cone.html 에 터미널 합계 자료를 읽는 자리가 없다(3.53-13 · 2.50-02)', !/terminal_work|terminalWork|fbFetchTerminalWork/.test(H));
+check('cone.html loadMirCtx 가 shipSpeed·pilot_forecast/{배} 를 받는다', /g\('shipSpeed\.json'\)/.test(H) && /g\('pilot_forecast\/'/.test(H));
 //  ④ cone.html 의 **실제 loadMirCtx** 를 Response 스텁으로 돌린다 — 2.48~2.49 는 g 가 Response 를 그대로 돌려줘 재료가 전부 빈 객체였다(감사 재현).
 //    ctx 를 손으로 베낀 ①~③ 은 이 층을 못 본다. 여기서 mirAsk 가 받는 mc 그대로를 만들어 엔진까지 돌린다.
 (async () => {
@@ -97,9 +97,9 @@ check('cone.html loadMirCtx 가 terminal_work/{배}·shipSpeed·pilot_forecast/{
     mc = await mk(stateStub, fbFetchStub, { warn() {}, log() {} })();
   } catch (e) { err = e && e.message; }
   check('실제 loadMirCtx 가 돈다', !!mc && !err, err);
-  check('재료가 JSON 으로 풀려 있다(Response 아님) — info.vsl·완료·터미널 실적', !!(mc && mc.info && mc.info.vsl === 'KBTR' && Object.keys(mc.compD || {}).length > 50 && mc.terminalWork && mc.terminalWork.KBTR && mc.terminalWork.KBTR.disDone === 371), mc ? JSON.stringify({ vsl: mc.info && mc.info.vsl, compD: Object.keys(mc.compD || {}).length, tw: mc.terminalWork }).slice(0, 160) : '(없음)');
+  check('재료가 JSON 으로 풀려 있다(Response 아님) — info.vsl·완료', !!(mc && mc.info && mc.info.vsl === 'KBTR' && Object.keys(mc.compD || {}).length > 50 && !('terminalWork' in mc)), mc ? JSON.stringify({ vsl: mc.info && mc.info.vsl, compD: Object.keys(mc.compD || {}).length, tw: mc.terminalWork }).slice(0, 160) : '(없음)');
   check('shipSpeed·pilotForecast 도 받는다', !!(mc && mc.shipSpeed && typeof mc.shipSpeed === 'object' && mc.pilotForecast && typeof mc.pilotForecast === 'object'));
-  check('요청 14건(항차 11 + 재료 3)', hits.length === 14 && hits.includes('terminal_work/KBTR.json') && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json'), hits.join(','));
+  check('요청 13건(항차 11 + 재료 2) — 터미널 합계 자료는 받지 않는다', hits.length === 13 && !hits.some((h) => /terminal_work/.test(h)) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json'), hits.join(','));
   if (mc) {
     //  mirAsk 3592~ 그대로 ctx 를 짠다(cs 는 위 paint 와 같은 한 벌)
     const comp2 = Object.assign({}, mc.compD || {}, mc.compL || {});

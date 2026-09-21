@@ -57,7 +57,7 @@ export function filterDamageHits(damageIndex, dq, now = new Date()) {
   });
 }
 
-export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '', embedded = false, ctxVoyageKey = null }) {   // 2.36: ctxVoyageKey — 항차 화면에 심을 때 배 이름을 안 붙여도 그 배로 답한다(검수사 «검색은 어디서든 같아야»)   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
+export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenContainer, portMisData, heartbeat, isChief = true, initialQuery = '', embedded = false, ctxVoyageKey = null }) {   // 2.36: ctxVoyageKey — 항차 화면에 심을 때 배 이름을 안 붙여도 그 배로 답한다(검수사 «검색은 어디서든 같아야»)   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -93,7 +93,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   useEffect(() => { if (debouncedQuery.trim().length >= 2) lastAskRef.current = debouncedQuery.trim(); }, [debouncedQuery]);
 
   // 모든 항차 양/선적 펼치기 — 3.41: 떠 있는 미르와 **같은 벌**(mirCtx.flattenVoyages). 홈이 아는 컨을 미르가 모르면 안 된다(§4-4).
-  const flat = useMemo(() => flattenVoyages(voyages, terminalWork), [voyages, terminalWork]);
+  const flat = useMemo(() => flattenVoyages(voyages), [voyages]);
 
   // 자연어 파싱 (M6.10: debouncedQuery 사용)
   const parsed = useMemo(() => parseNaturalQuery(debouncedQuery), [debouncedQuery]);
@@ -237,17 +237,17 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     traceRef.current = {};
     return answerOneRaw(Q, {
       app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', _trace: traceRef.current,
-      voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, terminalWork, carrierContacts, shipSpeed, ediPattern, shipContacts,
+      voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, carrierContacts, shipSpeed, ediPattern, shipContacts,
       bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts, onOpenPlan, carrierContacts, shipSpeed, ediPattern]);   // 3.41: 한 벌 엔진 ctx
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, chiefData, heartbeat, isChief, shipContacts, onOpenPlan, carrierContacts, shipSpeed, ediPattern]);   // 3.41: 한 벌 엔진 ctx
 
   /* ★ 3.42 (판 B) — 약한 답일 때만 모델. 접수된 질문(askedAt)만, 같은 문장은 한 번. 번역문은 같은 재료로 규칙을 다시 돌린다(두 벌 금지). */
   const [modelState, setModelState] = useState({ q: '', pending: false, text: null, via: null });
   const _rulesFor = (cq) => answerOneRaw(cq, {
     app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
-    voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, terminalWork, carrierContacts, shipSpeed, ediPattern, shipContacts,
+    voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, carrierContacts, shipSpeed, ediPattern, shipContacts,
     bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
     computeTallyData, matchPortMis,
   });

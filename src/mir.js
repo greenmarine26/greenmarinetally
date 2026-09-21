@@ -1333,7 +1333,7 @@ function _normalize(ctx) {
   c.matchPortMis = (typeof c.matchPortMis === 'function') ? c.matchPortMis : (() => null);
   //  3.24: 페이스 분모는 «검수 시작 보고»가 있으면 그것 — reports 는 info 밖이라 여기서 얹는다(작업창은 이걸 덮어써 잃고 있었다).
   if (c.info && v && !c.info.reportStartAt) { try { c.info = { ...c.info, ...voyageReportSpan(v) }; } catch (e) { /* */ } }
-  //  3.53-12: 트레드링스 합계 피드(c.tw·c.terminalWork)는 떼어 냈다 — 대수·잔여·페이스는 완료 기록 한 벌(검수사 2026-09-15·09-21).
+  //  3.53-12: 외부 합계 피드(옛 합계 ctx)는 떼어 냈다 — 대수·잔여·페이스는 완료 기록 한 벌(검수사 2026-09-15·09-21).
   //    «몇 시에 끝나»·«작업 속도» 의 총 잔여는 항차 전체(양하+선적 평택분)다 — 한 번 세어 ctx 에 둔다.
   //    ⚠ 물을 때만 센다(`_vcOf`) — 질문마다 항차 전체를 펴면 타이핑마다 수 ms 가 든다(감사 E6).
   const de = _bayDefOf(c.vsl);

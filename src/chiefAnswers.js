@@ -288,7 +288,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   const pier = voyage?.info?.pier || '';
   const plan = buildGangPlan(voyage, bayDef);
   if (!plan) return null;
-  //  3.53-12: 갱당 시간당은 **그날 완료 기록**으로 잰다(검수사 «그날 시간당 처리갯수와 갱수로») — 트레드링스 합계 피드는 떼어 냈다.
+  //  3.53-12: 갱당 시간당은 **그날 완료 기록**으로 잰다(검수사 «그날 시간당 처리갯수와 갱수로») — 외부 합계 피드는 떼어 냈다.
   const sp = speedFromRecords(voyage);
   const perGangHour = sp && sp.perGangHour > 0 ? sp.perGangHour : 0;
   _gangHours(plan, voyage, perGangHour);
@@ -307,7 +307,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     }
   }
   //  3.53-12: 종전 2.70 의 «터미널 합계 − 앱 기록 차이를 대수로 깎기»(twGap)는 없앴다 — 터미널 컨별 실적이 완료 기록(src:'term')으로
-  //    들어오므로 어느 컨인지까지 알고 위에서 이미 뺐다. 트레드링스 합계는 쓰지 않는다(검수사 2026-09-15).
+  //    들어오므로 어느 컨인지까지 알고 위에서 이미 뺐다. 외부 합계는 쓰지 않는다(검수사 2026-09-15).
   plan.cargo.forEach((g) => {
     const mv = g.dis + g.lod;
     g.restN = Math.max(0, mv - g.doneN);
@@ -835,8 +835,8 @@ export function isSpeedQuery(q) {
 //      그걸로 작업종료 시간을 예측해야 합니다»*
 //  ★ 그 말이 맞다 — 실측(2026-08-25 활동 기록): 검수사 말고는 앱에 완료를 거의 안 찍는다.
 //    그러니 `completed` 로 페이스를 재면 «아직 시작 전» 이라고 답한다(실제로는 작업 중인데).
-//  ★ 대신 `terminal_work`(트레드링스 — 수석 대시보드가 보여주는 그것)를 쓴다.
-//    거기엔 터미널이 보고한 `startAt`·`disDone`·`lodDone`·`disPlan`·`lodPlan` 이 있고 **앱과 무관하다.**
+//  ★ 3.53-12·13: 지금은 **완료 기록**으로 잰다 — 터미널 컨별 실적이 완료 기록(src:'term')으로 들어오므로 앱에 안 찍어도 실제 대수가 잡힌다.
+//    (2.54 는 터미널 합계 자료로 쟀다. 검수사 2026-09-15 «사용안하기로 했습니다» 로 그 자료는 앱에서 없앴다.)
 //  ⚠ 쉬는 시간은 지어내지 않는다 — `WORK_SHIFTS`(검수사 확정 2026-08-13)를 그대로 쓴다.
 //    메모의 «04시부터 06시30 08시부터» 가 곧 PCTC 야간 `[240,390]` 과 주간 `[480,720]` 이다.
 //  ⚠ 갱 수는 **2갱 기본** — 학습서 2-F′ *«기본 2갱으로 계산을 해주시면 됩니다. 만약 1갱이라면 ×2»*.
@@ -847,7 +847,7 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null)
   const info = voyage.info || {};
   const vsl = String(info.vsl || '').toUpperCase();
 
-  //  ① 그날 완료 기록(검수원 입력 + 터미널 컨별 반영)으로 잰다 — 3.53-12: 트레드링스 합계 피드는 떼어 냈다.
+  //  ① 그날 완료 기록(검수원 입력 + 터미널 컨별 반영)으로 잰다 — 3.53-12: 외부 합계 피드는 떼어 냈다.
   const T = speedFromRecords(voyage, counts);
   if (T) {
     const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 오늘 완료 기록 기준`];

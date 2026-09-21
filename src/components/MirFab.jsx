@@ -31,7 +31,7 @@ import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierCo
 
 const CLEAN_RE = /[📋📌⚠↩·❄🔁📊📦📖🐱🐟😺😻🎵📍⏳⏱🗺🚢✅📝🧳🌤📈]/g;
 
-export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, terminalWork = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null }) {
+export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [asked, setAsked] = useState('');   // 3.41-01: 방금 물은 말 — 칸은 비우고 이것을 답 위에 남긴다
@@ -47,7 +47,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const shipSpeed = useShipSpeed();
   const ediPattern = useEdiPattern();
   useEffect(() => subscribeMirCtx(setLive), []);
-  const flat = useMemo(() => { try { return flattenVoyages(voyages, terminalWork); } catch (e) { console.warn('[미르] 전 항차 펼치기 실패:', e); return []; } }, [voyages, terminalWork]);
+  const flat = useMemo(() => { try { return flattenVoyages(voyages); } catch (e) { console.warn('[미르] 전 항차 펼치기 실패:', e); return []; } }, [voyages]);
 
   //  수석 노드(feedback·tally_pending·archive)는 물었을 때 1회 — 홈 통합검색과 같은 절제(1.69: 자동 호출 금지).
   const ensureChiefData = useCallback(async (text, shipless) => {
@@ -139,7 +139,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       if (parseNaturalQuery(t).weatherQuery) { try { weatherText = await fetchWeatherText(); } catch (e) { weatherText = null; } }
       const ctx = {
         app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, weatherText,
-        inspector, isChief, chiefData, heartbeat, portMisData, terminalWork, pilotForecast,
+        inspector, isChief, chiefData, heartbeat, portMisData, pilotForecast,
         carrierContacts, shipSpeed, ediPattern, voyages, flat,
         computeTallyData, matchPortMis,
         ...(useLive ? lv : (sc ? { shipCtx: sc } : {})),
@@ -169,7 +169,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       logQuerySettled('nls', t, { voyageKey: vk || '', via: 'mir' });
       try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) speakLong(plain); else speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
     } finally { setBusy(false); }
-  }, [voyages, flat, inspector, isChief, heartbeat, portMisData, terminalWork, pilotForecast, carrierContacts, shipSpeed, ediPattern, onOpenPlan, ensureChiefData, applySideEffects]);
+  }, [voyages, flat, inspector, isChief, heartbeat, portMisData, pilotForecast, carrierContacts, shipSpeed, ediPattern, onOpenPlan, ensureChiefData, applySideEffects]);
 
   //  마이크 — 콘앱 질문바와 같은 교정(후보 5개 → 도메인 사전 → 숫자만이면 끝네자리).
   const recRef = useRef(null);

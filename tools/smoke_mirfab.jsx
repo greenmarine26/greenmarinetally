@@ -15,7 +15,7 @@ window.__publish = (key) => {
 };
 window.__unpublish = () => publishMirCtx(null);
 function App() {
-  return React.createElement(MirFab, { voyages: FX, inspector: '김성일', isChief: true, portMisData: {}, terminalWork: {}, pilotForecast: {}, heartbeat: null,
+  return React.createElement(MirFab, { voyages: FX, inspector: '김성일', isChief: true, portMisData: {}, pilotForecast: {}, heartbeat: null,
     onOpenPlan: (p) => { window.__calls.push({ fn: 'plan', ...p }); } });
 }
 createRoot(document.getElementById('root')).render(React.createElement(App));

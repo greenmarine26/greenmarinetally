@@ -63,7 +63,7 @@ function ctxOf(key) {
     o._mode = m; o.mode = m; if (comp[c.cn]) { o._comp = comp[c.cn]; o.comp = comp[c.cn]; } return o;
   });
   const cs = [...rows('discharge'), ...rows('loading')];
-  return { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', voyageKey: key, voyage: v, info: v.info, containers: cs, mode: 'discharge', inspector: '김성일', isChief: true, terminalWork: {}, portMisData: {} };
+  return { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', voyageKey: key, voyage: v, info: v.info, containers: cs, mode: 'discharge', inspector: '김성일', isChief: true, portMisData: {} };
 }
 const K = ctxOf('KBTR_2606E');
 const rules = (ctx) => (cq, trace) => M.answerOneRaw(cq, Object.assign({}, ctx, { _trace: trace || {} }));

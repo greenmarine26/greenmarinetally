@@ -2008,7 +2008,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   } else {
     lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
   }
-  //  3.53-12: 진행 줄은 **완료 기록 한 숫자**다 — 트레드링스 합계는 쓰지 않는다(검수사 2026-09-15·09-21). 완료 기록에 터미널 컨별 실적(src:'term')이 이미 들어 있다.
+  //  3.53-12: 진행 줄은 **완료 기록 한 숫자**다 — 외부 합계는 쓰지 않는다(검수사 2026-09-15·09-21). 완료 기록에 터미널 컨별 실적(src:'term')이 이미 들어 있다.
   if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
     //  ★ 2.62 (검수사 확정 «제가 듣고싶은 브리핑은 출근시간부터 퇴근시까지의 작업할 내용입니다»):
     //    조 단위 갱 배분 줄 — 호출부가 chiefAnswers.gangBriefLines 결과를 opts.gang 으로 싣는다.
@@ -2548,7 +2548,7 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
   const pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
 
   const lines = [];
-  //  3.53-12: 대수는 **완료 기록 한 숫자**로 답한다 — 트레드링스 합계(«실제(터미널)» 줄)는 떼어 냈다(검수사 2026-09-15 «사용안하기로 했습니다» · 09-21).
+  //  3.53-12: 대수는 **완료 기록 한 숫자**로 답한다 — 외부 합계(«실제(터미널)» 줄)는 떼어 냈다(검수사 2026-09-15 «사용안하기로 했습니다» · 09-21).
   if (parsed.progressQuery === 'done') {
     lines.push(`✅ ${baseDesc} 완료: ${doneCount}대 / 전체 ${totalCount}대 (${pct}%)`);
     lines.push(`남은 작업: ${pendingCount}대`);
@@ -2719,8 +2719,8 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   return L.join('\n');
 }
 
-//  3.53-12 — 트레드링스 합계 피드(`terminal_work`)를 읽던 자리(twOfCtx · terminalWorkFor · bothCounts · formatTerminalWorkAnswer)는 없앴다.
-//    검수사 2026-09-15 «트레드링스는 … 실시간으로 부적합하고 또 필요성이 없어서 사용안하기로 했습니다» · 2026-09-21 «삭제시킨 트레드링스 자료가 나왔기 때문입니다».
+//  3.53-12 — 외부 합계 피드(옛 합계 노드)를 읽던 자리(옛 함수 넷)는 없앴다.
+//    검수사 2026-09-15 «외부 합계는 … 실시간으로 부적합하고 또 필요성이 없어서 사용안하기로 했습니다» · 2026-09-21 «삭제시킨 외부 합계 자료가 나왔기 때문입니다».
 //    대수·잔여·페이스의 기준은 **완료 기록(`completed/{cn}`)** 하나다 — 검수원 입력과 터미널 컨별 실적 반영(src:'term' — 동방 직결·카토스)이 거기 같이 들어 있다.
 
 // 앱 검수 기록 답 — completed/전체 · % · 검수사별(기록에 by 가 있으면). 평택분 기준(7.1).
@@ -2848,9 +2848,9 @@ export function workWindowOf(info, lastAtMs) {
   const sane = (t) => (t > 0 && last > 0 && t < last && last - t < 30 * 24 * 3600000 ? t : 0);
   //  ★ 3.24 — **검수 시작이 첫째다**(검수사 «작업 시작 시간은 검수 시작이 시작입니다»).
   //    종전 첫째였던 터미널 `startAt` 과 둘째 `atbActual`(접안)은 실측에서 둘 다 틀렸다 —
-  //    ATPR 2640E 는 트레드링스 23:15 · 접안 00:00 인데 검수는 **20:45** 에 시작했다(작업 보고).
+  //    ATPR 2640E 는 외부 합계 23:15 · 접안 00:00 인데 검수는 **20:45** 에 시작했다(작업 보고).
   //    접안을 시작으로 삼으면 «시작 3시간 전에 66대를 내린 것»이 되고 페이스가 2배 넘게 부푼다.
-  //  3.53-12 — 둘째였던 트레드링스 `startAt` 자리는 **그 항차의 첫 완료 시각**(`info.firstDoneAt` — 호출부가 항차 전체 완료에서 뽑아 준다)이 맡는다.
+  //  3.53-12 — 둘째였던 외부 합계 `startAt` 자리는 **그 항차의 첫 완료 시각**(`info.firstDoneAt` — 호출부가 항차 전체 완료에서 뽑아 준다)이 맡는다.
   //    터미널 컨별 실적이 완료 기록에 제 시각(COM_DATE)으로 들어오므로 첫 완료가 곧 크레인이 움직이기 시작한 때다.
   //    접안(`atbActual`)은 배가 떠난 뒤에야 오므로 작업 중에는 이것 말고 분모를 세울 자료가 없다(3.6-01 감사 P1-A 가 지키던 자리).
   const st = sane(_tsOf(info && info.reportStartAt))
@@ -2891,7 +2891,7 @@ export function workWindowOf(info, lastAtMs) {
  *  ⇒ 여기서 뽑아 `workWindowOf` 가 **맨 먼저** 본다. 보고가 없는 항차는 종전 폴백 그대로다.
  *  ⚠ 호기가 여럿이면 **가장 이른 시작**과 **가장 늦은 완료**다(한 호기가 먼저 끝나도 배는 아직 일한다).
  *  @returns {{reportStartAt:number, reportEndAt:number}} 없으면 0. */
-//  3.53-12 — 그 항차의 **첫 터미널 반영 완료 시각**(없으면 0). 트레드링스 `startAt` 을 뗀 자리에서 «크레인이 움직이기 시작한 때»의 대역으로 쓴다.
+//  3.53-12 — 그 항차의 **첫 터미널 반영 완료 시각**(없으면 0). 외부 합계 `startAt` 을 뗀 자리에서 «크레인이 움직이기 시작한 때»의 대역으로 쓴다.
 //    검수원이 몰아 찍은 기록은 제 시각이 아니라서 안 쓴다 — 터미널 컨별 실적(src:'term')은 터미널이 적은 시각 그대로 온다.
 export function voyageFirstTermAt(voyage) {
   let t = 0;
@@ -3036,7 +3036,7 @@ export function paceFromRecords(doneAts, src, gangs) {
   return { ok: true, perHour, perGangHour, mins: Math.round(mins), workedMin: Math.round(mins), gangs: g, n: ats.length, basis, pier: pierN, from, to };
 }
 
-// ── ★ 3.53-12 — **그날 페이스를 재는 단 한 벌 — 완료 기록으로.** (종전 `speedFromTerminal` 은 트레드링스 합계 피드였고 없앴다)
+// ── ★ 3.53-12 — **그날 페이스를 재는 단 한 벌 — 완료 기록으로.** (종전 `speedFromTerminal` 은 외부 합계 피드였고 없앴다)
 //  검수사 2026-09-21 «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서 답해야 한다.»
 //   ⇒ 남은 시간 = 총 잔여(양하+선적 평택분) ÷ (갱당 시간당 처리 대수 × 갱 수).
 //      갱당 시간당 = 이 배 완료 기록(검수원 입력 + 터미널 컨별 반영) ÷ 실작업 시간(쉬는 시간 뺌) ÷ 갱 수.

@@ -38,7 +38,7 @@ function ctxOf(key, mode) {
     if (o._mode !== 'loading' && xl[c.cn]) o = Object.assign({}, o, { _xray: true, _xraySeal: xs[c.cn] || null });
     return o;   // ⚠ _ptk 를 여기서 찍지 않는다 — 탭 카드·콘앱 실제 모양(없음)을 그대로 넣어 엔진(_normalize)이 찍는지 잰다(감사 지적)
   });
-  return { app: 'tally', smallTalkLast: true, modeChoice: 'both', voyageKey: key, voyage: v, info: v.info, mode, containers: cs, compMap: comp, terminalWork: {}, portMisData: {}, isChief: true };
+  return { app: 'tally', smallTalkLast: true, modeChoice: 'both', voyageKey: key, voyage: v, info: v.info, mode, containers: cs, compMap: comp, portMisData: {}, isChief: true };
 }
 const K = ctxOf('KBTR_2606E', 'discharge'), N = ctxOf('NSFR_2617N', 'discharge');
 const ask = (q, c) => { try { return M.answerOne(q, Object.assign({}, c)); } catch (e) { return '⚠ ' + (e && e.stack || e); } };

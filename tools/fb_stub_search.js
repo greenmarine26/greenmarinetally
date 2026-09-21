@@ -145,7 +145,6 @@ export const fbSubscribeProcessDone = async () => true;
 export const fbSubscribeShipBayDict = async () => true;
 export const fbSubscribeShipLibrary = async () => true;
 export const fbSubscribeStaffList = async () => true;
-export const fbSubscribeTerminalWork = async () => true;
 export const fbSubscribeVoyages = async () => true;
 export const fbSubscribeWorkReports = async () => true;
 export const fbToggleXray = async () => true;
