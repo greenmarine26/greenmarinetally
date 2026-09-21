@@ -989,6 +989,7 @@ fi
     rm -f "$SMOKE_MS"
     #  3.53-11: **미르 한 파일** — 엔진이 src/mir.js 하나뿐인가 · 옛 일곱 파일을 부르는 줄이 없는가 · nlSearch 와 서로 불러도 어느 쪽을 먼저 열든 서는가.
     node tools/smoke_mirfile.cjs "$(pwd)" || { echo "✗ 미르 한 파일 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_home354.cjs "$(pwd)" || { echo "✗ 홈 화면 정리 연막검사 실패 — 배포 금지"; exit 1; }   # 3.54
     #  3.53-12: **항차 총 잔여** — «몇 시에 끝나»·«작업 속도»·«얼마나 남았어» 가 같은 총 잔여(양하+선적)를 말하는가 · 예약 자리 중복·콘앱(voyage 에 EDI 없음)·열린 탭만 넘기는 화면.
     SMOKE_VC=$(mktemp /dev/shm/hometmp/_smokevc_XXXXXX.cjs)
     npx esbuild src/mir.js --bundle --platform=node --format=cjs --outfile="$SMOKE_VC" --log-level=error \

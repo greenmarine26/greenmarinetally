@@ -575,7 +575,6 @@ export default function App() {
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
             onOpenAux={() => navigate('aux')}
-            onOpenGlobalSearch={_askGlobal}   /* 1.69-01: 홈 검색 진입 복원 */
           />
         )}
         {route.name === 'food' && (

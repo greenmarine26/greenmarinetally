@@ -15,6 +15,7 @@ import KakaoLogImportModal from '../components/KakaoLogImportModal.jsx';   // Ta
 import BayMatrixManagerModal from '../components/BayMatrixManagerModal.jsx';   // 1.60: 베이매트릭스 관리
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
+import PierRegisterModal from '../components/PierRegisterModal.jsx';   // 3.54: 부두 좌표 등록
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel, detectEdiVer } from '../loadingEdiExport.js';   // 1.88: 받은 판대로 생성
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
@@ -144,6 +145,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return () => { try { off && off(); } catch (e) {} };
   }, []);
   const readiness = useMemo(() => buildReadiness(voyages, bayDictAll), [voyages, bayDictAll]);
+  const [showPier, setShowPier] = useState(false);   // 3.54: 부두 좌표 등록(홈에서 옮겨 옴)
   const [showPortMis, setShowPortMis] = useState(false);   // V9.42: 홈 상단에서 옮겨온 PORT-MIS 캡처
   const [showBayMatrix, setShowBayMatrix] = useState(false);   // 1.60: 베이매트릭스 관리(업로드 화면에서 분리)
   const toggleSec = (id) => setOpenSecs(o => ({ ...o, [id]: !o[id] }));
@@ -732,6 +734,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
             //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
             ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
+            ['__pier', '📍 부두 좌표 등록'],   // 3.54: 홈 화면의 부두 위치 카드에서 옮겨 왔다(검수사 2026-09-21 «기능은 유지하고 화면은 삭제»)
             // TallyOne 1.60 (검수사 지시 2026-08-13): 베이매트릭스를 업로드 화면에서 **분리**해 여기로.
             //   *"업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다."* — 권한 화면으로 옮긴다.
             //   항차가 없어도 선박을 조회해 고치고, 조회가 안 되는 선박은 새로 만든다.
@@ -741,6 +744,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           ].map(([id, label]) => (
             <button key={id} onClick={() => (id === '__search' ? setDashOpen(true)   /* 2.03-03: 화면 전환 없이 그 자리 패널 — «또 수석 홈화면을 벗어 납니다» */
                                             : id === '__portmis' ? setShowPortMis(true)
+                                            : id === '__pier' ? setShowPier(true)
                                             : id === '__baymatrix' ? setShowBayMatrix(true)
                                             : id === '__aux' ? (window.location.hash = '#/aux')
                                             : jumpSec(id))}
@@ -754,6 +758,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
       {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
+      {showPier && <PierRegisterModal inspector={inspector} onClose={() => setShowPier(false)} />}
       {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
       {showBayMatrix && (
         /* 3.5: «쓰이는 배»를 화면이 알 수 있게 — 부모가 이미 들고 있는 재료만 넘긴다(추가 요청 0).

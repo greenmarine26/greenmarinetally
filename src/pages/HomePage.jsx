@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
-import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, BarChart3, CheckCircle, X } from 'lucide-react';
+import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -98,9 +98,8 @@ const _voyCore = (x) => {
 
 // V9.57: 죽은 prop onOpenGlobalSearch 제거 — 이 컴포넌트 안에서 쓰는 곳이 없었다(App쪽 전달부 정리는 판2).
 // TallyOne 1.0 (K5): 맛집(onOpenFood)·건강점검(onOpenHealth) 개별 진입 → 보조기능(onOpenAux, #/aux) 하나로 교체
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0, onOpenGlobalSearch = null }) {   // 1.69-01: 홈 검색 진입 복원
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0 }) {   // 1.69-01: 홈 검색 진입 복원
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
-  const [homeQ, setHomeQ] = useState('');   // 1.69-01: 홈 검색창 — 통합검색으로 들고 가는 질문
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
   // V9.57: showPortMisCapture 상태 제거 — 켜는 버튼이 V9.42에 삭제돼 항상 false였던 고아 상태
@@ -113,8 +112,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const [gpsState, setGpsState] = useState('idle');         // 'idle' | 'loading' | 'denied' | 'ok' | 'far'
   const [pierFilter, setPierFilter] = useState('auto');     // 'auto' | 'PCTC' | 'PNCT' | 'all'
   // M6.17: 현재 GPS 좌표 (부두 좌표 등록용)
-  const [currentCoord, setCurrentCoord] = useState(null);   // { lat, lng }
-  const [pierRegisterState, setPierRegisterState] = useState({ msg: '', error: false });
   // V8.35: 수집기 통보(신호) 기능 제거 — 자동 항차 등록이 대체(사용자 확정 2026-07-03).
 
   // 1주일(7일) 이상 지난 항차 자동 삭제. voyages 로드 후 1회 실행.
@@ -180,10 +177,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       try {
         const cached = localStorage.getItem('gm_current_pier');
         if (cached) {
-          const { pier, coord, timestamp } = JSON.parse(cached);
+          const { pier, timestamp } = JSON.parse(cached);
           if (Date.now() - timestamp < 5 * 60 * 1000) {
             setCurrentPier(pier);
-            setCurrentCoord(coord || null);
             setGpsState(pier ? 'ok' : 'far');
             return;
           }
@@ -197,7 +193,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const lng = pos.coords.longitude;
         const coord = { lat, lng };
         const pier = detectPierByGps(lat, lng);
-        setCurrentCoord(coord);
         setCurrentPier(pier);
         setGpsState(pier ? 'ok' : 'far');
         try {
@@ -210,32 +205,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: force ? 0 : 300000 }
     );
-  };
-
-  // M6.17: 현재 위치를 부두 좌표로 등록 (검수원이 현장에서 직접)
-  const handleRegisterPier = async (code) => {
-    if (!currentCoord) {
-      setPierRegisterState({ msg: 'GPS 좌표 없음 — 먼저 [위치 다시 측정]', error: true });
-      return;
-    }
-    if (!confirm(`현재 위치(${currentCoord.lat.toFixed(5)}, ${currentCoord.lng.toFixed(5)})를\n${code} 부두 좌표로 등록하시겠습니까?\n\n모든 검수원에게 즉시 공유됩니다.`)) {
-      return;
-    }
-    const saved = savePierCoord(code, currentCoord.lat, currentCoord.lng, inspector || '');
-    if (!saved) {
-      setPierRegisterState({ msg: '저장 실패', error: true });
-      return;
-    }
-    try {
-      await fbSavePierCoord(code, saved);
-      setPierRegisterState({ msg: `✅ ${code} 등록 완료 + Firebase 동기화`, error: false });
-    } catch (e) {
-      setPierRegisterState({ msg: `⚠️ localStorage 저장됨 (Firebase 동기화 실패)`, error: false });
-    }
-    // GPS 캐시 무효화 → 재측정
-    try { localStorage.removeItem('gm_current_pier'); } catch {}
-    setTimeout(() => measureGps(true), 500);
-    setTimeout(() => setPierRegisterState({ msg: '', error: false }), 4000);
   };
 
   // M5.82: GPS로 현 부두 판별 (한 번만)
@@ -543,6 +512,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   }, [voyagesWithPier]);
 
   // M5.82: 부두별 그룹화 + 현 부두 우선
+  const _chiefBtn = canOpenChief(inspector, isOwnerName(inspector));   // 3.54: 수집기 줄 옆 절반 자리 — 보이는 사람에게만
   const effectivePier = pierFilter === 'auto' ? currentPier?.code : (pierFilter === 'all' ? null : pierFilter);
   const list = useMemo(() => {
     if (!effectivePier) return voyagesWithPier;
@@ -705,19 +675,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {/* 1.69-01: 홈 검색 진입 복원 — 검수사: "통합검색이든 자연어 검색이든 검수앱 홈화면에 넣어 달라고
           했는데 그게 창에서 사라짐." V9.42가 3카드를 지울 때 검색 진입로까지 같이 사라졌었다.
           카드 대신 한 줄 검색창 — 치고 검색을 누르면 통합검색이 그 질문으로 바로 답한다(검수원도 진입 가능). */}
-      {onOpenGlobalSearch && (
-        <form onSubmit={(e) => { e.preventDefault(); onOpenGlobalSearch(homeQ.trim()); }} className="relative mb-3">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dim-400 pointer-events-none"/>
-          <input type="text" value={homeQ} onChange={(e) => setHomeQ(e.target.value)}
-            placeholder="통합검색 · 미르에게 질문 — 컨번호 끝자리, 용어, 기능"
-            className="w-full bg-ink-900 border border-line rounded-pill pl-9 pr-16 py-2.5 text-sm text-dim-100 placeholder-dim-400 focus:outline-none focus:border-sky-600"
-            style={{ minHeight: 44 }} />
-          <button type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xxs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-2 py-1">
-            검색
-          </button>
-        </form>
-      )}
+      {/* 3.54(검수사 2026-09-21 «검색창을 없애고 미르로 대체 합니다»): 홈 검색창을 없앴다 — 질문은 떠 있는 미르가 같은 답 엔진으로 받는다. */}
       {/* TallyOne 1.19: 미회신 오답 — 소유자만 본다. 누르면 수석 대시보드(오답 리포트)로. */}
       {fbUnanswered > 0 && isOwnerName(inspector) && (
         <button onClick={onOpenChiefDashboard}
@@ -750,24 +708,41 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
       {/* TallyOne 1.0 (K5): 수집기 상태 요약은 유지하되 진입은 보조기능(#/aux)으로 —
           건강 점검·맛집 수첩 등 개별 버튼은 AuxPage 안으로 통합됐다 */}
+      <div className="flex items-stretch gap-2 mb-3">
       <button onClick={() => onOpenAux && onOpenAux()}
-        className={`w-full flex items-center gap-2 rounded-pill border px-3 py-2 mb-3 text-left transition-colors ${
+        className={`flex-1 min-w-0 flex items-center gap-2 rounded-pill border px-3 py-2 text-left transition-colors ${
           hbView.state === 'down' || healthIssueCount
             ? 'border-amber-700/60 bg-amber-950/30 hover:bg-amber-950/45'
             : 'border-line/40 bg-ink-900/50 hover:bg-ink-750/60'}`}>
         <span className={`w-2 h-2 rounded-full shrink-0 ${
           hbView.state === 'ok' ? 'bg-emerald-400 animate-pulse' : hbView.state === 'down' ? 'bg-red-500' : 'bg-dim-500'}`} />
-        <span className="text-xs font-bold text-dim-100">
+        {/* 3.54: 수석 버튼과 절반씩 쓰는 폰에서는 짧게 적는다(상태는 왼쪽 점 색이 말한다) — 잘린 글자를 보이지 않는다. */}
+        <span className={`text-xs font-bold text-dim-100 truncate ${_chiefBtn ? 'hidden sm:inline' : ''}`}>
           {hbView.state === 'ok' ? `수집기 정상 · ${hbView.ageMin}분 전`
             : hbView.state === 'down' ? `수집기 끊김 · ${hbView.ageMin}분 전` : '수집기 기록 없음'}
         </span>
-        <span className={`text-xs font-bold ml-auto ${healthIssueCount ? 'text-amber-300' : 'text-emerald-300/80'}`}>
-          {healthIssueCount ? `⚠ 검증 필요 ${healthIssueCount}건` : '✓ 자료 정상'}
+        {_chiefBtn && <span className="sm:hidden text-xs font-bold text-dim-100 truncate">
+          {hbView.state === 'ok' ? `수집기 ${hbView.ageMin}분` : hbView.state === 'down' ? `끊김 ${hbView.ageMin}분` : '기록 없음'}
+        </span>}
+        <span className={`text-xs font-bold ml-auto shrink-0 ${healthIssueCount ? 'text-amber-300' : 'text-emerald-300/80'}`}>
+          {healthIssueCount
+            ? <>⚠ <span className={_chiefBtn ? 'hidden sm:inline' : ''}>검증 필요 </span>{healthIssueCount}건</>
+            : <>✓<span className={_chiefBtn ? 'hidden sm:inline' : ''}> 자료 정상</span></>}
         </span>
         {/* TallyOne 1.0: 보조기능 진입 표시 (건강 점검 · 맛집 수첩 등) */}
-        <span className="text-2xs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0">보조기능</span>
+        <span className={`text-2xs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0 ${_chiefBtn ? 'hidden sm:inline' : ''}`}>보조기능</span>
         <ChevronRight size={14} className="text-dim-400 shrink-0" />
       </button>
+      {/* 3.54(검수사 2026-09-21 «수집기표시는 수석대쉬보드 표기를 절반으로 같이 사용합니다»): 수석 대시보드 버튼을 이 줄로 올려 절반씩 쓴다.
+          V9.44·1.41 그대로 — canOpenChief 인 사람에게만 보인다. 안 보이는 사람은 수집기 줄이 한 줄을 다 쓴다. */}
+      {_chiefBtn && <button onClick={onOpenChiefDashboard}
+        className="flex-1 min-w-0 flex items-center gap-2 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-pill px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
+        <BarChart3 className="ico text-purple-300 shrink-0"/>
+        <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
+        <span className="hidden sm:inline text-2xs text-purple-300/70 truncate">전체 검수원 진행률·통계</span>
+        <ChevronRight size={14} className="text-purple-300/70 shrink-0 ml-auto" />
+      </button>}
+      </div>
 
       {/* 1.80(검수사 신고 2026-08-17): 폰에서 이 줄이 한 줄에 안 들어가 — 수석 대시보드 버튼이
           형태를 알아볼 수 없게 쭈그러들고, 데이터 새로고침이 화면 밖으로 밀렸다.
@@ -783,20 +758,27 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           </span>
           <span className="text-lg font-bold text-dim-100 leading-none">{list.length}건</span>
         </div>
-        {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김
-            V9.44: **수석 검수원에게만 보인다.** 눌러서 막히는 것보다 아예 안 보이는 편이 낫다
-            (진입 차단은 ChiefDashboard 안에도 있다 — 주소로 직접 들어오는 경우 대비). */}
-        {/* 1.41: 판정을 canOpenChief 로 통일 — 종전 isChief 만 봐서 App 라우트 게이트와 어긋났다
-            (소유자·개발용은 들어갈 수 있는데 버튼이 안 보였다). */}
-        {canOpenChief(inspector, isOwnerName(inspector)) && <button onClick={onOpenChiefDashboard}
-          className="flex-1 min-w-[140px] bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-pill px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
-          <div className="row-1">
-            <BarChart3 className="ico text-purple-300"/>
-            <span className="font-bold text-xs2 sm:text-xs text-purple-100">수석 대시보드</span>
-          </div>
-          {/* 폰에서는 부제를 숨긴다 — 이 한 줄이 세 줄의 원인이었다. */}
-          <div className="hidden sm:block text-2xs text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
-        </button>}
+        {/* 3.54: 부두 고르기 — 종전 부두 위치 카드에서 이 줄로 옮겼다. GPS 자동 판별은 뒤에서 그대로 돈다(자동이 무엇을 잡았는지 칩에 같이 적는다). */}
+        <div className="flex gap-1 ml-auto sm:ml-0 sm:flex-1">
+          {[
+            { id: 'auto', label: currentPier ? `자동·${currentPier.code}` : gpsState === 'loading' ? '자동…' : gpsState === 'far' ? '자동·외부' : gpsState === 'denied' ? '자동·위치꺼짐' : '자동' },
+            { id: 'PCTC', label: 'PCTC' },
+            { id: 'PNCT', label: 'PNCT' },
+            { id: 'all', label: '전체' },
+          ].map(b => (
+            <button key={b.id} onClick={() => { if (b.id === 'auto' && pierFilter === 'auto') measureGps(true); setPierFilter(b.id); }}
+              title={b.id === 'auto' ? '한 번 더 누르면 위치를 다시 잽니다' : undefined}
+              className={`px-2.5 py-1.5 rounded-pill text-xs2 font-bold ${
+                pierFilter === b.id
+                  ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
+                     b.id === 'PNCT' ? 'bg-purple-700 text-white' :
+                     'bg-amber-600 text-ink-950')
+                  : 'bg-ink-800 text-dim-300'
+              }`}>
+              {b.label}
+            </button>
+          ))}
+        </div>
         {/* 2.14: 폰은 **한 줄 고정** — 앞 3개는 균등(flex-1), 새로고침은 아이콘만. flex-wrap 을 빼서 줄바꿈 자체를 막는다. */}
         <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto sm:shrink-0">
           <button
@@ -822,97 +804,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               브라우저 새로고침을 하면 로그인이 풀린다. 이 버튼은 로그인을 유지한 채 구독만 재연결한다. */}
           <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
         </div>
-      </div>
-
-      {/* M5.82: 부두 필터 바 - GPS 자동 판별 + 수동 전환 / M6.17: 부두 좌표 등록 추가 */}
-      <div className="bg-ink-900/60 border border-line/40 rounded-pill px-3 py-2 mb-2">
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          {gpsState === 'loading' && (
-            <span className="flex items-center gap-1.5 text-dim-300">
-              <Loader2 className="w-3 h-3 animate-spin"/> 위치 확인 중...
-            </span>
-          )}
-          {gpsState === 'ok' && currentPier && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className={`w-3.5 h-3.5 ${currentPier.code === 'PCTC' ? 'text-blue-300' : 'text-purple-300'}`}/>
-              <span className={`font-bold ${currentPier.code === 'PCTC' ? 'text-blue-200' : 'text-purple-200'}`}>
-                현 위치: {currentPier.code}
-              </span>
-              <span className="text-dim-400 text-2xs">({currentPier.distance}m)</span>
-            </span>
-          )}
-          {gpsState === 'far' && (
-            <span className="flex items-center gap-1.5 text-amber-300">
-              <MapPin className="w-3 h-3"/> 평택항 외부 (저장된 부두에서 5km 이상)
-            </span>
-          )}
-          {gpsState === 'denied' && (
-            <span className="flex items-center gap-1.5 text-dim-300">
-              <MapPin className="w-3 h-3"/> 위치 안 씀 — 수동 선택 ▶
-            </span>
-          )}
-          <div className="flex gap-1 ml-auto">
-            {[
-              { id: 'auto', label: '자동' },
-              { id: 'PCTC', label: 'PCTC' },
-              { id: 'PNCT', label: 'PNCT' },
-              { id: 'all', label: '전체' },
-            ].map(b => (
-              <button key={b.id} onClick={() => setPierFilter(b.id)}
-                className={`px-3 py-1.5 rounded-pill text-xs2 font-bold ${
-                  pierFilter === b.id
-                    ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
-                       b.id === 'PNCT' ? 'bg-purple-700 text-white' :
-                       'bg-amber-600 text-ink-950')
-                    : 'bg-ink-800 text-dim-300'
-                }`}>
-                {b.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* M6.17: 현재 좌표 + 부두 등록 버튼 — '외부' 또는 잘못 잡힌 경우 사용 */}
-        {(gpsState === 'far' || gpsState === 'ok') && currentCoord && (
-          <div className="mt-2 pt-2 border-t border-line-soft">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-2xs text-dim-400 mono">
-                현재 좌표: {currentCoord.lat.toFixed(5)}, {currentCoord.lng.toFixed(5)}
-              </span>
-              <button
-                onClick={() => measureGps(true)}
-                className="text-xxs px-3 py-1.5 bg-ink-800 hover:bg-ink-750 rounded-pill text-dim-200"
-              >
-                🔄 다시 측정
-              </button>
-              <div className="flex gap-1 ml-auto">
-                <button
-                  onClick={() => handleRegisterPier('PCTC')}
-                  className="text-xxs px-3 py-1.5 bg-blue-900/60 hover:bg-blue-800/80 rounded-pill text-blue-200 font-bold border border-blue-700/40"
-                  title="현재 GPS 위치를 PCTC 부두 좌표로 등록"
-                >
-                  <Anchor className="w-3 h-3 inline mr-1"/>
-                  여기를 PCTC로 등록
-                </button>
-                <button
-                  onClick={() => handleRegisterPier('PNCT')}
-                  className="text-xxs px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800/80 rounded-pill text-purple-200 font-bold border border-purple-700/40"
-                >
-                  <Anchor className="w-3 h-3 inline mr-1"/>
-                  여기를 PNCT로 등록
-                </button>
-              </div>
-            </div>
-            {pierRegisterState.msg && (
-              <div className={`mt-1 text-2xs font-bold ${pierRegisterState.error ? 'text-red-300' : 'text-emerald-300'}`}>
-                {pierRegisterState.msg}
-              </div>
-            )}
-            <div className="mt-1 text-2xs text-dim-400">
-              💡 '외부'로 잡히면 부두에서 위 버튼 클릭 → 좌표 자동 등록 (모든 검수원 공유)
-            </div>
-          </div>
-        )}
       </div>
 
       {list.length === 0 && (
