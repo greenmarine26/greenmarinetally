@@ -110,6 +110,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // M5.82: GPS 기반 현 부두 자동 판별
   const [currentPier, setCurrentPier] = useState(null);    // { code, distance, name }
   const [gpsState, setGpsState] = useState('idle');         // 'idle' | 'loading' | 'denied' | 'ok' | 'far'
+  const [topMenu, setTopMenu] = useState('');               // 3.55: 진행 줄의 펼침 메뉴 — '' | 'pier' | 'new'
   const [pierFilter, setPierFilter] = useState('auto');     // 'auto' | 'PCTC' | 'PNCT' | 'all'
   // M6.17: 현재 GPS 좌표 (부두 좌표 등록용)
   // V8.35: 수집기 통보(신호) 기능 제거 — 자동 항차 등록이 대체(사용자 확정 2026-07-03).
@@ -731,7 +732,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         </span>
         {/* TallyOne 1.0: 보조기능 진입 표시 (건강 점검 · 맛집 수첩 등) */}
         <span className={`text-2xs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0 ${_chiefBtn ? 'hidden sm:inline' : ''}`}>보조기능</span>
-        <ChevronRight size={14} className="text-dim-400 shrink-0" />
+        <ChevronRight size={14} className={`text-dim-400 shrink-0 ${_chiefBtn ? 'hidden sm:block' : ''}`} />
       </button>
       {/* 3.54(검수사 2026-09-21 «수집기표시는 수석대쉬보드 표기를 절반으로 같이 사용합니다»): 수석 대시보드 버튼을 이 줄로 올려 절반씩 쓴다.
           V9.44·1.41 그대로 — canOpenChief 인 사람에게만 보인다. 안 보이는 사람은 수집기 줄이 한 줄을 다 쓴다. */}
@@ -740,7 +741,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         <BarChart3 className="ico text-purple-300 shrink-0"/>
         <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
         <span className="hidden sm:inline text-2xs text-purple-300/70 truncate">전체 검수원 진행률·통계</span>
-        <ChevronRight size={14} className="text-purple-300/70 shrink-0 ml-auto" />
+        <ChevronRight size={14} className="hidden sm:block text-purple-300/70 shrink-0 ml-auto" />
       </button>}
       </div>
 
@@ -748,68 +749,70 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           형태를 알아볼 수 없게 쭈그러들고, 데이터 새로고침이 화면 밖으로 밀렸다.
           → 폰(<640px)에서는 두 줄로 갈라 앉힌다. ①항차 수+수석 대시보드 ②양하·선적·예보·새로고침.
           PC(sm 이상)는 종전 그대로 한 줄. */}
-      <div className="flex flex-wrap items-center justify-between mb-3 gap-x-3 gap-y-1.5">
-        {/* 2.14 (검수사 지적 2026-08-23): *«진행중인 항차·수석대쉬보드·양하·선적·예보·데이터 새로고침
-            이것이 **세줄**을 차지 합니다. 분명 **2줄**로 줄이고도 남을수 있씁니다.»*
-            → 폰: ①「진행 N건」+수석 대시보드 한 줄 ②양하·선적·예보·새로고침 한 줄. 라벨은 폰에서 줄인다. */}
-        <div className="shrink-0 flex items-baseline gap-1.5 sm:block">
-          <span className="text-2xs text-dim-400 font-bold uppercase sm:block sm:mb-0.5">
+      {/* 3.55(검수사 2026-09-21 «제안안대로 해주세요»): 이 줄은 한 줄이다 — 「진행 N건」 · 부두 고르기 · 새 항차 · 새로고침.
+          부두 고르기(자동·PCTC·PNCT·전체)와 새 항차(양하·선적·예보)는 누르면 펼쳐지는 버튼 하나씩으로 묶었다. 기능은 종전 그대로. */}
+      <div className="flex items-center mb-3 gap-1.5">
+        <div className="shrink-0 flex items-baseline gap-1.5 mr-auto">
+          <span className="text-2xs text-dim-400 font-bold uppercase">
             <span className="sm:hidden">진행</span><span className="hidden sm:inline">진행 중인 항차</span>
           </span>
           <span className="text-lg font-bold text-dim-100 leading-none">{list.length}건</span>
         </div>
-        {/* 3.54: 부두 고르기 — 종전 부두 위치 카드에서 이 줄로 옮겼다. GPS 자동 판별은 뒤에서 그대로 돈다(자동이 무엇을 잡았는지 칩에 같이 적는다). */}
-        <div className="flex gap-1 ml-auto sm:ml-0 sm:flex-1">
-          {[
-            { id: 'auto', label: currentPier ? `자동·${currentPier.code}` : gpsState === 'loading' ? '자동…' : gpsState === 'far' ? '자동·외부' : gpsState === 'denied' ? '자동·위치꺼짐' : '자동' },
-            { id: 'PCTC', label: 'PCTC' },
-            { id: 'PNCT', label: 'PNCT' },
-            { id: 'all', label: '전체' },
-          ].map(b => (
-            <button key={b.id} onClick={() => { if (b.id === 'auto' && pierFilter === 'auto') measureGps(true); setPierFilter(b.id); }}
-              title={b.id === 'auto' ? '한 번 더 누르면 위치를 다시 잽니다' : undefined}
-              className={`px-2.5 py-1.5 rounded-pill text-xs2 font-bold ${
-                pierFilter === b.id
-                  ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
-                     b.id === 'PNCT' ? 'bg-purple-700 text-white' :
-                     'bg-amber-600 text-ink-950')
-                  : 'bg-ink-800 text-dim-300'
-              }`}>
-              {b.label}
-            </button>
-          ))}
+        {(() => {
+          const _autoLabel = currentPier ? `자동·${currentPier.code}` : gpsState === 'loading' ? '자동…' : gpsState === 'far' ? '자동·외부' : gpsState === 'denied' ? '자동·위치꺼짐' : '자동';
+          const _cur = pierFilter === 'auto' ? _autoLabel : pierFilter === 'all' ? '전체' : pierFilter;
+          const _tone = pierFilter === 'PCTC' ? 'bg-blue-700 text-white' : pierFilter === 'PNCT' ? 'bg-purple-700 text-white' : 'bg-amber-600 text-ink-950';
+          const _opts = [{ id: 'auto', label: _autoLabel }, { id: 'PCTC', label: 'PCTC' }, { id: 'PNCT', label: 'PNCT' }, { id: 'all', label: '전체' }];
+          return (
+            <div className="relative min-w-0 shrink">
+              <button onClick={() => setTopMenu(m => (m === 'pier' ? '' : 'pier'))} aria-haspopup="menu" aria-expanded={topMenu === 'pier'}
+                className={`px-2.5 py-2 rounded-pill text-xs2 font-bold whitespace-nowrap block max-w-full truncate ${_tone}`} style={{ minHeight: 40 }}>
+                📍 {_cur} ▾
+              </button>
+              {topMenu === 'pier' && (
+                <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[150px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
+                  {_opts.map(b => (
+                    <button key={b.id} role="menuitem" onClick={() => { setPierFilter(b.id); setTopMenu(''); }}
+                      className={`w-full text-left px-3 py-2.5 rounded text-xs font-bold ${pierFilter === b.id ? 'bg-ink-750 text-dim-100' : 'text-dim-200 hover:bg-ink-800'}`}>
+                      {pierFilter === b.id ? '✓ ' : ''}{b.label}
+                    </button>
+                  ))}
+                  <button role="menuitem" onClick={() => { measureGps(true); setPierFilter('auto'); setTopMenu(''); }}
+                    className="w-full text-left px-3 py-2.5 rounded text-xs text-dim-300 hover:bg-ink-800 border-t border-line-soft mt-1">
+                    🔄 위치 다시 재기
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+        <div className="relative shrink-0">
+          <button onClick={() => setTopMenu(m => (m === 'new' ? '' : 'new'))} aria-haspopup="menu" aria-expanded={topMenu === 'new'}
+            className="px-2.5 py-2 rounded-pill text-xs font-bold whitespace-nowrap bg-ink-800 hover:bg-ink-750 border border-line text-dim-100 flex items-center gap-1" style={{ minHeight: 40 }}>
+            <Plus className="ico-s"/>새 항차 ▾
+          </button>
+          {topMenu === 'new' && (
+            <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[170px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
+              <button role="menuitem" onClick={() => { setTopMenu(''); setShowCreate('discharge'); }}
+                className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-blue-200 hover:bg-ink-800 flex items-center gap-1"><ArrowDown className="ico-s"/>양하 항차</button>
+              <button role="menuitem" onClick={() => { setTopMenu(''); setShowCreate('loading'); }}
+                className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-amber-200 hover:bg-ink-800 flex items-center gap-1"><ArrowUp className="ico-s"/>선적 항차</button>
+              <button role="menuitem" onClick={() => { setTopMenu(''); setShowForecast(true); setFcText(''); }}
+                title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
+                className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-orange-200 hover:bg-ink-800">📋 물량 예보 붙여넣기</button>
+            </div>
+          )}
         </div>
-        {/* 2.14: 폰은 **한 줄 고정** — 앞 3개는 균등(flex-1), 새로고침은 아이콘만. flex-wrap 을 빼서 줄바꿈 자체를 막는다. */}
-        <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto sm:shrink-0">
-          <button
-            onClick={() => setShowCreate('discharge')}
-            className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-2.5 sm:px-3 py-2 rounded-pill text-xs font-bold flex items-center justify-center gap-1"
-          >
-            <Plus className="ico-s"/><ArrowDown className="ico-s"/>양하
-          </button>
-          <button
-            onClick={() => setShowCreate('loading')}
-            className="flex-1 sm:flex-none bg-amber-900/50 hover:bg-amber-800 border border-amber-700/50 text-amber-100 px-2.5 sm:px-3 py-2 rounded-pill text-xs font-bold flex items-center justify-center gap-1"
-          >
-            <Plus className="ico-s"/><ArrowUp className="ico-s"/>선적
-          </button>
-          <button
-            onClick={() => { setShowForecast(true); setFcText(''); }}
-            className="flex-1 sm:flex-none bg-orange-900/50 hover:bg-orange-800 border border-orange-700/50 text-orange-100 px-2.5 sm:px-3 py-2 rounded-pill text-xs font-bold flex items-center justify-center gap-1"
-            title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
-          >
-            📋 예보
-          </button>
-          {/* TallyOne 1.5: 화면 데이터만 새로고침 — 입출항 자료가 수시로 바뀌는데(사용자 확정 2026-08-04)
-              브라우저 새로고침을 하면 로그인이 풀린다. 이 버튼은 로그인을 유지한 채 구독만 재연결한다. */}
-          <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
-        </div>
+        {/* TallyOne 1.5: 화면 데이터만 새로고침 — 로그인을 유지한 채 구독만 재연결한다. */}
+        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
       </div>
+      {/* 펼친 메뉴 밖을 누르면 닫힌다 */}
+      {topMenu && <div className="fixed inset-0 z-20" onClick={() => setTopMenu('')} />}
 
       {list.length === 0 && (
         <div className="bg-ink-900 border border-line rounded-btn p-10 text-center">
           <div className="text-dim-400 text-sm mb-2">진행 중인 항차가 없습니다</div>
-          <div className="text-xs text-dim-500">위 + 양하 / + 선적 버튼으로 새 항차를 만드세요</div>
+          <div className="text-xs text-dim-500">위 [＋ 새 항차] 버튼으로 새 항차를 만드세요</div>
         </div>
       )}
 
@@ -1276,6 +1279,11 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const ACT_BTN = 'h-12 px-2.5 rounded-pill text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
   // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
   const [zap, setZap] = useState('');
+  //  3.55(검수사 2026-09-21): 폰에서는 카드가 **접힌 모습**이 기본이다 — 선박·부두·알림·작업일시·자료 상태·진행만 보인다.
+  //    신고도착·자동 배지·항차·항로·대수 내역·완료 버튼·삭제는 «자세히»를 눌렀을 때 나온다. PC(lg 이상)는 종전 그대로(2.15 시안).
+  //    ⚠ 감추기는 CSS 뿐이다 — 트리와 계산은 그대로라 출항 배지 sticky 기록 같은 부수 동작이 멈추지 않는다.
+  const [more, setMore] = useState(false);
+  const FOLD = more ? '' : 'max-lg:hidden';
   const [zapMsg, setZapMsg] = useState('');
   const dis = voyage.discharge;
   const loa = voyage.loading;
@@ -1481,24 +1489,24 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               const d = new Date(ms), p2 = (n) => String(n).padStart(2, '0');
               return (
                 <span title="PORT-MIS 세관 신고 기준 항 도착시각입니다. 도선 시작·작업시작과는 다릅니다."
-                  className="text-xxs px-1.5 py-0.5 rounded font-bold border bg-ink-800/70 border-line-strong text-dim-200">
+                  className={`text-xxs px-1.5 py-0.5 rounded font-bold border bg-ink-800/70 border-line-strong text-dim-200 ${FOLD}`}>
                   🚢신고도착 {p2(d.getHours())}:{p2(d.getMinutes())}
                 </span>
               );
             })()}
             {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
-              <span className="text-xxs bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
+              <span className={`text-xxs bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold ${FOLD}`}>
                 🤖 자동(수집중)
               </span>
             )}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus === 'confirmed' && (
-              <span className="text-xxs bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold">
+              <span className={`text-xxs bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold ${FOLD}`}>
                 🤖 자동(확정)
               </span>
             )}
           </div>
-          <div className="text-xxs text-dim-400 truncate">
+          <div className={`text-xxs text-dim-400 truncate ${FOLD}`}>
             {/* M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W) */}
             {(() => {
               const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
@@ -1509,7 +1517,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           </div>
           {/* ── 2.09 (검수사 지시 2026-08-23 «각선박의 자세히 항로 약자와 항로 전체를 홈화면 각선박에 등록») ── */}
           {laneRow && laneRow.lane && (
-            <div className="text-xxs leading-snug">
+            <div className={`text-xxs leading-snug ${FOLD}`}>
               <span className="text-dim-400">항로 </span>
               <span className="font-bold text-cyan-300">{laneRow.lane}</span>
               {laneRow.name ? <span className="text-dim-400"> · {laneRow.name}</span> : null}
@@ -1580,7 +1588,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               const eta = voyage._etaMs, etd = voyage._etdMs;
               const sameDay = eta && etd && new Date(eta).toDateString() === new Date(etd).toDateString();
               const work = eta && etd ? `${fmt(eta)} ~ ${fmt(etd, !sameDay)}` : (eta ? fmt(eta) : (etd ? `~ ${fmt(etd)}` : ''));
-              return <>🗓 작업 {work || <span className="text-dim-500">일정 미상</span>}</>;
+              return <span className={FOLD}>🗓 작업 {work || <span className="text-dim-500">일정 미상</span>} · </span>;   /* 3.55: 구분점은 이 토막에 붙인다 — 접힌 모습에서 자료 상태가 점으로 시작하지 않게 */
             })()}
             {(() => {
               // 자료 상태 — 확정 > 수정본 > 갱신일시 > 자료 없음.
@@ -1591,18 +1599,18 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               if (fixed) {
                 // 확정 뒤에 자료가 또 들어왔으면 수정본. 1분 여유 — 확정 기록과 저장이 거의 동시일 수 있다.
                 if (at > fixed + 60000) {
-                  return <span className="ml-1 text-amber-300">· ✏ 수정본 {fmt2(at)}</span>;
+                  return <span className="text-amber-300">✏ 수정본 {fmt2(at)}</span>;
                 }
-                return <span className="ml-1 text-emerald-300">· ✅ 자료 확정</span>;
+                return <span className="text-emerald-300">✅ 자료 확정</span>;
               }
               // TallyOne 1.13-01: 한쪽만 끝난 배 — 무엇을 기다리는지 적는다(검수사 요청).
               //   종전엔 선적 섹션이 아직 없다는 이유로 계산에서 빠져 '자료 확정'으로 떴다.
               if (voyage._waitFor) {
-                return <span className="ml-1 text-sky-300">· ⏳ {voyage._waitFor}자료 대기중{at ? ` · 갱신 ${fmt2(at)}` : ''}</span>;
+                return <span className="text-sky-300">⏳ {voyage._waitFor}자료 대기중{at ? ` · 갱신 ${fmt2(at)}` : ''}</span>;
               }
-              if (at) return <span className="ml-1">· 갱신 {fmt2(at)}</span>;
-              if (voyage._hasData) return <span className="ml-1 text-dim-500">· 갱신 —</span>;
-              return <span className="ml-1 text-dim-500">· 자료 없음</span>;
+              if (at) return <span>갱신 {fmt2(at)}</span>;
+              if (voyage._hasData) return <span className="text-dim-500">갱신 —</span>;
+              return <span className="text-dim-500">자료 없음</span>;
             })()}
             {(() => {
               // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다. 이 경고만 남긴다.
@@ -1625,10 +1633,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
              누르기 **전에** 알아야 한다. 숫자를 지우고 캔슬 한 줄만 남긴다. */}
         {dis && (sideCancelled(voyage.info, 'discharge') 
           ? <CancelledSide label="양하"/>
-          : <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>)}
+          : <SectionBar label="양하" color="blue" stats={disStats} fold={!more} onClick={() => onOpen('discharge')}/>)}
         {loa && (sideCancelled(voyage.info, 'loading')
           ? <CancelledSide label="선적"/>
-          : <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>)}
+          : <SectionBar label="선적" color="amber" stats={loaStats} fold={!more} onClick={() => onOpen('loading')}/>)}
         {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건).
             한쪽이라도 자료가 있는 항차만 — 순수 예정 항차는 이미 「자료 없음」 한 줄로 충분하다. */}
         {(dis || loa) && !dis && <MissingSideNote label="양하" qty={voyage.info?.planDis}/>}
@@ -1679,10 +1687,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       </div>{/* 2.15: 좌측 정보 영역 닫기 */}
 
       {(activeInspectors.length > 0 || onDelete) && (
-        <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-line pt-2
+        <div className={`px-3 flex flex-wrap items-center justify-between gap-2 border-t border-line lg:flex-nowrap ${more ? 'pb-2 pt-2' : 'py-1.5'}
                         lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
                         lg:border-t-0 lg:border-l lg:border-line lg:bg-ink-900 lg:p-5 lg:gap-3
-                        lg:hover:bg-ink-900 lg:transition-colors">
+                        lg:hover:bg-ink-900 lg:transition-colors`}>
           {/* 상단 — 상태 */}
           <div className="row-1 text-2xs text-dim-400 flex-1 min-w-0 lg:flex-none">
             {activeInspectors.length > 0 ? (
@@ -1692,6 +1700,11 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 <span className="truncate">{activeInspectors.map(a => a.name).join(', ')} 작업중</span>
               </>
             ) : <span className="text-dim-500">대기 중</span>}
+            {!more && onComplete && (inspectorDone || modeDone?.d || modeDone?.l) && (
+              <span className="lg:hidden ml-2 font-bold text-amber-300 whitespace-nowrap">
+                {inspectorDone ? '검수 완료 · 수석 대기' : `${modeDone?.d ? '양하 완료 ✓' : ''}${modeDone?.d && modeDone?.l ? ' · ' : ''}${modeDone?.l ? '선적 완료 ✓' : ''}`}
+              </span>
+            )}
           </div>
           {/* 중단 — PC 전용 큰 숫자. ⚠ 좌측에 이미 «양하 271 · 매칭 271» 이 있으므로 같은 수를 또 쓰지 않는다.
               현장에서 필요한 것은 «남은 수» 다 — 작업이 진행되면 좌측 총계와 갈라진다. */}
@@ -1719,7 +1732,12 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                  두 줄이 되는 순간 그 버튼만 키가 커진다.
               ⇒ 아래 한 규격(ACT_BTN)으로 묶는다. 높이·패딩·글자를 개별 버튼에서 다시 주지 않는다.
                  폰은 flex-1 로 **균등 분할**(같은 4자면 같은 폭), PC 는 w-full 세로 스택. */}
-          <div className="flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5">
+          {/* 3.55: 폰의 접힌 모습에서는 «자세히» 하나만 — 누르면 아래 버튼 묶음이 나온다. */}
+          <button onClick={(e) => { e.stopPropagation(); setMore(m => !m); }} aria-expanded={more}
+            className="lg:hidden shrink-0 h-9 px-3 rounded-pill text-xs2 font-bold border border-line bg-ink-800 text-dim-200 whitespace-nowrap">
+            {more ? '▴ 접기' : '▾ 자세히'}
+          </button>
+          <div className={`flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5 ${more ? 'max-lg:basis-full' : 'max-lg:hidden'}`}>
             {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈 카드에** 둔다.
                 "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" — 자료를 폴더에 넣은 직후
                 수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록시킨다.
@@ -1856,17 +1874,32 @@ function CancelledSide({ label }) {
   );
 }
 
-function SectionBar({ label, color, stats, onClick }) {
+function SectionBar({ label, color, stats, onClick, fold = false }) {
   const colorClasses = {
     blue: { bg: 'bg-blue-500', label: 'bg-blue-900/50 text-blue-200 border-blue-700/40' },
     amber: { bg: 'bg-amber-500', label: 'bg-amber-900/50 text-amber-200 border-amber-700/40' },
   }[color];
 
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+  //  3.55: 접힌 줄에 적을 터미널 대수 차이 — 아래 1.82 대조와 **같은 식**이다(앱 수 고르기 포함).
+  const _foldApp = stats.planOnly ? stats.planSlots : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount : stats.ptk;
+  const _foldGap = stats.planQty != null ? (Number(_foldApp) || 0) - stats.planQty : 0;
   // 2.15 시안: 폰은 «양하/선적 행 높이 36px» — 현장에서 눈에 들어와야 한다.
 
   return (
     <div onClick={onClick} className="cursor-pointer">
+      {/* 3.55: 접힌 모습(폰) — 한 줄. 대수 내역(평택·매칭·터미널·쉬프팅…)은 «자세히»에서 종전 그대로 나온다. 누락은 접혀 있어도 보인다. */}
+      {fold && (
+        <div className="lg:hidden flex items-center gap-2 min-h-[32px]">
+          <span className={`${colorClasses.label} border px-2 py-1 rounded font-black leading-none text-sm2 shrink-0`}>{label}</span>
+          <div className="flex-1 bg-ink-800 rounded-full h-1.5 overflow-hidden"><div className={`${colorClasses.bg} h-full transition-all`} style={{ width: `${pct}%` }}/></div>
+          <span className="text-sm2 font-bold text-dim-100 mono shrink-0">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
+          {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && <span className="text-xs2 font-bold text-red-300 shrink-0">누락 {stats.missing}</span>}
+          {(stats.planOnly || stats.forecastEdi) && <span className="text-2xs font-black px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 shrink-0" title="확정 자료가 아닌 예상 수치입니다 — 자세히를 누르면 내역이 나옵니다">예상</span>}
+          {_foldGap !== 0 && <span className="text-xs2 font-bold text-amber-300 shrink-0" title="터미널 배정 대수와 앱 대수가 다릅니다 — 자세히를 누르면 내역이 나옵니다">터미널 {_foldGap > 0 ? '+' : ''}{_foldGap}</span>}
+        </div>
+      )}
+      <div className={fold ? 'max-lg:hidden' : ''}>
       <div className="flex items-center gap-2 mb-1.5 text-sm2 sm:text-xxs min-h-[36px] sm:min-h-0">
         <span className={`${colorClasses.label} border px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-black leading-none`}>{label}</span>
         {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) —
@@ -1986,6 +2019,7 @@ function SectionBar({ label, color, stats, onClick }) {
       </div>
       <div className="flex items-center justify-between text-2xs mt-0.5 text-dim-400">
         <span>완료 {stats.done}/{stats.total} ({pct}%)</span>
+      </div>
       </div>
     </div>
   );
