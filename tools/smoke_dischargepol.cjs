@@ -89,7 +89,7 @@ const PATHS = [
   ['src/pages/VoyagePage.jsx', 2, '항차 화면 — 별첨 목록 + 화면 본류 둘 다'],
   ['src/components/SearchPanel.jsx', 1, '검색·끝4자리·자동 가이드'],
   ['src/components/PrintHubModal.jsx', 1, '대외 문서(검수 리스트·VGM·별첨·베이 상세)'],
-  ['src/mirCtx.js', 1, '미르·홈 통합검색'],
+  ['src/mir.js', 1, '미르·홈 통합검색'],
   ['src/pages/ChiefDashboard.jsx', 1, '수석 보드 컨 상세'],
   ['src/workingReport.js', 1, '작업 리포트 항구 집계'],
 ];
@@ -115,7 +115,7 @@ const GATED = [
   ['src/pages/VoyagePage.jsx', /mode !== 'discharge' \|\| !ediBase\.pol/],
   ['src/components/SearchPanel.jsx', /m !== 'discharge' \|\| !_e\.pol/],
   ['src/components/PrintHubModal.jsx', /mode !== 'discharge' \|\| !e\.pol/],
-  ['src/mirCtx.js', /if \(mode === 'discharge'\) \{\s*\n\s*const _dp = pickDischargePol/],
+  ['src/mir.js', /if \(mode === 'discharge'\) \{\s*\n\s*const _dp = pickDischargePol/],
   ['src/pages/ChiefDashboard.jsx', /boardDetail\.mode === 'discharge' \? pickDischargePol/],
   ['src/workingReport.js', /dlMode === 'disch' && ediC\.pol/],
 ];
@@ -136,7 +136,7 @@ const ESB = fs.existsSync(path.join(ROOT, 'node_modules/.bin/esbuild'))
 let bundled = true;
 for (const m of ['mirCtx', 'workingReport']) {
   try {
-    execSync(`${ESB} ${JSON.stringify(path.join(ROOT, 'src', m + '.js'))} --bundle --platform=node --format=cjs --outfile=${JSON.stringify(OUT + '_' + m + '.cjs')} --log-level=error`,
+    execSync(`${ESB} ${JSON.stringify(path.join(ROOT, 'src', (m === 'mirCtx' ? 'mir' : m) + '.js'))} --bundle --platform=node --format=cjs --outfile=${JSON.stringify(OUT + '_' + m + '.cjs')} --log-level=error`,
       { stdio: 'pipe' });
   } catch (e) { bundled = false; console.log('  ✗ 실소스 번들 실패 — ' + m + ' : ' + String(e.message || e).slice(0, 200)); fail++; }
 }

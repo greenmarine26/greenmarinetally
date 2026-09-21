@@ -17,7 +17,7 @@ import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.6
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
-import { askMirModel, isWeakAnswer } from '../mirModel.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
+import { askMirModel, isWeakAnswer } from '../mir.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
@@ -34,12 +34,12 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
-import { mirTone } from '../mirChat.js';
-import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
+import { mirTone } from '../mir.js';
+import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
 import { mirKnowledge } from '../data/mirKnowledge.js';
-import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
+import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
 import mirFaceUrl from '../assets/mir-face.png';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌

@@ -15,7 +15,7 @@
 
    ── 판정 두 벌 금지
    콘앱의 옛 `coneQaAnswer` 는 폴백으로만 남는다(번들 미로드 시). 정본은 `coneKnowledge.js` 한 벌이다.
-   ★ 3.41 / 2.48 — 2단계 완성: 검수앱 세 화면·떠 있는 미르·콘앱이 전부 `src/mirAnswer.js` 의 `answerOne()` 을 부른다.
+   ★ 3.41 / 2.48 — 2단계 완성: 검수앱 세 화면·떠 있는 미르·콘앱이 전부 `src/mir.js`([mirAnswer] 절) 의 `answerOne()` 을 부른다.
 
    ── 크기
    ⛔ `export * from utils.js` 로 싸면 **xlsx 엑셀 라이브러리 1,219KB** 가 딸려온다(실측).
@@ -24,7 +24,7 @@
 
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing } from './nlSearch.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
-import { mirTone, mirSmallTalk } from './mirChat.js';
+import { mirTone, mirSmallTalk } from './mir.js';
 /* ★ 2.17 — 미르 목소리. 검수사 *«콘앱의 미르는 말을 못합니다. 검수앱의 미르 목소리도 이쁜데»*
      ⛔ 새로 만들지 않는다 — 새로 만들면 **목소리가 달라진다.** 검수앱과 같은 voice.js 한 벌을 싣는다.
      (ko-KR · pitch 1.08 — «살짝 높여 덜 무뚝뚝하게» 가 그 파일에 적힌 뜻이다.) */
@@ -55,11 +55,11 @@ export function toMirContainers(rows, mode) {
  *           mode, modeLabel, pier, opts, ... 나머지는 엔진 ctx 로 그대로 흘러간다 }
  * 답을 못 내면 null.
  *
- * ★ 3.41 / 2.48 — **2단계 완성.** 답 고르기는 `src/mirAnswer.js` 한 벌로 옮겼다. 검수앱 세 화면·떠 있는 미르가
+ * ★ 3.41 / 2.48 — **2단계 완성.** 답 고르기는 `src/mir.js`([mirAnswer] 절) 한 벌로 옮겼다. 검수앱 세 화면·떠 있는 미르가
  *   같은 함수를 부르므로 «어디서 물어도 같은 답»이다(검수사 «미르를 하나로 만들고 싶습니다»). 이 파일은 콘앱 번들 진입점으로만 남는다.
  */
-export { answerOne, answerOneRaw } from './mirAnswer.js';
-export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATALOG } from './mirModel.js';   // 3.42 판 B: 콘앱도 같은 모델 창구(공용 키·문지기)
+export { answerOne, answerOneRaw } from './mir.js';
+export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATALOG } from './mir.js';   // 3.42 판 B: 콘앱도 같은 모델 창구(공용 키·문지기)
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };

@@ -12,7 +12,7 @@ import HelpModal from './HelpModal.jsx';
 //    판을 올리면 파일 이름이 바뀌어 **옛 로고가 캐시에 남지 않는다.**
 import logoUrl from '../assets/logo-tallyone.png';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
-import { getMirConfig } from '../mirModel.js';   // 3.43: 공용 키(검수사 부담)가 있으면 🔑 빨간 점·«설정 필요»를 띄우지 않는다
+import { getMirConfig } from '../mir.js';   // 3.43: 공용 키(검수사 부담)가 있으면 🔑 빨간 점·«설정 필요»를 띄우지 않는다
 import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
 import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: 데미지 예약(자료 도착 전 사전 등록)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';

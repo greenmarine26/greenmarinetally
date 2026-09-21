@@ -7,14 +7,14 @@ import { isoToLabel, fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, ko
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
-import { mirTone, mirSmallTalk } from '../mirChat.js';
-import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌
-import { askMirModel, isWeakAnswer } from '../mirModel.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
-import { flattenVoyages, pickShipCtx } from '../mirCtx.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
+import { mirTone, mirSmallTalk } from '../mir.js';
+import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
+import { askMirModel, isWeakAnswer } from '../mir.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
+import { flattenVoyages, pickShipCtx } from '../mir.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
 import { mirKnowledge } from '../data/mirKnowledge.js';
-import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
+import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
 import { fbGetDamagePhoto, fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답

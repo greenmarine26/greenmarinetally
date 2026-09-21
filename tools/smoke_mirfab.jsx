@@ -3,7 +3,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import MirFab from '../src/components/MirFab.jsx';
-import { publishMirCtx, flattenVoyages } from '../src/mirCtx.js';
+import { publishMirCtx, flattenVoyages } from '../src/mir.js';
 import FX from './fixtures/mirone_live_260910.json';
 
 window.__calls = [];

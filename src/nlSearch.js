@@ -10,10 +10,10 @@ import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 �
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
-import { mirRewrite, mirLearnedDef, mirObserve } from './mirLearn.js';
+import { mirRewrite, mirLearnedDef, mirObserve } from './mir.js';
 import { isoConflictText } from './diagnostics.js';   // ★ 3.47: 규격 불일치 문구 한 벌(진단 패널과 같은 말)
-import { mirSmallTalk } from './mirChat.js';   // ★ 3.7-06: 잡담이 받은 말은 «못 알아들은 말»이 아니다(판정 한 벌)
-export { _mirReset } from './mirLearn.js';   // 연막검사용(기억 초기화)   // ★ 3.0: 미르 자체 학습 — 못 알아듣는 말만 사전으로 되쓰기·이어진 말에서 배우기   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
+import { mirSmallTalk } from './mir.js';   // ★ 3.7-06: 잡담이 받은 말은 «못 알아들은 말»이 아니다(판정 한 벌)
+export { _mirReset } from './mir.js';   // 연막검사용(기억 초기화)   // ★ 3.0: 미르 자체 학습 — 못 알아듣는 말만 사전으로 되쓰기·이어진 말에서 배우기   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
 import { HELP_DATA_CHIEF } from './data/helpDataChief.js';   // 2.30: 미르가 수석 권도 안다(가르치진 않고 «있다»고 알린다)
 
 // ─── 항구 코드 매핑 ───
@@ -135,7 +135,7 @@ export function parseNaturalQuery(text) {
     //    (본선 아닌 연락처도 버리지 않는다). ⚠ 실제 자료(RTDB shipContacts)는 화면이 갖고 있다 —
     //    여기서는 «누구를 찾는지»만 담는다(순수 함수 유지, deviceCmd와 같은 방식).
     contactQuery: null,   // { code, onboardOnly } — code: 원문에서 뽑은 선박 코드/풀네임 후보(없으면 "이 배" 맥락)
-    //  ★ 3.41 미르 창구 — 개체(끝네자리+속성)·항차 사실. 판정은 여기, 답은 mirFacts.js 한 벌.
+    //  ★ 3.41 미르 창구 — 개체(끝네자리+속성)·항차 사실. 판정은 여기, 답은 mir.js([mirFacts] 절) 한 벌.
     entityAttr: null,   // 'temp'|'seal'|'weight'|'route'|'bl'|'dims'|'xray'|'status'|'spec' — digits 와 함께
     factQuery: null,    // 'tally'|'hatch'|'berthSide'|'workTimes'|'oog'|'eseal'|'mkcon'|'storage'|'cutSeal'|'held'|'lugg'|'transship'
   };
@@ -748,7 +748,7 @@ export function parseNaturalQuery(text) {
     result.gangQuery = null;
   }
   //  ★ 3.41 미르 창구 15건 (검수사 «어떤 질문이 들어 올지는 저도 모릅니다 … 적당한 답을») —
-  //    개체 창구는 «끝네자리 + 무엇을 묻는지», 항차 창구는 끝네자리 없이 사실을 묻는 말. 답은 mirFacts.js 가 낸다.
+  //    개체 창구는 «끝네자리 + 무엇을 묻는지», 항차 창구는 끝네자리 없이 사실을 묻는 말. 답은 mir.js([mirFacts] 절) 가 낸다.
   //    ⚠ 기존 갈래를 끄지 않는다 — 여기서 정한 것은 mirAnswer 가 **본체보다 먼저** 볼 뿐이다.
   if (result.digits && !result.crewQuery && !result.crewSet) {
     const _A = [

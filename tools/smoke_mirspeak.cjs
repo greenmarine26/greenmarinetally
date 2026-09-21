@@ -307,7 +307,7 @@ const ask = (q) => {
   //  ★ 2.57-02 (검수사 시험 실측 — 홈과 양하 탭의 «FR이 뭐야» 답안지가 달랐다):
   //    홈도 뜻 갈래는 본체 한 벌을 부른다 — 그리고 그 호출이 기능 색인(howToQuery) 분기보다 앞이어야 한다.
   //  3.41: 홈의 답 갈래는 mirAnswer 한 벌로 옮겨 갔다 — 뜻·방법·기능 색인의 차례를 그 한 벌에서 잰다(다섯 입구가 같은 차례).
-  const one = read('src/mirAnswer.js');
+  const one = read('src/mir.js');
   T(/asking === 'def'[\s\S]{0,220}generateLocalAnswer\(p, \[\], \[\], null\)/.test(one), '⛔ 한 벌 엔진이 뜻 갈래에 본체 한 벌을 안 부른다 — 화면마다 답안지가 갈린다');
   T(one.indexOf("asking === 'def'") < one.indexOf('if (p.howToQuery)'), '⛔ 한 벌 엔진의 뜻 본체 호출이 기능 색인(howTo 분기)보다 뒤다 — 기능 안내가 가로챈다');
   T(/submitNow\(/.test(gsp) && /slice\(0,\s*30\)/.test(gsp), 'GlobalSearchPage 버튼 제출·카드 상한 30 이 없다 (2.55-01 부작용·쏟기)');

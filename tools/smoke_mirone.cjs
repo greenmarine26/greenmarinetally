@@ -127,7 +127,7 @@ T(/answerOneRaw\(Q,/.test(src('src/pages/GlobalSearchPage.jsx')), '홈(GlobalSea
 T(/askMir\(t, ctx, \(cq, trace\) => answerOneRaw\(cq/.test(src('src/components/MirFab.jsx')), '떠 있는 미르(MirFab)가 askMir(규칙 → 약하면 모델) 를 부르고 규칙은 answerOneRaw 한 벌이다(3.42)');
 T(/<MirFab /.test(src('src/App.jsx')), 'App 이 MirFab 을 띄운다(어디서나)');
 T(/publishMirCtx\(\{/.test(src('src/pages/VoyagePage.jsx')), '항차 화면이 떠 있는 미르에게 재료를 놓는다');
-T(/export \{ answerOne, answerOneRaw \} from '\.\/mirAnswer\.js'/.test(src('src/mirCore.entry.js')), '콘앱 번들 진입점이 mirAnswer 한 벌을 낸다');
+T(/export \{ answerOne, answerOneRaw \} from '\.\/mir\.js'/.test(src('src/mirCore.entry.js')), '콘앱 번들 진입점이 mirAnswer 한 벌을 낸다');
 T(/voyages\/'\+k\+'\/discharge\/xrayList\.json/.test(src('public/cone.html')) && /_xray:true/.test(src('public/cone.html')), '콘앱이 xrayList 를 받아 컨에 입힌다');
 T(/const voyage=\{ info:info, reports:/.test(src('public/cone.html')), '콘앱이 항차 원본 모양(voyage)을 미르에게 넘긴다');
 T(!/generateLocalAnswer\(/.test(src('src/pages/GlobalSearchPage.jsx')) && !/generateBriefing\(/.test(src('src/pages/GlobalSearchPage.jsx')), '홈에 옛 답 갈래(본체·브리핑 직접 호출)가 남지 않았다');

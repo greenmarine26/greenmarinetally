@@ -96,7 +96,7 @@ ok(/want\[`\$\{row\.op\}\|\$\{row\.port\}\|\$\{row\.fe\}`\]/.test(xl),
 
 //  ⑥ 판정 한 벌 — 제 목록을 따로 만드는 화면이 전부 같은 매퍼를 지난다(규범 §4-4)
 for (const f of ['src/tallyReport.js', 'src/workingReport.js', 'src/inspectionList.js',
-  'src/pages/VoyagePage.jsx', 'src/pages/ChiefDashboard.jsx', 'src/mirCtx.js' /* 3.41: 홈의 전 항차 펼치기가 mirCtx.flattenVoyages 한 벌로 옮겨 갔다 — 홈·떠 있는 미르가 같이 쓴다 */,
+  'src/pages/VoyagePage.jsx', 'src/pages/ChiefDashboard.jsx', 'src/mir.js' /* 3.41: 홈의 전 항차 펼치기가 mirCtx.flattenVoyages 한 벌로 옮겨 갔다 — 홈·떠 있는 미르가 같이 쓴다 */,
   'src/components/PrintHubModal.jsx',
   'src/components/SearchPanel.jsx' /* 3.51-02 감사: 이 패널도 제 목록을 따로 병합한다 — 빠져 있어서 자동 가이드 카드·끝4자리 카드·컨 상세만 SOC 였다 */]) {
   ok(/shipOpMapper/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} 가 같은 매퍼를 지난다`);
@@ -140,7 +140,7 @@ ok(E[12] === 'TJM' && E[13] === '', '배를 몰라도 세관이 기준 · 둘 �
 //     감사 실측(3.52 1차) — `shipOpMapper` 만 세던 ⑥ 때문에, 화면 본류(VoyagePage 의 containersBase)와
 //     대외 인쇄물(PrintHubModal)이 안 지나는 채로 «전부 통과» 가 찍혔다. 세는 대상을 함수로 바꾼다.
 for (const f of ['src/pages/VoyagePage.jsx', 'src/components/SearchPanel.jsx', 'src/components/PrintHubModal.jsx',
-  'src/tallyReport.js', 'src/workingReport.js', 'src/mirCtx.js',
+  'src/tallyReport.js', 'src/workingReport.js', 'src/mir.js',
   'src/pages/ChiefDashboard.jsx' /* 3.52 재감사: 보드 컨 상세가 리스트 op 를 EDI 위에 그냥 펼치고 있었다 */]) {
   ok(/pickCarrierOp\(/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} 가 pickCarrierOp 를 지난다`);
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
-import { publishMirCtx, flattenVoyages } from '../mirCtx.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
-import { answerOneRaw } from '../mirAnswer.js';   // 3.41: 답 고르기 한 벌
+import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
+import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
@@ -9,8 +9,8 @@ import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
-import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
-import { mirTone } from '../mirChat.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
+import { mirSee } from '../mir.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
+import { mirTone } from '../mir.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import { Thermometer,
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,

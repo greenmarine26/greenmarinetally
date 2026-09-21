@@ -23,7 +23,7 @@
 
 import { fmtPos, normalizeBay } from './utils.js';
 import { lookupUN } from './dgUnDict.js';
-import { getMirConfig } from './mirModel.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
+import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
 
 // V9.57(G11): 하드코딩 폴백 키 삭제 — GitHub public repo 노출로 이미 차단된 키였고,
 //   소스에 실키를 두는 것 자체가 보안 위반. export 이름은 소비처 6곳(GeminiKeyModal·VoyagePage·

@@ -753,7 +753,7 @@ fi
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).
   SMOKE_ME=$(mktemp /dev/shm/hometmp/_smokeme_XXXXXX.cjs)
-  if npx esbuild src/mirEyes.js --bundle --platform=node --format=cjs --outfile="$SMOKE_ME" --log-level=error; then
+  if npx esbuild src/mir.js --bundle --platform=node --format=cjs --outfile="$SMOKE_ME" --log-level=error; then
     node tools/smoke_mireyes.cjs "$SMOKE_ME" || { echo "✗ 미르의 눈 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.52-03: 무게 병합 — 리스트의 «빈칸/0» 이 EDI 무게를 지우면 안 된다(소스 직접 검사, 번들 불필요)
     node tools/smoke_weight_merge.cjs || { echo "✗ 무게 병합 연막검사 실패 — 배포 금지"; exit 1; }
@@ -768,7 +768,7 @@ fi
     #  3.2-01: **플랜 명령(동사 없음)·항차번호≠끝자리·«미르 점심은?»** — 받은함 08-29 무응답 7건 재생.
     SMOKE_PCM="tools/_smokepcm_tmp.cjs"; SMOKE_MCH="tools/_smokemch_tmp.cjs"
     npx esbuild src/planCommand.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PCM" --log-level=error \
-      && npx esbuild src/mirChat.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MCH" --log-level=error \
+      && npx esbuild src/mir.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MCH" --log-level=error \
       && node tools/smoke_plancmd.cjs "$SMOKE_PCM" "$SMOKE_NS" "$SMOKE_MCH" \
       || { rm -f "$SMOKE_PCM" "$SMOKE_MCH"; echo "✗ 플랜 명령 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_PCM" "$SMOKE_MCH"
@@ -987,6 +987,8 @@ fi
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MS" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_mirsame.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 두 앱 같은 답 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MS"
+    #  3.53-11: **미르 한 파일** — 엔진이 src/mir.js 하나뿐인가 · 옛 일곱 파일을 부르는 줄이 없는가 · nlSearch 와 서로 불러도 어느 쪽을 먼저 열든 서는가.
+    node tools/smoke_mirfile.cjs "$(pwd)" || { echo "✗ 미르 한 파일 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
     SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)

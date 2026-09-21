@@ -14,7 +14,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Key, AlertTriangle, CheckCircle2, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { _storage, SK } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
-import { getMirConfig } from '../mirModel.js';   // 3.43: 공용 키(검수사 부담)가 있는지 — 있으면 «차단됨» 빨간 상자를 띄우지 않는다
+import { getMirConfig } from '../mir.js';   // 3.43: 공용 키(검수사 부담)가 있는지 — 있으면 «차단됨» 빨간 상자를 띄우지 않는다
 
 export default function GeminiKeyModal({ onClose }) {
   const [keyInput, setKeyInput] = useState('');

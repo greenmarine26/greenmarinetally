@@ -112,7 +112,10 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
   // ── 소스 — 판정이 한 벌인가, 두 칸을 같이 다루는가
   {
     const G = fs.readFileSync(path.join(ROOT, 'src/components/GuidedWorkPanel.jsx'), 'utf8');
-    const M = fs.readFileSync(path.join(ROOT, 'src/mirEyes.js'), 'utf8');
+    //  3.53-11: 미르가 한 파일(src/mir.js)이 됐다 — 이 검사는 종전대로 «한 대를 보는 겹»([mirEyes] 절)만 본다.
+    const _mirAll = fs.readFileSync(path.join(ROOT, 'src/mir.js'), 'utf8');
+    const M = (_mirAll.split(/^\/\/ \[mirEyes\][^\n]*$/m)[1] || '').split(/^\/\/ \[mirAnswer\][^\n]*$/m)[0];
+    ok(M.length > 5000, '[mirEyes] 절을 찾았다');
     ok(/berthSideOf\(voyage\?\.info\)/.test(G), '화면이 그 판정을 부른다');
     ok(/const side = berthSideOf\(info\)/.test(M), '미르도 같은 판정을 부른다 — 두 벌이 아니다');
     //  옛 방식(원본 칸을 제 손으로 읽기)이 남아 있으면 거기로 한글이 새어 들어간다.

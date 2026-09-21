@@ -13,12 +13,12 @@
      쳐달라고 함» → 이름 대신 «작업중인 배» 라고 부르면 지금 일하는 배(utils.isWorkingNow 한 벌)로 답하고, 여럿이면 «어느 배?» 하고 되묻는다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import mirFaceUrl from '../assets/mir-face.png';
-import { answerOneRaw } from '../mirAnswer.js';
-import { askMir } from '../mirModel.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
-import { mirTone } from '../mirChat.js';
+import { answerOneRaw } from '../mir.js';
+import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
+import { mirTone } from '../mir.js';
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
-import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE } from '../mirCtx.js';
+import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE } from '../mir.js';
 import { computeTallyData } from '../tallyReport.js';
 import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
