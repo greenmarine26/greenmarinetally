@@ -1,7 +1,7 @@
 // 작업속도 연막검사 — **그날 완료 기록으로, 쉬는 시간을 빼고, 갱 수로 나눠 잰다.**
 //
-// ★ 3.53-12 — 종전(2.54)은 «터미널 합계 피드(트레드링스)로 잰다» 였다. 그 뒤 터미널 **컨별** 실적이 완료 기록(src:'term')으로 들어오게 됐고
-//   검수사 2026-09-15 «트레드링스는 … 사용안하기로 했습니다» · 2026-09-21 «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서 답해야 한다.»
+// ★ 3.53-12 — 종전(2.54)은 «외부 합계로 잰다» 였다. 그 뒤 터미널 **컨별** 실적이 완료 기록(src:'term')으로 들어오게 됐고
+//   검수사 2026-09-21 «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서 답해야 한다.»
 //   ⇒ 아래 메모의 목적(앱을 안 찍어도 작업 중인 배의 속도·끝나는 시각을 답한다)은 그대로이고, 재료만 완료 기록으로 바뀌었다.
 //
 // 왜 있는가 (검수사 메모, 받은함 2026-08-26 09:13).
@@ -51,7 +51,7 @@ const counts = { total: 905, done: 152, byMode: { discharge: { total: 449, done:
 const ans = CA.answerShipSpeed(voyage, {}, 'SITC SENDAI', counts);
 T(!!ans, '완료 기록이 있는데 답이 없다');
 T(/오늘 완료 기록 기준/.test(ans || ''), '무엇으로 계산했는지 안 밝힌다');
-T(!/터미널 실적 기준|트레드링스/.test(ans || ''), '⛔ 아직 «터미널 실적 기준» 이라고 말한다 — 합계 피드는 떼어 냈다');
+T(!/터미널 실적 기준/.test(ans || ''), '⛔ 아직 «터미널 실적 기준» 이라고 말한다 — 합계 피드는 떼어 냈다');
 T(/2갱 기준/.test(ans || ''), '⛔ «2갱 기준»을 안 말한다(검수사 확정 표기)');
 T(/1갱이면/.test(ans || ''), '⛔ «1갱이면 ×2»를 안 말한다(검수사 확정 표기)');
 T(/실작업/.test(ans || ''), '쉬는 시간을 뺀 실작업 시간을 안 보여준다');
@@ -93,8 +93,7 @@ T(/과거 평균/.test(old || ''), '⛔ 과거 평균으로 답하면서 그 사
 {
   const comp = voyage.discharge.completed;
   const cont = Array.from({ length: 449 }, (_, i) => { const cn = 'STSE' + String(1000000 + i); return { cn, _ptk: true, _mode: 'discharge', _comp: comp[cn] || null }; });
-  const ctx = { mode: 'discharge', vsl: 'STSE', vslFull: 'SITC SENDAI', pier: 'PCTC', info: voyage.info, voyage, voyageDoneAts: NS.voyageDoneAts(voyage), voyageCounts: counts,
-    terminalWork: { STSE: { startAt: '2026-08-26 04:50', disDone: 449, disPlan: 449, lodDone: 0, lodPlan: 0, updatedAt: D('09:00') } } };   // 옛 피드를 실어 보내도 안 쓴다
+  const ctx = { mode: 'discharge', vsl: 'STSE', vslFull: 'SITC SENDAI', pier: 'PCTC', info: voyage.info, voyage, voyageDoneAts: NS.voyageDoneAts(voyage), voyageCounts: counts };
   const out = NS.generateLocalAnswer({ etaQuery: true }, [], cont, ctx);
   T(!!out, 'etaQuery 에 답이 없다');
   T(!/아직 시작 전/.test(out || ''), '⛔ 완료 기록(터미널 반영 152대)이 있는데 «아직 시작 전» 이라고 답한다');

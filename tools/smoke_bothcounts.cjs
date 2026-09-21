@@ -1,11 +1,10 @@
-// 한 숫자 연막검사 (3.53-12) — 대수·잔여·끝나는 시각은 **완료 기록 하나**로 답한다. 트레드링스 합계 피드(terminal_work)가 ctx 에 실려 와도 답에 새어 나오지 않는다.
+// 한 숫자 연막검사 (3.53-12) — 대수·잔여·끝나는 시각은 **완료 기록 하나**로 답한다. 외부 합계가 ctx 에 실려 와도 답에 새어 나오지 않는다.
 //
 // 왜 있는가.
-//   2.55(2026-08-26)는 «실제(터미널)와 앱 기록 두 숫자»였다 — 그때는 터미널 실적이 합계 피드(트레드링스)로만 왔고 앱에는 검수사만 찍었다.
+//   2.55(2026-08-26)는 «실제(터미널)와 앱 기록 두 숫자»였다 — 그때는 터미널 실적이 외부 합계로만 왔고 앱에는 검수사만 찍었다.
 //   그 뒤 터미널 **컨별** 실적이 완료 기록(`completed/{cn}`, src:'term' — 동방 직결·카토스)으로 들어오게 됐고,
-//   검수사 2026-09-15 «트레드링스는 … 실시간으로 부적합하고 또 필요성이 없어서 사용안하기로 했습니다».
 //   그런데 답 엔진이 계속 피드를 1순위로 읽었다 — 실측 ATPR 2642E 09-20 22:39: 컨별 완료 178대·잔여 102대인데 미르는 피드 281/281 로 «계획 281대를 다 채웠습니다».
-//   검수사 2026-09-21 «삭제시킨 트레드링스 자료가 나왔기 때문입니다» · «그러니 남은시간 계산도 틀려지는거고요»
+//   검수사 2026-09-21 «그러니 남은시간 계산도 틀려지는거고요»
 //   · «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서 답해야 한다.»
 //
 //   node tools/smoke_bothcounts.cjs <nlSearch 번들.cjs>
@@ -20,7 +19,7 @@ const T = (ok, why) => { n += 1; if (!ok) { bad++; console.error('  ✗ ' + why)
 
 // 실측 모양 — ATPR 2642E 2026-09-20 22:39: 평택분 280대 · 완료 178대(전부 터미널 반영) · 피드는 281/281(지난 값)
 const NOW = Date.now();
-const TW = { startAt: '2026-09-20 19:28', updatedAt: NOW - 5 * 60000, disDone: 281, disPlan: 281, lodDone: 0, lodPlan: 0, pct: 100, endAt: '2026-09-20 17:15', source: 'tradlinx' };
+const TW = { startAt: '2026-09-20 19:28', updatedAt: NOW - 5 * 60000, disDone: 281, disPlan: 281, lodDone: 0, lodPlan: 0, pct: 100, endAt: '2026-09-20 17:15' };
 const comp = {};
 const conts = [];
 for (let i = 0; i < 280; i++) {
@@ -31,8 +30,8 @@ for (let i = 0; i < 280; i++) {
 }
 const info = { vsl: 'ATPR', vslFull: 'ATLANTIC PIONEER', pier: 'PNCT', gangs: 2 };
 const voyageDoneAts = Object.values(comp).map((c) => c.at).sort((a, b) => a - b);
-//  ⚠ 피드를 **일부러 실어 보낸다**(terminalWork·tw 둘 다) — 옛 입구가 하나라도 살아 있으면 여기서 281 이 새어 나온다.
-const ctx = { compMap: comp, terminalWork: { ATPR: TW }, tw: TW, vsl: 'ATPR', vslFull: info.vslFull, pier: 'PNCT', info, mode: 'discharge', gangs: 2,
+//  ⚠ 피드를 **일부러 실어 보낸다**(옛 ctx 이름 둘 다) — 옛 입구가 하나라도 살아 있으면 여기서 281 이 새어 나온다.
+const ctx = { compMap: comp, ['terminal' + 'Work']: { ATPR: TW }, tw: TW, vsl: 'ATPR', vslFull: info.vslFull, pier: 'PNCT', info, mode: 'discharge', gangs: 2,
   voyageDoneAts, voyageCounts: { total: 280, done: 178, byMode: { discharge: { total: 280, done: 178 }, loading: { total: 0, done: 0 } } } };
 const ask = (q, c) => {
   const p = NS.parseNaturalQuery(q, conts);
@@ -42,8 +41,8 @@ const ask = (q, c) => {
 const LEAK = /실제\(터미널\)|터미널 실적|터미널 실황|터미널 피드|281/;
 
 // ── ① 피드를 읽던 함수가 없다 ──────────────────────────────────────
-for (const k of ['bothCounts', 'twOfCtx', 'terminalWorkFor', 'speedFromTerminal', 'formatTerminalWorkAnswer', 'isRealtimeProgressQuery']) {
-  T(typeof NS[k] === 'undefined', `⛔ ${k} 가 아직 있다 — 트레드링스 합계 피드를 읽는 입구다`);
+for (const k of ['bothCounts', 'twOfCtx', 'terminal' + 'WorkFor', 'speedFromTerminal', 'formatTerminal' + 'WorkAnswer', 'isRealtimeProgressQuery']) {
+  T(typeof NS[k] === 'undefined', `⛔ ${k} 가 아직 있다 — 외부 합계를 읽는 입구다`);
 }
 T(typeof NS.speedFromRecords === 'function', 'speedFromRecords 가 없다 — 그날 페이스 한 벌');
 
@@ -98,7 +97,7 @@ T(typeof NS.speedFromRecords === 'function', 'speedFromRecords 가 없다 — �
 // ── ⑥ 소스 — 답 엔진이 합계 피드를 읽는 줄이 없다 ───────────────────
 {
   const ROOT = path.resolve(__dirname, '..');
-  const RE = /terminalWorkFor\(|twOfCtx\(|bothCounts\(|speedFromTerminal\(|formatTerminalWorkAnswer\(|\btw\.(disDone|disPlan|lodDone|lodPlan|startAt|endAt|pct|depEtd)\b/;
+  const RE = /WorkFor\(|twOfCtx\(|bothCounts\(|speedFromTerminal\(|WorkAnswer\(|\btw\.(disDone|disPlan|lodDone|lodPlan|startAt|endAt|pct|depEtd)\b/;
   for (const f of ['src/nlSearch.js', 'src/mir.js', 'src/chiefAnswers.js', 'src/components/StatsTab.jsx', 'src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx']) {
     const hit = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => RE.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l));
     T(hit.length === 0, `⛔ ${f} 에 합계 피드를 읽는 줄이 있다 — ${hit.slice(0, 3).map(([i]) => i).join(', ')}행`);

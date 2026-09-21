@@ -33,14 +33,14 @@ const vc = M.voyageCountsOf(v);
 T(vc.total > 300 && vc.total - vc.done === 70 && vc.byMode.discharge.total - vc.byMode.discharge.done === 20 && vc.byMode.loading.total - vc.byMode.loading.done === 50,
   `총 잔여 70대(양하 20 · 선적 50) — 실제 ${JSON.stringify(vc)}`);
 const base = { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', countFallback: true, inspector: '연막', voyageKey: FX.voyageKey, voyage: v, info: v.info,
-  terminalWork: FX.terminalWork, shipSpeed: FX.shipSpeed };
+  shipSpeed: FX.shipSpeed };
 const mk = (containers, mode, extra) => ({ ...base, containers, mode, compMap: { ...v.discharge.completed, ...v.loading.completed }, _trace: {}, ...(extra || {}) });
 const all = () => mk(flat, 'discharge');
 const tabD = () => mk(flat.filter((c) => c._mode !== 'loading'), 'discharge');   // 양하선적 탭 카드 — 열린 탭 것만 온다
 const tabL = () => mk(flat.filter((c) => c._mode === 'loading'), 'loading');
 const coneVoyage = { info: v.info, reports: v.reports || {}, discharge: { completed: v.discharge.completed, records: v.discharge.records || {} }, loading: { completed: v.loading.completed, records: v.loading.records || {} } };
 const cone = () => ({ app: 'cone', containers: flat, cone: { rows: [], dischRows: [], stowRows: [] }, execDevice: false, shiftN: 0, mode: 'discharge', modeLabel: '양하', info: v.info,
-  compMap: { ...v.discharge.completed, ...v.loading.completed }, voyage: coneVoyage, terminalWork: FX.terminalWork, shipSpeed: FX.shipSpeed, voyageKey: FX.voyageKey, _trace: {} });
+  compMap: { ...v.discharge.completed, ...v.loading.completed }, voyage: coneVoyage, shipSpeed: FX.shipSpeed, voyageKey: FX.voyageKey, _trace: {} });
 
 // ── E1 엔진이 총 잔여를 스스로 싣는가(호출부는 voyageCounts 를 안 준다) · 화면마다 같은 수인가
 for (const [nm, c] of [['떠 있는 미르(양하+선적 컨)', all], ['양하 탭 카드(양하 컨만)', tabD], ['선적 탭 카드(선적 컨만)', tabL], ['콘앱(voyage 에 EDI 없음)', cone]]) {

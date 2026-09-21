@@ -69,7 +69,7 @@ T(NS.paceFromRecords(fx.doneAtsAll, 'PNCT', 2).ok === true, '문자열 부두(�
 // ⑨ ★ 감사가 잡은 자리 — 접안·이안은 **배가 떠난 뒤에야** 온다(collector/pnctpull.py:209).
 //    검수사가 실제로 보는 «작업 중»에는 터미널 실적의 startAt 만 있다. 그것으로 분모가 서야 한다.
 {
-  //  3.53-12: 트레드링스 startAt 자리는 그 항차의 **첫 완료 시각**(info.firstDoneAt)이 맡는다 — 합계 피드는 떼어 냈다.
+  //  3.53-12: 작업 시작의 대역은 그 항차의 **첫 완료 시각**(info.firstDoneAt)이 맡는다 — 합계 피드는 떼어 냈다.
   const FIRST = fx.doneAtsAll[0];
   const LAST = fx.doneAtsAll[fx.doneAtsAll.length - 1];
   //  ⚠ «끝났다» 표시까지 켜서 재면 진짜 작업 중 경로를 안 밟는다(감사 P2-4) — 둘 다 잰다.
