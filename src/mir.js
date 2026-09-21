@@ -23,9 +23,9 @@ import {
   resolveCrewSides,
 } from './utils.js';
 import {
-  terminalWorkFor, TWIN_MAX_TOTAL_KG, twinDiffLimit, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
+  TWIN_MAX_TOTAL_KG, twinDiffLimit, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
-  generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
+  generateHowToAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
   voyageReportSpan,
 } from './nlSearch.js';
@@ -439,7 +439,7 @@ export function mirSmallTalk(q) {
    ⚠ 전 항차 컨 펼치기(flattenVoyages)는 종전 GlobalSearchPage 의 useMemo 본문을 그대로 옮긴 것이다 — 두 곳이 각자 펼치면
      «홈은 이 컨을 알고 미르는 모르는» 일이 생긴다(§4-4). 홈도 이 함수를 부른다. */
 /** 전 항차의 양하·선적 컨을 한 줄로 편다 — 홈 통합검색·떠 있는 미르가 같은 벌을 쓴다. */
-export function flattenVoyages(voyages, terminalWork) {
+export function flattenVoyages(voyages) {
   const arr = [];
   Object.entries(voyages || {}).forEach(([vKey, v]) => {
     if (!v || !v.info) return;
@@ -447,7 +447,7 @@ export function flattenVoyages(voyages, terminalWork) {
       const sec = v[mode];
       if (!sec) return;
       //  2.66-01: 전량 캔슬된 쪽 컨은 검색에서도 빠진다(다른 배에 실리므로 끝 4자리 조회에 두 배가 걸린다).
-      if (sideCancelled(v.info, mode, terminalWorkFor(v.info, terminalWork))) return;
+      if (sideCancelled(v.info, mode)) return;
       const ediMap = sec.ediContainers || {};
       const recMap = sec.records || {};
       const xrayMap = sec.xrayList || {};
@@ -508,6 +508,32 @@ export function flattenVoyages(voyages, terminalWork) {
 /* ── «지금 열린 항차» 재료 — 항차 화면이 놓고 떠 있는 미르가 읽는다 ── */
 let _live = null;            // { voyageKey, voyage, containers, mode, compMap, shiftMap, bayPairs, rfSkip, esealBrief, diagAlerts, … }
 const _subs = new Set();
+//  3.53-12 — 항차 전체 평택분 대수(양하+선적)와 완료 수. 펼치기 한 벌(flattenVoyages)의 `_ptk`·`_comp` 를 그대로 센다 — 판정을 새로 만들지 않는다.
+//    { total, done, byMode: { discharge: { total, done }, loading: { total, done } } }
+//    ⚠ 예약 자리(부킹 슬롯)와 그 자리를 채운 실번호를 둘 다 세면 총 잔여가 부푼다 — 다른 답 경로와 같이 `dropFilledBookingSlots` 를 지난다(3.53-12 감사 C1).
+//    ⚠ 콘앱이 주는 voyage 에는 `ediContainers` 가 없다(완료·리스트뿐) — 그대로 세면 리스트 행만 세어 검수앱과 갈린다(감사 C2 · STSE 2673E 699 ↔ 343).
+//       그때는 `fallbackContainers`(그 앱이 넘긴 컨 — `_ptk`·`_mode`·`_comp` 가 찍힌 것)로 센다. 둘 다 없으면 total 0(모른다).
+export function voyageCountsOf(voyage, fallbackContainers = null) {
+  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } } };
+  const has = (m, k) => !!(voyage && voyage[m] && voyage[m][k] && Object.keys(voyage[m][k]).length);
+  const hasEdi = !!(voyage && voyage.info && ['discharge', 'loading'].some((m) => has(m, 'ediContainers')));
+  //  넘겨받은 컨이 이 항차의 양하·선적을 다 덮으면 **그것으로 센다** — «얼마나 남았어» 가 세는 바로 그 컨이라 두 답이 같은 수를 말한다.
+  //  열린 탭 것만 넘겨받았으면(양하선적 탭 카드) 항차 원본을 펴서 센다. 원본에 EDI 가 없으면(콘앱) 넘겨받은 컨뿐이다.
+  const given = dropFilledBookingSlots(Array.isArray(fallbackContainers) ? fallbackContainers : []).filter((c) => c && c._ptk);
+  const givenModes = new Set(given.map((c) => (c._mode === 'loading' ? 'loading' : 'discharge')));
+  const voyModes = ['discharge', 'loading'].filter((m) => voyage && voyage.info && (has(m, 'ediContainers') || has(m, 'records')) && !sideCancelled(voyage.info, m));
+  const covered = given.length > 0 && voyModes.every((m) => givenModes.has(m));
+  const pool = (covered || !hasEdi) ? given : dropFilledBookingSlots(flattenVoyages({ _: voyage })).filter((c) => c && c._ptk);
+  for (const c of pool) {
+    const md = c._mode === 'loading' ? 'loading' : 'discharge';
+    if (voyage && voyage.info && sideCancelled(voyage.info, md)) continue;
+    const m = out.byMode[md];
+    m.total += 1; out.total += 1;
+    if (c._comp) { m.done += 1; out.done += 1; }
+  }
+  return out;
+}
+
 export function publishMirCtx(ctx) {
   _live = ctx ? { ...ctx, _at: Date.now() } : null;
   _subs.forEach((f) => { try { f(_live); } catch (e) { /* 구독자 하나가 죽어도 나머지는 산다 */ } });
@@ -1243,7 +1269,7 @@ export function mirSee(q, ctx) {
    { app:'tally'|'cone',
      // 항차 맥락
      voyageKey, voyage(info·discharge·loading·photos·reports 원본), info, containers(양하+선적 병합 · _mode·_ptk·_comp·_xray), mode,
-     compMap, shiftMap, bayPairs|pairsMap, rfSkip, esealBrief|eseal, photos, terminalWork, pilotForecast, portMisData, weatherText,
+     compMap, shiftMap, bayPairs|pairsMap, rfSkip, esealBrief|eseal, photos, pilotForecast, portMisData, weatherText,
      shipSpeed, carrierContacts, shipContacts, diagAlerts, inspector, isChief, handover:{note, finalized}, lastTopic, modeChoice,
      gangShift(n)·crewAnswer(cq)·gangBrief() 클로저(화면이 감싸 준다 — 없으면 여기서 voyage 로 만든다),
      // 전역 맥락(홈·수석·떠 있는 미르)
@@ -1307,11 +1333,13 @@ function _normalize(ctx) {
   c.matchPortMis = (typeof c.matchPortMis === 'function') ? c.matchPortMis : (() => null);
   //  3.24: 페이스 분모는 «검수 시작 보고»가 있으면 그것 — reports 는 info 밖이라 여기서 얹는다(작업창은 이걸 덮어써 잃고 있었다).
   if (c.info && v && !c.info.reportStartAt) { try { c.info = { ...c.info, ...voyageReportSpan(v) }; } catch (e) { /* */ } }
-  if (!c.tw) { try { c.tw = terminalWorkFor(c.info || {}, c.terminalWork || {}); } catch (e) { c.tw = null; } }
+  //  3.53-12: 트레드링스 합계 피드(c.tw·c.terminalWork)는 떼어 냈다 — 대수·잔여·페이스는 완료 기록 한 벌(검수사 2026-09-15·09-21).
+  //    «몇 시에 끝나»·«작업 속도» 의 총 잔여는 항차 전체(양하+선적 평택분)다 — 한 번 세어 ctx 에 둔다.
+  //    ⚠ 물을 때만 센다(`_vcOf`) — 질문마다 항차 전체를 펴면 타이핑마다 수 ms 가 든다(감사 E6).
   const de = _bayDefOf(c.vsl);
-  if (!c.gangShift && v) c.gangShift = (n) => { try { return answerGangShift(v, de, { nGangs: n || null, tw: c.tw, compMap: c.compMap || null }); } catch (e) { return null; } };
+  if (!c.gangShift && v) c.gangShift = (n) => { try { return answerGangShift(v, de, { nGangs: n || null, compMap: c.compMap || null }); } catch (e) { return null; } };
   if (!c.crewAnswer && v) c.crewAnswer = (cq) => { try { return answerCraneCrew(v, cq); } catch (e) { console.warn('[미르] 호기 검수원 답 실패', e); return null; } };
-  if (!c.gangBrief && v) c.gangBrief = () => { try { return gangBriefLines(buildGangShift(v, de, { tw: c.tw, compMap: c.compMap || null })); } catch (e) { return null; } };
+  if (!c.gangBrief && v) c.gangBrief = () => { try { return gangBriefLines(buildGangShift(v, de, { compMap: c.compMap || null })); } catch (e) { return null; } };
   c._bayDef = de;
   return c;
 }
@@ -1327,6 +1355,9 @@ export function answerOneRaw(query, ctx) {
   const _via = (v) => { if (c._trace && typeof c._trace === 'object') c._trace.via = v; };   // 3.42: 잡아채는 길 표시(판 B 문지기 재료)
   const app = c.app || 'tally';
   const cs = c.containers || [];
+  //  3.53-12: 항차 전체 평택분(양하+선적) 대수·완료 — «몇 시에 끝나»·«작업 속도»·«얼마나 남았어» 가 같은 총 잔여를 말하게 한다. 한 번 세면 기억한다.
+  //    다른 항차 컨이 섞여 와도 이 항차 것만 센다(voyageKey 문지기 — 감사 경 2).
+  const _vcOf = () => { if (c.voyageCounts === undefined || c.voyageCounts === null) { try { c.voyageCounts = voyageCountsOf(c.voyage || null, c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs); } catch (e) { console.warn('[미르] 항차 대수 세기 실패:', e); c.voyageCounts = { total: 0, done: 0, byMode: {} }; } } return c.voyageCounts; };
   const v = c.voyage || null;
   const info = c.info || {};
   const ship = c.vslFull || c.vsl || '';
@@ -1357,8 +1388,8 @@ export function answerOneRaw(query, ctx) {
           if (!sub.length) continue;
           try {
             const b = generateBriefing(sub, m === 'loading' ? '선적' : '양하', m, c.pairsMap || null, c.pier || '',
-              { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null, tw: c.tw || null,
-                gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m, c.tw), compMap: c.compMap || null, shiftMap: c.shiftMap || null });
+              { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null,
+                gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m), compMap: c.compMap || null, shiftMap: c.shiftMap || null });
             if (b) parts.push('【' + (m === 'loading' ? '선적' : '양하') + '】\n' + b);
           } catch (e) { /* 한쪽이 막혀도 다른 쪽은 낸다 */ }
         }
@@ -1479,9 +1510,7 @@ export function answerOneRaw(query, ctx) {
     if (hasShip && cs.length) {
       _via('progress');   // 3.42: 조건 없는 진행 잡답 — «완료된 거 마지막 다섯 개»·«양하 끝난 시각» 이 여기로 떨어졌다(판 B 시뮬)
       const pool = dropFilledBookingSlots(cs);
-      let _md = mode;
-      if (!c.mode) _md = pool.some((x) => x._mode === 'loading') && !pool.some((x) => x._mode !== 'loading') ? 'loading' : 'discharge';
-      try { return isRealtimeProgressQuery(Q) ? formatTerminalWorkAnswer(ship, c.tw, pool, _md) : formatAppTallyAnswer(ship, pool, c.tw, _md, info || null); } catch (e) { /* 아래로 */ }
+      try { return formatAppTallyAnswer(ship, pool, info || null); } catch (e) { /* 아래로 */ }
     }
     if (!hasShip && c.isChief && c.chiefData) {   // 완료·보관된 배(1.69-06)
       const Q2 = Q.toUpperCase();
@@ -1656,7 +1685,6 @@ export function answerOneRaw(query, ctx) {
         const L = [`${ship || pm.vesselName || '이 선박'} — ` + [_fmtDT(pm.eta) ? `입항 ${_fmtDT(pm.eta)}` : null, _fmtDT(pm.etd) ? `출항 ${_fmtDT(pm.etd)}` : null].filter(Boolean).join(', ') + '.'];
         if (pm.pier || pm.berth) L.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
         if (pm.nextPort) L.push(`다음 항구: ${pm.nextPort}`);
-        if (c.tw && c.tw.depEtd && String(c.tw.depEtd).slice(0, 16) !== String(pm.etd || '').slice(0, 16)) L.push(`⚠ 터미널 기준 출항 ${String(c.tw.depEtd).slice(5, 16)} — 신고(${_fmtDT(pm.etd) || '?'})와 다릅니다`);
         if (pm.port && pm.port !== '평택') L.push(`⚠ ${pm.port} 항만 데이터입니다.`);
         return L.join('\n');
       }
@@ -1679,7 +1707,7 @@ export function answerOneRaw(query, ctx) {
     const pool = cs.filter((x) => x._ptk !== false && x._mode === m && !x._comp);
     return generateTwinCheckAnswer(p, pool, c.pairsMap || {}, info.pier || '');
   }
-  if (hasShip && isSpeedQuery(Q)) { try { const a = answerShipSpeed(v, c.shipSpeed, ship, c.terminalWork); if (a && !/못 불러왔/.test(a)) return a; } catch (e) { /* */ } }   // 2차 시뮬 5: 속도 자료가 없으면 본체 ETA 가 답한다
+  if (hasShip && isSpeedQuery(Q)) { try { const a = answerShipSpeed(v, c.shipSpeed, ship, _vcOf()); if (a && !/못 불러왔/.test(a)) return a; } catch (e) { /* */ } }   // 2차 시뮬 5: 속도 자료가 없으면 본체 ETA 가 답한다
   if (hasShip && isPlanOutlookQuery(Q)) { try { const m = outlookModeOf(Q); const a = m ? answerPlanOutlook(v, m, ship) : answerPlanOutlookBoth(v, ship); if (a) return a; } catch (e) { /* */ } }
 
   //  ⑯ 관련 선사 · 브리핑 · 실 점검.
@@ -1694,7 +1722,7 @@ export function answerOneRaw(query, ctx) {
       const arr = dropFilledBookingSlots(cs.filter((x) => x._mode === m || x._mode === 'transit'));   // 통과분은 양쪽 다 넘긴다(_ptk false 라 집계엔 안 들고 «자리 주의»에만 쓴인다)
       if (!arr.filter((x) => x._ptk !== false).length) continue;
       try {
-        const b = generateBriefing(arr, kr, m, c.pairsMap || null, c.pier || '', { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null, tw: c.tw || null, gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m, c.tw), compMap: c.compMap || null, shiftMap: c.shiftMap || null });
+        const b = generateBriefing(arr, kr, m, c.pairsMap || null, c.pier || '', { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null, gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m), compMap: c.compMap || null, shiftMap: c.shiftMap || null });
         if (b) parts.push(c.mode ? b : `【${kr}】\n` + b);
       } catch (e) { console.warn('[미르] 브리핑 실패:', e); }
     }
@@ -1800,7 +1828,7 @@ export function answerOneRaw(query, ctx) {
       const a = generateLocalAnswer(eff, effRes, cs.filter((x) => x._ptk !== false), {
         ...(c.manualCtx || null), mode: c.mode || null, bayPairs: c.bayPairs || c.pairsMap || null, selectedGroup: c.selectedGroup, selectedTier: c.selectedTier, shipLib: c.shipLib || null,
         gangShift: c.gangShift || null, crewAnswer: c.crewAnswer || null, voyage: v, carrierContacts: c.carrierContacts || null, shipSpeed: c.shipSpeed || null,
-        vsl: c.vsl, vslFull: c.vslFull, pier: c.pier, info: info || null, voyageDoneAts: c.voyageDoneAts || null, terminalWork: c.terminalWork || null, tw: c.tw || null,
+        vsl: c.vsl, vslFull: c.vslFull, pier: c.pier, info: info || null, voyageDoneAts: c.voyageDoneAts || null, voyageCounts: (p.etaQuery || p.paceQuery || p.progressQuery) ? _vcOf() : null,
         photos: c.photos || null, shiftMap: c.shiftMap || null, compMap: c.compMap || null, bowStern: c.bowStern || null, gangs: info && info.gangs,
         who: c.inspector || '', inspector: c.inspector || '', voyageKey: c.voyageKey || '',
       });

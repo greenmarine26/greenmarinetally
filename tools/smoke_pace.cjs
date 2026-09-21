@@ -69,35 +69,35 @@ T(NS.paceFromRecords(fx.doneAtsAll, 'PNCT', 2).ok === true, '문자열 부두(�
 // ⑨ ★ 감사가 잡은 자리 — 접안·이안은 **배가 떠난 뒤에야** 온다(collector/pnctpull.py:209).
 //    검수사가 실제로 보는 «작업 중»에는 터미널 실적의 startAt 만 있다. 그것으로 분모가 서야 한다.
 {
-  const tw = { startAt: '2026-09-02 22:15', endAt: '' };
+  //  3.53-12: 트레드링스 startAt 자리는 그 항차의 **첫 완료 시각**(info.firstDoneAt)이 맡는다 — 합계 피드는 떼어 냈다.
+  const FIRST = fx.doneAtsAll[0];
   const LAST = fx.doneAtsAll[fx.doneAtsAll.length - 1];
   //  ⚠ «끝났다» 표시까지 켜서 재면 진짜 작업 중 경로를 안 밟는다(감사 P2-4) — 둘 다 잰다.
-  const live = { pier: INFO.pier, berth: INFO.berth };
-  const LV = NS.paceFromRecords(fx.byLeeJB, live, 1, tw);
-  T(LV.basis === 'work', '작업 중(끝 표시 없음)인데 터미널 startAt 을 못 쓴다');
+  const live = { pier: INFO.pier, berth: INFO.berth, firstDoneAt: FIRST, paceTo: LAST };
+  const LV = NS.paceFromRecords(fx.byLeeJB, live, 1);
+  T(LV.basis === 'work', '작업 중(끝 표시 없음)인데 항차 첫 완료(firstDoneAt)를 시작으로 못 쓴다');
   T(LV.perHour < 45, `작업 중 이종부가 시간당 ${LV.ok ? LV.perHour.toFixed(1) : '?'}대 — 크레인 한 대 한계를 넘는다`);
-  const during = { pier: INFO.pier, berth: INFO.berth, terminalStatus: 'departed', paceTo: LAST };
-  const A = NS.paceFromRecords(fx.doneAtsAll, during, 2, tw);
-  const B = NS.paceFromRecords(fx.byLeeJB, during, 1, tw);
-  const C = NS.paceFromRecords(fx.byKimSI, during, 1, tw);
+  const during = { pier: INFO.pier, berth: INFO.berth, terminalStatus: 'departed', paceTo: LAST, firstDoneAt: FIRST };
+  const A = NS.paceFromRecords(fx.doneAtsAll, during, 2);
+  const B = NS.paceFromRecords(fx.byLeeJB, during, 1);
+  const C = NS.paceFromRecords(fx.byKimSI, during, 1);
   console.log(`  작업 중(접안·이안 없음) — 전체 ${A.ok ? A.perHour.toFixed(1) : A.why} · 이종부 ${B.ok ? B.perHour.toFixed(1) : B.why} · 김성일 ${C.ok ? C.perHour.toFixed(1) : C.why} · 분모 ${A.mins}/${B.mins}/${C.mins}분`);
-  T(A.basis === 'work' && B.basis === 'work' && C.basis === 'work', '접안·이안이 없으면 터미널 startAt 을 못 쓴다 — 3.6 의 분모로 되돌아간다');
+  T(A.basis === 'work' && B.basis === 'work' && C.basis === 'work', '접안·이안이 없으면 항차 첫 완료(firstDoneAt)를 못 쓴다 — 3.6 의 분모(내가 찍은 구간)로 되돌아간다');
   T(A.mins === B.mins && B.mins === C.mins, `사람마다 분모가 다르다 (${A.mins}/${B.mins}/${C.mins}) — 항차 마지막(paceTo)으로 맞춰야 한다`);
   T(B.perHour < 45, `⛔ 몰아 찍은 이종부가 시간당 ${B.ok ? B.perHour.toFixed(1) : '?'}대 — 크레인 한 대가 낼 수 없는 값이다`);
 }
 
 // ⑩ 끝난 배는 분모가 시계를 따라 늘지 않는다
 {
-  const tw = { startAt: '2026-09-02 22:15', endAt: '' };
-  const over = { pier: INFO.pier, terminalStatus: 'departed', paceTo: fx.doneAtsAll[fx.doneAtsAll.length - 1] };
-  const live = { pier: INFO.pier };
+  const over = { pier: INFO.pier, terminalStatus: 'departed', paceTo: fx.doneAtsAll[fx.doneAtsAll.length - 1], firstDoneAt: fx.doneAtsAll[0] };
+  const live = { pier: INFO.pier, firstDoneAt: fx.doneAtsAll[0] };
   //  ⚠ 이 시험은 «지금»을 쓴다 — 픽스처(2026-09-02)가 묵으면 하루 걸쇠(24시간)에 걸려
   //    작업 중인 배도 끝난 배와 같은 분모가 되고, 그때부터 **매일 빌드가 막힌다**(2026-09-04 실측).
   //    시계를 마지막 완료 30분 뒤로 고정해 «작업 중»을 재현한다. 블록을 나가면 되돌린다.
   const _now = Date.now;
   Date.now = () => fx.doneAtsAll[fx.doneAtsAll.length - 1] + 30 * 60000;
-  const O = NS.paceFromRecords(fx.doneAtsAll, over, 2, tw);
-  const V = NS.paceFromRecords(fx.doneAtsAll, live, 2, tw);
+  const O = NS.paceFromRecords(fx.doneAtsAll, over, 2);
+  const V = NS.paceFromRecords(fx.doneAtsAll, live, 2);
   Date.now = _now;
   T(O.mins < 400, `떠난 배인데 분모가 ${O.mins}분 — 시계를 따라 늘고 있다`);
   T(V.mins > O.mins, '작업 중인 배는 분모가 지금까지여야 한다');
@@ -115,22 +115,23 @@ T(NS.paceFromRecords(fx.doneAtsAll, 'PNCT', 2).ok === true, '문자열 부두(�
 
 // ⑫ «끝났다» 판정은 앱의 다른 자리(ChiefDashboard)와 한 벌이어야 한다 — 아니면 분모가 시계를 따라 늘어난다
 {
-  const tw = { startAt: '2026-09-02 22:15', endAt: '' };
-  const base = NS.paceFromRecords(fx.doneAtsAll, { pier: INFO.pier, terminalStatus: 'departed' }, 2, tw);
-  for (const [name, inf] of [['dischargeDone 만', { pier: INFO.pier, dischargeDone: true }],
-                             ['loadingDone 만', { pier: INFO.pier, loadingDone: true }],
-                             ['inspectorDone', { pier: INFO.pier, inspectorDone: true }],
-                             ['workEndAt', { pier: INFO.pier, workEndAt: '2026-09-03 04:40' }]]) {
-    const P = NS.paceFromRecords(fx.doneAtsAll, inf, 2, tw);
+  const F0 = fx.doneAtsAll[0];
+  const base = NS.paceFromRecords(fx.doneAtsAll, { pier: INFO.pier, terminalStatus: 'departed', firstDoneAt: F0 }, 2);
+  for (const [name, inf] of [['dischargeDone 만', { pier: INFO.pier, dischargeDone: true, firstDoneAt: F0 }],
+                             ['loadingDone 만', { pier: INFO.pier, loadingDone: true, firstDoneAt: F0 }],
+                             ['inspectorDone', { pier: INFO.pier, inspectorDone: true, firstDoneAt: F0 }],
+                             ['workEndAt', { pier: INFO.pier, workEndAt: '2026-09-03 04:40', firstDoneAt: F0 }]]) {
+    const P = NS.paceFromRecords(fx.doneAtsAll, inf, 2);
     T(P.ok && P.mins < 400, `«${name}» 을 끝난 것으로 안 본다 (분모 ${P.mins}분) — 시계를 따라 늘어난다`);
   }
   //  아무 표시도 없고 마지막 완료에서 하루 넘게 지났으면 끝난 것으로 본다
   const old = fx.doneAtsAll.map((a) => a - 3 * 24 * 3600000);
-  const S = NS.paceFromRecords(old, { pier: INFO.pier }, 2, { startAt: '2026-08-30 22:15', endAt: '' });
+  const S = NS.paceFromRecords(old, { pier: INFO.pier, firstDoneAt: old[0] }, 2);
   T(S.ok && S.mins < 700, `사흘 지난 배인데 분모가 ${S.mins}분 — 하루 걸쇠가 안 선다`);
-  //  미래 updatedAt 은 «신선»이 아니다
-  const F2 = NS.paceFromRecords(fx.doneAtsAll, { pier: INFO.pier }, 2, { startAt: '2026-09-02 22:15', pct: 100, updatedAt: Date.now() + 3 * 3600000 });
-  T(typeof F2.mins === 'number', '미래 updatedAt 에서 터진다');
+  //  옛 호출이 넷째 인자(합계 피드)를 넘겨도 터지지 않고, 그 값을 쓰지도 않는다
+  const F2 = NS.paceFromRecords(fx.doneAtsAll, { pier: INFO.pier, firstDoneAt: F0 }, 2, { startAt: '2026-09-01 00:00', pct: 100, updatedAt: Date.now() + 3 * 3600000 });
+  const F3 = NS.paceFromRecords(fx.doneAtsAll, { pier: INFO.pier, firstDoneAt: F0 }, 2);
+  T(typeof F2.mins === 'number' && F2.mins === F3.mins, '⛔ 넷째 인자(합계 피드)가 분모를 바꾼다 — 피드를 아직 읽는다');
 }
 
 // ⑬ 항차 전체를 모으는 helper

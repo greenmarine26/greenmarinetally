@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
-import { paceFromRecords, terminalWorkFor, voyageDoneAts } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
+import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -2320,7 +2320,7 @@ export function computeMyToday(voyages, inspector, now = Date.now(), terminalWor
         //  분모의 끝은 «그 배의 마지막 완료»다 — 내 마지막으로 자르면 사람마다 분모가 갈린다(감사 실측).
         if (!infoOf[key]) infoOf[key] = { ...(v?.info || {}), paceFrom: t0, paceTo: 0 };
         const vAll = voyageDoneAts(v);
-        if (vAll.length) infoOf[key].paceTo = vAll[vAll.length - 1];
+        if (vAll.length) { infoOf[key].paceTo = vAll[vAll.length - 1]; infoOf[key].firstDoneAt = voyageFirstTermAt(v); }   // 3.53-12: 작업 시작의 대역 — 그 항차 첫 완료(트레드링스 startAt 을 뗀 자리)
       });
     });
   });
@@ -2329,9 +2329,8 @@ export function computeMyToday(voyages, inspector, now = Date.now(), terminalWor
   const topKey = Object.keys(hits).sort((a, b) => hits[b] - hits[a])[0] || '';
   const count = mine.length;
   //  갱 수 1 — 한 사람은 크레인 한 대에 붙는다(다른 두 화면은 항차 갱 수를 쓴다).
-  //  터미널 실적의 시작 시각을 분모에 쓴다(접안 시각은 배가 떠난 뒤에야 온다 — 감사 P1-A).
-  const _tw = (() => { try { return terminalWorkFor(infoOf[topKey] || {}, terminalWork); } catch (e) { return null; } })();
-  const _P = paceFromRecords(mine, infoOf[topKey] || {}, 1, _tw);
+  //  3.53-12: 트레드링스 시작 시각은 분모에 쓰지 않는다(피드를 떼어 냈다) — 검수 시작 보고·접안·작업 시작 순.
+  const _P = paceFromRecords(mine, infoOf[topKey] || {}, 1);
   //  ⚠ 개인 몫은 **배가 일한 시간을 알 때만** 낸다(감사 P1-A).
   //    작업 구간을 모르면 분모가 «내가 찍은 구간»이 되어, 몰아 찍은 사람이 시간당 77대로 나온다.
   //    그때는 «오늘 N대»만 보여준다 — 숫자를 지어내지 않는다.

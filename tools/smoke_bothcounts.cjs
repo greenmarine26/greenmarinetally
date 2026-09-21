@@ -1,196 +1,109 @@
-// 두 숫자 연막검사 — **대수를 물으면 실제(터미널)와 앱 기록이 둘 다 나온다.**
+// 한 숫자 연막검사 (3.53-12) — 대수·잔여·끝나는 시각은 **완료 기록 하나**로 답한다. 트레드링스 합계 피드(terminal_work)가 ctx 에 실려 와도 답에 새어 나오지 않는다.
 //
-// 왜 있는가 (검수사 지시 2026-08-26).
-//   *«이제 작업한 갯수를 물어보거나 남은갯수를 물어보면 두가지 답이 나와야 합니다.
-//     실제로 작업한거와 앱에 기록된거»* · *«당분간은 그렇게 가야합니다 앱으로 전부 작업할때까지는»*
+// 왜 있는가.
+//   2.55(2026-08-26)는 «실제(터미널)와 앱 기록 두 숫자»였다 — 그때는 터미널 실적이 합계 피드(트레드링스)로만 왔고 앱에는 검수사만 찍었다.
+//   그 뒤 터미널 **컨별** 실적이 완료 기록(`completed/{cn}`, src:'term' — 동방 직결·카토스)으로 들어오게 됐고,
+//   검수사 2026-09-15 «트레드링스는 … 실시간으로 부적합하고 또 필요성이 없어서 사용안하기로 했습니다».
+//   그런데 답 엔진이 계속 피드를 1순위로 읽었다 — 실측 ATPR 2642E 09-20 22:39: 컨별 완료 178대·잔여 102대인데 미르는 피드 281/281 로 «계획 281대를 다 채웠습니다».
+//   검수사 2026-09-21 «삭제시킨 트레드링스 자료가 나왔기 때문입니다» · «그러니 남은시간 계산도 틀려지는거고요»
+//   · «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서 답해야 한다.»
 //
-//   실측이 그 말을 뒷받침한다 — STSE 2665E(08-26 10:00): 터미널 181대 · 앱 116대. 65대가 안 찍혀 있다.
-//   검수사 말고는 앱에 완료를 거의 안 찍으니, 한 숫자만 내면 어느 쪽을 내도 틀린 답이 된다.
-//
-// ⚠ 이 검사가 지키는 것은 «새로 되는 것»만이 아니다. **가로채지 않는 것**을 같이 잰다 —
-//   겹을 넓히는 판은 새 기능보다 남의 답을 먹는 쪽이 위험하다(2.47 에서 겪은 병).
+//   node tools/smoke_bothcounts.cjs <nlSearch 번들.cjs>
 const path = require('path');
+const fs = require('fs');
 const OUT = process.argv[2];
 if (!OUT) { console.error('✗ 번들 경로가 없다'); process.exit(1); }
 const NS = require(path.resolve(OUT));
 
-let bad = 0;
-const T = (ok, why) => { if (!ok) { bad++; console.error('  ✗ ' + why); } };
+let n = 0, bad = 0;
+const T = (ok, why) => { n += 1; if (!ok) { bad++; console.error('  ✗ ' + why); } };
 
-// 실데이터 모양 그대로 — STSE 2665E 08-26 (records 449 · 앱 completed 116 · 터미널 181/449)
-const TW = { startAt: '2026-08-26 04:50', updatedAt: Date.now() - 5 * 60000,
-             disDone: 181, disPlan: 449, lodDone: 0, lodPlan: 456, pct: 20 };
+// 실측 모양 — ATPR 2642E 2026-09-20 22:39: 평택분 280대 · 완료 178대(전부 터미널 반영) · 피드는 281/281(지난 값)
+const NOW = Date.now();
+const TW = { startAt: '2026-09-20 19:28', updatedAt: NOW - 5 * 60000, disDone: 281, disPlan: 281, lodDone: 0, lodPlan: 0, pct: 100, endAt: '2026-09-20 17:15', source: 'tradlinx' };
 const comp = {};
 const conts = [];
-for (let i = 0; i < 449; i++) {
+for (let i = 0; i < 280; i++) {
   const cn = 'TEST' + String(1000000 + i);
-  const done = i < 116;
-  if (done) comp[cn] = { by: '김성일', at: Date.now() - 3600000 };
+  const done = i < 178;
+  if (done) comp[cn] = { by: '', src: 'term', at: NOW - (178 - i) * 60000 };   // 1분에 한 대씩, 마지막이 방금
   conts.push({ cn, _mode: 'discharge', _ptk: true, pod: 'KRPTK', bay: 24, _comp: done ? comp[cn] : null });
 }
-const contsNoComp = conts.map((c) => { const d = { ...c }; delete d._comp; return d; });   // 항차 화면 모양
-const ctx = { compMap: comp, terminalWork: { STSE: TW }, vsl: 'STSE', vslFull: 'SITC SENDAI',
-              pier: 'PCTC', info: { vsl: 'STSE', vslFull: 'SITC SENDAI', pier: 'PCTC' }, mode: 'discharge' };
-
-const ask = (q, pool, c) => {
-  const p = NS.parseNaturalQuery(q, pool);
-  const r = NS.applyNLFilter(pool, p);
-  return NS.generateLocalAnswer(p, r, pool, c === undefined ? ctx : c) || '';
+const info = { vsl: 'ATPR', vslFull: 'ATLANTIC PIONEER', pier: 'PNCT', gangs: 2 };
+const voyageDoneAts = Object.values(comp).map((c) => c.at).sort((a, b) => a - b);
+//  ⚠ 피드를 **일부러 실어 보낸다**(terminalWork·tw 둘 다) — 옛 입구가 하나라도 살아 있으면 여기서 281 이 새어 나온다.
+const ctx = { compMap: comp, terminalWork: { ATPR: TW }, tw: TW, vsl: 'ATPR', vslFull: info.vslFull, pier: 'PNCT', info, mode: 'discharge', gangs: 2,
+  voyageDoneAts, voyageCounts: { total: 280, done: 178, byMode: { discharge: { total: 280, done: 178 }, loading: { total: 0, done: 0 } } } };
+const ask = (q, c) => {
+  const p = NS.parseNaturalQuery(q, conts);
+  const r = NS.applyNLFilter(conts, p);
+  return NS.generateLocalAnswer(p, r, conts, c === undefined ? ctx : c) || '';
 };
+const LEAK = /실제\(터미널\)|터미널 실적|터미널 실황|터미널 피드|281/;
 
-// ── ① 함수가 있는가 · 두 숫자를 내는가 ──────────────────────────────
-T(typeof NS.bothCounts === 'function', 'bothCounts 가 없다');
-T(typeof NS.twOfCtx === 'function', 'twOfCtx 가 없다');
-if (typeof NS.bothCounts !== 'function') { console.error('✗ 두 숫자 연막검사 — 함수가 없어 더 못 잰다'); process.exit(1); }
+// ── ① 피드를 읽던 함수가 없다 ──────────────────────────────────────
+for (const k of ['bothCounts', 'twOfCtx', 'terminalWorkFor', 'speedFromTerminal', 'formatTerminalWorkAnswer', 'isRealtimeProgressQuery']) {
+  T(typeof NS[k] === 'undefined', `⛔ ${k} 가 아직 있다 — 트레드링스 합계 피드를 읽는 입구다`);
+}
+T(typeof NS.speedFromRecords === 'function', 'speedFromRecords 가 없다 — 그날 페이스 한 벌');
+
+// ── ② 대수·잔여 — 한 숫자 ────────────────────────────────────────
 {
-  const L = NS.bothCounts(conts, ctx, 'discharge');
-  T(Array.isArray(L) && L.length >= 3, 'bothCounts 가 줄을 못 낸다');
-  const s = (L || []).join('\n');
-  T(/실제\(터미널\)\s*181대\s*\/\s*449대/.test(s), '터미널 실적 181/449 를 안 낸다');
-  T(/앱 기록 116대\s*\/\s*449대/.test(s), '앱 기록 116/449 를 안 낸다');
-  T(/남은 268대/.test(s), '터미널 기준 남은 268대를 안 낸다');
-  T(/남은 333대/.test(s), '앱 기준 남은 333대를 안 낸다');
-  T(/65대는 실제로 작업했는데 앱에 안 찍혔/.test(s), '⛔ 차이 65대를 말로 안 짚는다 — 숫자 두 줄만 던지면 검수사가 판단해야 한다');
+  const a = ask('얼마나 남았어');
+  T(/남은 작업: 102대 \/ 전체 280대/.test(a), `«얼마나 남았어» 가 102/280 이 아니다 — ${a.split('\n')[0]}`);
+  T(/완료: 178대/.test(a), '«얼마나 남았어» 에 완료 178대가 없다');
+  T(!LEAK.test(a), `⛔ «얼마나 남았어» 에 피드가 샌다 — ${a.slice(0, 120)}`);
+  const b = ask('몇 대 했어');
+  T(/178대/.test(b) && !LEAK.test(b), `«몇 대 했어» — ${b.split('\n')[0]}`);
+  T(!/두 가지로/.test(a + b), '⛔ «두 가지로 말씀드립니다» 가 남아 있다');
 }
 
-// ── ② 검수사 표준 표현이 걸리는가 (종전에는 답 자체가 없었다) ─────────
-for (const q of ['몇 대 했어', '작업한 갯수', '몇 대 작업했어', '몇 대 처리했어']) {
-  const a = ask(q, conts);
-  T(/181대/.test(a) && /116대/.test(a), `«${q}» 에 두 숫자가 안 나온다 — 검수사 표준 표현이다`);
-}
-for (const q of ['얼마나 남았어', '남은 갯수', '몇 대 남았어']) {
-  const a = ask(q, conts);
-  T(/268대/.test(a) && /333대/.test(a), `«${q}» 에 두 숫자가 안 나온다`);
-}
-
-// ── ③ ★ 항차 화면(_comp 없음)에서도 앱 수가 맞는가 ──────────────────
-//   2.52-01 이 mirEyes 에서만 메운 구멍이 nlSearch 본체에 그대로 있었다.
-//   검수사가 실제로 쓰는 양하 탭에서 «완료 0대» 가 나왔다(앱에 116대가 찍혀 있는데).
+// ── ③ 끝나는 시각 — 총 잔여 ÷ (갱당 시간당 × 갱 수) ─────────────────
 {
-  const a = ask('몇 대 했어', contsNoComp);
-  T(/앱 기록 116대/.test(a), '⛔ 항차 화면(_comp 없음)에서 앱 완료가 0 으로 나온다 — compMap 을 안 읽는다');
-  T(!/앱 기록 0대 \/ 449대/.test(a), '⛔ 앱 기록이 0대로 나온다');
-  const b = ask('얼마나 남았어', contsNoComp);
-  T(/남은 333대/.test(b), '⛔ 항차 화면에서 앱 잔여가 449 로 나온다(완료를 못 봤다)');
+  const a = ask('몇 시에 끝나');
+  T(/^102대 남았어요/.test(a), `«몇 시에 끝나» 첫 줄이 102대가 아니다 — ${a.split('\n')[0]}`);
+  T(/남은 작업: 102대 \(양하 102\) · 완료 178 \/ 전체 280/.test(a), '잔여 줄이 양하·선적으로 갈라 보이지 않는다');
+  T(/2갱 기준 갱당 \d+(\.\d)?대/.test(a), '«N갱 기준 갱당 N대» 가 없다 — 검수사 «시간당 처리갯수와 갱수로»');
+  T(!LEAK.test(a) && !/다 채웠습니다/.test(a), `⛔ 피드 281/281 로 «다 채웠습니다» 라고 답한다 — 2026-09-20 그 오답이다\n      ${a.slice(0, 160)}`);
+  T(!/앱에 찍힌 것만|다른 검수원이 한 몫/.test(a), '⛔ «앱에 찍힌 것만 … 다른 검수원 몫은 안 들어 있다» 가 남아 있다 — 완료 기록엔 터미널 반영분이 들어 있다');
+  const mins = (s) => { const x = /남은 시간: 약 (?:(\d+)시간)? ?(?:(\d+)분)?/.exec(s); return x ? (Number(x[1] || 0) * 60 + Number(x[2] || 0)) : 0; };
+  const a2 = mins(a);
+  T(a2 > 0, '남은 시간을 못 읽었다');
+  //  잔여를 항차 전체로 세는가 — 선적 260대가 남아 있으면 총 잔여 362대이고 남은 시간도 그만큼 길어진다
+  const c2 = { ...ctx, voyageCounts: { total: 540, done: 178, byMode: { discharge: { total: 280, done: 178 }, loading: { total: 260, done: 0 } } } };
+  const b = ask('몇 시에 끝나', c2);
+  T(/^362대 남았어요/.test(b) && /\(양하 102 · 선적 260\)/.test(b), `선적 잔여를 총 잔여에 안 넣는다 — ${b.split('\n')[0]}`);
+  T(mins(b) > a2 * 3, `총 잔여가 3.5배인데 남은 시간이 그만큼 안 늘었다 (${a2}분 → ${mins(b)}분)`);
 }
 
-// ── ④ ★ 판정이 한 벌인가 — 어느 경로로 물어도 같은 수가 나와야 한다 ──
-//   화면마다 다른 수가 나오면 검수사가 어느 것을 믿을지 판단해야 한다(무게·완료판정에서 이미 겪은 병).
+// ── ④ 진행 답·브리핑 — 한 숫자 ───────────────────────────────────
 {
-  const nums = (s) => (String(s).match(/\d+대/g) || []).join(',');
-  const a1 = NS.formatAppTallyAnswer('STSE', conts, TW, 'discharge');
-  const a2 = NS.formatTerminalWorkAnswer('STSE', TW, conts, 'discharge');
-  const a3 = ask('몇 대 했어', conts);
-  for (const [nm, s] of [['앱 갈래', a1], ['터미널 갈래', a2], ['진행 답', a3]]) {
-    T(/181대/.test(s), `${nm} 에 터미널 181대가 없다 — 두 갈래가 서로의 숫자를 안 싣는다`);
-    T(/116대/.test(s), `${nm} 에 앱 116대가 없다`);
-  }
-  T(nums(a1).includes('181대') && nums(a3).includes('181대'), '경로마다 다른 수를 낸다');
+  const s = NS.formatAppTallyAnswer('ATLANTIC PIONEER', conts, info);
+  T(/완료 기록 기준 양하 178\/280/.test(s) && /남은 102대/.test(s), `진행 답 — ${s.split('\n')[0]}`);
+  T(!LEAK.test(s), '⛔ 진행 답에 피드가 샌다');
+  const b = String(NS.generateBriefing(conts, '양하', 'discharge', null, 'PNCT', { tw: TW, compMap: comp }) || '');
+  T(/진행: 완료 178 \/ 잔여 102/.test(b), `브리핑 진행 줄이 178/102 가 아니다 — ${(b.match(/📈.*/) || [''])[0]}`);
+  T(!/두 가지/.test(b) && !LEAK.test(b), '⛔ 브리핑에 «두 가지»·피드가 남아 있다');
 }
 
-// ── ⑤ 지어내지 않는가 ──────────────────────────────────────────────
-{
-  //  터미널 피드가 없으면 «모른다»고 말한다
-  const noTw = { ...ctx, terminalWork: {} };
-  const a = ask('몇 대 했어', conts, noTw);
-  T(/터미널 실적 피드가 아직 없어/.test(a), '⛔ 터미널 피드가 없는데 실적을 지어낸다');
-  T(!/실제\(터미널\)/.test(a), '⛔ 피드가 없는데 터미널 줄을 낸다');
-  //  앱 기록이 없어도 터미널로는 답한다 (검수사가 앱을 안 쓴 항차가 대부분이다)
-  const empty = conts.map((c) => ({ ...c, _comp: null }));
-  const b = NS.formatAppTallyAnswer('STSE', empty, TW, 'discharge');
-  T(/181대/.test(b), '⛔ 앱 기록이 없으면 터미널 실적도 안 낸다 — 실제로 몇 대 내려갔는지 아무 데서도 못 본다');
-  T(!/앱 검수 기록 없음\(이 항차는 앱 검수 미사용\)\.$/m.test(b) || /181대/.test(b), '앱 없음 한 줄로 끝난다');
-}
-
-// ── ⑥ ★ 가로채지 않는가 — 이 검사의 절반이 여기다 ──────────────────
-//   «했어» 는 흔한 말이다. 대수를 묻는 맥락이 아니면 진행 질문으로 보면 안 된다.
+// ── ⑤ ★ 가로채지 않는가 — «했어» 는 흔한 말이다. 대수를 묻는 맥락이 아니면 진행 질문으로 보면 안 된다(2.55 부터 지키던 것) ──
 {
   const noProg = (q) => { const p = NS.parseNaturalQuery(q, conts); return !p.progressQuery; };
-  for (const q of ['1918 어디 했어', '엑스레이 어디 했어', '어디까지 했어', '커버 몇 장 했어']) {
-    T(noProg(q), `⛔ «${q}» 를 진행 질문으로 가로챈다`);
-  }
-  //  제 답이 따로 있는 것들 — 씰·트윈·커버·시프팅·무게·온도
-  for (const q of ['씰 몇 개 했어', '트윈 몇 대 했어', '봉인 몇 개 했어', '무게 몇 대 했어', '온도 몇 대 했어']) {
-    T(noProg(q), `⛔ «${q}» 를 컨 대수 질문으로 가로챈다 — 물어본 것은 그게 아니다`);
-  }
+  for (const q of ['1918 어디 했어', '엑스레이 어디 했어', '어디까지 했어', '커버 몇 장 했어']) T(noProg(q), `⛔ «${q}» 를 진행 질문으로 가로챈다`);
+  for (const q of ['씰 몇 개 했어', '트윈 몇 대 했어', '봉인 몇 개 했어', '무게 몇 대 했어', '온도 몇 대 했어']) T(noProg(q), `⛔ «${q}» 를 컨 대수 질문으로 가로챈다 — 물어본 것은 그게 아니다`);
+  const a = ask('24번 베이 몇 대 남았어');
+  T(/102/.test(a) && !LEAK.test(a), `베이 조건 질문 — ${a.split('\n')[0]}`);
 }
 
-// ── ⑦ 조건이 붙으면 두 숫자를 내지 않는가 ────────────────────────────
-//   터미널 실적에는 베이·규격 구분이 없다. 나란히 놓으면 «20번 베이 실제 181대» 같은 거짓말이 된다.
+// ── ⑥ 소스 — 답 엔진이 합계 피드를 읽는 줄이 없다 ───────────────────
 {
-  for (const q of ['20번 베이 남은 거', '24번 베이 몇 대 남았어']) {
-    const a = ask(q, conts);
-    T(!/실제\(터미널\)/.test(a), `⛔ «${q}» 에 터미널 실적을 나란히 낸다 — 그 자료에는 베이 구분이 없다`);
+  const ROOT = path.resolve(__dirname, '..');
+  const RE = /terminalWorkFor\(|twOfCtx\(|bothCounts\(|speedFromTerminal\(|formatTerminalWorkAnswer\(|\btw\.(disDone|disPlan|lodDone|lodPlan|startAt|endAt|pct|depEtd)\b/;
+  for (const f of ['src/nlSearch.js', 'src/mir.js', 'src/chiefAnswers.js', 'src/components/StatsTab.jsx', 'src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx']) {
+    const hit = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => RE.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l));
+    T(hit.length === 0, `⛔ ${f} 에 합계 피드를 읽는 줄이 있다 — ${hit.slice(0, 3).map(([i]) => i).join(', ')}행`);
   }
 }
 
-// ── ⑧ 선적은 선적 수를 보는가 ────────────────────────────────────────
-{
-  const load = conts.map((c) => ({ ...c, _mode: 'loading', pol: 'KRPTK', pod: 'CNSHA' }));
-  const L = NS.bothCounts(load, ctx, 'loading');
-  const s = (L || []).join('\n');
-  T(/실제\(터미널\) 0대 \/ 456대/.test(s), '⛔ 선적인데 양하 수(181/449)를 낸다');
-}
-
-// ── ⑨ 2.99-01 (BUG-2026-008) 터미널 실적은 **작업 시작 시점부터만** ───────────────
-//   실측 09-02 OBWH 2729E(11:30 예정, 시작 전) — terminal_work/OBWH 는 지난 기항 2727E(08-31 20:46 갱신, 278/278).
-//   선박 코드로만 찾아 «278대는 실제로 작업했는데 앱에 안 찍혔습니다» 가 나갔다. 검수사 — «작업도 안 했는데 실적이 보일 리가 없으니».
-{
-  const fmt = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
-  const now = Date.now();
-  const stale = { startAt: fmt(now - 46 * 3600000), updatedAt: now - 40 * 3600000, disDone: 278, disPlan: 278, lodDone: 108, lodPlan: 144, voySeq: '101' };
-  const pool = conts.slice(0, 260).map((c) => ({ ...c, _comp: null }));
-  const mk = (info) => ({ terminalWork: { OBWH: stale }, vsl: 'OBWH', vslFull: 'OCEAN BRIDGE WH', pier: 'PCTC', info: { vsl: 'OBWH', ...info }, mode: 'discharge' });
-  T(typeof NS.terminalWorkFor === 'function', 'terminalWorkFor 가 없다');
-  // ⓐ 시작 전(planDate 가 3시간 뒤) + 지난 기항 피드 → 안 쓴다
-  const c1 = mk({ planDate: `${fmt(now + 3 * 3600000)} ~ ${fmt(now + 11 * 3600000)}` });
-  T(NS.twOfCtx(c1) === null, '⛔ 시작 전 항차에 지난 기항 피드(278/278)가 붙는다');
-  const s1 = (NS.bothCounts(pool, c1, 'discharge') || []).join('\n');
-  T(!/실제\(터미널\)/.test(s1) && !/실제로 작업했는데/.test(s1) && /앱 기록 0대 \/ 260대/.test(s1), '⛔ 시작 전 브리핑에 «278대 앱 미입력» 류가 나간다');
-  T(NS.speedFromTerminal(c1.info, c1.terminalWork) === null, '⛔ 시작 전인데 지난 기항 실적으로 속도를 낸다');
-  // ⓑ 터미널이 «아직 시작 안 함»(workStartAt 빈칸) → 피드가 새것이어도 안 쓴다
-  const fresh = { ...stale, updatedAt: now - 60000, startAt: fmt(now - 3600000) };
-  const c2 = { ...mk({ planDate: `${fmt(now - 3600000)} ~ ${fmt(now + 7 * 3600000)}`, workStartAt: '' }), terminalWork: { OBWH: fresh } };
-  T(NS.twOfCtx(c2) === null, '⛔ 배정목록 작업시작 빈칸(아직 시작 안 함)인데 터미널 실적을 쓴다');
-  // ⓒ 작업 시작(ATW 지남) + 그 뒤 갱신된 피드 → 쓴다
-  const c3 = { ...mk({ planDate: `${fmt(now - 3600000)} ~ ${fmt(now + 7 * 3600000)}`, workStartAt: fmt(now - 50 * 60000) }), terminalWork: { OBWH: fresh } };
-  T(NS.twOfCtx(c3) === fresh, '⛔ 작업 시작 뒤 갱신된 피드를 안 쓴다 — 문지기가 너무 세다');
-  // ⓓ 시작 시각을 모르는 항차(planDate 없음) → 종전대로 쓴다(막지 않는다)
-  T(NS.twOfCtx(mk({})) === stale, '⛔ 시작 시각을 모르는 항차까지 막는다 — 종전 답이 사라진다');
-  // ⓔ 작업 시작 뒤인데 피드가 아직 시작 전 것(갱신 전) → 안 쓴다(다음 갱신을 기다린다)
-  const c5 = mk({ planDate: `${fmt(now - 20 * 60000)} ~ ${fmt(now + 7 * 3600000)}` });
-  T(NS.twOfCtx(c5) === null, '⛔ 시작 20분 지났는데 40시간 전 피드(지난 기항)를 쓴다');
-}
-
-// ── ⑩ 2.99-01 감사 지적 — 화면 호출부가 `{tw: 원시 레코드}` 로 넘기면 문지기를 건너뛴다(twOfCtx 는 ctx.tw 를 그대로 믿는다).
-//   그래서 화면단의 원시 조회 `(terminalWork || {})[…vsl…]` 를 전부 terminalWorkFor 로 바꿨다. 남아 있으면 같은 사고가 재발한다.
-{
-  const fs = require('fs');
-  //  3.41: 홈은 실적 조회를 제 손으로 안 한다(답은 mirAnswer 한 벌, 전 항차 펼치기는 mirCtx 한 벌) — 그 두 벌이 문지기를 지나야 한다.
-  for (const f of ['src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx', 'src/mir.js']) {
-    let src = '';
-    try { src = fs.readFileSync(path.resolve(f), 'utf8'); } catch { T(false, `${f} 를 못 읽는다`); continue; }
-    const raw = (src.match(/terminalWork \|\| \{\}\)\[/g) || []).length;
-    T(raw === 0, `⛔ ${f} 에 터미널 실적 원시 조회가 ${raw}곳 남아 있다 — terminalWorkFor 문지기를 건너뛴다(2.99-01 감사 지적)`);
-    T(/terminalWorkFor\(/.test(src), `⛔ ${f} 가 terminalWorkFor 를 안 쓴다`);
-  }
-}
-
-// ── ⑪ 2.99-03 «OBWH와 RZOR은 주야 구분이 없습니다» — 차이 줄에 조 이름을 안 붙인다 ─────
-{
-  const fresh = { startAt: '2026-09-02 11:30', updatedAt: Date.now() - 60000, disDone: 120, disPlan: 260, lodDone: 0, lodPlan: 144 };
-  const pool = conts.slice(0, 260).map((c, i) => ({ ...c, _comp: i < 100 ? { by: '김성일', at: Date.now() } : null }));
-  const mk = (vsl) => ({ terminalWork: { [vsl]: fresh }, vsl, vslFull: vsl, pier: 'PNCT', info: { vsl, planDate: '2026-01-01 00:00 ~ 2026-01-01 12:00' }, mode: 'discharge' });
-  const sO = (NS.bothCounts(pool, mk('OBWH'), 'discharge') || []).join('\n');
-  T(/20대는 실제로 작업했는데 앱에 안 찍혔습니다 \(앱 미사용\)/.test(sO), `⛔ OBWH 차이 줄에 조 이름이 붙는다 — ${(sO.match(/⚠.*/) || [''])[0]}`);
-  //  감사 지적 — 브리핑·진행 답 경로는 ctx 에 { tw } 만 싣는다. 레코드의 code/vessel(수집기 terminal_work 가 적음)로도 가려야 한다.
-  const sT = (NS.bothCounts(pool, { tw: { ...fresh, code: 'OBWH', vessel: 'OBWH' } }, 'discharge') || []).join('\n');
-  T(/\(앱 미사용\)/.test(sT) && !/조 앱 미사용/.test(sT), `⛔ {tw} 만 넘기는 브리핑 경로에서 OBWH 에 조 이름이 붙는다 — ${(sT.match(/⚠.*/) || [''])[0]}`);
-  const sB = NS.generateBriefing ? String((() => { try { return NS.generateBriefing(pool.map((c) => ({ ...c, _ptk: true })), 'discharge', { vsl: 'OBWH' }, null, null, 'PNCT', { tw: { ...fresh, code: 'OBWH' } }); } catch (e) { return 'ERR ' + e.message; } })()) : '';
-  if (sB && !/^ERR/.test(sB) && /앱에 안 찍혔/.test(sB)) T(!/조 앱 미사용/.test(sB), '⛔ generateBriefing 경로에서 OBWH 에 조 이름이 붙는다');
-  const sS = (NS.bothCounts(pool, mk('STSE'), 'discharge') || []).join('\n');
-  T(/\((주간조|야간조) 앱 미사용\)/.test(sS), `⛔ 보통 배(STSE)는 조 이름이 있어야 한다 — ${(sS.match(/⚠.*/) || [''])[0]}`);
-}
-
-if (bad) { console.error(`\n✗ 두 숫자 연막검사 ${bad}건 실패`); process.exit(1); }
-console.log('✅ 두 숫자 연막검사 통과 — 실제·앱 두 숫자 · compMap 구멍 · 판정 한 벌 · 가로채지 않음 · 작업 시작 전 터미널 실적 차단(2.99-01)');
+if (bad) { console.error(`✗ 한 숫자 연막검사 실패 ${bad}건 / ${n}항`); process.exit(1); }
+console.log(`✅ 한 숫자 연막검사 통과 (${n}항) — 대수·잔여·끝나는 시각은 완료 기록 하나 · 피드를 실어 보내도 새지 않음 · 가로채지 않음`);

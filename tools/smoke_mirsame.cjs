@@ -52,18 +52,21 @@ for (const q of SAME) {
   const body = (s) => s.replace(/^.*?【양하】/, '').replace(/【(선적|콘)】.*$/, '').trim();
   check('«브리핑» 【양하】 본문이 같다(콘앱은 배 이름·【선적】·【콘】 절을 덧붙인다)', body(a) && body(a) === body(b), `\n      검수앱: ${body(a).slice(0, 120)}\n      콘앱: ${body(b).slice(0, 120)}`);
 }
-//  ② 내용 — 터미널 실적을 봤는가(옛 콘앱은 앱 기록만 보고 «아직 시작 전»·앱 대수)
+//  ② 내용 — 3.53-12: 두 앱 다 **완료 기록 한 숫자**로 답한다. 트레드링스 합계 피드(terminalWork)를 실어 보내도 답에 새지 않는다
+//     (검수사 2026-09-15 «사용안하기로 했습니다» · 2026-09-21 «삭제시킨 트레드링스 자료가 나왔기 때문입니다»).
 {
-  const b = norm(M.answerOneRaw('몇시에 끝나', coneCtx()));
-  check('콘앱 «몇시에 끝나» 가 터미널 실적(600대)으로 답한다', /터미널 실적/.test(b) && /600대/.test(b), b.slice(0, 120));
+  const LEAK = /터미널 실적|터미널 실황|실제\(터미널\)|600대/;
+  for (const q of ['몇시에 끝나', '얼마나 남았어', '실제 진행 상황', '작업 속도', '브리핑']) {
+    const a = norm(M.answerOneRaw(q, tallyCtx())), b = norm(M.answerOneRaw(q, coneCtx()));
+    check(`«${q}» 에 합계 피드가 새지 않는다(검수앱·콘앱)`, !LEAK.test(a) && !LEAK.test(b), `\n      검수앱: ${a.slice(0, 120)}\n      콘앱: ${b.slice(0, 120)}`);
+  }
   const t = {}; const p = norm(M.answerOneRaw('실제 진행 상황', coneCtx({ _trace: t })));
-  check('콘앱 «실제 진행 상황» 은 브리핑이 아니라 터미널 실황(진행 두 갈래)', t.via === 'progress' && /터미널 실황/.test(p) && !/【양하】/.test(p), `via=${t.via} · ${p.slice(0, 100)}`);
-  //  문지기가 살아 있는가 — 피드를 25시간 낡히면 «작업 완료» 결론이 사라져야 한다(직전 기항 실적일 수 있다).
-  const _old = JSON.parse(JSON.stringify(tw)); for (const _k of Object.keys(_old)) _old[_k].updatedAt = Date.now() - 25 * 3600 * 1000;
-  const pOld = norm(M.answerOneRaw('실제 진행 상황', coneCtx({ terminalWork: _old, _trace: {} })));
-  check('낡은 피드(25시간)면 «작업 완료» 결론을 내지 않는다 — 24시간 문지기', !/작업 완료/.test(pOld), pOld.slice(0, 80));
-  const b0 = norm(M.answerOneRaw('몇시에 끝나', coneCtx({ terminalWork: null })));
-  check('재료를 빼면 갈린다(검사가 헛돌지 않는다)', !/터미널 실적/.test(b0), b0.slice(0, 100));
+  check('콘앱 «실제 진행 상황» 은 브리핑이 아니라 진행 답(완료 기록 기준)', t.via === 'progress' && /완료 기록 기준/.test(p) && !/【양하】/.test(p), `via=${t.via} · ${p.slice(0, 100)}`);
+  //  피드를 빼도 답이 같다 — 엔진이 피드를 안 읽는다는 뜻이다
+  for (const q of ['몇시에 끝나', '얼마나 남았어', '실제 진행 상황']) {
+    const a = norm(M.answerOneRaw(q, coneCtx())), b0 = norm(M.answerOneRaw(q, coneCtx({ terminalWork: null })));
+    check(`«${q}» — 피드를 빼도 같은 답`, a === b0, `\n      있음: ${a.slice(0, 100)}\n      없음: ${b0.slice(0, 100)}`);
+  }
 }
 //  ③ cone.html 배선 — 재료 셋을 실제로 넘기는가
 const H = fs.readFileSync(path.join(ROOT, 'public/cone.html'), 'utf8');

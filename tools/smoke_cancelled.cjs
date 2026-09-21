@@ -48,14 +48,14 @@ T(/_cancL = sideCancelled/.test(rd('src/pages/LoginPage.jsx')), '로그인 카�
 for (const f of ['src/mir.js']) {
   T(/cancelled: sideCancelled\(/.test(rd(f)), `${f} 브리핑이 캔슬을 모른다 — 화면마다 답이 갈린다`);
 }
-T(/if \(sideCancelled\(voyage\?\.info, mode, opts\.tw\)\) continue;/.test(rd('src/chiefAnswers.js')), '갱 배분이 캔슬된 쪽을 나눠 준다');
-T(/buildGangPlan\(voyage, bayDef, \{ tw: opts\.tw \}\)/.test(rd('src/chiefAnswers.js')), '갱 배분이 터미널 실황을 안 넘긴다 — 캔슬 판정이 배정목록만 본다');
+T(/if \(sideCancelled\(voyage\?\.info, mode\)\) continue;/.test(rd('src/chiefAnswers.js')), '갱 배분이 캔슬된 쪽을 나눠 준다');
+T(!/buildGangPlan\(voyage, bayDef, \{ tw:/.test(rd('src/chiefAnswers.js')), '⛔ 갱 배분이 아직 합계 피드(tw)를 넘긴다 — 3.53-12 에서 뗐다(캔슬 판정은 2.67 부터 배정목록만 본다)');
 //  2.66-01 (검수사): 캔슬이면 그 쪽 화면은 **전부 지우고** 캔슬 한 장만 — 밑에 허수(선적평택 81·예상EDI 80·터미널 0)를 남기지 않는다.
 const vpg = rd('src/pages/VoyagePage.jsx');
 T(/이번 항차 \{mode === 'discharge' \? '양하' : '선적'\} 전량 캔슬/.test(vpg), '항차 화면에 «이번 항차 전량 캔슬» 표시가 없다');
 T((vpg.match(/\{!_sideCanc && tab === /g) || []).length >= 9, '캔슬인데 탭 본문(목록·검증·베이·통계…)이 그대로 뜬다');
 T(/\{!_sideCanc && <VoyageSummaryCard/.test(vpg), '캔슬인데 현황 요약(선적평택 81·예상EDI 80…)이 그대로 뜬다');
-T(/sideCancelled\(v\.info, mode,/.test(rd('src/mir.js')),   // 3.41: 통합검색의 전 항차 펼치기는 mirCtx.flattenVoyages 한 벌(떠 있는 미르와 공용)
+T(/sideCancelled\(v\.info, mode\)/.test(rd('src/mir.js')),   // 3.41: 통합검색의 전 항차 펼치기는 mirCtx.flattenVoyages 한 벌(떠 있는 미르와 공용)
   '통합검색이 캔슬분을 그대로 검색한다 — 그 컨은 다른 배에 실리므로 끝 4자리 조회에 두 배가 걸린다');
 
 //  2.67-01 (검수사 «저걸로 인해 선적카드를 눌러보게 됩니다. 그후에야 캔슬사실을 알게 되죠»):

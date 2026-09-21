@@ -75,19 +75,22 @@ T(!!gd && /다가오는 야간조/.test((CA.gangBriefLines(gd) || [''])[0]), '�
   //  2.63-01 (검수사 수열 «34:40 33:4 32:44 30:44 26:44 22:23» — 8h·199대·데크 계산만):
   T(!!g21 && /\(22\)23 데크/.test(String(g21.gangs[1].to)), `⛔ 데크 우선 대수 소진이 아니다 (to=${g21 && g21.gangs[1].to}) — 검수사 수열과 어긋난다`);
 }
-// ★ 2.70 (검수사 메모 «작업중이던 선박에 갱배분을 물었을때 앱자료가 없을시 터미널 실작업량을 기준으로»):
-//    앱에 완료를 안 찍고 작업하면 이미 내린 것까지 «남은 일» 로 셌다. 터미널 실적으로 깎는다.
+// ★ 3.53-12 — 종전 2.70 은 «터미널 합계 피드(트레드링스)와 앱 기록의 차이를 대수로 깎는다»(twGap)였다.
+//    터미널 컨별 실적이 완료 기록(src:'term')으로 들어오므로 어느 컨인지까지 알고 그룹에서 뺀다. 합계 피드는 떼어 냈다(검수사 2026-09-15·09-21).
+//    ⇒ 피드를 실어 보내도 결과가 같아야 하고, 터미널 반영분(by 없음·src:'term')도 완료로 깎여야 한다.
 {
   const TW = { disPlan: 918, disDone: 200, lodPlan: 0, lodDone: 0 };
   const g0 = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2 });
   const gT = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2, tw: TW });
-  T(gT && gT.twGap === 200, `터미널 실적 200대를 안 깎는다 (twGap=${gT && gT.twGap})`);
-  const rest0 = g0.gangs.reduce((t, g) => t + (g.restTotal || 0), 0);
-  const restT = gT.gangs.reduce((t, g) => t + (g.restTotal || 0), 0);
-  T(restT === rest0 - 200, `구간 잔여가 200대 안 줄었다 (${rest0} → ${restT})`);
-  const ansT = CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2, tw: TW }) || '';
-  T(/앱에 안 찍힌 200대는 터미널 실적으로/.test(ansT), '터미널 실적으로 깎은 사실을 안 밝힌다 — 어디까지 했는지는 모르는 값이다');
-  T(!/안 찍힌/.test(CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2 }) || ''), '터미널 자료가 없는데도 그 문구가 뜬다');
+  const rest = (g) => g.gangs.reduce((t, x) => t + (x.restTotal || 0), 0);
+  T(gT && typeof gT.twGap === 'undefined', `⛔ twGap 이 아직 있다 (${gT && gT.twGap})`);
+  T(rest(gT) === rest(g0), `⛔ 합계 피드를 실어 보내니 구간 잔여가 달라진다 (${rest(g0)} → ${rest(gT)}) — 피드를 아직 읽는다`);
+  T(!/터미널 실적으로/.test(CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2, tw: TW }) || ''), '⛔ «터미널 실적으로 빼고 계산» 문구가 남아 있다');
+  //  터미널 반영 200대를 완료 기록에 넣으면 그만큼 준다(어느 컨인지 안다)
+  const cns = Object.values((voyage.discharge && voyage.discharge.ediContainers) || {}).map((c) => c.cn).filter(Boolean).slice(0, 200);
+  const compT = {}; cns.forEach((cn, i) => { compT[cn] = { by: '', src: 'term', at: NIGHT - (200 - i) * 60000 }; });
+  const gC = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2, compMap: compT });
+  T(gC && rest(gC) === rest(g0) - cns.length, `⛔ 터미널 반영 완료 ${cns.length}대가 구간 잔여에서 안 빠진다 (${rest(g0)} → ${gC && rest(gC)})`);
 }
 
 // ⑤ 브리핑 줄

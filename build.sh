@@ -989,6 +989,11 @@ fi
     rm -f "$SMOKE_MS"
     #  3.53-11: **미르 한 파일** — 엔진이 src/mir.js 하나뿐인가 · 옛 일곱 파일을 부르는 줄이 없는가 · nlSearch 와 서로 불러도 어느 쪽을 먼저 열든 서는가.
     node tools/smoke_mirfile.cjs "$(pwd)" || { echo "✗ 미르 한 파일 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.53-12: **항차 총 잔여** — «몇 시에 끝나»·«작업 속도»·«얼마나 남았어» 가 같은 총 잔여(양하+선적)를 말하는가 · 예약 자리 중복·콘앱(voyage 에 EDI 없음)·열린 탭만 넘기는 화면.
+    SMOKE_VC=$(mktemp /dev/shm/hometmp/_smokevc_XXXXXX.cjs)
+    npx esbuild src/mir.js --bundle --platform=node --format=cjs --outfile="$SMOKE_VC" --log-level=error \
+      && node tools/smoke_voycounts.cjs "$SMOKE_VC" "$(pwd)" || { rm -f "$SMOKE_VC"; echo "✗ 항차 총 잔여 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_VC"
     #  3.8: **호기–검수원 등록**(«주간 1호기 김판석 2호기 송제욱») — 실측 문장 알아듣기·조 키·SWMM 693 실데이터가 조·호기·사람으로 정확히 갈리는가·배선 4화면.
     #    명단(서버 주입)·파서·집계·답이 **같은 모듈 인스턴스**여야 해서 진입점 하나로 묶는다(tools/smoke_crew_entry.js).
     SMOKE_CW=$(mktemp /dev/shm/hometmp/_smokecw_XXXXXX.cjs)

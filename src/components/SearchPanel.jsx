@@ -11,7 +11,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOct
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { terminalWorkFor, parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
@@ -1741,7 +1741,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           </div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
-          {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null, tw: terminalWorkFor(voyage?.info, terminalWork) }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
+          {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
           {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다
               ★ 3.41-01 (검수사 «카고플랜하면 양하 선적 선택화면이 나오고 누른 후에 양하나 선적 중 선택하라고 함»):
                 뿌리는 2.85 의 배선 결함 — 이 SingleSearch 를 그리는 두 자리가 `onOpenPlan` 을 안 넘겨(감사 실측) 작업창에서는

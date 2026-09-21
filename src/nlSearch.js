@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, reeferTempOf, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts, voyageWorkStartMs, shipHasShifts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { isTermApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, sideCancelled, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -2008,11 +2008,8 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   } else {
     lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
   }
-  // ★ 2.55: 브리핑의 진행 줄도 **두 숫자**다(검수사 확정). 대수를 내는 곳이 화면마다 다른 수를 내면
-  //   검수사가 어느 것을 믿을지 판단해야 한다 — 이 저장소가 무게·완료판정에서 이미 겪은 병이다.
-  const _bBrief = (opts && opts.tw) ? bothCounts(cs.map((c) => ({ ...c, _mode: mode, _ptk: true })), { tw: opts.tw }, mode) : null;
-  if (_bBrief && _bBrief.length) { lines.push('📈 진행 — 두 가지'); _bBrief.forEach((x) => lines.push('  ' + x)); }
-  else if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
+  //  3.53-12: 진행 줄은 **완료 기록 한 숫자**다 — 트레드링스 합계는 쓰지 않는다(검수사 2026-09-15·09-21). 완료 기록에 터미널 컨별 실적(src:'term')이 이미 들어 있다.
+  if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
     //  ★ 2.62 (검수사 확정 «제가 듣고싶은 브리핑은 출근시간부터 퇴근시까지의 작업할 내용입니다»):
     //    조 단위 갱 배분 줄 — 호출부가 chiefAnswers.gangBriefLines 결과를 opts.gang 으로 싣는다.
     //    물을 때마다 «지금» 기준 재계산이라 일이 끝나가면 남은 것만 말한다(«일이 끝나가도 답은 같았습니다» 해소).
@@ -2551,22 +2548,8 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
   const pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
 
   const lines = [];
-  // ★ 2.55 (검수사 확정): 대수를 물으면 **실제(터미널)와 앱 기록 둘 다** 낸다.
-  //   조건 없는 질문(«몇 대 했어»·«얼마나 남았어»)에서만 세운다 — 베이·규격이 붙은 질문
-  //   («20번 베이 남은 거»)은 터미널 실적에 그 구분이 없어 두 수를 나란히 놓으면 거짓말이 된다.
-  const _plain = !parsed.bay && !parsed.size && !parsed.fe && !parsed.type && !parsed.temp
-    && !parsed.zone && !parsed.dgClass && !parsed.un && !parsed.pod && !parsed.pol
-    && !parsed.portAny && !parsed.digits && !parsed.bayTrio
-    && parsed.weightMin == null && parsed.weightMax == null;
-  let _both = null;
-  if (_plain) {
-    const _md = parsed.mode || (baseResults.length ? (baseResults[0]._mode || 'discharge') : 'discharge');
-    try { _both = bothCounts(baseResults, ctx, _md); } catch (e) { _both = null; }
-  }
-  if (_both && _both.length) {
-    lines.push(parsed.progressQuery === 'done' ? '✅ 작업한 대수 — 두 가지로 말씀드립니다.' : '⏳ 남은 대수 — 두 가지로 말씀드립니다.');
-    _both.forEach((l) => lines.push(l));
-  } else if (parsed.progressQuery === 'done') {
+  //  3.53-12: 대수는 **완료 기록 한 숫자**로 답한다 — 트레드링스 합계(«실제(터미널)» 줄)는 떼어 냈다(검수사 2026-09-15 «사용안하기로 했습니다» · 09-21).
+  if (parsed.progressQuery === 'done') {
     lines.push(`✅ ${baseDesc} 완료: ${doneCount}대 / 전체 ${totalCount}대 (${pct}%)`);
     lines.push(`남은 작업: ${pendingCount}대`);
   } else {
@@ -2577,6 +2560,19 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
     //   «질문 방식을 바꿔 달라고 사용자에게 어필» — 유도 문구는 1.84-03 패턴이라 자동으로 버튼이 된다.
     lines.push('');
     lines.push('더 자세히 물으실 수 있어요 — "지금 홀드 몇 개 남았어"로 상세 확인 · "몇 시에 끝나"로 상세 확인 · "몇 시간 걸릴까"로 상세 확인');
+  }
+
+  //  3.53-12: 열린 탭만 넘겨받은 화면(양하선적 탭 카드)은 위 숫자가 그 탭 것이다 — «몇 시에 끝나»·«작업 속도» 는 항차 전체 잔여로 답하므로
+  //    조건 없는 질문이면 항차 전체 잔여를 한 줄 덧붙여 두 답이 같은 수를 말하게 한다(2차 시뮬 지적: DJCT 양하 탭 33대 ↔ 293대).
+  {
+    const vc = ctx && ctx.voyageCounts;
+    const plain = !parsed.bay && !parsed.size && !parsed.fe && !parsed.type && !parsed.temp && !parsed.zone && !parsed.dgClass && !parsed.un && !parsed.pod && !parsed.pol
+      && !parsed.portAny && !parsed.digits && !parsed.bayTrio && parsed.weightMin == null && parsed.weightMax == null;
+    if (plain && vc && Number(vc.total) > 0 && (Number(vc.total) !== totalCount || Number(vc.done) !== doneCount)) {
+      const bm = vc.byMode || {};
+      const seg = ['discharge', 'loading'].filter((m) => bm[m] && bm[m].total > 0).map((m) => `${m === 'loading' ? '선적' : '양하'} ${bm[m].total - bm[m].done}`).join(' · ');
+      lines.splice(2, 0, `항차 전체로는 남은 ${vc.total - vc.done}대${seg ? ` (${seg})` : ''} · 완료 ${vc.done} / 전체 ${vc.total}`);
+    }
   }
 
   //  2.55: 표본은 **baseResults 에서 다시 뽑는다.** 넘겨받은 results 는 완료가 입혀지기 전에 걸러진 것이라
@@ -2723,119 +2719,15 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   return L.join('\n');
 }
 
-export function twOfCtx(ctx) {
-  if (!ctx) return null;
-  if (ctx.tw && typeof ctx.tw === 'object') return ctx.tw;   // 두 갈래 함수는 레코드를 직접 넘긴다
-  const info = ctx.info || {};
-  return terminalWorkFor({ ...info, vsl: ctx.vsl || info.vsl, vslFull: ctx.vslFull || info.vslFull }, ctx.terminalWork);
-}
-
-//  ★ 2.99-01 (BUG-2026-008) — 터미널 실적은 **작업 시작 시점부터만** 쓴다. 찾기 + 문지기 한 벌.
-//    검수사 — *«터미널 실적은 작업시작시점부터 적용하게 해주세요. 작업도 안했는데 실적이 보일리가 없으니»*
-//    🔴 실측 09-02 08:30 OBWH 2729E(11:30 예정, 시작 전) 브리핑 — `terminal_work/OBWH` 는 **지난 기항 2727E**
-//      (08-31 20:46 갱신, 양하 278/278)인데 선박 코드로만 찾아 붙였고, 앱 기록 0/260 과 견줘
-//      «278대는 실제로 작업했는데 앱에 안 찍혔습니다 (주간조 앱 미사용)» 로 나갔다. 검수사 — *«278대 앱 미입력은 어디서 나온 자료인가요?»*
-//    트레드링스 피드에는 항차 번호가 없다(voySeq 는 터미널 순번) ⇒ **피드 갱신 시각이 이 항차 시작보다 앞이면 지난 기항 것**이다.
-//    ⚠ 배가 일찍 시작해 planDate 전에 실적이 붙으면 planDate 까지 안 보인다 — 틀릴 거면 늦게 틀리는 쪽(isWorkingNow 와 같은 원칙).
-//    ⚠ 시작 시각을 모르는 항차(planDate 없음)는 문지기를 안 세운다(종전 그대로).
-export function terminalWorkFor(info, terminalWork) {
-  if (!info || !terminalWork || typeof terminalWork !== 'object') return null;
-  const a = String(info.vsl || '').toUpperCase();
-  const b = String(info.vslFull || '').toUpperCase();
-  const tw = (a && terminalWork[a]) || (b && terminalWork[b]) || null;
-  if (!tw || typeof tw !== 'object') return null;
-  const st = voyageWorkStartMs({ info });
-  if (st === -1) return null;                                       // 터미널이 «아직 시작 안 함» — 실적이 있을 리 없다
-  if (st > 0 && (Number(tw.updatedAt) || 0) < st) return null;     // 이 항차 시작 전에 갱신된 피드 = 지난 기항 실적
-  return tw;
-}
-
-//  두 숫자 블록을 줄 배열로 낸다. 낼 것이 없으면 null (있는 척하지 않는다).
-export function bothCounts(pool, ctx, mode) {
-  const md = mode === 'loading' ? 'loading' : 'discharge';
-  //  앱 기록 — 평택분만 센다(7.1). `_ptk` 가 아예 없는 화면도 있어 false 일 때만 뺀다.
-  const app = (pool || []).filter((c) => c && c._ptk !== false && (c._mode || 'discharge') === md);
-  const appTotal = app.length;
-  const appDone = app.filter((c) => !!c._comp).length;
-
-  //  터미널 실적 — 트레드링스 자료다. **앱과 무관하다**(검수원이 앱을 안 써도 여기엔 찍힌다).
-  const tw = twOfCtx(ctx);
-  const terDone = tw ? (Number(md === 'loading' ? tw.lodDone : tw.disDone) || 0) : 0;
-  const terPlan = tw ? (Number(md === 'loading' ? tw.lodPlan : tw.disPlan) || 0) : 0;
-  const hasTer = !!(tw && terPlan > 0);
-  if (!hasTer && !appTotal) return null;
-
-  const L = [];
-  if (hasTer) L.push(`🏗 실제(터미널) ${terDone}대 / ${terPlan}대 — 남은 ${Math.max(0, terPlan - terDone)}대`);
-  if (appTotal) L.push(`📱 앱 기록 ${appDone}대 / ${appTotal}대 — 남은 ${appTotal - appDone}대`);
-  else L.push('📱 앱 기록 없음 — 이 항차는 앱으로 검수하지 않았습니다.');
-
-  //  차이를 **말로** 짚는다. 숫자 두 줄만 던지면 어느 쪽을 믿을지 검수사가 판단해야 한다.
-  if (hasTer && appTotal) {
-    const gap = terDone - appDone;
-    //  2.65-01 (검수사 교정): 원인을 **지어내지 않는다**. 종전 «전근무자 작업분 등» 은 틀린 짐작이었다 —
-    //    검수사 원문 *«지금 근무자가 앱에 기록안한것입니다. 전근무자는 없습니다. 지금 근무자들이 첫조입니다»*
-    //    *«그럴때 검수사들이 앱 미사용이라고 적어주세요»* · *«주간조 앱 미사용이 좋을듯 합니다»* ⇒ 조 이름 + 사실만.
-    //  2.99-03: 주야 구분 없는 배(OBWH·RZOR)는 조 이름을 안 붙인다 — 검수사 «OBWH와 RZOR은 주야 구분이 없습니다».
-    //    ⚠ 감사 지적(2.99-03): 브리핑·진행 답 경로는 ctx 에 { tw } 만 싣는다 — 배 코드는 **터미널 실적 레코드 자체**(code/vessel, 수집기가 적음)에서도 읽는다.
-    const _shipCode = ctx?.vsl || ctx?.info?.vsl || tw?.code || tw?.vessel || '';
-    const _shiftTag = shipHasShifts(_shipCode) ? `${workingShiftName()} 앱 미사용` : '앱 미사용';
-    if (gap > 0) L.push(`⚠ ${gap}대는 실제로 작업했는데 앱에 안 찍혔습니다 (${_shiftTag}).`);
-    else if (gap < 0) L.push(`⚠ 앱이 ${-gap}대 더 많습니다 — 터미널 피드가 아직 안 따라왔을 수 있어요.`);
-    else L.push('✅ 두 숫자가 같습니다 — 앱 기록이 실제와 맞습니다.');
-  } else if (!hasTer) {
-    L.push('⚠ 터미널 실적 피드가 아직 없어 «실제로 작업한 수»는 모릅니다.');
-  }
-  if (hasTer && tw.updatedAt) {
-    const m = Math.round((Date.now() - (Number(tw.updatedAt) || 0)) / 60000);
-    if (m >= 0 && m < 60 * 24) L.push(`   (터미널 피드 ${m}분 전 갱신)`);
-  }
-  return L;
-}
-
-export const isRealtimeProgressQuery = (q) => /실제|실시간|실황|터미널/.test(String(q || ''));
-
-// 터미널 실황 답 — 실시간 작업보드형 (양하 N/N · 선적 N/N · % · 지연 · 시작 · 터미널 ETD · 피드 나이)
-export function formatTerminalWorkAnswer(ship, tw, containers = null, mode = 'discharge') {   // 2.55: 앱 기록도 같이
-  if (!tw || !(tw.disPlan || tw.lodPlan)) {
-    return `${ship} — 터미널 실황 피드가 아직 없습니다.\n앱 검수 기록은 «진행 상태»로 물어보세요.`;
-  }
-  const L = [];
-  // 1.69-06: 이미 끝난 작업이면 **결론부터** — «완료» + 종료 시각(터미널 endAt) (검수사 신고 2026-08-14
-  //   "이미 완료된 작업을 물어보면 언제 작업 종료했는지 알려줘야 함"). ⚠ 피드가 24시간 넘게 낡으면
-  //   직전 기항 실적일 수 있어(HAYN — 8/4 인천 피드 실측) 완료 결론을 내리지 않는다.
-  const _fresh = tw.updatedAt && (Date.now() - tw.updatedAt) < 24 * 3600 * 1000;
-  const _doneByCnt = (tw.disPlan ? (tw.disDone ?? 0) >= tw.disPlan : true) && (tw.lodPlan ? (tw.lodDone ?? 0) >= tw.lodPlan : true);
-  if (_fresh && (tw.endAt || tw.pct >= 100 || _doneByCnt)) {
-    L.push(`✅ ${ship} — 작업 완료${tw.endAt ? ` · 종료 ${String(tw.endAt).slice(5, 16)}` : ' (종료 시각 미수신)'} — 터미널 실황(endAt) 기준`);
-  }
-  const seg = [];
-  if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
-  if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
-  L.push(`${ship} — ${seg.join(' · ')}${tw.pct != null ? ` (전체 ${tw.pct}%)` : ''}${tw.delayed ? ' · ⚠ 지연 중' : ''}`);
-  if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
-  if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
-  if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
-  // ★ 2.55: 앱 기록을 **묻지 않아도** 같이 낸다 — 검수사 확정 «두가지 답이 나와야 합니다».
-  //   종전에는 «앱 검수 기록은 «진행 상태»로 물어보세요» 라고 안내만 했다(그 말을 알아야 볼 수 있었다).
-  if (containers && containers.length) {
-    const _b = bothCounts(containers, { tw }, mode);
-    if (_b && _b.length) { L.push(''); _b.forEach((x) => L.push(x)); }
-  }
-  return L.join('\n');
-}
+//  3.53-12 — 트레드링스 합계 피드(`terminal_work`)를 읽던 자리(twOfCtx · terminalWorkFor · bothCounts · formatTerminalWorkAnswer)는 없앴다.
+//    검수사 2026-09-15 «트레드링스는 … 실시간으로 부적합하고 또 필요성이 없어서 사용안하기로 했습니다» · 2026-09-21 «삭제시킨 트레드링스 자료가 나왔기 때문입니다».
+//    대수·잔여·페이스의 기준은 **완료 기록(`completed/{cn}`)** 하나다 — 검수원 입력과 터미널 컨별 실적 반영(src:'term' — 동방 직결·카토스)이 거기 같이 들어 있다.
 
 // 앱 검수 기록 답 — completed/전체 · % · 검수사별(기록에 by 가 있으면). 평택분 기준(7.1).
-export function formatAppTallyAnswer(ship, containers, tw = null, mode = 'discharge', info = null) {   // 3.16: info — 완료자 표기 한 벌에 쓰는 조 등록   // 2.55: 터미널 실적도 같이
+export function formatAppTallyAnswer(ship, containers, info = null) {   // 3.16: info — 완료자 표기 한 벌에 쓰는 조 등록   // 2.55: 터미널 실적도 같이
   const pool = (containers || []).filter((c) => c._ptk);
   const done = pool.filter((c) => c._comp);
-  // ★ 2.55: 앱 기록이 없어도 **터미널 실적으로는 답할 수 있다** — 검수사가 앱을 안 쓴 항차가 대부분이다.
-  //   종전에는 «앱 검수 기록 없음» 한 줄로 끝나 실제로 몇 대 내려갔는지 아무 데서도 못 봤다.
-  if (!done.length) {
-    const _b0 = tw ? bothCounts(pool, { tw }, mode) : null;
-    if (_b0 && _b0.length) return `${ship} — 앱 검수 기록은 없지만 터미널 실적으로 말씀드립니다.\n` + _b0.join('\n');
-    return `${ship} — 앱 검수 기록 없음(이 항차는 앱 검수 미사용).\n실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.`;
-  }
+  if (!done.length) return `${ship} — 아직 완료 기록이 없습니다(평택분 ${pool.length}대).`;
   const seg = [];
   [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
     const p = pool.filter((c) => c._mode === md);
@@ -2850,17 +2742,17 @@ export function formatAppTallyAnswer(ship, containers, tw = null, mode = 'discha
     done.forEach((c) => { const t = c._comp && c._comp.at; if (t && t > _last) _last = t; });
     const d = _last ? new Date(_last) : null;
     const _f = d ? `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
-    out.push(`✅ ${ship} — 작업 완료${_f ? ` · 종료 ${_f}` : ''} — 앱 검수 기록(마지막 완료 시각) 기준`);
+    out.push(`✅ ${ship} — 작업 완료${_f ? ` · 종료 ${_f}` : ''} — 완료 기록(마지막 완료 시각) 기준`);
   }
-  out.push(`${ship} — 앱 검수 기록 기준 ${seg.join(' · ')}`);
+  out.push(`${ship} — 완료 기록 기준 ${seg.join(' · ')}`);
   const by = {};
   done.forEach((c) => { const n = completedByLabel(c._comp, info); if (n) by[n] = (by[n] || 0) + 1; });   // 3.16: 업체 글자를 음성으로 읽지 않는다 — 조 등록 근무자, 없으면 «터미널 반영»
   const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
   if (names.length) out.push(`검수사별 — ${names.map(([n, k]) => `${n} ${k}대`).join(' · ')}`);
-  // ★ 2.55: 터미널 실적을 **묻지 않아도** 같이 낸다(검수사 확정). 안내 문구로 미루지 않는다.
-  const _b = tw ? bothCounts(pool, { tw }, mode) : null;
-  if (_b && _b.length) { out.push(''); _b.forEach((x) => out.push(x)); }
-  else out.push('실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.');
+  {
+    const left = pool.length - done.length;
+    if (left > 0) out.push(`남은 ${left}대`);
+  }
   return out.join('\n');
 }
 
@@ -2949,7 +2841,7 @@ export function normPier(pier, berth) {
  *  끝  — 터미널 `endAt` → `atdActual`(이안) → 지금(단, 마지막 완료에서 하루 넘게 지났으면 마지막 완료).
  *  ⚠ 시작이 마지막 완료보다 뒤면 버린다 — 다음 기항 값이 들어 있는 경우가 있다
  *    (실측 NSDC 2608N: `workStartAt` 09-03 22:00 인데 작업은 09-03 04:40 에 끝났다). */
-export function workWindowOf(info, lastAtMs, tw) {
+export function workWindowOf(info, lastAtMs) {
   //  ⚠ 끝은 **그 항차의** 마지막 완료다 — 사람별로 자른 배열의 마지막을 쓰면 분모가 사람마다 갈린다
   //    (실측: 김성일 286분 vs 이종부 312분). 호출부가 `info.paceTo` 로 항차 마지막을 준다.
   const last = Number((info && info.paceTo) || lastAtMs) || 0;
@@ -2958,8 +2850,11 @@ export function workWindowOf(info, lastAtMs, tw) {
   //    종전 첫째였던 터미널 `startAt` 과 둘째 `atbActual`(접안)은 실측에서 둘 다 틀렸다 —
   //    ATPR 2640E 는 트레드링스 23:15 · 접안 00:00 인데 검수는 **20:45** 에 시작했다(작업 보고).
   //    접안을 시작으로 삼으면 «시작 3시간 전에 66대를 내린 것»이 되고 페이스가 2배 넘게 부푼다.
+  //  3.53-12 — 둘째였던 트레드링스 `startAt` 자리는 **그 항차의 첫 완료 시각**(`info.firstDoneAt` — 호출부가 항차 전체 완료에서 뽑아 준다)이 맡는다.
+  //    터미널 컨별 실적이 완료 기록에 제 시각(COM_DATE)으로 들어오므로 첫 완료가 곧 크레인이 움직이기 시작한 때다.
+  //    접안(`atbActual`)은 배가 떠난 뒤에야 오므로 작업 중에는 이것 말고 분모를 세울 자료가 없다(3.6-01 감사 P1-A 가 지키던 자리).
   const st = sane(_tsOf(info && info.reportStartAt))
-    || sane(_tsOf(tw && tw.startAt))
+    || sane(Number(info && info.firstDoneAt) || 0)
     || sane(_tsOf(info && info.atbActual))
     || sane(_tsOf(info && info.workStartAt));
   if (!st) return [0, 0];
@@ -2968,18 +2863,15 @@ export function workWindowOf(info, lastAtMs, tw) {
   //  «끝났다»는 추측하지 않고 자료로 본다 — 터미널이 떠났다고 하거나, 양하·선적이 둘 다 마감됐거나, 진척 100%.
   //  ⚠ `pct>=100` 에는 신선도 걸쇠를 건다 — 지난 기항 피드가 100 인 채로 남아 있을 수 있다
   //    (2.99-01·BUG-2026-008 과 같은 계열). 미래 시각은 «신선»이 아니다.
-  const up = Number(tw && tw.updatedAt) || 0;
-  const twFresh = up > 0 && Date.now() - up >= 0 && Date.now() - up < 24 * 3600000;
   //  ★ «끝났다» 판정은 앱의 다른 자리와 **한 벌**이어야 한다 — ChiefDashboard 는
   //    `dischargeDone || loadingDone || inspectorDone` (OR) 로 본다. 여기만 AND 로 두면
   //    양하 전용선·선적 전용선이 안 걸려 **떠난 배의 분모가 시계를 따라 계속 늘어난다**
   //    (감사 실측 — 마지막 완료 1주 뒤 46대/h 가 1.9대/h 로 내려앉는다).
   const over = !!(info && (String(info.terminalStatus || '').trim().toLowerCase() === 'departed'
-    || info.dischargeDone || info.loadingDone || info.inspectorDone || info.workEndAt))
-    || (twFresh && Number(tw && tw.pct) >= 100);
+    || info.dischargeDone || info.loadingDone || info.inspectorDone || info.workEndAt));
   //  끝 시각 후보 — 터미널 endAt · 이안(PNCT 는 떠난 뒤에야 온다) · workEndAt(PCTC 작업완료 정본).
   //  ★ 3.24 — 끝도 «검수 완료» 보고가 첫째다(`*_done`). 없으면 종전 순서.
-  const done = _tsOf(info && info.reportEndAt) || _tsOf(tw && tw.endAt) || _tsOf(info && info.atdActual) || _tsOf(info && info.workEndAt);
+  const done = _tsOf(info && info.reportEndAt) || _tsOf(info && info.atdActual) || _tsOf(info && info.workEndAt);
   //  그래도 표시를 못 찾으면, **마지막 완료에서 하루 넘게 지났으면 끝난 것으로 본다**
   //  (2665 주석이 약속했는데 구현에 없던 걸쇠 — 감사 P2-B).
   const stale = last > 0 && Date.now() - last > 24 * 3600000;
@@ -2999,6 +2891,18 @@ export function workWindowOf(info, lastAtMs, tw) {
  *  ⇒ 여기서 뽑아 `workWindowOf` 가 **맨 먼저** 본다. 보고가 없는 항차는 종전 폴백 그대로다.
  *  ⚠ 호기가 여럿이면 **가장 이른 시작**과 **가장 늦은 완료**다(한 호기가 먼저 끝나도 배는 아직 일한다).
  *  @returns {{reportStartAt:number, reportEndAt:number}} 없으면 0. */
+//  3.53-12 — 그 항차의 **첫 터미널 반영 완료 시각**(없으면 0). 트레드링스 `startAt` 을 뗀 자리에서 «크레인이 움직이기 시작한 때»의 대역으로 쓴다.
+//    검수원이 몰아 찍은 기록은 제 시각이 아니라서 안 쓴다 — 터미널 컨별 실적(src:'term')은 터미널이 적은 시각 그대로 온다.
+export function voyageFirstTermAt(voyage) {
+  let t = 0;
+  for (const m of ['discharge', 'loading']) {
+    const comp = (voyage && voyage[m] && voyage[m].completed) || null;
+    if (!comp) continue;
+    for (const k of Object.keys(comp)) { const r = comp[k]; const at = r && r.at; if (typeof at === 'number' && at > 0 && isTermApplied(r) && (!t || at < t)) t = at; }
+  }
+  return t;
+}
+
 export function voyageReportSpan(voyage) {
   const rp = (voyage && voyage.reports) || null;
   let st = 0, ed = 0;
@@ -3033,8 +2937,7 @@ function formatPace(parsed, allContainers, ctx) {
   const ats = (Array.isArray(ctx && ctx.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
   if (!ats.length) return `아직 ${modeK} 완료 기록이 없어요. 몇 대 진행되면 시간당 몇 개인지 알려드릴게요.`;
   const info = _infoOf(ctx);
-  const tw = (() => { try { return terminalWorkFor(info, ctx && ctx.terminalWork); } catch (e) { return null; } })();
-  const P = paceFromRecords(ats, info, undefined, tw);
+  const P = paceFromRecords(ats, info);
   const L = [];
   //  ⚠ 시간대는 **작업 순서대로** 세운다. 자정을 넘기는 야간 작업이라 «시» 문자열로 정렬하면
   //    01·02·20·21·22 처럼 뒤죽박죽이 된다 — 첫 완료를 기준으로 몇 시간째인지로 줄 세운다.
@@ -3088,7 +2991,7 @@ export function voyageDoneAts(voyage) {
 //  ★ 재감사 지적 — 두 번째 인자는 **항차 info 를 통째로** 받는다(문자열도 받는다).
 //    부두·선석·갱 수를 화면마다 따로 뽑아 넘기게 두면 반드시 하나를 빠뜨린다 — 실제로 그랬다
 //    (통계탭·미르는 선석 폴백이 없어 +18.5%, 「질문 답변」 패널은 갱 수가 안 닿아 몰아 입력이 통과했다).
-export function paceFromRecords(doneAts, src, gangs, tw) {
+export function paceFromRecords(doneAts, src, gangs) {
   const info = (src && typeof src === 'object') ? src : { pier: src };
   const src0 = Array.isArray(doneAts) ? doneAts : [];   // 3.6: 배열이 아니면 던지던 것(감사 P2-6)
   const raw = src0.length;
@@ -3100,10 +3003,13 @@ export function paceFromRecords(doneAts, src, gangs, tw) {
   //  기록이 통째로 망가진 경우 — 한 기항이 30일을 넘을 수는 없다(초 단위 시각이 섞이면 이렇게 된다).
   if ((last - ats[0]) / 60000 > 30 * 24 * 60) return { ok: false, why: 'dirty', n: ats.length };
   const pierN = normPier(info.pier, info.berth);
-  const g = Math.max(1, Number(gangs != null ? gangs : info.gangs) || 2);
+  //  ★ 3.53-12 — 갱 수는 **조마다** 다를 수 있다(2.69 `info.gangsShift['MM-DD 주간|야간']` → 항차 기본 `info.gangs` → 2). 갱 배분(chiefAnswers)과 같은 순서다.
+  //    `gangs` 를 호출부가 못 박아 주면(홈 「오늘의 나」= 1) 그것을 쓴다.
+  const _gOf = (ms) => Math.min(4, Math.max(1, Number(gangs != null ? gangs : ((info.gangsShift && info.gangsShift[shiftGangKey(currentShift(ms))]) || info.gangs)) || 2));
+  const g = _gOf(Date.now());   // 지금 조의 갱 수 — 남은 시간을 나눌 때 쓴다
   //  ★ 3.6-01 — 분모는 **배가 일한 시간**이다. 검수원이 앱을 누른 구간이 아니다.
   //    작업 구간을 알면 그것으로, 모르면 그때만 완료 기록 구간으로 잰다(그 사실을 `basis` 로 알린다).
-  const [ws, we] = workWindowOf(info, last, tw);
+  const [ws, we] = workWindowOf(info, last);
   const basis = ws ? 'work' : 'records';
   //  분자가 자른 구간(예: 홈 「오늘의 나」는 오늘 것만 센다)이면 분모도 같이 잘라야 한다 —
   //  안 그러면 어제 접안부터 나눠 값이 낮게 나온다(감사 P1-B).
@@ -3117,38 +3023,34 @@ export function paceFromRecords(doneAts, src, gangs, tw) {
   if (!(mins > 0)) mins = (to - from) / 60000;
   if (!(mins > 0)) return { ok: false, why: 'short', n: ats.length, mins: 0, basis, pier: pierN };
   const perHour = ats.length / (mins / 60);
+  //  갱당 시간당 = 처리 대수 ÷ 갱·시간. 잰 구간이 조를 넘나들면 조마다 그 조의 갱 수를 곱해 더한다 — 그래야 «야간 3갱으로 잰 페이스»를 «주간 2갱»에 옮겨 쓸 수 있다.
+  let gangMin = 0;
+  for (let a = from, guard = 0; a < to && guard < 100; guard++) { const sh = currentShift(a); const b = Math.min(to, Math.max(a + 60000, sh.endMs || to)); gangMin += Math.max(0, workMinutesBetween(a, b, pierN)) * _gOf(a); a = b; }
+  if (!(gangMin > 0)) gangMin = mins * g;
+  const perGangHour = ats.length / (gangMin / 60);
   //  ⚠ 3.6 의 «몰아 입력이라 못 잼»은 없앴다 — 검수사 정정. 분모가 작업 시간이면 몰아 찍어도 안 튄다.
   //    남은 것은 «자료가 망가졌을 때»뿐이고, 그때만 숫자를 안 낸다.
   if (perHour > MAX_BOXES_PER_CRANE_HOUR * g * 3) return { ok: false, why: 'dirty', n: ats.length, mins: Math.round(mins), perHour, basis, pier: pierN };
   if (perHour < 0.05) return { ok: false, why: 'dirty', n: ats.length, mins: Math.round(mins), perHour, basis, pier: pierN };
   if (mins < 30) return { ok: false, why: 'short', n: ats.length, mins: Math.round(mins), basis, pier: pierN };
-  return { ok: true, perHour, perGangHour: perHour / g, mins: Math.round(mins), workedMin: Math.round(mins), gangs: g, n: ats.length, basis, pier: pierN, from, to };
+  return { ok: true, perHour, perGangHour, mins: Math.round(mins), workedMin: Math.round(mins), gangs: g, n: ats.length, basis, pier: pierN, from, to };
 }
 
-// ── ★ 2.54-01 — **터미널 실적으로 페이스를 재는 단 한 벌.**
-//  ⚠ 2.54 는 이것을 `chiefAnswers` 안에 두었다. 그런데 검수사가 실제로 쓰는 **양하 탭 검색바**는
-//    `answerShipSpeed` 를 아예 안 부르고 `formatEta` 로 간다 — 그래서 **완료 67대인 배가
-//    «아직 시작 전이에요» 라고 답했다**(2.54 라이브 실측). 절반만 고친 것이었다.
-//  ⇒ 계산을 여기로 옮겨 **양쪽이 같은 한 벌을 쓴다.** 판정을 두 벌로 만들면 반드시 갈린다.
-export function speedFromTerminal(info, terminalWork) {
-  const tw = terminalWorkFor(info || {}, terminalWork);            // 2.99-01: 작업 시작 전·지난 기항 피드는 안 쓴다(BUG-2026-008)
-  if (!tw || typeof tw !== 'object') return null;
-  const st = _tsOf(tw.startAt);
-  if (!st) return null;                                   // 시작 시각이 없으면 잴 수가 없다
-  const done = (Number(tw.disDone) || 0) + (Number(tw.lodDone) || 0);
-  const plan = (Number(tw.disPlan) || 0) + (Number(tw.lodPlan) || 0);
-  if (done <= 0) return null;                             // 아직 한 대도 안 했으면 페이스가 없다
-  //  자료가 갱신된 시각까지만 센다 — «지금»으로 재면 수집기가 멈춘 동안이 작업 시간에 섞인다.
-  const upto = Number(tw.updatedAt) || Date.now();
-  const pier = String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC';
-  const workedMin = workMinutesBetween(st, upto, pier);
-  if (workedMin < 30) return null;                        // 너무 짧으면 페이스가 튄다
-  //  3.6-01: 갱 수를 2 로 못 박지 않는다 — 앱 기록 경로(paceFromRecords)와 잣대를 맞춘다.
-  const g = Math.max(1, Number(info && info.gangs) || 2);
-  const perHour = done / (workedMin / 60);
-  const perGangHour = perHour / g;
-  if (!(perGangHour > 0)) return null;
-  return { st, upto, done, plan, left: Math.max(0, plan - done), workedMin, perHour, perGangHour, gangs: g, pier, tw };
+// ── ★ 3.53-12 — **그날 페이스를 재는 단 한 벌 — 완료 기록으로.** (종전 `speedFromTerminal` 은 트레드링스 합계 피드였고 없앴다)
+//  검수사 2026-09-21 «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서 답해야 한다.»
+//   ⇒ 남은 시간 = 총 잔여(양하+선적 평택분) ÷ (갱당 시간당 처리 대수 × 갱 수).
+//      갱당 시간당 = 이 배 완료 기록(검수원 입력 + 터미널 컨별 반영) ÷ 실작업 시간(쉬는 시간 뺌) ÷ 갱 수.
+//  `counts` = { total, done } — 항차 전체 평택분(호출부가 mir.js voyageCountsOf 로 센다). 없으면 left·plan 은 null.
+export function speedFromRecords(voyage, counts) {
+  if (!voyage) return null;
+  const info = voyage.info || {};
+  const P = paceFromRecords(voyageDoneAts(voyage), { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) });
+  //  완료 몇 건으로 잰 페이스는 잡음이다(감사 실측 — 3건·40분이면 갱당 2.25대, 2갱 몫이 19대로 나온다). 10건이 안 되면 «아직 못 잼»으로 두고 호출부가 계획·과거 평균으로 간다.
+  if (!P || !P.ok || !(P.perGangHour > 0) || P.n < 10) return null;
+  const plan = counts && Number(counts.total) > 0 ? Number(counts.total) : null;
+  const done = counts && plan != null ? Number(counts.done) || 0 : P.n;
+  return { done, plan, left: plan != null ? Math.max(0, plan - done) : null, workedMin: P.workedMin, perHour: P.perHour, perGangHour: P.perGangHour,
+    gangs: P.gangs, pier: P.pier || (String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC'), basis: P.basis, from: P.from, n: P.n };
 }
 function _tsOf(v) {
   if (!v) return 0;
@@ -3193,37 +3095,18 @@ function _infoOf(ctx) {
 function formatEta(parsed, allContainers, ctx) {
   // allContainers는 호출부에서 이미 평택분만 넘어옴(SearchPanel _ptk 필터).
   //   반환은 다른 답변과 동일하게 '문자열' — 첫 줄이 음성으로 읽히므로 첫 줄에 대화체 한 문장.
-  const total = allContainers.length;
+  //  3.53-12 (검수사 «총 잔여갯수를 그날 시간당 처리갯수와 갱수로 나눠서») — 잔여는 **항차 전체(양하+선적 평택분)** 다.
+  //    호출부(mir.js)가 `ctx.voyageCounts` 로 실어 준다. 못 받은 옛 호출은 넘겨받은 컨으로 센다.
+  const _vc = (ctx && ctx.voyageCounts && Number(ctx.voyageCounts.total) > 0) ? ctx.voyageCounts : null;
+  const total = _vc ? Number(_vc.total) : allContainers.length;
   const doneAts = allContainers
     .map(c => (c._comp && typeof c._comp === 'object' ? c._comp.at : null))
     .filter(at => typeof at === 'number' && at > 0)
     .sort((a, b) => a - b);
-  const doneCount = allContainers.filter(c => !!c._comp).length;
+  const doneCount = _vc ? (Number(_vc.done) || 0) : allContainers.filter(c => !!c._comp).length;
   const remain = Math.max(0, total - doneCount);
-
-  //  ★ 2.54-01 — **터미널 실적이 있으면 그것이 먼저다.**
-  //    아래 앱 기록(`_comp`) 경로는 검수사 말고는 거의 안 찍어서 «아직 시작 전이에요» 를 낸다.
-  //    검수사 메모(2026-08-26) — *«앱으로 계산하면 틀립니다. 앱으로 작업을 잘안하니까요»*.
-  //    ⚠ 실측으로 이 자리에서 걸렸다 — 완료 67대인 STSE 가 «아직 시작 전이에요» 라고 답했다.
-  //      (양하 탭 검색바는 answerShipSpeed 를 안 부르고 여기로 온다 — 경로가 셋이다.)
-  try {
-    const _T = speedFromTerminal(_infoOf(ctx), ctx?.terminalWork);   // 3.6-01: info 를 통째로 — 키를 골라 짜면 반드시 하나 빠뜨린다(감사 P1-D)   // 2.99-01: planDate·workStartAt 도 넘겨야 문지기가 선다
-    if (_T) {
-      const wh = Math.floor(_T.workedMin / 60), wm = _T.workedMin % 60;
-      const head = `터미널 실적으로 보면 지금까지 ${_T.done}대 했어요 — 실작업 ${wh}시간${wm ? ' ' + wm + '분' : ''}(쉬는 시간 뺀 것).`;
-      if (_T.left <= 0) return `${head}\n계획 ${_T.plan}대를 다 채웠습니다. 수고 많으셨어요.`;
-      const rMin = Math.round((_T.left / _T.perHour) * 60);   // 3.6-01: 갱 수는 _T 가 안다
-      const e = addWorkMinutes(Date.now(), rMin, _T.pier);
-      const p2 = (n) => String(n).padStart(2, '0');
-      const rh = Math.floor(rMin / 60), rm = rMin % 60;
-      return `${head}\n남은 ${_T.left}대 — 이 페이스면 **약 ${rh ? rh + '시간 ' : ''}${rm}분** 뒤, `
-        + `**${p2(e.getMonth() + 1)}-${p2(e.getDate())} ${p2(e.getHours())}:${p2(e.getMinutes())}** 쯤 끝나요.\n`
-        //  갱 수를 자료에서 알면 그대로 말하고, 모르면 검수사 확정 표기(«2갱 기준 … 1갱이면 ×2»)를 쓴다.
-        + `이 배 시간당 ${_T.perHour.toFixed(1)}대 — ${_T.gangs}갱 기준 갱당 ${_T.perGangHour.toFixed(1)}대`
-        + `${_T.gangs === 2 ? ' (1갱이면 ×2)' : ''} · 중식·야식·티타임·조 경계는 빼고 계산했어요.\n`
-        + `(터미널 실적입니다 — 앱에 안 찍은 다른 검수원 몫까지 들어 있어요.)`;
-    }
-  } catch (e) { /* 터미널 자료가 없으면 아래 앱 기록 경로로 */ }
+  const _split = _vc && _vc.byMode ? ['discharge', 'loading'].filter((m) => _vc.byMode[m] && _vc.byMode[m].total > 0)
+    .map((m) => `${m === 'loading' ? '선적' : '양하'} ${_vc.byMode[m].total - _vc.byMode[m].done}`).join(' · ') : '';
 
   if (total > 0 && remain === 0) {
     return `작업 다 끝났어요. 수고 많으셨습니다.\n🎉 평택분 ${total}대 전부 완료했어요.`;
@@ -3258,7 +3141,9 @@ function formatEta(parsed, allContainers, ctx) {
     if (g) return g;
     return `아직 시작 전이에요. 평택분 ${total}대 남았어요.\n몇 대 진행되면 페이스를 보고 완료 시각을 알려드릴게요.`;
   }
-  if (doneAts.length < 2) {
+  //  3.53-12: 페이스 재료는 항차 전체 완료 시각이다 — 열린 탭(예: 선적 0대)만 보고 «기록 부족»이라 하지 않는다.
+  const _atsAll = (Array.isArray(ctx?.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
+  if (_atsAll.length < 2) {
     const g = _speedGuess(`${remain}대 남았어요.`);
     if (g) return g;
     return `${remain}대 남았어요. 조금 더 진행되면 끝날 시각을 알려드릴게요.\n완료 ${doneCount}대 · 남은 ${remain}대 — 아직 페이스를 잴 기록이 부족해요.`;
@@ -3267,20 +3152,20 @@ function formatEta(parsed, allContainers, ctx) {
   //  ★ 3.6 — 최근 20대 «간격»이 아니라 **전체 실작업 시간**으로 잰다(몰아 입력 방어). 위 paceFromRecords 참조.
   //  3.6-01: 페이스는 **이 배 전체**(양하+선적)로 잰다 — 분모가 접안~이안이므로 분자도 그래야 한다.
   //    항차 전체 완료를 못 받았으면(옛 호출) 이 화면 것으로라도 잰다.
-  const _paceAts = (Array.isArray(ctx?.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
+  const _paceAts = _atsAll;
   //  ⚠ 여기서 **키를 골라 리터럴을 짜지 마라.** 감사가 두 번 잡은 자리다 —
   //    고를 때마다 하나씩 빠뜨려 통계탭과 미르가 다른 답을 냈다(43.7 vs 17.8, 2.46배).
   //    항차 info 를 통째로 깔고 ctx 의 평평한 키로 덮는다. 그러면 새 키가 늘어도 저절로 따라온다.
-  const _info = _infoOf(ctx);
-  const _tw = (() => { try { return terminalWorkFor(_info, ctx?.terminalWork); } catch (e) { return null; } })();
-  const _P = paceFromRecords(_paceAts, _info, undefined, _tw);   // 3.6: 부두·선석·갱 수를 한 덩어리로 — 하나씩 넘기면 빠뜨린다(재감사)
+  const _info = { ..._infoOf(ctx), ...(ctx && ctx.voyage ? { ...voyageReportSpan(ctx.voyage), firstDoneAt: voyageFirstTermAt(ctx.voyage) } : null) };   // 3.53-12: 작업 속도(speedFromRecords)와 같은 분모
+  const _P = paceFromRecords(_paceAts, _info);   // 3.6: 부두·선석·갱 수를 한 덩어리로 — 하나씩 넘기면 빠뜨린다(재감사)
   if (!_P.ok) {
     const why = _P.why === 'dirty'
       ? '완료 시각 기록이 고르지 않아 페이스를 못 재요.'
       : '아직 페이스를 잴 만큼 시간이 안 지났어요. 조금 더 진행되면 다시 물어봐 주세요.';
-    return `${remain}대 남았어요.\n${why}\n완료 ${doneCount} / 전체 ${total} — 터미널 실적이 들어오면 그것으로 알려드릴게요.`;
+    return `${remain}대 남았어요.\n${why}\n완료 ${doneCount} / 전체 ${total}`;
   }
-  const perHour = _P.perHour;
+  //  갱당 시간당 × **지금 조의** 갱 수 — 잰 구간의 갱 수(조마다 gangsShift)와 지금 갱 수가 다르면 여기서 갈린다(같으면 perHour 와 같다).
+  const perHour = _P.perGangHour * _P.gangs;
 
   const remainMin = Math.round((remain / perHour) * 60);
   // 1.68: 중식·야식·티타임·조 사이 공백을 건너뛰어 계산한다(터미널별 근무시간표 — 검수사 확정).
@@ -3305,9 +3190,8 @@ function formatEta(parsed, allContainers, ctx) {
   return (
     `${remain}대 남았어요. 지금 페이스면 ${durKo}, ${etaShort}쯤 끝나겠네요.${cheer}\n` +
     `⏱ 예상 완료: ${etaStr}쯤\n` +
-    `남은 작업: ${remain}대 (완료 ${doneCount} / 전체 ${total})\n` +
-    `현재 페이스: 시간당 약 ${rate}대 (앱에 찍힌 양하+선적 ${_P.n}대 ÷ ${_P.basis === 'work' ? '작업 시작부터의 ' : ''}실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 — 쉬는 시간 뺀 것${_P.basis === 'work' ? '' : ' · 작업 시각을 몰라 완료 기록 구간으로 쟀어요'})\n` +
-    `※ 터미널 실적이 아직 없어 **앱에 찍힌 것만** 셌어요 — 다른 검수원이 한 몫은 안 들어 있습니다.\n` +
+    `남은 작업: ${remain}대${_split ? ` (${_split})` : ''} · 완료 ${doneCount} / 전체 ${total}\n` +
+    `오늘 페이스: 시간당 약 ${rate}대 — ${_P.gangs}갱 기준 갱당 ${_P.perGangHour.toFixed(1)}대 (완료 기록 양하+선적 ${_P.n}대 ÷ ${_P.basis === 'work' ? '작업 시작부터의 ' : ''}실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 — 쉬는 시간 뺀 것${_P.basis === 'work' ? '' : ' · 작업 시각을 몰라 완료 기록 구간으로 쟀어요'})\n` +
     `남은 시간: ${durKo}`
   );
 }

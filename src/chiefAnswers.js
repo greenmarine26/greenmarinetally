@@ -8,7 +8,7 @@
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs } from './utils.js';   // 2.65-01: 조 경계 한 벌
-import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
+import { addWorkMinutes, speedFromRecords, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
@@ -21,7 +21,7 @@ const _hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinut
 // ─── 갱 분배의 공용 뿌리 ─────────────────────────────────────────────
 // 베이사전 baysSummary(pairEven)로 «장(시트) 그룹»을 만들고, 그룹별 평택분 무브수를 센다.
 // 크레인은 서로 못 넘으므로 절단은 그룹 경계 위 «연속 구간»으로만 한다(학습서 2-F #96).
-export function buildGangPlan(voyage, bayDef, opts = {}) {   // 2.66: opts.tw — 캔슬 판정에 터미널 실황을 같이 본다
+export function buildGangPlan(voyage, bayDef, opts = {}) {
   const bays = (bayDef && bayDef.baysSummary) || [];
   if (!bays.length) return null;
   const byNo = {};
@@ -58,7 +58,7 @@ export function buildGangPlan(voyage, bayDef, opts = {}) {   // 2.66: opts.tw �
   // 평택분 무브 집계
   for (const [mode, kd, kz] of [['discharge', 'dis', true], ['loading', 'lod', false]]) {
     //  2.66: 배정목록이 «그 쪽 0» 이면(전량 캔슬) 그 쪽은 갱 배분에서도 뺀다 — 없는 일을 나눌 수 없다.
-    if (sideCancelled(voyage?.info, mode, opts.tw)) continue;
+    if (sideCancelled(voyage?.info, mode)) continue;
     for (const c of _list(voyage?.[mode]?.ediContainers)) {
       if (!_ptk(c, mode)) continue;
       const g = groups[idxOfBay[_bayN(c)]];
@@ -286,9 +286,10 @@ const _currentShift = currentShift;
 export function buildGangShift(voyage, bayDef, opts = {}) {
   const nowMs = opts.now || Date.now();
   const pier = voyage?.info?.pier || '';
-  const plan = buildGangPlan(voyage, bayDef, { tw: opts.tw });
+  const plan = buildGangPlan(voyage, bayDef);
   if (!plan) return null;
-  const sp = (opts.tw) ? speedFromTerminal(voyage?.info, opts.tw ? { [String(voyage?.info?.vsl || '').toUpperCase()]: opts.tw } : null) : null;
+  //  3.53-12: 갱당 시간당은 **그날 완료 기록**으로 잰다(검수사 «그날 시간당 처리갯수와 갱수로») — 트레드링스 합계 피드는 떼어 냈다.
+  const sp = speedFromRecords(voyage);
   const perGangHour = sp && sp.perGangHour > 0 ? sp.perGangHour : 0;
   _gangHours(plan, voyage, perGangHour);
   //  완료 반영 — compMap(앱 기록)의 컨을 그룹에서 뺀다. «일이 끝나가도 답이 같던» 병의 해법.
@@ -305,32 +306,8 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
       if (g) g.doneN++;
     }
   }
-  //  ★ 2.70 (검수사 메모 2026-08-27 19:19): *«작업중이던 선박에 갱배분을 물었을때 앱자료가 없을시
-  //    터미널 실작업량을 기준으로 알려줘야함»* — 앱에 완료를 안 찍고 작업하면(대부분이 그렇다)
-  //    앱 기록만 보고 나누어 **이미 내린 것까지 «남은 일»** 로 셌다. 실측 PCSZ: 터미널 120대 · 앱 0대.
-  //    ⇒ 터미널 실적이 앱 기록보다 많으면 그 차이를 **작업 순서대로**(데크 먼저·구간 뒤에서 앞으로)
-  //      이미 한 것으로 깎는다. ⚠ 어느 컨인지는 모른다 — **대수만** 반영하고 답에 그렇게 밝힌다.
-  let twGap = 0;
-  {
-    const _tw = opts.tw || null;
-    const _terDone = _tw ? (Number(_tw.disDone) || 0) + (Number(_tw.lodDone) || 0) : 0;
-    const _appDone = plan.cargo.reduce((t, g) => t + (g.doneN || 0), 0);
-    twGap = Math.max(0, _terDone - _appDone);
-    if (twGap > 0) {
-      //  순서: 구간을 뒤(선미)에서 앞으로 — 검수사 확정 진행 방향과 같은 벌.
-      const order = [...plan.cargo].sort((a, b) => Math.min(...b.members) - Math.min(...a.members));
-      let left = twGap;
-      for (const g of order) {
-        if (left <= 0) break;
-        const mv = g.dis + g.lod;
-        const room = Math.max(0, mv - (g.doneN || 0));
-        const take = Math.min(room, left);
-        g.doneN = (g.doneN || 0) + take;
-        left -= take;
-      }
-      twGap -= left;   //  실제로 반영된 만큼만 기록(전부 못 깎으면 그만큼만)
-    }
-  }
+  //  3.53-12: 종전 2.70 의 «터미널 합계 − 앱 기록 차이를 대수로 깎기»(twGap)는 없앴다 — 터미널 컨별 실적이 완료 기록(src:'term')으로
+  //    들어오므로 어느 컨인지까지 알고 위에서 이미 뺐다. 트레드링스 합계는 쓰지 않는다(검수사 2026-09-15).
   plan.cargo.forEach((g) => {
     const mv = g.dis + g.lod;
     g.restN = Math.max(0, mv - g.doneN);
@@ -528,7 +505,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     }
     for (const r of Object.keys(byR)) heldLines.push(`⏸ 보류 ${byR[r].length}대 — ${r} (${byR[r].slice(0, 3).join('·')}${byR[r].length > 3 ? ' 외' : ''})`);
   }
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, twGap, heldLines, cranes: (_craneNos.length === nGangs ? _craneNos.slice() : []),
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, heldLines, cranes: (_craneNos.length === nGangs ? _craneNos.slice() : []),
     shiftKey: _gKey, fixed: !opts.nGangs && (_gShift > 0 || _gBase > 0), fixedShift: !opts.nGangs && _gShift > 0 };
 }
 
@@ -581,7 +558,6 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
     }
   }
   //  2.70: 터미널 실적으로 깎았으면 그 사실을 밝힌다 — 어디까지 했는지는 앱 기록이 없어 «대수만» 반영이다.
-  if (gs.twGap > 0) L.push(`⚠ 앱에 안 찍힌 ${gs.twGap}대는 터미널 실적으로 빼고 계산했어요 — 어느 컨인지는 몰라 대수만 반영입니다.`);
   //  ★ 2.75: 보류(양하 불가)가 남아 있으면 인계에 보인다 — 완료도 아니고 남은 일도 아닌 것이 조용히 묻히면 안 된다.
   if (gs.heldLines && gs.heldLines.length) gs.heldLines.forEach((x) => L.push(x));
   gs.gangs.forEach((g) => {
@@ -866,21 +842,23 @@ export function isSpeedQuery(q) {
 //  ⚠ 갱 수는 **2갱 기본** — 학습서 2-F′ *«기본 2갱으로 계산을 해주시면 됩니다. 만약 1갱이라면 ×2»*.
 //    답에 «2갱 기준»과 «1갱이면 ×2» 를 반드시 같이 말한다(검수사 확정).
 
-export function answerShipSpeed(voyage, shipSpeed, shipName = '', terminalWork = null) {
+export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null) {
   if (!voyage) return null;
   const info = voyage.info || {};
   const vsl = String(info.vsl || '').toUpperCase();
 
-  //  ① 터미널 실적이 있으면 그것이 진실이다(검수사 메모 2026-08-26).
-  const T = speedFromTerminal(info, terminalWork);
+  //  ① 그날 완료 기록(검수원 입력 + 터미널 컨별 반영)으로 잰다 — 3.53-12: 트레드링스 합계 피드는 떼어 냈다.
+  const T = speedFromRecords(voyage, counts);
   if (T) {
-    const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 터미널 실적 기준`];
+    const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 오늘 완료 기록 기준`];
     const hh = Math.floor(T.workedMin / 60), mm = T.workedMin % 60;
-    L.push(`시작 ${String(T.tw.startAt || '').slice(5, 16)} — 지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
+    L.push(`지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
     //  3.6-01: 갱 수를 2 로 못 박지 않는다 — speedFromTerminal 이 항차 갱 수로 나눈다(모르면 2).
     L.push(`**${T.gangs}갱 기준 갱당 시간당 ${T.perGangHour.toFixed(1)}대**${T.gangs === 2 ? ' (1갱이면 ×2 하시면 됩니다)' : ` · 이 배 시간당 ${T.perHour.toFixed(1)}대`}`);
-    if (T.left > 0) {
-      const remainMin = Math.round((T.left / T.perHour) * 60);   // 3.6-01: ×2 가 아니라 실제 갱 수(perHour 가 이미 전체다)
+    if (T.left == null) {
+      L.push('(남은 대수를 셀 자료가 없어 끝나는 시각은 말씀 못 드려요.)');
+    } else if (T.left > 0) {
+      const remainMin = Math.round((T.left / (T.perGangHour * T.gangs)) * 60);   // 3.53-12: 총 잔여 ÷ (갱당 시간당 × 갱 수)
       const eta = addWorkMinutes(Date.now(), remainMin, T.pier);
       const rh = Math.floor(remainMin / 60), rm = remainMin % 60;
       const p = (n) => String(n).padStart(2, '0');
@@ -893,13 +871,13 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', terminalWork =
     return L.join('\n');
   }
 
-  //  ② 터미널 실적이 없을 때만 옛 방식(텔리 리포트 평균)으로 간다 — 그 사실을 밝힌다.
+  //  ② 오늘 기록으로 아직 못 잴 때만 옛 방식(텔리 리포트 평균)으로 간다 — 그 사실을 밝힌다.
   if (!shipSpeed) return '작업 속도 자료를 아직 못 불러왔어요 — 잠시 후 다시 물어봐 주세요.';
   const pier = String(info.pier || '').toUpperCase().includes('PCTC') ? 'PCTC'
     : String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : null;
   let rec = (pier && shipSpeed[`${vsl}_${pier}`]) || shipSpeed[`${vsl}_PNCT`] || shipSpeed[`${vsl}_PCTC`] || null;
   const L = [`작업 속도${shipName ? ' — ' + shipName : ''}`,
-    '⚠ 터미널 실적이 아직 없어 **과거 평균**으로 말씀드립니다 — 실제와 다를 수 있어요.'];
+    '⚠ 오늘 완료 기록이 아직 모자라 **과거 평균**으로 말씀드립니다 — 실제와 다를 수 있어요.'];
   if (rec) {
     L.push(`${rec.vsl}(${rec.pier}) 평균 ${rec.movesPerCraneHour} 무브/크레인h — 표본 ${rec.voys}항차 ${rec.moves}무브${rec.voys < 3 ? ' ⚠ 표본 적음(참고치)' : ''}`);
   } else {

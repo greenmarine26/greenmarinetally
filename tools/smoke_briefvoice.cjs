@@ -11,11 +11,7 @@ let bad = 0; const T = (ok, why) => { if (!ok) { bad++; console.error('  ✗ ' +
 const REAL = [
   '📋 양하 평택 351대 — 주의 5건 (위험물 1, FR 2, OT 9)',
   '📌 작업: 351대 (Full 351 / Empty 0 · 20ft 18, 40ft 333) · 베이 2~34 (14개) · 갑판 222 / 홀드 129',
-  '📈 진행 — 두 가지',
-  '  🏗 실제(터미널) 32대 / 351대 — 남은 319대',
-  '  📱 앱 기록 0대 / 351대 — 남은 351대',
-  '  ⚠ 32대는 실제로 작업했는데 앱에 안 찍혔습니다 (주간조 앱 미사용).',
-  '     (터미널 피드 0분 전 갱신)',
+  '📈 진행: 완료 32 / 잔여 319 (9%)',   // 3.53-12: 진행 줄은 완료 기록 한 숫자(합계 피드의 «두 가지» 줄은 없앴다)
   '🏗 주간조(14:20 시작~17:30·2갱) — 1번 갱(01~17) (16)17 데크→(12)13 데크(13/27대째) 약 40대(FR1) / 2번 갱(20~35) (34)35 데크→(30)31 데크(8/36대째) 약 40대',
   '"갱 배분"으로 상세 확인',
   '⚠ 주의사항',
@@ -30,9 +26,9 @@ const REAL = [
 
 const L = NL.briefingVoiceLines(REAL);
 const all = L.join(' | ');
-T(L.length === 13, `토막이 13개가 아니다(${L.length}) — 주의사항이 빠지면 검수사가 못 듣는다`);
+T(L.length === 10, `토막이 10개가 아니다(${L.length}) — 주의사항이 빠지면 검수사가 못 듣는다`);
 //  ── 2.65-01: 라이브에서 뭉개졌던 세 줄 ──
-T(/실제 터미널 32대 완료, 전체 351대/.test(all), '진행 줄의 「32대 / 351대」가 소리로 안 풀린다');
+T(/진행: 완료 32 잔여 319/.test(all), '진행 줄(완료 32 / 잔여 319)이 소리로 안 풀린다');   // 3.53-12: 두 숫자 다섯 줄 → 한 줄(토막 13 → 10)
 T(/주간조 14시 20분 시작, 17시 30분까지/.test(all), '조 시각을 안 풀어 읽는다(14:20 을 그대로 읽으면 못 알아듣는다)');
 T(/1번 갱 1번에서 17번, 약 40대/.test(all) && !/데크\s*13\s*27대째/.test(all),
   '갱 줄의 도달점 괄호·화살표가 그대로 읽힌다 — 「16 17 데크 13 27대째」로 뭉개진다. 상세는 화면이다');
@@ -63,11 +59,11 @@ for (const f of ['src/components/SearchPanel.jsx', 'src/pages/VoyagePage.jsx']) 
 }
 //  2.65-01 (검수사 교정): 앱이 원인을 짐작하면 안 된다 — «전근무자» 는 틀린 짐작이었다.
 const nlSrc = fs.readFileSync(path.join(ROOT, 'src/nlSearch.js'), 'utf8');
-T(/\$\{workingShiftName\(\)\} 앱 미사용/.test(nlSrc), '두 숫자 차이에 조 이름을 안 붙인다 — 검수사 확정 «주간조 앱 미사용»');
+T(!/실제\(터미널\)/.test(nlSrc.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n')), '⛔ «실제(터미널)» 두 숫자 줄이 nlSearch 에 되살아났다 — 3.53-12 에서 합계 피드를 뗐다');
 T(/export function workingShiftName/.test(fs.readFileSync(path.join(ROOT,'src/utils.js'),'utf8')), '조 이름 한 벌(workingShiftName)이 utils 에 없다');
 T(!/function _currentShift\(nowMs\) \{\n  const d/.test(fs.readFileSync(path.join(ROOT,'src/chiefAnswers.js'),'utf8')), '조 경계가 두 벌이다 — chiefAnswers 가 제 것을 다시 갖고 있다');
 T(!/L\.push\(`[^`]*전근무자/.test(nlSrc), '«전근무자 작업분 등» 짐작이 답으로 되살아났다 — 첫 조인 배에서 거짓말이 된다');
-T(/주간조 앱 미사용/.test(all), '낭독에서 «주간조 앱 미사용» 이 빠졌다');
+T(/완료 32/.test(all) && /잔여 319/.test(all), `낭독에서 진행 줄(완료 32 · 잔여 319)이 빠졌다 — ${all.slice(0, 200)}`);
 
 //  2.65-02: 브리핑 낭독은 답이 실시간으로 바뀌어도 다시 시작하지 않는다(질문 기준 한 번).
 const vp = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');

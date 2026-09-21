@@ -4,7 +4,7 @@ import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { terminalWorkFor, voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
+import { voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
@@ -213,7 +213,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //    배정목록이 이 쪽 0 이면 이 화면은 **아무것도 안 보여준다** — 요약·시퀀스·목록·검증·예상EDI 전부.
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — 이 상수는 **VoyagePage 안**에 있어야 한다(2.50-01 교훈:
   //      ListTab 안에 두면 voyage 가 없어 렌더가 통째로 죽는다. 실제로 한 번 밟았다).
-  const _sideCanc = sideCancelled(voyage?.info, mode, terminalWorkFor(voyage?.info, terminalWork));
+  const _sideCanc = sideCancelled(voyage?.info, mode);
 
 
 
@@ -1200,10 +1200,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     doneAtsAll: voyageDoneAts(voyage),
     //  ★ 2.62: 조 단위 갱 배분 — **함수로** 싣는다(값으로 실으면 memo 가 낡아 «일이 끝나가도 답이 같다»).
     //    InlineAnswerCard 는 voyage 를 안 받는다(1.98·2.50-01 교훈) — 여기서 클로저로 감싼다.
-    gangBrief: () => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return gangBriefLines(buildGangShift(voyage, de, { tw: terminalWorkFor(voyage?.info, terminalWork), compMap: compMap || null })); } catch (e) { return null; } },
-    gangShift: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return answerGangShift(voyage, de, { nGangs: n || null, tw: terminalWorkFor(voyage?.info, terminalWork), compMap: compMap || null }); } catch (e) { return null; } },
+    gangBrief: () => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return gangBriefLines(buildGangShift(voyage, de, { compMap: compMap || null })); } catch (e) { return null; } },
+    gangShift: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return answerGangShift(voyage, de, { nGangs: n || null, compMap: compMap || null }); } catch (e) { return null; } },
     //  2.63: 스트립용 구조 데이터 — 그림은 GangStrip 이 그린다(계산은 buildGangShift 한 벌).
-    gangShiftData: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return buildGangShift(voyage, de, { nGangs: n || null, tw: terminalWorkFor(voyage?.info, terminalWork), compMap: compMap || null }); } catch (e) { return null; } },
+    gangShiftData: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return buildGangShift(voyage, de, { nGangs: n || null, compMap: compMap || null }); } catch (e) { return null; } },
     //  ★ 3.8: 호기별 검수원·작업량 — 함수로 싣는다(InlineAnswerCard 는 voyage 를 안 받는다 · 값으로 실으면 memo 가 낡는다).
     crewAnswer: (cq) => { try { return answerCraneCrew(voyage, cq); } catch (e) { console.warn('[3.8] 호기 검수원 답 실패', e); return null; } },
     //  ★ 2.52-01 — **완료 표를 같이 싣는다.** 이 화면의 `containers` 에는 `_comp` 가 없다.
