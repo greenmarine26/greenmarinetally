@@ -172,6 +172,14 @@ function boot(opts) {
     if (t >= 80) deckRows++; else if (t >= 0) holdRows++;
   }
   T(deckRows > 0 && holdRows > 0, `갑판 ${deckRows}줄 · 선창 ${holdRows}줄 — 둘 다 그린다`);
+  //  ★ 2.53-01 — 줄은 골격대로 **다** 그린다(검수사 «06에 작업 대상이 없으면 02 04 만 보여줘서 혼동»). 반쪽마다 티어 표가 그 베이 골격(deckTiers·holdTiers)을 전부 품어야 한다.
+  {
+    const want = [90, 88, 86, 84, 82, 10, 8, 6, 4, 2];   // SWBT 사전(픽스처 baysSummary) — 모든 베이가 같은 골격
+    const miss = boxes.map(b => { const ts = new Set([...b.querySelectorAll('.tw-tl')].map(x => parseInt(x.textContent, 10))); return want.filter(t => !ts.has(t)); });
+    T(miss.every(m => !m.length), `반쪽마다 골격 티어 10줄(90~82·10~02)을 다 그린다 — 작업분 없는 단도 빈 줄로${miss.some(m => m.length) ? ' (빠짐 ' + miss.map(m => m.join('/')).join(' | ') + ')' : ''}`);
+    const emptyRows = [...d.querySelectorAll('.tw-r')].filter(r => [...r.querySelectorAll('.tw-c')].every(c => c.classList.contains('gap')));
+    T(emptyRows.length > 0, `작업분이 하나도 없는 단이 빈 줄로 ${emptyRows.length}개 그려진다(종전엔 그 줄 자체가 없었다)`);
+  }
   T(d.querySelectorAll('.tw-r.sea').length === boxes.filter(b => {
     const ts = [...b.querySelectorAll('.tw-tl')].map(x => parseInt(x.textContent, 10));
     return ts.some(t => t >= 80) && ts.some(t => t < 80);
