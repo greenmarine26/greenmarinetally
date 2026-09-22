@@ -20,6 +20,9 @@ ok(M.matchSheetRuns([runs[0]], F.candidates).filter((r) => r.cn).length >= 29, '
 { const d = runs[2].filter((r) => r.slot === '150404');   // 세 번째 실응답은 15-04-04 를 두 번 냈다(하나는 13-04-04) — 버리지 않고 둘 다 확인 필요
   const m = M.matchSheetItems(runs[2], F.candidates).filter((r) => r.slot === '150404');
   ok(d.length === 2 && d.every((r) => r.dupSlot) && m.every((r) => !r.cn), `같은 칸 번호가 두 번 읽히면 둘 다 «확인 필요» 로 남는다 (${d.length}행)`); }
+{ const t = F.runs[0]; const cut = t.slice(0, t.indexOf('}', t.indexOf('130404')) + 1) + ' {"slot":"1306';   // 검수사 폰 실측 — AI 가 JSON 을 깨뜨려 보냄
+  const r = M.parseSheetResponse(cut.replace('}, {', '} {'));
+  ok(r.length >= 2, `깨진 JSON 이 와도 성한 칸은 읽는다 (${r.length}칸)`); }
 ok(M.isoOk('EAXU2045294') && !M.isoOk('EAXU2045295'), 'ISO 체크디지트');
 const CONE = fs.readFileSync(path.join(__dirname, '../public/cone.html'), 'utf8');
 ok(/function ctDrawRows\(mode\)/.test(CONE) && (CONE.match(/ctDrawRows\(/g) || []).length >= 4, '콘앱이 계획 밖 선적 기록도 그린다(ctDrawRows)');

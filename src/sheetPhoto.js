@@ -43,7 +43,15 @@ export function parseSheetResponse(resp) {
   if (resp && typeof resp === 'object') text = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const m = String(text || '').match(/\{[\s\S]*\}/);
   if (!m) throw new Error('기록지 판독 결과를 못 읽었어요 — 사진을 다시 찍어 주세요.');
-  const j = JSON.parse(m[0]);
+  let j;
+  try { j = JSON.parse(m[0]); } catch (e) {
+    //  AI 가 JSON 을 한 군데 깨뜨려 보낼 때가 있다(검수사 폰 실측 2026-09-22 «Expected ',' or ']' after array element … line 30») —
+    //  통째로 버리지 않고 칸 하나하나({ … slot … })를 따로 풀어 성한 칸만 쓴다. 깨진 칸은 빠지고 두 번 읽기에서 «한 번만 읽힌 칸» 으로 남는다.
+    const items = [];
+    for (const one of String(m[0]).slice(1).match(/\{[^{}]*\}/g) || []) { try { const o = JSON.parse(one); if (o && o.slot) items.push(o); } catch (e2) { /* 깨진 칸 하나 — 건너뛴다 */ } }
+    if (!items.length) throw new Error('기록지 판독 결과가 깨져 왔어요 — 한 번 더 눌러 주세요.');
+    j = { items };
+  }
   const seen = new Map(); const out = [];   // 같은 칸이 두 번 나오면 버리지 않고 둘 다 «확인 필요» — 한 칸은 다른 칸을 잘못 읽은 것이다(실측 13-04-04 를 «15-04-04» 로 두 번째 읽음)
   for (const it of (Array.isArray(j.items) ? j.items : [])) {
     const slot = String(it.slot || '').replace(/\D/g, '');
