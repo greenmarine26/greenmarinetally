@@ -42,7 +42,12 @@ console.log('\n[2] 데크에서 작업 중이면 데크와 홀드가 한 줄기�
 const deck = run({ mode: 'discharge', tier: 84, bay: 22, pair: 22, t1: 82, stale: false });
 const labs = labsOf(deck);
 T(labs.some(x => x[0] !== 'H') && labs.some(x => x[0] === 'H'), `데크·홀드가 한 그림에 있다 — ${labs.join(' ')}`);
-T(labs.length === FX.expectTiers, `단 수 ${labs.length} (실데이터 기대 ${FX.expectTiers})`);
+//  ★ 2.53-02 — 단은 **베이사전 골격 전부**(MCAP 22: 데크 92~82 여섯 + 홀드 12~02 여섯 = 12). 종전 기대 8 은 «평택분이 실린 단만» 이라
+//    검수사가 지적한 바로 그 증상(«06에 작업 대상이 없으면 02 04 만 보여줘서 혼동»)이었다. 실린 단 8(FX.expectTiers)은 골격 안에 다 들어 있어야 한다.
+const skelN = FX.bs.deckTiers.length + FX.bs.holdTiers.length;
+T(labs.length === skelN, `단 수 ${labs.length} — 골격 ${skelN}단 전부(실린 단 ${FX.expectTiers} 포함)`);
+T((deck.match(/ct-slot void/g) || []).length > 0, `평택분 없는 단(92·12단)은 옅은 칸(void)으로 모양만 그린다`);
+T(/>—</.test(deck), `빈 단의 개수 칸은 «—» (0/0 이 아니다)`);
 const iH = labs.findIndex(x => x[0] === 'H');
 T(iH > 0 && labs.slice(iH).every(x => x[0] === 'H'), '위가 데크·아래가 홀드 순서다');
 
