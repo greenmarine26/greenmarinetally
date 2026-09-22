@@ -44,15 +44,16 @@ export function parseSheetResponse(resp) {
   const m = String(text || '').match(/\{[\s\S]*\}/);
   if (!m) throw new Error('기록지 판독 결과를 못 읽었어요 — 사진을 다시 찍어 주세요.');
   const j = JSON.parse(m[0]);
-  const seen = new Set(); const out = [];
+  const seen = new Map(); const out = [];   // 같은 칸이 두 번 나오면 버리지 않고 둘 다 «확인 필요» — 한 칸은 다른 칸을 잘못 읽은 것이다(실측 13-04-04 를 «15-04-04» 로 두 번째 읽음)
   for (const it of (Array.isArray(j.items) ? j.items : [])) {
     const slot = String(it.slot || '').replace(/\D/g, '');
-    if (slot.length !== 6 || seen.has(slot)) continue;
-    seen.add(slot);
-    out.push({ slot, bay: slot.slice(0, 2), row: slot.slice(2, 4), tier: slot.slice(4, 6),
+    if (slot.length !== 6) continue;
+    const o = { slot, bay: slot.slice(0, 2), row: slot.slice(2, 4), tier: slot.slice(4, 6),
       prefix: String(it.hand_prefix || '').toUpperCase().replace(/[^A-Z]/g, ''),
       digits: String(it.hand_digits || '').replace(/[^0-9?]/g, ''),
-      printed: String(it.printed_cn || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), sure: it.sure !== false });
+      printed: String(it.printed_cn || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), sure: it.sure !== false };
+    if (seen.has(slot)) { o.dupSlot = true; seen.get(slot).dupSlot = true; } else seen.set(slot, o);
+    out.push(o);
   }
   return out;
 }
@@ -93,8 +94,8 @@ export function matchSheetItems(items, candidates) {
       return { cn: c, score: dd * 3 + pd, dd };
     }).sort((a, b) => a.score - b.score);
     const b1 = sc[0] || null, b2 = sc[1] || null;
-    const auto = !!b1 && b1.dd <= 2 && (!b2 || (b2.score - b1.score) >= 2);
-    const r = { ...it, cn: auto ? b1.cn : null, best: b1 && b1.cn, second: b2 && b2.cn, why: auto ? '' : (b1 ? `숫자를 ${b1.dd}자리 다르게 읽었어요 — 확인해 주세요` : '후보가 없어요') };
+    const auto = !it.dupSlot && !!b1 && b1.dd <= 2 && (!b2 || (b2.score - b1.score) >= 2);
+    const r = { ...it, cn: auto ? b1.cn : null, best: b1 && b1.cn, second: b2 && b2.cn, why: auto ? '' : it.dupSlot ? '같은 칸 번호가 두 번 읽혔어요 — 칸 번호를 확인해 주세요' : (b1 ? `숫자를 ${b1.dd}자리 다르게 읽었어요 — 확인해 주세요` : '후보가 없어요') };
     if (r.cn) taken.set(r.cn, (taken.get(r.cn) || 0) + 1);
     return r;
   });

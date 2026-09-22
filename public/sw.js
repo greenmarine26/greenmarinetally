@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.58';
-const NOTE = '손으로 적은 선적 기록지를 사진으로 찍어 넣으면 선적 자리가 들어갑니다 — 검수 탭 선적에서 기록지 사진 버튼. 콘앱도 그 자리를 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.58-01';
+const NOTE = '기록지 사진 — 칸 번호를 잘못 읽은 칸은 확인 필요로 남기고 칸 번호도 표에서 고칠 수 있습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

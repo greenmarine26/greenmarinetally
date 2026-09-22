@@ -41,6 +41,11 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
     if (!list.length) return;
     const dup = list.map((r) => r.pick).filter((c, i, a) => a.indexOf(c) !== i);
     if (dup.length) { setErr(`같은 컨이 두 칸에 있어요: ${Array.from(new Set(dup)).join(', ')}`); return; }
+    const slots = list.map((r) => `${r.bay}${r.row}${r.tier}`);
+    const badSlot = list.filter((r) => !/^\d{6}$/.test(`${r.bay}${r.row}${r.tier}`)).map((r) => r.pick);
+    if (badSlot.length) { setErr(`칸 번호는 여섯 자리(베이·열·단)로 적어 주세요: ${badSlot.join(', ')}`); return; }
+    const dupS = slots.filter((c, i, a) => a.indexOf(c) !== i);
+    if (dupS.length) { setErr(`한 칸에 컨이 둘이에요: ${Array.from(new Set(dupS)).join(', ')} — 칸 번호를 고쳐 주세요`); return; }
     if (!window.confirm(`${list.length}대의 선적 자리를 기록할까요?\n(이미 같은 자리인 컨은 건너뜁니다)`)) return;
     setBusy('기록하는 중…'); setErr('');
     const by = inspector || ''; const equip = getEquipNumber ? (getEquipNumber() || '') : '';
@@ -82,9 +87,12 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
                   {rows.map((r, i) => {
                     const now = posOf(r.pick); const same = now === `${r.bay}-${r.row}-${r.tier}`;
                     return (
-                      <tr key={r.slot} className={`border-t border-line ${r.cn ? '' : 'bg-amber-900/30'}`} data-slot={r.slot}>
+                      <tr key={i} className={`border-t border-line ${r.cn ? '' : 'bg-amber-900/30'}`} data-slot={r.slot}>
                         <td className="p-1"><input type="checkbox" checked={r.use} onChange={(e) => setRow(i, { use: e.target.checked })} aria-label={`${r.slot} 넣기`} /></td>
-                        <td className="p-1 font-bold text-white">{r.bay}-{r.row}-{r.tier}</td>
+                        <td className="p-1">
+                          <input value={`${r.bay}${r.row}${r.tier}`} inputMode="numeric" onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setRow(i, { bay: v.slice(0, 2), row: v.slice(2, 4), tier: v.slice(4, 6) }); }}
+                            className={`w-16 bg-ink-950 border rounded px-1 py-0.5 font-mono font-bold ${r.dupSlot ? 'border-amber-400 text-amber-200' : 'border-line text-white'}`} aria-label={`${r.slot} 칸 번호`} />
+                        </td>
                         <td className="p-1">
                           <input value={r.pick} onChange={(e) => setRow(i, { pick: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) })}
                             className={`w-28 bg-ink-950 border rounded px-1 py-0.5 font-mono ${isoOk(r.pick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.slot} 컨번호`} />
