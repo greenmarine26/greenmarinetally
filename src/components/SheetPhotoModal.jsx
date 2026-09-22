@@ -71,10 +71,17 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
           <button type="button" onClick={onClose} className="w-9 h-9 rounded bg-ink-800 border border-line text-dim-100" aria-label="닫기">✕</button>
         </div>
         <div className="text-2xs text-dim-300 mb-2 leading-relaxed">베이플랜 인쇄물에 손으로 고쳐 적은 기록지를 한 장이 다 나오게 위에서 찍어 주세요. 미르가 칸마다 손글씨 번호를 읽고, 이 배의 컨 목록(선적 계획·시프팅 {cands.length}대)과 맞춰 봅니다. 확인한 뒤에 기록합니다.</div>
-        <label className="block w-full text-center py-3 rounded-lg bg-amber-500 text-[#1a1206] font-black text-sm cursor-pointer">
-          사진 찍기 · 고르기
-          <input id="sheetPhotoIn" type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
-        </label>
+        {/* 3.58-04: capture 가 붙으면 폰이 카메라만 연다(검수사 «카메라로 찍어야만 되게 되어 있음 앨범에서 선택되고 해주면») — 찍기와 앨범 두 단추로 나눈다 */}
+        <div className="flex gap-2">
+          <label className="flex-1 text-center py-3 rounded-lg bg-amber-500 text-[#1a1206] font-black text-sm cursor-pointer">
+            📷 사진 찍기
+            <input id="sheetPhotoCam" type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
+          </label>
+          <label className="flex-1 text-center py-3 rounded-lg bg-ink-800 border-2 border-amber-500 text-amber-200 font-black text-sm cursor-pointer">
+            🖼 앨범에서 고르기
+            <input id="sheetPhotoIn" type="file" accept="image/*" className="hidden" onChange={onFile} />
+          </label>
+        </div>
         {busy && <div className="mt-2 text-xs text-amber-200 font-bold animate-pulse">{busy}</div>}
         {err && <div className="mt-2 text-xs text-red-300 font-bold">⚠ {err}</div>}
         {rows && rows.length > 0 && (
