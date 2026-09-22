@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.58-02';
-const NOTE = '기록지 사진 — 판독 오류(JSON)로 멈추던 것을 고쳤습니다. 다시 찍어 넣어 보세요';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.58-03';
+const NOTE = '기록지 사진으로 넣은 자리가 베이 그림에 제자리로 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -1113,6 +1113,9 @@ export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actual
   } catch { /* 이력을 못 읽어도 좌표 저장은 진행 */ }
   const _to = actualBay ? `${actualBay}-${actualRow}-${actualTier}` : '';
   await update(r, {
+    //  3.58-03: 기록이 처음 생기는 컨(계획 밖 — 기록지 사진의 시프팅 재선적)은 `cn` 칸이 없어 화면이 그 기록을 못 찾았다
+    //    (XTPG 541E 24대 실측 — 베이 그림이 저장된 자리 대신 옛 자리를 그림). 키와 같은 값을 같이 적는다.
+    cn,
     bay_actual: actualBay || '',
     row_actual: actualRow || '',
     tier_actual: actualTier || '',
@@ -1777,6 +1780,12 @@ export function fbSubscribeVoyages(callback) {
     const v = snap.val() || {};
     for (const k of Object.keys(v)) {
       //  한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
+      //  3.58-03: `cn` 칸이 빠진 기록(자리만 적힌 새 기록 — 3.58-01~02 기록지 사진 저장분 XTPG 541E 24대)은 키로 채운다.
+      //    화면들이 기록을 `r.cn` 으로 찾으므로 빠지면 그 기록이 안 보이고 베이 그림이 옛 자리를 그렸다. 문지기는 들어오는 이 자리 한 곳.
+      for (const _m of ['discharge', 'loading']) {
+        const _rs = v[k] && v[k][_m] && v[k][_m].records;
+        if (_rs && typeof _rs === 'object') for (const _cn of Object.keys(_rs)) { const _r = _rs[_cn]; if (_r && typeof _r === 'object' && !_r.cn) _rs[_cn] = { ..._r, cn: _cn }; }
+      }
       try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[터미널 자리] 반영 실패 —', k, e); }
       try { v[k] = applyAutoSwap(v[k]); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
     }
