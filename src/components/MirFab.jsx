@@ -10,9 +10,13 @@
    ★ 3.41-01 (검수사 라이브 신고 2026-09-10) — ①«질문은 하고나면 그 질문이 계속 남아 있음» → 묻고 나면 칸을 비우고
      물은 말은 답 위에 작게 남긴다. ②«답변이 화면을 연 후에 한참 있다가 말을 함» → 말하기 전에 쌓인 발화를 전부 끊고(stopSpeak),
      플랜 명령은 말부터 하고 화면을 열며 시트를 내린다(플랜 위에 시트가 남지 않는다). ③«작업중인 선박 언제 끝나 하면 선박명을
-     쳐달라고 함» → 이름 대신 «작업중인 배» 라고 부르면 지금 일하는 배(utils.isWorkingNow 한 벌)로 답하고, 여럿이면 «어느 배?» 하고 되묻는다. */
+     쳐달라고 함» → 이름 대신 «작업중인 배» 라고 부르면 지금 일하는 배(utils.isWorkingNow 한 벌)로 답하고, 여럿이면 «어느 배?» 하고 되묻는다.
+   ★ 3.56 (검수사 2026-09-22 «미르에게 에니메이션을 추가») — 얼굴이 기분을 보인다. 판정은 `mir.js` [mirMood] 절 한 벌(콘앱과 같은 규칙)이고
+     여기는 ①20초마다·재료가 바뀔 때 다시 재고 ②질문(noteMirAsk)·열람(noteMirOpen)·못 답함(missed)·완료 대수 증가(workDone)·
+     작업 선박 선택(workPick)을 그 벌에 알리고 ③얼굴 버튼에 `mir-mood-<key>` 클래스와 작은 표시를 얹을 뿐이다. 그림은 검수사 그림 그대로다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import mirFaceUrl from '../assets/mir-face.png';
+import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import { answerOneRaw } from '../mir.js';
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
@@ -33,6 +37,7 @@ const CLEAN_RE = /[📋📌⚠↩·❄🔁📊📦📖🐱🐟😺😻🎵📍�
 
 export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null }) {
   const [open, setOpen] = useState(false);
+  const [mood, setMood] = useState(() => ({ ...MIR_MOODS.basic, why: '' }));   // 3.56: 지금 기분(표시용 사본 — 판정은 mir.js [mirMood])
   const [q, setQ] = useState('');
   const [asked, setAsked] = useState('');   // 3.41-01: 방금 물은 말 — 칸은 비우고 이것을 답 위에 남긴다
   const [out, setOut] = useState('');
@@ -48,6 +53,20 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const ediPattern = useEdiPattern();
   useEffect(() => subscribeMirCtx(setLive), []);
   const flat = useMemo(() => { try { return flattenVoyages(voyages); } catch (e) { console.warn('[미르] 전 항차 펼치기 실패:', e); return []; } }, [voyages]);
+
+  //  ★ 3.56 — 기분. 20초마다, 그리고 재료(항차·하트비트)나 기억(질문·열람·순간 감정)이 바뀔 때 다시 잰다.
+  const remood = useCallback(() => { try { setMood(currentMirMood(voyages, heartbeat)); } catch (e) { console.warn('[미르 기분] 판정 실패:', e); } }, [voyages, heartbeat]);
+  useEffect(() => { remood(); const t = setInterval(remood, 20000); const off = subscribeMirMood(remood); return () => { clearInterval(t); off(); }; }, [remood]);
+  //  기쁨 — 작업 완료. 완료를 쓰는 화면이 여섯 곳이라 호출부가 아니라 데이터에서 본다. **항차별** 완료 수를 기억해 «이미 보던 항차의 수가 늘었을 때»만 기쁨이다
+  //  (감사 지적 — 켤 때 자료가 비어 있다가 도착하는 것, 새 항차가 목록에 붙는 것, 남의 항차 첫 등장은 완료가 아니다). 작업 선박 선택의 기쁨은 App.handleSelectInspector 가 알린다.
+  const doneRef = useRef(null);
+  useEffect(() => {
+    const cur = {};
+    for (const [k, v] of Object.entries(voyages || {})) { let n = 0; for (const m of ['discharge', 'loading']) { const c = v && v[m] && v[m].completed; if (c && typeof c === 'object') n += Object.keys(c).length; } cur[k] = n; }
+    const prev = doneRef.current;
+    if (prev) { let up = 0; for (const [k, n] of Object.entries(cur)) if (k in prev && n > prev[k]) up += n - prev[k]; if (up > 0) mirMoodEvent('workDone', `${up}대 완료했어요!`); }
+    if (prev || Object.keys(cur).length) doneRef.current = cur;   // 자료가 아직 비어 있으면 기준을 잡지 않는다
+  }, [voyages]);
 
   //  수석 노드(feedback·tally_pending·archive)는 물었을 때 1회 — 홈 통합검색과 같은 절제(1.69: 자동 호출 금지).
   const ensureChiefData = useCallback(async (text, shipless) => {
@@ -99,6 +118,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     const t = String(text || '').trim();
     if (t.length < 2) return;
     setBusy(true); setOut('…'); setAsked(t); setQ('');   // 3.41-01: 칸은 비우고 물은 말은 위에 남긴다
+    noteMirAsk();                                           // 3.56: 시키는 일이 있었다 — 심심함 시계를 되감는다
     try { stopSpeak(); } catch (e) { /* */ }              // 3.41-01: 쌓인 발화를 끊는다 — 새 답이 옛 말 뒤에 줄 서지 않게
     try {
       //  ① 플랜 명령 — 열어 준다(홈 _askGlobal 과 같은 길). 배를 못 찾으면 붙이라고 말한다.
@@ -159,6 +179,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       try { applySideEffects(parseNaturalQuery(t), vk, useLive ? lv.voyage : (sc && sc.v), t); } catch (e) { /* */ }
       if (!a) {
         a = '그건 아직 못 배웠어요 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.';
+        mirMoodEvent('missed', `«${t}» 못 배웠어요`);   // 3.56: 슬픔 — 답을 못 줬다
         if (!reportedRef.current.has(t) && /[가-힣]{2,}/.test(t)) {
           reportedRef.current.add(t);
           fbAddClaudeMemo({ kind: 'mir_unanswered', status: 'new', at: Date.now(), inspector: '미르(자동)', text: `미르 무응답 질문 — "${t}" (떠 있는 미르${vk ? ' · ' + vk : ''}). 답할 수 있게 배워서 반영할 것.` }).catch(() => { /* 신고 실패는 무해 */ });
@@ -199,15 +220,19 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const ctxLabel = live && live.voyageKey ? `${(live.info && live.info.vsl) || live.voyageKey} · ${live.mode === 'loading' ? '선적' : '양하'} 자료로 답해요` : '배 이름을 붙이면 그 항차로 답해요';
   return (
     <>
-      <button type="button" aria-label="미르에게 묻기" onClick={() => setOpen((o) => !o)}
-        className="fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95"
-        style={{ bottom: 76, background: `#f7f8fa url(${mirFaceUrl}) center/cover no-repeat` }} />
+      <button type="button" aria-label="미르에게 묻기" data-mood={mood.key} title={mood.key !== 'basic' ? `지금 ${mood.label}${mood.why ? ' — ' + mood.why : ''}` : ''}
+        onClick={() => { setOpen((o) => { if (!o) noteMirOpen(); return !o; }); }}
+        className={`fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95 mir-mood mir-mood-${mood.key}`}
+        style={{ bottom: 76, background: `#f7f8fa url(${mirFaceUrl}) center/cover no-repeat` }}>
+        {mood.badge && <span className="mir-mood-badge" aria-hidden="true">{mood.badge}</span>}
+      </button>
       {open && (
         <div className="fixed left-0 right-0 bottom-0 z-[10002] bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-full flex-none" style={{ background: `#f7f8fa url(${mirFaceUrl}) center/cover no-repeat` }} />
+            <div className={`w-8 h-8 rounded-full flex-none mir-mood mir-mood-${mood.key}`} style={{ background: `#f7f8fa url(${mirFaceUrl}) center/cover no-repeat` }} />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-black text-white">미르에게 묻기</div>
+              <div className="text-xs font-black text-white">미르에게 묻기{mood.key !== 'basic' && <span className="ml-1.5 text-amber-300 font-bold">{mood.badge} {mood.label}</span>}</div>
+              {mood.why ? <div className="text-2xs text-amber-200 truncate">{mood.why}</div> : null}
               <div className="text-2xs text-dim-300 truncate">{ctxLabel} · "3426 온도" · "브리핑" · "접안 현측" · "마감텔리 수치"</div>
             </div>
             <button type="button" onClick={() => { setOpen(false); try { stopSpeak(); } catch (e) { /* */ } }} className="w-9 h-9 rounded bg-ink-800 border border-line text-dim-100">✕</button>

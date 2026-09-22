@@ -26,6 +26,7 @@ import { consumeUpdateResume } from './updateResume.js';   // 3.7-04: 업데이�
 import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
 import MirFab from './components/MirFab.jsx';   // 3.41: 떠 있는 미르 — 어느 화면에서든 모든 질문(검수사 2026-09-10)
+import { mirMoodEvent } from './mir.js';   // 3.56: 작업 선박을 새로 고르면 미르가 기뻐한다(확정 자리에서 알린다)
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
 import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
@@ -384,6 +385,8 @@ export default function App() {
     setActiveWorkChoice(ch);   // 문지기 캐시를 렌더보다 먼저 세운다(이 뒤의 setEquipNumber 가 곧바로 새 판정을 본다)
     setWorkChoice(ch);
     prevChoiceRef.current = null;
+    //  3.56: 검수사가 작업(배)을 **새로 골랐다** = 미르 기쁨. 선택 화면을 거치면 MirFab 이 내렸다 다시 오르므로 화면이 아니라 여기(확정 자리)서 알린다(감사 지적). 기억으로 복원된 것(choice 없음)은 아니다.
+    if (choice && ch.mode === 'work' && ch.voyageKey) { try { mirMoodEvent('workPick', `${String(ch.voyageKey).split('_')[0]} 작업 시작이에요!`)   /* useCallback([]) 안이라 voyages 는 stale — 항차키 앞이 선박코드다(재감사 지적) */; } catch (e) { console.warn('[미르 기분] 작업 선택 알림 실패:', e); } }
     //  3.51: 조회만을 골라도 **호기를 지우지 않는다** — 화면을 그 호기 관점으로 보기 위한 것이다(검수사 «장비 지정등을 사용하게 해야만»). 기록은 쓰기 문지기가 막는다.
     if (ch.equip) { setEquipNumber(ch.equip); window.dispatchEvent(new CustomEvent('equipChanged', { detail: ch.equip })); }
     fbSetInspectorChoice(name, ch).catch((e) => console.warn('[3.50] 작업자/조회 선택 기록 실패', e));

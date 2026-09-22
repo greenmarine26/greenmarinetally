@@ -20,14 +20,14 @@
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, isoToLabel, effectivePos, reeferTempOf,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
-  resolveCrewSides,
+  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, twinDiffLimit, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
   generateHowToAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
-  voyageReportSpan,
+  voyageReportSpan, WORK_SHIFTS,   // 3.56 [mirMood] 식사 창은 근무표 그대로
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
@@ -2249,4 +2249,167 @@ export async function askMir(q, ctx, rulesFn, opts = {}) {
   const m = await askMirModel(q, ctx, (cq) => rulesFn(cq, {}), { who: opts.who || ctx.inspector || '', weakText: rulesText, weakVia: trace.via || '' });
   if (m && m.text) return { text: m.text, via: m.via, weak, rulesText, trace, canonical: m.canonical };
   return { text: rulesText, via: rulesText ? 'rules' : null, weak, rulesText, trace, reason: m && m.reason };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// [mirMood] 기분 — 얼굴이 보이는 감정 한 벌 (3.56 신설, 검수사 «미르를 하나로» 원칙대로 mir.js 안에 둔다)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+/* ★ TallyOne 3.56 / ConeOne 2.52 (검수사 2026-09-22 «미르에게 에니메이션을 추가 … 심심함·배고픔·기쁨·슬픔·초조함»)
+   검수사 확정 규칙(2026-09-22 11:51 원문) —
+     «배고픔은 식사시간 10분전부터 식사시간 시작전까지 식후는 배부름을 표현
+      기쁨은 작업완료시나 검수사가 작업을 선택했을시
+      슬픔은 미르가 답을 못주거나 미르의 행동을 보고도 방치 할시
+      심심함은 말그대로 작업이 없을시나 질문이나 시키는일이 없을시»
+     초조함 = «자료가 안 들어 올 때»(2026-09-22 11:41).
+   ─ 판정 순서(하나만 보인다) ─
+     ① 순간 감정 12초 — 기쁨(작업 선택·완료) / 슬픔(못 답함)
+     ② 초조함 — 수집기 하트비트가 주기의 3배 넘게 끊김 · 시작 6시간 전~끝인데 계획 대수가 있는 쪽 EDI(dataAt) 없음
+                · 작업 중인 배의 완료 기록이 60분째 없음.  초조함을 30분 넘게 보이는데 미르를 한 번도 안 열면 → 슬픔(방치)
+     ③ 배고픔(식사 10분 전~시작) · 배부름(식사 시작~쉬는 시간 끝 30분 뒤) — 식사 창은 근무표 WORK_SHIFTS 의 빈 자리(티타임 30분은 제외)
+     ④ 심심함 — 작업 중인 배가 없다(utils.isWorkingNow 한 벌) · 30분 넘게 질문·명령이 없다
+     ⑤ 기본
+   ⚠ 감정은 기기 안에서만 계산한다. RTDB 에 쓰지 않는다. 판정을 화면마다 따로 만들지 않는다 — 여기 한 벌뿐이다. */
+
+export const MIR_MOODS = {
+  basic:   { key: 'basic',   label: '기본',   badge: '' },
+  happy:   { key: 'happy',   label: '기쁨',   badge: '♪' },
+  sad:     { key: 'sad',     label: '슬픔',   badge: '💧' },
+  anxious: { key: 'anxious', label: '초조함', badge: '💦' },
+  hungry:  { key: 'hungry',  label: '배고픔', badge: '🍚' },
+  full:    { key: 'full',    label: '배부름', badge: '😋' },
+  bored:   { key: 'bored',   label: '심심함', badge: '💤' },
+};
+
+const MIN = 60000;
+export const MOOD_EVENT_MS = 12 * 1000;      // 순간 감정이 보이는 시간
+export const MOOD_BORED_MS = 30 * MIN;        // 이만큼 아무 질문·명령이 없으면 심심함
+export const MOOD_NEGLECT_MS = 30 * MIN;      // 초조함을 이만큼 보이는데 안 열어 보면 슬픔
+export const MOOD_NO_DONE_MS = 60 * MIN;      // 작업 중인데 완료 기록이 이만큼 없으면 초조함
+export const MOOD_EDI_AHEAD_MS = 6 * 3600000; // 시작 이만큼 전부터 EDI 를 기다린다
+export const MOOD_MEAL_BEFORE_MIN = 10;       // 식사 몇 분 전부터 배고픔
+export const MOOD_FULL_AFTER_MIN = 30;        // 쉬는 시간 끝 몇 분 뒤까지 배부름
+
+/** 근무표의 빈 자리 = 쉬는 시간. 그중 60분 이상인 것이 식사다(티타임 30분 제외). [시작분, 끝분] 하루 기준. */
+export function mealWindows(pier) {
+  const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
+  const sorted = wins.slice().sort((a, b) => a[0] - b[0]);
+  const gaps = [];
+  let prev = 0;
+  for (const [a, b] of sorted) { if (a > prev) gaps.push([prev, a]); prev = Math.max(prev, b); }
+  if (prev < 1440) gaps.push([prev, 1440]);
+  //  자정을 걸치는 쉬는 시간(예: 23:30~24:00 + 00:00~01:00)은 한 끼로 합친다
+  if (gaps.length > 1 && gaps[0][0] === 0 && gaps[gaps.length - 1][1] === 1440) {
+    const last = gaps.pop(); gaps[0] = [last[0] - 1440, gaps[0][1]];
+  }
+  return gaps.filter(([a, b]) => b - a >= 60);
+}
+
+/** 지금이 식사 앞뒤 어디인지. { phase:'hungry'|'full', label } 또는 null. */
+export function mealPhase(now, pier) {
+  const d = new Date(now);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  for (const [a, b] of mealWindows(pier)) {
+    for (const off of [0, -1440, 1440]) {   // 자정 걸침 대비 어제·내일 창도 같이 본다
+      const s = a + off, e = b + off;
+      if (mins >= s - MOOD_MEAL_BEFORE_MIN && mins < s) return { phase: 'hungry', label: `${_mmHHMM(s)} 식사 ${s - mins}분 전` };
+      if (mins >= s && mins < e + MOOD_FULL_AFTER_MIN) return { phase: 'full', label: `${_mmHHMM(s)}~${_mmHHMM(e)} 식사` };
+    }
+  }
+  return null;
+}
+function _mmHHMM(m) { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; }
+
+function pierOf(voyage) {
+  const info = (voyage && voyage.info) || {};
+  return getPierFromBerth(info.berth || info.berthNo || '') || String(info.pier || '').toUpperCase() || 'PCTC';
+}
+
+/** 자료가 안 들어오는 이유들. 없으면 []. heartbeat = collector_heartbeat { at, cycleMin } */
+export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
+  const r = [];
+  if (heartbeat && Number(heartbeat.at)) {
+    const cyc = (Number(heartbeat.cycleMin) || 5) * MIN;
+    const gap = now - Number(heartbeat.at);
+    if (gap > 3 * cyc) r.push(`수집기가 ${Math.round(gap / MIN)}분째 조용해요`);
+  }
+  for (const v of Object.values(voyages || {})) {
+    if (!v || !v.info) continue;
+    const info = v.info; const vsl = info.vsl || '';
+    const s = voyagePlanMs(v), e = voyagePlanEndMs(v);
+    if (s && (s - now) <= MOOD_EDI_AHEAD_MS && (!e || now < e)) {
+      for (const [mode, cnt, ko] of [['discharge', info.planDis, '양하'], ['loading', info.planLod, '선적']]) {
+        if (!(Number(cnt) > 0)) continue;
+        if ((v[mode] && v[mode].dataAt) || (v[mode] && v[mode].ediContainers)) continue;
+        const h = (s - now) / 3600000;
+        r.push(`${vsl} ${ko} EDI가 아직이에요 (${h > 0 ? Math.max(1, Math.round(h)) + '시간 뒤 시작' : '작업 시간인데'})`);
+      }
+    }
+    if (isWorkingNow(v, now)) {
+      let last = 0, any = false;
+      for (const mode of ['discharge', 'loading']) {
+        const comp = v[mode] && v[mode].completed;
+        if (!comp || typeof comp !== 'object') continue;
+        for (const c of Object.values(comp)) { const at = c && Number(c.at); if (at) { any = true; if (at > last) last = at; } }
+      }
+      if (any && now - last > MOOD_NO_DONE_MS) r.push(`${vsl} 완료 기록이 ${Math.round((now - last) / MIN)}분째 없어요`);
+    }
+  }
+  return r;
+}
+
+/**
+ * 기분 한 벌. 입력은 전부 읽기 전용이다.
+ * @param {object} p  { now, voyages, heartbeat, lastAskAt, lastEvent:{at,kind,why}, anxiousSince, openedAt, pier }
+ * @returns {{ key, label, badge, why }}
+ */
+export function mirMoodNow(p = {}) {
+  const now = Number(p.now) || Date.now();
+  const ev = p.lastEvent;
+  if (ev && Number(ev.at) && now - Number(ev.at) < MOOD_EVENT_MS) {
+    if (ev.kind === 'workPick' || ev.kind === 'workDone') return { ...MIR_MOODS.happy, why: ev.why || '' };
+    if (ev.kind === 'missed') return { ...MIR_MOODS.sad, why: ev.why || '' };
+  }
+  const reasons = anxiousReasons(p.voyages, p.heartbeat, now);
+  if (reasons.length) {
+    const since = Number(p.anxiousSince) || 0;
+    const opened = Number(p.openedAt) || 0;
+    if (since && now - since > MOOD_NEGLECT_MS && opened < since) {
+      return { ...MIR_MOODS.sad, why: `${Math.round((now - since) / MIN)}분째 말했는데 봐 주지 않아요 — ${reasons[0]}` };
+    }
+    return { ...MIR_MOODS.anxious, why: reasons.slice(0, 2).join(' · ') };
+  }
+  const working = Object.values(p.voyages || {}).filter((v) => v && v.info && isWorkingNow(v, now));
+  const pier = p.pier || (working[0] ? pierOf(working[0]) : 'PCTC');
+  const meal = mealPhase(now, pier);
+  if (meal) {
+    if (meal.phase === 'hungry') return { ...MIR_MOODS.hungry, why: `${meal.label} — 곧 밥 시간이에요` };
+    return { ...MIR_MOODS.full, why: `${meal.label} — 잘 먹었어요` };
+  }
+  if (!working.length) return { ...MIR_MOODS.bored, why: '지금 작업 중인 배가 없어요' };
+  const la = Number(p.lastAskAt) || 0;
+  if (!la || now - la > MOOD_BORED_MS) {
+    const names = working.map((v) => v.info.vsl).filter(Boolean).slice(0, 3).join('·');
+    return { ...MIR_MOODS.bored, why: `${names} 작업 중인데 ${la ? Math.round((now - la) / MIN) + '분' : '한참'} 넘게 시키는 일이 없어요` };
+  }
+  return { ...MIR_MOODS.basic, why: '' };
+}
+
+/* ── 기기 안 기억(한 벌) — 화면들이 같은 시계를 본다. RTDB 에 쓰지 않는다. */
+//  lastAskAt 은 앱을 켠 시각에서 시작한다 — 켜자마자 «한참 시키는 일이 없어요» 가 뜨지 않게(감사 지적). 시키는 일 = 질문·작업 선택·완료 기록.
+const _moodSt = { lastAskAt: Date.now(), lastEvent: null, anxiousSince: 0, openedAt: 0, lastKey: '' };
+const _moodSubs = new Set();
+function _moodEmit() { for (const f of _moodSubs) { try { f(); } catch (e) { console.warn('[미르 기분] 구독자 실패:', e); } } }
+export function noteMirAsk(now = Date.now()) { _moodSt.lastAskAt = now; _moodEmit(); }
+export function noteMirOpen(now = Date.now()) { _moodSt.openedAt = now; _moodEmit(); }
+/** kind: 'workPick' | 'workDone' | 'missed' */
+export function mirMoodEvent(kind, why = '', now = Date.now()) { _moodSt.lastEvent = { kind, why, at: now }; if (kind === 'workPick' || kind === 'workDone') _moodSt.lastAskAt = now; _moodEmit(); }
+export function subscribeMirMood(f) { _moodSubs.add(f); return () => _moodSubs.delete(f); }
+export function mirMoodState() { return { ..._moodSt }; }
+/** 지금 기분 — 기억(질문·열람·순간 감정)을 얹어 판정하고, 초조함이 시작된 시각을 기억해 둔다. */
+export function currentMirMood(voyages, heartbeat, now = Date.now(), pier) {
+  const reasons = anxiousReasons(voyages, heartbeat, now);
+  if (reasons.length) { if (!_moodSt.anxiousSince) _moodSt.anxiousSince = now; } else _moodSt.anxiousSince = 0;
+  const m = mirMoodNow({ now, voyages, heartbeat, pier, lastAskAt: _moodSt.lastAskAt, lastEvent: _moodSt.lastEvent, anxiousSince: _moodSt.anxiousSince, openedAt: _moodSt.openedAt });
+  _moodSt.lastKey = m.key;
+  return m;
 }

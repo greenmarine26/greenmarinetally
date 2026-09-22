@@ -1,0 +1,227 @@
+{
+ "snapshotAt": "2026-09-22 11:43 KST",
+ "heartbeat": {
+  "at": 1790044973323,
+  "autoreg": {
+   "done": 0,
+   "flagged": 0,
+   "retracted": 0
+  },
+  "cycleMin": 5,
+  "version": "MailPilot 2.36-12 (2026-09-21)"
+ },
+ "voyages": {
+  "ATPR_2643W": {
+   "info": {
+    "vsl": "ATPR",
+    "voy": "2643W",
+    "planDate": "2026-09-23 19:00 ~ 2026-09-24 12:00",
+    "planDis": 0,
+    "planLod": 0,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "mail"
+   }
+  },
+  "DJCF_0151N": {
+   "info": {
+    "vsl": "DJCF",
+    "voy": "0151N",
+    "planDate": "2026-09-29 08:00 ~ 2026-09-30 00:00",
+    "planDis": 300,
+    "planLod": 300,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   }
+  },
+  "DXQD_2638E": {
+   "info": {
+    "vsl": "DXQD",
+    "voy": "2638E",
+    "planDate": "2026-09-28 13:00 ~ 2026-09-29 09:00",
+    "planDis": 0,
+    "planLod": 0,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   }
+  },
+  "KBTR_2607E": {
+   "info": {
+    "vsl": "KBTR",
+    "voy": "2607E",
+    "planDate": "2026-09-26 08:00 ~ 2026-09-26 17:00",
+    "planDis": 200,
+    "planLod": 200,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   }
+  },
+  "MCSN_637N": {
+   "info": {
+    "vsl": "MCSN",
+    "voy": "637N",
+    "planDate": "2026-09-27 08:00 ~ 2026-09-28 00:00",
+    "planDis": 300,
+    "planLod": 300,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   }
+  },
+  "NSDC_2609N": {
+   "info": {
+    "vsl": "NSDC",
+    "voy": "2609N",
+    "planDate": "2026-09-29 00:30 ~ 2026-09-29 11:00",
+    "planDis": 0,
+    "planLod": 0,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   }
+  },
+  "NSFR_2618N": {
+   "info": {
+    "vsl": "NSFR",
+    "voy": "2618N",
+    "planDate": "2026-09-26 19:00 ~ 2026-09-27 06:00",
+    "planDis": 200,
+    "planLod": 200,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   }
+  },
+  "OBWH_2747E": {
+   "info": {
+    "vsl": "OBWH",
+    "voy": "2747E",
+    "planDate": "2026-09-23 10:30 ~ 2026-09-23 19:30",
+    "planDis": 0,
+    "planLod": 0,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "pilot"
+   }
+  },
+  "PCSZ_2628E": {
+   "info": {
+    "vsl": "PCSZ",
+    "voy": "2628E",
+    "planDate": "2026-09-23 01:00 ~ 2026-09-23 21:00",
+    "planDis": 621,
+    "planLod": 241,
+    "terminalStatus": "working",
+    "workStartAt": "",
+    "workEndAt": "",
+    "berth": "동부두 7번선석",
+    "pier": "PCTC",
+    "planSrc": "plan"
+   },
+   "discharge": {
+    "dataAt": 1790043300538
+   },
+   "loading": {
+    "dataAt": 1790043303602
+   }
+  },
+  "RZOR_R104E": {
+   "info": {
+    "vsl": "RZOR",
+    "voy": "R104E",
+    "planDate": "2026-09-23 15:30 ~ 2026-09-23 22:30",
+    "planDis": 0,
+    "planLod": 0,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "pilot"
+   }
+  },
+  "STSE_2673E": {
+   "info": {
+    "vsl": "STSE",
+    "voy": "2673E",
+    "planDate": "2026-09-22 22:00 ~ 2026-09-23 23:00",
+    "planDis": 522,
+    "planLod": 470,
+    "terminalStatus": "working",
+    "workStartAt": "",
+    "workEndAt": "",
+    "berth": "동부두 7번선석",
+    "pier": "PCTC",
+    "planSrc": "plan"
+   },
+   "discharge": {
+    "dataAt": 1790040309059
+   },
+   "loading": {
+    "dataAt": 1790040314423
+   }
+  },
+  "SWTD_9014E": {
+   "info": {
+    "vsl": "SWTD",
+    "voy": "9014E",
+    "planDate": "2026-09-23 19:00 ~ 2026-09-24 14:00",
+    "planDis": 500,
+    "planLod": 200,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   },
+   "loading": {
+    "dataAt": 1790043306365
+   }
+  },
+  "TMPZ_2030E": {
+   "info": {
+    "vsl": "TMPZ",
+    "voy": "2030E",
+    "planDate": "2026-09-26 19:00 ~ 2026-09-27 06:00",
+    "planDis": 0,
+    "planLod": 0,
+    "terminalStatus": "planned",
+    "workStartAt": "",
+    "workEndAt": "",
+    "planSrc": "plan"
+   },
+   "discharge": {
+    "dataAt": 1789787159521
+   }
+  },
+  "XTPG_541E": {
+   "info": {
+    "vsl": "XTPG",
+    "voy": "541E",
+    "planDate": "2026-09-22 14:00 ~ 2026-09-23 00:00",
+    "planDis": 78,
+    "planLod": 144,
+    "terminalStatus": "working",
+    "workStartAt": "",
+    "workEndAt": "",
+    "berth": "동부두 6번선석",
+    "pier": "PCTC",
+    "planSrc": "plan"
+   },
+   "discharge": {
+    "dataAt": 1789991225459
+   },
+   "loading": {
+    "dataAt": 1789996900603
+   }
+  }
+ }
+}

@@ -309,6 +309,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 해치 자동 판정 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HAM" "$SMOKE_HAO"; exit 1
   fi
+  # 3.56: 미르 기분 — 실 RTDB 스냅샷(2026-09-22 항차 14·하트비트)으로 src/mir.js [mirMood] 를 실소스 그대로 돌려 검수사 규칙(배고픔 10분 전·식후 배부름·기쁨=작업 선택/완료·슬픔=못 답함/방치·심심함=작업 없음/30분·초조함=자료 안 옴)과 대조한다. 콘앱도 같은 벌을 쓴다.
+  SMOKE_MMM=$(mktemp /dev/shm/hometmp/_mmm_XXXXXX.mjs)
+  SMOKE_MMO=$(mktemp /dev/shm/hometmp/_mmo_XXXXXX.cjs)
+  printf 'export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, mirMoodState, mealWindows, mealPhase, anxiousReasons, MIR_MOODS } from "%s/src/mir.js";\n' "$PWD" > "$SMOKE_MMM"
+  if npx esbuild "$SMOKE_MMM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --outfile="$SMOKE_MMO" --log-level=error; then
+    node tools/smoke_mirmood.cjs "$SMOKE_MMO" || { echo "✗ 미르 기분 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1; }
+    rm -f "$SMOKE_MMM" "$SMOKE_MMO"
+  else
+    echo "✗ 미르 기분 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1
+  fi
   # 3.50-02: 캔슬 리스트 — SWSP 2609S 실자료 사본(records 400 · EDI 813 · 취소 요청 13)으로 «취소분은 EDI에 없는 컨이 아니다»·파일명 판정·리스트에서 빼기·자동 등록 분류를 실소스 그대로 잰다.
   SMOKE_CLM=$(mktemp /dev/shm/hometmp/_clm_XXXXXX.mjs)
   SMOKE_CLO=$(mktemp /dev/shm/hometmp/_clo_XXXXXX.cjs)

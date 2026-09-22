@@ -67,3 +67,4 @@ export { parseViewCommand, pickVoyageKey };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };
+export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';   // 3.56 / 2.52: 미르 기분 한 벌 — 콘앱 얼굴도 같은 규칙으로 움직인다

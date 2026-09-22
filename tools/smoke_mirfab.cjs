@@ -4,6 +4,7 @@
 //   3.41-01 — ⑧ 묻고 나면 칸이 비고 물은 말이 답 위에 남는다 ⑨ 플랜 명령은 말부터 하고(발화 → 덮개 순) 시트를 내린다 ⑩ «작업중인 선박 언제 끝나» 는 지금 일하는 배로 답하고 여럿이면 «어느 배?»
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
 const errs = [];
 dom.window.addEventListener('error', (e) => errs.push(e.message));
@@ -22,6 +23,17 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!fab) fail('오른쪽 아래 미르 얼굴(버튼)이 없다');
   if (!/fixed/.test(fab.className) || !/right-4/.test(fab.className)) fail('얼굴이 fixed·오른쪽에 붙어 있지 않다: ' + fab.className);
   if (!/mir-face|data:image/.test(fab.style.background)) fail('얼굴 그림이 배경에 안 실렸다');
+  //  3.56: 기분 — 얼굴 버튼에 mir-mood-<key> 클래스와 data-mood 가 있어야 한다(CSS 가 그것으로 움직인다). 어떤 기분인지는 시각·자료에 따라 다르므로 값은 고정하지 않는다.
+  const moodKey = fab.getAttribute('data-mood');
+  if (!moodKey || !new RegExp('\\bmir-mood-' + moodKey + '\\b').test(fab.className)) fail('얼굴에 기분 클래스(mir-mood-<key>)가 없다: ' + fab.className + ' / data-mood=' + moodKey);
+  if (!['basic', 'happy', 'sad', 'anxious', 'hungry', 'full', 'bored'].includes(moodKey)) fail('모르는 기분 키: ' + moodKey);
+  //  3.56 감사 지적 — .mir-mood 가 position 을 덮어 얼굴이 fixed 를 잃은 적이 있다. 클래스 이름이 아니라 **계산된 스타일**로 fixed 를 본다(index.css 를 실제로 읽어 얹는다).
+  try {
+    const css = fs.readFileSync(path.resolve(__dirname, '../src/index.css'), 'utf8').replace(/@tailwind[^;]*;|@apply[^;]*;/g, '');
+    const st = doc.createElement('style'); st.textContent = '.fixed{position:fixed}\n' + css; doc.head.appendChild(st);
+    const pos = dom.window.getComputedStyle(fab).position;
+    if (pos !== 'fixed') fail('얼굴 버튼의 계산된 position 이 fixed 가 아니다: ' + pos + ' (mir-mood 가 덮었는가)');
+  } catch (e) { if (/fixed 가 아니다/.test(String(e && e.message))) throw e; console.log('  (계산 스타일 검사 생략 — ' + (e && e.message) + ')'); }
   fab.click(); await wait(100);
   const inp = doc.getElementById('mirFabIn');
   if (!inp) fail('얼굴을 눌렀는데 시트(입력칸)가 안 올라온다');
