@@ -122,7 +122,7 @@ const ENTRY = fs.readFileSync(path.join(ROOT, 'src/coneCargoPlan.entry.jsx'), 'u
 
 // ── 종전 동작을 안 깨뜨렸는가
 {
-  ok(/window\.__CONEV='ConeOne 2\.53-02'/.test(CONE), '콘앱 판이 2.53-02 이다(2.46 호기 되살리기 위에 쌓인 판 · 2.48 미르 한 벌 · 2.50-01 접안방향 재료 · 2.52 미르 기분 · 2.53 표정 인형 · 2.53-01 트윈 티어 골격 · 2.53-02 카드 좌우·단 골격)');
+  ok(/window\.__CONEV='ConeOne 2\.54'/.test(CONE), '콘앱 판이 2.54 이다(2.54 기록지 사진 자리 · 2.46 호기 되살리기 위에 쌓인 판 · 2.48 미르 한 벌 · 2.50-01 접안방향 재료 · 2.52 미르 기분 · 2.53 표정 인형 · 2.53-01 트윈 티어 골격 · 2.53-02 카드 좌우·단 골격)');
   ok((CONE.match(/ctEquip\(/g) || []).length >= 3, '종전 호기 이름 함수(ctEquip)를 그대로 쓴다 — PCTC 는 하나도 안 바뀐다');
   ok(/const eq = ctEquip\(c\.equip\) \|\| \('검수 '/.test(CONE),
      '검수원이 찍은 완료 쪽 이름 규칙은 안 건드렸다');

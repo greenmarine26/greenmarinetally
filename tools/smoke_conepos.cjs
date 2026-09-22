@@ -267,7 +267,9 @@ console.log('\n  ■ 그리는 자리 — 정해 준 자리가 그림에 나오�
 
   //  ── 트윈 전체화면
   setup('loading');
-  const twCells = new Function('CT', 'ctPlanRows', 'ctPosOf', grab('twCells') + '; return twCells;')(CT, ctPlanRows, ctPosOf);
+  //  2.54 — 트윈은 ctDrawRows(계획 + 계획 밖 실제 자리 기록)로 그린다. 그 함수도 실소스 그대로 넣는다.
+  const ctDrawRows = new Function('CT', 'ctPlanRows', 'ctPosOf', grab('ctDrawRows') + '; return ctDrawRows;')(CT, ctPlanRows, ctPosOf);
+  const twCells = new Function('CT', 'ctPlanRows', 'ctPosOf', 'ctDrawRows', grab('twCells') + '; return twCells;')(CT, ctPlanRows, ctPosOf, ctDrawRows);
   const cells = twCells('loading', new Set([19, 21, 23]), new Set());
   ok(!!(cells['84'] && cells['84']['06'] && cells['84']['06'].cn === 'ABCU1234567'), '트윈 전체화면 — 정해 준 자리(19-06-84)에 그린다');
   ok(!(cells['84'] && cells['84']['04']), '트윈 전체화면 — 뺏긴 계획 자리(21-04-84)에는 안 그린다');

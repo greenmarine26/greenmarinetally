@@ -309,6 +309,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 해치 자동 판정 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HAM" "$SMOKE_HAO"; exit 1
   fi
+  # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
+  SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
+  SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)
+  printf 'export { parseSheetResponse, matchSheetItems, matchSheetRuns, isoOk } from "%s/src/sheetPhoto.js";\n' "$PWD" > "$SMOKE_SPM"
+  if npx esbuild "$SMOKE_SPM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_SPO" --log-level=error; then
+    node tools/smoke_sheetphoto.cjs "$SMOKE_SPO" || { echo "✗ 기록지 사진 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SPM" "$SMOKE_SPO"; exit 1; }
+    rm -f "$SMOKE_SPM" "$SMOKE_SPO"
+  else
+    echo "✗ 기록지 사진 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SPM" "$SMOKE_SPO"; exit 1
+  fi
   # 3.56: 미르 기분 — 실 RTDB 스냅샷(2026-09-22 항차 14·하트비트)으로 src/mir.js [mirMood] 를 실소스 그대로 돌려 검수사 규칙(배고픔 10분 전·식후 배부름·기쁨=작업 선택/완료·슬픔=못 답함/방치·심심함=작업 없음/30분·초조함=자료 안 옴)과 대조한다. 콘앱도 같은 벌을 쓴다.
   SMOKE_MMM=$(mktemp /dev/shm/hometmp/_mmm_XXXXXX.mjs)
   SMOKE_MMO=$(mktemp /dev/shm/hometmp/_mmo_XXXXXX.cjs)

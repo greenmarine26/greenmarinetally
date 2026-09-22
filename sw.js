@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.57';
-const NOTE = '미르 표정이 움직입니다 — 눈을 깜빡이고 기쁘면 웃고 슬프면 울고 초조하면 땀을 흘립니다. 얼굴을 누르면 이유가 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.58';
+const NOTE = '손으로 적은 선적 기록지를 사진으로 찍어 넣으면 선적 자리가 들어갑니다 — 검수 탭 선적에서 기록지 사진 버튼. 콘앱도 그 자리를 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

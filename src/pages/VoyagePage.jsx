@@ -37,7 +37,8 @@ import { addToUserBayDict } from '../data/userBayDict.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
-import BayViewWork from '../components/BayViewWork.jsx';   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
+import BayViewWork from '../components/BayViewWork.jsx';
+import SheetPhotoModal from '../components/SheetPhotoModal.jsx';   // 3.58: 선적 기록지 사진 → 선적 자리(검수사 2026-09-22)   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
 import GlobalSearchPage from './GlobalSearchPage.jsx';
 import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
 import BayPlan from '../components/BayPlan.jsx';
@@ -128,6 +129,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // M3.5.5: 선박 엠티 실 정책
   const [extraPolicies, setExtraPolicies] = useState({});
   const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [showSheetPhoto, setShowSheetPhoto] = useState(false);   // 3.58: 기록지 사진 넣기
   const [policyAsked, setPolicyAsked] = useState(false);
   // M4.9f 5단계 단순: 이동 진행 중 상태 (선적 모드 전용)
   //   { cn, fromBay, fromRow, fromTier } 또는 null
@@ -1792,6 +1794,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           <button onClick={() => setWorkStyle('bayview')} className={`flex-1 py-2 rounded-pill text-xs2 font-black border ${workStyle === 'bayview' ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-violet-200'}`}>베이뷰 작업 — 위 자료 · 아래 베이</button>
         </div>
       )}
+      {/* ★ 3.58 — 선적 기록지 사진 넣기(검수사 2026-09-22 «이것을 넣을수 있게 앱을수정해야»). 시프팅 재선적처럼 새 자리가 기록지에만 있을 때. */}
+      {!_sideCanc && tab === 'search' && mode === 'loading' && (
+        <button type="button" onClick={() => setShowSheetPhoto(true)} className="w-full mb-2 py-2 rounded-pill text-xs2 font-black border bg-ink-900 border-amber-500 text-amber-200">📷 기록지 사진으로 선적 자리 넣기</button>
+      )}
+      {showSheetPhoto && <SheetPhotoModal voyage={voyage} voyageKey={voyageKey} inspector={inspector} onClose={() => setShowSheetPhoto(false)} />}
       {!_sideCanc && tab === 'search' && workStyle === 'bayview' && !isLoloShip && (
         <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyage} voyageKey={voyageKey} inspector={inspector} mode={mode}
           allEdiContainers={allEdiContainers} xrayMap={xrayMap} xraySeals={xraySeals} shiftingMap={shiftingMap} preGoneInfo={preGoneInfo}
