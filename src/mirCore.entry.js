@@ -67,4 +67,5 @@ export { parseViewCommand, pickVoyageKey };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };
-export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';   // 3.56 / 2.52: 미르 기분 한 벌 — 콘앱 얼굴도 같은 규칙으로 움직인다
+export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';   // 3.56 / 2.52
+export { mirFaceSvg, ensureMirFaceCss, MIR_FACE_CSS } from './components/mirFaceArt.js';   // 3.57 / 2.53: 표정 인형 한 벌(React·PNG 를 import 하지 않는 순수 문자열): 미르 기분 한 벌 — 콘앱 얼굴도 같은 규칙으로 움직인다

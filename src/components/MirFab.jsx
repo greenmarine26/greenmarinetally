@@ -15,8 +15,8 @@
      여기는 ①20초마다·재료가 바뀔 때 다시 재고 ②질문(noteMirAsk)·열람(noteMirOpen)·못 답함(missed)·완료 대수 증가(workDone)·
      작업 선박 선택(workPick)을 그 벌에 알리고 ③얼굴 버튼에 `mir-mood-<key>` 클래스와 작은 표시를 얹을 뿐이다. 그림은 검수사 그림 그대로다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import mirFaceUrl from '../assets/mir-face.png';
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
+import MirFace from './MirFace.jsx';   // 3.57: 표정이 움직이는 얼굴(눈·입·눈물·땀) — 그림은 검수사 원본 그대로
 import { answerOneRaw } from '../mir.js';
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
@@ -222,14 +222,15 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     <>
       <button type="button" aria-label="미르에게 묻기" data-mood={mood.key} title={mood.key !== 'basic' ? `지금 ${mood.label}${mood.why ? ' — ' + mood.why : ''}` : ''}
         onClick={() => { setOpen((o) => { if (!o) noteMirOpen(); return !o; }); }}
-        className={`fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95 mir-mood mir-mood-${mood.key}`}
-        style={{ bottom: 76, background: `#f7f8fa url(${mirFaceUrl}) center/cover no-repeat` }}>
+        className={`fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95 overflow-visible p-0 mir-mood mir-mood-${mood.key}`}
+        style={{ bottom: 76, background: '#f7f8fa' }}>
+        <MirFace mood={mood.key} size={44} style={{ borderRadius: '50%', overflow: 'hidden' }} />   {/* 3.57: 표정이 움직인다 */}
         {mood.badge && <span className="mir-mood-badge" aria-hidden="true">{mood.badge}</span>}
       </button>
       {open && (
         <div className="fixed left-0 right-0 bottom-0 z-[10002] bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <div className="flex items-center gap-2 mb-2">
-            <div className={`w-8 h-8 rounded-full flex-none mir-mood mir-mood-${mood.key}`} style={{ background: `#f7f8fa url(${mirFaceUrl}) center/cover no-repeat` }} />
+            <MirFace mood={mood.key} size={32} className="flex-none" style={{ borderRadius: '50%', overflow: 'hidden' }} />
             <div className="flex-1 min-w-0">
               <div className="text-xs font-black text-white">미르에게 묻기{mood.key !== 'basic' && <span className="ml-1.5 text-amber-300 font-bold">{mood.badge} {mood.label}</span>}</div>
               {mood.why ? <div className="text-2xs text-amber-200 truncate">{mood.why}</div> : null}

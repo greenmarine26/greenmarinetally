@@ -22,7 +22,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const fab = doc.querySelector('button[aria-label="미르에게 묻기"]');
   if (!fab) fail('오른쪽 아래 미르 얼굴(버튼)이 없다');
   if (!/fixed/.test(fab.className) || !/right-4/.test(fab.className)) fail('얼굴이 fixed·오른쪽에 붙어 있지 않다: ' + fab.className);
-  if (!/mir-face|data:image/.test(fab.style.background)) fail('얼굴 그림이 배경에 안 실렸다');
+  //  3.57: 얼굴은 배경 그림이 아니라 표정 인형(svg.mir, 검수사 원본 <image> 포함)이다. 눈꺼풀·동공·입·눈물 부위가 실제로 있어야 CSS 가 움직일 것이 있다.
+  const face = fab.querySelector('svg.mir');
+  if (!face) fail('얼굴 버튼 안에 표정 인형(svg.mir)이 없다');
+  if (!face.querySelector('image')) fail('인형에 검수사 원본 그림(<image>)이 없다');
+  for (const sel of ['.lid-l', '.lid-r', '.pupil', '.mouth-open', '.mouth-sad', '.mouth-wavy', '.tear', '.sweat', '.zz', '.heart']) if (!face.querySelector(sel)) fail('인형 부위가 빠졌다: ' + sel);
+  if (!doc.getElementById('mirFaceCss') || !/mirBlink|mirHop|mirTear/.test(doc.getElementById('mirFaceCss').textContent)) fail('인형 CSS(<style id=mirFaceCss>)가 문서에 안 들어갔다');
+  if (face.getAttribute('data-mood') !== fab.getAttribute('data-mood')) fail('인형 기분과 버튼 기분이 다르다: ' + face.getAttribute('data-mood') + ' vs ' + fab.getAttribute('data-mood'));
   //  3.56: 기분 — 얼굴 버튼에 mir-mood-<key> 클래스와 data-mood 가 있어야 한다(CSS 가 그것으로 움직인다). 어떤 기분인지는 시각·자료에 따라 다르므로 값은 고정하지 않는다.
   const moodKey = fab.getAttribute('data-mood');
   if (!moodKey || !new RegExp('\\bmir-mood-' + moodKey + '\\b').test(fab.className)) fail('얼굴에 기분 클래스(mir-mood-<key>)가 없다: ' + fab.className + ' / data-mood=' + moodKey);

@@ -312,7 +312,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 3.56: 미르 기분 — 실 RTDB 스냅샷(2026-09-22 항차 14·하트비트)으로 src/mir.js [mirMood] 를 실소스 그대로 돌려 검수사 규칙(배고픔 10분 전·식후 배부름·기쁨=작업 선택/완료·슬픔=못 답함/방치·심심함=작업 없음/30분·초조함=자료 안 옴)과 대조한다. 콘앱도 같은 벌을 쓴다.
   SMOKE_MMM=$(mktemp /dev/shm/hometmp/_mmm_XXXXXX.mjs)
   SMOKE_MMO=$(mktemp /dev/shm/hometmp/_mmo_XXXXXX.cjs)
-  printf 'export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, mirMoodState, mealWindows, mealPhase, anxiousReasons, MIR_MOODS } from "%s/src/mir.js";\n' "$PWD" > "$SMOKE_MMM"
+  printf 'export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, mirMoodState, mealWindows, mealPhase, anxiousReasons, MIR_MOODS } from "%s/src/mir.js";\nexport { mirFaceSvg, ensureMirFaceCss, MIR_FACE_CSS, MIR_MOOD_KEYS } from "%s/src/components/mirFaceArt.js";\n' "$PWD" "$PWD" > "$SMOKE_MMM"
   if npx esbuild "$SMOKE_MMM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --outfile="$SMOKE_MMO" --log-level=error; then
     node tools/smoke_mirmood.cjs "$SMOKE_MMO" || { echo "✗ 미르 기분 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1; }
     rm -f "$SMOKE_MMM" "$SMOKE_MMO"

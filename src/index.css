@@ -218,21 +218,7 @@ select:-webkit-autofill {
   transition: background-color 100000s ease-in-out 0s;
 }
 
-/* ★ 3.56 — 미르 기분 애니메이션(검수사 2026-09-22). 그림은 그대로, 얼굴 버튼만 움직이고 작은 표시를 얹는다.
-   판정은 src/mir.js [mirMood] 절 한 벌(콘앱 cone.html 도 같은 클래스 이름을 쓴다 — 여기 바꾸면 거기도 같이). */
-.mir-mood{ transform-origin:50% 100%; will-change:transform; }   /* position 은 건드리지 않는다 — 얼굴 버튼은 fixed 다(감사 지적: relative 가 fixed 를 덮어 얼굴이 흐름 속으로 떨어졌다). 배지는 fixed 요소 안에서도 absolute 로 붙는다 */
+/* ★ 3.56 — 미르 기분 표시(검수사 2026-09-22). 얼굴 버튼 왼쪽 위 작은 배지만 여기 둔다.
+   3.57 부터 얼굴 자체가 움직이는 인형(눈·입·눈물·땀)은 src/components/mirFaceArt.js 한 벌의 CSS 가 <style id="mirFaceCss"> 로 들어간다 — 여기(그리고 cone.html)에 같은 규칙을 또 적지 않는다. */
 .mir-mood-badge{ position:absolute; top:-6px; left:-6px; min-width:18px; height:18px; padding:0 3px; border-radius:9px;
-  background:#1a1206; border:1px solid #f59e0b; color:#fde68a; font-size:11px; line-height:16px; text-align:center; pointer-events:none; }
-.mir-mood-happy{ animation: mirHop .5s ease-in-out 6; }
-.mir-mood-sad{ animation: mirDroop 2.2s ease-in-out infinite; filter:saturate(.7) brightness(.9); }
-.mir-mood-anxious{ animation: mirFidget .35s ease-in-out infinite; }
-.mir-mood-hungry{ animation: mirRumble 1.2s ease-in-out infinite; }
-.mir-mood-full{ animation: mirSway 3s ease-in-out infinite; }
-.mir-mood-bored{ animation: mirNod 3.2s ease-in-out infinite; filter:brightness(.92); }
-@keyframes mirHop{ 0%,100%{transform:translateY(0) scale(1)} 40%{transform:translateY(-10px) scale(1.06,.96)} 60%{transform:translateY(-6px) scale(.98,1.04)} }
-@keyframes mirDroop{ 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(3px) rotate(-7deg)} }
-@keyframes mirFidget{ 0%,100%{transform:translateX(0) rotate(0)} 25%{transform:translateX(-2px) rotate(-4deg)} 75%{transform:translateX(2px) rotate(4deg)} }
-@keyframes mirRumble{ 0%,100%{transform:scale(1)} 30%{transform:scale(1.06,.94)} 45%{transform:scale(.97,1.03)} 60%{transform:scale(1.04,.96)} }
-@keyframes mirSway{ 0%,100%{transform:rotate(-3deg) scale(1.02)} 50%{transform:rotate(3deg) scale(1.02)} }
-@keyframes mirNod{ 0%,70%,100%{transform:rotate(0)} 80%{transform:rotate(9deg) translateY(2px)} 90%{transform:rotate(6deg) translateY(1px)} }
-@media (prefers-reduced-motion: reduce){ .mir-mood{ animation:none !important; } }
+  background:#1a1206; border:1px solid #f59e0b; color:#fde68a; font-size:11px; line-height:16px; text-align:center; pointer-events:none; z-index:1; }

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.56';
-const NOTE = '미르 얼굴이 기분을 보입니다 — 심심함 배고픔 배부름 기쁨 슬픔 초조함. 얼굴을 누르면 이유가 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.57';
+const NOTE = '미르 표정이 움직입니다 — 눈을 깜빡이고 기쁘면 웃고 슬프면 울고 초조하면 땀을 흘립니다. 얼굴을 누르면 이유가 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

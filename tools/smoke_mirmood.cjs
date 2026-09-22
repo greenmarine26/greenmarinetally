@@ -85,6 +85,19 @@ ok(M.currentMirMood(V, fresh(n6), n6 + 31 * 60000).key === 'sad', `31분 방치(
 M.noteMirOpen(n6 + 31 * 60000 + 1000);
 ok(M.currentMirMood(V, fresh(n6), n6 + 31 * 60000 + 2000).key === 'anxious', `열어 보면 다시 초조함`);
 ok(Object.keys(M.MIR_MOODS).length === 7, `기분 7가지`);
+//  ⑨ 3.57 표정 인형(mirFaceArt) — 기분 7가지 모두 SVG 가 나오고, 원본 그림·눈꺼풀·동공·입·눈물·땀 부위가 있으며, 기분 키가 mir.js 의 키와 같다
+console.log('\n표정 인형 (3.57)');
+ok(JSON.stringify(M.MIR_MOOD_KEYS) === JSON.stringify(Object.keys(M.MIR_MOODS)), `인형 기분 키 = mirMood 키 (${M.MIR_MOOD_KEYS.join(',')})`);
+for (const k of M.MIR_MOOD_KEYS) {
+  const svg = M.mirFaceSvg(k, 44, 'data:image/png;base64,AAAA', 't');
+  const need = ['<image href="data:image/png;base64,AAAA"', 'class="lid lid-l"', 'class="lid lid-r"', 'class="pupil"', 'class="mouth-open"', 'class="mouth-sad"', 'class="mouth-wavy"', 'class="tear tear-l"', 'class="sweat sweat-1"', 'class="zz zz-1"', 'class="heart"', `class="mir mood-${k}"`, `data-mood="${k}"`, `mirEyeL-${k}-t`];
+  const miss = need.filter((n) => !svg.includes(n));
+  ok(!miss.length && /width="44" height="44"/.test(svg), `${k} 인형 SVG — 부위 전부 있음${miss.length ? ' (빠짐 ' + miss.join(' ') + ')' : ''}`);
+}
+ok(M.mirFaceSvg('없는기분', 20, 'x').includes('mood-basic'), `모르는 기분은 기본으로`);
+for (const k of M.MIR_MOOD_KEYS.filter((x) => x !== 'basic')) ok(new RegExp('\\.mir\\.mood-' + k + '\\b').test(M.MIR_FACE_CSS), `CSS 에 ${k} 규칙이 있다`);
+ok(/prefers-reduced-motion/.test(M.MIR_FACE_CSS) && /mirBlink/.test(M.MIR_FACE_CSS), `깜빡임·저동작 설정 처리`);
+ok(M.ensureMirFaceCss(null) === false, `document 없으면 false(조용히 통과 아님)`);
 
 console.log(`\n미르 기분 연막검사: ${pass} 통과 / ${fail} 실패`);
 process.exit(fail ? 1 : 0);
