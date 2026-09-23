@@ -70,7 +70,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     return d && d.length ? d[d.length - 1].document.html : '';
   };
   const rowsOfSheet1 = (html) => {
-    const cut = html.indexOf('<div class="ititle">');
+    const cut = html.indexOf('<!--sheet2-->');   // 3.60-01: 별첨 제목은 장 머리줄 안으로 — 경계는 이 표시
     const s1 = cut > 0 ? html.slice(0, cut) : html;
     return (s1.match(/<td class="cn">/g) || []).length;
   };
@@ -90,7 +90,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
          `그 종이가 «검수 리스트 양하» 다 (${html.length.toLocaleString()}자)`);
       const n = rowsOfSheet1(html);
       ok(n === want && n > 0, `★ 본문 줄 수가 화면 대수와 같다 — 조용히 빠진 컨이 없다 (종이 ${n} · 화면 ${want})`);
-      ok(/<div class="ititle">\[별첨\]/.test(html) || !/별첨/.test(html),
+      ok(/<!--sheet2-->[\s\S]*\[별첨\] 특수화물/.test(html) || !/별첨/.test(html),
          '별첨(특수화물)은 있으면 제목을 달고 나간다');
     }
   }

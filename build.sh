@@ -312,7 +312,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 3.60: 엠티실 기록지 사진 — ATPR 2643W 실사진 AI 실응답 두 번으로 src/esealPhoto.js 를 실소스 그대로 돌려 세 자리→여섯 자리와 틀린 짝 자동 0 을 잰다.
   SMOKE_ESM=$(mktemp /dev/shm/hometmp/_esm_XXXXXX.mjs)
   SMOKE_ESO=$(mktemp /dev/shm/hometmp/_eso_XXXXXX.cjs)
-  printf 'export * from "%s/src/esealPhoto.js";\n' "$PWD" > "$SMOKE_ESM"
+  printf 'export * from "%s/src/esealPhoto.js";\nexport { esealSheetPages, esealSizeOf, esealSheetHTML } from "%s/src/esealSheet.js";\n' "$PWD" "$PWD" > "$SMOKE_ESM"
   if npx esbuild "$SMOKE_ESM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_ESO" --log-level=error; then
     node tools/smoke_esealphoto.cjs "$SMOKE_ESO" || { echo "✗ 엠티실 사진 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ESM" "$SMOKE_ESO"; exit 1; }
     rm -f "$SMOKE_ESM" "$SMOKE_ESO"

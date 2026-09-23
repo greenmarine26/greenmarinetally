@@ -39,5 +39,16 @@ ok(rows.filter((r) => r.ok).every((r) => /^036\d{3}$/.test(r.seal) && r.seal.end
 { const t = JSON.stringify({ items: [{ no: 1, cn: 'BMOU5407731', seal: '654' }, { no: 2, cn: 'HLHU6401476', seal: '' }, { no: 3, cn: 'HLHU6421955', seal: '626' }] });
   const r = M.parseEsealResponse(t); ok(r.length === 2, '손글씨 없는 줄은 버린다');
   const bad = t.replace('}, {"no":2', '} {"no":2'); ok(M.parseEsealResponse(bad).length >= 1, '깨진 JSON 이 와도 성한 줄은 읽는다'); }
+// 3.60-01 — 씰체결 작업 리스트 양식(검수사 종이 ATPR 2643W 와 같은 순서·표기)
+if (M.esealSheetPages) {
+  const iso = { BMOU5407731: '450E', FSCU5897071: '453E', HLHU6401476: '450E', BEAU2477263: '220E', SKRU1400448: '223E' };
+  const rows = Object.keys(iso).map((cn) => ({ cn, iso: iso[cn], seal: cn === 'BMOU5407731' ? '036654' : '' }));
+  const pg = M.esealSheetPages(rows);
+  ok(pg.length === 2 && pg[0].map((r) => r.cn).join() === 'BMOU5407731,HLHU6401476,FSCU5897071' && pg[1].map((r) => r.cn).join() === 'BEAU2477263,SKRU1400448',
+     '40피트 장(HC→RH, 컨번호순)과 20피트 장(20\'→20\'RF)이 따로, 종이와 같은 순서');
+  ok(pg[0].map((r) => r.size).join() === 'HC,HC,RH' && pg[1].map((r) => r.size).join() === "20',20'RF" && pg[1][0].no === 1, `Size 표기 HC·RH·20'·20'RF, 장마다 번호 1부터`);
+  const h = M.esealSheetHTML({ vsl: 'ATLANTIC PIONEER', voy: '2643W', pod: 'CNWEI', date: '2026-09-24', rows, remain: ['036655'] });
+  ok(/공컨테이너 씰체결 작업 리스트/.test(h) && /036654/.test(h) && /잔여 실 1개/.test(h), '양식에 제목·실번호·잔여 실이 들어간다');
+} else ok(false, '양식 함수가 번들에 없다');
 if (fail) { console.error(`✗ 엠티실 사진 연막 ${fail}건 실패`); process.exit(1); }
 console.log('✓ 엠티실 사진 연막 통과');

@@ -219,3 +219,51 @@ export async function generateEmptySealReport({ voyage, sealTargets, sealMode })
 }
 /* V9.57(I14): 이하 generateEmptySealEditReport·EmptySealReportButton 삭제 — 참조 0 (전수 grep 확인).
    수정 리포트 기능이 다시 필요하면 git 이력(V9.56 이전)에서 복원. */
+
+/* ★ TallyOne 3.60-01 (검수사 2026-09-24 «엠티실 리스트는 아까 수기로 기록한 양식처럼 만들어서 엑셀파일도 받을수 있게») —
+   «공컨테이너 씰체결 작업 리스트» 를 종이 양식 그대로 엑셀로. 장 나눔·순서·Size 표기는 src/esealSheet.js esealSheetPages 한 벌(인쇄본과 같은 것).
+   시트마다 한 장(40피트 · 20피트 · 넘치면 이어서), 끝에 «잔여 실» 시트. 읽기만 한다. */
+export async function downloadEsealSheetXlsx({ vsl = '', voy = '', pol = 'KRPTK', pod = '', date = '', rows = [], remain = [] }) {
+  const { esealSheetPages } = await import('../esealSheet.js');
+  const XLSX = await loadSheetJSStyled();
+  const wb = XLSX.utils.book_new();
+  const T = { font: { bold: true, sz: 15, underline: true }, alignment: { horizontal: 'center' } };
+  const K = { font: { sz: 10, color: { rgb: 'FF475569' } } };
+  const V = { font: { bold: true, sz: 10 } };
+  const H = { font: { sz: 10 }, fill: { fgColor: { rgb: 'FFDDDDDD' } }, alignment: { horizontal: 'center' }, border: { top: _B, bottom: _B, left: _B, right: _B } };
+  const C = { font: { sz: 10 }, alignment: { horizontal: 'center' }, border: { top: _B, bottom: _B, left: _B, right: _B } };
+  const N = { ...C, fill: { fgColor: { rgb: 'FFEEEEEE' } } };
+  const S = { ...C, font: { bold: true, sz: 10 } };
+  const head = [['공컨테이너 씰체결 작업 리스트'], [], ['M/V :', vsl, '', '', 'POL :', pol, 'Date :', date], ['Voy. :', voy, '', '', '', '', 'POD :', pod], []];
+  const put = (ws, r, c, s) => { const a = XLSX.utils.encode_cell({ r, c }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = s; };
+  const pages = esealSheetPages(rows);
+  pages.forEach((p, pi) => {
+    const aoa = head.map((r) => [...r]);
+    aoa.push(['No.', '컨테이너번호', 'Size', 'Seal', 'No.', '컨테이너번호', 'Size', 'Seal']);
+    for (let i = 0; i < 50; i++) {
+      const a = p[i], b = p[i + 50];
+      aoa.push([a ? a.no : '', a ? a.cn : '', a ? a.size : '', a ? (a.seal || '') : '', b ? b.no : '', b ? b.cn : '', b ? b.size : '', b ? (b.seal || '') : '']);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    put(ws, 0, 0, T);
+    for (const [r, c] of [[2, 0], [3, 0], [2, 4], [2, 6], [3, 6]]) put(ws, r, c, K);
+    for (const [r, c] of [[2, 1], [3, 1], [2, 5], [2, 7], [3, 7]]) put(ws, r, c, V);
+    for (let c = 0; c < 8; c++) put(ws, 5, c, H);
+    for (let r = 6; r < 56; r++) for (let c = 0; c < 8; c++) put(ws, r, c, c % 4 === 0 ? N : c % 4 === 3 ? S : C);
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 10 }, { wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 10 }];
+    const len = String(p[0] && p[0].size || '').startsWith('20') ? '20피트' : '40피트';
+    XLSX.utils.book_append_sheet(wb, ws, `${len}${pages.filter((q, k) => k < pi && String(q[0].size).startsWith('20') === len.startsWith('20')).length ? ' ' + (pi + 1) : ''}`);
+  });
+  if (remain.length) {
+    const aoa = [['잔여 실 (배정 구간 중 부착되지 않은 실) — ' + remain.length + '개'], []];
+    for (let i = 0; i < remain.length; i += 8) aoa.push(remain.slice(i, i + 8));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    put(ws, 0, 0, V);
+    ws['!cols'] = Array.from({ length: 8 }, () => ({ wch: 10 }));
+    XLSX.utils.book_append_sheet(wb, ws, '잔여 실');
+  }
+  const filename = `씰체결작업리스트_${String(vsl).replace(/\s+/g, '')}_${voy}_${date}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  return { filename };
+}

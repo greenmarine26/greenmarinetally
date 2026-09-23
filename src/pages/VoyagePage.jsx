@@ -39,7 +39,9 @@ import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
 import BayViewWork from '../components/BayViewWork.jsx';
 import { canWorkNow } from '../workChoice.js';   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
-import EsealPhotoModal from '../components/EsealPhotoModal.jsx';   // 3.60: 엠티실 기록지 사진 → 여섯 자리 실(검수사 2026-09-24)
+import EsealPhotoModal from '../components/EsealPhotoModal.jsx';
+import { esealSheetHTML } from '../esealSheet.js';
+import { downloadEsealSheetXlsx } from '../components/EmptySealReport.jsx';   // 3.60-01: 공컨테이너 씰체결 작업 리스트 양식   // 3.60: 엠티실 기록지 사진 → 여섯 자리 실(검수사 2026-09-24)
 import SheetPhotoModal from '../components/SheetPhotoModal.jsx';   // 3.58: 선적 기록지 사진 → 선적 자리(검수사 2026-09-22)   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
 import GlobalSearchPage from './GlobalSearchPage.jsx';
 import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
@@ -1753,7 +1755,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {!_sideCanc && tab === 'list' && <ForecastCard voyage={voyage} mode={mode} />}
       {!_sideCanc && tab === 'list' && mode === 'loading' && esealInfo && (
-        <EsealRangeCard voyageKey={voyageKey} info={esealInfo} inspector={inspector} />
+        <EsealRangeCard voyageKey={voyageKey} info={esealInfo} inspector={inspector} voyInfo={voyage?.info} />
       )}
       {!_sideCanc && tab === 'list' && (
         <ListTab
@@ -2858,7 +2860,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
 //   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
 // 1.87 (검수사 확정): 엠티실 범위 카드 — ATPR(WEIHAI 부착) 선적에서 «이번 항차 엠티실은 몇 번 실부터
 //   ~ 몇 번 실까지입니까?» 를 묻고 구간(복수)을 저장한다. 입력되면 부착 현황·잔여 실 정리를 보여준다.
-function EsealRangeCard({ voyageKey, info, inspector }) {
+function EsealRangeCard({ voyageKey, info, inspector, voyInfo }) {
   const has = info.ranges.length > 0;
   const [edit, setEdit] = useState(false);
   const [rows, setRows] = useState(() => (has ? info.ranges.map(r => ({ ...r })) : [{ from: '', to: '' }]));
@@ -2929,6 +2931,29 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
             <button onClick={() => setShowPhoto(true)}
               className="w-full py-2 rounded bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold">📷 엠티실 기록지 사진으로 넣기</button>
           )}
+          {(() => {
+            //  3.60-01 (검수사 2026-09-24 «엠티실 양식없이 단순 정리 리스트만 보여줍니다» · «수기로 기록한 양식처럼 만들어서 엑셀파일도 받을수 있게») — 현장 종이 양식 그대로 실을 채워 인쇄·엑셀
+            const sheetArgs = () => {
+              const sealOf = {}; for (const u of info.usedPairs) sealOf[u.cn] = u.seal;
+              const pods = {}; for (const c of info.targets) { const p = String(c.pod || '').toUpperCase(); if (p) pods[p] = (pods[p] || 0) + 1; }
+              const pod = Object.entries(pods).sort((a, b) => b[1] - a[1]).map(([p]) => p)[0] || '';
+              const d = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+              return { vsl: String(voyInfo?.vslFull || voyInfo?.vsl || '').toUpperCase(), voy: voyInfo?.voy_l || voyInfo?.voy || '', pod, date: d,
+                rows: info.targets.map(c => ({ cn: c.cn, iso: c.iso, seal: sealOf[c.cn] || '' })), remain: [] };   // 검수사 2026-09-24 «엠티실에서 잔여실은 표기 안합니다»
+            };
+            return (
+              <div className="flex gap-2">
+                <button onClick={() => {
+                    const w = window.open('', '_blank', 'width=900,height=1200');
+                    if (!w) { alert('팝업 차단을 해제해주세요'); return; }
+                    w.document.write(esealSheetHTML(sheetArgs())); w.document.close();
+                  }}
+                  className="flex-1 py-2 rounded bg-teal-800/70 hover:bg-teal-700 text-teal-100 text-xs font-bold">🖨 씰체결 작업 리스트 인쇄</button>
+                <button onClick={async () => { try { await downloadEsealSheetXlsx(sheetArgs()); } catch (e) { alert('엑셀 만들기 실패: ' + (e?.message || e)); } }}
+                  className="flex-1 py-2 rounded bg-teal-800/70 hover:bg-teal-700 text-teal-100 text-xs font-bold">📥 같은 양식 엑셀</button>
+              </div>
+            );
+          })()}
           {showPhoto && <EsealPhotoModal voyageKey={voyageKey} info={info} inspector={inspector} onClose={() => setShowPhoto(false)} />}
           <button onClick={() => setShowList(v => !v)}
             className="w-full py-2 rounded bg-teal-800/70 hover:bg-teal-700 text-teal-100 text-xs font-bold">

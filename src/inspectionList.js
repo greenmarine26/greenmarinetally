@@ -157,6 +157,7 @@ const _memoW = (txt) => { let w = 0; for (const ch of txt) { const c = ch.charCo
 //  ⚠ 1280px 기본 뷰포트로 재면 1.68배 넓은 자가 된다(4차 감사 — 그 때문에 실번호 41칸 침범을 «0» 이라고 봤다).
 //  ⚠ **6pt 아래로는 안 줄인다.** 이 저장소는 X-RAY 확인서에서 «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다» 고
 //    확정했다(generateXrayListHTML 주석). 더 줄이는 대신 **줄을 바꾼다** — 작게 만드는 것보다 낫다.
+const ROW_MM = 5.2;   // 3.60-01: 행 높이 — CSS table.ilist td height 와 같은 값
 const MEMO_FIT = [13, 16];   // 3.60: 세 단(비고 18%)에서 크로뮴 A4 실측 — 7pt 한 줄 13폭단위(«-20.0℃»=13 한 줄) · 6pt 16(«치수 미신고»=17 은 6pt 에서도 두 줄)
 const _memoFit = (plain) => {
   const w = _memoW(plain);
@@ -299,27 +300,46 @@ const COLS_PER_PAGE = 3;
 //    처럼 길어져 7pt 로 세 줄이 된다(행 3.4mm → 7.4mm). 특수화물 별첨은 **전 행이 특수화물**이라
 //    75행이 평균 두 줄 = 가용의 1.57배였다(2026-09-08 실측).
 //  ⇒ 단을 «행 수»가 아니라 **«차지하는 줄 수»**로 채운다. 한 줄도 안 자르고, 넘치면 페이지가 늘어난다.
-const _noteWeight = (rowHtml) => {
+const _noteWeight = (rowHtml, rowMm = ROW_MM) => {
   const tds = String(rowHtml).match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
   //  ★ 3.45 — F/E 가 한 칸이 되어 비고는 **6번째**다(tds[5]). 초판은 tds[6](선사)를 세고 있었다.
   const note = tds[5] || '';
   const txt = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim();
-  return _memoFit(txt).lines;                                  // 축소 등급과 같은 자로 센다
+  const f = _memoFit(txt);                                     // 축소 등급과 같은 자로 센다
+  //  ★ 3.60-01 (검수사 2026-09-24 «160개 이하라면 한장으로 뽑을수도 있을텐데 2장으로 뽑히는것») — 줄 수가 아니라 **행이 실제로 늘어나는 높이**로 센다.
+  //    세 단은 행 높이 5.2mm 라 7pt 두 줄(4.9mm)·6pt 두 줄(4.2mm)은 행 안에 들어가 행이 안 늘어난다. 종전엔 두 줄 비고를 두 행으로 쳐서
+  //    한 단이 25줄에서 끊기고 끝 8줄이 한 장을 따로 먹었다(ATPR 2643W 선적 403대 실측 5장). 비고 줄 높이 = 글자 pt × 0.3528mm(line-height 1.0).
+  const lineMm = (f.cls ? 6 : 7) * 0.3528;
+  //  감사 지적 — 14자↑ 실번호(s3)는 6pt 두 줄로 접힌다. 60줄(4.33mm)에서는 여유가 0.1mm 라 그 높이도 같이 센다.
+  const slMm = /class="sl s3"/.test(String(rowHtml)) ? 2 * 6 * 0.3528 : 0;
+  return Math.max(1, (Math.max(f.lines * lineMm, slMm) + 0.3) / rowMm);
 };
-const packCols = (rows, perCol = PER_COL) => {
+const packCols = (rows, perCol = PER_COL, rowMm = ROW_MM) => {
   const cols = []; let cur = [], w = 0;
   for (const r of rows) {
-    const L = _noteWeight(r);
+    const L = _noteWeight(r, rowMm);
     if (w + L > perCol && cur.length) { cols.push(cur); cur = []; w = 0; }
     cur.push(r); w += L;
   }
   if (cur.length) cols.push(cur);
   return cols;
 };
-const packPages = (rows, perCol = PER_COL) => {
-  const cols = packCols(rows, perCol); const pages = [];
+const packPages = (rows, perCol = PER_COL, rowMm = ROW_MM) => {
+  const cols = packCols(rows, perCol, rowMm); const pages = [];
   for (let i = 0; i < cols.length; i += COLS_PER_PAGE) pages.push(Array.from({ length: COLS_PER_PAGE }, (_, k) => cols[i + k] || []));
   return pages;
+};
+//  ★ 3.60-01 (검수사 2026-09-24 «160개 이하라면 한장으로 뽑을수도 있을텐데 2장으로 뽑히는것» · SWTD 9014E 선적 152대가 150+2 로 두 장) —
+//    끝 장이 조금 넘치면 행 높이를 줄여 한 단에 60줄까지 받는다(행 4.33mm · 글자 9pt 그대로). 장 수가 줄어드는 가장 작은 줄 수를 고른다. 단 높이(줄 수 × 행 높이)는 늘 50 × 5.2mm 그대로.
+const PER_COL_MAX = 60;   // 검수사 2026-09-24 «한장으로 뽑을수 있으면 한장으로 뽑는걸 원칙 … 무리하게 한장으로 뽑으면 글자 크기가 작아지니 … 50개 3단 ~ 60개 3단» — 60줄이면 행 4.33mm, 9pt 그대로
+const packFit = (rows) => {
+  let best = null;
+  for (let p = PER_COL; p <= PER_COL_MAX; p++) {
+    const rowMm = +(PER_COL * ROW_MM / p).toFixed(3);
+    const pages = packPages(rows, p, rowMm);
+    if (!best || pages.length < best.pages.length) best = { pages, rowMm };
+  }
+  return best;
 };
 
 // 메인: 검수 리스트 HTML 생성
@@ -348,7 +368,8 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
 
   // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
   //  3.29: 150 고정으로 자르지 않는다 — 비고가 긴 행이 자리를 더 먹으므로 «줄 수»로 채운다.
-  const allPages = packPages(list.map(c => renderRow(c, c._lineIdx)));   // 3.60: 묶음별 순번
+  const _fit1 = packFit(list.map(c => renderRow(c, c._lineIdx)));   // 3.60: 묶음별 순번 · 3.60-01 끝 장 넘침이면 행을 줄여 한 장 덜
+  const allPages = _fit1.pages;
   // sheet1Pages는 아래 renderPageWithHdr로 계산 (헤더 포함)
 
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
@@ -377,16 +398,16 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
 
   // M5.29: 각 페이지 상단 헤더 (좌: 선박명 / 중: 항차 / 우: 날짜+페이지) — cover page 제거
   // 페이지 헤더 렌더링을 위해 renderPage에 정보 전달 필요 → 메인 함수에서 직접 조립
-  const renderPageWithHdr = (pair, pageNum, totalPages) => {
+  const renderPageWithHdr = (pair, pageNum, totalPages, rowMm = ROW_MM, tag = '') => {
     const colsOf = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL, PER_COL * 2), pair.slice(PER_COL * 2)];
     const col = (rs) => `<table class="ilist">
       <colgroup><col style="width:7%"><col style="width:31%"><col style="width:25%"><col style="width:14%"><col style="width:5%"><col style="width:18%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th style="font-size:5.5pt">F/E</th><th>비고</th></tr></thead>
       <tbody>${rs.join('')}</tbody>
     </table>`;
-    return `<div class="ipage">
+    return `<div class="ipage"${rowMm !== ROW_MM ? ` style="--rh:${rowMm}mm"` : ''}>
       <div class="phdr">
         <div class="phdr-l">${vsl}</div>
-        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span></div>
+        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span>${tag ? ` <b>${tag}</b>` : ''}</div>
         <div class="phdr-r">${dateStr} · ${pageNum}/${totalPages}</div>
       </div>
       <div class="icols">
@@ -395,14 +416,15 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
     </div>`;
   };
 
-  const sheet1Pages = allPages.map((rows, i) => renderPageWithHdr(rows, i + 1, allPages.length)).join('');
+  const sheet1Pages = allPages.map((rows, i) => renderPageWithHdr(rows, i + 1, allPages.length, _fit1.rowMm)).join('');
 
   // 시트2 페이지도 헤더 포함 (전체 페이지 수는 시트1+시트2 합산하여 표기 가능하나, 별첨이라 별도 카운트)
   if (sheet2Html) {
     //  3.29: 별첨은 **전 행이 특수화물**이라 비고가 길다 — 여기가 넘침이 가장 컸다.
-    const sheet2PagesList = packPages(special.map((c, j) => renderRow(c, j + 1, { noFlag: true })));   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
-    sheet2Html = `<div class="ititle">[별첨] 특수화물·X-RAY (${special.length}대)</div>` +
-      sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length)).join('');
+    const _fit2 = packFit(special.map((c, j) => renderRow(c, j + 1, { noFlag: true })));
+    const sheet2PagesList = _fit2.pages;   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
+    //  3.60-01: 별첨 제목을 장 머리줄 안에 넣는다 — 장 밖 제목 줄(ititle)만큼 A4 를 넘어 마지막 한 줄이 빈 장으로 밀렸다(ATPR 2643W 실측).
+    sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, `[별첨] 특수화물·X-RAY ${special.length}대`)).join('');
   }
 
   // [별첨2] 시프팅(재적부) — **평택 작업에 방해가 되어 옮기는 화물**, 양하·선적 공통.
@@ -449,7 +471,7 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .icol { flex: 1; min-width: 0; }
 /* M5.30: 행 컴팩트 — 75행/단 보장 (이전 7.5pt + 1px padding으로 72행만 들어감) */
 table.ilist { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
-table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: 5.2mm; }
+table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: var(--rh, 5.2mm); }
 table.ilist th { background: #ddd; font-size: 7pt; font-weight: bold; height: 4mm; white-space: nowrap; letter-spacing: -0.3px; }
 table.ilist td.no { font-size: 6.5pt; letter-spacing: -0.4px; }   /* 3.60: 순번이 세 자리(100~)가 되어도 칸 안에 */
 table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.5px; }

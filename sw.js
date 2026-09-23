@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60';
-const NOTE = '엠티실 기록지를 사진으로 넣을 수 있습니다(끝 세 자리만 적어도 여섯 자리로 기록) — 검수리스트는 세 단 50줄, 20풀·20엠티·특수 묶음별 순번입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-01';
+const NOTE = '검수리스트가 조금 넘치면 한 장에 모읍니다 — 엠티실 카드에서 씰체결 작업 리스트 양식을 바로 인쇄할 수 있습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
