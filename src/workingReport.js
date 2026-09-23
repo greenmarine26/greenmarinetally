@@ -479,7 +479,7 @@ table.voucher th { background: #f0f0f0; font-weight: bold; font-size: ${thPt}pt;
 .port-cell { font-weight: bold; vertical-align: middle; }
 .fe-cell { font-weight: bold; }
 .total-row { font-weight: bold; background: #f8f8f8; }
-.total-label { text-align: right; font-weight: bold; vertical-align: middle; }
+.total-label { text-align: center; font-weight: bold; vertical-align: middle; }
 table.voucher .disch-first { border-left: 1.5pt solid #000; }
 table.voucher .load-first { border-left: 1.5pt solid #000; }
 table.voucher .shift-first { border-left: 1.5pt solid #000; }

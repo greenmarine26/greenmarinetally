@@ -242,7 +242,7 @@ function renderRow(c, idx, opts) {
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
   let reeferTmp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim()
                 : (c.temp != null && String(c.temp).trim() !== '') ? String(c.temp).trim() : null;
-  if (type === 'reefer') notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
+  if (type === 'reefer' && (reeferTmp != null || fe === 'F')) notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60-02: 엠티 리퍼는 온도가 없는 게 정상 — «리퍼는 풀일 때만 리퍼»(앱지침 §11)   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
   /* ★ 2.91 (검수사 «FR 폭 길이 높이 다 표기 해줘야 함») — FR 은 치수가 곧 작업 정보다.
        초과분(DIM)만 적던 것을 **폭·길이·높이 세 칸**으로 바꾼다. 없는 값은 «-» 로 자리를 남긴다
        (§2-0-D — 조용히 없애지 않는다). 치수가 하나도 없으면 «치수 미신고»라고 말한다(§0-Y-2). */
@@ -481,7 +481,7 @@ table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.5
     ⚠ nowrap+overflow:hidden 은 글자폭 모델이 조금만 낙관해도 뒤를 **조용히 지운다** —
       재감사 크로뮴 실측에서 OOG 실치수 6건이 m2 칸에서 15~24px 잘렸다. 그래서 숨기지 않고 줄을 바꾼다.
       등급(m2~m5)은 «한 줄에 담으려는 노력» 이고, 못 담으면 줄이 늘 뿐 한 글자도 안 잃는다. */
-table.ilist td.memo { white-space: normal; overflow-wrap: anywhere; text-align: left; padding: 0 1.5px; font-size: 7pt; }
+table.ilist td.memo { white-space: normal; overflow-wrap: anywhere; text-align: center; padding: 0 1.5px; font-size: 7pt; }   /* 3.60-02: 검수사 «모든 출력 양식중에 셀안에 있는것은 중앙정렬 … 특히 리스트중에 비고란이 좌측으로 치우쳐» */
 table.ilist td.memo.m2 { font-size: 6pt; letter-spacing: -0.2px; }   /* 3.45: 바닥은 6pt — 더 줄이지 않고 줄을 바꾼다 */
 /*  ★ 3.53-10 — 실번호도 잘리지 않는다. 10자 넘으면 6pt(바닥). 줄은 안 바꾼다(장당 줄수가 깨진다) — 15자까지 칸 안, 그보다 길면 숨기지 않고 옆 칸 위로 보인다(실측 최대 14자·보관 17자 1건). */
 table.ilist td.sl { white-space: nowrap; letter-spacing: -0.2px; }   /* 줄을 바꾸면 장당 줄수(고정)가 깨져 A4 를 넘친다 — 칸을 넓히고(16→18%, 컨번호 19→17%) 글자를 줄인다 */
@@ -530,7 +530,7 @@ export function generateVgmListHTML(containers, voyageInfo) {
     body{font-family:'Malgun Gothic',sans-serif;font-size:11px;margin:24px;color:#111}
     h1{font-size:16px;margin:0 0 2px} .sub{color:#555;margin-bottom:12px}
     table{border-collapse:collapse;width:100%} th,td{border:1px solid #999;padding:3px 6px;text-align:center}
-    th{background:#eee} .mono{font-family:Consolas,monospace} .num{text-align:right}
+    th{background:#eee} .mono{font-family:Consolas,monospace} .num{text-align:center}
     .warn{color:#b91c1c;font-weight:bold} tfoot td{font-weight:bold;background:#f5f5f5}
     @media print{body{margin:8mm}}
   </style></head><body>
@@ -704,7 +704,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       const memo = [];
       if (c.dg) memo.push(`${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00-03: «9/3480» 형식(클래스/UN만)
       const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
-      if (cat.type === 'reefer') memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
+      if (cat.type === 'reefer' && ((_t != null && String(_t).trim() !== '') || fe === 'F')) memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
       //  ★ 3.45 — 인쇄물과 같은 표기를 CSV 에도(한쪽만 고치면 종이와 엑셀이 갈린다).
       if (c._xray) memo.push('XRAY' + (String(c._xraySealNo || '').trim() ? ' ' + String(c._xraySealNo).trim().replace(/,/g, '') : ''));
       const _ov = [];

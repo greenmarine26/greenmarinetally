@@ -270,7 +270,7 @@ function sheetRF(wb, D) {
   const label = (txt) => {
     ws.mergeCells(`A${r}:H${r}`);
     const c = ws.getCell(`A${r}`); c.value = txt; c.font = HEAD_FONT; c.border = BOX;
-    c.alignment = { horizontal: 'left' };
+    c.alignment = { horizontal: 'center' };   // 3.60-02: 칸 안은 가운데(검수사 2026-09-24)
     r++;
   };
   const dis = D.rfIn.filter((x) => x.fe !== 'E');
