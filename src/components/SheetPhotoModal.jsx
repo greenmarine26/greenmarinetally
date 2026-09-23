@@ -119,7 +119,7 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
                         className={`flex-1 min-w-0 bg-ink-950 border rounded px-2 py-2 font-mono text-sm ${isoOk(r.pick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.slot} 컨번호`} />
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
-                      <span className="font-mono text-dim-300">읽은 글자 {r.prefix || '····'} {r.digits}</span>
+                      <span className="font-mono text-dim-300">{r.kind === 'mark' ? `표시만(계획 그대로) · 인쇄 ${r.printed || '?'}` : `손글씨 ${r.prefix || '····'} ${r.digits}`}</span>
                       <span>{r.saved ? <span className="text-emerald-300 font-bold">기록됨</span> : now ? (same ? <span className="text-emerald-300">같은 자리</span> : <span className="text-amber-200">지금 {now} → 옮김</span>) : (comp[r.pick] ? <span className="text-amber-200">완료됨 · 자리 없음</span> : '새로 실음')}</span>
                     </div>
                     {!r.cn && !r.saved && (

@@ -9,26 +9,26 @@
    ⚠ 이 파일은 읽기만 한다. RTDB 쓰기는 SheetPhotoModal 이 기존 저장 함수(fbUpdateRecordField·fbSetActualPosition·fbCompleteContainer)로 한다. */
 import { aiCall } from './gemini.js';
 
-export const SHEET_PROMPT = `이 사진은 컨테이너선 베이플랜 인쇄물에 검수원이 손으로 고쳐 적은 선적 기록지입니다.
+export const SHEET_PROMPT = `이 사진은 컨테이너선 베이플랜 인쇄물에 검수원이 손으로 표시한 선적 기록지입니다.
 
 인쇄물 읽는 법
 - 칸마다 인쇄 글자가 네 줄 있습니다: ① "NTG/ *INC" ② 인쇄된 컨번호(영문4+숫자7) ③ 선사·E/F·높이·규격 ④ "....130604" 처럼 점 뒤 여섯 자리 = 칸 자리(베이2·열2·단2).
-- 검수원이 실제로 실은 컨이 인쇄된 컨과 다르면, 칸 위쪽에 영문 4자(머리글자)를, 아래쪽에 숫자 7자리를 손으로 적습니다.
-- 인쇄된 머리글자에 동그라미를 쳤으면 머리글자는 인쇄된 것 그대로이고 숫자만 손으로 적은 것입니다.
-- 손글씨가 없고 인쇄된 컨번호 옆에 체크(✓)가 있는 칸은 **인쇄된 컨이 그대로 실린 칸**입니다 — 결과에 넣고, hand_prefix·hand_digits 에 인쇄된 컨번호를 그대로 넣고 checked 를 true 로 둡니다.
-- 손글씨도 체크도 없는 칸(인쇄 그대로)은 결과에 넣지 않습니다. X 로 지운 빈 칸도 넣지 않습니다.
+- **인쇄된 글자와 손으로 쓴 글자는 절대 섞지 않습니다.** 인쇄 글자는 printed_cn 에만, 손글씨는 hand_prefix·hand_digits 에만 넣습니다.
 
-할 일
-손글씨가 있는 칸과 체크(✓)만 있는 칸마다, 인쇄된 칸 자리 여섯 자리와 실제 실린 컨번호를 읽으십시오.
+검수원 표시는 두 가지뿐입니다
+1) 손으로 컨번호를 적은 칸(kind "hand") — 계획과 다른 컨이 실린 칸입니다. 칸 위쪽에 영문 4자, 아래쪽에 숫자 7자리를 손으로 적습니다.
+   - 인쇄된 머리글자에 동그라미를 치고 숫자만 손으로 적었으면, hand_prefix 에 그 인쇄 머리글자를 넣고 hand_digits 에 손으로 적은 숫자를 넣습니다.
+2) 손으로 쓴 숫자 없이 사선(／)·동그라미·체크(✓) 같은 표시만 있는 칸(kind "mark") — **인쇄된 계획 컨이 그대로 실린 칸**입니다.
+   - hand_prefix·hand_digits 는 빈 문자열로 두고, printed_cn 에 인쇄된 컨번호를 정확히 읽어 넣습니다.
+- 아무 표시도 없는 칸은 넣지 않습니다. X 로 지운 빈 칸도 넣지 않습니다.
 
 다음 JSON 으로만 답하십시오. 설명 없이 JSON 만.
-{"items":[{"slot":"130604","hand_prefix":"TRHU","hand_digits":"3477064","printed_cn":"WDFU1225273","sure":true}]}
+{"items":[{"slot":"130604","kind":"hand","hand_prefix":"TRHU","hand_digits":"3477064","printed_cn":"WDFU1225273","sure":true},{"slot":"100204","kind":"mark","hand_prefix":"","hand_digits":"","printed_cn":"CAXU5732380","sure":true}]}
 
 규칙
 - slot 은 칸 아래 인쇄된 "....xxxxxx" 여섯 자리 그대로. 손글씨가 그 숫자를 덮고 있어도 인쇄된 숫자를 읽습니다.
-- hand_prefix 는 손으로 적은 영문 4자. 동그라미 친 인쇄 머리글자를 쓴 칸이면 그 인쇄 머리글자를 넣습니다. 안 보이면 빈 문자열.
-- hand_digits 는 손으로 적은 숫자 7자리. 흐려서 확실하지 않은 자리는 ? 로 둡니다. 지어내지 않습니다.
-- sure 는 머리글자·숫자 둘 다 분명하면 true, 하나라도 애매하면 false.`;
+- 흐려서 확실하지 않은 숫자 자리는 ? 로 둡니다. 지어내지 않습니다.
+- sure 는 읽은 글자가 모두 분명하면 true, 하나라도 애매하면 false.`;
 
 /** AI 에 보낼 몸체 — 사진은 JPEG base64(부르는 쪽이 줄여서 넘긴다). */
 export function sheetRequestBody(base64Jpeg) {
@@ -61,6 +61,10 @@ export function parseSheetResponse(resp) {
       prefix: String(it.hand_prefix || '').toUpperCase().replace(/[^A-Z]/g, ''),
       digits: String(it.hand_digits || '').replace(/[^0-9?]/g, ''),
       printed: String(it.printed_cn || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), sure: it.sure !== false };
+    //  3.58-07 (검수사 2026-09-23 «인쇄된 문자와 수기로 필기한 문자를 같이 취급하면 오류 … 사선을 긋거나 동그라미 표시한것은 원래 계획한 컨테이너가 왔다는 표시»)
+    //    손으로 쓴 숫자가 없으면 «표시만» 칸이다 — 손글씨 칸을 비우고 인쇄 컨번호만 쓴다(AI 가 kind 를 빠뜨려도 숫자 유무로 가른다).
+    o.kind = o.digits.replace(/\?/g, '').length >= 4 ? 'hand' : (o.printed ? 'mark' : 'hand');
+    if (o.kind === 'mark') { o.prefix = ''; o.digits = ''; }
     if (seen.has(slot)) { o.dupSlot = true; seen.get(slot).dupSlot = true; } else seen.set(slot, o);
     out.push(o);
   }
@@ -121,6 +125,16 @@ export function matchSheetItems(items, candidates, slotOk) {
   const pool = Array.from(new Set(candidates || []));
   const taken = new Map();   // 같은 컨이 두 칸에 걸리면 둘 다 확인 필요로 내린다
   const rows = (items || []).map((it) => {
+    if (it.kind === 'mark') {
+      //  표시만 있는 칸 — 인쇄된 계획 컨이 그대로 실렸다. 인쇄 컨번호가 이 배 후보에 **글자 그대로** 있을 때만 자동(비슷한 컨으로 바꾸지 않는다).
+      const bad = typeof slotOk === 'function' && slotOk(it.bay, it.row, it.tier) === false;
+      const hit = pool.includes(it.printed);
+      const auto = hit && !bad && !it.dupSlot;
+      const r = { ...it, cn: auto ? it.printed : null, best: it.printed || null, second: null,
+        why: auto ? '' : bad ? '이 배에 없는 칸 번호예요 — 칸 번호를 확인해 주세요' : it.dupSlot ? '같은 칸 번호가 두 번 읽혔어요 — 칸 번호를 확인해 주세요' : '표시만 있는 칸인데 인쇄 컨번호가 이 배 목록에 없어요 — 확인해 주세요' };
+      if (r.cn) taken.set(r.cn, (taken.get(r.cn) || 0) + 1);
+      return r;
+    }
     const sc = pool.map((c) => {
       const dd = _diff(it.digits, c.slice(4));
       const pd = it.prefix.length === 4 ? _diff(it.prefix, c.slice(0, 4)) : 2;

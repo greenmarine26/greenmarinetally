@@ -36,6 +36,15 @@ ok(M.matchSheetRuns([runs[0]], F.candidates).filter((r) => r.cn).length >= 29, '
 { const a = M.loadingNoPosAsk({ cn: 'TIIU6553008', _mode: 'loading' }, 'loading');
   ok(!!a && M.loadingNoPosAsk({ cn: 'X', bay: '10', _mode: 'loading' }, 'loading') === '' && M.loadingNoPosAsk({ cn: 'X' }, 'discharge') === '' && M.loadingNoPosAsk({ cn: 'X', bay_actual: '10' }, 'loading') === '' && M.loadingNoPosAsk({ cn: 'X', _src: 'list' }, 'loading') === '' && M.loadingNoPosAsk({ cn: 'X', _virtualFromList: true }, 'loading') === '',
      '자리 없는 선적 완료만 묻는다(자리 있음·양하는 안 묻는다)'); }
+{ // 3.58-07 — 표시만(사선·동그라미·체크) 칸은 인쇄 컨번호만 쓴다. 손글씨 칸과 섞지 않는다(검수사 2026-09-23).
+  const t = JSON.stringify({ items: [
+    { slot: '100204', kind: 'mark', hand_prefix: 'XXXX', hand_digits: '', printed_cn: 'CAXU5732380' },
+    { slot: '100104', hand_prefix: '', hand_digits: '', printed_cn: 'TIIU6553008' },
+    { slot: '100302', kind: 'mark', printed_cn: 'CKSU4025680' } ] });
+  const it = M.parseSheetResponse(t);
+  ok(it.every((x) => x.kind === 'mark' && !x.prefix && !x.digits), '손으로 쓴 숫자가 없으면 표시만 칸 — 손글씨 칸은 비운다(kind 가 빠져도)');
+  const m = M.matchSheetItems(it, ['CAXU5732380', 'TIIU6553008', 'CKSU4025689']);
+  ok(m[0].cn === 'CAXU5732380' && m[1].cn === 'TIIU6553008' && !m[2].cn, '표시만 칸은 인쇄 컨번호가 글자 그대로 있을 때만 자동 — 한 글자 달라도 비슷한 컨으로 바꾸지 않는다'); }
 ok(M.isoOk('EAXU2045294') && !M.isoOk('EAXU2045295'), 'ISO 체크디지트');
 const CONE = fs.readFileSync(path.join(__dirname, '../public/cone.html'), 'utf8');
 ok(/function ctDrawRows\(mode\)/.test(CONE) && (CONE.match(/ctDrawRows\(/g) || []).length >= 4, '콘앱이 계획 밖 선적 기록도 그린다(ctDrawRows)');
