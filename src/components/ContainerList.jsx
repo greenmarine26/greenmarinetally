@@ -9,7 +9,7 @@ import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   //
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
 import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
@@ -471,6 +471,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
       // 1.56: 갱 없이 완료 금지 — 조용한 미기록이 인건비 사고의 뿌리다.
       if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
+      { const _np = loadingNoPosAsk(c, mode); if (_np && !window.confirm(_np)) return; }   // 3.58-05: 자리 없는 선적 완료
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
     }

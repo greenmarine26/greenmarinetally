@@ -15,10 +15,11 @@ export const SHEET_PROMPT = `이 사진은 컨테이너선 베이플랜 인쇄�
 - 칸마다 인쇄 글자가 네 줄 있습니다: ① "NTG/ *INC" ② 인쇄된 컨번호(영문4+숫자7) ③ 선사·E/F·높이·규격 ④ "....130604" 처럼 점 뒤 여섯 자리 = 칸 자리(베이2·열2·단2).
 - 검수원이 실제로 실은 컨이 인쇄된 컨과 다르면, 칸 위쪽에 영문 4자(머리글자)를, 아래쪽에 숫자 7자리를 손으로 적습니다.
 - 인쇄된 머리글자에 동그라미를 쳤으면 머리글자는 인쇄된 것 그대로이고 숫자만 손으로 적은 것입니다.
-- 손글씨가 없는 칸(인쇄 그대로)은 결과에 넣지 않습니다. X 로 지운 빈 칸도 넣지 않습니다.
+- 손글씨가 없고 인쇄된 컨번호 옆에 체크(✓)가 있는 칸은 **인쇄된 컨이 그대로 실린 칸**입니다 — 결과에 넣고, hand_prefix·hand_digits 에 인쇄된 컨번호를 그대로 넣고 checked 를 true 로 둡니다.
+- 손글씨도 체크도 없는 칸(인쇄 그대로)은 결과에 넣지 않습니다. X 로 지운 빈 칸도 넣지 않습니다.
 
 할 일
-손글씨가 있는 칸마다, 인쇄된 칸 자리 여섯 자리와 손으로 적은 실제 컨번호를 읽으십시오.
+손글씨가 있는 칸과 체크(✓)만 있는 칸마다, 인쇄된 칸 자리 여섯 자리와 실제 실린 컨번호를 읽으십시오.
 
 다음 JSON 으로만 답하십시오. 설명 없이 JSON 만.
 {"items":[{"slot":"130604","hand_prefix":"TRHU","hand_digits":"3477064","printed_cn":"WDFU1225273","sure":true}]}
@@ -92,7 +93,31 @@ function _diff(a, b) {
 }
 /** 칸마다 후보 중 가장 가까운 실제 컨을 고른다. 숫자가 무겁다(×3) — 머리글자는 손글씨가 인쇄 글자와 겹쳐 AI 가 자주 틀린다.
  *  자동으로 정하는 조건: 숫자 차이 ≤ 2 이고 2위와 점수 차 ≥ 2. 아니면 cn=null(«확인 필요») 로 두고 1·2위를 보여 준다. */
-export function matchSheetItems(items, candidates) {
+/** 3.58-05: 기록지 칸이 이 배 베이사전에 있는 칸인가 — 없으면 false, 사전이 그 베이를 모르면 null(판정 안 함).
+ *  실측 (10)11 기록지 — AI 가 홀드 6열뿐인 베이에 «10-07-04» 를 지어냈다. 열은 그 구역(데크/홀드) 최대 칸 수 안이어야 한다. */
+export function sheetSlotOk(bayDef, bay, row, tier) {
+  const bs = bayDef && Array.isArray(bayDef.baysSummary) ? bayDef.baysSummary : null;
+  if (!bs) return null;
+  const b = parseInt(bay, 10), r = parseInt(row, 10), t = parseInt(tier, 10);
+  if (!Number.isFinite(b) || !Number.isFinite(r) || !Number.isFinite(t)) return false;
+  const no = (x) => parseInt(x && (x.bayNo || x.bay), 10);
+  const e = bs.find((x) => no(x) === b) || bs.find((x) => no(x) === b + 1) || bs.find((x) => no(x) === b - 1);
+  if (!e) return null;
+  const deck = t >= 80;
+  const tiers = ((deck ? e.deckTiers : e.holdTiers) || []).map(Number).filter(Number.isFinite);
+  if (!tiers.length) return null;   // 사전에 단 목록이 없으면 판정하지 않는다(막지 않는다)
+  if (!tiers.includes(t)) return false;
+  //  칸 수(deckCells·holdCells)는 00열을 뺀 수다(BayGridEditor·coneCargoPlan 과 같은 셈) — 열은 1..n, 00열은 따로.
+  const cells = ((deck ? e.deckCells : e.holdCells) || []).map(Number).filter(Number.isFinite);
+  const n = cells.length ? Math.max(...cells) : (Number(e.rowCount) || 0);
+  if (!n) return null;
+  const zf = deck ? e.deckHasZero : e.holdHasZero;
+  const zero = zf !== undefined && zf !== null ? !!zf : !!e.hasZero;
+  if (r === 0) return zero;
+  return r >= 1 && r <= n;
+}
+
+export function matchSheetItems(items, candidates, slotOk) {
   const pool = Array.from(new Set(candidates || []));
   const taken = new Map();   // 같은 컨이 두 칸에 걸리면 둘 다 확인 필요로 내린다
   const rows = (items || []).map((it) => {
@@ -102,8 +127,9 @@ export function matchSheetItems(items, candidates) {
       return { cn: c, score: dd * 3 + pd, dd };
     }).sort((a, b) => a.score - b.score);
     const b1 = sc[0] || null, b2 = sc[1] || null;
-    const auto = !it.dupSlot && !!b1 && b1.dd <= 2 && (!b2 || (b2.score - b1.score) >= 2);
-    const r = { ...it, cn: auto ? b1.cn : null, best: b1 && b1.cn, second: b2 && b2.cn, why: auto ? '' : it.dupSlot ? '같은 칸 번호가 두 번 읽혔어요 — 칸 번호를 확인해 주세요' : (b1 ? `숫자를 ${b1.dd}자리 다르게 읽었어요 — 확인해 주세요` : '후보가 없어요') };
+    const bad = typeof slotOk === 'function' && slotOk(it.bay, it.row, it.tier) === false;
+    const auto = !bad && !it.dupSlot && !!b1 && b1.dd <= 2 && (!b2 || (b2.score - b1.score) >= 2);
+    const r = { ...it, cn: auto ? b1.cn : null, best: b1 && b1.cn, second: b2 && b2.cn, why: auto ? '' : bad ? '이 배에 없는 칸 번호예요 — 칸 번호를 확인해 주세요' : it.dupSlot ? '같은 칸 번호가 두 번 읽혔어요 — 칸 번호를 확인해 주세요' : (b1 ? `숫자를 ${b1.dd}자리 다르게 읽었어요 — 확인해 주세요` : '후보가 없어요') };
     if (r.cn) taken.set(r.cn, (taken.get(r.cn) || 0) + 1);
     return r;
   });
@@ -127,8 +153,8 @@ export async function readSheetPhoto(file) {
 }
 
 /** 두 번 읽은 결과를 맞춘다 — 두 번 모두 같은 칸에 같은 컨을 고른 것만 자동, 어긋나면 «확인 필요». 한 번만 읽혔으면 그 결과 그대로. */
-export function matchSheetRuns(runs, candidates) {
-  const ms = (runs || []).map((items) => matchSheetItems(items, candidates));
+export function matchSheetRuns(runs, candidates, slotOk) {
+  const ms = (runs || []).map((items) => matchSheetItems(items, candidates, slotOk));
   if (ms.length < 2) return ms[0] || [];
   const [a, b] = ms;
   const bBySlot = new Map(b.map((r) => [r.slot, r]));

@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
+import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -152,6 +152,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       //  3.2-01: 통과분은 완료할 수 없다 — 카드가 어느 길로 왔든 여기서 한 번 더(감사 P1-2).
       if (!canCompleteContainer(c, c._mode)) { alert(`평택 ${isDischarge ? '양하' : '선적'} 대상이 아닙니다 (${isDischarge ? 'POD ' + (c.pod || '?') : 'POL ' + (c.pol || '?')}) — 통과화물은 ${verb}할 수 없습니다.`); return; }
+      { const _np = loadingNoPosAsk(c, c._mode); if (_np && !window.confirm(_np)) return; }   // 3.58-05: 자리 없는 선적 완료
       await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
       // 완료 후 자동 비우기 콜백

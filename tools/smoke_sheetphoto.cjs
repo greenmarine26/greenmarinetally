@@ -23,6 +23,19 @@ ok(M.matchSheetRuns([runs[0]], F.candidates).filter((r) => r.cn).length >= 29, '
 { const t = F.runs[0]; const cut = t.slice(0, t.indexOf('}', t.indexOf('130404')) + 1) + ' {"slot":"1306';   // 검수사 폰 실측 — AI 가 JSON 을 깨뜨려 보냄
   const r = M.parseSheetResponse(cut.replace('}, {', '} {'));
   ok(r.length >= 2, `깨진 JSON 이 와도 성한 칸은 읽는다 (${r.length}칸)`); }
+{ const bd = F.bayDef;   // 3.58-05 — 이 배 베이사전에 없는 칸은 자동 금지((10)11 기록지 실측 «10-07-04»)
+  ok(M.sheetSlotOk(bd, '10', '07', '04') === false && M.sheetSlotOk(bd, '10', '06', '04') === true && M.sheetSlotOk(bd, '10', '07', '82') === true && M.sheetSlotOk(bd, '10', '01', '10') === false,
+     '베이사전 칸 판정 — 홀드 10-07-04 없음 · 10-06-04 있음 · 데크 10-07-82 있음 · 10단 없음');
+  const z = { baysSummary: [{ bay: '001', deckTiers: [82], holdTiers: [4], deckCells: [4], holdCells: [2], hasZero: true }] };
+  ok(M.sheetSlotOk(z, '01', '00', '82') === true && M.sheetSlotOk(z, '01', '04', '82') === true && M.sheetSlotOk(z, '01', '05', '82') === false && M.sheetSlotOk({ baysSummary: [{ bay: '001', deckCells: [4] }] }, '01', '01', '82') === null,
+     '00열 있는 배 — 00열·끝열 있음 · 넘는 열 없음 · 단 목록 없으면 판정 안 함');
+  ok(M.sheetSlotOk(null, '10', '01', '02') === null, '베이사전이 없으면 판정하지 않는다(막지 않는다)');
+  const it = [{ slot: '100704', bay: '10', row: '07', tier: '04', prefix: 'EAXU', digits: '2045294', printed: '', sure: true }];
+  const m = M.matchSheetItems(it, F.candidates, (b, r, t) => M.sheetSlotOk(bd, b, r, t));
+  ok(!m[0].cn && /없는 칸/.test(m[0].why), '없는 칸은 컨이 맞아도 «확인 필요» 로 남는다'); }
+{ const a = M.loadingNoPosAsk({ cn: 'TIIU6553008', _mode: 'loading' }, 'loading');
+  ok(!!a && M.loadingNoPosAsk({ cn: 'X', bay: '10', _mode: 'loading' }, 'loading') === '' && M.loadingNoPosAsk({ cn: 'X' }, 'discharge') === '' && M.loadingNoPosAsk({ cn: 'X', bay_actual: '10' }, 'loading') === '' && M.loadingNoPosAsk({ cn: 'X', _src: 'list' }, 'loading') === '' && M.loadingNoPosAsk({ cn: 'X', _virtualFromList: true }, 'loading') === '',
+     '자리 없는 선적 완료만 묻는다(자리 있음·양하는 안 묻는다)'); }
 ok(M.isoOk('EAXU2045294') && !M.isoOk('EAXU2045295'), 'ISO 체크디지트');
 const CONE = fs.readFileSync(path.join(__dirname, '../public/cone.html'), 'utf8');
 ok(/function ctDrawRows\(mode\)/.test(CONE) && (CONE.match(/ctDrawRows\(/g) || []).length >= 4, '콘앱이 계획 밖 선적 기록도 그린다(ctDrawRows)');

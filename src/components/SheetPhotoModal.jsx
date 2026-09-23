@@ -3,7 +3,7 @@
    저장은 검수원이 손으로 «실제 위치 지정 → 선적 완료» 한 것과 **같은 길**이다 — fbSetActualPosition → fbCompleteContainer(계획 자리 ediContainers 는 건드리지 않는다).
    새 저장 함수를 만들지 않는다. 조회만·호기 없음은 사진을 읽기 전에 기존 게이트(canWorkNow·getEquipNumber)로 먼저 막는다. 콘앱은 이 기록(records.*_actual·completed)을 읽어 그린다. */
 import React, { useMemo, useState } from 'react';
-import { readSheetPhoto, matchSheetRuns, sheetCandidates, isoOk } from '../sheetPhoto.js';
+import { readSheetPhoto, matchSheetRuns, sheetCandidates, isoOk, sheetSlotOk } from '../sheetPhoto.js';
 import { fbSetActualPosition, fbCompleteContainer } from '../firebase.js';
 import { getEquipNumber } from '../utils.js';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';
@@ -11,9 +11,12 @@ import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';
 export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
+  const [note, setNote] = useState('');   // 3.58-05: 오류가 아닌 안내는 빨간 칸이 아니라 노란 줄로
   const [rows, setRows] = useState(null);
   const [done, setDone] = useState(null);
   const cands = useMemo(() => sheetCandidates(voyage), [voyage]);
+  //  3.58-05: 이 배 베이사전에 없는 칸은 자동으로 넣지 않는다(사전 없으면 판정 안 함).
+  const slotOk = (b, r, t) => { try { const d = ((typeof window !== 'undefined' && window.__fbShipBayDict) || {})[String((voyage && voyage.info && voyage.info.vsl) || '').toUpperCase()]; return sheetSlotOk(d ? (d.bayDef || d) : null, b, r, t); } catch (e) { return null; } };
   const rec = (voyage && voyage.loading && voyage.loading.records) || {};
   const comp = (voyage && voyage.loading && voyage.loading.completed) || {};
   const posOf = (cn) => { const r = rec[cn]; return r && r.bay_actual && !String(r.bay_actual).startsWith('__') ? `${r.bay_actual}-${r.row_actual}-${r.tier_actual}` : ''; };
@@ -23,11 +26,11 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
     if (!f) return;
     if (!canWorkNow()) { alert(workGateText('선적 자리 기록')); return; }   // 조회만은 보기만 — AI 를 부르기 전에 막는다
     if (!getEquipNumber()) { alert(equipGateText()); return; }
-    setErr(''); setDone(null); setBusy('기록지를 읽는 중이에요 (30초쯤)…');
+    setErr(''); setNote(''); setDone(null); setBusy('기록지를 읽는 중이에요 (30초쯤)…');
     try {
       const items = await readSheetPhoto(f);
-      if (items.length < 2) setErr('한 번만 읽혔어요 — 두 번 대조를 못 했으니 자동 체크된 칸도 한 번 더 봐 주세요.');
-      const m = matchSheetRuns(items, cands).map((r) => ({ ...r, use: !!r.cn, pick: r.cn || r.best || '' }));
+      if (items.length < 2) setNote('한 번만 읽혔어요 — 두 번 대조를 못 했으니 자동 체크된 칸도 한 번 더 봐 주세요.');
+      const m = matchSheetRuns(items, cands, slotOk).map((r) => ({ ...r, use: !!r.cn, pick: r.cn || r.best || '' }));
       m.sort((a, b) => a.slot.localeCompare(b.slot));
       setRows(m);
       if (!m.length) setErr('손으로 고쳐 적은 칸을 못 찾았어요 — 기록지 한 장이 다 나오게 위에서 다시 찍어 주세요.');
@@ -44,6 +47,8 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
     const slots = list.map((r) => `${r.bay}${r.row}${r.tier}`);
     const badSlot = list.filter((r) => !/^\d{6}$/.test(`${r.bay}${r.row}${r.tier}`)).map((r) => r.pick);
     if (badSlot.length) { setErr(`칸 번호는 여섯 자리(베이·열·단)로 적어 주세요: ${badSlot.join(', ')}`); return; }
+    const noSlot = list.filter((r) => slotOk(r.bay, r.row, r.tier) === false).map((r) => `${r.bay}-${r.row}-${r.tier}`);
+    if (noSlot.length) { setErr(`이 배에 없는 칸이에요: ${noSlot.join(', ')} — 칸 번호를 고쳐 주세요`); return; }
     const dupS = slots.filter((c, i, a) => a.indexOf(c) !== i);
     if (dupS.length) { setErr(`한 칸에 컨이 둘이에요: ${Array.from(new Set(dupS)).join(', ')} — 칸 번호를 고쳐 주세요`); return; }
     if (!window.confirm(`${list.length}대의 선적 자리를 기록할까요?\n(이미 같은 자리인 컨은 건너뜁니다)`)) return;
@@ -84,6 +89,7 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
         </div>
         {busy && <div className="mt-2 text-xs text-amber-200 font-bold animate-pulse">{busy}</div>}
         {err && <div className="mt-2 text-xs text-red-300 font-bold">⚠ {err}</div>}
+        {note && <div className="mt-2 text-xs text-amber-200 font-bold">{note}</div>}
         {rows && rows.length > 0 && (
           <>
             <div className="mt-3 text-xs text-white font-bold">읽은 칸 {rows.length} · 자동으로 맞춘 칸 {nAuto} · 확인 필요 {rows.length - nAuto}</div>
@@ -97,7 +103,7 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
                       <tr key={i} className={`border-t border-line ${r.cn ? '' : 'bg-amber-900/30'}`} data-slot={r.slot}>
                         <td className="p-1"><input type="checkbox" checked={r.use} onChange={(e) => setRow(i, { use: e.target.checked })} aria-label={`${r.slot} 넣기`} /></td>
                         <td className="p-1">
-                          <input value={`${r.bay}${r.row}${r.tier}`} inputMode="numeric" onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setRow(i, { bay: v.slice(0, 2), row: v.slice(2, 4), tier: v.slice(4, 6) }); }}
+                          <input value={`${r.bay}${r.row}${r.tier}`} inputMode="numeric" onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setRow(i, { bay: v.slice(0, 2), row: v.slice(2, 4), tier: v.slice(4, 6), dupSlot: false }); }}
                             className={`w-16 bg-ink-950 border rounded px-1 py-0.5 font-mono font-bold ${r.dupSlot ? 'border-amber-400 text-amber-200' : 'border-line text-white'}`} aria-label={`${r.slot} 칸 번호`} />
                         </td>
                         <td className="p-1">

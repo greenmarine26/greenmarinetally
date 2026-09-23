@@ -1770,6 +1770,16 @@ export function fbSubscribeHeartbeat(callback) {
   return unsub;
 }
 
+//  3.58-03·05: `cn` 칸이 빠진 기록(자리만 적힌 새 기록)을 키로 채운다 — 화면은 기록을 r.cn 으로 찾는다.
+//    들어오는 자리 두 곳(현재 항차 구독·보관 항차 읽기)이 같은 한 벌을 부른다.
+function _fillRecordCn(voy) {
+  for (const _m of ['discharge', 'loading']) {
+    const _rs = voy && voy[_m] && voy[_m].records;
+    if (_rs && typeof _rs === 'object') for (const _cn of Object.keys(_rs)) { const _r = _rs[_cn]; if (_r && typeof _r === 'object' && !_r.cn) _rs[_cn] = { ..._r, cn: _cn }; }
+  }
+  return voy;
+}
+
 export function fbSubscribeVoyages(callback) {
   const r = ref(db, 'voyages');
   const unsub = onValue(r, (snap) => {
@@ -1782,10 +1792,7 @@ export function fbSubscribeVoyages(callback) {
       //  한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
       //  3.58-03: `cn` 칸이 빠진 기록(자리만 적힌 새 기록 — 3.58-01~02 기록지 사진 저장분 XTPG 541E 24대)은 키로 채운다.
       //    화면들이 기록을 `r.cn` 으로 찾으므로 빠지면 그 기록이 안 보이고 베이 그림이 옛 자리를 그렸다. 문지기는 들어오는 이 자리 한 곳.
-      for (const _m of ['discharge', 'loading']) {
-        const _rs = v[k] && v[k][_m] && v[k][_m].records;
-        if (_rs && typeof _rs === 'object') for (const _cn of Object.keys(_rs)) { const _r = _rs[_cn]; if (_r && typeof _r === 'object' && !_r.cn) _rs[_cn] = { ..._r, cn: _cn }; }
-      }
+      _fillRecordCn(v[k]);
       try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[터미널 자리] 반영 실패 —', k, e); }
       try { v[k] = applyAutoSwap(v[k]); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
     }
@@ -2338,7 +2345,7 @@ export async function fbGetArchiveVoyage(voyageKey) {
     if (k.startsWith('_')) continue;
     out[k] = v;
   }
-  return out;
+  return _fillRecordCn(out);   // 3.58-05: 보관 항차도 같은 한 벌
 }
 
 // ── TallyOne 1.6: 마감 텔리 생성 시각 기록 ──
