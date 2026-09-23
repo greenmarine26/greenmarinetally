@@ -96,19 +96,34 @@ function getContainerCategory(c) {
   return { len, type, fe };
 }
 
-function getSortKey(c) {
-  const { len, type, fe } = getContainerCategory(c);
-  // M5.52: 선사별 정렬 (1차 키) + 기존 사이즈/F-E (2차 키)
-  const line = normalizeCarrier(c);
-  /* ★ 2.91 (검수사 인쇄 실물 «정렬 안됨 — 사이즈별 규격별 컨넘버별. 리퍼들 속에 FR 등이 들어가 있고
-       그러면 안됨») — 종전은 특수를 **한 덩어리(2)** 로 묶어 리퍼·FR·OT·탱크가 섞였다.
-       규격으로 갈라 같은 것끼리 모은다: 풀 → 엠티 → 리퍼 → FR → OT → 탱크.
-       ⚠ 사이즈(20/40)가 1차, 규격이 2차, 컨번호가 3차 — 검수사가 말한 그 순서다. */
-  const sizeGroup = len === 20 ? 0 : 10;
-  const TYPE_ORDER = { normal: 0, reefer: 2, fr: 3, ot: 4, tk: 5 };
-  const typeOrder = type === 'normal' ? (fe === 'F' ? 0 : 1) : (TYPE_ORDER[type] ?? 6);
-  return { line, secondary: sizeGroup + typeOrder };
+//  ★ 3.60: 검수 리스트 정렬·순번 한 벌 — 종이·CSV 가 같은 순서를 쓴다.
+//    검수사 2026-09-24 «선사를 없애고 규격 f/e 일반/특수알파벳순» · «넘버링은 20풀 따로 20엠티 따로 특수화물 따로 40도 마찬가지»
+//    묶음 = 길이(20 / 40 — 45 는 40) × [일반 풀 · 일반 엠티 · 특수]. 묶음 안에서는 규격 → F/E → 컨번호 알파벳순. 순번은 묶음마다 1부터.
+//  특수 = 별첨(시트2)과 같은 판정(리퍼·FR·OT·탱크·위험물·규격초과).
+function _isSpecialCargo(c) {
+  const { type } = getContainerCategory(c);
+  return type !== 'normal' || !!(c.dg || c.oog || c.fr || c.ot || c.tk);
 }
+function _inspGroup(c) {
+  const { len, fe } = getContainerCategory(c);
+  const k = _isSpecialCargo(c) ? 2 : (fe === 'F' ? 0 : 1);
+  return (len === 20 ? 0 : 10) + k;
+}
+function inspSortCmp(a, b) {
+  const ga = _inspGroup(a), gb = _inspGroup(b);
+  if (ga !== gb) return ga - gb;
+  const sa = _specOf(a), sb = _specOf(b);
+  if (sa !== sb) return sa < sb ? -1 : 1;
+  const fa = String(a.fe || '').toUpperCase() === 'F' ? 0 : 1, fb = String(b.fe || '').toUpperCase() === 'F' ? 0 : 1;
+  if (fa !== fb) return fa - fb;
+  return String(a.cn || '').localeCompare(String(b.cn || ''));
+}
+//  정렬된 목록에 묶음별 순번을 매긴다.
+function inspNumber(sorted) {
+  let g = null, n = 0;
+  return sorted.map(c => { const k = _inspGroup(c); if (k !== g) { g = k; n = 0; } return ++n; });
+}
+
 
 function getRowColor(c, noFlag) {
   //  ★ 3.45 — X-RAY 가 규격색을 이긴다. 규격은 «규격» 칸에서 보고, 색은 «지금 할 일»을 가리킨다.
@@ -142,7 +157,7 @@ const _memoW = (txt) => { let w = 0; for (const ch of txt) { const c = ch.charCo
 //  ⚠ 1280px 기본 뷰포트로 재면 1.68배 넓은 자가 된다(4차 감사 — 그 때문에 실번호 41칸 침범을 «0» 이라고 봤다).
 //  ⚠ **6pt 아래로는 안 줄인다.** 이 저장소는 X-RAY 확인서에서 «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다» 고
 //    확정했다(generateXrayListHTML 주석). 더 줄이는 대신 **줄을 바꾼다** — 작게 만드는 것보다 낫다.
-const MEMO_FIT = [42, 52];
+const MEMO_FIT = [13, 16];   // 3.60: 세 단(비고 18%)에서 크로뮴 A4 실측 — 7pt 한 줄 13폭단위(«-20.0℃»=13 한 줄) · 6pt 16(«치수 미신고»=17 은 6pt 에서도 두 줄)
 const _memoFit = (plain) => {
   const w = _memoW(plain);
   for (let i = 0; i < MEMO_FIT.length; i++) if (w <= MEMO_FIT[i]) return { cls: i ? ` m${i + 1}` : '', lines: 1 };
@@ -163,6 +178,31 @@ const _specOf = (c) => {
   return `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
 };
 
+//  ★ 3.60: FR·OT 비고 한 벌(종이·CSV) — 초과치수가 있으면 «오버 L+… cm», 실치수가 있고 초과가 없으면 «인게이지»,
+//    치수가 하나도 없으면 «치수 미신고»(모르는 것을 인게이지라고 지어내지 않는다).
+function _shapeNote(c) {
+  const _d = [];
+  if (c.ovl) _d.push(`L+${c.ovl}`);
+  if (c.ovw) _d.push(`W+${c.ovw}`);
+  if (c.ovh) _d.push(`H+${c.ovh}`);
+  if (!_d.length) { const _o = overDims(c); if (_o && _o.over) _d.push(..._o.short); }
+  if (_d.length) return `오버 ${_d.join(' ')}cm`;
+  if (c.cgL || c.cgW || c.cgH) return '인게이지';
+  return '치수 미신고';
+}
+
+//  ★ 3.60 (검수사 2026-09-24 «그냥 20.0 온도기호») — 온도는 숫자 소수 한 자리 + ℃ 로만(예 -20.0℃). «T-20C» 같은 원문 표기를 그대로 찍지 않는다.
+//    숫자를 못 읽으면 원문을 그대로 둔다(지어내지 않는다).
+function _fmtTemp(v) {
+  //  감사 지적 — 유니코드 마이너스(−)·대시(–—)와 «- 20» 처럼 띄운 부호도 영하로 읽는다(부호를 잃으면 냉동 리퍼가 +20℃ 로 나간다).
+  const t = String(v == null ? '' : v).trim().replace(/[\u2212\u2012\u2013\u2014\uFE63\uFF0D]/g, '-');
+  if (!t) return '';
+  const m0 = t.match(/([-+])?\s*(\d+(?:\.\d+)?)/);
+  const m = m0 ? [`${m0[1] === '-' ? '-' : ''}${m0[2]}`] : null;
+  if (!m) return t;
+  return `${Number(m[0]).toFixed(1)}℃`;
+}
+
 // 단일 줄 HTML
 function renderRow(c, idx, opts) {
   const _noFlag = !!(opts && opts.noFlag);   // 2.92-01: 별첨 — 성질 아닌 표기(X-RAY·긴급) 제외
@@ -180,13 +220,11 @@ function renderRow(c, idx, opts) {
   //    (ATPR 2642E — 실번호 SINOKOR011526 이 종이에 «SINOKOR011» 로 나갔다). M5.52 가 선사 칸 공간을 위해 10자로 잘랐는데
   //    검수는 실번호로 실물을 맞추는 일이라 뒷자리를 잃으면 종이가 거짓이 된다. 칸을 넓히고(실번호 16→18%, 컨번호 19→17%) 10자 넘으면 6pt 로 줄인다 — 줄바꿈은 장당 줄수를 깨므로 안 쓴다.
   const sl = String(c.sl || '').trim();
-  const _slCls = sl.length > 10 ? ' s2' : '';
+  const _slCls = sl.length > 13 ? ' s3' : sl.length > 10 ? ' s2' : sl.length > 8 ? ' s1' : '';   // 3.60: 9~10자 7.5pt · 11자부터 6pt   // 3.60: 세 단 — 9자부터 6pt(10자 실번호가 8pt 로 칸을 넘었다, 크로뮴 실측)
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
   const isBooking = c.isBooking === true || c.pendingCn === true ||
                     (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_'));
   const cn = isBooking ? '' : (c.cn || '');
-  // M5.52: 선사 (c.op = EDI NAD+CA 또는 리스트 carrier 컬럼) 우선, 폴백 cn prefix(owner code)
-  const line = normalizeCarrier(c).slice(0, 5);
   // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
   const notes = [];
   if (isBooking) notes.push('<span style="color:#b45309;font-weight:bold">📝대기</span>');
@@ -203,34 +241,15 @@ function renderRow(c, idx, opts) {
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
   let reeferTmp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim()
                 : (c.temp != null && String(c.temp).trim() !== '') ? String(c.temp).trim() : null;
-  if (type === 'reefer' && reeferTmp != null) {
-    const hasUnit = /℃|°|C$/i.test(reeferTmp);
-    notes.push(hasUnit ? reeferTmp : `${reeferTmp}℃`);
-  }
+  if (type === 'reefer') notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
   /* ★ 2.91 (검수사 «FR 폭 길이 높이 다 표기 해줘야 함») — FR 은 치수가 곧 작업 정보다.
        초과분(DIM)만 적던 것을 **폭·길이·높이 세 칸**으로 바꾼다. 없는 값은 «-» 로 자리를 남긴다
        (§2-0-D — 조용히 없애지 않는다). 치수가 하나도 없으면 «치수 미신고»라고 말한다(§0-Y-2). */
-  if (type === 'fr' || c.fr) {
-    const _d = [];
-    if (c.ovl) _d.push(`L+${c.ovl}`);
-    if (c.ovw) _d.push(`W+${c.ovw}`);
-    if (c.ovh) _d.push(`H+${c.ovh}`);
-    if (!_d.length) { const _o = overDims(c); if (_o && _o.over) _d.push(..._o.short); }
-    const _real = (c.cgL || c.cgW || c.cgH)
-      ? `${c.cgL || '-'}×${c.cgW || '-'}×${c.cgH || '-'}mm` : '';
-    notes.push(`<span style="color:#166534;font-weight:bold">FR${_d.length ? ' ' + _d.join(' ') + 'cm' : ''}${_real ? ' ' + _real : ''}${(!_d.length && !_real) ? ' 치수 미신고' : ''}</span>`);
+  //  ★ 3.60 (검수사 2026-09-24 «규격에 42ut 이렇게 표시하면 비고에 ot라고 표시 안해도 됩니다. 리퍼도 마찬가지 온도만 표기
+  //    fr도 마찬가지 오버 또는 인게이지») — 종류는 규격 칸이 말한다. 비고엔 FR·OT 는 오버(초과치수)/인게이지만, 리퍼는 온도만, TK 는 없음.
+  if (type === 'fr' || c.fr || type === 'ot' || c.ot) {
+    notes.push(`<span style="color:#166534;font-weight:bold">${_shapeNote(c)}</span>`);
   }
-  /* ★ 2.91-03 (검수사 «OOG는 규격외 화물을 표기합니다. 그래서 따로 표기하지 않습니다. FR, OT로
-       표기해주세요 — 지금 화면은 이중표기») — OT 도 FR 과 같이 치수를 달고, OOG 줄은 없앤다. */
-  if (type === 'ot' || c.ot) {
-    const _d = [];
-    if (c.ovl) _d.push(`L+${c.ovl}`);
-    if (c.ovw) _d.push(`W+${c.ovw}`);
-    if (c.ovh) _d.push(`H+${c.ovh}`);
-    if (!_d.length) { const _o = overDims(c); if (_o && _o.over) _d.push(..._o.short); }
-    notes.push(`<span style="color:#166534;font-weight:bold">OT${_d.length ? ' ' + _d.join(' ') + 'cm' : ''}</span>`);
-  }
-  if (type === 'tk' || c.tk) notes.push('TK');
   // TallyOne 2.00 (검수사 지시 2026-08-20 «검수용 리스트에 DG(클래스·유엔넘버)·리퍼온도·OOG(높이 폭)·특수화물 다 기록»):
   //   DG — 클래스·UN·포장등급 (nlSearch specialDetailLines 와 같은 필드 dgc/un/pg. TNJP 26360E 실측: cl.9 UN3480)
   // TallyOne 2.00-03 (검수사 지시 «DG 표기는 */**** 형식으로»): 클래스/UN 만 — 예 «9/3480». 번호 없으면 DG 로 폴백
@@ -260,17 +279,17 @@ function renderRow(c, idx, opts) {
   const _plain = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ');
   const _memoCls = _memoFit(_plain).cls;
   return `<tr style="background:${bg}">
-    <td>${idx}</td>
+    <td class="no">${idx}</td>
     <td class="cn">${cn}</td>
     <td class="sl${_slCls}">${_esc(sl)}</td>
     <td>${spec}</td>
     <td>${fe}</td>
     <td class="memo${_memoCls}">${note}</td>
-    <td class="line">${line}</td>
   </tr>`;
 }
 
-const PER_COL = 75;
+const PER_COL = 50;   // 3.60: 좌·중·우 세 단 × 50줄(검수사 2026-09-24 «50줄로 3단화면이면 어떤가요?») — 종전 좌·우 두 단 × 75줄
+const COLS_PER_PAGE = 3;
 //  3.29: PER_PAGE(150 고정)와 옛 renderPage(75/75 고정 자르기)는 걷어 냈다 —
 //    renderPage 는 3.28 에서도 호출부가 0 이었고, 남겨 두면 옛 규칙이 파일에 있는 채로
 //    «150 고정 자르기가 남지 않았다» 검사가 통과한다. 단 배분은 아래 packCols 한 벌이다.
@@ -299,7 +318,7 @@ const packCols = (rows, perCol = PER_COL) => {
 };
 const packPages = (rows, perCol = PER_COL) => {
   const cols = packCols(rows, perCol); const pages = [];
-  for (let i = 0; i < cols.length; i += 2) pages.push([cols[i], cols[i + 1] || []]);
+  for (let i = 0; i < cols.length; i += COLS_PER_PAGE) pages.push(Array.from({ length: COLS_PER_PAGE }, (_, k) => cols[i + k] || []));
   return pages;
 };
 
@@ -322,36 +341,24 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   const list = withShipOp(containers, voyageInfo);
   if (list.length === 0) return '<p>컨테이너 없음</p>';
 
-  // M5.52: 선사별 정렬 (1차) → 사이즈/F-E (2차) → 컨번호 (3차)
-  list.sort((a, b) => {
-    const ka = getSortKey(a), kb = getSortKey(b);
-    if (ka.line !== kb.line) return ka.line.localeCompare(kb.line);
-    if (ka.secondary !== kb.secondary) return ka.secondary - kb.secondary;
-    return (a.cn || '').localeCompare(b.cn || '');
-  });
-
-  // M5.52: 선사별로 순번 1부터 재시작
-  let lineIdxMap = {};
-  list.forEach(c => {
-    const line = normalizeCarrier(c);
-    lineIdxMap[line] = (lineIdxMap[line] || 0) + 1;
-    c._lineIdx = lineIdxMap[line];
-  });
+  //  ★ 3.60 (검수사 2026-09-24 «규격별로 알파벳순» → «선사를 없애고 규격 f/e 일반/특수알파벳순» → «넘버링은 20풀 따로 20엠티 따로 특수화물 따로 40도 마찬가지»)
+  //    정렬·순번은 inspSortCmp·inspNumber 한 벌(CSV 도 같은 것). 선사 칸은 종이에서 뺐다.
+  list.sort(inspSortCmp);
+  { const _n = inspNumber(list); list.forEach((c, i) => { c._lineIdx = _n[i]; }); }
 
   // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
   //  3.29: 150 고정으로 자르지 않는다 — 비고가 긴 행이 자리를 더 먹으므로 «줄 수»로 채운다.
-  const allPages = packPages(list.map(c => renderRow(c, c._lineIdx)));   // 전체 idx 대신 선사별 idx
+  const allPages = packPages(list.map(c => renderRow(c, c._lineIdx)));   // 3.60: 묶음별 순번
   // sheet1Pages는 아래 renderPageWithHdr로 계산 (헤더 포함)
 
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
   const special = list.filter(c => {
-    const { type } = getContainerCategory(c);
     /* ★ 2.92-01 (검수사 확정 2026-08-31) — *«XRAY, 긴급화물은 특수 화물이 아닙니다.
          거기에 기록할 필요가 없습니다»* — 별첨은 **화물의 성질**이 특수한 것만 모은다
          (리퍼·FR·OT·탱크·위험물·규격초과). X-RAY 는 세관 검사 지정이고 긴급은 처리 순서라
          둘 다 성질이 아니다 — 각자 제 서류(X-RAY 확인서·긴급 안내)가 따로 있다.
        ⚠ 본문(시트1) 표기는 그대로 둔다 — 거기서는 알아야 할 정보다. */
-    return type !== 'normal' || c.dg || c.oog || c.fr || c.ot || c.tk;
+    return _isSpecialCargo(c);
   });
 
   let sheet2Html = special.length > 0 ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
@@ -371,9 +378,9 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   // M5.29: 각 페이지 상단 헤더 (좌: 선박명 / 중: 항차 / 우: 날짜+페이지) — cover page 제거
   // 페이지 헤더 렌더링을 위해 renderPage에 정보 전달 필요 → 메인 함수에서 직접 조립
   const renderPageWithHdr = (pair, pageNum, totalPages) => {
-    const [left, right] = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL)];
+    const colsOf = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL, PER_COL * 2), pair.slice(PER_COL * 2)];
     const col = (rs) => `<table class="ilist">
-      <colgroup><col style="width:6%"><col style="width:17%"><col style="width:18%"><col style="width:9%"><col style="width:4%"><col style="width:35%"><col style="width:11%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F/E</th><th>비고</th><th>선사</th></tr></thead>
+      <colgroup><col style="width:7%"><col style="width:31%"><col style="width:25%"><col style="width:14%"><col style="width:5%"><col style="width:18%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th style="font-size:5.5pt">F/E</th><th>비고</th></tr></thead>
       <tbody>${rs.join('')}</tbody>
     </table>`;
     return `<div class="ipage">
@@ -383,8 +390,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
         <div class="phdr-r">${dateStr} · ${pageNum}/${totalPages}</div>
       </div>
       <div class="icols">
-        <div class="icol">${col(left)}</div>
-        <div class="icol">${col(right)}</div>
+        ${colsOf.map((rs) => `<div class="icol">${col(rs)}</div>`).join('')}
       </div>
     </div>`;
   };
@@ -442,21 +448,24 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .icols { display: flex; gap: 1.5mm; }
 .icol { flex: 1; min-width: 0; }
 /* M5.30: 행 컴팩트 — 75행/단 보장 (이전 7.5pt + 1px padding으로 72행만 들어감) */
-table.ilist { width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
-table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: 3.4mm; }
-table.ilist th { background: #ddd; font-size: 6.5pt; font-weight: bold; height: 3.2mm; }
-table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0.3px; }
+table.ilist { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
+table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: 5.2mm; }
+table.ilist th { background: #ddd; font-size: 7pt; font-weight: bold; height: 4mm; white-space: nowrap; letter-spacing: -0.3px; }
+table.ilist td.no { font-size: 6.5pt; letter-spacing: -0.4px; }   /* 3.60: 순번이 세 자리(100~)가 되어도 칸 안에 */
+table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.5px; }
 /*  ★ 3.45 — 비고가 겹칠 때(검수사 2026-09-14 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다»).
     표식이 늘수록 글자만 줄여 **한 줄에 둘 다** 남긴다 — 줄바꿈이나 잘림으로 하나를 잃지 않는다. */
 /*  ★ 3.45 — 비고는 **잘리지 않는다**(검수사 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다»).
     ⚠ nowrap+overflow:hidden 은 글자폭 모델이 조금만 낙관해도 뒤를 **조용히 지운다** —
       재감사 크로뮴 실측에서 OOG 실치수 6건이 m2 칸에서 15~24px 잘렸다. 그래서 숨기지 않고 줄을 바꾼다.
       등급(m2~m5)은 «한 줄에 담으려는 노력» 이고, 못 담으면 줄이 늘 뿐 한 글자도 안 잃는다. */
-table.ilist td.memo { white-space: normal; overflow-wrap: anywhere; text-align: left; padding: 0 1.5px; }
+table.ilist td.memo { white-space: normal; overflow-wrap: anywhere; text-align: left; padding: 0 1.5px; font-size: 7pt; }
 table.ilist td.memo.m2 { font-size: 6pt; letter-spacing: -0.2px; }   /* 3.45: 바닥은 6pt — 더 줄이지 않고 줄을 바꾼다 */
 /*  ★ 3.53-10 — 실번호도 잘리지 않는다. 10자 넘으면 6pt(바닥). 줄은 안 바꾼다(장당 줄수가 깨진다) — 15자까지 칸 안, 그보다 길면 숨기지 않고 옆 칸 위로 보인다(실측 최대 14자·보관 17자 1건). */
 table.ilist td.sl { white-space: nowrap; letter-spacing: -0.2px; }   /* 줄을 바꾸면 장당 줄수(고정)가 깨져 A4 를 넘친다 — 칸을 넓히고(16→18%, 컨번호 19→17%) 글자를 줄인다 */
+table.ilist td.sl.s1 { font-size: 7.5pt; letter-spacing: -0.4px; }
 table.ilist td.sl.s2 { font-size: 6pt; letter-spacing: -0.4px; }
+table.ilist td.sl.s3 { font-size: 6pt; letter-spacing: -0.4px; white-space: normal; word-break: break-all; }   /* 3.60: 14자 이상(SINOKOR01152612) — 6pt 아래로는 안 줄인다(X-RAY 확인서 규칙). 세 단은 줄 높이 5.2mm 에 6pt 두 줄이 들어가 줄을 바꿔도 행이 안 늘어난다 */
 @media print {
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .actions { display: none; }
@@ -646,11 +655,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
   w.document.write(html);
   w.document.close();
   // M6.71: 엑셀 export 함수 새 창에 주입
-  const sortedConts = [...containers].sort((a, b) => {
-    const ka = getSortKey(a), kb = getSortKey(b);
-    if (ka !== kb) return ka - kb;
-    return (a.cn || '').localeCompare(b.cn || '');
-  });
+  const sortedConts = [...containers].sort(inspSortCmp);   // 3.60: 종이와 같은 순서(종전 비교식은 객체끼리 빼서 NaN — 사실상 정렬이 안 됐다)
   const vsl = voyageInfo?.vsl || voyageInfo?.vslFull || 'VESSEL';
   // V9.57: CSV 파일명 항차도 모드별 필드 우선(위 generateInspectionListHTML과 동일 기준)
   const voy = (mode === 'discharge'
@@ -664,6 +669,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     // 엑셀 호환 양식 — CSV (UTF-8 BOM + 한글 헤더)
     let csv = '\uFEFF';
     csv += '순번,컨테이너번호,실번호,규격,F/E,선사,비고\n';
+    const _no = inspNumber(d.containers);   // 3.60: 종이와 같은 묶음별 순번
     d.containers.forEach((c, i) => {
       const cn = (c.cn || '').replace(/,/g, '');
       const seal = String(c.sl || c.seal || '').replace(/,/g, '');   // TallyOne 2.00: 실번호 필드는 sl — seal 만 봐서 CSV 실번호가 늘 비었다
@@ -676,7 +682,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       const memo = [];
       if (c.dg) memo.push(`${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00-03: «9/3480» 형식(클래스/UN만)
       const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
-      if (cat.type === 'reefer') memo.push('R' + (_t != null && String(_t).trim() !== '' ? _t + '℃' : ''));
+      if (cat.type === 'reefer') memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
       //  ★ 3.45 — 인쇄물과 같은 표기를 CSV 에도(한쪽만 고치면 종이와 엑셀이 갈린다).
       if (c._xray) memo.push('XRAY' + (String(c._xraySealNo || '').trim() ? ' ' + String(c._xraySealNo).trim().replace(/,/g, '') : ''));
       const _ov = [];
@@ -684,11 +690,10 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       if (c.ovw) _ov.push('W+' + c.ovw);
       if (c.ovl) _ov.push('L+' + c.ovl);
       if (!_ov.length) { const _o = overDims(c); if (_o && _o.over) _ov.push(..._o.short); }   // 2.25
-      if (_ov.length) memo.push('OOG ' + _ov.join(' ') + 'cm');   // TallyOne 2.00
-      if (cat.type === 'fr') memo.push('FR');
-      if (cat.type === 'ot') memo.push('OT');
-      if (cat.type === 'tk') memo.push('TK');
-      csv += `${i+1},${cn},${seal},${iso},${fe},${op},${memo.join(' ')}\n`;
+      const _shape = cat.type === 'fr' || c.fr || cat.type === 'ot' || c.ot;
+      if (_shape) memo.push(_shapeNote(c));   // 3.60: 종이와 같은 오버/인게이지
+      else if (_ov.length) memo.push('OOG ' + _ov.join(' ') + 'cm');   // TallyOne 2.00
+      csv += `${_no[i]},${cn},${seal},${iso},${fe},${op},${memo.join(' ')}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);

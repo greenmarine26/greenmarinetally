@@ -37,7 +37,7 @@ const build = (withSeal, xIso) => Object.entries(FX.edi).map(([k, e]) => {
 }).filter((r) => String(r.pod || '').toUpperCase().startsWith('KRPT'));
 
 //  그려진 표를 칸 단위로 되읽는다 — «무엇이 어느 칸에 찍혔는가» 가 이 검사의 전부다
-const COLS = ['no', 'cn', 'sl', 'spec', 'fe', 'memo', 'line'];
+const COLS = ['no', 'cn', 'sl', 'spec', 'fe', 'memo'];   // 3.60: 선사 칸 없음(검수사 2026-09-24 «선사를 없애고»)
 //  HTML 엔티티를 되돌린다 — 이스케이프는 옳은 동작이고, 검사는 «글자가 살아남았는가» 를 본다
 const _dec = (v) => String(v || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
@@ -92,7 +92,7 @@ const anyRow = seen[Object.keys(seen)[0]];
 ok('머리칸 수 == 몸칸 수 — 값이 남의 칸 밑에 찍히지 않는다', !!anyRow && heads.every((h) => h.length === anyRow.nTd),
    anyRow ? `머리 ${heads[0] && heads[0].length} vs 몸 ${anyRow.nTd}` : '');
 ok('머리 이름과 내용이 맞는다(F/E 칸엔 F·E · 비고 칸엔 비고)',
-   !!heads[0] && heads[0][4] === 'F/E' && heads[0][5] === '비고' && heads[0][6] === '선사');
+   !!heads[0] && heads[0][4] === 'F/E' && heads[0][5] === '비고' && heads[0].length === 6);
 const cg = (html.match(/<colgroup>([\s\S]*?)<\/colgroup>/) || [])[1] || '';
 const widths = [...cg.matchAll(/width:(\d+)%/g)].map((m) => +m[1]);
 ok(`colgroup 이 ${COLS.length}칸이고 폭 합이 100% 다`, widths.length === COLS.length && widths.reduce((a, b) => a + b, 0) === 100,
@@ -148,8 +148,9 @@ ok('긴 비고는 6pt(m2)까지만 줄이고 그 아래로는 줄을 바꾼다',
    lr ? lr.raw[5].slice(0, 70) : '★XRAY 행 없음');
 ok('그 비고는 한 줄로 안 본다 — 배분기가 늘어난 줄을 센다', !!lr && M.memoFitOf(lr.memo).lines > 1,
    lr ? `${M.memoFitOf(lr.memo).lines}줄 · ${lr.memo.slice(0, 40)}` : '');
-ok('비고 전체가 남아 있다(★XRAY·봉인번호·FR·치수)',
-   !!lr && lr.memo.includes('★XRAY 523533') && lr.memo.includes('FR') && lr.memo.includes('H+121'), lr && lr.memo);
+//  3.60: 종류 이름(FR)은 규격 칸이 말한다 — 비고엔 «오버 치수»(검수사 2026-09-24 «fr도 마찬가지 오버 또는 인게이지»)
+ok('비고 전체가 남아 있다(★XRAY·봉인번호·오버 치수)',
+   !!lr && lr.memo.includes('★XRAY 523533') && lr.memo.includes('오버') && lr.memo.includes('H+121'), lr && lr.memo);
 //  글자 «수» 가 아니라 «폭» 으로 등급을 매기는가 — 소스를 읽지 않고 **그려진 결과**로 가린다.
 //  같은 길이인데 한글·× 가 든 쪽이 더 큰 등급이어야 한다(한글과 × 는 전각으로 그려진다).
 const clsOf = (memoRow) => {

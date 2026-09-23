@@ -111,7 +111,10 @@ const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-b
     out.memo = [];
     document.querySelectorAll('td.memo').forEach((td) => {
       const lh = parseFloat(getComputedStyle(td).lineHeight) || parseFloat(getComputedStyle(td).fontSize);
-      out.memo.push({ t: td.textContent.trim(), cls: td.className, lines: Math.round(td.getBoundingClientRect().height / lh) });
+      //  3.60: 칸 높이가 아니라 **글자가 실제로 그려진 줄**을 센다 — 세 단은 줄 높이(5.2mm)가 글자 한 줄보다 커서 칸 높이로 나누면 빈 줄까지 센다.
+      const rg = document.createRange(); rg.selectNodeContents(td);
+      const tops = new Set([...rg.getClientRects()].filter((q) => q.width > 0).map((q) => Math.round(q.top / (lh * 0.6))));
+      out.memo.push({ t: td.textContent.trim(), cls: td.className, lines: Math.max(1, tops.size) });
     });
     out.bodyX = document.body.scrollWidth > document.body.clientWidth + 1;
     return out;

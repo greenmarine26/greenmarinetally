@@ -2480,16 +2480,18 @@ export async function fbSetStowagePlan(voyageKey, mode, plan) {
 export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) {
   assertCanWork('엠티 실 입력');
   // fields: { eseal, eseal_wrong, reseal }
-  const eseal = String(fields.eseal || '').trim();
-  const eseal_wrong = String(fields.eseal_wrong || '').trim();
-  const reseal = String(fields.reseal || '').trim();
-
+  //  ★ 3.60 (감사 치명) — **넘기지 않은 칸은 지금 값을 지킨다.** 종전엔 없는 칸을 '' 로 만들어 update 해서,
+  //    엠티실만 고쳐도(컨 상세 기본 저장·엠티실 기록지 사진) 적어 둔 틀린실·리씰 번호가 지워졌다(이력에만 남음).
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const snap = await get(r);
   const cur = snap.val() || {};
   const oldEseal = cur.eseal || '';
   const oldWrong = cur.eseal_wrong || '';
   const oldReseal = cur.reseal || '';
+  const _has = (k) => fields && Object.prototype.hasOwnProperty.call(fields, k);
+  const eseal = _has('eseal') ? String(fields.eseal || '').trim() : oldEseal;
+  const eseal_wrong = _has('eseal_wrong') ? String(fields.eseal_wrong || '').trim() : oldWrong;
+  const reseal = _has('reseal') ? String(fields.reseal || '').trim() : oldReseal;
   const eseal_orig = cur.eseal_orig != null ? cur.eseal_orig : oldEseal;
 
   const history = Array.isArray(cur.eseal_history) ? [...cur.eseal_history] : [];

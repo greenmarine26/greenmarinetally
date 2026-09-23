@@ -38,6 +38,8 @@ import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
 import BayViewWork from '../components/BayViewWork.jsx';
+import { canWorkNow } from '../workChoice.js';   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
+import EsealPhotoModal from '../components/EsealPhotoModal.jsx';   // 3.60: 엠티실 기록지 사진 → 여섯 자리 실(검수사 2026-09-24)
 import SheetPhotoModal from '../components/SheetPhotoModal.jsx';   // 3.58: 선적 기록지 사진 → 선적 자리(검수사 2026-09-22)   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
 import GlobalSearchPage from './GlobalSearchPage.jsx';
 import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
@@ -2861,6 +2863,7 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
   const [edit, setEdit] = useState(false);
   const [rows, setRows] = useState(() => (has ? info.ranges.map(r => ({ ...r })) : [{ from: '', to: '' }]));
   const [showList, setShowList] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);   // 3.60: 엠티실 기록지 사진
   const [saving, setSaving] = useState(false);
   const save = async () => {
     const list = rows.map(r => ({ from: String(r.from).trim(), to: String(r.to).trim() }))
@@ -2922,6 +2925,11 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
           <div className="text-xxs text-teal-300">
             부착 {info.usedPairs.length} / 대상 {info.targets.length} · <b>잔여 실 {info.remain.length}개</b>
           </div>
+          {canWorkNow() && (
+            <button onClick={() => setShowPhoto(true)}
+              className="w-full py-2 rounded bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold">📷 엠티실 기록지 사진으로 넣기</button>
+          )}
+          {showPhoto && <EsealPhotoModal voyageKey={voyageKey} info={info} inspector={inspector} onClose={() => setShowPhoto(false)} />}
           <button onClick={() => setShowList(v => !v)}
             className="w-full py-2 rounded bg-teal-800/70 hover:bg-teal-700 text-teal-100 text-xs font-bold">
             {showList ? '접기' : '🔖 엠티실 정리 리스트 (제출용)'}

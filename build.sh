@@ -309,6 +309,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 해치 자동 판정 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HAM" "$SMOKE_HAO"; exit 1
   fi
+  # 3.60: 엠티실 기록지 사진 — ATPR 2643W 실사진 AI 실응답 두 번으로 src/esealPhoto.js 를 실소스 그대로 돌려 세 자리→여섯 자리와 틀린 짝 자동 0 을 잰다.
+  SMOKE_ESM=$(mktemp /dev/shm/hometmp/_esm_XXXXXX.mjs)
+  SMOKE_ESO=$(mktemp /dev/shm/hometmp/_eso_XXXXXX.cjs)
+  printf 'export * from "%s/src/esealPhoto.js";\n' "$PWD" > "$SMOKE_ESM"
+  if npx esbuild "$SMOKE_ESM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_ESO" --log-level=error; then
+    node tools/smoke_esealphoto.cjs "$SMOKE_ESO" || { echo "✗ 엠티실 사진 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ESM" "$SMOKE_ESO"; exit 1; }
+    rm -f "$SMOKE_ESM" "$SMOKE_ESO"
+  else
+    echo "✗ 엠티실 사진 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ESM" "$SMOKE_ESO"; exit 1
+  fi
   # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
   SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
   SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)
