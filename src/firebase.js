@@ -2819,6 +2819,23 @@ export function fbSubscribePortMis(callback) {
   return unsub;
 }
 
+// ★ TallyOne 3.59: 세관 «적하목록 검수예정 목록» — inspect_checklist/{MRN}. 검수원이 X-RAY 탭에서 xls 를 올린다(수석 관여 없음, 검수사 확정).
+//   같은 MRN 은 새 줄로 덮고, 새 파일에 없는 옛 MRN 은 지우지 않는다(지난 항차 서류 번호를 잃지 않게).
+export function fbSubscribeInspectCheck(callback) {
+  return onValue(ref(db, 'inspect_checklist'), (snap) => callback(snap.val() || {}));
+}
+export async function fbSaveInspectCheck(entries, by) {
+  assertCanWork('검수예정 목록 올리기');   // 조회만은 보기만(3.51) — 수석 가드는 없다(검수원 일)
+  const at = Date.now(); const up = {};
+  for (const e of entries || []) {
+    if (!e || !e.mrn || /[.#$\[\]\/]/.test(e.mrn)) continue;
+    up[e.mrn] = { ...e, uploadedAt: at, uploadedBy: by || '' };
+  }
+  if (!Object.keys(up).length) throw new Error('저장할 줄이 없습니다');
+  await update(ref(db, 'inspect_checklist'), up);
+  return Object.keys(up).length;
+}
+
 // V9.33: 평택도선사회 도선 예보 구독 (수집기 pilot.py가 기록)
 //   경로: pilot_forecast/{선박코드} = { code, vessel, callsign, rows[], nextDep, nextArr, updatedAt }
 //   PORT-MIS(신고=예보 성격)와 별도 노드 — 도선 예보는 확정에 가까우므로 카드에 함께 표시한다.

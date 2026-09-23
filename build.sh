@@ -319,6 +319,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 기록지 사진 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SPM" "$SMOKE_SPO"; exit 1
   fi
+  # 3.59: 세관 검수예정 목록 — 2026-09-23 실파일 22줄 × 진행 14항차로 src/inspectCheck.js 를 실소스 그대로 돌려 양하 MRN 12척 매칭·빈 항차 줄·다른 파일 거부를 잰다.
+  SMOKE_ICM=$(mktemp /dev/shm/hometmp/_icm_XXXXXX.mjs)
+  SMOKE_ICO=$(mktemp /dev/shm/hometmp/_ico_XXXXXX.cjs)
+  printf 'export { parseInspectCheckRows, matchInspectCheck, inspectStatusText } from "%s/src/inspectCheck.js";\n' "$PWD" > "$SMOKE_ICM"
+  if npx esbuild "$SMOKE_ICM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_ICO" --log-level=error; then
+    node tools/smoke_inspectcheck.cjs "$SMOKE_ICO" || { echo "✗ 검수예정 목록 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ICM" "$SMOKE_ICO"; exit 1; }
+    rm -f "$SMOKE_ICM" "$SMOKE_ICO"
+  else
+    echo "✗ 검수예정 목록 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ICM" "$SMOKE_ICO"; exit 1
+  fi
   # 3.56: 미르 기분 — 실 RTDB 스냅샷(2026-09-22 항차 14·하트비트)으로 src/mir.js [mirMood] 를 실소스 그대로 돌려 검수사 규칙(배고픔 10분 전·식후 배부름·기쁨=작업 선택/완료·슬픔=못 답함/방치·심심함=작업 없음/30분·초조함=자료 안 옴)과 대조한다. 콘앱도 같은 벌을 쓴다.
   SMOKE_MMM=$(mktemp /dev/shm/hometmp/_mmm_XXXXXX.mjs)
   SMOKE_MMO=$(mktemp /dev/shm/hometmp/_mmo_XXXXXX.cjs)

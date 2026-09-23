@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.58-07';
-const NOTE = '기록지 사진 — 사선·동그라미 표시만 있는 칸은 계획 컨이 그대로 실린 것으로 읽습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.59';
+const NOTE = 'X-RAY 탭에 세관 검수예정 목록(xls) 올리기가 생겼습니다 — 한 번 올리면 모든 항차에 양하 MRN 과 서류 상태가 붙습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

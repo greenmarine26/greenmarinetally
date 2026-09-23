@@ -23,10 +23,12 @@
 //       *«앱에서 컨번호를 조회하면 실번호와 XRAY번호를 둘다 볼수 있기 때문»* ← 미리 넣는 진짜 이유
 //
 //   ⛔ 앱 전반의 X-RAY 표시 판정은 건드리지 않았다(검수사 확정). 화물구분은 여기서만 쓴다.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
-import { fbSetXraySeal, fbUpdateVoyageInfo } from '../firebase.js';
+import { fbSetXraySeal, fbUpdateVoyageInfo, fbSubscribeInspectCheck, fbSaveInspectCheck } from '../firebase.js';
+import { parseInspectCheckRows, matchInspectCheck, inspectStatusText } from '../inspectCheck.js';
+import { canWorkNow } from '../workChoice.js';   // 3.59: 세관 검수예정 목록
 import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)                     // 2.39: 표에서 바로 봉인번호·봉인자 저장
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
 import { openXrayListPrint } from '../inspectionList.js';        // 2.26-02: 인쇄는 검수리스트·VGM 과 같은 벌(별도 문서)
@@ -56,6 +58,23 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  ★ 2.77: MRN 손입력 — PORT-MIS 에 없는 배(평택 미등록)는 여기서 적어 넣는다.
   const [mrnEdit, setMrnEdit] = useState(null);   // null=닫힘 · 문자열=편집 중인 값
   const [mrnBusy, setMrnBusy] = useState(false);
+  //  ★ 3.59: 세관 «적하목록 검수예정 목록» — 검수원이 올린 xls(inspect_checklist). 양하 MRN 과 서류 상태를 여기서 읽는다.
+  const [icList, setIcList] = useState({});
+  const [icMsg, setIcMsg] = useState('');
+  useEffect(() => { try { return fbSubscribeInspectCheck(setIcList); } catch (e) { console.warn('[3.59] 검수예정 목록 구독 실패', e); return undefined; } }, []);
+  async function uploadInspectCheck(ev) {
+    const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
+    if (!f) return;
+    setIcMsg('읽는 중…');
+    try {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+      const list = parseInspectCheckRows(rows);
+      const n = await fbSaveInspectCheck(list, inspector);
+      setIcMsg(`검수예정 목록 ${n}줄을 저장했습니다 — 모든 항차에 적용됩니다.`);
+    } catch (e) { setIcMsg('올리지 못했습니다 — ' + (e && e.message ? e.message : e)); }
+  }
 
   const info = voyage?.info || {};
 
@@ -86,7 +105,13 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
     const _pmLeg = pm && (mode === 'loading' ? pm.mrnOut : pm.mrnIn);
     const _pmTop = pm && pm.mrn;
     const _hand = String((mode === 'loading' ? info.mrnOut : info.mrnIn) || '').trim().toUpperCase();
-    const mrn = _legOK(_pmLeg) || _legOK(_pmTop) || _hand || '';
+    //  ★ 3.59: 읽는 순서 — 손입력 → 세관 검수예정 목록(양하 I 만) → PORT-MIS. 목록은 세관 원본이라 PORT-MIS 보다 앞이다.
+    const ic = mode === 'discharge' ? matchInspectCheck(icList, info) : null;
+    //    선적(E) 서류는 종전 순서 그대로 — PORT-MIS 레그 일치가 손입력보다 앞(감사 지적: 요청 범위는 양하뿐).
+    const _pmOk = _legOK(_pmLeg) || _legOK(_pmTop);
+    const mrn = mode === 'discharge' ? (_hand || (ic ? ic.mrn : '') || _pmOk || '') : (_pmOk || _hand || '');
+    const mrnSrc = !mrn ? '' : mrn === _hand ? 'hand' : ic && mrn === ic.mrn ? 'list' : 'portmis';
+    const mrnConflict = mrn && _pmOk && _pmOk !== mrn ? _pmOk : '';
     /* ★ 2.90 (검수사 지시 2026-08-31, §0-Y-2 «없어서 못 한다는 말은 없다») —
          MRN 이 비었을 때 **원인을 단정하지 않는다.** 종전 문구는 늘 «PORT-MIS 에 이 배 등록이 없으면»
          이었는데, 실제로 비는 길은 넷이고(매칭 실패 · 레그 불일치로 버림 · 레코드에 MRN 칸이 빔 ·
@@ -99,16 +124,16 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       !pm ? {
         why: `PORT-MIS 에서 이 배(${String(info.vsl || '').toUpperCase()}${info.callsign ? ' · ' + info.callsign : ''})를 못 찾았습니다`,
         how: 'PORT-MIS 자료가 아직 안 올라왔거나 이 배 신고가 없습니다. 수석 대시보드 「📸 PORT-MIS 캡처」로 엑셀을 올리거나, 아래에 직접 적어 넣으십시오.',
-        looked: 'PORT-MIS 매칭 · 항차 손입력',
+        looked: '항차 손입력 · 검수예정 목록 · PORT-MIS',
       } : _dropped ? {
         why: `PORT-MIS 에 ${_dropped} 가 있는데 ${mode === 'loading' ? '선적(E)' : '양하(I)'} 번호가 아니라 쓰지 않았습니다`,
         how: `이 배는 ${mode === 'loading' ? '입항(I)' : '출항(E)'} 신고만 올라와 있습니다. 이 서류에 맞는 번호를 아래에 적어 넣으십시오.`,
         cand: _dropped,
-        looked: `PORT-MIS ${mode === 'loading' ? 'mrnOut' : 'mrnIn'} · mrn · 반대 레그 · 항차 손입력`,
+        looked: `항차 손입력 · 검수예정 목록 · PORT-MIS ${mode === 'loading' ? 'mrnOut' : 'mrnIn'} · mrn · 반대 레그`,
       } : {
         why: 'PORT-MIS 에 이 배는 있는데 MRN 칸이 비어 있습니다',
         how: '올린 PORT-MIS 엑셀에 「MRN 번호」(적하목록관리번호) 열이 없었을 수 있습니다. 그 열이 있는 파일로 다시 올리거나, 아래에 직접 적어 넣으십시오.',
-        looked: 'PORT-MIS mrnIn · mrnOut · mrn · 항차 손입력',
+        looked: '항차 손입력 · 검수예정 목록 · PORT-MIS mrnIn · mrnOut · mrn',
       }
     );
     //  입항일자 — PORT-MIS 입항일시가 1순위, 없으면 항차 작업창 앞자리. «2026.08.24» 형태.
@@ -127,11 +152,11 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       //  2.78: 전역 사전은 resolveShipDisplayName 이 스스로 읽는다(인자 없으면 window.__fbShipBayDict).
       name: resolveShipDisplayName(info, portMisData).name || code,
       callsign: String(info.callsign || pm?.callsign || shipIdentityOf(info).callsign || '').toUpperCase(),
-      mrn, mrnDiag,
+      mrn, mrnDiag, mrnSrc, mrnConflict, icStatus: inspectStatusText(ic), icAt: ic ? ic.uploadedAt : 0,
       //  2.41: 엑셀 「터미널」 열 — PCTC/PNCT. 인쇄물 머리에는 없고 엑셀에만 쓴다.
       pier: info.pier || '',
     };
-  }, [info, portMisData, mode]);
+  }, [info, portMisData, mode, icList]);
 
   //  세관 목록 = xrayList. 위치·봉인은 각각 EDI·xraySeals·completed 에서 붙인다.
   const rows = useMemo(() => {
@@ -287,6 +312,20 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
             className="px-2 py-0.5 rounded-pill bg-ink-800 hover:bg-ink-700 text-dim-200 disabled:opacity-50">고치기 ✏</button>
         </div>
       ))}
+      {/* ★ 3.59: 세관 검수예정 목록 — 올리는 곳·출처·서류 상태 한 줄. 한 번 올리면 모든 항차에 적용된다. */}
+      {mode === 'discharge' && (
+        <div className="text-2xs text-dim-300 space-y-0.5">
+          {head.mrn && <div>번호 출처: {head.mrnSrc === 'hand' ? '손으로 적은 값' : head.mrnSrc === 'list' ? '세관 검수예정 목록' : 'PORT-MIS'}{head.mrnConflict ? <span className="text-rose-300"> · ⚠ PORT-MIS 번호({head.mrnConflict})와 다릅니다</span> : ''}</div>}
+          {head.icStatus && <div className="text-sky-200">서류 상태: {head.icStatus}</div>}
+          {canWorkNow() && (   /* 조회만은 쓰는 단추를 안 그린다(3.55-01) */
+            <label className="inline-flex items-center gap-1 px-2 py-1 rounded-pill bg-ink-800 border border-sky-600 text-sky-200 font-bold cursor-pointer">
+              📥 검수예정 목록 올리기(xls)
+              <input type="file" accept=".xls,.xlsx" className="hidden" onChange={uploadInspectCheck} />
+            </label>
+          )}
+          {icMsg && <span className="ml-2 text-amber-200">{icMsg}</span>}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <div className="flex-1 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
           <SearchIcon className="w-4 h-4 text-dim-400"/>
