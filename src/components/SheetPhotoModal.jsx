@@ -11,7 +11,8 @@ import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';
 export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
-  const [note, setNote] = useState('');   // 3.58-05: 오류가 아닌 안내는 빨간 칸이 아니라 노란 줄로
+  const [note, setNote] = useState('');
+  const [onlyChk, setOnlyChk] = useState(false);   // 3.58-06: 확인 필요만 보기   // 3.58-05: 오류가 아닌 안내는 빨간 칸이 아니라 노란 줄로
   const [rows, setRows] = useState(null);
   const [done, setDone] = useState(null);
   const cands = useMemo(() => sheetCandidates(voyage), [voyage]);
@@ -24,6 +25,8 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f) return;
+    //  3.58-06: 다시 찍으면 손으로 고친 표가 사라진다 — 아직 기록하지 않은 줄이 있으면 먼저 묻는다
+    if (rows && rows.some((r) => !r.saved) && !window.confirm('아직 기록하지 않은 줄이 있어요. 새 사진으로 바꾸면 지금 표(손으로 고친 것 포함)가 사라집니다. 바꿀까요?')) return;
     if (!canWorkNow()) { alert(workGateText('선적 자리 기록')); return; }   // 조회만은 보기만 — AI 를 부르기 전에 막는다
     if (!getEquipNumber()) { alert(equipGateText()); return; }
     setErr(''); setNote(''); setDone(null); setBusy('기록지를 읽는 중이에요 (30초쯤)…');
@@ -54,16 +57,18 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
     if (!window.confirm(`${list.length}대의 선적 자리를 기록할까요?\n(이미 같은 자리인 컨은 건너뜁니다)`)) return;
     setBusy('기록하는 중…'); setErr('');
     const by = inspector || ''; const equip = getEquipNumber ? (getEquipNumber() || '') : '';
-    let n = 0, skip = 0; const fail = [];
+    let n = 0, skip = 0; const fail = []; const ok = new Set();
     for (const r of list) {
       const to = `${r.bay}-${r.row}-${r.tier}`;
       try {
-        if (posOf(r.pick) === to && comp[r.pick]) { skip++; continue; }
+        if (posOf(r.pick) === to && comp[r.pick]) { skip++; ok.add(r.pick); continue; }
         await fbSetActualPosition(voyageKey, 'loading', r.pick, r.bay, r.row, r.tier, by);
         if (!comp[r.pick]) await fbCompleteContainer(voyageKey, 'loading', r.pick, by, 'normal', '', equip);
-        n++;
+        n++; ok.add(r.pick);
       } catch (ex) { fail.push(`${r.pick}: ${ex && ex.message || ex}`); }
     }
+    //  3.58-06: 기록한 줄은 «기록됨» 으로 잠그고 체크를 푼다 — 다시 눌러도 두 번 들어가지 않는다
+    setRows((rs) => rs.map((r) => (r.use && ok.has(r.pick) ? { ...r, use: false, saved: true } : r)));
     setBusy(''); setDone({ n, skip, fail });
   };
 
@@ -93,37 +98,46 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
         {rows && rows.length > 0 && (
           <>
             <div className="mt-3 text-xs text-white font-bold">읽은 칸 {rows.length} · 자동으로 맞춘 칸 {nAuto} · 확인 필요 {rows.length - nAuto}</div>
-            <div className="mt-1 overflow-x-auto">
-              <table className="w-full text-2xs text-dim-100" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                <thead><tr className="text-dim-300"><th className="text-left p-1">넣기</th><th className="text-left p-1">칸</th><th className="text-left p-1">컨번호</th><th className="text-left p-1">읽은 글자</th><th className="text-left p-1">지금 앱</th></tr></thead>
-                <tbody>
-                  {rows.map((r, i) => {
-                    const now = posOf(r.pick); const same = now === `${r.bay}-${r.row}-${r.tier}`;
-                    return (
-                      <tr key={i} className={`border-t border-line ${r.cn ? '' : 'bg-amber-900/30'}`} data-slot={r.slot}>
-                        <td className="p-1"><input type="checkbox" checked={r.use} onChange={(e) => setRow(i, { use: e.target.checked })} aria-label={`${r.slot} 넣기`} /></td>
-                        <td className="p-1">
-                          <input value={`${r.bay}${r.row}${r.tier}`} inputMode="numeric" onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setRow(i, { bay: v.slice(0, 2), row: v.slice(2, 4), tier: v.slice(4, 6), dupSlot: false }); }}
-                            className={`w-16 bg-ink-950 border rounded px-1 py-0.5 font-mono font-bold ${r.dupSlot ? 'border-amber-400 text-amber-200' : 'border-line text-white'}`} aria-label={`${r.slot} 칸 번호`} />
-                        </td>
-                        <td className="p-1">
-                          <input value={r.pick} onChange={(e) => setRow(i, { pick: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) })}
-                            className={`w-28 bg-ink-950 border rounded px-1 py-0.5 font-mono ${isoOk(r.pick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.slot} 컨번호`} />
-                          {!r.cn && <div className="text-amber-200">{r.why}{r.second ? ` · 2위 ${r.second}` : ''}</div>}
-                        </td>
-                        <td className="p-1 font-mono text-dim-300">{r.prefix || '····'} {r.digits}</td>
-                        <td className="p-1">{now ? (same ? <span className="text-emerald-300">같은 자리</span> : <span className="text-amber-200">{now} → 옮김</span>) : (comp[r.pick] ? '자리 없음' : '새로')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* 3.58-06: 폰 한 손 조작 — 모두 선택·모두 해제·확인 필요만 보기 */}
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => setRows((rs) => rs.map((r) => (r.saved ? r : { ...r, use: isoOk(r.pick) })))} className="flex-1 py-2 rounded-lg bg-ink-800 border border-line text-dim-100 text-xs font-bold">모두 선택</button>
+              <button type="button" onClick={() => setRows((rs) => rs.map((r) => ({ ...r, use: false })))} className="flex-1 py-2 rounded-lg bg-ink-800 border border-line text-dim-100 text-xs font-bold">모두 해제</button>
+              <button type="button" onClick={() => setOnlyChk((v) => !v)} className={`flex-1 py-2 rounded-lg border text-xs font-bold ${onlyChk ? 'bg-amber-500 border-amber-300 text-[#1a1206]' : 'bg-ink-800 border-amber-500 text-amber-200'}`}>{onlyChk ? '전부 보기' : '확인 필요만'}</button>
+            </div>
+            {/* 3.58-06: 표 대신 줄 카드 — 폰 폭에서 옆으로 밀리지 않게 «지금 앱» 을 같은 줄 안에 둔다 */}
+            <div className="mt-2 space-y-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {rows.map((r, i) => {
+                if (onlyChk && r.cn) return null;
+                const now = posOf(r.pick); const same = now === `${r.bay}-${r.row}-${r.tier}`;
+                return (
+                  <div key={i} className={`rounded-lg border p-2 ${r.saved ? 'border-emerald-700 bg-emerald-950/40 opacity-70' : r.cn ? 'border-line bg-ink-800' : 'border-amber-500 bg-amber-900/30'}`} data-slot={r.slot}>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" className="w-6 h-6 shrink-0" checked={!!r.use} disabled={!!r.saved} onChange={(e) => setRow(i, { use: e.target.checked })} aria-label={`${r.slot} 넣기`} />
+                      <input value={`${r.bay}${r.row}${r.tier}`} inputMode="numeric" disabled={!!r.saved} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setRow(i, { bay: v.slice(0, 2), row: v.slice(2, 4), tier: v.slice(4, 6), dupSlot: false }); }}
+                        className={`w-[5.5rem] bg-ink-950 border rounded px-2 py-2 font-mono font-bold text-sm ${r.dupSlot ? 'border-amber-400 text-amber-200' : 'border-line text-white'}`} aria-label={`${r.slot} 칸 번호`} />
+                      <input value={r.pick} disabled={!!r.saved} onChange={(e) => setRow(i, { pick: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) })}
+                        className={`flex-1 min-w-0 bg-ink-950 border rounded px-2 py-2 font-mono text-sm ${isoOk(r.pick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.slot} 컨번호`} />
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
+                      <span className="font-mono text-dim-300">읽은 글자 {r.prefix || '····'} {r.digits}</span>
+                      <span>{r.saved ? <span className="text-emerald-300 font-bold">기록됨</span> : now ? (same ? <span className="text-emerald-300">같은 자리</span> : <span className="text-amber-200">지금 {now} → 옮김</span>) : (comp[r.pick] ? <span className="text-amber-200">완료됨 · 자리 없음</span> : '새로 실음')}</span>
+                    </div>
+                    {!r.cn && !r.saved && (
+                      <div className="mt-1 text-2xs text-amber-200">{r.why}
+                        {[r.best, r.second].filter((x, k, a) => x && x !== r.pick && a.indexOf(x) === k).map((x) => (
+                          <button key={x} type="button" onClick={() => setRow(i, { pick: x, use: true })} className="ml-2 px-2 py-1 rounded bg-amber-500 text-[#1a1206] font-bold font-mono">{x}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <button type="button" onClick={save} disabled={!!busy} className="mt-3 w-full py-3 rounded-lg bg-emerald-600 text-white font-black text-sm disabled:opacity-60">확인한 칸 기록하기</button>
           </>
         )}
         {done && (
-          <div className="mt-2 text-xs font-bold text-emerald-200">기록 {done.n}대 · 이미 같은 자리 {done.skip}대{done.fail.length ? <span className="text-red-300"> · 실패 {done.fail.length}대 — {done.fail.join(' / ')}</span> : ''}</div>
+          <div className="mt-2 text-xs font-bold text-emerald-200">기록 {done.n}대 · 이미 같은 자리 {done.skip}대{done.fail.length ? <div className="text-red-300 mt-1">실패 {done.fail.length}대{done.fail.map((f) => <div key={f}>· {f}</div>)}</div> : ''}</div>
         )}
       </div>
     </div>
