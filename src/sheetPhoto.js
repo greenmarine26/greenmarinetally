@@ -34,12 +34,15 @@ export const SHEET_PROMPT = `이 사진은 컨테이너선 베이플랜 인쇄�
 export function sheetRequestBody(base64Jpeg) {
   return {
     contents: [{ parts: [{ text: SHEET_PROMPT }, { inline_data: { mime_type: 'image/jpeg', data: base64Jpeg } }] }],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+    //  3.60-06 (진단 M30): 생각 토큰이 출력 한도를 같이 쓴다 — 엠티실 판독처럼 넉넉히(8192 로는 칸 많은 기록지가 뒤에서 잘린다).
+    generationConfig: { temperature: 0.1, maxOutputTokens: 32000, responseMimeType: 'application/json' },
   };
 }
 
 /** AI 응답(JSON 문자열 또는 이미 풀린 응답 객체) → 칸 목록. 칸 자리가 여섯 자리 숫자가 아니면 버린다(지어낸 칸 방지). */
 export function parseSheetResponse(resp) {
+  //  3.60-06: 한도에 걸려 잘린 응답은 뒤 칸이 조용히 빠진다 — 잘렸다고 말한다.
+  if (resp && typeof resp === 'object' && resp?.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new Error('기록지 판독이 길어 잘렸어요 — 기록지를 절반씩 나눠 찍어 주세요.');
   let text = resp;
   if (resp && typeof resp === 'object') text = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const m = String(text || '').match(/\{[\s\S]*\}/);
@@ -142,7 +145,7 @@ export function matchSheetItems(items, candidates, slotOk) {
     }).sort((a, b) => a.score - b.score);
     const b1 = sc[0] || null, b2 = sc[1] || null;
     const bad = typeof slotOk === 'function' && slotOk(it.bay, it.row, it.tier) === false;
-    const auto = !bad && !it.dupSlot && !!b1 && b1.dd <= 2 && (!b2 || (b2.score - b1.score) >= 2);
+    const auto = !bad && !it.dupSlot && !!b1 && b1.dd <= 2 && (!b2 || (b2.score - b1.score) >= 2);   // 3.60-06 검토: sure:false 제외는 넣지 않았다 — XTPG 541E 실응답에서 두 번 읽기가 이미 틀림 0 이고 자동만 23→19~22 로 줄었다(smoke_sheetphoto)
     const r = { ...it, cn: auto ? b1.cn : null, best: b1 && b1.cn, second: b2 && b2.cn, why: auto ? '' : bad ? '이 배에 없는 칸 번호예요 — 칸 번호를 확인해 주세요' : it.dupSlot ? '같은 칸 번호가 두 번 읽혔어요 — 칸 번호를 확인해 주세요' : (b1 ? `숫자를 ${b1.dd}자리 다르게 읽었어요 — 확인해 주세요` : '후보가 없어요') };
     if (r.cn) taken.set(r.cn, (taken.get(r.cn) || 0) + 1);
     return r;

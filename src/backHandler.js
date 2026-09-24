@@ -11,7 +11,8 @@ export function parseHash(h) {
   const s = String(h || '');
   // B-1: 양하/선적 모드를 해시에 싣는다 — #/voyage/{KEY}/{discharge|loading}
   const v = s.match(/^#\/voyage\/([^/]+)(?:\/(discharge|loading))?/);
-  if (v) return { name: 'voyage', voyageKey: decodeURIComponent(v[1]), mode: v[2] || null };
+  //  3.60-06: 퍼센트가 잘린 주소(«%2»)로 열면 decodeURIComponent 가 던져 첫 화면부터 크래시 카드였다 — 원문 그대로 쓴다.
+  if (v) return { name: 'voyage', voyageKey: (() => { try { return decodeURIComponent(v[1]); } catch (e) { return v[1]; } })(), mode: v[2] || null };
   if (s.startsWith('#/login')) return { name: 'login' };
   if (s.startsWith('#/search')) return { name: 'search' };
   if (s.startsWith('#/chief')) return { name: 'chief' };

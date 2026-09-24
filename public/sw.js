@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-05';
-const NOTE = '미르가 20엠티·16시·24일 같은 숫자를 컨번호로 잘못 읽던 것과 출항 시각·자료 미착 답을 바로잡았습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-06';
+const NOTE = '업데이트 배너가 다시 뜨거나 혼자 새로고침되던 것과 기록지 사진 판독 안전장치를 보강했습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
@@ -68,7 +68,10 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        if (res && res.ok) {
+        //  3.60-06 (진단 M34): 배포 직후 열려 있던 탭이 옛 해시 청크를 부르면 서버는 404 다 — 캐시에 있으면 그것을 준다.
+        //    판 번호 확인용 요청(?v= · ?_ck=)은 캐시에 쌓지 않는다(3분마다 한 장씩 자라던 것).
+        if (res && !res.ok && /\/assets\//.test(e.request.url)) return caches.match(e.request).then((m) => m || res);
+        if (res && res.ok && !/[?&](?:v|_ck|u)=/.test(e.request.url)) {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(e.request, copy)).catch(() => {});
         }

@@ -33,7 +33,8 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
     try {
       const items = await readSheetPhoto(f);
       if (items.length < 2) setNote('한 번만 읽혔어요 — 두 번 대조를 못 했으니 자동 체크된 칸도 한 번 더 봐 주세요.');
-      const m = matchSheetRuns(items, cands, slotOk).map((r) => ({ ...r, use: !!r.cn, pick: r.cn || r.best || '' }));
+      //  3.60-06 (진단 M29): 한 번만 읽혔으면 대조를 못 했으니 자동 체크하지 않는다(종전엔 노란 안내만 붙이고 체크는 켜 두었다).
+      const m = matchSheetRuns(items, cands, slotOk).map((r) => ({ ...r, use: items.length >= 2 && !!r.cn, pick: r.cn || r.best || '' }));
       m.sort((a, b) => a.slot.localeCompare(b.slot));
       setRows(m);
       if (!m.length) setErr('손으로 고쳐 적은 칸을 못 찾았어요 — 기록지 한 장이 다 나오게 위에서 다시 찍어 주세요.');
@@ -45,6 +46,11 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
   const save = async () => {
     const list = (rows || []).filter((r) => r.use && /^[A-Z]{4}\d{7}$/.test(r.pick));
     if (!list.length) return;
+    //  3.60-06 (진단 M31): 체크디짓이 틀린 컨번호는 기록하지 않고, 이 배 후보에 없는 컨은 먼저 묻는다(엠티실 창과 같은 문지기).
+    const badCd = list.filter((r) => !isoOk(r.pick)).map((r) => r.pick);
+    if (badCd.length) { setErr(`컨번호 체크디짓이 맞지 않아요: ${badCd.join(', ')} — 고쳐 주세요`); return; }
+    const outC = list.filter((r) => !(cands || []).includes(r.pick)).map((r) => r.pick);
+    if (outC.length && !window.confirm(`이 배 선적 후보에 없는 컨이에요: ${outC.join(', ')}\n그래도 기록할까요?`)) return;
     const dup = list.map((r) => r.pick).filter((c, i, a) => a.indexOf(c) !== i);
     if (dup.length) { setErr(`같은 컨이 두 칸에 있어요: ${Array.from(new Set(dup)).join(', ')}`); return; }
     const slots = list.map((r) => `${r.bay}${r.row}${r.tier}`);

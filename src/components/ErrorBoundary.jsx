@@ -2,6 +2,7 @@
 //   사용 예: <ErrorBoundary name="베이상세"><PrintableBayDetail .../></ErrorBoundary>
 //   에러 발생 시 fallback UI 표시 + 콘솔 에러 로그
 import React from 'react';
+import { APP_VERSION } from '../utils.js';   // 3.60-06: 크래시 신고에 판 번호를 싣는다(종전엔 콘앱만 세팅하는 window.__APPV 라 늘 빈칸)
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -29,9 +30,11 @@ export default class ErrorBoundary extends React.Component {
         comp: String(errorInfo?.componentStack || '').split('\n').slice(0, 6).join('\n').slice(0, 800),
         route: (typeof window !== 'undefined' && window.location ? String(window.location.hash || '') : ''),
         q: (() => { try { return String(window.__lastQuery || '').slice(0, 120); } catch (e) { return ''; } })(),
-        appVersion: (typeof window !== 'undefined' && window.__APPV) || '',
+        appVersion: APP_VERSION || (typeof window !== 'undefined' && window.__APPV) || '',
         status: 'new',
       };
+      //  3.60-06 (진단 M41): 같은 자리·같은 오류는 이 탭에서 한 번만 신고한다 — «다시 시도»·재접속마다 받은함에 쌓였다.
+      try { const _k = 'crashSent:' + body.where + '|' + body.msg; if (sessionStorage.getItem(_k)) return; sessionStorage.setItem(_k, '1'); } catch (e2) { /* 저장소 없음 — 그냥 보낸다 */ }
       const url = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app/claude_inbox.json';
       if (typeof fetch === 'function') fetch(url, { method: 'POST', body: JSON.stringify(body) }).catch(() => {});
     } catch (e) { /* 신고 실패는 조용히 — 화면이 우선이다 */ }

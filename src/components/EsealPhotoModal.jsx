@@ -30,7 +30,7 @@ export default function EsealPhotoModal({ voyageKey, info, inspector, onClose })
     try {
       const runs = await readEsealPhoto(f);
       if (runs.length < 2) setNote('한 번만 읽혔어요 — 두 번 대조를 못 했으니 자동 체크된 줄도 한 번 더 봐 주세요.');
-      const m = matchEsealRuns(runs, targets, pool, used).map((r) => ({ ...r, use: !!r.ok }));
+      const m = matchEsealRuns(runs, targets, pool, used).map((r) => ({ ...r, use: runs.length >= 2 && !!r.ok }));   // 3.60-06 (진단 M29): 한 번만 읽혔으면 자동 체크하지 않는다
       m.sort((a, b) => (a.no || 999) - (b.no || 999));
       setRows(m);
       if (!m.length) setErr('손으로 적은 실 번호를 못 찾았어요 — 목록 한 장이 다 나오게 위에서 다시 찍어 주세요.');

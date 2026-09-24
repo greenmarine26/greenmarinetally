@@ -34,6 +34,8 @@ export function esealRequestBody(base64Jpeg) {
 
 /** AI 응답 → 줄 목록 [{no, cn, seal, sure}]. 깨진 JSON 이면 줄 하나하나를 따로 푼다(기록지 판독 3.58-02 와 같은 방어). */
 export function parseEsealResponse(resp) {
+  //  3.60-06: 한도에 걸려 잘린 응답은 뒤 줄이 조용히 빠진다 — 잘렸다고 말한다.
+  if (resp && typeof resp === 'object' && resp?.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new Error('엠티실 기록지 판독이 길어 잘렸어요 — 목록을 절반씩 나눠 찍어 주세요.');
   let text = resp;
   if (resp && typeof resp === 'object') text = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const m = String(text || '').match(/\{[\s\S]*\}/);
@@ -89,6 +91,7 @@ export function matchEsealItems(items, targets, pool, used) {
     if (!t.cn) r.why = '인쇄 컨번호가 이 배 엠티실 대상에 없어요 — 확인해 주세요';
     else if (!x.seal) r.why = x.why;
     else if (used && used[x.seal] && used[x.seal] !== t.cn) r.why = `이 실은 이미 ${used[x.seal]} 에 붙어 있어요 — 확인해 주세요`;
+    if (!r.why && it.sure === false) r.why = 'AI 가 애매하다고 한 줄이에요 — 확인해 주세요';   // 3.60-06: sure:false 는 자동 제외
     r.ok = !r.why;
     return r;
   });

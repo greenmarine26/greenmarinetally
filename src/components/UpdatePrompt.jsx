@@ -34,9 +34,17 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
   const regRef = useRef(null);
   //  3.53-05: «같은 판» 워커를 조용히 활성화할 때 controllerchange 새로고침을 한 번 건너뛴다(화면은 이미 그 판이다).
   const silentRef = useRef(false);
+  //  3.60-06 (진단 M36): X 로 닫은 워커의 배너는 다시 안 띄운다(종전엔 3분 poll 마다 다시 떴다) · statechange 는 워커당 한 번만 단다.
+  const dismissedRef = useRef(null);
+  const watchedRef = useRef(new WeakSet());
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    //  ★ 3.60-06 (진단 M11): 이 컴포넌트는 로그인 화면·본문 두 자리에 있어 로그인·로그아웃마다 새로 뜬다. 종전엔 정리가 없어
+    //    3분 poll·visibilitychange·controllerchange 가 인스턴스마다 쌓였고, 죽은 인스턴스의 controllerchange 가
+    //    조용한 교체(silentRef — 제 인스턴스 것만 봄)를 모르고 새로고침했다 — 이전 검수원 이름(inspRef)으로 다시 로그인되기도 했다.
+    let alive = true; let iv = null; let pollFn = null;
+    const onVis = () => { if (!document.hidden && pollFn) pollFn(); };
 
     // SW 등록
     const baseUrl = import.meta.env.BASE_URL || './';
@@ -51,7 +59,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
     //   GitHub Pages 가 sw.js 에 `max-age=600` 을 걸어 배포 후 10분간 옛/새 파일이 번갈아 나오는
     //   것이 방아쇠였다. 이제 **버전이 같으면 조용히 넘긴다** — 원인이 무엇이든 거짓 배너가 없다.
     const consider = async (sw) => {
-      if (!sw) return;
+      if (!sw || !alive) return;   // 3.60-06 감사 지적: 내려간 인스턴스의 updatefound 가 같은 판 워커를 조용히 활성화하지 않게
       const v = await askVersion(sw);
       if (v && v === APP_VERSION) {
         // 같은 판이다 — 배너 대신 조용히 넘겨 대기 상태만 푼다.
@@ -64,14 +72,16 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
         setWaiting(null);
         return;
       }
+      if (dismissedRef.current === sw) return;   // 3.60-06: 검수사가 X 로 닫은 그 워커 — 다시 안 띄운다(새 판 워커가 오면 그때 뜬다)
       setWaiting(sw);
       //  3.53-05: 이 워커가 (더 새 워커에 밀려) 폐기되면 배너도 걷는다 — 등록 시점의 reg.waiting 은 statechange 를 안 달아 두었다.
-      try { sw.addEventListener('statechange', () => { if (sw.state === 'redundant' || sw.state === 'activated') setWaiting(w => (w === sw ? null : w)); }); } catch { /* 무시 */ }
+      if (!watchedRef.current.has(sw)) { watchedRef.current.add(sw); try { sw.addEventListener('statechange', () => { if (sw.state === 'redundant' || sw.state === 'activated') setWaiting(w => (w === sw ? null : w)); }); } catch { /* 무시 */ } }
       setNote({ v, note: askVersion._note || '' });   // 2.99-03: 배너에 «무엇이 바뀌었는지»
       setHidden(false);
     };
 
     navigator.serviceWorker.register(swUrl).then(reg => {
+      if (!alive) return;   // 3.60-06: 등록이 끝나기 전에 이 화면이 내려갔으면 아무것도 걸지 않는다
       regRef.current = reg;
       if (reg.waiting) consider(reg.waiting);
 
@@ -124,22 +134,31 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
           if (reg.waiting) consider(reg.waiting);
         } catch (e) { console.warn('[sw] 갱신 확인 실패', e); }
       };
-      setInterval(poll, CHECK_MS);
+      pollFn = poll;
+      iv = setInterval(poll, CHECK_MS);
       // 탭으로 돌아왔을 때도 한 번 — 폰에서 앱을 다시 열었을 때 바로 알게 된다.
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+      document.addEventListener('visibilitychange', onVis);
       poll();
     }).catch(e => console.log('SW 등록 실패:', e));
 
     // 컨트롤러 변경 (새 SW 활성화) → 새로고침
     let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
+    const onCtrl = () => {
       if (silentRef.current) { silentRef.current = false; return; }   // 3.53-05: 같은 판 워커의 조용한 교체 — 화면은 그대로
       if (refreshing) return;
       refreshing = true;
       //  3.7-04: 새 판이 활성화돼 스스로 새로고침한다 — 검수원과 보던 화면을 맡겨 둔다.
       stashForUpdate(inspRef.current);
       window.location.reload();
-    });
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+    //  3.60-06: 내려갈 때 건 것을 다 푼다(다음 인스턴스 하나만 산다).
+    return () => {
+      alive = false;
+      if (iv) clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVis);
+      try { navigator.serviceWorker.removeEventListener('controllerchange', onCtrl); } catch { /* 무시 */ }
+    };
   }, []);
 
   const handleUpdate = () => {
@@ -174,7 +193,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
           className="bg-emerald-100 text-emerald-900 px-3 py-2 rounded font-black text-xs flex items-center gap-1 active:scale-95 transition">
           <RefreshCw className="w-3.5 h-3.5"/>업데이트
         </button>
-        <button onClick={() => setHidden(true)} className="text-emerald-200 hover:text-white p-1">
+        <button onClick={() => { dismissedRef.current = waiting; setHidden(true); }} className="text-emerald-200 hover:text-white p-1">
           <X className="w-4 h-4"/>
         </button>
       </div>

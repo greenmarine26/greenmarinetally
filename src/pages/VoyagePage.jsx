@@ -1150,6 +1150,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   홈 항차 카드(🧳 배지)·검증 면제(lugCns)·브리핑이 전부 이걸 본다. RZOR 은 수화물이 덱플랜 LUG 로만 와서
   //   이 통로가 비어 있었다. 덱플랜에서 발견한 LUG 컨을 forecast.luggageCns 로 승격(합집합, 다를 때만 1회 PATCH).
   const lugPromoRef = useRef('');
+  const pmWriteRef = useRef('');   // 3.60-06 (진단 M13): PORT-MIS 부두 자동 저장은 같은 값을 한 번만 쓴다(종전엔 렌더마다)
   useEffect(() => {
     if (lugPromoRef.current === voyageKey) return;
     const found = new Set();
@@ -1160,7 +1161,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (sl && sl.cn && !sl.empty && Array.isArray(sl.flags) && sl.flags.includes('LUG')) found.add(String(sl.cn).toUpperCase());
     }
     if (!found.size) return;
-    const cur = (voyage?.info?.forecast?.luggageCns || []).map((x) => String(x || '').trim().toUpperCase()).filter(Boolean);
+    const cur = (Array.isArray(voyage?.info?.forecast?.luggageCns) ? voyage.info.forecast.luggageCns : []).map((x) => String(x || '').trim().toUpperCase()).filter(Boolean);
     const merged = Array.from(new Set([...cur, ...found]));
     if (merged.length === cur.length) { lugPromoRef.current = voyageKey; return; }   // 이미 다 있음
     lugPromoRef.current = voyageKey;
@@ -1332,7 +1333,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       lugCns: (() => {
         // 1.56-04: CLL 본문이 선언한 수화물 번호(수집기 → forecast.luggageCns)가 1순위 —
         //   상시 대수(SHIP_LUGGAGE) 미등록 선박(OBWH 등)도 이것으로 면제된다.
-        const out = new Set((voyage?.info?.forecast?.luggageCns || []).map(x => String(x || '').trim().toUpperCase()).filter(Boolean));
+        const out = new Set((Array.isArray(voyage?.info?.forecast?.luggageCns) ? voyage.info.forecast.luggageCns : []).map(x => String(x || '').trim().toUpperCase()).filter(Boolean));
         const cap = shipLuggageCount(voyageKey);
         if (cap) {
           const dis = voyage?.discharge;
@@ -2208,21 +2209,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               const patch = {};
               if (currentBerth !== pm.berth) patch.berth = pm.berth;
               if (pm.pier && currentPier !== pm.pier) patch.pier = pm.pier;
-              fbUpdateVoyageInfo(voyageKey, patch).catch(e =>
+              const _wk = voyageKey + '|' + JSON.stringify(patch);
+              if (pmWriteRef.current !== _wk) { pmWriteRef.current = _wk; fbUpdateVoyageInfo(voyageKey, patch).catch(e =>
                 console.warn('[M6.13] voyage.info berth 자동 저장 실패:', e)
-              );
+              ); }
             }
           } else if (currentBerthInvalid) {
             // 옛 잘못된 값 정리 — berth, pier 둘 다 초기화 (사용자가 엑셀 재업로드 시 정상 채워짐)
-            fbUpdateVoyageInfo(voyageKey, { berth: '', pier: '' }).catch(e =>
+            if (pmWriteRef.current !== voyageKey + '|clear') { pmWriteRef.current = voyageKey + '|clear'; fbUpdateVoyageInfo(voyageKey, { berth: '', pier: '' }).catch(e =>
               console.warn('[M6.13] voyage.info berth 자동 정리 실패:', e)
-            );
+            ); }
           }
         } else if (voyage?.info?.berth && !isValidBerth(voyage.info.berth)) {
           // pm 없어도 voyage.info.berth가 잘못된 형식이면 정리
-          fbUpdateVoyageInfo(voyageKey, { berth: '', pier: '' }).catch(e =>
+          if (pmWriteRef.current !== voyageKey + '|clear') { pmWriteRef.current = voyageKey + '|clear'; fbUpdateVoyageInfo(voyageKey, { berth: '', pier: '' }).catch(e =>
             console.warn('[M6.13] voyage.info berth 자동 정리 실패:', e)
-          );
+          ); }
         }
         // V8.09-11/14: 선박 현재 상태 판정. ETD 지나도 작업 미완료면 '일정 미확정'(입항지연 등).
         //   작업 진행률(현재 모드 기준 완료/전체)을 함께 넘겨 '출항함'을 작업 완료 시에만 판정.
@@ -2874,7 +2876,8 @@ function EsealRangeCard({ voyageKey, info, inspector, voyInfo }) {
     if (!list.length) { alert('구간을 확인하세요 — 예: 521001 ~ 522000'); return; }
     setSaving(true);
     try {
-      await fbSetSimple(`voyages/${voyageKey}/loading/esealRanges`, { list, by: inspector || '', at: Date.now() });
+      //  3.60-06: fbSetSimple 은 실패를 false 로 돌려준다 — 종전엔 그 값을 안 봐 실패해도 «저장됨»으로 닫혔다.
+      if (!(await fbSetSimple(`voyages/${voyageKey}/loading/esealRanges`, { list, by: inspector || '', at: Date.now() }))) throw new Error('저장이 안 됐어요 — 신호를 확인하고 다시 눌러 주세요');
       setEdit(false);
     } catch (e) { alert('저장 실패: ' + (e?.message || e)); }
     setSaving(false);

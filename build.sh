@@ -21,6 +21,13 @@ export TZ=Asia/Seoul
 set -e
 cd "$(dirname "$0")"
 
+#  ★ 3.60-06 (진단 M39): 연막검사 여러 곳이 src/firebase.js 를 메모리 스텁으로 잠시 갈아 끼운다.
+#    그 사이 끊기면(Ctrl-C·set -e) 스텁이 «진짜 소스»로 남아 다음 빌드가 스텁 Firebase 를 배포한다 — 빠져나갈 때 되돌린다.
+_restore_fb() { for b in /dev/shm/hometmp/_smoke*.fbbak; do [ -f "$b" ] || continue; cp "$b" src/firebase.js && rm -f "$b" && echo "⚠ src/firebase.js 스텁을 되돌렸다 ($b)"; done; }
+trap '_restore_fb' EXIT; trap 'exit 130' INT TERM   # 감사 지적 — 신호를 받으면 멈추고(EXIT 가 되돌린다), 멈추지 않은 채 다음 빌드와 겹치지 않게
+_restore_fb
+if ! grep -q "initializeApp(firebaseConfig)" src/firebase.js; then echo "✗ src/firebase.js 가 스텁이다(진짜 소스가 아니다) — 빌드 중단"; exit 1; fi
+
 # ─── 2026-08-06: 판 쪼개기 게이트 (GitHub Pages 배포 거부 사고 재발 방지) ───
 #   사고: 1.11~1.20 을 하루 15판으로 나눠 올렸다. 각 판은 작았고 검증도 했지만
 #         묶었어야 할 것들이었다(화면 수정 셋=1.15, 표기 둘=1.19·1.20).
@@ -741,6 +748,8 @@ node tools/smoke_fix36003.cjs "$PWD" || { echo "✗ 3.60-03 수리 연막검사 
 node tools/smoke_fix36004.cjs "$PWD" || { echo "✗ 3.60-04 판정 한 벌 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-05: 미르 파서·답 — 숫자 오인(단위·크기 결합어·날짜·전화·R104W) · 디지/플랫 · 출항은 도선 예보 먼저 · 자료 미착 · 조회 말은 경고에 안 가로채임 · 끝네자리 답.
 node tools/smoke_fix36005.cjs "$PWD" || { echo "✗ 3.60-05 미르 파서 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.60-06: 업데이트 배너 정리·크래시 신고 판 번호·AI 판독 안전장치·배포 직후 자산·빌드 스텁 되돌리기.
+node tools/smoke_fix36006.cjs "$PWD" || { echo "✗ 3.60-06 안정 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
 #    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.
@@ -998,7 +1007,7 @@ fi
 
     #  2.64: **작업 타임라인** — 축 수식·배선(로그인 PC 하단, 검수사 확정 자리).
     #  ⚠ /tmp 에 두면 external react 를 못 찾는다 — repo 안(node_modules 곁)에 임시로 둔다.
-    SMOKE_TL="tools/_smoketl_tmp.cjs"; trap 'rm -f "$SMOKE_TL"' EXIT
+    SMOKE_TL="tools/_smoketl_tmp.cjs"; trap 'rm -f "$SMOKE_TL"; _restore_fb' EXIT   # 3.60-06: 스텁 되돌리기도 같이
     npx esbuild src/components/WorkTimeline.jsx --bundle --platform=node --format=cjs --external:react --loader:.jsx=jsx --jsx=automatic --outfile="$SMOKE_TL" --log-level=error \
       && node tools/smoke_timeline.cjs "$SMOKE_TL" "$(pwd)" || { echo "✗ 타임라인 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.63-02: **PORT-MIS 매칭** — 자매선 앞5자 오매칭·낡은 자료 되살아남 금지.
@@ -1115,6 +1124,12 @@ fi
 #   규칙: 지금 사이트가 실제로 참조하는 것만 남긴다. 참조는 **파일명 문자열**로 추적한다
 #         (Vite 동적 import 는 `./exceljs.min-XXXX.js` 처럼 assets/ 접두어 없이 나온다 —
 #          경로로 찾으면 청크를 통째로 놓친다. 한 번 헛짚었다.)
+#  ★ 3.60-06 (진단 M34): 빌드 첫머리(rm -rf dist assets)가 직전 판 자산까지 지운다 — 여기서 저장소 HEAD 의 자산을 되살려 둔다.
+#    아래 정리는 «지금 판 + 직전 판(HEAD:index.html)» 이 부르는 것만 남기므로 두 판 전 것은 여전히 지워진다.
+#    ⚠ 연막검사가 끝난 뒤에 되살린다 — 앞에서 되살리면 `ls assets/index-*.js | head -1` 류 검사가 옛 번들을 집는다.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  for f in $(git ls-tree --name-only HEAD assets/ 2>/dev/null); do [ -e "$f" ] || git show "HEAD:$f" > "$f" 2>/dev/null || rm -f "$f"; done
+fi
 echo "[+] 옛 해시 자산 정리..."
 python3 - <<'PRUNE'
 import os
@@ -1126,6 +1141,14 @@ if os.path.isdir('assets'):
         try: return open(p,'rb').read().decode('utf-8','ignore')
         except Exception: return ''
     keep=set(); frontier=list(seeds); seen=set()
+    #  ★ 3.60-06 (진단 M34): **직전 판이 부르던 자산도 한 판 더 남긴다.** 배포 직후 10분(sw.js·index.html max-age=600) 동안
+    #    옛 index.html 을 받은 폰이나 열려 있던 탭이 옛 해시 청크(엑셀 등)를 부르면 404 → 흰 화면·«모듈을 못 읽음» 이었다.
+    #    직전 판 자산은 다음 빌드에서 지워진다(두 판 전) — 저장소가 불어나지 않는다.
+    import subprocess
+    try: prev=subprocess.run(['git','show','HEAD:index.html'],capture_output=True,timeout=20).stdout.decode('utf-8','ignore')
+    except Exception: prev=''
+    for a in assets:
+        if a in prev and a not in keep: keep.add(a); frontier.append(os.path.join('assets',a))
     while frontier:
         p=frontier.pop()
         if p in seen: continue
