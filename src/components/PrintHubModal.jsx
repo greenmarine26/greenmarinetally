@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
@@ -102,7 +102,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
         if (_dp !== e.pol) merged.pol = _dp;
         return;
       }
-      if (hasEdi && PROTECTED_EDI_FIELDS.has(k) && !_flagUp) return;
+      //  3.60-13 (수정안 A): EDI 칸이 비어 있으면 리스트가 채운다(utils 한 벌 — 화면 본류 VoyagePage 와 같은 규칙). 종이도 화면과 같은 규격을 적는다.
+      if (hasEdi && PROTECTED_EDI_FIELDS.has(k) && !_flagUp && !(EDI_EMPTY_FILL_KEYS.has(k) && ediCoreEmpty(e, k))) return;
       //  ★ 2.52-04 — **리스트 무게가 «빈칸/0» 이면 EDI 무게를 지우지 않는다.** 80행 가드는 `''`·null 만 걸러
       //    `0` 이 그대로 통과하고, `wt` 는 PROTECTED 목록에도 없어 EDI 27,600kg 이 0 으로 덮이고 있었다.
       //    ⚠ 나가는 곳이 하필 **대외 문서**다 — VGM LIST(inspectionList.js:350 `w > 0`)가 무게 칸에 «—» 를

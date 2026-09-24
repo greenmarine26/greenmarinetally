@@ -22,6 +22,7 @@ import {
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
+  EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, twinDiffLimit, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -487,6 +488,8 @@ export function flattenVoyages(voyages) {
             if (k === 'pol' || !EDI_PROTECTED_KEYS.has(k)) continue;
             if (k === 'pod' && r.pod_pick) continue;
             if (r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) continue;
+            //  3.60-13 (수정안 A): EDI 칸이 비어 있으면 리스트 값을 남긴다(utils 한 벌 — 화면 본류와 같은 규칙). KBTR 2606E 양하 20대 규격.
+            if (EDI_EMPTY_FILL_KEYS.has(k) && ediCoreEmpty(_ebM, k)) continue;
             delete safeR[k];
           }
         }

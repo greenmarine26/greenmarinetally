@@ -53,7 +53,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -834,8 +834,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //   스텁이거나 EDI 값이 비어 있으면 리스트가 핵심 필드를 채운다 (OBWH 2699E 실측:
           //   records엔 fe/iso 전수 있는데 화면은 미정·기타 — 사용자 신고 "풀엠티·규격 다 있는데 적용 안 됨").
           //   실 EDI에 값이 있으면 기존 원칙 그대로 EDI가 진실.
-          const CORE_FILL = k === 'fe' || k === 'iso' || k === 'tp' || k === 'rf' || k === 'fr' ||
-            k === 'ot' || k === 'tk' || k === 'dg' || k === 'dgc' || k === 'un' || k === 'pg' || k === 'pod' || k === 'tmp_missing';
+          //  3.60-13: 이 규칙을 utils 한 벌(EDI_EMPTY_FILL_KEYS·ediCoreEmpty)로 올려 SearchPanel·PrintHubModal·미르가 같이 쓴다(수정안 A).
+          const CORE_FILL = EDI_EMPTY_FILL_KEYS.has(k);
           // TallyOne 2.00-01: 특수화물 플래그는 EDI 초기값 false 가 «정보 없음»이다 — DGS 없는 EDI(연운항형)의
           //   dg:false 가 리스트의 true 를 막아 DG 23대가 화면·미르 답에서 사라졌다(TNJP 26360E 실측).
           //   false→true 승격만 허용. tmp_missing 은 대상 아님(EDI 온도가 있는데 «미기재»로 뒤집히면 안 된다).
@@ -848,7 +848,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //  ★ 3.47: **검수사가 실물을 보고 고른 규격은 EDI 를 이긴다.** 병합 경로 셋(여기·SearchPanel·
           //    PrintHubModal)이 같은 규칙을 써야 한다 — 한 곳만 고치면 화면마다 규격이 갈린다(감사 지적).
           if (r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) { safeR[k] = v; return; }
-          if ((CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) || FLAG_FILL) {
+          if ((CORE_FILL && ediCoreEmpty(ediBase, k)) || FLAG_FILL) {
             safeR[k] = v; return;
           }
           //  ★ 2.77 (검수사 확정 2026-08-28 «앱의 판단도 틀리다고는 할수없습니다. 컨테이너
