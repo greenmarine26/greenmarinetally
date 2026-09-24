@@ -35,7 +35,7 @@ export function parseViewCommand(query) {
     .replace(/카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b/g, ' ')
     .replace(/(?<![가-힣])플[랜렌](?![가-힣])/g, ' ')
     .replace(/양하|선적|\b(LOADING|DISCHARGE|DIS|LDG)\b/g, ' ')
-    .replace(/\b\d{3,4}[NSEW]\b/g, ' ')           // 항차번호 633N·2608N (글자 없는 «0320 카고플랜»은 조회 — 재감사 P2-B)
+    .replace(/\b[A-Z]?\d{3,4}[NSEW]\b/g, ' ')           // 항차번호 633N·2608N (글자 없는 «0320 카고플랜»은 조회 — 재감사 P2-B)
     .replace(/\bB?\d{1,2}\s*번?/g, ' ')            // 베이 번호 «5번»·«22»·«B22» (bay 는 아래서 따로 읽는다)
     .replace(/\b[A-Z]{3,8}\b/g, ' ')                // 선박 약자·이름 토큰
     .replace(/미르야?|좀|의|을|를|은|는|[\s?？.!'"]/g, '');

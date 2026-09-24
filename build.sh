@@ -739,6 +739,8 @@ node tools/smoke_conepick.cjs || { echo "✗ 콘앱 선박 접기 연막검사 �
 node tools/smoke_fix36003.cjs "$PWD" || { echo "✗ 3.60-03 수리 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-04: 판정 한 벌 셋 — 미르 재료 EDI 핵심 칸 보호(utils.EDI_PROTECTED_KEYS) · 검수 리스트 20/40 묶음은 규격 라벨 · 엠티 리퍼는 엠티 묶음.
 node tools/smoke_fix36004.cjs "$PWD" || { echo "✗ 3.60-04 판정 한 벌 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.60-05: 미르 파서·답 — 숫자 오인(단위·크기 결합어·날짜·전화·R104W) · 디지/플랫 · 출항은 도선 예보 먼저 · 자료 미착 · 조회 말은 경고에 안 가로채임 · 끝네자리 답.
+node tools/smoke_fix36005.cjs "$PWD" || { echo "✗ 3.60-05 미르 파서 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
 #    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.

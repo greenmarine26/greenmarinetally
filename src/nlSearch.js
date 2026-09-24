@@ -157,7 +157,8 @@ export function parseNaturalQuery(text) {
   const hasBayCtx = /베이|bay/i.test(t) || /(?:^|\s)\d{1,2}\s*번(?![호])/.test(t);  // V7.99-13: "N번"도 베이 맥락
   const hasUnCtx = /\bun\s*\d|유엔\s*\d/i.test(t);
   const hasClassCtx = /클래스|class|급/i.test(t);
-  const hasSizeCtx = /\d+\s*(피트|hc|ft)/i.test(t);
+  //  3.60-05 (진단 T4): «20엠티»·«40풀»·«20MT»·«40하이큐브» 도 크기 맥락이다 — 종전엔 «20» 을 끝네자리로 읽어 «엠티 끝네자리 20: 0대» 를 답했다.
+  const hasSizeCtx = /\d+\s*(피트|hc|ft|엠티|풀|mt\b|하이\s*큐브|hq\b|리퍼|gp\b|dc\b)/i.test(t);
   const hasWeightCtx = /\d+\s*(톤|t|ton)\s*(?:이상|이하|넘는|미만|초과)/i.test(t);
   const hasStackCtx = /\d+\s*(단|층)/i.test(t);
   // TallyOne 1.22: **시각 표현을 컨번호로 읽지 않는다.** (오답 1786057401908 직접 원인 —
@@ -166,8 +167,12 @@ export function parseNaturalQuery(text) {
   // 1.69-01: **브리핑이 말한 «N건»은 컨번호 끝자리가 아니다.** (검수사 신고 2026-08-14 —
   //   "실 점검 필요 83건" 뒤 "83건이 뭐야"의 83이 끝자리로 잡혀 엉뚱한 컨을 답했다)
   const hasCountFollowCtx = /\d+\s*건\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(t);
+  //  3.60-05 (진단 T4): 단위가 바로 붙은 숫자(«16시까지»·«24일»·«9월»·«25톤»·«10개»·«20대»)와 날짜·전화번호는 컨번호 끝자리가 아니다.
+  //    종전엔 «16시까지 몇 대 했어» → «끝네자리 16 완료 2대», «2026-09-24 작업» → «끝네자리 0924» 를 답했다. 홀로 선 네 자리는 아래 _l4Alone 이 그대로 잡는다.
+  //    ⚠ 단위 글자 뒤에 한글이 이어지면 단위가 아니다(«0230 시프팅»·«3426 대기»·«5445 대상이야» — 감사 실측). 조사(까지·부터·에·째·쯤·전·후·간…)만 허용.
+  const hasUnitNumCtx = /\d+\s*(?:시(?!\s*\d)|일|월|년|톤|개|대|명|갱)(?:까지|부터|에서|에|째|쯤|전|후|간|동안|이|은|는|을|를|도|만|의|(?![가-힣]))/.test(t) || /\d+\s*(?:퍼센트|%)/.test(t) || /\d{2,4}\s*[-./]\s*\d{1,4}\s*[-./]\s*\d{1,4}/.test(t);   // 날짜(2026-09-24)·전화(010-1234-5678)
   const skipDigits = hasTempCtx || hasBayCtx || hasUnCtx || hasClassCtx ||
-                     hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx || hasCountFollowCtx;
+                     hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx || hasCountFollowCtx || hasUnitNumCtx;
   //  ★ 3.41 (검수사 «앱이 갖고 있는 자료를 막힘없이») — «3426 온도»·«0230 중량»·«0230 몇 피트야»:
   //    맥락 낱말(온도·톤·피트·단…)이 있어도 **홀로 선 네 자리**는 컨번호다. 종전엔 온도 낱말이 끝네자리를
   //    통째로 지워 «답 없음»이 됐다(관문 2 실측 — 15건 창구가 막힌 직접 원인). 단위가 바로 붙은 숫자(«-18도»·«20피트»·
@@ -177,15 +182,15 @@ export function parseNaturalQuery(text) {
     const _full = /\b[A-Z]{4}\s?(\d{7})\b/i.exec(String(text));
     if (_full) return _full[1].slice(-4);
     //  ⚠ 앞에 UN·IMO·클래스·베이·No 가 붙은 숫자는 그 번호다 — «UN 1805»(위험물 유엔번호)를 끝네자리로 잡으면 «없음» 거짓이 난다(감사·2차 시뮬 실측).
-    const s = String(text).replace(/\b\d{3,4}[NSEW]\b/gi, ' ').replace(/\d+\s*호기/g, ' ')
+    const s = String(text).replace(/\b[A-Z]?\d{3,4}[NSEW]\b/gi, ' ').replace(/\d{2,4}\s*[-./]\s*\d{1,4}\s*[-./]\s*\d{1,4}/g, ' ').replace(/\d+\s*호기/g, ' ')
       .replace(/(?:\bun|유엔|\bimo|아이엠오|클래스|\bclass|베이|\bbay|\bno\.?|번호)\s*-?\s*\d{1,7}/gi, ' ');
-    const m = /(?:^|[^0-9A-Za-z])(\d{4})(?![0-9]|\s*(?:도|℃|°|피트|ft|hc|단|층|번|톤|t\b|시|분|초|건|호|%|kg|키로|킬로|미터|m\b|mm|cm))/i.exec(s);
+    const m = /(?:^|[^0-9A-Za-z])(\d{4})(?![0-9]|\s*(?:도|℃|°|피트|ft|hc|단|층|번|톤|t\b|시|분|초|건|호|%|kg|키로|킬로|미터|m\b|mm|cm)|\s*(?:일|월|년|개|대|명|갱)(?:까지|부터|에서|에|째|쯤|전|후|간|동안|이|은|는|을|를|도|만|의|(?![가-힣])))/i.exec(s);   // 3.60-05: 날짜·수량 단위도(뒤에 한글 낱말이 이어지면 단위 아님)
     return m ? m[1] : '';
   })();
   if (!skipDigits) {
     //  3.2-01 (받은함 08-29 «MCSC 633N 양하 카고 플랜» → «양하 끝네자리 633 없음»): 항차번호(633N·2608N·635S)는
     //    끝자리가 아니다. 항차 토큰만 걷어 내고 센다 — «MCSC 633N 0320» 은 그대로 0320.
-    const digits = String(text).replace(/\b\d{3,4}[NSEW]\b/gi, ' ').replace(/\d+\s*호기/g, ' ').replace(/\D/g, '');
+    const digits = String(text).replace(/\b[A-Z]?\d{3,4}[NSEW]\b/gi, ' ').replace(/\d+\s*호기/g, ' ').replace(/\D/g, '');   // 3.60-05: «R104W» 처럼 글자가 붙은 항차번호도 걷는다(진단 T4)
     if (digits.length >= 2) result.digits = digits.slice(-4);
   } else if (_l4Alone) {
     result.digits = _l4Alone;
@@ -195,6 +200,10 @@ export function parseNaturalQuery(text) {
   if (/45\s*(피트|hc|ft)/i.test(t)) result.size = '45';
   else if (/40\s*(피트|hc|ft)/i.test(t)) result.size = '40';
   else if (/20\s*(피트|ft)/i.test(t)) result.size = '20';
+  //  3.60-05 (진단 T4): «20엠티»·«40풀»·«20MT»·«40하이큐브»·«20리퍼» — 크기+종류 결합어(앞에 다른 숫자가 붙지 않은 20·40·45).
+  else if (/(?:^|[^0-9])45\s*(엠티|풀|mt\b|리퍼|gp\b|dc\b)/i.test(t)) result.size = '45';
+  else if (/(?:^|[^0-9])40\s*(엠티|풀|mt\b|하이\s*큐브|hq\b|리퍼|gp\b|dc\b)/i.test(t)) result.size = '40';
+  else if (/(?:^|[^0-9])20\s*(엠티|풀|mt\b|리퍼|gp\b|dc\b)/i.test(t)) result.size = '20';
 
   // F/E
   if (/풀|적컨|적재|loaded/i.test(t)) result.fe = 'F';
@@ -204,13 +213,13 @@ export function parseNaturalQuery(text) {
 
   // 특수 화물
   if (/리퍼|reefer|냉장|냉동/i.test(t) || /\brf\b/i.test(t)) result.type = 'rf';
-  else if (/위험물|hazmat|imdg/i.test(t) || /\bdg\b/i.test(t)) result.type = 'dg';
+  else if (/위험물|hazmat|imdg|디지(?!털)|디쥐/i.test(t) || /\bdg\b/i.test(t)) result.type = 'dg';   // 3.60-05: 현장말 «디지»(검수사 확정 2026-09-17 «맞습니다»)를 파서가 직접 안다(진단 M27)
   //  ★ 2.69 (검수사 실측 2026-08-27 — 박진우 검수사가 «관리씰»·«관리» 로 조회): 현장에서 X-RAY 씰을
   //    **«관리 씰»** 이라고 부르는 사람이 있다. 검수사 지적 *«이친구는 XRAY씰을 관리 씰이라고 부르는듯»*.
   //    ⚠ «관리» 한 낱말만으로는 안 잡는다 — 관리자·인원 관리 같은 말과 겹친다. «관리씰» 일 때만.
   else if (/엑스레이|x[\s.\-]*ray|xray|관리\s*씰/i.test(t)) result.type = 'xray';
   else if (/탱크|tank/i.test(t) || /\btk\b/i.test(t)) result.type = 'tk';
-  else if (/플랫\s*랙|flat\s*rack/i.test(t) || /\bfr\b/i.test(t)) result.type = 'fr';
+  else if (/플랫\s*랙|flat\s*rack|플랫(?!\s*폼)/i.test(t) || /\bfr\b/i.test(t)) result.type = 'fr';   // 3.60-05: «플랫 몇 대»
   else if (/오픈\s*탑|open\s*top/i.test(t) || /\bot\b/i.test(t)) result.type = 'ot';
   else if (/\boog\b|아웃\s*오브\s*게이지/i.test(t)) result.type = 'oog';
   // V9.56: RO/RO 겸용선(RZOR) — 크레인으로 검수하는 건 갠트리(落地) 분뿐이다.
@@ -482,7 +491,7 @@ export function parseNaturalQuery(text) {
   // TallyOne 1.21: 기상·출근 시각 — "몇 시에 일어나야 하지"는 **현재 시각 질문이 아니다**(오답 1786028593439).
   //   검수사 규칙: 출근 = 작업시작 40분 전, 준비+운전 1시간 → 기상 = 작업시작 2시간 전.
   //   ⚠ timeQuery보다 먼저 판정하고 timeQuery를 끈다 — "몇 시에"가 둘 다에 걸린다.
-  if (/일어\s*나|일어날|일어남|깨워|깨우|기상\s*(?:시간|시각|몇|해야|하나)|몇\s*시\s*(?:에\s*)?(?:일어|기상)|알람|출근\s*(?:몇|시간|언제|해야)|몇\s*시(?:에|까지)?\s*출근|몇\s*시에\s*나가/i.test(t)) {
+  if (/일어\s*나|일어날|일어남|깨워|깨우|기상\s*(?:시간|시각|몇|해야|하나)|몇\s*시\s*(?:에\s*)?(?:일어|기상)|알람|출근\s*(?:몇|시간|언제|해야)|몇\s*시(?:에|까지)?\s*출근/i.test(t) || (/몇\s*시에\s*나가/.test(t) && !/배|선박|출항|입항/.test(t))) {   // 3.60-05: «배 몇 시에 나가» 는 출항 질문(진단 M21)
     result.wakeQuery = true;
   }
   // 1.69-05: «몇 시에 들어와»는 **입항 질문이다** (검수사 신고 2026-08-14 — "HAYN 몇시에 들어와 → 답이 현재시간").
@@ -520,7 +529,7 @@ export function parseNaturalQuery(text) {
       )) result.weatherQuery = true;
   // V9.18: 선박 소개·이름 유래 — "이 배 뭐야", "선박 소개", "배 이름 뜻/유래", "무슨 배야"
   if (/이\s*배\s*(?:가|는)?\s*(뭐|무슨|어떤|소개)|선박\s*소개|배\s*소개|(?:배|선박)\s*이름\s*(?:뜻|유래|의미)|무슨\s*배|어떤\s*배(?:야|에요|예요|인가)/i.test(t)) result.shipIntroQuery = true;   // 2.57: «이 배가 뭐야»(조사) 허용 — 종전엔 놓쳐 뜻 갈래로 오판
-  if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어[오와]|언제\s*나가/i.test(t)) result.schedQuery = true;   // 1.69-05: "언제 들어와"도 입항 질문
+  if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어[오와]|언제\s*나가/i.test(t) || /(?:배|선박)[^?]*몇\s*시에?\s*나가/.test(t)) result.schedQuery = true;   // 1.69-05: "언제 들어와"도 입항 질문
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
   if (/(실\s*번호|씰|실)\s*(점검|검사|오류|확인|체크)|리스트\s*(점검|검사|확인|체크)|점검\s*(?:해|좀|줘|할까)/i.test(t)) result.sealAuditQuery = true;

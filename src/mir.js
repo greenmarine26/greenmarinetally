@@ -1419,7 +1419,10 @@ export function answerOneRaw(query, ctx) {
   if (p.deviceCmd && c.execDevice) { try { const r = runDeviceCmd(p.deviceCmd); if (r) return r; } catch (e) { console.warn('[미르] 화면 조절 실패:', e); } }
 
   //  ②-2 경고 문장을 그대로 물은 것 — 검색 파서보다 앞(1.23 — «풀»·«5톤 이상»이 먼저 잡히면 엉뚱한 답).
-  if (Array.isArray(c.diagAlerts) && c.diagAlerts.length) { try { const a = answerAboutAlert(q, c.diagAlerts); if (a) return a; } catch (e) { /* */ } }
+  //  3.60-05 (진단 M19): 조회 말(몇 대·어디·위치·목록)은 경고 설명이 아니다 — «XRAY 대상 위치» 가 «X-RAY N대 중 1대 EDI 에 없음» 경고로,
+  //    «선적 리스트 몇 대» 가 «리스트 매칭» 경고로 가로채였다. 경고를 묻는 말(왜·뭐야·무슨 뜻·경고·오류·안 맞)이 같이 있으면 종전대로 설명한다.
+  const _lookupQ = /몇\s*(?:대|개|건)|어디|위치|목록|명단/.test(q) && !/경고|알림|왜|무슨\s*뜻|뭐야|뭔가요|뭐죠|뭐예요|이상|오류|문제|안\s*맞/.test(q);
+  if (!_lookupQ && Array.isArray(c.diagAlerts) && c.diagAlerts.length) { try { const a = answerAboutAlert(q, c.diagAlerts); if (a) return a; } catch (e) { /* */ } }
 
   //  ②-3 선박 연락처 — howTo 보다 먼저(«메일주소 뭐야»의 '뭐야'가 기능 색인에 먹히면 안 된다).
   if (p.contactQuery) {
@@ -1691,9 +1694,18 @@ export function answerOneRaw(query, ctx) {
   //  ⑭ 입출항·도선·기상·시각·날씨 — 입출항이 시각보다 먼저(«입항 시간 알려줘»는 timeQuery 에도 걸린다).
   if (p.schedQuery) {
     if (hasShip) {
-      const pm = c.matchPortMis(c.portMisData || {}, info);
+      //  3.60-05 (진단 M21): 출항 시각은 **도선 예보 → PORT-MIS 신고** 순이다(3.53-13 확정 · badgeRule 과 같은 순서).
+      //    종전엔 PORT-MIS 만 보고, 없으면 «PORT-MIS 신고는 아직» 이라 답했다 — 도선 예보에 출항이 있어도.
+      const _pf = (c.pilotForecast || {})[S(info && info.vsl).toUpperCase()] || null;
+      //  지나간 도선 시각은 현실이 아니다 — 미래(±12h 유예)인 예보만 쓴다(VoyagePage 2.63-03 과 같은 가드, 감사 지적).
+      const _pfT = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
+      const _pfOk = (x) => { const t0 = _pfT(x); return t0 != null && t0 >= Date.now() - 12 * 3600000; };
+      const _pfDep = _pf && _pfOk(_pf.nextDep) ? String(_pf.nextDep).slice(5) : '';
+      const _pfArr = _pf && _pfOk(_pf.nextArr) ? String(_pf.nextArr).slice(5) : '';
+      const pm = typeof c.matchPortMis === 'function' ? c.matchPortMis(c.portMisData || {}, info) : null;
+      if (!pm && (_pfDep || _pfArr)) return `${ship} — ` + [_pfArr ? `입항 예정 ${_pfArr}` : null, _pfDep ? `출항 예정 ${_pfDep}` : null].filter(Boolean).join(', ') + ' (도선 예보).';
       if (pm) {
-        const L = [`${ship || pm.vesselName || '이 선박'} — ` + [_fmtDT(pm.eta) ? `입항 ${_fmtDT(pm.eta)}` : null, _fmtDT(pm.etd) ? `출항 ${_fmtDT(pm.etd)}` : null].filter(Boolean).join(', ') + '.'];
+        const L = [`${ship || pm.vesselName || '이 선박'} — ` + [_fmtDT(pm.eta) ? `입항 ${_fmtDT(pm.eta)}` : null, _pfDep ? `출항 ${_pfDep}(도선 예보)` : (_fmtDT(pm.etd) ? `출항 ${_fmtDT(pm.etd)}` : null)].filter(Boolean).join(', ') + '.'];
         if (pm.pier || pm.berth) L.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
         if (pm.nextPort) L.push(`다음 항구: ${pm.nextPort}`);
         if (pm.port && pm.port !== '평택') L.push(`⚠ ${pm.port} 항만 데이터입니다.`);
@@ -1829,6 +1841,10 @@ export function answerOneRaw(query, ctx) {
   }
 
   //  ⑲ 본체 — 조회·집계·특수화물·시프팅·페이스·ETA·용량·단수… (generateLocalAnswer 한 벌).
+  //  3.60-05 (진단 M20): 항차는 있는데 컨 자료(EDI·리스트)가 한 대도 없으면 «못 배웠어요»(+무응답 신고)가 아니라 자료가 아직 없다고 말한다.
+  if (hasAnyCondition(p) && !cs.length && hasShip && !p.asking && !p.howToQuery && !p.crewQuery && !p.crewSet && !p.gangSet && !p.gangQuery && !p.startSet) {
+    return `📭 ${ship || '이 항차'} — 컨 자료(EDI·리스트)가 아직 안 왔어요. 자료가 들어오면 바로 답할게요.`;
+  }
   if (hasAnyCondition(p) && (cs.length || p.asking)) {
     try {
       let results = applyNLFilter(cs, p);
@@ -1850,6 +1866,12 @@ export function answerOneRaw(query, ctx) {
     try {
       if (cs.length && (app === 'cone' || c.countFallback)) {
         const r2 = applyNLFilter(cs, p).filter((x) => x._ptk !== false);
+        //  3.60-05 (진단 M23): 끝네자리만 물으면 검수사가 정한 답 — 컨번호·실번호·X-RAY 대상 여부·선내 위치(개체 창구 한 벌 entityHead·attrLine).
+        //    종전엔 «📊 끝네자리 5445: 1대» 만 말했다(작업창은 카드가 대신 보이지만 떠 있는 미르·콘앱은 이 글이 전부다).
+        if (p.digits && r2.length && r2.length <= 5) {
+          const _ax = { voyage: v, containers: cs };
+          return r2.map((x) => [entityHead(x), attrLine(x, 'seal', _ax), attrLine(x, 'xray', _ax)].filter(Boolean).join('\n')).join('\n\n');
+        }
         let label = ''; try { label = describeQuery(p) || ''; } catch (e) { label = ''; }
         return '📊 ' + (label || '조회') + ': ' + r2.length + '대';
       }
