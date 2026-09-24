@@ -66,14 +66,15 @@ function getContainerCategory(c) {
   const first = iso[0] || '';
   const third = iso[2] || '';
 
-  // 길이: 첫 자리 기준 (4/9 = 40ft 슬롯, 1/2 = 20ft)
+  // 길이: 규격 라벨(isoToLabel 한 벌)이 먼저다 — 45피트는 40 묶음(3.60 «45 는 40»).
+  //  ★ 3.60-04 (진단 M4): 종전엔 첫 자리가 4·9·1·2 가 아니면(L5G1·DCHC·빈 ISO) **컨번호 체크디짓**(cn[10])으로 20/40 을 골라
+  //    같은 45피트가 20풀·40풀로 갈렸다(OBWH 2731E 45피트 30대 중 14대가 20피트 묶음 — 감사 실측). 체크디짓은 크기와 무관하다.
+  //    라벨도 첫 자리도 모르면(빈 ISO) 20 으로 둔다 — 규격 칸도 같은 값(«20»)을 적어 종이 안에서 어긋나지 않는다.
+  const _labLen = String(isoToLabel(iso) || '').slice(0, 2);
   let len = 20;
-  if (first === '4' || first === '9') len = 40;
-  else if (first === '1' || first === '2') len = 20;
-  else if (c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn)) {
-    // ISO 없으면 cn 끝자리로 추정 (옛 호환)
-    len = parseInt(c.cn[10]) >= 4 ? 40 : 20;
-  }
+  if (_labLen === '40' || _labLen === '45') len = 40;
+  else if (_labLen === '20') len = 20;
+  else if (first === '4' || first === '9' || first === 'L' || first === 'M' || first === 'P') len = 40;
 
   //  ★ 3.45 — 종류도 **규격 칸과 같은 해석기**(isoToLabel)를 쓴다.
   //    ⚠ 종전엔 ISO 셋째 글자만 봐서 숫자 ISO 를 못 읽었다 — 4530·453E(40피트 HC 리퍼)와
@@ -90,7 +91,7 @@ function getContainerCategory(c) {
 
   // 리퍼 우선 판별 (EDI에 리퍼 플래그/실제 온도값 있으면 ISO와 무관하게 reefer)
   const hasTmpVal = (c.tmp != null && String(c.tmp).trim() !== '') || (c.temp != null && String(c.temp).trim() !== '');
-  if (c.reefer === true || hasTmpVal) type = 'reefer';
+  if (c.reefer === true || (c.rf === true && !c.iso_pick) || hasTmpVal) type = 'reefer';   // 3.60-04: 검수사가 규격을 고른 컨(iso_pick)은 그 규격이 말한다   // 3.60-04: 파서가 쓰는 표식은 `rf` 다(감사 지적 — `reefer` 만 보면 규격이 드라이로 적힌 리퍼를 놓친다)
 
   const fe = String(c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
   return { len, type, fe };
@@ -102,6 +103,10 @@ function getContainerCategory(c) {
 //  특수 = 별첨(시트2)과 같은 판정(리퍼·FR·OT·탱크·위험물·규격초과).
 function _isSpecialCargo(c) {
   const { type } = getContainerCategory(c);
+  //  ★ 3.60-04 (검수사 2026-09-24 «엠티는 엠티이다, 그래도 따로 구분은 한다»): 엠티 리퍼는 엠티 묶음으로 세고 별첨(특수)에 넣지 않는다.
+  //    구분은 규격 칸(RE·RH)과 줄 색(리퍼색)이 한다. 위험물·규격초과·FR·OT·탱크 표식이 있으면 여전히 특수다.
+  //    F/E 를 모르면(빈칸) 종전대로 특수로 둔다 — 풀 리퍼를 엠티로 잘못 보내지 않는다.
+  if (type === 'reefer' && String(c.fe || '').toUpperCase() === 'E' && !(c.dg || c.oog || c.fr || c.ot || c.tk)) return false;
   return type !== 'normal' || !!(c.dg || c.oog || c.fr || c.ot || c.tk);
 }
 function _inspGroup(c) {

@@ -18,7 +18,7 @@
 // ⚠ 순수 함수만 — firebase SDK 를 직접 부르지 않는다(콘앱 번들 mir-core.js 에도 실린다). 보관소는 REST(fetch)와 window 손으로만.
 
 import {
-  _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, isoToLabel, effectivePos, reeferTempOf,
+  _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
 } from './utils.js';
@@ -476,6 +476,17 @@ export function flattenVoyages(voyages) {
           if (mode === 'discharge') {
             const _dp = pickDischargePol(_ebM.pol, r.pol, _ebM.pod);
             if (_dp !== _ebM.pol) safeR.pol = _dp;
+          }
+        }
+        //  ★ 3.60-04 (진단 T5): EDI 가 있는 컨은 EDI 핵심 칸을 리스트가 못 덮는다 — 작업창과 같은 표(utils.EDI_PROTECTED_KEYS).
+        //    종전엔 세관 «최종항»(CNDAL 등)이 EDI POD(KRPTK)를 덮어 평택분에서 빠졌다 — 미르의 대수·잔여·끝나는 시각이 틀렸다.
+        //    검수사가 고른 POD(pod_pick)·규격(iso_pick)은 종전대로 이긴다. pol 은 바로 위 규칙이 이미 정했다.
+        if (_ebM) {
+          for (const k of Object.keys(safeR)) {
+            if (k === 'pol' || !EDI_PROTECTED_KEYS.has(k)) continue;
+            if (k === 'pod' && r.pod_pick) continue;
+            if (r.iso_pick && (k === 'iso' || k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk')) continue;
+            delete safeR[k];
           }
         }
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };

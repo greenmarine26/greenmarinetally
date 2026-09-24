@@ -106,7 +106,9 @@ const VP = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');
 const SP = fs.readFileSync(path.join(ROOT, 'src/components/SearchPanel.jsx'), 'utf8');
 const PH = fs.readFileSync(path.join(ROOT, 'src/components/PrintHubModal.jsx'), 'utf8');
 ok(!/ALLOWED_LIST_FIELDS = new Set\(\[[^\]]*'pol'/s.test(VP), "VoyagePage ALLOWED_LIST_FIELDS 에 'pol' 이 들어가면 안 된다");
-ok(/PROTECTED_EDI = new Set\(\['pol'/.test(SP), 'SearchPanel PROTECTED_EDI 에 pol 이 그대로 있다');
+//  3.60-04: SearchPanel 은 표를 utils.EDI_PROTECTED_KEYS 한 벌에서 받는다(미르 재료와 같은 표) — 그 표에 pol 이 있어야 한다.
+const UT = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
+ok(/PROTECTED_EDI = EDI_PROTECTED_KEYS;/.test(SP) && /export const EDI_PROTECTED_KEYS = new Set\(\['pol'/.test(UT), 'SearchPanel PROTECTED_EDI(utils.EDI_PROTECTED_KEYS 한 벌)에 pol 이 그대로 있다');
 ok(/PROTECTED_EDI_FIELDS = new Set\(\[\s*\n?\s*'pol'/.test(PH), 'PrintHubModal PROTECTED_EDI_FIELDS 에 pol 이 그대로 있다');
 //  선적에서 부르면 안 된다 — 부르는 자리마다 양하 게이트가 붙어 있는가
 const GATED = [
