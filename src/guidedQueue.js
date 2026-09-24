@@ -47,6 +47,7 @@
 //     ⓔ EDI 순번(`eseq`)대로 연속 진행 중이면 흐름 전환을 하지 않는다 — GuidedWorkPanel 에서 판정.
 //        검수사 원문: "단 연속으로 EDI대로 선적할때는 그게 우선입니다."
 
+import { isReeferContainer } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌
 const isDeckTier = (t) => parseInt(t, 10) >= 80;
 const is20ft = (c) => String(c.tp || '').startsWith("20") || String(c.iso || '')[0] === '2';
 const is40ft = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
@@ -273,15 +274,9 @@ function reorder40FirstForDischarge(flow) {
   return [...withinTier(deck), ...withinTier(hold)];
 }
 
-// 리퍼 판정 (이 모듈 자체 완결성 위해 로컬 헬퍼 — ISO 3번째 글자 R 또는 변형코드)
+// 리퍼 판정 — 3.60-10 (진단 M6): utils 한 벌(isReeferContainer). 종전 로컬 헬퍼는 숫자 리퍼(4530·2230)·42HR 을 놓쳤다.
 function cardIsReefer(c) {
-  if (!c) return false;
-  if (c.rf === true) return true;
-  const iso = String(c.iso || '').toUpperCase();
-  if (iso.length >= 3 && iso[2] === 'R') return true;
-  if (/^R[FE]/.test(iso)) return true;
-  if (/^[24]58[25]$/.test(iso)) return true;
-  return false;
+  return isReeferContainer(c);
 }
 
 // ── V8.50: 부류·물리 종속 헬퍼 (V8.09-04 reorderFullReeferLast 대체) ──

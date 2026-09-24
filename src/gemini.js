@@ -21,7 +21,7 @@
 //   - 토큰 분당 100만
 //   → 검수원 15명 × 하루 50회 = 750회/일, 한도의 50% 사용
 
-import { fmtPos, normalizeBay } from './utils.js';
+import { fmtPos, normalizeBay, isReeferContainer } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌
 import { lookupUN } from './dgUnDict.js';
 import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
 
@@ -221,7 +221,7 @@ export function ragFilter(question, allContainers, parsed = {}) {
       filtered = filtered.filter(c => c.dg);
       desc.push('DG');
     } else if (parsed.type === 'rf') {
-      filtered = filtered.filter(c => c.rf || (c.iso && c.iso[2] === 'R'));
+      filtered = filtered.filter(c => isReeferContainer(c));
       desc.push('리퍼');
     } else if (parsed.type === 'fr') {
       filtered = filtered.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || ''));
@@ -340,7 +340,7 @@ function compactContainer(c) {
   if (c.sl) o.sl = c.sl;
   if (c._xray) o.x = 1;
   if (c._comp) o.done = 1;
-  if (c.rf || (c.iso && c.iso[2] === 'R')) {
+  if (isReeferContainer(c)) {
     o.rf = 1;
     if (c.tmp) o.tmp = c.tmp;
   }
@@ -380,7 +380,7 @@ function buildBayStats(allContainers) {
     else bayMap[b].hold++;
     const w = parseInt(c.wt, 10) || 0;
     bayMap[b].wt += w;
-    if (c.rf || (c.iso && c.iso[2] === 'R')) bayMap[b].rf++;
+    if (isReeferContainer(c)) bayMap[b].rf++;
     if (c.dg) bayMap[b].dg++;
   });
   return bayMap;
@@ -423,7 +423,7 @@ function buildContext(voyage, allContainers) {
     loading: allContainers.filter(c => c._mode === 'loading').length,
     full: allContainers.filter(c => c.fe === 'F').length,
     empty: allContainers.filter(c => c.fe === 'E').length,
-    rf: allContainers.filter(c => c.rf || (c.iso && c.iso[2] === 'R')).length,
+    rf: allContainers.filter(c => isReeferContainer(c)).length,
     dg: allContainers.filter(c => c.dg).length,
     fr: allContainers.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || '')).length,
     ot: allContainers.filter(c => c.ot).length,

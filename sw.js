@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-09';
-const NOTE = '같은 컨을 두 사람이 완료해도 먼저 한 기록이 남고 항차를 지울 때 완료 기록 수를 알려 줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-10';
+const NOTE = '리퍼를 가리는 기준을 한 벌로 맞춰 숫자 규격 리퍼와 45피트 리퍼가 빠지지 않고 플랫랙이 리퍼로 세어지지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

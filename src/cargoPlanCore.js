@@ -596,7 +596,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
 import { getBayOverride } from './data/shipBayDict_pdf_override.js';
-import { isoToLabel } from './utils.js';
+import { isoToLabel, isReeferIso } from './utils.js';   // 3.60-10: isReeferIso — 리퍼 판정 한 벌
 
 // M6.91.0: PDF STOWAGE INSTRUCTION에서 추출한 베이별 정답 데이터 사용 (DJCT/SWAT 우선).
 //   override가 있으면 추측 안 함. 없으면 베이사전 기본 fallback.
@@ -1137,7 +1137,7 @@ export function defaultGetSelfMark(c, pod) {
   // V9.28-07: 비표준 리퍼 코드 보강 — YKTD 2612E 실측: EDI가 4530(40ft 리퍼 HC, 온도 동봉)으로
   //   보낸 12대가 iso[2]='3'이라 R마크를 못 받아 "인식은 되는데 카고플랜엔 안 보이는" 상태였다.
   //   rf 플래그·isoToLabel(4530→40RF)을 함께 본다 — 카운트·리스트·카고플랜 판정 통일.
-  if (typeChar === 'R' || c.rf || /R[FH]$/.test(isoToLabel(iso) || '')) return 'R';   // 1.99: 40RH 포함
+  if (typeChar === 'R' || c.rf || isReeferIso(iso)) return 'R';   // 1.99: 40RH 포함 · 3.60-10 (진단 M6): 라벨 대신 리퍼 한 벌(isReeferIso — 라벨 RF·RE·RH 를 다 본다)
   if (typeChar === 'P') return 'P';
   if (typeChar === 'U') return 'U';
   if (typeChar === 'T') return 'T';

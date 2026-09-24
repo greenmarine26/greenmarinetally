@@ -4,6 +4,7 @@
 import React, { useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { fbAssignDeckSlot } from '../firebase.js';
+import { isReeferIso } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌
 
 export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector }) {
   const decks = plan?.decks || [];
@@ -90,7 +91,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             const isDone = !!compMap[s.cn];
             const c = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류 — 실번호·온도·DG·POD (사용자 요청)
             const fe = (c && (c.fe === 'F' || c.fe === 'E')) ? c.fe : s.fe;
-            const isRf = /RH|RF/.test(s.iso) || (c && c.rf);
+            const isRf = isReeferIso(s.iso) || !!(c && c.rf);   // 3.60-10 (진단 M6): 리퍼 판정 한 벌
             const isDg = !!(c && c.dg);
             const isXray = !!xrayMap[s.cn];
             const tmp = c && c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '';

@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs } from './utils.js';   // 2.65-01: 조 경계 한 벌
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromRecords, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
@@ -229,7 +229,7 @@ export function answerXrayShifts(voyage, bayDef, opts = {}) {
 //   완료 기록(compMap)을 빼고, 지금~조 끝 남은 실근무시간(WORK_SHIFTS 한 벌)으로만 계산한다.
 //   크레인은 서로 못 넘는다 — 배정은 연속 구간 분할(예상시간 최균등 절단, 그룹 경계 위에서만).
 const _isFRlike = (c) => { const t = String(c.iso || ''); return !!c.fr || !!c.oog || (t.length > 2 && 'PU'.includes(t[2])); };
-const _isRF = (c) => { const t = String(c.iso || ''); return !!c.rf || (t.length > 2 && t[2] === 'R'); };
+const _isRF = (c) => isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌 — 숫자 리퍼(4530·2230)를 놓치던 것
 const _isDG = (c) => !!c.dg || !!c.dgc || !!c.un;
 
 //  그룹별 특수 분류·예상시간(계획 모델: 일반 25/h · 리퍼/DG 15/h · FR류 그룹당 0.25h+개당 0.05h).
@@ -633,7 +633,7 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
   }
   // ⑤ 특수화물 — 다음 조 초반(구간 바깥 끝)에 걸리는 것 먼저
   const xr = Object.keys(voyage?.discharge?.xrayList || {}).length;
-  const rf = dis.concat(lod).filter((c) => c.rf || (c.iso && c.iso[2] === 'R') || (c.tmp && String(c.tmp).trim() !== '')).length;
+  const rf = dis.concat(lod).filter((c) => isReeferContainer(c)).length;   // 3.60-10: 리퍼 한 벌(온도 칸만으로 리퍼라 하지 않는다 · 숫자 리퍼 포함)
   const dg = dis.concat(lod).filter((c) => c.dg).length;
   if (xr + rf + dg) {
     const sp = [];
@@ -644,7 +644,7 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
     if (plan) {
       const outer = [plan.left.groups[0], plan.right.groups[plan.right.groups.length - 1]].filter(Boolean);
       const outerBays = new Set(outer.flatMap((g) => g.members));
-      const earlyN = dis.filter((c) => outerBays.has(_bayN(c)) && (c.dg || c.rf || (c.iso && c.iso[2] === 'R'))).length;
+      const earlyN = dis.filter((c) => outerBays.has(_bayN(c)) && (c.dg || isReeferContainer(c))).length;   // 3.60-10: 리퍼 한 벌
       if (earlyN) early = ` — 이 중 ${earlyN}대가 구간 끝 베이(초반 순서)에 있습니다`;
     }
     L.push(`특수화물 — ${sp.join(' · ')}${early}.`);

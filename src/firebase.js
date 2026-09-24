@@ -926,7 +926,8 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   //    읽기는 구독 캐시(voyages 루트)에서 바로 온다 — SDK get() 은 켜진 구독의 캐시가 있으면 서버에 안 묻는다(repoGetValue, 오프라인도 즉시).
   //    쓰기는 **종전 set 그대로**다. transaction 은 전송 뒤 연결이 끊기면 다시 보내지 않고 버린다(감사 실측 — 약한 신호에서 완료가 사라짐).
   //    터미널 반영(src:'term')은 사람이 아니므로 사람 완료가 덮는다(종전과 같음). 캐시가 없거나 1.5초 안에 못 읽으면 종전대로 쓴다(완료를 막지 않는다).
-  //    ⚠ 두 기기가 같은 순간(서로의 기록이 닿기 전)에 누르는 경합은 이것으로 못 막는다 — 막으려면 transaction 인데 위 까닭으로 안 쓴다.
+  //    ⚠ 서로의 기록이 닿기 전에 두 기기가 누르는 경합은 이것으로 못 막는다 — 약한 신호면 «끊겨 있던 동안 전체»가 그 틈이다(재접속 때 나중 set 이 덮음, 3.60-09 감사).
+  //      막으려면 transaction 인데 위 까닭으로 안 쓴다.
   const r = ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`);
   const prev = await _peekVal(r);
   if (prev && !isTermApplied(prev)) {

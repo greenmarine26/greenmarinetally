@@ -9,7 +9,7 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS} from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isReeferContainer } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -2805,9 +2805,9 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
 
 function SmallResultCard({ c, onOpen, showPos = false }) {
   const isDone = !!c._comp;
-  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+  const isReefer = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
-  const isReeferF = c.rf && hasTmp && c.fe === 'F';
+  const isReeferF = isReefer && hasTmp && c.fe === 'F';
   return (
     <button onClick={onOpen}
       className={`w-full text-left bg-ink-900 border rounded-pill p-2 flex items-center gap-2 ${

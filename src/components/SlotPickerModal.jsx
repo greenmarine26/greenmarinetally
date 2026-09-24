@@ -2,7 +2,7 @@
 // FR 4개 다중 적재 케이스 지원 - 베이플랜에서 ⊕N 셀 클릭 시 표시
 import React from 'react';
 import { X } from 'lucide-react';
-import { isoToLabel, isFlatRackContainer } from '../utils.js';
+import { isoToLabel, isFlatRackContainer, isReeferContainer } from '../utils.js';
 
 export default function SlotPickerModal({ open, slot, containers, onPick, onClose }) {
   if (!open || !containers || containers.length === 0) return null;
@@ -35,7 +35,7 @@ export default function SlotPickerModal({ open, slot, containers, onPick, onClos
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {containers.map((c, i) => {
             const label = isoToLabel(c.iso) || c.iso || '?';
-            const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+            const isReefer = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌
             const isFr = isFlatRackContainer(c);   // 3.43-03: FR 판정 한 벌 — fr 없는 FR(ASC)이 OT 배지로 나오던 것
             const isOt = c.ot || c.oog;
             const isTk = c.tk;

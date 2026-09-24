@@ -16,6 +16,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk } from '../firebase.js';
+import { isReeferContainer } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
 //   공 리퍼는 전원을 안 꽂아 잴 것이 없다. 텔리 RF 시트(`fe !== 'E'` — 실물 관례 "양하 F 리퍼만
@@ -24,7 +25,7 @@ import { fbSetReeferTempBulk } from '../firebase.js';
 //     컨이 생긴다(STMJ 2643E 는 24대가 전부 풀이라 드러나지 않았다).
 //   리퍼드라이(rfdry, 넌플러그)·제작컨(mkcon)도 제외 — 지침서 5-5 "온도 경고 제외" 규칙과 같다.
 const isReefer = (c) => {
-  const rf = !!c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''));
+  const rf = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌 — 옛 `^45[38]` 은 4583·4584(플랫랙)를 온도 점검에 올렸다
   if (!rf) return false;
   if (c.rfdry || c.mkcon) return false;
   return c.fe === 'F' || !c.fe;     // fe 미상은 남긴다 — 조용히 빠뜨리지 않는다

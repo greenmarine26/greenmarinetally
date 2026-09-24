@@ -20,7 +20,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -1032,7 +1032,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   ReeferMemoModal.isReefer 와 **같은 식**이어야 한다 — 버튼 숫자와 모달 줄 수가 어긋나면 안 된다.
   const reefers = useMemo(
     () => (containers || []).filter((c) => {
-      const rf = !!c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''));
+      const rf = isReeferContainer(c);   // 3.60-10 (진단 M6): ReeferMemoModal 과 같은 한 벌(버튼 숫자 = 모달 줄 수)
       if (!rf || c.rfdry || c.mkcon) return false;
       return c.fe === 'F' || !c.fe;
     }),
@@ -1508,7 +1508,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (left <= 0 || left > 2 * 3600000) return null;
           const undone = containers.filter(c => !compMap[c.cn]).length;
           const xrayPend = mode === 'discharge' ? Object.keys(xrayMap || {}).filter(cn => !(xraySeals || {})[cn]?.seal).length : 0;
-          const rfMiss = containers.filter(c => (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry && !c.mkcon &&
+          const rfMiss = containers.filter(c => isReeferContainer(c) && !c.rfdry && !c.mkcon &&   // 3.60-10: 리퍼 한 벌
             (c.fe === 'F' || !c.fe) && (!c.tmp || String(c.tmp).trim() === '')).length;
           if (!undone && !xrayPend && !rfMiss) return null;
           const mins = Math.round(left / 60000);

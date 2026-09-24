@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isReeferContainer, isReeferIso } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -178,8 +178,8 @@ export function buildOS(containers, compMap, mode, fmt) {
     const missing = comp && comp.flag === 'missing';
     if (comp && !missing) g[k].worked++;
     if (missing) g[k].short++;
-    const iso = String(c.iso || '').toUpperCase();
-    const isRf = c.rf || iso[2] === 'R' || /^45[38]/.test(iso);
+    //  3.60-10 (진단 M6): 리퍼는 utils 한 벌 — 옛 `^45[38]` 은 4583·4584(플랫랙)까지 리퍼로 셌고, 숫자 리퍼 2230 은 rf 표식 없으면 놓쳤다.
+    const isRf = isReeferContainer(c);
     if (isRf) (sz === 'HC' || sz === '45' ? g[k].rh++ : g[k].rf++);
     if (c.dg) g[k].dg++;
   }
@@ -196,8 +196,7 @@ export function buildOS(containers, compMap, mode, fmt) {
     byOp[op] ??= {};
     const k = `${sz === '20' ? "20'" : sz === '45' ? "45'" : "40'"}${fe}`;
     byOp[op][k] = (byOp[op][k] || 0) + 1;
-    const iso = String(c.iso || '').toUpperCase();
-    if (c.rf || iso[2] === 'R' || /^45[38]/.test(iso)) byOp[op]._rh = (byOp[op]._rh || 0) + 1;
+    if (isReeferContainer(c)) byOp[op]._rh = (byOp[op]._rh || 0) + 1;   // 3.60-10: 리퍼 한 벌
     if (c.dg) byOp[op]._dg = (byOp[op]._dg || 0) + 1;
   }
   const remarks = Object.entries(byOp)
@@ -257,7 +256,7 @@ export function buildRF(containers) {
     //   지침서 5-5 "리퍼드라이=넌플러그, 제작컨=컨 자체가 상품 — 온도 경고 제외"와 같은 기준으로 맞춘다.
     //   리퍼 메모 화면·상단 버튼·출항 임박 경고도 전부 이 식이다(네 곳 일치, 시뮬 검증).
     .filter(c => !c.rfdry && !c.mkcon)
-    .filter(c => c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || '')))
+    .filter(c => isReeferContainer(c))   // 3.60-10 (진단 M6): 리퍼 한 벌 — 4583·4584(FR)가 RF condition 에 실리던 것
     .map(c => ({
       cn: c.cn, seal: c.sl || '', size: tallySizeCol(c) === '20' ? "20'RF" : "40'RH",
       // TallyOne 1.55: **최종 선적 위치**다 — 계획이 아니라 실제로 실은 자리.
@@ -336,7 +335,7 @@ export function buildFerry(voyage, disCs, loadCs) {
       const oKey = (lug && z.os[`${oLen}LUG${fe.toUpperCase()}`]) ? `${oLen}LUG${fe.toUpperCase()}` : `${oLen}${fe.toUpperCase()}`;
       const oe = z.os[oKey];
       oe.n += 1;
-      const isRf = !!(c.rf || String(isoEff)[2] === 'R');
+      const isRf = !!(c.rf || isReeferIso(isoEff));   // 3.60-10: 리스트 확정 규격(isoEff)도 리퍼 한 벌로
       if (isRf) oe.rh += 1;
       // TallyOne 1.4: 20' 하이큐브(26xx 등 높이코드 5~9)가 어느 분기에도 안 걸려 hc 미집계였다
       //   (2697E 실측: ZXJU0130463 ISO 2600 → 실물 REMARKS ' HC x 1' 인데 재현은 공란).

@@ -21,6 +21,7 @@ import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
+  isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, twinDiffLimit, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -691,7 +692,7 @@ function attrLine(c, attr, ctx) {
     case 'temp': {
       const r = reeferTempOf(c);
       if (!r.target) {
-        const looksRf = !!c.rf || /R/.test(S(c.iso).slice(2, 3)) || /RF|RE|RH/i.test(S(c.iso) + S(c.tp));
+        const looksRf = isReeferContainer(c) || isReeferIso(S(c.tp));   // 3.60-10 (진단 M6): 리퍼 판정 한 벌(ASC 장비코드 tp 도 같은 벌)
         if (!looksRf) return '리퍼가 아니에요 — 온도 없음.';
         if (c.rfdry) return '리퍼드라이(넌플러그)라 온도 대상이 아니에요.';
         if (c.mkcon) return '특수제작컨이라 온도 대상이 아니에요.';
@@ -2098,7 +2099,7 @@ JSON 한 줄로만 답한다: {"canonical":"...","window":"창구 이름","confi
 // ── ② 자료 답 — 요약 + 계산해 둔 사실 + 질문에 맞는 컨 ───────────────────────
 const _pos = (c) => [c.bay, c.row, c.tier].filter((x) => x !== undefined && x !== null && x !== '').join('-');
 const _iso = (c) => c.iso || c.tp || c.type || c.size || '';
-const _isRf = (c) => !!(c.rf || c.isReefer || /R[EFHT]|RF/.test(String(_iso(c))));
+const _isRf = (c) => !!(c.rf || c.isReefer || isReeferIso(String(_iso(c))));   // 3.60-10 (진단 M6): 리퍼 한 벌 — 옛 식은 rf 없는 45R1 을 놓쳤다
 const _isDg = (c) => !!(c.dg || c.imdg || c.dgc || c.un || c.dgClass);
 const _isX = (c) => !!(c._xray || c.isXray);
 const _isDone = (c) => !!(c._comp || c.comp);
