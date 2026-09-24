@@ -130,8 +130,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       merged._xray = true;
       //  ⚠ 이름이 _xraySealNo 다 — SearchPanel·mirCtx 는 _xraySeal 에 **레코드 객체**를 담는다(같은 이름에 다른 것).
       merged._xraySealNo = String((xraySealMap[cn] || {}).seal || '').trim();   // 3.45: 없으면 빈 칸 — 지어내지 않는다
-      //  3.45: 세관 리스트가 준 규격 원문 — 있으면 그것이 정본이다(XrayTab 과 같은 우선순위).
-      merged._xrayIso = String((xrayMap[cn] || {}).iso || '').trim();
+      //  3.60-15: XRAY 목록 규격(_xrayIso)은 검수리스트에 쓰지 않는다 — 검수리스트는 세관 적하목록 원문(iso_customs), XRAY 리스트는 제 글자(XrayTab).
     }
     return merged;
   });

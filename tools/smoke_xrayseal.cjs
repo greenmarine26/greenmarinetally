@@ -24,14 +24,16 @@ const ok = (name, cond, detail = '') => {
   else { bad += 1; console.log(`  ✘ ${name}${detail ? ' — ' + detail : ''}`); }
 };
 
-//  PrintHubModal 이 만드는 행 모양 그대로(평택 양하분 + _xray/_xraySealNo/_xrayIso)
-const build = (withSeal, xIso) => Object.entries(FX.edi).map(([k, e]) => {
+//  PrintHubModal 이 만드는 행 모양 그대로(평택 양하분 + _xray/_xraySealNo). _xrayIso 는 3.60-15 부터 PrintHubModal 이 안 싣는다 —
+//    검수리스트가 그 글자를 무시하는지 보려고 일부러 넣는다.
+const build = (withSeal, xIso, cIso) => Object.entries(FX.edi).map(([k, e]) => {
   const cn = String((e && e.cn) || k).toUpperCase();
   const r = Object.assign({}, e, { cn });
   if (FX.xrayList[cn]) {
     r._xray = true;
     if (withSeal) r._xraySealNo = String((FX.xraySeals[cn] || {}).seal || '').trim();
     if (xIso) r._xrayIso = xIso;
+    if (cIso) r.iso_customs = cIso;   // 3.60-15: 세관 적하목록 원문(parseCustomsSheet 가 records 에 남긴다)
   }
   return r;
 }).filter((r) => String(r.pod || '').toUpperCase().startsWith('KRPT'));
@@ -109,10 +111,14 @@ ok('EDI 가 이미 그룹꼴이면 그대로(45GP·22GP)',
 const hc = (seen._all || []).filter((r) => r.spec === '45GP').length;
 const dc = (seen._all || []).filter((r) => r.spec === '42GP').length;
 ok('하이큐빅(45GP)과 일반(42GP)이 갈린다 — 종전엔 둘 다 «40»', hc > 0 && dc > 0, `45GP ${hc}대 · 42GP ${dc}대`);
-//  세관 원문이 오면 그것이 이긴다
-const withCust = parse(M.generateInspectionListHTML(build(true, '22TN'), 'discharge', info, [])).rows;
-ok('세관 리스트 원문(_xrayIso)이 EDI 를 이긴다', targets.every((cn) => withCust[cn] && withCust[cn].spec === '22TN'),
+//  ★ 3.60-15 — 검수리스트 규격은 **세관 적하목록 원문**(iso_customs)이 이긴다. XRAY 목록 글자(_xrayIso)는 검수리스트에 쓰지 않는다
+//    (검수사 2026-09-25 «XRAY표기는 그대로 표기합니다. 검수리스트와 별개로» · «검수리스트와 XRAY 리스트는 다를수 있다는것입니다»).
+const withCust = parse(M.generateInspectionListHTML(build(true, '', '22TN'), 'discharge', info, [])).rows;
+ok('세관 적하목록 원문(iso_customs)이 EDI 를 이긴다', targets.every((cn) => withCust[cn] && withCust[cn].spec === '22TN'),
    targets.map((cn) => withCust[cn] && withCust[cn].spec).join(','));
+const withX = parse(M.generateInspectionListHTML(build(true, '22TN'), 'discharge', info, [])).rows;
+ok('XRAY 목록 글자(_xrayIso)는 검수리스트 규격 칸을 바꾸지 않는다', targets.every((cn) => withX[cn] && seen[cn] && withX[cn].spec === seen[cn].spec && withX[cn].spec !== '22TN'),
+   targets.map((cn) => withX[cn] && withX[cn].spec).join(','));
 //  폴백 — ATPR 실데이터의 내부 공컨 마커가 종이로 새면 안 된다
 const AT = fx('podpat_atpr.json');
 const atRows = Object.entries(AT.edi).map(([k, e]) => Object.assign({}, e, { cn: String(e.cn || k).toUpperCase() }));

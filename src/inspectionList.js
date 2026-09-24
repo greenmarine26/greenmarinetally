@@ -175,8 +175,18 @@ export const memoFitOf = (plain) => _memoFit(String(plain || ''));
 
 //  ★ 3.45 — **규격은 이 함수 한 곳에서만 정한다.** 종이와 인쇄창 CSV 가 각자 계산하면 반드시 갈린다 —
 //    재감사 실측에서 폴백 행(빈 ISO·DCHC 류)이 종이 «40» · 엑셀 «빈칸» 으로 어긋났다.
+//  ★ 3.60-15 — **검수리스트 규격 칸은 세관에 신고된 유형이 우선이다.** 검수사 2026-09-25 «규격은 항상 세관에 신고된 유형이 우선입니다» ·
+//    «검수리스트를 말하는것입니다. 나머지는 선박별 마감 텔리를 기준으로 합니다» · «XRAY표기는 그대로 표기합니다. 검수리스트와 별개로» ·
+//    «검수리스트와 XRAY 리스트는 다를수 있다는것입니다».
+//    ① 세관 적하목록 원문(iso_customs — parseCustomsSheet 가 3.47 부터 남긴다)을 모양을 따지지 않고 적힌 그대로 ② 없으면 EDI 규격을 세관꼴로(종전 그대로).
+//    XRAY 목록 글자(_xrayIso)는 검수리스트에 쓰지 않는다 — XRAY 리스트(generateXrayListHTML)가 제 글자를 그대로 쓴다.
+//    종전엔 ①을 안 읽고 XRAY 목록 글자만 세관 원문으로 넘겼고, 그마저 ISO 종류군 꼴(isCustomsSpec)만 받아 세관이 쓴 45HC·40HT 를 버렸다 —
+//    OBWH 2749E 세관 246대 중 103대가 원문과 다른 글자로 찍혔다(44GP→45GP 97 · 45HC→L5GP 5 · 40HT→42VH 1).
+//    ⚠ 판정(묶음 20/40·특수·대수)은 이 글자가 아니라 라벨(getContainerCategory)로 한다 — 글자만 세관을 따른다.
 const _specOf = (c) => {
-  const s0 = isoToCustomsSpec(c && c.iso, c && c._xrayIso);
+  const _cus = String((c && c.iso_customs) || '').trim();
+  if (_cus) return _cus;
+  const s0 = isoToCustomsSpec(c && c.iso, '');
   //  ⚠ 규격이 «일반(GP)» 이라는데 FR 한 벌이 «FR» 이라고 하면 규격을 고쳐 적지 않는다 —
   //    같은 종이에 «일반» 과 «특수화물 별첨» 이 같이 나가면 검수사가 둘 중 뭘 믿어야 할지 모른다.
   if (s0) return (/GP$/.test(s0) && isFlatRackContainer(c)) ? s0.slice(0, 2) + 'PF' : s0;
@@ -216,6 +226,7 @@ function renderRow(c, idx, opts) {
   const { len, type } = getContainerCategory(c);
   //  ★ 3.45 — 규격은 **세관 리스트와 같은 표기**(검수사 2026-09-14 «규격은 세관리스트껄로 맞추시면 될듯합니다»).
   //    세관 리스트 실측 — 45GP · 22GP · 44GP · 42RE 처럼 **ISO 4자리 그대로**다(검수업체컨테이너목록조회).
+  //    ⚠ 3.60-15: 원문은 **세관 적하목록**(iso_customs)이다 — XRAY 목록 글자는 쓰지 않는다(_specOf 주석).
   //    종전 자체 계산은 45GP(40피트 하이큐빅)와 42GP(40피트 일반)를 둘 다 «40» 으로 찍어 구분이 사라졌다.
   //    ISO 가 없거나 4자리가 아닌 행(부킹 자리·숫자 ISO 등)만 종전 계산으로 물러선다.
   //    ⚠ 초판은 문을 «4자리에 글자 하나» 로 열어 내부 공컨 마커(220E·450E·453E·45GE)와
@@ -288,7 +299,7 @@ function renderRow(c, idx, opts) {
     <td class="no">${idx}</td>
     <td class="cn">${cn}</td>
     <td class="sl${_slCls}">${_esc(sl)}</td>
-    <td>${spec}</td>
+    <td>${_esc(spec)}</td>
     <td>${fe}</td>
     <td class="memo${_memoCls}">${note}</td>
   </tr>`;
