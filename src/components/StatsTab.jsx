@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
+import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isReeferContainer, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
 import { paceFromRecords, voyageDoneAts, voyageReportSpan, voyageFirstTermAt } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
@@ -256,10 +256,14 @@ function computeAllStats(containers, compMap, xrayMap, mode, voyage) {
     dg: { total: 0, done: 0, list: [] },
   };
   containers.forEach(c => {
-    const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+    //  ★ 3.60-07 (진단 M3·M6): 판정은 utils 한 벌 — 종전엔 셋째 글자 R 만 리퍼로 봐 숫자 ISO(4530·2230)·42HR 을 놓쳤고,
+    //    EDI 파서가 오픈탑에 `oog` 만 찍어 오픈탑·규격초과가 FR 칸으로 가고 OT 는 0 이었다(SWTD 9013E 42UT 실측).
+    //    리퍼는 풀일 때만 리퍼(검수사 2026-09-24 «엠티는 엠티이다») — F/E 가 E 로 적힌 리퍼는 이 칸에 안 센다.
+    const isReefer = isReeferContainer(c) && String(c.fe || '').toUpperCase() !== 'E';
     if (isReefer) { bySpecial.rf.total++; if (compMap[c.cn]) bySpecial.rf.done++; bySpecial.rf.list.push(c); }
-    if (c.fr || c.oog) { bySpecial.fr.total++; if (compMap[c.cn]) bySpecial.fr.done++; bySpecial.fr.list.push(c); }
-    if (c.ot) { bySpecial.ot.total++; if (compMap[c.cn]) bySpecial.ot.done++; bySpecial.ot.list.push(c); }
+    const _isFr = isFlatRackContainer(c);
+    if (_isFr) { bySpecial.fr.total++; if (compMap[c.cn]) bySpecial.fr.done++; bySpecial.fr.list.push(c); }
+    if (!_isFr && (c.ot || isOpenTopIso(c.iso) || String(isoToLabel(c.iso) || '').endsWith('OT') || /^(OT|OP)\d/.test(String(c.tp || '').toUpperCase()))) { bySpecial.ot.total++; if (compMap[c.cn]) bySpecial.ot.done++; bySpecial.ot.list.push(c); }   // ASC 장비코드 OT40 도(감사 지적)
     if (c.tk) { bySpecial.tk.total++; if (compMap[c.cn]) bySpecial.tk.done++; bySpecial.tk.list.push(c); }
     if (c.dg) { bySpecial.dg.total++; if (compMap[c.cn]) bySpecial.dg.done++; bySpecial.dg.list.push(c); }
   });

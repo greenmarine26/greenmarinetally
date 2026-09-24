@@ -1,7 +1,8 @@
 // 엠티실 제출 양식 «공컨테이너 씰체결 작업 리스트» 한 벌 — 현장 종이와 같은 모양(두 단 × 50줄, No·컨테이너번호·Size·Seal)에 앱에 기록된 여섯 자리 실을 채워 인쇄용 HTML 로 만든다
 /* ★ TallyOne 3.60-01 (검수사 2026-09-24 «엠티실 양식없이 단순 정리 리스트만 보여줍니다») — 종전 카드의 [엠티실 정리 리스트]는 글자 목록(카톡용)뿐이었다.
-   양식은 검수사가 찍어 보낸 ATPR 2643W 종이 그대로 — 40피트 장(HC 다음 RH)과 20피트 장(20' 다음 20'RF)을 따로, 장마다 번호 1부터, 규격 안은 컨번호순.
-   ⚠ 읽기만 한다(RTDB 쓰기 없음). 잔여 실 목록은 양식 끝 장에 붙인다(검수사 1.87 «잔여 실번호 리스트도 제출해야 합니다»). */
+   양식은 검수사가 찍어 보낸 ATPR 2643W 종이 그대로 — 40피트 장(HC 다음 RH)과 20피트 장(20' 다음 20'RF)을 따로, 규격 안은 컨번호순.
+   ★ 3.60-07 (검수사 2026-09-24 «넘버링은 규격별 갯수를 파악하기 쉽게 보여주는것이 좋다»): 번호는 **규격(Size)마다 1부터** — 규격의 마지막 번호가 곧 그 규격 대수다.
+   ⚠ 읽기만 한다(RTDB 쓰기 없음). 잔여 실 목록은 넘기면 끝 장에 붙이지만, 항차 화면은 넘기지 않는다(검수사 2026-09-24 «엠티실에서 잔여실은 표기 안합니다»). */
 import { isoToLabel } from './utils.js';
 
 const _esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -24,7 +25,11 @@ export function esealSheetPages(rows) {
     .sort((a, b) => rank(a.size) - rank(b.size) || a.size.localeCompare(b.size) || String(a.cn).localeCompare(String(b.cn))))
     .filter((g) => g.length);
   const pages = [];
-  for (const g of groups) for (let i = 0; i < g.length; i += 100) pages.push(g.slice(i, i + 100).map((r, k) => ({ ...r, no: i + k + 1 })));
+  for (const g of groups) {
+    let prev = null, k = 0;
+    const numbered = g.map((r) => { if (r.size !== prev) { prev = r.size; k = 0; } return { ...r, no: ++k }; });   // 3.60-07: 규격마다 1부터
+    for (let i = 0; i < numbered.length; i += 100) pages.push(numbered.slice(i, i + 100));
+  }
   return pages;
 }
 

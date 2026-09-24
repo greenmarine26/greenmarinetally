@@ -66,6 +66,15 @@ export function normalizeCntrType(iso) {
     const high = k === 'HC' || k === 'HQ' || k === 'RH' || len === '45';
     return { len, kind, high };
   }
+  //  ★ 3.60-07: 선사 약어(종류+크기 — DC20·DC40·DCHC·RFHC·RF40·FR40·OT40·TK20)는 라벨 해석기가 원문을 그대로 돌려주므로 여기서 먼저 푼다
+  //    (메인플랜 TpSz 관례 — utils 1169 주석 «DCHC→40HC 드라이 · RFHC→40HC 리퍼» 와 같은 뜻).
+  const _ab = s.match(/^(DC|GP|RF|RE|FR|PL|FP|OT|OP|TK)(20|40|45|HC|HQ)$/);
+  if (_ab) {
+    const k = _ab[1], z = _ab[2];
+    return { len: z === '20' ? '20' : z === '45' ? '45' : '40',
+      kind: (k === 'RF' || k === 'RE') ? 'RF' : (k === 'FR' || k === 'PL' || k === 'FP') ? 'FR' : (k === 'OT' || k === 'OP') ? 'OT' : k === 'TK' ? 'TK' : 'GP',
+      high: z === 'HC' || z === 'HQ' || z === '45' };
+  }
   const c1 = s[0] || '', c2 = s[1] || '', c3 = s[2] || '';
   const len = c1 === '2' ? '20' : c1 === '4' ? '40' : (c1 === '9' || c1 === 'L' || c1 === 'M') ? '45' : '20';
   const high = c2 === '4' || c2 === '5' || c2 === '6' || c2 === 'E' || c2 === 'F';
@@ -81,6 +90,15 @@ export function normalizeCntrType(iso) {
     const kind = lk || ((c3 === '3' || c3 === '4') ? 'RF' : c3 === '2' ? 'BK'
       : c3 === '5' ? 'OT' : c3 === '6' ? 'FR' : c3 === '7' ? 'TK' : 'GP');
     return { len, kind, high };
+  }
+  //  ★ 3.60-07 (진단 M2): 글자 코드도 **규격 라벨(isoToLabel 한 벌)이 먼저다.** 셋째 글자 H 를 리퍼로 읽어
+  //    세관 관례 42HQ(40HC 드라이 — TMPZ 2027E 129대)·40HE·DCHC 가 4530(40HC 리퍼)·2230(20피트 리퍼)으로 카스피 회신에 나갔다.
+  //    라벨이 모르는 코드와 벌크(B)만 아래 셋째 글자 규칙으로 물러선다.
+  //    ⚠ 셋째 글자가 H 일 때만 라벨로 간다(감사 지적 — 4EG1·25G1·L5R1 처럼 라벨이 높이·종류를 다 모르는 표준 코드는 종전 규칙이 맞다).
+  const _lb = c3 !== 'H' ? null : String(isoToLabel(s) || '').match(/^(20|40|45)(DC|HC|RF|RH|FR|OT|TK|VH)$/);
+  if (_lb) {
+    const k2 = _lb[2];
+    return { len: _lb[1], kind: (k2 === 'RF' || k2 === 'RH') ? 'RF' : k2 === 'FR' ? 'FR' : k2 === 'OT' ? 'OT' : k2 === 'TK' ? 'TK' : 'GP', high: k2 === 'HC' || k2 === 'RH' || _lb[1] === '45' };
   }
   // 신형 ISO: 3번째 문자 (G=GP, R·H=리퍼, U=오픈탑, P=플랫, T=탱크, B=벌크)
   const kind = (c3 === 'R' || c3 === 'H') ? 'RF' : c3 === 'U' ? 'OT'

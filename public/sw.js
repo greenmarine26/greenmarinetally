@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-06';
-const NOTE = '업데이트 배너가 다시 뜨거나 혼자 새로고침되던 것과 기록지 사진 판독 안전장치를 보강했습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-07';
+const NOTE = '씰체결 작업 리스트 번호를 규격마다 1부터 매기고 선적 EDI 회신 규격과 현황 탭 특수화물 칸을 바로잡았습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
