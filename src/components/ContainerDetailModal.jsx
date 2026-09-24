@@ -175,7 +175,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       title: '수정 위치 기록 삭제',
       message: '수정 위치 기록을 삭제하시겠습니까?\n계획 위치대로 처리됩니다.',
       confirmLabel: '삭제', danger: true,
-      onConfirm: async () => { await fbClearActualPosition(voyageKey, mode, c.cn); },
+      //  3.60-08: 지우기가 멈추면(기록 못 읽음) 말한다 — 종전엔 catch 가 없어 조용히 실패했다. 조회만 막힘은 띠가 따로 알린다.
+      onConfirm: async () => {
+        try { await fbClearActualPosition(voyageKey, mode, c.cn); }
+        catch (e) { if (!e?.viewOnly) alert('수정 위치 삭제 실패 — ' + (e?.message || e)); }
+      },
     });
   };
 

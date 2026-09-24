@@ -449,7 +449,10 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
   const path = `voyages/${voyageKey}/${mode}/records`;
   let cur = {};
   try { cur = (await get(ref(db, path))).val() || {}; }
-  catch (e) { console.warn('[리스트 저장] 기존 records 읽기 실패 — 병합 없이 저장합니다:', e); }
+  //  ★ 3.60-08 (진단 T8): 기존 records 를 못 읽었으면 **저장하지 않는다.** 종전엔 «병합 없이 저장» 으로 넘어가 통째 set 이
+  //    검수원이 적은 실번호 이력·엠티실·리씰·리퍼 온도·비고·사진·실물 자리를 전부 지웠다.
+  //    (오프라인은 여기 안 온다 — SDK get() 은 재연결까지 기다린다. 여기 오는 것은 권한 거부 같은 읽기 오류다 — 감사 2026-09-24.)
+  catch (e) { throw new Error(`기존 리스트를 못 읽어 저장을 멈췄어요(현장 기록을 지우지 않으려고) — 원인 ${e?.message || e} · 잠시 뒤 다시 올려 주세요.`); }
 
   const out = {};
   for (const [cn, nv] of Object.entries(recordsObj || {})) {
@@ -1112,12 +1115,13 @@ export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actual
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   // 1.56: 이력 없는 좌표 쓰기였다(독립 재검증 P1-5) — 다른 모든 위치 변경은 moves 를 남기는데
   //   이 직통 경로(상세 모달·베이 빈칸 클릭·수석 편집)만 안 남겨 "지나온 자리"가 끊겼다.
-  let _mv = []; let _from = '';
+  let _mv = []; let _from = ''; let _mvOk = false;
   try {
     const s = await get(r); const cur = s.val() || {};
     _mv = Array.isArray(cur.moves) ? cur.moves : [];
     if (cur.bay_actual && !String(cur.bay_actual).startsWith('__')) _from = `${cur.bay_actual}-${cur.row_actual}-${cur.tier_actual}`;
-  } catch { /* 이력을 못 읽어도 좌표 저장은 진행 */ }
+    _mvOk = true;
+  } catch { /* 이력을 못 읽어도 좌표 저장은 진행 — 단 moves 는 덮지 않는다(3.60-08) */ }
   const _to = actualBay ? `${actualBay}-${actualRow}-${actualTier}` : '';
   await update(r, {
     //  3.58-03: 기록이 처음 생기는 컨(계획 밖 — 기록지 사진의 시프팅 재선적)은 `cn` 칸이 없어 화면이 그 기록을 못 찾았다
@@ -1135,7 +1139,8 @@ export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actual
     //  3.60-03 (감사 지적): 사람이 실물 자리를 적었으면 «정해 준 자리»(*_assign)는 걷는다 — 2.94-06 «한 컨에 자리가 둘일 수 없다».
     //    안 걷으면 완료 때 _markLoadedPos 가 옛 assign 을 집어 지금 적은 실물 자리를 덮는다.
     bay_assign: null, row_assign: null, tier_assign: null, assign_at: null, assign_by: null,
-    moves: [..._mv, { at: Date.now(), by: by || '', why: 'actual', from: _from, to: _to, byCn: '' }],
+    //  3.60-08 (감사 지적): 이력을 못 읽었으면 moves 를 한 줄짜리로 덮지 않는다 — 지나온 자리가 지워진다.
+    ...(_mvOk ? { moves: [..._mv, { at: Date.now(), by: by || '', why: 'actual', from: _from, to: _to, byCn: '' }] } : {}),
   });
 }
 // 실체 위치 삭제 (수정 취소)
@@ -1148,7 +1153,11 @@ export async function fbClearActualPosition(voyageKey, mode, cn, by) {
     const s = await get(r); const cur = s.val() || {};
     _mv = Array.isArray(cur.moves) ? cur.moves : [];
     if (cur.bay_actual && !String(cur.bay_actual).startsWith('__')) _from = `${cur.bay_actual}-${cur.row_actual}-${cur.tier_actual}`;
-  } catch { /* 이력을 못 읽어도 삭제는 진행 */ }
+  } catch (e) {
+    //  3.60-08 (감사 재판정): 이력을 못 읽으면 **지우지 않는다.** 종전엔 그냥 지우고 moves 를 한 줄로 덮었다.
+    //    moves 를 빼고 지우면 «지웠다» 표식(마지막 줄 why:'cancel')이 없어 CATOS 가 지운 자리를 되살린다(utils.applyCatosPos).
+    throw new Error(`자리 기록을 못 읽어 지우지 않았어요 — 원인 ${e?.message || e} · 잠시 뒤 다시 눌러 주세요.`);
+  }
   await update(r, {
     bay_actual: null,
     row_actual: null,

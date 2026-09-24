@@ -4341,8 +4341,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
     // 2. 무게: 'edi' 선택 시 EDI 무게로, 'list'면 리스트 무게 그대로
     resolution.weightActions.forEach(a => {
+      //  3.60-08: 제자리 수정 금지 — 저장 실패 뒤 선택을 바꿔 다시 누르면 앞 선택(EDI 값)이 남아 있었다(감사 지적).
       if (a.action === 'edi' && finalMap[a.cn]) {
-        finalMap[a.cn].wt = a.ediW;
+        finalMap[a.cn] = { ...finalMap[a.cn], wt: a.ediW };
       }
       // list는 그대로 (이미 리스트 값)
     });
@@ -4350,11 +4351,18 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     // 3. 실번호: 'edi' 선택 시 EDI 실번호로
     resolution.sealActions.forEach(a => {
       if (a.action === 'edi' && finalMap[a.cn]) {
-        finalMap[a.cn].sl = a.ediSl;
+        finalMap[a.cn] = { ...finalMap[a.cn], sl: a.ediSl };
       }
     });
 
-    await fbSaveListRecords(voyageKey, mode, finalMap);
+    //  3.60-08: 저장이 멈추면(기존 리스트 못 읽음 등) 말한다 — 종전엔 try 가 없었다. 상태 글은 검토 창 뒤에 가려지므로 알림으로도 띄운다(감사 지적).
+    //    검토 창은 그대로 둔다 — 같은 선택으로 다시 [적용]을 누르면 된다.
+    try { await fbSaveListRecords(voyageKey, mode, finalMap); }
+    catch (e) {
+      const _m = `❌ 리스트 저장 실패 — ${e?.message || e}`;
+      setStatus(_m); alert(_m + '\n\n검토 창은 그대로 두었어요 — 다시 [적용]을 누르면 됩니다.');
+      return;
+    }
     const ignoredCount = resolution.unmatchedActions.filter(a => a.action === 'ignore').length;
     setStatus(results.join('\n') + `\n\n✅ 저장 완료 — 전체 ${Object.keys(finalMap).length}대${ignoredCount > 0 ? ` (무시 ${ignoredCount}대)` : ''}`);
     setConflictData(null);

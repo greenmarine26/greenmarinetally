@@ -752,6 +752,8 @@ node tools/smoke_fix36005.cjs "$PWD" || { echo "✗ 3.60-05 미르 파서 연막
 node tools/smoke_fix36006.cjs "$PWD" || { echo "✗ 3.60-06 안정 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-07: 선적 EDI 회신 규격(H≠리퍼·선사 약어) · 씰체결 번호 규격별 · 현황 탭 특수화물 한 벌.
 node tools/smoke_fix36007.cjs "$PWD" || { echo "✗ 3.60-07 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.60-08: 기존 records 를 못 읽으면 리스트 저장을 멈춘다(병합 없이 통째 덮어 현장 기록을 지우던 갈래 · 진단 T8) — 실소스 + 메모리 스텁.
+node tools/smoke_fix36008.cjs "$PWD" || { echo "✗ 3.60-08 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
 #    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.
