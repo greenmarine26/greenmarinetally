@@ -760,6 +760,8 @@ node tools/smoke_fix36009.cjs "$PWD" || { echo "✗ 3.60-09 연막검사 실패 
 node tools/smoke_fix36010.cjs "$PWD" || { echo "✗ 3.60-10 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-11: 베이플랜 칸 규격 글자(진단 M10) · 3자 항구 코드 정규화(M9) · 검수 리스트 리퍼 한 줄 — 실소스 실행.
 node tools/smoke_fix36011.cjs "$PWD" || { echo "✗ 3.60-11 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.60-12: 규격 길이 분류 한 벌(진단 M5) — 장비코드 라벨 · 마감텔리 = WORKING REPORT · 검수 리스트 DCHC 40 묶음 — 실소스 실행.
+node tools/smoke_fix36012.cjs "$PWD" || { echo "✗ 3.60-12 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
 #    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.

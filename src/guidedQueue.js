@@ -47,10 +47,11 @@
 //     ⓔ EDI 순번(`eseq`)대로 연속 진행 중이면 흐름 전환을 하지 않는다 — GuidedWorkPanel 에서 판정.
 //        검수사 원문: "단 연속으로 EDI대로 선적할때는 그게 우선입니다."
 
-import { isReeferContainer } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌
+import { isReeferContainer, isoToLabel } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.60-12: 길이도 라벨로(장비코드 DC20·DCHC)
 const isDeckTier = (t) => parseInt(t, 10) >= 80;
-const is20ft = (c) => String(c.tp || '').startsWith("20") || String(c.iso || '')[0] === '2';
-const is40ft = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
+//  3.60-12 (진단 M5 감사): 장비코드(DC20·DCHC)는 첫 글자가 길이가 아니다 — 라벨(isoToLabel 이 이제 푼다)도 본다.
+const is20ft = (c) => String(c.tp || '').startsWith("20") || String(c.iso || '')[0] === '2' || String(isoToLabel(c.iso) || '').startsWith('20');
+const is40ft = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40') || /^4[05]/.test(String(isoToLabel(c.iso) || '')); };
 
 // 같은 티어 안 로우 정렬 순위 (작을수록 먼저)
 function rowRank(rowStr, { evenRowsSeaSide, landToSea }) {

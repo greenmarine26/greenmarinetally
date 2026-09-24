@@ -9,6 +9,7 @@
 import { openPrintWindow } from './printHelper.js';
 import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp, pickDischargePol } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
+import { tallySizeCol } from './tallyReport.js';   // 3.60-12 (진단 M5): 규격 칸 가르기 한 벌 — 마감텔리와 같은 함수
 const PORT_MAP = {
   // 표준 5자
   // V9.57(G13): 평택 표기 7종(utils.isPyeongtaekPort의 PYEONGTAEK_CODES)과 정합 —
@@ -95,19 +96,13 @@ function getSizeKey(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   if (SIZE_MAP_DJS[iso]) return SIZE_MAP_DJS[iso];
 
+  //  ★ 3.60-12 (진단 M5): 규격이 있으면 **마감텔리와 같은 함수**(tallySizeCol — 3.31 정본 대조 규칙)로 가른다.
+  //    종전 이 함수는 따로 셈법을 둬서 같은 컨이 두 서류에서 다른 칸에 섰다 — 픽스처 실측: 40HE 214대(텔리 HC · 워킹 40),
+  //    40HR(HC · 40), 436E·4363·430E·435E(정본 40' · 워킹 HC), DCHC·DCHE 320대(컨번호 끝자리로 20/HC 가 갈림).
+  //    ⚠ SZTY 양식 «4H…»(4HDC·4HRF = 40피트 하이큐브, M5.65)만 이 함수가 따로 안다 — 마감텔리 쪽은 아직 모른다(픽스처엔 없음).
   if (iso) {
-    const iu = iso.replace(/\s/g, '');
-    // M5.65: SZTY 양식 우선 검사 (4HDC, 4HRF, 40HC, 45 등 → HC)
-    if (iu.includes('4H') || iu.includes('40HC') || iu.includes('45')) return 'HC';
-    // 진짜 45피트 (L로 시작)
-    if (iu.startsWith('L')) return '45';
-    // 20피트
-    if (iu.startsWith('2') || iu.includes('20')) return '20';
-    // M5.81: 명시적 40DC 표기만 '40'으로 분류 (평택항 도메인 - 40DC 매우 드묾)
-    //   42xx = 40DC (42GP/42G0/42G1/42RE/42UT 등)
-    //   기타 4로 시작은 모두 HC로 분류 (안전 디폴트)
-    if (/^4[02]/.test(iu)) return '40';   // 42xx 또는 40xx만 진짜 40DC
-    if (iu.startsWith('4')) return 'HC';  // 그 외 4로 시작 → HC (평택 도메인)
+    if (/^4H/.test(iso.replace(/\s/g, ''))) return 'HC';   // M5.65 SZTY
+    return tallySizeCol(c);
   }
   // M5.81 폴백: ISO 정보 없어 cn 끝자리로 추정
   //   평택항 도메인 반영 — 40DC는 하루 1-2개 매우 드묾

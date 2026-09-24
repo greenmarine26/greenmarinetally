@@ -30,6 +30,15 @@ export function tallySizeCol(c) {
     if (!iso.startsWith('40')) return '20';
     return (l.includes('HC') || l.includes('RH')) ? 'HC' : '40';
   }
+  //  3.60-12 (진단 M5): 글자로 시작하는 장비코드(DCHC·DCHE·RF40·FR20 …)는 원본 첫 자리가 길이가 아니다 — 라벨(isoToLabel 이 이제 푼다)로.
+  //    종전엔 아래 `/^4/` 에 안 걸려 전부 20' 칸이었다(KBTR 2606E 선적 DCHC 160대).
+  //    글자형 41~44(43DC·43RF — 연운항 «4J(40HC=43DC)» · 44GP·44R1)도 라벨로 — 종전 WORKING REPORT 는 HC 로 셌고 이 함수만 40 이었다(3.60-12 감사).
+  //    숫자형 43xx(4300·430E·436E)는 아래 종전 규칙 그대로(DXQD 정본 40' — 3.31).
+  if ((/^[A-Z]{2}/.test(iso) || /^4[1-4][A-Z]/.test(iso)) && l !== iso && /^(20|40|45)/.test(l)) {
+    if (l.startsWith('20')) return '20';
+    if (l.startsWith('45')) return '45';
+    return (l.includes('HC') || l.includes('RH')) ? 'HC' : '40';
+  }
   if (l.startsWith('45') || /^L/.test(iso) || /^9[05]\d\d$/.test(iso)) return '45';
   if (/^4[5-9]/.test(iso)) return 'HC';
   if (/^4/.test(iso)) return '40';

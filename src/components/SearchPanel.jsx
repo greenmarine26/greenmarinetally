@@ -1994,7 +1994,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading' && canCompleteContainer(c, 'loading')), [allContainers]);
   const equipNo = useEquipNo();   // TallyOne 1.55: 완료 기록에 갱(호기)을 남긴다
   // V8.83: 자리 선택 그리드 — 20ft 계획 자리(완료=회색 선택불가). 위치수정 창과 같은 방식(사용자 확정).
-  const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
+  const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2' || String(isoToLabel(c.iso) || '').startsWith('20');   // 3.60-12: 장비코드 DC20 도
   // ── TallyOne 1.55: **칸은 컨이 아니다.** ──────────────────────────────
   //   검수사 확정 2026-08-12 — *"컨테이너가 빠져야 하는데 자리가 빠진 이유
   //   (손님이 나가야 하는데 방이 나가버린 상황). 카고플랜은 변함이 없어야 한다."*

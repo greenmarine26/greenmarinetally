@@ -1119,7 +1119,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     for (const c of targets) {
       const b = parseInt(c.bay, 10);
       const k = Number.isFinite(b) ? b : '?';
-      const sz = (String(c.iso || '')[0] === '2') ? '20' : '40';
+      const sz = (String(c.iso || '')[0] === '2' || String(isoToLabel(c.iso) || '').startsWith('20')) ? '20' : '40';   // 3.60-12: 장비코드 DC20 도 20
       const v = byBay[k] = byBay[k] || { n: 0, s20: 0, s40: 0 };
       v.n++; v[sz === '20' ? 's20' : 's40']++;
     }

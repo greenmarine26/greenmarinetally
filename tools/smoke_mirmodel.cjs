@@ -85,11 +85,13 @@ const gemCalls = () => calls.fetch.filter((f) => f.url.includes('generativelangu
 
   // ② 강한 답 — 모델 0회
   let r = await M.askMir('20피트 몇 대', K, rules(K), { who: '김성일' });
-  T(r.via === 'rules' && has(r.text, '17대') && gemCalls() === 0, `강한 규칙 답은 그대로·모델 0회 — via=${r.via} 호출 ${gemCalls()}`);
+  //  3.60-12 (진단 M5): KBTR 2606E 선적 EDI 는 규격이 장비코드(DC20 72대)다 — 종전 기대값 17 은 그 72대를 20피트로 못 센 값(코드가 낸 값)이었다.
+  //    규칙(DC20 = 20피트)에서 뽑으면 양하 17 + 선적 72 = 89.
+  T(r.via === 'rules' && has(r.text, '89대') && gemCalls() === 0, `강한 규칙 답은 그대로·모델 0회 — via=${r.via} 호출 ${gemCalls()}`);
 
   // ③ 번역 → 규칙 답 + 사전 등록 + 못 알아들은 말 기록
   r = await M.askMir('스무 피트짜리 몇 대', K, rules(K), { who: '김성일' });
-  T(r.via === 'translate' && has(r.text, '20피트: 17대'), `번역→규칙: «스무 피트짜리 몇 대» → «20피트 몇 대» → 17대 — via=${r.via} text=${String(r.text).slice(0, 60)}`);
+  T(r.via === 'translate' && has(r.text, '20피트: 89대'), `번역→규칙: «스무 피트짜리 몇 대» → «20피트 몇 대» → 89대 — via=${r.via} text=${String(r.text).slice(0, 60)}`);
   T(calls.lexicon.length === 1 && calls.lexicon[0].e && calls.lexicon[0].e.auto === true && calls.lexicon[0].e.ok === '20피트 몇 대', '번역이 답으로 이어지면 mir_lexicon 에 auto 별칭이 적힌다');
   T(calls.events.some((ev) => ev.type === 'gm-mir-miss' && ev.detail && ev.detail.q === '스무 피트짜리 몇 대') || calls.fetch.some((f) => f.url.includes('/mir_misses/')), '못 알아들은 말이 mir_misses 로 간다');
   T(calls.fetch.some((f) => f.url.includes('/mir_model_log/') && f.method === 'POST'), '호출마다 mir_model_log 에 한 줄');
