@@ -2340,6 +2340,13 @@ export async function fbRestoreVoyageFromArchive(voyageKey) {
         k === '_discharge_ptk' || k === '_loading_ptk' || k === '_shipId') continue;
     restored[k] = v;
   }
+  //  ★ 3.60-14 (검수사 «복원 시켰는데 자동으로 사라지는 버그가 있습니다. 지금 복원만 5-6번 한듯 합니다»):
+  //    복원한 시각을 남긴다. 홈 자동 정리(HomePage lastWorkAt — 마지막 작업 7일 경과 항차를 보관·삭제)가
+  //    이 시각부터 7일을 센다. 종전엔 표시가 없어 옛 항차(MCSC 635S — 작업 08-30)가 홈이 열리는 순간 다시 지워졌다.
+  //    lastActive 도 같은 시각으로 적는다 — 아직 옛 판(3.60-13 이하)이 도는 폰의 홈 자동 정리는 restoredAt 을 모르고
+  //    lastActive 만 센다(감사 지적). 항차 info.lastActive 를 읽는 곳은 HomePage lastWorkAt 하나뿐이다.
+  const _now = Date.now();
+  restored.info = { ...(restored.info || {}), restoredAt: _now, lastActive: _now };
   await set(ref(db, `voyages/${voyageKey}`), restored);
   return true;
 }

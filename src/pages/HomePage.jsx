@@ -67,6 +67,11 @@ function lastWorkAt(v) {
   scanActual(v?.loading?.records);
   const la = v?.info?.lastActive;    // 검수원 활동 핑
   if (typeof la === 'number' && la > last) last = la;
+  //  ★ 3.60-14: 보관소에서 복원한 시각도 센다(firebase fbRestoreVoyageFromArchive 가 남긴다).
+  //    종전엔 복원한 옛 항차가 홈이 열리는 순간 «마지막 작업 7일 경과»로 다시 보관·삭제됐다
+  //    (검수사 «복원 시켰는데 자동으로 사라지는 버그» — 5~6번 복원). 복원 뒤 7일은 자동 정리가 건드리지 않는다.
+  const rs = v?.info?.restoredAt;
+  if (typeof rs === 'number' && rs > last) last = rs;
   return last;
 }
 

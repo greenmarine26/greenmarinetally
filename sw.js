@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-13';
-const NOTE = '선사 리스트 어디에 적혀 있든 규격과 풀엠티와 POD 를 읽습니다(동진 리스트 등) · EDI 규격이 비면 리스트 규격을 씁니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-14';
+const NOTE = '복원한 항차가 7일 동안 저절로 사라지지 않습니다 · 선사 엠티 리스트의 목적항을 POD 로 · 터미널 검수 입력 자료의 씰 칸을 제대로 읽습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

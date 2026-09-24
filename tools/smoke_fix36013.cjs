@@ -88,7 +88,9 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
         [3, 'SEGU3513541', 'Storage', 'SIT', '22G0', 'E', '4F', 6, 2, 4, 'Sound', 'CNSHD', 'STSE 2670W']] }));
       ok('헤더 없는 목록의 E 칸 → 엠티 (MAE·SIT·HHS EMPTY LOAD LIST 3,181줄 — 종전 빈칸)', f.SITU2616060.fe === 'E' && f.SITU2629221.fe === 'E' && f.SEGU3513541.fe === 'E');
       ok('손상 등급 «MINOR»·«SOUND» 는 POL 이 아니다 — 항구 자리는 종전 그대로(CNSHD 는 POD)', f.SITU2616060.pol === '' && f.SITU2616060.pod === 'CNSHD' && f.SEGU3513541.pol === '' && f.SEGU3513541.pod === 'CNSHD', `${f.SITU2616060.pol}/${f.SITU2616060.pod}`);
-      ok('등급이 없는 줄은 종전 자리 그대로(첫 항구 = POL)', f.SITU2629221.pol === 'CNSHD' && f.SITU2629221.pod === '', `${f.SITU2629221.pol}/${f.SITU2629221.pod}`);
+      //  3.60-14 (검수사 «파서 문제 입니다»): 등급이 없는 줄도 항구 한 칸은 목적항(POD)이다. 3.60-13 은 이 줄만 «첫 항구 = POL» 로
+      //    남겨 같은 파일 안에서 POL·POD 가 갈렸다(같은 폴더 다른 자료 대조 — STSE 2670W 257줄 전부 POD CNSHD). smoke_fix36014 가 본류를 잰다.
+      ok('등급이 없는 줄도 항구 한 칸은 POD (3.60-14 — 종전 첫 항구 = POL)', f.SITU2629221.pol === '' && f.SITU2629221.pod === 'CNSHD', `${f.SITU2629221.pol}/${f.SITU2629221.pod}`);
     }
 
     console.log('■ 머리말·구간 제목줄의 POL·POD · 같은 B/L 이어 쓰기');
