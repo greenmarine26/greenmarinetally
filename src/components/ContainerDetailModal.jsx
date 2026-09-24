@@ -329,11 +329,8 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     const newVal = String(esealWrongVal || '').trim().toUpperCase();
     if (!newVal) { alert('실제 발견된 실번호를 입력하세요'); return; }
     if (!(await checkSealSwap(newVal))) return;  // V7.90-06: 스왑 의심 경고
-    await fbSetEmptySeal(voyageKey, mode, c.cn, {
-      eseal: c.eseal || '',
-      eseal_wrong: newVal,
-      reseal: c.reseal || '',
-    }, inspector, sealMode);
+    //  3.60-03 (진단 M14): 바꾸는 칸만 넘긴다 — 열 때의 스냅샷 `c` 로 세 칸을 다 넘기면 다른 기기가 그 사이 적은 값이 옛값으로 덮인다
+    await fbSetEmptySeal(voyageKey, mode, c.cn, { eseal_wrong: newVal }, inspector, sealMode);
     setEditingEsealWrong(false);
     setEsealWrongVal('');
   };
@@ -345,11 +342,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     const newVal = String(resealVal || '').trim().toUpperCase();
     if (!newVal) { alert('새로 부착한 실번호를 입력하세요'); return; }
     if (!(await checkSealSwap(newVal))) return;  // V7.90-06: 다른 컨과 중복 경고
-    await fbSetEmptySeal(voyageKey, mode, c.cn, {
-      eseal: c.eseal || '',
-      eseal_wrong: c.eseal_wrong || '',
-      reseal: newVal,
-    }, inspector, sealMode);
+    await fbSetEmptySeal(voyageKey, mode, c.cn, { reseal: newVal }, inspector, sealMode);   // 3.60-03: 바꾸는 칸만
     setEditingReseal(false);
     setResealVal('');
   };
@@ -359,20 +352,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.53: 네이티브 confirm() 제거.
     if (!(await ask('실오류 기록 삭제', '실오류 기록을 삭제하시겠습니까?'))) return;
-    await fbSetEmptySeal(voyageKey, mode, c.cn, {
-      eseal: c.eseal || '',
-      eseal_wrong: '',
-      reseal: c.reseal || '',
-    }, inspector, sealMode);
+    await fbSetEmptySeal(voyageKey, mode, c.cn, { eseal_wrong: '' }, inspector, sealMode);   // 3.60-03: 바꾸는 칸만
   };
   const handleClearReseal = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (!(await ask('리씰 기록 삭제', '리씰 기록을 삭제하시겠습니까?'))) return;
-    await fbSetEmptySeal(voyageKey, mode, c.cn, {
-      eseal: c.eseal || '',
-      eseal_wrong: c.eseal_wrong || '',
-      reseal: '',
-    }, inspector, sealMode);
+    await fbSetEmptySeal(voyageKey, mode, c.cn, { reseal: '' }, inspector, sealMode);   // 3.60-03: 바꾸는 칸만
   };
 
   // V8.09-06 (사용자 보고 2026-06-18): 엠티실 테스트 입력 후 완전 삭제 경로.
@@ -382,11 +367,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   const handleClearEseal = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (!(await ask('엠티 실번호 기록 삭제', '엠티 실번호 기록을 완전히 삭제하시겠습니까?\n(테스트 입력 등 잘못 기록한 경우)'))) return;
-    await fbSetEmptySeal(voyageKey, mode, c.cn, {
-      eseal: '',
-      eseal_wrong: c.eseal_wrong || '',
-      reseal: c.reseal || '',
-    }, inspector, sealMode);
+    await fbSetEmptySeal(voyageKey, mode, c.cn, { eseal: '' }, inspector, sealMode);   // 3.60-03: 바꾸는 칸만
     setEditingEseal(false);
     setEsealVal('');
   };

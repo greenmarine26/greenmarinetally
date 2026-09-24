@@ -1391,6 +1391,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     });
     return (
       <ContainerDetailModal
+        key={detailC.cn}   // 3.60-03 (진단 T2): PC 우측 칼럼은 컨을 바꿔 눌러도 같은 인스턴스라 실번호 편집값(useState 초기값)이 앞 컨 것으로 남아 다음 컨에 저장됐다 — 컨마다 새로 세운다
         variant={variant}
         c={detailC}
         workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}

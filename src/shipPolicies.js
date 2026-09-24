@@ -11,7 +11,7 @@
 //     label: '설명',
 //     registered_at, registered_by
 //   }
-import { ref, set, get, onValue, off } from 'firebase/database';
+import { ref, set, get, onValue } from 'firebase/database';   // 3.60-03: off 는 더 안 쓴다(구독 해제는 unsub)
 
 // 하드코딩 기본 정책 (검수원이 알려준 선박들)
 // aliases: 같은 선박이지만 다른 코드/표기 (ASC vs 사용자 표기)
@@ -129,7 +129,7 @@ export async function fbGetShipPolicies(db) {
 export function fbSubscribeShipPolicies(db, callback) {
   const r = ref(db, 'shipPolicies');
   const unsub = onValue(r, (snap) => callback(snap.val() || {}));
-  return () => off(r);
+  return unsub;   // 3.60-03 (진단 M12): `off(r)` 는 같은 노드의 **모든** 구독을 끊는다 — 미르 플랜 덮개(두 번째 VoyagePage)가 닫히면 뒤 화면(홈·수석·항차)의 정책 구독까지 죽었다
 }
 
 export async function fbSaveShipPolicy(db, vsl, policy, by) {

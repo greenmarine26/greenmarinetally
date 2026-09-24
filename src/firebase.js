@@ -869,6 +869,13 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
       // 2.94-06: **여기가 이름표 → 실물로 바뀌는 유일한 지점이다.**
       //   자리는 «검수원이 정해 준 자리»(`*_assign`)가 있으면 그것, 없으면 지정/계획 순.
       const hasAssign = cur.bay_assign !== undefined && cur.bay_assign !== null && cur.bay_assign !== '';
+      //  ★ 3.60-03 (진단 T1) — **실물 자리가 이미 적혀 있으면 계획 자리로 되돌리지 않는다.** 기록지 사진(3.58)·컨 상세
+      //    「위치 지정」이 `bay_actual` 을 적은 뒤 완료를 누르면, 여기가 `cur.bay`(계획)를 집어 그 자리를 덮었다 —
+      //    계획 10-02-04 컨을 13-06-04 로 읽어 저장해도 완료 뒤 10-02-04 로 조용히 복귀(스텁 실측). 계획 자리가 없는
+      //    타항 시프팅 컨만 무사해서 3.58 실검수에서 안 걸렸다. «정해 준 자리»(`*_assign`)가 있으면 종전대로 그것이 이기고,
+      //    창고 표식(`__`)은 아래 1.54 흐름대로 간다.
+      const _oa0 = String(cur.bay_actual ?? '');
+      if (!hasAssign && _oa0 && !_oa0.startsWith('__')) return;
       const b = hasAssign ? cur.bay_assign  : (cur.bay  !== undefined ? cur.bay  : (edi.bay  || ''));
       const r = hasAssign ? cur.row_assign  : (cur.row  !== undefined ? cur.row  : (edi.row  || ''));
       const t = hasAssign ? cur.tier_assign : (cur.tier !== undefined ? cur.tier : (edi.tier || ''));
@@ -1125,6 +1132,9 @@ export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actual
     //    보관본에 표식이 굳어 되살아난 경우 안 걷으면 시프팅이 이 자리를 계속 «터미널 것»으로 보고 건너뛴다.
     //    이 함수를 부르는 사람 편집 세 길 — 컨 상세 「위치 지정」·베이 그림 빈 칸·수석 베이상세 편집.
     _pos_src: null,
+    //  3.60-03 (감사 지적): 사람이 실물 자리를 적었으면 «정해 준 자리»(*_assign)는 걷는다 — 2.94-06 «한 컨에 자리가 둘일 수 없다».
+    //    안 걷으면 완료 때 _markLoadedPos 가 옛 assign 을 집어 지금 적은 실물 자리를 덮는다.
+    bay_assign: null, row_assign: null, tier_assign: null, assign_at: null, assign_by: null,
     moves: [..._mv, { at: Date.now(), by: by || '', why: 'actual', from: _from, to: _to, byCn: '' }],
   });
 }
@@ -2474,7 +2484,8 @@ export async function fbAssignDeckSlot(voyageKey, mode, slotKey, val) {
 
 // V9.22: RZOR 덱 스토우지 플랜 저장 (선사 rzdf 플랜 파싱분)
 export async function fbSetStowagePlan(voyageKey, mode, plan) {
-  await set(ref(db, `voyages/${voyageKey}/${mode}/stowagePlan`), { ...plan, _at: Date.now() });
+  //  3.60-03 (진단 M15): set → update — 덱플랜을 다시 올려도 검수원이 지정한 `stowagePlan/assign/*` 이 남는다.
+  await update(ref(db, `voyages/${voyageKey}/${mode}/stowagePlan`), { ...plan, _at: Date.now() });
 }
 
 export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) {

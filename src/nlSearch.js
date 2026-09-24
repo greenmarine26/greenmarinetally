@@ -402,7 +402,9 @@ export function parseNaturalQuery(text) {
     if (!/도선|입항|출항|접안|파일럿/.test(t)) {
       const _reCalc = /재\s*계산|다시\s*계산|계산\s*다시/.test(t);
       //  ⚠ «몇 시 시작이야»·«언제 시작» 은 **묻는 말**이다 — 알림이 아니다.
-      const _asking = /몇\s*시|언제/.test(t);
+      //  3.60-03 (진단 T3): «10시부터 몇 대 했어»·«8시부터 12시까지 몇 대» 는 **진행을 묻는 말**인데 «N시 … 부터» 에 걸려
+      //    startSet 이 서고 화면이 fbSetVoyageWorkStart 로 항차 시작 시각을 덮었다(실측). 대수·진행 어미가 있으면 묻는 말이다.
+      const _asking = /몇\s*시|언제|몇\s*(?:대|개|건|컨)|얼마나|남았|남아|어디까지|퍼센트|%/.test(t);
       const _startWord = !_asking && /시작|작업/.test(t);
       const _hasTime = /(\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시)/.test(t);
       //  ★ 2.74 (검수사 실측 «미르야 2호기는 23:15 3호기는 23:20 4호기는 23:25 에 시작했어»):
@@ -411,7 +413,7 @@ export function parseNaturalQuery(text) {
       const _cr = parseCraneStarts(t);
       if (!_asking && (_cr.length >= 2 || (_cr.length === 1 && (_reCalc || _startWord)))) {
         result.startSet = { raw: t, cranes: _cr };
-      } else if (!/몇\s*시|언제/.test(t) && _hasTime && (_reCalc || _startWord || /(\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})\s*부터/.test(t))) {
+      } else if (!_asking && _hasTime && (_reCalc || _startWord || /(\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})\s*부터/.test(t))) {
         result.startSet = { raw: t, cranes: [] };
       }
     }
