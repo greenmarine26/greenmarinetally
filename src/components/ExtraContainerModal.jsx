@@ -64,7 +64,7 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
       setCn(''); setSize(''); setFe(''); setCtype(''); setTemp(''); setSeal(''); setDamage(''); setDamageNote(''); setNote('');
       onClose();
     } catch (e) {
-      alert('기록 실패: 신호를 확인하세요.');
+      alert('기록 실패: ' + (e?.message || '신호를 확인하세요.'));   // 3.60-09: 까닭(이미 완료된 컨 등)을 말한다
     } finally {
       setSaving(false);
     }

@@ -592,7 +592,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     const v = voyages[key];
     const hasD = v?.discharge && Object.keys(v.discharge).length > 0;
     const hasL = v?.loading && Object.keys(v.loading).length > 0;
-    setDeleteTarget({ key, vsl, voy, hasD, hasL });
+    //  3.60-09 (진단 T11): 완료 기록 수 — 삭제는 보관소를 안 거치므로 확인 단계에서 알린다.
+    const doneD = Object.keys(v?.discharge?.completed || {}).length;
+    const doneL = Object.keys(v?.loading?.completed || {}).length;
+    setDeleteTarget({ key, vsl, voy, hasD, hasL, doneD, doneL });
   };
 
   const performDelete = async (action) => {
@@ -1187,7 +1190,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
 // M3.5: 항차 삭제 모달 - 큰 버튼, 폰 친화
 function DeleteVoyageModal({ target, onClose, onConfirm }) {
-  const { vsl, voy, hasD, hasL } = target;
+  const { vsl, voy, hasD, hasL, doneD = 0, doneL = 0 } = target;
   const [confirming, setConfirming] = useState(null); // 'discharge' | 'loading' | 'all'
 
   // 둘 다 비어있으면 → 항차 전체 삭제만
@@ -1203,6 +1206,8 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
       all: { title: '항차 전체 삭제', desc: '양하/선적/검수 데이터 모두 삭제됩니다. 복구 불가.', color: 'red' },
     };
     const L = labels[confirming];
+    //  3.60-09 (진단 T11): 지울 쪽에 완료 기록이 있으면 먼저 말한다 — 삭제는 보관소를 안 거쳐 되돌릴 수 없다.
+    const doneN = confirming === 'discharge' ? doneD : confirming === 'loading' ? doneL : doneD + doneL;
     return (
       <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
         <div className="bg-ink-900 border-2 border-red-700/50 rounded-card w-full sm:max-w-md overflow-hidden">
@@ -1212,6 +1217,11 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
           </div>
           <div className="p-4">
             <div className="text-sm text-dim-100 mb-4">{L.desc}</div>
+            {doneN > 0 && (
+              <div className="text-xs text-red-200 bg-red-950/50 border border-red-700/50 rounded p-2 mb-3 leading-relaxed" data-delete-done-warn="1">
+                ⚠ 완료 기록 {doneN}대가 있습니다. 작업이 끝난 항차면 삭제가 아니라 카드의 «양하 완료·선적 완료»로 처리해야 보관소에 남습니다. 삭제하면 완료 기록까지 되돌릴 수 없습니다.
+              </div>
+            )}
             <div className="text-xs text-dim-300">정말 진행하시겠습니까?</div>
           </div>
           <div className="grid grid-cols-2 gap-2 p-3 border-t border-line bg-ink-950">

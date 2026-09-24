@@ -10,7 +10,7 @@ import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
 import { resolvedPod } from './utils.js';   // 3.53: POD 확정 반영 한 벌
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso} from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isTermApplied } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
@@ -921,9 +921,41 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   const eq = String(equip || '').trim();
   if (eq) rec.equip = eq;
-  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
+  //  ★ 3.60-09 (진단 T10): **사람이 이미 완료한 컨은 덮지 않는다.** 종전 set 은 다른 기기가 먼저 완료한 컨을 다시 완료하면
+  //    뒤 기록이 앞을 지워 by·equip(인건비 근거)이 바뀌었고, 누락 완료·기록지 사진(열 때의 스냅샷)도 정상 완료를 덮을 수 있었다. 개인 실적도 두 번 셌다.
+  //    읽기는 구독 캐시(voyages 루트)에서 바로 온다 — SDK get() 은 켜진 구독의 캐시가 있으면 서버에 안 묻는다(repoGetValue, 오프라인도 즉시).
+  //    쓰기는 **종전 set 그대로**다. transaction 은 전송 뒤 연결이 끊기면 다시 보내지 않고 버린다(감사 실측 — 약한 신호에서 완료가 사라짐).
+  //    터미널 반영(src:'term')은 사람이 아니므로 사람 완료가 덮는다(종전과 같음). 캐시가 없거나 1.5초 안에 못 읽으면 종전대로 쓴다(완료를 막지 않는다).
+  //    ⚠ 두 기기가 같은 순간(서로의 기록이 닿기 전)에 누르는 경합은 이것으로 못 막는다 — 막으려면 transaction 인데 위 까닭으로 안 쓴다.
+  const r = ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`);
+  const prev = await _peekVal(r);
+  if (prev && !isTermApplied(prev)) {
+    _writeNotice(`${String(cn || '').slice(-4)} 는 이미 완료돼 있어요${prev.by ? ` — ${prev.by}${prev.at ? ' ' + _hhmm(prev.at) : ''}` : ''} (덮지 않았어요)`);
+    return { ok: false, already: true, prev };
+  }
+  await set(r, rec);
   _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 실린 자리 확정 + 경로 마지막 점
   _tallyInspector(voyageKey, mode, by);   // V9.16: 개인 누적 실적 (비차단 — 실패해도 완료 처리는 무관)
+  return { ok: true };
+}
+//  3.60-09: 지금 값을 «막지 않고» 본다 — 구독 캐시면 즉시, 아니면 1.5초까지만 기다리고 모르면 null(쓰는 쪽은 종전대로 진행).
+async function _peekVal(r, ms = 1500) {
+  let t = null;
+  try {
+    const got = await Promise.race([
+      get(r).then((s) => ({ v: s.val() })),
+      new Promise((res) => { t = setTimeout(() => res(null), ms); }),
+    ]);
+    return got ? got.v : null;
+  } catch (e) { return null; } finally { if (t) clearTimeout(t); }
+}
+//  3.60-09: 쓰기 층이 사람에게 한 줄 알릴 때(App 의 띠 — 조회만 안내와 같은 자리). 브라우저 밖(연막·노드)에서는 조용히 넘어간다.
+function _writeNotice(message) {
+  try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message } })); } catch (x) { /* 알릴 화면 없음 */ }
+}
+function _hhmm(ts) {
+  const d = new Date(Number(ts) || 0);
+  return Number.isNaN(d.getTime()) ? '' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // ── V9.16(2026-07-27): 검수원 개인 누적 실적 — fbAddShipVoyageInspector가 완성된 채
@@ -1006,7 +1038,14 @@ export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, eq
     damage: info.damage || '',  // '없음' | '있음' | 데미지 내용
     note: info.note || '',
   };
-  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
+  //  3.60-09 (진단 T10): 사람이 정상 완료한 컨을 «초과» 로 덮지 않는다 — 종전엔 중복 검사 없이 flag:'extra' 로 덮어
+  //    정상 완료가 초과로 바뀌었다(양하신고 점검·인건비 근거가 같이 바뀜). 터미널 반영(리스트 밖 컨에도 온다)·앞서 적은 초과(고쳐 적기)는 종전대로 덮는다.
+  const cr = ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`);
+  const prev = await _peekVal(cr);
+  if (prev && !isTermApplied(prev) && prev.flag !== 'extra') {
+    throw new Error(`이미 완료 기록이 있는 컨이에요 — 초과가 아닙니다${prev.by ? ` (${prev.by}${prev.at ? ' ' + _hhmm(prev.at) : ''})` : ''}`);
+  }
+  await set(cr, rec);
   await set(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`), rec);
 }
 // 2.06-04 (검수사 «있기는 하되 내릴지는 모르는 미정상태 카톡이나 메시지가 오면 그때 확정하는 상태로»):

@@ -69,7 +69,8 @@ export default function App() {
   useEffect(() => {
     const h = (e) => { setViewOnlyMsg((e && e.detail && e.detail.message) || '조회만으로 들어와 있습니다 — 보기만 됩니다.'); };
     window.addEventListener('viewOnlyBlocked', h);
-    return () => window.removeEventListener('viewOnlyBlocked', h);
+    window.addEventListener('writeNotice', h);   // 3.60-09: 쓰기 층 한 줄 알림(이미 완료된 컨 등)도 같은 띠
+    return () => { window.removeEventListener('viewOnlyBlocked', h); window.removeEventListener('writeNotice', h); };
   }, []);
   useEffect(() => { if (!viewOnlyMsg) return undefined; const t = setTimeout(() => setViewOnlyMsg(''), 6000); return () => clearTimeout(t); }, [viewOnlyMsg]);
   // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
