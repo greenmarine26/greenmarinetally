@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-15';
-const NOTE = '검수리스트 규격 칸은 세관에 신고된 규격을 그대로 적습니다 · XRAY 리스트는 제 규격 그대로입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-16';
+const NOTE = '리스트의 45HC 는 45피트로 읽습니다 · B/L 여러 줄로 나온 컨의 무게는 컨 합계 무게로 읽습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
