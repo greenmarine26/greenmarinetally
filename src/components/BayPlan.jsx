@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, bayCellTypeLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -1688,7 +1688,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
     const ptk = isPtk(c);
     const fe = c.fe || 'F';
     const wt = c.wt > 0 ? (c.wt / 1000).toFixed(1) : '0.0';
-    const typeLabel = isoToPdfLabel ? isoToPdfLabel(c.iso, c.tp) : (isoToLabel(c.iso) || '');
+    const typeLabel = bayCellTypeLabel(c);   // 3.60-11 (진단 M10): 칸 규격 글자 한 벌(utils) — 파서 tp «20'GP»·«40'HC» 가 리퍼·FR·OT·TK 를 덮던 것
     const polLabel = (c.pol || '').replace(/^KR/, '').slice(0, 3).padEnd(3, ' ');
     const podLabel = (c.pod || '').replace(/^KR/, '').slice(0, 3);
     const transit = (c.transit || c.tr || '').slice(0, 3);

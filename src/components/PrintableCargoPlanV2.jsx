@@ -14,7 +14,7 @@ import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict, podFeStyle} from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
-import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf } from '../utils.js';   // 2.98-14: 커버 막대 경계
+import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import {
   autoPairBays,
   generatePdfBays,
@@ -1139,9 +1139,10 @@ export default function PrintableCargoPlanV2({
       //   getContainerColorKey는 pol 재검증을 하는데, 엠티는 pol이 목적지로 오염될 수 있어
       //   여기서 null이 나면 POD 별첨에서 누락됨 → POD 3자만 직접 뽑는다.
       feCounts[size][c.fe === 'E' ? 'E' : 'F']++;   // V8.44: 규격별 F/E
-      const podRaw = String(c.pod || '').toUpperCase();
+      //  3.60-11 (진단 M9): 자르기 전에 정규화(normPortCode) — 칸 색(getContainerColorKey)과 같은 목적지 글자. «NANTONG»→NTG · «PTK02»→평택(빼기).
+      const podRaw = normPortCode(c.pod);
       const p3 = podRaw.length >= 5 ? podRaw.slice(2, 5) : podRaw.slice(0, 3);
-      if (p3 && p3 !== 'PTK') addTo(podCounts, p3, size);
+      if (p3 && p3 !== 'PTK' && !isPyeongtaekPort(podRaw)) addTo(podCounts, p3, size);   // 3.60-11: 칸 색과 같은 평택 빼기(KRPYT 등)
     }
     const carriers = [...carrierCounts.entries()].sort((a, b) => b[1].total - a[1].total);
     const cargos = [...cargoCounts.entries()].sort((a, b) => {

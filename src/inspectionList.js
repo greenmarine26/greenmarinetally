@@ -9,7 +9,7 @@
 
 import { openPrintWindow } from './printHelper.js';
 import { shipOpMapper } from './data/tallyFormats.js';
-import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims} from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
   //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
@@ -91,7 +91,7 @@ function getContainerCategory(c) {
 
   // 리퍼 우선 판별 (EDI에 리퍼 플래그/실제 온도값 있으면 ISO와 무관하게 reefer)
   const hasTmpVal = (c.tmp != null && String(c.tmp).trim() !== '') || (c.temp != null && String(c.temp).trim() !== '');
-  if (c.reefer === true || (c.rf === true && !c.iso_pick) || hasTmpVal) type = 'reefer';   // 3.60-04: 검수사가 규격을 고른 컨(iso_pick)은 그 규격이 말한다   // 3.60-04: 파서가 쓰는 표식은 `rf` 다(감사 지적 — `reefer` 만 보면 규격이 드라이로 적힌 리퍼를 놓친다)
+  if (c.reefer === true || (c.rf === true && !c.iso_pick) || hasTmpVal || isReeferIso(iso)) type = 'reefer';   // 3.60-11: 한 벌이 리퍼라 하는 규격(L5R1 등 — 라벨은 45HC)도 리퍼(3.60-10 감사)   // 3.60-04: 검수사가 규격을 고른 컨(iso_pick)은 그 규격이 말한다   // 3.60-04: 파서가 쓰는 표식은 `rf` 다(감사 지적 — `reefer` 만 보면 규격이 드라이로 적힌 리퍼를 놓친다)
 
   const fe = String(c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
   return { len, type, fe };
