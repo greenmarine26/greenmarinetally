@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isReeferContainer, isReeferIso, normPortCode } from './utils.js';   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isReeferContainer, isReeferIso, normPortCode, isFlatRackIso } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -39,6 +39,9 @@ export function tallySizeCol(c) {
     if (l.startsWith('45')) return '45';
     return (l.includes('HC') || l.includes('RH')) ? 'HC' : '40';
   }
+  //  3.60-20 (검수사 2026-09-25 «L2G1 은 HC 로 센다»(수석 방식대로)): TMPZ 2020E 양하 BAPLIE L2G1 47대(BOMU8201057 등)를 실물 마감텔리는 HC 칸에 셌다 —
+  //    같은 배 2021E·2022E 는 4500·45G1(40HC) 로 온 같은 부류. ISO 로는 45' 표준높이(L2)지만 마감텔리 규칙은 수석 실물이다. 진짜 45피트(L5G1·L5GP·9500 류)는 그대로 45' 칸.
+  if (/^L2/.test(iso)) return 'HC';
   if (l.startsWith('45') || /^L/.test(iso) || /^9[05]\d\d$/.test(iso)) return '45';
   if (/^4[5-9]/.test(iso)) return 'HC';
   if (/^4/.test(iso)) return '40';
@@ -116,9 +119,39 @@ export function ptkContainers(voyage, mode) {
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */
+//  3.60-20 (검수사 2026-09-25 «마감텔리는 현재 수석검수사들의 방법 그대로 합니다. 선박별로 비교해서 같게 만들면 됩니다»):
+//    실물 Final Work 는 **같은 칸에 겹쳐 실린 엠티 플랫랙 묶음(BUNDLE)을 FULL 1대**로 센다 — ATPR 2632E OS-IN «20'E 8 — FR x 8 (2 BUNDLE)» ↔ Final Work 20'F +2
+//    (bay1/01/08 ×4 · bay3/01/08 ×4, 전부 22PE·fr·E). 앱은 컨마다 1대라 20'E 8 로 갈렸다(2633E 도 같은 꼴 8대). OS 시트(buildOS)는 실물처럼 낱개 그대로.
+//    묶음 = 같은 자리(bay·row·tier)의 엠티 플랫랙 2대 이상. 혼자면 종전대로 E 1대.
+//  bundleFold — 집계용 컨 목록: 같은 자리의 엠티 플랫랙 2대 이상은 «FULL 1대» 가상 컨 하나로 접는다. Final Work 와 Performance 가 같은 목록을 센다(감사: 한 서류 안 두 표가 6대 달랐다).
+//    자리 문자열은 정규화해 비교(베이 앞 0 제거 · row/tier 두 자리 — ContainerDetailModal _p2 와 같은 규칙; bay_actual 이 '01' 과 '1' 로 갈리는 사례를 앱이 이미 안다).
+//    다른 선사·다른 포트의 엠티 플랫랙은 같은 자리라도 따로 묶는다(실물 근거 없음 — 한 묶음은 한 선사·한 출발지).
+export function bundleFold(containers, mode) {
+  const out = [];
+  const bundles = {};
+  const _p2 = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? s.padStart(2, '0') : s; };
+  const _bay = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s; };
+  for (const c of containers) {
+    if (c && c.fe === 'E' && (c.fr || isFlatRackIso(c.iso))) {
+      const p = effectivePos(c);
+      if (p && p.bay && p.row && p.tier) {
+        const op = String(c.op || '').toUpperCase().trim() || '???';
+        const port = port3(mode === 'discharge' ? c.pol : c.pod) || '???';
+        const k = [op, port, tallySizeCol(c), _bay(p.bay), _p2(p.row), _p2(p.tier)].join('|');
+        (bundles[k] ??= []).push(c); continue;
+      }
+    }
+    out.push(c);
+  }
+  for (const arr of Object.values(bundles)) {
+    if (arr.length >= 2) out.push({ ...arr[0], fe: 'F', _bundle: arr.map((x) => x.cn), _bundleN: arr.length });
+    else out.push(...arr);
+  }
+  return out;
+}
 export function buildMatrix(containers, mode) {
   const mat = {};
-  for (const c of containers) {
+  for (const c of bundleFold(containers, mode)) {
     const op = String(c.op || '').toUpperCase().trim() || '???';
     const port = port3(mode === 'discharge' ? c.pol : c.pod) || '???';
     const fe = c.fe === 'E' ? 'E' : 'F';
@@ -364,16 +397,16 @@ export function buildFerry(voyage, disCs, loadCs) {
 
 /** Performance — 선사별 IN/OUT × F/E × 규격 */
 export function buildPerformance(disCs, loadCs, fmt) {
-  const agg = (cs) => {
+  const agg = (cs, mode) => {
     const m = {};
-    for (const c of cs) {
+    for (const c of bundleFold(cs, mode)) {   // 3.60-20: Final Work 와 같은 목록(엠티 플랫랙 번들 = FULL 1대 — 실물 Performance 도 216)
       const op = String(c.op || '').toUpperCase().trim() || '???';
       const fe = c.fe === 'E' ? 'E' : 'F';
       ((m[op] ??= { F: {}, E: {} })[fe])[tallySizeCol(c)] = (m[op][fe][tallySizeCol(c)] || 0) + 1;
     }
     return m;
   };
-  const inb = agg(disCs), outb = agg(loadCs);
+  const inb = agg(disCs, 'discharge'), outb = agg(loadCs, 'loading');
   const ops = [...new Set([...Object.keys(inb), ...Object.keys(outb)])]
     .sort((a, b) => orderIndex(fmt.ops, opParent(fmt, a)) - orderIndex(fmt.ops, opParent(fmt, b))
       || subIndex(fmt, a) - subIndex(fmt, b) || a.localeCompare(b));

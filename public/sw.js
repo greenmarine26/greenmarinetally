@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-19';
-const NOTE = '카고플랜 별첨·베이상세·현황 요약의 평택분이 화면과 같은 수입니다 · 항차 삭제는 휴지통에 복사한 뒤 지웁니다 · 조회만 폰은 자료를 올릴 수 없습니다 · 씰 구간은 앞 0 까지 그대로 칩니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-20';
+const NOTE = '마감텔리를 수석 실물과 선박별로 대조해 맞췄습니다 · 같은 칸에 겹친 엠티 플랫랙 묶음은 FULL 1대로 셉니다 · NSFR·DPRT·SWDN·NSDC 선사 이름을 실물 코드로 찍습니다 · L2G1 은 HC 칸입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

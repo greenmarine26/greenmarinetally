@@ -66,11 +66,11 @@ export const TALLY_FORMATS = {
   SWAT: { ops: ['SKR', 'HAS', 'HSL'], ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },
   SWRG: { ops: ['SKR', 'HAS', 'HSL'], ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },
   SWSP: { ops: ['SKR', 'HAS', 'HSL'], ports: ['KAN', 'PUS', 'SHA', 'SGN', 'LCH', 'BKK'], damage: null, shifting: true, performance: true },
-  SWDN: { ops: ['SKR', 'NSL', 'DJS', 'HAS', 'HSL'], ports: ['INC', 'PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },
+  SWDN: { ops: ['SKR', 'NSL', 'DJS', 'HAS', 'HSL'], opAlias: { NAM: 'NSL' }, ports: ['INC', 'PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },   // 3.60-20: 실물 SWDN 2607N 양하 NAM 91 → NSL
   DJCF: { ops: ['SKR', 'NSL', 'DJS', 'HAS', 'HSL'], ports: ['INC', 'PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: 'each', shifting: false, performance: true },
-  DPRT: { ops: ['SKR', 'NSS', 'DJS', 'HAS', 'HSL', 'KMD'], ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK', 'INC'], damage: null, shifting: false, performance: true },
-  NSDC: { ops: ['NSL', 'KMD'], ports: ['KAN', 'PUS', 'SHK', 'HKG', 'MNN', 'SGN'], damage: null, shifting: false, performance: true },
-  NSFR: { ops: ['NSS', 'KMT', 'DYS'], ports: ['INC', 'XMN', 'SHK', 'HPH', 'HKG'], damage: null, shifting: true, performance: true },
+  DPRT: { ops: ['SKR', 'NSS', 'DJS', 'HAS', 'HSL', 'KMD'], opAlias: { HAL: 'HAS', NSL: 'NSS' }, ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK', 'INC'], damage: null, shifting: false, performance: true },
+  NSDC: { ops: ['NSL', 'KMD'], opAlias: { KM: 'KMD', KMT: 'KMD', NSMS: 'NSL', NSS: 'NSL' }, ports: ['KAN', 'PUS', 'SHK', 'HKG', 'MNN', 'SGN'], damage: null, shifting: false, performance: true },
+  NSFR: { ops: ['NSS', 'KMT', 'DYS'], opAlias: { KMD: 'KMT', NSL: 'NSS' }, ports: ['INC', 'XMN', 'SHK', 'HPH', 'HKG'], damage: null, shifting: true, performance: true },
   // OBWH는 바우처형 — variant로 분기 (주간/야간/시간외/휴일 열)
   OBWH: { variant: 'voucher', ops: [], ports: ['YNT'], damage: 'report', shifting: false, performance: false },
 };
