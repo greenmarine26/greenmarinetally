@@ -1371,7 +1371,7 @@ function _normalize(ctx) {
     if (touched) c.containers = out;
   }
   if (!c.compMap && v) { try { c.compMap = { ...(((v.discharge || {}).completed) || {}), ...(((v.loading || {}).completed) || {}) }; } catch (e) { /* 없으면 없는 대로 */ } }
-  if (!c.photos && v) c.photos = v.photos || null;
+  if (!c.photos && v) c.photos = (v.photoIndex || v.photos) ? { ...(v.photoIndex || {}), ...(v.photos || {}) } : null;   // 3.61: 색인(메타)으로도
   if (!c.voyageDoneAts && v) { try { c.voyageDoneAts = voyageDoneAts(v); } catch (e) { /* */ } }
   if (!c.shiftMap && v && c.voyageKey) { try { c.shiftMap = shiftingMapForDisplay(c.voyageKey, v); } catch (e) { /* */ } }
   //  ⚠ 트윈 짝(bayPairs)·PORT-MIS 매처(matchPortMis)는 화면이 실어 준다 — twin.js·portMisMatch.js 를 여기서 import 하면

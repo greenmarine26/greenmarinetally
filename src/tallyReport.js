@@ -636,7 +636,7 @@ export function buildDamage(voyage, disCs, loadCs) {
   const loadSet = new Set(loadCs.map((c) => norm(c.cn)));
   const seen = new Set();
   const out = { dmIn: [], dmOut: [] };
-  const list = vals(voyage?.photos || {})
+  const list = vals({ ...(voyage?.photoIndex || {}), ...(voyage?.photos || {}) })   // 3.61: 색인(메타)으로도 — 사진 본체는 photos/{항차} 에
     .filter((p) => p && p.type === 'damage' && p.cn)
     .sort((a, b) => (a.ts || 0) - (b.ts || 0));
   for (const p of list) {

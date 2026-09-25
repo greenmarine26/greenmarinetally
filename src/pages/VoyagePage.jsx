@@ -72,6 +72,7 @@ import DeckPlanView from '../components/DeckPlanView.jsx';
 import MailboxFilePicker from '../components/MailboxFilePicker.jsx';   // V9.46: 메일함 폴더 직결
 import { db } from '../firebase.js';
 import { fbGetPendingDamage, fbPromotePendingDamage } from '../firebase.js';   // 2.03: 데미지 예약 승격
+import { fbSubscribeVoyagePhotos } from '../firebase.js';   // 3.61: 사진 본체는 photos/{항차} 에서 따로
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
@@ -1191,6 +1192,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     })();
   }, [voyage, voyageKey]);
 
+  // ★ 3.61 (구조 판 B): 사진 본체는 `photos/{항차}` 를 이 화면이 열렸을 때만 받는다 — 홈 루트 구독에서 사진이 빠진다.
+  //   옛 자리(voyage.photos, 이관 전 항목)와 합쳐 종전 소비처(카드·미르·조회 썸네일)에 같은 모양으로 준다.
+  const [extPhotos, setExtPhotos] = useState(null);
+  useEffect(() => { setExtPhotos(null); if (!voyageKey) return undefined; return fbSubscribeVoyagePhotos(voyageKey, setExtPhotos); }, [voyageKey]);
+  const photosAll = useMemo(() => {
+    const legacy = voyage?.photos || null;
+    if (!extPhotos || !Object.keys(extPhotos).length) return legacy;
+    return { ...(legacy || {}), ...extPhotos };
+  }, [voyage?.photos, extPhotos]);
+  //   SearchPanel(안쪽 컴포넌트들이 voyage.photos 를 직접 본다)·BayViewWork 에는 사진을 합친 항차 사본을 준다 — 같은 모양, 자리만 넓힘.
+  const voyageUi = useMemo(() => (photosAll && photosAll !== (voyage?.photos || null) ? { ...(voyage || {}), photos: photosAll } : voyage), [voyage, photosAll]);
   const briefCtx = useMemo(() => ({
     //  ★ 2.50-02 — `info` 를 같이 싣는다. 미르가 순서를 부르려면 접안 방향(`berthSide`)·IMO 가 필요한데,
     //    `InlineAnswerCard` 는 `voyage` 를 안 받는다(prop 체인: VoyagePage → ListTab/LoloTab → InlineAnswerCard).
@@ -1218,7 +1230,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    보고 있어서 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 실선에서 잡혔다.
     //    ⚠ SearchPanel 의 `allContainers` 는 `_comp` 가 붙어 오므로 그쪽은 안 넘긴다(그대로 동작).
     comp: compMap || null,
-    photos: voyage?.photos || null,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다
+    photos: photosAll,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다 · 3.61: 새 자리 합본
     //  ★ 2.57: 시프팅 맵 — 이 화면 ctx 에만 빠져 있어 시프팅 질문이 «없다»로 나왔다. SearchPanel:1109 와 같은 벌.
     //    InlineAnswerCard 는 voyageKey·voyage 를 안 받으므로(1.98·2.50-01 교훈 — 부모 변수 직접 참조 금지) 여기 실어 내린다.
     shiftMap: (() => { try { return shiftingMapForDisplay(voyageKey, voyage); } catch (e) { return null; } })(),
@@ -1228,7 +1240,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
       poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
     } : null,
-  }), [containers, voyage, shipPolicy, esealInfo, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: 합계 자료가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
+  }), [photosAll, containers, voyage, shipPolicy, esealInfo, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: 합계 자료가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
 
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
@@ -1358,7 +1370,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         voyageKey, voyage, info: voyage?.info || null, mode,
         containers: flattenVoyages({ [voyageKey]: voyage }),
         compMap: briefCtx.comp || null, shiftMap: briefCtx.shiftMap || null, bayPairs: briefCtx.pairs || null,
-        rfSkip: !!briefCtx.rfSkip, esealBrief: briefCtx.eseal || null, photos: voyage?.photos || null,
+        rfSkip: !!briefCtx.rfSkip, esealBrief: briefCtx.eseal || null, photos: photosAll,   // 3.61
         gangShift: briefCtx.gangShift, gangBrief: briefCtx.gangBrief, crewAnswer: briefCtx.crewAnswer,
         diagAlerts: diagAlerts || [],
       });
@@ -1806,7 +1818,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {showSheetPhoto && <SheetPhotoModal voyage={voyage} voyageKey={voyageKey} inspector={inspector} onClose={() => setShowSheetPhoto(false)} />}
       {!_sideCanc && tab === 'search' && workStyle === 'bayview' && !isLoloShip && (
-        <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyage} voyageKey={voyageKey} inspector={inspector} mode={mode}
+        <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyageUi} voyageKey={voyageKey} inspector={inspector} mode={mode}
           allEdiContainers={allEdiContainers} xrayMap={xrayMap} xraySeals={xraySeals} shiftingMap={shiftingMap} preGoneInfo={preGoneInfo}
           onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}
           onClose={() => setWorkStyle('classic')}
@@ -1852,7 +1864,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
           } : null}
           relayQuery={relayQ}
-          voyage={voyage}
+          voyage={voyageUi}   /* 3.61: 사진 합본 */
           voyageKey={voyageKey}
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}

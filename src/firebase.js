@@ -125,6 +125,21 @@ async function _trashCopy(voyageKey, sub, what) {
       catch (e) { console.warn(`[휴지통] 사진 ${k} 복사 실패 — 본문은 복사됐다:`, e); }
     }
   }
+  //  3.61 감사 N-1: 항차 통째 삭제면 새 자리 본체 photos/{키} 도 휴지통으로 옮기고 지운다 — 두면 고아로 남고,
+  //  같은 키가 다시 생길 때 색인 없이 되살아나 마감텔리·미르와 어긋난다. 한 건씩(큰 set 금지) 복사, 전부 복사된 뒤에만 지운다.
+  if (!sub) {
+    try {
+      const ps = await get(ref(db, `${PHOTO_ROOT}/${voyageKey}`));
+      const pv = ps.exists() ? (ps.val() || {}) : {};
+      const ks = Object.keys(pv); let okN = 0;
+      for (const k of ks) {
+        try { await set(ref(db, `archive_trash/${key}/photos/${k}`), pv[k]); okN += 1; }
+        catch (e) { console.warn(`[휴지통] 새 자리 사진 ${k} 복사 실패:`, e); }
+      }
+      if (ks.length && okN === ks.length) await set(ref(db, `${PHOTO_ROOT}/${voyageKey}`), null);
+      else if (ks.length) console.warn(`[휴지통] 새 자리 사진 ${ks.length - okN}장 복사 실패 — photos/${voyageKey} 는 남긴다`);
+    } catch (e) { console.warn('[휴지통] 새 자리 사진 이동 실패 — 본문은 복사됐다:', e); }
+  }
 }
 export async function fbDeleteVoyage(voyageKey, opts = {}) {
   assertCanWork('항차 삭제');   // 3.60-19 (감사 E1): 화면은 단추를 숨기지만 진짜 문지기는 쓰는 자리(3.51)
@@ -2736,13 +2751,47 @@ export function fbSubscribeAllReports(callback, limit = 100) {
   return unsub;
 }
 
+// ── TallyOne 3.61 (구조 판 B, 검수사 2026-09-25 «B로 진행해주세요») — 사진은 항차 노드 밖 `photos/{항차}/{ts}` 에 둔다 ──
+//   왜 — 홈이 통째로 구독하는 `voyages` 5.37 MB 의 50% 가 사진(base64)이었다(실측 7장 2.69 MB). Storage 는 결제 계정이 닫혀
+//   (402 «billing account … disabled in state closed») 올리기·내려받기 모두 안 되므로(기존 STOWAGE PDF 도 안 열림) RTDB 안에서 자리만 옮긴다.
+//   본체 `photos/{항차}/{ts}` = 종전 항목 그대로(ts·cn·type·data·detailPhoto·…). 항차 노드에는 **색인** `voyages/{항차}/photoIndex/{ts}` = 본체에서
+//   data·detailPhoto 를 뺀 메타만(~200 B) — 미르·마감텔리 DAMAGE·카드 목록은 메타로 움직이고, 사진 자체는 그 항차를 열었을 때 `photos/{항차}` 를 따로 받는다.
+//   옛 항목(voyages·archive 의 photos)은 이관(3.61 뒤 클로드 스크립트)까지 그대로 읽힌다 — 읽기는 늘 «새 자리 → 옛 자리» 순.
+export const PHOTO_ROOT = 'photos';
+export function photoMetaOf(item) {
+  if (!item || typeof item !== 'object') return null;
+  const { data, detailPhoto, ...meta } = item;
+  return { ...meta, hasData: !!data, hasDetail: !!detailPhoto };
+}
+async function _writePhoto(voyageKey, ts, item) {
+  //  감사 M-2(3.61): 본체·색인을 **한 번의 다중 경로 update** 로 — RTDB 는 전부 아니면 전무. 본체만 남고 색인이 빠지면
+  //  재시도가 새 ts 로 사진을 두 번 넣고, 색인만 남으면 «사진을 찾지 못했습니다» 가 된다.
+  await update(ref(db), {
+    [`${PHOTO_ROOT}/${voyageKey}/${ts}`]: item,
+    [`voyages/${voyageKey}/photoIndex/${ts}`]: photoMetaOf(item),
+  });
+}
+// 그 항차 사진 본체 구독(항차를 연 폰만) — 옛 자리(voyages/{키}/photos)는 호출부가 `voyage.photos` 로 이미 갖고 있으므로 합친다.
+export function fbSubscribeVoyagePhotos(voyageKey, cb) {
+  if (!voyageKey) return () => {};
+  const r = ref(db, `${PHOTO_ROOT}/${voyageKey}`);
+  return onValue(r, (snap) => { try { cb(snap.exists() ? (snap.val() || {}) : {}); } catch (e) { console.warn('[photos] 구독 콜백 실패:', e); } },
+    (err) => console.warn('[photos] 구독 실패:', err));
+}
+// 사진 본체·색인 지우기(항차 삭제·보고 전체 삭제·규격 사진 취소가 부른다). 실패는 로그만 — 본문 흐름을 막지 않는다.
+async function _deletePhotos(voyageKey, ts) {
+  try {
+    if (ts) { await set(ref(db, `${PHOTO_ROOT}/${voyageKey}/${ts}`), null); await set(ref(db, `voyages/${voyageKey}/photoIndex/${ts}`), null); }
+    else { await set(ref(db, `${PHOTO_ROOT}/${voyageKey}`), null); await set(ref(db, `voyages/${voyageKey}/photoIndex`), null); }
+  } catch (e) { console.warn('[photos] 삭제 실패:', e); }
+}
+
 // 사진 데이터 저장 (Firebase Realtime DB - base64, 작은 사진만)
 //   대용량은 별도 Storage 권장이지만 일단 RTDB로
 export async function fbAddPhotoReport(voyageKey, photoData, meta) {
   assertCanWork('사진 보고');
   const ts = Date.now();
-  const r = ref(db, `voyages/${voyageKey}/photos/${ts}`);
-  await set(r, {
+  await _writePhoto(voyageKey, ts, {   // 3.61: photos/{항차}/{ts} + voyages/{항차}/photoIndex/{ts}
     ts,
     data: photoData,  // base64 string
     ...meta,
@@ -2772,7 +2821,8 @@ export async function fbGetDamageIndex() {
 }
 // 사진 단건 — 현행 voyages 먼저, 없으면 보관(archive) 폴백 (수석 완료 저장은 항차를 archive 로 옮긴다)
 export async function fbGetDamagePhoto(voyageKey, ts) {
-  let snap = await get(ref(db, `voyages/${voyageKey}/photos/${ts}`));
+  let snap = await get(ref(db, `${PHOTO_ROOT}/${voyageKey}/${ts}`));   // 3.61: 새 자리 먼저
+  if (!snap.exists()) snap = await get(ref(db, `voyages/${voyageKey}/photos/${ts}`));
   if (!snap.exists()) snap = await get(ref(db, `archive/${voyageKey}/photos/${ts}`));
   return snap.exists() ? snap.val() : null;
 }
@@ -2804,7 +2854,7 @@ export async function fbPromotePendingDamage(voyageKey, cn, entries) {
   for (const e of entries || []) {
     if (!e || e.status !== 'waiting') continue;   // 멱등 — 승격된 건 다시 안 옮긴다
     const { status, ...body } = e;
-    await set(ref(db, `voyages/${voyageKey}/photos/${e.ts}`), { ...body, mode: 'unknown', promotedFrom: 'pendingDamage' });
+    await _writePhoto(voyageKey, e.ts, { ...body, mode: 'unknown', promotedFrom: 'pendingDamage' });   // 3.61
     try { await _writeDamageIndex(voyageKey, e.ts, body); } catch (er) { console.warn('[damageIndex] 승격 색인 실패:', er); }
     await set(ref(db, `pendingDamage/${C}/${e.ts}/status`), 'promoted');
     await set(ref(db, `pendingDamage/${C}/${e.ts}/promotedTo`), voyageKey);
@@ -2819,8 +2869,7 @@ export async function fbSaveISO403Photo(voyageKey, mode, cn, photoData, by) {
   assertCanWork('규격 사진');
   const ts = Date.now();
   // 1) 사진 본체 저장
-  const photoRef = ref(db, `voyages/${voyageKey}/photos/${ts}`);
-  await set(photoRef, {
+  await _writePhoto(voyageKey, ts, {   // 3.61
     ts,
     data: photoData,  // base64 string
     type: 'iso403',
@@ -2858,6 +2907,7 @@ export async function fbDeleteISO403Photo(voyageKey, mode, cn, photoTs) {
   // 사진 본체 삭제
   if (photoTs) {
     await set(ref(db, `voyages/${voyageKey}/photos/${photoTs}`), null);
+    await _deletePhotos(voyageKey, photoTs);   // 3.61: 새 자리도
   }
   // records 마킹 해제 — null 사용 시 RTDB가 필드 삭제
   const recRef = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
@@ -2889,6 +2939,7 @@ export async function fbClearAllReports(voyageKey) {
   assertCanWork('보고 전체 삭제');
   await set(ref(db, `voyages/${voyageKey}/reports`), null);
   await set(ref(db, `voyages/${voyageKey}/photos`), null);
+  await _deletePhotos(voyageKey);   // 3.61
 }
 
 // 모든 항차의 작업 보고 일괄 삭제 (테스트 정리용)
@@ -2900,6 +2951,7 @@ export async function fbClearAllReportsAllVoyages() {
   Object.keys(voyages).forEach(vk => {
     ops.push(set(ref(db, `voyages/${vk}/reports`), null));
     ops.push(set(ref(db, `voyages/${vk}/photos`), null));
+    ops.push(_deletePhotos(vk));   // 3.61
   });
   await Promise.all(ops);
 }

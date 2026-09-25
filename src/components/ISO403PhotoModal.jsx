@@ -4,9 +4,7 @@
 //   카톡 공유는 필요 없음 (저장 전용)
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Camera, Save, Trash2, Loader, Check } from 'lucide-react';
-import { fbSaveISO403Photo, fbDeleteISO403Photo } from '../firebase.js';
-import { ref as dbRef, get } from 'firebase/database';
-import { db } from '../firebase.js';
+import { fbSaveISO403Photo, fbDeleteISO403Photo, fbGetDamagePhoto } from '../firebase.js';   // 3.61: 사진 읽기는 새 자리→옛 자리 한 벌
 
 // 사진 압축 (1024px JPEG quality 0.7) — RTDB 10MB 제한 안전 마진
 async function compressPhoto(file) {
@@ -56,9 +54,9 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
     (async () => {
       setLoading(true);
       try {
-        const snap = await get(dbRef(db, `voyages/${voyageKey}/photos/${c.iso403_photo_ts}`));
-        if (!cancelled && snap.exists()) {
-          setExistingPhoto(snap.val());
+        const _p = await fbGetDamagePhoto(voyageKey, c.iso403_photo_ts);   // 3.61
+        if (!cancelled && _p) {
+          setExistingPhoto(_p);
         }
       } catch (e) {
         console.error('[ISO403Photo] 기존 사진 로드 실패', e);

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-22';
-const NOTE = 'ASC 파일의 DC4H·RF4H 규격을 40피트 하이큐로 읽습니다(동진 셰코우 ASC) · 리스트 파일 이름의 선사를 씁니다 · 마감텔리를 수석 실물과 선박별로 대조해 맞췄습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.61';
+const NOTE = '사진을 항차 자료 밖에 따로 둡니다 — 홈이 받는 자료가 절반으로 줄고, 사진은 그 항차를 열었을 때만 받습니다 · ASC 파일의 DC4H·RF4H 규격을 40피트 하이큐로 읽습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
