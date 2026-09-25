@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
+import { isPtk as _isPtkOne, isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null }) {
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -43,10 +43,8 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       return merged;
     }).filter(c => {
       if (_shiftSet.has(c.cn)) return false;   // 2.89-06: 시프팅은 자기 칸에서 센다
-      if (mode === 'discharge') return isPyeongtaekPort(c.pod);
-      // V8.86: 선적 — 리스트 등록 = 평택(별첨·베이와 동일 원칙, M6.94.34). NOLIST류 pol 공란 누락 방지.
-      if (recMap[c.cn]) return true;
-      return isPyeongtaekPort(c.pol);
+      // 3.60-19 (다수결 V1): utils.isPtk 한 벌 — 리스트 등재(_inList)라도 EDI 통과화물이면 제외(3.14), 선적 탭·수석 보드와 같은 수
+      return _isPtkOne({ ...c, _inList: c._inList != null ? c._inList : !!recMap[c.cn] }, mode);
     }), { ediMap, recMap, mode });
     //  ★ 3.37(감사 실측) — 현황 요약도 제 목록을 따로 만든다. 특수제작컨 표시를 여기서도 찍어야
     //    «온도 미입력»·«제작컨» 셈이 화면·진단·마감 점검과 갈리지 않는다(규범 §4-4 — 입구마다 같은 문지기).

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-18';
-const NOTE = '미르 남은 대수는 홈 카드와 같은 리스트 기준입니다 · 조회만 폰은 항차를 자동 정리하지 않습니다 · 무엇의 위치인지 없는 물음은 되묻습니다 · 씰체결 엑셀 시트 이름과 검수리스트 별첨 제목을 바로잡았습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-19';
+const NOTE = '카고플랜 별첨·베이상세·현황 요약의 평택분이 화면과 같은 수입니다 · 항차 삭제는 휴지통에 복사한 뒤 지웁니다 · 조회만 폰은 자료를 올릴 수 없습니다 · 씰 구간은 앞 0 까지 그대로 칩니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

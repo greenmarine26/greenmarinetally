@@ -19,7 +19,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { swapFixGate } from '../utils.js';   // 2.89-01: 통과 고정분 맞교환 게이트 — 판정 한 벌
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { isoToLabel, buildContainerColorMap, getContainerColorKey, isPyeongtaekPort } from '../utils.js';
+import { isoToLabel, buildContainerColorMap, getContainerColorKey, isPtk as _isPtkOne } from '../utils.js';   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { autoPairBays, generatePdfBays, buildPosMap, computeBayRenderData, defaultGetSelfMark } from '../cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import * as P from '../planEditCore.js';
@@ -423,7 +423,7 @@ export default function BayGridEditor({
     return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || 'KRPTK';
   }, [containers]);
   const getColorKey = useCallback((c) => getContainerColorKey(c, mode), [mode]);
-  const getIsThrough = useCallback((c) => (mode === 'discharge' ? !isPyeongtaekPort(c.pod) : !(c._inList || isPyeongtaekPort(c.pol))), [mode]);
+  const getIsThrough = useCallback((c) => !_isPtkOne(c, mode), [mode]);   // 3.60-19: 한 벌
 
   const mk = useCallback((key) => (key && matrixBays.length
     ? computeBayRenderData(key, pdfBays, matrixBays, basePosMap, pod, defaultGetSelfMark, {}, getColorKey, getIsThrough, dictData?.bayDef, dictData?.code)

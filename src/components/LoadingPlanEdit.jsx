@@ -8,7 +8,7 @@
 //
 // 이동 가능 = 작업대상(평택 선적화물 + 쉬프팅). 통과 고정분은 잠금. (사용자 확정 2026-07-25)
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { isPyeongtaekPort, isoToLabel, loadSheetJS, fullEdiMapOf } from '../utils.js';
+import { isoToLabel, loadSheetJS, fullEdiMapOf, isPtk as _isPtkOne } from '../utils.js';   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { fbSavePlanDraft, fbCommitPlan, fbRestorePlanFromEdi } from '../firebase.js';
 import { computeShiftingMapCached } from '../utils.js';
 import BayGridEditor from './BayGridEditor.jsx';
@@ -77,7 +77,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
     const s = new Set();
     for (const c of containers) {
       const cn = cnNorm(c.cn);
-      const movable = shift.has(cn) || c._inList || isPyeongtaekPort(c.pol);
+      const movable = shift.has(cn) || _isPtkOne(c, 'loading');   // 3.60-19: 한 벌 — 통과화물은 옮길 수 없는 남의 짐
       if (!movable) s.add(cn);
     }
     return s;

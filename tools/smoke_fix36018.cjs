@@ -143,7 +143,7 @@ const norm = (s) => String(s == null ? '(null)' : s).replace(/\s+/g, ' ').trim()
       ok('씰체결 엑셀 시트명 — 같은 길이 안 순번(_sameLenBefore)', /_sameLenBefore \? ' ' \+ \(_sameLenBefore \+ 1\)/.test(src('src/components/EmptySealReport.jsx')));
       ok('검수리스트 별첨 제목에 X-RAY 글자 없음', /\[별첨\] 특수화물 \$\{special\.length\}대/.test(src('src/inspectionList.js')) && !/특수화물·X-RAY/.test(src('src/inspectionList.js')));
       ok('오프라인 띠 문구 — 닫거나 새로고침하지 말 것', /새로고침하지 마세요\(저장이 사라집니다\)/.test(src('src/components/Header.jsx')));
-      ok('APP_VERSION 3.60-18', /APP_VERSION = 'TallyOne 3\.60-18'/.test(src('src/utils.js')));
+      ok('APP_VERSION 이 3.60-18 이상(판 주석에 3.60-18 절이 있다)', /APP_VERSION = 'TallyOne 3\.60-18'|\s3.60-18 \*\*/.test(src('src/utils.js')));
     }
 
     console.log(`\n3.60-18 연막검사: ${n - bad}/${n}`);

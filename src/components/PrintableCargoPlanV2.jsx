@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict, podFeStyle} from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
+import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
 import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import {
@@ -122,9 +122,7 @@ const MARK_FG = '#000';            // 글자는 전부 진한 검정 (검수사 
 function getMarkV2(c, pod, mode) {
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
   //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 조회됨)
-  const ptk = mode === 'discharge'
-    ? isPyeongtaekPort(c.pod)
-    : (c._inList || isPyeongtaekPort(c.pol));
+  const ptk = _isPtkOne(c, mode);   // 3.60-19: 한 벌(통과화물 제외)
 
   const isEmpty = c.fe === 'E';
 
@@ -1053,13 +1051,7 @@ export default function PrintableCargoPlanV2({
   //   기존엔 pol만 봐서 엠티 285대가 별첨에서 누락됐다.
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
   //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 잡힘)
-  const matchPodC = (c) => {
-    if (mode === 'discharge') {
-      return isPyeongtaekPort(c.pod);
-    }
-    if (c._inList) return true;  // 선적: 리스트 등록 = 평택
-    return isPyeongtaekPort(c.pol);
-  };
+  const matchPodC = (c) => _isPtkOne(c, mode);   // 3.60-19: 한 벌(선적 리스트 등재라도 EDI 통과화물이면 제외 — 별첨·머리 합계가 화면과 같은 수)
   //  2.83: 머리 합계용 평택분 대수 — **별첨·베이 카운트와 같은 판정(matchPodC)** 을 쓴다.
   const _ptkCount = (containers || []).filter((c) => c && matchPodC(c)).length;
   const boxCounts = useMemo(() => {

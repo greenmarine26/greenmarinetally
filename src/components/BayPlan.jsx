@@ -14,11 +14,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, bayCellTypeLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, isTransitByEdi, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, bayCellTypeLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
+import { isUserOwnedBayDict, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -99,9 +99,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
   //   (SWAT 2607S: 평택 선적 리퍼 0인데 통과 리퍼 16대가 알람 ⚠16으로 표시, 9.2-② 패턴 재발).
   //   판정은 아래 isPtk와 동일 규칙(선적=_inList||POL평택, 양하=POD평택) — TDZ 때문에 지역 정의.
   const iso403Stats = useMemo(() => {
-    const ptk = (c) => mode === 'discharge'
-      ? isPyeongtaekPort(c.pod)
-      : (c._inList || isPyeongtaekPort(c.pol));
+    const ptk = (c) => _isPtkOne(c, mode);   // 3.60-19: 아래 isPtk 와 같은 한 벌(utils) — 종전엔 이 자리만 통과화물을 포함했다
     const targets = containers.filter(c => ptk(c) && isISO403(c));
     const taken = targets.filter(c => isISO403PhotoTaken(c));
     return {
@@ -141,9 +139,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
   //   (양하에서 _inList 인정 시 타항 양하분이 평택으로 잘못 잡힘)
   //  3.14: 선적은 «리스트 등재 = 평택»이되, EDI 가 «남의 항구 → 남의 항구»라 말하면 EDI 가 이긴다(판정 한 벌 utils.isTransitByEdi).
   //    이 줄이 없으면 통과화물이 평택 선적분 색으로 칠해지고 남의 짐 자리에 그려진다(DJCF 0151S 24대·베이 5·7·10·17·19·25·27).
-  const isPtk = (c) => mode === 'discharge'
-    ? isPyeongtaekPort(c.pod)
-    : (isPyeongtaekPort(c.pol) ? true : (isTransitByEdi(c) ? false : !!c._inList));
+  const isPtk = (c) => _isPtkOne(c, mode);   // 3.60-19: utils 한 벌(같은 규칙)
 
   // 평택 컨번호 set
   // V9.39: **컨번호가 있는 것만** 넣는다. 컨펌전 플랜 슬롯(__SLOT_)은 컨번호가 없어서(확답 ④)

@@ -18,13 +18,13 @@ import React, { useMemo, useState, useRef } from 'react';
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { podBgOf, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
+import { podBgOf, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
+import { isUserOwnedBayDict, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 
 //  3.7: 베이상세 칸 가로:세로 — 카스피 ATPR 2520E BAY 도면 실측(≈29mm × 16mm).
 const BD_CELL_ASPECT = 0.55;
@@ -33,9 +33,7 @@ const BD_CELL_ASPECT = 0.55;
 // (STD_DECK / STD_HOLD 제거됨 — globalTiers 동적 사용)
 
 // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만.
-const isPtk = (c, mode) => mode === 'discharge'
-  ? isPyeongtaekPort(c.pod)
-  : (c._inList || isPyeongtaekPort(c.pol));
+const isPtk = (c, mode) => _isPtkOne(c, mode);   // 3.60-19: 한 벌
 
 export function groupByBay(containers) {
   const m = {};

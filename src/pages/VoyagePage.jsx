@@ -2874,6 +2874,9 @@ function EsealRangeCard({ voyageKey, info, inspector, voyInfo }) {
     const list = rows.map(r => ({ from: String(r.from).trim(), to: String(r.to).trim() }))
       .filter(r => /^\d{4,8}$/.test(r.from) && /^\d{4,8}$/.test(r.to) && parseInt(r.to, 10) >= parseInt(r.from, 10));
     if (!list.length) { alert('구간을 확인하세요 — 예: 521001 ~ 522000'); return; }
+    //  3.60-19 (다수결 V7): 앞 0 이 있는 실(실측 ATPR 2643W 036601~036700)은 앞 0 까지 그대로 쳐야 기록 실과 맞는다 — from/to 자릿수가 다르면 앞 0 을 빠뜨린 것.
+    const _mis = list.find(r => r.from.length !== r.to.length);
+    if (_mis) { alert(`구간 ${_mis.from} ~ ${_mis.to} — 시작과 끝의 자릿수가 다릅니다. 실번호를 앞 0 까지 그대로 치세요(예: 036601 ~ 036700).`); return; }
     setSaving(true);
     try {
       //  3.60-06: fbSetSimple 은 실패를 false 로 돌려준다 — 종전엔 그 값을 안 봐 실패해도 «저장됨»으로 닫혔다.
@@ -2904,11 +2907,11 @@ function EsealRangeCard({ voyageKey, info, inspector, voyInfo }) {
           <div className="text-2xs text-teal-400/80">실은 6자리 — 100개가 넘어 앞 세 자리가 바뀌면 [+ 구간 추가]로 나눠 넣으세요.</div>
           {rows.map((r, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <input value={r.from} inputMode="numeric" placeholder="521001"
+              <input value={r.from} inputMode="numeric" placeholder="036601"
                 onChange={e => setRows(a => a.map((x, j) => (j === i ? { ...x, from: e.target.value.replace(/\D/g, '') } : x)))}
                 className="flex-1 bg-ink-800 border border-line rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
               <span className="text-teal-400">~</span>
-              <input value={r.to} inputMode="numeric" placeholder="522000"
+              <input value={r.to} inputMode="numeric" placeholder="036700"
                 onChange={e => setRows(a => a.map((x, j) => (j === i ? { ...x, to: e.target.value.replace(/\D/g, '') } : x)))}
                 className="flex-1 bg-ink-800 border border-line rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
               {rows.length > 1 && (
@@ -3505,7 +3508,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     }
   };
 
-  const handleEdiUpload = async (files) => {
+  const _handleEdiUploadCore = async (files) => {
     if (!files || files.length === 0) return;
     setStatus(`${files.length}개 파일 처리 중...`);
     const results = [];
@@ -4009,6 +4012,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     setStatus(results.join('\n') + summary);
     if (ediRef.current) ediRef.current.value = '';
   };
+  //  3.60-19 (감사 M1·2차 시뮬 2): 업로드가 던지면(조회만 문지기·저장 실패) «처리 중…» 이 남지 않게 — 실패를 상태 글로 말한다.
+  const handleEdiUpload = async (files) => { try { await _handleEdiUploadCore(files); } catch (e) { console.error('[EDI 업로드] 실패:', e); setStatus(`❌ EDI 업로드 실패 — ${e && e.message ? e.message : e}`); } };
 
   const handleListUpload = async (files) => {
     if (!files || files.length === 0) return;
@@ -4139,7 +4144,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
                 continue;
               }
             }
-          } catch (e0) { /* 덱 플랜 아님 → 리스트 흐름 계속 */ }
+          } catch (e0) { if (e0 && e0.viewOnly) throw e0; /* 덱 플랜 아님 → 리스트 흐름 계속 (3.60-19: 조회만 거부는 삼키지 않는다 — 감사 M2) */ }
           const parseResult = await parseListExcel(buf);
           records = parseResult.records || [];
           if (records.length === 0) {
@@ -4368,7 +4373,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     setConflictData(null);
   };
 
-  const handleXrayUpload = async (files) => {
+  const _handleXrayUploadCore = async (files) => {
     if (!files || files.length === 0 || mode !== 'discharge') return;
     setStatus(`${files.length}개 파일 처리 중...`);
     let cnObj = { ...(sec.xrayList || {}) };
@@ -4397,6 +4402,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     setStatus(`✅ X-RAY: +${added}대 (전체 ${Object.keys(cnObj).length}대)`);
     if (xrayRef.current) xrayRef.current.value = '';
   };
+  //  3.60-19 (감사 M1·2차 시뮬 2): 업로드가 던지면(조회만 문지기·저장 실패) «처리 중…» 이 남지 않게 — 실패를 상태 글로 말한다.
+  const handleXrayUpload = async (files) => { try { await _handleXrayUploadCore(files); } catch (e) { console.error('[X-RAY 업로드] 실패:', e); setStatus(`❌ X-RAY 리스트 업로드 실패 — ${e && e.message ? e.message : e}`); } };
 
   // 양하/선적 섹션 추가 (다른 모드)
   const otherMode = mode === 'discharge' ? 'loading' : 'discharge';
@@ -4567,8 +4574,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
                 if (!window.confirm(`미매칭 X-RAY ${um.length}대를 리스트에서 삭제합니다.\n${um.join(', ')}\n\n(EDI/리스트에 없는 번호 — 이전 업로드 잔존/오타)\n진행할까요?`)) return;
                 const kept = {};
                 Object.entries(sec.xrayList || {}).forEach(([cn, v]) => { if (cnSet.has(cn)) kept[cn] = v; });
-                await fbSaveXrayList(voyageKey, kept);
-                setStatus(`🧹 미매칭 X-RAY ${um.length}대 삭제 — 남은 ${Object.keys(kept).length}대`);
+                try { await fbSaveXrayList(voyageKey, kept); setStatus(`🧹 미매칭 X-RAY ${um.length}대 삭제 — 남은 ${Object.keys(kept).length}대`); }
+                catch (e) { setStatus(`❌ 미매칭 삭제 실패 — ${e && e.message ? e.message : e}`); }   // 3.60-19
               };
               return (
                 <span className="text-red-400 font-bold"> · ⚠미매칭 {um.length}대: {um.join(', ')} (EDI/리스트에 없는 번호)
@@ -4605,8 +4612,10 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               const patch = {};
               if (otherMode === 'discharge') patch.voy_d = upVoy;
               else patch.voy_l = upVoy;
+              //  3.60-19 (2차 시뮬 1): 섹션을 먼저 만든다 — 조회만 문지기가 여기서 던지면 항차번호만 남는 반쪽 쓰기가 없다.
+              try { await fbSaveSectionData(voyageKey, otherMode, { _created: Date.now() }); }
+              catch (e) { alert(`섹션을 만들지 못했습니다 — ${e && e.message ? e.message : e}`); return; }
               await fbUpdateVoyageInfo(voyageKey, patch);
-              await fbSaveSectionData(voyageKey, otherMode, { _created: Date.now() });
               setOtherVoyInput('');
               setMode(otherMode);
             }}

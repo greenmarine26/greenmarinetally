@@ -1707,7 +1707,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         setBusyKey(null); setConfirmKey(null);
         return;
       }
-      await fbDeleteVoyage(row.key);
+      await fbDeleteVoyage(row.key, { archived: true });   // 3.60-19: 보관소 저장 뒤라 휴지통 복사는 건너뜀
       setNotice({ kind: 'ok', text: `✅ ${row.vsl} 완료 저장 — 보관소로 이동했습니다.` });  // TallyOne 1.0(L5): 성공도 화면에 명시
     } catch (e) {
       console.error('[수석 완료] 실패:', row.key, e);

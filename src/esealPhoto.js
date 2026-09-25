@@ -131,8 +131,14 @@ export const ESEAL_MODEL = 'gemini-3.1-pro-preview';
 /** 사진 파일 → 두 번 읽은 줄 목록. */
 export async function readEsealPhoto(file) {
   const base64 = await _toJpegBase64(file, 2000);
+  //  3.60-19 (다수결 V8): 프리뷰 모델이 내려가면(404 · 모델 없음) 기본 모델로 한 번 더 읽고 그 사실을 note 로 남긴다 — 종전엔 «AI 오류 404» 로 판독 자체가 죽었다.
   const one = async () => {
-    const res = await aiCall('esealPhoto', esealRequestBody(base64), { timeoutMs: 120000, model: ESEAL_MODEL });
+    let res = await aiCall('esealPhoto', esealRequestBody(base64), { timeoutMs: 120000, model: ESEAL_MODEL });
+    if (!res.ok && res.status === 404) {
+      console.warn(`[엠티실 판독] ${ESEAL_MODEL} 404 — 기본 모델로 다시 읽습니다`);
+      res = await aiCall('esealPhoto', esealRequestBody(base64), { timeoutMs: 120000 });
+      if (res.ok) { const j = await res.json(); const out = parseEsealResponse(j); out._fallbackModel = true; return out; }
+    }
     if (!res.ok) { const t = await res.text(); throw new Error(`AI 오류 ${res.status}: ${t.slice(0, 160)}`); }
     return parseEsealResponse(await res.json());
   };

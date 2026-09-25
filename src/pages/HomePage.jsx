@@ -156,7 +156,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             console.warn(`[자동삭제] 백업 실패로 삭제 보류: ${key} (${v?.info?.vsl || ''})`);
             continue;
           }
-          await fbDeleteVoyage(key);
+          await fbDeleteVoyage(key, { archived: true });   // 3.60-19: 바로 위에서 보관소에 넣었다 — 휴지통 복사는 건너뜀
           console.log(`[자동삭제] 1주일 경과 항차 백업+삭제: ${key} (${v?.info?.vsl || ''})`);
         } catch (e) { console.error('[자동삭제] 실패:', key, e); }
       }
@@ -635,6 +635,11 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     }
     else if (action === 'all') await fbDeleteVoyage(key);
     setDeleteTarget(null);
+  };
+  //  3.60-19 (진단 T11·감사): 삭제 실패(휴지통 복사 실패·조회만 등)가 화면에 닿게 — 종전엔 catch 가 없어 조용히 끝났다.
+  const performDeleteSafe = async (action) => {
+    try { await performDelete(action); }
+    catch (e) { console.error('[홈 삭제] 실패:', e); alert(`삭제하지 못했습니다 — ${e && e.message ? e.message : e}`); }
   };
 
   // 완료 버튼: 작업 끝난 항차 → 전체 작업량을 선박 누적에 100% 완료 기록 후 삭제.
@@ -1157,7 +1162,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         <DeleteVoyageModal
           target={deleteTarget}
           onClose={() => setDeleteTarget(null)}
-          onConfirm={performDelete}
+          onConfirm={performDeleteSafe}
         />
       )}
 

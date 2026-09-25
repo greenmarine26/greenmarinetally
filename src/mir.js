@@ -2287,7 +2287,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     if (a && !WEAK_TEXT.test(String(a)) && !sameCatch) {
       out.text = a; out.via = 'translate';
       if (!fromMemo) {
-        if (rec.confidence >= 0.7) _learn(q, rec.canonical, who, rec.window);   // 자신 없는 번역은 전 기기 공용 사전에 안 적는다(감사)
+        if (rec.confidence >= 0.9) _learn(q, rec.canonical, who, rec.window);   // 3.60-19 (다수결 V9): 0.7 → 0.9 — «6배의 작업 현황»→«6번 베이»(0.85)처럼 음성 오인이 공용 사전에 굳었다. 0.7~0.9 는 결산(mir_misses) 후보로만.
         _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical, how: opts.weakText ? 'weak→translate' : 'null→translate' });
       }
       return out;

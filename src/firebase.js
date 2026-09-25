@@ -101,16 +101,45 @@ export async function fbCreateVoyage(voyageKey, info) {
   }
 }
 
-export async function fbDeleteVoyage(voyageKey) {
+//  ★ 3.60-19 (진단 T11 · 다수결 V3=B) — **정본 삭제는 휴지통(archive_trash) 경유를 강제한다.** 삭제 권한은 안 바꾼다.
+//    종전엔 홈 «삭제»·수석 «완료 저장» 뒤 remove 가 백업 없이 지웠다. 이제 지우기 전에 그 노드를 `archive_trash/{키}` 에 그대로 복사하고
+//    되읽기(_deletedAt)가 확인될 때만 지운다 — 복사가 안 되면 던지고 지우지 않는다(규범 §5-1 «척별 백업 · 되읽기 대조»).
+//    ⚠ 보관소(archive)·선박 통계(ships/stats)는 건드리지 않는다 — «잘못 만든 항차 제거» 가 통계에 완료 100% 로 굳으면 안 된다(투표자 3).
+//    이미 fbArchiveVoyageBeforeDelete 로 보관한 호출부(수석 완료 저장·홈 자동 정리)는 `{ archived: true }` 로 휴지통 복사를 건너뛴다.
+async function _trashCopy(voyageKey, sub, what) {
+  const path = sub ? `voyages/${voyageKey}/${sub}` : `voyages/${voyageKey}`;
+  const snap = await get(ref(db, path));
+  const val = snap.exists() ? snap.val() : null;
+  if (val == null) return;   // 지울 것이 없다
+  const key = `${voyageKey}${sub ? '__' + sub : ''}__${Date.now()}`;
+  //  ⚠ 사진(photos/{ts}.data base64 — 한 장 2~4MB)은 본문 set 에 싣지 않는다. fbArchiveVoyageBeforeDelete 2266 주석의 실측(STMJ 2643E — 10~20MB 를 set 하나로 밀면
+  //    Firebase 가 못 받고 연결이 끊겨 재연결마다 같은 쓰기를 되풀이하는 오프라인 고리)과 같은 틀 — 본문 먼저, 사진은 한 건씩(감사 C1).
+  const { photos: _photos, ...body } = (val && typeof val === 'object') ? val : {};
+  const payload = { ...body, _deletedAt: Date.now(), _deletedBy: String(getMeToday() || ''), _deletedWhat: what || (sub || 'voyage'), _from: path, _photoCount: _photos && typeof _photos === 'object' ? Object.keys(_photos).length : 0 };
+  await set(ref(db, `archive_trash/${key}`), payload);
+  const back = await get(ref(db, `archive_trash/${key}/_deletedAt`));
+  if (!back.exists()) throw new Error(`${what || '항차'} 삭제 전 휴지통 복사를 확인하지 못해 지우지 않았습니다 — 연결을 확인하고 다시 해 주세요.`);
+  if (_photos && typeof _photos === 'object') {
+    for (const k of Object.keys(_photos)) {
+      try { await set(ref(db, `archive_trash/${key}/photos/${k}`), _photos[k]); }
+      catch (e) { console.warn(`[휴지통] 사진 ${k} 복사 실패 — 본문은 복사됐다:`, e); }
+    }
+  }
+}
+export async function fbDeleteVoyage(voyageKey, opts = {}) {
+  assertCanWork('항차 삭제');   // 3.60-19 (감사 E1): 화면은 단추를 숨기지만 진짜 문지기는 쓰는 자리(3.51)
+  if (!opts.archived) await _trashCopy(voyageKey, '', '항차');
   await remove(voyageRef(voyageKey));
 }
 
 // M3.4.2: 양하 또는 선적 한 모드만 삭제 (다른 모드는 유지)
 // 사용 예: 같은 항차에 양하/선적 둘 다 있는데 양하만 삭제
-export async function fbDeleteSection(voyageKey, mode) {
+export async function fbDeleteSection(voyageKey, mode, opts = {}) {
   if (mode !== 'discharge' && mode !== 'loading') {
     throw new Error('mode must be discharge or loading');
   }
+  assertCanWork(mode === 'loading' ? '선적 삭제' : '양하 삭제');   // 3.60-19 (감사 E1)
+  if (!opts.archived) await _trashCopy(voyageKey, mode, mode === 'loading' ? '선적' : '양하');
   await remove(ref(db, `voyages/${voyageKey}/${mode}`));
 }
 
@@ -326,6 +355,7 @@ export async function fbSnoozeHold(voyageKey, mode, cns, doneAt) {
 
 // 양하/선적 섹션 데이터 저장 (mode = 'discharge' | 'loading')
 export async function fbSaveSectionData(voyageKey, mode, data) {
+  assertCanWork('항차 자료 등록');   // 3.60-19 (진단 M18 · 다수결 V4): 3.51 «조회만은 보기만» — 업로드도 정본 쓰기다. 호출부는 항차 업로드 화면·홈 예보 카드뿐(자동 경로 없음, 감사 확인).
   await update(sectionRef(voyageKey, mode), data);
 }
 
@@ -345,6 +375,7 @@ async function _touchDataAt(voyageKey, mode) {
 }
 
 export async function fbSaveEdiContainers(voyageKey, mode, containersObj) {
+  assertCanWork('EDI 업로드');   // 3.60-19 (진단 M18 · 다수결 V4): 3.51 «조회만은 보기만» — 업로드도 정본 쓰기다. 호출부는 항차 업로드 화면·홈 예보 카드뿐(자동 경로 없음, 감사 확인).
   await chunkedReplace(`voyages/${voyageKey}/${mode}/ediContainers`, containersObj);
   await _touchDataAt(voyageKey, mode);
 }
@@ -354,6 +385,7 @@ export async function fbSaveEdiContainers(voyageKey, mode, containersObj) {
 //   meta: { uploadedAt, fileName, parserVersion } 등 메타데이터
 //   path: voyages/{key}/{mode}/raw/edi
 export async function fbSaveEdiRaw(voyageKey, mode, rawText, meta) {
+  assertCanWork('EDI 원문 저장');   // 3.60-19 (진단 M18 · 다수결 V4): 3.51 «조회만은 보기만» — 업로드도 정본 쓰기다. 호출부는 항차 업로드 화면·홈 예보 카드뿐(자동 경로 없음, 감사 확인).
   if (!rawText) return;
   const r = ref(db, `voyages/${voyageKey}/${mode}/raw/edi`);
   await set(r, {
@@ -446,6 +478,7 @@ function _hasFieldWork(o) {
 }
 
 export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
+  assertCanWork('리스트 업로드');   // 3.60-19 (진단 M18 · 다수결 V4): 3.51 «조회만은 보기만» — 업로드도 정본 쓰기다. 호출부는 항차 업로드 화면·홈 예보 카드뿐(자동 경로 없음, 감사 확인).
   const path = `voyages/${voyageKey}/${mode}/records`;
   let cur = {};
   try { cur = (await get(ref(db, path))).val() || {}; }
@@ -547,6 +580,7 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
 
 // X-RAY (양하만)
 export async function fbSaveXrayList(voyageKey, xrayObj) {
+  assertCanWork('X-RAY 리스트 업로드');   // 3.60-19 (진단 M18 · 다수결 V4): 3.51 «조회만은 보기만» — 업로드도 정본 쓰기다. 호출부는 항차 업로드 화면·홈 예보 카드뿐(자동 경로 없음, 감사 확인).
   await chunkedReplace(`voyages/${voyageKey}/discharge/xrayList`, xrayObj);
 }
 
@@ -2225,6 +2259,7 @@ export function tallyVoyagesByShip(voyages) {
 //   삭제돼도 ships/{imo}/stats에 총 양하/선적 대수 영구 보존.
 export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   if (!voyage) return false;
+  assertCanWork('완료 저장');   // 3.60-19 (재감사 N1): 보관·통계·삭제가 한 묶음이라 문지기는 맨 앞 — 조회만이면 보관소·선박 통계도 안 적고 멈춘다(반쪽 쓰기 없음)
   // V9.57(G2): 보관소 평택분 집계를 화면 규칙과 통일 — 모드별(양하=POD평택, 선적=POL평택) + Set 중복 제거.
   //   종전 POL∨POD 판정은 평택발 타항행/타항발 평택행이 양쪽에 이중 집계됐다(옛 규칙 잔존).
   //   _ptkCountOfSection(수석대시보드 집계와 동일 함수) 재사용으로 단일 소스화.
@@ -2381,22 +2416,13 @@ export async function fbListArchive() {
     }));
     return out.sort((a, b) => b.archivedAt - a.archivedAt);
   } catch (e) {
-    console.warn('[fbListArchive] shallow 목록 실패 — 전체 읽기로 폴백:', e);
+    //  3.60-19 (진단 M40 · 검수사 2026-09-25 «보관소를 검수사가 열어야 할 이유가 없을텐데요»): 종전엔 여기서 `archive` 전체(실측 247MB · 297항차)를
+    //    통째로 받는 폴백으로 갔다. 목록은 필수 화면이 아니므로 폴백을 떼고 못 읽었다고 던진다 — 호출부(수석 보관함)가 «다시 시도» 로 말한다.
+    console.warn('[fbListArchive] shallow 목록 실패:', e);
+    const err = new Error('보관소 목록을 못 읽었어요 — 연결을 확인하고 다시 열어 주세요.');
+    err.archiveList = true;
+    throw err;
   }
-  const snap = await get(ref(db, 'archive'));
-  if (!snap.exists()) return [];
-  const out = [];
-  for (const [key, v] of Object.entries(snap.val() || {})) {
-    const info = v.info || {};
-    out.push({
-      voyageKey: key,
-      vsl: info.vsl || key.split('_')[0] || '',
-      archivedAt: v._archivedAt || 0,
-      discharge_ptk: v._discharge_ptk || 0,
-      loading_ptk: v._loading_ptk || 0,
-    });
-  }
-  return out.sort((a, b) => b.archivedAt - a.archivedAt);
 }
 
 // ── TallyOne 1.6: 보관소 항차 한 건 통째 읽기 (마감 텔리 생성용) ──
@@ -2446,13 +2472,16 @@ export async function fbListTallyPending() {
 // ── M7.18b: 1년 경과 archive 자동 정리 ──
 //   완료된 항차는 감사 자료로 1년 보관 후 자동 삭제. 앱 시작 시 1회 호출 권장.
 export async function fbCleanupArchive(maxAgeDays = 365) {
-  const snap = await get(ref(db, 'archive'));
-  if (!snap.exists()) return 0;
+  //  3.60-19 (진단 M40): 종전엔 `archive` 전체(실측 247MB)를 통째로 읽어 날짜만 봤다 — 키는 shallow 로, 날짜는 키마다 `_archivedAt` 만 읽는다. shallow 가 안 되면 던진다(통째 읽기 폴백 없음).
+  const res = await fetch(`${firebaseConfig.databaseURL}/archive.json?shallow=true`);
+  if (!res.ok) throw new Error(`보관소 목록을 못 읽었어요(HTTP ${res.status}) — 정리를 하지 않았습니다.`);
+  const keys = Object.keys((await res.json()) || {});
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
   let removed = 0;
-  for (const [key, v] of Object.entries(snap.val() || {})) {
-    const at = v._archivedAt || 0;
-    if (at && at < cutoff) {
+  for (const key of keys) {
+    const at = await get(ref(db, `archive/${key}/_archivedAt`));
+    const t = (at.exists() && Number(at.val())) || 0;
+    if (t && t < cutoff) {
       await set(ref(db, `archive/${key}`), null);
       removed++;
     }
@@ -2540,6 +2569,7 @@ export async function fbAssignDeckSlot(voyageKey, mode, slotKey, val) {
 
 // V9.22: RZOR 덱 스토우지 플랜 저장 (선사 rzdf 플랜 파싱분)
 export async function fbSetStowagePlan(voyageKey, mode, plan) {
+  assertCanWork('덱플랜 업로드');   // 3.60-19 (진단 M18 · 다수결 V4): 3.51 «조회만은 보기만» — 업로드도 정본 쓰기다. 호출부는 항차 업로드 화면·홈 예보 카드뿐(자동 경로 없음, 감사 확인).
   //  3.60-03 (진단 M15): set → update — 덱플랜을 다시 올려도 검수원이 지정한 `stowagePlan/assign/*` 이 남는다.
   await update(ref(db, `voyages/${voyageKey}/${mode}/stowagePlan`), { ...plan, _at: Date.now() });
 }

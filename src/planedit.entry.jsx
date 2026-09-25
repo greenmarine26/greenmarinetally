@@ -20,10 +20,10 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
-import { parseBAPLIE, parseListExcel, isoToLabel, isPyeongtaekPort, getContainerColorKey, buildContainerColorMap } from './utils.js';
+import { parseBAPLIE, parseListExcel, isoToLabel, getContainerColorKey, buildContainerColorMap } from './utils.js';
 import { extractShipInfo, getShipBayDictData } from './shipStructure.js';
 import { enrichBayDef } from './bayDictAutoEnrich.js';
-import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
+import { isUserOwnedBayDict, isPtk as _isPtkOne } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { autoPairBays, generatePdfBays, buildPosMap, computeBayRenderData, defaultGetSelfMark } from './cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './components/PrintableCargoPlanV2.jsx';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
@@ -411,7 +411,7 @@ function App() {
     return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || 'KRPTK';
   }, [containers]);
   const getColorKey = useCallback((c) => getContainerColorKey(c, 'loading'), []);
-  const getIsThrough = useCallback((c) => !(c._inList || isPyeongtaekPort(c.pol)), []);
+  const getIsThrough = useCallback((c) => !_isPtkOne(c, 'loading'), []);   // 3.60-19: 한 벌
 
   const mk = useCallback((key) => (key && matrixBays.length
     ? computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, defaultGetSelfMark, {}, getColorKey, getIsThrough, dictData?.bayDef, dictData?.code)
