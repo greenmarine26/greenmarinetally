@@ -1,0 +1,457 @@
+{
+ "source": "RTDB voyages/RZOR_R105E/discharge (2026-09-26 00:10 GET) + archive/RZOR_R103E TGHU4437784",
+ "edi": {
+  "CAAU4287114": {
+   "cn": "CAAU4287114",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "CHIU9026614": {
+   "cn": "CHIU9026614",
+   "iso_edi": "45R1",
+   "bay": "14"
+  },
+  "CICU9635056": {
+   "cn": "CICU9635056",
+   "iso_edi": "45R1",
+   "bay": "18"
+  },
+  "CICU9635122": {
+   "cn": "CICU9635122",
+   "iso_edi": "45R1",
+   "bay": "06"
+  },
+  "CICU9635138": {
+   "cn": "CICU9635138",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "CICU9647550": {
+   "cn": "CICU9647550",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "CICU9647566": {
+   "cn": "CICU9647566",
+   "iso_edi": "45R1",
+   "bay": "14"
+  },
+  "CICU9647674": {
+   "cn": "CICU9647674",
+   "iso_edi": "45R1",
+   "bay": "20"
+  },
+  "CICU9647709": {
+   "cn": "CICU9647709",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "CICU9647735": {
+   "cn": "CICU9647735",
+   "iso_edi": "45R1",
+   "bay": "20"
+  },
+  "CICU9647761": {
+   "cn": "CICU9647761",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "CICU9647817": {
+   "cn": "CICU9647817",
+   "iso_edi": "45R1",
+   "bay": "16"
+  },
+  "CICU9647838": {
+   "cn": "CICU9647838",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "CICU9647859": {
+   "cn": "CICU9647859",
+   "iso_edi": "45R1",
+   "bay": "20"
+  },
+  "SEGU9520044": {
+   "cn": "SEGU9520044",
+   "iso_edi": "45R1",
+   "bay": "16"
+  },
+  "SEGU9578025": {
+   "cn": "SEGU9578025",
+   "iso_edi": "45R1",
+   "bay": "04"
+  },
+  "SEGU9578745": {
+   "cn": "SEGU9578745",
+   "iso_edi": "45R1",
+   "bay": "18"
+  },
+  "SEKU9414432": {
+   "cn": "SEKU9414432",
+   "iso_edi": "45R1",
+   "bay": "20"
+  },
+  "SEKU9414535": {
+   "cn": "SEKU9414535",
+   "iso_edi": "45R1",
+   "bay": "18"
+  },
+  "SPSU8001070": {
+   "cn": "SPSU8001070",
+   "iso_edi": "45R1",
+   "bay": "22"
+  },
+  "CIMU2987306": {
+   "cn": "CIMU2987306",
+   "iso_edi": "40RF",
+   "bay": "18"
+  },
+  "CIMU2987311": {
+   "cn": "CIMU2987311",
+   "iso_edi": "40RF",
+   "bay": "20"
+  },
+  "CIMU2987327": {
+   "cn": "CIMU2987327",
+   "iso_edi": "40RF",
+   "bay": "16"
+  },
+  "CICU8416829": {
+   "cn": "CICU8416829",
+   "iso_edi": "4500",
+   "bay": "24"
+  },
+  "CICU8416876": {
+   "cn": "CICU8416876",
+   "iso_edi": "4500",
+   "bay": "20"
+  },
+  "CICU8418204": {
+   "cn": "CICU8418204",
+   "iso_edi": "4500",
+   "bay": "24"
+  },
+  "CICU8418420": {
+   "cn": "CICU8418420",
+   "iso_edi": "4500",
+   "bay": "22"
+  },
+  "CICU8418610": {
+   "cn": "CICU8418610",
+   "iso_edi": "4500",
+   "bay": "12"
+  },
+  "CICU8418647": {
+   "cn": "CICU8418647",
+   "iso_edi": "4500",
+   "bay": "06"
+  },
+  "TGHU4437784": {
+   "cn": "TGHU4437784",
+   "iso_edi": "40GP",
+   "bay": "04"
+  }
+ },
+ "rec": {
+  "CAAU4287114": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CAAU4287114"
+  },
+  "CHIU9026614": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CHIU9026614"
+  },
+  "CICU9635056": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9635056"
+  },
+  "CICU9635122": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9635122"
+  },
+  "CICU9635138": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9635138"
+  },
+  "CICU9647550": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647550"
+  },
+  "CICU9647566": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647566"
+  },
+  "CICU9647674": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647674"
+  },
+  "CICU9647709": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647709"
+  },
+  "CICU9647735": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647735"
+  },
+  "CICU9647761": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647761"
+  },
+  "CICU9647817": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647817"
+  },
+  "CICU9647838": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647838"
+  },
+  "CICU9647859": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU9647859"
+  },
+  "SEGU9520044": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "SEGU9520044"
+  },
+  "SEGU9578025": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "SEGU9578025"
+  },
+  "SEGU9578745": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "SEGU9578745"
+  },
+  "SEKU9414432": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "SEKU9414432"
+  },
+  "SEKU9414535": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "SEKU9414535"
+  },
+  "SPSU8001070": {
+   "iso": "45R1",
+   "iso_carrier": "40RE",
+   "iso_customs": "45RE",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "SPSU8001070"
+  },
+  "CIMU2987306": {
+   "iso": "40RF",
+   "iso_carrier": "40RF",
+   "iso_customs": "42RF",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": true,
+   "fe": "F",
+   "cn": "CIMU2987306"
+  },
+  "CIMU2987311": {
+   "iso": "40RF",
+   "iso_carrier": "40RF",
+   "iso_customs": "42RF",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": true,
+   "fe": "F",
+   "cn": "CIMU2987311"
+  },
+  "CIMU2987327": {
+   "iso": "40RF",
+   "iso_carrier": "40RF",
+   "iso_customs": "42RF",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": true,
+   "fe": "F",
+   "cn": "CIMU2987327"
+  },
+  "CICU8416829": {
+   "iso": "45G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "44GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU8416829"
+  },
+  "CICU8416876": {
+   "iso": "45G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "44GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU8416876"
+  },
+  "CICU8418204": {
+   "iso": "45G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "44GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU8418204"
+  },
+  "CICU8418420": {
+   "iso": "45G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "44GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU8418420"
+  },
+  "CICU8418610": {
+   "iso": "45G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "44GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU8418610"
+  },
+  "CICU8418647": {
+   "iso": "45G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "44GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "CICU8418647"
+  },
+  "TGHU4437784": {
+   "iso": "42G1",
+   "iso_carrier": "40HC",
+   "iso_customs": "42GP",
+   "_rz": true,
+   "_customs": true,
+   "mkcon": false,
+   "fe": "F",
+   "cn": "TGHU4437784"
+  }
+ }
+}

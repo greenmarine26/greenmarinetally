@@ -799,6 +799,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       //  ★ 3.53: POD 확정 표식 — **여기 없으면 저장돼도 컨 상세가 «확정됨» 을 못 읽어** 계속 고르라고 묻는다.
       //    위 세 사고(엠티실·리퍼 온도·규격 3자)와 같은 자리다. records 에 새 필드를 만들면 이 목록을 확인할 것.
       'pod_pick', 'pod_pick_label', 'pod_picked_by', 'pod_picked_at', 'pod_orig',
+      '_rz',           // 3.61-01: RZOR(RIZHAO 판독) 표식 — 규격 3자 대조(utils.isoTriad)가 이걸 보고 선사 «40RE·40RF» 를 높이 대조에서 뺀다. 여기 없으면 진단은 0인데 컨 상세만 고르라고 묻는다(감사 C-1 실측 20/20).
       'sl_conflict',   // 1.8-03: 리스트끼리 실번호가 다를 때 두 값 모두 — 배지가 이걸 읽는다
       '_source',       // 2.06-06: 이 컨을 채운 리스트 파일명 — 세관리스트 존재 판정(sealIssuesOf)이 읽는다
       'sl_src',        // 2.06-07: 채택 씰(sl)의 진짜 출처 — _source 는 마지막 파일로 덮이므로 따로 지킨다
