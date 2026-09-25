@@ -114,6 +114,28 @@ export function subIndex(fmt, op) {
 
 /** 3.31: 그 항차·그 모드에 실제로 있는 선사 코드를 보고 별칭 함수를 만든다.
  *  자료가 자식을 이미 갈라 놨을 때만 별칭을 쓴다 — `opAliasNeeds` 주석 참조. */
+//  3.60-21 (검수사 2026-09-25 18:01 «자료가 있는데 분류가 잘못된것입니다» — 메일 화면: «STMJ 2640W CLL (CSC).xls · (DWS).xls · (TJM).xls», «CDL STMJ 2639E CSC-DWS.xlsx · DWIC-DWS.xlsx»,
+//    «CLL_WDF_SITC MOJI», «CLL STSE EAS 2662W», «STSE 2669E SIT.xls»): 선사별로 따로 오는 리스트는 **파일 이름이 선사**다. 리스트 안에 선사 칸이 없어 합본이 op 를 비웠고
+//    마감텔리가 DWS 를 (CSC)/(DSL) 로 못 갈랐다(STSE 2653E·STMJ 2639E 실물 대조). 이름의 낱말이 아는 선사 코드(사전의 ops·subOps·opAlias 키)와 같으면 그 선사.
+//    자식(CSC)과 부모(DWS)가 같이 있으면 자식(«CSC-DWS» = CSC). «DWIC»(두우 자체분) 은 DWS 로 — 사전 opAlias DWS→DSL 이 CSC 가 있을 때 DSL 로 찍는다. 모르면 ''(안 지어낸다).
+const _FILE_OP_EXTRA = { DWIC: 'DWS' };
+//  3.60-21 감사(M-3·N-1): SOC 는 선사 코드가 아니다(3.51-02) — 파일 이름에 있어도 선사로 잡지 않는다.
+//    «자식 우선»의 자식은 어느 배에서든 부모이기도 한 코드(DWS: STSE 부모·TMPZ 자식)를 뺀 순수 자식(CSC·DSL·MAS)이다.
+const _FILE_OP_NEVER = new Set(['SOC']);
+export function opFromListFileName(name) {
+  const toks = String(name || '').toUpperCase().replace(/\.[A-Z0-9]+$/, '').split(/[^A-Z0-9]+/).filter(Boolean);
+  const known = new Set(); const child = new Set(); const parent = new Set();
+  for (const f of Object.values(TALLY_FORMATS)) {
+    (f.ops || []).forEach((o) => known.add(o));
+    Object.entries(f.subOps || {}).forEach(([pk, arr]) => { parent.add(pk); arr.forEach((o) => { known.add(o); child.add(o); }); });
+    Object.keys(f.opAlias || {}).forEach((o) => known.add(o));
+  }
+  _FILE_OP_NEVER.forEach((o) => known.delete(o));
+  const hits = toks.map((t) => _FILE_OP_EXTRA[t] || t).filter((t) => known.has(t));
+  if (!hits.length) return '';
+  return hits.find((t) => child.has(t) && !parent.has(t)) || hits[0];
+}
+
 export function shipOpMapper(vslCode, opList) {
   const norm = (op) => String(op || '').toUpperCase().trim();
   const fmt = getTallyFormat(vslCode);

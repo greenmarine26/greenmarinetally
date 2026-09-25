@@ -51,6 +51,8 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
       const R = T.computeTallyData(voyage);
       const osTxt = JSON.stringify(R.osIn);
       ok('computeTallyData 총 216 (Final Work 합 = 실물 · 종전 222)', R && R.totals && R.totals.dis && R.totals.dis.n === 216, JSON.stringify(R.totals && R.totals.dis));
+      ok('Final Work Remarks 줄 — «* 20\'FR E x 8 ( 2 BUNDLE ) → 20\'F x 2 CALCULATION» (검수사 «2개 이상만 묶여 있으면 풀 1개»)', R.bundleNotes && R.bundleNotes.dis.length === 1 && R.bundleNotes.dis[0] === "* 20'FR E x 8 ( 2 BUNDLE ) → 20'F x 2 CALCULATION" && R.bundleNotes.load.length === 0, JSON.stringify(R.bundleNotes));
+      ok('OS-IN 비고에 «FR x 8 ( 2 BUNDLE )» — 선사 요약 줄과 20 EMPTY 행 태그 둘 다', Array.isArray(R.osIn.remarks) && R.osIn.remarks.some((l) => /^SKR :/.test(l) && /FR x 8 \( 2 BUNDLE \)/.test(l)) && R.osIn.rows.some((r) => r.size === "20'" && r.fe === 'EMPTY' && r.frb === 8 && r.frbN === 2), JSON.stringify(R.osIn.rows.filter((r) => r.fe === 'EMPTY')));
       const pf = R.perf && R.perf.inbound && R.perf.inbound.SKR;
       ok('Performance 시트도 같은 목록 — SKR 20F 115 · 20E 없음 (실물 IN BOUND SKR 115·101·216, 감사 중 1)', pf && pf.F && pf.F['20'] === 115 && !(pf.E && pf.E['20']), JSON.stringify(pf));
       const osE20 = (R.osIn && R.osIn.rows ? R.osIn.rows : (Array.isArray(R.osIn) ? R.osIn : [])).filter((r) => r.size === "20'" && r.fe === 'EMPTY').reduce((a, r) => a + (r.manifested || 0), 0);
@@ -72,8 +74,41 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
       ok('L2G1 → HC (TMPZ 2020E 양하 47대 실물 HC 칸)', S.tallySizeCol({ iso: 'L2G1' }) === 'HC', S.tallySizeCol({ iso: 'L2G1' }));
       ok('L5G1 · L5GP · 9500 · 45G1(라벨 40HC) — L5G1/9500 은 45\', 45G1 은 HC 종전 그대로', S.tallySizeCol({ iso: 'L5G1' }) === '45' && S.tallySizeCol({ iso: '9500' }) === '45' && S.tallySizeCol({ iso: '45G1' }) === 'HC' && S.tallySizeCol({ iso: '4500' }) === 'HC', [S.tallySizeCol({ iso: 'L5G1' }), S.tallySizeCol({ iso: '9500' }), S.tallySizeCol({ iso: '45G1' })].join('/'));
       ok('22G1 · 4310 · 2230 종전 그대로(20 · 40 · 20)', S.tallySizeCol({ iso: '22G1' }) === '20' && S.tallySizeCol({ iso: '4310' }) === '40' && S.tallySizeCol({ iso: '2230' }) === '20');
+      //  3.60-21 장금 SKHU 번호 규칙(검수사 17:55)
+      ok('SKHU9508980·SKHU9552133 (EDI 22GP) → HC — PCSZ 2620E 실물', S.tallySizeCol({ cn: 'SKHU9508980', iso: '22GP' }) === 'HC' && S.tallySizeCol({ cn: 'SKHU9552133', iso: '22G1' }) === 'HC');
+      ok('SKHU6xxxxxx 42G1 → HC · SKHU2xxxxxx 22G1 → 20 · SKHU1640372 22PE(엠티 플랫랙) → 20 · SKLU 22G1 → 20 · SKHU 4510 는 원래 HC', S.tallySizeCol({ cn: 'SKHU6123456', iso: '42G1' }) === 'HC' && S.tallySizeCol({ cn: 'SKHU2840647', iso: '22G1' }) === '20' && S.tallySizeCol({ cn: 'SKHU1640372', iso: '22PE' }) === '20' && S.tallySizeCol({ cn: 'SKLU9508980', iso: '22G1' }) === '20' && S.tallySizeCol({ cn: 'SKHU6123456', iso: '4510' }) === 'HC');
     }
-    ok('APP_VERSION 이 3.60-20 이상', /APP_VERSION = 'TallyOne 3\.60-20'|\s3\.60-20 \*\*/.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8')));
+    console.log('■ ④ 선사별 리스트는 파일 이름이 선사(검수사 18:01 «자료가 있는데 분류가 잘못된것입니다») — CSC/DSL 가르기');
+    {
+      fs.writeFileSync(path.join(TMP, 'e4.mjs'), `export { opFromListFileName, shipOpMapper } from "${ROOT}/src/data/tallyFormats.js";\nexport { computeTallyData } from "${ROOT}/src/tallyReport.js";\n`);
+      execSync(`npx esbuild "${path.join(TMP, 'e4.mjs')}" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --log-level=error --outfile="${path.join(TMP, 'b4.cjs')}"`, { cwd: ROOT, stdio: 'pipe' });
+      const F = require(path.join(TMP, 'b4.cjs'));
+      const cases = [['STMJ 2640W CLL (CSC).xls', 'CSC'], ['STSE 2662W CLL (DWS).xls', 'DWS'], ['STSE 2662W CLL (TJM).xls', 'TJM'], ['CDL STMJ 2639E CSC-DWS.xlsx', 'CSC'], ['CDL STMJ 2639E DWIC-DWS.xlsx', 'DWS'], ['CDL PCSG 2653E TJM.xlsx', 'TJM'], ['CLL_WDF_SITC MOJI 2640W.xls', 'WDF'], ['CLL STSE EAS 2662W.xls', 'EAS'], ['STSE 2669E SIT.xls', 'SIT'], ['STSE 2669E WDG CDL.xlsx', 'WDG'],
+        ['STSD 2669E CDL.xls', ''], ['2640WLOADLIST.xlsx', ''], ['STSE2662WCN_CNTAO_CONTAINERLIST.XLS', ''], ['Excel_20260907175812.xls', ''], ['KBTR 2607W (Excel)1.xls', ''], ['MCSC 635S LIST.xlsx', ''], ['DXQD 2632E NOLIST.xls', ''],
+        ['TMPZ 2020E SOC.xls', ''], ['STSE 2662W DWS (CSC).xls', 'CSC'], ['STSE 2662W DWS-DSL.xlsx', 'DSL']];   // 감사 M-3·N-1: SOC 는 선사가 아니다 · 순수 자식 우선(토큰 순서 무관)
+      const _ar = fs.readFileSync(path.join(ROOT, 'src/autoRegApi.js'), 'utf8');
+      ok('감사 M-1: 자동등록(autoRegApi) 리스트 분기에도 파일명 선사 규칙', /opFromListFileName\(name\)/.test(_ar) && /_opFromFile/.test(_ar));
+      const _vp = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');
+      ok('감사 M-2: 파일명 선사가 기존 선사(세관 선사부호)를 덮지 않는다(VoyagePage 병합)', /k === 'op' && r\._opFromFile && prev\.op/.test(_vp));
+      const _ma = fs.readFileSync(path.join(ROOT, 'src/mergeApi.js'), 'utf8');
+      ok('감사 M-2: mergeApi 도 같은 보존', /_pv\._opFromFile/.test(_ma));
+      for (const [nm, want] of cases) ok(`«${nm}» → ${want || '(모름)'}`, F.opFromListFileName(nm) === want, JSON.stringify(F.opFromListFileName(nm)));
+      //  STSE: CSC 가 있으면 DWS → DSL (사전 opAlias·opAliasNeeds 그대로)
+      const mp = F.shipOpMapper('STSE', ['SIT', 'CSC', 'DWS', 'TJM']);
+      ok('STSE 에 CSC 가 있으면 DWS → DSL, CSC 는 CSC', mp('DWS') === 'DSL' && mp('CSC') === 'CSC' && mp('SIT') === 'SIT');
+      const mp2 = F.shipOpMapper('STSE', ['SIT', 'DWS']);
+      ok('CSC 가 없으면 DWS 그대로(근거 없이 안 가른다 — 3.31)', mp2('DWS') === 'DWS');
+      //  마감텔리 행: EDI 선사 DWS 인 컨 셋 중 리스트가 CSC·DWS 로 가른 것 → Final Work (CSC) 1 · (DSL) 2
+      const mk = (cn, op) => ({ cn, iso: '22G1', fe: 'F', pol: 'KRPTK', pod: 'CNTAO', op, bay: '5', row: '01', tier: '82', _mode: 'loading' });
+      const v = { info: { vsl: 'STSE', voy_l: '2662W' }, reports: {}, discharge: { ediContainers: {}, records: {}, completed: {} },
+        loading: { ediContainers: { A1: mk('SEGU1000001', 'DWS'), A2: mk('SEGU1000002', 'DWS'), A3: mk('SEGU1000003', 'DWS'), B1: mk('SEGU2000001', 'SIT') },
+          records: { SEGU1000001: { cn: 'SEGU1000001', op: 'CSC', _source: 'STSE 2662W CLL (CSC).xls' }, SEGU1000002: { cn: 'SEGU1000002', op: 'DWS', _source: 'STSE 2662W CLL (DWS).xls' }, SEGU1000003: { cn: 'SEGU1000003', op: 'DWS', _source: 'STSE 2662W CLL (DWS).xls' } }, completed: {} } };
+      const R = F.computeTallyData(v);
+      const line = (op, sub) => R.rows.find((r) => r.op === op && (sub ? r.subOp === sub : !r.subOp) && r.fe === 'F');
+      const c1 = R.rows.filter((r) => r.fe === 'F' && r.load && r.load['20']).map((r) => `${r.op}${r.subOp ? '(' + r.subOp + ')' : ''}=${r.load['20']}`).join(' ');
+      ok(`Final Work 선적 — DWS (CSC) 1 · (DSL) 2 · SIT 1  실측: ${c1}`, /CSC\)=1/.test(c1) && /DSL\)=2/.test(c1) && /SIT=1/.test(c1), JSON.stringify(R.rows.filter((r) => r.load && r.load['20']).map((r) => [r.op, r.subOp, r.fe, r.load])));
+    }
+    ok('APP_VERSION 이 3.60-20 이상', /APP_VERSION = 'TallyOne 3\.60-2[0-9]'|\s3\.60-20 \*\*/.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8')));
 
     console.log(`\n3.60-20 연막검사: ${n - bad}/${n}`);
     process.exit(bad ? 1 : 0);

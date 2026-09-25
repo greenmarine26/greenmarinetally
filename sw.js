@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-20';
-const NOTE = '마감텔리를 수석 실물과 선박별로 대조해 맞췄습니다 · 같은 칸에 겹친 엠티 플랫랙 묶음은 FULL 1대로 셉니다 · NSFR·DPRT·SWDN·NSDC 선사 이름을 실물 코드로 찍습니다 · L2G1 은 HC 칸입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-21';
+const NOTE = '마감텔리를 수석 실물과 선박별로 대조해 맞췄습니다 · 같은 칸에 겹친 엠티 플랫랙 묶음은 FULL 1대로 셉니다 · NSFR·DPRT·SWDN·NSDC 선사 이름을 실물 코드로 찍습니다 · L2G1 은 HC 칸입니다 · 묶음이 있으면 Remarks 에 묶음 계산 문구를 적습니다 · 장금 SKHU 600번대 이상은 40피트 하이큐입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

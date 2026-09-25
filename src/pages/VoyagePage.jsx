@@ -76,7 +76,7 @@ import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';
-import { shipOpMapper } from '../data/tallyFormats.js';
+import { shipOpMapper, opFromListFileName } from '../data/tallyFormats.js';   // 3.60-21: 파일 이름 선사
 import PrintableCargoPlanV2 from '../components/PrintableCargoPlanV2.jsx';   // 2.87-01: 미르가 «카고플랜 보여줘» 하면 이것만 띄운다   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
@@ -4179,9 +4179,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         //   안 실어서, 세관리스트(Excel_타임스탬프)를 올려도 세관 기준 판정(sealIssuesOf hasCustoms)이
         //   인식 못 하고 «세관리스트를 첨부해 주세요»가 계속 떴다. 파일명을 _source 로 싣는다 —
         //   fbSaveListRecords 가 이걸로 sl_src(채택 씰 출처)·sl_conflict 출처를 기록한다.
+        const _fop = opFromListFileName(file.name);   // 3.60-21: 선사별 리스트는 파일 이름이 선사 — 리스트에 선사 칸이 없으면 이름으로
         for (const r of records) {
           if (!r.cn) continue;
           r._source = file.name;
+          if (_fop && !(r.op && String(r.op).trim())) { r.op = _fop; r._opFromFile = true; }
           if (cnMap[r.cn]) {
             if (skipExisting) continue;  // 신규만 모드 → 기존 유지
             // M8.08: 스마트 병합 — 새 값(주로 세관리스트)이 비어있으면 기존 값(선사리스트) 보존.
@@ -4192,6 +4194,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             for (const [k, v] of Object.entries(r)) {
               if (v === '' || v == null) continue;          // 빈 새 값은 기존 보존
               if (k === 'tmp' && (v === '' || r.tmp_missing)) continue;  // 빈 온도 보존
+              if (k === 'op' && r._opFromFile && prev.op && String(prev.op).trim() && !prev._opFromFile) continue;   // 3.60-21 감사 M-2: 파일명 선사는 세관 선사부호·앞 파일의 선사를 덮지 않는다
+              if (k === '_opFromFile' && prev.op && String(prev.op).trim() && !prev._opFromFile) continue;
+              if (k === 'op' && !r._opFromFile) merged._opFromFile = false;   // 실제 선사 칸이 들어오면 파일명 표식을 지운다(감사 M-2b)
               merged[k] = v;
             }
             // 실번호: 한쪽이 다른 쪽의 앞부분이면서 더 길면 긴 쪽 채택(잘림 보정).

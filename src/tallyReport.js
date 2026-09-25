@@ -11,6 +11,12 @@ export const SIZE_COLS = ['20', '40', 'HC', '45'];
 
 /** 텔리 규격 4분류 — 20' / 40' / HC(하이큐브·HC리퍼 포함) / 45' (실측 검증 규칙) */
 export function tallySizeCol(c) {
+  const base = _sizeColBase(c);
+  //  3.60-21: 장금 SKHU 번호 규칙(아래 _skhuHc) — 규격 코드가 20'/40' 로 나와도 번호가 600번대 이상이면 40피트 하이큐(실물 HC 칸).
+  if ((base === '20' || base === '40') && _skhuHc(c)) return 'HC';
+  return base;
+}
+function _sizeColBase(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   const l = isoToLabel(iso) || '';
   //  ★ 3.31 — **규격은 `isoToLabel` 이 낸 라벨로만 가른다.** 원본 iso 를 정규식으로 재는 것을 그만둔다.
@@ -46,6 +52,13 @@ export function tallySizeCol(c) {
   if (/^4[5-9]/.test(iso)) return 'HC';
   if (/^4/.test(iso)) return '40';
   return '20';
+}
+//  3.60-21 (검수사 2026-09-25 17:55 «장금은 SKHU 이것은 하이큐 컨테이너에 쓰입니다. 보통 7자리중 앞 3자리가 600번대 이상이면 40피트 하이큐가 되고(SKHU6XXXXXX) 200번대이면 20피트 하이큐가 됩니다(SKHU2XXXXXX)»):
+//    장금 SKHU 번호의 앞 세 자리가 600 이상이면 EDI 가 22GP·42G1 로 줘도 40피트 하이큐(HC 칸) — PCSZ 2620E 양하 SKHU9508980·SKHU9552133(EDI 22GP, 실물 HC). 200번대는 20피트 하이큐라 20' 칸 그대로.
+//    ⚠ SKHU 로 온 엠티 플랫랙(22PE, 164·284번대 실측)은 600 미만이라 이 규칙에 안 걸린다. SKLU(20' 일반)·SKOU(오픈탑)·SKRU(리퍼)는 그대로.
+function _skhuHc(c) {
+  const m = /^SKHU(\d{3})\d{4}$/.exec(String(c && c.cn || '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
+  return !!m && Number(m[1]) >= 600;
 }
 
 /** 5자리 UN/LOCODE → 텔리 3자 포트 표기 (KRPTK→PTK, VNHPH→HPH) */
@@ -149,6 +162,20 @@ export function bundleFold(containers, mode) {
   }
   return out;
 }
+//  번들 요약 — 실물 Final Work Remarks «* 20'FR E x 8 ( 2 BUNDLE ) → 20'F x 2 CALCULATION» · OS 비고 «FR x 8 ( 2 BUNDLE )». 검수사 2026-09-25 «보통은 4개 한묶음인데 2개 이상만 묶여 있으면 풀 1개로 칩니다. 물론 위치는 같아야 합니다».
+export function bundleSummary(containers, mode) {
+  const bySz = {};
+  const byOp = {};
+  for (const v of bundleFold(containers, mode)) {
+    if (!v || !v._bundleN) continue;
+    const sz = tallySizeCol(v); const szL = sz === '20' ? "20'" : sz === '45' ? "45'" : sz === 'HC' ? 'HC' : "40'";
+    (bySz[szL] ??= { cn: 0, bundles: 0 }); bySz[szL].cn += v._bundleN; bySz[szL].bundles += 1;
+    const op = String(v.op || '').toUpperCase().trim() || '???';
+    (byOp[op] ??= { cn: 0, bundles: 0 }); byOp[op].cn += v._bundleN; byOp[op].bundles += 1;
+  }
+  const lines = Object.entries(bySz).map(([szL, o]) => `* ${szL}FR E x ${o.cn} ( ${o.bundles} BUNDLE ) → ${szL}F x ${o.bundles} CALCULATION`);
+  return { lines, byOp };
+}
 export function buildMatrix(containers, mode) {
   const mat = {};
   for (const c of bundleFold(containers, mode)) {
@@ -228,6 +255,13 @@ export function buildOS(containers, compMap, mode, fmt) {
     if (c.dg) g[k].dg++;
   }
   for (const comp of vals(compMap || {})) if (comp && comp.flag === 'extra') extra++;
+  //  3.60-20: 행 비고 «FR x 8 ( 2 BUNDLE )» — 실물 OS-IN 은 그 줄(port·size·EMPTY)에 묶음 수를 적는다. 대수(manifested)는 낱개 그대로.
+  for (const v of bundleFold(containers, mode)) {
+    if (!v || !v._bundleN) continue;
+    const sz = tallySizeCol(v); const szLbl = sz === '20' ? "20'" : sz === '45' ? "45'" : sz === '40' ? "40'" : 'HC';
+    const k = `${port3(mode === 'discharge' ? v.pol : v.pod) || '???'}|${szLbl}|EMPTY`;
+    if (g[k]) { g[k].frb = (g[k].frb || 0) + v._bundleN; g[k].frbN = (g[k].frbN || 0) + 1; }
+  }
   const rows = Object.values(g).sort((a, b) =>
     orderIndex(fmt.ports, a.port) - orderIndex(fmt.ports, b.port) ||
     a.size.localeCompare(b.size) || (a.fe === 'FULL' ? -1 : 1));
@@ -243,6 +277,7 @@ export function buildOS(containers, compMap, mode, fmt) {
     if (isReeferContainer(c)) byOp[op]._rh = (byOp[op]._rh || 0) + 1;   // 3.60-10: 리퍼 한 벌
     if (c.dg) byOp[op]._dg = (byOp[op]._dg || 0) + 1;
   }
+  const _bs = bundleSummary(containers, mode).byOp;   // 3.60-20: 실물 OS 비고 «FR x 8 ( 2 BUNDLE )»
   const remarks = Object.entries(byOp)
     .sort((a, b) => orderIndex(fmt.ops, opParent(fmt, a[0])) - orderIndex(fmt.ops, opParent(fmt, b[0]))
       || subIndex(fmt, a[0]) - subIndex(fmt, b[0]) || a[0].localeCompare(b[0]))
@@ -252,6 +287,7 @@ export function buildOS(containers, compMap, mode, fmt) {
       const tags = [];
       if (o._rh) tags.push(`RH x ${o._rh}`);
       if (o._dg) tags.push(`DG x ${o._dg}`);
+      if (_bs[op]) tags.push(`FR x ${_bs[op].cn} ( ${_bs[op].bundles} BUNDLE )`);
       return `${op} : ${parts.join(' , ')}${tags.length ? ` ( ${tags.join(' , ')} )` : ''}`;
     });
   return { rows, extra, remarks };
@@ -672,6 +708,7 @@ export function computeTallyData(voyage) {
       load: { F: sumMat(matLoad, 'F'), E: sumMat(matLoad, 'E'), n: matTotal(matLoad) },
       shift: { F: sumMat(matShift, 'F'), E: sumMat(matShift, 'E'), n: matTotal(matShift) },
     },
+    bundleNotes: { dis: bundleSummary(disCs, 'discharge').lines, load: bundleSummary(loadCs, 'loading').lines },   // 3.60-20: Final Work Remarks
     osIn: buildOS(disCs, sect(voyage, 'discharge').completed, 'discharge', fmt),
     osOut: buildOS(loadCs, sect(voyage, 'loading').completed, 'loading', fmt),
     sealIn: buildSealList(voyage, 'discharge'),

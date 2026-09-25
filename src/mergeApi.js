@@ -6,6 +6,7 @@
 //   달라진 점: cdl 허용(V8.89와 정합), .txt EDI/ASC/숫자코드 지원, 합본(loadlist.xlsx) 지원.
 import { parseListExcel, parseBAPLIE, parseAscFile, parseXrayList, loadSheetJS, parseListWeightKg } from './utils.js';
 import { classifyTallyFile } from './autoRegApi.js';
+import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(CLL (CSC) · CSC-DWS · CLL_WDF_…)
 
 // V9.57(G8): 원본(EDI 컨 객체) 직접 수정 금지 — 보강이 필요한 컨만 { ...원본 } 새 객체로 교체.
 function mergeWithEdi(edi,list,xray){const merged={...edi},conflicts=[],unmatched={};
@@ -63,7 +64,11 @@ export async function mergeFolder(files){
         const recs=readMergedSheet(XLSX,wb,name);
         Object.assign(listResults,recs); perFile.push({name,kind,count:Object.keys(recs).length});
       } else if(kind==='list'){ const out=await parseListExcel(await asArrayBuffer(f)); const recs=(out&&out.records)||[];
-        recs.forEach(r=>{if(r.cn){r._source=name;listResults[r.cn.toUpperCase()]=r;}}); perFile.push({name,kind,count:recs.length});
+        const _fop=opFromListFileName(name);   // 3.60-21
+        recs.forEach(r=>{if(r.cn){r._source=name;if(_fop&&!(r.op&&String(r.op).trim())){r.op=_fop;r._opFromFile=true;}
+          const _k=r.cn.toUpperCase(),_pv=listResults[_k];   // 감사 M-2: 파일명 선사는 이미 있는 선사(세관 선사부호·앞 파일)를 덮지 않는다
+          if(_pv&&r._opFromFile&&_pv.op&&String(_pv.op).trim()&&!_pv._opFromFile){r.op=_pv.op;r._opFromFile=false;}
+          listResults[_k]=r;}}); perFile.push({name,kind,count:recs.length,fileOp:_fop||''});
       } else if(kind==='xray'){ const out=await parseXrayList(await asArrayBuffer(f));
         // V8.20 수정: parseXrayList 반환은 { containers:[번호배열], _matchCount } — records 아님.
         const arr=(out&&out.containers)||(out&&out.records?out.records.map(r=>r&&r.cn):[])||[];

@@ -99,6 +99,10 @@ function sheetFinalWork(wb, D) {
   ws.getCell(`A${r}`).value = 'Remarks : Discharging';
   ws.getCell(`H${r}`).value = 'Remarks : Loading';
   ws.getCell(`A${r}`).font = HEAD_FONT; ws.getCell(`H${r}`).font = HEAD_FONT;
+  //  3.60-20: 엠티 플랫랙 번들이 있으면 실물처럼 그 아래에 «* 20'FR E x 8 ( 2 BUNDLE ) → 20'F x 2 CALCULATION» (수석이 «왜 E 가 0 인가» 를 안 묻게)
+  const _bn = D.bundleNotes || {};
+  (_bn.dis || []).forEach((line, i) => { ws.getCell(`A${r + 1 + i}`).value = line; ws.getCell(`A${r + 1 + i}`).font = BODY_FONT; });
+  (_bn.load || []).forEach((line, i) => { ws.getCell(`H${r + 1 + i}`).value = line; ws.getCell(`H${r + 1 + i}`).font = BODY_FONT; });
   sig(ws, r + 12, 'CHIEF CHECKER', 'CHIEF OFFICER', 'K');
   return ws;
 }
@@ -165,6 +169,7 @@ function sheetOS(wb, D, mode) {
     if (row.rf) tags.push(`RF x ${row.rf}`);
     if (row.rh) tags.push(`RH x ${row.rh}`);
     if (row.dg) tags.push(`DG x ${row.dg}`);
+    if (row.frb) tags.push(`FR x ${row.frb} ( ${row.frbN} BUNDLE )`);   // 3.60-20
     ws.getCell(`M${r}`).value = tags.join(' , ');
     for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     lastPort = row.port; r++;
@@ -492,6 +497,15 @@ async function fillTemplate(D, ExcelJS) {
     ws.getCell(`D8`).value = `DISCH (${D.totals.dis.n})`;
     ws.getCell(`H8`).value = `LOAD (${D.totals.load.n})`;
     ws.getCell(`L8`).value = `SHIFT (${D.totals.shift.n})`;
+    //  3.60-20: 엠티 플랫랙 번들 문구 — 실물 Remarks 자리(«Remarks : Discharging»/«Remarks : Loading» 셀 아래)에 «* 20'FR E x 8 ( 2 BUNDLE ) → 20'F x 2 CALCULATION».
+    //    템플릿마다 그 셀의 행이 달라 합계 아래 20줄에서 글자로 찾는다. 못 찾으면 합계 3줄 아래 A/H 열.
+    try {
+      const _bn = D.bundleNotes || {};
+      const _find = (re) => { for (let r = totalRow + 1; r <= totalRow + 20; r++) { const row = ws.getRow(r); for (let c = 1; c <= 15; c++) { const v = row.getCell(c).value; const t = typeof v === 'string' ? v : (v && v.richText ? v.richText.map((x) => x.text).join('') : ''); if (t && re.test(t)) return { r, c }; } } return null; };
+      const _put = (anchor, lines, defCol) => { if (!lines || !lines.length) return; const r0 = anchor ? anchor.r : totalRow + 3, c0 = anchor ? anchor.c : defCol; lines.forEach((line, i) => { const cell = ws.getRow(r0 + 1 + i).getCell(c0); cell.value = line; }); };
+      _put(_find(/remarks?\s*:?\s*disch/i), _bn.dis, 1);
+      _put(_find(/remarks?\s*:?\s*load/i), _bn.load, 8);
+    } catch (e) { console.warn('[마감텔리] 번들 문구 쓰기 실패 — 표는 그대로:', e); }
   }
   }
   // ── Time Sheet ──
@@ -568,6 +582,7 @@ async function fillTemplate(D, ExcelJS) {
         if (o.rf) tags.push(`RF x ${o.rf}`);
         if (o.rh) tags.push(`RH x ${o.rh}`);
         if (o.dg) tags.push(`DG x ${o.dg}`);
+        if (o.frb) tags.push(`FR x ${o.frb} ( ${o.frbN} BUNDLE )`);   // 3.60-20
         r.getCell(13).value = tags.join(' , ') || null;
         man += o.manifested; wk += o.manifested - o.short;
         last = o.port;

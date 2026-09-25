@@ -5,6 +5,7 @@
 //   - Firebase 쓰기는 여기서 하지 않는다 — 순수 함수라 시뮬·헬퍼 재사용이 쉽다.
 import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
 import { APP_VERSION } from './utils.js';
+import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 파일 이름이 선사
 
 // V9.57(G5): 파일 분류기 단일화 — mergeApi.classify와 이 _kind가 서로 달라(cdl 허용·.txt 지원·
 //   merged 지원) 같은 파일이 경로마다 다르게 처리됐다. 이제 이 함수 하나를 양쪽
@@ -238,13 +239,17 @@ export async function buildAutoPayload(files, opts) {
         if (xk !== 'list') { perFile.push({ name, kind: 'skip' }); continue; }
         const out = await parseListExcel(await _asU8(f));
         const recs = (out && out.records) || [];
+        const _fop = opFromListFileName(name);   // 3.60-21 감사 M-1: 자동등록 경로에도 파일명 선사 규칙(빈 op 에만, 표시 _opFromFile)
         recs.forEach(r => {
           if (!r.cn) return;
           const cn = r.cn.toUpperCase();
+          if (_fop && !(r.op && String(r.op).trim())) { r.op = _fop; r._opFromFile = true; }
           if (!records[cn]) { records[cn] = { ...r, cn, _source: name }; return; }
           const prev = records[cn];
           for (const [k, v] of Object.entries(r)) {
             if (v === '' || v == null) continue;
+            if (k === 'op' && prev._opFromFile && !r._opFromFile) { prev.op = v; prev._opFromFile = false; continue; }   // 실제 선사 칸(세관 선사부호)이 파일명 선사를 이긴다
+            if (k === '_opFromFile') continue;   // 표식은 op 와 같이만 움직인다(감사 N-6)
             if (prev[k] === '' || prev[k] == null) prev[k] = v;   // 빈칸만 채움
           }
         });
