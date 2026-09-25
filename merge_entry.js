@@ -5,6 +5,7 @@
 //   → 연운항(LYG) SZ·REMARK 온도가 자동 수집 합본에 반영된다. 로직 변경점은 합본 열 Temp·EmptySeal 추가뿐.
 // 재생성: 앱 저장소에서  npx vite build --config vite.merge.config.js  → dist_merge/gm_merge.js → HTML 래핑.
 import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, normalizeCarrierCode, APP_VERSION } from './src/utils.js';
+import { opFromListFileName } from './src/data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(합본이 op 를 비워 마감텔리가 CSC/DSL 을 못 갈랐다)
 
   // ../gmt2/src/mergeApi.js
   function classify(name) {
@@ -172,9 +173,11 @@ import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, 
             continue;
           }
           let n = 0;
+          const _fop = opFromListFileName(name);   // 3.60-21: 빈 op 에만 파일명 선사(실제 선사 칸이 있으면 그것이 이긴다)
           recs.forEach((r) => {
             if (r.cn && !isBook(r.cn)) {
               r._source = name;
+              if (_fop && !(r.op && String(r.op).trim())) { r.op = _fop; r._opFromFile = true; }
               if (!r.fe && /empty/i.test(name)) r.fe = "E";   // v2.17.11-17: 엠티 출처 파일(MAE EMPTY LOAD LIST 등)인데 F/E 공란이면 E로 채움 — 합본 F/E 공란 287행 실측(629S), 검수앱 E확정 판정 근거
               // MailPilot 1.8-06: 다른 소스 리스트는 덮어쓰지 않고 **빈칸만 채운다** (autoreg records 와 동일 규칙).
               //   TNJP 26360E 실측 — 터미널 목록조회(Excel_*.xls 151건)가 나중에 병합되며 선사 CNTR LIST 의
@@ -183,7 +186,10 @@ import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, 
               const _K = r.cn.toUpperCase();
               const _prev = list[_K];
               if (!_prev) { list[_K] = r; }
-              else { for (const _e of Object.entries(r)) { if (_prev[_e[0]] == null || _prev[_e[0]] === "") _prev[_e[0]] = _e[1]; } }
+              else { for (const _e of Object.entries(r)) {
+                if (_e[0] === "op" && _prev._opFromFile && !r._opFromFile && _e[1]) { _prev.op = _e[1]; _prev._opFromFile = false; continue; }   // 3.60-21: 실제 선사 칸이 파일명 선사를 이긴다
+                if (_e[0] === "_opFromFile") continue;
+                if (_prev[_e[0]] == null || _prev[_e[0]] === "") _prev[_e[0]] = _e[1]; } }
               n++;
             }
           });
