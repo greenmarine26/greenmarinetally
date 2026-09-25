@@ -22,6 +22,7 @@ import {
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
+  ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
 } from './utils.js';
 import {
@@ -43,6 +44,8 @@ import { bayGroupCenter } from './swapGrade.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 import { judgeMode, buildReadiness, describeReadiness } from './dataReadiness.js';
+import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60-18: PORT-MIS 매칭 본체(베이사전 없이) — 콘앱 미르용 기본 매처
+export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
 //    · mirEyes ← guidedQueue: 순서는 화면이 쓰는 그 벌을 그대로 쓴다
@@ -133,13 +136,15 @@ export function mirObserve(q, missed, meta = {}) {
   const key = mirKey(text);
   if (missed) {
     if (!key) return '';
-    _pending = { q: text, key, toks: new Set(mirTokens(text).filter((t) => t === mirSlot(t))), at: now };
+    //  3.60-18: recordOnly — 결산(mir_misses) 에만 남기고 즉석 학습 짝(_pending)은 안 건다(answerOneRaw null 출구용 — 모델 번역 경로가 같은 별칭을 두 번 적지 않게).
+    if (!meta.recordOnly) _pending = { q: text, key, toks: new Set(mirTokens(text).filter((t) => t === mirSlot(t))), at: now };
     //  결산용 기록 — 같은 말은 10분에 한 번만
     if (!_lastMissAt[key] || now - _lastMissAt[key] > 10 * 60 * 1000) {
       _lastMissAt[key] = now;
       try {
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('gm-mir-miss', { detail: { q: text, key, at: now, ...meta } }));
+          const { recordOnly: _ro, ...m2 } = meta || {};
+          window.dispatchEvent(new CustomEvent('gm-mir-miss', { detail: { q: text, key, at: now, ...m2 } }));
         }
       } catch (e) { /* 이벤트 미지원 — 결산 기록만 빠진다, 즉석 학습은 그대로 */ }
     }
@@ -528,9 +533,22 @@ const _subs = new Set();
 //    ⚠ 예약 자리(부킹 슬롯)와 그 자리를 채운 실번호를 둘 다 세면 총 잔여가 부푼다 — 다른 답 경로와 같이 `dropFilledBookingSlots` 를 지난다(3.53-12 감사 C1).
 //    ⚠ 콘앱이 주는 voyage 에는 `ediContainers` 가 없다(완료·리스트뿐) — 그대로 세면 리스트 행만 세어 검수앱과 갈린다(감사 C2 · STSE 2673E 699 ↔ 343).
 //       그때는 `fallbackContainers`(그 앱이 넘긴 컨 — `_ptk`·`_mode`·`_comp` 가 찍힌 것)로 센다. 둘 다 없으면 total 0(모른다).
-export function voyageCountsOf(voyage, fallbackContainers = null) {
-  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } } };
+//  3.60-18 (M7·다수결 V5 — 검수사 Q3 «기본은 리스트(잔여 분모 = 리스트)»): 홈 카드·수석 보드(utils progressOf)는 리스트 출신 records 가 분모인데
+//    미르는 EDI∪리스트 `_ptk` 전부를 세어 라이브 MCSN 637N 선적이 홈 127 / 미르 287 로 갈렸다. 그 모드에 리스트 출신 records 가 있으면
+//    **리스트에 있는 컨(+시프팅 컨)만** 센다 — progressOf 와 같은 분모. 완료 시각(doneAts)도 그 분모 안의 것만 돌려줘 페이스·ETA 가 같은 수로 잰다.
+//    `shiftSet` 은 호출부가 shiftMap 키로 준다(없으면 리스트만).
+export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = null) {
+  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } }, doneAts: [] };
   const has = (m, k) => !!(voyage && voyage[m] && voyage[m][k] && Object.keys(voyage[m][k]).length);
+  const ss = shiftSet instanceof Set ? shiftSet : new Set(Array.isArray(shiftSet) ? shiftSet : []);
+  const listOf = {};
+  for (const m of ['discharge', 'loading']) {
+    try {
+      const recs = (voyage && voyage[m] && voyage[m].records) || {};
+      const l = new Set(ownDirCns(recs, m).filter((cn) => isListOriginRecord(recs[cn])));
+      listOf[m] = l.size > 0 ? l : null;
+    } catch (e) { console.warn('[미르] 리스트 분모 세기 실패 — EDI 평택분으로 셉니다:', e); listOf[m] = null; }
+  }
   const hasEdi = !!(voyage && voyage.info && ['discharge', 'loading'].some((m) => has(m, 'ediContainers')));
   //  넘겨받은 컨이 이 항차의 양하·선적을 다 덮으면 **그것으로 센다** — «얼마나 남았어» 가 세는 바로 그 컨이라 두 답이 같은 수를 말한다.
   //  열린 탭 것만 넘겨받았으면(양하선적 탭 카드) 항차 원본을 펴서 센다. 원본에 EDI 가 없으면(콘앱) 넘겨받은 컨뿐이다.
@@ -539,13 +557,27 @@ export function voyageCountsOf(voyage, fallbackContainers = null) {
   const voyModes = ['discharge', 'loading'].filter((m) => voyage && voyage.info && (has(m, 'ediContainers') || has(m, 'records')) && !sideCancelled(voyage.info, m));
   const covered = given.length > 0 && voyModes.every((m) => givenModes.has(m));
   const pool = (covered || !hasEdi) ? given : dropFilledBookingSlots(flattenVoyages({ _: voyage })).filter((c) => c && c._ptk);
+  const pushAt = (w) => { const at = w && typeof w === 'object' ? w.at : null; if (typeof at === 'number' && at > 0) out.doneAts.push(at); };
+  //  3.60-18: 리스트가 있는 모드는 progressOf 와 똑같이 **리스트 컨 + 시프팅 컨** 을 항차 원본(records·completed)에서 직접 센다 — 풀(EDI)에 없는 리스트 컨도 분모다(NSFR 2617N 실측 80 ↔ 79).
+  const listModes = new Set();
+  for (const md of ['discharge', 'loading']) {
+    if (!listOf[md] || !voyage || !voyage.info || sideCancelled(voyage.info, md)) continue;
+    listModes.add(md);
+    const comp = (voyage[md] && voyage[md].completed) || {};
+    const base = new Set([...listOf[md]].filter((cn) => !ss.has(cn)));
+    const m = out.byMode[md];
+    for (const cn of base) { m.total += 1; out.total += 1; if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
+    for (const cn of ss) { if (base.has(cn)) continue; m.total += 1; out.total += 1; if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
+  }
   for (const c of pool) {
     const md = c._mode === 'loading' ? 'loading' : 'discharge';
     if (voyage && voyage.info && sideCancelled(voyage.info, md)) continue;
+    if (listModes.has(md)) continue;   // 3.60-18: 리스트가 있는 모드는 위에서 셌다
     const m = out.byMode[md];
     m.total += 1; out.total += 1;
-    if (c._comp) { m.done += 1; out.done += 1; }
+    if (c._comp) { m.done += 1; out.done += 1; pushAt(c._comp); }
   }
+  out.doneAts.sort((a, b) => a - b);
   return out;
 }
 
@@ -1345,7 +1377,8 @@ function _normalize(ctx) {
   //  ⚠ 트윈 짝(bayPairs)·PORT-MIS 매처(matchPortMis)는 화면이 실어 준다 — twin.js·portMisMatch.js 를 여기서 import 하면
   //    베이사전 2.2MB 가 콘앱 번들에 딸려 온다(실측 747KB → 2.0MB). 콘앱은 둘 다 없는 채로 종전과 같다.
   if (c.pairsMap == null) c.pairsMap = c.bayPairs || null;
-  c.matchPortMis = (typeof c.matchPortMis === 'function') ? c.matchPortMis : (() => null);
+  //  3.60-18 (M28 · 다수결 V2): 화면이 매처를 안 실어 줬으면(콘앱) 베이사전 없는 본체(portMisCore)를 항차 info 신원으로 돈다 — «출항 언제» 가 두 앱에서 같은 규칙.
+  c.matchPortMis = (typeof c.matchPortMis === 'function') ? c.matchPortMis : ((pm, inf) => { try { return matchPortMisById(pm || {}, inf || {}, shipIdentityLite(inf || {})); } catch (e) { console.warn('[미르] PORT-MIS 매칭 실패:', e); return null; } });
   //  3.24: 페이스 분모는 «검수 시작 보고»가 있으면 그것 — reports 는 info 밖이라 여기서 얹는다(작업창은 이걸 덮어써 잃고 있었다).
   if (c.info && v && !c.info.reportStartAt) { try { c.info = { ...c.info, ...voyageReportSpan(v) }; } catch (e) { /* */ } }
   //  3.53-12: 외부 합계 피드(옛 합계 ctx)는 떼어 냈다 — 대수·잔여·페이스는 완료 기록 한 벌(검수사 2026-09-15·09-21).
@@ -1372,7 +1405,16 @@ export function answerOneRaw(query, ctx) {
   const cs = c.containers || [];
   //  3.53-12: 항차 전체 평택분(양하+선적) 대수·완료 — «몇 시에 끝나»·«작업 속도»·«얼마나 남았어» 가 같은 총 잔여를 말하게 한다. 한 번 세면 기억한다.
   //    다른 항차 컨이 섞여 와도 이 항차 것만 센다(voyageKey 문지기 — 감사 경 2).
-  const _vcOf = () => { if (c.voyageCounts === undefined || c.voyageCounts === null) { try { c.voyageCounts = voyageCountsOf(c.voyage || null, c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs); } catch (e) { console.warn('[미르] 항차 대수 세기 실패:', e); c.voyageCounts = { total: 0, done: 0, byMode: {} }; } } return c.voyageCounts; };
+  //  3.60-18: 분모는 리스트(+시프팅) — 시프팅 키는 shiftMap 에서. 세고 나면 페이스 재료(voyageDoneAts)도 그 분모 안의 완료 시각으로 바꾼다(다수결 V5 — 한 벌).
+  const _vcOf = () => { if (c.voyageCounts === undefined || c.voyageCounts === null) { try {
+    //  시프팅 집합은 홈 카드와 같은 출처(utils shiftCnSetOf = computeShiftingMapCached 키 — 표시용 shiftMap 은 예측분이 섞여 다르다, 감사 M2)
+    //  + 콘앱이 «시프팅분» 으로 표시한 컨(_shift — 콘앱 voyage 엔 EDI 가 없어 shiftCnSetOf 가 빈다, 2차 시뮬 1: MCSN 637N 481 ↔ 521).
+    let _ss = new Set();
+    try { _ss = shiftCnSetOf(c.voyageKey || '', c.voyage || null) || new Set(); } catch (e) { console.warn('[미르] 시프팅 집합 실패:', e); _ss = new Set(); }
+    for (const x of cs) if (x && x._shift && x.cn) _ss.add(x.cn);
+    c.voyageCounts = voyageCountsOf(c.voyage || null, c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs, _ss);
+    if (Array.isArray(c.voyageCounts.doneAts) && c.voyageCounts.total > 0) c.voyageDoneAts = c.voyageCounts.doneAts;
+  } catch (e) { console.warn('[미르] 항차 대수 세기 실패:', e); c.voyageCounts = { total: 0, done: 0, byMode: {}, doneAts: [] }; } } return c.voyageCounts; };
   const v = c.voyage || null;
   const info = c.info || {};
   const ship = c.vslFull || c.vsl || '';
@@ -1528,7 +1570,7 @@ export function answerOneRaw(query, ctx) {
     if (hasShip && cs.length) {
       _via('progress');   // 3.42: 조건 없는 진행 잡답 — «완료된 거 마지막 다섯 개»·«양하 끝난 시각» 이 여기로 떨어졌다(판 B 시뮬)
       const pool = dropFilledBookingSlots(cs);
-      try { return formatAppTallyAnswer(ship, pool, info || null); } catch (e) { /* 아래로 */ }
+      try { return formatAppTallyAnswer(ship, pool, info || null, _vcOf()); } catch (e) { console.warn('[미르] 진행 답 실패:', e); }   // 3.60-18: 대수는 리스트 분모(감사 M1 — «진행 상황» 만 EDI∪리스트로 세던 두 벌)
     }
     if (!hasShip && c.isChief && c.chiefData) {   // 완료·보관된 배(1.69-06)
       const Q2 = Q.toUpperCase();
@@ -1849,6 +1891,12 @@ export function answerOneRaw(query, ctx) {
   if (hasAnyCondition(p) && !cs.length && hasShip && !p.asking && !p.howToQuery && !p.crewQuery && !p.crewSet && !p.gangSet && !p.gangQuery && !p.startSet) {
     return `📭 ${ship || '이 항차'} — 컨 자료(EDI·리스트)가 아직 안 왔어요. 자료가 들어오면 바로 답할게요.`;
   }
+  //  3.60-18 (M22): «위치요»·«화면 어디야» 처럼 **무엇의** 위치인지 없는 물음은 전량 분포(«📍 전체 334대 — 15개 베이…»)를 쏟지 않고 되묻는다.
+  //    실사용 09-06 ATPR 2640E «위치요»(직전 «유출이요» 음성 오인) 1건. 대상(끝자리·규격·리퍼·베이·«전체» 등)이 하나라도 붙으면 종전대로 답한다.
+  if (p.posQuery && !p.movePathQuery && !hasAnyCondition({ ...p, posQuery: false, howToQuery: false, listQuery: false }) && cs.length) {   // listQuery(«위치 알려줘» 의 알려줘)도 대상이 아니다(감사 E1)   // howToQuery(«어디야» 가 기능 위치로도 읽힘)는 위 기능 색인이 이미 못 받은 뒤라 조건으로 안 친다
+    _via('posAskBack');
+    return '어느 컨의 위치를 찾으세요? 🐱 끝 네 자리(예 «5445 어디야»)나 조건(«리퍼 위치»·«XRAY 대상 위치»·«12번 베이»)을 붙여 물어봐 주세요.';
+  }
   if (hasAnyCondition(p) && (cs.length || p.asking)) {
     try {
       let results = applyNLFilter(cs, p);
@@ -1859,7 +1907,7 @@ export function answerOneRaw(query, ctx) {
       const a = generateLocalAnswer(eff, effRes, cs.filter((x) => x._ptk !== false), {
         ...(c.manualCtx || null), mode: c.mode || null, bayPairs: c.bayPairs || c.pairsMap || null, selectedGroup: c.selectedGroup, selectedTier: c.selectedTier, shipLib: c.shipLib || null,
         gangShift: c.gangShift || null, crewAnswer: c.crewAnswer || null, voyage: v, carrierContacts: c.carrierContacts || null, shipSpeed: c.shipSpeed || null,
-        vsl: c.vsl, vslFull: c.vslFull, pier: c.pier, info: info || null, voyageDoneAts: c.voyageDoneAts || null, voyageCounts: (p.etaQuery || p.paceQuery || p.progressQuery) ? _vcOf() : null,
+        vsl: c.vsl, vslFull: c.vslFull, pier: c.pier, info: info || null, voyageCounts: (p.etaQuery || p.paceQuery || p.progressQuery) ? _vcOf() : null, voyageDoneAts: c.voyageDoneAts || null,   // 3.60-18: voyageCounts 를 먼저 세야 voyageDoneAts 가 같은 분모
         photos: c.photos || null, shiftMap: c.shiftMap || null, compMap: c.compMap || null, bowStern: c.bowStern || null, gangs: info && info.gangs,
         who: c.inspector || '', inspector: c.inspector || '', voyageKey: c.voyageKey || '',
       });
@@ -1874,7 +1922,8 @@ export function answerOneRaw(query, ctx) {
         //    종전엔 «📊 끝네자리 5445: 1대» 만 말했다(작업창은 카드가 대신 보이지만 떠 있는 미르·콘앱은 이 글이 전부다).
         if (p.digits && r2.length && r2.length <= 5) {
           const _ax = { voyage: v, containers: cs };
-          return r2.map((x) => [entityHead(x), attrLine(x, 'seal', _ax), attrLine(x, 'xray', _ax)].filter(Boolean).join('\n')).join('\n\n');
+          //  3.60-18 (M23 중복 줄): 실번호 줄(seal)이 X-RAY 대상·커트씰을 이미 말하면 xray 줄은 겹치므로 뺀다(재검증 실측 «X-RAY 대상 · 커트씰 아직 없음» 두 번).
+          return r2.map((x) => { const sl = attrLine(x, 'seal', _ax); const xr = attrLine(x, 'xray', _ax); return [entityHead(x), sl, (sl && /X-RAY 대상|커트씰/.test(sl)) ? null : xr].filter(Boolean).join('\n'); }).join('\n\n');
         }
         let label = ''; try { label = describeQuery(p) || ''; } catch (e) { label = ''; }
         return '📊 ' + (label || '조회') + ': ' + r2.length + '대';
@@ -1904,6 +1953,10 @@ export function answerOneRaw(query, ctx) {
       if (k) { _via('knowledgeGuess'); return k; }
     } catch (e) { /* */ }
   }
+  //  3.60-18 (M25): 여기까지 온 말은 못 알아들은 말이다 — 결산(mir_misses)·즉석 학습에 남긴다. 종전엔 generateLocalAnswer 를 거친 말만 기록돼
+  //    «츌항 언제»(09-10) 같은 완전 무응답이 miss 0건으로 결산됐다. 같은 말은 10분에 한 번(mirObserve 안에서).
+  //    ⚠ 접수된 질문(전송·음성 확정 — ctx.accepted)에서만 남긴다. 검색창(SearchPanel)·통합검색은 글자마다 answerOneRaw 를 부르므로 거기서 남기면 조각(«츌항»·«츌항 언»…)이 결산을 오염시키고 약신호에서 글자마다 쓰기가 나간다(감사 C1).
+  if (c.accepted) { try { mirObserve(query, true, { who: c.inspector || '', mode: c.mode || '', voyageKey: c.voyageKey || '', app, recordOnly: true }); } catch (e) { console.warn('[미르] miss 기록 실패:', e); } }
   if (app === 'cone') { _via('coneHelp'); return CONE_QA_HELP; }
   return null;
 }

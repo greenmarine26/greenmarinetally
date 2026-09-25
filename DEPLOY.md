@@ -13,7 +13,7 @@
   더 크게 설정하면 "timeout set to the maximum of 600000" 경고와 함께 10분으로 잘린다.
   **어느 경로든 10분이 한계다.** 1GB 사고 직후처럼 백엔드 처리가 10분을 넘는 동안은 어떤 설정으로도
   못 뚫는다 — 냉각을 기다리는 것이 유일한 해법이다(실측: 사고 당일 백엔드 65분 걸려 #1024 성공).
-  deploy.yml의 "30 min timeout" 표기는 이 캡 때문에 실제 10분이다. 다음 코드 판에 표기 정정할 것.
+  deploy.yml의 `timeout: 1800000`(30분) 표기는 그대로 둔다 — 값은 30분이되 액션이 10분으로 잘라 실제는 10분이다. 표기 정정 항목은 없다. (3.60-18 실측 정정)
 - ⛔ **이 워크플로는 Re-run 금지.** deploy 잡을 재실행하면 같은 런에 github-pages 아티팩트가 2개가 되어
   "Multiple artifacts named \"github-pages\"" 로 즉사한다(#1085 attempt2 실측). 다시 돌리려면
   **새 커밋** 또는 Actions 탭 → Deploy to GitHub Pages → **Run workflow**(workflow_dispatch)로 새 런을 만든다.
@@ -216,14 +216,14 @@ A는 사용자 PC의 GitHub Desktop git을 배치파일로 돌리는 방식이�
 
 1. 실데이터 시뮬 PASS (추론 금지)  2. `bash build.sh` 성공  3. 번들 grep으로 새 문자열·APP_VERSION 확인
 4. push 로그에 `xxxxxxx..yyyyyyy  main -> main`  5. 라이브 `sw.js?v=캐시버스터`의 VERSION 확인
-   ⚠ **라이브 번들 해시는 저장소와 다르다** — Pages는 Actions(`.github/workflows/deploy.yml`)가 `npm run build`한 `./dist`를 배포한다.
-   라이브 검증은 해시 대조가 아니라 **sw.js VERSION · 캐시명(`tallyman-Vx.xx`) · 번들 내 새 문자열**로 한다 (V9.10 실측: 저장소 `CJrBNLX3` ≠ 라이브 `Bm2YSPZD`).
+   ⚠ **라이브 번들 해시 = 저장소 HEAD** — Pages는 Actions(`.github/workflows/deploy.yml`)가 checkout → upload-pages-artifact(path: .) → deploy 로 **저장소 루트를 그대로** 배포한다(빌드 단계 없음 · `bash build.sh`로 커밋한 assets가 곧 라이브). (3.60-18 실측 정정)
+   라이브 검증은 **sw.js VERSION · 캐시명(`tallyman-Vx.xx`) · 번들 내 새 문자열**에 더해 **해시 대조**로도 한다 (저장소 assets 파일명 = 라이브 파일명). (3.60-18 실측 정정)
 + blob 해시 전수 대조 권장 (`git rev-parse origin/main:<파일>` vs `git hash-object <검증본>`)
 
 ## 3. 방법 A 절차
 
 1. **VM 내부**(`/tmp/repo`)에 클론해 수정·빌드한다. ⚠ 마운트 폴더에서 git 실행 금지 (4장 1번).
-2. `src/utils.js`의 `APP_VERSION`을 올린다 (단일 소스). 기능=마이너 두 자리 / 픽스=빌드번호. 언더스코어 금지.
+2. `src/utils.js`의 `APP_VERSION`을 올린다 (단일 소스). 기능 추가 = 마이너 두 자리 올림(3.59→3.60, 실이력 3.56→3.57→3.58→3.60) / 버그 수리 = -NN(3.60-01). 언더스코어 금지. (3.60-18 실측 정정 — CLAUDE.md Ⅱ-2.4 와 같음)
 3. `bash build.sh` (npm run build 직접 호출 금지).
 4. 변경 목록에서 **삭제분(`^ D`)은 제외**한다.
    ⛔ **단 "옛 해시 assets는 누적 무해"는 틀렸다 — 2026-08-06 사고.** 빌드 2,103회분이 쌓여
@@ -273,7 +273,7 @@ echo DONE %DATE% %TIME% >> %LOG%
 5. **큰 base64를 클로드가 직접 옮기지 말 것** — V8.85에서 두 번 다 글자 유실로 훼손됐다.
    4.2MB ZIP은 base64로 약 139만 토큰이라 애초에 컨텍스트를 통과할 수 없다.
 6. `.gitignore`가 없으면 `add -A`가 node_modules 19,027개를 쓸어담는다 (V9.07에서 신설).
-7. 컨테이너에서 github.io로 curl 불가(HTTP 000). **⚠ Chrome MCP로 라이브 확인 금지 (2026-07-31 사용자 지시)** —
+7. 컨테이너에서 github.io로 curl 된다(HTTP 200 · `?cb=` 캐시 우회로 sw.js VERSION 확인 가능 — 클라우드 컨테이너의 에이전트 프록시 허용목록 기준, 코워크 VM 은 별도 확인). (3.60-18 실측 정정) **⚠ Chrome MCP로 라이브 확인 금지 (2026-07-31 사용자 지시)** —
    수집기가 CDP(9222)로 전용 크롬(tallyman-chrome 프로필)을 조종하는데, 클로드의 크롬 탭 조작이 수집기를
    멈추게 한다(사용자 실측). 크롬 없는 검증 체계: ① blob 전수 대조(저장소 진실) ② `web_fetch`로
    `raw.githubusercontent.com/.../main/sw.js?v=캐시버스터` VERSION 확인(text/plain이라 읽힘 — github.io는 [binary]로 안 읽힘)

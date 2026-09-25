@@ -88,7 +88,7 @@ check('cone.html loadMirCtx 가 shipSpeed·pilot_forecast/{배} 를 받는다', 
   check('실제 loadMirCtx 가 돈다', !!mc && !err, err);
   check('재료가 JSON 으로 풀려 있다(Response 아님) — info.vsl·완료', !!(mc && mc.info && mc.info.vsl === 'KBTR' && Object.keys(mc.compD || {}).length > 50 && !(('terminal' + 'Work') in mc)), mc ? JSON.stringify({ vsl: mc.info && mc.info.vsl, compD: Object.keys(mc.compD || {}).length }).slice(0, 160) : '(없음)');
   check('shipSpeed·pilotForecast 도 받는다', !!(mc && mc.shipSpeed && typeof mc.shipSpeed === 'object' && mc.pilotForecast && typeof mc.pilotForecast === 'object'));
-  check('요청 13건(항차 11 + 재료 2) — 터미널 합계 자료는 받지 않는다', hits.length === 13 && !hits.some((h) => h.includes('terminal' + '_work')) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json'), hits.join(','));
+  check('요청 14건(항차 11 + 재료 3: 배 속도·도선·PORT-MIS[2.55-01]) — 터미널 합계 자료는 받지 않는다', hits.length === 14 && !hits.some((h) => h.includes('terminal' + '_work')) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json') && hits.includes('port_mis_data.json'), hits.join(','));
   if (mc) {
     //  mirAsk 3592~ 그대로 ctx 를 짠다(cs 는 위 paint 와 같은 한 벌)
     const comp2 = Object.assign({}, mc.compD || {}, mc.compL || {});

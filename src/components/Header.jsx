@@ -248,7 +248,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
       {/* V9.15: 오프라인은 14px 아이콘 대신 놓칠 수 없는 띠로 */}
       {!online && (
         <div className="bg-st-bad/80 text-white text-xs2 font-bold text-center py-1">
-          <CloudOff className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>오프라인 — 저장은 연결 복구 후 서버에 반영됩니다
+          <CloudOff className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>오프라인 — 연결이 돌아올 때까지 이 화면을 닫거나 새로고침하지 마세요(저장이 사라집니다)
         </div>
       )}
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} inspector={inspector}/>

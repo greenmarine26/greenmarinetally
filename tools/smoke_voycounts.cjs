@@ -63,7 +63,12 @@ for (const [nm, c] of [['떠 있는 미르(양하+선적 컨)', all], ['양하 �
   const c1 = M.voyageCountsOf(v, flat), c2 = M.voyageCountsOf(coneVoyage, flat);
   T(c1.total === c2.total && c1.done === c2.done, `콘앱 모양 voyage 도 같은 총 대수 — 검수앱 ${c1.done}/${c1.total} · 콘앱 ${c2.done}/${c2.total}`);
   const c3 = M.voyageCountsOf(coneVoyage, null);
-  T(c3.total === 0, `EDI 도 넘겨받은 컨도 없으면 모른다고 한다(total 0 — 리스트 행만 세어 지어내지 않는다) — ${JSON.stringify(c3)}`);
+  //  3.60-18 (M7 · 검수사 Q3 «잔여 분모 = 리스트»): 리스트 출신 records 가 있으면 EDI·넘겨받은 컨이 없어도 **리스트가 분모**다 — 홈 카드(progressOf)와 같은 수.
+  //    종전 «total 0» 기대는 검수앱이 EDI∪리스트를 세던 때의 것(3.53-12 C2). 리스트도 없으면 0.
+  const _pD = M.progressOf(coneVoyage.discharge, 'discharge', new Set(), null), _pL = M.progressOf(coneVoyage.loading, 'loading', new Set(), null);
+  T(c3.total === _pD.total + _pL.total && c3.total > 0, `EDI·넘겨받은 컨이 없어도 리스트가 있으면 리스트가 분모(progressOf 와 같은 수) — ${c3.total} vs ${_pD.total + _pL.total}`);
+  const c4 = M.voyageCountsOf({ info: v.info, discharge: { completed: v.discharge.completed }, loading: { completed: v.loading.completed } }, null);
+  T(c4.total === 0, `EDI 도 리스트도 넘겨받은 컨도 없으면 모른다고 한다(total 0) — ${JSON.stringify({ total: c4.total })}`);
 }
 
 // ── C1 실데이터 ② SWBT — 예약 자리를 채운 배. 실번호를 다 끝냈으면 «다 끝났어요» 여야 한다

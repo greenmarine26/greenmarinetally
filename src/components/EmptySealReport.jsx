@@ -253,7 +253,9 @@ export async function downloadEsealSheetXlsx({ vsl = '', voy = '', pol = 'KRPTK'
     ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
     ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 10 }, { wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 10 }];
     const len = String(p[0] && p[0].size || '').startsWith('20') ? '20피트' : '40피트';
-    XLSX.utils.book_append_sheet(wb, ws, `${len}${pages.filter((q, k) => k < pi && String(q[0].size).startsWith('20') === len.startsWith('20')).length ? ' ' + (pi + 1) : ''}`);
+    //  3.60-18: 시트 번호는 **같은 길이 안의 순번**(«20피트 2») — 종전엔 전체 장 인덱스(pi+1)라 40피트 2장 뒤 20피트 둘째 장이 «20피트 4» 로 찍혔다(OBWH 2731E 선적 엠티 231대 재현 · 코퍼스 조건 항차 16건).
+    const _sameLenBefore = pages.filter((q, k) => k < pi && String(q[0].size).startsWith('20') === len.startsWith('20')).length;
+    XLSX.utils.book_append_sheet(wb, ws, `${len}${_sameLenBefore ? ' ' + (_sameLenBefore + 1) : ''}`);
   });
   if (remain.length) {
     const aoa = [['잔여 실 (배정 구간 중 부착되지 않은 실) — ' + remain.length + '개'], []];

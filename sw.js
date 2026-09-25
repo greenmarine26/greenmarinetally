@@ -1,17 +1,12 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.60-17';
-const NOTE = '터미널 검수 입력 파일의 선사 칸을 읽습니다 · 리스트의 SOC -EMPTY 는 엠티입니다 · 리스트 항구 약칭(TAO 등)은 앱 항구 코드로 맞춥니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.60-18';
+const NOTE = '미르 남은 대수는 홈 카드와 같은 리스트 기준입니다 · 조회만 폰은 항차를 자동 정리하지 않습니다 · 무엇의 위치인지 없는 물음은 되묻습니다 · 씰체결 엑셀 시트 이름과 검수리스트 별첨 제목을 바로잡았습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
-  // V7.60: 콘앱 카고플랜 번들(1.6MB)을 설치 때 미리 캐시 — 약신호(배 안)에서도 즉시 로드.
-  //   실패해도 설치를 막지 않음 (런타임 캐시가 보완).
-  e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((c) => c.add('cone-cargoplan.js').catch(() => {}))
-      .catch(() => {})
-  );
+  // 3.60-18 (진단 M35): 콘앱 카고플랜 번들 프리캐시(V7.60)는 뗐다 — 3.60-03 부터 콘앱은 제 워커(cone-sw.js, cone.html 스코프)가 받고
+  //   콘앱은 그 파일을 `?v=` 붙여 부르므로 이 키(cone-cargoplan.js)는 맞은 적이 없다. 검수앱 설치마다 1.87MB 를 헛다운로드하던 죽은 코드.
   // TallyOne 1.30: **여기서 즉시 활성화하지 않는다.** 검수사 확정 2026-08-09 —
   //   *"알림을 주고 사용자가 필요할 때 새로 고침 하게 하는 게 좋을듯 합니다."*
   //   현장 작업 중에 앱이 제멋대로 새 판으로 바뀌면 안 된다. 갱신 시점은 검수사가 정한다.

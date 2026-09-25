@@ -2553,8 +2553,17 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 
   const baseParsed = { ...parsed, progressQuery: null };
   const baseResults = applyNLFilter(allContainers, baseParsed);
-  const totalCount = baseResults.length;
-  const doneCount = baseResults.filter(c => c._comp).length;
+  //  3.60-18 (M7·다수결 V5 — 검수사 Q3 «잔여 분모 = 리스트»): 조건 없는 «얼마나 남았어» 는 호출부(mir.js voyageCountsOf)가 센 **리스트 기준** 대수를 그대로 답한다 —
+  //    홈 카드·수석 보드(progressOf)와 같은 수. 넘겨받은 컨(EDI∪리스트)을 다시 세면 라이브 MCSN 637N 이 홈 127 / 미르 287 로 갈렸다. 조건(베이·규격·모드 밖)이 붙으면 종전대로 넘겨받은 컨을 센다.
+  const _vc0 = ctx && ctx.voyageCounts && Number(ctx.voyageCounts.total) > 0 ? ctx.voyageCounts : null;
+  const _plain0 = !parsed.bay && !parsed.size && !parsed.fe && !parsed.type && !parsed.temp && !parsed.zone && !parsed.dgClass && !parsed.un && !parsed.pod && !parsed.pol
+    && !parsed.portAny && !parsed.digits && !parsed.bayTrio && parsed.weightMin == null && parsed.weightMax == null;
+  //    넘겨받은 컨이 한 모드뿐(양하선적 탭 카드)이면 그 모드의 수를 본문으로, 항차 전체는 아래 덧줄로(3.53-12 모양 유지).
+  const _modesIn = new Set((Array.isArray(allContainers) ? allContainers : []).map((c) => (c && c._mode === 'loading' ? 'loading' : 'discharge')));
+  const _mainMode = parsed.mode || (_modesIn.size === 1 ? [..._modesIn][0] : null);
+  const _vcMain = (_vc0 && _plain0) ? (_mainMode ? ((_vc0.byMode || {})[_mainMode] || null) : _vc0) : null;
+  const totalCount = _vcMain && Number(_vcMain.total) > 0 ? Number(_vcMain.total) : baseResults.length;
+  const doneCount = _vcMain && Number(_vcMain.total) > 0 ? (Number(_vcMain.done) || 0) : baseResults.filter(c => c._comp).length;
   const pendingCount = totalCount - doneCount;
   const pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
 
@@ -2735,20 +2744,24 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
 //    대수·잔여·페이스의 기준은 **완료 기록(`completed/{cn}`)** 하나다 — 검수원 입력과 터미널 컨별 실적 반영(src:'term' — 동방 직결·카토스)이 거기 같이 들어 있다.
 
 // 앱 검수 기록 답 — completed/전체 · % · 검수사별(기록에 by 가 있으면). 평택분 기준(7.1).
-export function formatAppTallyAnswer(ship, containers, info = null) {   // 3.16: info — 완료자 표기 한 벌에 쓰는 조 등록   // 2.55: 터미널 실적도 같이
+export function formatAppTallyAnswer(ship, containers, info = null, counts = null) {   // 3.16: info — 완료자 표기 한 벌에 쓰는 조 등록   // 2.55: 터미널 실적도 같이   // 3.60-18: counts — 리스트 분모(voyageCountsOf)
   const pool = (containers || []).filter((c) => c._ptk);
   const done = pool.filter((c) => c._comp);
-  if (!done.length) return `${ship} — 아직 완료 기록이 없습니다(평택분 ${pool.length}대).`;
+  //  3.60-18 (감사 M1): 대수·완료 수는 호출부가 준 분모(counts.byMode — 리스트 기준, 홈 카드와 같은 수)로 말한다. 완료자별 집계만 풀에서.
+  const _bm = counts && counts.byMode && Number(counts.total) > 0 ? counts.byMode : null;
+  const _tot = _bm ? Number(counts.total) : pool.length, _dn = _bm ? (Number(counts.done) || 0) : done.length;
+  if (!_dn && !done.length) return `${ship} — 아직 완료 기록이 없습니다(평택분 ${_tot}대).`;
   const seg = [];
   [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
     const p = pool.filter((c) => c._mode === md);
-    if (!p.length) return;
-    const d = p.filter((c) => c._comp).length;
-    seg.push(`${kr} ${d}/${p.length} (${Math.round(d / p.length * 100)}%)`);
+    const t = _bm && _bm[md] ? Number(_bm[md].total) : p.length;
+    if (!t) return;
+    const d = _bm && _bm[md] ? (Number(_bm[md].done) || 0) : p.filter((c) => c._comp).length;
+    seg.push(`${kr} ${d}/${t} (${Math.round(d / t * 100)}%)`);
   });
   const out = [];
   // 1.69-06: 평택분 전량 완료면 **결론부터** — «완료» + 종료 시각(마지막 completed.at, 앱 기록 기준).
-  if (pool.length && done.length === pool.length) {
+  if (_tot && _dn === _tot) {
     let _last = 0;
     done.forEach((c) => { const t = c._comp && c._comp.at; if (t && t > _last) _last = t; });
     const d = _last ? new Date(_last) : null;
@@ -2761,7 +2774,7 @@ export function formatAppTallyAnswer(ship, containers, info = null) {   // 3.16:
   const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
   if (names.length) out.push(`검수사별 — ${names.map(([n, k]) => `${n} ${k}대`).join(' · ')}`);
   {
-    const left = pool.length - done.length;
+    const left = _tot - _dn;
     if (left > 0) out.push(`남은 ${left}대`);
   }
   return out.join('\n');
@@ -3055,7 +3068,9 @@ export function paceFromRecords(doneAts, src, gangs) {
 export function speedFromRecords(voyage, counts) {
   if (!voyage) return null;
   const info = voyage.info || {};
-  const P = paceFromRecords(voyageDoneAts(voyage), { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) });
+  //  3.60-18 (다수결 V5): 호출부가 분모(counts)를 주면 그 분모 안의 완료 시각(counts.doneAts)으로 잰다 — «시간당 몇 대»·«작업 속도»·«몇 시에 끝나» 가 같은 수.
+  const _ats = (counts && Array.isArray(counts.doneAts) && counts.doneAts.length) ? counts.doneAts : voyageDoneAts(voyage);
+  const P = paceFromRecords(_ats, { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) });
   //  완료 몇 건으로 잰 페이스는 잡음이다(감사 실측 — 3건·40분이면 갱당 2.25대, 2갱 몫이 19대로 나온다). 10건이 안 되면 «아직 못 잼»으로 두고 호출부가 계획·과거 평균으로 간다.
   if (!P || !P.ok || !(P.perGangHour > 0) || P.n < 10) return null;
   const plan = counts && Number(counts.total) > 0 ? Number(counts.total) : null;

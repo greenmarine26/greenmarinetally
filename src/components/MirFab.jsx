@@ -158,7 +158,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       let weatherText = null;
       if (parseNaturalQuery(t).weatherQuery) { try { weatherText = await fetchWeatherText(); } catch (e) { weatherText = null; } }
       const ctx = {
-        app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, weatherText,
+        app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, weatherText, accepted: true,   // 3.60-18: 전송된 질문 — 못 알아들으면 miss 기록
         inspector, isChief, chiefData, heartbeat, portMisData, pilotForecast,
         carrierContacts, shipSpeed, ediPattern, voyages, flat,
         computeTallyData, matchPortMis,

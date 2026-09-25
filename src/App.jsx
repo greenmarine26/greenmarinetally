@@ -116,7 +116,7 @@ export default function App() {
       const r = await fbReconnect();
       setRefreshedAt(Date.now());
       if (r && r.online === false) {
-        alert('데이터 새로고침 — 서버 재연결을 확인하지 못했습니다.\n\n상단에 오프라인 표시가 남아 있으면 화면을 새로고침(F5) 해 주세요.\n저장한 내용은 사라지지 않습니다.');
+        alert('데이터 새로고침 — 서버 재연결을 확인하지 못했습니다.\n\n상단에 오프라인 표시가 남아 있으면 화면을 새로고침(F5) 해 주세요.\n오프라인 표시가 남아 있는 동안 저장한 내용은 새로고침하면 사라질 수 있습니다 — 연결이 돌아온 뒤 새로고침해 주세요.');
       }
     } catch (e) {
       console.warn('[새로고침] 재연결 실패', e);   // 조용히 실패하지 않는다(3금지 3번)

@@ -130,6 +130,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const [autoCleanDone, setAutoCleanDone] = useState(false);
   useEffect(() => {
     if (autoCleanDone) return;
+    //  3.60-18 (M16): 조회만 기기는 정본을 지우지 않는다(3.51 «조회만은 보기만») — 종전엔 모든 기기(조회만 폰 포함)가 이 정리를 돌려
+    //    복원한 항차가 다른 폰에서 다시 지워지는 일(3.60-14 «복원 시켰는데 자동으로 사라지는 버그»)의 한 원인이었다. 조회만이면 1회 표식만 남기고 끝.
+    if (isViewOnlyNow()) { setAutoCleanDone(true); return; }
     const entries = Object.entries(voyages || {});
     if (entries.length === 0) return;              // 아직 로드 전
     const WEEK = 7 * 86400000;

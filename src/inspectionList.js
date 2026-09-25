@@ -440,7 +440,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
     const _fit2 = packFit(special.map((c, j) => renderRow(c, j + 1, { noFlag: true })));
     const sheet2PagesList = _fit2.pages;   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
     //  3.60-01: 별첨 제목을 장 머리줄 안에 넣는다 — 장 밖 제목 줄(ititle)만큼 A4 를 넘어 마지막 한 줄이 빈 장으로 밀렸다(ATPR 2643W 실측).
-    sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, `[별첨] 특수화물·X-RAY ${special.length}대`)).join('');
+    sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, `[별첨] 특수화물 ${special.length}대`   /* 3.60-18: 2.92-01 부터 별첨은 특수만(X-RAY·긴급 제외)인데 제목 글자에 X-RAY 가 남아 있었다 */)).join('');
   }
 
   // [별첨2] 시프팅(재적부) — **평택 작업에 방해가 되어 옮기는 화물**, 양하·선적 공통.
