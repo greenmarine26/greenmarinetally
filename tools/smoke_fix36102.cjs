@@ -48,6 +48,12 @@ global.window = globalThis;
     ok('옛 판은 파일별 인식에 «list(구판 제외)» 로 남는다', !!pf && pf.kind === 'list(구판 제외)', JSON.stringify(pf));
     const rDisj = await run([mkList('CLL X 2030E.xlsx', ['AAAU1111111', 'AAAU2222222'], 1), mkList('CLL X 2030E1.xlsx', ['BBBU1111111', 'BBBU2222222'], 2)]);
     ok('자동 등록도 안 겹치는 같은 이름 리스트는 둘 다(4대)', Object.keys(rDisj.records).length === 4);
+    //  3.61-03: 선적 자동 등록에는 새 판 판정을 쓰지 않는다 — RZOR R105W 실측(옛 FIIS 에만 있던 CICU9635360 이 실제로 선적 완료)
+    const rzOld = mkList('RD-Loading List(R105W)_FIIS.xls', ['CICU9635360', 'CICU0000001', 'CICU0000002'], 1, 'KRPTK', 'CNRZH');
+    const rzNew = mkList('RD-Loading List(R105W)_FIIS1.xls', ['SPSU2023195', 'CICU0000001', 'CICU0000002'], 2, 'KRPTK', 'CNRZH');
+    const rL = await M.buildAutoPayload([rzOld, rzNew], { vslCode: 'RZOR', voy: 'R105W', mode: 'loading' });
+    ok('선적 자동 등록은 두 판을 합친다 — CICU9635360 남음(4대)', Object.keys(rL.records).length === 4 && !!rL.records.CICU9635360, String(Object.keys(rL.records)));
+    ok('선적 자동 등록 perFile 에 구판 제외 없음', !(rL.perFile || []).some((p) => /구판/.test(String(p.kind))));
     // ③ 선적 합본(merge_entry) 이 같은 판정을 쓴다
     const me = fs.readFileSync(path.join(ROOT, 'merge_entry.js'), 'utf8');
     ok('merge_entry.js 가 listRevision.js 를 쓴다(자체 사본 없음)', /from '\.\/src\/listRevision\.js'/.test(me) && !/const baseKey\s*=/.test(me) && !/OVERLAP_REV\s*=/.test(me));
@@ -55,6 +61,6 @@ global.window = globalThis;
     const gp = ((g && g.report && g.report.perFile) || []).find((p) => p.name === 'CLL X 2030W.xlsx');
     ok('선적 합본도 옛 판을 «list(구판 제외)» 로 뺀다(종전과 같은 결과)', !!gp && gp.kind === 'list(구판 제외)', JSON.stringify(gp));
   } catch (e) { bad += 1; console.log('  ✘ 예외 — ' + (e && e.stack || e)); }
-  console.log(`3.61-02 연막검사 ${n - bad}/${n}`);
+  console.log(`3.61-02·03 연막검사 ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);
 })();

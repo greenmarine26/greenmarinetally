@@ -180,10 +180,12 @@ export async function buildAutoPayload(files, opts) {
   //    검수사 2026-09-26 «새로운 자료를 적용을 안하고 전자료를 이용하는이유? 금일은 TMPZ새로운걸로 적용하면 305개 맞는데 그전 자료를 이용하면 307개가 됨»
   //    — 이 경로는 리스트를 전부 합쳐, 새 판 «CDL TMPZ EAS 2030E1.xlsx»(47대)에서 빠진 컨 2대가 옛 판 «…2030E.xlsx»(50대)에서 살아남았다.
   //    옛 판은 perFile 에 «list(구판 제외)» 로 남긴다(조용히 사라지지 않게). 읽기에 실패한 파일은 판정에서 빠지고 아래에서 종전대로 다시 읽는다.
-  //    ⚠ 양하·선적을 가리지 않는다 — 합본(LOADLIST)이 없는 선적(RZOR R###W 폴더는 merge._is_load_voy 에 안 맞아 합본이 없다)도 낱개 리스트가
-  //      여기로 와서 같은 판정을 받는다. 실측 RZOR R105W: 옛 «RD-Loading List(R105W)_FIIS.xls» 에만 있던 CICU9635360 이 빠져 200 → 199.
+  //  ★ 3.61-03 — **양하에만 쓴다.** 선적은 종전대로(합본이 있는 배는 합본이 이미 판정하고, 합본 없는 RZOR R###W 는 리스트를 합친다).
+  //    실측 RZOR R105W(2026-09-26 완료 저장): 옛 «RD-Loading List(R105W)_FIIS.xls» 에만 있던 CICU9635360 이 새 판 «…FIIS1.xls»·
+  //    «R105W_CLL Data 최종.xls»(둘 다 199대)에는 없었지만 **실제로는 13:25 5호기로 선적 완료**(검수사 기록) — 실선적 200 이 맞았다.
+  //    3.61-02 는 이 경로를 양하·선적 가리지 않고 태워 199 로 줄였을 것이다(완료 저장이 먼저라 피해는 없었다).
   const _listParsed = {}, _listCns = {}, _listFiles = [];
-  for (const f of files || []) {
+  for (const f of (mode === 'discharge' ? (files || []) : [])) {   // 3.61-03: 양하만
     const name = f.name || '';
     if (!/\.(xls|xlsx)$/i.test(name) || _kind(name) !== 'list') continue;
     try {
