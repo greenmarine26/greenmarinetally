@@ -6,6 +6,7 @@
 import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
 import { APP_VERSION } from './utils.js';
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 파일 이름이 선사
+import { listRevisionDrops } from './listRevision.js';   // 3.61-02: 같은 기본이름 리스트는 새 판만(선적 합본과 같은 판정 한 벌)
 
 // V9.57(G5): 파일 분류기 단일화 — mergeApi.classify와 이 _kind가 서로 달라(cdl 허용·.txt 지원·
 //   merged 지원) 같은 파일이 경로마다 다르게 처리됐다. 이제 이 함수 하나를 양쪽
@@ -175,6 +176,29 @@ export async function buildAutoPayload(files, opts) {
   let plan = null;                 // V8.84-02: 플랜 격자 파싱 결과 { name, slots } — 슬롯 최다 1개 채택
   const records = {};              // 리스트 원시 병합(먼저 온 값 유지 + 빈칸 채움)
   const perFile = [];
+  //  ★ 3.61-02 — **같은 기본이름 리스트는 컨이 반 넘게 겹치면 새 판만 쓴다**(선적 합본 merge_entry.js 와 같은 판정 — src/listRevision.js 한 벌).
+  //    검수사 2026-09-26 «새로운 자료를 적용을 안하고 전자료를 이용하는이유? 금일은 TMPZ새로운걸로 적용하면 305개 맞는데 그전 자료를 이용하면 307개가 됨»
+  //    — 이 경로는 리스트를 전부 합쳐, 새 판 «CDL TMPZ EAS 2030E1.xlsx»(47대)에서 빠진 컨 2대가 옛 판 «…2030E.xlsx»(50대)에서 살아남았다.
+  //    옛 판은 perFile 에 «list(구판 제외)» 로 남긴다(조용히 사라지지 않게). 읽기에 실패한 파일은 판정에서 빠지고 아래에서 종전대로 다시 읽는다.
+  //    ⚠ 양하·선적을 가리지 않는다 — 합본(LOADLIST)이 없는 선적(RZOR R###W 폴더는 merge._is_load_voy 에 안 맞아 합본이 없다)도 낱개 리스트가
+  //      여기로 와서 같은 판정을 받는다. 실측 RZOR R105W: 옛 «RD-Loading List(R105W)_FIIS.xls» 에만 있던 CICU9635360 이 빠져 200 → 199.
+  const _listParsed = {}, _listCns = {}, _listFiles = [];
+  for (const f of files || []) {
+    const name = f.name || '';
+    if (!/\.(xls|xlsx)$/i.test(name) || _kind(name) !== 'list') continue;
+    try {
+      const out = await parseListExcel(await _asU8(f));
+      _listParsed[name] = out;
+      const cs = new Set();
+      ((out && out.records) || []).forEach(r => { const c = String(r.cn || '').toUpperCase(); if (c && !c.startsWith('__BOOK_')) cs.add(c); });
+      _listCns[name] = cs;
+    } catch (e) {
+      console.warn('[autoRegApi] 구판 판정용 리스트 읽기 실패 — 이 파일은 판정에서 빠진다:', name, e);
+      continue;
+    }
+    _listFiles.push({ name, mtime: Number(f.mtime) || 0 });
+  }
+  const _revDrop = listRevisionDrops(_listFiles, n => _listCns[n]);
   for (const f of files || []) {
     const name = f.name || '';
     try {
@@ -237,7 +261,8 @@ export async function buildAutoPayload(files, opts) {
           }
         }
         if (xk !== 'list') { perFile.push({ name, kind: 'skip' }); continue; }
-        const out = await parseListExcel(await _asU8(f));
+        if (_revDrop.has(name)) { perFile.push({ name, kind: 'list(구판 제외)', count: 0 }); continue; }   // 3.61-02
+        const out = (name in _listParsed) ? _listParsed[name] : await parseListExcel(await _asU8(f));
         const recs = (out && out.records) || [];
         const _fop = opFromListFileName(name);   // 3.60-21 감사 M-1: 자동등록 경로에도 파일명 선사 규칙(빈 op 에만, 표시 _opFromFile)
         recs.forEach(r => {

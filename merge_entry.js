@@ -6,6 +6,7 @@
 // 재생성: 앱 저장소에서  npx vite build --config vite.merge.config.js  → dist_merge/gm_merge.js → HTML 래핑.
 import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, normalizeCarrierCode, APP_VERSION } from './src/utils.js';
 import { opFromListFileName } from './src/data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(합본이 op 를 비워 마감텔리가 CSC/DSL 을 못 갈랐다)
+import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.61-02: 개정판 판정 한 벌(양하 자동 등록과 같이 쓴다)
 
   // ../gmt2/src/mergeApi.js
   function classify(name) {
@@ -48,42 +49,9 @@ import { opFromListFileName } from './src/data/tallyFormats.js';   // 3.60-21: �
     const xray = {};
     const perFile = [];
     let bestEdi = null, bestScore = -1, ediName = "", bestEdiM = -1, bestEdiR = -1, bestEdiS = -1;   // bestEdiS: 자리(적부도) 여부 — TallyOne 1.70
-    // v2.17.4: 개정판 대체 — 같은 기본이름(끝 1~2자리 숫자/(n) 무시)의 리스트는 최신(mtime)만 남긴다.
-    //   "SIMJ 2636W (Excel).xls" 1차의 빠진 컨 4대가 "(Excel)1" 2차가 와도 합본에 잔존하던 문제.
-    //   (5자리 부킹번호가 붙은 CONTAINERLIST53275류는 서로 다른 리스트 — 1~2자리만 개정판으로 본다.)
-    // v2.17.5: 개정판 마커 확장 — REVISED/RE)/수정/최종/개정/n차가 이름 어디에 붙어도 같은 그룹으로.
-    //   (STMJ2636WCN_CNTAO_REVISED CONTAINERLIST가 원본과 합집합으로 섞이던 문제, 사용자 보고 2026-07-07.)
-    const baseKey = (nm) => String(nm || "").toLowerCase()
-      .replace(/\.(xls|xlsx)$/, "")
-      .replace(/preloadlistdeadline|finalloadlistdeadline/g, "loadlistdeadline")
-      .replace(/revised?|final|\bre\)|\(re\)|수정본|수정|최종|개정|[0-9]+차/g, " ")
-      .replace(/\s*\(\d{1,2}\)$/, "").replace(/[\s_-]*\d{1,2}$/, "")
-      .replace(/[\s_()\-\.]+/g, "");
-    // v2.17.5b: 개정 서열 — mtime은 수집기가 매 사이클 파일을 다시 저장해 신뢰 불가(라이브에서 옛 CNTAO가
-    //   REVISED보다 mtime이 최신으로 나옴). 이름의 개정 마커 자체로 서열을 정한다.
-    //   최종(99) > REVISED/RE)/수정/개정(50) > n차·끝자리 n·(n)(=n) > 무표시(0). 동률이면 mtime, 그다음 이름 긴 쪽.
-    const revRank = (nm) => {
-      const n = String(nm || "").toLowerCase().replace(/\.(xls|xlsx|edi|asc)$/, "");
-      if (/최종|final/.test(n)) return 99;
-      if (/revised?|\bre\)|\(re\)|수정본|수정|개정/.test(n)) return 50;
-      let r = 0, m;
-      if ((m = n.match(/([0-9]{1,2})\s*차/))) r = Math.max(r, parseInt(m[1], 10));
-      if ((m = n.match(/\((\d{1,2})\)\s*$/))) r = Math.max(r, parseInt(m[1], 10));
-      if ((m = n.match(/[\s_-]*(\d{1,2})\s*$/))) r = Math.max(r, parseInt(m[1], 10));
-      return r;
-    };
-    const newerRev = (a, b) => { // a가 b보다 새 개정판이면 true.
-      if (!b) return true;
-      const ra = revRank(a.name), rb = revRank(b.name);
-      if (ra !== rb) return ra > rb;
-      if ((a.mtime || 0) !== (b.mtime || 0)) return (a.mtime || 0) > (b.mtime || 0);
-      return String(a.name || "").length > String(b.name || "").length;
-    };
-    // v2.17.9: 개정판 판정을 '내용(컨 집합) 기준'으로 (사용자 확정 2026-07-09, A안).
-    //   메일 중복 다운로드로 파일명이 같아 (1)(2)가 붙은 서로 다른 선사 리스트가 같은
-    //   baseKey로 묶여 최신 하나만 남고 나머지가 '구판 제외'되던 문제(SWSP 2606S:
-    //   HSL1·HAS223·SKR389 중 SKR만 남아 613→389). 같은 baseKey라도 컨 집합이 겹치면
-    //   (진짜 개정) 최신만, 겹치지 않으면(다른 선사) 모두 합친다.
+    // v2.17.4 · 2.17.5 · 2.17.5b · 2.17.9 개정판 판정(기본이름·개정 서열·컨 겹침)은 TallyOne 3.61-02 부터 src/listRevision.js 한 벌 —
+    //   양하 자동 등록(autoRegApi)도 같은 판정을 쓴다. 규칙 설명과 사건 기록은 그 파일 머리에 옮겼다.
+    const revRank = listRevRank;
     const listRecCache = {}, listCnSet = {};
     for (const f of files) {
       if (classify(f.name || "") !== "list") continue;
@@ -99,28 +67,7 @@ import { opFromListFileName } from './src/data/tallyFormats.js';   // 3.60-21: �
         listCnSet[f.name] = new Set();
       }
     }
-    const OVERLAP_REV = 0.5;
-    const _groups = {};
-    for (const f of files) {
-      if (classify(f.name || "") !== "list") continue;
-      const _k = baseKey(f.name);
-      (_groups[_k] = _groups[_k] || []).push(f);
-    }
-    const dropList = new Set();
-    for (const _gk in _groups) {
-      const _grp = _groups[_gk].slice().sort((a, b) => (newerRev(a, b) ? -1 : 1));
-      const _kept = new Set();
-      let _first = true;
-      for (const f of _grp) {
-        const _cs = listCnSet[f.name] || new Set();
-        if (_first) { _first = false; _cs.forEach((c) => _kept.add(c)); continue; }
-        let _inter = 0;
-        _cs.forEach((c) => { if (_kept.has(c)) _inter++; });
-        const _denom = Math.min(_cs.size, _kept.size) || 1;
-        if (_cs.size > 0 && _inter / _denom >= OVERLAP_REV) dropList.add(f.name);
-        else _cs.forEach((c) => _kept.add(c));
-      }
-    }
+    const dropList = listRevisionDrops(files.filter((f) => classify(f.name || "") === "list"), (n) => listCnSet[n]);
     for (const f of files) {
       const name = f.name || "";
       const kind = classify(name);

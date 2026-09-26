@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.61-01';
-const NOTE = 'RZOR 선사 리스트의 리퍼 표기(40RE·40RF)가 EDI·세관의 하이큐 리퍼와 다르다는 규격 알림을 더 내지 않습니다 — 높이는 EDI·세관을 따릅니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.61-02';
+const NOTE = '수집기가 같은 이름으로 다시 온 리스트는 새 판만 씁니다 — TMPZ 2030E 양하처럼 옛 판에만 있던 컨이 대수에 남지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
