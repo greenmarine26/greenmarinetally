@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.63';
-const NOTE = '카페리 TNJP OBWH RZOR 는 17시가 되면 갱별 주간 작업보고 창이 저절로 뜹니다 — 작업 중인 검수원 폰은 내 갱 카톡 보고, 수석 대시보드는 모아 보기';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.64';
+const NOTE = '카페리 갱별 작업보고를 놓쳐도 왼쪽 아래 보고 보관 단추에 17시와 05시30분 마감 기준으로 남습니다 — 작업이 끝나면 같이 사라집니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

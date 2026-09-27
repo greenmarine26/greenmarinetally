@@ -14,7 +14,7 @@ import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -950,6 +950,17 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             <div className="text-2xs text-dim-400 text-center">
               {dnShift ? '수동 선택됨' : '현재 시각 기준 자동 선택'} · 보고 마감 +30분 여유
             </div>
+            {/* ★ 3.64 카페리(TNJP·OBWH·RZOR) — 17:00·05:30 마감 갱별 보고 보관(검수사 «놓쳐서 작업 보고를 못했을떄 17시 기준으로 갱별 작업 보고 자료가 남아 있어야 합니다»).
+                 창은 Ferry1700Alert 한 곳에서만 그린다 — 여기서는 열라고 알리기만(이벤트). */}
+            {isFerry1700Ship(voyage?.info, voyageKey) && (() => {
+              const n = ferryReportCuts(voyage, Date.now(), voyageKey).length;
+              return (
+                <button onClick={() => window.dispatchEvent(new CustomEvent('ferry1700Open', { detail: { voyageKey } }))} data-f1700-open="1"
+                  className="w-full py-2.5 rounded-pill font-bold text-sm bg-amber-600 text-black">
+                  📋 갱별 보고 보관 {n}건 — 17:00·05:30 마감 기준 · 💬 카톡 보고
+                </button>
+              );
+            })()}
             {/* 양하/선적 각 표 */}
             {[['discharge', '양하', dnReportD], ['loading', '선적', dnReportL]].map(([m, label, rep]) => (
               <div key={m} className="bg-ink-900 border border-line rounded-pill p-2">

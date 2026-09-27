@@ -294,8 +294,9 @@ export const DAMAGE_PARTS = [
 //  ★ 3.63 — 카페리 17:00 주간 작업보고(갱별) 카톡 글. rep = utils.buildGangShiftReport 의 결과 한 벌(화면·음성과 같은 값).
 //    gangNos 가 있으면 그 호기만(검수원 폰 — 내 갱), 비면 갱 전부. 갱별 규격표가 없는 배(대수만)는 배 전체 규격표를 뒤에 붙인다.
 //    형식은 검수사가 본 미리보기(2026-09-27 «네» · «갱별 규격표까지») 그대로 — 📍 배 항차 / 📋 제목 / 🏗 호기 / ■ 양하·선적 / 규격 줄 / 시각.
-export function buildFerry1700Message({ vsl, voy, rep, gangNos = null }) {
-  const L = [`📍 ${vsl || ''} ${voy || ''}`.trim(), '📋 주간 작업보고 (17:00 마감)'];
+export function buildFerry1700Message({ vsl, voy, rep, gangNos = null, recomputed = false }) {
+  const _night = rep && rep.shift === '야간';   // 3.64: 보관한 야간(05:30 마감) 보고도 같은 글 모양
+  const L = [`📍 ${vsl || ''} ${voy || ''}`.trim(), _night ? '📋 야간 작업보고 (05:30 마감)' : '📋 주간 작업보고 (17:00 마감)'];
   const side = (label, r, withTable = true) => {
     if (!r || r.none) return;
     if (r.excluded) { L.push(`■ ${label} — 작업 완료`); return; }
@@ -311,11 +312,12 @@ export function buildFerry1700Message({ vsl, voy, rep, gangNos = null }) {
     for (const g of gangs) { L.push(`🏗 ${g.no}호기`); side('양하', g.discharge); side('선적', g.loading); }
     if (!rep.perGang) {
       const q = new Date(rep.qcAt || Date.now());
-      L.push(rep.postCut > 0 ? `(갱별 규격표 없음 — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, 17:00 뒤 ${rep.postCut}대 포함)` : '(갱별 규격표 없음 — 터미널 호기 집계 대수)');
+      L.push(rep.postCut > 0 ? `(갱별 규격표 없음 — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, ${_night ? '05:30' : '17:00'} 뒤 ${rep.postCut}대 포함)` : '(갱별 규격표 없음 — 터미널 호기 집계 대수)');
       L.push('▶ 배 전체'); side('양하', rep.ship.discharge); side('선적', rep.ship.loading);
     }
   }
+  if (recomputed) L.push('(마감 때 적어 둔 보고가 없어 지금 자료로 다시 센 값 — 갱 숫자는 조금 다를 수 있음)');   // 3.64: 화면 안내와 같은 말
   const d = new Date((rep && rep.cutMs) || Date.now());
-  L.push(`시각: ${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 17:00`);
+  L.push(`시각: ${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${_night ? '05:30' : '17:00'}`);
   return L.join('\n');
 }
