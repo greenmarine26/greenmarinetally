@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.64';
-const NOTE = '카페리 갱별 작업보고를 놓쳐도 왼쪽 아래 보고 보관 단추에 17시와 05시30분 마감 기준으로 남습니다 — 작업이 끝나면 같이 사라집니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.64-01';
+const NOTE = '수석 대시보드 장비별 작업 보고가 부두별 줄로 나뉩니다 — PCTC 4호기와 PNCT 4호기를 따로 셉니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

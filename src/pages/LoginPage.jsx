@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled, getPierFromBerth, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
 import { isFreeRoamer, readWorkChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
@@ -390,7 +390,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const free = isFreeRoamer(choiceName);
     const vlist = [...board.ships, ...board.soon, ...board.upcoming];
     const infoOf = (key) => (voyages && voyages[key] && voyages[key].info) || {};
-    const pierOf = (key) => { const inf = infoOf(key); return inf.pier || getPierFromBerth(inf.berth || ''); };
+    const pierOf = (key) => voyagePierOf(infoOf(key));   // 3.64-01: 부두 판정 한 벌(utils.voyagePierOf — 수석 대시보드 장비 보고 부두 줄과 같은 규칙)
     const rankLabel = (r) => (r === 0 ? '작업중' : r === 1 ? '오늘' : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
     const equips = choiceVoyage ? equipNumbersForPier(pierOf(choiceVoyage)) : [];
     const chosen = choiceVoyage ? infoOf(choiceVoyage) : null;

@@ -6,7 +6,7 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -189,26 +189,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const healthIssueCount = useMemo(() => healthSummary(voyages).issueCount, [voyages]);
 
   // M3.5.6: 오늘 장비별 작업 보고 통계
-  const equipStats = useMemo(() => {
+  //   3.64-01: 부두 → 호기 두 단(utils.equipReportBoard) — 같은 4호기라도 PCTC·PNCT 는 따로 센다
+  //   (검수사 2026-09-28 A안 «부두별 줄» · «두 부두 줄 늘»). 부두는 보고의 항차(voyageKey)로 찾는다.
+  const equipBoard = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayMs = today.getTime();
-    const stats = {};
-    (allReports || []).forEach(r => {
-      if (!r.ts || r.ts < todayMs) return;
-      const equip = r.equip || '미지정';
-      if (!stats[equip]) stats[equip] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, externalPause: 0, latest: 0 };
-      stats[equip].total++;
-      if (r.type === 'work_status') stats[equip].status++;
-      else if (r.type === 'hatch') stats[equip].hatch++;
-      else if (r.type === 'conbox') stats[equip].conbox++;
-      else if (r.type === 'damage') stats[equip].damage++;
-      else if (r.type === 'seal_error') stats[equip].sealError++;
-      else if (r.type === 'external_pause') stats[equip].externalPause++;  // V9.57(I2): 작업중단(사고성) 분기 누락 — 표에 안 잡히던 것
-      if (r.ts > stats[equip].latest) stats[equip].latest = r.ts;
-    });
-    return stats;
-  }, [allReports]);
+    return equipReportBoard(allReports, voyages, today.getTime());
+  }, [allReports, voyages]);
 
   // 최근 작업 보고 (시간순)
   const recentReports = useMemo(() => {
@@ -1007,54 +994,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <ArchiveRestoreSection chief={chief} onRestored={() => {}} />
       </Fold>
 
-      {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
-      {Object.keys(equipStats).length > 0 && (
+      {/* M3.5.6: 장비별 오늘 작업 보고 통계 — 3.64-01: 부두별 줄(EquipReportBoard) */}
+      {equipBoard.total > 0 && (
         <Fold id="equip" title="🏗 오늘 장비별 작업 보고" open={!!openSecs.equip} onToggle={() => toggleSec('equip')}>
-        <div className="bg-ink-900 border border-orange-700/40 rounded-btn p-3 mt-3">
-          <div className="flex items-center gap-2 mb-3">
-            <Truck className="w-4 h-4 text-orange-400"/>
-            <div className="text-sm font-bold text-orange-100">오늘 장비별 작업 보고</div>
-            <span className="text-2xs text-dim-400">실시간</span>
-            {/* V9.57(I3): 구독 한도(300건)에 걸리면 오늘 통계가 잘렸을 수 있음을 명시 */}
-            {(allReports || []).length >= 300 && (
-              <span className="text-2xs text-amber-400 font-bold">최근 300건 기준 (더 오래된 보고는 미집계)</span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {/* V9.57(I1): 하드코딩 1~4호기 → 부두 최대 목록(1~5호기) ∪ 실제 보고에 등장한 장비.
-                PNCT는 5호기가 있어 5호기 보고가 표에서 통째로 빠졌었다. '미지정'(장비 없는 보고,
-                작업중단 등)은 맨 뒤 버킷으로 표시(I2). */}
-            {(() => {
-              const eqList = [...equipNumbersForPier(null)];
-              Object.keys(equipStats).forEach(k => { if (k !== '미지정' && !eqList.includes(k)) eqList.push(k); });
-              if (equipStats['미지정']) eqList.push('미지정');
-              return eqList;
-            })().map(eq => {
-              const s = equipStats[eq];
-              if (!s) return (
-                <div key={eq} className="bg-ink-800/40 border border-line/40 rounded p-2 opacity-50">
-                  <div className="text-sm font-bold text-dim-300">🏗 {eq}</div>
-                  <div className="text-2xs text-dim-400">작업 없음</div>
-                </div>
-              );
-              return (
-                <div key={eq} className="bg-orange-900/20 border border-orange-700/40 rounded p-2">
-                  <div className="text-sm font-bold text-orange-200">🏗 {eq}</div>
-                  <div className="text-lg font-black text-orange-100">{s.total}건</div>
-                  <div className="text-2xs text-dim-300 space-y-0.5 mt-1">
-                    {s.status > 0 && <div>📤 작업상태 {s.status}</div>}
-                    {s.hatch > 0 && <div>🔓 해치 {s.hatch}</div>}
-                    {s.conbox > 0 && <div>📦 콘박스 {s.conbox}</div>}
-                    {s.damage > 0 && <div className="text-amber-300">⚠️ 데미지 {s.damage}</div>}
-                    {s.sealError > 0 && <div className="text-red-300">🚨 실오류 {s.sealError}</div>}
-                    {/* V9.57(I2): 작업중단(외부요인) — 사고성 보고라 가장 눈에 띄게 */}
-                    {s.externalPause > 0 && <div className="text-red-300 font-black">⛔ 작업중단 {s.externalPause}</div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+          <EquipReportBoard board={equipBoard} capped={(allReports || []).length >= 300} />
         </Fold>
       )}
 
@@ -2952,6 +2895,62 @@ function TallyExportSection({ voyages, chief, pfMap, archiveList, onArchiveChang
       </div>
       {msg && <div className="mt-2 text-xxs text-dim-200 whitespace-pre-wrap">{msg}</div>}
     </section>
+  );
+}
+
+// 3.64-01: «🏗 오늘 장비별 작업 보고» 카드 — 부두마다 한 줄, 줄 안은 호기 칸(utils.equipReportBoard 가 센 것을 그리기만 한다).
+//   검수사 2026-09-28 «작업 보고에서 위치별 갱이 서로 같은데 동시 작업시 중복되면 어떻게 표기 하나?» → A안 «부두별 줄» · «두 부두 줄 늘».
+//   칸 모양·색·셈 종류는 종전(M3.5.6 · V9.57 I1~I3) 그대로. 5칸 격자라 PCTC·PNCT 의 같은 호기가 위아래로 맞는다.
+//   export — 연막검사(tools/smoke_equippier)가 실데이터로 직접 그린다.
+export function EquipReportBoard({ board, capped = false }) {
+  return (
+        <div className="bg-ink-900 border border-orange-700/40 rounded-btn p-3 mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Truck className="w-4 h-4 text-orange-400"/>
+            <div className="text-sm font-bold text-orange-100">오늘 장비별 작업 보고</div>
+            <span className="text-2xs text-dim-400">실시간</span>
+            {/* V9.57(I3): 구독 한도(300건)에 걸리면 오늘 통계가 잘렸을 수 있음을 명시 */}
+            {capped && (
+              <span className="text-2xs text-amber-400 font-bold">최근 300건 기준 (더 오래된 보고는 미집계)</span>
+            )}
+          </div>
+          <div className="space-y-3">
+            {((board && board.rows) || []).map(row => (
+              <div key={row.pier} data-pier={row.pier}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-orange-300">{row.pier}</span>
+                  <span className="text-2xs text-dim-400">{row.total > 0 ? `${row.total}건` : '보고 없음'}</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {/* V9.57(I1): 부두 장비 목록 ∪ 실제 보고에 등장한 장비 · '미지정'(장비 없는 보고)은 줄 끝(I2) */}
+                  {row.cells.map(({ eq, s }) => {
+                    if (!s) return (
+                      <div key={eq} className="bg-ink-800/40 border border-line/40 rounded p-2 opacity-50">
+                        <div className="text-sm font-bold text-dim-300">🏗 {eq}</div>
+                        <div className="text-2xs text-dim-400">작업 없음</div>
+                      </div>
+                    );
+                    return (
+                      <div key={eq} className="bg-orange-900/20 border border-orange-700/40 rounded p-2">
+                        <div className="text-sm font-bold text-orange-200">🏗 {eq}</div>
+                        <div className="text-lg font-black text-orange-100">{s.total}건</div>
+                        <div className="text-2xs text-dim-300 space-y-0.5 mt-1">
+                          {s.status > 0 && <div>📤 작업상태 {s.status}</div>}
+                          {s.hatch > 0 && <div>🔓 해치 {s.hatch}</div>}
+                          {s.conbox > 0 && <div>📦 콘박스 {s.conbox}</div>}
+                          {s.damage > 0 && <div className="text-amber-300">⚠️ 데미지 {s.damage}</div>}
+                          {s.sealError > 0 && <div className="text-red-300">🚨 실오류 {s.sealError}</div>}
+                          {/* V9.57(I2): 작업중단(외부요인) — 사고성 보고라 가장 눈에 띄게 */}
+                          {s.externalPause > 0 && <div className="text-red-300 font-black">⛔ 작업중단 {s.externalPause}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
   );
 }
 

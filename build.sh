@@ -455,6 +455,17 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 카페리 17시 갱별 보고 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_F17"; exit 1
   fi
+  # 3.64-01: 수석 대시보드 «오늘 장비별 작업 보고» 부두별 줄 — 09-28 새벽 4호기 PCTC·PNCT 실보고와 보고 273건 전수로 세고 실제 카드를 그린다.
+  SMOKE_EQP=$(mktemp /dev/shm/hometmp/_smokeeqp_XXXXXX.js)
+  if npx esbuild tools/smoke_equippier.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+       --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_EQP" --log-level=error; then
+    node tools/smoke_equippier.cjs "$SMOKE_EQP" || { echo "✗ 장비별 작업 보고 부두별 줄 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_EQP"; exit 1; }
+    rm -f "$SMOKE_EQP"
+  else
+    echo "✗ 장비별 작업 보고 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_EQP"; exit 1
+  fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.
