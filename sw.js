@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.62';
-const NOTE = '검수 리스트 인쇄 창에 장 나누기 단추가 생겼습니다 — 이어서 · 20피트 40피트 · 풀 엠티 · 포트별, 묶음이 바뀌는 줄에는 경계선이 그어집니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.63';
+const NOTE = '카페리 TNJP OBWH RZOR 는 17시가 되면 갱별 주간 작업보고 창이 저절로 뜹니다 — 작업 중인 검수원 폰은 내 갱 카톡 보고, 수석 대시보드는 모아 보기';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

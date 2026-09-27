@@ -290,3 +290,32 @@ export const DAMAGE_PARTS = [
   { code: 'LOCK ROD', label: 'LOCK ROD (잠금봉)' },
   { code: 'SEAL', label: 'SEAL (봉인)' },
 ];
+
+//  ★ 3.63 — 카페리 17:00 주간 작업보고(갱별) 카톡 글. rep = utils.buildGangShiftReport 의 결과 한 벌(화면·음성과 같은 값).
+//    gangNos 가 있으면 그 호기만(검수원 폰 — 내 갱), 비면 갱 전부. 갱별 규격표가 없는 배(대수만)는 배 전체 규격표를 뒤에 붙인다.
+//    형식은 검수사가 본 미리보기(2026-09-27 «네» · «갱별 규격표까지») 그대로 — 📍 배 항차 / 📋 제목 / 🏗 호기 / ■ 양하·선적 / 규격 줄 / 시각.
+export function buildFerry1700Message({ vsl, voy, rep, gangNos = null }) {
+  const L = [`📍 ${vsl || ''} ${voy || ''}`.trim(), '📋 주간 작업보고 (17:00 마감)'];
+  const side = (label, r, withTable = true) => {
+    if (!r || r.none) return;
+    if (r.excluded) { L.push(`■ ${label} — 작업 완료`); return; }
+    L.push(`■ ${label} — ${r.basis} ${r.total.total}대 (완료 ${r.doneTotal} · 잔여 ${r.remainTotal})`);
+    if (!withTable || r.countsOnly || !r.tbl) return;
+    for (const [nm, o] of [['20ft', r.tbl.s20], ['40ft', r.tbl.s40], ['45ft', r.tbl.s45]]) L.push(`  ${nm}  F ${o.F} · E ${o.E}`);
+    L.push(`  계  F ${r.total.F} · E ${r.total.E}`);
+  };
+  const all = (rep && rep.gangs) || [];
+  const gangs = gangNos && gangNos.length ? all.filter((g) => gangNos.includes(g.no)) : all;
+  if (!gangs.length) { side('양하', rep && rep.ship && rep.ship.discharge); side('선적', rep && rep.ship && rep.ship.loading); }
+  else {
+    for (const g of gangs) { L.push(`🏗 ${g.no}호기`); side('양하', g.discharge); side('선적', g.loading); }
+    if (!rep.perGang) {
+      const q = new Date(rep.qcAt || Date.now());
+      L.push(rep.postCut > 0 ? `(갱별 규격표 없음 — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, 17:00 뒤 ${rep.postCut}대 포함)` : '(갱별 규격표 없음 — 터미널 호기 집계 대수)');
+      L.push('▶ 배 전체'); side('양하', rep.ship.discharge); side('선적', rep.ship.loading);
+    }
+  }
+  const d = new Date((rep && rep.cutMs) || Date.now());
+  L.push(`시각: ${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 17:00`);
+  return L.join('\n');
+}

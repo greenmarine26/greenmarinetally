@@ -33,6 +33,7 @@ import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 import { shipOpMapper } from '../data/tallyFormats.js';
 import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
+import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -759,6 +760,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
       {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
       {showPier && <PierRegisterModal inspector={inspector} onClose={() => setShowPier(false)} />}
+      {/* ★ 3.63 — 카페리 17:00 주간 작업보고(갱별) — 그 시각 작업 중인 대상 카페리를 한 창에 모아(보기만) */}
+      <Ferry1700Alert audience="chief" voyages={voyages} />
       {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
       {showBayMatrix && (
         /* 3.5: «쓰이는 배»를 화면이 알 수 있게 — 부모가 이미 들고 있는 재료만 넘긴다(추가 요청 0).

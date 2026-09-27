@@ -445,6 +445,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 시작보고 호기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_EQ"; exit 1
   fi
+  # 3.63: 카페리 17시 갱별 주간 작업보고 — 계산 한 벌(buildGangShiftReport·ferry1700Due)과 알림 창을 보관 실데이터로 그려 잰다.
+  SMOKE_F17=$(mktemp /dev/shm/hometmp/_smokef17_XXXXXX.js)
+  if npx esbuild tools/smoke_ferry1700.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+       --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_F17" --log-level=error; then
+    node tools/smoke_ferry1700.cjs "$SMOKE_F17" || { echo "✗ 카페리 17시 갱별 보고 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_F17"; exit 1; }
+    rm -f "$SMOKE_F17"
+  else
+    echo "✗ 카페리 17시 갱별 보고 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_F17"; exit 1
+  fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.

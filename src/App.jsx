@@ -19,6 +19,7 @@ import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
+import Ferry1700Alert from './components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 작업 중 검수원 폰
 import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
 import FoodPage from './pages/FoodPage.jsx';       // V8.60: 맛집 수첩+돌림판
 import AuxPage from './pages/AuxPage.jsx';         // TallyOne 1.0: 보조기능 화면(#/aux — 팀M 구현)
@@ -709,6 +710,12 @@ export default function App() {
            답은 mirAnswer.answerOne 한 벌(작업창·양하선적 탭·홈·콘앱과 같은 함수). 플랜 명령은 위 mirPlan 덮개를 연다. */}
       <MirFab voyages={visibleVoyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData}
         pilotForecast={pilotForecast} heartbeat={heartbeat} onOpenPlan={(p) => setMirPlan(p)} />
+
+      {/* ★ 3.63 — 카페리(TNJP·OBWH·RZOR) 17:00 주간 작업보고. 작업자로 들어와 그 배를 고른 폰에만(조회만은 안 뜬다) — 어느 화면에서든.
+           수석 대시보드를 보고 있으면 그쪽 창(모아 보기)이 뜨므로 여기서는 비킨다(두 창이 겹치지 않게). */}
+      {route.name !== 'chief' && workChoice && workChoice.mode === 'work' && workChoice.voyageKey && (
+        <Ferry1700Alert audience="inspector" voyages={voyages} voyageKey={workChoice.voyageKey} />
+      )}
 
       <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>

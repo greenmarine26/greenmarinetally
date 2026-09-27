@@ -14,7 +14,7 @@ import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -37,23 +37,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   //   호출부(VoyagePage)는 건드리지 않는다 — voyage prop만으로 조립(외과적 변경 유지).
   const dnContainers = useMemo(() => {
     if (!isHatchSkipShip) return { discharge: [], loading: [] };
-    const buildMode = (m) => {
-      const sec = voyage?.[m] || {};
-      const edi = sec.ediContainers || {};
-      const recs = sec.records || {};
-      const comp = sec.completed || {};
-      const cns = new Set([...Object.keys(edi), ...Object.keys(recs)]);
-      const out = [];
-      for (const cn of cns) {
-        const e = edi[cn] || {};
-        const r = recs[cn] || {};
-        const c = { ...e, ...r, cn, _comp: comp[cn] || null };
-        // 평택분만: 양하=POD 평택, 선적=POL 평택.
-        const ptk = m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
-        if (ptk) out.push(c);
-      }
-      return out;
-    };
+    const buildMode = (m) => shiftReportContainers(voyage, m);   // 3.63: 조립 한 벌(17시 갱별 보고 창과 같은 목록)
     return { discharge: buildMode('discharge'), loading: buildMode('loading') };
   }, [voyage, isHatchSkipShip]);
 
