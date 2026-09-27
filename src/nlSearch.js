@@ -84,6 +84,38 @@ export function portToKr(code) {
 }
 
 // ─── 메인 파서 ───
+/** ── 끼니 말의 «때» 판정 한 벌 (3.61-04) ────────────────────────────────────────────
+ *  검수사 2026-09-27 «내가 뭘 먹을지 물어본게 아니고 말 그대로 미르가 뭘 먹었는지 물어 본것입니다» ·
+ *    «이렇게 교육하면 미르가 바보가 됩니다» — 사전 별칭으로 표면형을 땜질하지 말고 여기 한 벌을 고친다.
+ *  ⚠ 부르는 곳이 넷이다 — 이 파일의 식사 그물(맛집 돌림판·SearchPanel 화면 자동 이동) ·
+ *    mir.js 의 2인칭 그물 · 식사 인사 그물 · 끼니 그물(mirAte). 넷이 각자 세면 반드시 갈린다(규범 §4-4).
+ *    표지가 늘면 **여기만** 고친다(배제 isOtherMeaningEat 도 이 표지를 합성해 쓰므로 저절로 따라온다 —
+ *      다만 맛평 그물(mir.js «맛있게 먹었»·«잘 먹었»)은 아직 제 목록을 쓴다. 거기까지 받고 싶어지면 그것도 여기서 합성한다) — 한 벌에만 늘리고 소비자를 안 늘리면 «너 자셨어요» 가 무응답이 된다(감사 실측).
+ *  ⚠ 판정은 전부 **이 파일에** 둔다. mir.js 는 함수만 부른다 — 두 파일이 서로 import 하므로(순환)
+ *    mir.js 최상단에서 이 상수들을 쓰면 초기화 전에 닿아 잡담이 통째로 죽는다(연막검사 3건 실패로 잡았다). */
+const PAST_EAT_SRC = '먹었|먹었었|드셨|자셨|먹고\\s*왔|먹고\\s*오셨|드시고\\s*왔|먹고\\s*있었|먹은\\s*거|먹은지';   // export 하지 않는다 — mir.js 가 가져가면 순환 초기화로 죽는다(문법으로 막는다, 주석으로는 약하다)
+//  앞일·요구 표지 — 한 문장에 지난 일과 앞일이 같이 있으면(«아침 안 먹었어 뭐 먹을까») **앞일이 이긴다.**
+//    맛집은 검수사가 쓰는 기능이라 복합문에서 잃으면 안 된다(감사 실측 15꼴). «알려»·«어디» 는 일부러 뺀다 —
+//    넣으면 «아침 뭐 먹었는지 알려줘» 가 다시 돌림판으로 샌다.
+const FUTURE_EAT_SRC = '먹을|먹지|먹으러|먹고\\s*싶|맛집|추천|시켜\\s*먹|뭐\\s*시킬|배\\s*고프|배고파|출출|허기|요기|골라';
+const _PAST_EAT = new RegExp(PAST_EAT_SRC);
+const _FUT_EAT = new RegExp(FUTURE_EAT_SRC);
+//  지난 끼니를 묻는 세 꼴 — ① 끼니 낱말이 붙은 꼴(«아침에 뭐 먹었어») ② 사람을 부른 꼴(«미르 뭐 드셨어») ③ 맨 물음(«뭐 먹었어»).
+const _ATE_MEAL = new RegExp('(아침|점심|저녁|야식|밥|식사|끼니)\\s*(은|는|을|를|이|가|에|에는|엔)?\\s*(뭐|뭘|무얼|뭐를|무엇을?)?\\s*(' + PAST_EAT_SRC + '|했어|하셨)');
+const _ATE_YOU = new RegExp('(미르|넌|너는?|당신)\\s*[^ ]{0,6}\\s*(' + PAST_EAT_SRC + ')');
+//  딴뜻 — «욕·겁·나이 먹었어» 는 끼니가 아니다(검수사 2026-09-04 감사 지적). **배제도 한 벌이라야 한다** —
+//    표지만 넓히고 이 배제를 안 넓혔더니 «미르 욕 먹고 왔어» 에 츄르 이야기를 했다(3.61-04 감사가 308꼴로 잡았다).
+const _OTHER_EAT = new RegExp('(욕|겁|마음|나이|한\\s*방|약|엿|퇴짜|골탕|미역국|더위|나잇살)\\s*(을|를)?\\s*(' + PAST_EAT_SRC + ')');
+const _ATE_BARE = new RegExp('^(뭐|뭘|무얼|뭐를|무엇을?)?\\s*(' + PAST_EAT_SRC + ')(어|어요|니|나|냐|지|나요|는지)?\\s*[?？]*$');
+/** 지난 일 표지가 있는가(앞일이 섞여 있어도 참). */
+export function isPastEatWord(text) { return _PAST_EAT.test(String(text || '')); }
+/** **지난 일만** 묻는 말인가 — 앞일 표지가 섞이면 거짓. 맛집을 끄는 문지기는 이것을 쓴다. */
+export function isPastEatOnly(text) { const t = String(text || ''); return _PAST_EAT.test(t) && !_FUT_EAT.test(t); }
+/** 끼니가 아닌 «먹었» 인가 — «욕 먹었어»·«나이 먹고 왔어». 끼니 그물의 배제 게이트가 부른다. */
+export function isOtherMeaningEat(text) { return _OTHER_EAT.test(String(text || '')); }
+/** 지난 끼니를 묻거나 말하는 말인가(세 꼴 중 하나) — mir.js 의 끼니 그물이 부른다. */
+export function isPastMealMention(text) { const d = String(text || ''); return _ATE_MEAL.test(d) || _ATE_YOU.test(d) || _ATE_BARE.test(d); }
+
 export function parseNaturalQuery(text) {
   //  2.70-02: 마지막 질문을 남긴다 — 크래시 신고(ErrorBoundary)에 «무엇을 물었을 때» 가 실린다.
   try { if (typeof window !== 'undefined') window.__lastQuery = String(text || ''); } catch (e) { /* 무시 */ }
@@ -505,7 +537,7 @@ export function parseNaturalQuery(text) {
   // V8.60: 맛집/식사 추천 — "점심 뭐 먹을까"·"저녁 먹으러 어디 가지"·"야식 추천" → 돌림판.
   //   ⚠ etaQuery("점심까지 끝나?")와 충돌 금지 — 끝/완료/까지 들어간 문장은 제외.
   // TallyOne 1.18: 출출·허기·요기·시켜먹 등 실제로 쓰는 말 추가 (검수사: 「출출한데 뭘 먹을까」 는 이미 됐다)
-  if (!result.etaQuery && /뭐\s*먹|먹을\s*까|먹으러|먹으면|먹고\s*싶|맛집|식당\s*추천|배\s*고프|배고파|출출|허기|요기|끼니|메뉴\s*추천|시켜\s*먹|뭐\s*시킬|야식\s*추천|아침\s*추천|점심\s*추천|저녁\s*추천/i.test(t) && !/끝|완료|까지|남/.test(t)) {
+  if (!result.etaQuery && /뭐\s*먹|먹을\s*까|먹으러|먹으면|먹고\s*싶|맛집|식당\s*추천|배\s*고프|배고파|출출|허기|요기|끼니|메뉴\s*추천|시켜\s*먹|뭐\s*시킬|야식\s*추천|아침\s*추천|점심\s*추천|저녁\s*추천/i.test(t) && !/끝|완료|까지|남/.test(t) && !isPastEatOnly(t)) {   // 3.61-04: 지난 끼니를 물은 말은 돌림판이 아니다(SearchPanel 1379 화면 자동 이동까지 같이 막힌다)
     result.foodQuery = /야식|밤참|심야/.test(t) ? 'night'
       : /저녁|디너/.test(t) ? 'dinner'
       : /아침|조식/.test(t) ? 'breakfast'
