@@ -442,7 +442,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 <div className="flex-1">
                   <div className="font-bold text-dim-100">📋 검수 리스트</div>
                   <div className="text-xs text-dim-300 mt-0.5">
-                    A4 세로, 좌우 2단, 페이지당 140대 · 시트1(전체) + 시트2(특수화물 별첨)
+                    A4 세로 세 단 · 인쇄 창 위 단추로 장 나누기(이어서·20/40·풀/엠티·포트별) · 시트1(전체) + 시트2(특수화물 별첨)
                   </div>
                 </div>
                 <Printer className="w-4 h-4 text-dim-400" />

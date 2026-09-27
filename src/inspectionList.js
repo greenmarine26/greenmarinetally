@@ -9,7 +9,7 @@
 
 import { openPrintWindow } from './printHelper.js';
 import { shipOpMapper } from './data/tallyFormats.js';
-import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
   //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
@@ -127,6 +127,15 @@ function inspSortCmp(a, b) {
 function inspNumber(sorted) {
   let g = null, n = 0;
   return sorted.map(c => { const k = _inspGroup(c); if (k !== g) { g = k; n = 0; } return ++n; });
+}
+//  ★ 3.62 (검수사 2026-09-27 «경계선을 만들어 주셔야 합니다. 20풀에서 20엠티로 바뀔때 20에서 40으로 넘어갈때 일반에서 특수로 넘어 갈때 두줄 경계선이라든지 굵은선 처리»)
+//    정렬된 목록에서 묶음이 바뀌는 첫 줄에 표식을 단다 — 20↔40 은 두 줄(gb2), 같은 길이 안의 풀→엠티·일반→특수는 굵은 줄(gb1). 목록 첫 줄은 표식 없음.
+function inspEdges(sorted) {
+  let g = null;
+  return sorted.map(c => {
+    const k = _inspGroup(c); const e = g === null || k === g ? '' : (Math.floor(k / 10) !== Math.floor(g / 10) ? 'gb2' : 'gb1');
+    g = k; return e;
+  });
 }
 
 
@@ -295,7 +304,8 @@ function renderRow(c, idx, opts) {
   //  ★ 3.45 — 글자 수(태그 뺀 실제 길이)로 축소 등급. DG·XRAY·OOG 가 겹쳐도 둘 다 남는다.
   const _plain = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ');
   const _memoCls = _memoFit(_plain).cls;
-  return `<tr style="background:${bg}">
+  const _edge = opts && opts.edge ? ` class="${opts.edge}"` : '';   // 3.62: 묶음 경계선(inspEdges) — style 뒤에 둔다(연막검사들이 «<tr style=» 로 행을 읽는다)
+  return `<tr style="background:${bg}"${_edge}>
     <td class="no">${idx}</td>
     <td class="cn">${cn}</td>
     <td class="sl${_slCls}">${_esc(sl)}</td>
@@ -328,7 +338,11 @@ const _noteWeight = (rowHtml, rowMm = ROW_MM) => {
   const lineMm = (f.cls ? 6 : 7) * 0.3528;
   //  감사 지적 — 14자↑ 실번호(s3)는 6pt 두 줄로 접힌다. 60줄(4.33mm)에서는 여유가 0.1mm 라 그 높이도 같이 센다.
   const slMm = /class="sl s3"/.test(String(rowHtml)) ? 2 * 6 * 0.3528 : 0;
-  return Math.max(1, (Math.max(f.lines * lineMm, slMm) + 0.3) / rowMm);
+  //  ★ 3.62 (감사·2차 시뮬 지적): 묶음 경계선은 두꺼워진 만큼 그 줄 칸 높이를 CSS 에서 줄여(tr.gb1·gb2 height calc) 행 높이가 안 는다 —
+  //    그래서 한 줄짜리 행은 무게 1 그대로다(종전 배치와 같다 · 무게를 더하면 180대가 두 장이 됐다). 글이 길어 행이 늘어나는 줄만 경계선 두께가 위에 얹히므로 그만큼 센다.
+  const edgeMm = /class="gb2"/.test(String(rowHtml)) ? 0.706 : (/class="gb1"/.test(String(rowHtml)) ? 0.353 : 0);
+  const w = (Math.max(f.lines * lineMm, slMm) + 0.3) / rowMm;
+  return edgeMm && w > 1 - edgeMm / rowMm ? Math.max(1, w + edgeMm / rowMm) : Math.max(1, w);
 };
 const packCols = (rows, perCol = PER_COL, rowMm = ROW_MM) => {
   const cols = []; let cur = [], w = 0;
@@ -357,6 +371,42 @@ const packFit = (rows) => {
   }
   return best;
 };
+//  ★ 3.62 (검수사 2026-09-27 «어차피 한포트가 2장 들어가면 보기좋게 나누었으면 좋겠습니다. 한쪽 공백이 심하지 않게») —
+//    장을 나눈 조각이 두 장 이상이면 장 수는 packFit 그대로 두고 단마다 줄 수를 가장 적게(고르게) 채운다.
+//    187대 두 장이 180 + 7 이 아니라 여섯 단에 32줄 안팎. 50줄 이하는 기본 행 높이 그대로, 그 위는 packFit 과 같은 줄임.
+const packBal = (rows) => {
+  const f = packFit(rows);
+  if (f.pages.length < 2) return f;
+  for (let p = 1; p <= PER_COL_MAX; p++) {
+    const rowMm = p <= PER_COL ? ROW_MM : +(PER_COL * ROW_MM / p).toFixed(3);
+    const pages = packPages(rows, p, rowMm);
+    if (pages.length <= f.pages.length) return { pages, rowMm };
+  }
+  return f;
+};
+
+//  ★ 3.62 — 검수 리스트 장 나누기(검수사 2026-09-27 «버튼 선택이 좋을꺼 같습니다. 20/40 풀/엠티 포트별 TMPZ처럼 포트가 2개일때» ·
+//    «1. 20/40 풀먼저 엠티뒤에 2.풀엠티 20먼저 40뒤에 3포트별 지금과 같은데 포트별로 나눔» · «20/40 적용이 좋을듯 합니다»(포트가 두 장일 때) ·
+//    «최대한 기본 크기에서 보기좋게 한장으로 만들되 장수가 추가 되면 지금 처러 자동분리»).
+//    조각(piece)마다 새 장에서 시작한다. 조각 안 순서·순번은 inspSortCmp·inspNumber 한 벌 그대로(20/40 은 풀→엠티→특수, 풀/엠티 는 20→40).
+//    포트 = 선적 POD · 양하 POL. 한 포트가 두 장 이상이면 그 포트를 20피트·40피트로 한 번 더 나눈다 — 단 장 수가 늘면 나누지 않는다.
+const _is20 = (c) => _inspGroup(c) < 10;
+const _isFullRow = (c) => getContainerCategory(c).fe === 'F';   // 종이 F/E 칸·묶음과 같은 한 벌(F 가 아니면 E)
+const _portOfRow = (c, mode) => normPortCode(mode === 'loading' ? c.pod : c.pol);
+function inspPieces(sorted, how, mode) {
+  const two = (a, b) => [a, b].filter((x) => x[1].length);
+  if (how === 'size') return two(['20피트', sorted.filter(_is20)], ['40피트', sorted.filter((c) => !_is20(c))]);
+  if (how === 'fe') return two(['풀', sorted.filter(_isFullRow)], ['엠티', sorted.filter((c) => !_isFullRow(c))]);
+  if (how === 'port') {
+    const g = new Map();
+    for (const c of sorted) { const k = _portOfRow(c, mode) || '포트 미상'; if (!g.has(k)) g.set(k, []); g.get(k).push(c); }
+    //  대수 많은 포트부터(같으면 이름순) — «포트 미상» 은 늘 맨 뒤(감사 지적).
+    const unk = (k) => (k === '포트 미상' ? 1 : 0);
+    return [...g.entries()].sort((a, b) => (unk(a[0]) - unk(b[0])) || (b[1].length - a[1].length) || (a[0] < b[0] ? -1 : 1));
+  }
+  return [['', sorted]];
+}
+const INSP_SPLITS = [['cont', '이어서'], ['size', '20/40'], ['fe', '풀/엠티'], ['port', '포트별']];
 
 // 메인: 검수 리스트 HTML 생성
 
@@ -373,20 +423,37 @@ function withShipOp(containers, voyageInfo) {
   });
 }
 
+//  ★ 3.62 (감사 지적): 장 나누기 네 판은 **종이 글자에 넣지 않는다.** 넣으면 컨번호가 문서에 네다섯 번 나와
+//    «종이에 몇 번 나오나»를 세는 연막검사(smoke_fix36004·36011·36012)가 깨지고 문서가 6배로 커진다.
+//    buildInspectionListDoc 가 {html, splits} 를 내고, openInspectionListPrint 가 창에 installInspectionSplit 로 심는다.
 export function generateInspectionListHTML(containers, mode, voyageInfo, shiftingList = []) {
+  return buildInspectionListDoc(containers, mode, voyageInfo, shiftingList).html;
+}
+//  인쇄 창에 장 나누기를 심는다 — 단추(onclick=__pickSplit)가 #sheet1 본문을 그 판으로 바꾼다.
+export function installInspectionSplit(w, splits) {
+  if (!w || !splits) return;
+  w.__ilSplit = splits;
+  w.__pickSplit = function (k) {
+    const h = w.__ilSplit && w.__ilSplit[k]; if (!h) return;
+    const d = w.document; const box = d.getElementById('sheet1'); if (!box) return;
+    box.innerHTML = h;
+    d.querySelectorAll('.btn-split').forEach((b) => { b.className = 'btn-split' + (b.getAttribute('data-k') === k ? ' on' : ''); });
+    try { w.scrollTo(0, 0); } catch (e) { /* 맨 위로 못 올려도 본문은 바뀌었다 */ }
+  };
+}
+export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingList = []) {
   const list = withShipOp(containers, voyageInfo);
-  if (list.length === 0) return '<p>컨테이너 없음</p>';
+  if (list.length === 0) return { html: '<p>컨테이너 없음</p>', splits: null };
 
   //  ★ 3.60 (검수사 2026-09-24 «규격별로 알파벳순» → «선사를 없애고 규격 f/e 일반/특수알파벳순» → «넘버링은 20풀 따로 20엠티 따로 특수화물 따로 40도 마찬가지»)
   //    정렬·순번은 inspSortCmp·inspNumber 한 벌(CSV 도 같은 것). 선사 칸은 종이에서 뺐다.
   list.sort(inspSortCmp);
-  { const _n = inspNumber(list); list.forEach((c, i) => { c._lineIdx = _n[i]; }); }
+  //  3.62: 순번은 조각마다 _rowsOf 가 inspNumber 로 매긴다(종전 c._lineIdx 는 걷어 냄).
 
   // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
   //  3.29: 150 고정으로 자르지 않는다 — 비고가 긴 행이 자리를 더 먹으므로 «줄 수»로 채운다.
-  const _fit1 = packFit(list.map(c => renderRow(c, c._lineIdx)));   // 3.60: 묶음별 순번 · 3.60-01 끝 장 넘침이면 행을 줄여 한 장 덜
-  const allPages = _fit1.pages;
-  // sheet1Pages는 아래 renderPageWithHdr로 계산 (헤더 포함)
+  //  3.62: «이어서»(종전 그대로) 외에 20/40·풀/엠티·포트별로 장을 나눈 판을 같이 만든다 — 조립은 아래 renderPageWithHdr 뒤.
+  const _rowsOf = (l) => { const no = inspNumber(l), ed = inspEdges(l); return l.map((c, i) => renderRow(c, no[i], { edge: ed[i] })); };
 
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
   const special = list.filter(c => {
@@ -423,7 +490,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
     return `<div class="ipage"${rowMm !== ROW_MM ? ` style="--rh:${rowMm}mm"` : ''}>
       <div class="phdr">
         <div class="phdr-l">${vsl}</div>
-        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span>${tag ? ` <b>${tag}</b>` : ''}</div>
+        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span>${tag ? ` <b>${_esc(tag)}</b>` : ''}</div>
         <div class="phdr-r">${dateStr} · ${pageNum}/${totalPages}</div>
       </div>
       <div class="icols">
@@ -432,12 +499,34 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
     </div>`;
   };
 
-  const sheet1Pages = allPages.map((rows, i) => renderPageWithHdr(rows, i + 1, allPages.length, _fit1.rowMm)).join('');
+  //  ★ 3.62 — 장 나누기 네 가지. 조각마다 packFit(한 장이면 종전 그대로) · 두 장 이상이면 packBal(고르게). «이어서» 는 종전과 같은 packFit.
+  //    쪽 번호는 조각을 넘어 이어 매기고, 나눈 조각은 머리줄에 «20피트 102대» 처럼 이름을 단다.
+  const _variants = {};
+  for (const [how, label] of INSP_SPLITS) {
+    const pieces = inspPieces(list, how, mode);
+    const off = how !== 'cont' && pieces.length < 2;   // 엠티가 없거나 포트가 하나면 누를 수 없다
+    const packed = [];
+    for (const [tag, l] of pieces) {
+      const rows = _rowsOf(l);
+      const fit = how === 'cont' ? packFit(rows) : packBal(rows);
+      if (how === 'port' && fit.pages.length >= 2) {
+        const sub = inspPieces(l, 'size', mode).map(([t, x]) => { const r = _rowsOf(x); return { tag: `${tag} ${t}`, n: x.length, fit: packBal(r) }; });
+        if (sub.length > 1 && sub.reduce((a, q) => a + q.fit.pages.length, 0) <= fit.pages.length) { packed.push(...sub); continue; }
+      }
+      packed.push({ tag, n: l.length, fit });
+    }
+    const total = packed.reduce((a, q) => a + q.fit.pages.length, 0);
+    let pno = 0;
+    const html = packed.map((q) => q.fit.pages.map((rows) => renderPageWithHdr(rows, ++pno, total, q.fit.rowMm, q.tag ? `${q.tag} ${q.n}대` : '')).join('')).join('');
+    _variants[how] = { label, off, counts: packed.map((q) => q.fit.pages.length), html };
+  }
+  const sheet1Pages = _variants.cont.html;
 
   // 시트2 페이지도 헤더 포함 (전체 페이지 수는 시트1+시트2 합산하여 표기 가능하나, 별첨이라 별도 카운트)
   if (sheet2Html) {
     //  3.29: 별첨은 **전 행이 특수화물**이라 비고가 길다 — 여기가 넘침이 가장 컸다.
-    const _fit2 = packFit(special.map((c, j) => renderRow(c, j + 1, { noFlag: true })));
+    const _ed2 = inspEdges(special);   // 3.62: 별첨도 20 → 40 경계선
+    const _fit2 = packFit(special.map((c, j) => renderRow(c, j + 1, { noFlag: true, edge: _ed2[j] })));
     const sheet2PagesList = _fit2.pages;   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
     //  3.60-01: 별첨 제목을 장 머리줄 안에 넣는다 — 장 밖 제목 줄(ititle)만큼 A4 를 넘어 마지막 한 줄이 빈 장으로 밀렸다(ATPR 2643W 실측).
     sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, `[별첨] 특수화물 ${special.length}대`   /* 3.60-18: 2.92-01 부터 별첨은 특수만(X-RAY·긴급 제외)인데 제목 글자에 X-RAY 가 남아 있었다 */)).join('');
@@ -460,12 +549,19 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
       ${rows}</table></div>`;
   }
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+  const _html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>검수 리스트 ${modeKo} - ${vsl} ${voy}</title>
 <style>
 @page { size: A4 portrait; margin: 0.4cm; }
 body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #000; font-size: 9pt; }
-.actions { position: sticky; top: 0; background: #1e293b; padding: 8px; display: flex; gap: 8px; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.actions { position: sticky; top: 0; background: #1e293b; padding: 8px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+/* 3.62: 장 나누기 단추 줄 — 인쇄에는 안 나간다(.actions 가 통째로 숨음) */
+.splitrow { flex-basis: 100%; display: flex; gap: 6px; align-items: center; }
+.splitrow .lab { color: #cbd5e1; font-size: 12px; white-space: nowrap; }
+.actions button.btn-split { flex: 1; padding: 6px 2px; font-size: 13px; background: #334155; color: #e2e8f0; line-height: 1.25; }
+.actions button.btn-split small { display: block; font-size: 11px; font-weight: normal; opacity: .85; }
+.actions button.btn-split.on { background: #0369a1; color: #fff; }
+.actions button.btn-split:disabled { opacity: .35; cursor: not-allowed; }
 .actions button { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
 .btn-print { background: #0369a1; color: white; }
 .btn-print:hover { background: #075985; }
@@ -483,11 +579,15 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .ititle { font-weight: bold; text-align: center; padding: 4px 0; font-size: 10pt; page-break-before: always; }
 .ipage { page-break-after: always; }
 .ipage:last-child { page-break-after: auto; }
+#sheet1.more > .ipage:last-child { page-break-after: always; }   /* 3.62: 본문을 #sheet1 로 감쌌다 — 뒤에 별첨이 있으면 본문 끝 장도 넘긴다 */
 .icols { display: flex; gap: 1.5mm; }
 .icol { flex: 1; min-width: 0; }
 /* M5.30: 행 컴팩트 — 75행/단 보장 (이전 7.5pt + 1px padding으로 72행만 들어감) */
 table.ilist { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
 table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: var(--rh, 5.2mm); }
+/* 3.62: 묶음 경계선 — 20↔40 은 두 줄, 풀→엠티·일반→특수는 굵은 줄(inspEdges) */
+table.ilist tr.gb1 td { border-top: 1.5pt solid #000; height: calc(var(--rh, 5.2mm) - 0.353mm); }   /* 두꺼워진 1pt 만큼 칸을 줄여 행 높이는 그대로 */
+table.ilist tr.gb2 td { border-top: 2.5pt double #000; height: calc(var(--rh, 5.2mm) - 0.706mm); }   /* 두꺼워진 2pt 만큼 */
 table.ilist th { background: #ddd; font-size: 7pt; font-weight: bold; height: 4mm; white-space: nowrap; letter-spacing: -0.3px; }
 table.ilist td.no { font-size: 6.5pt; letter-spacing: -0.4px; }   /* 3.60: 순번이 세 자리(100~)가 되어도 칸 안에 */
 table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.5px; }
@@ -515,13 +615,18 @@ table.ilist td.sl.s3 { font-size: 6pt; letter-spacing: -0.4px; white-space: norm
   <button class="btn-print" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
   <button class="btn-excel" onclick="window.__exportExcel()">📊 엑셀 다운로드</button>
   <button class="btn-close" onclick="window.close()">✕ 닫기</button>
+  <div class="splitrow"><span class="lab">장 나누기</span>${INSP_SPLITS.map(([k]) => { const v = _variants[k]; return `<button type="button" class="btn-split${k === 'cont' ? ' on' : ''}" data-k="${k}" onclick="window.__pickSplit &amp;&amp; window.__pickSplit('${k}')"${v.off ? ' disabled' : ''}>${v.label}<small>${v.off ? '해당 없음' : v.counts.join('+') + '장'}</small></button>`; }).join('')}</div>
 </div>
 <div class="content">
+<div id="sheet1"${(sheet2Html || shiftHtml) ? ' class="more"' : ''}>
 ${sheet1Pages}
+</div>
 ${sheet2Html}
 ${shiftHtml}
 </div>
 </body></html>`;
+  //  «이어서» 는 이미 본문에 있으나 되돌아올 때 쓰려고 같이 둔다. 누를 수 없는 판은 null.
+  return { html: _html, splits: Object.fromEntries(INSP_SPLITS.map(([k]) => [k, _variants[k].off ? null : _variants[k].html])) };
 }
 
 // 새 창에서 인쇄 가능한 HTML 열기
@@ -684,7 +789,7 @@ export function openVgmListPrint(containers, voyageInfo) {
 
 export function openInspectionListPrint(containers, mode, voyageInfo, shiftingList = []) {
   containers = withShipOp(containers, voyageInfo);   // 3.31: CSV 도 화면과 같은 선사로
-  const html = generateInspectionListHTML(containers, mode, voyageInfo, shiftingList);
+  const { html, splits } = buildInspectionListDoc(containers, mode, voyageInfo, shiftingList);   // 3.62: 장 나누기 판은 창에 따로 심는다
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) {
     alert('팝업 차단을 해제해주세요');
@@ -692,6 +797,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
   }
   w.document.write(html);
   w.document.close();
+  installInspectionSplit(w, splits);   // 3.62: 인쇄 창 위 장 나누기 단추
   // M6.71: 엑셀 export 함수 새 창에 주입
   const sortedConts = [...containers].sort(inspSortCmp);   // 3.60: 종이와 같은 순서(종전 비교식은 객체끼리 빼서 NaN — 사실상 정렬이 안 됐다)
   const vsl = voyageInfo?.vsl || voyageInfo?.vslFull || 'VESSEL';

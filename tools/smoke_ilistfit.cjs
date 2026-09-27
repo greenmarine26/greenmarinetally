@@ -55,6 +55,9 @@ const obAll = [];
 }(fx('liveboard_obwh.json'), 0));
 const obRows = obAll.filter((r, i) => obAll.findIndex((x) => x.cn === r.cn) === i).map((r) => Object.assign({}, r, { pod: 'KRPTK' }));
 const html2 = M.generateInspectionListHTML(obRows, 'discharge', { vsl: 'OBWH', vslFull: 'OCEAN BLUE', voy: '2731E' }, []);
+//  3.62: 같은 두 배의 장 나누기 판 — 종이 글자(html)는 generateInspectionListHTML 과 같다
+const docA = M.buildInspectionListDoc(rows, 'discharge', { vsl: 'PCSZ', vslFull: 'PACIFIC SHENZHEN', voy: '2620E' }, shift);
+const docB = M.buildInspectionListDoc(obRows, 'discharge', { vsl: 'OBWH', vslFull: 'OCEAN BLUE', voy: '2731E' }, []);
 
 const tmp = path.join(process.env.TMPDIR || '/dev/shm/hometmp', `_ilfit_${process.pid}.html`);
 const tmp2 = path.join(process.env.TMPDIR || '/dev/shm/hometmp', `_ilfit2_${process.pid}.html`);
@@ -125,6 +128,17 @@ const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-b
   await pg.goto('file://' + tmp2);
   await pg.emulateMedia({ media: 'print' });
   const rB = await pg.evaluate(MEASURE);
+  //  ★ 3.62 (감사 지적): 장 나누기 판(20/40·풀/엠티·포트별)도 한 장씩 A4 높이를 잰다 — 처음 보이는 «이어서» 만 재면 나머지 셋은 아무도 안 잰다.
+  //    인쇄 창과 같이 #sheet1 본문을 그 판으로 갈아 끼운 뒤 잰다. 두 배 × 세 판.
+  const splitMm = [];
+  for (const [file, D] of [[tmp, docA], [tmp2, docB]]) {
+    await pg.goto('file://' + file); await pg.emulateMedia({ media: 'print' });
+    for (const k of ['size', 'fe', 'port']) {
+      if (!D.splits || !D.splits[k]) continue;
+      const mm = await pg.evaluate((h) => { document.getElementById('sheet1').innerHTML = h; return [...document.querySelectorAll('#sheet1 .ipage')].map((p) => +(p.getBoundingClientRect().height * 25.4 / 96).toFixed(1)); }, D.splits[k]);
+      splitMm.push({ k, mm });
+    }
+  }
   await b.close();
   try { fs.unlinkSync(tmp); fs.unlinkSync(tmp2); } catch (e) {}
   //  두 배를 합쳐 본다 — 한 배에서만 나는 결함을 놓치지 않는다
@@ -160,6 +174,9 @@ const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-b
   ok('6pt 아래로는 안 줄인다 — 더 줄이는 대신 줄을 바꾼다', !/m[345]/.test(r.memo.map((m) => m.cls).join(' ')),
      `축소 ${shrunk}칸 · 두 줄 이상 ${wrapped}칸`);
   ok('종이가 가로로 안 넘친다', !r.bodyX);
+  const spAll = splitMm.flatMap((x) => x.mm), spOver = splitMm.filter((x) => x.mm.some((m) => m > r.a4));
+  ok(`3.62 — 장 나누기 판 ${splitMm.length}개(${splitMm.map((x) => x.k + ' ' + x.mm.length + '장').join(' · ')}) 도 A4 ${r.a4}mm 를 안 넘는다 (최대 ${spAll.length ? Math.max(...spAll) : '-'}mm)`,
+     splitMm.length >= 4 && !spOver.length, JSON.stringify(spOver));
   ok('3.53-10 — 실번호 13자가 한 글자도 안 잘린다(SINOKOR011526)', />SINOKOR011526<\/td>/.test(html), '종이에 SINOKOR011526 이 없다');
   ok('3.53-10 — 실번호 15자도 안 잘린다', html.includes('SINOKOR01152612'));
   ok('3.53-10 — 10자 넘는 실번호는 s2(6pt) 칸', /class="sl s2">SINOKOR011526</.test(html) && !/class="sl s2">010145</.test(html));

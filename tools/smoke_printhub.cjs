@@ -85,6 +85,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const before = dom.window.__DOCS.length;
       click(b); await wait(120);
       ok(dom.window.__DOCS.length === before + 1, '양하 검수 리스트를 누르면 종이가 한 장 나온다');
+      //  3.62 (감사 지적): 인쇄 창에 장 나누기가 심겼는가 — openInspectionListPrint 의 installInspectionSplit 한 줄이 빠지면 단추가 아무 일도 안 한다.
+      const _w = dom.window.__DOCS[dom.window.__DOCS.length - 1];
+      ok(_w && typeof _w.__pickSplit === 'function' && _w.__ilSplit && typeof _w.__ilSplit.cont === 'string' && /class="ipage"/.test(_w.__ilSplit.cont),
+         '3.62 — 인쇄 창에 장 나누기(__pickSplit·네 판)가 심긴다');
       const html = paper();
       ok(/<table class="ilist"/.test(html) && /검수 리스트 양하/.test(html),
          `그 종이가 «검수 리스트 양하» 다 (${html.length.toLocaleString()}자)`);
