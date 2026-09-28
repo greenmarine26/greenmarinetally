@@ -249,7 +249,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   spoken.length = 0;
   F.render(F.React.createElement('div', null)); await wait(20);
   F.render(F.React.createElement(F.Ferry1700Alert, { voyages: { ...voys, TMPZ_2031E: { info: { vsl: 'TMPZ' }, discharge: {}, loading: {} } }, audience: 'chief', nowOverride: w._now }));
-  await wait(60);
+  for (let i = 0; i < 100 && !(spoken.length && document.querySelectorAll('[data-f1700]').length >= 2); i++) await wait(20);   // 3.66-03: 고정 60ms → 조건 대기(빌드 부하 때 음성이 늦어 헛실패 — 감사 4회 중 1회)
   const blocks = [...document.querySelectorAll('[data-f1700]')].map((e) => e.getAttribute('data-f1700'));
   ok(blocks.join(',') === 'OBWH_2749E,RZOR_R104E', `두 척 한 창 — ${blocks.join(',')} (TMPZ 는 대상 밖)`);
   ok(/작업 중 2척/.test(q('[role="dialog"]').textContent) && ![...document.querySelectorAll('button')].some((b) => /카톡/.test(b.textContent)), '제목 «작업 중 2척» · 카톡 단추 없음(보기만)');

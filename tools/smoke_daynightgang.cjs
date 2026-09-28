@@ -130,7 +130,7 @@ const rowOf = (card, side, size) => {
   ok(/다시 센 값/.test(txt(doc.querySelector('[data-dn-gang]'))), '17:20 · 적어 둔 보고 없음 — 마감 시각으로 다시 세고 «⚠ 다시 센 값»이라고 밝힌다');
 
   // ── ⑥ 3.66-02 — 붙인 완료를 못 믿어도 «잔여» 기준 갱은 규격표(검수사 16:04 «규격표가 없으면 어떻게 주간보고를 할수있죠?») ──
-  //    OBWH 2751E 16:12 사본 — 위치로 붙인 완료 83/77 ↔ 터미널 96/70(13%)라 종전엔 두 갱 다 «대수만». 두 갱 모두 잔여 기준(43·54)이다.
+  //    OBWH 2751E 16:12 사본 — 위치로 붙인 완료 85/81 ↔ 터미널 96/70(11%)라 종전엔 두 갱 다 «대수만». 두 갱 모두 잔여 기준(43·54)이다.
   //    동방 베이별 잔여(bayWork)로 보면 1호기 43 = 02·06·10번 장(14+28+1) · 2호기 54 = 14·18번 장(46+8) — 앱 잔여 97 = 터미널 97.
   setEquipNumber('1호기');
   CLOCK = FO.at;
@@ -145,6 +145,7 @@ const rowOf = (card, side, size) => {
   //  구성 — 규칙(남은 컨을 장별로: 02·06·10번 장 = 1호기, 14·18번 장 = 2호기)에서 따로 뽑은 값(감사 실측)
   ok(JSON.stringify([rowOf(c61, '양하', '20ft'), rowOf(c61, '양하', '40ft'), rowOf(c62, '양하', '20ft'), rowOf(c62, '양하', '40ft')]) === '[[23,0,23],[20,0,20],[38,0,38],[16,0,16]]',
     `규격 구성이 장별 규칙과 같다 — 1호기 20ft 23·40ft 20 · 2호기 20ft 38·40ft 16 (${JSON.stringify([rowOf(c61, '양하', '20ft'), rowOf(c61, '양하', '40ft'), rowOf(c62, '양하', '20ft'), rowOf(c62, '양하', '40ft')])})`);
+  ok(/터미널\(16:12\) QC101 양 96\/43/.test(txt(c61)) && /터미널\(16:12\) QC102 양 70\/54/.test(txt(c62)), `3.66-03 카드 머리 = 본문과 같은 호기 표·그 시각 (${(txt(c61).match(/터미널[^양]*양 [0-9/]+/) || [''])[0]})`);
   ok(/완료\(작업량\) 기준 갱은 대수만/.test(txt(p6)) && /잔여 기준 갱은 남은 컨을 선수 호기부터 터미널 호기별 잔여 비율로 나눈 규격표/.test(txt(p6)),
     '⚠ 붙인 완료를 못 믿는 이유와 잔여 표의 출처를 밝힌다');
   const bw = FO.OBWH_2751E.discharge.bayWork; const bwSum = Object.values(bw).reduce((a, x) => a + (x.aft || 0), 0);
@@ -165,7 +166,9 @@ const rowOf = (card, side, size) => {
     const b1 = rb.gangs.find((g) => g.no === 1).discharge, b2 = rb.gangs.find((g) => g.no === 2).discharge;
     ok(rb.doneUnsure && !b1.countsOnly && b1.tbl && b2.countsOnly && b2.basis === '작업량' && rb.shipTable === true, `작업량 기준 갱은 대수만 · 잔여 기준 갱은 표 · 배 전체 표 붙임(shipTable) — 1호기 ${b1.basis} ${b1.total.total} · 2호기 ${b2.basis} ${b2.total.total}`);
     const msg = buildFerry1700Message({ vsl: 'OBWH', voy: '2751E', rep: rb });
-    ok(/▶ 배 전체/.test(msg) && /작업량 기준 갱은 대수만/.test(msg) && !/갱별 규격표 없음/.test(msg) && /20ft/.test(msg), '카톡 — 배 전체 표와 «작업량 기준 갱은 대수만» 이 붙고 «규격표 없음» 이라 하지 않는다');
+    ok(/▶ 배 전체/.test(msg) && /\(대수만 나간 갱은 터미널 호기 집계 대수\)/.test(msg) && !/갱별 규격표 없음/.test(msg) && /20ft/.test(msg), '카톡 — 배 전체 표와 «(대수만 나간 갱은 터미널 호기 집계 대수)» 가 붙고 «규격표 없음» 이라 하지 않는다');
+    const msg1 = buildFerry1700Message({ vsl: 'OBWH', voy: '2751E', rep: rb, gangNos: [1] });
+    ok(/▶ 배 전체/.test(msg1) && !/대수만 나간 갱은|규격표 없음/.test(msg1), '3.66-03 내 갱(표 있음)만 보낼 때 — 배 전체는 붙고 괄호 문구는 없다(남의 갱 사정을 내 갱처럼 말하지 않는다)');
     const stored = JSON.parse(JSON.stringify(rb, (kk, vv) => (vv === null || (typeof vv === 'number' && !Number.isFinite(vv)) ? undefined : vv)));
     ok(ferryRepShapeOk(stored), '보고 보관(RTDB 왕복 모양)이 새 칸(doneUnsure·shipTable)과 섞인 갱 모양을 받아들인다');
     //  (c) 남은 컨 자리를 모르면(잔여 표 합 ≠ 터미널 잔여) 대수만 — 표를 지어내지 않는다
@@ -173,6 +176,20 @@ const rowOf = (card, side, size) => {
     for (const [cn, e] of Object.entries(vc.discharge.ediContainers)) if (!comp[cn]) { e.bay = ''; e.row = ''; e.tier = ''; }
     const rc = buildGangShiftReport(vc, pg, FO.at, { shift: '주간' });
     ok(rc.gangs.every((g) => g.discharge.countsOnly) && /맞지 않는 갱도 대수만/.test(rc.why), `잔여 표 합이 터미널 잔여와 안 맞으면 대수만 — «${rc.why.slice(-30)}»`);
+    const mc = buildFerry1700Message({ vsl: 'OBWH', voy: '2751E', rep: rc });
+    ok(/\(갱별 규격표 없음 — 터미널 호기 집계 대수\)/.test(mc) && !/작업량 기준 갱은/.test(mc) && /▶ 배 전체/.test(mc), '3.66-03 카톡 — 표가 하나도 없으면 «(갱별 규격표 없음 …)» (잔여 기준인데 «작업량 기준 갱은» 이라 하지 않는다)');
+    //  (d) 3.66-03 감사 권장 — 실제 다시 세기 모양: 마감 뒤 1호기가 02·06·10번 장 43대를, 2호기가 14번 장 8대를 끝냈다(실적·완료에 넣음). 18:30 에 스냅으로 다시 센다.
+    const vd = JSON.parse(JSON.stringify(base)); const dc = vd.discharge; dc.completed = dc.completed || {}; dc.termWork = dc.termWork || {};
+    const rest = Object.values(dc.ediContainers).filter((e) => !dc.completed[e.cn]).sort((x, y) => (+x.bay) - (+y.bay) || (+y.tier) - (+x.tier) || (x.cn < y.cn ? -1 : 1));
+    const r1 = rest.filter((e) => +e.bay <= 11), r2 = rest.filter((e) => +e.bay >= 13 && +e.bay <= 15).slice(0, 8);
+    const put = (e, at) => { dc.completed[e.cn] = { at, by: '', src: 'term' }; dc.termWork[e.cn] = { at, fe: e.fe, op: e.op, pos: String(e.bay).padStart(2, '0') + String(e.row).padStart(2, '0') + String(e.tier).padStart(2, '0'), src: 'pnct' }; };
+    r1.forEach((e, i) => put(e, k17 + (5 + i) * 60000)); r2.forEach((e, i) => put(e, k17 + (5 + i) * 60000 + 30000));
+    vd.info.qcWork.QC101 = { ...vd.info.qcWork.QC101, disDone: 96 + r1.length, disRest: 43 - r1.length }; vd.info.qcWork.QC102 = { ...vd.info.qcWork.QC102, disDone: 70 + r2.length, disRest: 54 - r2.length };
+    const rd = buildGangShiftReport(vd, pg, k17 + 90 * 60000, { shift: '주간', cutMs: k17, qcSnap: { at: k17 + 60000, qcWork: base.info.qcWork } });
+    const d1 = rd.gangs.find((g) => g.no === 1).discharge, d2 = rd.gangs.find((g) => g.no === 2).discharge;
+    ok(r1.length === 43 && r2.length === 8 && !d1.countsOnly && d1.total.total === 43 && d1.doneTotal === 96 && !d2.countsOnly && d2.total.total === 54 && d2.doneTotal === 70,
+      `마감 뒤 실적 51대가 섞여도 스냅으로 17:00 잔여 43 · 54 (1호기 ${d1.countsOnly ? '대수만' : d1.total.total} · 2호기 ${d2.countsOnly ? '대수만' : d2.total.total})`);
+    ok(rd.gangs.every((g) => g.qcNow && g.qcNow.disRest === (g.no === 1 ? 43 : 54)), '카드 머리도 스냅 값(지금 0 · 46 이 아니다)');
   }
 
   ok(!errs.length, `화면 오류 없음 ${errs.slice(0, 2).join(' | ')}`);

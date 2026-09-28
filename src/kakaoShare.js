@@ -313,7 +313,13 @@ export function buildFerry1700Message({ vsl, voy, rep, gangNos = null, recompute
     if (!rep.perGang || rep.shipTable || (rep.doneUnsure && rep.postCut > 0)) {   // 3.66-02: 대수만 갱이 섞이면 배 전체 표 · 이유
       const q = new Date(rep.qcAt || Date.now());
       const _tail = rep.postCut > 0 ? ` — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, ${_night ? '05:30' : '17:00'} 뒤 ${rep.postCut}대 포함` : ' — 터미널 호기 집계 대수';
-      L.push(rep.perGang ? `(작업량 기준 갱은 대수만${_tail})` : `(갱별 규격표 없음${_tail})`);   // 3.66-02: 잔여 기준 갱은 규격표가 있으므로 «없음» 이라 하지 않는다
+      //  3.66-03: 괄호는 실제로 나간 모양대로 — 표가 하나도 없으면 «없음», 대수만 갱이 섞이면 «대수만 나간 갱은», 표만 있으면(마감 뒤 섞임 안내뿐) 호기 집계 시각만(감사 — remainOff·전부 완료에도 «작업량 기준 갱은»)
+      const _live = (r) => r && !r.none && !r.excluded;
+      const _hasTbl = gangs.some((g) => [g.discharge, g.loading].some((r) => _live(r) && !r.countsOnly && r.tbl));
+      const _hasCnt = gangs.some((g) => [g.discharge, g.loading].some((r) => _live(r) && r.countsOnly));
+      const _t2 = _tail.replace(' — 터미널 호기 집계 대수', '');
+      const _paren = !rep.perGang || !_hasTbl ? `(갱별 규격표 없음${_tail})` : (_hasCnt ? `(대수만 나간 갱은 터미널 호기 집계 대수${_t2})` : (rep.postCut > 0 ? `(터미널 호기 집계${_t2})` : ''));
+      if (_paren) L.push(_paren);
       L.push('▶ 배 전체'); side('양하', rep.ship.discharge); side('선적', rep.ship.loading);
     }
   }

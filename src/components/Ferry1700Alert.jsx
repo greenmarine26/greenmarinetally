@@ -178,7 +178,7 @@ export function VoyageBlock({ item, myNo, onKakao = null, shipAlways = false }) 
       {rep.why && <div className="text-2xs text-amber-200/80">⚠ {rep.why}</div>}
       {rep.perGang && rep.side && <div className="text-2xs text-dim-400">{rep.side === 'starboard' ? '우현' : '좌현'} 접안 기준 · 선수 {rep.bow}호기 — 방향이 다르면 수석에게 알려 주세요.</div>}
       {rep.postCut > 0 && (!rep.perGang || rep.doneUnsure) && <div className="text-2xs text-dim-400">터미널 호기 집계는 {_hm(rep.qcAt)} 값이라 {rep.shift === '야간' ? '05:30' : '17:00'} 뒤 {rep.postCut}대가 섞여 있습니다.</div>}
-      {gangs.map((g) => <GangCard key={g.no} g={g} mine={!!myNo && g.no === myNo} qcLabel={item.stored ? `(${_hm(item.storedAt)})` : (item.recomputed && rep.perGang ? '(지금)' : '')} />)}
+      {gangs.map((g) => <GangCard key={g.no} g={g} mine={!!myNo && g.no === myNo} qcLabel={rep.doneUnsure && _num(rep.qcAt) ? `(${_hm(rep.qcAt)})` : (item.stored ? `(${_hm(item.storedAt)})` : (item.recomputed && rep.perGang ? '(지금)' : ''))} />)}
       {(shipAlways || !rep.perGang || !gangs.length || rep.shipTable) && (   /* 3.66-02: 대수만 나가는 갱이 있으면 배 전체 규격표를 같이 */
         <div className="space-y-1.5" data-f1700-ship="1">
           <div className="text-2xs text-dim-300">{rep.perGang && gangs.length ? '배 전체 합계' : '배 전체'}</div>
