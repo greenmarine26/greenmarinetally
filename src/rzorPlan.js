@@ -3,9 +3,144 @@
 //   실측 검증(R080E): D 75(20×4/40×68/45×3) · C 71 · B 14 = PDF SUB TOTAL과 완전 일치.
 //   좌표: colStops/rowBands 정규화 — 화면 CSS grid와 인쇄가 같은 데이터를 쓴다.
 
-/** SheetJS 워크북이 RZOR 덱 플랜인지 */
+/** SheetJS 워크북이 RZOR 덱 플랜인지 — 선사 rzdf(시트 이름 «-DECK») 또는 검수사 STOWAGE PLAN(3.67, 내용으로 판별) */
 export function isDeckPlanWorkbook(wb) {
-  return (wb?.SheetNames || []).some((n) => /-?DECK/i.test(String(n)));
+  return (wb?.SheetNames || []).some((n) => /-?DECK/i.test(String(n))) || isCheckerPlanWorkbook(wb);
+}
+
+// ── 3.67: 검수사 STOWAGE PLAN 엑셀(마감텔리 PLAN.xlsx 양식) — RZOR **선적** 덱플랜 ─────────────────────
+//   실측 R070W~R106W 36항차(2026-07-04~09-28) 같은 양식. 선사 rzdf 는 양하만 오고 선적 덱플랜은 이것뿐이다.
+//   · 한 시트에 덱 블록 셋이 세로로: 라벨 «C» «- DECK» · «D» «- DECK» · «UNDER» «- DECK»
+//   · 블록마다 머리줄에 위치 번호 26(왼쪽)→1(오른쪽), 세 칸 간격. 오른쪽 끝 열에 줄 번호 1~8
+//   · 컨 하나 = 세로 네 줄: 컨번호 / 무게 / 규격 «F40'H»(F·E + 20·40·45 + H·R·D·L) / 섀시 숫자(4·3·2·1)
+//   · 40피트는 번호 칸 + 그 왼쪽 옆 칸 «X», 45피트는 «<45>». 옆 칸에 다른 컨이 있으면 표식을 안 적는다
+//   · «C/S» = 빈 섀시(컨 아님, 건너뜀) · «L» = 수화물(LUG) 표식
+//   좌표 — 검수사 번호 그대로 col = 위치(1~26, **1 이 선수**). 그림 방향은 선사 rzdf 와 같다(왼쪽 선미·오른쪽 선수)
+//   → ci = 26 − 위치. 선사 rzdf 와 견줄 때는 «선사 칸 = 25 − 위치»(R106 40피트 D덱 87/94 · C덱 57/60 실측).
+//   덱 단(tier)은 rzorPlan DECK_TIER 와 같은 값(U(=선사 B) 84 · C 86 · D 88). decks[].numbering = 'bow' 로 표시한다.
+const CHK_CN_RE = /^([A-Z]{4})\s*(\d{7})$/;
+const CHK_TYP_RE = /^([FE])\s*(20|40|45)\s*'?\s*([A-Z])?/i;
+const CHK_TYP_ISO = { H: 'HC', R: 'RH', D: 'GP', G: 'GP', L: 'GP', F: 'FR' };   // F = 플랫(R101W FBIU4020493 «E40'F» 실측 — 2차 시뮬 지적)
+
+/** 검수사 STOWAGE PLAN 양식인지 — 시트 이름이 아니라 내용으로 본다(«STOWAGE PLAN» 제목 + «- DECK» 라벨). XLSX 없이 셀 키만 훑는다. */
+export function isCheckerPlanWorkbook(wb) {
+  for (const name of (wb?.SheetNames || [])) {
+    const ws = wb.Sheets[name];
+    if (!ws) continue;
+    let title = false, deck = false;
+    for (const k of Object.keys(ws)) {
+      if (k[0] === '!') continue;
+      const v = ws[k] && ws[k].v != null ? String(ws[k].v) : '';
+      if (!title && /STOWAGE\s*PLAN/i.test(v)) title = true;
+      else if (!deck && /^-\s*DECK$/i.test(v.trim())) deck = true;
+      if (title && deck) return true;
+    }
+  }
+  return false;
+}
+
+/** 검수사 STOWAGE PLAN 워크북 → parseDeckPlanWorkbook 과 같은 모양 {voy, decks, total, lolo, dbl} */
+export function parseCheckerPlanWorkbook(wb, XLSX) {
+  const decks = [];
+  let voy = '';
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    if (!ws || !ws['!ref']) continue;
+    const rg = XLSX.utils.decode_range(ws['!ref']);
+    const val = (r, c) => { const cell = ws[XLSX.utils.encode_cell({ r, c })]; return cell && cell.v != null ? cell.v : null; };
+    const txt = (r, c) => { const v = val(r, c); return v == null ? '' : String(v).trim(); };
+    // 덱 라벨 행: «C»·«D»·«UNDER» 가 «- DECK» 왼쪽 몇 칸 안에(병합 셀이라 최대 8칸)
+    const labels = [];
+    for (let r = rg.s.r; r <= rg.e.r; r++) {
+      for (let c = rg.s.c; c <= rg.e.c; c++) {
+        if (!/^-\s*DECK$/i.test(txt(r, c))) continue;
+        let lab = '';
+        for (let k = 1; k <= 8 && c - k >= rg.s.c; k++) { const t = txt(r, c - k); if (t) { lab = t; break; } }
+        const m = lab.match(/^(UNDER|[A-E])$/i);
+        if (m) labels.push({ r, deck: /^UNDER$/i.test(m[1]) ? 'U' : m[1].toUpperCase() });
+        if (!voy) {
+          for (let rr = Math.max(rg.s.r, r - 2); rr <= r + 4 && !voy; rr++) for (let cc = rg.s.c; cc <= rg.e.c; cc++) {
+            const mv = txt(rr, cc).match(/Voy\.?\s*No\.?\s*:?\s*([A-Z]?\d{3,4}[EWNS])/i);
+            if (mv) { voy = mv[1].toUpperCase(); break; }
+          }
+        }
+      }
+    }
+    if (!labels.length) continue;
+    labels.sort((a, b) => a.r - b.r);
+    for (let li = 0; li < labels.length; li++) {
+      const { r: lr, deck } = labels[li];
+      const rEnd = li + 1 < labels.length ? labels[li + 1].r - 1 : rg.e.r;
+      // 머리줄: 위치 번호 1~26 이 20개 넘게 있는 첫 행
+      let hr = -1; const colPos = new Map();
+      for (let r = lr; r <= Math.min(rEnd, lr + 12); r++) {
+        const m = new Map();
+        for (let c = rg.s.c; c <= rg.e.c; c++) { const v = val(r, c); if (typeof v === 'number' && v >= 1 && v <= 26 && Number.isInteger(v)) m.set(c, v); }
+        if (m.size >= 20) { hr = r; for (const [c, p] of m) colPos.set(c, p); break; }
+      }
+      if (hr < 0) continue;
+      const posCol = new Map([...colPos].map(([c, p]) => [p, c]));
+      const nPos = Math.max(...colPos.values());
+      const lastCol = Math.max(...colPos.keys());
+      const slots = [];
+      let bandIdx = 0;
+      for (let r = hr + 1; r <= rEnd; r++) {
+        let hasCn = false;
+        for (const c of colPos.keys()) if (CHK_CN_RE.test(txt(r, c).replace(/\s+/g, ''))) { hasCn = true; break; }
+        if (!hasCn) continue;
+        bandIdx += 1;
+        // 줄 번호: 마지막 위치 칸 오른쪽에 적힌 정수(1~8) — 없으면 밴드 순번
+        let line = 0;
+        for (let c = lastCol + 1; c <= Math.min(rg.e.c, lastCol + 4); c++) { const v = val(r, c); if (typeof v === 'number' && v >= 1 && v <= 12) { line = v; break; } }
+        if (!line) line = bandIdx;
+        for (const [c, pos] of colPos) {
+          const raw = txt(r, c).replace(/\s+/g, '');
+          const cm = raw.match(CHK_CN_RE);
+          if (!cm) continue;
+          const cn = cm[1] + cm[2];
+          const wtv = val(r + 1, c);
+          const typ = txt(r + 2, c);
+          const tm = typ.match(CHK_TYP_RE);
+          const fe = tm ? tm[1].toUpperCase() : 'F';
+          const sz = tm ? tm[2] : '';
+          const k = tm && tm[3] ? tm[3].toUpperCase() : '';
+          const iso = sz ? `${sz} ${CHK_TYP_ISO[k] || 'GP'}` : '';
+          const flags = [];
+          if (k === 'L') flags.push('LUG');
+          // 그림은 시트 그대로 — 옆 칸(위치+1, 왼쪽)에 X·<45> 가 있을 때만 두 칸(span 2)
+          const nc = posCol.get(pos + 1);
+          const mark = nc != null ? txt(r, nc) : '';
+          const marked = /^X$/i.test(mark) || /<\s*45\s*>/.test(mark);
+          const span = marked ? 2 : 1;
+          const ci = nPos - pos - (span - 1);
+          // 크레인(LO/LO) 구역 — 선사 rzdf 25항차의 초록(落地) 칸은 전부 D덱 10~15칸(검수사 번호). 검수사 양식엔 표식이
+          //   없어 자리로 정한다. R106W 실측 D덱 10~15칸 45대 = 동방 3호기(LO/LO) 45대 = 터미널 베이 22 와 컨번호까지 같음.
+          const lolo = deck === 'D' && pos >= 10 && pos <= 15;
+          const chv = val(r + 3, c);   // 크기 코드 4=40'·3=20' 단독·2/1=20' 트윈(한 섀시에 둘) — 내보내기가 그대로 되돌린다
+          slots.push({ cn, wt: typeof wtv === 'number' ? Math.round(wtv) : null, iso, fe,
+                       ri: line - 1, ci: Math.max(0, ci), span, flags, empty: false,
+                       lolo, dbl: false,
+                       line, col: pos, tier: DECK_TIER[deck === 'U' ? 'B' : deck] || '',
+                       row: String(line).padStart(2, '0'), bay: String(pos).padStart(2, '0'),
+                       pos: `${deck}덱 ${line}줄 ${pos}칸`,
+                       key: `${deck}-${line}-${pos}`,   // 한 키 = 한 자리(덱-줄-위치). ri·ci 는 그림 좌표라 40피트 두 칸과 옆 칸이 겹친다
+                       chassis: typeof chv === 'number' ? chv : null });
+        }
+      }
+      if (!slots.length) continue;
+      const lines = Math.max(...slots.map((s) => s.line));
+      decks.push({ deck, name: `${deck === 'U' ? 'UNDER' : deck}-DECK`, cols: nPos, rows: lines, slots,
+                   tier: DECK_TIER[deck === 'U' ? 'B' : deck] || '', lines, colsN: nPos,
+                   lolo: slots.filter((x) => x.lolo).length, dbl: 0,
+                   numbering: 'bow' });   // 위치 1 = 선수(검수사 양식). 선사 rzdf 는 1 = 선미
+    }
+  }
+  const _ord = { D: 0, C: 1, U: 2 };   // 첫 탭은 D덱(크레인 구역) — 생성 플랜과 같은 순서(감사 지적: 종전 정렬은 UNDER 가 첫 탭)
+  decks.sort((a, b) => ((_ord[a.deck] ?? 9) - (_ord[b.deck] ?? 9)) || (a.deck < b.deck ? -1 : 1));
+  return { voy, decks,
+           total: decks.reduce((a, d) => a + d.slots.filter((s) => !s.empty).length, 0),
+           lolo: decks.reduce((a, d) => a + (d.lolo || 0), 0),
+           dbl: 0, _fmt: 'checker' };
 }
 
 // V9.54(2026-08-03): 덱플랜을 **좌표로** 읽는다 — 도면 실측(R082E 2甲/3甲/4甲.PDF)으로 축 확정.
@@ -42,6 +177,7 @@ const ISO_RE = /(20|40|45)\s*(GP|HC|RH|RF|HA|OT|FR|TK|DC)\s*([FE])?/;
 
 /** SheetJS 워크북 → {voy, decks:[{deck,name,cols,rows,slots:[{cn,wt,iso,fe,ri,ci,span,flags}]}]} */
 export function parseDeckPlanWorkbook(wb, XLSX) {
+  if (isCheckerPlanWorkbook(wb)) return parseCheckerPlanWorkbook(wb, XLSX);   // 3.67: 검수사 STOWAGE PLAN(선적)
   const decks = [];
   let voy = '';
   for (const name of wb.SheetNames) {

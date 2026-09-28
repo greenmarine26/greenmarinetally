@@ -6,10 +6,11 @@ import { Layers } from 'lucide-react';
 import { fbAssignDeckSlot } from '../firebase.js';
 import { isReeferIso } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌
 
-export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector }) {
+export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector, onExport }) {
   const decks = plan?.decks || [];
   const [sel, setSel] = useState(0);
   const [loloOnly, setLoloOnly] = useState(false);   // V9.55: 갠트리(LO/LO) 분만 보기
+  const [exporting, setExporting] = useState('');     // 3.67: 엑셀 내보내기 상태('' | '작성 중' | 파일명 | 오류)
   const byCn = useMemo(() => {
     const m = {};
     for (const c of containers) if (c && c.cn) m[c.cn] = c;
@@ -32,7 +33,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             {dk.deck}덱 {dk.slots.filter((s) => !s.empty && compMap[s.cn]).length}/{dk.slots.filter((s) => !s.empty).length}
           </button>
         ))}
-        <span className="ml-auto text-xxs text-dim-300">이 덱 {done}/{conts.length} 완료 · 빈자리 {d.slots.length - conts.length}</span>
+        <span className="ml-auto text-xxs text-dim-300">이 덱 {done}/{conts.length} 완료 · 빈자리 {d.slots.length - conts.length}{plan._gen ? ` · 예측 ${conts.filter((s) => s.pred).length} · 확정 ${conts.filter((s) => s.sure).length}` : ''}</span>
         {/* V9.55: 갠트리(LO/LO) 분만 보기 — 크레인으로 검수하는 건 이것뿐이다 */}
         {(d.lolo > 0) && (
           <button onClick={() => setLoloOnly(!loloOnly)}
@@ -42,12 +43,33 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             🏗 갠트리 {d.lolo}van{loloOnly ? ' 만 보는 중' : ''}
           </button>
         )}
+        {/* 3.67: 선적 덱플랜 → 검수사 STOWAGE PLAN 엑셀(마감텔리 양식). 예측 자리는 회색 글씨로 나간다. */}
+        {onExport ? (
+          <button onClick={async () => {
+              if (exporting === '작성 중') return;
+              setExporting('작성 중');
+              try { const name = await onExport(plan); setExporting(name ? `저장: ${name}` : ''); }
+              catch (e) { console.error('[3.67] STOWAGE PLAN 엑셀 실패', e); setExporting(`오류: ${e?.message || e}`); }
+            }}
+            className="px-2 py-1 rounded text-xxs font-black border bg-ink-800 border-cyan-700/60 text-cyan-200">
+            📄 STOWAGE PLAN 엑셀{exporting === '작성 중' ? ' … 작성 중' : ''}
+          </button>
+        ) : null}
+        {exporting && exporting !== '작성 중' ? <span className={`text-2xs ${exporting.startsWith('오류') ? 'text-red-300' : 'text-dim-300'}`}>{exporting}</span> : null}
       </div>
       {/* V9.54: 도면과 같은 방향으로 읽는다 — 줄은 좌현(부두)→우현, 칸은 선미(램프)→선수 */}
+      {/* 3.67: 검수사 STOWAGE PLAN(선적)은 위치 1 이 선수다(numbering 'bow'). 그림 방향은 둘 다 왼쪽 선미·오른쪽 선수. */}
+      {plan._gen ? (
+        <div className="text-2xs text-amber-200/90 mb-1">
+          🧭 자동 덱플랜 — 동방 실적 순번으로 자리를 예측했습니다(실적 {plan.seqN || 0}대 · 크레인 {plan.craneN || 0}대). 예측 칸을 누르면 그 자리로 확정, 확정 칸을 다시 누르면 해제, 빈자리를 누르면 컨번호를 넣습니다.
+          {Array.isArray(plan.unplaced) && plan.unplaced.length ? <span className="text-red-300"> · 자리를 못 받은 컨 {plan.unplaced.length}대: {plan.unplaced.slice(0, 5).join(' ')}{plan.unplaced.length > 5 ? ' …' : ''}</span> : null}
+          {Array.isArray(plan.badAssign) && plan.badAssign.length ? <span className="text-red-300"> · 모르는 자리 키의 확정 {plan.badAssign.length}건은 무시(예측으로 돌림)</span> : null}
+        </div>
+      ) : null}
       <div className="text-2xs text-dim-400 mb-1">
         ↕ 줄 1~{d.lines || d.rows} <span className="text-dim-500">(1=좌현·부두쪽)</span>
         <span className="mx-2 text-dim-500">|</span>
-        ↔ 칸 1~{d.colsN || d.cols} <span className="text-dim-500">(1=선미·램프쪽 → 선수)</span>
+        ↔ 칸 1~{d.colsN || d.cols} <span className="text-dim-500">{d.numbering === 'bow' ? '(검수사 양식 · 1=선수 → 선미·램프쪽, 오른쪽이 선수)' : '(1=선미·램프쪽 → 선수)'}</span>
       </div>
       <div className="overflow-auto">
         <div className="grid gap-0.5 min-w-[720px]"
@@ -56,7 +78,8 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             // V9.22-02: 빈자리 — 선적 시 탭해서 컨 지정 (assign 맵), 재탭 해제
             if (s.empty) {
               if (loloOnly) return null;   // V9.55
-              const slotKey = `${d.deck}-${s.ri}-${s.ci}`;
+              // 3.67: 자리 키는 플랜이 준 것(덱-줄-위치, 한 키 = 한 자리)을 먼저 쓴다 — 그림 좌표(ri·ci) 키는 40피트 두 칸과 옆 칸이 겹친다(2차 시뮬 지적)
+              const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
               const asg = plan.assign && plan.assign[slotKey];
               return (
                 <button key={`e${si}`}
@@ -99,18 +122,33 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             const isLug = !!((s.flags && s.flags.includes('LUG')) || (c && c.lugg));   // 2.06-01: 수화물 — 덱 칸도 보라 박스 (검수사 «9220을 찾았는데 보라박스가 없습니다 — C덱에서 입니다»)
             const marks = [isRf ? (tmp ? `❄${tmp}` : '❄') : '', isDg ? '⚠DG' : '',
                            s.flags && s.flags.length ? s.flags.filter((f) => f !== 'LUG').join('·') : ''].filter(Boolean).join(' ');
+            // 3.67: 자동 덱플랜 — 예측 칸은 누르면 확정(assign), 확정 칸은 다시 누르면 해제. 올린 플랜(예측 아님)은 종전대로 컨 상세.
+            const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
+            const onTap = async () => {
+              if (s.pred) {
+                if (!voyageKey) return;
+                await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn: s.cn, by: inspector || '', at: Date.now() });
+                return;
+              }
+              if (s.sure) {
+                if (!voyageKey) return;
+                if (window.confirm(`${s.cn} 확정을 해제할까요?`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
+                return;
+              }
+              onOpenContainer?.(c || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay });  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
+            };
             return (
               <button key={`${s.cn}${s.ri}${s.ci}`}
-                title={s.pos || ''}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" */
-                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay })}  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
+                title={(s.pred ? '예측 · 누르면 확정 — ' : s.sure ? '확정 · 누르면 해제 — ' : '') + (s.pos || '')}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" */
+                onClick={onTap}
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
-                  ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-ink-750/80 border-line-strong' : 'bg-sky-900/80 border-sky-600'}
+                  ${s.pred ? 'border-dashed border-amber-400 bg-amber-950/50' : s.sure ? 'bg-amber-900/70 border-amber-400' : isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-ink-750/80 border-line-strong' : 'bg-sky-900/80 border-sky-600'}
                   ${isXray ? 'ring-2 ring-yellow-400' : isRf ? 'ring-1 ring-cyan-400' : ''}
                   ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}
                   ${isLug ? 'ring-2 ring-violet-400 border-violet-400 bg-violet-900/70' : ''}`}
                 style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
                 <div className="text-2xs font-black mono text-dim-100 truncate">
-                  {s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{isXray ? <span className="bg-yellow-400 text-black px-0.5 rounded-sm font-black">X</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
+                  {s.pred ? <span className="text-amber-300">?</span> : null}{s.sure ? <span className="text-amber-200">📌</span> : null}{s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{isXray ? <span className="bg-yellow-400 text-black px-0.5 rounded-sm font-black">X</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
                 </div>
                 <div className="text-[8.5px] text-dim-200 truncate">{s.iso} {fe}</div>
                 {s.line ? <div className="text-[8px] mono text-dim-300/90 truncate">{s.line}줄 {s.col}칸</div> : null}
@@ -131,6 +169,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-lime-400 rounded-sm mr-1" />🏗갠트리(落地·LO/LO)</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-amber-300 rounded-sm mr-1" />⇅双背(2단)</span>
         <span><span className="inline-block w-2.5 h-2.5 bg-violet-900 border-2 border-violet-400 rounded-sm mr-1" />🧳수화물(이적 아님)</span>
+        {plan._gen ? <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-amber-400 rounded-sm mr-1" />?예측(탭=확정)</span> : null}
       </div>
     </div>
   );

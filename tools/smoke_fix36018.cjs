@@ -138,7 +138,7 @@ const norm = (s) => String(s == null ? '(null)' : s).replace(/\s+/g, ' ').trim()
       ok('cone-sw.js — ok·같은 오리진(+보관소)·_ck/u 제외 조건이 있고 public 사본과 같다', /res\.ok/.test(csw) && /self\.location\.origin/.test(csw) && /firebasedatabase/.test(csw) && /_ck\|u/.test(csw) && csw === src('public/cone-sw.js'));
       ok('떠 있는 미르·콘앱 ctx 에 accepted 표식', /accepted: true/.test(src('src/components/MirFab.jsx')) && /accepted:true/.test(src('public/cone.html')));
       ok('cone.html 이 port_mis_data 를 받아 ctx.portMisData 로 넘긴다', /g\('port_mis_data\.json'\)/.test(src('public/cone.html')) && /portMisData: \(mc&&mc\.portMisData\)/.test(src('public/cone.html')));
-      ok('콘앱 버전 2.55-02', /window\.__CONEV='ConeOne 2\.55-02'/.test(src('public/cone.html')));
+      ok('콘앱 버전 2.56', /window\.__CONEV='ConeOne 2\.56'/.test(src('public/cone.html')));
       ok('콘앱 미르 voyage 에 restowList(선사 시프팅 목록)가 실린다', /restowList:\(state\.restowList/.test(src('public/cone.html')));
       ok('씰체결 엑셀 시트명 — 같은 길이 안 순번(_sameLenBefore)', /_sameLenBefore \? ' ' \+ \(_sameLenBefore \+ 1\)/.test(src('src/components/EmptySealReport.jsx')));
       ok('검수리스트 별첨 제목에 X-RAY 글자 없음', /\[별첨\] 특수화물 \$\{special\.length\}대/.test(src('src/inspectionList.js')) && !/특수화물·X-RAY/.test(src('src/inspectionList.js')));

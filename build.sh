@@ -803,6 +803,8 @@ node tools/smoke_fix36004.cjs "$PWD" || { echo "✗ 3.60-04 판정 한 벌 연�
 node tools/smoke_fix36005.cjs "$PWD" || { echo "✗ 3.60-05 미르 파서 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-06: 업데이트 배너 정리·크래시 신고 판 번호·AI 판독 안전장치·배포 직후 자산·빌드 스텁 되돌리기.
 node tools/smoke_fix36006.cjs "$PWD" || { echo "✗ 3.60-06 안정 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.67: RZOR 선적 덱플랜 — 검수사 STOWAGE PLAN 파서(실물 R106W·R079W) · 자동 덱플랜(실적 189대) · 엑셀 왕복 · 화면 배선.
+node tools/smoke_rzorplan.cjs "$PWD" || { echo "✗ RZOR 선적 덱플랜 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-07: 선적 EDI 회신 규격(H≠리퍼·선사 약어) · 씰체결 번호 규격별 · 현황 탭 특수화물 한 벌.
 node tools/smoke_fix36007.cjs "$PWD" || { echo "✗ 3.60-07 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-08: 기존 records 를 못 읽으면 리스트 저장을 멈춘다(병합 없이 통째 덮어 현장 기록을 지우던 갈래 · 진단 T8) — 실소스 + 메모리 스텁.

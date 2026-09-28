@@ -68,6 +68,8 @@ import { consumePodFocus, setPodFocus } from '../podFocus.js';   // 3.53: 홈 �
 import { logView, logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 활동 로그(열람·조회 기록)
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
+import { buildRzorLoadingDeckPlan } from '../rzorDeckPredict.js';   // 3.67: RZOR 선적 자동 덱플랜
+import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';        // 3.67: 검수사 STOWAGE PLAN 엑셀 내보내기
 import DeckPlanView from '../components/DeckPlanView.jsx';
 import MailboxFilePicker from '../components/MailboxFilePicker.jsx';   // V9.46: 메일함 폴더 직결
 import { db } from '../firebase.js';
@@ -973,6 +975,26 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return baseContainers;
   }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl]);   // 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
 
+  // ★ 3.67 — RZOR 선적 자동 덱플랜. 검수사 «선적 순번대로 자리가 정해지는것만 확실하다면» —
+  //   마감텔리 STOWAGE PLAN 을 아직 안 올린 선적 항차는 동방 실적(termWork) 순번과 규칙표(36항차 실물)로
+  //   컨마다 예측 자리를 놓는다. 검수원이 덱 그림에서 누른 자리(stowagePlan/assign)는 확정으로 들어간다.
+  //   ⚠ 올린 덱플랜(decks)이 있으면 그것이 정본이고 이 생성은 쓰지 않는다. RZOR(정책 lolo) 선적만.
+  const _rzorGen = useMemo(() => {
+    if (mode !== 'loading') return null;
+    if (Array.isArray(sec.stowagePlan?.decks) && sec.stowagePlan.decks.length) return null;
+    const vsl = voyage?.info?.vsl || '';
+    const hints = [voyage?.info?.voy, voyage?.info?.voyage, voyage?.info?.callsign].filter(Boolean);
+    const _rz = /RZOR|RIZHAO/i.test(`${vsl} ${voyageKey || ''}`) || isLoloShipByPolicy(vsl, extraPolicies, hints);
+    if (!_rz) return null;
+    const list = containersBase.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__'));
+    if (!list.length) return null;
+    try {
+      return buildRzorLoadingDeckPlan({ containers: list, termWork: sec.termWork || {}, bayWork: sec.bayWork || null,
+                                       assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });   // 선적 항차(R106W) — info.voy 는 양하 항차(R106E)
+    } catch (e) { console.warn('[3.67] RZOR 덱플랜 생성 실패', e); return null; }
+  }, [mode, containersBase, sec.stowagePlan, sec.termWork, sec.bayWork, voyage?.info?.vsl, voyage?.info?.voy, voyageKey, extraPolicies]);
+  const _deckPlanEff = _rzorGen || voyage?.[mode]?.stowagePlan;   // LOLO 탭이 그리는 것 — 올린 것 우선, 없으면 생성
+
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(
     () => {
@@ -981,7 +1003,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       //   갠트리(lolo)·자리(pos)·2단(dbl) 지정을 조회용 컨 속성에 병합한다. RZOR R089E 실측 — 덱플랜은
       //   와 있는데(갠트리 49) ediContainers 엔 주입 전이라 «LOLO 리스트» 조회가 0건이었다.
       //   화면(DeckPlanView)은 plan 을 직접 그려 보였고, 조회(nlSearch)만 못 보던 불일치를 여기서 없앤다.
-      const decks = sec.stowagePlan?.decks;
+      //   3.67: 생성 덱플랜(_rzorGen)이면 **확정 자리만** pos·lolo 로 넣는다(예측은 자리가 아니다 — 그림에만 있다).
+      const _gen = !!_rzorGen;
+      const decks = (_gen ? _rzorGen : sec.stowagePlan)?.decks;
       if (!Array.isArray(decks) || !decks.length) return base;
       const mark = {};
       for (const dk of decks) for (const s of (dk?.slots || [])) if (s && s.cn && !s.empty) mark[s.cn] = s;
@@ -989,6 +1013,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       const out = base.map(c => {
         const s = mark[c.cn];
         if (!s) return c;
+        if (_gen) return s.sure ? { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '' } : c;   // 예측은 자리가 아니다 — 콘앱·현황 카드(RTDB)와 같은 답(감사 C)
         // 2.06 (검수사 실측 «RZOR 자료에서 수화물이 안보입니다» — SPSU2019220): RZOR 수화물은 별도 리스트가
         //   아니라 **덱플랜 칸의 LUG 마킹**으로 온다. 파서(rzorPlan)는 flags 로 뽑고 있었는데 여기 병합이
         //   버려서 보라 박스·브리핑·«수화물» 조회에 안 잡혔다. 긴급 플래그도 같이 얹는다.
@@ -996,6 +1021,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '', dbl: c.dbl || !!s.dbl,
           lugg: c.lugg || _fl.includes('LUG'), urgent: c.urgent || _fl.includes('긴급') };
       });
+      if (_gen) return out;   // 3.67: 생성 플랜엔 덱 전용 컨이 없다(컨 목록에서 만든 것)
       // 2.06-02 (검수사 «리스트 목록에도 카드색이 반영안됨» — R090E 실측): SPSU2019220 은 EDI(208)에도
       //   양하 리스트(208)에도 없고 **덱플랜에만 있다**. 그래서 리스트에 행 자체가 없어 보라 카드가
       //   나올 수 없었다. 덱플랜 전용 LUG(수화물) 컨만 행으로 추가한다 — R087E(163/164, 수화물 +1)처럼
@@ -1015,7 +1041,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       }
       return out;
     },
-    [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan, sec.luggConfirm]);
+    [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan, sec.luggConfirm, _rzorGen]);   // 3.67: 생성 덱플랜도 의존
 
   //  3.21: «선미 김판석 선수 이종부» 를 호기로 가릴 재료 — 항차 한 번만 재고 탭에 내린다(§4-4 한 벌).
   //    ListTab·LoloTab 은 항차를 통째로 안 받으므로(빌드 스코프 검사가 잡았다) 여기서 구해 prop 으로 준다.
@@ -1889,10 +1915,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'lolo' && (
         <>
         <DeckPlanView
-          plan={voyage?.[mode]?.stowagePlan}
+          plan={_deckPlanEff}   /* 3.67: 올린 덱플랜이 없는 RZOR 선적은 생성 덱플랜(예측·확정) */
           containers={containers} compMap={compMap} xrayMap={xrayMap}
           voyageKey={voyageKey} mode={mode} inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
+          onExport={mode === 'loading' && _deckPlanEff?.decks?.length ? ((pl) => exportCheckerPlanXlsx({
+            plan: pl, vsl: String(voyage?.info?.vsl || 'RIZHAO ORIENT').toUpperCase(),
+            voy: voyage?.info?.voy_l || voyage?.info?.voy || (voyageKey || '').split('_').pop() || '',
+            date: new Date().toISOString().slice(0, 10), inspector: inspector || '',
+          })) : null}   /* 3.67: 선적만 — 검수사 STOWAGE PLAN 엑셀(마감텔리 양식) */
         />
         <LoloTab
           onOpenPlan={_mirOpenPlan}
@@ -4175,8 +4206,10 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           //   V9.31: 파일명이 rzdf_ 이거나 RZOR 선박일 때만 검사한다. 종전엔 모든 리스트 파일을
           //   cellStyles:true(스타일 전체 파싱)로 통째 읽어 — 큰 CLL(OBWH 2702W 등)에서 업로드가
           //   "처리 중"에서 수 분간 멈춘 것처럼 보였다(사용자 신고 2026-07-31). 무관한 파일엔 건너뛴다.
-          const _mayBeDeckPlan = /rzdf|deck/i.test(file.name) ||
-            String(voyage?.info?.vsl || voyageKey || '').toUpperCase().includes('RZOR');
+          //   3.67: 검수사 STOWAGE PLAN(마감텔리 PLAN.xlsx 양식) 도 덱플랜이다 — 선적 탭에서 올리면 loading/stowagePlan 이 된다.
+          const _mayBeDeckPlan = /rzdf|deck|stowage|plan\.xlsx$/i.test(file.name) ||
+            /RZOR|RIZHAO/i.test(`${voyage?.info?.vsl || ''} ${voyageKey || ''}`);   // 3.67: 선박명은 «RIZHAO ORIENT» 라 RZOR 만 보면 늘 거짓이었다(감사 지적)
+          let _deckPlanStop = false;   // 3.67: 덱플랜으로 감지됐는데 0대면 리스트로 흘리지 않는다(선적 리스트에 컨이 섞인다)
           try {
             if (!_mayBeDeckPlan) throw new Error('skip-deckplan');
             const XLSX0 = await loadSheetJS();
@@ -4184,12 +4217,17 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             if (isDeckPlanWorkbook(wb0)) {
               const plan0 = parseDeckPlanWorkbook(wb0, XLSX0);
               if (plan0.total > 0) {
-                await fbSetStowagePlan(voyageKey, mode, plan0);
-                results.push(`✅ 🗺 ${file.name}: 덱 플랜 ${plan0.decks.map(d => `${d.deck}${d.slots.length}`).join('/')} = ${plan0.total}대`);
+                // 3.67: 검수사 STOWAGE PLAN 은 선적 그림이다 — 양하 탭에서 올려도 loading 노드로 간다(선사 rzdf 를 소리 없이 덮지 않는다, 감사 지적).
+                const _tgtMode = plan0._fmt === 'checker' ? 'loading' : mode;
+                await fbSetStowagePlan(voyageKey, _tgtMode, plan0);
+                results.push(`✅ 🗺 ${file.name}: ${_tgtMode === 'loading' ? '선적' : '양하'} 덱 플랜 ${plan0.decks.map(d => `${d.deck}${d.slots.length}`).join('/')} = ${plan0.total}대${_tgtMode !== mode ? ' (검수사 STOWAGE PLAN 은 선적 탭 그림이라 선적에 저장했습니다)' : ''}`);
                 continue;
               }
+              _deckPlanStop = true;
+              results.push(`❌ 🗺 ${file.name}: 덱 플랜 양식인데 컨을 한 대도 못 읽었습니다 — 리스트로 넣지 않았습니다(양식 확인)`);
             }
           } catch (e0) { if (e0 && e0.viewOnly) throw e0; /* 덱 플랜 아님 → 리스트 흐름 계속 (3.60-19: 조회만 거부는 삼키지 않는다 — 감사 M2) */ }
+          if (_deckPlanStop) continue;
           const parseResult = await parseListExcel(buf);
           records = parseResult.records || [];
           if (records.length === 0) {
