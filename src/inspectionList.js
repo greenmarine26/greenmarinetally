@@ -9,7 +9,7 @@
 
 import { openPrintWindow } from './printHelper.js';
 import { shipOpMapper } from './data/tallyFormats.js';
-import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
   //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
@@ -537,15 +537,17 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   //   (검수사 확정 2026-08-15, 정본 ★앱_통합지침서.md §5-1B). 좌표만 달라진 통과화물은 서류 차이다.
   let shiftHtml = '';
   if (Array.isArray(shiftingList) && shiftingList.length > 0) {
+    //  3.65: 검수사 «시프팅 리스트에서 양하/선적/실제위치(컨별 선적완료시 마다 추가)» — 종이에도 같은 세 칸(인쇄 시점까지 실린 것).
+    //    자리 글자는 fmtShiftPos 한 벌(종전엔 7자리 날것 0180786 이 찍혔다).
     const rows = shiftingList.map((c, i) => `<tr>
       <td>${i + 1}</td><td class="cn">${c.cn || ''}</td><td>${c.iso || ''}</td><td>${c.pod || ''}</td>
-      <td class="cn">${c.from || ''}</td><td class="cn">${c.to || ''}</td><td></td></tr>`).join('');
+      <td class="cn">${fmtShiftPos(c.from)}</td><td class="cn">${c.same ? '제자리' : fmtShiftPos(c.to)}</td><td class="cn">${c.act ? `${fmtShiftAct(c)} ${fmtShiftTime(c.actAt)}` : ''}</td><td></td></tr>`).join('');
     shiftHtml = `<div class="ititle">[별첨2] ◆ 시프팅(재적부) ${shiftingList.length}대 — 평택 작업에 걸려 옮기는 화물 (양하·선적 공통, 1대=크레인 2모브)</div>
-      <div class="ipage"><table class="ilist" style="max-width:120mm;margin:0 auto;">
+      <div class="ipage"><table class="ilist" style="max-width:140mm;margin:0 auto;">
       <!--  ★ 3.45 — 이 표엔 colgroup 이 없어, table-layout:fixed 아래서 7칸이 **균등분할**돼
             컨테이너번호 칸이 30mm→17mm 로 줄었다(재감사 실측). 3.44 의 내용폭 비율을 그대로 적어 둔다. -->
-      <colgroup><col style="width:6%"><col style="width:23%"><col style="width:10%"><col style="width:13%"><col style="width:20%"><col style="width:20%"><col style="width:8%"></colgroup>
-      <tr><th>No</th><th>컨테이너</th><th>규격</th><th>POD</th><th>전 위치</th><th>후 위치</th><th>확인</th></tr>
+      <colgroup><col style="width:5%"><col style="width:19%"><col style="width:8%"><col style="width:10%"><col style="width:15%"><col style="width:15%"><col style="width:22%"><col style="width:6%"></colgroup>
+      <tr><th>No</th><th>컨테이너</th><th>규격</th><th>POD</th><th>양하 위치</th><th>선적 위치</th><th>실제 위치</th><th>확인</th></tr>
       ${rows}</table></div>`;
   }
 

@@ -20,7 +20,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, restowActualExtra, fmtShiftPos, fmtShiftTime} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -428,20 +428,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
       voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix]);
 
-  const shiftingList = useMemo(() => {
-    const keys = Object.keys(shiftingMap || {});
-    if (!keys.length) return [];
-    return keys.map(cn => {
-      const c = fullEdiMap[cn] || {};
-      const s = shiftingMap[cn] || {};   // 1.43-02: 예측 경로엔 from이 없었다 — 결측이 와도 안 죽게
-      //  3.44: 서류 정본 행은 EDI 에 없을 수 있다 — 규격·풀엠티는 서류 값으로 채우고 제자리 재적재를 표식한다.
-      return { cn, from: s.from || s.pos || '', to: s.to || '', iso: c.iso || s._iso || '', pod: c.pod || '', fe: c.fe || s._fe || '',
-               doc: !!s._doc, same: !!s._same };
-    }).sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
-  }, [shiftingMap, fullEdiMap]);
+  //  3.65: 목록 행 만들기는 utils.shiftingListOf 한 벌(연막검사가 같은 함수를 잰다) — 실제 칸(실은 자리·시각)이 붙었다.
+  const shiftingList = useMemo(() => shiftingListOf(shiftingMap, fullEdiMap, voyage),
+    //  3.65: 카토스 실적(restowActual)·검수원 선적 자리(loading.records)가 바뀌면 실제 칸을 다시 채운다.
+    [shiftingMap, fullEdiMap, voyage?.restowActual, voyage?.loading?.records, voyage?.loading?.ediContainers, voyage?.loading?.completed]);
 
   //  3.2-01: 상세창 통과분 문지기 재료 — 시프팅 컨은 통과분이어도 작업분이다.
   const shiftCnSet = useMemo(() => new Set(shiftingList.map((x) => x.cn)), [shiftingList]);
+  //  3.65: 카토스가 시프팅이라고 한 컨 중 목록에 없는 것 — 목록은 안 바꾸고 아래에 따로 적는다.
+  const restowExtra = useMemo(() => restowActualExtra(voyage, shiftCnSet), [voyage?.restowActual, shiftCnSet]);
 
   // TallyOne 1.69-10: 선적 EDI 미도착(=평택 출항본 아님) — 조용히 0 으로 두지 않고 화면에 말한다.
   //   판정은 utils.loadEdiIsDeparture 한 벌만 쓴다(같은 판정을 두 기준으로 하지 않는다).
@@ -478,6 +473,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     loadEdiPending,
     truthChk,
     hatchSolve,
+    restowExtra,   // 3.65: 카토스 시프팅 실적에만 있는 컨
   };
 
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
@@ -2661,11 +2657,15 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       )}
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
-      {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
+      {(shiftingList.length > 0 || (shiftInfo?.restowExtra || []).length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
         <div className="mt-3 bg-ink-900 border border-blue-800/50 rounded-pill overflow-hidden">
           <button type="button" onClick={() => setShiftOpen(v => !v)}
             className="w-full text-left px-3 py-2 bg-blue-950/60 hover:bg-blue-900/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            {/*  ★ 3.65 — 실제로 다시 실린 대수(검수사 «컨별 선적완료시 마다 추가»). 하나라도 실렸을 때만. */}
+            {shiftingList.some((x) => x.act) && (
+              <span className="text-emerald-300">· 실제 {shiftingList.filter((x) => x.act).length}/{shiftingList.length}</span>
+            )}
             {/*  ★ 3.44 (검수사 2026-09-12 «둘 다 보이기») — 선사 서류가 정본이면 그것을 밝히고,
                  앱 추정과 다르면 차이도 같이 적는다. 어느 쪽이 틀렸는지 화면에서 바로 보이게. */}
             {shiftInfo?.meta?.source === 'carrier' && (
@@ -2693,7 +2693,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 *«선사 세관 항만(배정) 그러므르 시프팅은 없습니다»* — ⛔ 를 띄우면 안 된다. */}
             {/* ⛔ 2.82-03: «시프팅 없음»은 **실제로 0일 때만** 쓴다. 목록에 95대를 띄워 놓고
                 그 옆에 «없음»을 적으면 검수사가 무엇을 믿어야 할지 모른다(2026-08-29 실물 보고). */}
-            {shiftingList.length === 0 && shiftInfo?.truthChk?.srcAgree ? (
+            {!(shiftInfo?.restowExtra || []).length && shiftingList.length === 0 && shiftInfo?.truthChk?.srcAgree ? (
               <span className="text-emerald-300">
                 · 선사·세관·배정 {shiftInfo.truthChk.srcs?.plan}대 <b>일치</b> ✓ 시프팅 없음
               </span>
@@ -2706,8 +2706,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               </span>
             )}
             <span className="ml-auto text-2xs font-normal text-dim-400">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>
-            {shiftingList.length > 0 && (
-              <span className="text-2xs font-bold text-blue-300">{shiftOpen ? '▲ 접기' : `▼ 목록 보기 (${shiftingList.length}대)`}</span>
+            {(shiftingList.length > 0 || (shiftInfo?.restowExtra || []).length > 0) && (
+              <span className="text-2xs font-bold text-blue-300">{shiftOpen ? '▲ 접기' : `▼ 목록 보기 (${shiftingList.length || (shiftInfo?.restowExtra || []).length}대)`}</span>
             )}
           </button>
           {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
@@ -2846,16 +2846,48 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             </div>
           )}
           {shiftOpen && (
-          <div className="divide-y divide-line">
+          <div className="divide-y divide-line" data-shift-list="1">
+            {/*  ★ 3.65 — 검수사 2026-09-28 «시프팅 리스트에서 양하/선적/실제위치(컨별 선적완료시 마다 추가)되게 해주세요».
+                 양하 = 내린 자리 · 선적 = 선사 계획 자리(RESTOW LIST — 없으면 예측) · 실제 = 실은 자리와 시각(카토스 또는 검수원).
+                 실제는 컨이 실릴 때마다 채워진다(수집기 2.37 이 5분에 한 번 카토스 «컨테이너 조회»를 읽는다). */}
+            <div className="px-3 py-1 grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-1 text-2xs text-dim-400">
+              <span>컨테이너</span><span>양하</span><span>선적</span><span>실제</span>
+            </div>
             {shiftingList.map(sc => (
-              <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-xs2">
-                <span className="mono font-bold text-dim-100">{sc.cn}</span>
-                <span className="text-dim-400">{sc.iso}</span>
-                {sc.pod && <span className="text-dim-400">{sc.pod}</span>}
+              <div key={sc.cn} data-shift-cn={sc.cn} className="px-3 py-1.5 grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-1 items-start text-xs2">
+                <span className="min-w-0">
+                  <span className="mono font-bold text-dim-100 block truncate">{sc.cn}</span>
+                  <span className="text-2xs text-dim-400">{[sc.iso, sc.pod].filter(Boolean).join(' · ')}</span>
+                </span>
+                <span className="mono text-blue-300" data-col="from">{fmtShiftPos(sc.from)}</span>
                 {/* 3.44: 제자리 재적재(도착 자리 = 선적 자리)는 «제자리» 라고 적는다 — 자리는 안 바뀌지만 크레인은 두 번 든다. */}
-                <span className="ml-auto mono text-blue-300">{sc.same ? `${sc.from} (제자리)` : sc.to ? `${sc.from} → ${sc.to}` : `${sc.from} (예측)`}</span>
+                <span className="mono text-blue-300" data-col="to">{sc.same ? '제자리' : sc.to ? fmtShiftPos(sc.to) : <span className="text-dim-400">(예측)</span>}</span>
+                <span className="mono" data-col="act">
+                  {sc.act ? (
+                    <>
+                      <span className={sc.actDiff ? 'text-amber-300 font-bold' : 'text-emerald-300 font-bold'}>{fmtShiftPos(sc.act)}</span>
+                      <span className="block text-2xs text-dim-400">
+                        {fmtShiftTime(sc.actAt)}
+                        {sc.actSrc === 'app' ? ' 검수원' : ' 터미널'}
+                      </span>
+                      {sc.actDiff && <span className="block text-2xs text-amber-300 whitespace-nowrap">⚠ 터미널 {fmtShiftPos(sc.actCatos)}</span>}
+                    </>
+                  ) : <span className="text-dim-500">—</span>}
+                </span>
               </div>
             ))}
+            {/*  3.65 — 카토스는 시프팅이라고 하는데 목록에 없는 컨. 목록(선사 서류·앱 추정)을 바꾸지 않고 따로 보인다. */}
+            {(shiftInfo?.restowExtra || []).length > 0 && (
+              <div className="px-3 py-1.5 text-2xs text-amber-200 bg-amber-950/30" data-shift-extra="1">
+                <div className="font-bold">⚠ 터미널 시프팅 실적에만 있는 컨 {shiftInfo.restowExtra.length}대 — 목록에 없습니다</div>
+                {shiftInfo.restowExtra.map((x) => (
+                  <div key={x.cn} className="mono">
+                    {x.cn} · 양하 {fmtShiftPos(x.from) || '?'} → 실제 {fmtShiftPos(x.to)}
+                    {x.at ? ` ${fmtShiftTime(x.at)}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           )}
         </div>

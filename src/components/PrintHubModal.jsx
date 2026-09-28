@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
@@ -268,10 +268,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       return;
     }
     // V8.98-05: 쉬프팅 별첨 — 컨 정보 보강해 전달
-    const _shiftList = Object.keys(shiftingMap || {}).map(cn => {
-      const c = fullEdiMap[cn] || {};
-      return { cn, from: shiftingMap[cn].from, to: shiftingMap[cn].to, iso: c.iso || '', pod: c.pod || '' };
-    }).sort((a, b) => a.from.localeCompare(b.from));
+    //  3.65: 항차 화면 목록과 같은 한 벌(utils.shiftingListOf) — 실제 칸(실은 자리·시각)이 같이 간다(감사 — 둘째 벌이었다).
+    const _shiftList = shiftingListOf(shiftingMap, fullEdiMap, voyage);
     openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList);
   };
 

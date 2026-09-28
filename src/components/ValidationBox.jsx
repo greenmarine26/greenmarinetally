@@ -1,9 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { ShieldCheck, AlertTriangle, Printer, FileDown, X } from 'lucide-react';
-import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry, isPtkResolved } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
+import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry, isPtkResolved, fmtShiftPos, fmtShiftTime, fmtShiftAct } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
 
 // V8.98-08: 쉬프팅(재적부) 목록 모달 — 검증 카드의 ◆ 칸 클릭 시. 인쇄/PDF/엑셀 저장(청구 근거용).
-const _sp = (p) => `${String(p).slice(0, 3)}-${String(p).slice(3, 5)}-${String(p).slice(5, 7)}`;
+//  3.65: 자리 글자는 utils.fmtShiftPos 한 벌(0180786 → 18-07-86) — 종전 자르기는 예측 꼴(«6-02-82»)을 «6-0-2-82» 로 깼다.
+const _sp = (p) => fmtShiftPos(p);
+//  3.65: 실은 시각 «04:19» (KST)
+const _hm = (t) => fmtShiftTime(t);
+//  3.65: 실제 칸 글자 — 검수원 자리가 터미널 기록과 다르면 둘 다(화면·서류에 외부 시스템 이름은 안 쓴다 — 3.16)
+const _act = (s) => fmtShiftAct(s);
 
 function ShiftingModal({ list, voyageKey, onClose }) {
   //  3.44: 선사 시프팅 목록(RESTOW LIST)이 정본이면 종이에도 출처를 적는다 — 현장이 무엇을 보고 세는지 알게.
@@ -11,7 +16,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   const title = `쉬프팅(재적부) 목록 — ${String(voyageKey || '').replace('_', ' ')}`;
   const openPrint = () => {
     const rows = list.map((s, i) =>
-      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${s.iso || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.same ? '제자리' : _sp(s.to)}</td><td></td></tr>`).join('');
+      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${s.iso || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.same ? '제자리' : _sp(s.to)}</td><td class="mono">${_act(s)}</td><td>${_hm(s.actAt)}</td><td></td></tr>`).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>
       body{font-family:'Malgun Gothic',sans-serif;margin:24px;color:#111}
       h2{font-size:16px;margin:0 0 2px}
@@ -23,7 +28,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
     </style></head><body>
       <h2>◆ ${title} · 총 ${list.length}대</h2>
       <div class="sub">통과화물 선내 위치 이동(양하+재선적 실작업) — 양하·선적 공통${docNote} · 출력 ${new Date().toLocaleString('ko-KR')}</div>
-      <table><thead><tr><th>No</th><th>컨테이너 번호</th><th>규격</th><th>F/E</th><th>POD</th><th>전 위치</th><th>후 위치</th><th>확인</th></tr></thead>
+      <table><thead><tr><th>No</th><th>컨테이너 번호</th><th>규격</th><th>F/E</th><th>POD</th><th>양하 위치</th><th>선적 위치</th><th>실제 위치</th><th>실은 시각</th><th>확인</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
     const w = window.open('', '_blank');
@@ -34,10 +39,10 @@ function ShiftingModal({ list, voyageKey, onClose }) {
     try {
       const XLSX = await loadSheetJS();
       const aoa = [[title], [`총 ${list.length}대 · 통과화물 재적부(양하·선적 공통)`], [],
-        ['No', '컨테이너 번호', '규격', 'F/E', 'POD', '전 위치', '후 위치'],
-        ...list.map((s, i) => [i + 1, s.cn, s.iso || '', s.fe || '', s.pod || '', _sp(s.from), s.same ? '제자리' : _sp(s.to)])];   // 3.44: 제자리 재적재
+        ['No', '컨테이너 번호', '규격', 'F/E', 'POD', '양하 위치', '선적 위치', '실제 위치', '실은 시각'],
+        ...list.map((s, i) => [i + 1, s.cn, s.iso || '', s.fe || '', s.pod || '', _sp(s.from), s.same ? '제자리' : _sp(s.to), _act(s), _hm(s.actAt)])];   // 3.44: 제자리 재적재 · 3.65: 실제
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 5 }, { wch: 8 }, { wch: 10 }, { wch: 10 }];
+      ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 5 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 8 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, '쉬프팅');
       XLSX.writeFile(wb, `쉬프팅_${voyageKey || 'list'}.xlsx`);
@@ -66,12 +71,14 @@ function ShiftingModal({ list, voyageKey, onClose }) {
         <div className="px-3 py-1 text-2xs text-dim-400">인쇄·PDF는 새 창에서 열립니다 — PDF는 인쇄 대상에서 "PDF로 저장"을 선택하세요.</div>
         <div className="overflow-y-auto divide-y divide-line">
           {list.map((s, i) => (
-            <div key={s.cn} className="px-3 py-1.5 flex items-center gap-2 text-xs2">
+            <div key={s.cn} className="px-3 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs2">
               <span className="text-dim-500 w-5 text-right">{i + 1}</span>
               <span className="mono font-bold text-dim-100">{s.cn}</span>
               <span className="text-dim-400">{s.iso}</span>
               {s.pod && <span className="text-dim-400">{s.pod}</span>}
               <span className="ml-auto mono text-blue-300">{s.same ? `${_sp(s.from)} (제자리)` : `${_sp(s.from)} → ${_sp(s.to)}`}</span>
+              {/* 3.65: 실제 실은 자리 — 실릴 때마다 채워진다 */}
+              {s.act ? <span className={`mono font-bold ${s.actDiff ? 'text-amber-300' : 'text-emerald-300'}`}>실제 {_act(s)} {_hm(s.actAt)}</span> : <span className="text-dim-500 text-2xs">실제 —</span>}
             </div>
           ))}
         </div>

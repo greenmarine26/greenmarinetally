@@ -466,6 +466,17 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 장비별 작업 보고 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_EQP"; exit 1
   fi
+  # 3.65: 시프팅 목록 «양하 · 선적 · 실제» — MCSN 639S 20대(마감텔리 EDI·ASC 기준표)·XTPG 541W 50대 카토스 사본으로 세고 리스트 탭·검증 박스·인쇄를 그린다.
+  SMOKE_SA=$(mktemp /dev/shm/hometmp/_smokesa_XXXXXX.js)
+  if npx esbuild tools/smoke_shiftactual.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+       --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_SA" --log-level=error; then
+    node tools/smoke_shiftactual.cjs "$SMOKE_SA" || { echo "✗ 시프팅 목록 양하·선적·실제 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SA"; exit 1; }
+    rm -f "$SMOKE_SA"
+  else
+    echo "✗ 시프팅 목록 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SA"; exit 1
+  fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.

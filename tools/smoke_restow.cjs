@@ -53,7 +53,8 @@ const code = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').split('\n').map(
 const vp = code('src/pages/VoyagePage.jsx');
 ok(/meta\?\.source === 'carrier'/.test(vp), '항차 화면이 «선사 서류 정본»을 밝힌다');
 ok(/앱 추정 \$\{shiftInfo\.meta\.estN\}/.test(vp), '앱 추정과 차이를 같이 적는다(검수사 «둘 다 보이기»)');
-ok(/sc\.same \? `\$\{sc\.from\} \(제자리\)`/.test(vp), '제자리 재적재를 목록에 «제자리»로 적는다');
+//  3.65: 목록이 «양하 · 선적 · 실제» 칸으로 나뉘어 제자리 재적재는 선적 칸에 «제자리»로 적는다(양하 칸은 따로 있다).
+ok(/sc\.same \? '제자리'/.test(vp), '제자리 재적재를 목록에 «제자리»로 적는다');
 ok(/s\.same \? '제자리'/.test(code('src/components/ValidationBox.jsx')), '인쇄·엑셀에도 제자리를 적는다');
 const cone = code('public/cone.html');
 ok(/function ctShiftMap\(/.test(cone) && /restowMapFromDoc/.test(cone), '콘앱에 시프팅 판정 한 벌(ctShiftMap)이 있다');
