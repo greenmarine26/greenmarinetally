@@ -70,6 +70,14 @@ function _addAll(k, vals) {
   catch (e) { console.warn('[3.63] 17시 보고 기록 쓰기 실패 — 이 기기에서 다시 뜰 수 있습니다', e); }
 }
 
+//  ★ 3.66 — 한 마감의 보고 한 건(한 벌) — 17시 창·보고 보관·주야간 작업보고 화면이 같이 쓴다(2차 감사 — 주야간 화면이 마감 뒤에 지금 자료로 따로 세면
+//    같은 화면 안에서 보관 창과 갱 숫자가 갈린다). 적어 둔 보고(info.shiftReports)가 있으면 그것(모든 기기 같은 숫자), 없으면 마감 시각으로 다시 센다
+//    (recomputed — 마감 +8분이 지났으면 «다시 센 값»이라고 밝힌다). 종전 Ferry1700AlertInner.repOf 본문을 그대로 옮겼다.
+export function ferryCutItem(k, v, cut, now) {
+  const st = _storedOf(v, cut.key, cut.cutMs);
+  const rp = st ? st.rep : buildGangShiftReport(v, ferryPagesOf(v, k), now, { shift: cut.shift, cutMs: cut.cutMs, qcSnap: _qcSnapOf(k, v, now, cut.cutMs, cut.key) });
+  return { key: k, cutKey: cut.key, cutMs: cut.cutMs, info: (v && v.info) || {}, rep: rp, stored: !!st, storedAt: st ? st.at : 0, recomputed: !st && now - cut.cutMs > WRITE_UNTIL_MS };
+}
 //  그 배의 «장(해치)» 목록 — 보드(ChiefDashboard boardPages)와 같은 길(getShipBayDictData → buildBayPagesFromSummary).
 export function ferryPagesOf(voyage, key) {
   try {
@@ -156,7 +164,8 @@ export function ferryCutLabel(rep) {
   const md = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return rep.shift === '야간' ? `${md} 야간 · 익일 05:30 마감` : `${md} 주간 · 17:00 마감`;
 }
-function VoyageBlock({ item, myNo, onKakao = null }) {
+//  3.66: export — 주야간 작업보고 화면(WorkReportModal)도 같은 호기 카드를 그린다. shipAlways — 갱으로 나뉘어도 배 전체 합계를 아래에 같이(검수사 «갱별 + 배 전체 합계»).
+export function VoyageBlock({ item, myNo, onKakao = null, shipAlways = false }) {
   const { info, rep } = item;
   const gangs = (rep.gangs || []).slice().sort((a, b) => (a.no === myNo ? -1 : b.no === myNo ? 1 : a.no - b.no));
   return (
@@ -170,9 +179,9 @@ function VoyageBlock({ item, myNo, onKakao = null }) {
       {rep.perGang && rep.side && <div className="text-2xs text-dim-400">{rep.side === 'starboard' ? '우현' : '좌현'} 접안 기준 · 선수 {rep.bow}호기 — 방향이 다르면 수석에게 알려 주세요.</div>}
       {rep.postCut > 0 && !rep.perGang && <div className="text-2xs text-dim-400">터미널 호기 집계는 {_hm(rep.qcAt)} 값이라 {rep.shift === '야간' ? '05:30' : '17:00'} 뒤 {rep.postCut}대가 섞여 있습니다.</div>}
       {gangs.map((g) => <GangCard key={g.no} g={g} mine={!!myNo && g.no === myNo} qcLabel={item.stored ? `(${_hm(item.storedAt)})` : (item.recomputed && rep.perGang ? '(지금)' : '')} />)}
-      {(!rep.perGang || !gangs.length) && (
-        <div className="space-y-1.5">
-          <div className="text-2xs text-dim-300">배 전체</div>
+      {(shipAlways || !rep.perGang || !gangs.length) && (
+        <div className="space-y-1.5" data-f1700-ship="1">
+          <div className="text-2xs text-dim-300">{rep.perGang && gangs.length ? '배 전체 합계' : '배 전체'}</div>
           <SideTable label="양하" rep={rep.ship.discharge} />
           <SideTable label="선적" rep={rep.ship.loading} />
         </div>
@@ -235,10 +244,8 @@ function Ferry1700AlertInner({ voyages, audience = 'inspector', voyageKey = '', 
   const myNo = audience === 'inspector' ? crewCraneNo(equip) : 0;
   //  보고 한 건 — 적어 둔 것이 있으면 그것(모든 기기 같은 숫자), 없으면 지금 자료로 센다(recomputed — 마감 5분 안이면 그것이 곧 마감 값이라 표시 안 함).
   const repOf = (k, v, cut) => {
-    const st = _storedOf(v, cut.key, cut.cutMs);
-    const rp = st ? st.rep : buildGangShiftReport(v, ferryPagesOf(v, k), now, { shift: cut.shift, cutMs: cut.cutMs, qcSnap: _qcSnapOf(k, v, now, cut.cutMs, cut.key) });
-    return { key: k, cutKey: cut.key, cutMs: cut.cutMs, info: v.info || {}, rep: rp, stored: !!st, storedAt: st ? st.at : 0, recomputed: !st && now - cut.cutMs > WRITE_UNTIL_MS,
-      mineIn: !!myNo && audience === 'inspector' && (rp.gangs || []).some((g) => g.no === myNo) };
+    const it = ferryCutItem(k, v, cut, now);   // 3.66: 본문을 한 벌로 옮김(같은 값)
+    return { ...it, mineIn: !!myNo && audience === 'inspector' && (it.rep.gangs || []).some((g) => g.no === myNo) };
   };
   const dueKeys = useMemo(() => keys.filter((k) => voyages && voyages[k] && ferry1700Due(voyages[k], now, k)).sort(),
     // eslint-disable-next-line react-hooks/exhaustive-deps

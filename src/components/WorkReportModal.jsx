@@ -14,7 +14,8 @@ import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
+import { VoyageBlock, ferryPagesOf, ferryCutItem } from './Ferry1700Alert.jsx';   // 3.66: 주야간 작업보고도 17시 창과 같은 갱별 카드·계산 한 벌
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -43,8 +44,25 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   // 현재 보여줄 시프트(자동 또는 수동 고정) + 양하/선적 보고서.
   const dnActiveShift = dnShift || reportShiftToShow(Date.now());
-  const dnReportD = useMemo(() => buildShiftReport(dnContainers.discharge, dnActiveShift, Date.now()), [dnContainers, dnActiveShift]);
-  const dnReportL = useMemo(() => buildShiftReport(dnContainers.loading, dnActiveShift, Date.now()), [dnContainers, dnActiveShift]);
+  //  3.66: 종전 배 전체 표 — 갱별 계산이 실패했을 때만 쓴다. 창이 닫혀 있으면 세지 않는다(2차 감사 — 항차 화면에 늘 붙어 있어 틱마다 돌았다).
+  const dnOn = !!open && view === 'daynight';
+  const dnReportD = useMemo(() => (dnOn ? buildShiftReport(dnContainers.discharge, dnActiveShift, Date.now()) : null), [dnOn, dnContainers, dnActiveShift]);
+  const dnReportL = useMemo(() => (dnOn ? buildShiftReport(dnContainers.loading, dnActiveShift, Date.now()) : null), [dnOn, dnContainers, dnActiveShift]);
+  //  ★ 3.66 — **갱별로 나눈다.** 검수사 2026-09-28 12:34 «여기서 보면 갱호수별이 아니고 전체가 보입니다. 갱별로 나누어져 있어야 합니다.» · 관문 4 «갱별 + 배 전체 합계».
+  //    계산은 17시 창·보고 보관과 같은 한 벌(utils.buildGangShiftReport — 3.63 «갱별보고여야함»). 못 나누는 배(호기 순서·베이사전·오차 문지기)는 그 이유와 터미널 호기 집계 대수.
+  //    실패하면 조용히 넘기지 않고 콘솔에 남기고 종전 배 전체 표로 보인다.
+  //    마감이 지난 보고(17:00~17:29 · 05:30~05:59 자동 선택, 또는 지난 근무를 눌렀을 때)는 17시 창·보고 보관과 같은 한 벌(ferryCutItem) —
+  //    적어 둔 마감 보고가 있으면 그것, 없으면 마감 시각으로 다시 세고 «다시 센 값»이라고 밝힌다(2차 감사 — 지금 자료로 세면 보관 창과 갱 숫자가 갈렸다).
+  //    마감 전(근무 중)은 지금 자료로 센다.
+  const dnGang = useMemo(() => {
+    if (!isHatchSkipShip || !dnOn) return null;
+    try {
+      const now = Date.now();
+      const cutMs = shiftCutMs(dnActiveShift, now);
+      if (now > cutMs) return { ...ferryCutItem(voyageKey, voyage, { shift: dnActiveShift, cutMs, key: shiftReportKey(dnActiveShift, cutMs) }, now), archive: true };
+      return { key: voyageKey, info: voyage?.info || {}, rep: buildGangShiftReport(voyage, ferryPagesOf(voyage, voyageKey), now, { shift: dnActiveShift }) };
+    } catch (e) { console.warn('[3.66] 주야간 작업보고 갱별 계산 실패 — 배 전체 표로 보입니다', e); return null; }
+  }, [voyage, voyageKey, isHatchSkipShip, dnActiveShift, dnOn]);
   const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
   //  ★ 3.36 — **시작보고 호기 = 앱 호기.** 검수사 메모 2026-09-06 21:27
   //    *«약간의 버그 4호기로 양하시작보고를 하고 3호기로 양하를 하는데 제재가 없음»* ·
@@ -961,8 +979,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 </button>
               );
             })()}
-            {/* 양하/선적 각 표 */}
-            {[['discharge', '양하', dnReportD], ['loading', '선적', dnReportL]].map(([m, label, rep]) => (
+            {/* 3.66: 갱별 카드(내 갱 위) + 배 전체 합계 — 17시 창과 같은 모양 */}
+            {dnGang && (
+              <div data-dn-gang="1">
+                <VoyageBlock item={dnGang} myNo={crewCraneNo(getEquipNumber())} shipAlways />
+              </div>
+            )}
+            {/* 양하/선적 각 표 — 3.66: 갱별 계산이 실패했을 때만(종전 배 전체 표) */}
+            {!dnGang && [['discharge', '양하', dnReportD], ['loading', '선적', dnReportL]].map(([m, label, rep]) => (
               <div key={m} className="bg-ink-900 border border-line rounded-pill p-2">
                 <div className="text-xs font-bold text-dim-100 mb-1 flex items-center justify-between">
                   <span>{label}</span>
@@ -1001,7 +1025,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               </div>
             ))}
             <div className="text-2xs text-dim-400 text-center">
-              💡 적은 쪽(작업량/잔여)을 세는 게 빠릅니다. 어느 기준인지 표에 표기됩니다.
+              💡 적은 쪽(작업량/잔여)을 세는 게 빠릅니다. 어느 기준인지 표에 표기됩니다.{dnGang && dnGang.rep && dnGang.rep.perGang ? ' 갱별 규격표는 선내위치로 호기를 붙인 값이고, 호기 옆 숫자는 터미널이 주는 호기별 합계입니다.' : ''}
             </div>
           </div>
         )}
