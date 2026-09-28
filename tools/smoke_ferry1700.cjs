@@ -170,7 +170,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   dom.window.localStorage.setItem('gm_equip_no', '1호기');
   const voys = { OBWH_2749E: w, RZOR_R104E: z };
   F.render(F.React.createElement(F.Ferry1700Alert, { voyages: voys, audience: 'inspector', voyageKey: 'OBWH_2749E', nowOverride: w._now }));
-  await wait(60);
+  //  3.66-01: 고정 60ms 로는 빌드 중(부하)에 창·음성 효과가 아직 안 돈 채로 재서 «음성 한 번 — «»» 가 번갈아 떨어졌다(같은 번들 6회 중 3회).
+  //    창이 뜨고 음성이 나올 때까지 최대 3초 기다린다 — 기다림만 늘렸고 판정은 그대로다.
+  for (let t = 0; t < 60 && !(document.querySelector('[role="dialog"]') && spoken.length); t++) await wait(50);
   const q = (s) => document.querySelector(s);
   const cards = [...document.querySelectorAll('[data-gang]')].map((e) => e.getAttribute('data-gang'));
   ok(!!q('[role="dialog"]') && cards[0] === '1' && cards.includes('2'), `창이 뜨고 내 갱(1호기)이 맨 위 — ${cards.join(',')}`);

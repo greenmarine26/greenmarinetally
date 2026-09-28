@@ -12,6 +12,8 @@ import { enrichBayDef } from './bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from './cargoPlanCore.js';   // ★ ConeOne 2.4: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from './shipMatrixBuilder.js';
+import { pickCarrierOp } from './utils.js';   // TallyOne 3.66-01 · ConeOne 2.55-02: 선사 고르기 한 벌
+import { shipOpMapper } from './data/tallyFormats.js';   // 같은 판: 그 배 마감텔리 코드로 읽기 한 벌
 
 let _root = null;
 let _host = null;
@@ -22,8 +24,21 @@ function close() {
   _root = null; _host = null;
 }
 
+//  ★ TallyOne 3.66-01 · ConeOne 2.55-02 — **선사는 그 배 마감텔리 코드로**(검수사 2026-09-28 «모든 선사기준은 마감 텔리로 해야 합니다»).
+//    콘앱 카고플랜 별첨은 리스트(records) 선사를 그대로(EDI 에만 있는 컨은 선사 없이) 찍어, 검수앱이 배별 사전으로 바꿔 읽는
+//    CKC·SHI·SNK·NSS 같은 값이 여기서만 남았다(3.51-02 이 남긴 숙제 «콘앱은 아직 SOC 로 답한다»). 별첨 병합(cone.html)은 pickCarrierOp 로 고르고,
+//    ⇒ 검수앱 카고플랜이 지나는 것과 **같은 매퍼**(shipOpMapper)를 여기 한 곳에서 씌운다. 배 약자는 항차 키 앞(voyageInfo.code).
+function _opFixProps(props) {
+  const code = String((props && props.voyageInfo && (props.voyageInfo.code || props.voyageInfo.vsl)) || '').toUpperCase();
+  const all = [...((props && props.containers) || []), ...((props && props.legendContainers) || [])];
+  const sp = shipOpMapper(code, all.map((c) => c && c.op));
+  const fix = (arr) => (Array.isArray(arr) ? arr.map((c) => ((c && c.op) ? { ...c, op: sp(c.op) } : c)) : arr);
+  return { ...props, containers: fix(props && props.containers), legendContainers: fix(props && props.legendContainers) };
+}
+
 function open(props) {
   close();
+  props = _opFixProps(props || {});
   _host = document.createElement('div');
   document.body.appendChild(_host);
   _root = createRoot(_host);
@@ -69,7 +84,7 @@ window.ConeCargoPlan = { open, close };
 //   **크레인 하나는 같은 시각에 두 베이를 못 한다**는 규칙으로 시각 바구니를 갈라 호기를 되살린다(`craneBaysByTime`).
 //   그 함수가 `utils.js` 에 있는데 콘앱 번들이 안 내보내 콘앱은 그 답을 못 봤다(실측 — cone.html·번들에 이름 0건).
 //   ⇒ 콘앱이 **같은 함수**를 부른다. 콘앱이 제 규칙을 새로 만들면 두 화면이 또 갈린다(규범 §4-4).
-window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc };   // 3.44: 선사 시프팅 목록 판정도 한 벌   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, pickCarrierOp };   // 3.66-01: 리스트 선사가 EDI 선사를 덮는 자리도 한 벌(cone.html 별첨 병합)   // 3.44: 선사 시프팅 목록 판정도 한 벌   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.
 window.ConeShipPolicy = { isLolo: isLoloShipByPolicy };

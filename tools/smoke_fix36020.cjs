@@ -85,7 +85,9 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
       const F = require(path.join(TMP, 'b4.cjs'));
       const cases = [['STMJ 2640W CLL (CSC).xls', 'CSC'], ['STSE 2662W CLL (DWS).xls', 'DWS'], ['STSE 2662W CLL (TJM).xls', 'TJM'], ['CDL STMJ 2639E CSC-DWS.xlsx', 'CSC'], ['CDL STMJ 2639E DWIC-DWS.xlsx', 'DWS'], ['CDL PCSG 2653E TJM.xlsx', 'TJM'], ['CLL_WDF_SITC MOJI 2640W.xls', 'WDF'], ['CLL STSE EAS 2662W.xls', 'EAS'], ['STSE 2669E SIT.xls', 'SIT'], ['STSE 2669E WDG CDL.xlsx', 'WDG'],
         ['STSD 2669E CDL.xls', ''], ['2640WLOADLIST.xlsx', ''], ['STSE2662WCN_CNTAO_CONTAINERLIST.XLS', ''], ['Excel_20260907175812.xls', ''], ['KBTR 2607W (Excel)1.xls', ''], ['MCSC 635S LIST.xlsx', ''], ['DXQD 2632E NOLIST.xls', ''],
-        ['TMPZ 2020E SOC.xls', ''], ['STSE 2662W DWS (CSC).xls', 'CSC'], ['STSE 2662W DWS-DSL.xlsx', 'DSL']];   // 감사 M-3·N-1: SOC 는 선사가 아니다 · 순수 자식 우선(토큰 순서 무관)
+        ['TMPZ 2020E SOC.xls', ''], ['STSE 2662W DWS (CSC).xls', 'CSC'], ['STSE 2662W DWS-DSL.xlsx', 'DSL'],
+        //  3.66-01: XTPG 사전에 CLL(마감텔리 선사 줄)이 들어왔어도 파일 이름의 CLL 은 «Container Loading List» 다(실파일 이름)
+        ['CLL XTPG EAS 539W.xls', 'EAS'], ['XTPG0539W_KRPTK_CLL 천경.xlsx', ''], ['JXTP0540W_CLL.xlsx', ''], ['XTPG 540W CLL PTK.xlsx', ''], ['CDL XTPG 0541E TCL.xlsx', 'TCL'], ['_문서_XTPG0539W TYS.xls', 'TYS']];   // 감사 M-3·N-1: SOC 는 선사가 아니다 · 순수 자식 우선(토큰 순서 무관)
       const _ar = fs.readFileSync(path.join(ROOT, 'src/autoRegApi.js'), 'utf8');
       ok('감사 M-1: 자동등록(autoRegApi) 리스트 분기에도 파일명 선사 규칙', /opFromListFileName\(name\)/.test(_ar) && /_opFromFile/.test(_ar));
       const _vp = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');

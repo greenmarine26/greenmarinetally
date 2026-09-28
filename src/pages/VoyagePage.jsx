@@ -549,7 +549,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //    **모르는 코드로 아는 것을 덮는 것**이 잘못이다. M6.21 의 «리스트 우선»은 살리되,
         //    EDI 가 리퍼라고 말하는데 리스트 규격이 리퍼가 아니면 EDI 를 지킨다.
         if (r.iso && !(isReeferIso(merged[r.cn].iso) && !isReeferIso(r.iso) && r.rf !== true)) safeR.iso = r.iso;
-        //  3.52: 세관 «선사부호» 가 선사 기준이지만 **자식을 부모로 뭉개지 않는다** — utils 한 벌.
+        //  3.52: 세관 «선사부호» 와 EDI 중 고르되 **자식을 부모로 뭉개지 않는다** — utils 한 벌. 3.66-01: 마감텔리 이름으로는 뒤 배별 별칭이 바꾼다.
         if (r.op)  safeR.op  = pickCarrierOp(r.op, merged[r.cn] && merged[r.cn].op, voyage?.info?.vsl);
         // M6.94.31: EDI에 pol/pod 있으면 리스트가 덮지 못함 (EDI = 단일 진실).
         //   원인: 엠티 선적 엑셀(MCAT EMPTY)은 헤더가 없어 fallback 파서가 목적지(CNDLC 등)를

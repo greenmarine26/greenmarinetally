@@ -105,7 +105,8 @@ export function ptkContainers(voyage, mode) {
     if (r.rfAct != null && String(r.rfAct).trim() !== '') out.rfAct = r.rfAct;
     // 1.8-04: 리퍼드라이·제작컨 표시는 records 에만 있다(수집기 패치·검수원 입력). 텔리가
     //   RF 목록에서 이 둘을 빼려면 여기서 들고 가야 한다 — 안 그러면 EDI에 없어 항상 false 다.
-    //  3.52: 세관 «선사부호» 가 선사 기준이되 **자식을 부모로 뭉개지 않는다**(utils 한 벌 — pickCarrierOp).
+    //  3.52: 세관 «선사부호» 와 EDI 중 고르되 **자식을 부모로 뭉개지 않는다**(utils 한 벌 — pickCarrierOp).
+    //  3.66-01: 기준은 그 배 마감텔리 — 세관 이름(CKC 등)은 _op(배별 별칭)이 마감텔리 코드(CKL 등)로 바꾼다.
     if (r.op != null && String(r.op).trim() !== '') out.op = _op(pickCarrierOp(r.op, c.op, _vsl));
     //  3.52-01: **Final Work·OS·PERFORMANCE·SHIFTING·DAMAGE 의 PORT 칸이 여기서 정해진다**(port3(c.pol)).
     //    검수사 «마감텔리랑 같게 수정 바랍니다» · «양하전 마지막 항구가 SHA 맞으니까요» — 되돌아온 화물만 바뀐다.

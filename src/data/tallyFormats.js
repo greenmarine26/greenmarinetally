@@ -30,7 +30,8 @@
 //                 (컨 접두 `PKEU` 는 선사 접두가 아니라 오히려 화주 소유를 뒷받침한다).
 //            ② 이 사전의 TMPZ.ops 에 SOC 가 없다(실물 마감텔리 233건 분석분)
 //            ③ 실제로 Final Work 맨 뒤에 «SOC / SHA / F — HC 5» 라는 없어야 할 줄이 서 있었다.
-//   ⚠ **3.52 부터 이것은 폴백이다.** 검수사 확정 «SOC가 있는 선박은 선사기준을 세관리스트로 합니다» —
+//   ⚠ **3.52 부터 이것은 폴백이다.** 검수사 확정 «SOC가 있는 선박은 선사기준을 세관리스트로 합니다»(3.66-01 부터 모든 선사의 기준은
+//     그 배 마감텔리 — 세관 이름이 다르면 아래 사전 별칭이 바꾼다) —
 //     세관리스트 «선사부호» 칸이 선사 기준이고(파서 `parseCustomsSheet`), 그 자료가 오면 SOC 는 애초에
 //     나오지 않는다(실측 TMPZ 2027E 세관 — TJMS 284·EASK 44, SOC 0건). 이 별칭은 **세관리스트가 아직
 //     안 온 항차**에서만 일한다. 배마다 «그 코드는 이 선사» 를 손으로 박는 방식은 늘리지 마라 —
@@ -49,11 +50,28 @@
 //     **마감텔리만 딴소리**를 했다 — `tallyReport.ptkContainers` 는 이 사전만 지나고 공용 코드표를 안 부른다.
 //     그래서 화면·검수리스트·바우처는 DWS 인데 Final Work 에는 `NOL` 이 «순서 미확정» 줄로 맨 뒤에 섰다
 //     (3.51-02 가 SOC 로 고친 바로 그 증상 · 감사 실측 394대). 배별 사전은 네 경로가 다 지난다.
+// ─── 3.66-01 (검수사 2026-09-28 «모든 선사기준은 마감 텔리로 해야 합니다») ───────────────
+//   계기 — XTPG 542E 카고플랜 별첨1 이 CKC·SHI·KMT·PCS·SNT 를 찍었다. 실물 마감텔리(530E·531E·532E
+//   Final Working Report)는 CKL·SIF·KMD·DYS·CLL 이다. 3.52 가 세관 «선사부호»(CKCO·SHIF·KMTC·PCSL·SNTX)를
+//   모든 배의 기준으로 삼아서 생긴 일이다(3.52 원문은 «SOC가 있는 선박은»).
+//   ⇒ **이 사전의 `ops`·`subOps` 가 곧 «그 배 마감텔리에 적히는 선사»다.** 자료가 다른 이름으로 오면 `opAlias` 가
+//     이 목록 코드로 바꾼다(모든 경로가 shipOpMapper 로 지난다). `pickCarrierOp` 의 고르기(3.52)는 그대로다 —
+//     1차안처럼 거기서 «마감텔리 코드인 쪽» 을 고르면 별칭을 먼저 씌우는 경로(마감텔리 입구·미르)에서 DXQD 세관 SKR 이 DWS 로 먹혔다.
+//   새로 적은 배 — 전부 실물 마감텔리 Final Work 에서 읽었다(추정 아님).
+//     XTPG — 530E·531E·532E 세 건의 OPR 13줄(빈 줄 포함, 순서 그대로). 세관→마감텔리 대응은
+//            536E~542E 6항차 559대 컨별 대조 예외 0(CKCO=CKL 194 · SHIF=SIF 132 · PCSL=DYS 33 · KMTC=KMD 22 · SNTX=CLL 17).
+//     KSKM — 2614N&2615S 한 건(KMD·NSL·DYS). 대응은 8항차(보관 포함) EDI↔리스트·세관(KMD=KMT 168 · NSS=NSL 243 · DYS=PCS 39).
+//     DJCT·YKTD·NSFR — 원래 DYS 가 정본인데 세관·리스트가 PCS 로 와서 PCS 줄이 섰다(17·8·17대) → PCS:'DYS'.
+//     ATPR·DPRT — EDI 가 `SNK` 로 보낸 항차(ATPR 2638E 100대 · DPRT 2611N 74대)가 SNK 줄로 섰다. 마감텔리는 SKR → SNK:'SKR'.
+//   ⚠ `ports` 는 비워 두었다 — 이 판은 선사만 고친다. 포트 순서·시트 변형은 종전(사전 없는 배 기본값)과 같다.
+//   ⚠ 실물 마감텔리가 없는 배(MAMP·MCAP·MCAT·MCSC·MCSN 의 MAE/MSK · KKAK · KBTR · SWTD)는 적지 않았다 — 종전 그대로다.
+//   ⚠ DXQD 의 `NOL` 은 선사가 아니다(검수사 «NOL은 두가지가 될수가 있을것입니다. 어떤선박은 DWS 어떤 선박은 SKR»).
+//     세관이 SKR 로 갈라 주면 SKR(2638E 17대 · 실물 DXQD 템플릿에 «(SKR) DLC» 줄이 있다), 세관도 NOL 이면 DWS.
 // 시트 변형: damage = 'each'(DAMAGE-EACH) | 'report'(DAMAGE REPORT) | null
 //            shifting = SHIFTING 시트 포함 여부(쉬프팅 있을 때만 렌더)
 //            performance = Performance 시트 여부
 export const TALLY_FORMATS = {
-  ATPR: { ops: ['SKR'], ports: ['DLC', 'WEI'], damage: null, shifting: false, performance: true },
+  ATPR: { ops: ['SKR'], opAlias: { SNK: 'SKR' }, ports: ['DLC', 'WEI'], damage: null, shifting: false, performance: true },   // 3.66-01: EDI SNK(2638E 100대) = SKR(세관 SNKO 와 같은 선사)
   PCSZ: { ops: ['SKR', 'EAS'], ports: ['SHA'], damage: null, shifting: false, performance: true },
   DXQD: { ops: ['DWS', 'EAS'], opAlias: { NOL: 'DWS' }, ports: ['DLC'], damage: 'report', shifting: false, performance: true },
   TMPZ: { ops: ['TJM', 'EAS'], subOps: { TJM: ['DWS', 'MAS'] }, opAlias: { SOC: 'TJM' }, ports: ['NGB', 'SHA'], damage: 'report', shifting: false, performance: true },
@@ -61,16 +79,20 @@ export const TALLY_FORMATS = {
          opAlias: { DWS: 'DSL', WDF: 'WDG' }, opAliasNeeds: { DWS: 'CSC' }, ports: ['TAO', 'SHD'], damage: 'each', shifting: true, performance: false },
   STMJ: { ops: ['SIT', 'DWS', 'TJM', 'EAS', 'WDG', 'SKR'], subOps: { DWS: ['CSC', 'DSL'] },
          opAlias: { DWS: 'DSL', WDF: 'WDG' }, opAliasNeeds: { DWS: 'CSC' }, ports: ['TAO', 'SHD'], damage: 'each', shifting: true, performance: false },
-  DJCT: { ops: ['SKR', 'HAS', 'HSL', 'DJS', 'DYS'], ports: ['SHK', 'HPH', 'INC'], damage: null, shifting: true, performance: true },
-  YKTD: { ops: ['SKR', 'HAS', 'HSL', 'DJS', 'DYS'], ports: ['INC', 'SHK', 'HPH'], damage: 'each', shifting: false, performance: true },
+  DJCT: { ops: ['SKR', 'HAS', 'HSL', 'DJS', 'DYS'], opAlias: { PCS: 'DYS' }, ports: ['SHK', 'HPH', 'INC'], damage: null, shifting: true, performance: true },   // 3.66-01: 세관·리스트 PCS 17대 = EDI DYS
+  YKTD: { ops: ['SKR', 'HAS', 'HSL', 'DJS', 'DYS'], opAlias: { PCS: 'DYS' }, ports: ['INC', 'SHK', 'HPH'], damage: 'each', shifting: false, performance: true },   // 3.66-01: 리스트 PCS 8대 = EDI DYS
   SWAT: { ops: ['SKR', 'HAS', 'HSL'], ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },
   SWRG: { ops: ['SKR', 'HAS', 'HSL'], ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },
   SWSP: { ops: ['SKR', 'HAS', 'HSL'], ports: ['KAN', 'PUS', 'SHA', 'SGN', 'LCH', 'BKK'], damage: null, shifting: true, performance: true },
   SWDN: { ops: ['SKR', 'NSL', 'DJS', 'HAS', 'HSL'], opAlias: { NAM: 'NSL' }, ports: ['INC', 'PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: null, shifting: false, performance: true },   // 3.60-20: 실물 SWDN 2607N 양하 NAM 91 → NSL
   DJCF: { ops: ['SKR', 'NSL', 'DJS', 'HAS', 'HSL'], ports: ['INC', 'PUS', 'KAN', 'SGN', 'LCH', 'BKK'], damage: 'each', shifting: false, performance: true },
-  DPRT: { ops: ['SKR', 'NSS', 'DJS', 'HAS', 'HSL', 'KMD'], opAlias: { HAL: 'HAS', NSL: 'NSS' }, ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK', 'INC'], damage: null, shifting: false, performance: true },
-  NSDC: { ops: ['NSL', 'KMD'], opAlias: { KM: 'KMD', KMT: 'KMD', NSMS: 'NSL', NSS: 'NSL' }, ports: ['KAN', 'PUS', 'SHK', 'HKG', 'MNN', 'SGN'], damage: null, shifting: false, performance: true },
-  NSFR: { ops: ['NSS', 'KMT', 'DYS'], opAlias: { KMD: 'KMT', NSL: 'NSS' }, ports: ['INC', 'XMN', 'SHK', 'HPH', 'HKG'], damage: null, shifting: true, performance: true },
+  DPRT: { ops: ['SKR', 'NSS', 'DJS', 'HAS', 'HSL', 'KMD'], opAlias: { HAL: 'HAS', NSL: 'NSS', SNK: 'SKR' }, ports: ['PUS', 'KAN', 'SGN', 'LCH', 'BKK', 'INC'], damage: null, shifting: false, performance: true },   // 3.66-01: EDI SNK(2611N 74대) = SKR
+  NSDC: { ops: ['NSL', 'KMD'], opAlias: { KM: 'KMD', KMT: 'KMD', NSMS: 'NSL', NSM: 'NSL', NSS: 'NSL' }, ports: ['KAN', 'PUS', 'SHK', 'HKG', 'MNN', 'SGN'], damage: null, shifting: false, performance: true },   // 3.66-01: NSM — 3자로 펴는 경로(NSMS→NSM)에서도 별칭이 걸리게(감사)
+  NSFR: { ops: ['NSS', 'KMT', 'DYS'], opAlias: { KMD: 'KMT', NSL: 'NSS', PCS: 'DYS' }, ports: ['INC', 'XMN', 'SHK', 'HPH', 'HKG'], damage: null, shifting: true, performance: true },   // 3.66-01: PCS 17대 = EDI DYS
+  //  3.66-01 — 아래 둘은 선사만 적는다. ports·damage·shifting·performance 는 사전 없는 배 기본값(tallyReport.computeTallyData)과 같게.
+  XTPG: { ops: ['CKL', 'CLL', 'DWS', 'DYS', 'EAS', 'KMD', 'SIF', 'SIT', 'SKR', 'SOF', 'TCL', 'TYS', 'WDF'],
+         opAlias: { CKC: 'CKL', SHI: 'SIF', KMT: 'KMD', PCS: 'DYS', SNT: 'CLL' }, ports: [], damage: null, shifting: true, performance: true },
+  KSKM: { ops: ['KMD', 'NSL', 'DYS'], opAlias: { KMT: 'KMD', NSS: 'NSL', PCS: 'DYS' }, ports: [], damage: null, shifting: true, performance: true },
   // OBWH는 바우처형 — variant로 분기 (주간/야간/시간외/휴일 열)
   OBWH: { variant: 'voucher', ops: [], ports: ['YNT'], damage: 'report', shifting: false, performance: false },
 };
@@ -121,7 +143,9 @@ export function subIndex(fmt, op) {
 const _FILE_OP_EXTRA = { DWIC: 'DWS' };
 //  3.60-21 감사(M-3·N-1): SOC 는 선사 코드가 아니다(3.51-02) — 파일 이름에 있어도 선사로 잡지 않는다.
 //    «자식 우선»의 자식은 어느 배에서든 부모이기도 한 코드(DWS: STSE 부모·TMPZ 자식)를 뺀 순수 자식(CSC·DSL·MAS)이다.
-const _FILE_OP_NEVER = new Set(['SOC']);
+//  3.66-01: `CLL` 은 XTPG 선사(마감텔리 OPR 줄)이기도 하지만 파일 이름에서는 «Container Loading List» 다
+//    («CLL XTPG EAS 539W.xls» 는 EAS · «XTPG0539W_KRPTK_CLL 천경.xlsx» 는 CKL 파일). 이름으로는 선사로 잡지 않는다.
+const _FILE_OP_NEVER = new Set(['SOC', 'CLL']);
 export function opFromListFileName(name) {
   const toks = String(name || '').toUpperCase().replace(/\.[A-Z0-9]+$/, '').split(/[^A-Z0-9]+/).filter(Boolean);
   const known = new Set(); const child = new Set(); const parent = new Set();

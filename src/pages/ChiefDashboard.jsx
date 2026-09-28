@@ -2208,7 +2208,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, Object.keys(voyage?.discharge?.ediContainers || {}).length,
       voyage?.loading?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.sizeBytes, Object.keys(voyage?.loading?.ediContainers || {}).length, swapFixList(voyage).length]);
-  const recSig = ['discharge', 'loading'].map((mode) => { const r = voyage?.[mode]?.records || {}; let sg = mode; for (const cn of Object.keys(r)) { const x = r[cn] || {}; if (x.bay_actual != null || x.planTaken || x.bay_assign) sg += `|${cn}:${x.bay_actual}-${x.row_actual}-${x.tier_actual}${x.planTaken ? 'T' : ''}${x.bay_assign ? `>${x.bay_assign}-${x.row_assign}-${x.tier_assign}` : ''}`; } return sg; }).join('#');   // 3.13: 정해 준 자리도 서명에
+  const recSig = ['discharge', 'loading'].map((mode) => { const r = voyage?.[mode]?.records || {}; let sg = mode; const _oc = {}; for (const cn of Object.keys(r)) { const x = r[cn] || {}; if (x.op) _oc[x.op] = (_oc[x.op] || 0) + 1; if (x.bay_actual != null || x.planTaken || x.bay_assign) sg += `|${cn}:${x.bay_actual}-${x.row_actual}-${x.tier_actual}${x.planTaken ? 'T' : ''}${x.bay_assign ? `>${x.bay_assign}-${x.row_assign}-${x.tier_assign}` : ''}`; } return sg + `§${Object.keys(r).length}` + Object.keys(_oc).sort().map((k) => k + _oc[k]).join(','); }).join('#');   // 3.13: 정해 준 자리도 서명에   // 3.66-01(재감사): 리스트 수·선사 분포도 — 세관이 EDI 뒤에 와도 켜 둔 보드의 그림·별첨 선사가 바로 바뀐다
   //  ★ 3.15: **그 배의 «장(해치)» 목록** — 보드가 세는 묶음과 BayPlan 이 그리는 장을 같게 만든다(`hatchEvenOf` 가 이것을 받는다).
   //    BayPlan 안에서 하는 두 호출(getShipBayDictData → buildBayPagesFromSummary)과 같은 길이다. 사전이 없으면 null 이고,
   //    그때는 홀수를 «홀로 선 앞홀수»로 보는 같은 폴백을 양쪽이 함께 쓴다.
@@ -2239,7 +2239,9 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         const gone = rec.bay_actual === '__STG__' || !!rec.planTaken;   // 감사: 임시창고·자리를 내준 컨은 탭처럼 격자에서 뺀다(한 칸 두 대 방지)
         const hasA = !gone && rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null && !String(rec.bay_actual).startsWith('__');
         const hasG = !gone && !hasA && rec.bay_assign && rec.row_assign && rec.tier_assign && !String(rec.bay_assign).startsWith('__');   // 3.13: 자동 맞교환 자리
-        return { ...e, op: e.op ? _spOpB(e.op) : e.op, _inList: !!recMap[e.cn] || !!e._inList, _assigned: !!hasG, _assign_warn: hasG ? (rec._assign_warn || '') : '',
+        //  3.66-01 (감사): 리스트 선사를 보지 않고 EDI 선사만 찍어, 같은 보드의 컨 상세(pickCarrierOp)와 선사가 갈렸다(DXQD 세관 SKR 이 여기만 DWS).
+        const _opB = (rec.op || e.op) ? pickCarrierOp(rec.op, e.op, String(voyage?.info?.vsl || '').toUpperCase()) : e.op;
+        return { ...e, op: _opB ? _spOpB(_opB) : _opB, _inList: !!recMap[e.cn] || !!e._inList, _assigned: !!hasG, _assign_warn: hasG ? (rec._assign_warn || '') : '',
           bay: gone ? '' : pad2(hasA ? rec.bay_actual : hasG ? rec.bay_assign : e.bay), row: gone ? '' : pad2(hasA ? rec.row_actual : hasG ? rec.row_assign : e.row), tier: gone ? '' : pad2(hasA ? rec.tier_actual : hasG ? rec.tier_assign : e.tier) };
       });
     }

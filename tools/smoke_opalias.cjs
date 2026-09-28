@@ -6,7 +6,7 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 const ROOT = process.argv[2] || path.resolve(__dirname, '..');
 let fail = 0;
-const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
+const ok = (c, m, why) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && why ? '  ← ' + why : '')); if (!c) fail++; };
 console.log('마감텔리 선사·규격 칸 (3.31)');
 
 const url = (f) => 'file://' + path.join(ROOT, f).replace(/\\/g, '/');
@@ -199,6 +199,88 @@ for (const f of ['src/pages/VoyagePage.jsx', 'src/components/SearchPanel.jsx', '
   ok(G[0] === 'NOL', '공용 코드표는 NOL 을 안 건드린다(배별 사전이 한다)');
   ok(G[1] === 'DWS' && G[2] === 'SKR' && G[3] === 'TJM' && G[4] === 'ABC' && G[5] === null,
     '기존 코드 동작은 그대로 — 이 판이 공용 코드표를 바꾸지 않았다');
+}
+
+//  ⑫ 3.66-01 — **모든 선사기준은 마감텔리**(검수사 2026-09-28 «모든 선사기준은 마감 텔리로 해야 합니다»).
+//     XTPG 542E 카고플랜 별첨1 이 세관 선사부호 앞 세 글자(CKC 42·SHI 24·KMT 8·PCS 5·SNT 2)를 찍었다.
+//     실물 마감텔리(530E·531E·532E)는 CKL·SIF·KMD·DYS·CLL. 이름 바꾸기는 배별 별칭 한 곳(shipOpMapper)이 한다.
+//     ⛔ 1차안(pickCarrierOp 에서 «마감텔리 코드인 쪽» 고르기)은 **별칭을 먼저 씌우는 경로**(마감텔리 입구 ptkContainers·미르)에서
+//       DXQD 의 NOL→DWS 가 세관 SKR 을 먹었다(2차 시뮬·감사 실측 2638E 17·2637E 16). 그래서 여기서는 **두 순서**로 다 잰다.
+{
+  const os = require('os');
+  const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'opal12-'));
+  fs.writeFileSync(path.join(TMP, 'e.mjs'),
+    `export { pickCarrierOp } from "${ROOT}/src/utils.js";\n`
+    + `export { shipOpMapper, TALLY_FORMATS, opFromListFileName } from "${ROOT}/src/data/tallyFormats.js";\n`
+    + `export { computeTallyData } from "${ROOT}/src/tallyReport.js";\n`
+    + `export { flattenVoyages } from "${ROOT}/src/mir.js";\n`);
+  execSync(`npx esbuild "${path.join(TMP, 'e.mjs')}" --bundle --platform=node --format=cjs --loader:.png=dataurl --loader:.jsx=jsx --jsx=automatic `
+    + `--alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js `
+    + `--alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --log-level=error --outfile="${path.join(TMP, 'b.cjs')}"`, { cwd: ROOT, stdio: 'pipe' });
+  const M = require(path.join(TMP, 'b.cjs'));
+  //  경로 두 순서 — ㉮ 고르기→별칭(VoyagePage·PrintHubModal·SearchPanel·workingReport·수석 보드) ㉯ EDI 에 별칭→고르기→별칭(ptkContainers·미르)
+  const fin = (vsl, rop, eop) => {
+    const sp = M.shipOpMapper(vsl, [rop, eop]);
+    const a = sp(rop ? M.pickCarrierOp(rop, eop, vsl) : String(eop || ''));
+    const b = sp(rop ? M.pickCarrierOp(rop, sp(eop), vsl) : sp(eop));
+    return a === b ? a : `${a}≠${b}`;
+  };
+  const cases = [
+    ['XTPG', 'CKC', 'CKL', 'CKL'], ['XTPG', 'SHI', 'SIF', 'SIF'], ['XTPG', 'KMT', 'KMD', 'KMD'], ['XTPG', 'PCS', 'DYS', 'DYS'], ['XTPG', 'SNT', 'CLL', 'CLL'],
+    ['XTPG', 'CKCO', 'CKL', 'CKL'], ['XTPG', 'SHIF', 'SIF', 'SIF'], ['XTPG', 'CKC', '', 'CKL'], ['XTPG', '', 'CKL', 'CKL'], ['XTPG', 'SNKO', 'SKR', 'SKR'],
+    ['KSKM', 'NSL', 'NSS', 'NSL'], ['KSKM', 'KMT', 'KMD', 'KMD'], ['KSKM', '', 'NSS', 'NSL'], ['KSKM', 'PCSL', 'DYS', 'DYS'],
+    ['NSFR', 'KMT', 'KMD', 'KMT'], ['NSFR', 'PCS', 'DYS', 'DYS'], ['DJCT', 'PCSL', 'DYS', 'DYS'], ['YKTD', 'PCS', 'DYS', 'DYS'],
+    ['ATPR', '', 'SNK', 'SKR'], ['DPRT', '', 'SNK', 'SKR'], ['NSDC', '', 'NSMS', 'NSL'], ['NSDC', 'NSMS', '', 'NSL'],
+    ['DXQD', 'SKR', 'NOL', 'SKR'], ['DXQD', 'NOL', 'NOL', 'DWS'], ['DXQD', '', 'NOL', 'DWS'], ['TMPZ', 'TJM', 'SOC', 'TJM'],
+    ['STMJ', 'DWS', 'DSL', 'DSL'], ['MCAT', 'MSK', 'MAE', 'MSK'],
+  ];
+  const bad = cases.filter(([v, r, e, w]) => fin(v, r, e) !== w).map(([v, r, e, w]) => `${v} ${r || '-'}/${e || '-'} → ${fin(v, r, e)} (기대 ${w})`);
+  ok(!bad.length, `선사 ${cases.length}경우 — 두 순서(고르기→별칭 · 별칭→고르기) 모두 그 배 마감텔리 코드`, bad.join(' · '));
+  ok(fin('DXQD', 'SKR', 'NOL') === 'SKR', '⛔ DXQD 세관 SKR 은 SKR — NOL 은 선사가 아니다(검수사 «NOL은 두가지가 될수가» · 실물 템플릿 «(SKR) DLC» 줄)');
+  ok(fin('MCAT', 'MSK', 'MAE') === 'MSK' && M.shipOpMapper('MCAT', ['MAE'])('MAE') === 'MAE', '실물 마감텔리가 없는 배는 종전 그대로 — 남의 배 별칭을 씌우지 않는다');
+  ok(JSON.stringify(M.TALLY_FORMATS.XTPG.ops) === '["CKL","CLL","DWS","DYS","EAS","KMD","SIF","SIT","SKR","SOF","TCL","TYS","WDF"]' && JSON.stringify(M.TALLY_FORMATS.KSKM.ops) === '["KMD","NSL","DYS"]',
+    'XTPG 13줄·KSKM 3줄 = 실물 Final Work 순서(누가 사전을 고치면 여기서 멈춘다)');
+  //  실데이터 — 마감텔리 입구(computeTallyData)와 미르 재료(flattenVoyages)로 실제로 돌린다.
+  const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/carrier_xtpg542e_real.json'), 'utf8'));
+  const tallyOps = (vk) => { const D = M.computeTallyData(FX[vk]); const o = {}; for (const r of D.rows) { const n = Object.values(r.dis || {}).reduce((a, x) => a + (+x || 0), 0); if (n) o[r.op] = (o[r.op] || 0) + n; } return o; };
+  const mirOps = (vk) => { const o = {}; for (const c of M.flattenVoyages({ [vk]: FX[vk] })) if (c && c.mode === 'discharge') o[c.op] = (o[c.op] || 0) + 1; return o; };
+  const X = tallyOps('XTPG_542E');
+  ok(!['CKC', 'SHI', 'KMT', 'PCS', 'SNT'].some((k) => X[k]) && X.CKL >= 41 && X.SIF === 24 && X.KMD === 8 && X.DYS === 5 && X.CLL === 2,
+    'XTPG 542E 마감텔리 Final Work 양하 — CKL·SIF·KMD·DYS·CLL 로 선다(세관 코드 줄 0)', JSON.stringify(X));
+  const XM = mirOps('XTPG_542E');
+  ok(XM.CKL === 42 && XM.SIF === 24 && XM.KMD === 8 && XM.DYS === 5 && XM.CLL === 2 && !XM.CKC, 'XTPG 542E 미르·통합검색 재료도 같다(세관에만 있는 FFAU8289910 도 CKL)', JSON.stringify(XM));
+  const Dq = tallyOps('DXQD_2638E'); const DqM = mirOps('DXQD_2638E');
+  ok(Dq.SKR === 17 && Dq.DWS === 10 && DqM.SKR === 17 && DqM.DWS === 10,
+    '⛔ DXQD 2638E 실데이터 — 세관 SKR 17대는 마감텔리·미르 모두 SKR, 세관도 NOL 인 10대는 DWS(1차안 퇴행 재발 방지)', JSON.stringify({ Dq, DqM }));
+  //  별칭에 새로 들어간 낱말이 파일 이름에서 선사로 잘못 잡히지 않는가(부정 사례 — 감사 경-5)
+  const neg = ['XTPG 542E SOF.xls', '20PCS LIST.xlsx', 'CLL XTPG 542W.xls', 'XTPG0542W_KRPTK_CLL 천경.xlsx'].filter((n) => M.opFromListFileName(n) !== '');
+  ok(neg.length === 1 && neg[0] === 'XTPG 542E SOF.xls',
+    '파일 이름 — «20PCS»·CLL 은 선사가 아니다 · SOF 는 XTPG 사전 선사라 잡힌다(실물 13줄에 있는 선사 · 지금 받은 파일 이름 604개 중 해당 0)', neg.join(','));
+  //  콘앱 카고플랜도 같은 한 벌 — 별첨 병합은 pickCarrierOp(EDI 선사를 붙여서), 그리는 쪽(번들 open)은 shipOpMapper.
+  const CE = fs.readFileSync(path.join(ROOT, 'src/coneCargoPlan.entry.jsx'), 'utf8');
+  const CH = fs.readFileSync(path.join(ROOT, 'public/cone.html'), 'utf8');
+  ok(/props = _opFixProps\(props/.test(CE) && /shipOpMapper\(code,/.test(CE) && /legendContainers: fix\(/.test(CE),
+    '콘앱 카고플랜 번들 open 이 containers·legendContainers 선사를 배별 매퍼로 읽는다');
+  ok(/ConeParse = \{[^}]*pickCarrierOp/.test(CE) && /_eop\[c\.cn\] \? Object\.assign\(\{\}, c, \{ op: _eop\[c\.cn\] \}\)/.test(CH) && /if\(k === 'op' && _pk\)\{ add\.op = _pk\(v, base\.op, voyageInfo\.code\)/.test(CH),
+    '콘앱 별첨 병합 — EDI 선사를 붙인 뒤 리스트 선사와 pickCarrierOp 로 고른다(배 약자 = 항차 키 앞)');
+  //  콘앱 원문 계산 행(masterRowsAdapter)이 선사를 싣는가 — 동작으로(재감사 중-2: 원문 EDI 로 계산한 항차는 ediRowsAll 을 쓰는데
+  //    그 행에 op 가 없어 별첨 병합의 pickCarrierOp 가 EDI 쪽을 못 봤다). 실물 ASC(DJCT 0219E)를 검수앱 파서로 읽어 넣는다.
+  {
+    const fnOf = (name) => { const m = CH.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)); return m ? m[0] : ''; };
+    const src = ['masterRowsAdapter', 'isASC', 'isPtkPort'].map(fnOf);
+    const asc = fs.readFileSync(path.join(ROOT, 'tools/fixtures/asc_djct0219e_shk.asc'), 'utf8');
+    fs.writeFileSync(path.join(TMP, 'p.mjs'), `export { parseAscFile, isPyeongtaekPort } from "${ROOT}/src/utils.js";\n`);
+    execSync(`npx esbuild "${path.join(TMP, 'p.mjs')}" --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --log-level=error --outfile="${path.join(TMP, 'p.cjs')}"`, { cwd: ROOT, stdio: 'pipe' });
+    const PU = require(path.join(TMP, 'p.cjs'));
+    const res = PU.parseAscFile(asc);
+    const run2 = new Function('window', 'extractEdiDocDate', `${src.join('\n')}; return masterRowsAdapter;`)({ ConeParse: { isPyeongtaekPort: PU.isPyeongtaekPort } }, () => '');
+    const out = src.every(Boolean) ? run2(res, asc) : { rowsAll: [] };
+    const withOp = (res.containers || []).filter((c) => c.op).length;
+    const kept = out.rowsAll.filter((r) => r.op).length;
+    ok(withOp > 0 && kept === withOp, `콘앱 masterRowsAdapter 가 선사를 싣는다 — 실물 ASC ${res.containers.length}대 중 선사 ${withOp}대 → 행 ${kept}대`, `src ${src.map((x) => !!x).join(',')}`);
+  }
+  const CD = fs.readFileSync(path.join(ROOT, 'src/pages/ChiefDashboard.jsx'), 'utf8');
+  ok(/const _opB = \(rec\.op \|\| e\.op\) \? pickCarrierOp\(rec\.op, e\.op,/.test(CD), '수석 보드 그림·별첨도 리스트 선사를 고르기 한 벌로(컨 상세와 같은 답)');
 }
 
 console.log(fail ? `✗ ${fail}항 실패` : '✓ 전부 통과');
