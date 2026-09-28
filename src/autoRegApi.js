@@ -3,7 +3,7 @@
 //   - ediContainers 분류는 VoyagePage 재처리 로직과 동일(평택 POD/POL → discharge/loading, 그 외 transit).
 //   - records는 원시 파싱 결과만 반환(먼저 온 값 유지 + 빈칸 채움). 기존 records와의 병합·보존은 수집기 측 보수 머지 담당.
 //   - Firebase 쓰기는 여기서 하지 않는다 — 순수 함수라 시뮬·헬퍼 재사용이 쉽다.
-import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
+import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind, listTypoTwins } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
 import { APP_VERSION } from './utils.js';
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 파일 이름이 선사
 import { listRevisionDrops } from './listRevision.js';   // 3.61-02: 같은 기본이름 리스트는 새 판만(선적 합본과 같은 판정 한 벌)
@@ -376,6 +376,17 @@ export async function buildAutoPayload(files, opts) {
   if (droppedCns.length) {
     perFile.push({ name: `반대 방향 리스트 제외(${mode === 'discharge' ? '선적분' : '양하분'})`, kind: 'dropped', count: droppedCns.length });
     console.warn(`[autoRegApi] ${mode} 등록에서 반대 방향 레코드 ${droppedCns.length}대 제외 — 같은 폴더에 양하·선적 리스트가 함께 있다:`, droppedCns.slice(0, 10));
+  }
+
+  //  ★ 3.66-04 — **리스트 번호 오타 짝은 오타 쪽을 뺀다**(utils.listTypoTwins 한 벌 — 같은 실번호를 딱 둘이 갖고, 한쪽만 검산이 틀리고,
+  //    번호가 두 글자 이내로 다를 때만). 실측 RZOR R106W — CLL 2차·3차의 WKIU5243987 이 최종의 WIKU5243987 과 같이 남아
+  //    «실번호 중복»·잔여 1대(검수사 2026-09-28 «오타 구별건까지 정리»). 판을 합치는 선적 경로(3.61-03)에서 생기는 일이라 여기서 거른다.
+  //    완료 기록 보호는 수집기(autoreg.py 잔재 정리 — 완료 컨은 안 지운다)가 한다. 조용히 빼지 않는다(perFile·콘솔).
+  const _typo = listTypoTwins(records, best ? new Set(Object.keys(ediContainers)) : null);   // 실 EDI(또는 가상 IFCSUM)가 그 번호를 담고 있으면 빼지 않는다 — 감사 지적
+  for (const t of _typo) delete records[t.typo];
+  if (_typo.length) {
+    perFile.push({ name: `번호 오타 제외(${_typo.map((t) => `${t.typo}→${t.real}`).join(', ')})`, kind: 'dropped', count: _typo.length });
+    console.warn(`[autoRegApi] ${mode} 리스트 번호 오타 ${_typo.length}대 제외(같은 실번호·검산 틀린 쪽):`, _typo.map((t) => `${t.typo}→${t.real}`));
   }
 
   // 가상 선적 EDI(RZOR·OBWH) — 선적인데 진짜 EDI가 없으면(best 없음) 리스트를 선적 ediContainers로 승격한다.

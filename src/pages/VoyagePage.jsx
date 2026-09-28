@@ -53,7 +53,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -4315,6 +4315,16 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       }
       if (listRef.current) listRef.current.value = '';
       return;
+    }
+    //  ★ 3.66-04 — 번호 오타 짝(같은 실번호를 딱 둘이 갖고 한쪽만 검산이 틀림)은 오타 쪽을 뺀다 — 수집기 자동등록(autoRegApi)과 같은 한 벌.
+    //    빼지 않는 것 — 완료 기록이 있는 번호(현장이 그 번호로 끝냈다) · 실 EDI 가 담은 번호(리스트로 만든 가상 EDI 는 빼고 — 그것이 RZOR 의 오타다).
+    //    저장하는 길에서만 한다(캔슬만·새 컨 0 으로 저장 없이 끝나는 길에 «제외» 줄이 나오지 않게 — 감사 지적).
+    const _typoKeep = new Set(Object.keys(sec.completed || {}));
+    Object.entries(sec.ediContainers || {}).forEach(([k, e]) => { if (!(e && e._virtualFromList)) _typoKeep.add(k); });
+    const _typoTw = listTypoTwins(cnMap, _typoKeep);
+    _typoTw.forEach((t) => { delete cnMap[t.typo]; });
+    if (_typoTw.length) {
+      results.push(`✂ 번호 오타 ${_typoTw.length}대 제외 — ${_typoTw.map((t) => `${t.typo}→${t.real}`).join(', ')} (같은 실번호 · 체크디지트가 틀린 쪽)`);
     }
     // M3.5.4-fix2: 충돌 검출 — EDI vs 리스트 비교
     const ediMap = sec.ediContainers || {};

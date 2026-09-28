@@ -366,6 +366,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 캔슬 리스트 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CLM" "$SMOKE_CLO"; exit 1
   fi
+  # 3.66-04: 리스트 번호 오타 짝 — RZOR R106W 선적 실리스트 두 판(CLL 2차 WKIU·최종 WIKU)으로 수집기 자동등록 실소스(buildAutoPayload)가 오타 쪽을 빼는지·가상번호 묶음은 안 건드리는지 잰다.
+  SMOKE_LTM=$(mktemp /dev/shm/hometmp/_ltm_XXXXXX.mjs)
+  SMOKE_LTO=$(mktemp /dev/shm/hometmp/_lto_XXXXXX.cjs)
+  printf 'export { listTypoTwins, isoCheckDigit, loadSheetJS } from "%s/src/utils.js";\nexport { buildAutoPayload } from "%s/src/autoRegApi.js";\n' "$PWD" "$PWD" > "$SMOKE_LTM"
+  if npx esbuild "$SMOKE_LTM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_LTO" --log-level=error; then
+    node tools/smoke_listtypo.cjs "$SMOKE_LTO" || { echo "✗ 리스트 번호 오타 짝 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LTM" "$SMOKE_LTO"; exit 1; }
+    rm -f "$SMOKE_LTM" "$SMOKE_LTO"
+  else
+    echo "✗ 리스트 번호 오타 짝 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LTM" "$SMOKE_LTO"; exit 1
+  fi
   # 3.39: 선적 칸에서 «칠한 칸=풀 · 테두리만=엠티» 가 실제로 그려지는가 — 같은 번들(ATPR 366대·엠티 361)로 실렌더한다.
   node tools/smoke_feborder.cjs "$SMOKE_HL" || { echo "✗ 풀·엠티 구분 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.36: 카고플랜 해치커버가 세로 한가운데인가 — 세 척(ATPR·MCSC·MAMP)을 실렌더한다. MAMP 만 «데크 전용 베이» 를 갖는다.
