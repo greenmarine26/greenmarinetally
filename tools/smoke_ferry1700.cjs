@@ -79,7 +79,9 @@ ok(!r3.ship.discharge.excluded && r3.ship.discharge.tbl, '배 전체 규격표�
 
 console.log('⑤ 문지기 — 자료가 못 가르면 갱별 표를 안 낸다');
 { const x = clone(w); const q = x.info.qcWork; const a = q.QC101.lodDone; q.QC101.lodDone = q.QC102.lodDone + 60; q.QC102.lodDone = Math.max(0, a - 60);
-  const r = F.buildGangShiftReport(x, pagesOBWH, x._now); ok(r.perGang === false && /%/.test(r.why), `위치로 붙인 합계가 호기 집계와 크게 다르면 대수만 — «${r.why}»`); }
+  //  3.66-02: 이 꾸민 자료는 두 호기 선적 완료를 맞바꾼 것이라 «방향을 뒤집으면 더 맞는» 경우다 — 방향 문지기가 먼저 서서 전부 대수만(안전 쪽).
+  //    방향 문제가 아닌 13% 차이(실자료 OBWH 2751E 16:12)는 잔여 기준 갱만 규격표 — smoke_daynightgang ⑥ 이 잰다.
+  const r = F.buildGangShiftReport(x, pagesOBWH, x._now); ok(r.perGang === false && /접안 방향을 뒤집어/.test(r.why) && r.gangs.every((g) => !g.loading.tbl), `호기 합계를 맞바꾼 자료 — 방향 문지기로 대수만 «${r.why}»`); }
 { const x = clone(w); delete x.info.qcWork; const r = F.buildGangShiftReport(x, pagesOBWH, x._now); ok(r.gangs.length === 0 && /호기 집계가 아직/.test(r.why), '호기 집계가 없으면 갱 없이 배 전체만'); }
 { const x = clone(w); x.info.qcWork = { QC101: { qc: 'QC101', disDone: 246, disRest: 0, lodDone: 261, lodRest: 28 } }; const r = F.buildGangShiftReport(x, pagesOBWH, x._now);
   ok(r.perGang && r.gangs.length === 1 && r.gangs[0].loading.remainTotal === r.ship.loading.remainTotal, '호기가 하나면 그 갱 = 배 전체'); }

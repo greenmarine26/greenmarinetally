@@ -310,9 +310,10 @@ export function buildFerry1700Message({ vsl, voy, rep, gangNos = null, recompute
   if (!gangs.length) { side('양하', rep && rep.ship && rep.ship.discharge); side('선적', rep && rep.ship && rep.ship.loading); }
   else {
     for (const g of gangs) { L.push(`🏗 ${g.no}호기`); side('양하', g.discharge); side('선적', g.loading); }
-    if (!rep.perGang) {
+    if (!rep.perGang || rep.shipTable || (rep.doneUnsure && rep.postCut > 0)) {   // 3.66-02: 대수만 갱이 섞이면 배 전체 표 · 이유
       const q = new Date(rep.qcAt || Date.now());
-      L.push(rep.postCut > 0 ? `(갱별 규격표 없음 — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, ${_night ? '05:30' : '17:00'} 뒤 ${rep.postCut}대 포함)` : '(갱별 규격표 없음 — 터미널 호기 집계 대수)');
+      const _tail = rep.postCut > 0 ? ` — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, ${_night ? '05:30' : '17:00'} 뒤 ${rep.postCut}대 포함` : ' — 터미널 호기 집계 대수';
+      L.push(rep.perGang ? `(작업량 기준 갱은 대수만${_tail})` : `(갱별 규격표 없음${_tail})`);   // 3.66-02: 잔여 기준 갱은 규격표가 있으므로 «없음» 이라 하지 않는다
       L.push('▶ 배 전체'); side('양하', rep.ship.discharge); side('선적', rep.ship.loading);
     }
   }

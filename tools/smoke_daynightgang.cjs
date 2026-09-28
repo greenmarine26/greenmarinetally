@@ -35,7 +35,7 @@ const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ') : '');
 
 console.log('주야간 작업보고 갱별 (OBWH 2751E · RZOR R106E 09-28 12:36 실자료)');
 require(path.resolve(B));
-const { setEquipNumber, FF, ferryCutItem, shiftReportKey } = dom.window.__DN;
+const { setEquipNumber, FF, FO, ferryCutItem, shiftReportKey, ferryRepShapeOk, buildFerry1700Message, buildGangShiftReport, pagesOf } = dom.window.__DN;
 const doc = dom.window.document;
 const openDaynight = async (key, v = null) => {
   dom.window.__open(key, v); await wait(120);
@@ -128,6 +128,52 @@ const rowOf = (card, side, size) => {
   ok(g20.join('|') === g5.join('|') && g20.length >= 2, `적어 둔 보고의 갱 숫자 = 17:05 에 본 숫자 (${g20.map((x) => x.slice(0, 40)).join(' / ')})`);
   await openDaynight('OBWH_2749E', W);
   ok(/다시 센 값/.test(txt(doc.querySelector('[data-dn-gang]'))), '17:20 · 적어 둔 보고 없음 — 마감 시각으로 다시 세고 «⚠ 다시 센 값»이라고 밝힌다');
+
+  // ── ⑥ 3.66-02 — 붙인 완료를 못 믿어도 «잔여» 기준 갱은 규격표(검수사 16:04 «규격표가 없으면 어떻게 주간보고를 할수있죠?») ──
+  //    OBWH 2751E 16:12 사본 — 위치로 붙인 완료 83/77 ↔ 터미널 96/70(13%)라 종전엔 두 갱 다 «대수만». 두 갱 모두 잔여 기준(43·54)이다.
+  //    동방 베이별 잔여(bayWork)로 보면 1호기 43 = 02·06·10번 장(14+28+1) · 2호기 54 = 14·18번 장(46+8) — 앱 잔여 97 = 터미널 97.
+  setEquipNumber('1호기');
+  CLOCK = FO.at;
+  await openDaynight('OBWH_2751E', JSON.parse(JSON.stringify(FO.OBWH_2751E)));
+  const p6 = doc.querySelector('[data-dn-gang]');
+  const c61 = p6 && p6.querySelector('[data-gang="1"]'), c62 = p6 && p6.querySelector('[data-gang="2"]');
+  const tot6 = (c) => { const box = c && [...c.querySelectorAll('div')].find((d) => d.querySelector('table')); const tr = box && [...box.querySelectorAll('tr')].find((t) => /풀엠티토탈/.test(txt(t))); return tr ? +txt(tr.lastElementChild) : -1; };
+  ok(!!c61 && !!c62 && /잔여 기준/.test(txt(c61)) && /잔여 기준/.test(txt(c62)) && !/규격표 없음/.test(txt(c61) + txt(c62)),
+    `두 갱 모두 «잔여 기준» 규격표 — «규격표 없음» 아님 (${txt(c61).slice(0, 60)} / ${txt(c62).slice(0, 60)})`);
+  ok(tot6(c61) === 43 && tot6(c62) === 54, `갱별 잔여 = 터미널 호기별 잔여 43 · 54 (표 ${tot6(c61)} · ${tot6(c62)})`);
+  ok(/잔여 기준 \(완료 96 · 잔여 43\)/.test(txt(c61)) && /잔여 기준 \(완료 70 · 잔여 54\)/.test(txt(c62)), '완료 대수는 터미널 값(96·70 — 위치로 붙인 85·81 이 아니다)');
+  //  구성 — 규칙(남은 컨을 장별로: 02·06·10번 장 = 1호기, 14·18번 장 = 2호기)에서 따로 뽑은 값(감사 실측)
+  ok(JSON.stringify([rowOf(c61, '양하', '20ft'), rowOf(c61, '양하', '40ft'), rowOf(c62, '양하', '20ft'), rowOf(c62, '양하', '40ft')]) === '[[23,0,23],[20,0,20],[38,0,38],[16,0,16]]',
+    `규격 구성이 장별 규칙과 같다 — 1호기 20ft 23·40ft 20 · 2호기 20ft 38·40ft 16 (${JSON.stringify([rowOf(c61, '양하', '20ft'), rowOf(c61, '양하', '40ft'), rowOf(c62, '양하', '20ft'), rowOf(c62, '양하', '40ft')])})`);
+  ok(/완료\(작업량\) 기준 갱은 대수만/.test(txt(p6)) && /잔여 기준 갱은 남은 컨을 선수 호기부터 터미널 호기별 잔여 비율로 나눈 규격표/.test(txt(p6)),
+    '⚠ 붙인 완료를 못 믿는 이유와 잔여 표의 출처를 밝힌다');
+  const bw = FO.OBWH_2751E.discharge.bayWork; const bwSum = Object.values(bw).reduce((a, x) => a + (x.aft || 0), 0);
+  ok(bwSum === 97 && (bw['02'].aft + bw['06'].aft + bw['10'].aft) === 43 && (bw['14'].aft + bw['18'].aft) === 54,
+    `동방 베이별 잔여로 검산 — 선수 쪽 02·06·10 = 43(1호기) · 14·18 = 54(2호기) · 합 ${bwSum}`);
+
+  // ── ⑦ 3.66-02 감사 — 굳힌 호기 표(qcSnap)·작업량 기준 갱 섞임·잔여 합 문지기 ──
+  {
+    const base = FO.OBWH_2751E; const pg = pagesOf(base); const k17 = Date.UTC(2026, 8, 28, 8, 0, 0);
+    //  (a) 18:30 에 다시 센다 — 지금 호기 표는 다 끝났고(139/0 · 124/0) 17:01 에 굳힌 표는 96/43 · 70/54. 17:00 잔여 43 이 살아야 한다.
+    const va = JSON.parse(JSON.stringify(base)); va.info.qcWork.QC101 = { ...va.info.qcWork.QC101, disDone: 139, disRest: 0 }; va.info.qcWork.QC102 = { ...va.info.qcWork.QC102, disDone: 124, disRest: 0 };
+    const ra = buildGangShiftReport(va, pg, k17 + 90 * 60000, { shift: '주간', cutMs: k17, qcSnap: { at: k17 + 60000, qcWork: base.info.qcWork } });
+    const a1 = ra.gangs.find((g) => g.no === 1).discharge;
+    ok(ra.doneUnsure && !a1.countsOnly && a1.basis === '잔여' && a1.doneTotal === 96 && a1.total.total === 43, `다시 세기 — 굳힌 호기 표로 «잔여 43 (완료 96)» (${a1.basis} ${a1.total && a1.total.total} · 완료 ${a1.doneTotal})`);
+    //  (b) 2호기가 작업량 기준(60/64)이면 2호기는 대수만 — 배 전체 규격표를 같이 붙인다(화면·카톡)
+    const vb = JSON.parse(JSON.stringify(base)); vb.info.qcWork.QC102 = { ...vb.info.qcWork.QC102, disDone: 60, disRest: 64 };
+    const rb = buildGangShiftReport(vb, pg, FO.at, { shift: '주간' });
+    const b1 = rb.gangs.find((g) => g.no === 1).discharge, b2 = rb.gangs.find((g) => g.no === 2).discharge;
+    ok(rb.doneUnsure && !b1.countsOnly && b1.tbl && b2.countsOnly && b2.basis === '작업량' && rb.shipTable === true, `작업량 기준 갱은 대수만 · 잔여 기준 갱은 표 · 배 전체 표 붙임(shipTable) — 1호기 ${b1.basis} ${b1.total.total} · 2호기 ${b2.basis} ${b2.total.total}`);
+    const msg = buildFerry1700Message({ vsl: 'OBWH', voy: '2751E', rep: rb });
+    ok(/▶ 배 전체/.test(msg) && /작업량 기준 갱은 대수만/.test(msg) && !/갱별 규격표 없음/.test(msg) && /20ft/.test(msg), '카톡 — 배 전체 표와 «작업량 기준 갱은 대수만» 이 붙고 «규격표 없음» 이라 하지 않는다');
+    const stored = JSON.parse(JSON.stringify(rb, (kk, vv) => (vv === null || (typeof vv === 'number' && !Number.isFinite(vv)) ? undefined : vv)));
+    ok(ferryRepShapeOk(stored), '보고 보관(RTDB 왕복 모양)이 새 칸(doneUnsure·shipTable)과 섞인 갱 모양을 받아들인다');
+    //  (c) 남은 컨 자리를 모르면(잔여 표 합 ≠ 터미널 잔여) 대수만 — 표를 지어내지 않는다
+    const vc = JSON.parse(JSON.stringify(base)); const comp = vc.discharge.completed || {};
+    for (const [cn, e] of Object.entries(vc.discharge.ediContainers)) if (!comp[cn]) { e.bay = ''; e.row = ''; e.tier = ''; }
+    const rc = buildGangShiftReport(vc, pg, FO.at, { shift: '주간' });
+    ok(rc.gangs.every((g) => g.discharge.countsOnly) && /맞지 않는 갱도 대수만/.test(rc.why), `잔여 표 합이 터미널 잔여와 안 맞으면 대수만 — «${rc.why.slice(-30)}»`);
+  }
 
   ok(!errs.length, `화면 오류 없음 ${errs.slice(0, 2).join(' | ')}`);
   Date.now = _now;

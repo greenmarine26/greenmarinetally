@@ -103,7 +103,7 @@ export function ferry1700Speech(items, myNo = 0) {
     const gangs = (rep.gangs || []).filter((g) => !myNo || g.no === myNo);
     if (!gangs.length) { parts.push(`${vsl} ${[_side('양하', rep.ship.discharge), _side('선적', rep.ship.loading)].filter(Boolean).join(', ')}`); continue; }
     const gl = gangs.map((g) => { const t = [_side('양하', g.discharge), _side('선적', g.loading)].filter(Boolean).join(', '); return t ? `${g.no}호기 ${t}` : ''; }).filter(Boolean);
-    if (gl.length) parts.push(`${vsl} ${gl.join('. ')}${!rep.perGang && rep.postCut > 0 ? `. 호기 대수는 ${_hm(rep.qcAt)} 터미널 값` : ''}`);
+    if (gl.length) parts.push(`${vsl} ${gl.join('. ')}${(!rep.perGang || rep.doneUnsure) && rep.postCut > 0 ? `. 호기 대수는 ${_hm(rep.qcAt)} 터미널 값` : ''}`);
     else parts.push(`${vsl} ${[_side('양하', rep.ship.discharge), _side('선적', rep.ship.loading)].filter(Boolean).join(', ') || '보고할 것 없음'}`);
   }
   return `주간 작업보고 시간입니다. ${parts.join('. ')}입니다.`;
@@ -177,9 +177,9 @@ export function VoyageBlock({ item, myNo, onKakao = null, shipAlways = false }) 
       {item.recomputed && <div className="text-2xs text-amber-200/80">⚠ 마감 때 적어 둔 보고가 없어 지금 자료로 다시 센 값입니다 — 배 전체는 같고 갱 숫자는 조금 다를 수 있습니다.</div>}
       {rep.why && <div className="text-2xs text-amber-200/80">⚠ {rep.why}</div>}
       {rep.perGang && rep.side && <div className="text-2xs text-dim-400">{rep.side === 'starboard' ? '우현' : '좌현'} 접안 기준 · 선수 {rep.bow}호기 — 방향이 다르면 수석에게 알려 주세요.</div>}
-      {rep.postCut > 0 && !rep.perGang && <div className="text-2xs text-dim-400">터미널 호기 집계는 {_hm(rep.qcAt)} 값이라 {rep.shift === '야간' ? '05:30' : '17:00'} 뒤 {rep.postCut}대가 섞여 있습니다.</div>}
+      {rep.postCut > 0 && (!rep.perGang || rep.doneUnsure) && <div className="text-2xs text-dim-400">터미널 호기 집계는 {_hm(rep.qcAt)} 값이라 {rep.shift === '야간' ? '05:30' : '17:00'} 뒤 {rep.postCut}대가 섞여 있습니다.</div>}
       {gangs.map((g) => <GangCard key={g.no} g={g} mine={!!myNo && g.no === myNo} qcLabel={item.stored ? `(${_hm(item.storedAt)})` : (item.recomputed && rep.perGang ? '(지금)' : '')} />)}
-      {(shipAlways || !rep.perGang || !gangs.length) && (
+      {(shipAlways || !rep.perGang || !gangs.length || rep.shipTable) && (   /* 3.66-02: 대수만 나가는 갱이 있으면 배 전체 규격표를 같이 */
         <div className="space-y-1.5" data-f1700-ship="1">
           <div className="text-2xs text-dim-300">{rep.perGang && gangs.length ? '배 전체 합계' : '배 전체'}</div>
           <SideTable label="양하" rep={rep.ship.discharge} />
@@ -322,7 +322,7 @@ function Ferry1700AlertInner({ voyages, audience = 'inspector', voyageKey = '', 
             📋 {audience === 'chief' ? `카페리 주간 작업보고 · 17:00 · 작업 중 ${items.length}척` : '주간 작업보고 · 17:00'}
           </div>
           {items.map((it) => <VoyageBlock key={it.key} item={it} myNo={myNo} />)}
-          <div className="text-2xs text-dim-400 text-center">💡 갱마다 적은 쪽(작업량/잔여)을 기준으로 냅니다. 규격표는 선내위치로 호기를 붙인 값이고, 호기 옆 숫자는 터미널이 주는 호기별 합계입니다. 닫아도 작업이 끝날 때까지 «📋 보고 보관» 에 남습니다.</div>
+          <div className="text-2xs text-dim-400 text-center">💡 갱마다 적은 쪽(작업량/잔여)을 기준으로 냅니다. 규격표는 선내위치로 호기를 붙인 값(잔여는 선수 호기부터 터미널 호기별 잔여 비율로 나눈 값)이고, 호기 옆 숫자는 터미널이 주는 호기별 합계입니다. 닫아도 작업이 끝날 때까지 «📋 보고 보관» 에 남습니다.</div>
           <div className="grid grid-cols-2 gap-2">
             {audience === 'inspector' ? (
               <button onClick={kakaoOf(items[0])} className="py-2.5 rounded-pill font-bold text-sm bg-yellow-400 text-black">💬 카톡 보고{mineIn ? ` (${myNo}호기)` : ''}</button>
