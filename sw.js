@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.67';
-const NOTE = 'RZOR 선적 덱플랜 — 마감텔리 STOWAGE PLAN 엑셀을 선적 탭에 올리면 LOLO 탭에 덱 그림이 서고 컨 자리가 붙습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.67-01';
+const NOTE = 'RZOR 자동 덱플랜에서 예측 칸을 누르면 그 자리에 선적됩니다(자리 확정 + 완료). 조회만은 보기만, 동방 실적 자동 완료는 그대로입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

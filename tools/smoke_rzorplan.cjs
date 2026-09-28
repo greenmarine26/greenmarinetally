@@ -130,12 +130,61 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
   ok('40피트 드라이(D)는 «F40\'D» 로 되돌아간다(H 로 바꾸지 않음)', M.checkerTypeOf({ iso: '40 GP', fe: 'F' }).txt === "F40'D" && M.checkerTypeOf({ iso: '40 HC', fe: 'F' }).txt === "F40'H");
   ok('VoyagePage — 엑셀 내보내기(onExport → exportCheckerPlanXlsx) 선적 탭에만', /onExport=\{mode === 'loading' && _deckPlanEff\?\.decks\?\.length \? \(\(pl\) => exportCheckerPlanXlsx\(\{/.test(vp));
   ok('VoyagePage — 업로드 관문이 «stowage|plan.xlsx» 파일명도 덱플랜 후보로 본다', /\/rzdf\|deck\|stowage\|plan\\\.xlsx\$\/i\.test\(file\.name\)/.test(vp));
-  ok('DeckPlanView — 예측 칸 탭 = 확정(fbAssignDeckSlot) · 확정 칸 탭 = 해제 · 회색 점선 · 자리 키는 플랜의 key(덱-줄-위치) 먼저', /if \(s\.pred\)/.test(dv) && /fbAssignDeckSlot\(voyageKey, mode, slotKey, \{ cn: s\.cn/.test(dv) && /border-dashed border-amber-400/.test(dv) && /\?예측\(탭=확정\)/.test(dv) && (dv.match(/const slotKey = s\.key \|\| `\$\{d\.deck\}-\$\{s\.ri\}-\$\{s\.ci\}`;/g) || []).length === 2);
+  ok('DeckPlanView — 예측 칸 탭 = 선적(loadHere: 자리 확정 + 완료) · 확정 칸 탭 = 자리 해제 · 회색 점선 · 자리 키는 플랜의 key(덱-줄-위치) 먼저', /if \(s\.pred\)/.test(dv) && /await fbAssignDeckSlot\(voyageKey, mode, slotKey, \{ cn, by: inspector/.test(dv) && /border-dashed border-amber-400/.test(dv) && /\?예측\(탭=선적\)/.test(dv) && (dv.match(/const slotKey = s\.key \|\| `\$\{d\.deck\}-\$\{s\.ri\}-\$\{s\.ci\}`;/g) || []).length === 2);
   ok('VoyagePage — 생성 플랜 머리 항차는 선적 항차(voy_l)', /voy: voyage\?\.info\?\.voy_l \|\| voyage\?\.info\?\.voy \|\| '' \}\);/.test(vp));
   ok('DeckPlanView — 검수사 양식 방향 안내 · STOWAGE PLAN 엑셀 단추 · 자리 못 받은 컨 경고', /1=선수 → 선미·램프쪽, 오른쪽이 선수/.test(dv) && /📄 STOWAGE PLAN 엑셀/.test(dv) && /plan\.unplaced/.test(dv));
   ok('콘앱 — numbering bow 면 칸을 뒤집어 그린다(오른쪽이 선수)', /const bow = dk\.numbering\s*===\s*'bow'/.test(cone) && /bow \? \(maxCol\s*-\s*gc\s*\+\s*1\) : gc/.test(cone));
   ok('매뉴얼 — RZOR 덱플랜 3.67 항목(업로드·예측·확정·엑셀)', /RZOR\(카페리\) 덱플랜\(3\.67\)/.test(help) && /STOWAGE PLAN 엑셀/.test(help) && /예측/.test(help.split('RZOR(카페리) 덱플랜(3.67)')[1] || ''));
-  ok('버전 — TallyOne 3.67 · APP_NOTE 는 덱플랜 문구 · ConeOne 2.56', /APP_VERSION = 'TallyOne 3\.67'/.test(ut) && /APP_NOTE = '[^']*덱플랜[^']*'/.test(ut) && /__CONEV='ConeOne 2\.56'/.test(cone));
+  ok('버전 — TallyOne 3.67-01 · APP_NOTE 는 덱플랜 문구 · ConeOne 2.56', /APP_VERSION = 'TallyOne 3\.67-01'/.test(ut) && /APP_NOTE = '[^']*덱플랜[^']*'/.test(ut) && /__CONEV='ConeOne 2\.56'/.test(cone));
+
+  console.log('■ ⑤ 3.67-01 — 자동 덱플랜에서 자리를 찍으면 선적(자리 확정 + 완료), 조회만은 보기만, 호기 없이 완료 금지');
+  //  검수사 2026-09-29 «작업자로 로그인하면 실제 선적을 할수 있어야 합니다. 물로 조회만으로는 앱이 자동처리하는것을 보기만 하는게 당연한것이고요».
+  ok('DeckPlanView — loadHere: 문지기(canWorkNow → getEquipNumber) → fbAssignDeckSlot → fbCompleteContainer(호기 인자) 순서', (() => {
+    const i1 = dv.indexOf('const loadHere = async (slotKey, cn) =>'); if (i1 < 0) return false;
+    const body = dv.slice(i1, dv.indexOf('return true;', i1));
+    const at = (t) => body.indexOf(t);
+    return at("if (!canWorkNow()) { alert(workGateText('선적 완료')); return false; }") > 0 && at('if (!getEquipNumber()) { alert(equipGateText()); return false; }') > at('canWorkNow()') &&
+      at('await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector') > at('getEquipNumber())') &&
+      at("await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber())") > at('await fbAssignDeckSlot');
+  })());
+  ok('DeckPlanView — 예측 칸 탭 = loadHere · 자동 덱플랜의 빈자리 지정 = 목록에 있는 번호만 loadHere(감사 지적) · 올린 플랜의 빈자리는 종전대로 자리만', /if \(s\.pred\) \{[^\n]*\n\s*await loadHere\(slotKey, s\.cn\);/.test(dv) && /if \(plan\._gen\) \{[^\n]*\n\s*if \(!byCn\[cn\]\) \{ alert\([^\n]*\n\s*await loadHere\(slotKey, cn\); return;/.test(dv) && /await fbAssignDeckSlot\(voyageKey, mode, slotKey, \{ cn, by: inspector \|\| '', at: Date\.now\(\) \}\);\n\s*\}\}/.test(dv));
+  ok('DeckPlanView — 확정 칸 재탭은 자리만 해제(완료 기록은 그대로) · 안내문·범례 «탭=선적»', /자리 확정을 해제할까요\? \(완료 기록은 그대로/.test(dv) && /\?예측\(탭=선적\)/.test(dv) && /누르면 그 자리에 <b>선적<\/b>/.test(dv));
+  ok('컨 상세 [완료] 와 같은 함수·같은 인자 꼴(fbCompleteContainer(voyageKey, mode, cn, inspector, \'normal\', \'\', getEquipNumber()))', /fbCompleteContainer\(voyageKey, mode, c\.cn, inspector, 'normal', '', getEquipNumber\(\)\)/.test(src('src/components/ContainerDetailModal.jsx')));
+  //  실제 firebase.js 를 메모리 스텁으로 돌려 «찍으면 완료 기록 + 자리» 가 남는지, 터미널 먼저 완료된 컨을 사람이 찍으면 사람 기록으로 바뀌는지, 조회만이면 막히는지
+  const FBO = path.join(TMP, 'fb.cjs');
+  const stub = './tools/stub_fbdb_mem.js';
+  execSync(`npx esbuild src/firebase.js --bundle --platform=node --format=cjs --log-level=error --alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --outfile="${FBO}"`, { cwd: ROOT, stdio: 'pipe' });
+  const WCO = path.join(TMP, 'wc.cjs');
+  execSync(`npx esbuild src/workChoice.js --bundle --platform=node --format=cjs --log-level=error --outfile="${WCO}"`, { cwd: ROOT, stdio: 'pipe' });
+  global.window = { addEventListener() {}, dispatchEvent() { return true; }, location: { href: '' } };
+  global.localStorage = { _m: {}, getItem(k) { return this._m[k] ?? null; }, setItem(k, v) { this._m[k] = String(v); }, removeItem(k) { delete this._m[k]; } };
+  global.document = { addEventListener() {}, createElement: () => ({ style: {} }), documentElement: { style: {}, setAttribute() {} }, body: { style: {} } };
+  global.CustomEvent = class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } };
+  const FB = require(FBO);
+  const cnA = F.containers[0].cn, cnB = F.containers[1].cn;
+  global.__memdb = { voyages: { V1: { loading: { ediContainers: { [cnA]: { cn: cnA, iso: '45G1', fe: 'F', pol: 'KRPTK' }, [cnB]: { cn: cnB, iso: '45G1', fe: 'F', pol: 'KRPTK' } },
+                                                completed: { [cnB]: { by: '동방', at: 1, src: 'term' } } } } } };
+  localStorage.setItem('master_active_inspector_v1', '검수원A');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  await FB.fbAssignDeckSlot('V1', 'loading', 'D-1-15', { cn: cnA, by: '검수원A', at: 1 });
+  const rA = await FB.fbCompleteContainer('V1', 'loading', cnA, '검수원A', 'normal', '', '3'); await sleep(60);
+  const L = global.__memdb.voyages.V1.loading;
+  ok('작업자가 찍으면 — stowagePlan/assign/D-1-15 = 그 컨 · completed/{cn} = {by 검수원A, equip 3}', rA && rA.ok && L.stowagePlan.assign['D-1-15'].cn === cnA && L.completed[cnA] && L.completed[cnA].by === '검수원A' && L.completed[cnA].equip === '3', JSON.stringify(L.completed[cnA]));
+  const rB = await FB.fbCompleteContainer('V1', 'loading', cnB, '검수원A', 'normal', '', '3'); await sleep(60);
+  ok('터미널(src term)이 먼저 완료한 컨을 사람이 찍으면 사람 기록으로 바뀐다(3.60-09 규칙 그대로)', rB && rB.ok && L.completed[cnB].by === '검수원A' && !L.completed[cnB].src, JSON.stringify(L.completed[cnB]));
+  const rA2 = await FB.fbCompleteContainer('V1', 'loading', cnA, '검수원B', 'normal', '', '4'); await sleep(60);
+  ok('사람이 이미 완료한 컨은 다시 찍어도 덮지 않는다(already)', rA2 && rA2.already === true && L.completed[cnA].by === '검수원A');
+  //  조회만 — firebase 번들 안의 workChoice 는 App 캐시가 없으니 localStorage(오늘의 본인 + 오늘 선택 view)를 본다. 화면(DeckPlanView)의 canWorkNow 도 같은 한 벌(workChoice.js).
+  const WC = require(WCO);
+  const ymd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  localStorage.setItem('tallyone_me_today', JSON.stringify({ name: '검수원A', ymd }));
+  localStorage.setItem('tallyone_work_choice', JSON.stringify({ name: '검수원A', ymd, mode: 'view', voyageKey: '', equip: '', at: Date.now() }));
+  let blocked = false;
+  try { await FB.fbAssignDeckSlot('V1', 'loading', 'D-1-16', { cn: cnB, by: '조회만', at: 1 }); } catch (e) { blocked = !!(e && e.viewOnly); }
+  let blocked2 = false;
+  try { await FB.fbCompleteContainer('V1', 'loading', cnB, '검수원A', 'normal', '', '3'); } catch (e) { blocked2 = !!(e && e.viewOnly); }
+  ok('조회만이면 자리 지정·완료가 쓰는 자리(firebase 문지기)에서 막힌다 — 보기만 · 화면 문지기 canWorkNow 도 거짓', blocked && blocked2 && !(L.stowagePlan.assign['D-1-16']) && !WC.canWorkNow(), `assign ${blocked} complete ${blocked2} canWorkNow ${WC.canWorkNow()}`);
+  localStorage.removeItem('tallyone_work_choice');
 
   console.log(`RZOR 선적 덱플랜 연막검사: ${n - bad}/${n} 통과`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 */ }

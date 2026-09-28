@@ -3,8 +3,10 @@
 //   셀 클릭 → 컨 상세(기존 모달).
 import React, { useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
-import { fbAssignDeckSlot } from '../firebase.js';
-import { isReeferIso } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌
+import { fbAssignDeckSlot, fbCompleteContainer } from '../firebase.js';
+import { isReeferIso, getEquipNumber } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.67-01: 호기(인건비 근거)
+import { canWorkNow, workGateText, equipGateText } from '../workChoice.js';   // 3.67-01: 조회만은 보기만 · 호기 없이 완료 금지(컨 상세와 같은 문지기)
+import { speakDone } from '../voice.js';
 
 export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector, onExport }) {
   const decks = plan?.decks || [];
@@ -18,6 +20,19 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
   }, [containers]);
   if (!decks.length) return null;
   const d = decks[Math.min(sel, decks.length - 1)];
+  // ★ 3.67-01 (검수사 2026-09-29 «작업자로 로그인하면 실제 선적을 할수 있어야 합니다») — 자동 덱플랜에서 자리를 찍는 것은 **선적**이다.
+  //   자리 확정(assign) + 완료(fbCompleteContainer — 컨 상세 [완료] 와 같은 함수·호기 인자). 문지기도 컨 상세와 같다 —
+  //   조회만은 보기만(canWorkNow), 호기 없이 완료 금지(getEquipNumber). 동방 실적 자동 완료(2.30)는 이것과 무관하게 계속 돈다 —
+  //   사람이 먼저 찍으면 사람 기록이 남고(터미널은 추가만), 터미널이 먼저면 사람이 찍을 때 사람 기록으로 바뀐다(3.60-09).
+  const loadHere = async (slotKey, cn) => {
+    if (!voyageKey || !cn) return false;
+    if (!canWorkNow()) { alert(workGateText('선적 완료')); return false; }
+    if (!getEquipNumber()) { alert(equipGateText()); return false; }
+    await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector || '', at: Date.now() });
+    const r = await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());
+    if (r && r.ok) { try { speakDone(byCn[cn] || { cn }); } catch (e) { /* 음성 없음 */ } }
+    return true;
+  };
   const conts = d.slots.filter((s) => !s.empty);
   const done = conts.filter((s) => compMap[s.cn]).length;
 
@@ -61,7 +76,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
       {/* 3.67: 검수사 STOWAGE PLAN(선적)은 위치 1 이 선수다(numbering 'bow'). 그림 방향은 둘 다 왼쪽 선미·오른쪽 선수. */}
       {plan._gen ? (
         <div className="text-2xs text-amber-200/90 mb-1">
-          🧭 자동 덱플랜 — 동방 실적 순번으로 자리를 예측했습니다(실적 {plan.seqN || 0}대 · 크레인 {plan.craneN || 0}대). 예측 칸을 누르면 그 자리로 확정, 확정 칸을 다시 누르면 해제, 빈자리를 누르면 컨번호를 넣습니다.
+          🧭 자동 덱플랜 — 동방 실적 순번으로 자리를 예측했습니다(실적 {plan.seqN || 0}대 · 크레인 {plan.craneN || 0}대). 예측 칸을 누르면 그 자리에 <b>선적</b>(자리 확정 + 완료), 확정 칸을 다시 누르면 자리 해제, 빈자리를 누르면 컨번호를 넣어 선적합니다. 조회만은 보기만, 동방 실적 자동 완료는 그대로 돕니다.
           {Array.isArray(plan.unplaced) && plan.unplaced.length ? <span className="text-red-300"> · 자리를 못 받은 컨 {plan.unplaced.length}대: {plan.unplaced.slice(0, 5).join(' ')}{plan.unplaced.length > 5 ? ' …' : ''}</span> : null}
           {Array.isArray(plan.badAssign) && plan.badAssign.length ? <span className="text-red-300"> · 모르는 자리 키의 확정 {plan.badAssign.length}건은 무시(예측으로 돌림)</span> : null}
         </div>
@@ -99,6 +114,10 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                       if (hits.length === 1) cn = hits[0].cn;
                       else { alert(hits.length ? `끝자리 일치 ${hits.length}건 — 전체 번호로 입력하세요` : '일치하는 컨 없음'); return; }
                     }
+                    if (plan._gen) {   // 3.67-01: 자동 덱플랜의 빈자리 지정 = 그 자리에 선적 — 선적 목록에 있는 번호만(감사 지적: 목록 밖 번호가 완료 기록이 되지 않게)
+                      if (!byCn[cn]) { alert(`${cn} 은 이 항차 선적 목록에 없습니다 — 실제로 실었으면 컨 상세의 [초과 컨 등록]으로 남겨 주세요.`); return; }
+                      await loadHere(slotKey, cn); return;
+                    }
                     await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector || '', at: Date.now() });
                   }}
                   className={`rounded-sm border border-dashed text-center overflow-hidden leading-tight
@@ -125,21 +144,20 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             // 3.67: 자동 덱플랜 — 예측 칸은 누르면 확정(assign), 확정 칸은 다시 누르면 해제. 올린 플랜(예측 아님)은 종전대로 컨 상세.
             const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
             const onTap = async () => {
-              if (s.pred) {
-                if (!voyageKey) return;
-                await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn: s.cn, by: inspector || '', at: Date.now() });
+              if (s.pred) {   // 3.67-01: 예측 칸 탭 = 그 자리에 선적(자리 확정 + 완료)
+                await loadHere(slotKey, s.cn);
                 return;
               }
               if (s.sure) {
                 if (!voyageKey) return;
-                if (window.confirm(`${s.cn} 확정을 해제할까요?`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
+                if (window.confirm(`${s.cn} 자리 확정을 해제할까요? (완료 기록은 그대로 — 완료 취소는 컨 상세에서)`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
                 return;
               }
               onOpenContainer?.(c || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay });  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
             };
             return (
               <button key={`${s.cn}${s.ri}${s.ci}`}
-                title={(s.pred ? '예측 · 누르면 확정 — ' : s.sure ? '확정 · 누르면 해제 — ' : '') + (s.pos || '')}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" */
+                title={(s.pred ? '예측 · 누르면 이 자리에 선적 — ' : s.sure ? '확정 · 누르면 자리 해제 — ' : '') + (s.pos || '')}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" · 3.67-01 탭 = 선적 */
                 onClick={onTap}
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
                   ${s.pred ? 'border-dashed border-amber-400 bg-amber-950/50' : s.sure ? 'bg-amber-900/70 border-amber-400' : isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-ink-750/80 border-line-strong' : 'bg-sky-900/80 border-sky-600'}
@@ -169,7 +187,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-lime-400 rounded-sm mr-1" />🏗갠트리(落地·LO/LO)</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-amber-300 rounded-sm mr-1" />⇅双背(2단)</span>
         <span><span className="inline-block w-2.5 h-2.5 bg-violet-900 border-2 border-violet-400 rounded-sm mr-1" />🧳수화물(이적 아님)</span>
-        {plan._gen ? <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-amber-400 rounded-sm mr-1" />?예측(탭=확정)</span> : null}
+        {plan._gen ? <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-amber-400 rounded-sm mr-1" />?예측(탭=선적)</span> : null}
       </div>
     </div>
   );
