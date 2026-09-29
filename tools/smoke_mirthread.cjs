@@ -324,7 +324,7 @@ console.log('■ ⑥ 배선 — 다섯 창구·콘앱 포장·매뉴얼·판');
   T(/미르 대화|대화\(3\.68\)/.test(help) && /응/.test(help) && /됐어|그만/.test(help), '매뉴얼(helpData)에 미르 대화 설명(응·끝맺음)');
   const utils = read('src/utils.js');
   T(/APP_VERSION = 'TallyOne 3\.(6[89]|[7-9]\d)/.test(utils), 'APP_VERSION 3.68 이상');
-  T(/APP_NOTE = '[^']*(대화|야드|출력물|베이상세|끼니)/.test(utils), 'APP_NOTE 가 이번 판(대화·3.69 야드·3.69-03 출력물·3.69-04 베이상세·3.69-05 끼니) 문구');
+  T(/APP_NOTE = '[^']*(대화|야드|출력물|베이상세|끼니|덱플랜)/.test(utils), 'APP_NOTE 가 이번 판(대화·3.69 야드·3.69-03 출력물·3.69-04 베이상세·3.69-05 끼니·3.70 덱플랜) 문구');
   const cone = read('public/cone.html');
   T(/__CONEV\s*=\s*['"]ConeOne 2\.5[7-9]/.test(cone), 'ConeOne 2.57 이상');
 }

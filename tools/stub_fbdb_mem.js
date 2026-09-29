@@ -29,7 +29,8 @@ function assertNoUndefined(v, p = '') {
   if (v === undefined) throw new Error(`set failed: value argument contains undefined in property '${p}'`);
   if (v && typeof v === 'object') for (const k of Object.keys(v)) assertNoUndefined(v[k], p ? p + '.' + k : k);
 }
-export async function set(r, v) { assertNoUndefined(v, r.path); LOG().push({ op: 'set', path: r.path }); setAt(r.path, v); }
+export async function set(r, v) { if (global.__setfail && global.__setfail(r.path)) throw new Error('PERMISSION_DENIED 흉내');   // 3.70: 저장 실패를 흉내 낼 때만(검사가 켠다)
+  assertNoUndefined(v, r.path); LOG().push({ op: 'set', path: r.path }); setAt(r.path, v); }
 export async function update(r, patch) {
   assertNoUndefined(patch, r.path);
   LOG().push({ op: 'update', path: r.path });

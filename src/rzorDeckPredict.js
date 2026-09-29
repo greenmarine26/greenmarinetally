@@ -50,7 +50,7 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
   for (const c of containers) if (c && c.cn) byCn[c.cn] = c;
   // 템플릿 자리(36항차 실물) — 키 → {deck,line,pos,sz}
   const tpl = {};
-  for (const [deck, line, pos, sz] of RZOR_DECK_SLOTS) tpl[rzorSlotKey(deck, line, pos)] = { deck, line, pos, sz };
+  for (const [deck, line, pos, sz, w] of RZOR_DECK_SLOTS) tpl[rzorSlotKey(deck, line, pos)] = { deck, line, pos, sz, w: Number(w) === 2 ? 2 : 1 };   // 3.70: w = 그림 칸수(검수사가 옆 칸에 X 를 적는 자리만 2)
   // 확정 자리 — 슬롯키 → cn, cn → 슬롯키. 템플릿에 없는 키(옛 그림 좌표 키 등)는 무시하고 그 컨은 예측으로 돌린다 — 조용히 사라지지 않게.
   const sureBySlot = {}, sureByCn = {}, badAssign = [];
   for (const [k, v] of Object.entries(assign || {})) {
@@ -115,7 +115,8 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
     if (slot) pred[s.cn] = { ...slot, zone: z };   // sz·rf 는 놓을 때 rzorSizeOf 로 다시 본다
     else unplaced.push(s.cn);
   }
-  // 덱별 슬롯 — 컨(확정·예측)을 줄·위치에 놓고, 그림 좌표는 그 뒤에 정한다(40·45 는 옆 위치 p+1 이 비었을 때만 두 칸)
+  // 덱별 슬롯 — 컨(확정·예측)을 줄·위치에 놓고, 그림 좌표는 그 뒤에 정한다(3.70 — 40·45 는 두 칸 자리(w 2)에서 옆 위치 p+1 이 비었을 때만 두 칸.
+  //   옆이 템플릿 자리면 두 칸 대신 한 칸 + «X 칸»(검수사 양식의 X) — 빈자리로 세지 않고, 누르면 조회창이 X 칸이라고 알린다)
   const decks = [];
   for (const deck of ['D', 'C', 'U']) {
     const occ = {};   // line → pos → {cn, sure, sz, rf, c}
@@ -135,11 +136,20 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
       pos: `${deck}덱 ${line}줄 ${pos}칸`, key: rzorSlotKey(deck, line, pos),
     });
     const covered = new Set();   // 두 칸 컨이 덮는 옆 위치(빈자리로 그리지 않는다)
+    const xOf = {};              // 3.70: X 칸 키 → 그 X 를 만든 40피트 자리(«D덱 3줄 5칸»)
     for (const line of Object.keys(occ).map(Number)) {
       for (const pos of Object.keys(occ[line]).map(Number)) {
         const o = occ[line][pos];
-        const span = (o.sz !== '20' && pos < N_POS && !occ[line][pos + 1]) ? 2 : 1;
-        if (span === 2) covered.add(rzorSlotKey(deck, line, pos + 1));
+        //  ★ 3.70 — 두 칸은 템플릿 그림 칸수(w)가 2 인 자리에서만(검수사 양식에서 옆 칸에 X 를 적는 자리). 종전(3.67)은 칸수를 버리고
+        //    «옆이 비면 두 칸» 이라 크레인 구역(D 9~20칸, 40피트 한 칸 자리)의 옆 빈자리를 덮었다 — 빈자리 단추가 사라져 «빈곳을 클릭»(3.70)을
+        //    못 했다(2차 시뮬 — R106W 실적 순서 재연 189걸음 중 41걸음 불가). 두 칸 자리의 옆이 템플릿 자리이면(주로 20피트 자리) 두 칸 대신
+        //    한 칸 + X 칸으로 그린다 — 실물 R106W·R079W 에서 그 옆 칸은 94번 중 92번 X(덮임)였고 2번은 20피트가 실렸다(감사·2차 시뮬 실측).
+        const t0 = tpl[rzorSlotKey(deck, line, pos)];
+        const nk = rzorSlotKey(deck, line, pos + 1);
+        const wide = o.sz !== '20' && pos < N_POS && !occ[line][pos + 1] && (!t0 || t0.w === 2);
+        const span = wide && !tpl[nk] ? 2 : 1;
+        if (span === 2) covered.add(nk);
+        else if (wide) xOf[nk] = `${deck}덱 ${line}줄 ${pos}칸`;
         slots.push({ ...base(line, pos, span), cn: o.cn, empty: false,
                      wt: o.c.wt != null ? Math.round(Number(o.c.wt)) || null : null,
                      iso: `${o.sz} ${o.rf ? 'RH' : (o.sz === '20' ? 'GP' : 'HC')}`, fe: o.c.fe === 'E' ? 'E' : 'F',
@@ -148,7 +158,8 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
     }
     for (const [key, t] of Object.entries(tpl)) {
       if (t.deck !== deck || covered.has(key) || (occ[t.line] && occ[t.line][t.pos])) continue;
-      slots.push({ ...base(t.line, t.pos, 1), cn: '', empty: true, wt: null, iso: '', fe: '' });
+      slots.push({ ...base(t.line, t.pos, 1), cn: '', empty: true, wt: null, iso: '', fe: '', sz: t.sz,   // 3.70: 빈자리 조회창이 «40피트 자리» 로 보여 준다
+                   ...(xOf[key] ? { xcell: true, xOf: xOf[key] } : {}) });   // 3.70: 옆 40피트의 X 칸 — 빈자리로 세지 않는다
     }
     slots.sort((a, b) => (a.ri - b.ri) || (a.ci - b.ci));
     const lines = Math.max(1, ...slots.map((s) => s.line));
@@ -158,4 +169,37 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
   const total = decks.reduce((a, d) => a + d.slots.filter((s) => !s.empty).length, 0);
   return { voy, decks, total, lolo: decks.reduce((a, d) => a + (d.lolo || 0), 0), dbl: 0, _fmt: 'predict', _gen: true,
            assign: assign || null, craneN, seqN: seq.length, sureN: Object.keys(sureBySlot).length, predN: Object.keys(pred).length, unplaced, badAssign };
+}
+
+/**
+ * ★ 3.70 — 덱플랜 빈자리 조회 후보. 검수사 2026-09-30 «빈덱에서 빈곳을 클릭하면 컨번호 조회가 되게하고 조회후 컨을 선택할수 있게 하는게 더 빠를거 같습니다» ·
+ *   «2대 이상 맞으면 맞는거 다 보여주고 고르게 해야 빠릅니다». 종전(3.67-01)은 브라우저 입력창에 끝 4자리를 넣고, 2대 이상 맞으면 «전체 번호로» 막았다
+ *   (실데이터 R106W 190대 중 «9765» 가 SPSU2019765·LYGU4039765 두 대).
+ * @param {object} p
+ * @param {Array}  p.containers 선적 목록(화면이 쓰는 containers — 가상 자리 «__» 는 뺀다)
+ * @param {string} p.q          입력 — 컨번호 끝자리(2자 이상). 전체 번호도 된다(끝이 같으면 그 자체).
+ * @param {Set}    p.placed     후보에서 아예 뺄 컨(없으면 안 뺀다)
+ * @param {object} p.placedAt   cn → {pos, how} 이미 자리가 있는 컨(자동 덱플랜의 확정 📌 'sure' · 올린 덱플랜의 칸 'plan' · 지정 'asg').
+ *                              **빼지 않고 잠근 후보(locked)로 맨 뒤에 보인다** — «맞는거 다 보여주고»(감사 지적: 종전엔 조용히 빠져 «맞는 컨이 없습니다» 로 보였다).
+ * @param {object} p.compMap    완료 지도 — 안 실은 컨을 먼저 보여 주려고
+ * @param {object} p.predPos    cn → 예측 자리(«D덱 3줄 12칸») — 예측 컨도 후보다(그 자리가 아니라 여기라고 검수원이 고를 수 있다)
+ * @returns {Array<{cn, c, sz, rf, fe, done, pred, locked, at}>} 고를 수 있는 것 먼저(안 실은 컨 → 실은 컨), 잠근 것 맨 뒤, 같은 무리는 컨번호 순
+ */
+export function rzorSlotCandidates({ containers = [], q = '', placed = null, placedAt = null, compMap = null, predPos = null } = {}) {
+  const qq = String(q || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (qq.length < 2) return [];
+  const out = [];
+  const seen = new Set();
+  for (const c of containers) {
+    const cn = String((c && c.cn) || '').toUpperCase();
+    if (!cn || cn.startsWith('__') || c._slot || seen.has(cn)) continue;
+    if (!cn.endsWith(qq)) continue;
+    if (placed && placed.has(cn)) continue;
+    seen.add(cn);
+    const { sz, rf } = rzorSizeOf(c);
+    const at = (placedAt && placedAt[cn]) || null;
+    out.push({ cn, c, sz, rf, fe: c.fe === 'E' ? 'E' : 'F', done: !!(compMap && compMap[cn]), pred: (predPos && predPos[cn]) || '', locked: !!at, at });
+  }
+  out.sort((a, b) => (Number(a.locked) - Number(b.locked)) || (Number(a.done) - Number(b.done)) || (a.cn < b.cn ? -1 : a.cn > b.cn ? 1 : 0));
+  return out;
 }

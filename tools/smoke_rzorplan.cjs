@@ -13,7 +13,7 @@ const fx = (p) => path.join(ROOT, 'tools', 'fixtures', p);
 
 const ENTRY = path.join(TMP, 'entry.mjs');
 fs.writeFileSync(ENTRY, `export { isDeckPlanWorkbook, isCheckerPlanWorkbook, parseDeckPlanWorkbook } from "${ROOT}/src/rzorPlan.js";
-export { buildRzorLoadingDeckPlan, rzorLoadSequence, rzorSizeOf } from "${ROOT}/src/rzorDeckPredict.js";
+export { buildRzorLoadingDeckPlan, rzorLoadSequence, rzorSizeOf, rzorSlotCandidates } from "${ROOT}/src/rzorDeckPredict.js";
 export { buildCheckerPlanWorkbook, checkerTypeOf } from "${ROOT}/src/rzorPlanExcel.js";
 export { craneSlots, RZOR_DECK_SLOTS, RZOR_PATH_TWENTY } from "${ROOT}/src/data/rzorDeckRules.js";\n`);
 const OUT = path.join(TMP, 'rz.cjs');
@@ -84,9 +84,60 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
   const genBad = M.buildRzorLoadingDeckPlan({ containers: F.containers, termWork: F.termWork, bayWork: F.bayWork, assign: { 'D-0-10': { cn: cnCrane, by: 'x', at: 1 }, 'Q-9-9': { cn: F.containers[7].cn, by: 'x', at: 1 } }, voy: 'R106W' });
   ok('모르는 자리 키(옛 그림 좌표 D-0-10·Q-9-9)의 확정은 무시하고 그 컨은 예측으로 — 사라지지 않는다', genBad.badAssign.length === 2 && genBad.total === 189 && genBad.sureN === 0 && genBad.decks.flatMap((d) => d.slots).some((s) => s.cn === cnCrane && s.pred), `bad${genBad.badAssign.length} total${genBad.total}`);
   const twentySpan = gen.decks.flatMap((d) => d.slots).filter((s) => !s.empty && /^20/.test(s.iso) && s.span !== 1);
-  ok('20피트는 늘 한 칸 · 40피트는 옆 위치가 비었을 때만 두 칸', twentySpan.length === 0 && gen.decks.flatMap((d) => d.slots).filter((s) => !s.empty && !/^20/.test(s.iso) && s.span === 2).length > 0, `20 span2: ${twentySpan.length}`);
+  ok('20피트는 늘 한 칸 · 40피트는 두 칸 자리(템플릿 칸수 2)에서 옆 위치가 비었을 때만 두 칸(옆이 템플릿 자리면 한 칸 + X 칸 — 3.70)', twentySpan.length === 0 && gen.decks.flatMap((d) => d.slots).filter((s) => !s.empty && !/^20/.test(s.iso) && s.span === 2).length > 0, `20 span2: ${twentySpan.length}`);
   const gen0 = M.buildRzorLoadingDeckPlan({ containers: [], termWork: {}, bayWork: null, assign: null, voy: '' });
+  {
+    //  3.70 (2차 시뮬 결함 A): 두 칸 그림이 템플릿의 옆 자리를 덮지 않는다 — 모든 템플릿 자리가 칸(컨 또는 빈자리)으로 한 번씩 서야 빈곳을 누를 수 있다
+    const tplKeys = new Set(M.RZOR_DECK_SLOTS.map(([dk, l, p]) => `${dk}-${l}-${p}`));
+    const cover = (plan) => { const ks = plan.decks.flatMap((d) => d.slots).map((x) => x.key); const bad2 = plan.decks.flatMap((d) => d.slots.filter((x) => x.span === 2 && tplKeys.has(`${d.deck}-${x.line}-${x.col + 1}`))); return { all: [...tplKeys].every((k) => ks.includes(k)), uniq: new Set(ks).size === ks.length, bad2: bad2.length }; };
+    const g1 = cover(gen);
+    const c40 = F.containers.find((c) => /^4/.test(c.iso));
+    const g2p = M.buildRzorLoadingDeckPlan({ containers: F.containers, termWork: {}, bayWork: null, assign: { 'D-3-10': { cn: c40.cn } }, voy: '' });
+    const g2 = cover(g2p);
+    ok('3.70 — 템플릿 291자리가 전부 칸으로 선다(두 칸 그림이 옆 템플릿 자리를 덮지 않음 · 실데이터 예측판·크레인 칸 확정판)', g1.all && g1.uniq && g1.bad2 === 0 && g2.all && g2.uniq && g2.bad2 === 0 && g2p.decks.find((d) => d.deck === 'D').slots.some((x) => x.empty && x.key === 'D-3-11'), JSON.stringify({ g1, g2 }));
+  }
+  {
+    //  3.70 (재감사·2차 시뮬 재판): 그림 칸폭은 템플릿 칸수(w)를 따른다 — 실물 검수사 PLAN 의 X·<45>(두 칸)와 같아야 하고,
+    //    실물이 X 인 칸은 «빈자리» 가 아니라 X 칸이다(종전 재판 규칙은 X 칸 63곳을 빈자리로 세웠다).
+    const vsReal = (P) => {
+      const sl = P.decks.flatMap((d) => d.slots.filter((s) => !s.empty));
+      const assign = {}; for (const s of sl) assign[s.key] = { cn: s.cn };
+      const g = M.buildRzorLoadingDeckPlan({ containers: sl.map((s) => ({ cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe: s.fe })), termWork: {}, bayWork: null, assign, voy: P.voy });
+      const gs = g.decks.flatMap((d) => d.slots);
+      const byKey = Object.fromEntries(gs.map((x) => [x.key, x]));
+      const nextKey = (k) => k.replace(/-(\d+)$/, (m, p1) => `-${Number(p1) + 1}`);
+      let placed = 0, same = 0; const diff = [];
+      for (const s of sl) {
+        const x = byKey[s.key];
+        if (!x || x.empty) { diff.push(`${s.key}:없음`); continue; }
+        placed += 1;
+        const nx = byKey[nextKey(s.key)];
+        const w = x.span + (nx && nx.xcell ? 1 : 0);
+        if (w === s.span) same += 1; else diff.push(`${s.key}:${s.span}→${w}`);
+      }
+      const real2 = new Set(sl.filter((s) => s.span === 2).map((s) => nextKey(s.key)));
+      const ghost = gs.filter((x) => x.empty && !x.xcell && real2.has(x.key)).length;
+      return { n: sl.length, placed, same, ghost, xcells: gs.filter((x) => x.xcell).length, diff: diff.slice(0, 5) };
+    };
+    const r106 = vsReal(p106), r079 = vsReal(p079);
+    ok('3.70 — 실물 PLAN 칸폭 그대로(R106W·R079W 컨마다 두 칸/한 칸 = 시트의 X·<45>) · 실물이 X 인 칸이 «빈자리» 로 서지 않는다', r106.same === r106.placed && r106.placed >= 188 && r106.ghost === 0 && r079.same === r079.placed && r079.placed >= 190 && r079.ghost === 0, JSON.stringify({ r106, r079 }));
+  }
   ok('실적·컨이 없으면 예외 없이 빈 템플릿(291 빈자리·컨 0)', gen0.total === 0 && gen0.decks.reduce((a, d) => a + d.slots.length, 0) === 291 && gen0.unplaced.length === 0);
+  ok('3.70 — 빈 템플릿의 빈자리에 자리 크기(sz 20·40)가 붙는다(조회창 «40피트 자리» 표시)', gen0.decks.flatMap((d) => d.slots).every((x) => x.empty && (x.sz === '20' || x.sz === '40')));
+  {
+    //  3.70 빈자리 조회 후보 — 검수사 «2대 이상 맞으면 맞는거 다 보여주고 고르게 해야 빠릅니다»
+    const C = M.rzorSlotCandidates;
+    const h1 = C({ containers: F.containers, q: '9765' });
+    ok('후보 — «9765» 두 대(SPSU2019765·LYGU4039765) · «2323» 한 대 · 한 자는 0', h1.length === 2 && h1.map((x) => x.cn).sort().join() === 'LYGU4039765,SPSU2019765' && C({ containers: F.containers, q: '2323' }).length === 1 && C({ containers: F.containers, q: '9' }).length === 0);
+    ok('후보 — 확정 자리가 있는 컨은 뺀다 · 안 실은 컨이 먼저 · 가상 자리(__) 는 없다',
+      C({ containers: F.containers, q: '9765', placed: new Set(['SPSU2019765']) }).map((x) => x.cn).join() === 'LYGU4039765' &&
+      C({ containers: F.containers, q: '9765', compMap: { LYGU4039765: { by: 'x' } } })[0].cn === 'SPSU2019765' &&
+      C({ containers: [{ cn: '__SLOT_1_2_9765' }, { cn: 'ABCD1239765', _slot: true }], q: '9765' }).length === 0 &&
+      C({ containers: [{ cn: '__SLOT_1_2_9765' }], q: '9765' }).length === 0 && C({ containers: [{ cn: 'ABCD1239765', _slot: true }], q: '9765' }).length === 0);
+    const lk = C({ containers: F.containers, q: '9765', placedAt: { SPSU2019765: { pos: 'D덱 1줄 18칸', how: 'sure' } } });
+    ok('후보 — 자리가 있는 컨(placedAt)은 빼지 않고 잠가 맨 뒤에 · 그 자리를 들고 온다', lk.length === 2 && lk[0].cn === 'LYGU4039765' && !lk[0].locked && lk[1].cn === 'SPSU2019765' && lk[1].locked && lk[1].at.pos === 'D덱 1줄 18칸');
+    ok('후보 — 전체 번호·소문자·공백도 찾는다 · 규격(sz)·예측 자리 표시', C({ containers: F.containers, q: ' spsu2019765 ' }).length === 1 && /^(20|40|45)$/.test(h1[0].sz) && C({ containers: F.containers, q: '9765', predPos: { SPSU2019765: 'D덱 1줄 15칸' } }).find((x) => x.cn === 'SPSU2019765').pred === 'D덱 1줄 15칸');
+  }
   ok('크레인 길 — N=45 → 7+8줄(D 10~12 는 1~7줄, 13~15 는 1~8줄) · N=36 → 5+7줄', (() => { const a = M.craneSlots(45), b = M.craneSlots(36); const rows = (arr, p) => new Set(arr.filter((x) => x[1] === p).map((x) => x[0])).size; return a.length === 45 && rows(a, 10) === 7 && rows(a, 13) === 8 && b.length === 36 && rows(b, 10) === 5 && rows(b, 13) === 7; })());
 
   console.log('■ ③ 엑셀 내보내기 — 마감텔리 양식으로 나가고, 같은 파서가 그대로 다시 읽는다');
@@ -147,7 +198,8 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
       at('await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector') > at('getEquipNumber())') &&
       at("await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber())") > at('await fbAssignDeckSlot');
   })());
-  ok('DeckPlanView — 예측 칸 탭 = loadHere · 자동 덱플랜의 빈자리 지정 = 목록에 있는 번호만 loadHere(감사 지적) · 올린 플랜의 빈자리는 종전대로 자리만', /if \(s\.pred\) \{[^\n]*\n\s*await loadHere\(slotKey, s\.cn\);/.test(dv) && /if \(plan\._gen\) \{[^\n]*\n\s*if \(!byCn\[cn\]\) \{ alert\([^\n]*\n\s*await loadHere\(slotKey, cn\); return;/.test(dv) && /await fbAssignDeckSlot\(voyageKey, mode, slotKey, \{ cn, by: inspector \|\| '', at: Date\.now\(\) \}\);\n\s*\}\}/.test(dv));
+  //  3.70: 빈자리는 브라우저 입력창 대신 조회창(setPick → rzorSlotCandidates 후보 → choosePick). 후보는 선적 목록에서만 나온다(목록 밖 번호가 완료가 안 되게 — 3.67-01 감사 지적 그대로).
+  ok('DeckPlanView — 예측 칸 탭 = loadHere · 빈자리 탭 = 조회창 · 고르면 자동 덱플랜은 loadHere, 올린 플랜은 자리만', /if \(s\.pred\) \{[^\n]*\n\s*try \{ await loadHere\(slotKey, s\.cn\); \}\n\s*catch \(e\) \{[^\n]*alert\(/.test(dv) && /openPick\(\{ slotKey, pos:/.test(dv) && /rzorSlotCandidates\(\{ containers, q: pq, placedAt, compMap, predPos \}\)/.test(dv) && /if \(!gen\) for \(const \[k, v\] of Object\.entries\(\(plan && plan\.assign\)/.test(dv) && /if \(plan\._gen\) \{ const ok = await loadHere\(pick\.slotKey, h\.cn\);/.test(dv) && /await fbAssignDeckSlot\(voyageKey, mode, pick\.slotKey, \{ cn: h\.cn, by: inspector \|\| '', at: Date\.now\(\) \}\);/.test(dv) && !/window\.prompt\(/.test(dv));
   ok('DeckPlanView — 확정 칸 재탭은 자리만 해제(완료 기록은 그대로) · 안내문·범례 «탭=선적»', /자리 확정을 해제할까요\? \(완료 기록은 그대로/.test(dv) && /\?예측\(탭=선적\)/.test(dv) && /누르면 그 자리에 <b>선적<\/b>/.test(dv));
   ok('컨 상세 [완료] 와 같은 함수·같은 인자 꼴(fbCompleteContainer(voyageKey, mode, cn, inspector, \'normal\', \'\', getEquipNumber()))', /fbCompleteContainer\(voyageKey, mode, c\.cn, inspector, 'normal', '', getEquipNumber\(\)\)/.test(src('src/components/ContainerDetailModal.jsx')));
   //  실제 firebase.js 를 메모리 스텁으로 돌려 «찍으면 완료 기록 + 자리» 가 남는지, 터미널 먼저 완료된 컨을 사람이 찍으면 사람 기록으로 바뀌는지, 조회만이면 막히는지

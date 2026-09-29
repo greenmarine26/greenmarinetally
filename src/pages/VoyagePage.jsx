@@ -987,8 +987,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const hints = [voyage?.info?.voy, voyage?.info?.voyage, voyage?.info?.callsign].filter(Boolean);
     const _rz = /RZOR|RIZHAO/i.test(`${vsl} ${voyageKey || ''}`) || isLoloShipByPolicy(vsl, extraPolicies, hints);
     if (!_rz) return null;
+    //  ★ 3.70 — 선적 리스트가 아직 없어도 덱플랜(빈 격자)을 그린다. 검수사 2026-09-30 «덱플랜은 항상 보여주는게 나을것 같습니다».
+    //    자리는 고정이다(36항차 실물 템플릿 291자리). 목록이 비면 전부 빈자리로 서고, 빈자리 조회창이 «리스트가 아직 없다» 고 알린다.
     const list = containersBase.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__'));
-    if (!list.length) return null;
     try {
       return buildRzorLoadingDeckPlan({ containers: list, termWork: sec.termWork || {}, bayWork: sec.bayWork || null,
                                        assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });   // 선적 항차(R106W) — info.voy 는 양하 항차(R106E)
