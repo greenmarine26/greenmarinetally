@@ -2952,7 +2952,7 @@ export function currentMirMood(voyages, heartbeat, now = Date.now(), pier) {
 
    재료 — 수집기(MailPilot 2.39 collector/yard.py)가 3분마다 올리는 RTDB `yard_status/{PCTC|PNCT}`(로그인 없는 두 정보서비스 페이지).
      PCTC { at, inCnt, outCnt, level(양호/혼잡/적체 — 터미널 자체 규칙 반입+반출 60/80), gate{GP,RF,DG,AK,MT}(반출입 대기), vssl{…}(본선 대기),
-            locked[블록](본선 작업으로 반출 불가), work[{blk,rt,cn,at}](야드 장비가 붙은 블록·마지막 놓인 양하 컨), ahead{h3,h4,h5:{g,v}}(추이) }
+            locked[블록](본선 작업으로 반출 불가), work[{blk,rt,cn,at}](야드 장비가 붙은 블록·마지막 놓인 양하 컨), ahead{h1~h5:{g,v}}(1~5시간 뒤 예상치) }
      PNCT { at, inCnt, outCnt, tatIn, tatOut(회전시간 분) } — 동방은 판정어·블록 자료를 안 준다. **지어내지 않는다.**
    자료는 화면이 넣어 준다 — 검수앱 App.jsx 가 구독해 setMirYard 로, 콘앱은 mirAsk 가 GET 해 ctx.yard 로(ctx.yard 가 있으면 그것이 먼저).
    ⚠ 순수 — 판정은 answerYard 한 벌. 검수앱·콘앱이 같은 답을 낸다. 우리 배 몫은 «블록에 마지막 놓인 컨»을 이 항차·전 항차 EDI 와 대조해 센다. */
@@ -3047,12 +3047,13 @@ function _ydPctc(kind, y, age, o, now) {
   for (const w of owned) { if (_isMine(w)) continue; const k = w.owner || '다른 배'; otherCnt[k] = (otherCnt[k] || 0) + 1; }
   const idleN = rts.filter((w) => !w.cn).length;   // 장비는 붙었는데 아직 놓인 컨이 없는 블록 — 셈이 어긋나지 않게 같이 말한다(2차 시뮬 8)
   const otherLine = Object.keys(otherCnt).sort((a, b) => (a === '다른 배') - (b === '다른 배')).map((k) => `${k} ${otherCnt[k]}대`).concat(idleN ? [`아직 안 놓인 ${idleN}대`] : []).join(' · ');
-  //  추이 — 블록 표의 «3·4·5시간 후» 열 합계. 검수사 «그건 그시간이후의 추이상황입니다». 0 인 쪽은 읽지 않는다(2차 시뮬 12).
-  //    ⚠ «일반·냉동» 머리글의 1·2 열은 실측상 1·2시간 뒤 추이로 보이나(본선 7→41→24→12→0→0) 검수사 확정 전이라 읽지 않는다 — 수집기는 h1·h2 도 적어 둔다(감사 4).
+  //  추이 — 블록 표의 시간대 열 합계. 검수사 «그건 그시간이후의 추이상황입니다». 0 인 쪽은 읽지 않는다(2차 시뮬 12).
+  //    3.69-02 — «일반·냉동» 머리글의 1·2 열도 1·2시간 뒤 예상치로 읽는다. 근거 — ① 냉동 블록은 1E·2E·3F(검수사 2026-09-29 20:05)인데 «냉동» 열 값은 3A·3B 같은 일반 블록에 있다
+  //    ② 같은 페이지 스크립트가 화물 종류 표 열 이름도 «현재·일반·냉동·3시간 후·4시간 후» 로 한 칸 밀어 달았다(이름 목록 돌려쓴 흔적) ③ 서버 키 GATE0~5·VSSL0~5 에서 3·4·5 = 3·4·5시간 후이니 1·2 = 1·2시간 후.
   const ah = y.ahead || {};
   //  검수사 2026-09-29 18:49 «3시간후 4시간 후는 예상치 입니다» · «3시간 후에는 몇대쯤 될것이다. 4시간 후에는 몇대쯤일것이다» — 예상치는 «몇 대쯤 될 것 같아요» 로 말한다(3.69-01).
-  const trendParts = ['h3', 'h4', 'h5'].map((h) => { const t = ah[h] || {}; const g = Number(t.g) || 0, v = Number(t.v) || 0; if (!g && !v) return ''; const parts = [].concat(g ? [`반출입 ${g}대`] : [], v ? [`본선 ${v}대`] : []); return `${h.slice(1)}시간 뒤엔 ${parts.join('·')}쯤`; }).filter(Boolean);
-  const trend = trendParts.length ? `예상 — ${trendParts.join(', ')} 될 것 같아요.` : '앞으로 3~5시간 예상치는 안 잡혀 있어요.';
+  const trendParts = ['h1', 'h2', 'h3', 'h4', 'h5'].map((h) => { const t = ah[h] || {}; const g = Number(t.g) || 0, v = Number(t.v) || 0; if (!g && !v) return ''; const parts = [].concat(g ? [`반출입 ${g}대`] : [], v ? [`본선 ${v}대`] : []); return `${h.slice(1)}시간 뒤엔 ${parts.join('·')}쯤`; }).filter(Boolean);
+  const trend = trendParts.length ? `예상 — ${trendParts.join(', ')} 될 것 같아요.` : '앞으로 1~5시간 예상치는 안 잡혀 있어요.';
   if (kind === 'count') return `${base} ${wait}`;
   if (kind === 'trend') return `${base} ${trend}`;
   if (kind === 'block') {
