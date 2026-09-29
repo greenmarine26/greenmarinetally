@@ -72,7 +72,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       cells: cellsOf(), vars: geo.replace(/\s/g, ''),
       //  진입점이 실제로 쓴 봉인번호(긴 번호로 바꾼 것 포함) — 디스크 픽스처와 다르다
       seals: (dom.window.__FX || {}).xraySeals || {},
-      html: (CHILD === 'A' || CHILD === 'D') ? ('<!doctype html>' + D.documentElement.outerHTML) : '',
+      html: (CHILD === 'A' || CHILD === 'D' || CHILD === 'F') ? ('<!doctype html>' + D.documentElement.outerHTML) : '',
       xcns: ((dom.window.__FX || {}).xcns) || [],
       matrix: D.querySelectorAll('.cpv2-cell').length,
       errs: errs.filter((e) => !/not wrapped in act|Warning:/i.test(e)).slice(0, 3),
@@ -89,8 +89,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     fs.unlinkSync(f);
     return j;
   };
-  let rA, rB, rC, rD, rE;
-  try { rA = run('A'); rB = run('B'); rC = run('C'); rD = run('D'); rE = run('E'); }
+  let rA, rB, rC, rD, rE, rF;
+  try { rA = run('A'); rB = run('B'); rC = run('C'); rD = run('D'); rE = run('E'); rF = run('F'); }
   catch (e) {
     //  ⛔ 못 그렸으면 «통과» 가 아니라 실패다 — 조용히 0항으로 끝나면 아무것도 증명하지 못한다.
     ok(false, '세 경로를 다 그려 읽었다', String((e && e.message) || e).slice(0, 200));
@@ -112,8 +112,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const longOnes = xcns.slice(1, 4).filter((cn) => A[cn] && /★[A-Z0-9-]{6,}/.test(A[cn].r4));
     ok(longOnes.length === 3, '긴 봉인번호(DJHN225094 류)도 칸에 다 적힌다',
        xcns.slice(1, 4).map((cn) => A[cn] ? `「${A[cn].r4}」${A[cn].r4cls.replace('bd-r4', '')}` : '없음').join(' · '));
-    ok(xcns.slice(1, 4).some((cn) => A[cn] && /x\d/.test(A[cn].r4cls)),
-       '길면 등급이 올라간다(줄여 담는다)', xcns.slice(1, 4).map((cn) => A[cn] && A[cn].r4cls).join(' · '));
+    //  ★ 3.69-04 — 등급 규칙: 14폭(카스피 칸 글자 덩어리) 안이면 다른 줄과 같은 선(''), 넘으면 칸 가운데(wide)·필요하면 줄인다.
+    //    종전 «8.5pt 10자 넘으면 x2» 문턱은 글자 크기를 칸에 맞추면서 없어졌다 — 규칙 자체를 긴 번호 세 칸에 대 본다.
+    const mw = (t) => { let w = 0; for (const ch of String(t || '')) w += ch.charCodeAt(0) > 0x2000 ? 2 : 1; return w; };
+    ok(xcns.slice(1, 4).every((cn) => A[cn] && ((mw(A[cn].r4) <= 14) === !/wide/.test(A[cn].r4cls))),
+       '14폭을 넘는 줄만 칸 가운데로 넓힌다(넘지 않으면 다른 줄과 같은 선)', xcns.slice(1, 4).map((cn) => A[cn] && `「${A[cn].r4}」${A[cn].r4cls}`).join(' · '));
     const rf = A[xcns[4]];
     ok(!!rf && rf.r4.includes('★') && rf.r4.includes('-18'), '리퍼 온도와 겹쳐도 둘 다 적는다', rf ? `「${rf.r4}」` : '');
   }
@@ -152,9 +155,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     if (!M2.MID_FIT) {
       ok(false, '폭 셈법을 검사에서 부를 수 있다(MID_FIT 내보내기)');
     } else {
-      ok(fit('★123456789') !== fit('A123456789'),
+      //  3.69-04: 문턱이 14폭(덩어리)이 됐다 — ★+13자(15폭)와 A+13자(14폭)가 갈려야 ★ 를 두 폭으로 센 것이다
+      ok(fit('★1234567890123') !== fit('A1234567890123'),
          '★ 를 반각으로 세지 않는다 — 같은 글자 수라도 등급이 다르다',
-         `★판 «${fit('★123456789')}» vs ASCII판 «${fit('A123456789')}»`);
+         `★판 «${fit('★1234567890123')}» vs ASCII판 «${fit('A1234567890123')}»`);
       ok(fit('123456') === '' && /x3/.test(fit('★DJHN225094 -23.5C') || ''),
          '짧은 번호는 그대로, 긴 번호+온도는 바닥 등급까지 줄인다',
          `「123456」→«${fit('123456')}» · 「★DJHN225094 -23.5C」→«${fit('★DJHN225094 -23.5C')}»`);
@@ -228,15 +232,19 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
           const k = [...el.children].filter((x) => x.tagName === 'DIV');
           const d = k[3]; if (!d) return;
           const isX = /★/.test(d.textContent) || d.classList.contains('xr');
-          const painted = getComputedStyle(d).backgroundColor === 'rgb(255, 224, 102)';
+          //  3.69-04: 노랑은 줄 상자가 아니라 ::before 띠(칸 폭 전체)로 칠한다
+          const bs = getComputedStyle(d, '::before');
+          const painted = bs.content !== 'none' && bs.backgroundColor === 'rgb(255, 224, 102)';
           if (painted && !isX) bad += 1;
         });
         out.yellowOnPlain = bad;
         if (yel[0]) {
-          const cs = getComputedStyle(yel[0]);
+          const cs = getComputedStyle(yel[0], '::before');
           out.yellowBg = cs.backgroundColor;
           out.yellowExact = (cs.printColorAdjust || cs.webkitPrintColorAdjust || '') === 'exact';
-        } else { out.yellowBg = '(없음)'; out.yellowExact = false; }
+          //  칸 폭 전체 띠인가 — 칸(.cpv2-cell · .bd-cell)을 기준으로 좌우 1.5pt(2px) 안쪽
+          out.yellowSpan = cs.position === 'absolute' && cs.left === '2px' && cs.right === '2px';
+        } else { out.yellowBg = '(없음)'; out.yellowExact = false; out.yellowSpan = false; }
       }
       document.querySelectorAll('.bd-cell-lines, .bd-cell.filled').forEach((el) => {
         const d = [...el.children].filter((x) => x.tagName === 'DIV')[3]; if (!d) return;
@@ -245,10 +253,25 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         const k = (d.className.match(/x\d/) || ['기본'])[0];
         out.cls[k] = (out.cls[k] || 0) + 1;
         out.inner = out.inner || d.clientWidth;
+        //  3.69-04: 줄 상자는 이제 14글자 폭이라 넓은 배에서도 좁다 — «가장 좁은 배» 는 칸 폭으로 판정한다(2차 감사)
+        out.cellW = out.cellW || ((el.closest('.cpv2-cell') || el).getBoundingClientRect().width);
         //  실제로 **적용된** 글꼴을 읽는다 — CSS 규칙을 지워도 초록이 뜨던 자리다
         const px = parseFloat(getComputedStyle(d).fontSize) || 0;
         if (px) out.minPt = Math.min(out.minPt, Math.round(px / 96 * 72 * 10) / 10);
-        if (d.scrollWidth > d.clientWidth + 0.5) out.over.push({ t, cls: d.className, sw: d.scrollWidth, cw: d.clientWidth });
+        //  3.69-04: 긴 4번째 줄은 줄 상자(덩어리 폭) 밖 양옆으로 일부러 넘친다 — 줄 상자가 아니라 **칸**과 글자를 맞댄다
+        const cellBox = (el.closest('.cpv2-cell') || el).getBoundingClientRect();
+        const rg = document.createRange(); rg.selectNodeContents(d); const tr = rg.getBoundingClientRect();
+        if (tr.left < cellBox.left - 0.5 || tr.right > cellBox.right + 0.5) out.over.push({ t, cls: d.className, sw: Math.round(tr.width), cw: Math.round(cellBox.width) });
+      });
+      //  다섯 줄 전부 — 칸 밖으로 나가는 글자가 하나도 없어야 한다(3.69-04 글자 크기를 칸에 맞춘 판의 핵심)
+      out.overAll = [];
+      document.querySelectorAll('.bd-cell-lines, .bd-cell.filled').forEach((el) => {
+        const cellBox = (el.closest('.cpv2-cell') || el).getBoundingClientRect();
+        [...el.children].filter((x) => x.tagName === 'DIV').forEach((d) => {
+          if (!d.textContent.trim()) return;
+          const rg = document.createRange(); rg.selectNodeContents(d); const tr = rg.getBoundingClientRect();
+          if (tr.left < cellBox.left - 0.5 || tr.right > cellBox.right + 0.5 || tr.top < cellBox.top - 0.5 || tr.bottom > cellBox.bottom + 0.5) out.overAll.push(d.textContent.trim());
+        });
       });
       return out;
     });
@@ -256,7 +279,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     try { fs.unlinkSync(tmp); } catch (e) {}
     ok(rD.matrix > 0, `매트릭스 격자를 그렸다(사전을 깔았다) — .cpv2-cell ${rD.matrix}칸`, `${rD.matrix}칸 — 사전을 안 깔면 폭이 2.2배 넓은 폴백 격자로 재게 된다`);
     ok(r.n > 0, `4번째 줄에 글자가 있는 칸 ${r.n}개를 쟀다`, `${r.n}개`);
-    ok(r.inner > 0 && r.inner < 110, `칸 안폭이 실선 수준이다 (${r.inner}px)`, `${r.inner}px — 79px 부근이라야 진짜 좁은 배다`);
+    ok(r.cellW > 80 && r.cellW < 90, `가장 좁은 배의 칸이다 (칸 폭 ${Math.round(r.cellW * 10) / 10}px)`, `${r.cellW}px — MCSC 87px 부근이라야 진짜 좁은 배다`);
     ok(!/x4/.test(JSON.stringify(r.cls)), '6pt 아래 등급(x4)을 안 쓴다', JSON.stringify(r.cls));
     ok(r.minPt >= 6, `가장 작은 글꼴이 ${r.minPt}pt — 6pt 바닥을 지킨다`, `${r.minPt}pt`);
     ok(r.yellowOnXray === r.nX && r.yellowOnPlain === 0 && r.nX > 0,
@@ -270,7 +293,77 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
        r.oddGeo.length ? `다른 칸 ${r.oddGeo.join(', ')}` : `X ${r.nX} · 그냥 ${r.nPlain}`);
     ok(r.over.length === 0, '그 줄이 한 칸도 안 넘친다(넘치면 조용히 잘린다)',
        r.over.slice(0, 3).map((x) => `「${x.t}」 ${x.cls} ${x.sw}>${x.cw}`).join(' · '));
+    ok(r.overAll.length === 0, '가장 좁은 배(MCSC 87px)에서 칸 안 다섯 줄 글자가 모두 칸 안에 있다', r.overAll.slice(0, 3).join(' · '));
+    ok(r.yellowSpan, '노란 띠가 칸 폭 전체(좌우 1.5pt 안쪽)에 깔린다', '줄 상자만 칠하면 14글자 폭으로 좁아진다');
     console.log(`     등급 분포 ${JSON.stringify(r.cls)}`);
+
+    //  ★ 3.69-04 — 바탕 8.5pt 고정 칸 격자(PCSZ 116px)에서 넓힌(wide)·줄인(x2) 4번째 줄을 잰다(2차 감사 변이 시험 세 건을 잡는 자리).
+    //    ① 줄인 칸이 실제로 생겼는가 ② 그 칸의 다섯 줄 높이·자리가 그냥 칸과 같은가(3.46-01 — 줄 간격이 «수» 면 여기서 걸린다)
+    //    ③ 넓힌 칸의 컨번호 줄 왼쪽 선이 그냥 칸과 같은가(.wide 규칙이 빠지면 덩어리가 밀린다) ④ 칸 밖 글자 0
+    //    ⑤ 노란 띠를 **픽셀로** 본다 — 계산 스타일이 맞아도 칸 바탕 밑에 깔리면(isolation 빠짐) 종이에 안 나온다.
+    console.log('\n── 크로뮴 실측 (바탕 8.5pt 고정 칸 PCSZ 116px · 넓힌 줄·줄인 줄)');
+    const tmpF = path.join('/dev/shm/hometmp', `_bdxF_${process.pid}.html`);
+    fs.writeFileSync(tmpF, rF.html);
+    let brF = null;
+    let f = null, yel = { n: 0, w: 0 };
+    try {
+    brF = await pw.chromium.launch({ executablePath: CHROME });
+    const pf = await brF.newPage({ viewport: { width: Math.round((297 - 6) / 25.4 * 96), height: 900 } });
+    await pf.goto('file://' + tmpF);
+    await pf.emulateMedia({ media: 'print' });
+    f = await pf.evaluate(() => {
+      const rd = (x) => Math.round(x * 100) / 100;
+      const R = (d) => { const rg = document.createRange(); rg.selectNodeContents(d); return rg.getBoundingClientRect(); };
+      const out = { n: 0, wide: 0, shrunk: 0, nX: 0, oddGeo: [], oddLeft: [], overAll: [], fs: '', clip: null, cellW: 0 };
+      const rows = [];
+      document.querySelectorAll('.bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines').forEach((el) => {
+        const k = [...el.children].filter((x) => x.tagName === 'DIV'); if (k.length !== 5) return;
+        const cn = (k[1].textContent || '').trim(); if (!/^[A-Z]{4}\d{7}$/.test(cn)) return;
+        const cell = el.closest('.cpv2-cell').getBoundingClientRect();
+        out.n += 1; out.cellW = out.cellW || cell.width; out.fs = out.fs || getComputedStyle(el).fontSize;
+        const xr = k[3].classList.contains('xr'); if (xr) out.nX += 1;
+        const wide = /wide/.test(k[3].className); if (wide) out.wide += 1;
+        const shr = /x[23]/.test(k[3].className); if (shr) out.shrunk += 1;
+        rows.push({ cn, xr, wide, shr,
+          key: JSON.stringify([[rd(cell.width), rd(cell.height)], k.map((d) => rd(d.getBoundingClientRect().height)), k.map((d) => rd(d.getBoundingClientRect().top - cell.top))]),
+          left2: rd(R(k[1]).left - cell.left) });
+        k.forEach((d) => { if (!d.textContent.trim()) return; const r = R(d);
+          if (r.left < cell.left - 0.5 || r.right > cell.right + 0.5 || r.top < cell.top - 0.5 || r.bottom > cell.bottom + 0.5) out.overAll.push(d.textContent.trim()); });
+        if (!out.clip && xr && wide) { const b4 = k[3].getBoundingClientRect(); out.clip = { x: cell.left, y: b4.top, width: cell.width, height: 4 }; }
+      });
+      const plain = rows.filter((x) => !x.xr);
+      const keys = new Set(plain.map((x) => x.key)); const lefts = new Set(plain.map((x) => x.left2));
+      out.oddGeo = rows.filter((x) => x.shr && !keys.has(x.key)).slice(0, 3).map((x) => x.cn);
+      out.oddLeft = rows.filter((x) => x.wide && !lefts.has(x.left2)).slice(0, 3).map((x) => x.cn);
+      out.nPlain = plain.length; out.lefts = [...lefts];
+      return out;
+    });
+    if (f.clip) {
+      //  칸이 화면 아래(첫 쪽 밖)에 있어도 찍히게 전 페이지 기준으로 자른다 — 화면 밖 clip 은 오류로 멈춘다
+      const shot = await pf.screenshot({ clip: f.clip, fullPage: true, timeout: 60000 });
+      yel = await pf.evaluate(async (b64) => {
+        const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 1, img.width, 1).data; let n = 0;   //  줄 윗단 1px — 글자 잉크가 닿지 않는 높이
+        for (let i = 0; i < img.width; i++) { const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2]; if (Math.abs(r - 255) < 14 && Math.abs(gg - 224) < 16 && Math.abs(b - 102) < 26) n += 1; }
+        return { n, w: img.width };
+      }, shot.toString('base64'));
+    }
+    } catch (e) {
+      //  ⛔ 여기서 멈추거나 죽으면 «통과» 가 아니라 실패다(건너뜀은 통과가 아니다 — 규범 §4-3)
+      ok(false, '경로 F 크로뮴 실측을 끝까지 돌렸다', String((e && e.message) || e).slice(0, 200));
+      f = f || { n: 0, wide: 0, shrunk: 0, oddGeo: [], oddLeft: [], overAll: [], lefts: [], cellW: 0, fs: '' };
+    }
+    if (brF) { try { await brF.close(); } catch (e) {} }
+    try { fs.unlinkSync(tmpF); } catch (e) {}
+    ok(f.n > 500 && Math.round(f.cellW) === 116, `PCSZ 고정 칸 116px 격자를 그렸다(${f.n}칸 · 바탕 ${f.fs})`, `${f.n}칸 · 칸 ${f.cellW}px`);
+    ok(f.wide >= 3, `14폭을 넘는 4번째 줄을 칸 가운데로 넓힌 칸이 있다(${f.wide}칸)`, `${f.wide}칸`);
+    ok(f.shrunk >= 2, `칸 폭에 안 들어 글자를 줄인 칸이 있다(${f.shrunk}칸) — 줄 자리 검사가 헛돌지 않는다`, `${f.shrunk}칸`);
+    ok(f.shrunk > 0 && f.oddGeo.length === 0, '⛔ 줄인 칸의 칸 크기·다섯 줄 높이·자리가 그냥 칸과 **똑같다**(3.46-01)', `다른 칸 ${f.oddGeo.join(', ')}`);
+    ok(f.wide > 0 && f.oddLeft.length === 0 && f.lefts.length === 1, '넓힌 칸도 컨번호 줄 왼쪽 선이 그냥 칸과 같다(덩어리가 안 밀린다)', `다른 칸 ${f.oddLeft.join(', ')} · 그냥 칸 왼쪽 선 ${JSON.stringify(f.lefts)}`);
+    ok(f.overAll.length === 0, '칸 밖으로 나간 글자가 없다(PCSZ 전 칸)', f.overAll.slice(0, 3).join(' · '));
+    ok(yel.w > 0 && yel.n >= yel.w - 8, `노란 띠가 종이에 칸 폭 전체로 찍힌다(픽셀 ${yel.n}/${yel.w})`, `노란 픽셀 ${yel.n}/${yel.w} — 칸 바탕 밑에 깔리면 0 이다`);
   }
 
   ok(rA.errs.length === 0 && rB.errs.length === 0, '콘솔에 오류가 없다', rA.errs.concat(rB.errs).slice(0, 2).join(' | '));

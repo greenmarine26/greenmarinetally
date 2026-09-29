@@ -10,6 +10,7 @@ import PrintHubModal from '../src/components/PrintHubModal.jsx';
 import fx from './fixtures/xrayseal_pcsz.json';
 import mcsc from './fixtures/podpat_mcsc.json';
 import hub from './fixtures/printhub_kbtr.json';
+import pcszDict from './fixtures/bdx_dict_pcsz.json';   // 3.69-04: PCSZ 실사전(RTDB ship_bay_dict_v3/PCSZ, 2026-09-30 읽기) — 고정 칸 116×64px · 8.5pt
 
 //  ⚠ **가장 좁은 배로 잰다.** 칸 폭은 uniformCell 이 정하고 실측 최소는 MCSC 의 87px(안폭 79px)다.
 //    사전을 안 깔면 매트릭스 격자(.cpv2-cell)가 아예 안 그려지고 폴백 격자(안폭 174px)로 재게 된다 —
@@ -64,6 +65,26 @@ if (WHICH === 'D') {
       voyageInfo: { vsl: 'MCSC', vslFull: (mcsc.dict && mcsc.dict.name) || 'MCSC', voy: '1', callsign: (mcsc.dict && mcsc.dict.callsign) || '' },
       shipName: (mcsc.dict && mcsc.dict.name) || 'MCSC', shipImo: (mcsc.dict && mcsc.dict.imo) || '',
       voyageKey: 'MCSC_1', xrayMap: xl, xraySeals: xs, onClose: () => {},
+    })
+  );
+}
+//  경로 F — ★ 3.69-04 **바탕 글자가 6pt 보다 큰 고정 칸 격자**(PCSZ 116px · 8.5pt). 경로 D(MCSC)는 바탕이 이미 6pt 라
+//    4번째 줄을 더 줄일 여지가 없어 «줄인 칸의 줄 자리» 와 «14폭을 넘는 줄의 가운데 두기» 를 못 잰다(2차 감사 변이 시험).
+//    실데이터(PCSZ 2620E 608대 · X-RAY 12대)에 실봉인 길이(10·12자)와 리퍼 온도를 얹어 넓히고(wide) 줄이는(x2) 칸을 만든다.
+if (WHICH === 'F') {
+  window.__fbShipBayDict = { PCSZ: pcszDict };
+  const frows = rows.map((r) => Object.assign({}, r));
+  const xl = {}; const xs = {};
+  const FSEALS = ['DJHN225094-1', 'DJHN225094', '523533'];
+  xcns.forEach((cn, i) => { xl[cn] = { at: 1 }; xs[cn] = { seal: FSEALS[i % 3] }; });
+  frows.forEach((r) => { if (xl[r.cn] && !r.imdg) r.tmp = '-18.5'; });
+  window.__FX = { xrayList: xl, xraySeals: xs, xcns };
+  createRoot(document.getElementById('rootA')).render(
+    React.createElement(PrintableBayDetail, {
+      containers: frows, mode: 'discharge',
+      voyageInfo: { vsl: 'PCSZ', vslFull: 'PACIFIC SHENZHEN', voy: '2620E', callsign: pcszDict.callsign || '' },
+      shipName: 'PACIFIC SHENZHEN', shipImo: pcszDict.imo || '',
+      voyageKey: 'PCSZ_2620E', xrayMap: xl, xraySeals: xs, onClose: () => {},
     })
   );
 }

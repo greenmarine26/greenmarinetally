@@ -123,30 +123,62 @@ export function buildBayPages(bays, summary) {
   return pages;
 }
 
-//  ★ 3.46 — 4번째 줄이 칸을 넘지 않게 줄여 담는 등급. 칸 폭은 78~118px 이고 8.5pt Courier 한 글자 ≈ 6.8px 라
-//    기본 8.5pt 로는 10자까지가 한계다(크로뮴 A4 가로 실측). 전각(★·℃)은 두 폭으로 센다.
-//    ⚠ .bd-fill 은 overflow:hidden 이라 넘치면 **조용히 잘린다** — 등급이 그것을 막는 장치다.
+//  ★ 3.69-04 — **칸 안 글자 크기는 칸 크기로 정한다(카스피 규칙).**
+//    검수사 2026-09-30 «좌우상하 여백도 카스피랑 같게 만들어 주세요» · «동적변경이 필요하다고. 아마도 카스피는 동적 변경 같습니다»
+//    · «카스피 폴더를 연결 시켰으니 최대한 똑같이 맞춰 주셨으면 합니다» → 수정안 «안 1»(01:28 확정).
+//    카스피 베이상세 26척 실측(카스피 폴더 24척 43개 PDF · 마감텔리 DXQD·TMPZ·XTPG·OBWH · 메일 SWTD) —
+//    «14글자 × 5줄 덩어리가 칸 안에 좌우 합 3pt, 위아래 합 1.5pt 이상을 남기는 가장 큰 0.5pt 단위 크기» 가 26척 모두 맞았다.
+//    줄 간격은 글자의 1.067배, Courier 한 글자는 0.6em. 덩어리는 칸 한가운데, 다섯 줄은 같은 왼쪽 선에서 시작한다.
+//    ⚠ 칸 크기는 그대로다(3.46-01 «셀크기는 절대 변경하면 안됩니다») — 글자 크기만 칸에 맞춘다.
+//    우리 칸 5종 → 118·116px 8.5pt · 104px 7.5pt · 95px 7pt · 87px 6pt (6pt 바닥은 칸 최소 78×46px 에서도 안 걸린다).
+export const BD_BLOCK_CH = 14;      // 카스피 칸 글자 덩어리 폭 — 3줄 «SKR F22.3 DC20» 이 14자
+export const BD_LINE_K = 1.067;     // 줄 간격 ÷ 글자 크기(카스피 실측 9→9.6 · 8→8.52 · 7→7.56 · 6→6.36)
+export const BD_FALLBACK_PT = 7;    // 폴백 격자(사전 단면 없는 배) 글자 — 칸 크기가 쪽마다 달라 계산하지 않는다(종전 값)
+export const bdCellPt = (wPx, hPx) => {
+  const W = (Number(wPx) || 87) * 0.75, H = (Number(hPx) || 48) * 0.75;
+  const f05 = (x) => Math.floor(x * 2 + 1e-6) / 2;
+  return Math.max(6, Math.min(f05((W - 3) / (BD_BLOCK_CH * 0.6)), f05((H - 1.5) / (5 * BD_LINE_K))));
+};
+//  ★ 3.46 · 3.69-04 — 4번째 줄(X-RAY 봉인번호 · IMDG · 리퍼 온도)이 칸을 넘으면 overflow 에 **조용히 잘린다**.
+//    14폭 안이면 다른 줄과 같은 왼쪽 선. 넘으면 칸 한가운데(칸 폭 − 3pt 안)에 두고, 그래도 안 들면 0.5pt씩 줄인다.
+//    ⚠ **6pt 아래로는 안 줄인다.** 3.45 가 검수 리스트에서 세운 바닥 — «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다»
+//    (generateXrayListHTML 주석). 6pt 에서도 안 들면 **★ 표식을 뗀다**(번호가 자료이고 별은 장식이다).
+//    전각(★·℃)은 두 폭으로 센다(윈도우 맑은고딕·Segoe UI Symbol 에서 전각으로 그려진다).
 export const MID_W = (t) => { let w = 0; for (const ch of String(t || '')) w += ch.charCodeAt(0) > 0x2000 ? 2 : 1; return w; };
-//  ⚠ **6pt 아래로는 안 줄인다.** 3.45 가 검수 리스트에서 세운 바닥을 여기서도 지킨다 —
-//    이 저장소는 «6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다» 고 확정했다(generateXrayListHTML 주석).
-//    그래서 등급은 x3(6.3pt)이 끝이고, 그래도 안 들면 **★ 표식을 뗀다**(번호가 자료이고 별은 장식이다).
-//    실측(크로뮴 A4 가로 · 가장 좁은 배 MCSC 칸 87px · 안폭 79px) — 8.5pt 10자 · 7.2pt 13자 · 6.3pt 16자.
-//  ⚠ 줄이는 정도는 **그 배의 칸 폭**에 맞춘다. 고정 문턱을 쓰면 칸이 넓은 배(ATPR 116px)에서도
-//    가장 좁은 배(87px) 기준으로 줄여 **필요 없이 작게** 나온다(실측 — ATPR 리퍼 4칸이 6.3pt 로 떨어졌다).
-//    Courier 는 한 글자가 0.6em 이고 자간이 등급마다 다르다. 안폭 = 칸 폭 − 8px(테두리·여백, 87px 에서 79px 실측).
-const MID_PT = [8.5, 7.2, 6.3];     // 기본 · x2 · x3 — 6pt 아래로는 안 내려간다
-const MID_LS = [0.7, 0.1, -0.45];   // ⚠ CSS 의 letter-spacing 과 같은 값이어야 한다 — 어긋나면 ★ 를 필요보다 일찍 뗀다
-const MID_CAP = (cellW, i) => Math.floor(((cellW || 87) - 8) / (MID_PT[i] * 96 / 72 * 0.6 + MID_LS[i]));
-export const MID_FIT = (t, cellW) => {
+const midAvail = (cellW) => (Number(cellW) || 87) * 0.75 - 3;   // 칸 폭(pt) − 좌우 1.5pt
+export const MID_PT_OF = (t, cellW, pt) => {
+  const base = Number(pt) || bdCellPt(cellW, null);
   const w = MID_W(t);
-  for (let i = 0; i < MID_PT.length; i++) if (w <= MID_CAP(cellW, i)) return i ? ` x${i + 1}` : '';
-  return ' x3';   // 바닥 — 여기서도 안 들면 아래에서 ★ 를 뗀다
+  if (w <= BD_BLOCK_CH) return base;
+  let p = base;
+  while (p > 6 && w * 0.6 * p > midAvail(cellW) + 1e-6) p -= 0.5;
+  return Math.max(6, p);
+};
+//  등급 — '' 덩어리 안 · ' wide' 칸 가운데(같은 크기) · ' wide x2' 줄였다 · ' wide x3' 6pt 바닥(여기서도 안 들면 ★ 를 뗀다)
+export const MID_FIT = (t, cellW, pt) => {
+  const base = Number(pt) || bdCellPt(cellW, null);
+  if (MID_W(t) <= BD_BLOCK_CH) return '';
+  const p = MID_PT_OF(t, cellW, base);
+  const fits = MID_W(t) * 0.6 * p <= midAvail(cellW) + 1e-6;
+  if (p <= 6 && (p < base || !fits)) return ' wide x3';
+  return p < base ? ' wide x2' : ' wide';
+};
+//  3.69-04 이전 등급 — **사전에 칸 수(deckCells)가 없어 칸 폭이 글자로 정해지는 매트릭스 격자(bd-uniform 아님)** 전용.
+//    그 격자는 글자열·글꼴이 바뀌면 칸 폭이 바뀐다(2차 감사 실측 23척 93.2 → 97.5px) — «셀크기는 절대 변경하면 안됩니다».
+//    그래서 그 격자만 3.69-03 그대로(8.5 · 7.2 · 6.3pt 등급, 자간 0.7px, 줄1 양끝 · 줄3 3등분) 둔다.
+const LEGACY_PT = [8.5, 7.2, 6.3];
+const LEGACY_LS = [0.7, 0.1, -0.45];   // ⚠ 아래 CSS(.bd-cargo-wrap .cpv2-cell .bd-r4.x2·x3)의 letter-spacing 과 같은 값
+const LEGACY_CAP = (cellW, i) => Math.floor(((cellW || 87) - 8) / (LEGACY_PT[i] * 96 / 72 * 0.6 + LEGACY_LS[i]));
+const midFitLegacy = (t, cellW) => {
+  const w = MID_W(t);
+  for (let i = 0; i < LEGACY_PT.length; i++) if (w <= LEGACY_CAP(cellW, i)) return i ? ` x${i + 1}` : '';
+  return ' x3';
 };
 
 // 컨테이너 4-5줄 텍스트 포맷
 // M4.9: 모든 입력 String 변환 + try-catch로 방어 (한 셀 에러가 전체 페이지 크래시 방지)
-export function formatCellParts(c, cellW) {
-  // V8.25-04: 셀 5줄 분배 렌더용 — 토큰 단위로 분리(줄1 양끝, 줄3 3등분).
+export function formatCellParts(c, cellW, pt, legacy = false) {
+  // V8.25-04: 셀 5줄 분배 렌더용 — 토큰 단위로 분리. ★ 3.69-04: 1·3줄은 카스피처럼 한 줄 글자열(line1·line3)로 그린다.
   try {
     const pol = String(c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
     const pod = String(c.pod || '').replace(/^KR/, '').slice(0, 3) || '   ';
@@ -179,19 +211,25 @@ export function formatCellParts(c, cellW) {
     //  DG·리퍼와 겹치면 **둘 다** 적는다(검수 리스트에서 검수사가 확정한 규칙과 한 벌).
     //    겹쳐서 길어진 줄은 아래 midCls 등급으로 줄여 담는다 — 잘라 버리지 않는다.
     let mid = [_xs, _mid0].filter(Boolean).join(' ');
-    //  바닥(6.3pt)에서도 안 들면 ★ 를 떼어 한 글자를 번다 — 잘라서 번호를 잃는 것보다 낫다.
-    if (_xs && MID_W(mid) > MID_CAP(cellW, MID_PT.length - 1)) mid = [_xs.replace('★', ''), _mid0].filter(Boolean).join(' ');
-    const midCls = MID_FIT(mid, cellW);
+    //  6pt 바닥(옛 격자는 6.3pt)에서도 안 들면 ★ 를 떼어 한 글자를 번다 — 잘라서 번호를 잃는 것보다 낫다.
+    const tooLong = legacy ? MID_W(mid) > LEGACY_CAP(cellW, LEGACY_PT.length - 1) : MID_W(mid) * 0.6 * 6 > midAvail(cellW) + 1e-6;
+    if (_xs && tooLong) mid = [_xs.replace('★', ''), _mid0].filter(Boolean).join(' ');
+    const midCls = legacy ? midFitLegacy(mid, cellW) : MID_FIT(mid, cellW, pt);
+    const midPt = (!legacy && midCls) ? MID_PT_OF(mid, cellW, pt) : null;
     const bayInt = parseInt(c.bay, 10);
     const bay = Number.isFinite(bayInt) && bayInt >= 100 ? String(bayInt)
       : String(Number.isFinite(bayInt) ? bayInt : 0).padStart(2, '0');
     const row = String(c.row ?? '00').padStart(2, '0');
     const tier = String(c.tier ?? '00').padStart(2, '0');
     const pos = `....${bay}${row}${tier}`;
-    return { left1, right1, cn, carrier, fewt, type, mid, midCls, midXray: !!_xs, pos };
+    //  ★ 3.69-04 — 카스피 글자열 그대로(26척 실측 13,267칸). 1줄 «PTK/PTK*DLC» · «KAN/   *VNS»(11자),
+    //    3줄 «SKR F22.3 DC20» — 무게는 4칸 오른쪽 맞춤(«F 4.4»). 종전(V8.25-04)은 양끝·세 토막으로 벌려 줄마다 시작 자리가 달랐다.
+    const line1 = `${left1.padEnd(7)}${right1}`;
+    const line3 = `${carrier.padEnd(3)} ${fe}${wt.padStart(4)} ${type}`;
+    return { left1, right1, line1, cn, carrier, fewt, type, line3, mid, midCls, midPt, midXray: !!_xs, pos };
   } catch (e) {
     console.error('[formatCellParts] error', e, c);
-    return { left1: '', right1: '', cn: String((c && c.cn) || ''), carrier: '', fewt: '', type: '', mid: '', midCls: '', midXray: false, pos: '' };
+    return { left1: '', right1: '', line1: '', cn: String((c && c.cn) || ''), carrier: '', fewt: '', type: '', line3: '', mid: '', midCls: '', midPt: null, midXray: false, pos: '' };
   }
 }
 
@@ -433,13 +471,13 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const c = cellMap[`${t}-${r}`];
     if (!c) return <div key={`${t}-${r}`} className="bd-cell empty"></div>;
     //  3.46-01: 폴백 격자는 균일 칸 폭이 없다 — 가장 좁은 배 기준으로 보수적으로 줄인다(잘리는 쪽보다 낫다).
-    const p = formatCellParts(c, null);
+    const p = formatCellParts(c, null, BD_FALLBACK_PT);
     return (
       <div key={`${t}-${r}`} className="bd-cell filled">
-        <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
+        <div className="bd-r1">{p.line1}</div>
         <div className="bd-r2">{p.cn}</div>
-        <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
-        <div className={`bd-r4${p.midCls || ''}${p.midXray ? ' xr' : ''}`}>{p.mid || '\u00A0'}</div>
+        <div className="bd-r3">{p.line3}</div>
+        <div className={`bd-r4${p.midCls || ''}${p.midXray ? ' xr' : ''}`} style={p.midPt ? { fontSize: `${p.midPt}pt` } : undefined}>{p.mid || '\u00A0'}</div>
         <div className="bd-r5">{p.pos}</div>
       </div>
     );
@@ -456,7 +494,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const c = cellMap[`${String(tier).padStart(2, '0')}-${cell.rowLbl}`];
     if (!c) return null; // 빈 active 슬롯 — 테두리만, 내용 없음
     //  3.46-01: 이 배의 실제 칸 폭을 넘겨, 넓은 배에서 필요 없이 작게 줄이지 않는다.
-    const p = formatCellParts(c, uniformCell ? uniformCell.w : null);
+    //  ★ 3.69-04: 고정 칸 격자(uniformCell)만 카스피 배치. 없으면 칸 폭이 글자로 정해지므로 3.69-03 그대로(legacy).
+    const legacy = !uniformCell;
+    const p = formatCellParts(c, uniformCell ? uniformCell.w : null, uniformCell ? uniformCell.fs : null, legacy);
     return (
       <div className="bd-cell-lines">
         {/* ── TallyOne 2.98: **베이상세는 종이 원본처럼 도형으로 그린다.** (검수사 확정 2026-08-31) ──
@@ -495,10 +535,10 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
                 카스피 FR 표기법 = 셀 좌우 삼각형 그것뿐이다. */}
           </svg>
         )}
-        <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
+        {legacy ? <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div> : <div className="bd-r1">{p.line1}</div>}
         <div className="bd-r2">{p.cn}</div>
-        <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
-        <div className={`bd-r4${p.midCls || ''}${p.midXray ? ' xr' : ''}`}>{p.mid || '\u00A0'}</div>
+        {legacy ? <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div> : <div className="bd-r3">{p.line3}</div>}
+        <div className={`bd-r4${p.midCls || ''}${p.midXray ? ' xr' : ''}`} style={p.midPt ? { fontSize: `${p.midPt}pt` } : undefined}>{p.mid || '\u00A0'}</div>
         <div className="bd-r5">{p.pos}</div>
       </div>
     );
@@ -549,6 +589,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
           style={uniformCell ? {
             '--bdc-w': `${uniformCell.w}px`,
             '--bdc-h': `${uniformCell.h}px`,
+            '--bdc-fs': `${uniformCell.fs}pt`,
             '--bdc-gc': String(Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0, 1)),
           } : undefined}
         >
@@ -831,7 +872,8 @@ export default function PrintableBayDetail({
     //    자리가 모자라면 종전 상한이 먼저 걸린다 — 넘치지 않는다. 5줄이 들어갈 최소 46px 는 지킨다.
     const hFit = Math.floor(655 / Math.max(rowsMax, 1));
     const h = Math.max(46, Math.min(84, hFit, Math.round(w * BD_CELL_ASPECT)));
-    return { w, h };
+    //  ★ 3.69-04: 칸 안 글자 크기 — 카스피 규칙(bdCellPt). 칸 크기는 위 그대로다.
+    return { w, h, fs: bdCellPt(w, h) };
   }, [allPages, dictBaysSummary]);
 
   // V7.98-13: 화면은 항상 전체 베이를 빠짐없이 보여준다 (빈자리도 자리 — 양하/선적 대상이
@@ -1009,6 +1051,16 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-cell .bd-oog rect { fill: none; stroke: #000; stroke-width: 0.8; vector-effect: non-scaling-stroke; }
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; font-size: 8pt; font-family: 'Courier New', monospace; line-height: 1.15em; align-items: stretch; justify-content: space-evenly; }   /* ★ 3.46-01: «수»가 아니라 «길이» — 아래 주석 */
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: 100%; padding: 0; }   /* V8.25-05: text-align 제거 — 줄별 정렬(bd-r2 좌/ bd-r4·r5 중앙)이 살도록 */
+        /*  ★ 3.69-04 — 카스피 칸 안 배치(26척 실측) — **고정 칸 격자(bd-uniform)에만** 건다.
+            14글자 폭 덩어리 한 열을 칸 한가운데에 놓고, 다섯 줄은 그 열의 같은 왼쪽 선에서 시작한다.
+            글자 크기는 칸 크기로 계산한 --bdc-fs(bdCellPt). 줄 간격은 «길이»(글자 × 1.067) — 3.46-01: 4번째 줄 글꼴이 작아져도 줄 자리는 안 움직인다.
+            열 폭 = 14글자(줄마다 최소 폭) ~ 칸 폭 − 3pt(fit-content) — 컨번호 없는 부킹 자리(«__SLOT_…»)처럼 줄이 비정상으로 길어도
+            덩어리가 칸 밖으로 밀리지 않고 좌우 1.5pt 를 남긴다(긴 줄 끝만 잘린다 · 2차 감사).
+            isolation — X-RAY 노란 띠(::before, z-index −1)가 흰 칸 바탕 위·글자 아래에 그려지게. 이것이 빠지면 띠가 칸 바탕 밑에 깔려 안 보인다.
+            ⚠ 사전에 칸 수(deckCells)가 없어 칸 폭이 글자로 정해지는 격자(bd-uniform 아님)에는 걸지 않는다 — 3줄이 14자가 되면
+              칸이 93.2px → 97.5px 로 넓어진다(2차 감사 실측 23척). «셀크기는 절대 변경하면 안됩니다». */
+        .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { display: grid; grid-template-columns: fit-content(calc(100% - 3pt)); justify-content: safe center; align-content: safe center; font-size: var(--bdc-fs, 8pt); line-height: calc(var(--bdc-fs, 8pt) * ${BD_LINE_K}); isolation: isolate; }
+        .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > div { white-space: pre; width: auto; min-width: ${BD_BLOCK_CH}ch; }   /* pre — 카스피 글자열의 빈칸(«KAN/   *VNS» · «F 4.4») 그대로 */
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 7.5pt; color: inherit; }
         /* ── V8.98-14: 카스피식 고정격자 (bd-uniform) ─────────────────────────
@@ -1047,7 +1099,7 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-tier-row .cpv2-cell .bd-oog { left: calc(-100% + 3px); top: calc(-100% + 3px); width: calc(300% - 6px); height: calc(200% - 4px); }
         .bd-cargo-wrap .cpv2-row-labels, .bd-cargo-wrap .cpv2-tier-labels { color: #000; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell.bd-fill { padding: 0; }
-        .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { padding: 1px 3px; box-sizing: border-box; }
+        .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { padding: 0; box-sizing: border-box; }   /* 3.69-04: 여백은 덩어리 가운데 놓기가 만든다(카스피와 같은 계산) */
         .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 16px; }
         .bd-cargo-wrap.bd-uniform .cpv2-row-labels > span {
           flex: 0 0 var(--bdc-w); min-width: var(--bdc-w); max-width: var(--bdc-w);
@@ -1224,8 +1276,8 @@ export default function PrintableBayDetail({
           border: none;   /* 3.69-03: 카스피 선 — 0.375pt 검정 한 줄(위 매트릭스 격자와 같은 그림자 방식) */
           box-shadow: 0 0 0 0.1875pt #000, inset 0 0 0 0.1875pt #000;
           padding: 1px 2px;
-          font-size: 7pt;
-          line-height: 1.1em;   /* ★ 3.46-01: «수»가 아니라 «길이» — 아래 주석 */
+          font-size: ${BD_FALLBACK_PT}pt;
+          line-height: calc(${BD_FALLBACK_PT}pt * ${BD_LINE_K});   /* ★ 3.46-01: «수»가 아니라 «길이» — 아래 주석 · 3.69-04 카스피 줄 간격 */
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
@@ -1237,26 +1289,37 @@ export default function PrintableBayDetail({
           overflow-wrap: normal;
           height: 100%;
           box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-evenly;
-          align-items: stretch;
+          /* 3.69-04: 폴백 격자도 카스피 배치 — 14글자 폭 덩어리를 칸 가운데(칸이 더 좁으면 칸 폭), 다섯 줄 같은 왼쪽 선.
+             글자 크기는 칸 크기가 쪽마다 달라 계산하지 않고 종전 7pt 그대로 둔다. */
+          display: grid;
+          grid-template-columns: fit-content(calc(100% - 3pt));
+          justify-content: safe center;
+          align-content: safe center;
+          position: relative;
+          isolation: isolate;
           font-weight: normal;   /* 3.69-03: 카스피와 같은 보통 굵기 */
         }
-        /* M6.32: 셀 안 각 줄도 nowrap 보장 — 한 항목이 두 줄로 안 나뉨 */
+        /* M6.32: 셀 안 각 줄도 한 줄 보장 — 한 항목이 두 줄로 안 나뉨. 3.69-04: pre — 카스피 글자열 빈칸 그대로 */
         .bd-cell > div {
-          white-space: nowrap;
+          white-space: pre;
           overflow: hidden;
           text-overflow: clip;
+          min-width: ${BD_BLOCK_CH}ch;
         }
-        /* V8.25-04: 5줄 분배 — 줄1 양끝, 줄3 3등분, 컨번호 좌측, 온도·위치 중앙 */
-        .bd-cell .bd-r1, .bd-cell .bd-r3, .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3 { display: flex; flex-direction: row; justify-content: space-between; width: 100%; }
-        .bd-cell .bd-r2, .bd-cargo-wrap .cpv2-cell .bd-r2 { text-align: left; letter-spacing: 0.3px; }
-        .bd-cell .bd-r4, .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { text-align: center; }
-        .bd-cell .bd-r1, .bd-cell .bd-r3, .bd-cell .bd-r4, .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { letter-spacing: 0.7px; }
+        /* V8.25-04: 5줄 분배 — 줄1 양끝, 줄3 3등분, 컨번호 좌측, 온도·위치 중앙.
+           3.69-04: 칸 폭이 글자로 정해지는 매트릭스 격자(bd-uniform 아님)에만 남는다 — 그 칸 크기를 안 바꾸려고. */
+        .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3 { display: flex; flex-direction: row; justify-content: space-between; width: 100%; }
+        .bd-cargo-wrap .cpv2-cell .bd-r2 { text-align: left; letter-spacing: 0.3px; }
+        .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { text-align: center; }
+        .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { letter-spacing: 0.7px; }
+        /* ★ 3.69-04: 다섯 줄 모두 같은 왼쪽 선 · 자간 0 — 카스피 실측(26척). 고정 칸 격자와 폴백 격자(.bd-cell — 칸 폭은 줄 격자가 정한다)에 건다.
+           종전 V8.25-04 «줄1 양끝 · 줄3 3등분 · 줄4·5 가운데 · 자간 0.7px» 는 줄마다 시작 자리가 달라 어수선했다(검수사 «조잡해 보인다»). */
+        .bd-cell > .bd-r1, .bd-cell > .bd-r2, .bd-cell > .bd-r3, .bd-cell > .bd-r4, .bd-cell > .bd-r5,
+        .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r1, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r2, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r3, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r4, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r5 { display: block; width: auto; text-align: left; letter-spacing: 0; }
         /*  ★ 3.46 — 4번째 줄(X-RAY 봉인번호 · IMDG · 리퍼 온도)이 칸을 넘으면 **조용히 잘린다**
             (.bd-cell-lines > div 가 overflow:hidden). 그래서 길이에 따라 줄여 담는다.
-            ⚠ 자간이 0.7px 로 벌어져 있어 등급마다 자간도 같이 좁힌다 — 글꼴만 줄이면 모자란다.
+            ⚠ (칸 폭이 글자로 정해지는 격자) 자간이 0.7px 로 벌어져 있어 등급마다 자간도 같이 좁힌다 — 글꼴만 줄이면 모자란다.
+              고정 칸 격자·폴백 격자(3.69-04)는 자간 0 이라 글꼴 크기만 0.5pt씩 줄인다(MID_PT_OF).
             ⚠ 선택자는 두 격자(.bd-cell = 폴백 · .cpv2-cell = 매트릭스)에 **둘 다** 건다.
               이 파일의 옛 .bd-line3/.bd-pos 규칙은 JSX 가 내는 클래스(bd-r3·bd-r5)와 안 맞아 죽어 있다. */
         /*  ★ 3.46-01 — **칸 안 다섯 줄의 자리는 X-RAY 가 붙어도 안 움직인다.**
@@ -1270,26 +1333,44 @@ export default function PrintableBayDetail({
             ⚠ 커스텀 속성(--bd-lh: 1.15em)으로 푸는 길은 **안 된다** — 속성 안의 em 은 선언한 쪽이 아니라
               **쓰는 쪽(자식)** 글꼴로 풀려서 6.3pt 기준 9.66px 가 나왔다(크로뮴 실측). */
 
-        /*  ⚠ 두 격자의 바탕 글꼴이 다르다 — 매트릭스 8.5pt · 폴백 7pt. 절대 크기만 쓰면 폴백에서
-            이 줄만 **더 커져** 다른 네 줄과 어긋난다(감사 실측). min() 으로 «바탕보다 크지 않게» 묶는다.
-            바닥은 6.3pt — 6pt 아래로는 안 내려간다. */
+        /*  ⚠ 격자마다 바탕 글꼴이 다르다 — 고정 칸 격자는 칸 크기로 계산(6~8.5pt) · 폴백 7pt · 칸 폭이 글자로 정해지는 격자 8pt.
+            4번째 줄을 줄일 때는 «바탕보다 크지 않게»(MID_PT_OF 가 바탕에서 시작) · 6pt 아래로는 안 내려간다. */
         /*  ★ 3.46-01 — **봉인번호가 적힌 그 줄만 노란 바탕.**
             검수사 2026-09-14 «그부분만 바탕에 노란색 처리 해주세요 흑백으로 인쇄해도 구분이 되게».
             색은 검수 리스트의 X-RAY 노랑과 **같은 한 벌**(inspectionList COLOR.xray = #ffe066) —
             같은 배 같은 표식이 종이마다 다른 색이면 안 된다.
             ⚠ print-color-adjust: exact — 브라우저 인쇄는 기본적으로 배경색을 **안 찍는다**.
               이것이 없으면 화면엔 노랗고 종이엔 하얗게 나가 «흑백에서 구분» 이 아예 성립하지 않는다.
-            ⚠ 바탕색만 바꾼다 — 여백·테두리를 주면 칸 안 줄 자리가 움직인다(그게 이 판의 사고였다). */
-        .bd-cell .bd-r4.xr, .bd-cargo-wrap .cpv2-cell .bd-r4.xr {
+            ⚠ 바탕색만 바꾼다 — 여백·테두리를 주면 칸 안 줄 자리가 움직인다(그게 이 판의 사고였다).
+            ★ 3.69-04 — 줄이 14글자 폭 덩어리 안에 들어가 좁아졌다. 노랑은 종전처럼 **칸 폭 전체**(좌우 1.5pt 안쪽)에
+              깔리도록 줄 상자 대신 ::before 띠로 칠한다. 칸(.cpv2-cell · .bd-cell)이 기준 상자이고 높이는 줄 간격 한 줄이다. */
+        .bd-cargo-wrap .cpv2-cell .bd-r4.xr {   /* 칸 폭이 글자로 정해지는 격자 — 3.69-03 그대로 줄 상자를 칠한다 */
           background: #ffe066;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-        .bd-cell .bd-r4.x2, .bd-cargo-wrap .cpv2-cell .bd-r4.x2 { font-size: min(7.2pt, 1em); letter-spacing: 0.1px; }
-        /*  ⚠ 바닥에서는 **글꼴 대신 자간을 좁힌다.** 실봉인 최장 「DJHN225094」(10자)에 리퍼 온도가 겹치면
-            17자가 되는데 6.3pt·자간 -0.1px 로는 84px 라 79px 칸을 넘어 조용히 잘렸다(감사·연막 실측).
-            자간을 좁히면 글자 크기는 그대로 두고 들어간다 — 작게 만드는 것보다 낫다. */
-        .bd-cell .bd-r4.x3, .bd-cargo-wrap .cpv2-cell .bd-r4.x3 { font-size: min(6.3pt, 0.92em); letter-spacing: -0.45px; }
+        .bd-cell > .bd-r4.xr, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r4.xr {
+          background: none;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .bd-cell > .bd-r4.xr::before, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r4.xr::before {
+          content: ''; position: absolute; left: 1.5pt; right: 1.5pt; z-index: -1;
+          height: calc(var(--bdc-fs, 8pt) * ${BD_LINE_K});
+          background: #ffe066;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .bd-cell > .bd-r4.xr::before { height: calc(${BD_FALLBACK_PT}pt * ${BD_LINE_K}); }
+        /*  옛 등급(칸 폭이 글자로 정해지는 격자 전용 · midFitLegacy) — 고정 칸 격자·폴백 격자는 JSX 가 글자 크기를 인라인으로 준다.
+            ⚠ 바닥에서는 **글꼴 대신 자간을 좁힌다.** 실봉인 최장 「DJHN225094」(10자)에 리퍼 온도가 겹치면 17자가 되는데
+            6.3pt·자간 -0.1px 로는 84px 라 79px 칸을 넘어 조용히 잘렸다(3.46 감사·연막 실측). */
+        .bd-cargo-wrap .cpv2-cell .bd-r4.x2 { font-size: min(7.2pt, 1em); letter-spacing: 0.1px; }
+        .bd-cargo-wrap .cpv2-cell .bd-r4.x3 { font-size: min(6.3pt, 0.92em); letter-spacing: -0.45px; }
+        /*  ★ 3.69-04 — 14폭을 넘는 4번째 줄(봉인번호 + 온도 · DG)은 칸 한가운데에 둔다. 줄 상자는 덩어리 폭(열) 그대로 두고
+            (폭 0 · 최소 100% — 긴 줄이 덩어리를 넓혀 다른 네 줄을 밀지 않게) 글자만 양옆으로 고르게 넘친다.
+            글자 크기는 JSX 가 인라인으로 준다(MID_PT_OF — 칸 폭 − 3pt 안에 들 때까지 0.5pt씩, 6pt 바닥). */
+        .bd-cell > .bd-r4.wide, .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines > .bd-r4.wide { width: 0; min-width: 100%; display: flex; justify-content: center; overflow: visible; }
         .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r5 { color: #000; }   /* 3.69-03: 카스피는 칸 글씨가 전부 검정 */
         /* M6.33: 3번째 줄(상태+무게+규격)만 폰트 축소 — 정보 밀도 높아 한 줄에 안 들어감
            예: "C_K E 2.2 DC20" → 14자 + 공백 → 6pt로 줄여서 한 줄 보장 */
