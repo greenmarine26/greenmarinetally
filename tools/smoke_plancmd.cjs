@@ -5,6 +5,12 @@ const fs = require('fs');
 const [PC, NS, MC] = process.argv.slice(2);
 if (!PC || !NS || !MC) { console.error('✗ 번들 경로 셋(planCommand·nlSearch·mirChat)이 필요하다'); process.exit(1); }
 global.window = { __mirLexicon: {}, __mirLexiconWrite: () => {}, dispatchEvent: () => true };
+//  ★ 3.69-05 (재감사 지적) — **검수원을 등록한 상태가 실앱의 정상 흐름이다.** 이 하네스가 그것을 안 세워
+//    호칭이 «검수사님» 으로 고정됐고, 그 바람에 호칭에 기대는 버그(mirCall 이 «아저씨/형님» 을 Math.random 으로
+//    고른다)가 172항을 전부 통과했다. 검사가 통과하는 조건과 검수사가 쓰는 조건이 달랐다.
+const _ls = { 'master_active_inspector_v1': '김성일' };
+global.localStorage = { getItem: (k) => (_ls[k] === undefined ? null : _ls[k]), setItem: (k, v) => { _ls[k] = String(v); }, removeItem: (k) => { delete _ls[k]; } };
+global.window.localStorage = global.localStorage;
 global.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } };
 const P = require(path.resolve(PC)); const N = require(path.resolve(NS)); const M = require(path.resolve(MC));
 let fail = 0; const ok = (c, m) => { console.log((c ? '  PASS ' : '  FAIL ') + m); if (!c) fail++; };
@@ -80,6 +86,132 @@ for (const q of ['오늘 회의 별로였어', '교육 별로였어', '맛나는
 {  // 되물은 직후에는 «별로였어»도 받는다 — 대화가 끊기지 않게.
   M.mirSmallTalk('점심 먹었어');
   ok(/다음 끼니/.test(String(M.mirSmallTalk('별로였어') || '')), '되물은 직후의 «별로였어» 는 받는다');
+}
+//  ★ 3.69-05 (검수사 2026-09-30 «묻고 답을주니 그 다음은 반응을 못함»):
+//    되물어 놓고 **메뉴를 들으면 무응답**이던 자리 — 실측으로 스프·김치찌개·토스트가 전부 null 이었다.
+for (const q of ['난 아침에 스프 먹어.', '스프 먹었어', '김치찌개 먹었어요', '국밥 먹었어요', '주먹밥 먹었어요', '저는 점심에 칼국수 먹었어요']) {
+  M.mirSmallTalk('아침 뭐 먹었어?');                       // 되묻기로 3분 창을 연다
+  const a = String(M.mirSmallTalk(q) || '');
+  ok(a !== '', `되물은 뒤 «${q}» 를 받는다`);
+  ok(!/뭐 드셨|메뉴 좀 알려|여쭤봐도 돼요/.test(a), `«${q}» 에 **다시 되묻지 않는다** → ${a.slice(0, 34)}`);
+}
+{  // 들은 메뉴를 그대로 되받는다 · 안 드셨다는 답도 받는다
+  M.mirSmallTalk('아침 뭐 먹었어?');
+  ok(/스프/.test(String(M.mirSmallTalk('난 아침에 스프 먹어.') || '')), '들은 메뉴 «스프» 가 답에 들어간다');
+  //  ⚠ 맨 명사 한 마디는 **안 받는다** — 미르 대화의 «카고»·«응 맞아» 와 구별할 길이 없다(3.69-05 회귀).
+  //  ⚠ 감사 ①②(2026-09-30, 판정 «부») — «…요» 로 끝난다고 메뉴가 아니다. 끼니 표지(«먹/드시/자시»)를 반드시 요구한다.
+  //    처음 판은 존댓말 34문장 중 28을 삼켰다 — 위로·인사·미르 대화 제안 칩까지 음식 답으로 나가고 무응답 신고도 끊겼다.
+  const _menuish = (a) => /적어 뒀어요|든든하시겠어요|드셨구나|좋죠!/.test(String(a || ''));
+  for (const q of ['카고', '응 맞아', '두 번째요', '속도요', '그거요', '남은 대수요', '첫 번째요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(!_menuish(M.mirSmallTalk(q)), `3분 창 안이어도 «${q}» 는 메뉴가 아니다(미르 대화 몫)`);
+  }
+  for (const q of ['피곤해요', '오늘 힘들어요', '속상해요', '지쳤어요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(/애쓰셨어요|토닥토닥/.test(String(M.mirSmallTalk(q) || '')), `«${q}» 는 위로 갈래가 받는다`);
+  }
+  for (const q of ['다녀올게요', '다녀왔어요', '안녕하세요', '감사해요', '비 와요', '추워요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(!_menuish(M.mirSmallTalk(q)), `«${q}» 를 음식 답으로 받지 않는다`);
+  }
+  //  ⚠ 감사 ③ — 남 이야기·전해 들은 말·나이 세는 말은 끼니 그물과 **같은 배제**를 받는다.
+  for (const q of ['케빈이 국밥 먹었어요', '아이 밥 먹었어요', '강아지 밥 먹었어요', '한 살 더 먹었어요', '수석이 점심 먹었대']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(!_menuish(M.mirSmallTalk(q)), `«${q}» 는 내 끼니 답이 아니다`);
+  }
+  //  ⚠ 감사 ⑤ — 안 드셨다는 답의 흔한 꼴
+  for (const q of ['아직 안 먹었어요', '아직 못 먹었어요', '걸렀어요', '굶었어요']) {
+    M.mirSmallTalk('점심 먹었어?');
+    ok(/아직이시구나/.test(String(M.mirSmallTalk(q) || '')), `«${q}» 를 «안 드셨다»로 받는다`);
+  }
+  //  ⚠ 감사 ④ — 화면 재계산으로 3분 창이 늘어나지 않는다
+  {
+    const real = Date.now; const base = real();
+    Date.now = () => base;            M.mirSmallTalk('아침 뭐 먹었어?');
+    Date.now = () => base + 150000;   M.mirSmallTalk('아침 뭐 먹었어?');   // 2.5분 뒤 화면이 다시 계산
+    Date.now = () => base + 200000;   ok(M.mirSmallTalk('스프 먹었어요') === null, '첫 되묻기로부터 3분이 지나면 창은 닫힌다(재계산으로 안 늘어난다)');
+    Date.now = real;
+  }
+  //  ⚠ 감사 ⑥ — 메뉴 이름에 «먹» 이 들어도 되묻기를 되풀이하지 않는다
+  M.mirSmallTalk('아침 뭐 먹었어?');
+  ok(/주먹밥/.test(String(M.mirSmallTalk('주먹밥 먹었어요') || '')), '«주먹밥» 을 메뉴로 받는다(«먹» 한 글자에 안 걸린다)');
+  //  ⚠ 재감사 ① — 호칭 꼬리가 무작위라도 **매번** 받아야 한다. 창 임자를 호칭으로 적으면 여기서 절반이 떨어진다.
+  {
+    let got = 0;
+    for (let i = 0; i < 40; i++) { M.mirSmallTalk('아침 뭐 먹었어?'); if (/스프/.test(String(M.mirSmallTalk('난 아침에 스프 먹어.') || ''))) got++; }
+    ok(got === 40, `검수원이 등록된 상태에서 되묻기→메뉴가 40회 모두 통한다 (${got}/40)`);
+  }
+  //  ⚠ 3.69-05 — 호칭도 한 사람에게 늘 같아야 한다(종전 Math.random 이라 낭독 키가 흔들렸다 · 기준본에도 있던 병).
+  {
+    const names = new Set();
+    for (let i = 0; i < 40; i++) names.add(String(M.mirSmallTalk('아침 뭐 먹었어?') || '').match(/(아저씨|형님)/)?.[1] || '');
+    ok(names.size === 1, `한 검수원에게 호칭 꼬리가 하나로 고정된다 (${[...names].join('·')})`);
+  }
+  //  ⚠ 3차 감사 잔여 — 남 이야기 목록·때말·약·수량
+  for (const q of ['애가 국밥 먹었어요', '애가 안 먹었어요', '와이프가 안 먹었어요', '집사람이 국밥 먹었어요',
+                   '쉬는 시간에 먹었어요', '우리 다 먹었어요', '약 안 먹었어요', '약 못 먹었어요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    const a = String(M.mirSmallTalk(q) || '');
+    ok(!_menuish(a) && !/아직이시구나/.test(a), `«${q}» 는 검수사님 끼니 답이 아니다`);
+  }
+  for (const q of ['삼겹살 2인분 먹었어요', '라면 2개 먹었어요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(_menuish(M.mirSmallTalk(q)), `«${q}» 는 메뉴로 받는다(수량이 붙어도)`);
+  }
+  //  ⚠ 재감사 ② — «잘 먹었어요» 는 종전 갈래 몫이다
+  for (const q of ['잘 먹었어요', '잘 먹었습니다', '국밥 잘 먹었어요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(/제 배가 다 부르네요/.test(String(M.mirSmallTalk(q) || '')), `«${q}» 는 «맛있게 드셨다니» 갈래가 받는다`);
+  }
+  //  ⚠ 재감사 ③ — 부사·대명사·자리말·업무 꼴은 메뉴가 아니다
+  for (const q of ['많이 먹었어요', '조금 먹었어요', '혼자 먹었어요', '방금 먹었어요', '빨리 먹었어요', '다 먹었어요',
+                   '그거 먹었어요', '아무거나 먹었어요', '집에서 먹었어요', '구내식당에서 먹었어요',
+                   '작업 전에 먹었어요', '야드 가서 먹었어요', '1번 갱 먹었어요', '두 번째 먹었어요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(!_menuish(M.mirSmallTalk(q)), `«${q}» 를 메뉴로 읽지 않는다`);
+  }
+  for (const q of ['안 먹고 왔어요', '시간 없어서 못 먹었어요']) {
+    M.mirSmallTalk('점심 먹었어?');
+    ok(/아직이시구나/.test(String(M.mirSmallTalk(q) || '')), `«${q}» 를 «안 드셨다»로 받는다`);
+  }
+  M.mirSmallTalk('점심 먹었어?');
+  ok(/아직/.test(String(M.mirSmallTalk('아직이요') || '')), '«아직이요» 도 받는다');
+}
+{  // 검수사 «점심보다 저녁에 먹을껄 대비하네요» — 끼니 이름을 읽는다
+  for (const q of ['저녁 뭐 먹었어?', '야식 먹었어?']) {
+    ok(!/용으로 남겨/.test(String(M.mirSmallTalk(q) || '')), `«${q}» 에 «다음 끼니용으로 남겨» 는 안 나온다`);
+  }
+  ok(/아침/.test(String(M.mirSmallTalk('아침 뭐 먹었어?') || '')), '되묻는 말에 물은 끼니 이름이 들어간다');
+}
+{  // 검수사 «매번 같은것만» — 날이 바뀌면 답도 바뀐다(같은 날은 같은 답 그대로)
+  const real = Date.now; const base = real();
+  const seen = new Set();
+  //  _todaySeed·_nextMeal 이 new Date(Date.now()) 를 쓰므로 Date.now 하나만 갈아도 날이 바뀐다.
+  for (let i = 0; i < 20; i++) { Date.now = () => base + i * 86400000; seen.add(String(M.mirSmallTalk('아침 뭐 먹었어?') || '')); }
+  Date.now = real;
+  ok(seen.size >= 4, `«아침 뭐 먹었어?» 가 20일에 걸쳐 여러 답을 낸다(가짓수 ${seen.size})`);
+  const a1 = String(M.mirSmallTalk('아침 뭐 먹었어?') || ''); const a2 = String(M.mirSmallTalk('아침 뭐 먹었어?') || '');
+  ok(a1 === a2, '같은 날 같은 질문은 같은 답이다(낭독이 처음부터 다시 읽히지 않게)');
+}
+{  // ⚠ 3.69-05 회귀 — 끼니말 자체는 메뉴가 아니다(«밥 먹었어» 가 메뉴 «밥» 으로 읽혀 연막검사가 잡았다).
+  for (const q of ['밥 먹었어', '점심 먹었어', '저녁 먹었어', '아침 먹었어', '식사 했어요']) {
+    M.mirSmallTalk('아침 뭐 먹었어?');
+    ok(/드셨|먹었|아직/.test(String(M.mirSmallTalk(q) || '')) && !/적어 뒀어요|든든하시겠어요|드셨구나/.test(String(M.mirSmallTalk(q) || '')),
+      `«${q}» 는 끼니 그물이 받는다(메뉴로 안 샌다)`);
+  }
+  M.mirSmallTalk('아침 뭐 먹었어?');
+  ok(/국밥/.test(String(M.mirSmallTalk('국밥 먹었어요') || '')), '«국밥» 은 «국» 으로 잘리지 않는다');
+}
+{  // 문지기가 옆길을 막는가 — 3분 창 밖·업무 말·딴뜻 «먹었»
+  const real = Date.now; const base = real();
+  M.mirSmallTalk('아침 뭐 먹었어?');
+  Date.now = () => base + 4 * 60 * 1000;
+  ok(M.mirSmallTalk('스프 먹어') === null, '되물은 지 4분 뒤 «스프 먹어» 는 안 받는다(무응답 신고가 살아 있다)');
+  Date.now = real;
+  M.mirSmallTalk('아침 뭐 먹었어?');
+  ok(!/든든|드셨구나|좋죠/.test(String(M.mirSmallTalk('미르 욕 먹었어') || '')), '«욕 먹었어» 는 메뉴가 아니다');
+  M.mirSmallTalk('아침 뭐 먹었어?');
+  ok(M.mirSmallTalk('3호기 어디까지 했어') === null, '업무 말은 3분 창 안에서도 잡담이 안 가로챈다');
 }
 //  항차 화면도 같은 답을 낸다 — 검수사가 실제로 물은 자리(SearchPanel·VoyagePage)는 잡담을 안 불렀다.
 {

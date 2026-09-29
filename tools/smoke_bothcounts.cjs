@@ -12,6 +12,22 @@ const path = require('path');
 const fs = require('fs');
 const OUT = process.argv[2];
 if (!OUT) { console.error('✗ 번들 경로가 없다'); process.exit(1); }
+//  ★ 3.69-05 — **시계를 못 박는다.** 종전엔 `NOW = Date.now()` 라 검사 결과가 **돌린 시각에 따라 갈렸다** —
+//    실측: KST 08:00~08:59 에만 5건 실패(06·09·10·14·18·22·02시는 40/40 통과), 기준본 3.69-04 도 똑같이 실패했다.
+//    앱이 틀린 게 아니다 — 픽스처가 완료 178건을 «지금부터 178분 전~방금» 으로 까는데, 주간조가 막 시작한 08시대에는
+//    **이번 조의 완료가 열 건이 안 돼** paceFromRecords 가 «아직 못 잼» 으로 물러선다(§3127 «완료 몇 건으로 잰 페이스는
+//    잡음이다 — 10건이 안 되면 못 잼으로 둔다»). 지어내지 않는 옳은 동작인데 검사가 그것을 실패로 읽었다.
+//    ⇒ 조 한가운데(그날 14:00)로 시계를 고정한다. 검사는 언제 돌려도 같은 답을 내야 한다.
+{
+  const _D = Date, _now = Date.now;
+  const _fix = (() => { const d = new _D(); d.setHours(14, 0, 0, 0); return d.getTime(); })();
+  const _off = _fix - _now();
+  Date.now = () => _now() + _off;
+  global.Date = class extends _D {
+    constructor(...a) { if (!a.length) super(_now() + _off); else super(...a); }
+    static now() { return _now() + _off; }
+  };
+}
 const NS = require(path.resolve(OUT));
 
 let n = 0, bad = 0;
