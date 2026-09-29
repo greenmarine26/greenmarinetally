@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
+import { mirThreadCommit, mirThreadAlive } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어» — 탭 카드도 같은 대화 층
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
@@ -2481,7 +2482,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       const t = pickSpeechAlternative(alts).trim();
       const digits = parseSpokenDigits(t);
       if (digits && digits.length >= 2) setSearch(digits);          // 숫자 = 즉시 조회(종전 규칙)
-      else if (t.length >= 2) setAsk({ q: t, stack: [] });          // 1.85-05: 문장 = 이 화면에서 바로 답
+      else if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) setAsk({ q: t, stack: [], at: Date.now() });   // 3.68: 대화 중 «응» 은 한 글자여도 · at = 접수 표   // 1.85-05: 문장 = 이 화면에서 바로 답
       else speak('인식 실패');
     };
     r.onend = () => setListening(false);
@@ -2615,8 +2616,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               setAsk(a => (a && v !== a.q ? null : a));
             }}
             onKeyDown={e => {
-              if (e.key === 'Enter' && search.trim().length >= 2 && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌
-                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
+              if (e.key === 'Enter' && (search.trim().length >= 2 || mirThreadAlive({ voyageKey, inspector })) && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌 · 3.68: 대화 중 «응»
+                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [], at: Date.now() });   // 1.85-05 · 3.68: at = 접수 표
               }
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
@@ -3095,14 +3096,18 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
   const gangGs = useMemo(() => {
     try { return (parsed?.gangQuery && briefCtx?.gangShiftData) ? briefCtx.gangShiftData(parsed.gangQuery.n || null) : null; } catch (e) { return null; }
   }, [parsed, briefCtx, q]);
+  const traceRef = useRef({});   // 3.68: 규칙이 어느 길에서 답했는지(얼버무림 판정 재료)
+  const rawRef = useRef(null);   // 3.68: 말투 입히기 전 규칙 답(대화 기록에 넣는 것)
   const answer = useMemo(() => {
+    traceRef.current = {}; rawRef.current = null;   // 3.68(감사 3): 이른 return(플랜 명령·미르의 눈)에서도 옛 답·옛 길이 남지 않게 맨 위에서 비운다
     try {
       //  3.2-01: 플랜 명령이면 «열었어요» 한 줄 — 위 useEffect 가 연다. 종전엔 답 자리에 컨 목록이 통째로 나왔다(통합검색과 한 벌).
       const _pc = onOpenPlan ? parseViewCommand(q || '') : null;
       if (_pc) {
         const _md = _pc.mode || mode;
         const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
-        return `🗺 ${vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+        rawRef.current = `🗺 ${vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+        return rawRef.current;
       }
       //  ★ 2.50-01 — **여기가 검수사가 실제로 쓰는 검색줄이다.**
       //    2.50 은 `SearchPanel`(수동 모드 안쪽)과 통합검색에만 겹을 붙였는데, 양하 탭 검색줄은
@@ -3111,13 +3116,14 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       //    ⚠ 배선을 붙일 때 «어느 화면이 그 답을 내는가»를 먼저 확인한다. 파일이 있다고 걸리는 것이 아니다.
       const _eyes = mirSee(q, { containers, info: briefCtx?.info || null, mode, compMap: briefCtx?.comp || null,
         bayPairs: briefCtx?.pairs || null });
-      if (_eyes) return _eyes;
+      if (_eyes) { rawRef.current = _eyes; return _eyes; }
       /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOneRaw` 한 벌(검수사 «미르를 하나로»). 종전 브리핑·실 점검·본체 세 갈래를 그리로 옮겼다.
            이 카드의 컨은 현재 탭(mode) 병합본이고 완료는 briefCtx.comp 로 따로 오므로(2.52-01) 여기서 `_comp` 를 입혀 넘긴다.
            답이 없으면 종전대로 null → «▶ 작업 시작 탭» 릴레이. */
       const _cs = (briefCtx && briefCtx.comp) ? containers.map((c) => (briefCtx.comp[c.cn] ? { ...c, _comp: briefCtx.comp[c.cn] } : c)) : containers;
       const _raw = answerOneRaw(q, {
-        app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
+        app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', _trace: traceRef.current,
+        _utterAt: (ask && ask.at) || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다
         limited: true,   // 이 카드가 못 싣는 재료(연락처·날씨·인계 메모)가 필요한 갈래는 null → 종전대로 «▶ 작업 시작 탭» 릴레이
         isChief: !!(briefCtx && briefCtx.isChief),   // 수석 통계 게이트(«마감 텔리 안 나간 거»)를 카드도 지난다
         portMisData: briefCtx?.portMisData || {}, pilotForecast: briefCtx?.pilotForecast || {}, inspector: briefCtx?.inspector || '', matchPortMis,
@@ -3128,9 +3134,10 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
         gangShift: briefCtx?.gangShift || null, gangBrief: briefCtx?.gangBrief || null, crewAnswer: briefCtx?.crewAnswer || null, bowStern: briefCtx?.bowStern || null,
         vsl, vslFull: briefCtx?.info?.vslFull, pier, carrierContacts, shipSpeed, computeTallyData,
       });
+      rawRef.current = _raw || null;
       return _raw ? mirTone(_raw) : null;
     } catch (e) { return null; }
-  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan]);   // 3.2-01: onOpenPlan
+  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, onOpenPlan, ask]);   // 3.2-01: onOpenPlan · 3.68: ask(접수 표)
   const readRef = useRef('');
   useEffect(() => {
     //  ⚠ 2.65-02 (라이브 실측): 브리핑은 **물을 때마다 지금 기준으로 다시 계산**된다(2.62) —
@@ -3152,6 +3159,25 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
     const first = (answer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();   // 1.92-02: 이모지 벗겨 읽기
     if (first) { try { speak(first); } catch (e) { /* 낭독 실패 무시 */ } }
   }, [answer, q, parsed]);   // 2.65: parsed — 브리핑 갈래를 봐야 낭독으로 간다
+  /* ★ 3.68 [mirThread] — 접수된 말 하나에 **한 번** 기록(이 카드는 모델을 안 부르니 규칙 답이 곧 최종). 한 마디 {line, chips, confirm} 를 답 밑에 그리고
+       (칩은 setAsk 로 그 말을 그대로 접수 — «← 이전 답으로» 는 종전 stack) 답 첫 줄 뒤에 이어 읽는다(append). 작업창·통합검색과 같은 배선. */
+  const [mirFollow, setMirFollow] = useState(null);
+  const followKeyRef = useRef('');
+  useEffect(() => {
+    if (!ask || !q) { if (mirFollow) setMirFollow(null); return; }
+    const key = `${ask.at || 0}|${q}`;
+    if (followKeyRef.current === key) return;
+    followKeyRef.current = key;
+    let fo = null;
+    try { fo = mirThreadCommit(q, rawRef.current || (answer ? String(answer) : null), (traceRef.current && traceRef.current.via) || '', { voyageKey: briefCtx?.voyageKey || '', inspector: briefCtx?.inspector || '', _utterAt: ask.at || 0 }); }
+    catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
+    const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
+    setMirFollow(show);
+    if (show && !parsed?.briefingQuery) {
+      const more = show.confirm || show.line;
+      if (more) { try { speak(String(more).replace(/\p{Extended_Pictographic}/gu, '').replace(/[«»]/g, ' ').trim(), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ } }
+    }
+  }, [answer, q, ask]);   // eslint-disable-line react-hooks/exhaustive-deps — 접수 하나에 한 번
   // 2.05 (검수사 «제질문은 FR 실위치를 물어봤습니다» · «그냥 FR 정보 알려줘 하면 다알려주고»):
   //   결과 컨(≤12)의 사진(데미지·메일 사진 — 씰 위치·FR 고정 등)을 답 아래 썸네일로. 탭하면 크게.
   const [photoView, setPhotoView] = useState(null);
@@ -3188,6 +3214,19 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       {answer ? (
         <>
         <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{answer}</div>
+        {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 접수). 끝은 검수사가. */}
+        {mirFollow && (
+          <div className="pt-2 border-t border-emerald-800/60" data-mir-follow="1">
+            {(mirFollow.confirm || mirFollow.line) ? <div className={`text-sm ${mirFollow.confirm ? 'text-amber-200' : 'text-emerald-200'}`}>{mirFollow.confirm ? '❓ ' : '🐱 '}{mirFollow.confirm || mirFollow.line}</div> : null}
+            {mirFollow.chips && mirFollow.chips.length > 0 && (
+              <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                {mirFollow.chips.map((ch) => (
+                  <button key={ch} type="button" onClick={() => { try { stopSpeak(); } catch (e) { /* */ } setAsk(a => ({ q: ch, stack: [...(a?.stack || []), a?.q].filter(Boolean), at: Date.now() })); }} className="px-3 py-1.5 rounded-pill bg-emerald-900/60 border border-emerald-600 text-emerald-100 text-sm font-bold">{ch}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {gangGs ? <GangStrip gs={gangGs} /> : null}
         {resultPhotos.length > 0 && (
           <div className="pt-1">
@@ -3229,7 +3268,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       {(uniq.length > 0 || (ask.stack || []).length > 0) && (
         <div className="flex gap-2 flex-wrap">
           {uniq.map(h => (
-            <button key={h} onClick={() => setAsk(a => ({ q: h, stack: [...(a?.stack || []), a?.q].filter(Boolean) }))}
+            <button key={h} onClick={() => setAsk(a => ({ q: h, stack: [...(a?.stack || []), a?.q].filter(Boolean), at: Date.now() }))}
               className="flex-1 min-w-[110px] py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
               🔍 {h} 보기
             </button>
@@ -3237,7 +3276,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
           {(ask.stack || []).length > 0 && (
             <button onClick={() => setAsk(a => {
               const s = [...(a?.stack || [])]; const prev = s.pop();
-              return prev ? { q: prev, stack: s } : null;
+              return prev ? { q: prev, stack: s, at: Date.now() } : null;
             })}
               className="flex-1 min-w-[110px] py-2.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-100 font-bold text-sm border border-line-strong">
               ← 이전 답으로
@@ -3320,7 +3359,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
       const t = pickSpeechAlternative(alts).trim();
       const digits = parseSpokenDigits(t);
       if (digits && digits.length >= 2) setSearch(digits);
-      else if (t.length >= 2) setAsk({ q: t, stack: [] });          // 1.85-05: 문장 = 이 화면에서 바로 답
+      else if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) setAsk({ q: t, stack: [], at: Date.now() });   // 3.68: 대화 중 «응» 은 한 글자여도 · at = 접수 표   // 1.85-05: 문장 = 이 화면에서 바로 답
       else speak('인식 실패');
     };
     r.onend = () => setListening(false);
@@ -3419,8 +3458,8 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
               setAsk(a => (a && v !== a.q ? null : a));
             }}
             onKeyDown={e => {
-              if (e.key === 'Enter' && search.trim().length >= 2 && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌
-                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
+              if (e.key === 'Enter' && (search.trim().length >= 2 || mirThreadAlive({ voyageKey, inspector })) && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌 · 3.68: 대화 중 «응»
+                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [], at: Date.now() });   // 1.85-05 · 3.68: at = 접수 표
               }
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}

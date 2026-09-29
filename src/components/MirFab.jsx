@@ -20,6 +20,7 @@ import MirFace from './MirFace.jsx';   // 3.57: 표정이 움직이는 얼굴(�
 import { answerOneRaw } from '../mir.js';
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
+import { mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디 더 · «응/아니/됐어» 는 직전 답에 이어서
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
 import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE } from '../mir.js';
@@ -41,6 +42,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const [q, setQ] = useState('');
   const [asked, setAsked] = useState('');   // 3.41-01: 방금 물은 말 — 칸은 비우고 이것을 답 위에 남긴다
   const [out, setOut] = useState('');
+  const [follow, setFollow] = useState(null);   // 3.68: 답 뒤 한 마디 {line, chips, confirm} — 칩을 누르면 그 말을 그대로 묻는다
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [live, setLive] = useState(() => readMirCtx());
@@ -116,15 +118,18 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
 
   const ask = useCallback(async (text) => {
     const t = String(text || '').trim();
-    if (t.length < 2) return;
-    setBusy(true); setOut('…'); setAsked(t); setQ('');   // 3.41-01: 칸은 비우고 물은 말은 위에 남긴다
+    //  3.68: 한 글자(«응»)는 대화 중일 때만 받는다 — 문지기는 데이터가 들어오는 자리(§4-4)
+    if (!t || (t.length < 2 && !mirThreadAlive({ voyageKey: (readMirCtx() || {}).voyageKey || '', inspector }))) return;
+    setBusy(true); setOut('…'); setAsked(t); setQ(''); setFollow(null);   // 3.41-01: 칸은 비우고 물은 말은 위에 남긴다
     noteMirAsk();                                           // 3.56: 시키는 일이 있었다 — 심심함 시계를 되감는다
     try { stopSpeak(); } catch (e) { /* */ }              // 3.41-01: 쌓인 발화를 끊는다 — 새 답이 옛 말 뒤에 줄 서지 않게
     try {
       //  ① 플랜 명령 — 열어 준다(홈 _askGlobal 과 같은 길). 배를 못 찾으면 붙이라고 말한다.
       const cmd = parseViewCommand(t);
       const lv = readMirCtx();
-      const sc = pickShipCtx(t, voyages, lv && lv.voyageKey ? lv.voyageKey : null);
+      //  3.68 [mirThread](감사 5): «KBTR 몇 시에 끝나» 뒤의 «응» 은 배 이름이 없다 — 대화 층이 되쓴 말(«KBTR 남은 대수»)로 배를 고른다(엔진과 같은 배)
+      let tq = t; try { const r0 = mirThreadResolve(t, { voyageKey: (lv && lv.voyageKey) || '', vsl: (lv && lv.info && lv.info.vsl) || '', inspector }); if (r0 && r0.q) tq = r0.q; } catch (e) { tq = t; }   // vsl — 열린 항차와 대화의 배가 다르면 되쓴 말에 배 코드가 붙는다(재감사 C)
+      const sc = pickShipCtx(tq, voyages, lv && lv.voyageKey ? lv.voyageKey : null);
       //  3.41-01: «작업중인 배» 라고 불렀는데 지금 일하는 배가 여럿이면 고르지 않고 되묻는다
       if (!sc && !(lv && lv.voyageKey) && WORKING_SHIP_RE.test(t)) {
         const w = workingShipCtx(voyages);
@@ -170,10 +175,12 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       if (ctx.shipContacts === undefined && parseNaturalQuery(t).contactQuery) {
         try { ctx.shipContacts = (await fbGetSimple('shipContacts')) || {}; } catch (e) { ctx.shipContacts = {}; }
       }
-      let a = null;
+      let a = null, fo = null;
       try {
         const r = await askMir(t, ctx, (cq, trace) => answerOneRaw(cq, { ...ctx, _trace: trace }), { who: inspector || '' });
         a = (r && r.text != null) ? mirTone(r.text) : null;
+        //  3.68 [mirThread]: 접수된 말 하나에 한 번 기록 — 답이 정해진 뒤(규칙이면 그 길 trace.via, 모델이면 r.via). 한 마디 {line, chips, confirm} 를 받는다.
+        try { fo = mirThreadCommit(t, r && r.text != null ? r.text : null, (r && r.via === 'rules') ? ((r.trace && r.trace.via) || '') : ((r && r.via) || ''), ctx); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
       } catch (e) { console.warn('[미르] 답 실패:', e); a = null; }
       const vk = useLive ? lv.voyageKey : (sc && sc.key) || null;
       try { applySideEffects(parseNaturalQuery(t), vk, useLive ? lv.voyage : (sc && sc.v), t); } catch (e) { /* */ }
@@ -187,8 +194,13 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       }
       lastRef.current = a;
       setOut(a);
+      const _fo = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
+      setFollow(_fo);
       logQuerySettled('nls', t, { voyageKey: vk || '', via: 'mir' });
-      try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) speakLong(plain); else speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
+      let _long = false;
+      try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) { _long = true; speakLong(plain); } else speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
+      //  3.68: 한 마디는 답 뒤에 이어 읽는다(끊지 않고 append). 칩은 읽지 않는다. 긴 낭독(speakLong·브리핑)은 우선순위 보호가 있어 뒤에 붙이지 않는다(감사 6).
+      try { const more = (_fo && !_long) ? (_fo.confirm || _fo.line) : ''; if (more) speak(String(more).replace(CLEAN_RE, ' ').replace(/[«»]/g, ' '), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ }
     } finally { setBusy(false); }
   }, [voyages, flat, inspector, isChief, heartbeat, portMisData, pilotForecast, carrierContacts, shipSpeed, ediPattern, onOpenPlan, ensureChiefData, applySideEffects]);
 
@@ -249,6 +261,19 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
             <div className="mt-2 p-2.5 rounded bg-ink-950 select-text">
               {asked && <div className="text-2xs text-dim-300 mb-1 truncate">🗨 {asked}</div>}
               <div className="text-[15px] leading-relaxed font-semibold text-white whitespace-pre-line">{out}</div>
+              {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 묻는다). 끝은 검수사가(«됐어»·«고마워»). */}
+              {follow && !busy && (
+                <div className="mt-2 pt-2 border-t border-line/60" data-mir-follow="1">
+                  {(follow.confirm || follow.line) ? <div className={`text-sm ${follow.confirm ? 'text-amber-200' : 'text-emerald-200'}`}>{follow.confirm ? '❓ ' : '🐱 '}{follow.confirm || follow.line}</div> : null}
+                  {follow.chips && follow.chips.length > 0 && (
+                    <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                      {follow.chips.map((ch) => (
+                        <button key={ch} type="button" onClick={() => ask(ch)} className="px-3 py-1.5 rounded-pill bg-emerald-900/60 border border-emerald-600 text-emerald-100 text-sm font-bold">{ch}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

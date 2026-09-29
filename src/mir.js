@@ -12,6 +12,8 @@
 //   5. [mirEyes] 한 대를 보는 겹 — 순서 · 트윈 · 자리
 //   6. [mirAnswer] 답 고르기 한 벌 — answerOneRaw
 //   7. [mirModel] 모델 문 — 규칙이 약할 때만 askMir
+//   8. [mirThread] 대화 — 답 뒤 한 마디 더 · 얼버무린 답만 확인 · 끝은 검수사가 (3.68)
+//   9. [mirMood] 기분 — 얼굴이 보이는 감정 한 벌 (3.56)
 //
 // ⚠ nlSearch.js 가 이 파일의 사전·잡담 함수를 부르고 이 파일도 nlSearch.js 를 부른다(서로 부름).
 //   그래서 이 파일 맨 바깥(함수 밖)에서는 nlSearch 에서 가져온 것을 **쓰지 않는다** — 함수 안에서만 쓴다. 연막 smoke_mirfile 이 지킨다.
@@ -1396,7 +1398,16 @@ function _normalize(ctx) {
       «잡아채는 길»(사용법 매뉴얼·현재 시각·되묻기·베이사전 타령·진행 잡답·지식 추측·콘 안내)은 규칙이 자신 없이 낸 답이라,
       mirModel.askMir 가 그때만 모델을 부른다(번역 → 규칙 재실행 → 자료 답). 그 밖의 답에는 모델이 끼지 않는다. */
 export function answerOneRaw(query, ctx) {
-  const q = S(query);
+  const q0 = S(query);
+  //  3.68 [mirThread]: 대화 중의 «응·두 번째·아니 ○○·그거·됐어» 는 직전 답에 이어 푼다(순수 — 기억은 화면이 접수 시점에 mirThreadCommit 으로 바꾼다).
+  //    대화 층이 직접 낸 답은 via='thread'(isWeakAnswer 가 강한 답으로 본다 — 모델·miss 로 안 간다).
+  let q = q0;
+  if (q0) {
+    let th = null;
+    try { th = mirThreadResolve(q0, ctx || {}, (ctx && ctx._now) || Date.now()); } catch (e) { console.warn('[미르 대화] 풀기 실패:', e); th = null; }   // _now — 연막검사가 시계를 준다
+    if (th && th.direct != null) { if (ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.via = 'thread'; return th.direct; }
+    if (th && th.q) { q = S(th.q); if (q !== q0 && ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.rq = q; }   // rq — 되쓴 말. isWeakAnswer 가 원문(«응»·«두 번째») 대신 이것으로 약함을 잰다(모델 누출 방지, 감사 3)
+  }
   if (!q || q.length < 2) return null;
   const c = _normalize(ctx);
   const _via = (v) => { if (c._trace && typeof c._trace === 'object') c._trace.via = v; };   // 3.42: 잡아채는 길 표시(판 B 문지기 재료)
@@ -2028,10 +2039,12 @@ const WEAK_TEXT = /못 배웠|이렇게 물어보세요|무슨 뜻인지 못 알
 /** 규칙 답이 «약한 답»인가 — null · 잡아채는 길 · 모르는 낱말이 남음. 되묻기(modeChoice)는 화면이 단추로 받으니 약하지 않다고 본다. */
 const PURE_TIME = /^(미르야\s*)?(지금\s*)?(몇\s*시|시간|시각|몇시)(야|이야|지|예요|인가요|입니까|니|냐|요)?\s*[?？]*$/;
 const PURE_PROGRESS = /(진행|어디까지|얼마나\s*(했|됐)|몇\s*(프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(했|됐)|현황)/;
-export function isWeakAnswer(q, answer, trace) {
+export function isWeakAnswer(q0, answer, trace) {
   if (answer == null || answer === '') return true;
   const via = trace && trace.via;
   if (via === 'modeChoice') return false;
+  if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
+  const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다
   if (via === 'time' && PURE_TIME.test(String(q).trim())) return false;
   if (via === 'progress' && PURE_PROGRESS.test(String(q))) return false;
@@ -2338,6 +2351,356 @@ export async function askMir(q, ctx, rulesFn, opts = {}) {
   const m = await askMirModel(q, ctx, (cq) => rulesFn(cq, {}), { who: opts.who || ctx.inspector || '', weakText: rulesText, weakVia: trace.via || '' });
   if (m && m.text) return { text: m.text, via: m.via, weak, rulesText, trace, canonical: m.canonical };
   return { text: rulesText, via: rulesText ? 'rules' : null, weak, rulesText, trace, reason: m && m.reason };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// [mirThread] 대화 — 답 뒤에 한 마디 더 · 얼버무린 답만 확인 · 끝은 검수사가 (3.68 / ConeOne 2.57 신설)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+/* ★ TallyOne 3.68 (검수사 2026-09-29)
+     «예를 들면 몇시에 끝나 하면 그 답만 하고 끝납니다. 다른 질문을 받거나 왜 그질문을 했는지 의도를 묻지 않습니다.
+      그리고 미르가 답한게 원하는건지 다른 대답을 했는지 확인을 안합니다.»
+     «네 원하는것은 미르가 대화를 끝내는게 아니고 사용자가 끝낼수 있게 했으면 합니다. 미르가 좀더 친절 했으면 하는것입니다.»
+
+   ── 한 벌의 규칙(관문 4 시뮬 확정 2026-09-29 13:35 «네»)
+   · 대화 단위 = **검수원 한 사람의 한 줄**(키는 항차 키|검수원이지만, 같은 검수원이 다른 항차 키로 이어 말하면 가장 최근 대화에 붙인다 — 떠 있는 미르는 배 이름을 바꿔 가며 묻는다).
+     마지막 말에서 3분. 최근 5턴만. 메모리에만 두고 보관소에 쓰지 않는다.
+   · 답 뒤 한 마디(follow) — 규칙이 강하게 답했으면 «왜 물었을까»에 맞는 다음 제안 한 줄 + 누르면 그대로 묻는 칩 2~3개.
+     칩은 전부 엔진이 강한 답을 내는 말만(관문 4 칩 전수 21/21). 숫자는 지어내지 않는다(제안만).
+   · 확인(confirm) — 엔진이 얼버무린 길(WEAK_VIA·WEAK_TEXT — howTo·knowledgeGuess·unlearned…)이나 모델 답일 때만 «제가 맞게 알아들었나요?».
+     모르는 낱말(이름·선박코드)만으로 약한 답은 얼버무림이 아니다(1판 시뮬 41/78 → 2/78).
+   · 대화 중 «응/네/sp/그래» = 첫 칩 · «두 번째» = 그 번호 · «아니 ○○» = 새 질문 · «그거·아까 그 컨» = 직전 컨 · «아니»만 = 두고 보기
+     · 끝맺음(됐어·그만·고마워·수고·괜찮아·오케이·끝 — 12자 이하·묻는 말 아님) = 접는다. 미르가 먼저 끝내지 않는다.
+   · 대화 밖 «응·sp·그만» 은 모델·오답학습으로 보내지 않고 «네? 뭐 확인해 드릴까요?» + 칩 3개.
+   · 같은 제안을 두 번 하지 않는다. 작업이 다 끝났으면 «다음 배 일정 볼까요?». 못 찾은 번호·베이는 «다시 불러 주시면 바로 찾을게요».
+
+   ── 배선(§4-4 한 벌 · §4-4 문지기는 데이터가 들어오는 자리)
+   · 풀기(mirThreadResolve)는 **순수**다 — answerOneRaw 머리에서 «응»을 첫 칩으로 바꾸거나(직접 답이면 via='thread' 로 돌려준다) 기억을 바꾸지 않는다.
+     검색창·통합검색은 글자마다·다시 그릴 때마다 answerOneRaw 를 부르므로 여기서 기억을 바꾸면 같은 «응»이 두 번째 그림에서 다른 답이 된다.
+   · 기록(mirThreadCommit)은 화면이 **접수 시점에 한 번** 부른다(떠 있는 미르 ask · 검색창 askedAt effect · 통합검색 · 탭 카드 · 콘앱 mirAsk).
+     같은 접수(ctx._utterAt = 화면 askedAt)를 다시 풀어도 같은 결과가 나오게 마지막 발화(lastUtter)를 기억한다 — 접수 표가 없는 자리(떠 있는 미르·콘앱)는 한 번만 부르니 그대로 새로 푼다. 한 마디는 답 문자열이 아니라 돌려주는 값({line, chips, confirm})이다 —
+     smoke_mirsame 의 «두 앱 같은 답» 정확 비교와 WEAK_TEXT 문지기가 그대로 선다.
+   · 대화 층이 직접 받은 말(응·아니·끝맺음·되물음)은 via='thread' — isWeakAnswer 가 약하지 않다고 보므로 모델·mir_misses·학습 짝(_pending)에 안 간다.
+     되쓴 말(«응»→«남은 대수»)은 ctx._trace.rq 에 적고 isWeakAnswer 가 그것으로 잰다 — 원문의 «아니»·«번째» 가 모르는 낱말로 남아 모델로 새지 않게(감사 3).
+   · 기억은 **앱마다 따로**(모듈 메모리 — 검수앱 번들과 콘앱 mir-core.js 가 각자 가진다). 검수원이 빈 키(조회만·콘앱 미로그인)는 같은 폰의 한 사람으로 본다 — 여러 사람이 한 폰을 쓰면 섞일 수 있다(허용, 콘앱은 한 폰 한 사람).
+   · 끝맺음은 **끝맺음 낱말만 있는 말**이다 — «0230 완료됐어»·«양하 다 됐어»·«OK 3426» 은 업무 말이라 엔진이 답한다(감사 9 회귀 실측 뒤 앵커 정규식으로). */
+const THREAD_WINDOW_MS = 3 * 60 * 1000;
+const THREAD_MAX_TURNS = 5;
+const _threads = {};                 // key(voyageKey|inspector) → { turns:[{q, rq, intent, entity, answer, follow, confirm, at}], at, lastUtter }
+let _threadClosed = null;            // 방금 접은 대화 — 같은 «됐어»를 다시 그릴 때 같은 문구
+//  끝맺음 — **끝맺음 낱말만 있는 말**(감사 실측 «0230 완료됐어»·«양하 다 됐어»·«다 됐어»·«OK 3426» 은 업무 말이다 — 낱말이 들어 있다고 접지 않는다)
+const TH_CLOSE_RE = /^(?:(?:응|네|어|예|아|아니|아냐|아니야|이제|자|그래|오케이|ok)\s*,?\s*)?(?:됐어요?|됐다|됐습니다|그만|그만해|그만할게|고마워요?|고맙습니다|고맙다|감사합니다|감사해요?|감사|수고|수고했어|수고하세요|수고해|수고 많았어|괜찮아요?|괜찮습니다|오케이|ok|okay|ㅇㅋ|끝|끝이야|알았어|알겠어|알겠습니다|알았어요|알겠어요|바이|잘자|잘 자)(?:요|입니다)?(?:\s*,?\s*(?:고마워요?|고맙습니다|감사합니다|수고|수고하세요|미르야|미르))?[.!~\s]*$/i;
+const TH_ASK_WORD = /(몇|언제|어디|뭐|무슨|어떻게|누구|얼마|\?|？)/;
+const TH_YES_RE = /^(?:(?:응|어|네|예)\s*,?\s*)?(응|어|네|넵|예|그래|그래요|좋아|좋아요|좋지|해줘|해 줘|부탁해|ㅇㅇ|sp|웅|응응|그러자|그럴까|해봐|보여줘|알려줘|맞아|맞아요|맞습니다)[.!~?]*$/i;
+const TH_NO_RE = /^(아니|아니요|아뇨|아니야|노|ㄴㄴ|싫어|괜찮아|틀렸어|아닌데)[.!~]*$/i;
+const TH_PICK_RE = /^(첫\s*번째|둘째|두\s*번째|세\s*번째|셋째|1|2|3|1번|2번|3번)[.!~]*$/;
+const TH_ORDINAL_RE = /^(첫\s*번째|둘째|두\s*번째|세\s*번째|셋째)[.!~]*$/;   // 되물음 폴백은 서수 낱말만 — «1번/2번/3번» 은 칩이 없으면 베이 번호다(2차 시뮬 재검증 회귀)
+const TH_REDIRECT_RE = /^(아니|아니요|아뇨|아니야|아냐)[,\s]+(.+)$/;
+const TH_REF_RE = /(아까 그 컨테이너|아까 그 컨|아까 그거|아까 그|그 컨테이너|그 컨(?![가-힣])|그것|그거(?![가-힣])|그놈|걔)/;   // «이거»·«그 배» 는 뺐다 — «이거 몇 시에 끝나»(실제 질문)·«그 배 출항 언제» 가 컨 번호로 바뀌던 것(감사) · «그 컨테이너»·«그거야» 부분일치 방지(재감사 D)
+const TH_CONFIRM_LINE = '제가 맞게 알아들었나요? 아니면 «남은 대수»처럼 다시 말씀해 주세요.';
+const TH_CONFIRM_YES = '네, 그대로 둘게요 😺 더 물어보셔도 돼요.';
+const TH_CONFIRM_NO = '그럼 어떤 걸 물으신 건지 한 마디만 더 알려 주세요. 예를 들면 «몇 시에 끝나» «0230 어디»요.';
+const TH_PROMPT_LINE = '네? 뭐 확인해 드릴까요? 아래 단추를 누르셔도 되고 컨 번호나 말로 물으셔도 돼요.';
+const TH_REF_ASK = '어느 컨 말씀이세요? 끝 네 자리로 불러 주시면 바로 볼게요.';
+const TH_PROMPT_CHIPS = ['몇 시에 끝나', '남은 대수', '브리핑'];
+const TH_CLOSE_LINES = ['네, 언제든 부르세요 😺', '네! 수고하세요, 또 불러 주세요 😺', '알겠어요. 필요하면 미르야 하고 부르시면 돼요 😺'];
+const TH_NO_LINE = '네, 그럼 두고 볼게요. 필요하면 또 부르세요 😺';
+const _thSeed = (arr, s) => arr[[...String(s)].reduce((a, ch) => a + ch.charCodeAt(0), 0) % arr.length];
+const _thNorm = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+const _thIsClose = (q) => q.length <= 14 && !TH_ASK_WORD.test(q) && !/\d/.test(q) && TH_CLOSE_RE.test(q);
+const _thKey = (c) => `${(c && c.voyageKey) || ''}|${(c && c.inspector) || ''}`;
+//  살아 있는 대화 — 같은 키가 먼저, 없으면 같은 검수원의 가장 최근 것(«KBTR 몇 시에 끝나» 뒤의 «응»은 배 이름이 없다)
+function _thOf(c, now) {
+  const k = _thKey(c);
+  const th = _threads[k];
+  if (th && th.turns.length && now - th.at <= THREAD_WINDOW_MS) return { key: k, th };
+  const who = '|' + ((c && c.inspector) || '');
+  let best = null;
+  for (const kk of Object.keys(_threads)) { const t = _threads[kk]; if (kk.endsWith(who) && t.turns.length && now - t.at <= THREAD_WINDOW_MS && (!best || t.at > best.th.at)) best = { key: kk, th: t }; }
+  return best;
+}
+/** 지금 이 검수원과 대화 중인가 — 화면의 1글자 문지기(«응»)가 이것으로 연다. */
+export function mirThreadAlive(ctx, now = Date.now()) { return !!_thOf(ctx || {}, now); }
+/** 시험용 — 대화 기억 초기화 */
+export function _mirThreadReset() { for (const k of Object.keys(_threads)) delete _threads[k]; _threadClosed = null; }
+
+/** 풀기(순수) — 대화 중의 짧은 말을 직전 답에 이어 푼다. 기억은 바꾸지 않는다.
+    돌려주는 값 { q(엔진에 넘길 말), direct(대화 층이 직접 낸 답이면 문자열), kind('close'|'confirmYes'|'confirmNo'|'prompt'|'pick'|'redirect'|'ref'|'pass'), how } */
+export function mirThreadResolve(q0, ctx, now = Date.now()) {
+  const q = _thNorm(q0);
+  if (!q) return { q, direct: null, kind: 'pass', how: '' };
+  //  같은 발화를 다시 풀면(화면이 다시 그림 — 검색창·통합검색·탭 카드는 재료가 바뀔 때마다 answerOneRaw 를 다시 부른다) 기록된 결과 그대로.
+  //    «같은 발화»의 판정은 글자가 아니라 **접수 표(ctx._utterAt — 화면의 askedAt)** 다. 글자만 보면 «응» 을 두 번 말한 것도 같은 발화가 된다(연막 실측).
+  const ut = ctx && ctx._utterAt;
+  if (ut && _threadClosed && _threadClosed.raw === q && _threadClosed.utterAt === ut) return { q, direct: _threadClosed.direct, kind: 'close', how: '기록됨' };
+  const hit = _thOf(ctx, now);
+  const th = hit ? hit.th : null;
+  if (ut && th && th.lastUtter && th.lastUtter.raw === q && th.lastUtter.utterAt === ut) return { q: th.lastUtter.q, direct: th.lastUtter.direct, kind: th.lastUtter.kind, how: '기록됨' };
+  const last = th ? th.turns[th.turns.length - 1] : null;
+  if (!last) {
+    //  대화 밖 짧은 말 — «응·sp·아니» 는 되묻고, 끝맺음은 잡담이 못 받는 것만 받아 준다(«고마워» 는 잡담이 답한다 — 종전 그대로)
+    if (TH_YES_RE.test(q) || TH_NO_RE.test(q) || TH_ORDINAL_RE.test(q)) return { q, direct: TH_PROMPT_LINE, kind: 'prompt', how: '대화 밖 «응/아니/두 번째»' };
+    if (TH_REF_RE.test(q)) return { q, direct: TH_REF_ASK, kind: 'prompt', how: '대화 밖 «그거» — 붙을 컨이 없다' };
+    if (_thIsClose(q)) { let st = null; try { st = mirSmallTalk(q); } catch (e) { st = null; } if (!st) return { q, direct: _thSeed(TH_CLOSE_LINES, q), kind: 'close', how: '대화 밖 끝맺음' }; }
+    const rd0 = q.match(TH_REDIRECT_RE);   // 대화 밖 «아니 남은 대수» — «아니» 가 모르는 낱말로 남아 모델로 새지 않게 그 뒤 말로(2차 시뮬 ⑥)
+    if (rd0) return { q: rd0[2], direct: null, kind: 'redirect', how: `«${q}» → «${rd0[2]}»` };
+    return { q, direct: null, kind: 'pass', how: '' };
+  }
+  //  못 배운 말(엔진 null) 뒤에는 직전 제안이 화면에 없다 — «응/두 번째» 를 옛 칩으로 풀지 않고 되묻는다(2차 시뮬 ⑤: 두 턴 전 칩이 조용히 실행되던 것)
+  const afterMiss = !!(th.missAt && th.missAt > last.at);
+  //  ① 사용자가 끝낸다
+  if (_thIsClose(q)) return { q, direct: _thSeed(TH_CLOSE_LINES, q), kind: 'close', how: '끝맺음' };
+  //  ② 확인 질문에 «응/아니» — «두 번째» 같은 번호 고르기는 제안이 없으니 되물음(3차 감사 4)
+  if (last.confirm && !afterMiss) {
+    if (TH_YES_RE.test(q)) return { q, direct: TH_CONFIRM_YES, kind: 'confirmYes', how: '확인 «응»' };
+    if (TH_NO_RE.test(q)) return { q, direct: TH_CONFIRM_NO, kind: 'confirmNo', how: '확인 «아니»' };
+    if (TH_ORDINAL_RE.test(q)) return { q, direct: TH_PROMPT_LINE, kind: 'prompt', how: '확인 뒤 번호 — 제안 없음' };
+  }
+  //  ③ 제안 받기 — «응/그래/sp» 는 첫 칩, «두 번째» 는 그 번호, «아니» 만이면 두고 보기
+  //  되쓴 말에 배를 붙인다 — 홈(떠 있는 미르·통합검색)에서 «KBTR 몇 시에 끝나» 뒤의 «응» 은 배 이름이 없다. **그 턴의 배와 지금 재료의 배가 다르면**(재료가 없거나
+  //    다른 항차가 열려 있으면) 턴의 배 코드를 앞에 붙여 화면(pickShipCtx)과 엔진이 같은 배로 답하게 한다(감사 5 · 재감사 C: 항차 ZZZZ 열린 채 KBTR 대화의 «응»).
+  const ctxShip = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
+  const lastShip = (last.ship && /^[A-Z0-9]{2,8}$/.test(last.ship)) ? last.ship : '';
+  const withShip = (rq) => (lastShip && ctxShip !== lastShip && !rq.toUpperCase().startsWith(lastShip + ' ')) ? `${lastShip} ${rq}` : rq;
+  const chips = (!afterMiss && last.follow && Array.isArray(last.follow.chips)) ? last.follow.chips : [];
+  if (chips.length) {
+    if (TH_YES_RE.test(q)) return { q: withShip(chips[0]), direct: null, kind: 'pick', how: `«${q}» → 제안 1 «${chips[0]}»` };
+    //  맨숫자 «1/2/3» 은 접수된 말(ctx._utterAt — 전송·음성 확정)에서만 번호로 본다. 검색창에 숫자를 치기 시작한 첫 글자가 제안으로 풀리던 것(감사 2).
+    if (TH_PICK_RE.test(q) && (!/^\d$/.test(q) || ut)) { const n = /둘|두|2/.test(q) ? 1 : /셋|세|3/.test(q) ? 2 : 0; const rq = chips[Math.min(n, chips.length - 1)]; return { q: withShip(rq), direct: null, kind: 'pick', how: `«${q}» → 제안 ${n + 1} «${rq}»` }; }
+    if (TH_NO_RE.test(q)) return { q, direct: TH_NO_LINE, kind: 'decline', how: '제안 뒤 «아니» — 칩만 거두고 대화는 남긴다' };
+  } else if (TH_YES_RE.test(q) || TH_NO_RE.test(q) || TH_ORDINAL_RE.test(q)) {
+    return { q, direct: TH_PROMPT_LINE, kind: 'prompt', how: '제안 없는 «응/아니/두 번째»' };
+  }
+  //  ④ «아니 ○○» → 새 질문
+  let rq = q, how = '', kind = 'pass';
+  const rd = q.match(TH_REDIRECT_RE);
+  if (rd) { rq = rd[2]; how = `«${q}» → 방향 바꿈 «${rq}»`; kind = 'redirect'; }
+  //  ⑤ «그거·아까 그 컨» → 가장 가까운 개체(끝 네 자리 · 베이 — 최근 5턴에서 뒤부터, 2차 시뮬 ④). 개체가 없으면 대화 층이 «어느 컨 말씀이세요?» 로 직접 받는다(모델·메모로 안 샘).
+  if (TH_REF_RE.test(rq)) {
+    let ent = null;
+    for (let i = th.turns.length - 1; i >= 0; i -= 1) { const e0 = th.turns[i].entity || {}; if (e0.cn || e0.l4 || e0.bay) { ent = e0; break; } }
+    if (ent) {
+      const e = (ent.cn ? ent.cn.slice(-4) : '') || ent.l4 || `${ent.bay}번 베이`;   // 컨 번호 끝 네 자리가 먼저(«여기를 46» 의 46 은 끝네자리가 아니다)
+      rq = rq.replace(TH_REF_RE, e); how = (how ? how + ' · ' : '') + `«그거» → ${e}`; kind = 'ref';
+    } else {
+      return { q, direct: TH_REF_ASK, kind: 'prompt', how: '«그거» — 붙을 컨이 없다' };
+    }
+  }
+  if (kind !== 'pass') rq = withShip(rq);
+  return { q: rq, direct: null, kind, how };
+}
+
+//  얼버무린 답인가 — WEAK_VIA·WEAK_TEXT 그대로 한 벌 + 모델 답(model·translate·confirmed). 모르는 낱말만으로 약한 답은 아니다.
+const TH_HEDGE_VIA = new Set(['model', 'translate', 'confirmed']);
+function _thHedged(q, text, via) {
+  if (text == null || text === '') return false;
+  if (via && TH_HEDGE_VIA.has(via)) return true;
+  if (!isWeakAnswer(q, text, { via })) return false;
+  return (via && WEAK_VIA.has(via)) || WEAK_TEXT.test(String(text));
+}
+//  의도 — 파서 칸 + 답 모양(한 벌: 엔진 것 그대로). 한 마디의 갈래를 고르는 데만 쓴다(답을 고르지 않는다).
+function _thIntent(q, p, answer) {
+  const a = _thNorm(answer);
+  if (!p) return 'unknown';
+  if (p.etaQuery || /몇\s*시(쯤)?에?\s*끝|언제\s*끝|끝날까/.test(q)) return 'eta';
+  if (p.paceQuery || /속도|시간당/.test(q)) return 'pace';
+  if (p.progressQuery || /남았|남은|얼마나\s*(했|남)/.test(q)) return 'remaining';
+  if (/^📝/.test(a)) return 'crewSet';
+  if (p.crewSet || p.gangSet) return 'crewRefused';   // 적지 않았다(콘앱 «검수앱에서 적어 주세요»·전부 명단 밖) — 한 마디 없음(2차 시뮬 ③)
+  if (p.deviceCmd) return 'device';
+  if (p.briefingQuery || /브리핑/.test(q)) return 'briefing';
+  if (p.foodQuery || /먹었|먹지|먹을/.test(q)) return 'meal';
+  if (p.bay || p.bayBreakdown || /베이/.test(q)) return 'bay';
+  if (p.type === 'l4' || p.digits || p.posQuery) return 'position';
+  if (p.asking === 'how' || p.howToQuery || /처리\s*방법|대처|어떻게\s*해/.test(q)) return 'howto';
+  if (p.pilotQuery || p.schedQuery || /출항|입항|도선/.test(q)) return 'sched';
+  if (p.mirHello || p.mirCalled) return 'hello';
+  if (p.fe === 'E' || /엠티|피트|풀\b|리퍼|디지|위험물|엑스레이|오픈탑|플랫/.test(q) || p.isStat || /몇\s*(개|대)/.test(q)) return 'count';
+  return 'other';
+}
+function _thEntity(q, p, answer, ctx) {
+  const m = _thNorm(answer).match(/([A-Z]{4}\d{7})/);
+  const cn = m ? m[1] : '';
+  let c = null;
+  if (cn && ctx && Array.isArray(ctx.containers)) { try { c = ctx.containers.find((x) => x && x.cn === cn) || null; } catch (e) { c = null; } }
+  const l4 = (p && p.digits && /^\d{4}$/.test(String(p.digits))) ? String(p.digits) : ((q.match(/\b(\d{4})\b/) || [])[1] || '');   // 4자리일 때만(«여기를 46» 의 46 은 끝네자리가 아니다, 2차 시뮬 ②)
+  const notFound = _thIsNotFound(answer);   // 📭 없음 답의 번호는 개체가 아니다(«그거» 가 붙지 않게)
+  return { cn: notFound ? '' : cn, c: notFound ? null : c, l4: notFound ? '' : l4, bay: (!notFound && p && p.bay) ? String(p.bay) : '' };
+}
+const _thIsDone = (a) => /남은 작업:\s*0대|다 끝났어요|작업 완료 · 종료/.test(_thNorm(a));
+const _thIsNotFound = (a) => /^📭/.test(_thNorm(a));
+const _thSeenQs = (th, q) => (th ? th.turns : []).map((t) => t.rq).concat([q]).join(' ');
+//  진행 세 갈래(ETA·잔여·속도)+갱별+다음 배는 서로를 제안한다 — 이 대화에서 본 갈래는 뺀다. «다 끝났다»가 나왔으면 ETA·잔여·속도는 다시 권하지 않는다.
+function _thProgressFollow(intent, th, q, a, emptyLine, n, done) {
+  const seen = new Set((th ? th.turns : []).map((t) => t.intent).concat([intent]));
+  if (done) ['eta', 'remaining', 'pace'].forEach((k) => seen.add(k));
+  const sq = _thSeenQs(th, q);
+  const C = [
+    { k: 'eta', chip: '몇 시에 끝나', line: '이 속도면 몇 시에 끝나는지도 볼까요?', re: /끝나|끝날/ },
+    { k: 'remaining', chip: '남은 대수', line: '남은 대수도 볼까요?', re: /남은|남았/ },
+    { k: 'gang', chip: '갱별 진행', line: '갱별 진행도 볼까요?', re: /갱별/ },
+    { k: 'pace', chip: '작업 속도', line: '작업 속도도 볼까요?', re: /속도|시간당/ },
+    { k: 'sched', chip: '출항 언제', line: '출항 시각도 볼까요?', re: /출항/ },
+  ].filter((c) => !seen.has(c.k) && !c.re.test(sq));
+  if (!C.length) return { line: emptyLine, chips: [] };
+  return { line: C[0].line + (C[1] ? ` ${C[1].chip}도 돼요.` : ''), chips: C.slice(0, n).map((c) => c.chip) };
+}
+//  컨 하나에 대해 이 대화에서 이미 물은 항목(온도·위험물·실번호·무게·규격) — 같은 제안을 두 번 하지 않는다
+const TH_ATTR = { '온도': /온도/, '위험물': /위험물|디지/, '실번호': /실번호|씰/, '무게': /무게|중량/, '규격': /규격|피트|사이즈/ };
+function _thAskedAttrs(th, l4) {
+  const s = new Set();
+  if (!th || !l4) return s;
+  for (const t of th.turns) { if (t.entity && (t.entity.l4 === l4 || (t.entity.cn || '').endsWith(l4))) for (const k in TH_ATTR) if (TH_ATTR[k].test(t.rq)) s.add(k); }
+  return s;
+}
+/** 한 마디 더 — «응» 은 첫 칩. 칩은 전부 엔진이 강한 답을 내는 말(관문 4 칩 전수). 숫자는 답에서 가져오지 않는다. */
+function _thFollowFor(intent, q, answer, ent, now, th, via, done) {
+  const a = _thNorm(answer);
+  const l4 = ent.cn ? ent.cn.slice(-4) : ent.l4;
+  const bay = ent.bay;
+  const sq = _thSeenQs(th, q);   // 이 대화에서 이미 물은 말들(+지금 말) — 같은 제안을 두 번 하지 않는다
+  if (via === 'posAskBack' || via === 'modeChoice') return null;   // 엔진이 이미 되물었다 — 겹쳐 묻지 않는다
+  if (/작업표가 없어요|검수앱에서 적어 주세요/.test(a)) return null;   // 콘앱이 «못 한다» 고 답한 자리 — 이어 붙일 제안이 없다(2차 시뮬 ③)
+  switch (intent) {
+    case 'eta': case 'remaining': case 'pace': {
+      if (done) {
+        //  다 끝났으면 출항·호기별·갱별 — 이 대화에서 이미 본 것은 뺀다. («다음 배» 는 엔진에 규칙이 없다 — 이 배 일정을 다음 배라고 내던 것, 2차 시뮬 ①)
+        const C = [['출항 언제', /출항/], ['호기별 진행', /호기별/], ['갱별 진행', /갱별/]].filter(([, re]) => !re.test(sq)).map(([c]) => c);
+        const head = intent === 'eta' ? '수고하셨어요.' : '다 끝났네요, 수고하셨어요.';
+        if (!C.length) return { line: `${head} 더 볼 것 있으면 말씀하세요.`, chips: [] };
+        return { line: `${head} ${C[0] === '출항 언제' ? '출항 시각도 볼까요?' : C[0] + '도 볼까요?'}`, chips: C.slice(0, 2) };
+      }
+      return _thProgressFollow(intent, th, q, a, '진행은 다 봤어요. 다른 것도 물어보세요.', 3, done);
+    }
+    case 'position': {
+      if (_thIsNotFound(a) || /이 항차에 없어요/.test(a)) return { line: '이 항차 목록엔 없어요. 숫자 하나가 다를 수 있으니 다시 불러 주시면 바로 찾을게요.', chips: [] };
+      if (!l4) return { line: '실번호나 무게도 볼 수 있어요. 끝 네 자리로 불러 주세요.', chips: [] };
+      const asked = _thAskedAttrs(th, l4);
+      for (const k in TH_ATTR) if (TH_ATTR[k].test(q)) asked.add(k);
+      //  리퍼·위험물은 컨 재료로 판정한다([mirFacts] _isRf/_isDg 한 벌 — 답 문자열의 «RH» 는 소유주 코드 TRHU 에도 있다, 감사 4). 재료에 없으면 답 머리의 규격 칸만 본다.
+      const isRf = ent.c ? _isRf(ent.c) : (/·\s*\d{2}R[HFE]\b/.test(a) && !/리퍼가 아니에요/.test(a));   // [mirFacts] 의 _isRf/_isDg 한 벌(재감사 4)
+      const isDg = ent.c ? _isDg(ent.c) : /DG\d|UN\d{4}|cl\.\d/.test(a);
+      const order = [].concat(isRf ? ['온도'] : [], isDg ? ['위험물'] : [], ['실번호', '무게', '규격']).filter((k) => !asked.has(k));
+      if (!order.length) return { line: '이 컨은 다 봤어요. 다른 번호도 불러 주세요.', chips: [] };
+      const head = order[0] === '온도' ? '리퍼네요. 온도도 볼까요?' : order[0] === '위험물' ? '위험물이에요. 클래스·UN 번호도 볼까요?' : `${order[0]}도 볼까요?${order[1] ? ' ' + order[1] + '도 돼요.' : ''}`;
+      return { line: head, chips: order.slice(0, 2).map((k) => `${l4} ${k}`) };
+    }
+    case 'crewSet': {
+      //  확인할 호기는 **답이 적었다고 한 첫 호기**(«— 2호기 김석 · 3호기 이인철로 기억할게요»)다 — 질문의 첫 호기는 명단 밖이라 못 적었을 수 있다(2차 시뮬 ①)
+      const no = (a.match(/—\s*(\d)\s*호기/) || a.match(/(\d)\s*호기\s*[가-힣]+/) || [])[1] || '';
+      if (!no) return null;
+      const warn = /명단에 없어 못 적었어요/.test(a) ? '못 적은 이름은 명단에 있는 이름으로 다시 말해 주세요. ' : '';
+      return { line: `${warn}적은 대로 맞는지 볼까요?`, chips: [`${no}호기 누구야`, '호기별 진행'] };
+    }
+    case 'crewRefused':
+      return null;
+    case 'device': {
+      //  방금 한 조작의 반대쪽만, 그리고 이 대화에서 막 권한 것은 다시 권하지 않는다(2차 시뮬 ①)
+      let C = /이미 제일 어두워요/.test(a) ? ['밝게'] : /이미 제일 밝아요/.test(a) ? ['더 어둡게'] : (/어둡|어두/.test(q) ? ['더 어둡게', '밝게'] : ['밝게', '더 어둡게']);
+      const lastChips = (th && th.turns.length) ? ((th.turns[th.turns.length - 1].follow || {}).chips || []) : [];
+      C = C.filter((c) => !lastChips.includes(c) || C.length === 1);
+      if (!C.length) return { line: '', chips: [] };
+      return { line: `${C[0]} 할까요?${C[1] ? ' ' + C[1] + '도 돼요.' : ''}`, chips: C };
+    }
+    case 'briefing': {
+      const C = [['리퍼 목록', /리퍼/], ['위험물 목록', /위험물|디지/], ['남은 대수', /남은|남았/]].filter(([, re]) => !re.test(sq)).map(([c]) => c);
+      if (!C.length) return { line: '더 볼 것 있으면 말씀하세요.', chips: [] };
+      return { line: `${C[0]}도 볼까요?${C[1] ? ' ' + C[1] + '도 돼요.' : ''}`, chips: C.slice(0, 3) };
+    }
+    case 'howto': {
+      //  «씰 목록» 은 엔진이 컨 위치 목록을 내므로 뺐다(2차 시뮬 ①) — 커트씰 기록만
+      const C = [['커트씰', /커트씰/]].filter(([, re]) => !re.test(sq)).map(([c]) => c);
+      if (!C.length) return { line: '더 볼 것 있으면 말씀하세요.', chips: [] };
+      return { line: '커트씰 기록도 볼까요?', chips: C };
+    }
+    case 'sched': {
+      //  일정 갈래도 같은 제안을 두 번 하지 않는다(재감사 A — «다음 배 언제» 가 자기 자신을 무한 반복)
+      const C = [['도선 언제야', /도선/], ['출항 언제', /출항/]].filter(([, re]) => !re.test(sq)).map(([c]) => c);
+      if (!C.length) return { line: '일정은 다 봤어요. 다른 것도 물어보세요.', chips: [] };
+      return { line: `${C[0] === '도선 언제야' ? '도선 시각도 볼까요?' : '출항 시각도 볼까요?'}${C[1] ? ' ' + C[1] + '도 돼요.' : ''}`, chips: C.slice(0, 2) };
+    }
+    case 'bay':
+      if (_thIsNotFound(a)) return { line: '그 번호 베이는 이 배에 없어요. 다시 불러 주시면 바로 볼게요.', chips: [] };
+      if (!bay) return { line: '베이 번호를 불러 주시면 남은 대수·리퍼도 볼게요.', chips: [] };
+      return { line: '그 베이 남은 대수도 볼까요? 리퍼도 돼요.', chips: [`${bay}번 베이 남은`, `${bay}번 베이 리퍼`] };
+    case 'count': {
+      //  대수를 물었으면 그 부류 목록을, 목록을 봤으면 아직 안 본 다른 부류를
+      const isList = /^📍/.test(a) || /목록/.test(q);
+      const kind = /리퍼/.test(q) ? '리퍼' : /디지|위험물/.test(q) ? '위험물' : '';
+      if (kind && !isList) return { line: '목록으로 뽑아 드릴까요? 위치까지 나와요.', chips: [`${kind} 목록`, kind === '리퍼' ? '위험물 목록' : '리퍼 목록'] };
+      const KINDS = { '리퍼 목록': /리퍼/, '위험물 목록': /위험물|디지/, '엠티 몇 대': /엠티/, '20피트 몇 대': /20\s*피트/ };
+      const cand = Object.keys(KINDS).filter((c) => !KINDS[c].test(sq));
+      if (!cand.length) return { line: '대수는 다 봤어요. 다른 것도 물어보세요.', chips: [] };
+      return { line: `${cand[0]}도 볼까요?`, chips: cand.slice(0, 2) };
+    }
+    case 'meal': {
+      if (/돌림판/.test(a)) return { line: '', chips: [] };   // 돌림판이 열린다 — 더 붙일 말 없음
+      const h = new Date(now).getHours();
+      const meal = /아침/.test(q) ? '아침' : /점심/.test(q) ? '점심' : /저녁/.test(q) ? '저녁' : h < 10 ? '아침' : h < 15 ? '점심' : '저녁';
+      return { line: `아직 안 드셨으면 ${meal} 뭐 먹을지 돌림판 돌려 드릴까요?`, chips: [`${meal} 뭐 먹지`] };   // «응» = 돌림판(2차 시뮬 ①: «드셨어요?» 에 «응» 이 돌림판이 되던 것)
+    }
+    case 'hello':
+      return { line: '', chips: TH_PROMPT_CHIPS.slice() };   // 엔진이 이미 «뭐 확인해 드릴까요?» 라고 물었다 — 칩만
+    default:
+      return _thProgressFollow(intent, th, q, a, '더 볼 것 있으면 말씀하세요.', 2, done);
+  }
+}
+
+/** 기록 — 화면이 접수된 말 하나에 **한 번** 부른다(답이 정해진 뒤: 규칙 답이거나 모델 답). 돌려주는 값 { kind, q, line, chips, confirm }.
+    text 가 null(못 배움)이면 기억에 넣지 않는다 — 다음 말은 종전대로 학습 짝·모델 경로다. */
+export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || Date.now())) {
+  const q = _thNorm(q0);
+  const none = { kind: 'none', q, line: '', chips: [], confirm: '' };
+  if (!q) return none;
+  const r = mirThreadResolve(q, ctx, now);
+  const hit = _thOf(ctx, now);
+  const key = hit ? hit.key : _thKey(ctx);
+  const ut = (ctx && ctx._utterAt) || null;
+  if (r.kind === 'close') {
+    if (hit) delete _threads[hit.key];
+    _threadClosed = { raw: q, direct: r.direct, at: now, utterAt: ut };
+    return { kind: 'close', q, line: '', chips: [], confirm: '' };
+  }
+  if (r.kind === 'decline') {   // 제안 뒤 «아니» — 칩만 거두고 대화는 남긴다(바로 뒤 «그거 무게»·«두 번째» 가 이어지게, 2차 시뮬)
+    if (hit) { const last = hit.th.turns[hit.th.turns.length - 1]; if (last) last.follow = { line: '', chips: [] }; hit.th.at = now; hit.th.lastUtter = { raw: q, q, direct: r.direct, kind: 'decline', utterAt: ut }; }
+    return { kind: 'decline', q, line: '', chips: [], confirm: '' };
+  }
+  if (r.kind === 'confirmYes' || r.kind === 'confirmNo') {
+    if (hit) { const last = hit.th.turns[hit.th.turns.length - 1]; if (last) last.confirm = ''; hit.th.at = now; hit.th.lastUtter = { raw: q, q, direct: r.direct, kind: r.kind, utterAt: ut }; }
+    return { kind: r.kind, q, line: '', chips: [], confirm: '' };
+  }
+  if (r.kind === 'prompt') {
+    //  되물음의 칩도 이 대화에서 이미 본 것은 뺀다(제안이 다 소진된 뒤의 «응» 이 처음 제안으로 되돌아 무한히 돌지 않게)
+    const sq0 = hit ? _thSeenQs(hit.th, q) : q;
+    const PR = [['몇 시에 끝나', /끝나|끝날/], ['남은 대수', /남은|남았/], ['브리핑', /브리핑/]].filter(([, re]) => !re.test(sq0)).map(([c]) => c);
+    const follow = { line: '', chips: PR };
+    const lastTurn = hit ? hit.th.turns[hit.th.turns.length - 1] : null;
+    const turn = { q, rq: q, intent: 'prompt', entity: {}, ship: (lastTurn && lastTurn.ship) || '', answer: r.direct, follow, confirm: '', at: now };   // ship — 대화의 배를 물려준다(3차 감사 2)
+    if (hit) { hit.th.turns.push(turn); if (hit.th.turns.length > THREAD_MAX_TURNS) hit.th.turns.shift(); hit.th.at = now; hit.th.missAt = 0; hit.th.lastUtter = { raw: q, q, direct: r.direct, kind: 'prompt', utterAt: ut }; }
+    else _threads[key] = { turns: [turn], at: now, missAt: 0, lastUtter: { raw: q, q, direct: r.direct, kind: 'prompt', utterAt: ut } };
+    return { kind: 'prompt', q, line: follow.line, chips: follow.chips, confirm: '' };
+  }
+  if (text == null || text === '') {
+    if (hit) { hit.th.lastUtter = { raw: q, q: r.q, direct: null, kind: r.kind, utterAt: ut }; hit.th.missAt = now; }   // 같은 말을 다시 그려도 같은 풀이 · 못 배운 말 표시(다음 «응» 은 되물음)
+    return { kind: 'none', q: r.q, line: '', chips: [], confirm: '' };
+  }
+  const rq = r.q;
+  let p = null; try { p = parseNaturalQuery(rq); } catch (e) { p = null; }
+  const hedged = _thHedged(rq, text, via);
+  const intent = _thIntent(rq, p, text);
+  const entity = _thEntity(rq, p, text, ctx);
+  const th = hit ? hit.th : null;
+  //  다 끝났는가 — 재료(항차 info 의 양하·선적 완료 표시)가 먼저, 없으면 답 문장(«다 끝났어요»·«남은 작업: 0대»)·이 대화의 앞 답(2차 시뮬 ①: 속도 답 뒤에 ETA 를 권하던 것)
+  const inf = (ctx && (ctx.info || (ctx.voyage && ctx.voyage.info))) || null;
+  const _pl = inf ? Number(inf.planLod) : NaN;   // 양하만 하는 배(선적 계획 planLod 0 — utils 와 같은 칸)는 양하 완료만으로 끝
+  const done = !!(inf && inf.dischargeDone && (inf.loadingDone || _pl === 0)) || _thIsDone(text) || !!(th && th.turns.some((t) => _thIsDone(t.answer || '')));
+  const follow = hedged ? null : _thFollowFor(intent, rq, text, entity, now, th, via, done);
+  const confirm = hedged ? TH_CONFIRM_LINE : '';
+  //  그 턴의 배 코드 — 홈에서 배 이름 붙인 질문 뒤의 «응» 에 붙인다(ctx.vsl · info.vsl · shipCtx.info.vsl · 되쓴 말 머리의 배 코드)
+  const ship = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
+  const turn = { q, rq, intent, entity: { cn: entity.cn, l4: entity.l4, bay: entity.bay }, ship, answer: _thNorm(text).slice(0, 200), follow, confirm, at: now };
+  if (th) { th.turns.push(turn); if (th.turns.length > THREAD_MAX_TURNS) th.turns.shift(); th.at = now; th.missAt = 0; th.lastUtter = { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut }; }
+  else _threads[key] = { turns: [turn], at: now, missAt: 0, lastUtter: { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut } };
+  return { kind: 'answer', q: rq, line: follow ? follow.line : '', chips: follow ? follow.chips.slice() : [], confirm };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════

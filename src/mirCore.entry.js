@@ -60,6 +60,7 @@ export function toMirContainers(rows, mode) {
  */
 export { answerOne, answerOneRaw } from './mir.js';
 export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATALOG } from './mir.js';   // 3.42 판 B: 콘앱도 같은 모델 창구(공용 키·문지기)
+export { mirThreadResolve, mirThreadCommit, mirThreadAlive, _mirThreadReset } from './mir.js';   // 3.68 / 2.57 [mirThread]: 답 뒤 한 마디·응/아니/끝맺음 — 콘앱도 같은 대화 층
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };

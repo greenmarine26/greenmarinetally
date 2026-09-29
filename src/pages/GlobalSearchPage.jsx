@@ -9,7 +9,7 @@ import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석�
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { mirTone, mirSmallTalk } from '../mir.js';
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
-import { askMirModel, isWeakAnswer } from '../mir.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
+import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
 import { flattenVoyages, pickShipCtx } from '../mir.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
@@ -71,6 +71,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   const traceRef = useRef({});                    // 3.42: 규칙이 어느 길에서 답했는지(mirAnswer _trace)
   const [askedAt, setAskedAt] = useState(null);   // 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
   const [reasked, setReasked] = useState(false);  // 같은 질문 재제출 — 답 박스에 «다시 확인했습니다»
+  //  3.68 [mirThread]: 대화 키(항차|검수원) — 이 화면은 inspector prop 이 없다(저장된 검수원 이름, 모델 기록과 같은 키). 1글자 «응» 문지기와 기록에 쓴다.
+  const _thCtx = () => ({ voyageKey: (shipCtx && shipCtx.key) || ctxVoyageKey || '', inspector: _storage.get(SK.activeInspector) || '', vsl: (shipCtx && shipCtx.info && shipCtx.info.vsl) || '' });
 
   // M6.10: debounce — 키 입력마다 즉시 검색하지 않고 200ms 후 검색
   //   대용량 (수천 대 컨테이너) 환경에서 입력 반응성 개선
@@ -155,7 +157,9 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   const planRanRef = useRef('');
 
   //  3.41: 질문 속 배 고르기는 mirCtx.pickShipCtx 한 벌(떠 있는 미르와 공용) — 정확 포함 → 편집거리 1 유일(1.85) → 심긴 항차(2.36).
-  const shipCtx = useMemo(() => pickShipCtx(debouncedQuery, voyages, ctxVoyageKey), [voyages, debouncedQuery, ctxVoyageKey]);
+  //  3.68 [mirThread](감사 5): «KBTR 몇 시에 끝나» 뒤의 «응» 은 배 이름이 없다 — 대화 층이 되쓴 말(«KBTR 남은 대수»)로 배를 고른다(엔진과 같은 배).
+  const _thQ = useMemo(() => { try { const r = mirThreadResolve(debouncedQuery, { voyageKey: ctxVoyageKey || '', inspector: _storage.get(SK.activeInspector) || '', _utterAt: askedAt || 0 }); return (r && r.q) || debouncedQuery; } catch (e) { return debouncedQuery; } }, [debouncedQuery, ctxVoyageKey, askedAt]);
+  const shipCtx = useMemo(() => pickShipCtx(_thQ || debouncedQuery, voyages, ctxVoyageKey), [voyages, _thQ, debouncedQuery, ctxVoyageKey]);
 
   /* 2.86 — «플랜 보여줘» 면 그 배를 열면서 신호를 남긴다. 여는 것은 부모(onOpenPlan)가 한다.
        ⚠ 홈은 **아직 배를 안 고른 자리**다. 질문에서 배를 못 찾으면(shipCtx 없음) 아무것도 열지 않는다 —
@@ -214,7 +218,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   //   시간·자기소개처럼 항차와 무관한 질문은 바로 답하고,
   //   항차 맥락이 필요한 질문(브리핑·점검·인계·ETA·날씨 등)은 어디서 물어야 하는지 안내한다.
   const _localAnswerRaw = useMemo(() => {
-    if (!debouncedQuery || debouncedQuery.length < 2) return null;
+    traceRef.current = {};   // 3.68(감사): 플랜 명령·이른 return 에서도 옛 길(via)이 남지 않게 맨 위에서 비운다
+    if (!debouncedQuery || (debouncedQuery.length < 2 && !mirThreadAlive(_thCtx()))) return null;   // 3.68: 한 글자(«응»)는 대화 중일 때만
     const Q = debouncedQuery;
     /* ★ 3.2-01 (받은함 08-29 «MCSC 카고플랜»·«MCSC 633N 양하 카고 플랜» 무응답 6건) — 플랜 명령이면 «열었어요» 한 줄.
          종전엔 플랜이 열려도(위 useEffect) 답 카드가 비어 _mirDontKnow 가 참이 되고 «무응답»으로 신고됐다.
@@ -237,11 +242,12 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     traceRef.current = {};
     return answerOneRaw(Q, {
       app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', _trace: traceRef.current,
+      _utterAt: askedAt || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다
       voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, carrierContacts, shipSpeed, ediPattern, shipContacts,
       bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, chiefData, heartbeat, isChief, shipContacts, onOpenPlan, carrierContacts, shipSpeed, ediPattern]);   // 3.41: 한 벌 엔진 ctx
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, chiefData, heartbeat, isChief, shipContacts, onOpenPlan, carrierContacts, shipSpeed, ediPattern, askedAt]);   // 3.41: 한 벌 엔진 ctx · 3.68: askedAt(접수 표)
 
   /* ★ 3.42 (판 B) — 약한 답일 때만 모델. 접수된 질문(askedAt)만, 같은 문장은 한 번. 번역문은 같은 재료로 규칙을 다시 돌린다(두 벌 금지). */
   const [modelState, setModelState] = useState({ q: '', pending: false, text: null, via: null });
@@ -298,33 +304,37 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
       실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
       ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
-  const [devAnswer, setDevAnswer] = useState(null);
+  const [devAnswer, setDevAnswer] = useState(null);   // 3.68(3차 감사 1): { key(접수 표|문장), msg } — 대화 기록이 «이 접수의» 조작 문구만 적게(ref/state 어긋남 없이)
+  const _devMsg = devAnswer ? devAnswer.msg : null;
   const devRanRef = useRef('');
+  //  3.68 [mirThread]: 대화 중 «응» 이 조작 칩(«밝게»)으로 풀리면 되쓴 말(_trace.rq)의 명령을 본다(감사 6) — 작업창과 같은 배선
+  const _rqDeviceCmd = (() => { try { const rq = traceRef.current && traceRef.current.rq; return rq ? (parseNaturalQuery(rq).deviceCmd || null) : null; } catch (e) { return null; } })();
   useEffect(() => {
-    const cmd = parsed.deviceCmd;
+    const cmd = parsed.deviceCmd || _rqDeviceCmd;
     if (!cmd) { return; }
     //  ⚠ 2.40-01 은 askedAt(전송 누름) 요구를 걷고 «치기만 해도 실행»으로 갔었다.
     //  ★ 2.57 주석 정정 — 2.55-01(문장은 전송까지 대기) 뒤로 조작 문장도 전송(엔터·➤·음성)해야
     //    debouncedQuery 에 들어오므로, 실동작은 다시 «전송해야 실행»이다. 동작은 이대로 둔다 —
     //    치는 중에 밝기가 바뀌면 안 되고, 옛 주석을 믿을 다음 클로드가 헛디디지 않게 글만 고친다.
     //    같은 문장을 두 번 실행하지 않는 **질의+명령** 키 잠금은 종전 그대로.
-    const key = String(debouncedQuery || '').trim() + '|' + JSON.stringify(cmd);
+    //  3.68(재감사 B): 키에 접수 표(askedAt)를 넣는다 — 대화 중 «응»·같은 칩을 두 번 누른 것은 같은 문장·같은 명령이라도 **다른 접수**라 다시 실행한다
+    const key = `${askedAt || 0}|${String(debouncedQuery || '').trim()}|${JSON.stringify(cmd)}`;
     if (devRanRef.current === key) return;
     devRanRef.current = key;
     let msg = null;
     try { msg = runDeviceCmd(cmd); }
     catch (e) { console.warn('[미르 조작] 실패', e); msg = '그건 지금 바꾸지 못했어요.'; }
-    if (msg) { setDevAnswer(msg); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
-  }, [parsed.deviceCmd, debouncedQuery]);
+    if (msg) { setDevAnswer({ key: `${askedAt || 0}|${String(debouncedQuery || '').trim()}`, msg }); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
+  }, [parsed.deviceCmd, _rqDeviceCmd, debouncedQuery, askedAt]);
   //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
-  useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, debouncedQuery]);
+  useEffect(() => { if (!parsed.deviceCmd && !_rqDeviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, _rqDeviceCmd, debouncedQuery]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다. 3.42: 모델이 받은 답이 있으면 약한 규칙 답 대신 그것.
   const _modelAnswer = (modelState.q === String(debouncedQuery || '').trim() && modelState.text) ? mirTone(modelState.text) : null;
   //  3.42: 렌더 시점에 «이 문장은 모델로 간다»를 미리 안다 — effect 가 pending 을 세우기 전 첫 커밋에 발화·신고가 먼저 나가던 것(감사 jsdom 실측)
   const _dq = String(debouncedQuery || '').trim();
   const _willAskModel = !!(askedAt && _dq.length >= 4 && /[가-힣]{2,}|[A-Za-z]{3,}/.test(_dq) && !/^[0-9\s]+$/.test(_dq) && !(parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) && isWeakAnswer(_dq, _localAnswerRaw, traceRef.current));
   const _modelPending = _willAskModel && !(modelState.q === _dq && !modelState.pending);
-  const localAnswer = devAnswer || _modelAnswer || _mirAnswer;
+  const localAnswer = _devMsg || _modelAnswer || _mirAnswer;
 
 
   // 검색 결과 (AI 자연어 적용)
@@ -400,7 +410,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       if (last.isFinal) {
         // 자연어 그대로 저장
         const t = text.trim();
-        if (t.length >= 2) submitNow(t);   // 1.69-05: 같은 질문을 다시 말해도 답한다(종전 setQuery는 같은 문자열이면 무반응)
+        if (t.length >= 2 || mirThreadAlive(_thCtx())) submitNow(t);   // 3.68: 대화 중 «응» 은 한 글자여도 접수   // 1.69-05: 같은 질문을 다시 말해도 답한다(종전 setQuery는 같은 문자열이면 무반응)
         else {
           const digits = parseSpokenDigits(text);
           if (digits && digits.length >= 2) submitNow(digits);
@@ -430,7 +440,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   //   답 박스에 «다시 확인했습니다 (HH:MM 기준)» 한 줄로 갱신이 보이게 한다.
   const submitNow = (raw) => {
     const t = String(raw ?? '').trim();
-    if (t.length < 2) return;
+    if (!t || (t.length < 2 && !mirThreadAlive(_thCtx()))) return;   // 3.68: 한 글자(«응»)는 대화 중일 때만
     setReasked(t === lastAskRef.current);
     lastSpokenRef.current = null;
     setAskedAt(Date.now());
@@ -450,7 +460,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   // 자동 음성 안내
   useEffect(() => {
     if (!autoSpeak) return;
-    if (!debouncedQuery || debouncedQuery.length < 2) return;
+    if (!debouncedQuery || (debouncedQuery.length < 2 && !localAnswer)) return;   // 3.68: 대화 중 «응» 의 답은 읽는다(감사 6)
     if (settledQuery !== debouncedQuery) return;   // 1.68: 아직 치는 중 — 침묵
     if (_modelPending) return;   // 3.42: 모델이 생각 중 — 약한 답을 먼저 읽지 않는다
     const sig = `${debouncedQuery}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}-${(localAnswer || '').slice(0, 24)}`;   // 1.69: 비동기 답(보관소 조회)이 도착해도 읽는다
@@ -488,6 +498,31 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       speak(`${matches.length}개 일치. 더 자세히`);
     }
   }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer, settledQuery, askedAt, _modelPending]);   // 1.69-05: 재제출 시 재발화 · 3.42: 모델 결과
+
+  /* ★ 3.68 [mirThread] — 접수된 말 하나에 **한 번** 기록(답이 정해진 뒤 — 모델로 갈 문장은 결과가 온 뒤). 한 마디 {line, chips, confirm} 를 답 밑에 그리고
+       (칩은 submitNow 로 그 말을 그대로 접수) 답 첫 줄 뒤에 이어 읽는다(append). 작업창 SearchPanel 과 같은 배선 — 화면마다 다르면 안 된다. */
+  const [mirFollow, setMirFollow] = useState(null);
+  const followKeyRef = useRef('');
+  useEffect(() => {
+    const q = String(debouncedQuery || '').trim();
+    if (!q || !askedAt) { if (mirFollow) setMirFollow(null); return; }
+    if (_modelPending) return;
+    if ((parsed.deviceCmd || _rqDeviceCmd) && !(devAnswer && devAnswer.key === `${askedAt || 0}|${q}`)) return;   // 이 접수의 조작 답이 놓일 때까지(직전 명령 문구를 적지 않는다)   // 조작 답은 실행 effect 가 다음 커밋에 놓는다 — 그때 한 번(감사 6)
+    const key = `${askedAt}|${q}`;
+    if (followKeyRef.current === key) return;
+    followKeyRef.current = key;
+    const _m = (modelState.q === q && modelState.text) ? modelState : null;
+    const text = _devMsg || (_m ? _m.text : _localAnswerRaw);
+    const via = _devMsg ? '' : (_m ? (_m.via || 'model') : ((traceRef.current && traceRef.current.via) || ''));
+    let fo = null;
+    try { fo = mirThreadCommit(q, text, via, Object.assign(_thCtx(), { _utterAt: askedAt })); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
+    const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
+    setMirFollow(show);
+    if (show && autoSpeak && !parsed.briefingQuery) {
+      const more = show.confirm || show.line;
+      if (more) { try { speak(String(more).replace(/\p{Extended_Pictographic}/gu, '').replace(/[«»]/g, ' ').trim(), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ } }
+    }
+  }, [askedAt, debouncedQuery, _modelPending, modelState, _localAnswerRaw, devAnswer, _rqDeviceCmd]);   // eslint-disable-line react-hooks/exhaustive-deps — 접수 하나에 한 번
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -633,6 +668,19 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
           <div className="text-xxs text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르 즉답</div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
+          {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 접수). 끝은 검수사가. */}
+          {mirFollow && askedAt && (
+            <div className="mt-2 pt-2 border-t border-emerald-800/60" data-mir-follow="1">
+              {(mirFollow.confirm || mirFollow.line) ? <div className={`text-sm ${mirFollow.confirm ? 'text-amber-200' : 'text-emerald-200'}`}>{mirFollow.confirm ? '❓ ' : '🐱 '}{mirFollow.confirm || mirFollow.line}</div> : null}
+              {mirFollow.chips && mirFollow.chips.length > 0 && (
+                <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                  {mirFollow.chips.map((ch) => (
+                    <button key={ch} type="button" onClick={() => { try { stopSpeak(); } catch (e) { /* */ } submitNow(ch); }} className="px-3 py-1.5 rounded-pill bg-emerald-900/60 border border-emerald-600 text-emerald-100 text-sm font-bold">{ch}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {/* 2.05-03 (검수사 확정): «내일 작업할 것을 브리핑할까요?» — [네][아니오] 선택 */}
           {/내일 작업할 것을 브리핑할까요/.test(localAnswer) && (
             <div className="flex gap-2 mt-3">

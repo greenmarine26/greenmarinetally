@@ -17,7 +17,7 @@ import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.6
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
-import { askMirModel, isWeakAnswer } from '../mir.js';   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
+import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
@@ -1146,7 +1146,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   }, [parsed, results, modeChoice]);
 
   const _localAnswerRaw = useMemo(() => {
-    if (!query || query.length < 2) return null;
+    traceRef.current = {};   // 3.68(감사): 플랜 명령·이른 return 에서도 옛 길(via)이 남지 않게 맨 위에서 비운다
+    if (!query || (query.length < 2 && !mirThreadAlive({ voyageKey, inspector }))) return null;   // 3.68: 한 글자(«응»)는 대화 중일 때만
     //  3.2-01: 플랜 명령이면 «열었어요» 한 줄 — 위 useEffect 가 연다. 셋째 쌍둥이(통합검색·양하탭과 한 벌, 감사 P2-2).
     {
       const _pc = onOpenPlan ? parseViewCommand(query) : null;
@@ -1168,6 +1169,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     traceRef.current = {};
     return answerOneRaw(query, {
       app: 'tally', smallTalkLast: true, execDevice: false, modeChoice, _trace: traceRef.current,
+      _utterAt: askedAt || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다(기록 뒤에도)
       voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
       containers: allContainers, photos: voyage?.photos || null,
       shiftMap: shiftingMapForDisplay(voyageKey, voyage),   // V7.92-02 · 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
@@ -1178,7 +1180,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       voyageDoneAts: (manualCtx && manualCtx.voyageDoneAts) || voyageDoneAts(voyage),
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan, askedAt]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan · 3.68: askedAt(접수 표)
   //  3.42: 모델이 «미르 말»로 바꾼 문장을 같은 재료로 규칙에 다시 돌린다(위 _localAnswerRaw 와 같은 ctx — 두 벌이 되면 안 된다).
   const _rulesFor = (cq) => answerOneRaw(cq, {
     app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
@@ -1217,24 +1219,28 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
       실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
       ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
-  const [devAnswer, setDevAnswer] = useState(null);
+  const [devAnswer, setDevAnswer] = useState(null);   // 3.68(3차 감사 1): { key(접수 표|문장), msg } — 대화 기록이 «이 접수의» 조작 문구만 적게(ref/state 어긋남 없이)
+  const _devMsg = devAnswer ? devAnswer.msg : null;
   const devRanRef = useRef('');
+  //  3.68 [mirThread]: 대화 중 «응» 이 조작 칩(«밝게»)으로 풀리면 되쓴 말(_trace.rq)의 명령을 본다 — 원문 «응» 에는 deviceCmd 가 없다(감사 6)
+  const _rqDeviceCmd = (() => { try { const rq = traceRef.current && traceRef.current.rq; return rq ? (parseNaturalQuery(rq).deviceCmd || null) : null; } catch (e) { return null; } })();
   useEffect(() => {
-    const cmd = parsed.deviceCmd;
+    const cmd = parsed.deviceCmd || _rqDeviceCmd;
     if (!cmd) { return; }
     //  ⚠ 2.40-01: 종전엔 `askedAt`(전송 누름)을 요구했다. 그래서 검수사가 「미르야 화면이 너무 밝아」를
     //    **치기만 하고** 전송을 안 누르자 아무 일도 안 일어났다 — 다른 조회는 치기만 해도 답이 나오는데.
     //    ⇒ 디바운스된 질의로 곧장 실행한다. 같은 문장을 두 번 실행하지 않게 **질의+명령**을 키로 잠근다.
-    const key = String(query || '').trim() + '|' + JSON.stringify(cmd);
+    //  3.68(재감사 B): 키에 접수 표(askedAt)를 넣는다 — 대화 중 «응»·같은 칩을 두 번 누른 것은 같은 문장·같은 명령이라도 **다른 접수**라 다시 실행한다
+    const key = `${askedAt || 0}|${String(query || '').trim()}|${JSON.stringify(cmd)}`;
     if (devRanRef.current === key) return;
     devRanRef.current = key;
     let msg = null;
     try { msg = runDeviceCmd(cmd); }
     catch (e) { console.warn('[미르 조작] 실패', e); msg = '그건 지금 바꾸지 못했어요.'; }
-    if (msg) { setDevAnswer(msg); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
-  }, [parsed.deviceCmd, query]);
+    if (msg) { setDevAnswer({ key: `${askedAt || 0}|${String(query || '').trim()}`, msg }); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
+  }, [parsed.deviceCmd, _rqDeviceCmd, query, askedAt]);
   //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
-  useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, query]);
+  useEffect(() => { if (!parsed.deviceCmd && !_rqDeviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, _rqDeviceCmd, query]);
 
   //  ★ 2.68 (검수사 «SWTD 갱배분은 3갱으로 하시면 편할듯 합니다»): «3갱으로 기억해» 를 이 항차에 저장.
   //    저장만 하고 답은 갱 배분 본체가 낸다 — 저장 뒤 계산이 그 수로 나오는지 바로 보인다.
@@ -1282,7 +1288,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
   //  3.42: 모델이 받은 답(번역→규칙 / 자료 답)이 있으면 약한 규칙 답 대신 그것이다. 말투는 규칙 답과 같은 한 겹.
   const _modelAnswer = (modelState.q === query.trim() && modelState.text) ? mirTone(modelState.text) : null;
-  const localAnswer = devAnswer || _modelAnswer || _mirAnswer;
+  const localAnswer = _devMsg || _modelAnswer || _mirAnswer;
   //  3.42: 렌더 시점에 «이 문장은 모델로 간다»를 미리 안다 — effect 가 pending 을 세우기 전 첫 커밋에 발화·신고가 먼저 나가던 것(감사 jsdom 실측)
   const _willAskModel = !!(askedAt && query.trim().length >= 4 && !/^[0-9\s]+$/.test(query.trim()) && !(parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) && isWeakAnswer(query.trim(), _localAnswerRaw, traceRef.current));
   const _modelWait = _willAskModel && !(modelState.q === query.trim() && !modelState.pending);
@@ -1341,7 +1347,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
-        if (t.length >= 2) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled('nls', t, { voyageKey }); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다
+        if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled('nls', t, { voyageKey }); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다
         else {
           const digits = parseSpokenDigits(text);
           if (digits && digits.length >= 2) { setReasked(digits === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(digits); setQuery(digits); logQuerySettled('lookup', digits, { voyageKey }); }
@@ -1385,7 +1391,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   // 자동 음성 안내
   useEffect(() => {
     if (!autoSpeak) return;
-    if (!query || query.length < 2) return;
+    if (!query || (query.length < 2 && !localAnswer)) return;   // 3.68: 대화 중 «응» 의 답은 읽는다(감사 6)
     if (aiLoading || aiAnswer) return; // AI 답변 중엔 안내 X
     if (chatMessages.length > 0) return;  // M5.80: 대화 중에도 안내 X (AI 답변에 자동 발음됨)
     //  2.65: 브리핑만 askedAt 을 섞는다 — 같은 «브리핑» 을 다시 말하면 처음부터 다시 읽어 준다(다시 듣기).
@@ -1427,6 +1433,32 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       speak(`${results.length}개 일치, 더 자세히`);
     }
   }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer, localAnswer, askedAt, modelState, _modelWait]);   // 1.69-05: 재제출 시 재발화 · 3.42: 모델 결과
+
+  /* ★ 3.68 [mirThread] — 접수된 말 하나에 **한 번** 기록(답이 정해진 뒤 — 모델로 갈 문장은 결과가 온 뒤). 돌려받은 한 마디 {line, chips, confirm} 를
+       답 밑에 그리고(칩은 누르면 followUp 으로 그 말을 그대로 접수) 답 첫 줄 뒤에 이어 읽는다(append — 끊지 않는다). 풀기는 위 _localAnswerRaw 가
+       answerOneRaw 머리에서 이미 했다(순수) — 여기서 기억을 바꾸면 «응» 이 다음 그림에서 다른 답이 되므로 접수 표(askedAt)로 한 번만. */
+  const [mirFollow, setMirFollow] = useState(null);
+  const followKeyRef = useRef('');
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || !askedAt) { if (mirFollow) setMirFollow(null); return; }
+    if (_modelWait) return;
+    if ((parsed.deviceCmd || _rqDeviceCmd) && !(devAnswer && devAnswer.key === `${askedAt || 0}|${q}`)) return;   // 이 접수의 조작 답이 놓일 때까지(직전 명령 문구를 적지 않는다)   // 조작 답은 실행 effect 가 다음 커밋에 놓는다 — 그때 한 번(키를 아직 잠그지 않는다, 감사 6)
+    const key = `${askedAt}|${q}`;
+    if (followKeyRef.current === key) return;
+    followKeyRef.current = key;
+    const _m = (modelState.q === q && modelState.text) ? modelState : null;
+    const text = _devMsg || (_m ? _m.text : _localAnswerRaw);
+    const via = _devMsg ? '' : (_m ? (_m.via || 'model') : ((traceRef.current && traceRef.current.via) || ''));
+    let fo = null;
+    try { fo = mirThreadCommit(q, text, via, { voyageKey, inspector, _utterAt: askedAt }); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
+    const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
+    setMirFollow(show);
+    if (show && autoSpeak && !parsed.briefingQuery && chatMessages.length === 0) {
+      const more = show.confirm || show.line;
+      if (more) { try { speak(String(more).replace(/\p{Extended_Pictographic}/gu, '').replace(/[«»]/g, ' ').trim(), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ } }
+    }
+  }, [askedAt, query, _modelWait, modelState, _localAnswerRaw, devAnswer, _rqDeviceCmd]);   // eslint-disable-line react-hooks/exhaustive-deps — 접수 하나에 한 번
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -1742,6 +1774,19 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           </div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
+          {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 접수). 끝은 검수사가(«됐어»·«고마워»). */}
+          {mirFollow && askedAt && (
+            <div className="mt-2 pt-2 border-t border-emerald-800/60" data-mir-follow="1">
+              {(mirFollow.confirm || mirFollow.line) ? <div className={`text-sm ${mirFollow.confirm ? 'text-amber-200' : 'text-emerald-200'}`}>{mirFollow.confirm ? '❓ ' : '🐱 '}{mirFollow.confirm || mirFollow.line}</div> : null}
+              {mirFollow.chips && mirFollow.chips.length > 0 && (
+                <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                  {mirFollow.chips.map((ch) => (
+                    <button key={ch} type="button" onClick={() => { try { stopSpeak(); } catch (e) { /* */ } followUp(ch); }} className="px-3 py-1.5 rounded-pill bg-emerald-900/60 border border-emerald-600 text-emerald-100 text-sm font-bold">{ch}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
           {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다
               ★ 3.41-01 (검수사 «카고플랜하면 양하 선적 선택화면이 나오고 누른 후에 양하나 선적 중 선택하라고 함»):
