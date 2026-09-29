@@ -173,10 +173,15 @@ const _memoW = (txt) => { let w = 0; for (const ch of txt) { const c = ch.charCo
 //    확정했다(generateXrayListHTML 주석). 더 줄이는 대신 **줄을 바꾼다** — 작게 만드는 것보다 낫다.
 const ROW_MM = 5.2;   // 3.60-01: 행 높이 — CSS table.ilist td height 와 같은 값
 const MEMO_FIT = [13, 16];   // 3.60: 세 단(비고 18%)에서 크로뮴 A4 실측 — 7pt 한 줄 13폭단위(«-20.0℃»=13 한 줄) · 6pt 16(«치수 미신고»=17 은 6pt 에서도 두 줄)
+//  ★ 3.69-03 — 여러 줄 비고는 한 줄 폭(16)으로 나누면 모자란다. 좌우 여백을 7mm 로 넓혀 칸이 3% 좁아지자
+//    낱말 단위 줄바꿈 손실이 드러나 «오버 H+121 W+90cm 9/3480 PG2 수화물 ◆시프팅» 이 예상 5줄 · 실제 7줄이 됐다
+//    (PCSZ 실항차 연막 실측). 한 줄 판정(MEMO_FIT)은 그대로 두고, 여러 줄 셈만 13폭단위로 센다 — 예상이 실제보다 적으면
+//    단이 넘쳐 종이가 한 장 더 나온다. 남는 것은 빈 칸일 뿐이다.
+const MEMO_WRAP = 13;
 const _memoFit = (plain) => {
   const w = _memoW(plain);
   for (let i = 0; i < MEMO_FIT.length; i++) if (w <= MEMO_FIT[i]) return { cls: i ? ` m${i + 1}` : '', lines: 1 };
-  return { cls: ' m2', lines: Math.max(1, Math.ceil(w / MEMO_FIT[MEMO_FIT.length - 1])) };
+  return { cls: ' m2', lines: Math.max(1, Math.ceil(w / MEMO_WRAP)) };
 };
 //  연막검사가 «내가 예상한 줄수» 와 «브라우저가 그린 줄수» 를 맞대 볼 수 있게 내보낸다 —
 //  이 예상이 틀리면 단·페이지 배분이 어긋나 종이가 한 장 더 나온다.
@@ -554,7 +559,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   const _html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>검수 리스트 ${modeKo} - ${vsl} ${voy}</title>
 <style>
-@page { size: A4 portrait; margin: 0.4cm; }
+@page { size: A4 portrait; margin: 0.4cm 0.7cm; }   /* 3.69-03: 좌우 7mm — 4mm 는 프린터가 표 바깥 세로줄을 못 찍었다(검수사 2026-09-29 «좌우 세로줄 부분이 안보였고»). 위아래·장당 줄 수는 그대로 */
 body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #000; font-size: 9pt; }
 .actions { position: sticky; top: 0; background: #1e293b; padding: 8px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
 /* 3.62: 장 나누기 단추 줄 — 인쇄에는 안 나간다(.actions 가 통째로 숨음) */
@@ -592,7 +597,7 @@ table.ilist tr.gb1 td { border-top: 1.5pt solid #000; height: calc(var(--rh, 5.2
 table.ilist tr.gb2 td { border-top: 2.5pt double #000; height: calc(var(--rh, 5.2mm) - 0.706mm); }   /* 두꺼워진 2pt 만큼 */
 table.ilist th { background: #ddd; font-size: 7pt; font-weight: bold; height: 4mm; white-space: nowrap; letter-spacing: -0.3px; }
 table.ilist td.no { font-size: 6.5pt; letter-spacing: -0.4px; }   /* 3.60: 순번이 세 자리(100~)가 되어도 칸 안에 */
-table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.5px; }
+table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.7px; }   /* 3.69-03: 좌우 여백 7mm 로 칸이 3% 좁아져 11자가 오른쪽 괘선에 닿았다(2차 감사) — 자간만 0.2px 좁혀 옛 틈(약 2px)을 되찾는다 */
 /*  ★ 3.45 — 비고가 겹칠 때(검수사 2026-09-14 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다»).
     표식이 늘수록 글자만 줄여 **한 줄에 둘 다** 남긴다 — 줄바꿈이나 잘림으로 하나를 잃지 않는다. */
 /*  ★ 3.45 — 비고는 **잘리지 않는다**(검수사 «DG와 중복이 될경우 동적 축소로 둘다 표기 되어야 합니다»).

@@ -18,7 +18,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { podBgOf, normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
+import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
@@ -520,9 +520,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     // 2.98-03: **베이상세는 `buildBayGrid` 를 써서 cell.oog 가 없다** — 컨 객체로 직접 판정한다.
     //   (2.98~2.98-02 가 안 보인 진짜 이유. buildBayMarks 를 쓰는 카고플랜과 경로가 다르다.)
     const og = _oogDir(c);
-    //  ★ 3.7 — 목적지 고정 바탕색(카고플랜과 같은 한 벌). 3.2 무늬는 폐기.
-    const _pb = podBgOf(colorKey, mode);
-    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}`, ...(_pb ? { style: { background: _pb } } : {}) };   // V8.25-03: 카스피식 흰 배경
+    //  ★ 3.69-03 — 바탕은 흰색(카스피와 같게). 검수사 2026-09-29 «바탕색은 흰색입니다».
+    //    3.7 의 목적지 고정 바탕색은 베이상세에서만 뺀다 — 흑백 프린터에서 회색으로 찍혀 «어둡다»였다. 카고플랜은 그대로.
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}${og ? ` cpv2-oog-${og}` : ''}` };   // V8.25-03: 카스피식 흰 배경
   };
 
   return (
@@ -991,14 +991,14 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-bay-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
         /* V7.98-15: 베이번호 중복 제거 — bd-title(큰 제목)만 쓰고 BayBoxV2 자체 베이제목은 숨김 */
         .bd-cargo-wrap .cpv2-bay-title-row { display: none !important; }
-        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: stretch; justify-content: space-evenly; line-height: 1.15; overflow: hidden; font-weight: bold; padding: 2px 4px; }
+        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: stretch; justify-content: space-evenly; line-height: 1.15; overflow: hidden; font-weight: normal; padding: 2px 4px; }   /* 3.69-03: 카스피와 같은 보통 굵기(검수사 «선굵기와 글씨 진하기는 카스피와 같게») */
         /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
         /* 2.98: OOG 도형 — 셀 밖(좌·우 한 칸, 위 한 단)으로 뻗는다. 선만, 채우지 않는다. */
         /* 2.98-01: :has() 대신 셀에 이미 붙는 OOG 클래스로 건다 — :has 가 안 먹으면
            도형이 셀의 overflow:hidden 에 통째로 잘려 «베이플랜은 안보입니다»(검수사 실측).
            그리고 형제 셀의 흰 배경이 나중에 그려져 덮으므로
            z-index 로 올린다 — 둘 중 하나만 빠져도 안 보인다. */
-        .bd-cargo-wrap .cpv2-cell[class*="cpv2-oog-"] { overflow: visible; z-index: 3; box-shadow: none !important; }
+        .bd-cargo-wrap .cpv2-cell[class*="cpv2-oog-"] { overflow: visible; z-index: 3; box-shadow: 0 0 0 0.1875pt #000, inset 0 0 0 0.1875pt #000 !important; }   /* 3.69-03: 굵은 선은 끄되(2.98-04) 칸 선은 다른 칸과 같은 0.375pt — none 이면 FR 칸만 선이 반쪽이 된다(2차 감사) */
         /* 2.98-04: 카고플랜용 «안쪽 굵은 선»(2.97)을 베이상세에서는 끈다 — 도형과 이중이 된다.
            검수사 확정 *"아까 보신대로만 그려 주세요. FR 표기법이 공용 표기법입니다"* —
            선사 베이플랜 원본은 셀 테두리를 굵게 하지 않고 **도형만** 그린다. */
@@ -1007,7 +1007,7 @@ export default function PrintableBayDetail({
            선은 인쇄에서 확실히 보이되 글씨를 방해하지 않을 굵기로. */
         .bd-cargo-wrap .cpv2-cell .bd-oog polygon,
         .bd-cargo-wrap .cpv2-cell .bd-oog rect { fill: none; stroke: #000; stroke-width: 0.8; vector-effect: non-scaling-stroke; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; font-size: 8.5pt; font-family: 'Courier New', monospace; line-height: 1.15em; align-items: stretch; justify-content: space-evenly; }   /* ★ 3.46-01: «수»가 아니라 «길이» — 아래 주석 */
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; font-size: 8pt; font-family: 'Courier New', monospace; line-height: 1.15em; align-items: stretch; justify-content: space-evenly; }   /* ★ 3.46-01: «수»가 아니라 «길이» — 아래 주석 */
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: 100%; padding: 0; }   /* V8.25-05: text-align 제거 — 줄별 정렬(bd-r2 좌/ bd-r4·r5 중앙)이 살도록 */
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 7.5pt; color: inherit; }
@@ -1034,6 +1034,18 @@ export default function PrintableBayDetail({
           box-sizing: border-box;
         }
         .bd-cargo-wrap.bd-uniform .cpv2-tier-row .cpv2-cell-empty { border: 0.5px solid transparent; }
+        /*  ★ 3.69-03 — 선 굵기는 카스피 도면 값 그대로(ATRP2622EBAY.pdf 칸 선 0.375pt 검정 · 해치 막대 1.8pt).
+            검수사 2026-09-29 «선굵기와 글씨 진하기는 카스피와 같게 해주세요».
+            ⚠ border 는 1px 아래로 못 내린다(크롬이 0.375pt 를 0.75pt 로 올림 — PDF 실측). 그래서 테두리 대신
+              바깥·안쪽 그림자를 반씩(0.1875pt) 깐다 — 이웃 칸의 반쪽과 같은 자리에 겹쳐 0.375pt 한 줄이 된다.
+            ⚠ 그림자는 칸 크기에 안 들어간다 — 칸 크기는 그대로다(3.46-01 «셀크기는 절대 변경하면 안됩니다»). */
+        .bd-cargo-wrap .cpv2-tier-row .cpv2-cell { border: none; box-shadow: 0 0 0 0.1875pt #000, inset 0 0 0 0.1875pt #000; }
+        .bd-cargo-wrap .cpv2-hatch-seg { border-top: none; height: 0; margin: 0 0.9pt; box-shadow: 0 0 0 0.9pt #000; }   /* 좌우 0.9pt 를 들여 그림자 번짐만큼 — 커버 사이 틈(4px)은 그대로 */
+        /*  ⚠ 테두리(인쇄 1px)를 없애 칸 안쪽 상자가 가로·세로 2px 커졌다. FR 도형(.bd-oog)은 그 상자 기준 %라
+              꼭짓점이 옆 칸 한가운데에서 서로 닿아 «X» 가 됐다(2차 감사 실측 — STMJ 2659E 10쪽).
+              2.98-06 확정 «> < 로 마주보되 닿지 않는다» 를 지키려고 옛 상자(테두리 1px 안쪽) 기하로 되돌린다. */
+        .bd-cargo-wrap .cpv2-tier-row .cpv2-cell .bd-oog { left: calc(-100% + 3px); top: calc(-100% + 3px); width: calc(300% - 6px); height: calc(200% - 4px); }
+        .bd-cargo-wrap .cpv2-row-labels, .bd-cargo-wrap .cpv2-tier-labels { color: #000; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell.bd-fill { padding: 0; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { padding: 1px 3px; box-sizing: border-box; }
         .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 16px; }
@@ -1107,7 +1119,10 @@ export default function PrintableBayDetail({
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            padding: 0 !important;
+            /*  ★ 3.69-03 — 머리 줄(선박명·VOY·POL)이 종이 끝 3.9mm 에 붙어 프린터가 못 찍었다(검수사 2026-09-29
+                «베이상세는 윗부분 항차 부분이 잘렸습니다»). @page 0.3cm 에 쪽 안 여백 5mm 를 더해 8~9mm 안으로.
+                border-box 라 쪽 크기(291×204mm)와 칸 크기는 그대로다. */
+            padding: 5mm 5mm 0 5mm !important;
             margin: 0 !important;
             border-bottom: none !important;
             width: 100% !important;
@@ -1121,6 +1136,10 @@ export default function PrintableBayDetail({
           /* V7.98-13: 인쇄 제외 베이는 인쇄에서만 숨김 (화면엔 보임) */
           .bd-page.bd-noprint { display: none !important; }
           /* 페어 짝꿍으로 인쇄 대상이 마지막일 때 빈 페이지 방지 — noprint 다음의 마지막 출력 페이지 */
+          /*  ★ 3.69-03 — 위 5mm 를 들인 만큼 큰 베이(PCSZ·STMJ BAY19·21·23 — 데크+홀드)는 격자가 내려와
+              아래 줄번호가 종이 끝 5.4mm 까지 내려왔다(옛 8.0mm, 실항차 PDF 실측). 머리·베이번호 글자 크기와 순서는
+              그대로 두고 줄 높이만 1.15 로 좁혀 아래를 7.5mm 로 되찾는다. 칸 크기는 안 바뀐다(고정 격자 실측). */
+          .bd-header, .bd-title { line-height: 1.15 !important; }
           /* 폰/프린터 minimum margin 대응 */
           @page { size: A4 landscape; margin: 0.3cm; }
         }
@@ -1196,13 +1215,14 @@ export default function PrintableBayDetail({
         }
         .bd-tier-row {
           display: grid;
-          border: 0.5px solid #000;
+          border: none;   /* 3.69-03: 칸마다 선을 그리므로 줄 테두리는 겹친다 */
           flex: 1 1 0;                  /* M6.94.17: 페이지 세로 가득 채움 (고정 52px→동적). tier 적은 베이 여백 제거 */
           min-height: var(--bd-row-h);  /* 텍스트 4-5줄 최소 보장 */
           box-sizing: border-box;
         }
         .bd-cell {
-          border: 0.3px solid #555;
+          border: none;   /* 3.69-03: 카스피 선 — 0.375pt 검정 한 줄(위 매트릭스 격자와 같은 그림자 방식) */
+          box-shadow: 0 0 0 0.1875pt #000, inset 0 0 0 0.1875pt #000;
           padding: 1px 2px;
           font-size: 7pt;
           line-height: 1.1em;   /* ★ 3.46-01: «수»가 아니라 «길이» — 아래 주석 */
@@ -1221,7 +1241,7 @@ export default function PrintableBayDetail({
           flex-direction: column;
           justify-content: space-evenly;
           align-items: stretch;
-          font-weight: bold;
+          font-weight: normal;   /* 3.69-03: 카스피와 같은 보통 굵기 */
         }
         /* M6.32: 셀 안 각 줄도 nowrap 보장 — 한 항목이 두 줄로 안 나뉨 */
         .bd-cell > div {
@@ -1270,7 +1290,7 @@ export default function PrintableBayDetail({
             17자가 되는데 6.3pt·자간 -0.1px 로는 84px 라 79px 칸을 넘어 조용히 잘렸다(감사·연막 실측).
             자간을 좁히면 글자 크기는 그대로 두고 들어간다 — 작게 만드는 것보다 낫다. */
         .bd-cell .bd-r4.x3, .bd-cargo-wrap .cpv2-cell .bd-r4.x3 { font-size: min(6.3pt, 0.92em); letter-spacing: -0.45px; }
-        .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r5 { color: #555; }
+        .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r5 { color: #000; }   /* 3.69-03: 카스피는 칸 글씨가 전부 검정 */
         /* M6.33: 3번째 줄(상태+무게+규격)만 폰트 축소 — 정보 밀도 높아 한 줄에 안 들어감
            예: "C_K E 2.2 DC20" → 14자 + 공백 → 6pt로 줄여서 한 줄 보장 */
         .bd-cell .bd-line3 {
@@ -1278,13 +1298,13 @@ export default function PrintableBayDetail({
           letter-spacing: -0.2px;
         }
         .bd-cell.empty { background: white; }
-        .bd-cell.filled.ptk { background: #fef3c7; }
+        .bd-cell.filled.ptk { background: white; }   /* 3.69-03: 바탕은 흰색 */
         .bd-cell.filled { background: white; }
         .bd-pos { color: #555; }
         .bd-hatch {
           height: 4px; margin: 2px 0; display: flex; gap: 6px;
         }
-        .bd-hatch-seg { flex: 1 1 0; height: 4px; background: #000; }
+        .bd-hatch-seg { flex: 1 1 0; height: 0; margin: 2px 0.9pt 0; box-shadow: 0 0 0 0.9pt #000; }   /* 3.69-03: 카스피 해치 막대 1.8pt — 좌우 0.9pt 들여 커버 사이 틈 그대로 */
         .bd-tier-labels {
           display: flex; flex-direction: column;
           padding-left: 6px;

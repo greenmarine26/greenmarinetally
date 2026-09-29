@@ -76,8 +76,8 @@ const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-b
   const b = await pw.chromium.launch({ executablePath: CHROME });
   //  ⚠ **A4 인쇄 폭으로 재야 한다.** 플레이라이트 기본 1280px 로 재면 비고 칸이 62mm(진짜는 37mm)가 되어
   //    1.68배 넓은 자로 판정한다 — 4차 감사에서 이 때문에 실번호 칸 41개 괘선 침범을 «0» 이라고 보고했다.
-  //    210mm − @page 여백 0.4cm×2 = 202mm · 96dpi → 763px.
-  const A4_PX = Math.round((210 - 4 - 4) / 25.4 * 96);
+  //    210mm − @page 좌우 여백 0.7cm×2 = 196mm · 96dpi → 741px (3.69-03 — 옛 0.4cm 는 프린터가 괘선을 못 찍었다).
+  const A4_PX = Math.round((210 - 7 - 7) / 25.4 * 96);
   const pg = await b.newPage({ viewport: { width: A4_PX, height: 1200 } });
   const MEASURE = () => {
     const over = (el) => el.scrollWidth > el.clientWidth + 0.5;
