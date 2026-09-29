@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.68-01';
-const NOTE = '미르 대화 수리 — 홈에서 미르 제안 단추를 눌러도 방금 물은 배로 답합니다(배를 잃고 AI로 가던 것)';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.69';
+const NOTE = '미르에게 야드 상황을 물어보세요 — 야드 바빠? 왜 차 안 와? 작업 왜 느려? 반입 반출 몇 대? (PCTC 야드작업 현황·PNCT 야드 혼잡 현황을 수집기가 3분마다 읽습니다)';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

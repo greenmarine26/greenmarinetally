@@ -1878,6 +1878,13 @@ export function fbSubscribeHeartbeat(callback) {
   return unsub;
 }
 
+// 3.69: 야드 상황 구독 — yard_status/{PCTC|PNCT} (수집기 MailPilot 2.39 collector/yard.py 가 3분마다) → mir.js setMirYard(미르 [mirYard] 재료)
+export function fbSubscribeYardStatus(callback) {
+  const r = ref(db, 'yard_status');
+  const unsub = onValue(r, (snap) => callback(snap.val() || null));
+  return unsub;
+}
+
 //  3.58-03·05: `cn` 칸이 빠진 기록(자리만 적힌 새 기록)을 키로 채운다 — 화면은 기록을 r.cn 으로 찾는다.
 //    들어오는 자리 두 곳(현재 항차 구독·보관 항차 읽기)이 같은 한 벌을 부른다.
 function _fillRecordCn(voy) {

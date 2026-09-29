@@ -14,6 +14,7 @@
 //   7. [mirModel] 모델 문 — 규칙이 약할 때만 askMir
 //   8. [mirThread] 대화 — 답 뒤 한 마디 더 · 얼버무린 답만 확인 · 끝은 검수사가 (3.68)
 //   9. [mirMood] 기분 — 얼굴이 보이는 감정 한 벌 (3.56)
+//  10. [mirYard] 야드 상황 — 바빠?·왜 차 안 와?·작업 왜 느려? (3.69)
 //
 // ⚠ nlSearch.js 가 이 파일의 사전·잡담 함수를 부르고 이 파일도 nlSearch.js 를 부른다(서로 부름).
 //   그래서 이 파일 맨 바깥(함수 밖)에서는 nlSearch 에서 가져온 것을 **쓰지 않는다** — 함수 안에서만 쓴다. 연막 smoke_mirfile 이 지킨다.
@@ -346,6 +347,7 @@ export function mirSmallTalk(q) {
   if (/미르/.test(d) && /(해\s*봤어|해본\s*적|할\s*줄\s*알아)/.test(d))
     return '당연하죠! 매일 검수사님들 옆에서 컨테이너 번호 맞춰보는 게 제 일인걸요 😼 야드에서 눈으로 배운 검수 경력 3년이에요. 그래도 실번호 확인은 ' + mirCall() + ' 손끝이 제일 정확해요!';
   if (WORK.test(d)) return null;
+  if (/야드/.test(d) && /바[빠쁘뻐쁜쁨]|복잡|혼잡|적체|정체|어[때떄]|어떻|상황|현황|추이|블록|왜|괜찮|막[혀히혔]|밀[려리렸]|꽉|장비/.test(d)) return null;   // 3.69: 야드 상황 질문은 일 이야기 — «야드 다녀올게»·«야드 순찰» 잡담은 그대로 받는다(감사 3)
   const nim = mirCall();
   const isMe = d.includes('미르') || d.includes('너');
 
@@ -1446,7 +1448,7 @@ export function answerOneRaw(query, ctx) {
   //    «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다», 실측 KBTR 2606E). 판정은 ⑥의 _progressLike 와 같은 식 한 벌.
   const _progressLike = /진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(q)
     || (/현황(?!\s*판)/.test(q) && !hasAnyCondition(p));
-  if (c.cone && (app === 'cone' ? (/콘/.test(q) || !(p.digits || p.entityAttr || p.factQuery || p.type || p.sealAuditQuery)) : isConeQuery(q))) {
+  if (c.cone && !p.yardQuery && (app === 'cone' ? (/콘/.test(q) || !(p.digits || p.entityAttr || p.factQuery || p.type || p.sealAuditQuery)) : isConeQuery(q))) {   // 3.69: 야드 질문은 콘 갈래·브리핑보다 앞(두 앱 같은 답 — 2차 시뮬 1)
     try {
       if (p.briefingQuery && !(_progressLike && !/자료|브리핑|요약/.test(q))) {
         const parts = [];
@@ -1497,6 +1499,22 @@ export function answerOneRaw(query, ctx) {
     return hasShip
       ? `${cq.code} — 지금 보는 배(${ship})가 아닙니다. 다른 배 연락처는 배 이름을 붙여 물어보세요.`
       : '어느 배 말씀인지 배 이름을 붙여 주시면 연락처를 찾아 드립니다. (예: "PCSZ 이메일")';
+  }
+
+  //  ②-4 야드 상황 — «야드 바빠?·왜 차 안 와?·작업 왜 느려?·반입 반출 몇 대?» (3.69, [mirYard] 한 벌). 배가 없어도 답한다 —
+  //    열린 항차의 부두 → 없으면 지금 일하는 배들의 부두 → 그것도 없으면 두 터미널 다. 재료는 화면이 넣은 ctx.yard 가 먼저, 없으면 setMirYard 로 받은 것.
+  if (p.yardQuery) {
+    _via('yard');
+    let piers = [];
+    if (/PNCT|동방/i.test(q)) piers = ['PNCT'];            // 질문이 터미널을 지목하면 그것이 먼저(2차 시뮬 5)
+    else if (/PCTC/i.test(q)) piers = ['PCTC'];
+    else if (c.pier) piers = [String(c.pier).toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC'];
+    else if (v && v.info && (v.info.berth || v.info.berthNo)) piers = [pierOf(v)];
+    else { try { const now = c._now || Date.now(); for (const vv of Object.values(c.voyages || {})) if (vv && vv.info && isWorkingNow(vv, now)) piers.push(pierOf(vv)); } catch (e) { piers = []; } }
+    const yd = (c.yard && typeof c.yard === 'object') ? c.yard : _yard;
+    try {
+      return answerYard(p.yardQuery, yd, { piers, ship: hasShip ? (c.vsl || ship) : '', containers: cs, flat: c.flat, voyages: c.voyages, mode: p.mode || mode, now: c._now || Date.now() });   // «선적 왜 안 나가» 는 질문의 모드가 먼저(감사 12)
+    } catch (e) { console.warn('[미르] 야드 답 실패:', e); return '야드 자료를 읽다가 막혔어요 — 잠시 후 다시 물어봐 주세요.'; }
   }
 
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.
@@ -2044,6 +2062,7 @@ export function isWeakAnswer(q0, answer, trace) {
   const via = trace && trace.via;
   if (via === 'modeChoice') return false;
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
+  if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다
   if (via === 'time' && PURE_TIME.test(String(q).trim())) return false;
@@ -2503,6 +2522,7 @@ function _thHedged(q, text, via) {
 function _thIntent(q, p, answer) {
   const a = _thNorm(answer);
   if (!p) return 'unknown';
+  if (p.yardQuery) return 'yard';   // 3.69 [mirYard] — «작업 왜 느려» 는 속도(pace)가 아니라 야드 갈래
   if (p.etaQuery || /몇\s*시(쯤)?에?\s*끝|언제\s*끝|끝날까/.test(q)) return 'eta';
   if (p.paceQuery || /속도|시간당/.test(q)) return 'pace';
   if (p.progressQuery || /남았|남은|얼마나\s*(했|남)/.test(q)) return 'remaining';
@@ -2555,7 +2575,7 @@ function _thAskedAttrs(th, l4) {
   return s;
 }
 /** 한 마디 더 — «응» 은 첫 칩. 칩은 전부 엔진이 강한 답을 내는 말(관문 4 칩 전수). 숫자는 답에서 가져오지 않는다. */
-function _thFollowFor(intent, q, answer, ent, now, th, via, done) {
+function _thFollowFor(intent, q, answer, ent, now, th, via, done, ship = '') {
   const a = _thNorm(answer);
   const l4 = ent.cn ? ent.cn.slice(-4) : ent.l4;
   const bay = ent.bay;
@@ -2613,6 +2633,20 @@ function _thFollowFor(intent, q, answer, ent, now, th, via, done) {
       const C = [['커트씰', /커트씰/]].filter(([, re]) => !re.test(sq)).map(([c]) => c);
       if (!C.length) return { line: '더 볼 것 있으면 말씀하세요.', chips: [] };
       return { line: '커트씰 기록도 볼까요?', chips: C };
+    }
+    case 'yard': {
+      //  3.69 — 야드 답 뒤에는 «왜 느린가» 의 나머지 절반(작업 속도·남은 대수)과 추이를 권한다. 자료가 없다고 답했으면 붙이지 않는다.
+      if (/자료가 아직 안 왔어요|안 들어와요|막혔어요/.test(a)) return null;
+      const hasShipQ = !!ship && !done;   // 다 끝난 배엔 속도·잔여를 권하지 않는다(2차 시뮬 16)
+      const isPctc = /PCTC 야드는/.test(a);
+      const C = [].concat(
+        hasShipQ ? [['작업 속도', /속도/], ['남은 대수', /남은|남았/]] : [],
+        isPctc && /반출이 막힌 블록|야드 장비/.test(a) ? [['야드 어느 블록', /어느\s*블록|블록/]] : [],   // why 답은 목록을 안 읽는다 — 목록은 이 칩이 낸다
+        isPctc ? [['야드 추이', /추이/]] : [])
+        .filter(([, re]) => !re.test(sq)).map(([c]) => c);
+      if (!C.length) return { line: '야드는 다 봤어요. 다른 것도 물어보세요.', chips: [] };
+      const head = C[0] === '작업 속도' ? '지금 작업 속도도 볼까요?' : C[0] === '남은 대수' ? '남은 대수도 볼까요?' : C[0] === '야드 어느 블록' ? '어느 블록에 장비가 붙었는지도 볼까요?' : '앞으로 야드가 어떻게 될지도 볼까요?';
+      return { line: `${head}${C[1] ? ' ' + C[1] + '도 돼요.' : ''}`, chips: C.slice(0, 2) };
     }
     case 'sched': {
       //  일정 갈래도 같은 제안을 두 번 하지 않는다(재감사 A — «다음 배 언제» 가 자기 자신을 무한 반복)
@@ -2695,10 +2729,10 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   const inf = (ctx && (ctx.info || (ctx.voyage && ctx.voyage.info))) || null;
   const _pl = inf ? Number(inf.planLod) : NaN;   // 양하만 하는 배(선적 계획 planLod 0 — utils 와 같은 칸)는 양하 완료만으로 끝
   const done = !!(inf && inf.dischargeDone && (inf.loadingDone || _pl === 0)) || _thIsDone(text) || !!(th && th.turns.some((t) => _thIsDone(t.answer || '')));
-  const follow = hedged ? null : _thFollowFor(intent, rq, text, entity, now, th, via, done);
-  const confirm = hedged ? TH_CONFIRM_LINE : '';
   //  그 턴의 배 코드 — 홈에서 배 이름 붙인 질문 뒤의 «응» 에 붙인다(ctx.vsl · info.vsl · shipCtx.info.vsl · 되쓴 말 머리의 배 코드)
   const ship = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
+  const follow = hedged ? null : _thFollowFor(intent, rq, text, entity, now, th, via, done, ship);   // 3.69: ship — 야드 갈래가 배 유무로 칩을 고른다
+  const confirm = hedged ? TH_CONFIRM_LINE : '';
   const turn = { q, rq, intent, entity: { cn: entity.cn, l4: entity.l4, bay: entity.bay }, ship, answer: _thNorm(text).slice(0, 200), follow, confirm, at: now };
   if (th) { th.turns.push(turn); if (th.turns.length > THREAD_MAX_TURNS) th.turns.shift(); th.at = now; th.missAt = 0; th.lastUtter = { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut }; }
   else _threads[key] = { turns: [turn], at: now, missAt: 0, lastUtter: { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut } };
@@ -2866,4 +2900,138 @@ export function currentMirMood(voyages, heartbeat, now = Date.now(), pier) {
   const m = mirMoodNow({ now, voyages, heartbeat, pier, lastAskAt: _moodSt.lastAskAt, lastEvent: _moodSt.lastEvent, anxiousSince: _moodSt.anxiousSince, openedAt: _moodSt.openedAt });
   _moodSt.lastKey = m.key;
   return m;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════════
+   10. [mirYard] 야드 상황 — «야드 바빠?·복잡해?·왜 차 안 와?·작업 왜 느려?·반입 반출 몇 대?» (TallyOne 3.69 / ConeOne 2.58)
+   ═══════════════════════════════════════════════════════════════════════════════════════════════════
+   검수사 2026-09-29 «미르에게 질문 야드 바빠(뻐)?, 야드 복잡해?,왜 차 안와? 반입 반출 차량등 확인하고 알려주기»
+                    · '왜' — «야드 상황을 알고 작업이 느린 이유 설명등» · 블록 표의 3·4·5시간 후 열 — «그건 그시간이후의 추이상황입니다».
+
+   재료 — 수집기(MailPilot 2.39 collector/yard.py)가 3분마다 올리는 RTDB `yard_status/{PCTC|PNCT}`(로그인 없는 두 정보서비스 페이지).
+     PCTC { at, inCnt, outCnt, level(양호/혼잡/적체 — 터미널 자체 규칙 반입+반출 60/80), gate{GP,RF,DG,AK,MT}(반출입 대기), vssl{…}(본선 대기),
+            locked[블록](본선 작업으로 반출 불가), work[{blk,rt,cn,at}](야드 장비가 붙은 블록·마지막 놓인 양하 컨), ahead{h3,h4,h5:{g,v}}(추이) }
+     PNCT { at, inCnt, outCnt, tatIn, tatOut(회전시간 분) } — 동방은 판정어·블록 자료를 안 준다. **지어내지 않는다.**
+   자료는 화면이 넣어 준다 — 검수앱 App.jsx 가 구독해 setMirYard 로, 콘앱은 mirAsk 가 GET 해 ctx.yard 로(ctx.yard 가 있으면 그것이 먼저).
+   ⚠ 순수 — 판정은 answerYard 한 벌. 검수앱·콘앱이 같은 답을 낸다. 우리 배 몫은 «블록에 마지막 놓인 컨»을 이 항차·전 항차 EDI 와 대조해 센다. */
+let _yard = null;
+export function setMirYard(v) { _yard = (v && typeof v === 'object') ? v : null; }
+export function readMirYard() { return _yard; }
+export const YARD_STALE_MS = 10 * MIN;    // 이보다 오래된 자료면 «N분 전 자료» 를 붙인다
+export const YARD_DEAD_MS = 60 * MIN;     // 이보다 오래됐으면 자료가 안 오는 것 — 수집기 확인을 권한다
+const YARD_CT_KO = { GP: '일반', RF: '냉동', DG: '위험물', AK: '장척', MT: '공컨' };
+const YARD_ADVICE = '샤시가 늦으면 1차로 기다리고, 2차로 포맨에게 독촉해요. 출항이 임박했으면 수석에게 보고해요.';   // data/mirKnowledge «야드 샤시 안 왔어요» 와 같은 말
+
+function _ydSum(d) { let n = 0; for (const k in (d || {})) n += Number(d[k]) || 0; return n; }
+function _ydKinds(d) {
+  return Object.keys(d || {}).filter((k) => Number(d[k]) > 0).sort((a, b) => Number(d[b]) - Number(d[a])).map((k) => `${YARD_CT_KO[k] || k} ${Number(d[k])}`).join('·');
+}
+function _ydAge(y, now) {
+  const at = Number(y && y.at) || 0;
+  if (!at) return { min: Infinity, dead: true, tag: '' };
+  const gap = now - at;
+  const min = Math.max(0, Math.round(gap / MIN));
+  return { min, dead: gap >= YARD_DEAD_MS, tag: gap >= YARD_STALE_MS ? ` (${min}분 전 자료)` : '', text: min >= 120 ? `${Math.floor(min / 60)}시간` : `${min}분` };
+}
+const _ydHm = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim()); return m ? (Number(m[1]) * 60 + Number(m[2])) : null; };
+/** 시각 문자열(HH:MM)만 있는 «마지막 놓인 컨» 중 지금(now) 기준 가장 가까운 과거 — 자정을 넘긴 야간 작업(«00:05» 가 «23:59» 뒤)도 맞는다(2차 시뮬 13). */
+function _ydLatest(list, now) {
+  const d = new Date(now); const nowMin = d.getHours() * 60 + d.getMinutes();
+  let best = null, bestGap = Infinity;
+  for (const w of list) { const t = _ydHm(w.at); if (t == null) continue; const gap = ((nowMin - t) % 1440 + 1440) % 1440; if (gap < bestGap) { bestGap = gap; best = w; } }
+  return best;
+}
+/** 블록에 마지막 놓인 컨(work[].cn)이 어느 배 것인지 — 이 항차 컨(cs) → «우리 배», 전 항차(flat → voyages) → 그 배 코드, 모르면 ''. */
+function _ydOwnerOf(cn, o) {
+  if (!cn) return '';
+  if (o._mine && o._mine.has(cn)) return o.ship || '우리 배';
+  if (o._others === undefined) {
+    o._others = new Map();
+    try {
+      if (Array.isArray(o.flat)) { for (const x of o.flat) if (x && x.cn && x.voyageKey && !o._others.has(x.cn)) o._others.set(x.cn, x.voyageKey); }
+      if (o.voyages && typeof o.voyages === 'object') {   // flat 이 비었거나 못 찾으면 항차 원본도 본다(2차 시뮬 14)
+        for (const k of Object.keys(o.voyages)) {
+          const v = o.voyages[k]; if (!v) continue;
+          for (const m of ['discharge', 'loading']) { const e = v[m] && v[m].ediContainers; if (e && typeof e === 'object') for (const c of Object.keys(e)) if (!o._others.has(c)) o._others.set(c, k); }
+        }
+      }
+    } catch (e) { /* 대조 재료가 없어도 야드 답은 낸다 */ }
+  }
+  const vk = o._others.get(cn);
+  if (!vk) return '';
+  const v = o.voyages && o.voyages[vk];
+  return S(v && v.info && (v.info.vsl || v.info.vslFull)) || String(vk).split('_')[0] || '';
+}
+export function answerYard(kind, yard, o = {}) {
+  const now = Number(o.now) || Date.now();
+  const piers = (Array.isArray(o.piers) && o.piers.length ? o.piers : ['PCTC', 'PNCT']).map((p) => String(p || '').toUpperCase()).filter((p, i, a) => a.indexOf(p) === i);
+  if (!yard || typeof yard !== 'object' || !Object.keys(yard).length) return '야드 자료가 아직 안 왔어요 — 수집기(MailPilot 2.39)가 3분마다 올려요. 하트비트부터 확인해 주세요.' + (kind === 'why' ? ' ' + YARD_ADVICE : '');   // 자료가 없어도 대처는 말한다(감사 6)
+  const opts = Object.assign({}, o, { _mine: new Set((o.containers || []).map((x) => x && x.cn).filter(Boolean)) });
+  const out = [];
+  for (const pier of piers) {
+    const y = yard[pier];
+    if (!y || !Number(y.at)) { out.push(`${pier} 야드 자료가 아직 안 왔어요.${kind === 'why' ? ' ' + YARD_ADVICE : ''}`); continue; }
+    const age = _ydAge(y, now);
+    if (age.dead) { out.push(`${pier} 야드 자료가 ${age.text}째 안 들어와요 — 수집기를 확인해 주세요${y.err ? `(수집기: ${String(y.err).slice(0, 60)})` : ''}. (마지막 자료 반입 ${y.inCnt}대·반출 ${y.outCnt}대)${kind === 'why' ? ' ' + YARD_ADVICE : ''}`); continue; }
+    if (!(Number.isFinite(Number(y.inCnt)) && Number.isFinite(Number(y.outCnt)))) { out.push(`${pier} 야드 자료를 못 읽었어요(반입/반출 대수 없음) — 수집기 로그를 봐 주세요.`); continue; }
+    out.push(pier === 'PNCT' ? _ydPnct(kind, y, age) : _ydPctc(kind, y, age, opts, now));
+  }
+  return out.join('\n');
+}
+function _ydPnct(kind, y, age) {
+  const base = `PNCT 야드 — 반입 ${y.inCnt}대 · 반출 ${y.outCnt}대${age.tag}.`;
+  const tat = (y.tatIn != null && y.tatOut != null) ? ` 회전시간은 반입 ${y.tatIn}분 · 반출 ${y.tatOut}분이에요.` : '';
+  if (kind === 'why') return `${base}${tat} 블록별 자료는 동방 정보서비스에 없어요. ${YARD_ADVICE}`;
+  if (kind === 'block' || kind === 'trend') return `${base}${tat} 동방은 블록별 작업현황·추이를 안 보여줘요.`;
+  return `${base}${tat} (동방은 혼잡 등급을 안 줘서 대수와 회전시간만 말해요.)`;
+}
+function _ydPctc(kind, y, age, o, now) {
+  const lvl = y.level || '판정 없음';
+  const _last = lvl.charCodeAt(lvl.length - 1); const _jong = _last >= 0xAC00 && _last <= 0xD7A3 && ((_last - 0xAC00) % 28) !== 0;   // 받침 — «혼잡이에요»·«적체예요»(감사 2)
+  const base = `PCTC 야드는 지금 ${lvl}${_jong ? '이에요' : '예요'} — 반입 ${y.inCnt}대 · 반출 ${y.outCnt}대${age.tag}.`;
+  if (kind === 'busy') return base;
+  //  수집기가 표를 못 읽은 판(partial — 사이트 모양이 바뀐 것) — 대수 말고는 «못 읽었다» 고 한다. 빈 표를 «대기 없음» 으로 말하지 않는다(2차 시뮬 6).
+  if (y.partial) return `${base} 야드 표(대기 물량·블록·장비)는 이번에 못 읽었어요 — 사이트 모양이 바뀐 것 같아요. 반입/반출 대수만 믿어 주세요.`;
+  const gate = y.gate || {}, vssl = y.vssl || {};
+  const wait = `야드 작업 대기 — 반출입 ${_ydSum(gate)}대(${_ydKinds(gate) || '없음'}) · 본선 ${_ydSum(vssl)}대(${_ydKinds(vssl) || '없음'}).`;
+  const locked = Array.isArray(y.locked) ? y.locked : [];
+  const work = (Array.isArray(y.work) ? y.work : []).filter((w) => w && (w.rt || w.cn));
+  const rts = work.filter((w) => w.rt);
+  const owned = work.filter((w) => w.cn).map((w) => Object.assign({}, w, { owner: _ydOwnerOf(w.cn, o) }));
+  const _isMine = (w) => !!w.owner && (w.owner === (o.ship || '우리 배') || w.owner === '우리 배');
+  const mineN = owned.filter(_isMine).length;
+  const otherCnt = {};   // 다른 배 코드별 대수 — 우리 항차 목록에 없는 배는 «다른 배» 로 묶는다(지어내지 않는다)
+  for (const w of owned) { if (_isMine(w)) continue; const k = w.owner || '다른 배'; otherCnt[k] = (otherCnt[k] || 0) + 1; }
+  const idleN = rts.filter((w) => !w.cn).length;   // 장비는 붙었는데 아직 놓인 컨이 없는 블록 — 셈이 어긋나지 않게 같이 말한다(2차 시뮬 8)
+  const otherLine = Object.keys(otherCnt).sort((a, b) => (a === '다른 배') - (b === '다른 배')).map((k) => `${k} ${otherCnt[k]}대`).concat(idleN ? [`아직 안 놓인 ${idleN}대`] : []).join(' · ');
+  //  추이 — 블록 표의 «3·4·5시간 후» 열 합계. 검수사 «그건 그시간이후의 추이상황입니다». 0 인 쪽은 읽지 않는다(2차 시뮬 12).
+  //    ⚠ «일반·냉동» 머리글의 1·2 열은 실측상 1·2시간 뒤 추이로 보이나(본선 7→41→24→12→0→0) 검수사 확정 전이라 읽지 않는다 — 수집기는 h1·h2 도 적어 둔다(감사 4).
+  const ah = y.ahead || {};
+  const trendParts = ['h3', 'h4', 'h5'].map((h) => { const t = ah[h] || {}; const g = Number(t.g) || 0, v = Number(t.v) || 0; if (!g && !v) return ''; const parts = [].concat(g ? [`반출입 ${g}대`] : [], v ? [`본선 ${v}대`] : []); return `${h.slice(1)}시간 뒤 ${parts.join('·')}`; }).filter(Boolean);
+  const trend = trendParts.length ? `앞으로 — ${trendParts.join(', ')}.` : '앞으로 잡힌 반출입·본선 예정은 안 보여요.';
+  if (kind === 'count') return `${base} ${wait}`;
+  if (kind === 'trend') return `${base} ${trend}`;
+  if (kind === 'block') {
+    if (!rts.length && !owned.length) return `${base} ${y.partialWork ? '장비·잠금 표는 이번에 못 읽었어요.' : '지금 야드 장비가 붙은 블록은 안 보여요.'}${locked.length ? ` 반출 막힌 블록 ${locked.length}곳(${locked.join(' ')}).` : ''}`;   // 재감사 4
+    const L = work.map((w) => `${w.blk} ${w.rt || ''}${w.cn ? ' ' + w.cn.slice(-4) : ''}${w.at ? ' ' + w.at : ''}`.replace(/\s+/g, ' ').trim());
+    return `${base} 야드 장비가 붙은 블록: ${L.join(', ')}.${locked.length ? ` 반출 막힌 블록 ${locked.length}곳(${locked.join(' ')}).` : ''}`;
+  }
+  //  why — 느린 이유 설명(검수사 '왜'): 등급·대기 물량·잠긴 블록 수·장비 중 우리 몫·마지막 우리 컨·추이·대처.
+  //    블록 코드·장비 번호 목록은 여기서 읽지 않는다(음성 40초 — 2차 시뮬 8). «야드 어느 블록» 칩이 그 목록을 낸다.
+  const L = [base, wait];
+  if (locked.length) L.push(`본선 작업 때문에 반출이 막힌 블록이 ${locked.length}곳이에요.`);
+  if (o.mode === 'loading') {
+    //  선적 탭 — 야드 장비·마지막 놓인 컨은 양하 쪽 이야기다. 선적 지연은 반출 쪽 사정으로만 말한다(2차 시뮬 16).
+    L.push(`게이트 반출 차량이 ${y.outCnt}대예요.`);
+  } else if (rts.length) {
+    let s = `양하 컨을 받는 야드 장비는 ${rts.length}대`;
+    if (o.ship && owned.length) s += `인데 마지막 놓인 컨으로 보면 우리 배(${o.ship}) 컨을 받는 건 ${mineN}대예요${otherLine ? `(${otherLine})` : ''}.`;
+    else s += '예요.';
+    L.push(s);
+    const last = _ydLatest(owned.filter(_isMine), now);
+    if (last) L.push(`마지막으로 놓인 우리 컨은 ${last.blk} ${last.cn}(${last.at})이에요.`);
+  } else L.push(y.partialWork ? '장비·잠금 표는 이번에 못 읽었어요.' : '지금 양하 컨을 받는 야드 장비가 안 보여요.');   // partialWork — 수집기가 장비·잠금 표를 못 읽은 판(감사 7)
+  L.push(trend);
+  L.push(YARD_ADVICE);
+  return L.join(' ');
 }

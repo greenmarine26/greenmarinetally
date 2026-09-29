@@ -139,6 +139,7 @@ export function parseNaturalQuery(text) {
     bayTrio: null,   // V8.03-01: 짝수 베이+구역 = 트리오(23·24·25) 전체
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
     pilotQuery: false,  // TallyOne 1.22: 도선·접안·작업개시 시각 (오답 1786057401908)
+    yardQuery: null,    // 3.69: 야드 상황 — 'busy'|'why'|'count'|'block'|'trend' (src/mir.js [mirYard])
     wakeQuery: false,   // TallyOne 1.21: "몇 시에 일어나야 하지" — 현재 시각이 아니라 기상 시각 (오답 1786028593439)
     shipIntroQuery: false,   // V9.18: 선박 소개·이름 유래
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
@@ -176,7 +177,7 @@ export function parseNaturalQuery(text) {
   let t = String(text).toLowerCase();
   // 1.91 (검수사 확정 «미르야 하면 네 하고 답변도 하고»): 호출어를 벗기고 나머지를 질문으로.
   {
-    const _mir = /^\s*미르\s*(?:야|아|님)?\s*[,!~.\s]*/;
+    const _mir = /^\s*미르\s*(?:(?:야|아|님)(?![가-힣]))?\s*[,!~.\s]*/;   // 3.69: «미르 야드 바빠» 의 «야» 는 호격이 아니다(«야드»·«야간»·«야식» — 재감사 1)
     if (_mir.test(t)) {
       result.mirCalled = true;
       t = t.replace(_mir, '');
@@ -515,6 +516,26 @@ export function parseNaturalQuery(text) {
   if (/관련\s*선사|선사\s*(?:몇|현황|분포|별로)|담당자/i.test(t)) result.carrierQuery = true;
   // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
   if (/(?:^|\s)(?:넌|너는|네가|니가|너|당신|당신이)\s*(?:뭐|누구|하는\s*일|할\s*수|어떤\s*일)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해|무슨\s*(?:일|기능)|뭐\s*(?:하는|할\s*수)|어떤\s*(?:일|기능|걸\s*할)/i.test(t)) result.introQuery = true;
+  // ★ 3.69 야드 상황 (검수사 2026-09-29 «미르에게 질문 야드 바빠(뻐)?, 야드 복잡해?,왜 차 안와? 반입 반출 차량등 확인하고 알려주기» ·
+  //   «야드 상황을 알고 작업이 느린 이유 설명등») — 답은 src/mir.js [mirYard] answerYard 한 벌(수집기 yard_status 재료). 갈래 하나만 세운다.
+  //   ⚠ «반입후검사»(세관 X-RAY 화물구분)·«반입시각/일시»(터미널 실적)·«반출입 구분»(카토스 시프팅)은 야드 질문이 아니다.
+  //   2차 시뮬(3·4·10): «수집기/앱/화면/미르/N호기/크레인/갱 왜 느려» 는 야드가 아니다(수석 답·인사) · «2차 없어» 의 «차» 는 차량이 아니다 · «왜차안와» 도 받는다.
+  if (!/반입\s*후|반입\s*(?:시각|일시)|반출입\s*구분/.test(t)) {
+    const _notYard = /수집기|하트비트|메일|mailpilot|(?:^|\s)(?:앱|화면|미르|미르야|폰|인터넷|와이파이|업데이트|다운로드|사진|로딩|서버|등록|저장|수석|케빈|배터리|카톡|엑셀)(?:이|가|는|은|도)?\s|\d\s*호기|크레인|(?:^|\s)갱(?:이|은|는|도)?\s|(?:^|\s)배(?:가|는|도)?\s*(?:왜\s*)?늦/i.test(t);   // 감사 5: 주어가 야드 밖이면 아니다
+    const _truck = /(?:^|[^가-힣\d]|왜)(?:차|차량|트럭|샤시|샷시|셔틀|YT|와이티)(?:들|가|는|이|도)?\s*(?:왜\s*)?(?:안\s*[와오왔옴]|안와|안\s*들어|안\s*나[와오왔]|안\s*붙|늦|없|끊[겼기]|언제\s*[와오])/i;
+    const _slow = /(?:작업|양하|선적|하역|진행)\s*(?:이|은|가|는)?\s*(?:왜\s*|이렇게\s*|자꾸\s*)*(?:느[려리]|더[디뎌]|늦[어지]|안\s*나가|안\s*빠)|^(?:[a-z]{4}\s+)?(?:지금\s*|오늘\s*)?(?:왜|어째서)\s*(?:이렇게|이리|이리도|자꾸)?\s*(?:느[려리]|더[디뎌]|안\s*나가)|(?:느린|늦는|더딘)\s*이유/;   // 주어 없는 «왜 느려» 는 문두(배 코드 접두 허용)일 때만(감사 5·재감사 2)
+    const _yardWord = /야드/.test(t);
+    const _meaning = /뭐야|뭐예요|뭐죠|무슨\s*뜻|뜻이|이란|정의/.test(t);
+    //   «미르야 왜 이렇게 느려» — 부름을 뗀 뒤 «왜 느려» 홀말만 남으면 미르 이야기다(3.68 과 같이 인사 갈래로, 2차 시뮬 4) — 작업·차량 낱말이 있어야 야드.
+    const _bareSlow = result.mirCalled && !/작업|양하|선적|하역|진행|야드|차|트럭|샤시|셔틀|YT/i.test(t);
+    if (_yardWord && /왜|이유/.test(t)) result.yardQuery = 'why';
+    else if (!_notYard && !_bareSlow && (_truck.test(t) || _slow.test(t))) result.yardQuery = 'why';
+    else if (_yardWord && /블록|장비|(?:^|[^A-Z])RT(?![A-Z])|어디\s*(?:서|에서)?\s*(?:받|작업)/i.test(t)) result.yardQuery = 'block';
+    else if (_yardWord && /추이|앞으로|이따|나중|[\d몇]\s*시간\s*(?:뒤|후)|좋아[지져]|풀[리려]|나아[지져]|더\s*바빠|더\s*밀[리려]|예정|예상|전망/.test(t)) result.yardQuery = 'trend';
+    else if (/(?:반입|반출|반출입|반입반출|반입\s*반출)\s*(?:차량|차|트럭)?\s*(?:이|은|가|는|만|도|등)?\s*(?:몇\s*대|대수|얼마나|현황|몇\s*이|몇\s*개|몇\s*[?]?$|확인|알려|봐\s*줘|봐줘|체크|어때)|(?:차량|트럭)\s*(?:이|은|가|는)?\s*(?:몇\s*대|대수)|회전\s*시간|(?:야드|게이트)\s*(?:차|차량|트럭)\s*몇|야드\s*대기/.test(t)) result.yardQuery = 'count';
+    else if (_yardWord && /바[빠쁘뻐쁜쁨]|복잡|혼잡|적체|정체|어[때떄]|어떻|상황|현황|괜찮|한가|널널|막[혀히혔]|밀[려리렸]|여유|원활|양호|상태|꽉|터졌|빡세|문제|돌아가|확인|알려|봐\s*줘|봐줘|체크/.test(t)) result.yardQuery = 'busy';
+    else if (_yardWord && !_meaning && /^(?:미르야?\s*)?야드\s*(?:는|은|요|이요)?\s*[?？!.~]*$/.test(t)) result.yardQuery = 'busy';   // «야드», «야드는?» 홀말
+  }
   // TallyOne 1.22: 도선·접안·작업개시 — "도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?"
   //   도선 시각은 **입항 시각**이라 그 시각에 작업을 시작할 수 없다. 부두별 소요를 더해 작업개시를 답한다.
   if (/도선|파일럿|접안|작업\s*(?:시작|개시|예정)|몇\s*시(?:부터|에)?\s*작업|작업\s*(?:시간|시각)\s*(?:이|은|는)?\s*(?:몇|언제|가능)|언제\s*작업/i.test(t)) {
@@ -761,7 +782,7 @@ export function parseNaturalQuery(text) {
       || result.bottomQuery || result.topQuery || result.dupL4Query || result.sealAuditQuery
       || result.customsReportQuery || result.briefingQuery || result.handoverQuery || result.carrierQuery
       || result.twinCheckQuery || result.movePathQuery || result.contactQuery || result.schedQuery
-      || result.timeQuery || result.wakeQuery || result.pilotQuery || result.foodQuery || result.weatherQuery
+      || result.timeQuery || result.wakeQuery || result.pilotQuery || result.foodQuery || result.weatherQuery || result.yardQuery   // 3.69: 야드 질문은 자료 답
       || result.introQuery || result.shipIntroQuery || (result.dmgQuery && _histWord) || result.luggQuery || result.urgentQuery
       || result.mirHello || result.deviceCmd);
     //  ⚠ shiftingQuery·mode·type 은 일부러 안 막는다 — «시프팅이 뭐야»·«양하가 뭐야»·«FR이 뭐야»는 뜻이 정답
@@ -1011,7 +1032,7 @@ export function hasAnyCondition(parsed) {
             parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.mirHello || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
             parsed.dmgQuery || parsed.luggQuery || parsed.urgentQuery ||   // 2.05-01
             parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery ||
-            parsed.howToQuery || parsed.contactQuery);   // 1.65 · 2.41: 선박 연락처 질의도 '조건 있음'
+            parsed.howToQuery || parsed.contactQuery || parsed.yardQuery);   // 1.65 · 2.41: 선박 연락처 질의도 '조건 있음' · 3.69: 야드
 }
 
 // ─── TallyOne 1.65: 기능 위치 답변 ────────────────────────────────────────

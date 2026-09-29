@@ -1,0 +1,5 @@
+{
+ "note": "2026-09-29 17:01 실측 — yard_status_20260929.json 의 블록별 마지막 놓인 컨 7대 중 우리 항차 EDI 에 있던 것 2대(RTDB GET). 나머지 5대는 관할 밖 배(항차 목록에 없음).",
+ "DJCF_0151N": { "info": { "vsl": "DJCF", "vslFull": "DONGJIN CONFIDENT", "pier": "PCTC", "berth": "동부두 6번선석", "voy_d": "0151N" }, "discharge": { "ediContainers": { "DJLU2160277": { "cn": "DJLU2160277", "iso": "22G1", "fe": "F", "pod": "KRPTK" } } } },
+ "PCSZ_2630E": { "info": { "vsl": "PCSZ", "pier": "PCTC", "voy_d": "2630E" }, "discharge": { "ediContainers": { "TCNU7028896": { "cn": "TCNU7028896", "iso": "45G1", "fe": "F", "pod": "KRPTK" } } } }
+}

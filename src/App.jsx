@@ -7,7 +7,7 @@ import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, i
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
-  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
+  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat, fbSubscribeYardStatus,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
 , fbSubscribeLaneRoutes, fbSubscribeMirLexicon, fbWriteMirLexicon, fbLogMirMiss } from './firebase.js';   // 3.0: 미르 자체 학습 사전·결산 기록
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
@@ -27,7 +27,7 @@ import { consumeUpdateResume } from './updateResume.js';   // 3.7-04: 업데이�
 import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
 import MirFab from './components/MirFab.jsx';   // 3.41: 떠 있는 미르 — 어느 화면에서든 모든 질문(검수사 2026-09-10)
-import { mirMoodEvent } from './mir.js';   // 3.56: 작업 선박을 새로 고르면 미르가 기뻐한다(확정 자리에서 알린다)
+import { mirMoodEvent, setMirYard } from './mir.js';   // 3.56: 작업 선박을 새로 고르면 미르가 기뻐한다(확정 자리에서 알린다) · 3.69: 야드 상황 재료
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
 import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
@@ -173,6 +173,7 @@ export default function App() {
     const u4b = fbSubscribePilotForecast(setPilotForecast);  // V9.33: 도선 예보
     const u4d = fbSubscribeLaneRoutes(setLaneRoutes);       // 1.45: 항로 사전(utils 모듈 캐시)
     const u6 = fbSubscribeHeartbeat(setHeartbeat);  // V8.40: 수집기 하트비트
+    const u6y = fbSubscribeYardStatus(setMirYard);   // 3.69: 야드 상황 — 미르 엔진 캐시로(화면 상태 아님 — 다섯 창구가 같은 재료를 본다)
     // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
     //   shipStructure.js가 이 데이터를 우선 조회 (베이사전 매칭 자동화)
     // M6.94.20: user 소스 매트릭스를 localStorage userBayDict에도 머지
@@ -242,7 +243,7 @@ export default function App() {
       //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
       //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
-    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); };
+    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); };
   }, []);
 
   useEffect(() => {

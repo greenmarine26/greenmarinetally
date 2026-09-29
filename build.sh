@@ -1124,6 +1124,8 @@ fi
       && node tools/smoke_mirsame.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 두 앱 같은 답 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.68: **미르 대화**([mirThread]) — 답 뒤 한 마디·«응/두 번째/아니 ○○/그거»·끝맺음·확인 질문·3분 창·같은 접수 재풀이·칩 전수·다섯 창구 배선. 같은 번들(mirCore.entry).
     node tools/smoke_mirthread.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 대화 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.69: **미르 야드 상황**([mirYard]) — 말귀 다섯 갈래·터미널 판정어·우리 배 몫 대조·자료 나이·두 터미널·콘앱 ctx.yard·대화 칩. 같은 번들.
+    node tools/smoke_yard.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 야드 상황 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MS"
     #  3.53-11: **미르 한 파일** — 엔진이 src/mir.js 하나뿐인가 · 옛 일곱 파일을 부르는 줄이 없는가 · nlSearch 와 서로 불러도 어느 쪽을 먼저 열든 서는가.
     node tools/smoke_mirfile.cjs "$(pwd)" || { echo "✗ 미르 한 파일 연막검사 실패 — 배포 금지"; exit 1; }

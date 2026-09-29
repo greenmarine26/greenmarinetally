@@ -28,7 +28,7 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
                       'bayDistQuery','briefingQuery','sealAuditQuery','twinCheckQuery',
                       'tierPlaceCountQuery','tierInContextQuery','etaQuery','customsReportQuery',
                       'handoverQuery','foodQuery','schedQuery','weatherQuery','timeQuery','wakeQuery','pilotQuery',
-                      'introQuery','bayTrio'];
+                      'introQuery','bayTrio','yardQuery'];   // 3.69: 야드 갈래도 오답 신고에 담긴다(감사 14)
         keys.forEach(k => {
           if (parsed[k] !== null && parsed[k] !== false && parsed[k] !== '' && parsed[k] !== undefined) {
             parsedSummary[k] = parsed[k];
