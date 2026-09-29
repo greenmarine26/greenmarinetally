@@ -7,7 +7,7 @@ import { isoToLabel, fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, ko
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
-import { mirTone, mirSmallTalk } from '../mir.js';
+import { mirTone, mirSmallTalk, YARD_SPEAK } from '../mir.js';
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
 import { flattenVoyages, pickShipCtx } from '../mir.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
@@ -471,7 +471,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       // 1.92-02: 미르 인사는 짧게, 이모지 벗겨 읽기 — «미르야» 낭독이 이상하게 들리던 문제(검수사).
       const first = parsed.mirHello ? '네, 말씀하세요'
         : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·«»]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (first) speak(first);
+      if (first) speak(first, parsed.yardQuery ? YARD_SPEAK : undefined);   // 3.69-01: 야드 답은 천천히
       return;
     }
     if (parsed.isStat) {

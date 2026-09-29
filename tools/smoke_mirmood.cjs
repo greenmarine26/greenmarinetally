@@ -51,7 +51,7 @@ ok(!/OBWH|RZOR|ATPR/.test(a2.why), `OBWH·RZOR·ATPR 은 계획 대수 0(도선�
 const now4 = T('2026-09-23 10:00');
 const V4 = { ...V, PCSZ_2628E: { ...V.PCSZ_2628E, info: { ...V.PCSZ_2628E.info, workStartAt: '2026-09-23 01:10' }, discharge: { dataAt: V.PCSZ_2628E.discharge.dataAt, completed: { MSKU1234567: { at: now4 - 61 * 60000 } } } } };
 const a4 = M.mirMoodNow({ now: now4, voyages: V4, heartbeat: fresh(now4), lastAskAt: now4 - 60000 });
-ok(a4.key === 'anxious' && /PCSZ 완료 기록이 61분째 없어요/.test(a4.why), `작업 중 완료 61분 없음 → 초조함 (${a4.why})`);
+ok(a4.key === 'anxious' && /PCSZ 완료 기록이 실작업 61분째 없어요/.test(a4.why), `작업 중 완료 61분 없음(08:59~10:00 은 근무 창 안 — 실작업 61분) → 초조함 (${a4.why})`);   // 3.69-01: 실작업 분(쉬는 시간 제외)
 const V4b = { ...V4, PCSZ_2628E: { ...V4.PCSZ_2628E, discharge: { ...V4.PCSZ_2628E.discharge, completed: { MSKU1234567: { at: now4 - 10 * 60000 } } } } };
 ok(M.mirMoodNow({ now: now4, voyages: V4b, heartbeat: fresh(now4), lastAskAt: now4 - 60000 }).key === 'basic', `완료 10분 전이면 기본`);
 //  ⑤ 방치 → 슬픔 / 열어 보면 초조함

@@ -33,7 +33,7 @@ import {
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
   generateHowToAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
-  voyageReportSpan, WORK_SHIFTS,   // 3.56 [mirMood] 식사 창은 근무표 그대로
+  voyageReportSpan, WORK_SHIFTS, workMinutesBetween,   // 3.56 [mirMood] 식사 창은 근무표 그대로 · 3.69-01 완료 공백은 실작업 분으로 잰다
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
@@ -1513,7 +1513,7 @@ export function answerOneRaw(query, ctx) {
     else { try { const now = c._now || Date.now(); for (const vv of Object.values(c.voyages || {})) if (vv && vv.info && isWorkingNow(vv, now)) piers.push(pierOf(vv)); } catch (e) { piers = []; } }
     const yd = (c.yard && typeof c.yard === 'object') ? c.yard : _yard;
     try {
-      return answerYard(p.yardQuery, yd, { piers, ship: hasShip ? (c.vsl || ship) : '', containers: cs, flat: c.flat, voyages: c.voyages, mode: p.mode || mode, now: c._now || Date.now() });   // «선적 왜 안 나가» 는 질문의 모드가 먼저(감사 12)
+      return answerYard(p.yardQuery, yd, { piers, ship: hasShip ? (c.vsl || ship) : '', containers: cs, flat: c.flat, voyages: c.voyages, voyage: v, mode: p.mode || mode, now: c._now || Date.now() });   // «선적 왜 안 나가» 는 질문의 모드가 먼저(감사 12) · voyage — 중단 보고(3.69-01)
     } catch (e) { console.warn('[미르] 야드 답 실패:', e); return '야드 자료를 읽다가 막혔어요 — 잠시 후 다시 물어봐 주세요.'; }
   }
 
@@ -2813,6 +2813,45 @@ function pierOf(voyage) {
 }
 
 /** 자료가 안 들어오는 이유들. 없으면 []. heartbeat = collector_heartbeat { at, cycleMin } */
+/** 앱 보고(WorkReportModal → voyages/{키}/reports)로 본 «지금 작업 중단 중인가». 마지막 작업 상태 보고가 중단(«{모드}_pause»·«external_pause»)이면
+ *  { mode, reason, equip, ts, ko } 를, 그 뒤에 시작·재개·완료 보고가 있으면 null. 12시간 넘은 옛 보고는 안 본다.
+ *  3.69-01 — 검수사 2026-09-29 18:56 «앱에서 야드혼잡의 이유로 작업중단을 했습니다. DJCF PCSZ 앱에 기록이 안되나요 카톡보고를 했으면 앱은 알고 있을텐데»
+ *  — 미르 초조함(«완료 기록이 113분째 없어요»)과 야드 답이 이 보고를 본다. */
+export function workPauseOf(v, now = Date.now()) {
+  const reps = v && v.reports;
+  if (!reps || typeof reps !== 'object') return null;
+  let last = null;
+  for (const k of Object.keys(reps)) {
+    const r = reps[k]; if (!r || typeof r !== 'object') continue;
+    const ts = Number(r.ts) || Number(k) || 0;
+    if (!ts || ts > now + 5 * MIN || now - ts > 12 * 3600000) continue;
+    const act = String(r.action || '');
+    const isStatus = r.type === 'work_status' && /_(start|pause|resume|done)$/.test(act);
+    const isExt = r.type === 'external_pause';
+    if (!isStatus && !isExt) continue;
+    if (!last || ts > last.ts) last = { ts, act: isExt ? 'external_pause' : act, mode: String(r.mode || ''), reason: String(r.reason || ''), equip: String(r.equip || '') };
+  }
+  if (!last || !/pause$/.test(last.act)) return null;
+  //  재개 보고 없이 일을 다시 시작하는 일이 흔하다 — 중단 뒤에 완료 기록이 찍혔으면 재개로 본다(재감사 2).
+  for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const c of Object.values(comp)) { const at = c && Number(c.at); if (at && at > last.ts && at <= now + 5 * MIN) return null; } }
+  //  재개 예상 — 검수사 2026-09-29 19:28 «보통 17시에 야드 혼잡이유로 작업 중단을 하면 19시에 작업이 재개됩니다» · «중단한 시간이 … 야드 혼잡 + 석식 시간이었습니다.
+  //    그 시간대엔 작업자도 작업중인 장비도 없는상태». 중단 뒤 3시간 안에 쉬는 시간(근무표 창 사이)이 끝나면 그 창의 시작이 재개 예상 시각이다.
+  let resumeAt = 0, breakKo = '';
+  try {
+    const pier = pierOf(v);
+    const wins = (WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC).slice().sort((a, b) => a[0] - b[0]);
+    const d0 = new Date(last.ts); d0.setHours(0, 0, 0, 0);
+    for (let day = 0; day < 2 && !resumeAt; day++) {
+      const base = d0.getTime() + day * 86400000;
+      for (const [a, b] of wins) {
+        const startMs = base + a * 60000;
+        if (startMs > last.ts && startMs - last.ts <= 3 * 3600000) { resumeAt = startMs; break; }
+      }
+    }
+    if (resumeAt) { const m = new Date(resumeAt).getHours() * 60 + new Date(resumeAt).getMinutes(); breakKo = (m >= 720 && m <= 810) ? '중식' : (m >= 1080 && m <= 1200) ? '석식' : (m >= 0 && m <= 90) ? '야식' : '쉬는 시간'; }
+  } catch (e) { resumeAt = 0; }
+  return { mode: last.mode, reason: last.reason, equip: last.equip, ts: last.ts, resumeAt, breakKo, ko: last.mode === 'loading' ? '선적' : last.mode === 'discharge' ? '양하' : '작업' };
+}
 export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
   const r = [];
   if (heartbeat && Number(heartbeat.at)) {
@@ -2833,13 +2872,16 @@ export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
       }
     }
     if (isWorkingNow(v, now)) {
+      if (workPauseOf(v, now)) continue;   // 3.69-01: 앱에 중단 보고가 있으면 완료가 없는 게 당연하다 — 초조해하지 않는다
       let last = 0, any = false;
       for (const mode of ['discharge', 'loading']) {
         const comp = v[mode] && v[mode].completed;
         if (!comp || typeof comp !== 'object') continue;
         for (const c of Object.values(comp)) { const at = c && Number(c.at); if (at) { any = true; if (at > last) last = at; } }
       }
-      if (any && now - last > MOOD_NO_DONE_MS) r.push(`${vsl} 완료 기록이 ${Math.round((now - last) / MIN)}분째 없어요`);
+      //  3.69-01: 쉬는 시간(석식·중식·야식·티타임)은 세지 않는다 — 검수사 «그 시간대엔 작업자도 작업중인 장비도 없는상태이기 때문에 작업 대기시간도 아닙니다». 근무표(WORK_SHIFTS) 한 벌.
+      let wmin = 0; try { wmin = workMinutesBetween(last, now, pierOf(v)); } catch (e) { wmin = Math.round((now - last) / MIN); }
+      if (any && wmin * MIN > MOOD_NO_DONE_MS) r.push(`${vsl} 완료 기록이 실작업 ${wmin}분째 없어요`);
     }
   }
   return r;
@@ -2919,6 +2961,7 @@ export function setMirYard(v) { _yard = (v && typeof v === 'object') ? v : null;
 export function readMirYard() { return _yard; }
 export const YARD_STALE_MS = 10 * MIN;    // 이보다 오래된 자료면 «N분 전 자료» 를 붙인다
 export const YARD_DEAD_MS = 60 * MIN;     // 이보다 오래됐으면 자료가 안 오는 것 — 수집기 확인을 권한다
+export const YARD_SPEAK = { conversational: true, rate: 0.9 };   // 3.69-01: 야드 답은 숫자가 빽빽해 천천히 읽는다 — 검수사 «답변 속도가 너무 빨라서 무슨 소리인지 모르겠음»(18:52). 네 창구·콘앱이 같은 값을 쓴다
 const YARD_CT_KO = { GP: '일반', RF: '냉동', DG: '위험물', AK: '장척', MT: '공컨' };
 const YARD_ADVICE = '샤시가 늦으면 1차로 기다리고, 2차로 포맨에게 독촉해요. 출항이 임박했으면 수석에게 보고해요.';   // data/mirKnowledge «야드 샤시 안 왔어요» 와 같은 말
 
@@ -3007,8 +3050,9 @@ function _ydPctc(kind, y, age, o, now) {
   //  추이 — 블록 표의 «3·4·5시간 후» 열 합계. 검수사 «그건 그시간이후의 추이상황입니다». 0 인 쪽은 읽지 않는다(2차 시뮬 12).
   //    ⚠ «일반·냉동» 머리글의 1·2 열은 실측상 1·2시간 뒤 추이로 보이나(본선 7→41→24→12→0→0) 검수사 확정 전이라 읽지 않는다 — 수집기는 h1·h2 도 적어 둔다(감사 4).
   const ah = y.ahead || {};
-  const trendParts = ['h3', 'h4', 'h5'].map((h) => { const t = ah[h] || {}; const g = Number(t.g) || 0, v = Number(t.v) || 0; if (!g && !v) return ''; const parts = [].concat(g ? [`반출입 ${g}대`] : [], v ? [`본선 ${v}대`] : []); return `${h.slice(1)}시간 뒤 ${parts.join('·')}`; }).filter(Boolean);
-  const trend = trendParts.length ? `앞으로 — ${trendParts.join(', ')}.` : '앞으로 잡힌 반출입·본선 예정은 안 보여요.';
+  //  검수사 2026-09-29 18:49 «3시간후 4시간 후는 예상치 입니다» · «3시간 후에는 몇대쯤 될것이다. 4시간 후에는 몇대쯤일것이다» — 예상치는 «몇 대쯤 될 것 같아요» 로 말한다(3.69-01).
+  const trendParts = ['h3', 'h4', 'h5'].map((h) => { const t = ah[h] || {}; const g = Number(t.g) || 0, v = Number(t.v) || 0; if (!g && !v) return ''; const parts = [].concat(g ? [`반출입 ${g}대`] : [], v ? [`본선 ${v}대`] : []); return `${h.slice(1)}시간 뒤엔 ${parts.join('·')}쯤`; }).filter(Boolean);
+  const trend = trendParts.length ? `예상 — ${trendParts.join(', ')} 될 것 같아요.` : '앞으로 3~5시간 예상치는 안 잡혀 있어요.';
   if (kind === 'count') return `${base} ${wait}`;
   if (kind === 'trend') return `${base} ${trend}`;
   if (kind === 'block') {
@@ -3018,7 +3062,15 @@ function _ydPctc(kind, y, age, o, now) {
   }
   //  why — 느린 이유 설명(검수사 '왜'): 등급·대기 물량·잠긴 블록 수·장비 중 우리 몫·마지막 우리 컨·추이·대처.
   //    블록 코드·장비 번호 목록은 여기서 읽지 않는다(음성 40초 — 2차 시뮬 8). «야드 어느 블록» 칩이 그 목록을 낸다.
-  const L = [base, wait];
+  const L = [base];
+  //  3.69-01: 앱에 중단 보고가 있으면 그것부터 — 검수사 «카톡보고를 했으면 앱은 알고 있을텐데». 시각은 보고 ts 를 HH:MM 으로.
+  const wp = o.voyage ? workPauseOf(o.voyage, now) : null;
+  if (wp) {
+    const hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    const tail = wp.resumeAt ? (now < wp.resumeAt ? ` ${wp.breakKo}과 겹쳐 보통 ${hm(wp.resumeAt)}에 재개돼요.` : ` 보통 ${hm(wp.resumeAt)} 재개인데 아직 재개·완료 기록이 없어요.`) : '';
+    L.push(`앱 보고로는 ${wp.equip ? wp.equip + ' ' : ''}${wp.ko} ${hm(wp.ts)} 중단${wp.reason ? `(사유 ${wp.reason})` : ''} 중이에요.${tail}`);
+  }
+  L.push(wait);
   if (locked.length) L.push(`본선 작업 때문에 반출이 막힌 블록이 ${locked.length}곳이에요.`);
   if (o.mode === 'loading') {
     //  선적 탭 — 야드 장비·마지막 놓인 컨은 양하 쪽 이야기다. 선적 지연은 반출 쪽 사정으로만 말한다(2차 시뮬 16).

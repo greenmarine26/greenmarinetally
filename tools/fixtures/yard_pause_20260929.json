@@ -1,0 +1,191 @@
+{
+ "PCSZ_2630E": {
+  "info": {
+   "ascHdr": "$600",
+   "ascName": "PCSZ 2630E ASC.ASC",
+   "autoRegistered": true,
+   "autoStatus": "confirmed",
+   "berth": "동부두 8번선석",
+   "berthShift": 0,
+   "berthSide": "starboard",
+   "berthSidePick": "starboard",
+   "craneCrew": {
+    "09-29 주간": {
+     "3호기": {
+      "at": 1790663168254,
+      "name": "김성일"
+     },
+     "4호기": {
+      "at": 1790663168254,
+      "name": "한성호"
+     }
+    }
+   },
+   "createdAt": 1790481447763,
+   "createdBy": "예정등록(수집기)",
+   "dataFixedAt": 1790586989339,
+   "lane": "PSS",
+   "mode": "discharge",
+   "mrnIn": "26SNKO3444I",
+   "pier": "PCTC",
+   "planDate": "2026-09-29 15:00 ~ 2026-09-30 09:00",
+   "planDis": 614,
+   "planLod": 70,
+   "planSrc": "plan",
+   "seqFull": true,
+   "seqFullAt": 1790590858923,
+   "seqFullBy": "김성일",
+   "seqMode": "fullOnlySeq",
+   "termVoy": "PCSZ-0026",
+   "terminalStatus": "working",
+   "voy": "2630E",
+   "voy_d": "2630E",
+   "voy_l": "2632W",
+   "vsl": "PCSZ",
+   "vslFull": "PACIFIC SHENZHEN",
+   "workEndAt": "",
+   "workStartAt": "2026-09-29 15:05"
+  },
+  "reports": {
+   "1790663716710": {
+    "action": "discharge_start",
+    "created_at": "2026-09-29T06:35:16.710Z",
+    "equip": "3호기",
+    "message": "🏗 3호기\n📍 PCSZ 2630E\n🟢 양하 시작\n시각: 9. 29. 15:35",
+    "mode": "discharge",
+    "ts": 1790663716710,
+    "type": "work_status"
+   },
+   "1790668893268": {
+    "action": "discharge_pause",
+    "created_at": "2026-09-29T08:01:33.268Z",
+    "equip": "3호기",
+    "message": "🏗 3호기\n📍 PCSZ 2630E\n⏸ 양하 중단\n시각: 9. 29. 17:01\n사유: 야드혼잡",
+    "mode": "discharge",
+    "reason": "야드혼잡",
+    "ts": 1790668893268,
+    "type": "work_status"
+   }
+  },
+  "discharge": {
+   "completed": {
+    "SKHU8926239": {
+     "at": 1790666474000,
+     "by": "",
+     "equip": "4호기",
+     "src": "term"
+    },
+    "HLHU8437499": {
+     "at": 1790666963000,
+     "by": "",
+     "equip": "4호기",
+     "src": "term"
+    },
+    "SKHU8719756": {
+     "at": 1790665630000,
+     "by": "",
+     "equip": "3호기",
+     "src": "term"
+    }
+   }
+  }
+ },
+ "DJCF_0151N": {
+  "info": {
+   "ascHdr": "$600",
+   "ascName": "DJCF 0152S PTK.ASC",
+   "autoRegistered": true,
+   "autoStatus": "confirmed",
+   "berth": "동부두 6번선석",
+   "berthShift": 0,
+   "berthSide": "port",
+   "berthSidePick": "port",
+   "callsign": "D7XF",
+   "carrier": "",
+   "craneCrew": {
+    "09-29 주간": {
+     "2호기": {
+      "at": 1790653732106,
+      "name": "이종부"
+     },
+     "3호기": {
+      "at": 1790653732106,
+      "name": "송제욱"
+     },
+     "4호기": {
+      "at": 1790653732106,
+      "name": "김성일"
+     }
+    }
+   },
+   "createdAt": 1790003170605,
+   "createdBy": "예정등록(수집기)",
+   "dataFixedAt": 1790640531855,
+   "etd": "20260928",
+   "lane": "NTX",
+   "mode": "discharge",
+   "mrnIn": "26DJSC702PI",
+   "pier": "PCTC",
+   "planDate": "2026-09-29 13:00 ~ 2026-09-30 02:00",
+   "planDis": 304,
+   "planLod": 351,
+   "planSrc": "plan",
+   "seqFull": true,
+   "seqFullAt": 1790594546928,
+   "seqFullBy": "김성일",
+   "seqMode": "fullOnlySeq",
+   "termVoy": "DJCF-0012",
+   "terminalStatus": "working",
+   "voy": "0151N",
+   "voy_d": "0151N",
+   "voy_l": "0152S",
+   "vsl": "DJCF",
+   "vslFull": "DONGJIN CONFIDENT",
+   "workEndAt": "",
+   "workStartAt": "2026-09-29 13:05"
+  },
+  "reports": {
+   "1790655288943": {
+    "action": "discharge_start",
+    "created_at": "2026-09-29T04:14:48.943Z",
+    "equip": "3호기",
+    "message": "🏗 3호기\n📍 DJCF 0151N\n🟢 양하 시작\n시각: 9. 29. 13:14",
+    "mode": "discharge",
+    "ts": 1790655288943,
+    "type": "work_status"
+   },
+   "1790663030240": {
+    "action": "discharge_pause",
+    "created_at": "2026-09-29T06:23:50.240Z",
+    "equip": "3호기",
+    "message": "🏗 3호기\n📍 DJCF 0151N\n⏸ 양하 중단\n시각: 9. 29. 15:23\n사유: 타선박이동",
+    "mode": "discharge",
+    "reason": "타선박이동",
+    "ts": 1790663030240,
+    "type": "work_status"
+   }
+  },
+  "discharge": {
+   "completed": {
+    "FBIU5373793": {
+     "at": 1790661830000,
+     "by": "",
+     "equip": "1호기",
+     "src": "term"
+    },
+    "NSSU0074574": {
+     "at": 1790664893000,
+     "by": "",
+     "equip": "2호기",
+     "src": "term"
+    },
+    "HLHU8532325": {
+     "at": 1790656790000,
+     "by": "",
+     "equip": "2호기",
+     "src": "term"
+    }
+   }
+  }
+ }
+}

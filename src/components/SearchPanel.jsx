@@ -17,7 +17,7 @@ import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.6
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
-import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
+import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, YARD_SPEAK } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
@@ -1414,7 +1414,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();
       const zm = first.match(/^(.+?):\s*0대/);
       if (zm) speak(`${zm[1].trim()} 없어요`);   // 2.33: 미르 말투
-      else if (first) speak(first.replace(/:\s*/, ' '), (parsed.etaQuery || parsed.handoverQuery || parsed.customsReportQuery) ? { conversational: true } : {});  // V7.99-15/V8.00: 대화형 답변은 부드럽게
+      else if (first) speak(first.replace(/:\s*/, ' '), parsed.yardQuery ? YARD_SPEAK : (parsed.etaQuery || parsed.handoverQuery || parsed.customsReportQuery) ? { conversational: true } : {});   // 3.69-01: 야드 답은 천천히  // V7.99-15/V8.00: 대화형 답변은 부드럽게
       return;
     }
 

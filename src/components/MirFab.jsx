@@ -15,7 +15,7 @@
      여기는 ①20초마다·재료가 바뀔 때 다시 재고 ②질문(noteMirAsk)·열람(noteMirOpen)·못 답함(missed)·완료 대수 증가(workDone)·
      작업 선박 선택(workPick)을 그 벌에 알리고 ③얼굴 버튼에 `mir-mood-<key>` 클래스와 작은 표시를 얹을 뿐이다. 그림은 검수사 그림 그대로다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
+import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import MirFace from './MirFace.jsx';   // 3.57: 표정이 움직이는 얼굴(눈·입·눈물·땀) — 그림은 검수사 원본 그대로
 import { answerOneRaw } from '../mir.js';
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
@@ -175,9 +175,9 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       if (ctx.shipContacts === undefined && parseNaturalQuery(t).contactQuery) {
         try { ctx.shipContacts = (await fbGetSimple('shipContacts')) || {}; } catch (e) { ctx.shipContacts = {}; }
       }
-      let a = null, fo = null;
+      let a = null, fo = null, r = null;   // 3.69-01: r 을 밖으로 — 야드 답 판정(_yardA)이 try 밖에서 본다
       try {
-        const r = await askMir(t, ctx, (cq, trace) => answerOneRaw(cq, { ...ctx, _trace: trace }), { who: inspector || '' });
+        r = await askMir(t, ctx, (cq, trace) => answerOneRaw(cq, { ...ctx, _trace: trace }), { who: inspector || '' });
         a = (r && r.text != null) ? mirTone(r.text) : null;
         //  3.68 [mirThread]: 접수된 말 하나에 한 번 기록 — 답이 정해진 뒤(규칙이면 그 길 trace.via, 모델이면 r.via). 한 마디 {line, chips, confirm} 를 받는다.
         try { fo = mirThreadCommit(t, r && r.text != null ? r.text : null, (r && r.via === 'rules') ? ((r.trace && r.trace.via) || '') : ((r && r.via) || ''), ctx); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
@@ -198,7 +198,8 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       setFollow(_fo);
       logQuerySettled('nls', t, { voyageKey: vk || '', via: 'mir' });
       let _long = false;
-      try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) { _long = true; speakLong(plain); } else speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
+      const _yardA = !!(r && r.via === 'rules' && r.trace && r.trace.via === 'yard');   // 3.69-01: 야드 답은 천천히(YARD_SPEAK 한 벌)
+      try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) { _long = true; speakLong(plain); } else speak(plain.slice(0, 400), _yardA ? YARD_SPEAK : { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
       //  3.68: 한 마디는 답 뒤에 이어 읽는다(끊지 않고 append). 칩은 읽지 않는다. 긴 낭독(speakLong·브리핑)은 우선순위 보호가 있어 뒤에 붙이지 않는다(감사 6).
       try { const more = (_fo && !_long) ? (_fo.confirm || _fo.line) : ''; if (more) speak(String(more).replace(CLEAN_RE, ' ').replace(/[«»]/g, ' '), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ }
     } finally { setBusy(false); }

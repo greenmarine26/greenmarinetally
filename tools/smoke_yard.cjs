@@ -62,13 +62,14 @@ console.log('■ ② answerYard 순수 함수(실 스냅샷 2026-09-29 17:01)');
   T(w.includes(`반출이 막힌 블록이 ${pc.locked.length}곳이에요.`) && !w.includes(pc.locked[0] + ' ' + pc.locked[1]), 'why — COPINO LOCK 블록 수만(코드 목록은 «야드 어느 블록» 칩 — 음성 길이)', w);
   const rtN = pc.work.filter((x) => x.rt).length;
   T(w.includes(`야드 장비는 ${rtN}대예요.`) && !w.includes('RT204'), 'why — 배 없이 물으면 장비 대수만(번호 목록·우리 몫 없음)', w);
-  T(/앞으로 — 3시간 뒤 본선 12대\./.test(w) && !/1시간 뒤/.test(w), 'why — 추이(3·4·5시간 뒤만 — 1·2 열은 검수사 확정 전, 0 인 쪽·시간대는 생략, 단위 «대»)', w);
+  T(/예상 — 3시간 뒤엔 본선 12대쯤 될 것 같아요\./.test(w) && !/1시간 뒤/.test(w), 'why — 예상치(3·4·5시간 뒤만, 0 인 쪽·시간대는 생략, «몇 대쯤 될 것 같아요»)', w);
   T(w.length < 260, 'why 길이 — 음성으로 읽을 만한 길이(260자 미만)', String(w.length));
   T(/샤시가 늦으면 1차로 기다리고, 2차로 포맨에게 독촉해요/.test(w), 'why — 대처(지식 «야드 샤시 안 왔어요» 와 같은 말)');
   const b = M.answerYard('block', YD, { piers: ['PCTC'], now: NOW });
   T(b.includes('1A RT204 9937 16:58') && b.includes('1D RT209') && b.includes(`반출 막힌 블록 ${pc.locked.length}곳`), 'block — 블록·장비·마지막 컨 끝네자리·시각, 장비만 붙은 블록도', b);
   const t = M.answerYard('trend', YD, { piers: ['PCTC'], now: NOW });
-  T(/앞으로 — 3시간 뒤 본선 12대\./.test(t) && !/1시간 뒤/.test(t), 'trend — 시간대별 예정(블록 표 3·4·5 열 합계)', t);
+  T(/예상 — 3시간 뒤엔 본선 12대쯤 될 것 같아요\./.test(t) && !/1시간 뒤/.test(t), 'trend — 예상치(블록 표 3·4·5 열 합계)', t);
+  T(M.YARD_SPEAK && M.YARD_SPEAK.rate === 0.9 && M.YARD_SPEAK.conversational === true, 'YARD_SPEAK 한 벌(rate 0.9·conversational)');
   const hon = M.answerYard('busy', { PCTC: Object.assign({}, pc, { level: '혼잡' }) }, { piers: ['PCTC'], now: NOW });
   T(/^PCTC 야드는 지금 혼잡이에요 — /.test(hon), '받침 있는 판정어 «혼잡이에요»(감사 2)', hon);
   const pw = M.answerYard('why', { PCTC: Object.assign({}, pc, { partialWork: true, work: [], locked: [] }) }, { piers: ['PCTC'], now: NOW });
@@ -132,7 +133,7 @@ const kbtr = mkCtx(FX.voyage, FX.voyageKey);
   T(/^PCTC 야드는 지금/.test(r1.a) && !/PNCT/.test(r1.a) && r1.via === 'yard' && r1.weak === false, '열린 항차(PCTC) → PCTC 한 줄만', `${r1.a} · ${r1.via}`);
   T(r1.fo && r1.fo.chips.length && r1.fo.chips.includes('야드 추이'), '답 뒤 한 마디 — 칩(다 끝난 KBTR 은 «야드 추이»만)', JSON.stringify(r1.fo));
   const r2 = ask('응', kbtr, NOW + 5000);
-  T(r2.via === 'yard' && /앞으로 — /.test(r2.a) && r2.weak === false, '«응» → 첫 칩(야드 추이) 답(강함)', `${r2.a.slice(0, 80)} · ${r2.via}`);
+  T(r2.via === 'yard' && /예상 — /.test(r2.a) && r2.weak === false, '«응» → 첫 칩(야드 추이) 답(강함)', `${r2.a.slice(0, 80)} · ${r2.via}`);
   //  일하는 배(DJCF 실물 info — RTDB 2026-09-29) — «작업 속도»·«남은 대수» 칩
   M._mirThreadReset();
   const djcfW = mkCtx(OWN.DJCF_0151N, 'DJCF_0151N', { voyages: OWN });
@@ -153,7 +154,7 @@ const kbtr = mkCtx(FX.voyage, FX.voyageKey);
   const rp2 = ask('동방 야드 바빠', kbtr, NOW + 2000);
   T(/^PNCT 야드 — /.test(rp2.a), '«동방 야드» → PNCT', rp2.a);
   const r3b = ask('야드 추이', kbtr, NOW + 5000);
-  T(/앞으로 — /.test(r3b.a) && r3b.via === 'yard' && r3b.weak === false, '칩 «야드 추이» → 추이 답(강함)', r3b.a);
+  T(/예상 — /.test(r3b.a) && r3b.via === 'yard' && r3b.weak === false, '칩 «야드 추이» → 추이 답(강함)', r3b.a);
   M._mirThreadReset();
   const rl = ask('선적 왜 안 나가', kbtr);
   T(/게이트 반출 차량이/.test(rl.a) && !/야드 장비는/.test(rl.a), '양하 탭에서 «선적 왜 안 나가» → 질문의 모드(선적)로(감사 12)', rl.a.slice(0, 120));
@@ -198,6 +199,48 @@ const kbtr = mkCtx(FX.voyage, FX.voyageKey);
   T(rd.fo && !(rd.fo.chips || []).includes('작업 속도') && !(rd.fo.chips || []).includes('남은 대수'), '다 끝난 배(KBTR 보관본)엔 «작업 속도»·«남은 대수» 칩이 없다(2차 시뮬 16)', JSON.stringify(rd.fo && rd.fo.chips));
 }
 
+console.log('■ ③-B 앱 중단 보고(3.69-01) — 실측 PCSZ 2630E 17:01 양하 중단(야드혼잡) · DJCF 0151N 15:23 중단(타선박이동)');
+{
+  const PZ = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/yard_pause_20260929.json'), 'utf8'));
+  const tNow = 1790668893268 + 30 * 60 * 1000;   // 중단 보고 30분 뒤
+  const wp = M.workPauseOf(PZ.PCSZ_2630E, tNow);
+  T(wp && wp.mode === 'discharge' && wp.reason === '야드혼잡' && wp.equip === '3호기' && wp.ko === '양하', 'workPauseOf — 마지막 보고가 중단이면 {mode, reason, equip}', JSON.stringify(wp));
+  T(M.workPauseOf(PZ.DJCF_0151N, tNow) === null, 'DJCF — 15:23 중단(타선박이동) 뒤 15:54 완료 기록(실측) → 재개로 본다(중단 아님)');
+  const resumed = JSON.parse(JSON.stringify(PZ.PCSZ_2630E)); resumed.reports['1790669000000'] = { type: 'work_status', action: 'discharge_resume', mode: 'discharge', equip: '3호기', ts: 1790669000000 };
+  T(M.workPauseOf(resumed, tNow) === null, '재개 보고가 뒤에 있으면 중단 아님');
+  const ext = JSON.parse(JSON.stringify(PZ.PCSZ_2630E)); ext.reports['1790669000000'] = { type: 'external_pause', reason: '우천', ts: 1790669000000 };
+  T(M.workPauseOf(ext, tNow) && M.workPauseOf(ext, tNow).reason === '우천' && M.workPauseOf(ext, tNow).ko === '작업', 'external_pause 도 중단(모드 없음 → «작업»)');
+  T(M.workPauseOf(PZ.PCSZ_2630E, tNow + 13 * 3600000) === null, '12시간 지난 중단 보고는 안 본다');
+  const _r = new Date(wp.resumeAt); T(wp.breakKo === '석식' && _r.getHours() === 19 && _r.getMinutes() === 0 && (wp.resumeAt - wp.ts) < 3 * 3600000, '17:01 야드혼잡 중단 → 석식과 겹쳐 재개 예상 19:00(근무표 다음 창 시작 — 검수사 «17시에 중단하면 19시에 재개»)', JSON.stringify(wp));
+  const noon = JSON.parse(JSON.stringify(PZ.PCSZ_2630E)); const nts = new Date('2026-09-29T10:10:00+09:00').getTime(); noon.reports = { [String(nts)]: { type: 'work_status', action: 'discharge_pause', mode: 'discharge', reason: '야드혼잡', equip: '3호기', ts: nts } };
+  const wpn = M.workPauseOf(noon, nts + 600000); T(wpn && wpn.resumeAt && new Date(wpn.resumeAt).getHours() === 13 && wpn.breakKo === '중식', '10:10 중단 → 다음 창 13:00(중식)까지 3시간 안이면 그것이 재개 예상', JSON.stringify(wpn));
+  const early = JSON.parse(JSON.stringify(PZ.PCSZ_2630E)); const ets = new Date('2026-09-29T08:10:00+09:00').getTime(); early.reports = { [String(ets)]: { type: 'work_status', action: 'discharge_pause', mode: 'discharge', reason: '야드혼잡', ts: ets } };
+  T(M.workPauseOf(early, ets + 600000).resumeAt === 0, '08:10 중단 → 3시간 안에 창 시작이 없으면 재개 예상 없음(지어내지 않는다)');
+  //  초조함은 실작업 분으로 — 석식(17:30~19:00)은 세지 않는다(검수사 «그 시간대엔 작업자도 작업중인 장비도 없는상태 … 대기시간도 아닙니다»)
+  const vv = { info: Object.assign({}, PZ.PCSZ_2630E.info, { planStart: '2026-09-29 15:00', planEnd: '2026-09-30 06:00' }), discharge: { ediContainers: { A: { cn: 'A' } }, completed: { A: { cn: 'A', at: new Date('2026-09-29T16:59:00+09:00').getTime() } } }, loading: { ediContainers: { B: { cn: 'B' } } } };
+  T(!M.anxiousReasons({ X: vv }, null, new Date('2026-09-29T19:05:00+09:00').getTime()).some((x) => /완료 기록/.test(x)), '16:59 마지막 완료 · 19:05 — 실작업 31분이라 초조하지 않다(벽시계 126분)');
+  T(M.anxiousReasons({ X: vv }, null, new Date('2026-09-29T20:30:00+09:00').getTime()).some((x) => /완료 기록이 실작업 121분째 없어요/.test(x)), '20:30 — 실작업 121분 → 초조(문구에 «실작업»)');
+  T(M.workPauseOf({ info: {} }, tNow) === null && M.workPauseOf(null, tNow) === null, '보고 없음 → null');
+  const doneAfter = JSON.parse(JSON.stringify(PZ.PCSZ_2630E)); doneAfter.discharge = { completed: { XXXU0000001: { cn: 'XXXU0000001', at: 1790668893268 + 10 * 60 * 1000 } } };
+  T(M.workPauseOf(doneAfter, tNow) === null, '중단 뒤 완료 기록이 찍히면 재개로 본다(재감사 2)');
+  //  초조함 — isWorkingNow 는 utils 한 벌이라 여기서는 workPauseOf 가 anxiousReasons 안에서 불리는지를 소스로 확인하고, 완료 기록 없음 문장이 중단 중엔 안 나오는지 본다
+  T(/if \(workPauseOf\(v, now\)\) continue;/.test(src('src/mir.js')), 'anxiousReasons — 중단 보고가 있으면 «완료 기록 없음» 을 세지 않는다(소스)');
+  const anx = M.anxiousReasons({ PCSZ_2630E: Object.assign({}, PZ.PCSZ_2630E, { info: Object.assign({}, PZ.PCSZ_2630E.info, { planStart: '2026-09-29 15:00', planEnd: '2026-09-30 06:00' }) }) }, null, tNow);
+  T(!anx.some((x) => /완료 기록/.test(x)), '중단 중인 PCSZ 에 «완료 기록이 N분째 없어요» 없음', JSON.stringify(anx));
+  //  야드 why 머리에 중단 보고
+  const pzCtx = mkCtx(Object.assign({}, OWN.PCSZ_2630E, { reports: PZ.PCSZ_2630E.reports }), 'PCSZ_2630E', { voyages: OWN, _now: tNow, _utterAt: tNow });
+  M.setMirYard(YD); M._mirThreadReset();
+  const rw = ask('작업 왜 느려', pzCtx, tNow);
+  const _d = new Date(1790668893268); const _hm = `${String(_d.getHours()).padStart(2, '0')}:${String(_d.getMinutes()).padStart(2, '0')}`;   // 시계에 따라(KST 17:01) — TZ 무관 핀(재감사 3)
+  T(new RegExp(`앱 보고로는 3호기 양하 ${_hm} 중단\\(사유 야드혼잡\\) 중이에요\\. 석식과 겹쳐 보통 \\d\\d:\\d\\d에 재개돼요\\.`).test(rw.a) && rw.a.indexOf('앱 보고로는') < rw.a.indexOf('야드 작업 대기'), 'PCSZ «작업 왜 느려» → 중단 보고 + 재개 예상이 대기 물량보다 먼저', rw.a.slice(0, 200));
+  const t1920 = 1790676000000 + 20 * 60000; M.setMirYard({ PCTC: Object.assign({}, YD.PCTC, { at: t1920 - 60000 }), PNCT: YD.PNCT });
+  const rwl = ask('왜 차 안 와', pzCtx, t1920);   // 19:20 — 재개 예상 지난 뒤(야드 자료는 1분 전 것으로)
+  T(/보통 \d\d:\d\d 재개인데 아직 재개·완료 기록이 없어요/.test(rwl.a), '재개 예상 시각이 지나도 기록이 없으면 그렇게 말한다', rwl.a.slice(0, 200));
+  M.setMirYard(YD);
+  const rb = ask('야드 바빠?', pzCtx, tNow + 1000);
+  T(!/앱 보고로는/.test(rb.a), 'busy 답에는 중단 보고를 붙이지 않는다', rb.a);
+}
+
 console.log('■ ④ 배선·매뉴얼·버전');
 T(/fbSubscribeYardStatus\(setMirYard\)/.test(src('src/App.jsx')) && /u6y\(\)/.test(src('src/App.jsx')), 'App.jsx 가 yard_status 를 구독해 setMirYard 로 넣고 해제한다');
 T(/ref\(db, 'yard_status'\)/.test(src('src/firebase.js')), 'firebase.js fbSubscribeYardStatus(yard_status)');
@@ -207,6 +250,7 @@ T(/야드 상황\(3\.69\)/.test(src('src/data/helpData.js')) && /왜 차 안 와
 T(/APP_VERSION = 'TallyOne 3\.(69|[7-9]\d)/.test(src('src/utils.js')), 'APP_VERSION 3.69 이상');
 T(/APP_NOTE = '[^']*야드/.test(src('src/utils.js')), 'APP_NOTE 가 이번 판(야드) 문구');
 T(/__CONEV='ConeOne 2\.(5[89]|[6-9]\d)/.test(src('public/cone.html')), 'ConeOne 2.58 이상');
+T(/_yardA \? YARD_SPEAK/.test(src('src/components/MirFab.jsx')) && /parsed\.yardQuery \? YARD_SPEAK/.test(src('src/components/SearchPanel.jsx')) && /parsed\.yardQuery \? YARD_SPEAK/.test(src('src/pages/GlobalSearchPage.jsx')) && /__mirYardSlow/.test(src('public/cone.html')), '야드 답 느린 낭독 — 네 창구·콘앱이 YARD_SPEAK 한 벌(3.69-01)');
 T(/smoke_yard\.cjs/.test(src('build.sh')), 'build.sh 가 이 연막검사를 부른다');
 T(/yardQuery/.test(src('src/nlSearch.js')) && (src('src/nlSearch.js').match(/result\.yardQuery = '/g) || []).length === 7, 'nlSearch yardQuery 다섯 갈래(why 두 줄·busy 두 줄)');
 
