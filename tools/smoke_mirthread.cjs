@@ -111,6 +111,11 @@ console.log('■ ①-B 감사 회귀 — 끝맺음은 낱말만 있는 말 · �
   T(h2.a != null && !/어느 배 말씀인지/.test(h2.a) && !h2.fo.confirm, '그 «응» 을 배 재료와 함께 다시 풀면 확인 질문이 아니라 답(출항 일정)', first(h2.a));
   const r3 = M.mirThreadResolve('응', Object.assign(tallyCtx(), { _now: NOON + 5000, _utterAt: NOON + 5000 }), NOON + 5000);
   T(!/^KBTR /.test(r3.q || ''), '항차가 열려 있으면(재료 있음) 배 코드를 붙이지 않는다', r3.q);
+  //  3.68-01: 홈에서 칩을 눌러 그 말 그대로 온 것(«호기별 진행»)도 배를 잇는다(라이브 실측 — 칩 클릭이 배를 잃고 모델까지 감)
+  const hc2 = tallyCtx(); hc2.voyage = null; hc2.voyageKey = ''; hc2.info = null; hc2.vsl = ''; hc2.containers = []; hc2.compMap = null; hc2._now = NOON + 5500; hc2._utterAt = NOON + 5500; delete hc2.shipCtx;
+  const chipQ = (h2.fo.chips || [])[0] || '';
+  const r2b = M.mirThreadResolve(chipQ, hc2, NOON + 5500);
+  T(!!chipQ && r2b.kind === 'pick' && r2b.q === 'KBTR ' + chipQ, `홈에서 칩 «${chipQ}» 을 누르면(그 말 그대로) 배 코드를 붙여 «KBTR ${chipQ}»`, `${r2b.kind} ${r2b.q}`);
   M._mirThreadReset();
   //  «이거 몇 시에 끝나»(실제 로그) 는 직전 컨으로 바뀌지 않는다
   ask('0230 어디', tallyCtx, NOON);

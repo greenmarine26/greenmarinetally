@@ -2463,6 +2463,8 @@ export function mirThreadResolve(q0, ctx, now = Date.now()) {
   const withShip = (rq) => (lastShip && ctxShip !== lastShip && !rq.toUpperCase().startsWith(lastShip + ' ')) ? `${lastShip} ${rq}` : rq;
   const chips = (!afterMiss && last.follow && Array.isArray(last.follow.chips)) ? last.follow.chips : [];
   if (chips.length) {
+    //  3.68-01: 칩을 눌러 그 말 그대로 온 것도 «고른 것»이다 — 홈(열린 항차 없음)에서 칩 «남은 대수» 를 누르면 배 없이 엔진에 가 «어느 배 말씀인지» 로 모델까지 가던 것(라이브 실측 DJCF «갱별 진행» → «자료에 없어요 (AI)»)
+    if (chips.includes(q)) return { q: withShip(q), direct: null, kind: 'pick', how: `칩 «${q}»` };
     if (TH_YES_RE.test(q)) return { q: withShip(chips[0]), direct: null, kind: 'pick', how: `«${q}» → 제안 1 «${chips[0]}»` };
     //  맨숫자 «1/2/3» 은 접수된 말(ctx._utterAt — 전송·음성 확정)에서만 번호로 본다. 검색창에 숫자를 치기 시작한 첫 글자가 제안으로 풀리던 것(감사 2).
     if (TH_PICK_RE.test(q) && (!/^\d$/.test(q) || ut)) { const n = /둘|두|2/.test(q) ? 1 : /셋|세|3/.test(q) ? 2 : 0; const rq = chips[Math.min(n, chips.length - 1)]; return { q: withShip(rq), direct: null, kind: 'pick', how: `«${q}» → 제안 ${n + 1} «${rq}»` }; }
