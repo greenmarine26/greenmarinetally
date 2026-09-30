@@ -1395,6 +1395,8 @@ export function mirSee(q, ctx) {
       findTwin: (t, arr, used) => findTwinCandidate(t, arr, used, info.imo || '', info.vsl || ''),
       streamPref: null,
       rowFrom: info.seqRowFrom === 'sea' ? 'sea' : 'land',   // 3.3: 양하 «해상부터» — 자동 가이드와 한 벌
+      //  3.72-01: 선적 도착항 순위는 완료한 컨을 포함한 전체 계획으로 잰다 — 화면(GuidedWorkPanel)과 한 벌
+      planAll: all.filter((c) => c && c._ptk !== false && (c._mode || mode) === mode && c.bay),
     }) || [];
   } catch (e) { return null; }
   if (!queue.length) return null;

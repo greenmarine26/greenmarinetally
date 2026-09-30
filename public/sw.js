@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.72';
-const NOTE = 'RZOR 덱플랜 — 양하(선적) 완료된 칸이 밝은 초록과 ✓ 로 바로 보이고, 위에 최근 양하된 컨 6대와 시각이 뜹니다. 눌러 보지 않아도 남은 대수까지 한눈에 봅니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.72-01';
+const NOTE = '선적 자동 가이드 — 한 베이에 도착항이 섞여 있어도 바닥 칸이 있는 묶음부터 나오고 같은 열에서 위 칸이 아래 칸보다 먼저 나오지 않습니다. ATPR 2644W 28베이는 WEI 리퍼부터 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

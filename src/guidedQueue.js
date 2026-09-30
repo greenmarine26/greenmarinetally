@@ -78,37 +78,65 @@ function _frontFirst(cards, frontCns) {
   return hit.length ? [...hit, ...rest] : cards;
 }
 
-export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null }) {
+export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null, planAll = null }) {
   const landToSea = mode === 'discharge' && rowFrom !== 'sea';   // 3.3: 양하 «해상부터»면 해상→육상
   const topFirst = mode === 'discharge';
 
   // V7.94-23: 선적 시 같은 베이 안에서 POD(목적항)별로 묶어 제시 (현장: 포트별 선적).
   //   베이 순서·물리 적재순서(데크/홀드·티어)는 유지하고, 같은 베이+같은 단 안에서 POD가 같은 것끼리 인접.
-  //   POD 우선순위 = 그 베이에서 먼저 등장하는 POD 순 (베이별 독립).
-  const podOrderByBay = {};
+  //   POD 우선순위 = 그 베이·그 단(데크/홀드) 안에서 ① **가장 낮은 티어(바닥 칸)를 가진 POD 가 먼저**,
+  //     ② 같으면 **다른 POD 의 칸 밑에 깔린 쪽이 먼저**(같은 열에서 남의 칸 위에 얹힌 수 − 남이 내 칸 위에 얹힌 수 가 작은 쪽), ③ 그래도 같으면 POD 코드 순 (베이별 독립).
+  //   ★ 3.72-01 (검수사 2026-09-30 ATPR 2644W «28베이 작업시작을 누르면 6585부터 나온다 — WEI 가 바닥인데 DLC 부터»):
+  //     종전 순위는 «배열에서 먼저 나온 POD» 라 보관소 키(컨번호 알파벳) 순서가 정했다 — 28베이는 첫 컨이 BMOU6075098(DLC)이라 DLC 11대가
+  //     티어 80~86 의 WEI 리퍼 24대보다 앞에 섰고, 같은 열에서 88단 DLC 가 그 아래 WEI 보다 먼저 나왔다(20쌍 — 허공 적재).
+  //     바닥 칸을 가진 묶음을 먼저 세우고, 그래도 남는 종속 위반은 아래 enforceBelowFirst 가 끊는다.
+  //     ② 는 두 POD 가 다 티어 80 에 칸이 있을 때(ATPR 2633E·2640W 28베이 — WEI 리퍼 위에 DLC 가 얹힘) «밑에 깔린 WEI» 를 먼저 세운다.
+  //       POD 코드 순만으로 정하면 DLC 가 먼저 서서 위 칸이 아래 칸을 기다리며 두 POD 가 번갈아 나온다(감사 실측 — 전환 1회 → 8회).
+  //   ⚠ 순위는 **완료한 컨을 포함한 그 베이·단 전체 계획(planAll)** 으로 잰다. 화면은 카드를 하나 끝낼 때마다 «남은 컨»으로 큐를 다시 만드는데,
+  //     남은 컨으로 재면 바닥 묶음이 비는 순간 순위가 뒤집혀 WEI→DLC→WEI 로 묶음이 쪼개진다(감사 실측 — 28베이 진행 시뮬 POD 전환 6회).
+  //     planAll 을 안 주면(호출부가 전체를 못 줄 때) containers 로 잰다 — 이 경우 진행 중 순위가 흔들릴 수 있다.
+  const podOrderByBay = Object.create(null);   // 키가 자료값(POD 코드)이라 프로토타입 없는 객체로 — constructor 같은 이름이 와도 안 깨지게
   if (mode === 'loading') {
-    const seen = {};
-    for (const c of containers) {
-      const b = String(parseInt(c.bay, 10));
+    const seen = new Set();
+    const cell = Object.create(null);   // `${베이}|${d|h}` → { POD: { low: 가장 낮은 티어, cells: [[열, 티어], …] } }
+    for (const c of [...(Array.isArray(planAll) ? planAll : []), ...containers]) {
+      if (!c || c.bay == null || c.tier == null || seen.has(c.cn || c)) continue;   // planAll 과 containers 가 겹쳐도 한 번만 센다
+      seen.add(c.cn || c);
+      const k = `${parseInt(c.bay, 10)}|${isDeckTier(c.tier) ? 'd' : 'h'}`;
       const pod = c.pod || '';
-      podOrderByBay[b] ||= {};
-      if (!(pod in podOrderByBay[b])) { seen[b] = (seen[b] || 0); podOrderByBay[b][pod] = seen[b]++; }
+      const t = parseInt(c.tier, 10), low = Number.isFinite(t) ? t : 9999;
+      cell[k] ||= Object.create(null);
+      const e = (cell[k][pod] ||= { low, cells: [] });
+      if (low < e.low) e.low = low;
+      if (Number.isFinite(t)) e.cells.push([String(c.row), t]);
+    }
+    for (const k of Object.keys(cell)) {
+      const pods = Object.keys(cell[k]);
+      //  열(로우)마다 서로 다른 POD 의 칸을 견주어 «누가 누구 위에 얹혔나» 를 센다 — over[p] = p 의 칸이 남의 칸 위에 얹힌 수, under[p] = 남의 칸이 p 의 칸 위에 얹힌 수
+      const over = Object.create(null), under = Object.create(null), byRow = {};
+      for (const p of pods) { over[p] = 0; under[p] = 0; for (const [r, t] of cell[k][p].cells) (byRow[r] ||= []).push([p, t]); }
+      for (const list of Object.values(byRow)) for (const [pa, ta] of list) for (const [pb, tb] of list) if (pa !== pb && ta > tb) { over[pa]++; under[pb]++; }
+      const cover = (p) => over[p] - under[p];
+      pods.sort((x, y) => (cell[k][x].low - cell[k][y].low) || (cover(x) - cover(y)) || (x < y ? -1 : x > y ? 1 : 0));
+      podOrderByBay[k] = Object.create(null);
+      pods.forEach((p, i) => { podOrderByBay[k][p] = i; });
     }
   }
   const podRank = (c) => {
     if (mode !== 'loading') return 0;
-    const b = String(parseInt(c.bay, 10));
-    return podOrderByBay[b]?.[c.pod || ''] ?? 99;
+    const k = `${parseInt(c.bay, 10)}|${isDeckTier(c.tier) ? 'd' : 'h'}`;
+    return podOrderByBay[k]?.[c.pod || ''] ?? 99;
   };
 
-  const cmp = (a, b) => {
+  //  ★ 3.72-01 — 정렬을 «물리 총순서» 와 «도착항 묶음 후처리» 둘로 갈랐다.
+  //    종전 cmp 는 같은 베이끼리는 POD 순위를 먼저, 다른 베이끼리는 티어를 먼저 견줘 비교가 순환(A<C<B<A)할 수 있었고,
+  //    그러면 정렬 결과가 자료 배열 순서에 좌우된다(감사 실측 — 여러 베이가 섞인 혼합 무리 2%). 이제
+  //      ① physCmp = 단(데크/홀드) → 티어 → 로우 → 베이(→ 선적은 컨번호) 의 **총순서** — 배열 순서와 무관.
+  //      ② podGroup = 그 순서에서 «같은 베이·같은 단» 카드들이 차지한 자리는 그대로 두고, 그 자리들 안에서만 도착항 순위(같으면 물리 순서)로 다시 채운다.
+  //    → 베이 사이 순서는 물리 순서가 정하고, 도착항 묶음은 같은 베이 안에서만 작용한다(V7.94-23 그대로). 한 베이만 있는 무리는 종전 결과와 같다.
+  const physCmp = (a, b) => {
     const aDeck = isDeckTier(a.tier), bDeck = isDeckTier(b.tier);
     if (aDeck !== bDeck) return (mode === 'discharge') === aDeck ? -1 : 1;
-    // 선적: 같은 단(데크/홀드) 안에서 같은 베이면 POD별로 묶기 (물리 적재순서보다 우선하지 않게 — 베이·단 동일 시에만)
-    if (mode === 'loading' && parseInt(a.bay, 10) === parseInt(b.bay, 10)) {
-      const ap = podRank(a), bp = podRank(b);
-      if (ap !== bp) return ap - bp;
-    }
     const at = parseInt(a.tier, 10), bt = parseInt(b.tier, 10);
     if (at !== bt) return topFirst ? bt - at : at - bt;
     // 1.57: 같은 층 안 부류 가산점(40ft 먼저 · 풀일반→풀리퍼→엠티) 전부 제거.
@@ -116,10 +144,26 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     const ar = rowRank(a.row, { evenRowsSeaSide, landToSea });
     const br = rowRank(b.row, { evenRowsSeaSide, landToSea });
     if (ar !== br) return ar - br;
-    return parseInt(a.bay, 10) - parseInt(b.bay, 10); // 같은 슬롯은 낮은 베이(앞) 먼저
+    const ab = parseInt(a.bay, 10), bb = parseInt(b.bay, 10);
+    if (ab !== bb) return ab - bb; // 같은 슬롯은 낮은 베이(앞) 먼저
+    if (mode === 'loading') { const x = String(a.cn || ''), y = String(b.cn || ''); if (x !== y) return x < y ? -1 : 1; }   // 같은 자리 중복 자료도 배열 순서와 무관하게
+    return 0;
   };
+  const podGroup = (arr, keyOf) => {
+    if (mode !== 'loading' || arr.length < 2) return arr;
+    const slots = {};   // `${베이}|${d|h}` → 그 무리가 차지한 자리(배열 인덱스, 물리 순서)
+    arr.forEach((x, i) => { const c = keyOf(x); (slots[`${parseInt(c.bay, 10)}|${isDeckTier(c.tier) ? 'd' : 'h'}`] ||= []).push(i); });
+    const out = arr.slice();
+    for (const idxs of Object.values(slots)) {
+      if (idxs.length < 2) continue;
+      const ranked = idxs.map((i, n) => [arr[i], n]).sort((p, q) => (podRank(keyOf(p[0])) - podRank(keyOf(q[0]))) || (p[1] - q[1]));
+      idxs.forEach((i, n) => { out[i] = ranked[n][0]; });
+    }
+    return out;
+  };
+  const orderBy = (arr, keyOf = (x) => x) => podGroup([...arr].sort((a, b) => physCmp(keyOf(a), keyOf(b))), keyOf);
 
-  const sorted = [...containers].sort(cmp);
+  const sorted = [...containers].sort(physCmp);   // 트윈 짝짓기 순서 — 도착항과 무관(짝은 같은 티어·로우의 옆 베이라 도착항 묶음이 끼어들 일이 없다)
 
   // 1차: 트윈 짝짓기 → 카드화 + 싱글모드(짝 없는 20ft)·FR 식별
   const used = new Set();
@@ -147,7 +191,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   // 적재 종속 예외 ①: 싱글 '아래'에 일반/FR 작업분이 있으면 단계 분리 불가 → 층 순서 유지
   const slotCards = [...normal, ...frs].filter(card => !isDeckTier(card.main.tier));
   const keepInFlow = [];
-  const pureSingles = [];
+  let pureSingles = [];
   for (const s of singles) {
     const st = parseInt(s.main.tier, 10), srow = s.main.row;
     const conflict = slotCards.some(card => {
@@ -156,13 +200,14 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     });
     (conflict ? keepInFlow : pureSingles).push(s);
   }
+  pureSingles = podGroup(pureSingles, (card) => card.main);   // 물리 순서로 쌓여 있으므로 도착항 묶음만 후처리
 
   // 적재 종속 예외 ②: FR 우선양하/마지막선적의 물리 제약
   //   양하 우선 불가: 같은 줄 '위'에 비FR 작업분 존재, 또는 홀드 FR인데 데크 작업이 남음
   //   선적 마지막 불가: 같은 줄 '위'에 비FR 작업분 존재(FR 위에 실어야 함), 또는 홀드 FR인데 데크 작업이 남음
   const nonFr = [...normal, ...singles];
   const deckWorkExists = nonFr.some(card => isDeckTier(card.main.tier));
-  const pureFrs = [];
+  let pureFrs = [];
   for (const f of frs) {
     const ft = parseInt(f.main.tier, 10), frow = f.main.row;
     const frIsHold = !isDeckTier(f.main.tier);
@@ -175,12 +220,12 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     const conflict = aboveExists || (frIsHold && deckWorkExists);
     (conflict ? keepInFlow : pureFrs).push(f);
   }
-  pureFrs.sort((a, b) => cmp(a.main, b.main));
+  pureFrs = orderBy(pureFrs, (card) => card.main);
 
   // 최종 순서:
   //   양하 = FR(우선) → 일반(+예외 병합) → 순수 싱글
   //   선적 = 순수 싱글 → 트윈(같은 로우 스택 연속, 아래 깔린 40ft 종속 끌어오기) → 남은 40ft(층 순서) → FR·OT(마지막)
-  const flow = [...normal, ...keepInFlow].sort((a, b) => cmp(a.main, b.main));
+  const flow = orderBy([...normal, ...keepInFlow], (card) => card.main);
   if (mode === 'discharge') {
     // ★ 양하 순서 규칙 — 목적은 «순서»가 아니라 **스프레더 전환 횟수 최소화**다.
     //
@@ -219,8 +264,8 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   //     종전엔 이 검사가 홀드에만 있어(`singles` 수집 조건이 `!isDeckTier`) 데크 20싱글이
   //     아래 단 트윈보다 먼저 갔다 — DJCF 0149N `7-07-84` 싱글이 `7-07-82` 트윈보다 앞선 실증.
   const buildStageOrder = (cards) => {
-    const ordered = [...cards].sort((a, b) => cmp(a.main, b.main));   // 순수 물리 순서(층 → 로우)
-    return pullStreamForward(ordered, '20SINGLE', 'below');           // 20싱글을 종속 지키며 앞으로
+    const ordered = orderBy(cards, (card) => card.main);   // 층 → 로우(같은 베이는 도착항 묶음이 앞선다)
+    return pullStreamForward(enforceBelowFirst(ordered), '20SINGLE', 'below');   // 3.72-01: POD 묶음이 같은 열 종속을 깨지 않게 → 20싱글을 종속 지키며 앞으로
   };
   const holdOrdered = buildStageOrder(flow.filter(card => !isDeckTier(card.main.tier)));
   const deckOrdered = buildStageOrder(flow.filter(card => isDeckTier(card.main.tier)));
@@ -229,7 +274,8 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   let body = [...holdOrdered, ...deckOrdered];
   if (streamPref) body = pullStreamForward(body, streamPref, 'below');
   // pureSingles(홀드 짝없는 20ft) → 홀드 → 데크 → FR·OT(마지막)
-  return _frontFirst([...pureSingles, ...body, ...pureFrs], frontCns);
+  //   3.72-01: 싱글·FR/OT 무리도 POD 묶음이 같은 열 종속을 깨지 않게 같은 보정을 건다(실데이터 250항목 중 싱글 3무리에서 위 싱글이 아래 싱글보다 먼저 나왔다).
+  return _frontFirst([...enforceBelowFirst(pureSingles), ...body, ...enforceBelowFirst(pureFrs)], frontCns);
 }
 
 // 카드의 대표 규격이 40ft인지 (트윈 카드는 20ft 짝이므로 20ft 취급)
@@ -333,6 +379,46 @@ function blockedByBelow(card, cards) {
     return cardPositions(o).some(op => poss.some(p =>
       sameStackPos(op, p) && parseInt(op.tier, 10) < parseInt(p.tier, 10)));
   });
+}
+// ★ 3.72-01: 선적 종속 보정 — 같은 열(스택)에서 아래 칸이 먼저 나가야 위 칸이 나온다(허공 적재 금지).
+//   POD 묶음(V7.94-23)이 층 순서보다 앞서다 보니 다른 POD 가 깔린 열에서 위 칸이 먼저 나오는 일이 있었다(ATPR 2644W 28베이 — 88단 DLC 가 80~86단 WEI 보다 앞, 20쌍).
+//   입력 순서를 최대한 지킨다 — 막히지 않은 첫 카드부터 차례로 내고, 막힌 카드는 아래 칸이 다 나간 직후 자리로 온다. 종속 위반이 없으면 입력 그대로다.
+//   종속 판정은 blockedByBelow 와 같다(같은 단·sameStackPos·더 낮은 티어) — 로우가 같은 카드끼리만 견주므로 느리지 않다.
+function enforceBelowFirst(cards) {
+  const n = cards.length;
+  if (n < 2) return cards;
+  const byRow = {};
+  cards.forEach((card, i) => { for (const p of cardPositions(card)) (byRow[String(p.row)] ||= new Set()).add(i); });
+  const deps = cards.map((card, i) => {
+    const need = new Set();
+    const poss = cardPositions(card);
+    const cand = new Set();
+    for (const p of poss) for (const j of (byRow[String(p.row)] || [])) cand.add(j);
+    for (const j of cand) {
+      if (j === i) continue;
+      const o = cards[j];
+      if (isDeckTier(o.main.tier) !== isDeckTier(card.main.tier)) continue;
+      if (cardPositions(o).some(op => poss.some(p => sameStackPos(op, p) && parseInt(op.tier, 10) < parseInt(p.tier, 10)))) need.add(j);
+    }
+    return need;
+  });
+  if (!deps.some(s => s.size)) return cards;
+  const done = new Array(n).fill(false);
+  const out = [];
+  let first = 0;
+  while (out.length < n) {
+    while (first < n && done[first]) first++;
+    let pick = -1;
+    for (let i = first; i < n; i++) {
+      if (done[i]) continue;
+      let ok = true;
+      for (const j of deps[i]) if (!done[j]) { ok = false; break; }
+      if (ok) { pick = i; break; }
+    }
+    if (pick === -1) { for (let i = 0; i < n; i++) if (!done[i]) out.push(cards[i]); break; }   // 방어 — 종속은 티어가 엄격히 낮아지는 관계라 순환이 없다
+    done[pick] = true; out.push(cards[pick]);
+  }
+  return out;
 }
 // 선호 부류를 물리 종속 지키며 앞으로 — 막힌 카드는 못 당기고, 못 당긴 것은 기본 순서에 남는다.
 //   dir='above' = 양하(위가 안 내려갔으면 못 당김) · dir='below' = 선적(아래가 안 실렸으면 못 당김).

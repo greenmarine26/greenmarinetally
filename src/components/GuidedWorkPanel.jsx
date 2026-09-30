@@ -493,8 +493,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       streamPref,                                           // V8.50: 갈림 선택 부류
       frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
       rowFrom,                                              // 3.3: 양하 «해상부터»
+      planAll: modeAll,                                     // 3.72-01: 선적 도착항 순위는 완료한 컨을 포함한 전체 계획으로 잰다(진행 중 순위가 안 뒤집히게)
     });
-  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom]);
+  }, [remaining, modeAll, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom]);
 
   const card = queue[0] || null;
 
