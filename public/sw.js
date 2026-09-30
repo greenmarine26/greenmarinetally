@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.71';
-const NOTE = 'ATPR 위해행 엠티 선적 — 자동 가이드가 컨번호를 부른 뒤 엠티실 뒷 세 자리를 불러 달라고 하고 마이크를 엽니다. 불러 주신 세 자리를 엠티실 구간의 앞 세 자리와 합쳐 여섯 자리로 리스트에 넣습니다(다른 배·다른 목적지 엠티는 그대로)';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.72';
+const NOTE = 'RZOR 덱플랜 — 양하(선적) 완료된 칸이 밝은 초록과 ✓ 로 바로 보이고, 위에 최근 양하된 컨 6대와 시각이 뜹니다. 눌러 보지 않아도 남은 대수까지 한눈에 봅니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

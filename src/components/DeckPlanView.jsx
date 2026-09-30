@@ -1,17 +1,39 @@
 // V9.22: RZOR 덱 스토우지 플랜 뷰 — RORO/LOLO 혼용선용 덱플랜(차량은 램프로 실어 좌표가 없고 갠트리 적재분만 셀로 보인다) (선사 rzdf 플랜 자동 파싱분)
 //   덱 칩 선택 → CSS grid. 셀: 끝4 + 규격, 완료=초록, 리퍼=청록 테두리, 긴급/활어 배지.
 //   셀 클릭 → 컨 상세(기존 모달).
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { fbAssignDeckSlot, fbCompleteContainer } from '../firebase.js';
-import { isReeferIso, getEquipNumber } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.67-01: 호기(인건비 근거)
+import { isReeferIso, getEquipNumber, fmtShiftTime } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.67-01: 호기(인건비 근거) · 3.72: 완료 시각(KST HH:MM)
 import { canWorkNow, workGateText, equipGateText } from '../workChoice.js';   // 3.67-01: 조회만은 보기만 · 호기 없이 완료 금지(컨 상세와 같은 문지기)
 import { speakDone } from '../voice.js';
 import { rzorSlotCandidates } from '../rzorDeckPredict.js';   // 3.70: 빈자리 조회 후보 한 벌
 
-export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector, onExport }) {
+const FRESH_MS = 10 * 60 * 1000;   // 3.72: 완료 10분 안 = «방금» — ✓ 배지가 깜박이고 «최근 양하» 줄 칩이 밝은 초록이다
+//  폰 시계와 터미널 시각이 어긋나도(느리거나 앞서도) «방금» 판정이 한쪽으로 치우치지 않게 차이의 절댓값으로 잰다.
+const isFresh = (now, at) => !!at && Math.abs(now - at) < FRESH_MS;
+
+export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector, onExport, nowMs: nowProp = 0 }) {
   const decks = plan?.decks || [];
   const [sel, setSel] = useState(0);
+  //  ★ 3.72 — 지금 시각(30초마다 다시 그려 10분이 지난 «방금» 표식을 끈다). nowMs prop 은 연막검사가 시각을 고정하는 자리.
+  const [tickNow, setTickNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setTickNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const now = nowProp || tickNow;
+  //  «최근 양하» — 이 덱플랜의 칸 중 완료 시각(at)이 있는 컨을 늦은 순 6대. 칸을 눌러 보지 않고도 지금 어디가 내려지고 있는지 본다.
+  const recent = useMemo(() => {
+    const out = [];
+    const seen = new Set();
+    for (const dk of (plan?.decks || [])) for (const x of (dk.slots || [])) {
+      if (x.empty || !x.cn || seen.has(x.cn)) continue;
+      const r = compMap[x.cn];
+      const at = r && Number(r.at) > 0 ? Number(r.at) : 0;
+      if (!at) continue;
+      seen.add(x.cn);
+      out.push({ cn: x.cn, at, deck: dk.deck, pos: x.pos || '', iso: x.iso, fe: x.fe });
+    }
+    return out.sort((a, b) => b.at - a.at).slice(0, 6);
+  }, [plan, compMap]);
   const [loloOnly, setLoloOnly] = useState(false);   // V9.55: 갠트리(LO/LO) 분만 보기
   const [exporting, setExporting] = useState('');     // 3.67: 엑셀 내보내기 상태('' | '작성 중' | 파일명 | 오류)
   const byCn = useMemo(() => {
@@ -90,6 +112,9 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
   const modeWord = mode === 'discharge' ? '양하' : '선적';
   const conts = d.slots.filter((s) => !s.empty);
   const done = conts.filter((s) => compMap[s.cn]).length;
+  //  3.72: 배 전체 진행 — 덱마다 칩에 n/m 이 있지만 «지금 몇 대 남았나» 는 한 줄로 본다.
+  const allConts = decks.reduce((n, dk) => n + dk.slots.filter((s) => !s.empty).length, 0);
+  const allDone = decks.reduce((n, dk) => n + dk.slots.filter((s) => !s.empty && compMap[s.cn]).length, 0);
 
   return (
     <div className="bg-ink-900 border border-line rounded-pill p-3 mb-3">
@@ -103,7 +128,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             {dk.deck}덱 {dk.slots.filter((s) => !s.empty && compMap[s.cn]).length}/{dk.slots.filter((s) => !s.empty).length}
           </button>
         ))}
-        <span className="ml-auto text-xxs text-dim-300">이 덱 {done}/{conts.length} 완료 · 빈자리 {d.slots.filter((s) => s.empty && !s.xcell).length}{plan._gen ? ` · 예측 ${conts.filter((s) => s.pred).length} · 확정 ${conts.filter((s) => s.sure).length}` : ''}</span>
+        <span className="ml-auto text-xxs text-dim-300">이 덱 {done}/{conts.length} 완료 · 남음 {conts.length - done} · 덱플랜 전체 {allDone}/{allConts} · 빈자리 {d.slots.filter((s) => s.empty && !s.xcell).length}{plan._gen ? ` · 예측 ${conts.filter((s) => s.pred).length} · 확정 ${conts.filter((s) => s.sure).length}` : ''}</span>
         {/* V9.55: 갠트리(LO/LO) 분만 보기 — 크레인으로 검수하는 건 이것뿐이다 */}
         {(d.lolo > 0) && (
           <button onClick={() => setLoloOnly(!loloOnly)}
@@ -127,6 +152,19 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         ) : null}
         {exporting && exporting !== '작성 중' ? <span className={`text-2xs ${exporting.startsWith('오류') ? 'text-red-300' : 'text-dim-300'}`}>{exporting}</span> : null}
       </div>
+      {/* 3.72: 검수사 2026-09-30 «RZOR 양하시 실시간으로 덱플랜에서 확인할수 있게 … 지금은 클릭해야 양하 되었는지 안되었는지 알수 있습니다» — 눌러 보지 않고도 지금 어디까지 내렸는지 */}
+      {recent.length ? (
+        <div data-recent="1" className="flex items-center gap-1 mb-2 flex-wrap text-2xs text-emerald-200">
+          <span className="font-black">🟢 최근 {modeWord}</span>
+          {recent.map((r) => (
+            <button key={r.cn} onClick={() => onOpenContainer?.(byCn[r.cn] || { cn: r.cn, iso: String(r.iso || '').replace(/\s/g, ''), fe: r.fe, pos: r.pos })}
+              title={r.pos || `${r.deck}덱`}
+              className={`px-1.5 py-0.5 rounded border mono font-black ${isFresh(now, r.at) ? 'bg-emerald-600 border-emerald-300 text-emerald-50' : 'bg-ink-800 border-emerald-700 text-emerald-200'}`}>
+              {r.cn.slice(-4)} <span className="font-normal">{r.deck} {fmtShiftTime(r.at)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {/* V9.54: 도면과 같은 방향으로 읽는다 — 줄은 좌현(부두)→우현, 칸은 선미(램프)→선수 */}
       {/* 3.67: 검수사 STOWAGE PLAN(선적)은 위치 1 이 선수다(numbering 'bow'). 그림 방향은 둘 다 왼쪽 선미·오른쪽 선수. */}
       {plan._gen ? (
@@ -176,6 +214,11 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             }
             if (loloOnly && !s.lolo) return null;   // V9.55: 갠트리 분만 보기
             const isDone = !!compMap[s.cn];
+            //  3.72: 완료 칸 = 밝은 초록 + 모서리 ✓ 배지(글자 잘림과 무관하게 항상 보인다). 종전엔 어두운 초록·어두운 파랑이라 눌러 봐야 알았다.
+            //    예측(?)·확정(📌) 칸은 선적 자동 덱플랜의 자기 색이 우선이라 종전 그대로(배지도 없다).
+            const showDone = isDone && !s.pred && !s.sure;
+            const dnAt = showDone && compMap[s.cn] && Number(compMap[s.cn].at) > 0 ? Number(compMap[s.cn].at) : 0;
+            const fresh = isFresh(now, dnAt);
             const c = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류 — 실번호·온도·DG·POD (사용자 요청)
             const fe = (c && (c.fe === 'F' || c.fe === 'E')) ? c.fe : s.fe;
             const isRf = isReeferIso(s.iso) || !!(c && c.rf);   // 3.60-10 (진단 M6): 리퍼 판정 한 벌
@@ -184,6 +227,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             const tmp = c && c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '';
             const sl = c && c.sl ? String(c.sl) : (c && c.eseal ? String(c.eseal) : '');
             const isLug = !!((s.flags && s.flags.includes('LUG')) || (c && c.lugg));   // 2.06-01: 수화물 — 덱 칸도 보라 박스 (검수사 «9220을 찾았는데 보라박스가 없습니다 — C덱에서 입니다»)
+            const dn = showDone && !isLug;   // 3.72: 밝은 초록 바탕에서 글자를 밝게(수화물 보라 칸은 종전 글자색)
             const marks = [isRf ? (tmp ? `❄${tmp}` : '❄') : '', isDg ? '⚠DG' : '',
                            s.flags && s.flags.length ? s.flags.filter((f) => f !== 'LUG').join('·') : ''].filter(Boolean).join(' ');
             // 3.67: 자동 덱플랜 — 예측 칸은 누르면 확정(assign), 확정 칸은 다시 누르면 해제. 올린 플랜(예측 아님)은 종전대로 컨 상세.
@@ -205,18 +249,20 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
               <button key={`${s.cn}${s.ri}${s.ci}`}
                 title={(s.pred ? '예측 · 누르면 이 자리에 선적 — ' : s.sure ? '확정 · 누르면 자리 해제 — ' : '') + (s.pos || '')}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" · 3.67-01 탭 = 선적 */
                 onClick={onTap}
-                className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
-                  ${s.pred ? 'border-dashed border-amber-400 bg-amber-950/50' : s.sure ? 'bg-amber-900/70 border-amber-400' : isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-ink-750/80 border-line-strong' : 'bg-sky-900/80 border-sky-600'}
+                data-done={showDone ? (fresh ? 'fresh' : '1') : undefined}
+                className={`relative rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
+                  ${s.pred ? 'border-dashed border-amber-400 bg-amber-950/50' : s.sure ? 'bg-amber-900/70 border-amber-400' : isDone ? 'bg-emerald-600 border-emerald-300' : fe === 'E' ? 'bg-ink-750/80 border-line-strong' : 'bg-sky-900/80 border-sky-600'}
                   ${isXray ? 'ring-2 ring-yellow-400' : isRf ? 'ring-1 ring-cyan-400' : ''}
                   ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}
                   ${isLug ? 'ring-2 ring-violet-400 border-violet-400 bg-violet-900/70' : ''}`}
                 style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
-                <div className="text-2xs font-black mono text-dim-100 truncate">
-                  {s.pred ? <span className="text-amber-300">?</span> : null}{s.sure ? <span className="text-amber-200">📌</span> : null}{s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{isXray ? <span className="bg-yellow-400 text-black px-0.5 rounded-sm font-black">X</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
+                {showDone ? <span data-badge="1" style={{ background: '#ffffff', color: '#047857' }} className={`absolute top-0 right-0 px-0.5 rounded-bl-sm text-[10px] leading-none font-black ${fresh ? 'animate-pulse' : ''}`}>✓</span> : null}
+                <div className={`text-2xs font-black mono truncate ${dn ? 'text-emerald-50' : 'text-dim-100'}`}>
+                  {s.pred ? <span className="text-amber-300">?</span> : null}{s.sure ? <span className="text-amber-200">📌</span> : null}{s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{isXray ? <span className="bg-yellow-400 text-black px-0.5 rounded-sm font-black">X</span> : null}{s.cn.slice(-4)}{isDone && !showDone ? ' ✓' : ''}{marks ? <span className={`${dn ? 'text-emerald-50' : 'text-cyan-300'} font-bold`}> {marks}</span> : null}
                 </div>
-                <div className="text-[8.5px] text-dim-200 truncate">{s.iso} {fe}</div>
-                {s.line ? <div className="text-[8px] mono text-dim-300/90 truncate">{s.line}줄 {s.col}칸</div> : null}
-                {sl ? <div className="text-[8.5px] mono text-amber-200/90 truncate">🔒{sl}</div> : null}
+                <div className={`text-[8.5px] truncate ${dn ? 'text-emerald-50' : 'text-dim-200'}`}>{s.iso} {fe}</div>
+                {s.line ? <div className={`text-[8px] mono truncate ${dn ? 'text-emerald-50' : 'text-dim-300/90'}`}>{s.line}줄 {s.col}칸</div> : null}
+                {sl ? <div className={`text-[8.5px] mono truncate ${dn ? 'text-yellow-100' : 'text-amber-200/90'}`}>🔒{sl}</div> : null}
               </button>
             );
           })}
@@ -225,7 +271,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
       <div className="flex gap-3 mt-2 text-2xs text-dim-300 flex-wrap">
         <span><span className="inline-block w-2.5 h-2.5 bg-sky-900 border border-sky-600 rounded-sm mr-1" />풀</span>
         <span><span className="inline-block w-2.5 h-2.5 bg-ink-750 border border-line-strong rounded-sm mr-1" />엠티</span>
-        <span><span className="inline-block w-2.5 h-2.5 bg-emerald-800 border border-emerald-500 rounded-sm mr-1" />완료</span>
+        <span><span className="inline-block w-2.5 h-2.5 bg-emerald-600 border border-emerald-200 rounded-sm mr-1" />완료 ✓(10분 안은 ✓ 깜박)</span>
         <span><span className="inline-block w-2.5 h-2.5 border border-cyan-400 rounded-sm mr-1" />리퍼</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-yellow-400 rounded-sm mr-1" />Ⓧ X-RAY</span>
         <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-line-strong rounded-sm mr-1" />빈자리(탭=찾아 고르기)</span>
