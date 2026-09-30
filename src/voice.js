@@ -70,7 +70,8 @@ const KOR_DIGITS_RECOGNIZE = [
   ['여섯','6'],['일곱','7'],['여덟','8'],['아홉','9'],['열','']
 ];
 
-export function parseSpokenDigits(text) {
+//  3.71: 말한 숫자 전부(자르지 않는다) — 엠티실 뒷 세 자리·여섯 자리를 받는 esealVoice 가 쓴다. parseSpokenDigits 는 이것의 뒤 4자리다.
+export function spokenDigitsRaw(text) {
   if (!text) return '';
   let s = text.toLowerCase();
   const ENG = [['zero','0'],['oh','0'],['one','1'],['two','2'],['three','3'],
@@ -81,7 +82,10 @@ export function parseSpokenDigits(text) {
   for (const [k, v] of sorted) s = s.split(k).join(v);
   const matches = s.match(/\d+/g);
   if (!matches) return '';
-  const allDigits = matches.join('');
+  return matches.join('');
+}
+export function parseSpokenDigits(text) {
+  const allDigits = spokenDigitsRaw(text);
   if (allDigits.length >= 4) return allDigits.slice(-4);
   return allDigits;
 }

@@ -13,6 +13,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
+import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { hatchPanelCountOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -1795,6 +1796,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           )}
 
           {/* ★ 2.75 — 트윈을 한 대씩. 55톤 초과면 «한 번에»는 잠근다(종전엔 경고만 띄우고 그대로 눌렸다). */}
+          {/* ★ 3.71 — ATPR 위해행 엠티 선적: 컨번호를 부른 뒤 엠티실 뒷 세 자리를 듣는다(다른 배·다른 POD 는 그리지 않는다) */}
+          <EsealVoiceBar voyage={voyage} voyageKey={voyageKey} inspector={inspector} card={card} mode={mode} voiceOn={voiceOn} />
+
           {card.twin && singleMode ? (
             <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2">
               <div className="text-xxs text-sky-300 font-bold">한 대씩 — 캐빈에서 먼 쪽부터, 갱을 피해서 (어느 쪽인지는 캐빈이 정합니다)</div>

@@ -42,6 +42,7 @@ import BayViewWork from '../components/BayViewWork.jsx';
 import { canWorkNow } from '../workChoice.js';   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
 import EsealPhotoModal from '../components/EsealPhotoModal.jsx';
 import { esealSheetHTML } from '../esealSheet.js';
+import { esealPoolOf } from '../esealVoice.js';   // 3.71: 엠티실 구간 → 여섯 자리 실 목록 한 벌(음성 입력과 공용)
 import { downloadEsealSheetXlsx } from '../components/EmptySealReport.jsx';   // 3.60-01: 공컨테이너 씰체결 작업 리스트 양식   // 3.60: 엠티실 기록지 사진 → 여섯 자리 실(검수사 2026-09-24)
 import SheetPhotoModal from '../components/SheetPhotoModal.jsx';   // 3.58: 선적 기록지 사진 → 선적 자리(검수사 2026-09-22)   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
 import GlobalSearchPage from './GlobalSearchPage.jsx';
@@ -1150,12 +1151,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       v.n++; v[sz === '20' ? 's20' : 's40']++;
     }
     // 범위 전개(구간당 10,000 가드) — 사용/잔여
-    const pool = [];
-    for (const r of (esealRanges || [])) {
-      const f = parseInt(r.from, 10), t = parseInt(r.to, 10);
-      if (!Number.isFinite(f) || !Number.isFinite(t) || t < f || t - f > 10000) continue;
-      for (let n = f; n <= t; n++) pool.push(String(n).padStart(String(r.from).length, '0'));
-    }
+    const pool = esealPoolOf(esealRanges);   // 3.71: 음성 입력(esealVoice)과 한 벌
     const usedPairs = [];
     for (const c of targets) {
       const e = String(recMap[c.cn]?.eseal ?? c.eseal ?? '').trim();

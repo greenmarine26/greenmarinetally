@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.70-02';
-const NOTE = '검수 리스트 — 줄 바탕색을 없앴습니다(X-RAY 노랑만) · 한 단 66줄까지 좁혀 장을 덜 씁니다(글자 크기 그대로, ATPR 포트별 4장이 2장)';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.71';
+const NOTE = 'ATPR 위해행 엠티 선적 — 자동 가이드가 컨번호를 부른 뒤 엠티실 뒷 세 자리를 불러 달라고 하고 마이크를 엽니다. 불러 주신 세 자리를 엠티실 구간의 앞 세 자리와 합쳐 여섯 자리로 리스트에 넣습니다(다른 배·다른 목적지 엠티는 그대로)';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
