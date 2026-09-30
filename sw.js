@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.70-01';
-const NOTE = 'RZOR 수화물 리퍼는 온도 입력 대상에서 뺐습니다 — 온도 미입력 알림이 뜨지 않습니다. 리퍼드라이 지정 때 나던 오류도 고쳤습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.70-02';
+const NOTE = '검수 리스트 — 줄 바탕색을 없앴습니다(X-RAY 노랑만) · 한 단 66줄까지 좁혀 장을 덜 씁니다(글자 크기 그대로, ATPR 포트별 4장이 2장)';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

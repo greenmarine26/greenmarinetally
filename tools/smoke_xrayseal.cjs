@@ -181,21 +181,17 @@ const amp = parse(M.generateInspectionListHTML(
 const ampRow = amp[Object.keys(amp)[0]];
 ok('봉인번호의 & 가 지워지지 않는다(A&B-123 그대로)', !!ampRow && ampRow.memo.includes('A&B-123'), ampRow && ampRow.memo);
 
-console.log('\n── 규격과 줄 색이 서로 어긋나지 않는가 (4차 감사 — 무방비였던 자리)');
+console.log('\n── 규격 칸이 말하고 바탕은 희다 — 3.70-02 규격색 없음 (4차 감사 — 무방비였던 자리)');
 {
   //  ⚠ _LABEL_TYPE 에서 RH 한 글자만 빠져도 «규격은 45RE(리퍼)인데 줄은 회색» 인 행이 65개 되살아난다.
   //    ATPR 2633W 실데이터로 그려 규격 칸과 줄 색을 맞댄다.
   const AT2 = fx('podpat_atpr.json');
   const ar = Object.entries(AT2.edi).map(([k, e]) => Object.assign({}, e, { cn: String(e.cn || k).toUpperCase(), pod: 'KRPTK' }));
   const as = parse(M.generateInspectionListHTML(ar, 'discharge', { vsl: 'ATPR', voy: '2633W' }, [])).rows;
-  const COLOR_OF = { RE: '#cce6ff', RF: '#cce6ff', PF: '#d4edda', UT: '#fff3cd', TN: '#ffe5d0' };
-  const mism = Object.keys(as).filter((cn) => {
-    if (cn === '_all') return false;
-    const want = COLOR_OF[String(as[cn].spec || '').slice(2)];
-    return want && as[cn].bg !== want && as[cn].bg !== YELLOW;
-  });
+  //  3.70-02 (검수사 2026-09-30 «바탕색은 없애 주세요»): 규격색이 없다 — X-RAY 노랑 말고는 전부 흰 바탕(#ffffff). 규격은 «규격» 칸이 말한다.
+  const mism = Object.keys(as).filter((cn) => cn !== '_all' && as[cn].bg !== '#ffffff' && as[cn].bg !== YELLOW);
   const reefer = Object.keys(as).filter((cn) => cn !== '_all' && /RE$/.test(as[cn].spec || ''));
-  ok(`규격이 리퍼(${reefer.length}대)라고 적힌 줄은 리퍼색이다`, reefer.length > 0 && mism.length === 0,
+  ok(`규격이 리퍼(${reefer.length}대)라고 적힌 줄도 흰 바탕이다(3.70-02 규격색 없음)`, reefer.length > 0 && mism.length === 0,
      mism.slice(0, 3).map((c) => `${c} ${as[c].spec} ${as[c].bg}`).join(' · '));
 }
 {
@@ -220,8 +216,8 @@ console.log('\n── 규격과 줄 색이 서로 어긋나지 않는가 (4차 �
   });
   ok('FR 한 벌이 FR 이라는 규격을 «일반(GP)» 이라고 안 적는다',
      fr.every((x) => /PF$/.test(x.spec || '')), fr.map((x) => `${x.iso}→${x.spec}`).join(' · '));
-  ok('그 줄은 FR 색(#d4edda)이다 — 규격과 색이 같은 말을 한다',
-     fr.every((x) => x.bg === '#d4edda'), fr.map((x) => `${x.iso}→${x.bg}`).join(' · '));
+  ok('그 줄은 흰 바탕이다(3.70-02 규격색 없음 — 규격은 규격 칸이 말한다)',
+     fr.every((x) => x.bg === '#ffffff'), fr.map((x) => `${x.iso}→${x.bg}`).join(' · '));
 }
 
 console.log('\n── 별첨 · CSV');

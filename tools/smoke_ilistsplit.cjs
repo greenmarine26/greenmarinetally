@@ -41,7 +41,7 @@ try {
     const V = D.splits, B = buttonsOf(html);
     ok('generateInspectionListHTML = buildInspectionListDoc 의 html(종이 글자는 한 벌)', gen(list, info) === html);
     ok('TMPZ — 인쇄 창에 장 나누기 단추 넷(이어서·20/40·풀/엠티·포트별)', V && ['cont', 'size', 'fe', 'port'].every((k) => B[k]), JSON.stringify(B));
-    ok('TMPZ — 단추 장 수 이어서 2 · 20/40 1+1 · 풀/엠티 1+1 · 포트별 1+1+1', B.cont && B.cont.sub === '2장' && B.size.sub === '1+1장' && B.fe.sub === '1+1장' && B.port.sub === '1+1+1장', JSON.stringify(B));
+    ok('TMPZ — 단추 장 수 이어서 2 · 20/40 1+1 · 풀/엠티 1+1 · 포트별 1+1(3.70-02 상한 66 — CNSHA 187대가 한 장, 종전 상한 60 은 1+1+1)', B.cont && B.cont.sub === '2장' && B.size.sub === '1+1장' && B.fe.sub === '1+1장' && B.port.sub === '1+1장', JSON.stringify(B));
     //  ★ 종이 글자에는 컨번호가 한 번씩만 — 네 판을 문서에 넣으면 «종이에 몇 번 나오나» 를 세는 검사(smoke_fix36004 등)가 깨진다(감사 지적).
     const multi = list.filter((c) => html.split(c.cn).length - 1 !== 1).map((c) => c.cn);
     ok('TMPZ — 종이 글자에 컨번호가 한 번씩만(네 판은 창에 따로 심는다)', !multi.length && !/__ilSplit/.test(html), multi.slice(0, 3).join(','));
@@ -67,7 +67,7 @@ try {
     ok('TMPZ 20/40 — 머리줄 «20피트 102대» → «40피트 172대»', size.map((p) => p.tag).join('|') === '20피트 102대|40피트 172대', size.map((p) => p.tag).join('|'));
     ok('TMPZ 20/40 — 장 안은 풀 먼저 엠티 뒤(두 줄 경계 없음)', size.every((p) => { const r = p.cols.flat(); const fi = r.findIndex((x) => x.edge === 'gb1'); return !r.some((x) => x.edge === 'gb2') && fi > 0; }));
     ok('TMPZ 풀/엠티 — 머리줄 «풀 115대» → «엠티 159대», 장 안은 20 먼저 40 뒤(두 줄 경계 하나씩)', fe.map((p) => p.tag).join('|') === '풀 115대|엠티 159대' && fe.every((p) => p.cols.flat().filter((x) => x.edge === 'gb2').length === 1), fe.map((p) => p.tag).join('|'));
-    ok('TMPZ 포트별 — CNSHA 187대(두 장감)는 20피트·40피트로 나뉘고 CNNGB 87대는 한 장', port.map((p) => p.tag).join('|') === 'CNSHA 20피트 82대|CNSHA 40피트 105대|CNNGB 87대', port.map((p) => p.tag).join('|'));
+    ok('TMPZ 포트별 — CNSHA 187대는 3.70-02 부터 한 장(66줄 이하, 20/40 재분할 없음) · CNNGB 87대 한 장', port.length === 2 && port[0].tag === 'CNSHA 187대' && port[1].tag === 'CNNGB 87대' && Math.max(...port[0].cols.map((c) => c.length)) <= 66 && port[0].cols.flat().length === 187, port.map((p) => p.tag + ' ' + p.cols.map((c) => c.length).join('+')).join(' | '));
     ok('TMPZ 포트별 — 포트 장 안의 순번은 묶음마다 1부터', port.every((p) => p.cols.flat()[0].no === 1));
     const unk = list.map((c, i) => (i % 2 ? { ...c, pod: '' } : c));   // 절반의 POD 를 지워 «포트 미상» 이 가장 많게
     const Pu = pagesOf(doc(unk, info).splits.port).map((p) => p.tag);
@@ -88,7 +88,7 @@ try {
     const cnt = () => d.querySelectorAll('#sheet1 .ipage').length;
     ok('인쇄 창 — 처음엔 이어서 2장', cnt() === 2 && d.querySelector('.btn-split.on').getAttribute('data-k') === 'cont');
     dom.window.__pickSplit('port');
-    ok('인쇄 창 — 포트별을 누르면 3장 · 단추가 켜진다', cnt() === 3 && d.querySelector('.btn-split.on').getAttribute('data-k') === 'port' && /CNSHA 20피트 82대/.test(d.getElementById('sheet1').innerHTML));
+    ok('인쇄 창 — 포트별을 누르면 2장(3.70-02) · 단추가 켜진다', cnt() === 2 && d.querySelector('.btn-split.on').getAttribute('data-k') === 'port' && /CNSHA 187대/.test(d.getElementById('sheet1').innerHTML) && !/CNSHA 20피트/.test(d.getElementById('sheet1').innerHTML));
     dom.window.__pickSplit('cont');
     ok('인쇄 창 — 이어서로 돌아오면 다시 2장', cnt() === 2);
   }
@@ -107,6 +107,22 @@ try {
     const cont = pagesOf(V.cont);
     //  «이어서» 는 종전처럼 첫 장부터 채운다(고르게 펼치지 않는다) — 첫 장 세 단이 다 45줄 이상(경계선 무게로 한두 줄 덜 들 수 있다).
     ok('MCSN 이어서 — 종전처럼 첫 장부터 채운다(첫 장 세 단 45줄 이상)', cont[0].cols.length === 3 && cont[0].cols.every((c) => c.length >= 45), cont[0].cols.map((c) => c.length).join(','));
+  }
+
+  // ── ④ 3.70-02 ATPR 2644W 선적 372대(CNDLC 187 · CNWEI 185) — 상한 66줄: 포트마다 한 장(2장), 이어서도 2장. 상한 60 이던 때는 4장(포트 두 장 → 20/40 재분할)이었다.
+  //    검수사 2026-09-30 «잘꾸미면 2장 출력이면 될듯 한데 4장 출력 … 포트별 출력에서 63줄로 뽑으면 포트별 1장씩». 실자료 tools/fixtures/ilist_split_37002.json.
+  {
+    const FX2 = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/ilist_split_37002.json'), 'utf8'));
+    const { list, info } = FX2.atpr;
+    const D = doc(list, info), html = D.html;
+    const V = D.splits, B = buttonsOf(html);
+    ok('ATPR 2644W — 단추 장 수 이어서 2 · 포트별 1+1(20/40 재분할 없음)', B.cont.sub === '2장' && B.port.sub === '1+1장', JSON.stringify(B));
+    const port = pagesOf(V.port);
+    ok('ATPR 포트별 — CNDLC 187대 한 장(63줄 이하) · CNWEI 185대 한 장', port.length === 2 && port[0].tag === 'CNDLC 187대' && port[1].tag === 'CNWEI 185대' && port.every((p) => p.cols.flat().length >= 185 && Math.max(...p.cols.map((c) => c.length)) <= 66), port.map((p) => p.tag + ' ' + p.cols.map((c) => c.length).join('+')).join(' | '));
+    const cont = pagesOf(V.cont);
+    ok('ATPR 이어서 — 두 장(한 단 62줄 안팎, 66줄 이하)', cont.length === 2 && cont.every((p) => Math.max(...p.cols.map((c) => c.length)) <= 66), cont.map((p) => p.cols.map((c) => c.length).join('+')).join(' | '));
+    const src = fs.readFileSync(path.join(ROOT, 'src/inspectionList.js'), 'utf8');
+    ok('상한 상수 PER_COL_MAX = 66 (3.70-02)', /const PER_COL_MAX = 66;/.test(src));
   }
 
   // ── ③ 별첨·CSS 계약
