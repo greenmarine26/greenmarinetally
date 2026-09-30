@@ -16,7 +16,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk } from '../firebase.js';
-import { isReeferContainer } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌
+import { isReeferContainer, reeferTempExempt } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.70-01: 온도 제외 한 벌
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
 //   공 리퍼는 전원을 안 꽂아 잴 것이 없다. 텔리 RF 시트(`fe !== 'E'` — 실물 관례 "양하 F 리퍼만
@@ -27,7 +27,7 @@ import { isReeferContainer } from '../utils.js';   // 3.60-10: 리퍼 판정 한
 const isReefer = (c) => {
   const rf = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌 — 옛 `^45[38]` 은 4583·4584(플랫랙)를 온도 점검에 올렸다
   if (!rf) return false;
-  if (c.rfdry || c.mkcon) return false;
+  if (reeferTempExempt(c)) return false;   // 3.70-01: 리퍼드라이·제작컨·수화물
   return c.fe === 'F' || !c.fe;     // fe 미상은 남긴다 — 조용히 빠뜨리지 않는다
 };
 

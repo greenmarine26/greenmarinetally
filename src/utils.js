@@ -41,7 +41,8 @@ export function isSentenceQuery(v) {
 //  3.61-03 **3.61-02 의 새 판 판정은 양하에만** — RZOR R105W 선적은 옛 FIIS 리스트에만 있던 CICU9635360 이 실제로 선적 완료(검수사 13:25 5호기)였다. 새 판 199 가 틀리고 합친 200 이 맞았다. 선적 자동 등록은 3.61-01 과 같다
 //  3.61-02 **수집기 자동 등록(양하, 합본 없는 선적)도 같은 이름 리스트는 새 판만 쓴다**(검수사 2026-09-26 «새로운 자료를 적용을 안하고 전자료를 이용하는이유? 금일은 TMPZ새로운걸로 적용하면 305개 맞는데 그전 자료를 이용하면 307개가 됨» — 선적 합본 merge_entry.js 에만 있던 개정판 판정을 src/listRevision.js 한 벌로 꺼내 autoRegApi 도 씀, TMPZ 2030E 양하 307 → 305 · RZOR R105W 선적 200 → 199(옛 FIIS 에만 있던 CICU9635360) · 수집기 헬퍼 전용, 앱 화면 변화 없음)
 //  3.61-01 **RZOR 선사 리스트 리퍼 «40RE»·«40RF» 는 높이를 말하지 않는다**(검수사 2026-09-25 «RZOR은 40RE 또는 40RF로 사용합니다. 그래서 매번 규격틀림 알림이 발생합니다» — utils.isoTriad, R105E 규격 알림 20 → 0)
-export const APP_VERSION = 'TallyOne 3.70'   // 3.70 RZOR 선적 덱플랜 — 리스트가 오기 전에도 늘 보인다, 빈자리를 누르면 컨번호 끝자리 조회창에서 맞는 컨을 다 보여 주고 골라 선적(검수사 2026-09-30 «빈덱에서 빈곳을 클릭하면 컨번호 조회가 되게하고 조회후 컨을 선택할수 있게» · «2대 이상 맞으면 맞는거 다 보여주고 고르게» · «덱플랜은 항상 보여주는게 나을것 같습니다»)
+export const APP_VERSION = 'TallyOne 3.70-01'   // 3.70-01 수화물 리퍼는 온도 대상이 아니다(utils.reeferTempExempt 한 벌 — 입구 applySpecialMarks 가 forecast.luggageCns 로 lugg 를 찍음, RZOR CICU9635360 수화물이던 R097E~R106E 19번 온도 기록 0) · 기록에 없던 칸을 처음 고쳐도 저장(fbUpdateRecordField 이력 from undefined → null — 리퍼드라이 지정 오류)(검수사 2026-09-30 «수화물이 온도 없는 수화물 리퍼인데 온도 미입력 대상으로 알림» · «리퍼드라이로 지정을 했더니 오류메시지»)
+//   (앞 판) 'TallyOne 3.70'   // 3.70 RZOR 선적 덱플랜 — 리스트가 오기 전에도 늘 보인다, 빈자리를 누르면 컨번호 끝자리 조회창에서 맞는 컨을 다 보여 주고 골라 선적(검수사 2026-09-30 «빈덱에서 빈곳을 클릭하면 컨번호 조회가 되게하고 조회후 컨을 선택할수 있게» · «2대 이상 맞으면 맞는거 다 보여주고 고르게» · «덱플랜은 항상 보여주는게 나을것 같습니다»)
 //   (앞 판) 'TallyOne 3.69-05'   // 3.69-05 미르 끼니 대화 — 되물어 놓고 메뉴를 들으면 무응답이던 자리를 받게 하고(«난 아침에 스프 먹어.» 실측 null), 묻는 끼니 이름을 읽어 되묻고(저녁·야식엔 «저녁용으로 남겨 뒀어요» 안 나옴), 답 고르는 씨앗에 날짜를 넣어 같은 질문이 날마다 같은 답이던 것을 고침 (검수사 2026-09-30 «매번 같은것만 먹고 점심보다 저녁에 먹을껄 대비하네요» · «두번째 질문은 묻고 답을주니 그 다음은 반응을 못함»)
 //   (앞 판) 'TallyOne 3.69-04'   // 3.69-04 베이상세 칸 안 카스피식 — 칸 크기로 글자 크기 계산(카스피 26척 실측 규칙: 14자×5줄 덩어리가 좌우 합 3pt·상하 합 1.5pt 남기는 가장 큰 0.5pt), 덩어리 칸 가운데·다섯 줄 같은 왼쪽 선·자간 0·1·3줄 카스피 글자열(검수사 2026-09-30 «좌우상하 여백도 카스피랑 같게» · «동적변경» · 안 1)
 //   (앞 판) 'TallyOne 3.69-03'   // 3.69-03 출력물 잘림 — 검수리스트 좌우 7mm · 베이상세 머리 8~9mm 안쪽, 베이상세 선 굵기·글씨 진하기·흰 바탕을 카스피와 같게(검수사 2026-09-29 실출력 테스트)
@@ -54,7 +55,7 @@ export const APP_VERSION = 'TallyOne 3.70'   // 3.70 RZOR 선적 덱플랜 — �
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = 'RZOR 선적 덱플랜 — 리스트가 오기 전에도 늘 보이고, 빈자리를 누르면 컨번호 끝자리로 찾아 맞는 컨을 다 보여 줍니다. 골라 누르면 그 자리에 선적됩니다'
+export const APP_NOTE = 'RZOR 수화물 리퍼는 온도 입력 대상에서 뺐습니다 — 온도 미입력 알림이 뜨지 않습니다. 리퍼드라이 지정 때 나던 오류도 고쳤습니다'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -1159,11 +1160,25 @@ export function isFlatRackContainer(c) {
      C 확인됨    — 둘 다 있다. 차이를 낸다.
    ⚠ 3.24까지 이 판정이 **열 곳에 따로** 있었고 조건이 서로 달랐다(어떤 곳은 c.fe==='F' 만,
      어떤 곳은 fe 미상 포함). 그래서 같은 항차를 화면마다 다르게 셌다. 여기 한 벌만 둔다. */
+/*  ★ 3.70-01 — **온도 대상에서 빼는 컨 한 벌** — 'rfdry'(리퍼드라이·넌플러그) | 'mkcon'(특수제작컨) | 'lugg'(수화물) | ''.
+    수화물 — 검수사 2026-09-30 «RZOR에서 수화물이 온도 없는 수화물 리퍼인데 온도 미입력 대상으로 알림을 띄웁니다 …
+    수화물 컨테이너 전 항차에서도 온도 입력이 있었는지 확인하고 그떄도 미입력이면 온도 입력 대상에서 제외».
+    실측 — RZOR 보관소 42항차: 수화물 컨 CICU9635360(20RF·22R1)은 R097E~R106E 양하 9번·선적 8번 **온도 기록 0**(설정·실측 모두 빈칸),
+    매번 E 로 와서 저절로 빠졌다. R107E 는 EDI 에 없고 CNTR_List 에만 있어 F/E 가 비어 «풀일 수도 있는 리퍼» 로 잡혔다.
+    진단(diagnostics)의 «수화물은 어느 검사에서도 검증 대상이 아니다»(검수사 확정 1.56-03)와 같은 뜻.
+    ⚠ 수화물 표시(lugg)는 화면 목록이 붙인다(tagForecastMarks — forecast.luggageCns · 덱플랜 LUG). 제 목록을 따로 만드는 곳은 거기서도 붙여야 한다. */
+export function reeferTempExempt(c) {
+  if (!c) return '';
+  if (c.rfdry) return 'rfdry';
+  if (c.mkcon) return 'mkcon';
+  if (c.lugg || isLuggageCn(c.cn)) return 'lugg';
+  return '';
+}
 export function reeferTempOf(c) {
   const off = { target: false, state: 'none', set: '', act: '', diff: null };
   if (!c) return off;
   if (!isReeferContainer(c)) return off;
-  if (c.rfdry || c.mkcon) return off;                         // 리퍼드라이(넌플러그)·마크콘은 온도 대상이 아니다
+  if (reeferTempExempt(c)) return off;                        // 리퍼드라이(넌플러그)·특수제작컨·수화물(3.70-01)은 온도 대상이 아니다
   if (!(c.fe === 'F' || c.fe === '' || c.fe == null)) return off;   // 리퍼는 «풀일 때만» 리퍼다
   const t = (v) => (v == null ? '' : String(v).trim());
   //  기준(세팅) — 검수원이 넣은 rfSet 이 먼저, 없으면 리스트·EDI 가 준 tmp.
@@ -1340,6 +1355,7 @@ export function isISO403(c) {
   if (!c) return false;
   if (c.rfdry) return false;   // V9.20-03: 리퍼드라이(넌플러그) — 온도 확인 불필요, 사진 대상 아님
   if (c.mkcon) return false;   // V9.23: 제작컨테이너 — 컨 자체가 상품(내용물 없음), 온도·사진 대상 아님
+  if (reeferTempExempt(c)) return false;   // 3.70-01: 수화물도 온도·사진 대상 아님(판정 한 벌)
   // V9.04-04: 목적 정정 — '규격 확인'이 아니라 '풀 리퍼 온도 확인 사진'(사용자 확정 2026-07-19).
   //   기존 규칙은 4530·9530·L5R 코드만 봐서 두 가지가 어긋나 있었다.
   //   ① 20ft 리퍼(2230류)를 통째로 빠뜨림 — 온도 확인이 목적이면 당연히 대상이어야 한다.
@@ -8742,8 +8758,22 @@ export function specialCnSet(voyage) {
  */
 export function applySpecialMarks(voyage, list) {
   const s = specialCnSet(voyage);
-  if (!s.size || !Array.isArray(list)) return list;
-  return list.map((c) => (c && c.cn && !c.mkcon && s.has(String(c.cn).trim().toUpperCase()) ? { ...c, mkcon: true } : c));
+  //  ★ 3.70-01 — **수화물 표시(lugg)도 이 입구에서 찍는다.** 화면 목록은 tagForecastMarks 가 붙이지만, 제 목록을 따로 만드는
+  //    현황 요약·마감 점검·진단·마감텔리는 lugg 가 없어 수화물 리퍼가 «온도 미입력» 으로 셌다(reeferTempExempt 가 못 봄).
+  //    정본 통로는 forecast.luggageCns(덱플랜 LUG 도 VoyagePage 가 여기로 승격 — 2.06-01).
+  const _la = voyage?.info?.forecast?.luggageCns;
+  const lg = new Set((Array.isArray(_la) ? _la : []).map((x) => String(x || '').trim().toUpperCase()).filter(Boolean));
+  if ((!s.size && !lg.size) || !Array.isArray(list)) return list;
+  return list.map((c) => {
+    if (!c || !c.cn) return c;
+    const k = String(c.cn).trim().toUpperCase();
+    const mk = !c.mkcon && s.has(k), lu = !c.lugg && lg.has(k);
+    if (!mk && !lu) return c;
+    const t = { ...c };
+    if (mk) t.mkcon = true;
+    if (lu) t.lugg = true;
+    return t;
+  });
 }
 
 //  ★ 3.37 (검수사 2026-09-09) — **특수제작컨도 여기서 찍는다.** 검수사 원문 «특수제작컨입니다.

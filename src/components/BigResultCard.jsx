@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
+import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -307,7 +307,13 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 <Snowflake className="w-3.5 h-3.5"/>🔌 리퍼드라이 (넌플러그)
               </span>
             )}
-            {!showTmp && isReefer && c.fe !== 'E' && !c.rfdry && !c.mkcon && (
+            {!showTmp && isReefer && c.fe !== 'E' && reeferTempExempt(c) === 'lugg' && (
+              /* 3.70-01: 수화물 — 온도 대상이 아니다(RZOR 수화물 리퍼 42항차 온도 기록 0, 검수사 2026-09-30) */
+              <span className="bg-violet-800 text-violet-100 px-2 py-1 rounded font-black text-sm flex items-center gap-1 border-2 border-violet-400">
+                <Snowflake className="w-3.5 h-3.5"/>🧳 수화물 (온도 대상 아님)
+              </span>
+            )}
+            {!showTmp && isReefer && c.fe !== 'E' && !reeferTempExempt(c) && (
               <span className="bg-red-700 text-white px-2 py-1 rounded font-black text-sm flex items-center gap-1 animate-pulse border-2 border-red-400">
                 <Snowflake className="w-3.5 h-3.5"/>
                 <AlertTriangle className="w-3 h-3"/>

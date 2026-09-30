@@ -54,7 +54,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -1059,7 +1059,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const reefers = useMemo(
     () => (containers || []).filter((c) => {
       const rf = isReeferContainer(c);   // 3.60-10 (진단 M6): ReeferMemoModal 과 같은 한 벌(버튼 숫자 = 모달 줄 수)
-      if (!rf || c.rfdry || c.mkcon) return false;
+      if (!rf || reeferTempExempt(c)) return false;   // 3.70-01: 리퍼드라이·제작컨·수화물 — 판정 한 벌
       return c.fe === 'F' || !c.fe;
     }),
     [containers]);
@@ -1545,7 +1545,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (left <= 0 || left > 2 * 3600000) return null;
           const undone = containers.filter(c => !compMap[c.cn]).length;
           const xrayPend = mode === 'discharge' ? Object.keys(xrayMap || {}).filter(cn => !(xraySeals || {})[cn]?.seal).length : 0;
-          const rfMiss = containers.filter(c => isReeferContainer(c) && !c.rfdry && !c.mkcon &&   // 3.60-10: 리퍼 한 벌
+          const rfMiss = containers.filter(c => isReeferContainer(c) && !reeferTempExempt(c) &&   // 3.60-10: 리퍼 한 벌 · 3.70-01: 수화물도 뺀다(판정 한 벌)
             (c.fe === 'F' || !c.fe) && (!c.tmp || String(c.tmp).trim() === '')).length;
           if (!undone && !xrayPend && !rfMiss) return null;
           const mins = Math.round(left / 60000);

@@ -41,7 +41,7 @@ try {
   walk(path.join(ROOT, 'src'));
   ok('src 에 자체 리퍼 판정(`[2] === \'R\'`·`^45[38]`·`R[EFHT]`·라벨 `R[FH]$`·`slice(2, 3)`) 0곳(utils 밖)', hits.length === 0, hits.join(' · '));
   const VP = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8'), RM = fs.readFileSync(path.join(ROOT, 'src/components/ReeferMemoModal.jsx'), 'utf8');
-  ok('리퍼 버튼 숫자(VoyagePage)와 리퍼 메모 줄(ReeferMemoModal)이 같은 한 벌', /const rf = isReeferContainer\(c\);/.test(VP) && /const rf = isReeferContainer\(c\);/.test(RM) && /isReeferIso, isReeferContainer/.test(VP) && /import \{ isReeferContainer \} from '\.\.\/utils\.js'/.test(RM));
+  ok('리퍼 버튼 숫자(VoyagePage)와 리퍼 메모 줄(ReeferMemoModal)이 같은 한 벌', /const rf = isReeferContainer\(c\);/.test(VP) && /const rf = isReeferContainer\(c\);/.test(RM) && /isReeferIso, isReeferContainer/.test(VP) && /import \{ isReeferContainer(, reeferTempExempt)? \} from '\.\.\/utils\.js'/.test(RM));
 } catch (ex) {
   bad += 1; console.log('  ✘ 검사 중 오류 — ' + (ex && ex.stack || ex));
 }

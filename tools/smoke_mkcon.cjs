@@ -147,7 +147,8 @@ const warn = (key, specCns, recOverride) => {
                                 ['현황 요약', 'src/components/VoyageSummaryCard.jsx', 1],
                                 ['마감텔리(선사로 나가는 종이)', 'src/tallyReport.js', 1]]) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    const n = (src.match(/applySpecialMarks\(voyage,/g) || []).length;
+    //  3.70-01: 마감텔리는 제작컨만 찍는 좁힌 항차(_specOnly — 수화물 Lug 줄은 종이 규칙 fcOk 로만 가른다)를 넘긴다. 같은 문지기다.
+    const n = (src.match(/applySpecialMarks\((voyage|_specOnly),/g) || []).length;
     //  ⚠ «한 번이라도 있으면 통과» 로 두면 두 목록 중 하나만 지나도 초록이다(감사 실측) — 자리 수를 센다.
     ok(n === want, `${who} 도 같은 문지기를 지난다 — ${want}자리 (${n}자리, ${f})`);
   }

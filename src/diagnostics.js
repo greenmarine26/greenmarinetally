@@ -118,6 +118,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
         if (c.rfdry || lr.rfdry) return false;
         // V9.23: 제작컨테이너 — 컨 자체가 상품(빈 컨), 온도 없음이 정상 (RZOR R080E HSAP 실측)
         if (c.mkcon || lr.mkcon) return false;
+        // 3.70-01: 수화물 — 온도 대상이 아니다(RZOR CICU9635360 42항차 온도 기록 0, 검수사 2026-09-30). 판정은 위 _isLug 한 벌.
+        if (c.lugg || lr.lugg || _isLug(c.cn)) return false;
         // EDI·리스트 어느 쪽이든 유효 온도가 있으면 입력된 것으로 인정.
         if (ediT && !c.tmp_missing) return false;
         if (listT && !listMissing) return false;

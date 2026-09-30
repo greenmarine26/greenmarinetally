@@ -248,7 +248,7 @@ T(/answerYard, setMirYard, readMirYard/.test(src('src/mirCore.entry.js')), 'mirC
 T(/coneYardStatus\(\)/.test(src('public/cone.html')) && /yard: _yard,/.test(src('public/cone.html')) && /fbFetch\('yard_status\.json'\)/.test(src('public/cone.html')), 'cone.html mirAsk 가 yard_status.json 을 GET 해 ctx.yard 로 넣는다');
 T(/야드 상황\(3\.69\)/.test(src('src/data/helpData.js')) && /왜 차 안 와\?/.test(src('src/data/helpData.js')), '매뉴얼 미르 절에 야드 상황(3.69)');
 T(/APP_VERSION = 'TallyOne 3\.(69|[7-9]\d)/.test(src('src/utils.js')), 'APP_VERSION 3.69 이상');
-T(/APP_NOTE = '[^']*(야드|출력물|베이상세|끼니|덱플랜)/.test(src('src/utils.js')), 'APP_NOTE 가 이번 판(야드 · 3.69-03 출력물 · 3.69-04 베이상세 · 3.69-05 끼니 · 3.70 덱플랜) 문구');
+T(/APP_NOTE = '[^']*(야드|출력물|베이상세|끼니|덱플랜|수화물)/.test(src('src/utils.js')), 'APP_NOTE 가 이번 판(야드 · 3.69-03 출력물 · 3.69-04 베이상세 · 3.69-05 끼니 · 3.70 덱플랜 · 3.70-01 수화물) 문구');
 T(/__CONEV='ConeOne 2\.(5[89]|[6-9]\d)/.test(src('public/cone.html')), 'ConeOne 2.58 이상');
 T(/_yardA \? YARD_SPEAK/.test(src('src/components/MirFab.jsx')) && /parsed\.yardQuery \? YARD_SPEAK/.test(src('src/components/SearchPanel.jsx')) && /parsed\.yardQuery \? YARD_SPEAK/.test(src('src/pages/GlobalSearchPage.jsx')) && /__mirYardSlow/.test(src('public/cone.html')), '야드 답 느린 낭독 — 네 창구·콘앱이 YARD_SPEAK 한 벌(3.69-01)');
 T(/smoke_yard\.cjs/.test(src('build.sh')), 'build.sh 가 이 연막검사를 부른다');

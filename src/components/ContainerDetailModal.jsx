@@ -1,7 +1,7 @@
 import React, { useState , useMemo, useRef } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
@@ -66,6 +66,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
   const [editingTmp, setEditingTmp] = useState(false);
+  //  ★ 3.70-01 — 수화물 판정은 이 항차 표시로(utils.applySpecialMarks 한 벌). 홈 통합검색·수석 보드가 여는 컨에는 lugg 가 없어
+  //    수화물 리퍼에 «자료에 설정온도 없음»·지정 단추가 보였다(감사 실측) — 받은 voyageInfo 의 forecast 로 여기서도 찍는다.
+  const _luggC = useMemo(() => reeferTempExempt(((applySpecialMarks({ info: voyageInfo }, [c]) || [])[0]) || c) === 'lugg', [c, voyageInfo]);
   const [tmpVal, setTmpVal] = useState(c.tmp || '');
   const [editingEseal, setEditingEseal] = useState(false);
   // M4.9b-fix: 실오류 / 리씰 별도 입력 모드
@@ -888,6 +891,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   ) : c.rfdry ? (
                     /* V9.20-03: 리퍼드라이(넌플러그) — 선사 요청으로 전원 안 꽂는 리퍼. 온도 없음 정상 */
                     <span className="text-sm font-bold text-teal-300">🔌 리퍼드라이 (넌플러그 — 온도 없음 정상)</span>
+                  ) : _luggC && !(c.tmp && !c.tmp_missing) ? (
+                    /* 3.70-01: 수화물 — 온도 대상이 아니다(검수사 2026-09-30, 판정은 utils.reeferTempExempt 한 벌) */
+                    <span className="text-sm font-bold text-violet-300">🧳 수화물 (온도 대상 아님)</span>
                   ) : c.tmp && !c.tmp_missing ? (
                     <span className="text-base font-bold mono text-cyan-200">{c.tmp}°C</span>
                   ) : c.fe === 'E' ? (
@@ -900,6 +906,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   {tmpOrigShow !== undefined && tmpOrigShow !== c.tmp && (
                     <span className="text-2xs text-amber-400 mono">원본: {tmpOrigShow || '(없음)'} → 수정됨</span>
                   )}
+                  {/* 3.70-01: 수화물은 이미 온도 대상이 아니다 — 두 지정 단추를 감춘다(EDI 에 없는 수화물에 누르면 fbUpdateRecordField 가
+                      ediContainers 에 그 컨을 새로 만들어 양하 EDI 대수에 수화물이 섞인다 — 수화물은 양하 개수에 안 든다, 검수사 확정 1.52) */}
+                  {!_luggC && (<>
                   {/* V9.20-03: 리퍼드라이 토글 — 선사 요청(넌플러그) 반영. 경고·사진 대상에서 빠진다 */}
                   <button
                     onClick={async () => {
@@ -924,6 +933,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     className={`text-2xs px-2 py-1 rounded font-bold border ${c.mkcon ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-ink-800 border-line-strong text-dim-300'}`}>
                     {c.mkcon ? '제작컨 해제' : '제작컨 지정'}
                   </button>
+                  </>)}
                 </div>
               ) : (
                 <div className="space-y-2">

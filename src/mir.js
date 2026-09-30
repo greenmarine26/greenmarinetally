@@ -21,7 +21,7 @@
 // ⚠ 순수 함수만 — firebase SDK 를 직접 부르지 않는다(콘앱 번들 mir-core.js 에도 실린다). 보관소는 REST(fetch)와 window 손으로만.
 
 import {
-  _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf,
+  _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
@@ -618,7 +618,9 @@ export function flattenVoyages(voyages) {
         }
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
       });
-      Object.values(merged).forEach((c) => {
+      //  ★ 3.70-01 — 특수제작컨·수화물 표시 입구(utils.applySpecialMarks 한 벌). 떠 있는 미르·홈 통합검색·홈에서 여는 컨 상세가
+      //    이 목록을 쓴다 — 안 찍으면 수화물 리퍼가 «세팅 온도 기록 없음» 으로 답했다(감사 실측, 항차 화면과 답이 갈림).
+      applySpecialMarks(v, Object.values(merged)).forEach((c) => {
         if (!c.cn) return;
         arr.push({
           ...c,
@@ -849,6 +851,7 @@ function attrLine(c, attr, ctx) {
         if (!looksRf) return '리퍼가 아니에요 — 온도 없음.';
         if (c.rfdry) return '리퍼드라이(넌플러그)라 온도 대상이 아니에요.';
         if (c.mkcon) return '특수제작컨이라 온도 대상이 아니에요.';
+        if (reeferTempExempt(c) === 'lugg') return '수화물 컨이라 온도 대상이 아니에요.';   // 3.70-01
         return '엠티 리퍼라 온도 대상이 아니에요(리퍼는 풀일 때만 리퍼).';
       }
       if (r.state === 'A') return '세팅 온도 기록 없음(EDI·리스트 모두 빈칸) — 사진으로 확인해 주세요.';
@@ -1473,6 +1476,18 @@ function _normalize(ctx) {
   if (!c.vslFull) c.vslFull = S(c.info && c.info.vslFull);
   if (c.pier == null) c.pier = S(c.info && c.info.pier);
   if (!c.containers) c.containers = [];
+  //  ★ 3.70-01 — 콘앱 컨(toMirContainers)·항차 화면 재료에도 특수제작컨·수화물 표시를 찍는다(utils.applySpecialMarks 한 벌 — 두 앱 같은 답).
+  //    다른 항차 컨이 섞여 와도 이 항차 것에만(voyageKey 문지기).
+  {
+    const fc = c.info && c.info.forecast;
+    if (fc && ((Array.isArray(fc.luggageCns) && fc.luggageCns.length) || (Array.isArray(fc.specialCns) && fc.specialCns.length))) {
+      const vk = c.voyageKey || null;
+      const idx = []; const sub = [];
+      c.containers.forEach((x, i) => { if (x && x.cn && (!vk || !x.voyageKey || x.voyageKey === vk)) { idx.push(i); sub.push(x); } });
+      const mk = applySpecialMarks({ info: c.info }, sub);
+      if (mk !== sub) { const out = c.containers.slice(); idx.forEach((i, j) => { out[i] = mk[j]; }); c.containers = out; }
+    }
+  }
   //  ★ 감사 지적(치명 1) — 양하선적 탭 카드·콘앱 컨에는 `_ptk`·`_mode` 가 없다. 그대로 두면 진행 답(formatAppTallyAnswer 의 `_ptk` 필터)이
   //    풀 0 으로 «앱 검수 기록 없음» 거짓을 낸다. 판정은 utils.isPtk 한 벌(§4-4) — 여기서 한 번 찍고 아래 갈래 전부가 그것을 본다.
   {

@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, bayCellTypeLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, bayCellTypeLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, reeferTempExempt, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -1696,7 +1696,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
     const tmpStr = String(c.tmp || '').trim();
     // M3.75 fix: 엠티 리퍼는 온도 없는 게 정상 → 경고 X (Full 또는 fe 미정만 경고)
     const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);
-    const tmpMissing = isFullReefer && (c.tmp_missing || tmpStr === '');
+    const tmpMissing = isFullReefer && !reeferTempExempt(c) && (c.tmp_missing || tmpStr === '');   // 3.70-01: 리퍼드라이·제작컨·수화물은 온도 대상 아님(판정 한 벌)
 
     let specialLine = '';
     let specialColor = 'text-dim-400';

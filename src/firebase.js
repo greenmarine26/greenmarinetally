@@ -694,7 +694,10 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
 
   const edits = cur.edits || {};
   const fieldHistory = Array.isArray(edits[field]) ? [...edits[field]] : [];
-  fieldHistory.push({ from: oldValue, to: newValue, by: by || '', at: Date.now() });
+  //  ★ 3.70-01 — 기록에 **없던 칸**을 처음 고치면 oldValue 가 undefined 다. 실 SDK 는 값 안의 undefined 를 거부해
+  //    저장이 통째로 실패했다(«values argument contains undefined in property '…edits.rfdry.0.from'» — RZOR R107E 수화물
+  //    CICU9635360 리퍼드라이 지정, 검수사 2026-09-30 «리퍼드라이로 지정을 했더니 오류메시지를 띄웁니다»). 없던 값은 null 로 적는다.
+  fieldHistory.push({ from: oldValue === undefined ? null : oldValue, to: newValue, by: by || '', at: Date.now() });
 
   // records 업데이트 (이력 보관용)
   await update(r, {
@@ -711,6 +714,10 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
   const ediSnap = await get(ediRef);
   if (ediSnap.exists()) {
     await update(ediRef, { [field]: newValue });
+  } else if (field === 'rfdry' || field === 'mkcon') {
+    //  ★ 3.70-01 — 표시 칸(리퍼드라이·제작컨)은 화면이 records 에서 읽는다(VoyagePage ALLOWED_LIST_FIELDS). EDI 가 없는 리스트 단독 컨에
+    //    EDI 노드를 새로 만들면 양하 EDI 대수에 섞인다(수화물은 양하 개수에 안 든다 — 1.52). 종전엔 이 첫 지정이 undefined 오류로
+    //    통째로 실패해 드러나지 않았다(감사 실측) — 첫 지정이 저장되게 된 이 판에서 막는다.
   } else {
     // ediContainers에 없으면 records의 데이터로 신규 생성
     const newEdi = { ...cur, [field]: newValue };

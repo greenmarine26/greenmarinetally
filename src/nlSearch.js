@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isTermApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, sideCancelled, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { isTermApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, sideCancelled, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -2254,7 +2254,9 @@ function specialDetailLines(results, parsed) {
   const lines = [''];
   for (const c of results) {
     const bits = [];
-    if (c.rf) bits.push(c.tmp != null && String(c.tmp).trim() !== '' ? `설정 ${c.tmp}°C` : '온도 미입력');
+    //  3.70-01: 온도 대상이 아닌 리퍼(리퍼드라이·제작컨·수화물)는 «온도 미입력» 이 아니다 — 판정은 utils.reeferTempExempt 한 벌
+    const _rx = c.rf ? reeferTempExempt(c) : '';
+    if (c.rf) bits.push(c.tmp != null && String(c.tmp).trim() !== '' ? `설정 ${c.tmp}°C` : _rx ? `${{ rfdry: '리퍼드라이', mkcon: '제작컨', lugg: '수화물' }[_rx]} (온도 대상 아님)` : '온도 미입력');
     if (c._xray) bits.push('X-RAY 대상');
     if (c.dg) bits.push(`cl.${c.dgc || '?'}${c.un ? ` UN${c.un}` : ' (UN 미기재)'}${c.pg ? ` PG ${c.pg}` : ''}`);
     if (c.cgL || c.cgW || c.cgH) {

@@ -129,7 +129,10 @@ export function ptkContainers(voyage, mode) {
   //  ★ 3.37(감사 실측) — 마감텔리도 제 목록을 만든다. 특수제작컨 표시를 여기서 찍어야
   //    RF condition report(`buildRF` 의 `!c.rfdry && !c.mkcon`)가 그 컨을 뺀다 —
   //    안 찍으면 **선사로 나가는 종이에** 제작컨이 Setting·Actual 빈칸으로 실린다(규범 §4-4 — 입구에 문지기).
-  return applySpecialMarks(voyage, merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))));
+  //  3.70-01: applySpecialMarks 가 수화물(lugg)도 찍게 됐지만 **마감텔리 종이는 바꾸지 않는다** — 페리 집계 Lug 줄은 forecast.mode 가
+  //    맞을 때만(buildFerry fcOk, OBWH 2692W 실물 대조) 가른다. 여기서 lugg 를 찍으면 그 게이트가 풀린다(감사 지적) — 제작컨만 찍는다.
+  const _specOnly = { info: { forecast: { specialCns: voyage?.info?.forecast?.specialCns || [] } } };
+  return applySpecialMarks(_specOnly, merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))));
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */
