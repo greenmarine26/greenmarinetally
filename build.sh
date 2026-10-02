@@ -368,6 +368,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 미르 기분 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1
   fi
+  # 3.73-01: 리퍼 규격 대조 — NSDC 2609N 양하 실자료 사본(163대)으로 «40피트 리퍼 42·45 는 같은 규격» 과 «다른 규격은 여전히 잡힘» 을 실소스 그대로 잰다.
+  SMOKE_IRM=$(mktemp /dev/shm/hometmp/_irm_XXXXXX.mjs)
+  SMOKE_IRO=$(mktemp /dev/shm/hometmp/_iro_XXXXXX.cjs)
+  printf 'export { isoConflictOf, isoTriad } from "%s/src/utils.js";\n' "$PWD" > "$SMOKE_IRM"
+  if npx esbuild "$SMOKE_IRM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_IRO" --log-level=error; then
+    node tools/smoke_isoreefer.cjs "$SMOKE_IRO" || { echo "✗ 리퍼 규격 대조 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_IRM" "$SMOKE_IRO"; exit 1; }
+    rm -f "$SMOKE_IRM" "$SMOKE_IRO"
+  else
+    echo "✗ 리퍼 규격 대조 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_IRM" "$SMOKE_IRO"; exit 1
+  fi
   # 3.73: 머스크 엠티 찾기 — MCSC 638N/640S 실자료 사본(보관소 EDI 230건)으로 실번호 엠티 183대·묶음·BAPLIE 대조·CSV 를 실소스 그대로 잰다.
   SMOKE_EFM=$(mktemp /dev/shm/hometmp/_efm_XXXXXX.mjs)
   SMOKE_EFO=$(mktemp /dev/shm/hometmp/_efo_XXXXXX.cjs)

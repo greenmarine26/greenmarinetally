@@ -24,10 +24,10 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
     ok('RZOR 40RE 20대 — 대조는 EDI·세관 둘(선사 칸 빠짐)', re40.every((cn) => { const t = U.isoTriad(FX.edi[cn].iso_edi, FX.rec[cn]); return t.length === 2 && t.every((x) => x.k !== 'carrier'); }));
     const cimu = ['CIMU2987306', 'CIMU2987311', 'CIMU2987327'];
     ok('특수제작컨 CIMU 3대(선사 40RF · EDI 40RF · 세관 42RF) — 알림 0 그대로', cimu.every((cn) => !conf(cn)));
-    ok('표식 없는 다른 배의 같은 값(EDI 45R1 · 선사 40RE · 세관 45RE) — 알림 그대로', !!U.isoConflictOf('45R1', { iso_carrier: '40RE', iso_customs: '45RE' }));
+    ok('표식 없는 다른 배의 같은 값(EDI 45R1 · 선사 40RE · 세관 45RE) — 3.73-01: 40피트 리퍼는 전부 같은 규격이라 알림 없음', !U.isoConflictOf('45R1', { iso_carrier: '40RE', iso_customs: '45RE' }));
     ok('RZOR 이라도 EDI·세관이 20피트 리퍼면 선사 40RE 와 다툼 — 알림 그대로', !!U.isoConflictOf('22R1', { _rz: true, iso_carrier: '40RE', iso_customs: '22RE' }));
     ok('RZOR 이라도 EDI·세관이 건화물(40HC)이면 선사 40RE 와 다툼 — 알림 그대로', !!U.isoConflictOf('45G1', { _rz: true, iso_carrier: '40RE', iso_customs: '45GP' }));
-    ok('RZOR EDI 45R1 · 세관 42RF(선사 40RE) — EDI·세관끼리 다툼은 그대로', (() => { const s = U.isoConflictOf('45R1', { _rz: true, iso_carrier: '40RE', iso_customs: '42RF' }); return !!s && s.length === 2 && s.every((x) => x.k !== 'carrier'); })());
+    ok('RZOR EDI 45R1 · 세관 42RF(선사 40RE) — 3.73-01: 40피트 리퍼끼리라 EDI·세관 다툼도 없다', !U.isoConflictOf('45R1', { _rz: true, iso_carrier: '40RE', iso_customs: '42RF' }));
     ok('R103E 건화물 TGHU4437784(EDI 40GP · 선사 40HC · 세관 42GP) — 알림 그대로', !!conf('TGHU4437784'));
     ok('특수제작컨 CIMU — 선사 칸이 빠지고 EDI·세관 둘로 대조', cimu.every((cn) => U.isoTriad(FX.edi[cn].iso_edi, FX.rec[cn]).length === 2));
     //  감사 C-1: 항차 화면은 EDI 컨에 리스트 칸을 **허용 목록(ALLOWED_LIST_FIELDS)** 으로만 얹는다 — `_rz` 가 빠지면 컨 상세만 알림이 남는다.
