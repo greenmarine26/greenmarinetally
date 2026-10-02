@@ -86,6 +86,7 @@ export const fbRemoveSwapFix = async () => true;
 export const fbReplacePortMisBatch = async () => true;
 export const fbReportWrongAnswer = async () => true;
 export const fbRequestProcessNow = async () => true;
+export const fbRequestEmptyMake = async () => 'stub__empty';   // 3.73: 머스크 엠티 찾기 명령
 export const fbResolveFeedback = async () => true;
 export const fbRestorePlanFromEdi = async () => true;
 export const fbRestoreVoyageFromArchive = async () => true;

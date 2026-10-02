@@ -21,6 +21,7 @@ import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
+import EmptyFindPanel, { maerskEmptyCards } from '../components/EmptyFindPanel.jsx';   // 3.73: 머스크 엠티 찾기
 import { buildReadiness } from '../dataReadiness.js';   // 1.66: 자료 다 왔나 · 빠진 것은 무엇인가
 import { fbSubscribeShipBayDict } from '../firebase.js';   // 1.66: 선사를 베이사전에서 보강
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -715,7 +716,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ['ready', readiness.short.length ? `📦 자료 부족 ${readiness.short.length}` : '📦 자료 현황'],   // 1.66
             ['inspectors', '👷 검수원'], ['reports', '📤 작업 보고'], ['equip', '🏗 장비 보고'],
             ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
-            ['seal', '🔒 엠티 실'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
+            ['seal', '🔒 엠티 실'], ['emptyfind', '🔎 머스크 엠티'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
             ['notice', '📢 공지'],
             // TallyOne 1.3: 활동 로그 바로가기 — 소유자에게만 노출
             ...(owner ? [['actlog', '🕵️ 활동 로그']] : []),
@@ -1098,6 +1099,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </div>
         </Fold>
       )}
+
+      {/* 3.73: 머스크 엠티 찾기 — 엠티 리스트가 없으면 검수 리스트를 못 만든다(검수사 2026-10-03). 정본(머스크 EMPTY LOAD LIST)이 오면 정본 우선. */}
+      <Fold id="emptyfind" title={`🔎 머스크 엠티 찾기 (${maerskEmptyCards(voyages, bayDictAll).length})`} open={!!openSecs.emptyfind} onToggle={() => toggleSec('emptyfind')}>
+        <EmptyFindPanel voyages={voyages} dictAll={bayDictAll} inspector={inspector} canMake={chief} />
+      </Fold>
 
       {/* V8.06: LOLO 검수 제출 리스트 (RIZHAO 등 RORO/LOLO 혼용선) */}
       {loloVoyages.length > 0 && (

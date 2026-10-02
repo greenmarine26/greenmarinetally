@@ -3912,6 +3912,16 @@ export async function fbRequestProcessNow(vessel, voy, by = '') {
   return key;
 }
 
+// 3.73: 머스크 엠티 찾기 — 수집기에 «이 항차 엠티 리스트를 지금 만들어라» 명령. 앱은 리스트를 RTDB 에 직접 쓰지 않는다(수집기가 항차 폴더에 엑셀로 만든다).
+//   키 = {항차키}__empty — 같은 항차를 연타해도 명령은 하나만 쌓인다. 결과는 collector_commands_done/{키}.
+export async function fbRequestEmptyMake(voyageKey, by = '') {
+  const vk = String(voyageKey || '').trim();
+  if (!vk) throw new Error('항차 키가 없습니다');
+  const key = `${vk}__empty`;
+  await set(ref(db, `collector_commands/${key}`), { action: 'empty_make', vk, at: Date.now(), by: by || '' });
+  return key;
+}
+
 export function fbSubscribeProcessDone(key, callback) {
   const r = ref(db, `collector_commands_done/${key}`);
   return onValue(r, (snap) => callback(snap.val() || null));

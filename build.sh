@@ -368,6 +368,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 미르 기분 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1
   fi
+  # 3.73: 머스크 엠티 찾기 — MCSC 638N/640S 실자료 사본(보관소 EDI 230건)으로 실번호 엠티 183대·묶음·BAPLIE 대조·CSV 를 실소스 그대로 잰다.
+  SMOKE_EFM=$(mktemp /dev/shm/hometmp/_efm_XXXXXX.mjs)
+  SMOKE_EFO=$(mktemp /dev/shm/hometmp/_efo_XXXXXX.cjs)
+  printf 'export { isMaerskVoyage, maerskEmptyCards, groupBy, emptyCsv, realEmptyRows } from "%s/src/emptyFind.js";\n' "$PWD" > "$SMOKE_EFM"
+  if npx esbuild "$SMOKE_EFM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_EFO" --log-level=error; then
+    node tools/smoke_emptyfind.cjs "$SMOKE_EFO" || { echo "✗ 머스크 엠티 찾기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_EFM" "$SMOKE_EFO"; exit 1; }
+    rm -f "$SMOKE_EFM" "$SMOKE_EFO"
+  else
+    echo "✗ 머스크 엠티 찾기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_EFM" "$SMOKE_EFO"; exit 1
+  fi
   # 3.50-02: 캔슬 리스트 — SWSP 2609S 실자료 사본(records 400 · EDI 813 · 취소 요청 13)으로 «취소분은 EDI에 없는 컨이 아니다»·파일명 판정·리스트에서 빼기·자동 등록 분류를 실소스 그대로 잰다.
   SMOKE_CLM=$(mktemp /dev/shm/hometmp/_clm_XXXXXX.mjs)
   SMOKE_CLO=$(mktemp /dev/shm/hometmp/_clo_XXXXXX.cjs)
