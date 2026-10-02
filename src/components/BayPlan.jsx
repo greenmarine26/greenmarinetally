@@ -31,7 +31,7 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
-export default function BayPlan({ containers, compMap, xrayMap, xraySeals, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
+export default function BayPlan({ containers, compMap, xrayMap, xraySeals, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey, rfSkip = false,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
   pendingSwap, onCancelSwap,   // TallyOne 2.89: 컨 맞교환 상대 고르기(배너만 — 셀 가로채기는 VoyagePage onOpenContainer)
@@ -100,7 +100,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
   //   판정은 아래 isPtk와 동일 규칙(선적=_inList||POL평택, 양하=POD평택) — TDZ 때문에 지역 정의.
   const iso403Stats = useMemo(() => {
     const ptk = (c) => _isPtkOne(c, mode);   // 3.60-19: 아래 isPtk 와 같은 한 벌(utils) — 종전엔 이 자리만 통과화물을 포함했다
-    const targets = containers.filter(c => ptk(c) && isISO403(c));
+    const targets = rfSkip ? [] : containers.filter(c => ptk(c) && isISO403(c));   // 3.72-02: 리퍼 체크 안 하는 배(머스크 계열)는 사진 배지를 세지 않는다
     const taken = targets.filter(c => isISO403PhotoTaken(c));
     return {
       total: targets.length,
@@ -108,7 +108,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
       pending: targets.length - taken.length,
       pendingList: targets.filter(c => !isISO403PhotoTaken(c)),
     };
-  }, [containers, mode]);
+  }, [containers, mode, rfSkip]);
   // M4.9: ISO403 미촬영 목록 펼치기
   const [showISO403List, setShowISO403List] = useState(false);
   const scrollRef = useRef(null);
@@ -656,7 +656,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
       <div className={`flex ${onlyLayout === 'row' ? 'flex-row items-start' : 'flex-col'}`} style={{ gap: onlyLayout === 'row' ? 48 : 4 }} data-only-layout={onlyLayout}>   {/* row 는 앞 장 오른쪽 단 라벨(장 밖 24px)과 뒷 장 왼쪽 라벨이 붙지 않게 48px */}
         {pgList.map((pg) => {
           const page = (
-            <BayPage key={pg.title} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
+            <BayPage key={pg.title} rfSkip={rfSkip} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
               isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
               isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
               globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
@@ -964,6 +964,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
             {pages.map((page, pIdx) => (
               <div key={pIdx} id={`bay-page-${pIdx}`}>
                 <BayPage
+                  rfSkip={rfSkip}
                   page={page}
                   bayGroups={bayGroups}
                   completedMap={compMap}
@@ -1009,6 +1010,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
         ) : (
           // 단일 페이지 모드
           <BayPage
+            rfSkip={rfSkip}
             page={curPage}
             bayGroups={bayGroups}
             completedMap={compMap}
@@ -1132,7 +1134,8 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
   // M6.92.5: 양하/선적 모드 (needsShift 표시 제어)
   mode = 'discharge',
   //  3.48 베이뷰 — 고른 단만 밝게 · 불일치 칸 테두리(BayPlan 이 onlyBay 갈래에서만 넘긴다)
-  brightTier = null, warnCells = null
+  brightTier = null, warnCells = null,
+  rfSkip = false   // 3.72-02: 리퍼 체크 안 하는 배(머스크 계열) — 셀의 «NO TEMP» 를 안 띄운다
 }) {
   //  3.48: 단 흐리기 — 라벨·해치커버는 그대로 두고 칸만. 데크 = 80단 이상(BayPlan 전체가 쓰는 같은 기준).
   const _dimStyle = (tier) => (brightTier && ((parseInt(tier, 10) >= 80 ? 'deck' : 'hold') !== brightTier)) ? { opacity: 0.32 } : undefined;
@@ -1696,7 +1699,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
     const tmpStr = String(c.tmp || '').trim();
     // M3.75 fix: 엠티 리퍼는 온도 없는 게 정상 → 경고 X (Full 또는 fe 미정만 경고)
     const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);
-    const tmpMissing = isFullReefer && !reeferTempExempt(c) && (c.tmp_missing || tmpStr === '');   // 3.70-01: 리퍼드라이·제작컨·수화물은 온도 대상 아님(판정 한 벌)
+    const tmpMissing = !rfSkip && isFullReefer && !reeferTempExempt(c) && (c.tmp_missing || tmpStr === '');   // 3.72-02: 리퍼 체크 안 하는 배는 «NO TEMP» 를 안 띄운다   // 3.70-01: 리퍼드라이·제작컨·수화물은 온도 대상 아님(판정 한 벌)
 
     let specialLine = '';
     let specialColor = 'text-dim-400';

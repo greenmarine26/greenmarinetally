@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
 import { isPtk as _isPtkOne, isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
 
-export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null }) {
+export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
   const _shiftSet = shiftCnSetOf(voyageKey || (voyage?.info?.vsl || ''), voyage);
   const summary = useMemo(() => {
@@ -168,9 +168,9 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
         {summary.reeferTotal > 0 && (
           <Chip
             icon={Snowflake}
-            color={summary.reeferTempMissing > 0 || summary.reeferNoPos > 0 ? 'red' : 'cyan'}
+            color={(!rfSkip && summary.reeferTempMissing > 0) || summary.reeferNoPos > 0 ? 'red' : 'cyan'}   /* 3.72-02: 체크 안 하는 배는 온도X 로 빨갛게 안 한다(위치미상은 자리 문제라 그대로) */
             label="리퍼"
-            value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferNoPos > 0 ? ` · 📍위치미상${summary.reeferNoPos}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
+            value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferNoPos > 0 ? ` · 📍위치미상${summary.reeferNoPos}` : ''}${!rfSkip && summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
           />
         )}
         {/* 1.24: **풀 리퍼 사진 칩 삭제** — 바로 옆 「리퍼 확인」 칩과 같은 것을 두 번 말한다.
@@ -185,9 +185,10 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
             icon={Snowflake}
             /*  3.25: 칩도 판정 한 벌을 본다. 종전엔 `rfCheckedAt`(누가 «확인 완료»를 눌렀나)만 봐서
                 잰 적 없는 19대에도 «완료 19대 ✓» 초록이 떴다 — 그 착시가 2026-09-07 사고였다. */
-            color={(summary.rfSum.nNoBase + summary.rfSum.nUnverified) > 0 ? 'red' : summary.rfSum.nGaps ? 'amber' : 'emerald'}
+            color={rfSkip ? 'cyan' : (summary.rfSum.nNoBase + summary.rfSum.nUnverified) > 0 ? 'red' : summary.rfSum.nGaps ? 'amber' : 'emerald'}
             label="리퍼 확인"
-            value={summary.rfSum.nNoBase ? `기준없음 ${summary.rfSum.nNoBase}/${summary.rfSum.total}`
+            value={rfSkip ? `${summary.rfSum.total}대 · 체크 안 함`   /* 3.72-02: 진입점은 남기고 경고색·미확인 숫자는 뺀다 */
+                 : summary.rfSum.nNoBase ? `기준없음 ${summary.rfSum.nNoBase}/${summary.rfSum.total}`
                  : summary.rfSum.nUnverified ? `검증안됨 ${summary.rfSum.nUnverified}/${summary.rfSum.total}`
                  : summary.rfSum.nGaps ? `확인 ${summary.rfSum.total}대 · 차이 ${summary.rfSum.nGaps}`
                  : `확인 ${summary.rfSum.total}대 ✓`}

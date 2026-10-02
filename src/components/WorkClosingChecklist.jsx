@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, MoveRight, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
 import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots , applySpecialMarks} from '../utils.js';
 
-export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump }) {
+export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 온도·사진 항목을 세지 않는다
   const items = useMemo(() => {
     if (!voyage) return [];
     const sec = voyage[mode] || {};
@@ -45,10 +45,10 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         검수사 확정 2026-09-07 «완료시 다시 한번 묻는걸로 대치» — 묻는 자리가 여기다.
         시작할 때는 안 막는다(컨이 배 위에 있어 잴 수가 없다). 다 내려온 지금 묻는다. */
     const reefers = containers.filter(isReeferContainer);
-    const rfSum = reeferTempSummary(containers);
+    const rfSum = reeferTempSummary(rfSkip ? [] : containers);   // 3.72-02: 리퍼 체크 안 하는 배는 0 (판정은 utils.isReeferCheckSkipped)
 
     // ISO403 사진 미촬영
-    const iso403Pending = containers.filter(c => isISO403(c) && !isISO403PhotoTaken(c));
+    const iso403Pending = rfSkip ? [] : containers.filter(c => isISO403(c) && !isISO403PhotoTaken(c));
 
     // X-RAY 미처리 (양하 모드만)
     const xrayPending = mode === 'discharge'
@@ -142,7 +142,8 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
              : rfSum.nUnverified ? '리퍼 실물 온도 미확인'
              : '리퍼 온도 확인',
         count: rfSum.nNoBase + rfSum.nUnverified,
-        desc: rfSum.total === 0 ? '리퍼 없음'
+        desc: rfSkip ? '리퍼 체크 안 함 — 이 배는 리퍼 온도를 확인하지 않습니다(머스크 계열·선박 정책)'
+          : rfSum.total === 0 ? '리퍼 없음'
           : rfSum.nNoBase ? `리퍼 ${rfSum.total}대 중 ${rfSum.nNoBase}대에 기준(세팅)온도가 없습니다 — 선사 리스트가 오면 채워집니다`
           : rfSum.nUnverified ? `리퍼 ${rfSum.total}대 중 ${rfSum.nUnverified}대를 아직 안 쟀습니다 — 검수 수기 리스트를 사진으로 올리십시오`
           : rfSum.nGaps ? `리퍼 ${rfSum.total}대 확인 · 세팅과 차이 나는 것 ${rfSum.nGaps}대 (${rfSum.gaps.slice(0,3).map(r => `${r.cn} ${r.set}→${r.act}`).join(' · ')})`
@@ -226,7 +227,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         },
       ] : []),
     ];
-  }, [voyage, mode]);
+  }, [voyage, mode, rfSkip]);
 
   if (!open) return null;
 

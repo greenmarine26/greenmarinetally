@@ -71,7 +71,7 @@ export const isoConflictText = (w) => {
   return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
 };
 
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false, cancelReq = [] }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false }) {
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
@@ -102,7 +102,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   // ─── 🔴 1. 리퍼 온도 미입력 (양하 모드의 풀 리퍼만) ───
   // M3.71: 선적 모드는 검사 제외 (적재 전이라 온도 정보 없는 게 정상)
   // M3.73: 무게 추정 제거 - fe='F' 명시된 리퍼만 검사
-  if (mode === 'discharge') {
+  //   3.72-02: 리퍼 체크 안 하는 배(머스크 계열 · 선박 정책 «리퍼 체크 안 함»)는 이 알람을 만들지 않는다 — 판정은 utils.isReeferCheckSkipped 한 벌.
+  if (mode === 'discharge' && !rfSkip) {
     const reefers = extractReefers(ediPtk, listRecords);   // 3.47: 확정 컨은 확정이 이긴다
     // 풀 리퍼만 추출 - fe='F'로 명시된 것만
     const fullReefers = reefers.filter(c => c.fe === 'F');

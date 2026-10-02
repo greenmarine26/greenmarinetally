@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 3.72-01';
-const NOTE = '선적 자동 가이드 — 한 베이에 도착항이 섞여 있어도 바닥 칸이 있는 묶음부터 나오고 같은 열에서 위 칸이 아래 칸보다 먼저 나오지 않습니다. ATPR 2644W 28베이는 WEI 리퍼부터 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 3.72-02';
+const NOTE = '리퍼 체크 안 함 — 머스크 계열은 선박 설정과 상관없이 마감 점검의 리퍼 온도와 사진, 출항 배너, 진단 알람, 요약 카드의 리퍼 확인 칩, 베이 사진 배지, 미르 브리핑의 리퍼 경고가 뜨지 않습니다. 이전 안내 — 선적 자동 가이드 — 한 베이에 도착항이 섞여 있어도 바닥 칸이 있는 묶음부터 나오고 같은 열에서 위 칸이 아래 칸보다 먼저 나오지 않습니다. ATPR 2644W 28베이는 WEI 리퍼부터 나옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -823,6 +823,8 @@ node tools/smoke_rzorslotpick.cjs "$PWD" || { echo "✗ RZOR 빈자리 조회창
 node tools/smoke_deckdone.cjs "$PWD" || { echo "✗ RZOR 덱플랜 완료 표시 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.70-01: 수화물 리퍼는 온도 대상이 아니다 · 기록에 없던 칸을 처음 고쳐도 저장(실데이터 RZOR R107E · 컨 상세·큰 카드 jsdom)
 node tools/smoke_luggtemp.cjs "$PWD" || { echo "✗ 수화물 리퍼 온도 제외 연막검사 실패 — 배포 금지"; exit 1; }
+#  3.72-02: 리퍼 체크 안 하는 배(머스크 계열 선사 MAE · 선박 정책) — 마감 점검·진단 알람·출항 배너·베이 사진 배지가 같은 한 벌을 읽는다(실데이터 MAMP 636N 192대 · 사전 64척 · 마감 점검 jsdom)
+node tools/smoke_rfskip.cjs "$PWD" || { echo "✗ 리퍼 체크 안 하는 배 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-07: 선적 EDI 회신 규격(H≠리퍼·선사 약어) · 씰체결 번호 규격별 · 현황 탭 특수화물 한 벌.
 node tools/smoke_fix36007.cjs "$PWD" || { echo "✗ 3.60-07 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-08: 기존 records 를 못 읽으면 리스트 저장을 멈춘다(병합 없이 통째 덮어 현장 기록을 지우던 갈래 · 진단 T8) — 실소스 + 메모리 스텁.

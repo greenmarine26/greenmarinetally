@@ -55,7 +55,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -1116,6 +1116,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const vsl = voyage?.info?.vsl || '';
     return matchShipPolicy(vsl, extraPolicies);
   }, [voyage, extraPolicies]);
+  //  ★ 3.72-02 — 리퍼 체크 안 하는 배(머스크 계열 · 선박 정책 «리퍼 체크 안 함») — 알람을 만드는 모든 입구가 이 값 하나를 읽는다(규범 §4-4).
+  //    사전 carrier 는 늦게 도착할 수 있어 메모하지 않고 매 렌더 읽는다(싸다).
+  const rfSkipShip = isReeferCheckSkipped(voyage?.info, shipPolicy,
+    (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()]?.carrier : '');
 
   // M3.5.5: 정책 적용 대상 컨테이너 (sealMode 표시용)
   const sealTargets = useMemo(() => {
@@ -1256,12 +1260,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    InlineAnswerCard 는 voyageKey·voyage 를 안 받으므로(1.98·2.50-01 교훈 — 부모 변수 직접 참조 금지) 여기 실어 내린다.
     shiftMap: (() => { try { return shiftingMapForDisplay(voyageKey, voyage); } catch (e) { return null; } })(),
     pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
-    rfSkip: !!shipPolicy?.rfSkip,
+    rfSkip: rfSkipShip,   // 3.72-02: 선사 MAE 도 포함 — 판정 한 벌
     eseal: esealInfo ? {
       n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
       poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
     } : null,
-  }), [photosAll, containers, voyage, shipPolicy, esealInfo, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: 합계 자료가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
+  }), [photosAll, containers, voyage, shipPolicy, rfSkipShip, esealInfo, voyageKey, portMisData, pilotForecast, inspector]);   // ★ 2.57: 합계 자료가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료 · 3.41: 입출항·도선·검수원
 
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
@@ -1359,6 +1363,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
       cancelReq: voyage?.info?.amend?.cancelReq || [],   // 3.50-02: 수집기가 읽은 선사 취소 요청분 — «EDI에 없는 컨» 이 아니다
       carrier: voyage?.info?.carrier || '',
+      rfSkip: rfSkipShip,   // 3.72-02: 리퍼 체크 안 하는 배는 «풀 리퍼 온도 미입력» 알람을 만들지 않는다
       sealPolicy: shipPolicy,  // M3.5.5
       lugCount: shipLuggageCount(voyageKey),  // 1.56-02: 수화물은 검증 대상이 아니다(검수사 확정)
       // 1.56-03: 이 항차의 수화물 **번호**까지 넘긴다 — 번호는 항차마다 바뀌지만, 양하에서
@@ -1379,7 +1384,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return [...out];
       })(),
     });
-  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
+  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy, rfSkipShip]);
   /* ★ 3.41 — 떠 있는 미르(App 의 MirFab)에게 «지금 열린 항차» 재료를 놓아 둔다(검수사 «앱 어디에든 항상 띄워서»).
        MirFab 은 prop 체인 밖(App)에 살아 이 화면의 컨·완료·시프팅·트윈 짝을 받을 길이 없다 — 여기서 publishMirCtx 로 건넨다.
        컨은 홈 통합검색과 같은 벌(flattenVoyages)로 편다 — 홈에서 묻든 여기서 묻든 같은 재료(§4-4). 화면이 닫히면 비운다.
@@ -1483,7 +1488,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             onOpenContainer={(c) => setDetailC(c)}
             shipImo={voyage?.info?.imo}
             shipName={voyage?.info?.vsl}
-            voyageInfo={voyage?.info}
+            voyageInfo={voyage?.info} rfSkip={rfSkipShip}
             voyageKey={voyageKey}
           />
         </div>
@@ -1541,7 +1546,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (left <= 0 || left > 2 * 3600000) return null;
           const undone = containers.filter(c => !compMap[c.cn]).length;
           const xrayPend = mode === 'discharge' ? Object.keys(xrayMap || {}).filter(cn => !(xraySeals || {})[cn]?.seal).length : 0;
-          const rfMiss = containers.filter(c => isReeferContainer(c) && !reeferTempExempt(c) &&   // 3.60-10: 리퍼 한 벌 · 3.70-01: 수화물도 뺀다(판정 한 벌)
+          const rfMiss = rfSkipShip ? 0 : containers.filter(c => isReeferContainer(c) && !reeferTempExempt(c) &&   // 3.60-10: 리퍼 한 벌 · 3.70-01: 수화물도 뺀다(판정 한 벌)
             (c.fe === 'F' || !c.fe) && (!c.tmp || String(c.tmp).trim() === '')).length;
           if (!undone && !xrayPend && !rfMiss) return null;
           const mins = Math.round(left / 60000);
@@ -1564,7 +1569,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {/*  3.25: 리퍼 온도 — **큰 화면 대신 상단 한 줄.** 검수사 확정 2026-09-07
            «상단에 리퍼 검수여부를 알림으로 작게 보여주고 완료시 다시 한번 묻는걸로 대치»
            작업을 막지 않는다. 누르면 그때 자세히 본다. */}
-      {!_sideCanc && !shipPolicy?.rfSkip && rfSummary.total > 0 && (
+      {!_sideCanc && !rfSkipShip && rfSummary.total > 0 && (
         <button onClick={() => setShowReefer(true)}
           className={'w-full mb-2 px-3 py-2 rounded-pill text-left flex items-center gap-2 border '
             + (rfSummary.tone === 'ok'  ? 'bg-emerald-900/25 border-emerald-700/40'
@@ -1584,9 +1589,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
 
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
-      {!_sideCanc && <VoyageSummaryCard voyage={voyage} mode={mode} voyageKey={voyageKey}
+      {!_sideCanc && <VoyageSummaryCard voyage={voyage} mode={mode} voyageKey={voyageKey} rfSkip={rfSkipShip}
         reeferCheck={reefers.length > 0
-          ? { total: reefers.length, unchecked: shipPolicy?.rfSkip ? 0 : rfUnchecked, onOpen: () => setShowReefer(true) }   // 1.86: rfSkip 배는 미확인 배지 끔
+          ? { total: reefers.length, unchecked: rfSkipShip ? 0 : rfUnchecked, onOpen: () => setShowReefer(true) }   // 1.86: rfSkip 배는 미확인 배지 끔
           : null} />}
 
       {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
@@ -1844,7 +1849,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}
           onClose={() => setWorkStyle('classic')}
           searchPanelProps={{
-            rfSkip: !!shipPolicy?.rfSkip,
+            rfSkip: rfSkipShip,
             esealBrief: esealInfo ? { n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges, poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length } : null,
             relayQuery: relayQ, shipLib, portMisData, pilotForecast, isLoloShip, diagAlerts,
             onWorkFilterChange: (m) => setMode(m), onOpenPlan: _mirOpenPlan,
@@ -1879,7 +1884,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             onOpenContainer={(c) => setDetailC(c)}/>
         </div>
         <SearchPanel
-          rfSkip={!!shipPolicy?.rfSkip}
+          rfSkip={rfSkipShip}
           esealBrief={esealInfo ? {
             n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
             poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
@@ -1977,7 +1982,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}   // 2.89: 맞교환 상대 고르기 가로채기(SlotPicker 경유 포함)
               shipImo={voyage?.info?.imo}
               shipName={voyage?.info?.vsl}
-              voyageInfo={voyage?.info}
+              voyageInfo={voyage?.info} rfSkip={rfSkipShip}
               voyageKey={voyageKey}
               pendingSwap={pendingSwap}
               onCancelSwap={() => setPendingSwap(null)}
@@ -2393,6 +2398,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         open={closingOpen}
         voyage={voyage}
         mode={mode}
+        rfSkip={rfSkipShip}
         onClose={() => setClosingOpen(false)}
         onJump={(target) => {
           // target: { tab, filter?, search? }

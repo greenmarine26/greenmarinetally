@@ -21,7 +21,7 @@
 // ⚠ 순수 함수만 — firebase SDK 를 직접 부르지 않는다(콘앱 번들 mir-core.js 에도 실린다). 보관소는 REST(fetch)와 window 손으로만.
 
 import {
-  _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks,
+  _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
@@ -1478,6 +1478,14 @@ function _normalize(ctx) {
   if (!c.vslFull) c.vslFull = S(c.info && c.info.vslFull);
   if (c.pier == null) c.pier = S(c.info && c.info.pier);
   if (!c.containers) c.containers = [];
+  //  ★ 3.72-02 — 리퍼 체크 안 하는 배(머스크 계열). 항차 화면은 rfSkip 을 실어 오지만 홈 통합검색·떠 있는 미르·콘앱은 안 싣는다 —
+  //    그래서 브리핑·인수인계에 «실물온도 미확인 N대» 가 샜다. 여기서 선사(항차 info.carrier · 사전 carrier · 콘앱 ctx.dictCarrier)로 스스로 판정한다(utils 한 벌).
+  {
+    let car = '';
+    try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[S(c.info && c.info.vsl).toUpperCase()] : null; car = (d && d.carrier) || ''; } catch (e) { car = ''; }
+    if (!car) car = S(c.dictCarrier);   // 콘앱은 사전 전체를 안 들고 있어 선사 칸 하나만 ctx.dictCarrier 로 싣는다(cone.html fbFetchDictCarrier)
+    c.rfSkip = !!c.rfSkip || isReeferCheckSkipped(c.info, null, car);
+  }
   //  ★ 3.70-01 — 콘앱 컨(toMirContainers)·항차 화면 재료에도 특수제작컨·수화물 표시를 찍는다(utils.applySpecialMarks 한 벌 — 두 앱 같은 답).
   //    다른 항차 컨이 섞여 와도 이 항차 것에만(voyageKey 문지기).
   {

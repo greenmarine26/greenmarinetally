@@ -262,7 +262,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
           <FitBox boost={zoom} fill boundsRef={bottomRef}>
             <BayPlan containers={gridContainers} compMap={overlay.compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
               preGoneInfo={preGoneInfo} onOpenContainer={onOpenContainer}
-              shipImo={info.imo} shipName={info.vsl} voyageInfo={info} voyageKey={voyageKey}
+              shipImo={info.imo} shipName={info.vsl} voyageInfo={info} voyageKey={voyageKey} rfSkip={!!searchPanelProps.rfSkip}
               onlyBay={String(gridBay)} onlyLayout={isWide ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={overlay.warnCells} />
           </FitBox>
         ) : (
