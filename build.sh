@@ -368,6 +368,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 미르 기분 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1
   fi
+  # 3.73-02: 카고플랜 컬러/흑백 인쇄 — 실소스의 인쇄 CSS·단추 배선을 읽어 잰다(번들 불필요).
+  node tools/smoke_cargobw.cjs || { echo "✗ 카고플랜 컬러/흑백 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.73-01: 리퍼 규격 대조 — NSDC 2609N 양하 실자료 사본(163대)으로 «40피트 리퍼 42·45 는 같은 규격» 과 «다른 규격은 여전히 잡힘» 을 실소스 그대로 잰다.
   SMOKE_IRM=$(mktemp /dev/shm/hometmp/_irm_XXXXXX.mjs)
   SMOKE_IRO=$(mktemp /dev/shm/hometmp/_iro_XXXXXX.cjs)

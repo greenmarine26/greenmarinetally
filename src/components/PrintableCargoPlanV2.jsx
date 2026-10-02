@@ -400,6 +400,18 @@ export const CARGO_V2_CSS = `
   .cpv2-zoom-wrap { transform: none !important; width: auto !important; }
   @page { size: A4 landscape; margin: 6mm; }
 }
+/* ★ 3.73-02 — 흑백 인쇄 = 바탕색 없음 (검수사 2026-10-03 «흑백 출력시 바탕색은 지워주세요. 칼라프린터로 출력할때는 바탕색이 있어야 하며
+   흑백으로 출력할때만 바탕색이 없어야 합니다. Xray표기만 양쪽다 색을 표기합니다»).
+   브라우저는 프린터가 컬러인지 알 수 없다 — 그래서 도구줄의 «컬러/흑백» 단추로 고르고 화면에도 그대로 보인다(보이는 대로 인쇄).
+   칸 바탕·글자색·표식(◆ ▲ 보라 테두리)·별첨 색을 모두 흰 바탕·검정으로 내리고 **★ X-RAY 만 빨강으로 남긴다.**
+   통과·그림자 칸의 회색은 «목적지 색»이 아니라 «남의 짐이 있다»는 구조 표시라 남긴다 — 지우면 빈자리로 읽혀 선적 오류를 부른다(3.7). */
+.cpv2-bw .cpv2-cell:not(.cpv2-through):not(.cpv2-shadow20) { background: #fff !important; color: #000 !important; }
+.cpv2-bw .cpv2-cell.cpv2-through { color: #000 !important; }
+.cpv2-bw .cpv2-cell.cpv2-shift::before { color: #000 !important; }
+.cpv2-bw .cpv2-cell .cpv2-um { color: #000 !important; }
+.cpv2-bw .cpv2-cell.cpv2-lugg:not(.cpv2-oog-W):not(.cpv2-oog-HW) { box-shadow: inset 0 0 0 2px #000 !important; }
+.cpv2-bw .cpv2-cell.cpv2-xray::after { color: #dc2626 !important; }
+.cpv2-bw .cpv2-legend-mark, .cpv2-bw .cpv2-legend-nm, .cpv2-bw .cpv2-legend-table th, .cpv2-bw .cpv2-legend-total { background: #fff !important; color: #000 !important; }
 `;
 
 // ------------------------------------------------------------
@@ -1241,6 +1253,9 @@ export default function PrintableCargoPlanV2({
   const zoomRef = useRef(1);
   zoomRef.current = zoom;
   const [rotated, setRotated] = useState(false);
+  // 3.73-02: 컬러/흑백 인쇄 선택 — 기억해 두되(검수사 PC 한 대에 프린터 하나) 못 쓰는 환경이면 컬러.
+  const [bw, setBw] = useState(() => { try { return localStorage.getItem('cpv2_bw') === '1'; } catch { return false; } });
+  const toggleBw = () => setBw(v => { const n = !v; try { localStorage.setItem('cpv2_bw', n ? '1' : '0'); } catch { /* 저장 불가 환경 — 이번 화면에만 적용 */ } return n; });
   /* ⛔ 2.11-02 (검수사 실측 «잘 보였다가 화면이 바뀝니다») —
        **회전이 걸린 뒤에 다시 재면 가로·세로가 뒤바뀌어 잡힌다.**
        getBoundingClientRect() 는 «돌아간 뒤의 바깥 상자»를 주기 때문이다.
@@ -1338,6 +1353,7 @@ export default function PrintableCargoPlanV2({
         <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>＋</button>
         <button onClick={() => { const f = calcFit(); setZoom(f || 0.22); }} style={{ padding: '6px 10px', background: '#546e7a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>맞춤</button>
       </>)}
+      <button onClick={toggleBw} title="흑백 프린터는 흑백, 컬러 프린터는 컬러로 고른 뒤 인쇄합니다. ★ X-RAY 만 두 쪽 다 빨강입니다." style={{ padding: '6px 10px', background: bw ? '#fff' : '#f59e0b', color: bw ? '#111' : '#111', border: '1px solid #111', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' }}>{bw ? '◐ 흑백' : '● 컬러'}</button>
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
       <button onClick={onClose} style={{ padding: '6px 10px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>✕ 닫기</button>
     </div>
@@ -1396,7 +1412,7 @@ export default function PrintableCargoPlanV2({
           ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (window.innerHeight - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
-      <div ref={pageRef} className={`cpv2-page${podLen > 0 ? ' cpv2-podsplit' : ''}`} style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
+      <div ref={pageRef} className={`cpv2-page${podLen > 0 ? ' cpv2-podsplit' : ''}${bw ? ' cpv2-bw' : ''}`} style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
         {/*  ★ 3.7-03 — 매번 같은 설명은 **바닥글**로 내렸다(검수사 «설명이 길어서 상단이 두줄 또는 세줄로
             되어 있습니다. 매번 같은 설명은 하단 아래 바닥글로 처리 바랍니다»). 머리글에는 이 항차의 것만 남는다. */}
         <div className="cpv2-page-header">
