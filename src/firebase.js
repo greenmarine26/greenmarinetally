@@ -3743,6 +3743,46 @@ export async function fbSetDevAccess(actor, target, on) {
   }
 }
 
+// ─── TallyOne 3.76: 인원 접근 온오프 (staffOff) ────────────────────────────────
+//   오프인 이름은 검수앱에 들어오지도, 들어와 있던 채로 쓰지도 못한다(콘앱은 공개 — 이 노드를 보지 않는다).
+//   ⛔ 고칠 수 있는 사람은 **관리자뿐**이고 **소유자와 본인은 끌 수 없다**(잠금 방지).
+const STAFF_OFF_NODE = 'staffOff';
+export function fbSubscribeStaffOff(callback) {
+  const r = ref(db, STAFF_OFF_NODE);
+  const handler = onValue(r, snap => {
+    callback(snap.exists() ? (snap.val() || {}) : {});
+  }, (e) => {
+    // 3금지③ — 조용히 실패하지 않는다(로그). 이미 받은 명단은 **지우지 않는다** — 일시 오류로 오프인 사람의 차단이 풀리면 안 된다.
+    //   처음부터 못 받았으면 App 의 기본값(빈 명단 = 아무도 안 막음)이 그대로라 기존 사용을 깨지 않는다.
+    console.error('[fbSubscribeStaffOff] 구독 실패 — 마지막으로 받은 명단을 유지한다', e);
+  });
+  return () => off(r, 'value', handler);
+}
+/**
+ * 접근 온오프. on=true → 접근 허용(노드 삭제) / on=false → 접근 차단.
+ * @returns {Promise<{ok:boolean, reason?:string}>}
+ */
+export async function fbSetStaffOff(actor, target, off_) {
+  const a = String(actor || '').trim();
+  const t = String(target || '').trim();
+  if (!a || !t) return { ok: false, reason: 'no_name' };
+  try {
+    const guard = await fbGetAdminGuard();   // 권한은 서버 값을 다시 읽어 판정한다 — 화면 state 를 믿지 않는다
+    if (!isAdminName(guard, a)) return { ok: false, reason: 'not_admin' };
+    if (off_ && isOwnerName(t)) return { ok: false, reason: 'owner' };
+    if (off_ && a === t) return { ok: false, reason: 'self' };
+    if (off_) {
+      await set(ref(db, `${STAFF_OFF_NODE}/${t}`), { name: t, by: a, at: Date.now() });
+    } else {
+      await set(ref(db, `${STAFF_OFF_NODE}/${t}`), null);
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error('[fbSetStaffOff] 저장 실패', t, e);
+    return { ok: false, reason: 'fb_error' };
+  }
+}
+
 /** 부분 갱신 (pwHash/salt 설정, devices/{id} 추가 등) */
 export async function fbUpdateAdminGuard(patch) {
   try {

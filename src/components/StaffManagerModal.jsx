@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff, isChief, isTester, splitRole } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSetStaffRole } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSetStaffRole, fbSubscribeStaffOff, fbSetStaffOff } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
          OWNER_NAME, isOwnerName, canRevokeAdmin,
@@ -97,6 +97,28 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     const ok = await fbSetStaffRole(name, next);
     setTesterBusy('');
     if (!ok) alert('저장 실패 — 네트워크를 확인하세요.');
+  };
+
+  // ── TallyOne 3.76: 접근 온오프 (검수사 지시 2026-10-03) ──────────────────────────
+  //   *"인원관리에서 온오프 기능을 만들어서 주세요 오프하면 접근불허 메시지와 함께 사용을 못하게 막습니다."*
+  //   퇴사 처리와 다르다 — 직책·관리자 권한·기록은 그대로이고, 온으로 되돌리면 바로 들어온다. 소유자·본인은 끌 수 없다.
+  const [staffOff, setStaffOffState] = useState({});
+  React.useEffect(() => fbSubscribeStaffOff(setStaffOffState), []);
+  const [offBusy, setOffBusy] = useState('');
+  const handleToggleOff = async (name) => {
+    const turnOff = !staffOff[name];
+    if (turnOff && !window.confirm(
+      `접근 차단(오프): ${name}\n\n· 이 사람 화면은 자물쇠 그림만 보이고 아무것도 쓸 수 없습니다.\n` +
+      `· 지금 로그인해 있어도 바로 자물쇠로 덮입니다.\n· 직책·관리자 권한·기록은 그대로입니다. 온으로 돌리면 메뉴가 바로 정상으로 보입니다.`)) return;
+    setOffBusy(name);
+    const r = await fbSetStaffOff(current, name, turnOff);
+    setOffBusy('');
+    if (!r.ok) {
+      alert(r.reason === 'not_admin' ? '관리자만 접근을 켜고 끌 수 있습니다.'
+        : r.reason === 'owner' ? `${OWNER_NAME} 님은 앱 소유자라 접근을 막을 수 없습니다.`
+        : r.reason === 'self' ? '본인은 끌 수 없습니다(잠금 방지).'
+        : '저장 실패 — 네트워크를 확인하세요.');
+    }
   };
 
   const handleRemoveDevice = async (devId, label) => {
@@ -497,6 +519,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     {devAccess[s.name] && <span className="text-3xs bg-cyan-900 text-cyan-300 px-1 rounded" title={`개발용 접근 — ${devAccess[s.name].grantedBy || ''} 부여`}>🛠 개발용</span>}
                     {matrixEditors.includes(s.name) && <span className="text-3xs bg-indigo-900 text-indigo-300 px-1 rounded" title="베이 매트릭스(베이사전) 편집 권한">📐 매트릭스</span>}
                     {isDeleted(s.name) && <span className="text-3xs bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
+                    {staffOff[s.name] && <span className="text-3xs bg-rose-900 text-rose-200 px-1 rounded font-bold" title={`접근 차단 — ${staffOff[s.name].by || ''} 설정`}>🚫 접근차단</span>}
                   </div>
                   {/* TallyOne 1.71: 이사급 이상만 직급, 그 아래는 직책. 직책 없으면 «검수». */}
                   <div className="text-2xs text-dim-300">{displayRole(s.name)}</div>
@@ -524,6 +547,17 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       권한부여
                     </button>
                   )
+                )}
+                {/* 3.76: 접근 온오프 — 관리자에게만 보인다. 소유자·본인 행에는 단추를 두지 않는다(서버에서도 한 번 더 막는다). */}
+                {!isDeleted(s.name) && isAdminName(guardInfo, current) && !isOwnerName(s.name) && s.name !== current && (
+                  <button onClick={() => handleToggleOff(s.name)}
+                    disabled={offBusy === s.name}
+                    className={`px-2 py-1 rounded text-xs font-bold ${staffOff[s.name]
+                      ? 'bg-rose-800 hover:bg-rose-700 text-rose-100'
+                      : 'bg-emerald-800/70 hover:bg-emerald-700 text-emerald-100'} disabled:opacity-50`}
+                    title={staffOff[s.name] ? '접근 차단 중 — 눌러서 켜면(온) 다시 들어올 수 있습니다' : '켜져 있음(온) — 눌러서 끄면(오프) 검수앱 접근이 막힙니다'}>
+                    {offBusy === s.name ? '…' : (staffOff[s.name] ? 'OFF' : 'ON')}
+                  </button>
                 )}
                 {/* 1.41: 개발용 접근 토글 — 관리자에게만 보인다(저장 시 서버에서 한 번 더 확인한다). */}
                 {!isDeleted(s.name) && isAdminName(guardInfo, current) && !isOwnerName(s.name) && (

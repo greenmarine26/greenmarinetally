@@ -227,3 +227,31 @@ export function isDevViewer(name) {
 export function canOpenChief(name, isOwner = false) {
   return isChief(name) || isOwner || isDevViewer(name);
 }
+
+// ─── TallyOne 3.76: 인원 접근 온오프 (검수사 지시 2026-10-03) ─────────────────────
+//   *"인원관리에서 온오프 기능을 만들어서 주세요 오프하면 접근불허 메시지와 함께 사용을 못하게 막습니다."*
+//   *"콘앱은 공개이니 열어 놓습니다. 검수앱만 접근을 막습니다."*
+//   퇴사 처리(deletedStaff)와 별개 축이다 — 직책·관리자 권한·활동 기록을 하나도 건드리지 않아 온으로 되돌리면 그대로다.
+//   노드 `staffOff/{이름}`. 판정은 여기 한 벌 — 로그인 화면·로그인 확정·실시간 차단이 전부 isStaffOff 를 부른다.
+//   ⚠ 소유자 보호는 호출부 몫이다(staffList 는 adminGuard 를 부르지 않는다 — 순환 방지). App 구독부와 fbSetStaffOff 가 막는다.
+let STAFF_OFF = {};
+export const ACCESS_DENIED_MSG = '접근이 허용되지 않았습니다.\n관리자에게 문의하세요.';
+export function setStaffOff(map) {
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) {
+    const name = String((v && typeof v === 'object' && v.name) || k).trim();
+    if (name && v) out[name] = true;
+  }
+  STAFF_OFF = out;
+}
+export function isStaffOff(name) {
+  return !!STAFF_OFF[String(name || '').trim()];
+}
+/** 3.76: 지금 자물쇠 화면을 덮어야 하는 이름. 로그인해 있는 사람이 오프가 됐거나, 오프인 이름으로 로그인을 시도한 사람(denied). 없으면 ''.
+ *  map = App 이 소유자를 걸러 담은 오프 명단 state. 온으로 돌아오면 같은 판정이 '' 를 줘서 화면이 걷힌다. */
+export function lockedNameOf(map, inspector, denied) {
+  const m = map || {};
+  if (inspector && m[inspector]) return inspector;
+  if (denied && m[denied]) return denied;
+  return '';
+}

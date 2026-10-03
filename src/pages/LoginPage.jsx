@@ -9,7 +9,7 @@ import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 //  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
 import logoUrl from '../assets/logo-tallyone.png';
-import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
+import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
 import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
@@ -95,6 +95,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     // V9.45 계승: 로딩 검사를 맨 앞으로 — guard가 null인 사이에 잠금 대상을 고르면
     //   "미설정"으로 읽혀 남의 비밀번호 설정 화면이 뜨는 사고를 막는다.
     if (!guardLoaded) { alert('이름 보호 정보를 불러오는 중 — 잠시 후 다시 시도하세요.'); return; }
+    //  3.76: 접근 오프 — 비밀번호 창 앞에서 막는다(오프인 사람이 남의 잠금 화면을 보지 않게). 소유자는 막지 않는다.
+    if (isStaffOff(name) && !isOwnerName(name)) { onSelect(name); return; }   // App 이 로그인 대신 자물쇠 화면을 띄운다
     if (!isLockedName(guard, name)) { commitSelect(name); return; }  // 일반 검수원은 그대로
     if (hasSessionPassFor(name)) { commitSelect(name); return; }     // 이 탭에서 이미 비번 통과
     setGateName(name);

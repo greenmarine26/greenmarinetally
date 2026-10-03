@@ -7,11 +7,12 @@ import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, i
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
-  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat, fbSubscribeYardStatus,
+  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeStaffOff, fbSubscribeShipBayDict, fbSubscribeHeartbeat, fbSubscribeYardStatus,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
 , fbSubscribeLaneRoutes, fbSubscribeMirLexicon, fbWriteMirLexicon, fbLogMirMiss } from './firebase.js';   // 3.0: 미르 자체 학습 사전·결산 기록
+import AccessLockScreen from './components/AccessLockScreen.jsx';   // 3.76: 접근 오프 자물쇠 화면
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
-import { isChief, setServerRoles, setDevAccess, canOpenChief } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
+import { isChief, setServerRoles, setDevAccess, canOpenChief, setStaffOff, isStaffOff, lockedNameOf } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
 import { parseHash, exitApp } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6)
 import { setActivityUser, logActivity, logView, activityUserName } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
@@ -56,6 +57,8 @@ export default function App() {
   const [voyagesLoaded, setVoyagesLoaded] = useState(false);  // V8.27: 딥링크 #310 방지 — 로드 전엔 VoyagePage 미마운트
   const [inspectors, setInspectors] = useState({});
   const [extraStaff, setExtraStaff] = useState({});
+  const [staffOffMap, setStaffOffMap] = useState({});   // 3.76: 접근 오프 명단(소유자는 걸러서 담는다)
+  const [deniedName, setDeniedName] = useState('');       // 3.76: 오프인 이름으로 로그인을 시도한 사람 — 로그인은 시키지 않고 자물쇠 화면만 보인다
   const [deletedStaff, setDeletedStaff] = useState({});  // M5.74: 퇴사자 마커  // M5.62: 김성일이 추가한 동적 명단
   // V9.11: 관리자 가드 — 종전에는 `inspector === '김성일'` 하드코딩이라 V9.09에서 권한을 넘겨받은
   //   관리자에게 헤더 ⚙(인원 관리) 버튼이 아예 안 보였다(인수인계가 실질적으로 반쪽).
@@ -167,6 +170,12 @@ export default function App() {
     // 1.41: 개발용 접근 명단 — 모듈 캐시(setDevAccess)에 밀어 넣고 state 도 갱신한다.
     //   K5 와 같은 이유로 **캐시 먼저**. 순서가 바뀌면 첫 렌더가 옛 명단으로 판정한다.
     const unsubDev = fbSubscribeDevAccess((m) => { setDevAccess(m); setDevAccessMap(m || {}); });
+    //  3.76: 접근 온오프 — 캐시 먼저(setStaffOff), 그다음 state. 소유자는 어떤 값이 와도 막지 않는다(잠금 방지).
+    const unsubOff = fbSubscribeStaffOff((m) => {
+      const clean = {};
+      for (const [k, v] of Object.entries(m || {})) { const nm = String((v && v.name) || k).trim(); if (nm && v && !isOwnerName(nm)) clean[nm] = true; }
+      setStaffOff(clean); setStaffOffMap(clean);
+    });
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
@@ -243,7 +252,7 @@ export default function App() {
       //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
       //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
-    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); };
+    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); unsubOff(); };
   }, []);
 
   useEffect(() => {
@@ -307,7 +316,7 @@ export default function App() {
   //    localStorage 만 보면 KST 자정·[검수원 변경] 뒤 meToday 가 남으로 바뀐 경우·저장 실패에서 조회만이 작업자로 둔갑한다(3.50 감사 지적).
   useEffect(() => { setActiveWorkChoice(workChoice); }, [workChoice]);
   useEffect(() => {
-    if (!inspector || !workChoice) return;   // 3.50: 아직 작업자/조회만을 안 고른 사람(선택 화면)은 활동을 안 적는다 — 적으면 «작업중» 으로 센다
+    if (!inspector || !workChoice || staffOffMap[inspector]) return;   // 3.76: 접근 오프(자물쇠로 덮인 동안)는 «작업중» 으로 쓰지 않는다 — 온이 되면 이 효과가 다시 돌아 바로 적는다 // 3.50: 아직 작업자/조회만을 안 고른 사람(선택 화면)은 활동을 안 적는다 — 적으면 «작업중» 으로 센다
     const tick = () => {
       const voyageKey = route.name === 'voyage' ? route.voyageKey : null;
       const mode = route.name === 'voyage' ? (route.mode || null) : null;
@@ -316,15 +325,21 @@ export default function App() {
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
-  }, [inspector, workChoice, route]);
+  }, [inspector, workChoice, route, staffOffMap]);
 
   // TallyOne 1.3: 화면 열람 기록 — 라우트 변경마다 1건(30초 중복 생략은 activityLog가 처리).
   //   voyage는 VoyagePage가 탭·모드까지 붙여 기록하므로 여기서 빼고(이중 기록 방지), login도 제외.
   useEffect(() => {
-    if (!inspector) return;
+    if (!inspector || staffOffMap[inspector]) return;   // 3.76: 자물쇠로 덮인 동안은 열람 기록을 남기지 않는다
     if (route.name === 'login' || route.name === 'voyage') return;
     logView({ route: route.name });
-  }, [inspector, route.name]);
+  }, [inspector, route.name, staffOffMap]);
+
+  //  3.76: 자물쇠로 덮이는 순간 읽던 음성을 끊는다(미르 화면이 내려가도 말이 이어지지 않게). 덮개가 걷히면 아무 일도 없다.
+  useEffect(() => {
+    if (!lockedNameOf(staffOffMap, inspector, deniedName)) return;
+    try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { console.warn('[3.76] 음성 정지 실패', e); }
+  }, [staffOffMap, inspector, deniedName]);
 
   // TallyOne 1.0: 로그인 화면 강제(자동 로그아웃·로그아웃 완료 시) — replaceState라 스택에 안 쌓임
   const forceLoginScreen = useCallback(() => {
@@ -374,12 +389,20 @@ export default function App() {
     };
   }, [inspector, forceLoginScreen]);
 
+  //  ★ 3.76: 접근 오프 — 오프인 이름으로 로그인을 시도했던 사람은 온이 되면 자물쇠가 걷히고 로그인 화면으로 돌아온다.
+  //    (로그인해 있던 사람은 로그아웃하지 않는다 — 오프 동안 자물쇠 화면이 덮고, 온이 되면 하던 화면이 그대로 보인다. 아래 early return 참조.)
+  useEffect(() => {
+    if (deniedName && !staffOffMap[deniedName]) setDeniedName('');
+  }, [deniedName, staffOffMap]);
+
   // M6.42: STOWAGE PDF는 영구 보관 — 시간 기반 자동 폐기 제거
   //   비용 분석: 300척 × 3MB = 900MB → 월 ₩25 (매우 적음)
   //   사용자 결정: 자동 폐기보다 라이브러리로 영구 보관이 더 가치 있음
   //   같은 선박 새 PDF 등록 시 이전 자동 삭제 (덮어쓰기) 정책은 유지 — fbUploadStowagePdf 내부 로직
 
   const handleSelectInspector = useCallback(async (name, choice = null) => {
+    //  3.76: 접근 오프 — 로그인 확정의 단일 입구에서 한 번 더 막는다(화면이 놓쳐도·업데이트 재개여도 여기서 걸린다).
+    if (isStaffOff(name) && !isOwnerName(name)) { setDeniedName(name); return; }   // 로그인을 시키지 않는다 — 자물쇠 화면만 뜬다
     //  3.50: choice = { mode:'work', voyageKey, equip } | { mode:'view' } — LoginPage 선택 단계가 준다. 없으면(업데이트 재개 등) 오늘 기억한 것.
     const ch = choice ? saveWorkChoice({ ...choice, name }) : readWorkChoice(name);
     if (!ch) { setInspector(name); setWorkChoice(null); return; }   // 아직 안 골랐다 — 선택 화면이 선다(로그인 상태이지만 진입 전)
@@ -504,6 +527,9 @@ export default function App() {
   //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).
   //  3.50: 로그인은 됐는데 «작업자/조회만» 을 아직 안 골랐으면(workChoice null) 선택 화면이 선다 — 진입 전이다. 헤더 [변경] 도 이 길로 온다.
   const needChoice = !!inspector && !workChoice;
+  //  ★ 3.76: 접근 오프 — 자물쇠 그림 하나만 전체를 덮는다(메뉴 없음). 온이 되면 이 줄이 통과돼 화면이 그대로 돌아온다.
+  const lockedName = lockedNameOf(staffOffMap, inspector, deniedName);
+  if (lockedName && !isOwnerName(lockedName)) return <AccessLockScreen />;
   if (!inspector || route.name === 'login' || needChoice) {
     //  2.64-01 (검수사 «페이지 스크롤이 생기면 불편합니다 맞춤처럼 한화면에 보였으면»):
     //    PC 는 화면 높이에 딱 맞춘다 — 겉은 절대 안 구르고(overflow-hidden), 화면이 짧으면
