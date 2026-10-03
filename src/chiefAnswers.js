@@ -115,10 +115,11 @@ export function answerGangSplit(voyage, bayDef, shipName = '') {
 }
 
 // #97 총 무브수 — "총 무브수 몇이야?"
-export function answerTotalMoves(voyage, shipName = '') {
+export function answerTotalMoves(voyage, shipName = '', opts = {}) {
   const dis = _list(voyage?.discharge?.ediContainers);
   const lod = _list(voyage?.loading?.ediContainers);
-  if (!dis.length && !lod.length) return `${shipName || '이 배'} — EDI 가 아직 없어 무브수를 셀 수 없습니다.`;
+  //  4.01: 화면이 숫자를 주는 항차(리스트만 있는 배 등)는 미르도 같은 수로 답한다 — opts.eta 가 있으면 EDI 없음 안내로 막지 않는다(콘앱은 eta 를 안 넘겨 종전 그대로).
+  if (!dis.length && !lod.length && !(opts && opts.eta && opts.eta.units > 0)) return `${shipName || '이 배'} — EDI 가 아직 없어 무브수를 셀 수 없습니다.`;
   const dp = dis.filter((c) => _ptk(c, 'discharge')).length;
   const lp = lod.filter((c) => _ptk(c, 'loading')).length;
   let shifting = 0;
@@ -127,7 +128,19 @@ export function answerTotalMoves(voyage, shipName = '') {
     shifting = Object.keys(shiftingMapForDisplay(voyage.key || 'k', voyage) || {}).length;
   } catch (e) { shifting = -1; }
   const allPtk = dp === dis.length && lp === lod.length;
-  const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}무브 — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dp - lp} 제외)`}.`];
+  //  ★ 4.01 — 무브 ≠ 대수. 트윈으로 드는 쌍은 1무브, 나머지는 한 대당 1무브(화면 «예상 작업 시간» 줄과 같은 수 — mir.movesOfVoyage).
+  //    검수사 2026-10-04 «ATPR 양하가 269인데 무브수가 269무브 맞습니까?» · «트윈 가능 갯수와 싱글갯수가 정확히 파악해야 무브수가 계산 됩니다.»
+  const E = opts && opts.eta;
+  if (E && E.units > 0) {
+    const nm = shipName ? shipName + ' — ' : '';
+    const head = E.exact ? `${E.moves}무브` : `최대 ${E.moves}무브 · 최소 ${E.movesMin}무브`;
+    const L2 = [`${nm}${head} — 대수 ${E.units}대는 트윈 ${E.twinLifts}번(${2 * E.twinLifts}대) + 한 대씩 ${E.singles}번이에요.`];
+    L2.push(`${[E.dis > 0 ? `양하 ${E.dis}대 → ${E.disMoves}무브` : '', E.lod > 0 ? `선적 ${E.lod}대 → ${E.lodMoves}무브` : ''].filter(Boolean).join(' · ')}${E.exact ? '' : '(최대)'}.`);
+    if (!E.exact) L2.push(`자리·무게를 모르는 20피트 ${E.unres20}대는 한 대씩으로 센 값이 최대이고, 트윈이 되면 최소까지 줄어요.`);
+    L2.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting}${shifting > 0 ? '(리스트가 있는 쪽은 위 수에 들어 있어요)' : ''} · 해치커버 별도.`);
+    return L2.join('\n');
+  }
+  const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}대 (무브 아님 — 트윈 계산을 못 해 대수로만 말씀드려요) — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dp - lp} 제외)`}.`];
   L.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting} · 해치커버 별도.`);
   return L.join('\n');
 }
@@ -580,6 +593,7 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
   const now = opts.now ? new Date(opts.now) : new Date();
   const pier = voyage?.info?.pier || '';
   const plan = buildGangPlan(voyage, bayDef);
+  const pace = opts.pace || 25;   // 4.01: 무브/시간·갱 — 호출부(mir.workPaceOf)가 예상 작업 시간 줄과 같은 규칙(싱글 25 · 트윈 30)으로 싣는다. 못 받으면 25
   const L = [];
   // ① 전환 시각 — 주·야 조 경계(2-F′): 주간 종료 17:30 → 야간 19:00 / 야간 종료 06:30 → 주간 08:00
   const mmNow = now.getHours() * 60 + now.getMinutes();
@@ -589,7 +603,7 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
   else { hand.setHours(8, 0, 0, 0); if (mmNow >= 1050) hand.setDate(hand.getDate() + 1); }
   const endLbl = isDayNow ? '주간 종료 17:30 → 야간 시작 19:00' : '야간 종료 06:30 → 주간 시작 08:00';
   L.push(`${shipName} 교대 브리핑 — 전환 ${endLbl}.`);
-  // ② 인수 시점 예상 진행 — 앱 완료 기록이 있으면 그것, 없으면 시작시각+페이스(2갱×25)
+  // ② 인수 시점 예상 진행 — 앱 완료 기록이 있으면 그것, 없으면 시작시각+페이스(2갱×pace)
   const dis = _list(voyage?.discharge?.ediContainers).filter((c) => _ptk(c, 'discharge'));
   const lod = _list(voyage?.loading?.ediContainers).filter((c) => _ptk(c, 'loading'));
   const total = dis.length + lod.length;
@@ -601,7 +615,7 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
     if (doneD + doneL > 0) {
       L.push(`진행 — 앱 검수 기록 양하 ${doneD}/${dis.length} · 선적 ${doneL}/${lod.length}.`);
     } else if (startMs && startMs < hand.getTime()) {
-      // 시작~전환까지 근무 창 안의 분 × 2갱 × 25무브/h
+      // 시작~전환까지 근무 창 안의 분 × 2갱 × pace무브/h
       let mins = 0; let probe = startMs;
       // addWorkMinutes 역산 대신 1분씩 세지 않고 근사: 전환까지 반복 60분 단위 전진
       while (probe < hand.getTime() && mins < 3000) {
@@ -609,8 +623,8 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
         if (nx > hand.getTime()) break;
         mins += 30; probe = nx;
       }
-      const est = Math.min(total, Math.round((mins / 60) * 25 * 2));
-      L.push(`인수 시점 예상 — 전체 ${total}무브 중 약 ${est}무브 진행(2갱·시간당 25무브 기준, 1갱이면 절반). 남을 것 약 ${Math.max(0, total - est)}무브.`);
+      const est = Math.min(total, Math.round((mins / 60) * pace * 2));
+      L.push(`인수 시점 예상 — 전체 ${total}무브 중 약 ${est}무브 진행(2갱·시간당 ${pace}무브 기준, 1갱이면 절반). 남을 것 약 ${Math.max(0, total - est)}무브.`);
     } else {
       L.push(`물량 — 양하 ${dis.length} + 선적 ${lod.length} = ${total}무브(평택분). 작업 전이거나 시작 시각 미상이라 진행 예상은 생략합니다.`);
     }

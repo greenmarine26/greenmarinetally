@@ -27,9 +27,10 @@ import {
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
+  currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
 } from './utils.js';
 import {
-  TWIN_MAX_TOTAL_KG, twinDiffLimit, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
+  TWIN_MAX_TOTAL_KG, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
   generateHowToAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
@@ -662,7 +663,7 @@ const _subs = new Set();
 //    **리스트에 있는 컨(+시프팅 컨)만** 센다 — progressOf 와 같은 분모. 완료 시각(doneAts)도 그 분모 안의 것만 돌려줘 페이스·ETA 가 같은 수로 잰다.
 //    `shiftSet` 은 호출부가 shiftMap 키로 준다(없으면 리스트만).
 export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = null) {
-  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } }, doneAts: [] };
+  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } }, doneAts: [], cns: { discharge: [], loading: [] } };   // 4.01: cns = 센 컨 번호(트윈 쌍 판정용)
   const has = (m, k) => !!(voyage && voyage[m] && voyage[m][k] && Object.keys(voyage[m][k]).length);
   const ss = shiftSet instanceof Set ? shiftSet : new Set(Array.isArray(shiftSet) ? shiftSet : []);
   const listOf = {};
@@ -690,19 +691,122 @@ export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = nul
     const comp = (voyage[md] && voyage[md].completed) || {};
     const base = new Set([...listOf[md]].filter((cn) => !ss.has(cn)));
     const m = out.byMode[md];
-    for (const cn of base) { m.total += 1; out.total += 1; if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
-    for (const cn of ss) { if (base.has(cn)) continue; m.total += 1; out.total += 1; if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
+    for (const cn of base) { m.total += 1; out.total += 1; out.cns[md].push(cn); if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
+    for (const cn of ss) { if (base.has(cn)) continue; m.total += 1; out.total += 1; out.cns[md].push(cn); if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
   }
   for (const c of pool) {
     const md = c._mode === 'loading' ? 'loading' : 'discharge';
     if (voyage && voyage.info && sideCancelled(voyage.info, md)) continue;
     if (listModes.has(md)) continue;   // 3.60-18: 리스트가 있는 모드는 위에서 셌다
     const m = out.byMode[md];
-    m.total += 1; out.total += 1;
+    m.total += 1; out.total += 1; out.cns[md].push(c.cn);
     if (c._comp) { m.done += 1; out.done += 1; pushAt(c._comp); }
   }
   out.doneAts.sort((a, b) => a - b);
   return out;
+}
+
+//  ★ 4.01 (검수사 2026-10-04 «처음 작업 시작시 예상 작업 시간을 알려주세요. 정상적인 작업일때 무브수로 계산해서 1시간당 갱당 30무브로 계산 하시면 됩니다»)
+//    예상 작업 시간 = 항차 총 **무브** ÷ (갱 수 × 갱당 시간당 무브). 시간당 무브 = 싱글이 많으면 25 · 트윈이 어느 정도 있으면 30(gangRateOf).
+//    ⚠ 무브 ≠ 컨테이너 대수. 검수사 2026-10-04 06:40 «ATPR 양하 269인데 무브수가 269무브 맞습니까? 20피트가 150여개인데 트윈 작업이 안되는건가요?» ·
+//      «쉽게 계산 해서는 안됩니다. 트윈 가능 갯수와 싱글 갯수가 정확히 파악해야 무브수가 계산 됩니다.» · «무게도 확인해야 하고요».
+//      그래서 무브 = 대수 − 트윈으로 들 수 있는 쌍 수. 트윈 쌍은 화면·미르가 쓰는 그 판정 한 벌(nlSearch buildTwinPairs·analyzeTwinPairs —
+//      앞뒤 베이 같은 row/tier의 20피트 두 대, 합계 55t 이하, 무게차 부두별 한계 PNCT 14t·PCTC 20t)을 **센 컨에만** 건다.
+//      무게를 모르는 쌍은 트윈으로 치지 않는다(보수적으로 한 대씩) — 그 쌍 수(noWt)를 같이 돌려줘 화면이 밝힌다.
+//    대수는 항차 총 대수(voyageCountsOf 한 벌 — 홈 카드 분모와 같은 수)이고, 갱 수 = 지금 조의 `info.gangsShift` → 항차 기본 `info.gangs`.
+//    둘 다 없으면 2갱으로 센다(지어낸 값이 아니라 «2갱 기준, 1갱이면 ×2» 앱 원칙) — 그 사실(gangsKnown:false)과 1갱 값을 같이 돌려준다.
+//    ⚠ 배정목록 수량(info.planDis/planLod)은 카운트 기준으로 쓰지 않는다(예정치가 섞인다) — 앱 대수가 배정보다 훨씬 적을 때 «자료가 덜 들어옴» 근거로만 돌려준다.
+export const MOVES_PER_GANG_HOUR = 30;      // 트윈이 어느 정도 있는 작업의 갱당 시간당 무브
+export const SINGLE_PER_GANG_HOUR = 25;     // 싱글이 많은 작업의 갱당 시간당 무브
+export const TWIN_SHARE_MIN = 0.15;         // «트윈이 어느 정도 있다»의 선 — 트윈으로 드는 컨이 총 대수의 15% 이상. 검수사 확정 전 임시값(오늘 항차는 8% 이하와 20% 이상으로 갈려 10~20%면 결과가 같다)
+//  검수사 2026-10-04 06:45 «싱글이 많다면 시간당 25개 계산이며 트윈이 어느정도 있다면 30개 계산하면 작업 시간이 나옵니다.»
+export const gangRateOf = (twinUnits, units) => (units > 0 && twinUnits / units >= TWIN_SHARE_MIN ? MOVES_PER_GANG_HOUR : SINGLE_PER_GANG_HOUR);
+//    ⚠ 트윈 쌍을 **확정할 수 있는 자료**가 있는 컨(EDI에 자리 bay·row·tier 와 무게가 있는 컨)만 확정한다. 리스트만 있는 컨은 크기(iso)만 알고 자리가 없고,
+//      선적 EDI 가 예약 칸(isBooking, 컨 번호 없이 자리·크기만)이면 무게가 없다 — 그 20피트는 «한 대씩»으로 센 뒤(최대 무브), 트윈이 되면 줄어드는 한도(최소 무브)를 같이 돌려준다.
+export function twinSplitOf(voyage, cnsByMode) {
+  const info = (voyage && voyage.info) || {};
+  const out = { n20: 0, n40: 0, posPairs: 0, ok: 0, over: 0, diff: 0, noWt: 0, unres20: 0, maybe: 0, byMode: { discharge: 0, loading: 0 } };
+  const is20 = (iso) => /^2/.test(String(iso || ''));
+  for (const m of ['discharge', 'loading']) {
+    const ed = (voyage && voyage[m] && voyage[m].ediContainers) || {};
+    const recs = (voyage && voyage[m] && voyage[m].records) || {};
+    const cns = (cnsByMode && cnsByMode[m]) || [];
+    if (!cns.length) continue;
+    const cs = [];
+    let n20 = 0;
+    for (const cn of cns) {
+      const c = ed[cn];
+      if (c) cs.push({ ...c, cn: c.cn || cn, _mode: m });
+      if (is20((c && c.iso) || (recs[cn] && recs[cn].iso))) n20 += 1;
+    }
+    let pairsMap = {};
+    try { pairsMap = getBayPairs(cs, info.imo || '', info.vsl || '') || {}; } catch (e) { console.warn('[예상 작업 시간] 베이 짝을 못 만들어 트윈 없이 셉니다:', e); }
+    const allPairs = buildTwinPairs(cs, pairsMap);
+    const an = analyzeTwinPairs(allPairs, twinDiffLimit(info.pier));
+    //  판정이 끝난 20피트 = ① 자리·무게가 다 있어 트윈 OK / 55t 초과 / 무게차 초과로 갈린 쌍 ② 자리·무게가 다 있는데 앞뒤에 짝이 없는 20피트(그 자리 그대로 한 대씩).
+    //  무게가 빠진 쌍과, 자리나 무게가 없는 20피트는 아직 모른다.
+    const decided = new Set();
+    for (const r of [...an.ok, ...an.over, ...an.diff]) { decided.add(r.a.cn); decided.add(r.b.cn); }
+    const paired = new Set();
+    for (const [x, y] of allPairs) { paired.add(x.cn); paired.add(y.cn); }
+    for (const c of cs) { if (is20(c.iso) && c.bay && c.row && c.tier && (parseInt(c.wt, 10) || 0) > 0 && !paired.has(c.cn)) decided.add(c.cn); }
+    let decided20 = 0;
+    for (const cn of cns) { const c = ed[cn]; if (decided.has((c && c.cn) || cn) && is20((c && c.iso) || (recs[cn] && recs[cn].iso))) decided20 += 1; }
+    const unres20 = Math.max(0, n20 - decided20);
+    //  못 정한 20피트가 트윈이 될 수 있는 한도 — 선적 예약 칸이 있으면 그 칸의 앞뒤 짝 수, 없으면 20피트 반반.
+    let cap = Math.floor(unres20 / 2);
+    const slots = Object.values(ed).filter((c) => c && c.isBooking && is20(c.iso) && c.bay && c.row && c.tier).map((c) => ({ ...c, _mode: m }));
+    if (slots.length) {
+      let sp = {};
+      try { sp = getBayPairs(slots, info.imo || '', info.vsl || '') || {}; } catch (e) { console.warn('[예상 작업 시간] 예약 칸 짝을 못 만들었습니다:', e); }
+      cap = Math.min(cap, buildTwinPairs(slots, sp).length);
+    }
+    out.n20 += n20; out.n40 += cns.length - n20;
+    out.posPairs += an.ok.length + an.over.length + an.diff.length + an.noWt.length;
+    out.ok += an.ok.length; out.over += an.over.length; out.diff += an.diff.length; out.noWt += an.noWt.length;
+    out.unres20 += unres20; out.maybe += cap;
+    out.byMode[m] = an.ok.length;
+  }
+  return out;
+}
+export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now()) {
+  const vc = voyageCountsOf(voyage, null, shiftSet);
+  if (!(vc.total > 0)) return null;
+  const info = (voyage && voyage.info) || {};
+  const tw = twinSplitOf(voyage, vc.cns);
+  const moves = vc.total - tw.ok;           // 확정된 트윈만 빼고 나머지는 한 대씩 — 최대 무브
+  const movesMin = moves - tw.maybe;        // 못 정한 20피트가 트윈이 되면 — 최소 무브
+  const set = Number((info.gangsShift && info.gangsShift[shiftGangKey(currentShift(now))]) || info.gangs);
+  const gangsKnown = set > 0;
+  const gangs = Math.min(4, Math.max(1, gangsKnown ? set : 2));
+  //  가장 오래 걸리는 쪽 = 확정된 트윈만 인정(movesMax) · 가장 빠른 쪽 = 못 정한 20피트도 트윈이 됐을 때(movesMin). 속도는 각각 그 트윈 비율로 25/30을 고른다.
+  const rate = gangRateOf(2 * tw.ok, vc.total);
+  const rateMin = gangRateOf(2 * (tw.ok + tw.maybe), vc.total);
+  const mins = (mv, g, r) => Math.round((mv / (g * r)) * 60);
+  const planTotal = ['discharge', 'loading'].reduce((t, m) => t + (sideCancelled(info, m) ? 0 : (Number(m === 'discharge' ? info.planDis : info.planLod) || 0)), 0);
+  return { units: vc.total, moves, movesMin, exact: tw.maybe === 0, twinLifts: tw.ok, singles: vc.total - 2 * tw.ok,
+    n20: tw.n20, n40: tw.n40, posPairs: tw.posPairs, twinOver: tw.over, twinDiff: tw.diff, twinNoWt: tw.noWt, unres20: tw.unres20, twinMaybe: tw.maybe,
+    dis: vc.byMode.discharge.total, lod: vc.byMode.loading.total,
+    disMoves: vc.byMode.discharge.total - tw.byMode.discharge, lodMoves: vc.byMode.loading.total - tw.byMode.loading, done: vc.done,
+    gangs, gangsKnown, rate, rateMin, twinShare: vc.total ? (2 * tw.ok) / vc.total : 0, minutes: mins(moves, gangs, rate), minutesMin: mins(movesMin, gangs, rateMin), minutes1: mins(moves, 1, rate), planTotal,
+    planGap: planTotal - vc.total > Math.max(20, vc.total * 0.1) };
+}
+
+//  수석 답변(X-RAY 조별 가능 수·교대 브리핑 인수 시점 예상)이 쓰는 시간당 무브 — 예상 작업 시간 줄과 **같은 규칙**(싱글 위주 25 · 트윈 있으면 30).
+//  검수사 2026-10-04 «확인 받고 싶은것 4가지중 3번만 제외하고 적용» — 2번 «수석 답변의 기본 속도도 맞출까요» 적용분. 못 구하면 싱글 기본 25.
+export function workPaceOf(voyage, voyageKey = '') {
+  try {
+    const E = expectedWorkTimeOf(voyage, shiftCnSetOf(voyageKey || (voyage && voyage.info && voyage.info.vsl) || '', voyage));
+    return E ? E.rate : SINGLE_PER_GANG_HOUR;
+  } catch (e) { console.warn('[예상 작업 시간] 속도를 못 구해 싱글 기본 25로 씁니다:', e); return SINGLE_PER_GANG_HOUR; }
+}
+
+//  미르 «총 무브수» 답이 쓰는 한 벌 — 예상 작업 시간 줄과 **같은 무브**(대수 − 트윈으로 드는 쌍). 못 구하면 null 이라 답이 종전 문장으로 간다.
+//  검수사 2026-10-04 «총 무브수 계산에서 ATPR을 보면 양하가 269인데 무브수가 269무브 맞습니까?» — 미르 답도 대수를 그대로 «무브» 라 불렀다(4.01 정정).
+export function movesOfVoyage(voyage, voyageKey = '') {
+  try {
+    return expectedWorkTimeOf(voyage, shiftCnSetOf(voyageKey || (voyage && voyage.info && voyage.info.vsl) || '', voyage));
+  } catch (e) { console.warn('[예상 작업 시간] 트윈 무브를 못 구해 종전 계산으로 갑니다:', e); return null; }
 }
 
 export function publishMirCtx(ctx) {
@@ -1806,10 +1910,10 @@ export function answerOneRaw(query, ctx) {
         if (isArrivalQ) return answerDataArrival(_voy, ship);
         if (isHatchQ) return answerHatchStatus(_voy, de, ship) || answerVoyageFacts({ factQuery: 'hatch' }, c);
         if (isGangQ) return answerGangSplit(_voy, de, ship);
-        if (isMoveQ) return answerTotalMoves(_voy, ship);
+        if (isMoveQ) return answerTotalMoves(_voy, ship, { eta: app === 'cone' ? null : movesOfVoyage(_voy, c.voyageKey || '') });   // 콘앱은 트윈 짝 사전이 없어 종전 문장 그대로(검수사 결정 대기)
         if (isFirstQ) return answerFirstStart(_voy, de, ship);
-        if (isXrayShiftQ) return answerXrayShifts(_voy, de, { shipName: ship, pier: info.pier });
-        if (isShiftBriefQ) return answerShiftBriefing(_voy, de, { shipName: ship, voyages: c.voyages || null });
+        if (isXrayShiftQ) return answerXrayShifts(_voy, de, { shipName: ship, pier: info.pier, pace: workPaceOf(_voy, c.voyageKey || '') });
+        if (isShiftBriefQ) return answerShiftBriefing(_voy, de, { shipName: ship, voyages: c.voyages || null, pace: workPaceOf(_voy, c.voyageKey || '') });
         //  3.42: «2호기 11:15 시작했어» 는 적는 말이다 — 종전엔 gangQuery(n:null) 가 같이 켜져 «베이사전이 필요해요» 가 답을 가로챘다(판 B 시뮬). 저장은 화면(부수효과)이 한다.
         if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length && app === 'cone') return '시작 시각은 검수앱(작업 시작 탭)에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 감사: 콘앱엔 fbSetVoyageWorkStart 가 없다
         if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length) {

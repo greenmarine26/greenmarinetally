@@ -60,6 +60,7 @@ import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
+import ExpectedTimeLine from '../components/ExpectedTimeLine.jsx';   // 4.01: 작업 시작 화면 맨 위 «예상 작업 시간»
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
@@ -1838,6 +1839,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           ))}
         />
       )}
+      {/* ★ 4.01 — 처음 작업 시작할 때의 예상 작업 시간(무브 ÷ (갱 수 × 시간당 25 또는 30무브)). 완료 10대 전까지만 보인다. */}
+      {!_sideCanc && tab === 'search' && <ExpectedTimeLine voyage={voyage} voyageKey={voyageKey} />}
       {/* ★ 3.48 베이뷰 — «작업 시작» 탭에서 고른다. 베이뷰면 아래 SearchPanel 블록 대신 덮개를 그린다(인스턴스 하나). LOLO 배는 베이 그림이 없어 안 보인다. */}
       {!_sideCanc && tab === 'search' && !isLoloShip && (
         <div className="flex gap-1.5 mb-2" data-workstyle={workStyle}>

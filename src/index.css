@@ -375,7 +375,7 @@ select:-webkit-autofill {
 .status-todo { color: rgb(var(--st-lodHi)); background: rgb(var(--st-lod) / .14); border-color: rgb(var(--st-lod) / .55); }
 
 /* ── 홈 화면 — 선박 카드·작은 단추·얇은 경험치 바(폰 접힘 줄 12px) ── */
-.card-v2.ship-card { border: 2px solid rgb(var(--ink-700)); box-shadow: 0 5px 0 rgb(var(--ink-950)), 0 14px 28px rgb(0 0 0 / .22); }
+.card-v2.ship-card { border: 2px solid rgb(var(--ink-700)); box-shadow: inset 6px 0 0 var(--rail, transparent), 0 5px 0 rgb(var(--ink-950)), 0 14px 28px rgb(0 0 0 / .22); }   /* 4.01: 왼쪽 부두 띠(--rail) */
 @media (hover: hover) { .card-v2.ship-card:hover { border-color: rgb(var(--act) / .55); } }
 .lift3 { box-shadow: 0 3px 0 rgb(0 0 0 / .34); transition: transform .1s ease, box-shadow .1s ease; }
 .lift3:active { transform: translateY(2px); box-shadow: 0 1px 0 rgb(0 0 0 / .34); }
@@ -402,3 +402,40 @@ select:-webkit-autofill {
   .pop-in { animation: none; }
   .hud-tab, .hud-tab .hud-ico, .pop-btn, .seg-btn, .drop-zone, .print-tile, .xp-fill { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★ TallyOne 4.01 — 홈 화면(항차 목록)도 항차 화면과 같은 말투로 (검수사 2026-10-04
+     «바뀐 화면 구성은 선박을 지정해서 들어 가야 보입니다. 그전에는 바뀐건이 하나도 안보입니다»)
+   ⚠ 색은 4.00 과 같은 이름표만 쓴다. 부두 색은 왼쪽 띠·선박 딱지에만 — 양하(파랑)/선적(호박) 막대 색과 겹쳐 읽히지 않게 띠 폭을 좁게 둔다.
+   ══════════════════════════════════════════════════════════════════════════ */
+.home-stage { background: radial-gradient(90% 300px at 50% 0, rgb(var(--act) / .10), transparent 72%) no-repeat; }
+.home-count { padding: 5px 10px; font-size: 14px; }
+.ship-card.pier-pctc { --rail: rgb(59 130 246 / .9); }
+.ship-card.pier-pnct { --rail: rgb(139 92 246 / .9); }
+.card-v2.ship-card.is-today { border-color: rgb(var(--act) / .85); box-shadow: inset 6px 0 0 var(--rail, transparent), 0 5px 0 rgb(var(--act-dn) / .9), 0 0 22px rgb(var(--act) / .26); }
+.ship-ico {   /* 선박 이름 앞 딱지 — 부두 색 */
+  display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 10px; font-size: 17px; line-height: 1;
+  background: linear-gradient(180deg, rgb(var(--ink-700)), rgb(var(--ink-800))); border: 2px solid rgb(var(--ink-700)); box-shadow: 0 2px 0 rgb(var(--ink-950));
+}
+.pier-pctc .ship-ico { background: linear-gradient(180deg, #4f8ff7, #1d4ed8); border-color: #1e3a8a; box-shadow: 0 2px 0 #1e3a8a; }
+.pier-pnct .ship-ico { background: linear-gradient(180deg, #8b5cf6, #5b21b6); border-color: #3b0f7a; box-shadow: 0 2px 0 #3b0f7a; }
+.lbl-dis, .lbl-lod { border-radius: 10px; border: 2px solid; color: #fff; text-shadow: 0 1px 0 rgb(0 0 0 / .3); }   /* 양하/선적 이름표 — seg-btn 과 같은 색 */
+.lbl-dis { background: linear-gradient(180deg, #4f8ff7, #1d4ed8); border-color: #1e3a8a; box-shadow: 0 2px 0 #1e3a8a; }
+.lbl-lod { background: linear-gradient(180deg, #f6ae2d, #c2670a); border-color: #7c3f06; box-shadow: 0 2px 0 #7c3f06; }
+.ship-card .xp-bar.xp-sm { height: 14px; }
+.ship-card .xp-fill { position: relative; }
+.ship-card .xp-fill::after { content: ""; position: absolute; left: 5px; right: 5px; top: 2px; height: 3px; border-radius: 99px; background: rgb(255 255 255 / .28); }   /* 윤기 한 줄 */
+.status-wait { color: rgb(var(--dim-300)); background: rgb(var(--ink-800)); border-color: rgb(var(--ink-700)); }
+.pop-btn.pop-sm { min-height: 38px; padding: 4px 10px; border-radius: 999px; font-size: 13px; box-shadow: 0 3px 0 rgb(0 0 0 / .34); }
+.pop-btn.pop-sm:active { transform: translateY(2px); box-shadow: 0 1px 0 rgb(0 0 0 / .34); }
+.pop-btn.pop-slate.pop-sm { box-shadow: 0 3px 0 rgb(var(--ink-950)); }
+.home-stage .chip-v2 { min-width: 0; overflow: hidden; padding: 0 9px; }
+.chip-v2.is-on.is-blue { background: linear-gradient(180deg, #4f8ff7, #1d4ed8); border-color: #1e3a8a; box-shadow: 0 3px 0 #1e3a8a; }
+.chip-v2.is-on.is-violet { background: linear-gradient(180deg, #8b5cf6, #5b21b6); border-color: #3b0f7a; box-shadow: 0 3px 0 #3b0f7a; }
+.fold-bar { border-radius: 18px; border: 2px solid rgb(var(--ink-700)); background: rgb(var(--ink-900) / .7); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
+.fold-ico { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 10px; font-size: 16px; background: rgb(var(--ink-800)); border: 2px solid rgb(var(--ink-700)); box-shadow: 0 2px 0 rgb(var(--ink-950)); }
+
+/* ── 4.01 예상 작업 시간 줄(작업 시작 화면 맨 위) ── */
+.eta-line { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 18px; border: 2px solid rgb(var(--act) / .55); background: rgb(var(--act) / .08); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
+.eta-ico { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 13px; font-size: 20px; background: rgb(var(--ink-800)); border: 2px solid rgb(var(--act) / .6); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
+.eta-big { font-size: 17px; font-weight: 900; color: rgb(var(--act-soft)); white-space: nowrap; }

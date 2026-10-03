@@ -346,6 +346,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   NODE_PATH="$PWD/node_modules" node tools/smoke_bayfirst.cjs || { echo "✗ 베이 먼저 연막검사 실패 — 배포 금지"; exit 1; }
   # 4.00: 메뉴 구조 — 독(양하·선적/작업 시작/베이/출력/업로드/더보기)·출력 단일 경로(출력 센터)·업로드 올리기 전용·매뉴얼 옛 낱말 잔재(▶ 작업 시작·인쇄 ▾·카고 플랜 V2·헤더 ⋯)를 소스에서 잰다.
   node tools/smoke_menu400.cjs || { echo "✗ 4.00 메뉴 구조 연막검사 실패 — 배포 금지"; exit 1; }
+  # 4.01: 홈 자료 대기 — 자료 없는 배는 목록에서 빼 맨 아래 한 줄에 접고(지우지 않는다), 접어도 언마운트하지 않으며, 펼치면 종전 카드 그대로인지 소스 배선을 잰다.
+  node tools/smoke_home401.cjs || { echo "✗ 4.01 홈 자료 대기 연막검사 실패 — 배포 금지"; exit 1; }
+  # 4.01: 예상 작업 시간 — 실항차 ATPR(양하 EDI 위치·무게 있음)·DJCT(선적 예약 슬롯만 있음) 사본으로 src/mir.js 의 트윈 가능 쌍·한 대씩 수·무브 수·시간당 25/30 속도·갱 수 나눗셈을 실소스 그대로 돌리고, 검수사 규칙(트윈은 55톤 이하·무게차 한도·무브는 대수가 아니다)과 대조한다. 위치·무게를 모르는 20피트는 범위로 나오는지, 화면·미르 답이 같은 속도 규칙을 쓰는지도 소스로 잰다.
+  SMOKE_ET=$(mktemp /dev/shm/hometmp/_smoket_XXXXXX.cjs)
+  if npx esbuild tools/smoke_eta401_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_ET" --loader:.js=jsx --jsx=automatic --log-level=error; then
+    node tools/smoke_eta401.cjs "$SMOKE_ET" "$PWD" || { echo "✗ 4.01 예상 작업 시간 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ET"; exit 1; }
+    rm -f "$SMOKE_ET"
+  else
+    echo "✗ 4.01 예상 작업 시간 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ET"; exit 1
+  fi
   # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
   SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
   SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)
