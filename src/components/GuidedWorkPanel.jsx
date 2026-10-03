@@ -110,6 +110,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const setSelectedTier = workCtx ? workCtx.setTier : _setLocTier;
   // V8.50: 갈림 선택 — 검수사(또는 무언 적응)가 고른 부류 스트림. null = 기본 층 순서.
   const [streamPref, setStreamPref] = useState(null);
+  //  ★ 3.77 — 양하 «베이 먼저»: 트윈이 무게로 싱글이 될 때 한쪽 베이(33 또는 35)를 먼저 몰아 내리는 흐름. null = 짝 번갈아(기본).
+  const [bayFirst, setBayFirst] = useState(null);
+  const singleBaysRef = useRef([]);   // 최근 «짝이 남은 채 혼자 내린» 컨의 베이(최대 2개) — 같은 베이 연속이면 자동으로 베이 먼저
   const [fixOpen, setFixOpen] = useState(false);
   //  ★ 2.80 «자리 확인» 모드 (검수사 확정 2026-08-28) — 엠티 선적에서 계획과 다른 것은 예외가 아니라 정상이다.
   //    실측 STSE 2666W: 선적 456대 중 엠티 367대, 그중 262대(71%)가 계획 자리와 달랐다. 그런데 그것은
@@ -493,9 +496,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       streamPref,                                           // V8.50: 갈림 선택 부류
       frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
       rowFrom,                                              // 3.3: 양하 «해상부터»
+      bayFirst,                                             // 3.77: 양하·선적 «베이 먼저»
       planAll: modeAll,                                     // 3.72-01: 선적 도착항 순위는 완료한 컨을 포함한 전체 계획으로 잰다(진행 중 순위가 안 뒤집히게)
     });
-  }, [remaining, modeAll, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom]);
+  }, [remaining, modeAll, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom, bayFirst]);
 
   const card = queue[0] || null;
 
@@ -532,6 +536,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (!queue.some(cd => cardMatchesPref(cd, streamPref))) setStreamPref(null);
   }, [queue, streamPref]);
 
+  //  ★ 3.77: 고른 베이가 소진되면 자동 해제 — 남은 짝은 다시 트윈으로.
+  useEffect(() => {
+    if (bayFirst == null) return;
+    if (!queue.some(cd => [cd.main, cd.twin].some(x => x && parseInt(x.bay, 10) === bayFirst))) setBayFirst(null);
+  }, [queue, bayFirst]);
+
   // ★ TallyOne 1.57: 흐름 감지 — 실제로 처리한 컨 3대가 연속 같은 부류면 그 흐름으로 바꾼다.
   //   검수사 원문 2026-08-13: "일단 모든 컨테이너를 기본 컨테이너 취급을 하고 같은 순서로 …
   //     그렇게 하다가 혼재 되어 있을때 연속으로 리퍼(또는 20피트) 먼저 양하를 하는것 같으면
@@ -543,8 +553,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //      검수사 원문: "단 연속으로 EDI대로 선적할때는 그게 우선입니다."
   //   ⓒ 리퍼는 풀일 때만 리퍼로 센다 — "리퍼 엠티는 일반 엠티랑 같습니다."
   const recentRef = useRef([]);
-  const noteWorked = (c) => {
+  const noteWorked = (c, alone = false) => {
     if (!c) return;
+    //  ★ 3.77: 짝이 남은 채 혼자 내린 컨(alone)이 같은 베이로 두 번 연속이면 «그 베이 먼저»로 바꾼다(기사가 한쪽 베이를 몰아 내리는 날).
+    {
+      if (alone) {
+        const b = parseInt(c.bay, 10);
+        singleBaysRef.current = [...singleBaysRef.current, b].slice(-2);
+        const sb = singleBaysRef.current;
+        if (sb.length === 2 && sb[0] === sb[1] && bayFirst !== b) { setBayFirst(b); speak(`${b}번 베이 먼저로 바꿉니다`); }
+      } else singleBaysRef.current = [];
+    }
     const k = conClassOf(c);
     const eseq = Number.isFinite(c.eseq) ? c.eseq : null;
     recentRef.current = [...recentRef.current, { fe: k.fe, rf: k.rf, size: k.size, eseq }].slice(-STREAM_STREAK);
@@ -678,7 +697,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     setBusy(true);
     try {
       await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', equip);
-      noteWorked(one);
+      noteWorked(one, true);
       setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns([]);
     } finally { setBusy(false); }
   };
@@ -829,10 +848,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     _prevGroupRef.current = selectedGroup;
     const byPreset = !!workCtx && (workCtx.presetSeq || 0) !== _prevPresetRef.current;
     _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0;
-    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); if (!byPreset) setSelectedTier(null); setStreamPref(null); recentRef.current = [];
+    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); if (!byPreset) setSelectedTier(null); setStreamPref(null); setBayFirst(null); singleBaysRef.current = []; recentRef.current = [];
   }, [selectedGroup]);
   useEffect(() => { _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0; }, [workCtx ? workCtx.presetSeq : 0]);   // 3.48: 단만 바뀐 프리셋도 기준을 맞춰 둔다(다음 «진짜» 그룹 변경이 프리셋으로 오해되지 않게)
-  useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
+  useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);
+  useEffect(() => { setBayFirst(null); singleBaysRef.current = []; }, [selectedTier, mode]);   // 3.77: 단·모드가 바뀌면 «베이 먼저» 도 푼다   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -1257,7 +1277,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       done = await applyFixOne(c, card.main);
     } finally { setBusy(false); }
     if (!done) return;   // 1.54: 자리를 못 넣었으면(시퀀스 되묻기 취소 포함) 수정으로 세지 않는다
-    noteWorked(c);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
+    //  3.77: 짝 자리의 컨이 짝을 남기고 혼자 나갔으면 «싱글»로 센다(카드 밖 다른 컨 선택도 같은 판정)
+    //  (카드 안 두 컨 중 하나를 골랐거나, 고른 컨에게 짝 자리 컨이 남아 있을 때만 — 짝이 없는 40ft·다른 베이 선택은 세지 않는다)
+    const _alone = (!!card.twin && (c.cn === card.main.cn || c.cn === card.twin.cn))
+      || !!findTwinCandidate(c, remaining.filter(x => x.cn !== c.cn), new Set(), shipImo, shipName);
+    noteWorked(c, _alone);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
     afterFix();
   };
 
@@ -1644,6 +1668,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
       )}
 
+      {/* ★ 3.77 — 양하 «베이 먼저»: 무게로 싱글이 된 트윈을 한쪽 베이부터 몰아 내리는 중. 누르면 트윈으로 복귀. */}
+      {card && bayFirst != null && (
+        <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-sky-700 rounded-pill px-2 py-1.5">
+          <span className="text-2xs font-bold text-sky-300">{bayFirst}번 베이 먼저 중 — 남은 쌍은 한 대씩</span>
+          <button onClick={() => { setBayFirst(null); singleBaysRef.current = []; }}
+            className="px-2 py-1 rounded text-xxs font-bold border bg-ink-800 border-amber-700 text-amber-300 hover:bg-ink-750">
+            트윈으로 복귀
+          </button>
+        </div>
+      )}
+
       {/* V8.50: 갈림 — 지금 내릴 수 있는 컨에 부류 혼재 시 선택 버튼 (기사 흐름 따라가기) */}
       {card && (forkChips || streamPref) && (
         <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-line rounded-pill px-2 py-1.5">
@@ -1811,6 +1846,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   <span>이것부터</span>
                 </button>
               ))}
+              {(
+                <div className="grid grid-cols-2 gap-2">
+                  {[card.main, card.twin].map((c) => (
+                    <button key={c.cn} onClick={() => { setBayFirst(parseInt(c.bay, 10)); setSingleMode(false); }} disabled={busy}
+                      className="py-2 rounded-pill text-xxs font-bold bg-sky-800 hover:bg-sky-700 disabled:opacity-50 text-white">
+                      {parseInt(c.bay, 10)}번 베이 먼저 (남은 쌍 모두 한 대씩)
+                    </button>
+                  ))}
+                </div>
+              )}
               <button onClick={() => setSingleMode(false)} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">트윈으로 돌아가기</button>
             </div>
           ) : (

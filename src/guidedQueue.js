@@ -78,7 +78,7 @@ function _frontFirst(cards, frontCns) {
   return hit.length ? [...hit, ...rest] : cards;
 }
 
-export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null, planAll = null }) {
+export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null, planAll = null, bayFirst = null }) {
   const landToSea = mode === 'discharge' && rowFrom !== 'sea';   // 3.3: 양하 «해상부터»면 해상→육상
   const topFirst = mode === 'discharge';
 
@@ -174,6 +174,8 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     let twin = null;
     if (findTwin && is20ft(c)) {
       twin = findTwin(c, containers, used);
+      //  ★ 3.77 — 양하·선적 «베이 먼저»: 고른 베이가 낀 트윈 짝은 짝짓지 않고 한 대씩 카드로 낸다(아래 pullBayForward 가 그 베이를 먼저 세운다).
+      if (twin && bayFirst != null && (parseInt(c.bay, 10) === bayFirst || parseInt(twin.bay, 10) === bayFirst)) twin = null;
       if (twin) used.add(twin.cn);
     }
     const card = { kind: 'work', main: c, twin, pos: `${c.bay}-${c.row}-${c.tier}`, single: false, fr: false };
@@ -252,8 +254,12 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     //     게다가 꺼져도 화면에 아무 표시가 없어 검수사가 현장에서 순서를 볼 때까지 아무도 몰랐다.
     const base = [...pureFrs, ...reorder40FirstForDischarge(flow), ...pureSingles];
     // V8.50 ③: 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
-    if (streamPref) return _frontFirst([...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)], frontCns);
-    return _frontFirst(base, frontCns);
+    //  ★ 3.77 (검수사 2026-10-03 DPRT 2611N 3호기 — «무게가 초과되는 게 많을 때는 33번 베이 먼저 또는 35번 베이 먼저»):
+    //    실측 — 33/35 베이 24대 중 55t 초과는 4쌍뿐이었는데 기사는 35번 11대를 먼저 싱글로 내린 뒤 33번을 내렸다.
+    //    종전 큐는 싱글 한 대를 내릴 때마다 짝(33)을 다음 카드로 내보내 35번 구간에서 가이드가 계속 다른 베이를 가리켰다. 고른 베이를 물리 종속을 지키며 먼저 세운다.
+    let ordered = streamPref ? [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)] : base;
+    if (bayFirst != null) ordered = [...pureFrs, ...pullBayForward(ordered.slice(pureFrs.length), bayFirst)];
+    return _frontFirst(ordered, frontCns);
   }
   // ── 선적 (1.57 개편). 단 사이 순서는 종전대로 홀드 먼저 → 데크. ──
   //   폐기: "단 내부 = 20싱글 → 트윈 → 40ft" 고정.
@@ -275,7 +281,10 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   if (streamPref) body = pullStreamForward(body, streamPref, 'below');
   // pureSingles(홀드 짝없는 20ft) → 홀드 → 데크 → FR·OT(마지막)
   //   3.72-01: 싱글·FR/OT 무리도 POD 묶음이 같은 열 종속을 깨지 않게 같은 보정을 건다(실데이터 250항목 중 싱글 3무리에서 위 싱글이 아래 싱글보다 먼저 나왔다).
-  return _frontFirst([...enforceBelowFirst(pureSingles), ...body, ...enforceBelowFirst(pureFrs)], frontCns);
+  //  ★ 3.77 — 선적 «베이 먼저» (검수사 2026-10-03 «선적도 같은 기능이 있어야 합니다»): 고른 베이를 아래 단이 안 실린 칸은 못 당기는 종속을 지키며 앞으로.
+  let front = [...enforceBelowFirst(pureSingles), ...body];
+  if (bayFirst != null) front = pullBayForward(front, bayFirst, 'below');
+  return _frontFirst([...front, ...enforceBelowFirst(pureFrs)], frontCns);
 }
 
 // 카드의 대표 규격이 40ft인지 (트윈 카드는 20ft 짝이므로 20ft 취급)
@@ -428,6 +437,22 @@ function pullStreamForward(cards, pref, dir = 'above') {
   const out = [];
   for (;;) {
     const idx = rest.findIndex(card => cardMatchesPref(card, pref) && !blocked(card, rest));
+    if (idx === -1) break;
+    out.push(...rest.splice(idx, 1));
+  }
+  return [...out, ...rest];
+}
+
+// ★ 3.77 — 고른 베이의 카드를 앞으로 당긴다. 양하는 위에 안 내린 카드가 있으면(blockedByAbove)·선적은 아래가 안 실렸으면(blockedByBelow) 못 당기고, 지금 작업하는 단(데크/홀드)과 같은 단만 당긴다
+//   — 단 순서를 뒤집지 않는다. 못 당긴 카드는 기본 순서에 남는다.
+function pullBayForward(cards, bay, dir = 'above') {
+  const blocked = dir === 'below' ? blockedByBelow : blockedByAbove;
+  const rest = [...cards];
+  const out = [];
+  while (rest.length) {
+    const deckNow = isDeckTier(rest[0].main.tier);
+    const idx = rest.findIndex(card => cardPositions(card).some(p => parseInt(p.bay, 10) === bay)
+      && isDeckTier(card.main.tier) === deckNow && !blocked(card, rest));
     if (idx === -1) break;
     out.push(...rest.splice(idx, 1));
   }
