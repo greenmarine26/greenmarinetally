@@ -117,7 +117,7 @@ export default function ShipIntroCard({ info, inspector, portMisData = {},
       const res = await generator({ name: shipName, callsign: info?.callsign || '', imo: info?.imo || '',
         carrier: info?.carrier || '', code: String(info?.vsl || '').trim() });
       // eslint-disable-next-line no-unused-expressions
-      if (!res.ok) { setErr(`생성 실패: ${res.error} — 헤더 ⋯ 메뉴에서 AI 검색 키를 확인하세요.`); return; }
+      if (!res.ok) { setErr(`생성 실패: ${res.error} — 헤더 ⋮ 메뉴에서 AI 검색 키를 확인하세요.`); return; }
       const rec = { text: res.text, sources: res.sources || [], by: inspector || '', at: Date.now() };
       setIntro(rec);
       window.__shipIntroCache = { ...(window.__shipIntroCache || {}), [shipId]: res.text };
@@ -132,7 +132,7 @@ export default function ShipIntroCard({ info, inspector, portMisData = {},
   if (!shipId || !shipName) return null;
 
   return (
-    <div className="bg-ink-900 border border-line rounded-pill overflow-hidden mb-3">
+    <div className="bg-ink-900 border border-line rounded-pill overflow-hidden mt-3 mb-3">
       <button onClick={() => setOpen(v => !v)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left" style={{ minHeight: 44 }}>
         <Ship className="w-4 h-4 text-sky-300 shrink-0"/>

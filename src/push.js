@@ -15,7 +15,7 @@
 //
 // ⚠ 수집기는 **data-only** 로 보내야 한다. `notification` 블록을 넣으면 브라우저가 자동으로도 띄워
 //   알림이 두 번 뜬다(자동 1 + 우리 push 핸들러 1).
-import { getMessaging, getToken, deleteToken, onMessage, isSupported } from 'firebase/messaging';
+import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
 import { app, fbSavePushToken, fbDeletePushToken } from './firebase.js';
 
 // Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서 (공개 키라 번들에 박혀도 안전)
@@ -76,12 +76,3 @@ export async function disablePush(inspector) {
   return { ok: true };
 }
 
-/** 앱이 열려 있을 때 온 메시지 — 조용히 삼키지 않고 콘솔에 남긴다(화면 표시는 호출부가 정한다) */
-export function onPushForeground(cb) {
-  pushSupported().then((ok) => {
-    if (!ok) return;
-    try { onMessage(getMessaging(app), (payload) => { console.info('[push] 수신(앱 열림)', payload); cb && cb(payload); }); }
-    catch (e) { console.warn('[push] 포그라운드 수신 설정 실패', e); }
-  });
-  return () => {};
-}

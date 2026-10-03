@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isTermApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, sideCancelled, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { isTermApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -107,8 +107,6 @@ const _ATE_YOU = new RegExp('(미르|넌|너는?|당신)\\s*[^ ]{0,6}\\s*(' + PA
 //    표지만 넓히고 이 배제를 안 넓혔더니 «미르 욕 먹고 왔어» 에 츄르 이야기를 했다(3.61-04 감사가 308꼴로 잡았다).
 const _OTHER_EAT = new RegExp('(욕|겁|마음|나이|한\\s*방|약|엿|퇴짜|골탕|미역국|더위|나잇살)\\s*(을|를)?\\s*(' + PAST_EAT_SRC + ')');
 const _ATE_BARE = new RegExp('^(뭐|뭘|무얼|뭐를|무엇을?)?\\s*(' + PAST_EAT_SRC + ')(어|어요|니|나|냐|지|나요|는지)?\\s*[?？]*$');
-/** 지난 일 표지가 있는가(앞일이 섞여 있어도 참). */
-export function isPastEatWord(text) { return _PAST_EAT.test(String(text || '')); }
 /** **지난 일만** 묻는 말인가 — 앞일 표지가 섞이면 거짓. 맛집을 끄는 문지기는 이것을 쓴다. */
 export function isPastEatOnly(text) { const t = String(text || ''); return _PAST_EAT.test(t) && !_FUT_EAT.test(t); }
 /** 끼니가 아닌 «먹었» 인가 — «욕 먹었어»·«나이 먹고 왔어». 끼니 그물의 배제 게이트가 부른다. */
@@ -1089,7 +1087,6 @@ function _htManualIndex() {
   _htManual = out;
   return out;
 }
-const _ROLE_KR = { t: '', c: '수석 검수사 화면', a: '보조기능', o: '소유자 전용', m: '관리자 전용' };
 
 //  2.30: 매뉴얼 한 장을 **가르치는 말투로** 편다.
 //    답은 whitespace-pre-wrap 로 그대로 찍히므로 «**» 는 걷어낸다(안 그러면 별표가 그대로 읽힌다).
@@ -1134,7 +1131,7 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
   // "사용법 알려줘"처럼 대상 낱말이 없는 물음 — 매뉴얼 자체로 안내한다.
   if (!T.length) {
     return ['📍 사용 매뉴얼',
-      '   헤더 ⋯ 메뉴 → [사용 매뉴얼] · 보조기능 → [사용 매뉴얼]',
+      '   헤더 ⋮ 메뉴 → [사용 매뉴얼] · 보조기능 → [사용 매뉴얼]',
       '',
       '하루 작업 순서 10단계와 기능 사전, 검수 용어·회화가 들어 있습니다.',
       '',

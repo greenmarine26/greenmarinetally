@@ -324,13 +324,3 @@ function v5MaT_used(v5) {
   return v5.matrixBays.length > 0;
 }
 
-/**
- * 보정 결과를 사람 읽기 좋은 형태로 (디버그용)
- */
-export function describeEnrichment(enriched) {
-  if (!enriched?._enrichMeta) return '보정 없음 (이미 완전)';
-  const m = enriched._enrichMeta;
-  const sources = Object.entries(m.sourceCounts)
-    .map(([k, n]) => `${k}×${n}`).join(', ');
-  return `필드 ${m.totalFieldsEnriched}개 자동 보정 (${sources})`;
-}

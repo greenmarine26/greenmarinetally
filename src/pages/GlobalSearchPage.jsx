@@ -2,9 +2,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
-import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer } from '../utils.js';   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, crewSetText } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
+import { fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer } from '../utils.js';   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { mirTone, mirSmallTalk, YARD_SPEAK } from '../mir.js';

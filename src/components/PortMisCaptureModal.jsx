@@ -3,11 +3,11 @@
 // M5.82 hotfix: [평택 전체 교체] 옵션 추가 — 옛 데이터 자동 삭제
 // M5.84: 현재 Firebase에 저장된 PORT-MIS 데이터 직접 보기 + 일괄 정리 + 개별 삭제
 import React, { useState, useEffect } from 'react';
-import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Trash2, Eye, Database } from 'lucide-react';
+import { X, Camera, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { ocrPortMisCapture } from '../mixerUpload.js';
 import { fbSavePortMisBatch, fbReplacePortMisBatch, fbSubscribePortMis, db } from '../firebase.js';
 import { ref, remove } from 'firebase/database';
-import { parsePortMisExcel, getPierFromBerth, formatBerth } from '../utils.js';
+import { parsePortMisExcel, formatBerth } from '../utils.js';
 import { resolveAiKey } from '../gemini.js';   // 3.43: 공용 키(검수사 부담) → 개인 키
 
 export default function PortMisCaptureModal({ onClose }) {

@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
+import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 //  ★ 3.53 — **POD 확정을 반영한다**(utils 한 벌 `isPtkResolved`). 2차 시뮬 지적 2026-09-16 —

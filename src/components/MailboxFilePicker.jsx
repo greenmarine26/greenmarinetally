@@ -108,7 +108,7 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
   // ── 연결 전 ────────────────────────────────────────────────────────────
   if (!root) {
     return (
-      <div className="bg-ink-900 border border-amber-800/50 rounded-pill p-3">
+      <div className="quest-card is-todo">
         <div className="text-sm font-bold mb-1 flex items-center gap-2 text-amber-200">
           <FolderOpen className="w-4 h-4" /> 메일함 폴더 연결
         </div>
@@ -119,7 +119,7 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
           <br />선박 폴더({vessel})나 항차 폴더({voy})를 골라도 동작하지만, 그러면 그 폴더 안에서만 찾습니다.
         </div>
         <button onClick={connect}
-          className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-3 py-2 rounded text-xs font-bold flex items-center gap-1.5">
+          className="pop-btn pop-amber" style={{ minHeight: 44, fontSize: 13 }}>
           <Link2 className="w-3.5 h-3.5" /> 메일함 폴더 연결
         </button>
         {err && <div className="text-xxs text-red-400 mt-2">{err}</div>}
@@ -130,14 +130,14 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
   // ── 권한이 잠깐 풀린 상태 ─────────────────────────────────────────────
   if (perm !== 'granted') {
     return (
-      <div className="bg-ink-900 border border-amber-800/50 rounded-pill p-3">
+      <div className="quest-card is-todo">
         <div className="text-sm font-bold mb-1 flex items-center gap-2 text-amber-200">
           <FolderOpen className="w-4 h-4" /> 메일함 폴더 — 접근 확인 필요
         </div>
         <div className="text-xxs text-dim-300 mb-2">브라우저를 다시 연 뒤에는 한 번 눌러 되살립니다.</div>
         <div className="flex gap-2">
           <button onClick={revive}
-            className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-3 py-2 rounded text-xs font-bold">
+            className="pop-btn pop-amber" style={{ minHeight: 44, fontSize: 13 }}>
             폴더 접근 허용
           </button>
           <button onClick={connect}
@@ -153,7 +153,7 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
   // ── 연결됨 ────────────────────────────────────────────────────────────
   const files = (res && res.files) || [];
   return (
-    <div className="bg-ink-900 border border-line rounded-pill p-3">
+    <div className="quest-card">
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <button onClick={() => setOpen(!open)} className="text-sm font-bold flex items-center gap-2 text-amber-200">
           <FolderOpen className="w-4 h-4" />

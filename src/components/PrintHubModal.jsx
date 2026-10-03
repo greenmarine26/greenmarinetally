@@ -3,7 +3,7 @@
 //   - 평택분만 (양하 mode = 평택 양하 대상, 선적 mode = 평택 선적 대상)
 //   - 컨테이너는 이미 mode별로 분리되어 voyage.discharge / voyage.loading에 있음
 import React, { useState, useMemo } from 'react';
-import { X, FileText, Grid3x3, Ship, ArrowDown, ArrowUp, Printer } from 'lucide-react';
+import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
@@ -12,13 +12,13 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
-export default function PrintHubModal({ voyage, voyageKey, onClose }) {
+export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge' }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
   const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
   const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
   const [voucherBerth, setVoucherBerth] = useState(voyage?.info?.berth || voyage?.discharge?.info?.berth || '');
 
-  const [mode, setMode] = useState('discharge');  // 'discharge' | 'loading'
+  const [mode, setMode] = useState(initialMode === 'loading' ? 'loading' : 'discharge');  // 'discharge' | 'loading'
   const [printSub, setPrintSub] = useState(null);  // 'cargo' | 'detail' | null
 
   // M5.30-fix: 카고플랜/베이상세는 전체 컨테이너 (평택+통과), 검수리스트는 평택만
@@ -282,7 +282,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   }
   if (printSub === 'cargo-v2') {
     return (
-      <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintSub(null)}>
+      <ErrorBoundary name="카고플랜" onClose={() => setPrintSub(null)}>
         <PrintableCargoPlanV2
           containers={printContainers}
           legendContainers={ptkAll}
@@ -319,51 +319,122 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     );
   }
 
+  //  ★ 4.00 — 출력 센터. 독의 「🖨️ 출력」 단추와 베이 탭 도구줄의 「출력」 단추가 **이 한 곳**을 연다.
+  //    화면 모양만 게임 메뉴처럼 바꿨다 — 단추·글자·동작(검수 리스트·카고플랜·베이 상세·VGM·작업 보고)은 그대로다.
+  //    자주 뽑는 종이(검수 리스트·카고플랜·베이 상세)를 위에 두고, 손으로 적어 내는 작업 보고서는 아래로 내렸다.
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-      <div className="bg-ink-900 w-full sm:max-w-lg sm:rounded-btn rounded-t-2xl max-h-[95vh] overflow-y-auto flex flex-col">
-        {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b border-line sticky top-0 bg-ink-900 z-10">
-          <h2 className="text-lg font-bold text-dim-100 flex items-center gap-2">
-            <Printer className="w-5 h-5 text-amber-300" />
-            검수 자료 출력
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* 양하/선적 탭 */}
-        <div className="flex border-b border-line sticky top-[65px] bg-ink-900 z-10">
-          <button
-            onClick={() => setMode('discharge')}
-            className={`flex-1 py-3 font-bold flex items-center justify-center gap-2 ${
-              mode === 'discharge'
-                ? 'bg-blue-900/40 text-blue-200 border-b-2 border-blue-400'
-                : 'text-dim-300 hover:bg-ink-750'
-            }`}
-          >
-            <ArrowDown className="w-4 h-4" />
-            양하 ({dischargeCount})
-          </button>
-          <button
-            onClick={() => setMode('loading')}
-            className={`flex-1 py-3 font-bold flex items-center justify-center gap-2 ${
-              mode === 'loading'
-                ? 'bg-amber-900/40 text-amber-200 border-b-2 border-amber-400'
-                : 'text-dim-300 hover:bg-ink-750'
-            }`}
-          >
-            <ArrowUp className="w-4 h-4" />
-            선적 ({loadingCount})
-          </button>
+      <div className="bg-ink-900 w-full sm:max-w-lg sm:rounded-sheet rounded-t-sheet max-h-[95vh] overflow-y-auto flex flex-col pop-in border-2 border-ink-700">
+        {/* 헤더 + 양하/선적 전환 — 같이 붙어 내려오지 않게 한 덩어리로 고정 */}
+        <div className="sticky top-0 z-10 bg-ink-900 rounded-t-sheet"
+          style={{ backgroundImage: 'radial-gradient(110% 130% at 0% 0%, rgb(var(--st-lod) / .24), transparent 70%)' }}>
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <h2 className="text-lg font-black text-dim-100 flex items-center gap-3 min-w-0">
+              <span className="print-ico" style={{ width: 44, height: 44, fontSize: 24, background: 'linear-gradient(180deg, #f59e0b, #b45309)' }}>🖨️</span>
+              <span className="min-w-0">
+                <span className="block leading-tight">검수 자료 출력</span>
+                <span className="block text-xs2 font-bold text-dim-300 leading-tight mt-0.5">양하·선적 × 검수 리스트 · 카고플랜 · 베이 상세 · VGM · 작업 보고서</span>
+              </span>
+            </h2>
+            <button onClick={onClose} className="p-2 rounded-pill border-2 border-ink-700 bg-ink-850 hover:bg-ink-750 shrink-0" aria-label="닫기">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="px-4 pb-3">
+            <div className="seg">
+              <button
+                onClick={() => setMode('discharge')} aria-pressed={mode === 'discharge'}
+                className={`seg-btn ${mode === 'discharge' ? 'on-dis' : ''}`}
+              >
+                <ArrowDown className="w-4 h-4" />
+                양하 ({dischargeCount})
+              </button>
+              <button
+                onClick={() => setMode('loading')} aria-pressed={mode === 'loading'}
+                className={`seg-btn ${mode === 'loading' ? 'on-lod' : ''}`}
+              >
+                <ArrowUp className="w-4 h-4" />
+                선적 ({loadingCount})
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* 항목 리스트 */}
         <div className="p-4 space-y-3">
-          {/* FINAL WORKING REPORT (VOUCHER) — 입력 폼 + 두 버튼 */}
-          <div className="bg-ink-800/50 border-2 border-amber-600/30 rounded-pill p-3 space-y-2">
-            <div className="text-sm font-bold text-amber-200 mb-2">📄 FINAL WORKING REPORT 출력</div>
+          {count === 0 ? (
+            <div className="text-center py-8 text-dim-300">
+              <p className="text-3xl mb-2">📭</p>
+              <p>이 모드에 컨테이너 자료가 없습니다</p>
+              <p className="text-xs mt-1">[업로드] 탭에서 EDI/리스트를 올린 뒤 사용합니다</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-dim-300">
+                {modeKo} <strong className="text-dim-100">{count}대</strong> · 평택항 {modeKo} 대상만 포함
+              </p>
+
+              {/* 1. 검수 리스트 */}
+              <button onClick={handlePrintInspection} className="print-tile">
+                <span className="print-ico" style={{ background: 'linear-gradient(180deg, #14b37d, #047857)' }}>📋</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-dim-100">검수 리스트</div>
+                  <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                    A4 세로 세 단 · 인쇄 창 위 단추로 장 나누기(이어서·20/40·풀/엠티·포트별) · 시트1(전체) + 시트2(특수화물 별첨)
+                  </div>
+                </div>
+                <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+              </button>
+
+              {/* 2. 카고플랜 (M6.93.11: V1 폐기, V2만 사용 - 사용자 결정 · 4.00: 화면 이름에서 «V2» 를 뗐다 — 개발 용어) */}
+              <button onClick={() => setPrintSub('cargo-v2')} className="print-tile">
+                <span className="print-ico" style={{ background: 'linear-gradient(180deg, #4f8ff7, #1d4ed8)' }}>📐</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-dim-100">카고플랜</div>
+                  <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                    표준 도면 양식 그대로 · 베이별 단면 · 별첨(선사별·특수화물)
+                  </div>
+                </div>
+                <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+              </button>
+
+              {/* 3. 베이 상세 */}
+              <button onClick={() => setPrintSub('detail')} className="print-tile">
+                <span className="print-ico" style={{ background: 'linear-gradient(180deg, #8b5cf6, #5b21b6)' }}>🚢</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-dim-100">베이 상세</div>
+                  <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                    베이별 슬롯 단위 컨테이너 위치 · 검수 현장용
+                  </div>
+                </div>
+                <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+              </button>
+
+              {/* 2.07: VGM 리스트 — 선적분만 의미 있음(본선 «VGM list for {voy} KRPTK» 요청 대응) */}
+              {mode === 'loading' && (
+                <button
+                  onClick={() => {
+                    if (!ptkContainers.length) { alert('선적 컨테이너가 없습니다'); return; }
+                    openVgmListPrint(ptkContainers, voyageInfo);
+                  }}
+                  className="print-tile"
+                >
+                  <span className="print-ico" style={{ background: 'linear-gradient(180deg, #f59e0b, #b45309)' }}>⚖️</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-black text-dim-100">VGM 리스트</div>
+                    <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                      평택 선적분 컨별 VGM(kg) · 본선 요청 시 제출용 (영문)
+                    </div>
+                  </div>
+                  <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+                </button>
+              )}
+            </>
+          )}
+
+          {/* FINAL WORKING REPORT (VOUCHER) — 입력 폼 + 두 버튼. 손으로 적어 배에 내는 서류라 아래로 내렸다. */}
+          <div className="quest-card space-y-2" style={{ borderColor: 'rgb(var(--st-lod) / .55)' }}>
+            <div className="text-sm2 font-black text-amber-200 mb-1">📄 FINAL WORKING REPORT 출력</div>
             {/* 항차 + BERTH 입력 */}
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -373,7 +444,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                   value={voucherDischVoy}
                   onChange={(e) => setVoucherDischVoy(e.target.value)}
                   placeholder="예: 0145N"
-                  className="w-full bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"
+                  className="w-full bg-ink-850 border-2 border-line-strong rounded-pill px-3 py-2 text-sm text-dim-100"
                 />
               </div>
               <div>
@@ -383,7 +454,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                   value={voucherLoadVoy}
                   onChange={(e) => setVoucherLoadVoy(e.target.value)}
                   placeholder="예: 0146S"
-                  className="w-full bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"
+                  className="w-full bg-ink-850 border-2 border-line-strong rounded-pill px-3 py-2 text-sm text-dim-100"
                 />
               </div>
             </div>
@@ -394,114 +465,36 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 value={voucherBerth}
                 onChange={(e) => setVoucherBerth(e.target.value)}
                 placeholder="예: 6"
-                className="w-full bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"
+                className="w-full bg-ink-850 border-2 border-line-strong rounded-pill px-3 py-2 text-sm text-dim-100"
               />
             </div>
             {/* 출력 버튼 두 개 */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-3 pt-1">
               <button
                 onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'settlement', {
                   dischVoy: voucherDischVoy, loadVoy: voucherLoadVoy, berth: voucherBerth
                 })}
-                className="bg-amber-900/40 hover:bg-amber-900/60 border border-amber-600/50 rounded p-2 text-center"
+                className="pop-btn pop-amber" style={{ flexDirection: 'column', gap: 0, minHeight: 56 }}
               >
-                <div className="font-bold text-amber-100 text-xs">📄 결제용</div>
-                <div className="text-2xs text-amber-200/70">완료 가정</div>
+                <span className="text-sm2">📄 결제용</span>
+                <span className="text-2xs font-bold opacity-85">완료 가정</span>
               </button>
               <button
                 onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'actual', {
                   dischVoy: voucherDischVoy, loadVoy: voucherLoadVoy, berth: voucherBerth
                 })}
-                className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-600/50 rounded p-2 text-center"
+                className="pop-btn pop-blue" style={{ flexDirection: 'column', gap: 0, minHeight: 56 }}
               >
-                <div className="font-bold text-blue-100 text-xs">📄 작업용</div>
-                <div className="text-2xs text-blue-200/70">진행 현황</div>
+                <span className="text-sm2">📄 작업용</span>
+                <span className="text-2xs font-bold opacity-85">진행 현황</span>
               </button>
             </div>
           </div>
-
-          {count === 0 ? (
-            <div className="text-center py-8 text-dim-300">
-              <p>이 모드에 컨테이너 자료가 없습니다</p>
-              <p className="text-xs mt-1">자료 탭에서 EDI/리스트 업로드 후 사용</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-dim-300">
-                {modeKo} <strong className="text-dim-100">{count}대</strong> · 평택항 {modeKo} 대상만 포함
-              </p>
-
-              {/* 1. 검수 리스트 */}
-              <button
-                onClick={handlePrintInspection}
-                className="w-full bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-pill p-4 text-left flex items-center gap-3"
-              >
-                <FileText className="w-8 h-8 text-emerald-400 shrink-0" />
-                <div className="flex-1">
-                  <div className="font-bold text-dim-100">📋 검수 리스트</div>
-                  <div className="text-xs text-dim-300 mt-0.5">
-                    A4 세로 세 단 · 인쇄 창 위 단추로 장 나누기(이어서·20/40·풀/엠티·포트별) · 시트1(전체) + 시트2(특수화물 별첨)
-                  </div>
-                </div>
-                <Printer className="w-4 h-4 text-dim-400" />
-              </button>
-
-              {/* 2. 카고플랜 V2 (M6.93.11: V1 폐기, V2만 사용 - 사용자 결정) */}
-              <button
-                onClick={() => setPrintSub('cargo-v2')}
-                className="w-full bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 rounded-pill p-4 text-left flex items-center gap-3"
-              >
-                <Grid3x3 className="w-8 h-8 text-emerald-300 shrink-0" />
-                <div className="flex-1">
-                  <div className="font-bold text-emerald-100">📐 카고플랜 V2</div>
-                  <div className="text-xs text-emerald-200 mt-0.5">
-                    매트릭스 빌더 저장 데이터 우선 · 베이별 cells hull 단면
-                  </div>
-                </div>
-                <Printer className="w-4 h-4 text-emerald-400" />
-              </button>
-
-              {/* 2.07: VGM 리스트 — 선적분만 의미 있음(본선 «VGM list for {voy} KRPTK» 요청 대응) */}
-              {mode === 'loading' && (
-                <button
-                  onClick={() => {
-                    if (!ptkContainers.length) { alert('선적 컨테이너가 없습니다'); return; }
-                    openVgmListPrint(ptkContainers, voyageInfo);
-                  }}
-                  className="w-full bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-pill p-4 text-left flex items-center gap-3"
-                >
-                  <FileText className="w-8 h-8 text-amber-400 shrink-0" />
-                  <div className="flex-1">
-                    <div className="font-bold text-dim-100">⚖ VGM 리스트</div>
-                    <div className="text-xs text-dim-300 mt-0.5">
-                      평택 선적분 컨별 VGM(kg) · 본선 요청 시 제출용 (영문)
-                    </div>
-                  </div>
-                  <Printer className="w-4 h-4 text-dim-400" />
-                </button>
-              )}
-
-              {/* 3. 베이 상세 */}
-              <button
-                onClick={() => setPrintSub('detail')}
-                className="w-full bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-pill p-4 text-left flex items-center gap-3"
-              >
-                <Ship className="w-8 h-8 text-purple-400 shrink-0" />
-                <div className="flex-1">
-                  <div className="font-bold text-dim-100">🚢 베이 상세</div>
-                  <div className="text-xs text-dim-300 mt-0.5">
-                    베이별 슬롯 단위 컨테이너 위치 · 검수 현장용
-                  </div>
-                </div>
-                <Printer className="w-4 h-4 text-dim-400" />
-              </button>
-            </>
-          )}
         </div>
 
         {/* 하단 안내 */}
-        <div className="p-4 border-t border-line text-xs text-dim-400 leading-relaxed">
-          출력 클릭 → 새 창 미리보기 → Ctrl+P (인쇄 또는 PDF 저장)<br />
+        <div className="p-4 border-t-2 border-ink-700 text-xs text-dim-400 leading-relaxed">
+          출력을 누르면 미리보기가 뜹니다 — 검수 리스트·VGM·작업 보고서는 새 창, 카고플랜·베이 상세는 이 화면 위. 미리보기에서 인쇄하거나 PDF로 저장하세요(단추가 없는 창은 Ctrl+P).<br />
           💡 컬러 인쇄 권장 (특수화물 색상 구분)
         </div>
       </div>

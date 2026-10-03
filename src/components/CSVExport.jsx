@@ -1,5 +1,5 @@
 // CSV 내보내기 — 결재용 + 세관 신고용
-import { reeferTempOf, isoToLabel, formatWt, fmtPos, isReeferContainer, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
+import { reeferTempOf, isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
 
 export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo = null) {   // 3.16: info 는 조 등록 근무자를 찾는 데 쓴다
   const headers = [

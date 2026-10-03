@@ -40,15 +40,6 @@ import {
 //   - 특수화물은 **전부 두 글자** (검수사 확정 2026-09-01): DG · RF/RE · FR · TK · OT
 //   - 양하/선적 동일 마크. 색만 다름 (양하=선사별, 선적=POD별).
 //   - PTK = 컬러 배경 + 글자. 통과 = 회색 + 빈(일반) / 글자(특수).
-// M6.94.23: 특수화물 마크 여부 — true면 선사/포트 색 대신 특수화물 색(기호) 우선.
-//   특수화물: DG(위험물) RF/RE(리퍼) FR(플랫랙) TK(탱크) OT(OOG/오픈탑) — 전부 두 글자.
-//   일반 표기(F/E/o/X/L/K/P/S/M 등 PTK·선사 마커)는 false → 선사색 적용 허용.
-function isSpecialMark(mark) {
-  if (!mark) return false;
-  const m = String(mark).toUpperCase();
-  return m === 'D' || m === 'R' || m === 'RF' || m === 'RE' ||
-         m.startsWith('R') || m === 'FR' || m === 'T' || m === 'OT';
-}
 
 // V8.88: 20피트 판정 — iso 앞자리(2x=20ft), 없으면 베이 홀수 폴백. 2.38부터 엠티 e/E 분기용.
 function _is20ft(c) {
@@ -58,24 +49,7 @@ function _is20ft(c) {
   return Number.isFinite(b) ? (b % 2 === 1) : false;
 }
 
-// V8.88: 엠티 마커 여부. 2.38-01: 그림 칸 리퍼 엠티는 RE(슬래시 뺌).
-function isMtMark(m) {
-  return m === 'e' || m === 'E' || m === 'RE';
-}
 
-// V8.88: 엠티 셀 배경 = 그 컨의 포트(선적)/선사(양하) 색을 연하게(파스텔) — 풀/엠티 구역이 면으로 구분.
-//   hex(#rrggbb)는 투명도, hsl(자동 생성색)은 명도 상향. 인쇄는 print-color-adjust:exact로 유지.
-function pastelOf(col) {
-  const s = String(col || '').trim();
-  const m = /^#([0-9a-f]{6})$/i.exec(s);
-  if (m) {
-    const n = parseInt(m[1], 16);
-    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.18)`;
-  }
-  const h = /^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/i.exec(s);
-  if (h) return `hsl(${h[1]}, ${h[2]}%, 88%)`;
-  return '#eef2f7';
-}
 
 // 2.38-01 검수사 확정 — **글자는 언제나 진한 검정, 색은 «칠»이 혼자 말한다.**
 //   «기존 특수화물에 고유색이 있지 않았나요?» → 있었는데 목적지/선사 색이 덮고 있었다.

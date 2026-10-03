@@ -11,7 +11,7 @@
 //     label: '설명',
 //     registered_at, registered_by
 //   }
-import { ref, set, get, onValue } from 'firebase/database';   // 3.60-03: off 는 더 안 쓴다(구독 해제는 unsub)
+import { ref, set, onValue } from 'firebase/database';   // 3.60-03: off 는 더 안 쓴다(구독 해제는 unsub)
 
 // 하드코딩 기본 정책 (검수원이 알려준 선박들)
 // aliases: 같은 선박이지만 다른 코드/표기 (ASC vs 사용자 표기)
@@ -120,11 +120,6 @@ export function isLoloShipByPolicy(vsl, extraPolicies = {}, extraHints = []) {
   return !!(policy && policy.lolo === true);
 }
 
-// Firebase에서 추가 정책 가져오기
-export async function fbGetShipPolicies(db) {
-  const snap = await get(ref(db, 'shipPolicies'));
-  return snap.val() || {};
-}
 
 export function fbSubscribeShipPolicies(db, callback) {
   const r = ref(db, 'shipPolicies');
@@ -144,43 +139,8 @@ export async function fbSaveShipPolicy(db, vsl, policy, by) {
   });
 }
 
-export async function fbDeleteShipPolicy(db, vsl) {
-  const norm = normalizeVslName(vsl);
-  const r = ref(db, `shipPolicies/${norm.replace(/[.#$\[\]\/]/g, '_')}`);
-  await set(r, null);
-}
 
-// 정책에 따른 컨테이너 그룹화
-//   { matched: [...], notMatched: [...] }
-export function groupContainersByPolicy(policy, containers) {
-  const matched = [];
-  const notMatched = [];
-  containers.forEach(c => {
-    const mode = applyPolicyToContainer(policy, c);
-    if (mode) matched.push({ ...c, _sealMode: mode });
-    else notMatched.push(c);
-  });
-  return { matched, notMatched };
-}
 
-// 부착/확인 진행 상황 카운트
-//   { total, done, pending, missingSeal: [] }
-export function countSealProgress(matchedContainers, recordsMap) {
-  let done = 0;
-  const pending = [];
-  matchedContainers.forEach(c => {
-    const r = recordsMap?.[c.cn] || {};
-    const eseal = String(r.eseal || c.eseal || '').trim();
-    if (eseal) done++;
-    else pending.push(c);
-  });
-  return {
-    total: matchedContainers.length,
-    done,
-    pending: pending.length,
-    missingSeal: pending,
-  };
-}
 
 
 // ★ 1.83: 정책 조합 라벨 — 검수사 표현 그대로 (RZOR = LOLO+실확인이 한눈에).

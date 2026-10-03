@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
-import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff, isChief, isTester, splitRole } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSetStaffRole, fbSubscribeStaffOff, fbSetStaffOff } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
+import { getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff, isChief, isTester, splitRole } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSetStaffRole, fbSubscribeStaffOff, fbSetStaffOff } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
          OWNER_NAME, isOwnerName, canRevokeAdmin,

@@ -2,7 +2,7 @@
 // 프로젝트: greenmarinetally (asia-southeast1)
 import { initializeApp } from 'firebase/app';
 import {
-  getDatabase, ref, onValue, push, set, update, remove, get, child, off, goOffline, goOnline
+  getDatabase, ref, onValue, push, set, update, remove, get, off, goOffline, goOnline
 } from 'firebase/database';
 import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
@@ -619,20 +619,6 @@ export async function fbToggleXray(voyageKey, cn) {
   const snap = await get(r);
   if (snap.exists()) await remove(r);
   else await set(r, { at: Date.now() });
-}
-// 실번호 현장 수정 — 원본(sl_orig)은 절대 변경 X, 이력 누적
-// ── TallyOne 1.8: 리퍼 온도 확인 (리퍼 메모 화면) ──────────────────────────
-//   rfSet = 실제 셋팅온도 · rfAct = 실제온도 · rfSrc = 'photo'(검수 수기 리스트 판독) | 'manual'
-//   records 가 단일 진실 원천이라는 기존 원칙 그대로 여기에 적는다(ediContainers 는 EDI 원본이므로 안 건드린다).
-//   텔리 RF condition report 의 Setting/Actual 칸이 이 값을 읽는다.
-export async function fbSetReeferTemp(voyageKey, mode, cn, patch, by) {
-  assertCanWork('리퍼 온도 입력');
-  const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
-  const f = { rfCheckedAt: Date.now(), rfCheckedBy: by || '' };
-  if (patch.set !== undefined) f.rfSet = String(patch.set ?? '');
-  if (patch.act !== undefined) f.rfAct = String(patch.act ?? '');
-  if (patch.src) f.rfSrc = patch.src;
-  await update(r, f);
 }
 
 /** 여러 대를 한 번에 (사진 판독 결과 반영 · '전부 리스트대로' 일괄 적용) */
@@ -1313,19 +1299,6 @@ export async function fbBatchMoveToStorage(voyageKey, mode, cns, by) {
 //     창고 표식은 기존 `fbBatchMoveToStorage` 와 같은 모양이어야 한다(화면 StorageBox·effectivePos 가 그 모양을 읽는다).
 /* ⛔ 2.95: _markPlanTaken 제거 — 호출부 0 (검수사 확정 «이름만 걸린 컨은 밀어내지 않는다»). */
 
-export async function fbBatchClearActual(voyageKey, mode, cns) {
-  assertCanWork('자리 일괄 해제');
-  const updates = {};
-  cns.forEach(cn => {
-    const path = `voyages/${voyageKey}/${mode}/records/${cn}`;
-    updates[`${path}/bay_actual`] = null;
-    updates[`${path}/row_actual`] = null;
-    updates[`${path}/tier_actual`] = null;
-    updates[`${path}/actual_at`] = null;
-    updates[`${path}/actual_by`] = null;
-  });
-  await update(ref(db), updates);
-}
 
 // ============================================================
 // V9.07: 선적 확정 플랜 (일항사 협의용) — 3단 계층

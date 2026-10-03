@@ -12,17 +12,6 @@ import { gateBayDictWrite } from '../bayDictGuard.js';   // V9.05: 베이사전 
 
 const STORAGE_KEY = 'master_user_bay_dict_v1';
 
-/**
- * V9.05: entry 최신 시각 판정 — updatedAt(숫자) 우선, 없으면 parsedAt(ISO 문자열)을 Date.parse.
- *   기존 결함: Number(parsedAt)이 ISO 문자열에서 NaN → "로컬이 최신이면 보존" 가드가 무작위 동작.
- */
-export function entryTimestamp(e) {
-  if (!e) return 0;
-  const u = Number(e.updatedAt);
-  if (Number.isFinite(u) && u > 0) return u;
-  const p = Date.parse(e.bayDef?.parsedAt || e.parsedAt || '');
-  return Number.isFinite(p) ? p : 0;
-}
 
 // localStorage 안전 접근 (사파리 시크릿 모드 등 fail-safe)
 const _ls = {
@@ -258,87 +247,7 @@ export function removeFromUserBayDict(key) {
   return _ls.set(STORAGE_KEY, JSON.stringify(dict));
 }
 
-/**
- * 등록된 모든 사용자 베이사전 목록 (UI 표시용)
- * @returns {Array} [{ code, name, bayCount, sourceFile, parsedAt }, ...]
- */
-export function listUserBayDict() {
-  const dict = loadUserBayDict();
-  return Object.values(dict).map(entry => ({
-    imo: entry.imo || '',
-    code: entry.code,
-    name: entry.name,
-    callsign: entry.callsign,
-    bayCount: entry.bayDef?.recordCount || 0,
-    sourceFile: entry.bayDef?.sourceFile || '',
-    parsedAt: entry.bayDef?.parsedAt || '',
-    sourceVersion: entry.bayDef?.sourceVersion || '',
-    verified: entry.bayDef?.verified || false,
-  }));
-}
 
-/**
- * V8.98-15: 공유(파이어베이스) 사전 → 이 기기 로컬 사본 동기화 (명시적 가져오기)
- *   배경: 조회는 로컬 사본이 절대 우선(§6.3)이고 FB→로컬 자동 병합이 없어,
- *   기기/브라우저마다 사본이 어긋남(크롬≠엣지 사고). 이 함수는 사용자가
- *   라이브러리 위젯의 '공유 사전 가져오기' 버튼을 누를 때만 실행된다.
- *   병합 규칙: 같은 키는 공유본으로 덮어쓰기, 이 기기에만 있는 선박은 유지.
- */
-export function mergeUserBayDictFrom(sharedDict) {
-  if (!sharedDict || typeof sharedDict !== 'object') return { ok: false, updated: 0, added: 0, kept: 0, total: 0 };
-  // V9.05-02: 게이트 해제 — FB 정본→로컬 복사는 원본을 건드리지 않으므로 모든 검수원 허용.
-  //   (V9.05에서 과잉 차단되어 권한자 미선택 폰에서 카고플랜이 틀리게 보이던 문제 수정.
-  //    원본(FB) 쓰기와 로컬 직접 수정 게이트는 그대로 유지.)
-  const dict = loadUserBayDict() || {};
-  let updated = 0, added = 0;
-  for (const [k, v] of Object.entries(sharedDict)) {
-    if (!v || typeof v !== 'object') continue;
-    if (dict[k]) updated++; else added++;
-    dict[k] = v;
-  }
-  const total = Object.keys(dict).length;
-  const kept = total - updated - added;
-  const ok = _ls.set(STORAGE_KEY, JSON.stringify(dict));
-  return { ok, updated, added, kept, total };
-}
 
-/**
- * V9.05: 공유 정본 승인 반영 — App.jsx 배너에서 관리자가 승인했을 때만 실행.
- *   기존 자동 머지(조용한 덮어쓰기)를 대체. 지정된 코드만 FB 정본으로 교체.
- * @param {object} fbDict  window.__fbShipBayDict
- * @param {string[]} codes 교체할 키 목록
- */
-export function applyApprovedSync(fbDict, codes) {
-  if (!fbDict || !Array.isArray(codes) || codes.length === 0) return { ok: false, applied: 0 };
-  // V9.05-02: 게이트 해제 — FB 정본→로컬 반영도 원본 훼손 불가, 모든 검수원 허용.
-  const dict = loadUserBayDict() || {};
-  let applied = 0;
-  for (const code of codes) {
-    const e = fbDict[code];
-    if (!e || typeof e !== 'object') continue;
-    dict[code] = e;
-    applied++;
-  }
-  const ok = applied > 0 ? _ls.set(STORAGE_KEY, JSON.stringify(dict)) : true;
-  return { ok, applied };
-}
 
-/**
- * 통계 (디버그/대시보드용)
- */
-export function getUserBayDictStats() {
-  const dict = loadUserBayDict();
-  const ships = Object.values(dict);
-  return {
-    totalShips: ships.length,
-    totalBays: ships.reduce((sum, s) => sum + (s.bayDef?.recordCount || 0), 0),
-    storageKey: STORAGE_KEY,
-  };
-}
 
-/**
- * 사용자 베이사전 전체 초기화 (위험! 확인 필수)
- */
-export function clearUserBayDict() {
-  return _ls.set(STORAGE_KEY, '{}');
-}

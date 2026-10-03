@@ -247,7 +247,6 @@ export const BGE_CSS = `
 `;
 
 const num = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
-const cnNorm = (s) => String(s || '').replace(/\s/g, '').toUpperCase();
 const keyToNum = (k) => parseInt(String(k).startsWith('(') ? String(k).replace(/[()]/g, '').slice(2) : k, 10) || 0;
 const keyLabel = (k) => { if (String(k).startsWith('(')) { const m = String(k).replace(/[()]/g, ''); return `(${m.slice(0, 2)})${m.slice(2)}`; } return String(k); };
 
@@ -786,7 +785,7 @@ export default function BayGridEditor({
         <style>{CARGO_V2_CSS}</style><style>{BGE_CSS}</style>
         <div className="bge-head"><h1>{title}</h1>
           <button className="bge-btn" style={{ marginLeft: 'auto' }} onClick={onClose}><X size={16} /></button></div>
-        <div className="bge-empty-msg">컨테이너 자료가 없습니다.<br />자료 탭에서 EDI를 먼저 올려주세요.</div>
+        <div className="bge-empty-msg">컨테이너 자료가 없습니다.<br />[업로드] 탭에서 EDI를 먼저 올려주세요.</div>
       </div>, document.body);
   }
 

@@ -3,7 +3,7 @@
 //   각 항목 클릭 시 모달 닫고 해당 탭/필터로 점프 (onJump 콜백)
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
-import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, MoveRight, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
+import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
 import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots , applySpecialMarks} from '../utils.js';
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 온도·사진 항목을 세지 않는다

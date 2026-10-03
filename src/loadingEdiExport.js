@@ -3,7 +3,7 @@
 //   - EDI 형식: 실수신 EDI(SWDN 2603S) 실측 문법과 바이트 단위 일치 검증(sim_v895) — 카스피(CASP) 호환.
 //   - 범위: 평택 선적분만(사용자 확정). 위치는 실체(bay_actual) 우선, 없으면 계획.
 //   - 대상: 선적확인(completed)된 컨 우선 — 완료가 하나도 없으면 전체 평택 선적분(경고 표시).
-import { isPyeongtaekPort, loadSheetJS, isoToLabel, isPtk, isValidCn } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
+import { loadSheetJS, isoToLabel, isPtk, isValidCn } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
 
 // ── 평택 선적분 컨테이너 조립 (ediContainers + records 병합, 실체 위치 우선) ──
 export function collectActualLoading(voyage) {
@@ -106,25 +106,6 @@ export function normalizeCntrType(iso) {
   return { len, kind, high };
 }
 
-// EDI(EQD)용 구형 숫자 ISO 4자리 — 카스피계 수신 EDI 실측값(2200/2230/2270/4300/4500/4530/9500)에 맞춤.
-//   타입을 알 수 없으면 2200(20DC) 기본값 (2026-07-13 결정).
-export function numericIso(iso) {
-  const s = String(iso || '').toUpperCase().trim();
-  if (/^\d{4}$/.test(s)) return s;                                   // 이미 구형 숫자
-  if (/^\d{3}E$/.test(s)) return s.slice(0, 3) + '0';                // 엠티 정규화('450E') 복원
-  if (!s) return '2200';
-  const t = normalizeCntrType(s);
-  if (t.len === '45') return t.kind === 'RF' ? '9530' : '9500';
-  if (t.len === '40') {
-    if (t.kind === 'RF') return '4530';
-    if (t.kind === 'TK') return '4370';
-    return t.high ? '4500' : '4300';
-  }
-  if (t.kind === 'RF') return '2230';
-  if (t.kind === 'TK') return '2270';
-  if (t.kind === 'BK') return '2220';
-  return '2200';
-}
 
 // EDI(EQD)용 ISO — 이미 ISO꼴(4자리 숫자·문자)은 그대로, 문자 라벨('20DC'/'40HC'…)과 빈 값만
 //   수신 선적 EDI(LOAD FILE) 실측 문자쌍(22GP/45GP/45RE/22RE)으로 변환. 엠티 정규화('450E')는 복원.

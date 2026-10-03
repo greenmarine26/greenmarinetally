@@ -14,24 +14,22 @@ import { mirSee } from '../mir.js';   // 2.50-01: 미르가 순서를 부른다 
 import { mirTone } from '../mir.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import { Thermometer,
-  ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
-  AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
-  BarChart3, FileCheck, Package as PackageIcon
+  ArrowDown, ArrowUp, Search as SearchIcon, ListChecks, MapPin,
+  FileSpreadsheet, FileText, X, Download, Camera,
+  Package as PackageIcon
 } from 'lucide-react';
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
-  isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
+  isoToLabel, shipLuggageCount
 , formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, restowActualExtra, fmtShiftPos, fmtShiftTime} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
-  fbCompleteContainer, fbCancelComplete, fbToggleXray,
-  fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
+  fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
-  fbSetActualPosition, fbClearActualPosition
-  , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
-import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
+  fbSetActualPosition, fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
+import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
@@ -55,7 +53,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -120,7 +118,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //  ★ 3.48 «베이뷰 작업» — 작업 시작 방식. 검수사 «작업 시작시 기존모드로 할것인지 새로운 베이뷰 모드로 시작할건지 선택할수있게».
   //    'classic'(종전 그대로) | 'bayview'(전면 덮개). 폰에 기억하되 항차 화면을 열 때는 기존 방식으로 시작한다 — 덮개가 저절로 뜨면 화면을 가린다.
   const [workStyle, setWorkStyle] = useState('classic');
-  const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과·업로드 접이 메뉴(표시 전용)
+  const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과 접이 메뉴(표시 전용) — 4.00: 업로드는 독으로 꺼냈다
+  const [showPrintHub, setShowPrintHub] = useState(false);   // 4.00: 출력 센터(독의 「출력」 단추 · 베이 탭 「출력」 단추 · 한 곳)
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 (넓은 화면 = 우측 고정 칼럼 / 폰 = 바텀시트)
   const isWide = useIsWide();   // 2.18: **어디에 그릴지**를 JS 로 정한다 — 인스턴스는 하나(구독 중복 방지)
   const [procState, setProcState] = useState('');  // V9.37(판6): ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
@@ -164,8 +163,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     /* BayPlan 은 마운트하며 이 신호를 읽는다 — 오버레이를 켜기 **직전**에 세운다(같은 tick). */
     try { stopSpeak(); } catch (e) { /* 3.41-01: 플랜을 열 때 쌓인 발화(되묻는 말)를 끊는다 — 검수사 «화면을 연 후에 한참 있다가 말을 함» */ }
     try {
-      if (what === 'cargo') window.__mirOpenCargo = Date.now();
-      if (bay != null) window.__mirGoBay = bay;
+      if (bay != null) window.__mirGoBay = bay;   // 4.00: __mirOpenCargo 신호는 걷었다 — 카고플랜은 아래 _planOverlay 가 직접 띄운다(받는 쪽이 없어 다음 베이 탭에서 혼자 뜨던 자리)
     } catch (e) {}
     setPlanOv({ what, bay: bay == null ? null : bay });
   }, []);
@@ -174,7 +172,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (!mirPlan) return;
     //  3.41-01: 여기서는 발화를 끊지 않는다 — 떠 있는 미르가 «열었어요» 를 말한 직후 이 effect 가 돌아, 끊으면 그 말이 지워진다(감사 jsdom 실측).
     try {
-      if (mirPlan.what === 'cargo') window.__mirOpenCargo = Date.now();
       if (mirPlan.bay != null) window.__mirGoBay = mirPlan.bay;
     } catch (e) {}
     setPlanOv({ what: mirPlan.what, bay: mirPlan.bay == null ? null : mirPlan.bay });
@@ -1483,13 +1480,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               className="ml-auto px-3 py-1.5 rounded-btn bg-ink-750 text-dim-200 text-xs2 font-bold">닫기</button>
           </div>
           <BayPlan
-            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
+            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
             preGoneInfo={preGoneInfo}
             onOpenContainer={(c) => setDetailC(c)}
             shipImo={voyage?.info?.imo}
             shipName={voyage?.info?.vsl}
             voyageInfo={voyage?.info} rfSkip={rfSkipShip}
-            voyageKey={voyageKey}
           />
         </div>
       ));
@@ -1499,22 +1495,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     <div className="max-w-6xl mx-auto px-3 py-2">
       {/* 모드 탭 (둘 다 있을 때만) */}
       {showDis && showLoa && (
-        <div className="flex gap-1 mb-3 bg-ink-900 border border-line rounded-pill p-1">
+        <div className="seg mb-3">
           <button
-            onClick={() => setMode('discharge')}
-            className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 transition ${
-              mode === 'discharge' ? 'bg-blue-700 text-blue-100' : 'text-dim-300 hover:bg-ink-750'
-            }`}
+            onClick={() => setMode('discharge')} aria-pressed={mode === 'discharge'}
+            className={`seg-btn ${mode === 'discharge' ? 'on-dis' : ''}`}
           >
-            <ArrowDown className="w-4 h-4"/>양하{!hasDis && <span className="text-2xs font-normal opacity-70">(자료 대기)</span>}
+            <ArrowDown className="w-5 h-5"/>양하{!hasDis && <span className="text-2xs font-normal opacity-70">(자료 대기)</span>}
           </button>
           <button
-            onClick={() => setMode('loading')}
-            className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 transition ${
-              mode === 'loading' ? 'bg-amber-700 text-amber-100' : 'text-dim-300 hover:bg-ink-750'
-            }`}
+            onClick={() => setMode('loading')} aria-pressed={mode === 'loading'}
+            className={`seg-btn ${mode === 'loading' ? 'on-lod' : ''}`}
           >
-            <ArrowUp className="w-4 h-4"/>선적{!hasLoa && <span className="text-2xs font-normal opacity-70">(자료 대기)</span>}
+            <ArrowUp className="w-5 h-5"/>선적{!hasLoa && <span className="text-2xs font-normal opacity-70">(자료 대기)</span>}
           </button>
         </div>
       )}
@@ -1595,13 +1587,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           : null} />}
 
       {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         <button onClick={() => setShowWorkReport(true)}
-          className="py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+          className="pop-btn pop-green">
           📤 작업 보고
         </button>
         <button onClick={() => setClosingOpen(true)}
-          className="py-3 bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+          className="pop-btn pop-amber">
           🏁 마감 점검
         </button>
       </div>
@@ -1639,7 +1631,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             d: '풀만 자리를 지킵니다. 엠티 자리는 안 묻고 바로 내줍니다.',
             cls: 'bg-amber-800 hover:bg-amber-700 text-white' },
           { m: 'allActual', t: '풀 액츄얼 (풀+엠티)', lock: false,
-            d: '풀도 엠티도 계획은 예약일 뿐 — 안 묻고 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.',
+            d: '풀도 엠티도 계획은 예약일 뿐 — 안 묻고 바로 내주고, 자리를 내준 컨은 «자리 없음·계획 자리 내줌»으로 남아 실을 때 자리를 다시 정합니다.',
             cls: 'bg-ink-750 hover:bg-ink-700 text-dim-100' },
         ];
         const _cur = _CH.find(x => x.m === _mode3) || null;
@@ -1668,7 +1660,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             )}
             <div className="text-xxs text-amber-300/80 mt-0.5 leading-snug">
               시퀀스면 계획 자리 주인이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
-              <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.
+              <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 «자리 없음·계획 자리 내줌»으로 남아 실을 때 자리를 다시 정합니다.
               <br/>풀과 엠티가 다를 수 있으니 셋 중에서 고르세요.
             </div>
             {shipSeqPref && !_mode3 && (
@@ -1711,40 +1703,47 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
 
 
-      {/* 탭 네비게이션 — M5.0: 명칭 산뜻하게 정리 */}
-      <nav className="bg-ink-900 border border-line rounded-pill flex mb-3 overflow-x-auto sticky top-[52px] z-20 shadow-lg shadow-slate-950/60">
-        {/* ★ 1.84 (검수사 확정 2026-08-19, UI 1차 판2): 탭 «표시»만 정리 — tab state·점프 경로는 불변.
-            ① 「🎤 자연어」 → 「▶ 작업 시작」 — *"자연어는 이름이 검수용어가 아닙니다. 작업시작 모드가 되어야겠죠."*
-            ② 통계·결과·업로드는 요약·필터 칩과 겹쳐(*"중복 되는거 같습니다"*) 「더보기 ⋯」 한 버튼으로 접었다.
-              누르면 그 자리에서 셋 중 고른다. jumpTo(tab:'report' 등 8곳)는 setTab 그대로라 전부 살아 있다. */}
+      {/* ★ 4.00 — 탭 줄을 «독»(아이콘 + 글자, 게임 메뉴처럼)으로 바꾸고 **자주 쓰는 자리를 앞으로** 꺼냈다.
+          검수사 2026-10-04 — «업로드 안에 검수리스트 출력과 카고플랜 베이상세를 출력하는 곳도 있습니다. 베이를 누르면 거기에도 있습니다. 이걸 정리하여야 합니다»
+            · 출력은 이제 **독의 「출력」 단추 하나**(출력 센터 — 검수 리스트·카고플랜·베이 상세·VGM·작업 보고서).
+              업로드 탭은 **올리기만**, 베이 탭 도구줄의 「출력」 단추도 같은 문을 연다(경로가 하나라 종이가 갈리지 않는다).
+            · 업로드는 더보기에서 꺼냈다 — 통계·결과·X-RAY 만 «더보기 ⋯» 에 남는다.
+          ⚠ tab state·점프 경로(jumpTo 8곳)는 불변 — 표시만 바뀌었다. 키: list·search·bay|lolo·data·stats·report·xray. */}
+      <nav className="hud-dock mb-3 sticky top-[52px] z-20" role="tablist" aria-label="항차 메뉴">
         {[
-          { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
-          { k: 'search', t: '▶ 작업 시작', i: SearchIcon },
+          { k: 'list', t: mode === 'discharge' ? '양하' : '선적', e: '📋' },
+          { k: 'search', t: '작업 시작', e: '🚀' },
           ...(isLoloShip
-            ? [{ k: 'lolo', t: 'LOLO', i: ListChecks }]
-            : [{ k: 'bay', t: '베이', i: MapPin }]),
-        ].map(({ k, t, i: Icon }) => (
-          <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
-            className={`flex-1 px-2 py-2.5 text-xs2 font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
-              tab === k ? 'border-amber-400 text-amber-300 bg-ink-800/30' : 'border-transparent text-dim-300'
-            }`}>
-            <Icon className="w-3.5 h-3.5"/>{t}
+            ? [{ k: 'lolo', t: 'LOLO', e: '🏗️' }]
+            : [{ k: 'bay', t: '베이', e: '🚢' }]),
+        ].map(({ k, t, e }) => (
+          <button key={k} role="tab" aria-selected={tab === k} className="hud-tab"
+            onClick={() => { setTab(k); setMoreTabs(false); }}>
+            <span className="hud-ico" aria-hidden="true">{e}</span>{t}
           </button>
         ))}
-        <button onClick={() => setMoreTabs(v => !v)}
-          className={`flex-none px-3 py-2.5 text-xs2 font-bold border-b-2 whitespace-nowrap ${
-            ['stats', 'report', 'data', 'xray'].includes(tab) ? 'border-amber-400 text-amber-300 bg-ink-800/30' : 'border-transparent text-dim-400'
-          }`} title="통계 · 결과 · 업로드 · X-RAY">
-          {['stats', 'report', 'data', 'xray'].includes(tab) ? ({ stats: '통계', report: '결과', data: '업로드', xray: 'X-RAY' })[tab] : '⋯'}
+        {/* 출력 센터 — 탭이 아니라 «문»이다(창을 연다). 늘 호박색으로 보여 눈에 띈다. */}
+        <button role="tab" aria-selected={false} className="hud-tab hud-door" title="출력 센터 — 검수 리스트 · 카고플랜 · 베이 상세 · VGM · 작업 보고서"
+          onClick={() => { setShowPrintHub(true); setMoreTabs(false); }}>
+          <span className="hud-ico" aria-hidden="true">🖨️</span>출력
+        </button>
+        <button role="tab" aria-selected={tab === 'data'} className="hud-tab" title="EDI · 세관 리스트 · 선사 리스트 · X-RAY 리스트 올리기"
+          onClick={() => { setTab('data'); setMoreTabs(false); }}>
+          <span className="hud-ico" aria-hidden="true">📤</span>업로드
+        </button>
+        <button role="tab" aria-selected={['stats', 'report', 'xray'].includes(tab)} className="hud-tab" onClick={() => setMoreTabs(v => !v)}
+          title="통계 · 결과 · X-RAY">
+          <span className="hud-ico" aria-hidden="true">{['stats', 'report', 'xray'].includes(tab) ? ({ stats: '📊', report: '📋', xray: '🔍' })[tab] : '➕'}</span>
+          {['stats', 'report', 'xray'].includes(tab) ? ({ stats: '통계', report: '결과', xray: 'X-RAY' })[tab] : '더보기'}
         </button>
       </nav>
       {moreTabs && (
-        <div className="flex gap-1.5 mb-3 -mt-1.5">
+        <div className="flex gap-2 mb-3 -mt-1">
           {/* 2.26: X-RAY 는 양하에서만 — 세관 검사 대상은 내리는 화물이다 */}
-          {[['stats', '📊 통계'], ['report', '📋 결과'], ['data', '📤 업로드'],
+          {[['stats', '📊 통계'], ['report', '📋 결과'],
             ...(mode === 'discharge' ? [['xray', '🔍 X-RAY']] : [])].map(([k, t]) => (
             <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
-              className={`flex-1 py-2 rounded-pill text-xs2 font-bold ${tab === k ? 'bg-ink-750 text-amber-300' : 'bg-ink-900 border border-line text-dim-200'}`}>{t}</button>
+              className={`pop-btn ${tab === k ? 'pop-green' : 'pop-slate'} flex-1 !px-2`} style={{ minHeight: 44, fontSize: 14 }}>{t}</button>
           ))}
         </div>
       )}
@@ -1756,6 +1755,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {showReefer && (
         <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
           onClose={() => setShowReefer(false)}/>
+      )}
+
+      {/* ★ 4.00 — 출력 센터. 독의 「출력」 단추와 베이 탭 도구줄의 「출력」 단추가 **이 한 곳**을 연다.
+          종전엔 ① 업로드 탭 맨 위 카드 ② 베이 탭 [인쇄 ▾] 드롭다운(카고플랜·베이 상세만, 계획/실적 기준이 다른 둘째 경로)
+          두 곳이었다. 지금 보고 있는 모드(양하/선적)로 열린다. */}
+      {showPrintHub && (
+        <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode}
+          onClose={() => setShowPrintHub(false)} />
       )}
 
       {/* ★ 2.87 플랜 오버레이 (검수사 지시 2026-08-29) —
@@ -1835,7 +1842,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'search' && !isLoloShip && (
         <div className="flex gap-1.5 mb-2" data-workstyle={workStyle}>
           <button onClick={() => setWorkStyle('classic')} className={`flex-1 py-2 rounded-pill text-xs2 font-black border ${workStyle === 'classic' ? 'bg-amber-700 border-amber-300 text-white' : 'bg-ink-900 border-line text-dim-200'}`}>기존 방식</button>
-          <button onClick={() => setWorkStyle('bayview')} className={`flex-1 py-2 rounded-pill text-xs2 font-black border ${workStyle === 'bayview' ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-violet-200'}`}>베이뷰 작업 — 위 자료 · 아래 베이</button>
+          <button onClick={() => setWorkStyle('bayview')} className={`flex-1 py-2 rounded-pill text-xs2 font-black border break-keep ${workStyle === 'bayview' ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-violet-200'}`}>베이뷰 작업 — 위 자료 · 아래 베이</button>
         </div>
       )}
       {/* ★ 3.58 — 선적 기록지 사진 넣기(검수사 2026-09-22 «이것을 넣을수 있게 앱을수정해야»). 시프팅 재선적처럼 새 자리가 기록지에만 있을 때. */}
@@ -1977,13 +1984,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               </div>
             )}
             <BayPlan
-              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
+              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
               preGoneInfo={preGoneInfo}
               onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}   // 2.89: 맞교환 상대 고르기 가로채기(SlotPicker 경유 포함)
               shipImo={voyage?.info?.imo}
               shipName={voyage?.info?.vsl}
               voyageInfo={voyage?.info} rfSkip={rfSkipShip}
-              voyageKey={voyageKey}
+              onOpenPrint={() => setShowPrintHub(true)}   /* 4.00: 도구줄 «출력» = 독의 「출력」과 같은 출력 센터 */
               pendingSwap={pendingSwap}
               onCancelSwap={() => setPendingSwap(null)}
               pendingMove={pendingMove}
@@ -2653,7 +2660,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
 
       {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
 
-      <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
+      <div className="flex gap-2 flex-wrap">
         {[
           { k: 'all', t: `전체 ${stats.total}` },
           { k: 'undone', t: `미완 ${stats.total - stats.done}` },
@@ -2665,9 +2672,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
-            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-pill font-bold transition-colors ${
-              filter === k ? 'bg-amber-700 text-amber-100' : 'bg-ink-850 text-dim-200 hover:bg-ink-750'
-            }`}>{t}</button>
+            className={`chip-v2 ${filter === k ? 'is-on' : ''}`}>{t}</button>
         ))}
       </div>
 
@@ -3256,10 +3261,10 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       ) : onFallback ? (
         // ★ 2.57: 릴레이 안내가 뜨는 조건(onFallback 있음)은 종전 그대로 — 새 갈래는 그 조건이 아닌 null 에만
         <div className="text-xs2 text-dim-300">
-          이 질문은 여기서 바로 못 냅니다 — 아래 버튼으로 ▶ 작업 시작 탭에서 이어집니다.
+          이 질문은 여기서 바로 못 냅니다 — 아래 버튼으로 🚀 작업 시작 탭에서 이어집니다.
           <button onClick={() => { const _q = q; setAsk(null); onFallback(_q); }}
             className="mt-2 w-full py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
-            ▶ 작업 시작 탭에서 답 보기
+            🚀 작업 시작 탭에서 답 보기
           </button>
         </div>
       ) : (
@@ -3495,9 +3500,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
           { k: 'done', t: `누적(처리) ${stats.done}` },
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
-            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-pill font-bold transition-colors ${
-              filter === k ? 'bg-cyan-700 text-cyan-100' : 'bg-ink-850 text-dim-200 hover:bg-ink-750'
-            }`}>{t}</button>
+            className={`chip-v2 ${filter === k ? 'is-on is-cyan' : ''}`}>{t}</button>
         ))}
       </div>
 
@@ -4551,9 +4554,13 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   // M6.46: 다른 mode 섹션 추가 시 voy 입력
   const [otherVoyInput, setOtherVoyInput] = useState('');
 
-  // M5.26: 통합 출력 허브 모달
-  const [showPrintHub, setShowPrintHub] = useState(false);
+  // ★ 4.00 — 출력 센터(통합 출력 허브)는 독의 「출력」 단추로 옮겼다(항차 화면 VoyagePage 가 연다). 이 탭은 **올리기만** 한다.
   const [showTestLab, setShowTestLab] = useState(false);   // V9.25: 검증 모드 (검수원 '김성일'만 노출)
+  const [showTools, setShowTools] = useState(false);       // 4.00: 개발·점검 도구는 접어 둔다
+  const ediN = Object.keys(sec.ediContainers || {}).length;
+  const listN = Object.keys(sec.records || {}).length;
+  const xrayN = Object.keys(sec.xrayList || {}).length;
+  const modeKoD = mode === 'discharge' ? '양하' : '선적';
 
   return (
     <div className="space-y-3">
@@ -4563,38 +4570,15 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           검수사 지시 2026-08-13: *"업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다."*
             · *"올리기 전에 업로드 화면에서 이건 안보이게 해주세요 **검수사에겐 필요 없는 기능입니다.**"*
           → 셋 다 수석 대시보드 「🧱 베이매트릭스」(권한 화면)로 옮겼다.
-          업로드 화면에는 검수원이 실제로 쓰는 자료 올리기만 남는다. */}
-      {/* M5.26: 통합 출력 진입 */}
-      <button
-        onClick={() => setShowPrintHub(true)}
-        className="w-full bg-gradient-to-br from-amber-900/40 to-orange-900/40 hover:from-amber-900/60 border border-amber-700/50 rounded-pill p-3 flex items-center gap-3 active:scale-[0.98] transition"
-      >
-        <span className="text-2xl">📄</span>
-        <div className="flex-1 text-left">
-          <div className="font-bold text-amber-100">검수 자료 출력</div>
-          <div className="text-2xs text-amber-300/80">양하/선적 × 검수리스트 / 카고플랜 / 베이상세 통합</div>
+          업로드 화면에는 검수원이 실제로 쓰는 자료 올리기만 남는다.
+          ★ 4.00: 「검수 자료 출력」 카드도 이 화면에서 뺐다 — 출력은 독의 「🖨️ 출력」(출력 센터) 한 곳이다.
+            검수사 2026-10-04 — «업로드 기능은 EDI나 세관 리스트 선사리스트 를 넣기 위한곳인데 그안에 검수리스트 출력과 카고플랜 베이상세를 출력하는곳도 있습니다.» */}
+      <div className="px-1">
+        <div className="text-lg font-black flex items-center gap-2">📤 자료 올리기</div>
+        <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+          EDI · 세관 리스트 · 선사 리스트 · X-RAY 리스트를 넣는 곳입니다. 다 올렸으면 위 메뉴의 <b className="text-amber-300">🖨️ 출력</b>에서 검수 리스트·카고플랜을 뽑습니다.
         </div>
-        <span className="text-amber-300">›</span>
-      </button>
-      {showPrintHub && (
-        <PrintHubModal
-          voyage={voyage}
-          voyageKey={voyageKey}
-          onClose={() => setShowPrintHub(false)}
-        />
-      )}
-      {/* V9.25: 🧪 검증 모드 — 검수원 '김성일' 선택 시에만 노출 (사용자 요청: "저만 보이게") */}
-      {inspector === '김성일' && (
-        <button onClick={() => setShowTestLab(true)}
-          className="w-full bg-fuchsia-950/40 hover:bg-fuchsia-900/50 border border-fuchsia-700/50 rounded-pill p-3 flex items-center gap-3 active:scale-[0.98] transition">
-          <span className="text-2xl">🧪</span>
-          <div className="flex-1 text-left">
-            <div className="font-bold text-fuchsia-200">검증 모드 (테스트 랩)</div>
-            <div className="text-2xs text-fuchsia-300/70">검수확인 전체 취소 등 재검수 도구 — 성일님 전용</div>
-          </div>
-          <span className="text-fuchsia-300">›</span>
-        </button>
-      )}
+      </div>
       {showTestLab && inspector === '김성일' && (
         <TestLabModal voyage={voyage} voyageKey={voyageKey} onClose={() => setShowTestLab(false)}/>
       )}
@@ -4629,16 +4613,30 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         onList={handleListUpload}
         onXray={handleXrayUpload}
       />
-      <div className="bg-ink-900 border border-line rounded-pill p-3">
-        <div className="text-sm font-bold mb-2 flex items-center gap-2">
-          <FileText className="w-4 h-4 text-blue-400"/>
-          1. EDI / ASC (필수) <span className="text-2xs text-cyan-400 font-normal">+ .def / STOWAGE PDF</span>
+
+      {/* 컴 화면은 세 칸을 나란히(폭이 넓다), 폰은 위에서 아래로 한 칸씩 — 배치가 다르다 */}
+      <div className={`grid grid-cols-1 gap-3 items-start ${mode === 'discharge' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+      {/* ── 1. EDI / ASC ── */}
+      <div className={`quest-card ${ediN > 0 ? 'is-done' : 'is-todo'}`}>
+        <div className="quest-head flex items-center gap-3 mb-3">
+          <span className="step-badge">{ediN > 0 ? '✓' : '1'}</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm2 font-black flex items-center gap-2 flex-wrap">
+              <FileText className="w-4 h-4 text-blue-400"/>
+              EDI / ASC <span className="sticker text-2xs text-amber-300">필수</span>
+            </div>
+            <div className="text-2xs text-cyan-400">+ .def / STOWAGE PDF</div>
+          </div>
+          <span className={`status-pill ${ediN > 0 ? 'status-ok' : 'status-todo'}`}>{ediN > 0 ? `${ediN}대 ✓` : '아직 없음'}</span>
         </div>
-        <input ref={ediRef} type="file" multiple accept="*/*"
-          onChange={e => handleEdiUpload(e.target.files)}
-          className="text-xs text-dim-200 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-700 file:text-blue-100 file:font-bold file:cursor-pointer"/>
-        <div className="text-2xs text-dim-400 mt-1">
-          현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
+        <label className="drop-zone">
+          <input ref={ediRef} type="file" multiple accept="*/*"
+            onChange={e => handleEdiUpload(e.target.files)}
+            className="hidden"/>
+          <span style={{ fontSize: 26 }}>📥</span><span>EDI 파일 고르기</span>
+        </label>
+        <div className="text-2xs text-dim-400 mt-2 leading-snug">
+          현재 EDI 컨테이너: {ediN}대
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
           <br/><span className="text-cyan-400">📚 .def 같이 올리면 베이사전 자동 등록</span>
         </div>
@@ -4647,7 +4645,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
         {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
         {rawMeta?.text ? (
-          <div className="mt-2 pt-2 border-t border-line-soft">
+          <div className="mt-3 pt-3 border-t border-line-soft">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xxs text-emerald-400 font-bold">💾 EDI 원본 보관됨</span>
               <span className="text-2xs text-dim-400 mono">
@@ -4657,7 +4655,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               </span>
             </div>
             <button onClick={handleReprocess}
-              className="mt-1.5 w-full bg-ink-750/60 hover:bg-ink-750 active:bg-ink-750 text-dim-100 px-3 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5">
+              className="pop-btn pop-slate w-full mt-2" style={{ minHeight: 44, fontSize: 13 }}>
               🔄 EDI 다시 분석 <span className="text-dim-300 font-normal">(선택사항)</span>
             </button>
             <div className="text-2xs text-dim-400 mt-1 leading-tight">
@@ -4667,44 +4665,64 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         ) : null /* M5.27: "다음 EDI 업로드부터..." 안내 메시지 제거 — 사용자 혼란 유발 */}
       </div>
 
-      <div className="bg-ink-900 border border-line rounded-pill p-3">
-        <div className="text-sm font-bold mb-2 flex items-center gap-2">
-          <FileSpreadsheet className="w-4 h-4 text-emerald-400"/>
-          2. {mode === 'discharge' ? '양하' : '선적'} 리스트
+      {/* ── 2. 리스트(세관 리스트 · 선사 리스트) ── */}
+      <div className={`quest-card ${listN > 0 ? 'is-done' : 'is-todo'}`}>
+        <div className="quest-head flex items-center gap-3 mb-3">
+          <span className="step-badge">{listN > 0 ? '✓' : '2'}</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm2 font-black flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400"/>
+              {modeKoD} 리스트
+            </div>
+            <div className="text-2xs text-dim-300">세관 리스트 · 선사 리스트</div>
+          </div>
+          <span className={`status-pill ${listN > 0 ? 'status-ok' : 'status-todo'}`}>{listN > 0 ? `${listN}대 ✓` : '아직 없음'}</span>
         </div>
-        <div className="flex items-center gap-2 mb-2">
-          <input ref={listRef} type="file" multiple
-            accept="*/*"
-            onChange={e => handleListUpload(e.target.files)}
-            className="flex-1 text-xs text-dim-200 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
+        <div className="flex items-stretch gap-2">
+          <label className="drop-zone flex-1">
+            <input ref={listRef} type="file" multiple
+              accept="*/*"
+              onChange={e => handleListUpload(e.target.files)}
+              className="hidden"/>
+            <span style={{ fontSize: 26 }}>📥</span><span>리스트 파일 고르기</span>
+          </label>
           <button
             onClick={() => cameraRef.current?.click()}
-            className="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 flex-shrink-0"
+            className="pop-btn pop-violet flex-shrink-0" style={{ minHeight: 64, padding: '0 14px', flexDirection: 'column', gap: 2, fontSize: 12 }}
             title="카메라로 종이 리스트 촬영"
           >
-            <Camera className="w-3.5 h-3.5"/>📷
+            <Camera className="w-5 h-5"/>📷 촬영
           </button>
           <input ref={cameraRef} type="file" accept="image/*" capture="environment"
             onChange={e => { handleListUpload(e.target.files); if (cameraRef.current) cameraRef.current.value = ''; }}
             className="hidden"/>
         </div>
-        <div className="text-2xs text-dim-400">
-          현재 리스트: {Object.keys(sec.records || {}).length}대
+        <div className="text-2xs text-dim-400 mt-2 leading-snug">
+          현재 리스트: {listN}대
           <br/>📊 엑셀 (.xls .xlsx .csv) · 📄 PDF · 📷 사진 (자동 인식)
         </div>
       </div>
 
+      {/* ── 3. X-RAY 리스트(양하만) ── */}
       {mode === 'discharge' && (
-        <div className="bg-ink-900 border border-line rounded-pill p-3">
-          <div className="text-sm font-bold mb-2 flex items-center gap-2">
-            🔍 3. X-RAY 리스트 (양하만)
+        <div className={`quest-card ${xrayN > 0 ? 'is-done' : ''}`}>
+          <div className="quest-head flex items-center gap-3 mb-3">
+            <span className="step-badge">{xrayN > 0 ? '✓' : '3'}</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm2 font-black">🔍 X-RAY 리스트</div>
+              <div className="text-2xs text-dim-300">양하만 · 세관 검사 대상</div>
+            </div>
+            <span className={`status-pill ${xrayN > 0 ? 'status-ok' : ''}`} style={xrayN > 0 ? undefined : { color: 'rgb(var(--dim-300))', borderColor: 'rgb(var(--ink-700))' }}>{xrayN > 0 ? `${xrayN}대 ✓` : '없으면 건너뜀'}</span>
           </div>
-          <input ref={xrayRef} type="file" multiple
-            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
-            onChange={e => handleXrayUpload(e.target.files)}
-            className="text-xs text-dim-200 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-purple-700 file:text-purple-100 file:font-bold file:cursor-pointer"/>
-          <div className="text-2xs text-dim-400 mt-1">
-            현재 X-RAY: {Object.keys(sec.xrayList || {}).length}대
+          <label className="drop-zone">
+            <input ref={xrayRef} type="file" multiple
+              accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
+              onChange={e => handleXrayUpload(e.target.files)}
+              className="hidden"/>
+            <span style={{ fontSize: 26 }}>🩻</span><span>X-RAY 파일 고르기</span>
+          </label>
+          <div className="text-2xs text-dim-400 mt-2 leading-snug">
+            현재 X-RAY: {xrayN}대
             {(() => {   // V7.94-03: EDI/리스트에 없는 X-RAY 컨번호 노출 + V7.94-04: 잔존 키 정리 버튼
               //   업로드는 누적(merge) 방식 — 이전 업로드의 옛 키가 안 지워져 미매칭 잔존 발생 (사용자 제보)
               const cnSet = new Set([...Object.keys(sec.ediContainers || {}), ...Object.keys(sec.records || {})]);
@@ -4730,17 +4748,18 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           </div>
         </div>
       )}
+      </div>
 
       {!hasOther && (
-        <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
-          <div className="text-xs text-dim-300">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+        <div className="quest-card space-y-2">
+          <div className="text-xs2 font-bold text-dim-200">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
           {/* M6.46: voy 입력 받기 — 추측하지 않음 */}
           <input
             type="text"
             value={otherVoyInput}
             onChange={e => setOtherVoyInput(e.target.value.toUpperCase())}
             placeholder={`${otherMode === 'discharge' ? '양하' : '선적'} 항차 번호 (예: ${otherMode === 'discharge' ? '0521E' : '0521W'})`}
-            className="w-full bg-ink-800 border border-line rounded px-2 py-1.5 text-xs uppercase mono focus:outline-none focus:border-blue-500"
+            className="w-full bg-ink-800 border-2 border-line-strong rounded-pill px-3 py-2.5 text-sm uppercase mono focus:outline-none focus:border-blue-500"
           />
           <button
             onClick={async () => {
@@ -4760,11 +4779,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               setMode(otherMode);
             }}
             disabled={!otherVoyInput.trim()}
-            className={`w-full py-2 rounded text-sm font-bold ${
-              otherMode === 'discharge'
-                ? 'bg-blue-900/50 hover:bg-blue-800 disabled:bg-ink-800 text-blue-100 border border-blue-700/40 disabled:text-dim-400'
-                : 'bg-amber-900/50 hover:bg-amber-800 disabled:bg-ink-800 text-amber-100 border border-amber-700/40 disabled:text-dim-400'
-            }`}
+            className={`pop-btn w-full ${otherMode === 'discharge' ? 'pop-blue' : 'pop-amber'} disabled:opacity-40`}
+            style={{ minHeight: 46, fontSize: 14 }}
           >
             + {otherMode === 'discharge' ? '양하' : '선적'} 섹션 추가
           </button>
@@ -4772,9 +4788,26 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
 
       {status && (
-        <pre className="bg-ink-950 border border-line rounded p-2 text-xxs text-dim-200 whitespace-pre-wrap mono">
+        <pre className="bg-ink-950 border-2 border-line rounded-pill p-3 text-xxs text-dim-200 whitespace-pre-wrap mono">
 {status}
         </pre>
+      )}
+
+      {/* V9.25: 🧪 검증 모드 — 검수원 '김성일' 선택 시에만 노출 (사용자 요청: "저만 보이게").
+          ★ 4.00: 개발·점검 도구는 맨 아래 «🛠 점검 도구» 안에 접어 둔다 — 일반 검수원 화면은 올리기만 남는다. */}
+      {inspector === '김성일' && (
+        <div className="quest-card">
+          <button onClick={() => setShowTools(v => !v)} className="w-full flex items-center gap-2 text-left">
+            <span className="text-xl">🛠</span>
+            <span className="flex-1 text-sm2 font-black text-dim-200">점검 도구 <span className="text-2xs font-normal text-dim-400">성일님 전용</span></span>
+            <span className="text-dim-400 text-xs2">{showTools ? '▲ 접기' : '▼ 펼치기'}</span>
+          </button>
+          {showTools && (
+            <button onClick={() => setShowTestLab(true)} className="pop-btn pop-violet w-full mt-3" style={{ minHeight: 46, fontSize: 14 }}>
+              🧪 검증 모드 (테스트 랩) <span className="font-normal text-2xs opacity-80">검수확인 전체 취소 등 재검수 도구</span>
+            </button>
+          )}
+        </div>
       )}
 
       {/* M3.5.4-fix2: 충돌 검토 모달 */}
@@ -4798,7 +4831,7 @@ function ModeSetup({ voyageKey }) {
   return (
     <div className="bg-amber-900/30 border border-amber-800 rounded-pill p-4 text-center mb-3">
       <div className="text-amber-200 text-sm mb-2">자료를 업로드해주세요</div>
-      <div className="text-xxs text-amber-300/70">자료 탭에서 EDI/ASC 파일부터 시작하세요</div>
+      <div className="text-xxs text-amber-300/70">[업로드] 탭에서 EDI/ASC 파일부터 시작하세요</div>
     </div>
   );
 }

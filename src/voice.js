@@ -254,10 +254,6 @@ export function speakDone(c) {
   speak(`${spellKo(last4)} 완료`, { rate: 1.5, priority: 'high' });
 }
 
-// 오류 음성
-export function speakError(text) {
-  speak(text, { rate: 1.2, pitch: 0.9 });
-}
 
 export function stopSpeak() {
   //  2.65: 낭독(speakLong) 의 keepalive 와 우선순위도 같이 내린다 — 안 내리면 다음 음성이 막힌다.

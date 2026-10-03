@@ -3,7 +3,7 @@
 //   표시: 모드별 진행률 / 리퍼·X-RAY·ISO403·자리뺏긴 등 주의 항목
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
-import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
+import { CheckCircle2, AlertTriangle, Snowflake } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
 import { isPtk as _isPtkOne, isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
@@ -138,26 +138,25 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
   const modeColor = mode === 'discharge' ? 'blue' : 'amber';
 
   return (
-    <div className={`mb-3 rounded-btn border-2 overflow-hidden ${
-      mode === 'discharge' ? 'border-blue-700/50 bg-blue-950/30' : 'border-amber-700/50 bg-amber-950/30'
-    }`}>
-      {/* 진행률 바 */}
-      <div className={`px-4 py-3 ${mode === 'discharge' ? 'bg-blue-900/30' : 'bg-amber-900/30'}`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className={`w-5 h-5 ${mode === 'discharge' ? 'text-blue-300' : 'text-amber-300'}`}/>
-            <span className={`font-black text-lg ${mode === 'discharge' ? 'text-blue-100' : 'text-amber-100'}`}>
+    <div className={`mb-4 hero-card ${mode === 'discharge' ? 'hero-dis' : 'hero-lod'}`}>
+      {/* 진행률 바 — ★ 4.00: 게임의 경험치 막대(10칸 눈금)처럼. 글자(«양하 0/323 (0%)»)는 종전 그대로다. */}
+      <div className="px-4 pt-3 pb-3">
+        <div className="flex items-center justify-between mb-2.5 gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <span className="text-2xl leading-none" aria-hidden="true">{mode === 'discharge' ? '🚢' : '⚓'}</span>
+            <span className={`font-black text-2xl ${mode === 'discharge' ? 'text-blue-100' : 'text-amber-100'}`}>
               {modeLabel} {summary.done}/{summary.total}
             </span>
-            <span className={`text-sm font-bold ${mode === 'discharge' ? 'text-blue-300' : 'text-amber-300'}`}>
+            <span className={`sticker text-sm ${mode === 'discharge' ? 'text-blue-300' : 'text-amber-300'}`}>
               ({summary.pct}%)
             </span>
+            {summary.pct === 100 && <span className="text-2xl leading-none" aria-hidden="true">🎉</span>}
           </div>
-          <span className="text-2xs text-dim-300 font-bold uppercase">현황 요약</span>
+          <span className="text-2xs text-dim-300 font-bold uppercase shrink-0">현황 요약</span>
         </div>
-        <div className="h-2 bg-ink-900/60 rounded-full overflow-hidden">
-          <div className={`h-full transition-all ${
-            summary.pct === 100 ? 'bg-emerald-500' : (mode === 'discharge' ? 'bg-blue-500' : 'bg-amber-500')
+        <div className="xp-bar">
+          <div className={`xp-fill ${
+            summary.pct === 100 ? 'xp-done' : (mode === 'discharge' ? 'xp-dis' : 'xp-lod')
           }`}
             style={{ width: `${summary.pct}%` }}/>
         </div>
@@ -224,7 +223,7 @@ function Chip({ icon: Icon, color, label, value, onClick = null }) {
     emerald: 'bg-emerald-900/40 border-emerald-700/40 text-emerald-200',
     orange:  'bg-orange-900/40 border-orange-700/50 text-orange-200',
   };
-  const cls = `inline-flex items-center gap-1 px-2 py-1 rounded border text-xxs font-bold ${colorMap[color] || colorMap.cyan}`;
+  const cls = `inline-flex items-center gap-1 px-2.5 py-1 rounded-full border-2 text-xxs font-bold ${colorMap[color] || colorMap.cyan}`;
   const body = (<>
     <Icon className="w-3 h-3"/>
     <span className="text-dim-200/80">{label}</span>

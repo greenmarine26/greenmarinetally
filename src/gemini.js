@@ -607,17 +607,6 @@ ${truncated ? `\n※ ${candidates.length}대 중 상위 ${MAX_CANDIDATES}대만 
   }
 }
 
-/* 3.42 (판 B): fixQuestionWithAI(음성 교정, 개인 키)는 mirModel.askMirModel 한 함수로 대체돼 지웠다 — 호출부 0(작업창·콘앱). */
-// 질문이 자유 자연어인지 키워드 검색인지 판단
-export function isFreeFormQuestion(text) {
-  if (!text) return false;
-  const t = text.trim();
-  if (/^\d+$/.test(t)) return false;
-  if (t.length < 4) return false;
-  if (/\?|왜|어떻게|뭐|무엇|어디|언제|누가|얼마/.test(t)) return true;
-  if (t.length >= 8) return true;
-  return false;
-}
 
 // ─── M6.14: STOWAGE INSTRUCTION PDF 자동 분석 ──────────────────────────────
 // PDF 파일을 application/pdf MIME으로 Gemini에 직접 전송

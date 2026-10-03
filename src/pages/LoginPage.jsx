@@ -197,7 +197,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       await refreshGuard();
       setPw1(''); setPw2('');
       setGateMode('setup');      // 이어서 새 비밀번호를 정한다
-      alert('✅ 복구 코드 확인. 이어서 새 비밀번호를 정하십시오.\n\n⚠ 이 코드는 방금 소멸했습니다 — 나중에 ⚙ 인원 관리에서 새로 만들어 두십시오.');
+      alert('✅ 복구 코드 확인. 이어서 새 비밀번호를 정하십시오.\n\n⚠ 이 코드는 방금 소멸했습니다 — 나중에 ⋮ 메뉴의 인원 관리에서 새로 만들어 두십시오.');
     } finally {
       setGateBusy(false);
     }

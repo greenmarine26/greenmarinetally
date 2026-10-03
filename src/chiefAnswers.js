@@ -533,7 +533,7 @@ export function gangBriefLines(gs) {
   return [`🏗 ${_nm}(${gs.shift.label}·${gs.nGangs}갱) — ` + parts.join(' / '), `"갱 배분"으로 상세 확인`];
 }
 
-//  «갱 배분 (자세히)» · «3갱이면» 상세 답.
+//  «갱 배분 (자세히)» · «3갱 갱 배분» 상세 답.
 export function answerGangShift(voyage, bayDef, opts = {}) {
   const gs = buildGangShift(voyage, bayDef, opts);
   if (!gs) return null;
@@ -569,7 +569,7 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
   L.push(gs.cranes && gs.cranes.length ? `${gs.cranes.map((n) => n + '호기').join('·')} 시작을 알려 주셔서 ${gs.nGangs}갱으로 계산했어요 — 호기가 바뀌면 다시 알려 주세요.`
     : gs.fixedShift ? `${gs.shiftKey} 조는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «${gs.shiftKey.slice(-2)} 2갱으로 기억해» 처럼 말씀하세요.`
     : gs.fixed ? `이 항차는 ${gs.nGangs}갱으로 정해 두셨어요 — 조마다 다르면 «내일 주간 2갱으로 기억해» 처럼 조를 붙여 말씀하세요.`
-    : (gs.nGangs === 2 ? '«3갱이면» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요. «3갱으로 기억해» 하시면 이 항차는 계속 3갱으로 냅니다.'
+    : (gs.nGangs === 2 ? '«3갱 갱 배분» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요. «3갱으로 기억해» 하시면 이 항차는 계속 3갱으로 냅니다.'
                        : '«갱 배분» 이라고 물으시면 기본 2갱 기준이에요.'));
   L.push('최종 배분은 포맨 지시가 우선입니다.');
   return L.join('\n');
@@ -972,9 +972,6 @@ export function answerPlanOutlook(voyage, mode = 'loading', shipName = '') {
   return L.join('\n');
 }
 
-// 하위 호환(1.91) — 선적 전용 이름은 공용 함수로 위임.
-export function isLoadOutlookQuery(q) { return isPlanOutlookQuery(q) && outlookModeOf(q) === 'loading'; }
-export function answerLoadOutlook(voyage, shipName = '') { return answerPlanOutlook(voyage, 'loading', shipName); }
 
 // 1.90 (검수사 테스트 질문 «SWSP 선적 EDI 자료 몇시쯤에 받은거야? 최종본 맞아?»): 트리거 공용(통합검색+항차 검색창).
 export function isDataArrivalQuery(q) {

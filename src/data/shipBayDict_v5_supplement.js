@@ -4857,10 +4857,3 @@ export function lookupBayDictV5SupplementEnhanced(imo, vesselNameOrCode) {
   return null;
 }
 
-export function getV5SupplementStats() {
-  return {
-    version: '5.0-supplement',
-    totalShips: Object.keys(SHIP_BAY_DICT_V5_SUPPLEMENT).length,
-    methodology: 'M6.55 .def matrix decode (auto-extracted)',
-  };
-}

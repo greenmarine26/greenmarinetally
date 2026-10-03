@@ -7,7 +7,7 @@
 //   저장 경로는 종전 그대로: 실체위치 fbSetActualPosition / 임시창고 fbBatchMoveToStorage.
 //   → 검수사 화면·실선적 EDI 근거(records.bay_actual)의 의미는 바뀌지 않는다.
 import React, { useMemo, useState, useCallback } from 'react';
-import { isoToLabel, isPyeongtaekPort, fullEdiMapOf, applySwapFix, swapFixList } from '../utils.js';
+import { isPyeongtaekPort, fullEdiMapOf, applySwapFix, swapFixList } from '../utils.js';
 import { fbSetActualPosition, fbBatchMoveToStorage, STORAGE_BAY, fbAddSwapFix } from '../firebase.js';   // 2.89-01: 통과분 맞교환
 import BayGridEditor from './BayGridEditor.jsx';
 import * as P from '../planEditCore.js';

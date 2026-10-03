@@ -186,7 +186,7 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
   ok('DeckPlanView — 검수사 양식 방향 안내 · STOWAGE PLAN 엑셀 단추 · 자리 못 받은 컨 경고', /1=선수 → 선미·램프쪽, 오른쪽이 선수/.test(dv) && /📄 STOWAGE PLAN 엑셀/.test(dv) && /plan\.unplaced/.test(dv));
   ok('콘앱 — numbering bow 면 칸을 뒤집어 그린다(오른쪽이 선수)', /const bow = dk\.numbering\s*===\s*'bow'/.test(cone) && /bow \? \(maxCol\s*-\s*gc\s*\+\s*1\) : gc/.test(cone));
   ok('매뉴얼 — RZOR 덱플랜 3.67 항목(업로드·예측·확정·엑셀)', /RZOR\(카페리\) 덱플랜\(3\.67\)/.test(help) && /STOWAGE PLAN 엑셀/.test(help) && /예측/.test(help.split('RZOR(카페리) 덱플랜(3.67)')[1] || ''));
-  ok('버전 — TallyOne 3.68 이상(3.67-01 덱플랜 판은 지나감) · ConeOne 2.57 이상', /APP_VERSION = 'TallyOne 3\.(6[8-9]|[7-9]\d)/.test(ut) && /__CONEV='ConeOne 2\.(5[7-9]|[6-9]\d)/.test(cone));   // 3.68: APP_NOTE 는 그 판 문구라 여기서 안 잰다(smoke_mirthread 가 잰다)
+  ok('버전 — TallyOne 3.68 이상(3.67-01 덱플랜 판은 지나감) · ConeOne 2.57 이상', /APP_VERSION = 'TallyOne (3\.(6[8-9]|[7-9]\d)|[4-9]\.\d\d)/.test(ut) && /__CONEV='ConeOne 2\.(5[7-9]|[6-9]\d)/.test(cone));   // 3.68: APP_NOTE 는 그 판 문구라 여기서 안 잰다(smoke_mirthread 가 잰다)
 
   console.log('■ ⑤ 3.67-01 — 자동 덱플랜에서 자리를 찍으면 선적(자리 확정 + 완료), 조회만은 보기만, 호기 없이 완료 금지');
   //  검수사 2026-09-29 «작업자로 로그인하면 실제 선적을 할수 있어야 합니다. 물로 조회만으로는 앱이 자동처리하는것을 보기만 하는게 당연한것이고요».

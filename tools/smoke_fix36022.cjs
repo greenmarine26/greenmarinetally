@@ -29,7 +29,7 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
     ok('F/E 가 규격 뒤 글자', cs.every((c) => c.fe === 'F' || c.fe === 'E'));
     ok('마감텔리 칸: DC4H 는 HC', by('DC4H').every((c) => U.tallySizeCol(c) === 'HC'));
     ok('mSpec·m1·m4 우선순위 유지(DCHC 는 m4)', (() => { const t = text.replace(/DC4H/g, 'DCHC'); const x = U.parseAscFile(t).containers.filter((c) => c.tp === 'DCHC'); return x.length === 2 && x.every((c) => c.iso === '45GP'); })());
-    ok('APP_VERSION 3.60-22 이상', /3\.60-2[2-9]|3\.6[1-9]|3\.[7-9]/.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8').match(/APP_VERSION = '([^']*)'/)[1]));
+    ok('APP_VERSION 3.60-22 이상', /3\.60-2[2-9]|3\.6[1-9]|3\.[7-9]|^TallyOne [4-9]\./.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8').match(/APP_VERSION = '([^']*)'/)[1]));
   } catch (e) { bad += 1; console.log('  ✘ 예외 ' + (e && e.stack || e)); }
   console.log(`\n3.60-22 연막검사: ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);

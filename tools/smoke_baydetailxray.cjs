@@ -345,8 +345,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
         const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
         const g = c.getContext('2d'); g.drawImage(img, 0, 0);
-        const d = g.getImageData(0, 1, img.width, 1).data; let n = 0;   //  줄 윗단 1px — 글자 잉크가 닿지 않는 높이
-        for (let i = 0; i < img.width; i++) { const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2]; if (Math.abs(r - 255) < 14 && Math.abs(gg - 224) < 16 && Math.abs(b - 102) < 26) n += 1; }
+        //  줄 윗단 몇 px 중 노랑이 가장 많은 한 줄을 잰다 — 글꼴이 다른 컴퓨터(클라우드 크롬 등)에서는 글자 잉크가 첫 줄에 닿아 노랑을 가리므로 한 줄만 보면 헛실패한다.
+        //  띠가 칸 바탕 밑에 깔리면 어느 줄이나 0 이라 진짜 불량은 그대로 잡힌다.
+        let n = 0;
+        for (let y = 0; y < Math.min(img.height, 4); y++) {
+          const d = g.getImageData(0, y, img.width, 1).data; let m = 0;
+          for (let i = 0; i < img.width; i++) { const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2]; if (Math.abs(r - 255) < 14 && Math.abs(gg - 224) < 16 && Math.abs(b - 102) < 26) m += 1; }
+          if (m > n) n = m;
+        }
         return { n, w: img.width };
       }, shot.toString('base64'));
     }

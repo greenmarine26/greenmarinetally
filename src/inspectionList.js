@@ -7,7 +7,6 @@
 //   - 색상: 흰 바탕 한 벌(3.70-02 규격색 없음 — 검수사 «바탕색은 없애 주세요») · X-RAY 대상 줄만 노랑(#ffe066)
 //   - 시트1=전체, 시트2=특수화물 별첨
 
-import { openPrintWindow } from './printHelper.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {

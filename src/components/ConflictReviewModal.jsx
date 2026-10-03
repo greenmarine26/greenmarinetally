@@ -10,7 +10,7 @@
 //   - 컨별로 [추가/무시] [EDI 사용/리스트 사용] 선택
 //   - "모두 추가/무시" 일괄 처리
 import React, { useState } from 'react';
-import { X, AlertTriangle, Plus, Check, ChevronRight } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
 
 export default function ConflictReviewModal({ open, onClose, conflicts, onResolve }) {
   // conflicts 형식:

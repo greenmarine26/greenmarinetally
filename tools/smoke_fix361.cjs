@@ -95,7 +95,7 @@ exports.onValue = () => () => {}; exports.off = () => {}; exports.goOffline = ()
     ok('SearchPanel — 종전 그대로 voyage?.photos 6곳(안쪽 컴포넌트가 제 prop 을 본다 — 스코프 검사)', (S('src/components/SearchPanel.jsx').match(/voyage\?\.photos \|\| null/g) || []).length === 6 && !/photosAll/.test(S('src/components/SearchPanel.jsx')));
     ok('ISO403PhotoModal — 사진 읽기는 fbGetDamagePhoto 한 벌(직접 get 없음)', /fbGetDamagePhoto\(voyageKey, c\.iso403_photo_ts\)/.test(S('src/components/ISO403PhotoModal.jsx')) && !/voyages\/\$\{voyageKey\}\/photos/.test(S('src/components/ISO403PhotoModal.jsx')));
     ok('firebase.js — 옛 자리에 새로 쓰는 set 이 없다(voyages/{k}/photos/{ts} set 은 삭제·null 뿐)', !/set\(ref\(db, `voyages\/\$\{voyageKey\}\/photos\/\$\{(ts|e\.ts)\}`\), \{/.test(S('src/firebase.js')));
-    ok('APP_VERSION 3.61 이상', /3\.6[1-9]|3\.[7-9]/.test(S('src/utils.js').match(/APP_VERSION = '([^']*)'/)[1]));
+    ok('APP_VERSION 3.61 이상', /3\.6[1-9]|3\.[7-9]|^TallyOne [4-9]\./.test(S('src/utils.js').match(/APP_VERSION = '([^']*)'/)[1]));
   } catch (e) { bad += 1; console.log('  ✘ 예외 ' + (e && e.stack || e)); }
   console.log(`\n3.61 연막검사: ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);

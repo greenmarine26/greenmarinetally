@@ -327,10 +327,10 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
         </div>
       )}
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
+        <div className="flex-1 min-w-0 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
           <SearchIcon className="w-4 h-4 text-dim-400"/>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="컨번호 · 씰번호"
-            className="flex-1 bg-transparent text-sm2 outline-none"/>
+            className="flex-1 min-w-0 bg-transparent text-sm2 outline-none"/>
           {q && <button onClick={() => setQ('')}><X className="w-4 h-4 text-dim-400"/></button>}
         </div>
         {/* 조회의 필터·검색이 그대로 인쇄로 간다(시안 «연계» — 같은 `shown` 을 넘긴다).
@@ -357,7 +357,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
             + (sealedCount === rows.length && rows.length ? ' 완료' : ' (인계용)') },
           PER_PAGE)}
           disabled={!shown.length}
-          className="h-11 px-4 rounded-pill bg-amber-500 text-ink-950 font-bold text-sm2 flex items-center gap-1.5 disabled:opacity-40">
+          className="h-11 px-4 rounded-pill bg-amber-500 text-ink-950 font-bold text-sm2 flex items-center gap-1.5 whitespace-nowrap shrink-0 disabled:opacity-40">
           <Printer className="w-4 h-4"/>출력 {pages.length > 1 ? `(${pages.length}장)` : ''}
         </button>
       </div>
@@ -438,7 +438,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                         <button disabled={!canEdit} onClick={() => setEdit({ cn: r.cn, field: 'sealer', val: r.sealer })}
                           className="text-emerald-300 font-bold disabled:cursor-default">{r.sealer}</button>
                       ) : (
-                        <span className="text-dim-500 italic">미등록</span>
+                        <span className="text-dim-500 italic whitespace-nowrap">미등록</span>
                       )}
                     </div>
                   </td>

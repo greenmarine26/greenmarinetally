@@ -64,8 +64,8 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
   };
 
   return (
-    <div className={`rounded-pill overflow-hidden ${
-      hasIssue ? 'bg-amber-950/30 border border-amber-700/60' : 'bg-ink-900/50 border border-line'
+    <div className={`rounded-card overflow-hidden ${
+      hasIssue ? 'bg-amber-950/30 border-2 border-amber-700/60' : 'bg-ink-900/50 border-2 border-line-strong'
     }`}>
       <button
         onClick={() => setExpanded(v => !v)}

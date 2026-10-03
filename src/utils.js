@@ -42,7 +42,8 @@ export function isSentenceQuery(v) {
 //  3.61-02 **수집기 자동 등록(양하, 합본 없는 선적)도 같은 이름 리스트는 새 판만 쓴다**(검수사 2026-09-26 «새로운 자료를 적용을 안하고 전자료를 이용하는이유? 금일은 TMPZ새로운걸로 적용하면 305개 맞는데 그전 자료를 이용하면 307개가 됨» — 선적 합본 merge_entry.js 에만 있던 개정판 판정을 src/listRevision.js 한 벌로 꺼내 autoRegApi 도 씀, TMPZ 2030E 양하 307 → 305 · RZOR R105W 선적 200 → 199(옛 FIIS 에만 있던 CICU9635360) · 수집기 헬퍼 전용, 앱 화면 변화 없음)
 //  3.61-01 **RZOR 선사 리스트 리퍼 «40RE»·«40RF» 는 높이를 말하지 않는다**(검수사 2026-09-25 «RZOR은 40RE 또는 40RF로 사용합니다. 그래서 매번 규격틀림 알림이 발생합니다» — utils.isoTriad, R105E 규격 알림 20 → 0)
 //   (앞 판) 'TallyOne 3.71'   // 3.71 **ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로**(검수사 2026-09-30 «ATPR WEI 엠티 선적시에만 … 컨번호를 불러주고 엠티실번호를 입력하라고 하고 마이크를 열어주고 검수가 실번호를 불러 주면 입력 … 앞자리 세자리는 이곳에 실 구간을 넣어주면 그것의 앞자리 세자리와 검수가 불러주는 뒷자리 세자리를 리스트에 입력») — 자동 가이드(GuidedWorkPanel)가 컨번호를 부른 직후 그 컨이 ATPR 위해행 엠티(정책 code ATRP·POD CNWEI/CNWEH·F/E=E)이면 EsealVoiceBar 가 «엠티실 뒷 세 자리» 를 말하고 마이크를 연다 · 세 자리 + 선적 목록 🔖 카드 구간의 앞 세 자리 = 여섯 자리 실 → fbSetEmptySeal(컨 상세·기록지 사진과 같은 길) · 구간 밖·다른 컨에 이미 붙은 실·앞 세 자리가 둘 이상이면 받지 않고 까닭을 말한다(둘 이상이면 화면에서 고른다) · 트윈이면 컨마다 차례로 · 손으로도 넣을 수 있다 · 선적확인은 막지 않는다 · 다른 선박·다른 POD 엠티는 안 건드린다(src/esealVoice.js isAtprWeiEmpty) · 구간 전개는 VoyagePage 와 esealPoolOf 한 벌 · voice.js spokenDigitsRaw(자르지 않는 숫자) 신설 · 연막 smoke_esealvoice(ATPR 2644W 372대 실항차) · 3.70-02 검수 리스트 줄 바탕색 없음(X-RAY 노랑만 남김, 검수사 2026-09-30 «바탕색은 없애 주세요») · 한 단 상한 60 → 66줄(글자 9pt 그대로, 장이 줄 때만 행을 좁힘) — ATPR 2644W 선적 372대가 포트별 4장 → 2장, 이어서 3장 → 2장(검수사 2026-09-30 «잘꾸미면 2장 출력이면 될듯 한데 4장 출력 … 63줄로 뽑으면 포트별 1장씩») · (앞 판) 3.70-01 수화물 리퍼는 온도 대상이 아니다(utils.reeferTempExempt 한 벌 — 입구 applySpecialMarks 가 forecast.luggageCns 로 lugg 를 찍음, RZOR CICU9635360 수화물이던 R097E~R106E 19번 온도 기록 0) · 기록에 없던 칸을 처음 고쳐도 저장(fbUpdateRecordField 이력 from undefined → null — 리퍼드라이 지정 오류)(검수사 2026-09-30 «수화물이 온도 없는 수화물 리퍼인데 온도 미입력 대상으로 알림» · «리퍼드라이로 지정을 했더니 오류메시지»)
-export const APP_VERSION = 'TallyOne 3.77'   // 3.77 **자동 가이드 «베이 먼저» (양하·선적)** — 트윈이 무게로 싱글이 될 때 한 대씩 번갈아(앞·뒤) 내는 대신 33번 또는 35번 베이를 몰아서 먼저 내린다. 같은 베이 싱글을 두 번 연속 고르면 앱이 알아채 그 베이 먼저로 바꾸고(음성 안내), 싱글 화면의 «N번 베이 먼저» 단추로 바로 고를 수도 있다. 그동안 카드가 한 대씩 나오고 위(양하)·아래(선적) 칸이 남은 칸은 앞서지 않는다. 노란 칩 «트윈으로 복귀» 로 되돌린다(검수사 2026-10-03 DPRT 2611N 3호기 «무게가 초과 되는게 많을때에는 33번베이 먼저 또는 35번베이 먼저» · «선적도 같은 기능이 있어야 합니다»). 연막검사 smoke_bayfirst.
+//   (앞 판) 'TallyOne 3.77'   // 3.77 **자동 가이드 «베이 먼저» (양하·선적)** — 트윈이 무게로 싱글이 될 때 한 대씩 번갈아(앞·뒤) 내는 대신 33번 또는 35번 베이를 몰아서 먼저 내린다. 같은 베이 싱글을 두 번 연속 고르면 앱이 알아채 그 베이 먼저로 바꾸고(음성 안내), 싱글 화면의 «N번 베이 먼저» 단추로 바로 고를 수도 있다. 그동안 카드가 한 대씩 나오고 위(양하)·아래(선적) 칸이 남은 칸은 앞서지 않는다. 노란 칩 «트윈으로 복귀» 로 되돌린다(검수사 2026-10-03 DPRT 2611N 3호기 «무게가 초과 되는게 많을때에는 33번베이 먼저 또는 35번베이 먼저» · «선적도 같은 기능이 있어야 합니다»). 연막검사 smoke_bayfirst.
+export const APP_VERSION = 'TallyOne 4.00'   // 4.00 **메뉴 정리와 새 화면** — 항차 화면 탭 줄을 아이콘 메뉴(독)로 바꾸고(양하·선적 · 작업 시작 · 베이 · 출력 · 업로드 · 더보기) 출력을 «🖨️ 출력» 한 곳(출력 센터)으로 모았다. 업로드 탭은 올리기만 남기고 통계·결과·X-RAY 는 더보기로, 업로드는 독으로 꺼냈다(검수사 2026-10-04 «업로드 안에 검수리스트 출력과 카고플랜 베이상세를 출력하는곳도 있습니다. 그리고 베이를 누르면 거기에도 있습니다. 이런걸 정리하여야 합니다»). 쓰지 않는 죽은 화면·함수 16파일+를 걷어내고 홈·항차 요약·업로드를 게임 메뉴처럼 새로 꾸몄으며 사용 매뉴얼·기능 색인·수석 매뉴얼을 이 화면에 맞췄다.
 //   3.76 **인원 접근 온오프** — 인원관리(⚙) 각 행의 [ON/OFF]. 오프(🚫 접근차단)면 그 사람 화면에는 자물쇠 그림 하나만 뜨고(접근불허 문구 포함) 아무것도 쓸 수 없다 — 로그인해 있던 사람도 즉시 덮인다. 온으로 돌리면 메뉴가 그대로 정상으로 돌아온다. 퇴사 처리와 별개라 직책·권한·기록은 그대로이고 온으로 돌리면 바로 들어온다. 소유자·본인은 끌 수 없다. 콘앱은 공개라 막지 않는다(검수사 2026-10-03 «인원관리에서 온오프 기능을 만들어서 주세요 오프하면 접근불허 메시지와 함께 사용을 못하게 막습니다» · «콘앱은 공개이니 열어 놓습니다. 검수앱만 접근을 막습니다»). 노드 staffOff, 연막검사 smoke_staffoff.
 //   3.75 **수동 트윈 선적 — 앞 자리를 정하면 뒤가 짝꿍 자리로 자동** — 앞 카드의 «위치 수정»에서 앞 자리(예 33-07-82)를 고르면 뒤 컨이 짝꿍 자리(35-07-82)로 같이 들어가고 뒤 카드도 그 컨·그 자리로 바뀐다. 앞뒤 둘 다 다른 컨이 온 때는 뒤 컨만 한 번 정하면 되고, 그 다음 [트윈 한 번에 선적확인] 한 번이면 둘이 같이 찍힌다(검수사 2026-10-03 «앞에껄 33-07-82를 지정하면 뒤컨테이너는 35-07-82로 자동으로 지정되게 하고 선적을 누르면 둘다 선적»). 연막검사 smoke_twinauto.
 // 3.74 **미르 «언제 끝나»·작업 계산을 각 터미널 본선현황으로** — PCTC 는 본선작업현황의 작업량·완료량·잔여량(수집기 MailPilot 2.41 이 info.termStat 으로 올림), 동방은 본선 작업 현황의 QC별 완료·잔여(info.qcWork). «몇 시에 끝나»·«얼마나 남았어»·«작업 속도» 가 모두 그 한 숫자를 읽고 답에 «📡 본선현황 기준» 줄이 붙는다. 자료가 없거나(예정·수집 전) PCTC 가 3시간 넘게 안 갱신되면 종전 완료 기록 계산으로 돌아간다(검수사 2026-10-03 «미르는 언제끝나 라는 질문과 작업계산은 각 터미널 본선현황보고 계산하도록하세요»). 연막검사 smoke_termeta.
@@ -61,7 +62,7 @@ export const APP_VERSION = 'TallyOne 3.77'   // 3.77 **자동 가이드 «베이
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '자동 가이드 — 트윈이 무게로 싱글이 되면 33번 또는 35번 베이를 먼저 몰아서 내릴 수 있습니다. 같은 베이 싱글을 두 번 고르면 저절로 그 베이 먼저로 바뀌고 싱글 화면의 베이 먼저 단추로도 고릅니다. 양하와 선적 모두 됩니다. 이전 안내 — 인원관리에 접근 ON/OFF 가 생겼습니다 — 오프로 하면 그 사람 화면에는 자물쇠만 보이고 쓸 수 없으며 온으로 돌리면 정상으로 돌아옵니다. 수동 트윈 선적 — 앞 카드 위치 수정에서 앞 자리를 고르면 뒤 컨이 짝꿍 자리로 같이 들어가고 뒤 카드도 바뀝니다. 앞뒤 둘 다 다른 컨이 와도 뒤 컨만 한 번 정한 뒤 트윈 한 번에 선적확인 한 번으로 둘이 같이 찍힙니다. 이전 안내 — 미르 — 몇 시에 끝나, 얼마나 남았어, 작업 속도를 각 터미널 본선현황 숫자로 계산합니다. 답에 본선현황 기준이라고 표시됩니다. 이전 안내 — 카고플랜 인쇄 — 도구줄의 «컬러·흑백» 단추로 고릅니다. 흑백은 칸 바탕색을 지우고 ★ X-RAY 만 빨강으로 찍힙니다. 이전 안내 — 리퍼 규격 알림 — 45RE 와 42RE 처럼 40피트 리퍼의 42·45 표기 차이는 더 이상 «규격이 자료마다 다름» 으로 뜨지 않습니다. 이전 안내 — 머스크 엠티 찾기 — 수석 대시보드의 «🔎 머스크 엠티 찾기»에서 머스크 항차마다 PCTC 엠티와 머스크 BAPLIE 엠티를 맞대 봅니다. 엠티 리스트가 없으면 항차 폴더에 임시 리스트를 만들고 머스크 정본이 오면 정본을 씁니다. 이전 안내 — 리퍼 체크 안 함 — 머스크 계열은 선박 설정과 상관없이 마감 점검의 리퍼 온도와 사진, 출항 배너, 진단 알람, 요약 카드의 리퍼 확인 칩, 베이 사진 배지, 미르 브리핑의 리퍼 경고가 뜨지 않습니다. 이전 안내 — 선적 자동 가이드 — 한 베이에 도착항이 섞여 있어도 바닥 칸이 있는 묶음부터 나오고 같은 열에서 위 칸이 아래 칸보다 먼저 나오지 않습니다. ATPR 2644W 28베이는 WEI 리퍼부터 나옵니다'
+export const APP_NOTE = '4.00 메뉴 정리 — 항차 화면 메뉴가 양하 · 작업 시작 · 베이 · 출력 · 업로드 · 더보기로 바뀌었습니다. 검수 리스트와 카고플랜과 베이 상세 출력은 출력 한 곳에서 합니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -2250,126 +2251,6 @@ export function parseAscFile(text) {
   return stampEdiSeq({ vsl, voy, serviceCode, containers });
 }
 
-// === M6.47: ASC 파일 → 베이사전 엔트리 변환 (Gemini 호출 0) ===
-//   M6.48 보강: serviceCode 우선 사용 (KSKM 등 ASC 헤더 코드)
-//   ASC의 컨테이너 좌표(BBBRRTT)로부터 베이 구조 자동 추출:
-//   - 사용된 베이 목록
-//   - 각 베이의 hold(tier ≤10) / deck(tier ≥80) 분리
-//   - 짝수 베이(40ft) / 홀수 베이(20ft) 식별
-//   - 홀수 베이의 짝꿍(인접 짝수) 자동 매칭
-//   - 짝수 단독 베이(isStandalone) 자동 판정
-//
-//   한계: 항차마다 "사용된 슬롯"만 반영 (전체 베이 구조는 여러 ASC 누적 시 정확해짐)
-//   장점: Gemini 0, 무료, 즉시, 정확도 100% (구조화 데이터)
-export function ascToBayDictEntry(ascResult, fileName, extra = {}) {
-  // M6.47: 컨번호 있는 실제 컨테이너만 사용 (정렬용 빈 슬롯 라인 무시)
-  //   ASC에 종종 "000010", "000020" 같은 빈 슬롯 라인 있음 — BAY 00 오인 원인
-  const containers = (ascResult?.containers || []).filter(c => c.cn && isValidCn(c.cn));   // V9.57: 단일 소스
-  if (containers.length === 0) {
-    return null;
-  }
-
-  // 1) 각 베이별 좌표 수집
-  const bayMap = {};  // { bayNo: { rowsEven, rowsOdd, holdTiers, deckTiers } }
-  containers.forEach(c => {
-    if (!c.bay) return;
-    const bayNo = parseInt(c.bay, 10);
-    if (!Number.isFinite(bayNo)) return;
-    const row = parseInt(c.row, 10);
-    const tier = parseInt(c.tier, 10);
-    if (!Number.isFinite(row) || !Number.isFinite(tier)) return;
-
-    if (!bayMap[bayNo]) {
-      bayMap[bayNo] = {
-        rowsEven: new Set(),  // 짝수 row (40ft 슬롯)
-        rowsOdd: new Set(),   // 홀수 row (20ft 슬롯)
-        holdTiers: new Set(),
-        deckTiers: new Set(),
-      };
-    }
-    const b = bayMap[bayNo];
-    if (row % 2 === 0 && row !== 0) b.rowsEven.add(row);
-    else b.rowsOdd.add(row);
-    if (tier <= 20) b.holdTiers.add(tier);     // hold: tier 02~20
-    else b.deckTiers.add(tier);                 // deck: tier 80~98
-  });
-
-  // 2) baysSummary 생성
-  const sortedBays = Object.keys(bayMap).map(Number).sort((a, b) => a - b);
-  const baysSummary = [];
-  const standalone = [];
-  const pairs = [];
-
-  sortedBays.forEach(bayNo => {
-    const b = bayMap[bayNo];
-    // tier 큰 순으로 정렬 (deck: 88, 86, 84, 82 / hold: 08, 06, 04, 02)
-    const deckTiers = Array.from(b.deckTiers).sort((a, b) => b - a);
-    const holdTiers = Array.from(b.holdTiers).sort((a, b) => b - a);
-    const hasHold = holdTiers.length > 0;
-    const hasDeck = deckTiers.length > 0;
-
-    const isEven = bayNo % 2 === 0;
-    // 짝수 베이 단독: 인접 홀수 베이(N-1, N+1) 데이터 없으면 standalone
-    const isStandalone = isEven && !bayMap[bayNo - 1] && !bayMap[bayNo + 1];
-
-    // row 폭 (사용된 max row)
-    const rowMaxEven = b.rowsEven.size > 0 ? Math.max(...b.rowsEven) : null;
-    const rowMaxOdd = b.rowsOdd.size > 0 ? Math.max(...b.rowsOdd) : null;
-
-    if (isStandalone) standalone.push(bayNo);
-
-    const entry = {
-      bayNo: String(bayNo).padStart(2, '0'),
-      section: 1,                                  // 단순화 (모두 section 1)
-      hasHold,
-      hasDeck,
-      isStandalone,
-      // PrintableCargoPlan/BayDetail 양쪽 호환
-      deckTiers,
-      holdTiers,
-      deckTiersLocal: deckTiers,
-      holdTiersLocal: holdTiers,
-    };
-    if (rowMaxEven != null) { entry.rowMaxEvenLocal = rowMaxEven; entry.rowMaxEven = rowMaxEven; }
-    if (rowMaxOdd != null) { entry.rowMaxOddLocal = rowMaxOdd; entry.rowMaxOdd = rowMaxOdd; }
-    baysSummary.push(entry);
-  });
-
-  // 3) 짝꿍 쌍 식별 (짝수 + 홀수 인접)
-  sortedBays.forEach(bayNo => {
-    if (bayNo % 2 === 0 && bayMap[bayNo - 1]) pairs.push([bayNo, bayNo - 1]);
-    if (bayNo % 2 === 0 && bayMap[bayNo + 1]) pairs.push([bayNo, bayNo + 1]);
-  });
-
-  // 4) 코드/이름 추출 — M6.48: 우선순위
-  //   1순위: 사용자 입력 (extra.code)
-  //   2순위: ASC 헤더 serviceCode (예: KSKM)
-  //   3순위: vesselName 앞 4글자 (예: SUNN from SUNNY KALMIA)
-  const serviceCode = (ascResult?.serviceCode || '').toUpperCase().trim();
-  const vname = (ascResult?.vsl || '').toUpperCase();
-  const vname4 = vname.replace(/\s+/g, '').slice(0, 4);
-  const code = (extra.code || serviceCode || vname4).toUpperCase();
-
-  return {
-    name: ascResult?.vsl || vname,
-    code,
-    serviceCode,                            // M6.48: 헤더 코드 별도 저장
-    vesselCode: vname4,                     // M6.48: 이름 기반 코드 별도 저장
-    callsign: extra.callsign || '',
-    imo: extra.imo || '',
-    voy: ascResult?.voy || '',
-    bayDef: {
-      baysSummary,
-      pairs,
-      standalone,
-      grade: 'user-verified-asc',
-      verified: true,
-      source: 'asc-file',
-      sourceFile: fileName || '',
-      generatedAt: Date.now(),
-    },
-  };
-}
 export async function loadSheetJS() {
   if (window.XLSX) return window.XLSX;
   // V9.32-01: 종전엔 CDN 한 곳을 타임아웃 없이 기다려 — CDN 무응답이면 업로드가
@@ -3847,61 +3728,6 @@ export async function parseXrayList(arrayBuffer) {
   };
 }
 
-// === POD/POL 색깔 (M3.85 대폭 확장) ===
-// 평택항 자주 쓰는 모든 항구 색깔 지정 - 베이플랜에서 셀 색깔로 행선지 즉시 식별
-// 지역별 톤 통일 (구분 + 그룹 인지):
-//   중국 = 청-남청 계열
-//   일본 = 분홍-장미 계열
-//   한국 = 노랑-amber 계열
-//   대만/홍콩 = 보라-인디고 계열
-//   동남아 = 청록 계열
-//   미주/유럽 = 슬레이트 계열
-export const podColorMap = {
-  // 중국 (청-남청 톤) - 평택 주력 항로
-  'CNDLC': { bg: 'bg-blue-600', text: 'text-blue-50' },        // 대련
-  'CNQDG': { bg: 'bg-blue-500', text: 'text-blue-50' },        // 청도
-  'CNTAO': { bg: 'bg-blue-500', text: 'text-blue-50' },        // 청도(별칭)
-  'CNWEI': { bg: 'bg-sky-600', text: 'text-sky-50' },          // 위해
-  'CNYAT': { bg: 'bg-sky-500', text: 'text-sky-50' },          // 연태
-  'CNLYG': { bg: 'bg-cyan-700', text: 'text-cyan-50' },        // 연운항
-  'CNXMN': { bg: 'bg-cyan-600', text: 'text-cyan-50' },        // 하문
-  'CNTSN': { bg: 'bg-cyan-500', text: 'text-cyan-50' },        // 천진
-  'CNSHA': { bg: 'bg-indigo-600', text: 'text-indigo-50' },    // 상해
-  'CNNGB': { bg: 'bg-indigo-500', text: 'text-indigo-50' },    // 닝보
-  'CNQZH': { bg: 'bg-teal-600', text: 'text-teal-50' },        // 친저우
-  'CNCAN': { bg: 'bg-teal-500', text: 'text-teal-50' },        // 광주
-  'CNSZN': { bg: 'bg-teal-700', text: 'text-teal-50' },        // 심천
-  'CNTAG': { bg: 'bg-blue-700', text: 'text-blue-50' },        // (기존)
-  'CNNTG': { bg: 'bg-cyan-800', text: 'text-cyan-50' },        // (기존)
-  'CNWEH': { bg: 'bg-sky-700', text: 'text-sky-50' },          // 웨이하이
-  // 일본 (분홍-장미 톤)
-  'JPHKT': { bg: 'bg-rose-600', text: 'text-rose-50' },        // 하카타
-  'JPYOK': { bg: 'bg-pink-600', text: 'text-pink-50' },        // 요코하마
-  'JPTYO': { bg: 'bg-rose-500', text: 'text-rose-50' },        // 도쿄
-  'JPOSA': { bg: 'bg-pink-500', text: 'text-pink-50' },        // 오사카
-  'JPNGO': { bg: 'bg-rose-700', text: 'text-rose-50' },        // 나고야
-  'JPUKB': { bg: 'bg-pink-700', text: 'text-pink-50' },        // 고베
-  // 한국 (노랑 톤)
-  'KRPUS': { bg: 'bg-yellow-600', text: 'text-yellow-50' },    // 부산
-  'KRINC': { bg: 'bg-amber-600', text: 'text-amber-50' },      // 인천
-  'KRPTK': { bg: 'bg-amber-500', text: 'text-amber-950' },     // 평택 (자기)
-  // 대만/홍콩 (보라-인디고)
-  'TWKHH': { bg: 'bg-violet-600', text: 'text-violet-50' },    // 카오슝
-  'TWTPE': { bg: 'bg-violet-500', text: 'text-violet-50' },    // 타이베이
-  'HKHKG': { bg: 'bg-purple-600', text: 'text-purple-50' },    // 홍콩
-  // 동남아 (청록)
-  'SGSIN': { bg: 'bg-emerald-600', text: 'text-emerald-50' },  // 싱가포르
-  'VNSGN': { bg: 'bg-emerald-700', text: 'text-emerald-50' },  // 호치민
-  'VNHPH': { bg: 'bg-emerald-500', text: 'text-emerald-50' },  // 하이퐁
-  'THBKK': { bg: 'bg-green-600', text: 'text-green-50' },      // 방콕
-  'MYPKG': { bg: 'bg-green-700', text: 'text-green-50' },      // 클랑
-  // 미주/유럽 (슬레이트)
-  'USLAX': { bg: 'bg-ink-700', text: 'text-dim-100' },      // LA
-  'USNYC': { bg: 'bg-slate-500', text: 'text-dim-100' },      // 뉴욕
-  'USSEA': { bg: 'bg-ink-750', text: 'text-dim-100' },      // 시애틀
-  'DEHAM': { bg: 'bg-ink-700', text: 'text-zinc-50' },        // 함부르크
-  'NLRTM': { bg: 'bg-zinc-500', text: 'text-zinc-50' },        // 로테르담
-};
 
 //  ★ 3.7 목적지(POD)별 **고정 바탕색** — 검수사 지시 2026-09-03.
 //    «플랜에서 포트별 격자를 없앱니다. 눈이 아프고 구분이 잘 안됩니다. 표기보다 엷은 바탕색으로 대체합니다. 목적지별 색으로»
@@ -4027,20 +3853,6 @@ export function podBgOf(key, mode) {
 }
 
 
-// 항구 코드 → 색깔 (3자/5자 모두 매핑)
-// 예: 'KRPTK' → 정확 매칭, 'PTK' → 끝 3자 매칭 (LOC+11이 3자만 줄 때)
-export function getPortColor(code) {
-  if (!code) return null;
-  const upper = String(code).toUpperCase().trim();
-  if (podColorMap[upper]) return podColorMap[upper];
-  // 끝 3자로 재시도 (예: 'PTK' → 'KRPTK')
-  if (upper.length === 3) {
-    for (const k of Object.keys(podColorMap)) {
-      if (k.endsWith(upper)) return podColorMap[k];
-    }
-  }
-  return null;
-}
 
 // M3.5.6: 장비 번호 (localStorage)
 //  ★ 3.50 문지기 — «조회만» 으로 들어온 사람에게는 호기가 없다(읽으면 '' · 넣어도 안 넣힌다 · 비우기는 된다). 호기 단추·시작보고·베이뷰 호기 단추 어디서 넣어도 여기 한 곳에서 막힌다.
@@ -4102,9 +3914,6 @@ export function extractBerthNo(berthRaw) {
 //     타 지명이 들어가지 않으므로 정상값을 자르지 않는다.
 //   ※ 범용화 시 이 목록은 테넌트 프로필의 homePort 기준으로 바꾼다(작업표준 §범용화).
 const _FOREIGN_PORT_RE = /인천|부산|광양|울산|마산|군산|목포|포항|동해|대산|여수|삼천포|INCHEON|BUSAN|PUSAN|GWANGYANG|ULSAN|MASAN/i;
-export function isForeignPortBerth(b) {
-  return !!b && _FOREIGN_PORT_RE.test(String(b));
-}
 
 export function isValidBerth(b) {
   if (!b) return false;
@@ -4830,16 +4639,6 @@ export function savePierCoord(code, lat, lng, registeredBy = '') {
   }
 }
 
-/**
- * M6.17: 저장된 부두 좌표 조회 (UI 표시용)
- */
-export function getStoredPierCoords() {
-  try {
-    const raw = localStorage.getItem('master_pier_coords_v1');
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return {};
-}
 
 // ─── M5.82: PORT-MIS 엑셀 파서 ───────────────────────────────
 // 사용자가 PORT-MIS 사이트에서 엑셀 다운로드 → 검수앱 업로드
@@ -5371,17 +5170,6 @@ export function isValidCn(cn) {
   return /^[A-Z]{4}\d{7}$/i.test(String(cn || '').trim());
 }
 
-// 오픈탑/OOG 통합 판정 — 필드 유래가 갈린다: 리스트 파서는 ot, EDI 파서는 oog(459 계열·U/O 타입).
-//   oog는 오픈탑 외 순수 OOG(규격초과)도 포함하므로 이름을 isOogOrOt로 명확히 한다
-//   (기존 소비처 20곳의 의미가 전부 '오픈탑/OOG 표시'라 통합 판정과 일치 — 감사 F6 확인).
-//   필드가 없어도 ISO(459x·..U/..O → 라벨 OT)로 보강 판정.
-export function isOogOrOt(c) {
-  if (!c) return false;
-  if (c.ot || c.oog) return true;
-  const iso = String(c.iso || '').toUpperCase();
-  if (/^[24]59/.test(iso)) return true;
-  return (isoToLabel(iso) || '').endsWith('OT');
-}
 
 // ------------------------------------------------------------
 // 실(봉인)번호 중복 — **두 컨에 한 실**. 판정은 여기 한 벌만 둔다.
@@ -7971,15 +7759,6 @@ export function isWorkingNow(voyage, now = Date.now()) {
   return now >= s;
 }
 
-/** ★ 항차 작업 시작 시각(ms) — 터미널 실적을 «작업 시작 시점부터» 적용하는 문지기 (2.99-01, BUG-2026-008).
- *  검수사 2026-09-02 — *«터미널 실적은 작업시작시점부터 적용하게 해주세요. 작업도 안했는데 실적이 보일리가 없으니»*
- *  `workStartAt` 이 문자열로 있으면 그것(빈칸이면 -1 = 터미널이 «아직 시작 안 함»이라고 적어 준 것 — isWorkingNow ② 와 같은 뜻),
- *  없으면 planDate 앞부분. 둘 다 없으면 0(모름 — 문지기를 세우지 않는다). */
-export function voyageWorkStartMs(voyage) {
-  const info = voyage?.info || {};
-  if (typeof info.workStartAt === 'string') return _dtMs(info.workStartAt) || -1;
-  return voyagePlanMs(voyage);
-}
 
 /** '2026-08-25 13:05' · '2026-08-25T13:05' → ms. 못 읽으면 0. */
 function _dtMs(v) {
@@ -8237,65 +8016,6 @@ function _mergeRecPos(map, rec) {
   return out;
 }
 
-//  2.89: 맞교환을 양하·선적 두 지도에 함께 겹친다 — 한쪽만 겹치면 95→66 붕괴(위 주석).
-//  2.96: 검수원이 고친 자리를 겹친 뒤 맞교환을 얹는다 — 양하·선적 두 축 모두.
-//  2.81: 배정표 이적(수집기가 배정목록에서 받아 적은 모브 수)을 같이 넘긴다 — 정본 판정용.
-// ══════════════════════════════════════════════════════
-// ★ 3.21 — **양하가 끝나면 «안 내린 시프팅 컨»과 «리스트에 없는데 내려온 컨»을 맞바꾼다.**
-//
-//   검수사 확정 2026-09-06 — *«양하가 끝나면 시프팅 대상인데 안내린 컨이 생길 것입니다. 그때 맞바꿈 해야 합니다.
-//   그리고 시프팅 양하/선적 대상리스트를 바꿔야 할것입니다»* · *«양하된것중에 리스트에 없는것이랑 안내린것이랑 맞바꿔 주세요»*
-//
-//   **왜 생기나.** 시프팅은 계획(적부도) 두 벌의 자리 차이로 «어느 컨을 들어야 하나» 를 고른다. 그런데 같은 규격 엠티가
-//   여러 대면 **어느 개체가 그 자리에 있었는지는 계획으로 못 가른다.** 크레인이 든 것이 실물이다.
-//   실측 MCAP 634N(2026-09-06 양하 종료) — 검수사가 데이터를 보기 전에 이렇게 짚었다:
-//   *«시프팅 리스트를 보세요 96개인데 아마 95개만 내렸을거고 그 리스트에 없는게 내려와서 양하로 잡힌게 하나 있을것입니다»*
-//     · 시프팅 96 · 완료 초과(리스트 밖) 96 · **겹치는 것 95**
-//     · 안 내린 시프팅 컨 `GCXU5751840`(계획 38-03-90 → 22-11-86)
-//     · 리스트 밖인데 내려온 컨 `MRKU4562139`(계획 38-09-90 → 38-09-90 = 시프팅 아님)
-//     · **카토스가 답을 줬다** — MRKU4562139 의 실적 자리가 `380390`(38-03-90) 이고 그것은 GCXU5751840 의 계획 자리다.
-//       둘 다 45GE 엠티 PHDVO→CNTXG — 계획으로는 못 가르고 실물이 갈랐다.
-//
-//   ⚠ **찾기만 한다. 쓰기는 사람이 누른다.** 컨번호가 바뀌는 일이라 조용히 정본을 고치지 않는다(D급).
-//   ⚠ 게이트는 `swapFixGate` 한 벌 — 출발지·도착지·규격·풀엠티가 같아야 하고 풀이면 무게까지(일항사 상의).
-//     통과 못 한 것은 버리지 않고 `blocked` 로 돌려준다(조용한 실패 금지 — 규범 §4-3).
-export function pendingShiftSwaps(voyage) {
-  const out = { done: false, pairs: [], blocked: [], notDropped: [], extra: [] };
-  if (!voyage || !voyage.discharge) return out;
-  const sec = voyage.discharge;
-  const comp = sec.completed || {};
-  const list = Object.keys(sec.ediContainers || {}).filter((cn) => isPyeongtaekPort((sec.ediContainers[cn] || {}).pod));
-  if (!list.length) return out;
-  //  «양하가 끝났다» = 리스트가 전량 완료. 진행 중에는 아직 바뀔 수 있으므로 내지 않는다(검수사 «양하가 끝나면»).
-  out.done = list.every((cn) => !!comp[cn]);
-  if (!out.done) return out;
-  let shift = {};
-  try { shift = computeShiftingFromVoyage(voyage) || {}; } catch (e) { console.warn('[맞바꿈] 시프팅을 못 셌습니다', e); return out; }
-  const shiftCn = Object.keys(shift).filter((k) => !k.startsWith('_'));
-  if (!shiftCn.length) return out;
-  const inList = new Set(list);
-  const inShift = new Set(shiftCn);
-  //  ① 시프팅인데 안 내린 것    ② 내려졌는데 리스트에도 시프팅에도 없는 것
-  out.notDropped = shiftCn.filter((cn) => !comp[cn]).sort();
-  out.extra = Object.keys(comp).filter((cn) => !inList.has(cn) && !inShift.has(cn)).sort();
-  if (!out.notDropped.length || !out.extra.length) return out;
-  //  속성은 **도착 적부도(raw)** 로 본다 — 통과화물이라 ediContainers 에 없다(실측 두 컨 다 없었다).
-  //  raw 가 없으면 ediContainers 로 폴백 — computeShiftingFromVoyage 와 같은 벌(§4-4).
-  const dm = ediMapFromRaw(sec) || sec.ediContainers || {};
-  const used = new Set();
-  for (const a of out.notDropped) {
-    let hit = null, why = '';
-    for (const b of out.extra) {
-      if (used.has(b)) continue;
-      const g = swapFixGate(dm[a], dm[b]);
-      if (g && g.ok) { hit = { a, b, chiefMate: !!g.chiefMate }; break; }
-      why = (g && g.reason) || why;
-    }
-    if (hit) { used.add(hit.b); out.pairs.push(hit); }
-    else out.blocked.push({ cn: a, reason: why || '짝이 없습니다' });
-  }
-  return out;
-}
 
 export function computeShiftingFromVoyage(voyage) {
   const sw = swapFixList(voyage);
@@ -8904,20 +8624,6 @@ export function buildMovePath(c) {
 //   utils.js 가 firebase.js 를 부르면 순환이 된다. 글자를 바꿀 일이 생기면 두 곳을 함께 고친다.
 const _MV_STORAGE = '창고';
 
-// 사유 낱말은 검수사가 쓰는 말로. 클로드가 지어낸 용어는 현장에서 안 통한다.
-export const MOVE_WHY_KO = {
-  move: '자리를 옮김',
-  actual: '실제 실린 자리로 지정',
-  displaced: '자리를 뺏겨 밀려남',
-  unassign: '자리를 비움',
-  // TallyOne 1.54: **이동이 아니다.** 이름표가 내려온 것이고 실물은 처음부터 창고에 있었다.
-  //   검수사 확정 2026-08-12 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
-  planTaken: '계획 자리를 내줌 (아직 안 실림)',
-  cancel: '완료 취소로 계획 자리 복귀',
-  restore: '원래 계획 자리로 되돌림',
-  loaded: '선적확인',
-  '': '사유 기록 없음',
-};
 
 export function movePathOrigin(c) {
   const p = buildMovePath(c);
@@ -9026,7 +8732,7 @@ export function seqFullConfirmText(res) {
   const pos = t.bay ? `${String(parseInt(t.bay, 10)).padStart(2, '0')}-${t.row}-${t.tier}` : '그 자리';
   const cns = (res.seqConflict || []).map(x => String(x).slice(-4));
   const who = cns.length > 1 ? `${cns.join(', ')} (${cns.length}대)` : (cns[0] || String(res.displaced || '').slice(-4));
-  return `시퀀스 작업입니다.\n${pos} 주인 ${who}(풀)의 이름표를 내리고 넣을까요?\n\n넣으면 그 컨은 몸만 창고로 갑니다 — 계획 자리 ${pos} 는 그대로 남습니다.`;
+  return `시퀀스 작업입니다.\n${pos} 주인 ${who}(풀)의 이름표를 내리고 넣을까요?\n\n넣으면 그 컨은 «자리 없음·계획 자리 내줌»으로 남아 실을 때 자리를 다시 정합니다 — 계획 자리 ${pos} 의 이름표는 그대로 남습니다.`;
 }
 
 // ── TallyOne 1.51: LUGGAGE (여객 수하물 컨테이너) ──────────────

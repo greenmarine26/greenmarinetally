@@ -4,7 +4,6 @@
 // - 평택항 좌표 고정
 // - TTS 음성 출력
 
-import { currentVolume } from './utils.js';   // 2.40: 볼륨 단일 소스
 const PYEONGTAEK_LAT = 36.9826;
 const PYEONGTAEK_LON = 126.8244;
 
@@ -289,36 +288,6 @@ export function buildFarewellMessage(name, weather, workDurationMs) {
   };
 }
 
-// 음성 출력 (Web Speech API) - M3.6-fix3: 밝고 청아한 목소리
-export function speakGreeting(text) {
-  if (!('speechSynthesis' in window)) return;
-  if (!text) return;
-  try {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'ko-KR';
-    utter.rate = 1.1;       // 약간 빠르게 (낭랑하게)
-    utter.pitch = 1.4;      // 높이 (밝고 청아하게)
-    utter.volume = currentVolume();   // 2.40: 하드코딩 1.0 → 단일 소스
-
-    // 한국어 여성 음성 우선 선택 (밝은 음색)
-    const voices = window.speechSynthesis.getVoices();
-    if (voices && voices.length > 0) {
-      // 우선순위: 한국어 여성 > 한국어 > 시스템 기본
-      const koVoices = voices.filter(v => v.lang && v.lang.startsWith('ko'));
-      // 여성 음성 찾기 (이름에 "Female", "Heami", "Yuna", "Sora", "Sun-Hi" 등)
-      const female = koVoices.find(v =>
-        /female|heami|yuna|sora|sun-hi|seoyeon|jiwon|innai|narae/i.test(v.name)
-      );
-      const koVoice = female || koVoices[0];
-      if (koVoice) utter.voice = koVoice;
-    }
-
-    window.speechSynthesis.speak(utter);
-  } catch (e) {
-    console.warn('[speakGreeting] 음성 출력 실패:', e);
-  }
-}
 
 // 로그인 시각 저장 (작업 시간 계산용)
 export function saveLoginTime(name) {

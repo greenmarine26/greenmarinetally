@@ -50,7 +50,7 @@ function Row({ r }) {
   //  통계 카드 줄
   if (r.kind === 'cards') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+      <div className={`grid grid-cols-2 ${r.items.length >= 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-1.5`}>
         {r.items.map((x, i) => (
           <div key={i} className={`rounded-pill border px-2 py-1.5 ${tone(x.c)}`}>
             <div className="text-3xs opacity-70 leading-none">{x.t}</div>

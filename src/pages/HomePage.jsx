@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, BarChart3, CheckCircle, X } from 'lucide-react';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, BarChart3, CheckCircle } from 'lucide-react';
 import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
@@ -7,7 +7,7 @@ import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
@@ -15,7 +15,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
 import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
-import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
+import { canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
@@ -755,7 +755,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {/* 3.54(검수사 2026-09-21 «수집기표시는 수석대쉬보드 표기를 절반으로 같이 사용합니다»): 수석 대시보드 버튼을 이 줄로 올려 절반씩 쓴다.
           V9.44·1.41 그대로 — canOpenChief 인 사람에게만 보인다. 안 보이는 사람은 수집기 줄이 한 줄을 다 쓴다. */}
       {_chiefBtn && <button onClick={onOpenChiefDashboard}
-        className="flex-1 min-w-0 flex items-center gap-2 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-pill px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
+        className="lift3 flex-1 min-w-0 flex items-center gap-2 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border-2 border-purple-700/50 rounded-pill px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
         <BarChart3 className="ico text-purple-300 shrink-0"/>
         <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
         <span className="hidden sm:inline text-2xs text-purple-300/70 truncate">전체 검수원 진행률·통계</span>
@@ -784,7 +784,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           return (
             <div className="relative min-w-0 shrink">
               <button onClick={() => setTopMenu(m => (m === 'pier' ? '' : 'pier'))} aria-haspopup="menu" aria-expanded={topMenu === 'pier'}
-                className={`px-2.5 py-2 rounded-pill text-xs2 font-bold whitespace-nowrap block max-w-full truncate ${_tone}`} style={{ minHeight: 40 }}>
+                className={`lift3 px-2.5 py-2 rounded-pill text-xs2 font-bold whitespace-nowrap block max-w-full truncate ${_tone}`} style={{ minHeight: 40 }}>
                 📍 {_cur} ▾
               </button>
               {topMenu === 'pier' && (
@@ -807,7 +807,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         {/* 3.55-01(검수사 2026-09-22): 조회만은 보기만 — 새 항차·완료·삭제 버튼을 그리지 않는다(3.51 은 눌렀을 때 막았다). */}
         {!_viewOnly && <div className="relative shrink-0">
           <button onClick={() => setTopMenu(m => (m === 'new' ? '' : 'new'))} aria-haspopup="menu" aria-expanded={topMenu === 'new'}
-            className="px-2.5 py-2 rounded-pill text-xs font-bold whitespace-nowrap bg-ink-800 hover:bg-ink-750 border border-line text-dim-100 flex items-center gap-1" style={{ minHeight: 40 }}>
+            className="lift3 px-2.5 py-2 rounded-pill text-xs font-bold whitespace-nowrap bg-ink-800 hover:bg-ink-750 border-2 border-line text-dim-100 flex items-center gap-1" style={{ minHeight: 40 }}>
             <Plus className="ico-s"/>새 항차 ▾
           </button>
           {topMenu === 'new' && (
@@ -1216,7 +1216,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
     const labels = {
       discharge: { title: '양하 데이터 삭제', desc: '선적 데이터는 유지됩니다.', color: 'blue' },
       loading: { title: '선적 데이터 삭제', desc: '양하 데이터는 유지됩니다.', color: 'amber' },
-      all: { title: '항차 전체 삭제', desc: '양하/선적/검수 데이터 모두 삭제됩니다. 복구 불가.', color: 'red' },
+      all: { title: '항차 전체 삭제', desc: '양하/선적/검수 데이터가 모두 삭제됩니다. 앱에서는 되돌릴 수 없습니다.', color: 'red' },
     };
     const L = labels[confirming];
     //  3.60-09 (진단 T11): 지울 쪽에 완료 기록이 있으면 먼저 말한다 — 삭제는 보관소를 안 거쳐 되돌릴 수 없다.
@@ -1390,7 +1390,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
     //   *«카드 전체를 좌(정보) 70% + 우(액션) 30% 로 분할 … 우측 280px 전용 액션 패널»*
     //   PC 에서 카드 오른쪽이 비어 있던 자리에 «지금 처리 / 양하 완료 / 선적 완료» 를 세로로 세운다.
     //   ⚠ 트리는 그대로 두고 클래스만 뒤집는다(LoginPage 에서 검증한 관용구) — 폰은 종전 세로 흐름.
-    <div className="card-v2 bg-ink-850 overflow-hidden lg:flex lg:items-stretch">  {/* 2.16 시안 V2: card-v2 가 radius 20 · 보더 white/6% · shadow · hover 2px 들림(PC만)을 준다.
+    <div className="card-v2 ship-card bg-ink-850 overflow-hidden lg:flex lg:items-stretch">  {/* 2.16 시안 V2: card-v2 가 radius 20 · 보더 white/6% · shadow · hover 2px 들림(PC만)을 준다.
       카드면은 #151F32(ink-850), 우측 액션 패널은 한 단계 깊은 #0F172A — 종전엔 둘 다 #0F172A 라
       패널이 카드에서 안 떨어져 보였다. */}
       <div className="lg:flex-1 lg:min-w-0">
@@ -1902,8 +1902,8 @@ function CancelledSide({ label }) {
 
 function SectionBar({ label, color, stats, onClick, fold = false }) {
   const colorClasses = {
-    blue: { bg: 'bg-blue-500', label: 'bg-blue-900/50 text-blue-200 border-blue-700/40' },
-    amber: { bg: 'bg-amber-500', label: 'bg-amber-900/50 text-amber-200 border-amber-700/40' },
+    blue: { bg: 'bg-blue-500', xp: 'xp-dis', label: 'bg-blue-900/50 text-blue-200 border-blue-700/40' },
+    amber: { bg: 'bg-amber-500', xp: 'xp-lod', label: 'bg-amber-900/50 text-amber-200 border-amber-700/40' },
   }[color];
 
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
@@ -1918,7 +1918,7 @@ function SectionBar({ label, color, stats, onClick, fold = false }) {
       {fold && (
         <div className="lg:hidden flex items-center gap-2 min-h-[32px]">
           <span className={`${colorClasses.label} border px-2 py-1 rounded font-black leading-none text-sm2 shrink-0`}>{label}</span>
-          <div className="flex-1 bg-ink-800 rounded-full h-1.5 overflow-hidden"><div className={`${colorClasses.bg} h-full transition-all`} style={{ width: `${pct}%` }}/></div>
+          <div className="flex-1 xp-bar xp-sm"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/></div>
           <span className="text-sm2 font-bold text-dim-100 mono shrink-0">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
           {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && <span className="text-xs2 font-bold text-red-300 shrink-0">누락 {stats.missing}</span>}
           {(stats.planOnly || stats.forecastEdi) && <span className="text-2xs font-black px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 shrink-0" title="확정 자료가 아닌 예상 수치입니다 — 자세히를 누르면 내역이 나옵니다">예상</span>}
@@ -2040,8 +2040,8 @@ function SectionBar({ label, color, stats, onClick, fold = false }) {
         )}
       </div>
       {/* 2.15 시안: 폰은 «진행바 2px → 6px 두껍게», PC 는 «얇은 4px». */}
-      <div className="bg-ink-800 rounded-full h-1.5 sm:h-1 overflow-hidden">
-        <div className={`${colorClasses.bg} h-full transition-all`} style={{ width: `${pct}%` }}/>
+      <div className="xp-bar xp-sm">
+        <div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/>
       </div>
       <div className="flex items-center justify-between text-2xs mt-0.5 text-dim-400">
         <span>완료 {stats.done}/{stats.total} ({pct}%)</span>

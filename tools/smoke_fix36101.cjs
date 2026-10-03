@@ -38,7 +38,7 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
     const mergedOf = (cn) => { const c = { ...FX.edi[cn] }; for (const [k, v] of Object.entries(FX.rec[cn])) if (allowed.has(k)) c[k] = v; return c; };
     ok('항차 화면 병합 뒤(컨 상세 경로) RZOR 40RE 20대도 알림 0', re40.every((cn) => { const c = mergedOf(cn); return !U.isoConflictOf(c.iso_edi || '', c); }), JSON.stringify(re40.filter((cn) => { const c = mergedOf(cn); return U.isoConflictOf(c.iso_edi || '', c); })));
     ok('다른 선사 표기(40RH)는 손대지 않음', U.isoTriad('45R1', { _rz: true, iso_carrier: '40RH', iso_customs: '45RE' }).length === 3);
-    ok('APP_VERSION 3.61-01 이상', /3\.61-(0[1-9]|[1-9]\d)|3\.6[2-9]|3\.[7-9]/.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8').match(/APP_VERSION = '([^']*)'/)[1]));
+    ok('APP_VERSION 3.61-01 이상', /3\.61-(0[1-9]|[1-9]\d)|3\.6[2-9]|3\.[7-9]|^TallyOne [4-9]\./.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8').match(/APP_VERSION = '([^']*)'/)[1]));
   } catch (e) { bad += 1; console.log('  ✘ 예외 ' + (e && e.stack || e)); }
   console.log(`\n3.61-01 연막검사: ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);

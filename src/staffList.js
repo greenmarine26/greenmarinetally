@@ -47,12 +47,6 @@ export const STAFF_NAMES = STAFF_LIST.map(s => s.name);
 // 이름 → 직책 매핑
 export const STAFF_ROLES = Object.fromEntries(STAFF_LIST.map(s => [s.name, s.role]));
 
-// 정규화 (공백/특수문자 제거 후 비교용)
-export function isStaff(name) {
-  if (!name) return false;
-  const norm = String(name).trim().replace(/[,\s\.\-_\/\\]/g, '');
-  return STAFF_NAMES.some(n => n === norm || n.replace(/\s/g, '') === norm);
-}
 
 // V9.57(B-4 선행): 서버 staffList 직책 캐시 — Firebase 구독(fbSubscribeStaffList) 데이터를
 //   구독부(App 등, 연결은 판2)가 setServerRoles로 밀어 넣는다. 모듈 캐시 방식이라 React 의존이 없고

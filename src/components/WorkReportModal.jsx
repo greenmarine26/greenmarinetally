@@ -16,7 +16,7 @@ import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
 import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { VoyageBlock, ferryPagesOf, ferryCutItem } from './Ferry1700Alert.jsx';   // 3.66: 주야간 작업보고도 17시 창과 같은 갱별 카드·계산 한 벌
-import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
+import { ref, set, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 

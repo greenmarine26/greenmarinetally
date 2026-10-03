@@ -13,8 +13,7 @@
 //  - 모바일/데스크톱 자동 셀 크기
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, bayCellTypeLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, reeferTempExempt, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
+import { isoToLabel, bayCellTypeLabel, normalizeBay, isReeferContainer, reeferTempExempt, isFlatRackContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort , slotAdjacencyError, hatchSegCols, podBgOf, podFeStyle} from '../utils.js';   // 3.7: 목적지 고정 바탕색(3.2 무늬 폐기)   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -24,14 +23,11 @@ import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
-// M4.6: 인쇄 컴포넌트
-import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
-import PrintableBayDetail from './PrintableBayDetail.jsx';
-import ErrorBoundary from './ErrorBoundary.jsx';
 
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
-export default function BayPlan({ containers, compMap, xrayMap, xraySeals, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey, rfSkip = false,
+export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, rfSkip = false,
+  onOpenPrint = null,   // 4.00: 도구줄 «출력» 단추가 여는 곳 — 항차 화면의 출력 센터(없으면 단추를 안 그린다)
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
   pendingSwap, onCancelSwap,   // TallyOne 2.89: 컨 맞교환 상대 고르기(배너만 — 셀 가로채기는 VoyagePage onOpenContainer)
@@ -55,14 +51,12 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   const [view3D, setView3D] = useState(false); // V7.97: 3D 입체 베이뷰 토글
-  // M4.6: 인쇄 모달 상태
-  const [printMode, setPrintMode] = useState(null);  // null | 'cargo' | 'detail'
 
-  /* ★ 2.85 — 미르가 «카고플랜 보여줘» 하면 부모가 베이 탭을 열고 신호를 남긴다. 여기서 받아 연다.
-       ⚠ 신호는 **한 번만** 쓰고 지운다 — 안 지우면 이 화면에 올 때마다 카고플랜이 다시 열린다. */
+  /* ★ 2.85 — 미르가 «N번 베이 보여줘» 하면 부모가 신호를 남긴다. 여기서 받아 그 장으로 옮긴다.
+       ★ 4.00 — «카고플랜 보여줘» 신호(__mirOpenCargo)는 이 화면에서 **받지 않는다.** 2.87 부터 카고플랜은 항차 화면이 덮개로 직접 띄워(_planOverlay)
+         이 화면이 받을 일이 없는데, 신호만 남아 **다음에 베이 탭을 열 때 카고플랜이 혼자 뜨는** 자리였다. 신호를 세우던 쪽도 같이 걷었다. */
   useEffect(() => {
     try {
-      if (window.__mirOpenCargo) { window.__mirOpenCargo = 0; setPrintMode('cargo-v2'); }
       /* 2.86: «N번 베이 보여줘» — 그 베이 장으로 옮긴다(BayPlan 이 쓰는 bay-page 앵커). */
       if (window.__mirGoBay != null) {
         const want = window.__mirGoBay; window.__mirGoBay = null;
@@ -81,8 +75,6 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
       }
     } catch (e) { /* 못 열어도 화면은 그대로 */ }
   }, []);
-  // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
-  const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(() => {
     // V7.99-12: 기본 22% (30%는 큰 베이(데크 많음+홀드)가 한 화면에 안 들어와 홀드가 잘림 — 사용자 제보).
     //   하한 0.15·버튼 0.01단위로 낮춰 현장 미세 조정. +/− 버튼·핀치·휠로 확대 가능.
@@ -620,7 +612,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
     if (onlyBay != null) return <div className="text-2xs text-dim-500 text-center py-3">자료 없음</div>;   // 3.11: 보드 호기 칸은 한 줄로
     return (
       <div className="bg-ink-900 border border-line rounded-pill p-8 text-center text-dim-400 text-sm">
-        베이 데이터 없음 — 자료 탭에서 EDI/ASC 업로드
+        베이 데이터 없음 — [업로드] 탭에서 EDI/ASC 업로드
       </div>
     );
   }
@@ -722,7 +714,7 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
       {/* TallyOne 1.15: **고정 위치 교정** (검수사 신고 2026-08-06 — "스크롤 대상이 아니다. 베이만 스크롤되고
           이 부분은 고정되어야 한다"). sticky 는 걸려 있었지만 `top-0` 이라 앱 헤더(52px)와
           항차 탭 네비(`sticky top-[52px]`, 높이 ≈38px) 뒤로 숨어 안 보였다. 그 아래로 내린다. */}
-      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[92px] z-10 shadow-lg shadow-slate-950/60">
+      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[124px] sm:top-[118px] z-10 shadow-lg shadow-slate-950/60">
         {/* V8.25-06: PC(터치없음)만 +/− 버튼 표시. 폰은 핀치, PC는 버튼+Ctrl휠 */}
         {!IS_TOUCH_DEVICE && (
           <div className="flex items-center bg-ink-800 rounded-pill overflow-hidden">
@@ -752,38 +744,17 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
           {view3D ? '✓ ⛴ 측면' : '⛴ 측면'}
         </button>
 
-        {/* M5.0: 인쇄 드롭다운 — 2개 버튼 → 1개 메뉴 */}
-        <div className="relative">
-          <button onClick={() => setPrintMenuOpen(v => !v)}
-            className="px-2.5 py-1.5 rounded-pill text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-50 flex items-center gap-1"
-            title="인쇄 옵션">
-            <Printer className="w-3.5 h-3.5"/>인쇄 ▾
+        {/* ★ 4.00 — 인쇄 드롭다운(카고플랜·베이 상세 둘만, 부모가 넘긴 «실적» 자리로 그리는 둘째 경로)을 걷었다.
+            «출력» 단추 하나가 **출력 센터**(항차 화면의 독 「🖨️ 출력」과 같은 창)를 연다 — 검수 리스트·카고플랜·베이 상세·VGM·작업 보고서가 한 곳에 있다.
+            검수사 2026-10-04 — «업로드를 누르면 … 그리고 베이를 누르면 거기에도 있습니다. 이걸 정리하여야 합니다.»
+            ⚠ 부모가 onOpenPrint 를 안 넘기면(수석 보드·베이뷰 등) 단추 자체를 안 그린다 — 열 곳이 없는 단추를 두지 않는다. */}
+        {onOpenPrint && (
+          <button onClick={() => onOpenPrint()}
+            className="pop-btn pop-amber" style={{ minHeight: 36, padding: '0 12px', borderRadius: 14, fontSize: 12, boxShadow: '0 3px 0 rgb(0 0 0 / .34)' }}
+            title="출력 센터 — 검수 리스트 · 카고플랜 · 베이 상세 · VGM · 작업 보고서">
+            🖨️ 출력
           </button>
-          {printMenuOpen && (
-            <>
-              {/* 백드롭 — 바깥 클릭으로 닫기 */}
-              <div className="fixed inset-0 z-20" onClick={() => setPrintMenuOpen(false)}/>
-              <div className="absolute top-full left-0 mt-1 bg-ink-800 border border-line-strong rounded-pill shadow-xl z-30 min-w-[180px] overflow-hidden">
-                <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
-                  className="w-full px-3 py-2 text-left hover:bg-emerald-900 text-xs text-emerald-100 border-b border-line flex items-center gap-2 bg-emerald-950">
-                  <span className="text-base">🆕</span>
-                  <div>
-                    <div className="font-black">카고 플랜 V2 · M6.81 회귀</div>
-                    <div className="text-2xs text-emerald-300">표준 도면 양식 그대로</div>
-                  </div>
-                </button>
-                <button onClick={() => { setPrintMode('detail'); setPrintMenuOpen(false); }}
-                  className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 flex items-center gap-2">
-                  <span className="text-base">📋</span>
-                  <div>
-                    <div className="font-black">베이 상세</div>
-                    <div className="text-2xs text-dim-300">베이당 1페이지</div>
-                  </div>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        )}
 
 
         {/* 시각적 분리선 — 알림 배지 영역 시작 */}
@@ -1074,44 +1045,6 @@ export default function BayPlan({ containers, compMap, xrayMap, xraySeals, resto
         }}
       />
 
-      {/* M4.6: 인쇄 모달 — M4.9: ErrorBoundary로 격리 */}
-            {printMode === 'cargo-v2' && (
-        <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintMode(null)}>
-          <PrintableCargoPlanV2
-            /* 1.55-03: 카고플랜은 계획이다 — 부모가 실체로 승격한 좌표를 계획(_edi_*)으로 되돌려 그린다.
-               종전엔 PrintHub 경유(계획)와 이 버튼 경유(실적)가 같은 종이에 다른 그림을 냈다(독립 재검증 P1-2). */
-            containers={containers.map(c => (c._edi_bay !== undefined && c._edi_bay !== '') ? { ...c, bay: c._edi_bay, row: c._edi_row, tier: c._edi_tier } : c)}
-            mode={mode}
-            voyageInfo={voyageInfo}
-            shipImo={shipImo}
-            shipName={shipName}
-            xrayMap={xrayMap}
-            shiftingMap={restowMap}
-            onClose={() => setPrintMode(null)}
-          />
-        </ErrorBoundary>
-      )}
-      {printMode === 'detail' && (
-        <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintMode(null)}>
-          {/*  3.46: 베이플랜 경로는 컨에 X-RAY 표식이 안 얹혀 온다 — 지도를 넘겨 거기서 붙인다. */}
-          <PrintableBayDetail
-            containers={containers}
-            xrayMap={xrayMap}
-            xraySeals={xraySeals}
-            mode={mode}
-            voyageInfo={voyageInfo}
-            voyageKey={voyageKey}
-            shipImo={shipImo}
-            shipName={shipName}
-            globalRowRange={globalRowRange}
-            globalGridCols={globalGridCols}
-            globalTiers={globalTiers}
-                  dictBaysSummary={dictBaysSummary}
-            dictBayDef={dictBayDefObj}
-            onClose={() => setPrintMode(null)}
-          />
-        </ErrorBoundary>
-      )}
     </div>
   );
 }

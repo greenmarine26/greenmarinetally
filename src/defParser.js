@@ -25,25 +25,6 @@ function bytesToAscii(bytes, start, length) {
   return s;
 }
 
-function findAsciiInRange(bytes, start, end) {
-  // [\x20-\x7E]{4,} 패턴: 4글자 이상 인쇄가능 ASCII 연속 추출
-  const results = [];
-  let cur = '';
-  let curStart = -1;
-  for (let i = start; i < Math.min(end, bytes.length); i++) {
-    const b = bytes[i];
-    if (b >= 0x20 && b <= 0x7E) {
-      if (cur.length === 0) curStart = i;
-      cur += String.fromCharCode(b);
-    } else {
-      if (cur.length >= 4) results.push({ text: cur, start: curStart });
-      cur = '';
-      curStart = -1;
-    }
-  }
-  if (cur.length >= 4) results.push({ text: cur, start: curStart });
-  return results;
-}
 
 const MAGIC = 'CASP SHIP DEFINE FILE';
 

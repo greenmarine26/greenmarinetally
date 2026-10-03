@@ -9,7 +9,7 @@
 //   - 컨테이너 데이터는 기존 EDI 흐름 유지 (변경 없음)
 
 import { lookupBayDict } from './data/shipBayDict.js';
-import { lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
+import { lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
 import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 // M6.55: v5 — .def 매트릭스 디코드 자동 추출
 //   - supplement: v2에 없는 13척 (DAP, DBM, DHA, ESTM, FN7, FSR, HAHM, HECN, MDB, MEB, ORT, PCBS, WBC)
@@ -19,14 +19,6 @@ import { getMatrixV5 } from './data/shipBayDict_v5_matrix.js';
 // M6.57: 베이사전 자동 보정 — verified 보존, 비어있는 필드만 다단계 fallback으로 채움
 import { enrichBayDef } from './bayDictAutoEnrich.js';
 
-// M4.5: 선박 식별자 정규화 (퍼지 매칭용)
-//   "TJ TEN JUPITER" → "TJTENJUPITER"
-//   "TEN JUPITER" → "TENJUPITER"
-//   "MSC OSCAR " → "MSCOSCAR"
-function normalizeShipKey(s) {
-  if (!s) return '';
-  return String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
 
 // M4.5: 사전(임베드 v2 + v1 + userBayDict) 통합 퍼지 조회
 //   1) IMO 정확 매칭 (가장 신뢰)
@@ -760,11 +752,4 @@ export function augmentStructureWithBayDict(structure, imo, code) {
   };
 }
 
-/**
- * 베이사전 등록 여부 확인 (UI에 배지 표시용)
- * M4.5: user + v2(109척) + v1(11척, 폴백) + fuzzy 매칭
- */
-export function isShipInBayDict(imo, code) {
-  return getShipBayDictData(imo, code) !== null;
-}
 

@@ -344,6 +344,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   NODE_PATH="$PWD/node_modules" node tools/smoke_staffoff.cjs || { echo "✗ 접근 온오프 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.77: 자동 가이드 «베이 먼저» — 실소스 buildGuidedQueue 로 DPRT 2611N 3호기 33·34·35번 베이 실제 순서를 재생(대조군 포함)하고 양하·선적 물리 종속을 잰다.
   NODE_PATH="$PWD/node_modules" node tools/smoke_bayfirst.cjs || { echo "✗ 베이 먼저 연막검사 실패 — 배포 금지"; exit 1; }
+  # 4.00: 메뉴 구조 — 독(양하·선적/작업 시작/베이/출력/업로드/더보기)·출력 단일 경로(출력 센터)·업로드 올리기 전용·매뉴얼 옛 낱말 잔재(▶ 작업 시작·인쇄 ▾·카고 플랜 V2·헤더 ⋯)를 소스에서 잰다.
+  node tools/smoke_menu400.cjs || { echo "✗ 4.00 메뉴 구조 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
   SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
   SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)

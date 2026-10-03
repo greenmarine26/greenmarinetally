@@ -387,6 +387,9 @@ function _menuHeard(q) {
   //  ⚠ 미르에게 **되묻는** 말은 메뉴 답이 아니다 — «너 밥 드셨어요» 가 메뉴 «너» 로 읽히던 자리(연막검사가 잡았다).
   //    높임말 «드셨/자셨» 도 제 끼니를 말하는 꼴이 아니라 묻는 꼴이다. 둘 다 아래 끼니 그물 몫이다.
   if (/(미르|^\s*넌|^\s*너[\s는가를]|\s너[\s는가를]|당신|자네)/.test(String(q || '')) || /(드셨|자셨|잡수)/.test(String(q || ''))) return null;
+  //  4.00 — «저녁 먹었니»·«먹었냐»·«먹었나» 는 **묻는 꼴**이다. 되물은 뒤 3분 안에 오면 메뉴 «먹었니» 로 읽혀 «먹었니요? 든든하시겠어요» 로 새던 자리다
+  //    (연막검사 smoke_plancmd 가 날짜 씨앗에 따라 하루걸러 실패 — 문장 넷 중 둘만 «드셨» 이 있다). 묻는 꼴은 아래 끼니 그물(mirAte) 몫이다.
+  if (/(먹었니|먹었냐|먹었나|먹었는지|먹었을까)/.test(String(q || ''))) return null;
   let s = String(q || '').replace(/[.!?？~,·…"'«»]/g, ' ')
     .replace(/^\s*(난|나는|저는|제가|나|저|우리|저희|우리는|저희는)\s+/, '')
     .replace(/(아침|조식|점심|중식|저녁|석식|야식|밤참|새참)\s*(에는|에|엔|은|는|으로|로)?\s+/g, '')
@@ -1450,7 +1453,6 @@ export function mirSee(q, ctx) {
 
    답을 못 내면 null. 화면은 null 이면 종전대로 카드·릴레이·안내를 낸다. */
 //  (S 는 위 [mirFacts] 절의 것과 글자까지 같은 선언이라 한 번만 둔다)
-const PROGRESS_RE = /진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)|현황(?!\s*판)/;
 const READY_RE = /자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)|어느\s*(?:선박|배|선사)[^?]*(?:없|빠|안\s*왔)|안\s*온\s*자료|EDI\s*(?:없|왔|들어왔)|리스트\s*(?:없|왔|들어왔)|베이플랜\s*(?:없|왔)/;
 const _bayDefOf = (vsl) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[S(vsl).toUpperCase()] : null; return d ? (d.bayDef || d) : null; } catch (e) { return null; } };
 const _fmtDT = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? `${parseInt(m[2], 10)}월 ${parseInt(m[3], 10)}일 ${m[4]}:${m[5]}` : null; };
@@ -1724,7 +1726,7 @@ export function answerOneRaw(query, ctx) {
       L.push(`가장 오래된 것: ${_t(sorted[sorted.length - 1].archivedAt)} ${String(sorted[sorted.length - 1].voyageKey || '').replace('_', ' ')}`);
       L.push(''); L.push('최근 5항차');
       sorted.slice(0, 5).forEach((a) => L.push(`· ${_t(a.archivedAt)} ${String(a.voyageKey || '').replace('_', ' ')} — 양하 ${a.discharge_ptk ?? '?'} · 선적 ${a.loading_ptk ?? '?'}`));
-      L.push(''); L.push('배 이름을 붙여 물으면 그 배 것만 짚어 드려요 — 예: «DXQD 완료됐어?»');
+      L.push(''); L.push('배 이름을 붙여 물으면 그 배 것만 짚어 드려요 — 예: «DXQD 끝났어?»');
       return L.join('\n');
     }
   }
@@ -1947,7 +1949,7 @@ export function answerOneRaw(query, ctx) {
   if (p.weatherQuery) {
     if (c.weatherText) return c.weatherText;
     if (c.limited) return null;   // 탭 카드 — 날씨를 안 받는 자리, 작업 시작 탭으로 릴레이
-    return c.weatherPending ? '🌤 평택항 날씨 조회 중…' : '날씨는 항차 화면 [▶ 작업 시작] 탭이나 떠 있는 미르에게 물어 주세요.';
+    return c.weatherPending ? '🌤 평택항 날씨 조회 중…' : '날씨는 항차 화면 [🚀 작업 시작] 탭이나 떠 있는 미르에게 물어 주세요.';
   }
 
   //  ⑮ 트윈 무게 점검 · 속도 · 계획 전망 · 자료 도착.

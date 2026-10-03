@@ -20,7 +20,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
-import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
+import { buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -47,31 +47,6 @@ export function groupByBay(containers) {
   return m;
 }
 
-function splitForeAft(bayList) {
-  if (bayList.length === 0) return { fore: [], aft: [] };
-  const baySet = new Set(bayList);
-  const used = new Set();
-  const groups = [];
-  // 1) 트리오 [홀, 짝, 홀] 그룹화 — 표준 페어
-  for (const n of bayList) {
-    if (used.has(n) || n % 2 === 0) continue;
-    if (baySet.has(n + 1) && baySet.has(n + 2)) {
-      groups.push([n, n + 1, n + 2]);
-      used.add(n); used.add(n + 1); used.add(n + 2);
-    }
-  }
-  // 2) 남은 베이 (단독 홀수, 20ft 전용 짝수)
-  for (const n of bayList) {
-    if (!used.has(n)) { groups.push([n]); used.add(n); }
-  }
-  groups.sort((a, b) => a[0] - b[0]);
-  // 3) 그룹 갯수의 중간으로 분할 — TNJP는 9그룹 → FORE 5 / AFT 4
-  const mid = Math.ceil(groups.length / 2);
-  return {
-    fore: groups.slice(0, mid).flat().sort((a, b) => a - b),
-    aft: groups.slice(mid).flat().sort((a, b) => a - b),
-  };
-}
 
 // 베이상세 페이지 빌드 — 페어(홀-짝-홀 트리오)
 //   요구사항: 7,8,9 베이 → "BAY 07 단독" + "BAY (08)09 짝꿍" = 2페이지
@@ -233,64 +208,6 @@ export function formatCellParts(c, cellW, pt, legacy = false) {
   }
 }
 
-export function formatCellLines(c) {
-  try {
-    const pol = String(c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
-    const pod = String(c.pod || '').replace(/^KR/, '').slice(0, 3) || '   ';
-    const via = String(c.via || '');
-    // POL POD via 표기
-    let line1;
-    if (pol === pod) {
-      line1 = `${pol}/${pod}*${via || ' '}`;
-    } else {
-      line1 = `${pol}/${' '}*${via || pod}`;
-    }
-    const line2 = String(c.cn || '');
-    // 선사 약어
-    // V9.57(I16): c.line 충돌 — 덱 줄번호(정수) 오염 차단 (formatCellParts와 동일 규칙)
-    const carrierRaw = ((typeof c.line === 'string' && /[A-Z]/i.test(c.line)) ? c.line : String(c.carrier || '')).toUpperCase();
-    let carrier = 'C_K';
-    if (carrierRaw === 'CKL' || carrierRaw === 'CK') carrier = 'C_K';
-    else if (carrierRaw === 'SOC' || carrierRaw.includes('SOC')) carrier = 'SOC';
-    else if (carrierRaw) carrier = carrierRaw.slice(0, 3);
-
-    const fe = c.fe || (String(c.iso || '').endsWith('0') ? 'E' : 'F');
-    // M4.9: wt 안전 처리 (number/string/null 모두 OK)
-    let wt = '0.0';
-    try {
-      const wtNum = parseFloat(c.wt);
-      if (Number.isFinite(wtNum)) wt = (wtNum / 1000).toFixed(1);
-    } catch (_) {}
-    const isoLbl = String(isoToPdfLabel(c.iso) || '');
-    const line3 = `${carrier} ${fe}${String(wt).padStart(5)} ${isoLbl}`;
-    // IMDG/위험물
-    // V8.25-03: 줄4 고정 슬롯 — DG > 리퍼온도 > 빈 줄. 위치를 항상 줄5에 고정(카스피식).
-    const _tmp = String(c.tmp ?? '').trim();
-    const line4 = c.imdg ? ` ${String(c.imdg)}` : (_tmp ? `${_tmp}C` : '');
-    // 위치
-    // M6.35: BAY 2자리 정규화 (100+ 만 3자리 유지) — 7자리(0010002) → 6자리(010082)
-    //   기존: padStart(3,'0') → "001" → ....0010002 7자리
-    //   변경: 100 미만이면 2자리, 이상이면 3자리 그대로
-    const bayInt = parseInt(c.bay, 10);
-    const bay = Number.isFinite(bayInt) && bayInt >= 100
-      ? String(bayInt)
-      : String(Number.isFinite(bayInt) ? bayInt : 0).padStart(2, '0');
-    const row = String(c.row ?? '00').padStart(2, '0');
-    const tier = String(c.tier ?? '00').padStart(2, '0');
-    const lineLast = `....${bay}${row}${tier}`;
-    return { line1, line2, line3, line4, lineLast };
-  } catch (e) {
-    // 한 컨테이너 에러가 전체 페이지를 무너뜨리지 않게
-    console.error('[formatCellLines] error', e, c);
-    return {
-      line1: '?',
-      line2: String(c?.cn || '?'),
-      line3: '? ?',
-      line4: '',
-      lineLast: '?',
-    };
-  }
-}
 
 function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, dictBayDef = null, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true, uniformCell = null }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
@@ -903,12 +820,12 @@ export default function PrintableBayDetail({
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
       <div className="no-print flex flex-col p-3 bg-slate-900 border-b border-slate-700 gap-2">
-        <div className="flex items-center justify-between">
-          <div className="text-base font-bold text-slate-100">📋 베이 상세 미리보기 (전체 {filteredPages.length}베이 · 인쇄 {printCount})</div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="text-base font-bold text-slate-100 min-w-0">📋 베이 상세 미리보기 (전체 {filteredPages.length}베이 · 인쇄 {printCount})</div>
           <div className="flex gap-2">
             <div className="flex gap-2 print:hidden">
-            <button onClick={() => { if (printCount === 0) { alert('인쇄할 베이가 없습니다. 출력 모드(전체/평택분/베이 지정)를 확인하세요.'); return; } window.print(); }} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded">🖨 인쇄</button>
-            <button onClick={() => { if (printCount === 0) { alert('인쇄할 베이가 없습니다. 출력 모드를 확인하세요.'); return; } alert('인쇄 창에서 "PDF로 저장" 선택하세요'); setTimeout(() => window.print(), 100); }} className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded">📄 PDF</button>
+            <button onClick={() => { if (printCount === 0) { alert('인쇄할 베이가 없습니다. 출력 모드(전체/평택분/베이 지정)를 확인하세요.'); return; } window.print(); }} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded whitespace-nowrap">🖨 인쇄</button>
+            <button onClick={() => { if (printCount === 0) { alert('인쇄할 베이가 없습니다. 출력 모드를 확인하세요.'); return; } alert('인쇄 창에서 "PDF로 저장" 선택하세요'); setTimeout(() => window.print(), 100); }} className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-3 rounded whitespace-nowrap">📄 PDF</button>
             <button onClick={async () => {
               if (typeof window.XLSX === 'undefined') {
                 const s = document.createElement('script');
@@ -927,7 +844,7 @@ export default function PrintableBayDetail({
                 const d = new Date().toISOString().slice(0,10);
                 window.XLSX.writeFile(wb, document.title + '_' + d + '.xlsx');
               } catch (e) { alert('엑셀 실패: ' + e.message); }
-            }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">📊 엑셀</button>
+            }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded whitespace-nowrap">📊 엑셀</button>
           </div>
             <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded">
               <X className="w-5 h-5 text-slate-300" />

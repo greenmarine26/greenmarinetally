@@ -36,7 +36,3 @@ export function getMeToday() {
   } catch (e) { return ''; }
 }
 
-/** 기억을 지운다(다른 사람에게 기기를 넘길 때). */
-export function forgetMe() {
-  try { localStorage.removeItem(KEY); } catch (e) { /* 편의값 */ }
-}
