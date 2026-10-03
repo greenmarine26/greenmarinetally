@@ -43,6 +43,12 @@ export default function PositionEditModal({
   //   그래서 「번호 수정」으로 실제 온 컨을 고르면 기본 칸은 그 컨의 계획 자리가 아니라 **이 칸**이어야 한다.
   //   ⚠ 없으면 종전대로 컨 자신의 자리로 연다(회귀 없음).
   defaultPos = null,
+  // TallyOne 3.75 (검수사 2026-10-03 «수동 트윈 선적중 앞뒤가 둘다 바뀌어 올때 둘다 수정후 한번에 선적하기 …
+  //   앞에껄 33-07-82를 지정하면 뒤컨테이너는 35-07-82로 자동으로 지정되게»):
+  //   autoTwin — 트윈 화면 앞 카드에서만 켠다. 뒤 컨(defaultPartner)이 있고 짝꿍 자리가 실재하면 «트윈 지정»을 처음부터 켠다.
+  //   onTwinSaved — 뒤 컨 자리 저장이 끝난 뒤 부른다. 트윈 화면이 뒤 카드(컨·자리)를 그 결과로 갈아 끼운다.
+  autoTwin = false,
+  onTwinSaved = null,
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -60,6 +66,8 @@ export default function PositionEditModal({
   //   위치 지정 단계에서 선적까지 찍히면 트윈 흐름이 깨진다 — 자리를 잡은 뒤 트윈 화면으로 돌아가
   //   앞·뒤 두 대를 **한 번에** 찍어야 한다. 필요하면 검수원이 이 자리에서 켜면 된다.
   const [alsoComplete, setAlsoComplete] = useState(false);// 배정 후 바로 선적확인 (기본 끔)
+  const twinTouchedRef = useRef(false);     // 3.75: 검수원이 트윈 지정을 직접 만졌으면 자동 켜기를 멈춘다
+  const twinAutoSetRef = useRef(false);     // 3.75: 자동으로 켠 것인지(짝꿍 자리가 없어지면 같이 끈다)
 
   useEffect(() => {
     if (open && container) {
@@ -81,6 +89,7 @@ export default function PositionEditModal({
       setManualOpen(false);
       setTwinOn(false); setPartnerQuery(''); setPartnerPick(null);
       setAlsoComplete(false);   // 1.46: 열 때마다 끔 — 위치 저장과 선적확인을 분리
+      twinTouchedRef.current = false; twinAutoSetRef.current = false;   // 3.75
       setPickedSlotCn(null);
       // V7.94-20: 미배정 컨(위치 없음)인데 현재 작업 베이가 있으면 그 베이 자동 선택 — 전체 베이 재선택 단계 생략
       //   1.55: 작업 중인 칸을 받았으면 그 베이를 편다 — 베이를 다시 고르게 하지 않는다.
@@ -311,6 +320,19 @@ export default function PositionEditModal({
     return gradeSwap(container, slotCon, bayPairs || {});
   }, [container, bay, row, tier, pickedSlotCn, conflict, allContainers, bayPairs]);
 
+  //  3.75: 자동 트윈 — 앞 자리를 고르면 짝꿍 자리가 생기고, 그때 뒤 컨을 물려받아 «트윈 지정»을 켠다(두 번 누르지 않는다).
+  //    ⚠ 검수원이 끄거나 뒤 컨을 ✕ 하면(twinTouchedRef) 다시 켜지 않는다. 짝꿍 자리가 없어지면 자동으로 켠 것만 같이 끈다.
+  useEffect(() => {
+    if (!open || !autoTwin) return;
+    if (twinOn && twinAutoSetRef.current && !pairSlot) { setTwinOn(false); setPartnerPick(null); twinAutoSetRef.current = false; return; }
+    if (twinOn || twinTouchedRef.current) return;
+    if (!container || container._comp || !(bay && row && tier) || !pairSlot || !onSavePartner) return;
+    if (!defaultPartner || !defaultPartner.cn || defaultPartner.cn === container.cn) return;
+    const inherit = allContainers.find(x => x && x.cn === defaultPartner.cn && x._mode === container._mode) || defaultPartner;
+    twinAutoSetRef.current = true;
+    setTwinOn(true); setPartnerPick(inherit);
+  }, [open, autoTwin, twinOn, container, bay, row, tier, pairSlot, onSavePartner, defaultPartner, allContainers]);
+
   if (!open || !container) return null;
 
   const isFull = container.fe === 'F';
@@ -428,6 +450,11 @@ export default function PositionEditModal({
         }
         const n2 = noticeOf(r2);
         if (n2) alert(n2);
+        //  3.75: 뒤 컨이 새 자리에 들어갔다 — 트윈 화면의 뒤 카드가 옛 컨·옛 자리를 들고 있지 않게 알린다.
+        if (onTwinSaved) onTwinSaved({
+          partner: partnerPick, slot: pairSlot,
+          front: { bay: String(parseInt(bay, 10)), row: String(row).padStart(2, '0'), tier: String(tier).padStart(2, '0') },
+        });
       }
       if (alsoComplete && !isUnassign && !isCompleted && onCompleteBoth) {
         const cns = [container.cn];
@@ -756,6 +783,7 @@ export default function PositionEditModal({
                 <div className="border-t border-line pt-2 space-y-1.5">
                   <button onClick={() => {
                       const next = !twinOn;
+                      twinTouchedRef.current = true; twinAutoSetRef.current = false;   // 3.75
                       setTwinOn(next); setPartnerQuery(''); setErrMsg('');
                       // 1.48: 트윈 화면에서 이미 고른 뒤 컨이 있으면 그대로 물려받는다 — 두 번 입력하지 않는다.
                       const inherit = next && defaultPartner && defaultPartner.cn && defaultPartner.cn !== container?.cn
@@ -780,7 +808,7 @@ export default function PositionEditModal({
                             <span className="ml-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
                         </div>
                       </div>
-                      <button onClick={() => setPartnerPick(null)} className="text-xxs text-dim-300 px-1.5">✕</button>
+                      <button onClick={() => { twinTouchedRef.current = true; setPartnerPick(null); }} className="text-xxs text-dim-300 px-1.5">✕</button>
                     </div>
                   ) : (
                     <>

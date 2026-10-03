@@ -338,6 +338,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   fi
   # 3.71: 엠티실 음성 막대 화면 — 같은 실항차 컨으로 EsealVoiceBar 를 그려 ATPR 위해행 엠티 선적에서만 뜨는지(양하·다롄행·다른 배·카드 없음은 빈 화면) 잰다.
   NODE_PATH="$PWD/node_modules" node tools/smoke_esealvoicebar.cjs || { echo "✗ 엠티실 음성 막대 연막검사 실패 — 배포 금지"; exit 1; }
+  # 3.75: 수동 트윈 선적 — 앞 자리를 정하면 뒤가 짝꿍 자리로 자동 배정되고 뒤 카드가 따라 바뀌는지, 끄거나 뒤 컨이 없으면 종전 그대로인지. 실항차 ATPR 2644W 실 BAPLIE 로 PositionEditModal 을 jsdom 에 띄워 눌러 본다.
+  NODE_PATH="$PWD/node_modules" node tools/smoke_twinauto.cjs || { echo "✗ 수동 트윈 자동 짝꿍 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
   SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
   SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)

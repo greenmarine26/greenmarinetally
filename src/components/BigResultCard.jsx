@@ -25,7 +25,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   //   (실측 2026-08-11, 24번 홀드 싱글 TBJU2403485). 부르는 쪽이 쓰는 그 벌을 그대로 받는다.
   bayPairsIn = null,
   // TallyOne 2.03: 항차 photos(데미지 사진 포함) — 있으면 이 컨의 데미지 기록·사진을 카드에 띄운다.
-  voyagePhotos = null }) {
+  voyagePhotos = null,
+  // TallyOne 3.75: 트윈 앞 카드 — 위치 수정 모달이 트윈 지정을 처음부터 켜고, 뒤 컨 저장 결과를 트윈 화면에 알린다.
+  autoTwin = false, onTwinSaved = null }) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
   //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
   //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
@@ -541,6 +543,8 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         workGroup={workGroup}
         workTier={workTier}
         defaultPartner={twinPartner}
+        autoTwin={autoTwin}
+        onTwinSaved={onTwinSaved ? (info) => onTwinSaved({ ...info, frontCn: (posTarget || c).cn }) : null}
         /* 1.55: 기본 칸은 **지금 작업 중인 칸**(이 카드의 컨이 있는 칸)이다 — 고른 컨의 계획 자리가 아니다. */
         defaultPos={cardPos}
         slotSource={slotSource}

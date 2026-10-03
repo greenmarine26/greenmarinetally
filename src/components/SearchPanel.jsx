@@ -2630,6 +2630,16 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   };
   const replaceFront = (nc) => { setReplaced(true); setC1(_freshen(nc)); };
   const replaceBack = (nc) => { setReplaced(true); setC2(_freshen(nc)); };
+  //  TallyOne 3.75 (검수사 2026-10-03 «앞에껄 33-07-82를 지정하면 뒤컨테이너는 35-07-82로 자동으로 지정되게 하고 선적을 누르면 둘다 선적»):
+  //    앞 카드 위치 수정에서 뒤 컨이 짝꿍 자리로 들어가면, 뒤 카드를 그 컨·그 자리로 갈아 끼운다(같은 컨이면 자리만).
+  //    이걸 안 하면 [트윈 한 번에 선적확인]이 옛 뒤 컨을 찍는다 — 확인 버튼은 c1·c2 의 컨번호만 읽는다.
+  const handleTwinSaved = ({ partner, slot, front, frontCn }) => {
+    if (!partner || !slot) return;
+    setReplaced(true);
+    const live = allContainers.find(x => x.cn === partner.cn);
+    setC2({ ...(live || {}), ...partner, bay: slot.bay, row: slot.row, tier: slot.tier, _replaced: partner.cn !== c2?.cn || !!c2?._replaced });
+    if (front) setC1(prev => (prev && prev.cn === frontCn) ? { ...prev, bay: front.bay, row: front.row, tier: front.tier } : prev);
+  };
 
   const handleSwapTwin = () => {
     setReplaced(false);
@@ -2737,6 +2747,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           onOpen={() => onOpenContainer?.(c1)}
           onAfterComplete={handleAfterComplete}
           onReplace={replaceFront}
+          autoTwin={c1._mode === 'loading'} onTwinSaved={handleTwinSaved}
           workGroup={workGroup} workTier={workTier} twinPartner={c2} slotSource={slotSource} bayPairsIn={bayPairsIn}
           label="앞" labelColor="amber"
         />
