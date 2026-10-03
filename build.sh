@@ -1164,6 +1164,8 @@ fi
     SMOKE_MS=$(mktemp /dev/shm/hometmp/_smokems_XXXXXX.cjs)
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MS" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_mirsame.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 두 앱 같은 답 연막검사 실패 — 배포 금지"; exit 1; }
+    #  3.74: **미르 본선현황 계산** — «몇 시에 끝나»·«얼마나 남았어»·«작업 속도» 가 PCTC termStat·동방 qcWork 로 나가는지, 없거나 낡으면 종전 계산인지, 두 앱 같은 답인지. 같은 번들.
+    node tools/smoke_termeta.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 본선현황 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.68: **미르 대화**([mirThread]) — 답 뒤 한 마디·«응/두 번째/아니 ○○/그거»·끝맺음·확인 질문·3분 창·같은 접수 재풀이·칩 전수·다섯 창구 배선. 같은 번들(mirCore.entry).
     node tools/smoke_mirthread.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 대화 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.69: **미르 야드 상황**([mirYard]) — 말귀 다섯 갈래·터미널 판정어·우리 배 몫 대조·자료 나이·두 터미널·콘앱 ctx.yard·대화 칩. 같은 번들.

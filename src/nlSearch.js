@@ -2652,7 +2652,9 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 
   //  2.55: 표본은 **baseResults 에서 다시 뽑는다.** 넘겨받은 results 는 완료가 입혀지기 전에 걸러진 것이라
   //   항차 화면에서 «완료된 컨» 목록이 통째로 비어 있었다(숫자와 목록이 어긋난다).
-  const shown = baseResults.filter((c) => (parsed.progressQuery === 'done' ? !!c._comp : !c._comp));
+  //  3.74: 터미널 본선현황으로 센 항차 전체 숫자(_vcMain.term)면 컨 표본을 안 붙인다 — 숫자는 터미널, 표본은 앱 완료 기록이라 둘이 어긋나 보인다.
+  if (_vcMain && _vc0 && _vc0.term) lines.push(`📡 ${_vc0.term} 본선현황 기준 — 터미널이 말한 작업·완료·잔여 대수입니다.`);
+  const shown = (_vcMain && _vc0 && _vc0.term) ? [] : baseResults.filter((c) => (parsed.progressQuery === 'done' ? !!c._comp : !c._comp));
   if (shown.length > 0 && shown.length <= 50) {
     lines.push('', `${parsed.progressQuery === 'done' ? '완료된' : '남은'} 컨 (${Math.min(shown.length, 10)}대):`);
     shown.slice(0, 10).forEach((c, i) => {
@@ -2823,7 +2825,7 @@ export function formatAppTallyAnswer(ship, containers, info = null, counts = nul
     const _f = d ? `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
     out.push(`✅ ${ship} — 작업 완료${_f ? ` · 종료 ${_f}` : ''} — 완료 기록(마지막 완료 시각) 기준`);
   }
-  out.push(`${ship} — 완료 기록 기준 ${seg.join(' · ')}`);
+  out.push(`${ship} — ${counts && counts.term ? '본선현황' : '완료 기록'} 기준 ${seg.join(' · ')}`);
   const by = {};
   done.forEach((c) => { const n = completedByLabel(c._comp, info); if (n) by[n] = (by[n] || 0) + 1; });   // 3.16: 업체 글자를 음성으로 읽지 않는다 — 조 등록 근무자, 없으면 «터미널 반영»
   const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
@@ -3120,6 +3122,45 @@ export function paceFromRecords(doneAts, src, gangs) {
 //   ⇒ 남은 시간 = 총 잔여(양하+선적 평택분) ÷ (갱당 시간당 처리 대수 × 갱 수).
 //      갱당 시간당 = 이 배 완료 기록(검수원 입력 + 터미널 컨별 반영) ÷ 실작업 시간(쉬는 시간 뺌) ÷ 갱 수.
 //  `counts` = { total, done } — 항차 전체 평택분(호출부가 mir.js voyageCountsOf 로 센다). 없으면 left·plan 은 null.
+// ── ★ 3.74 — **터미널 본선현황으로 센다**(검수사 2026-10-03 12:41 «지금 부터 미르는 언제끝나 라는 질문과 작업계산은 각 터미널 본선현황보고 계산하도록하세요»).
+//  PCTC = 본선작업현황의 작업량·완료량·잔여량(수집기 vesselstatus.py → info.termStat), 동방 = 본선 작업 현황의 QC별 완료·잔여(수집기 pnctpull → info.qcWork).
+//  두 모양을 한 모양 {total, done, rest, byMode, startMs}로 읽는다 — 호출부(mir.js)는 이것으로 voyageCounts 를 갈아 끼운다.
+//  자료가 없거나(예정 항차·수집 전) 낡았으면(PCTC 3시간 넘게 안 갱신 + 잔여 있음) null — 호출부가 종전 완료 기록 계산으로 돌아간다.
+export function termProgressOf(info, now = Date.now()) {
+  if (!info || typeof info !== 'object') return null;
+  let dis = null, lod = null, src = '', at = 0, startMs = 0;
+  const ts = info.termStat;
+  if (ts && typeof ts === 'object' && ts.dis && ts.lod) {
+    const n = (x) => Math.max(0, Number(x) || 0);
+    dis = { total: n(ts.dis.tot), done: n(ts.dis.done) }; lod = { total: n(ts.lod.tot), done: n(ts.lod.done) };
+    src = 'PCTC'; at = Number(ts.at) || 0; startMs = _tsOf(ts.atw) || _tsOf(info.workStartAt);
+  } else if (info.qcWork && typeof info.qcWork === 'object') {
+    const rows = Object.values(info.qcWork).filter((q) => q && typeof q === 'object');
+    if (!rows.length) return null;
+    const n = (x) => Math.max(0, Number(x) || 0);
+    const sum = (k) => rows.reduce((a, q) => a + n(q[k]), 0);
+    dis = { total: sum('disDone') + sum('disRest'), done: sum('disDone') };
+    lod = { total: sum('lodDone') + sum('lodRest'), done: sum('lodDone') };
+    src = 'PNCT'; startMs = _tsOf(info.workStartAt);
+    //  동방 크레인별 합은 배 전체일 수 있다(3.22 실측 ATPR 2640E 376 ↔ 평택 계획 260). 평택 계획을 5% 넘게 웃돌면 평택분이 아니므로 쓰지 않는다 — 종전 계산으로.
+    const pd = Number(info.planDis) || 0, pl = Number(info.planLod) || 0;
+    if ((pd > 0 && dis.total > pd * 1.05) || (pl > 0 && lod.total > pl * 1.05)) return null;
+  } else return null;
+  //  시작 시각은 workWindowOf 와 같은 차례(검수 시작 → 접안 → 작업 시작)로 — 페이스 분모와 균등 시각표 시작이 한 점이 되게.
+  startMs = _tsOf(info.reportStartAt) || _tsOf(info.atbActual) || startMs;
+  const total = dis.total + lod.total, done = dis.done + lod.done;
+  if (!(total > 0)) return null;
+  const rest = Math.max(0, total - done);
+  if (src === 'PCTC' && rest > 0 && at > 0 && now - at > 3 * 3600 * 1000) return null;   // 수집이 멎은 채 낡은 숫자로 «언제 끝나» 를 말하지 않는다
+  return { src, total, done, rest, startMs, at, byMode: { discharge: dis, loading: lod } };
+}
+//  페이스 재료 — 터미널은 컨별 완료 시각을 안 준다. 작업 시작~지금 사이에 완료 대수를 고르게 놓은 시각표를 만들어
+//  종전 paceFromRecords(쉬는 시간 빼기·조별 갱 수·이안 끝)를 **그대로** 타게 한다(계산식이 두 벌이 되지 않게). 시작 시각을 모르면 빈 배열(= 페이스 못 잼).
+export function termDoneAts(T, now = Date.now()) {
+  if (!T || !(T.done >= 3) || !(T.startMs > 0) || !(now > T.startMs)) return [];
+  const n = T.done, a = T.startMs, b = now;
+  return Array.from({ length: n }, (_, i) => Math.round(a + ((b - a) * i) / (n - 1)));
+}
 export function speedFromRecords(voyage, counts) {
   if (!voyage) return null;
   const info = voyage.info || {};
@@ -3274,6 +3315,7 @@ function formatEta(parsed, allContainers, ctx) {
     `남은 작업: ${remain}대${_split ? ` (${_split})` : ''} · 완료 ${doneCount} / 전체 ${total}\n` +
     `오늘 페이스: 시간당 약 ${rate}대 — ${_P.gangs}갱 기준 갱당 ${_P.perGangHour.toFixed(1)}대 (완료 기록 양하+선적 ${_P.n}대 ÷ ${_P.basis === 'work' ? '작업 시작부터의 ' : ''}실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 — 쉬는 시간 뺀 것${_P.basis === 'work' ? '' : ' · 작업 시각을 몰라 완료 기록 구간으로 쟀어요'})\n` +
     `남은 시간: ${durKo}`
+    + (_vc && _vc.term ? `\n📡 ${_vc.term} 본선현황 기준 — 양하 ${_vc.byMode.discharge.done}/${_vc.byMode.discharge.total} · 선적 ${_vc.byMode.loading.done}/${_vc.byMode.loading.total}` : '')
   );
 }
 

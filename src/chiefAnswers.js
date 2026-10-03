@@ -850,7 +850,7 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null)
   //  ① 그날 완료 기록(검수원 입력 + 터미널 컨별 반영)으로 잰다 — 3.53-12: 외부 합계 피드는 떼어 냈다.
   const T = speedFromRecords(voyage, counts);
   if (T) {
-    const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 오늘 완료 기록 기준`];
+    const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · ${counts && counts.term ? counts.term + ' 본선현황' : '오늘 완료 기록'} 기준`];   // 3.74: 터미널 본선현황이 있으면 그것
     const hh = Math.floor(T.workedMin / 60), mm = T.workedMin % 60;
     L.push(`지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
     //  3.6-01: 갱 수를 2 로 못 박지 않는다 — speedFromTerminal 이 항차 갱 수로 나눈다(모르면 2).

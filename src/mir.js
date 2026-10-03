@@ -35,6 +35,7 @@ import {
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
   voyageReportSpan, WORK_SHIFTS, workMinutesBetween,   // 3.56 [mirMood] 식사 창은 근무표 그대로 · 3.69-01 완료 공백은 실작업 분으로 잰다
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
+  termProgressOf, termDoneAts,   // 3.74: 터미널 본선현황으로 센다
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
@@ -1566,6 +1567,17 @@ export function answerOneRaw(query, ctx) {
     for (const x of cs) if (x && x._shift && x.cn) _ss.add(x.cn);
     c.voyageCounts = voyageCountsOf(c.voyage || null, c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs, _ss);
     if (Array.isArray(c.voyageCounts.doneAts) && c.voyageCounts.total > 0) c.voyageDoneAts = c.voyageCounts.doneAts;
+    //  ★ 3.74 (검수사 2026-10-03 «미르는 언제끝나 라는 질문과 작업계산은 각 터미널 본선현황보고 계산하도록») — 터미널 본선현황이 있으면
+    //    총량·완료·잔여와 페이스 재료를 그것으로 갈아 끼운다(PCTC info.termStat · 동방 info.qcWork). 없으면(예정·수집 전·낡음) 위 완료 기록 계산 그대로다.
+    //    «몇 시에 끝나»·«작업 속도»·«얼마나 남았어» 가 모두 voyageCounts 한 곳을 읽으므로 세 답이 같은 수를 말한다.
+    try {
+      const _T = termProgressOf(info);
+      if (_T) {
+        const _ats = termDoneAts(_T);
+        c.voyageCounts = { total: _T.total, done: _T.done, byMode: _T.byMode, doneAts: _ats, term: _T.src };
+        c.voyageDoneAts = _ats;
+      }
+    } catch (e) { console.warn('[미르] 터미널 본선현황 읽기 실패 — 완료 기록으로:', e); }
   } catch (e) { console.warn('[미르] 항차 대수 세기 실패:', e); c.voyageCounts = { total: 0, done: 0, byMode: {}, doneAts: [] }; } } return c.voyageCounts; };
   const v = c.voyage || null;
   const info = c.info || {};
