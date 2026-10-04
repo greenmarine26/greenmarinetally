@@ -59,15 +59,15 @@ ok(/import ExpectedTimeLine from '..\/components\/ExpectedTimeLine\.jsx'/.test(V
 const L = rd('src/components/ExpectedTimeLine.jsx');
 ok(/E\.done >= 10/.test(L) && /E\.twinLifts/.test(L) && /E\.unres20/.test(L) && /E\.rate/.test(L), '줄이 트윈·못 정한 20피트·속도를 밝힌다 · 완료 10대 넘으면 사라진다');
 const MR = rd('src/mir.js');
-ok(/answerXrayShifts\(_voy, de, \{[^}]*pace: workPaceOf\(/.test(MR) && /answerShiftBriefing\(_voy, de, \{[^}]*pace: workPaceOf\(/.test(MR), '수석 답변 둘(X-RAY 조별·교대 브리핑)이 같은 속도 규칙을 받는다');
+ok(/answerXrayShifts\(_voyE?, de, \{[^}]*pace: workPaceOf\(/.test(MR) && /answerShiftBriefing\(_voyE?, de, \{[^}]*pace: workPaceOf\(/.test(MR), '수석 답변 둘(X-RAY 조별·교대 브리핑)이 같은 속도 규칙을 받는다(4.02: 콘앱용 EDI 채운 사본 _voyE 도 같은 줄)');
 const CA = rd('src/chiefAnswers.js');
 ok((CA.match(/opts\.pace \|\| 25/g) || []).length === 2 && /\* pace \* 2/.test(CA) && !/\* 25 \* 2/.test(CA), '수석 답변은 속도를 opts.pace 로 받고 못 받으면 싱글 25');
 const H = rd('src/data/helpData.js') + rd('src/data/featureIndex.js');
 ok(/예상 작업 시간/.test(H) && /자료 대기/.test(H) && /트윈 쌍/.test(H) && /무브는 대수가 아니다/.test(H), '매뉴얼·색인이 예상 작업 시간·자료 대기·무브 ≠ 대수를 말한다');
 const U = rd('src/utils.js');
-ok(/APP_VERSION = 'TallyOne 4\.01'/.test(U), '버전 4.01');
+ok(/APP_VERSION = 'TallyOne 4\.0[12]'/.test(U), '버전 4.01~4.02 계열');
 const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
-ok(note.startsWith('4.01') && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.01 · 작은따옴표와 슬래시가 없다 · 두 문장 안쪽', note);
+ok(/^4\.0[12]/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.01~4.02 · 작은따옴표와 슬래시가 없다 · 두 문장 안쪽', note);
 
 console.log('⑤ 미르 «총 무브수» — 화면과 같은 무브로 답한다(대수를 무브라 부르지 않는다)');
 //  검수사 2026-10-04 «총 무브수 계산에서 ATPR을 보면 양하가 269인데 무브수가 269무브 맞습니까?» — 독립 감사가 미르 답이 아직 269무브라고 잡았다.
@@ -79,13 +79,13 @@ const tmN = M.answerTotalMoves({ ...atpr, key: 'ATPR_2644E' }, 'ATPR');
 ok(/269대/.test(tmN) && !/269무브/.test(tmN) && /무브 아님/.test(tmN), '트윈 계산을 못 받으면(eta 없음) 대수로만 말하고 무브라 부르지 않는다 — 조용히 죽지 않는다', tmN);
 const tmE = M.answerTotalMoves({ key: 'X', info: {} }, 'X', { eta: null });
 ok(/EDI 가 아직 없어/.test(tmE), 'EDI 가 없으면 종전 안내 그대로');
-ok(/isMoveQ\) return answerTotalMoves\(_voy, ship, \{ eta: app === 'cone' \? null : movesOfVoyage\(/.test(MR), '미르 호출부가 같은 한 벌(movesOfVoyage)을 넘긴다(콘앱만 종전 그대로)');
+ok(/isMoveQ\) return answerTotalMoves\(_voy, ship, \{ eta: movesOfVoyage\(_voy, c\.voyageKey \|\| '', _mvGiven\)/.test(MR) && !/app === 'cone' \? null : movesOfVoyage/.test(MR), '미르 호출부가 같은 한 벌(movesOfVoyage)을 넘긴다(4.02: 콘앱도 비켜 가지 않고 같은 계산 — 콘앱이 넘긴 컨 _mvGiven 으로)');
 //  리스트만 있는 배(STSE 모양 — EDI 없음)는 화면이 숫자를 주니 미르도 «EDI 가 없다» 로 막지 않는다
 const lst = JSON.parse(JSON.stringify(djct)); lst.key = 'DJCT_0225E'; delete lst.discharge.ediContainers; delete lst.loading.ediContainers;
 const Lq = M.movesOfVoyage(lst, 'DJCT_0225E');
 const tmL = M.answerTotalMoves(lst, 'DJCT', { eta: Lq });
 ok(Lq && Lq.units > 0 && !/EDI 가 아직 없어/.test(tmL) && /무브/.test(tmL), '리스트만 있는 배는 EDI 없음 안내로 막지 않고 화면과 같은 무브로 답한다', tmL);
 const tmL0 = M.answerTotalMoves(lst, 'DJCT');
-ok(/EDI 가 아직 없어/.test(tmL0), 'eta 를 안 받으면(콘앱) EDI 없음 안내 그대로', tmL0);
+ok(/EDI 가 아직 없어/.test(tmL0), 'eta 를 안 받으면 EDI 없음 안내 그대로(4.02: 콘앱은 이제 eta 를 받는다)', tmL0);
 console.log(fail ? `\n✗ 4.01 예상 작업 시간 연막검사 실패 ${fail}건` : '\n✓ 4.01 예상 작업 시간 연막검사 통과');
 process.exit(fail ? 1 : 0);

@@ -127,6 +127,8 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
     // 2.08-15: 확정∨예측 폴백 한 벌 — 배정표 확정 이적 0이면 허수를 수석 집계에 넣지 않는다.
     shifting = Object.keys(shiftingMapForDisplay(voyage.key || 'k', voyage) || {}).length;
   } catch (e) { shifting = -1; }
+  //  4.02: 콘앱은 항차에 EDI 를 안 싣고 행(_shift 표시 포함)만 넘긴다 — 콘이 센 시프팅 수를 그대로 쓴다(opts.shifting).
+  if (opts && Number.isFinite(opts.shifting)) shifting = opts.shifting;
   const allPtk = dp === dis.length && lp === lod.length;
   //  ★ 4.01 — 무브 ≠ 대수. 트윈으로 드는 쌍은 1무브, 나머지는 한 대당 1무브(화면 «예상 작업 시간» 줄과 같은 수 — mir.movesOfVoyage).
   //    검수사 2026-10-04 «ATPR 양하가 269인데 무브수가 269무브 맞습니까?» · «트윈 가능 갯수와 싱글갯수가 정확히 파악해야 무브수가 계산 됩니다.»

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.01';
-const NOTE = '4.01 예상 작업 시간 — 작업 시작 탭 맨 위에 트윈과 무게를 따진 예상 시간이 나옵니다. 자료 없는 배는 홈 맨 아래 자료 대기 한 줄로 접히고 홈 화면 모양이 바뀌었습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.02';
+const NOTE = '4.02 콘앱 첫 화면 — 배를 지정하면 양하·선적 카고플랜이 가로로 먼저 뜹니다. 콘앱 미르의 무브수 답도 검수앱과 같아졌습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

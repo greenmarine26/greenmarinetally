@@ -356,6 +356,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 4.01 예상 작업 시간 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ET"; exit 1
   fi
+  # 4.02: 콘앱·검수앱 미르 답 일치 + 콘 첫 화면 배선 — 실항차 SWMM 2609N(양하 223·선적 191·X-RAY 1)·ATPR·DJCT 로 콘앱 모양 ctx(항차에 EDI 묶음 없이 컨 행만)와 검수앱 모양 ctx 에 같은 질문(총 무브수·X-RAY 조별·갱 분배·최초 양하·교대 브리핑)을 던져 답이 한 글자도 안 갈리는지 실소스 mir.js 로 잰다. 콘 첫 화면(카고플랜 양하|선적)·실시간 화면 안내 문구·콘 타이밍 빈 문구·미르 사전 받기 배선은 소스에서 잰다.
+  SMOKE_C4=$(mktemp /dev/shm/hometmp/_smokec4_XXXXXX.cjs)
+  if npx esbuild tools/smoke_cone402_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_C4" --loader:.js=jsx --jsx=automatic --log-level=error; then
+    node tools/smoke_cone402.cjs "$SMOKE_C4" "$PWD" || { echo "✗ 4.02 콘앱 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_C4"; exit 1; }
+    rm -f "$SMOKE_C4"
+  else
+    echo "✗ 4.02 콘앱 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_C4"; exit 1
+  fi
   # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
   SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
   SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)

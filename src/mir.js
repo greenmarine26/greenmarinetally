@@ -723,12 +723,34 @@ export const TWIN_SHARE_MIN = 0.15;         // «트윈이 어느 정도 있다�
 export const gangRateOf = (twinUnits, units) => (units > 0 && twinUnits / units >= TWIN_SHARE_MIN ? MOVES_PER_GANG_HOUR : SINGLE_PER_GANG_HOUR);
 //    ⚠ 트윈 쌍을 **확정할 수 있는 자료**가 있는 컨(EDI에 자리 bay·row·tier 와 무게가 있는 컨)만 확정한다. 리스트만 있는 컨은 크기(iso)만 알고 자리가 없고,
 //      선적 EDI 가 예약 칸(isBooking, 컨 번호 없이 자리·크기만)이면 무게가 없다 — 그 20피트는 «한 대씩»으로 센 뒤(최대 무브), 트윈이 되면 줄어드는 한도(최소 무브)를 같이 돌려준다.
-export function twinSplitOf(voyage, cnsByMode) {
+//  4.02 — 무브 계산이 읽는 «그 모드의 컨 묶음». 항차에 ediContainers 가 있으면 그것(검수앱), 없으면 그 앱이 넘긴 컨(콘앱 — `_mode`·자리·중량이 찍힌 것).
+//  교대 브리핑 말 판정 한 벌 — 콘 브리핑 가로채기와 ⑨ 교대 브리핑이 같은 식을 쓴다.
+const SHIFT_BRIEF_RE = /교대.{0,8}브리핑|브리핑.{0,8}교대|교대\s*준비|인수\s*브리핑/;
+function edOfMode(voyage, m, given) {
+  const own = voyage && voyage[m] && voyage[m].ediContainers;
+  if (own && Object.keys(own).length) return own;
+  const o = {};
+  if (Array.isArray(given)) for (const c of given) { if (c && c.cn && (c._mode === 'loading' ? 'loading' : 'discharge') === m) o[c.cn] = c; }
+  return o;
+}
+//  선적 예약 칸 — 보관소 EDI 는 isBooking, 콘앱 행은 표식을 안 싣고 번호가 __BOOK_ 으로 시작한다(DJCT 0225E 실측 263칸 전부).
+const isBookingSlot = (c) => !!(c && (c.isBooking || /^__BOOK/.test(String(c.cn || ''))));
+//  항차에 EDI 묶음이 하나라도 있는가 — 없으면(콘앱) 넘겨받은 컨으로 센다.
+const hasAnyEdi = (voyage) => !!(voyage && ['discharge', 'loading'].some((m) => voyage[m] && voyage[m].ediContainers && Object.keys(voyage[m].ediContainers).length));
+//  시프팅 집합 — 홈 카드와 같은 출처(shiftCnSetOf) + 콘앱이 «시프팅분»(_shift)으로 표시한 컨. _vcOf 와 한 벌.
+function shiftSetOfVoyage(voyage, key, given) {
+  let ss = new Set();
+  try { ss = new Set(shiftCnSetOf(key || '', voyage || null) || []); } catch (e) { console.warn('[미르] 시프팅 집합 실패:', e); ss = new Set(); }
+  if (Array.isArray(given)) for (const x of given) if (x && x._shift && x.cn) ss.add(x.cn);
+  return ss;
+}
+export function twinSplitOf(voyage, cnsByMode, given = null) {
   const info = (voyage && voyage.info) || {};
   const out = { n20: 0, n40: 0, posPairs: 0, ok: 0, over: 0, diff: 0, noWt: 0, unres20: 0, maybe: 0, byMode: { discharge: 0, loading: 0 } };
   const is20 = (iso) => /^2/.test(String(iso || ''));
   for (const m of ['discharge', 'loading']) {
-    const ed = (voyage && voyage[m] && voyage[m].ediContainers) || {};
+    //  4.02 (검수사 2026-10-04 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다»): 콘앱 voyage 에는 ediContainers 가 없다 — 그 앱이 넘긴 컨(자리·중량 있음)으로 읽는다.
+    const ed = edOfMode(voyage, m, given);
     const recs = (voyage && voyage[m] && voyage[m].records) || {};
     const cns = (cnsByMode && cnsByMode[m]) || [];
     if (!cns.length) continue;
@@ -755,7 +777,7 @@ export function twinSplitOf(voyage, cnsByMode) {
     const unres20 = Math.max(0, n20 - decided20);
     //  못 정한 20피트가 트윈이 될 수 있는 한도 — 선적 예약 칸이 있으면 그 칸의 앞뒤 짝 수, 없으면 20피트 반반.
     let cap = Math.floor(unres20 / 2);
-    const slots = Object.values(ed).filter((c) => c && c.isBooking && is20(c.iso) && c.bay && c.row && c.tier).map((c) => ({ ...c, _mode: m }));
+    const slots = Object.values(ed).filter((c) => c && isBookingSlot(c) && is20(c.iso) && c.bay && c.row && c.tier).map((c) => ({ ...c, _mode: m }));
     if (slots.length) {
       let sp = {};
       try { sp = getBayPairs(slots, info.imo || '', info.vsl || '') || {}; } catch (e) { console.warn('[예상 작업 시간] 예약 칸 짝을 못 만들었습니다:', e); }
@@ -769,11 +791,12 @@ export function twinSplitOf(voyage, cnsByMode) {
   }
   return out;
 }
-export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now()) {
-  const vc = voyageCountsOf(voyage, null, shiftSet);
+export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now(), given = null) {
+  const g = hasAnyEdi(voyage) ? null : given;   // EDI 가 있는 항차(검수앱)는 종전 그대로 — 콘앱만 넘겨받은 컨으로 센다
+  const vc = voyageCountsOf(voyage, g, shiftSet);
   if (!(vc.total > 0)) return null;
   const info = (voyage && voyage.info) || {};
-  const tw = twinSplitOf(voyage, vc.cns);
+  const tw = twinSplitOf(voyage, vc.cns, g);
   const moves = vc.total - tw.ok;           // 확정된 트윈만 빼고 나머지는 한 대씩 — 최대 무브
   const movesMin = moves - tw.maybe;        // 못 정한 20피트가 트윈이 되면 — 최소 무브
   const set = Number((info.gangsShift && info.gangsShift[shiftGangKey(currentShift(now))]) || info.gangs);
@@ -794,18 +817,18 @@ export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now()) {
 
 //  수석 답변(X-RAY 조별 가능 수·교대 브리핑 인수 시점 예상)이 쓰는 시간당 무브 — 예상 작업 시간 줄과 **같은 규칙**(싱글 위주 25 · 트윈 있으면 30).
 //  검수사 2026-10-04 «확인 받고 싶은것 4가지중 3번만 제외하고 적용» — 2번 «수석 답변의 기본 속도도 맞출까요» 적용분. 못 구하면 싱글 기본 25.
-export function workPaceOf(voyage, voyageKey = '') {
+export function workPaceOf(voyage, voyageKey = '', given = null) {
   try {
-    const E = expectedWorkTimeOf(voyage, shiftCnSetOf(voyageKey || (voyage && voyage.info && voyage.info.vsl) || '', voyage));
+    const E = expectedWorkTimeOf(voyage, shiftSetOfVoyage(voyage, voyageKey || (voyage && voyage.info && voyage.info.vsl) || '', given), Date.now(), given);
     return E ? E.rate : SINGLE_PER_GANG_HOUR;
   } catch (e) { console.warn('[예상 작업 시간] 속도를 못 구해 싱글 기본 25로 씁니다:', e); return SINGLE_PER_GANG_HOUR; }
 }
 
 //  미르 «총 무브수» 답이 쓰는 한 벌 — 예상 작업 시간 줄과 **같은 무브**(대수 − 트윈으로 드는 쌍). 못 구하면 null 이라 답이 종전 문장으로 간다.
 //  검수사 2026-10-04 «총 무브수 계산에서 ATPR을 보면 양하가 269인데 무브수가 269무브 맞습니까?» — 미르 답도 대수를 그대로 «무브» 라 불렀다(4.01 정정).
-export function movesOfVoyage(voyage, voyageKey = '') {
+export function movesOfVoyage(voyage, voyageKey = '', given = null) {
   try {
-    return expectedWorkTimeOf(voyage, shiftCnSetOf(voyageKey || (voyage && voyage.info && voyage.info.vsl) || '', voyage));
+    return expectedWorkTimeOf(voyage, shiftSetOfVoyage(voyage, voyageKey || (voyage && voyage.info && voyage.info.vsl) || '', given), Date.now(), given);
   } catch (e) { console.warn('[예상 작업 시간] 트윈 무브를 못 구해 종전 계산으로 갑니다:', e); return null; }
 }
 
@@ -1668,9 +1691,7 @@ export function answerOneRaw(query, ctx) {
   const _vcOf = () => { if (c.voyageCounts === undefined || c.voyageCounts === null) { try {
     //  시프팅 집합은 홈 카드와 같은 출처(utils shiftCnSetOf = computeShiftingMapCached 키 — 표시용 shiftMap 은 예측분이 섞여 다르다, 감사 M2)
     //  + 콘앱이 «시프팅분» 으로 표시한 컨(_shift — 콘앱 voyage 엔 EDI 가 없어 shiftCnSetOf 가 빈다, 2차 시뮬 1: MCSN 637N 481 ↔ 521).
-    let _ss = new Set();
-    try { _ss = shiftCnSetOf(c.voyageKey || '', c.voyage || null) || new Set(); } catch (e) { console.warn('[미르] 시프팅 집합 실패:', e); _ss = new Set(); }
-    for (const x of cs) if (x && x._shift && x.cn) _ss.add(x.cn);
+    const _ss = shiftSetOfVoyage(c.voyage || null, c.voyageKey || '', cs);   // 4.02: 무브 계산과 같은 한 벌
     c.voyageCounts = voyageCountsOf(c.voyage || null, c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs, _ss);
     if (Array.isArray(c.voyageCounts.doneAts) && c.voyageCounts.total > 0) c.voyageDoneAts = c.voyageCounts.doneAts;
     //  ★ 3.74 (검수사 2026-10-03 «미르는 언제끝나 라는 질문과 작업계산은 각 터미널 본선현황보고 계산하도록») — 터미널 본선현황이 있으면
@@ -1706,7 +1727,8 @@ export function answerOneRaw(query, ctx) {
   //    «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다», 실측 KBTR 2606E). 판정은 ⑥의 _progressLike 와 같은 식 한 벌.
   const _progressLike = /진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(q)
     || (/현황(?!\s*판)/.test(q) && !hasAnyCondition(p));
-  if (c.cone && !p.yardQuery && (app === 'cone' ? (/콘/.test(q) || !(p.digits || p.entityAttr || p.factQuery || p.type || p.sealAuditQuery)) : isConeQuery(q))) {   // 3.69: 야드 질문은 콘 갈래·브리핑보다 앞(두 앱 같은 답 — 2차 시뮬 1)
+  //  4.02: «교대 브리핑» 은 콘 브리핑이 아니라 교대 브리핑(⑨ — 검수앱과 같은 답)이다 — 콘앱만 가로채던 것을 푼다.
+  if (c.cone && !p.yardQuery && !(SHIFT_BRIEF_RE.test(q) && !/콘/.test(q)) && (app === 'cone' ? (/콘/.test(q) || !(p.digits || p.entityAttr || p.factQuery || p.type || p.sealAuditQuery)) : isConeQuery(q))) {   // 3.69: 야드 질문은 콘 갈래·브리핑보다 앞(두 앱 같은 답 — 2차 시뮬 1)
     try {
       if (p.briefingQuery && !(_progressLike && !/자료|브리핑|요약/.test(q))) {
         const parts = [];
@@ -1900,20 +1922,41 @@ export function answerOneRaw(query, ctx) {
     const isMoveQ = /무브/.test(Q) && /(?:몇|총|얼마)/.test(Q);
     const isFirstQ = /(?:최초|처음|어디서?\s*부터|몇\s*번\s*부터).{0,10}(?:양하|시작|해)|양하.{0,12}(?:어디부터|어디서\s*시작|시작\s*어디|몇\s*번\s*부터)/.test(Q);
     const isXrayShiftQ = /엑스레이|x[\s.\-]*ray|xray/i.test(Q) && /(?:조별|주간|야간|부착|몇\s*대\s*가능)/.test(Q);
-    const isShiftBriefQ = /교대.{0,8}브리핑|브리핑.{0,8}교대|교대\s*준비|인수\s*브리핑/.test(Q);
+    const isShiftBriefQ = SHIFT_BRIEF_RE.test(Q);
     const anyCalc = isArrivalQ || isHatchQ || isGangQ || isMoveQ || isFirstQ || isXrayShiftQ || isShiftBriefQ;
     if (anyCalc && !v) return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 계산합니다. (예: "HAYN 갱 2개로 분배")';
     if (v) {
       const _voy = { ...v, key: c.voyageKey || '', _key: c.voyageKey || '' };
+      //  4.02 감사: 콘앱 전용이다 — 검수앱 항차가 EDI 없이 리스트만 있어도(app 'tally') 종전 답(«EDI 가 아직 없어…»)이 그대로 나가야 한다.
+      const _isCone = app === 'cone';
+      const _mvGiven = !_isCone ? null : (c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs);   // 콘앱이 넘긴 이 항차 컨(_vcOf 와 같은 걸러내기)
       const de = c._bayDef;
+      //  4.02: 콘앱 항차엔 EDI 가 없다 — 갱 분배·최초 시작·X-RAY 조별·교대 브리핑은 EDI 자리를 읽으므로 콘앱이 넘긴 컨으로 채운 사본을 쓴다(검수앱과 같은 답).
+      const _voyE = (!anyCalc || !_isCone || hasAnyEdi(_voy)) ? _voy : (() => {
+        try {
+        const o = { ..._voy };
+        for (const m of ['discharge', 'loading']) {
+          //  시프팅분(_shift)은 콘앱이 얹은 행이다 — 검수앱의 EDI 칸은 평택분만이라, 같이 세면 교대 브리핑 «자료» 줄이 «EDI 323 ⚠ 46건 차이» 로 갈린다(MCSC 실측).
+          const _ed0 = edOfMode(_voy, m, _mvGiven);
+          const ed = {};
+          for (const k of Object.keys(_ed0)) if (!(_ed0[k] && _ed0[k]._shift)) ed[k] = _ed0[k];
+          if (Object.keys(ed).length) { o[m] = { ...(_voy[m] || {}), ediContainers: ed }; continue; }
+          //  자료가 하나도 없는 쪽은 «없는 쪽» 으로 둔다 — 검수앱은 한쪽만 있는 배에 그쪽 노드가 아예 없다(«선적 EDI 0 ⚠ EDI 없음» 이 따라붙지 않게).
+          const nd = _voy[m];
+          if (nd && Object.values(nd).every((x) => !x || (typeof x === 'object' && !Object.keys(x).length))) delete o[m];
+        }
+        return o;
+        } catch (e) { console.warn('[미르] 콘앱 항차 사본 만들기 실패 — 원본으로 셉니다:', e); return _voy; }
+      })();
       try {
         if (isArrivalQ) return answerDataArrival(_voy, ship);
         if (isHatchQ) return answerHatchStatus(_voy, de, ship) || answerVoyageFacts({ factQuery: 'hatch' }, c);
-        if (isGangQ) return answerGangSplit(_voy, de, ship);
-        if (isMoveQ) return answerTotalMoves(_voy, ship, { eta: app === 'cone' ? null : movesOfVoyage(_voy, c.voyageKey || '') });   // 콘앱은 트윈 짝 사전이 없어 종전 문장 그대로(검수사 결정 대기)
-        if (isFirstQ) return answerFirstStart(_voy, de, ship);
-        if (isXrayShiftQ) return answerXrayShifts(_voy, de, { shipName: ship, pier: info.pier, pace: workPaceOf(_voy, c.voyageKey || '') });
-        if (isShiftBriefQ) return answerShiftBriefing(_voy, de, { shipName: ship, voyages: c.voyages || null, pace: workPaceOf(_voy, c.voyageKey || '') });
+        if (isGangQ) return answerGangSplit(_voyE, de, ship);
+        //  4.02: 콘앱도 같은 계산 — 콘앱이 넘긴 컨(cs)으로 트윈·무브를 센다(검수사 «콘앱 첫 답 «EDI 가 아직 없어» 는 통합이 안 된 것»). 시프팅 수는 콘앱이 합친 수(shiftN).
+        if (isMoveQ) return answerTotalMoves(_voy, ship, { eta: movesOfVoyage(_voy, c.voyageKey || '', _mvGiven), shifting: (_isCone && !hasAnyEdi(_voy) && Number.isFinite(c.shiftN)) ? c.shiftN : undefined });
+        if (isFirstQ) return answerFirstStart(_voyE, de, ship);
+        if (isXrayShiftQ) return answerXrayShifts(_voyE, de, { shipName: ship, pier: info.pier, pace: workPaceOf(_voy, c.voyageKey || '', _mvGiven) });
+        if (isShiftBriefQ) return answerShiftBriefing(_voyE, de, { shipName: ship, voyages: c.voyages || null, pace: workPaceOf(_voy, c.voyageKey || '', _mvGiven) });
         //  3.42: «2호기 11:15 시작했어» 는 적는 말이다 — 종전엔 gangQuery(n:null) 가 같이 켜져 «베이사전이 필요해요» 가 답을 가로챘다(판 B 시뮬). 저장은 화면(부수효과)이 한다.
         if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length && app === 'cone') return '시작 시각은 검수앱(작업 시작 탭)에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 감사: 콘앱엔 fbSetVoyageWorkStart 가 없다
         if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length) {

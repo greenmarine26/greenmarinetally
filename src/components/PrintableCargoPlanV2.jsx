@@ -13,6 +13,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
 import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode } from '../utils.js';   // 2.98-14: 커버 막대 경계
 import {
@@ -789,6 +790,7 @@ export default function PrintableCargoPlanV2({
   xrayMap = {},
   shiftingMap = {},   // V8.98: 쉬프팅(재적부) { cn: {from,to} } — 셀 ◆ 마크 + 헤더 카운트
   pod: explicitPod,
+  duo = null,   // ★ ConeOne 2.60 — 콘앱 첫 화면이 넘긴다 {mode, tabs:[{mode,label}], onPick}. 없으면(검수앱) 아무것도 안 그린다.
   onClose,
 }) {
   // M6.94.26: mode별 항차 선택 (카고플랜1과 통일).
@@ -1318,10 +1320,15 @@ export default function PrintableCargoPlanV2({
   const onTouchEnd = (e) => { if (!e.touches || e.touches.length < 2) pinchRef.current.active = false; };
 
   // 2.13-01: 돌아가 있으면 버튼을 **아래 여백**으로 내린다 — 위에 두면 도면을 덮는다(검수사 실측).
+  /* 4.02: 콘앱 «양하|선적» 두 쪽 보기(duo)에서는 자리를 따로 잡는다 — 콘앱 아래 줄에는 불편신고·새로고침(왼쪽)과
+       미르 고양이(오른쪽 14~62px)가 항상 떠 있어 아래 오른쪽 구석이 가려진다(실측).
+       가로 화면 → 도면 아래 여백(calcFit 이 막대 높이만큼 비워 둔다)의 고양이 왼쪽. 세로(돌아간) 화면 → 도면 위 여백. */
+  const barPos = duo
+    ? (rotated ? { top: 8, right: 8 } : { bottom: 8, right: 68 })
+    : (rotated ? { bottom: 8, right: 8 } : { top: 8, right: 8 });
   const closeBtn = onClose ? (
-    <div className="cpv2-noprint" style={rotated
-      ? { position: 'fixed', bottom: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }
-      : { position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
+    <div className="cpv2-noprint" style={{ position: 'fixed', ...barPos, zIndex: 10, display: 'flex', gap: 6, ...(duo ? { flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: rotated ? 'calc(100vw - 16px)' : 'calc(100vw - 280px)' } : null) }}>
+      {duo && <CargoDuoPills duo={duo} />}
       {!IS_TOUCH_DEVICE && (<>
         <button onClick={() => setZoom(z => Math.max(0.15, +(z - 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>−</button>
         <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>＋</button>

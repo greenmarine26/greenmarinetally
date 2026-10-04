@@ -1,9 +1,11 @@
 // 콘앱(cone.html)에서 검수앱 본체 카고플랜 V2를 그대로 띄우는 번들 진입점 (V7.45)
 //   본체 PrintableCargoPlanV2 + cargoPlanCore + 베이사전(.def 내장 포함)을 React째 번들.
 //   콘앱은 window.ConeCargoPlan.open(props) 한 줄로 본체와 100% 동일한 카고플랜을 연다.
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
+import CargoDuoPills from './components/CargoDuoPills.jsx';   // ConeOne 2.60: 양하|선적 전환 단추(빈 쪽 안내 화면에서도 쓴다)
 import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc} from './utils.js';   // ConeOne 2.44: 자리 판정도 한 벌   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
@@ -18,10 +20,55 @@ import { shipOpMapper } from './data/tallyFormats.js';   // 같은 판: 그 배 
 let _root = null;
 let _host = null;
 
-function close() {
+function close(opts) {
   try { if (_root) _root.unmount(); } catch (e) {}
   if (_host && _host.parentNode) _host.parentNode.removeChild(_host);
   _root = null; _host = null;
+  unlockOrientation();   // ConeOne 2.60: 첫 화면(양하|선적)이 걸어 둔 가로 잠금은 닫을 때 반드시 푼다 — 콘 계산기는 세로
+  const o = opts || {};   // 단추의 onClick 으로 불리면 이벤트가 들어온다 — 아래 두 키는 없으니 그냥 지나간다
+  if (!o.keepGuard) dropBackGuard(!o.fromPop);
+}
+
+//  ★ ConeOne 2.60 감사(R4) — 폰 «뒤로가기» 로 첫 화면(양하|선적)이 닫히게 한다. 안 하면 안드로이드 뒤로가기가 도면이 아니라 콘앱을 나간다.
+//    베이뷰 전체화면(cone.html)과 같은 방식 — 열 때 history 한 칸을 쌓고, 뒤로가기(popstate)면 닫는다. 단추로 닫으면 쌓은 칸을 되감는다.
+let _pushed = false;
+let _popFn = null;
+function dropBackGuard(rewind) {
+  if (_popFn) { window.removeEventListener('popstate', _popFn); _popFn = null; }
+  if (_pushed) {
+    _pushed = false;
+    if (rewind) {
+      try { if (window.history.state && window.history.state.coneDuo) window.history.back(); }
+      catch (e) { console.debug('[콘앱 2.60] 뒤로가기 칸 되감기 건너뜀:', e && e.message); }
+    }
+  }
+}
+function raiseBackGuard() {
+  if (_pushed) return;
+  try {
+    window.history.pushState({ coneDuo: 1 }, '');
+    _pushed = true;
+    _popFn = () => close({ fromPop: true });
+    window.addEventListener('popstate', _popFn);
+  } catch (e) { console.debug('[콘앱 2.60] 뒤로가기 칸 쌓기 실패 — 뒤로가기는 앱을 나갈 수 있습니다:', e && e.message); }
+}
+
+//  ★ ConeOne 2.60 — 가로 잠금(best effort). 설치형 앱·전체화면에서만 허용되고 나머지 브라우저는 거절한다 —
+//    거절돼도 화면은 V2 가 «세로면 도면을 90도 돌려 가로로 펴는» 길로 간다(둘 중 하나는 늘 된다). 거절 이유는 콘솔에만 남긴다(검수사 화면에 띄울 일이 아니다).
+function lockLandscape() {
+  try {
+    const so = (typeof window !== 'undefined' && window.screen) ? window.screen.orientation : null;
+    if (so && typeof so.lock === 'function') {
+      const r = so.lock('landscape');
+      if (r && typeof r.catch === 'function') r.catch((e) => console.debug('[콘앱 2.60] 가로 잠금은 이 기기에서 안 됩니다 — 도면을 돌려 가로로 폅니다:', e && e.message));
+    }
+  } catch (e) { console.debug('[콘앱 2.60] 가로 잠금 호출 실패 — 도면을 돌려 가로로 폅니다:', e && e.message); }
+}
+function unlockOrientation() {
+  try {
+    const so = (typeof window !== 'undefined' && window.screen) ? window.screen.orientation : null;
+    if (so && typeof so.unlock === 'function') so.unlock();
+  } catch (e) { console.debug('[콘앱 2.60] 가로 잠금 풀기 건너뜀(걸린 적 없음):', e && e.message); }
 }
 
 //  ★ TallyOne 3.66-01 · ConeOne 2.55-02 — **선사는 그 배 마감텔리 코드로**(검수사 2026-09-28 «모든 선사기준은 마감 텔리로 해야 합니다»).
@@ -52,7 +99,164 @@ function open(props) {
   );
 }
 
-window.ConeCargoPlan = { open, close };
+//  ★ ConeOne 2.60 — **콘앱 첫 화면: 양하(왼쪽 쪽)·선적(오른쪽 쪽) 카고플랜을 한 화면에서 좌우로 넘긴다.**
+//    검수사 2026-10-04 «카고플랜 (양하, 선적)화면은 반드시 가로모드 상태로 보여줘야 합니다» · 닫으면 콘 계산기.
+//    카고플랜 본체(V2)는 한 번에 한 쪽만 그린다(싱글턴 질의 `.cpv2-overlay .cpv2-page` 가 둘이면 맞춤·회전이 엉킨다) —
+//    쪽을 넘기면 다른 쪽 props 로 다시 세운다. 세로로 들고 있으면 V2 가 도면을 90도 돌려 가로로 펴므로,
+//    이 파일의 «쪽 넘기기» 방향도 같이 돈다(화면 위로 밀면 도면의 왼쪽 → 다음 쪽).
+function useWinSize() {
+  const [s, setS] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const f = () => setS({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', f); window.addEventListener('orientationchange', f);
+    return () => { window.removeEventListener('resize', f); window.removeEventListener('orientationchange', f); };
+  }, []);
+  return s;
+}
+
+//  한 쪽이 비었을 때 — «선적 자료 없음» 한 줄. 글자는 도면과 같은 가로 틀(세로면 90도)로 놓고,
+//  단추 묶음은 돌리지 않고 도면 쪽과 같은 자리에 둔다(PrintableCargoPlanV2 의 duo 자리와 한 벌 — 쪽을 넘겨도 단추가 안 움직인다).
+//  ⚠ 돌린 틀 안에 단추를 두면 세로 화면에서 오른쪽 아래로 가 미르 고양이에 닫기가 가려진다(실측).
+function DuoEmpty({ label, duo, onClose }) {
+  const { w, h } = useWinSize();
+  const portrait = h > w;
+  const W = Math.max(w, h), H = Math.min(w, h);
+  const frame = { position: 'fixed', width: W, height: H, left: (w - W) / 2, top: (h - H) / 2, transformOrigin: 'center', transform: portrait ? 'rotate(90deg)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+  const barPos = portrait ? { top: 8, right: 8 } : { bottom: 8, right: 68 };
+  return createPortal(
+    <div className="cpv2-duo-empty" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#475569', overflow: 'hidden' }}>
+      <div style={frame}>
+        <div style={{ color: '#e2e8f0', fontSize: 18, fontWeight: 700 }}>{label}</div>
+      </div>
+      <div className="cpv2-noprint" style={{ position: 'fixed', ...barPos, display: 'flex', gap: 6 }}>
+        <CargoDuoPills duo={duo} />
+        <button type="button" onClick={onClose} style={{ padding: '6px 10px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>✕ 닫기</button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+//  ★ 감사(R3) — 도면 그리기가 죽으면 React 18 은 루트를 통째로 내려 화면은 사라지지만 close() 가 안 불려 가로 잠금·isOpen 이 남는다.
+//    그래서 죽으면 스스로 닫고(잠금·뒤로가기 칸 정리) 콘솔에 남기고 한 줄 알린다. 콘앱엔 tailwind 가 없어 검수앱 ErrorBoundary 화면은 못 쓴다.
+class DuoBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { dead: false }; }
+  static getDerivedStateFromError() { return { dead: true }; }
+  componentDidCatch(err, info) {
+    console.error('[콘앱 2.60] 카고플랜 첫 화면 렌더 오류 — 닫고 콘 계산기로 돌아갑니다:', err, info && info.componentStack);
+    const msg = String((err && err.message) || err || '');
+    setTimeout(() => { try { this.props.onClose(); } catch (e) { console.error('[콘앱 2.60] 오류 뒤 닫기 실패:', e); } try { alert('카고플랜을 그리다 오류가 났습니다. 콘 계산기로 돌아갑니다.\n' + msg); } catch (e) { console.debug('[콘앱 2.60] 알림창을 못 띄웠습니다(오류는 위 콘솔에 남김):', e && e.message); } }, 0);
+  }
+  render() { return this.state.dead ? null : this.props.children; }
+}
+
+function DuoHost({ data, onClose }) {
+  const [mode, setMode] = useState(data.start || 'discharge');
+  const [dir, setDir] = useState(0);
+  const modeRef = useRef(mode); modeRef.current = mode;
+  const win = useWinSize();
+  const pick = useCallback((m) => {
+    if (m === modeRef.current) return;
+    setDir(m === 'loading' ? 1 : -1);
+    setMode(m);
+  }, []);
+  //  좌우(세로로 들면 상하) 밀기 — 손가락 하나·충분히 길고 한 방향일 때만. 확대해서 도면을 끌고 있으면(스크롤 여지가 있으면) 넘기지 않는다.
+  useEffect(() => {
+    let st = null;
+    //  확대해서 도면이 화면보다 커졌으면(밀기 방향 길이가 화면 이상) 손가락은 도면을 끄는 중이다 — 쪽을 넘기지 않는다.
+    //  ⚠ 겹을 가진 스크롤 길이(scrollWidth)로 재지 않는다 — 인쇄용 요소 때문에 맞춤 상태에서도 화면보다 길게 나온다(실측 SWMM 1836 ↔ 844).
+    const zoomedAlong = (portrait) => {
+      const pg = document.querySelector('.cpv2-overlay .cpv2-page');
+      if (!pg) return !document.querySelector('.cpv2-duo-empty, .cpv2-overlay-fallback');   // 도면이 없어도 «자료 없음» 화면이면 확대 중이 아니다 — 밀어서 돌아올 수 있어야 한다
+      const r = pg.getBoundingClientRect();
+      return (portrait ? r.height : r.width) > (portrait ? window.innerHeight : window.innerWidth) - 4;
+    };
+    const onStart = (e) => {
+      if (!e.touches || e.touches.length !== 1) { st = null; return; }
+      if (e.target && e.target.closest && e.target.closest('button, input, textarea, select, #mirSheet')) { st = null; return; }   // 단추 · 입력창 · 미르 시트 안의 동작은 도면을 넘기지 않는다
+      st = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    };
+    //  밀기가 시작되면 브라우저 기본 동작(뒤로 가기 스와이프·당겨서 새로고침)을 끊는다 — 안 끊으면 오른쪽 밀기에 콘앱이 통째로 나간다(실측 about:blank).
+    //  overscroll-behavior 만으로는 이 화면에서 안 막혔다 — 스크롤이 시작되기 전(취소 가능한 동안)에 판정해 preventDefault 한다. 확대해서 끄는 중이면 건드리지 않는다.
+    const onMove = (e) => {
+      if (!e.touches || e.touches.length > 1) { st = null; return; }
+      if (!st || !e.touches[0]) return;
+      const portrait = window.innerHeight > window.innerWidth;
+      const dx = e.touches[0].clientX - st.x, dy = e.touches[0].clientY - st.y;
+      const along = portrait ? dy : dx, across = portrait ? dx : dy;
+      if (Math.abs(along) > 6 && Math.abs(along) > Math.abs(across) && !zoomedAlong(portrait) && e.cancelable) e.preventDefault();
+    };
+    const onEnd = (e) => {
+      if (!st) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      const s0 = st; st = null;
+      if (!t) return;
+      const dx = t.clientX - s0.x, dy = t.clientY - s0.y;
+      const portrait = window.innerHeight > window.innerWidth;
+      const along = portrait ? dy : dx, across = portrait ? dx : dy;
+      if (Math.abs(along) < 70 || Math.abs(along) < Math.abs(across) * 1.8) return;
+      if (zoomedAlong(portrait)) return;
+      pick(along < 0 ? 'loading' : 'discharge');
+    };
+    document.addEventListener('touchstart', onStart, { capture: true, passive: true });
+    document.addEventListener('touchmove', onMove, { capture: true, passive: false });
+    document.addEventListener('touchend', onEnd, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onStart, { capture: true });
+      document.removeEventListener('touchmove', onMove, { capture: true });
+      document.removeEventListener('touchend', onEnd, { capture: true });
+    };
+  }, [pick]);
+  //  PC 에서는 ← → 키로도 넘긴다.
+  useEffect(() => {
+    const k = (e) => {
+      const t = e.target;
+      if (t && ((t.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) || t.isContentEditable)) return;   // 미르 입력창에서 커서를 옮길 때 도면이 넘어가지 않게
+      if (e.key === 'ArrowRight') pick('loading'); else if (e.key === 'ArrowLeft') pick('discharge');
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [pick]);
+  const tabs = [
+    { mode: 'discharge', label: `양하 ${data.counts && data.counts.discharge != null ? data.counts.discharge : ''}`.trim() },
+    { mode: 'loading', label: `선적 ${data.counts && data.counts.loading != null ? data.counts.loading : ''}`.trim() },
+  ];
+  const duo = { mode, tabs, onPick: pick };
+  const props = mode === 'discharge' ? data.discharge : data.loading;
+  const portrait = win.h > win.w;
+  //  ⚠ overscroll-behavior — 쪽을 넘기는 밀기(오른쪽으로 밀기·세로로 들었을 땐 아래로 밀기)가 브라우저 «뒤로 가기»·«당겨서 새로고침» 으로 먹히면 콘앱이 통째로 사라진다(실측: 오른쪽 밀기에 about:blank 로 나갔다).
+  //    첫 화면이 떠 있는 동안만 막는다(닫으면 이 style 이 같이 없어진다).
+  const slide = `html,body{overscroll-behavior:none}.cpv2-overlay{overscroll-behavior:none;animation:cpDuoIn .2s ease-out backwards}@keyframes cpDuoIn{from{opacity:0;transform:translate(${portrait ? 0 : dir * 40}px,${portrait ? dir * 40 : 0}px)}to{opacity:1;transform:none}}`;
+  return (
+    <>
+      <style>{slide}</style>
+      {props
+        ? <PrintableCargoPlanV2 key={mode} flipBays {...props} duo={duo} onClose={onClose} />
+        : <DuoEmpty key={mode} label={mode === 'loading' ? '선적 자료 없음' : '양하 자료 없음'} duo={duo} onClose={onClose} />}
+    </>
+  );
+}
+
+//  양하·선적 한 쌍으로 연다. data = { discharge: props|null, loading: props|null, start, counts:{discharge,loading} }
+function openDuo(data) {
+  close({ keepGuard: true });   // 이미 떠 있던 첫 화면을 치우되 뒤로가기 칸은 이어 쓴다(되감기와 새로 쌓기가 엇갈리지 않게)
+  data = data || {};
+  const fix = (p) => (p ? _opFixProps(p) : null);
+  const d = { ...data, discharge: fix(data.discharge), loading: fix(data.loading) };
+  if (!d.discharge && !d.loading) return false;
+  if (!d.start) d.start = d.discharge ? 'discharge' : 'loading';
+  _host = document.createElement('div');
+  document.body.appendChild(_host);
+  _root = createRoot(_host);
+  lockLandscape();
+  raiseBackGuard();
+  _root.render(<DuoBoundary onClose={close}><DuoHost data={d} onClose={close} /></DuoBoundary>);
+  return true;
+}
+
+function isOpen() { return !!_root; }
+
+window.ConeCargoPlan = { open, openDuo, close, isOpen };
 
 // V9.05-03: 파서 단일 소스 통합 — 콘앱(cone.html)이 본체 parseBAPLIE/parseAscFile을 그대로 쓰도록 노출.
 //   콘앱 내부 약식 파서의 Full/Empty 미인식(실측: EQD 상태 +5/+4 안 읽음)·ISO 불일치 해소.
