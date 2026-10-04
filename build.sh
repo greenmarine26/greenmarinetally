@@ -364,6 +364,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 4.02 콘앱 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_C4"; exit 1
   fi
+  # 4.03: 터미널 본선 현황 — 검수사가 보내 준 PCTC 본선작업현황(MCSC 7B·SWMM 6B 2026-10-04 16:21)과 동방 RZOR 보관본 숫자를 기준으로 src/termBoard.js(수석 보드·콘앱 한 벌)를 실소스로 돌리고, 수석 보드·콘앱·미르 번들·매뉴얼 배선과 버전을 소스에서 확인한다.
+  SMOKE_TB=$(mktemp /dev/shm/hometmp/_smoketb_XXXXXX.cjs)
+  if npx esbuild src/termBoard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_TB" --log-level=error; then
+    node tools/smoke_termboard403.cjs "$SMOKE_TB" "$PWD" || { echo "✗ 4.03 터미널 본선 현황 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_TB"; exit 1; }
+    rm -f "$SMOKE_TB"
+  else
+    echo "✗ 4.03 터미널 본선 현황 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_TB"; exit 1
+  fi
   # 3.58: 선적 기록지 사진 — XTPG 541E 실사진 AI 실응답 세 번으로 src/sheetPhoto.js 를 실소스 그대로 돌려 두 번 읽기가 틀린 자리를 자동으로 넣지 않는지 잰다.
   SMOKE_SPM=$(mktemp /dev/shm/hometmp/_spm_XXXXXX.mjs)
   SMOKE_SPO=$(mktemp /dev/shm/hometmp/_spo_XXXXXX.cjs)
@@ -1056,6 +1064,20 @@ fi
       else
         cp "$SMOKE_LP.fbbak" src/firebase.js; rm -f "$SMOKE_LP.fbbak"
         echo "✗ 동방 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1
+      fi
+      #  4.03: **터미널 본선 현황 표** — 검수원 기록이 없는 PCTC(MCSC 7B 실값)·동방(RZOR 보관본) 카드에 표가 서고, 호기 그림이 그려지는 배(DJCT)·숨은 호기에 그림이 있는 배에는 안 서는지 실제로 그려 본다.
+      SMOKE_TBR=$(mktemp /dev/shm/hometmp/_smoketbr_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_TBR.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_termboard403_render.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_TBR"; then
+        cp "$SMOKE_TBR.fbbak" src/firebase.js && rm -f "$SMOKE_TBR.fbbak"
+        node tools/smoke_termboard403_render.cjs "$SMOKE_TBR" || { echo "✗ 4.03 수석 보드 터미널 현황 렌더 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_TBR"; exit 1; }
+        rm -f "$SMOKE_TBR"
+      else
+        cp "$SMOKE_TBR.fbbak" src/firebase.js; rm -f "$SMOKE_TBR.fbbak"
+        echo "✗ 4.03 수석 보드 터미널 현황 렌더 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_TBR"; exit 1
       fi
       #  3.48: **베이뷰 작업** — DXQD 2636E 실자료로 선택 화면 → 따라가기 → 자동 카드·장 그림(완료 초록·남은 흰 칸·다른 단 흐리게) → 데크⇄홀드 → 수동 게이트 → ✕ 를 실제로 누른다.
       #    완료 지도(앱 ∪ 터미널)·불일치 세 갈래(pos·cell·noterm)·따라가기(4호기 BAY (20)21·실적 없는 배) 판정도 같은 번들에서 센다.

@@ -63,8 +63,8 @@ ok(rows.concat(r2, r3, r4, r5).every(r => !/CATOS|카토스|터미널/.test(r.na
     '⛔ 단추가 호기 갈래에만 있다 — 동방 갈래(지금 작업 중인 베이)에서는 펼 길이 없다(감사가 잡은 절반 미배송)');
   ok(/bays\.length >= 5 \? 'grid-cols-5'/.test(cd), '⛔ 동방 격자가 4·5칸을 모른다 — 펴도 세 칸에 2줄로 접힌다');
   ok(/craneOpen \? cranes\.slice\(0, 5\)/.test(cd), '⛔ 펼치면 상한이 없다 — 6칸 이상이면 격자가 접혀 그림이 뭉갠다');
-  ok(/\{openBtn\(bayMore\)\}/.test(cd) && /\{openBtn\(more\)\}/.test(cd), '⛔ 두 갈래가 같은 단추를 쓰지 않는다');
-  ok(/shown\.length >= 5 \? 'grid-cols-5'/.test(cd) && /shown\.length === 4 \? 'grid-cols-4'/.test(cd),
+  ok(/\{openBtn\(bayMore\)\}/.test(cd) && /\{openBtn\((_termOnly && boxes\.length === 0 \? 0 : )?more\)\}/.test(cd), '⛔ 두 갈래가 같은 단추를 쓰지 않는다');
+  ok(/(shown|boxes)\.length >= 5 \? 'grid-cols-5'/.test(cd) && /(shown|boxes)\.length === 4 \? 'grid-cols-4'/.test(cd),
     '⛔ 격자가 4·5칸을 모른다 — 펴도 세 칸에 겹친다');
   //  부두 정본이 정말 4·5 인지 — 상한을 3 으로 되돌리는 다음 판을 막는다
   const uu = fs2.readFileSync(path2.join(__dirname, '..', 'src', 'utils.js'), 'utf8');

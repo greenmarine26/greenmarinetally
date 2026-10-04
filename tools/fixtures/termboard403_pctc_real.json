@@ -1,0 +1,108 @@
+{
+ "MCSC_638N": {
+  "vsl": "MCSC",
+  "voy": "638N",
+  "berth": "동부두 7번선석",
+  "pier": "PCTC",
+  "planDis": 277,
+  "planLod": 230,
+  "workStartAt": "2026-10-04 08:05",
+  "termStat": {
+   "at": 1791098523571,
+   "atw": "2026-10-04 08:05",
+   "berth": "7B",
+   "dis": {
+    "done": 268,
+    "rest": 9,
+    "tot": 277
+   },
+   "etb": "2026-10-04 08:00",
+   "etd": "2026-10-04 23:00",
+   "gc": {
+    "101": {
+     "disRest": 4,
+     "disTot": 56,
+     "lodRest": 150,
+     "lodTot": 0
+    },
+    "102": {
+     "disRest": 5,
+     "disTot": 106,
+     "lodRest": 90,
+     "lodTot": 36
+    },
+    "103": {
+     "disRest": 0,
+     "disTot": 83,
+     "lodRest": 0,
+     "lodTot": 0
+    },
+    "104": {
+     "disRest": 0,
+     "disTot": 69,
+     "lodRest": 0,
+     "lodTot": 0
+    }
+   },
+   "lod": {
+    "done": 36,
+    "rest": 194,
+    "tot": 230
+   },
+   "src": "PCTC"
+  }
+ },
+ "SWMM_2609N": {
+  "vsl": "SWMM",
+  "voy": "2609N",
+  "berth": "동부두 6번선석",
+  "pier": "PCTC",
+  "planDis": 223,
+  "planLod": 191,
+  "workStartAt": "2026-10-04 13:00",
+  "termStat": {
+   "at": 1791098523379,
+   "atw": "2026-10-04 13:00",
+   "berth": "6B",
+   "dis": {
+    "done": 174,
+    "rest": 49,
+    "tot": 223
+   },
+   "etb": "2026-10-04 12:55",
+   "etd": "2026-10-05 00:00",
+   "gc": {
+    "101": {
+     "disRest": 0,
+     "disTot": 0,
+     "lodRest": 0,
+     "lodTot": 0
+    },
+    "102": {
+     "disRest": 0,
+     "disTot": 0,
+     "lodRest": 0,
+     "lodTot": 0
+    },
+    "103": {
+     "disRest": 39,
+     "disTot": 86,
+     "lodRest": 70,
+     "lodTot": 0
+    },
+    "104": {
+     "disRest": 10,
+     "disTot": 88,
+     "lodRest": 121,
+     "lodTot": 0
+    }
+   },
+   "lod": {
+    "done": 0,
+    "rest": 191,
+    "tot": 191
+   },
+   "src": "PCTC"
+  }
+ }
+}

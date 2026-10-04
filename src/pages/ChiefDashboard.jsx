@@ -35,6 +35,7 @@ import { shipOpMapper } from '../data/tallyFormats.js';
 import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
 import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
+import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -2342,17 +2343,26 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         </div>
       </div>
     );
+    //  ★ 4.03 — 이 줄까지 왔다 = 베이 묶음 그림(bays)이 없다. 호기 칸에도 그릴 자리가 하나도 없으면 터미널 본선 현황 표를 낸다.
+    const _canDraw = (c) => !!(c.bay && /\d/.test(String(c.bay)) && voyage);
+    const _termOnly = !cranes.some(_canDraw) && hasTermBoard(voyage?.info);   // 접혀서 안 보이는 호기까지 본다 — 그림이 그려질 호기가 하나라도 있으면 종전 화면 그대로
+    const termBlock = _termOnly ? <TermBoardPanel info={voyage.info} /> : null;
+    const boxes = _termOnly ? shown.filter((c) => !(c.qc && !_canDraw(c))) : shown;
     return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">   {/* 2갱이면 75/2 · 3갱이면 75/3 (grid-cols-N) · PC 는 줄 높이를 다 쓴다 */}
         <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5">
           <span>호기별 작업 베이</span>
-          {openBtn(more)}
+          {openBtn(_termOnly && boxes.length === 0 ? 0 : more)}   {/* 4.03: 표가 호기 칸을 대신하면 «+N칸 더» 가 펼칠 것이 없다 */}
         </div>
-        {shown.length === 0 ? (
-          <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 그 베이 그림이 뜹니다</div>
+        {/* ★ 4.03 — 검수사 2026-10-04 «수석대쉬보드의 실시간 작업 현황과 콘앱의 실시간 작업 현황이 검수사가 찍지 않으면 안보일 경우 PCTC의 선박별 본선 작업 현황과 동방의 선박별 본선작업 현황을 보여줄수 있게 해주세요».
+            호기별 베이 그림을 하나도 못 그릴 때(= 검수원이 호기·자리를 안 찍음)만 터미널 현황 표를 채운다. 그림이 그려지는 배는 종전 그대로.
+            동방은 QC 합계로 만든 «완료 기록이 와야 그림이 뜹니다» 칸이 이미 있는데, 그 숫자가 표에 다 들어 있어 표로 대신한다. */}
+        {termBlock}
+        {boxes.length === 0 ? (
+          termBlock ? null : <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 그 베이 그림이 뜹니다</div>
         ) : (
-          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${shown.length >= 5 ? 'grid-cols-5' : shown.length === 4 ? 'grid-cols-4' : shown.length >= 3 ? 'grid-cols-3' : shown.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            {shown.map(c => (
+          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${boxes.length >= 5 ? 'grid-cols-5' : boxes.length === 4 ? 'grid-cols-4' : boxes.length >= 3 ? 'grid-cols-3' : boxes.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {boxes.map(c => (
               <div key={c.no} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
                   <span className="text-sm font-black text-cyan-200">{c.no}호기</span>
@@ -2363,7 +2373,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                   <span className={`ml-auto ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>
                 </div>
                 {c.bay && /\d/.test(String(c.bay)) && voyage ? (
-                  <BoardBayCell px={boardTitlePx(shown.length)}
+                  <BoardBayCell px={boardTitlePx(boxes.length)}
                     fit={{ fill: wide, boundsRef: cardRef, maxH: wide ? null : fitMaxH, boost: zoom, onFit: reportFit(`c${c.no}`), force: groupFit }}
                     plan={{ containers: boardContainers[c.mode || modeOfBoard] || [], compMap: voyage?.[c.mode || modeOfBoard]?.completed || {},
                       xrayMap: voyage?.[c.mode || modeOfBoard]?.xrayList || {}, mode: c.mode || modeOfBoard,
