@@ -39,6 +39,32 @@ export function isCheckerPlanWorkbook(wb) {
   return false;
 }
 
+/** 4.04-05: 검수사 STOWAGE PLAN 맨 아래 «CHASSIS» 표(C-DECK·D-DECK·U-DECK 줄의 20'·40' 칸) — 마감텔리가 샤시 코드로 센 값이다.
+ *  컨 대수에서 거꾸로 못 센다(크레인 LO/LO 는 샤시가 없고 빈 섀시 C/S 는 컨이 아니다). 실물 37항차 중 추정이 맞은 것은 8개뿐이었다.
+ *  머리(CHASSIS · 20' · 40')를 찾아 그 칸 아래의 «C-DECK»·«D-DECK»·«U-DECK» 줄에서 읽는다. 못 읽으면 null(출력은 추정으로). */
+function readCheckerChassis(ws, XLSX) {
+  try {
+    const rg = XLSX.utils.decode_range(ws['!ref']);
+    const g = (r, c) => { const x = ws[XLSX.utils.encode_cell({ r, c })]; return x && x.v != null ? x.v : null; };
+    //  숫자 칸만 — 오류 셀(#N/A 등)은 SheetJS 가 오류 코드 숫자를 v 에 담으므로 t 가 'n' 인지 같이 본다(수집기 파이썬은 오류 셀을 문자열로 읽어 null 이다).
+    const num = (r, c) => { const x = ws[XLSX.utils.encode_cell({ r, c })]; return x && x.t === 'n' && typeof x.v === 'number' && Number.isFinite(x.v) ? x.v : null; };
+    for (let r = rg.s.r; r <= rg.e.r; r++) for (let c = rg.s.c; c <= rg.e.c; c++) {
+      if (String(g(r, c) ?? '').trim().toUpperCase() !== 'CHASSIS') continue;
+      let c20 = -1, c40 = -1;
+      for (let k = 1; k <= 8; k++) { const t = String(g(r, c + k) ?? '').trim(); if (t === "20'") c20 = c + k; else if (t === "40'") c40 = c + k; }
+      if (c20 < 0 || c40 < 0) continue;
+      const out = {};
+      for (let rr = r + 1; rr <= r + 6; rr++) {
+        const m = String(g(rr, c) ?? '').trim().toUpperCase().match(/^([CDU])-DECK$/);
+        const a = num(rr, c20), b = num(rr, c40);
+        if (m && a != null && b != null) out[m[1]] = [a, b];
+      }
+      if (Object.keys(out).length) return out;
+    }
+  } catch { /* 표를 못 읽으면 추정으로 */ }
+  return null;
+}
+
 /** 검수사 STOWAGE PLAN 워크북 → parseDeckPlanWorkbook 과 같은 모양 {voy, decks, total, lolo, dbl} */
 export function parseCheckerPlanWorkbook(wb, XLSX) {
   const decks = [];
@@ -67,6 +93,7 @@ export function parseCheckerPlanWorkbook(wb, XLSX) {
       }
     }
     if (!labels.length) continue;
+    const chas = readCheckerChassis(ws, XLSX);   // 4.04-05: 시트 자신의 샤시표 — 출력 CHASSIS 상자가 이 값을 그대로 쓴다
     labels.sort((a, b) => a.r - b.r);
     for (let li = 0; li < labels.length; li++) {
       const { r: lr, deck } = labels[li];
@@ -132,6 +159,7 @@ export function parseCheckerPlanWorkbook(wb, XLSX) {
       decks.push({ deck, name: `${deck === 'U' ? 'UNDER' : deck}-DECK`, cols: nPos, rows: lines, slots,
                    tier: DECK_TIER[deck === 'U' ? 'B' : deck] || '', lines, colsN: nPos,
                    lolo: slots.filter((x) => x.lolo).length, dbl: 0,
+                   ...(chas && chas[deck] ? { capacity: chas[deck] } : {}),   // 4.04-05: [20' 샤시, 40' 샤시]
                    numbering: 'bow' });   // 위치 1 = 선수(검수사 양식). 선사 rzdf 는 1 = 선미
     }
   }

@@ -162,7 +162,7 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
   ok('맨 아래 집계 — F 55 · E 135 · TTL 190 · 컨 무게 합 2266.323t(실물 2282.325 − 빈 섀시 16t)', ws2.BZ156.v === 55 && ws2.BZ157.v === 135 && ws2.BZ158.v === 190 && Math.abs(ws2.AK159.v - 2266.323) < 0.01, `${ws2.BZ156 && ws2.BZ156.v} ${ws2.BZ157 && ws2.BZ157.v} ${ws2.BZ158 && ws2.BZ158.v} ${ws2.AK159 && ws2.AK159.v}`);
   const chs = p106.decks.find((d) => d.deck === 'D').slots.map((s) => s.chassis);
   ok('파서가 크기 코드(4·3·2·1)를 그대로 갖고 온다 — D덱 트윈 20피트 코드 2·1 이 각 6대', chs.filter((x) => x === 2).length === 6 && chs.filter((x) => x === 1).length === 6 && chs.filter((x) => x === 4).length === 94, `${JSON.stringify([2, 1, 4, 3].map((k) => chs.filter((x) => x === k).length))}`);
-  ok('블록 CHASSIS 집계 — C덱 20\'=2·40\'=64 · D덱 20\'=4(단독만)·40\'=55(크레인 45 뺀 49 + 트윈 6, 빈 섀시 4는 컨이 아니라 못 셈)', ws2.AY5.v === 2 && ws2.BB5.v === 64 && ws2.AY57.v === 4 && ws2.BB57.v === 55, `${ws2.AY5 && ws2.AY5.v} ${ws2.BB5 && ws2.BB5.v} ${ws2.AY57 && ws2.AY57.v} ${ws2.BB57 && ws2.BB57.v}`);
+  ok('블록 CHASSIS 집계 — C덱 20\'=2·40\'=64 · D덱 20\'=4·40\'=59(4.04-05 부터 마감텔리 파일 자신의 CHASSIS 표 값 — 크레인 45 뺀 49 + 트윈 6 + 빈 섀시 4)', ws2.AY5.v === 2 && ws2.BB5.v === 64 && ws2.AY57.v === 4 && ws2.BB57.v === 59, `${ws2.AY5 && ws2.AY5.v} ${ws2.BB5 && ws2.BB5.v} ${ws2.AY57 && ws2.AY57.v} ${ws2.BB57 && ws2.BB57.v}`);
   ok('Cont. 표 — 수화물 1대는 20\' D 에 안 세고 20 Lug 에만(실물 F 20\' 0 · 20 Lug 1 · TTL 55)', ws2.AS156.v === 0 && ws2.BT156.v === 1 && ws2.BZ156.v === 55 && ws2.AS158.v === 31);
   const wbG = M.buildCheckerPlanWorkbook(XLSX, { plan: gen2, vsl: 'RIZHAO ORIENT', voy: 'R106W', date: '2026-09-28', inspector: '검수원' });
   const outG = path.join(TMP, 'gen.xlsx');

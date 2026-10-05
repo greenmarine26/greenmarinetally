@@ -90,9 +90,11 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
   const merge = (r1, c1, r2, c2) => merges.push({ s: { r: r1, c: c1 }, e: { r: r2, c: c2 } });
 
   const byDeck = {};
+  const capByDeck = {};
   for (const d of (plan?.decks || [])) {
     const key = /^U|^B/.test(String(d.deck || '')) ? 'U' : String(d.deck || '').toUpperCase();
     byDeck[key] = (byDeck[key] || []).concat((d.slots || []).filter((s) => s && s.cn && !s.empty));
+    if (Array.isArray(d.capacity) && d.capacity.length === 2 && d.capacity.every((x) => typeof x === 'number' && Number.isInteger(x) && x >= 0)) capByDeck[key] = [d.capacity[0], d.capacity[1]];   // 4.04-05: 시트 샤시표
   }
   const sum = { C: null, D: null, U: null };
   const feTot = { F: { 20: { D: 0, R: 0 }, 40: { D: 0, R: 0 }, 45: { D: 0, R: 0 }, L20: 0, L40: 0, n: 0 },
@@ -124,12 +126,13 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
       //   트윈(코드 2·1)은 한 섀시에 둘이라 코드 1 만 센다. 크레인(D덱 10~15)은 섀시 없음. 빈 섀시(C/S)는 컨이 아니라 못 센다.
       const chas = s.chassis != null ? Number(s.chassis) : (t.sz === '20' ? 3 : 4);
       if (t.sz === '20') { if (chas === 3) ch20 += 1; else if (chas === 1) ch40 += 1; }
-      else if (!s.lolo) ch40 += 1;
+      else if (!s.lolo && !s.crane) ch40 += 1;   // 4.04-05: 넘친 크레인 칸도 샤시 없음(출력 deckTotals 와 같은 식)
       const ft = feTot[t.fe];
       ft.n += 1;
       if (t.k === 'L') { if (t.sz === '20') ft.L20 += 1; else ft.L40 += 1; }   // 실물 — 수화물은 크기 칸에 안 세고 Lug 칸·TTL 에만
       else ft[t.sz][t.rf ? 'R' : 'D'] += 1;
     }
+    if (capByDeck[deck]) { ch20 = capByDeck[deck][0]; ch40 = capByDeck[deck][1]; }   // 4.04-05: 시트 자신의 샤시표가 있으면 그대로(출력과 같게)
     sum[deck] = { ch20, ch40, wt: wt / 1000, n, ttl: n[20] + n[40] + n[45] };
     set(off + 2, 51, 'CHASSIS', S_HEAD); merge(off + 2, 51, off + 2, 54);
     set(off + 3, 50, "20'", S_TBL); merge(off + 3, 50, off + 3, 52);

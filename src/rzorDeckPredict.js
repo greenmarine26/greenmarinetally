@@ -115,6 +115,10 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
     if (slot) pred[s.cn] = { ...slot, zone: z };   // sz·rf 는 놓을 때 rzorSizeOf 로 다시 본다
     else unplaced.push(s.cn);
   }
+  //  4.04-05: 크레인(터미널 베이 22) 몫으로 놓인 자리 키 — D덱 10~15칸 밖으로 넘친 크레인 칸(45대 초과)도 «crane» 로 표시해 출력 샤시 대수에서 뺀다.
+  const craneKeys = new Set();
+  for (const [cn, sl] of Object.entries(pred)) if (sl.zone === 'CRANE') craneKeys.add(sl.key);
+  for (const s of craneSeq) if (sureByCn[s.cn]) craneKeys.add(sureByCn[s.cn]);
   // 덱별 슬롯 — 컨(확정·예측)을 줄·위치에 놓고, 그림 좌표는 그 뒤에 정한다(3.70 — 40·45 는 두 칸 자리(w 2)에서 옆 위치 p+1 이 비었을 때만 두 칸.
   //   옆이 템플릿 자리면 두 칸 대신 한 칸 + «X 칸»(검수사 양식의 X) — 빈자리로 세지 않고, 누르면 조회창이 X 칸이라고 알린다)
   const decks = [];
@@ -153,7 +157,8 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
         slots.push({ ...base(line, pos, span), cn: o.cn, empty: false,
                      wt: o.c.wt != null ? Math.round(Number(o.c.wt)) || null : null,
                      iso: `${o.sz} ${o.rf ? 'RH' : (o.sz === '20' ? 'GP' : 'HC')}`, fe: o.c.fe === 'E' ? 'E' : 'F',
-                     flags: o.c.lugg ? ['LUG'] : [], sure: !!o.sure, pred: !o.sure });
+                     flags: o.c.lugg ? ['LUG'] : [], sure: !!o.sure, pred: !o.sure,
+                     ...(craneKeys.has(rzorSlotKey(deck, line, pos)) ? { crane: true } : {}) });
       }
     }
     for (const [key, t] of Object.entries(tpl)) {

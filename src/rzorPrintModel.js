@@ -83,7 +83,7 @@ export function deckTotals(slots) {
     n[t.sz] += 1; wt += Number(s.wt) || 0;
     const chas = s.chassis != null ? Number(s.chassis) : (t.sz === '20' ? 3 : 4);
     if (t.sz === '20') { if (chas === 3) ch20 += 1; else if (chas === 1) ch40 += 1; }
-    else if (!s.lolo) ch40 += 1;
+    else if (!s.lolo && !s.crane) ch40 += 1;   // 4.04-05: 크레인(LO/LO)은 샤시가 없다 — D덱 10~15칸 밖으로 넘친 크레인 칸(45대 초과)도 뺀다
     const ft = fe[t.fe];
     ft.n += 1;
     if (t.k === 'L') { if (t.sz === '20') ft.L20 += 1; else ft.L40 += 1; }
@@ -168,6 +168,10 @@ export function buildPrintModel({ plan, containers = [], xrayMap = {}, termWork 
         }
         totals.chFrom = 'est';
       }
+    }
+    else if (Array.isArray(d.capacity) && d.capacity.length === 2 && d.capacity.every((x) => typeof x === 'number' && Number.isInteger(x) && x >= 0)) {
+      //  4.04-05 검수사 양식(마감텔리) — 시트 맨 아래 CHASSIS 표가 준 값(d.capacity)을 그대로. 추정은 실물 37항차 중 8개만 맞았다(크레인 넘침·빈 섀시 C/S·UNDER 트윈).
+      totals.ch20 = Number(d.capacity[0]); totals.ch40 = Number(d.capacity[1]); totals.chFrom = 'file';
     }
     page.totals = totals;
 
