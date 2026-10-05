@@ -1,6 +1,6 @@
 // 4.04-02 연막검사 — RZOR 엑셀(양하 카고플랜 · 선적 마감텔리 양식)이 파일 안에 인쇄 설정을 갖는다: 가로 A4 · 덱마다 한 쪽(양하) · 쪽 나눔(선적).
 //   검수사 2026-10-05 «엑셀에서도 한장으로 나오게끔 맞춰주세요» — 쓰는 라이브러리(SheetJS·xlsx-js-style)가 pageSetup 을 파일에 안 써서 세로 A4 11쪽으로 찍혔다(라이브 R109E 실측).
-//   기대값은 앱 함수가 아니라 **선사·마감텔리 실물 파일의 시트 XML**(R106E 선사 rzdf: fitToPage · 가로 A4 / R106W 마감텔리: scale 60 · 가로 A4 · 쪽 나눔 49·98)에서 따로 읽는다.
+//   기대값은 앱 함수가 아니라 **선사·마감텔리 실물 파일의 시트 XML**(R106E 선사 rzdf: fitToPage · 가로 A4 / R106W 마감텔리: scale 60 · 가로 A4 · 쪽 나눔 49·98 — 앱은 4.04-04 부터 블록마다 서명 3줄을 더해 52·104)에서 따로 읽는다.
 //   실파일 tools/fixtures/rzor_rzdf_R109E.xls(선사 원본) · rzor_plan_R106W.xlsx(마감텔리) 를 앱 파서로 읽어 앱이 쓰는 그대로 만들고, 만든 파일(zip)을 열어 시트 XML 을 직접 잰다.
 //   ⚠ 엑셀(Microsoft)이 «복구» 창을 띄우는지는 여기서 못 잰다 — 요소 순서(스키마)·중복·XML 짜임까지 잰다. 쪽 수는 LibreOffice 로 따로 확인했다(인계함).
 const fs = require('fs');
@@ -94,7 +94,7 @@ console.log('■ ② 앱이 쓰는 설정 상수 — 실물 파일 자신의 인
   const r106w = sheetsOf('rzor_plan_R106W.xlsx')[0]; const pw = parseSheet(r106w);
   const wBreaks = [...r106w.matchAll(/<brk id="(\d+)"/g)].map((m) => Number(m[1]));
   ok('실물 마감텔리 R106W: 가로 A4 · 배율 60 · 가운데 맞춤 · 쪽 나눔 49·98 · 맞춤(fitToPage) 없음', ps(r106w).paperSize === '9' && ps(r106w).orientation === 'landscape' && ps(r106w).scale === '60' && JSON.stringify(wBreaks) === '[49,98]' && pw.get('printOptions').length === 1 && attrs(pw.get('printOptions')[0]).horizontalCentered === '1' && !/fitToPage/.test(r106w));
-  ok('앱 선적 설정 = 그 실물: 가로 A4 · 배율 60(상한 — 칸이 넓으면 가로 한 쪽까지 낮춘다) · 가운데 · 쪽 나눔 49·98 · 맞춤 아님', M.CHECKER_XLSX_PRINT.orientation === 'landscape' && M.CHECKER_XLSX_PRINT.paper === 9 && M.CHECKER_XLSX_PRINT.scale === 60 && M.CHECKER_XLSX_PRINT.fitWidth === true && !M.CHECKER_XLSX_PRINT.fit && M.CHECKER_XLSX_PRINT.centered === true && JSON.stringify(M.CHECKER_XLSX_PRINT.breaks) === JSON.stringify(wBreaks), JSON.stringify(M.CHECKER_XLSX_PRINT));
+  ok('앱 선적 설정 = 그 실물: 가로 A4 · 배율 60(상한 — 칸이 넓으면 가로 한 쪽까지 낮춘다) · 가운데 · 쪽 나눔은 덱 블록 사이(4.04-04 부터 블록마다 서명 3줄이 늘어 실물 49·98 → 52·104) · 맞춤 아님', M.CHECKER_XLSX_PRINT.orientation === 'landscape' && M.CHECKER_XLSX_PRINT.paper === 9 && M.CHECKER_XLSX_PRINT.scale === 60 && M.CHECKER_XLSX_PRINT.fitWidth === true && !M.CHECKER_XLSX_PRINT.fit && M.CHECKER_XLSX_PRINT.centered === true && JSON.stringify(M.CHECKER_XLSX_PRINT.breaks) === JSON.stringify(wBreaks.map((b) => b + (b / 49) * 3)), JSON.stringify(M.CHECKER_XLSX_PRINT));   // 실물 49·98 → 서명 3줄씩(블록마다)을 더한 52·104
 }
 
 console.log('■ ③ 양하 카고플랜 엑셀 — 실물 R109E(선사 원본)로 만든 3시트');
@@ -140,11 +140,11 @@ const shK = unzip(fixK);
   ok('올바른 XML · 자식 순서가 스키마대로', p.wellFormed && inOrder(p.kids), p.kids.join('>'));
   ok('가로 A4 · 배율 60 · 맞춤 없음', a.paperSize === '9' && a.orientation === 'landscape' && a.scale === '60' && !/fitToPage|fitToWidth/.test(x));
   const brks = [...x.matchAll(/<brk id="(\d+)"/g)].map((m) => Number(m[1]));
-  ok('쪽 나눔 = 49 · 98 (덱 블록 C·D·UNDER 사이)', JSON.stringify(brks) === '[49,98]' && /<rowBreaks count="2" manualBreakCount="2">/.test(x), brks.join(','));
-  ok('쪽 나눔 줄 49·98(1부터) = 덱 블록 마지막 행(칸 번호 26·25·24… 줄) 아래 — 다음 쪽은 블록 제목(M/V … STOW)에서 시작한다', (() => {
+  ok('쪽 나눔 = 52 · 104 (덱 블록 C·D·UNDER 사이 — 블록 = 격자 49줄 + 서명 3줄)', JSON.stringify(brks) === '[52,104]' && /<rowBreaks count="2" manualBreakCount="2">/.test(x), brks.join(','));
+  ok('쪽 나눔 줄 52·104(1부터) = 덱 블록 마지막 행(서명 직책 줄 CHIEF CHECKER) 아래 — 다음 쪽은 블록 제목(M/V … STOW)에서 시작하고 칸 번호 줄(26·25·24…) 바로 아래에 서명 3줄이 선다', (() => {
     const ws = wbK.Sheets[wbK.SheetNames[0]];
     const rowTxt = (r0) => { const out = []; for (let c = 0; c < 90; c++) { const v = ws[XLSX.utils.encode_cell({ r: r0, c })]; if (v && v.v !== undefined && v.v !== '') out.push(String(v.v)); } return out.join('|'); };
-    return /^26\|25\|24/.test(rowTxt(48)) && /STOW/.test(rowTxt(49)) && /^26\|25\|24/.test(rowTxt(97)) && /STOW/.test(rowTxt(98));
+    return /^26\|25\|24/.test(rowTxt(48)) && /CHIEF CHECKER/.test(rowTxt(51)) && /STOW/.test(rowTxt(52)) && /^26\|25\|24/.test(rowTxt(100)) && /CHIEF CHECKER/.test(rowTxt(103)) && /STOW/.test(rowTxt(104));
   })());
   ok('병합 칸·셀 데이터가 원본과 똑같다', JSON.stringify(mergesOf(rawSheetsK[0])) === JSON.stringify(mergesOf(x)) && dataOf(rawSheetsK[0]) === dataOf(x));
 }
@@ -173,7 +173,7 @@ console.log('■ ④-B 칸이 실물보다 넓은 라이브러리(xlsx-js-style)
   ok('(대조) fitWidth 를 끄면 배율 60 이 그대로라 가로로 넘친다 — 위 통과는 fitWidth 덕이다', scaleOf(w0) === 60 && inches(w0, 60) > AVAIL_IN, `${inches(w0, 60).toFixed(2)}in`);
   ok('widthFitScale — 열 정보가 없으면 null(조용히 지어내지 않는다) · A4 가 아닌 용지도 null', M.widthFitScale('<worksheet><sheetData/></worksheet>', {}) === null && M.widthFitScale(rawWide, { paper: 8 }) === null);
   ok('세로 지정이면 가로보다 작은 배율(쪽 너비 8.27인치)', M.widthFitScale(rawWide, { orientation: 'portrait' }) < M.widthFitScale(rawWide, { orientation: 'landscape' }));
-  ok('배율은 쪽 나눔 설정과 같이 쓰인다 — rowBreaks 49·98 그대로', /<brk id="49"/.test(w1) && /<brk id="98"/.test(w1) && !/fitToPage/.test(w1));
+  ok('배율은 쪽 나눔 설정과 같이 쓰인다 — rowBreaks 52·104 그대로', /<brk id="52"/.test(w1) && /<brk id="104"/.test(w1) && !/fitToPage/.test(w1));
 }
 
 console.log('■ ⑤ 내려받기 배선 — 종전 XLSX.writeFile(인쇄 설정을 안 쓴다)을 더 부르지 않는다');
@@ -184,7 +184,7 @@ const bC = body(srcC, 'exportCarrierPlanXlsx'), bK = body(srcK, 'exportCheckerPl
 ok('exportCarrierPlanXlsx — writeFile 없음 · XLSX.write → applyXlsxPrintSetup(CARRIER_XLSX_PRINT) → downloadXlsxBytes', bC && !/writeFile/.test(bC) && /XLSX\.write\(wb, \{ bookType: 'xlsx', type: 'array' \}\)/.test(bC) && /applyXlsxPrintSetup\([\s\S]*\[CARRIER_XLSX_PRINT\]\)/.test(bC) && /downloadXlsxBytes\(bytes, name\)/.test(bC));
 ok('exportCheckerPlanXlsx — writeFile 없음 · XLSX.write → applyXlsxPrintSetup(CHECKER_XLSX_PRINT) → downloadXlsxBytes', bK && !/writeFile/.test(bK) && /XLSX\.write\(wb, \{ bookType: 'xlsx', type: 'array' \}\)/.test(bK) && /applyXlsxPrintSetup\([\s\S]*\[CHECKER_XLSX_PRINT\]\)/.test(bK) && /downloadXlsxBytes\(bytes, name\)/.test(bK));
 ok('파일 이름은 종전 그대로(STOWAGE_PLAN_<항차>_DISCHARGE.xlsx · STOWAGE_PLAN_<항차>.xlsx)', /STOWAGE_PLAN_\$\{[^}]+\}_DISCHARGE\.xlsx/.test(bC) && /STOWAGE_PLAN_\$\{String\(p\.voy/.test(bK));
-ok('쪽 나눔 상수는 덱 블록 높이 한 벌(BLOCK_ROWS)에서 나온다 — 따로 숫자를 두지 않는다', /breaks: \[BLOCK_ROWS, BLOCK_ROWS \* 2\]/.test(srcK) && /^const BLOCK_ROWS = 49;/m.test(srcK));
+ok('쪽 나눔 상수는 덱 블록 높이 한 벌(STRIDE = BLOCK_ROWS + SIGN_ROWS)에서 나온다 — 따로 숫자를 두지 않는다', /breaks: \[STRIDE, STRIDE \* 2\]/.test(srcK) && /^const BLOCK_ROWS = 49;/m.test(srcK) && /^const STRIDE = BLOCK_ROWS \+ SIGN_ROWS;/m.test(srcK));
 ok('엑셀 두 곳의 동작하지 않던 ws[\'!pageSetup\'] 줄은 없다(거짓 단서 제거)', !/ws\['!pageSetup'\]/.test(srcC) && !/ws\['!pageSetup'\]/.test(srcK));
 const callers = ['src/components/PrintHubModal.jsx', 'src/pages/VoyagePage.jsx'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
 ok('부르는 곳(출력 허브·항차 화면)은 종전 이름 그대로 부른다(exportCarrierPlanXlsx · exportCheckerPlanXlsx)', /exportCarrierPlanXlsx/.test(callers) && /exportCheckerPlanXlsx/.test(callers));

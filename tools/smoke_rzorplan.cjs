@@ -152,22 +152,24 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
   const diff = Object.keys({ ...A, ...Bk }).filter((cn) => A[cn] !== Bk[cn]);
   ok('왕복 — 190대 컨·덱·줄·칸·규격·F/E·LUG·크레인 전부 같다', pX.total === 190 && pX.lolo === 45 && diff.length === 0, `total${pX.total} diff${diff.length} ${diff.slice(0, 3)}`);
   const ws1 = wb106.Sheets[wb106.SheetNames[0]], ws2 = wbX.Sheets['loading stowage plan'];
-  const cellEq = (a) => String((ws1[a] || {}).v ?? '') === String((ws2[a] || {}).v ?? '');
+  //  4.04-04 내보내기는 덱 블록마다 서명 3줄이 늘어 블록 간격이 49 → 52 행이다 — 실물 주소를 블록 순서대로 3(두 번째 블록 50~98행) · 6(세 번째 블록·맨 아래 99행~)씩 민 자리와 견준다.
+  const shiftA = (a) => { const m = /^([A-Z]+)(\d+)$/.exec(a); const r = Number(m[2]); return `${m[1]}${r >= 99 ? r + 6 : r >= 50 ? r + 3 : r}`; };
+  const cellEq = (a) => String((ws1[a] || {}).v ?? '') === String((ws2[shiftA(a)] || {}).v ?? '');
   ok('셀 자리 실물과 같다 — Y1 제목·B2 항차·AK2 «C»·AN2 «- DECK»·D7=26·CA7=1·CC9=1·AW9 컨번호·AT9 «X»·AK51 «D»·AH100 «UNDER»', ['Y1', 'B2', 'AK2', 'AN2', 'D7', 'CA7', 'CC9', 'AW9', 'AT9', 'AK51', 'AH100', 'AN100', 'D105', 'CA147'].every(cellEq),
      ['Y1', 'B2', 'AK2', 'AN2', 'D7', 'CA7', 'CC9', 'AW9', 'AT9', 'AK51', 'AH100', 'AN100', 'D105', 'CA147'].filter((a) => !cellEq(a)).join(','));
-  ok('블록 집계 — C덱 CONT 20\'=2·40\'=60·45\'=4·TTL 66 · D덱 TTL 110 · UNDER TTL 14', ws2.BR5.v === 2 && ws2.BU5.v === 60 && ws2.BX5.v === 4 && ws2.CA5.v === 66 && ws2.CA54.v === 110 && ws2.CA103.v === 14);
+  ok('블록 집계 — C덱 CONT 20\'=2·40\'=60·45\'=4·TTL 66 · D덱 TTL 110 · UNDER TTL 14', ws2.BR5.v === 2 && ws2.BU5.v === 60 && ws2.BX5.v === 4 && ws2.CA5.v === 66 && ws2.CA57.v === 110 && ws2.CA109.v === 14);
   //  무게 합 — 실물 2282.325t 에는 빈 섀시(C/S 4대 × 4t = 16t)가 들어 있다. 파서는 C/S 를 컨이 아니라 건너뛰므로 컨 무게 합 2266.323t 가 맞다.
-  ok('맨 아래 집계 — F 55 · E 135 · TTL 190 · 컨 무게 합 2266.323t(실물 2282.325 − 빈 섀시 16t)', ws2.BZ150.v === 55 && ws2.BZ151.v === 135 && ws2.BZ152.v === 190 && Math.abs(ws2.AK153.v - 2266.323) < 0.01, `${ws2.BZ150 && ws2.BZ150.v} ${ws2.BZ151 && ws2.BZ151.v} ${ws2.BZ152 && ws2.BZ152.v} ${ws2.AK153 && ws2.AK153.v}`);
+  ok('맨 아래 집계 — F 55 · E 135 · TTL 190 · 컨 무게 합 2266.323t(실물 2282.325 − 빈 섀시 16t)', ws2.BZ156.v === 55 && ws2.BZ157.v === 135 && ws2.BZ158.v === 190 && Math.abs(ws2.AK159.v - 2266.323) < 0.01, `${ws2.BZ156 && ws2.BZ156.v} ${ws2.BZ157 && ws2.BZ157.v} ${ws2.BZ158 && ws2.BZ158.v} ${ws2.AK159 && ws2.AK159.v}`);
   const chs = p106.decks.find((d) => d.deck === 'D').slots.map((s) => s.chassis);
   ok('파서가 크기 코드(4·3·2·1)를 그대로 갖고 온다 — D덱 트윈 20피트 코드 2·1 이 각 6대', chs.filter((x) => x === 2).length === 6 && chs.filter((x) => x === 1).length === 6 && chs.filter((x) => x === 4).length === 94, `${JSON.stringify([2, 1, 4, 3].map((k) => chs.filter((x) => x === k).length))}`);
-  ok('블록 CHASSIS 집계 — C덱 20\'=2·40\'=64 · D덱 20\'=4(단독만)·40\'=55(크레인 45 뺀 49 + 트윈 6, 빈 섀시 4는 컨이 아니라 못 셈)', ws2.AY5.v === 2 && ws2.BB5.v === 64 && ws2.AY54.v === 4 && ws2.BB54.v === 55, `${ws2.AY5 && ws2.AY5.v} ${ws2.BB5 && ws2.BB5.v} ${ws2.AY54 && ws2.AY54.v} ${ws2.BB54 && ws2.BB54.v}`);
-  ok('Cont. 표 — 수화물 1대는 20\' D 에 안 세고 20 Lug 에만(실물 F 20\' 0 · 20 Lug 1 · TTL 55)', ws2.AS150.v === 0 && ws2.BT150.v === 1 && ws2.BZ150.v === 55 && ws2.AS152.v === 31);
+  ok('블록 CHASSIS 집계 — C덱 20\'=2·40\'=64 · D덱 20\'=4(단독만)·40\'=55(크레인 45 뺀 49 + 트윈 6, 빈 섀시 4는 컨이 아니라 못 셈)', ws2.AY5.v === 2 && ws2.BB5.v === 64 && ws2.AY57.v === 4 && ws2.BB57.v === 55, `${ws2.AY5 && ws2.AY5.v} ${ws2.BB5 && ws2.BB5.v} ${ws2.AY57 && ws2.AY57.v} ${ws2.BB57 && ws2.BB57.v}`);
+  ok('Cont. 표 — 수화물 1대는 20\' D 에 안 세고 20 Lug 에만(실물 F 20\' 0 · 20 Lug 1 · TTL 55)', ws2.AS156.v === 0 && ws2.BT156.v === 1 && ws2.BZ156.v === 55 && ws2.AS158.v === 31);
   const wbG = M.buildCheckerPlanWorkbook(XLSX, { plan: gen2, vsl: 'RIZHAO ORIENT', voy: 'R106W', date: '2026-09-28', inspector: '검수원' });
   const outG = path.join(TMP, 'gen.xlsx');
   XLSX.writeFile(wbG, outG);
   const pG = M.parseDeckPlanWorkbook(readWb(outG), XLSX);
   const wsG = wbG.Sheets['loading stowage plan'];
-  ok('생성 플랜(예측 188·확정 1)도 엑셀로 나가 189대가 다시 읽힌다 · 예측 안내문 있음', pG.total === 189 && pG.lolo === 45 && wsG.B154 && /회색 글씨 188대/.test(wsG.B154.v), `${pG.total} ${wsG.B154 && wsG.B154.v}`);
+  ok('생성 플랜(예측 188·확정 1)도 엑셀로 나가 189대가 다시 읽힌다 · 예측 안내문 있음', pG.total === 189 && pG.lolo === 45 && wsG.B160 && /회색 글씨 188대/.test(wsG.B160.v), `${pG.total} ${wsG.B160 && wsG.B160.v}`);
   ok('규격 표기 — F40\'H·E20\'D·F40\'R·E45\'H·F20\'L·E40\'F(플랫, R101W FBIU4020493)', M.checkerTypeOf({ iso: '40 HC', fe: 'F' }).txt === "F40'H" && M.checkerTypeOf({ iso: '20 GP', fe: 'E' }).txt === "E20'D" && M.checkerTypeOf({ iso: '40 RH', fe: 'F' }).txt === "F40'R" && M.checkerTypeOf({ iso: '45 HC', fe: 'E' }).txt === "E45'H" && M.checkerTypeOf({ iso: '20 GP', fe: 'F', flags: ['LUG'] }).txt === "F20'L" && M.checkerTypeOf({ iso: '40 FR', fe: 'E' }).txt === "E40'F");
 
   console.log('■ ④ 배선 — 화면·콘앱·매뉴얼·버전');

@@ -13,6 +13,9 @@ export const PAGE = { w: 1077, h: 748 };          // A4 가로 − 여백 6mm �
 export const CARRIER_GRID_BOTTOM = 650;
 export const CARRIER_GRID_BOTTOM_SCREEN = 690;   // 앱 화면에는 서명줄·범례줄이 없다 — 화면 그림 높이는 종전(4.04-02)과 같게 둔다(칸 안 글자가 5줄이어도 겹치지 않는다)
 export const CARRIER_SIGN_Y = 710;
+//  4.04-04 마감텔리 양식(선적) 쪽 아래 — 양하와 같다. 8줄 덱(C·D)의 칸 그림은 CHECKER_GRID_BOTTOM 에서 끝내고(칸 높이 66→61, 앱 화면은 66 그대로) 서명줄은 모든 덱 쪽(C·D·UNDER)의 CHECKER_SIGN_Y 에 둔다. 검수사 2026-10-05 «둘다 서명이 필요합니다.» «양하 선적 동일 합니다»
+export const CHECKER_GRID_BOTTOM = 640;
+export const CHECKER_SIGN_Y = 710;
 const N_POS = 26;
 export const DECK_ORDER = { carrier: ['B', 'C', 'D'], checker: ['C', 'D', 'U'] };
 const DECK_LABEL = { B: 'B', C: 'C', D: 'D', U: 'UNDER' };
@@ -170,7 +173,8 @@ export function buildPrintModel({ plan, containers = [], xrayMap = {}, termWork 
 
     let px;                 // 격자 → 쪽 좌표
     if (fmt === 'checker') {
-      const x0 = 34, x1 = 1018, y0 = 152, bandH = 66;
+      const x0 = 34, x1 = 1018, y0 = 152;
+      const bandH = forScreen ? 66 : Math.min(66, (CHECKER_GRID_BOTTOM - y0) / rows);   // 4.04-04: 종이는 8줄 덱(C·D)의 칸 높이를 66→61 로 줄여 맨 아래 서명줄 위에 사인할 자리를 남긴다 — 앱 화면은 종전 66 그대로
       px = { x0, y0, uw: (x1 - x0) / N_POS, uh: bandH, cols: N_POS, rows };
     } else {
       const cols = Math.max(1, Number(d.cols) || 24);

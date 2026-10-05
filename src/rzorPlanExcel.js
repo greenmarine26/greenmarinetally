@@ -1,6 +1,6 @@
 // 3.67: RZOR 선적 덱플랜 → 검수사 STOWAGE PLAN 엑셀(마감텔리 PLAN.xlsx 양식) 내보내기.
 //   양식은 R106W 실물(2026-09-28)을 셀 단위로 그대로 따른다 — rzorPlan.parseCheckerPlanWorkbook 이 다시 읽을 수 있어야 한다.
-//   · 시트 하나 «loading stowage plan», 덱 블록 셋(C·D·UNDER)이 49행 간격으로 세로, 맨 아래 집계표.
+//   · 시트 하나 «loading stowage plan», 덱 블록 셋(C·D·UNDER)이 52행 간격(격자 49행 + 서명 3행, 4.04-04 전에는 49행)으로 세로, 맨 아래 집계표.
 //   · 위치 p(1~26, 1=선수)의 열 = 4 + 3·(26−p) (D=26 … CA=1). 옆(왼쪽) 칸 = p+1 자리에 «X»(40) «<45>»(45) — 그 자리에 컨이 없을 때만.
 //   · 컨 하나 = 세로 네 줄(번호·무게·규격 F40'H·크기 코드 4=40'·3=20'). 줄 번호는 CC 열.
 //   · 크레인(LO/LO, D덱 10~15) 40피트도 검수사 양식에서는 코드 4 + 옆 칸 X 가 붙는다(R106W·R100W 실측 — 45대 전부 c4, 15칸엔 X). 표식으로 크레인을 가르지 않는다.
@@ -12,6 +12,11 @@ import { applyXlsxPrintSetup, downloadXlsxBytes } from './xlsxPrintSetup.js';
 
 const N_POS = 26;
 const BLOCK_ROWS = 49;
+//  4.04-04 선적 서명줄 — 덱 블록(C·D)마다 맨 아래에 서명 3줄(사인할 자리 · 이름 · 직책)을 더하고, UNDER 쪽은 집계표 왼쪽 빈 칸에 선다(집계표 줄 높이는 그대로 — 쪽이 길어지지 않는다). 쪽 나눔은 블록 높이 한 벌(STRIDE)이다. 검수사 2026-10-05 «둘다 서명이 필요합니다.» «양하 선적 동일 합니다»
+//  쪽 높이 — 배율 60 에서도 한 쪽(A4 가로 여백 안 190mm)에 들어가게 블록 높이를 잡는다. C·D 블록 = 격자 49줄(779) + 서명 3줄(64+18+18) = 879pt → 배율 60 에서 186mm.
+const SIGN_ROWS = 3;
+const STRIDE = BLOCK_ROWS + SIGN_ROWS;
+const SIGN_ROOM_PX = 64;                // 서명줄 위 사인할 자리(행 높이) — 칸 번호 줄 아래부터 줄까지 64pt, 배율 51~60 에서 약 11~13mm
 const BANDS = 8;
 const COL_LINE = 80;                     // CC
 const colOfPos = (p) => 3 + 3 * (N_POS - p);   // 0-based
@@ -45,6 +50,9 @@ const S_DECK = { font: { name: 'Arial', sz: 20, bold: true }, alignment: { horiz
 const S_INFO = { font: { name: 'Arial', sz: 10 }, alignment: { vertical: 'center' } };
 const S_TBL = { font: { name: 'Arial', sz: 9 }, alignment: { horizontal: 'center', vertical: 'center' }, border: BOX };
 const S_TBLB = { font: { name: 'Arial', sz: 9, bold: true }, alignment: { horizontal: 'center', vertical: 'center' }, border: BOX };
+const S_SIGN = { font: { name: 'Arial', sz: 10 }, alignment: { horizontal: 'center', vertical: 'center' } };
+const S_SIGNB = { font: { name: 'Arial', sz: 10, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } };
+const S_SIGNLINE = { border: { bottom: B } };
 const S_MARK = { font: { name: 'Arial', sz: 8 }, alignment: { horizontal: 'center', vertical: 'center' } };
 
 /** 규격 문자열 «F40'H» — 검수사 표기(F/E + 크기 + H·D·R·L) */
@@ -91,7 +99,7 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
                   E: { 20: { D: 0, R: 0 }, 40: { D: 0, R: 0 }, 45: { D: 0, R: 0 }, L20: 0, L40: 0, n: 0 } };
 
   DECK_ORDER.forEach((deck, bi) => {
-    const off = BLOCK_ROWS * bi;
+    const off = STRIDE * bi;
     const slots = byDeck[deck] || [];
     // 머리
     set(off + 0, 24, `M/V "${vsl}" STOWAGE PLAN`, S_TITLE);
@@ -170,8 +178,8 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
     }
   });
 
-  // 맨 아래 집계표(149행~)
-  const r0 = BLOCK_ROWS * 3 + 1;
+  // 맨 아래 집계표(UNDER 블록 격자 아래, 155행~)
+  const r0 = STRIDE * 2 + BLOCK_ROWS + 1;   // 세 번째 블록(UNDER) 격자 바로 아래 — 이 쪽의 서명줄은 집계표 왼쪽 빈 칸(r0+2 줄)에 선다
   const hdr = [[27, 'CHASSIS'], [29, "20'"], [32, "40'"], [36, 'Weight'], [41, 'Cont.'], [44, "20'"], [47, 'D'], [50, 'R'],
                [53, "40'"], [56, 'D'], [59, 'R'], [62, "45'"], [65, 'D'], [68, 'R'], [71, '20 Lug'], [74, '40 Lug'], [77, 'TTL']];
   // 머리 병합 폭 — CHASSIS 는 두 칸(AB:AC), Weight 는 네 칸(AK:AN), 나머지는 세 칸. 폭이 겹치면 엑셀이 파일을 «복구» 하겠냐고 묻는다(4.04: CHASSIS 병합이 옆 20' 칸을 침범하던 것을 바로잡음).
@@ -203,12 +211,18 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
               45: { D: feTot.F[45].D + feTot.E[45].D, R: feTot.F[45].R + feTot.E[45].R },
               L20: feTot.F.L20 + feTot.E.L20, L40: feTot.F.L40 + feTot.E.L40, n: feTot.F.n + feTot.E.n };
   feRow(r0 + 3, 'TTL', T);
-  set(r0 + 1, 6, inspector || '', S_INFO); merge(r0 + 1, 6, r0 + 1, 18);
-  set(r0 + 4, 6, 'CHIEF CHECKER ', S_INFO); merge(r0 + 4, 6, r0 + 4, 18);
   // 예측 자리가 섞였으면 표시(검수사 초안)
   const predN = Object.values(byDeck).flat().filter((s) => s.pred && !s.sure).length;
   if (predN) set(r0 + 5, 1, `※ 회색 글씨 ${predN}대는 앱 예측 자리입니다 — 확인 후 고쳐 주십시오.`, S_INFO);
 
+  // 서명줄 — 모든 덱 쪽 맨 아래(C·D 는 블록 끝, UNDER 는 집계표 왼쪽 빈 칸). 줄 아래에 검수원 이름 · CHIEF CHECKER, 오른쪽에 CHIEF OFFICER. 병합은 줄·이름·직책 줄마다 한 칸씩이고 집계표(AA 열~)와 겹치지 않는다.
+  const signRows = [{ sr: BLOCK_ROWS, tall: true }, { sr: STRIDE + BLOCK_ROWS, tall: true }, { sr: r0 + 2, tall: false }];
+  for (const { sr } of signRows) {
+    for (const [c1, c2] of [[3, 11], [15, 23]]) { for (let c = c1; c <= c2; c++) set(sr, c, '', S_SIGNLINE); merge(sr, c1, sr, c2); }
+    set(sr + 1, 3, inspector || '', S_SIGN); merge(sr + 1, 3, sr + 1, 11);
+    set(sr + 2, 3, 'CHIEF CHECKER', S_SIGNB); merge(sr + 2, 3, sr + 2, 11);
+    set(sr + 2, 15, 'CHIEF OFFICER', S_SIGNB); merge(sr + 2, 15, sr + 2, 23);
+  }
   ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: r0 + 6, c: 84 } });
   ws['!merges'] = merges;
   // 열 너비 — 실물과 같은 모양(위치 칸 57/53px, 사이 칸 1px)
@@ -226,11 +240,12 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
   ws['!cols'] = cols;
   const rows = [];
   for (let bi = 0; bi < 3; bi++) {
-    const off = BLOCK_ROWS * bi;
+    const off = STRIDE * bi;
     rows[off] = { hpx: 41 }; rows[off + 1] = { hpx: 29 }; rows[off + 5] = { hpx: 5 }; rows[off + 7] = { hpx: 5 };
     for (let k = 0; k < BANDS; k++) { const r = off + 8 + 5 * k; rows[r] = { hpx: 27 }; rows[r + 1] = { hpx: 12 }; rows[r + 2] = { hpx: 12 }; rows[r + 3] = { hpx: 12 }; rows[r + 4] = { hpx: 15 }; }
   }
-  for (let r = 0; r < rows.length; r++) if (!rows[r]) rows[r] = { hpx: 15 };
+  for (const { sr, tall } of signRows) if (tall) { rows[sr] = { hpx: SIGN_ROOM_PX }; rows[sr + 1] = { hpx: 18 }; rows[sr + 2] = { hpx: 18 }; }
+  for (let r = 0; r <= r0 + 5; r++) if (!rows[r]) rows[r] = { hpx: 15 };   // 집계표·서명 줄까지 줄마다 높이를 적는다(안 적으면 엑셀·리브레오피스의 기본 높이가 달라 마지막 쪽 높이가 어긋난다)
   ws['!rows'] = rows;
 
   const wb = XLSX.utils.book_new();
@@ -240,7 +255,7 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
 
 /** 엑셀 인쇄 설정 — 마감텔리 R106W 실물과 같다: 가로 A4 · 배율 60 · 여백 0.39 · 가운데 맞춤 · 덱 블록(C·D·UNDER) 사이에서 쪽 나눔.
  *  엑셀은 «한 쪽 맞춤» 을 쓰면 쪽 나눔 줄을 무시하므로 배율을 쓴다. 60 은 상한 — 쓰는 라이브러리가 칸을 실물보다 넓게 써서(1.3배) 60 이면 가로 두 쪽이 되므로 열 너비 합으로 가로 한 쪽에 맞는 배율까지 낮춘다(fitWidth). 검수사 2026-10-05 «엑셀에서도 한장으로 나오게끔 맞춰주세요» */
-export const CHECKER_XLSX_PRINT = { orientation: 'landscape', paper: 9, margin: 0.3937, centered: true, scale: 60, fitWidth: true, breaks: [BLOCK_ROWS, BLOCK_ROWS * 2] };
+export const CHECKER_XLSX_PRINT = { orientation: 'landscape', paper: 9, margin: 0.3937, centered: true, scale: 60, fitWidth: true, breaks: [STRIDE, STRIDE * 2] };
 
 /** 파일로 저장(브라우저) — STOWAGE_PLAN_R106W.xlsx */
 export async function exportCheckerPlanXlsx(p) {

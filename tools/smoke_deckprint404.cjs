@@ -16,7 +16,7 @@ fs.writeFileSync(ENTRY, `import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 export { React, renderToStaticMarkup };
 export { parseDeckPlanWorkbook } from "${ROOT}/src/rzorPlan.js";
-export { buildPrintModel, CARRIER_GRID_BOTTOM, CARRIER_GRID_BOTTOM_SCREEN, CARRIER_SIGN_Y } from "${ROOT}/src/rzorPrintModel.js";
+export { buildPrintModel, CARRIER_GRID_BOTTOM, CARRIER_GRID_BOTTOM_SCREEN, CARRIER_SIGN_Y, CHECKER_GRID_BOTTOM, CHECKER_SIGN_Y } from "${ROOT}/src/rzorPrintModel.js";
 export { buildCarrierPlanWorkbook } from "${ROOT}/src/rzorPlanExcelCarrier.js";
 export { buildCheckerPlanWorkbook } from "${ROOT}/src/rzorPlanExcel.js";
 export { buildRzorLoadingDeckPlan } from "${ROOT}/src/rzorDeckPredict.js";
@@ -186,12 +186,49 @@ const stubScreen = { cellState: () => ({}), titleOf: () => '', onCell() {}, empt
   ok('출력 모델 — 맨 아래 F 55 · E 135 · TTL 190 이 마감텔리 파일과 같다', m106.totals.F.n === v('BZ150') && m106.totals.E.n === v('BZ151') && m106.totals.TTL.n === v('BZ152'), `${m106.totals.F.n}/${m106.totals.E.n}/${m106.totals.TTL.n}`);
   ok('LOLO 구역 — D덱에만 굵은 선, 칸 수 45(마감텔리 크레인 45대)', !!pgOf('D').zone && pgOf('D').zone.cells === 45 && pgOf('D').zone.count === 45 && p106.lolo === 45 && m106.pages.filter((p) => p.zone).length === 1, pgOf('D').zone && pgOf('D').zone.count);
   const htmlL = M.renderToStaticMarkup(M.React.createElement(M.PrintableDeckPlan, { plan: p106, containers: [], xrayMap: {}, termWork: {}, voyageInfo: { vslFull: 'RIZHAO ORIENT', planDate: '2026-09-28 10:00' }, mode: 'loading', staticPreview: true, initialBw: false, inspector: '김성일' }));
-  ok('선적 인쇄 — 서명란: 마지막 덱 쪽에 검수사 이름과 CHIEF CHECKER 가 있다(마감텔리 양식)', (htmlL.match(/CHIEF CHECKER/g) || []).length === 1 && />김성일</.test(htmlL), `${(htmlL.match(/CHIEF CHECKER/g) || []).length}`);
+  //  4.04-04 선적(마감텔리 양식)도 양하처럼 모든 덱 쪽에 서명줄 + 사인할 자리 — 검수사 2026-10-05 «둘다 서명이 필요합니다.» «양하 선적 동일 합니다»
+  ok('선적 인쇄 — 서명란(검수원 이름 · CHIEF CHECKER · CHIEF OFFICER)이 덱 쪽마다 있다(C·D·UNDER 3쪽)', m106.pages.length === 3 && (htmlL.match(/CHIEF CHECKER/g) || []).length === 3 && (htmlL.match(/CHIEF OFFICER/g) || []).length === 3 && (htmlL.match(/>김성일</g) || []).length === 3, `${(htmlL.match(/CHIEF CHECKER/g) || []).length}/${(htmlL.match(/CHIEF OFFICER/g) || []).length}/${(htmlL.match(/>김성일</g) || []).length}`);
+  {
+    const svgs = htmlL.split('<svg').slice(1);
+    const lowest = (pg) => { let mx = 0; const up = (y) => { if (Number.isFinite(y) && y > mx) mx = y; }; pg.cells.forEach((c) => up(c.y + c.h)); pg.empties.forEach((e) => up(e.y + e.h)); pg.xmarks.forEach((e) => up(e.y + e.h)); up(pg.px.y0 + pg.px.rows * pg.px.uh + 14); return mx; };   // 맨 아래 칸 번호 줄(격자 끝 + 14)도 센다
+    const rows = m106.pages.map((pg, i) => { const sv = svgs[i] || ''; const m = new RegExp(`<line x1="50" y1="([\\d.]+)" x2="200" y2="\\1"`).exec(sv); const ly = m ? Number(m[1]) : NaN; const lb = /y="([\d.]+)"[^>]*>CHIEF CHECKER</.exec(sv); const lo = /<line x1="240" y1="([\d.]+)" x2="390"/.exec(sv); const nm = /y="([\d.]+)"[^>]*>김성일</.exec(sv); return { deck: pg.deck, line: ly, room: ly - lowest(pg), label: lb ? Number(lb[1]) : NaN, officer: lo ? Number(lo[1]) : NaN, name: nm ? Number(nm[1]) : NaN }; });
+    ok('선적 인쇄 — 모든 덱 쪽에서 서명줄 위에 사인할 자리가 48단위(약 12mm) 이상 비어 있다(칸 · 빈 칸 · X 표식 · 칸 번호 줄 아래부터)', rows.length === 3 && rows.every((r) => Number.isFinite(r.line) && r.room >= 48), JSON.stringify(rows.map((r) => [r.deck, Math.round(r.room)])));
+    ok('선적 인쇄 — 서명줄은 모델 상수(CHECKER_SIGN_Y)에 서고 Chief Officer 줄과 같은 높이 · 이름과 직책 글자는 맨 아래 범례줄(y 744)과 겹치지 않는다', rows.every((r) => r.line === M.CHECKER_SIGN_Y && r.officer === M.CHECKER_SIGN_Y && r.name > r.line && r.label > r.name && r.label + 4 < 738), JSON.stringify(rows));
+    ok(`선적 인쇄 — 8줄 덱(C·D)의 칸 그림은 CHECKER_GRID_BOTTOM(${M.CHECKER_GRID_BOTTOM}) 에서 끝나고 UNDER(3줄)는 종전 칸 높이 66`, m106.pages.every((pg) => pg.px.y0 + pg.px.rows * pg.px.uh <= M.CHECKER_GRID_BOTTOM + 0.01) && m106.pages.filter((pg) => pg.px.rows === 8).length === 2 && m106.pages.filter((pg) => pg.px.rows === 3).every((pg) => pg.px.uh === 66));
+    const mScrL = M.buildPrintModel({ plan: p106, containers: [], xrayMap: {}, termWork: {}, vsl: 'RIZHAO ORIENT', date: '2026-09-28', mode: 'loading', forScreen: true });
+    ok('선적 앱 화면 — 칸 높이는 종전 그대로 66(forScreen) · 출력만 낮아진다', mScrL.pages.every((pg) => pg.px.uh === 66) && m106.pages.some((pg) => pg.px.uh < 66));
+    //  칸 안 글자(맨 아래 줄 baseline)와 종류 글자(RF·DG, 칸 맨 아래)가 겹치지 않는다 — 값은 모델(칸 높이 c.h · 글자 줄 수)에서 읽고 CellView 의 배치 상수(첫 줄 +10 · 줄 간격 10.4 · 종류 글자 = 칸 높이 -5 안쪽 아래 3.2)를 쓴다.
+    const gaps = m106.pages.flatMap((pg) => pg.cells.filter((c) => c.letter).map((c) => ((1 + (c.h - 5) - 3.2 - 6.8 * 0.72) - (1 + 10 + (c.lines.length - 1) * 10.4 + 1.5))));
+    ok('선적 인쇄 — 낮아진 칸(C·D 높이 61)에서도 칸 글자 맨 아래 줄과 종류 글자(RF·DG)가 3단위 이상 떨어져 겹치지 않는다', gaps.length > 20 && gaps.every((g) => g >= 3), `칸 ${gaps.length} · 최소 ${Math.min(...gaps).toFixed(1)}`);
+    //  UNDER 덱 컨이 없어(파서가 컨 0대 덱을 버린다) 8줄 덱(D)이 마지막 쪽이면 집계표가 서명줄 높이까지 내려온다 — 감사 지적: 서명줄(x 50~390)과 겹치지 않게 집계표를 오른쪽으로 민다
+    const pNoU = { ...p106, decks: p106.decks.filter((d) => d.deck !== 'U') };
+    const htmlNoU = M.renderToStaticMarkup(M.React.createElement(M.PrintableDeckPlan, { plan: pNoU, containers: [], xrayMap: {}, termWork: {}, voyageInfo: { vslFull: 'RIZHAO ORIENT', planDate: '2026-09-28 10:00' }, mode: 'loading', staticPreview: true, initialBw: false, inspector: '김성일' }));
+    const tblMinX = (h) => { const sv = h.split('<svg').slice(1).pop() || ''; return Math.min(...[...sv.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="[\d.]+" height="[\d.]+" class="dp-tb"/g)].filter((m) => Number(m[2]) > 300).map((m) => Number(m[1]))); };
+    ok('선적 인쇄 — UNDER 컨이 없어 D덱이 마지막 쪽이어도 집계표(x 400~)가 서명줄(x 50~390)과 겹치지 않고 서명이 둘 다 있다 · UNDER 가 있으면 집계표는 종전 자리(x 300)', (htmlNoU.split('<svg').length - 1) === 2 && tblMinX(htmlNoU) >= 400 && (htmlNoU.match(/CHIEF CHECKER/g) || []).length === 2 && tblMinX(htmlL) === 300, `${tblMinX(htmlNoU)} / ${tblMinX(htmlL)}`);
+  }
   const htmlLs = m106.pages.map((pg, i) => M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg, model: m106, bw: false, isFirst: i === 0, isLast: i === m106.pages.length - 1, screen: stubScreen, signer: '김성일' }))).join('');
-  ok('선적 앱 화면 — 서명란(CHIEF CHECKER · 이름)이 없다', !/CHIEF CHECKER/.test(htmlLs) && !/>김성일</.test(htmlLs) && /CHASSIS/.test(htmlLs));
+  ok('선적 앱 화면 — 서명란(CHIEF CHECKER · CHIEF OFFICER · 이름 · 서명선)이 없다', !/CHIEF (CHECKER|OFFICER)/.test(htmlLs) && !/>김성일</.test(htmlLs) && !/<line x1="50" y1="710"/.test(htmlLs) && /CHASSIS/.test(htmlLs));
   const wbc = M.buildCheckerPlanWorkbook(XLSX, { plan: p106, vsl: 'RIZHAO ORIENT', voy: 'R106W', date: '2026-09-28', inspector: '김성일' });
   const wsc = wbc.Sheets[wbc.SheetNames[0]];
-  ok('선적 엑셀(마감텔리 양식) — 병합 칸이 서로 겹치지 않고 서명란(이름·CHIEF CHECKER)이 있다', overlaps(wsc) === 0 && (cellAt(wsc, 149, 6) || {}).v === '김성일' && /CHIEF CHECKER/.test(String((cellAt(wsc, 152, 6) || {}).v)), `겹침 ${overlaps(wsc)}`);
+  {   // 4.04-04 선적 엑셀도 덱 블록(C·D)마다 서명 3줄 · UNDER 는 집계표 왼쪽 빈 칸 — 줄(맨 위 사인할 자리) · 이름 · 직책
+    const txtAt = (r, c) => String(((cellAt(wsc, r, c) || {}).v) ?? '');
+    const found = (t) => Object.keys(wsc).filter((a) => a[0] !== '!' && String(wsc[a].v) === t).map((a) => XLSX.utils.decode_cell(a));
+    const cc = found('CHIEF CHECKER').map((x) => x.r).sort((a, b) => a - b), co = found('CHIEF OFFICER').map((x) => x.r).sort((a, b) => a - b), nm = found('김성일').map((x) => x.r).sort((a, b) => a - b);
+    ok('선적 엑셀(마감텔리 양식) — 병합 칸이 서로 겹치지 않는다', overlaps(wsc) === 0, `겹침 ${overlaps(wsc)}`);
+    ok('선적 엑셀 — 서명란(이름 · CHIEF CHECKER · CHIEF OFFICER)이 덱 블록마다 하나씩 3벌이고 같은 열(C 열~)에 선다', cc.join() === '51,103,158' && co.join() === '51,103,158' && nm.join() === '50,102,157' && found('CHIEF CHECKER').every((x) => x.c === 3) && found('CHIEF OFFICER').every((x) => x.c === 15), `${cc} / ${co} / ${nm}`);
+    const rh = (r) => { const x = (wsc['!rows'] || [])[r]; return x && x.hpx ? x.hpx : 0; };   // 행 높이는 파일에 줄마다 적혀 있어야 한다(없으면 0 으로 쳐서 걸린다)
+    const roomOf = (a, b) => { let t = 0; for (let r = a; r <= b; r++) t += rh(r); return t; };
+    ok('선적 엑셀 — 칸 번호 줄 아래 서명줄까지 사인할 자리가 C·D 블록 64pt · UNDER 쪽 60pt 이상(배율 51~60 에서 약 11~13mm)', roomOf(49, 49) >= 64 && roomOf(101, 101) >= 64 && roomOf(153, 156) >= 60, [roomOf(49, 49), roomOf(101, 101), roomOf(153, 156)].join());
+    ok('선적 엑셀 — 서명줄(아래 테두리)이 줄 칸 전체에 있다(병합 열 3~11 · 15~23)', [49, 101, 156].every((r) => [3, 11, 15, 23].every((c) => { const x = cellAt(wsc, r, c); return !!(x && x.s && x.s.border && x.s.border.bottom); })));
+    ok('선적 엑셀 — UNDER 쪽 서명은 집계표(AB 열~)와 겹치지 않는다(서명 열 3~23 < 집계표 첫 열 27)', (wsc['!merges'] || []).filter((m) => m.s.r >= 154 && m.s.r <= 158).every((m) => (m.e.c <= 23) === (m.s.c <= 23)) && txtAt(154, 27) === 'CHASSIS');
+    ok('선적 엑셀 — 서명 3줄을 넣어도 한 블록이 52줄 안에 들어 쪽 나눔(52·104)이 블록 경계다(다음 블록 제목이 그 다음 줄)', /STOW/.test(txtAt(52, 24)) && /STOW/.test(txtAt(104, 24)) && /STOW/.test(txtAt(0, 24)), `${txtAt(52, 24)}|${txtAt(104, 24)}`);
+    //  쪽 높이 — 블록(52줄)·마지막 쪽(집계표까지)의 행 높이 합(pt) × 배율이 A4 가로 여백 안 높이(190mm)에 들어간다. 배율 60(상한)에서도 · 라이브러리 열 너비 때문에 낮아지는 배율(약 51)에서도 — 넘치면 서명 줄이 다음 쪽(빈 쪽)으로 밀린다.
+    const lastRow = Math.max(...Object.keys(wsc).filter((a) => a[0] !== '!').map((a) => XLSX.utils.decode_cell(a).r));   // 값·서식이 있는 마지막 줄(인쇄되는 끝)
+    const sumH = (a, b) => { let t = 0; for (let r = a; r <= b; r++) t += rh(r); return t; };
+    const mm = (pt, sc) => pt * sc / 100 * 25.4 / 72;
+    const heights = [sumH(0, 51), sumH(52, 103), sumH(104, lastRow)];
+    ok('선적 엑셀 — 덱 블록 한 쪽 높이가 배율 60 에서 188mm 이하 · 배율 51 에서 170mm 이하(A4 가로 여백 안 190mm)', heights.every((h) => mm(h, 60) <= 188 && mm(h, 51) <= 170) && Array.from({ length: lastRow + 1 }, (_, r) => rh(r)).every((x) => x > 0), heights.map((h) => `${h}pt→${mm(h, 60).toFixed(0)}/${mm(h, 51).toFixed(0)}mm`).join(' '));
+  }
   const termWork = JSON.parse(fs.readFileSync(fx('rzor_termwork_R106E.json'), 'utf8'));
   const gen = M.buildRzorLoadingDeckPlan({ containers: (termWork.containers || []).map((c) => ({ ...c, pod: 'CNRZH' })), termWork: {}, bayWork: termWork.bayWork || null, assign: null, voy: 'R106W' });
   const mg2 = M.buildPrintModel({ plan: gen, containers: [], xrayMap: {}, termWork: {}, vsl: 'RIZHAO ORIENT', date: '2026-09-28', mode: 'loading' });

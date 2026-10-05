@@ -4,7 +4,7 @@
 //   · 인쇄 · PDF(인쇄 창에서 PDF 로 저장) · Excel(onExcel — 선적은 마감텔리 PLAN.xlsx 양식).
 import React, { useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { buildPrintModel, PAGE, CARRIER_SIGN_Y } from '../rzorPrintModel.js';
+import { buildPrintModel, PAGE, CARRIER_SIGN_Y, CHECKER_SIGN_Y } from '../rzorPrintModel.js';
 import { SPECIAL_FILL } from './PrintableCargoPlanV2.jsx';
 
 const FONT = "Arial, Helvetica, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif";
@@ -272,13 +272,15 @@ export function PageView({ pg, model, bw, isFirst, isLast, screen, signer = '' }
         </g>
       ) : null}
       {(!ck && isFirst) ? <SummaryCarrier model={model} w3={w3} y={622} /> : null}
-      {(ck && isLast) ? <SummaryChecker model={model} w3={w3} y={yEnd + 34} /> : null}
-      {/* 서명란 — 마감텔리 양식(엑셀 G150:P151 이름 칸 + 맨 아래 «CHIEF CHECKER»). 출력에만 있고 화면에는 없다. */}
-      {(ck && isLast && !sc) ? (
+      {(ck && isLast) ? <SummaryChecker model={model} w3={w3} y={yEnd + 34} x={(!sc && yEnd + 34 + 15 * (['C', 'D', 'U'].filter((k) => model.totals.decks[k]).length + 2) > CHECKER_SIGN_Y - 4) ? 400 : 300} /> : null}   {/* 4.04-04 UNDER 덱 컨이 없어 8줄 덱이 마지막 쪽이면 집계표가 서명줄 높이까지 내려온다 — 서명줄(x 50~390)과 겹치지 않게 오른쪽(400)으로 민다 */}
+      {/* 서명란 — 마감텔리 양식(선적). 4.04-04: 양하처럼 모든 덱 쪽 맨 아래에 둔다(서명줄 위는 사인할 자리로 비워 둔다). 서명줄 아래에 검수원 이름과 CHIEF CHECKER, 오른쪽에 CHIEF OFFICER. 출력에만 있고 화면에는 없다. */}
+      {(ck && !sc) ? (
         <g>
-          <text x={150} y={yEnd + 34 + 15 + 19} fontSize={11} textAnchor="middle">{signer}</text>
-          <line x1={60} y1={yEnd + 34 + 52} x2={240} y2={yEnd + 34 + 52} stroke="#000" strokeWidth={1} />
-          <text x={150} y={yEnd + 34 + 71} fontSize={10} fontWeight={700} textAnchor="middle">CHIEF CHECKER</text>
+          <line x1={50} y1={CHECKER_SIGN_Y} x2={200} y2={CHECKER_SIGN_Y} stroke="#000" strokeWidth={1.2} />
+          {signer ? <text x={125} y={CHECKER_SIGN_Y + 12} fontSize={11} textAnchor="middle">{signer}</text> : null}
+          <text x={125} y={CHECKER_SIGN_Y + 23} fontSize={10} fontWeight={700} textAnchor="middle">CHIEF CHECKER</text>
+          <line x1={240} y1={CHECKER_SIGN_Y} x2={390} y2={CHECKER_SIGN_Y} stroke="#000" strokeWidth={1.2} />
+          <text x={315} y={CHECKER_SIGN_Y + 23} fontSize={10} fontWeight={700} textAnchor="middle">CHIEF OFFICER</text>
         </g>
       ) : null}
       {!sc ? <text x={538} y={744} fontSize={7.6} textAnchor="middle" style={{ fill: '#444' }}>{legend}{zoneNote}{predNote}{estNote}</text> : null}
@@ -313,7 +315,7 @@ function SummaryCarrier({ model, w3, y }) {
 }
 
 // 배 전체 집계표 — 마감텔리 양식(맨 아래): CHASSIS 덱별 + Cont. F/E/TTL
-function SummaryChecker({ model, w3, y }) {
+function SummaryChecker({ model, w3, y, x = 300 }) {
   const T = model.totals;
   const decks = ['C', 'D', 'U'].filter((k) => T.decks[k]);
   const fe = (f) => [f[20].D + f[20].R, f[20].D, f[20].R, f[40].D + f[40].R, f[40].D, f[40].R, f[45].D + f[45].R, f[45].D, f[45].R, f.L20, f.L40, f.n];
@@ -326,7 +328,7 @@ function SummaryChecker({ model, w3, y }) {
     rows.push([`${k}-DECK`, T.decks[k].ch20, T.decks[k].ch40, w3(T.decks[k].wt), ...(side[i] ? [side[i][0], ...side[i][1]] : Array(13).fill(''))]);
   });
   rows.push(['TTL', T.ch20, T.ch40, w3(T.wt), ...(side[decks.length] ? [side[decks.length][0], ...side[decks.length][1]] : Array(13).fill(''))]);
-  return <Tbl x={300} y={y} widths={[...wl, ...wr]} rh={15} fs={9} rows={rows} />;   // 마감텔리 양식처럼 표는 오른쪽, 왼쪽은 서명 자리
+  return <Tbl x={x} y={y} widths={[...wl, ...wr]} rh={15} fs={9} rows={rows} />;   // 마감텔리 양식처럼 표는 오른쪽에 둔다
 }
 
 /** 그림 머리의 DATE — 덱플랜 날짜(planDate)가 있으면 그것, 없으면 오늘(KST). 출력과 화면이 같은 함수를 쓴다. */
