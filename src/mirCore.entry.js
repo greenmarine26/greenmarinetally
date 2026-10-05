@@ -63,7 +63,7 @@ export function toMirContainers(rows, mode, plan) {
 export { answerOne, answerOneRaw } from './mir.js';
 export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATALOG } from './mir.js';   // 3.42 판 B: 콘앱도 같은 모델 창구(공용 키·문지기)
 export { mirThreadResolve, mirThreadCommit, mirThreadAlive, _mirThreadReset } from './mir.js';   // 3.68 / 2.57 [mirThread]: 답 뒤 한 마디·응/아니/끝맺음 — 콘앱도 같은 대화 층
-export { answerYard, setMirYard, readMirYard, YARD_SPEAK, workPauseOf, anxiousReasons } from './mir.js';   // 3.69-01: 중단 보고 한 벌(연막·콘앱)   // 3.69 / 2.58 [mirYard]: 야드 상황 — 콘앱은 mirAsk 가 yard_status 를 GET 해 ctx.yard 로 넣는다
+export { answerYard, setMirYard, readMirYard, YARD_SPEAK, workPauseOf, anxiousReasons, angryReasons, isUpcomingWork } from './mir.js';   // 3.69-01: 중단 보고 한 벌(연막·콘앱)   // 3.69 / 2.58 [mirYard]: 야드 상황 — 콘앱은 mirAsk 가 yard_status 를 GET 해 ctx.yard 로 넣는다
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };
@@ -71,6 +71,7 @@ export { parseViewCommand, pickVoyageKey };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };
-export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';   // 3.56 / 2.52
+export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';
+export { isWorkingNow } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52
 export { mirFaceSvg, ensureMirFaceCss, MIR_FACE_CSS } from './components/mirFaceArt.js';   // 3.57 / 2.53: 표정 인형 한 벌(React·PNG 를 import 하지 않는 순수 문자열): 미르 기분 한 벌 — 콘앱 얼굴도 같은 규칙으로 움직인다
 export { termBoardOf, termBoardHtml, ensureTermBoardCss } from './termBoard.js';   // 4.03 / 2.61: 터미널 본선 현황 표 — 수석 실시간 보드와 콘앱 실시간 화면이 같은 값·같은 모양(검수사 2026-10-04)

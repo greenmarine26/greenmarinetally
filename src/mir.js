@@ -24,7 +24,7 @@ import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «�
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
-  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs,   // 3.56 [mirMood]
+  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs,   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
@@ -3056,11 +3056,19 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
      초조함 = «자료가 안 들어 올 때»(2026-09-22 11:41).
    ─ 판정 순서(하나만 보인다) ─
      ① 순간 감정 12초 — 기쁨(작업 선택·완료) / 슬픔(못 답함)
-     ② 초조함 — 수집기 하트비트가 주기의 3배 넘게 끊김 · 시작 6시간 전~끝인데 계획 대수가 있는 쪽 EDI(dataAt) 없음
-                · 작업 중인 배의 완료 기록이 60분째 없음.  초조함을 30분 넘게 보이는데 미르를 한 번도 안 열면 → 슬픔(방치)
-     ③ 배고픔(식사 10분 전~시작) · 배부름(식사 시작~쉬는 시간 끝 30분 뒤) — 식사 창은 근무표 WORK_SHIFTS 의 빈 자리(티타임 30분은 제외)
-     ④ 심심함 — 작업 중인 배가 없다(utils.isWorkingNow 한 벌) · 30분 넘게 질문·명령이 없다
-     ⑤ 기본
+     ② 화남(4.06) — 터미널은 작업 중인데(utils.isWorkingNow) 앱 완료 기록이 실작업 60분째 없음. 쉬는 시간엔 화내지 않는다. 수집기가 조용하면 화내지 않는다(그건 ③).
+     ③ 초조함 — 수집기 하트비트가 주기의 3배 넘게 끊김 · 시작 6시간 전~끝인데 계획 대수가 있는 쪽 EDI(dataAt) 없음.
+                초조함을 30분 넘게 보이는데 미르를 한 번도 안 열면 → 슬픔(방치)
+     ④ 배고픔(식사 10분 전~시작) · 배부름(식사 시작~쉬는 시간 끝 30분 뒤) — 식사 창은 근무표 WORK_SHIFTS 의 빈 자리(티타임 30분은 제외)
+     ⑤ 작업 중인 배가 없다(utils.isWorkingNow 한 벌) → 초조함·슬픔·화남은 없다. 곧 시작할 배(6시간 안)가 있으면 «작업 준비», 없으면 30분마다 «휴식» ↔ «취미 생활»(4.06)
+        심심함 — 작업 중인 배가 있는데 30분 넘게 질문·명령이 없다
+     ⑥ 기본
+   ★ TallyOne 4.06 / ConeOne 2.62 — 검수사 2026-10-05 18:40 «B. 초조함 조건을 바꿉니다. 터미널 본선 현황이 작업중으로 계속 올라오는 동안에는 초조해하지 않게 합니다 … 초조함이 아니라 화난표정이어야 함
+     작업은 진행중인데 앱 입력이 없으니 화난다는 뜻으로». 종전엔 «작업 중인 배의 완료 기록이 60분째 없음» 이 초조함의 한 갈래였다(17:54 실측 — OBWH 완료가 12:26 에서 멈춘 4시간 반 동안 미르가 초조해 했다).
+     이제 그 갈래는 화남이고, 초조함은 «자료가 안 들어올 때»(수집기 하트비트 · EDI)만 남는다. 터미널 합계는 완료로 세지 않는다 — 여기서 보는 완료는 검수원이 앱에서 누른 completed 뿐이다(2026-10-03).
+   ★ TallyOne 4.06 / ConeOne 2.62 — 검수사 2026-10-05 20:57 «작업할 선박이 없을때에는 초조 하거나 화가 나면 안되는거고 편안하게 휴식을 취하거나 취미 생활을 즐기거나 다음 작업을 준비하는 미르가 되어야 합니다».
+     종전엔 작업 중인 배가 없어도 수집기가 조용하거나 시작 6시간 전 배의 EDI 가 없으면 초조했고, 아니면 «심심함» 이었다(검수사 2026-09-22 «심심함은 말그대로 작업이 없을시» — 이 부분은 이제 휴식·취미·준비로 바뀐다).
+     이제 작업 중인 배가 하나도 없으면 초조함·(초조함이 방치되어 생기는)슬픔은 판정에서 빠진다 — 그 두 갈래는 «일하는 배가 있는데 자료가 안 들어올 때» 만 남는다. 화남은 원래 일하는 배에만 있다.
    ⚠ 감정은 기기 안에서만 계산한다. RTDB 에 쓰지 않는다. 판정을 화면마다 따로 만들지 않는다 — 여기 한 벌뿐이다. */
 
 export const MIR_MOODS = {
@@ -3068,16 +3076,20 @@ export const MIR_MOODS = {
   happy:   { key: 'happy',   label: '기쁨',   badge: '♪' },
   sad:     { key: 'sad',     label: '슬픔',   badge: '💧' },
   anxious: { key: 'anxious', label: '초조함', badge: '💦' },
+  angry:   { key: 'angry',   label: '화남',   badge: '💢' },   // 4.06
   hungry:  { key: 'hungry',  label: '배고픔', badge: '🍚' },
   full:    { key: 'full',    label: '배부름', badge: '😋' },
   bored:   { key: 'bored',   label: '심심함', badge: '💤' },
+  rest:    { key: 'rest',    label: '휴식',     badge: '☕' },   // 4.06 — 작업할 배가 없을 때(검수사 2026-10-05 20:57)
+  hobby:   { key: 'hobby',   label: '취미 생활', badge: '🎧' },
+  prep:    { key: 'prep',    label: '작업 준비', badge: '📋' },
 };
 
 const MIN = 60000;
 export const MOOD_EVENT_MS = 12 * 1000;      // 순간 감정이 보이는 시간
 export const MOOD_BORED_MS = 30 * MIN;        // 이만큼 아무 질문·명령이 없으면 심심함
 export const MOOD_NEGLECT_MS = 30 * MIN;      // 초조함을 이만큼 보이는데 안 열어 보면 슬픔
-export const MOOD_NO_DONE_MS = 60 * MIN;      // 작업 중인데 완료 기록이 이만큼 없으면 초조함
+export const MOOD_NO_DONE_MS = 60 * MIN;      // 작업 중인데 완료 기록이 이만큼 없으면 화남(4.06 — 종전 초조함)
 export const MOOD_EDI_AHEAD_MS = 6 * 3600000; // 시작 이만큼 전부터 EDI 를 기다린다
 export const MOOD_MEAL_BEFORE_MIN = 10;       // 식사 몇 분 전부터 배고픔
 export const MOOD_FULL_AFTER_MIN = 30;        // 쉬는 시간 끝 몇 분 뒤까지 배부름
@@ -3117,11 +3129,11 @@ function pierOf(voyage) {
   return getPierFromBerth(info.berth || info.berthNo || '') || String(info.pier || '').toUpperCase() || 'PCTC';
 }
 
-/** 자료가 안 들어오는 이유들. 없으면 []. heartbeat = collector_heartbeat { at, cycleMin } */
+const _WORK_ACT_RE = /(^|_)(start|pause|resume|done)$/;   // 4.06 감사: 카톡 이관 보고는 «pause»·«resume» 접두어가 없다(kakaoWorkLog) — workPauseOf 와 화남이 한 벌로 본다
 /** 앱 보고(WorkReportModal → voyages/{키}/reports)로 본 «지금 작업 중단 중인가». 마지막 작업 상태 보고가 중단(«{모드}_pause»·«external_pause»)이면
  *  { mode, reason, equip, ts, ko } 를, 그 뒤에 시작·재개·완료 보고가 있으면 null. 12시간 넘은 옛 보고는 안 본다.
  *  3.69-01 — 검수사 2026-09-29 18:56 «앱에서 야드혼잡의 이유로 작업중단을 했습니다. DJCF PCSZ 앱에 기록이 안되나요 카톡보고를 했으면 앱은 알고 있을텐데»
- *  — 미르 초조함(«완료 기록이 113분째 없어요»)과 야드 답이 이 보고를 본다. */
+ *  — 미르 화남(«완료 기록이 113분째 없어요» — 4.06 전엔 초조함)과 야드 답이 이 보고를 본다. */
 export function workPauseOf(v, now = Date.now()) {
   const reps = v && v.reports;
   if (!reps || typeof reps !== 'object') return null;
@@ -3131,7 +3143,7 @@ export function workPauseOf(v, now = Date.now()) {
     const ts = Number(r.ts) || Number(k) || 0;
     if (!ts || ts > now + 5 * MIN || now - ts > 12 * 3600000) continue;
     const act = String(r.action || '');
-    const isStatus = r.type === 'work_status' && /_(start|pause|resume|done)$/.test(act);
+    const isStatus = r.type === 'work_status' && _WORK_ACT_RE.test(act);
     const isExt = r.type === 'external_pause';
     if (!isStatus && !isExt) continue;
     if (!last || ts > last.ts) last = { ts, act: isExt ? 'external_pause' : act, mode: String(r.mode || ''), reason: String(r.reason || ''), equip: String(r.equip || '') };
@@ -3157,18 +3169,127 @@ export function workPauseOf(v, now = Date.now()) {
   } catch (e) { resumeAt = 0; }
   return { mode: last.mode, reason: last.reason, equip: last.equip, ts: last.ts, resumeAt, breakKo, ko: last.mode === 'loading' ? '선적' : last.mode === 'discharge' ? '양하' : '작업' };
 }
+/** 수집기 하트비트가 주기의 3배 넘게 끊긴 시간(ms). 안 끊겼거나 하트비트가 아직 없으면 0. 초조함(수집기 조용)과 화남(터미널 «작업 중» 을 믿어도 되나)이 이 한 벌을 본다. */
+function _collectorSilentMs(heartbeat, now) {
+  if (!(heartbeat && Number(heartbeat.at))) return 0;
+  const cyc = (Number(heartbeat.cycleMin) || 5) * MIN;
+  const gap = now - Number(heartbeat.at);
+  return gap > 3 * cyc ? gap : 0;
+}
+/** 지금이 근무표의 «일하는 창» 안인가 — 밖이면 쉬는 시간(식사·티타임)이다. WORK_SHIFTS 한 벌(workMinutesBetween 과 같은 표). */
+function _inWorkWindow(now, pier) {
+  const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
+  const d = new Date(now); const m = d.getHours() * 60 + d.getMinutes();
+  return wins.some(([a, b]) => m >= a && m < b);
+}
+/** 앱 작업 보고(workPauseOf 와 같은 12시간 안의 work_status)에서 ① «시작·재개» 중 가장 늦은 시각(restartAt) ② 모든 «모드·호기» 의 가장 늦은 보고가 «끝(…_done)» 이면 그 가운데 가장 늦은 끝 시각(allClosedAt, 아니면 0).
+ *  (4.06 감사 — 재개 직후·끝 보고 뒤에 화내지 않게. 호기별로 따진다: 1호기가 끝 보고를 올려도 2호기가 일하고 있으면 «끝» 이 아니다.) */
+function _statusReportMarks(v, now) {
+  const reps = v && v.reports; let restartAt = 0;
+  const lastBy = new Map();   // «모드|호기» → 그 호기의 가장 늦은 작업 상태 보고
+  if (!reps || typeof reps !== 'object') return { restartAt, allClosedAt: 0 };
+  for (const k of Object.keys(reps)) {
+    const r = reps[k]; if (!r || typeof r !== 'object') continue;
+    const ts = Number(r.ts) || Number(k) || 0;
+    if (!ts || ts > now + 5 * MIN || now - ts > 12 * 3600000) continue;
+    const act = String(r.action || '');
+    if (!(r.type === 'work_status' && _WORK_ACT_RE.test(act))) continue;   // external_pause 는 workPauseOf 가 본다
+    if (/(^|_)(start|resume)$/.test(act) && ts > restartAt) restartAt = ts;
+    if (!String(r.mode || '')) continue;   // 재감사 D8: 모드 없는 보고(카톡 이관 pause·resume)는 «끝» 판정 열쇠를 만들지 않는다 — 재개 시각(restartAt)은 위에서 이미 셌다
+    const key = `${String(r.mode || '')}|${String(r.equip || '')}`;
+    const p = lastBy.get(key); if (!p || ts > p.ts) lastBy.set(key, { ts, act });
+  }
+  //  재감사 D8: 카톡 «양하 끝»(호기 칸이 빈칸)은 그 모드에서 그보다 일찍 보고한 호기들(앱 «1호기 시작» 등)을 같이 닫는다.
+  for (const [k, p] of [...lastBy]) {
+    if (!k.endsWith('|') || !/(^|_)done$/.test(p.act)) continue;
+    const md = k.slice(0, -1);
+    for (const [k2, p2] of [...lastBy]) if (k2 !== k && k2.startsWith(md + '|') && p2.ts <= p.ts) lastBy.delete(k2);
+  }
+  let allClosedAt = 0;
+  if (lastBy.size) {
+    allClosedAt = 0; let allDone = true;
+    for (const p of lastBy.values()) { if (!/(^|_)done$/.test(p.act)) { allDone = false; break; } if (p.ts > allClosedAt) allClosedAt = p.ts; }
+    if (!allDone) allClosedAt = 0;
+  }
+  return { restartAt, allClosedAt };
+}
+/** 검수원이 홈 카드에서 «검수 완료» 를 눌렀나 — 수석 완료(inspectorDone)이거나 보유 모드가 전부 완료 표식(dischargeDone·loadingDone)이면 true.
+ *  HomePage.isAllDone · utils.ferryWorkDone · 홀드 잔여 finishedAll 과 같은 규칙(보유 모드만 따진다). 작업 끝 시각(workEndAt)·터미널 상태는 isWorkingNow 가 본다 — 출항(ATD) 뒤에도 터미널이 «작업중» 으로 남는 항차는 이 «검수 완료» 표시가 끝낸다. (4.06 재감사 D1) */
+function _inspectorFinished(v) {
+  const info = (v && v.info) || {};
+  if (info.inspectorDone) return true;
+  const hasD = !!(v && v.discharge && Object.keys(v.discharge).length), hasL = !!(v && v.loading && Object.keys(v.loading).length);
+  if (!hasD && !hasL) return false;
+  return (!hasD || !!info.dischargeDone) && (!hasL || !!info.loadingDone);
+}
+/** 앱에 올라온 평택분 컨(voyageCountsOf — 홈 카드와 같은 분모)을 앱 완료가 다 채웠으면 true — 앱에 더 입력할 컨이 없다.
+ *  배정목록 수량(info.planDis·planLod)은 «대조용 참고치» 라 대수 기준으로 쓰지 않는다 — 다만 «배정은 있다는데 앱엔 아직 컨이 안 올라온» 모드는 입력할 게 남았을 수 있으니 true 로 치지 않는다.
+ *  센 컨이 하나도 없으면 false(모른다 → 종전처럼 본다).
+ *  분모는 홈 카드와 같이 시프팅 컨까지 낀다(재감사 D7 — MCSC 633N 실측: 리스트 컨만 끝내고 시프팅 95대가 남았는데 홈은 189대 남았다고 하고 미르는 조용했다). (4.06 재감사 D3·D7) */
+function _appAllDone(v, key) {
+  const info = (v && v.info) || {};
+  let c; try { c = voyageCountsOf(v, null, shiftSetOfVoyage(v, key, null)); } catch (e) { console.warn('[미르 화남] 앱 대수 세기 실패 — 종전처럼 봅니다:', e); return false; }
+  let known = 0;
+  for (const [mode, plan] of [['discharge', info.planDis], ['loading', info.planLod]]) {
+    if (sideCancelled(info, mode)) continue;
+    const m = c.byMode[mode];
+    if (m.total > 0) { known++; if (m.done < m.total) return false; }
+    else if (Number(plan) > 0) return false;
+  }
+  return known > 0;
+}
+/** «곧 시작하거나 막 시작할 배» 의 계획 시작 시각(ms) — 아니면 0. 미르 «다음 작업 준비»(_nextWorkOf)와 초조함의 «EDI 를 기다린다»(anxiousReasons)가 같은 문지기를 쓴다(한 벌).
+ *  제외 — 떠난 배(departed·done) · «검수 완료» 한 배 · 터미널 작업 끝 시각(workEndAt)이 지난 배(isWorkingNow 와 같은 칸) · 계획 끝이 지난 배 · 시작 6시간보다 먼저인 배 ·
+ *  계획 끝을 모르는데 시작한 지 6시간이 넘고 터미널도 «작업중» 이 아닌 배(옛 항차가 «다음 작업» 으로 영영 남지 않게 — 닫는 문이 없다). (4.06 재감사 3·A) */
+function _upcomingStartMs(v, now) {
+  const info = v && v.info;
+  if (!info) return 0;
+  const ts = String(info.terminalStatus || '').trim().toLowerCase();
+  if (ts === 'departed' || ts === 'done' || _inspectorFinished(v)) return 0;
+  const we = _dtMs(info.workEndAt);
+  if (we && now >= we) return 0;
+  const s = voyagePlanMs(v), e = voyagePlanEndMs(v);
+  if (!s || (s - now) > MOOD_EDI_AHEAD_MS) return 0;
+  if (e ? now >= e : ((now - s) > MOOD_EDI_AHEAD_MS && !isWorkingNow(v, now))) return 0;   // 닫는 문 없는 옛 항차만 자른다 — 터미널이 «작업중» 이라 한 배는 EDI 를 계속 기다린다
+  return s;
+}
+/** 콘앱용 — 이 배가 «곧 시작하거나 막 시작할 배» 인가(_upcomingStartMs 한 벌). 콘앱은 목록을 받을 때의 info 만 들고 있어, 이 배만 info 를 새로 받아 «일하는 배» 판정이 낡지 않게 한다. (4.06 / 2.62 재감사 1) */
+export function isUpcomingWork(v, now = Date.now()) { return !!_upcomingStartMs(v, now); }
+/** 작업 중인 배가 없을 때 미르가 하는 일 — 한 벌(검수앱·콘앱 같은 답). 입력은 지금 시각과 항차뿐이라 두 앱이 같은 때 같은 얼굴이다.
+ *  곧 시작할 배(시작 6시간 안 · 아직 안 끝남)가 있으면 «작업 준비», 없으면 30분 단위로 «휴식» ↔ «취미 생활». (4.06 — 검수사 2026-10-05 20:57)
+ *  끝난 배(출항·터미널 완료·«검수 완료»)와 계획 끝이 지난 옛 항차는 «다음 작업» 으로 세지 않는다. */
+function _nextWorkOf(voyages, now) {
+  let best = null;
+  for (const v of Object.values(voyages || {})) {
+    if (!v || !v.info || isWorkingNow(v, now)) continue;
+    const s = _upcomingStartMs(v, now);
+    if (!s) continue;
+    if (!best || Math.abs(s - now) < Math.abs(best.s - now)) best = { v, s };   // 시작이 가장 가까운 배(막 지난 배도 «다음 작업» — 터미널이 아직 안 열었을 뿐)
+  }
+  return best;
+}
+function _idleMood(voyages, now) {
+  const nx = _nextWorkOf(voyages, now);
+  if (nx) {
+    const info = nx.v.info, d = nx.s - now;
+    const when = d > 0 ? (d >= 3600000 ? `${Math.max(1, Math.round(d / 3600000))}시간 뒤 시작` : `${Math.max(1, Math.round(d / MIN))}분 뒤 시작`) : '시작할 시간';
+    const waitEdi = [['discharge', info.planDis], ['loading', info.planLod]].some(([mode, cnt]) => Number(cnt) > 0 && !(nx.v[mode] && (nx.v[mode].dataAt || nx.v[mode].ediContainers)));
+    return { ...MIR_MOODS.prep, why: `${info.vsl || '다음 배'} ${when} — 다음 작업을 준비하고 있어요${waitEdi ? ' (EDI 를 기다리는 중)' : ''}` };
+  }
+  return Math.floor(now / (30 * MIN)) % 2 === 0
+    ? { ...MIR_MOODS.rest, why: '작업할 배가 없어서 편안하게 쉬고 있어요' }
+    : { ...MIR_MOODS.hobby, why: '작업할 배가 없어서 취미 생활을 즐기고 있어요' };
+}
+/** 초조함의 이유들 — «자료가 안 들어올 때» 만. 없으면 []. (4.06: «작업 중 완료 기록 없음» 갈래는 화남 angryReasons 로 옮겼다.) */
 export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
   const r = [];
-  if (heartbeat && Number(heartbeat.at)) {
-    const cyc = (Number(heartbeat.cycleMin) || 5) * MIN;
-    const gap = now - Number(heartbeat.at);
-    if (gap > 3 * cyc) r.push(`수집기가 ${Math.round(gap / MIN)}분째 조용해요`);
-  }
+  const silent = _collectorSilentMs(heartbeat, now);
+  if (silent) r.push(`수집기가 ${Math.round(silent / MIN)}분째 조용해요`);
   for (const v of Object.values(voyages || {})) {
     if (!v || !v.info) continue;
     const info = v.info; const vsl = info.vsl || '';
-    const s = voyagePlanMs(v), e = voyagePlanEndMs(v);
-    if (s && (s - now) <= MOOD_EDI_AHEAD_MS && (!e || now < e)) {
+    const s = _upcomingStartMs(v, now);   // 4.06 재감사 A: «다음 작업» 과 같은 문지기 — 떠난·검수 완료·작업 끝난 배의 EDI 는 기다리지 않는다
+    if (s) {
       for (const [mode, cnt, ko] of [['discharge', info.planDis, '양하'], ['loading', info.planLod, '선적']]) {
         if (!(Number(cnt) > 0)) continue;
         if ((v[mode] && v[mode].dataAt) || (v[mode] && v[mode].ediContainers)) continue;
@@ -3176,25 +3297,46 @@ export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
         r.push(`${vsl} ${ko} EDI가 아직이에요 (${h > 0 ? Math.max(1, Math.round(h)) + '시간 뒤 시작' : '작업 시간인데'})`);
       }
     }
-    if (isWorkingNow(v, now)) {
-      if (workPauseOf(v, now)) continue;   // 3.69-01: 앱에 중단 보고가 있으면 완료가 없는 게 당연하다 — 초조해하지 않는다
-      let last = 0, any = false;
-      for (const mode of ['discharge', 'loading']) {
-        const comp = v[mode] && v[mode].completed;
-        if (!comp || typeof comp !== 'object') continue;
-        for (const c of Object.values(comp)) { const at = c && Number(c.at); if (at) { any = true; if (at > last) last = at; } }
-      }
-      //  3.69-01: 쉬는 시간(석식·중식·야식·티타임)은 세지 않는다 — 검수사 «그 시간대엔 작업자도 작업중인 장비도 없는상태이기 때문에 작업 대기시간도 아닙니다». 근무표(WORK_SHIFTS) 한 벌.
-      let wmin = 0; try { wmin = workMinutesBetween(last, now, pierOf(v)); } catch (e) { wmin = Math.round((now - last) / MIN); }
-      if (any && wmin * MIN > MOOD_NO_DONE_MS) r.push(`${vsl} 완료 기록이 실작업 ${wmin}분째 없어요`);
+  }
+  return r;
+}
+/** 화남의 이유들 — 터미널은 작업 중(isWorkingNow, 터미널 본선 현황 한 벌)인데 앱 완료 기록이 실작업 60분 넘게 없다. 없으면 [].
+ *  4.06 — 검수사 2026-10-05 18:40 «초조함이 아니라 화난표정이어야 함 작업은 진행중인데 앱 입력이 없으니 화난다는 뜻으로». 종전엔 anxiousReasons 의 한 갈래(초조함)였다.
+ *  · 수집기가 조용하면(하트비트 끊김) 터미널 «작업 중» 도 믿을 수 없다 — 화내지 않는다(자료가 안 들어오는 건 초조함이 맡는다). 하트비트가 아직 없으면(null) 그냥 본다.
+ *  · 쉬는 시간(근무표의 빈 자리 — 식사·티타임)엔 화내지 않는다 — 검수사 2026-09-29 «그 시간대엔 작업자도 작업중인 장비도 없는상태». 터미널 상태는 그동안도 «작업중» 으로 남는다.
+ *  · 앱에 입력할 게 없는 배도 화내지 않는다 — «검수 완료»(inspectorDone·보유 모드 전부 dischargeDone/loadingDone) · 모든 호기가 끝 보고 · 앱에 올라온 컨을 완료가 다 채움(재감사).
+ *  ⚠ 여기서 보는 완료는 검수원이 앱에서 누른 completed 뿐이다. 터미널 합계는 완료로 세지 않는다(터미널 완료 자동 반영 금지 — 검수사 2026-10-03). */
+export function angryReasons(voyages, heartbeat, now = Date.now()) {
+  const r = [];
+  if (_collectorSilentMs(heartbeat, now)) return r;
+  for (const [vKey, v] of Object.entries(voyages || {})) {
+    if (!v || !v.info) continue;
+    const vsl = v.info.vsl || '';
+    if (!isWorkingNow(v, now)) continue;
+    if (!_inWorkWindow(now, pierOf(v))) continue;   // 4.06: 밥 먹는 시간에 화내지 않는다
+    if (workPauseOf(v, now)) continue;   // 3.69-01: 앱에 중단 보고가 있으면 완료가 없는 게 당연하다 — 화내지 않는다
+    if (_inspectorFinished(v)) continue;  // 4.06 재감사 D1: 검수원이 «검수 완료» 를 눌렀으면 입력할 게 없다(터미널은 출항 전까지 «작업중» 으로 남는다 — 동방은 workEndAt 이 실출항 ATD)
+    const marks = _statusReportMarks(v, now);
+    let last = 0, any = false;
+    for (const mode of ['discharge', 'loading']) {
+      const comp = v[mode] && v[mode].completed;
+      if (!comp || typeof comp !== 'object') continue;
+      for (const c of Object.values(comp)) { const at = c && Number(c.at); if (at) { any = true; if (at > last) last = at; } }
     }
+    if (marks.allClosedAt && marks.allClosedAt >= last) continue;   // 4.06 감사: 모든 호기의 마지막 보고가 «작업 끝» 이고 그 뒤에 완료가 더 안 찍혔으면 입력할 게 없다(끝 보고 뒤에 또 입력했으면 다시 본다)
+    if (marks.restartAt > last) last = marks.restartAt;   // 4.06 감사: 중단 뒤 재개 보고가 있으면 재개 시각부터 잰다(중단 시간이 그대로 세지 않게)
+    //  3.69-01: 쉬는 시간(석식·중식·야식·티타임)은 세지 않는다 — 검수사 «그 시간대엔 작업자도 작업중인 장비도 없는상태이기 때문에 작업 대기시간도 아닙니다». 근무표(WORK_SHIFTS) 한 벌.
+    let wmin = 0; try { wmin = workMinutesBetween(last, now, pierOf(v)); } catch (e) { wmin = Math.round((now - last) / MIN); }
+    if (!(any && wmin * MIN > MOOD_NO_DONE_MS)) continue;
+    if (_appAllDone(v, vKey)) continue;   // 4.06 감사: 앱에 올라온 컨을 완료가 다 채웠으면 입력할 게 없다 — 센 값은 비싸서(항차 펼치기) 60분이 넘었을 때만 본다
+    r.push(`${vsl} 터미널은 작업 중인데 앱 완료 기록이 실작업 ${wmin}분째 없어요`);
   }
   return r;
 }
 
 /**
  * 기분 한 벌. 입력은 전부 읽기 전용이다.
- * @param {object} p  { now, voyages, heartbeat, lastAskAt, lastEvent:{at,kind,why}, anxiousSince, openedAt, pier }
+ * @param {object} p  { now, voyages, heartbeat, lastAskAt, lastEvent:{at,kind,why}, anxiousSince, openedAt, pier, angry(이미 잰 angryReasons 결과 — 있으면 다시 재지 않는다) }
  * @returns {{ key, label, badge, why }}
  */
 export function mirMoodNow(p = {}) {
@@ -3204,7 +3346,11 @@ export function mirMoodNow(p = {}) {
     if (ev.kind === 'workPick' || ev.kind === 'workDone') return { ...MIR_MOODS.happy, why: ev.why || '' };
     if (ev.kind === 'missed') return { ...MIR_MOODS.sad, why: ev.why || '' };
   }
-  const reasons = anxiousReasons(p.voyages, p.heartbeat, now);
+  const angry = Array.isArray(p.angry) ? p.angry : angryReasons(p.voyages, p.heartbeat, now);   // 4.06: 작업은 되는데 앱 입력이 없다 → 화남(초조함보다 먼저). currentMirMood 가 이미 쟀으면 그 값을 쓴다(큰 항차는 한 번에 십수 ms)
+  if (angry.length) return { ...MIR_MOODS.angry, why: angry.slice(0, 2).join(' · ') };
+  const working = Object.values(p.voyages || {}).filter((v) => v && v.info && isWorkingNow(v, now));
+  //  4.06: 작업 중인 배가 하나도 없으면 초조해하지도 슬퍼하지도 않는다 — 쉬는 얼굴(아래 _idleMood). 검수사 2026-10-05 20:57
+  const reasons = working.length ? anxiousReasons(p.voyages, p.heartbeat, now) : [];
   if (reasons.length) {
     const since = Number(p.anxiousSince) || 0;
     const opened = Number(p.openedAt) || 0;
@@ -3213,14 +3359,13 @@ export function mirMoodNow(p = {}) {
     }
     return { ...MIR_MOODS.anxious, why: reasons.slice(0, 2).join(' · ') };
   }
-  const working = Object.values(p.voyages || {}).filter((v) => v && v.info && isWorkingNow(v, now));
   const pier = p.pier || (working[0] ? pierOf(working[0]) : 'PCTC');
   const meal = mealPhase(now, pier);
   if (meal) {
     if (meal.phase === 'hungry') return { ...MIR_MOODS.hungry, why: `${meal.label} — 곧 밥 시간이에요` };
     return { ...MIR_MOODS.full, why: `${meal.label} — 잘 먹었어요` };
   }
-  if (!working.length) return { ...MIR_MOODS.bored, why: '지금 작업 중인 배가 없어요' };
+  if (!working.length) return _idleMood(p.voyages, now);   // 4.06: 작업할 배가 없으면 심심함이 아니라 휴식·취미·다음 작업 준비
   const la = Number(p.lastAskAt) || 0;
   if (!la || now - la > MOOD_BORED_MS) {
     const names = working.map((v) => v.info.vsl).filter(Boolean).slice(0, 3).join('·');
@@ -3242,9 +3387,12 @@ export function subscribeMirMood(f) { _moodSubs.add(f); return () => _moodSubs.d
 export function mirMoodState() { return { ..._moodSt }; }
 /** 지금 기분 — 기억(질문·열람·순간 감정)을 얹어 판정하고, 초조함이 시작된 시각을 기억해 둔다. */
 export function currentMirMood(voyages, heartbeat, now = Date.now(), pier) {
-  const reasons = anxiousReasons(voyages, heartbeat, now);
+  //  4.06 감사: 화남이 보이는 동안(초조함을 가린다)은 «말했는데 안 봐 준다» 시계를 세우지 않는다 — 안 본 말로 슬퍼지지 않게
+  const angry = angryReasons(voyages, heartbeat, now);
+  const anyWorking = Object.values(voyages || {}).some((v) => v && v.info && isWorkingNow(v, now));   // 4.06: 일하는 배가 없으면 초조함 자체가 없다
+  const reasons = (angry.length || !anyWorking) ? [] : anxiousReasons(voyages, heartbeat, now);
   if (reasons.length) { if (!_moodSt.anxiousSince) _moodSt.anxiousSince = now; } else _moodSt.anxiousSince = 0;
-  const m = mirMoodNow({ now, voyages, heartbeat, pier, lastAskAt: _moodSt.lastAskAt, lastEvent: _moodSt.lastEvent, anxiousSince: _moodSt.anxiousSince, openedAt: _moodSt.openedAt });
+  const m = mirMoodNow({ now, voyages, heartbeat, pier, angry, lastAskAt: _moodSt.lastAskAt, lastEvent: _moodSt.lastEvent, anxiousSince: _moodSt.anxiousSince, openedAt: _moodSt.openedAt });
   _moodSt.lastKey = m.key;
   return m;
 }

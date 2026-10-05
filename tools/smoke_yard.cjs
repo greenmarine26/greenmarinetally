@@ -218,14 +218,14 @@ console.log('■ ③-B 앱 중단 보고(3.69-01) — 실측 PCSZ 2630E 17:01 �
   T(M.workPauseOf(early, ets + 600000).resumeAt === 0, '08:10 중단 → 3시간 안에 창 시작이 없으면 재개 예상 없음(지어내지 않는다)');
   //  초조함은 실작업 분으로 — 석식(17:30~19:00)은 세지 않는다(검수사 «그 시간대엔 작업자도 작업중인 장비도 없는상태 … 대기시간도 아닙니다»)
   const vv = { info: Object.assign({}, PZ.PCSZ_2630E.info, { planStart: '2026-09-29 15:00', planEnd: '2026-09-30 06:00' }), discharge: { ediContainers: { A: { cn: 'A' } }, completed: { A: { cn: 'A', at: new Date('2026-09-29T16:59:00+09:00').getTime() } } }, loading: { ediContainers: { B: { cn: 'B' } } } };
-  T(!M.anxiousReasons({ X: vv }, null, new Date('2026-09-29T19:05:00+09:00').getTime()).some((x) => /완료 기록/.test(x)), '16:59 마지막 완료 · 19:05 — 실작업 31분이라 초조하지 않다(벽시계 126분)');
-  T(M.anxiousReasons({ X: vv }, null, new Date('2026-09-29T20:30:00+09:00').getTime()).some((x) => /완료 기록이 실작업 121분째 없어요/.test(x)), '20:30 — 실작업 121분 → 초조(문구에 «실작업»)');
+  T(!M.angryReasons({ X: vv }, null, new Date('2026-09-29T19:05:00+09:00').getTime()).some((x) => /완료 기록/.test(x)), '16:59 마지막 완료 · 19:05 — 실작업 31분이라 화내지 않는다(벽시계 126분)');
+  T(M.angryReasons({ X: vv }, null, new Date('2026-09-29T20:30:00+09:00').getTime()).some((x) => /완료 기록이 실작업 121분째 없어요/.test(x)), '20:30 — 실작업 121분 → 화남(문구에 «실작업» · 4.06 전엔 초조함)');
   T(M.workPauseOf({ info: {} }, tNow) === null && M.workPauseOf(null, tNow) === null, '보고 없음 → null');
   const doneAfter = JSON.parse(JSON.stringify(PZ.PCSZ_2630E)); doneAfter.discharge = { completed: { XXXU0000001: { cn: 'XXXU0000001', at: 1790668893268 + 10 * 60 * 1000 } } };
   T(M.workPauseOf(doneAfter, tNow) === null, '중단 뒤 완료 기록이 찍히면 재개로 본다(재감사 2)');
   //  초조함 — isWorkingNow 는 utils 한 벌이라 여기서는 workPauseOf 가 anxiousReasons 안에서 불리는지를 소스로 확인하고, 완료 기록 없음 문장이 중단 중엔 안 나오는지 본다
-  T(/if \(workPauseOf\(v, now\)\) continue;/.test(src('src/mir.js')), 'anxiousReasons — 중단 보고가 있으면 «완료 기록 없음» 을 세지 않는다(소스)');
-  const anx = M.anxiousReasons({ PCSZ_2630E: Object.assign({}, PZ.PCSZ_2630E, { info: Object.assign({}, PZ.PCSZ_2630E.info, { planStart: '2026-09-29 15:00', planEnd: '2026-09-30 06:00' }) }) }, null, tNow);
+  T(/if \(workPauseOf\(v, now\)\) continue;/.test(src('src/mir.js')), 'angryReasons — 중단 보고가 있으면 «완료 기록 없음» 을 세지 않는다(소스)');
+  const anx = M.angryReasons({ PCSZ_2630E: Object.assign({}, PZ.PCSZ_2630E, { info: Object.assign({}, PZ.PCSZ_2630E.info, { planStart: '2026-09-29 15:00', planEnd: '2026-09-30 06:00' }) }) }, null, tNow);
   T(!anx.some((x) => /완료 기록/.test(x)), '중단 중인 PCSZ 에 «완료 기록이 N분째 없어요» 없음', JSON.stringify(anx));
   //  야드 why 머리에 중단 보고
   const pzCtx = mkCtx(Object.assign({}, OWN.PCSZ_2630E, { reports: PZ.PCSZ_2630E.reports }), 'PCSZ_2630E', { voyages: OWN, _now: tNow, _utterAt: tNow });
@@ -248,7 +248,7 @@ T(/answerYard, setMirYard, readMirYard/.test(src('src/mirCore.entry.js')), 'mirC
 T(/coneYardStatus\(\)/.test(src('public/cone.html')) && /yard: _yard,/.test(src('public/cone.html')) && /fbFetch\('yard_status\.json'\)/.test(src('public/cone.html')), 'cone.html mirAsk 가 yard_status.json 을 GET 해 ctx.yard 로 넣는다');
 T(/야드 상황\(3\.69\)/.test(src('src/data/helpData.js')) && /왜 차 안 와\?/.test(src('src/data/helpData.js')), '매뉴얼 미르 절에 야드 상황(3.69)');
 T(/APP_VERSION = 'TallyOne (3\.(69|[7-9]\d)|[4-9]\.\d\d)/.test(src('src/utils.js')), 'APP_VERSION 3.69 이상');
-T(/APP_NOTE = '[^']*(터미널 본선 현황|콘앱 첫 화면|예상 작업 시간|야드|출력물|베이상세|끼니|덱플랜|수화물|검수 리스트|엠티실|선적 자동 가이드|리퍼 체크)/.test(src('src/utils.js')), 'APP_NOTE 가 이번 판(4.02 콘앱 첫 화면 · 4.01 예상 작업 시간 · 3.72-02 리퍼 체크 안 함 · 3.72-01 선적 자동 가이드 · 3.72 덱플랜 완료 표시 · 3.71 엠티실 음성 · 3.70-02 검수 리스트 · 야드 · 3.69-03 출력물 · 3.69-04 베이상세 · 3.69-05 끼니 · 3.70 덱플랜 · 3.70-01 수화물) 문구');
+T(/APP_NOTE = '[^']*(터미널 본선 현황|콘앱 첫 화면|예상 작업 시간|야드|출력물|베이상세|끼니|덱플랜|수화물|검수 리스트|엠티실|선적 자동 가이드|리퍼 체크|화난 얼굴|화내고)/.test(src('src/utils.js')), 'APP_NOTE 가 이번 판(4.06 미르 화난 얼굴 · 4.02 콘앱 첫 화면 · 4.01 예상 작업 시간 · 3.72-02 리퍼 체크 안 함 · 3.72-01 선적 자동 가이드 · 3.72 덱플랜 완료 표시 · 3.71 엠티실 음성 · 3.70-02 검수 리스트 · 야드 · 3.69-03 출력물 · 3.69-04 베이상세 · 3.69-05 끼니 · 3.70 덱플랜 · 3.70-01 수화물) 문구');
 T(/__CONEV='ConeOne 2\.(5[89]|[6-9]\d)/.test(src('public/cone.html')), 'ConeOne 2.58 이상');
 T(/_yardA \? YARD_SPEAK/.test(src('src/components/MirFab.jsx')) && /parsed\.yardQuery \? YARD_SPEAK/.test(src('src/components/SearchPanel.jsx')) && /parsed\.yardQuery \? YARD_SPEAK/.test(src('src/pages/GlobalSearchPage.jsx')) && /__mirYardSlow/.test(src('public/cone.html')), '야드 답 느린 낭독 — 네 창구·콘앱이 YARD_SPEAK 한 벌(3.69-01)');
 T(/smoke_yard\.cjs/.test(src('build.sh')), 'build.sh 가 이 연막검사를 부른다');

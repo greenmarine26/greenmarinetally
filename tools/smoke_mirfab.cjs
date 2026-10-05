@@ -26,13 +26,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const face = fab.querySelector('svg.mir');
   if (!face) fail('얼굴 버튼 안에 표정 인형(svg.mir)이 없다');
   if (!face.querySelector('image')) fail('인형에 검수사 원본 그림(<image>)이 없다');
-  for (const sel of ['.lid-l', '.lid-r', '.pupil', '.mouth-open', '.mouth-sad', '.mouth-wavy', '.tear', '.sweat', '.zz', '.heart']) if (!face.querySelector(sel)) fail('인형 부위가 빠졌다: ' + sel);
+  for (const sel of ['.lid-l', '.lid-r', '.pupil', '.mouth-open', '.mouth-sad', '.mouth-wavy', '.mouth-grr', '.brow', '.vein', '.flush', '.tear', '.sweat', '.zz', '.heart']) if (!face.querySelector(sel)) fail('인형 부위가 빠졌다: ' + sel);
   if (!doc.getElementById('mirFaceCss') || !/mirBlink|mirHop|mirTear/.test(doc.getElementById('mirFaceCss').textContent)) fail('인형 CSS(<style id=mirFaceCss>)가 문서에 안 들어갔다');
   if (face.getAttribute('data-mood') !== fab.getAttribute('data-mood')) fail('인형 기분과 버튼 기분이 다르다: ' + face.getAttribute('data-mood') + ' vs ' + fab.getAttribute('data-mood'));
   //  3.56: 기분 — 얼굴 버튼에 mir-mood-<key> 클래스와 data-mood 가 있어야 한다(CSS 가 그것으로 움직인다). 어떤 기분인지는 시각·자료에 따라 다르므로 값은 고정하지 않는다.
   const moodKey = fab.getAttribute('data-mood');
   if (!moodKey || !new RegExp('\\bmir-mood-' + moodKey + '\\b').test(fab.className)) fail('얼굴에 기분 클래스(mir-mood-<key>)가 없다: ' + fab.className + ' / data-mood=' + moodKey);
-  if (!['basic', 'happy', 'sad', 'anxious', 'hungry', 'full', 'bored'].includes(moodKey)) fail('모르는 기분 키: ' + moodKey);
+  if (!['basic', 'happy', 'sad', 'anxious', 'angry', 'hungry', 'full', 'bored', 'rest', 'hobby', 'prep'].includes(moodKey)) fail('모르는 기분 키: ' + moodKey);
   //  3.56 감사 지적 — .mir-mood 가 position 을 덮어 얼굴이 fixed 를 잃은 적이 있다. 클래스 이름이 아니라 **계산된 스타일**로 fixed 를 본다(index.css 를 실제로 읽어 얹는다).
   try {
     const css = fs.readFileSync(path.resolve(__dirname, '../src/index.css'), 'utf8').replace(/@tailwind[^;]*;|@apply[^;]*;/g, '');

@@ -166,7 +166,7 @@ execSync(`npx esbuild tools/smoke_deckposall402.jsx --bundle --loader:.jsx=jsx -
     ok('홈 검색·떠 있는 미르가 같이 쓰는 flattenVoyages 가 좌표를 붙인다(한 곳)', /deckCoordMap\(sec\.stowagePlan\)/.test(mir) && /\.\.\.\(_dcm\.get\(c\.cn\) \? \{ deckPos: _dcm\.get\(c\.cn\) \} : \{\}\)/.test(mir));
     ok('미르 자리 말 세 곳(posOf · eyePosOf · _pos)이 deckPos 를 먼저 읽는다', /function posOf\(c\) \{\s*\n\s*if \(c && c\.deckPos\) return String\(c\.deckPos\)/.test(mir) && /const eyePosOf = \(c\) => c\?\.deckPos \?/.test(mir) && /const _pos = \(c\) => c\.deckPos \?/.test(mir));
     ok('큰 카드·리스트 행·홈 결과 줄은 베이 없이 좌표만 있어도 자리를 그린다', /\(c\.bay \|\| c\.deckPos\) && /.test(rd('src/components/BigResultCard.jsx')) && /\(c\.bay \|\| c\.deckPos\) && /.test(rd('src/components/ContainerList.jsx')) && /\(c\.bay \|\| c\.deckPos\) && /.test(gs));
-    ok('콘앱: 버전 2.61-01 · LoLo 선박만 양하·선적 덱플랜을 받아 미르 컨에 붙인다(다른 배는 아무것도 안 받는다)', /window\.__CONEV='ConeOne 2\.61-01'/.test(cone) && /if\(isLoloShip\(\)\)\{ try\{ const _sp=await Promise\.all\(\[fbFetchStowagePlan\('discharge'\), fbFetchStowagePlan\('loading'\)\]\)/.test(cone) && /window\.ConeMir\.toMirContainers\(rows,mode, mode==='loading'\?_spL:_spD\)/.test(cone));
+    ok('콘앱: 버전 2.61-01~2.62 · LoLo 선박만 양하·선적 덱플랜을 받아 미르 컨에 붙인다(다른 배는 아무것도 안 받는다)', /window\.__CONEV='ConeOne 2\.(61-01|62)'/.test(cone) && /if\(isLoloShip\(\)\)\{ try\{ const _sp=await Promise\.all\(\[fbFetchStowagePlan\('discharge'\), fbFetchStowagePlan\('loading'\)\]\)/.test(cone) && /window\.ConeMir\.toMirContainers\(rows,mode, mode==='loading'\?_spL:_spD\)/.test(cone));
   }
 
   console.log('■ ⑨ 손대지 않은 것 — 자리를 고치는 화면은 종전 베이·줄·단 그대로');
