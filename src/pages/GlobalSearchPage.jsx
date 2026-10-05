@@ -15,7 +15,7 @@ import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 �
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
-import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
+import MirFace from '../components/MirFace.jsx';   // 4.07: 실사 미르 얼굴(작은 정지 아바타) — 2.33 부터 쓰던 그림 아바타를 바꿨다
 import { fbGetDamagePhoto, fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -547,7 +547,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
             title="검색을 마치고 들어온 화면으로 돌아갑니다">
             ← 나가기
           </button>}
-          <span className="min-w-0 truncate flex items-center gap-1.5"><img src={mirFaceUrl} alt="미르" className="w-5 h-5 rounded-full inline-block"/>미르 통합 검색 — 모든 항차·양/선적</span>
+          <span className="min-w-0 truncate flex items-center gap-1.5"><MirFace mood="basic" size={20} still className="inline-block" />미르 통합 검색 — 모든 항차·양/선적</span>
           <span className="text-dim-300 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">
@@ -654,7 +654,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       {/* 2.06: 미르가 모르는 질문 — 솔직하게 + 자동으로 개발에 전달됐음을 알림 (검수사 확정 문구 그대로) */}
       {_mirDontKnow && (
         <div className="bg-ink-900 border-2 border-line-strong rounded-btn p-4 mb-3">
-          <div className="text-xxs text-dim-300 font-bold uppercase mb-1 flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르</div>
+          <div className="text-xxs text-dim-300 font-bold uppercase mb-1 flex items-center gap-1.5"><MirFace mood="basic" size={20} still />미르</div>
           <div className="text-sm text-dim-100 leading-relaxed">
             아직은 미르가 그 기능을 할 수 없어요 😿 열심히 배워서 꼭 알려드릴게요!
             {askedAt ? <span className="block text-xxs text-dim-300 mt-1">이 질문은 개발자에게 자동 전달됐습니다.</span>
@@ -665,7 +665,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       {/* V9.14: 즉답/안내 카드 */}
       {localAnswer && (
         <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-btn p-4 mb-3">
-          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르 즉답</div>
+          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1.5"><MirFace mood="basic" size={20} still />미르 즉답</div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
           {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 접수). 끝은 검수사가. */}

@@ -168,6 +168,8 @@ cp dist/index.html ./
 # V9.19-02: 마감 텔리 템플릿도 루트로 — Pages는 두 워크플로(Actions dist / 브랜치 루트)가
 #   경합해 마지막에 끝난 쪽이 서빙된다(2026-07-28 실측). 루트·dist 양쪽 다 완전해야 한다.
 [ -d dist/tally_templates ] && rm -rf ./tally_templates && cp -r dist/tally_templates ./
+# 4.07 / 2.63: 실사 미르 전신 사진(public/mir_art/pNN.webp) — public/ 아래 폴더라 위의 «최상위 파일» 복사에 안 걸린다. 루트에도 있어야 Pages 가 서빙한다(콘앱·검수앱 둘 다 ./mir_art/ 를 부른다).
+[ -d dist/mir_art ] && rm -rf ./mir_art && cp -r dist/mir_art ./
 # 콘앱(독립 파일): dist의 cone.html을 루트로 복사 (Pages가 루트 서빙). 검수앱과 무관.
 [ -f dist/cone.html ] && cp dist/cone.html ./
 # V7.46: 콘앱용 본체 카고플랜 V2 번들 — 같은 소스(PrintableCargoPlanV2+cargoPlanCore+사전)를 React째 번들
@@ -395,7 +397,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 3.56: 미르 기분 — 실 RTDB 스냅샷(2026-09-22 항차 14·하트비트)으로 src/mir.js [mirMood] 를 실소스 그대로 돌려 검수사 규칙(배고픔 10분 전·식후 배부름·기쁨=작업 선택/완료·슬픔=못 답함/방치·심심함=작업 없음/30분·초조함=자료 안 옴)과 대조한다. 콘앱도 같은 벌을 쓴다.
   SMOKE_MMM=$(mktemp /dev/shm/hometmp/_mmm_XXXXXX.mjs)
   SMOKE_MMO=$(mktemp /dev/shm/hometmp/_mmo_XXXXXX.cjs)
-  printf 'export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, mirMoodState, mealWindows, mealPhase, anxiousReasons, angryReasons, isUpcomingWork, MIR_MOODS } from "%s/src/mir.js";\nexport { mirFaceSvg, ensureMirFaceCss, MIR_FACE_CSS, MIR_MOOD_KEYS } from "%s/src/components/mirFaceArt.js";\nexport { isWorkingNow } from "%s/src/utils.js";\n' "$PWD" "$PWD" "$PWD" > "$SMOKE_MMM"
+  printf 'export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, mirMoodState, mealWindows, mealPhase, anxiousReasons, angryReasons, isUpcomingWork, MIR_MOODS } from "%s/src/mir.js";\nexport { mirPhotoHtml, mirHeroHtml, mirHeroSrc, mirPoseNo, mirPhotoKey, ensureMirPhotoCss, MIR_PHOTO_KEYS, MIR_POSES, MIR_PHOTO_CSS } from "%s/src/components/mirPhotoArt.js";\nexport { isWorkingNow } from "%s/src/utils.js";\n' "$PWD" "$PWD" "$PWD" > "$SMOKE_MMM"
   if npx esbuild "$SMOKE_MMM" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --outfile="$SMOKE_MMO" --log-level=error; then
     node tools/smoke_mirmood.cjs "$SMOKE_MMO" || { echo "✗ 미르 기분 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MMM" "$SMOKE_MMO"; exit 1; }
     rm -f "$SMOKE_MMM" "$SMOKE_MMO"

@@ -379,19 +379,57 @@ console.log('\n콘앱 화남 자료 (2.62)');
     ok(/coneTimeout\(r\.json\(\), FB_TIMEOUT_MS, 'collector_heartbeat'\)/.test(html), `하트비트 본문도 같은 한도(소스)`);
   }
 }
-//  ⑨ 3.57 표정 인형(mirFaceArt) — 기분 8가지 모두 SVG 가 나오고, 원본 그림·눈꺼풀·동공·입·눈물·땀 부위가 있으며, 기분 키가 mir.js 의 키와 같다
-console.log('\n표정 인형 (3.57)');
-ok(JSON.stringify(M.MIR_MOOD_KEYS) === JSON.stringify(Object.keys(M.MIR_MOODS)), `인형 기분 키 = mirMood 키 (${M.MIR_MOOD_KEYS.join(',')})`);
-for (const k of M.MIR_MOOD_KEYS) {
-  const svg = M.mirFaceSvg(k, 44, 'data:image/png;base64,AAAA', 't');
-  const need = ['<image href="data:image/png;base64,AAAA"', 'class="lid lid-l"', 'class="lid lid-r"', 'class="pupil"', 'class="mouth-open"', 'class="mouth-sad"', 'class="mouth-wavy"', 'class="tear tear-l"', 'class="sweat sweat-1"', 'class="zz zz-1"', 'class="heart"', 'class="brow brow-l"', 'class="brow brow-r"', 'class="mouth-grr"', 'class="vein"', 'class="flush"', 'class="note note-1"', 'class="note note-2"', 'class="steam steam-1"', 'class="steam steam-2"', `class="mir mood-${k}"`, `data-mood="${k}"`, `mirEyeL-${k}-t`];
-  const miss = need.filter((n) => !svg.includes(n));
-  ok(!miss.length && /width="44" height="44"/.test(svg), `${k} 인형 SVG — 부위 전부 있음${miss.length ? ' (빠짐 ' + miss.join(' ') + ')' : ''}`);
+//  ⑨ 4.07 실사 미르(mirPhotoArt) — 기분 11가지 + 생각하는 얼굴 한 칸씩 스프라이트에 있고, 칸 좌표·그림 파일·전신 사진 12자세가 실제로 있으며, 콘앱·검수앱이 같은 것을 쓴다
+//    (3.57~4.06 의 그림 인형 mirFaceArt 는 이 판에서 걷었다 — 검수사 2026-10-04 «미르를 두발로 서게 하고 안전조끼를 입히면 훨씬 보기 좋을것입니다» · 실사 20장 제공)
+console.log('\n실사 미르 (4.07)');
+const ROOT = path.resolve(__dirname, '..');
+const moodKeys = Object.keys(M.MIR_MOODS);
+ok(JSON.stringify(M.MIR_PHOTO_KEYS) === JSON.stringify([...moodKeys, 'think']), `스프라이트 칸 순서 = mirMood 키 11가지 + think (${M.MIR_PHOTO_KEYS.join(',')})`);
+for (const k of M.MIR_PHOTO_KEYS) {
+  const h = M.mirPhotoHtml(k, 44);
+  ok(h.includes(`mirp-m-${k}`) && h.includes(`mood-${k}`) && /width:44px;height:44px/.test(h) && !h.includes('mirp-still'), `${k} 얼굴 한 칸 — 칸·기분 클래스·크기`);
 }
-ok(M.mirFaceSvg('없는기분', 20, 'x').includes('mood-basic'), `모르는 기분은 기본으로`);
-for (const k of M.MIR_MOOD_KEYS.filter((x) => x !== 'basic')) ok(new RegExp('\\.mir\\.mood-' + k + '\\b').test(M.MIR_FACE_CSS), `CSS 에 ${k} 규칙이 있다`);
-ok(/prefers-reduced-motion/.test(M.MIR_FACE_CSS) && /mirBlink/.test(M.MIR_FACE_CSS), `깜빡임·저동작 설정 처리`);
-ok(M.ensureMirFaceCss(null) === false, `document 없으면 false(조용히 통과 아님)`);
+ok(M.mirPhotoHtml('없는기분', 20).includes('mirp-m-basic') && M.mirPhotoKey('없는기분') === 'basic', `모르는 기분은 기본으로`);
+ok(/aria-hidden="true"/.test(M.mirPhotoHtml('happy', 20, true)) && !/aria-label/.test(M.mirPhotoHtml('happy', 20, true)) && /role="img" aria-label="미르"/.test(M.mirPhotoHtml('happy', 44)), `정지 아바타는 스크린리더에서 숨기고(옆 글자와 «미르 미르» 중복 낭독 방지) 얼굴 버튼은 «미르» 로 읽힌다`);
+ok(M.mirPhotoHtml('happy', 20, true).includes('mirp-still') && !M.mirPhotoHtml('happy', '20px;x').includes('20px;x'), `still 은 움직임 없음 · 크기에 숫자만 들어간다(주입 막음)`);
+//  CSS — 칸 좌표(4열×3행) · 크기 · 저동작 · 기분마다 몸짓
+const css = M.MIR_PHOTO_CSS;
+const posOf = (k) => { const m = css.match(new RegExp('\\.mirp-m-' + k + '\\{background-position:([^}]*)\\}')); return m ? m[1] : ''; };
+const cx = (i) => ['0', '33.3333', '66.6667', '100'][i % 4] + '%', cy = (i) => ['0', '50', '100'][Math.floor(i / 4)] + '%';
+const badPos = M.MIR_PHOTO_KEYS.filter((k, i) => posOf(k) !== cx(i) + ' ' + cy(i));
+ok(!badPos.length, `칸 좌표 12개가 4열×3행 격자와 맞다${badPos.length ? ' (틀림 ' + badPos.map((k) => k + ':' + posOf(k)).join(' ') + ')' : ''}`);
+ok(/background-size:400% 300%/.test(css) && /url\("data:image\/webp;base64,/.test(css), `스프라이트는 코드에 박혀 있고(오프라인에서도 뜬다) 크기는 400%×300%`);
+for (const k of M.MIR_PHOTO_KEYS.filter((x) => x !== 'basic')) ok(new RegExp('\\.mirp\\.mood-' + k + '\\b').test(css), `CSS 에 ${k} 몸짓 규칙이 있다`);
+ok(/prefers-reduced-motion/.test(css) && /\.mirp-still/.test(css), `저동작 설정·정지 아바타 처리`);
+ok(M.ensureMirPhotoCss(null) === false, `document 없으면 false(조용히 통과 아님)`);
+//  스프라이트 그림 자체 — webp(알파) · 캔버스 448×336(112×4, 112×3)
+const spr = Buffer.from(css.match(/data:image\/webp;base64,([A-Za-z0-9+/=]+)/)[1], 'base64');
+const vp8x = spr.toString('latin1', 0, 4) === 'RIFF' && spr.toString('latin1', 8, 12) === 'WEBP' && spr.toString('latin1', 12, 16) === 'VP8X';
+const cw = vp8x ? (spr.readUIntLE(24, 3) + 1) : 0, ch = vp8x ? (spr.readUIntLE(27, 3) + 1) : 0;
+ok(vp8x && (spr[20] & 0x10) !== 0 && cw === 448 && ch === 336, `스프라이트는 알파 있는 webp ${cw}×${ch} (112px 칸 4×3) — ${(spr.length / 1024).toFixed(0)}KB`);
+//  전신 사진 — 기분마다 자세가 있고 그 파일이 실제로 있다(webp) · 같은 seed 는 같은 자세
+const poseNos = new Set(); let poseBad = [];
+for (const k of M.MIR_PHOTO_KEYS) {
+  const list = M.MIR_POSES[k]; if (!Array.isArray(list) || !list.length) { poseBad.push(k + ':자세없음'); continue; }
+  for (const n of list) { poseNos.add(n); const f = path.join(ROOT, 'public', 'mir_art', 'p' + String(n).padStart(2, '0') + '.webp'); if (!fs.existsSync(f)) { poseBad.push(k + ':' + n + '없음'); continue; } const hd = fs.readFileSync(f).subarray(0, 12); if (hd.toString('latin1', 0, 4) !== 'RIFF' || hd.toString('latin1', 8, 12) !== 'WEBP') poseBad.push(k + ':' + n + '웹피아님'); }
+}
+ok(!poseBad.length && poseNos.size === 18, `전신 자세 12기분 → 사진 ${poseNos.size}장 전부 있다(webp)${poseBad.length ? ' — ' + poseBad.join(' ') : ''}`);
+ok(M.mirPoseNo('happy', 0) === 2 && M.mirPoseNo('happy', 1) === 14 && M.mirPoseNo('happy', 2) === 18 && M.mirPoseNo('happy', 3) === 2 && M.mirPoseNo('rest', 5) === 15 && M.mirPoseNo('hobby', 99) === 13 && M.mirPoseNo('없는', 7) === 1, `자세 고르기 — seed 가 같으면 같고 기분마다 목록 안에서 돈다`);
+ok(M.mirHeroSrc('think', 0) === './mir_art/p20.webp' && M.mirHeroSrc('sad', 0, 'x"y/') === 'xy/p07.webp', `전신 사진 주소(문서 기준 ./mir_art/) · 기준 경로에는 따옴표 같은 글자가 안 들어간다`);
+ok(/class="mirp-hero mood-angry"/.test(M.mirHeroHtml('angry', 0)) && /onerror="this\.style\.visibility='hidden'"/.test(M.mirHeroHtml('angry', 0)) && /src="\.\/mir_art\/p03\.webp"/.test(M.mirHeroHtml('angry', 0)), `콘앱용 전신 HTML — 못 받으면 숨긴다(장식)`);
+//  두 앱이 같은 것을 쓴다 — 콘앱·검수앱 소스에서 옛 그림 인형·옛 PNG 가 사라졌고 실사로 이어져 있다
+const coneSrc = fs.readFileSync(path.join(ROOT, 'public', 'cone.html'), 'utf8');
+const fabSrc = fs.readFileSync(path.join(ROOT, 'src', 'components', 'MirFab.jsx'), 'utf8');
+const faceSrc = fs.readFileSync(path.join(ROOT, 'src', 'components', 'MirFace.jsx'), 'utf8');
+const coneCode = coneSrc.split('\n').filter((l) => !/^\s*\/\//.test(l) && !/^window\.__CONEV=/.test(l)).join('\n');   // 버전 이력 줄(옛 판 설명)은 빼고 코드만 본다
+ok(!/const MIR_FACE=|url\('\+MIR_FACE|ConeMir\.mirFaceSvg|ConeMir\.ensureMirFaceCss/.test(coneCode) && /ConeMir\.mirPhotoHtml|M\.mirPhotoHtml/.test(coneSrc) && /M\.mirHeroHtml\(key, _mirSeed, '\.\/mir_art\/'/.test(coneSrc), `콘앱 — 옛 그림 인형·만화 얼굴 data URL 이 없고 실사 얼굴·전신으로 그린다`);
+ok(/if\(bd0\) fab\.appendChild\(bd0\)/.test(coneSrc) && /_mirSeed=Math\.floor\(Math\.random\(\)\*1000\); coneFaceSet\(_mirThink\?'think':\(_moodLast\|\|'basic'\), true\)/.test(coneSrc) && /if\(hero && \(force \|\| _faceKey!==key\)\)/.test(coneSrc), `콘앱 — 얼굴을 바꿔 그려도 기분 배지가 FAB 안에 남고, 시트를 열 때마다 전신 자세를 새로 고르며 열 때(force)에는 전신을 다시 그린다(감사 R2 — 변이 3종이 지나가던 곳)`);
+ok(/_mirThink=true; coneFaceSet\('think'\)/.test(coneSrc) && /finally\{ _mirThink=false; coneFaceSet\(_moodLast\|\|'basic'\); \}/.test(coneSrc), `콘앱 — 답을 만드는 동안 생각하는 얼굴, 끝나면 기분 얼굴로`);
+ok(/id="mirHero"/.test(coneSrc) && /\.mir-hero\{ position:absolute; right:10px; bottom:100%/.test(coneSrc) && /getElementById\('mirHero'\); if\(h\) h\.innerHTML=''/.test(coneSrc) && /open && !coneWeakSignal\(\)/.test(coneSrc), `콘앱 — 전신은 시트 위 가장자리에 서고, 시트가 열려 있고 신호가 약하지 않을 때만 받으며 닫으면 치운다`);
+ok(/MirHero/.test(fabSrc) && /busy \? 'think' : mood\.key/.test(fabSrc) && /position: 'absolute', right: 10, bottom: '100%'/.test(fabSrc) && /useMemo\(\(\) => Math\.floor\(Math\.random\(\) \* 1000\), \[open\]\)/.test(fabSrc), `검수앱 — 시트 위 전신 미르 · 생각하는 중 얼굴 · 열 때마다 자세 선택`);
+ok(/mirPhotoHtml/.test(faceSrc) && !/mir-face\.png|mirFaceSvg/.test(faceSrc + fabSrc), `검수앱 얼굴 — 실사 한 칸(옛 PNG·인형 없음)`);
+const usesOldPng = ['src/components/SearchPanel.jsx', 'src/pages/GlobalSearchPage.jsx'].filter((f) => /mir-face\.png|mirFaceUrl/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+ok(!usesOldPng.length && !fs.existsSync(path.join(ROOT, 'src', 'assets', 'mir-face.png')) && !fs.existsSync(path.join(ROOT, 'src', 'components', 'mirFaceArt.js')), `검색창 아바타도 실사 — 옛 mir-face.png·mirFaceArt.js 가 저장소에 없다${usesOldPng.length ? ' (남음 ' + usesOldPng.join(' ') + ')' : ''}`);
 
 console.log(`\n미르 기분 연막검사: ${pass} 통과 / ${fail} 실패`);
 process.exit(fail ? 1 : 0);

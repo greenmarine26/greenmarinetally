@@ -219,7 +219,7 @@ select:-webkit-autofill {
 }
 
 /* ★ 3.56 — 미르 기분 표시(검수사 2026-09-22). 얼굴 버튼 왼쪽 위 작은 배지만 여기 둔다.
-   3.57 부터 얼굴 자체가 움직이는 인형(눈·입·눈물·땀)은 src/components/mirFaceArt.js 한 벌의 CSS 가 <style id="mirFaceCss"> 로 들어간다 — 여기(그리고 cone.html)에 같은 규칙을 또 적지 않는다. */
+   4.07 부터 얼굴은 실사 미르 사진 한 칸이고 그 CSS 는 src/components/mirPhotoArt.js 한 벌이 <style id="mirPhotoCss"> 로 넣는다 — 여기(그리고 cone.html)에 같은 규칙을 또 적지 않는다. */
 .mir-mood-badge{ position:absolute; top:-6px; left:-6px; min-width:18px; height:18px; padding:0 3px; border-radius:9px;
   background:#1a1206; border:1px solid #f59e0b; color:#fde68a; font-size:11px; line-height:16px; text-align:center; pointer-events:none; z-index:1; }
 

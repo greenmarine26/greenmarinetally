@@ -41,7 +41,7 @@ import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 �
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
-import mirFaceUrl from '../assets/mir-face.png';
+import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(작은 정지 아바타)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
 
@@ -1541,7 +1541,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-2xs text-dim-400 font-bold">
-            <img src={mirFaceUrl} alt="미르" className="w-5 h-5 rounded-full inline-block align-middle mr-1"/>미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
+            <MirFace mood="basic" size={20} still className="inline-block align-middle mr-1" />미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
           </div>
           <button onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-2xs font-bold border border-amber-700/40 whitespace-nowrap shrink-0">
@@ -1767,7 +1767,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-300"/>
-              <div className="text-xxs text-emerald-300 font-bold flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르 즉답</div>
+              <div className="text-xxs text-emerald-300 font-bold flex items-center gap-1.5"><MirFace mood="basic" size={20} still />미르 즉답</div>
             </div>
             <button onClick={() => {
               setWrongPayload({ query, answerType: 'local', answerText: localAnswer, parsed });

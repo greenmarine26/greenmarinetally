@@ -22,13 +22,18 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const fab = doc.querySelector('button[aria-label="미르에게 묻기"]');
   if (!fab) fail('오른쪽 아래 미르 얼굴(버튼)이 없다');
   if (!/fixed/.test(fab.className) || !/right-4/.test(fab.className)) fail('얼굴이 fixed·오른쪽에 붙어 있지 않다: ' + fab.className);
-  //  3.57: 얼굴은 배경 그림이 아니라 표정 인형(svg.mir, 검수사 원본 <image> 포함)이다. 눈꺼풀·동공·입·눈물 부위가 실제로 있어야 CSS 가 움직일 것이 있다.
-  const face = fab.querySelector('svg.mir');
-  if (!face) fail('얼굴 버튼 안에 표정 인형(svg.mir)이 없다');
-  if (!face.querySelector('image')) fail('인형에 검수사 원본 그림(<image>)이 없다');
-  for (const sel of ['.lid-l', '.lid-r', '.pupil', '.mouth-open', '.mouth-sad', '.mouth-wavy', '.mouth-grr', '.brow', '.vein', '.flush', '.tear', '.sweat', '.zz', '.heart']) if (!face.querySelector(sel)) fail('인형 부위가 빠졌다: ' + sel);
-  if (!doc.getElementById('mirFaceCss') || !/mirBlink|mirHop|mirTear/.test(doc.getElementById('mirFaceCss').textContent)) fail('인형 CSS(<style id=mirFaceCss>)가 문서에 안 들어갔다');
-  if (face.getAttribute('data-mood') !== fab.getAttribute('data-mood')) fail('인형 기분과 버튼 기분이 다르다: ' + face.getAttribute('data-mood') + ' vs ' + fab.getAttribute('data-mood'));
+  //  4.07: 얼굴은 실사 미르 한 칸(span.mirp > span.mirp-img.mirp-m-<기분>)이다. 칸 좌표·움직임 CSS 는 문서에 들어간 <style id=mirPhotoCss> 가 준다.
+  const face = fab.querySelector('span.mirp');
+  if (!face) fail('얼굴 버튼 안에 실사 미르(span.mirp)가 없다');
+  const img0 = face.querySelector('.mirp-img');
+  if (!img0 || !/\bmirp-m-[a-z]+\b/.test(img0.className)) fail('실사 얼굴에 스프라이트 칸(.mirp-img.mirp-m-<기분>)이 없다');
+  const pcss = doc.getElementById('mirPhotoCss');
+  if (!pcss || !/mirpPop/.test(pcss.textContent) || !/data:image\/webp;base64,/.test(pcss.textContent)) fail('실사 CSS(<style id=mirPhotoCss>)가 문서에 안 들어갔다(스프라이트 포함)');
+  if (doc.getElementById('mirFaceCss') || fab.querySelector('svg.mir')) fail('걷은 옛 그림 인형(svg.mir·mirFaceCss)이 아직 남아 있다');
+  if (face.getAttribute('data-mood') !== fab.getAttribute('data-mood')) fail('실사 얼굴 기분과 버튼 기분이 다르다: ' + face.getAttribute('data-mood') + ' vs ' + fab.getAttribute('data-mood'));
+  if (img0.className.indexOf('mirp-m-' + fab.getAttribute('data-mood')) < 0) fail('실사 얼굴 칸이 기분과 다르다: ' + img0.className + ' vs ' + fab.getAttribute('data-mood'));
+  if (doc.querySelector('[data-mir-hero]')) fail('시트를 열기 전인데 전신 미르가 떠 있다');
+  const seenFace = new Set(); const mo = new W.MutationObserver(() => { const m = fab.querySelector('.mirp'); if (m) seenFace.add(m.getAttribute('data-mood')); }); mo.observe(fab, { childList: true, subtree: true, attributes: true });
   //  3.56: 기분 — 얼굴 버튼에 mir-mood-<key> 클래스와 data-mood 가 있어야 한다(CSS 가 그것으로 움직인다). 어떤 기분인지는 시각·자료에 따라 다르므로 값은 고정하지 않는다.
   const moodKey = fab.getAttribute('data-mood');
   if (!moodKey || !new RegExp('\\bmir-mood-' + moodKey + '\\b').test(fab.className)) fail('얼굴에 기분 클래스(mir-mood-<key>)가 없다: ' + fab.className + ' / data-mood=' + moodKey);
@@ -43,6 +48,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   fab.click(); await wait(100);
   const inp = doc.getElementById('mirFabIn');
   if (!inp) fail('얼굴을 눌렀는데 시트(입력칸)가 안 올라온다');
+  //  4.07: 시트가 열리면 윗가장자리에 두 발로 선 전신 미르가 시트 래퍼 안에 있다(주소는 ./mir_art/pNN.webp, 그 기분의 자세 목록 안의 번호)
+  const hero = doc.querySelector('[data-mir-sheet] [data-mir-hero] img.mirp-hero');
+  if (!hero) fail('시트를 열었는데 시트 위의 전신 미르(img.mirp-hero)가 없다');
+  const hm = /^\.\/mir_art\/p(\d\d)\.webp$/.exec(hero.getAttribute('src') || '');
+  if (!hm) fail('전신 미르 주소가 ./mir_art/pNN.webp 가 아니다: ' + hero.getAttribute('src'));
+  if (!hero.className.includes('mood-' + fab.getAttribute('data-mood'))) fail('전신 미르 기분 클래스가 버튼 기분과 다르다: ' + hero.className);
+  { const hs = doc.querySelector('[data-mir-hero]'); if (!hs || hs.style.pointerEvents !== 'none' || hs.style.bottom !== '100%') fail('전신 미르는 시트 위 가장자리(bottom:100%)에 서고 눌림을 막지 않아야 한다(pointer-events:none)'); }
   const t = doc.body.textContent;
   for (const s of ['미르에게 묻기', '🎤', '🔊', '질문']) if (!t.includes(s)) fail(`시트에 «${s}» 가 없다`);
   const setVal = (el, v) => { const setter = Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new W.Event('input', { bubbles: true })); };
@@ -54,6 +66,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // ③ 홈 — 배 이름으로
   let o = await askChk('KBTR 3426 온도');
   if (!o.includes('FBIU5093426') || !o.includes('세팅 온도 기록 없음')) fail('홈에서 «KBTR 3426 온도» 답이 없다: ' + o.slice(0, 200));
+  if (!seenFace.has('think')) fail('답을 만드는 동안 생각하는 얼굴(think)이 한 번도 안 나왔다: ' + [...seenFace].join(','));
+  if (fab.querySelector('.mirp').getAttribute('data-mood') === 'think') fail('답이 나온 뒤에도 생각하는 얼굴이 남아 있다');
   o = await askChk('NSFR 엑스레이 대상 위치');
   if (!o.includes('NSSU0170686')) fail('홈에서 «NSFR 엑스레이 대상 위치» 답이 없다: ' + o.slice(0, 200));
   o = await ask('3426 온도');
@@ -89,8 +103,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // ⑦ 닫기
   [...doc.querySelectorAll('button')].find((b) => b.textContent.trim() === '✕').click(); await wait(50);
   if (doc.getElementById('mirFabIn')) fail('✕ 를 눌렀는데 시트가 안 닫힌다');
+  if (doc.querySelector('[data-mir-hero]')) fail('시트를 닫았는데 전신 미르가 남아 있다');
   const uniq2 = [...new Set(errs)];
   if (uniq2.length) { console.log('✗ 누르는 중 오류 ' + uniq2.length + '건'); uniq2.slice(0, 3).forEach((e) => console.log('   ' + e)); process.exit(1); }
-  console.log('✓ 떠 있는 미르 렌더 연막검사 통과 (얼굴 · 시트 · 홈 배 이름 답 · 항차 재료 답 · 플랜 덮개 · 고백 · 닫기)');
+  console.log('✓ 떠 있는 미르 렌더 연막검사 통과 (실사 얼굴 · 시트 위 전신 · 생각하는 얼굴 · 시트 · 홈 배 이름 답 · 항차 재료 답 · 플랜 덮개 · 고백 · 닫기)');
   process.exit(0);
 })();

@@ -16,7 +16,8 @@
      작업 선박 선택(workPick)을 그 벌에 알리고 ③얼굴 버튼에 `mir-mood-<key>` 클래스와 작은 표시를 얹을 뿐이다. 그림은 검수사 그림 그대로다. */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
-import MirFace from './MirFace.jsx';   // 3.57: 표정이 움직이는 얼굴(눈·입·눈물·땀) — 그림은 검수사 원본 그대로
+import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
+import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
 import { answerOneRaw } from '../mir.js';
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
@@ -34,6 +35,18 @@ import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 �
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';
 
+//  ★ 4.07 — 시트 위쪽 가장자리에 두 발로 서 있는 미르(전신 사진). 장식이라 파일을 못 받으면 조용히 안 보일 뿐이다.
+//  기분이 바뀌면 자세가 바뀌고(key=src 로 새로 그려 통통 나타남), 여러 자세가 있는 기분은 시트를 열 때마다 하나를 고른다(seed).
+function MirHero({ mood, seed }) {
+  const src = mirHeroSrc(mood, seed);
+  useMemo(() => { ensureMirPhotoCss(); }, []);
+  return (
+    <div data-mir-hero="1" aria-hidden="true" style={{ position: 'absolute', right: 10, bottom: '100%', marginBottom: -2, lineHeight: 0, pointerEvents: 'none' }}>
+      <img key={src} className={`mirp-hero mood-${mirPhotoKey(mood)}`} src={src} alt="" draggable={false} style={{ height: 160 }} onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+    </div>
+  );
+}
+
 const CLEAN_RE = /[📋📌⚠↩·❄🔁📊📦📖🐱🐟😺😻🎵📍⏳⏱🗺🚢✅📝🧳🌤📈]/g;
 
 export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null }) {
@@ -44,6 +57,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const [out, setOut] = useState('');
   const [follow, setFollow] = useState(null);   // 3.68: 답 뒤 한 마디 {line, chips, confirm} — 칩을 누르면 그 말을 그대로 묻는다
   const [busy, setBusy] = useState(false);
+  const heroSeed = useMemo(() => Math.floor(Math.random() * 1000), [open]);   // 4.07: 시트를 열 때마다 전신 자세를 하나 고른다(열려 있는 동안은 그대로)
   const [listening, setListening] = useState(false);
   const [live, setLive] = useState(() => readMirCtx());
   const lastRef = useRef('');
@@ -237,13 +251,15 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         onClick={() => { setOpen((o) => { if (!o) noteMirOpen(); return !o; }); }}
         className={`fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95 overflow-visible p-0 mir-mood mir-mood-${mood.key}`}
         style={{ bottom: 76, background: '#f7f8fa' }}>
-        <MirFace mood={mood.key} size={44} style={{ borderRadius: '50%', overflow: 'hidden' }} />   {/* 3.57: 표정이 움직인다 */}
+        <MirFace mood={busy ? 'think' : mood.key} size={44} style={{ borderRadius: '50%', overflow: 'hidden' }} />   {/* 4.07: 실사 얼굴 — 답을 만드는 중에는 턱 괴고 생각하는 얼굴 */}
         {mood.badge && <span className="mir-mood-badge" aria-hidden="true">{mood.badge}</span>}
       </button>
       {open && (
-        <div className="fixed left-0 right-0 bottom-0 z-[10002] bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <div className="fixed left-0 right-0 bottom-0 z-[10002]" data-mir-sheet="1">
+          <MirHero mood={busy ? 'think' : mood.key} seed={heroSeed} />
+          <div className="bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <div className="flex items-center gap-2 mb-2">
-            <MirFace mood={mood.key} size={32} className="flex-none" style={{ borderRadius: '50%', overflow: 'hidden' }} />
+            <MirFace mood={busy ? 'think' : mood.key} size={32} className="flex-none" style={{ borderRadius: '50%', overflow: 'hidden' }} />
             <div className="flex-1 min-w-0">
               <div className="text-xs font-black text-white">미르에게 묻기{mood.key !== 'basic' && <span className="ml-1.5 text-amber-300 font-bold">{mood.badge} {mood.label}</span>}</div>
               {mood.why ? <div className="text-2xs text-amber-200 truncate">{mood.why}</div> : null}
@@ -277,6 +293,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
               )}
             </div>
           )}
+          </div>
         </div>
       )}
     </>
