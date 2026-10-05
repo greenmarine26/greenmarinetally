@@ -32,6 +32,7 @@ import { canWorkNow } from '../workChoice.js';   // 3.59: 세관 검수예정 �
 import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)                     // 2.39: 표에서 바로 봉인번호·봉인자 저장
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
 import { openXrayListPrint } from '../inspectionList.js';        // 2.26-02: 인쇄는 검수리스트·VGM 과 같은 벌(별도 문서)
+import { deckCoordMap } from '../rzorPlan.js';                   // 4.04-01: RZOR 선내위치 = 덱플랜 좌표 «덱_줄_칸»
 
 //  세관 파일의 화물구분 4종 — 실측 64개 358행(X-RAY 252 · Sea & Air 84 · 반입후검사 14 · 즉시검사 8).
 //  ⚠ 시안에는 «즉시검사»가 빠져 있었다. 실물에 있으므로 넣는다.
@@ -46,6 +47,10 @@ const PER_PAGE = 20;   // 하한 8pt 에서 A4 가로 한 장에 들어가는 �
 const pos = (c) => (c && c.bay && c.row && c.tier
   ? `${String(c.bay).padStart(2, '0')}-${String(c.row).padStart(2, '0')}-${String(c.tier).padStart(2, '0')}`
   : '');
+//  4.04-01 (검수사 2026-10-05 «XRAY실번호를 넣으면 위치표기가 안됩니다. 위치를 C_8_21 D_5_04 이런식으로 실제 위치를 넣어 주세요» · «덱플랜에 좌표가 보입니다. 그대로 넣어 주시면 될듯합니다»)
+//   RZOR 은 EDI 에 베이 좌표가 없어 위치가 비었다 — 선사 덱플랜 칸(덱·줄·칸)에서 읽어 «덱_줄_칸» 으로 쓴다. 화면·인쇄·엑셀이 이 한 벌을 쓴다.
+//   덱플랜에 그 컨이 없으면 종전 베이-열-단, 그것도 없으면 빈칸(= «위치 미상») 그대로다.
+const posOf = (r) => (r && r.deckPos) || pos(r);
 
 export default function XrayTab({ voyage, voyageKey, mode, containers = [], inspector = '',
                                   xrayMap = {}, xraySeals = {}, compMap = {}, portMisData = {} }) {
@@ -77,6 +82,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   }
 
   const info = voyage?.info || {};
+  const stowPlan = voyage?.[mode]?.stowagePlan || null;   // 4.04-01: 이 모드의 덱플랜(양하 = 선사 rzdf)
 
   /* ★ 2.26-01 — **기존 출력물에서 한 칸도 빠지면 안 된다.** (검수사 실물 `OWBH_2721_XRAY2.pdf`)
        종전 양식 머리는 여섯 칸이다.
@@ -161,11 +167,13 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  세관 목록 = xrayList. 위치·봉인은 각각 EDI·xraySeals·completed 에서 붙인다.
   const rows = useMemo(() => {
     const byCn = new Map(containers.map((c) => [c.cn, c]));
+    const coord = deckCoordMap(stowPlan);   // 4.04-01: 덱플랜이 있는 배(RZOR)만 채워진다 — 없으면 빈 맵
     const out = Object.entries(xrayMap || {}).map(([cn, x]) => {
       const c = byCn.get(cn) || {};
       const xs = xraySeals[cn] || {};
       return {
         cn,
+        deckPos: coord.get(cn) || '',                    // 4.04-01: «C_8_21» — 덱플랜 칸 좌표
         seal: (x && x.seal) || '',                       // 선사 SEAL(세관 파일)
         kind: (x && x.kind) || '',                       // 화물구분 4종
         iso: (x && x.iso) || c.iso || '',
@@ -178,7 +186,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       };
     });
     return sortByDischargePlan(out);   // 베이별순 + 우선양하순
-  }, [xrayMap, containers, xraySeals, compMap, info]);   // 3.9: 조 등록(info.craneCrew)이 바뀌면 봉인자도 다시
+  }, [xrayMap, containers, xraySeals, compMap, info, stowPlan]);   // 3.9: 조 등록(info.craneCrew)이 바뀌면 봉인자도 다시 · 4.04-01: 덱플랜이 오면 위치도 다시
 
   //  ★ 2.39 — 봉인번호·봉인자 저장. 조용히 실패하지 않는다(3금지 ③): 실패하면 화면에 띄운다.
   const canEdit = mode === 'discharge' && !!voyageKey;
@@ -336,7 +344,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
         {/* 조회의 필터·검색이 그대로 인쇄로 간다(시안 «연계» — 같은 `shown` 을 넘긴다).
             머리 부제는 그 결과를 밝힌다 — «전체 N대 · X-RAY M대», 필터가 걸렸으면 그것도. */}
         <button onClick={() => openXrayListPrint(
-          shown.map(r => ({ ...r, pos: pos(r) })),
+          shown.map(r => ({ ...r, pos: posOf(r) })),
           /* ★ 2.26-07 (검수사 정정 2026-08-24) — *«20대 전부가 XRAY입니다. 다만 구분만 틀린것»*
              세관 목록에 오른 것은 **전부 X-RAY 대상**이고, 「화물구분」은 그 안의 **검사 유형**이다.
              종전 부제 «전체 20대 · X-RAY 5대» 는 5대만 대상인 것처럼 읽혔다.
@@ -392,7 +400,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                   <td className="px-2 py-2 mono text-dim-200">{r.seal || '—'}</td>
                   <td className={`px-2 py-2 ${(KINDS.find((k) => k.k === r.kind) || {}).c || 'text-dim-300'}`}>{r.kind || '—'}</td>
                   <td className="px-2 py-2 mono text-dim-300">{r.iso || '—'}</td>
-                  <td className="px-2 py-2 mono text-dim-200">{pos(r) || <span className="text-rose-400">위치 미상</span>}</td>
+                  <td className="px-2 py-2 mono text-dim-200">{posOf(r) || <span className="text-rose-400">위치 미상</span>}</td>
                   {/* ── 2.39 부착 세관봉인번호 — 그 자리에서 친다 ──
                        검수사 확정 *«사무실에서 직접 지정하고 출력물을 인쇄해서 나가야»* ·
                        *«앱에서 컨번호를 조회하면 실번호와 XRAY번호를 둘다 볼수 있기 때문»*.

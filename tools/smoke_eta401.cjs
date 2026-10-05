@@ -65,7 +65,7 @@ ok((CA.match(/opts\.pace \|\| 25/g) || []).length === 2 && /\* pace \* 2/.test(C
 const H = rd('src/data/helpData.js') + rd('src/data/featureIndex.js');
 ok(/예상 작업 시간/.test(H) && /자료 대기/.test(H) && /트윈 쌍/.test(H) && /무브는 대수가 아니다/.test(H), '매뉴얼·색인이 예상 작업 시간·자료 대기·무브 ≠ 대수를 말한다');
 const U = rd('src/utils.js');
-ok(/APP_VERSION = 'TallyOne 4\.0[1234]'/.test(U), '버전 4.01~4.04 계열');
+ok(/APP_VERSION = 'TallyOne 4\.0[1234](-\d\d)?'/.test(U), '버전 4.01~4.04 계열(-NN 포함)');
 const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
 ok(/^4\.0[1234]/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.01~4.04 · 작은따옴표와 슬래시가 없다 · 두 문장 안쪽', note);
 

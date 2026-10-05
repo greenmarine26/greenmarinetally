@@ -304,3 +304,30 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
            lolo: decks.reduce((a, d) => a + (d.lolo || 0), 0),
            dbl: decks.reduce((a, d) => a + (d.dbl || 0), 0) };
 }
+
+/** 4.04-01: 덱플랜 칸 좌표 «덱_줄_칸» — 선내위치를 C_8_21 · D_5_04 로 쓴다(줄은 그대로, 칸은 두 자리). 덱플랜 그림 축의 줄·칸 숫자와 같은 값이다.
+ *   RZOR 은 베이 좌표가 없어 EDI 에서 위치를 못 얻는다 — 위치는 선사 덱플랜 칸(덱·줄·칸)에만 있다(검수사 2026-10-05 «덱플랜에 좌표가 보입니다. 그대로 넣어 주시면 될듯합니다»). */
+export function deckCoordCode(deck, line, col) {
+  const d = String(deck || '').trim().toUpperCase();
+  const l = Number(line), c = Number(col);
+  if (!/^[A-Z]$/.test(d) || !Number.isInteger(l) || l < 1 || !Number.isInteger(c) || c < 1) return '';
+  return `${d}_${l}_${String(c).padStart(2, '0')}`;
+}
+
+/** 덱플랜 → {컨번호: «덱_줄_칸»}. 빈 칸·컨번호 없는 칸은 건너뛴다. 저장된 옛 플랜에 line·col 이 없으면 «D덱 3줄 5칸» 글자(pos)에서 읽는다. */
+export function deckCoordMap(plan) {
+  const m = new Map();
+  const list = (x) => (Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []));   // 보관소가 빈 칸 있는 배열을 {키:값} 으로 돌려줄 때도 읽는다
+  for (const dk of list(plan && plan.decks)) {
+    for (const s of (dk ? list(dk.slots) : [])) {
+      if (!s || s.empty || !s.cn || m.has(s.cn)) continue;
+      let code = deckCoordCode(dk.deck, s.line, s.col);
+      if (!code && s.pos) {
+        const pm = String(s.pos).match(/^([A-Z])덱\s*(\d+)줄\s*(\d+)칸$/);
+        if (pm) code = deckCoordCode(pm[1], pm[2], pm[3]);
+      }
+      if (code) m.set(s.cn, code);
+    }
+  }
+  return m;
+}

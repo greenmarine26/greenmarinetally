@@ -879,6 +879,8 @@ node tools/smoke_rzorslotpick.cjs "$PWD" || { echo "✗ RZOR 빈자리 조회창
 node tools/smoke_deckdone.cjs "$PWD" || { echo "✗ RZOR 덱플랜 완료 표시 연막검사 실패 — 배포 금지"; exit 1; }
 # 4.04: RZOR 카고플랜 덱플랜 출력(인쇄·PDF·Excel)·앱 화면 — 집계표 = 선사·마감텔리 파일 자신의 집계 · 엑셀 병합 칸 겹침 없음·빈줄 없음 · 서명란은 출력에만(실물 R109E·R106E·R106W)
 node tools/smoke_deckprint404.cjs "$PWD" || { echo "✗ RZOR 덱플랜 출력 연막검사 실패 — 배포 금지"; exit 1; }
+# 4.04-01: RZOR X-RAY 탭 선내위치 = 덱플랜 좌표(C_8_21 · D_5_04) — 화면 표 · 인쇄 · 엑셀 상세 장, 실물 R109E·R106E 파일 + 보관소 실측 좌표
+node tools/smoke_xraydeckpos.cjs "$PWD" || { echo "✗ RZOR X-RAY 선내위치 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.70-01: 수화물 리퍼는 온도 대상이 아니다 · 기록에 없던 칸을 처음 고쳐도 저장(실데이터 RZOR R107E · 컨 상세·큰 카드 jsdom)
 node tools/smoke_luggtemp.cjs "$PWD" || { echo "✗ 수화물 리퍼 온도 제외 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.72-02: 리퍼 체크 안 하는 배(머스크 계열 선사 MAE · 선박 정책) — 마감 점검·진단 알람·출항 배너·베이 사진 배지가 같은 한 벌을 읽는다(실데이터 MAMP 636N 192대 · 사전 64척 · 마감 점검 jsdom)

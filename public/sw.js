@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.04';
-const NOTE = '4.04 RZOR 카고플랜 출력이 선사 덱플랜 PDF 그대로 나옵니다 — 특수화물 색·X-RAY·LOLO 구역을 인쇄·PDF·Excel 로 뽑습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.04-01';
+const NOTE = '4.04-01 RZOR X-RAY 선내위치가 덱플랜 좌표로 나옵니다 — C_8_21 · D_5_04 형식으로 화면·인쇄·엑셀에 들어갑니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
