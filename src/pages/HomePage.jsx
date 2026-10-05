@@ -1993,7 +1993,7 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
           <span className={`${colorClasses.label} px-2.5 py-1 font-black leading-none text-sm2 shrink-0`}>{label}</span>
           <div className="flex-1 xp-bar xp-sm"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/></div>
           <span className="text-sm2 font-bold text-dim-100 mono shrink-0">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
-          {term && <span className="text-2xs font-bold text-cyan-300 mono shrink-0" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 완료 ${term.done} · 잔여 ${term.rest} — 검수원이 누른 완료와 다를 수 있습니다`}>본선 {term.done}</span>}
+          {term && <span className="text-2xs font-bold text-cyan-300 mono shrink-0" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 완료 ${term.done} · 잔여 ${term.rest} — 검수원이 누른 완료와 다를 수 있습니다`}>본선 {term.done}/{term.done + term.rest} ({(term.done + term.rest) > 0 ? Math.min(100, Math.round((term.done / (term.done + term.rest)) * 100)) : 0}%)</span>}
           {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && <span className="text-xs2 font-bold text-red-300 shrink-0">누락 {stats.missing}</span>}
           {(stats.planOnly || stats.forecastEdi) && <span className="text-2xs font-black px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 shrink-0" title="확정 자료가 아닌 예상 수치입니다 — 자세히를 누르면 내역이 나옵니다">예상</span>}
           {_foldGap !== 0 && <span className="text-xs2 font-bold text-amber-300 shrink-0" title="터미널 배정 대수와 앱 대수가 다릅니다 — 자세히를 누르면 내역이 나옵니다">터미널 {_foldGap > 0 ? '+' : ''}{_foldGap}</span>}
@@ -2119,9 +2119,21 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
       </div>
       <div className="flex items-center justify-between text-2xs mt-0.5 text-dim-400">
         <span>완료 {stats.done}/{stats.total} ({pct}%)</span>
-        {/* 4.05: 터미널 호기 합계가 말한 완료·잔여 — 참고 숫자(검수원이 누른 완료와 다를 수 있다) */}
-        {term && <span className="text-cyan-300/90 mono" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 숫자입니다. 검수원이 앱에서 누른 완료와는 별개이며 다를 수 있습니다.${termOver ? ' 계획보다 커서 타 항 하역분이 섞였을 수 있습니다.' : ''}`}>본선 집계 완료 {term.done} · 잔여 {term.rest}{termOver ? ' ⚠' : ''}</span>}
       </div>
+      {/*  ★ 4.05-01 (검수사 «진행상황을 안보임 · 터미널별 본선작업현황에 있는 갯수라도 표기»): 터미널(동방 QC 합계·PCTC 본선작업현황)이 말하는 완료·잔여를
+          앱 막대와 **따로** 한 줄 막대로 보인다. 참고 숫자 — 앱 완료·남음·작업중 판정에 섞지 않는다(컨 단위 터미널 완료는 안 받는다 — 검수사 2026-10-03). */}
+      {term && (() => {
+        const _tot = term.done + term.rest, _tpct = _tot > 0 ? Math.min(100, Math.round((term.done / _tot) * 100)) : 0;
+        return (
+          <div className="mt-1.5" data-term-bar title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 숫자입니다. 검수원이 앱에서 누른 완료와는 별개이며 다를 수 있습니다.${termOver ? ' 계획보다 커서 타 항 하역분이 섞였을 수 있습니다.' : ''}`}>
+            <div className="h-2 rounded-full overflow-hidden bg-ink-950/75 border border-ink-700"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${_tpct}%` }}/></div>
+            <div className="flex items-center justify-between text-2xs mt-0.5 text-cyan-300 font-bold mono">
+              <span>본선 작업현황 완료 {term.done}/{_tot} ({_tpct}%)</span>
+              <span>잔여 {term.rest}{termOver ? ' ⚠' : ''}</span>
+            </div>
+          </div>
+        );
+      })()}
       </div>
     </div>
   );
