@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.04-02';
-const NOTE = '4.04-02 RZOR 선내위치가 미르 답·통계 탭·CSV·검색 목록에서도 덱플랜 좌표(C_2_20)로 나오고, 카고플랜 Excel 은 그대로 인쇄해도 덱마다 가로 A4 한 쪽으로 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.04-03';
+const NOTE = '4.04-03 RZOR 카고플랜 출력물은 덱마다 서명줄 위에 사인할 자리가 남고 Excel 도 같습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

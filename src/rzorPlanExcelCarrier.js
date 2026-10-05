@@ -99,6 +99,7 @@ export function buildCarrierPlanWorkbook(XLSX, { plan, containers = [], xrayMap 
       sigR = r0 + 1 + nrow + 2;
     }
     // 서명란 — 출력 양식에만 있는 칸(앱 화면에는 없다). 줄 위에 서명, 아래에 직책.
+    sigR += 2;   // 4.04-03: 줄 위에 사인할 자리 — 격자(또는 집계표) 아래 빈 줄을 둘 더 둔다(검수사 «사인할 공간이 없음»)
     const sg = { font: font({ sz: 11 }), alignment: { horizontal: 'center', vertical: 'center' } };
     area(sigR, 1, sigR, 3, '', { border: { bottom: { style: 'medium', color: { rgb: '000000' } } } }); area(sigR + 1, 1, sigR + 1, 3, 'Chief Checker', sg);
     area(sigR, 5, sigR, 7, '', { border: { bottom: { style: 'medium', color: { rgb: '000000' } } } }); area(sigR + 1, 5, sigR + 1, 7, 'Chief Officer', sg);

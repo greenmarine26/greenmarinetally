@@ -77,7 +77,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
   const [zoom, setZoom] = useState(() => (typeof window !== 'undefined' && window.innerWidth >= 900 ? 'fit' : 'big'));
   const vinfo = voyageInfo || {};
   const model = useMemo(
-    () => buildPrintModel({ plan, containers, xrayMap, termWork, vsl: vinfo.vslFull || 'RIZHAO ORIENT', date: deckPlanDate(vinfo), mode }),
+    () => buildPrintModel({ plan, containers, xrayMap, termWork, vsl: vinfo.vslFull || 'RIZHAO ORIENT', date: deckPlanDate(vinfo), mode, forScreen: true }),
     [plan, containers, xrayMap, termWork, vinfo.vslFull, vinfo.planDate, mode]);
   if (!decks.length) return null;
   const d = decks[Math.min(sel, decks.length - 1)];

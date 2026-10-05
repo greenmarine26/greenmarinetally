@@ -8,6 +8,11 @@ import { checkerTypeOf } from './rzorPlanExcel.js';
 import { RZOR_DECK_SLOTS, RZOR_CRANE_BAY } from './data/rzorDeckRules.js';
 
 export const PAGE = { w: 1077, h: 748 };          // A4 가로 − 여백 6mm 를 96dpi 로 본 크기(285×198mm)
+//  4.04-03 선사 양식(양하) 쪽 아래 — 칸 그림은 CARRIER_GRID_BOTTOM 에서 끝내고 서명줄은 CARRIER_SIGN_Y 에 둔다. 검수사 2026-10-05 «사인란이 없는게 아니고 있는데 사인할 공간이 없음»
+//  (C·D덱은 그림이 서명줄 위 2~4mm 까지 내려와 쓸 자리가 없었다 — 이제 쪽마다 약 14mm 가 빈다. 1 단위 = 0.265mm).
+export const CARRIER_GRID_BOTTOM = 650;
+export const CARRIER_GRID_BOTTOM_SCREEN = 690;   // 앱 화면에는 서명줄·범례줄이 없다 — 화면 그림 높이는 종전(4.04-02)과 같게 둔다(칸 안 글자가 5줄이어도 겹치지 않는다)
+export const CARRIER_SIGN_Y = 710;
 const N_POS = 26;
 export const DECK_ORDER = { carrier: ['B', 'C', 'D'], checker: ['C', 'D', 'U'] };
 const DECK_LABEL = { B: 'B', C: 'C', D: 'D', U: 'UNDER' };
@@ -125,7 +130,7 @@ function outlineSegments(units, px) {
  * @param {string} p.date        YYYY-MM-DD
  * @param {string} p.mode        'discharge' | 'loading'
  */
-export function buildPrintModel({ plan, containers = [], xrayMap = {}, termWork = {}, vsl = 'RIZHAO ORIENT', date = '', mode = 'discharge' } = {}) {
+export function buildPrintModel({ plan, containers = [], xrayMap = {}, termWork = {}, vsl = 'RIZHAO ORIENT', date = '', mode = 'discharge', forScreen = false } = {}) {
   const fmt = planFormat(plan);
   const byCn = {};
   for (const c of (containers || [])) if (c && c.cn) byCn[String(c.cn).toUpperCase()] = c;
@@ -170,7 +175,7 @@ export function buildPrintModel({ plan, containers = [], xrayMap = {}, termWork 
     } else {
       const cols = Math.max(1, Number(d.cols) || 24);
       const x0 = 52, x1 = 1002, y0 = 170;
-      const uh = Math.min(84, (690 - y0) / rows);
+      const uh = Math.min(84, ((forScreen ? CARRIER_GRID_BOTTOM_SCREEN : CARRIER_GRID_BOTTOM) - y0) / rows);
       px = { x0, y0, uw: (x1 - x0) / cols, uh, cols, rows };
     }
     page.px = px;

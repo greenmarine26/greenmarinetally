@@ -16,7 +16,7 @@ fs.writeFileSync(ENTRY, `import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 export { React, renderToStaticMarkup };
 export { parseDeckPlanWorkbook } from "${ROOT}/src/rzorPlan.js";
-export { buildPrintModel } from "${ROOT}/src/rzorPrintModel.js";
+export { buildPrintModel, CARRIER_GRID_BOTTOM, CARRIER_GRID_BOTTOM_SCREEN, CARRIER_SIGN_Y } from "${ROOT}/src/rzorPrintModel.js";
 export { buildCarrierPlanWorkbook } from "${ROOT}/src/rzorPlanExcelCarrier.js";
 export { buildCheckerPlanWorkbook } from "${ROOT}/src/rzorPlanExcel.js";
 export { buildRzorLoadingDeckPlan } from "${ROOT}/src/rzorDeckPredict.js";
@@ -105,6 +105,11 @@ const stubScreen = { cellState: () => ({}), titleOf: () => '', onCell() {}, empt
     ok(`${cs.name} 엑셀 집계표 — 머리부터 TTL 까지 다섯 줄이 모두 차 있다(빈줄 없음)`, rowsFilled.every(Boolean), rowsFilled.join(','));
     const allTxt = (w) => Object.keys(w).filter((a) => a[0] !== '!').map((a) => String(w[a].v));
     ok(`${cs.name} 엑셀 — 서명란(Chief Checker · Chief Officer)이 있다(출력양식)`, wbx.SheetNames.every((s) => allTxt(wbx.Sheets[s]).includes('Chief Checker') && allTxt(wbx.Sheets[s]).includes('Chief Officer')));
+    {   // 4.04-03 엑셀도 서명줄 위에 사인할 자리 — 마지막 컨 줄(칸 위 줄)부터 «Chief Checker» 줄까지 10행 이상(종전 8행)
+      const cn1 = /^([A-Z]{4}\d{7}|[A-Z]{6}\d{3})$/;
+      const gaps = wbx.SheetNames.map((sn) => { const w = wbx.Sheets[sn]; let lastCn = -1, label = -1; for (const a of Object.keys(w)) { if (a[0] === '!') continue; const rr = XLSX.utils.decode_cell(a).r; const t = String(w[a].v); if (cn1.test(t.split('\n')[0]) && rr > lastCn) lastCn = rr; if (t === 'Chief Checker') label = rr; } return label - lastCn; });
+      ok(`${cs.name} 엑셀 — 모든 시트에서 마지막 컨 줄과 «Chief Checker» 줄 사이가 10행 이상(사인할 자리)`, gaps.length > 0 && gaps.every((g) => g >= 10), gaps.join(','));
+    }
     //  칸 수 — 엑셀의 컨 칸(병합 4행 × 칸 폭) 수 = 플랜의 컨 수
     const cnRe = /^([A-Z]{4}\d{7}|[A-Z]{6}\d{3})$/;   // 선사 파일의 일부 칸은 번호가 9자(SAWTBP007) — 그것도 한 칸이다
     const inXls = wbx.SheetNames.reduce((a, s) => a + allTxt(wbx.Sheets[s]).filter((t) => cnRe.test(t.split('\n')[0])).length, 0);
@@ -115,6 +120,17 @@ const stubScreen = { cellState: () => ({}), titleOf: () => '', onCell() {}, empt
     const yC = yOf(html, 'CHASSIS'), yB = yOf(html, 'B-DECK'), yL = yOf(html, 'LUG');
     ok(`${cs.name} 인쇄 집계표 — B-DECK 가 CHASSIS 머리 바로 아래 줄(한 줄 14)이고 LUG 아래 20'·40' 줄과 같은 높이`, Math.abs((yB - yC) - 14) < 0.5 && yL < yB, `CHASSIS ${yC} · B-DECK ${yB} · LUG ${yL}`);
     ok(`${cs.name} 인쇄 — 서명란(Chief Checker · Chief Officer)이 덱마다 있다`, (html.match(/Chief Checker/g) || []).length === model.pages.length && (html.match(/Chief Officer/g) || []).length === model.pages.length, `${(html.match(/Chief Checker/g) || []).length}/${model.pages.length}`);
+    //  4.04-03 사인할 자리 — 검수사 2026-10-05 «사인란이 없는게 아니고 있는데 사인할 공간이 없음»(C·D덱은 그림이 서명줄 위 2~4mm 까지 내려왔다)
+    {
+      const svgs = html.split('<svg').slice(1);
+      const lowest = (pg) => { let mx = 0; const up = (y) => { if (Number.isFinite(y) && y > mx) mx = y; }; pg.cells.forEach((c) => up(c.y + c.h)); pg.empties.forEach((e) => up(e.y + e.h)); pg.xmarks.forEach((e) => up(e.y + e.h)); if (pg.art) { pg.art.hull.forEach(([, y]) => up(y)); if (pg.art.ramp) up(pg.art.ramp.y + pg.art.ramp.h); } return mx; };
+      const rows = model.pages.map((pg, i) => { const m = /<line x1="50" y1="([\d.]+)" x2="200"/.exec(svgs[i] || ''); const ly = m ? Number(m[1]) : NaN; const lb = /y="([\d.]+)"[^>]*>Chief Checker</.exec(svgs[i] || ''); return { deck: pg.deck, line: ly, room: ly - lowest(pg), label: lb ? Number(lb[1]) : NaN }; });
+      ok(`${cs.name} 인쇄 — 모든 덱 쪽에서 서명줄 위에 사인할 자리가 48단위(약 12mm) 이상 비어 있다`, rows.length === model.pages.length && rows.every((r) => Number.isFinite(r.line) && r.room >= 48), JSON.stringify(rows.map((r) => [r.deck, Math.round(r.room)])));
+      ok(`${cs.name} 인쇄 — 서명줄은 모델 상수(CARRIER_SIGN_Y)에 서고 직책 글자는 맨 아래 범례줄(y 744)과 겹치지 않는다`, rows.every((r) => r.line === M.CARRIER_SIGN_Y && r.label + 4 < 738), JSON.stringify(rows));
+      const mScr = M.buildPrintModel({ plan, containers: cs.containers, xrayMap: cs.xrayMap, vsl: cs.info.vslFull, date: '2026-10-05', mode: 'discharge', forScreen: true });
+      ok(`${cs.name} 앱 화면 — 그림 높이는 종전 그대로(격자가 ${M.CARRIER_GRID_BOTTOM_SCREEN} 까지) · DeckPlanView 가 forScreen 을 넘긴다`, mScr.pages.filter((pg) => pg.px.rows === 8).every((pg) => Math.abs(pg.px.y0 + pg.px.rows * pg.px.uh - M.CARRIER_GRID_BOTTOM_SCREEN) < 0.01) && /buildPrintModel\([^\n]*forScreen: true/.test(fs.readFileSync(path.join(ROOT, 'src/components/DeckPlanView.jsx'), 'utf8')) && !/forScreen/.test(fs.readFileSync(path.join(ROOT, 'src/components/PrintableDeckPlan.jsx'), 'utf8').replace(/\/\/.*$/gm, '')));
+      ok(`${cs.name} 인쇄 — 칸 그림 격자는 CARRIER_GRID_BOTTOM(${M.CARRIER_GRID_BOTTOM}) 에서 끝난다`, model.pages.every((pg) => pg.px.y0 + pg.px.rows * pg.px.uh <= M.CARRIER_GRID_BOTTOM + 0.01));
+    }
     const pg0 = model.pages[0];
     const screenHtml = model.pages.map((pg, i) => M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg, model, bw: false, isFirst: i === 0, isLast: i === model.pages.length - 1, screen: stubScreen }))).join('');
     ok(`${cs.name} 앱 화면 — 서명란이 없다(Chief Checker · Chief Officer · 서명선)`, !/Chief (Checker|Officer)/i.test(screenHtml) && !/stroke-width="1.2"/.test(screenHtml) && /SUB TOTAL/.test(screenHtml) && /CHASSIS/.test(screenHtml));

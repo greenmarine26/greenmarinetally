@@ -4,7 +4,7 @@
 //   · 인쇄 · PDF(인쇄 창에서 PDF 로 저장) · Excel(onExcel — 선적은 마감텔리 PLAN.xlsx 양식).
 import React, { useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { buildPrintModel, PAGE } from '../rzorPrintModel.js';
+import { buildPrintModel, PAGE, CARRIER_SIGN_Y } from '../rzorPrintModel.js';
 import { SPECIAL_FILL } from './PrintableCargoPlanV2.jsx';
 
 const FONT = "Arial, Helvetica, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif";
@@ -267,8 +267,8 @@ export function PageView({ pg, model, bw, isFirst, isLast, screen, signer = '' }
       {/* ── 아래 ── */}
       {!ck && !sc ? (
         <g>
-          <line x1={50} y1={705} x2={200} y2={705} stroke="#000" strokeWidth={1.2} /><text x={125} y={722} fontSize={13} textAnchor="middle">Chief Checker</text>
-          <line x1={240} y1={705} x2={390} y2={705} stroke="#000" strokeWidth={1.2} /><text x={315} y={722} fontSize={13} textAnchor="middle">Chief Officer</text>
+          <line x1={50} y1={CARRIER_SIGN_Y} x2={200} y2={CARRIER_SIGN_Y} stroke="#000" strokeWidth={1.2} /><text x={125} y={CARRIER_SIGN_Y + 16} fontSize={13} textAnchor="middle">Chief Checker</text>
+          <line x1={240} y1={CARRIER_SIGN_Y} x2={390} y2={CARRIER_SIGN_Y} stroke="#000" strokeWidth={1.2} /><text x={315} y={CARRIER_SIGN_Y + 16} fontSize={13} textAnchor="middle">Chief Officer</text>
         </g>
       ) : null}
       {(!ck && isFirst) ? <SummaryCarrier model={model} w3={w3} y={622} /> : null}
