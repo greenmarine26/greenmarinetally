@@ -8,6 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
@@ -1349,7 +1350,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, showRoute = false }) {
+export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, showRoute = false }) {
   // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 48 고정 · 한 줄 고정 · 폰 균등 / PC 전폭.
   //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
   const ACT_BTN = 'h-12 px-2.5 rounded-pill text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
@@ -1417,6 +1418,13 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   //  2.67-02: 캔슬된 쪽은 «남음» 도 없다 — 남은 일이 아니라 없는 일이다.
   const remD = sideCancelled(voyage.info, 'discharge') ? null : _rem(disStats);
   const remL = sideCancelled(voyage.info, 'loading') ? null : _rem(loaStats);
+  //  ★ 4.05 (검수사 2026-10-05 «앱 항차목록은 작업중인지도 모르는 화면» · «1개 단위로 맞추긴 힘들지만 어느정도는 맞아야») —
+  //    ① «대기 중» 은 앱에 접속한 검수원이 없다는 뜻일 뿐이라 터미널이 작업 중인 배도 대기로 보였다 → 터미널이 작업 중으로 알리면(isWorkingNow — 작업시작일시를 지난 것만) «본선 작업중».
+  //    ② 컨별 터미널 실적은 안 받으므로(2.40-01) 완료 수는 누른 것뿐이다 → 터미널 호기 합계(termBoardOf)의 완료·잔여를 참고 숫자로 곁들인다. 완료 기록·남음 계산은 그대로.
+  const _termWorking = isWorkingNow(voyage);
+  const _tp = termAggOf(voyage.info);
+  const _tpOf = (side) => (_tp && _tp[side] && (_tp[side].done + _tp[side].rest) > 0 ? _tp[side] : null);
+  const _tpDis = _tpOf('dis'), _tpLod = _tpOf('lod');
   const departBadge = decideBadge({
     remainLoad: _rem(loaStats), remainDis: _rem(disStats), hasLoad: _hasLoad,
     terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
@@ -1717,10 +1725,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
              누르기 **전에** 알아야 한다. 숫자를 지우고 캔슬 한 줄만 남긴다. */}
         {dis && (sideCancelled(voyage.info, 'discharge') 
           ? <CancelledSide label="양하"/>
-          : <SectionBar label="양하" color="blue" stats={disStats} fold={!more} onClick={() => onOpen('discharge')}/>)}
+          : <SectionBar label="양하" color="blue" stats={disStats} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} fold={!more} onClick={() => onOpen('discharge')}/>)}
         {loa && (sideCancelled(voyage.info, 'loading')
           ? <CancelledSide label="선적"/>
-          : <SectionBar label="선적" color="amber" stats={loaStats} fold={!more} onClick={() => onOpen('loading')}/>)}
+          : <SectionBar label="선적" color="amber" stats={loaStats} term={_tpLod} termOver={!!(_tp && _tp.overPlan)} fold={!more} onClick={() => onOpen('loading')}/>)}
         {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건).
             한쪽이라도 자료가 있는 항차만 — 순수 예정 항차는 이미 「자료 없음」 한 줄로 충분하다. */}
         {(dis || loa) && !dis && <MissingSideNote label="양하" qty={voyage.info?.planDis}/>}
@@ -1770,7 +1778,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       </div>
       </div>{/* 2.15: 좌측 정보 영역 닫기 */}
 
-      {(activeInspectors.length > 0 || onDelete) && (
+      {(activeInspectors.length > 0 || onDelete || _termWorking) && (
         <div className={`px-3 flex flex-wrap items-center justify-between gap-2 border-t border-line lg:flex-nowrap ${more ? 'pb-2 pt-2' : 'py-1.5'}
                         lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
                         lg:border-t-0 lg:border-l lg:border-line lg:bg-ink-900 lg:p-5 lg:gap-3
@@ -1783,6 +1791,11 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 <span className="text-emerald-300 font-bold">●</span>
                 <span className="truncate">{activeInspectors.map(a => a.name).join(', ')} 작업중</span>
               </>
+            ) : _termWorking ? (
+              <span className="status-pill bg-cyan-900/30 text-cyan-200 border border-cyan-700/50"
+                title="터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.">
+                <span className="inline-block w-2 h-2 rounded-full bg-cyan-300"/>본선 작업중 · 접속 검수원 없음
+              </span>
             ) : <span className="status-pill status-wait"><span className="inline-block w-2 h-2 rounded-full bg-dim-500"/>대기 중</span>}
             {!more && onComplete && (inspectorDone || modeDone?.d || modeDone?.l) && (
               <span className="lg:hidden ml-2 font-bold text-amber-300 whitespace-nowrap">
@@ -1798,12 +1811,14 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 <div className="min-w-0">
                   <div className="text-3xs text-blue-400/70 font-bold">양하 남음</div>
                   <div className="text-2xl font-black text-blue-200 leading-none">{remD}</div>
+                  {_tpDis && <div className="text-3xs text-cyan-300/80 mt-0.5" title="터미널 본선 작업 현황의 잔여 — 참고">본선 잔여 {_tpDis.rest}</div>}
                 </div>
               )}
               {remL != null && (
                 <div className="min-w-0">
                   <div className="text-3xs text-amber-400/70 font-bold">선적 남음</div>
                   <div className="text-2xl font-black text-amber-200 leading-none">{remL}</div>
+                  {_tpLod && <div className="text-3xs text-cyan-300/80 mt-0.5" title="터미널 본선 작업 현황의 잔여 — 참고">본선 잔여 {_tpLod.rest}</div>}
                 </div>
               )}
             </div>
@@ -1958,7 +1973,7 @@ function CancelledSide({ label }) {
   );
 }
 
-function SectionBar({ label, color, stats, onClick, fold = false }) {
+function SectionBar({ label, color, stats, onClick, fold = false, term = null, termOver = false }) {
   const colorClasses = {
     blue: { bg: 'bg-blue-500', xp: 'xp-dis', label: 'lbl-dis' },
     amber: { bg: 'bg-amber-500', xp: 'xp-lod', label: 'lbl-lod' },
@@ -1978,6 +1993,7 @@ function SectionBar({ label, color, stats, onClick, fold = false }) {
           <span className={`${colorClasses.label} px-2.5 py-1 font-black leading-none text-sm2 shrink-0`}>{label}</span>
           <div className="flex-1 xp-bar xp-sm"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/></div>
           <span className="text-sm2 font-bold text-dim-100 mono shrink-0">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
+          {term && <span className="text-2xs font-bold text-cyan-300 mono shrink-0" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 완료 ${term.done} · 잔여 ${term.rest} — 검수원이 누른 완료와 다를 수 있습니다`}>본선 {term.done}</span>}
           {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && <span className="text-xs2 font-bold text-red-300 shrink-0">누락 {stats.missing}</span>}
           {(stats.planOnly || stats.forecastEdi) && <span className="text-2xs font-black px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 shrink-0" title="확정 자료가 아닌 예상 수치입니다 — 자세히를 누르면 내역이 나옵니다">예상</span>}
           {_foldGap !== 0 && <span className="text-xs2 font-bold text-amber-300 shrink-0" title="터미널 배정 대수와 앱 대수가 다릅니다 — 자세히를 누르면 내역이 나옵니다">터미널 {_foldGap > 0 ? '+' : ''}{_foldGap}</span>}
@@ -2103,6 +2119,8 @@ function SectionBar({ label, color, stats, onClick, fold = false }) {
       </div>
       <div className="flex items-center justify-between text-2xs mt-0.5 text-dim-400">
         <span>완료 {stats.done}/{stats.total} ({pct}%)</span>
+        {/* 4.05: 터미널 호기 합계가 말한 완료·잔여 — 참고 숫자(검수원이 누른 완료와 다를 수 있다) */}
+        {term && <span className="text-cyan-300/90 mono" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 숫자입니다. 검수원이 앱에서 누른 완료와는 별개이며 다를 수 있습니다.${termOver ? ' 계획보다 커서 타 항 하역분이 섞였을 수 있습니다.' : ''}`}>본선 집계 완료 {term.done} · 잔여 {term.rest}{termOver ? ' ⚠' : ''}</span>}
       </div>
       </div>
     </div>

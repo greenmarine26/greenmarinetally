@@ -2193,6 +2193,11 @@ function BoardBayCell({ px = 24, fit = {}, plan = {} }) {
     </>
   );
 }
+//  ★ 4.05 (검수사 2026-10-05 «수석 대쉬보드 OBWH는 앱을 사용하다 멈췄으면 본선작업현황이라도 보여 줘야 하는데 몇시간째 멈춰있습니다») —
+//    4.03 은 «베이 그림을 하나도 못 그릴 때»만 터미널 본선 현황 표를 냈다. 그런데 검수원이 몇 건 찍고 멈추면(실측 OBWH 2757E — 10:36 작업 시작, 앱 완료 2건이 2시간 전)
+//    그 옛 베이 그림이 «지금 작업 중인 베이» 로 계속 남아 터미널 표는 영영 안 나왔다. 앱 입력이 이 시간 넘게 없고 접속 검수원도 없으면 그림 대신 터미널 표를 낸다.
+//    시간이 한 곳이라 바꿀 때는 이 줄만 고친다(30분 — 갱 하나가 베이 하나를 도는 시간보다 길고, 점심·교대 사이 쉼보다 짧다).
+export const BOARD_APP_STALE_MS = 30 * 60 * 1000;
 export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
@@ -2306,6 +2311,12 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     const allBays = noCranePos && voyage ? boardBaysOf(voyage, Math.max(2, cranes.length || 2), 30, boardPages) : [];
     const bays = craneOpen ? allBays : allBays.slice(0, bayCapShut);
     const bayMore = allBays.length - bays.length;
+    //  ★ 4.05 — 앱 입력이 멈췄는가. 접속 검수원(workers)이 하나라도 있으면 아니다. 마지막 앱 완료 시각은 베이 묶음(lastAt)과 호기(lastAt·«앱 접속»)에서 가장 늦은 것.
+    //    시각을 하나도 모르면(앱 완료 0건) 멈춤이 아니라 «아직 입력 없음» — 종전 분기(그림 없음 → 4.03 표)가 맡는다.
+    //    ★ 감사(4.05): 호기를 안 고른 완료는 베이 묶음·호기 어느 쪽에도 안 잡힌다 — 항차 전체 완료의 가장 늦은 시각(boardRows 의 lastCompAt 과 같은 기준)을 같이 본다.
+    const _lastComp = (() => { let t = 0; for (const m of ['discharge', 'loading']) for (const r of Object.values(voyage?.[m]?.completed || {})) { const a = Number(r && r.at) || 0; if (a > t) t = a; } return t; })();
+    const _lastApp = Math.max(0, _lastComp, ...allBays.map((b) => Number(b.lastAt) || 0), ...cranes.map((c) => (c.src === 'live' ? Date.now() : Number(c.lastAt) || 0)));
+    const _appStale = !(workers && workers.length) && _lastApp > 0 && (Date.now() - _lastApp) > BOARD_APP_STALE_MS && hasTermBoard(voyage?.info);
     //  단추는 **두 갈래가 함께 쓰는 한 벌**이다 — 종전에는 호기 갈래에만 있어서 동방 배는
     //  «+N 더»를 눌러 볼 길이 아예 없었다(감사가 잡은 «절반 미배송»).
     const openBtn = (hidden) => ((hidden > 0 || craneOpen) && (
@@ -2316,7 +2327,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         title={craneOpen ? '칸을 셋으로 되돌립니다' : `안 보이는 ${hidden}칸까지 폅니다`}
       >{craneOpen ? '↩ 접기' : `+${hidden}칸 더 ▾`}</button>
     ));
-    if (bays.length) return (
+    if (bays.length && !_appStale) return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">
         <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5 flex-wrap">
           <span>지금 작업 중인 베이</span>
@@ -2345,13 +2356,14 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     );
     //  ★ 4.03 — 이 줄까지 왔다 = 베이 묶음 그림(bays)이 없다. 호기 칸에도 그릴 자리가 하나도 없으면 터미널 본선 현황 표를 낸다.
     const _canDraw = (c) => !!(c.bay && /\d/.test(String(c.bay)) && voyage);
-    const _termOnly = !cranes.some(_canDraw) && hasTermBoard(voyage?.info);   // 접혀서 안 보이는 호기까지 본다 — 그림이 그려질 호기가 하나라도 있으면 종전 화면 그대로
+    const _termOnly = (!cranes.some(_canDraw) || _appStale) && hasTermBoard(voyage?.info);   // 접혀서 안 보이는 호기까지 본다 — 그림이 그려질 호기가 하나라도 있으면 종전 화면 그대로 · 4.05: 앱 입력이 멈췄으면 그림이 있어도 표
     const termBlock = _termOnly ? <TermBoardPanel info={voyage.info} /> : null;
-    const boxes = _termOnly ? shown.filter((c) => !(c.qc && !_canDraw(c))) : shown;
+    const boxes = _appStale ? [] : _termOnly ? shown.filter((c) => !(c.qc && !_canDraw(c))) : shown;   // 4.05: 멈췄으면 옛 호기 그림을 치우고 표만
     return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">   {/* 2갱이면 75/2 · 3갱이면 75/3 (grid-cols-N) · PC 는 줄 높이를 다 쓴다 */}
         <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5">
-          <span>호기별 작업 베이</span>
+          <span>{_appStale ? '터미널 본선 현황' : '호기별 작업 베이'}</span>
+          {_appStale && <span className="text-amber-300 font-normal">· 앱 입력 마지막 {fmtAgo(_lastApp)} — 멈춘 동안은 터미널 표를 보입니다</span>}
           {openBtn(_termOnly && boxes.length === 0 ? 0 : more)}   {/* 4.03: 표가 호기 칸을 대신하면 «+N칸 더» 가 펼칠 것이 없다 */}
         </div>
         {/* ★ 4.03 — 검수사 2026-10-04 «수석대쉬보드의 실시간 작업 현황과 콘앱의 실시간 작업 현황이 검수사가 찍지 않으면 안보일 경우 PCTC의 선박별 본선 작업 현황과 동방의 선박별 본선작업 현황을 보여줄수 있게 해주세요».

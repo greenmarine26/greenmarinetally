@@ -111,10 +111,10 @@ ok(/\.tbx\{/.test(TB.TERM_BOARD_CSS) && typeof TB.ensureTermBoardCss === 'functi
 console.log('⑦ 배선 — 수석 보드·콘앱·미르 번들·매뉴얼·버전');
 const CD = rd('src/pages/ChiefDashboard.jsx'), CONE = rd('public/cone.html'), ENTRY = rd('src/mirCore.entry.js'), U = rd('src/utils.js');
 ok(/import TermBoardPanel, \{ hasTermBoard \} from '\.\.\/components\/TermBoardPanel\.jsx'/.test(CD), '수석 보드가 TermBoardPanel 을 쓴다');
-ok(/const _canDraw = \(c\) => !!\(c\.bay && \/\\d\/\.test\(String\(c\.bay\)\) && voyage\)/.test(CD) && /const _termOnly = !cranes\.some\(_canDraw\) && hasTermBoard\(voyage\?\.info\)/.test(CD), '수석: 호기 그림을 하나도 못 그릴 때만 표를 낸다(접혀 안 보이는 호기까지 본다 — 그려지는 배는 종전 그대로)');
+ok(/const _canDraw = \(c\) => !!\(c\.bay && \/\\d\/\.test\(String\(c\.bay\)\) && voyage\)/.test(CD) && /const _termOnly = \(!cranes\.some\(_canDraw\) \|\| _appStale\) && hasTermBoard\(voyage\?\.info\)/.test(CD), '수석: 호기 그림을 하나도 못 그릴 때(또는 4.05 앱 입력이 30분 넘게 멈췄을 때)만 표를 낸다(접혀 안 보이는 호기까지 본다 — 그려지는 배는 종전 그대로)');
 ok(/openBtn\(_termOnly && boxes\.length === 0 \? 0 : more\)/.test(CD), '수석: 표가 호기 칸을 대신하면 «+N칸 더» 단추가 서지 않는다(펼칠 것이 없다)');
 ok(/termBlock \? null : <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다/.test(CD), '수석: 표가 없을 때만 종전 안내 한 줄이 남는다');
-ok(/boxes = _termOnly \? shown\.filter\(\(c\) => !\(c\.qc && !_canDraw\(c\)\)\) : shown/.test(CD), '수석: 표가 뜰 때 동방 «완료 기록이 와야 그림이 뜹니다» 칸(같은 숫자)만 걷고 나머지는 그대로');
+ok(/boxes = _appStale \? \[\] : _termOnly \? shown\.filter\(\(c\) => !\(c\.qc && !_canDraw\(c\)\)\) : shown/.test(CD), '수석: 표가 뜰 때 동방 «완료 기록이 와야 그림이 뜹니다» 칸(같은 숫자)만 걷고 나머지는 그대로');
 ok(/termBoardHtml/.test(rd('src/components/TermBoardPanel.jsx')) && /termBoardHtml\(CT\.tb, Date\.now\(\)\)|M\.termBoardHtml\(CT\.tb/.test(CONE), '수석과 콘앱이 같은 termBoardHtml 을 부른다');
 ok(/export \{ termBoardOf, termBoardHtml, ensureTermBoardCss \} from '\.\/termBoard\.js'/.test(ENTRY), '미르 번들(mir-core)이 표 함수를 내보낸다 — 콘앱은 이것을 쓴다');
 ok(/const _tb = TW\.wait \? '' : ctTermBoardHtml\(\);/.test(CONE) && /\$\{_tb\}<\/div>`;/.test(CONE), '콘앱 실시간 화면: 안내 아래에 표가 붙는다(자료 받는 중에는 안 붙는다)');
@@ -133,10 +133,10 @@ ok(/\.tbx-tw\{[^}]*touch-action:pan-x pan-y/.test(TB.TERM_BOARD_CSS), '표 CSS: 
 ok(!/catch\(e\)\{\s*\}/.test(CONE.slice(CONE.indexOf('function ctTermBoardHtml'), CONE.indexOf('function twDraw'))), '콘앱 ctTermBoardHtml 안에 조용한 빈 catch 가 없다');
 ok(/CT\.err = '자료를 못 받았습니다[^\n]*\n\s*if\(CT\.tb && \(!CT\.tbAt \|\| Date\.now\(\)-CT\.tbAt > 300000\)\) CT\.tb = null;/.test(CONE), '콘앱: 전부 못 받는 사이클에도 오래된 표를 5분 넘게 두지 않는다');
 ok(/if\(_infAll === undefined\)\{ if\(!CT\.tbAt \|\| Date\.now\(\)-CT\.tbAt > 300000\) CT\.tb = null; \}/.test(CONE), '콘앱: info 를 못 읽은 사이클은 앞 표를 5분까지만 둔다');
-ok(/window\.__CONEV='ConeOne 2\.61(-\d\d)?'/.test(CONE) && /APP_VERSION = 'TallyOne 4\.0[34](-\d\d)?'/.test(U), '버전 ConeOne 2.61(-NN) · TallyOne 4.03~4.04(-NN)');   // 4.04-01: 버그 수리판은 -NN 이 붙는다
+ok(/window\.__CONEV='ConeOne 2\.61(-\d\d)?'/.test(CONE) && /APP_VERSION = 'TallyOne 4\.0[345](-\d\d)?'/.test(U), '버전 ConeOne 2.61(-NN) · TallyOne 4.03~4.05(-NN)');   // 4.04-01: 버그 수리판은 -NN 이 붙는다
 {
   const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
-  ok(/^4\.0[34](-\d\d)? (터미널 본선 현황|RZOR 카고플랜|RZOR X-RAY 선내위치|RZOR 선내위치)/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.03~4.04 · 작은따옴표와 슬래시가 없다 · 짧은 문장', note);
+  ok(/^4\.0[345](-\d\d)? (터미널 본선 현황|RZOR 카고플랜|RZOR X-RAY 선내위치|RZOR 선내위치|항차 목록)/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.03~4.05 · 작은따옴표와 슬래시가 없다 · 짧은 문장', note);
 }
 ok(/터미널 본선 현황/.test(rd('src/data/helpDataChief.js')) && /터미널 본선 현황/.test(rd('src/data/helpData.js')) && /터미널 본선 현황/.test(rd('src/data/featureIndex.js')), '매뉴얼(수석·검수원)과 기능 색인이 이 화면을 말한다');
 ok(/export function termProgressOf/.test(rd('src/nlSearch.js')) && !/termBoard/.test(rd('src/nlSearch.js')), '미르 «언제 끝나» 계산(termProgressOf)은 건드리지 않았다');

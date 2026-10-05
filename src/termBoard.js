@@ -131,6 +131,23 @@ export function termBoardOf(info, now = Date.now()) {
   return null;
 }
 
+//  ★ 4.05 — 항차 목록 카드에 «터미널이 말한 완료·잔여»를 참고 숫자로 보인다(검수사 2026-10-05 «1개 단위로 실시간으로 맞추긴 힘듭니다. 하지만 어느정도는 맞아야 한다»).
+//    컨별 터미널 실적은 받지 않으므로(MailPilot 2.40-01 · 검수사 2026-10-03) 카드의 완료 수는 검수사가 누른 것뿐이다 — 그 옆에 같은 표(termBoardOf)의 양하·적하 합계를 따로 보인다.
+//    완료 기록·남음 계산·미르는 건드리지 않는다. 숫자는 termBoardOf 가 만든 그대로(동방 QC 합계 · PCTC 본선작업현황) — 계산이 두 벌이 되지 않게 여기서 한 번만 꺼낸다.
+//    돌려주는 값: null 또는 { src, dis:{done,rest}, lod:{done,rest}, overPlan, at }
+export function termAggOf(info, now = Date.now()) {
+  const b = termBoardOf(info, now);
+  if (!b) return null;
+  if (b.src === 'PCTC') {
+    const d = b.rows.find((r) => r.key === 'done'), r = b.rows.find((x) => x.key === 'rest');
+    if (!d || !r) return null;
+    return { src: 'PCTC', dis: { done: d.dis, rest: r.dis }, lod: { done: d.lod, rest: r.lod }, overPlan: false, at: b.at };
+  }
+  const q = b.qcSum;
+  if (!q) return null;
+  return { src: 'PNCT', dis: { done: q.disDone, rest: q.disRest }, lod: { done: q.lodDone, rest: q.lodRest }, overPlan: !!b.overPlan, at: 0 };
+}
+
 // ── 화면 그리기 — 수석 보드(React)와 콘앱(순수 HTML)이 **같은 문자열**을 쓴다(그림이 두 벌이 되지 않게). 색은 부모 글자색을 따른다(콘앱 밝기 4단계·수석 어두운 판 모두).
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const cell = (n) => (n === 0 ? '<td class="tbx-z">0</td>' : '<td>' + n + '</td>');

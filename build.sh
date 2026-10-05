@@ -1089,6 +1089,20 @@ fi
         cp "$SMOKE_TBR.fbbak" src/firebase.js; rm -f "$SMOKE_TBR.fbbak"
         echo "✗ 4.03 수석 보드 터미널 현황 렌더 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_TBR"; exit 1
       fi
+      #  4.05: **작업 현황 표시** — 수석 보드(앱 입력이 멈춘 OBWH 2757E 실데이터는 터미널 표 · 접속 검수원 있음·방금 찍음은 그림)와 항차 목록 카드(터미널 작업중 · 본선 집계 = 동방 화면 15:10:42 숫자)를 실제로 그려 본다.
+      SMOKE_W5=$(mktemp /dev/shm/hometmp/_smokew405_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_W5.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_work405.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_W5"; then
+        cp "$SMOKE_W5.fbbak" src/firebase.js && rm -f "$SMOKE_W5.fbbak"
+        node tools/smoke_work405.cjs "$SMOKE_W5" || { echo "✗ 4.05 작업 현황 표시 렌더 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_W5"; exit 1; }
+        rm -f "$SMOKE_W5"
+      else
+        cp "$SMOKE_W5.fbbak" src/firebase.js; rm -f "$SMOKE_W5.fbbak"
+        echo "✗ 4.05 작업 현황 표시 렌더 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_W5"; exit 1
+      fi
       #  3.48: **베이뷰 작업** — DXQD 2636E 실자료로 선택 화면 → 따라가기 → 자동 카드·장 그림(완료 초록·남은 흰 칸·다른 단 흐리게) → 데크⇄홀드 → 수동 게이트 → ✕ 를 실제로 누른다.
       #    완료 지도(앱 ∪ 터미널)·불일치 세 갈래(pos·cell·noterm)·따라가기(4호기 BAY (20)21·실적 없는 배) 판정도 같은 번들에서 센다.
       SMOKE_BV=$(mktemp /dev/shm/hometmp/_smokebv_XXXXXX.js)

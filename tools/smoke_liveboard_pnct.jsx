@@ -19,7 +19,7 @@ function App() {
   const [focused, setFocused] = React.useState(false);
   window.__setFocused = setFocused;
   return React.createElement(LiveShipCard, {
-    v, workers: [], lastReport: null, alerts: null, tw, departed: false, cranes,
+    v, workers: [{ name: '검수원', mode: 'discharge' }], lastReport: null, alerts: null, tw, departed: false, cranes,
     voyage, rows: 1, focused, canFocus: true,
     onFocus: () => { window.__calls.push({ fn: 'focus' }); setFocused((f) => !f); },
     onOpen: () => { window.__calls.push({ fn: 'open' }); },

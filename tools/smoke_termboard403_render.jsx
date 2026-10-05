@@ -17,7 +17,7 @@ const card = (id, key, info, voyage, extra = {}, cranesOverride = null) => {
   const cranes = cranesOverride || craneBoardOf(voyage, []);
   const tw = { disPlan: dis.total, disDone: 0, lodPlan: loa.total, lodDone: 0, pct: 0, updatedAt: Date.now() - 60000 };
   return React.createElement('div', { key: id, 'data-scn': id, style: { width: 900, height: 360, display: 'flex' } },
-    React.createElement(LiveShipCard, { v, workers: [], lastReport: null, alerts: null, tw, departed: false, cranes, voyage, rows: 1, focused: false, canFocus: false, onFocus: () => {}, onOpen: () => {}, onOpenContainer: () => {} }));
+    React.createElement(LiveShipCard, { v, workers: extra.workers || [], lastReport: null, alerts: null, tw, departed: false, cranes, voyage, rows: 1, focused: false, canFocus: false, onFocus: () => {}, onOpen: () => {}, onOpenContainer: () => {} }));
 };
 
 //  A: PCTC — 검수원 기록 0건, 터미널 본선작업현황만 있다
@@ -47,7 +47,7 @@ function App() {
   return React.createElement('div', null,
     card('A', 'MCSC_638N', infoA, vA, { dTot: 277, lTot: 230 }),
     card('B', 'RZOR_R110E', infoB, vB, { dTot: 164, lTot: 194 }),
-    card('C', 'DJCT_0223E', vC0.info, vC0, { dTot: 251, lTot: 274 }),
+    card('C', 'DJCT_0223E', vC0.info, vC0, { dTot: 251, lTot: 274, workers: [{ name: '검수원', mode: 'discharge' }] }),   // 4.05: 접속 검수원이 있어야 «활동 중인 배» — 실항차 사본의 완료 시각은 오래돼 입력 멈춤으로 읽힌다
     card('D', 'ZZZZ_0001E', infoD, vD, {}),
     card('E', 'RZOR_R111E', infoE, vE, { dTot: 164, lTot: 194 }),
     card('F', 'RZOR_R112E', infoF, vF, { dTot: 164, lTot: 194 }, cranesF));
