@@ -41,8 +41,10 @@ execSync(`npx esbuild tools/smoke_rzorslotpick.jsx --bundle --loader:.jsx=jsx --
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new W.Event('input', { bubbles: true })); };
   const click = (el) => el.dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
   const enter = () => input().dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  const emptyBtns = () => [...D.querySelectorAll('button')].filter((b) => /빈자리/.test(b.textContent || '') && b.title);
-  const emptyAt = (pos) => emptyBtns().find((b) => b.title === pos);
+  //  4.04: 덱플랜은 종이와 같은 SVG 그림이다 — 빈자리 = 그림 속 눌리는 칸(g[role=button] 안의 rect.dp-empty), 자리 표기는 그 칸의 <title> 앞머리.
+  const gT = (g) => ((g.querySelector('title') || {}).textContent || '');
+  const emptyBtns = () => [...D.querySelectorAll('[data-deckplan-screen] g[role="button"]')].filter((g) => g.querySelector('rect.dp-empty'));
+  const emptyAt = (pos) => emptyBtns().find((g) => gT(g).split(' · ')[0] === pos);
   const input = () => D.querySelector('input[placeholder^="컨번호 끝자리"]');
   const modal = () => D.querySelector('.fixed');
   const candBtns = () => [...D.querySelectorAll('button')].filter((b) => /^[A-Z]{4}\d{7}/.test((b.textContent || '').trim()));
@@ -164,9 +166,9 @@ execSync(`npx esbuild tools/smoke_rzorslotpick.jsx --bundle --loader:.jsx=jsx --
   reset();
   const c20 = conts.find((c) => /^2/.test(c.iso));
   W.__render({ assign: { 'D-1-5': { cn: c40.cn, by: 'x', at: 1 } } }); await wait(80);
-  const xBtn = [...D.querySelectorAll('button')].find((b) => /^D덱 1줄 6칸 · 옆 D덱 1줄 5칸 40피트의 X 칸$/.test(b.title || ''));
+  const xBtn = [...D.querySelectorAll('[data-deckplan-screen] g[role="button"]')].find((g) => /^D덱 1줄 6칸 · 옆 D덱 1줄 5칸 40피트의 X 칸 · /.test(gT(g)));
   const w40 = W.__plan.decks.find((x) => x.deck === 'D').slots.find((x) => x.key === 'D-1-5');
-  ok('두 칸 자리 40피트 옆 템플릿 자리는 X 칸 — 40피트는 한 칸 + X 칸 · «빈자리» 수에 안 든다', !!xBtn && /^X/.test(xBtn.textContent.trim()) && w40 && w40.span === 1 && emptyBtns().length === dTpl - 2 && new RegExp(`빈자리 ${dTpl - 2}`).test(D.body.textContent), `X ${!!xBtn} span ${w40 && w40.span} 빈자리 ${emptyBtns().length}`);
+  ok('두 칸 자리 40피트 옆 템플릿 자리는 X 칸 — 40피트는 한 칸 + X 칸 · «빈자리» 수에 안 든다', !!xBtn && /^X/.test(((xBtn.querySelector('text') || {}).textContent || '').trim()) && w40 && w40.span === 1 && emptyBtns().length === dTpl - 2 && new RegExp(`빈자리 ${dTpl - 2}`).test(D.body.textContent), `X ${!!xBtn} span ${w40 && w40.span} 빈자리 ${emptyBtns().length}`);
   if (xBtn) click(xBtn); await wait(40);
   ok('X 칸을 누르면 조회창이 «X 칸입니다 — 따로 실었을 때만» 이라고 알린다', !!input() && /옆 D덱 1줄 5칸 40피트가 덮는 X 칸입니다/.test(modal().textContent));
   if (input()) { setVal(input(), c20.cn); await wait(30); enter(); await wait(150); }

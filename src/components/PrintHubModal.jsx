@@ -6,13 +6,17 @@ import React, { useState, useMemo } from 'react';
 import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
-import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
+import PrintableCargoPlanV2, { SPECIAL_FILL } from './PrintableCargoPlanV2.jsx';
+import PrintableDeckPlan, { deckPlanDate } from './PrintableDeckPlan.jsx';   // 4.04: RZOR 는 카고플랜 자리에 덱플랜이 열린다
+import { buildRzorLoadingDeckPlan } from '../rzorDeckPredict.js';
+import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
+import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
-export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge' }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
+export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
   const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
   const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
@@ -281,6 +285,45 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     return null;
   }
   if (printSub === 'cargo-v2') {
+    //  ★ 4.04 — RZOR(RIZHAO ORIENT)는 베이 매트릭스가 아니라 덱플랜이다. 카고플랜을 누르면 선사 STOWAGE PLAN(양하) · 검수사 마감텔리 STOWAGE PLAN(선적) 종이가 열린다.
+    //   검수사 2026-10-04 «RZOR도 카고플랜 출력 누르면 덱플랜이 위 PDF랑 똑같이 나오게 … 특수화물은 칼라 바탕색을 넣되 칼라 흑백 방식 카고플랜과 동일 … XRAY도 동일하게».
+    //   덱플랜이 없으면(양하 선사 플랜 미도착) 종전 카고플랜이 열린다. 선적은 올린 마감텔리 플랜이 정본이고, 없으면 LOLO 탭과 같은 자동 덱플랜(buildRzorLoadingDeckPlan)이다.
+    const _rzLike = isLolo || /RZOR|RIZHAO/i.test(`${voyage?.info?.vsl || ''} ${voyageKey || ''}`);
+    const _upPlan = Array.isArray(sec.stowagePlan?.decks) && sec.stowagePlan.decks.length ? sec.stowagePlan : null;
+    let rzDeckPlan = null;
+    if (_rzLike) {
+      if (_upPlan) rzDeckPlan = _upPlan;
+      else if (mode === 'loading' && viewDeckPlan && mode === initialMode && Array.isArray(viewDeckPlan.decks) && viewDeckPlan.decks.length) rzDeckPlan = viewDeckPlan;   // 4.04: 화면(LOLO 탭)이 그리는 자동 덱플랜을 그대로 — 종이의 예측 자리와 화면이 한 벌
+      else if (mode === 'loading') {
+        try {
+          rzDeckPlan = buildRzorLoadingDeckPlan({ containers: allContainers.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__')),
+            termWork: sec.termWork || {}, bayWork: sec.bayWork || null, assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });
+        } catch (e) { console.warn('[4.04] RZOR 덱플랜 생성 실패 — 카고플랜으로 연다', e); }
+      }
+    }
+    if (rzDeckPlan && Array.isArray(rzDeckPlan.decks) && rzDeckPlan.decks.length) {
+      const _vslFull = String(voyageInfo.vslFull || 'RIZHAO ORIENT').toUpperCase();
+      const _date = deckPlanDate(voyageInfo);
+      //  Excel — 선적은 마감텔리 PLAN.xlsx 양식(화면 «STOWAGE PLAN 엑셀» 단추와 같은 함수), 양하는 선사 STOWAGE PLAN 모양(rzorPlanExcelCarrier)
+      const _onExcel = mode === 'loading'
+        ? () => exportCheckerPlanXlsx({ plan: rzDeckPlan, vsl: _vslFull, voy: voyageInfo.voy_l || voyageInfo.voy || (voyageKey || '').split('_').pop() || '', date: _date, inspector: inspector || '' })
+        : () => exportCarrierPlanXlsx({ plan: rzDeckPlan, containers: allContainers, xrayMap, vsl: _vslFull, date: _date, fills: SPECIAL_FILL });
+      return (
+        <ErrorBoundary name="덱플랜 출력" onClose={() => setPrintSub(null)}>
+          <PrintableDeckPlan
+            plan={rzDeckPlan}
+            containers={allContainers}
+            xrayMap={xrayMap}
+            termWork={sec.termWork || {}}
+            voyageInfo={voyageInfo}
+            mode={mode}
+            inspector={inspector}
+            onExcel={_onExcel}
+            onClose={() => setPrintSub(null)}
+          />
+        </ErrorBoundary>
+      );
+    }
     return (
       <ErrorBoundary name="카고플랜" onClose={() => setPrintSub(null)}>
         <PrintableCargoPlanV2

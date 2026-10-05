@@ -113,7 +113,7 @@ const kE = K.containers.filter((c) => c._mode === 'loading' && c.fe === 'E').len
 { const a = ask('코너캐스팅이 뭐야', K); T(has(a, 'Corner Casting'), '뜻 질문 그대로'); }
 { const a = ask('1호기 김판석 2호기 이종부', K); T(has(a, '김판석'), '호기–검수원 등록 확인 글'); }
 { const a = ask('실번호 의심', K); T(a && !/못 배웠/.test(String(a)), '«실번호 의심» → 실 점검 답(작업창만 되던 것)'); }
-{ const a = ask('점심 먹었어', Object.assign({}, K)); T(a && /먹었|참치|츄르|열빙어/.test(String(a)), '잡담 그대로'); }
+{ const a = ask('점심 먹었어', Object.assign({}, K)); T(a && /먹었|참치|츄르|열빙어|먹을 참|드셨/.test(String(a)), '잡담 그대로'); }   // 4.04: 미르 점심 잡담은 시각에 따라 말이 바뀐다(아침엔 «먹을 참») — 시각과 무관하게 점심 잡담 답이 나오는지를 잰다
 { const p = M.parseNaturalQuery('20피트 몇 대야'); T(p.size === '20' && !p.digits, '단위 붙은 숫자(20피트)는 끝네자리가 아니다'); }
 { const p = M.parseNaturalQuery('-18도 리퍼'); T(!p.digits, '«-18도» 는 끝네자리가 아니다'); }
 { const p = M.parseNaturalQuery('도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?'); T(!p.digits, '시각(0830)은 끝네자리가 아니다(1.22 그대로)'); }

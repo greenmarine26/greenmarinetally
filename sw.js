@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.03';
-const NOTE = '4.03 터미널 본선 현황 — 검수원이 호기를 찍지 않아 실시간 화면이 비면 PCTC 본선작업현황과 동방 본선 작업 현황이 수석 화면과 콘앱에 뜹니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.04';
+const NOTE = '4.04 RZOR 카고플랜 출력이 선사 덱플랜 PDF 그대로 나옵니다 — 특수화물 색·X-RAY·LOLO 구역을 인쇄·PDF·Excel 로 뽑습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

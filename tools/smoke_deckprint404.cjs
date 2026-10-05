@@ -1,0 +1,203 @@
+// 4.04 연막검사 — RZOR 카고플랜 덱플랜 출력(인쇄·PDF·Excel)과 앱 덱플랜 화면: 출력 집계 = 선사·마감텔리 파일의 자기 집계 · 병합 칸 겹침 없음 · 집계표 빈줄 없음 · 서명란은 출력에만.
+//   검수사 2026-10-05 «RZOR도 카고플랜 출력 누르면 덱플랜이 위 PDF랑 똑같이 나오게» · «앱의 덱플랜도 PDF처럼 다 그려져 있었으면» · «서명란은 출력양식에만» · «셀 병합자리도 잘 봐주시기 바랍니다. 안그러면 빈줄이 생길수 있습니다.»
+//   기대값은 앱 코드가 아니라 **실물 파일 자신의 집계표 칸**에서 따로 읽는다 — tools/fixtures/rzor_rzdf_R109E.xls(선사 원본 2026-10-05) · rzor_rzdf_R106E.xlsx(선사) · rzor_plan_R106W.xlsx(마감텔리).
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const ROOT = process.argv[2] || process.cwd();
+const TMP = fs.mkdtempSync(path.join(fs.existsSync('/dev/shm/hometmp') ? '/dev/shm/hometmp' : require('os').tmpdir(), 'deckprint_'));
+let n = 0, bad = 0;
+const ok = (name, cond, detail = '') => { n += 1; if (cond) console.log(`  ✔ ${name}`); else { bad += 1; console.log(`  ✘ ${name}${detail ? ' — ' + detail : ''}`); } };
+const fx = (p) => path.join(ROOT, 'tools', 'fixtures', p);
+const stub = './tools/stub_fbdb_mem.js';
+
+const ENTRY = path.join(TMP, 'entry.jsx');
+fs.writeFileSync(ENTRY, `import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+export { React, renderToStaticMarkup };
+export { parseDeckPlanWorkbook } from "${ROOT}/src/rzorPlan.js";
+export { buildPrintModel } from "${ROOT}/src/rzorPrintModel.js";
+export { buildCarrierPlanWorkbook } from "${ROOT}/src/rzorPlanExcelCarrier.js";
+export { buildCheckerPlanWorkbook } from "${ROOT}/src/rzorPlanExcel.js";
+export { buildRzorLoadingDeckPlan } from "${ROOT}/src/rzorDeckPredict.js";
+export { default as PrintableDeckPlan, PageView } from "${ROOT}/src/components/PrintableDeckPlan.jsx";
+export { SPECIAL_FILL } from "${ROOT}/src/components/PrintableCargoPlanV2.jsx";\n`);
+const OUT = path.join(TMP, 'dp.cjs');
+execSync(`npx esbuild "${ENTRY}" --bundle --platform=node --format=cjs --loader:.js=jsx --jsx=automatic --alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} `
+  + `--external:react --external:react-dom --external:react/jsx-runtime --define:process.env.NODE_ENV='"development"' --log-level=error --outfile="${OUT}"`, { cwd: ROOT, stdio: 'pipe' });
+process.env.NODE_PATH = path.join(ROOT, 'node_modules'); require('module').Module._initPaths();   // 번들 밖 react 를 저장소 것으로 읽는다(복사본이 둘이면 훅이 죽는다)
+const M = require(OUT);
+const XLSX = require(path.join(ROOT, 'node_modules', 'xlsx'));
+const readWb = (p) => XLSX.read(fs.readFileSync(p), { type: 'buffer', cellStyles: true });
+const cellAt = (ws, r, c) => ws[XLSX.utils.encode_cell({ r, c })];
+
+//  선사 파일 자신의 집계표(CHASSIS 머리 아래 줄들) — 칸 값을 왼쪽부터 순서대로 읽는다.
+function fileChassis(wb) {
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn]; if (!ws['!ref']) continue;
+    const rng = XLSX.utils.decode_range(ws['!ref']);
+    for (let r = rng.s.r; r <= rng.e.r; r++) for (let c = rng.s.c; c <= rng.e.c; c++) {
+      const v = cellAt(ws, r, c);
+      if (!(v && v.v === 'CHASSIS')) continue;
+      const rows = {};
+      for (let rr = r + 1; rr <= r + 6; rr++) {
+        const vals = [];
+        for (let cc = c; cc <= rng.e.c; cc++) { const x = cellAt(ws, rr, cc); if (x && x.v !== '' && x.v != null) vals.push(x.v); }
+        if (vals[0] === 'B-DECK' || vals[0] === 'C-DECK' || vals[0] === 'D-DECK' || vals[0] === 'TTL') rows[`${vals[0]}${rows[vals[0]] ? '2' : ''}`] = vals;
+      }
+      return { rows, headRow: r };
+    }
+  }
+  return null;
+}
+//  병합 칸 겹침 수 — 겹친 병합이 있으면 엑셀이 파일을 «복구» 하겠냐고 묻는다.
+const overlaps = (ws) => { const mg = ws['!merges'] || []; let o = 0; for (let i = 0; i < mg.length; i++) for (let j = i + 1; j < mg.length; j++) { const a = mg[i], b = mg[j]; if (a.s.r <= b.e.r && b.s.r <= a.e.r && a.s.c <= b.e.c && b.s.c <= a.e.c) o += 1; } return o; };
+const yOf = (html, txt) => { const m = html.match(new RegExp(`<text[^>]*?\\sy="([\\d.]+)"[^>]*>${txt.replace(/[.*+?^${}()|[\]\\']/g, '\\$&')}</text>`)); return m ? Number(m[1]) : NaN; };
+const feRow = (f) => [f[20].D + f[20].R, f[20].D, f[20].R, f[40].D + f[40].R, f[40].D, f[40].R, f[45].D + f[45].R, f[45].D, f[45].R, f.L20, f.L40, f.n];
+
+const stubScreen = { cellState: () => ({}), titleOf: () => '', onCell() {}, emptyState: () => ({}), emptyTitle: () => '', onEmpty() {} };
+
+(async () => {
+  const R109 = JSON.parse(fs.readFileSync(fx('rzor_discharge_R109E_print.json'), 'utf8'));
+  const CASES = [
+    { name: 'R109E', wb: readWb(fx('rzor_rzdf_R109E.xls')), containers: R109.containers, xrayMap: R109.xrayMap, info: R109.info },
+    { name: 'R106E', wb: readWb(fx('rzor_rzdf_R106E.xlsx')), containers: [], xrayMap: {}, info: { vslFull: 'RIZHAO ORIENT', voy: 'R106E', planDate: '2026-09-28 10:00' } },
+  ];
+
+  for (const cs of CASES) {
+    console.log(`■ 양하(선사 덱플랜) ${cs.name} — 출력 집계 = 선사 파일의 자기 집계표`);
+    const plan = M.parseDeckPlanWorkbook(cs.wb, XLSX);
+    const want = (fileChassis(cs.wb) || {}).rows;
+    ok(`${cs.name} 선사 파일에서 집계표(CHASSIS)를 읽었다`, !!want && !!want['B-DECK'] && !!want['C-DECK'] && !!want['D-DECK'] && !!want.TTL, want ? Object.keys(want).join(',') : '없음');
+    const model = M.buildPrintModel({ plan, containers: cs.containers, xrayMap: cs.xrayMap, termWork: {}, vsl: cs.info.vslFull, date: '2026-10-05', mode: 'discharge' });
+    const T = model.totals;
+    const w3 = (v) => Number(model.fmtWt(v, false));
+    ok(`${cs.name} 선사 파일의 덱 머리 CAPACITY(샤시 20'·40' 대수)를 덱마다 읽었다`, ['B', 'C', 'D'].every((k) => { const d = plan.decks.find((x) => x.deck === k); const f = want[`${k}-DECK`]; return d && d.capacity && d.capacity[0] === Number(f[1]) && d.capacity[1] === Number(f[2]); }), JSON.stringify(plan.decks.map((d) => [d.deck, d.capacity])));
+    if (cs.name === 'R106E') {
+      //  옛 방식으로 올린 플랜(CAPACITY 를 안 읽은 것)은 추정으로 그린다 — 이 항차는 추정식이 선사 집계표와 정확히 맞는다.
+      const planOld = { ...plan, decks: plan.decks.map(({ capacity, ...d }) => d) };
+      const mOld = M.buildPrintModel({ plan: planOld, containers: cs.containers, xrayMap: cs.xrayMap, termWork: {}, vsl: cs.info.vslFull, date: '2026-10-05', mode: 'discharge' });
+      ok(`${cs.name} CAPACITY 없는 옛 플랜 — 추정 샤시 대수(덱마다·TTL)가 선사 집계표와 같다`, ['B', 'C', 'D'].every((k) => mOld.totals.decks[k].chFrom === 'est' && mOld.totals.decks[k].ch20 === Number(want[`${k}-DECK`][1]) && mOld.totals.decks[k].ch40 === Number(want[`${k}-DECK`][2])) && mOld.totals.ch20 === Number(want.TTL[1]) && mOld.totals.ch40 === Number(want.TTL[2]), ['B', 'C', 'D'].map((k) => `${k} ${mOld.totals.decks[k].ch20}/${mOld.totals.decks[k].ch40}`).join(' '));
+    }
+    for (const k of ['B', 'C', 'D']) {
+      const f = want[`${k}-DECK`];
+      const dk = T.decks[k];
+      ok(`${cs.name} ${k}-DECK 샤시 20'·40' 대수·무게가 선사 집계표와 같다`, !!f && !!dk && dk.ch20 === Number(f[1]) && dk.ch40 === Number(f[2]) && Math.abs(w3(dk.wt) - Number(f[3])) < 0.0006, `앱 ${dk && dk.ch20}/${dk && dk.ch40}/${dk && w3(dk.wt)} · 파일 ${f && f.slice(1, 4)}`);
+    }
+    ok(`${cs.name} TTL 줄(20'·40'·무게)이 선사 집계표와 같다`, T.ch20 === Number(want.TTL[1]) && T.ch40 === Number(want.TTL[2]) && Math.abs(w3(T.wt) - Number(want.TTL[3])) < 0.0006, `앱 ${T.ch20}/${T.ch40}/${w3(T.wt)} · 파일 ${want.TTL.slice(1, 4)}`);
+    const sideOf = (vals) => vals.slice(4, 17);   // [라벨, 12칸]
+    const fF = sideOf(want['C-DECK']), fE = sideOf(want['D-DECK']), fT = sideOf(want.TTL);
+    const same = (a, b) => a.length === b.length && a.every((x, i) => x === Number(b[i]));
+    ok(`${cs.name} F·E·TTL 줄(20'·D·R·40'·D·R·45'·D·R·LUG·TTL)이 선사 집계표와 같다`, fF[0] === 'F' && fE[0] === 'E' && fT[0] === 'TTL' && same(feRow(T.F), fF.slice(1)) && same(feRow(T.E), fE.slice(1)) && same(feRow(T.TTL), fT.slice(1)),
+       `앱 F ${feRow(T.F)} · 파일 F ${fF.slice(1)}`);
+
+    //  엑셀 — 병합 겹침 · 머리 병합 · 빈줄
+    const wbx = M.buildCarrierPlanWorkbook(XLSX, { plan, containers: cs.containers, xrayMap: cs.xrayMap, vsl: cs.info.vslFull, date: '2026-10-05', fills: M.SPECIAL_FILL });
+    ok(`${cs.name} 엑셀 — 덱마다 시트 하나(B·C·D)이고 병합 칸이 서로 겹치지 않는다`, wbx.SheetNames.join(',') === 'B-DECK,C-DECK,D-DECK' && wbx.SheetNames.every((s) => overlaps(wbx.Sheets[s]) === 0), wbx.SheetNames.map((s) => `${s}:${overlaps(wbx.Sheets[s])}`).join(' '));
+    const ws = wbx.Sheets['B-DECK'];
+    let r0 = -1; for (const a of Object.keys(ws)) if (a[0] !== '!' && ws[a].v === 'CHASSIS') r0 = XLSX.utils.decode_cell(a).r;
+    const mg = (ws['!merges'] || []);
+    const hasMerge = (r1, c1, r2, c2) => mg.some((m) => m.s.r === r1 && m.s.c === c1 && m.e.r === r2 && m.e.c === c2);
+    ok(`${cs.name} 엑셀 집계표 — 첫 자료 줄(B-DECK)이 머리 바로 아래 줄이다(빈줄 없음 · 선사 파일과 같다)`, r0 > 0 && (cellAt(ws, r0 + 1, 1) || {}).v === 'B-DECK' && Number((cellAt(ws, r0 + 1, 2) || {}).v) === Number(want['B-DECK'][1]));
+    ok(`${cs.name} 엑셀 집계표 머리 — LUG 는 가로로 합쳐 아래 줄에 20'·40' 가 따로 서고, 나머지 칸 이름은 두 줄이 세로로 합쳐진다`, hasMerge(r0, 15, r0, 16) && (cellAt(ws, r0 + 1, 15) || {}).v === "20'" && (cellAt(ws, r0 + 1, 16) || {}).v === "40'"
+       && hasMerge(r0, 5, r0 + 1, 5) && hasMerge(r0, 6, r0 + 1, 6) && hasMerge(r0, 14, r0 + 1, 14) && hasMerge(r0, 17, r0 + 1, 17));
+    const rowsFilled = []; for (let r = r0; r <= r0 + 4; r++) { let any = false; for (let c = 1; c <= 17; c++) { const x = cellAt(ws, r, c); if (x && x.v !== '' && x.v != null) any = true; } rowsFilled.push(any); }
+    ok(`${cs.name} 엑셀 집계표 — 머리부터 TTL 까지 다섯 줄이 모두 차 있다(빈줄 없음)`, rowsFilled.every(Boolean), rowsFilled.join(','));
+    const allTxt = (w) => Object.keys(w).filter((a) => a[0] !== '!').map((a) => String(w[a].v));
+    ok(`${cs.name} 엑셀 — 서명란(Chief Checker · Chief Officer)이 있다(출력양식)`, wbx.SheetNames.every((s) => allTxt(wbx.Sheets[s]).includes('Chief Checker') && allTxt(wbx.Sheets[s]).includes('Chief Officer')));
+    //  칸 수 — 엑셀의 컨 칸(병합 4행 × 칸 폭) 수 = 플랜의 컨 수
+    const cnRe = /^([A-Z]{4}\d{7}|[A-Z]{6}\d{3})$/;   // 선사 파일의 일부 칸은 번호가 9자(SAWTBP007) — 그것도 한 칸이다
+    const inXls = wbx.SheetNames.reduce((a, s) => a + allTxt(wbx.Sheets[s]).filter((t) => cnRe.test(t.split('\n')[0])).length, 0);
+    ok(`${cs.name} 엑셀 — 컨 칸 수 = 선사 덱플랜 컨 수(${plan.total}대)`, inXls === plan.total, `엑셀 ${inXls} · 플랜 ${plan.total}`);
+
+    //  인쇄(SVG) — 집계표 빈줄 · 서명란 · 화면에는 서명란 없음
+    const html = M.renderToStaticMarkup(M.React.createElement(M.PrintableDeckPlan, { plan, containers: cs.containers, xrayMap: cs.xrayMap, voyageInfo: cs.info, mode: 'discharge', staticPreview: true, initialBw: false, dateOverride: '2026-10-05' }));
+    const yC = yOf(html, 'CHASSIS'), yB = yOf(html, 'B-DECK'), yL = yOf(html, 'LUG');
+    ok(`${cs.name} 인쇄 집계표 — B-DECK 가 CHASSIS 머리 바로 아래 줄(한 줄 14)이고 LUG 아래 20'·40' 줄과 같은 높이`, Math.abs((yB - yC) - 14) < 0.5 && yL < yB, `CHASSIS ${yC} · B-DECK ${yB} · LUG ${yL}`);
+    ok(`${cs.name} 인쇄 — 서명란(Chief Checker · Chief Officer)이 덱마다 있다`, (html.match(/Chief Checker/g) || []).length === model.pages.length && (html.match(/Chief Officer/g) || []).length === model.pages.length, `${(html.match(/Chief Checker/g) || []).length}/${model.pages.length}`);
+    const pg0 = model.pages[0];
+    const screenHtml = model.pages.map((pg, i) => M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg, model, bw: false, isFirst: i === 0, isLast: i === model.pages.length - 1, screen: stubScreen }))).join('');
+    ok(`${cs.name} 앱 화면 — 서명란이 없다(Chief Checker · Chief Officer · 서명선)`, !/Chief (Checker|Officer)/i.test(screenHtml) && !/stroke-width="1.2"/.test(screenHtml) && /SUB TOTAL/.test(screenHtml) && /CHASSIS/.test(screenHtml));
+    ok(`${cs.name} 앱 화면 — 종이와 같은 그림(선체 윤곽·집계표·칸 번호)이 다 그려진다`, /dp-hull/.test(screenHtml) && (screenHtml.match(/dp-cell/g) || []).length >= plan.total);
+
+    //  특수화물(컬러만) · X-RAY(두 쪽 다)
+    const planCns = new Set(plan.decks.flatMap((d) => d.slots).filter((s) => s.cn && !s.empty).map((s) => s.cn));
+    const xrayIn = Object.keys(cs.xrayMap || {}).filter((cn) => planCns.has(cn)).length;
+    const htmlBw = M.renderToStaticMarkup(M.React.createElement(M.PrintableDeckPlan, { plan, containers: cs.containers, xrayMap: cs.xrayMap, voyageInfo: cs.info, mode: 'discharge', staticPreview: true, initialBw: true, dateOverride: '2026-10-05' }));
+    const cntX = (h) => (h.match(/class="dp-xray"/g) || []).length;
+    ok(`${cs.name} X-RAY — 컬러·흑백 둘 다 빨간 ★ 가 X-RAY 대상 수(${xrayIn})와 같다`, cntX(html) === xrayIn && cntX(htmlBw) === xrayIn, `컬러 ${cntX(html)} · 흑백 ${cntX(htmlBw)} · 기대 ${xrayIn}`);
+    const spCells = (h) => (h.match(/class="dp-cell[^"]*\bsp-(DG|RF|FR|OT|TK)\b/g) || []).length;
+    const wantSp = model.pages.reduce((a, pg) => a + pg.cells.filter((c) => c.fill).length, 0);
+    ok(`${cs.name} 특수화물 — 컬러는 칸 바탕색 클래스가 서고, 흑백은 바탕색을 지운다(.dp-bw .dp-cell fill #fff)`, spCells(html) === wantSp && /class="dp-svg"/.test(html) && /class="dp-svg dp-bw"/.test(htmlBw) && !/class="dp-svg dp-bw"/.test(html), `컬러 ${spCells(html)} · 모델 ${wantSp}`);
+    ok(`${cs.name} 특수화물 — 흑백에서도 종류 글자(DG·RF·FR·OT·TK)가 칸 아래에 남는다`, model.pages.some((pg) => pg.cells.some((c) => c.fill && c.letter)) && /\.dp-bw \.dp-cell \{ fill: #fff !important; \}/.test(fs.readFileSync(path.join(ROOT, 'src/components/PrintableDeckPlan.jsx'), 'utf8')));
+    if (cs.name === 'R109E') {
+      const dpg = model.pages.find((p) => p.deck === 'D');
+      ok('R109E LOLO — D덱에만 굵은 선 구역이 서고 기본 구역은 45칸(구역 안 컨은 9대)', !!dpg.zone && dpg.zone.cells === 45 && dpg.zone.count === 9 && model.pages.filter((p) => p.zone).length === 1, dpg.zone && `${dpg.zone.cells}칸 · ${dpg.zone.count}대`);
+      ok('R109E 합계 — 컨 149대 · D덱 무게 1440.741t · 전체 3405.665t (선사 PDF 인쇄본 숫자)', T.TTL.n === 149 && w3(T.decks.D.wt) === 1440.741 && w3(T.wt) === 3405.665, `${T.TTL.n} · ${w3(T.decks.D.wt)} · ${w3(T.wt)}`);
+      ok('R109E 수화물 LUG 1대 · 긴급 ▲ 표시용 목록과 별개로 칸에 LUG 가 선다', T.F.L20 + T.F.L40 + T.E.L20 + T.E.L40 === 1 && model.pages.some((p) => p.cells.some((c) => c.lug)));
+    }
+    //  4.04 감사 지적 — 가짜 컨 번호 · 긴급/활어 · 추정 표시 · 그림 무늬 id
+    const allSlots = plan.decks.flatMap((d) => d.slots).filter((s) => s.cn && !s.empty);
+    const rawNo = (() => { const out = []; for (const sn of cs.wb.SheetNames) { const ws0 = cs.wb.Sheets[sn]; for (const a of Object.keys(ws0)) { if (a[0] === '!') continue; const v0 = ws0[a].v; if (typeof v0 === 'string' && /^SAWTBP\d+\s*[\r\n]/.test(v0)) out.push(v0.split(/[\r\n]+/)[0].trim()); } } return out; })();
+    ok(`${cs.name} 칸 번호 — 번호가 9자인 칸(SAWTBP…)은 파일 첫 줄 그대로이고 중량 앞자리가 붙은 가짜 번호가 없다(파일 ${rawNo.length}칸)`, rawNo.every((no) => allSlots.some((s) => s.cn === no)) && !allSlots.some((s) => /^WTBP\d{7}$/.test(s.cn)) && allSlots.every((s) => /^[A-Z]{4}\d{7}$/.test(s.cn) || rawNo.includes(s.cn)), JSON.stringify(allSlots.filter((s) => !/^[A-Z]{4}\d{7}$/.test(s.cn)).map((s) => s.cn)));
+    const flagTxt = (w) => { const out = { 긴급: 0, 활어: 0 }; for (const sn of w.SheetNames) { const ws0 = w.Sheets[sn]; for (const a of Object.keys(ws0)) { if (a[0] === '!') continue; const v0 = ws0[a].v; if (typeof v0 !== 'string') continue; const l3 = v0.split(/[\r\n]+/); if (/^[A-Z]{4}\d{7}$/.test(l3[0] || '')) { if (/긴급/.test(l3.slice(1).join(' '))) out.긴급 += 1; if (/활어/.test(l3.slice(1).join(' '))) out.활어 += 1; } } } return out; };
+    const fileFlags = flagTxt(cs.wb);
+    const svgFlags = { 긴급: (html.match(/[> ]긴급</g) || []).length, 활어: (html.match(/[> ]활어</g) || []).length };
+    const xlFlags = flagTxt(wbx);
+    ok(`${cs.name} 긴급·활어 — 선사 파일 칸 글자(긴급 ${fileFlags.긴급} · 활어 ${fileFlags.활어})가 종이 그림과 엑셀 칸에 그대로 나온다`, svgFlags.긴급 === fileFlags.긴급 && svgFlags.활어 === fileFlags.활어 && xlFlags.긴급 === fileFlags.긴급 && xlFlags.활어 === fileFlags.활어, `종이 ${JSON.stringify(svgFlags)} · 엑셀 ${JSON.stringify(xlFlags)} · 파일 ${JSON.stringify(fileFlags)}`);
+    ok(`${cs.name} 긴급 ▲ — 파일 칸 글자 «긴급»(${fileFlags.긴급}칸)이 칸 모서리 ▲ 로도 선다`, (html.match(/>▲</g) || []).length === fileFlags.긴급 && model.pages.reduce((a, p) => a + p.cells.filter((c) => c.urgent).length, 0) === fileFlags.긴급);
+    const planNoCap = { ...plan, decks: plan.decks.map(({ capacity, ...d }) => d) };
+    const htmlEst = M.renderToStaticMarkup(M.React.createElement(M.PrintableDeckPlan, { plan: planNoCap, containers: cs.containers, xrayMap: cs.xrayMap, voyageInfo: cs.info, mode: 'discharge', staticPreview: true, initialBw: false, dateOverride: '2026-10-05' }));
+    ok(`${cs.name} 샤시 대수 추정 표시 — 파일 CAPACITY 로 그린 종이엔 없고, CAPACITY 없는 옛 플랜 종이엔 «추정» 이 적힌다`, !/샤시 대수는 추정/.test(html) && /샤시 대수는 추정/.test(htmlEst));
+    const patIds = (h) => [...h.matchAll(/<pattern id="([^"]+)"/g)].map((x) => x[1]);
+    const pa = patIds(M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg: model.pages[0], model, bw: false, isFirst: true, isLast: false })));
+    const pb = patIds(M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg: model.pages[0], model, bw: false, isFirst: true, isLast: false, screen: stubScreen })));
+    const both = M.renderToStaticMarkup(M.React.createElement('div', null, M.React.createElement(M.PageView, { pg: model.pages[0], model, bw: false, isFirst: true, isLast: false }), M.React.createElement(M.PageView, { pg: model.pages[0], model, bw: false, isFirst: true, isLast: false, screen: stubScreen })));
+    const idsBoth = patIds(both);
+    ok(`${cs.name} 그림 무늬(빗금·회색) id — 그림 한 장마다 따로라서 화면 그림과 출력 그림이 함께 떠도 겹치지 않고, 쓰는 id 가 그림 안에 있다`, pa.length === 2 && pb.length === 2 && idsBoth.length === 4 && new Set(idsBoth).size === 4 && [...both.matchAll(/url\(#([^)]+)\)/g)].every((x) => idsBoth.includes(x[1])), `${idsBoth}`);
+    void pg0;
+  }
+
+  console.log('■ 선적(마감텔리 덱플랜) R106W — 출력 집계 = 마감텔리 파일의 자기 집계 · 엑셀 병합 · 서명란');
+  const wb106 = readWb(fx('rzor_plan_R106W.xlsx'));
+  const p106 = M.parseDeckPlanWorkbook(wb106, XLSX);
+  const ws1 = wb106.Sheets[wb106.SheetNames[0]];
+  const v = (a) => (ws1[a] || {}).v;
+  const m106 = M.buildPrintModel({ plan: p106, containers: [], xrayMap: {}, termWork: {}, vsl: 'RIZHAO ORIENT', date: '2026-09-28', mode: 'loading' });
+  const pgOf = (k) => m106.pages.find((p) => p.deck === k);
+  ok('마감텔리 파일의 자기 집계(C덱 CONT 20/40/45/TTL · D덱 TTL · F/E/TTL)를 읽는다', v('BR5') === 2 && v('BU5') === 60 && v('BX5') === 4 && v('CA5') === 66 && v('CA54') === 110 && v('BZ150') === 55 && v('BZ151') === 135 && v('BZ152') === 190);
+  ok('출력 모델 — C덱 20\'=2·40\'=60·45\'=4·TTL 66 · D덱 TTL 110 이 마감텔리 파일과 같다', pgOf('C').totals.n[20] === v('BR5') && pgOf('C').totals.n[40] === v('BU5') && pgOf('C').totals.n[45] === v('BX5') && pgOf('C').totals.ttl === v('CA5') && pgOf('D').totals.ttl === v('CA54'), JSON.stringify([pgOf('C').totals, pgOf('D').totals.ttl]));
+  ok('출력 모델 — 맨 아래 F 55 · E 135 · TTL 190 이 마감텔리 파일과 같다', m106.totals.F.n === v('BZ150') && m106.totals.E.n === v('BZ151') && m106.totals.TTL.n === v('BZ152'), `${m106.totals.F.n}/${m106.totals.E.n}/${m106.totals.TTL.n}`);
+  ok('LOLO 구역 — D덱에만 굵은 선, 칸 수 45(마감텔리 크레인 45대)', !!pgOf('D').zone && pgOf('D').zone.cells === 45 && pgOf('D').zone.count === 45 && p106.lolo === 45 && m106.pages.filter((p) => p.zone).length === 1, pgOf('D').zone && pgOf('D').zone.count);
+  const htmlL = M.renderToStaticMarkup(M.React.createElement(M.PrintableDeckPlan, { plan: p106, containers: [], xrayMap: {}, termWork: {}, voyageInfo: { vslFull: 'RIZHAO ORIENT', planDate: '2026-09-28 10:00' }, mode: 'loading', staticPreview: true, initialBw: false, inspector: '김성일' }));
+  ok('선적 인쇄 — 서명란: 마지막 덱 쪽에 검수사 이름과 CHIEF CHECKER 가 있다(마감텔리 양식)', (htmlL.match(/CHIEF CHECKER/g) || []).length === 1 && />김성일</.test(htmlL), `${(htmlL.match(/CHIEF CHECKER/g) || []).length}`);
+  const htmlLs = m106.pages.map((pg, i) => M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg, model: m106, bw: false, isFirst: i === 0, isLast: i === m106.pages.length - 1, screen: stubScreen, signer: '김성일' }))).join('');
+  ok('선적 앱 화면 — 서명란(CHIEF CHECKER · 이름)이 없다', !/CHIEF CHECKER/.test(htmlLs) && !/>김성일</.test(htmlLs) && /CHASSIS/.test(htmlLs));
+  const wbc = M.buildCheckerPlanWorkbook(XLSX, { plan: p106, vsl: 'RIZHAO ORIENT', voy: 'R106W', date: '2026-09-28', inspector: '김성일' });
+  const wsc = wbc.Sheets[wbc.SheetNames[0]];
+  ok('선적 엑셀(마감텔리 양식) — 병합 칸이 서로 겹치지 않고 서명란(이름·CHIEF CHECKER)이 있다', overlaps(wsc) === 0 && (cellAt(wsc, 149, 6) || {}).v === '김성일' && /CHIEF CHECKER/.test(String((cellAt(wsc, 152, 6) || {}).v)), `겹침 ${overlaps(wsc)}`);
+  const termWork = JSON.parse(fs.readFileSync(fx('rzor_termwork_R106E.json'), 'utf8'));
+  const gen = M.buildRzorLoadingDeckPlan({ containers: (termWork.containers || []).map((c) => ({ ...c, pod: 'CNRZH' })), termWork: {}, bayWork: termWork.bayWork || null, assign: null, voy: 'R106W' });
+  const mg2 = M.buildPrintModel({ plan: gen, containers: [], xrayMap: {}, termWork: {}, vsl: 'RIZHAO ORIENT', date: '2026-09-28', mode: 'loading' });
+  const zd = mg2.pages.find((p) => p.deck === 'D');
+  ok('앱이 그린 선적 덱플랜도 같은 출력 — D덱에만 LOLO 구역(45~67칸, 보통 49 이내, 시프팅 최대 67)', !!zd && !!zd.zone && zd.zone.cells >= 45 && zd.zone.cells <= 67 && mg2.pages.filter((p) => p.zone).length === 1, zd && zd.zone && zd.zone.cells);
+  const wbg = M.buildCheckerPlanWorkbook(XLSX, { plan: gen, vsl: 'RIZHAO ORIENT', voy: 'R106W', date: '2026-09-28', inspector: '김성일' });
+  ok('앱이 그린 선적 덱플랜의 엑셀도 병합이 겹치지 않는다', overlaps(wbg.Sheets[wbg.SheetNames[0]]) === 0);
+
+  //  4.04 감사 지적 — 지정(📌)된 X 칸과 빈 칸이 화면에서 끝 4자리로 보인다(옛 화면과 같다) · 엑셀 제목·날짜는 출력 허브와 같은 한 벌 · 로드 타임아웃
+  const srcDp = fs.readFileSync(path.join(ROOT, 'src/components/PrintableDeckPlan.jsx'), 'utf8');
+  const srcVp = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');
+  const srcXl = fs.readFileSync(path.join(ROOT, 'src/rzorPlanExcel.js'), 'utf8');
+  ok('화면 — 지정(📌)된 X 칸도 빈 칸처럼 📌 끝4자리가 보인다', /pg\.xmarks\.map\(\(m, i\) => \{ const xs = sc && m\.slot \? sc\.emptyState\(m\) : null;/.test(srcDp) && /xs\.asg \? <text[^>]*>📌/.test(srcDp) && /st\.asg \? <text[^>]*>📌/.test(srcDp));
+  const stubAsg = { ...stubScreen, emptyState: () => ({ asg: { cn: 'ABCD1234567' } }) };
+  const genPg = mg2.pages.map((pg, i) => M.renderToStaticMarkup(M.React.createElement(M.PageView, { pg, model: mg2, bw: false, isFirst: i === 0, isLast: i === mg2.pages.length - 1, screen: stubAsg }))).join('');
+  ok('화면 — 지정된 빈 칸(생성 덱플랜 빈자리 291칸)이 전부 📌 끝4자리로 보인다', (genPg.match(/📌4567/g) || []).length === mg2.pages.reduce((a, p) => a + p.empties.filter((e) => e.slot).length, 0), `${(genPg.match(/📌4567/g) || []).length}`);
+  ok('엑셀 제목·날짜 — 화면 단추와 출력 허브가 같은 값(제목 vslFull 또는 RIZHAO ORIENT · 날짜 deckPlanDate)', /vsl: String\(voyage\?\.info\?\.vslFull \|\| 'RIZHAO ORIENT'\)\.toUpperCase\(\)/.test(srcVp) && /date: _deckPlanDate\(voyage\?\.info \|\| \{\}\)/.test(srcVp));
+  ok('엑셀 도구 로드 — 15초 넘으면 포기하고 알린다(«만드는 중…» 이 끝나지 않지 않게)', /setTimeout\(\(\) => reject\(new Error\('xlsx-js-style 로드 시간 초과/.test(srcXl) && /clearTimeout\(tm\)/.test(srcXl));
+  ok('출력 허브 — 화면(LOLO 탭)의 자동 덱플랜을 그대로 받아 종이와 화면의 예측 자리가 한 벌이다', /viewDeckPlan=\{_deckPlanEff\}/.test(srcVp) && /rzDeckPlan = viewDeckPlan;/.test(fs.readFileSync(path.join(ROOT, 'src/components/PrintHubModal.jsx'), 'utf8')));
+  ok('출력 모델 — containers 가 null 이어도 죽지 않는다', (() => { try { M.buildPrintModel({ plan: p106, containers: null, xrayMap: {}, termWork: {}, vsl: 'R', date: '2026-09-28', mode: 'loading' }); return true; } catch (e) { return false; } })());
+
+  console.log(`\n${bad ? '✘' : '✔'} RZOR 덱플랜 출력·화면(4.04) ${n - bad}/${n}`);
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { console.log(`  ⚠ 임시 폴더를 못 치웠다 — ${TMP}`); }
+  process.exit(bad ? 1 : 0);
+})().catch((e) => { console.log('✘ 연막검사 예외', (e && e.stack) || e); process.exit(1); });

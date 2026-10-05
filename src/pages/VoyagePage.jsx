@@ -72,6 +72,7 @@ import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
 import { buildRzorLoadingDeckPlan } from '../rzorDeckPredict.js';   // 3.67: RZOR 선적 자동 덱플랜
 import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';        // 3.67: 검수사 STOWAGE PLAN 엑셀 내보내기
 import DeckPlanView from '../components/DeckPlanView.jsx';
+import { deckPlanDate as _deckPlanDate } from '../components/PrintableDeckPlan.jsx';   // 4.04: 엑셀 제목·날짜는 출력 허브와 같은 한 벌
 import MailboxFilePicker from '../components/MailboxFilePicker.jsx';   // V9.46: 메일함 폴더 직결
 import { db } from '../firebase.js';
 import { fbGetPendingDamage, fbPromotePendingDamage } from '../firebase.js';   // 2.03: 데미지 예약 승격
@@ -1762,7 +1763,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           종전엔 ① 업로드 탭 맨 위 카드 ② 베이 탭 [인쇄 ▾] 드롭다운(카고플랜·베이 상세만, 계획/실적 기준이 다른 둘째 경로)
           두 곳이었다. 지금 보고 있는 모드(양하/선적)로 열린다. */}
       {showPrintHub && (
-        <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode}
+        <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode} isLolo={isLoloShip} inspector={inspector || ''} viewDeckPlan={_deckPlanEff}
           onClose={() => setShowPrintHub(false)} />
       )}
 
@@ -1931,11 +1932,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           plan={_deckPlanEff}   /* 3.67: 올린 덱플랜이 없는 RZOR 선적은 생성 덱플랜(예측·확정) */
           containers={containers} compMap={compMap} xrayMap={xrayMap}
           voyageKey={voyageKey} mode={mode} inspector={inspector}
+          termWork={sec.termWork || {}} voyageInfo={voyage?.info || null}   /* 4.04: 화면 그림이 출력(카고플랜)과 같은 종이 그림 — 크레인 구역·머리글 */
           onOpenContainer={(c) => setDetailC(c)}
           onExport={mode === 'loading' && _deckPlanEff?.decks?.length ? ((pl) => exportCheckerPlanXlsx({
-            plan: pl, vsl: String(voyage?.info?.vsl || 'RIZHAO ORIENT').toUpperCase(),
+            plan: pl, vsl: String(voyage?.info?.vslFull || 'RIZHAO ORIENT').toUpperCase(),   /* 4.04: 마감텔리 제목은 «RIZHAO ORIENT» — 종전 info.vsl 은 선박 코드(RZOR)라 제목이 달랐다 · 출력 허브와 같은 값 */
             voy: voyage?.info?.voy_l || voyage?.info?.voy || (voyageKey || '').split('_').pop() || '',
-            date: new Date().toISOString().slice(0, 10), inspector: inspector || '',
+            date: _deckPlanDate(voyage?.info || {}), inspector: inspector || '',
           })) : null}   /* 3.67: 선적만 — 검수사 STOWAGE PLAN 엑셀(마감텔리 양식) */
         />
         <LoloTab

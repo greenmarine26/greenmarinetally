@@ -23,8 +23,10 @@ export async function loadSheetJSStyled() {
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
-    script.onload = resolve;
-    script.onerror = () => reject(new Error('xlsx-js-style 로드 실패'));
+    //  4.04: 15초 안에 안 오면 포기하고 화면에 알린다 — 네트워크가 멈추면 «Excel 만드는 중…» 이 끝나지 않던 것.
+    const tm = setTimeout(() => reject(new Error('xlsx-js-style 로드 시간 초과(15초) — 인터넷 연결을 확인해 주세요')), 15000);
+    script.onload = () => { clearTimeout(tm); resolve(); };
+    script.onerror = () => { clearTimeout(tm); reject(new Error('xlsx-js-style 로드 실패')); };
     document.head.appendChild(script);
   });
   window.XLSXS = window.XLSX;
@@ -171,20 +173,21 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
   const r0 = BLOCK_ROWS * 3 + 1;
   const hdr = [[27, 'CHASSIS'], [29, "20'"], [32, "40'"], [36, 'Weight'], [41, 'Cont.'], [44, "20'"], [47, 'D'], [50, 'R'],
                [53, "40'"], [56, 'D'], [59, 'R'], [62, "45'"], [65, 'D'], [68, 'R'], [71, '20 Lug'], [74, '40 Lug'], [77, 'TTL']];
-  for (const [c, v] of hdr) { set(r0, c, v, S_TBLB); merge(r0, c, r0, c + 2); }
+  // 머리 병합 폭 — CHASSIS 는 두 칸(AB:AC), Weight 는 네 칸(AK:AN), 나머지는 세 칸. 폭이 겹치면 엑셀이 파일을 «복구» 하겠냐고 묻는다(4.04: CHASSIS 병합이 옆 20' 칸을 침범하던 것을 바로잡음).
+  for (const [c, v] of hdr) { set(r0, c, v, S_TBLB); merge(r0, c, r0, c + (c === 27 ? 1 : c === 36 ? 3 : 2)); }
   const tot = { ch20: 0, ch40: 0, wt: 0 };
   DECK_ORDER.forEach((deck, i) => {
     const r = r0 + 1 + i; const sm = sum[deck] || { ch20: 0, ch40: 0, wt: 0 };
     set(r, 27, `${deck}-DECK`, S_TBLB); merge(r, 27, r, 28);
     set(r, 29, sm.ch20, S_TBL); merge(r, 29, r, 31);
-    set(r, 32, sm.ch40, S_TBL); merge(r, 32, r, 35);
+    set(r, 32, sm.ch40, S_TBL); merge(r, 32, r, 34);
     set(r, 36, Math.round(sm.wt * 1000) / 1000, S_TBL, '#,##0.000_ '); merge(r, 36, r, 39);
     tot.ch20 += sm.ch20; tot.ch40 += sm.ch40; tot.wt += sm.wt;
   });
   const rT = r0 + 4;
   set(rT, 27, 'TTL', S_TBLB); merge(rT, 27, rT, 28);
   set(rT, 29, tot.ch20, S_TBL); merge(rT, 29, rT, 31);
-  set(rT, 32, tot.ch40, S_TBL); merge(rT, 32, rT, 35);
+  set(rT, 32, tot.ch40, S_TBL); merge(rT, 32, rT, 34);
   set(rT, 36, Math.round(tot.wt * 1000) / 1000, S_TBL, '#,##0.000_ '); merge(rT, 36, rT, 39);
   const feRow = (r, lab, f) => {
     set(r, 41, lab, S_TBLB); merge(r, 41, r, 43);

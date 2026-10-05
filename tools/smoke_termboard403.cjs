@@ -133,10 +133,10 @@ ok(/\.tbx-tw\{[^}]*touch-action:pan-x pan-y/.test(TB.TERM_BOARD_CSS), '표 CSS: 
 ok(!/catch\(e\)\{\s*\}/.test(CONE.slice(CONE.indexOf('function ctTermBoardHtml'), CONE.indexOf('function twDraw'))), '콘앱 ctTermBoardHtml 안에 조용한 빈 catch 가 없다');
 ok(/CT\.err = '자료를 못 받았습니다[^\n]*\n\s*if\(CT\.tb && \(!CT\.tbAt \|\| Date\.now\(\)-CT\.tbAt > 300000\)\) CT\.tb = null;/.test(CONE), '콘앱: 전부 못 받는 사이클에도 오래된 표를 5분 넘게 두지 않는다');
 ok(/if\(_infAll === undefined\)\{ if\(!CT\.tbAt \|\| Date\.now\(\)-CT\.tbAt > 300000\) CT\.tb = null; \}/.test(CONE), '콘앱: info 를 못 읽은 사이클은 앞 표를 5분까지만 둔다');
-ok(/window\.__CONEV='ConeOne 2\.61'/.test(CONE) && /APP_VERSION = 'TallyOne 4\.03'/.test(U), '버전 ConeOne 2.61 · TallyOne 4.03');
+ok(/window\.__CONEV='ConeOne 2\.61'/.test(CONE) && /APP_VERSION = 'TallyOne 4\.0[34]'/.test(U), '버전 ConeOne 2.61 · TallyOne 4.03~4.04');
 {
   const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
-  ok(/^4\.03 터미널 본선 현황/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 이번 판 · 작은따옴표와 슬래시가 없다 · 한 문장', note);
+  ok(/^4\.0[34] (터미널 본선 현황|RZOR 카고플랜)/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.03~4.04 · 작은따옴표와 슬래시가 없다 · 짧은 문장', note);
 }
 ok(/터미널 본선 현황/.test(rd('src/data/helpDataChief.js')) && /터미널 본선 현황/.test(rd('src/data/helpData.js')) && /터미널 본선 현황/.test(rd('src/data/featureIndex.js')), '매뉴얼(수석·검수원)과 기능 색인이 이 화면을 말한다');
 ok(/export function termProgressOf/.test(rd('src/nlSearch.js')) && !/termBoard/.test(rd('src/nlSearch.js')), '미르 «언제 끝나» 계산(termProgressOf)은 건드리지 않았다');

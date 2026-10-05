@@ -176,6 +176,23 @@ const CN_RE = /([A-Z]{4})\s*(\d{7})/;
 const ISO_RE = /(20|40|45)\s*(GP|HC|RH|RF|HA|OT|FR|TK|DC)\s*([FE])?/;
 
 /** SheetJS 워크북 → {voy, decks:[{deck,name,cols,rows,slots:[{cn,wt,iso,fe,ri,ci,span,flags}]}]} */
+/** 4.04: 선사 덱 시트 머리의 «CAPACITY» 두 칸(샤시 20'·40' 대수) — 선사가 샤시 코드로 센 값이라 컨 대수에서 거꾸로 못 센다(LOLO 는 샤시가 없고 트윈 20피트 둘은 40피트 샤시 하나). 있는 그대로 둔다 — 출력이 선사 종이와 같게. 못 찾으면 null(출력이 추정으로 채운다). */
+function readCapacity(ws, XLSX) {
+  try {
+    for (let r = 0; r < 16; r++) for (let c = 0; c < 80; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (!(cell && typeof cell.v === 'string' && cell.v.trim().toUpperCase() === 'CAPACITY')) continue;
+      const nums = [];
+      for (let cc = c + 1; cc <= c + 16 && nums.length < 2; cc++) {
+        const x = ws[XLSX.utils.encode_cell({ r, c: cc })];
+        if (x && x.v !== '' && x.v != null && Number.isFinite(Number(x.v))) nums.push(Number(x.v));
+      }
+      return nums.length === 2 ? nums : null;
+    }
+  } catch { /* 머리를 못 읽으면 추정으로 */ }
+  return null;
+}
+
 export function parseDeckPlanWorkbook(wb, XLSX) {
   if (isCheckerPlanWorkbook(wb)) return parseCheckerPlanWorkbook(wb, XLSX);   // 3.67: 검수사 STOWAGE PLAN(선적)
   const decks = [];
@@ -202,10 +219,17 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
     for (const m of ws['!merges']) {
       const raw = cellText(m.s.r, m.s.c).trim();
       if (!raw) continue;
-      const joined = raw.split(/\n/).map((s) => s.trim()).filter(Boolean).join(' ');
-      const cnM = joined.replace(/\s+/g, '').match(/([A-Z]{4})(\d{7})/);
-      if (!cnM) continue;
-      const cn = cnM[1] + cnM[2];
+      const rawLines = raw.split(/\n/).map((s) => s.trim()).filter(Boolean);
+      const joined = rawLines.join(' ');
+      //  4.04: 컨 번호는 첫 줄에서만 찾는다 — 줄을 이어 붙여 찾으면 번호가 9자인 칸(SAWTBP007 / 24258 / 45 HC F)에서 중량 앞자리가 붙어 가짜 번호(WTBP0072425)가 생겼다.
+      //        첫 줄이 컨 번호 모양이 아니면(영숫자 6~10자) 그 글자를 그대로 칸 번호로 둔다 — 선사 집계에는 그 칸도 세어져 있어 버리면 합계가 어긋난다.
+      const head = (rawLines[0] || '').replace(/\s+/g, '').toUpperCase();
+      const cnM = head.match(/([A-Z]{4})(\d{7})/);
+      let cn = '';
+      if (cnM) cn = cnM[1] + cnM[2];
+      else if (/^[A-Z0-9]{6,10}$/.test(head) && /[A-Z]/.test(head) && /\d/.test(head)) cn = head;
+      else { const jm = joined.replace(/\s+/g, '').match(/([A-Z]{4})(\d{7})/); if (jm) cn = jm[1] + jm[2]; }
+      if (!cn) continue;
       const key = `${cn}@${m.s.r}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -267,9 +291,11 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
                bay: cl ? String(cl).padStart(2, '0') : '',
                pos: (ln && cl) ? `${deckLetter}덱 ${ln}줄 ${cl}칸` : '' };
     }).filter((s) => s.ri >= 0 && s.ci >= 0);
+    const capacity = readCapacity(ws, XLSX);
     decks.push({ deck: deckLetter, name, cols: colStops.length - 1, rows: rowBands.length, slots,
                  tier, lines: rowBands.length, colsN: colStarts.length,
-                 lolo: slots.filter((x) => x.lolo).length, dbl: slots.filter((x) => x.dbl).length });
+                 lolo: slots.filter((x) => x.lolo).length, dbl: slots.filter((x) => x.dbl).length,
+                 ...(capacity ? { capacity } : {}) });
   }
   // 덱 순서: 위(D)→아래(B) 실물 페이지 순 아님 — 알파벳 역순(D,C,B,A)로 위 데크 먼저
   decks.sort((a, b) => (b.deck < a.deck ? -1 : b.deck > a.deck ? 1 : 0));

@@ -1,19 +1,25 @@
 // V9.22: RZOR 덱 스토우지 플랜 뷰 — RORO/LOLO 혼용선용 덱플랜(차량은 램프로 실어 좌표가 없고 갠트리 적재분만 셀로 보인다) (선사 rzdf 플랜 자동 파싱분)
-//   덱 칩 선택 → CSS grid. 셀: 끝4 + 규격, 완료=초록, 리퍼=청록 테두리, 긴급/활어 배지.
-//   셀 클릭 → 컨 상세(기존 모달).
+//   덱 칩 선택 → 그림. 4.04: 그림은 출력 허브 «카고플랜»(PrintableDeckPlan)과 같은 종이 그림(선사 STOWAGE PLAN · 마감텔리 STOWAGE PLAN)이다 — 서명란·범례줄만 빠진다.
+//   셀 클릭 → 컨 상세(기존 모달) · 예측 칸 = 선적 · 빈자리 = 끝자리 조회(종전 동작 그대로).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { fbAssignDeckSlot, fbCompleteContainer } from '../firebase.js';
-import { isReeferIso, getEquipNumber, fmtShiftTime } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.67-01: 호기(인건비 근거) · 3.72: 완료 시각(KST HH:MM)
+import { getEquipNumber, fmtShiftTime } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.67-01: 호기(인건비 근거) · 3.72: 완료 시각(KST HH:MM)
 import { canWorkNow, workGateText, equipGateText } from '../workChoice.js';   // 3.67-01: 조회만은 보기만 · 호기 없이 완료 금지(컨 상세와 같은 문지기)
 import { speakDone } from '../voice.js';
 import { rzorSlotCandidates } from '../rzorDeckPredict.js';   // 3.70: 빈자리 조회 후보 한 벌
+import { buildPrintModel, deckKeyOf } from '../rzorPrintModel.js';   // 4.04: 화면 그림도 출력과 같은 모델 한 벌
+import { PageView, DP_BASE_CSS, deckPlanDate } from './PrintableDeckPlan.jsx';
+import { SPECIAL_FILL } from './PrintableCargoPlanV2.jsx';
 
 const FRESH_MS = 10 * 60 * 1000;   // 3.72: 완료 10분 안 = «방금» — ✓ 배지가 깜박이고 «최근 양하» 줄 칩이 밝은 초록이다
 //  폰 시계와 터미널 시각이 어긋나도(느리거나 앞서도) «방금» 판정이 한쪽으로 치우치지 않게 차이의 절댓값으로 잰다.
 const isFresh = (now, at) => !!at && Math.abs(now - at) < FRESH_MS;
 
-export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector, onExport, nowMs: nowProp = 0 }) {
+const ZOOM_W = { fit: '100%', big: '1500px', huge: '2200px' };   // 4.04: 폰은 «크게»로 시작 — 그림이 A4 한 장이라 줄이면 글자가 안 읽힌다
+const ZOOM_LABEL = { fit: '맞춤', big: '크게', huge: '아주 크게' };
+
+export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector, onExport, nowMs: nowProp = 0, termWork = {}, voyageInfo = null }) {
   const decks = plan?.decks || [];
   const [sel, setSel] = useState(0);
   //  ★ 3.72 — 지금 시각(30초마다 다시 그려 10분이 지난 «방금» 표식을 끈다). nowMs prop 은 연막검사가 시각을 고정하는 자리.
@@ -67,8 +73,17 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
   }, [decks, plan]);
   const hits = useMemo(() => (pick ? rzorSlotCandidates({ containers, q: pq, placedAt, compMap, predPos }) : []), [pick, pq, containers, placedAt, compMap, predPos]);
   const freeHits = hits.filter((h) => !h.locked);
+  //  ★ 4.04 — 화면 그림 = 출력과 같은 모델(buildPrintModel) 한 벌. 칸·집계·LOLO 구역이 화면과 종이에서 갈리지 않는다.
+  const [zoom, setZoom] = useState(() => (typeof window !== 'undefined' && window.innerWidth >= 900 ? 'fit' : 'big'));
+  const vinfo = voyageInfo || {};
+  const model = useMemo(
+    () => buildPrintModel({ plan, containers, xrayMap, termWork, vsl: vinfo.vslFull || 'RIZHAO ORIENT', date: deckPlanDate(vinfo), mode }),
+    [plan, containers, xrayMap, termWork, vinfo.vslFull, vinfo.planDate, mode]);
   if (!decks.length) return null;
   const d = decks[Math.min(sel, decks.length - 1)];
+  const pg = model.pages.find((p) => p.deck === deckKeyOf(d)) || null;
+  const zoneN = pg && pg.zone ? pg.zone.count : 0;   // LOLO 구역 대수 — 덱플랜 파일의 lolo 표시와 무관하게 «고정 구역» 규칙으로 센다
+  const loloActive = loloOnly && !!(pg && pg.zone);   // 다른 덱으로 옮겨도 «갠트리만 보기» 가 켜진 채 그림이 사라지지 않게
   // ★ 3.67-01 (검수사 2026-09-29 «작업자로 로그인하면 실제 선적을 할수 있어야 합니다») — 자동 덱플랜에서 자리를 찍는 것은 **선적**이다.
   //   자리 확정(assign) + 완료(fbCompleteContainer — 컨 상세 [완료] 와 같은 함수·호기 인자). 문지기도 컨 상세와 같다 —
   //   조회만은 보기만(canWorkNow), 호기 없이 완료 금지(getEquipNumber). 동방 실적 자동 완료(2.30)는 이것과 무관하게 계속 돈다 —
@@ -130,12 +145,12 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         ))}
         <span className="ml-auto text-xxs text-dim-300">이 덱 {done}/{conts.length} 완료 · 남음 {conts.length - done} · 덱플랜 전체 {allDone}/{allConts} · 빈자리 {d.slots.filter((s) => s.empty && !s.xcell).length}{plan._gen ? ` · 예측 ${conts.filter((s) => s.pred).length} · 확정 ${conts.filter((s) => s.sure).length}` : ''}</span>
         {/* V9.55: 갠트리(LO/LO) 분만 보기 — 크레인으로 검수하는 건 이것뿐이다 */}
-        {(d.lolo > 0) && (
+        {(zoneN > 0) && (
           <button onClick={() => setLoloOnly(!loloOnly)}
-            className={`px-2 py-1 rounded text-xxs font-black border ${loloOnly
+            className={`px-2 py-1 rounded text-xxs font-black border ${loloActive
               ? 'bg-lime-600 border-lime-400 text-lime-50'
               : 'bg-ink-800 border-lime-700/60 text-lime-300'}`}>
-            🏗 갠트리 {d.lolo}van{loloOnly ? ' 만 보는 중' : ''}
+            🏗 갠트리 {zoneN}van{loloActive ? ' 만 보는 중' : ''}
           </button>
         )}
         {/* 3.67: 선적 덱플랜 → 검수사 STOWAGE PLAN 엑셀(마감텔리 양식). 예측 자리는 회색 글씨로 나간다. */}
@@ -165,8 +180,6 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
           ))}
         </div>
       ) : null}
-      {/* V9.54: 도면과 같은 방향으로 읽는다 — 줄은 좌현(부두)→우현, 칸은 선미(램프)→선수 */}
-      {/* 3.67: 검수사 STOWAGE PLAN(선적)은 위치 1 이 선수다(numbering 'bow'). 그림 방향은 둘 다 왼쪽 선미·오른쪽 선수. */}
       {plan._gen ? (
         <div className="text-2xs text-amber-200/90 mb-1">
           🧭 자동 덱플랜 — 동방 실적 순번으로 자리를 예측했습니다(실적 {plan.seqN || 0}대 · 크레인 {plan.craneN || 0}대). 예측 칸을 누르면 그 자리에 <b>선적</b>(자리 확정 + 완료), 확정 칸을 다시 누르면 자리 해제, 빈자리를 누르면 컨번호 끝자리로 찾아 맞는 컨 중에서 골라 선적합니다. 조회만은 보기만, 동방 실적 자동 완료는 그대로 돕니다.
@@ -174,113 +187,99 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
           {Array.isArray(plan.badAssign) && plan.badAssign.length ? <span className="text-red-300"> · 모르는 자리 키의 확정 {plan.badAssign.length}건은 무시(예측으로 돌림)</span> : null}
         </div>
       ) : null}
-      <div className="text-2xs text-dim-400 mb-1">
-        ↕ 줄 1~{d.lines || d.rows} <span className="text-dim-500">(1=좌현·부두쪽)</span>
-        <span className="mx-2 text-dim-500">|</span>
-        ↔ 칸 1~{d.colsN || d.cols} <span className="text-dim-500">{d.numbering === 'bow' ? '(검수사 양식 · 1=선수 → 선미·램프쪽, 오른쪽이 선수)' : '(1=선미·램프쪽 → 선수)'}</span>
+      <div className="flex items-center gap-2 mb-1 flex-wrap text-2xs text-dim-400">
+        <span>↕ 줄 1~{d.lines || d.rows} <span className="text-dim-500">(1=좌현·부두쪽)</span></span>
+        <span className="text-dim-500">|</span>
+        <span>↔ 칸 1~{d.colsN || d.cols} <span className="text-dim-500">{d.numbering === 'bow' ? '(검수사 양식 · 1=선수 → 선미·램프쪽, 오른쪽이 선수)' : `(1=선미·램프쪽 → 선수${pg && pg.colAxis ? ', 그림 위·아래 숫자' : ''})`}</span></span>
+        <span className="ml-auto flex items-center gap-1">
+          <span className="text-dim-500">크기</span>
+          {Object.keys(ZOOM_W).map((k) => (
+            <button key={k} onClick={() => setZoom(k)} data-zoom={k}
+              className={`px-2 py-0.5 rounded text-xxs font-black ${zoom === k ? 'bg-cyan-600 text-cyan-50' : 'bg-ink-800 text-dim-200'}`}>{ZOOM_LABEL[k]}</button>
+          ))}
+        </span>
       </div>
-      <div className="overflow-auto">
-        <div className="grid gap-0.5 min-w-[720px]"
-             style={{ gridTemplateColumns: `repeat(${d.cols}, minmax(30px, 1fr))`, gridTemplateRows: `repeat(${d.rows}, 58px)` }}>
-          {d.slots.map((s, si) => {
-            // V9.22-02: 빈자리 — 선적 시 탭해서 컨 지정 (assign 맵), 재탭 해제
-            if (s.empty) {
-              if (loloOnly) return null;   // V9.55
-              // 3.67: 자리 키는 플랜이 준 것(덱-줄-위치, 한 키 = 한 자리)을 먼저 쓴다 — 그림 좌표(ri·ci) 키는 40피트 두 칸과 옆 칸이 겹친다(2차 시뮬 지적)
-              const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
-              const asg = plan.assign && plan.assign[slotKey];
-              return (
-                <button key={`e${si}`}
-                  title={s.xcell ? `${s.pos || ''} · 옆 ${s.xOf} 40피트의 X 칸` : (s.pos || '')}
-                  onClick={async () => {
+      {pg ? (
+        <div className="overflow-auto rounded-sm bg-white" data-deckplan-screen="1">
+          <style>{DP_BASE_CSS}</style>
+          <div style={{ width: ZOOM_W[zoom] }}>
+            <PageView pg={pg} model={model} bw={false} isFirst={model.pages[0] === pg} isLast={model.pages[model.pages.length - 1] === pg}
+              screen={{
+                //  칸의 눌림·완료·확정 표시 — 종전 칸 색(초록=완료 · 노랑=확정 · 점선=예측)과 같은 판정
+                cellState: (c) => {
+                  const s = c.slot;
+                  const isDone = !!compMap[s.cn];
+                  const showDone = isDone && !s.pred && !s.sure;   // 예측(?)·확정(📌) 칸은 자기 색이 우선 — 완료는 모서리 ✓ 만
+                  const dnAt = showDone && Number(compMap[s.cn].at) > 0 ? Number(compMap[s.cn].at) : 0;
+                  return { done: showDone, fresh: isFresh(now, dnAt), tick: isDone && !showDone, sure: !!s.sure, dim: loloActive && !c.lolo };
+                },
+                titleOf: (c) => {
+                  const s = c.slot;
+                  const cc = byCn[s.cn];
+                  return [(s.pred ? '예측 · 누르면 이 자리에 선적 — ' : s.sure ? '확정 · 누르면 자리 해제 — ' : '') + (s.pos || ''), s.cn, `${String(s.iso || '').trim()} ${(cc && (cc.fe === 'F' || cc.fe === 'E')) ? cc.fe : (s.fe || '')}`.trim(), cc && cc.tmp != null && String(cc.tmp).trim() !== '' ? `온도 ${cc.tmp}` : ''].filter(Boolean).join(' · ');   // V9.54 자리 표기 · 3.67-01 탭 = 선적
+                },
+                onCell: async (c) => {
+                  const s = c.slot;
+                  const cc = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류
+                  const fe = (cc && (cc.fe === 'F' || cc.fe === 'E')) ? cc.fe : s.fe;
+                  const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
+                  // 3.67: 자동 덱플랜 — 예측 칸은 누르면 확정(assign), 확정 칸은 다시 누르면 해제. 올린 플랜(예측 아님)은 종전대로 컨 상세.
+                  if (s.pred) {   // 3.67-01: 예측 칸 탭 = 그 자리에 선적(자리 확정 + 완료)
+                    try { await loadHere(slotKey, s.cn); }
+                    catch (e) { console.error('[3.70] 예측 칸 선적 실패', e); alert(e && e.viewOnly ? workGateText('선적 완료') : `${s.cn} 저장 실패 — ${(e && e.message) || e}`); }   // 3.70 감사: 조용히 실패하지 않는다
+                    return;
+                  }
+                  if (s.sure) {
                     if (!voyageKey) return;
-                    if (asg) {
-                      if (window.confirm(`${asg.cn} 지정을 해제할까요?`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
-                      return;
-                    }
-                    //  3.70: 브라우저 입력창 대신 앱 조회창 — 끝자리로 찾고, 맞는 컨을 다 보여 주고 고른다(목록 밖 번호는 후보에 없다 — 3.67-01 감사 지적 그대로).
-                    openPick({ slotKey, pos: s.pos || `${d.deck}덱 ${s.line || ''}줄 ${s.col || ''}칸`, sz: s.sz || '', xOf: s.xcell ? s.xOf : '' });
-                  }}
-                  className={`rounded-sm border border-dashed text-center overflow-hidden leading-tight
-                    ${asg ? 'bg-amber-900/70 border-amber-400' : s.xcell ? 'bg-ink-900/60 border-line' : 'bg-ink-800/40 border-line-strong'}`}
-                  style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
-                  {asg
-                    ? <div className="text-2xs font-black mono text-amber-200 truncate">📌{asg.cn.slice(-4)}<div className="text-[8px] text-amber-300/80">{asg.cn.slice(0,4)}</div></div>
-                    : s.xcell   /* 3.70: 옆 40피트가 덮는 칸(검수사 양식의 X) — 빈자리로 세지 않는다. 실물에서 따로 실었을 때만 눌러 고른다 */
-                      ? <div className="text-xs font-black text-dim-500">X{s.line ? <div className="text-[8px] mono text-dim-500 font-normal">{s.line}-{s.col}</div> : null}</div>
-                      : <div className="text-3xs text-dim-400">빈자리{s.line ? <div className="text-[8px] mono text-dim-500">{s.line}-{s.col}</div> : null}</div>}
-                </button>
-              );
-            }
-            if (loloOnly && !s.lolo) return null;   // V9.55: 갠트리 분만 보기
-            const isDone = !!compMap[s.cn];
-            //  3.72: 완료 칸 = 밝은 초록 + 모서리 ✓ 배지(글자 잘림과 무관하게 항상 보인다). 종전엔 어두운 초록·어두운 파랑이라 눌러 봐야 알았다.
-            //    예측(?)·확정(📌) 칸은 선적 자동 덱플랜의 자기 색이 우선이라 종전 그대로(배지도 없다).
-            const showDone = isDone && !s.pred && !s.sure;
-            const dnAt = showDone && compMap[s.cn] && Number(compMap[s.cn].at) > 0 ? Number(compMap[s.cn].at) : 0;
-            const fresh = isFresh(now, dnAt);
-            const c = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류 — 실번호·온도·DG·POD (사용자 요청)
-            const fe = (c && (c.fe === 'F' || c.fe === 'E')) ? c.fe : s.fe;
-            const isRf = isReeferIso(s.iso) || !!(c && c.rf);   // 3.60-10 (진단 M6): 리퍼 판정 한 벌
-            const isDg = !!(c && c.dg);
-            const isXray = !!xrayMap[s.cn];
-            const tmp = c && c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '';
-            const sl = c && c.sl ? String(c.sl) : (c && c.eseal ? String(c.eseal) : '');
-            const isLug = !!((s.flags && s.flags.includes('LUG')) || (c && c.lugg));   // 2.06-01: 수화물 — 덱 칸도 보라 박스 (검수사 «9220을 찾았는데 보라박스가 없습니다 — C덱에서 입니다»)
-            const dn = showDone && !isLug;   // 3.72: 밝은 초록 바탕에서 글자를 밝게(수화물 보라 칸은 종전 글자색)
-            const marks = [isRf ? (tmp ? `❄${tmp}` : '❄') : '', isDg ? '⚠DG' : '',
-                           s.flags && s.flags.length ? s.flags.filter((f) => f !== 'LUG').join('·') : ''].filter(Boolean).join(' ');
-            // 3.67: 자동 덱플랜 — 예측 칸은 누르면 확정(assign), 확정 칸은 다시 누르면 해제. 올린 플랜(예측 아님)은 종전대로 컨 상세.
-            const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
-            const onTap = async () => {
-              if (s.pred) {   // 3.67-01: 예측 칸 탭 = 그 자리에 선적(자리 확정 + 완료)
-                try { await loadHere(slotKey, s.cn); }
-                catch (e) { console.error('[3.70] 예측 칸 선적 실패', e); alert(e && e.viewOnly ? workGateText('선적 완료') : `${s.cn} 저장 실패 — ${(e && e.message) || e}`); }   // 3.70 감사: 조용히 실패하지 않는다
-                return;
-              }
-              if (s.sure) {
-                if (!voyageKey) return;
-                if (window.confirm(`${s.cn} 자리 확정을 해제할까요? (완료 기록은 그대로 — 완료 취소는 컨 상세에서)`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
-                return;
-              }
-              onOpenContainer?.(c || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay });  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
-            };
-            return (
-              <button key={`${s.cn}${s.ri}${s.ci}`}
-                title={(s.pred ? '예측 · 누르면 이 자리에 선적 — ' : s.sure ? '확정 · 누르면 자리 해제 — ' : '') + (s.pos || '')}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" · 3.67-01 탭 = 선적 */
-                onClick={onTap}
-                data-done={showDone ? (fresh ? 'fresh' : '1') : undefined}
-                className={`relative rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
-                  ${s.pred ? 'border-dashed border-amber-400 bg-amber-950/50' : s.sure ? 'bg-amber-900/70 border-amber-400' : isDone ? 'bg-emerald-600 border-emerald-300' : fe === 'E' ? 'bg-ink-750/80 border-line-strong' : 'bg-sky-900/80 border-sky-600'}
-                  ${isXray ? 'ring-2 ring-yellow-400' : isRf ? 'ring-1 ring-cyan-400' : ''}
-                  ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}
-                  ${isLug ? 'ring-2 ring-violet-400 border-violet-400 bg-violet-900/70' : ''}`}
-                style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
-                {showDone ? <span data-badge="1" style={{ background: '#ffffff', color: '#047857' }} className={`absolute top-0 right-0 px-0.5 rounded-bl-sm text-[10px] leading-none font-black ${fresh ? 'animate-pulse' : ''}`}>✓</span> : null}
-                <div className={`text-2xs font-black mono truncate ${dn ? 'text-emerald-50' : 'text-dim-100'}`}>
-                  {s.pred ? <span className="text-amber-300">?</span> : null}{s.sure ? <span className="text-amber-200">📌</span> : null}{s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{isXray ? <span className="bg-yellow-400 text-black px-0.5 rounded-sm font-black">X</span> : null}{s.cn.slice(-4)}{isDone && !showDone ? ' ✓' : ''}{marks ? <span className={`${dn ? 'text-emerald-50' : 'text-cyan-300'} font-bold`}> {marks}</span> : null}
-                </div>
-                <div className={`text-[8.5px] truncate ${dn ? 'text-emerald-50' : 'text-dim-200'}`}>{s.iso} {fe}</div>
-                {s.line ? <div className={`text-[8px] mono truncate ${dn ? 'text-emerald-50' : 'text-dim-300/90'}`}>{s.line}줄 {s.col}칸</div> : null}
-                {sl ? <div className={`text-[8.5px] mono truncate ${dn ? 'text-yellow-100' : 'text-amber-200/90'}`}>🔒{sl}</div> : null}
-              </button>
-            );
-          })}
+                    if (window.confirm(`${s.cn} 자리 확정을 해제할까요? (완료 기록은 그대로 — 완료 취소는 컨 상세에서)`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
+                    return;
+                  }
+                  onOpenContainer?.(cc || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay });  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
+                },
+                emptyState: (e) => {
+                  const s = e.slot;
+                  const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
+                  return { asg: (plan.assign && plan.assign[slotKey]) || null, dim: loloActive && !e.z };
+                },
+                emptyTitle: (e) => {
+                  const s = e.slot;
+                  const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
+                  const asg = plan.assign && plan.assign[slotKey];
+                  if (asg) return `📌 ${asg.cn} 지정됨 · 누르면 해제 — ${s.pos || ''}`;
+                  return (s.xcell ? `${s.pos || ''} · 옆 ${s.xOf} 40피트의 X 칸` : (s.pos || '')) + ' · 누르면 컨번호로 찾아 지정';
+                },
+                onEmpty: async (e) => {
+                  const s = e.slot;
+                  // V9.22-02: 빈자리 — 선적 시 탭해서 컨 지정 (assign 맵), 재탭 해제
+                  // 3.67: 자리 키는 플랜이 준 것(덱-줄-위치, 한 키 = 한 자리)을 먼저 쓴다 — 그림 좌표(ri·ci) 키는 40피트 두 칸과 옆 칸이 겹친다(2차 시뮬 지적)
+                  const slotKey = s.key || `${d.deck}-${s.ri}-${s.ci}`;
+                  const asg = plan.assign && plan.assign[slotKey];
+                  if (!voyageKey) return;
+                  if (asg) {
+                    if (window.confirm(`${asg.cn} 지정을 해제할까요?`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
+                    return;
+                  }
+                  //  3.70: 브라우저 입력창 대신 앱 조회창 — 끝자리로 찾고, 맞는 컨을 다 보여 주고 고른다(목록 밖 번호는 후보에 없다 — 3.67-01 감사 지적 그대로).
+                  openPick({ slotKey, pos: s.pos || `${d.deck}덱 ${s.line || ''}줄 ${s.col || ''}칸`, sz: s.sz || '', xOf: s.xcell ? s.xOf : '' });
+                },
+              }} />
+          </div>
         </div>
-      </div>
-      <div className="flex gap-3 mt-2 text-2xs text-dim-300 flex-wrap">
-        <span><span className="inline-block w-2.5 h-2.5 bg-sky-900 border border-sky-600 rounded-sm mr-1" />풀</span>
-        <span><span className="inline-block w-2.5 h-2.5 bg-ink-750 border border-line-strong rounded-sm mr-1" />엠티</span>
-        <span><span className="inline-block w-2.5 h-2.5 bg-emerald-600 border border-emerald-200 rounded-sm mr-1" />완료 ✓(10분 안은 ✓ 깜박)</span>
-        <span><span className="inline-block w-2.5 h-2.5 border border-cyan-400 rounded-sm mr-1" />리퍼</span>
-        <span><span className="inline-block w-2.5 h-2.5 border-2 border-yellow-400 rounded-sm mr-1" />Ⓧ X-RAY</span>
-        <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-line-strong rounded-sm mr-1" />빈자리(탭=찾아 고르기)</span>
-        {plan._gen ? <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-line rounded-sm mr-1 bg-ink-900/60" />X(옆 40피트 칸)</span> : null}
-        <span><span className="inline-block w-2.5 h-2.5 bg-amber-900 border border-amber-400 rounded-sm mr-1" />📌지정됨</span>
-        <span><span className="inline-block w-2.5 h-2.5 border-2 border-lime-400 rounded-sm mr-1" />🏗갠트리(落地·LO/LO)</span>
-        <span><span className="inline-block w-2.5 h-2.5 border-2 border-amber-300 rounded-sm mr-1" />⇅双背(2단)</span>
-        <span><span className="inline-block w-2.5 h-2.5 bg-violet-900 border-2 border-violet-400 rounded-sm mr-1" />🧳수화물(이적 아님)</span>
-        {plan._gen ? <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-amber-400 rounded-sm mr-1" />?예측(탭=선적)</span> : null}
+      ) : <div className="text-xs text-red-300">이 덱의 그림을 만들지 못했습니다.</div>}
+      <div className="flex gap-x-3 gap-y-1 mt-2 text-2xs text-dim-300 flex-wrap items-center">
+        {['DG', 'RF', 'FR', 'OT', 'TK'].map((k) => (
+          <span key={k}><span className="inline-block w-2.5 h-2.5 border border-black rounded-sm mr-1 align-middle" style={{ background: SPECIAL_FILL[k] }} />{k}</span>
+        ))}
+        <span className="text-dim-500">칸 아래 글자 = 특수화물 · F=풀 E=엠티</span>
+        <span><span className="text-red-500 font-black mr-0.5">★</span>X-RAY</span>
+        <span><span className="inline-block w-2.5 h-2.5 border-2 border-violet-600 bg-white rounded-sm mr-1 align-middle" />🧳수화물(LUG)</span>
+        <span><span className="inline-block w-2.5 h-2.5 bg-emerald-300 border border-emerald-700 rounded-sm mr-1 align-middle" />완료 ✓(10분 안은 ✓ 깜박)</span>
+        <span><span className="inline-block w-2.5 h-2.5 border-2 border-black rounded-sm mr-1 align-middle" />🏗LOLO 구역(굵은 선)</span>
+        <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-line-strong rounded-sm mr-1 align-middle" />빈자리(탭=찾아 고르기)</span>
+        <span><span className="inline-block w-2.5 h-2.5 bg-amber-200 border border-amber-700 rounded-sm mr-1 align-middle" />📌지정됨</span>
+        <span>⇅ 双背(2단)</span>
+        {plan._gen ? <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-amber-600 bg-white rounded-sm mr-1 align-middle" />?예측(탭=선적)</span> : null}
+        {plan._gen ? <span>X = 옆 40피트 칸</span> : null}
       </div>
       {pick ? (
         //  ★ 3.70 빈자리 조회창 — 끝자리를 치면 맞는 컨이 다 나온다(안 실은 컨 먼저). 하나를 누르면 그 자리에 싣는다. Enter 는 한 대만 맞을 때만.
