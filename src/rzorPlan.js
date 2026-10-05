@@ -331,3 +331,20 @@ export function deckCoordMap(plan) {
   }
   return m;
 }
+
+/** 4.04-02: 컨 목록에 «덱_줄_칸» 좌표(deckPos)를 붙여 돌려준다 — 목록을 만드는 모든 길(항차 화면 · 검색 패널 · 홈 통합검색 · 미르 · 콘앱)이 이 한 벌을 부른다.
+ *   덱플랜에 없는 컨은 건드리지 않는다(종전 표기 그대로). 붙은 게 하나도 없으면 같은 배열을 돌려준다.
+ *   검수사 2026-10-05 «미르 답, 통계 탭, CSV, 검색 목록은 아직 다른 표기입니다 … 같은 좌표로 맞출까요?» «네 맞춰주세요». */
+export function withDeckPos(list, plan) {
+  if (!Array.isArray(list) || !list.length) return list;
+  const m = deckCoordMap(plan);
+  if (!m.size) return list;
+  let hit = false;
+  const out = list.map((c) => {
+    const k = c && c.cn ? m.get(c.cn) : '';
+    if (!k || c.deckPos === k) return c;
+    hit = true;
+    return { ...c, deckPos: k };
+  });
+  return hit ? out : list;
+}

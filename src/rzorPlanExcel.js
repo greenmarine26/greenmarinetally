@@ -8,6 +8,7 @@
 //   스타일은 xlsx-js-style 로 쓴다(EmptySealReport 와 같은 로더). 노드 시험은 스타일 없는 xlsx 로도 같은 셀이 나온다.
 
 import { isReeferIso, isoFeet } from './utils.js';   // 리퍼·크기 판정 한 벌(3.60-10 lint · 감사 §4)
+import { applyXlsxPrintSetup, downloadXlsxBytes } from './xlsxPrintSetup.js';
 
 const N_POS = 26;
 const BLOCK_ROWS = 49;
@@ -231,19 +232,24 @@ export function buildCheckerPlanWorkbook(XLSX, { plan, vsl = 'RIZHAO ORIENT', vo
   }
   for (let r = 0; r < rows.length; r++) if (!rows[r]) rows[r] = { hpx: 15 };
   ws['!rows'] = rows;
-  ws['!pageSetup'] = { orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'loading stowage plan');
   return wb;
 }
 
+/** 엑셀 인쇄 설정 — 마감텔리 R106W 실물과 같다: 가로 A4 · 배율 60 · 여백 0.39 · 가운데 맞춤 · 덱 블록(C·D·UNDER) 사이에서 쪽 나눔.
+ *  엑셀은 «한 쪽 맞춤» 을 쓰면 쪽 나눔 줄을 무시하므로 배율을 쓴다. 60 은 상한 — 쓰는 라이브러리가 칸을 실물보다 넓게 써서(1.3배) 60 이면 가로 두 쪽이 되므로 열 너비 합으로 가로 한 쪽에 맞는 배율까지 낮춘다(fitWidth). 검수사 2026-10-05 «엑셀에서도 한장으로 나오게끔 맞춰주세요» */
+export const CHECKER_XLSX_PRINT = { orientation: 'landscape', paper: 9, margin: 0.3937, centered: true, scale: 60, fitWidth: true, breaks: [BLOCK_ROWS, BLOCK_ROWS * 2] };
+
 /** 파일로 저장(브라우저) — STOWAGE_PLAN_R106W.xlsx */
 export async function exportCheckerPlanXlsx(p) {
   const XLSX = await loadSheetJSStyled();
   const wb = buildCheckerPlanWorkbook(XLSX, p);
   const name = `STOWAGE_PLAN_${String(p.voy || 'RZOR').replace(/[^A-Za-z0-9_-]/g, '')}.xlsx`;
-  XLSX.writeFile(wb, name);
+  // 4.04-02: XLSX.writeFile 은 인쇄 설정을 파일에 안 쓴다 — 만든 파일을 열어 써 넣고 내려받는다.
+  const bytes = applyXlsxPrintSetup(XLSX, XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), [CHECKER_XLSX_PRINT]);
+  downloadXlsxBytes(bytes, name);
   return name;
 }
 

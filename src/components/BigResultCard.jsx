@@ -331,7 +331,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
         {/* 부가 정보 */}
         <div className="flex items-center gap-2 text-xxs mono flex-wrap text-dim-300 pt-2 border-t border-line">
-          {c.bay && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
+          {(c.bay || c.deckPos) && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
           {/* V9.56: RO/RO 겸용선(RZOR) — 갠트리(落地) 작업분인지 한눈에. 크레인 검수 대상이 이것뿐이다. */}
           {c.lolo && <span className="px-1.5 py-0.5 rounded bg-lime-700 text-lime-50 text-2xs font-black">🏗갠트리</span>}
           {c.dbl && <span className="px-1.5 py-0.5 rounded bg-amber-700 text-amber-50 text-2xs font-black">⇅2단</span>}

@@ -34,19 +34,21 @@ import { speak, stopSpeak } from './voice.js';
 import { runDeviceCmd } from './utils.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 import { parseViewCommand, pickVoyageKey } from './planCommand.js';
+import { withDeckPos } from './rzorPlan.js';   // 2.61-01: RZOR 선내위치 «C_8_21» — 콘앱 미르도 검수앱과 같은 좌표(rzorPlan 은 import 가 없어 번들이 가볍다)
 
 /* 2.87-02: parseViewCommand 는 src/planCommand.js 한 벌로 옮겼다 — 검수앱 화면들과 같은 판정을 쓰기 위해서다.
    콘앱 번들은 여기서 그대로 다시 내보낸다(부르는 이름은 그대로). */
 
 /** 콘앱 행 → 미르가 읽는 컨테이너 모양. 콘앱은 `reefer/temp`, 엔진은 `rf/tmp` 를 본다. */
-export function toMirContainers(rows, mode) {
-  return (rows || []).map((c) => {
+export function toMirContainers(rows, mode, plan) {
+  const out = (rows || []).map((c) => {
     const o = Object.assign({}, c);
     if (o.rf == null && c.reefer != null) o.rf = c.reefer ? 1 : 0;
     if (o.tmp == null && c.temp != null) o.tmp = c.temp;
     if (!o._mode && mode) o._mode = mode;
     return o;
   });
+  return plan ? withDeckPos(out, plan) : out;   // 2.61-01: 덱플랜(stowagePlan)을 주면 «덱_줄_칸» 좌표(deckPos)를 붙인다 — 미르 posOf 가 먼저 읽는다
 }
 
 /**

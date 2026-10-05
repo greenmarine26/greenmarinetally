@@ -9,6 +9,7 @@ import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명�
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
+import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
@@ -277,7 +278,11 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     //   그래서 베이 화면에서 배정해 `bay_actual` 이 채워져도, 이 패널의 "자리 미지정"
     //   판정(`!c.bay || !c.row || !c.tier`)에는 그대로 걸려 **같은 컨이 두 화면에서 다르게 세어졌다.**
     //   임시창고(`__STG__`)는 승격하지 않는다 — 그것은 '자리 없음'을 뜻하는 정상 상태다.
-    return arr.map(c => {
+    //  4.04-02: 덱플랜 좌표(C_8_21) — 항차 화면·미르와 같은 한 벌(rzorPlan.withDeckPos). 모드마다 그 모드 덱플랜으로.
+    const _dpm = { discharge: deckCoordMap(voyage?.discharge?.stowagePlan), loading: deckCoordMap(voyage?.loading?.stowagePlan) };
+    return arr.map(c0 => {
+      const _dk = c0.cn && _dpm[c0._mode] ? _dpm[c0._mode].get(c0.cn) : '';
+      const c = _dk && c0.deckPos !== _dk ? { ...c0, deckPos: _dk } : c0;
       if (c.bay_actual && c.bay_actual !== '__STG__' && c.row_actual && c.tier_actual) {
         return { ...c, bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual,
                  _bay_planned: c.bay, _row_planned: c.row, _tier_planned: c.tier, _position_moved: true };
@@ -2719,7 +2724,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
                 <button key={c.cn} onClick={() => { setC1(c); setC2(findTwinCandidate(c, allContainers, new Set(), shipImo, shipName)); }}
                   className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
                   {c.cn}{/* 3.3-01: 자리까지 보여야 고른다 */}
-                  <span className="ml-1 text-3xs text-rose-300 font-black">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}</span>
+                  <span className="ml-1 text-3xs text-rose-300 font-black">{c.deckPos || (c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음')}</span>
                 </button>
               ))}
             </div>
@@ -2884,7 +2889,7 @@ function SmallResultCard({ c, onOpen, showPos = false }) {
         <span className="px-1 rounded text-3xs font-black bg-indigo-900 text-indigo-200">수정</span>}
       <span className="text-2xs text-dim-300 mono truncate flex-1">{c.cn}</span>
       {/* 3.3-01: 끝4가 겹칠 때는 **자리**가 고르는 근거다 — 번호만 보여 주면 못 고른다(검수사 지적 2026-09-03) */}
-      {showPos && <span className={`text-3xs mono font-black px-1 rounded ${c._comp ? 'bg-emerald-900 text-emerald-200' : 'bg-rose-900 text-rose-200'}`}>{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}</span>}
+      {showPos && <span className={`text-3xs mono font-black px-1 rounded ${c._comp ? 'bg-emerald-900 text-emerald-200' : 'bg-rose-900 text-rose-200'}`}>{c.deckPos || (c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음')}</span>}
       <span className="text-3xs mono text-dim-300">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
       <span className={`text-3xs mono px-1 rounded font-bold ${
         c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :

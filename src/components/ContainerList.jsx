@@ -603,7 +603,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
             {/* 위치 + 무게 + 검수업체 + POD 강조 */}
             <div className="flex items-center gap-2 mt-1 text-2xs mono flex-wrap">
-              {c.bay && <span className="text-amber-200 font-bold">{fmtPos(c)}</span>}
+              {(c.bay || c.deckPos) && <span className="text-amber-200 font-bold">{fmtPos(c)}</span>}
               {c.wt > 0 && <span className="text-dim-300">{formatWt(c.wt)}</span>}
               {c.op && <span className="bg-ink-800 px-1 py-0.5 rounded text-dim-200 font-bold">{c.op}</span>}
               {c.pol && <span className="text-dim-400">POL <span className="text-dim-200">{c.pol}</span></span>}

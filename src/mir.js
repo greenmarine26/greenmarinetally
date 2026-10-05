@@ -20,6 +20,7 @@
 //   그래서 이 파일 맨 바깥(함수 밖)에서는 nlSearch 에서 가져온 것을 **쓰지 않는다** — 함수 안에서만 쓴다. 연막 smoke_mirfile 이 지킨다.
 // ⚠ 순수 함수만 — firebase SDK 를 직접 부르지 않는다(콘앱 번들 mir-core.js 에도 실린다). 보관소는 REST(fetch)와 window 손으로만.
 
+import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸» (rzorPlan 은 import 가 없다 — 콘앱 번들에 가볍게 실린다)
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
@@ -583,6 +584,7 @@ export function flattenVoyages(voyages) {
       const xrayMap = sec.xrayList || {};
       const xraySeals = sec.xraySeals || {};
       const compMap = sec.completed || {};
+      const _dcm = deckCoordMap(sec.stowagePlan);   // 4.04-02: 덱플랜 좌표 «C_8_21» — 항차 화면·검색 패널·X-RAY 와 같은 값(rzorPlan 한 벌)
       const merged = {};
       //  3.31: 항차 화면·마감텔리와 같은 선사 코드로(같은 배를 두 화면이 다르게 답하면 안 된다).
       const _spOpG = shipOpMapper(String(v.info?.vsl || '').toUpperCase(),
@@ -643,6 +645,7 @@ export function flattenVoyages(voyages) {
           _comp: compMap[c.cn] || null,
           xraySeal: xraySeals[c.cn] || null,
           _xraySeal: xraySeals[c.cn] || null,
+          ...(_dcm.get(c.cn) ? { deckPos: _dcm.get(c.cn) } : {}),
         });
       });
     });
@@ -945,6 +948,7 @@ function specOf(c) {
   return lab || '규격 미상';
 }
 function posOf(c) {
+  if (c && c.deckPos) return String(c.deckPos);   // 4.04-02: RZOR — 덱플랜 좌표(C_8_21). 베이 자리 말은 베이 좌표가 있는 배만.
   const p = effectivePos(c);
   if (p.inStorage) return '임시창고';
   if (!p.bay) return '자리 미정';
@@ -1329,7 +1333,7 @@ function readBayWish(text) {
   return { bay, tier: hold ? 'hold' : deck ? 'deck' : null };
 }
 
-const eyePosOf = (c) => (c?.bay && c?.row && c?.tier) ? `${c.bay}-${c.row}-${c.tier}` : '';
+const eyePosOf = (c) => c?.deckPos ? String(c.deckPos) : (c?.bay && c?.row && c?.tier) ? `${c.bay}-${c.row}-${c.tier}` : '';   // 4.04-02: RZOR 덱플랜 좌표 먼저
 const l4 = (c) => c?.l4 || String(c?.cn || '').slice(-4);
 const feetOf = (iso) => { const h = String(iso || '')[0]; return h === '2' ? '20피트' : (h === '4' || h === 'L' || h === '9') ? '40피트' : ''; };
 
@@ -2485,7 +2489,7 @@ JSON 한 줄로만 답한다: {"canonical":"...","window":"창구 이름","confi
 }
 
 // ── ② 자료 답 — 요약 + 계산해 둔 사실 + 질문에 맞는 컨 ───────────────────────
-const _pos = (c) => [c.bay, c.row, c.tier].filter((x) => x !== undefined && x !== null && x !== '').join('-');
+const _pos = (c) => c.deckPos ? String(c.deckPos) : [c.bay, c.row, c.tier].filter((x) => x !== undefined && x !== null && x !== '').join('-');   // 4.04-02: RZOR 덱플랜 좌표 먼저
 const _iso = (c) => c.iso || c.tp || c.type || c.size || '';
 const _isRf = (c) => !!(c.rf || c.isReefer || isReeferIso(String(_iso(c))));   // 3.60-10 (진단 M6): 리퍼 한 벌 — 옛 식은 rf 없는 45R1 을 놓쳤다
 const _isDg = (c) => !!(c.dg || c.imdg || c.dgc || c.un || c.dgClass);

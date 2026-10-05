@@ -68,7 +68,7 @@ import { runDiagnostics } from '../diagnostics.js';
 import { consumePodFocus, setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { logView, logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 활동 로그(열람·조회 기록)
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
-import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
+import { isDeckPlanWorkbook, parseDeckPlanWorkbook, deckCoordMap } from '../rzorPlan.js';   // 4.04-02: deckCoordMap — 목록에 «덱_줄_칸» 좌표
 import { buildRzorLoadingDeckPlan } from '../rzorDeckPredict.js';   // 3.67: RZOR 선적 자동 덱플랜
 import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';        // 3.67: 검수사 STOWAGE PLAN 엑셀 내보내기
 import DeckPlanView from '../components/DeckPlanView.jsx';
@@ -1012,6 +1012,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       const mark = {};
       for (const dk of decks) for (const s of (dk?.slots || [])) if (s && s.cn && !s.empty) mark[s.cn] = s;
       if (!Object.keys(mark).length) return base;
+      //  4.04-02: 덱플랜 좌표(C_8_21) — X-RAY 탭과 같은 값을 모든 목록(통계·CSV·검색·리스트)이 쓴다. 생성 플랜은 확정 자리(sure)만.
+      const _dcm = deckCoordMap(_gen ? _rzorGen : sec.stowagePlan);
       const out = base.map(c => {
         const s = mark[c.cn];
         if (!s) return c;
@@ -1023,6 +1025,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '', dbl: c.dbl || !!s.dbl,
           lugg: c.lugg || _fl.includes('LUG'), urgent: c.urgent || _fl.includes('긴급') };
       });
+      for (let i = 0; i < out.length; i++) {   // 4.04-02: 좌표 붙이기(생성 플랜은 확정 자리만 — 예측은 자리가 아니다)
+        const k = _dcm.get(out[i].cn);
+        if (k && (!_gen || (mark[out[i].cn] && mark[out[i].cn].sure))) out[i] = { ...out[i], deckPos: k };
+      }
       if (_gen) return out;   // 3.67: 생성 플랜엔 덱 전용 컨이 없다(컨 목록에서 만든 것)
       // 2.06-02 (검수사 «리스트 목록에도 카드색이 반영안됨» — R090E 실측): SPSU2019220 은 EDI(208)에도
       //   양하 리스트(208)에도 없고 **덱플랜에만 있다**. 그래서 리스트에 행 자체가 없어 보라 카드가
@@ -1039,7 +1045,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         out.push({ cn, l4: cn.slice(-4), iso: String(s.iso || '').replace(/\s/g, ''), fe: s.fe || '',
           bay: s.bay || '', row: s.row || '', tier: s.tier || '', pos: s.pos || '',
           lugg: true, urgent: _fl.includes('긴급'), lolo: !!s.lolo, dbl: !!s.dbl,
-          _deckOnly: !_cf, _luggConfirmed: _cf });
+          _deckOnly: !_cf, _luggConfirmed: _cf, ...(_dcm.get(cn) ? { deckPos: _dcm.get(cn) } : {}) });
       }
       return out;
     },

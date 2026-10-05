@@ -773,7 +773,7 @@ function GlobalResultCard({ c, onOpen }) {
           <span className="text-dim-200 font-bold">{c.vsl}</span>
           <span>·</span>
           <span>{c.voy}</span>
-          {c.bay && <><span>·</span><MapPin className="w-2.5 h-2.5"/><span className="text-amber-300">{fmtPos(c)}</span></>}
+          {(c.bay || c.deckPos) && <><span>·</span><MapPin className="w-2.5 h-2.5"/><span className="text-amber-300">{fmtPos(c)}</span></>}
           {c.op && <><span>·</span><span className="text-dim-300">{c.op}</span></>}
         </div>
       </div>

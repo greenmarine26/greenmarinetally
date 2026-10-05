@@ -5,6 +5,7 @@
 //   · 선적(검수사 마감텔리 양식)은 이 파일이 아니라 rzorPlanExcel.exportCheckerPlanXlsx 가 쓴다.
 import { buildPrintModel } from './rzorPrintModel.js';
 import { loadSheetJSStyled } from './rzorPlanExcel.js';
+import { applyXlsxPrintSetup, downloadXlsxBytes } from './xlsxPrintSetup.js';
 
 const B = { style: 'thin', color: { rgb: '000000' } };
 const BOX = { top: B, bottom: B, left: B, right: B };
@@ -107,17 +108,21 @@ export function buildCarrierPlanWorkbook(XLSX, { plan, containers = [], xrayMap 
     ws['!cols'] = Array.from({ length: Math.max(lastC, tc + 8, 18) + 1 }, (_, i) => ({ wch: i === 0 ? 2 : (i === lastC ? 5 : 11) }));
     const rows = []; for (let r = 0; r <= endR; r++) rows.push({ hpx: r >= H && r < H + pg.px.rows * 4 ? 13 : 16 });
     ws['!rows'] = rows;
-    ws['!pageSetup'] = { orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
     XLSX.utils.book_append_sheet(wb, ws, `${pg.label === 'UNDER' ? 'UNDER' : pg.label}-DECK`);
   });
   return wb;
 }
+
+/** 엑셀 인쇄 설정 — 선사 덱플랜(rzdf) 실물과 같다: 가로 A4 · 덱 시트마다 한 쪽에 맞춤(1×1). 검수사 2026-10-05 «엑셀에서도 한장으로 나오게끔 맞춰주세요» */
+export const CARRIER_XLSX_PRINT = { orientation: 'landscape', paper: 9, margin: 0.3937, centered: true, fit: true };
 
 /** 파일로 저장(브라우저) — STOWAGE_PLAN_R109E_양하.xlsx */
 export async function exportCarrierPlanXlsx(p) {
   const XLSX = await loadSheetJSStyled();
   const wb = buildCarrierPlanWorkbook(XLSX, p);
   const name = `STOWAGE_PLAN_${String((p.plan && p.plan.voy) || 'RZOR').replace(/[^A-Za-z0-9_-]/g, '')}_DISCHARGE.xlsx`;
-  XLSX.writeFile(wb, name);
+  // 4.04-02: XLSX.writeFile 은 인쇄 설정을 파일에 안 쓴다(세로 A4 11쪽으로 찍혔다) — 만든 파일을 열어 시트마다 써 넣고 내려받는다.
+  const bytes = applyXlsxPrintSetup(XLSX, XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), [CARRIER_XLSX_PRINT]);
+  downloadXlsxBytes(bytes, name);
   return name;
 }
