@@ -6,7 +6,7 @@
 // 재생성: 앱 저장소에서  npx vite build --config vite.merge.config.js  → dist_merge/gm_merge.js → HTML 래핑.
 import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, normalizeCarrierCode, APP_VERSION } from './src/utils.js';
 import { opFromListFileName } from './src/data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(합본이 op 를 비워 마감텔리가 CSC/DSL 을 못 갈랐다)
-import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.61-02: 개정판 판정 한 벌(양하 자동 등록과 같이 쓴다)
+import { listRevRank, listRevisionDrops, listPartialRevisionDrops } from './src/listRevision.js';   // 3.61-02: 개정판 판정 한 벌(양하 자동 등록과 같이 쓴다)
 
   // ../gmt2/src/mergeApi.js
   function classify(name) {
@@ -68,6 +68,18 @@ import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.6
       }
     }
     const dropList = listRevisionDrops(files.filter((f) => classify(f.name || "") === "list"), (n) => listCnSet[n]);
+    // TallyOne 4.07-02: 공컨만 고친 개정판(«REVISED EMPTY CONTAINERLIST»)은 같은 계열 옛 리스트의 공컨 중 빠진 것만 뺀다(취소분).
+    //   옛 리스트의 풀 컨은 그대로 둔다. 판정은 src/listRevision.js 한 벌 — 머리 설명(STSE 2678W 512 → 427)을 본다.
+    const _listFiles = files.filter((f) => classify(f.name || "") === "list");
+    const listFe = {};
+    for (const f of _listFiles) {
+      const _m = {};
+      (listRecCache[f.name] || []).forEach((r) => { if (r.cn && !isBook(r.cn)) _m[String(r.cn).toUpperCase()] = String(r.fe || "").toUpperCase(); });
+      listFe[f.name] = _m;
+    }
+    const partDrop = listPartialRevisionDrops(_listFiles, (n) => listCnSet[n], (n, c) => (listFe[n] || {})[c] || "", dropList);
+    const revDropped = new Set();   // 개정판으로 취소된 컨(합본에서 뺀 것) — 다른 리스트에 또 있으면 아래에서 거른다
+    const revRows = new Map();      // 취소로 뺀 행 자체(컨 → { rec, file }) — 실번호 EDI 에 있는 컨이면 아래에서 되살린다(EDI 가 내용의 진실)
     for (const f of files) {
       const name = f.name || "";
       const kind = classify(name);
@@ -119,10 +131,16 @@ import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.6
             perFile.push({ name, kind: "list(양하자료 제외)", count: 0, dischargeList: true, ptkPod: _ptkPod, ptkPol: _ptkPol });
             continue;
           }
-          let n = 0;
+          let n = 0, _pdN = 0;
+          const _pd = partDrop.get(name);   // 4.07-02: 이 파일에서 개정판이 취소한 공컨
           const _fop = opFromListFileName(name);   // 3.60-21: 빈 op 에만 파일명 선사(실제 선사 칸이 있으면 그것이 이긴다)
           recs.forEach((r) => {
             if (r.cn && !isBook(r.cn)) {
+              if (_pd && _pd.cns.has(String(r.cn).toUpperCase())) {
+                _pdN++; const _rc = String(r.cn).toUpperCase(); revDropped.add(_rc);
+                if (!revRows.has(_rc)) { r._source = name; if (!r.fe && /empty/i.test(name)) r.fe = "E"; revRows.set(_rc, { rec: r, file: name }); }
+                return;
+              }
               r._source = name;
               if (_fop && !(r.op && String(r.op).trim())) { r.op = _fop; r._opFromFile = true; }
               if (!r.fe && /empty/i.test(name)) r.fe = "E";   // v2.17.11-17: 엠티 출처 파일(MAE EMPTY LOAD LIST 등)인데 F/E 공란이면 E로 채움 — 합본 F/E 공란 287행 실측(629S), 검수앱 E확정 판정 근거
@@ -140,7 +158,7 @@ import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.6
               n++;
             }
           });
-          perFile.push({ name, kind, count: n });
+          perFile.push(_pdN ? { name, kind, count: n, revDropped: _pdN, revBy: Array.from(_pd.by) } : { name, kind, count: n });
         } else if (kind === "xray") {
           const out = await parseXrayList(await asArrayBuffer(f));
           const arr = out && out.containers || (out && out.records ? out.records.map((r) => r && r.cn) : []) || [];
@@ -177,6 +195,17 @@ import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.6
     const isDummyE = (cn) => { const _s = String(cn || "").toUpperCase().replace(/\s+/g, ""); return /^[A-Z]{4}\d{7}$/.test(_s) && !/^[A-Z]{3}[UJZ]/.test(_s); };   // v2.17.11-17: DUME 프리픽스 → ISO 6346 규칙(실번호는 4번째 글자 U/J/Z) — CASP69 플래너 가상번호(CASP0000001…) 77대 오집계 수정 (MCSN 629S 2026-07-18)
     const ediDummy = ediReal.reduce((n, c) => n + (isDummyE(c.cn) ? 1 : 0), 0);
     const ediRealCns = ediReal.filter((c) => !isDummyE(c.cn));
+    // 4.07-02(독립 감사): 개정판이 뺀 컨이라도 **실번호 EDI 에 있으면 취소가 아니다** — EDI 는 내용의 진실이라 종전대로 합본에 남긴다.
+    //   (남기지 않으면 EDI 에는 있고 합본에는 없는 «부족» 이 생기고, 수집기가 보관소의 그 행까지 지운다.)
+    if (ediRealCns.length && revRows.size) {
+      const _es = new Set(ediRealCns.map((c) => String(c.cn).toUpperCase()));
+      revRows.forEach((v, cn) => {
+        if (!_es.has(cn) || list[cn]) return;
+        list[cn] = v.rec;
+        const _pf = perFile.find((p) => p.name === v.file && p.revDropped);
+        if (_pf) { _pf.revDropped--; _pf.count++; if (!_pf.revDropped) { delete _pf.revDropped; delete _pf.revBy; } }
+      });
+    }
     let emptyConfirmed = 0;
     if (ediHasCn) {
       const eset = new Set(ediRealCns.map((c) => String(c.cn).toUpperCase()));
@@ -198,6 +227,8 @@ import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.6
     }
     const listKeys = Object.keys(list);
     const listTotal = listKeys.length;
+    // 4.07-02: 개정판이 취소한 컨 중 합본에 정말 없는 것(다른 리스트에 또 있으면 취소가 아니다) — 수집기가 보관소에서 같이 뺀다.
+    const revCancelCns = Array.from(revDropped).filter((c) => !(c in list)).sort();
     let missingByCarrier = {};
     const missingCns = [];
     if (ediHasCn) {
@@ -235,6 +266,8 @@ import { listRevRank, listRevisionDrops } from './src/listRevision.js';   // 3.6
       extraTotal: extraCns.length,
       // v2.17.4: EDI 밖 잔존(커트·구판) — LOADING_LIST에서 분리됨
       extraCns: extraCns.slice(0, 300),
+      revCancelCns,
+      // 4.07-02: 공컨 개정판이 취소한 컨(전부 — 자르지 않는다. 수집기가 보관소 records 에서 이 컨들을 뺀다)
       partialEdi,
       // v2.17.11-13: EDI 부분본 판정(제외 대상 > EDI 총수) — 리스트 전체 보존됨
       emptyConfirmed,

@@ -72,3 +72,66 @@ export function listRevisionDrops(files, cnSetOf) {
   }
   return drop;
 }
+
+// ★ TallyOne 4.07-02 / MailPilot 2.42-03 — **공컨만 고친 개정판(«REVISED EMPTY CONTAINERLIST»)** 은 옛 리스트의 공컨만 대체한다.
+//   검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 수집기에 변경에 대한 반응이 적용되어 있을텐데 무슨이유인지 적용이 안되고 있습니다. 이번 항차 STSE건입니다.»
+//   실측 STSE 2678W — 선사(SITC)가 09:57 에 `STSE2678WCN_REVISED EMPTY CONTAINERLIST.XLS`(공컨 215대)를 보냈다. 원래 리스트
+//   `STSE2678WCN_CONTAINERLIST.XLS`(330대 = 풀 30 + 공컨 300)에서 공컨 85대를 취소한 것이다(300-215=85, 512-85=427=터미널 배정 선적).
+//   그런데 위 `listBaseKey` 는 이름에 남은 «EMPTY» 한 낱말 때문에 두 파일을 다른 계열로 보아 합집합으로 합쳤고(512), 취소분 85대가 그대로 남았다.
+//   ⚠ 두 파일을 한 계열로 묶어 통째 대체(`listRevisionDrops`)하면 안 된다 — 개정판에는 풀 컨 30대가 없어 옛 판과 함께 사라진다.
+//   ⇒ 개정판이 «공컨만» 담은 목록(이름에 공컨 낱말 · 행이 전부 F/E=E)일 때, 같은 계열 옛 리스트의 **공컨 중 개정판에 없는 것만** 뺀다. 풀 컨은 그대로 둔다.
+//   조건이 하나라도 안 맞으면 아무것도 안 뺀다(종전과 같음) — 개정판에 풀이 섞였거나, 옛 리스트와 공컨이 반도 안 겹치거나, 계열이 안 맞으면.
+export const EMPTY_WORD_RE = /empt(?:y|ies)|엠티|공컨/i;
+const EMPTY_WORD_RE_G = /empt(?:y|ies)|엠티|공컨/gi;
+// 이름에 «명시한 개정 표시»(REVISED·최종·수정·개정…)와 공컨 낱말이 같이 있는가.
+//   ⚠ 끝 숫자(…EMPTY 55.xls)나 n차는 개정 표시로 치지 않는다 — listRevRank 는 끝 숫자도 서열로 쓰므로(55 ≥ 50) 숫자가 큰 이름이 개정판으로 오인된다(독립 감사 2026-10-06).
+const REV_MARK_RE = /최종|final|revised?|\bre\)|\(re\)|수정본|수정|개정/;
+export const isEmptyRevisionName = (nm) => REV_MARK_RE.test(String(nm || "").toLowerCase()) && EMPTY_WORD_RE.test(String(nm || ""));
+// 공컨 낱말을 뺀 이름의 계열 키 — 옛 리스트의 listBaseKey 와 같으면 같은 계열이다
+export const listFamilyKey = (nm) => listBaseKey(String(nm || "").replace(EMPTY_WORD_RE_G, " "));
+
+// files: [{ name, mtime }] — 리스트 파일만. cnSetOf(name) → 실번호 Set, feOf(name, cn) → 'E'|'F'|''.
+// wholeDrop: 위 listRevisionDrops 가 이미 통째로 뺀 파일 이름 Set(그 파일은 계산에서 뺀다).
+// 반환: Map(옛 리스트 파일 이름 → { cns: 그 파일에서 뺄 컨 Set, by: 근거가 된 개정판 파일 이름 Set }).
+// 판정(독립 감사 반영 — 지나치게 빼지 않는 쪽으로만 좁혔다)
+//   ① 개정판은 «공컨만» 담은 것이어야 한다(F/E 가 F 인 행이 하나라도 있으면 공컨 개정판이 아니다).
+//   ② 개정판 한 개마다 옛 리스트의 공컨과 작은 쪽 기준 절반 넘게 겹쳐야 근거로 쓴다(다른 선사 목록 배제).
+//   ③ 근거가 된 개정판들의 합집합이 옛 리스트의 공컨 **절반 이상을 덮어야** 한다 — 5대짜리 부분집합 개정판이 옛 공컨 295대를 지우지 못하게.
+//   ④ 취소 = 옛 공컨 − 개정판들의 합집합. 개정판이 둘이어도(서로 다른 반쪽씩) 합집합으로 한 번에 센다.
+//   ⑤ «옛 리스트»는 개정 표시도 끝 숫자도 없는 원본이어야 한다(listRevRank 0). 개정판 뒤에 늦게 온 «…CONTAINERLIST1.XLS» 같은 전체 리스트가
+//      옛 판으로 취급돼 그 공컨이 취소되는 것을 막는다(독립 감사 2026-10-06 — 못 지우는 쪽으로만 좁힌다).
+export function listPartialRevisionDrops(files, cnSetOf, feOf, wholeDrop) {
+  const out = new Map();
+  const live = (files || []).filter((f) => !(wholeDrop && wholeDrop.has(f.name)));
+  for (const o of live) {
+    if (listRevRank(o.name) > 0) continue;   // ⑤ 개정 표시·끝 숫자가 붙은 리스트는 «옛 원본»이 아니다
+    const oCns = cnSetOf(o.name);
+    if (!oCns || !oCns.size) continue;
+    const oEmpty = [];
+    oCns.forEach((c) => { if (feOf(o.name, c) === "E") oEmpty.push(c); });
+    if (!oEmpty.length) continue;
+    const key = listBaseKey(o.name);
+    const union = new Set(), by = new Set();
+    for (const p of live) {
+      if (p.name === o.name || !isEmptyRevisionName(p.name) || listFamilyKey(p.name) !== key) continue;   // 같은 계열의 «공컨 낱말 없는» 옛 리스트
+      if (!newerListRev(p, o)) continue;
+      const pCns = cnSetOf(p.name);
+      if (!pCns || !pCns.size) continue;
+      // 개정판이 «공컨만» 담았는가 — 이름에 공컨 낱말이 있으므로 F/E 칸이 빈 행은 공컨으로 본다(합본이 같은 규칙으로 E 를 채운다).
+      let pure = true;
+      pCns.forEach((c) => { const fe = feOf(p.name, c); if (fe && fe !== "E") pure = false; });
+      if (!pure) continue;
+      let inter = 0;
+      oEmpty.forEach((c) => { if (pCns.has(c)) inter++; });
+      if (inter / (Math.min(pCns.size, oEmpty.length) || 1) < LIST_REV_OVERLAP) continue;   // 옛 판의 공컨과 반도 안 겹치면 다른 목록
+      pCns.forEach((c) => union.add(c));
+      by.add(p.name);
+    }
+    if (!by.size) continue;
+    const gone = oEmpty.filter((c) => !union.has(c));
+    if (!gone.length) continue;
+    if ((oEmpty.length - gone.length) / oEmpty.length < LIST_REV_OVERLAP) continue;   // 개정판들이 옛 공컨의 반도 못 덮으면 부분집합일 뿐이다
+    out.set(o.name, { cns: new Set(gone), by });
+  }
+  return out;
+}
