@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.07-02';
-const NOTE = '4.07-02 선적 리스트에 공컨 개정판이 오면 취소된 공컨은 선적 합본에서 빠집니다. 수집기 합본 판정을 고쳤습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.07-03';
+const NOTE = '4.07-03 해치커버 장수가 STSE 같은 배에서 한 홀드 베이 셋을 6장으로 세던 것을 2장으로 고쳤습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

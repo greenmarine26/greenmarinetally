@@ -69,6 +69,34 @@ const path = require('path');
   ok(l10m && l10m.needed === 1, `선적 10번 작업 전(아직 하나도 안 실음)에도 1장 (needed=${l10m && l10m.needed})`);
   const hNo = U.hatchOpenable(Object.values(FX.ediContainers), Object.fromEntries(FX.dict.bayDef.baysSummary.map(b => [parseInt(b.bayNo, 10), b])), 10, () => true);
   ok(hNo.needed === hNo.openable && hNo.openable === 2, 'isWork 없이 부르면 needed = openable (종전 호출부 호환)');
+  console.log('[6] 4.07-03 홀드 중심이 4의 배수인 배(STSE) — 트리오를 한 홀드로 센다 (검수사 2026-10-06 22:33 «24번베이가 왜 총6장인지?»)');
+  //  실측 STSE 2677E 보고(자동가이드 22:29 «23 (24)25 총 6장» · 21:30 «19 (20)21 총 6장» · 수동 24번만 2장) — 사전은 23·24·25 한 홀드 2장. 정답은 모두 2장.
+  const SX = require(path.resolve('tools/fixtures/hatch_stse.json'));
+  const vSx = { info: SX.info, discharge: { ediContainers: SX.ediContainers, completed: SX.completed } };
+  const gcSx = (b) => parseInt(b, 10);
+  const cnt = (bays) => U.hatchPanelCountOf(vSx, 'discharge', bays, SX.dict, gcSx);
+  ok(cnt(['23', '24', '25']) === 2, `자동가이드 «23 (24)25» 는 2장 (종전 6) — ${cnt(['23', '24', '25'])}`);
+  ok(cnt(['19', '20', '21']) === 2, `자동가이드 «19 (20)21» 도 2장 (종전 6) — ${cnt(['19', '20', '21'])}`);
+  ok(cnt(['11', '12', '13']) === 2, `«11 (12)13» 도 2장 — ${cnt(['11', '12', '13'])}`);
+  ok(cnt(['24']) === 2 && cnt(['12']) === 2, `수동으로 한 베이만 적어도 2장 — 24:${cnt(['24'])} 12:${cnt(['12'])}`);
+  const gSx = [19, 20, 21, 23, 24, 25].map((b) => U.hatchOpenableFor(vSx, 'discharge', b, SX.dict).group);
+  ok(JSON.stringify(gSx) === '[20,20,20,24,24,24]', `홀수 베이가 옆 홀드 중심(20·24)으로 묶인다 — ${JSON.stringify(gSx)}`);
+  const r24 = U.hatchOpenableFor(vSx, 'discharge', 23, SX.dict);
+  ok(r24 && r24.needed === 2 && r24.panels[0].holdWork.length > 0 && r24.panels[1].holdWork.length > 0, '23번으로 물어도 트리오 전체(홀드 평택분 두 장 모두)를 본다');
+  //  종전 배는 그대로 — 홀드 중심이 «4로 나눠 2가 남는» NSDC 는 coverGroupOf 가 groupOf 와 같다. 시프팅이 쓰는 groupOf 는 STSE 에서 옛 값(혼자) 그대로다.
+  const infoN = Object.fromEntries(FX.dict.bayDef.baysSummary.map((b) => [parseInt(b.bayNo, 10), b]));
+  const RN = U.makePanelResolver([], infoN);
+  ok(Object.keys(infoN).map(Number).every((n) => RN.coverGroupOf(n) === RN.groupOf(n)), 'NSDC(홀드 중심 ≡ 2 mod 4) 전 베이 — 커버 묶음이 종전과 같다');
+  const infoS = Object.fromEntries(SX.dict.bayDef.baysSummary.map((b) => [parseInt(b.bayNo, 10), b]));
+  const RS = U.makePanelResolver([], infoS);
+  ok(RS.groupOf(23) === 23 && RS.groupOf(25) === 25 && RS.coverGroupOf(23) === 24 && RS.coverGroupOf(25) === 24, '시프팅 축(groupOf)은 그대로 · 커버 묶음(coverGroupOf)만 24');
+  ok(RS.coverGroupOf(27) === 27 && RS.coverGroupOf(29) === 29, '해치 없는 데크 전용 베이(27·28·29)는 묶지 않는다');
+  //  독립 감사 반례(DJCT) — 사전 3·5 번 hatchCount 0 · 4번 2. 홀수만 적어도(자동가이드 groupBaysOf·수동 «3, 5») 둘째 장이 버려지면 안 된다. 실자료 DJCT 0225E 양하.
+  const DJ = require(path.resolve('tools/fixtures/hatch_djct.json'));
+  const vDj = { info: DJ.info, discharge: { ediContainers: DJ.ediContainers, completed: DJ.completed } };
+  const cDj = (bays) => U.hatchPanelCountOf(vDj, 'discharge', bays, DJ.dict, gcSx);
+  ok([[3, 4, 5], [4], [3, 5], [3], [5]].every((b) => cDj(b.map(String)) === 2) && [[7, 8, 9], [8], [7, 9], [7]].every((b) => cDj(b.map(String)) === 2),
+    `DJCT 3·4·5 / 7·8·9 — 홀수만 적어도 중심만 적어도 모두 2장 (3,5:${cDj(['3', '5'])} · 3:${cDj(['3'])} · 7,9:${cDj(['7', '9'])})`);
   console.log(fail ? `✗ ${fail}건 실패` : '✓ 해치 폭 연막검사 통과');
   process.exit(fail ? 1 : 0);
 })();
