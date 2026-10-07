@@ -919,6 +919,7 @@ node tools/smoke_fix361.cjs "$PWD" || { echo "✗ 3.61 연막검사 실패 — �
 node tools/smoke_fix36101.cjs "$PWD" || { echo "✗ 3.61-01 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_fix36102.cjs "$PWD" || { echo "✗ 3.61-02 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_fix40702.cjs "$PWD" || { echo "✗ 4.07-02 공컨 개정판 연막검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_voyscope408.cjs "$PWD" || { echo "✗ 4.08 항차 구독 범위(고른 선박 본문만) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_ilistsplit.cjs "$PWD" || { echo "✗ 3.62 장 나누기 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.

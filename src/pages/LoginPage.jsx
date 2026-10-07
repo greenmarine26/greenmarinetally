@@ -26,7 +26,7 @@ import {
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 import { useBackHandler } from '../backHandler.js';
 
-export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, pilotForecast = {}, choiceFor = '', onCancelChoice = null }) {   // 3.50 choiceFor — 이미 로그인한 사람이 «선박 변경» 으로 왔다: 이름 단계를 건너뛰고 선택 단계만   // 2.64: pilotForecast — 타임라인 도선 마커
+export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, voyagesLoaded = true, pilotForecast = {}, choiceFor = '', onCancelChoice = null }) {   // 3.50 choiceFor — 이미 로그인한 사람이 «선박 변경» 으로 왔다: 이름 단계를 건너뛰고 선택 단계만   // 2.64: pilotForecast — 타임라인 도선 마커
   const [newName, setNewName] = useState('');
   // TallyOne 1.0: 목록에서 이름을 고르면 선택만 되고, 하단 [로그인] 버튼으로 확정한다.
   const [selected, setSelected] = useState('');
@@ -434,7 +434,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 <div className="font-black text-sm text-amber-200">⚠ 작업 선박을 고르지 않으면 들어갈 수 없습니다.</div>
                 오늘 작업할 선박을 고르세요. {free ? '수석·검수사는 고른 뒤에도 모든 선박을 볼 수 있습니다.' : '앱은 고른 선박 안에서만 돕니다(다른 선박은 보이지 않습니다).'} 호기를 같이 고르면 작업 시작 때 호기를 다시 묻지 않습니다. 선박을 바꾸려면 헤더의 [변경]을 누르세요.
               </div>
-              {vlist.length === 0 && <div className="text-xs text-dim-400 text-center py-4">등록된 항차가 없습니다 — 자료가 오면 다시 로그인하세요.</div>}
+              {vlist.length === 0 && <div className="text-xs text-dim-400 text-center py-4">{!voyagesLoaded ? '항차 목록을 불러오는 중입니다…' : '등록된 항차가 없습니다 — 자료가 오면 다시 로그인하세요.'}</div>}
               <div className="space-y-1.5">
                 {vlist.map((sh) => {
                   const inf = infoOf(sh.key); const on = choiceVoyage === sh.key;
@@ -520,7 +520,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                     : '■ 오늘 · 내일 작업 선박 — LIVE'}
           </div>
           {boardShown.length === 0 ? (
-            <div className="text-xs2 text-dim-500">등록된 항차가 없습니다</div>
+            <div className="text-xs2 text-dim-500">{voyagesLoaded ? '등록된 항차가 없습니다' : '항차 목록을 불러오는 중…'}</div>
           ) : (
             // 2.4x (검수사 확정 -- 시안 구조): 선박 2열 카드 그리드. 좌측 코드 박스(작업중=act 초록 /
             //   예정=회색) · 우측 상태 2줄(1줄 작업중·번선석 또는 예정 시각 / 2줄 수량 배지 + 인원 0 경고).

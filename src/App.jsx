@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { parseViewCommand, pickVoyageKey } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber } from './utils.js';   // 3.50: 로그인 선택의 호기를 앱 호기로
-import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
+import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage, voyagesScopeOf } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
 import {
-  fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
+  fbSubscribeVoyages, fbSubscribeVoyageBody, fbSubscribeVoyageInfos, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeStaffOff, fbSubscribeShipBayDict, fbSubscribeHeartbeat, fbSubscribeYardStatus,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
@@ -48,13 +48,18 @@ function DeniedChiefOnly({ onGoHome }) {
   );
 }
 
+//  4.08: 아직 어느 범위로도 받은 것이 없다(또는 범위가 바뀌어 옛 것을 못 쓴다) — scope '' 는 어떤 voyScope 와도 다르다.
+const NO_VOY = Object.freeze({ scope: '', all: Object.freeze({}), keys: new Set(), loaded: false });
+
 export default function App() {
   // TallyOne 1.0 (B-8): 초기 라우트도 해시 파싱으로 — 홈 깜빡임 제거 (단 아래 로그인 강제가 우선)
   const [route, setRoute] = useState(() => parseHash(window.location.hash));
   // TallyOne 1.0: 로그인 전에 열려던 딥링크(#/voyage/... 등) — 로그인 후 그 화면으로 보낸다
   const pendingHashRef = React.useRef('');
-  const [voyages, setVoyages] = useState({});
-  const [voyagesLoaded, setVoyagesLoaded] = useState(false);  // V8.27: 딥링크 #310 방지 — 로드 전엔 VoyagePage 미마운트
+  //  ★ 4.08 — 항차는 «받은 만큼»만 쥔다(일반 검수원은 뿌리 전체 3.6MB 를 연결마다 다시 받던 것을 끊었다 — 아래 voyScope).
+  //    voyState = { scope, all, keys, loaded } — 한 구독이 한 번에 내놓는 한 벌. scope 는 «어느 범위로 받은 것인가» 라서,
+  //    범위가 바뀐 렌더(예: [변경] 직후)에는 옛 범위의 것을 쓰지 않는다(아래 liveVoy) — 효과가 도는 사이 «항차를 찾을 수 없습니다» 가 한 프레임 비치던 것(4.08 감사 주의 1)을 같은 렌더에서 막는다.
+  const [voyState, setVoyState] = useState(NO_VOY);
   const [inspectors, setInspectors] = useState({});
   const [extraStaff, setExtraStaff] = useState({});
   const [staffOffMap, setStaffOffMap] = useState({});   // 3.76: 접근 오프 명단(소유자는 걸러서 담는다)
@@ -162,7 +167,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const u1 = fbSubscribeVoyages((v) => { setVoyages(v); setVoyagesLoaded(true); });
     const u2 = fbSubscribeInspectors(setInspectors);
     // TallyOne 1.0 (K5): 서버 직책을 staffList 모듈 캐시에 먼저 밀어 넣고(setServerRoles),
     //   그 다음 state 반영(setExtraStaff) — 순서가 바뀌면 첫 렌더가 옛 직책으로 판정한다.
@@ -252,8 +256,40 @@ export default function App() {
       //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
       //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
-    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); unsubOff(); };
+    return () => { u2(); u3(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); unsubOff(); };
   }, []);
+
+  //  ★ 4.08 — 이 사람이 서버에서 받을 범위(workChoice.voyagesScopeOf): 자유 열람(수석·부수석·테스터·소유자·개발 열람)은 뿌리 전체, 일반 검수원은 고른 선박 본문 하나, 선택 전에는 항차마다 info 만.
+  //    로그인 전 PC(lg 이상)는 로그인 화면 현황판이 컨 수를 세므로 전체, 폰은 info 만. 범위는 문자열이라 호기만 바꿔 저장해도 다시 구독하지 않는다.
+  //    직책이 늦게 오면(devAccessMap·extraStaff) 다시 센다 — visibleVoyages 와 같은 잣대.
+  const [wideScreen, setWideScreen] = useState(() => { try { return window.matchMedia('(min-width: 1024px)').matches; } catch (e) { return true; } });
+  useEffect(() => {
+    let mq = null;
+    try { mq = window.matchMedia('(min-width: 1024px)'); } catch (e) { return undefined; }
+    const h = () => setWideScreen(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', h); else if (mq.addListener) mq.addListener(h);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', h); else if (mq.removeListener) mq.removeListener(h); };
+  }, []);
+  const voyScope = useMemo(() => voyagesScopeOf(inspector, workChoice, wideScreen), [inspector, workChoice, wideScreen, devAccessMap, extraStaff]);
+  useEffect(() => {
+    //  콜백이 범위 이름표(voyScope)를 달아 내놓는다 — 이 효과는 범위가 바뀔 때만 다시 돌고 옛 구독은 먼저 끊긴다.
+    const put = (all, keys, loaded) => setVoyState({ scope: voyScope, all, keys, loaded: !!loaded });
+    if (voyScope === 'all') return fbSubscribeVoyages((v) => put(v, null, true));
+    const sub = voyScope.startsWith('body:') ? fbSubscribeVoyageBody : (_k, cb) => fbSubscribeVoyageInfos(cb);
+    return sub(voyScope.slice(5), put);
+  }, [voyScope]);
+  //  voyagesAll = 받은 것 전부(선택 화면 목록용 info 만 있는 항차 포함) → LoginPage·Header 만 본다.
+  //  voyages    = 본문이 실제로 들어 있는 항차만(keys 가 null 이면 전부) — 홈·자동삭제·검색 같은 무거운 화면은 본문 없는 항차를 보면 안 된다.
+  //  voyagesLoaded = 지금 범위의 첫 한 벌이 왔는가 — 딥링크 #310 가드(V8.27)와 «불러오는 중» 표시가 쓴다.
+  const liveVoy = voyState.scope === voyScope ? voyState : NO_VOY;
+  const voyagesAll = liveVoy.all;
+  const voyagesLoaded = liveVoy.loaded;
+  const voyages = useMemo(() => {
+    if (!liveVoy.keys) return liveVoy.all;
+    const o = {};
+    for (const k of liveVoy.keys) if (liveVoy.all[k]) o[k] = liveVoy.all[k];
+    return o;
+  }, [liveVoy]);
 
   useEffect(() => {
     let alive = true;
@@ -541,7 +577,8 @@ export default function App() {
           pilotForecast={pilotForecast}   // 2.64: 로그인 타임라인 도선 마커
           current={inspector}
           inspectors={inspectors}
-          voyages={voyages}
+          voyages={voyagesAll}   /* 4.08: 선택 화면 목록은 info 만 있는 항차도 본다 */
+          voyagesLoaded={voyagesLoaded}
           extraStaff={extraStaff}
           deletedStaff={deletedStaff}
           notice={autoLogoutNotice}
@@ -581,7 +618,7 @@ export default function App() {
         inspector={inspector}
         online={online}
         route={route}
-        voyages={voyages}
+        voyages={voyagesAll}   /* 4.08: 헤더는 info 만 읽는다 */
         workChoice={workChoice}
         onChangeWork={() => { prevChoiceRef.current = workChoice; rechoiceRef.current = inspector; setWorkChoice(null); }}   /* 3.50: 선박·호기 다시 고르기(조회만 ↔ 작업자 전환도 여기서) */
         onChangeInspector={() => { setAutoLogoutNotice(''); navigate('login'); }}
@@ -597,7 +634,15 @@ export default function App() {
           1.60-01: 그 자리에 잠깐 있던 「이 기기 사본을 올렸습니다」 통지도 없앴다.
           자동 업로드가 지운 허상 72건을 되살린 사고(2026-08-13) 뒤 장치 자체를 폐기했다. */}
       <main className="pb-20">
-        {route.name === 'home' && (
+        {/* 4.08: 범위가 바뀐 직후(폰에서 수석이 로그인해 뿌리 전체를 받는 중 등)에는 빈 홈·빈 대시보드 대신 «불러오는 중» — «오늘 항차가 없다» 로 읽히지 않게 */}
+        {!voyagesLoaded && ['home', 'chief'].includes(route.name) && (
+          <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400" data-voyages-loading="1">
+            항차 불러오는 중…
+            <div className="mt-3 text-xs text-dim-500">오래 걸리면 아래 단추로 서버 연결을 다시 잡아 보세요.</div>
+            <div className="mt-2"><button onClick={handleRefreshData} disabled={refreshing} className="px-4 py-2 bg-ink-800 border border-line rounded-pill text-dim-100 font-bold disabled:opacity-50">{refreshing ? '다시 연결 중…' : '데이터 새로고침'}</button></div>
+          </div>
+        )}
+        {route.name === 'home' && voyagesLoaded && (
           <HomePage
             voyages={visibleVoyages} inspectors={inspectors} inspector={inspector}
             portMisData={portMisData}
@@ -637,7 +682,7 @@ export default function App() {
           />
         )}
         {/* TallyOne 1.0 (K2): 수석 대시보드 게이트 (ChiefDashboard 내부 가드와 이중 방어) */}
-        {route.name === 'chief' && (
+        {route.name === 'chief' && voyagesLoaded && (
           chiefOrOwner ? (
             <ChiefDashboard
               voyages={voyages} inspectors={inspectors} inspector={inspector}
@@ -665,7 +710,7 @@ export default function App() {
           />
         )}
         {route.name === 'voyage' && (
-          (voyages[route.voyageKey] && !canSeeVoyage(workChoice, inspector, route.voyageKey)) ? (
+          (voyagesLoaded && !canSeeVoyage(workChoice, inspector, route.voyageKey))   /* 4.08: 항차가 있는지는 보지 않는다(받은 뒤에만 가른다 — 직책이 늦게 오는 자유 열람자가 첫 렌더에 거부 화면을 보지 않게) — 일반 검수원은 고른 선박 밖 항차를 받지 않으므로 «있는지» 를 알 수 없고, 알 필요도 없다(자유 열람은 canSeeVoyage 가 늘 true) */ ? (
             /* 3.50: 일반 검수원이 고른 선박 밖 항차 — 주소 직접 입력·옛 딥링크·미르 플랜 등 */
             <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-300 space-y-3" data-denied-voyage="1">
               <div className="font-bold text-dim-100">내 작업 선박이 아닙니다.</div>

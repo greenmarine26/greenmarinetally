@@ -69,6 +69,16 @@ export function myWorkVoyageNow() {
   return (c && c.mode === 'work' && c.voyageKey) ? String(c.voyageKey) : '';
 }
 
+/** ★ 4.08 — 이 사람이 서버에서 **어디까지 받아야 하는가**. 'all' = 항차 뿌리 전체 · 'body:항차키' = 그 항차 본문 하나만(다른 항차는 받지 않는다) · 'light' = 항차마다 info 만(선택 화면 목록).
+ *  자유 열람(수석·부수석·테스터·소유자·개발 열람)은 전부를 본다. 일반 검수원은 고른 선박 하나뿐이라 그 본문만 받는다(뿌리 구독이 연결마다 3.6MB 를 다시 받던 것을 끊는다).
+ *  이름이 아직 없으면(로그인 전) PC(wide)는 로그인 화면 현황판이 항차 본문(컨 수)을 세므로 전부, 폰은 info 만. */
+export function voyagesScopeOf(name, choice, wide) {
+  const n = String(name || '').trim();
+  if (!n) return wide ? 'all' : 'light';
+  if (isFreeRoamer(n)) return 'all';
+  return (choice && choice.mode === 'work' && choice.voyageKey) ? 'body:' + String(choice.voyageKey) : 'light';
+}
+
 /** 이 사람이 볼 수 있는 항차만 — 자유 열람이면 전부, 작업자면 고른 선박 하나. 선택이 없으면(로그인 직후) 빈 것. */
 export function visibleVoyagesOf(choice, name, voyages) {
   const all = voyages || {};

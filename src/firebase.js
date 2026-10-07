@@ -1875,25 +1875,134 @@ function _fillRecordCn(voy) {
   return voy;
 }
 
+//  4.08: 항차 한 벌을 화면에 내보내기 전 손질 — 전체 구독(fbSubscribeVoyages)과 «고른 선박 본문 구독»(fbSubscribeVoyageBody)이
+//    **같은 한 벌**을 부른다(문지기는 들어오는 자리). 한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
+function _postVoyage(k, v) {
+  //  3.58-03: `cn` 칸이 빠진 기록(자리만 적힌 새 기록 — 3.58-01~02 기록지 사진 저장분 XTPG 541E 24대)은 키로 채운다.
+  //    화면들이 기록을 `r.cn` 으로 찾으므로 빠지면 그 기록이 안 보이고 베이 그림이 옛 자리를 그렸다.
+  _fillRecordCn(v);
+  //  3.7-08: CATOS 가 보내 준 **실제 실린 자리**(termWork.pos)를 실적 자리로 얹는다.
+  //    전 화면이 이 한 벌을 props 로 받으므로 여기 한 곳이면 베이플랜·베이상세·검수 리스트·
+  //    텔리·검색이 같이 따라온다(카고플랜은 `_edi_*` 복원이 있어 계획 그대로다).
+  //    자세한 이유는 utils.applyCatosPos 머리말 — 검수사 «실제 입력된 데이터로 고치라».
+  try { v = applyCatosPos(v); } catch (e) { console.warn('[터미널 자리] 반영 실패 —', k, e); }
+  try { v = applyAutoSwap(v); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
+  return v;
+}
+
 export function fbSubscribeVoyages(callback) {
   const r = ref(db, 'voyages');
   const unsub = onValue(r, (snap) => {
-    //  3.7-08: CATOS 가 보내 준 **실제 실린 자리**(termWork.pos)를 실적 자리로 얹는다.
-    //    전 화면이 이 한 벌을 props 로 받으므로 여기 한 곳이면 베이플랜·베이상세·검수 리스트·
-    //    텔리·검색이 같이 따라온다(카고플랜은 `_edi_*` 복원이 있어 계획 그대로다).
-    //    자세한 이유는 utils.applyCatosPos 머리말 — 검수사 «실제 입력된 데이터로 고치라».
     const v = snap.val() || {};
-    for (const k of Object.keys(v)) {
-      //  한 항차가 이상해도 나머지는 그대로 — 다만 조용히 넘기지 않는다(§4-3).
-      //  3.58-03: `cn` 칸이 빠진 기록(자리만 적힌 새 기록 — 3.58-01~02 기록지 사진 저장분 XTPG 541E 24대)은 키로 채운다.
-      //    화면들이 기록을 `r.cn` 으로 찾으므로 빠지면 그 기록이 안 보이고 베이 그림이 옛 자리를 그렸다. 문지기는 들어오는 이 자리 한 곳.
-      _fillRecordCn(v[k]);
-      try { v[k] = applyCatosPos(v[k]); } catch (e) { console.warn('[터미널 자리] 반영 실패 —', k, e); }
-      try { v[k] = applyAutoSwap(v[k]); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
-    }
+    for (const k of Object.keys(v)) v[k] = _postVoyage(k, v[k]);
     callback(v);
   });
   return unsub;
+}
+
+//  ★ 4.08 — 일반 검수원(작업 선박 하나만 보는 사람)은 `voyages` 뿌리 전체(실측 3.6MB)를 받을 이유가 없다.
+//    뿌리 구독은 수집기가 항차 info 를 쓸 때마다 바뀌어서, 연결이 끊겼다 붙을 때마다(폰은 수시로 끊긴다) 뿌리를 통째로 다시 받았다
+//    — 검수사 2026-10-07 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지».
+//    두 가지 좁은 구독을 둔다. 둘 다 callback(all, bodyKeys, loaded) 모양이고 App 이 같은 길로 받는다.
+//      all      = { 항차키: 항차 }
+//      bodyKeys = 본문이 **실제로 들어 있는** 항차 키 Set — App 은 무거운 화면(홈·자동삭제·검색…)에 이 항차만 넘긴다(본문 없는 항차를 보면 안 된다).
+//      loaded   = 처음 한 벌이 왔는가.
+
+//  ① 고른 항차 하나의 본문만. 다른 항차는 아예 받지 않는다(일반 검수원은 그 항차 밖을 못 본다 — workChoice.visibleVoyagesOf).
+export function fbSubscribeVoyageBody(voyageKey, callback) {
+  const k = String(voyageKey || '');
+  if (!k) { callback({}, new Set(), true); return () => {}; }
+  return onValue(ref(db, 'voyages/' + k), (snap) => {
+    const v = snap.val();
+    if (v === null || v === undefined) { callback({}, new Set(), true); return; }   // 그 항차가 없다 — «찾을 수 없습니다» 가 정직한 답
+    callback({ [k]: _postVoyage(k, v) }, new Set([k]), true);
+  });
+}
+
+//  ② 선택 화면(선박을 고르기 전)용 — 항차 키 목록(REST shallow, 수 바이트) + 항차마다 `info` 만(전체 10KB). 본문은 받지 않는다.
+//    항차 키 목록은 5분마다·화면이 다시 보일 때 새로 읽는다(새 항차·지워진 항차 반영). 실패하면 소리 내고 곧 다시 시도한다(조용히 넘기지 않는다).
+//    all[키] = { info } — info 가 없는 항차는 목록에 올리지 않는다.
+export function fbSubscribeVoyageInfos(callback) {
+  const infos = new Map();       // 항차키 → info 값(첫 응답 전에는 키 자체가 없다)
+  const unsubs = new Map();      // 항차키 → 구독 해제
+  let keys = null;               // 항차 키 배열 — null 이면 아직 못 받았다
+  let dead = false, queued = false, settleOver = false, inflight = false;   // settleOver — info 첫 응답을 기다리는 3초가 지났다 · inflight — 키 목록 요청이 가는 중(겹쳐 보내지 않는다)
+  let listTimer = null, settleTimer = null, retryDelay = 0;
+
+  const infosReady = () => keys !== null && keys.every((k) => infos.has(k));
+  const emit = () => {
+    if (dead || queued) return;
+    queued = true;
+    Promise.resolve().then(() => {
+      queued = false;
+      if (dead) return;
+      const all = {};
+      for (const [k, info] of infos) { if (info != null && keys && keys.includes(k)) all[k] = { info }; }
+      //  3초가 지나 «먼저 연다» 는 info 가 하나라도 와 있거나 항차가 정말 0개일 때만 — 연결이 없어 하나도 못 받았는데 «항차 없음» 으로 읽히면 안 된다(4.08 재감사 참고 1).
+      callback(all, new Set(), keys !== null && (infosReady() || (settleOver && (infos.size > 0 || keys.length === 0))));
+    });
+  };
+  const syncListeners = () => {
+    for (const k of keys) {
+      if (unsubs.has(k)) continue;
+      unsubs.set(k, onValue(ref(db, 'voyages/' + k + '/info'), (snap) => { infos.set(k, snap.val()); emit(); }));
+    }
+    for (const [k, u] of [...unsubs]) {
+      if (keys.includes(k)) continue;
+      try { u(); } catch (e) { console.warn('[항차 구독] info 해제 실패 —', k, e); }
+      unsubs.delete(k); infos.delete(k);
+    }
+  };
+  //  키 목록을 못 받았을 때의 대체 — 이 기기가 직전에 받아 둔 목록. 지워진 항차는 info 가 null 로 와 목록에서 빠지고, 새 항차는 REST 가 되면 올라온다.
+  const adoptCachedKeys = () => {
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem('gm_voy_keys') || 'null'); } catch (e) { c = null; }
+    if (!Array.isArray(c) || !c.length) return;
+    console.warn('[항차 구독] 키 목록을 못 받아 직전에 받아 둔 목록 ' + c.length + '개로 먼저 엽니다');
+    keys = c.map(String);
+    syncListeners();
+    if (!settleTimer) settleTimer = setTimeout(() => { settleOver = true; emit(); }, 3000);
+    emit();
+  };
+  const loadKeys = async () => {
+    if (dead || inflight) return;
+    inflight = true;
+    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const to = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) { /* 이미 끝남 */ } }, 12000);
+    try {
+      const res = await fetch(firebaseConfig.databaseURL + '/voyages.json?shallow=true', ctl ? { signal: ctl.signal } : undefined);
+      if (!res.ok) throw new Error('shallow HTTP ' + res.status);
+      const j = await res.json();
+      if (dead) return;
+      keys = Object.keys(j || {});
+      try { localStorage.setItem('gm_voy_keys', JSON.stringify(keys)); } catch (e) { /* 저장이 막힌 기기 — 대체 목록만 없다 */ }
+      retryDelay = 0;
+      syncListeners();
+      if (!settleTimer) settleTimer = setTimeout(() => { settleOver = true; emit(); }, 3000);   // info 첫 응답이 늦는 항차가 있어도 선택 화면이 막히지 않게
+      emit();
+      clearTimeout(listTimer); listTimer = setTimeout(loadKeys, 300000);
+    } catch (e) {
+      if (dead) return;
+      retryDelay = Math.min(60000, (retryDelay || 5000) * 2);
+      console.warn('[항차 구독] 항차 키 목록 실패 — ' + Math.round(retryDelay / 1000) + '초 뒤 다시 —', e);
+      clearTimeout(listTimer); listTimer = setTimeout(loadKeys, retryDelay);
+      if (keys === null) adoptCachedKeys();
+    } finally { clearTimeout(to); inflight = false; }
+  };
+  //  화면이 다시 보일 때·네트워크가 돌아올 때 곧바로 다시 읽는다(첫 성공 전이어도 — 재시도 간격을 기다리지 않는다).
+  const onVisible = () => { if (!dead && typeof document !== 'undefined' && document.visibilityState === 'visible') loadKeys(); };
+  const onOnline = () => { if (!dead) loadKeys(); };
+  if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', onVisible);
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('online', onOnline);
+  loadKeys();
+  return () => {
+    dead = true;
+    clearTimeout(listTimer); clearTimeout(settleTimer);
+    if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', onVisible);
+    if (typeof window !== 'undefined' && window.removeEventListener) window.removeEventListener('online', onOnline);
+    for (const [k, u] of unsubs) { try { u(); } catch (e) { console.warn('[항차 구독] info 해제 실패 —', k, e); } }
+    unsubs.clear(); infos.clear();
+  };
 }
 
 
