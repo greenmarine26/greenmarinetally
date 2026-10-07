@@ -3,7 +3,7 @@
 //   - EDI 형식: 실수신 EDI(SWDN 2603S) 실측 문법과 바이트 단위 일치 검증(sim_v895) — 카스피(CASP) 호환.
 //   - 범위: 평택 선적분만(사용자 확정). 위치는 실체(bay_actual) 우선, 없으면 계획.
 //   - 대상: 선적확인(completed)된 컨 우선 — 완료가 하나도 없으면 전체 평택 선적분(경고 표시).
-import { loadSheetJS, isoToLabel, isPtk, isValidCn } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
+import { loadSheetJS, isoToLabel, isPtk, isValidCn, closingEdiGate } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
 
 // ── 평택 선적분 컨테이너 조립 (ediContainers + records 병합, 실체 위치 우선) ──
 export function collectActualLoading(voyage) {
@@ -48,6 +48,22 @@ export function collectActualLoading(voyage) {
     };
   }).sort((a, b) => (a.bay + a.row + a.tier).localeCompare(b.bay + b.row + b.tier) || a.cn.localeCompare(b.cn));
   return { rows, useDoneOnly, totalPtk: all.length, doneCount: done.length };
+}
+
+// ── 4.12 «마감적용» — 동방 선적을 마감텔리 선적 EDI 기준으로 마무리할 때 채울 컨 목록 ──
+//   검수사 2026-10-07 22:01 «앱으로 선적한것은 그래로 적용하고 마감텔리EDI를 적용하면 앱으로 사용안한부분만 덮어쓰는것입니다».
+//   «마감텔리 선적 EDI 가 고르는 컨» = collectActualLoading 의 전체 평택 선적분(all) — 완료를 비워 부르면 그 all 이 그대로 나온다(함수를 고치지 않고 한 벌로 쓴다).
+//   앱 완료가 이미 있는 컨은 뺀다(추가만 · 검수원·터미널 반영 기록은 안 덮는다). 판정 gate 는 쓰는 자리(fbApplyClosingEdi)와 같은 utils.closingEdiGate.
+//   @returns {{gate:{ok:boolean,why?:string,at?:number}, total:number, appDone:number, cns:string[]}}
+export function closingEdiEntries(voyage, now = Date.now()) {
+  const sec = (voyage && voyage.loading) || {};
+  const comp = sec.completed || {};
+  const norm = (k) => String(k).replace(/\s/g, '').toUpperCase();
+  const gate = closingEdiGate(voyage && voyage.info, comp, now);
+  const all = collectActualLoading({ ...voyage, loading: { ...sec, completed: {} } });
+  const have = new Set(Object.keys(comp).map(norm));
+  const cns = all.rows.map((r) => r.cn).filter((cn) => !have.has(cn));
+  return { gate, total: all.totalPtk, appDone: all.totalPtk - cns.length, cns };
 }
 
 // ── 컨테이너 타입 정규화 — 구형 숫자 ISO('2200'/'4530'/'9500'/'450E')·신형 ISO('45G1'/'22R1')·

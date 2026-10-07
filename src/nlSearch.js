@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isTermApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -3033,13 +3033,15 @@ function formatPace(parsed, allContainers, ctx) {
   }
   //  시간대별 — 검수사가 물은 «시간별 몇 대». 앱 기록과 터미널 반영분을 갈라 보인다.
   const byH = new Map();
+  let _ediSkip = 0;
   for (const c of pool) {
     const r = compOf(c); if (!r || !(r.at > 0)) continue;
+    if (isEdiApplied(r)) { _ediSkip++; continue; }   // 4.12: 마감 EDI 적용은 «작업 끝 시각» 한 점에 몰려 있다 — 시간대별 분포에 넣으면 끝 시간대가 거짓으로 솟는다
     const k = hh(r.at); const o = byH.get(k) || { n: 0, app: 0 };
     o.n++; if (r.by) o.app++; byH.set(k, o);
   }
   //  화면이 컨 목록을 안 줬으면(통합검색 밖) 시각 배열만으로라도 시간대별을 낸다 — 빈손으로 돌려보내지 않는다.
-  if (!byH.size) for (const at of ats) { const k = hh(at); const o = byH.get(k) || { n: 0, app: 0 }; o.n++; byH.set(k, o); }
+  if (!byH.size && !_ediSkip) for (const at of ats) { const k = hh(at); const o = byH.get(k) || { n: 0, app: 0 }; o.n++; byH.set(k, o); }
   if (byH.size) {
     L.push('');
     L.push(`🕐 시간대별 ${modeK}`);

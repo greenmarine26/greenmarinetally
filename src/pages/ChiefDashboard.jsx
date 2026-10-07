@@ -37,6 +37,7 @@ import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: T
 import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
 import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
 import ShiftSnapPanel from '../components/ShiftSnapPanel.jsx';   // 4.11: 교대 시각(06:30·17:30) 터미널 기준 — 소유자 메뉴 안
+import ClosingEdiPanel from '../components/ClosingEdiPanel.jsx';   // 4.12: 마감적용 — 동방 선적을 마감텔리 선적 EDI 기준으로 마무리(소유자 메뉴 안)
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -722,7 +723,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ['seal', '🔒 엠티 실'], ['emptyfind', '🔎 머스크 엠티'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
             ['notice', '📢 공지'],
             // TallyOne 1.3: 활동 로그 바로가기 → 4.11: 소유자 메뉴 한 칩으로 모았다 — 소유자에게만 노출
-            ...(owner ? [['ownermenu', '👑 소유자 메뉴']] : []),   // 4.11: 소유자 전용 메뉴는 이 한 칩 — 안에 교대 시각 터미널 기준·활동 로그·인원 관리
+            ...(owner ? [['ownermenu', '👑 소유자 메뉴']] : []),   // 4.11: 소유자 전용 메뉴는 이 한 칩 — 안에 교대 시각 터미널 기준·마감적용(4.12)·활동 로그·인원 관리
             // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
             //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
             ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
@@ -1215,6 +1216,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <div className="space-y-2">
             <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
               <ShiftSnapPanel voyages={voyages} by={inspector} />
+            </Fold>
+            <Fold id="closingedi" title="🏁 마감적용 (동방 선적 EDI 마무리)" open={!!openSecs.closingedi} onToggle={() => toggleSec('closingedi')}>
+              <ClosingEdiPanel voyages={voyages} by={inspector} />
             </Fold>
             <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
               <ActivityLogSection voyages={voyages} />

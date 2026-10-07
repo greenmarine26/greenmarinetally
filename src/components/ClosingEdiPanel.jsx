@@ -1,0 +1,128 @@
+// 수석(소유자) 전용 — 작업이 끝난 동방 선적을 마감텔리 선적 EDI 기준으로 마무리(앱에서 안 찍은 컨만 완료로 채움)하는 «마감적용» 화면
+import React, { useMemo, useState } from 'react';
+import { fbApplyClosingEdi } from '../firebase.js';
+import { closingEdiEntries } from '../loadingEdiExport.js';
+
+//  4.12 — 검수사 2026-10-07 21:54 «PCTC는 PDA입력 데이터이니 정확한데 동방은 동방계획에 따라 선적이 됩니다. 그래서 완료가 되었다고 해도 정확하다고 볼수가 없습니다.
+//         그럴때엔 수석 마감텔리 안에 있는 선적EDI로 선적 완료를 해야 합니다» · 22:01 «앱으로 선적한것은 그래로 적용하고 마감텔리EDI를 적용하면 앱으로 사용안한부분만 덮어쓰는것입니다» · 22:02 «동방 선박만 그렇습니다».
+//         2026-10-08 04:25 «마감텔리 선적 EDI 기준 선적 완료처리(동방 선박만, 앱에서 안 찍은 컨만 채움) … =마감적용».
+//  ⚠ 이 화면은 구독하지 않는다 — 이미 받아 둔 항차 자료로 세기만 하고, 쓰는 순간 fbApplyClosingEdi 가 항차 info·loading 을 한 번 새로 읽어 정한다.
+//  ⚠ 쓰기는 completed 에 «추가만» 한다(앱에 완료가 있는 컨은 건너뜀). 대상 컨·시각·동방/작업 끝 판정은 화면이 아니라 쓰는 자리가 다시 정한다.
+const pad = (n) => String(n).padStart(2, '0');
+const hm = (ms) => {
+  const n = Number(ms);
+  if (!n) return '—';
+  const d = new Date(n);
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+export default function ClosingEdiPanel({ voyages, by }) {
+  const [busyKey, setBusyKey] = useState(null);
+  const [confirmKey, setConfirmKey] = useState(null);
+  const [notice, setNotice] = useState(null);
+
+  const { rows, waiting } = useMemo(() => {
+    const out = [];
+    let wait = 0;
+    for (const [vk, v] of Object.entries(voyages || {})) {
+      const info = (v && v.info) || {};
+      if (String(info.pier || '').toUpperCase() !== 'PNCT') continue;   // 동방 선박만
+      if (!v.loading || typeof v.loading !== 'object') continue;
+      const r = closingEdiEntries(v);
+      if (!r.total) continue;
+      const started = !!info.workStartAt || r.appDone > 0;
+      if (!started && !r.gate.ok) { wait++; continue; }                 // 작업 시작 전 배는 목록에서 뺀다(개수만 알린다)
+      out.push({
+        vk, ...r, info,
+        vsl: info.vsl || vk.split('_')[0],
+        voy: info.voy_l || info.voy_d || '',
+        todo: r.cns.length,
+      });
+    }
+    //  할 일이 있는 배(끝난 배) → 작업 중인 배 → 다 끝난 배 순
+    const rank = (x) => (x.gate.ok && x.todo > 0 ? 0 : !x.gate.ok ? 1 : 2);
+    out.sort((a, b) => rank(a) - rank(b) || a.vsl.localeCompare(b.vsl));
+    return { rows: out, waiting: wait };
+  }, [voyages]);
+
+  const doApply = async (row) => {
+    setBusyKey(row.vk);
+    try {
+      const res = await fbApplyClosingEdi(row.vk, by);
+      setNotice(res.applied > 0
+        ? { kind: res.bad ? 'warn' : 'ok', text: `🏁 ${row.vsl} ${row.voy} 선적 ${res.applied}대를 마감텔리 선적 EDI 기준으로 완료 처리했습니다(완료 시각 ${hm(res.at)}). 앱에서 찍은 ${res.appDone}대는 건드리지 않았습니다.${res.bad ? ` 컨 번호 모양이 보관소 키로 못 쓰는 ${res.bad}대는 넣지 못했습니다.` : ''}` }
+        : { kind: 'warn', text: res.bad ? `${row.vsl} ${row.voy} 선적 — 컨 번호 모양이 보관소 키로 못 쓰는 ${res.bad}대는 넣지 못했고, 채울 수 있는 컨은 없었습니다.` : `채울 것이 없습니다 — ${row.vsl} ${row.voy} 선적은 앱 완료가 이미 전부 있습니다.` });
+    } catch (e) {
+      setNotice({ kind: 'err', text: `마감적용 실패(${row.vsl} ${row.voy}) — ${e?.message || e}` });   // 조용한 실패 금지
+    }
+    setBusyKey(null);
+    setConfirmKey(null);
+  };
+
+  const noticeCls = (k) => (k === 'err' ? 'bg-red-950/40 border-red-800/60 text-red-200'
+    : k === 'warn' ? 'bg-amber-950/30 border-amber-800/50 text-amber-200' : 'bg-emerald-950/30 border-emerald-800/50 text-emerald-200');
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded-btn border border-line bg-ink-900 px-3 py-2 text-xs2 text-dim-200 space-y-1">
+        <div>동방(PNCT) 선적은 동방 계획에 따라 실려서, 터미널이 «완료»라고 해도 확정으로 볼 수 없습니다. 작업이 끝난 뒤 <b className="text-dim-100">마감텔리 선적 EDI</b> 기준으로 마무리합니다.</div>
+        <div>앱에서 이미 찍은 컨은 그대로 두고, 앱에서 안 찍은 컨만 완료로 채웁니다. 단추를 눌러 «예»를 해야만 들어가고, 자동으로는 아무것도 바뀌지 않습니다. 동방 선박만 나옵니다.</div>
+      </div>
+
+      {notice && <div className={`rounded-btn border px-3 py-2 text-xs2 ${noticeCls(notice.kind)}`}>{notice.text}</div>}
+
+      {rows.length === 0 && (
+        <div className="text-xs2 text-dim-300 px-1">마감적용을 쓸 동방 선적 항차가 없습니다(작업이 시작된 동방 선박이 없음).</div>
+      )}
+
+      {rows.map((r) => {
+        const done = r.gate.ok && r.todo === 0;
+        return (
+          <div key={r.vk} className="rounded-btn border border-line bg-ink-900 px-3 py-2 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm2 font-bold text-dim-100">{r.vsl} {r.voy}</span>
+              <span className="text-xs2 font-bold text-dim-100">선적</span>
+              <span className={`text-2xs px-2 py-0.5 rounded-pill border ${r.gate.ok ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-200' : 'bg-amber-950/40 border-amber-700/50 text-amber-200'}`}>
+                {r.gate.ok ? '작업 끝' : '작업 중'}
+              </span>
+            </div>
+            <div className="text-xs2 text-dim-200">
+              평택 선적분 <b className="text-dim-100">{r.total}</b>대
+              {' '}· 앱 완료 <b className="text-dim-100">{r.appDone}</b>
+              {' '}· 채울 컨 <b className="text-amber-200">{r.todo}</b>대
+            </div>
+            {r.gate.ok && (
+              <div className="text-2xs text-dim-400">완료 시각은 작업 끝 시각 {hm(r.gate.at)} 로 들어갑니다 · 완료자 칸은 «마감 EDI 적용»</div>
+            )}
+            {!r.gate.ok && (
+              <div className="text-2xs text-amber-300">{r.gate.why}</div>
+            )}
+            {done && <div className="text-2xs text-dim-400">앱 완료가 전부 있어 채울 것이 없습니다.</div>}
+            {r.gate.ok && r.todo > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                {confirmKey === r.vk ? (
+                  <>
+                    <span className="text-2xs text-amber-300">{r.vsl} {r.voy} 선적 {r.todo}대를 마감텔리 선적 EDI 기준으로 완료 처리? 앱에서 찍은 {r.appDone}대는 그대로 둡니다.</span>
+                    <button onClick={() => doApply(r)} disabled={busyKey === r.vk} style={{ minHeight: 36 }}
+                      className="text-xxs px-3 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">
+                      {busyKey === r.vk ? '적용 중…' : '예'}
+                    </button>
+                    <button onClick={() => setConfirmKey(null)} style={{ minHeight: 36 }}
+                      className="text-xxs px-3 rounded bg-ink-750 hover:bg-ink-700 text-dim-100">취소</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmKey(r.vk)} style={{ minHeight: 36 }}
+                    className="text-xxs px-3 rounded-pill bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 border border-amber-700/50 font-bold"
+                    title="마감텔리 선적 EDI 가 고르는 평택 선적분 중 앱에 완료가 안 찍힌 컨만 완료로 — 앱 완료 기록은 덮지 않음">
+                    🏁 마감적용 {r.todo}대
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {waiting > 0 && <div className="text-2xs text-dim-400 px-1">작업 시작 전인 동방 선적 {waiting}척은 표시하지 않았습니다.</div>}
+    </div>
+  );
+}

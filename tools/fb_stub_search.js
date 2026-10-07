@@ -19,6 +19,7 @@ export const fbApplyTermWork = async () => true;
 export const fbApplyTermSnapshot = async (vk, mode, by) => { window.__calls.push({ fn: 'applySnap', vk, mode, by }); return { ok: true, applied: window.__applyN || 0, basis: window.__applyBasis || '' }; };   // 4.11
 export const fbGetTermSnapshot = async (by) => { window.__getBy = by; return (window.__snap || {}); };   // 4.11: 교대 시각 터미널 스냅샷 — 시험이 window.__snap 에 넣는다
 export const fbRequestTermSnapshot = async (by) => { window.__calls.push({ fn: 'reqSnap', by }); return true; };   // 4.11
+export const fbApplyClosingEdi = async (vk, by) => { window.__calls.push({ fn: 'closingEdi', vk, by }); if (window.__closingEdiErr) throw new Error(window.__closingEdiErr); return { ok: true, applied: window.__closingEdiN || 0, bad: 0, total: window.__closingEdiTotal || 0, appDone: window.__closingEdiAppDone || 0, at: window.__closingEdiAt || 0 }; };   // 4.12: 마감적용
 export const fbArchiveVoyageBeforeDelete = async () => true;
 export const fbAssignDeckSlot = async () => true;
 export const fbBackupAll = async () => true;

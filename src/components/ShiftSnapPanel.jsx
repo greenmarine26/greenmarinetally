@@ -204,7 +204,7 @@ export default function ShiftSnapPanel({ voyages, by }) {
             </div>
             {r.snap.basis === 'plan' && (
               <div className="text-2xs text-amber-300">
-                ⚠ 동방 선적은 동방 계획에 따라 실립니다 — 완료로 확정된 것이 아닙니다. 이어서 작업하려고 반영하면 «계획 기준» 표식이 남고, 마무리는 마감텔리 선적 EDI 기준으로 합니다.
+                ⚠ 동방 선적은 동방 계획에 따라 실립니다 — 완료로 확정된 것이 아닙니다. 이어서 작업하려고 반영하면 «계획 기준» 표식이 남고, 마무리는 «🏁 마감적용» 메뉴에서 마감텔리 선적 EDI 기준으로 합니다.
               </div>
             )}
             {r.applyN > 0 && (

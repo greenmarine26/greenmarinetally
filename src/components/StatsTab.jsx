@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isReeferContainer, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
+import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isEdiApplied, isReeferContainer, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
 import { paceFromRecords, voyageDoneAts, voyageReportSpan, voyageFirstTermAt } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
@@ -293,9 +293,11 @@ function computeAllStats(containers, compMap, xrayMap, mode, voyage) {
     if (!r) return;
     if (r.at) {
       doneAts.push(r.at);
-      const d = new Date(r.at);
-      const k = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}시`;
-      byHour[k] = (byHour[k] || 0) + 1;
+      if (!isEdiApplied(r)) {   // 4.12: 마감 EDI 적용은 «작업 끝 시각» 한 점에 몰려 있다 — 시간대 막대에 넣으면 끝 시간대가 거짓으로 솟는다(속도 계산용 doneAts 에는 그대로 둔다)
+        const d = new Date(r.at);
+        const k = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}시`;
+        byHour[k] = (byHour[k] || 0) + 1;
+      }
     }
     const _who = completedByLabel(r, voyage?.info || null); if (_who) byInspector[_who] = (byInspector[_who] || 0) + 1;   // 3.16
     if (r.flag === 'missing') anomaly.missing++;

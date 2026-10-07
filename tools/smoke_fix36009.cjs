@@ -46,7 +46,7 @@ const src = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
     ok('지금 값을 못 읽어도 완료는 종전대로 쓴다', r3 && r3.ok === true && comp().READ0000001 && comp().READ0000001.by === '검수원E', JSON.stringify(r3));
     const F = src('src/firebase.js');
     const body = F.split('export async function fbCompleteContainer(')[1].split('\nexport ')[0];
-    const gate = body.indexOf('if (prev && !isTermApplied(prev))');
+    const gate = body.indexOf('if (prev && !isAutoDone(prev))');
     ok('개인 실적·실린 자리 확정은 실제로 쓴 뒤에만(이미 완료면 부르지 않는다)', gate > 0 && body.indexOf('_tallyInspector(') > gate && body.indexOf('_markLoadedPos(') > gate && body.indexOf('await set(r, rec);') > gate);
     ok('완료 쓰기에 transaction 을 쓰지 않는다(전송 뒤 끊기면 버림 — 감사 실측)', !/runTransaction/.test(F));
 

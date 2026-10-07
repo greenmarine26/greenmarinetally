@@ -51,7 +51,7 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.11'   // 4.11 **교대 시각(06:30·17:30) 터미널 실적 읽기 — 수석(소유자) 전용 «👑 소유자 메뉴 → 🕰 교대 시각 터미널 기준»** 검수사 2026-10-07 21:42 «카토스, 동방 자료를 읽는데 … 제 전용으로 수석대쉬보드 안에 넣어 줄수 있나요 선박 실시간 실적에 적용 시킬수 있게? … 아침 6시30분 저녁 5시30분 두차례만 읽어서 적용 시켰으면 합니다» · 22:05 «자동으로 읽어서 승인을 버튼을 누르면 적용되게 해주세요» · 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요». 수집기(MailPilot 2.43 shiftsnap.py)가 06:30·17:30 에 카토스(PDA)·동방을 읽어 term_snapshot 에 적고, 수석 화면이 그 시각의 터미널 완료와 앱 완료를 맞대 보인 뒤 [반영]을 누르면 completed 에 추가만 한다(검수원 기록은 안 덮음·자동 완료 잠금 그대로). 동방 선적은 «동방 계획 기준 · 완료 확정 아님» 표시 + termBasis:'plan' 표식(마감텔리 선적 EDI 마무리는 다음 판). 소유자 전용 메뉴는 «👑 소유자 메뉴» 한 곳에 모았다(활동 로그도 그리로). utils.snapApplyEntries·snapBasisOf 한 벌 / firebase.fbGetTermSnapshot·fbApplyTermSnapshot·fbRequestTermSnapshot / ShiftSnapPanel
+export const APP_VERSION = 'TallyOne 4.12'   // 4.12 **마감적용 — 작업이 끝난 동방 선적을 마감텔리 선적 EDI 기준으로 마무리**(수석(소유자) 전용 «👑 소유자 메뉴 → 🏁 마감적용»). 검수사 2026-10-07 21:54 «PCTC는 PDA입력 데이터이니 정확한데 동방은 동방계획에 따라 선적이 됩니다. 그래서 완료가 되었다고 해도 정확하다고 볼수가 없습니다. 그럴때엔 수석 마감텔리 안에 있는 선적EDI로 선적 완료를 해야 합니다» · 22:01 «앱으로 선적한것은 그래로 적용하고 마감텔리EDI를 적용하면 앱으로 사용안한부분만 덮어쓰는것입니다» · 22:02 «동방 선박만 그렇습니다» · 2026-10-08 04:25 «마감텔리 선적 EDI 기준 선적 완료처리(동방 선박만, 앱에서 안 찍은 컨만 채움)는 별도 판으로 … =마감적용». 동방(PNCT) 항차 중 작업이 끝난 배(출항했거나 작업 끝 시각이 지난 배)만 단추가 켜지고, 마감텔리 선적 EDI 가 고르는 평택 선적분 중 앱에 완료가 없는 컨에만 `{by:'', src:'edi', at:작업 끝 시각}` 를 **추가**한다(앱 완료·터미널 반영은 안 덮음 · 호기·이름 없음). 쓰는 자리 fbApplyClosingEdi 가 소유자·동방·작업 끝 판정(utils.closingEdiGate 한 벌)과 대상 컨(loadingEdiExport.closingEdiEntries)을 새로 읽어 다시 정한다. 현장 [완료]가 이 기록을 덮을 수 있고(utils.isAutoDone — 터미널 반영과 같은 «사람이 아닌 기록»), 완료자 칸은 «마감 EDI 적용»이며, 속도(시간당)는 작업 구간 ÷ 완료 대수라 그대로 맞고, 시간대별 분포와 «앱은 완료인데 터미널엔 없음» 경고·선적 실물 표식에서는 뺀다. 콘앱(ConeOne 2.64)은 이 기록을 «검수 (이름 없음)» 가짜 호기로 그리지 않는다. 매뉴얼·기능 색인·연막검사(smoke_closingedi412) 동반. ← (앞 판) 'TallyOne 4.11'   // 4.11 **교대 시각(06:30·17:30) 터미널 실적 읽기 — 수석(소유자) 전용 «👑 소유자 메뉴 → 🕰 교대 시각 터미널 기준»** 검수사 2026-10-07 21:42 «카토스, 동방 자료를 읽는데 … 제 전용으로 수석대쉬보드 안에 넣어 줄수 있나요 선박 실시간 실적에 적용 시킬수 있게? … 아침 6시30분 저녁 5시30분 두차례만 읽어서 적용 시켰으면 합니다» · 22:05 «자동으로 읽어서 승인을 버튼을 누르면 적용되게 해주세요» · 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요». 수집기(MailPilot 2.43 shiftsnap.py)가 06:30·17:30 에 카토스(PDA)·동방을 읽어 term_snapshot 에 적고, 수석 화면이 그 시각의 터미널 완료와 앱 완료를 맞대 보인 뒤 [반영]을 누르면 completed 에 추가만 한다(검수원 기록은 안 덮음·자동 완료 잠금 그대로). 동방 선적은 «동방 계획 기준 · 완료 확정 아님» 표시 + termBasis:'plan' 표식(마감텔리 선적 EDI 마무리는 다음 판). 소유자 전용 메뉴는 «👑 소유자 메뉴» 한 곳에 모았다(활동 로그도 그리로). utils.snapApplyEntries·snapBasisOf 한 벌 / firebase.fbGetTermSnapshot·fbApplyTermSnapshot·fbRequestTermSnapshot / ShiftSnapPanel
 //   (앞 판) 'TallyOne 4.10'   // 4.10 **해치커버 보고 직전 장수 확인** — 자동 가이드·수동 작업 보고에서 오픈·클로즈 보고를 쓰기 직전에 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 검수사가 맞는지 보고 고른다(utils.hatchPanelDetailOf·hatchCountFlags, HatchCountConfirm). 취소하면 보고도 «열렸다» 표시도 남기지 않는다(sendHatchReport 반환값). 알림 배너에도 «총 N장»(검수사 2026-10-07)
 //   (앞 판) 'TallyOne 4.09'   // 4.09 **양하 순서 조건 — 로우(육상부터·해상부터)와 풀·엠티·일반·리퍼·20·40 부터를 겹쳐 고르고 호기별로 항차 info.workOrder 에 기억한다(자동 가이드·미르 같은 순서).** 검수사 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터 이런조건들을 다 적용할수 있게 해주세요 · 장비 기사의 작업 방법이 틀려서 입니다». 먼저 고른 것이 우선, 위에 컨이 남은 칸은 앞당기지 않고 데크가 홀드보다 먼저(물리 규칙 그대로), 조건이 없으면 종전과 같은 순서. 4.08-02 **트윈 무게는 컨 총중량(EDI)으로 재고 경보뿐이다 — 55톤 초과는 «싱글 권유»(막지 않는다) · 컨 하나 40톤 초과는 무게 없음 · 싱글 한 대 뒤 짝이 다음 카드.** 4.08-01 **폰 선박 선택 화면의 «N대» 표시를 되돌렸다 — 4.08 에서 본문을 안 받게 되며 사라졌던 것** — 검수사 2026-10-07 «수정하세요». 4.08 에서 일반 검수원 폰이 선박을 고르기 전에는 항차 본문(EDI)을 받지 않아 선택 화면 목록의 «· N대» 가 빠졌다. 되던 것을 되던 상태로 되돌린다 — 선택 화면에 보이는 항차마다 discharge·loading 의 ediContainers 키 개수만 REST shallow 로 센다(키 하나 19바이트 안팎 · 18척 합쳐 약 66KB · 항차 뿌리 3.6MB 와 비교) 합은 종전 «N대»(양하 EDI 키 + 선적 EDI 키)와 같은 수이고 항차마다 10분 캐시한다. 못 센 항차는 0 이 아니라 표시를 비운다. 수석·부수석·테스터·소유자·PC 화면은 본문을 이미 받아 종전 그대로. ★ 같은 판 둘째 — 헤더 «검수원 변경»(#/login) 화면. 4.08 은 로그인해 있는 일반 검수원의 선박 한 척 본문만 받은 채 이 화면을 열어 다른 사람의 선택 목록에 그 배 한 척만 떴다(실측 앱 하네스 LoginPage.voyages = DXQD 한 척). 로그인 화면은 이름이 없을 때와 같은 범위(폰 info 만 · PC 전체)로 받는다(workChoice.voyagesScopeOf 네 번째 인자 · 돌아가면 그 선박 본문을 다시 받는다). ★ 독립 감사 지적 반영 — 선박 정보가 한 척씩 도착해도 첫 한 벌이 다 온 뒤에만 세고(voyagesLoaded) 가는 중인 요청은 겹쳐 받지 않는다(도착 간격에 따라 같은 항차가 최대 16번 받아져 최악 580KB 이던 것 → 항상 약 74KB).
 //   (앞 판) 'TallyOne 4.04'   // 4.04 **RZOR 덱플랜 출력 · 화면** — 출력 센터 «카고플랜» 이 RZOR 에서는 덱플랜(선사 STOWAGE PLAN 그림 · 선적은 마감텔리 그림)을 열고 인쇄·PDF·Excel 로 뽑는다. 특수화물은 컬러에서만 칸 바탕색(흑백은 글자만) · X-RAY 는 두 쪽 다 빨간 별 · D덱 LOLO 구역은 굵은 선. 앱의 덱플랜 화면도 같은 그림(선체·램프·집계표)으로 그려 선내 지도 구실을 하고, 서명란은 출력에만 둔다(검수사 2026-10-05 «RZOR도 카고플랜 출력 누르면 덱플랜이 위 PDF랑 똑같이 나오게» · «앱의 덱플랜도 PDF처럼 다 그려져 있었으면 합니다» · «서명란은 출력양식에만»). ★ 4.03 **터미널 본선 현황** — 검수원이 호기를 안 찍어 실시간 화면이 비면(수석 ⚓ 실시간 작업 보드 호기별 칸 · 콘앱 ⚡ 실시간 화면과 콘 타이밍 카드의 빈 칸) 터미널이 올린 본선 현황을 그 자리에 보인다 — PCTC 는 본선작업현황(작업량·완료량·잔여량 · GC별 잔여량 · 받은 시각 · 3시간 넘게 안 오면 «낡은 자료»), 동방은 본선 작업 현황(QC별 총작업량·완료·잔여 · 평택 계획보다 5% 넘게 크면 «타 항 하역분 포함 가능»). 숫자는 터미널 화면 그대로이고 두 앱이 같은 함수(src/termBoard.js 한 벌)로 그린다. 검수원 기록이 있어 호기 그림이 그려지는 배는 종전 그대로이며 미르 «언제 끝나» 계산·완료 기록은 건드리지 않는다(검수사 2026-10-04 «검수사가 찍지 않으면 안보일 경우 PCTC의 선박별 본선 작업 현황과 동방의 선박별 본선작업 현황을 보여줄수 있게 해주세요» → «네 그대로 해주세요»). ★ 4.02 **콘앱 첫 화면 · 미르 한 벌** — ①콘앱(ConeOne 2.60): 배를 지정하면 양하(왼쪽)·선적(오른쪽) 카고플랜이 가로로 먼저 뜨고 좌우로 밀면 바뀌며 닫으면 콘 계산기(실시간 화면은 «⚡ 실시간» 단추로, 실적이 없으면 «검수원의 실작업이 있어야 보이는 화면» 안내). ②미르 총 무브수·X-RAY 조별·갱 분배·교대 브리핑을 콘앱이 검수앱과 같은 수로 답한다 — 콘앱 항차엔 EDI 묶음이 없어 «EDI 가 아직 없어» 로 막히던 것을 콘앱이 넘기는 컨(자리·무게)으로 같은 계산을 돌린다(검수사 2026-10-04 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다»). ★ 4.01 **홈 정리 · 예상 작업 시간** — ①자료 없는 항차(EDI·리스트·카톡 물량 예보 모두 없음)는 홈 목록에서 빼고 맨 아래 «⏳ 자료 대기 N척» 한 줄에 접는다(자료가 들어오면 저절로 목록으로 — 검수사 2026-10-04 «자료 없음 선박까지 보여줄 필요는 없다고 생각합니다. 자료가 들어 오면 그때 보여주는게 나을듯 합니다»). ②홈 목록 카드·막대·접힘 줄에 부두 색 띠·배 아이콘·오늘 작업 빛·굵은 진행 막대를 넣어 선박을 열기 전에도 새 화면이 보이게 했다(검수사 «바뀐 화면 구성은 선박을 지정해서 들어 가야 보입니다»). ③작업 시작 탭 맨 위 «예상 작업 시간» — 무브 ÷ (갱 수 × 시간당 속도). 무브는 대수가 아니라 **트윈으로 드는 쌍은 1·나머지는 한 대당 1**(앞뒤 베이 같은 칸 20피트 두 대, 합계 55t 이하, 무게차 PNCT 14t·PCTC 20t — mir.twinSplitOf 가 nlSearch.buildTwinPairs·analyzeTwinPairs 한 벌을 센 컨에만 건다), 시간당 속도는 «싱글이 많다면 25 · 트윈이 어느정도 있다면 30»(트윈 컨 15% 이상이면 30 — 임시 선, mir.gangRateOf). 자리·무게가 없는 20피트(리스트만·선적 예약 칸)는 한 대씩으로 세고 «최소~최대» 범위로 보인다. 검수사 2026-10-04 «ATPR 양하 269인데 무브수가 269무브 맞습니까? 20피트가 150여개인데 트윈 작업이 안되는건가요?» · «트윈 가능 갯수와 싱글갯수가 정확히 파악해야 무브수가 계산 됩니다» · «무게도 확인해야 하고요». 수석 답변(X-RAY 조별 가능 수·교대 브리핑 인수 예상)도 같은 속도 규칙(mir.workPaceOf)을 쓴다.
@@ -73,7 +73,7 @@ export const APP_VERSION = 'TallyOne 4.11'   // 4.11 **교대 시각(06:30·17:3
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.11 수석 화면에 아침 6시30분 저녁 5시30분 터미널 실적 읽기가 생겼습니다. 읽은 것은 수석이 반영 단추를 눌러야만 완료로 들어갑니다.'
+export const APP_NOTE = '4.12 수석 소유자 메뉴에 마감적용이 생겼습니다. 앱으로 안 찍은 동방 선적 컨만 마감텔리 선적 EDI 기준으로 채웁니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -102,6 +102,18 @@ export function isTermApplied(rec) {
   return TERM_BY_RE.test(String(rec.by || '').trim());
 }
 
+//  4.12 — «마감적용»: 동방 선적을 마감텔리 선적 EDI 기준으로 마무리할 때 앱에서 안 찍은 컨에 채우는 완료(`{by:'', src:'edi', at}`).
+//    터미널 실적도 사람 입력도 아니다 — 사람이 아닌 기록이라 현장의 뒤늦은 [완료]가 덮을 수 있고, 호기·속도·조 근무자 추정에는 쓰지 않는다.
+//    ⚠ isTermApplied 에 합치지 않는다(합치면 «터미널 반영 + 조 등록 근무자 이름» 추정이 이 기록에도 붙는다).
+export const EDI_DONE_LABEL = '마감 EDI 적용';
+export function isEdiApplied(rec) {
+  return !!rec && rec.src === 'edi';
+}
+/** 사람이 앱으로 찍은 완료가 «아닌» 기록인가 — 터미널 반영이거나 마감 EDI 적용. 사람의 [완료]가 덮어도 되는 기록이다. */
+export function isAutoDone(rec) {
+  return isTermApplied(rec) || isEdiApplied(rec);
+}
+
 /** 화면·서류에 나갈 **완료자 이름 한 벌**. 검수사 «어디든 이 문구는 없어야 됩니다».
  *
  *  ① 사람이 앱으로 찍었으면 그 이름 ② 터미널 반영이면 **그 시각·그 호기의 조 등록 근무자**(3.9 X-RAY 봉인자와 같은 규칙)
@@ -111,6 +123,7 @@ export function completedByLabel(rec, info) {
   if (!rec) return '';
   const by = String(rec.by || rec.inspector || '').trim();
   if (by && !TERM_BY_RE.test(by)) return by;
+  if (!by && isEdiApplied(rec)) return EDI_DONE_LABEL;   // 4.12: 조 근무자를 붙이지 않는다 — 터미널이 한 일이 아니다
   if (!by && !isTermApplied(rec)) return '';
   const who = info ? crewNameAt(info, Number(rec.at) || 0, rec.equip) : '';
   return who || TERM_DONE_LABEL;
@@ -129,13 +142,36 @@ export function computeTermApply(termWork, completed) {
 
 /** 4.11 — 교대 시각 터미널 스냅샷(term_snapshot/{항차}/{모드}) → 수석 승인으로 completed 에 넣을 [컨, 레코드] 목록.
  *  판정은 computeTermApply **한 벌**이다(이미 completed 에 있는 컨은 건너뛴다 — 검수원 기록을 안 덮는다 · 추가만).
- *  동방 선적(basis 'plan')은 «동방 계획 기준 — 완료 확정 아님» 표식(termBasis:'plan')을 더한다 — 마감텔리 선적 EDI 기준 마무리(다음 판)가
+ *  동방 선적(basis 'plan')은 «동방 계획 기준 — 완료 확정 아님» 표식(termBasis:'plan')을 더한다 — 마감텔리 선적 EDI 기준 마무리(4.12 마감적용)가
  *  이 표식으로 «앱으로 안 찍은 부분»을 가려낸다. 검수사 2026-10-07 22:01 «앱으로 선적한것은 그래로 적용하고 마감텔리EDI를 적용하면 앱으로 사용안한부분만 덮어쓰는것입니다».
  *  이름 자리(by)는 비운다 — completedByLabel 이 그 조 등록 근무자 또는 «터미널 반영» 으로 그린다(3.16). */
 export function snapApplyEntries(snap, completed) {
   if (!snap || typeof snap !== 'object' || !snap.rows || typeof snap.rows !== 'object') return [];
   const list = computeTermApply(snap.rows, completed);
   return snap.basis === 'plan' ? list.map(([cn, rec]) => [cn, { ...rec, termBasis: 'plan' }]) : list;
+}
+
+/** 4.12 «마감적용» — 이 항차 선적을 마감텔리 선적 EDI 기준으로 마무리해도 되는가, 채울 완료 시각은 언제인가. **쓰는 자리(firebase.fbApplyClosingEdi)와 화면이 같은 이 함수를 부른다.**
+ *  검수사 2026-10-07 21:54 «동방은 동방계획에 따라 선적이 됩니다 … 그럴때엔 수석 마감텔리 안에 있는 선적EDI로 선적 완료를 해야 합니다» · 22:02 «동방 선박만 그렇습니다».
+ *  ① 동방(PNCT) 항차만. ② 작업이 끝난 배만(출항했거나 작업 끝 시각이 지남) — 작업 중에 쓰면 출항 배지(잔여 20 이하)가 일찍 켜지고 한 번 켜지면 안 꺼진다.
+ *  ③ 시각 = **작업 끝 시각**(workEndAt, 앱이 작업 끝으로 읽는 값과 같은 `_dtMs`) — 지금 시각이면 «방금 작업했다»로 보이고 0 이면 교대 보고서·속도가 서로 어긋난다.
+ *     비어 있으면 앱에 찍힌 마지막 완료 시각, 그것도 없으면 쓰지 않는다(값 없는 기록을 만들지 않는다). 미래 시각은 지금으로 자른다.
+ *  @returns {{ok:boolean, why?:string, at?:number}} */
+export function closingEdiGate(info, comp, now = Date.now()) {
+  const i = info || {};
+  if (String(i.pier || '').toUpperCase() !== 'PNCT') return { ok: false, why: '동방(PNCT) 선박만 쓸 수 있습니다' };
+  if (sideCancelled(i, 'loading')) return { ok: false, why: '선적이 취소 표시된 항차입니다' };
+  //  ★ 감사 2026-10-08 — 모두가 읽는 절대 시각을 DB 에 쓰는 자리다. 기기 시간대로 읽는 _dtMs 는 한국 밖 기기에서 시차만큼 어긋나므로 KST(+09:00) 를 명시한다.
+  const _kst = Date.parse(String(i.workEndAt || '').trim().replace(' ', 'T') + '+09:00');
+  const endAt = Number.isFinite(_kst) ? _kst : 0;
+  const departed = String(i.terminalStatus || '').toLowerCase() === 'departed';
+  if (!departed && !(endAt > 0 && endAt <= now)) return { ok: false, why: '작업이 끝난 뒤에 쓰는 마무리 단추입니다(출항하거나 작업 끝 시각이 지난 뒤)' };
+  let at = endAt > 0 ? Math.min(endAt, now) : 0;
+  if (!at) {
+    for (const r of Object.values(comp || {})) { const a = Number(r && r.at); if (Number.isFinite(a) && a > at && a <= now) at = a; }
+  }
+  if (!(at > 0)) return { ok: false, why: '작업 끝 시각을 알 수 없어 쓰지 않습니다(수집기가 아직 적지 않았고 앱 완료도 없음)' };
+  return { ok: true, at };
 }
 
 /** 4.11 — 스냅샷의 출처·신뢰 표시 한 벌. 동방 선적만 «계획 기준»이다(카토스는 PDA 입력이라 선적도 정확, 동방 양하는 실제 작업 기록 — 검수사 2026-10-07 21:54·21:59·22:02). */
@@ -7278,7 +7314,7 @@ export function bayViewOverlayOf(sec) {
   }
   if (termAt) {
     for (const [cn, c] of Object.entries(comp)) {
-      if (!c || !c.at || isTermApplied(c) || tw[cn]) continue;
+      if (!c || !c.at || isAutoDone(c) || tw[cn]) continue;   // 4.12: 마감 EDI 적용도 «앱은 완료인데 터미널엔 없음» 경고 대상이 아니다(사람이 찍은 게 아니다)
       if (c.at + 10 * 60000 >= termAt) continue;      // 터미널이 아직 그 시각까지 못 왔다 — 정상 지연
       const k = posOf(cn); if (!k) continue;
       push({ type: 'noterm', cn, app: k, term: '', key: k });
@@ -8249,7 +8285,7 @@ export function shiftActualOf(voyage, cn) {
   const done = voyage.loading && voyage.loading.completed && voyage.loading.completed[cn];
   const doneAt = done ? (Number(done.at) || 0) : 0;
   //  실렸다는 표식 — 사람이 앱으로 완료했거나, 터미널 반영 완료 **뒤에** 사람이 자리를 적었을 때(기록지 사진)만.
-  const seenLoaded = !!done && (!isTermApplied(done) || (Number(r && r.actual_at) || 0) >= doneAt);
+  const seenLoaded = !!done && (!isAutoDone(done) || (Number(r && r.actual_at) || 0) >= doneAt);   // 4.12: 마감 EDI 적용도 사람이 본 자리가 아니다
   if (r && seenLoaded && !r._pos_src && !r.planTaken && r.bay_actual != null && r.bay_actual !== '' && !String(r.bay_actual).startsWith('__')) {
     const to = _shiftPos7(r.bay_actual, r.row_actual, r.tier_actual);
     //  앱 선적확인이 EDI 계획 자리를 그대로 베껴 적은 것(moves 마지막 why:'loaded' · to = 계획)은 사람이 본 자리가 아니다(bayViewOverlayOf 와 같은 뜻).

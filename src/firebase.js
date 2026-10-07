@@ -4,13 +4,14 @@ import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, onValue, push, set, update, remove, get, off, goOffline, goOnline
 } from 'firebase/database';
+import { closingEdiEntries } from './loadingEdiExport.js';   // 4.12: 마감적용 — 마감텔리 선적 EDI 가 고르는 컨 한 벌
 import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
 import { resolvedPod } from './utils.js';   // 3.53: POD 확정 반영 한 벌
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isTermApplied } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
@@ -991,7 +992,7 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   //      막으려면 transaction 인데 위 까닭으로 안 쓴다.
   const r = ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`);
   const prev = await _peekVal(r);
-  if (prev && !isTermApplied(prev)) {
+  if (prev && !isAutoDone(prev)) {   // 4.12: 마감 EDI 적용(src:'edi')도 사람이 아니므로 사람 완료가 덮는다
     _writeNotice(`${String(cn || '').slice(-4)} 는 이미 완료돼 있어요${prev.by ? ` — ${prev.by}${prev.at ? ' ' + _hhmm(prev.at) : ''}` : ''} (덮지 않았어요)`);
     return { ok: false, already: true, prev };
   }
@@ -1131,6 +1132,33 @@ export async function fbApplyTermSnapshot(voyageKey, mode, by) {
   return { ok: true, applied: entries.length, basis };
 }
 
+// ── 4.12: 마감적용 — 동방 선적을 마감텔리 선적 EDI 기준으로 마무리 (소유자 전용) ──
+//   검수사 2026-10-08 04:25 «마감텔리 선적 EDI 기준 선적 완료처리(동방 선박만, 앱에서 안 찍은 컨만 채움)» · 2026-10-07 22:01 «앱으로 사용안한부분만 덮어쓰는것입니다».
+//   ⚠ 쓰기는 completed 에 **추가만** — 앱 완료가 이미 있는 컨(검수원·터미널 반영)은 건너뛴다. 기록 = `{by:'', src:'edi', at:작업 끝 시각}`(이름·호기 없음).
+//   ⚠ 문지기(소유자·동방·작업 끝난 배)는 데이터가 들어오는 이 자리에 선다 — 화면의 비활성은 보조다. 대상 컨은 화면이 넘기지 않고 여기서 새로 읽어 정한다(낡은 화면으로 쓰지 않는다).
+//   ⚠ 구독하지 않는다 — 누를 때 info·loading 을 한 번 읽는다.
+export async function fbApplyClosingEdi(voyageKey, by) {
+  assertOwner('마감적용', by);
+  assertCanWork('마감적용');
+  if (!voyageKey) throw new Error('마감적용할 항차가 없습니다');
+  const [infoSnap, loadSnap] = await Promise.all([
+    get(ref(db, `voyages/${voyageKey}/info`)),
+    get(ref(db, `voyages/${voyageKey}/loading`)),
+  ]);
+  const r = closingEdiEntries({ info: infoSnap.val() || {}, loading: loadSnap.val() || {} });
+  if (!r.gate.ok) throw new Error(`마감적용을 할 수 없습니다 — ${r.gate.why}`);
+  const keyOk = /^[A-Z0-9_-]{1,24}$/;
+  const patch = {};
+  let bad = 0;
+  for (const cn of r.cns) {
+    if (!keyOk.test(cn)) { bad++; continue; }   // 보관소 키로 못 쓰는 글자 — 조용히 넘기지 않고 건수를 돌려준다
+    patch[`voyages/${voyageKey}/loading/completed/${cn}`] = { by: '', src: 'edi', at: r.gate.at };
+  }
+  const applied = Object.keys(patch).length;
+  if (applied) await update(ref(db), patch);
+  return { ok: true, applied, bad, total: r.total, appDone: r.appDone, at: r.gate.at };
+}
+
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {
   assertCanWork('초과 컨 추가');
   const at = Date.now();
@@ -1150,7 +1178,7 @@ export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, eq
   //    정상 완료가 초과로 바뀌었다(양하신고 점검·인건비 근거가 같이 바뀜). 터미널 반영(리스트 밖 컨에도 온다)·앞서 적은 초과(고쳐 적기)는 종전대로 덮는다.
   const cr = ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`);
   const prev = await _peekVal(cr);
-  if (prev && !isTermApplied(prev) && prev.flag !== 'extra') {
+  if (prev && !isAutoDone(prev) && prev.flag !== 'extra') {
     throw new Error(`이미 완료 기록이 있는 컨이에요 — 초과가 아닙니다${prev.by ? ` (${prev.by}${prev.at ? ' ' + _hhmm(prev.at) : ''})` : ''}`);
   }
   await set(cr, rec);

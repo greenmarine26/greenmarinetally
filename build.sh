@@ -999,6 +999,28 @@ if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:fir
 else
   echo "✗ 4.11 교대 시각 스냅샷 반영 함수 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SSF"; exit 1
 fi
+#  4.12: **마감적용(동방 선적을 마감텔리 선적 EDI 기준으로 마무리)** — 채울 컨이 마감텔리 선적 EDI 가 고르는 컨과 한 벌인가 · 앱 완료는 안 덮는가 · 동방·작업 끝·시각 문지기 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
+#    ATPR 2645W 실제 항차 자료(보관소 GET 픽스처)로 패널을 그려 단추·확인창·결과 안내를 본다. 검수사 2026-10-07 «앱으로 사용안한부분만 덮어쓰는것입니다» · 2026-10-08 «=마감적용».
+SMOKE_CE=$(mktemp /dev/shm/hometmp/_smokece_XXXXXX.js)
+cp src/firebase.js "$SMOKE_CE.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_closingedi412.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_CE"; then
+  cp "$SMOKE_CE.fbbak" src/firebase.js && rm -f "$SMOKE_CE.fbbak"
+  node tools/smoke_closingedi412.cjs "$(pwd)" "$SMOKE_CE" || { echo "✗ 4.12 마감적용 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CE"; exit 1; }
+  rm -f "$SMOKE_CE"
+else
+  cp "$SMOKE_CE.fbbak" src/firebase.js; rm -f "$SMOKE_CE.fbbak"
+  echo "✗ 4.12 마감적용 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CE"; exit 1
+fi
+#  4.12(2): **실소스 firebase.js** 로 fbApplyClosingEdi 를 친다(메모리 RTDB) — 소유자가 아니면 막히고 아무것도 안 쓰는가 · 동방이 아니거나 작업 중이면 막히는가 · 쓰는 것은 completed/{컨} 추가뿐이고 앱 완료는 그대로인가 · 사람 [완료]가 덮는가
+SMOKE_CEF=$(mktemp /dev/shm/hometmp/_smokecef_XXXXXX.cjs)
+if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_CEF" --log-level=error; then
+  node tools/smoke_closingedi412_fb.cjs "$SMOKE_CEF" || { echo "✗ 4.12 마감적용 쓰기 함수 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CEF"; exit 1; }
+  rm -f "$SMOKE_CEF"
+else
+  echo "✗ 4.12 마감적용 쓰기 함수 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CEF"; exit 1
+fi
 #  3.40: **접안 현측이 한 벌인가** — 수집기가 적는 한글(«좌현»·«우현»)과 앱이 적는 영문이 같은 답을 내는지,
 #    그리고 검수사가 고친 것이 수집 사이클에 안 밀리는지. 표시뿐 아니라 첫 카드 자리(작업 순서)까지 잰다.
 #    검수사 2026-09-09 «선박이 좌현으로 고정됨 바꿔도 다시바뀜» — 우현 5척이 좌현 기준으로 줄 서고 있었다.
