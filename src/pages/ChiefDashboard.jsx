@@ -36,6 +36,7 @@ import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보�
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
 import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
 import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
+import ShiftSnapPanel from '../components/ShiftSnapPanel.jsx';   // 4.11: 교대 시각(06:30·17:30) 터미널 기준 — 소유자 메뉴 안
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -94,6 +95,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
   collectorHb = null, pilotForecast = null, portMisData = null,   // 1.40-01: 🚢신고도착
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
+  onOpenStaffManager = null,   // 4.11: 소유자 메뉴 안 «인원 관리» — 헤더 ⋮ 메뉴와 같은 창(App 이 넘긴다)
 }) {
   const [chiefSearchQ, setChiefSearchQ] = useState('');   // 2.03-01: 대시보드 통합검색창
   const [dashQ, setDashQ] = useState('');   // 2.03-02: 제출된 질문 — 있으면 그 자리에 통합검색 패널을 펼친다(화면 전환 없음, 검수사 확정)
@@ -719,8 +721,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
             ['seal', '🔒 엠티 실'], ['emptyfind', '🔎 머스크 엠티'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
             ['notice', '📢 공지'],
-            // TallyOne 1.3: 활동 로그 바로가기 — 소유자에게만 노출
-            ...(owner ? [['actlog', '🕵️ 활동 로그']] : []),
+            // TallyOne 1.3: 활동 로그 바로가기 → 4.11: 소유자 메뉴 한 칩으로 모았다 — 소유자에게만 노출
+            ...(owner ? [['ownermenu', '👑 소유자 메뉴']] : []),   // 4.11: 소유자 전용 메뉴는 이 한 칩 — 안에 교대 시각 터미널 기준·활동 로그·인원 관리
             // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
             //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
             ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
@@ -1205,10 +1207,27 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       </div>
       </Fold>
 
-      {/* TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회. */}
+      {/* 4.11: 소유자 전용 메뉴는 여기 한 곳에 모은다 — 검수사 2026-10-07 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요» · 22:09 «인원관리나 활동로그 마감적용 등».
+          새 소유자 전용 기능은 이 묶음 안에 넣는다(대시보드 곳곳에 흩지 않는다). 기본 접힘 — 열기 전에는 아무 자료도 읽지 않는다.
+          · TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회. */}
       {owner && (
-        <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
-          <ActivityLogSection voyages={voyages} />
+        <Fold id="ownermenu" title="👑 소유자 메뉴" open={!!openSecs.ownermenu} onToggle={() => toggleSec('ownermenu')}>
+          <div className="space-y-2">
+            <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
+              <ShiftSnapPanel voyages={voyages} by={inspector} />
+            </Fold>
+            <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
+              <ActivityLogSection voyages={voyages} />
+            </Fold>
+            {onOpenStaffManager && (
+              <button onClick={onOpenStaffManager}
+                className="w-full flex items-center justify-between px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-left"
+                style={{ minHeight: 44 }}>
+                <span className="text-sm2 font-bold text-dim-100">👥 인원 관리</span>
+                <span className="text-dim-400 text-xs shrink-0 ml-2">창 열기 ▶</span>
+              </button>
+            )}
+          </div>
         </Fold>
       )}
 

@@ -10,7 +10,7 @@ import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
 import { resolvedPod } from './utils.js';   // 3.53: POD 확정 반영 한 벌
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isTermApplied } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isTermApplied } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
@@ -1083,6 +1083,52 @@ export async function fbApplyTermWork(voyageKey, mode) {
   for (const [cn, rec] of entries) patch[`${base}/completed/${cn}`] = rec;
   await update(ref(db), patch);
   return { ok: true, applied: entries.length };
+}
+
+// ── 4.11: 교대 시각(06:30·17:30) 터미널 스냅샷 — 수집기(MailPilot 2.43 shiftsnap.py)가 term_snapshot 에 적는다 ──
+//   검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게 해주세요» · «제 전용으로».
+//   ⚠ 소유자 전용 — 보는 것도 반영도 여기서 막는다(화면 단추를 감추는 것은 보조다).
+//   ⚠ 구독하지 않는다 — 한 번 읽기(get)뿐이다. 일반 검수원 폰은 이 노드를 받지 않는다(다운로드 비용 0).
+//   ⚠ 반영은 fbApplyTermWork 와 같은 규칙 — completed 에 **추가만**(이미 있는 컨은 건너뜀 · 검수원 기록을 안 덮음). 판정은 utils.snapApplyEntries 한 벌.
+function assertOwner(what, by) {
+  const who = String(by || getMeToday() || '').trim();
+  if (isOwnerName(who)) return;
+  const e = new Error(`${what || '이 작업'} 은 소유자만 할 수 있습니다.`);
+  e.ownerOnly = true;
+  throw e;
+}
+
+//  ★ 감사 2026-10-07 — 이름은 화면이 «지금 로그인한 사람(by)» 을 넘긴다. getMeToday() 는 하루 지나면 비는 편의값이라 어제 열어 둔 탭에서 소유자가 막히던 것을 막는다.
+export async function fbGetTermSnapshot(by) {
+  assertOwner('교대 시각 터미널 기준 보기', by);
+  const s = await get(ref(db, 'term_snapshot'));
+  const v = s.val();
+  return v && typeof v === 'object' ? v : {};
+}
+
+//  «지금 다시 읽기» — 수집기가 1분마다 이 값(밀리초) 하나를 보고, 새 값이면 한 번 읽는다(10분 넘게 묵은 요청은 버린다).
+export async function fbRequestTermSnapshot(by) {
+  assertOwner('터미널 다시 읽기', by);
+  await set(ref(db, 'term_snapshot/_req'), { at: Date.now(), by: String(by || getMeToday() || '') });
+}
+
+export async function fbApplyTermSnapshot(voyageKey, mode, by) {
+  assertOwner('터미널 스냅샷 반영', by);
+  assertCanWork('터미널 스냅샷 반영');
+  if (mode !== 'discharge' && mode !== 'loading') throw new Error(`반영할 모드가 올바르지 않습니다(${mode})`);
+  const base = `voyages/${voyageKey}/${mode}`;
+  const [snSnap, compSnap] = await Promise.all([
+    get(ref(db, `term_snapshot/${voyageKey}/${mode}`)),
+    get(ref(db, `${base}/completed`)),
+  ]);
+  const snap = snSnap.val();
+  const entries = snapApplyEntries(snap, compSnap.val() || {});
+  const basis = (snap && snap.basis) || '';
+  if (!entries.length) return { ok: true, applied: 0, basis };
+  const patch = {};
+  for (const [cn, rec] of entries) patch[`${base}/completed/${cn}`] = rec;
+  await update(ref(db), patch);
+  return { ok: true, applied: entries.length, basis };
 }
 
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {

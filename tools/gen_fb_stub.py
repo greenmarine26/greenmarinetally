@@ -34,6 +34,9 @@ special = {
     'fbSetInspectorActivity': "export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };",
     'fbSetInspectorChoice': "export const fbSetInspectorChoice = async (name, choice) => { window.__calls.push({ fn: 'choice', name, choice }); return true; };",   # 3.50
     'fbSetWorkOrder': "export const fbSetWorkOrder = async (vk, equip, order, by) => { window.__calls.push({ fn: 'workOrder', vk, equip, order: order || null, by }); return order || null; };   // 4.09: 양하 순서 조건 저장 기록",
+    'fbGetTermSnapshot': "export const fbGetTermSnapshot = async (by) => { window.__getBy = by; return (window.__snap || {}); };   // 4.11: 교대 시각 터미널 스냅샷 — 시험이 window.__snap 에 넣는다",
+    'fbApplyTermSnapshot': "export const fbApplyTermSnapshot = async (vk, mode, by) => { window.__calls.push({ fn: 'applySnap', vk, mode, by }); return { ok: true, applied: window.__applyN || 0, basis: window.__applyBasis || '' }; };   // 4.11",
+    'fbRequestTermSnapshot': "export const fbRequestTermSnapshot = async (by) => { window.__calls.push({ fn: 'reqSnap', by }); return true; };   // 4.11",
     'fbFetchVoyageBoxCounts': "export const fbFetchVoyageBoxCounts = async () => ({});   // 4.08-01: 선택 화면 «N대» — 빈 결과(항차마다 못 셌음)로 둔다",
     'resolveSeqMode': body('resolveSeqMode') + "\nexport { resolveSeqMode };",
     'tallyVoyagesByShip': body('tallyVoyagesByShip') + "\nexport { tallyVoyagesByShip };",

@@ -701,6 +701,7 @@ export default function App() {
               onGoHome={() => navigate('home')}
               onMirPlan={(pl) => setMirPlan(pl)}   /* 2.87: 플랜은 덮개 — 수석 화면 그대로 둔다 */
               onOpenGlobalSearch={_askGlobal}   /* 2.03-01: 대시보드 검색창 질문을 들고 간다 */
+              onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}   /* 4.11: 소유자 메뉴 안 «인원 관리» — 헤더 ⋮ 메뉴와 같은 창 */
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>

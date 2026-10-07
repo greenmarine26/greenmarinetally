@@ -977,6 +977,28 @@ else
   cp "$SMOKE_HC.fbbak" src/firebase.js; rm -f "$SMOKE_HC.fbbak"
   echo "✗ 4.10 해치 장수 확인 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HC"; exit 1
 fi
+#  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
+#    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
+SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)
+cp src/firebase.js "$SMOKE_SS.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_shiftsnap411.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_SS"; then
+  cp "$SMOKE_SS.fbbak" src/firebase.js && rm -f "$SMOKE_SS.fbbak"
+  node tools/smoke_shiftsnap411.cjs "$(pwd)" "$SMOKE_SS" || { echo "✗ 4.11 교대 시각 터미널 기준 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SS"; exit 1; }
+  rm -f "$SMOKE_SS"
+else
+  cp "$SMOKE_SS.fbbak" src/firebase.js; rm -f "$SMOKE_SS.fbbak"
+  echo "✗ 4.11 교대 시각 터미널 기준 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SS"; exit 1
+fi
+#  4.11(2): **실소스 firebase.js** 로 스냅샷 읽기·요청·반영 함수를 친다(메모리 RTDB) — 소유자가 아니면 셋 다 막히고 아무것도 안 쓰는가 · 반영은 completed/{컨} 추가뿐이고 검수원 기록은 그대로인가 · 두 번째는 0건인가.
+SMOKE_SSF=$(mktemp /dev/shm/hometmp/_smokessf_XXXXXX.cjs)
+if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_SSF" --log-level=error; then
+  node tools/smoke_shiftsnap411_fb.cjs "$SMOKE_SSF" || { echo "✗ 4.11 교대 시각 스냅샷 반영 함수 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SSF"; exit 1; }
+  rm -f "$SMOKE_SSF"
+else
+  echo "✗ 4.11 교대 시각 스냅샷 반영 함수 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SSF"; exit 1
+fi
 #  3.40: **접안 현측이 한 벌인가** — 수집기가 적는 한글(«좌현»·«우현»)과 앱이 적는 영문이 같은 답을 내는지,
 #    그리고 검수사가 고친 것이 수집 사이클에 안 밀리는지. 표시뿐 아니라 첫 카드 자리(작업 순서)까지 잰다.
 #    검수사 2026-09-09 «선박이 좌현으로 고정됨 바꿔도 다시바뀜» — 우현 5척이 좌현 기준으로 줄 서고 있었다.
