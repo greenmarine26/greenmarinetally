@@ -375,7 +375,11 @@ T(/const HOLD_LONG_MS = 60 \* 60000;/.test(P), '1시간 기준이 없다(검수�
 T(/HOLD_REASONS = \['콘 잠김', '트윈 무게 초과', '컨 홀 불량\(스프레더 안착 불가\)'\]/.test(P), '사유 3택이 검수사가 준 그대로가 아니다');
 T(/frontCns: dueCns\.length \? dueCns : \(resumeCns\.length \? resumeCns : null\)/.test(P), '해제·되묻기 컨을 맨 앞으로 안 보낸다');
 T(/!heldSet\.has\(cn\) \|\| dueCns\.includes\(cn\)/.test(P), '보류한 컨을 큐에서 안 뺀다');
-T(/disabled=\{busy \|\| \(card\.twin && !!twinWtWarn\?\.over\)\}/.test(P), '55톤 초과인데 «트윈 한 번에» 가 그대로 눌린다 — 그게 사고다');
+//  ★ 4.08-02 (검수사 2026-10-07 «강제 싱글 전환은 안됩니다» · «경보알림만으로 충분 합니다»): 2.75 의 «55톤 초과면 한 번에 잠금» 을 뒤집었다 — 경보뿐이고 버튼은 항상 눌린다.
+T(/<button onClick=\{handleConfirm\} disabled=\{busy\}/.test(P), '«트윈 한 번에» 가 busy 외 조건으로 잠긴다 — 55톤 초과여도 막지 않는다(경보뿐)');
+T(!/disabled=\{[^}]*twinWtWarn/.test(P), '무게 경보가 버튼을 잠근다 — 들 수 있으면 트윈이다(검수사 2026-10-07)');
+T(!/무게 초과로 잠김/.test(P), '«무게 초과로 잠김» 글귀가 남아 있다');
+T(/setResumeCns\(mate && mate\.cn \? \[mate\.cn\] : \[\]\)/.test(P), '싱글로 한 대 내린 뒤 남은 짝을 다음 카드로 올리지 않는다(짝이 큐 끝으로 사라진다)');
 T(/singleMode/.test(P) && /handleConfirmOne/.test(P), '트윈을 한 대씩 내리는 길이 없다');
 T(/캐빈에서 먼 쪽부터, 갱을 피해서/.test(P), '싱글 순서 안내가 검수사 말과 다르다');
 T(!/twinWtWarn\?\.imbal.*disabled/.test(P), '무게차만으로 트윈을 막는다 — 트림 판단은 현장 몫이다');

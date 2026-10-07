@@ -193,7 +193,7 @@ exports.off = () => {}; exports.goOffline = () => {}; exports.goOnline = () => {
       ok('연결이 끝나면 늦게 온 답을 버린다(alive 가드)', /let alive = true;[\s\S]*?if \(alive\) setLightBoxes\(c \|\| \{\}\)[\s\S]*?return \(\) => \{ alive = false; \};/.test(lp));
       const fb = src('src/firebase.js');
       ok('firebase.js — 새로 만든 받기는 ediContainers shallow 한 곳뿐이고, 항차 뿌리 통째 REST 받기(voyages.json 단독)는 만들지 않았다', (fb.match(/ediContainers\.json\?shallow=true/g) || []).length === 1 && !/fetch\([^)]*\/voyages\.json[`'"]/.test(fb));
-      ok('이번 판 버전 4.08-01', /APP_VERSION = 'TallyOne 4\.08-01'/.test(src('src/utils.js')));
+      ok('이번 판 버전 4.08 계열(4.08-01 이후 -NN 포함)', /APP_VERSION = 'TallyOne 4\.08-0[1-9]'/.test(src('src/utils.js')));
     }
   } catch (e) {
     realTimers();

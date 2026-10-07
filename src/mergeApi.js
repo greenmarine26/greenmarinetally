@@ -4,7 +4,7 @@
 //   XRAY 처리: parseXrayList 실제 반환이 { containers:[...] } 이므로 그에 맞춤(연동안내 6-1 확정).
 // V9.57(G5): 자체 classify 삭제 — autoRegApi.classifyTallyFile 단일 분류기를 임포트.
 //   달라진 점: cdl 허용(V8.89와 정합), .txt EDI/ASC/숫자코드 지원, 합본(loadlist.xlsx) 지원.
-import { parseListExcel, parseBAPLIE, parseAscFile, parseXrayList, loadSheetJS, parseListWeightKg } from './utils.js';
+import { parseListExcel, parseBAPLIE, parseAscFile, parseXrayList, loadSheetJS, plausibleListWtKg } from './utils.js';
 import { classifyTallyFile } from './autoRegApi.js';
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(CLL (CSC) · CSC-DWS · CLL_WDF_…)
 
@@ -34,7 +34,7 @@ function readMergedSheet(XLSX,wb,name){
     const rec={cn,_source:name};
     if(row['Seal']!=null&&row['Seal']!=='')rec.sl=String(row['Seal']).trim();
     if(row['EmptySeal']!=null&&row['EmptySeal']!=='')rec.eseal=String(row['EmptySeal']).trim();
-    const w=parseListWeightKg(row['Weight']); if(w>0)rec.wt=w;   // 1.23: 톤 표기 절사 방지
+    const w=plausibleListWtKg(row['Weight']); if(w>0)rec.wt=w;   // 1.23: 톤 표기 절사 방지
     const feRaw=String(row['F/E']||'').trim().toUpperCase(); if(feRaw==='F'||feRaw==='E')rec.fe=feRaw;
     const isoRaw=String(row['ISO']||'').trim().toUpperCase(); if(isoRaw)rec.iso=isoRaw;
     const tmpRaw=String(row['Temp']==null?'':row['Temp']).trim(); if(tmpRaw!==''){rec.tmp=tmpRaw;rec.rf=true;}   // 1.99-01

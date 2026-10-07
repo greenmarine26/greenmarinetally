@@ -4,7 +4,7 @@
 //   - records는 원시 파싱 결과만 반환(먼저 온 값 유지 + 빈칸 채움). 기존 records와의 병합·보존은 수집기 측 보수 머지 담당.
 //   - Firebase 쓰기는 여기서 하지 않는다 — 순수 함수라 시뮬·헬퍼 재사용이 쉽다.
 import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind, listTypoTwins } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
-import { APP_VERSION } from './utils.js';
+import { APP_VERSION, CONTAINER_WT_MAX_KG } from './utils.js';   // 4.08-02: 컨 하나 40톤 상한
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 파일 이름이 선사
 import { listRevisionDrops } from './listRevision.js';   // 3.61-02: 같은 기본이름 리스트는 새 판만(선적 합본과 같은 판정 한 벌)
 
@@ -220,7 +220,7 @@ export async function buildAutoPayload(files, opts) {
             if (row['Seal'] != null && row['Seal'] !== '') rec.sl = String(row['Seal']).trim();
             if (row['EmptySeal'] != null && row['EmptySeal'] !== '') rec.eseal = String(row['EmptySeal']).trim();
             const w = parseInt(row['Weight'], 10);
-            if (w > 0) rec.wt = w;
+            if (w > 0 && w <= CONTAINER_WT_MAX_KG) rec.wt = w;   // 4.08-02: 컨 하나 40톤 초과(B/L 합계)는 무게 없음 — 들어오는 자리에서 거른다
             // V9.20-02: 합본에 있는 ISO/F/E/Line/POL/POD도 옮긴다 — 안 옮겨서 26353W 256대가
             //   전부 'F/E 미정 + 기타 ISO'로 등록되던 사건(2026-07-28 실측). 합본이 유일 리스트인 항차 보호.
             const feRaw = String(row['F/E'] || '').trim().toUpperCase();

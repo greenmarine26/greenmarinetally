@@ -53,7 +53,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -525,7 +525,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //   메인 병합(containers)과 동일하게 __SLOT_ 키로 개별 유지 + 대기 표식.
     let _slotSeq2 = 0;
     Object.values(fullEdiMap).forEach(c => {
-      if (c.cn) { merged[c.cn] = { ...c, _src: 'edi' }; return; }
+      if (c.cn) { merged[c.cn] = { ...c, ...ediWtField(c), _src: 'edi' }; return; }
       let k = `__SLOT_${c.bay || ''}_${c.row || ''}_${c.tier || ''}`;
       if (merged[k]) k = `${k}_${_slotSeq2++}`;
       merged[k] = { ...c, cn: k, pendingCn: true, _slot: true, _src: 'edi' };
@@ -583,7 +583,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         // 1.23: 무게는 리스트 기준. 단 B/L 총중량 복사분은 컨별 실중량이 아니라 EDI 를 유지.
         //   ⚠ 이미 저장된 톤 값(1.22 이전 파서가 `12.4`→`12` 로 남긴 것)이 EDI 를 덮지 않도록
         //   같은 보정을 여기서도 건다. 재업로드 없이도 옛 자료가 스스로 낫는다.
-        if (r.wt) safeR.wt = parseListWeightKg(r.wt);
+        //  4.08-02: 컨 하나 40톤 초과(B/L 합계가 컨 무게로 들어온 것 — STSE 2677E 232톤)는 무게 없음 — EDI 무게를 유지한다(utils.plausibleListWtKg 한 벌).
+        if (r.wt) { const _w0 = plausibleListWtKg(r.wt); if (_w0 > 0) safeR.wt = _w0; }
         // M8.07: 온도·품명·F/E·리퍼 보강.
         //   RIZHAO처럼 EDI에 온도/품명이 없는 양식에서 엑셀 리스트 값을 반영.
         //   EDI에 값이 있으면 보존(EDI 우선) — 다른 선박 영향 없음.
@@ -746,7 +747,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     let _slotSeq = 0;
     Object.values(applySwapFix(ediMap, _swL)).forEach(c => {
       if (!isPtk(c)) return;
-      if (c.cn) { merged[c.cn] = { ...c, _src: 'edi' }; return; }
+      if (c.cn) { merged[c.cn] = { ...c, ...ediWtField(c), _src: 'edi' }; return; }
       let k = `__SLOT_${c.bay || ''}_${c.row || ''}_${c.tier || ''}`;
       if (merged[k]) k = `${k}_${_slotSeq++}`;
       merged[k] = { ...c, cn: k, pendingCn: true, _slot: true, _src: 'edi' };
@@ -902,13 +903,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //      자동 가이드(SearchPanel.allContainers 경로)는 «27.6t» 로 트윈 하중까지 계산해 막는데,
           //      양하 탭 리스트·미르(이 경로)는 무게 칸이 통째로 비어 있었다(실선 확인).
           //    ⚠ 0kg 컨테이너는 없다 — 타레만 2톤이다. 0 은 언제나 «값 없음»이지 «0킬로»가 아니다.
-          if (k === 'wt') { const _w = parseListWeightKg(v); if (_w > 0) safeR.wt = _w; return; }   // 톤 보정 후 리스트 값 채택
+          if (k === 'wt') { const _w = plausibleListWtKg(v); if (_w > 0) safeR.wt = _w; return; }   // 톤 보정 후 리스트 값 채택 · 4.08-02: 컨 하나 40톤 초과는 제외
           //  3.52: 선사는 «더 자세한 쪽» — 세관이 뭉쳐 준 값이 EDI 의 자식(DSL·CSC·MAS)을 덮지 않는다(utils 한 벌).
           //    ⚠ 이 목록이 화면 본류다(컨 목록·카고플랜 색·베이플랜 라벨·CSV). 536행만 고치면 여기로 새 나간다(감사 실측 17대).
           if (k === 'op') { safeR.op = pickCarrierOp(v, ediBase && ediBase.op, voyage?.info?.vsl); return; }
           safeR[k] = v;
         } else {
           // EDI에 없는 컨번호 → 리스트만 있는 항목 (참고용으로 허용)
+          //  4.08-02 (감사 지적): 리스트 전용 컨의 무게도 같은 문지기 — 톤 보정 + 컨 하나 40톤 초과는 무게 없음(EDI 가 있는 갈래와 한 벌).
+          if (k === 'wt') { const _w = plausibleListWtKg(v); if (_w > 0) safeR.wt = _w; return; }
           if (v !== 0) safeR[k] = v;
         }
       });

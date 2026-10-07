@@ -985,6 +985,8 @@ fi
     node tools/smoke_mireyes.cjs "$SMOKE_ME" || { echo "✗ 미르의 눈 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.52-03: 무게 병합 — 리스트의 «빈칸/0» 이 EDI 무게를 지우면 안 된다(소스 직접 검사, 번들 불필요)
     node tools/smoke_weight_merge.cjs || { echo "✗ 무게 병합 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.08-02: 트윈 무게는 총중량으로 재고 경보뿐 · 컨 하나 40톤 초과는 무게 없음 · 싱글 한 대 뒤 짝이 다음 카드(STSE 2677E 실데이터)
+    node tools/smoke_twinwt40802.cjs "$(pwd)" || { echo "✗ 4.08-02 트윈 무게 연막검사 실패 — 배포 금지"; exit 1; }
   else
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi

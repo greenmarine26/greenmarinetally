@@ -20,10 +20,13 @@ const m = src.match(/if \(k === 'wt'\) \{([^}]*)\}/);
 T(!!m, "`if (k === 'wt')` 분기를 못 찾았다 — 병합 코드가 옮겨졌나?");
 if (m) {
   const body = m[1];
-  T(/parseListWeightKg/.test(body), '톤 보정(parseListWeightKg)이 사라졌다');
+  T(/plausibleListWtKg/.test(body), '톤 보정·40톤 상한(plausibleListWtKg)이 사라졌다');   // 4.08-02: parseListWeightKg → plausibleListWtKg(컨 하나 40톤 초과는 무게 없음)
   T(/>\s*0/.test(body), '**양수 가드가 없다** — 리스트의 0 이 EDI 무게를 다시 지운다');
   T(!/safeR\.wt\s*=\s*parseListWeightKg\(v\)\s*;/.test(body), '가드 없이 그대로 대입하는 옛 줄이 남아 있다');
 }
+
+//  ①-b ★ 4.08-02 감사 지적 — 항차 화면 병합은 «EDI 있는 컨» 과 «리스트에만 있는 컨» 두 갈래다. 문지기가 앞 갈래에만 있으면 리스트 전용 컨의 232톤이 목록에 나온다.
+T((src.match(/if \(k === 'wt'\) \{ const _w = plausibleListWtKg\(v\); if \(_w > 0\) safeR\.wt = _w; return; \}/g) || []).length >= 2, '항차 화면 병합의 두 갈래(EDI 있음 · 리스트 전용) 모두에 40톤 문지기가 있어야 한다');
 
 //  ② 실제 병합 동작을 재현해 확인한다 — 위 분기와 같은 규칙을 그대로 옮겨 적는다.
 //    ⚠ 픽스처 값은 실데이터에서 베껴 왔다(NSFR 2616N TEMU0105882: EDI 27600 · records 0).
@@ -51,13 +54,23 @@ T(mergeWt(0, 12000) === 12000, 'EDI 가 없고 리스트만 있으면 리스트'
 //  ③ ★ 2.52-04 — **인쇄 경로(PrintHubModal)도 같은 가드를 갖는가.**
 //    2.52-03 은 VoyagePage 만 고쳤고 이 세 번째 병합 경로를 안 봤다. 다른 클로드에게 전수 감사를 시켜 찾았다.
 //    나가는 곳이 대외 문서다 — VGM LIST 가 무게 칸에 «—» 를 찍고 미기재로 센다.
-//    ⚠ 병합 경로가 넷이다(SearchPanel · VoyagePage.containersBase · VoyagePage.allEdiContainersBase · PrintHubModal).
+//    ⚠ 병합 경로가 다섯이다(SearchPanel · VoyagePage.containersBase · VoyagePage.allEdiContainersBase · PrintHubModal · mir.flattenVoyages).
 //      새 경로를 만들거나 고칠 때는 **여기 검사를 같이 늘려라.**
 const PH = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'components', 'PrintHubModal.jsx'), 'utf8');
-T(/parseListWeightKg/.test(PH), '인쇄 경로에 톤 보정이 없다');
+T(/plausibleListWtKg/.test(PH), '인쇄 경로에 톤 보정이 없다');   // 4.08-02
 const mph = PH.match(/if \(k === 'wt'\) \{([^}]*)\}/);
 T(!!mph, "인쇄 경로에 `if (k === 'wt')` 가드가 없다 — 리스트의 0 이 EDI 무게를 덮는다(VGM LIST 가 비어 나간다)");
 if (mph) T(/>\s*0/.test(mph[1]), '인쇄 경로 가드에 양수 조건이 없다');
 
+//  ④ ★ 4.08-02 감사 지적 — **다섯 번째 병합 경로: 전 항차 펼치기(mir.flattenVoyages — 홈 통합검색·떠 있는 미르).**
+//    여기만 40톤 문지기와 EDI 총중량(wtEdi)이 빠져 있어서, 작업창 미르는 «경보 19쌍» 인데 떠 있는 미르는 «30쌍 · 합계 464톤» 이라고 답했다(실동작은 smoke_twinwt40802).
+const MIR = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'mir.js'), 'utf8');
+T(/safeR\.wt !== undefined\) \{ const _w = plausibleListWtKg\(safeR\.wt\)/.test(MIR), '전 항차 펼치기(flattenVoyages)에 40톤 문지기(plausibleListWtKg)가 없다');
+T(/merged\[c\.cn\] = \{ \.\.\.c, \.\.\.ediWtField\(c\)/.test(MIR), '전 항차 펼치기가 EDI 총중량(wtEdi)을 남기지 않는다');
+
+//  ⑤ 합본 업로드 입구(autoRegApi) — 저장 전에 40톤 상한
+const AR = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'autoRegApi.js'), 'utf8');
+T(/if \(w > 0 && w <= CONTAINER_WT_MAX_KG\) rec\.wt = w;/.test(AR), '합본 업로드 입구(autoRegApi)에 40톤 상한이 없다');
+
 if (bad) { console.error(`✗ 무게 병합 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 무게 병합 연막검사 통과 (가드 3 · 병합 7 · 인쇄 경로 3)');
+console.log('✓ 무게 병합 연막검사 통과 (가드 3 · 병합 7 · 인쇄 경로 3 · 전 항차 펼치기 2)');

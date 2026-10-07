@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -115,7 +115,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       //    ⚠ 2.52-03 이 VoyagePage 경로만 고치고 이 세 번째 병합 경로를 안 봤다 — 파급 검증의 구멍이었다.
       //    규칙은 그대로다(1.23 «무게는 리스트가 기준») — 리스트에 **값이 있을 때** 하는 말이다.
       //    0kg 컨테이너는 없다(타레만 2톤). 톤 보정도 VoyagePage 와 같은 벌로 건다.
-      if (k === 'wt') { const _w = parseListWeightKg(v); if (_w > 0) merged.wt = _w; return; }
+      if (k === 'wt') { const _w = plausibleListWtKg(v); if (_w > 0) merged.wt = _w; return; }   // 4.08-02: 컨 하나 40톤 초과는 제외
       //  3.52: 선사는 «더 자세한 쪽»(utils 한 벌). 여기서 나오는 것이 **대외 문서**다 —
       //    검수 리스트·VGM·카고플랜 별첨1(선사별)·베이 상세. 위 100행 주석이 경고한 «세 번째 병합 경로» 가 이것이다.
       if (k === 'op') { merged.op = pickCarrierOp(v, e && e.op, voyage?.info?.vsl); return; }

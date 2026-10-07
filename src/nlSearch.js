@@ -2008,8 +2008,9 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const limit = twinDiffLimit(pier);
     const tw = analyzeTwinPairs(buildTwinPairs(cs, pairsMap), limit);
     const posOf = (arr) => arr.slice(0, 6).map(p => `${fmtPos(p.a)}↔${fmtPos(p.b)}`).join(', ') + (arr.length > 6 ? ' 외' : '');
-    if (tw.over.length) warns.push({ k: `트윈초과 ${tw.over.length}`, line: `🏗 트윈 무게 초과 ${tw.over.length}쌍 (합계 55톤↑): ${posOf(tw.over)} — 트윈 불가, 싱글 작업 검토` });
-    if (tw.diff.length) warns.push({ k: `트윈무게차 ${tw.diff.length}`, line: `⚖ 트윈 무게차 초과 ${tw.diff.length}쌍 (한계 ${(limit / 1000)}톤↑): ${posOf(tw.diff)} — 수평 불가, 싱글 작업 검토` });
+    //  4.08-02: 경보뿐이다 — «싱글 권유, 들 수 있으면 트윈»(검수사 2026-10-07). 막거나 «불가»라고 하지 않는다.
+    if (tw.over.length) warns.push({ k: `트윈초과 ${tw.over.length}`, line: `🏗 트윈 총중량(EDI) 합계 55톤 초과 ${tw.over.length}쌍: ${posOf(tw.over)} — 싱글 작업 권유 (들 수 있으면 트윈)` });
+    if (tw.diff.length) warns.push({ k: `트윈무게차 ${tw.diff.length}`, line: `⚖ 트윈 총중량(EDI) 무게차 ${tw.diff.length}쌍 (한계 ${(limit / 1000)}톤↑): ${posOf(tw.diff)} — 수평 주의, 싱글 작업 권유` });
   }
   const audit = auditSeals(cs);
   // 2.06-05: 실오류(수정 기록)·실번호 불일치(sl_conflict)도 브리핑에 — 검수사 «브리핑에서 실오류 내용이 없던데»
@@ -3635,12 +3636,28 @@ export function generatePilotAnswer(info = {}, pf = null) {
   return lines.join('\n');
 }
 
-// ─── V7.93: 트윈 작업 무게 점검 (사용자 도메인: 합계 55톤 초과 = 트윈 불가) ───
+// ─── V7.93: 트윈 작업 무게 점검 (사용자 도메인: 합계 55톤 초과 = 싱글 권유) ───
 //   불균형 기준(TWIN_DIFF_WARN_KG)은 임시 10톤 — 크레인 실제 기준 확정 시 이 상수만 변경.
 //   짝 규칙은 twin.js getBayPairs(pairsMap)를 주입받음 — 트윈 작업 화면과 동일 규칙 보장.
+//   ★ 4.08-02 (검수사 2026-10-07 «무게가 55톤을 초과하면 싱글 작업을 권유 하되 들수 있으면 트윈작업을 합니다» ·
+//     «강제 싱글 전환은 안됩니다» · «경보알림만으로 충분 합니다»): 55톤 초과는 **경보와 싱글 권유 문구**일 뿐 완료를 막지 않는다.
+//     장비가 이미 트윈을 든 뒤에 잠겨 있으면 싱글 두 번으로 기록해야 하고, 완료 시각이 어긋나고 무브수·시간 계산도 틀어진다
+//     (STSE 2677E 실측 — 트윈 후보 79쌍 중 실제로 든 60쌍 가운데 32쌍이 15초 안에 «싱글 두 번»으로 기록됐다).
+//     경보 단계 — 50톤 이하 정상 · 50~55톤 «주의(한계 근처)» · 55톤 초과 «싱글 권유». 모두 경보뿐이다.
 export const TWIN_MAX_TOTAL_KG = 55000;
+export const TWIN_CAUTION_TOTAL_KG = 50000;   // 4.08-02: 이 수를 넘고 55톤 이하면 «주의» — 싱글 한 대 한도 근처
+//   ★ 4.08-02 — **트윈 판정에 쓰는 무게 한 벌.** 갱이 드는 것은 컨테이너 총중량(화물+자중)이다. EDI(BAPLIE MEA+WT)가 총중량이고,
+//     리스트 무게는 순중량(SIT·EAS·WDG)·B/L 합계(SITC `Weight`)가 섞여 있다(STSE 2677E 498대 중 EDI 총중량과 같은 값은 20대뿐 — 순중량 381대 ·
+//     B/L 합계 81대). «무게는 리스트가 기준»(1.23)은 화면에 보이는 무게의 규칙이라 그대로 두고, 트윈 판정만 총중량(`wtEdi`)을 먼저 본다.
+//     `wtEdi` 가 없는 컨(EDI 에 없는 리스트 전용 컨 · 콘앱이 넘긴 컨)은 종전대로 `wt` 를 쓴다.
+export function twinWtOf(c) {
+  if (!c) return 0;
+  const e = parseInt(c.wtEdi, 10) || 0;
+  if (e > 0) return e;
+  return parseInt(c.wt, 10) || 0;
+}
 // V7.93-02: 무게차 한계는 부두별 (사용자 확정) — 동방아이포트(PNCT) 14톤, 평택컨테이너터미널(PCTC) 20톤.
-//   차이 초과 = 수평이 안 맞아 트윈 불가 (주의가 아니라 불가). 부두 미상이면 보수적으로 14톤.
+//   차이 초과 = 수평이 안 맞으니 싱글 작업을 권하는 경보다(4.08-02 — 막지 않는다. 들 수 있으면 트윈). 부두 미상이면 보수적으로 14톤.
 export const TWIN_DIFF_LIMITS = { PNCT: 14000, PCTC: 20000 };
 export function twinDiffLimit(pier) {
   return TWIN_DIFF_LIMITS[String(pier || '').toUpperCase().trim()] || 14000;
@@ -3671,16 +3688,16 @@ export function buildTwinPairs(containers, pairsMap) {
   return out;
 }
 
-// 쌍 분석: ok / over(55톤 초과) / imbal(차이 큼) / noWt(무게 미상)
+// 쌍 분석: ok(heavy=50~55톤 주의 포함) / over(55톤 초과·싱글 권유) / diff(차이 큼·수평 주의) / noWt(무게 미상)
 export function analyzeTwinPairs(pairs, diffLimitKg = 14000) {
   const r = { ok: [], over: [], diff: [], noWt: [] };
   for (const [a, b] of pairs) {
-    const wa = parseInt(a.wt, 10) || 0, wb = parseInt(b.wt, 10) || 0;
+    const wa = twinWtOf(a), wb = twinWtOf(b);   // 4.08-02: 총중량 먼저
     if (!wa || !wb) { r.noWt.push({ a, b, wa, wb }); continue; }
     const total = wa + wb, diff = Math.abs(wa - wb);
     if (total > TWIN_MAX_TOTAL_KG) r.over.push({ a, b, wa, wb, total, diff });
     else if (diff > diffLimitKg) r.diff.push({ a, b, wa, wb, total, diff });
-    else r.ok.push({ a, b, wa, wb, total, diff });
+    else r.ok.push({ a, b, wa, wb, total, diff, heavy: total > TWIN_CAUTION_TOTAL_KG });
   }
   return r;
 }
@@ -3705,16 +3722,16 @@ export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '')
   const r = analyzeTwinPairs(pairs, limit);
   const bad = r.over.length + r.diff.length;
   const lines = [];
-  // 첫 줄 = 음성용 한 문장
-  if (bad) lines.push(`${scope} 트윈 불가 ${bad}쌍 — ${[r.over.length ? '무게 초과' : null, r.diff.length ? '무게차 초과' : null].filter(Boolean).join('·')}. 위치 확인하세요.`);
+  // 첫 줄 = 음성용 한 문장 — 4.08-02: «불가»가 아니라 «싱글 권유»(들 수 있으면 트윈) — 검수사 2026-10-07
+  if (bad) lines.push(`${scope} 트윈 경보 ${bad}쌍 — ${[r.over.length ? '총중량(EDI) 합계 55톤 초과' : null, r.diff.length ? '총중량(EDI) 무게차 초과' : null].filter(Boolean).join('·')}. 싱글 작업을 권합니다. 들 수 있으면 트윈으로 하십시오.`);
   else if (r.noWt.length && !r.ok.length) lines.push(`${scope} 트윈 ${pairs.length}쌍 — 무게 정보가 없어 판단 불가.`);
   else lines.push(`${scope} 트윈 ${pairs.length}쌍 모두 가능합니다.`);
   if (r.over.length) {
-    lines.push('', `🚫 무게 초과 (합계 55톤↑) — 트윈 불가, 싱글 작업:`);
+    lines.push('', `⚠ 총중량(EDI) 합계 55톤 초과 — 싱글 작업 권유 (들 수 있으면 트윈):`);
     r.over.forEach(p => lines.push(`  • ${pairPos(p)} — 합계 ${t1(p.total)}톤 (${t1(p.wa)}+${t1(p.wb)}) ${pairCn(p)}`));
   }
   if (r.diff.length) {
-    lines.push('', `🚫 무게차 초과 (${pierLabel} 한계 ${t1(limit)}톤↑) — 수평 불가, 싱글 작업:`);
+    lines.push('', `⚠ 총중량(EDI) 무게차 초과 (${pierLabel} 한계 ${t1(limit)}톤↑) — 수평 주의, 싱글 작업 권유:`);
     r.diff.forEach(p => lines.push(`  • ${pairPos(p)} — 차이 ${t1(p.diff)}톤 (${t1(p.wa)}/${t1(p.wb)}) ${pairCn(p)}`));
   }
   if (r.noWt.length) {
@@ -3723,7 +3740,8 @@ export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '')
   }
   if (r.ok.length) {
     const maxOk = Math.max(...r.ok.map(p => p.total));
-    lines.push('', `✅ 가능 ${r.ok.length}쌍 (최대 합계 ${t1(maxOk)}톤)`);
+    const nHeavy = r.ok.filter(p => p.heavy).length;
+    lines.push('', `✅ 가능 ${r.ok.length}쌍 (최대 합계 ${t1(maxOk)}톤)${nHeavy ? ` — 이 중 합계 50~55톤 ${nHeavy}쌍은 한계 근처입니다` : ''}`);
   }
   return lines.join('\n');
 }

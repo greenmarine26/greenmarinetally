@@ -17,7 +17,7 @@ import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠�
 import { speak, spellKo } from '../voice.js';
 import { hatchPanelCountOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
-import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
+import { TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinDiffLimit, twinWtOf } from '../nlSearch.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
 // TallyOne 1.57: 같은 부류가 몇 대 연속되면 그 흐름으로 보는가 (검수사 확정 2026-08-13 — 3대).
@@ -600,16 +600,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return out;
   }, [card, modeDupSeals]);
 
-  // V7.99-6 (메모3): 트윈 카드 무게 점검 — 합계 55톤 초과 = 트윈 불가, 무게차 부두한계 초과 = 수평 불가.
+  // V7.99-6 (메모3): 트윈 카드 무게 점검 — 합계 55톤 초과 = 싱글 권유, 무게차 부두한계 초과 = 수평 주의.
   //   nlSearch의 검증된 상수 재사용. 부두는 voyage.info.pier(미상이면 보수적 14톤).
+  //   ★ 4.08-02: 무게는 갱이 드는 총중량(nlSearch.twinWtOf — EDI 총중량 먼저) · 경보뿐이다(완료를 막지 않는다 — 검수사 2026-10-07).
   const twinWtWarn = useMemo(() => {
     if (!card?.twin) return null;
-    const wa = parseInt(card.main.wt, 10) || 0, wb = parseInt(card.twin.wt, 10) || 0;
+    const wa = twinWtOf(card.main), wb = twinWtOf(card.twin);
     if (!wa || !wb) return { noWt: true };
     const total = wa + wb, diff = Math.abs(wa - wb);
     const limit = twinDiffLimit(voyage?.info?.pier);
     if (total > TWIN_MAX_TOTAL_KG) return { over: true, total, diff };
     if (diff > limit) return { imbal: true, total, diff, limit };
+    if (total > TWIN_CAUTION_TOTAL_KG) return { heavy: true, total, diff };   // 50~55톤 — 한계 근처 주의
     return null;
   }, [card, voyage]);
 
@@ -694,11 +696,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;
     const one = which === 'twin' ? card.twin : card.main;
+    const mate = which === 'twin' ? card.main : card.twin;   // 4.08-02: 남은 짝
     setBusy(true);
     try {
       await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', equip);
       noteWorked(one, true);
-      setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns([]);
+      //  ★ 4.08-02 (검수사 2026-10-07 «하나 처리하면 하나가 사라져 베이에서 직접처리해야 하는 경우»): 짝이 남으면 짝 없는 홀드 20피트(싱글)가 되어 큐 맨 끝으로 밀렸다
+      //    (STSE 2677E 실데이터 — 베이 11~13 홀드 6/10장 · 19~21 6/16장). 한 대만 내렸으면 남은 짝을 **바로 다음 카드**로 올린다(홀드·데크 모두).
+      //    순서를 정하는 것이 아니라 «짝이 끝나기 전에 다른 카드로 넘어가지 않게» 앞에 두는 것뿐이다 — 다른 컨을 먼저 하려면 [수정]으로 가면 된다.
+      setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns(mate && mate.cn ? [mate.cn] : []);
     } finally { setBusy(false); }
   };
 
@@ -1801,13 +1807,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
 
-          {twinWtWarn && (twinWtWarn.over || twinWtWarn.imbal) && (
+          {/* ★ 4.08-02 — 경보뿐이다. 55톤 초과는 «싱글 권유» 이고 들 수 있으면 트윈으로 한다(검수사 2026-10-07 «무게가 55톤을 초과하면 싱글 작업을 권유 하되 들수 있으면 트윈작업을 합니다»). */}
+          {twinWtWarn && (twinWtWarn.over || twinWtWarn.imbal || twinWtWarn.heavy) && (
             <div className={`rounded-pill px-3 py-2 text-sm font-bold flex items-start gap-2 ${twinWtWarn.over ? 'bg-rose-950/60 border border-rose-700 text-rose-200' : 'bg-amber-950/60 border border-amber-700 text-amber-200'}`}>
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5"/>
               {twinWtWarn.over ? (
-                <span>🚫 합계 {formatWt(twinWtWarn.total)} (55톤 초과) — 트윈 불가, 싱글 작업 검토</span>
+                <span>⚠️ 총중량(EDI) 합계 {formatWt(twinWtWarn.total)} (55톤 초과) — 싱글 작업을 권합니다. 들 수 있으면 트윈으로 하십시오.</span>
+              ) : twinWtWarn.imbal ? (
+                <span>⚠️ 총중량(EDI) 무게차 {formatWt(twinWtWarn.diff)} (한계 {formatWt(twinWtWarn.limit)} 초과) — 수평 주의, 트윈 주의</span>
               ) : (
-                <span>⚠️ 무게차 {formatWt(twinWtWarn.diff)} (한계 {formatWt(twinWtWarn.limit)} 초과) — 수평 안 맞음, 트윈 주의</span>
+                <span>⚠️ 총중량(EDI) 합계 {formatWt(twinWtWarn.total)} (50톤 넘음) — 한계 근처입니다. 확인하고 트윈 하십시오.</span>
               )}
             </div>
           )}
@@ -1831,7 +1840,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
 
-          {/* ★ 2.75 — 트윈을 한 대씩. 55톤 초과면 «한 번에»는 잠근다(종전엔 경고만 띄우고 그대로 눌렸다). */}
+          {/* ★ 2.75 — 트윈을 한 대씩. ★ 4.08-02 — 55톤 초과여도 «트윈 한 번에» 는 잠그지 않는다(2.75 잠금을 풀었다 — 검수사 2026-10-07 «강제 싱글 전환은 안됩니다»). */}
           {/* ★ 3.71 — ATPR 위해행 엠티 선적: 컨번호를 부른 뒤 엠티실 뒷 세 자리를 듣는다(다른 배·다른 POD 는 그리지 않는다) */}
           <EsealVoiceBar voyage={voyage} voyageKey={voyageKey} inspector={inspector} card={card} mode={mode} voiceOn={voiceOn} />
 
@@ -1859,17 +1868,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button onClick={() => setSingleMode(false)} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">트윈으로 돌아가기</button>
             </div>
           ) : (
-            <button onClick={handleConfirm} disabled={busy || (card.twin && !!twinWtWarn?.over)}
+            <button onClick={handleConfirm} disabled={busy}
               className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
               {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
-              {card.twin ? (twinWtWarn?.over ? '트윈 한 번에 — 무게 초과로 잠김' : `트윈 한 번에 ${mode === 'discharge' ? '양하' : '선적'}확인`) : `${mode === 'discharge' ? '양하' : '선적'}확인`}
+              {card.twin ? `트윈 한 번에 ${mode === 'discharge' ? '양하' : '선적'}확인` : `${mode === 'discharge' ? '양하' : '선적'}확인`}
             </button>
           )}
 
           {card.twin && !singleMode && (
             <button onClick={() => setSingleMode(true)}
               className={`w-full py-2.5 rounded-pill font-bold text-sm flex items-center justify-center gap-2 ${twinWtWarn?.over ? 'bg-sky-700 hover:bg-sky-600 text-white' : 'bg-ink-800 hover:bg-ink-700 text-sky-300'}`}>
-              싱글로 한 대씩{twinWtWarn?.over ? ' — 이렇게 하십시오' : ''}
+              싱글로 한 대씩{twinWtWarn?.over ? ' — 권합니다' : ''}
             </button>
           )}
 

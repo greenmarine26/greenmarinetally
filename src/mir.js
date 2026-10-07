@@ -29,9 +29,10 @@ import {
   ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
   currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
+  plausibleListWtKg, ediWtField,   // 4.08-02: 컨 하나 40톤 초과는 무게 없음 · EDI 총중량 wtEdi (병합 경로 한 벌)
 } from './utils.js';
 import {
-  TWIN_MAX_TOTAL_KG, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
+  TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
   generateHowToAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
@@ -589,13 +590,15 @@ export function flattenVoyages(voyages) {
       //  3.31: 항차 화면·마감텔리와 같은 선사 코드로(같은 배를 두 화면이 다르게 답하면 안 된다).
       const _spOpG = shipOpMapper(String(v.info?.vsl || '').toUpperCase(),
         [...Object.values(ediMap), ...Object.values(recMap)].map((c) => c && c.op));
-      Object.values(ediMap).forEach((c) => { merged[c.cn] = { ...c, _src: 'edi', op: c.op ? _spOpG(c.op) : c.op }; });
+      Object.values(ediMap).forEach((c) => { merged[c.cn] = { ...c, ...ediWtField(c), _src: 'edi', op: c.op ? _spOpG(c.op) : c.op }; });   // 4.08-02: EDI 총중량 → wtEdi
       Object.values(recMap).forEach((r) => {
         const safeR = {};
         Object.keys(r).forEach((k) => {
           const x = r[k];
           if (x !== '' && x !== 0 && x !== null && x !== undefined && !(Array.isArray(x) && x.length === 0)) safeR[k] = x;
         });
+        //  4.08-02 (감사 지적): 리스트 무게도 항차 화면과 같은 문지기 — 컨 하나 40톤 초과(B/L 합계)는 무게 없음이라 EDI 무게가 이긴다(utils 한 벌).
+        if (safeR.wt !== undefined) { const _w = plausibleListWtKg(safeR.wt); if (_w > 0) safeR.wt = _w; else delete safeR.wt; }
         //  3.52: 홈·미르도 항차 화면과 같은 선사를 본다 — «더 자세한 쪽»(utils 한 벌).
         if (safeR.op) safeR.op = _spOpG(pickCarrierOp(safeR.op, merged[r.cn] && merged[r.cn].op, v.info?.vsl));
         //  3.52-01: **POL 은 EDI 가 정본이다.** 이 경로엔 POL 문지기가 **아예 없어서** 미르·홈 통합검색만
@@ -1356,14 +1359,16 @@ const feetOf = (iso) => { const h = String(iso || '')[0]; return h === '2' ? '20
 /** 카드 한 장을 말로 — 트윈이면 두 대를 함께 부른다. */
 function twinWarn(card, pier) {
   if (!card || !card.twin) return '';
-  const wa = parseInt(card.main.wt, 10) || 0, wb = parseInt(card.twin.wt, 10) || 0;
+  //  4.08-02: 총중량 먼저(twinWtOf) · **경보와 싱글 권유뿐** — 막지 않는다(검수사 2026-10-07 «무게가 55톤을 초과하면 싱글 작업을 권유 하되 들수 있으면 트윈작업을 합니다»).
+  const wa = twinWtOf(card.main), wb = twinWtOf(card.twin);
   if (!wa || !wb) return '\n  ⚠ 무게가 없는 컨이 있습니다 — 트윈 하중을 못 잽니다. 눈으로 확인하십시오.';
   const total = wa + wb, diff = Math.abs(wa - wb);
   if (total > TWIN_MAX_TOTAL_KG) {
-    return `\n  ⛔ **트윈 불가** — 합계 ${formatWt(total)} (55톤 초과). **싱글로 한 대씩** 내리십시오.`;
+    return `\n  ⚠ **싱글 권유** — 총중량(EDI) 합계 ${formatWt(total)} (55톤 초과). 싱글로 한 대씩 내리기를 권합니다. 들 수 있으면 트윈으로 하십시오.`;
   }
   const limit = twinDiffLimit(pier);
-  if (diff > limit) return `\n  ⚠ 무게차 ${formatWt(diff)} (${pier || '부두 미상'} 한계 ${formatWt(limit)}) — 수평이 안 맞습니다.`;
+  if (diff > limit) return `\n  ⚠ 총중량(EDI) 무게차 ${formatWt(diff)} (${pier || '부두 미상'} 한계 ${formatWt(limit)}) — 수평이 안 맞습니다.`;
+  if (total > TWIN_CAUTION_TOTAL_KG) return `\n  ⚠ 총중량(EDI) 합계 ${formatWt(total)} (50톤 넘음) — 한계 근처입니다. 확인하고 트윈 하십시오.`;
   return '';
 }
 
@@ -1383,8 +1388,8 @@ function sayCard(card, n, pier) {
   };
   if (t) {
     const w = twinWarn(card, pier);
-    //  못 드는 트윈이면 «두 대 한 번에» 라고 말하지 않는다 — 그 말이 곧 오작업 지시가 된다.
-    const head2 = w.includes('트윈 불가') ? `${head} — **트윈 자리지만 한 번에 못 듭니다.**` : `${head} — **트윈입니다. 두 대 한 번에.**`;
+    //  4.08-02: 55톤을 넘으면 «두 대 한 번에» 라고만 말하지 않는다 — 싱글을 권하되 들 수 있으면 트윈이다(검수사 2026-10-07).
+    const head2 = w.includes('싱글 권유') ? `${head} — **트윈 자리입니다. 합계가 55톤을 넘어 싱글을 권합니다.**` : `${head} — **트윈입니다. 두 대 한 번에.**`;
     return `${head2}\n  앞 ${one(c)}\n  뒤 ${one(t)}${w}`;
   }
   return `${head} — ${one(c)}${card.fr ? '\n  ⚠ FR(플랫랙)입니다 — 치수·고정 확인' : ''}`;

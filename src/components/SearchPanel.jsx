@@ -10,7 +10,7 @@ import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -145,7 +145,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       const xraySeals = sec.xraySeals || {};
       const compMap = sec.completed || {};
       const merged = {};
-      Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c }; });
+      //  4.08-02: EDI 총중량을 `wtEdi` 로 따로 남긴다 — 화면 무게(`wt`)는 «무게는 리스트가 기준»(1.23)대로 리스트가 덮지만,
+      //    트윈 판정은 갱이 드는 총중량(화물+자중)으로 해야 한다(nlSearch.twinWtOf 한 벌 — 화면·미르·브리핑·무브 계산이 같은 값을 본다).
+      Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, ...ediWtField(c) }; });   // 4.08-02: EDI 총중량 → wtEdi (utils 한 벌)
       // M6.94.31: EDI에 있는 컨은 핵심 필드를 리스트가 덮지 못함 (EDI = 단일 진실).
       //   원인: 엠티 선적 엑셀(헤더 없는 EMPTY)은 fallback 파서가 목적지(CNDLC)를 pol에 넣음.
       //   리스트 pol=CNDLC가 EDI pol=KRPTK를 덮어 상세/카고플랜에서 평택 누락.
@@ -156,6 +158,8 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         Object.keys(r).forEach(k => {
           const v = r[k];
           if (v === '' || v === 0 || v === null || v === undefined || (Array.isArray(v) && v.length === 0)) return;
+          //  4.08-02: 무게는 톤 보정 + 컨 하나 40톤 초과(B/L 합계 — STSE 2677E 232톤)는 무게 없음 — VoyagePage·PrintHubModal 과 같은 한 벌(utils.plausibleListWtKg).
+          if (k === 'wt') { const _w = plausibleListWtKg(v); if (_w > 0) safeR.wt = _w; return; }
           //  3.47: **검수사가 실물을 보고 고른 규격은 EDI 를 이긴다.** 서류보다 실물이 정본이다.
           //    2차 시뮬 지적 2026-09-14 — 확정 뒤 수집기가 ediContainers 를 다시 쓰면 화면 규격이
           //    EDI 값으로 되돌아가는데, `iso_pick` 때문에 알림은 계속 조용해 **틀린 값이 조용히 남았다.**
