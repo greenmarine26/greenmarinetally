@@ -66,7 +66,7 @@ function RouletteModal({ spots, slot, onClose }) {
               const a = i * seg + seg / 2;
               return (
                 <div key={s.name + i} className="absolute inset-0" style={{ transform: `rotate(${a - 90}deg)` }}>
-                  <div className="absolute top-1/2 text-2xs font-bold text-white"
+                  <div className="absolute top-1/2 text-2xs font-bold fixed-white"
                     style={{ left: '50%', width: 128, paddingLeft: 34, transform: 'translateY(-50%)', textAlign: 'left',
                       textShadow: '0 1px 2px rgba(0,0,0,.8)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                     {s.name}

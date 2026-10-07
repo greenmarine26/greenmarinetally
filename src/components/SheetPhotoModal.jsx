@@ -120,9 +120,9 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
                     <div className="flex items-center gap-2">
                       <input type="checkbox" className="w-6 h-6 shrink-0" checked={!!r.use} disabled={!!r.saved} onChange={(e) => setRow(i, { use: e.target.checked })} aria-label={`${r.slot} 넣기`} />
                       <input value={`${r.bay}${r.row}${r.tier}`} inputMode="numeric" disabled={!!r.saved} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setRow(i, { bay: v.slice(0, 2), row: v.slice(2, 4), tier: v.slice(4, 6), dupSlot: false }); }}
-                        className={`w-[5.5rem] bg-ink-950 border rounded px-2 py-2 font-mono font-bold text-sm ${r.dupSlot ? 'border-amber-400 text-amber-200' : 'border-line text-white'}`} aria-label={`${r.slot} 칸 번호`} />
+                        className={`w-[5.5rem] bg-ink-950 border rounded px-2 py-2 font-mono font-bold text-sm ${r.dupSlot ? 'border-amber-400 text-amber-200' : 'border-line text-dim-100'}`} aria-label={`${r.slot} 칸 번호`} />
                       <input value={r.pick} disabled={!!r.saved} onChange={(e) => setRow(i, { pick: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) })}
-                        className={`flex-1 min-w-0 bg-ink-950 border rounded px-2 py-2 font-mono text-sm ${isoOk(r.pick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.slot} 컨번호`} />
+                        className={`flex-1 min-w-0 bg-ink-950 border rounded px-2 py-2 font-mono text-sm ${isoOk(r.pick) ? 'border-line text-dim-100' : 'border-red-500 text-red-200'}`} aria-label={`${r.slot} 컨번호`} />
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
                       <span className="font-mono text-dim-300">{r.kind === 'mark' ? `표시만(계획 그대로) · 인쇄 ${r.printed || '?'}` : `손글씨 ${r.prefix || '····'} ${r.digits}`}</span>

@@ -639,12 +639,12 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       )}
       {dmgPhotoView && (
         <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={() => setDmgPhotoView(null)}>
-          {dmgPhotoView.loading && <div className="text-dim-100 font-bold">사진 불러오는 중…</div>}
-          {dmgPhotoView.err && <div className="text-red-300 font-bold text-sm">{dmgPhotoView.err}</div>}
+          {dmgPhotoView.loading && <div className="fixed-white font-bold">사진 불러오는 중…</div>}
+          {dmgPhotoView.err && <div className="text-[#fca5a5] font-bold text-sm">{dmgPhotoView.err}</div>}
           {(dmgPhotoView.imgs || []).map((src, i) => (
             <img key={i} src={src} alt="" className="max-h-[45vh] max-w-full rounded-pill border border-line-strong" />
           ))}
-          {dmgPhotoView.imgs && <div className="text-dim-200 text-xs2 font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
+          {dmgPhotoView.imgs && <div className="fixed-white opacity-80 text-xs2 font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
         </div>
       )}
 

@@ -99,7 +99,7 @@ export default function PendingDamageModal({ inspector = '', onClose }) {
                 {p ? (
                   <div className="relative">
                     <img src={p.url} alt="" className="w-full h-28 object-cover rounded-pill border border-line" />
-                    <button onClick={() => setP(null)} className="absolute top-1 right-1 bg-black/70 rounded-full p-1"><X className="w-4 h-4 text-white" /></button>
+                    <button onClick={() => setP(null)} className="absolute top-1 right-1 bg-black/70 rounded-full p-1"><X className="w-4 h-4 fixed-white" /></button>
                   </div>
                 ) : (
                   <div className="flex gap-1">

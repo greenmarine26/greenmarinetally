@@ -779,7 +779,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleDirect()}
               placeholder="목록에 없으면 이름 입력"
-              className="flex-1 min-w-0 h-14 bg-ink-800 border border-line-faint rounded-card px-3.5 text-[15px] font-medium text-white placeholder:text-dim-500 focus:outline-none focus:border-act/60
+              className="flex-1 min-w-0 h-14 bg-ink-800 border border-line-faint rounded-card px-3.5 text-[15px] font-medium text-dim-100 placeholder:text-dim-500 focus:outline-none focus:border-act/60
                          lg:h-auto lg:rounded lg:py-2 lg:text-sm lg:bg-ink-800 lg:border-line"
               autoFocus={list.length === 0}
             />

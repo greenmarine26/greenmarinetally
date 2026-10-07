@@ -193,7 +193,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           {[dmgView.data, dmgView.detailPhoto].filter(Boolean).map((src, i) => (
             <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-pill border border-line-strong" />
           ))}
-          <div className="text-dim-100 text-xs2 font-bold text-center">
+          <div className="fixed-white text-xs2 font-bold text-center">
             {c.cn} — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
             <br/>화면을 누르면 닫힙니다
           </div>

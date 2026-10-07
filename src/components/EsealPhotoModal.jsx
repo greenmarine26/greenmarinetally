@@ -107,9 +107,9 @@ export default function EsealPhotoModal({ voyageKey, info, inspector, onClose })
                       <input type="checkbox" className="w-6 h-6 shrink-0" checked={!!r.use} disabled={!!r.saved} onChange={(e) => setRow(i, { use: e.target.checked })} aria-label={`${r.pick} 넣기`} />
                       <span className="w-7 text-2xs text-dim-300 text-right shrink-0">{r.no || ''}</span>
                       <input value={r.pick} disabled={!!r.saved} onChange={(e) => setRow(i, { pick: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) })}
-                        className={`flex-1 min-w-0 bg-ink-950 border rounded px-2 py-2 font-mono text-sm ${targets.includes(r.pick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.no} 컨번호`} />
+                        className={`flex-1 min-w-0 bg-ink-950 border rounded px-2 py-2 font-mono text-sm ${targets.includes(r.pick) ? 'border-line text-dim-100' : 'border-red-500 text-red-200'}`} aria-label={`${r.no} 컨번호`} />
                       <input value={r.sealPick} inputMode="numeric" disabled={!!r.saved} onChange={(e) => setRow(i, { sealPick: e.target.value.replace(/\D/g, '').slice(0, 8) })}
-                        className={`w-[5.5rem] bg-ink-950 border rounded px-2 py-2 font-mono font-bold text-sm ${poolSet.has(r.sealPick) ? 'border-line text-white' : 'border-red-500 text-red-200'}`} aria-label={`${r.pick} 실번호`} />
+                        className={`w-[5.5rem] bg-ink-950 border rounded px-2 py-2 font-mono font-bold text-sm ${poolSet.has(r.sealPick) ? 'border-line text-dim-100' : 'border-red-500 text-red-200'}`} aria-label={`${r.pick} 실번호`} />
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
                       <span className="font-mono text-dim-300">손글씨 {r.hand || '?'}</span>

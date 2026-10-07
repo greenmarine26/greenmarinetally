@@ -269,7 +269,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           </div>
           <div className="flex gap-1.5">
             <input id="mirFabIn" type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(q); }}
-              placeholder="예: 0230 실번호 · 엠티실 몇 대 남았어" className="flex-1 min-w-0 bg-ink-950 border border-line rounded px-2 py-2 text-sm text-white" />
+              placeholder="예: 0230 실번호 · 엠티실 몇 대 남았어" className="flex-1 min-w-0 bg-ink-950 border border-line rounded px-2 py-2 text-sm text-dim-100" />
             <button type="button" onClick={mic} className={`w-11 rounded border border-line ${listening ? 'bg-red-700 text-white' : 'bg-ink-800 text-dim-100'}`} aria-label="말로 묻기">🎤</button>
             <button type="button" onClick={() => { try { stopSpeak(); const plain = String(lastRef.current || out || '').replace(CLEAN_RE, ' '); if (plain) speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* */ } }} className="w-11 rounded border border-line bg-ink-800 text-dim-100" aria-label="다시 읽어 주기">🔊</button>
             <button type="button" onClick={() => ask(q)} disabled={busy} className="px-3 rounded bg-amber-500 text-[#1a1206] font-black text-sm disabled:opacity-60">질문</button>

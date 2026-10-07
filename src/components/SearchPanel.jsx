@@ -1663,7 +1663,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
 
       {/* M5.80: 멀티턴 AI 대화 카드 */}
       {chatMessages.length > 0 && (
-        <div className="bg-gradient-to-br from-purple-950 via-slate-900 to-cyan-950 border-2 border-purple-500 rounded-btn p-4">
+        <div className="bg-gradient-to-br from-purple-950 via-ink-900 to-cyan-950 border-2 border-purple-500 rounded-btn p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-300"/>

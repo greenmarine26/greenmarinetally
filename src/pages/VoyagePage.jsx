@@ -3268,7 +3268,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
             {[photoView.data, photoView.detailPhoto].filter(Boolean).map((src, i) => (
               <img key={i} src={src} alt="" className="max-h-[70vh] max-w-full rounded-pill border border-line-strong" />
             ))}
-            <div className="text-dim-100 text-xs2 font-bold text-center">{photoView.cn} — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
+            <div className="fixed-white text-xs2 font-bold text-center">{photoView.cn} — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
           </div>
         )}
         </>

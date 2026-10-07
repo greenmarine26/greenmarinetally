@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.12';
-const NOTE = '4.12 수석 소유자 메뉴에 마감적용이 생겼습니다. 앱으로 안 찍은 동방 선적 컨만 마감텔리 선적 EDI 기준으로 채웁니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.12-01';
+const NOTE = '4.12-01 화면을 밝게 해도 글자색이 밝기에 맞게 바뀌어 잘 보입니다. 입력칸과 미르 답변도 같습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

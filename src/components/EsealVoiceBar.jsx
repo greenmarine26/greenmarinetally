@@ -167,7 +167,7 @@ export default function EsealVoiceBar({ voyage, voyageKey, inspector, card, mode
                   <span className="mono text-sm text-cyan-300 shrink-0">{prefixes.length === 1 ? prefixes[0] : '···'} +</span>
                   <input value={typed} onChange={(e) => setTyped(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="뒷 세 자리"
                     onKeyDown={(e) => { if (e.key === 'Enter' && typed.length >= 3) handleHeard([typed], startListen); }}
-                    className="flex-1 min-w-0 bg-ink-950 border border-line rounded px-2 py-2 text-base mono text-white" />
+                    className="flex-1 min-w-0 bg-ink-950 border border-line rounded px-2 py-2 text-base mono text-dim-100" />
                   <button onClick={() => handleHeard([typed], startListen)} disabled={busy || typed.length < 3}
                     className="px-3 py-2 rounded-pill font-bold text-sm bg-cyan-700 disabled:opacity-40 text-white">저장</button>
                   <button onClick={() => { tryRef.current = 0; if (listening) stopMic(); else startListen(); }}

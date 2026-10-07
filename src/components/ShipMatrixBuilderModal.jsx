@@ -1681,7 +1681,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               <input value={editorInput} onChange={e => setEditorInput(e.target.value)}
                      onKeyDown={e => { if (e.key === 'Enter') handleAddEditor(); }}
                      placeholder="검수자 이름 (예: 김성일)"
-                     className="flex-1 px-3 py-2 bg-ink-850 border border-line-strong rounded text-sm text-white" />
+                     className="flex-1 px-3 py-2 bg-ink-850 border border-line-strong rounded text-sm text-dim-100" />
               <button onClick={handleAddEditor}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold">추가</button>
             </div>

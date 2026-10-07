@@ -439,3 +439,7 @@ select:-webkit-autofill {
 .eta-line { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 18px; border: 2px solid rgb(var(--act) / .55); background: rgb(var(--act) / .08); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
 .eta-ico { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 13px; font-size: 20px; background: rgb(var(--ink-800)); border: 2px solid rgb(var(--act) / .6); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
 .eta-big { font-size: 17px; font-weight: 900; color: rgb(var(--act-soft)); white-space: nowrap; }
+
+/* ── 4.12-01 어느 밝기에서도 흰 글자 — 사진 위·검은 칩 위처럼 바탕이 밝기와 상관없이 어두운 자리에만 쓴다.
+   보통의 흰 글자는 text-white 를 쓴다(4단계 흰 바탕에서는 brightLight.css 가 진한 글자로 바꿔 준다). 여기엔 그 규칙이 안 걸린다. ── */
+.fixed-white { color: #fff; }
