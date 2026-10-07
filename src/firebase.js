@@ -2005,6 +2005,46 @@ export function fbSubscribeVoyageInfos(callback) {
   };
 }
 
+//  ★ 4.08-01 — 선택 화면의 «N대»(검수사 규칙 «되던 것이 안 될 때 되던 상태로 되돌린다»).
+//    4.08 이 일반 검수원에게 항차 본문을 안 받게 하면서 선택 화면 배지(그 배의 EDI 컨 수 = 양하+선적 ediContainers 키 수)가 사라졌다.
+//    본문을 받지 않고 **키만** 센다 — REST shallow(`{컨번호:true,…}`)라 컨 한 대당 약 19B, 항차 18개 합쳐 약 66KB(실측 2026-10-07 라이브).
+//    판정은 종전과 같다(키 수, 캔슬 가감 없음). 항차마다 따로 실패해도 나머지는 센다 — 실패한 항차만 배지가 빈다(0 으로 둔갑시키지 않는다).
+//    같은 기기에서 선택 화면을 다시 열 때 또 받지 않게 10분 기억한다(항차 키별).
+const _boxCountCache = new Map();      // 항차키 → { n, at } — 센 결과(성공만 기억한다)
+const _boxCountInflight = new Map();   // 항차키 → Promise<n> — 가는 중인 요청(선박 정보가 한 척씩 도착해 효과가 여러 번 돌아도 같은 항차를 겹쳐 받지 않는다 · 감사 4.08-01)
+const BOX_COUNT_TTL_MS = 10 * 60 * 1000;
+export async function fbFetchVoyageBoxCounts(keys, now = Date.now()) {
+  const out = {};
+  const ks = Array.isArray(keys) ? keys.filter((k) => k != null && k !== '').map(String) : [];   // null·빈 키를 «null» 글자로 바꿔 조회하지 않는다
+  const one = async (k, side) => {
+    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const to = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) { /* 이미 끝남 */ } }, 8000);
+    try {
+      const res = await fetch(`${firebaseConfig.databaseURL}/voyages/${encodeURIComponent(k)}/${side}/ediContainers.json?shallow=true`, ctl ? { signal: ctl.signal } : undefined);
+      if (!res.ok) throw new Error('shallow HTTP ' + res.status);
+      const j = await res.json();
+      return (j && typeof j === 'object') ? Object.keys(j).length : 0;
+    } finally { clearTimeout(to); }
+  };
+  await Promise.all(ks.map(async (k) => {
+    const hit = _boxCountCache.get(k);
+    if (hit && now - hit.at < BOX_COUNT_TTL_MS) { out[k] = hit.n; return; }
+    let p = _boxCountInflight.get(k);
+    if (!p) {
+      p = Promise.all([one(k, 'discharge'), one(k, 'loading')]).then(([d, l]) => { _boxCountCache.set(k, { n: d + l, at: now }); return d + l; });
+      _boxCountInflight.set(k, p);
+      const done = () => { if (_boxCountInflight.get(k) === p) _boxCountInflight.delete(k); };
+      p.then(done, done);   // 실패해도 지운다 — 못 센 항차는 기억하지 않고 다음 호출에서 다시 받는다
+    }
+    try {
+      out[k] = await p;
+    } catch (e) {
+      console.warn('[항차 컨 수] 못 셌습니다 — ' + k + ' (이 항차는 «N대» 표시만 비웁니다) —', e);
+    }
+  }));
+  return out;
+}
+
 
 // V9.57(G14): fbSubscribeVoyage(단일 항차 구독) 삭제 — 저장소 전체 grep 참조 0 확인
 //   (App.jsx는 복수형 fbSubscribeVoyages만 사용).

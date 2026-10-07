@@ -33,6 +33,7 @@ special = {
     'fbAddWorkReport': "export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };",
     'fbSetInspectorActivity': "export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };",
     'fbSetInspectorChoice': "export const fbSetInspectorChoice = async (name, choice) => { window.__calls.push({ fn: 'choice', name, choice }); return true; };",   # 3.50
+    'fbFetchVoyageBoxCounts': "export const fbFetchVoyageBoxCounts = async () => ({});   // 4.08-01: 선택 화면 «N대» — 빈 결과(항차마다 못 셌음)로 둔다",
     'resolveSeqMode': body('resolveSeqMode') + "\nexport { resolveSeqMode };",
     'tallyVoyagesByShip': body('tallyVoyagesByShip') + "\nexport { tallyVoyagesByShip };",
 }

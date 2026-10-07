@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.08';
-const NOTE = '4.08 작업 선박 자료만 받도록 바꿔 일반 검수원 폰의 데이터 사용량을 줄였습니다. 수석 화면은 그대로입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.08-01';
+const NOTE = '4.08-01 폰 선박 선택 화면의 N대 표시와 검수원 변경 화면의 전체 선박 목록을 되돌렸습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

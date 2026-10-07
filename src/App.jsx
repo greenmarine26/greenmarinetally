@@ -270,7 +270,13 @@ export default function App() {
     if (mq.addEventListener) mq.addEventListener('change', h); else if (mq.addListener) mq.addListener(h);
     return () => { if (mq.removeEventListener) mq.removeEventListener('change', h); else if (mq.removeListener) mq.removeListener(h); };
   }, []);
-  const voyScope = useMemo(() => voyagesScopeOf(inspector, workChoice, wideScreen), [inspector, workChoice, wideScreen, devAccessMap, extraStaff]);
+  //  4.08-01: 헤더 «검수원 변경»(#/login) — 로그인해 있는 일반 검수원이 로그인 화면을 열면 이름이 없을 때와 같은 범위(모든 선박 목록)로 받는다.
+  //    ⚠ 단 **로그인을 확정하는 동안**(loginPicking)은 적용하지 않는다 — handleSelectInspector 는 이름·선택을 먼저 세우고 쓰기 응답을 기다린 뒤에야 주소를 바꾸므로,
+  //      그 사이 이 규칙이 남아 있으면 고른 선박 본문 받기가 쓰기 응답 뒤로 밀려 모든 로그인이 느려진다(독립 감사 3차 실측 +0.3초). 주소가 login 을 벗어나면 꺼진다.
+  const [loginPicking, setLoginPicking] = useState(false);
+  const onLoginRoute = route.name === 'login';
+  useEffect(() => { if (!onLoginRoute) setLoginPicking(false); }, [onLoginRoute]);
+  const voyScope = useMemo(() => voyagesScopeOf(inspector, workChoice, wideScreen, onLoginRoute && !loginPicking), [inspector, workChoice, wideScreen, onLoginRoute, loginPicking, devAccessMap, extraStaff]);
   useEffect(() => {
     //  콜백이 범위 이름표(voyScope)를 달아 내놓는다 — 이 효과는 범위가 바뀔 때만 다시 돌고 옛 구독은 먼저 끊긴다.
     const put = (all, keys, loaded) => setVoyState({ scope: voyScope, all, keys, loaded: !!loaded });
@@ -462,6 +468,7 @@ export default function App() {
       }
       return;
     }
+    if (parseHash(window.location.hash).name === 'login') setLoginPicking(true);   // 4.08-01: 로그인 확정 중 — 고른 선박 본문 받기를 곧바로 시작한다(위 voyScope 주석)
     setInspector(name);
     lastInputRef.current = Date.now();     // V9.13: 로그인 순간부터 무조작 시간 다시 셈
     setAutoLogoutNotice('');

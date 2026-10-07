@@ -103,6 +103,11 @@ exports.off = () => {}; exports.goOffline = () => {}; exports.goOnline = () => {
     ok('일반 검수원 최원형 · 작업자(DXQD_2638E) → body:DXQD_2638E (PC 여도)', S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC1' }, true) === 'body:DXQD_2638E');
     ok('작업자인데 선박 키가 비면 → light', S('이인철', { mode: 'work', voyageKey: '' }, false) === 'light');
     ok('호기만 다르면 같은 범위 문자열(호기를 바꿔 저장해도 다시 구독하지 않는다)', S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC1' }, false) === S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC2' }, false));
+    //  ★ 4.08-01 — 로그인해 있는 일반 검수원이 «검수원 변경»(#/login)을 열면 로그인 화면이므로 이름이 없을 때와 같은 범위(다른 사람이 아무 선박이나 고른다)
+    ok('4.08-01 일반 검수원 · 작업자(DXQD) · 검수원 변경 화면 · 폰 → light (모든 선박 info)', S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC1' }, false, true) === 'light');
+    ok('4.08-01 일반 검수원 · 작업자 · 검수원 변경 화면 · PC → all (로그인 화면 현황판이 컨 수를 센다 — 이름 없을 때와 같다)', S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC1' }, true, true) === 'all');
+    ok('4.08-01 검수원 변경 화면이 아니면 종전 그대로 body:DXQD_2638E', S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC1' }, false, false) === 'body:DXQD_2638E' && S('최원형', { mode: 'work', voyageKey: 'DXQD_2638E', equip: 'QC1' }, false) === 'body:DXQD_2638E');
+    ok('4.08-01 자유 열람은 검수원 변경 화면이어도 all · 이름 없음은 종전 그대로', S('김성일', null, false, true) === 'all' && S('', null, true, true) === 'all' && S('', null, false, true) === 'light');
     M.setDevAccess({ 최원형: { name: '최원형' } });
     ok('개발 열람 명단에 오른 사람 → all (직책 판정과 같은 잣대)', S('최원형', null, false) === 'all');
     M.setDevAccess({});
@@ -270,7 +275,9 @@ exports.off = () => {}; exports.goOffline = () => {}; exports.goOnline = () => {
 
     console.log('■ ④ App.jsx 연결 모양 — 소스 대조');
     const app = src('src/App.jsx');
-    ok('범위 판정은 workChoice.voyagesScopeOf 한 벌 — App 이 inspector·workChoice·화면 너비로 부른다', /voyagesScopeOf\(inspector, workChoice, wideScreen\)/.test(app));
+    ok('범위 판정은 workChoice.voyagesScopeOf 한 벌 — App 이 inspector·workChoice·화면 너비로 부른다', /voyagesScopeOf\(inspector, workChoice, wideScreen, onLoginRoute && !loginPicking\)/.test(app) && /const onLoginRoute = route\.name === 'login';/.test(app));
+    ok('4.08-01 범위 계산의 의존성 배열에 onLoginRoute·loginPicking 이 들어 있다(빠지면 #/login 에서 범위가 안 바뀐다)', /\[inspector, workChoice, wideScreen, onLoginRoute, loginPicking, devAccessMap, extraStaff\]\);/.test(app));
+    ok('4.08-01 로그인 확정 때(주소가 login 인 채 이름을 세우기 직전) loginPicking 을 켜고, 주소가 login 을 벗어나면 끈다', /if \(parseHash\(window\.location\.hash\)\.name === 'login'\) setLoginPicking\(true\);\s*\/\/[^\n]*\n\s*setInspector\(name\);/.test(app) && /useEffect\(\(\) => \{ if \(!onLoginRoute\) setLoginPicking\(false\); \}, \[onLoginRoute\]\);/.test(app));
     ok('구독 효과는 범위 문자열에만 매달린다 — [voyScope]', /\}, \[voyScope\]\);/.test(app));
     ok('all → 뿌리 전체 / body: → 본문 하나 / 그 밖 → info 만', /voyScope === 'all'[\s\S]{0,200}fbSubscribeVoyages\(/.test(app) && /voyScope\.startsWith\('body:'\) \? fbSubscribeVoyageBody : \(_k, cb\) => fbSubscribeVoyageInfos\(cb\)/.test(app));
     ok('받은 것은 범위 이름표(scope)를 달고, 범위가 바뀐 렌더에는 옛 것을 쓰지 않는다 — loaded·항차가 같은 렌더에서 일치(감사 주의 1)', /const liveVoy = voyState\.scope === voyScope \? voyState : NO_VOY;/.test(app) && /const voyagesLoaded = liveVoy\.loaded;/.test(app) && !/setVoyagesLoaded/.test(app));
@@ -285,7 +292,7 @@ exports.off = () => {}; exports.goOffline = () => {}; exports.goOnline = () => {
     ok('훅은 조기 return(잠금 화면) 앞에 있다', app.indexOf('const voyScope = useMemo') > 0 && app.indexOf('const voyScope = useMemo') < app.indexOf('if (lockedName && !isOwnerName(lockedName)) return'));
     const fb = src('src/firebase.js');
     ok('전체 구독·본문 구독이 같은 손질 함수(_postVoyage)를 부른다', /for \(const k of Object\.keys\(v\)\) v\[k\] = _postVoyage\(k, v\[k\]\);/.test(fb) && /callback\(\{ \[k\]: _postVoyage\(k, v\) \}, new Set\(\[k\]\), true\)/.test(fb));
-    ok('이번 판 버전 4.08', /APP_VERSION = 'TallyOne 4\.08'/.test(src('src/utils.js')));
+    ok('이번 판 버전 4.08 계열(-NN 포함)', /APP_VERSION = 'TallyOne 4\.08(-\d\d)?'/.test(src('src/utils.js')));
     ok('연막 중 예상 밖 경고 없음', !warns.some((w) => /반영 실패/.test(w)), warns.join(' | '));
   } catch (e) {
     realTimers(); console.warn = realWarn;

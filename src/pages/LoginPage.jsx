@@ -23,7 +23,7 @@ import {
   hasRecoveryCode, verifyRecoveryCode,   // 2.53: 복구 코드 — 소유자가 잠겼을 때의 유일한 길
   recoveryMadeAtText,                   // 2.77: 복구 코드를 언제 만든 것인지 알려 준다
 } from '../adminGuard.js';
-import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
+import { fbGetAdminGuard, fbUpdateAdminGuard, fbFetchVoyageBoxCounts } from '../firebase.js';   // 4.08-01: 선택 화면 «N대» — 본문 없이 키만 센다
 import { useBackHandler } from '../backHandler.js';
 
 export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, voyagesLoaded = true, pilotForecast = {}, choiceFor = '', onCancelChoice = null }) {   // 3.50 choiceFor — 이미 로그인한 사람이 «선박 변경» 으로 왔다: 이름 단계를 건너뛰고 선택 단계만   // 2.64: pilotForecast — 타임라인 도선 마커
@@ -84,6 +84,20 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   }, [extraStaff, choiceName, choiceStage, roleDecided, choiceVoyage]);
   //  선택 화면을 띄운 채 30분 자동 로그아웃이 되면(current '' · choiceFor '') 이름 단계로 돌아간다 — 안 그러면 로그아웃 안내 없이 그 자리에서 «작업 시작» 이 재로그인이 된다(3.50 감사 지적).
   useEffect(() => { if (!current && !choiceFor) setChoiceName(''); }, [current, choiceFor]);
+  //  ★ 4.08-01 — 선택 화면 «N대»(그 배의 EDI 컨 수). 일반 검수원은 항차 본문을 안 받으므로(전부 info 만) 컨 수를 REST shallow 로 따로 센다.
+  //    본문이 하나라도 들어 있으면(수석·부수석·테스터·PC 전체 구독) 아래 board 가 종전처럼 직접 센다 — 이 값은 쓰지 않는다.
+  //    ⚠ 훅이므로 아래 조기 반환(`if (choiceName)`)보다 위에 둔다.
+  const [lightBoxes, setLightBoxes] = useState({});
+  const voyKeyStr = JSON.stringify(Object.keys(voyages || {}).sort());   // 키 목록 문자열 — 안에 어떤 글자가 들어 있어도 되돌려 읽는다
+  const lightOnly = Object.keys(voyages || {}).length > 0 && Object.values(voyages || {}).every((v) => v && !v.discharge && !v.loading);   // 전부 info 만 = 본문을 안 받는 범위
+  //  선박 정보(info)는 한 척씩 도착하므로 «첫 한 벌이 다 온 뒤»(voyagesLoaded)에만 센다 — 도착 때마다 키 목록이 바뀌어 효과가 되풀이돼 받기가 늘던 것을 막는다(감사 4.08-01).
+  //  늦게 올라온 새 항차는 키 목록이 바뀌어 다시 돌지만 센 항차는 firebase.js 가 기억해 새 항차만 받는다.
+  useEffect(() => {
+    if (!choiceName || choiceStage !== 'vessel' || !lightOnly || !voyagesLoaded) return undefined;
+    let alive = true;
+    fbFetchVoyageBoxCounts(JSON.parse(voyKeyStr)).then((c) => { if (alive) setLightBoxes(c || {}); }).catch((e) => console.warn('[4.08-01] 선택 화면 컨 수 실패', e));
+    return () => { alive = false; };
+  }, [choiceName, choiceStage, lightOnly, voyagesLoaded, voyKeyStr]);
   const commitSelect = (name) => {
     rememberMe(name);
     const prev = readWorkChoice(name);
@@ -392,6 +406,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const free = isFreeRoamer(choiceName);
     const vlist = [...board.ships, ...board.soon, ...board.upcoming];
     const infoOf = (key) => (voyages && voyages[key] && voyages[key].info) || {};
+    const boxesOf = (sh) => (lightOnly ? (lightBoxes[sh.key] || 0) : (sh.boxes || 0));   // 4.08-01: 본문이 있으면 board 가 센 값 그대로, 없으면(일반 검수원) 키만 센 값
     const pierOf = (key) => voyagePierOf(infoOf(key));   // 3.64-01: 부두 판정 한 벌(utils.voyagePierOf — 수석 대시보드 장비 보고 부두 줄과 같은 규칙)
     const rankLabel = (r) => (r === 0 ? '작업중' : r === 1 ? '오늘' : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
     const equips = choiceVoyage ? equipNumbersForPier(pierOf(choiceVoyage)) : [];
@@ -446,7 +461,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                         <span className="font-black text-base truncate">{inf.vsl || sh.vsl || sh.key} <span className="font-bold text-sm opacity-80">{voyTxt}</span></span>
                         <span className={`text-xxs font-bold px-1.5 py-0.5 rounded ${sh.rank === 0 ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>{rankLabel(sh.rank)}</span>
                       </div>
-                      <div className="text-xxs opacity-80">{pierOf(sh.key) || '부두 미상'}{inf.berth ? ` · ${inf.berth}` : ''}{sh.boxes ? ` · ${sh.boxes}대` : ''}{sh.ms ? ` · ${hhmm(sh.ms)}` : ''}</div>
+                      <div className="text-xxs opacity-80">{pierOf(sh.key) || '부두 미상'}{inf.berth ? ` · ${inf.berth}` : ''}{boxesOf(sh) ? ` · ${boxesOf(sh)}대` : ''}{sh.ms ? ` · ${hhmm(sh.ms)}` : ''}</div>
                     </button>
                   );
                 })}
