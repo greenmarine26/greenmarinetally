@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -426,7 +426,8 @@ export function parseNaturalQuery(text) {
     if (_gset) {
       //  ★ 2.69: 조를 붙여 말하면 **그 조에만** 기억한다 — «내일 주간 2갱으로 기억해».
       //    조를 안 붙이면 이 항차 기본값(종전 2.68 동작).
-      const _day = /모레/.test(t) ? 2 : /내일|다음\s*날/.test(t) ? 1 : /오늘|이번/.test(t) ? 0 : null;
+      const _dwg = dateWordOf(t);   // 4.12-02: 날짜 말 한 벌 — «어제 야간 2갱으로 기억해» 가 오늘 밤에 저장되던 것(dayOff null)
+      const _day = _dwg ? _dwg.off : /이번/.test(t) ? 0 : null;
       const _sh = /야간|밤/.test(t) ? '야간' : /주간|낮/.test(t) ? '주간' : null;
       result.gangSet = { n: parseInt(_gset[1], 10), dayOff: _day, shift: _sh };
     }
@@ -472,12 +473,12 @@ export function parseNaturalQuery(text) {
     if (_crew) {
       //  3.21: «선미 김판석 선수 이종부» 는 여기서 호기를 모른다 — needPos 로 실어 보내고 **저장하는 자리**가
       //    그 배의 실적으로 유도한다(utils.resolveCrewSides 한 벌). 검수사 «처음에 호기를 이야기 안한 이유입니다».
-      result.crewSet = { raw: String(text), shift: _crew.shift, dayOff: _crew.dayOff || 0, crew: _crew.crew, unknown: _crew.unknown, needPos: _crew.needPos || [] };
+      result.crewSet = { raw: String(text), shift: _crew.shift, dayOff: _crew.dayOff || 0, dayWord: _crew.dayWord || '', crew: _crew.crew, unknown: _crew.unknown, needPos: _crew.needPos || [] };
       result.digits = null; result.briefingQuery = false; result.posQuery = false;
     } else if (!result.startSet && /호기/.test(t) && /취소|빼\s*줘|빼줘|빼라|지워|지우|삭제/.test(t) && (_staffInText(t) || /검수원|검수사|이름|등록/.test(t))) {
       result.crewQuery = { kind: 'cancel' };   // 지우기는 아직 없다 — 조용히 등록으로 삼키지 않고 말한다(«2호기 양하 취소» 같은 딴 말은 안 잡는다 — 이름·검수원이 있을 때만)
       result.digits = null;
-    } else if (!result.startSet && (/호기|검수원|누가\s*(?:몇|얼마|제일|가장)/.test(t) || _staffInText(t))) {
+    } else if (!result.startSet && (/호기|검수원|근무자|근무조|누가\s*(?:몇|얼마|제일|가장|근무|일\s*(?:했|하|해))/.test(t) || _staffInText(t))) {
       const _eq = t.match(/(\d)\s*호기/);
       const _nm = _staffInText(t);
       const _timeish = /\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시|몇\s*시|언제/.test(t);   // «몇 시에 시작했어»·«언제 끝나» 는 시각 질문
@@ -488,7 +489,7 @@ export function parseNaturalQuery(text) {
       const _who = /누구|누가|담당|검수원|검수사|사람|맞아|맞나|맞지|맞습|아니야|아닌가|아니지/.test(t);   // «1호기 박진우 맞아?» 는 되묻기 — 지금 등록을 답한다
       if (_eq && _who && !_timeish && !_cargo) {
         result.crewQuery = { kind: 'who', no: +_eq[1] };   // «1호기 (검수원) 누구야» — 호기를 댔으면 그 호기
-      } else if (/호기\s*(?:별|마다)|검수원\s*(?:별|마다)|누가\s*(?:몇|얼마|제일|가장)|(?:검수원|호기)\s*(?:배정|등록)|검수원\s*(?:누구|누가|현황|목록)/.test(t) && !_cargo && !_remain) {
+      } else if ((/호기\s*(?:별|마다)|검수원\s*(?:별|마다)|누가\s*(?:몇|얼마|제일|가장)|(?:검수원|호기)\s*(?:배정|등록)|검수원\s*(?:누구|누가|현황|목록)/.test(t) || (!/인수|인계|교대|넘겨/.test(t) && /(?:근무자|근무조)\s*(?:누구|누가|현황|목록|알려|이름|명단|등록)|누가\s*(?:근무|일)\s*(?:했|하|해)/.test(t))) && !_cargo && !_remain) {   // «교대 근무자 알려줘» 는 종전대로 인수인계 갈래
         result.crewQuery = { kind: 'all' };
       } else if (_nm && _cnt && !_cargo && !_timeish) {
         result.crewQuery = { kind: 'name', name: _nm };   // «김성일 몇 시에 시작했어» 는 시각 질문이다
@@ -496,6 +497,11 @@ export function parseNaturalQuery(text) {
         result.crewQuery = { kind: 'crane', no: +_eq[1] };
       }
       if (result.crewQuery) {
+        //  4.12-02: «어제 야간 근무자 누구야»·«그제 김성일 몇 개 했어» — 날짜 말·조를 답이 거를 수 있게 싣는다(종전엔 날짜 말을 버리고 항차 전체로 답했다).
+        const _qd = dateWordOf(t);
+        const _qs = /야간|밤/.test(t) ? '야간' : /주간|낮/.test(t) ? '주간' : null;
+        if (_qd) { result.crewQuery.dayOff = _qd.off; result.crewQuery.dayWord = _qd.word; }
+        if (_qs) result.crewQuery.shift = _qs;
         //  «이인철 어디까지 했어» 가 브리핑·위치 갈래(briefingQuery·posQuery)로 새어 항차 화면에서 브리핑을 내던 것(감사 실측) — 사람·호기 답 한 갈래로
         result.digits = null; result.progressQuery = null; result.briefingQuery = false; result.posQuery = false; result.etaQuery = false;
         //  «김성일 작업량»·«1호기 작업량» — 사람·호기를 댔으면 갱 배분이 아니라 그 사람·호기 답이다
@@ -2702,7 +2708,9 @@ export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
   if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return null;
   const k = crewShiftKey(cs.shift, nowMs, cs.dayOff || 0);
   const who = cs.crew.map((c) => `${c.no}호기 ${c.name}`).join(' · ');
-  let out = `📝 ${shipLabel ? shipLabel + ' ' : ''}${k.key}조 — ${koJosa(who, '으로')} 기억할게요.`;
+  //  4.12-02: 날짜 말을 했으면 «어제 야간 → 10-07 야간조» 처럼 어느 날로 알아들었는지 보인다 — 잘못 알아들으면 사람이 바로 본다(07:15 PCSZ 사고).
+  const _dwEcho = cs.dayWord ? `«${cs.dayWord}${cs.shift ? ' ' + cs.shift : ''}» → ` : '';
+  let out = `📝 ${shipLabel ? shipLabel + ' ' : ''}${_dwEcho}${k.key}조 — ${koJosa(who, '으로')} 기억할게요.`;
   //  3.21: 선수·선미로 말한 것을 실적으로 가렸으면 그 근거를 밝힌다 — 사람이 «맞나» 를 눈으로 볼 수 있게.
   if (cs._sideFrom && cs._sideFrom.bow) out += `\n(선수 ${cs._sideFrom.bow}호기 · 선미 ${cs._sideFrom.stern}호기 — 지금까지 내려놓은 베이로 가렸어요)`;
   if (Array.isArray(cs.unknown) && cs.unknown.length) {
@@ -2729,6 +2737,19 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   const info = voyage.info || {};
   const ship = info.vslFull || info.vsl || '';
   const hint = '\n(등록은 «주간 1호기 김판석 2호기 송제욱» 처럼 말해 주세요 — 조를 안 대면 지금 조예요)';
+  //  4.12-02: **날짜 말을 댔을 때만** 그 날 조 기록으로 거른다(어제·그제·내일… 또는 «오늘 야간»). 날짜만 대면 그날 주간·야간 둘 다.
+  //    날짜 말이 없는 «야간 1호기 누구야»·«오늘 몇 개 했어» 는 종전처럼 항차 전체로 답한다(앱 완료 기록은 조 표시가 없어 날 단위로 못 가른다 — 감사 실측).
+  let keyOk = null, keyLbl = '';
+  if (cq.dayWord && ((cq.dayOff || 0) !== 0 || cq.shift)) {
+    const _off = cq.dayOff || 0;
+    const _ks = cq.shift ? [crewShiftKey(cq.shift, nowMs, _off).key] : ['주간', '야간'].map((sh) => crewShiftKey(sh, nowMs, _off).key);
+    keyOk = (k) => _ks.includes(k);
+    keyLbl = `${[cq.dayWord, cq.shift].filter(Boolean).join(' ')} → ${_ks.join(' · ')}`;
+  }
+  //  거르는 중이면 조 표시가 없는 기록(앱으로 직접 찍은 완료)은 그 날에 넣을 수 없다 — 조용히 빼지 않고 몇 대인지 밝힌다.
+  const _unkN = (pred) => (keyOk ? st.rows.filter((r) => !r.key && pred(r)).reduce((a, r) => a + (r.n || 0), 0) : 0);
+  const _unkTxt = (n) => (n > 0 ? `\n(조 표시가 없는 앱 완료 기록 ${n}대는 이 조에 넣지 못했어요)` : '');
+  if (keyOk && st.qcOnly && cq.kind !== 'who') return `${ship} ${keyLbl} — 동방 배는 QC 합계라 날짜·조별로는 못 나눠요. 날짜를 빼고 물으면 합계로 답해요.`;
   const rowLine = (r) => {
     const parts = [`${r.no ? r.no + '호기 ' : ''}${r.name || '(검수원 미등록)'} — ${r.n}대`];
     if (r.dis && r.lod) parts.push(`양하 ${r.dis}·선적 ${r.lod}`);
@@ -2742,7 +2763,8 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
     + (st.outside ? ` · 등록된 조 밖 ${st.outside}대는 «조 미상» — 다음 조 등록이 없어요` : '');
   if (cq.kind === 'who') {
     const no = cq.no;
-    const hits = st.shifts.filter((s) => s.cranes[no]);
+    const hits = st.shifts.filter((s) => s.cranes[no] && (!keyOk || keyOk(s.key)));
+    if (!hits.length && keyOk) return `${ship} ${keyLbl} — ${no}호기 등록이 없어요 😿${hint}`;
     if (!hits.length) {
       //  등록은 없어도 앱 완료 기록(by+equip)이 있으면 그것으로 답한다 — 지어내지 않고 «기록으로는» 이라고 밝힌다.
       const c = st.byCrane[no];
@@ -2754,6 +2776,20 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
     const L = hits.map((s) => `${s.key} ${s.cranes[no]}${s.key === cur ? ' (지금 조)' : ''}`);
     const head = now ? `${ship} ${no}호기는 지금 ${koJosa(now.cranes[no], '이에요')} 🐱` : `${ship} ${no}호기 등록`;
     return `${head}\n${L.join('\n')}`;
+  }
+  if (cq.kind === 'name' && keyOk) {
+    const rr = st.rows.filter((r) => r.name === cq.name && keyOk(r.key));
+    const _u = _unkN((r) => r.name === cq.name);
+    if (!rr.length) return `${ship} ${keyLbl} — ${cq.name} 몫으로 잡힌 작업이 없어요.${_unkTxt(_u)}${st.registered ? '' : hint}`;
+    const tot = rr.reduce((a, r) => a + (r.n || 0), 0);
+    return [`${ship} ${keyLbl} — ${cq.name} ${tot}대`, ...rr.map((r) => `  ${r.key} ${rowLine(r)}`), `(${src})`].join('\n') + _unkTxt(_u);
+  }
+  if (cq.kind === 'crane' && keyOk) {
+    const rr = st.rows.filter((r) => r.no === cq.no && keyOk(r.key));
+    const _u = _unkN((r) => r.no === cq.no);
+    if (!rr.length) return `${ship} ${keyLbl} — ${cq.no}호기로 잡힌 작업이 없어요.${_unkTxt(_u)}${st.registered ? '' : hint}`;
+    const tot = rr.reduce((a, r) => a + (r.n || 0), 0);
+    return [`${ship} ${keyLbl} — ${cq.no}호기 ${tot}대`, ...rr.map((r) => `  ${r.key} ${rowLine(r)}`), `(${src})`].join('\n') + _unkTxt(_u);
   }
   if (cq.kind === 'name') {
     const b = st.byName[cq.name];
@@ -2780,8 +2816,9 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   }
   //  all — 조별로 호기·사람·대수
   if (!st.rows.length && !st.registered) return `${ship} 호기별 검수원 등록이 아직 없어요 😿${hint}`;
-  const L = [`👷 ${ship} 호기별 검수원·작업량`];
-  const keys = [...new Set([...st.shifts.map((s) => s.key), ...st.rows.map((r) => r.key)])];
+  const L = [`👷 ${ship} 호기별 검수원·작업량${keyOk ? ` — ${keyLbl}` : ''}`];
+  const keys = [...new Set([...st.shifts.map((s) => s.key), ...st.rows.map((r) => r.key)])].filter((k) => !keyOk || keyOk(k));
+  if (keyOk && !keys.length) return `${ship} ${keyLbl} — 그 조 등록이 없어요 😿${_unkTxt(_unkN(() => true))}${hint}`;
   for (const k of keys) {
     const sh = st.shifts.find((s) => s.key === k);
     const rs = st.rows.filter((r) => r.key === k);
@@ -2791,7 +2828,7 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
     if (sh && !rs.length) L.push('  (아직 잡힌 작업 없음)');
   }
   L.push(`(${src})`);
-  return L.join('\n');
+  return L.join('\n') + _unkTxt(_unkN(() => true));
 }
 
 //  3.53-12 — 외부 합계 피드(옛 합계 노드)를 읽던 자리(옛 함수 넷)는 없앴다.
@@ -3542,9 +3579,15 @@ export function generateIntroAnswer(shipName) {
   ].join('\n');
 }
 
-export function generateTimeAnswer(now) {
+export function generateTimeAnswer(now, text = '') {
   const d = now instanceof Date ? now : new Date();
   const days = ['일', '월', '화', '수', '목', '금', '토'];
+  //  4.12-02: «내일 며칠이야»·«어제 무슨 요일이야» — 날짜 말이 있으면 그 날의 날짜·요일로 답한다(종전엔 말을 무시하고 오늘 시각을 말했다).
+  const _dw = dateWordOf(text);
+  if (_dw && _dw.off !== 0) {
+    const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + _dw.off);
+    return `${koJosa(_dw.word, '은')} ${t.getMonth() + 1}월 ${t.getDate()}일 ${days[t.getDay()]}요일입니다.`;
+  }
   const h24 = d.getHours();
   const ampm = h24 < 12 ? '오전' : '오후';
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;

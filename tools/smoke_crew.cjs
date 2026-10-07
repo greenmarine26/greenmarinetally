@@ -165,6 +165,12 @@ const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/crew_swmm.
   T(st.byName['이인철'] && st.byName['이인철'].n === 257 && st.byName['최관식'] && st.byName['최관식'].n === 213, 'OBWH 2731E QC101 257·QC103 213 이 아니다');
   const a = M.answerCraneCrew(o, { kind: 'all' });
   T(/조별로는 못 나눠요/.test(a) && /이인철 — 257대/.test(a), `동방 답이 한계를 안 밝히거나 수가 틀리다\n${a}`);
+  //  4.12-02: «어제 근무자 누구야» 처럼 날짜 말을 대면 합계를 그날 몫으로 내놓지 않고 못 나눈다고 말한다. 날짜 말이 없거나 «오늘» 뿐이면 종전 그대로.
+  const NOW9 = new Date(2026, 8, 5, 9, 0).getTime();
+  const ay = M.answerCraneCrew(o, { kind: 'all', dayOff: -1, dayWord: '어제', shift: '야간' }, NOW9);
+  T(/날짜·조별로는 못 나눠요/.test(ay) && !/이인철 — 257대/.test(ay), `동방 배 «어제 야간» 이 합계를 그날 몫으로 낸다\n${ay}`);
+  const at0 = M.answerCraneCrew(o, { kind: 'name', name: '이인철', dayOff: 0, dayWord: '오늘' }, NOW9);
+  T(/이인철 — 257대/.test(at0) && !/못 나눠요 *$/.test(at0.split('\n')[0]), `동방 배 «이인철 오늘» 이 종전 답이 아니다\n${at0}`);
 }
 //  ── ⑤-B 동방 혼합 — 앱 완료가 섞여도 QC 합계가 정본(2차 시뮬 지적: 3건 섞이자 257·213 이 사라졌다) ──
 {

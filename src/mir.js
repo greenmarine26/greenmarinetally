@@ -30,6 +30,7 @@ import {
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
   currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
   plausibleListWtKg, ediWtField,   // 4.08-02: 컨 하나 40톤 초과는 무게 없음 · EDI 총중량 wtEdi (병합 경로 한 벌)
+  dateWordOf,   // 4.12-02: 날짜 말(어제·내일·낼모레…) 해석 한 벌
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -2109,7 +2110,7 @@ export function answerOneRaw(query, ctx) {
   }
   if (p.pilotQuery && hasShip) return generatePilotAnswer(info || {}, (c.pilotForecast || {})[S(info.vsl).toUpperCase()] || null);
   if (p.wakeQuery) return generateWakeAnswer(hasShip ? (info || {}) : {});
-  if (p.timeQuery && !p.factQuery) { _via('time'); return generateTimeAnswer(); }
+  if (p.timeQuery && !p.factQuery) { _via('time'); return generateTimeAnswer(undefined, Q); }
   if (p.weatherQuery) {
     if (c.weatherText) return c.weatherText;
     if (c.limited) return null;   // 탭 카드 — 날씨를 안 받는 자리, 작업 시작 탭으로 릴레이
@@ -2180,11 +2181,14 @@ export function answerOneRaw(query, ctx) {
     if (tok.length) return `${tok[0]} — 지금 항차 목록·선석배정 자료에 없는 배입니다. 저희가 작업할 배로 잡혀 있지 않습니다.\n(배정목록·메일에 뜨면 수집기가 자동으로 항차 카드를 만듭니다 — 그때 다시 물으면 «네»라고 답합니다)`;
     return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: "PCSZ 우리가 작업해야해?"';
   }
-  const dayOff = /모레/.test(Q) ? 2 : /내일|명일/.test(Q) ? 1 : 0;
-  if (c.voyages && !v && /오늘|내일|명일|모레/.test(Q) && /작업|양하|선적|일정/.test(Q) && /선박|배|대상|뭐|뭔|몇|무슨/.test(Q)) {
+  //  4.12-02: 날짜 말은 utils.dateWordOf 한 벌 — 내일·낼·모레·낼모레·글피(오늘 이후)까지 알아듣는다. 어제·그제 같은 지난 날은 작업 선박 목록으로 답하지 않는다(종전과 같음).
+  const _dwQ = dateWordOf(Q);
+  const dayOff = _dwQ && _dwQ.off > 0 ? _dwQ.off : 0;
+  const _dayLbl = dayOff > 0 ? _dwQ.word : '오늘';
+  if (c.voyages && !v && _dwQ && _dwQ.off >= 0 && /작업|양하|선적|일정/.test(Q) && /선박|배|대상|뭐|뭔|몇|무슨/.test(Q)) {
     try {
       const ships = _shipsOnDay(c.voyages, dayOff);
-      const lbl = dayOff === 2 ? '모레' : dayOff === 1 ? '내일' : '오늘';
+      const lbl = _dayLbl;
       if (!ships.length) return `${lbl} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 아직이면 수집기가 잡는 대로 항차 카드에 뜹니다.`;
       const L = [`${lbl} 작업 선박 ${ships.length}척`];
       for (const { k, v: vv, a } of ships) {
@@ -2203,10 +2207,10 @@ export function answerOneRaw(query, ctx) {
       const today = _shipsOnDay(c.voyages, dayOff);
       if (!today.length) {
         if (dayOff === 0 && _shipsOnDay(c.voyages, 1).length) return '오늘 작업할 선박이 없습니다. 내일 작업할 것을 브리핑할까요?';
-        const lbl0 = dayOff === 2 ? '모레' : dayOff === 1 ? '내일' : '오늘·내일';
+        const lbl0 = dayOff > 0 ? _dayLbl : '오늘·내일';
         return `${lbl0} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 잡히면 항차 카드에 뜹니다.\n배 이름을 붙이면 그 배 브리핑을 바로 합니다 (예: "TNJP 브리핑").`;
       }
-      const parts = [`📋 ${dayOff === 2 ? '모레' : dayOff === 1 ? '내일' : '오늘'} 작업 선박 ${today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
+      const parts = [`📋 ${_dayLbl} 작업 선박 ${today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
       for (const { k, v: vv } of today) {
         const sh = vv?.info?.vslFull || vv?.info?.vsl || k;
         let blk = null;
@@ -2341,7 +2345,7 @@ const TIMEOUT_MS = 10000;
 //   감사 실측(3.42 첫 판): 부분 문자열 정규식은 «시프팅»에서 «시»를 떼어 «프팅»을 모르는 낱말로 만들었고, 창구 예시 84개 중 22개가 «모르는 낱말 남음»이었다.
 //   그래서 ① mirTokens(조사·문장부호 제거) 로 낱말을 자르고 ② 사전(아래 낱말 + 창구 예시의 낱말 전부)에 있으면 아는 말, ③ 사전 낱말이 앞머리로 붙은 것(«리퍼가»)·
 //   흔한 어미(했어·열었어·됐어…)를 뗀 것도 아는 말로 본다. 한 글자 낱말은 세지 않는다.
-const KNOWN_WORDS = `베이 리퍼 냉동 엠티 풀 위험물 디지 엑스레이 갑판 데크 홀드 선창 컨테이너 피트 온도 영하 영상 실번호 씰 봉인 잘림 잘린 파손 훼손 손상 대처 대처법 처리 조치 절차 무게 톤 위치 어디 몇 대 개 남은 남았 완료 진행 전체 전부 모두 몽땅 싹 죄다 도합 통틀어 합쳐 합치 수량 불러 뽑아 달라 다오 내렸 내린 누구 누가 소개 시야 시간 지금 오늘 내일 어제 날씨 기온 바람 입항 출항 입출항 접안 언제 며칠 요일 날짜 트윈 가능 불가 초과 불균형 수평 크레인 목록 리스트 양하 선적 쌓 빈자리 자리 평택 끝 끝나 끝났 페이스 속도 퇴근 점심 저녁 아침 걸려 걸리 예상 마치 종료 신고 세관 누락 바뀜 리씰 이상 인계 인수 교대 넘겨 특이사항 전달 있어 없어 있나 없나 찾아 알려 보여 보여줘 주세요 호기 갱 브리핑 마감 마감텔리 텔리 수치 해치 해치커버 커버 현측 우현 좌현 시작 커트 커트씰 봉인 전자봉인 전자 보류 수화물 환적 창고 임시창고 특수 특수제작 특수제작컨 규격 규격초과 치수 콜사인 호출부호 아이엠오 선속 도선 카고플랜 카고 플랜 베이플랜 밝게 어둡게 소리 순서 순서대로 다음 의심 클래스 오픈탑 하이큐브 플랫 탱크 무거운 가벼운 기록 적어 등록 담당 검수원 근무 주간 야간 뜻 어떻게 뭐야 뭔 무슨 미르 미르야 안녕 수고 고마워 힘들 먹 밥 배정 선박 배 작업 선수 선미 현황 상황 상태 대상 번호 열어 열었어 띄워 보자 이거 그거 저거 여기 거기 저기 아직 벌써 우리 이제 얼마 얼마나 언제쯤 몇시 시간당 시간별 제일 가장 화물 비엘 확인 확인된 선사 실오류 화면 하자 맞아 대수 우리배 우리 항 항구 정박 남아 남았어 걸린 걸렸어 들어와 나가 들어 나가는 몇시쯤 쯤 대략 마지막 처음 첫 완료된 완료했어 시작했어 끝났어 열렸어 붙었어 어때 어떤 뭐 무엇 몇번 오픈 클로즈 닫아 닫았어 닫혔어 조 근무자 사람 이름 담당자 현재 지금까지 중 안 못 잘 더 덜 것 거 건 개수 대수 척 척이야 갯수`.split(/\s+/).filter(Boolean);
+const KNOWN_WORDS = `베이 리퍼 냉동 엠티 풀 위험물 디지 엑스레이 갑판 데크 홀드 선창 컨테이너 피트 온도 영하 영상 실번호 씰 봉인 잘림 잘린 파손 훼손 손상 대처 대처법 처리 조치 절차 무게 톤 위치 어디 몇 대 개 남은 남았 완료 진행 전체 전부 모두 몽땅 싹 죄다 도합 통틀어 합쳐 합치 수량 불러 뽑아 달라 다오 내렸 내린 누구 누가 소개 시야 시간 지금 오늘 내일 어제 날씨 기온 바람 입항 출항 입출항 접안 언제 며칠 요일 날짜 트윈 가능 불가 초과 불균형 수평 크레인 목록 리스트 양하 선적 쌓 빈자리 자리 평택 끝 끝나 끝났 페이스 속도 퇴근 점심 저녁 아침 걸려 걸리 예상 마치 종료 신고 세관 누락 바뀜 리씰 이상 인계 인수 교대 넘겨 특이사항 전달 있어 없어 있나 없나 찾아 알려 보여 보여줘 주세요 호기 갱 브리핑 마감 마감텔리 텔리 수치 해치 해치커버 커버 현측 우현 좌현 시작 커트 커트씰 봉인 전자봉인 전자 보류 수화물 환적 창고 임시창고 특수 특수제작 특수제작컨 규격 규격초과 치수 콜사인 호출부호 아이엠오 선속 도선 카고플랜 카고 플랜 베이플랜 밝게 어둡게 소리 순서 순서대로 다음 의심 클래스 오픈탑 하이큐브 플랫 탱크 무거운 가벼운 기록 적어 등록 담당 검수원 근무 주간 야간 뜻 어떻게 뭐야 뭔 무슨 미르 미르야 안녕 수고 고마워 힘들 먹 밥 배정 선박 배 작업 선수 선미 현황 상황 상태 대상 번호 열어 열었어 띄워 보자 이거 그거 저거 여기 거기 저기 아직 벌써 우리 이제 얼마 얼마나 언제쯤 몇시 시간당 시간별 제일 가장 화물 비엘 확인 확인된 선사 실오류 화면 하자 맞아 대수 우리배 우리 항 항구 정박 남아 남았어 걸린 걸렸어 들어와 나가 들어 나가는 몇시쯤 쯤 대략 마지막 처음 첫 완료된 완료했어 시작했어 끝났어 열렸어 붙었어 어때 어떤 뭐 무엇 몇번 오픈 클로즈 닫아 닫았어 닫혔어 조 근무자 사람 이름 담당자 현재 지금까지 중 안 못 잘 더 덜 것 거 건 개수 대수 척 척이야 갯수 모레 내일모레 낼모레 엊그제 그제 그저께 그끄저께 글피 어저께`.split(/\s+/).filter(Boolean);
 const _ENDINGS = /(했어요|했어|했나요|했니|했지|됐어|됐나요|됐니|났어|었어|였어|있어요|있어|있나요|있니|없어요|없어|없나요|없니|해줘|해요|하자|할까|할래|해봐|해|줘요|줘|인가요|인지|이야|이에요|예요|이지|지요|지|야|요|까|니|나요|는지|은지|던|던가|어요|어|아요|아|을까|을래|ㄹ까|세요|십시오|십시요|주십시오|주세요|주라|해주세요)$/;
 //  낱말 자르기 — mirLearn.mirTokens 는 조사(«로»)까지 떼어 «킬로»를 «킬»로 만든다. 여기서는 어미만 뗀다.
 const _STOP = new Set(['보여줘', '보여', '알려줘', '알려', '해줘', '해', '줘', '주세요', '좀', '미르야', '미르', '봐줘', '봐', '좀요', '해봐', '해주세요', '있어', '없어', '이야', '이거', '그거', '저거']);

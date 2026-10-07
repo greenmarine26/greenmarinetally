@@ -116,7 +116,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         }
       }
       if (parsed.gangSet && parsed.gangSet.n) {
-        const key = `gang|${voyageKey}|${parsed.gangSet.n}`;
+        const key = `gang|${voyageKey}|${parsed.gangSet.n}|${parsed.gangSet.dayOff == null ? '' : parsed.gangSet.dayOff}|${parsed.gangSet.shift || ''}`;   // 4.12-02: 날짜·조가 다르면 다른 요청
         if (sideRef.current !== key) { sideRef.current = key; fbSetVoyageGangs(voyageKey, parsed.gangSet.n, inspector || '', gangKeyFromWords(parsed.gangSet.dayOff, parsed.gangSet.shift)).catch((e) => console.warn('[미르] 갱 수 저장 실패', e)); }
       }
       if (parsed.startSet) {

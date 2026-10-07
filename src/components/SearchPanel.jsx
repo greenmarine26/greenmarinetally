@@ -1274,7 +1274,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   useEffect(() => {
     const g = parsed.gangSet;
     if (!g || !voyageKey) return;
-    const key = `${voyageKey}|${g.n}`;
+    const key = `${voyageKey}|${g.n}|${g.dayOff == null ? '' : g.dayOff}|${g.shift || ''}`;   // 4.12-02: «어제 야간 2갱» 뒤 «오늘 야간 2갱» 이 같은 키로 막히지 않게 날짜·조를 키에 넣는다
     if (gangSetRef.current === key) return;
     gangSetRef.current = key;
     fbSetVoyageGangs(voyageKey, g.n, inspector || '', gangKeyFromWords(g.dayOff, g.shift))

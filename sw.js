@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.12-01';
-const NOTE = '4.12-01 화면을 밝게 해도 글자색이 밝기에 맞게 바뀌어 잘 보입니다. 입력칸과 미르 답변도 같습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.12-02';
+const NOTE = '4.12-02 미르가 어제 그제 엊그제 내일 모레 같은 날짜 말을 알아듣습니다. 어제 야간 근무자는 어제 야간조로 등록됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
