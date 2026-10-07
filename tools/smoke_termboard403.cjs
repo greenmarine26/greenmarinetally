@@ -133,10 +133,10 @@ ok(/\.tbx-tw\{[^}]*touch-action:pan-x pan-y/.test(TB.TERM_BOARD_CSS), '표 CSS: 
 ok(!/catch\(e\)\{\s*\}/.test(CONE.slice(CONE.indexOf('function ctTermBoardHtml'), CONE.indexOf('function twDraw'))), '콘앱 ctTermBoardHtml 안에 조용한 빈 catch 가 없다');
 ok(/CT\.err = '자료를 못 받았습니다[^\n]*\n\s*if\(CT\.tb && \(!CT\.tbAt \|\| Date\.now\(\)-CT\.tbAt > 300000\)\) CT\.tb = null;/.test(CONE), '콘앱: 전부 못 받는 사이클에도 오래된 표를 5분 넘게 두지 않는다');
 ok(/if\(_infAll === undefined\)\{ if\(!CT\.tbAt \|\| Date\.now\(\)-CT\.tbAt > 300000\) CT\.tb = null; \}/.test(CONE), '콘앱: info 를 못 읽은 사이클은 앞 표를 5분까지만 둔다');
-ok(/window\.__CONEV='ConeOne 2\.6[123](-\d\d)?'/.test(CONE) && /APP_VERSION = 'TallyOne 4\.0[345678](-\d\d)?'/.test(U), '버전 ConeOne 2.61~2.63(-NN) · TallyOne 4.03~4.08(-NN)');   // 4.04-01: 버그 수리판은 -NN 이 붙는다
+ok(/window\.__CONEV='ConeOne 2\.6[123](-\d\d)?'/.test(CONE) && /APP_VERSION = 'TallyOne 4\.0[3456789](-\d\d)?'/.test(U), '버전 ConeOne 2.61~2.63(-NN) · TallyOne 4.03~4.09(-NN)');   // 4.04-01: 버그 수리판은 -NN 이 붙는다
 {
   const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
-  ok(/^4\.0[345678](-\d\d)? (실사 미르가|터미널 본선 현황|RZOR 카고플랜|RZOR X-RAY 선내위치|RZOR 선내위치|항차 목록|미르가 작업은|미르가 작업 중 앱 입력이|PORT-MIS 를 수집기가|선적 리스트에 공컨 개정판이|해치커버 장수|작업 선박 자료만|폰 선박 선택 화면|트윈 무게를 총중량으로)/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.03~4.08 · 작은따옴표와 슬래시가 없다 · 짧은 문장', note);
+  ok(/^4\.0[3456789](-\d\d)? (실사 미르가|터미널 본선 현황|RZOR 카고플랜|RZOR X-RAY 선내위치|RZOR 선내위치|항차 목록|미르가 작업은|미르가 작업 중 앱 입력이|PORT-MIS 를 수집기가|선적 리스트에 공컨 개정판이|해치커버 장수|작업 선박 자료만|폰 선박 선택 화면|트윈 무게를 총중량으로|양하 순서를 호기별로)/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.03~4.09 · 작은따옴표와 슬래시가 없다 · 짧은 문장', note);
 }
 ok(/터미널 본선 현황/.test(rd('src/data/helpDataChief.js')) && /터미널 본선 현황/.test(rd('src/data/helpData.js')) && /터미널 본선 현황/.test(rd('src/data/featureIndex.js')), '매뉴얼(수석·검수원)과 기능 색인이 이 화면을 말한다');
 ok(/export function termProgressOf/.test(rd('src/nlSearch.js')) && !/termBoard/.test(rd('src/nlSearch.js')), '미르 «언제 끝나» 계산(termProgressOf)은 건드리지 않았다');

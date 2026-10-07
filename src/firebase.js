@@ -17,6 +17,7 @@ import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확�
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, myWorkVoyageNow, workGateText } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
+import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -326,6 +327,24 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
   list.forEach((c) => { patch[`craneCrew/${shiftKey}/${c.no}호기`] = { name: String(c.name).trim(), at: now }; });
   await update(ref(db, `voyages/${voyageKey}/info`), patch);
   return list.map((c) => `${c.no}호기 ${String(c.name).trim()}`).join(' · ');
+}
+
+//  ★ 4.09 (검수사 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터 이런조건들을 다 적용할수 있게 해주세요» · «장비 기사의 작업 방법이 틀려서 입니다»):
+//    **양하 순서 조건을 호기별로 항차에 적는다.** `info.workOrder/{N호기} = { rowFrom, prefs:'RF,20', at, by }` — 같은 호기를 쓰는 모든 화면과 미르가 같은 순서를 따른다.
+//    호기를 모르는 기기는 '전체' 칸에 쓴다(읽는 쪽 workOrderOf 가 호기 칸 → 전체 칸 → 옛 seqRowFrom 순으로 본다).
+//    order 가 null 이면 그 호기 칸을 지운다(기본으로). ⚠ 작업 순서를 통째로 바꾸므로 «조회만» 은 막는다(seqRowFrom 과 같은 문지기). PATCH 한 칸만 건드린다 — 다른 호기·수집기 칸은 그대로.
+export async function fbSetWorkOrder(voyageKey, equip, order, by) {
+  if (!voyageKey) return null;
+  assertCanWork('양하 순서 변경');
+  const key = workOrderKey(equip);
+  const rec = order ? {
+    rowFrom: order.rowFrom === 'sea' ? 'sea' : 'land',
+    prefs: normalizePrefs(order.prefs).join(','),
+    at: Date.now(),
+    by: by || '',
+  } : null;
+  await update(ref(db, `voyages/${voyageKey}/info`), { [`workOrder/${key}`]: rec });
+  return rec;
 }
 
 //  ★ TallyOne 2.75 — **양하 불가(보류).** 검수사 실측 2026-08-27: 자동 가이드가 그날 세 번 멈췄고,

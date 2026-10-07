@@ -8,6 +8,7 @@ export const fbCompleteContainer = async (vk, mode, cn, by, flag, note, equip) =
 };
 export const fbCompleteContainersAtomic = async (vk, mode, cns) => { window.__calls.push({ fn: 'completeAtomic', cns }); return true; };
 export const fbHoldContainers = async () => true;
+export const fbSetWorkOrder = async () => true;   // 4.09: GuidedWorkPanel 의 양하 순서 저장
 export const fbReleaseHold = async () => true;
 export const fbSnoozeHold = async () => true;
 export const fbUpdateVoyageInfo = async () => true;

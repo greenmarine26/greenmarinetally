@@ -11,7 +11,8 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «몇 호기 화물인가» 안내 — 계산은 한 벌
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
-import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
+import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
+import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LABEL, ALL_EQUIP_KEY } from '../workOrder.js';   // 4.09: 양하 순서 조건 한 벌(호기별 기억)
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
@@ -77,8 +78,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  3.40: 접안 현측은 utils 한 벌로 읽는다 — 수집기가 적는 한글('좌현'·'우현')과 앱이 적는 영문을
   //    같은 답으로 만든다(검수사 «선박이 좌현으로 고정됨 바꿔도 다시바뀜»). 모르는 값은 ''(접안?) 이다.
   const berthSide = berthSideOf(voyage?.info);              // 'starboard'(우현) | 'port'(좌현) | ''(모름)
-  //  ★ 3.3 (김성일 메모 2026-09-03 «양하순서 추가 해상부터»): 양하 로우 순서 — 'land'(기본, 육상→해상) | 'sea'(해상→육상). 항차 info 에 저장.
-  const rowFrom = voyage?.info?.seqRowFrom === 'sea' ? 'sea' : 'land';
+  //  ★ 3.3 (김성일 메모 2026-09-03 «양하순서 추가 해상부터»): 양하 로우 순서 — 'land'(기본, 육상→해상) | 'sea'(해상→육상).
+  //  ★ 4.09: 로우 방향과 부류 조건(20부터·리퍼부터…)을 **호기별로** 항차 info.workOrder 에 기억한다 — 읽기는 아래 workOrderOf(호기 칸 → 전체 칸 → 옛 seqRowFrom).
   // V8.10: 부두별 장비 목록. PCTC 1~4호기, PNCT 1~5호기(여객석 RORO 1대 추가). 부두 미상이면 1~5 전체.
   const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
 
@@ -96,6 +97,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     window.dispatchEvent(new CustomEvent('equipChanged', { detail: num }));
     setEquipStep(false);
   };
+  //  ★ 4.09 — 지금 이 호기에 걸린 양하 순서. 양하만 쓴다(선적은 로우 방향·부류 조건이 없다).
+  const wo = workOrderOf(voyage?.info, equip);
+  const rowFrom = wo.rowFrom;
+  const orderPrefs = mode === 'discharge' ? wo.prefs : null;
+  const orderKey = orderPrefs ? orderPrefs.join(',') : '';   // useMemo 의존성은 문자열로(배열은 매번 새것이라)
+  const [orderOpen, setOrderOpen] = useState(false);
 
   //  2.90 (검수사 «수동작업 크레인 지정해서 작업하다 자동가이드로 넘어가면 재지정하게 한다 …
   //    자동이든 수동이든 이중지정은 피한다») — 베이·단 선택을 부모(SearchPanel) 한 벌(workCtx)로 올린다.
@@ -235,18 +242,26 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     fbUpdateVoyageInfo(voyageKey, { berthSide: side, berthSidePick: side })
       .catch(e => { console.warn('[V9.57] 접안 방향 저장 실패', e); alert('접안 방향 저장에 실패했습니다. 네트워크 확인 후 다시 선택해 주세요.'); });
   };
-  //  3.3: 양하 로우 순서 토글(육상부터 ↔ 해상부터) — 오선택 방지: 확인 후 저장. 항차 info.seqRowFrom.
-  const toggleRowFrom = async () => {
-    if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
-    const next = rowFrom === 'sea' ? 'land' : 'sea';
+  //  ★ 4.09: 양하 순서 조건 저장 — 로우 방향·부류 조건 모두 항차 info.workOrder/{호기} 한 칸에 적는다(PATCH, 다른 호기는 그대로).
+  //    종전 3.3 의 «⇄ 육상부터/해상부터» 항차 단위 저장(seqRowFrom)은 읽기만 남는다 — 호기 칸이 없으면 그 값이 로우 방향이다.
+  const saveWorkOrder = async (next) => {
+    if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return false; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
+    try { await fbSetWorkOrder(voyageKey, equip, next, inspector); return true; }
+    catch (e) { console.warn('[4.09] 양하 순서 저장 실패', e); alert('양하 순서 저장에 실패했습니다. 네트워크 확인 후 다시 눌러 주세요.'); return false; }
+  };
+  const pickRow = (r) => { if (r !== rowFrom) saveWorkOrder({ rowFrom: r, prefs: wo.prefs }); };
+  const pickPref = (k) => saveWorkOrder({ rowFrom, prefs: togglePref(wo.prefs, k) });
+  const resetWorkOrder = async () => {
+    if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return; }
     const ok = await ask({
-      title: '양하 순서 변경',
-      message: `같은 단 안 로우 순서를 [${next === 'sea' ? '해상부터' : '육상부터'}]로 바꿉니다.\n(${next === 'sea' ? '해상쪽 로우 → 육상쪽 로우' : '육상쪽 로우 → 해상쪽 로우'} · 데크 위층부터는 그대로)\n\n케빈이 그렇게 내리고 있을 때만 바꾸십시오. 맞습니까?`,
+      title: '양하 순서를 기본으로',
+      message: `${equip || '이 항차'} 의 양하 순서 조건을 지우고 기본(육상부터 · 부류 조건 없음)으로 돌립니다.\n기사가 바뀌었을 때 쓰십시오. 맞습니까?`,
       confirmLabel: '맞습니다', cancelLabel: '취소',
     });
     if (!ok) return;
-    fbUpdateVoyageInfo(voyageKey, { seqRowFrom: next })
-      .catch(e => { console.warn('[3.3] 양하 순서 저장 실패', e); alert('양하 순서 저장에 실패했습니다. 네트워크 확인 후 다시 눌러 주세요.'); });
+    //  호기 칸을 지우면 «전체» 칸이나 옛 항차 단위 seqRowFrom 이 다시 읽힌다 — 그런 칸이 남아 있으면 지워서는 기본으로 안 돌아오므로 기본값을 이 호기 칸에 적어 둔다.
+    const fallbackLeft = voyage?.info?.seqRowFrom === 'sea' || (!!equip && !!voyage?.info?.workOrder?.[ALL_EQUIP_KEY]);
+    await saveWorkOrder(fallbackLeft ? { rowFrom: 'land', prefs: [] } : null);
   };
   const changeBerth = async () => {
     if (!canWorkNow()) { alert(workGateText('작업 설정 변경')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
@@ -495,11 +510,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
       streamPref,                                           // V8.50: 갈림 선택 부류
       frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
-      rowFrom,                                              // 3.3: 양하 «해상부터»
+      rowFrom,                                              // 3.3: 양하 «해상부터» (4.09: 호기별)
+      orderPrefs,                                           // 4.09: 양하 부류 조건(리퍼부터·20부터…) — 호기별로 기억한 것
       bayFirst,                                             // 3.77: 양하·선적 «베이 먼저»
       planAll: modeAll,                                     // 3.72-01: 선적 도착항 순위는 완료한 컨을 포함한 전체 계획으로 잰다(진행 중 순위가 안 뒤집히게)
     });
-  }, [remaining, modeAll, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom, bayFirst]);
+  }, [remaining, modeAll, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom, orderKey, bayFirst]);
 
   const card = queue[0] || null;
 
@@ -529,6 +545,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (cnt['40'] && cnt['20']) chips.push(['40', cnt['40']], ['20', cnt['20']]);
     return chips.length ? chips : null;
   }, [availCards, mode]);
+
+  //  ★ 4.09: 부류 조건(orderKey)이 바뀌면 — 이 기기에서 눌렀든 다른 폰이 바꿨든 — 갈림 칩(일시 «○ 우선 중»)을 끈다.
+  //    안 끄면 방금 정한 조건 위에 옛 흐름이 남아 첫 카드가 창의 «1. ○○부터» 와 어긋난다. 저장 응답이 아니라 값이 바뀐 때 끄므로 로컬 반영과 같이 움직인다.
+  useEffect(() => { setStreamPref(null); }, [orderKey]);
 
   // V8.50: 선택 부류가 소진되면 자동 해제 — 기본 층 순서로 복귀.
   useEffect(() => {
@@ -570,6 +590,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const r = recentRef.current;
     if (r.length < STREAM_STREAK) return;
     if (!forkChips) return;                                   // ⓐ 혼재가 아니면 감지하지 않는다
+    if (orderKey) return;                                     // 4.09: 검수사가 기사의 방법을 정해 두었으면 그 방법이 이긴다 — 3대 연속 감지로 바꾸지 않는다
     const sq = r.map(x => x.eseq);
     if (sq.every(v => v != null) && sq.every((v, i) => i === 0 || v > sq[i - 1])) return;   // ⓑ EDI 순번대로면 유지
     let next = null;                                          // 좁은 부류부터 본다
@@ -1346,7 +1367,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   if (mode !== 'discharge' && mode !== 'loading') return null;
 
   // ── 설정 칩 바: 장비·접안·베이 — 항상 표시, 탭하면 변경 ──
-  const SettingsBar = () => (
+  const SettingsBar = ({ hideOrder = false }) => (
     <div className="flex gap-1.5 text-xxs">
       <button onClick={() => setEquipStep(true)}
         className="flex items-center gap-1 px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-amber-300 font-bold hover:bg-ink-750">
@@ -1356,11 +1377,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         className="flex items-center gap-1 px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-sky-300 font-bold hover:bg-ink-750 disabled:opacity-40">
         <Anchor className="w-3.5 h-3.5"/>{berthSide ? (berthSide === 'starboard' ? '우현 접안' : '좌현 접안') : '접안?'}
       </button>
-      {/* 3.3: 양하 로우 순서 — 케빈이 해상부터 내리면 여기서 바꾼다(항차에 저장). 선적은 무관(해상→육상 고정). */}
-      {mode === 'discharge' && (
-        <button onClick={toggleRowFrom} disabled={!berthSide}
+      {/* 3.3: 양하 로우 순서 — 케빈이 해상부터 내리면 여기서 바꾼다. 선적은 무관(해상→육상 고정).
+          4.09: 누르면 «양하 순서» 창이 열린다 — 로우 방향과 풀·엠티·일반·리퍼·20·40부터를 겹쳐 고르고 호기별로 항차에 기억한다. */}
+      {mode === 'discharge' && !hideOrder && (
+        <button onClick={() => setOrderOpen((v) => !v)} disabled={!berthSide}
           className={`flex items-center gap-1 px-2 py-1.5 rounded-pill bg-ink-800 border border-line font-bold hover:bg-ink-750 disabled:opacity-40 ${rowFrom === 'sea' ? 'text-orange-300 border-orange-700/60' : 'text-teal-300'}`}>
-          ⇄ {rowFrom === 'sea' ? '해상부터' : '육상부터'}
+          ⇄ {rowFrom === 'sea' ? '해상부터' : '육상부터'}{wo.prefs.length ? ` +${wo.prefs.length}` : ''}
         </button>
       )}
       {selectedGroup != null && (
@@ -1372,6 +1394,53 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     </div>
   );
 
+
+  //  ★ 4.09 — «양하 순서» 창. 기사의 작업 방법을 호기별로 정한다(검수사 «장비 기사의 작업 방법이 틀려서 입니다»).
+  //    고르는 즉시 저장하고(다시 누르면 해제) 같은 호기를 쓰는 모든 화면·미르가 같은 순서를 따른다. 번호 = 우선순위(먼저 누른 것이 먼저).
+  const orderSheet = () => (
+    <div className="bg-ink-900 border-2 border-teal-700 rounded-pill p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-bold text-teal-300">양하 순서 — {equip || '호기 미지정'}</div>
+        <button onClick={() => setOrderOpen(false)} className="px-2 py-1 rounded text-xs text-dim-300 hover:text-teal-300">닫기</button>
+      </div>
+      <div className="text-xxs text-dim-300 leading-snug">
+        기사의 작업 방법에 맞춥니다. {equip ? `${equip}` : '이 항차'}를 쓰는 모든 검수원 화면과 미르가 같은 순서를 따릅니다.
+        위에 컨이 남은 칸은 앞당기지 않고, 데크가 홀드보다 먼저입니다.
+      </div>
+      <div>
+        <div className="text-2xs font-bold text-dim-200 mb-1">로우</div>
+        <div className="flex gap-1.5">
+          {[['land', '육상부터'], ['sea', '해상부터']].map(([k, l]) => (
+            <button key={k} onClick={() => pickRow(k)}
+              className={`flex-1 py-2 rounded-pill border text-xs font-bold ${rowFrom === k ? 'bg-teal-700 border-teal-500 text-white' : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-2xs font-bold text-dim-200 mb-1">먼저 내릴 것 — 먼저 누른 것이 우선입니다</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {ORDER_PREF_KEYS.map((k) => {
+            const n = wo.prefs.indexOf(k);
+            return (
+              <button key={k} onClick={() => pickPref(k)}
+                className={`py-2 rounded-pill border text-xs font-bold ${n >= 0 ? 'bg-violet-700 border-violet-500 text-white' : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>
+                {n >= 0 ? `${n + 1}. ` : ''}{ORDER_PREF_LABEL[k]}부터
+              </button>
+            );
+          })}
+        </div>
+        <div className="text-3xs text-dim-400 leading-snug mt-1">20↔40 · 풀↔엠티 · 일반↔리퍼 · 엠티↔일반·리퍼는 함께 못 겁니다(새로 누른 쪽으로 바뀝니다). 내릴 수 있는 칸에서만 앞당기고, 갈림 칩이 켜져 있으면 그것이 먼저입니다.</div>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xxs text-dim-400 min-w-0">
+          지금 <span className="text-dim-100 font-bold">{workOrderText(wo)}</span>
+          {wo.by ? ` · ${wo.by} ${wo.at ? new Date(wo.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}` : ''}
+        </div>
+        <button onClick={resetWorkOrder}
+          className="shrink-0 px-3 py-1.5 rounded-pill border border-amber-700 bg-ink-800 text-xs font-bold text-amber-300 hover:bg-ink-750">기본으로</button>
+      </div>
+    </div>
+  );
 
   // ── 1단계: 장비(호기) 결정 ──
   if (equipStep) {
@@ -1432,6 +1501,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return (
       <div className="space-y-2">
         {!compact && <SettingsBar/>}
+        {!compact && mode === 'discharge' && orderOpen && orderSheet()}
         <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
           <div className="text-sm font-bold text-violet-300">작업할 베이를 선택하세요</div>
           {groups.length === 0 && unassigned.length === 0 && <div className="text-xs text-dim-400 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
@@ -1503,6 +1573,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return (
       <div className="space-y-2">
         {!compact && <SettingsBar/>}
+        {!compact && mode === 'discharge' && orderOpen && orderSheet()}
         <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-3">
           <div className="flex items-center gap-2">
             <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-dim-300 hover:text-violet-300">
@@ -1632,7 +1703,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   return (
     <div className="space-y-2">
-      {!compact && <SettingsBar/>}
+      {!compact && <SettingsBar hideOrder/>}
       <div className="flex items-center justify-between bg-ink-900 border border-line rounded-pill px-2 py-1.5">
         <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-dim-300 hover:text-violet-300">
           <ChevronLeft className="w-4 h-4"/>베이 선택
@@ -1645,6 +1716,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       <div className="h-1.5 bg-ink-800 rounded overflow-hidden">
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
+
+      {/* ★ 4.09 — 양하 순서 한 줄(폰 베이뷰 포함). 누르면 «양하 순서» 창이 열린다. */}
+      {mode === 'discharge' && (
+        <button onClick={() => setOrderOpen((v) => !v)}
+          className="w-full flex items-center justify-between gap-2 bg-ink-900 border border-line rounded-pill px-2 py-1.5 text-left hover:bg-ink-850">
+          <span className="min-w-0 truncate text-2xs text-dim-300">순서 <span className={`font-bold ${(wo.prefs.length || rowFrom === 'sea') ? 'text-orange-300' : 'text-teal-300'}`}>{workOrderText(wo)}</span></span>
+          <span className="shrink-0 text-xxs text-dim-400">{orderOpen ? '닫기' : '바꾸기 ⚙'}</span>
+        </button>
+      )}
+      {mode === 'discharge' && orderOpen && orderSheet()}
 
       {/* ★ 2.75 — ⏸ 보류 줄. 검수사가 먼저 풀렸으면 되묻기를 기다릴 것 없이 여기서 [해제] 하면
           그 컨이 바로 앞 순서로 온다(검수사 확정 «해제 탭만 있으면 될듯»). */}

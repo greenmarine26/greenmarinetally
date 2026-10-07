@@ -78,7 +78,7 @@ function _frontFirst(cards, frontCns) {
   return hit.length ? [...hit, ...rest] : cards;
 }
 
-export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null, planAll = null, bayFirst = null }) {
+export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null, planAll = null, bayFirst = null, orderPrefs = null }) {
   const landToSea = mode === 'discharge' && rowFrom !== 'sea';   // 3.3: 양하 «해상부터»면 해상→육상
   const topFirst = mode === 'discharge';
 
@@ -257,7 +257,18 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     //  ★ 3.77 (검수사 2026-10-03 DPRT 2611N 3호기 — «무게가 초과되는 게 많을 때는 33번 베이 먼저 또는 35번 베이 먼저»):
     //    실측 — 33/35 베이 24대 중 55t 초과는 4쌍뿐이었는데 기사는 35번 11대를 먼저 싱글로 내린 뒤 33번을 내렸다.
     //    종전 큐는 싱글 한 대를 내릴 때마다 짝(33)을 다음 카드로 내보내 35번 구간에서 가이드가 계속 다른 베이를 가리켰다. 고른 베이를 물리 종속을 지키며 먼저 세운다.
-    let ordered = streamPref ? [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)] : base;
+    //  ★ 4.09 (검수사 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터 이런조건들을 다 적용할수 있게 해주세요» · «장비 기사의 작업 방법이 틀려서 입니다»):
+    //    orderPrefs = 호기별로 기억한 부류 조건 목록(workOrder.js). 먼저 적힌 조건이 우선이다 — 뒤 조건부터 차례로 당기면 앞 조건이 맨 앞에 선다.
+    //    데크와 홀드는 따로 당긴다(홀드 카드가 데크 카드보다 앞서지 않게 — 해치커버 순서). 위에 남은 카드가 있는 칸은 못 당긴다(pullStreamForward 그대로).
+    //    비어 있으면 아래 코드는 종전과 한 줄도 다르지 않다(시험 smoke_workorder409 가 실데이터로 대조).
+    let body = base.slice(pureFrs.length);
+    if (orderPrefs && orderPrefs.length) {
+      const applyAll = (arr) => { let a = arr; for (let i = orderPrefs.length - 1; i >= 0; i--) a = pullStreamForward(a, orderPrefs[i]); return a; };
+      body = [...applyAll(body.filter((c) => isDeckTier(c.main.tier))), ...applyAll(body.filter((c) => !isDeckTier(c.main.tier)))];
+    }
+    //  V8.50 ③ 갈림 칩·3대 연속 감지(streamPref)는 그 위에 한 번 더 — 지금 흐름이 조건보다 앞선다.
+    if (streamPref) body = pullStreamForward(body, streamPref);
+    let ordered = [...pureFrs, ...body];
     if (bayFirst != null) ordered = [...pureFrs, ...pullBayForward(ordered.slice(pureFrs.length), bayFirst)];
     return _frontFirst(ordered, frontCns);
   }

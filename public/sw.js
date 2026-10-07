@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.08-02';
-const NOTE = '4.08-02 트윈 무게를 총중량으로 재고 55톤을 넘으면 싱글을 권하되 막지 않습니다. 싱글로 한 대 내리면 짝이 바로 다음 카드로 옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.09';
+const NOTE = '4.09 양하 순서를 호기별로 정합니다. 육상 해상 부터와 풀 엠티 일반 리퍼 20 40 부터를 겹쳐 고릅니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

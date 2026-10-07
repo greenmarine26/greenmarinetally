@@ -126,6 +126,7 @@ export const fbSetVoyageCraneCrew = async () => true;
 export const fbSetVoyageGangs = async () => true;
 export const fbSetVoyageSeqMode = async () => true;
 export const fbSetVoyageWorkStart = async () => true;
+export const fbSetWorkOrder = async (vk, equip, order, by) => { window.__calls.push({ fn: 'workOrder', vk, equip, order: order || null, by }); return order || null; };   // 4.09: 양하 순서 조건 저장 기록
 export const fbSetXraySeal = async () => true;
 export const fbSnoozeHold = async () => true;
 export const fbSubscribeAllReports = async () => true;

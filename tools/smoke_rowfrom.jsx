@@ -1,5 +1,5 @@
-// 양하 «해상부터» 칩(3.3) 렌더 연막검사 진입점 — NSDC 2608N 10번 실데이터로 자동 가이드를 그려 칩을 실제로 누른다.
-//   김성일 메모 2026-09-03 «양하순서 추가 해상부터». firebase 는 tools/fb_stub_search.js 스텁(쓰기 없음, updateInfo 만 기록).
+// 양하 «해상부터» 칩(3.3)·«양하 순서» 창(4.09) 렌더 연막검사 진입점 — NSDC 2608N 10번 실데이터로 자동 가이드를 그려 칩을 실제로 누른다.
+//   김성일 메모 2026-09-03 «양하순서 추가 해상부터», 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터…». firebase 는 tools/fb_stub_search.js 스텁(쓰기 없음, updateInfo·workOrder 만 기록).
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 window.__calls = [];
@@ -13,8 +13,8 @@ const containers = Object.values(FX.ediContainers).filter((c) => gOf(c.bay) === 
   ...c, l4: c.cn.slice(-4), _mode: 'discharge', _ptk: c.pod === 'KRPTK', _comp: false,
 }));
 const root = createRoot(document.getElementById('root'));
-window.__render = (seqRowFrom) => {
-  const voyage = { info: { ...FX.info, seqRowFrom: seqRowFrom || '' }, discharge: { ediContainers: FX.ediContainers, completed: {} } };
+window.__render = (seqRowFrom, workOrder) => {   // 4.09: workOrder = info.workOrder 모양({ '1호기': { rowFrom, prefs:'RF,20' } })
+  const voyage = { info: { ...FX.info, seqRowFrom: seqRowFrom || '', ...(workOrder ? { workOrder } : {}) }, discharge: { ediContainers: FX.ediContainers, completed: {} } };
   root.render(React.createElement(GuidedWorkPanel, { voyage, voyageKey: 'NSDC_2608N', inspector: '김성일',
     allContainers: containers, workFilter: 'discharge', onSwitchManual: () => {} }));
 };

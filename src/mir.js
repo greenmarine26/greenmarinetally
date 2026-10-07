@@ -47,6 +47,7 @@ import {
   isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview, buildGangShift, gangBriefLines, answerGangShift,
 } from './chiefAnswers.js';
 import { buildGuidedQueue } from './guidedQueue.js';
+import { workOrderOf, workOrderText } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌 — 자동 가이드 화면과 같은 읽기
 import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
@@ -1528,13 +1529,17 @@ export function mirSee(q, ctx) {
   }
 
   let queue = [];
+  //  4.09: 이 기기의 호기로 읽는다 — 호기 칸 → 전체 칸 → 옛 항차 seqRowFrom (화면 GuidedWorkPanel 과 같은 workOrderOf 한 벌)
+  let myEquip = ''; try { myEquip = String(getEquipNumber() || '').trim(); } catch (e) { myEquip = ''; }
+  const wo = workOrderOf(info, myEquip);
   try {
     queue = buildGuidedQueue({
       containers: pool, mode,
       evenRowsSeaSide: side === 'starboard',    // 우현 접안 = 짝수 로우가 해상쪽
       findTwin: (t, arr, used) => findTwinCandidate(t, arr, used, info.imo || '', info.vsl || ''),
       streamPref: null,
-      rowFrom: info.seqRowFrom === 'sea' ? 'sea' : 'land',   // 3.3: 양하 «해상부터» — 자동 가이드와 한 벌
+      rowFrom: wo.rowFrom,                                   // 3.3: 양하 «해상부터» — 자동 가이드와 한 벌 (4.09: 이 기기 호기의 순서 조건)
+      orderPrefs: mode === 'discharge' ? wo.prefs : null,    // 4.09: 양하 부류 조건(리퍼부터·20부터…) — 화면과 같은 읽기
       //  3.72-01: 선적 도착항 순위는 완료한 컨을 포함한 전체 계획으로 잰다 — 화면(GuidedWorkPanel)과 한 벌
       planAll: all.filter((c) => c && c._ptk !== false && (c._mode || mode) === mode && c.bay),
     }) || [];
@@ -1543,12 +1548,15 @@ export function mirSee(q, ctx) {
 
   const done = all.filter((c) => c && compOf(c) && (c._mode || mode) === mode).length;
   const lines = [];
-  if (head) lines.push(head);
-  else {
+  if (head) {
+    lines.push(head);
+    //  4.09: 조건을 걸어 둔 호기는 어떤 순서로 부르는지 한 줄 밝힌다(조건이 없으면 종전과 같은 답)
+    if (mode === 'discharge' && (wo.rowFrom === 'sea' || wo.prefs.length)) lines.push(`순서 ${workOrderText(wo)}`);
+  } else {
     //  2.51: 베이를 안 댔으면 **어느 베이부터인지 반드시 말한다.** 갱마다 베이가 다르다 —
     //    「4호기」를 단 검수사에게 남의 베이를 부르면 그것이 틀린 답이다.
     const b0 = queue[0] && queue[0].main ? String(queue[0].main.bay) : '';
-    lines.push(`${mode === 'loading' ? '선적' : '양하'} — 남은 ${remaining.length}대 (완료 ${done}대) · ${side === 'starboard' ? '우현' : '좌현'} 접안${mode === 'discharge' && info.seqRowFrom === 'sea' ? ' · 해상부터' : ''}`
+    lines.push(`${mode === 'loading' ? '선적' : '양하'} — 남은 ${remaining.length}대 (완료 ${done}대) · ${side === 'starboard' ? '우현' : '좌현'} 접안${mode === 'discharge' && (wo.rowFrom === 'sea' || wo.prefs.length) ? ` · ${workOrderText(wo)}` : ''}`
       + (b0 ? `\n  ${b0}번 베이부터입니다. 다른 베이면 «○번 베이 ${mode === 'loading' ? '선적' : '양하'}하자» 라고 하십시오.` : ''));
   }
   lines.push(sayCard(queue[0], wish ? null : (goneHere != null ? goneHere + 1 : done + 1), info.pier || ''));
