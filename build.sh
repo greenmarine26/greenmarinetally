@@ -963,6 +963,20 @@ else
   cp "$SMOKE_RF.fbbak" src/firebase.js; rm -f "$SMOKE_RF.fbbak"
   echo "✗ 양하 해상부터 칩 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_RF"; exit 1
 fi
+#  4.10: **해치커버 보고 직전 «장수 확인»** — 장수 계산이 4.09 와 같은가(격자 5760건) · 사전 상한 경고 · 자동 가이드에서 단추를 눌러 확인 창이 뜨고
+#    취소하면 보고도 «열렸다» 표시도 안 남는가(NSDC 2608N 10번 실데이터). 검수사 2026-10-07 «보고 직전에 커버 장수를 맞는지 확인하고 보고».
+SMOKE_HC=$(mktemp /dev/shm/hometmp/_smokehc_XXXXXX.js)
+cp src/firebase.js "$SMOKE_HC.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_hatchcount410.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_HC"; then
+  cp "$SMOKE_HC.fbbak" src/firebase.js && rm -f "$SMOKE_HC.fbbak"
+  node tools/smoke_hatchcount410.cjs "$(pwd)" "$SMOKE_HC" || { echo "✗ 4.10 해치 장수 확인 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_HC"; exit 1; }
+  rm -f "$SMOKE_HC"
+else
+  cp "$SMOKE_HC.fbbak" src/firebase.js; rm -f "$SMOKE_HC.fbbak"
+  echo "✗ 4.10 해치 장수 확인 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HC"; exit 1
+fi
 #  3.40: **접안 현측이 한 벌인가** — 수집기가 적는 한글(«좌현»·«우현»)과 앱이 적는 영문이 같은 답을 내는지,
 #    그리고 검수사가 고친 것이 수집 사이클에 안 밀리는지. 표시뿐 아니라 첫 카드 자리(작업 순서)까지 잰다.
 #    검수사 2026-09-09 «선박이 좌현으로 고정됨 바꿔도 다시바뀜» — 우현 5척이 좌현 기준으로 줄 서고 있었다.

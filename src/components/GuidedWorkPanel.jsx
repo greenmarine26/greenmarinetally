@@ -11,12 +11,13 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «몇 호기 화물인가» 안내 — 계산은 한 벌
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
+import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LABEL, ALL_EQUIP_KEY } from '../workOrder.js';   // 4.09: 양하 순서 조건 한 벌(호기별 기억)
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
-import { hatchPanelCountOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinDiffLimit, twinWtOf } from '../nlSearch.js';
 
@@ -167,6 +168,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //     `if (!(await ask(...))) return;` 한 줄로 갈아끼운다(ChoiceModal 의 useChoice 와 같은 방식).
   //   ⚠ alert() 는 toast.js 가 전역으로 가로채 논블로킹 토스트로 나가므로 그대로 둔다.
   const [confirmState, askConfirm] = useConfirm();
+  const [hatchCountEl, askHatchCount] = useHatchCountConfirm();   // 4.10: 해치 오픈·클로즈 보고 직전에 «총 N장» 을 보이고 고르게 한다
   const ask = (opts) => new Promise((resolve) => {
     askConfirm({ ...opts, onConfirm: () => resolve(true), onCancel: () => resolve(false) });
   });
@@ -910,7 +912,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
      ⚠ 판정은 utils.hatchOpenableFor 한 벌이다 — 커버 로우 범위를 아는 _panelOf 를 그대로 쓴다.
        구하지 못하면(사전 없음·자료 없음) 종전대로 사전 합산으로 돌아간다. */
   //  3.49: 장수 셈은 utils.hatchPanelCountOf 한 벌(자동 판정 기록·알림 배너도 같은 수를 쓴다). 본문은 그대로 옮겼다.
-  const hatchPanelsOf = (bays) => hatchPanelCountOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf);
+  //  4.10: 보고 직전 확인 창을 넣으면서 이 줄의 `hatchPanelsOf` 는 sendHatchReport 안의 `hatchPanelDetailOf`(같은 계산, 장별 내용까지) 로 바뀌었다.
 
   // TallyOne 1.8-18: **끝난 모드에서는 유도 해치 보고를 걸지 않는다.**
   //
@@ -960,12 +962,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     });
   };
 
+  //  4.10: **반환값** — true = 보고를 냈다 · false = 취소·실패(아무것도 저장하지 않는다) · 'skip' = 열 홀드가 없어 보고할 것이 없다(종전처럼 «처리됨» 표시는 한다).
+  //    종전엔 값이 없어서 «그래도 보고/취소» 에서 취소를 눌러도 부르는 쪽이 «열렸다» 표시를 저장했다(보고는 없는데 hatchDone 만 남음).
   const sendHatchReport = async (action) => {
-    if (hatchBusy) return;
+    if (hatchBusy) return false;
     setHatchBusy(true);
     try {
       const bays = groupBaysOf(selectedGroup, true);  // V7.99-6: 홀드 평택분 베이만 (메모5)
-      if (bays.length === 0) return;  // 열 홀드 없으면 보고 안 함 (finally에서 busy 해제)
+      if (bays.length === 0) return 'skip';  // 열 홀드 없으면 보고 안 함 (finally에서 busy 해제)
       // 1.8-19: 데크에 화물이 얹혀 있으면 오픈은 물리적으로 불가능하다.
       //   자료가 틀렸을 수도 있으니 조용히 막지 않고, 무엇이 막고 있는지 보여 주고 묻는다.
       if (action === 'open') {
@@ -983,7 +987,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               + '자료가 틀렸다면 그래도 보고할 수 있습니다. 보고할까요?',
             confirmLabel: '그래도 보고', cancelLabel: '취소',
           });
-          if (!ok) return;
+          if (!ok) return false;
         }
       }
       // 1.8-18: 끝난 모드면 조용히 막지 않고 **사람에게 묻는다** — 진짜 뒤늦은 보고일 수도 있다.
@@ -997,19 +1001,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             + '(실수로 눌렀다면 「취소」 — 마감 서류 타임시트에 그대로 실립니다)',
           confirmLabel: '그래도 보고', cancelLabel: '취소',
         });
-        if (!ok) return;
+        if (!ok) return false;
       }
+      // 4.10 (검수사 2026-10-07 «보고 직전에 커버 장수를 맞는지 확인하고 보고 … 무심코 보고 했다가 6장 오픈을 보고 했으니까요»)
+      //   보고 직전에 항상 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 고르게 한다. 취소하면 아무것도 저장·공유하지 않는다.
+      const countDetail = hatchPanelDetailOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf);
+      const chosenCount = await askHatchCount({ action, bays, detail: countDetail, initial: countDetail.count });
+      if (chosenCount == null) return false;
       const voy = mode === 'discharge'
         ? (voyage?.info?.voy_d || voyage?.info?.voy || '')
         : (voyage?.info?.voy_l || voyage?.info?.voy || '');
-      const panelCount = hatchPanelsOf(bays);
+      const panelCount = chosenCount;   // 4.10: 검수사가 확인해 고른 장수(앱이 센 값이 기본)
       const message = buildHatchMessage({ vsl: shipName, voy, bays, action, time: Date.now(), equip, panelCount });
       // V9.57(I8): DB 기록 실패를 삼키고 카톡만 나가던 것 — 수석 대시보드엔 보고가 없는데
       //   카톡엔 있는 불일치가 생겼다. 재시도 1회 후에도 실패면 공유 진행 여부를 묻는다.
       let dbOk = false;
       try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
       catch (e1) {
-        if (e1 && e1.viewOnly) { alert(e1.message); return; }   // 3.51: 조회만은 보기만 — 카톡도 내보내지 않는다
+        if (e1 && e1.viewOnly) { alert(e1.message); return false; }   // 3.51: 조회만은 보기만 — 카톡도 내보내지 않는다
         console.warn('[V9.57] 해치 보고 DB 기록 실패 — 1회 재시도', e1);
         try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
         catch (e2) { console.warn('[V9.57] 해치 보고 DB 기록 재시도 실패', e2); }
@@ -1022,9 +1031,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           message: '해치 보고 DB 기록에 실패했습니다 (재시도 포함).\n수석 대시보드에는 이 보고가 남지 않습니다.\n\n카톡 공유만 진행할까요?',
           confirmLabel: '카톡만 진행', cancelLabel: '취소',
         });
-        if (!goOn) return;  // finally에서 busy 해제
+        if (!goOn) return false;  // finally에서 busy 해제
       }
       await shareText(message, '해치커버');
+      return true;
     } finally { setHatchBusy(false); }
   };
 
@@ -1492,6 +1502,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
         {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
         <ConfirmModal {...confirmState} />
+        {hatchCountEl}
       </div>
     );
   }
@@ -1558,6 +1569,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
         {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
         <ConfirmModal {...confirmState} />
+        {hatchCountEl}
       </div>
     );
   }
@@ -1601,6 +1613,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
         {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
         <ConfirmModal {...confirmState} />
+        {hatchCountEl}
       </div>
     );
   }
@@ -1817,7 +1830,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             <div className="text-xxs text-dim-300">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
           )}
           <div className="flex gap-2">
-            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('open'); setHatchOpenDone(true); markHatchDone(selectedGroup, 'open'); }}
+            <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('open')) === false) return; setHatchOpenDone(true); markHatchDone(selectedGroup, 'open'); }}
               className="flex-1 py-3 rounded-pill bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm">🔓 해치커버 오픈 → 홀드 진행</button>
             <button onClick={() => setSelectedGroup(null)}
               className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 데크로 이동</button>
@@ -1828,7 +1841,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           <div className="font-bold text-sky-200">⚓ 이 베이 홀드 선적 완료!</div>
           <div className="text-xxs text-dim-300">데크를 하려면 해치커버를 닫아야 합니다. 다음 작업을 선택하세요.</div>
           <div className="flex gap-2">
-            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setDeckPromptDone(true); markHatchDone(selectedGroup, 'close'); }}
+            <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('close')) === false) return; setDeckPromptDone(true); markHatchDone(selectedGroup, 'close'); }}
               className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈 → 데크 계속</button>
             <button onClick={() => { setSelectedGroup(null); setDeckPromptDone(false); }}
               className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 베이 홀드 이동</button>
@@ -1842,7 +1855,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             <div className="mt-3 space-y-2">
               <div className="text-xxs text-dim-300">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
               <div className="flex gap-2 justify-center">
-                <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setHatchCloseDone(true); markHatchDone(selectedGroup, 'close'); }}
+                <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('close')) === false) return; setHatchCloseDone(true); markHatchDone(selectedGroup, 'close'); }}
                   className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈</button>
                 <button onClick={() => setSelectedGroup(null)}
                   className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 베이 홀드 이동</button>
@@ -2180,6 +2193,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
       {/* 1.53: 확인창은 앱 안에서 뜬다. 네이티브 confirm() 은 렌더러를 멈춰 앱을 굳혔다. */}
       <ConfirmModal {...confirmState} />
+      {hatchCountEl}{/* 4.10: 해치 보고 직전 장수 확인 창 */}
     </div>
   );
 }

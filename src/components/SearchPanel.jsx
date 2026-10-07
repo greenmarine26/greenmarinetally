@@ -532,7 +532,8 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const _hatchFollow = !!(bayView && bayView.follow);
   const _hatchGroupCenterOf = (b) => bayGroupCenter(b, manualBayPairs);
   //  사건의 모드(양하/선적)로 항차번호·장수를 고른다 — 양하 탭에 뜬 선적 닫힘을 양하 항차로 적지 않게(감사 지적).
-  const hatchPanelCountFor = (bays, mode = workFilter) => hatchPanelCountOf(voyage, mode, bays, _hatchDict, _hatchGroupCenterOf);
+  //  4.10 재감사(중-1): 알림 배너가 이 함수로 «총 N장» 을 센다 — 글자 하나마다 SearchPanel 이 다시 그려지므로 함수 정체성을 자료가 바뀔 때만 바꿔(배너 useMemo 가 그때만 다시 센다) raw EDI 파싱 비용이 입력을 느리게 하지 않게 한다.
+  const hatchPanelCountFor = React.useCallback((bays, mode = workFilter) => hatchPanelCountOf(voyage, mode, bays, _hatchDict, (b) => bayGroupCenter(b, manualBayPairs)), [voyage, workFilter, _hatchDict, manualBayPairs]);
   const hatchVoyFor = (mode = workFilter) => (mode === 'discharge' ? (voyage?.info?.voy_d || voyage?.info?.voy || '') : (voyage?.info?.voy_l || voyage?.info?.voy || ''));
   useEffect(() => {
     if (!_hatchFollow || !voyageKey || !hatchPending.length) return;

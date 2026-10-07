@@ -14,11 +14,13 @@ import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, hatchPanelDetailOf, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { VoyageBlock, ferryPagesOf, ferryCutItem } from './Ferry1700Alert.jsx';   // 3.66: 주야간 작업보고도 17시 창과 같은 갱별 카드·계산 한 벌
 import { ref, set, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
+import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
+import { getShipBayDictData } from '../shipStructure.js';
 
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
 
@@ -91,6 +93,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [bayInput, setBayInput] = useState('');
   const [hatchEquip, setHatchEquip] = useState('');
   const [hatchPanels, setHatchPanels] = useState(1);  // V8.31: 해치커버 장수 수동 선택(1~3장) — 자동계산 제거
+  const [hatchPanelsTouched, setHatchPanelsTouched] = useState(false);   // 4.10: 검수사가 장수 버튼을 직접 눌렀는가(안 눌렀으면 기본값 1 은 «고른 것» 이 아니다)
   // 콘박스
   const [conBoxType, setConBoxType] = useState('20');
   const [conBoxCount, setConBoxCount] = useState(1);
@@ -98,6 +101,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  const [hatchCountEl, askHatchCount] = useHatchCountConfirm();   // 4.10
 
   // Firebase에서 활성 작업 구독
   useEffect(() => {
@@ -159,7 +163,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   useEffect(() => {
     if (!hatchHint) return;
     const sum = hatchHint.reduce((a, x) => a + (x.needed ?? x.openable), 0);   // 3.2-01: 열어야 할 장
-    if (sum >= 1 && sum <= 3) setHatchPanels(sum);
+    if (sum >= 1 && sum <= 3) { setHatchPanels(sum); setHatchPanelsTouched(false); }
   }, [hatchHint]);
 
   //  3.36: 이 창은 항차 화면에서 **조건 없이 마운트**되므로 위 초기값은 첫 마운트 때 한 번만 잡힌다.
@@ -396,8 +400,18 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (bays.length === 0) { alert('베이 번호를 입력하세요'); return; }
     const voy = getVoy(equipModeOf(equip));
 
+    //  4.10 (검수사 2026-10-07 «보고 직전에 커버 장수를 맞는지 확인하고 보고 … 무심코 보고 했다가 6장 오픈을 보고 했으니까요»)
+    //   보고를 쓰기 직전에 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 장수를 확인받는다. 취소하면 아무것도 저장·공유하지 않는다.
+    //   처음 값 — 검수사가 위 화면에서 장수 버튼을 직접 눌렀으면 그 값, 안 눌렀으면 앱이 센 값(못 셌으면 비워서 직접 고르게 한다 — 기본값 1 이 눈에 안 띄고 나가던 것).
+    //   앱이 센 값과 다르게 고르면 창이 «앱이 센 장수는 N장» 을 알린다.
+    const _md = equipModeOf(equip) === 'loading' ? 'loading' : 'discharge';
+    const countDetail = hatchPanelDetailOf(voyage, _md, bays, getShipBayDictData(voyage?.info?.imo || '', voyage?.info?.vsl || ''), (b) => bayGroupCenter(b, bayPairsForHatch));
+    const chosen = await askHatchCount({ action: hatchAction, bays, detail: countDetail, initial: hatchPanelsTouched ? hatchPanels : (countDetail.count > 0 ? countDetail.count : null) });
+    if (chosen == null) return;
+    setHatchPanels(chosen); setHatchPanelsTouched(false);   // 고른 값은 이번 보고에 쓰였다 — 다음 보고에서 «직접 누른 값» 으로 남겨 두지 않는다(이 창은 닫아도 상태가 남는다)
+
     const time = Date.now();
-    const panelCount = hatchPanels;  // V8.31: 자동계산 제거 — 검수사가 선택한 장수(1~3)
+    const panelCount = chosen;  // V8.31: 자동계산 제거 → 4.10: 보고 직전 확인 창에서 검수사가 확인해 고른 장수
     const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip, panelCount });
 
     await fbAddWorkReport(voyageKey, {
@@ -882,7 +896,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               <div className="text-xs font-bold text-dim-200 mb-1">장수 선택{hatchHint ? ' (앱이 센 값 — 다르면 눌러서 바꾸세요)' : ''}</div>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3].map(n => (
-                  <button key={n} onClick={() => setHatchPanels(n)}
+                  <button key={n} onClick={() => { setHatchPanels(n); setHatchPanelsTouched(true); }}
                     className={`py-3 rounded-pill font-bold ${hatchPanels === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}장
                   </button>
@@ -1033,6 +1047,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       {/* M5.92 fix: ConfirmModal 렌더 누락 — handleDone의 askConfirm 다이얼로그가 안 떠서
           완료 보고가 카톡으로 전송 안 되던 버그 수정 */}
       <ConfirmModal {...confirmState} />
+      {hatchCountEl}{/* 4.10: 해치 보고 직전 장수 확인 창 */}
     </div>
   );
 }

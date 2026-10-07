@@ -9,7 +9,9 @@ export const fmtHm = (ms) => { const d = new Date(ms); return `${pad2(d.getHours
 
 /** 사건 → 카톡·보고 문장. 기존 buildHatchMessage(한 벌) 뒤에 «판정 근거» 한 줄만 붙인다. */
 export function buildAutoHatchMessage(ev, { vsl, voy, equip, panelCount }) {
-  const base = buildHatchMessage({ vsl, voy, bays: ev.bays, action: ev.action, time: ev.from, equip: ev.crane ? `${ev.crane}호기` : equip, panelCount });
+  let base = buildHatchMessage({ vsl, voy, bays: ev.bays, action: ev.action, time: ev.from, equip: ev.crane ? `${ev.crane}호기` : equip, panelCount });
+  //  4.10 감사 지적(중-2): 앱이 장수를 못 센 자동 기록(panelCount 0)은 buildHatchMessage 가 베이 개수를 «총 N장» 으로 적어 옛 6장 오류와 같은 모양이 된다 — 못 센 것은 못 셌다고 적어 수석이 확인하게 한다.
+  if (!(panelCount > 0)) base = base.replace(/총 \d+장/, '총 장수 확인 필요');
   const how = ev.src === 'term' ? `터미널 실적 공백 ${fmtHm(ev.from)}~${fmtHm(ev.to)} (${ev.gapMin}분)` : `터미널 실적으로 추정 ${fmtHm(ev.from)}~${fmtHm(ev.to)}`;
   return `${base}\n판정: ${how}${ev.crane ? ` · ${ev.crane}호기` : ''} (자동)`;
 }
