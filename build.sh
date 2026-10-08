@@ -465,6 +465,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ FR 표기 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_FR"; exit 1
   fi
+  # 4.12-04: 출력허브 카고플랜이 선박 전체(평택분 글자 · 나머지 회색 음영 · 시프팅 ◆)를 그리는가 — MCAP 639N 실데이터로 출력허브를 열어 카고플랜을 누른다.
+  #   검수사 2026-10-09 03:13 «베이플랜에는 보이는데 카고플랜에서는 보이지 않는군요» · 03:20 «콘앱은 표기하고 검수앱은 표기가 안되게 한 이유» · 03:27 «콘앱처럼 되어 있어야 합니다» (수정 전 ◆ 0칸 · 통과화물 회색 칸 빠짐).
+  SMOKE_SB=$(mktemp /dev/shm/hometmp/_smokesb_XXXXXX.js)
+  if npx esbuild tools/smoke_shiftbay.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs \
+       --outfile="$SMOKE_SB" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_shiftbay.cjs "$SMOKE_SB" || { echo "✗ 출력허브 카고플랜 선박 전체·시프팅 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SB"; exit 1; }
+    rm -f "$SMOKE_SB"
+  else
+    echo "✗ 출력허브 카고플랜 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SB"; exit 1
+  fi
   # 3.44: 선사 RESTOW LIST 가 시프팅 정본이 되는가 — MCAT 635N 실서류 14행 + 실 BAPLIE 두 벌로 실소스를 돌린다.
   #   검수사 2026-09-11 «카토스에 있는 MCAT 시프팅 자료를 찾아서 검수앱과 맞춰주세요 2개 차이납니다» — 서류 14 vs 앱 추정 12.
   SMOKE_RSM=$(mktemp /dev/shm/hometmp/_rsm_XXXXXX.mjs)

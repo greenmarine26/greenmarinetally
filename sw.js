@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.12-03';
-const NOTE = '4.12-03 콘앱 미르에게 24번 홀드 콘 몇 개 남았어 하고 물으면 그 베이에 남은 콘만 정확히 알려줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.12-04';
+const NOTE = '4.12-04 출력 센터 카고플랜이 콘앱처럼 선박 전체를 보여줍니다. 평택분만 글자, 나머지는 회색 음영, 시프팅 표시도 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -46,7 +46,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const shiftingMap = useMemo(
     () => computeShiftingMapCached(voyageKey, voyage),
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix]
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix,
+     voyage?.restowList?._meta?.at, voyage?.info?.berthShift]   // 4.12-04: 선사 서류·배정표 이적이 나중에 와도 다시 센다(계산 자체는 computeShiftingMapCached 가 내용 서명으로 한 번 더 지킨다)
   );
 
   const isPtk = (c) => {
@@ -151,7 +152,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const allContainers = tagForecastMarks(
     allContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null, specSet);
 
-  // M5.30-fix: 베이 단위 필터
+  // M5.30-fix: 베이 단위 필터 — ★ 4.12-04 부터 **베이 상세에만** 걸린다(카고플랜은 아래 printContainers 처럼 선박 전체).
   //   평택 화물이 1개라도 있는 베이의 전체 슬롯 표시 (그 베이의 통과 화물 + 빈 슬롯 포함)
   //   사용자 명세: "평택분 화물이 하나라도 있다면 그 베이 전체 티어/로우를 다 보여줘야 함"
   //
@@ -178,21 +179,25 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     return String(b).padStart(3, '0').slice(0, 3);
   };
 
-  // 평택분 컨테이너의 베이 set (포함된 베이만 표시 대상) — 계획·실적 두 벌.
-  const ptkBays = new Set();
+  // 베이 상세용 베이 set — 평택분이 있는 베이 + 시프팅 컨이 있는 베이(실적 자리 기준).
+  //  ★ 4.12-04 — **시프팅 컨이 있는 베이도 작업 베이다.** 평택 화물이 0대여도 크레인이 들어 올리는 컨이 있는 베이는 현장 종이에 든다.
+  //    ⚠ 베이를 고르는 데만 쓴다 — 검수 리스트·별첨 대수(isPtk)는 그대로다.
+  const _isShiftCn = (c) => !!(c && c.cn && shiftingMap && shiftingMap[c.cn]);
   const ptkBaysActual = new Set();
   allContainers.forEach(c => {
-    if (!isPtk(c)) return;
-    const b = getBay(c);
-    if (b && b !== '000') ptkBays.add(b);
+    if (!isPtk(c) && !_isShiftCn(c)) return;
     const ba = getBayActual(c);
     if (ba && ba !== '000') ptkBaysActual.add(ba);
   });
 
-  // 카고플랜용 — 계획 기준. 평택 화물 있는 베이의 전체 컨테이너.
+  // 카고플랜용 — 계획 기준. ★ 4.12-04 — **선박 전체**(평택 + 통과 + 시프팅). 베이를 거르지 않는다.
+  //   검수사 확정 2026-08-28(2.79-03) «타지역화물도 보여줘야 합니다. 선적시 빈곳을 찾기 위해서» — «베이는 절대 안 뺀다»(통과화물은 회색 칸만, 글자는 평택분만).
+  //   검수사 2026-10-09 03:25 «표기는 평택분만 표기를 하고 나머지는 음영을 넣어서 보여주기로 한것일텐데 그래야 선적위치를 정할수 있다고».
+  //   M5.32 부터 여기만 «평택 화물이 한 대라도 있는 베이»로 걸러, 평택분 0대인 베이의 통과화물(회색)이 통째로 빠져 꽉 찬 베이가 빈 베이처럼 그려졌다
+  //   (MCAP 639N — 891대 중 491대 · 시프팅 ◆ 5칸도 같이 빠졌다). 항차 화면 카고플랜(VoyagePage allEdiContainers)·콘앱은 처음부터 전체를 그린다 — 한 기준으로 맞춘다.
   const printContainers = allContainers.filter(c => {
     const b = getBay(c);
-    return b && ptkBays.has(b);
+    return b && b !== '000';
   });
 
   // 베이 상세용 — 실적 기준. 창고에 넣은 컨은 자리가 없으니 이 종이에서 빠진다(실물이 배에 없다).
