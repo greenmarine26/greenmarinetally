@@ -16,7 +16,16 @@ const PER_OF = { deck: 4, ele: 2, hold: 1 };   // 곳당 개수 — 데크 4, �
 const KINDS = ['deck', 'ele', 'hold'];
 
 export const CONE_QA_HELP =
-  '이렇게 물어보세요. "5번 베이", "7번 베이 홀드콘", "모자란 데", "남는 데", "전체", "콘 작업 브리핑", "5번 베이 컨테이너 몇 대".';
+  '이렇게 물어보세요. "5번 베이", "7번 베이 홀드콘", "24번 홀드 콘 몇 개 남았어", "모자란 데", "남는 데", "전체", "콘 작업 브리핑", "5번 베이 컨테이너 몇 대".';
+
+/* ★ 2.64-01 — «N번 홀드»·«N번 데크»·«홀드 N» 도 베이 번호다. 종전엔 «베이» 낱말이 있어야 번호를 읽어, 검수사 «24번 홀드에 콘이 몇개 남았어»
+     (2026-10-08 PCSZ 2631E 실측)가 번호를 못 잡고 «콘이 남는 곳(반납)» 전체 목록으로 나갔다.
+     ⚠ «홀드콘 14개»·«2 호기»·«20ft 홀드콘» 같은 말의 숫자는 번호가 아니다 — 숫자 뒤에 베이·홀드·데크·코끼리가 바로 와야 하고, 낱말 뒤 숫자는 개·대·장이 안 붙을 때만. */
+const BAY_RE = /(\d{1,3})(?!\d)\s*번?\s*(?:베이|홀드|데크|코끼리)|베이\s*(\d{1,3})(?!\d)(?!\s*(?:개|대|곳|군데|열|단|칸|줄|호기))|(?:홀드|데크|코끼리)\s*콘?\s*(\d{1,3})(?!\d)(?:\s*번(?!째)|(?=(?:에|의|은|는|이|가|도|만)(?:\s|$|[?.!,~]))|(?![가-힣a-zA-Z])(?!\s*(?:개|대|장|ft|피트|호기|곳|군데|열|단|칸|줄|명|척|톤|시|분|층|번째)))|^(\d{1,3})$/;
+/* «남았어»·«남은 거» = **아직 안 한 일(완료 기록 기준)**. «남는 데(반납)» = 콘이 남아 돌려줄 곳(작업표 계산) — 둘은 다른 말이다. */
+const REST_RE = /남았|남은|남음|남나|남지|남아\s*있|얼마\s*남|몇\s*개\s*남|몇개\s*남|잔량|잔여|빼야|뺄\s*(?:거|것|게)|빼면|꽂아야|꽂을\s*(?:거|것|게)|꽂으면|안\s*(?:한|뺀|뺐|꽂은|꽂았|했)|못\s*(?:뺐|꽂았|했)|끝났|다\s*(?:했|뺐|꽂)|얼마나\s*(?:했|뺐|꽂)|아직\s*몇/;
+const CONE_WORD = /콘|홀드|데크|코끼리/;   // 콘 계열 낱말 — «남았어» 와 같이 오면 번호·개수 말이 없어도 남은 콘을 묻는 말이다
+const COUNT_RE = /몇|얼마|개수|갯수|수량|정확/;
 
 /** o={need,have,diff}(곳당) · per=곳 수 → 총개수와 «할 일»을 사람 말로. */
 export function coneConeLine(name, o, per) {
@@ -111,9 +120,100 @@ export function coneBriefing(cone, opts) {
   return L.join('\n');
 }
 
+/** ★ 2.64-01 — 남은 콘(완료 기록 기준). cone.restRows = 부르는 쪽(콘앱)이 «아직 안 한 컨»만으로 같은 콘 계산을 다시 돌려 낸 표.
+ *  행 = { bay, rest:{deck|ele|hold:{dis,load}}, tot:{같은 모양} } — dis=양하 빼기 개수, load=선적 꽂기 개수(곳당 환산 없이 콘 개수 그대로).
+ *  restRows 가 없으면(완료 기록을 못 읽음) **0 으로 지어내지 않고** 모른다고 하며 계획 개수만 알려 준다. */
+function coneRestLines(r, ks, flag) {
+  const out = [];
+  for (const k of ks) {
+    const t = r.tot && r.tot[k], x = r.rest && r.rest[k];
+    if (!t || !x) continue;
+    if (x.dis > t.dis || x.load > t.load) continue;   // 남은 수가 전체보다 크면 어긋난 자료다 — 그 줄은 내지 않는다
+    const lo = r.lo && r.lo[k];   // 컨번호가 아직 없는 예약 자리(__BOOK_·__SLOT_)가 끝났는지 모를 때의 «최소» — 있으면 «최소~최대» 로 말한다
+    const seg = [];
+    const one = (label, left, all, low) => {
+      if (!all) return;
+      if (low != null && low >= 0 && low < left) { if (flag) flag.unsure = true; seg.push(label + ' ' + low + '~' + left + '개 남음(전체 ' + all + '개)'); return; }
+      seg.push(label + ' ' + left + '개 남음' + (left === 0 ? '(전체 ' + all + '개 모두 끝)' : (left === all ? '(전체 ' + all + '개, 아직 안 함)' : '(전체 ' + all + '개 중 ' + (all - left) + '개 끝)')));
+    };
+    one('양하 빼기', x.dis, t.dis, lo ? lo.dis : null);
+    one('선적 꽂기', x.load, t.load, lo ? lo.load : null);
+    if (seg.length) out.push(KIND_NAME[k] + ' ' + seg.join(', '));
+  }
+  return out;
+}
+const REST_UNSURE_NOTE = '※ 컨번호가 아직 없는 예약 자리가 있어 그 자리가 끝났는지는 알 수 없어요. 작은 숫자는 예약 자리가 전부 끝났을 때, 큰 숫자는 하나도 안 끝났을 때입니다.';
+
+function coneRestAnswer(cone, bayN, kind) {
+  const rest = (cone && cone.restRows) || null;
+  const rows = (cone && cone.rows) || [];
+  const ks = kind ? [kind] : KINDS;
+  if (!rest || !rest.length) {
+    //  완료 기록을 못 읽었다 — 남은 수를 모른다. 계획 개수만 말하고 «남은 수»를 지어내지 않는다.
+    const r = bayN != null ? findRow(rows, bayN) : null;
+    if (bayN != null && !r) return bayN + '번 베이는 작업표에 없습니다. (콘 작업 없는 베이)';
+    const plan = r ? ks.map((k) => {
+      const o = r[k]; if (!o) return null;
+      const dis = o.have * PER_OF[k], load = o.need * PER_OF[k];
+      if (!dis && !load) return null;
+      return KIND_NAME[k] + ' 양하 ' + dis + '개 · 선적 ' + load + '개';
+    }).filter(Boolean) : [];
+    return '아직 이 배의 완료 기록을 못 읽어서 «남은» 개수는 못 세요. 잠시 뒤 다시 물어봐 주세요.'
+      + (r ? ' (계획은 베이 ' + r.bay + ' ' + (plan.join(', ') || '콘 변동 없음') + '입니다.)' : '');
+  }
+  if (bayN != null) {
+    const r = findRow(rest, bayN);
+    if (!r) return bayN + '번 베이는 작업표에 없습니다. (콘 작업 없는 베이)';
+    const flag = {};
+    const lines = coneRestLines(r, ks, flag);
+    if (!lines.length) return '베이 ' + r.bay + '. 콘 변동 없습니다.';
+    return '베이 ' + r.bay + '. ' + lines.join('. ') + '. (완료 기록 기준)' + (flag.unsure ? '\n' + REST_UNSURE_NOTE : '');
+  }
+  //  번호 없이 «몇 개 남았어» — 배 전체 남은 개수 + 남은 것이 있는 베이.
+  const tot = {}, st = { unsure: false };
+  for (const k of ks) tot[k] = { dis: 0, load: 0, dlo: 0, llo: 0, tdis: 0, tload: 0 };
+  const left = [];
+  const rng = (lo, hi) => (lo < hi ? lo + '~' + hi : String(hi));
+  for (const r of rest) {
+    const seg = [];
+    for (const k of ks) {
+      const t = r.tot && r.tot[k], x = r.rest && r.rest[k];
+      if (!t || !x) continue;
+      if (x.dis > t.dis || x.load > t.load) continue;   // 어긋난 줄은 합에도 넣지 않는다(베이 지정 답과 같은 문지기)
+      const lo = r.lo && r.lo[k];
+      const dlo = lo && lo.dis >= 0 && lo.dis < x.dis ? lo.dis : x.dis, llo = lo && lo.load >= 0 && lo.load < x.load ? lo.load : x.load;
+      if (dlo < x.dis || llo < x.load) st.unsure = true;
+      tot[k].dis += x.dis; tot[k].load += x.load; tot[k].dlo += dlo; tot[k].llo += llo; tot[k].tdis += t.dis; tot[k].tload += t.load;
+      if (x.dis) seg.push(KIND_NAME[k] + ' 양하 ' + rng(dlo, x.dis));
+      if (x.load) seg.push(KIND_NAME[k] + ' 선적 ' + rng(llo, x.load));
+    }
+    if (seg.length) left.push('베이 ' + r.bay + ' ' + seg.join('·'));
+  }
+  //  안 맞는 완료 기록 한 건이 줄일 수 있는 콘은 종류마다 한도(cap = 건수 × 컨 하나당 최대 개수)가 있다 — 줄마다 따로 깎은 «최소» 의 합보다 합계 한도가 더 촘촘하면 그것을 쓴다.
+  const capRow = rest.find((r) => r && r.cap);
+  const cap = capRow ? capRow.cap : null;
+  if (cap) {
+    for (const k of ks) {
+      const a = tot[k];
+      a.dlo = Math.min(a.dis, Math.max(a.dlo, a.dis - ((cap.dis && cap.dis[k]) || 0)));
+      a.llo = Math.min(a.load, Math.max(a.llo, a.load - ((cap.load && cap.load[k]) || 0)));
+    }
+  }
+  const head = ks.map((k) => {
+    const a = tot[k]; const p = [];
+    if (a.tdis) p.push('양하 빼기 ' + rng(a.dlo, a.dis) + '개(전체 ' + a.tdis + '개)');
+    if (a.tload) p.push('선적 꽂기 ' + rng(a.llo, a.load) + '개(전체 ' + a.tload + '개)');
+    return p.length ? KIND_NAME[k] + ' ' + p.join(', ') : null;
+  }).filter(Boolean);
+  if (!head.length) return '이 배는 콘 변동이 없습니다.';
+  return '남은 콘(완료 기록 기준) — ' + head.join(' / ') + '.' + (left.length ? ' 남은 곳 — ' + left.join(' / ') + '.' : ' 남은 곳이 없습니다.')
+    + (st.unsure ? '\n' + REST_UNSURE_NOTE : '')
+    + '\n베이 번호를 같이 말씀하시면 그 베이만 알려 드려요. 예: "24번 홀드 콘 몇 개 남았어"';
+}
+
 /** 콘 질문에 답한다. 못 알아들으면 **null** 을 준다 — 그때는 부르는 쪽이 미르에게 넘긴다.
  *  cone = { rows, dischRows, stowRows } */
-export function coneAnswer(qRaw, cone) {
+export function coneAnswer(qRaw, cone, mark) {
   const q = (qRaw || '').trim();
   if (!q) return null;
   const rows = (cone && cone.rows) || [];
@@ -151,8 +251,20 @@ export function coneAnswer(qRaw, cone) {
   }
 
   // ① 베이 질문
-  const bayM = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})|^(\d{1,3})$/);
-  const bayN = bayM ? parseInt(bayM[1] || bayM[2] || bayM[3], 10) : null;
+  const bayM = t.match(BAY_RE);
+  const bayN = bayM ? parseInt(bayM[1] || bayM[2] || bayM[3] || bayM[4], 10) : null;
+  //  ★ 2.64-01 — «남았어» 는 **남은 일**이다(완료 기록 기준). 번호가 있거나 개수를 묻는 말이면 «남는 곳(반납)» 목록이 아니라 남은 개수로 답한다.
+  //   · «컨테이너 몇 대 남았어» 는 콘 질문이 아니다 — 콘 계획 대수(완료를 모른다)를 내지 않고 null 로 넘겨, 완료 기록을 아는 진행 답(검수앱과 같은 답)이 하게 한다.
+  //   · 반납·모자람·추가·필요를 묻는 말은 종전 작업표 답(남는 곳·모자란 곳) 그대로다.
+  if (REST_RE.test(t) && /컨테이너|몇\s*대|대수/.test(t)) return null;
+  //  시간·속도를 묻는 말은 콘 개수 질문이 아니다(«24번 홀드 콘 언제 끝나»·«몇 시에 끝나»·«남은 시간») — 베이 계획 답(곳당 N개 반납)으로 대신하지 않고 null 로 넘겨 예상 완료 답이 받게 한다.
+  if (bayN != null && /시간|시각|몇\s*시|언제|속도|페이스/.test(t)) return null;
+  if (REST_RE.test(t) && (bayN != null || COUNT_RE.test(t) || CONE_WORD.test(t)) && !/반납|회수|돌려|모자|부족|가져|추가|필요|시간|시각|몇\s*시|언제|속도|페이스/.test(t)) {
+    const a = coneRestAnswer(cone, bayN, kind);
+    //  mark — 부른 쪽(mir.js)이 «이 답은 남은 콘 자료 답» 임을 알게 한다. «몇개»·«콘이» 가 사전에 없어 약한 답으로 보이면 모델이 질문을 고쳐 써
+    //  컨테이너 대수 답으로 덮어쓴다(실측 2.64-01: 1번·2번·16번 홀드). 자료 답은 약하지 않다(isWeakAnswer 의 coneRest).
+    if (a) { if (mark && typeof mark === 'object') mark.rest = true; return a; }
+  }
   if (bayN != null) {
     const r = findRow(rows, bayN);
     if (!r) return bayN + '번 베이는 작업표에 없습니다. (콘 작업 없는 베이)';

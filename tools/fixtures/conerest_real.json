@@ -1,0 +1,1002 @@
+{
+"_what": "콘앱 2.64-01 남은 콘 — 실항차 PCSZ_2631E(양하 558대, 완료 516건) · XTPG_543E(양하 107·선적 134, 완료 0)를 헤드리스 콘앱(실 Firebase GET 사본)으로 돌려 낸 표. half = PCSZ 23-25 베이 홀드 컨 42대 중 21대의 완료 표식을 뺀 같은 항차.",
+"pcsz": {
+"rows": [
+{
+"bay": "01-03",
+"hold": {
+"need": 0,
+"have": 6,
+"diff": -6
+},
+"deck": {
+"need": 0,
+"have": 18,
+"diff": -18
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "05-07",
+"hold": {
+"need": 0,
+"have": 16,
+"diff": -16
+},
+"deck": {
+"need": 0,
+"have": 13,
+"diff": -13
+},
+"ele": {
+"need": 0,
+"have": 15,
+"diff": -15
+}
+},
+{
+"bay": "11-13",
+"hold": {
+"need": 0,
+"have": 16,
+"diff": -16
+},
+"deck": {
+"need": 0,
+"have": 23,
+"diff": -23
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "15-17",
+"hold": {
+"need": 0,
+"have": 4,
+"diff": -4
+},
+"deck": {
+"need": 0,
+"have": 27,
+"diff": -27
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "19-21",
+"hold": {
+"need": 0,
+"have": 14,
+"diff": -14
+},
+"deck": {
+"need": 0,
+"have": 29,
+"diff": -29
+},
+"ele": {
+"need": 0,
+"have": 10,
+"diff": -10
+}
+},
+{
+"bay": "23-25",
+"hold": {
+"need": 0,
+"have": 14,
+"diff": -14
+},
+"deck": {
+"need": 0,
+"have": 36,
+"diff": -36
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "29-31",
+"hold": {
+"need": 0,
+"have": 16,
+"diff": -16
+},
+"deck": {
+"need": 0,
+"have": 36,
+"diff": -36
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "34",
+"hold": {
+"need": 0,
+"have": 0,
+"diff": 0
+},
+"deck": {
+"need": 0,
+"have": 34,
+"diff": -34
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+}
+],
+"restRows": [
+{
+"bay": "01-03",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 6,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 72,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 6,
+"load": 0
+}
+}
+},
+{
+"bay": "05-07",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 50,
+"load": 0
+},
+"ele": {
+"dis": 30,
+"load": 0
+},
+"hold": {
+"dis": 16,
+"load": 0
+}
+}
+},
+{
+"bay": "11-13",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 92,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 16,
+"load": 0
+}
+}
+},
+{
+"bay": "15-17",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 4,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 108,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 4,
+"load": 0
+}
+}
+},
+{
+"bay": "19-21",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 112,
+"load": 0
+},
+"ele": {
+"dis": 20,
+"load": 0
+},
+"hold": {
+"dis": 14,
+"load": 0
+}
+}
+},
+{
+"bay": "23-25",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 144,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 14,
+"load": 0
+}
+}
+},
+{
+"bay": "29-31",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 144,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 16,
+"load": 0
+}
+}
+},
+{
+"bay": "34",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 136,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+}
+]
+},
+"pcsz_half": {
+"restRows": [
+{
+"bay": "01-03",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 6,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 72,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 6,
+"load": 0
+}
+}
+},
+{
+"bay": "05-07",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 50,
+"load": 0
+},
+"ele": {
+"dis": 30,
+"load": 0
+},
+"hold": {
+"dis": 16,
+"load": 0
+}
+}
+},
+{
+"bay": "11-13",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 92,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 16,
+"load": 0
+}
+}
+},
+{
+"bay": "15-17",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 4,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 108,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 4,
+"load": 0
+}
+}
+},
+{
+"bay": "19-21",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 112,
+"load": 0
+},
+"ele": {
+"dis": 20,
+"load": 0
+},
+"hold": {
+"dis": 14,
+"load": 0
+}
+}
+},
+{
+"bay": "23-25",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 9,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 144,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 14,
+"load": 0
+}
+}
+},
+{
+"bay": "29-31",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 144,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 16,
+"load": 0
+}
+}
+},
+{
+"bay": "34",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 136,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+}
+]
+},
+"xtpg": {
+"rows": [
+{
+"bay": "01",
+"hold": {
+"need": 1,
+"have": 0,
+"diff": 1
+},
+"deck": {
+"need": 3,
+"have": 0,
+"diff": 3
+},
+"ele": {
+"need": 5,
+"have": 0,
+"diff": 5
+}
+},
+{
+"bay": "03-05",
+"hold": {
+"need": 18,
+"have": 0,
+"diff": 18
+},
+"deck": {
+"need": 6,
+"have": 6,
+"diff": 0
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "07",
+"hold": {
+"need": 0,
+"have": 0,
+"diff": 0
+},
+"deck": {
+"need": 3,
+"have": 0,
+"diff": 3
+},
+"ele": {
+"need": 6,
+"have": 0,
+"diff": 6
+}
+},
+{
+"bay": "10",
+"hold": {
+"need": 0,
+"have": 0,
+"diff": 0
+},
+"deck": {
+"need": 10,
+"have": 4,
+"diff": 6
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "14",
+"hold": {
+"need": 0,
+"have": 0,
+"diff": 0
+},
+"deck": {
+"need": 11,
+"have": 16,
+"diff": -5
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "22",
+"hold": {
+"need": 0,
+"have": 0,
+"diff": 0
+},
+"deck": {
+"need": 5,
+"have": 0,
+"diff": 5
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+},
+{
+"bay": "26",
+"hold": {
+"need": 0,
+"have": 0,
+"diff": 0
+},
+"deck": {
+"need": 0,
+"have": 12,
+"diff": -12
+},
+"ele": {
+"need": 0,
+"have": 0,
+"diff": 0
+}
+}
+],
+"restRows": [
+{
+"bay": "01",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 10
+},
+"ele": {
+"dis": 0,
+"load": 10
+},
+"hold": {
+"dis": 0,
+"load": 1
+}
+},
+"tot": {
+"deck": {
+"dis": 0,
+"load": 10
+},
+"ele": {
+"dis": 0,
+"load": 10
+},
+"hold": {
+"dis": 0,
+"load": 1
+}
+}
+},
+{
+"bay": "03-05",
+"rest": {
+"deck": {
+"dis": 24,
+"load": 24
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 18
+}
+},
+"tot": {
+"deck": {
+"dis": 24,
+"load": 24
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 18
+}
+}
+},
+{
+"bay": "07",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 12
+},
+"ele": {
+"dis": 0,
+"load": 12
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 0,
+"load": 12
+},
+"ele": {
+"dis": 0,
+"load": 12
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+},
+{
+"bay": "10",
+"rest": {
+"deck": {
+"dis": 16,
+"load": 40
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 16,
+"load": 40
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+},
+{
+"bay": "14",
+"rest": {
+"deck": {
+"dis": 64,
+"load": 44
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 64,
+"load": 44
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+},
+{
+"bay": "22",
+"rest": {
+"deck": {
+"dis": 0,
+"load": 20
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 0,
+"load": 20
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+},
+{
+"bay": "26",
+"rest": {
+"deck": {
+"dis": 48,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+},
+"tot": {
+"deck": {
+"dis": 48,
+"load": 0
+},
+"ele": {
+"dis": 0,
+"load": 0
+},
+"hold": {
+"dis": 0,
+"load": 0
+}
+}
+}
+]
+}
+}

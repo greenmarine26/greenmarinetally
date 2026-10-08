@@ -1365,6 +1365,15 @@ fi
   node tools/smoke_conedone.cjs || { echo "✗ 콘앱 완료 화면·쉬는 시간 연막검사 실패 — 배포 금지"; exit 1; }   # 2.27
   node tools/smoke_conestrip.cjs || { echo "✗ 콘앱 위 띠·카드 접기 연막검사 실패 — 배포 금지"; exit 1; }   # 2.38
   node tools/smoke_coneqakey.cjs || { echo "✗ 콘앱 콘 작업표 배 표식 연막검사 실패 — 배포 금지"; exit 1; }   # 2.49-02 배를 바꾸면 미르가 앞 배 콘 작업표로 답하던 것
+  #  2.64-01: 미르 «24번 홀드에 콘이 몇개 남았어» — 그 베이의 남은 콘만(완료 기록 기준). 실항차 PCSZ 2631E·XTPG 543E 표 사본 + 콘앱 배선.
+  SMOKE_CRO=$(mktemp /dev/shm/hometmp/_cro_XXXXXX.cjs)
+  #  입구는 tools/smoke_conerest_entry.js — 콘 엔진 + 미르 창구(askMir·answerOneRaw)를 실소스로 묶는다(⑨ 약한 답으로 새는지).
+  if npx esbuild tools/smoke_conerest_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CRO" --loader:.js=jsx --jsx=automatic --log-level=error; then
+    node tools/smoke_conerest.cjs "$SMOKE_CRO" || { echo "✗ 미르 남은 콘 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CRO"; exit 1; }
+    rm -f "$SMOKE_CRO"
+  else
+    echo "✗ 미르 남은 콘 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CRO"; exit 1
+  fi
   node tools/smoke_dupl4bay.cjs || { echo "✗ 끝4 중복 — 고른 베이 우선 검사 실패 — 배포 금지"; exit 1; }   # 3.23
   #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.
   #    ⚠ 「건너뜀」 분기를 만들지 않는다(§2-2-M) — 번들이 실패하면 그것도 배포 금지다.
