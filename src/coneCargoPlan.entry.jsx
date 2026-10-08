@@ -288,7 +288,7 @@ window.ConeCargoPlan = { open, openDuo, close, isOpen };
 //   **크레인 하나는 같은 시각에 두 베이를 못 한다**는 규칙으로 시각 바구니를 갈라 호기를 되살린다(`craneBaysByTime`).
 //   그 함수가 `utils.js` 에 있는데 콘앱 번들이 안 내보내 콘앱은 그 답을 못 봤다(실측 — cone.html·번들에 이름 0건).
 //   ⇒ 콘앱이 **같은 함수**를 부른다. 콘앱이 제 규칙을 새로 만들면 두 화면이 또 갈린다(규범 §4-4).
-window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, pickCarrierOp, shiftEvidenceCore };   // 4.13: 시프팅 근거·상태(미확정/확정/불일치)도 한 벌 — 카고플랜 머리와 미르 답이 부른다
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, pickCarrierOp, shiftEvidenceCore };   // 4.13: 시프팅 근거·상태(미확정/확정/불일치)도 한 벌 — 카고플랜 머리(콘앱은 머리 상태만)와 검수앱 미르 답이 부른다
 //   // 3.66-01: 리스트 선사가 EDI 선사를 덮는 자리도 한 벌(cone.html 별첨 병합)   // 3.44: 선사 시프팅 목록 판정도 한 벌   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.

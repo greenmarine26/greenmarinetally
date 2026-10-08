@@ -1665,7 +1665,7 @@ function _normalize(ctx) {
   if (!c.photos && v) c.photos = (v.photoIndex || v.photos) ? { ...(v.photoIndex || {}), ...(v.photos || {}) } : null;   // 3.61: 색인(메타)으로도
   if (!c.voyageDoneAts && v) { try { c.voyageDoneAts = voyageDoneAts(v); } catch (e) { /* */ } }
   if (!c.shiftMap && v && c.voyageKey) { try { c.shiftMap = shiftingMapForDisplay(c.voyageKey, v); } catch (e) { /* */ } }
-  //  4.13: 시프팅 근거·상태. 콘앱은 항차에 EDI 를 안 싣고 오므로 제 화면이 shiftEvid 를 만들어 싣는다(없는 EDI 를 «아직 없음»이라 말하지 않게) — 검수앱만 여기서 만든다.
+  //  4.13: 시프팅 근거·상태. 4.13-01(검수사 2026-10-09 05:50 «콘앱에 왠 근거줄을? 근거는 검수앱에만») — 콘앱은 근거를 싣지 않는다. 검수앱만 여기서 만든다.
   if (!c.shiftEvid && c.app !== 'cone' && v && c.voyageKey && c.shiftMap) { try { c.shiftEvid = shiftEvidenceOf(c.voyageKey, v, c.shiftMap); } catch (e) { console.warn('[4.13] 시프팅 근거 판정 실패:', e); } }
   //  ⚠ 트윈 짝(bayPairs)·PORT-MIS 매처(matchPortMis)는 화면이 실어 준다 — twin.js·portMisMatch.js 를 여기서 import 하면
   //    베이사전 2.2MB 가 콘앱 번들에 딸려 온다(실측 747KB → 2.0MB). 콘앱은 둘 다 없는 채로 종전과 같다.

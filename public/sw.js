@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.13';
-const NOTE = '4.13 시프팅 근거를 앱에 보입니다. 선사 메일 받은 시각과 자리 대조가 나오고 미확정은 터미널이 확정하면 저절로 바뀝니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.13-01';
+const NOTE = '4.13-01 시프팅 근거는 검수앱에서만 보입니다. 콘앱 미르의 시프팅 답에서 근거 줄을 뺐습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
