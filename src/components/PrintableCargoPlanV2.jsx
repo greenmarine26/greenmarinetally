@@ -789,6 +789,7 @@ export default function PrintableCargoPlanV2({
   mode = 'discharge',
   xrayMap = {},
   shiftingMap = {},   // V8.98: 쉬프팅(재적부) { cn: {from,to} } — 셀 ◆ 마크 + 헤더 카운트
+  shiftStatus = '',   // 4.13: 시프팅 상태 말(미확정·확정·불일치·예측) — 머리 «쉬프팅 5 미확정». 없으면 종전 그대로(utils.shiftEvidenceOf 가 정한다)
   pod: explicitPod,
   duo = null,   // ★ ConeOne 2.60 — 콘앱 첫 화면이 넘긴다 {mode, tabs:[{mode,label}], onPick}. 없으면(검수앱) 아무것도 안 그린다.
   onClose,
@@ -1407,6 +1408,10 @@ export default function PrintableCargoPlanV2({
             {shiftCount > 0 && (
               <>
                 <span style={{ color: '#1d4ed8' }}> · 쉬프팅 {shiftCount}</span>
+                {shiftStatus && (
+                  <span data-shift-status={shiftStatus}
+                    style={{ color: shiftStatus === '확정' ? '#15803d' : shiftStatus === '불일치' ? '#dc2626' : '#b45309' }}> {shiftStatus}</span>
+                )}
                 {/* 2.83-01 (검수사 문구 확정): «합»이 아니라 «작업분» —
                     *«검수앱은 기존에다 시프팅만 따로 표기 해주면 됩니다.
                       양하 279 시프팅 95 **작업분** 374 이런식으로»*

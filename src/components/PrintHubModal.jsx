@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -48,6 +48,15 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix,
      voyage?.restowList?._meta?.at, voyage?.info?.berthShift]   // 4.12-04: 선사 서류·배정표 이적이 나중에 와도 다시 센다(계산 자체는 computeShiftingMapCached 가 내용 서명으로 한 번 더 지킨다)
+  );
+  //  ★ 4.13 — 카고플랜 머리 «쉬프팅 5 미확정/확정/불일치». 판정은 항차 화면·콘앱과 같은 utils.shiftEvidenceOf 한 벌이다.
+  //    터미널이 작업을 시작해 배정표 이적(berthShift)이 나오면 바뀌어야 하므로 berthShift·terminalStatus 가 의존성이다.
+  const shiftEvid = useMemo(
+    () => shiftEvidenceOf(voyageKey, voyage, shiftingMap),
+    [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus,
+     voyage?.restowList?._meta?.mailAt, voyage?.restowList?._meta?.at,
+     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes]
   );
 
   const isPtk = (c) => {
@@ -340,6 +349,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
           shipName={shipName}
           xrayMap={xrayMap}
           shiftingMap={shiftingMap}
+          shiftStatus={shiftEvid.label}
           onClose={() => setPrintSub(null)}
         />
       </ErrorBoundary>

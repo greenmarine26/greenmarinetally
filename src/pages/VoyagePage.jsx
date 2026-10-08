@@ -21,7 +21,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, restowActualExtra, fmtShiftPos, fmtShiftTime} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -468,8 +468,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     } catch (e) { return null; }
   }, [truthChk?.ok, truthChk?.truth, voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.info?.vsl]);
 
+  //  ★ 4.13 — 시프팅 근거(메일·자리 대조·배정표)와 상태(미확정/확정/불일치). 판정은 utils.shiftEvidenceOf 한 벌(콘앱도 같은 core).
+  //    터미널이 작업을 시작해 배정표 이적(berthShift)이 나오면 이 값이 바뀌어 화면이 저절로 «확정» 으로 고쳐진다 — 그래서 두 값이 의존성이다.
+  const shiftEvid = useMemo(
+    () => shiftEvidenceOf(voyageKey, voyage, shiftingMap),
+    [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus,
+     voyage?.restowList?._meta?.mailAt, voyage?.restowList?._meta?.at,
+     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes]
+  );
+
   // 1.45: 시프팅 근거 — 예측이면 출항본·제외 기항, 배정표 이적(수집기 berthShift)이 있으면 그것이 정본
   const shiftInfo = {
+    evid: shiftEvid,   // 4.13: 상태 딱지·근거 한 줄·컨별 대조
     meta: (shiftingMap && shiftingMap._meta) || null,
     berthShift: (voyage?.info?.berthShift ?? null),
     lane: voyage?.info?.lane || '',
@@ -1478,6 +1489,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shipName={voyage?.info?.vsl}
           xrayMap={xrayMap}
           shiftingMap={shiftingMap}
+          shiftStatus={shiftEvid.label}
           onClose={_closePlanOv}
         />
       ) : (
@@ -2442,7 +2454,12 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
        반복해서 보이면 짜증납니다. 강조문구와 볼려면 클릭하게 만들어 주세요») —
      시프팅 목록 95줄이 늘 펼쳐져 있어 그 아래 것을 보려면 매번 지나쳐야 했다. 접어 두고 눌러서 연다.
      ⚠ 이 파일은 컴포넌트가 여럿이다 — 이 목록을 그리는 **ListTab 안**에 둔다(위 filter 와 같은 자리). */
-  const [shiftOpen, setShiftOpen] = useState(false);
+  //  ★ 4.13 — 미확정·불일치인 작은 목록(10대 이하)은 처음부터 펼쳐 위치를 보인다(검수사 «미확정이면 위치도 보여줘야 합니다»).
+  //    2.92 의 «큰 목록(95줄)을 강제로 펼치지 않는다» 는 그대로 — 11대 이상은 접어 두고 눌러서 연다. 사용자가 한 번 누르면 그 뜻을 따른다(null = 자동).
+  const [shiftOpenUser, setShiftOpen] = useState(null);
+  const _ev0 = shiftInfo && shiftInfo.evid;
+  const shiftOpen = shiftOpenUser !== null ? shiftOpenUser
+    : !!(_ev0 && (_ev0.status === '미확정' || _ev0.status === '불일치') && _ev0.count > 0 && _ev0.count <= 10);
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
   const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
   useEffect(() => {
@@ -2713,9 +2730,16 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
       {(shiftingList.length > 0 || (shiftInfo?.restowExtra || []).length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
         <div className="mt-3 bg-ink-900 border border-blue-800/50 rounded-pill overflow-hidden">
-          <button type="button" onClick={() => setShiftOpen(v => !v)}
+          <button type="button" onClick={() => setShiftOpen(!shiftOpen)}
             className="w-full text-left px-3 py-2 bg-blue-950/60 hover:bg-blue-900/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            {/*  ★ 4.13 — 상태 딱지. 배정표 이적이 나오면(터미널 작업 시작) 미확정 → 확정 으로 저절로 바뀐다. */}
+            {shiftInfo?.evid?.label && (
+              <span data-shift-status={shiftInfo.evid.label}
+                className={`px-1.5 py-0.5 rounded-btn text-2xs font-black ${shiftInfo.evid.label === '확정' ? 'bg-emerald-900/60 text-emerald-200' : shiftInfo.evid.label === '불일치' ? 'bg-rose-900/60 text-rose-200' : 'bg-amber-900/60 text-amber-200'}`}>
+                {shiftInfo.evid.label}
+              </span>
+            )}
             {/*  ★ 3.65 — 실제로 다시 실린 대수(검수사 «컨별 선적완료시 마다 추가»). 하나라도 실렸을 때만. */}
             {shiftingList.some((x) => x.act) && (
               <span className="text-emerald-300">· 실제 {shiftingList.filter((x) => x.act).length}/{shiftingList.length}</span>
@@ -2764,8 +2788,19 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               <span className="text-2xs font-bold text-blue-300">{shiftOpen ? '▲ 접기' : `▼ 목록 보기 (${shiftingList.length || (shiftInfo?.restowExtra || []).length}대)`}</span>
             )}
           </button>
+          {/*  ★ 4.13 — 근거 한 줄(검수사 2026-10-09 «시프팅건은 근거를 앱에 제시 하여야 한다는것입니다. 메일이 존재한다는것.»).
+               선사 서류면 메일 받은 시각·파일명·대수, 양하/선적 EDI 자리 일치, 배정표 이적. 화면에 근거를 늘어놓지 않는다(2.76) — 한 줄이다. */}
+          {shiftInfo?.evid?.line && (
+            <div data-shift-evid={shiftInfo.evid.label} className="px-3 py-1.5 text-xxs text-dim-100 bg-ink-950/60 border-b border-line">
+              {shiftInfo.evid.label && (<><b className={shiftInfo.evid.label === '확정' ? 'text-emerald-300' : shiftInfo.evid.label === '불일치' ? 'text-rose-300' : 'text-amber-300'}>{shiftInfo.evid.label}</b>{' · '}</>)}
+              {shiftInfo.evid.line}
+              {(shiftInfo.evid.label === '미확정' || shiftInfo.evid.label === '예측') && (
+                <span className="text-dim-300"> — 터미널이 작업을 시작해 배정표 이적이 나오면 저절로 확정(또는 불일치)으로 바뀝니다.</span>
+              )}
+            </div>
+          )}
           {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
-          {shiftInfo?.truthChk?.pending && (
+          {shiftInfo?.truthChk?.pending && !shiftInfo?.evid?.line && (
             <div className="px-3 py-1.5 text-xxs text-dim-200 bg-ink-950/60 border-b border-line">
               ⏳ 배정표 이적 대조 <b>보류</b> — 아직 작업 시작 전({shiftInfo.truthChk.terminalStatus})입니다.
               <span className="text-dim-300"> 이적 칸이 채워지기 전의 0은 «이적 없음»이 아니라 «아직 안 나온 것»이라 판정하지 않습니다.</span>
@@ -2905,7 +2940,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                  양하 = 내린 자리 · 선적 = 선사 계획 자리(RESTOW LIST — 없으면 예측) · 실제 = 실은 자리와 시각(카토스 또는 검수원).
                  실제는 컨이 실릴 때마다 채워진다(수집기 2.37 이 5분에 한 번 카토스 «컨테이너 조회»를 읽는다). */}
             <div className="px-3 py-1 grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-1 text-2xs text-dim-400">
-              <span>컨테이너</span><span>양하</span><span>선적</span><span>실제</span>
+              <span>컨테이너{shiftInfo?.evid?.kind === 'carrier' && <span className="text-dim-500"> (✓ EDI와 같은 자리)</span>}</span><span>양하</span><span>선적</span><span>실제</span>
             </div>
             {shiftingList.map(sc => (
               <div key={sc.cn} data-shift-cn={sc.cn} className="px-3 py-1.5 grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-1 items-start text-xs2">
@@ -2913,9 +2948,17 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                   <span className="mono font-bold text-dim-100 block truncate">{sc.cn}</span>
                   <span className="text-2xs text-dim-400">{[sc.iso, sc.pod].filter(Boolean).join(' · ')}</span>
                 </span>
-                <span className="mono text-blue-300" data-col="from">{fmtShiftPos(sc.from)}</span>
+                <span className="min-w-0">
+                  <span className="mono text-blue-300" data-col="from">{fmtShiftPos(sc.from)}</span>
+                  {shiftInfo?.evid?.per?.[sc.cn]?.arv === true && <span className="text-emerald-300" data-mark="arv"> ✓</span>}
+                  {shiftInfo?.evid?.per?.[sc.cn]?.arv === false && <span className="block text-2xs text-amber-300" data-mark="arv">⚠ 양하 EDI {fmtShiftPos(shiftInfo.evid.per[sc.cn].arvPos)}</span>}
+                </span>
                 {/* 3.44: 제자리 재적재(도착 자리 = 선적 자리)는 «제자리» 라고 적는다 — 자리는 안 바뀌지만 크레인은 두 번 든다. */}
-                <span className="mono text-blue-300" data-col="to">{sc.same ? '제자리' : sc.to ? fmtShiftPos(sc.to) : <span className="text-dim-400">(예측)</span>}</span>
+                <span className="min-w-0">
+                  <span className="mono text-blue-300" data-col="to">{sc.same ? '제자리' : sc.to ? fmtShiftPos(sc.to) : <span className="text-dim-400">(예측)</span>}</span>
+                  {shiftInfo?.evid?.per?.[sc.cn]?.dep === true && <span className="text-emerald-300" data-mark="dep"> ✓</span>}
+                  {shiftInfo?.evid?.per?.[sc.cn]?.dep === false && <span className="block text-2xs text-amber-300" data-mark="dep">⚠ 선적 EDI {fmtShiftPos(shiftInfo.evid.per[sc.cn].depPos)}</span>}
+                </span>
                 <span className="mono" data-col="act">
                   {sc.act ? (
                     <>

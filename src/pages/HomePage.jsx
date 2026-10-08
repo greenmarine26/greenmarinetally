@@ -7,7 +7,7 @@ import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -1379,6 +1379,8 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
   const shiftCount = Object.keys(_shiftMap).length;
   if (shiftCount > 0) {
     disStats.shiftCount = shiftCount; loaStats.shiftCount = shiftCount;
+    //  4.13: 항차 목록 카드에도 상태(미확정·확정·불일치) — «시프팅 5건»이 확정인지 모르는 채로 보이지 않게(검수사 2026-10-09). EDI 는 다시 파싱하지 않는다(light).
+    try { const _se = shiftEvidenceOf(voyage.key, voyage, _shiftMap, { light: true }); disStats.shiftState = _se.label || ''; loaStats.shiftState = _se.label || ''; } catch (e) { console.warn('[4.13] 시프팅 상태 판정 실패 — 카드에 상태를 안 적습니다:', e); }
     // 1.78-01(인계함 2026-08-16): 모브 수를 «×2 고정»이 아니라 **실제 완료로** 센다.
     //   검수사 확정 — *"그게 그래서 양하 리스트에 있어야 하고 선적 리스트에 있어야 하는 이유입니다.
     //   그러면 투타임이 적히게 되었을테니까요."* 마감텔리 실물(MAMP 631N&633S Vol 시트)도
@@ -2100,7 +2102,7 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
         {stats.shiftCount > 0 && (
           <>
             <span className="text-dim-500">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 작업량·완료 바에도 이 수가 더해진다(작업량 = 리스트+시프팅). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 작업량·완료 바에도 이 수가 더해진다(작업량 = 리스트+시프팅). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount}{stats.shiftState ? ` ${stats.shiftState}` : ''} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
           </>
         )}
         {stats.virtualFromList && (

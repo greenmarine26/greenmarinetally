@@ -38,7 +38,7 @@ const fs = require('fs');
   //  ⚠ 2.7 에서 «안 들어갔다» → «포함됐다» 로 바뀌었다. 낡은 문구를 그대로 검사하면 여기서 막힌다.
   //    (2.6 은 계산 엔진을 안 건드리고 안내만 했고, 2.7 이 실제로 합쳤다.)
   ok(/다시 싣는 자리는 갑판/.test(src), '다시 놓는 자리(갑판/홀드)를 알려 준다');
-  ok(/berthShift: _v\.berthShift/.test(src) && (src.match(/berthShift: _v\.berthShift/g) || []).length >= 2,
+  ok(/berthShift: _(v|sh)\.berthShift/.test(src) && (src.match(/berthShift: _(v|sh)\.berthShift/g) || []).length >= 2,   // 4.13: 카고플랜은 새로 읽은 값(_sh)
      '요약도 배정표 정본을 쓴다(카고플랜과 같은 수를 말한다)');
 
   console.log('[1-C] 2.7 — 시프팅이 내림·실음 **양쪽에** 들어가는가');

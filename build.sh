@@ -475,6 +475,18 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 출력허브 카고플랜 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SB"; exit 1
   fi
+  # 4.13: 시프팅 근거 표시 — MCAP 639N 실자료(선사 서류 5대 · 양하/선적 BAPLIE · 터미널 working · 이적 10모브)로 상태(미확정→확정→불일치)·근거 한 줄(메일 시각·파일명)·컨별 ✓/⚠·미르 답을 잰다.
+  #   검수사 2026-10-09 03:00 «시프팅건은 근거를 앱에 제시 하여야 한다는것입니다. 메일이 존재한다는것.» · 03:02 «미확정이라고 표기 한후 터미널이 확정을 하면 확정된 대로 표기를 수정해야 합니다».
+  SMOKE_SE=$(mktemp /dev/shm/hometmp/_smokese_XXXXXX.js)
+  if npx esbuild tools/smoke_shiftevid.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+       --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_SE" --log-level=error; then
+    node tools/smoke_shiftevid.cjs "$SMOKE_SE" || { echo "✗ 시프팅 근거 표시 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SE"; exit 1; }
+    rm -f "$SMOKE_SE"
+  else
+    echo "✗ 시프팅 근거 표시 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SE"; exit 1
+  fi
   # 3.44: 선사 RESTOW LIST 가 시프팅 정본이 되는가 — MCAT 635N 실서류 14행 + 실 BAPLIE 두 벌로 실소스를 돌린다.
   #   검수사 2026-09-11 «카토스에 있는 MCAT 시프팅 자료를 찾아서 검수앱과 맞춰주세요 2개 차이납니다» — 서류 14 vs 앱 추정 12.
   SMOKE_RSM=$(mktemp /dev/shm/hometmp/_rsm_XXXXXX.mjs)

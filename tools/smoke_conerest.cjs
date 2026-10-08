@@ -101,7 +101,7 @@ ok(/mc\.compOk\.D \|\| !mc\.compOk\.L\) return null/.test(fn) && /gOk\('voyages\
 ok(/state\._conePlan=\{ key:__calcKey, sg, dg, ctx:__ctx, sepDis:__sepDis, groups,[\s\S]*?dLen:[\s\S]*?sLen:[^}]*\};[^\n]*\n\s*renderResults\(groups\)/.test(html), 'runCalc 가 계획(그룹·ctx·분리 표식·자료 지문)을 남기고 바로 표를 그린다');
 ok(/try\{ cone\.restRows = await coneRestRowsNow\(\); \}catch/.test(html) && !/test\(String\(q\|\|''\)\)\) cone\.restRows/.test(html), 'mirAsk 가 말 낱말 게이트 없이 cone.restRows 를 미르에 넘긴다(게이트가 엔진의 REST 진입보다 좁으면 «못 읽어서» 거짓 안내가 난다)');
 ok(/\(\/콘\/\.test\(String\(q\|\|''\)\) && \/남았\|남은/.test(html), '표 없이 «콘 몇 개 남았어» 를 물어도 미르가 대신 계산한다(mirEnsureCalc)');
-ok(/window\.__CONEV='ConeOne 2\.64-01'/.test(html), '콘앱 판 번호 ConeOne 2.64-01');
+ok(/window\.__CONEV='ConeOne 2\.(64-01|65)(-\d\d)?'/.test(html), '콘앱 판 번호 ConeOne 2.64-01 이상(2.65 포함)');
 
 
 // ⑧ 실함수 — cone.html 에서 coneRestRowsNow·planToGroups·ediToBayGroups·mergeTrioRows 를 **그대로** 꺼내(베끼지 않는다) 실항차 EDI 행(PCSZ 2631E·XTPG 543E)

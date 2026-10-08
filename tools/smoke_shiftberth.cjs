@@ -91,14 +91,15 @@ const fs = require('fs');
     ok(/function ctShiftMap\(dMap, lMap, opts\)/.test(cone) &&
        /P\.computeShiftingMap\(dMap, lMap, opts\|\|\{\}\)/.test(cone),
        '콘앱: 판정 한 벌(ctShiftMap)이 배정표(opts)를 그대로 넘긴다');
-    const _ctCalls = (cone.match(/ctShiftMap\(/g) || []).length;   // 정의 1 + 호출부 3
+    const _ctCalls = (cone.match(/ctShiftMap\(/g) || []).length;   // 정의 1 + 호출부 4(4.13 ctShiftEvid 추가)
     const _ctWith  = (cone.match(/ctShiftMap\([^)]*,\s*\{ berthShift:/g) || []).length;
-    ok(_ctCalls === 4 && _ctWith === 3,
-       `콘앱: 호출부 ${_ctWith}곳이 전부 배정표를 넘긴다(등장 ${_ctCalls} = 정의 1 + 호출 3)`);
+    ok(_ctCalls === 5 && _ctWith === 4,
+       `콘앱: 호출부 ${_ctWith}곳이 전부 배정표를 넘긴다(등장 ${_ctCalls} = 정의 1 + 호출 4 — 4.13 에서 시프팅 근거 판정이 한 곳 늘었다)`);
     //  판정 한 벌 밖에서 computeShiftingMap 을 직접 부르면 또 갈린다 — ctShiftMap 안의 한 번뿐이어야 한다.
     ok((cone.match(/computeShiftingMap\(/g) || []).length === 1,
        '콘앱: computeShiftingMap 직접 호출은 판정 한 벌 안의 한 번뿐');
-    ok(/berthShift: \(info\.berthShift!=null\?Number\(info\.berthShift\):null\)/.test(cone),
+    ok(/berthShift: \(info\.berthShift!=null\?Number\(info\.berthShift\):null\)/.test(cone) || (/berthShift: ctBerthNum\(info\.berthShift\)/.test(cone) && /function ctBerthNum\(x\)\{ return \(x!=null && String\(x\)\.trim\(\)!==''\) \? Number\(x\) : null; \}/.test(cone)),   // 4.13: 읽는 법을 ctBerthNum 한 벌로 뺐다(빈 문자열은 자료 없음)
+  
        '콘앱: 항차 목록이 info.berthShift 를 담는다(안 담으면 넘길 값이 없다)');
     //  직접 호출이 그 둘 말고 더 늘어나면 여기서 걸린다.
     const direct = (u.match(/computeShiftingMap\(/g) || []).length;   // 정의 1 + 래퍼 1

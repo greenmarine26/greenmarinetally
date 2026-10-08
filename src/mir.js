@@ -23,7 +23,7 @@
 import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸» (rzorPlan 은 import 가 없다 — 콘앱 번들에 가볍게 실린다)
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
-  berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, dropFilledBookingSlots, legendItemsOf,
+  berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs,   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
   isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
@@ -1665,6 +1665,8 @@ function _normalize(ctx) {
   if (!c.photos && v) c.photos = (v.photoIndex || v.photos) ? { ...(v.photoIndex || {}), ...(v.photos || {}) } : null;   // 3.61: 색인(메타)으로도
   if (!c.voyageDoneAts && v) { try { c.voyageDoneAts = voyageDoneAts(v); } catch (e) { /* */ } }
   if (!c.shiftMap && v && c.voyageKey) { try { c.shiftMap = shiftingMapForDisplay(c.voyageKey, v); } catch (e) { /* */ } }
+  //  4.13: 시프팅 근거·상태. 콘앱은 항차에 EDI 를 안 싣고 오므로 제 화면이 shiftEvid 를 만들어 싣는다(없는 EDI 를 «아직 없음»이라 말하지 않게) — 검수앱만 여기서 만든다.
+  if (!c.shiftEvid && c.app !== 'cone' && v && c.voyageKey && c.shiftMap) { try { c.shiftEvid = shiftEvidenceOf(c.voyageKey, v, c.shiftMap); } catch (e) { console.warn('[4.13] 시프팅 근거 판정 실패:', e); } }
   //  ⚠ 트윈 짝(bayPairs)·PORT-MIS 매처(matchPortMis)는 화면이 실어 준다 — twin.js·portMisMatch.js 를 여기서 import 하면
   //    베이사전 2.2MB 가 콘앱 번들에 딸려 온다(실측 747KB → 2.0MB). 콘앱은 둘 다 없는 채로 종전과 같다.
   if (c.pairsMap == null) c.pairsMap = c.bayPairs || null;
@@ -2258,7 +2260,7 @@ export function answerOneRaw(query, ctx) {
         ...(c.manualCtx || null), mode: c.mode || null, bayPairs: c.bayPairs || c.pairsMap || null, selectedGroup: c.selectedGroup, selectedTier: c.selectedTier, shipLib: c.shipLib || null,
         gangShift: c.gangShift || null, crewAnswer: c.crewAnswer || null, voyage: v, carrierContacts: c.carrierContacts || null, shipSpeed: c.shipSpeed || null,
         vsl: c.vsl, vslFull: c.vslFull, pier: c.pier, info: info || null, voyageCounts: (p.etaQuery || p.paceQuery || p.progressQuery) ? _vcOf() : null, voyageDoneAts: c.voyageDoneAts || null,   // 3.60-18: voyageCounts 를 먼저 세야 voyageDoneAts 가 같은 분모
-        photos: c.photos || null, shiftMap: c.shiftMap || null, compMap: c.compMap || null, bowStern: c.bowStern || null, gangs: info && info.gangs,
+        photos: c.photos || null, shiftMap: c.shiftMap || null, shiftEvid: c.shiftEvid || null, compMap: c.compMap || null, bowStern: c.bowStern || null, gangs: info && info.gangs,
         who: c.inspector || '', inspector: c.inspector || '', voyageKey: c.voyageKey || '',
       });
       if (a) return a;

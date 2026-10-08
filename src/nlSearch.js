@@ -1354,7 +1354,8 @@ function formatShifting(ctx) {
   const meta = map && map._meta;
   //  ★ 3.53-02: 배정표가 사전 제외를 되돌렸으면 그것부터 말한다 — 검수앱과 콘앱의 답은 같아야 한다.
   const _rv = meta && meta.exReverted;
-  const basis = !meta ? '' :
+  //  4.13: 선사 서류(source:'carrier')가 정본이면 항로 추정(로테이션)과 무관하다 — «로테이션 미확인» 을 달면 근거(메일)와 어긋난 말이 된다. 근거 한 줄이 대신 말한다.
+  const basis = (!meta || meta.source === 'carrier') ? '' :
     _rv ? `\n↩ 항로 사전은 ${_rv.ports.join('·')} 을(를) 평택 앞이라 해서 양하 ${_rv.n}대를 뺐고 그러면 ${_rv.nEx}대입니다. 그런데 배정표 이적은 ${_rv.truth}대이고 제외를 풀면 ${_rv.nAll}대로 맞습니다.\n⇒ 이 항차에서 ${_rv.ports.join('·')} 은(는) 평택 다음 기항이고 그 화물은 배에 실려 있습니다. 배정표가 정본이라 그쪽을 따랐습니다.${
       (meta.excludedCnt > 0 && meta.excluded && meta.excluded.length)
         ? `\n↘ 다만 ${meta.excluded.join('·')} 양하 ${meta.excludedCnt}대는 계속 뺍니다 — 이 배 EDI 가 다음 기항으로 직접 적은 항입니다.` : ''}` :
@@ -1369,12 +1370,20 @@ function formatShifting(ctx) {
     const p = String((v && v.from) || '');               // 확정 대조값
     return p.length >= 7 ? `${Number(p.slice(0, 3))}-${p.slice(3, 5)}-${p.slice(5, 7)}` : p;
   };
-  const lines = [`🔄 시프팅 ${cns.length}대 (배정목록 표기로는 ${cns.length * 2} — 양하 1 + 재선적 1)`];
+  //  ★ 4.13 — 상태(미확정·확정·불일치)와 근거 한 줄. 검수사 2026-10-09 «시프팅건은 근거를 앱에 제시 하여야 한다는것입니다. 메일이 존재한다는것.»
+  const _ev = ctx && ctx.shiftEvid && ctx.shiftEvid.count === cns.length ? ctx.shiftEvid : null;
+  //  4.13 감사: 배정표가 아직이거나 다르면 «배정목록 표기로는 N» 이 근거 줄(배정표 이적 0모브…)과 부딪친다 — 그때는 대수를 이적으로 환산한 값이라고 말한다.
+  const _moveTail = (_ev && _ev.label && _ev.label !== '확정') ? `대수를 이적(모브)으로 환산하면 ${cns.length * 2} — 양하 1 + 재선적 1` : `배정목록 표기로는 ${cns.length * 2} — 양하 1 + 재선적 1`;
+  const lines = [`🔄 시프팅 ${cns.length}대${_ev && _ev.label ? ` [${_ev.label}]` : ''} (${_moveTail})`];
   const sorted = cns.slice().sort((a, b) => String(posOf(map[a])).localeCompare(String(posOf(map[b]))));
   for (const cn of sorted) {
     const v = map[cn] || {};
     const to = v.to ? ` → ${String(v.to).length >= 7 ? `${Number(String(v.to).slice(0, 3))}-${String(v.to).slice(3, 5)}-${String(v.to).slice(5, 7)}` : v.to}` : '';
     lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${v.iso || ''} ${v.pod ? 'POD ' + v.pod : ''}`.trimEnd());
+  }
+  if (_ev && _ev.line) {
+    lines.push('', `근거 — ${_ev.line}`);
+    if (_ev.label === '미확정' || _ev.label === '예측') lines.push('아직 확정이 아닙니다 — 터미널이 작업을 시작해 배정표 이적이 나오면 확정(또는 불일치)으로 바뀝니다.');
   }
   lines.push('', '커버를 열려면 치워야 하는 통과화물입니다 — 평택 양하분은 세지 않습니다.');
   return lines.join('\n') + basis;

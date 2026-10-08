@@ -35,6 +35,7 @@ function render(which) {
   const shiftCells = d.querySelectorAll('.cpv2-cell.cpv2-shift').length;
   const head = [...d.querySelectorAll('*')].filter((e) => e.children.length === 0 && /^· ?쉬프팅/.test(e.textContent.trim())).map((e) => e.textContent.trim());
   ok(head.length === 1 && /쉬프팅 5$/.test(head[0]), `머리 «${head[0] || '없음'}» — 시프팅 5대`);
+  { const st = d.querySelector('[data-shift-status]'); ok(!!st && st.textContent.trim() === (FX.info.terminalStatus === 'working' && FX.info.berthShift === 10 ? '확정' : '미확정'), `4.13 머리 «쉬프팅 5 ${st ? st.textContent.trim() : '(상태 없음)'}» — 터미널 working · 이적 10모브(=5대)라 확정`); }
   ok(shiftCells === 5, `⛔ ◆ 칸 ${shiftCells}개 — 머리가 5대라고 하면 칸에도 5개가 그려져야 한다(수정 전 0개)`);
   // ②-2 항차 화면 카고플랜·콘앱이 그리는 길(선박 전체 891대)과 같은 그림인가 — 통과화물 회색 칸 수가 같아야 한다
   const rd = await render('direct');
