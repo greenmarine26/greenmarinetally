@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { isTester } from '../staffList.js';   // 1.79: 테스터 호칭
 import { ChevronLeft, BookOpen, Languages, MessageCircle, Dices, Activity,
-  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen, Bell, BellOff, MessageSquareReply } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가 / 1.22: 오답노트
+  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen, Bell, BellOff, MessageSquareReply, QrCode } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가 / 1.22: 오답노트
 import HelpModal from '../components/HelpModal.jsx';
 import ContainerPhrasebook from '../components/ContainerPhrasebook.jsx';
 import GeminiKeyModal from '../components/GeminiKeyModal.jsx';
@@ -15,6 +15,7 @@ import { pushState, enablePush, disablePush } from '../push.js';   // TallyOne 1
 import { buildGreetingMessage, fetchPyeongtaekWeather } from '../greeting.js';
 import { heartbeatState, healthSummary } from '../health.js';
 import { equipNumbersForPier, getEquipNumber } from '../utils.js';
+import { INSTALL_QR_SVG, INSTALL_QR_URL } from '../data/installQr.js';   // 4.14: 설치 QR
 import { fbSubscribeFeedback } from '../firebase.js';   // TallyOne 1.22: 오답노트 — 내가 신고한 오답과 클로드 회신
 
 // 테일윈드 정적 클래스 (동적 생성 금지 — purge 회피, HelpModal ACCENT 패턴과 동일)
@@ -287,6 +288,33 @@ function BriefingModal({ inspector, onClose }) {
   );
 }
 
+// 4.14: 설치 QR — 다른 검수원 폰에 검수앱을 깔아 줄 때 사진을 찾지 않고 여기서 바로 보여 준다(검수사 2026-10-09 06:13).
+function InstallQrModal({ onClose }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(INSTALL_QR_URL); setCopied(true); }
+    catch (e) { setCopied(false); window.prompt('주소를 길게 눌러 복사하세요', INSTALL_QR_URL); }
+  };
+  return (
+    <div className="fixed inset-0 z-[150] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-ink-900 border-2 border-emerald-700/60 rounded-card w-full max-w-sm p-4 space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="font-black text-emerald-200 flex items-center gap-2"><QrCode className="w-5 h-5 text-emerald-300" />검수앱 설치 QR</div>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill" aria-label="닫기"><X className="w-5 h-5 text-dim-300" /></button>
+        </div>
+        <div className="mx-auto rounded-card p-2" style={{ background: '#fff', width: 260, maxWidth: '100%' }}>
+          <img alt="검수앱 설치 QR" style={{ width: '100%', display: 'block' }}
+            src={'data:image/svg+xml;utf8,' + encodeURIComponent(INSTALL_QR_SVG)} />
+        </div>
+        <div className="text-xs text-dim-200 leading-relaxed text-center">설치할 폰의 카메라로 찍으면 그 폰에 맞는 설치 안내가 열립니다. 아이폰은 사파리, 갤럭시는 크롬으로 열면 됩니다.</div>
+        <button onClick={copy} className="w-full py-3 rounded-btn bg-emerald-800 hover:bg-emerald-700 text-dim-100 font-bold text-sm">
+          {copied ? '주소가 복사됐습니다' : '주소 복사하기 (카톡으로 보낼 때)'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AuxPage({ inspector, isChief = false, isOwner = false, voyages, collectorHb = null }) {
   const [view, setView] = useState('grid');        // 'grid' | 'terms' | 'equip'
   const [helpOpen, setHelpOpen] = useState(false);
@@ -294,6 +322,7 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
   const [keyOpen, setKeyOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
   const [memoOpen, setMemoOpen] = useState(false);   // TallyOne 1.1: 클로드에게 메모 모달
+  const [qrOpen, setQrOpen] = useState(false);   // 4.14: 설치 QR
 
   // TallyOne 1.20: 폰 알림(FCM) — 화면을 안 열어도 미회신 오답을 폰이 알려 준다.
   //   'on' | 'off' | 'denied' | 'unsupported'. 결과는 문구로 그대로 보여준다(조용한 실패 금지).
@@ -414,6 +443,10 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
             sub={replyBadge ? `개발 회신 ${replyBadge}건 · 눌러서 보기` : '내가 신고한 오답 · 개발 답'}
             badge={waitingBadge ? `대기 ${waitingBadge}` : null}
             onClick={() => setView('reply')} />
+          {/* 4.14: 설치 QR — 다른 폰에 검수앱을 깔아 줄 때 */}
+          <AuxCard icon={QrCode} accent="emerald" title="설치 QR"
+            sub="다른 폰에 검수앱 깔아 주기 · 카메라로 찍으면 됩니다"
+            onClick={() => setQrOpen(true)} />
           {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청 기록, 클로드 세션이 나중에 처리 */}
           <AuxCard icon={NotebookPen} accent="violetDeep" title="개발 요청 · 미르에게 원함"
             sub="발견한 문제·개발 요청, 미르가 더 해줬으면 하는 것"
@@ -433,6 +466,7 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
       {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}
       {briefOpen && <BriefingModal inspector={inspector} onClose={() => setBriefOpen(false)} />}
       {/* TallyOne 1.1: 클로드에게 메모 — AuxPage는 route·version prop이 없어 모달 내부 해시 파싱·APP_VERSION 폴백으로 동작 */}
+      {qrOpen && <InstallQrModal onClose={() => setQrOpen(false)} />}
       {memoOpen && <ClaudeMemoModal inspector={inspector} onClose={() => setMemoOpen(false)} />}
     </div>
   );
