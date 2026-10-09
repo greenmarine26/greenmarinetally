@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isReeferContainer, isReeferIso, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -300,7 +300,9 @@ export function buildOS(containers, compMap, mode, fmt) {
     if (comp && !missing) g[k].worked++;
     if (missing) g[k].short++;
     //  3.60-10 (진단 M6): 리퍼는 utils 한 벌 — 옛 `^45[38]` 은 4583·4584(플랫랙)까지 리퍼로 셌고, 숫자 리퍼 2230 은 rf 표식 없으면 놓쳤다.
-    const isRf = isReeferContainer(c);
+    //  ★ 4.15-01 (검수사 2026-10-09 15:37·15:39 «풀리퍼랑 합산 하면 안됨» · «리퍼=2»): FULL 줄의 RF·RH 는 풀 리퍼(isFullReefer)만,
+    //    EMPTY 줄의 RF·RH 는 그 엠티 줄 안의 리퍼 엠티(isEmptyReefer) — 줄이 F/E 로 갈려 있어 합산되지 않는다(엠티 구분 표기).
+    const isRf = fe === 'EMPTY' ? isEmptyReefer(c) : isFullReefer(c);
     if (isRf) (sz === 'HC' || sz === '45' ? g[k].rh++ : g[k].rf++);
     if (c.dg) g[k].dg++;
   }
@@ -324,7 +326,9 @@ export function buildOS(containers, compMap, mode, fmt) {
     byOp[op] ??= {};
     const k = `${sz === '20' ? "20'" : sz === '45' ? "45'" : "40'"}${fe}`;
     byOp[op][k] = (byOp[op][k] || 0) + 1;
-    if (isReeferContainer(c)) byOp[op]._rh = (byOp[op]._rh || 0) + 1;   // 3.60-10: 리퍼 한 벌
+    //  4.15-01: 선사 줄 «( RH x N )» 는 F·E 를 한 줄에 모으므로 풀 리퍼만 센다(풀리퍼랑 합산 금지). 엠티 리퍼는 위 EMPTY 줄의 «RH x N» 이 이미 구분한다 —
+    //    선사 서류에 없던 영문 표현을 새로 짓지 않는다(규범 §11 · Fable 판정 2026-10-09).
+    if (isFullReefer(c)) byOp[op]._rh = (byOp[op]._rh || 0) + 1;   // 3.60-10: 리퍼 한 벌
     if (c.dg) byOp[op]._dg = (byOp[op]._dg || 0) + 1;
   }
   const _bs = bundleSummary(containers, mode).byOp;   // 3.60-20: 실물 OS 비고 «FR x 8 ( 2 BUNDLE )»
@@ -386,7 +390,7 @@ export function buildRF(containers) {
     //   지침서 5-5 "리퍼드라이=넌플러그, 제작컨=컨 자체가 상품 — 온도 경고 제외"와 같은 기준으로 맞춘다.
     //   리퍼 메모 화면·상단 버튼·출항 임박 경고도 전부 이 식이다(네 곳 일치, 시뮬 검증).
     .filter(c => !c.rfdry && !c.mkcon)
-    .filter(c => isReeferContainer(c))   // 3.60-10 (진단 M6): 리퍼 한 벌 — 4583·4584(FR)가 RF condition 에 실리던 것
+    .filter(c => isFullReefer(c))   // 3.60-10 (진단 M6): 리퍼 한 벌 — 4583·4584(FR)가 RF condition 에 실리던 것 · 4.15-01: 온도 확인 대상인 풀 리퍼만(엠티 리퍼는 안 싣는다 — 미르 «RF in·out» 도 같은 수)
     .map(c => ({
       cn: c.cn, seal: c.sl || '', size: tallySizeCol(c) === '20' ? "20'RF" : "40'RH",
       // TallyOne 1.55: **최종 선적 위치**다 — 계획이 아니라 실제로 실은 자리.
@@ -465,7 +469,9 @@ export function buildFerry(voyage, disCs, loadCs) {
       const oKey = (lug && z.os[`${oLen}LUG${fe.toUpperCase()}`]) ? `${oLen}LUG${fe.toUpperCase()}` : `${oLen}${fe.toUpperCase()}`;
       const oe = z.os[oKey];
       oe.n += 1;
-      const isRf = !!(c.rf || isReeferIso(isoEff));   // 3.60-10: 리스트 확정 규격(isoEff)도 리퍼 한 벌로
+      //  3.60-10: 리스트 확정 규격(isoEff)도 리퍼 한 벌로 · 4.15-01: F 줄은 풀 리퍼만, E 줄은 그 엠티 줄의 리퍼 엠티(풀리퍼랑 합산 금지)
+      const _rfC = { ...c, iso: isoEff };
+      const isRf = fe === 'e' ? isEmptyReefer(_rfC) : isFullReefer(_rfC);
       if (isRf) oe.rh += 1;
       // TallyOne 1.4: 20' 하이큐브(26xx 등 높이코드 5~9)가 어느 분기에도 안 걸려 hc 미집계였다
       //   (2697E 실측: ZXJU0130463 ISO 2600 → 실물 REMARKS ' HC x 1' 인데 재현은 공란).
@@ -754,8 +760,9 @@ export function computeTallyData(voyage) {
     date: new Date(),
     rows: matrixRows(matDis, matLoad, matShift, fmt),
     totals: {
-      dis: { F: sumMat(matDis, 'F'), E: sumMat(matDis, 'E'), n: matTotal(matDis) },
-      load: { F: sumMat(matLoad, 'F'), E: sumMat(matLoad, 'E'), n: matTotal(matLoad) },
+      //  4.15-01: rfE — 엠티 중 리퍼 엠티(isEmptyReefer). 미르 마감텔리 수치가 «엠티 N(일반 · 리퍼 엠티)» 로 구분한다(리퍼 수에는 안 더한다).
+      dis: { F: sumMat(matDis, 'F'), E: sumMat(matDis, 'E'), n: matTotal(matDis), rfE: disCs.filter(isEmptyReefer).length },
+      load: { F: sumMat(matLoad, 'F'), E: sumMat(matLoad, 'E'), n: matTotal(matLoad), rfE: loadCs.filter(isEmptyReefer).length },
       shift: { F: sumMat(matShift, 'F'), E: sumMat(matShift, 'E'), n: matTotal(matShift) },
     },
     bundleNotes: { dis: bundleSummary(disCs, 'discharge').lines, load: bundleSummary(loadCs, 'loading').lines },   // 3.60-20: Final Work Remarks

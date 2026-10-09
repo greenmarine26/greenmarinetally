@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.15';
-const NOTE = '4.15 리퍼 몇 대는 풀 리퍼만 셉니다(엠티·리퍼드라이·제작컨 빼고). 엠티 리퍼는 40HR 그대로 엠티로 세고, 고른 규격이 EDI 를 이기며, 마감텔리 빈 규격은 EDI·베이플랜 규격으로 채웁니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.15-01';
+const NOTE = '4.15-01 리퍼 수는 풀 리퍼만입니다. 엠티는 총엠티·일반·리퍼 엠티로 나눠 보입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

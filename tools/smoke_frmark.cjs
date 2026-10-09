@@ -115,7 +115,8 @@ const cnt = (d, sel) => d.querySelectorAll(sel).length;
   if (rowOf) {
     const run = (withBundle) => {
       const ctx = { console }; if (withBundle && Uf) ctx.window = { ConeParse: { isFlatRackContainer: Uf } };
-      vm.createContext(ctx); vm.runInContext(rowOf[0] + '\nthis.__rowOf = _ediRowOf;', ctx);
+      const isRf = (html.match(/function coneIsReefer\(c\)\{[\s\S]*?\n\}\n/) || [''])[0];   // ConeOne 2.67: _ediRowOf 가 부르는 리퍼 판정 한 벌(본체 없으면 rf 표식만)
+      vm.createContext(ctx); vm.runInContext(isRf + rowOf[0] + '\nthis.__rowOf = _ediRowOf;', ctx);
       const rows = Object.values(dis).map(ctx.__rowOf);
       return { fr: rows.filter((x) => x.fr).map((x) => x.cn).sort(), ot: rows.filter((x) => x.ot && !x.fr).map((x) => x.cn) };
     };
@@ -133,7 +134,9 @@ const cnt = (d, sel) => d.querySelectorAll(sel).length;
   const code = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
   const cp = code('src/components/PrintableCargoPlanV2.jsx');
   ok(/else if \(isFlatRackContainer\(c\)\) specialLetter = 'FR'/.test(cp), '카고플랜 칸(getMarkV2)이 FR 판정 한 벌을 쓴다');
-  ok(/else if \(isFlatRackContainer\(c\)\) cat = 'FR'/.test(cp) && !/c\.fr \|\| \(c\.iso && c\.iso\[2\] === 'P'\)/.test(cp), '카고플랜 별첨이 같은 판정을 쓴다(iso[2]===P 따로 판정 없음)');
+  //  4.15-01: 별첨 화물 종류는 utils.legendCargoCatOf 한 벌(인쇄 별첨·수석 보드) — 그 안의 FR 가지가 isFlatRackContainer 여야 한다
+  const legCat = (code('src/utils.js').match(/export function legendCargoCatOf\(c\) \{[\s\S]*?\n\}/) || [''])[0];
+  ok(/addTo\(cargoCounts, legendCargoCatOf\(c\), size\)/.test(cp) && /if \(isFlatRackContainer\(c\)\) return 'FR';/.test(legCat) && !/c\.fr \|\| \(c\.iso && c\.iso\[2\] === 'P'\)/.test(cp + legCat), '카고플랜 별첨이 같은 판정을 쓴다(iso[2]===P 따로 판정 없음 · 4.15-01 legendCargoCatOf 한 벌)');
   const bp = code('src/components/BayPlan.jsx');
   ok(!/else if \(c\.fr\)/.test(bp) && !/c\.fr \? 'border-purple-600'/.test(bp), '베이플랜에 fr 플래그만 보는 FR 가지가 없다');
   ok(!/const isFr = c\.fr;/.test(code('src/components/SlotPickerModal.jsx')), '자리 고르기 창이 fr 플래그만 보지 않는다');

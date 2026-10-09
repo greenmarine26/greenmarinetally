@@ -6,7 +6,7 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -2520,6 +2520,8 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                       {colgroup}{head(has45All ? ['Full', 'Empty', '', '계'] : ['Full', 'Empty', '계'])}
                       <tbody>{feRows.map(([k, cells]) => <tr key={k} className="border-t border-line/60"><td className="px-1 text-dim-200">{k}</td>{cells.map((e, i) => <LegendCell key={i} e={e}/>)}</tr>)}</tbody>
                     </table>
+                    {/* 4.15-01 (검수사 2026-10-09 15:37): 리퍼 엠티가 있으면 «엠티 N(일반 · 리퍼 엠티)» — 인쇄 별첨3 과 같은 한 줄(utils.emptySplitLabel) */}
+                    {L.emptyRf.n > 0 && <div className="px-1 text-dim-300">{emptySplitLabel(L.fe['20'].E.n + L.fe['40'].E.n + L.fe['45'].E.n, L.emptyRf.n)}</div>}
                   </div>
                   {/* 3.12: 선적은 표 넷 — 검수사 «선적은 표4개가 필요합니다 양하처럼 + 포트별» */}
                   {m === 'loading' && L.pods.length > 0 && mk(`별첨4 · 목적지별 (${modeK})`, L.pods.concat([['합계', tot(L.pods)]]))}

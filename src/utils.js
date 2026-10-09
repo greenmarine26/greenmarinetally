@@ -51,7 +51,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.15'   // 4.15 **규격·리퍼 계수 — 검수사 2026-10-09 12:23 확정 넷(§7.8-⑥⑨⑩⑪)** — ⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»: 미르·통합검색·베이 답·브리핑·인수인계·갱 배분·AI 자료 묶음과 앱 화면 넷(현황 탭·요약 카드·선박 카드 배지·선박 옆모습)의 «리퍼 N» 은 utils.isFullReefer 한 벌(엠티·리퍼드라이·제작컨 빼고 · RZOR R098E 40→32). ⑩ «엠티는 엠티이다, 그래도 따로 구분은 한다»: ASC 파서가 엠티 끝 글자를 맞출 때 라벨이 바뀌면 그대로(feSyncedIso — 리스트 파서와 한 벌 · STSE 2669E 40HR 41칸 40HE→40HR · 엠티실 45GE→45RE). ⑨ 검수사가 고른 규격(iso_pick)이 EDI tp 를 이긴다(isFlatRackContainer·bayCellTypeLabel·현황 OT·미르 리퍼 · 규격초과 oog 도 고른 규격(utils.isoPickOog — 병합 다섯·마감텔리) — SWTD 9013E FR 표식). ⑥ ASC 파서가 무게 두 자리(45GP90 F)도 규격을 읽고, 마감텔리 규격 빈 행은 같은 컨번호의 EDI 규격(남은 EDI 원문 다시 읽기 포함), 없으면 베이플랜 자리(홀수 20 · 짝수 40)로(KBTR 2606E 양하 20피트 28→22 · HC 74→80). 회귀 기준표 R12~R15.
+export const APP_VERSION = 'TallyOne 4.15-01'   // 4.15-01 **리퍼 수는 어디서든 풀 리퍼만 · 엠티는 총엠티·일반·리퍼 엠티로 나눠 보인다** — 검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨» · 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2». 4.15 가 엠티 리퍼의 40HR 표기를 지키자 규격으로 세던 카고플랜 별첨 Reefer 가 STSE 2669E 선적에서 2 에서 43 이 됐다. 별첨 화물 종류는 utils.legendCargoCatOf 한 벌(인쇄 별첨·수석 보드), 마감텔리 RF 시트·선사 줄 RH·미르 RF in out 은 isFullReefer, 엠티 리퍼는 짝 isEmptyReefer 로 세어 emptySplitLabel 한 벌로 «엠티 43(일반 2 · 리퍼 엠티 41)» 를 적는다(별첨3·수석 보드·현황 탭·선박 카드 MTY·통합검색·미르·브리핑·마감텔리 수치·AI 자료). Fable 판정 — 마감텔리 선사 줄은 풀만 RH 이고 엠티 리퍼는 OS EMPTY 줄 태그가 구분한다(새 영문 표현 없음), 리퍼 엠티를 콕 집어 물으면 구분 없이 답한다, 콘앱 행 리퍼 판정도 utils 한 벌(ConeOne 2.67 · mir-core ConeMir.isReeferContainer). 회귀 기준표 R14·R15.
+//   (앞 판) 'TallyOne 4.15'   // 4.15 **규격·리퍼 계수 — 검수사 2026-10-09 12:23 확정 넷(§7.8-⑥⑨⑩⑪)** — ⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»: 미르·통합검색·베이 답·브리핑·인수인계·갱 배분·AI 자료 묶음과 앱 화면 넷(현황 탭·요약 카드·선박 카드 배지·선박 옆모습)의 «리퍼 N» 은 utils.isFullReefer 한 벌(엠티·리퍼드라이·제작컨 빼고 · RZOR R098E 40→32). ⑩ «엠티는 엠티이다, 그래도 따로 구분은 한다»: ASC 파서가 엠티 끝 글자를 맞출 때 라벨이 바뀌면 그대로(feSyncedIso — 리스트 파서와 한 벌 · STSE 2669E 40HR 41칸 40HE→40HR · 엠티실 45GE→45RE). ⑨ 검수사가 고른 규격(iso_pick)이 EDI tp 를 이긴다(isFlatRackContainer·bayCellTypeLabel·현황 OT·미르 리퍼 · 규격초과 oog 도 고른 규격(utils.isoPickOog — 병합 다섯·마감텔리) — SWTD 9013E FR 표식). ⑥ ASC 파서가 무게 두 자리(45GP90 F)도 규격을 읽고, 마감텔리 규격 빈 행은 같은 컨번호의 EDI 규격(남은 EDI 원문 다시 읽기 포함), 없으면 베이플랜 자리(홀수 20 · 짝수 40)로(KBTR 2606E 양하 20피트 28→22 · HC 74→80). 회귀 기준표 R12~R15.
 //   (앞 판) 'TallyOne 4.10'   // 4.10 **해치커버 보고 직전 장수 확인** — 자동 가이드·수동 작업 보고에서 오픈·클로즈 보고를 쓰기 직전에 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 검수사가 맞는지 보고 고른다(utils.hatchPanelDetailOf·hatchCountFlags, HatchCountConfirm). 취소하면 보고도 «열렸다» 표시도 남기지 않는다(sendHatchReport 반환값). 알림 배너에도 «총 N장»(검수사 2026-10-07)
 //   (앞 판) 'TallyOne 4.09'   // 4.09 **양하 순서 조건 — 로우(육상부터·해상부터)와 풀·엠티·일반·리퍼·20·40 부터를 겹쳐 고르고 호기별로 항차 info.workOrder 에 기억한다(자동 가이드·미르 같은 순서).** 검수사 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터 이런조건들을 다 적용할수 있게 해주세요 · 장비 기사의 작업 방법이 틀려서 입니다». 먼저 고른 것이 우선, 위에 컨이 남은 칸은 앞당기지 않고 데크가 홀드보다 먼저(물리 규칙 그대로), 조건이 없으면 종전과 같은 순서. 4.08-02 **트윈 무게는 컨 총중량(EDI)으로 재고 경보뿐이다 — 55톤 초과는 «싱글 권유»(막지 않는다) · 컨 하나 40톤 초과는 무게 없음 · 싱글 한 대 뒤 짝이 다음 카드.** 4.08-01 **폰 선박 선택 화면의 «N대» 표시를 되돌렸다 — 4.08 에서 본문을 안 받게 되며 사라졌던 것** — 검수사 2026-10-07 «수정하세요». 4.08 에서 일반 검수원 폰이 선박을 고르기 전에는 항차 본문(EDI)을 받지 않아 선택 화면 목록의 «· N대» 가 빠졌다. 되던 것을 되던 상태로 되돌린다 — 선택 화면에 보이는 항차마다 discharge·loading 의 ediContainers 키 개수만 REST shallow 로 센다(키 하나 19바이트 안팎 · 18척 합쳐 약 66KB · 항차 뿌리 3.6MB 와 비교) 합은 종전 «N대»(양하 EDI 키 + 선적 EDI 키)와 같은 수이고 항차마다 10분 캐시한다. 못 센 항차는 0 이 아니라 표시를 비운다. 수석·부수석·테스터·소유자·PC 화면은 본문을 이미 받아 종전 그대로. ★ 같은 판 둘째 — 헤더 «검수원 변경»(#/login) 화면. 4.08 은 로그인해 있는 일반 검수원의 선박 한 척 본문만 받은 채 이 화면을 열어 다른 사람의 선택 목록에 그 배 한 척만 떴다(실측 앱 하네스 LoginPage.voyages = DXQD 한 척). 로그인 화면은 이름이 없을 때와 같은 범위(폰 info 만 · PC 전체)로 받는다(workChoice.voyagesScopeOf 네 번째 인자 · 돌아가면 그 선박 본문을 다시 받는다). ★ 독립 감사 지적 반영 — 선박 정보가 한 척씩 도착해도 첫 한 벌이 다 온 뒤에만 세고(voyagesLoaded) 가는 중인 요청은 겹쳐 받지 않는다(도착 간격에 따라 같은 항차가 최대 16번 받아져 최악 580KB 이던 것 → 항상 약 74KB).
 //   (앞 판) 'TallyOne 4.04'   // 4.04 **RZOR 덱플랜 출력 · 화면** — 출력 센터 «카고플랜» 이 RZOR 에서는 덱플랜(선사 STOWAGE PLAN 그림 · 선적은 마감텔리 그림)을 열고 인쇄·PDF·Excel 로 뽑는다. 특수화물은 컬러에서만 칸 바탕색(흑백은 글자만) · X-RAY 는 두 쪽 다 빨간 별 · D덱 LOLO 구역은 굵은 선. 앱의 덱플랜 화면도 같은 그림(선체·램프·집계표)으로 그려 선내 지도 구실을 하고, 서명란은 출력에만 둔다(검수사 2026-10-05 «RZOR도 카고플랜 출력 누르면 덱플랜이 위 PDF랑 똑같이 나오게» · «앱의 덱플랜도 PDF처럼 다 그려져 있었으면 합니다» · «서명란은 출력양식에만»). ★ 4.03 **터미널 본선 현황** — 검수원이 호기를 안 찍어 실시간 화면이 비면(수석 ⚓ 실시간 작업 보드 호기별 칸 · 콘앱 ⚡ 실시간 화면과 콘 타이밍 카드의 빈 칸) 터미널이 올린 본선 현황을 그 자리에 보인다 — PCTC 는 본선작업현황(작업량·완료량·잔여량 · GC별 잔여량 · 받은 시각 · 3시간 넘게 안 오면 «낡은 자료»), 동방은 본선 작업 현황(QC별 총작업량·완료·잔여 · 평택 계획보다 5% 넘게 크면 «타 항 하역분 포함 가능»). 숫자는 터미널 화면 그대로이고 두 앱이 같은 함수(src/termBoard.js 한 벌)로 그린다. 검수원 기록이 있어 호기 그림이 그려지는 배는 종전 그대로이며 미르 «언제 끝나» 계산·완료 기록은 건드리지 않는다(검수사 2026-10-04 «검수사가 찍지 않으면 안보일 경우 PCTC의 선박별 본선 작업 현황과 동방의 선박별 본선작업 현황을 보여줄수 있게 해주세요» → «네 그대로 해주세요»). ★ 4.02 **콘앱 첫 화면 · 미르 한 벌** — ①콘앱(ConeOne 2.60): 배를 지정하면 양하(왼쪽)·선적(오른쪽) 카고플랜이 가로로 먼저 뜨고 좌우로 밀면 바뀌며 닫으면 콘 계산기(실시간 화면은 «⚡ 실시간» 단추로, 실적이 없으면 «검수원의 실작업이 있어야 보이는 화면» 안내). ②미르 총 무브수·X-RAY 조별·갱 분배·교대 브리핑을 콘앱이 검수앱과 같은 수로 답한다 — 콘앱 항차엔 EDI 묶음이 없어 «EDI 가 아직 없어» 로 막히던 것을 콘앱이 넘기는 컨(자리·무게)으로 같은 계산을 돌린다(검수사 2026-10-04 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다»). ★ 4.01 **홈 정리 · 예상 작업 시간** — ①자료 없는 항차(EDI·리스트·카톡 물량 예보 모두 없음)는 홈 목록에서 빼고 맨 아래 «⏳ 자료 대기 N척» 한 줄에 접는다(자료가 들어오면 저절로 목록으로 — 검수사 2026-10-04 «자료 없음 선박까지 보여줄 필요는 없다고 생각합니다. 자료가 들어 오면 그때 보여주는게 나을듯 합니다»). ②홈 목록 카드·막대·접힘 줄에 부두 색 띠·배 아이콘·오늘 작업 빛·굵은 진행 막대를 넣어 선박을 열기 전에도 새 화면이 보이게 했다(검수사 «바뀐 화면 구성은 선박을 지정해서 들어 가야 보입니다»). ③작업 시작 탭 맨 위 «예상 작업 시간» — 무브 ÷ (갱 수 × 시간당 속도). 무브는 대수가 아니라 **트윈으로 드는 쌍은 1·나머지는 한 대당 1**(앞뒤 베이 같은 칸 20피트 두 대, 합계 55t 이하, 무게차 PNCT 14t·PCTC 20t — mir.twinSplitOf 가 nlSearch.buildTwinPairs·analyzeTwinPairs 한 벌을 센 컨에만 건다), 시간당 속도는 «싱글이 많다면 25 · 트윈이 어느정도 있다면 30»(트윈 컨 15% 이상이면 30 — 임시 선, mir.gangRateOf). 자리·무게가 없는 20피트(리스트만·선적 예약 칸)는 한 대씩으로 세고 «최소~최대» 범위로 보인다. 검수사 2026-10-04 «ATPR 양하 269인데 무브수가 269무브 맞습니까? 20피트가 150여개인데 트윈 작업이 안되는건가요?» · «트윈 가능 갯수와 싱글갯수가 정확히 파악해야 무브수가 계산 됩니다» · «무게도 확인해야 하고요». 수석 답변(X-RAY 조별 가능 수·교대 브리핑 인수 예상)도 같은 속도 규칙(mir.workPaceOf)을 쓴다.
@@ -73,7 +74,7 @@ export const APP_VERSION = 'TallyOne 4.15'   // 4.15 **규격·리퍼 계수 —
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.15 리퍼 몇 대는 풀 리퍼만 셉니다(엠티·리퍼드라이·제작컨 빼고). 엠티 리퍼는 40HR 그대로 엠티로 세고, 고른 규격이 EDI 를 이기며, 마감텔리 빈 규격은 EDI·베이플랜 규격으로 채웁니다.'
+export const APP_NOTE = '4.15-01 리퍼 수는 풀 리퍼만입니다. 엠티는 총엠티·일반·리퍼 엠티로 나눠 보입니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -1201,6 +1202,19 @@ export function isFullReefer(c) {
   if (!c || c.rfdry || c.mkcon) return false;
   if (String(c.fe || '').toUpperCase() === 'E') return false;
   return isReeferContainer(c);
+}
+//  ★ 4.15-01 — **엠티 리퍼 한 벌**(isFullReefer 의 짝). 검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를
+//    구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨» · 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2». F/E 가 E 이고 리퍼 규격(rf·RF·RE·HR·R·숫자 냉동군)이면 엠티 리퍼다.
+//    엠티 수를 보이는 자리(별첨3·수석 보드 별첨·현황 탭·선박 카드 MTY·통합검색·미르·브리핑·마감텔리·AI 자료)가 이것만 부르고, 리퍼 수에는 절대 더하지 않는다.
+export function isEmptyReefer(c) {
+  if (!c || String(c.fe || '').toUpperCase() !== 'E') return false;
+  return isReeferContainer(c);
+}
+//  4.15-01 엠티 구분 표기 한 벌 — 리퍼 엠티가 1대라도 있으면 «엠티 43(일반 2 · 리퍼 엠티 41)», 없으면 종전 그대로 «엠티 43».
+//    word 는 그 자리의 말(엠티·Empty·MTY)을 그대로 쓴다. 숫자는 부르는 쪽이 isEmptyReefer 로 센다.
+export function emptySplitLabel(total, rfE, word = '엠티') {
+  const t = Number(total) || 0, r = Number(rfE) || 0;
+  return r > 0 ? `${word} ${t}(일반 ${t - r} · 리퍼 엠티 ${r})` : `${word} ${t}`;
 }
 
 /*  ★ 3.43-03 플랫랙(FR) 판정 — **한 벌** (규범 §4-4)
@@ -7693,6 +7707,20 @@ export function hatchReportedOf(voyage, pages = null) {
   return m;
 }
 
+//  ★ 4.15-01 — **별첨 «화물 종류» 한 벌** — 인쇄 별첨(PrintableCargoPlanV2 legends)과 수석 보드 별첨(legendLiveOf)이 이것만 부른다.
+//    종전엔 두 곳이 같은 if 사슬을 따로 들고 있었고 리퍼를 규격(isReeferContainer)으로 세어, 4.15 에서 엠티 리퍼가 40HR 표기를 지키자
+//    STSE 2669E 선적 별첨 Reefer 가 2 → 43 이 됐다. 검수사 2026-10-09 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2» — Reefer 줄은 풀 리퍼(isFullReefer)만.
+//    엠티 리퍼·리퍼드라이·제작컨은 일반 줄로 가고(DG·FR·OT·탱크 표식이 있으면 그 줄), 엠티 리퍼 수는 별첨3 아래에 따로 적는다(emptySplitLabel).
+export function legendCargoCatOf(c) {
+  if (!c) return '일반';
+  if (c.dg) return 'DG';
+  if (isFullReefer(c)) return 'Reefer';
+  if (isFlatRackContainer(c)) return 'FR';   // 3.43-03: FR 판정 한 벌(카고플랜 칸·인쇄 별첨과 같은 판정)
+  if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) return 'OT';
+  if (c.tk || (c.iso && c.iso[2] === 'T')) return 'Tank';
+  return '일반';
+}
+
 //  ★ 3.11: **별첨 표 실시간** — 수석 실시간 작업 보드 왼쪽. 검수사 «통계는 선박 밑에 빈공간에 별첨 자료처럼 실시간으로 채워 지는걸 원한것입니다».
 //    분류 규칙은 카고플랜 별첨(PrintableCargoPlanV2 legends — sizeOfC·matchPodC·cat·fe)과 같은 것을 그대로 옮겼다(그 쪽은 컴포넌트 안 useMemo 라 못 부른다).
 //    ⚠ 두 벌이 갈리면 별첨 숫자가 달라진다 — 저쪽 규칙을 고치면 여기도(연막검사가 DJCT 실측 별첨 숫자로 붙잡는다).
@@ -7707,6 +7735,7 @@ export function legendLiveOf(rows, mode, compMap) {
   const add = (map, key, size, dn) => { const e = map.get(key) || (map.set(key, mk()), map.get(key)); e[size].n++; e.total.n++; if (dn) { e[size].done++; e.total.done++; } };
   const carriers = new Map(), cargos = new Map(), pods = new Map();   // 3.12: pods — 선적 별첨4 «목적지별»(인쇄 별첨의 POD 표와 같은 셈, PTK 제외)
   const fe = { '20': { F: cell(), E: cell() }, '40': { F: cell(), E: cell() }, '45': { F: cell(), E: cell() } };
+  const emptyRf = cell();   // 4.15-01: 엠티 중 리퍼 엠티(isEmptyReefer) — 별첨3 아래 «엠티 N(일반 · 리퍼 엠티)» 한 줄
   let n = 0, done = 0;
   //  3.26: 자리(부킹·PRE)가 있으면 자리가 별첨이고 그 자리를 채운 실번호는 뺀다(legendItemsOf 한 벌 — 인쇄 별첨과 같은 분모).
   //    종전의 «__SLOT_ 제외»는 cn 이 `__BOOK_` 인 자리를 못 걸러 실번호와 두 번 세었다(SWBT 2614N 632).
@@ -7715,14 +7744,9 @@ export function legendLiveOf(rows, mode, compMap) {
     const size = sizeOf(c); const dn = !!(c.cn && comp[c.cn] && comp[c.cn].flag !== 'missing');
     n++; if (dn) done++;
     add(carriers, (c.op && String(c.op).trim()) || 'UNK', size, dn);
-    let cat = '일반';
-    if (c.dg) cat = 'DG';
-    else if (isReeferContainer(c)) cat = 'Reefer';   // 3.6-02 리퍼 판정 한 벌(rf·4530·45R1·HR…) — 별첨 인쇄는 ptkContainers 의 정규화 iso 로 같은 결과
-    else if (isFlatRackContainer(c)) cat = 'FR';   // 3.43-03: FR 판정 한 벌(카고플랜 칸·인쇄 별첨과 같은 판정)
-    else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
-    else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
-    add(cargos, cat, size, dn);
+    add(cargos, legendCargoCatOf(c), size, dn);   // 4.15-01: 화물 종류 한 벌 — 인쇄 별첨(PrintableCargoPlanV2)과 같은 함수
     const f = fe[size][c.fe === 'E' ? 'E' : 'F']; f.n++; if (dn) f.done++;
+    if (isEmptyReefer(c)) { emptyRf.n++; if (dn) emptyRf.done++; }   // 4.15-01: 별첨3 엠티 구분(일반 · 리퍼 엠티) — 리퍼 줄에는 안 더한다
     //  3.60-11 (진단 M9): 자르기 전에 정규화 — 색 키(getContainerColorKey)와 같은 한 벌. 종전엔 리스트 «NANTONG» 이 색은 NTG · 별첨은 «NTO»,
     //    부두코드 «PTK02» 가 목적지 표에 «K02» 로 섰다.
     const podN = normPortCode(c.pod); const p3 = podN.length >= 5 ? podN.slice(2, 5) : podN.slice(0, 3);
@@ -7732,7 +7756,7 @@ export function legendLiveOf(rows, mode, compMap) {
     carriers: [...carriers.entries()].sort((a, b) => b[1].total.n - a[1].total.n),
     pods: [...pods.entries()].sort((a, b) => b[1].total.n - a[1].total.n),
     cargos: [...cargos.entries()].sort((a, b) => (a[0] === '일반' ? -1 : b[0] === '일반' ? 1 : b[1].total.n - a[1].total.n)),
-    fe, n, done,
+    fe, emptyRf, n, done,
   };
 }
 

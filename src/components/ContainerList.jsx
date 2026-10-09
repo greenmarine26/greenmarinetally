@@ -9,7 +9,7 @@ import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   //
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
 import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
@@ -109,7 +109,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (c.dg) k.dg++;
       if (xrayMap[c.cn]) k.xray++;
       const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
-      if (isReeferContainer(c) && hasTmp) k.rf++;   // 1.45-01: c.rf 원시 플래그 금지 — 통합 판정(43RF 사고)
+      if (isFullReefer(c) && hasTmp) k.rf++;   // 1.45-01: c.rf 원시 플래그 금지 — 통합 판정(43RF 사고) · 4.15-01: 칩 «리퍼(F+온도)» 는 풀 리퍼 한 벌
       if (c.tk) k.tk++;
       if (c.oog || c.fr) k.oog++;
       if (c.fe === 'F') k.full++;
@@ -214,7 +214,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'tk40' && lbl !== '40TK') return false;
       if (f === 'rf') {
         const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
-        if (!(isReeferContainer(c) && hasTmp)) return false;   // 1.45-01: 통합 판정
+        if (!(isFullReefer(c) && hasTmp)) return false;   // 1.45-01: 통합 판정 · 4.15-01: 칩 숫자와 같은 풀 리퍼 한 벌
       }
       if (f === 'dg' && !c.dg) return false;
       if (f === 'tk' && !c.tk) return false;

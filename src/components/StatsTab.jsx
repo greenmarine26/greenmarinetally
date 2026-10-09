@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isEdiApplied, isFullReefer, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
+import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isEdiApplied, isFullReefer, isEmptyReefer, emptySplitLabel, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
 import { paceFromRecords, voyageDoneAts, voyageReportSpan, voyageFirstTermAt } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
@@ -94,6 +94,10 @@ export default function StatsTab({ containers, compMap, xrayMap, mode, voyage })
             <StatRow key={fe} label={fe === 'F' ? 'Full (적컨)' : 'Empty (공컨)'} stats={stats.byFE[fe]} highlight={fe === 'F' ? 'rose' : ''}/>
           ))}
         </div>
+        {/* 4.15-01 (검수사 2026-10-09 15:37 «총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기»): 리퍼 엠티가 있을 때만 — 아래 특수 화물 «리퍼» 에는 안 더한다 */}
+        {stats.byFE.E && stats.byFE.E.rf > 0 && (
+          <div className="text-xxs text-dim-300 mt-1.5 px-1">{emptySplitLabel(stats.byFE.E.total, stats.byFE.E.rf)}</div>
+        )}
       </Section>
 
       {/* 특수 화물 */}
@@ -239,12 +243,13 @@ export function computeAllStats(containers, compMap, xrayMap, mode, voyage) {   
   });
 
   // F/E
-  const byFE = { F: { total: 0, done: 0 }, E: { total: 0, done: 0 } };
+  const byFE = { F: { total: 0, done: 0 }, E: { total: 0, done: 0, rf: 0 } };   // 4.15-01: E.rf = 리퍼 엠티(isEmptyReefer) — 엠티 구분 표기용, 리퍼 칸에는 안 더한다
   containers.forEach(c => {
     const fe = c.fe || 'F';
     if (!byFE[fe]) byFE[fe] = { total: 0, done: 0 };
     byFE[fe].total++;
     if (compMap[c.cn]) byFE[fe].done++;
+    if (fe === 'E' && isEmptyReefer(c)) byFE.E.rf++;
   });
 
   // 특수 화물

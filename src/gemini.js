@@ -21,7 +21,7 @@
 //   - 토큰 분당 100만
 //   → 검수원 15명 × 하루 50회 = 750회/일, 한도의 50% 사용
 
-import { fmtPos, normalizeBay, isReeferContainer, isFullReefer } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
+import { fmtPos, normalizeBay, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
 import { lookupUN } from './dgUnDict.js';
 import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
 
@@ -221,7 +221,7 @@ export function ragFilter(question, allContainers, parsed = {}) {
       filtered = filtered.filter(c => c.dg);
       desc.push('DG');
     } else if (parsed.type === 'rf') {
-      filtered = filtered.filter(c => (parsed.fe === 'E' ? isReeferContainer(c) : isFullReefer(c)));   // 4.15 (§7.8-⑪): 엠티는 «리퍼 엠티» 로 물을 때만(nlSearch 와 같은 갈래)
+      filtered = filtered.filter(c => (parsed.fe === 'E' ? isEmptyReefer(c) : isFullReefer(c)));   // 4.15-01: «리퍼 엠티» 는 엠티 리퍼 한 벌   // 4.15 (§7.8-⑪): 엠티는 «리퍼 엠티» 로 물을 때만(nlSearch 와 같은 갈래)
       desc.push('리퍼');
     } else if (parsed.type === 'fr') {
       filtered = filtered.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || ''));
@@ -423,6 +423,7 @@ function buildContext(voyage, allContainers) {
     loading: allContainers.filter(c => c._mode === 'loading').length,
     full: allContainers.filter(c => c.fe === 'F').length,
     empty: allContainers.filter(c => c.fe === 'E').length,
+    emptyRf: allContainers.filter(c => c.fe === 'E' && isEmptyReefer(c)).length,   // 4.15-01: 엠티 중 리퍼 엠티 — 리퍼 N 에는 안 더한다
     rf: allContainers.filter(c => isFullReefer(c)).length,   // 4.15 (§7.8-⑪): AI 에게 주는 «리퍼 N» 도 풀 리퍼만
     dg: allContainers.filter(c => c.dg).length,
     fr: allContainers.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || '')).length,
@@ -517,7 +518,7 @@ ETD: ${ctx.etd} / ETA: ${ctx.eta}
 
 [전체 통계]
 - 총 ${ctx.stats.total}대 (양하 ${ctx.stats.discharge} / 선적 ${ctx.stats.loading})
-- Full ${ctx.stats.full} / Empty ${ctx.stats.empty}
+- Full ${ctx.stats.full} / ${emptySplitLabel(ctx.stats.empty, ctx.stats.emptyRf, 'Empty')}
 - 리퍼 ${ctx.stats.rf} / DG ${ctx.stats.dg} / FR ${ctx.stats.fr} / OT ${ctx.stats.ot} / TK ${ctx.stats.tk}
 - X-RAY ${ctx.stats.xray} / 완료 ${ctx.stats.completed}/${ctx.stats.total}
 - 부킹 슬롯(컨번호 입력대기) ${ctx.stats.booking}

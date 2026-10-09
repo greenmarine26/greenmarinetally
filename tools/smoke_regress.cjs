@@ -37,7 +37,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
   const B = bundle([
-    `export { shiftReportContainers, plausibleListWtKg, legendItemsOf, isFlatRackContainer, bayCellTypeLabel, legendLiveOf, parseAscFile, emptySealSpec, isReeferContainer } from "${ROOT}/src/utils.js";`,
+    `export { shiftReportContainers, plausibleListWtKg, legendItemsOf, isFlatRackContainer, bayCellTypeLabel, legendLiveOf, parseAscFile, emptySealSpec, isReeferContainer, isoPickOog } from "${ROOT}/src/utils.js";`,
     `export { computeTallyData, ptkContainers } from "${ROOT}/src/tallyReport.js";`,
     `export { generateBriefing } from "${ROOT}/src/nlSearch.js";`,
     `export { computeAllStats } from "${ROOT}/src/components/StatsTab.jsx";`,
@@ -45,6 +45,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     `export { buildInspectionListDoc, generateInspectionListHTML } from "${ROOT}/src/inspectionList.js";`,
     `export { answerOneRaw, buildDataPack, flattenVoyages, movesOfVoyage } from "${ROOT}/src/mir.js";`,
     `export { answerTotalMoves } from "${ROOT}/src/chiefAnswers.js";`,
+    `export { toMirContainers } from "${ROOT}/src/mirCore.entry.js";`,
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
   const stub = './tools/stub_fbdb_mem.js';
   const FB = bundle(`export { fbSetEmptySeal } from "${ROOT}/src/firebase.js";\n`, 'fb', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
@@ -360,6 +361,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(`엠티 ${wantE}칸이 리퍼로 판정된다(§7.1 «HR 로 시작하는 규격은 리퍼»)`, em.every((c) => B.isReeferContainer(c)), `리퍼 ${em.filter((c) => B.isReeferContainer(c)).length}/${em.length}`);
     const specs = [...new Set(em.map((c) => B.emptySealSpec(c)))];
     ok('엠티실 규격 = 45RE (45GE 로 나가지 않는다)', specs.length === 1 && specs[0] === '45RE', specs.join(','));
+    //  4.15-01 (검수사 2026-10-09 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2») — 표기를 지킨 그 43칸을 별첨에 넣어도 Reefer 줄은 원자료 F 칸 수, 엠티 리퍼는 엠티 구분 줄로만 간다.
+    const wantF = rows.filter((c) => c.fe !== 'E').length;
+    const L14 = B.legendLiveOf(P, 'loading', {});
+    const rf14 = ((L14.cargos.find(([k]) => k === 'Reefer') || [])[1] || { total: { n: 0 } }).total.n;
+    ok(`이 ${rows.length}칸의 카고플랜 별첨 «Reefer» = 원자료 F 칸 ${wantF}대 · 엠티 리퍼 ${wantE}대는 별첨3 엠티 구분 줄(4.15 에서 ${rows.length} 로 세던 것)`, wantF > 0 && rf14 === wantF && L14.emptyRf && L14.emptyRf.n === wantE, `Reefer ${rf14} · 엠티 리퍼 ${L14.emptyRf && L14.emptyRf.n}`);
   }
 
   // ── R15 ──────────────────────────────────────────────────────────────
@@ -409,6 +415,86 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const st = B.computeAllStats(flat.filter((c) => c._mode === 'discharge'), {}, {}, 'discharge', v);
     ok(`현황 탭(StatsTab) 특수화물 «리퍼» = ${want} — 미르 «리퍼 몇 대» 와 같은 수`, st && st.bySpecial && st.bySpecial.rf.total === want, String(st && st.bySpecial && st.bySpecial.rf.total));
     ok(`AI 자료 묶음 «리퍼» ${want} · 브리핑 «리퍼 ${want}» — 같은 한 벌`, pack.summary && pack.summary.양하 && pack.summary.양하.리퍼 === want && brN === want, `묶음 ${JSON.stringify(pack.summary && pack.summary.양하 && pack.summary.양하.리퍼)} · 브리핑 ${brN}`);
+    //  ── 4.15-01 (검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨» · 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2»)
+    //  STSE 2669E 선적 실 EDI(conepos_live.json — 컨번호 426대, 엠티 리퍼 45RE 41 · 풀 리퍼 45RF 2). 기대값은 EDI 원자료 fe·규격(iso)에서 이 파일이 센다.
+    {
+      const k = 'STSE_2669E', sec = fx('conepos_live.json')['STSE_2669E|loading'];
+      const vs = { info: { vsl: 'STSE', voy: '2669E', voy_d: '2669E', voy_l: '2670W' }, loading: sec };
+      const E0 = Object.values(sec.ediContainers).filter((e) => isPtkCode(e.pol));
+      const isE = (e) => String(e.fe).toUpperCase() === 'E';
+      const is40 = (e) => /^4/.test(String(e.iso || ''));   // ISO 첫 자리 4 = 40피트(45xx 는 40피트 하이큐브 · 진짜 45피트는 L)
+      const wFull = E0.filter((e) => isRfRaw(e) && !isE(e)).length, wE = E0.filter(isE).length, wERf = E0.filter((e) => isE(e) && isRfRaw(e)).length;
+      const w40E = E0.filter((e) => isE(e) && is40(e)).length, w40ERf = E0.filter((e) => isE(e) && is40(e) && isRfRaw(e)).length;
+      const flatS = B.flattenVoyages({ [k]: vs }), csS = flatS.filter((c) => c.voyageKey === k && c._mode === 'loading');
+      const askS = (q) => String(B.answerOneRaw(q, { app: 'tally', voyages: { [k]: vs }, flat: flatS, voyageKey: k, voyage: vs, info: vs.info, mode: 'loading', containers: csS, portMisData: {}, _trace: {}, computeTallyData: B.computeTallyData }) || '');
+      const split = (t, r) => `${t}(일반 ${t - r} · 리퍼 엠티 ${r})`;
+      //  ① 별첨 — 수석 보드(legendLiveOf)와 인쇄 별첨(PrintableCargoPlanV2)이 같은 화물 종류 함수(legendCargoCatOf)를 쓴다
+      const LS = B.legendLiveOf(csS, 'loading', {});
+      const rfS = ((LS.cargos.find(([kk]) => kk === 'Reefer') || [])[1] || { total: { n: 0 } }).total.n;
+      const feE = ['20', '40', '45'].reduce((a, s) => a + LS.fe[s].E.n, 0);
+      ok(`STSE 2669E 선적 카고플랜 별첨 «Reefer» = EDI 풀 리퍼 ${wFull}대 (엠티 리퍼 ${wERf}대를 더하지 않는다 — 4.15 는 ${wFull + wERf})`, wFull > 0 && rfS === wFull, `Reefer ${rfS}`);
+      ok(`별첨3 엠티 ${wE} 중 리퍼 엠티 ${wERf} — 엠티 구분 줄 «엠티 ${split(wE, wERf)}»`, wERf > 0 && feE === wE && (LS.emptyRf || {}).n === wERf, `엠티 ${feE} · 리퍼 엠티 ${(LS.emptyRf || {}).n}`);
+      const cpSrc = src('src/components/PrintableCargoPlanV2.jsx');
+      ok('배선 — 인쇄 별첨도 legendCargoCatOf 한 벌 · 별첨3 은 emptySplitLabel 로 엠티 구분 (규격 isReeferContainer 로 Reefer 를 세지 않는다)', /addTo\(cargoCounts, legendCargoCatOf\(c\), size\)/.test(cpSrc) && /isEmptyReefer\(c\)\) emptyRf\+\+/.test(cpSrc) && /emptySplitLabel\(totE, emptyRf\)/.test(cpSrc) && !/isReeferContainer\(c\)\) cat = 'Reefer'/.test(cpSrc));
+      //  ② 엠티 구분 표기 — 현황 탭 · 브리핑 · 미르 «엠티 몇 대» · «40엠티 몇 대»
+      const stS = B.computeAllStats(csS, {}, {}, 'loading', vs);
+      ok(`현황 탭 Empty ${wE} · 리퍼 엠티 ${wERf} (특수 화물 «리퍼» 는 ${wFull})`, stS.byFE.E.total === wE && stS.byFE.E.rf === wERf && stS.bySpecial.rf.total === wFull, `E ${stS.byFE.E.total}·${stS.byFE.E.rf} · 리퍼 ${stS.bySpecial.rf.total}`);
+      const brS = String(B.generateBriefing(csS, '선적', 'loading') || '');
+      ok(`선적 브리핑 작업 줄 «Empty ${split(wE, wERf)}»`, brS.includes(`Empty ${split(wE, wERf)}`), (brS.split('\n')[1] || '').slice(0, 120));
+      const a40 = askS('40엠티 몇 대'), aE = askS('엠티 몇 대'), aR = askS('리퍼 몇 대');
+      ok(`미르 «40엠티 몇 대» = ${w40E}대 · «Empty ${split(w40E, w40ERf)}» — 리퍼 엠티 ${w40ERf}`, w40ERf > 0 && /40피트 엠티:\s*(\d+)대/.test(a40) && Number(a40.match(/40피트 엠티:\s*(\d+)대/)[1]) === w40E && a40.includes(`Empty ${split(w40E, w40ERf)}`), a40.split('\n').slice(0, 2).join(' | '));
+      ok(`미르 «엠티 몇 대» «Empty ${split(wE, wERf)}» · «리퍼 몇 대» ${wFull} (엠티 리퍼를 리퍼에 합산하지 않는다)`, aE.includes(`Empty ${split(wE, wERf)}`) && num(aR) === wFull, `${aE.split('\n')[1]} | ${aR.split('\n')[0]}`);
+      //  Fable 판정 2026-10-09 — 리퍼 엠티를 콕 집어 물으면 «리퍼 엠티 41대» 로만(«일반 0» 구분은 엠티 전체를 물을 때만)
+      const aRE = askS('리퍼 엠티 몇 대');
+      ok(`미르 «리퍼 엠티 몇 대» = ${wERf}대 — 구분 표기(«일반 0») 없이`, num(aRE) === wERf && !/\(일반 /.test(aRE), aRE.split('\n').slice(0, 2).join(' | '));
+      //  ③ 마감텔리 — RF 시트(온도 확인 대상)는 풀 리퍼만 · 선사 줄 RH 는 풀만, 엠티 리퍼는 «EMPTY RH» 로 따로 · 미르 «마감텔리» 수치의 RF out
+      const tS = B.computeTallyData(vs);
+      const rmk = (tS.osOut.remarks || []).join(' / ');
+      //    선사 서류에 없던 영문 «EMPTY RH» 는 짓지 않는다(규범 §11 · Fable 판정) — 엠티 리퍼는 OS EMPTY 줄의 «RH x N» 이 구분한다.
+      const emRh = (tS.osOut.rows || []).filter((r) => r.fe === 'EMPTY').reduce((a, r) => a + (r.rf || 0) + (r.rh || 0), 0);
+      ok(`마감텔리 RF 시트(선적) = 풀 리퍼 ${wFull}줄 · 선사 줄 «( RH x ${wFull} )» · 엠티 리퍼 ${wERf} 는 EMPTY 줄 태그 (4.15 는 RF ${wFull + wERf} · RH x ${wFull + wERf})`, tS.rfOut.length === wFull && rmk.includes(`( RH x ${wFull} )`) && !/EMPTY RH/.test(rmk) && emRh === wERf, `RF ${tS.rfOut.length} · EMPTY 줄 RH ${emRh} · ${rmk.slice(0, 140)}`);
+      //  ── 두 앱 같은 답(ConeOne 2.67 · 검수사 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 한다»). 콘앱 행은 cone.html 의 _ediRowOf 실소스로 만든다(ConeMir 는 같은 번들).
+      {
+        const html = src('public/cone.html');
+        const fnSrc = (name) => (html.match(new RegExp(`function ${name}\\(c\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
+        const vctx = { console, window: { ConeMir: { isReeferContainer: B.isReeferContainer }, ConeParse: { isFlatRackContainer: B.isFlatRackContainer } } };
+        require('vm').createContext(vctx); require('vm').runInContext(fnSrc('coneIsReefer') + fnSrc('_ediRowOf') + '\nthis.__rowOf = typeof _ediRowOf === "function" ? _ediRowOf : null;', vctx);
+        const both = [['STSE_2669E', { info: vs.info, loading: sec, discharge: fx('conepos_live.json')['STSE_2669E|discharge'] }], ['OBWH_2749E', fx('ferry1700.json').voyages.OBWH_2749E]].map(([kk, vo]) => {
+          const ptkM = (m, e) => isPtkCode(m === 'discharge' ? e.pod : e.pol);
+          const ed = (m) => Object.values((vo[m] || {}).ediContainers || {}).filter((e) => e.bay && e.tier && ptkM(m, e));
+          const wantRow = ['discharge', 'loading'].reduce((a, m) => a + ed(m).filter(isRfRaw).length, 0);   // 원자료 리퍼(§7.1 규격 · rf) — 자리 있는 평택분
+          const rows = (m) => ed(m).map(vctx.__rowOf);
+          const dR = vctx.__rowOf ? rows('discharge') : [], lR = vctx.__rowOf ? rows('loading') : [];
+          const coneRf = dR.concat(lR).filter((r) => r.reefer).length;
+          const flatT = B.flattenVoyages({ [kk]: vo });
+          const tA = String(B.answerOneRaw('리퍼 몇 대', { app: 'tally', voyages: { [kk]: vo }, flat: flatT, voyageKey: kk, voyage: vo, info: vo.info, mode: 'discharge', containers: flatT.filter((c) => c.voyageKey === kk), portMisData: {}, _trace: {} }) || '');
+          const cs = B.toMirContainers(dR, 'discharge').concat(B.toMirContainers(lR, 'loading'));
+          const cA = String(B.answerOneRaw('리퍼 몇 대', { app: 'cone', containers: cs, cone: { rows: [], dischRows: dR, stowRows: lR }, accepted: true, mode: 'discharge', modeLabel: '양하', info: vo.info, voyage: { info: vo.info, reports: {}, discharge: { records: (vo.discharge || {}).records || {} }, loading: { records: (vo.loading || {}).records || {} } }, vsl: vo.info.vsl, portMisData: {}, _trace: {} }) || '');
+          return { kk, wantRow, coneRf, t: num(tA), c: num(cA) };
+        });
+        ok(`두 앱 같은 답 — 콘앱 미르 «리퍼 몇 대» = 검수앱(${both.map((b) => `${b.kk} ${b.t}`).join(' · ')}) · 콘앱 행 ❄ 리퍼 = 원자료 리퍼(${both.map((b) => b.wantRow).join(' · ')}) — 정규식 사본이 아니라 utils 한 벌`,
+          both.every((b) => b.t > 0 && b.c === b.t && b.coneRf === b.wantRow), both.map((b) => `${b.kk} 검수앱 ${b.t} 콘앱 ${b.c} · 행 ❄ ${b.coneRf}/${b.wantRow}`).join(' | '));
+        //  ── ConeOne 2.67 (Fable 판정) — 콘앱 미르 재료에 리스트(records) 표식(제작컨·리퍼드라이·고른 규격)을 검수앱 병합과 같은 순위로 얹는다(cone.html coneRecRows — 미르가 이미 받는 records 만).
+        //  RZOR R098E 양하(제작컨 HSAP 8)는 자리 없는 리스트라 실제 콘앱은 양하 행을 안 만든다 — 같은 행을 자리 조건 없이 _ediRowOf 로 만들어 표식 얹기만 잰다. 기대값은 위 wantOf(원자료 규격·fe + records mkcon·rfdry).
+        {
+          {
+            const vc2 = { console, window: { ConeMir: { isReeferContainer: B.isReeferContainer, isoPickOog: B.isoPickOog }, ConeParse: { isFlatRackContainer: B.isFlatRackContainer } } };
+            const fnSrc2 = (name) => (html.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
+            require('vm').createContext(vc2);
+            require('vm').runInContext(['coneIsReefer', 'coneRecMark', 'coneRecRows', '_ediRowOf'].map(fnSrc2).join('') + '\nthis.__rowOf = _ediRowOf; this.__recRows = typeof coneRecRows === "function" ? coneRecRows : null;', vc2);
+            const kR = 'RZOR_R098E', vR = { info: { vsl: 'RZOR', voy: 'R098E', voy_d: 'R098E' }, discharge: { ediContainers: mk.edi, records: mk.rec } };
+            const dR2 = Object.values(mk.edi).filter((e) => isPtkCode(e.pod)).map(vc2.__rowOf);
+            const marked = vc2.__recRows ? vc2.__recRows(dR2, mk.rec) : dR2;
+            const csR = B.toMirContainers(marked, 'discharge');
+            const cR = num(String(B.answerOneRaw('리퍼 몇 대', { app: 'cone', containers: csR, cone: { rows: [], dischRows: marked, stowRows: [] }, accepted: true, mode: 'discharge', modeLabel: '양하', info: vR.info, voyage: { info: vR.info, reports: {}, discharge: { records: mk.rec }, loading: { records: {} } }, vsl: 'RZOR', portMisData: {}, _trace: {} }) || ''));
+            const wired = /toMirContainers\(coneRecRows\(rows, mode==='loading'\?\(mc&&mc\.recL\):\(mc&&mc\.recD\)\)/.test(html);
+            ok(`두 앱 같은 답 — RZOR R098E 콘앱 미르 «리퍼 몇 대» = 검수앱 ${want} (리스트의 제작컨 8 을 얹어 빼고 — 얹기 전 콘앱 40) · 미르 묻기(paint)가 coneRecRows 를 거친다`, cR === want && wired, `콘앱 ${cR} · 검수앱 ${want} · 배선 ${wired}`);
+          }
+        }
+      }
+      const aT = askS('마감텔리');
+      ok(`미르 «마감텔리» — RF out ${wFull} · 선적 엠티 «엠티 ${split(wE, wERf)}»`, /RF in 0 · out (\d+)/.test(aT) && Number(aT.match(/RF in 0 · out (\d+)/)[1]) === wFull && aT.includes(`엠티 ${split(wE, wERf)}`), aT.split('\n').slice(2, 4).join(' | ').slice(0, 200));
+    }
   }
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);

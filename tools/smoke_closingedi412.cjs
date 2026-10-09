@@ -104,7 +104,7 @@ const bundle = process.argv[3];
   ok(!!m, '콘앱 ctIsTerm 을 찾았다');
   const ctIsTerm = new Function(m[0].replace(/\/\/[^\n]*/g, '') + '; return ctIsTerm;')();
   ok(ctIsTerm({ src: 'edi', by: '' }) === true && ctIsTerm({ src: 'term' }) === true && ctIsTerm({ by: '터미널(옛)' }) === true && ctIsTerm({ by: '박철민', at: 1 }) === false && ctIsTerm(null) === false, '콘앱: 마감 EDI 적용·터미널 반영은 호기 줄로 그리지 않고, 검수원 기록은 그대로 그린다');
-  ok(/window\.__CONEV='ConeOne 2\.(64|65|66)(-\d\d)?'/.test(CONE), '콘앱 버전이 2.64 이상으로 올랐다(폰이 새 cone.html 을 감지)');
+  ok(/window\.__CONEV='ConeOne 2\.(64|65|66|67)(-\d\d)?'/.test(CONE), '콘앱 버전이 2.64 이상으로 올랐다(폰이 새 cone.html 을 감지)');
   //  시간대별 분포에서 뺀다
   const NL = read('src/nlSearch.js');
   ok(/if \(isEdiApplied\(r\)\) \{ _ediSkip\+\+; continue; \}/.test(NL) && /if \(!byH\.size && !_ediSkip\)/.test(NL), '시간대별 분포에서 마감 EDI 적용을 뺀다(끝 시각 한 시간대가 솟아 보이지 않게)');

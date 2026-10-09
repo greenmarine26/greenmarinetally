@@ -15,7 +15,7 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
-import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode } from '../utils.js';   // 2.98-14: 커버 막대 경계
+import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode, legendCargoCatOf, isEmptyReefer, emptySplitLabel } from '../utils.js';   // 4.15-01: 별첨 화물 종류·엠티 구분 한 벌 · 2.98-14: 커버 막대 경계
 import {
   autoPairBays,
   generatePdfBays,
@@ -1091,6 +1091,7 @@ export default function PrintableCargoPlanV2({
     const podCounts = new Map();
     // V8.44: 별첨3 — 규격(20/40/45)별 Full/Empty 카운트 (평택분만, 기존 별첨 원칙 동일).
     const feCounts = { '20': { F: 0, E: 0 }, '40': { F: 0, E: 0 }, '45': { F: 0, E: 0 } };
+    let emptyRf = 0;   // 4.15-01: 엠티 중 리퍼 엠티(isEmptyReefer) — 별첨3 아래 «엠티 N(일반 · 리퍼 엠티)» 한 줄. Reefer 줄에는 안 더한다
     const addTo = (map, key, size) => {
       if (!map.has(key)) map.set(key, { '20': 0, '40': 0, '45': 0, total: 0 });
       const e = map.get(key);
@@ -1109,17 +1110,14 @@ export default function PrintableCargoPlanV2({
       const size = sizeOfC(c);
       const carrier = (c.op && String(c.op).trim()) || 'UNK';
       addTo(carrierCounts, carrier, size);
-      let cat = '일반';
-      if (c.dg) cat = 'DG';
-      else if (isReeferContainer(c)) cat = 'Reefer';   // 3.11: 리퍼 판정 한 벌(3.6-02 isReeferContainer — rf·2230·4530). 종전 iso[2]==='R' 은 2230(20ft 리퍼)을 놓쳤다(DJCT 0223E 실측 18 → 20). 수석 보드 utils.legendLiveOf 와 같은 수
-      else if (isFlatRackContainer(c)) cat = 'FR';   // 3.43-03: 칸(getMarkV2)과 같은 FR 판정 한 벌
-      else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
-      else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
-      addTo(cargoCounts, cat, size);
+      //  ★ 4.15-01 (검수사 2026-10-09 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2»): 화물 종류는 utils.legendCargoCatOf 한 벌 — Reefer 줄은 풀 리퍼만(isFullReefer).
+      //    종전 isReeferContainer(규격) 는 4.15 에서 엠티 리퍼가 40HR 을 지키자 STSE 2669E 선적 별첨 Reefer 를 2 → 43 으로 세었다. 수석 보드 legendLiveOf 와 같은 함수.
+      addTo(cargoCounts, legendCargoCatOf(c), size);
       // M6.94.29: POD 키 직접 추출 (이미 matchPodC 통과 = 평택 확정).
       //   getContainerColorKey는 pol 재검증을 하는데, 엠티는 pol이 목적지로 오염될 수 있어
       //   여기서 null이 나면 POD 별첨에서 누락됨 → POD 3자만 직접 뽑는다.
       feCounts[size][c.fe === 'E' ? 'E' : 'F']++;   // V8.44: 규격별 F/E
+      if (isEmptyReefer(c)) emptyRf++;   // 4.15-01: 엠티 구분 — 총엠티 · 일반 · 리퍼 엠티
       //  3.60-11 (진단 M9): 자르기 전에 정규화(normPortCode) — 칸 색(getContainerColorKey)과 같은 목적지 글자. «NANTONG»→NTG · «PTK02»→평택(빼기).
       const podRaw = normPortCode(c.pod);
       const p3 = podRaw.length >= 5 ? podRaw.slice(2, 5) : podRaw.slice(0, 3);
@@ -1132,7 +1130,7 @@ export default function PrintableCargoPlanV2({
       return b[1].total - a[1].total;
     });
     const pods = [...podCounts.entries()].sort((a, b) => b[1].total - a[1].total);
-    return { carriers, cargos, pods, feCounts };
+    return { carriers, cargos, pods, feCounts, emptyRf };
   }, [containers, legendContainers, pod, mode]);
 
   // 모든 베이의 렌더 데이터 미리 계산
@@ -1498,7 +1496,7 @@ export default function PrintableCargoPlanV2({
                 <Legend podMode={podMode} title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']}
                   rows={leg2Rows} totalRow={true} kind={leg2Kind} />
               );
-              const legend3 = <FeLegend fe={legends.feCounts} />;
+              const legend3 = <FeLegend fe={legends.feCounts} emptyRf={legends.emptyRf} />;
               // 칸 하나를 세로로 채우는 껍데기 — 표가 여럿이면 높이를 나눠 갖는다.
               //  ★ 3.7-03 — 별첨 1·2·3 은 **언제나 한 상자에 붙여** 놓는다(검수사 «별첨 1, 2, 3은 중첩되지
               //    않아야 하며 최대한 같이 있어야 합니다. SWMM은 너무 각 각 떨어져 있으며 OWBH는 2, 3이 중첩되는 부분이 보입니다»).
@@ -1512,7 +1510,7 @@ export default function PrintableCargoPlanV2({
               //    ⚠ 3.27 에서 이 «문턱으로 미리 정하기»는 폐기했다 — 계산이 실제와 어긋나 XTPG 539E 가
               //    7.2px 로 «읽을 만하다» 판정을 받고도 잘렸다. 이제는 한 칸으로 그려 보고 넘치면 나눈다.
               //    나눌 자리가 없으면 그대로 두고 글자를 줄인다(하한 4.6px). 잘리는 것보다 낫다.
-              const _r1 = leg1Rows.length + 2, _r2 = leg2Rows.length + 2, _r3 = 5;   // 표마다 머리줄+합계줄
+              const _r1 = leg1Rows.length + 2, _r2 = leg2Rows.length + 2, _r3 = 5 + (legends.emptyRf > 0 ? 1 : 0);   // 표마다 머리줄+합계줄 · 4.15-01: 엠티 구분 줄
               const _pr = Math.max(1, layout.length);
               const cell = (key, items, rows) => (
                 <div key={key} className="cpv2-bay-box cpv2-legend-box"
@@ -1618,7 +1616,7 @@ export default function PrintableCargoPlanV2({
 }
 
 // V8.44: 별첨3 렌더링 — 규격(20/40/45)별 Full/Empty 표 (흑백, 평택분).
-function FeLegend({ fe }) {
+function FeLegend({ fe, emptyRf = 0 }) {
   const sizes = ['20', '40', '45'];
   const totF = sizes.reduce((a, s) => a + fe[s].F, 0);
   const totE = sizes.reduce((a, s) => a + fe[s].E, 0);
@@ -1644,6 +1642,10 @@ function FeLegend({ fe }) {
             <td className="cpv2-legend-ct"><b>{totE}</b></td>
             <td className="cpv2-legend-ct"><b>{totF + totE}</b></td>
           </tr>
+          {/* 4.15-01 (검수사 2026-10-09 15:37 «총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨»): 리퍼 엠티가 있을 때만 한 줄 */}
+          {emptyRf > 0 && (
+            <tr><td className="cpv2-legend-ct" colSpan={4}>{emptySplitLabel(totE, emptyRf)}</td></tr>
+          )}
         </tbody>
       </table>
     </div>

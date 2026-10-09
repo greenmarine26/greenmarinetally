@@ -267,7 +267,7 @@ for (const f of ['src/pages/VoyagePage.jsx', 'src/components/SearchPanel.jsx', '
   //    그 행에 op 가 없어 별첨 병합의 pickCarrierOp 가 EDI 쪽을 못 봤다). 실물 ASC(DJCT 0219E)를 검수앱 파서로 읽어 넣는다.
   {
     const fnOf = (name) => { const m = CH.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)); return m ? m[0] : ''; };
-    const src = ['masterRowsAdapter', 'isASC', 'isPtkPort'].map(fnOf);
+    const src = ['coneIsReefer', 'masterRowsAdapter', 'isASC', 'isPtkPort'].map(fnOf);   // ConeOne 2.67: masterRowsAdapter 가 부르는 리퍼 판정 한 벌
     const asc = fs.readFileSync(path.join(ROOT, 'tools/fixtures/asc_djct0219e_shk.asc'), 'utf8');
     fs.writeFileSync(path.join(TMP, 'p.mjs'), `export { parseAscFile, isPyeongtaekPort } from "${ROOT}/src/utils.js";\n`);
     execSync(`npx esbuild "${path.join(TMP, 'p.mjs')}" --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --log-level=error --outfile="${path.join(TMP, 'p.cjs')}"`, { cwd: ROOT, stdio: 'pipe' });

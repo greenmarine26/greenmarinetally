@@ -25,7 +25,7 @@ import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs,   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
-  isReeferContainer, isReeferIso, isFullReefer,   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
+  isReeferContainer, isReeferIso, isFullReefer, isEmptyReefer, emptySplitLabel,   // 4.15-01: 엠티 구분 한 벌 · 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
   currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
@@ -1095,7 +1095,9 @@ export function answerVoyageFacts(parsed, ctx) {
       if (!v) return null;
       if (typeof ctx.computeTallyData !== 'function') return `${ship} 마감텔리 수치는 검수앱 미르에게 물어 주세요 — 콘앱은 그 계산을 싣지 않아요.`;
       const t = ctx.computeTallyData(v);
-      const s = (o) => `풀 20 ${o.F['20'] || 0}·40 ${o.F['40'] || 0}·HC ${o.F.HC || 0}·45 ${o.F['45'] || 0} / 엠티 20 ${o.E['20'] || 0}·40 ${o.E['40'] || 0}·HC ${o.E.HC || 0}`;
+      //  4.15-01 (검수사 2026-10-09 15:37): 리퍼 엠티가 있으면 엠티 뒤에 «엠티 N(일반 · 리퍼 엠티)» — 리퍼(RF) 수에는 안 더한다
+      const s = (o) => `풀 20 ${o.F['20'] || 0}·40 ${o.F['40'] || 0}·HC ${o.F.HC || 0}·45 ${o.F['45'] || 0} / 엠티 20 ${o.E['20'] || 0}·40 ${o.E['40'] || 0}·HC ${o.E.HC || 0}`
+        + (o.rfE > 0 ? ` — ${emptySplitLabel(['20', '40', 'HC', '45'].reduce((a, k) => a + (o.E[k] || 0), 0), o.rfE)}` : '');
       const L = [`${ship} ${S(info.voy)} 마감텔리 수치(지금 기준)`];
       L.push(`양하 ${t.totals.dis.n}대 — ${s(t.totals.dis)}`);
       L.push(`선적 ${t.totals.load.n}대 — ${s(t.totals.load)}`);
@@ -2532,7 +2534,7 @@ export function buildDataPack(q, ctx) {
   const digs = (String(q).match(/\d{4,7}/g) || []);
   const cnt = (arr, f) => { const m = {}; arr.forEach((c) => { const k = f(c) || '?'; m[k] = (m[k] || 0) + 1; }); return m; };
   const d = cs.filter((c) => (c._mode || c.mode) !== 'loading'), l = cs.filter((c) => (c._mode || c.mode) === 'loading');
-  const sum = (arr) => ({ 총: arr.length, 규격: cnt(arr, _iso), 풀엠티: cnt(arr, (c) => c.fe), 리퍼: arr.filter(_isRfFull).length, 위험물: arr.filter(_isDg).length, 엑스레이: arr.filter(_isX).length, 규격초과: arr.filter((c) => c.oog).length, 완료: arr.filter(_isDone).length, 미완료: arr.filter((c) => !_isDone(c)).length, 실번호없음: arr.filter((c) => !c.sl).length, POD별: cnt(arr, (c) => c.pod), POL별: cnt(arr, (c) => c.pol) });
+  const sum = (arr) => ({ 총: arr.length, 규격: cnt(arr, _iso), 풀엠티: cnt(arr, (c) => c.fe), 리퍼엠티: arr.filter((c) => c.fe === 'E' && isEmptyReefer({ ...c, rf: _isRf(c) })).length, 리퍼: arr.filter(_isRfFull).length, 위험물: arr.filter(_isDg).length, 엑스레이: arr.filter(_isX).length, 규격초과: arr.filter((c) => c.oog).length, 완료: arr.filter(_isDone).length, 미완료: arr.filter((c) => !_isDone(c)).length, 실번호없음: arr.filter((c) => !c.sl).length, POD별: cnt(arr, (c) => c.pod), POL별: cnt(arr, (c) => c.pol) });
   const summary = { 배: `${info.vsl || ''} ${info.vslFull || ''}`.trim(), 항차: { 양하: info.voy_d || info.voy || '', 선적: info.voy_l || '' }, 부두: info.pier || '', 선석: info.berth || '', 접안: info.berthSidePick || info.berthSide || '', 작업시작: info.workStartAt || '', 작업끝: info.workEndAt || '', 양하완료시각: (typeof info.dischargeDoneAt === 'number' ? _tm(info.dischargeDoneAt) : (info.dischargeDoneAt || '')), 양하: sum(d), 선적: sum(l) };
   const byWt = cs.filter((c) => Number(c.wt) > 0).sort((a, b) => Number(b.wt) - Number(a.wt));
   const derived = {

@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
 import { isFreeRoamer, readWorkChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
@@ -338,7 +338,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         // ① 2.4x (검수사 확정): 선박 카드 수량 배지 -- 추가 통신 0. 이미 받은 ediContainers 의
         //   iso·fe·rf 를 그대로 센다(판정은 전부 기존 utils 헬퍼 -- isoFeet·fe==='E'·isReeferContainer,
         //   새로 만들지 않는다).
-        let c20 = 0, mty = 0, rf = 0;
+        let c20 = 0, mty = 0, mtyRf = 0, rf = 0;   // 4.15-01: mtyRf — MTY 중 리퍼 엠티(배지 «MTY 43(일반 2 · 리퍼 엠티 41)»)
         //  2.66: 배정목록이 0이라고 말하는 쪽(전량 캔슬)은 배지에서 뺀다 — 실측 PCSZ 2626W:
         //    «20FT 46» 중 28대·«MTY 1»·«리퍼 1» 이 전부 캔슬된 선적분이었다(양하는 엠티·리퍼 0).
         const _cancL = sideCancelled(v?.info, 'loading');
@@ -346,12 +346,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         const allC = [...((d && !_cancD) ? Object.values(d) : []), ...((l && !_cancL) ? Object.values(l) : [])];
         for (const c of allC) {
           if (isoFeet(c?.iso) === 20) c20++;
-          if (c?.fe === 'E') mty++;
+          if (c?.fe === 'E') { mty++; if (isEmptyReefer(c)) mtyRf++; }   // 4.15-01: 엠티 구분(리퍼 엠티) — 리퍼 배지에는 안 더한다
           if (isFullReefer(c)) rf++;   // 4.15 (§7.8-⑪ Fable 판정 — §4-4 한 벌): 배지 «리퍼» 도 풀 리퍼만
         }
         const xray = Object.keys(v?.discharge?.xrayList || {}).length;   // XRAY는 양하 전용
         //  2.82-01: boxes — 그 배의 컨 수. 목록에 안 보이는 나머지의 «일감»을 아래 한 줄로 말한다.
-        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, key: v.key, c20, mty, rf, xray, boxes: vBoxes });
+        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, key: v.key, c20, mty, mtyRf, rf, xray, boxes: vBoxes });
       }
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
@@ -559,7 +559,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                       {/* ① 2.4x (검수사 확정): 수량 배지 -- 0이면 안 그린다(빈 배지가 줄을 늘린다) */}
                       <div className="flex flex-wrap gap-1">
                         {sp.c20 > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-st-dis/15 text-st-disHi border border-st-dis/30">20FT {sp.c20}</span>}
-                        {sp.mty > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-ink-800 text-dim-300 border border-line-faint">MTY {sp.mty}</span>}
+                        {sp.mty > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-ink-800 text-dim-300 border border-line-faint">{emptySplitLabel(sp.mty, sp.mtyRf, 'MTY')}</span>}
                         {sp.rf > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-st-chief/15 text-st-chief border border-st-chief/30">리퍼 {sp.rf}</span>}
                         {sp.xray > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-st-lod/15 text-st-lodHi border border-st-lod/30">XRAY {sp.xray}</span>}
                         {zeroWarn && <span className="text-3xs font-black px-1.5 py-0.5 rounded bg-st-bad/20 text-st-badHi border border-st-bad/40">검수원 0명</span>}

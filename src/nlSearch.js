@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -885,7 +885,7 @@ export function applyNLFilter(containers, parsed) {
   if (parsed.type === 'rf') {
     // 1.86 (검수사 확정): «리퍼» = 풀이 기본 — 엠티는 «리퍼 엠티»로 물을 때만. 전면에 엠티가 섞이면 헷갈린다.
     //  ★ 4.15 (검수사 2026-10-09 §7.8-⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»): 풀 리퍼 한 벌(utils.isFullReefer) — 리퍼드라이·제작컨도 세지 않는다.
-    r = r.filter(c => (parsed.fe === 'E' ? isReeferContainer(c) : isFullReefer(c)));   // 3.60-10: 리퍼 판정 한 벌
+    r = r.filter(c => (parsed.fe === 'E' ? isEmptyReefer(c) : isFullReefer(c)));   // 3.60-10: 리퍼 판정 한 벌 · 4.15-01: «리퍼 엠티» 는 엠티 리퍼 한 벌(isEmptyReefer)
   } else if (parsed.type === 'dg') r = r.filter(c => c.dg);
   else if (parsed.type === 'xray') r = r.filter(c => c._xray);
   else if (parsed.type === 'lolo') r = r.filter(c => c.lolo);       // V9.56: 갠트리(落地) 분
@@ -1561,7 +1561,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     if (parsed.type === 'lolo' && !results.length) return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
     return splitByModeAnswer(results, parsed, (rs) => formatLocationList(desc, rs, parsed));
   }
-  if (parsed.isStat) return formatStats(desc, results);
+  if (parsed.isStat) return formatStats(desc, results, parsed);   // 4.15-01: parsed — «리퍼 엠티» 를 콕 집어 물으면 구분 표기 없이
 
   // 베이 단독 → 베이 통계
   if (parsed.bay) {
@@ -1660,7 +1660,7 @@ function formatTierInContext(tier, allContainers, ctx) {
   return `${bayLbl} ${label}에 ${remain.length}개 남았습니다.`;
 }
 
-function formatStats(desc, results0) {
+function formatStats(desc, results0, parsed = null) {
   const results = dropFilledBookingSlots(results0);   // 3.26: 부킹 자리(예상 EDI)와 그 자리를 채운 실번호를 두 번 세지 않는다(항차·모드별)
   if (results.length === 0) return `📊 ${desc}: 0대`;
   const fCount = results.filter(c => c.fe === 'F').length;
@@ -1674,7 +1674,10 @@ function formatStats(desc, results0) {
   }).length;
   const lines = [`📊 ${desc}: ${results.length}대`];
   const sub = [];
-  if (fCount + eCount > 0) sub.push(`Full ${fCount} / Empty ${eCount}`);
+  //  ★ 4.15-01 (검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기»): 리퍼 엠티가 있으면 «Empty 43(일반 2 · 리퍼 엠티 41)».
+  //    «리퍼 엠티 몇 대» 처럼 리퍼를 콕 집어 물으면(parsed.type rf) 답이 곧 리퍼 엠티 수라 «일반 0» 구분을 붙이지 않는다(Fable 판정 2026-10-09) — 구분은 엠티 전체를 물을 때만.
+  const eRfCount = (parsed && parsed.type === 'rf') ? 0 : results.filter(c => c.fe === 'E' && isEmptyReefer(c)).length;
+  if (fCount + eCount > 0) sub.push(`Full ${fCount} / ${emptySplitLabel(eCount, eRfCount, 'Empty')}`);
   if (dCount + lCount > 0) sub.push(`양하 ${dCount} / 선적 ${lCount}`);
   if (deckCount + holdCount > 0) sub.push(`갑판 ${deckCount} / 홀드 ${holdCount}`);
   if (sub.length > 0) lines.push(sub.join(' · '));
@@ -1695,7 +1698,8 @@ function formatBayStats(bay, results) {
   const compCount = results.filter(c => c._comp).length;
 
   const lines = [`📊 ${bay}번 베이: 총 ${results.length}대`];
-  lines.push(`Full ${fCount} / Empty ${eCount} · 갑판 ${deckCount} / 홀드 ${holdCount}`);
+  const eRfCount = results.filter(c => c.fe === 'E' && isEmptyReefer(c)).length;   // 4.15-01: 엠티 구분(리퍼 엠티) — 아래 «특수: 리퍼» 에는 안 더한다
+  lines.push(`Full ${fCount} / ${emptySplitLabel(eCount, eRfCount, 'Empty')} · 갑판 ${deckCount} / 홀드 ${holdCount}`);
   lines.push(`⚖️ 총중량 ${formatWt(totalKg)}`);
   if (compCount > 0) lines.push(`✅ 완료 ${compCount}/${results.length} (${Math.round(compCount/results.length*100)}%)`);
   if (rfCount > 0 || dgCount > 0) {
@@ -1939,12 +1943,12 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   };
   const total = cs.length;
   const done = cs.filter(c => c._comp).length;
-  const sz = {}; let F = 0, E = 0, deck = 0, hold = 0;
+  const sz = {}; let F = 0, E = 0, ERf = 0, deck = 0, hold = 0;   // 4.15-01: ERf — 엠티 중 리퍼 엠티(엠티 구분 표기)
   const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], oog = [], noTmp = [];
   const bays = new Set();
   for (const c of cs) {
     const s = szOf(c); sz[s] = (sz[s] || 0) + 1;
-    if (c.fe === 'E') E++; else F++;
+    if (c.fe === 'E') { E++; if (isEmptyReefer(c)) ERf++; } else F++;
     const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
     const t = parseInt(c.tier, 10);
     if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
@@ -2081,9 +2085,9 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   const lines = [head];
   // V8.06-02: RORO/LOLO 혼용선(셀 좌표 없음)은 베이/갑판/홀드 표기 생략 — undefined·0 표시 방지.
   if (isLoloBrief) {
-    lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · LOLO(리스트 검수)`);
+    lines.push(`📌 작업: ${total}대 (Full ${F} / ${emptySplitLabel(E, ERf, 'Empty')} · ${szStr}) · LOLO(리스트 검수)`);   // 4.15-01: 엠티 구분
   } else {
-    lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
+    lines.push(`📌 작업: ${total}대 (Full ${F} / ${emptySplitLabel(E, ERf, 'Empty')} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
   }
   //  3.53-12: 진행 줄은 **완료 기록 한 숫자**다 — 외부 합계는 쓰지 않는다(검수사 2026-09-15·09-21). 완료 기록에 터미널 컨별 실적(src:'term')이 이미 들어 있다.
   if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
