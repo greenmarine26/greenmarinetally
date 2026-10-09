@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.18-01';
-const NOTE = '4.18-01 콘앱 미르도 질문에 다른 배 이름이 있으면 그 배로 답합니다. 자료가 없는 배면 없다고 답합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.18-02';
+const NOTE = '4.18-02 45피트 공컨 규격이 비어 보이던 것을 모든 화면에서 같게 고쳤습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
