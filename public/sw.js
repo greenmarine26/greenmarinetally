@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.20';
-const NOTE = '4.20 양하 대수는 세관 목록이 기준이고 목록에 없이 내린 컨은 추가분으로 따로 셉니다. 제작컨은 대수와 크기에 들어가고 규격 코드는 없습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.20-01';
+const NOTE = '4.20-01 엠티 실 작업 현황의 규격 글자와 같게 컨 상세 등에도 풀 엠티 표식 대신 정본 규격 45RE를 보여 줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

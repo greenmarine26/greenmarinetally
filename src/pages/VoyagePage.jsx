@@ -54,6 +54,7 @@ import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -2897,7 +2898,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 )}
                 {cf.slice(0, 6).map(x => (
                   <div key={x.cn} className="mono text-2xs opacity-80">
-                    · {x.cn} <b>{x.pos}</b> {x.iso} — EDI {x.ediPod} · 리스트 {x.recPod}
+                    · {x.cn} <b>{x.pos}</b> {isoShown(x.iso)} — EDI {x.ediPod} · 리스트 {x.recPod}
                   </div>
                 ))}
                 {cf.length > 6 && <div className="text-2xs opacity-70">… 외 {cf.length - 6}대</div>}
@@ -2977,7 +2978,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               <div key={sc.cn} data-shift-cn={sc.cn} className="px-3 py-1.5 grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-1 items-start text-xs2">
                 <span className="min-w-0">
                   <span className="mono font-bold text-dim-100 block truncate">{sc.cn}</span>
-                  <span className="text-2xs text-dim-400">{[sc.iso, sc.pod].filter(Boolean).join(' · ')}</span>
+                  <span className="text-2xs text-dim-400">{[isoShown(sc.iso), sc.pod].filter(Boolean).join(' · ')}</span>
                 </span>
                 <span className="min-w-0">
                   <span className="mono text-blue-300" data-col="from">{fmtShiftPos(sc.from)}</span>

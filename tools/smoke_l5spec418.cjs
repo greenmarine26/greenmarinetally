@@ -25,6 +25,6 @@ const root = process.argv[2] || process.cwd();
   ok(cs.L5GE === 44 && (cs['45GE'] || 0) + (cs['45RE'] || 0) === 127 && cs['45RE'] === 21 && (cs['20E'] || 0) + (cs['20RE'] || 0) === 116 && !cs['40E'], `규격 글자 = 마감텔리 칸 전체 287 (45' L5GE 44 · HC 127 중 리퍼 RH 21 = 엑셀 RH 20+1 · 20' 116) → ${JSON.stringify(cs)}`);
   ok(T.emptySealSpecTally({ iso: '4200', fe: 'E' }) === '40E' && T.emptySealSpecTally({ iso: '450E', fe: 'E' }) === '45GE' && T.emptySealSpecTally({ iso: '950E', fe: 'E' }) === 'L5GE' && T.emptySealSpecTally({ iso: '' }) === '-', '일반 40\' 엠티는 40E · 40HC 엠티는 45GE · 45피트 엠티는 L5GE · 규격 없으면 -');
   const gw = fs.readFileSync(path.join(root, 'src/components/GuidedWorkPanel.jsx'), 'utf8');
-  ok(/c\.tp \|\| isoToLabel\(c\.iso\) \|\| c\.iso/.test(gw) && !/\{c\.tp \|\| c\.iso\}/.test(gw), '자동 가이드는 규격 글자가 비어도 공통 규격 판정으로 보인다(950E 그대로 안 나옴)');
+  ok(/c\.tp \|\| isoToLabel\(c\.iso\) \|\| (isoShown\(c\.iso\)|c\.iso)/.test(gw) && !/\{c\.tp \|\| c\.iso\}/.test(gw), '자동 가이드는 규격 글자가 비어도 공통 규격 판정으로 보인다(950E 그대로 안 나옴)');
   console.log(bad ? `✗ ${bad}건 실패` : '✓ 전부 통과'); process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

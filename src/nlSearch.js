@@ -5,6 +5,7 @@
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
+import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -1337,7 +1338,7 @@ export function answerAboutAlert(query, alerts) {
         (x.ediFe && x.lrFe) ? ` · EDI ${x.ediFe} / 리스트 ${x.lrFe}` :
         (hit.code === 'iso_conflict' && (x.srcs || x.ediIso)) ? ` · ${isoConflictText(x)}` :
         (x.ediSl && x.lrSl) ? ` · EDI ${x.ediSl} / 리스트 ${x.lrSl}` :
-        (x.iso ? ` · ${x.iso}` : '');
+        (x.iso ? ` · ${isoShown(x.iso)}` : '');
       lines.push(`${i + 1}. ${x.cn || x.location || ''}${pos}${extra}`);
     });
     if (d.length > 12) lines.push(`… 외 ${d.length - 12}건`);
@@ -1379,7 +1380,7 @@ function formatShifting(ctx) {
   for (const cn of sorted) {
     const v = map[cn] || {};
     const to = v.to ? ` → ${String(v.to).length >= 7 ? `${Number(String(v.to).slice(0, 3))}-${String(v.to).slice(3, 5)}-${String(v.to).slice(5, 7)}` : v.to}` : '';
-    lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${v.iso || ''} ${v.pod ? 'POD ' + v.pod : ''}`.trimEnd());
+    lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${isoShown(v.iso) || ''} ${v.pod ? 'POD ' + v.pod : ''}`.trimEnd());
   }
   if (_ev && _ev.line) {
     lines.push('', `근거 — ${_ev.line}`);

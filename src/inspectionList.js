@@ -9,6 +9,7 @@
 
 import { shipOpMapper } from './data/tallyFormats.js';
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
   //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
@@ -540,7 +541,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     //  3.65: 검수사 «시프팅 리스트에서 양하/선적/실제위치(컨별 선적완료시 마다 추가)» — 종이에도 같은 세 칸(인쇄 시점까지 실린 것).
     //    자리 글자는 fmtShiftPos 한 벌(종전엔 7자리 날것 0180786 이 찍혔다).
     const rows = shiftingList.map((c, i) => `<tr>
-      <td>${i + 1}</td><td class="cn">${c.cn || ''}</td><td>${c.iso || ''}</td><td>${c.pod || ''}</td>
+      <td>${i + 1}</td><td class="cn">${c.cn || ''}</td><td>${isoShown(c.iso) || ''}</td><td>${c.pod || ''}</td>
       <td class="cn">${fmtShiftPos(c.from)}</td><td class="cn">${c.same ? '제자리' : fmtShiftPos(c.to)}</td><td class="cn">${c.act ? `${fmtShiftAct(c)} ${fmtShiftTime(c.actAt)}` : ''}</td><td></td></tr>`).join('');
     shiftHtml = `<div class="ititle">[별첨2] ◆ 시프팅(재적부) ${shiftingList.length}대 — 평택 작업에 걸려 옮기는 화물 (양하·선적 공통, 1대=크레인 2모브)</div>
       <div class="ipage"><table class="ilist" style="max-width:140mm;margin:0 auto;">

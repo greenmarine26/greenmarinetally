@@ -5,6 +5,7 @@
 //   ⇒ 인천 출항본 EDI가 오면 저절로 맞는다. 검수사가 헤매지 않도록 미르가 이걸 설명한다.
 //   ⚠ 진단만 한다 — 숫자를 고치거나 자료를 만들지 않는다. 리스트가 정본이라는 판단도 하지 않는다.
 import { isPyeongtaekPort, isPtkResolved } from './utils.js';   // 3.53: POD 확정 반영 한 벌
+import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 
 const S = (x) => String(x || '').trim().toUpperCase();
 // 40ft 계열(4·L·9 시작) / 20ft(2 시작) — utils.isoToLabel 과 같은 앞자리 규칙
@@ -80,7 +81,7 @@ export function explainEdiGap(d, vsl) {
     d.onlyList.slice(0, 8).forEach((cn) => {
       const c = d.detail(cn) || {};
       const ts = S(c.tsport);
-      L.push(`  · ${cn} ${c.iso || ''}${c.pol ? ` · 출발 ${c.pol}` : ''}${ts ? ` · 환적 ${ts}` : ''}${c.sl ? ` · 씰 ${c.sl}` : ''}`);
+      L.push(`  · ${cn} ${isoShown(c.iso) || ''}${c.pol ? ` · 출발 ${c.pol}` : ''}${ts ? ` · 환적 ${ts}` : ''}${c.sl ? ` · 씰 ${c.sl}` : ''}`);
     });
     if (d.onlyList.length > 8) L.push(`  … 외 ${d.onlyList.length - 8}대`);
   }
@@ -88,7 +89,7 @@ export function explainEdiGap(d, vsl) {
     L.push(`▸ EDI에만 있는 컨 ${d.onlyEdi.length}대 (리스트가 아직 모름)`);
     d.onlyEdi.slice(0, 8).forEach((cn) => {
       const c = d.detail(cn) || {};
-      L.push(`  · ${cn} ${c.iso || ''}${c.bay ? ` · ${c.bay}-${c.row}-${c.tier}` : ''}`);
+      L.push(`  · ${cn} ${isoShown(c.iso) || ''}${c.bay ? ` · ${c.bay}-${c.row}-${c.tier}` : ''}`);
     });
   }
 

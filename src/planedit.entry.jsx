@@ -21,6 +21,7 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
 import { parseBAPLIE, parseListExcel, isoToLabel, getContainerColorKey, buildContainerColorMap } from './utils.js';
+import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { extractShipInfo, getShipBayDictData } from './shipStructure.js';
 import { enrichBayDef } from './bayDictAutoEnrich.js';
 import { isUserOwnedBayDict, isPtk as _isPtkOne } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
@@ -750,7 +751,7 @@ function App() {
       ...dropProps,
       'data-cn': cn, draggable: !locked,
       className: `cpv2-cell ${locked ? 'pe-lock' : 'pe-fill'}${changedSet.has(cn) ? ' pe-chgd' : ''}${selected.has(cn) ? ' pe-sel' : ''}`,
-      title: `${cn}\n${isoToLabel(c.iso) || c.iso} · ${c.pol}→${c.pod}${locked ? '\n통과 고정분 — 이동 불가' : ''}${state.shiftSet.has(cn) ? '\n◆ 쉬프팅(재적부)' : ''}`,
+      title: `${cn}\n${isoToLabel(c.iso) || isoShown(c.iso)} · ${c.pol}→${c.pod}${locked ? '\n통과 고정분 — 이동 불가' : ''}${state.shiftSet.has(cn) ? '\n◆ 쉬프팅(재적부)' : ''}`,
       onDragStart: (e) => dragStart(e, cn),
       onDragEnd: () => clearOver(),
       onClick: (e) => { e.stopPropagation(); toggleSel(cn); },

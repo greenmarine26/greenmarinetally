@@ -1,5 +1,6 @@
 // 머스크 엠티 찾기 — PCTC EDI(실번호 엠티)와 머스크 BAPLIE 를 도착항×규격으로 대조하는 순수 판정 모듈(수석 대시보드·연막검사 공용)
 import { isReeferCheckSkipped, isVirtualCn, isBookingSlot } from './utils.js';
+import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 
 // 규격 묶음 — 앞 두 자리 + RF/GP (수집기 emptylist._spec_key 와 같은 규칙. 45R1·45RE 는 같은 묶음)
 export function specKey(iso) {
@@ -86,6 +87,6 @@ export function maerskEmptyCards(voyages, dictAll) {
 // 인쇄·CSV — 규격별로 모아 번호를 한 줄씩
 export function emptyCsv(card) {
   const L = ['번호,컨번호,규격,도착항'];
-  card.rows.forEach((r, i) => L.push(`${i + 1},${r.cn},${r.iso},${r.pod}`));
+  card.rows.forEach((r, i) => L.push(`${i + 1},${r.cn},${isoShown(r.iso)},${r.pod}`));
   return '﻿' + L.join('\r\n') + '\r\n';
 }

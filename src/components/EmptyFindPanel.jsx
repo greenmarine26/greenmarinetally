@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { maerskEmptyCards, emptyCsv, STATUS_LABEL } from '../emptyFind.js';
 import { fbRequestEmptyMake, fbSubscribeProcessDone } from '../firebase.js';
 import { downloadText } from '../loloReport.js';
+import { isoShown } from '../utils.js';   // 4.20-01: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 
 function EmptyFindCard({ c, inspector, canMake }) {
   const [open, setOpen] = useState(false);
@@ -54,7 +55,7 @@ function EmptyFindCard({ c, inspector, canMake }) {
       )}
       <div className="flex gap-2 mt-2 flex-wrap">
         <button className="px-3 rounded-btn border border-line text-xs" style={{ minHeight: 44 }} onClick={() => setOpen(!open)}>
-          {open ? '번호 접기' : `번호 보기 (${specs.map(([k, v]) => `${k} ${v.length}`).join(' · ') || '없음'})`}
+          {open ? '번호 접기' : `번호 보기 (${specs.map(([k, v]) => `${isoShown(k)} ${v.length}`).join(' · ') || '없음'})`}
         </button>
         {canMake && c.status !== 'official' && (
           <button className="px-3 rounded-btn border border-amber-700 text-amber-200 text-xs" style={{ minHeight: 44 }} onClick={make} disabled={waiting}>
@@ -71,7 +72,7 @@ function EmptyFindCard({ c, inspector, canMake }) {
       {err && <div className="text-xs mt-1 text-red-300">{err}</div>}
       {open && (
         <div className="mt-2 text-xs text-dim-200 space-y-1">
-          {specs.map(([iso, cns]) => (<div key={iso}><b>{iso}</b> {cns.length}대 — <span className="break-all">{cns.join(' ')}</span></div>))}
+          {specs.map(([iso, cns]) => (<div key={iso}><b>{isoShown(iso)}</b> {cns.length}대 — <span className="break-all">{cns.join(' ')}</span></div>))}
         </div>
       )}
     </div>

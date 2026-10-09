@@ -17,6 +17,7 @@ import { isoToLabel, bayCellTypeLabel, normalizeBay, isReeferContainer, reeferTe
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { isUserOwnedBayDict, isPtk as _isPtkOne, isPredShift } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
@@ -865,7 +866,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-black mono text-dim-100 truncate">{c.cn}</div>
                       <div className="text-2xs text-dim-300 mono">
-                        {c.iso || '-'} · {c.bay || '-'}/{c.row || '-'}/{c.tier || '-'}
+                        {isoShown(c.iso) || '-'} · {c.bay || '-'}/{c.row || '-'}/{c.tier || '-'}
                       </div>
                     </div>
                   </button>

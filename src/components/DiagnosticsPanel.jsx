@@ -1,4 +1,4 @@
-import { fmtPos } from '../utils';
+import { fmtPos, isoShown } from '../utils';   // 4.21
 // 자동 진단 경고 패널 (M3.5.4)
 //   - 자료 업로드 후 자동 호출
 //   - critical: 빨강 점멸 + 자동 음성
@@ -141,7 +141,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
             <span className="font-bold">{c.cn}</span>
-            <span className="text-dim-300 text-3xs">{c.iso} · POD {c.pod} · @{fmtPos(c) || '?-?-?'}</span>
+            <span className="text-dim-300 text-3xs">{isoShown(c.iso)} · POD {c.pod} · @{fmtPos(c) || '?-?-?'}</span>
             <span className={`text-3xs ${isAttach ? 'text-red-400' : 'text-cyan-400'}`}>🔒 입력</span>
           </button>
         ))}
@@ -162,7 +162,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
             <span className="font-bold">{c.cn}</span>
-            <span className="text-dim-300">ISO: {c.iso} @ {fmtPos(c) || '?-?-?'}</span>
+            <span className="text-dim-300">ISO: {isoShown(c.iso)} @ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-3xs">✏️ 수정</span>
           </button>
         ))}
@@ -201,7 +201,7 @@ function AlertDetails({ alert, onOpenContainer }) {
           <div className="mt-1">
             <div className="text-amber-400 mb-0.5">리스트에 없는 컨번호 (부족):</div>
             {d.missing.slice(0, 10).map((m, i) => (
-              <div key={i} className="mono">• {m.cn} {m.iso ? `(${m.iso})` : ''} {m.fe || ''}</div>
+              <div key={i} className="mono">• {m.cn} {m.iso ? `(${isoShown(m.iso)})` : ''} {m.fe || ''}</div>
             ))}
             {d.missing.length > 10 && <div className="text-dim-400">... 외 {d.missing.length - 10}건</div>}
           </div>

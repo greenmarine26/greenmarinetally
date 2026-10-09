@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
 import { bayParityError, seqFullConfirmText, buildSlotUniverse, buildOccupancy, effectivePos, isoToLabel } from '../utils.js';   // 2.95: 충돌은 실물이 실린 칸 하나뿐   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌) · 1.55: 칸·점유는 utils 한 벌
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter, isSlotRelaxed } from '../swapGrade.js';   // 2.95: 완화는 엠티·시프팅만   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
@@ -546,7 +547,7 @@ export default function PositionEditModal({
             <span className={`px-2 py-1 rounded font-black ${isFull ? 'bg-rose-700 text-rose-50' : 'bg-ink-750 text-dim-200'}`}>
               {isFull ? '풀 (F)' : container.fe === 'E' ? '엠티 (E)' : '미정'}
             </span>
-            {container.iso && <span className="bg-ink-800 text-dim-200 px-2 py-1 rounded mono">{container.iso}</span>}
+            {container.iso && <span className="bg-ink-800 text-dim-200 px-2 py-1 rounded mono">{isoShown(container.iso)}</span>}
             {isCompleted && <span className="bg-emerald-700 text-emerald-50 px-2 py-1 rounded font-black">✓ 선적 완료</span>}
           </div>
           <div className="mt-2 text-sm text-dim-300">

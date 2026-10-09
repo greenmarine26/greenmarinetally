@@ -17,6 +17,7 @@ import { createPortal } from 'react-dom';
 import { X, Save, Undo2 } from 'lucide-react';
 import { getShipBayDictData } from '../shipStructure.js';
 import { swapFixGate } from '../utils.js';   // 2.89-01: 통과 고정분 맞교환 게이트 — 판정 한 벌
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { isoToLabel, buildContainerColorMap, getContainerColorKey, isPtk as _isPtkOne } from '../utils.js';   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
@@ -917,7 +918,7 @@ export default function BayGridEditor({
       ...dropProps,
       'data-cn': cn, draggable: !locked,
       className: `cpv2-cell ${locked ? 'bge-lock' : 'bge-fill'}${changedSet.has(cn) ? ' bge-chgd' : ''}${selected.has(cn) ? ' bge-picked' : ''}`,
-      title: `${cn}\n${isoToLabel(c.iso) || c.iso} · ${c.pol || ''}→${c.pod || ''}${locked ? `\n${lockHint} — 이동 불가` : ''}${state.shiftSet.has(cn) ? '\n◆ 쉬프팅(재적부)' : ''}`,
+      title: `${cn}\n${isoToLabel(c.iso) || isoShown(c.iso)} · ${c.pol || ''}→${c.pod || ''}${locked ? `\n${lockHint} — 이동 불가` : ''}${state.shiftSet.has(cn) ? '\n◆ 쉬프팅(재적부)' : ''}`,
       onDragStart: (e) => dragStart(e, cn),
       onDragEnd: () => clearOver(),
       onClick: (e) => {

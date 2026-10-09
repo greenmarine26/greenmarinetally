@@ -7,6 +7,7 @@ import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 �
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
 import { isoConflictOf, ISO_SRC_NAME } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
 import { completedByLabel, EXTRA_OF_LIST_LABEL } from '../utils.js';   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
@@ -426,7 +427,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     askConfirm({
       title: '규격 변경',
       message:
-        `현재: ${c.iso || '?'} (${isoToLabel(c.iso) || '?'})\n` +
+        `현재: ${isoShown(c.iso) || '?'} (${isoToLabel(c.iso) || '?'})\n` +
         `변경: ${opt.iso} (${opt.label})\n\n` +
         `변경 이력에 기록됩니다.`,
       confirmLabel: '변경',
@@ -543,7 +544,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 <div className="flex-1">
                   <div className="text-xs font-black text-blue-200">풀 리퍼 사진 촬영 필요</div>
                   <div className="text-xxs text-blue-300 mt-0.5">
-                    이 컨테이너는 풀 리퍼입니다 (코드 {c.iso}). 온도 확인 사진 1장 촬영이 필요합니다.
+                    이 컨테이너는 풀 리퍼입니다 (코드 {isoShown(c.iso)}). 온도 확인 사진 1장 촬영이 필요합니다.
                   </div>
                   <button onClick={() => setIso403PhotoOpen(true)}
                     className="mt-2 w-full py-2.5 bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white rounded font-bold text-sm flex items-center justify-center gap-1.5">
@@ -784,7 +785,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold mono text-dim-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
-                  <span className="text-xs text-dim-400 mono">({c.iso || '-'})</span>
+                  <span className="text-xs text-dim-400 mono">({isoShown(c.iso) || '-'})</span>
                   {/* V9.57(I10): c.iso_orig → 폴백 조회값(isoOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
                   {isoOrigShow && isoOrigShow !== c.iso && (
                     <span className="text-2xs text-amber-400 mono">원본: {isoOrigShow} → 수정됨</span>

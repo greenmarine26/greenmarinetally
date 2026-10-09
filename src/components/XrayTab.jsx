@@ -26,6 +26,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
+import { isoShown } from '../utils.js';   // 4.20-01: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { fbSetXraySeal, fbUpdateVoyageInfo, fbSubscribeInspectCheck, fbSaveInspectCheck } from '../firebase.js';
 import { parseInspectCheckRows, matchInspectCheck, inspectStatusText } from '../inspectCheck.js';
 import { canWorkNow } from '../workChoice.js';   // 3.59: 세관 검수예정 목록
@@ -399,7 +400,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                   <td className="px-2 py-2 mono font-bold">{r.cn}</td>
                   <td className="px-2 py-2 mono text-dim-200">{r.seal || '—'}</td>
                   <td className={`px-2 py-2 ${(KINDS.find((k) => k.k === r.kind) || {}).c || 'text-dim-300'}`}>{r.kind || '—'}</td>
-                  <td className="px-2 py-2 mono text-dim-300">{r.iso || '—'}</td>
+                  <td className="px-2 py-2 mono text-dim-300">{isoShown(r.iso) || '—'}</td>
                   <td className="px-2 py-2 mono text-dim-200">{posOf(r) || <span className="text-rose-400">위치 미상</span>}</td>
                   {/* ── 2.39 부착 세관봉인번호 — 그 자리에서 친다 ──
                        검수사 확정 *«사무실에서 직접 지정하고 출력물을 인쇄해서 나가야»* ·

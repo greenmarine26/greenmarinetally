@@ -6,6 +6,7 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -1285,7 +1286,7 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
               <tr key={i} className={`border-t border-line ${c.done ? '' : 'opacity-50'}`}>
                 <td className="px-1.5 py-1 text-dim-400 mono">{i + 1}</td>
                 <td className="px-1.5 py-1 mono text-dim-100">{c.cn}</td>
-                <td className="px-1.5 py-1 mono text-dim-300">{c.iso}</td>
+                <td className="px-1.5 py-1 mono text-dim-300">{isoShown(c.iso)}</td>
                 <td className="px-1.5 py-1 mono">
                   {c.fe === 'E'
                     ? <span className="text-amber-300 font-bold">E</span>

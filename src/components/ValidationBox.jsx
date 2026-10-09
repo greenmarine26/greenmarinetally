@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ShieldCheck, AlertTriangle, Printer, FileDown, X } from 'lucide-react';
 import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry, isPtkResolved, fmtShiftPos, fmtShiftTime, fmtShiftAct } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
+import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 
 // V8.98-08: 쉬프팅(재적부) 목록 모달 — 검증 카드의 ◆ 칸 클릭 시. 인쇄/PDF/엑셀 저장(청구 근거용).
 //  3.65: 자리 글자는 utils.fmtShiftPos 한 벌(0180786 → 18-07-86) — 종전 자르기는 예측 꼴(«6-02-82»)을 «6-0-2-82» 로 깼다.
@@ -16,7 +17,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   const title = `쉬프팅(재적부) 목록 — ${String(voyageKey || '').replace('_', ' ')}`;
   const openPrint = () => {
     const rows = list.map((s, i) =>
-      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${s.iso || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.same ? '제자리' : _sp(s.to)}</td><td class="mono">${_act(s)}</td><td>${_hm(s.actAt)}</td><td></td></tr>`).join('');
+      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${isoShown(s.iso) || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.same ? '제자리' : _sp(s.to)}</td><td class="mono">${_act(s)}</td><td>${_hm(s.actAt)}</td><td></td></tr>`).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>
       body{font-family:'Malgun Gothic',sans-serif;margin:24px;color:#111}
       h2{font-size:16px;margin:0 0 2px}
@@ -40,7 +41,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
       const XLSX = await loadSheetJS();
       const aoa = [[title], [`총 ${list.length}대 · 통과화물 재적부(양하·선적 공통)`], [],
         ['No', '컨테이너 번호', '규격', 'F/E', 'POD', '양하 위치', '선적 위치', '실제 위치', '실은 시각'],
-        ...list.map((s, i) => [i + 1, s.cn, s.iso || '', s.fe || '', s.pod || '', _sp(s.from), s.same ? '제자리' : _sp(s.to), _act(s), _hm(s.actAt)])];   // 3.44: 제자리 재적재 · 3.65: 실제
+        ...list.map((s, i) => [i + 1, s.cn, isoShown(s.iso) || '', s.fe || '', s.pod || '', _sp(s.from), s.same ? '제자리' : _sp(s.to), _act(s), _hm(s.actAt)])];   // 3.44: 제자리 재적재 · 3.65: 실제
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 5 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 8 }];
       const wb = XLSX.utils.book_new();
@@ -74,7 +75,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
             <div key={s.cn} className="px-3 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs2">
               <span className="text-dim-500 w-5 text-right">{i + 1}</span>
               <span className="mono font-bold text-dim-100">{s.cn}</span>
-              <span className="text-dim-400">{s.iso}</span>
+              <span className="text-dim-400">{isoShown(s.iso)}</span>
               {s.pod && <span className="text-dim-400">{s.pod}</span>}
               <span className="ml-auto mono text-blue-300">{s.same ? `${_sp(s.from)} (제자리)` : `${_sp(s.from)} → ${_sp(s.to)}`}</span>
               {/* 3.65: 실제 실은 자리 — 실릴 때마다 채워진다 */}
