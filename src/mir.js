@@ -31,6 +31,8 @@ import {
   currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
   plausibleListWtKg, ediWtField,   // 4.08-02: 컨 하나 40톤 초과는 무게 없음 · EDI 총중량 wtEdi (병합 경로 한 벌)
   dateWordOf,   // 4.12-02: 날짜 말(어제·내일·낼모레…) 해석 한 벌
+  dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
+  shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -53,7 +55,7 @@ import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
 import { mirKnowledge, mirKnowledgeMulti } from './data/mirKnowledge.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
-import { judgeMode, buildReadiness, describeReadiness } from './dataReadiness.js';
+import { judgeMode, buildReadiness, describeReadiness, loadingCollecting } from './dataReadiness.js';   // 4.17 (§7.8-⑫): 리스트뿐·미선적 = «자료 수집중» 판정 한 벌
 import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60-18: PORT-MIS 매칭 본체(베이사전 없이) — 콘앱 미르용 기본 매처
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
@@ -937,9 +939,24 @@ export function pickShipCtx(query, voyages, ctxVoyageKey = null) {
       }
       return true;
     };
-    const toks = Q.split(/[^A-Z0-9]+/).filter((w) => /^[A-Z]{3,8}$/.test(w));
+    //  ★ 4.17 (검수사 §7.8-⑧ «2») — 배 코드 꼴(영문 네 글자)은 utils.shipCodeFixOf(→ nearestShipCode) 한 벌로 고른다 — 거리 1~2(자리바꿈 포함) 안에서 가장 가까운
+    //    코드가 하나면 그 배(미르 답에 «OBWH 로 답했어요» 한 줄), 같은 거리에 둘 이상이면 고르지 않는다(미르가 «… 중 어느 배요?» 로 되묻는다).
+    //    아는 코드는 활성 항차·베이사전(knownShipCodes) — 사전에만 있는 배가 더 가까우면 엉뚱한 항차를 고르지 않는다. 네 글자가 아닌 낱말·선박명은 종전 거리 1(dl1).
+    const _fx = shipCodeFixOf(query, knownShipCodes(voyages));
+    const _amb = !!_fx.ambiguous;
+    if (!_amb) {
+      for (const f of _fx.fixes) {
+        Object.entries(voyages || {}).forEach(([k, v]) => {
+          const i = v?.info; if (!i || String(i.vsl || '').toUpperCase() !== f.code) return;
+          const has = !!(v.discharge?.ediContainers || v.loading?.ediContainers);
+          if (!best || (has && !best.has)) best = { key: k, info: i, v, has };
+        });
+        if (best) break;
+      }
+    }
+    const toks = Q.split(/[^A-Z0-9]+/).filter((w) => /^[A-Z]{3,8}$/.test(w) && w.length !== 4);
     const byShip = new Map();
-    Object.entries(voyages || {}).forEach(([k, v]) => {
+    if (!best && !_amb) Object.entries(voyages || {}).forEach(([k, v]) => {
       const i = v?.info; if (!i) return;
       const names2 = [i.vsl, i.vslFull].filter(Boolean).map((x) => String(x).toUpperCase());
       if (names2.some((nm) => nm.length >= 3 && toks.some((tk) => dl1(tk, nm)))) {
@@ -949,7 +966,7 @@ export function pickShipCtx(query, voyages, ctxVoyageKey = null) {
         if (!prev || (has && !prev.has)) byShip.set(shipId, { key: k, info: i, v, has });
       }
     });
-    if (byShip.size === 1) best = [...byShip.values()][0];
+    if (!best && byShip.size === 1) best = [...byShip.values()][0];
   }
   return best || _fallback();
 }
@@ -1648,6 +1665,112 @@ function _shipsOnDay(voyages, off) {
   }).filter((x) => x.a != null && x.a < d1 && x.b >= d0).sort((x, y) => x.a - y.a);
 }
 
+//  ★ 4.17 (검수사 §7.8-③ «모든걸 알수 있으면 도움이 됨») — **지난 날 진행·작업 선박은 날짜별 완료 기록으로** 답한다(§4.2-F-5 «알려진 한계» 폐기).
+//    조 키는 근무일 기준(utils.dayShiftKeys·shiftKeyOfMs — 야간은 시작한 날, 00:00~06:29 는 전날 근무일). 완료 시각이 없는 기록은 날짜·조로 못 가르니
+//    몇 대인지 밝히고(§4.2-F-3 과 같은 태도) 빼지 않는다. 검수앱·콘앱이 같은 원본(항차 completed)을 읽으므로 같은 답이다.
+const _segMd = (b, mk) => (mk ? '' : [b.discharge ? `양하 ${b.discharge}` : null, b.loading ? `선적 ${b.loading}` : null].filter(Boolean).join(' · '));
+//  작업일(planDate) 창도 근무일 기준 — 00:00~06:29 에는 근무일이 하루 앞이라(§4.2-F-2) 달력 하루 차이(_shipsOnDay)를 그만큼 당긴다.
+function _planOff(off, nowMs) {
+  const d = new Date(nowMs);
+  const today = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return off + (dayShiftKeys(0, '주간', nowMs)[0].slice(0, 5) === today ? 0 : -1);
+}
+function _pastDayLabel(dw, shW, keys) { return `${dw.word}${shW ? ' ' + shW : ''}(${shW ? keys[0] : keys[0].slice(0, 5)})`; }
+function _pastDayDone(v, ship, dw, shW, mode, nowMs) {
+  const keys = dayShiftKeys(dw.off, shW, nowMs);
+  const D = doneOnShiftKeys(v, keys);
+  const all = doneOnShiftKeys(v, null);
+  const nm = ship || '이 배';
+  const lbl = _pastDayLabel(dw, shW, keys);
+  if (!all.n && all.noAt) return `${nm} — 완료 기록 ${all.noAt}대에 완료 시각이 없어 날짜·조별로는 못 나눠요. 날짜를 빼고 물으면 항차 전체로 답해요.`;
+  const mk = mode === 'loading' || mode === 'discharge' ? mode : null;
+  const mKr = mk === 'loading' ? '선적 ' : mk === 'discharge' ? '양하 ' : '';
+  const n = mk ? D[mk] : D.n;
+  const L = [];
+  if (!n) {
+    L.push(`${nm} — ${lbl}에는 ${mKr}완료 기록이 없어요.`);
+    const ks = Object.keys(all.byKey).sort((x, y) => (x.slice(0, 5) + (x.endsWith('주간') ? 0 : 1)).localeCompare(y.slice(0, 5) + (y.endsWith('주간') ? 0 : 1)));   // 날짜 순 · 같은 날은 주간 먼저
+    if (ks.length) L.push(`(이 항차 완료 기록이 있는 조 — ${ks.map((k) => `${k} ${mk ? all.byKey[k][mk] : all.byKey[k].discharge + all.byKey[k].loading}대`).join(' · ')})`);
+  } else {
+    const seg = _segMd(D, mk);
+    L.push(`${nm} — ${lbl} ${mKr}완료 기록 ${n}대${seg ? ` (${seg})` : ''}`);
+    if (!shW) for (const k of keys) { const b = D.byKey[k]; const nn = b ? (mk ? b[mk] : b.discharge + b.loading) : 0; if (nn) { const sg = _segMd(b, mk); L.push(`  ${k} ${nn}대${sg ? ` (${sg})` : ''}`); } }
+  }
+  if (all.noAt) L.push(`(완료 시각이 없는 기록 ${all.noAt}대는 날짜·조별로는 못 나눠요)`);
+  return L.join('\n');
+}
+//  배 이름 없이(홈·떠 있는 미르) — 그 날 완료 기록이 있는 항차마다 한 줄. 이 폰에 완료 기록(본문)이 없는 배는 셀 수 없으니 그 날 작업 계획이 있던 배는 밝힌다(4.08 — 일반 검수원 폰은 고른 항차 본문만 받는다).
+function _pastDayDoneAll(voyages, dw, shW, mode, nowMs) {
+  const keys = dayShiftKeys(dw.off, shW, nowMs);
+  const lbl = _pastDayLabel(dw, shW, keys);
+  const mk = mode === 'loading' || mode === 'discharge' ? mode : null;
+  const rows = [];
+  for (const [k, vv] of Object.entries(voyages || {})) {
+    if (!vv || !(vv.discharge || vv.loading)) continue;
+    const D = doneOnShiftKeys(vv, keys); const n = mk ? D[mk] : D.n;
+    if (n) rows.push({ k, i: vv.info || {}, D, n });
+  }
+  const off = _shipsOnDay(voyages, _planOff(dw.off, nowMs)).filter((x) => !(x.v && (x.v.discharge || x.v.loading))).map((x) => String((x.v && x.v.info && x.v.info.vsl) || x.k.split('_')[0]));
+  const tail = off.length ? `\n(그 날 작업 계획이 있던 ${off.join('·')} 는 이 폰에 받은 완료 기록이 없어 세지 않았어요)` : '';
+  if (!rows.length) return `${lbl}에는 완료 기록이 있는 배가 없어요.${tail}`;
+  rows.sort((a, b) => b.n - a.n);
+  const tot = rows.reduce((a, r) => a + r.n, 0);
+  return [`${lbl} ${mk === 'loading' ? '선적 ' : mk === 'discharge' ? '양하 ' : ''}완료 기록 — ${rows.length}척 ${tot}대`,
+    ...rows.map((r) => { const sg = _segMd(r.D, mk); return `${r.i.vsl || r.k.split('_')[0]} ${r.k.split('_')[1] || ''} — ${r.n}대${sg ? ` (${sg})` : ''}`; })].join('\n') + tail;
+}
+//  «어제 작업한 배» — 항차 작업일(planDate)이 그 날과 겹친 배 ∪ 그 날 완료 기록이 있는 배.
+function _pastDayShips(voyages, dw, nowMs) {
+  const keys = dayShiftKeys(dw.off, null, nowMs);
+  const day = keys[0].slice(0, 5);
+  const m = new Map();
+  for (const x of _shipsOnDay(voyages, _planOff(dw.off, nowMs))) m.set(x.k, { k: x.k, v: x.v, a: x.a, b: x.b, D: null });
+  for (const [k, vv] of Object.entries(voyages || {})) {
+    if (!vv || !(vv.discharge || vv.loading)) continue;
+    const D = doneOnShiftKeys(vv, keys);
+    if (D.n) { const e = m.get(k) || { k, v: vv, a: null, b: null, D: null }; e.D = D; m.set(k, e); }
+  }
+  if (!m.size) return `${dw.word}(${day}) 작업한 선박이 없어요 — 그 날 작업 계획(작업일)도 완료 기록도 없습니다.`;
+  const hm = (t) => { const d = new Date(t); return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const firstAt = (e) => (e.a != null ? e.a : Infinity);
+  const L = [`${dw.word}(${day}) 작업한 선박 ${m.size}척`];
+  for (const e of [...m.values()].sort((x, y) => firstAt(x) - firstAt(y) || x.k.localeCompare(y.k))) {
+    const i = (e.v && e.v.info) || {};
+    const parts = [];
+    if (e.a != null) parts.push(`작업 ${hm(e.a)}~${e.b != null ? hm(e.b) : ''}`);
+    if (e.D) { const sg = _segMd(e.D, null); parts.push(`완료 기록 ${e.D.n}대${sg ? ` (${sg})` : ''}`); }
+    L.push(`${i.vsl || e.k.split('_')[0]} ${e.k.split('_')[1] || ''} — ${parts.join(' · ')}${i.pier ? ` · ${i.pier}` : ''}`);
+  }
+  return L.join('\n');
+}
+//  ★ 4.17 (검수사 §7.8-⑫ «자료 수집중») — 선적이 리스트뿐이고 아직 안 실은 배(dataReadiness.loadingCollecting 한 벌)의 «얼마나 남았어»·진행·끝나는 시각.
+//    선적 잔여·총 잔여는 수를 내지 않는다(§7.5-B 홈 «자료 대기»와 같은 상태). 양하는 셀 수 있으니 같이 말한다 — 분모는 voyageCountsOf 한 벌(두 앱 같은 수).
+function _collectingAnswer(ship, vc, askMode) {
+  const nm = ship || '이 배';
+  if (askMode === 'loading') return `${nm} 선적 — 자료 수집중이에요. 선적 리스트만 왔고 EDI 는 아직이라 남은 수를 세지 않아요.\n선적 EDI 가 들어오거나 한 대라도 실으면 바로 셀게요.`;
+  const L = [`${nm} — 선적 자료 수집중이라 총 잔여·끝나는 시각은 아직 세지 않아요.`];
+  const d = vc && vc.byMode && vc.byMode.discharge;
+  if (d && d.total > 0) L.push(`양하 — 남은 ${d.total - d.done}대 / 전체 ${d.total}대 (완료 ${d.done})`);
+  L.push('선적 — 자료 수집중 (리스트만 왔고 EDI 는 아직 · 실은 컨 없음)');
+  return L.join('\n');
+}
+//  ★ 4.17 (검수사 §7.8-⑧ «2») — 질문 속 없는 선박코드를 가장 가까운 코드로 고친다(utils.shipCodeFixOf → nearestShipCode 한 벌 — 대문자로 친 낱말만 거리 2·되묻기). 아는 코드 = 활성 항차·베이사전·선박 라이브러리 + 지금 열린 배.
+//    같은 거리에 둘 이상이면 { ambiguous } — 그때만 되묻는다. 고칠 것이 없으면 null.
+function _shipCodeFix(q, ctx) {
+  if (!/[A-Za-z]{4}/.test(String(q))) return null;
+  const x = ctx || {};
+  const own = [x.vsl, x.info && x.info.vsl, x.shipCtx && x.shipCtx.info && x.shipCtx.info.vsl, x.voyage && x.voyage.info && x.voyage.info.vsl].filter(Boolean).map((t) => String(t).toUpperCase());
+  const fx = shipCodeFixOf(q, knownShipCodes(x.voyages || null, x.shipLib || (x.manualCtx && x.manualCtx.shipLib) || null).concat(own));
+  if (fx.ambiguous) return { ambiguous: fx.ambiguous };
+  //  고쳐 답하는 것은 답할 수 있는 배(활성 항차 · 지금 열린 배)로 고칠 때만 — 사전에만 있는 배로 고쳐 봐야 답할 자료가 없고, 질문 글만 바뀐다(«haha»→HAHM 잡담이 깨지지 않게).
+  const active = new Set(own.concat(Object.values(x.voyages || {}).map((v) => String((v && v.info && v.info.vsl) || '').toUpperCase())));
+  //  옛 코드 별칭(베이사전 prevCode)은 정확한 옛 이름이라 걸러내지 않는다 — 지금 코드를 댄 말과 같은 답이 나간다.
+  const fixes = fx.fixes.filter((f) => f.alias || active.has(f.code));
+  if (!fixes.length) return null;
+  let out = String(q);
+  for (const f of fixes) out = out.replace(new RegExp(`(^|[^A-Za-z0-9])${f.raw}(?![A-Za-z0-9])`), `$1${f.code}`);
+  return { code: fixes[0].code, tok: fixes[0].raw, alias: fixes[0].alias || '', q: out };
+}
+
 /** 항차 맥락을 한 모양으로 편다 — 화면이 voyage 만 실어도 info·vsl·컨·완료·클로저를 여기서 채운다. */
 function _normalize(ctx) {
   const c = { ...(ctx || {}) };
@@ -1737,6 +1860,21 @@ export function answerOneRaw(query, ctx) {
     if (th && th.q) { q = S(th.q); if (q !== q0 && ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.rq = q; }   // rq — 되쓴 말. isWeakAnswer 가 원문(«응»·«두 번째») 대신 이것으로 약함을 잰다(모델 누출 방지, 감사 3)
   }
   if (!q || q.length < 2) return null;
+  //  ★ 4.17 (검수사 §7.8-⑧ «2») — 없는 선박코드(«OWBH»)는 가장 가까운 코드로 고쳐 바로 답하고 «OBWH 로 답했어요» 한 줄을 붙인다(되묻지 않는다).
+  //    같은 거리에 둘 이상이면 그때만 «… 중 어느 배요?». 한 줄은 그 배로 답했을 때만 — 다른 배 항차가 열려 있으면(정확한 코드를 댔을 때처럼) 그 항차로 답한다.
+  //    판정은 _shipCodeFix → utils.shipCodeFixOf 한 벌(질문 속 배 고르기 pickShipCtx·콘앱 배 옮기기 pickVoyageKey 와 같은 판정).
+  if (!(ctx && ctx._shipFixed)) {
+    let fx = null;
+    try { fx = _shipCodeFix(q, ctx); } catch (e) { console.warn('[미르] 선박코드 고치기 실패:', e); fx = null; }
+    if (fx && fx.ambiguous) { if (ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.via = 'shipAsk'; return `${fx.ambiguous.join('·')} 중 어느 배요?`; }
+    if (fx && fx.code) {
+      const a = answerOneRaw(fx.q, { ...(ctx || {}), _shipFixed: fx });
+      if (a == null) return null;
+      const x = ctx || {};
+      const on = String(x.vsl || (x.info && x.info.vsl) || (x.shipCtx && x.shipCtx.info && x.shipCtx.info.vsl) || (x.voyage && x.voyage.info && x.voyage.info.vsl) || '').toUpperCase();
+      return (on ? on === fx.code : String(a).includes(fx.code)) ? `${a}\n${fx.code} 로 답했어요${fx.alias ? `(옛 코드 ${fx.alias})` : ''}.` : a;
+    }
+  }
   const c = _normalize(ctx);
   const _via = (v) => { if (c._trace && typeof c._trace === 'object') c._trace.via = v; };   // 3.42: 잡아채는 길 표시(판 B 문지기 재료)
   const app = c.app || 'tally';
@@ -1761,6 +1899,8 @@ export function answerOneRaw(query, ctx) {
         c.voyageDoneAts = _ats;
       }
     } catch (e) { console.warn('[미르] 터미널 본선현황 읽기 실패 — 완료 기록으로:', e); }
+    //  ★ 4.17 (§7.8-⑫): 선적이 리스트뿐이고 아직 안 실은 배 — 총 잔여는 «자료 수집중»(dataReadiness.loadingCollecting 한 벌). 터미널 본선현황으로 센 수는 그대로.
+    if (!c.voyageCounts.term) { try { if (loadingCollecting(c.voyage || null, cs)) c.voyageCounts.collecting = 'loading'; } catch (e) { console.warn('[미르] 자료 수집중 판정 실패:', e); } }
   } catch (e) { console.warn('[미르] 항차 대수 세기 실패:', e); c.voyageCounts = { total: 0, done: 0, byMode: {}, doneAts: [] }; } } return c.voyageCounts; };
   const v = c.voyage || null;
   const info = c.info || {};
@@ -1783,6 +1923,33 @@ export function answerOneRaw(query, ctx) {
   //    «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다», 실측 KBTR 2606E). 판정은 ⑥의 _progressLike 와 같은 식 한 벌.
   const _progressLike = /진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(q)
     || (/현황(?!\s*판)/.test(q) && !hasAnyCondition(p));
+  //  ★ 4.17 — 조건(끝자리·규격·리퍼·베이·POD·자리·선사·데미지…)이 붙은 말은 아래 두 갈래(③ 지난 날 · ⑫ 자료 수집중)가 가로채지 않는다 — 종전 길로 간다.
+  const _cargoCond = !!(p.digits || p.size || p.fe || p.type || p.bay || p.pol || p.pod || p.portAny || p.zone || p.dgClass || p.un || p.weightMin != null || p.weightMax != null
+    || p.temp != null || p.tierStackQuery || p.bottomQuery || p.topQuery || p.vacantQuery || p.posQuery || p.bayDistQuery || p.shiftingQuery || p.dmgQuery || p.carrierQuery
+    || p.luggQuery || p.urgentQuery || p.sealAuditQuery || p.twinCheckQuery || p.crewSet || p.crewQuery || p.gangSet || p.gangQuery || p.startSet || p.paceQuery || p.entityAttr);
+  //  ★ 4.17 (검수사 §7.8-③ «모든걸 알수 있으면 도움이 됨») — 지난 날(어제·그제…) 진행·작업 선박은 **날짜별 완료 기록**으로 답한다(§4.2-F-5 «알려진 한계» 폐기 · 감사 26).
+  //    날짜 말은 utils.dateWordOf 한 벌, 조 키는 근무일 기준(dayShiftKeys — 야간은 시작한 날, 00:00~06:29 는 전날 근무일). 사람·호기를 댄 말(«그제 김성일 몇 개 했어»)은
+  //    종전대로 ⑧ 근무자 답, 조건이 붙은 말은 종전 길 — 여기서는 조건 없는 «몇 대 했어»·«진행»·«작업한 배» 만. 콘 이야기는 콘 갈래.
+  {
+    const _dwP = dateWordOf(q);
+    if (_dwP && _dwP.off < 0 && !/콘/.test(q) && !_cargoCond && !p.etaQuery && !p.handoverQuery) {
+      const _shW = /야간|밤/.test(q) ? '야간' : /주간|낮/.test(q) ? '주간' : null;
+      const _now = c._now || Date.now();
+      const _shipListQ = /선박|배(?![정분치])|척|대상/.test(q) && /작업|양하|선적|일정|했|일한|들어온/.test(q) && !/몇\s*(?:대|개|건)|갯수|개수|대수/.test(q);
+      const _countQ = p.progressQuery === 'done' || _progressLike || /몇\s*(?:대|개|건)|갯수|개수|대수|작업량|실적/.test(q);
+      if (!v && c.voyages && _shipListQ) { _via('pastDay'); return _pastDayShips(c.voyages, _dwP, _now); }
+      if (_countQ && p.progressQuery !== 'pending') {
+        if (v) { _via('pastDay'); return _pastDayDone(v, ship, _dwP, _shW, p.mode || null, _now); }
+        if (c.voyages) { _via('pastDay'); return _pastDayDoneAll(c.voyages, _dwP, _shW, p.mode || null, _now); }
+      }
+    }
+  }
+  //  ★ 4.17 (검수사 §7.8-⑫ «자료 수집중») — 선적이 리스트뿐이고 아직 안 실은 배(dataReadiness.loadingCollecting 한 벌)는 «얼마나 남았어»·진행·«언제 끝나» 의
+  //    선적 잔여·총 잔여를 수로 내지 않는다 — 검수앱·콘앱이 서로 다른 수를 냈다(감사 421). 터미널 본선현황으로 세는 배(§3.74)는 터미널 수 그대로.
+  if (hasShip && v && !/콘/.test(q) && !_cargoCond && !/자료|브리핑|요약|인계|인수/.test(q) && (p.progressQuery || _progressLike || p.etaQuery)) {
+    const _vc = _vcOf();
+    if (_vc && _vc.collecting) { _via('collecting'); return _collectingAnswer(ship, _vc, p.mode || null); }
+  }
   //  4.02: «교대 브리핑» 은 콘 브리핑이 아니라 교대 브리핑(⑨ — 검수앱과 같은 답)이다 — 콘앱만 가로채던 것을 푼다.
   if (c.cone && !p.yardQuery && !(SHIFT_BRIEF_RE.test(q) && !/콘/.test(q)) && (app === 'cone' ? (/콘/.test(q) || !(p.digits || p.entityAttr || p.factQuery || p.type || p.sealAuditQuery)) : isConeQuery(q))) {   // 3.69: 야드 질문은 콘 갈래·브리핑보다 앞(두 앱 같은 답 — 2차 시뮬 1)
     try {
@@ -2113,7 +2280,8 @@ export function answerOneRaw(query, ctx) {
     if (!hasShip) return '어느 배 말씀인지 배 이름을 붙여 주시면 인계서를 정리합니다.';
     const ptk = cs.filter((x) => x._ptk !== false);
     const h = c.handover || {};
-    const body = generateHandover(ptk, { byInspector: c.inspector || '', shipName: ship, voyageLabel: S(info.voyNo) || S(info.voy), extraNote: h.finalized ? (h.note || '') : '', rfSkip: !!c.rfSkip });
+    const body = generateHandover(ptk, { byInspector: c.inspector || '', shipName: ship, voyageLabel: S(info.voyNo) || S(info.voy), extraNote: h.finalized ? (h.note || '') : '', rfSkip: !!c.rfSkip,
+      loadCollecting: (() => { try { return !!(v && loadingCollecting(v, cs)); } catch (e) { return false; } })() });   // 4.17 (§7.8-⑫): 선적 잔여는 «자료 수집중»
     if (h.finalized) return `인계서 정리했어요. 다음 검수사에게 이 내용 전달하세요.\n\n${body}`;
     return `인계서 초안이에요. 특이사항이나 더 전달할 내용 있으면 아래에 적어 주세요. 없으면 그대로 두셔도 됩니다.\n\n${body}\n\n— 더 전달할 내용이 있으면 아래 칸에 적고 [인계 메모 추가]를 누르세요.`;
   }
@@ -2166,7 +2334,7 @@ export function answerOneRaw(query, ctx) {
     const pool = cs.filter((x) => x._ptk !== false && x._mode === m && !x._comp);
     return generateTwinCheckAnswer(p, pool, c.pairsMap || {}, info.pier || '');
   }
-  if (hasShip && isSpeedQuery(Q)) { try { const a = answerShipSpeed(v, c.shipSpeed, ship, _vcOf()); if (a && !/못 불러왔/.test(a)) return a; } catch (e) { /* */ } }   // 2차 시뮬 5: 속도 자료가 없으면 본체 ETA 가 답한다
+  if (hasShip && isSpeedQuery(Q)) { try { const a = answerShipSpeed(v, c.shipSpeed, ship, _vcOf()); if (a && !/못 불러왔/.test(a)) return a; } catch (e) { /* */ } }   // 4.17: 자료 수집중이면 _vcOf().collecting — 남은 대수·끝나는 시각 줄을 안 낸다   // 2차 시뮬 5: 속도 자료가 없으면 본체 ETA 가 답한다
   if (hasShip && isPlanOutlookQuery(Q)) { try { const m = outlookModeOf(Q); const a = m ? answerPlanOutlook(v, m, ship) : answerPlanOutlookBoth(v, ship); if (a) return a; } catch (e) { /* */ } }
 
   //  ⑯ 관련 선사 · 브리핑 · 실 점검.
@@ -2224,7 +2392,7 @@ export function answerOneRaw(query, ctx) {
     if (tok.length) return `${tok[0]} — 지금 항차 목록·선석배정 자료에 없는 배입니다. 저희가 작업할 배로 잡혀 있지 않습니다.\n(배정목록·메일에 뜨면 수집기가 자동으로 항차 카드를 만듭니다 — 그때 다시 물으면 «네»라고 답합니다)`;
     return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: "PCSZ 우리가 작업해야해?"';
   }
-  //  4.12-02: 날짜 말은 utils.dateWordOf 한 벌 — 내일·낼·모레·낼모레·글피(오늘 이후)까지 알아듣는다. 어제·그제 같은 지난 날은 작업 선박 목록으로 답하지 않는다(종전과 같음).
+  //  4.12-02: 날짜 말은 utils.dateWordOf 한 벌 — 내일·낼·모레·낼모레·글피(오늘 이후)까지 알아듣는다. 어제·그제 같은 지난 날은 위 4.17 갈래(_pastDayShips — 작업일 ∪ 그 날 완료 기록)가 먼저 답한다.
   const _dwQ = dateWordOf(Q);
   const dayOff = _dwQ && _dwQ.off > 0 ? _dwQ.off : 0;
   const _dayLbl = dayOff > 0 ? _dwQ.word : '오늘';
@@ -2428,6 +2596,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'modeChoice') return false;
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
+  if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다

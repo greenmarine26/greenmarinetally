@@ -874,7 +874,9 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null)
     L.push(`지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
     //  3.6-01: 갱 수를 2 로 못 박지 않는다 — speedFromTerminal 이 항차 갱 수로 나눈다(모르면 2).
     L.push(`**${T.gangs}갱 기준 갱당 시간당 ${T.perGangHour.toFixed(1)}대**${T.gangs === 2 ? ' (1갱이면 ×2 하시면 됩니다)' : ` · 이 배 시간당 ${T.perHour.toFixed(1)}대`}`);
-    if (T.left == null) {
+    if (counts && counts.collecting) {
+      L.push('(선적 자료 수집중이라 남은 대수·끝나는 시각은 아직 세지 않아요.)');   // 4.17 (검수사 §7.8-⑫): 선적이 리스트뿐이고 아직 안 실은 배 — mir.js _vcOf 가 dataReadiness.loadingCollecting 으로 표시
+    } else if (T.left == null) {
       L.push('(남은 대수를 셀 자료가 없어 끝나는 시각은 말씀 못 드려요.)');
     } else if (T.left > 0) {
       const remainMin = Math.round((T.left / (T.perGangHour * T.gangs)) * 60);   // 3.53-12: 총 잔여 ÷ (갱당 시간당 × 갱 수)

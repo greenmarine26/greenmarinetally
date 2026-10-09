@@ -47,6 +47,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     `export { answerOneRaw, buildDataPack, flattenVoyages, movesOfVoyage, voyageCountsOf } from "${ROOT}/src/mir.js";`,
     `export { answerTotalMoves } from "${ROOT}/src/chiefAnswers.js";`,
     `export { toMirContainers } from "${ROOT}/src/mirCore.entry.js";`,
+    `export { pickShipCtx } from "${ROOT}/src/mir.js";`,   // 4.17 R21 — 질문 속 배 고르기(홈 통합검색·떠 있는 미르)
+    `export { pickVoyageKey } from "${ROOT}/src/planCommand.js";`,   // 4.17 R21 — 콘앱 배 옮기기(cone.html mirEnsureShip)
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
   const stub = './tools/stub_fbdb_mem.js';
   const FB = bundle(`export { fbSetEmptySeal } from "${ROOT}/src/firebase.js";\n`, 'fb', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
@@ -150,7 +152,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // ── R6 ───────────────────────────────────────────────────────────────
   head('R6 «오늘/내일/모레 작업하는 배» 는 그 날짜의 항차만 답한다 (기록부 25 · 4.12-02 ⑤)', '검수사 §4.2-F(2026-10-08)');
   {
-    //  오늘·내일·모레만 — 지난 날은 §4.2-F-5 알려진 한계(«어제·그제의 작업 선박 목록은 날짜로 거르지 않습니다»).
+    //  오늘·내일·모레 — 지난 날(어제·그제)은 4.17 부터 날짜별 완료 기록으로 답한다(§7.8-③ · §4.2-F-5 폐기) — R20 이 잰다.
     //  기준일 고정 — 픽스처 항차들의 작업일 가운데 2026-08-26(KST 12:00). 실시간 날짜를 쓰지 않는다.
     const FIX = Date.parse('2026-08-26T12:00:00+09:00');
     const RealDate = Date;
@@ -674,6 +676,160 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const opOk = rows.every((r) => r.op && r.op !== '???');
       ok(`${label} Final Work 시프팅 칸 ${JSON.stringify(agg)} = 원문 POD·규격·F/E 로 센 것 · 선사 칸 «???» 없음 (수정 전 «???/???/F HC ${cns.length}»)`, JSON.stringify(Object.entries(fw).sort()) === JSON.stringify(Object.entries(agg).sort()) && opOk && td.totals.shift.n === cns.length, `${JSON.stringify(fw)} · op ${rows.map((r) => r.op).join(',')}`);
     }
+  }
+
+
+  // ══ 4.17 — 미르 셋 · 검수사 2026-10-09 12:23 §7.8-③⑧⑫ ═══════════════════════════════════════════════════════
+  //  독립 재료 — 완료 시각 → 근무일 조 키를 이 파일이 따로 정한다(검수사 §4.2-F-2: 야간은 시작한 날 · 00:00~06:29 는 전날 야간 · 06:30~17:30 주간 · 17:30~ 야간).
+  const wkKey = (ms) => {
+    const d = new Date(ms); const mm = d.getHours() * 60 + d.getMinutes();
+    const day = mm < 390 ? new Date(ms - 864e5) : d;
+    return `${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')} ${mm < 390 || mm >= 1050 ? '야간' : '주간'}`;
+  };
+  const doneBy = (voy) => {   // { 키: { discharge, loading } } · noAt
+    const o = { keys: {}, noAt: 0 };
+    for (const m of ['discharge', 'loading']) for (const r of Object.values((voy[m] || {}).completed || {})) {
+      if (!r || r.flag === 'missing') continue;
+      if (!(Number(r.at) > 0)) { o.noAt += 1; continue; }
+      const k = wkKey(Number(r.at)); const b = o.keys[k] || (o.keys[k] = { discharge: 0, loading: 0 }); b[m] += 1;
+    }
+    return o;
+  };
+  const RealDate417 = Date;
+  const atFix = (iso, fn) => { const FIX = Date.parse(iso); class F extends RealDate417 { constructor(...a) { if (a.length) super(...a); else super(FIX); } static now() { return FIX; } } global.Date = F; try { return fn(); } finally { global.Date = RealDate417; } };
+  const tallyCtx417 = (vk, v, voyages, extra) => { const flat = B.flattenVoyages(voyages); return Object.assign({ app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', countFallback: true, portMisData: {}, voyages, flat, voyageKey: vk, voyage: v, info: v.info, mode: 'discharge', containers: flat.filter((x) => x.voyageKey === vk), _trace: {} }, extra || {}); };
+  //  콘앱 — cone.html mirAsk 모양(원본엔 EDI 묶음 없이 완료·리스트만 · 컨은 EDI 행)
+  const coneCtx417 = (vk, v) => { const D = v.discharge || {}, L = v.loading || {}; const comp = Object.assign({}, D.completed || {}, L.completed || {});
+    const paint = (rows, mode) => B.toMirContainers(rows, mode).map((c) => (c && c.cn && comp[c.cn] && !c._comp ? Object.assign({}, c, { _comp: comp[c.cn] }) : c));
+    return { app: 'cone', containers: paint(Object.values(D.ediContainers || {}), 'discharge').concat(paint(Object.values(L.ediContainers || {}), 'loading')), cone: { rows: [], dischRows: [], stowRows: [] }, execDevice: true, shiftN: 0, mode: 'discharge', modeLabel: '양하',
+      info: v.info, compMap: comp, voyage: { info: v.info, reports: v.reports || {}, restowList: v.restowList || null, discharge: { completed: D.completed || {}, records: D.records || {} }, loading: { completed: L.completed || {}, records: L.records || {} } },
+      vsl: v.info.vsl, vslFull: v.info.vslFull || '', voyageKey: vk, records: { discharge: D.records || {}, loading: L.records || {} }, portMisData: {}, _trace: {} }; };
+  const say = (q, ctx) => { const a = B.answerOneRaw(q, ctx); return a == null ? '' : String(a); };
+
+  // ── R20 ───────────────────────────────────────────────────────────────
+  head('R20 지난 날(어제·그제) 진행·작업 선박은 날짜별 완료 기록으로 답한다 — 조 키는 근무일 기준 · 두 앱 같은 답 (감사 26 · 4.12-02 · 4.17)', '검수사 §7.8-③ «모든걸 알수 있으면 도움이 됨» · §4.2-F-5 폐기');
+  {
+    const H = fx('hatchauto.json');
+    const swtd = { info: H.swtd.info, discharge: H.swtd.discharge, loading: H.swtd.loading }, kklc = { info: H.kklc.info, discharge: H.kklc.discharge, loading: H.kklc.loading };
+    const vk = 'SWTD_9013E', DB = doneBy(swtd);
+    const sumDay = (o, day) => Object.entries(o.keys).filter(([k]) => k.startsWith(day)).reduce((a, [, b]) => ({ d: a.d + b.discharge, l: a.l + b.loading }), { d: 0, l: 0 });
+    //  ① «그제 몇 대 했어» — 기준 09-13 12:00 → 그제 = 09-11 근무일(주간 + 그 밤 야간)
+    const w1 = sumDay(DB, '09-11');
+    const [t1, c1] = atFix('2026-09-13T12:00:00+09:00', () => [say('그제 몇 대 했어', tallyCtx417(vk, swtd, { [vk]: swtd })), say('그제 몇 대 했어', coneCtx417(vk, swtd))]);
+    const n1 = Number((t1.match(/완료 기록 (\d+)대/) || [])[1]);
+    ok(`SWTD 9013E «그제 몇 대 했어»(09-13 기준) = 09-11 근무일 완료 기록 ${w1.d + w1.l}대(양하 ${w1.d} · 선적 ${w1.l}) — 수정 전 항차 전체 964/964`, n1 === w1.d + w1.l && t1.includes(`양하 ${w1.d}`) && t1.includes(`선적 ${w1.l}`), t1.split('\n')[0]);
+    //  ② «어제 야간 몇 대» — 기준 09-12 12:00 → 09-11 야간(19:00~이튿날 06:29)
+    const w2 = DB.keys['09-11 야간'] || { discharge: 0, loading: 0 };
+    const [t2, c2] = atFix('2026-09-12T12:00:00+09:00', () => [say('어제 야간 몇 대', tallyCtx417(vk, swtd, { [vk]: swtd })), say('어제 야간 몇 대', coneCtx417(vk, swtd))]);
+    const n2 = Number((t2.match(/완료 기록 (\d+)대/) || [])[1]);
+    ok(`SWTD 9013E «어제 야간 몇 대»(09-12 기준) = 09-11 야간 완료 기록 ${w2.discharge + w2.loading}대 — 수정 전 검수앱 무응답 · 콘앱 콘 안내`, n2 === w2.discharge + w2.loading && /09-11 야간/.test(t2), t2.split('\n')[0]);
+    ok('두 앱 같은 답 — «그제 몇 대 했어»·«어제 야간 몇 대» 검수앱 = 콘앱', t1 && t1 === c1 && t2 && t2 === c2, `검수앱 ${t1.slice(0, 50)} | 콘앱 ${c1.slice(0, 50)} || ${t2.slice(0, 40)} | ${c2.slice(0, 40)}`);
+    //  ②-2 새벽(00:00~06:29)은 근무일이 하루 앞이다(§4.2-F-2) — 09-13 02:00 의 «어제» 는 09-11 근무일(달력 09-12 아님)
+    const w3 = sumDay(DB, '09-11'), cal = sumDay(DB, '09-12');
+    const t3 = atFix('2026-09-13T02:00:00+09:00', () => say('어제 몇 대 했어', tallyCtx417(vk, swtd, { [vk]: swtd })));
+    ok(`새벽 02:00(09-13) «어제 몇 대 했어» = 근무일 09-11 ${w3.d + w3.l}대 — 달력 어제(09-12 ${cal.d + cal.l}대)가 아니다`, Number((t3.match(/완료 기록 (\d+)대/) || [])[1]) === w3.d + w3.l && /\(09-11\)/.test(t3), t3.split('\n')[0]);
+    //  ③ «어제 작업한 배» — 작업일(planDate)이 그 날과 겹친 배 ∪ 그 날 완료 기록이 있는 배
+    const VJ = fx('voyages.json').voyages;
+    const dx = fx('bayview_dxqd.json');
+    const home = { ...Object.fromEntries(Object.entries(VJ).map(([k, i]) => [k, { info: i }])), SWTD_9013E: swtd, KKLC_2608N: kklc, DXQD_2636E: { info: dx.info, discharge: dx.discharge, loading: dx.loading } };
+    const kst = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+09:00`) : null; };
+    const shipsOn = (iso) => {   // iso = 그 날 00:00 KST
+      const d0 = Date.parse(iso), d1 = d0 + 864e5, md = iso.slice(5, 10);
+      return Object.entries(home).filter(([, vv]) => {
+        const [a0, b0] = String((vv.info || {}).planDate || '').split('~'); const a = kst(a0), b = b0 ? kst(b0) : a;
+        const byPlan = a != null && a < d1 && (b == null ? a : b) >= d0;
+        const byDone = Object.keys(doneBy(vv).keys).some((k) => k.startsWith(md));
+        return byPlan || byDone;
+      }).map(([k, vv]) => String(vv.info.vsl || k.split('_')[0])).sort();
+    };
+    for (const [now, day] of [['2026-09-15T12:00:00+09:00', '2026-09-14T00:00:00+09:00'], ['2026-09-02T12:00:00+09:00', '2026-09-01T00:00:00+09:00']]) {
+      const want = shipsOn(day);
+      const a = atFix(now, () => say('어제 작업한 배', { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', voyages: home, flat: B.flattenVoyages(home), shipCtx: null, portMisData: {}, _trace: {} }));
+      const got = a.split('\n').map((l) => (l.match(/^([A-Z]{4}) \S+ — /) || [])[1]).filter(Boolean).sort();
+      ok(`홈 «어제 작업한 배»(${now.slice(5, 10)} 기준) = 작업일·완료 기록으로 센 ${want.length}척 [${want.join(' ')}] — 수정 전 무응답`, want.length > 0 && got.join(' ') === want.join(' '), `답 [${got.join(' ')}] · ${a.split('\n')[0]}`);
+    }
+    //  ④ 완료 시각이 없는 기록(MCSC 635S progress_mcsc — 410건 at 없음)은 날짜·조로 못 가른다고 밝힌다(§4.2-F-3 과 같은 태도)
+    const pm = fx('progress_mcsc.json'); const mcsc = { info: { vsl: 'MCSC', vslFull: 'MAERSK CHICAGO', voy_d: '635S' }, discharge: pm.discharge, loading: pm.loading };
+    const nNoAt = doneBy(mcsc).noAt;
+    const a4 = atFix('2026-09-01T12:00:00+09:00', () => say('어제 몇 대 했어', tallyCtx417('MCSC_635S', mcsc, { MCSC_635S: mcsc })));
+    ok(`MCSC 635S 완료 시각 없는 기록 ${nNoAt}대 — «어제 몇 대 했어» 는 «날짜·조별로는 못 나눠요» 와 그 대수(수정 전 «컨 자료가 아직»)`, nNoAt > 0 && /날짜·조별로는 못 나눠요/.test(a4) && a4.includes(`${nNoAt}대`), a4.slice(0, 120));
+  }
+
+  // ── R21 ───────────────────────────────────────────────────────────────
+  head('R21 없는 선박코드는 가장 가까운 코드로 바로 답하고 «OBWH 로 답했어요» 한 줄 — 같은 거리 둘 이상이면 그때만 되묻는다 · 두 앱 같은 답 (감사 587 · 3.38 · 4.17)', '검수사 §7.8-⑧ «2»');
+  {
+    const SC = fx('shipcodes417.json');
+    const dictSave = global.window.__fbShipBayDict;
+    global.window.__fbShipBayDict = Object.fromEntries(SC.bayDictKeys.map((k) => [k, SC.prevCodes[k] ? { code: k, prevCode: SC.prevCodes[k] } : {}]));   // 베이사전 키 · 옛 코드(prevCode)(RTDB 읽기 전용 사본)
+    try {
+      const VJ = fx('voyages.json').voyages, F = fx('ferry1700.json').voyages, K = fx('mirsame_kbtr.json');
+      const voyages = { ...Object.fromEntries(Object.entries(VJ).map(([k, i]) => [k, { info: i }])), OBWH_2749E: F.OBWH_2749E, RZOR_R104E: F.RZOR_R104E, [K.voyageKey]: K.voyage, [SC.smyaVoyage.key]: { info: SC.smyaVoyage.info } };
+      //  독립 거리 — 바꿈·넣기·빼기·이웃 자리바꿈 한 번이 1(검수사 «자리바꿈 포함» · OSA). 아는 코드 = 베이사전 키 ∪ 항차 코드.
+      const dist = (a, b) => { const d = [...Array(a.length + 1)].map((_, i) => [i, ...Array(b.length).fill(0)]); for (let j = 0; j <= b.length; j++) d[0][j] = j;
+        for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) { d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); }
+        return d[a.length][b.length]; };
+      const U = [...new Set([...SC.bayDictKeys, ...Object.values(voyages).map((v) => String(v.info.vsl))])];
+      const near = (t) => { const ds = U.map((c) => [c, dist(t, c)]); const m = Math.min(...ds.map((x) => x[1])); return { m, codes: ds.filter((x) => x[1] === m).map((x) => x[0]).sort() }; };
+      const home = (q) => { const sc = B.pickShipCtx(q, voyages, null); return { sc, a: say(q, { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', voyages, flat: B.flattenVoyages(voyages), shipCtx: sc || null, portMisData: {}, _trace: {} }) }; };
+      //  ① OWBH — OBWH 와 자리바꿈 한 번(거리 1, 하나뿐)
+      const nO = near('OWBH'); const want1 = nO.m <= 2 && nO.codes.length === 1 ? nO.codes[0] : null;
+      const obwhPtk = Object.values(F.OBWH_2749E.discharge.ediContainers).filter((c) => isPtkCode(c.pod)).length;   // 독립 — EDI 행을 POD 평택으로
+      const h1 = home('OWBH 양하 몇 대'), h1x = home(`${want1} 양하 몇 대`);
+      ok(`«OWBH 양하 몇 대» → 가장 가까운 ${want1}(거리 ${nO.m}) 로 바로 답하고 끝줄 «${want1} 로 답했어요.» · 양하 ${obwhPtk}대(수정 전 말없이 삼킴)`,
+        want1 === 'OBWH' && h1.sc && h1.sc.info.vsl === want1 && h1.a === `${h1x.a}\n${want1} 로 답했어요.` && Number((h1.a.match(/양하: (\d+)대/) || [])[1]) === obwhPtk, h1.a.replace(/\n/g, ' | ').slice(0, 160));
+      //  ② TNPJ — TNJP 와 자리바꿈(거리 1)
+      const nT = near('TNPJ'); const want2 = nT.m <= 2 && nT.codes.length === 1 ? nT.codes[0] : null;
+      const h2 = home('TNPJ 리퍼 몇 대'), h2x = home(`${want2} 리퍼 몇 대`);
+      ok(`«TNPJ 리퍼 몇 대» → ${want2}(거리 ${nT.m}) 로 답하고 «${want2} 로 답했어요.»`, want2 === 'TNJP' && h2.a === `${h2x.a}\n${want2} 로 답했어요.`, h2.a.replace(/\n/g, ' | ').slice(0, 140));
+      //  ③ SWSM — 거리 1 에 넷(SWMM·SWSI·SWSP·SWSR) → 그때만 되묻는다(검수앱 홈 · 콘앱 같은 말)
+      const nS = near('SWSM');
+      const h3 = home('SWSM 양하 몇 대');
+      ok(`«SWSM 양하 몇 대» → 같은 거리(${nS.m}) ${nS.codes.length}척이라 «${nS.codes.join('·')} 중 어느 배요?» (수정 전 SWMM 으로 말없이)`, nS.codes.length > 1 && h3.a === `${nS.codes.join('·')} 중 어느 배요?`, h3.a.slice(0, 120));
+      //  ④ ZZZZ — 거리 2 안에 코드가 없다 → 고치지 않는다(종전 그대로)
+      const nZ = near('ZZZZ'), h4 = home('ZZZZ 양하 몇 대');
+      ok(`«ZZZZ 양하 몇 대» → 가장 가까운 거리 ${nZ.m}(2 초과) — 고치지 않고 한 줄도 안 붙인다`, nZ.m > 2 && !/로 답했어요|어느 배요/.test(h4.a) && !h4.sc, h4.a.slice(0, 80));
+      //  ④-2 옛 코드 — 별칭 표(베이사전 prevCode: SMYA ← RZSY)를 거리보다 먼저 본다(Fable 판정). 거리로만 재면 RZOR(2)로 엉뚱한 배가 된다.
+      const oldOf = Object.fromEntries(Object.entries(SC.prevCodes).map(([cur, old]) => [old, cur]));
+      const nR = near('RZSY'), wantA = oldOf.RZSY;
+      const h45 = home('RZSY 양하 몇 대'), h45x = home(`${wantA} 양하 몇 대`);
+      ok(`«RZSY 양하 몇 대» → 옛 코드 별칭 ${wantA}(베이사전 prevCode) 로 답하고 «${wantA} 로 답했어요(옛 코드 RZSY).» — 거리로 잰 가장 가까운 ${nR.codes.join('·')}(${nR.m}) 이 아니다(수정 전 RZOR)`,
+        wantA === 'SMYA' && !nR.codes.includes(wantA) && h45.sc && h45.sc.info.vsl === wantA && h45.a === `${h45x.a}\n${wantA} 로 답했어요(옛 코드 RZSY).` && !/RZOR/.test(h45.a), h45.a.replace(/\n/g, ' | ').slice(0, 140));
+      //  ⑤ 콘앱(KBTR 를 고른 채) «OWBH 양하 몇 대» — 배 옮기기(planCommand.pickVoyageKey — cone.html mirEnsureShip)가 OBWH 로 옮기고 같은 답 · «SWSM» 은 같은 되물음
+      const cands = Object.entries(voyages).filter(([, v]) => v.discharge || v.loading).map(([k, v]) => ({ k, vsl: v.info.vsl }));
+      const pick = (q) => B.pickVoyageKey(q, cands.map((x) => x.k), (k) => (cands.find((x) => x.k === k) || {}).vsl);
+      const vk5 = pick('OWBH 양하 몇 대') || K.voyageKey;
+      const c5 = say('OWBH 양하 몇 대', coneCtx417(vk5, voyages[vk5]));
+      const vk6 = pick('SWSM 양하 몇 대') || K.voyageKey;
+      const c6 = say('SWSM 양하 몇 대', coneCtx417(vk6, voyages[vk6]));
+      ok(`두 앱 같은 답 — 콘앱(KBTR 고른 채) «OWBH 양하 몇 대» 는 ${vk5} 로 옮겨 검수앱 홈과 같은 답 · «SWSM» 은 같은 되물음 (수정 전 콘앱은 KBTR 102대)`, vk5 === h1.sc.key && c5 === h1.a && c6 === h3.a, `콘앱 ${vk5} ${c5.replace(/\n/g, ' | ').slice(0, 90)} || ${c6.slice(0, 60)}`);
+    } finally { global.window.__fbShipBayDict = dictSave; }
+  }
+
+  // ── R22 ───────────────────────────────────────────────────────────────
+  head('R22 선적이 리스트뿐이고 아직 안 실은 배의 잔여는 «자료 수집중» — 수를 내지 않는다 · 두 앱 같은 답 (감사 421 · 3.53-12 · 4.17)', '검수사 §7.8-⑫ «자료 수집중» · §7.5-B 자료 대기와 같은 상태');
+  {
+    //  MCAP 639N(shiftsplit416 — RTDB 읽기 전용 사본) 선적 EDI 가 오기 전 모양: 선적은 리스트(records) 293 만 · 선적 완료 0. 양하는 그대로.
+    const b0 = SS.MCAP_639N, vk = 'MCAP_639N';
+    const v = JSON.parse(JSON.stringify({ info: b0.info, restowList: b0.restowList, discharge: b0.discharge, loading: { records: b0.loading.records } }));
+    const listN = Object.keys(v.loading.records).filter((k) => CN_RE.test(k)).length;
+    const state = !Object.keys(v.loading.ediContainers || {}).length && listN > 0 && !Object.keys(v.loading.completed || {}).length;
+    //  독립 — 양하 평택분 = BAPLIE 원문 POD 평택(검수사가 고른 POD 우선 — R16 과 같은 셈)
+    const recD = v.discharge.records || {};
+    const dPtk = rawBap(v.discharge.raw.edi.text).filter((c) => isPtkCode(recD[c.cn] && recD[c.cn].pod_pick && recD[c.cn].pod ? recD[c.cn].pod : c.pod)).length;
+    const T = (q) => say(q, tallyCtx417(vk, v, { [vk]: v })), C = (q) => say(q, coneCtx417(vk, v));
+    const nums = (s) => (String(s).match(/\d+/g) || []).map(Number);
+    const tR = T('얼마나 남았어'), cR = C('얼마나 남았어');
+    ok(`MCAP 639N(선적 리스트 ${listN} 만 · 실은 컨 0) «얼마나 남았어» — «자료 수집중» · 총 잔여 수 없음 · 양하만 남은 ${dPtk}대 (수정 전 검수앱 526 · 콘앱 223)`,
+      state && /자료 수집중/.test(tR) && nums(tR).every((n) => n === dPtk || n === 0) && tR.includes(`남은 ${dPtk}대 / 전체 ${dPtk}대`), tR.replace(/\n/g, ' | ').slice(0, 160));
+    const tE = T('몇 시에 끝나'), cE = C('몇 시에 끝나'), tL = T('선적 얼마나 남았어'), cL = C('선적 얼마나 남았어');
+    ok('«몇 시에 끝나» 도 «자료 수집중» · «선적 얼마나 남았어» 는 수 없이 «자료 수집중»(수정 전 «평택분 526대 남았어요» · «선적 293대»)', /자료 수집중/.test(tE) && !nums(tE).some((n) => n > dPtk) && /자료 수집중/.test(tL) && !nums(tL).length, `${tE.split('\n')[0]} | ${tL.split('\n')[0]}`);
+    const tH = T('인수인계'), cH = C('인수인계');
+    const lineL = (s) => (String(s).split('\n').find((l) => /^⬆ 선적/.test(l)) || '');
+    ok('두 앱 같은 답 — «얼마나 남았어»·«몇 시에 끝나»·«선적 얼마나 남았어» 검수앱 = 콘앱 · 인수인계 선적 줄도 같은 «자료 수집중»(수정 전 검수앱 «남은 293대» · 콘앱 줄 없음)',
+      tR === cR && tE === cE && tL === cL && /자료 수집중/.test(lineL(tH)) && lineL(tH) === lineL(cH), `${tR.slice(0, 40)} | ${cR.slice(0, 40)} || ${lineL(tH)} | ${lineL(cH)}`);
+    //  대조 — 선적 EDI 가 온 원래 MCAP 639N 은 종전 셈 그대로(«자료 수집중» 아님)
+    const vo = { ...b0 }, tO = say('얼마나 남았어', tallyCtx417(vk, vo, { [vk]: vo }));
+    ok('대조 — 선적 EDI 가 온 MCAP 639N 은 종전 셈(«자료 수집중» 없음)', !/자료 수집중/.test(tO) && /남은 작업/.test(tO), tO.split('\n')[0]);
   }
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);

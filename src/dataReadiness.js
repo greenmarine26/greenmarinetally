@@ -13,6 +13,8 @@
 // ⛔ 마감자료(타임시트·실선적 EDI·DEP.TALLY·FINAL WORKING)는 여기서 안 본다.
 //    검수사: *"마감자료는 작업을 하면 저절로 생김."*
 
+import { sideCancelled } from './utils.js';   // 4.17: 배정 0(캔슬)인 쪽은 «자료 수집중»이 아니다 — 세지 않는 쪽이다
+
 /** 무게가 비었는가 — '', 0, '0.0', null 을 모두 미기재로 본다 */
 function _noWeight(c) {
   const w = c && (c.weight ?? c.wt ?? c.grossWeight);
@@ -42,6 +44,25 @@ export function judgeMode(modeData) {
   if (!list)         return { state: 'noList', label: '리스트 없음', missing: '양하/선적 리스트', edi, list, wt0 };
   if (wt0)           return { state: 'noWeight', label: `무게 미기재 ${wt0}대`, missing: `무게(VGM) ${wt0}대`, edi, list, wt0 };
   return { state: 'ready', label: '준비완료', missing: '', edi, list, wt0 };
+}
+
+/**
+ * ★ 4.17 (검수사 §7.8-⑫ «자료 수집중») — **선적이 리스트뿐이고(judgeMode 'noEdi' · 리스트 있음) 아직 한 대도 안 실은 배.**
+ *   이 배의 선적 잔여·항차 총 잔여는 수를 내지 않고 «자료 수집중»으로 답한다 — 리스트가 다 왔는지 모르는 채로 센 수라
+ *   검수앱·콘앱이 서로 다른 수를 냈다(감사 421 · 3.53-12: 콘앱 총 잔여 < 검수앱). §7.5-B 홈 «자료 대기»와 같은 상태이고, EDI 가 오거나
+ *   한 대라도 실으면 저절로 종전 셈으로 돌아간다. 판정은 이 함수 한 벌 — 미르(검수앱·콘앱 같은 번들)가 부른다.
+ *   EDI 는 항차 원본의 선적 ediContainers. 콘앱은 원본에 EDI 를 싣지 않고 EDI 행만 넘기므로(cone.html mirAsk), 원본에 EDI 묶음이
+ *   하나도 없을 때만 넘겨받은 선적 행(리스트 출신 `_src:'list'` 은 뺀다)을 EDI 로 본다.
+ */
+export function loadingCollecting(voyage, givenRows = null) {
+  const L = voyage && voyage.loading;
+  if (!L || (voyage.info && sideCancelled(voyage.info, 'loading'))) return false;
+  if (L.completed && typeof L.completed === 'object' && Object.keys(L.completed).length) return false;   // 한 대라도 실었으면 종전 셈
+  let edi = L.ediContainers;
+  const anyEdi = ['discharge', 'loading'].some((m) => voyage[m] && voyage[m].ediContainers && Object.keys(voyage[m].ediContainers).length);
+  if (!anyEdi && Array.isArray(givenRows)) edi = givenRows.filter((c) => c && c._mode === 'loading' && c._src !== 'list');
+  const j = judgeMode({ ediContainers: edi, records: L.records });
+  return j.state === 'noEdi' && j.list > 0;
 }
 
 /**

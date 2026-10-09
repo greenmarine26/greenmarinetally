@@ -9,6 +9,7 @@
    ── 이것은 «답»이 아니라 «화면을 열어라»다
    그래서 여기서는 해석만 하고 **열지 않는다.** 화면 구조는 앱마다 다르니 여는 일은 각 앱이 한다.
    nlSearch.js 가 deviceCmd·startSet 을 다루는 방식 그대로다. */
+import { shipCodeFixOf, knownShipCodes } from './utils.js';   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
 
 /**
  * 반환 { mode:'discharge'|'loading'|null, bay:number|null, what:'bay'|'cargo' } · 명령이 아니면 null.
@@ -84,6 +85,19 @@ export function pickVoyageKey(query, keys, nameOf) {
       const n = String(nameOf(k) || '').toUpperCase();
       return n.length >= 3 && t.includes(n);
     });
+  }
+  //  ★ 4.17 (검수사 §7.8-⑧ «2») — 없는 선박코드(«OWBH»)는 가장 가까운 코드(OBWH)의 항차로 옮긴다(utils.shipCodeFixOf 한 벌 — 미르 답이
+  //    «OBWH 로 답했어요» 한 줄을 붙인다). 같은 거리에 둘 이상이면 고르지 않는다(null) — 미르가 «… 중 어느 배요?» 로 되묻는다.
+  //    아는 코드 = 이 키들의 약자·선박명 + 베이사전(utils.knownShipCodes) — 사전에만 있는 배가 더 가까우면 엉뚱한 항차로 옮기지 않는다.
+  if (!hit.length) {
+    const own = ks.map((k) => k.split('_')[0].toUpperCase()).concat(typeof nameOf === 'function' ? ks.map((k) => String(nameOf(k) || '').toUpperCase()) : []);
+    const fx = shipCodeFixOf(query, [...new Set(own.concat(knownShipCodes()))]);
+    if (!fx.ambiguous) {
+      for (const f of fx.fixes) {
+        hit = ks.filter((k) => k.split('_')[0].toUpperCase() === f.code || (typeof nameOf === 'function' && String(nameOf(k) || '').toUpperCase() === f.code));
+        if (hit.length) break;
+      }
+    }
   }
   //  같은 약자로 두 항차가 열려 있으면(실측 TMPZ_2026E·TMPZ_2027E) 항차번호로 좁힌다.
   if (hit.length > 1) {

@@ -3509,10 +3509,13 @@ export function generateHandover(allContainers, handoverInfo = {}) {
   if (disch.length) {
     lines.push(`⬇ 양하: 남은 ${dischPend}대 / 전체 ${disch.length}대 (완료 ${dischDone})`);
   }
-  if (load.length) {
+  //  ★ 4.17 (검수사 §7.8-⑫ «자료 수집중») — 선적이 리스트뿐이고 아직 안 실은 배는 선적 잔여를 수로 내지 않는다(판정은 호출부 mir.js 가 dataReadiness.loadingCollecting 한 벌로).
+  if (handoverInfo.loadCollecting) {
+    lines.push('⬆ 선적: 자료 수집중 (리스트만 왔고 EDI 는 아직 · 실은 컨 없음)');
+  } else if (load.length) {
     lines.push(`⬆ 선적: 남은 ${loadPend}대 / 전체 ${load.length}대 (완료 ${loadDone})`);
   }
-  if (!disch.length && !load.length) lines.push('작업 데이터 없음.');
+  if (!disch.length && !load.length && !handoverInfo.loadCollecting) lines.push('작업 데이터 없음.');
 
   // 남은 작업 베이 분포 (어디가 남았는지 한눈에)
   const pendBays = (arr) => {

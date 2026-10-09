@@ -51,7 +51,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.16'   // 4.16 **시프팅 분리 — 양하·선적 리스트와 시프팅 리스트를 따로 센다 · 종이 카고플랜에도 예측 시프팅(◇ 확정 아님)** — 검수사 2026-10-09 12:23 §7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»(1.76-05 «TCLU9762509 양하처리» 대체) · ② «그래야 준비 할수 있음(대신 확정아님 표기)» · 17:30 «판 B(시프팅 4.16) 진행하시고 상기 화면에도 버전을 크게 표기 바랍니다». utils.shiftSplitOf·isShiftOffPtk 한 벌 — 홈 카드·수석 보드·현황 요약 막대 = 평택분(MCAP 639N 0/228 → 0/223), 시프팅은 «내림 x/N · 실음 y/N» 줄. 입구마다 «시프팅이면 평택분 아님»(항차 화면·자동 가이드·출력 센터·미르 펼치기·마감텔리·갱별 보고) — 시프팅 재선적 기록이 선적 평택분으로 새던 길(293→298)을 막았다. 선사 리스트에 실려 온 시프팅은 평택분에도 센다(Fable 판정 ⑤ «214+95»). 미르 분모·예상 시간 = 양하 평택 + 선적 평택 + 2×시프팅(리스트 유무 무관 — MCAT 635N 534 → 562), 총 무브수 «양하 223 · 선적 293 · 시프팅 5대 → 10무브». 카고플랜·출력 센터·베이플랜·콘앱(ConeOne 2.68)은 확정 지도가 빈 배에 예측 시프팅을 ◇ 로(KSKM 2617N 종이 0 → ◇1). 마감텔리 SHIFTING 시트를 지도 꼴대로 읽게 고쳤다(컨번호·규격·자리 빈칸 → 채움, PORT = EDI POD). 로그인 화면 제목 줄에 판 이름을 크게. 회귀 기준표 R16~R19.
+export const APP_VERSION = 'TallyOne 4.17'   // 4.17 **미르 셋 — 지난 날 완료 기록 · 없는 선박코드 · 자료 수집중** — 검수사 2026-10-09 12:23 §7.8 ③ «모든걸 알수 있으면 도움이 됨»: «그제 몇 대 했어»·«어제 야간 몇 대»·«어제 작업한 배» 를 날짜별 완료 기록(completed 의 at)으로 답한다 — 조 키는 근무일 기준 한 벌(utils.dayShiftKeys·shiftKeyOfMs·doneOnShiftKeys — 야간은 시작한 날, 00:00~06:29 는 전날), 작업한 배 = 작업일(planDate) ∪ 그 날 완료 기록, 완료 시각이 없는 기록은 «날짜·조별로는 못 나눠요»(§4.2-F-5 알려진 한계 폐기 · SWTD 9013E 그제 880 · 어제 야간 611). ⑧ «2»: 없는 선박코드는 가장 가까운 코드(거리 1~2, 자리바꿈 포함)로 바로 답하고 «OBWH 로 답했어요» 한 줄 — 같은 거리에 둘 이상이면 그때만 «… 중 어느 배요?»(utils.shipCodeFixOf·nearestShipCode 한 벌 — 미르 답·질문 속 배 고르기 pickShipCtx·콘앱 배 옮기기 planCommand.pickVoyageKey · 선사·부두 낱말 SITC·PCTC 등은 고치지 않고 소문자로 친 낱말은 거리 1 까지만). ⑫ «자료 수집중»: 선적이 리스트뿐이고 아직 안 실은 배의 «얼마나 남았어»·진행·«언제 끝나»·인수인계 선적 줄은 수 대신 «자료 수집중»(dataReadiness.loadingCollecting 한 벌 — 검수앱 526 · 콘앱 223 으로 갈리던 것). 회귀 기준표 R20~R22.
+//   (앞 판) 'TallyOne 4.16'   // 4.16 **시프팅 분리 — 양하·선적 리스트와 시프팅 리스트를 따로 센다 · 종이 카고플랜에도 예측 시프팅(◇ 확정 아님)** — 검수사 2026-10-09 12:23 §7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»(1.76-05 «TCLU9762509 양하처리» 대체) · ② «그래야 준비 할수 있음(대신 확정아님 표기)» · 17:30 «판 B(시프팅 4.16) 진행하시고 상기 화면에도 버전을 크게 표기 바랍니다». utils.shiftSplitOf·isShiftOffPtk 한 벌 — 홈 카드·수석 보드·현황 요약 막대 = 평택분(MCAP 639N 0/228 → 0/223), 시프팅은 «내림 x/N · 실음 y/N» 줄. 입구마다 «시프팅이면 평택분 아님»(항차 화면·자동 가이드·출력 센터·미르 펼치기·마감텔리·갱별 보고) — 시프팅 재선적 기록이 선적 평택분으로 새던 길(293→298)을 막았다. 선사 리스트에 실려 온 시프팅은 평택분에도 센다(Fable 판정 ⑤ «214+95»). 미르 분모·예상 시간 = 양하 평택 + 선적 평택 + 2×시프팅(리스트 유무 무관 — MCAT 635N 534 → 562), 총 무브수 «양하 223 · 선적 293 · 시프팅 5대 → 10무브». 카고플랜·출력 센터·베이플랜·콘앱(ConeOne 2.68)은 확정 지도가 빈 배에 예측 시프팅을 ◇ 로(KSKM 2617N 종이 0 → ◇1). 마감텔리 SHIFTING 시트를 지도 꼴대로 읽게 고쳤다(컨번호·규격·자리 빈칸 → 채움, PORT = EDI POD). 로그인 화면 제목 줄에 판 이름을 크게. 회귀 기준표 R16~R19.
 //   (앞 판) 'TallyOne 4.15-01'   // 4.15-01 **리퍼 수는 어디서든 풀 리퍼만 · 엠티는 총엠티·일반·리퍼 엠티로 나눠 보인다** — 검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨» · 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2». 4.15 가 엠티 리퍼의 40HR 표기를 지키자 규격으로 세던 카고플랜 별첨 Reefer 가 STSE 2669E 선적에서 2 에서 43 이 됐다. 별첨 화물 종류는 utils.legendCargoCatOf 한 벌(인쇄 별첨·수석 보드), 마감텔리 RF 시트·선사 줄 RH·미르 RF in out 은 isFullReefer, 엠티 리퍼는 짝 isEmptyReefer 로 세어 emptySplitLabel 한 벌로 «엠티 43(일반 2 · 리퍼 엠티 41)» 를 적는다(별첨3·수석 보드·현황 탭·선박 카드 MTY·통합검색·미르·브리핑·마감텔리 수치·AI 자료). Fable 판정 — 마감텔리 선사 줄은 풀만 RH 이고 엠티 리퍼는 OS EMPTY 줄 태그가 구분한다(새 영문 표현 없음), 리퍼 엠티를 콕 집어 물으면 구분 없이 답한다, 콘앱 행 리퍼 판정도 utils 한 벌(ConeOne 2.67 · mir-core ConeMir.isReeferContainer). 회귀 기준표 R14·R15.
 //   (앞 판) 'TallyOne 4.15'   // 4.15 **규격·리퍼 계수 — 검수사 2026-10-09 12:23 확정 넷(§7.8-⑥⑨⑩⑪)** — ⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»: 미르·통합검색·베이 답·브리핑·인수인계·갱 배분·AI 자료 묶음과 앱 화면 넷(현황 탭·요약 카드·선박 카드 배지·선박 옆모습)의 «리퍼 N» 은 utils.isFullReefer 한 벌(엠티·리퍼드라이·제작컨 빼고 · RZOR R098E 40→32). ⑩ «엠티는 엠티이다, 그래도 따로 구분은 한다»: ASC 파서가 엠티 끝 글자를 맞출 때 라벨이 바뀌면 그대로(feSyncedIso — 리스트 파서와 한 벌 · STSE 2669E 40HR 41칸 40HE→40HR · 엠티실 45GE→45RE). ⑨ 검수사가 고른 규격(iso_pick)이 EDI tp 를 이긴다(isFlatRackContainer·bayCellTypeLabel·현황 OT·미르 리퍼 · 규격초과 oog 도 고른 규격(utils.isoPickOog — 병합 다섯·마감텔리) — SWTD 9013E FR 표식). ⑥ ASC 파서가 무게 두 자리(45GP90 F)도 규격을 읽고, 마감텔리 규격 빈 행은 같은 컨번호의 EDI 규격(남은 EDI 원문 다시 읽기 포함), 없으면 베이플랜 자리(홀수 20 · 짝수 40)로(KBTR 2606E 양하 20피트 28→22 · HC 74→80). 회귀 기준표 R12~R15.
 //   (앞 판) 'TallyOne 4.10'   // 4.10 **해치커버 보고 직전 장수 확인** — 자동 가이드·수동 작업 보고에서 오픈·클로즈 보고를 쓰기 직전에 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 검수사가 맞는지 보고 고른다(utils.hatchPanelDetailOf·hatchCountFlags, HatchCountConfirm). 취소하면 보고도 «열렸다» 표시도 남기지 않는다(sendHatchReport 반환값). 알림 배너에도 «총 N장»(검수사 2026-10-07)
@@ -75,7 +76,7 @@ export const APP_VERSION = 'TallyOne 4.16'   // 4.16 **시프팅 분리 — 양�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.16 시프팅은 양하 리스트와 분리해 시프팅 리스트에서 따로 셉니다. 종이 카고플랜에도 예측 시프팅을 ◇ 확정 아님으로 그립니다.'
+export const APP_NOTE = '4.17 미르가 어제 그제 몇 대 했는지와 작업한 배를 지난 날 완료 기록으로 답합니다. 없는 선박코드는 가장 가까운 코드로 답하고 선적 리스트만 온 배의 잔여는 자료 수집중으로 보입니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -6885,6 +6886,121 @@ export function crewShiftKey(shiftWord, nowMs = Date.now(), dayOff = 0) {
     ? { name, startMs: at(19, 0), endMs: at(6, 30) + 86400000 }
     : { name, startMs: at(8, 0), endMs: at(17, 30) };
   return { key: shiftGangKey(sh), startMs: sh.startMs, endMs: sh.endMs };
+}
+
+//  ★ 4.17 (검수사 §7.8-③ «모든걸 알수 있으면 도움이 됨») — **완료 시각 → 그 조 키**(「MM-DD 주간|야간」 — shiftGangKey 모양) 한 벌.
+//    근무일 기준이다(§4.2-F-2) — 야간은 시작한 날(00:00~06:29 는 전날 야간), 교대 사이 06:30~08:00 은 그날 주간 · 17:30~19:00 은 그날 야간(currentShift 의 «다가오는 조»).
+//    말로 가리킨 조(crewShiftKey)와 키 모양이 같아 «어제 야간»이 그대로 맞물린다. 시각이 없으면 '' — 날짜·조로 못 가른다.
+export function shiftKeyOfMs(ms) {
+  const t = Number(ms);
+  return t > 0 && isFinite(t) ? shiftGangKey(currentShift(t)) : '';
+}
+//  ★ 4.17 (§7.8-③) — 지난 날 말(«그제»·«어제 야간»)이 가리키는 조 키들. 조를 대면 그 조 하나, 안 대면 그 날 주간·야간 둘 — crewShiftKey 한 벌(근무일 기준).
+export function dayShiftKeys(dayOff, shiftWord = null, nowMs = Date.now()) {
+  const sh = (shiftWord === '야간' || shiftWord === '주간') ? [shiftWord] : ['주간', '야간'];
+  return sh.map((w) => crewShiftKey(w, nowMs, Number(dayOff) || 0).key);
+}
+//  ★ 4.17 (§7.8-③) — 그 조 키들에 든 **완료 기록**(항차 {양하|선적}.completed 의 at) 대수. 누락 표식(flag missing)은 한 일이 아니라 세지 않는다(별첨 완료와 같은 셈).
+//    완료 시각이 없는 기록은 날짜·조로 못 가르니 noAt 로 따로 센다 — 조용히 빼지 않는다(§4.2-F-3 과 같은 태도). byKey = 키별 { discharge, loading }.
+//    keys 를 안 주면(null) 키별로 모두 센다(그 항차에 완료 기록이 있는 조 목록).
+export function doneOnShiftKeys(voyage, keys = null) {
+  const ks = keys ? new Set(keys) : null;
+  const out = { discharge: 0, loading: 0, n: 0, noAt: 0, byKey: {} };
+  for (const m of ['discharge', 'loading']) {
+    const comp = (voyage && voyage[m] && voyage[m].completed) || {};
+    for (const r of Object.values(comp)) {
+      if (!r) continue;
+      if (typeof r === 'object' && r.flag === 'missing') continue;
+      const k = typeof r === 'object' ? shiftKeyOfMs(r.at) : '';
+      if (!k) { out.noAt += 1; continue; }
+      if (ks && !ks.has(k)) continue;
+      out[m] += 1; out.n += 1;
+      const b = out.byKey[k] || (out.byKey[k] = { discharge: 0, loading: 0 });
+      b[m] += 1;
+    }
+  }
+  return out;
+}
+
+//  ★ 4.17 (검수사 §7.8-⑧ «2») — **없는 선박코드 → 가장 가까운 코드** 한 벌. 미르(질문을 고쳐 답하고 «OBWH 로 답했어요» 한 줄)·
+//    질문 속 배 고르기(mir.pickShipCtx — 홈 통합검색·떠 있는 미르)·콘앱 배 옮기기(planCommand.pickVoyageKey)가 이것만 부른다.
+//    거리 = 글자 바꿈·넣기·빼기·이웃 자리바꿈(OWBH↔OBWH · TNPJ↔TNJP) 한 번이 1. 1~2 안에서 가장 가까운 코드가 하나면 그것,
+//    같은 거리에 둘 이상이면 ambiguous(그때만 «OBWH·OBWF 중 어느 배요?» 로 되묻는다). 아는 코드 그대로면 dist 0.
+//    배 코드는 영문 네 글자다. 선사·부두·화물·흔한 영문 낱말(SITC·PCTC·XRAY·DECK·TWIN …)은 배 코드로 보지 않는다 — 거리 2 안에 배 코드가 있어도(SITC↔STTC 1 · PCTC↔PCTJ 1 · DECK↔DJCT 2) 고치지 않는다.
+//    질문에서 고를 때는 shipCodeFixOf 한 벌을 거친다(대문자로 친 낱말만 거리 2·되묻기 — 아래).
+export const NOT_SHIP_CODE = new Set([
+  'PCTC', 'PNCT', 'KMTC', 'SITC', 'SNKO', 'DJSC', 'NSSL', 'HASL', 'HSLI', 'JEON', 'DWIC', 'EASK', 'TJMS', 'WDFC', 'SCLK', 'OOCL', 'MAEU', 'CMDU', 'HLCU', 'COSU', 'EGLV', 'ONEY', 'YMLU', 'SMLM',
+  'XRAY', 'IMDG', 'TANK', 'FLAT', 'RACK', 'OPEN', 'HIGH', 'CUBE', 'REEF', 'FULL', 'DECK', 'HOLD', 'TEMP', 'SEAL', 'LIST', 'PLAN', 'DATA', 'MAIL', 'TEST', 'BOOK', 'SLOT', 'CODE', 'NAME', 'TIER', 'BAYS',
+  'LOAD', 'CREW', 'GANG', 'TIME', 'DONE', 'LEFT', 'WORK', 'SHIP', 'PORT', 'BULK', 'SIZE', 'TYPE', 'ROWS', 'EDIS', 'FILE', 'SHOW', 'HELP', 'STOP', 'NEXT', 'BACK', 'OKAY', 'YARD', 'GATE', 'CALL',
+  'TWIN', 'SWAP', 'CNTR', 'LASH', 'INFO', 'VOID', 'CONS', 'CONE', 'DISC', 'SAFE', 'SAVE', 'SEND', 'PASS', 'CATO', 'LOLO', 'RORO', 'MOVE', 'PAIR', 'AREA', 'ZONE', 'MENU', 'USER',
+  'STAR', 'DCHC', 'RFHC', 'OTHC', 'FRHC', 'TKHC', 'USDA', 'BARE', 'REST', 'POST', 'POSN', 'NSEW', 'KEYS', 'PAST', 'DENT', 'RTGC', 'SIDE', 'TASK', 'CATS', 'HTTP',   // 앱 글(지식·매뉴얼·검색)에 나오는 네 글자 낱말 중 배 코드와 거리 2 안인 것(4.17 실측)
+]);
+//  거리는 컨번호 오타 짝(listTypoTwins)이 쓰는 _osaDist 한 벌(바꿈·넣음·뺌 1, 이웃 자리 바뀜 1).
+const _SHIP4 = /^[A-Z]{4}$/;
+export function nearestShipCode(token, codes, maxDist = 2) {
+  const t = String(token || '').trim().toUpperCase();
+  if (!_SHIP4.test(t) || NOT_SHIP_CODE.has(t)) return null;
+  const list = [...new Set([...(codes || [])].map((c) => String(c || '').trim().toUpperCase()).filter((c) => _SHIP4.test(c)))];
+  if (list.includes(t)) return { code: t, dist: 0, ambiguous: null };
+  if (/^[A-Z]{3}U$/.test(t)) return null;   // 컨 소유자 코드(ISO 6346 — 끝 U, «CICU»·«TGHU») — 컨번호를 치는 중이다, 배 코드로 고치지 않는다
+  let best = 3, hits = [];
+  for (const c of list) {
+    const d = _osaDist(t, c);
+    if (d < best) { best = d; hits = [c]; } else if (d === best) hits.push(c);
+  }
+  if (best > Math.min(2, maxDist) || !hits.length) return null;
+  return hits.length === 1 ? { code: hits[0], dist: best, ambiguous: null } : { code: null, dist: best, ambiguous: hits.sort() };
+}
+//  ★ 4.17 (§7.8-⑧) — **질문 속 배 코드 꼴 낱말 → 고칠 코드** 한 벌(미르 답·pickShipCtx·pickVoyageKey 가 이것만 부른다). 컨번호(영문 4 + 숫자 7)의 앞 네 글자는 낱말이 아니다.
+//    대문자로 친 낱말(«OWBH»)은 거리 1~2, 같은 거리에 둘 이상이면 ambiguous(그때만 되묻는다). 소문자·섞어 친 낱말은 거리 1 까지만 고치고 되묻지 않는다 —
+//    흔한 영문 낱말(«swap»→SWAL·SWAT·SWCP·SWSP · «haha»→HAHM · «kakao»)이 배 코드 되묻기로 답을 가로채지 않게(클로드 문지기 — 검수사 확정 필요).
+//    ★ 옛 코드가 먼저다(Fable 판정 2026-10-09) — 거리를 재기 전에 별칭 표(shipCodeAliasMap — 베이사전 prevCode)를 본다. 별칭이면 그 정본 코드로
+//      바로 고치고(alias 에 옛 코드), 거리로는 재지 않는다 — «RZSY»(SMYA 의 옛 코드)가 거리 2 의 RZOR 로 가던 것.
+//    반환 { fixes:[{ raw(친 그대로), code, dist, alias(옛 코드 — 별칭일 때만) }], ambiguous:[코드…]|null }.
+export function shipCodeFixOf(text, codes, aliases = shipCodeAliasMap()) {
+  const out = { fixes: [], ambiguous: null };
+  const re = /(?:^|[^A-Za-z0-9])([A-Za-z]{4})(?![A-Za-z0-9])/g;
+  const s = String(text || '');
+  let m;
+  while ((m = re.exec(s))) {
+    const raw = m[1], up = raw === raw.toUpperCase();
+    const al = aliases && aliases[raw.toUpperCase()];
+    if (al && al !== raw.toUpperCase()) { out.fixes.push({ raw, code: al, dist: 0, alias: raw.toUpperCase() }); continue; }
+    const nc = nearestShipCode(raw, codes, up ? 2 : 1);
+    if (!nc || nc.dist === 0) continue;
+    if (nc.ambiguous) { if (up && !out.ambiguous) out.ambiguous = nc.ambiguous; continue; }
+    out.fixes.push({ raw, code: nc.code, dist: nc.dist });
+  }
+  return out;
+}
+//  ★ 4.17 (Fable 판정) — **옛 선박코드 → 지금 코드** 별칭 표. 베이사전 항목의 prevCode(SMYA ← RZSY · HABK ← ABAN — 코드를 바꿀 때 남긴 옛 코드)를 읽는다.
+//    V8.43 SHIP_KEY_ALIAS 는 코드 → ships 노드 키(IMO·콜사인) 표라 옛 코드가 없다(RZSY 0건). 콤마·공백으로 여럿을 적었어도 받는다. 영문 네 글자만.
+export function shipCodeAliasMap(dict = null) {
+  const out = {};
+  try {
+    const d = dict || ((typeof window !== 'undefined' && window.__fbShipBayDict) || null);
+    if (!d || typeof d !== 'object') return out;
+    for (const k of Object.keys(d)) {
+      const e = d[k]; if (!e || typeof e !== 'object' || !e.prevCode) continue;
+      const cur = String(e.code || k).trim().toUpperCase(); if (!_SHIP4.test(cur)) continue;
+      for (const pc of String(e.prevCode).toUpperCase().split(/[\s,·\/]+/)) if (_SHIP4.test(pc) && pc !== cur) out[pc] = cur;
+    }
+  } catch (e) { /* 사전이 없으면 별칭 없음 */ }
+  return out;
+}
+//  아는 배 코드 — 활성 항차(info.vsl)·베이사전(키·code)·선박 라이브러리(ships 키·그 아래 항차 키 앞머리). 영문 네 글자만.
+export function knownShipCodes(voyages = null, shipLib = null) {
+  const s = new Set();
+  const add = (x) => { const k = String(x || '').trim().toUpperCase(); if (_SHIP4.test(k)) s.add(k); };
+  for (const v of Object.values(voyages || {})) add(v && v.info && v.info.vsl);
+  try {
+    const d = (typeof window !== 'undefined' && window.__fbShipBayDict) || null;
+    if (d && typeof d === 'object') for (const k of Object.keys(d)) { add(k); add(d[k] && d[k].code); }
+  } catch (e) { /* 사전이 없으면 항차 코드만 */ }
+  if (shipLib && typeof shipLib === 'object') {
+    for (const k of Object.keys(shipLib)) { add(k); const vs = shipLib[k] && shipLib[k].voyages; if (vs && typeof vs === 'object') for (const vk of Object.keys(vs)) add(String(vk).split('_')[0]); }
+  }
+  return [...s];
 }
 
 //  ★ 3.8: 받침에 따라 조사 한 벌 — koJosa('최관식', '으로') → «최관식으로» · koJosa('박진우', '으로') → «박진우로».
