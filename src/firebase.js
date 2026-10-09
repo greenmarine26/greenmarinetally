@@ -3697,6 +3697,14 @@ export async function fbSaveShipBayDict(code, entry) {
       return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stable(v[k])).join(',') + '}';
     };
     const _cmp = (o) => { const { updatedAt, updatedBy, ...rest } = o || {}; return _stable(rest); };
+    //  ★ 4.19 (§7.8-⑬ «항차는 등록하기 사전에 없음 표기» · 감사 680): **값이 undefined 인 칸은 쓰지 않는다.**
+    //    1.62 는 매트릭스 없는 등록이 확정·보정중을 말하지 않게 provisional 에 있던 값을 돌려줬는데, 사전에 없는 새 배는 그 값이 undefined 라
+    //    실 SDK 가 값 안의 undefined 를 거부해 set 이 통째로 실패했다 — EDI 자동 등록(M5.89)이 사전에 없는 새 배를 1.62 이후 한 번도 못 만들었다.
+    //    undefined 는 «말하지 않음» 이다 — 있던 값이 있으면 그대로 두고, 없으면 칸을 만들지 않는다(chunkedReplace V9.32-02 와 같은 뜻).
+    for (const k of Object.keys(merged)) {
+      if (merged[k] !== undefined) continue;
+      if (existing[k] !== undefined) merged[k] = existing[k]; else delete merged[k];
+    }
     if (existing && _cmp(existing) === _cmp(merged)) return true;   // 무변경 — 쓰지 않고 성공으로 본다
     await set(r, merged);
     return true;

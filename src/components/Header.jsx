@@ -18,6 +18,7 @@ import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: �
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
+import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, workChoice = null, onChangeWork = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
@@ -104,6 +105,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <div className="font-bold text-sm text-dim-100 truncate leading-tight">
               {/* TallyOne 1.0 (K4): 앱 이름 리브랜딩 — 버전 문자열은 건드리지 않음(통합 시 처리) */}
               {info ? info.vsl : 'TallyOne'}
+              {info && <DictMissingChip info={info} className="ml-1.5 align-middle" />}
             </div>
             <div className="text-2xs text-dim-400 truncate leading-tight">
               {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}

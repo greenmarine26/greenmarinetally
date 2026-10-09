@@ -37,7 +37,7 @@ import { enrichBayDef } from './bayDictAutoEnrich.js';
 //   목적: 콘앱(cone-cargoplan.js)처럼 Firebase를 로드하지 않는 같은-오리진 환경에서도
 //   Firebase 전용 선박(예: STMJ)의 카고플랜 조회가 가능하게.
 let _fbCacheParsed = null;
-function getFbBayDict() {
+export function getFbBayDict() {   // 4.19: dictMissing.js 가 «사전을 받았나» 를 같은 길로 본다
   try {
     if (typeof window !== 'undefined' && window.__fbShipBayDict && Object.keys(window.__fbShipBayDict).length > 0) {
       return window.__fbShipBayDict;

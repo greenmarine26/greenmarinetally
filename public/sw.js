@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.18-03';
-const NOTE = '4.18-03 엠티 실 작업 현황의 규격 글자를 마감텔리 칸대로 보여 줍니다. 45피트 엠티는 L5GE로 따로 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.19';
+const NOTE = '4.19 베이사전에 없는 배는 항차 목록 카드와 머리줄 그리고 베이플랜 머리에 사전에 없음이 붙습니다. 항차는 그대로 등록되고 매트릭스를 만들면 딱지가 사라집니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

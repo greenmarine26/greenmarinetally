@@ -7,6 +7,7 @@ import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
+import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
@@ -1471,6 +1472,7 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
           <div className="flex items-center gap-2 flex-wrap">
             <span className="ship-ico" aria-hidden="true">🚢</span>
             <span className="font-black text-lg sm:text-base text-dim-100 truncate">{voyage.info.vsl}</span>
+            <DictMissingChip info={voyage.info} />{/* 4.19 §7.8-⑬ «항차는 등록하기 사전에 없음 표기» */}
             {/*  ★ 3.53 — **선박명 옆 문제 알림.** 검수사 2026-09-16 *«진행상황에서 선박명 옆빈곳에
                  발생된 문제 알림을 주었으면 합니다. 둘중 한군데를 누르면 상세카드가 나오고 수정 할수 있게»*
                  누르면 그 컨의 상세 카드로 바로 간다(수정은 거기서 — 수석·검수사만).

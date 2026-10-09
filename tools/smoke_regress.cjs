@@ -867,6 +867,94 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('대조 — 선적 EDI 가 온 MCAP 639N 은 종전 셈(«자료 수집중» 없음)', !/자료 수집중/.test(tO) && /남은 작업/.test(tO), tO.split('\n')[0]);
   }
 
+  // ── R23 ───────────────────────────────────────────────────────────────
+  //  §7.8-④ «POD 가 자료마다 다를 때» — **Fable 판정 필요로 비워 둔다**(기준표 R23 줄). 이 파일은 단언을 두지 않는다(헛검사 금지).
+  //    까닭 — 세관 적하목록 POD 칸은 «최종항»(parseCustomsSheet col('최종항'))이고 3.53·2.76 검수사 확정 «세관 리스트는 평택에서 내리는 것의 명단» 과 걸린다.
+  head('R23 POD 가 자료마다 다를 때(세관·EDI·터미널) — Fable 판정 필요, 단언 없음', '검수사 §7.8-④ «1-3 다쓴다 다만 세관 자료가 없으면 1 있으면 2 그리고 터미널 자료와 비교해서 3»');
+
+  //  4.19 R24·R25 — 베이사전 쓰기(fbSaveShipBayDict)·«사전에 없음» 판정·RZOR 덱플랜 파서를 메모리 스텁으로 묶는다(실 SDK 처럼 값 안의 undefined 를 거부한다).
+  const DM = fx('dictmissing419.json');
+  const R24 = bundle([
+    `export { fbSaveShipBayDict } from "${ROOT}/src/firebase.js";`,
+    `export { bayDictMissingOf } from "${ROOT}/src/dictMissing.js";`,
+    `export { parseDeckPlanWorkbook } from "${ROOT}/src/rzorPlan.js";`,
+  ].join('\n'), 'r24', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --loader:.js=jsx --jsx=automatic`);
+
+  // ── R24 ───────────────────────────────────────────────────────────────
+  head('R24 사전에 없는 배 — 항차는 등록하고 «사전에 없음» 을 표기한다 · EDI 자동 등록(베이사전)이 undefined 칸으로 거부되지 않는다 (감사 680 · 3.8-01)', '검수사 §7.8-⑬ «항차는 등록하기 사전에 없음 표기»');
+  {
+    //  독립 — «사전» = 정본 ship_bay_dict_v3 의 베이 구조(bayDef) · 덱플랜 배(RZOR)는 셀 매트릭스를 만들지 않는 배(검수사 확정 3.5 — 선박 정책 lolo).
+    const DECKPLAN_SHIPS = ['RZOR'];
+    const dictWith = (extra) => Object.assign(Object.fromEntries(Object.entries(DM.dict).map(([k, e]) => [k, { code: k, name: e.name || '', callsign: e.callsign || '', imo: e.imo || '', ...(e.hasBayDef ? { bayDef: { recordCount: 1 } } : {}) }])), extra || {});
+    const codes = DM.activeKeys.map((k) => k.split('_')[0]);
+    const want = codes.filter((c) => !(DM.dict[c] && DM.dict[c].hasBayDef) && !DECKPLAN_SHIPS.includes(c)).sort();
+    const dictSave = global.window.__fbShipBayDict;
+    try {
+      //  ① 쓰기 — EDI 자동 등록(VoyagePage M5.89)이 보내는 모양 그대로. 사전에 없는 QDTR(활성 QDTR_2608E — 예정등록·사전 키 없음)
+      localStorage.setItem('master_active_inspector_v1', '김성일');   // 베이사전 쓰기 문지기(시드 관리자) 통과 — 일반 검수원은 종전대로 막힌다
+      global.window.__fbShipBayDict = dictWith();
+      global.__memdb = { ship_bay_dict_v3: { RZOR: JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(DM.dict.RZOR).filter(([k]) => ['callsign', 'imo', 'name'].includes(k))))) } };
+      const qi = DM.voyages.QDTR_2608E;
+      const shape = (code, name) => ({ code, name, callsign: '', source: 'edi-auto', _inspector: '김성일' });
+      let e1 = '', ok1 = null;
+      try { ok1 = await R24.fbSaveShipBayDict(qi.vsl, shape(qi.vsl, qi.vslFull || qi.vsl)); } catch (e) { e1 = String(e && e.message || e); }
+      const q = (global.__memdb.ship_bay_dict_v3 || {})[qi.vsl];
+      ok(`사전에 없는 ${qi.vsl}(QDTR_2608E) EDI 자동 등록 모양 → true · 사전 항목이 생기고 provisional 칸은 만들지 않는다(수정 전 false — 실 SDK 가 provisional undefined 로 set 거부)`,
+        ok1 === true && !!q && q.name === (qi.vslFull || qi.vsl) && q.source === 'edi-auto' && !('provisional' in q), e1 || `${ok1} ${JSON.stringify(q || null).slice(0, 160)}`);
+      //  껍데기(이름·콜사인만 — RZOR 꼴, provisional 칸 없음)에 다시 EDI 자동 등록 — 있던 신원은 그대로
+      let e2 = '', ok2 = null;
+      try { ok2 = await R24.fbSaveShipBayDict('RZOR', shape('RZOR', 'RIZHAO ORIENT')); } catch (e) { e2 = String(e && e.message || e); }
+      const rz = global.__memdb.ship_bay_dict_v3.RZOR || {};
+      ok(`껍데기 RZOR(실 사전 — bayDef·provisional 없음)에 EDI 자동 등록 모양 → true · 콜사인 ${DM.dict.RZOR.callsign} · IMO ${DM.dict.RZOR.imo} 그대로 · provisional 칸 없음(수정 전 false)`,
+        ok2 === true && rz.callsign === DM.dict.RZOR.callsign && rz.imo === DM.dict.RZOR.imo && !('provisional' in rz), e2 || `${ok2} ${JSON.stringify(rz).slice(0, 160)}`);
+
+      //  ② 판정 — 활성 17항차 중 «사전에 없음» = 테스트가 사전 사본(키·bayDef)에서 직접 고른 배
+      global.window.__fbShipBayDict = dictWith();
+      const got = DM.activeKeys.filter((k) => R24.bayDictMissingOf({ vsl: k.split('_')[0] })).map((k) => k.split('_')[0]).sort();
+      ok(`활성 ${codes.length}항차 중 «사전에 없음» = 사전 사본에서 bayDef 없는 배(덱플랜 RZOR 제외) [${want.join(' ')}] (수정 전 표기 없음)`, want.length > 0 && got.join(' ') === want.join(' '), `답 [${got.join(' ')}]`);
+      //  껍데기를 만든 뒤에도 매트릭스가 없으면 «사전에 없음» · 매트릭스를 만들면 저절로 사라진다 · 사전을 아직 못 받았으면 말하지 않는다
+      global.window.__fbShipBayDict = dictWith({ [qi.vsl]: { code: qi.vsl, name: qi.vsl, source: 'edi-auto' } });
+      const afterShell = R24.bayDictMissingOf(qi);
+      global.window.__fbShipBayDict = dictWith({ [qi.vsl]: { code: qi.vsl, name: qi.vsl, bayDef: { recordCount: 1, source: 'user' } } });
+      const afterMatrix = R24.bayDictMissingOf(qi);
+      global.window.__fbShipBayDict = {};
+      const noDict = R24.bayDictMissingOf(qi);
+      ok(`${qi.vsl} — 껍데기 등록 뒤에도 «사전에 없음»(베이 구조 없음) · 매트릭스를 만들면 사라짐 · 사전을 아직 못 받았으면 말하지 않음`, afterShell === true && afterMatrix === false && noDict === false, JSON.stringify({ afterShell, afterMatrix, noDict }));
+
+      //  ③ 화면 — 항차 목록 카드·맨 위 머리줄·베이플랜 머리를 jsdom 에서 실소스로 그린다(smoke_regress_dom.jsx ③). 사전에 없는 배만 셋 다 «사전에 없음».
+      const domR24 = async (key) => {
+        const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+        const errs = []; dom.window.addEventListener('error', (e) => errs.push(e.message));
+        dom.window.__R24 = key; dom.window.console.warn = () => {};
+        try { dom.window.eval(domSrc); } catch (e) { errs.push('THROW ' + e.message); }
+        await sleep(250);
+        const d = dom.window.document;
+        const cnt = (id) => { const el = d.getElementById(id); return el ? [...el.querySelectorAll('[data-dict-missing]')].filter((x) => x.textContent.trim() === '사전에 없음').length : -1; };
+        return { card: cnt('r24card'), head: cnt('r24head'), bay: cnt('r24bay'), errs };
+      };
+      const sQ = await domR24('QDTR_2608E'), sA = await domR24('ATPR_2645E'), sR = await domR24('RZOR_R111E');
+      ok(`화면 — QDTR(사전에 없음) 항차 목록 카드·머리줄·베이플랜 머리에 «사전에 없음» 셋 · ATPR(사전 있음)·RZOR(덱플랜 배) 는 없음 (수정 전 셋 다 0)`,
+        sQ.card === 1 && sQ.head === 1 && sQ.bay === 1 && sA.card + sA.head + sA.bay === 0 && sR.card + sR.head + sR.bay === 0 && !sQ.errs.length && !sA.errs.length,
+        JSON.stringify({ QDTR: sQ, ATPR: sA, RZOR: sR }).slice(0, 220));
+    } finally { global.window.__fbShipBayDict = dictSave; }
+  }
+
+  // ── R25 ───────────────────────────────────────────────────────────────
+  head('R25 비ISO 유닛(RZOR «SAWTBP00N») 은 검수 대상이 아니다 — 검수사 STOWAGE PLAN(선적 덱플랜) 파서가 건너뛰고 대수는 실컨 칸 수 그대로 (3.67 남긴 것 · 현행 고정)', '검수사 §7.8-⑦ «7. 1» (건너뛴다)');
+  {
+    //  독립 — 시트의 모든 글자 칸을 이 파일이 따로 읽어 실컨번호(ISO 6346 영문 4 + 숫자 7) 칸과 비ISO 유닛(영문 6 + 숫자 3 — SAWTBP005·006) 칸을 센다.
+    for (const f of ['rzor_plan_R070W.xlsx', 'rzor_plan_R075W.xlsx']) {
+      const wb = XLSX.readFile(path.join(ROOT, 'tools/fixtures', f), { cellStyles: true });
+      let isoN = 0; const units = [];
+      for (const sn of wb.SheetNames) { const ws = wb.Sheets[sn]; for (const a of Object.keys(ws)) { if (a[0] === '!') continue; const v = ws[a].v; if (typeof v !== 'string') continue; const t = v.replace(/\s+/g, '').toUpperCase(); if (CN_RE.test(t)) isoN += 1; else if (/^[A-Z]{6}\d{3}$/.test(t)) units.push(t); } }
+      const p = R24.parseDeckPlanWorkbook(wb, XLSX);
+      const slots = (p.decks || []).flatMap((d) => d.slots.filter((s) => !s.empty));
+      const leaked = slots.filter((s) => !CN_RE.test(String(s.cn || '')));
+      ok(`${f} — 시트에 비ISO 유닛 ${units.length}(${units.join('·')}) · 파서 칸 ${slots.length} = 실컨 칸 ${isoN} (건너뜀 · 대수 불변) · 비ISO 칸 0`,
+        p._fmt === 'checker' && units.length >= 1 && slots.length === isoN && p.total === isoN && leaked.length === 0, `fmt ${p._fmt} · 칸 ${slots.length} · total ${p.total} · 샌 칸 ${leaked.map((s) => s.cn).join(',')}`);
+    }
+  }
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

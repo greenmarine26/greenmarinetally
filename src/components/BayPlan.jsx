@@ -22,6 +22,7 @@ import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildP
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
+import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { formatDgShort } from '../dgUnDict.js';
 
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
@@ -668,6 +669,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
   return (
     <div className="space-y-2">
+      {/* 4.19 (§7.8-⑬ «항차는 등록하기 사전에 없음 표기»): 베이플랜 머리 — 판정은 dictMissing.bayDictMissingOf 한 벌(항차 목록·헤더와 같은 딱지) */}
+      <DictMissingChip info={voyageInfo || { vsl: shipName, imo: shipImo }} className="inline-block" />
       {/* V7.01: 계열 대체 안내 — 정확한 베이정보 없어 같은 계열 선박으로 대체 시 */}
       {bayDictSubstituted && (
         <div className="bg-amber-100 border border-amber-600 text-amber-900 rounded-pill p-2 text-xs">

@@ -292,7 +292,7 @@ exports.off = () => {}; exports.goOffline = () => {}; exports.goOnline = () => {
     ok('훅은 조기 return(잠금 화면) 앞에 있다', app.indexOf('const voyScope = useMemo') > 0 && app.indexOf('const voyScope = useMemo') < app.indexOf('if (lockedName && !isOwnerName(lockedName)) return'));
     const fb = src('src/firebase.js');
     ok('전체 구독·본문 구독이 같은 손질 함수(_postVoyage)를 부른다', /for \(const k of Object\.keys\(v\)\) v\[k\] = _postVoyage\(k, v\[k\]\);/.test(fb) && /callback\(\{ \[k\]: _postVoyage\(k, v\) \}, new Set\(\[k\]\), true\)/.test(fb));
-    ok('이번 판 버전 4.08~4.13 계열(-NN 포함)', /APP_VERSION = 'TallyOne 4\.(0[89]|1[012345678])(-\d\d)?'/.test(src('src/utils.js')));
+    ok('이번 판 버전 4.08~4.13 계열(-NN 포함)', /APP_VERSION = 'TallyOne 4\.(0[89]|1[0123456789])(-\d\d)?'/.test(src('src/utils.js')));
     ok('연막 중 예상 밖 경고 없음', !warns.some((w) => /반영 실패/.test(w)), warns.join(' | '));
   } catch (e) {
     realTimers(); console.warn = realWarn;
