@@ -467,7 +467,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   };
   const tagShift = (c, tier, rowLbl) => {
     if (shiftMap && c.cn && shiftMap[c.cn]) {
-      ensureShiftTier(tier).set(rowLbl, true);
+      ensureShiftTier(tier).set(rowLbl, isPredShift(shiftMap[c.cn]) ? 'pred' : true);   // 4.16: 예측은 'pred'(칸 ◇ — 확정 아님)
     }
   };
   const ensureUrgentTier = (tier) => { if (!urgents.has(tier)) urgents.set(tier, new Map()); return urgents.get(tier); };
@@ -929,7 +929,7 @@ export function assembleBayRows(spec, marksBundle) {
         }
         if (inActive) {
           // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? (rowShifts.get(rowLbl) || false) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -970,7 +970,7 @@ export function assembleBayRows(spec, marksBundle) {
             cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
             continue;
           }
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? (rowShifts.get(rowLbl) || false) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -1050,6 +1050,12 @@ export function summaryToMatrixBays(shipBayDef) {
 //    두 칸이 같은 그림**이 된다. 실측 OBWH 2731E 470대 — 완료 시각마다 재굴려 2갱 7.4%(23/311) · 3갱 41.8%(130/311) 이 겹쳤다.
 //    사전 있는 63척 중 62척이 같은 구조라 선박 예외가 아니다. 그래서 세는 쪽(보드)과 그리는 쪽(BayPlan)이 이 함수 하나를 같이 쓴다.
 //    `pages` 는 `buildBayPagesFromSummary` 가 준 장 목록이다. 사전이 없으면 홀로 선 앞홀수로 본다(그림도 같은 답을 낸다).
+//  ★ 4.16 (§7.8-② «그래야 준비 할수 있음(대신 확정아님 표기)») — 예측 시프팅 항목인가.
+//    선적 자리(to)도 선사 서류 표식(_doc)도 없으면 앱 예측이다(utils.shiftingMapForDisplay 의 예측 갈래 — 양하 EDI 하나로 커버 위를 본 것).
+//    대수가 배정표로 확정이어도 자리가 예측이면 예측이다(Fable 판정 ⑥). 칸은 ◇ — 확정(선사 서류·EDI 대조)은 종전대로 ◆.
+export function isPredShift(e) {
+  return !!(e && typeof e === 'object' && !e.to && !e._doc);
+}
 export function hatchEvenOf(bayNo, pages) {
   const b = parseInt(bayNo, 10);
   if (!(b > 0)) return null;

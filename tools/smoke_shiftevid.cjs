@@ -158,7 +158,8 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
   // ⑥ 배선 — 같은 판정 한 벌을 모든 길이 부른다
   const R = (f) => fs.readFileSync(path.join(process.cwd(), f), 'utf8');
   ok(/shiftEvidenceOf\(voyageKey, voyage, shiftingMap\)/.test(R('src/pages/VoyagePage.jsx')) && /shiftStatus=\{shiftEvid\.label\}/.test(R('src/pages/VoyagePage.jsx')), '항차 화면이 shiftEvidenceOf 를 부르고 카고플랜 머리에 상태를 넘긴다');
-  ok(/shiftEvidenceOf\(voyageKey, voyage, shiftingMap\)/.test(R('src/components/PrintHubModal.jsx')) && /shiftStatus=\{shiftEvid\.label\}/.test(R('src/components/PrintHubModal.jsx')), '출력허브도 같은 판정으로 카고플랜 머리에 상태를 넘긴다');
+  //  4.16 (§7.8-②): 출력 센터 종이도 화면과 같은 지도(확정 ∨ 예측 — shiftingMapForDisplay)를 그리고 그 지도로 머리 상태를 낸다.
+  ok(/shiftEvidenceOf\(voyageKey, voyage, shiftingMapDraw\)/.test(R('src/components/PrintHubModal.jsx')) && /shiftingMapDraw = useMemo\([\s\S]{0,80}shiftingMapForDisplay\(voyageKey, voyage\)/.test(R('src/components/PrintHubModal.jsx')) && /shiftStatus=\{shiftEvid\.label\}/.test(R('src/components/PrintHubModal.jsx')), '출력허브도 같은 판정으로 카고플랜 머리에 상태를 넘긴다(4.16 — 그리는 지도 = 화면과 같은 shiftingMapForDisplay)');
   ok(/shiftStatus && \(/.test(R('src/components/PrintableCargoPlanV2.jsx')), '카고플랜 머리가 상태를 그린다');
   ok(/ConeParse = \{[^}]*shiftEvidenceCore/.test(R('src/coneCargoPlan.entry.jsx')) && /ctShiftEvid\(_v\)/.test(R('public/cone.html')) && !/\bshiftEvid\s*:/.test(R('public/cone.html')), '콘앱은 번들 shiftEvidenceCore 로 카고플랜 머리에만 상태를 내고 미르 답에는 근거를 싣지 않는다(검수사 2026-10-09 05:50 «근거는 검수앱에만»)');
   ok(/근거 — \$\{_ev\.line\}/.test(R('src/nlSearch.js')) && /c\.shiftEvid = shiftEvidenceOf/.test(R('src/mir.js')), '미르의 시프팅 답에 상태와 근거가 붙는다(검수앱 mir.js 만 — 콘앱은 싣지 않는다)');

@@ -17,7 +17,7 @@ import { isoToLabel, bayCellTypeLabel, normalizeBay, isReeferContainer, reeferTe
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import { isUserOwnedBayDict, isPtk as _isPtkOne, isPredShift } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -497,7 +497,11 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
        실측 MCSC — 시프팅 95대가 양하 EDI 95 · 선적 EDI 95 · **양쪽 다 95**.
          표본 MRKU4002140 — 26/04/02 에서 내려 26/02/82 에 다시 실린다.
        그러니 모드를 가리지 않고 같은 컨번호로 칠하면 양쪽이 맞는다. */
-    if (restowMap && restowMap[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
+    //  ★ 4.16 (§7.8-② «확정아님 표기»): 예측 시프팅(선적 자리도 선사 서류도 없음)은 점선 테두리 + 칸 아래 ◇ — 카고플랜 종이와 같은 표식이다.
+    //    cell-shift-pred 는 색이 아니라 표식 이름이다(BayPage 가 이것을 보고 ◇ 를 얹는다 — cell-podbg 와 같은 방식).
+    if (restowMap && restowMap[c.cn]) return isPredShift(restowMap[c.cn])
+      ? 'bg-orange-50 text-ink-950 border-orange-500 border-dashed ring-1 ring-orange-400 cell-shift-pred'
+      : 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
     //  ★ 3.7 — 무늬를 버리고 **목적지 고정 바탕색**을 쓴다(검수사 «격자를 없앱니다… 목적지별 색으로»).
     //    실제 칠은 인라인 style 이라 여기서는 «색이 붙는 칸»이라는 표시만 준다.
     //    ⚠ 색값은 `podBgKey` 가 따로 돌려준다 — 자식(BayPage)은 mode 를 안 받으므로
@@ -1730,6 +1734,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
     //  ★ 3.7 — 목적지 고정 바탕색(카고플랜·베이상세와 같은 한 벌 `podBgOf`).
     //    cellColor 가 'cell-podbg' 를 준 칸에만 얹는다 — 완료·XRAY·시프팅 표시는 그대로 이긴다.
     const _podBg = /cell-podbg/.test(cellColor(c) || '') && podBg ? podBg(c) : '';
+    const _shPred = /cell-shift-pred/.test(cellColor(c) || '');   // 4.16: 예측 시프팅(확정 아님) — 칸 왼쪽 아래 ◇
     return (
       <button
         key={key}
@@ -1764,6 +1769,11 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
               <span className="text-red-600 ml-0.5 animate-pulse">!</span>
             )}
           </div>
+        )}
+        {_shPred && (
+          <div className="absolute bottom-0 left-0 z-20 text-orange-700 font-black leading-none" data-shift-pred="1"
+            style={{ fontSize: Math.max(9, fontSize), marginLeft: typeBarBg && !compactCell ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 0 }}
+            title="예측 시프팅 — 확정 아님(선사 서류·선적 EDI 가 오면 확정으로 바뀝니다)">◇</div>
         )}
         {needsShift && !compactCell && (
           <div className="absolute top-0 left-0 bg-amber-400 text-ink-950 px-0.5 font-black leading-none rounded-br z-10"

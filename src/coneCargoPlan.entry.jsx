@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
 import CargoDuoPills from './components/CargoDuoPills.jsx';   // ConeOne 2.60: 양하|선적 전환 단추(빈 쪽 안내 화면에서도 쓴다)
-import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, shiftEvidenceCore} from './utils.js';   // ConeOne 2.44: 자리 판정도 한 벌   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
+import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, normPortCode, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, shiftEvidenceCore, predictedShiftingForDisplay, setLaneRoutes} from './utils.js';   // 4.16: 예측 시프팅(종이 ◇)도 한 벌 — 항로 사전은 콘앱이 받아 넣는다   // ConeOne 2.44: 자리 판정도 한 벌   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
@@ -288,7 +288,7 @@ window.ConeCargoPlan = { open, openDuo, close, isOpen };
 //   **크레인 하나는 같은 시각에 두 베이를 못 한다**는 규칙으로 시각 바구니를 갈라 호기를 되살린다(`craneBaysByTime`).
 //   그 함수가 `utils.js` 에 있는데 콘앱 번들이 안 내보내 콘앱은 그 답을 못 봤다(실측 — cone.html·번들에 이름 0건).
 //   ⇒ 콘앱이 **같은 함수**를 부른다. 콘앱이 제 규칙을 새로 만들면 두 화면이 또 갈린다(규범 §4-4).
-window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, pickCarrierOp, shiftEvidenceCore };   // 4.13: 시프팅 근거·상태(미확정/확정/불일치)도 한 벌 — 카고플랜 머리(콘앱은 머리 상태만)와 검수앱 미르 답이 부른다
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, normPortCode, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList, applyCatosPos, applyAutoSwap, craneBaysByTime, isFlatRackContainer, restowMapFromDoc, pickCarrierOp, shiftEvidenceCore, predictedShiftingForDisplay, setLaneRoutes };   // 4.16: 확정 지도가 빈 배의 예측 시프팅(카고플랜 ◇ — 확정 아님)   // 4.13: 시프팅 근거·상태(미확정/확정/불일치)도 한 벌 — 카고플랜 머리(콘앱은 머리 상태만)와 검수앱 미르 답이 부른다
 //   // 3.66-01: 리스트 선사가 EDI 선사를 덮는 자리도 한 벌(cone.html 별첨 병합)   // 3.44: 선사 시프팅 목록 판정도 한 벌   // 2.41: 항구 코드 정규화도 한 벌로(콘앱 short 가 쓴다)
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.

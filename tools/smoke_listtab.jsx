@@ -17,6 +17,8 @@ for (let i = 0; i < 12; i++) {
   });
 }
 const ediMap = Object.fromEntries(containers.map((c) => [c.cn, c]));
+//  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리») — 시프팅 행 둘(_shift). «전체» 칩에는 안 나오고 «◆ 시프팅 내림 0/2» 칩에서만 나와야 한다.
+for (let i = 0; i < 2; i++) containers.push({ cn: `SHFT${String(9000000 + i)}`, l4: String(9000000 + i).slice(-4), bay: '06', row: '11', tier: '84', iso: '45G1', fe: 'E', pol: 'PHDVO', pod: 'CNTXG', op: 'MAE', _src: 'shift', _shift: 'out', _shiftFrom: '0061184', _shiftTo: '0340888' });
 
 createRoot(document.getElementById('root')).render(
   React.createElement(ListTab, {

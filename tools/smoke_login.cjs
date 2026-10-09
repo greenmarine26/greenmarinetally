@@ -94,6 +94,14 @@ setTimeout(()=>{
     }
   }
 
+  // ── ★ 4.16 (검수사 2026-10-09 17:30 «상기 화면에도 버전을 크게 표기 바랍니다»): 로그인 화면 제목 줄의 큰 판 이름 = APP_VERSION ──
+  {
+    const APPV = (fs.readFileSync(path.join(__dirname, '../src/utils.js'), 'utf8').match(/export const APP_VERSION = '([^']+)'/) || [])[1];
+    const big = [...d.querySelectorAll('[data-app-version]')].map((el) => (el.textContent || '').replace(/\s+/g, ' ').trim());
+    if (!APPV || big.length < 2 || big.some((x) => x !== APPV)) { console.log(`✗ 큰 판 이름 글자 ≠ APP_VERSION(${APPV}) — 제목 줄 ${big.length}곳 [${big.join(' | ')}]`); process.exit(1); }
+    console.log(`  큰 판 이름 = APP_VERSION «${APPV}» (PC 머리 · 폰 머리 ${big.length}곳)`);
+  }
+
   // ── 2.4x: 토큰 밖 색(하드코딩 hex · slate · zinc) 0건 ──
   if (offTokenHits.length) {
     console.log('✗ 토큰 밖 색이 남아있다:', [...new Set(offTokenHits)].join(', '));

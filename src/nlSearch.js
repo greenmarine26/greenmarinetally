@@ -2647,6 +2647,11 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
   } else {
     lines.push(`⏳ ${baseDesc} 남은 작업: ${pendingCount}대 / 전체 ${totalCount}대`);
     lines.push(`완료: ${doneCount}대 (${pct}%)`);
+    //  4.16 (§7.8-① · Fable 판정 ④): 항차 전체 수에는 시프팅이 대당 2무브(내림 + 실음)로 들어 있다 — 양하·선적 평택분과 따로 밝힌다.
+    if (_vcMain && _vcMain === _vc0 && _vc0.shift && _vc0.shift.n > 0) {
+      const _bm = _vc0.byMode || {};
+      lines.push(`(양하 ${(_bm.discharge || {}).total || 0} · 선적 ${(_bm.loading || {}).total || 0} · 시프팅 ${_vc0.shift.n}대 → ${_vc0.shift.moves.total}무브)`);
+    }
   
     // 1.93 (검수사 확정): 애매한 «얼마나 남았어»는 기본 답(이해 차원)만 주고,
     //   «질문 방식을 바꿔 달라고 사용자에게 어필» — 유도 문구는 1.84-03 패턴이라 자동으로 버튼이 된다.
@@ -2662,7 +2667,10 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
       && !parsed.portAny && !parsed.digits && !parsed.bayTrio && parsed.weightMin == null && parsed.weightMax == null;
     if (plain && vc && Number(vc.total) > 0 && (Number(vc.total) !== totalCount || Number(vc.done) !== doneCount)) {
       const bm = vc.byMode || {};
-      const seg = ['discharge', 'loading'].filter((m) => bm[m] && bm[m].total > 0).map((m) => `${m === 'loading' ? '선적' : '양하'} ${bm[m].total - bm[m].done}`).join(' · ');
+      //  4.16 (§7.8-①): 양하·선적은 평택분, 시프팅은 대당 2무브로 따로 — 합이 «남은 N» 과 맞는다.
+      const _sm = vc.shift && vc.shift.moves && vc.shift.moves.total > 0 ? vc.shift.moves : null;
+      const seg = [...['discharge', 'loading'].filter((m) => bm[m] && bm[m].total > 0).map((m) => `${m === 'loading' ? '선적' : '양하'} ${bm[m].total - bm[m].done}`),
+        ...(_sm ? [`시프팅 ${_sm.total - _sm.done}무브`] : [])].join(' · ');
       lines.splice(2, 0, `항차 전체로는 남은 ${vc.total - vc.done}대${seg ? ` (${seg})` : ''} · 완료 ${vc.done} / 전체 ${vc.total}`);
     }
   }
@@ -3172,6 +3180,7 @@ export function paceFromRecords(doneAts, src, gangs) {
 //   ⇒ 남은 시간 = 총 잔여(양하+선적 평택분) ÷ (갱당 시간당 처리 대수 × 갱 수).
 //      갱당 시간당 = 이 배 완료 기록(검수원 입력 + 터미널 컨별 반영) ÷ 실작업 시간(쉬는 시간 뺌) ÷ 갱 수.
 //  `counts` = { total, done } — 항차 전체 평택분(호출부가 mir.js voyageCountsOf 로 센다). 없으면 left·plan 은 null.
+//    4.16: total 은 양하 평택 + 선적 평택 + 2×시프팅(작업량 — 크레인이 드는 횟수)이다. 시프팅도 갱이 드는 일이라 남은 시간에 든다(Fable 판정 ④).
 // ── ★ 3.74 — **터미널 본선현황으로 센다**(검수사 2026-10-03 12:41 «지금 부터 미르는 언제끝나 라는 질문과 작업계산은 각 터미널 본선현황보고 계산하도록하세요»).
 //  PCTC = 본선작업현황의 작업량·완료량·잔여량(수집기 vesselstatus.py → info.termStat), 동방 = 본선 작업 현황의 QC별 완료·잔여(수집기 pnctpull → info.qcWork).
 //  두 모양을 한 모양 {total, done, rest, byMode, startMs}로 읽는다 — 호출부(mir.js)는 이것으로 voyageCounts 를 갈아 끼운다.

@@ -11,7 +11,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, S
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
-import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
@@ -135,6 +135,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
 
   const allContainers = useMemo(() => {
     const _sw = swapFixList(voyage);   // 2.89-05: 맞교환 겹침 — 이 풀만 안 겹쳐 «자리 뺏김 20» 허깨비 그룹이 떴다
+    const _shSetAll = new Set(Object.keys(shiftMapAll || {}).filter((k) => k && !k.startsWith('_')));   // 4.16: 시프팅 분리 문지기 재료(확정 지도 — 작업 카드와 같은 것)
     const arr = [];
     ['discharge', 'loading'].forEach(m => {
       const sec = voyage?.[m];
@@ -199,7 +200,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           // V7.92-02: 평택분 여부 — 양하=POD평택, 선적=POL평택 (7.1). 집계는 평택분만.
           //  3.26: 선적은 utils.isPtk 한 벌 — **리스트 등재 = 평택**(V8.86·M5.50, 항차 화면·인쇄허브와 같은 규칙). 종전엔 pol 만 봐서
           //    POD·POL 열이 없는 리스트(남성 CLL 104대)가 평택분에서 빠져 «선적 N» 이 212 로 섰다(2차 감사 실측).
-          _ptk: m === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m),
+          //  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»): 시프팅이면 평택분이 아니다(문지기 한 벌 isShiftOffPtk — 선사 리스트에 실려 온 시프팅은 평택분에도).
+          //    종전엔 시프팅 재선적 기록(records)이 생기면 «리스트 등재 = 평택» 으로 «선적 N» 에 섞였다. 카드는 아래 1.76-05 블록이 _shift 로 큐에 남긴다(Fable 판정 ③).
+          _ptk: (m === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m)) && !isShiftOffPtk(_shSetAll, recMap, m, c.cn),
           _transit: isTransitContainer(c, m, recMap),   // 3.2-01: 통과분(항구 적혀 있고 평택 아님·리스트 미등재) — 완료 카드가 되지 않는다
           _xray: m === 'discharge' && !!xrayMap[c.cn],
           _xraySeal: xraySeals[c.cn] || null,

@@ -545,7 +545,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                     검수사 확정 2026-08-16: *"앱에서 양하처리 되어야 합니다."* 어디서 어디로 가는지 같이 보여 준다. */}
               {c._shift && (
                 <span className="bg-sky-700/90 text-sky-50 bdg font-black"
-                  title={`시프팅(재적부) — 크레인이 두 번 듭니다. ${c._shiftFrom || '?'} 에서 내려 ${c._shiftTo || '?'} 에 싣습니다.`}>
+                  title={`시프팅(재적부) — 크레인이 두 번 듭니다. ${c._shiftFrom || '?'} 에서 내려 ${c._shiftTo || '?'} 에 싣습니다. 양하·선적 대수에는 안 들고 시프팅 리스트에서 따로 셉니다(4.16).`}>
                   ◆ 시프팅 {c._shift === 'out' ? '내림' : '실음'}
                   {c._shiftFrom && c._shiftTo ? ` ${shiftPosLabel(c._shiftFrom)}→${shiftPosLabel(c._shiftTo)}` : ''}
                 </span>

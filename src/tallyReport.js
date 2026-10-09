@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -177,7 +177,9 @@ export function ptkContainers(voyage, mode) {
   //  3.70-01: applySpecialMarks 가 수화물(lugg)도 찍게 됐지만 **마감텔리 종이는 바꾸지 않는다** — 페리 집계 Lug 줄은 forecast.mode 가
   //    맞을 때만(buildFerry fcOk, OBWH 2692W 실물 대조) 가른다. 여기서 lugg 를 찍으면 그 게이트가 풀린다(감사 지적) — 제작컨만 찍는다.
   const _specOnly = { info: { forecast: { specialCns: voyage?.info?.forecast?.specialCns || [] } } };
-  return applySpecialMarks(_specOnly, merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))))
+  //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — 문지기 한 벌(isShiftOffPtk). 시프팅은 SHIFTING 시트·Final Work 시프팅 칸에서 따로 센다.
+  const _ss = shiftCnSetOf(voyageKeyOf(voyage), voyage);
+  return applySpecialMarks(_specOnly, merged.filter(c => (mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))) && !isShiftOffPtk(_ss, recs, mode, c.cn)))
     .map((c) => _isoBlankFilled(voyage, c));   // 4.15 (§7.8-⑥): 규격 빈 행은 EDI·베이플랜 규격으로 — Final Work·OS·RF·PERFORMANCE·DAMAGE·페리가 이 목록을 센다
 }
 
@@ -505,19 +507,34 @@ export function buildPerformance(disCs, loadCs, fmt) {
   return { inbound: inb, outbound: outb, ops };
 }
 
-/** SHIFTING 행 */
+/** SHIFTING 행 — ★ 4.16 (판 B · 4.15 기준표 §3-B «R12 곁가지» 수리).
+ *  시프팅 지도는 {컨번호: {from, to, _iso, _fe, _doc}} 꼴이다(utils.restowMapFromDoc · computeShiftingMap). 종전엔 Object.values(map) 로 s.cn·s.iso·s.fe·s.oldPos 를
+ *  읽어 컨번호·규격·자리가 통째로 빈칸이었다 — Final Work 시프팅 칸이 «??? · ??? · F · HC» 로 섰다(MCAP 639N 5행 · MCAT 635N 14행).
+ *  행은 항차 화면 시프팅 목록·검수 리스트 [별첨2] 와 같은 utils.shiftingListOf 한 벌(양하 ∪ 선적 EDI 원문 — 양하 자리가 정본).
+ *  선사·무게·POD·POL 은 양하 EDI → 선적 EDI → 선사 RESTOW 서류 순. **PORT(POD) = EDI POD, 없으면 서류 POD**(Fable 판정 ⑦). 규격 칸은 tallySizeCol 한 벌.
+ *  NEW POSN 은 실제로 다시 실은 자리(3.65 실제 칸 — 검수원·터미널)가 있으면 그것, 없으면 계획 자리(서류·선적 EDI), 제자리 재적재면 같은 자리. */
 export function buildShifting(voyage) {
   let map = {};
-  try { map = computeShiftingMapCached(voyage.key || voyage?.info?.vsl || 'k', voyage) || {}; } catch { /* 계산 실패 시 빈 목록 */ }
-  const _all = Object.values(map);
+  try { map = computeShiftingMapCached(voyageKeyOf(voyage) || 'k', voyage) || {}; } catch { /* 계산 실패 시 빈 목록 */ }
+  if (!Object.keys(map).length) return [];
+  const dE = _rawEdiMapOf(sect(voyage, 'discharge')) || sect(voyage, 'discharge').ediContainers || {};
+  const lE = _rawEdiMapOf(sect(voyage, 'loading')) || sect(voyage, 'loading').ediContainers || {};
+  const doc = (voyage && voyage.restowList) || {};
+  const rows = shiftingListOf(map, { ...lE, ...dE }, voyage);
+  const pick = (cn, k) => { for (const src of [dE[cn], lE[cn], doc[cn]]) { const v = src && src[k]; if (v != null && String(v).trim() !== '') return v; } return ''; };
   //  3.31: 시프팅도 같은 벌 — 안 씌우면 SHIFTING 시트와 Final Work 의 시프팅 칸이 옛 코드로 갈린다.
-  const _op = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _all.map((s) => s && s.op));
-  return _all.map((s, i) => ({
-    no: i + 1, cn: s.cn || s.CN || '', type: s.iso ? (tallySizeCol(s) === '20' ? "20'" : "40'") : '',
-    fe: s.fe || '', wt: s.wt || '', op: _op(s.op),
-    oldPos: s.oldPos || [s.bay, s.row, s.tier].filter(Boolean).join(''),
-    newPos: s.newPos || '', pod: port3(s.pod), pol: port3(s.pol),
-  }));
+  const _op = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), rows.map((r) => pick(r.cn, 'op')));
+  return rows.map((r, i) => {
+    const iso = String(r.iso || pick(r.cn, 'iso') || pick(r.cn, 'sztp') || '').trim();
+    const sz = iso ? tallySizeCol({ iso, cn: r.cn }) : '';
+    const fe = String(r.fe || pick(r.cn, 'fe') || '').toUpperCase() === 'E' ? 'E' : 'F';
+    return {
+      no: i + 1, cn: r.cn, type: sz ? (sz === '20' ? "20'" : "40'") : '', sz,
+      fe, wt: pick(r.cn, 'wt') || '', op: _op(String(pick(r.cn, 'op') || '').toUpperCase()),
+      oldPos: fmtShiftPos(r.from), newPos: fmtShiftPos(r.act || r.to || (r.same ? r.from : '')),
+      pod: port3(pick(r.cn, 'pod')), pol: port3(pick(r.cn, 'pol')),
+    };
+  });
 }
 
 /** Time Sheet — 작업 보고 이력에서 시각록 구성 */
@@ -748,7 +765,7 @@ export function computeTallyData(voyage) {
   for (const s of shiftRows) {
     const op = s.op || '???'; const port = s.pod || '???';
     const fe = s.fe === 'E' ? 'E' : 'F';
-    const sz = s.type === "20'" ? '20' : 'HC';
+    const sz = s.sz || (s.type === "20'" ? '20' : 'HC');   // 4.16: 규격 칸은 tallySizeCol 한 벌(buildShifting 이 sz 를 싣는다) — 종전 «20' 아니면 HC» 는 40' 일반도 HC 로 셌다
     ((((matShift[op] ??= {})[port] ??= {})[fe] ??= {}))[sz] = ((matShift[op][port][fe] || {})[sz] || 0) + 1;
   }
   return {

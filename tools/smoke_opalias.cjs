@@ -104,7 +104,8 @@ for (const f of ['src/tallyReport.js', 'src/workingReport.js', 'src/inspectionLi
 const rpt = fs.readFileSync(path.join(ROOT, 'src/tallyReport.js'), 'utf8');
 ok(/remarks: _op\(pickCarrierOp\(r\.op,/.test(rpt),
   'Act. Cntr-Seal 시트도 같은 벌 — 한 워크북에서 코드가 두 벌이면 안 된다(3.52: EDI 짝까지 보고 더 자세한 쪽)');
-ok(/fe: s\.fe \|\| '', wt: s\.wt \|\| '', op: _op\(s\.op\)/.test(rpt), 'SHIFTING 시트도 같은 벌');
+//  4.16: SHIFTING 행은 지도 꼴대로 shiftingListOf 한 벌에서 오고, 선사는 양하·선적 EDI → 선사 서류에서 골라 같은 매퍼(_op)를 지난다(회귀 기준표 R19 가 동작을 잰다).
+ok(/op: _op\(String\(pick\(r\.cn, 'op'\) \|\| ''\)\.toUpperCase\(\)\)/.test(rpt) && /const _op = shipOpMapper\(String\(voyage\?\.info\?\.vsl \|\| ''\)\.toUpperCase\(\), rows\.map\(\(r\) => pick\(r\.cn, 'op'\)\)\)/.test(rpt), 'SHIFTING 시트도 같은 벌');
 
 //  ⑦ 3.51-02 — 목록에 씌우면 실제로 0 이 되는가(문자열이 아니라 동작으로)
 const D = run(`import('${FMT}').then(m=>{`

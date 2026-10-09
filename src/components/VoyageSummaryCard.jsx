@@ -4,11 +4,13 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
+import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftSplitOf, isShiftOffPtk, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
-  const _shiftSet = shiftCnSetOf(voyageKey || (voyage?.info?.vsl || ''), voyage);
+  //  4.16: 시프팅 분리 한 벌(utils.shiftSplitOf) — 막대는 평택분, 시프팅은 «내림 x/N · 실음 y/N» 줄로 따로(§7.8-①).
+  const _shSp = shiftSplitOf(voyageKey || (voyage?.info?.vsl || ''), voyage);
+  const _shiftSet = _shSp.set;
   const summary = useMemo(() => {
     const sec = voyage?.[mode] || {};
     const ediMap = sec.ediContainers || {};
@@ -42,7 +44,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       if (r.pod_pick && r.pod) merged.pod = r.pod;
       return merged;
     }).filter(c => {
-      if (_shiftSet.has(c.cn)) return false;   // 2.89-06: 시프팅은 자기 칸에서 센다
+      if (isShiftOffPtk(_shiftSet, recMap, mode, c.cn)) return false;   // 2.89-06: 시프팅은 자기 칸에서 센다 · 4.16: 문지기 한 벌(선사 리스트에 실려 온 시프팅은 평택분에도)
       // 3.60-19 (다수결 V1): utils.isPtk 한 벌 — 리스트 등재(_inList)라도 EDI 통과화물이면 제외(3.14), 선적 탭·수석 보드와 같은 수
       return _isPtkOne({ ...c, _inList: c._inList != null ? c._inList : !!recMap[c.cn] }, mode);
     }), { ediMap, recMap, mode });
@@ -57,11 +59,12 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     const _realN = containers.filter(c => !isSlotEntry(c)).length;   // 자리 제외한 실컨(리스트) 수 — 3.26: 자리 판정 한 벌(자리가 이미 빠진 목록에서 _slotN 을 또 빼지 않게)
     //  2.89-07: 분모 고정 — 리스트가 있으면 (리스트+시프팅)/(리스트완료+모브)를 progressOf 한 벌로.
     //    리스트 전(EDI·플랜 슬롯만)이면 종전 계산을 유지하되 시프팅·모브를 같은 규칙으로 더한다.
+    //  ★ 4.16 (§7.8-① · Fable 판정 ①): 막대·대수 = **평택분**. 시프팅은 아래 «◆ 시프팅 N — 내림 x/N · 실음 y/N» 줄이 따로 센다(작업량 «279+95» 는 화면 막대에 안 섞는다).
     const _prog = progressOf(sec, mode, _shiftSet);
     const _base0 = _slotN > 0 ? Math.max(_slotN, _realN) : containers.length;
-    const _done0 = Object.keys(compMap).filter((cn) => !_shiftSet.has(cn)).length;
-    const total = _prog.listTotal > 0 ? _prog.total : _base0 + _shiftSet.size;
-    const done = _prog.listTotal > 0 ? _prog.done : _done0 + _prog.moves;
+    const _done0 = Object.keys(compMap).filter((cn) => !isShiftOffPtk(_shiftSet, recMap, mode, cn)).length;
+    const total = _prog.listTotal > 0 ? _prog.ptk.total : _base0;
+    const done = _prog.listTotal > 0 ? _prog.ptk.done : _done0;
     // 2.08-02 (검수사 «전에 한번 수정한건 같습니다. 리퍼 엠티 알림건» — OBWH 선적 실측: 엠티 리퍼 26대가
     //   «리퍼 26대 · 위치미상26» 빨간 알림으로): 1.85-04 정책 «리퍼 전면 표시는 풀만»이 이 요약 카드에는
     //   빠져 있었다. 카운트·위치미상·온도X 전부 풀 리퍼 기준(F 또는 F/E 미상 — 조회·브리핑과 동일 판정).
@@ -113,6 +116,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     return {
       total, done,
       pct: total ? Math.round(done / total * 100) : 0,
+      shift: { n: _shSp.n, out: _shSp.out.done, in: _shSp.in.done },   // 4.16: 시프팅 줄
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
       rfSum,   // 3.25: 리퍼 온도 판정 한 벌 — 칩이 이것을 본다(규범 §4-4)
@@ -132,7 +136,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     };
   }, [voyage, mode]);
 
-  if (summary.total === 0) return null;
+  if (summary.total === 0 && !(summary.shift && summary.shift.n > 0)) return null;
 
   const modeLabel = mode === 'discharge' ? '양하' : '선적';
   const modeColor = mode === 'discharge' ? 'blue' : 'amber';
@@ -160,6 +164,12 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
           }`}
             style={{ width: `${summary.pct}%` }}/>
         </div>
+        {/*  ★ 4.16 — 시프팅은 막대에 안 섞고 이 줄에서 따로 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). 내림 = 양하 때 내린 것 · 실음 = 다시 실은 것. */}
+        {summary.shift && summary.shift.n > 0 && (
+          <div className="mt-1.5 text-xs2 font-bold text-sky-300" data-shift-line={summary.shift.n}>
+            ◆ 시프팅 {summary.shift.n} — 내림 {summary.shift.out}/{summary.shift.n} · 실음 {summary.shift.in}/{summary.shift.n}
+          </div>
+        )}
       </div>
 
       {/* 주의 항목 칩 — 0이면 숨김 */}

@@ -38,12 +38,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const B = bundle([
     `export { shiftReportContainers, plausibleListWtKg, legendItemsOf, isFlatRackContainer, bayCellTypeLabel, legendLiveOf, parseAscFile, emptySealSpec, isReeferContainer, isoPickOog } from "${ROOT}/src/utils.js";`,
-    `export { computeTallyData, ptkContainers } from "${ROOT}/src/tallyReport.js";`,
+    `export { ediMapFromRaw, shiftSplitOf, shiftCnSetOf, progressOf, computeShiftingMap, swapFixList, applySwapFix, setLaneRoutes, shiftingMapForDisplay, predictedShiftingForDisplay } from "${ROOT}/src/utils.js";`,   // 4.16 R16~R19
+    `export { computeTallyData, ptkContainers, buildShifting } from "${ROOT}/src/tallyReport.js";`,
     `export { generateBriefing } from "${ROOT}/src/nlSearch.js";`,
     `export { computeAllStats } from "${ROOT}/src/components/StatsTab.jsx";`,
     `export { mergeFolder } from "${ROOT}/src/mergeApi.js";`,
     `export { buildInspectionListDoc, generateInspectionListHTML } from "${ROOT}/src/inspectionList.js";`,
-    `export { answerOneRaw, buildDataPack, flattenVoyages, movesOfVoyage } from "${ROOT}/src/mir.js";`,
+    `export { answerOneRaw, buildDataPack, flattenVoyages, movesOfVoyage, voyageCountsOf } from "${ROOT}/src/mir.js";`,
     `export { answerTotalMoves } from "${ROOT}/src/chiefAnswers.js";`,
     `export { toMirContainers } from "${ROOT}/src/mirCore.entry.js";`,
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
@@ -494,6 +495,184 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       }
       const aT = askS('마감텔리');
       ok(`미르 «마감텔리» — RF out ${wFull} · 선적 엠티 «엠티 ${split(wE, wERf)}»`, /RF in 0 · out (\d+)/.test(aT) && Number(aT.match(/RF in 0 · out (\d+)/)[1]) === wFull && aT.includes(`엠티 ${split(wE, wERf)}`), aT.split('\n').slice(2, 4).join(' | ').slice(0, 200));
+    }
+  }
+
+
+  // ══ 4.16 — 판 B(시프팅) · 검수사 2026-10-09 12:23 §7.8-①②⑤ + 판 B 수리(SHIFTING 시트) ═══════════════════════
+  //  독립 재료 — BAPLIE 원문을 앱 파서와 따로 읽는다(LOC+147 자리 · EQD 컨번호·규격·풀엠티 · LOC+11 POD · LOC+9 POL · DGS 유무).
+  const rawBap = (txt) => {
+    const out = []; let cur = null;
+    for (const s0 of String(txt || '').replace(/\r?\n/g, '').split("'")) {
+      const s = s0.trim();
+      if (s.startsWith('LOC+147+')) { cur = { pos: s.split('+')[2].split(':')[0], dg: false }; out.push(cur); continue; }
+      if (!cur) continue;
+      if (s.startsWith('LOC+11+')) cur.pod = s.split('+')[2].split(':')[0];
+      else if (s.startsWith('LOC+9+')) cur.pol = s.split('+')[2].split(':')[0];
+      else if (s.startsWith('EQD+CN+')) { const p = s.split('+'); cur.cn = (p[2] || '').split(':')[0].replace(/\s/g, ''); cur.iso = (p[3] || '').split(':')[0]; cur.fe = p[6] === '4' ? 'E' : (p[6] === '5' ? 'F' : ''); }
+      else if (s.startsWith('DGS+')) cur.dg = true;
+    }
+    return out.filter((c) => c.cn);
+  };
+  const docCns = (rl) => Object.keys(rl || {}).filter((k) => CN_RE.test(k));
+  const SS = fx('shiftsplit416.json');
+  const mcat = fx('restow_mcat.json');
+  for (const m of ['discharge', 'loading']) mcat[m].ediContainers = B.ediMapFromRaw(mcat[m]);   // 수집기 저장 꼴(원문 파싱 전체) — 기대값은 아래 rawBap 으로 따로 센다
+  //  화면 입구(홈 카드·출력 센터)는 jsdom 에서 실소스를 돌린다(쓰기 없음 — 메모리 스텁).
+  const { JSDOM } = require(path.join(ROOT, 'node_modules/jsdom'));
+  const domSrc = (() => {
+    const o = path.join(TMP, 'dom416.js');
+    execSync(`npx esbuild tools/smoke_regress_dom.jsx --bundle --loader:.jsx=jsx --loader:.js=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url --alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --define:process.env.NODE_ENV='"development"' --log-level=error --outfile="${o}"`, { cwd: ROOT, stdio: 'pipe' });
+    return fs.readFileSync(o, 'utf8');
+  })();
+  const domOpen = (r17) => {
+    const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+    const errs = []; dom.window.addEventListener('error', (e) => errs.push(e.message));
+    if (r17) dom.window.__R17 = r17;
+    try { dom.window.eval(domSrc); } catch (e) { errs.push('THROW ' + e.message); }
+    return { dom, errs, W: dom.window, d: dom.window.document };
+  };
+  const DOM0 = domOpen('');
+
+  // ── R16 ───────────────────────────────────────────────────────────────
+  head('R16 시프팅 분리 — 양하·선적 평택분(리스트)과 시프팅 리스트를 따로 센다 · 미르·예상 시간 분모 = 양하 + 선적 + 2×시프팅 (4.16)', '검수사 §7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리» · Fable 판정 ①④⑤ · 검수사 원문 «279+95 214+95»');
+  {
+    const key = 'MCAP_639N', v0 = { ...SS.MCAP_639N, key };
+    const rawD = rawBap(v0.discharge.raw.edi.text), rawL = rawBap(v0.loading.raw.edi.text);
+    //  BAPLIE 원문 평택분 — 양하는 검수사·수석이 고른 POD(records pod_pick — 3.53 «고른 POD 가 EDI 를 이긴다»)가 원문 POD 를 이긴다(MCAP 639N 은 5대가 고른 POD 로 평택분).
+    const recD0 = v0.discharge.records || {};
+    const podOf = (c) => (recD0[c.cn] && recD0[c.cn].pod_pick && recD0[c.cn].pod ? recD0[c.cn].pod : c.pod);
+    const dPtk = rawD.filter((c) => isPtkCode(podOf(c))).length, lPtk = rawL.filter((c) => isPtkCode(c.pol)).length;
+    const doc = docCns(v0.restowList);                                                                              // 선사 RESTOW LIST
+    //  ① 홈 카드 막대(HomePage.computeStats 실소스) = 평택분
+    const H = JSON.parse(DOM0.W.__r416.homeTotals(JSON.stringify(v0), key));
+    ok(`MCAP 639N 홈 카드 막대 양하 0/${dPtk} · 선적 0/${lPtk} = BAPLIE 평택분 — 시프팅 ${doc.length}대는 막대에 안 섞인다(수정 전 0/${dPtk + doc.length} · 0/${lPtk + doc.length}) · 작업량은 ${dPtk + doc.length}·${lPtk + doc.length} 그대로(출항 배지)`,
+      DOM0.errs.length === 0 && H.dis.total === dPtk && H.lod.total === lPtk && H.dis.workTotal === dPtk + doc.length && H.lod.workTotal === lPtk + doc.length, `${JSON.stringify(H)} ${DOM0.errs[0] || ''}`);
+    //  ② 새는 길 — 시프팅 내림·재선적(실제 자리 기록 + 완료)을 메모리에서만 얹는다(3.65 실제 자리 · 완료 기록은 옮기지 않는다)
+    const v = JSON.parse(JSON.stringify(v0)); v.key = key + '_R16';
+    const at = Date.parse('2026-10-09T12:00:00+09:00');
+    v.discharge.completed = {}; v.loading.completed = {};
+    for (const cn of doc) {
+      const to = String(v.restowList[cn].to).padStart(7, '0');
+      v.discharge.completed[cn] = { at, by: '연막' };
+      v.loading.records[cn] = { cn, bay_actual: String(parseInt(to.slice(0, 3), 10)), row_actual: to.slice(3, 5), tier_actual: to.slice(5, 7), actual_at: at + 1, actual_by: '연막' };
+      v.loading.completed[cn] = { at: at + 2, by: '연막' };
+    }
+    const flat = B.flattenVoyages({ [v.key]: v });
+    const lodPtk = flat.filter((c) => c._mode === 'loading' && c._ptk).length;
+    const askL = String(B.answerOneRaw('선적 몇 대', { app: 'tally', voyageKey: v.key, voyage: v, info: v.info, containers: flat, mode: 'loading', modeChoice: 'both', portMisData: {}, _trace: {} }) || '');
+    const nL = Number((askL.match(/선적:?\s*(\d+)대/) || [])[1]);
+    ok(`시프팅 재선적 기록 ${doc.length}대가 생겨도 미르 재료 선적 평택분 ${lPtk} · «선적 몇 대» ${lPtk}대 (수정 전 ${lPtk + doc.length})`, lodPtk === lPtk && nL === lPtk, `재료 ${lodPtk} · 답 ${askL.split('\n')[0]}`);
+    const H2 = JSON.parse(DOM0.W.__r416.homeTotals(JSON.stringify(v), v.key));
+    const sp = B.shiftSplitOf(v.key, v);
+    ok(`그 뒤 홈 카드 선적 ${H2.lod.done}/${H2.lod.total} = 평택분 0/${lPtk} · 시프팅 내림 ${sp.out.done}/${doc.length} · 실음 ${sp.in.done}/${doc.length} · 모브 ${sp.moves.done}/${2 * doc.length}`,
+      H2.lod.total === lPtk && H2.lod.done === 0 && sp.out.done === doc.length && sp.in.done === doc.length && sp.moves.done === 2 * doc.length, JSON.stringify({ lod: H2.lod, out: sp.out, in: sp.in }));
+    //  ③ 미르·예상 시간 분모 — 양하 평택 + 선적 평택 + 2×시프팅(리스트 유무 무관 — Fable 판정 ④)
+    const vc = B.voyageCountsOf(v0, null, B.shiftCnSetOf(key, v0));
+    ok(`MCAP 639N 미르 분모 ${dPtk} + ${lPtk} + 2×${doc.length} = ${dPtk + lPtk + 2 * doc.length} · 양하·선적 줄은 평택분`,
+      vc.total === dPtk + lPtk + 2 * doc.length && vc.byMode.discharge.total === dPtk && vc.byMode.loading.total === lPtk && vc.shift && vc.shift.moves.total === 2 * doc.length, JSON.stringify({ t: vc.total, d: vc.byMode.discharge.total, l: vc.byMode.loading.total, s: vc.shift }));
+    const mD = rawBap(mcat.discharge.raw.edi.text).filter((c) => isPtkCode(c.pod)).length, mL = rawBap(mcat.loading.raw.edi.text).filter((c) => isPtkCode(c.pol)).length, mS = docCns(mcat.restowList).length;
+    const vcM = B.voyageCountsOf({ ...mcat, key: 'MCAT_635N' }, null, B.shiftCnSetOf('MCAT_635N', mcat));
+    ok(`리스트 없는 배 MCAT 635N 도 같은 셈 — ${mD} + ${mL} + 2×${mS} = ${mD + mL + 2 * mS} (수정 전 ${mD + mL} — 리스트 없는 배는 시프팅을 안 셌다)`, vcM.total === mD + mL + 2 * mS && vcM.byMode.discharge.total === mD && vcM.byMode.loading.total === mL, JSON.stringify({ t: vcM.total, d: vcM.byMode.discharge.total, l: vcM.byMode.loading.total }));
+    const tm = String(B.answerTotalMoves(v0, 'MCAP', { eta: B.movesOfVoyage(v0, key) }) || '');
+    ok(`미르 «총 무브수» — «양하 ${dPtk}대 → … · 선적 ${lPtk}대 → … · 시프팅 ${doc.length}대 → ${2 * doc.length}무브»`, new RegExp(`양하 ${dPtk}대 → \\d+무브 · 선적 ${lPtk}대 → \\d+무브 · 시프팅 ${doc.length}대 → ${2 * doc.length}무브`).test(tm), tm.split('\n')[1] || tm);
+    //  ④ 선사 리스트에 실려 온 시프팅은 평택분에도 센다 — 검수사 원문 «279+95 214+95»(MCSC 633N 양하 · 635S 선적, Fable 판정 ⑤)
+    const FXM = fx('progress_mcsc.json'), SBM = fx('shifting_berth.json').MCSC_633N;
+    const expand = (o, k) => { const r = {}; for (const [cn, c] of Object.entries(o)) r[cn] = { bay: c.b, row: c.r, tier: c.t, [k]: c[k], iso: c.i, fe: c.f }; return r; };
+    const sw = B.swapFixList({ swapFix: FXM.swapFix });
+    const ssM = new Set(Object.keys(B.computeShiftingMap(B.applySwapFix(expand(SBM.d, 'pod'), sw), B.applySwapFix(expand(SBM.l, 'pol'), sw), { berthShift: SBM.bs }) || {}).filter((k) => !k.startsWith('_')));
+    const pD = B.progressOf(FXM.discharge, 'discharge', ssM), pL = B.progressOf(FXM.loading, 'loading', ssM);
+    //  ⑤ 방향을 가린다(Fable 판정 2026-10-09) — 양하 리스트에 시프팅 컨이 실려 와도 양하 평택분에 넣지 않는다(규칙 ① 우선). 실자료에 사례가 없어 MCAP 양하 리스트 사본에 시프팅 한 대를 섞는다.
+    {
+      const vx = JSON.parse(JSON.stringify(v0)); vx.key = key + '_R16x';
+      const sx = doc[0];
+      vx.discharge.records[sx] = { cn: sx, _source: 'MCAP639N_DISCHARGE_LIST.xlsx', pol: 'PHDVO', pod: 'KRPTK', iso: '45G1', op: 'MAE', wt: 3700 };   // 선사 양하 리스트 행 꼴(변이)
+      const Hx = JSON.parse(DOM0.W.__r416.homeTotals(JSON.stringify(vx), vx.key));
+      const vcx = B.voyageCountsOf(vx, null, B.shiftCnSetOf(vx.key, vx));
+      const px = B.progressOf(vx.discharge, 'discharge', B.shiftCnSetOf(vx.key, vx));
+      ok(`양하 리스트 사본에 시프팅 ${sx} 를 섞어도 양하 평택분 ${dPtk} 그대로(홈 카드 · 미르 분모 · 작업량 ${dPtk + doc.length}) — 시프팅으로만 센다(수정 전 ${dPtk + 1})`,
+        Hx.dis.total === dPtk && vcx.byMode.discharge.total === dPtk && px.ptk.total === dPtk && px.total === dPtk + doc.length, JSON.stringify({ home: Hx.dis, vc: vcx.byMode.discharge.total, ptk: px.ptk, total: px.total }));
+    }
+    ok(`MCSC — 양하 ${pD.ptk.total}+${pD.shift.total} · 선적 ${pL.ptk.total}+${pL.shift.total} = 검수사 원문 «279+95 214+95» (선적 리스트에 실린 시프팅 TGHU6154253 은 양쪽에 — 수정 전 213)`,
+      pD.ptk.total === 279 && pL.ptk.total === 214 && pD.shift.total === 95 && pL.shift.total === 95, JSON.stringify({ d: pD.ptk, l: pL.ptk, s: pD.shift.total }));
+  }
+
+  // ── R17 ───────────────────────────────────────────────────────────────
+  head('R17 종이 카고플랜에도 예측 시프팅 — ◇ «확정 아님» (출력 센터 = 항차 화면 = 콘앱 같은 지도) (4.16)', '검수사 §7.8-② «그래야 준비 할수 있음(대신 확정아님 표기)» · Fable 판정 ⑥ «대수 확정·자리 예측이면 ◇»');
+  {
+    //  KSKM 2617N — 선사 서류·선적 EDI 가 없는 배. 독립: 양하 원문(ASC)의 27-01-90 컨 · 배정표 이적 2모브 = 1대(검수사 3.53-02 «터미널은 시프팅1개를 잡았습니다»).
+    const K = fx('shifting_pregone.json');
+    const at270190 = (K.text.split('\n').map((l) => l.match(/^(\d{6})\s+([A-Z]{4}\d{7})/)).find((m) => m && m[1] === '270190') || [])[2];
+    const wantN = Math.round(Number(K.info.berthShift) / 2);
+    const paper = async (which) => {
+      const R = domOpen(which);
+      await sleep(1500);
+      const tile = [...R.d.querySelectorAll('button.print-tile')].find((b) => /카고플랜/.test(b.textContent));
+      if (tile) tile.click(); else R.errs.push('카고플랜 단추를 못 찾음');
+      await sleep(5000);
+      const d = R.d;
+      const pred = [...d.querySelectorAll('.cpv2-cell.cpv2-shift-pred')];
+      const boxOf = (el) => { let p = el; for (let k = 0; k < 10 && p; k++) { const t = [...(p.querySelectorAll ? p.querySelectorAll('*') : [])].find((e) => e.children.length === 0 && /^BAY /.test((e.textContent || '').trim())); if (t) return t.textContent.trim(); p = p.parentElement; } return ''; };
+      return { errs: R.errs, shift: d.querySelectorAll('.cpv2-cell.cpv2-shift').length, pred: pred.length, predBays: pred.map(boxOf),
+        head: [...d.querySelectorAll('[data-shift-head]')].map((e) => e.textContent.trim()), foot: ((d.querySelector('.cpv2-page-footer') || {}).textContent || '') };
+    };
+    const pk = await paper('kskm');
+    ok(`KSKM 2617N 출력 센터 카고플랜 — ◇ 칸 ${wantN}(= 배정표 이적 ${K.info.berthShift}모브) · BAY 27 · 머리 «쉬프팅 ◇${wantN}» · 바닥글 «◇=예측(확정 아님)» (수정 전 출력 센터는 확정만 그려 0칸)`,
+      pk.errs.length === 0 && pk.pred === wantN && pk.shift === wantN && pk.predBays.every((b) => /27/.test(b)) && pk.head.some((h) => h.includes(`쉬프팅 ◇${wantN}`)) && pk.foot.includes('◇=예측(확정 아님)'), JSON.stringify(pk).slice(0, 300));
+    const pm = await paper('mcap');
+    const mcDoc = docCns(fx('shiftbay_mcap639n.json').restowList).length;
+    ok(`MCAP 639N(선사 RESTOW LIST ${mcDoc}대 — 확정) 은 ◆ ${mcDoc}칸 · ◇ 0칸 그대로`, pm.errs.length === 0 && pm.shift === mcDoc && pm.pred === 0, JSON.stringify(pm).slice(0, 200));
+    //  두 앱 같은 예측 — 콘앱 cone.html 의 실제 함수(ctPredShiftMap)를 꺼내 같은 재료로 돌린다(번들 예측 함수 · 항로표 · 양하 리스트 · 베이사전).
+    const html = src('public/cone.html');
+    const fnSrc = (html.match(/let _ctLaneLoaded = false;\nasync function ctPredShiftMap\(v, sh\)\{[\s\S]*?\n\}\n/) || [''])[0];
+    B.setLaneRoutes({ IHS1: { rotation: ['CNXMN', 'KRINC', 'KRPTK'] } });
+    global.window.__fbShipBayDict = { KSKM: { bayDef: { baysSummary: K.bay27 } } };
+    const vT = { key: 'KSKM_2617N', info: { ...K.info }, discharge: { raw: { edi: { text: K.text, fileName: 'KSKM2617NXMNB.ASC' } } }, loading: {} };
+    const tallyKeys = Object.keys(B.shiftingMapForDisplay('KSKM_2617N', vT) || {}).sort();
+    const vctx = { console, state: { voyageKey: 'KSKM_2617N', disch: { rawEdi: K.text } },
+      fbFetch: async (p) => ({ ok: true, json: async () => (p === 'lane_routes.json' ? { IHS1: { rotation: ['CNXMN', 'KRINC', 'KRPTK'] } } : {}) }),
+      window: { ConeParse: { predictedShiftingForDisplay: B.predictedShiftingForDisplay, setLaneRoutes: B.setLaneRoutes } } };
+    let coneKeys = null;
+    if (fnSrc) { require('vm').createContext(vctx); require('vm').runInContext(fnSrc + '\nthis.__pred = ctPredShiftMap;', vctx); const r = await vctx.__pred({ _info: { ...K.info } }, { berthShift: K.info.berthShift, terminalStatus: K.info.terminalStatus }); coneKeys = Object.keys(r || {}).sort(); }
+    const wired = /ConeParse = \{[^}]*predictedShiftingForDisplay/.test(src('src/coneCargoPlan.entry.jsx')) && /if\(!Object\.keys\(shiftingMap\)\.length && !_isDoc\)\{\s*const _pr = await ctPredShiftMap\(_v, _sh\);/.test(html);
+    ok(`두 앱 같은 예측 — 검수앱 [${tallyKeys.join(',')}] = 콘앱 [${(coneKeys || []).join(',')}] = 양하 원문 27-01-90 «${at270190}» · 콘앱 카고플랜이 확정 지도가 빌 때 이것을 부른다(배선)`,
+      !!at270190 && tallyKeys.length === wantN && tallyKeys[0] === at270190 && JSON.stringify(coneKeys) === JSON.stringify(tallyKeys) && wired, `tally ${tallyKeys} · cone ${coneKeys} · 배선 ${wired}`);
+  }
+
+  // ── R18 ───────────────────────────────────────────────────────────────
+  head('R18 «DG 몇 대» 는 평택분만 — 통과화물 DG 는 세지 않는다(지금 동작 고정)', '검수사 §7.8-⑤ «1»(감사 572 · 3.41)');
+  {
+    for (const [key, m, q, label] of [['MCAP_639N', 'discharge', '양하 DG 몇 대', 'MCAP 639N 양하'], ['MCAP_639N', 'loading', '선적 DG 몇 대', 'MCAP 639N 선적'], ['KBTR_2608E', 'discharge', '양하 DG 몇 대', 'KBTR 2608E 양하']]) {
+      const v = { ...SS[key], key };
+      const raw = rawBap(v[m].raw.edi.text);
+      const dgAll = raw.filter((c) => c.dg).length, dgPtk = raw.filter((c) => c.dg && isPtkCode(m === 'discharge' ? c.pod : c.pol)).length;
+      const flat = B.flattenVoyages({ [key]: v });
+      const a = String(B.answerOneRaw(q, { app: 'tally', voyageKey: key, voyage: v, info: v.info, containers: flat, mode: m, modeChoice: m, portMisData: {}, _trace: {} }) || '');
+      const nA = Number((a.match(/위험물[^:\n]*:\s*(\d+)대/) || [])[1]);
+      ok(`${label} — EDI DG ${dgAll}대 중 평택분 ${dgPtk} → «${q}» ${dgPtk}대`, dgAll > 0 && nA === dgPtk, a.split('\n')[0]);
+    }
+  }
+
+  // ── R19 ───────────────────────────────────────────────────────────────
+  head('R19 마감텔리 SHIFTING 시트·Final Work 시프팅 칸은 지도 꼴대로 읽는다 — 컨번호·규격·자리·PORT 를 채운다 (4.16)', '판 B(§7.8-①) · 4.15 기준표 §3-B «R12 곁가지» · Fable 판정 ⑦ «PORT = EDI POD, 없으면 선사 서류 POD»');
+  {
+    const p3 = (code) => String(code || '').toUpperCase().slice(2, 5);
+    const szOf = (iso) => { const s = String(iso || '').toUpperCase(); if (/^2/.test(s)) return '20'; if (/^4[5-9]/.test(s) || /^40H[CRQ]/.test(s)) return 'HC'; if (/^4/.test(s)) return '40'; return '?'; };
+    const fmt7 = (p) => { const s = String(p || '').padStart(7, '0'); return `${String(parseInt(s.slice(0, 3), 10)).padStart(2, '0')}-${s.slice(3, 5)}-${s.slice(5, 7)}`; };
+    for (const [label, v0, key] of [['MCAP 639N', SS.MCAP_639N, 'MCAP_639N'], ['MCAT 635N', mcat, 'MCAT_635N']]) {
+      const v = { ...v0, key };
+      const doc = v.restowList, cns = docCns(doc).sort();
+      const byCn = Object.fromEntries(rawBap(v.discharge.raw.edi.text).map((c) => [c.cn, c]));
+      const want = cns.map((cn) => { const e = byCn[cn] || {}, dd = doc[cn]; return { cn, port: p3(e.pod || dd.pod), sz: szOf(e.iso || dd.sztp), fe: e.fe || (String(dd.fe).toUpperCase() === 'E' ? 'E' : 'F'), old: fmt7(dd.from) }; });
+      const rows = B.buildShifting(v);
+      const got = rows.map((r) => ({ cn: r.cn, port: r.pod, sz: r.sz, fe: r.fe, old: r.oldPos })).sort((a, b) => String(a.cn || '').localeCompare(String(b.cn || '')));
+      const bad = want.filter((w, i) => !got[i] || JSON.stringify(got[i]) !== JSON.stringify(w));
+      ok(`${label} SHIFTING 시트 ${cns.length}행 — 컨번호·PORT(원문 POD)·규격 칸·F/E·OLD POSN(서류 자리) = 원문·선사 서류 (수정 전 컨번호·규격·자리 빈칸)`, got.length === cns.length && !bad.length, bad.slice(0, 2).map((w) => `${w.cn} 기대 ${JSON.stringify(w)} · 앱 ${JSON.stringify(got.find((g) => g.cn === w.cn) || null)}`).join(' | '));
+      const agg = {}; for (const w of want) { const k = `${w.port}/${w.fe}/${w.sz}`; agg[k] = (agg[k] || 0) + 1; }
+      const td = B.computeTallyData(v);
+      const fw = {}; for (const r of td.rows || []) for (const [sz, nn] of Object.entries(r.shift || {})) { const k = `${r.port}/${r.fe}/${sz}`; fw[k] = (fw[k] || 0) + nn; }
+      const opOk = rows.every((r) => r.op && r.op !== '???');
+      ok(`${label} Final Work 시프팅 칸 ${JSON.stringify(agg)} = 원문 POD·규격·F/E 로 센 것 · 선사 칸 «???» 없음 (수정 전 «???/???/F HC ${cns.length}»)`, JSON.stringify(Object.entries(fw).sort()) === JSON.stringify(Object.entries(agg).sort()) && opOk && td.totals.shift.n === cns.length, `${JSON.stringify(fw)} · op ${rows.map((r) => r.op).join(',')}`);
     }
   }
 

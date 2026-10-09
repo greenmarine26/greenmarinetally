@@ -6,7 +6,7 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftCnSetOf, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -446,15 +446,19 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
       .map(([k, v]) => {
-        const _ss = shiftCnSetOf(k, v);   // 2.89-06
+        //  ★ 4.16 (§7.8-① · Fable 판정 ①): 양하·선적 막대 = 평택분. 시프팅은 «◆ 시프팅 N — 내림 x/N · 실음 y/N» 줄로 따로.
+        //    전체 %(totalAll·totalDone)는 작업량(평택분 + 시프팅 2무브)으로 — 종전 숫자 그대로다.
+        const _sp = shiftSplitOf(k, v);
+        const _ss = _sp.set;   // 2.89-06
         const dis = computeStats(v.discharge, 'discharge', _ss);
         const loa = computeStats(v.loading, 'loading', _ss);
         return {
           key: k,
           info: v.info,
           dis, loa,
-          totalDone: dis.done + loa.done,
-          totalAll: dis.total + loa.total,
+          shift: { n: _sp.n, out: _sp.out.done, in: _sp.in.done },
+          totalDone: dis.workDone + loa.workDone,
+          totalAll: dis.workTotal + loa.workTotal,
         };
       })
       .sort((a, b) => (b.info.createdAt || 0) - (a.info.createdAt || 0));
@@ -2468,6 +2472,10 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
       <div className="space-y-1.5 text-2xs mono">
         {v.dis.total > 0 && <MiniBar label="양하" color="blue" stats={v.dis}/>}
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
+        {/*  ★ 4.16: 시프팅은 양하·선적 막대에 안 섞고 따로(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). */}
+        {v.shift && v.shift.n > 0 && (
+          <div className="text-sky-300 font-bold" data-shift-line={v.shift.n}>◆ 시프팅 {v.shift.n} — 내림 {v.shift.out}/{v.shift.n} · 실음 {v.shift.in}/{v.shift.n}</div>
+        )}
       </div>
       {/*  3.20 — **터미널 대수는 화면에 안 쓴다.** 검수사 2026-09-06 «카토스(앱) 카운트는 놔두고 터미널 카운트는 이제 없어도 될듯합니다».
           1.0(L2) 의 이 줄은 «앱 숫자를 믿어도 되나»를 외부 합계 실적(disDone/disPlan)과 대조하려던 것이다.
@@ -2657,7 +2665,7 @@ function computeStats(section, mode, shiftSet) {   // 2.89-06
   //   메일함 폴더가 하나라 양하·선적 리스트가 섞여 들어와, 양하 카드가 두 리스트를 합산해
   //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
   //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
-  const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !shiftSet || !shiftSet.has(cn)));   // 2.89-06
+  const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !isShiftOffPtk(shiftSet, records, mode, cn)));   // 2.89-06 · 4.16: 문지기 한 벌
   //  3.26: 부킹 자리를 실번호가 다 채운 모드 — 자리를 빼고 실번호를 EDI 평택 대상으로(홈 카드 HomePage.computeStats 와 같은 규칙).
   const _bfill = bookingFillOfSec(section, mode);
   if (_bfill && _bfill.filled) {
@@ -2671,13 +2679,15 @@ function computeStats(section, mode, shiftSet) {   // 2.89-06
   //  2.89-07: 작업량·완료는 progressOf 한 벌(홈 카드·현황 요약과 같은 숫자) —
   //    작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브 · extra = 분모 밖 완료(V9.57 I4 유지).
   const prog = progressOf(section, mode, shiftSet, ptkCns);
-  const total = prog.total;
-  const done = prog.done;
+  //  ★ 4.16: 막대 = 평택분(홈 카드와 같은 한 벌). 작업량(평택분 + 이 모드 모브)은 workTotal·workDone — 보드 전체 % 가 쓴다.
+  const total = prog.ptk.total;
+  const done = prog.ptk.done;
+  const workTotal = prog.total, workDone = prog.done;
   const extra = prog.extra;
   // V8.90: 예상 EDI 판정(홈 카드와 동일 규칙) — 리스트가 있는데 매칭 0이면 예상(프리스토우) EDI.
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
   const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
-  return { total, done, extra, ptk: ptkCns.size, matched, missing, forecastEdi, planSlots };  // V9.57(I4): extra 추가
+  return { total, done, workTotal, workDone, extra, ptk: ptkCns.size, matched, missing, forecastEdi, planSlots };  // V9.57(I4): extra 추가 · 4.16: 작업량
 }
 
 // ── V9.17: 완료 보관소 (archive 노드) — 열람·복원·1년 정리. 수석 전용 조작. ──

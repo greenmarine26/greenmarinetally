@@ -21,7 +21,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime, shiftSplitOf, isShiftOffPtk} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -369,6 +369,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   POD만 보면 이 62대가 통째로 빠진다. 선사가 양하리스트에 올린 컨은 평택에서 내리는 것이 진실.
   const isPtk = (c) => {
     if (!c) return false;
+    //  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리») — 시프팅 컨은 평택분이 아니다(문지기 한 벌 isShiftOffPtk). 1.76-05 «TCLU9762509 양하처리» 를 대체한다.
+    //    시프팅 컨은 아래 containersBase 가 «◆ 시프팅» 행(_shift)으로 따로 올린다 — 양하·선적 리스트(전체·미완·완료 칩)에는 안 섞이고 «◆ 시프팅 내림/실음» 칩에서 완료한다.
+    //    선사 리스트에 실려 온 시프팅은 평택분에도 남는다(Fable 판정 ⑤ «214+95»). 재료(shiftConfSet)는 아래 확정 지도 — 이 함수는 그 뒤에서만 불린다.
+    if (c.cn && isShiftOffPtk(shiftConfSet, recMap, mode, c.cn)) return false;
     if (mode === 'discharge') {
       if (isPyeongtaekPort(c.pod)) return true;
       return !!(c.cn && recMap && recMap[c.cn]);   // 양하리스트 등재분(TS 포함)
@@ -438,6 +442,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
   //  3.2-01: 상세창 통과분 문지기 재료 — 시프팅 컨은 통과분이어도 작업분이다.
   const shiftCnSet = useMemo(() => new Set(shiftingList.map((x) => x.cn)), [shiftingList]);
+  //  ★ 4.16: 시프팅 분리 재료 — 확정 지도 키(평택분 문지기 isPtk 가 읽는다)와 내림·실음 완료 수(시프팅 목록 머리).
+  const shiftConfSet = useMemo(() => new Set(Object.keys(shiftingConfirmed || {}).filter((k) => k && !k.startsWith('_'))), [shiftingConfirmed]);
+  const shiftSplit = useMemo(() => shiftSplitOf(voyageKey, voyage),
+    [shiftingConfirmed, voyageKey, voyage?.discharge?.completed, voyage?.loading?.completed]);
   //  3.65: 카토스가 시프팅이라고 한 컨 중 목록에 없는 것 — 목록은 안 바꾸고 아래에 따로 적는다.
   const restowExtra = useMemo(() => restowActualExtra(voyage, shiftCnSet), [voyage?.restowActual, shiftCnSet]);
 
@@ -488,6 +496,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     truthChk,
     hatchSolve,
     restowExtra,   // 3.65: 카토스 시프팅 실적에만 있는 컨
+    split: { n: shiftSplit.n, out: shiftSplit.out.done, in: shiftSplit.in.done },   // 4.16: 목록 머리 «내림 x/N · 실음 y/N»
   };
 
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
@@ -928,6 +937,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
       if (ediBase && r.iso_pick) safeR.oog = isoPickOog(r, ediBase.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
       merged[r.cn] = { ...(ediBase || {}), ...safeR, _inList: true, _src: ediBase ? 'both' : 'list' };   // V8.86: 리스트 등록 표식(선적 평택 판정 — 별첨·베이와 동일 원칙)
+      //  ★ 4.16: 시프팅 컨에 검수원 작업 기록(재선적 자리 등)만 있으면 리스트 행이 아니라 시프팅 행이다 — 자리 원본(fullEdiMap)이 없어 위 1.76-05 블록을 못 탄 경우에도.
+      if (!merged[r.cn]._shift && isShiftOffPtk(shiftConfSet, recMap, mode, r.cn)) merged[r.cn]._shift = mode === 'discharge' ? 'out' : 'in';
     });
     // V7.99-16: 초과 컨(리스트·EDI에 없는데 내려진 것) 합치기 — 양하신고 점검이 보도록.
     //   completed에도 flag:'extra'로 기록되지만, 컨 목록에 없으면 집계에서 빠지므로 여기서 추가.
@@ -2543,13 +2554,18 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
   //   타이핑 멈춤을 확정으로 본다(판정·중복 생략은 activityLog가 담당, 타이핑마다 기록 아님).
   useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
 
+  //  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»): 칩(전체·미완·완료·X-RAY)은 양하·선적 리스트(평택분)만, «◆ 시프팅» 칩은 시프팅 리스트만 연다.
+  //    종전 «전체 223» 칩은 시프팅 5행을 섞어 228행을 보였다(MCAP 639N). 끝4자리·컨번호 검색은 둘 다 찾는다(현장 조회).
+  //    선사 리스트에 실려 온 시프팅(Fable 판정 ⑤)은 리스트 행이면서 시프팅 칩에도 든다.
+  const _shCnL = useMemo(() => new Set((shiftingList || []).map((x) => x.cn)), [shiftingList]);
+  const _isShiftRow = (c) => !!(c && (c._shift || _shCnL.has(c.cn)));
   const filtered = useMemo(() => {
     if (!filter && !search) return [];   // 1.84: 칩 미선택·검색어 없음 = 목록 안 연다
-    let arr = containers;
+    let arr = filter === 'shift' ? containers : (filter ? containers.filter(c => !c._shift) : containers);
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
-    else if (filter === 'shift') arr = arr.filter(c => c._shift);   // 1.76-05: 시프팅만 보기
+    else if (filter === 'shift') arr = arr.filter(_isShiftRow);   // 1.76-05: 시프팅만 보기 · 4.16: 시프팅 리스트(내림·실음 완료는 여기서)
     else if (filter === 'lugg') arr = arr.filter(c => c._deckOnly || c.lugg);   // 2.06-04: 수화물(미정)만 보기
     /*  마감 점검 「리퍼」 항목 점프용 — 3.25: **판정 한 벌**(규범 §4-4).
         종전엔 여기서 `!c.tmp` 만 봐서 B(기준은 있고 안 잰 것)를 하나도 못 담았다 —
@@ -2565,7 +2581,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       arr = arr.filter(c => c.cn?.includes(q) || c.l4?.includes(q) || c.bay?.includes(q));
     }
     return arr;
-  }, [containers, filter, search, compMap, xrayMap]);
+  }, [containers, filter, search, compMap, xrayMap, _shCnL]);
 
   // 1.84-01: 자동 읽기 — 끝4자리 조회 결과가 딱 1건이면 위치를 말해준다(장갑 낀 손, 화면 안 봐도 되게).
   const readRef = useRef('');
@@ -2589,7 +2605,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     //   덱 전용 수화물(_deckOnly — EDI·리스트에 없고 덱플랜에만, 내릴지 미정)은 시프팅(1.76-05)처럼
     //   총계에 섞지 않고 자기 칸(미정)에서 센다. 전체=확정분(선사·터미널 숫자와 일치) 유지.
     const base = containers.filter(c => !c._shift && !c._deckOnly);
-    const sh = containers.filter(c => c._shift);
+    const sh = containers.filter(_isShiftRow);   // 4.16: 선사 리스트에 실려 온 시프팅도 시프팅 리스트에 든다
     const lg = containers.filter(c => c._deckOnly);
     return {
       total: base.length,
@@ -2600,7 +2616,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       lug: lg.length,
       lugDone: lg.filter(c => compMap[c.cn]).length,
     };
-  }, [containers, compMap, xrayMap, mode]);
+  }, [containers, compMap, xrayMap, mode, _shCnL]);
 
   const handleExport = () => {
     exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo);   // 3.16: 완료자 표기 한 벌에 조 등록을 넘긴다(ListTab 이 이미 받는 props)
@@ -2699,7 +2715,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           { k: 'done', t: `완료 ${stats.done}` },
           ...(mode === 'discharge' ? [{ k: 'xray', t: `🔍 X-RAY ${stats.xray}` }] : []),
           // 1.76-05: 시프팅 별도 칸 — 총계에 안 섞고 따로 센다(검수사 확정). 탭하면 시프팅만 본다.
-          ...(stats.shift > 0 ? [{ k: 'shift', t: `◆ 시프팅 ${stats.shiftDone}/${stats.shift}` }] : []),
+          //  4.16: 시프팅 리스트 — 양하 화면은 «내림», 선적 화면은 «실음» 완료를 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»).
+          ...(stats.shift > 0 ? [{ k: 'shift', t: `◆ 시프팅 ${mode === 'discharge' ? '내림' : '실음'} ${stats.shiftDone}/${stats.shift}` }] : []),
           // 2.06-04: 덱 전용 수화물 = 미정 칸 — 총계(확정분)에 안 섞는다 (검수사 «LUG는 미정으로 노면 됩니다»)
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
         ].map(({ k, t }) => (
@@ -2734,6 +2751,10 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           <button type="button" onClick={() => setShiftOpen(!shiftOpen)}
             className="w-full text-left px-3 py-2 bg-blue-950/60 hover:bg-blue-900/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            {/*  ★ 4.16 — 시프팅 리스트 머리: 내림(양하 완료) · 실음(선적 완료). 양하·선적 대수에는 안 섞는다(§7.8-①). */}
+            {shiftInfo?.split && shiftInfo.split.n > 0 && (
+              <span className="text-blue-200" data-shift-split={`${shiftInfo.split.out}/${shiftInfo.split.in}/${shiftInfo.split.n}`}>· 내림 {shiftInfo.split.out}/{shiftInfo.split.n} · 실음 {shiftInfo.split.in}/{shiftInfo.split.n}</span>
+            )}
             {/*  ★ 4.13 — 상태 딱지. 배정표 이적이 나오면(터미널 작업 시작) 미확정 → 확정 으로 저절로 바뀐다. */}
             {shiftInfo?.evid?.label && (
               <span data-shift-status={shiftInfo.evid.label}

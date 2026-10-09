@@ -137,9 +137,12 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
     const nm = shipName ? shipName + ' — ' : '';
     const head = E.exact ? `${E.moves}무브` : `최대 ${E.moves}무브 · 최소 ${E.movesMin}무브`;
     const L2 = [`${nm}${head} — 대수 ${E.units}대는 트윈 ${E.twinLifts}번(${2 * E.twinLifts}대) + 한 대씩 ${E.singles}번이에요.`];
-    L2.push(`${[E.dis > 0 ? `양하 ${E.dis}대 → ${E.disMoves}무브` : '', E.lod > 0 ? `선적 ${E.lod}대 → ${E.lodMoves}무브` : ''].filter(Boolean).join(' · ')}${E.exact ? '' : '(최대)'}.`);
+    //  ★ 4.16 (§7.8-① · Fable 판정 ④): 양하·선적은 평택분만, 시프팅은 대당 2무브(내림 + 실음)로 따로 적는다 — «양하 223 · 선적 293 · 시프팅 5대 → 10무브».
+    const _sn = Number(E.shiftN) || 0;
+    L2.push(`${[E.dis > 0 ? `양하 ${E.dis}대 → ${E.disMoves}무브` : '', E.lod > 0 ? `선적 ${E.lod}대 → ${E.lodMoves}무브` : '', _sn > 0 ? `시프팅 ${_sn}대 → ${Number(E.shiftMoves) || 2 * _sn}무브` : ''].filter(Boolean).join(' · ')}${E.exact ? '' : '(최대)'}.`);
     if (!E.exact) L2.push(`자리·무게를 모르는 20피트 ${E.unres20}대는 한 대씩으로 센 값이 최대이고, 트윈이 되면 최소까지 줄어요.`);
-    L2.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting}${shifting > 0 ? '(리스트가 있는 쪽은 위 수에 들어 있어요)' : ''} · 해치커버 별도.`);
+    //  끝줄 N = 시프팅 지도 대수(R5). 확정 대수보다 많으면 나머지는 예측(확정 아님)이라 무브 수에는 안 넣었다(§7.8-②).
+    L2.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting}${shifting > _sn ? '(예측 — 확정 아님, 무브 수에는 안 넣었어요)' : ''} · 해치커버 별도.`);
     return L2.join('\n');
   }
   const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}대 (무브 아님 — 트윈 계산을 못 해 대수로만 말씀드려요) — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dp - lp} 제외)`}.`];

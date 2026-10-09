@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
 import { isFreeRoamer, readWorkChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
@@ -25,6 +25,13 @@ import {
 } from '../adminGuard.js';
 import { fbGetAdminGuard, fbUpdateAdminGuard, fbFetchVoyageBoxCounts } from '../firebase.js';   // 4.08-01: 선택 화면 «N대» — 본문 없이 키만 센다
 import { useBackHandler } from '../backHandler.js';
+
+//  ★ 4.16 — 제목 줄 판 이름 «TallyOne 4.16»(이름은 제목색 · 번호는 강조색, 글자 전체 = APP_VERSION). 로그인 화면 두 머리(PC·폰)가 같이 쓴다.
+function AppVerTitle() {
+  const m = String(APP_VERSION || '').match(/^(.*?)\s*([0-9][0-9.\-]*)$/);
+  if (!m) return <>{APP_VERSION}</>;
+  return <>{m[1]} <span className="text-act-soft">{m[2]}</span></>;
+}
 
 export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, voyagesLoaded = true, pilotForecast = {}, choiceFor = '', onCancelChoice = null }) {   // 3.50 choiceFor — 이미 로그인한 사람이 «선박 변경» 으로 왔다: 이름 단계를 건너뛰고 선택 단계만   // 2.64: pilotForecast — 타임라인 도선 마커
   const [newName, setNewName] = useState('');
@@ -504,7 +511,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <img src={logoUrl} alt="TallyOne" draggable="false"
               className="w-[48px] h-[48px] rounded-card select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
             <div>
-              <h1 className="text-[26px] leading-tight font-black tracking-tight text-dim-100">TallyOne</h1>
+              {/*  ★ 4.16 — 판 이름을 제목 줄에 제목과 같은 크기로(검수사 2026-10-09 17:30 «상기 화면에도 버전을 크게 표기 바랍니다»). 아래 작은 회색 꼬리는 그대로 둔다. */}
+              <h1 className="text-[26px] leading-tight font-black tracking-tight text-dim-100" data-app-version="1"><AppVerTitle/></h1>
               <div className="text-sm2 text-dim-300 mt-0.5">
                 평택항 컨테이너 검수 시스템 <span className="text-dim-500">·</span>{' '}
                 <span className="text-2xs text-dim-500 tracking-[0.18em]">CONTROL CENTER EDITION</span>
@@ -632,7 +640,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <img src={logoUrl} alt="TallyOne" draggable="false"
                  className="w-[56px] h-[56px] rounded-[18px] select-none"
                  style={{ boxShadow: '0 12px 32px rgba(212,175,55,.26)' }}/>
-            <div className="mt-2.5 text-[23px] font-black tracking-tight text-white leading-none">TallyOne</div>
+            <div className="mt-2.5 text-[23px] font-black tracking-tight text-white leading-none" data-app-version="1"><AppVerTitle/></div>
             <div className="mt-1 text-[11.5px] font-medium text-dim-300">평택항 컨테이너 검수</div>
             <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-xxs font-semibold text-act-soft"
                   style={{ border: '1px solid rgba(0,209,143,.28)', background: 'rgba(0,209,143,.10)' }}>

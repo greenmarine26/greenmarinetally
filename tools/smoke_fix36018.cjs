@@ -46,10 +46,14 @@ const norm = (s) => String(s == null ? '(null)' : s).replace(/\s+/g, ' ').trim()
       const shiftCn = cs.find((c) => !c._ptk && !(D.records || {})[c.cn]);   // 타항 컨 = 시프팅 후보
       const vcS = M.voyageCountsOf(v, cs, new Set([shiftCn.cn]));
       const progS = M.progressOf(D, 'discharge', new Set([shiftCn.cn]), null);
-      ok(`시프팅 1대를 더하면 분모 81 = progressOf ${progS.total}`, vcS.byMode.discharge.total === progS.total && progS.total === 81, `${vcS.byMode.discharge.total} vs ${progS.total}`);
+      //  ★ 4.16 (§7.8-① · Fable 판정 ④): 양하 분모는 평택분(리스트 80) 그대로이고 시프팅은 대당 2무브로 항차 전체 수에만 든다.
+      //    progressOf 의 작업량(total)은 81(리스트 + 시프팅) 그대로 — 화면 막대는 그 안의 평택분(ptk 80)이다.
+      ok(`시프팅 1대 — 양하 분모 80 = progressOf 평택분 ${progS.ptk && progS.ptk.total} · 시프팅 2무브는 전체에만 · 작업량 ${progS.total}`, vcS.byMode.discharge.total === 80 && progS.ptk && progS.ptk.total === 80 && progS.total === 81 && vcS.shift && vcS.shift.n === 1 && vcS.shift.moves.total === 2 && vcS.total === vcS.byMode.discharge.total + vcS.byMode.loading.total + 2, `${vcS.byMode.discharge.total} · ptk ${progS.ptk && progS.ptk.total} · 작업량 ${progS.total} · 시프팅 ${JSON.stringify(vcS.shift)} · 전체 ${vcS.total}`);
       const ctxS = { app: 'cone', countFallback: true, voyageKey: vk, voyage: v, info: v.info, mode: 'discharge', containers: cs.map((c) => (c.cn === shiftCn.cn ? { ...c, _shift: true } : c)), compMap: {}, _trace: {} };
       const aS = norm(M.answerOneRaw('얼마나 남았어', ctxS));
-      ok('콘앱 ctx 의 _shift 행도 분모에 든다(전체 81대)', /전체 81대/.test(aS), aS.slice(0, 100));
+      //  4.16: 콘앱 ctx 의 _shift 행은 양하 평택분(80)이 아니고, 항차 전체 수에 시프팅 2무브로 든다(검수앱과 같은 셈).
+      const _mAll = aS.match(/항차 전체로는 남은 (\d+)대 \(양하 (\d+) · 선적 (\d+) · 시프팅 2무브\)/);
+      ok('콘앱 ctx 의 _shift 행 — 양하 본문 80대(평택분) · 항차 전체에 시프팅 2무브', /전체 80대/.test(aS) && !!_mAll && Number(_mAll[1]) === Number(_mAll[2]) + Number(_mAll[3]) + 2, aS.slice(0, 160));
     }
 
     console.log('■ ②③ 페이스·«얼마나 남았어» — KBTR 2606E (완료 있음)');
@@ -138,7 +142,7 @@ const norm = (s) => String(s == null ? '(null)' : s).replace(/\s+/g, ' ').trim()
       ok('cone-sw.js — ok·같은 오리진(+보관소)·_ck/u 제외 조건이 있고 public 사본과 같다', /res\.ok/.test(csw) && /self\.location\.origin/.test(csw) && /firebasedatabase/.test(csw) && /_ck\|u/.test(csw) && csw === src('public/cone-sw.js'));
       ok('떠 있는 미르·콘앱 ctx 에 accepted 표식', /accepted: true/.test(src('src/components/MirFab.jsx')) && /accepted:true/.test(src('public/cone.html')));
       ok('cone.html 이 port_mis_data 를 받아 ctx.portMisData 로 넘긴다', /g\('port_mis_data\.json'\)/.test(src('public/cone.html')) && /portMisData: \(mc&&mc\.portMisData\)/.test(src('public/cone.html')));
-      ok('콘앱 버전 2.58~2.65 계열', /window\.__CONEV='ConeOne 2\.(58|59|60|61|62|63|64|65|66|67)(-\d\d)?'/.test(src('public/cone.html')));
+      ok('콘앱 버전 2.58~2.65 계열', /window\.__CONEV='ConeOne 2\.(58|59|60|61|62|63|64|65|66|67|68)(-\d\d)?'/.test(src('public/cone.html')));
       ok('콘앱 미르 voyage 에 restowList(선사 시프팅 목록)가 실린다', /restowList:\(state\.restowList/.test(src('public/cone.html')));
       ok('씰체결 엑셀 시트명 — 같은 길이 안 순번(_sameLenBefore)', /_sameLenBefore \? ' ' \+ \(_sameLenBefore \+ 1\)/.test(src('src/components/EmptySealReport.jsx')));
       ok('검수리스트 별첨 제목에 X-RAY 글자 없음', /\[별첨\] 특수화물 \$\{special\.length\}대/.test(src('src/inspectionList.js')) && !/특수화물·X-RAY/.test(src('src/inspectionList.js')));

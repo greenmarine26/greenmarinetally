@@ -38,11 +38,14 @@ const fs = require('fs');
     ok(p.total - p.done === 0, `서류상 로스 0 (${p.total - p.done})`);
   }
 
-  console.log('[2] MCSC 635S 선적 — 작업량 308 = 리스트 213 + 시프팅 95(이중 계산 금지), 완료 = 리스트완료 + 실음');
+  //  ★ 4.16 (Fable 판정 2026-10-09 ⑤ · 검수사 원문 «214+95»): 선사 선적 리스트에 실려 온 시프팅 컨(TGHU6154253 — 리스트 214 안)은
+  //    선적 평택분에도 세고 시프팅에도 센다(리스트가 정본). 종전 기대(213 · 308 «이중 계산 금지»)는 이 판정으로 바뀌었다 — 규칙이 먼저다.
+  console.log('[2] MCSC 635S 선적 — 작업량 309 = 리스트 214(검수사 «214+95») + 시프팅 95, 완료 = 리스트완료 + 실음');
   {
     const p = U.progressOf(FX.loading, 'loading', ss);
-    ok(p.listTotal === 213, `리스트 213 (${p.listTotal}) — 시프팅 재선적 기록(4253 포함)은 리스트에 겹쳐 세지 않는다`);
-    ok(p.total === 308, `작업량 308 (${p.total})`);
+    ok(p.listTotal === 214, `리스트 214 (${p.listTotal}) — 선사 리스트에 실려 온 시프팅(4253)도 리스트다 · 작업 생성 재선적 기록 16대는 못 들어온다`);
+    ok(p.total === 309, `작업량 309 (${p.total})`);
+    ok(p.ptk && p.ptk.total === 214 && p.shift && p.shift.total === 95, `평택분 214 · 시프팅 95 (${p.ptk && p.ptk.total} · ${p.shift && p.shift.total}) — 화면 막대는 평택분, 시프팅은 따로(4.16)`);
     ok(p.moves === 16, `실음 모브 16 (${p.moves})`);
     ok(p.done === 20 + 16, `완료 36 (${p.done})`);
   }

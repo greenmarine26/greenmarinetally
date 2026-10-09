@@ -104,7 +104,7 @@ ok(/최대 461무브 · 최소 404무브/.test(dC) && dC === dT, 'DJCT 콘앱 = 
 
 console.log('③ 배선 — 콘 첫 화면 · 실시간 화면 안내 · 콘 타이밍 빈 문구 · 미르 사전 · 버전');
 const C = rd('public/cone.html');
-ok(/window\.__CONEV='ConeOne 2\.6[01234567](-\d\d)?'/.test(C), '콘앱 판 번호 ConeOne 2.60~2.65 계열');
+ok(/window\.__CONEV='ConeOne 2\.6[012345678](-\d\d)?'/.test(C), '콘앱 판 번호 ConeOne 2.60~2.65 계열');
 ok(/async function cargoPlanPropsV2\(mode\)/.test(C) && /async function openCargoPlanV2\(mode\)[\s\S]{0,900}cargoPlanPropsV2\(mode\)/.test(C), '한 쪽 카고플랜도 같은 재료 함수(cargoPlanPropsV2)를 쓴다 — 재료가 두 벌로 갈리지 않는다');
 ok(/async function openCargoPlanDuo\(key0\)[\s\S]{0,2000}Promise\.all\(\[cargoPlanPropsV2\('discharge'\), cargoPlanPropsV2\('loading'\)\]\)[\s\S]{0,700}ConeCargoPlan\.openDuo\(/.test(C), '첫 화면은 양하·선적 재료를 둘 다 만들어 ConeCargoPlan.openDuo 로 연다');
 ok(/key !== state\.voyageKey \|\| TW\.on/.test(C), '그 사이 다른 배를 골랐으면 앞 배 도면을 안 띄운다');
@@ -151,8 +151,8 @@ let leak = [];
 for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true })) { if (!/\.jsx?$/.test(f) || /coneCargoPlan\.entry|PrintableCargoPlanV2|CargoDuoPills/.test(f)) continue; try { if (/<PrintableCargoPlanV2[^>]*\bduo=/.test(fs.readFileSync(path.join(ROOT, 'src', f), 'utf8'))) leak.push(f); } catch (e) { /* 폴더 항목 */ } }
 ok(leak.length === 0, '검수앱 쪽에서 PrintableCargoPlanV2 에 duo 를 넘기는 곳이 없다', leak.join(','));
 const U = rd('src/utils.js');
-ok(/APP_VERSION = 'TallyOne 4\.(0[23456789]|1[012345])(-\d\d)?'/.test(U) && /^TallyOne 4\.(0[23456789]|1[012345])(-\d\d)?$/.test(M.APP_VERSION), 'TallyOne 4.02~4.13(-NN)');
-ok(/(보조기능에 설치 QR|터미널 본선 현황|콘앱 첫 화면|RZOR 카고플랜|RZOR X-RAY 선내위치|RZOR 선내위치|미르가 작업은 진행 중인데|미르가 작업 중 앱 입력이 없으면|실사 미르가 왔습니다|PORT-MIS 를 수집기가 30분마다 직접 가져옵니다|선적 리스트에 공컨 개정판이 오면|해치커버 장수|작업 선박 자료만|폰 선박 선택 화면|트윈 무게를 총중량으로|양하 순서를 호기별로|해치커버 보고 직전|수석 화면에 아침 6시30분|수석 소유자 메뉴에 마감적용|수석 소유자 메뉴에 마감적용이|화면을 밝게 해도|날짜 말을 알아듣|24번 홀드 콘 몇 개 남았어|시프팅 근거|출력 센터 카고플랜이 콘앱처럼|미르가 «파손됐고|리퍼 몇 대는 풀 리퍼만|리퍼 수는 풀 리퍼만)/.test(M.APP_NOTE) && !/['\/]/.test(M.APP_NOTE.replace(/^'|'$/g, '')) && M.APP_NOTE.length < 120, '업데이트 문구는 짧고 작은따옴표·슬래시가 없다', M.APP_NOTE);
+ok(/APP_VERSION = 'TallyOne 4\.(0[23456789]|1[0123456])(-\d\d)?'/.test(U) && /^TallyOne 4\.(0[23456789]|1[0123456])(-\d\d)?$/.test(M.APP_VERSION), 'TallyOne 4.02~4.13(-NN)');
+ok(/(보조기능에 설치 QR|터미널 본선 현황|콘앱 첫 화면|RZOR 카고플랜|RZOR X-RAY 선내위치|RZOR 선내위치|미르가 작업은 진행 중인데|미르가 작업 중 앱 입력이 없으면|실사 미르가 왔습니다|PORT-MIS 를 수집기가 30분마다 직접 가져옵니다|선적 리스트에 공컨 개정판이 오면|해치커버 장수|작업 선박 자료만|폰 선박 선택 화면|트윈 무게를 총중량으로|양하 순서를 호기별로|해치커버 보고 직전|수석 화면에 아침 6시30분|수석 소유자 메뉴에 마감적용|수석 소유자 메뉴에 마감적용이|화면을 밝게 해도|날짜 말을 알아듣|24번 홀드 콘 몇 개 남았어|시프팅 근거|출력 센터 카고플랜이 콘앱처럼|미르가 «파손됐고|리퍼 몇 대는 풀 리퍼만|리퍼 수는 풀 리퍼만|시프팅은 양하 리스트와 분리)/.test(M.APP_NOTE) && !/['\/]/.test(M.APP_NOTE.replace(/^'|'$/g, '')) && M.APP_NOTE.length < 120, '업데이트 문구는 짧고 작은따옴표·슬래시가 없다', M.APP_NOTE);
 const H = rd('src/data/helpData.js');
 ok(/양하\(왼쪽\)·선적\(오른쪽\) 카고플랜이 가로 화면으로 먼저/.test(H) && /\[⚡ 실시간\] 화면/.test(H), '매뉴얼(콘앱 절)이 새 첫 화면과 실시간 화면 안내를 말한다');
 console.log(fail ? `\n✗ ${fail}건 실패` : '\n✓ 4.02 콘앱 연막검사 전부 통과');

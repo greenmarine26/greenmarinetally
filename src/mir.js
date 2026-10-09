@@ -26,7 +26,7 @@ import {
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs,   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
   isReeferContainer, isReeferIso, isFullReefer, isEmptyReefer, emptySplitLabel,   // 4.15-01: 엠티 구분 한 벌 · 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
-  ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
+  ownDirCns, isListOriginRecord, shiftCnSetOf, shiftSplitOf, isShiftOffPtk,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합) · 4.16: 시프팅 분리 한 벌
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
   currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
   plausibleListWtKg, ediWtField,   // 4.08-02: 컨 하나 40톤 초과는 무게 없음 · EDI 총중량 wtEdi (병합 경로 한 벌)
@@ -573,6 +573,10 @@ export function mirSmallTalk(q) {
    ⚠ 전 항차 컨 펼치기(flattenVoyages)는 종전 GlobalSearchPage 의 useMemo 본문을 그대로 옮긴 것이다 — 두 곳이 각자 펼치면
      «홈은 이 컨을 알고 미르는 모르는» 일이 생긴다(§4-4). 홈도 이 함수를 부른다. */
 /** 전 항차의 양하·선적 컨을 한 줄로 편다 — 홈 통합검색·떠 있는 미르가 같은 벌을 쓴다. */
+//  4.16: 펼치기마다 항차별 시프팅 분리 — computeShiftingMapCached 가 내용 서명으로 캐시하므로 여기서는 한 번 부르기만 한다.
+function _shiftSplitCached(vKey, v) {
+  try { return shiftSplitOf(vKey, v); } catch (e) { console.warn('[미르] 시프팅 분리 실패 — 시프팅 없이 셉니다:', e); return { set: new Set(), n: 0, offPtk: () => false }; }
+}
 export function flattenVoyages(voyages) {
   const arr = [];
   Object.entries(voyages || {}).forEach(([vKey, v]) => {
@@ -588,6 +592,10 @@ export function flattenVoyages(voyages) {
       const xraySeals = sec.xraySeals || {};
       const compMap = sec.completed || {};
       const _dcm = deckCoordMap(sec.stowagePlan);   // 4.04-02: 덱플랜 좌표 «C_8_21» — 항차 화면·검색 패널·X-RAY 와 같은 값(rzorPlan 한 벌)
+      //  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»): 시프팅 컨은 평택분(_ptk)이 아니다 — 문지기 한 벌(utils.shiftSplitOf · isShiftOffPtk).
+      //    종전엔 «리스트에 기록이 있으면 평택분» 이라 시프팅 재선적 자리 기록이 생기면 미르 «선적 몇 대» 가 293 → 298 로 샜다(MCAP 639N).
+      //    선사 리스트에 실려 온 시프팅은 평택분에도 남는다(Fable 판정 ⑤). 시프팅 행에는 _shift(내림 out · 실음 in)를 찍는다 — 미르 시프팅 집합이 읽는다.
+      const _shSp = _shiftSplitCached(vKey, v);
       const merged = {};
       //  3.31: 항차 화면·마감텔리와 같은 선사 코드로(같은 배를 두 화면이 다르게 답하면 안 된다).
       const _spOpG = shipOpMapper(String(v.info?.vsl || '').toUpperCase(),
@@ -644,7 +652,8 @@ export function flattenVoyages(voyages) {
           voy: v.info.voy,
           mode,
           _mode: mode,
-          _ptk: mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, mode),
+          _ptk: (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, mode)) && !_shSp.offPtk(mode, c.cn),
+          ...(_shSp.set.has(c.cn) ? { _shift: mode === 'discharge' ? 'out' : 'in' } : {}),
           isXray: mode === 'discharge' && !!xrayMap[c.cn],
           _xray: mode === 'discharge' && !!xrayMap[c.cn],
           comp: compMap[c.cn] || null,
@@ -671,8 +680,11 @@ const _subs = new Set();
 //    미르는 EDI∪리스트 `_ptk` 전부를 세어 라이브 MCSN 637N 선적이 홈 127 / 미르 287 로 갈렸다. 그 모드에 리스트 출신 records 가 있으면
 //    **리스트에 있는 컨(+시프팅 컨)만** 센다 — progressOf 와 같은 분모. 완료 시각(doneAts)도 그 분모 안의 것만 돌려줘 페이스·ETA 가 같은 수로 잰다.
 //    `shiftSet` 은 호출부가 shiftMap 키로 준다(없으면 리스트만).
+//  ★ 4.16 (§7.8-① · Fable 판정 ④): byMode(양하·선적) = **평택분만**. 시프팅은 대당 2무브(내림 + 실음)로 total·done 에만 더한다 —
+//    «얼마나 남았어»·«언제 끝나»·예상 시간 분모 = 양하 평택 + 선적 평택 + 2×시프팅이고 **리스트 유무와 무관**하다(종전엔 리스트 있는 모드만 시프팅을 셌다 — 두 갈래).
+//    shift = { n, moves:{ total, done } }. 완료 시각(doneAts)에는 시프팅 내림·실음 완료도 든다(페이스가 같은 분모로 잰다).
 export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = null) {
-  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } }, doneAts: [], cns: { discharge: [], loading: [] } };   // 4.01: cns = 센 컨 번호(트윈 쌍 판정용)
+  const out = { total: 0, done: 0, byMode: { discharge: { total: 0, done: 0 }, loading: { total: 0, done: 0 } }, doneAts: [], cns: { discharge: [], loading: [] }, shift: { n: 0, moves: { total: 0, done: 0 } } };   // 4.01: cns = 센 컨 번호(트윈 쌍 판정용)
   const has = (m, k) => !!(voyage && voyage[m] && voyage[m][k] && Object.keys(voyage[m][k]).length);
   const ss = shiftSet instanceof Set ? shiftSet : new Set(Array.isArray(shiftSet) ? shiftSet : []);
   const listOf = {};
@@ -698,18 +710,37 @@ export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = nul
     if (!listOf[md] || !voyage || !voyage.info || sideCancelled(voyage.info, md)) continue;
     listModes.add(md);
     const comp = (voyage[md] && voyage[md].completed) || {};
-    const base = new Set([...listOf[md]].filter((cn) => !ss.has(cn)));
+    const recs = (voyage[md] && voyage[md].records) || {};
+    //  4.16: 리스트 컨 = 평택분(선사 리스트에 실려 온 시프팅도 — Fable 판정 ⑤). 시프팅은 아래에서 따로 2무브로.
+    const base = new Set([...listOf[md]].filter((cn) => !isShiftOffPtk(ss, recs, md, cn)));
     const m = out.byMode[md];
     for (const cn of base) { m.total += 1; out.total += 1; out.cns[md].push(cn); if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
-    for (const cn of ss) { if (base.has(cn)) continue; m.total += 1; out.total += 1; out.cns[md].push(cn); if (comp[cn]) { m.done += 1; out.done += 1; pushAt(comp[cn]); } }
   }
   for (const c of pool) {
     const md = c._mode === 'loading' ? 'loading' : 'discharge';
     if (voyage && voyage.info && sideCancelled(voyage.info, md)) continue;
     if (listModes.has(md)) continue;   // 3.60-18: 리스트가 있는 모드는 위에서 셌다
+    if (c.cn && isShiftOffPtk(ss, (voyage && voyage[md] && voyage[md].records) || {}, md, c.cn)) continue;   // 4.16: 시프팅은 아래에서 따로
     const m = out.byMode[md];
     m.total += 1; out.total += 1; out.cns[md].push(c.cn);
     if (c._comp) { m.done += 1; out.done += 1; pushAt(c._comp); }
+  }
+  //  4.16: 시프팅 — 대당 2무브(양하 때 내림 1 + 선적 때 실음 1). 완료는 각 모드 completed(콘앱은 넘겨받은 행의 _comp)로 센다.
+  if (ss.size && voyage && voyage.info) {
+    const compOf = (md, cn) => {
+      const w = voyage[md] && voyage[md].completed && voyage[md].completed[cn];
+      if (w) return w;
+      const g = Array.isArray(fallbackContainers) ? fallbackContainers.find((x) => x && x.cn === cn && (x._mode === 'loading' ? 'loading' : 'discharge') === md && x._comp) : null;
+      return g ? g._comp : null;
+    };
+    out.shift.n = ss.size;
+    for (const cn of ss) {
+      for (const md of ['discharge', 'loading']) {
+        out.shift.moves.total += 1; out.total += 1;
+        const w = compOf(md, cn);
+        if (w) { out.shift.moves.done += 1; out.done += 1; pushAt(w); }
+      }
+    }
   }
   out.doneAts.sort((a, b) => a - b);
   return out;
@@ -820,6 +851,7 @@ export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now(), gi
     n20: tw.n20, n40: tw.n40, posPairs: tw.posPairs, twinOver: tw.over, twinDiff: tw.diff, twinNoWt: tw.noWt, unres20: tw.unres20, twinMaybe: tw.maybe,
     dis: vc.byMode.discharge.total, lod: vc.byMode.loading.total,
     disMoves: vc.byMode.discharge.total - tw.byMode.discharge, lodMoves: vc.byMode.loading.total - tw.byMode.loading, done: vc.done,
+    shiftN: (vc.shift && vc.shift.n) || 0, shiftMoves: (vc.shift && vc.shift.moves.total) || 0,   // 4.16: 시프팅 대당 2무브(트윈으로 안 든다)
     gangs, gangsKnown, rate, rateMin, twinShare: vc.total ? (2 * tw.ok) / vc.total : 0, minutes: mins(moves, gangs, rate), minutesMin: mins(movesMin, gangs, rateMin), minutes1: mins(moves, 1, rate), planTotal,
     planGap: planTotal - vc.total > Math.max(20, vc.total * 0.1) };
 }
@@ -1658,6 +1690,7 @@ function _normalize(ctx) {
       if (!x || (x._ptk !== undefined && x._mode)) return x;
       const m = x._mode || x.mode || mode0;
       let ptk = x._ptk;
+      if (ptk === undefined && x._shift) ptk = false;   // 4.16 (§7.8-①): 시프팅 행은 평택분이 아니다 — 리스트에 실려 온 시프팅은 화면이 일반 행으로 넘긴다
       if (ptk === undefined) { try { ptk = m === 'transit' ? false : isPtk({ ...x, _inList: x._inList != null ? x._inList : (x._src === 'list' || x._src === 'both') }, m); } catch (e) { ptk = true; } }
       touched = true;
       return { ...x, _mode: m, _ptk: ptk };
@@ -3265,6 +3298,8 @@ function _appAllDone(v, key) {
     if (m.total > 0) { known++; if (m.done < m.total) return false; }
     else if (Number(plan) > 0) return false;
   }
+  //  4.16: byMode 는 평택분만이다 — 시프팅 모브(내림·실음)가 남았으면 아직이다(재감사 D7 — MCSC 633N 시프팅 95대).
+  if (c.shift && c.shift.moves.total > c.shift.moves.done) return false;
   return known > 0;
 }
 /** «곧 시작하거나 막 시작할 배» 의 계획 시작 시각(ms) — 아니면 0. 미르 «다음 작업 준비»(_nextWorkOf)와 초조함의 «EDI 를 기다린다»(anxiousReasons)가 같은 문지기를 쓴다(한 벌).

@@ -51,7 +51,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.15-01'   // 4.15-01 **리퍼 수는 어디서든 풀 리퍼만 · 엠티는 총엠티·일반·리퍼 엠티로 나눠 보인다** — 검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨» · 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2». 4.15 가 엠티 리퍼의 40HR 표기를 지키자 규격으로 세던 카고플랜 별첨 Reefer 가 STSE 2669E 선적에서 2 에서 43 이 됐다. 별첨 화물 종류는 utils.legendCargoCatOf 한 벌(인쇄 별첨·수석 보드), 마감텔리 RF 시트·선사 줄 RH·미르 RF in out 은 isFullReefer, 엠티 리퍼는 짝 isEmptyReefer 로 세어 emptySplitLabel 한 벌로 «엠티 43(일반 2 · 리퍼 엠티 41)» 를 적는다(별첨3·수석 보드·현황 탭·선박 카드 MTY·통합검색·미르·브리핑·마감텔리 수치·AI 자료). Fable 판정 — 마감텔리 선사 줄은 풀만 RH 이고 엠티 리퍼는 OS EMPTY 줄 태그가 구분한다(새 영문 표현 없음), 리퍼 엠티를 콕 집어 물으면 구분 없이 답한다, 콘앱 행 리퍼 판정도 utils 한 벌(ConeOne 2.67 · mir-core ConeMir.isReeferContainer). 회귀 기준표 R14·R15.
+export const APP_VERSION = 'TallyOne 4.16'   // 4.16 **시프팅 분리 — 양하·선적 리스트와 시프팅 리스트를 따로 센다 · 종이 카고플랜에도 예측 시프팅(◇ 확정 아님)** — 검수사 2026-10-09 12:23 §7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»(1.76-05 «TCLU9762509 양하처리» 대체) · ② «그래야 준비 할수 있음(대신 확정아님 표기)» · 17:30 «판 B(시프팅 4.16) 진행하시고 상기 화면에도 버전을 크게 표기 바랍니다». utils.shiftSplitOf·isShiftOffPtk 한 벌 — 홈 카드·수석 보드·현황 요약 막대 = 평택분(MCAP 639N 0/228 → 0/223), 시프팅은 «내림 x/N · 실음 y/N» 줄. 입구마다 «시프팅이면 평택분 아님»(항차 화면·자동 가이드·출력 센터·미르 펼치기·마감텔리·갱별 보고) — 시프팅 재선적 기록이 선적 평택분으로 새던 길(293→298)을 막았다. 선사 리스트에 실려 온 시프팅은 평택분에도 센다(Fable 판정 ⑤ «214+95»). 미르 분모·예상 시간 = 양하 평택 + 선적 평택 + 2×시프팅(리스트 유무 무관 — MCAT 635N 534 → 562), 총 무브수 «양하 223 · 선적 293 · 시프팅 5대 → 10무브». 카고플랜·출력 센터·베이플랜·콘앱(ConeOne 2.68)은 확정 지도가 빈 배에 예측 시프팅을 ◇ 로(KSKM 2617N 종이 0 → ◇1). 마감텔리 SHIFTING 시트를 지도 꼴대로 읽게 고쳤다(컨번호·규격·자리 빈칸 → 채움, PORT = EDI POD). 로그인 화면 제목 줄에 판 이름을 크게. 회귀 기준표 R16~R19.
+//   (앞 판) 'TallyOne 4.15-01'   // 4.15-01 **리퍼 수는 어디서든 풀 리퍼만 · 엠티는 총엠티·일반·리퍼 엠티로 나눠 보인다** — 검수사 2026-10-09 15:37 «40앰티중 리퍼 엠티가 섞여 있다면 총엠티 몇개 일반 몇개 리퍼엠티 몇개를 구분해서 표기 하지만 풀리퍼랑 합산 하면 안됨» · 15:39 «리퍼 엠티 41 리퍼풀 2 -> 리퍼=2». 4.15 가 엠티 리퍼의 40HR 표기를 지키자 규격으로 세던 카고플랜 별첨 Reefer 가 STSE 2669E 선적에서 2 에서 43 이 됐다. 별첨 화물 종류는 utils.legendCargoCatOf 한 벌(인쇄 별첨·수석 보드), 마감텔리 RF 시트·선사 줄 RH·미르 RF in out 은 isFullReefer, 엠티 리퍼는 짝 isEmptyReefer 로 세어 emptySplitLabel 한 벌로 «엠티 43(일반 2 · 리퍼 엠티 41)» 를 적는다(별첨3·수석 보드·현황 탭·선박 카드 MTY·통합검색·미르·브리핑·마감텔리 수치·AI 자료). Fable 판정 — 마감텔리 선사 줄은 풀만 RH 이고 엠티 리퍼는 OS EMPTY 줄 태그가 구분한다(새 영문 표현 없음), 리퍼 엠티를 콕 집어 물으면 구분 없이 답한다, 콘앱 행 리퍼 판정도 utils 한 벌(ConeOne 2.67 · mir-core ConeMir.isReeferContainer). 회귀 기준표 R14·R15.
 //   (앞 판) 'TallyOne 4.15'   // 4.15 **규격·리퍼 계수 — 검수사 2026-10-09 12:23 확정 넷(§7.8-⑥⑨⑩⑪)** — ⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»: 미르·통합검색·베이 답·브리핑·인수인계·갱 배분·AI 자료 묶음과 앱 화면 넷(현황 탭·요약 카드·선박 카드 배지·선박 옆모습)의 «리퍼 N» 은 utils.isFullReefer 한 벌(엠티·리퍼드라이·제작컨 빼고 · RZOR R098E 40→32). ⑩ «엠티는 엠티이다, 그래도 따로 구분은 한다»: ASC 파서가 엠티 끝 글자를 맞출 때 라벨이 바뀌면 그대로(feSyncedIso — 리스트 파서와 한 벌 · STSE 2669E 40HR 41칸 40HE→40HR · 엠티실 45GE→45RE). ⑨ 검수사가 고른 규격(iso_pick)이 EDI tp 를 이긴다(isFlatRackContainer·bayCellTypeLabel·현황 OT·미르 리퍼 · 규격초과 oog 도 고른 규격(utils.isoPickOog — 병합 다섯·마감텔리) — SWTD 9013E FR 표식). ⑥ ASC 파서가 무게 두 자리(45GP90 F)도 규격을 읽고, 마감텔리 규격 빈 행은 같은 컨번호의 EDI 규격(남은 EDI 원문 다시 읽기 포함), 없으면 베이플랜 자리(홀수 20 · 짝수 40)로(KBTR 2606E 양하 20피트 28→22 · HC 74→80). 회귀 기준표 R12~R15.
 //   (앞 판) 'TallyOne 4.10'   // 4.10 **해치커버 보고 직전 장수 확인** — 자동 가이드·수동 작업 보고에서 오픈·클로즈 보고를 쓰기 직전에 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 검수사가 맞는지 보고 고른다(utils.hatchPanelDetailOf·hatchCountFlags, HatchCountConfirm). 취소하면 보고도 «열렸다» 표시도 남기지 않는다(sendHatchReport 반환값). 알림 배너에도 «총 N장»(검수사 2026-10-07)
 //   (앞 판) 'TallyOne 4.09'   // 4.09 **양하 순서 조건 — 로우(육상부터·해상부터)와 풀·엠티·일반·리퍼·20·40 부터를 겹쳐 고르고 호기별로 항차 info.workOrder 에 기억한다(자동 가이드·미르 같은 순서).** 검수사 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터 이런조건들을 다 적용할수 있게 해주세요 · 장비 기사의 작업 방법이 틀려서 입니다». 먼저 고른 것이 우선, 위에 컨이 남은 칸은 앞당기지 않고 데크가 홀드보다 먼저(물리 규칙 그대로), 조건이 없으면 종전과 같은 순서. 4.08-02 **트윈 무게는 컨 총중량(EDI)으로 재고 경보뿐이다 — 55톤 초과는 «싱글 권유»(막지 않는다) · 컨 하나 40톤 초과는 무게 없음 · 싱글 한 대 뒤 짝이 다음 카드.** 4.08-01 **폰 선박 선택 화면의 «N대» 표시를 되돌렸다 — 4.08 에서 본문을 안 받게 되며 사라졌던 것** — 검수사 2026-10-07 «수정하세요». 4.08 에서 일반 검수원 폰이 선박을 고르기 전에는 항차 본문(EDI)을 받지 않아 선택 화면 목록의 «· N대» 가 빠졌다. 되던 것을 되던 상태로 되돌린다 — 선택 화면에 보이는 항차마다 discharge·loading 의 ediContainers 키 개수만 REST shallow 로 센다(키 하나 19바이트 안팎 · 18척 합쳐 약 66KB · 항차 뿌리 3.6MB 와 비교) 합은 종전 «N대»(양하 EDI 키 + 선적 EDI 키)와 같은 수이고 항차마다 10분 캐시한다. 못 센 항차는 0 이 아니라 표시를 비운다. 수석·부수석·테스터·소유자·PC 화면은 본문을 이미 받아 종전 그대로. ★ 같은 판 둘째 — 헤더 «검수원 변경»(#/login) 화면. 4.08 은 로그인해 있는 일반 검수원의 선박 한 척 본문만 받은 채 이 화면을 열어 다른 사람의 선택 목록에 그 배 한 척만 떴다(실측 앱 하네스 LoginPage.voyages = DXQD 한 척). 로그인 화면은 이름이 없을 때와 같은 범위(폰 info 만 · PC 전체)로 받는다(workChoice.voyagesScopeOf 네 번째 인자 · 돌아가면 그 선박 본문을 다시 받는다). ★ 독립 감사 지적 반영 — 선박 정보가 한 척씩 도착해도 첫 한 벌이 다 온 뒤에만 세고(voyagesLoaded) 가는 중인 요청은 겹쳐 받지 않는다(도착 간격에 따라 같은 항차가 최대 16번 받아져 최악 580KB 이던 것 → 항상 약 74KB).
@@ -74,7 +75,7 @@ export const APP_VERSION = 'TallyOne 4.15-01'   // 4.15-01 **리퍼 수는 어�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.15-01 리퍼 수는 풀 리퍼만입니다. 엠티는 총엠티·일반·리퍼 엠티로 나눠 보입니다.'
+export const APP_NOTE = '4.16 시프팅은 양하 리스트와 분리해 시프팅 리스트에서 따로 셉니다. 종이 카고플랜에도 예측 시프팅을 ◇ 확정 아님으로 그립니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4341,7 +4342,10 @@ export function shiftReportContainers(voyage, m) {
   const comp = sec.completed || {};
   const cns = new Set([...Object.keys(edi), ...Object.keys(recs)]);
   const out = [];
+  //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — 문지기 한 벌(isShiftOffPtk). 선사 리스트에 실려 온 시프팅은 평택분에도 남는다.
+  const _ss = shiftCnSetOf(voyageKeyOf(voyage), voyage);
   for (const cn of cns) {
+    if (isShiftOffPtk(_ss, recs, m, cn)) continue;
     const e = edi[cn] || {};
     const r = recs[cn] || {};
     //  ⚠ 3.63 — records 의 **빈 칸은 EDI 를 덮지 않는다**(App.jsx 상세 모달 머지와 같은 규칙). 2차 시뮬 실측 — TNJP 26362E 는 records pod 가 «» 라
@@ -8452,6 +8456,11 @@ export function shiftingMapForDisplay(voyageKey, voyage, dictEntry) {
   try { cmp = computeShiftingMapCached(voyageKey, voyage); } catch (e) { cmp = null; }
   if (cmp && Object.keys(cmp).length) return cmp;              // 선적 EDI 있음 = 확정값
   if (cmp && cmp._meta && cmp._meta.source === 'carrier') return cmp;   // 3.44: 선사 서류가 «0대» 라고 말한 것도 답이다
+  return predictedShiftingForDisplay(voyage, dictEntry);
+}
+//  ★ 4.16 — 위 함수의 **예측 갈래**만 따로(동작 그대로 꺼냈다). 확정 지도(선사 서류·EDI 대조)가 빈 배에서만 부른다.
+//    콘앱 카고플랜이 자기 확정 지도(ctShiftMap)가 빌 때 같은 예측을 부른다(§7.8-② «종이에도 예측 시프팅 — 확정아님 표기» · 판정 한 벌).
+export function predictedShiftingForDisplay(voyage, dictEntry) {
   const pred = predictShiftingFromVoyage(voyage, dictEntry) || {};
   const n = Object.keys(pred).length;
   if (!n) return pred;
@@ -8508,21 +8517,65 @@ export function isListOriginRecord(r) {
 //    · 작업량(total) = 리스트 + 시프팅  (리스트가 아직 없으면 EDI 평택분(ptkCns 폴백) + 시프팅)
 //    · 완료(done)   = 리스트완료 + 이 모드의 모브(시프팅∩completed — 양하=내림, 선적=실음)
 //    · extra        = 리스트에도 시프팅에도 없는 완료(무적 등) — 분모 밖, 바를 밀지 않는다
+//  ★ 4.16 — 화면 막대·대수는 **평택분(ptk)** 이고 시프팅은 따로(shift) 센다(검수사 2026-10-09 12:23 §7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»).
+//    total·done(작업량 = 평택분 + 이 모드 모브)은 그대로 둔다 — 출항 배지·수석 보드 전체 %가 작업량으로 잰다(2.89-07 «279+95»).
+//    선사 **선적** 리스트에 실려 온 시프팅 컨은 선적 평택분에도 센다 — 리스트가 정본이다(Fable 판정 2026-10-09 ⑤ · 검수사 원문 «214+95», MCSC 635S 선적 리스트 214 에 TGHU6154253). 양하는 예외 없음(isShiftOffPtk).
+//    종전(2.89-06)엔 리스트에서 뺐다(213). 검수원 작업이 만든 기록(재선적 자리 등)은 리스트가 아니라 여전히 못 들어온다(isListOriginRecord).
 export function progressOf(section, mode, shiftSet, ptkCns) {
   const records = section?.records || {};
   const completed = section?.completed || {};
   const ss = shiftSet || new Set();
-  const listCns = new Set(ownDirCns(records, mode).filter((cn) => isListOriginRecord(records[cn]) && !ss.has(cn)));
+  const listCns = new Set(ownDirCns(records, mode).filter((cn) => isListOriginRecord(records[cn]) && !isShiftOffPtk(ss, records, mode, cn)));   // 4.16 Fable 판정: 양하는 리스트에 실려 있어도 시프팅으로만 · 선적만 예외
   const usePtk = listCns.size === 0 && ptkCns && ptkCns.size > 0;
   const baseSet = usePtk ? new Set([...ptkCns].filter((cn) => !ss.has(cn))) : listCns;
   let baseDone = 0, moves = 0, extra = 0;
   for (const cn of Object.keys(completed)) {
-    if (ss.has(cn)) moves += 1;
-    else if (baseSet.has(cn)) baseDone += 1;
-    else extra += 1;
+    const inBase = baseSet.has(cn), inShift = ss.has(cn);
+    if (inBase) baseDone += 1;
+    if (inShift) moves += 1;
+    if (!inBase && !inShift) extra += 1;
   }
   return { listTotal: listCns.size, base: baseSet.size, baseDone, shiftN: ss.size, moves, extra,
-           total: baseSet.size + ss.size, done: baseDone + moves, usePtk };
+           total: baseSet.size + ss.size, done: baseDone + moves, usePtk,
+           ptk: { total: baseSet.size, done: baseDone }, shift: { total: ss.size, done: moves } };
+}
+
+//  ★ 4.16 — **시프팅 분리 문지기 한 벌.** 그 방향 평택분에서 이 컨을 빼는가.
+//    시프팅(확정 지도 키)이면 뺀다. 단 그 방향 선사 리스트에 실려 온 컨(isListOriginRecord · 반대 방향 리스트 아님)은 평택분에도 센다(Fable 판정 ⑤ «214+95»).
+//    입구마다(항차 화면·자동 가이드·출력 센터·미르 펼치기·마감텔리·갱별 보고·현황 요약) 이것만 부른다 — «리스트에 기록이 있으면 평택분» 사본이 시프팅 재선적 기록을 평택분으로 새게 했다(MCAP 639N 선적 293→298).
+export function isShiftOffPtk(shiftSet, records, mode, cn) {
+  if (!cn || !shiftSet || !shiftSet.has(cn)) return false;
+  //  Fable 판정 2026-10-09 — **방향을 가린다.** «214+95» 는 선적 리스트 얘기다. 양하는 규칙 ①(«양하리스트와 분리»)이 우선 — 리스트에 실려 있어도 시프팅으로만 센다.
+  if (mode !== 'loading') return true;
+  const r = records && records[cn];
+  return !(r && isListOriginRecord(r) && !isOppositeDirRecord(r, mode));
+}
+//  예측 시프팅 항목 판정 한 벌은 cargoPlanCore.isPredShift(그림이 쓰는 곳 — cargoPlanCore 는 import 가 없어 거기 둔다). 여기서는 다시 내보내기만 한다.
+export { isPredShift } from './cargoPlanCore.js';
+//  ★ 4.16 — **시프팅 분리 한 벌**(§7.8-①). set·map = 확정 지도(computeShiftingMapCached — 선사 서류 또는 양하·선적 EDI 대조).
+//    예측은 작업 항목이 아니다(1.76-05) — 대수·문지기는 확정으로만, 종이·화면의 ◇ 는 shiftingMapForDisplay 로 따로 그린다.
+//    out = 내림(시프팅 ∩ 양하 완료) · in = 실음(시프팅 ∩ 선적 완료) · moves = 대당 2무브(크레인이 두 번 든다).
+//    완료 기록은 옮기지 않는다 — 읽기만 나눈다.
+export function shiftSplitOf(voyageKey, voyage) {
+  let map = {};
+  try { map = computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { console.warn('[4.16 시프팅 분리] 확정 지도 실패 — 시프팅 0 으로 셉니다:', e); map = {}; }
+  const set = new Set(Object.keys(map).filter((k) => k && !k.startsWith('_')));
+  const dc = (voyage && voyage.discharge && voyage.discharge.completed) || {};
+  const lc = (voyage && voyage.loading && voyage.loading.completed) || {};
+  let od = 0, id = 0;
+  for (const cn of set) { if (dc[cn]) od += 1; if (lc[cn]) id += 1; }
+  const recOf = (mode) => (voyage && voyage[mode] && voyage[mode].records) || {};
+  return { map, set, n: set.size,
+           out: { total: set.size, done: od }, in: { total: set.size, done: id },
+           moves: { total: 2 * set.size, done: od + id },
+           offPtk: (mode, cn) => isShiftOffPtk(set, recOf(mode), mode, cn) };
+}
+//  항차 키를 모르는 입구(마감텔리·갱별 보고 — voyage 만 받는다)가 시프팅 지도 캐시를 남의 배와 섞지 않게 쓰는 키.
+export function voyageKeyOf(voyage) {
+  if (!voyage) return '';
+  if (voyage.key) return String(voyage.key);
+  const i = voyage.info || {};
+  return [i.vsl, i.voy || i.voy_d].filter(Boolean).join('_');
 }
 
 // ── TallyOne 2.94-01: **통과화물 판정 한 벌.** (검수사 지적 2026-08-31) ──

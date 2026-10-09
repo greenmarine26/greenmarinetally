@@ -7,7 +7,7 @@ import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -1414,8 +1414,10 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
   const pmDep = (() => { const t = voyage._pm && voyage._pm.etd ? parsePortMisDateTime(voyage._pm.etd) : null; return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null; })();
   // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료).
   //   V9.57: disStats/loaStats(위에서 같은 인자로 계산)를 재사용 — IIFE 안 중복 computeStats 제거.
-  const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0));
+  const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0 || loaStats.workTotal > 0));
   const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
+  //  ★ 4.16: 출항 배지는 **작업량**(평택분 + 이 모드 시프팅 모브)이 남았는지로 판정한다 — 종전 값 그대로. 막대·«남음» 은 평택분(§7.8-①).
+  const _remW = (st) => (st.workTotal > 0 ? Math.max(0, st.workTotal - st.workDone) : null);
   // 2.15: 우측 액션 패널의 «남은 수» — 좌측 총계와 다른 숫자라야 두 번 쓰는 값이 안 된다.
   //  2.67-02: 캔슬된 쪽은 «남음» 도 없다 — 남은 일이 아니라 없는 일이다.
   const remD = sideCancelled(voyage.info, 'discharge') ? null : _rem(disStats);
@@ -1428,7 +1430,7 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
   const _tpOf = (side) => (_tp && _tp[side] && (_tp[side].done + _tp[side].rest) > 0 ? _tp[side] : null);
   const _tpDis = _tpOf('dis'), _tpLod = _tpOf('lod');
   const departBadge = decideBadge({
-    remainLoad: _rem(loaStats), remainDis: _rem(disStats), hasLoad: _hasLoad,
+    remainLoad: _remW(loaStats), remainDis: _remW(disStats), hasLoad: _hasLoad,
     terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
     pfDep, pmDep, stickyAt: voyage.info?.departBadgeAt || null,
     eta: voyage._etaMs, etd: voyage._etdMs, src: voyage._etaSrc,
@@ -2102,7 +2104,7 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
         {stats.shiftCount > 0 && (
           <>
             <span className="text-dim-500">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 작업량·완료 바에도 이 수가 더해진다(작업량 = 리스트+시프팅). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount}{stats.shiftState ? ` ${stats.shiftState}` : ''} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 4.16~ 막대와 대수는 평택분만이고 시프팅은 이 줄에서 따로 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount}{stats.shiftState ? ` ${stats.shiftState}` : ''} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
           </>
         )}
         {stats.virtualFromList && (
@@ -2168,7 +2170,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.
   //   메일함 폴더가 하나라 양하·선적 리스트가 섞여 들어와, 양하 카드가 두 리스트를 합산해
   //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
   //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
-  const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !shiftSet || !shiftSet.has(cn)));   // 2.89-06
+  const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !isShiftOffPtk(shiftSet, records, mode, cn)));   // 2.89-06 · 4.16: 문지기 한 벌(리스트에 실려 온 시프팅은 평택분에도)
   //  3.26: 부킹 자리를 실번호가 다 채운 모드 — 자리를 채운 실번호가 곧 EDI 평택 대상이다(자리는 빼고 실번호를 넣는다).
   //    종전엔 `__BOOK_` 316 이 전부 «누락»으로 섰다(SWBT 2614N). 부분 리스트면 자리를 두고 아래 planSlots 로 «누락» 에서만 뺀다.
   const _bfill = bookingFillOfSec(section, mode);
@@ -2187,8 +2189,11 @@ export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.
   //    작업량·완료는 progressOf 한 벌(작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브).
   //    recordCns(위)는 매칭·수화물 판정용으로 그대로 둔다 — 분모에는 안 쓴다.
   const prog = progressOf(section, mode, shiftSet, ptkCns);
-  const total = prog.total;
-  const done = prog.done;
+  //  ★ 4.16 (§7.8-① · Fable 판정 ①): 막대·대수 = **평택분**. 시프팅은 SectionBar 의 «쉬프팅 N (내림 x/N)» 줄이 따로 센다.
+  //    작업량(평택분 + 이 모드 모브 — «279+95»)은 workTotal·workDone 으로 남겨 출항 배지가 쓴다.
+  const total = prog.ptk.total;
+  const done = prog.ptk.done;
+  const workTotal = prog.total, workDone = prog.done;
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
   // V9.37-03: 배지는 **출처별로** 나눈다(사용자 지적 2026-08-02 "가상/리스트?").
   //   '가상/리스트'는 리스트로 채운 가상(베이 없음)을 뜻하는데, 플랜 슬롯은 리스트가 아니라
@@ -2259,7 +2264,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.
       if (_r && podConflictOf(c.pod, _r)) podIssueCns.push(c.cn || key);
     }
   }
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
+  return { total, done, workTotal, workDone, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

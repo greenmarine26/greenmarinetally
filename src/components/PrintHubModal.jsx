@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -49,21 +49,34 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix,
      voyage?.restowList?._meta?.at, voyage?.info?.berthShift]   // 4.12-04: 선사 서류·배정표 이적이 나중에 와도 다시 센다(계산 자체는 computeShiftingMapCached 가 내용 서명으로 한 번 더 지킨다)
   );
+  //  ★ 4.16 (§7.8-② «그래야 준비 할수 있음(대신 확정아님 표기)») — **종이 카고플랜에도 예측 시프팅을 그린다.** 화면과 같은 지도(shiftingMapForDisplay 한 벌)이고
+  //    예측 칸은 ◇ 로 «확정 아님»을 밝힌다(cargoPlanCore tagShift). ⚠ 그리기에만 쓴다 — 별첨2·베이 상세 베이 고르기·검수 리스트 대수는 확정 지도(shiftingMap) 그대로다.
+  //    종전(4.12-04·4.13 ⑤)엔 출력 센터가 확정만 그려 서류·선적 EDI 가 오기 전 KSKM 2617N 종이에 SEGU2523756(27-01-90)이 빠졌다.
+  const shiftingMapDraw = useMemo(
+    () => { try { return shiftingMapForDisplay(voyageKey, voyage); } catch (e) { console.warn('[4.16 출력 센터] 예측 시프팅 지도 실패 — 확정만 그립니다:', e); return shiftingMap; } },
+    [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus, voyage?.info?.lane,
+     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes]
+  );
   //  ★ 4.13 — 카고플랜 머리 «쉬프팅 5 미확정/확정/불일치». 판정은 항차 화면·콘앱과 같은 utils.shiftEvidenceOf 한 벌이다.
   //    터미널이 작업을 시작해 배정표 이적(berthShift)이 나오면 바뀌어야 하므로 berthShift·terminalStatus 가 의존성이다.
+  //    4.16: 머리 상태는 그리는 지도(예측 포함)로 — 예측이면 «예측» 이고 항차 화면 머리와 같은 말이다.
   const shiftEvid = useMemo(
-    () => shiftEvidenceOf(voyageKey, voyage, shiftingMap),
-    [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus,
+    () => shiftEvidenceOf(voyageKey, voyage, shiftingMapDraw),
+    [shiftingMapDraw, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus,
      voyage?.restowList?._meta?.mailAt, voyage?.restowList?._meta?.at,
      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes]
   );
 
+  const _shSetP = new Set(Object.keys(shiftingMap || {}).filter((k) => k && !k.startsWith('_')));   // 4.16: 확정 지도 키(작업 항목과 같은 것)
   const isPtk = (c) => {
     if (!c) return false;
     // M5.50: 리스트에 있는 컨테이너는 무조건 평택 화물로 인식
     //   (사용자가 평택에서 검수하는 모든 컨테이너 = 리스트 등록 = 검수 대상)
     //   EDI POL/POD가 KRPTK 아닌 환적 표기여도 리스트 등록되면 평택분
+    //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — «리스트에 있으면 평택» 보다 먼저 묻는다(문지기 한 벌 isShiftOffPtk).
+    //    종전엔 시프팅 재선적 기록이 records 에 생기면 검수 리스트 본문에 실리고 [별첨2] 에도 실려 이중이었다(MCAP 639N 선적 293 → 298).
+    if (c.cn && isShiftOffPtk(_shSetP, recMap, mode, c.cn)) return false;
     if (c.cn && recMap[c.cn]) return true;
     // M6.94.25: 평택 판정 공용 함수 (KRPYOTM 등 변형 포함). POL/POD 비면 평택 간주.
     if (mode === 'discharge') {
@@ -273,6 +286,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     Object.entries(ed).forEach(([k, c]) => { if (c) items.push({ ...c, _src: rc[k] ? 'both' : 'edi', _inList: !!rc[k] }); });
     Object.keys(rc).forEach(cn => { if (!ed[cn]) items.push({ ...(rc[cn] || {}), cn, _src: 'list', _inList: true }); });
     return dropFilledBookingSlots(items).filter(c => {
+      if (c.cn && isShiftOffPtk(_shSetP, rc, m, c.cn)) return false;   // 4.16: 탭 라벨도 검수 리스트와 같은 문지기
       if (c._inList) return true;  // M5.51: 리스트에 있으면 무조건 평택
       const target = m === 'discharge' ? c.pod : c.pol;
       return !target || isPyeongtaekPort(target);
@@ -349,7 +363,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
           shipImo={shipImo}
           shipName={shipName}
           xrayMap={xrayMap}
-          shiftingMap={shiftingMap}
+          shiftingMap={shiftingMapDraw}
           shiftStatus={shiftEvid.label}
           onClose={() => setPrintSub(null)}
         />
