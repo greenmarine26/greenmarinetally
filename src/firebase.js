@@ -10,7 +10,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { resolvedPod } from './utils.js';   // 3.53: POD 확정 반영 한 벌
+import { resolvedPod, ptkDischargeUnitsOf } from './utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
@@ -2505,7 +2505,10 @@ export async function fbAddShipStats(imo, stats, voyageKey) {
 function _isPtk(code) {
   return isPyeongtaekPort(code);
 }
-export function _ptkCountOfSection(section, mode) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)
+export function _ptkCountOfSection(section, mode, voyage) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)
+  //  ★ 4.20 감사(Fable 판정 상-2): 양하 = 평택 양하분 한 벌(utils.ptkDischargeUnitsOf — 세관 목록 + 추가분 − 시프팅). 아래 3.53 주석 «선박 통계·보관도 마감텔리와 같은 수» 그대로다.
+  //    항차(voyage)를 넘기면 그 시프팅을 뺀다. 선적은 종전 그대로.
+  if (mode === 'discharge') return section ? ptkDischargeUnitsOf(voyage && voyage.discharge === section ? voyage : { discharge: section }).set.size : 0;
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1·8.3 — 양하=POD평택, 선적=POL평택).
   //   이전: POL∨POD → 평택발 타항행/타항발 평택행이 양쪽에 이중 집계.
   if (!section || !section.ediContainers) return 0;
@@ -2535,7 +2538,7 @@ export function tallyVoyagesByShip(voyages) {
     //   중복 카드(CNYNT)가 생기던 문제. 항만코드 그룹은 표시에서 제외(데이터는 보존).
     if (isPortCode(vsl)) continue;
     if (!byShip[vsl]) byShip[vsl] = { vsl, discharge: 0, loading: 0, voyageKeys: [] };
-    byShip[vsl].discharge += _ptkCountOfSection(v.discharge, 'discharge');
+    byShip[vsl].discharge += _ptkCountOfSection(v.discharge, 'discharge', { ...v, key });   // 4.20 감사: 항차째로(시프팅 뺌)
     byShip[vsl].loading += _ptkCountOfSection(v.loading, 'loading');
     byShip[vsl].voyageKeys.push(key);
   }
@@ -2552,7 +2555,7 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   // V9.57(G2): 보관소 평택분 집계를 화면 규칙과 통일 — 모드별(양하=POD평택, 선적=POL평택) + Set 중복 제거.
   //   종전 POL∨POD 판정은 평택발 타항행/타항발 평택행이 양쪽에 이중 집계됐다(옛 규칙 잔존).
   //   _ptkCountOfSection(수석대시보드 집계와 동일 함수) 재사용으로 단일 소스화.
-  const discharge = _ptkCountOfSection(voyage.discharge, 'discharge');
+  const discharge = _ptkCountOfSection(voyage.discharge, 'discharge', { ...voyage, key: voyageKey });   // 4.20 감사: 항차째로(시프팅 뺌)
   const loading = _ptkCountOfSection(voyage.loading, 'loading');
   const info = voyage.info || {};
   // V8.43: vsl 폴백 등으로 같은 배가 다른 키에 갈라지지 않게 정식 키로 수렴.

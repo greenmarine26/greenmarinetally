@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -69,6 +69,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   );
 
   const _shSetP = new Set(Object.keys(shiftingMap || {}).filter((k) => k && !k.startsWith('_')));   // 4.16: 확정 지도 키(작업 항목과 같은 것)
+  //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관»): 양하 평택분 = 유닛 한 벌(세관 목록 + 추가분 — 마감텔리·갱별·홈 카드·미르와 같은 집합). 목록 없는 배는 종전 판정.
+  const _dU = mode === 'discharge' ? ptkDischargeUnitsOf(voyage, _shSetP) : null;   // 4.20 감사: 시프팅은 이 출력의 확정 지도로 뺀다
+  const _useDU = !!(_dU && _dU.basis !== 'edi');
   const isPtk = (c) => {
     if (!c) return false;
     // M5.50: 리스트에 있는 컨테이너는 무조건 평택 화물로 인식
@@ -77,6 +80,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — «리스트에 있으면 평택» 보다 먼저 묻는다(문지기 한 벌 isShiftOffPtk).
     //    종전엔 시프팅 재선적 기록이 records 에 생기면 검수 리스트 본문에 실리고 [별첨2] 에도 실려 이중이었다(MCAP 639N 선적 293 → 298).
     if (c.cn && isShiftOffPtk(_shSetP, recMap, mode, c.cn)) return false;
+    if (_useDU) return !!(c.cn && _dU.set.has(c.cn));   // 4.20: 유닛 한 벌
     if (c.cn && recMap[c.cn]) return true;
     // M6.94.25: 평택 판정 공용 함수 (KRPYOTM 등 변형 포함). POL/POD 비면 평택 간주.
     if (mode === 'discharge') {
@@ -101,11 +105,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     'pol', 'pod', 'npod', 'fpod', 'bay', 'row', 'tier', 'pos',
     'iso', 'fe', 'rf', 'fr', 'ot', 'tk', 'dg', 'oog', 'voy', 'vsl',
   ]);
-  const allCnSet = new Set([...Object.keys(fullEdiMap), ...Object.keys(recMap)]);
+  //  ★ 4.20: 자리표시 키(__SLOT___)에 컨번호가 든 EDI 행(제작컨 SAWTBP004)은 그 컨번호로 합친다 — 리스트(records)의 같은 유닛과 두 줄이 되지 않게(cn 기준 합집합).
+  const _ediByCn = ediByUnitCn(fullEdiMap);
+  const allCnSet = new Set([...Object.keys(_ediByCn), ...Object.keys(recMap), ...(_useDU ? _dU.set : [])]);   // 4.20: 행이 없는 유닛(완료 기록·터미널 실적만 있는 추가분)도
   const allContainersBase = [...allCnSet].map(cn => {
-    const e = fullEdiMap[cn] || {};
+    const e = _ediByCn[cn] || (recMap[cn] || !_useDU ? {} : dischargeUnitBareRow(voyage, cn));
     const r = recMap[cn] || {};
-    const hasEdi = !!fullEdiMap[cn];
+    const hasEdi = !!_ediByCn[cn];
     const merged = { ...e };
     Object.entries(r).forEach(([k, v]) => {
       if (v === '' || v == null) return;
@@ -160,7 +166,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       merged._xraySealNo = String((xraySealMap[cn] || {}).seal || '').trim();   // 3.45: 없으면 빈 칸 — 지어내지 않는다
       //  3.60-15: XRAY 목록 규격(_xrayIso)은 검수리스트에 쓰지 않는다 — 검수리스트는 세관 적하목록 원문(iso_customs), XRAY 리스트는 제 글자(XrayTab).
     }
-    return merged;
+    return _useDU ? markDischargeUnit(merged, _dU) : merged;   // 4.20: 추가분·통과 표식
   });
 
   // TallyOne 1.10-01: 긴급/수화물 예보 마커 주입 — VoyagePage와 같은 게이트 규칙.

@@ -25,6 +25,22 @@ const bundle = (entrySrc, name, extra = '') => {
 const CN_RE = /^[A-Z]{4}\d{7}$/;                                      // 실컨번호(ISO 6346 — 영문 4 + 숫자 7)
 const PTK_RE = /^(?:KR)?(?:PTK|PYT|PYO|PYOTM)\d{0,2}$|PYEONGTAEK/i;  // 평택 항구코드(KRPTK · PTK02 · KRPYT …)
 const isPtkCode = (s) => PTK_RE.test(String(s || '').trim().toUpperCase());
+//  4.20 R23 — 평택 양하분을 규칙대로 따로 센다(검수사 2026-10-10 00:02 «그래도 기본은 세관이 맞습니다. 나중에 추가분이 생기면 추가분만 더하면 됩니다. 그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다»).
+//    목록 L = 양하 records 중 리스트 행(선사 칸이 하나라도 있음 · POL 만 평택인 선적분 아님) — 세관 표식이 있으면 세관 행만. 추가분 X = (EDI POD 평택 ∪ 완료 기록(누락 표식 빼고) ∪ 터미널 실적) − L.
+//    목록이 없으면 EDI POD 평택. 유닛은 컨번호(EDI 행은 그 행의 cn — 자리표시 키는 유닛이 아니다). 앱 함수를 부르지 않는다.
+const unitsByRule = (sec) => {
+  const E = (sec && sec.ediContainers) || {}, R = (sec && sec.records) || {}, C = (sec && sec.completed) || {}, T = (sec && sec.termWork) || {};
+  const isList = (r) => !!(r && (r._source || r.wt || r.sl || r.pol || r.pod || r.sh || r.bl || r.op || r.tmp || r.iso));
+  const outbound = (r) => !isPtkCode(r.pod) && isPtkCode(r.pol);
+  const rows = Object.entries(R).filter(([cn, r]) => cn && !cn.startsWith('_') && isList(r) && !outbound(r));
+  const cust = rows.filter(([, r]) => r._customs);
+  const L = new Set((cust.length ? cust : rows).map(([cn]) => cn));
+  const edi = Object.entries(E).map(([k, e]) => [String((e && e.cn) || k), e]).filter(([cn, e]) => e && cn && !cn.startsWith('_') && !e.isBooking);
+  const ediPtk = edi.filter(([, e]) => isPtkCode(e.pod)).map(([cn]) => cn);
+  if (!L.size) return { basis: 'edi', set: new Set(ediPtk), L, X: new Set(), ediCns: new Set(edi.map(([cn]) => cn)) };
+  const X = new Set([...ediPtk, ...Object.keys(C).filter((k) => C[k] && C[k].flag !== 'missing'), ...Object.keys(T)].filter((cn) => cn && !cn.startsWith('_') && !L.has(cn)));
+  return { basis: cust.length ? 'customs' : 'list', set: new Set([...L, ...X]), L, X, ediCns: new Set(edi.map(([cn]) => cn)), ediPtk: new Set(ediPtk) };
+};
 
 global.window = { addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; }, open: () => null, location: { href: '' }, __fbShipBayDict: {} };
 global.localStorage = { _m: {}, getItem(k) { return this._m[k] ?? null; }, setItem(k, v) { this._m[k] = String(v); }, removeItem(k) { delete this._m[k]; } };
@@ -39,17 +55,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const B = bundle([
     `export { shiftReportContainers, plausibleListWtKg, legendItemsOf, isFlatRackContainer, bayCellTypeLabel, legendLiveOf, parseAscFile, emptySealSpec, isReeferContainer, isoPickOog } from "${ROOT}/src/utils.js";`,
     `export { ediMapFromRaw, shiftSplitOf, shiftCnSetOf, progressOf, computeShiftingMap, swapFixList, applySwapFix, setLaneRoutes, shiftingMapForDisplay, predictedShiftingForDisplay } from "${ROOT}/src/utils.js";`,   // 4.16 R16~R19
-    `export { computeTallyData, ptkContainers, buildShifting } from "${ROOT}/src/tallyReport.js";`,
+    `export { computeTallyData, ptkContainers, buildShifting, buildSealList } from "${ROOT}/src/tallyReport.js";`,   // 4.20 감사 R25 — Act. Cntr-Seal 시트
     `export { generateBriefing } from "${ROOT}/src/nlSearch.js";`,
     `export { computeAllStats } from "${ROOT}/src/components/StatsTab.jsx";`,
     `export { mergeFolder } from "${ROOT}/src/mergeApi.js";`,
     `export { buildInspectionListDoc, generateInspectionListHTML } from "${ROOT}/src/inspectionList.js";`,
     `export { answerOneRaw, buildDataPack, flattenVoyages, movesOfVoyage, voyageCountsOf } from "${ROOT}/src/mir.js";`,
-    `export { answerTotalMoves } from "${ROOT}/src/chiefAnswers.js";`,
+    `export { answerTotalMoves, answerShiftBriefing } from "${ROOT}/src/chiefAnswers.js";`,   // 4.20 후속 — 교대 브리핑 양하 물량
     `export { toMirContainers } from "${ROOT}/src/mirCore.entry.js";`,
     `export { pickShipCtx } from "${ROOT}/src/mir.js";`,   // 4.17 R21 — 질문 속 배 고르기(홈 통합검색·떠 있는 미르)
     `export { pickVoyageKey, parseViewCommand } from "${ROOT}/src/planCommand.js";`,   // 4.17 R21 — 콘앱 배 옮기기(cone.html mirEnsureShip) · 4.18-01 콘앱 mirAsk 실소스 시험
     `export { shipCodeInQuery, knownShipCodes } from "${ROOT}/src/utils.js";`,   // 4.18-01 R21 — 콘앱 mirShipFirst 가 부르는 판정(ConeMir 와 같은 함수)
+    `export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn, splitJoinedSeals, shiftCnSetOf as shiftCnSetOf420 } from "${ROOT}/src/utils.js";`,   // 4.20 R23·R25 — 평택 양하분 한 벌 · 제작컨 · 씰 가르기
+    `export { buildPrintModel, deckTotals } from "${ROOT}/src/rzorPrintModel.js";`,   // 4.20 R25 — 덱플랜 칸 글자·덱 집계
     `export { mirTone } from "${ROOT}/src/mir.js";`,
     `export { parseNaturalQuery } from "${ROOT}/src/nlSearch.js";`,
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
@@ -150,6 +168,34 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const m = last.match(/^시프팅 (\d+)(?:\(.*\))? · 해치커버 별도\.$/);
     ok(`${label} — 끝줄이 «시프팅 N · 해치커버 별도.» 꼴`, !!m, last);
     ok(`${label} — N = 선사 서류(restowList) 행 수 ${want}`, !!m && Number(m[1]) === want, m ? m[1] : last);
+  }
+  //  ★ 4.20 후속 (Fable 판정 ④-4 · 규범 §4-4): «총 무브수» 둘째 줄의 «양하 N대» 와 교대 브리핑의 양하 물량 = 평택 양하분(세관 목록·선사 리스트 + 추가분 − 시프팅).
+  //    기대값은 원자료에서 따로 — unitsByRule(records·EDI·완료·터미널 실적) 에서 선사 RESTOW LIST 의 컨을 뺀 수. KBTR 2606E 는 세관 목록에만 있고 실제로 내린 3대가 있는 배(교대 브리핑 102 → 105).
+  {
+    const rows5 = [['eta401_atpr_real.json', 'ATPR_2644E', 'ATPR'], ['shiftbay_mcap639n.json', 'MCAP_639N', 'MCAP'], ['mirsame_kbtr.json', 'KBTR_2606E', 'KBTR']].map(([file, key, ship]) => {
+      const d0 = fx(file), d = d0.voyage || d0, v = { ...d, key };
+      const restow = new Set(Object.keys(d.restowList || {}).filter((k) => CN_RE.test(k)));
+      const want = [...unitsByRule(d.discharge).set].filter((cn) => !restow.has(cn)).length;
+      const ans = String(B.answerTotalMoves(v, ship, { eta: B.movesOfVoyage(v, key) }) || '');
+      const got = Number((ans.split('\n')[1] || '').match(/양하 (\d+)대 →/)?.[1]);
+      return { key, want, got, line: (ans.split('\n')[1] || '').slice(0, 60) };
+    });
+    ok(`«총 무브수» 양하 N대 = 평택 양하분(원자료 − 선사 시프팅 서류) — ${rows5.map((r) => `${r.key} ${r.want}`).join(' · ')}`, rows5.every((r) => r.got === r.want), rows5.map((r) => `${r.key} ${r.got}≠${r.want} «${r.line}»`).filter((x, i) => rows5[i].got !== rows5[i].want).join(' | '));
+    const K5 = { ...fx('mirsame_kbtr.json').voyage, _key: 'KBTR_2606E' };
+    const want5 = unitsByRule(K5.discharge).set.size;
+    const sb = String(B.answerShiftBriefing(K5, null, { shipName: 'KBTR' }) || '');
+    const sbN = Number((sb.match(/양하 \d+\/(\d+)/) || sb.match(/양하 (\d+) \+/) || [])[1]);
+    ok(`교대 브리핑 양하 물량 = 평택 양하분 ${want5}(KBTR 2606E — 세관 목록에만 있고 실제로 내린 3대 포함) (수정 전 EDI 행 102)`, sbN === want5, sb.split('\n').slice(1, 2).join(' '));
+    //  교대 브리핑 특수화물 줄 — 양하 물량을 컨번호로 센 뒤에도 리퍼·위험물은 그 컨의 행(EDI 행, 없으면 records 행)으로 센다. 기대값은 평택 양하분 행 + 선적 평택분 행에서 따로.
+    const E5 = K5.discharge.ediContainers || {}, R5r = K5.discharge.records || {}, eBy5 = {};
+    for (const [k, e] of Object.entries(E5)) if (e) { const cn = String(e.cn || k); if (!eBy5[cn] || k === cn) eBy5[cn] = e; }
+    const dRows5 = [...unitsByRule(K5.discharge).set].map((cn) => eBy5[cn] || R5r[cn] || {});
+    const lRows5 = Object.values((K5.loading && K5.loading.ediContainers) || {}).filter((c) => c && isPtkCode(c.pol));
+    const fullRf = (c) => !c.rfdry && !c.mkcon && String(c.fe || '').toUpperCase() !== 'E' && B.isReeferContainer(c);
+    const rfW = dRows5.concat(lRows5).filter(fullRf).length, dgW = dRows5.concat(lRows5).filter((c) => c.dg).length, dSp5 = dRows5.filter((c) => fullRf(c) || c.dg).length;
+    const spL = sb.split('\n').find((l) => l.startsWith('특수화물')) || '';
+    const rfG = Number((spL.match(/리퍼 (\d+)/) || [0, 0])[1]), dgG = Number((spL.match(/위험물 (\d+)/) || [0, 0])[1]);
+    ok(`교대 브리핑 특수화물 — 리퍼 ${rfW} · 위험물 ${dgW}(그중 양하 ${dSp5}대) = 평택 양하분 행 + 선적 평택분 행에서 따로 셈`, rfG === rfW && dgG === dgW && dSp5 > 0, spL || sb.slice(0, 80));
   }
 
   // ── R6 ───────────────────────────────────────────────────────────────
@@ -294,7 +340,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const E = v.discharge.ediContainers;
     const rawTxt = String(v.discharge.raw.edi.text || '');
     const lineOf = {}; rawTxt.split(/\r?\n/).forEach((l) => { const cn = l.substring(7, 18).trim(); if (CN_RE.test(cn)) lineOf[cn] = l; });
-    const ptk = Object.values(E).filter((c) => isPtkCode(c.pod));
+    //  4.20 (R23 · 검수사 2026-10-10 00:02 «기본은 세관»): 모집단은 평택 양하분(세관 목록 + 추가분) — 세관 목록에만 있고 EDI 에 없는데 실제로 내린 3대(완료·터미널 실적)가 든다(102 → 105).
+    //    그 행의 규격은 세관 행 규격(22G1). EDI 행은 종전대로 EDI iso → 원문 44열.
+    const U12 = unitsByRule(v.discharge);
+    const eByCn = Object.fromEntries(Object.entries(E).map(([k, c]) => [c.cn || k, c]));
+    const ptk = [...U12.set].map((cn) => eByCn[cn] || { cn, iso: String((v.discharge.records[cn] || {}).iso || ''), _onlyList: true });
     const specOf = (c) => String(c.iso || '').trim() || (lineOf[c.cn] || '').substring(44, 48);
     const colOf = (s) => (s[0] === '2' ? '20' : s[0] === '4' ? (/[5-9]/.test(s[1]) ? 'HC' : '40') : '?');
     const blank = ptk.filter((c) => !String(c.iso || '').trim());
@@ -307,8 +357,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     //  ② 마감텔리 — 저장된 빈 규격 행도 원문 규격으로 칸이 선다.
     const t = B.computeTallyData(v).totals.dis;
     const got = (k) => (t.F[k] || 0) + (t.E[k] || 0);
-    ok(`KBTR 2606E 양하 마감텔리 20' ${want[20]} · 40' ${want[40]} · HC ${want.HC} = 원자료(EDI·원문 ASC 44열)로 센 칸 (규격 빈 행 ${blank.length}대 포함)`, blank.length > 0 && got('20') === want[20] && got('40') === want[40] && got('HC') === want.HC, `20' ${got('20')} · 40' ${got('40')} · HC ${got('HC')}`);
-    ok(`전체 ${ptk.length}대 그대로(컨을 더하거나 빼지 않는다) · 45' 0`, t.n === ptk.length && got('45') === 0, `전체 ${t.n} · 45' ${got('45')}`);
+    ok(`KBTR 2606E 양하 마감텔리 20' ${want[20]} · 40' ${want[40]} · HC ${want.HC} = 원자료(EDI·원문 ASC 44열 · 세관 목록에만 있는 ${ptk.filter((c) => c._onlyList).length}대는 세관 규격)로 센 칸 (규격 빈 행 ${blank.length}대 포함)`, blank.length > 0 && got('20') === want[20] && got('40') === want[40] && got('HC') === want.HC, `20' ${got('20')} · 40' ${got('40')} · HC ${got('HC')}`);
+    ok(`전체 ${ptk.length}대(평택 양하분 — 규격 채우기는 컨을 더하거나 빼지 않는다) · 45' 0`, t.n === ptk.length && got('45') === 0, `전체 ${t.n} · 45' ${got('45')}`);
     const filled = B.ptkContainers(v, 'discharge').filter((c) => blank.some((b) => b.cn === c.cn));
     ok(`규격 빈 ${blank.length}대는 어디서 채웠는지 표식(_isoFrom)을 남긴다`, filled.length === blank.length && filled.every((c) => ['edi', 'ediRaw', 'bay'].includes(c._isoFrom)), filled.filter((c) => !c._isoFrom).map((c) => c.cn).slice(0, 3).join(','));
   }
@@ -815,7 +865,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const list = Object.entries(voyages).map(([k, vv]) => ({ key: k, vsl: vv.info.vsl, _info: vv.info, noEdi: !((vv.discharge && (vv.discharge.ediContainers || vv.discharge.raw)) || (vv.loading && (vv.loading.ediContainers || vv.loading.raw))) }));
         const state = { voyages: list, voyageKey: '', disch: null, stow: null };
         const CMs = { answerOneRaw: B.answerOneRaw, answerOne: (q, c) => B.answerOneRaw(q, c), toMirContainers: B.toMirContainers, pickVoyageKey: B.pickVoyageKey, parseViewCommand: B.parseViewCommand, parseNaturalQuery: B.parseNaturalQuery,
-          shipCodeInQuery: B.shipCodeInQuery, knownShipCodes: B.knownShipCodes, mirTone: B.mirTone, isReeferContainer: B.isReeferContainer, isoPickOog: B.isoPickOog,
+          shipCodeInQuery: B.shipCodeInQuery, knownShipCodes: B.knownShipCodes, mirTone: B.mirTone, isReeferContainer: B.isReeferContainer, isoPickOog: B.isoPickOog, applyDischargeUnits: B.applyDischargeUnits,   // 4.20 / ConeOne 2.70
           askMir: async (q, ctx, f) => ({ text: f(q, {}), via: 'rules', trace: {} }), mirThreadCommit: () => null, mirThreadAlive: () => false };
         const sel = async (k) => { const vv = voyages[k]; state.voyageKey = k; state.disch = vv.discharge && vv.discharge.ediContainers ? { ediRows: Object.values(vv.discharge.ediContainers) } : null; state.stow = vv.loading && vv.loading.ediContainers ? { ediRows: Object.values(vv.loading.ediContainers) } : null; state.shipName = vv.info.vsl; };
         const vc = { console, Promise, setTimeout, state, localStorage: { getItem: () => '' }, window: { ConeMir: CMs, __fbShipBayDict: global.window.__fbShipBayDict }, document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
@@ -826,7 +876,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         let mirAskFn = null;
         if (code.every(Boolean)) { require('vm').runInContext('let _mirLastFollow=null;\n' + code.join('') + '\nthis.__mirAsk = mirAsk;', vc); mirAskFn = vc.__mirAsk; }
         const obwhN = Object.values(F.OBWH_2749E.discharge.ediContainers).filter((c) => isPtkCode(c.pod)).length;          // 고른 배(OBWH 2749E) 양하 평택분 — 답에 나오면 안 되는 수
-        const kbtrN = Object.values(K.voyage.discharge.ediContainers).filter((c) => isPtkCode(c.pod)).length;               // 독립 — KBTR 2606E EDI 행 POD 평택
+        const kbtrN = unitsByRule(K.voyage.discharge).set.size;   // 독립 — KBTR 2606E 평택 양하분(4.20 R23 — 세관 목록 105 · 종전 EDI 행 POD 평택 102)
         const askC = async (q) => { await sel('OBWH_2749E'); const a = mirAskFn ? String(await mirAskFn(q) || '') : ''; return { a, vk: state.voyageKey }; };
         const c1 = await askC('KBTR 양하 몇 대'), c2 = await askC('SMYA 양하 몇 대'), c3 = await askC('RZSY 양하 몇 대');
         const t2 = B.mirTone(home('SMYA 양하 몇 대').a), t3 = B.mirTone(home('RZSY 양하 몇 대').a);
@@ -868,9 +918,186 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
 
   // ── R23 ───────────────────────────────────────────────────────────────
-  //  §7.8-④ «POD 가 자료마다 다를 때» — **Fable 판정 필요로 비워 둔다**(기준표 R23 줄). 이 파일은 단언을 두지 않는다(헛검사 금지).
-  //    까닭 — 세관 적하목록 POD 칸은 «최종항»(parseCustomsSheet col('최종항'))이고 3.53·2.76 검수사 확정 «세관 리스트는 평택에서 내리는 것의 명단» 과 걸린다.
-  head('R23 POD 가 자료마다 다를 때(세관·EDI·터미널) — Fable 판정 필요, 단언 없음', '검수사 §7.8-④ «1-3 다쓴다 다만 세관 자료가 없으면 1 있으면 2 그리고 터미널 자료와 비교해서 3»');
+  //  4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02): 평택 양하분 = 세관 목록 + 추가분 한 벌(utils.ptkDischargeUnitsOf). 기대값은 위 unitsByRule 이 원자료(records _customs · EDI 행 cn · 완료 키 · 터미널 실적 키)에서 따로 센다.
+  head('R23 평택 양하분 = 세관 목록(+ 목록 밖 실제 양하분은 추가분) 한 벌 — 마감텔리·갱별·홈 카드·미르·콘앱 같은 수 · 유닛은 컨번호로 한 번 (감사 424 · 3.53 · 4.20 에서 켬)', '검수사 2026-10-10 00:02 «그래도 기본은 세관이 맞습니다. 나중에 추가분이 생기면 추가분만 더하면 됩니다. 그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다» · §7.8-④ «1-3 다쓴다»');
+  {
+    const G = fx('daynight_gang_real.json'), P = fx('ptk420_units.json');
+    const voyOf = (x) => ({ info: x.info, discharge: x.discharge, loading: x.loading || {} });
+    const entr = (vk, v) => {   // 세 입구 — 마감텔리 · 갱별 보고 · 홈 카드(progressOf — 호출부가 넘기는 EDI 평택분과 함께)
+      const ss = B.shiftCnSetOf420(vk, v);
+      const ptkCns = new Set(Object.entries(v.discharge.ediContainers || {}).filter(([, c]) => c && isPtkCode(c.pod)).map(([k, c]) => c.cn || k));
+      return { tal: B.ptkContainers(v, 'discharge'), gang: B.shiftReportContainers(v, 'discharge'), home: B.progressOf(v.discharge, 'discharge', ss, ptkCns).ptk.total };
+    };
+    const n3 = (e) => `마감텔리 ${e.tal.length} · 갱별 ${e.gang.length} · 홈 카드 ${e.home}`;
+    //  ① RZOR R106E — EDI 189 키(자리표시 __SLOT___ 의 cn = SAWTBP004) · 세관 records 190 · CICU9635360 은 세관에만(완료·터미널 실적 있음)
+    const v106 = voyOf(G.RZOR_R106E), W = unitsByRule(v106.discharge), e106 = entr('RZOR_R106E', v106);
+    ok(`RZOR R106E 세 입구 모두 = 평택 양하분 ${W.set.size}(세관 목록 ${W.L.size} + 추가분 ${W.X.size}) (수정 전 189 · 191 · 190)`, W.basis === 'customs' && [e106.tal.length, e106.gang.length, e106.home].every((n) => n === W.set.size), n3(e106));
+    //  ② 자리표시 키 __SLOT___(cn SAWTBP004)와 records SAWTBP004 는 한 유닛
+    const slotKey = Object.keys(v106.discharge.ediContainers).find((k) => k.startsWith('__'));
+    const one = (arr) => arr.filter((c) => c.cn === 'SAWTBP004').length === 1 && !arr.some((c) => String(c.cn).startsWith('__'));
+    ok(`EDI ${slotKey}(cn ${slotKey && v106.discharge.ediContainers[slotKey].cn}) 와 records SAWTBP004 는 한 유닛 — 세 입구 모두 SAWTBP004 한 줄 · 자리표시 키 줄 없음 (수정 전 갱별은 두 줄)`,
+      !!slotKey && v106.discharge.ediContainers[slotKey].cn === 'SAWTBP004' && !!v106.discharge.records.SAWTBP004 && one(e106.tal) && one(e106.gang), `${e106.tal.filter((c) => c.cn === 'SAWTBP004').length} · ${e106.gang.filter((c) => c.cn === 'SAWTBP004').length}`);
+    //  ③ CICU9635360 — 세관 목록에만 있고(EDI 없음) 완료·터미널 실적이 있다 → 든다
+    const cicu = 'CICU9635360', inAll = (arr) => arr.some((c) => c.cn === cicu);
+    ok(`${cicu} — EDI 에 없고 세관 목록·완료 기록·터미널 실적에 있다 → 마감텔리·갱별에 든다 (수정 전 마감텔리에서 빠짐)`,
+      !W.ediCns.has(cicu) && !!(v106.discharge.records[cicu] || {})._customs && !!v106.discharge.completed[cicu] && !!v106.discharge.termWork[cicu] && inAll(e106.tal) && inAll(e106.gang), `${inAll(e106.tal)} · ${inAll(e106.gang)}`);
+    //  ④ ATPR 2643E — 세관 «최종항»(VNSGN 등)이 평택 판정을 떨어뜨리지 않는다(갱별 266 이던 것)
+    const va = voyOf(P.ATPR_2643E), Wa = unitsByRule(va.discharge), ea = entr('ATPR_2643E', va);
+    const finalNotPtk = Object.values(va.discharge.records).filter((r) => r._customs && !isPtkCode(r.pod)).length;
+    ok(`ATPR 2643E — 세관 ${Wa.L.size} · EDI 평택 ${Wa.ediPtk.size} · records 세관 «최종항» 평택 아님 ${finalNotPtk} — 세 입구 모두 ${Wa.set.size} (수정 전 갱별 266)`,
+      finalNotPtk > 0 && [ea.tal.length, ea.gang.length, ea.home].every((n) => n === Wa.set.size), n3(ea));
+    //  ⑤ PCBJ 2609N — EDI 가 통과(KRINC→KRPUS)라 해도 세관 목록에 있으면 센다 · 통과 표식(_ediTransit)을 남긴다
+    const vp = voyOf(P.PCBJ_2609N), Wp = unitsByRule(vp.discharge), ep = entr('PCBJ_2609N', vp);
+    const wantTr = [...Wp.L].filter((cn) => Wp.ediCns.has(cn) && !Wp.ediPtk.has(cn)).sort();
+    const gotTr = ep.tal.filter((c) => c._ediTransit).map((c) => c.cn).sort();
+    ok(`PCBJ 2609N — 세관 ${Wp.L.size} · EDI 평택 ${Wp.ediPtk.size} — 세 입구 모두 ${Wp.set.size} · EDI 통과분 ${wantTr.length}대(${wantTr.join('·')})에 통과 표식 (수정 전 마감텔리 145 · 갱별 70)`,
+      wantTr.length > 0 && [ep.tal.length, ep.gang.length, ep.home].every((n) => n === Wp.set.size) && gotTr.join(',') === wantTr.join(','), `${n3(ep)} · 표식 ${gotTr.join(',')}`);
+    //  ⑥ 추가분 — R106E 사본에서 세관 행 하나를 지우면 그 컨은 «추가분»(EDI 평택·완료)으로 남고 총수는 그대로 · 미르 대수 답에 한 토막
+    const vx = JSON.parse(JSON.stringify(v106));
+    const victim = Object.keys(vx.discharge.records).find((cn) => W.ediCns.has(cn) && vx.discharge.completed[cn]);
+    delete vx.discharge.records[victim];
+    const Wx = unitsByRule(vx.discharge), ex = entr('RZOR_R106E', vx);
+    const flatX = B.flattenVoyages({ RZOR_R106E: vx });
+    const aX = say('양하 몇 대', { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', countFallback: true, portMisData: {}, voyages: { RZOR_R106E: vx }, flat: flatX, voyageKey: 'RZOR_R106E', voyage: vx, info: vx.info, mode: 'discharge', containers: flatX.filter((x) => x.voyageKey === 'RZOR_R106E'), _trace: {} });
+    const mvX = Number((String(B.answerTotalMoves({ ...vx, key: 'RZOR_R106E' }, 'RZOR', { eta: B.movesOfVoyage({ ...vx, key: 'RZOR_R106E' }, 'RZOR_R106E') }) || '').split('\n')[1] || '').match(/양하 (\d+)대 →/)?.[1]);   // 4.20 후속: «총 무브수»(voyageCountsOf)도 같은 수
+    ok(`추가분 — R106E 사본에서 세관 행 ${victim} 을 지우면 그 컨은 _extraOfList(마감텔리·갱별)로 남고 총수 ${Wx.set.size} 그대로(«총 무브수» 양하도) · 미르 «양하 몇 대» 끝에 «(세관 목록 밖 추가분 1대 — 신고 대상)»`,
+      Wx.set.size === W.set.size && Wx.X.has(victim) && [ex.tal.length, ex.gang.length, ex.home, mvX].every((n) => n === Wx.set.size)
+      && ex.tal.some((c) => c.cn === victim && c._extraOfList) && ex.gang.some((c) => c.cn === victim && c._extraOfList) && aX.includes(`양하: ${Wx.set.size}대`) && aX.includes('(세관 목록 밖 추가분 1대 — 신고 대상)'), `${n3(ex)} · 총 무브수 양하 ${mvX} · ${aX.replace(/\n/g, ' | ').slice(0, 120)}`);
+    //  ⑦ 목록이 없는 배(basis 'edi') — EDI POD 평택 그대로(종전 · R1 OBWH 2751E 와 같은 셈) · 무적 완료는 분모 밖
+    const ve = JSON.parse(JSON.stringify(v106)); ve.discharge.records = {};
+    const We = unitsByRule(ve.discharge), ee = entr('RZOR_R106E', ve);
+    const vo = JSON.parse(JSON.stringify(voyOf(fx('daynight_gang_obwh_1612.json').OBWH_2751E))); vo.discharge.records = {};
+    const ob = Object.values(vo.discharge.ediContainers).filter((c) => isPtkCode(c.pod)).length, eo = entr('OBWH_2751E', vo);
+    ok(`목록 없음(basis edi) — R106E EDI POD 평택 ${We.set.size} · OBWH 2751E ${ob}(R1 과 같은 셈) 를 세 입구가 그대로 · 무적 완료(${cicu})는 분모 밖`,
+      We.basis === 'edi' && [ee.tal.length, ee.gang.length, ee.home].every((n) => n === We.set.size) && !inAll(ee.tal) && [eo.tal.length, eo.gang.length, eo.home].every((n) => n === ob), `${n3(ee)} || ${n3(eo)}`);
+    //  ⑧ 두 앱 같은 답 — 검수앱 홈(펼치기)·콘앱(EDI 행 + records — 미르 _normalize 가 utils.applyDischargeUnits 한 벌로 세관 목록 행을 붙인다) «양하 몇 대» = 평택 양하분
+    const flat106 = B.flattenVoyages({ RZOR_R106E: v106 });
+    const tA = say('양하 몇 대', { app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', countFallback: true, portMisData: {}, voyages: { RZOR_R106E: v106 }, flat: flat106, voyageKey: 'RZOR_R106E', voyage: v106, info: v106.info, mode: 'discharge', containers: flat106.filter((x) => x.voyageKey === 'RZOR_R106E'), _trace: {} });
+    const cA = say('양하 몇 대', coneCtx417('RZOR_R106E', v106));
+    ok(`두 앱 같은 답 — «양하 몇 대» 검수앱 홈 = 콘앱 = ${W.set.size}대 (수정 전 콘앱은 EDI 행만 189)`, tA.includes(`양하: ${W.set.size}대`) && cA === tA, `${tA.split('\n')[0]} | ${cA.split('\n')[0]}`);
+    //  ⑨ 4.20 후속 (Fable 판정 ④-4 · 규범 §4-4) — 한 배의 양하 수는 미르 답 어디서나 같다: «양하 몇 대» = 양하 브리핑 «양하 평택 N대» = «총 무브수» 양하 N대 = 교대 브리핑 양하 물량.
+    //    PCBJ 2609N — EDI 가 통과(KRINC→KRPUS)인 세관 목록 4대가 갈리는 배(수정 전 브리핑·교대 브리핑 145 · 대수·총 무브수 149). 축소본에 컨번호 칸만 되살린다(실자료 모양).
+    {
+      const vq = JSON.parse(JSON.stringify(vp)); for (const n of ['ediContainers', 'records']) for (const [cn, x] of Object.entries(vq.discharge[n])) x.cn = cn;
+      vq.key = 'PCBJ_2609N';
+      const flatQ = B.flattenVoyages({ PCBJ_2609N: vq });
+      const ctxQ = (extra) => Object.assign({ app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', countFallback: true, portMisData: {}, voyages: { PCBJ_2609N: vq }, flat: flatQ, voyageKey: 'PCBJ_2609N', voyage: vq, info: vq.info, containers: flatQ.filter((x) => x.voyageKey === 'PCBJ_2609N'), _trace: {} }, extra || {});
+      const nCnt = Number((say('양하 몇 대', ctxQ()).match(/양하: (\d+)대/) || [])[1]);
+      const nBr = Number((say('양하 브리핑', ctxQ({ mode: 'discharge' })).match(/양하 평택 (\d+)대/) || [])[1]);
+      const nMv = Number((String(B.answerTotalMoves(vq, 'PCBJ', { eta: B.movesOfVoyage(vq, 'PCBJ_2609N') }) || '').split('\n')[1] || '').match(/양하 (\d+)대 →/)?.[1]);
+      const sbQ = String(B.answerShiftBriefing({ ...vq, _key: 'PCBJ_2609N' }, null, { shipName: 'PCBJ' }) || '');
+      const nSb = Number((sbQ.match(/양하 \d+\/(\d+)/) || sbQ.match(/양하 (\d+) \+/) || [])[1]);
+      ok(`PCBJ 2609N 미르 양하 수 한 벌 — «양하 몇 대» ${nCnt} = 양하 브리핑 ${nBr} = «총 무브수» 양하 ${nMv} = 교대 브리핑 ${nSb} = 평택 양하분 ${Wp.set.size} (수정 전 브리핑·교대 브리핑 145)`,
+        [nCnt, nBr, nMv, nSb].every((n) => n === Wp.set.size), JSON.stringify({ nCnt, nBr, nMv, nSb }));
+    }
+    //  ⑩ 4.20 후속 (Fable 판정 ④-3) — 수화물(LUG)도 평택 양하분이다: R106E CICU9635360(forecast.luggageCns · 양하 예보 · 세관 목록에만 · 실제로 내림)은 마감텔리 페리 집계의 Lug 줄에 1.
+    //    기대값은 forecast(mode·luggageCns) 와 records 에서 따로. 실물 RZOR R075E&W 마감텔리도 «20ft Empty (Lug) 1» 을 제 그룹으로 싣는다. (수정 전 0 — EDI 에 없어 마감텔리 모집단 밖)
+    {
+      const fc = v106.info.forecast || {};
+      const wantLug = (fc.mode === 'discharge' ? (fc.luggageCns || []) : []).filter((cn) => W.set.has(cn) && v106.discharge.records[cn]);
+      const fe0 = String((v106.discharge.records[wantLug[0]] || {}).fe || '') === 'E' ? 'e' : 'f';
+      const z = B.computeTallyData(v106).ferry.inb;
+      const lugN = ['f20lug', 'e20lug', 'f40lug', 'e40lug'].reduce((a, k) => a + z[k].total, 0);
+      ok(`R106E 마감텔리 페리 집계 Lug = ${wantLug.length}(${wantLug.join('·')} · ${fe0 === 'e' ? 'Empty' : 'Full'} 20ft) — forecast.luggageCns·records 에서 따로 셈 (수정 전 0)`,
+        wantLug.length === 1 && lugN === 1 && z[`${fe0}20lug`].total === 1 && z.pp[`${fe0}lug`] === 1, JSON.stringify({ lugN, e20: z.e20lug, pp: z.pp }));
+    }
+    //  ── 4.20 감사(다른 Opus «하» · Fable 판정 2026-10-10) — 한 벌을 안 지나던 입구·사각 ──
+    //  화면 입구는 실소스를 node 에서 그려 글자를 읽는다(react-dom/server — 쓰기 없음 · Firebase 는 메모리 스텁). 수석 보드·보관소·FINAL WORKING REPORT 는 순수 함수를 부른다.
+    global.window.matchMedia = global.window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    const S4 = bundle([
+      `export { default as React } from "${ROOT}/node_modules/react/index.js";`,
+      `export { renderToStaticMarkup } from "${ROOT}/node_modules/react-dom/server.node.js";`,
+      `export { default as VoyageSummaryCard } from "${ROOT}/src/components/VoyageSummaryCard.jsx";`,
+      `export { default as WorkClosingChecklist } from "${ROOT}/src/components/WorkClosingChecklist.jsx";`,
+      `export { default as PrintHubModal } from "${ROOT}/src/components/PrintHubModal.jsx";`,
+      `export { countPtkSection } from "${ROOT}/src/pages/ChiefDashboard.jsx";`,
+      `export { _ptkCountOfSection, tallyVoyagesByShip } from "${ROOT}/src/firebase.js";`,
+      `export { buildBuckets } from "${ROOT}/src/workingReport.js";`,
+      `export { ptkDischargeUnitsOf, ediByUnitCn } from "${ROOT}/src/utils.js";`,
+    ].join('\n'), 'r420audit', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --loader:.js=jsx --jsx=automatic --loader:.png=dataurl`);
+    const txt = (comp, props) => S4.renderToStaticMarkup(S4.React.createElement(comp, props)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const scr3 = (vk, v) => ({
+      sum: Number((txt(S4.VoyageSummaryCard, { voyage: v, mode: 'discharge', voyageKey: vk }).match(/양하 \d+\/(\d+)/) || [])[1]),
+      chk: Number((txt(S4.WorkClosingChecklist, { open: true, voyage: v, mode: 'discharge', onClose() {}, onJump() {} }).match(/미완료 컨 (\d+)대 중/) || [])[1]),
+      hub: Number((txt(S4.PrintHubModal, { voyage: v, voyageKey: vk, onClose() {}, initialMode: 'discharge', inspector: '연막' }).match(/양하 (\d+)대 · 평택항/) || [])[1]),
+    });
+    //  ⑪ (상-1) 한 벌이 시프팅을 안다 — MCSC 633N(양하 리스트 279 + 시프팅 95): 마감 점검 분모 = 현황 요약 = 279 · 시프팅 95대에 추가분 표식 없음 · U.extra 에 시프팅 없음.
+    //    기대값은 원자료에서 — 리스트 행·완료(규칙대로 센 집합) − 시프팅 집합(선사 서류 없음 → 양하·선적 EDI 대조 — R16 ④ 와 같은 재료).
+    const MC = (() => {
+      const FXM = fx('progress_mcsc.json'), SBM = fx('shifting_berth.json').MCSC_633N;
+      const expand = (o, k) => { const r = {}; for (const [cn, c] of Object.entries(o)) r[cn] = { cn, bay: c.b, row: c.r, tier: c.t, [k]: c[k], iso: c.i, fe: c.f }; return r; };
+      const vm = { key: 'MCSC_633N', info: { vsl: 'MCSC', voy_d: '633N', voy_l: '635S', berthShift: SBM.bs }, swapFix: FXM.swapFix, discharge: { ...FXM.discharge, ediContainers: expand(SBM.d, 'pod') }, loading: { ...FXM.loading, ediContainers: expand(SBM.l, 'pol') } };
+      const sw = B.swapFixList({ swapFix: FXM.swapFix });
+      const ssM = new Set(Object.keys(B.computeShiftingMap(B.applySwapFix(expand(SBM.d, 'pod'), sw), B.applySwapFix(expand(SBM.l, 'pol'), sw), { berthShift: SBM.bs }) || {}).filter((k) => !k.startsWith('_')));
+      const Wm = unitsByRule(vm.discharge);
+      return { vm, ssM, Wm, want: [...Wm.set].filter((cn) => !ssM.has(cn)).length };
+    })();
+    {
+      const { vm, ssM, Wm, want } = MC, key = vm.key;
+      const sc = scr3(key, vm);
+      const U = B.ptkDischargeUnitsOf(vm);
+      const flat = B.flattenVoyages({ [key]: vm }).filter((c) => c._mode === 'discharge');
+      const shiftMarked = flat.filter((c) => c._shift && c._extraOfList).length;
+      ok(`MCSC 633N 마감 점검 분모 ${sc.chk} = 현황 요약 ${sc.sum} = 평택 양하분 ${want}(리스트 ${Wm.L.size} − 시프팅 ${ssM.size}) · 시프팅 ${ssM.size}대 중 추가분 표식 ${shiftMarked} · U.extra 에 시프팅 ${[...U.extra].filter((cn) => ssM.has(cn)).length} (수정 전 마감 점검 374 · 표식 95 · extra 95)`,
+        ssM.size === 95 && want === 279 && sc.chk === want && sc.sum === want && shiftMarked === 0 && ![...U.extra].some((cn) => ssM.has(cn)) && U.set.size === want && U.shiftSet instanceof Set,
+        JSON.stringify({ ...sc, shiftMarked, extra: U.extra.size, set: U.set.size, ss: ssM.size }));
+    }
+    //  ⑫ (상-2) 수석 보드 «양하 N»(countPtkSection) = 보관소(_ptkCountOfSection · fbArchiveVoyageBeforeDelete) = 선박 통계(tallyVoyagesByShip) = 평택 양하분 — R106E 190 · PCBJ 2609N 149
+    {
+      const vk = 'RZOR_R106E', vr = { ...v106, key: vk }, vq = { ...vp, key: 'PCBJ_2609N' };
+      const r = { chief: S4.countPtkSection(vr.discharge, 'discharge', vr), arch: S4._ptkCountOfSection(vr.discharge, 'discharge', vr), ships: (S4.tallyVoyagesByShip({ [vk]: v106 })[0] || {}).discharge,
+        pChief: S4.countPtkSection(vq.discharge, 'discharge', vq), pArch: S4._ptkCountOfSection(vq.discharge, 'discharge', vq) };
+      ok(`수석 보드 양하 = 보관소 양하 = 선박 통계 양하 — R106E ${W.set.size} · PCBJ 2609N ${Wp.set.size} (수정 전 EDI POD 평택 189 · 145)`,
+        [r.chief, r.arch, r.ships].every((x) => x === W.set.size) && r.pChief === Wp.set.size && r.pArch === Wp.set.size, JSON.stringify(r));
+    }
+    //  ⑬ (상-3) FINAL WORKING REPORT(결제용) 양하 대수 = 평택 양하분 — R106E 190 · MCSC 633N 279(records 281 — 리스트 아닌 빈 행 2대(시프팅 자리 기록)를 종전엔 셌다)
+    {
+      const wb = S4.buildBuckets(v106, 'settlement'), wm = S4.buildBuckets(MC.vm, 'settlement');
+      const recN = Object.keys(MC.vm.discharge.records).length;
+      ok(`FINAL WORKING REPORT 양하 대수 — R106E ${wb.dischTotal} = 평택 양하분 ${W.set.size} · MCSC 633N ${wm.dischTotal} = ${MC.want} (수정 전 records 키 전부 ${recN})`,
+        wb.dischTotal === W.set.size && wm.dischTotal === MC.want && recN !== MC.want, JSON.stringify({ r106: wb.totalDS, mcsc: wm.dischTotal }));
+    }
+    //  ⑭ (중-7) 세관이 기준인 배는 세관 밖 선사 행(«预配» 의 쓰레기 행 R083E(rf:true) · XNX26261001 · SOC 행)이 대수에 안 든다 — 세관 기준 수 = _customs 행 수(보관소 _drec 줄인 사본)
+    {
+      const GZ = fx('rzor_garbage420.json');
+      const rows = ['RZOR_R083E', 'RZOR_R105E'].map((k) => {
+        const R = GZ[k].discharge.records, want = Object.values(R).filter((x) => x._customs).length;
+        const junk = Object.keys(R).filter((cn) => !R[cn]._customs);
+        const U = B.ptkDischargeUnitsOf({ key: k, info: GZ[k].info, discharge: GZ[k].discharge, loading: {} });
+        return { k, want, got: U.set.size, basis: U.basis, junk, leak: junk.filter((cn) => U.set.has(cn)) };
+      });
+      ok(`세관 기준 수 = _customs 행 수 — ${rows.map((r) => `${r.k} ${r.want}(선사 행 ${r.junk.join('·')} 제외)`).join(' · ')}`,
+        rows.every((r) => r.basis === 'customs' && r.got === r.want && r.junk.length > 0 && r.leak.length === 0) && rows.some((r) => r.junk.includes('R083E')) && rows.some((r) => r.junk.includes('XNX26261001')), JSON.stringify(rows));
+    }
+    //  ⑮ (하-8 · 감사 A1) 터미널 실적만 있는 추가분 — KBTR 2606E 사본에서 그 3대의 세관 행·완료 기록을 지워도 터미널 실적(termWork)으로 들어와 105 · 그 3대에 추가분 표식
+    //    (그 3대는 세관 목록에도 있다 — 터미널 실적 길만 남기려고 세관 행까지 지운다)
+    {
+      const K = JSON.parse(JSON.stringify(fx('mirsame_kbtr.json').voyage)), three = ['DFSU1945962', 'HALU2504906', 'SEGU1308091'];
+      const want = unitsByRule(K.discharge).set.size;
+      for (const cn of three) { delete K.discharge.records[cn]; delete K.discharge.completed[cn]; }
+      const ek = entr('KBTR_2606E', K);
+      const tw = three.every((cn) => !!K.discharge.termWork[cn]);
+      ok(`KBTR 2606E — ${three.join('·')} 의 세관 행·완료 기록을 지워도 터미널 실적으로 ${want} · 셋 다 추가분 표식(마감텔리)`,
+        tw && want === 105 && [ek.tal.length, ek.gang.length, ek.home].every((x) => x === want) && three.every((cn) => ek.tal.some((c) => c.cn === cn && c._extraOfList)), n3(ek));
+    }
+    //  ⑯ (하-9 · 감사 A2) 완료 기록의 «누락» 표식(flag 'missing' — 검수원이 «선박에 없음» 으로 완료 처리)은 내린 컨이 아니다 — 목록 밖 컨에 찍혀도 추가분이 아니다
+    {
+      const vz = JSON.parse(JSON.stringify(v106)), ghost = 'ZZZU0000001';
+      vz.discharge.completed[ghost] = { at: Date.parse('2026-10-10T01:00:00+09:00'), by: '연막', flag: 'missing' };
+      const ez = entr('RZOR_R106E', vz);
+      ok(`R106E 사본 — 목록 밖 ${ghost} 에 누락 표식 완료를 넣어도 세 입구 ${W.set.size} 그대로 · 그 컨은 안 든다`,
+        [ez.tal.length, ez.gang.length, ez.home].every((x) => x === W.set.size) && !ez.tal.some((c) => c.cn === ghost) && !ez.gang.some((c) => c.cn === ghost), n3(ez));
+    }
+    //  ⑰ (하-10 · 감사 A4) 현황 요약·마감 점검·출력 센터 — EDI 자리표시 키(__SLOT___ · cn SAWTBP004)와 records SAWTBP004 를 한 유닛으로(ediByUnitCn) · R106E 세 화면 190
+    //    세 화면은 행 cn 을 묶음 키로 두고 유닛 판정으로 거르므로 자리표시 키 행은 대수에 안 든다 — ediByUnitCn 이 하는 일은 그 유닛 행에 EDI 행을 붙이는 것이라 그것을 따로 잰다.
+    {
+      const sc = scr3('RZOR_R106E', { ...v106, key: 'RZOR_R106E' });
+      const E0 = v106.discharge.ediContainers, Eu = S4.ediByUnitCn(E0);
+      const moved = !!slotKey && !Eu[slotKey] && Eu.SAWTBP004 === E0[slotKey] && Object.keys(Eu).length === Object.keys(E0).length;
+      ok(`R106E 현황 요약 ${sc.sum} · 마감 점검 ${sc.chk} · 출력 센터 ${sc.hub} = 평택 양하분 ${W.set.size} · EDI 묶음의 ${slotKey} 행은 SAWTBP004 키로 옮겨 그 유닛 행에 붙는다(키 수 ${Object.keys(E0).length} 그대로)`,
+        [sc.sum, sc.chk, sc.hub].every((x) => x === W.set.size) && moved, JSON.stringify({ ...sc, moved, slot: !!Eu[slotKey] }));
+    }
+  }
 
   //  4.19 R24·R25 — 베이사전 쓰기(fbSaveShipBayDict)·«사전에 없음» 판정·RZOR 덱플랜 파서를 메모리 스텁으로 묶는다(실 SDK 처럼 값 안의 undefined 를 거부한다).
   const DM = fx('dictmissing419.json');
@@ -940,18 +1167,87 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
 
   // ── R25 ───────────────────────────────────────────────────────────────
-  head('R25 비ISO 유닛(RZOR «SAWTBP00N») 은 검수 대상이 아니다 — 검수사 STOWAGE PLAN(선적 덱플랜) 파서가 건너뛰고 대수는 실컨 칸 수 그대로 (3.67 남긴 것 · 현행 고정)', '검수사 §7.8-⑦ «7. 1» (건너뛴다)');
+  head('R25 제작컨(비ISO 유닛 RZOR «SAWTBP00N») — 대수와 크기 행(45\')에 들어가고 ISO 규격 코드는 없다(«제작컨») · 씰은 전부 · LUG 와 별개 (3.67 남긴 것 · 4.20 에서 뒤집음)', '검수사 2026-10-10 00:02 «SAWTBP004는 정상적인 컨테이너가 아닙니다. 제작컨일것입니다. 대수엔 들어 가지만 규격엔 없습니다» · 00:04 «이 기준도 마감텔리로 규정을 정하시면 됩니다» (§7.8-⑦ «7. 1» 은 뒤집힘)');
   {
-    //  독립 — 시트의 모든 글자 칸을 이 파일이 따로 읽어 실컨번호(ISO 6346 영문 4 + 숫자 7) 칸과 비ISO 유닛(영문 6 + 숫자 3 — SAWTBP005·006) 칸을 센다.
-    for (const f of ['rzor_plan_R070W.xlsx', 'rzor_plan_R075W.xlsx']) {
+    //  독립 — 시트 글자 칸을 이 파일이 따로 읽어 실컨번호(ISO 6346) 칸 · 비ISO 유닛 칸을 세고, 덱마다 SUB TOTAL 표(SIZE 행 아래 CONT 행)의 20'·40'·45'·TTL 을 읽는다(실물 마감텔리 STOWAGE PLAN).
+    const sheetOf = (f) => {
       const wb = XLSX.readFile(path.join(ROOT, 'tools/fixtures', f), { cellStyles: true });
-      let isoN = 0; const units = [];
-      for (const sn of wb.SheetNames) { const ws = wb.Sheets[sn]; for (const a of Object.keys(ws)) { if (a[0] === '!') continue; const v = ws[a].v; if (typeof v !== 'string') continue; const t = v.replace(/\s+/g, '').toUpperCase(); if (CN_RE.test(t)) isoN += 1; else if (/^[A-Z]{6}\d{3}$/.test(t)) units.push(t); } }
-      const p = R24.parseDeckPlanWorkbook(wb, XLSX);
+      let isoN = 0; const units = []; const subs = [];
+      for (const sn of wb.SheetNames) {
+        const ws = wb.Sheets[sn];
+        for (const a of Object.keys(ws)) {
+          if (a[0] === '!') continue; const v0 = ws[a].v;
+          if (typeof v0 === 'string') { const t = v0.replace(/\s+/g, '').toUpperCase(); if (CN_RE.test(t)) isoN += 1; else if (/^[A-Z]{6}\d{3}$/.test(t)) units.push(t); }
+          if (String(v0).trim() === 'SIZE') {
+            const d = XLSX.utils.decode_cell(a); const row = {};
+            for (let c = d.c + 1; c < d.c + 20; c++) { const h = ws[XLSX.utils.encode_cell({ r: d.r, c })]; const x = ws[XLSX.utils.encode_cell({ r: d.r + 1, c })]; if (h && /^(20'|40'|45'|TTL)$/.test(String(h.v).trim())) row[String(h.v).trim()] = Number(x && x.v) || 0; }
+            subs.push({ r: d.r, ...row });
+          }
+        }
+      }
+      subs.sort((x, y) => x.r - y.r);   // 시트 위에서부터 C · D · UNDER
+      return { wb, isoN, units, subs };
+    };
+    const plans = ['R070W', 'R075W', 'R079W', 'R091W', 'R106W'].map((k) => { const S = sheetOf(`rzor_plan_${k}.xlsx`); return { k, S, p: R24.parseDeckPlanWorkbook(S.wb, XLSX) }; });
+    const deckN = (p, dk) => ((p.decks || []).find((d) => d.deck === dk) || { slots: [] }).slots.filter((s) => !s.empty).length;
+    //  ① R070W·R075W — 제작컨 칸을 낸다(크기 45 · 규격 코드 없음 표식) · 실컨 칸 수는 종전 그대로 · total = 시트 TTL 합
+    for (const k of ['R070W', 'R075W']) {
+      const { S, p } = plans.find((x) => x.k === k);
       const slots = (p.decks || []).flatMap((d) => d.slots.filter((s) => !s.empty));
-      const leaked = slots.filter((s) => !CN_RE.test(String(s.cn || '')));
-      ok(`${f} — 시트에 비ISO 유닛 ${units.length}(${units.join('·')}) · 파서 칸 ${slots.length} = 실컨 칸 ${isoN} (건너뜀 · 대수 불변) · 비ISO 칸 0`,
-        p._fmt === 'checker' && units.length >= 1 && slots.length === isoN && p.total === isoN && leaked.length === 0, `fmt ${p._fmt} · 칸 ${slots.length} · total ${p.total} · 샌 칸 ${leaked.map((s) => s.cn).join(',')}`);
+      const made = slots.filter((s) => !CN_RE.test(String(s.cn || '')));
+      const ttl = S.subs.reduce((a, x) => a + (x.TTL || 0), 0);
+      ok(`${k} — 시트 비ISO 유닛 ${S.units.join('·')} 을 칸으로(크기 45 · madeUnit) · 실컨 칸 ${slots.length - made.length} = 시트 실컨 ${S.isoN}(종전 그대로) · total ${p.total} = 시트 덱 TTL 합 ${ttl} (수정 전 ${S.isoN})`,
+        p._fmt === 'checker' && S.units.length === 1 && made.length === 1 && made[0].cn === S.units[0] && made[0].madeUnit === true && made[0].size === 45 && slots.length - made.length === S.isoN && p.total === ttl,
+        `칸 ${slots.length} · 제작컨 ${made.map((s) => `${s.cn}/${s.size}/${s.madeUnit}`).join(',')} · total ${p.total} · TTL ${ttl}`);
+    }
+    //  ② 다섯 플랜 — 덱마다 파서 칸 = 시트 SUB TOTAL TTL(C · D · UNDER)
+    const bad = plans.filter(({ S, p }) => !(S.subs.length === 3 && deckN(p, 'C') === S.subs[0].TTL && deckN(p, 'D') === S.subs[1].TTL && deckN(p, 'U') === S.subs[2].TTL));
+    ok(`다섯 플랜(R070W·R075W·R079W·R091W·R106W) 덱마다 파서 칸 = 시트 SUB TOTAL TTL — ${plans.map(({ k, S }) => `${k} ${S.subs.map((x) => x.TTL).join('/')}`).join(' · ')} (수정 전 R070W·R075W D덱 121)`,
+      !bad.length, bad.map(({ k, S, p }) => `${k} 시트 ${S.subs.map((x) => x.TTL).join('/')} 파서 ${deckN(p, 'C')}/${deckN(p, 'D')}/${deckN(p, 'U')}`).join(' · '));
+    //  ③ 덱플랜 그림·집계 — R075W D덱 45' = 시트 45' · 제작컨 칸 글자는 «제작컨»(규격 코드 없음)
+    {
+      const { S, p } = plans.find((x) => x.k === 'R075W');
+      const dD = (p.decks || []).find((d) => d.deck === 'D');
+      const tot = B.deckTotals(dD.slots.filter((s) => !s.empty));
+      const model = B.buildPrintModel({ plan: p, containers: [], vsl: 'RIZHAO ORIENT', mode: 'loading', forScreen: true });
+      const cell = model.pages.flatMap((pg) => pg.cells || []).find((c) => c.cn === S.units[0]);
+      ok(`R075W D덱 집계 45' ${tot.n[45]} = 시트 45' ${S.subs[1]["45'"]} · ${S.units[0]} 칸 글자 «${cell && cell.type}» (규격 코드 F45'H 아님)`, tot.n[45] === S.subs[1]["45'"] && !!cell && cell.type === '제작컨' && !cell.lines.some((l) => /45'H/.test(l)), JSON.stringify({ n: tot.n, cell: cell && cell.lines }));
+    }
+    //  ④ 판정 한 벌
+    ok(`isMadeUnitCn — SAWTBP005 true · XNX26261001 true(모양은 유닛) · CAAU4286458 false · __SLOT___ false · «TCLU 9762509»(띄어 쓴 실컨번호) false · TBN false · R083E false (4.20 감사 — 글자만·항차 꼴은 유닛 아님) · ABCU123456 false · ABCU12345678 false (4.20 재감사 — ISO 오타 꼴은 제작컨 아님)`,
+      B.isMadeUnitCn('SAWTBP005') === true && B.isMadeUnitCn('XNX26261001') === true && B.isMadeUnitCn('CAAU4286458') === false && B.isMadeUnitCn('__SLOT___') === false && B.isMadeUnitCn('TCLU 9762509') === false && B.isMadeUnitCn('TBN') === false && B.isMadeUnitCn('R083E') === false
+      && B.isMadeUnitCn('ABCU123456') === false && B.isMadeUnitCn('ABCU12345678') === false);
+    //  ⑤ R106E 마감텔리 — SAWTBP004 는 Final Work 45' Full 에 1(크기는 EDI iso L5G1) · 제작컨 표식(mkcon) · 수화물 아님 · 검수 리스트 규격 칸 «제작컨» · 씰 넷 전부
+    {
+      const v = { info: fx('daynight_gang_real.json').RZOR_R106E.info, discharge: fx('daynight_gang_real.json').RZOR_R106E.discharge, loading: {} };
+      const W = unitsByRule(v.discharge);
+      const eRow = (cn) => Object.values(v.discharge.ediContainers).find((c) => c.cn === cn) || v.discharge.records[cn] || {};
+      const is45 = (iso) => /^(L[013-9]|9[05])/.test(String(iso || '').toUpperCase());
+      const want45F = [...W.set].filter((cn) => is45(eRow(cn).iso) && String(eRow(cn).fe || (v.discharge.records[cn] || {}).fe) === 'F').length;
+      const t = B.computeTallyData(v), dis = B.ptkContainers(v, 'discharge');
+      const su = dis.find((c) => c.cn === 'SAWTBP004') || {};
+      const html = String(B.generateInspectionListHTML(dis, 'discharge', { vsl: 'RZOR', voy_d: 'R106E' }, []) || '');
+      const i = html.indexOf('>SAWTBP004<'), rowH = i < 0 ? '' : html.slice(html.lastIndexOf('<tr', i), html.indexOf('</tr>', i));
+      const seals = ['LF102335', 'LF102350', 'LF102345', 'LF102336'];
+      ok(`R106E 마감텔리 Final Work 45' Full ${t.totals.dis.F['45'] || 0} = 원자료(EDI iso L·9x · F) ${want45F} — SAWTBP004 포함(mkcon·제작컨 · 수화물 아님) · 검수 리스트 규격 칸 «제작컨» · 씰 넷 ${seals.join(' ')} 전부`,
+        want45F >= 1 && (t.totals.dis.F['45'] || 0) === want45F && su._madeUnit === true && su.mkcon === true && !su.lugg && />제작컨</.test(rowH) && !/>45HC</.test(rowH) && seals.every((x) => rowH.includes(x)) && rowH.includes(seals.join(' ')),
+        `45F ${t.totals.dis.F['45']} · ${JSON.stringify({ mu: su._madeUnit, mk: su.mkcon, lg: su.lugg })} · ${rowH.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').slice(0, 160)}`);
+    }
+    //  ⑥ 씰 가르기 — 같은 꼴 토큰이 이어 붙은 것만
+    const sp = B.splitJoinedSeals('LF102335LF102350LF102345LF102336');
+    ok(`splitJoinedSeals — «LF102335LF102350LF102345LF102336» 넷 · 일반 씰 «RZHT24690» 그대로 · 꼴이 다른 둘(«AB12345CDE678901») 그대로`, sp.length === 4 && sp.join(',') === 'LF102335,LF102350,LF102345,LF102336' && B.splitJoinedSeals('RZHT24690').join() === 'RZHT24690' && B.splitJoinedSeals('AB12345CDE678901').length === 1, JSON.stringify(sp));
+    //  ⑦ 4.20 감사(Fable 판정 중-4) — 마감텔리 «Act. Cntr-Seal No List»: 제작컨 행은 세관 셀이 잘린 값(sl_orig 가 sl 의 앞부분)이면 같은 씰이라 안 싣는다.
+    //    실제로 다른 씰이 적힌 사본이면 실린다 — SIZE 45'(L5G1) · ACTUAL 씰 넷. 일반 컨 행은 손대지 않는다.
+    {
+      const G5 = fx('daynight_gang_real.json').RZOR_R106E;
+      const v = { info: G5.info, discharge: G5.discharge, loading: {} };
+      const r0 = v.discharge.records.SAWTBP004, cut = !!r0 && String(r0.sl).startsWith(String(r0.sl_orig)) && String(r0.sl).length > String(r0.sl_orig).length;
+      const rows0 = B.buildSealList(v, 'discharge');
+      const v2 = JSON.parse(JSON.stringify(v)); v2.discharge.records.SAWTBP004.sl_orig = 'LF999999';
+      const row2 = B.buildSealList(v2, 'discharge').find((x) => x.cn === 'SAWTBP004') || {};
+      const act = String(row2.actualSeal || '').split(' ').filter(Boolean);
+      ok(`R106E 씰 시트 — SAWTBP004 행 없음(세관 «${r0 && r0.sl_orig}» 은 «${r0 && r0.sl}» 의 잘린 앞부분 = 같은 씰) · 다른 씰 사본이면 SIZE ${row2.size} · ACTUAL ${act.length}개`,
+        cut && !rows0.some((x) => x.cn === 'SAWTBP004') && row2.size === "45'" && act.length === 4 && act.join(' ') === 'LF102335 LF102350 LF102345 LF102336', JSON.stringify({ n0: rows0.length, row2 }));
     }
   }
 

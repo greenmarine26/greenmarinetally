@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -12,6 +12,7 @@ export const SIZE_COLS = ['20', '40', 'HC', '45'];
 /** 4.18-03 — 엠티 실 작업 현황의 규격 글자: **마감텔리의 칸(tallySizeCol)을 그대로 따른다.** 검수사 2026-10-09 22:44 «현장에서는 45G1 40HC를 40풀이라 하고 엠티는 40엠티라고 부릅니다. 표기 방법은 마감텔리에 있는데로 선사별로 틀립니다. 그건 예전에 규격구분을 수석검수가 정리한 마감텔리로 정한다고 결정했습니다».
  *  20' → 20E/20RE · 40' → 40E/40RE · HC → 45GE/45RE(정본 EDI 글자 그대로) · 45' → L5GE. 종전 emptySealSpec 은 20 이 아니면 전부 45xE 라 진짜 45피트 엠티와 일반 40' 엠티가 40HC 엠티와 같은 «45GE» 로 섞였다(OBWH 2762W 45' 44대). 리퍼 판정은 emptySealSpec 그대로. */
 export function emptySealSpecTally(c) {
+  if (c && (c._madeUnit || isMadeUnitCn(c.cn))) return MADE_UNIT_LABEL;   // 4.20: 제작컨은 규격 코드가 없다(검수사 «규격엔 없습니다»)
   const base = emptySealSpec(c);
   if (base === '-') return base;
   const rf = /RE$/.test(base);
@@ -100,12 +101,21 @@ function _rawEdiMapOf(sec) {
   if (!_rawEdiMapCache.has(sec)) { let m = null; try { m = ediMapFromRaw(sec); } catch (e) { console.warn('[마감텔리] EDI 원문 다시 읽기 실패(베이플랜 자리로 대신):', e && e.message); } _rawEdiMapCache.set(sec, m); }
   return _rawEdiMapCache.get(sec);
 }
+//  4.20 — EDI 행을 컨번호로 찾는다. 키가 곧 컨번호면 그것, 아니면(제작컨 등 비ISO 유닛은 자리표시 키 __SLOT___ 에 cn 이 들어 있다) 행의 cn 으로. 섹션 객체마다 한 번만 훑는다.
+const _ediByCnCache = new WeakMap();
+function _ediRowOfCn(sec, cn) {
+  const em = (sec && sec.ediContainers) || null;
+  if (!em || !cn) return null;
+  if (em[cn]) return em[cn];
+  if (!_ediByCnCache.has(em)) { const m = new Map(); for (const [k, e] of Object.entries(em)) if (e && e.cn && e.cn !== k && !m.has(e.cn)) m.set(e.cn, e); _ediByCnCache.set(em, m); }
+  return _ediByCnCache.get(em).get(cn) || null;
+}
 function _isoBlankFilled(voyage, c) {
   if (!c || String(c.iso || '').trim()) return c;
   let iso = String(c.iso_edi || c.ediIso || '').trim();
   if (!iso && c.cn) {
     for (const m of ['discharge', 'loading']) {
-      const e = (sect(voyage, m).ediContainers || {})[c.cn];
+      const e = _ediRowOfCn(sect(voyage, m), c.cn);   // 4.20: 키가 컨번호가 아닌 행(제작컨 __SLOT___)도 그 행의 cn 으로 찾는다
       iso = String((e && e.iso) || '').trim();
       if (iso) break;
     }
@@ -128,8 +138,21 @@ function _isoBlankFilled(voyage, c) {
 //   엠티 선적 리스트는 pol이 비거나 목적지로 오염되는데, 종전엔 그 컨들이 마감 텔리에서 통째로 빠졌다.
 //   TODO: utils.isPtk(c, mode)가 export되면(팀F 추가 중) 이 인라인을 임포트로 교체.
 export function ptkContainers(voyage, mode) {
-  const edi = vals(sect(voyage, mode).ediContainers);
   const recs = sect(voyage, mode).records || {};
+  //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관 … 추가분만 더하면 됩니다»): 양하 모집단 = 평택 양하분 한 벌(utils.ptkDischargeUnitsOf — 세관 목록 + 추가분).
+  //    종전엔 EDI 행만 돌아 세관 목록에만 있고 실제로 내린 컨(RZOR R106E CICU9635360 — 완료·터미널 실적 있음)이 빠졌다(189). EDI 행이 있으면 EDI 행(자리표시 키 __SLOT___ 는 그 행의 cn),
+  //    없으면 records 행(빈 칸은 버린다) · 그것도 없으면 터미널 실적의 F/E·선사만 — 규격은 아래 _isoBlankFilled 가 EDI·자리에서 채운다. 목록이 없는 배(basis 'edi')는 종전 그대로 EDI POD 평택.
+  const _U = mode === 'discharge' ? ptkDischargeUnitsOf(voyage) : null;
+  const _useU = !!(_U && _U.basis !== 'edi');
+  const _ediMap = sect(voyage, mode).ediContainers || {};
+  const _unitRow = (cn) => {
+    const e = _ediMap[_U.ediKeyOf.get(cn)] || _ediMap[cn];
+    if (e) return e.cn === cn ? e : { ...e, cn };
+    const r = recs[cn];
+    if (r) return { ...Object.fromEntries(Object.entries(r).filter(([, v]) => v !== '' && v != null)), cn };
+    return dischargeUnitBareRow(voyage, cn);
+  };
+  const edi = _useU ? [..._U.set].map(_unitRow) : vals(_ediMap);
   //  3.31: **배별 선사 별칭은 여기서 한 번만 씌운다** — 컨이 텔리로 들어오는 입구다.
   //    답 함수 안에 세우면 옆길(OS·RF·씰목록)로 들어온 값을 못 막는다(규범 §4-4).
   const _vsl = String(voyage?.info?.vsl || '').toUpperCase();
@@ -192,8 +215,9 @@ export function ptkContainers(voyage, mode) {
   const _specOnly = { info: { forecast: { specialCns: voyage?.info?.forecast?.specialCns || [] } } };
   //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — 문지기 한 벌(isShiftOffPtk). 시프팅은 SHIFTING 시트·Final Work 시프팅 칸에서 따로 센다.
   const _ss = shiftCnSetOf(voyageKeyOf(voyage), voyage);
-  return applySpecialMarks(_specOnly, merged.filter(c => (mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))) && !isShiftOffPtk(_ss, recs, mode, c.cn)))
-    .map((c) => _isoBlankFilled(voyage, c));   // 4.15 (§7.8-⑥): 규격 빈 행은 EDI·베이플랜 규격으로 — Final Work·OS·RF·PERFORMANCE·DAMAGE·페리가 이 목록을 센다
+  //  4.20: 양하(목록 있음)는 평택 판정이 끝났다(유닛 한 벌) — 세관 «최종항» 을 다시 보지 않는다. 시프팅 문지기만 지난다. 추가분·통과 표식은 markDischargeUnit 한 벌.
+  return applySpecialMarks(_specOnly, merged.filter(c => (_useU ? true : (mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)))) && !isShiftOffPtk(_ss, recs, mode, c.cn)))
+    .map((c) => _isoBlankFilled(voyage, _useU ? markDischargeUnit(c, _U) : c));   // 4.15 (§7.8-⑥): 규격 빈 행은 EDI·베이플랜 규격으로 — Final Work·OS·RF·PERFORMANCE·DAMAGE·페리가 이 목록을 센다
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */
@@ -379,10 +403,16 @@ export function buildSealList(voyage, mode) {
     const orig = String(r.sl_orig || '').trim();
     const act = String(r.sl || '').trim();
     const reseal = String(r.reseal || '').trim();
-    if ((orig && act && orig !== act) || reseal) {
+    //  ★ 4.20 감사(Fable 판정 중-4): **제작컨 행만** — 원래 값(sl_orig)이 실번호(sl)의 잘린 앞부분이면 같은 씰이다(상이 아님 · ptkContainers 의 «잘린 값» 규칙과 같은 벌).
+    //    RZOR R106E SAWTBP004 — 세관 셀 «LF102335LF102350LF10»(잘림) vs «LF102335LF102350LF102345LF102336». 일반 컨은 손대지 않는다.
+    const mu = isMadeUnitCn(r.cn);
+    const cut = mu && orig && act && act.length > orig.length && act.startsWith(orig);
+    if ((orig && act && orig !== act && !cut) || reseal) {
+      const _sl = (x) => (mu ? splitJoinedSeals(x).join(' ') : x);   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다
+      const _col = tallySizeCol(_isoBlankFilled(voyage, r));
       out.push({
-        cn: r.cn, manifestSeal: orig || act, size: tallySizeCol(_isoBlankFilled(voyage, r)) === '20' ? "20'" : "40'",   // 4.15 (§7.8-⑥): 리스트 규격이 비면 같은 컨번호의 EDI·베이플랜 규격
-        actualSeal: (orig && act && orig !== act) ? act : '',
+        cn: r.cn, manifestSeal: _sl(orig || act), size: (mu && _col === '45') ? "45'" : _col === '20' ? "20'" : "40'",   // 4.15 (§7.8-⑥): 리스트 규격이 비면 같은 컨번호의 EDI·베이플랜 규격 · 4.20 감사: 제작컨은 45' 칸 그대로(SAWTBP L5G1)
+        actualSeal: (orig && act && orig !== act) ? _sl(act) : '',
         reseal, remarks: _op(pickCarrierOp(r.op, _ediMap[r.cn] && _ediMap[r.cn].op, _vslS)),
         fe: r.fe === 'E' ? 'EMPTY' : 'FULL',
       });
@@ -750,7 +780,7 @@ export function buildDamage(voyage, disCs, loadCs) {
       contents: `${szLbl} ${fe} CONT'R`,
       pkgs: 1, kind: 'VAN',
       exception,
-      seal: String(c.sl || c.sl_orig || '').trim(),
+      seal: c._madeUnit ? splitJoinedSeals(c.sl || c.sl_orig).join(' ') : String(c.sl || c.sl_orig || '').trim(),   // 4.20: 제작컨은 씰 전부
       fe, size: szLbl, ts: p.ts || 0,
     };
     (isLoad ? out.dmOut : out.dmIn).push(row);

@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -1600,6 +1600,10 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
 
 // ─── 헬퍼 함수들 ───
 
+//  ★ 4.20 후속·감사 (Fable 판정 ④-4 · 중-5 · 규범 §4-4): 평택분 행 판정 한 벌 — 양하는 행에 찍힌 평택 표식(_ptk — 미르 펼치기·_normalize·콘앱이 utils.ptkDischargeUnitsOf 한 벌로 찍는다)을 먼저 본다.
+//    «양하 몇 대» 와 브리핑 «양하 평택 N대»·단(갑판·홀드)별 남은 수가 같은 집합(세관 목록 + 추가분 − 시프팅)을 센다. 표식이 없는 행만 종전 POD 판정. 선적은 종전 그대로(POL).
+const _ptkRow = (c, mode) => (mode === 'discharge' ? (typeof c._ptk === 'boolean' ? c._ptk : isPyeongtaekPort(c.pod)) : isPyeongtaekPort(c.pol));
+
 // V7.99-10 (메모6 수동): "홀드 몇 개 남았어" — 작업 남은 단(홀드/데크)이 몇 곳인지 + 베이 번호 한 번에.
 //   되묻지 않게 곳수와 베이를 같이: "4, 12, 20 3곳입니다".
 function formatTierPlaceCount(tier, allContainers, ctx) {
@@ -1614,7 +1618,7 @@ function formatTierPlaceCount(tier, allContainers, ctx) {
     return b;
   };
   const isDeck = (c) => parseInt(c.tier, 10) >= 80;
-  const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+  const isPtk = (c) => _ptkRow(c, mode);   // 4.20 감사: 평택분 행 판정 한 벌
   // 작업 남은(미완료·평택분) 컨 중 해당 단에 있는 것 → 그룹(center)별로 모음
   const centers = new Set();
   allContainers.forEach(c => {
@@ -1649,7 +1653,7 @@ function formatTierInContext(tier, allContainers, ctx) {
     return b;
   };
   const isDeck = (c) => parseInt(c.tier, 10) >= 80;
-  const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+  const isPtk = (c) => _ptkRow(c, mode);   // 4.20 감사: 평택분 행 판정 한 벌
   const remain = allContainers.filter(c =>
     isPtk(c) && !c._comp && groupCenterOf(c.bay) === selectedGroup &&
     (tier === 'deck' ? isDeck(c) : !isDeck(c))
@@ -1681,6 +1685,9 @@ function formatStats(desc, results0, parsed = null) {
   if (dCount + lCount > 0) sub.push(`양하 ${dCount} / 선적 ${lCount}`);
   if (deckCount + holdCount > 0) sub.push(`갑판 ${deckCount} / 홀드 ${holdCount}`);
   if (sub.length > 0) lines.push(sub.join(' · '));
+  //  ★ 4.20 (검수사 2026-10-10 00:02 «그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다»): 양하 평택분 안의 추가분(utils.ptkDischargeUnitsOf 가 찍은 _extraOfList)을 한 토막 밝힌다.
+  const _ex = results.filter((c) => c._extraOfList && c._mode === 'discharge');
+  if (_ex.length) lines.push(extraOfListNote(_ex.length, _ex[0]._extraBasis));
   return lines.join('\n');
 }
 
@@ -1931,7 +1938,8 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   if (opts && opts.compMap && all.length && !all.some((c) => c && c._comp)) {
     all = all.map((c) => (c && !c._comp && opts.compMap[c.cn] ? { ...c, _comp: opts.compMap[c.cn] } : c));
   }
-  const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+  //  ★ 4.20 후속 (Fable 판정 ④-4 · 규범 §4-4): 양하는 행에 찍힌 평택 표식을 먼저 본다(_ptkRow 한 벌) — «양하 몇 대» 와 브리핑 «양하 평택 N대» 가 같은 수.
+  const isPtk = (c) => _ptkRow(c, mode);
   const cs = all.filter(isPtk);
   const transit = all.filter(c => !isPtk(c));
   if (!cs.length) return `📋 ${modeLabel} 브리핑 — 평택분 컨테이너가 없습니다`;

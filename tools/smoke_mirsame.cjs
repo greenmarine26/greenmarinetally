@@ -76,6 +76,7 @@ check('cone.html loadMirCtx 가 shipSpeed·pilot_forecast/{배} 를 받는다', 
     [`voyages/${vk}/discharge/xrayList.json`]: D.xrayList || {}, [`voyages/${vk}/discharge/xraySeals.json`]: D.xraySeals || {}, [`voyages/${vk}/discharge/held.json`]: D.held || {},
     [`voyages/${vk}/loading/held.json`]: L.held || {}, [`voyages/${vk}/discharge/luggConfirm.json`]: D.luggConfirm || {},
     'shipSpeed.json': ss, 'pilot_forecast/KBTR.json': pf.KBTR || null,
+    [`voyages/${vk}/discharge/termWork.json`]: D.termWork || {},   // ConeOne 2.70: 양하 터미널 실적 — 평택 양하분 한 벌(세관 목록 + 추가분)의 재료
   };
   const hits = [];
   const fbFetchStub = async (p) => { hits.push(p); const d = routes[p]; return (d === undefined) ? { ok: false, status: 404, json: async () => null } : { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(d)) }; };
@@ -88,7 +89,7 @@ check('cone.html loadMirCtx 가 shipSpeed·pilot_forecast/{배} 를 받는다', 
   check('실제 loadMirCtx 가 돈다', !!mc && !err, err);
   check('재료가 JSON 으로 풀려 있다(Response 아님) — info.vsl·완료', !!(mc && mc.info && mc.info.vsl === 'KBTR' && Object.keys(mc.compD || {}).length > 50 && !(('terminal' + 'Work') in mc)), mc ? JSON.stringify({ vsl: mc.info && mc.info.vsl, compD: Object.keys(mc.compD || {}).length }).slice(0, 160) : '(없음)');
   check('shipSpeed·pilotForecast 도 받는다', !!(mc && mc.shipSpeed && typeof mc.shipSpeed === 'object' && mc.pilotForecast && typeof mc.pilotForecast === 'object'));
-  check('요청 14건(항차 11 + 재료 3: 배 속도·도선·PORT-MIS[2.55-01]) — 터미널 합계 자료는 받지 않는다', hits.length === 14 && !hits.some((h) => h.includes('terminal' + '_work')) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json') && hits.includes('port_mis_data.json'), hits.join(','));
+  check('요청 15건(항차 12 + 재료 3: 배 속도·도선·PORT-MIS[2.55-01] · 2.70 양하 터미널 실적 termWork) — 터미널 합계 자료는 받지 않는다', hits.length === 15 && !hits.some((h) => h.includes('terminal' + '_work')) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json') && hits.includes('port_mis_data.json') && hits.includes(`voyages/${vk}/discharge/termWork.json`) && Object.keys((mc && mc.twD) || {}).length > 50, hits.join(','));
   if (mc) {
     //  mirAsk 3592~ 그대로 ctx 를 짠다(cs 는 위 paint 와 같은 한 벌)
     const comp2 = Object.assign({}, mc.compD || {}, mc.compL || {});

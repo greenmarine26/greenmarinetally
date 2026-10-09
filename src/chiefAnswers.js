@@ -7,12 +7,16 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
+import { ptkDischargeJudgeOf } from './utils.js';   // 4.20 후속: 평택 양하분 한 벌
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer, isFullReefer } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromRecords, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
 const _ptk = (c, mode) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+//  ★ 4.20 후속 (Fable 판정 ④-4 · 규범 §4-4): 양하 평택분은 utils.ptkDischargeJudgeOf 한 벌(세관 목록 + 추가분) — 미르 «양하 몇 대» 와 «총 무브수»·교대 브리핑·갱 배분이 다른 양하 수를 말하지 않게.
+//    선적은 종전 그대로(POL). 목록 없는 배는 종전 POD 판정.
+const _ptkOf = (voyage) => { let J = null; try { J = ptkDischargeJudgeOf(voyage); } catch (e) { console.warn('[수석 답 4.20] 평택 양하분 판정 실패 — 종전 POD 로 셉니다:', e); } return (c, mode) => (mode === 'discharge' && J && J.pred ? J.pred(c) : _ptk(c, mode)); };
 const _bayN = (c) => parseInt(normalizeBay(c.bay), 10);
 const _isDeck = (c) => parseInt(c.tier, 10) >= 80;
 const _fmtT = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -24,6 +28,7 @@ const _hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinut
 export function buildGangPlan(voyage, bayDef, opts = {}) {
   const bays = (bayDef && bayDef.baysSummary) || [];
   if (!bays.length) return null;
+  const _ptkV = _ptkOf(voyage);   // 4.20 후속
   const byNo = {};
   bays.forEach((b) => { const n = parseInt(b.bayNo || b.bay, 10); if (Number.isFinite(n)) byNo[n] = b; });
   const nums = Object.keys(byNo).map(Number).sort((a, b) => a - b);
@@ -60,7 +65,7 @@ export function buildGangPlan(voyage, bayDef, opts = {}) {
     //  2.66: 배정목록이 «그 쪽 0» 이면(전량 캔슬) 그 쪽은 갱 배분에서도 뺀다 — 없는 일을 나눌 수 없다.
     if (sideCancelled(voyage?.info, mode)) continue;
     for (const c of _list(voyage?.[mode]?.ediContainers)) {
-      if (!_ptk(c, mode)) continue;
+      if (!_ptkV(c, mode)) continue;   // 4.20 후속: 양하는 평택 양하분 한 벌
       const g = groups[idxOfBay[_bayN(c)]];
       if (!g) continue;
       g[kd]++;
@@ -120,7 +125,10 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
   const lod = _list(voyage?.loading?.ediContainers);
   //  4.01: 화면이 숫자를 주는 항차(리스트만 있는 배 등)는 미르도 같은 수로 답한다 — opts.eta 가 있으면 EDI 없음 안내로 막지 않는다(콘앱은 eta 를 안 넘겨 종전 그대로).
   if (!dis.length && !lod.length && !(opts && opts.eta && opts.eta.units > 0)) return `${shipName || '이 배'} — EDI 가 아직 없어 무브수를 셀 수 없습니다.`;
-  const dp = dis.filter((c) => _ptk(c, 'discharge')).length;
+  //  4.20 후속: 양하는 평택 양하분 한 벌 — 세관 목록에만 있는 컨(EDI 행 없음)도 센다. 통과 = 그 판정에 안 드는 EDI 행.
+  const _J = (() => { try { return ptkDischargeJudgeOf(voyage); } catch (e) { console.warn('[총 무브수 4.20] 평택 양하분 판정 실패 — 종전 POD 로 셉니다:', e); return null; } })();
+  const dp = _J && _J.cns ? _J.cns.length : dis.filter((c) => _ptk(c, 'discharge')).length;
+  const dpEdi = _J && _J.pred ? dis.filter((c) => _J.pred(c)).length : dp;   // 양하 EDI 행 중 평택분
   const lp = lod.filter((c) => _ptk(c, 'loading')).length;
   let shifting = 0;
   try {
@@ -129,7 +137,7 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
   } catch (e) { shifting = -1; }
   //  4.02: 콘앱은 항차에 EDI 를 안 싣고 행(_shift 표시 포함)만 넘긴다 — 콘이 센 시프팅 수를 그대로 쓴다(opts.shifting).
   if (opts && Number.isFinite(opts.shifting)) shifting = opts.shifting;
-  const allPtk = dp === dis.length && lp === lod.length;
+  const allPtk = dpEdi === dis.length && lp === lod.length;
   //  ★ 4.01 — 무브 ≠ 대수. 트윈으로 드는 쌍은 1무브, 나머지는 한 대당 1무브(화면 «예상 작업 시간» 줄과 같은 수 — mir.movesOfVoyage).
   //    검수사 2026-10-04 «ATPR 양하가 269인데 무브수가 269무브 맞습니까?» · «트윈 가능 갯수와 싱글갯수가 정확히 파악해야 무브수가 계산 됩니다.»
   const E = opts && opts.eta;
@@ -145,7 +153,7 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
     L2.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting}${shifting > _sn ? '(예측 — 확정 아님, 무브 수에는 안 넣었어요)' : ''} · 해치커버 별도.`);
     return L2.join('\n');
   }
-  const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}대 (무브 아님 — 트윈 계산을 못 해 대수로만 말씀드려요) — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dp - lp} 제외)`}.`];
+  const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}대 (무브 아님 — 트윈 계산을 못 해 대수로만 말씀드려요) — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dpEdi - lp} 제외)`}.`];
   L.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting} · 해치커버 별도.`);
   return L.join('\n');
 }
@@ -253,12 +261,13 @@ const _isDG = (c) => !!c.dg || !!c.dgc || !!c.un;
 //  그룹별 특수 분류·예상시간(계획 모델: 일반 25/h · 리퍼/DG 15/h · FR류 그룹당 0.25h+개당 0.05h).
 //  실측 페이스(perGangHour)가 오면 그것이 이긴다 — 실측엔 특수 지연이 이미 녹아 있다.
 function _gangHours(plan, voyage, perGangHour) {
+  const _ptkV = _ptkOf(voyage);   // 4.20 후속
   const idx = {};
   plan.cargo.forEach((g, i) => { g.frN = 0; g.rfN = 0; g.dgN = 0; g.members.forEach((m) => { idx[m] = i; }); });
   plan.cargo.forEach((g) => { g.deckN = 0; g.holdN = 0; });
   for (const [mode] of [['discharge'], ['loading']]) {
     for (const c of _list(voyage?.[mode]?.ediContainers)) {
-      if (!_ptk(c, mode)) continue;
+      if (!_ptkV(c, mode)) continue;   // 4.20 후속: 양하는 평택 양하분 한 벌
       const g = plan.cargo[idx[_bayN(c)]];
       if (!g) continue;
       if (_isFRlike(c)) g.frN++; else if (_isRF(c)) g.rfN++; else if (_isDG(c)) g.dgN++;
@@ -302,6 +311,7 @@ const _currentShift = currentShift;
 
 //  본체 — 조 단위 갱 배분. 반환 null(자료 없음) 또는 {shift, gangs[], nGangs, note}.
 export function buildGangShift(voyage, bayDef, opts = {}) {
+  const _ptkV = _ptkOf(voyage);   // 4.20 후속
   const nowMs = opts.now || Date.now();
   const pier = voyage?.info?.pier || '';
   const plan = buildGangPlan(voyage, bayDef);
@@ -501,7 +511,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   const cnGroup = {};
   { const gidx = {}; plan.cargo.forEach((g, i) => g.members.forEach((m) => { gidx[m] = i; }));
     for (const md of ['discharge', 'loading']) for (const c of _list(voyage?.[md]?.ediContainers)) {
-      if (!_ptk(c, md)) continue; const i = gidx[_bayN(c)]; if (i != null) cnGroup[String(c.cn || '').toUpperCase()] = { i, md };
+      if (!_ptkV(c, md)) continue; const i = gidx[_bayN(c)]; if (i != null) cnGroup[String(c.cn || '').toUpperCase()] = { i, md };   // 4.20 후속: 양하는 평택 양하분 한 벌
     } }
   const doneBy = plan.cargo.map(() => ({}));
   for (const cn of Object.keys(compAt)) { const g = cnGroup[cn]; if (!g) continue;
@@ -609,7 +619,11 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
   const endLbl = isDayNow ? '주간 종료 17:30 → 야간 시작 19:00' : '야간 종료 06:30 → 주간 시작 08:00';
   L.push(`${shipName} 교대 브리핑 — 전환 ${endLbl}.`);
   // ② 인수 시점 예상 진행 — 앱 완료 기록이 있으면 그것, 없으면 시작시각+페이스(2갱×pace)
-  const dis = _list(voyage?.discharge?.ediContainers).filter((c) => _ptk(c, 'discharge'));
+  //  4.20 후속: 양하 물량은 평택 양하분 한 벌(세관 목록 + 추가분 — 시프팅 뺌). 목록 없는 배는 종전 EDI 평택 행.
+  const _J = (() => { try { return ptkDischargeJudgeOf(voyage); } catch (e) { console.warn('[교대 브리핑 4.20] 평택 양하분 판정 실패 — 종전 POD 로 셉니다:', e); return null; } })();
+  //    행은 그 컨의 EDI 행(없으면 records 행) — 리퍼·DG 세기(아래 특수화물 줄)가 종전처럼 행을 본다.
+  const _dE = voyage?.discharge?.ediContainers || {}, _dR = voyage?.discharge?.records || {};
+  const dis = _J && _J.cns ? _J.cns.map((cn) => { const k = _J.U.ediKeyOf.get(cn); return (k != null && _dE[k]) || _dR[cn] || { cn }; }) : _list(voyage?.discharge?.ediContainers).filter((c) => _ptk(c, 'discharge'));
   const lod = _list(voyage?.loading?.ediContainers).filter((c) => _ptk(c, 'loading'));
   const total = dis.length + lod.length;
   const doneD = Object.keys(voyage?.discharge?.completed || {}).length;

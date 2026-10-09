@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftSplitOf, isShiftOffPtk, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
+import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftSplitOf, isShiftOffPtk, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -23,13 +23,17 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     const compMap = sec.completed || {};
     const xrayMap = sec.xrayList || {};
 
+    //  ★ 4.20 (Fable 판정 ④): 양하 평택분 = 유닛 한 벌(세관 목록 + 추가분 — 막대 분모 progressOf 와 같은 집합). EDI 는 유닛 컨번호로 건다(제작컨 자리표시 키를 두 줄로 안 센다).
+    const _dU = mode === 'discharge' ? ptkDischargeUnitsOf(voyage) : null;
+    const _useDU = !!(_dU && _dU.basis !== 'edi');
+    const _ediU = _useDU ? ediByUnitCn(ediMap) : ediMap;
     // 머지 로직 (VoyagePage와 동일)
-    const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+    const allCnSet = new Set([...Object.keys(_ediU), ...Object.keys(recMap), ...(_useDU ? _dU.set : [])]);
     // V7.93-02: 평택분만 (7.1 — 양하=POD평택, 선적=POL평택). 현황 요약이 EDI 전체(통과화물 포함)를
     //   세어 목록(403)과 헤더(909)가 다르던 버그 (사용자 스크린샷 제보).
     //  3.26: 부킹 자리(`__BOOK_`·cn 빈 자리)를 실번호가 다 채웠으면 자리는 세지 않는다(utils 한 벌 — SWBT 2614N 316+316=632 사건).
     const containersRaw = dropFilledBookingSlots([...allCnSet].map(cn => {
-      const e = ediMap[cn] || {};
+      const e = _ediU[cn] || {};
       const r = recMap[cn] || {};
       // V8.20-01 fix: 리스트(records)는 실번호/무게 등 보강만. POL/POD(항구)는 EDI가 단일 진실(7.1).
       //   리스트 POL이 EDI 평택 POL을 덮어 isPyeongtaekPort에서 탈락 → 현황요약 분모가 354 대신 265로 적게 나오던 버그.
@@ -45,9 +49,10 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       return merged;
     }).filter(c => {
       if (isShiftOffPtk(_shiftSet, recMap, mode, c.cn)) return false;   // 2.89-06: 시프팅은 자기 칸에서 센다 · 4.16: 문지기 한 벌(선사 리스트에 실려 온 시프팅은 평택분에도)
+      if (_useDU) return _dU.set.has(c.cn);   // 4.20: 양하는 유닛 한 벌
       // 3.60-19 (다수결 V1): utils.isPtk 한 벌 — 리스트 등재(_inList)라도 EDI 통과화물이면 제외(3.14), 선적 탭·수석 보드와 같은 수
       return _isPtkOne({ ...c, _inList: c._inList != null ? c._inList : !!recMap[c.cn] }, mode);
-    }), { ediMap, recMap, mode });
+    }), { ediMap: _ediU, recMap, mode });
     //  ★ 3.37(감사 실측) — 현황 요약도 제 목록을 따로 만든다. 특수제작컨 표시를 여기서도 찍어야
     //    «온도 미입력»·«제작컨» 셈이 화면·진단·마감 점검과 갈리지 않는다(규범 §4-4 — 입구마다 같은 문지기).
     const containers = applySpecialMarks(voyage, containersRaw);

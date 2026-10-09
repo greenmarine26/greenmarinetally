@@ -103,7 +103,8 @@ const rowOf = (card, side, size) => {
   ok(rc.map((c) => c.getAttribute('data-gang')).join(',') === '5,3' && /내 갱/.test(txt(rc[0])), 'RZOR 호기 카드 5·3 — 내 갱 5호기 먼저');
   ok(/터미널 호기 집계\(규격표 없음\)/.test(txt(rc[0])) && /완료 2 · 잔여 88/.test(txt(rc[0])), `5호기 — 터미널 호기 집계 대수만(완료 2 · 잔여 88) (${txt(rc[0]).slice(0, 120)})`);
   const rship = rz.querySelector('[data-f1700-ship]');
-  ok(!!rship && /배 전체/.test(txt(rship)) && !/배 전체 합계/.test(txt(rship)) && /잔여 기준 \(완료 101 · 잔여 90\)/.test(txt(rship)), `RZOR 배 전체 표(규격표) 그대로 (${txt(rship).slice(0, 90)})`);
+  //  4.20 (Fable 판정 ④ · 회귀 기준표 R23): 평택 양하분은 컨번호 한 벌 — 종전 잔여 90 은 EDI 자리표시 키 __SLOT___ 와 records SAWTBP004 를 두 번 센 191 기준이었다(유닛 190 − 완료 101 = 89).
+  ok(!!rship && /배 전체/.test(txt(rship)) && !/배 전체 합계/.test(txt(rship)) && /잔여 기준 \(완료 101 · 잔여 89\)/.test(txt(rship)), `RZOR 배 전체 표(규격표) 그대로 (${txt(rship).slice(0, 90)})`);
 
   // ── ⑤ 마감 뒤 — 17시 창·보고 보관과 같은 한 벌(2차 감사 중요 1) · OBWH 2749E 09-26 실자료 사본 ──
   const W = JSON.parse(JSON.stringify(FF.voyages.OBWH_2749E));

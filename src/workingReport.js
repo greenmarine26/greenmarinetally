@@ -7,7 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
-import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp, pickDischargePol } from './utils.js';
+import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, dischargeUnitBareRow } from './utils.js';   // 4.20 감사: 양하 대수는 평택 양하분 한 벌
 import { shipOpMapper } from './data/tallyFormats.js';
 import { tallySizeCol } from './tallyReport.js';   // 3.60-12 (진단 M5): 규격 칸 가르기 한 벌 — 마감텔리와 같은 함수
 const PORT_MAP = {
@@ -211,6 +211,8 @@ function buildBuckets(voyage, mode = 'settlement') {
       const ediCs = section.ediContainers || {};
       const recs = section.records || {};
       const completedCns = section.completed ? new Set(Object.keys(section.completed).map(k => String(k).toUpperCase())) : null;
+      //  ★ 4.20 감사(Fable 판정 상-3): 결제용 양하 대수 = 평택 양하분 한 벌(세관 목록 + 추가분 − 시프팅 — 마감텔리·수석 보드와 같은 수 · RZOR R106E 190). 선적은 종전 그대로.
+      const _dU = (dlMode === 'disch' && mode !== 'actual' && voyage.discharge === section) ? ptkDischargeUnitsOf(voyage) : null;
 
       // 결제용: records의 모든 cn (LIST 데이터). 작업용: completed의 cn (실제 작업)
       let targetCns;
@@ -221,9 +223,9 @@ function buildBuckets(voyage, mode = 'settlement') {
           : Object.keys(recs);
       } else {
         // 결제용: records 전체 (LIST 평택 대상)
-        targetCns = Object.keys(recs);
+        targetCns = _dU ? [..._dU.set] : Object.keys(recs);   // 4.20 감사: 양하는 평택 양하분 한 벌
         // records가 비어 있으면 ediContainers의 PTK 필터로 폴백
-        if (targetCns.length === 0) {
+        if (!_dU && targetCns.length === 0) {
           // V7.40: 모드별 평택 판정 (지침 7.1 — 양하=POD평택, 선적=POL평택)
           targetCns = Object.values(ediCs)
             .filter(c => dlMode === 'disch' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol))
@@ -234,8 +236,8 @@ function buildBuckets(voyage, mode = 'settlement') {
       targetCns.forEach(cn => {
         // M5.67: voucher는 EDI 우선 (ISO/POD/사이즈 정확). LIST는 필터링용 + 폴백.
         const cnUpper = String(cn).toUpperCase();
-        const ediC = ediCs[cnUpper] || ediCs[cn] || {};
-        const recC = recs[cnUpper] || recs[cn] || {};
+        const ediC = ediCs[cnUpper] || ediCs[cn] || (_dU && ediCs[_dU.ediKeyOf.get(cn)]) || {};   // 4.20 감사: 자리표시 키(__SLOT___)에 든 유닛(제작컨)은 그 EDI 행으로
+        const recC = recs[cnUpper] || recs[cn] || (_dU ? dischargeUnitBareRow(voyage, cn) : {});   // 행이 없는 추가분은 터미널 실적의 F/E·선사만
         // EDI에 컨테이너 있으면 EDI 데이터 (POD/ISO/OP 정확)
         // EDI에 없으면 LIST 데이터 사용
         let c;

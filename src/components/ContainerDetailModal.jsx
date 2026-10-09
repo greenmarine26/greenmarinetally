@@ -9,7 +9,7 @@ import { isoConflictOf, ISO_SRC_NAME } from '../utils.js';   // ★ 3.47: 규격
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
-import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
+import { completedByLabel, EXTRA_OF_LIST_LABEL } from '../utils.js';   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
@@ -582,6 +582,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             </button>
           </div>
         </div>
+
+        {/* ★ 4.20 (검수사 2026-10-10 00:02 «그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다»): 평택 양하분 한 벌(utils.ptkDischargeUnitsOf)이 찍은 추가분 표식 — 글은 utils 상수 한 벌 */}
+        {c._extraOfList && (
+          <div className="mx-4 my-2 bg-amber-950/40 border border-amber-700/60 rounded-pill px-3 py-2 text-xxs font-black text-amber-200" data-extra-of-list="1">
+            ⚠ {EXTRA_OF_LIST_LABEL[c._extraBasis] || EXTRA_OF_LIST_LABEL.customs}
+          </div>
+        )}
 
         {/* 2.05-05 (검수사 실측 «자료 불일치? 내용을 설명 안함»): 실번호 불일치 — 무엇이 어떻게 다른지 여기서 설명 */}
         {(() => {

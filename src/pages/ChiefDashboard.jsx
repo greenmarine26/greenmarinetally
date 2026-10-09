@@ -5,7 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { resolvedPod } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
+import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -1572,7 +1572,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
     for (const [key, v] of Object.entries(voyages || {})) {
       const info = v.info || {};
       const vsl = info.vsl || key.split('_')[0] || '(선박명 미상)';
-      const dPtk = countPtkSection(v.discharge, 'discharge');
+      const dPtk = countPtkSection(v.discharge, 'discharge', { ...v, key });   // 4.20 감사: 양하는 평택 양하분 한 벌(항차째로 넘겨 시프팅을 뺀다)
       const lPtk = countPtkSection(v.loading, 'loading');
       out.push({
         key, vsl,
@@ -1927,7 +1927,10 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
 }
 
 // 한 섹션(discharge/loading)의 평택분 컨테이너 수 — UI용 (firebase _ptkCountOfSection과 동일 기준)
-export function countPtkSection(section, mode) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)
+export function countPtkSection(section, mode, voyage) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)
+  //  ★ 4.20 감사(Fable 판정 상-2 · 3.53 «선박 통계·보관도 마감텔리와 같은 수»): 양하 = 평택 양하분 한 벌(utils.ptkDischargeUnitsOf — 세관 목록 + 추가분 − 시프팅).
+  //    수석 보드 «양하 N»이 마감텔리·홈 카드와 같은 수를 말한다(RZOR R106E 190 · PCBJ 2609N 149). 항차(voyage)를 넘기면 그 시프팅을 뺀다. 선적은 종전 그대로.
+  if (mode === 'discharge') return section ? ptkDischargeUnitsOf(voyage && voyage.discharge === section ? voyage : { discharge: section }).set.size : 0;
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1·8.3 — 양하=POD평택, 선적=POL평택).
   if (!section || !section.ediContainers) return 0;
   const set = new Set();

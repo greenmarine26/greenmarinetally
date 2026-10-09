@@ -54,7 +54,10 @@ const FX = {
       BBBU2222222: { cn: 'BBBU2222222', pol: 'MYPKG', pod: 'KRPTK', _customs: true },
       //  ⚠ 리스트가 «평택 양하» 라고 우기는 선적분 — 문지기가 **EDI 의 pod** 를 봐야 안 넘어간다.
       //    인자를 `recC.pod`·`r.pod` 로 잘못 넘기면 이 컨이 SHA 로 넘어가 검사가 잡는다(변이 시험 실측).
-      CCCU3333333: { cn: 'CCCU3333333', pol: 'CNSHA', pod: 'KRPTK', _customs: true },
+      //  4.20: 세관 표식(_customs)은 뗐다 — 4.20 부터 평택 양하분은 «세관 목록 + 추가분»(검수사 2026-10-10 00:02 «기본은 세관» · utils.ptkDischargeUnitsOf)이라
+      //    세관 목록에 있으면 센다. 이 행은 «평택 선적분(EDI POL 평택·POD 타항)을 리스트가 평택 양하라고 우기는» 꼴이고, 평택 수입 세관 목록에 선적분이 오는 일은 없다 —
+      //    선사 리스트 행으로 두어 이 검사의 뜻(POL 문지기)을 그대로 지킨다. (세관 목록에 선적분이 실제로 실리면 센다 — Fable 판정 필요로 보고)
+      CCCU3333333: { cn: 'CCCU3333333', pol: 'CNSHA', pod: 'KRPTK' },
     },
   },
   //  선적 — M6.94.31 그대로 재현한다. 엠티 선적 엑셀 fallback 파서가 목적지(CNDLC)를 POL 자리에 넣는다.
@@ -154,11 +157,16 @@ if (bundled) {
   ok(pick('CCCU3333333', 'discharge').pol === 'KRPTK',
     '⛔ 미르·홈 — 같은 EDI 의 선적분은 PTK 그대로. 문지기가 **EDI 의 pod** 를 봐야 한다(리스트는 평택이라 우긴다)');
   ok(pick('DDDU4444444', 'loading').pol === 'KRPTK', '⛔ 미르·홈 — 선적은 EDI(PTK) 그대로. 리스트 CNDLC 가 덮으면 285대 누락 재발이다');
-  //  ⚠ 이 문서는 결제용에서 **records 의 컨만** 센다(평택 필터를 따로 안 건다) — 그래서 픽스처의
+  //  ⚠ 이 문서는 작업용(actual)에서 **records 의 컨만** 센다(완료 기록이 없으면 · 평택 필터를 따로 안 건다) — 그래서 픽스처의
   //    선적분 CCCU 도 한 줄로 선다. 그것이 PTK 로 **남아 있어야** pod 문지기가 산 증거다.
-  const bk = WR.buildBuckets(FX, 'settlement');
+  //    4.20 감사(Fable 판정 상-3): 결제용(settlement) 양하는 평택 양하분 한 벌(세관 목록 PHRU·BBBU + 추가분 AAAU — EDI POD 평택 · 세관 목록 밖)이라 CCCU 가 안 선다 —
+  //    PORT 칸 문지기는 records 를 그대로 도는 작업용으로 잰다(같은 processSection · 같은 pickDischargePol).
+  const bk = WR.buildBuckets(FX, 'actual');
   const cell = (b, port) => ((((b.TJM || {})[port] || {}).HC) || { F: 0 }).F;
   const d = bk.disch || {};
+  const bs = WR.buildBuckets(FX, 'settlement');
+  ok(bs.dischTotal === 3 && cell(bs.disch || {}, 'PTK') === 0 && cell(bs.disch || {}, 'SHA') === 2 && cell(bs.disch || {}, 'SHK') === 1,
+    `결제용 양하 = 평택 양하분 3대(세관 PHRU·BBBU + 추가분 AAAU) — 선적분 CCCU 는 안 선다 · PORT SHA 2(PHRU 되돌아온 화물 · AAAU) · SHK 1 [실제 ${bs.dischTotal} · SHA ${cell(bs.disch || {}, 'SHA')} · SHK ${cell(bs.disch || {}, 'SHK')} · PTK ${cell(bs.disch || {}, 'PTK')}]`);
   ok(cell(d, 'SHA') === 1, `작업 리포트 — 되돌아온 화물이 SHA 로 옮겨 온다 [실제 ${cell(d, 'SHA')}]`);
   ok(cell(d, 'SHK') === 1, `⛔ 작업 리포트 — 환적분은 SHK 그대로(세관 MYPKG 아님) [실제 ${cell(d, 'SHK')}]`);
   ok(cell(d, 'PTK') === 1, `⛔ 작업 리포트 — 같은 EDI 의 선적분은 PTK 그대로 — pod 문지기가 살아 있다 [실제 ${cell(d, 'PTK')}]`);

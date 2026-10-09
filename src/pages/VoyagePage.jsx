@@ -53,7 +53,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -374,6 +374,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    선사 리스트에 실려 온 시프팅은 평택분에도 남는다(Fable 판정 ⑤ «214+95»). 재료(shiftConfSet)는 아래 확정 지도 — 이 함수는 그 뒤에서만 불린다.
     if (c.cn && isShiftOffPtk(shiftConfSet, recMap, mode, c.cn)) return false;
     if (mode === 'discharge') {
+      if (dischUnits && dischUnits.basis !== 'edi') return !!(c.cn && dischUnits.set.has(c.cn));   // 4.20: 유닛 한 벌(세관 목록 + 추가분)
       if (isPyeongtaekPort(c.pod)) return true;
       return !!(c.cn && recMap && recMap[c.cn]);   // 양하리스트 등재분(TS 포함)
     }
@@ -444,6 +445,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const shiftCnSet = useMemo(() => new Set(shiftingList.map((x) => x.cn)), [shiftingList]);
   //  ★ 4.16: 시프팅 분리 재료 — 확정 지도 키(평택분 문지기 isPtk 가 읽는다)와 내림·실음 완료 수(시프팅 목록 머리).
   const shiftConfSet = useMemo(() => new Set(Object.keys(shiftingConfirmed || {}).filter((k) => k && !k.startsWith('_'))), [shiftingConfirmed]);
+  //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관 … 추가분만 더하면 됩니다»): 양하 평택분 한 벌(세관 목록 + 추가분). 목록 없는 배(basis 'edi')는 종전 판정.
+  //    4.20 감사: 시프팅은 이 화면의 확정 지도(shiftConfSet)로 뺀다 — 그래서 그 아래에 둔다(isPtk·목록 머지는 이 뒤에서만 불린다).
+  const dischUnits = useMemo(() => (mode === 'discharge' ? ptkDischargeUnitsOf(voyage, shiftConfSet) : null), [mode, voyage?.discharge, shiftConfSet]);
   const shiftSplit = useMemo(() => shiftSplitOf(voyageKey, voyage),
     [shiftingConfirmed, voyageKey, voyage?.discharge?.completed, voyage?.loading?.completed]);
   //  3.65: 카토스가 시프팅이라고 한 컨 중 목록에 없는 것 — 목록은 안 바꾸고 아래에 따로 적는다.
@@ -946,6 +950,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     Object.keys(extrasMap).forEach(cn => {
       if (!merged[cn]) merged[cn] = { cn, _src: 'extra', pod: 'KRPTK', _extraNote: extrasMap[cn]?.note || '' };
     });
+    //  ★ 4.20: 평택 양하분(유닛)인데 행이 없는 컨(완료 기록·터미널 실적만 있는 추가분)도 목록에 · 추가분·통과 표식(컨 상세가 «추가분 — 세관 목록에 없음(신고 대상)» 을 보인다).
+    if (dischUnits && dischUnits.basis !== 'edi') {
+      for (const cn of dischUnits.set) if (!merged[cn] && !isShiftOffPtk(shiftConfSet, recMap, mode, cn)) merged[cn] = { ...dischargeUnitBareRow(voyage, cn), _src: 'unit' };
+      for (const cn of Object.keys(merged)) merged[cn] = markDischargeUnit(merged[cn], dischUnits);
+    }
     // 2.08-11 (검수사 확정 «실 리스트가 존재 하는데 예상EDI에 있는 가상리스트를 선적리스트에
     //   포함시키는것은 없어야 합니다 — 원천봉쇄», SWAT 2607N 실측: 실번호 리스트 523(F166·E357)이
     //   있는데 예상 EDI 의 __BOOK 자리 523이 별도 행으로 잡혀 목록이 1046으로 두 배):
@@ -1000,7 +1009,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl]);   // 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
+  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl, dischUnits]);   // 4.20: dischUnits · 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
 
   // ★ 3.67 — RZOR 선적 자동 덱플랜. 검수사 «선적 순번대로 자리가 정해지는것만 확실하다면» —
   //   마감텔리 STOWAGE PLAN 을 아직 안 올린 선적 항차는 동방 실적(termWork) 순번과 규칙표(36항차 실물)로

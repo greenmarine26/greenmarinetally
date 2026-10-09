@@ -10,7 +10,7 @@ import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -146,6 +146,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       const xraySeals = sec.xraySeals || {};
       const compMap = sec.completed || {};
       const merged = {};
+      //  ★ 4.20 (Fable 판정 ④): 양하 평택분 = 유닛 한 벌(세관 목록 + 추가분 — 마감텔리·갱별·홈 카드·미르와 같은 집합). 목록 없는 배(basis 'edi')는 종전 POD 판정.
+      const _U = m === 'discharge' ? ptkDischargeUnitsOf(voyage) : null;
+      const _useU = !!(_U && _U.basis !== 'edi');
       //  4.08-02: EDI 총중량을 `wtEdi` 로 따로 남긴다 — 화면 무게(`wt`)는 «무게는 리스트가 기준»(1.23)대로 리스트가 덮지만,
       //    트윈 판정은 갱이 드는 총중량(화물+자중)으로 해야 한다(nlSearch.twinWtOf 한 벌 — 화면·미르·브리핑·무브 계산이 같은 값을 본다).
       Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, ...ediWtField(c) }; });   // 4.08-02: EDI 총중량 → wtEdi (utils 한 벌)
@@ -193,16 +196,18 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       const _mvS = Object.values(merged);
       const _spOpS = shipOpMapper(String(voyage?.info?.vsl || '').toUpperCase(), _mvS.map((c) => c && c.op));
       for (const c of _mvS) { if (!c || !c.op) continue; const _o = _spOpS(c.op); if (_o !== c.op) c.op = _o; }
+      //  4.20: 유닛인데 행이 없는 컨(완료 기록·터미널 실적만 있는 추가분)도 목록에 — 끝4자리 조회·컨 상세가 찾는다.
+      if (_useU) for (const cn of _U.set) if (!merged[cn]) { const b = dischargeUnitBareRow(voyage, cn); if (b.op) b.op = _spOpS(b.op); merged[cn] = { ...b, _src: 'unit' }; _mvS.push(merged[cn]); }
       _mvS.forEach(c => {
         if (!c.cn) return;
         arr.push({
-          ...c, _mode: m, _src: c._src || 'edi',
+          ...(_useU ? markDischargeUnit(c, _U) : c), _mode: m, _src: c._src || 'edi',   // 4.20: 추가분·통과 표식(컨 상세가 «추가분 — 세관 목록에 없음(신고 대상)»)
           // V7.92-02: 평택분 여부 — 양하=POD평택, 선적=POL평택 (7.1). 집계는 평택분만.
           //  3.26: 선적은 utils.isPtk 한 벌 — **리스트 등재 = 평택**(V8.86·M5.50, 항차 화면·인쇄허브와 같은 규칙). 종전엔 pol 만 봐서
           //    POD·POL 열이 없는 리스트(남성 CLL 104대)가 평택분에서 빠져 «선적 N» 이 212 로 섰다(2차 감사 실측).
           //  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»): 시프팅이면 평택분이 아니다(문지기 한 벌 isShiftOffPtk — 선사 리스트에 실려 온 시프팅은 평택분에도).
           //    종전엔 시프팅 재선적 기록(records)이 생기면 «리스트 등재 = 평택» 으로 «선적 N» 에 섞였다. 카드는 아래 1.76-05 블록이 _shift 로 큐에 남긴다(Fable 판정 ③).
-          _ptk: (m === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m)) && !isShiftOffPtk(_shSetAll, recMap, m, c.cn),
+          _ptk: (m === 'discharge' ? (_useU ? _U.set.has(c.cn) : isPyeongtaekPort(c.pod)) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m)) && !isShiftOffPtk(_shSetAll, recMap, m, c.cn),   // 4.20: 양하는 유닛 한 벌
           _transit: isTransitContainer(c, m, recMap),   // 3.2-01: 통과분(항구 적혀 있고 평택 아님·리스트 미등재) — 완료 카드가 되지 않는다
           _xray: m === 'discharge' && !!xrayMap[c.cn],
           _xraySeal: xraySeals[c.cn] || null,

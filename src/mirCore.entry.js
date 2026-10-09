@@ -73,6 +73,7 @@ export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };
 export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';
 export { isReeferContainer, isFullReefer, isEmptyReefer, isoPickOog } from './utils.js';   // 4.15-01 / ConeOne 2.67: 콘앱 행의 리퍼 판정도 검수앱 utils 한 벌(cone.html coneIsReefer — 정규식 사본 없음)
+export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn } from './utils.js';   // 4.20 / ConeOne 2.70: 평택 양하분 한 벌(세관 목록 + 추가분)·제작컨 판정 — 콘앱 미르 «양하 몇 대» 가 검수앱과 같은 집합(cone.html mirAsk)
 export { shipCodeInQuery, knownShipCodes } from './utils.js';   // 4.18-01 / ConeOne 2.69: 질문 속 다른 배(정확·오타·옛 코드)를 콘앱이 검수앱과 같은 판정으로 가린다(cone.html mirShipFirst)
 export { isWorkingNow } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52
 export { mirPhotoHtml, mirHeroHtml, mirHeroSrc, mirPoseNo, mirPhotoKey, ensureMirPhotoCss, MIR_PHOTO_KEYS, MIR_POSES, MIR_PHOTO_CSS } from './components/mirPhotoArt.js';   // 4.07 / 2.63: 실사 미르 한 벌(얼굴 스프라이트·전신 자세·몸짓 CSS — React·이미지 파일을 import 하지 않는 순수 문자열). 3.57~4.06 의 그림 인형(mirFaceArt)은 걷었다 — 콘앱 얼굴도 같은 규칙으로 움직인다

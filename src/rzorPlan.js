@@ -20,6 +20,19 @@ export function isDeckPlanWorkbook(wb) {
 //   덱 단(tier)은 rzorPlan DECK_TIER 와 같은 값(U(=선사 B) 84 · C 86 · D 88). decks[].numbering = 'bow' 로 표시한다.
 const CHK_CN_RE = /^([A-Z]{4})\s*(\d{7})$/;
 const CHK_TYP_RE = /^([FE])\s*(20|40|45)\s*'?\s*([A-Z])?/i;
+//  ★ 4.20 (검수사 2026-10-10 00:02 «SAWTBP004는 … 제작컨일것입니다. 대수엔 들어 가지만 규격엔 없습니다» — §7.8-⑦ «7. 1»(건너뛴다)을 뒤집음):
+//    비ISO 유닛(제작컨 SAWTBP00N)도 칸이다. 영문으로 시작하는 영숫자 6~11자(숫자 포함) **이고** 그 칸 두 줄 아래에 규격 줄(«F45'H»)이 있을 때만 유닛으로 본다 —
+//    시트의 다른 글자(C/S·X·<45>·집계표 머리)를 칸으로 잘못 잡지 않게. 실측 R075W SAWTBP005(무게 24248 · F45'H · 왼쪽 <45>) — 덱 소계 45' 4 · TTL 122 에 이미 세어져 있다.
+//    판정은 ISO 6346 꼴이 아니면 제작컨(utils.isMadeUnitCn 과 같은 규칙 — 이 파일은 import 가 없어 번들이 가볍게 실린다). 칸에는 madeUnit·size 를 싣고 규격 글자는 «제작컨» 으로 그린다(rzorPrintModel·콘앱).
+const CHK_UNIT_RE = /^(?=[A-Z0-9]*\d)[A-Z][A-Z0-9]{5,10}$/;
+function chkUnitOf(txt, r, c) {
+  const raw = txt(r, c).replace(/\s+/g, '');
+  const cm = raw.match(CHK_CN_RE);
+  if (cm) return { cn: cm[1] + cm[2], made: false };
+  const u = raw.toUpperCase();
+  if (CHK_UNIT_RE.test(u) && CHK_TYP_RE.test(txt(r + 2, c))) return { cn: u, made: true };
+  return null;
+}
 const CHK_TYP_ISO = { H: 'HC', R: 'RH', D: 'GP', G: 'GP', L: 'GP', F: 'FR' };   // F = 플랫(R101W FBIU4020493 «E40'F» 실측 — 2차 시뮬 지적)
 
 /** 검수사 STOWAGE PLAN 양식인지 — 시트 이름이 아니라 내용으로 본다(«STOWAGE PLAN» 제목 + «- DECK» 라벨). XLSX 없이 셀 키만 훑는다. */
@@ -113,7 +126,7 @@ export function parseCheckerPlanWorkbook(wb, XLSX) {
       let bandIdx = 0;
       for (let r = hr + 1; r <= rEnd; r++) {
         let hasCn = false;
-        for (const c of colPos.keys()) if (CHK_CN_RE.test(txt(r, c).replace(/\s+/g, ''))) { hasCn = true; break; }
+        for (const c of colPos.keys()) if (chkUnitOf(txt, r, c)) { hasCn = true; break; }   // 4.20: 제작컨 칸만 있는 줄도 줄이다
         if (!hasCn) continue;
         bandIdx += 1;
         // 줄 번호: 마지막 위치 칸 오른쪽에 적힌 정수(1~8) — 없으면 밴드 순번
@@ -121,10 +134,9 @@ export function parseCheckerPlanWorkbook(wb, XLSX) {
         for (let c = lastCol + 1; c <= Math.min(rg.e.c, lastCol + 4); c++) { const v = val(r, c); if (typeof v === 'number' && v >= 1 && v <= 12) { line = v; break; } }
         if (!line) line = bandIdx;
         for (const [c, pos] of colPos) {
-          const raw = txt(r, c).replace(/\s+/g, '');
-          const cm = raw.match(CHK_CN_RE);
-          if (!cm) continue;
-          const cn = cm[1] + cm[2];
+          const unit = chkUnitOf(txt, r, c);   // 4.20: 실컨번호 또는 제작컨(비ISO 유닛)
+          if (!unit) continue;
+          const cn = unit.cn;
           const wtv = val(r + 1, c);
           const typ = txt(r + 2, c);
           const tm = typ.match(CHK_TYP_RE);
@@ -151,7 +163,8 @@ export function parseCheckerPlanWorkbook(wb, XLSX) {
                        row: String(line).padStart(2, '0'), bay: String(pos).padStart(2, '0'),
                        pos: `${deck}덱 ${line}줄 ${pos}칸`,
                        key: `${deck}-${line}-${pos}`,   // 한 키 = 한 자리(덱-줄-위치). ri·ci 는 그림 좌표라 40피트 두 칸과 옆 칸이 겹친다
-                       chassis: typeof chv === 'number' ? chv : null });
+                       chassis: typeof chv === 'number' ? chv : null,
+                       ...(unit.made ? { madeUnit: true, size: Number(sz) || (/<\s*45\s*>/.test(mark) ? 45 : null) } : {}) });   // 4.20: 제작컨 — 크기는 규격 줄(F45'H)·<45> 표식, 규격 코드는 없다
         }
       }
       if (!slots.length) continue;

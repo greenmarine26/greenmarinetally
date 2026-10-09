@@ -58,24 +58,34 @@ const runFx = (obj) => {
   const r = run(`Promise.all([import('${R}'),import('node:fs')]).then(([m,fsm])=>{`
     + `const v=JSON.parse(fsm.readFileSync('${FXP}','utf8'));`
     + `const cs=m.ptkContainers(v,'discharge');`
-    + `console.log(JSON.stringify([cs.length, cs.map(c=>c.cn).sort()]))})`);
+    + `console.log(JSON.stringify([cs.length, cs.map(c=>c.cn).sort(), cs.filter(c=>c._ediTransit).map(c=>c.cn).sort()]))})`);
   return r;
 };
+//  ★ 4.20 (검수사 2026-10-10 00:02 «그래도 기본은 세관이 맞습니다» · Fable 판정 ④ · 회귀 기준표 R23): 평택 양하분은 **세관 목록 + 추가분** 이다.
+//    세관 목록(_customs)에 있으면 EDI 가 인천(통과)이라 해도 센다 — 통과 표식(_ediTransit)만 남긴다. 3.53 «확정하면 대수가 바뀐다» 는 그대로 —
+//    이제 목록 행을 **평택 아닌 POD 로 확정하면 빠진다**(고른 POD 가 맨 위). 종전(3.53~4.19)엔 EDI POD 가 기준이라 확정 전 1대 · «리스트 것 KRPTK» 확정 뒤 2대였다.
 const before = runFx(FX);
-ok(before[0] === 1 && before[1].join(',') === 'AAAU1111111',
-  `확정 전 — 평택 양하분은 1대뿐이다(EDI 가 인천이라 두 대가 빠진다) [실제 ${before[0]}대]`);
-//  검수사가 «리스트 것 KRPTK» 를 고른 상태 그대로
+ok(before[0] === 3 && before[1].join(',') === 'AAAU1111111,BBBU2222222,SEGU2430571' && before[2].join(',') === 'BBBU2222222,SEGU2430571',
+  `확정 전 — 평택 양하분은 세관 목록 3대(4.20 «기본은 세관») · EDI 가 인천인 두 대는 통과 표식만 [실제 ${before[0]}대 · 표식 ${before[2].join(',')}]`);
+//  검수사가 SEGU 를 «리스트 것 KRPTK» 로 고른 상태 그대로 — 이미 목록이라 대수는 그대로, 통과 표식은 사라진다(고른 POD 가 평택)
 const AFTER = JSON.parse(JSON.stringify(FX));
 AFTER.discharge.records.SEGU2430571 = {
   ...AFTER.discharge.records.SEGU2430571,
   pod: 'KRPTK', pod_orig: 'KRPTK', pod_pick: 'list', pod_pick_label: 'KRPTK', pod_picked_by: '김성일', pod_picked_at: 1,
 };
 const after = runFx(AFTER);
+ok(after[0] === 3 && after[2].join(',') === 'BBBU2222222',
+  `SEGU «리스트 것 KRPTK» 확정 — 대수 3 그대로 · SEGU 통과 표식 없음(고른 POD 가 평택) [실제 ${after[0]}대 · 표식 ${after[2].join(',')}]`);
+//  BBBU 를 «EDI 것 KRINC» 로 고른 상태 — **대수가 3 → 2 로 내린다**(검수사 «갯수가 변경되어야만 계획과 맞습니다» — 고른 POD 가 맨 위)
+const AFTER2 = JSON.parse(JSON.stringify(AFTER));
+AFTER2.discharge.records.BBBU2222222 = {
+  ...AFTER2.discharge.records.BBBU2222222,
+  pod: 'KRINC', pod_orig: 'KRPTK', pod_pick: 'edi', pod_pick_label: 'KRINC', pod_picked_by: '김성일', pod_picked_at: 2,
+};
+const after2 = runFx(AFTER2);
 try { fs.unlinkSync(FXP); } catch { /* 안 지워져도 검사는 계속한다 */ }
-ok(after[0] === 2 && after[1].join(',') === 'AAAU1111111,SEGU2430571',
-  `★ 확정 뒤 — **대수가 1 → 2 로 오른다**(검수사 «갯수가 변경되어야만 계획과 맞습니다») [실제 ${after[0]}대]`);
-ok(!after[1].includes('BBBU2222222'),
-  '⛔ 확정 안 한 통과화물은 그대로 빠진다 — 리스트에 있다고 저절로 들어오지 않는다');
+ok(after2[0] === 2 && after2[1].join(',') === 'AAAU1111111,SEGU2430571',
+  `★ BBBU «EDI 것 KRINC» 확정 뒤 — **대수가 3 → 2 로 내린다**(검수사 «갯수가 변경되어야만 계획과 맞습니다» · 고른 POD 가 맨 위) [실제 ${after2[0]}대]`);
 
 //  ③ 부르는 자리 점호 — 한 곳만 빠져도 화면·서류·대수가 갈린다(규범 §4-4)
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
@@ -248,9 +258,15 @@ if (!FBB || !fs.existsSync(FBB)) {
       const SEC0 = { ediContainers: EDI, records: REC0, completed: {} };
       const SEC1 = { ediContainers: EDI, records: REC1, completed: {} };
       const six = g.sixCounts ? null : null;   // (아래 각 함수를 직접 부른다)
+      //  ★ 4.20 감사(Fable 판정 상-2): 수석 보드 «양하 N»·선박 통계·보관소 수는 평택 양하분 한 벌(utils.ptkDischargeUnitsOf — 리스트 행 + 추가분)이다.
+      //    리스트에 실린 두 대는 확정 전부터 센다(2 → 2) — 확정이 이 수를 움직이는 길은 «평택 아닌 POD 를 고르면 빠진다»(2 → 1). EDI 대조 숫자(아래 셋)는 종전 그대로 1 → 2.
+      const SEC2 = { ediContainers: EDI, records: { ...REC0, SEGU2430571: { ...REC0.SEGU2430571, pod: 'KRINC', pod_pick: 'edi', pod_pick_label: 'KRINC' } }, completed: {} };
+      for (const [nm, fn] of [['firebase._ptkCountOfSection', g.ptkCountOfSection], ['ChiefDashboard.countPtkSection', g.countPtkSection]]) {
+        if (typeof fn !== 'function') { ok(false, `${nm} — 잴 함수가 번들에 없다`); continue; }
+        const a = fn(SEC0, 'discharge'), b = fn(SEC1, 'discharge'), c = fn(SEC2, 'discharge');
+        ok(a === 2 && b === 2 && c === 1, `★ ${nm} — 리스트 두 대는 확정 전부터 2 · 평택 POD 확정 2 · 평택 아닌 POD 를 고르면 1 로 같이 움직인다 [실제 ${a} · ${b} · ${c}]`);
+      }
       const pairs = [
-        ['firebase._ptkCountOfSection', g.ptkCountOfSection],
-        ['ChiefDashboard.countPtkSection', g.countPtkSection],
         ['HomePage.computeStats.ptk', g.computeStatsPtk],
         ['ValidationBox 평택 EDI', g.validationPtk],
         ['ediGap 평택 EDI', g.ediGapPtk],

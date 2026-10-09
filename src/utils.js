@@ -51,7 +51,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.19'   // 4.19 **자료 셋(§7.8-④⑬⑦) 중 ⑬ — 베이사전에 없는 배는 항차를 그대로 등록하고 «사전에 없음» 을 붙인다** — 검수사 2026-10-09 12:23 «항차는 등록하기 사전에 없음 표기». 판정 dictMissing.bayDictMissingOf 한 벌(정본 사전의 베이 구조 · 덱플랜 배 RZOR 제외 · 사전을 못 받았으면 말하지 않음)을 항차 목록 카드·머리줄·베이플랜 머리(DictMissingChip)가 부른다. EDI 자동 등록(M5.89)이 사전에 없는 새 배를 만들 때 provisional 이 undefined 라 실 SDK 가 set 을 거부하던 것(감사 680 · 1.62 이후)은 fbSaveShipBayDict 가 undefined 칸을 쓰지 않게 고쳤다. ⑦ 비ISO 유닛(SAWTBP00N)은 STOWAGE PLAN 파서가 건너뛰는 현행을 기준표 R25 로 고정. ④ 세관 POD 는 Fable 판정 필요로 비움(R23). 4.18-03(f467087) 위에 얹었다.
+export const APP_VERSION = 'TallyOne 4.20'   // 4.20 **자료 셋 마저(§7.8-④⑦) — 평택 양하분은 세관 목록이 기준, 목록 밖 실제 양하분은 추가분 · 제작컨은 대수·크기에 넣고 규격 코드 없음** — 검수사 2026-10-10 00:02 «그래도 기본은 세관이 맞습니다. 나중에 추가분이 생기면 추가분만 더하면 됩니다. 그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다. SAWTBP004는 정상적인 컨테이너가 아닙니다. 제작컨일것입니다. 대수엔 들어 가지만 규격엔 없습니다» · 00:04 «이 기준도 마감텔리로 규정을 정하시면 됩니다» · 00:32 «마저 수정 바랍니다». ④ utils.ptkDischargeUnitsOf 한 벌(세관 목록 L + 추가분 X = EDI POD 평택·완료 기록·터미널 실적 − L · 유닛은 컨번호 · 세관 «최종항» 은 평택 판정에 안 씀 · 목록 없으면 종전 EDI POD 평택)을 마감텔리 ptkContainers·갱별 shiftReportContainers·홈 카드 progressOf·미르 펼치기·voyageCountsOf·항차 화면·검색 패널·출력 센터·콘앱(ConeOne 2.70)이 부른다 — RZOR R106E 189·191·190 → 190 · ATPR 2643E 갱별 266 → 280 · PCBJ 2609N 145(통과 표식 4) → 149. ⑦ utils.isMadeUnitCn(비ISO 유닛)을 applySpecialMarks 입구에서 mkcon·_madeUnit 으로 찍고, 검수사 STOWAGE PLAN 파서가 SAWTBP00N 칸을 낸다(R075W 216 = 시트 TTL · 덱 D 122), 검수 리스트·덱플랜 규격 칸은 «제작컨», 씰은 splitJoinedSeals 로 전부. 4.19(951eaaf) 위에 얹었다.
+// (이전) TallyOne 4.19'   // 4.19 **자료 셋(§7.8-④⑬⑦) 중 ⑬ — 베이사전에 없는 배는 항차를 그대로 등록하고 «사전에 없음» 을 붙인다** — 검수사 2026-10-09 12:23 «항차는 등록하기 사전에 없음 표기». 판정 dictMissing.bayDictMissingOf 한 벌(정본 사전의 베이 구조 · 덱플랜 배 RZOR 제외 · 사전을 못 받았으면 말하지 않음)을 항차 목록 카드·머리줄·베이플랜 머리(DictMissingChip)가 부른다. EDI 자동 등록(M5.89)이 사전에 없는 새 배를 만들 때 provisional 이 undefined 라 실 SDK 가 set 을 거부하던 것(감사 680 · 1.62 이후)은 fbSaveShipBayDict 가 undefined 칸을 쓰지 않게 고쳤다. ⑦ 비ISO 유닛(SAWTBP00N)은 STOWAGE PLAN 파서가 건너뛰는 현행을 기준표 R25 로 고정. ④ 세관 POD 는 Fable 판정 필요로 비움(R23). 4.18-03(f467087) 위에 얹었다.
 // (이전) TallyOne 4.18-03'   // 4.18-03 **엠티 실 작업 현황 규격 글자를 마감텔리 칸대로** — 검수사 2026-10-09 22:44 «현장에서는 45G1 40HC를 40풀이라 하고 엠티는 40엠티라고 부릅니다. 표기 방법은 마감텔리에 있는데로 선사별로 틀립니다». tallyReport.emptySealSpecTally = tallySizeCol 한 벌(20'→20E · 40'→40E · HC→45GE · 45'→L5GE, 리퍼는 RE). 종전엔 20 이 아니면 전부 45xE 라 진짜 45피트·일반 40' 엠티가 40HC 엠티와 섞였다.
 // (이전) TallyOne 4.18-02'   // 4.18-02 **45피트 규격이 비던 것을 메움** — 검수사 2026-10-09 22:01~22:10 «앱이 잘못인식한것이죠 모든곳이 같아야 합니다 · 규격을 놓쳐서는 안된다». EDI 읽는 곳이 ISO 앞자리 95·L5(950E·9500·L5G1·L5GE)에 규격 글자(tp)를 안 채워(OBWH 2762W 엠티 44대 · RZOR L5G1) 자동 가이드가 «950E» 를 그대로 보였다 → 파서가 «45\'HC» 를 채우고 자동 가이드는 공통 규격 판정(isoToLabel)을 보조로 쓴다. 마감텔리(tallySizeCol)는 원래 45\' 칸으로 세어 OBWH 2762W 선적 20\'실4·20\'공112·40실27·HC공100·45\'공44 가 마감텔리 엑셀 OS-OUT 과 일치.
 // (이전) TallyOne 4.18-01'   // 4.18-01 **콘앱 미르도 질문 속 배로 답한다(ConeOne 2.69)** — 4.17 배포 뒤 라이브 실측(콘앱 OBWH_2761E 고른 채): «KBTR 양하 몇 대»·«SMYA 양하 몇 대»·«RZSY 양하 몇 대» 가 전부 고른 배 OBWH 의 237대로 답했다. cone.html mirAsk 가 배 옮기기(mirEnsureShip)를 콘 계산·브리핑·화면 명령 갈래에서만 불러 수 질문은 고른 배로 답했고, 검수앱은 질문 속 배(pickShipCtx)로 답해 두 앱이 갈렸다(검수사 «답이 다르면 통합이 안 된 것» · §7.8-⑧ 과 같은 갈래). mirAsk 머리 mirShipFirst — 질문 속 배 코드(정확·오타·옛 코드, utils.shipCodeInQuery 한 벌)가 지금 배와 다르면 ① 열 수 있는 항차면 그 배로 옮겨 답하고 ② 못 열면(자료 없음·목록에 없음) 그 배 기준 엔진 답(«📭 SMC YANTAI — 컨 자료(EDI·리스트)가 아직 안 왔어요», 옛 코드면 «SMYA 로 답했어요(옛 코드 RZSY)»). 회귀 기준표 R21 콘앱 단언.
@@ -81,7 +82,7 @@ export const APP_VERSION = 'TallyOne 4.19'   // 4.19 **자료 셋(§7.8-④⑬�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.19 베이사전에 없는 배는 항차 목록 카드와 머리줄 그리고 베이플랜 머리에 사전에 없음이 붙습니다. 항차는 그대로 등록되고 매트릭스를 만들면 딱지가 사라집니다.'
+export const APP_NOTE = '4.20 양하 대수는 세관 목록이 기준이고 목록에 없이 내린 컨은 추가분으로 따로 셉니다. 제작컨은 대수와 크기에 들어가고 규격 코드는 없습니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4347,10 +4348,24 @@ export function shiftReportContainers(voyage, m) {
   const edi = sec.ediContainers || {};
   const recs = sec.records || {};
   const comp = sec.completed || {};
-  const cns = new Set([...Object.keys(edi), ...Object.keys(recs)]);
   const out = [];
   //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — 문지기 한 벌(isShiftOffPtk). 선사 리스트에 실려 온 시프팅은 평택분에도 남는다.
   const _ss = shiftCnSetOf(voyageKeyOf(voyage), voyage);
+  //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관»): 양하 평택분은 ptkDischargeUnitsOf 한 벌 — 컨번호로 합친다(EDI 자리표시 키 __SLOT___ 와 records 의 같은 유닛을 두 번 세지 않는다).
+  //    records 의 pod(세관 «최종항»)가 EDI pod 를 덮어 평택분에서 떨어뜨리던 길을 끊는다(ATPR 2643E 280 → 266 이던 것) — 평택 판정은 등재 여부뿐이다.
+  if (m === 'discharge') {
+    const U = ptkDischargeUnitsOf(voyage, _ss);   // 4.20 감사: 같은 시프팅 집합
+    for (const cn of U.set) {
+      if (isShiftOffPtk(_ss, recs, m, cn)) continue;
+      const e = edi[U.ediKeyOf.get(cn)] || edi[cn] || {};
+      const r = recs[cn] || {};
+      //  3.63 — records 의 빈 칸은 EDI 를 덮지 않는다(아래 선적 갈래와 같은 규칙). pod 는 EDI 가 정본(고른 POD 는 resolvedPod 가 이미 반영) — 세관 «최종항» 이 보고서의 POD 를 바꾸지 않는다.
+      const rr = Object.fromEntries(Object.entries(r).filter(([k, vv]) => vv !== '' && vv != null && !(k === 'pod' && e.pod && !r.pod_pick)));
+      out.push(markDischargeUnit({ ...e, ...rr, cn, _comp: comp[cn] || null }, U));
+    }
+    return out;
+  }
+  const cns = new Set([...Object.keys(edi), ...Object.keys(recs)]);
   for (const cn of cns) {
     if (isShiftOffPtk(_ss, recs, m, cn)) continue;
     const e = edi[cn] || {};
@@ -8657,8 +8672,12 @@ export function progressOf(section, mode, shiftSet, ptkCns) {
   const completed = section?.completed || {};
   const ss = shiftSet || new Set();
   const listCns = new Set(ownDirCns(records, mode).filter((cn) => isListOriginRecord(records[cn]) && !isShiftOffPtk(ss, records, mode, cn)));   // 4.16 Fable 판정: 양하는 리스트에 실려 있어도 시프팅으로만 · 선적만 예외
-  const usePtk = listCns.size === 0 && ptkCns && ptkCns.size > 0;
-  const baseSet = usePtk ? new Set([...ptkCns].filter((cn) => !ss.has(cn))) : listCns;
+  //  ★ 4.20 (Fable 판정 ④): 양하 분모 = 평택 양하분 한 벌(ptkDischargeUnitsOf — 세관 목록 + 추가분). 홈 카드·수석 통계·현황 요약 세 호출부가 여기를 지난다.
+  //    목록이 없으면(basis 'edi') 종전 그대로 호출부의 EDI 평택분(ptkCns).
+  const _U = mode === 'discharge' ? ptkDischargeUnitsOf({ discharge: section || {} }, ss) : null;   // 4.20 감사: 이 진행 숫자의 시프팅 집합으로
+  const usePtk = !(_U && _U.basis !== 'edi') && listCns.size === 0 && ptkCns && ptkCns.size > 0;
+  const baseSet = (_U && _U.basis !== 'edi') ? new Set([..._U.set].filter((cn) => !isShiftOffPtk(ss, records, mode, cn)))
+    : usePtk ? new Set([...ptkCns].filter((cn) => !ss.has(cn))) : listCns;
   let baseDone = 0, moves = 0, extra = 0;
   for (const cn of Object.keys(completed)) {
     const inBase = baseSet.has(cn), inShift = ss.has(cn);
@@ -8680,6 +8699,139 @@ export function isShiftOffPtk(shiftSet, records, mode, cn) {
   if (mode !== 'loading') return true;
   const r = records && records[cn];
   return !(r && isListOriginRecord(r) && !isOppositeDirRecord(r, mode));
+}
+//  ★ 4.20 (검수사 2026-10-10 00:02 «그래도 기본은 세관이 맞습니다. 나중에 추가분이 생기면 추가분만 더하면 됩니다. 그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다» · Fable 판정 ④):
+//    **평택 양하분(유닛) 한 벌.** 마감텔리(ptkContainers)·갱별 보고(shiftReportContainers)·홈 카드(progressOf)·미르·콘앱이 이것만 부른다.
+//    종전엔 세 벌(EDI POD 평택 · EDI∪records 에 records POD 가 덮음 · 리스트)이 같은 배를 다르게 셌다 — RZOR R106E 마감텔리 189 · 갱별 191 · 홈 190, ATPR 2643E 갱별 266(세관 «최종항» VNSGN 이 평택분을 떨어뜨림).
+//    L(목록) = 양하 records 중 리스트 출신(isListOriginRecord)·반대 방향 아님. 세관 표식(_customs)이 하나라도 있으면 세관 행만(basis 'customs'),
+//      없으면 선사 양하 리스트(basis 'list' — 2.89-07 홈 카드와 같음), L 이 비면 basis 'edi'.
+//    X(추가분) = (EDI POD 평택 ∪ 완료 기록 ∪ 터미널 실적) − L — 목록에 없이 실제로 내린 컨(신고 대상). basis 'edi' 면 추가분 없음(종전 그대로 EDI POD 평택 — 무적 완료는 분모 밖).
+//    유닛은 컨번호(cn)로 센다 — EDI 자리표시 키(__SLOT___)는 그 행의 cn 으로(R106E SAWTBP004 를 EDI 키·records 키로 두 번 세던 것). 예약 자리·컨번호 없는 자리는 유닛이 아니다.
+//    세관 «최종항» 열(records.pod)은 평택 판정에 쓰지 않는다(등재 여부만). EDI 가 통과분이라 해도 세관 목록에 있으면 센다(PCBJ 2609N 4대) — transit 에 남겨 보고서가 밝힌다.
+//    검수사·수석이 고른 POD(pod_pick)는 종전대로 맨 위다(3.53) — 평택 아닌 POD 를 고른 목록 행은 빼고, 고른 평택 POD 는 EDI POD 대신 본다.
+//    ★ 4.20 감사(Fable 판정 상-1): **시프팅을 안다** — 양하 방향 시프팅 컨(isShiftOffPtk 'discharge' — 늘 뺀다)은 set·extra·transit 에 안 든다.
+//      종전엔 «입구마다 거른다» 였는데 거르지 않는 입구(마감 점검 분모 MCSC 633N 374 · 시프팅 95대의 추가분 표식)가 샜다. 입구의 isShiftOffPtk 는 그대로 둔다(중복 · 해 없음).
+//      shiftSet 을 넘기면 그것을(진행 숫자·미르 분모·콘앱 — 이미 가진 집합), 안 넘기면 항차 전체(key 또는 info 가 있는 것)에서 shiftCnSetOf 로 구한다. 반쪽 항차(양하 묶음만)는 빈 집합.
+//    완료 기록의 누락 표식(flag 'missing')은 내린 컨이 아니다.
+export const EXTRA_OF_LIST_LABEL = { customs: '추가분 — 세관 목록에 없음(신고 대상)', list: '추가분 — 양하 리스트에 없음' };
+//  미르 대수 답에 붙는 한 토막 — 컨 상세 표식(EXTRA_OF_LIST_LABEL)과 같은 자리에 둔다. 추가분이 없으면 빈 글.
+export function extraOfListNote(n, basis) {
+  if (!(n > 0)) return '';
+  return basis === 'list' ? `(양하 리스트 밖 추가분 ${n}대)` : `(세관 목록 밖 추가분 ${n}대 — 신고 대상)`;
+}
+const _unitKey = (k) => !!k && !String(k).startsWith('_');
+export function ptkDischargeUnitsOf(voyage, shiftSet) {
+  const sec = (voyage && voyage.discharge) || {};
+  const shSet = shiftSet instanceof Set ? shiftSet : (voyage && (voyage.key || voyage.info)) ? shiftCnSetOf(voyageKeyOf(voyage), voyage) : new Set();
+  const onPtk = (cn) => !isShiftOffPtk(shSet, sec.records || {}, 'discharge', cn);   // 양하는 시프팅이면 늘 뺀다
+  const edi = sec.ediContainers || {}, recs = sec.records || {}, comp = sec.completed || {}, tw = sec.termWork || {};
+  const ediKeyOf = new Map(), ediPtk = new Set(), ediNotPtk = new Set();
+  for (const [k, c] of Object.entries(edi)) {
+    if (!c || c.isBooking || c.pendingCn) continue;
+    const cn = String(c.cn || k || '').trim();
+    if (!_unitKey(cn)) continue;
+    if (!ediKeyOf.has(cn) || k === cn) ediKeyOf.set(cn, k);
+    if (isPyeongtaekPort(resolvedPod(c, recs[cn]))) { ediPtk.add(cn); ediNotPtk.delete(cn); }
+    else if (!ediPtk.has(cn)) ediNotPtk.add(cn);
+  }
+  const rows = Object.entries(recs).filter(([cn, r]) => _unitKey(cn) && r && isListOriginRecord(r) && !isOppositeDirRecord(r, 'discharge'));
+  const cust = rows.filter(([, r]) => r._customs);
+  const basis = cust.length ? 'customs' : (rows.length ? 'list' : 'edi');
+  const extra = new Set();
+  if (basis === 'edi') return { basis, set: new Set([...ediPtk].filter(onPtk)), extra, listSet: new Set(), ediKeyOf, transit: new Set(), shiftSet: shSet };
+  const picked = (r) => !!(r.pod_pick && r.pod && !isPyeongtaekPort(r.pod));   // 3.53: 평택 아닌 POD 를 고른 행
+  const listSet = new Set((basis === 'customs' ? cust : rows).filter(([, r]) => !picked(r)).map(([cn]) => cn));
+  const add = (cn) => { if (_unitKey(cn) && !listSet.has(cn) && !(recs[cn] && picked(recs[cn])) && onPtk(cn)) extra.add(cn); };
+  for (const cn of ediPtk) add(cn);
+  for (const [cn, w] of Object.entries(comp)) if (w && !(typeof w === 'object' && w.flag === 'missing')) add(cn);
+  for (const cn of Object.keys(tw)) add(cn);
+  const transit = new Set([...listSet].filter((cn) => ediNotPtk.has(cn) && onPtk(cn)));
+  return { basis, set: new Set([...[...listSet].filter(onPtk), ...extra]), extra, listSet, ediKeyOf, transit, shiftSet: shSet };
+}
+//  4.20 후속 (Fable 판정 ④-4 — 규범 §4-4): 미르 «양하 몇 대»·«총 무브수»·교대 브리핑·갱 배분이 같은 양하 수를 말하게 하는 한 벌.
+//    pred(c) — 그 양하 행(EDI 행 등 cn 이 있는 행)이 평택 양하분인가(시프팅이면 아님). 목록 없는 배(basis 'edi')는 pred 가 null — 부르는 쪽 종전 POD 판정.
+//    cns — 평택 양하분 컨번호(시프팅 뺌). 행이 없는 유닛(세관 목록에만 있는 컨)도 든다.
+export function ptkDischargeJudgeOf(voyage) {
+  const U = ptkDischargeUnitsOf(voyage);
+  if (U.basis === 'edi') return { U, pred: null, cns: null };
+  const ss = shiftCnSetOf(voyageKeyOf(voyage), voyage);
+  const recs = (voyage && voyage.discharge && voyage.discharge.records) || {};
+  const on = (cn) => !!cn && U.set.has(cn) && !isShiftOffPtk(ss, recs, 'discharge', cn);
+  return { U, pred: (c) => on(c && c.cn), cns: [...U.set].filter(on) };
+}
+//  4.20 — EDI 묶음을 유닛 컨번호로 다시 건다 — 자리표시 키(__SLOT___ 등)에 컨번호가 든 행(제작컨 SAWTBP004)은 그 컨번호 키로 옮긴다(이미 그 키가 있으면 그대로).
+//    «EDI 키 ∪ records 키» 로 목록을 만드는 화면(출력 센터·현황 요약·마감 점검)이 같은 유닛을 두 줄로 세지 않게 — ptkDischargeUnitsOf 와 같은 «cn 기준».
+export function ediByUnitCn(ediMap) {
+  const em = ediMap || {};
+  let out = null;
+  for (const [k, e] of Object.entries(em)) {
+    if (!e || !e.cn || e.cn === k || !String(k).startsWith('__') || String(e.cn).startsWith('__') || em[e.cn]) continue;
+    if (!out) out = { ...em };
+    out[e.cn] = e; delete out[k];
+  }
+  return out || em;
+}
+//  4.20 — 추가분·통과 표식을 컨에 얹는다(한 벌). U = ptkDischargeUnitsOf 결과. 그 밖의 칸은 건드리지 않는다.
+export function markDischargeUnit(c, U) {
+  if (!c || !c.cn || !U || U.basis === 'edi') return c;
+  const ex = U.extra.has(c.cn), tr = U.transit.has(c.cn);
+  if (!ex && !tr) return c;
+  return { ...c, ...(ex ? { _extraOfList: true, _extraBasis: U.basis } : {}), ...(tr ? { _ediTransit: true } : {}) };
+}
+
+//  4.20 — 행이 없는 유닛(세관 목록·EDI 어디에도 행이 없고 완료 기록·터미널 실적만 있는 컨)의 맨 행 — 터미널 실적의 F/E·선사만 싣는다(지어내지 않는다).
+export function dischargeUnitBareRow(voyage, cn) {
+  const t = ((voyage && voyage.discharge && voyage.discharge.termWork) || {})[cn] || {};
+  return { cn, ...(t.fe ? { fe: t.fe } : {}), ...(t.op ? { op: t.op } : {}) };
+}
+//  4.20 — 미르 재료 행(양하·선적이 섞인 목록)에 평택 양하분 한 벌을 입힌다 — 콘앱 미르(cone.html mirAsk)·미르 _normalize(평택 표식이 없는 행)가 부른다.
+//    양하 행에 _ptk(유닛이면 true · 시프팅이면 false)·추가분·통과 표식을 찍고, 유닛인데 행이 없는 것(세관 목록에만 있는 컨 등)은 records 행(빈 칸 버림)으로 만들어 붙인다.
+//    voyage 에 EDI 묶음이 없으면(콘앱 — 완료·리스트만 받는다) 넘겨받은 양하 행을 EDI 로 본다. 목록이 없는 배(basis 'edi')는 손대지 않는다(종전 판정 그대로).
+export function applyDischargeUnits(rows, voyage, shiftSet) {
+  const list = Array.isArray(rows) ? rows : [];
+  const dSec = (voyage && voyage.discharge) || {};
+  const isD = (x) => !!(x && x.cn && (x._mode || x.mode || 'discharge') === 'discharge');
+  const own = dSec.ediContainers && Object.keys(dSec.ediContainers).length ? dSec.ediContainers : null;
+  const ss = new Set(shiftSet instanceof Set ? shiftSet : (Array.isArray(shiftSet) ? shiftSet : []));
+  for (const x of list) if (isD(x) && x._shift) ss.add(x.cn);   // 4.20 감사: 콘앱이 «시프팅분» 으로 찍은 행도 한 벌 판정의 시프팅 집합으로
+  const U = ptkDischargeUnitsOf({ discharge: { ...dSec, ediContainers: own || Object.fromEntries(list.filter(isD).map((x) => [x.cn, x])) } }, ss);
+  if (U.basis === 'edi') return { rows: list, U };
+  const recs = dSec.records || {}, comp = dSec.completed || {};
+  const off = (x) => !!(x && x._shift) || isShiftOffPtk(ss, recs, 'discharge', x.cn);
+  const seen = new Set();
+  const out = list.map((x) => {
+    if (!isD(x)) return x;
+    seen.add(x.cn);
+    return markDischargeUnit({ ...x, _mode: 'discharge', _ptk: U.set.has(x.cn) && !off(x) }, U);
+  });
+  for (const cn of U.set) {
+    if (seen.has(cn) || off({ cn })) continue;
+    const r = recs[cn];
+    const base = r ? Object.fromEntries(Object.entries(r).filter(([, v]) => v !== '' && v != null)) : dischargeUnitBareRow(voyage, cn);
+    out.push(markDischargeUnit({ ...base, cn, _mode: 'discharge', _ptk: true, _src: r ? 'list' : 'unit', ...(comp[cn] ? { _comp: comp[cn] } : {}) }, U));
+  }
+  return { rows: out, U };
+}
+
+//  ★ 4.20 (검수사 2026-10-10 00:02 «SAWTBP004는 정상적인 컨테이너가 아닙니다. 제작컨일것입니다. 대수엔 들어 가지만 규격엔 없습니다»):
+//    **제작컨(비ISO 유닛) 판정 한 벌** — 유닛 꼴(영문 2~6 + 숫자 3~8 — SAWTBP005 · XNX26261001)이면서 ISO 6346 꼴(영문 4 + 숫자 7)이 아니면 제작컨이다.
+//      4.20 감사(Fable 판정 중-7): 글자만 있는 값(TBN)·항차 번호 꼴(R083E)은 유닛이 아니다. 4.20 재감사: ISO 오타 꼴(영문 4 + 숫자 6~8 — ABCU123456)도 제작컨이 아니다.
+//    대수와 크기 행(20·40·HC·45)에는 들어가고 ISO 규격 코드는 없다(«제작컨» 으로). 수화물(LUG)과는 별개다(RZOR R075E&W 마감텔리 실측 — SAWTBP005 는 제 그룹 · LUG 는 따로).
+export const MADE_UNIT_LABEL = '제작컨';
+export function isMadeUnitCn(cn) {
+  const s = String(cn || '').replace(/[\s-]/g, '').toUpperCase();
+  return /^[A-Z]{2,6}\d{3,8}$/.test(s) && !/^[A-Z]{4}\d{6,8}$/.test(s);
+}
+//  4.20 — 세관 셀에 씰 여러 개가 붙어 온 것(«LF102335LF102350LF102345LF102336»)을 가른다. 같은 꼴 토큰(영문 1~3 + 숫자 5~8 — 영문 수·숫자 수가 같음)이
+//    둘 이상 이어지고 전체가 그 토큰으로만 이뤄졌을 때만 가른다. 아니면 원문 한 개 그대로. 제작컨 행에만 쓴다(일반 컨 씰은 손대지 않는다).
+export function splitJoinedSeals(sl) {
+  const s = String(sl == null ? '' : sl).trim();
+  if (!s) return [];
+  const t = s.replace(/\s+/g, '').toUpperCase();
+  const toks = t.match(/[A-Z]{1,3}\d{5,8}/g);
+  if (!toks || toks.length < 2 || toks.join('') !== t) return [s];
+  const shape = (x) => x.replace(/\d/g, '9').replace(/[A-Z]/g, 'A');
+  return toks.every((x) => shape(x) === shape(toks[0])) ? toks : [s];
 }
 //  예측 시프팅 항목 판정 한 벌은 cargoPlanCore.isPredShift(그림이 쓰는 곳 — cargoPlanCore 는 import 가 없어 거기 둔다). 여기서는 다시 내보내기만 한다.
 export { isPredShift } from './cargoPlanCore.js';
@@ -8731,7 +8883,7 @@ export function thruCnSetOf(mode, recMap, loadEdiMap, dischEdiMap) {
 
 export function shiftCnSetOf(voyageKey, voyage) {
   try { return new Set(Object.keys(computeShiftingMapCached(voyageKey, voyage) || {}).filter((k) => !k.startsWith('_'))); }
-  catch (e) { return new Set(); }
+  catch (e) { console.warn('[시프팅 집합] 확정 지도 실패 — 시프팅 0 으로 셉니다(추가분에 이적 컨이 섞일 수 있음):', e); return new Set(); }
 }
 
 // 2.96: 시프팅 캐시 서명용 — 검수원이 고친 자리만 뽑아 짧게 찍는다(레코드 전체를 넣으면 매 틱 무효화).
@@ -9021,15 +9173,20 @@ export function applySpecialMarks(voyage, list) {
   //    정본 통로는 forecast.luggageCns(덱플랜 LUG 도 VoyagePage 가 여기로 승격 — 2.06-01).
   const _la = voyage?.info?.forecast?.luggageCns;
   const lg = new Set((Array.isArray(_la) ? _la : []).map((x) => String(x || '').trim().toUpperCase()).filter(Boolean));
-  if ((!s.size && !lg.size) || !Array.isArray(list)) return list;
+  if (!Array.isArray(list)) return list;
+  //  ★ 4.20 (검수사 2026-10-10 00:02 «SAWTBP004는 … 제작컨일것입니다»): **비ISO 유닛은 이 입구에서 제작컨(mkcon)으로 찍는다**(isMadeUnitCn 한 벌) —
+  //    종전 mkcon 경로(리퍼 온도 제외·«제작컨» 표기·RF 시트 제외)가 그대로 받는다. _madeUnit 은 «규격 코드 없음» 표식. 수화물(lugg)은 찍지 않는다(LUG 와 별개).
+  const anyMade = list.some((c) => c && c.cn && !c._madeUnit && isMadeUnitCn(c.cn));
+  if (!s.size && !lg.size && !anyMade) return list;
   return list.map((c) => {
     if (!c || !c.cn) return c;
     const k = String(c.cn).trim().toUpperCase();
-    const mk = !c.mkcon && s.has(k), lu = !c.lugg && lg.has(k);
-    if (!mk && !lu) return c;
+    const mk = !c.mkcon && s.has(k), lu = !c.lugg && lg.has(k), mu = !c._madeUnit && isMadeUnitCn(k);
+    if (!mk && !lu && !mu) return c;
     const t = { ...c };
     if (mk) t.mkcon = true;
     if (lu) t.lugg = true;
+    if (mu) { t.mkcon = true; t._madeUnit = true; }
     return t;
   });
 }

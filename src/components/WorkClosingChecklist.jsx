@@ -4,19 +4,22 @@
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
-import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots , applySpecialMarks} from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn} from '../utils.js';
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 온도·사진 항목을 세지 않는다
   const items = useMemo(() => {
     if (!voyage) return [];
     const sec = voyage[mode] || {};
-    const ediMap = sec.ediContainers || {};
+    //  ★ 4.20 (Fable 판정 ④): 양하 분모 = 평택 양하분 한 벌(세관 목록 + 추가분) — 마감텔리·홈 카드와 같은 집합. EDI 는 유닛 컨번호로 건다(제작컨 자리표시 키를 두 줄로 안 센다).
+    const _dU = mode === 'discharge' ? ptkDischargeUnitsOf(voyage) : null;
+    const _useDU = !!(_dU && _dU.basis !== 'edi');
+    const ediMap = _useDU ? ediByUnitCn(sec.ediContainers || {}) : (sec.ediContainers || {});
     const recMap = sec.records || {};
     const compMap = sec.completed || {};
     const xrayMap = sec.xrayList || {};
     const xraySeals = sec.xraySeals || {};
 
-    const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+    const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap), ...(_useDU ? _dU.set : [])]);
     //  3.26: 부킹 자리를 실번호가 다 채웠으면 자리는 세지 않는다(utils 한 벌 — 현황요약·검수 리스트와 같은 수).
     const containersRaw = dropFilledBookingSlots([...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
@@ -33,7 +36,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
       //    마감텔리·검수 리스트와 같아야 한다(검수사 «갯수가 변경되어야만 계획과 맞습니다»).
       if (r.pod_pick && r.pod) merged.pod = r.pod;
       return merged;
-    }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol)), { ediMap, recMap, mode });   // V7.93-02: 평택분만 (7.1)
+    }).filter(c => (_useDU ? _dU.set.has(c.cn) : (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol)))), { ediMap, recMap, mode });   // V7.93-02: 평택분만 (7.1) · 4.20: 양하는 유닛 한 벌
     //  ★ 3.37(감사 실측) — 마감 점검은 화면 목록을 안 쓰고 **제 목록을 따로 만든다.**
     //    특수제작컨 표시(`mkcon`)를 여기서도 찍어야 리퍼 온도·사진 셈이 화면·진단과 갈리지 않는다(규범 §4-4).
     const containers = applySpecialMarks(voyage, containersRaw);

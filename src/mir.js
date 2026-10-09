@@ -33,6 +33,7 @@ import {
   dateWordOf,   // 4.12-02: 날짜 말(어제·내일·낼모레…) 해석 한 벌
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
+  ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -598,6 +599,9 @@ export function flattenVoyages(voyages) {
       //    종전엔 «리스트에 기록이 있으면 평택분» 이라 시프팅 재선적 자리 기록이 생기면 미르 «선적 몇 대» 가 293 → 298 로 샜다(MCAP 639N).
       //    선사 리스트에 실려 온 시프팅은 평택분에도 남는다(Fable 판정 ⑤). 시프팅 행에는 _shift(내림 out · 실음 in)를 찍는다 — 미르 시프팅 집합이 읽는다.
       const _shSp = _shiftSplitCached(vKey, v);
+      //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관»): 양하 평택분 = ptkDischargeUnitsOf 한 벌(세관 목록 + 추가분). 목록이 없는 배(basis 'edi')는 종전 POD 판정.
+      const _U = mode === 'discharge' ? ptkDischargeUnitsOf(v, _shSp.set) : null;   // 4.20 감사: 시프팅은 이 펼치기와 같은 집합으로 뺀다
+      const _useU = !!(_U && _U.basis !== 'edi');
       const merged = {};
       //  3.31: 항차 화면·마감텔리와 같은 선사 코드로(같은 배를 두 화면이 다르게 답하면 안 된다).
       const _spOpG = shipOpMapper(String(v.info?.vsl || '').toUpperCase(),
@@ -641,12 +645,14 @@ export function flattenVoyages(voyages) {
         if (_ebM && r.iso_pick) safeR.oog = isoPickOog(r, _ebM.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
       });
+      //  4.20: 유닛인데 EDI·리스트 어디에도 행이 없는 컨(완료 기록·터미널 실적만 있는 추가분)도 행으로 — 미르 대수가 마감텔리·갱별·홈 카드와 같은 수가 된다.
+      if (_useU) for (const cn of _U.set) if (!merged[cn]) merged[cn] = { ...dischargeUnitBareRow(v, cn), _src: 'unit' };
       //  ★ 3.70-01 — 특수제작컨·수화물 표시 입구(utils.applySpecialMarks 한 벌). 떠 있는 미르·홈 통합검색·홈에서 여는 컨 상세가
       //    이 목록을 쓴다 — 안 찍으면 수화물 리퍼가 «세팅 온도 기록 없음» 으로 답했다(감사 실측, 항차 화면과 답이 갈림).
       applySpecialMarks(v, Object.values(merged)).forEach((c) => {
         if (!c.cn) return;
         arr.push({
-          ...c,
+          ...(_useU ? markDischargeUnit(c, _U) : c),   // 4.20: 추가분(_extraOfList)·통과(_ediTransit) 표식
           /* 1.55-03: 실체 위치 승격 — 창고(__)는 제외. */
           ...((c.bay_actual && c.row_actual && c.tier_actual && !String(c.bay_actual).startsWith('__')) ? { bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual } : {}),
           voyageKey: vKey,
@@ -654,7 +660,7 @@ export function flattenVoyages(voyages) {
           voy: v.info.voy,
           mode,
           _mode: mode,
-          _ptk: (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPtk({ ...c, _inList: !!recMap[c.cn] }, mode)) && !_shSp.offPtk(mode, c.cn),
+          _ptk: (mode === 'discharge' ? (_useU ? _U.set.has(c.cn) : isPyeongtaekPort(c.pod)) : isPtk({ ...c, _inList: !!recMap[c.cn] }, mode)) && !_shSp.offPtk(mode, c.cn),   // 4.20: 양하는 유닛 한 벌(세관 «최종항» 이 아니라 등재 여부)
           ...(_shSp.set.has(c.cn) ? { _shift: mode === 'discharge' ? 'out' : 'in' } : {}),
           isXray: mode === 'discharge' && !!xrayMap[c.cn],
           _xray: mode === 'discharge' && !!xrayMap[c.cn],
@@ -695,6 +701,14 @@ export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = nul
       const recs = (voyage && voyage[m] && voyage[m].records) || {};
       const l = new Set(ownDirCns(recs, m).filter((cn) => isListOriginRecord(recs[cn])));
       listOf[m] = l.size > 0 ? l : null;
+      //  ★ 4.20 (Fable 판정 ④): 양하 분모 = 평택 양하분 한 벌(세관 목록 + 추가분 — 홈 카드 progressOf·마감텔리·갱별과 같은 집합). 원본에 EDI 가 없으면(콘앱) 넘겨받은 양하 행을 EDI 로 본다.
+      if (m === 'discharge' && listOf[m]) {
+        const dSec = (voyage && voyage.discharge) || {};
+        const ownE = dSec.ediContainers && Object.keys(dSec.ediContainers).length ? dSec.ediContainers : null;
+        const giv = Array.isArray(fallbackContainers) ? fallbackContainers.filter((x) => x && x.cn && (x._mode || 'discharge') === 'discharge') : [];
+        const U = ptkDischargeUnitsOf({ discharge: { ...dSec, ediContainers: ownE || Object.fromEntries(giv.map((x) => [x.cn, x])) } }, ss);   // 4.20 감사: 이 분모의 시프팅 집합으로
+        if (U.basis !== 'edi') listOf[m] = U.set;
+      }
     } catch (e) { console.warn('[미르] 리스트 분모 세기 실패 — EDI 평택분으로 셉니다:', e); listOf[m] = null; }
   }
   const hasEdi = !!(voyage && voyage.info && ['discharge', 'loading'].some((m) => has(m, 'ediContainers')));
@@ -1803,6 +1817,18 @@ function _normalize(ctx) {
       const mk = applySpecialMarks({ info: c.info }, sub);
       if (mk !== sub) { const out = c.containers.slice(); idx.forEach((i, j) => { out[i] = mk[j]; }); c.containers = out; }
     }
+  }
+  //  ★ 4.20 (Fable 판정 ④): 평택 표식이 없는 양하 행(콘앱 행·양하선적 탭 카드)도 평택 양하분 한 벌로 — 세관 목록에만 있는 컨은 행을 만들어 붙인다(utils.applyDischargeUnits — 콘앱 mirAsk 와 같은 함수).
+  //    이미 평택 표식이 있는 목록(펼치기·검색 패널)은 건드리지 않는다. 목록이 없는 배(basis 'edi')는 아래 종전 판정 그대로.
+  if (v && c.containers.some((x) => x && x.cn && x._ptk === undefined && (x._mode || x.mode || c.mode || 'discharge') === 'discharge')) {
+    try {
+      const vk = c.voyageKey || null;
+      const mine = c.containers.filter((x) => x && (!vk || !x.voyageKey || x.voyageKey === vk));
+      if (mine.length === c.containers.length) {
+        const ss = new Set(Object.keys(c.shiftMap || {}).filter((k) => k && !k.startsWith('_')));
+        c.containers = applyDischargeUnits(c.containers.map((x) => (x && !x._mode && (x.mode || c.mode) ? { ...x, _mode: x.mode || c.mode } : x)), v, ss).rows;
+      }
+    } catch (e) { console.warn('[미르 4.20] 평택 양하분 입히기 실패 — 종전 판정으로 셉니다:', e); }
   }
   //  ★ 감사 지적(치명 1) — 양하선적 탭 카드·콘앱 컨에는 `_ptk`·`_mode` 가 없다. 그대로 두면 진행 답(formatAppTallyAnswer 의 `_ptk` 필터)이
   //    풀 0 으로 «앱 검수 기록 없음» 거짓을 낸다. 판정은 utils.isPtk 한 벌(§4-4) — 여기서 한 번 찍고 아래 갈래 전부가 그것을 본다.

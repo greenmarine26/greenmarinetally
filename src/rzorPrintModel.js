@@ -3,7 +3,7 @@
 //   · 같은 판정은 한 벌 — 특수화물 글자는 카고플랜(getMarkV2)과 같은 순서(DG → RF/RE → FR → TK → OT), 리퍼·플랫랙 판정은 utils 한 벌, 칸 집계·섀시 수는 rzorPlanExcel.buildCheckerPlanWorkbook 과 같은 식(연막검사가 대조).
 //   · LOLO 구역 — D 덱 10~15칸(45자리, 8줄은 13~15칸만). 터미널이 크레인 베이(22)로 작업한 칸(확장 49·67대)과 플랜의 lolo 칸은 같이 굵은 선 안에 든다.
 import { RZOR_CARRIER_ART } from './rzorDeckArt.js';
-import { isReeferIso, isReeferContainer, isFlatRackContainer } from './utils.js';
+import { isReeferIso, isReeferContainer, isFlatRackContainer, MADE_UNIT_LABEL } from './utils.js';
 import { checkerTypeOf } from './rzorPlanExcel.js';
 import { RZOR_DECK_SLOTS, RZOR_CRANE_BAY } from './data/rzorDeckRules.js';
 
@@ -277,7 +277,7 @@ export function buildPrintModel({ plan, containers = [], xrayMap = {}, termWork 
       const w = px.uw * g.span;
       const wide = fmt === 'carrier' && px.uw >= 60;   // 덱 단위로 같게 — B덱(20피트 큰 칸)만 번호 한 줄
       const wtTxt = s.wt != null && s.wt !== '' ? String(Math.round(Number(s.wt))) : '';
-      const baseTxt = fmt === 'checker' ? t.txt : `${String(s.iso || '').trim()} ${s.fe === 'E' ? 'E' : 'F'}`.trim();
+      const baseTxt = s.madeUnit ? MADE_UNIT_LABEL : (fmt === 'checker' ? t.txt : `${String(s.iso || '').trim()} ${s.fe === 'E' ? 'E' : 'F'}`.trim());   // 4.20: 제작컨은 규격 코드 없이 «제작컨»
       const flagTxt = fmt === 'carrier' ? `${m.urgentFlag ? '긴급' : ''}${m.urgentFlag && m.fish ? ' ' : ''}${m.fish ? '활어' : ''}` : '';   // 4.04: 선사 파일 칸 글자 «긴급»·«활어»
       const typeTxt = flagTxt ? `${baseTxt} ${flagTxt}` : baseTxt;
       const lines = [];

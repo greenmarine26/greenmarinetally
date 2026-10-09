@@ -8,7 +8,7 @@
 //   - 시트1=전체, 시트2=특수화물 별첨
 
 import { shipOpMapper } from './data/tallyFormats.js';
-import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
   //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
@@ -189,6 +189,7 @@ export const memoFitOf = (plain) => _memoFit(String(plain || ''));
 //    OBWH 2749E 세관 246대 중 103대가 원문과 다른 글자로 찍혔다(44GP→45GP 97 · 45HC→L5GP 5 · 40HT→42VH 1).
 //    ⚠ 판정(묶음 20/40·특수·대수)은 이 글자가 아니라 라벨(getContainerCategory)로 한다 — 글자만 세관을 따른다.
 const _specOf = (c) => {
+  if (c && (c._madeUnit || isMadeUnitCn(c.cn))) return MADE_UNIT_LABEL;   // ★ 4.20 (검수사 2026-10-10 00:02 «제작컨일것입니다 … 규격엔 없습니다»): 제작컨은 ISO 규격 코드가 없다 — 세관 셀의 45HC 도 적지 않는다
   const _cus = String((c && c.iso_customs) || '').trim();
   if (_cus) return _cus;
   const s0 = isoToCustomsSpec(c && c.iso, '');
@@ -241,7 +242,7 @@ function renderRow(c, idx, opts) {
   //  ★ 3.53-10 — **실번호를 자르지 않는다.** 검수사 2026-09-21 «검수리스트에서 셀 자리수 부족으로 실번호 잘림현상 해결바람»
   //    (ATPR 2642E — 실번호 SINOKOR011526 이 종이에 «SINOKOR011» 로 나갔다). M5.52 가 선사 칸 공간을 위해 10자로 잘랐는데
   //    검수는 실번호로 실물을 맞추는 일이라 뒷자리를 잃으면 종이가 거짓이 된다. 칸을 넓히고(실번호 16→18%, 컨번호 19→17%) 10자 넘으면 6pt 로 줄인다 — 줄바꿈은 장당 줄수를 깨므로 안 쓴다.
-  const sl = String(c.sl || '').trim();
+  const sl = (c._madeUnit || isMadeUnitCn(c.cn)) ? splitJoinedSeals(c.sl).join(' ') : String(c.sl || '').trim();   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다(일반 컨 씰은 그대로)
   const _slCls = sl.length > 13 ? ' s3' : sl.length > 10 ? ' s2' : sl.length > 8 ? ' s1' : '';   // 3.60: 9~10자 7.5pt · 11자부터 6pt   // 3.60: 세 단 — 9자부터 6pt(10자 실번호가 8pt 로 칸을 넘었다, 크로뮴 실측)
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
   const isBooking = c.isBooking === true || c.pendingCn === true ||
