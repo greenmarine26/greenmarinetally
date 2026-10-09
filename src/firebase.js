@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, onValue, push, set, update, remove, get, off, goOffline, goOnline
 } from 'firebase/database';
-import { closingEdiEntries } from './loadingEdiExport.js';   // 4.12: 마감적용 — 마감텔리 선적 EDI 가 고르는 컨 한 벌
+import { closingEdiEntries, closingEdiPlan } from './loadingEdiExport.js';   // 4.12: 마감적용 — 마감텔리 선적 EDI 가 고르는 컨 한 벌
 import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
 import {
@@ -1137,10 +1137,11 @@ export async function fbApplyTermSnapshot(voyageKey, mode, by) {
 //   ⚠ 쓰기는 completed 에 **추가만** — 앱 완료가 이미 있는 컨(검수원·터미널 반영)은 건너뛴다. 기록 = `{by:'', src:'edi', at:작업 끝 시각}`(이름·호기 없음).
 //   ⚠ 문지기(소유자·동방·작업 끝난 배)는 데이터가 들어오는 이 자리에 선다 — 화면의 비활성은 보조다. 대상 컨은 화면이 넘기지 않고 여기서 새로 읽어 정한다(낡은 화면으로 쓰지 않는다).
 //   ⚠ 구독하지 않는다 — 누를 때 info·loading 을 한 번 읽는다.
-export async function fbApplyClosingEdi(voyageKey, by) {
+export async function fbApplyClosingEdi(voyageKey, by, ediRows) {
   assertOwner('마감적용', by);
   assertCanWork('마감적용');
   if (!voyageKey) throw new Error('마감적용할 항차가 없습니다');
+  if (Array.isArray(ediRows)) return applyClosingEdiFile(voyageKey, by, ediRows);   // 4.17 — 파일을 올린 경우
   const [infoSnap, loadSnap] = await Promise.all([
     get(ref(db, `voyages/${voyageKey}/info`)),
     get(ref(db, `voyages/${voyageKey}/loading`)),
@@ -1157,6 +1158,50 @@ export async function fbApplyClosingEdi(voyageKey, by) {
   const applied = Object.keys(patch).length;
   if (applied) await update(ref(db), patch);
   return { ok: true, applied, bad, total: r.total, appDone: r.appDone, at: r.gate.at };
+}
+
+// ── 4.17: 마감적용 — 수석 마감텔리 선적 EDI 파일을 올려 실제 자리와 완료를 맞춘다 ──
+//   검수사 2026-10-09 20:34 «동방자료를 먼저 넣은것은 컨의 선적 타임을 알기 위해서 입니다. 그걸 알아야 베이별 완료시간도 알수 있습니다» → 동방 완료의 **시각은 그대로**, 계획 표식만 걷고 자리를 EDI 자리로 바꾼다.
+//   ⚠ 사람이 찍은 완료(검수원·콘앱)는 완료도 자리도 건드리지 않는다. 대상은 화면이 아니라 여기서 info·loading 을 새로 읽어 closingEdiPlan 으로 정한다.
+//   ⚠ PATCH(update)만 — 통째 쓰기 없음. 자리는 fbSetActualPosition 과 같은 칸(bay_actual…) + moves 이력(why:'actual').
+async function applyClosingEdiFile(voyageKey, by, ediRows) {
+  const [infoSnap, loadSnap] = await Promise.all([
+    get(ref(db, `voyages/${voyageKey}/info`)),
+    get(ref(db, `voyages/${voyageKey}/loading`)),
+  ]);
+  const voyage = { info: infoSnap.val() || {}, loading: loadSnap.val() || {} };
+  const plan = closingEdiPlan(voyage, ediRows);
+  if (!plan.ok) throw new Error(`마감적용을 할 수 없습니다 — ${plan.why}`);
+  const keyOk = /^[A-Z0-9_-]{1,24}$/;
+  const recs = (voyage.loading.records) || {};
+  const recKey = {}; for (const k of Object.keys(recs)) recKey[String(k).replace(/\s/g, '').toUpperCase()] = k;
+  const compKey = {}; for (const k of Object.keys(voyage.loading.completed || {})) compKey[String(k).replace(/\s/g, '').toUpperCase()] = k;
+  const base = `voyages/${voyageKey}/loading`;
+  const patch = {};
+  const now = Date.now();
+  let bad = 0, added = 0, confirmed = 0, moved = 0;
+  for (const it of plan.items) {
+    if (it.kind === 'human') continue;
+    if (!keyOk.test(it.cn)) { bad++; continue; }
+    if (it.kind === 'add') { patch[`${base}/completed/${it.cn}`] = { by: '', src: 'edi', at: plan.at }; added++; }
+    else { patch[`${base}/completed/${compKey[it.cn] || it.cn}/termBasis`] = null; confirmed++; }   // 시각(at)은 그대로
+    if (!it.posDiff) continue;
+    const rk = recKey[it.cn] || it.cn;
+    const cur = recs[rk] || {};
+    const pos = (p) => (p && p.bay ? `${String(parseInt(p.bay, 10)).padStart(2, '0')}-${p.row}-${p.tier}` : '자리 없음');
+    const mv = Array.isArray(cur.moves) ? [...cur.moves] : [];
+    mv.push({ at: now, by: by || '', from: pos(it.from), to: pos(it.to), why: 'actual', byCn: '' });
+    const rp = `${base}/records/${rk}`;
+    patch[`${rp}/cn`] = it.cn;
+    patch[`${rp}/bay_actual`] = it.to.bay; patch[`${rp}/row_actual`] = it.to.row; patch[`${rp}/tier_actual`] = it.to.tier;
+    patch[`${rp}/actual_at`] = now; patch[`${rp}/actual_by`] = by || '마감 EDI';
+    patch[`${rp}/_pos_src`] = null;
+    patch[`${rp}/bay_assign`] = null; patch[`${rp}/row_assign`] = null; patch[`${rp}/tier_assign`] = null; patch[`${rp}/assign_at`] = null; patch[`${rp}/assign_by`] = null;
+    patch[`${rp}/moves`] = mv.slice(-40);
+    moved++;
+  }
+  if (Object.keys(patch).length) await update(ref(db), patch);
+  return { ok: true, file: true, applied: added + confirmed, added, confirmed, moved, bad, human: plan.counts.human, ediOnly: plan.ediOnly.length, planOnly: plan.planOnly.length, at: plan.at };
 }
 
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {

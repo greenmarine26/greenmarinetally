@@ -1050,6 +1050,14 @@ if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:fir
 else
   echo "✗ 4.12 마감적용 쓰기 함수 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CEF"; exit 1
 fi
+#  4.17: **마감적용 파일 올리기** — 마감텔리 선적 EDI 로 동방 계획 완료를 확정하고 자리를 바꾼다(시각은 그대로 · 사람 기록 불가침) — OBWH 2762W 실제 항차 287대(메모리 RTDB, 실제 쓰기 없음).
+SMOKE_CE17=$(mktemp /dev/shm/hometmp/_smokece17_XXXXXX.cjs)
+if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_CE17" --log-level=error; then
+  node tools/smoke_closingedi417.cjs "$SMOKE_CE17" || { echo "✗ 4.17 마감적용 파일 올리기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CE17"; exit 1; }
+  rm -f "$SMOKE_CE17"
+else
+  echo "✗ 4.17 마감적용 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CE17"; exit 1
+fi
 #  3.40: **접안 현측이 한 벌인가** — 수집기가 적는 한글(«좌현»·«우현»)과 앱이 적는 영문이 같은 답을 내는지,
 #    그리고 검수사가 고친 것이 수집 사이클에 안 밀리는지. 표시뿐 아니라 첫 카드 자리(작업 순서)까지 잰다.
 #    검수사 2026-09-09 «선박이 좌현으로 고정됨 바꿔도 다시바뀜» — 우현 5척이 좌현 기준으로 줄 서고 있었다.

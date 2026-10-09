@@ -3,7 +3,7 @@
 //   - EDI 형식: 실수신 EDI(SWDN 2603S) 실측 문법과 바이트 단위 일치 검증(sim_v895) — 카스피(CASP) 호환.
 //   - 범위: 평택 선적분만(사용자 확정). 위치는 실체(bay_actual) 우선, 없으면 계획.
 //   - 대상: 선적확인(completed)된 컨 우선 — 완료가 하나도 없으면 전체 평택 선적분(경고 표시).
-import { loadSheetJS, isoToLabel, isPtk, isValidCn, closingEdiGate } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
+import { loadSheetJS, isoToLabel, isPtk, isValidCn, closingEdiGate, sideCancelled } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
 
 // ── 평택 선적분 컨테이너 조립 (ediContainers + records 병합, 실체 위치 우선) ──
 export function collectActualLoading(voyage) {
@@ -64,6 +64,70 @@ export function closingEdiEntries(voyage, now = Date.now()) {
   const have = new Set(Object.keys(comp).map(norm));
   const cns = all.rows.map((r) => r.cn).filter((cn) => !have.has(cn));
   return { gate, total: all.totalPtk, appDone: all.totalPtk - cns.length, cns };
+}
+
+// ── 4.17 «마감적용» 파일 올리기 — 수석 마감텔리 선적 EDI(실제 실린 컨과 자리)를 앱 기록과 맞춰 본다 ──
+//   검수사 2026-10-09 20:26 «메일의 수석 마감텔리에 있는 선적 EDI를 적용해야 완전 마감이 됩니다» · 20:27 «실제 위치가 많이 틀립니다» ·
+//   20:30 «사용자가 기록을 안한 상태에서 사용자가 수기로 기록한걸 수석이 EDI에 기록한것입니다» · 20:34 «동방자료를 먼저 넣은것은 컨의 선적 타임을 알기 위해서 입니다. 그걸 알아야 베이별 완료시간도 알수 있습니다».
+//   규칙 — ① 사람이 찍은 완료(검수원·콘앱)는 시각도 자리도 그대로 ② 동방 계획 기준 완료(src term·termBasis plan)는 **시각을 그대로 두고** 계획 표식만 걷고 자리를 EDI 자리로
+//          ③ 완료가 없는 컨은 완료(src edi)를 더하고 자리를 EDI 자리로 ④ 앱 평택 선적분에 없는 EDI 컨·EDI에 없는 앱 완료는 건수와 목록만 알리고 쓰지 않는다.
+//   ⚠ 순수 함수 — 화면이 미리 보기에, 쓰는 자리(firebase.fbApplyClosingEdi)가 실제 쓰기에 같은 이 함수를 부른다.
+//   @param ediRows parseBAPLIE(...).containers  @returns {{ok,why?,at,items,counts,ediOnly,planOnly}}
+export function closingEdiPlan(voyage, ediRows, now = Date.now()) {
+  const info = (voyage && voyage.info) || {};
+  const sec = (voyage && voyage.loading) || {};
+  const comp = sec.completed || {};
+  const recs = sec.records || {};
+  const edis = sec.ediContainers || {};
+  const norm = (k) => String(k).replace(/\s/g, '').toUpperCase();
+  const empty = { items: [], counts: { ediTotal: 0, confirm: 0, add: 0, human: 0, posDiff: 0, posSame: 0 }, ediOnly: [], planOnly: [] };
+  if (String(info.pier || '').toUpperCase() !== 'PNCT') return { ok: false, why: '동방(PNCT) 선박만 쓸 수 있습니다', at: 0, ...empty };
+  if (sideCancelled(info, 'loading')) return { ok: false, why: '선적이 취소 표시된 항차입니다', at: 0, ...empty };
+  const list = (Array.isArray(ediRows) ? ediRows : []).filter((r) => r && r.cn && String(r.bay) && r.row && r.tier && (!r.pol || String(r.pol).toUpperCase() === 'KRPTK'));
+  if (!list.length) return { ok: false, why: '파일에서 평택(KRPTK) 선적 컨과 자리를 읽지 못했습니다', at: 0, ...empty };
+  //  완료 시각(완료가 없던 컨에만 쓴다) — 작업 끝 시각, 없으면 앱에 찍힌 마지막 완료 시각, 그것도 없으면 지금
+  const g = closingEdiGate(info, comp, now);
+  let at = g.ok ? g.at : 0;
+  if (!at) for (const r of Object.values(comp)) { const a = Number(r && r.at); if (Number.isFinite(a) && a > at && a <= now) at = a; }
+  if (!at) at = now;
+  const compBy = {};
+  for (const [k, v] of Object.entries(comp)) compBy[norm(k)] = v || {};
+  const recBy = {}; for (const [k, v] of Object.entries(recs)) recBy[norm(k)] = v || {};
+  const ediBy = {}; for (const [k, v] of Object.entries(edis)) ediBy[norm(k)] = v || {};
+  const all = collectActualLoading({ ...voyage, loading: { ...sec, completed: {} } });
+  const ptk = new Set(all.rows.map((r) => r.cn));
+  const items = [], ediOnly = [], seen = new Set();
+  const counts = { ediTotal: 0, confirm: 0, add: 0, human: 0, posDiff: 0, posSame: 0 };
+  const b2 = (b) => String(parseInt(b, 10));
+  for (const r of list) {
+    const cn = norm(r.cn);
+    if (seen.has(cn)) continue;
+    seen.add(cn); counts.ediTotal++;
+    if (!ptk.has(cn)) { ediOnly.push({ cn, bay: r.bay, row: r.row, tier: r.tier }); continue; }
+    const rec = recBy[cn] || {}, e = ediBy[cn] || {};
+    const ab = String(rec.bay_actual ?? '');
+    const has = ab && !ab.startsWith('__');
+    const cur = has ? { bay: ab, row: String(rec.row_actual ?? ''), tier: String(rec.tier_actual ?? '') } : { bay: String(e.bay ?? ''), row: String(e.row ?? ''), tier: String(e.tier ?? '') };
+    const to = { bay: b2(r.bay), row: String(r.row), tier: String(r.tier) };
+    const n2 = (x) => String(parseInt(x, 10));   // 감사 4.17 — «2» 와 «02» 는 같은 칸
+    const same = cur.bay && b2(cur.bay) === to.bay && n2(cur.row) === n2(to.row) && n2(cur.tier) === n2(to.tier);
+    //  감사 4.17 — 사람이 고친 실제 자리(bay_actual 이 있고 터미널 표식 _pos_src 가 없고 적은 사람이 있음)는 완료가 없거나 계획 완료여도 덮지 않는다
+    const humanPos = has && !rec._pos_src && !!String(rec.actual_by || '').trim() && String(rec.actual_by).trim() !== '마감 EDI';
+    const c = compBy[cn];
+    let kind;
+    if (!c) kind = 'add';
+    else if (c.src === 'term' && c.termBasis === 'plan') kind = 'confirm';
+    else kind = 'human';
+    if (kind === 'human') { counts.human++; items.push({ cn, kind, posDiff: !same, from: cur, to }); continue; }   // 사람 기록은 그대로 — 건수와 자리 차이만 알린다
+    counts[kind]++;
+    if (same) counts.posSame++;
+    else if (humanPos) { counts.posKeep = (counts.posKeep || 0) + 1; items.push({ cn, kind, posDiff: false, posKeep: true, from: cur, to }); continue; }
+    else counts.posDiff++;
+    items.push({ cn, kind, posDiff: !same, from: cur, to });
+  }
+  const planOnly = [];
+  for (const cn of ptk) { if (!seen.has(cn) && compBy[cn]) planOnly.push({ cn, src: compBy[cn].src || 'user' }); }
+  return { ok: true, at, items, counts, ediOnly, planOnly };
 }
 
 // ── 컨테이너 타입 정규화 — 구형 숫자 ISO('2200'/'4530'/'9500'/'450E')·신형 ISO('45G1'/'22R1')·

@@ -1,7 +1,8 @@
 // 수석(소유자) 전용 — 작업이 끝난 동방 선적을 마감텔리 선적 EDI 기준으로 마무리(앱에서 안 찍은 컨만 완료로 채움)하는 «마감적용» 화면
 import React, { useMemo, useState } from 'react';
 import { fbApplyClosingEdi } from '../firebase.js';
-import { closingEdiEntries } from '../loadingEdiExport.js';
+import { closingEdiEntries, closingEdiPlan } from '../loadingEdiExport.js';
+import { parseBAPLIE } from '../utils.js';
 
 //  4.12 — 검수사 2026-10-07 21:54 «PCTC는 PDA입력 데이터이니 정확한데 동방은 동방계획에 따라 선적이 됩니다. 그래서 완료가 되었다고 해도 정확하다고 볼수가 없습니다.
 //         그럴때엔 수석 마감텔리 안에 있는 선적EDI로 선적 완료를 해야 합니다» · 22:01 «앱으로 선적한것은 그래로 적용하고 마감텔리EDI를 적용하면 앱으로 사용안한부분만 덮어쓰는것입니다» · 22:02 «동방 선박만 그렇습니다».
@@ -20,6 +21,7 @@ export default function ClosingEdiPanel({ voyages, by }) {
   const [busyKey, setBusyKey] = useState(null);
   const [confirmKey, setConfirmKey] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [files, setFiles] = useState({});   // 4.17 — 항차별로 올린 마감텔리 선적 EDI {name, rows, err}
 
   const { rows, waiting } = useMemo(() => {
     const out = [];
@@ -44,6 +46,32 @@ export default function ClosingEdiPanel({ voyages, by }) {
     out.sort((a, b) => rank(a) - rank(b) || a.vsl.localeCompare(b.vsl));
     return { rows: out, waiting: wait };
   }, [voyages]);
+
+  //  4.17 — 마감텔리 선적 EDI 파일 올리기(읽기만 · 쓰기는 «예» 뒤에 fbApplyClosingEdi 가 한다)
+  const onFile = async (vk, f) => {
+    if (!f) return;
+    try {
+      const txt = await f.text();
+      const p = parseBAPLIE(txt);
+      const rows = (p.containers || []).filter((c) => c.cn);
+      setFiles((o) => ({ ...o, [vk]: rows.length ? { name: f.name, rows } : { name: f.name, rows: [], err: '컨테이너와 자리를 읽지 못했습니다(.EDI 파일이 맞는지 확인).' } }));
+    } catch (e) {
+      setFiles((o) => ({ ...o, [vk]: { name: f.name, rows: [], err: `파일을 읽지 못했습니다 — ${e?.message || e}` } }));
+    }
+  };
+
+  const doApplyFile = async (row) => {
+    setBusyKey(row.vk);
+    try {
+      const res = await fbApplyClosingEdi(row.vk, by, files[row.vk].rows);
+      setNotice({ kind: res.bad ? 'warn' : 'ok', text: `🏁 ${row.vsl} ${row.voy} 마감텔리 선적 EDI 적용 — 완료 확정 ${res.confirmed}대(시각 그대로) · 새로 완료 ${res.added}대 · 자리 바뀐 컨 ${res.moved}대. 사람이 찍은 ${res.human}대는 그대로 뒀습니다.${res.ediOnly ? ` 앱 선적분에 없는 EDI 컨 ${res.ediOnly}대는 넣지 않았습니다.` : ''}${res.planOnly ? ` EDI에 없는 앱 완료 ${res.planOnly}대는 그대로 뒀습니다.` : ''}${res.bad ? ` 컨 번호 모양이 키로 못 쓰는 ${res.bad}대는 넣지 못했습니다.` : ''}` });
+      setFiles((o) => { const n = { ...o }; delete n[row.vk]; return n; });
+    } catch (e) {
+      setNotice({ kind: 'err', text: `마감적용 실패(${row.vsl} ${row.voy}) — ${e?.message || e}` });
+    }
+    setBusyKey(null);
+    setConfirmKey(null);
+  };
 
   const doApply = async (row) => {
     setBusyKey(row.vk);
@@ -90,6 +118,40 @@ export default function ClosingEdiPanel({ voyages, by }) {
               평택 선적분 <b className="text-dim-100">{r.total}</b>대
               {' '}· 앱 완료 <b className="text-dim-100">{r.appDone}</b>
               {' '}· 채울 컨 <b className="text-amber-200">{r.todo}</b>대
+            </div>
+            <div className="rounded-btn border border-line bg-ink-950 px-2 py-1.5 space-y-1 mt-1">
+              <div className="text-2xs text-dim-300">📎 수석 마감텔리의 <b>선적 EDI(PTK.EDI)</b> 파일을 올리면 실제 실린 자리와 비교합니다. 동방 완료의 선적 시각은 그대로 두고 자리만 바꿉니다.</div>
+              <input type="file" accept=".edi,.EDI,.txt" onChange={(e) => { onFile(r.vk, e.target.files && e.target.files[0]); e.target.value = ''; }} className="text-2xs text-dim-200" />
+              {files[r.vk] && files[r.vk].err && <div className="text-2xs text-red-300">{files[r.vk].err}</div>}
+              {files[r.vk] && !files[r.vk].err && (() => {
+                const pl = closingEdiPlan({ info: r.info, loading: (voyages[r.vk] || {}).loading }, files[r.vk].rows);
+                if (!pl.ok) return <div className="text-2xs text-amber-300">{pl.why}</div>;
+                const c = pl.counts;
+                return (
+                  <div className="space-y-1">
+                    <div className="text-2xs text-dim-200">{files[r.vk].name} — EDI {c.ediTotal}대 · 동방 계획 완료 확정 <b className="text-dim-100">{c.confirm}</b> · 완료 새로 채움 <b className="text-dim-100">{c.add}</b> · 자리 바뀜 <b className="text-amber-200">{c.posDiff}</b> / 같음 {c.posSame}{c.posKeep ? ` · 사람이 고친 자리 ${c.posKeep}대는 그대로` : ''} · 사람이 찍은 {c.human}대는 그대로</div>
+                    {(pl.ediOnly.length > 0 || pl.planOnly.length > 0) && (
+                      <div className="text-2xs text-amber-300">
+                        {pl.ediOnly.length > 0 && <>앱 선적분에 없는 EDI 컨 {pl.ediOnly.length}대({pl.ediOnly.slice(0, 5).map((x) => x.cn).join(', ')}{pl.ediOnly.length > 5 ? ' …' : ''}) · </>}
+                        {pl.planOnly.length > 0 && <>EDI에 없는 앱 완료 {pl.planOnly.length}대({pl.planOnly.slice(0, 5).map((x) => x.cn).join(', ')}{pl.planOnly.length > 5 ? ' …' : ''})</>}
+                        {' '}— 이 컨들은 건드리지 않습니다.
+                      </div>
+                    )}
+                    {confirmKey === 'F' + r.vk ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-2xs text-amber-300">{r.vsl} {r.voy} 에 이 EDI 를 적용? (완료 시각은 안 바뀝니다)</span>
+                        <button onClick={() => doApplyFile(r)} disabled={busyKey === r.vk} style={{ minHeight: 36 }} className="text-xxs px-3 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">{busyKey === r.vk ? '적용 중…' : '예'}</button>
+                        <button onClick={() => setConfirmKey(null)} style={{ minHeight: 36 }} className="text-xxs px-3 rounded bg-ink-750 hover:bg-ink-700 text-dim-100">취소</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmKey('F' + r.vk)} disabled={c.confirm + c.add + c.posDiff === 0} style={{ minHeight: 36 }}
+                        className="text-xxs px-3 rounded-pill bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 border border-amber-700/50 font-bold disabled:opacity-40">
+                        🏁 이 EDI 적용
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             {r.gate.ok && (
               <div className="text-2xs text-dim-400">완료 시각은 작업 끝 시각 {hm(r.gate.at)} 로 들어갑니다 · 완료자 칸은 «마감 EDI 적용»</div>
