@@ -1251,6 +1251,191 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     }
   }
 
+  // ── R26 ───────────────────────────────────────────────────────────────
+  //  4.21 — 마감적용 덱 갈래(RZOR 수석 마감텔리 STOWAGE PLAN xlsx). 실소스 firebase.js 를 메모리 스텁으로 묶는다(실제 쓰기 없음).
+  const R26 = bundle([
+    `export { fbApplyClosingEdi } from "${ROOT}/src/firebase.js";`,
+    `export { closingEdiPlan } from "${ROOT}/src/loadingEdiExport.js";`,
+    `export { isDeckPlanWorkbook, parseDeckPlanWorkbook, deckPlanRows, deckCoordMap } from "${ROOT}/src/rzorPlan.js";`,
+  ].join('\n'), 'r26', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --loader:.js=jsx --jsx=automatic`);
+  head('R26 마감적용 — RZOR 는 수석 마감텔리 STOWAGE PLAN(xlsx)으로 마감한다 · 자리는 덱플랜 좌표(덱_줄_칸)로 stowagePlan 에 · 플랜에만 있는 제작컨은 대수에 (4.21)', '검수사 2026-10-10 05:31 «RZOR 마감적용에서 EDI대신에 위 파일로 되어 있습니다. 앱은 EDI만 받게 되어 있어서 적용이 되지 않습니다» · 05:32 «마감적용이라 는것 동방의 자료가 맞지 않아서 수기로 입력된 자료로 마감함 수석의 텔리에 있는 자료로 마감을 하기 위한것입니다» · 4.17 규칙 ①~④ · §7.8-⑦ · Fable 판정 4.21');
+  {
+    const FX = fx('closingdeck421_r111e.json'); const vk = FX.key;
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    //  독립 — 시트 글자 칸을 이 파일이 따로 읽는다(앱 파서를 부르지 않는다): 실컨번호 칸 · 비ISO 유닛 칸 · 덱(위에서부터 C·D·UNDER — 블록 머리는 SUB TOTAL 표의 SIZE 행)
+    //    · 위치(그 칸 위쪽 머리줄 — 1~26 정수가 20개 넘는 행 — 의 같은 열 번호) · 줄(그 행 머리줄 오른쪽 끝 바깥 1~12 정수) · 덱별 SUB TOTAL(20'·40'·45'·TTL) · 칸 두 줄 아래 규격 글자(«F45'H»).
+    const wb = XLSX.readFile(path.join(ROOT, 'tools/fixtures/rzor_plan_R111W.xlsx'), { cellStyles: true });
+    const S = (() => {
+      const ws = wb.Sheets[wb.SheetNames.find((n) => wb.Sheets[n] && wb.Sheets[n]['!ref'])];
+      const at = (r, c) => { const x = ws[XLSX.utils.encode_cell({ r, c })]; return x && x.v != null ? x.v : null; };
+      const subs = [], heads = [], cells = []; let voy = '';
+      for (const a of Object.keys(ws)) {
+        if (a[0] === '!') continue;
+        const { r, c } = XLSX.utils.decode_cell(a); const v0 = ws[a].v;
+        if (typeof v0 === 'string') {
+          const t = v0.replace(/\s+/g, '').toUpperCase();
+          if (CN_RE.test(t)) cells.push({ cn: t, r, c, made: false }); else if (/^[A-Z]{6}\d{3}$/.test(t)) cells.push({ cn: t, r, c, made: true });
+          const mv = String(v0).match(/Voy\.?\s*No\.?\s*:?\s*([A-Z]?\d{3,4}[EWNS])/i); if (mv && !voy) voy = mv[1].toUpperCase();
+        }
+        if (String(v0).trim() === 'SIZE') {
+          const row = { r };
+          for (let k = c + 1; k < c + 20; k++) { const h = at(r, k); if (h != null && /^(20'|40'|45'|TTL)$/.test(String(h).trim())) row[String(h).trim()] = Number(at(r + 1, k)) || 0; }
+          subs.push(row);
+        }
+      }
+      subs.sort((x, y) => x.r - y.r);
+      const rg = XLSX.utils.decode_range(ws['!ref']);
+      for (let r = rg.s.r; r <= rg.e.r; r++) {
+        const m = new Map();
+        for (let c = rg.s.c; c <= rg.e.c; c++) { const v = at(r, c); if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 26) m.set(c, v); }
+        if (m.size >= 20) heads.push({ r, m, maxC: Math.max(...m.keys()) });
+      }
+      const DK = ['C', 'D', 'U'];
+      const pos = {};
+      for (const x of cells) {
+        const bi = subs.reduce((k, s, i) => (s.r <= x.r ? i : k), -1);
+        const hd = heads.filter((h) => h.r < x.r && h.r >= subs[bi].r).pop();
+        let line = 0; for (let c = hd.maxC + 1; c <= hd.maxC + 4 && !line; c++) { const v = at(x.r, c); if (typeof v === 'number' && v >= 1 && v <= 12) line = v; }
+        pos[x.cn] = `${DK[bi]}_${line}_${String(hd.m.get(x.c)).padStart(2, '0')}`;
+        x.deck = DK[bi]; x.typ = String(at(x.r + 2, x.c) || '');
+      }
+      return { cells, subs, pos, voy, iso: cells.filter((x) => !x.made).map((x) => x.cn), units: cells.filter((x) => x.made).map((x) => x.cn) };
+    })();
+    const A = new Set(Object.keys(FX.loading.ediContainers));   // 앱 평택 선적분(EDI 행 — 원자료)
+    const C0 = FX.loading.completed;
+    const isoIn = S.iso.filter((cn) => A.has(cn));
+    const want = {
+      confirm: isoIn.filter((cn) => C0[cn] && C0[cn].src === 'term' && C0[cn].termBasis === 'plan').length,
+      add: isoIn.filter((cn) => !C0[cn]).length,
+      human: isoIn.filter((cn) => C0[cn] && !(C0[cn].src === 'term' && C0[cn].termBasis === 'plan')).length,
+      made: [...S.units, ...S.iso].filter((cn) => !A.has(cn) && !CN_RE.test(cn)).sort(),
+      ediOnly: S.iso.filter((cn) => !A.has(cn)).length,
+      planOnly: [...A].filter((cn) => C0[cn] && !S.cells.some((x) => x.cn === cn)).length,
+    };
+    //  ① xlsx → 덱플랜(검수사 STOWAGE PLAN 양식) → 마감적용 행 216 · 좌표 모양 · 칸마다 좌표 = 시트에서 따로 읽은 덱·줄·위치 · 항차 = info.voy_l
+    const okWb = R26.isDeckPlanWorkbook(wb);
+    const plan = R26.parseDeckPlanWorkbook(wb, XLSX);
+    const rows = R26.deckPlanRows(plan);
+    const badPos = rows.filter((r) => S.pos[r.cn] !== r.deckPos);
+    const mk = rows.filter((r) => r.madeUnit);
+    ok(`R111W STOWAGE PLAN(xlsx) → 검수사 양식 덱플랜 · 행 ${rows.length} = 시트 칸 ${S.cells.length}(실컨 ${S.iso.length} + 제작컨 ${S.units.join('·')}) · deckPos 전부 «덱_줄_칸» · 칸마다 = 시트에서 따로 읽은 덱·줄·위치 · 항차 ${plan.voy} = info.voy_l (수정 전 마감적용 파일 칸이 xlsx 를 안 받음)`,
+      okWb && plan._fmt === 'checker' && rows.length === S.cells.length && S.cells.length === 216 && rows.every((r) => /^[A-Z]_\d+_\d{2}$/.test(r.deckPos)) && !badPos.length
+        && mk.length === 1 && mk[0].cn === S.units[0] && mk[0].size === 45 && /45'/.test(S.cells.find((x) => x.made).typ) && plan.voy === FX.info.voy_l && S.voy === plan.voy && rows.every((r) => r.voy === S.voy),
+      `행 ${rows.length} · 좌표 어긋남 ${badPos.slice(0, 3).map((r) => `${r.cn} ${r.deckPos}≠${S.pos[r.cn]}`).join(',')} · 제작컨 ${JSON.stringify(mk)} · voy ${plan.voy}`);
+    //  ⑦ 덱마다 파서 칸 = 시트 SUB TOTAL TTL(C · D · UNDER) — 제작컨 칸 포함
+    const deckN = (p, dk) => ((p.decks || []).find((d) => d.deck === dk) || { slots: [] }).slots.filter((s) => !s.empty).length;
+    ok(`덱마다 플랜 칸 = 시트 SUB TOTAL TTL ${S.subs.map((x) => x.TTL).join('/')} (C/D/UNDER) · 합 ${plan.total} · 제작컨은 ${S.cells.find((x) => x.made).deck}덱`,
+      S.subs.length === 3 && deckN(plan, 'C') === S.subs[0].TTL && deckN(plan, 'D') === S.subs[1].TTL && deckN(plan, 'U') === S.subs[2].TTL && plan.total === S.subs.reduce((a, x) => a + x.TTL, 0) && mk[0].deck === S.cells.find((x) => x.made).deck,
+      `파서 ${deckN(plan, 'C')}/${deckN(plan, 'D')}/${deckN(plan, 'U')}`);
+    //  ② 판정 한 벌(덱 갈래) — 동방 계획 완료 확정 · 새 완료 · 사람 · 자리 바뀜(덱플랜 없던 배 = 전부) · 제작컨 · 파일에만 있는 ISO 컨 · 파일에 없는 앱 완료
+    const v0 = { key: vk, info: clone(FX.info), loading: clone(FX.loading) };
+    const pl = R26.closingEdiPlan(v0, rows);
+    ok(`closingEdiPlan 덱 갈래 — 확정 ${pl.counts.confirm} = ${want.confirm} · 새 완료 ${pl.counts.add} = ${want.add} · 사람 ${pl.counts.human} = ${want.human} · 자리 바뀜 ${pl.counts.posDiff} = ${isoIn.length}(덱플랜 없던 배) · 제작컨 [${pl.madeOnly.map((x) => x.cn)}] · 파일에만 있는 ISO 컨 ${pl.ediOnly.length} · 파일에 없는 앱 완료 ${pl.planOnly.length} (수정 전 ok:false «평택(KRPTK) 선적 컨과 자리를 읽지 못했습니다»)`,
+      pl.ok && pl.fmt === 'deck' && pl.counts.confirm === want.confirm && want.confirm === 215 && pl.counts.add === want.add && pl.counts.human === want.human && pl.counts.posDiff === isoIn.length && !pl.counts.posKeep && pl.counts.assignOver === 0
+        && pl.madeOnly.map((x) => x.cn).sort().join() === want.made.join() && want.made.join() === 'SAWTBP004' && pl.ediOnly.length === want.ediOnly && pl.planOnly.length === want.planOnly,
+      JSON.stringify({ ok: pl.ok, why: pl.why, fmt: pl.fmt, counts: pl.counts, made: pl.madeOnly, want }).slice(0, 300));
+    //  ③ 쓰기(메모리 RTDB) — 완료 시각 그대로 · 계획 표식만 걷힘 · stowagePlan = 이 플랜(assign 보존) · 제작컨 리스트 행 + 완료 · 선적 대수 215 → 216(마감텔리·홈 카드·미르) · 마감텔리 45' Full +1 · 바뀐 컨 moves
+    const lsSave = localStorage.getItem('tallyone_me_today');
+    localStorage.setItem('tallyone_me_today', JSON.stringify({ name: '김성일', ymd: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) }));
+    try {
+      const fresh = (mut) => { const L = clone(FX.loading); if (mut) mut(L); global.__memdb = { voyages: { [vk]: { info: clone(FX.info), loading: L } } }; global.__memlog = []; return L; };
+      const L0 = fresh((L) => { L.stowagePlan = { assign: { 'D-1-26': { cn: 'ZZZU0000001', by: '연막', at: 1 } } }; });
+      const before = { key: vk, info: FX.info, loading: L0, discharge: {} };
+      const n0 = B.ptkContainers(before, 'loading').length;
+      const t0 = B.computeTallyData(before).totals.load;
+      const tryApply = async () => { try { return await R26.fbApplyClosingEdi(vk, '김성일', rows, plan, 'R111W STOWAGE PLAN.xlsx'); } catch (e) { return { err: String(e && e.message || e) }; } };   // 던져도 아래 단언이 ✘ 로 남게
+      const res = await tryApply();
+      const L = global.__memdb.voyages[vk].loading;
+      const after = { key: vk, info: FX.info, loading: L, discharge: {} };
+      const sameTs = isoIn.every((cn) => L.completed[cn].at === C0[cn].at && L.completed[cn].termBasis === undefined && L.completed[cn].src === 'term');
+      const sp = L.stowagePlan || {};
+      const slotN = (sp.decks || []).reduce((a, d) => a + (d.slots || []).filter((s) => !s.empty && s.cn).length, 0);
+      const dm = R26.deckCoordMap(sp);
+      const posBad = Object.keys(S.pos).filter((cn) => dm.get(cn) !== S.pos[cn]);
+      const su = L.records.SAWTBP004 || {}, sc = L.completed.SAWTBP004 || {};
+      const n1 = B.ptkContainers(after, 'loading').length, pg = B.progressOf(L, 'loading', new Set()), mc = B.voyageCountsOf(after).byMode.loading.total;
+      const t1 = B.computeTallyData(after).totals.load;
+      const mvBad = isoIn.filter((cn) => { const m = ((L.records[cn] || {}).moves || []).slice(-1)[0]; return !(m && m.why === 'actual' && m.from === '자리 없음' && m.to === S.pos[cn]); });
+      ok(`적용 — 확정 ${res.confirmed} · 새 완료 ${res.added} · 자리 바뀜 ${res.moved} · 제작컨 ${res.madeAdded} · 동방 완료 ${isoIn.length}대 시각(at) 그대로·계획 표식만 걷힘 · stowagePlan 칸 ${slotN} = 시트 ${S.cells.length} · 칸 좌표 = 시트 · 검수원 지정(assign) 그대로 · _src closing`,
+        res.fmt === 'deck' && res.confirmed === want.confirm && res.added === 0 && res.moved === isoIn.length && res.madeAdded === 1 && sameTs && slotN === S.cells.length && !posBad.length
+          && sp.assign && sp.assign['D-1-26'] && sp.assign['D-1-26'].cn === 'ZZZU0000001' && sp._src === 'closing' && sp._file === 'R111W STOWAGE PLAN.xlsx',
+        JSON.stringify({ res, sameTs, slotN, posBad: posBad.slice(0, 3), assign: sp.assign, src: sp._src }).slice(0, 300));
+      ok(`제작컨 SAWTBP004 — 리스트 행(mkcon · 제작컨 표식 · 규격 코드 없음 · 출처 파일명 · 크기 45) + 완료(src edi · 이름 없음) · 선적 대수 마감텔리 ${n0} → ${n1} · 홈 카드 ${pg.ptk.total} · 미르 ${mc} = 시트 ${S.cells.length} · 마감텔리 45' Full ${t0.F['45']} → ${t1.F['45']}(F45'H)`,
+        su.mkcon === true && su._madeUnit === true && su.iso === '' && su._source === 'R111W STOWAGE PLAN.xlsx' && su.size === 45 && su.pol === 'KRPTK' && sc.src === 'edi' && sc.by === '' && sc.at === res.at
+          && n0 === A.size && n1 === S.cells.length && pg.ptk.total === S.cells.length && pg.ptk.done === S.cells.length && mc === S.cells.length && t1.F['45'] === t0.F['45'] + 1 && t1.n === t0.n + 1,
+        JSON.stringify({ su, sc, n0, n1, pg: pg.ptk, mc, f45: [t0.F['45'], t1.F['45']] }).slice(0, 300));
+      ok(`바뀐 컨 records moves 한 줄(자리 없음 → 시트 좌표 · why actual) ${isoIn.length - mvBad.length}/${isoIn.length} · 베이 칸(bay_actual)은 안 씀`,
+        !mvBad.length && isoIn.every((cn) => (L.records[cn] || {}).bay_actual === undefined && (L.records[cn] || {}).actual_by === '김성일'), mvBad.slice(0, 3).join(','));
+      //  ④ 수석 플랜 자리가 이긴다(Fable 판정 4.21-2 · 05:32 «수석의 텔리에 있는 자료로 마감») — 사람이 찍은 완료는 시각·이름 그대로 · 검수원 지정 자리(assign)가 파일과 다르면 플랜 자리로
+      //     (assignOver 로 알림 · 그 핀 지움 · moves note) · 새 플랜에서 칸이 찬 낡은 핀도 지움 · 그 밖의 핀은 그대로
+      const hx = isoIn[0];
+      const hy = Object.keys(S.pos).find((cn) => S.pos[cn] === 'D_1_05');   // 시트에서 D덱 1줄 5칸에 있는 컨
+      const yKey = 'C-1-1';   // 지정 자리 C_1_01 — 시트에서 빈 칸
+      const zCn = isoIn.find((cn) => cn !== hx && cn !== hy);
+      const zKey = (() => { const [d, l, c] = S.pos[zCn].split('_'); return `${d}-${l}-${Number(c)}`; })();   // 시트에서 찬 칸에 꽂힌 낡은 핀(목록 밖 번호)
+      const hxC = { by: '김성일', at: 1791560000000, equip: '5호기' }, hyC = { by: '박철민', at: 1791561000000, src: 'user' };
+      const mutH = (Lx) => { Lx.completed[hx] = clone(hxC); Lx.completed[hy] = clone(hyC);
+        Lx.stowagePlan = { assign: { [yKey]: { cn: hy, by: '박철민', at: 1791561000000 }, [zKey]: { cn: 'ZZZU0000002', by: '연막', at: 2 }, 'D-1-26': { cn: 'ZZZU0000001', by: '연막', at: 1 } } }; };
+      const pl4 = R26.closingEdiPlan({ key: vk, info: FX.info, loading: (() => { const Lx = clone(FX.loading); mutH(Lx); return Lx; })() }, rows);
+      fresh(mutH);
+      const r4 = await tryApply();
+      const L4 = global.__memdb.voyages[vk].loading;
+      const asg4 = (L4.stowagePlan || {}).assign || {};
+      const mvY = (L4.records[hy] || {}).moves || [], mvX = (L4.records[hx] || {}).moves || [];
+      ok(`수석 플랜 자리가 이긴다 — 사람 완료 2(${hx} 김성일 · ${hy} 박철민) 시각·이름 그대로 · ${hy} 지정 자리 C_1_01 → 파일 ${S.pos[hy]}(검수원 지정과 다름 ${pl4.counts.assignOver}) · 그 핀·찬 칸 핀 지움 · 다른 핀 그대로 · moves 한 줄(note closing-over-assign) · 자리 바뀜 ${pl4.counts.posDiff} = ${isoIn.length}`,
+        S.pos[hy] === 'D_1_05' && pl4.counts.human === 2 && pl4.counts.assignOver === 1 && !pl4.counts.posKeep && pl4.counts.posDiff === isoIn.length && pl4.counts.confirm === want.confirm - 2
+          && [...pl4.assignClear].sort().join() === [yKey, zKey].sort().join() && r4.moved === isoIn.length && r4.human === 2 && r4.assignOver === 1
+          && JSON.stringify(L4.completed[hx]) === JSON.stringify(hxC) && JSON.stringify(L4.completed[hy]) === JSON.stringify(hyC)
+          && R26.deckCoordMap(L4.stowagePlan).get(hy) === 'D_1_05' && !asg4[yKey] && !asg4[zKey] && asg4['D-1-26'] && asg4['D-1-26'].cn === 'ZZZU0000001'
+          && mvY.length === 1 && mvY[0].from === 'C_1_01' && mvY[0].to === 'D_1_05' && mvY[0].why === 'actual' && mvY[0].note === 'closing-over-assign'
+          && mvX.length === 1 && mvX[0].from === '자리 없음' && mvX[0].to === S.pos[hx] && !mvX[0].note,
+        JSON.stringify({ c: pl4.counts, clr: pl4.assignClear, r4: { moved: r4.moved, human: r4.human, over: r4.assignOver, err: r4.err }, asg: Object.keys(asg4), mvY, cx: L4.completed[hx], cy: L4.completed[hy] }).slice(0, 400));
+      //  ⑧ 다른 항차의 플랜은 받지 않는다(Fable 판정 4.21-1) — 시트 «Voy. No.» 와 이 항차(info.voy_l, 없으면 info.voy)를 번호로 대조(utils.voyEq)
+      const wb75 = XLSX.readFile(path.join(ROOT, 'tools/fixtures/rzor_plan_R075W.xlsx'), { cellStyles: true });
+      const p75 = R26.parseDeckPlanWorkbook(wb75, XLSX), rows75 = R26.deckPlanRows(p75);
+      const pl8 = R26.closingEdiPlan({ key: vk, info: FX.info, loading: clone(FX.loading) }, rows75);
+      const pl8b = R26.closingEdiPlan({ key: vk, info: { ...FX.info, voy_l: '' }, loading: clone(FX.loading) }, rows);   // voy_l 이 없으면 info.voy(R111E) — 번호 R111 같음
+      fresh();
+      let e8 = '';
+      try { await R26.fbApplyClosingEdi(vk, '김성일', rows75, p75, 'R075W STOWAGE PLAN.xlsx'); } catch (e) { e8 = String(e && e.message); }
+      const why8 = `플랜 항차 R075W 가 이 항차 ${FX.info.voy_l} 와 다릅니다`;
+      ok(`다른 항차 플랜(R075W) — 판정 ok:false «${pl8.why}» · 쓰기 던짐 · 쓴 것 0 · voy_l 없으면 info.voy(${FX.info.voy})로 대조해 R111W 플랜은 받음`,
+        pl8.ok === false && pl8.why === why8 && e8.includes(why8) && !global.__memlog.length && pl8b.ok === true, JSON.stringify({ why: pl8.why, e8, b: pl8b.ok }));
+      //  ⑨ 제작컨에 이미 완료(사람)가 있으면 규칙 ① 그대로 — 리스트 행만 더해 대수에 넣는다
+      const sw0 = { by: '박철민', at: 1791562000000, src: 'user' };
+      fresh((Lx) => { Lx.completed.SAWTBP004 = clone(sw0); });
+      const r9 = await tryApply();
+      const L9 = global.__memdb.voyages[vk].loading;
+      ok(`제작컨 SAWTBP004 에 사람 완료(박철민)가 이미 있으면 완료는 그대로 · 리스트 행만 더함 · 선적 대수 ${B.ptkContainers({ key: vk, info: FX.info, loading: L9, discharge: {} }, 'loading').length}`,
+        JSON.stringify(L9.completed.SAWTBP004) === JSON.stringify(sw0) && (L9.records.SAWTBP004 || {})._madeUnit === true && r9.madeAdded === 1 && B.ptkContainers({ key: vk, info: FX.info, loading: L9, discharge: {} }, 'loading').length === S.cells.length,
+        JSON.stringify({ c: L9.completed.SAWTBP004, r: L9.records.SAWTBP004, err: r9.err }).slice(0, 200));
+      //  ⑩ 마감텔리 선적 모집단에는 마감적용이 넣은 제작컨(_madeUnit)만 더한다 — EDI 에 없는 다른 리스트 전용 행(ISO 컨 · _madeUnit 없는 제작컨 꼴)은 종전대로 안 든다
+      const v10 = { key: vk, info: FX.info, discharge: {}, loading: clone(FX.loading) };
+      v10.loading.records.TSTU1234567 = { cn: 'TSTU1234567', pol: 'KRPTK', iso: '45G1', fe: 'F', _source: 'R111W_CLL extra.xls', _inList: true };
+      v10.loading.records.SAWTBP009 = { cn: 'SAWTBP009', pol: 'KRPTK', fe: 'F', mkcon: true, _source: 'R111W_CLL extra.xls', _inList: true };
+      const n10 = B.ptkContainers(v10, 'loading');
+      ok(`EDI 에 없는 리스트 전용 행(ISO TSTU1234567 · _madeUnit 없는 SAWTBP009)은 마감텔리 선적 모집단에 안 든다 — ${n10.length} = EDI ${A.size}`,
+        n10.length === A.size && !n10.some((c) => c.cn === 'TSTU1234567' || c.cn === 'SAWTBP009'), n10.filter((c) => !A.has(c.cn)).map((c) => c.cn).join(','));
+      //  ⑥ 동방이 아닌 배는 판정이 거절하고 쓰는 자리도 아무것도 안 쓴다
+      const pctc = { key: vk, info: { ...FX.info, pier: 'PCTC' }, loading: clone(FX.loading) };
+      const pl6 = R26.closingEdiPlan(pctc, rows);
+      fresh(); global.__memdb.voyages[vk].info.pier = 'PCTC';
+      let e6 = '';
+      try { await R26.fbApplyClosingEdi(vk, '김성일', rows, plan, 'x.xlsx'); } catch (e) { e6 = String(e && e.message); }
+      ok(`PNCT 아닌 배(info.pier PCTC 사본) — 판정 ok:false «${pl6.why}» · 쓰기 던짐 · 쓴 것 0`, pl6.ok === false && /동방\(PNCT\)/.test(pl6.why) && /동방\(PNCT\)/.test(e6) && !global.__memlog.length, e6);
+    } finally {
+      if (lsSave == null) localStorage.removeItem('tallyone_me_today'); else localStorage.setItem('tallyone_me_today', lsSave);
+    }
+    //  ⑤ 베이 갈래(PTK.EDI)는 그대로 — OBWH 2762W 실제 항차를 EDI 꼴 행(베이·로우·단)으로 판정하면 fmt bay · 제작컨 없음 · 확정 = 원자료에서 센 동방 계획 완료(4.17 기대값은 smoke_closingedi417 이 그대로 잰다)
+    {
+      const OB = fx('closingedi_obwh2762.json');
+      const erows = Object.values(OB.loading.ediContainers).map((c) => ({ cn: c.cn, bay: c.bay, row: c.row, tier: c.tier, pol: 'KRPTK' }));
+      const p5 = R26.closingEdiPlan({ info: OB.info, loading: OB.loading }, erows);
+      const c5 = Object.keys(OB.loading.ediContainers).filter((cn) => { const c = OB.loading.completed[cn]; return c && c.src === 'term' && c.termBasis === 'plan'; }).length;
+      ok(`베이 갈래 그대로 — OBWH 2762W EDI 꼴 ${erows.length}행 → fmt bay · 제작컨 0 · 확정 ${p5.counts.confirm} = 원자료 동방 계획 완료 ${c5}`, p5.ok && p5.fmt === 'bay' && p5.madeOnly.length === 0 && p5.counts.confirm === c5 && c5 > 0, JSON.stringify(p5.counts));
+    }
+  }
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.20-01';
-const NOTE = '4.20-01 엠티 실 작업 현황의 규격 글자와 같게 컨 상세 등에도 풀 엠티 표식 대신 정본 규격 45RE를 보여 줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.21';
+const NOTE = '4.21 마감적용에 RZOR 수석 마감텔리의 STOWAGE PLAN(xlsx)을 올릴 수 있습니다. 수석 텔리의 자리와 완료로 마감하고 제작컨도 대수에 넣습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

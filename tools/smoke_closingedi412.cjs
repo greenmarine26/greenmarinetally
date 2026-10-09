@@ -164,6 +164,51 @@ const bundle = process.argv[3];
   ok(/마감적용 실패\(ATPR 2645W\)/.test(txt()) && /작업이 끝난 뒤에 쓰는 마무리 단추입니다/.test(txt()), '쓰는 자리가 거절하면 «마감적용 실패» 와 이유가 화면에 뜬다(조용한 실패 없음)');
   dom.window.__renderPanel({}); await wait(400);
   ok(/마감적용을 쓸 동방 선적 항차가 없습니다/.test(txt()), '해당 항차가 없으면 없다고 말한다');
+  //  [6] 4.21 — RZOR 는 수석 마감텔리 STOWAGE PLAN(xlsx)을 올린다(검수사 2026-10-10 05:31 «RZOR 마감적용에서 EDI대신에 위 파일로 되어 있습니다. 앱은 EDI만 받게 되어 있어서 적용이 되지 않습니다»).
+  //      RZOR R111E 실제 항차(RTDB 읽기 사본) + 실제 R111W STOWAGE PLAN 을 파일 칸에 넣는다. 판정·쓰기 숫자는 회귀 기준표 R26 이 실소스로 잰다 — 여기는 화면 입구.
+  console.log('[6] 4.21 STOWAGE PLAN(xlsx) — RZOR R111E');
+  {
+    const R1 = require(path.resolve(root, 'tools/fixtures/closingdeck421_r111e.json'));
+    dom.window.XLSX = require(path.resolve(root, 'node_modules/xlsx'));   // loadSheetJS 는 window.XLSX 가 있으면 그것을 쓴다(네트워크 없음)
+    dom.window.__calls = []; delete dom.window.__closingEdiErr; dom.window.__closingEdiN = 215; dom.window.__closingMade = 1;
+    const put = async (file, until) => {
+      const inp = doc.querySelector('input[type=file]');
+      Object.defineProperty(inp, 'files', { value: [new dom.window.File([new dom.window.Uint8Array(fs.readFileSync(path.resolve(root, 'tools/fixtures', file)))], file === 'rzor_plan_R111W.xlsx' ? 'R111W STOWAGE PLAN.xlsx' : file)], configurable: true });
+      inp.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      for (let k = 0; k < 50 && !until.test(txt()); k++) await wait(100);
+    };
+    dom.window.__renderPanel({ [R1.key]: { info: R1.info, loading: R1.loading } }); await wait(500);
+    const acc = (doc.querySelector('input[type=file]') || { getAttribute: () => '' }).getAttribute('accept') || '';
+    ok(/\.xlsx/.test(acc) && /\.edi/.test(acc) && /마감텔리 선적 EDI 또는 STOWAGE PLAN\(xlsx\)/.test(txt()), `파일 칸이 .EDI 와 STOWAGE PLAN(xlsx)을 받는다 — accept «${acc}» (수정 전 .edi·.EDI·.txt 만)`);
+    await put('rzor_rzdf_R106E.xlsx', /선사 덱플랜\(양하 그림\)은 마감적용 파일이 아닙니다/);
+    ok(/선사 덱플랜\(양하 그림\)은 마감적용 파일이 아닙니다 — 수석 마감텔리의 STOWAGE PLAN\(xlsx\)을 올리세요/.test(txt()) && !/이 STOWAGE PLAN 적용/.test(txt()), '선사 rzdf(양하 덱플랜)는 마감적용 파일이 아니다 — 거절 글(수석 STOWAGE PLAN 을 올리라고)');
+    await put('rzor_plan_R075W.xlsx', /플랜 항차 R075W 가 이 항차 R111W 와 다릅니다/);
+    ok(/플랜 항차 R075W 가 이 항차 R111W 와 다릅니다/.test(txt()) && !/이 STOWAGE PLAN 적용/.test(txt()), '다른 항차(R075W) 플랜 — 이유가 뜨고 적용 단추가 없다');
+    await put('rzor_plan_R111W.xlsx', /R111W STOWAGE PLAN\.xlsx —/);
+    const t6 = txt();
+    ok(/R111W STOWAGE PLAN\.xlsx — 덱플랜 좌표 · STOWAGE PLAN 216대/.test(t6) && /동방 계획 완료 확정 215/.test(t6) && /자리 바뀜 215/.test(t6) && /제작컨 1대\(SAWTBP004\) 대수에 추가/.test(t6),
+      '미리 보기 — 덱플랜 좌표 216대 · 동방 계획 완료 확정 215 · 자리 바뀜 215 · 제작컨 SAWTBP004 대수에 추가');
+    ok(clickBy(/이 STOWAGE PLAN 적용/), '[🏁 이 STOWAGE PLAN 적용]'); await wait(300);
+    ok(/STOWAGE PLAN 을 적용\?/.test(txt()) && !(dom.window.__calls || []).length, '한 번 더 묻는다 — 아직 아무것도 안 썼다');
+    clickBy(/^예$/); await wait(500);
+    const c6 = (dom.window.__calls || []).filter((c) => c.fn === 'closingEdi');
+    ok(c6.length === 1 && c6[0].vk === R1.key && c6[0].by === '김성일' && c6[0].rows === 216 && c6[0].planTotal === 216 && c6[0].name === 'R111W STOWAGE PLAN.xlsx', `쓰기 호출 한 번 — 덱플랜(216칸)과 파일 이름을 넘긴다 ${JSON.stringify(c6)}`);
+    ok(/RZOR R111W 수석 마감텔리 STOWAGE PLAN 적용 — 완료 확정 215대/.test(txt()) && /덱플랜 좌표 저장 · 제작컨 1대 추가/.test(txt()), '결과 안내 — 수석 마감텔리 STOWAGE PLAN · 덱플랜 좌표 저장 · 제작컨 추가');
+    //  적용할 것이 없으면 단추가 꺼지고 이유가 한 줄 뜬다 — 사람이 전부 찍었고 플랜 자리도 같은 배(덱플랜은 이미 이 플랜)
+    const RP = await import(path.resolve(root, 'src/rzorPlan.js'));
+    const p111 = RP.parseDeckPlanWorkbook(dom.window.XLSX.read(fs.readFileSync(path.resolve(root, 'tools/fixtures/rzor_plan_R111W.xlsx')), { type: 'buffer', cellStyles: true }), dom.window.XLSX);
+    const Lh = clone(R1.loading);
+    for (const k of Object.keys(Lh.completed)) Lh.completed[k] = { by: '박철민', at: 1791560000000 };
+    Lh.records.SAWTBP004 = { cn: 'SAWTBP004', mkcon: true, _madeUnit: true, pol: 'KRPTK', _source: 'R111W STOWAGE PLAN.xlsx', _inList: true };
+    Lh.completed.SAWTBP004 = { by: '박철민', at: 1791560000000 };
+    Lh.stowagePlan = clone(p111);
+    dom.window.__renderPanel({}); await wait(200);
+    dom.window.__renderPanel({ [R1.key]: { info: R1.info, loading: Lh } }); await wait(500);
+    await put('rzor_plan_R111W.xlsx', /R111W STOWAGE PLAN\.xlsx —/);
+    const bOff = [...doc.querySelectorAll('button')].find((x) => /이 STOWAGE PLAN 적용/.test(x.textContent || ''));
+    ok(!!bOff && bOff.disabled && /자리 바뀜 0/.test(txt()) && /적용할 것이 없습니다 — 확정·채움·자리 바뀜·제작컨 0/.test(txt()) && /플랜 그림만 바꾸려면 선적 탭 덱플랜 올리기로/.test(txt()),
+      '적용할 것이 없으면(사람이 전부 찍음 · 플랜 자리 같음) 단추가 꺼지고 이유 한 줄과 «선적 탭 덱플랜 올리기» 안내가 뜬다');
+  }
   ok(errs.length === 0, '끝까지 오류 없음' + (errs.length ? ' — ' + [...new Set(errs)].slice(0, 2).join(' | ') : ''));
   finish();
   function finish() { console.log(`\n${n - bad}/${n} 통과`); process.exit(bad ? 1 : 0); }

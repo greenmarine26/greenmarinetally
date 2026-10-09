@@ -358,19 +358,42 @@ export function deckCoordCode(deck, line, col) {
 /** 덱플랜 → {컨번호: «덱_줄_칸»}. 빈 칸·컨번호 없는 칸은 건너뛴다. 저장된 옛 플랜에 line·col 이 없으면 «D덱 3줄 5칸» 글자(pos)에서 읽는다. */
 export function deckCoordMap(plan) {
   const m = new Map();
+  _eachPlacedSlot(plan, (dk, s, code) => { m.set(s.cn, code); });
+  return m;
+}
+//  4.21: 덱플랜의 «컨이 있는 칸» 을 좌표와 함께 한 번씩 돈다 — deckCoordMap 과 deckPlanRows 가 같은 이 한 벌을 쓴다(좌표 판정 두 벌 금지).
+//    같은 컨이 두 칸에 있으면 좌표가 잡히는 첫 칸만.
+function _eachPlacedSlot(plan, fn) {
+  const got = new Set();
   const list = (x) => (Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []));   // 보관소가 빈 칸 있는 배열을 {키:값} 으로 돌려줄 때도 읽는다
   for (const dk of list(plan && plan.decks)) {
     for (const s of (dk ? list(dk.slots) : [])) {
-      if (!s || s.empty || !s.cn || m.has(s.cn)) continue;
+      if (!s || s.empty || !s.cn || got.has(s.cn)) continue;
       let code = deckCoordCode(dk.deck, s.line, s.col);
       if (!code && s.pos) {
         const pm = String(s.pos).match(/^([A-Z])덱\s*(\d+)줄\s*(\d+)칸$/);
         if (pm) code = deckCoordCode(pm[1], pm[2], pm[3]);
       }
-      if (code) m.set(s.cn, code);
+      if (code) { got.add(s.cn); fn(dk, s, code); }
     }
   }
-  return m;
+}
+
+/** 4.21: 덱플랜 → «마감적용» 행 [{cn, deckPos, deck, line, col, size, wt, fe, madeUnit?, voy?}] — RZOR 는 수석 마감텔리의 STOWAGE PLAN(xlsx)이 선적 EDI 자리다.
+ *   검수사 2026-10-10 05:31 «RZOR 마감적용에서 EDI대신에 위 파일로 되어 있습니다» · 05:32 «수석의 텔리에 있는 자료로 마감을 하기 위한것입니다».
+ *   좌표(deckPos «덱_줄_칸»)는 deckCoordMap 과 같은 한 벌. 크기는 칸의 size(제작컨) → 규격 글자(«40 HC») 앞 숫자. 판정은 loadingEdiExport.closingEdiPlan 이 한다.
+ *   voy = 시트 «Voy. No.»(플랜 항차) — 판정이 이 항차와 대조한다(다른 항차 플랜 거절). */
+export function deckPlanRows(plan) {
+  const out = [];
+  const voy = String((plan && plan.voy) || '').trim().toUpperCase();
+  _eachPlacedSlot(plan, (dk, s, code) => {
+    const [d, l, c] = code.split('_');
+    out.push({ cn: String(s.cn).toUpperCase(), deckPos: code, deck: d, line: Number(l), col: Number(c),
+               size: Number(s.size) || parseInt(String(s.iso || ''), 10) || null,
+               wt: Number.isFinite(Number(s.wt)) && s.wt != null ? Number(s.wt) : null, fe: s.fe === 'E' ? 'E' : 'F',
+               ...(s.madeUnit ? { madeUnit: true } : {}), ...(voy ? { voy } : {}) });
+  });
+  return out;
 }
 
 /** 4.04-02: 컨 목록에 «덱_줄_칸» 좌표(deckPos)를 붙여 돌려준다 — 목록을 만드는 모든 길(항차 화면 · 검색 패널 · 홈 통합검색 · 미르 · 콘앱)이 이 한 벌을 부른다.

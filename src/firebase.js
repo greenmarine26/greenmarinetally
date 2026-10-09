@@ -5,6 +5,7 @@ import {
   getDatabase, ref, onValue, push, set, update, remove, get, off, goOffline, goOnline
 } from 'firebase/database';
 import { closingEdiEntries, closingEdiPlan } from './loadingEdiExport.js';   // 4.12: 마감적용 — 마감텔리 선적 EDI 가 고르는 컨 한 벌
+import { deckPlanRows } from './rzorPlan.js';   // 4.21: 마감적용 덱 갈래 — RZOR 수석 마감텔리 STOWAGE PLAN 의 행(좌표 한 벌)
 import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
 import {
@@ -1137,11 +1138,11 @@ export async function fbApplyTermSnapshot(voyageKey, mode, by) {
 //   ⚠ 쓰기는 completed 에 **추가만** — 앱 완료가 이미 있는 컨(검수원·터미널 반영)은 건너뛴다. 기록 = `{by:'', src:'edi', at:작업 끝 시각}`(이름·호기 없음).
 //   ⚠ 문지기(소유자·동방·작업 끝난 배)는 데이터가 들어오는 이 자리에 선다 — 화면의 비활성은 보조다. 대상 컨은 화면이 넘기지 않고 여기서 새로 읽어 정한다(낡은 화면으로 쓰지 않는다).
 //   ⚠ 구독하지 않는다 — 누를 때 info·loading 을 한 번 읽는다.
-export async function fbApplyClosingEdi(voyageKey, by, ediRows) {
+export async function fbApplyClosingEdi(voyageKey, by, ediRows, deckPlan, fileName) {
   assertOwner('마감적용', by);
   assertCanWork('마감적용');
   if (!voyageKey) throw new Error('마감적용할 항차가 없습니다');
-  if (Array.isArray(ediRows)) return applyClosingEdiFile(voyageKey, by, ediRows);   // 4.17 — 파일을 올린 경우
+  if (Array.isArray(ediRows) || deckPlan) return applyClosingEdiFile(voyageKey, by, ediRows, deckPlan, fileName);   // 4.17 — 파일을 올린 경우 · 4.21 — RZOR STOWAGE PLAN(xlsx)은 덱플랜째로
   const [infoSnap, loadSnap] = await Promise.all([
     get(ref(db, `voyages/${voyageKey}/info`)),
     get(ref(db, `voyages/${voyageKey}/loading`)),
@@ -1164,14 +1165,24 @@ export async function fbApplyClosingEdi(voyageKey, by, ediRows) {
 //   검수사 2026-10-09 20:34 «동방자료를 먼저 넣은것은 컨의 선적 타임을 알기 위해서 입니다. 그걸 알아야 베이별 완료시간도 알수 있습니다» → 동방 완료의 **시각은 그대로**, 계획 표식만 걷고 자리를 EDI 자리로 바꾼다.
 //   ⚠ 사람이 찍은 완료(검수원·콘앱)는 완료도 자리도 건드리지 않는다. 대상은 화면이 아니라 여기서 info·loading 을 새로 읽어 closingEdiPlan 으로 정한다.
 //   ⚠ PATCH(update)만 — 통째 쓰기 없음. 자리는 fbSetActualPosition 과 같은 칸(bay_actual…) + moves 이력(why:'actual').
-async function applyClosingEdiFile(voyageKey, by, ediRows) {
+//   ★ 4.21 덱 갈래(RZOR — 검수사 2026-10-10 05:31 «RZOR 마감적용에서 EDI대신에 위 파일로 되어 있습니다» · 05:32 «수석의 텔리에 있는 자료로 마감을 하기 위한것입니다»):
+//     행은 화면이 넘긴 것이 아니라 **쓰는 이 덱플랜에서 다시 뽑는다**(rzorPlan.deckPlanRows — 그림과 판정이 갈리지 않게). 완료 쓰기는 위와 같다.
+//     자리는 records 가 아니라 `loading/stowagePlan` 을 이 플랜으로 갱신한다(fbSetStowagePlan 과 같은 update — 검수원 지정 assign 은 그대로) → 목록의 덱플랜 좌표는 화면이 그릴 때 rzorPlan.withDeckPos 가 저절로 따른다.
+//     자리가 바뀐 컨은 records 에 moves 한 줄과 적은 사람·시각만(베이 칸 bay_actual 류는 쓰지 않는다 — RZOR 엔 베이가 없다).
+//     ★ Fable 판정(감사 4.21-2): 수석 플랜 자리가 검수원 지정 자리(assign)도 이긴다 — 다른 컨은 moves 에 note 'closing-over-assign' 을 남기고 낡은 지정 핀(assignClear)을 지운다.
+//       사람이 찍은 완료(kind human)는 완료를 건드리지 않고 자리 이력만 남긴다(덱 갈래). 베이 갈래는 종전 그대로(사람 기록은 완료도 자리도 그대로).
+//     파일에만 있는 제작컨(§7.8-⑦ «대수엔 들어 가지만 규격엔 없습니다»)은 리스트 행(records — 칸 단위 PATCH · 규격 코드 없음 · 크기는 플랜 칸)과 완료(src edi — 이미 완료가 있으면 규칙 ① 그대로 둔다)를 더한다. 파일에만 있는 ISO 컨은 종전대로 알리기만.
+async function applyClosingEdiFile(voyageKey, by, ediRows, deckPlan, fileName) {
   const [infoSnap, loadSnap] = await Promise.all([
     get(ref(db, `voyages/${voyageKey}/info`)),
     get(ref(db, `voyages/${voyageKey}/loading`)),
   ]);
   const voyage = { info: infoSnap.val() || {}, loading: loadSnap.val() || {} };
-  const plan = closingEdiPlan(voyage, ediRows);
+  const deckOk = !!(deckPlan && Array.isArray(deckPlan.decks) && deckPlan.decks.length);
+  const plan = closingEdiPlan(voyage, deckOk ? deckPlanRows(deckPlan) : ediRows);
   if (!plan.ok) throw new Error(`마감적용을 할 수 없습니다 — ${plan.why}`);
+  const deck = plan.fmt === 'deck';
+  if (deck && !deckOk) throw new Error('마감적용을 할 수 없습니다 — 덱플랜 좌표만 있고 덱플랜이 없습니다');
   const keyOk = /^[A-Z0-9_-]{1,24}$/;
   const recs = (voyage.loading.records) || {};
   const recKey = {}; for (const k of Object.keys(recs)) recKey[String(k).replace(/\s/g, '').toUpperCase()] = k;
@@ -1179,29 +1190,46 @@ async function applyClosingEdiFile(voyageKey, by, ediRows) {
   const base = `voyages/${voyageKey}/loading`;
   const patch = {};
   const now = Date.now();
-  let bad = 0, added = 0, confirmed = 0, moved = 0;
+  let bad = 0, added = 0, confirmed = 0, moved = 0, madeAdded = 0;
   for (const it of plan.items) {
-    if (it.kind === 'human') continue;
+    if (it.kind === 'human' && !(deck && it.posDiff)) continue;   // 4.21: 덱 갈래의 사람 완료는 자리 이력만(완료는 그대로)
     if (!keyOk.test(it.cn)) { bad++; continue; }
     if (it.kind === 'add') { patch[`${base}/completed/${it.cn}`] = { by: '', src: 'edi', at: plan.at }; added++; }
-    else { patch[`${base}/completed/${compKey[it.cn] || it.cn}/termBasis`] = null; confirmed++; }   // 시각(at)은 그대로
+    else if (it.kind === 'confirm') { patch[`${base}/completed/${compKey[it.cn] || it.cn}/termBasis`] = null; confirmed++; }   // 시각(at)은 그대로
     if (!it.posDiff) continue;
     const rk = recKey[it.cn] || it.cn;
     const cur = recs[rk] || {};
-    const pos = (p) => (p && p.bay ? `${String(parseInt(p.bay, 10)).padStart(2, '0')}-${p.row}-${p.tier}` : '자리 없음');
+    const pos = (p) => (deck ? (p || '자리 없음') : (p && p.bay ? `${String(parseInt(p.bay, 10)).padStart(2, '0')}-${p.row}-${p.tier}` : '자리 없음'));   // 4.21: 덱 갈래는 «덱_줄_칸»
     const mv = Array.isArray(cur.moves) ? [...cur.moves] : [];
-    mv.push({ at: now, by: by || '', from: pos(it.from), to: pos(it.to), why: 'actual', byCn: '' });
+    mv.push({ at: now, by: by || '', from: pos(it.from), to: pos(it.to), why: 'actual', byCn: '', ...(it.assignOver ? { note: 'closing-over-assign' } : {}) });
     const rp = `${base}/records/${rk}`;
     patch[`${rp}/cn`] = it.cn;
-    patch[`${rp}/bay_actual`] = it.to.bay; patch[`${rp}/row_actual`] = it.to.row; patch[`${rp}/tier_actual`] = it.to.tier;
+    if (!deck) {
+      patch[`${rp}/bay_actual`] = it.to.bay; patch[`${rp}/row_actual`] = it.to.row; patch[`${rp}/tier_actual`] = it.to.tier;
+      patch[`${rp}/_pos_src`] = null;
+      patch[`${rp}/bay_assign`] = null; patch[`${rp}/row_assign`] = null; patch[`${rp}/tier_assign`] = null; patch[`${rp}/assign_at`] = null; patch[`${rp}/assign_by`] = null;
+    }
     patch[`${rp}/actual_at`] = now; patch[`${rp}/actual_by`] = by || '마감 EDI';
-    patch[`${rp}/_pos_src`] = null;
-    patch[`${rp}/bay_assign`] = null; patch[`${rp}/row_assign`] = null; patch[`${rp}/tier_assign`] = null; patch[`${rp}/assign_at`] = null; patch[`${rp}/assign_by`] = null;
     patch[`${rp}/moves`] = mv.slice(-40);
     moved++;
   }
+  if (deck) {
+    //  자리 정본 = 이 덱플랜(fbSetStowagePlan 과 같은 update — stowagePlan 아래 칸만 바꾼다) · 검수원 지정 핀은 플랜과 겹치거나 다른 것만 지운다(그 밖의 assign 은 그대로)
+    for (const [k, v] of Object.entries(deckPlan)) if (v !== undefined && k !== 'assign') patch[`${base}/stowagePlan/${k}`] = v;
+    patch[`${base}/stowagePlan/_at`] = now; patch[`${base}/stowagePlan/_src`] = 'closing'; patch[`${base}/stowagePlan/_file`] = String(fileName || '');
+    for (const k of plan.assignClear || []) patch[`${base}/stowagePlan/assign/${k}`] = null;
+    for (const m of plan.madeOnly) {
+      if (!keyOk.test(m.cn)) { bad++; continue; }
+      const rk = recKey[m.cn] || m.cn, rp = `${base}/records/${rk}`, cur = recs[rk] || {};
+      const f = { cn: m.cn, mkcon: true, _madeUnit: true, fe: m.fe === 'E' ? 'E' : 'F', pol: 'KRPTK', _source: String(fileName || 'STOWAGE PLAN'), _inList: true,
+        ...(cur.iso ? {} : { iso: '' }), ...(m.size ? { size: m.size } : {}), ...(m.wt != null ? { wt: m.wt } : {}) };
+      for (const [k, v] of Object.entries(f)) patch[`${rp}/${k}`] = v;   // 칸 단위 — 그 기록의 다른 칸(씰·이력)은 그대로
+      if (!compKey[m.cn]) patch[`${base}/completed/${m.cn}`] = { by: '', src: 'edi', at: plan.at };   // 규칙 ① — 이미 완료(사람 등)가 있으면 그대로
+      madeAdded++;
+    }
+  }
   if (Object.keys(patch).length) await update(ref(db), patch);
-  return { ok: true, file: true, applied: added + confirmed, added, confirmed, moved, bad, human: plan.counts.human, ediOnly: plan.ediOnly.length, planOnly: plan.planOnly.length, at: plan.at };
+  return { ok: true, file: true, fmt: plan.fmt, applied: added + confirmed, added, confirmed, moved, bad, human: plan.counts.human, posKeep: plan.counts.posKeep || 0, assignOver: plan.counts.assignOver || 0, ediOnly: plan.ediOnly.length, planOnly: plan.planOnly.length, madeAdded, at: plan.at };
 }
 
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {

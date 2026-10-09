@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, isMadeUnitCn, isListOriginRecord, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -128,6 +128,8 @@ function _isoBlankFilled(voyage, c) {
       if (iso) return { ...c, iso, _isoFrom: 'ediRaw' };
     }
   }
+  //  4.21: 마감적용이 넣은 제작컨(EDI 없음 · 규격 코드 없음)은 STOWAGE PLAN 칸의 크기(size)로 — R111W SAWTBP004 F45'H → 45' 칸
+  if (c._madeUnit && [20, 40, 45].includes(Number(c.size))) return { ...c, _sizeFill: String(Number(c.size)), _isoFrom: 'plan' };
   const b = parseInt(effectivePos(c).bay, 10);
   if (Number.isFinite(b) && b > 0) return { ...c, _sizeFill: b % 2 ? '20' : '40', _isoFrom: 'bay' };
   return c;
@@ -153,6 +155,15 @@ export function ptkContainers(voyage, mode) {
     return dischargeUnitBareRow(voyage, cn);
   };
   const edi = _useU ? [..._U.set].map(_unitRow) : vals(_ediMap);
+  //  ★ 4.21 (§7.8-⑦ · 마감적용 덱 갈래 — 검수사 2026-10-10 05:32 «수석의 텔리에 있는 자료로 마감을 하기 위한것입니다»): 선적 모집단은 EDI 행 그대로다.
+  //    단 수석 마감텔리 STOWAGE PLAN 에만 있어 마감적용(firebase.applyClosingEdiFile)이 리스트 행으로 넣은 제작컨(records `_madeUnit`)은 EDI 가 없어도 센다
+  //    («대수엔 들어 가지만 규격엔 없습니다» — RZOR R111W SAWTBP004). 그 밖의 리스트 전용 행은 종전대로 넣지 않는다(아래 «컨을 추가하지 않는다» 원칙).
+  if (mode === 'loading') {
+    const _have = new Set(edi.map((c) => c && c.cn));
+    for (const [cn, r] of Object.entries(recs)) {
+      if (r && r._madeUnit === true && isMadeUnitCn(cn) && isListOriginRecord(r) && !_have.has(cn)) edi.push({ ...Object.fromEntries(Object.entries(r).filter(([, v]) => v !== '' && v != null)), cn });
+    }
+  }
   //  3.31: **배별 선사 별칭은 여기서 한 번만 씌운다** — 컨이 텔리로 들어오는 입구다.
   //    답 함수 안에 세우면 옆길(OS·RF·씰목록)로 들어온 값을 못 막는다(규범 §4-4).
   const _vsl = String(voyage?.info?.vsl || '').toUpperCase();
