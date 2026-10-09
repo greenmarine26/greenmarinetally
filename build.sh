@@ -487,6 +487,9 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 시프팅 근거 표시 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SE"; exit 1
   fi
+  # 회귀 기준표 — tools/REGRESS_BASELINE.md · 검수사 2026-10-09 «찾은 것이 고정되지 않는 것이 문제»
+  #   지난 감사 지적(R1~R11)을 실항차 픽스처·실소스로 잰다. 검사가 스스로 esbuild 로 묶는다 — 번들이 실패해도 종료코드 1 이라 배포 금지(«건너뜀» 없음).
+  node tools/smoke_regress.cjs "$PWD" || { echo "✗ 회귀 기준표 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.44: 선사 RESTOW LIST 가 시프팅 정본이 되는가 — MCAT 635N 실서류 14행 + 실 BAPLIE 두 벌로 실소스를 돌린다.
   #   검수사 2026-09-11 «카토스에 있는 MCAT 시프팅 자료를 찾아서 검수앱과 맞춰주세요 2개 차이납니다» — 서류 14 vs 앱 추정 12.
   SMOKE_RSM=$(mktemp /dev/shm/hometmp/_rsm_XXXXXX.mjs)
