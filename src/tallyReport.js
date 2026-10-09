@@ -2,12 +2,25 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
 
 export const SIZE_COLS = ['20', '40', 'HC', '45'];
+
+/** 4.18-03 — 엠티 실 작업 현황의 규격 글자: **마감텔리의 칸(tallySizeCol)을 그대로 따른다.** 검수사 2026-10-09 22:44 «현장에서는 45G1 40HC를 40풀이라 하고 엠티는 40엠티라고 부릅니다. 표기 방법은 마감텔리에 있는데로 선사별로 틀립니다. 그건 예전에 규격구분을 수석검수가 정리한 마감텔리로 정한다고 결정했습니다».
+ *  20' → 20E/20RE · 40' → 40E/40RE · HC → 45GE/45RE(정본 EDI 글자 그대로) · 45' → L5GE. 종전 emptySealSpec 은 20 이 아니면 전부 45xE 라 진짜 45피트 엠티와 일반 40' 엠티가 40HC 엠티와 같은 «45GE» 로 섞였다(OBWH 2762W 45' 44대). 리퍼 판정은 emptySealSpec 그대로. */
+export function emptySealSpecTally(c) {
+  const base = emptySealSpec(c);
+  if (base === '-') return base;
+  const rf = /RE$/.test(base);
+  const col = tallySizeCol(c);
+  if (col === '20') return rf ? '20RE' : '20E';
+  if (col === '40') return rf ? '40RE' : '40E';
+  if (col === '45') return 'L5GE';
+  return rf ? '45RE' : '45GE';
+}
 
 /** 텔리 규격 4분류 — 20' / 40' / HC(하이큐브·HC리퍼 포함) / 45' (실측 검증 규칙) */
 export function tallySizeCol(c) {

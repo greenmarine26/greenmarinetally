@@ -19,7 +19,7 @@ import PierRegisterModal from '../components/PierRegisterModal.jsx';   // 3.54: 
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel, detectEdiVer } from '../loadingEdiExport.js';   // 1.88: 받은 판대로 생성
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
-import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
+import { computeTallyData, emptySealSpecTally } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import EmptyFindPanel, { maerskEmptyCards } from '../components/EmptyFindPanel.jsx';   // 3.73: 머스크 엠티 찾기
 import { buildReadiness } from '../dataReadiness.js';   // 1.66: 자료 다 왔나 · 빠진 것은 무엇인가
@@ -1394,7 +1394,7 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
                 <tr key={i} className={`border-t border-line ${filled ? '' : 'opacity-50'}`}>
                   <td className="px-1.5 py-1 text-dim-400 mono">{i + 1}</td>
                   <td className="px-1.5 py-1 mono text-dim-100">{c.cn || '(현장부여)'}</td>
-                  <td className="px-1.5 py-1 mono text-dim-300">{emptySealSpec(c)}</td>
+                  <td className="px-1.5 py-1 mono text-dim-300">{emptySealSpecTally(c)}</td>
                   <td className="px-1.5 py-1 mono">
                     {c.eseal ? <span className="text-emerald-300 font-bold">{c.eseal}</span> : <span className="text-dim-500">⏳ 대기</span>}
                   </td>
