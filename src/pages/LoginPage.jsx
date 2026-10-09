@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, sideCancelled, voyagePierOf, equipNumbersForPier } from '../utils.js';   // 3.50: 작업 선박 선택 — 부두별 호기
 import { isFreeRoamer, readWorkChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
@@ -347,7 +347,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         for (const c of allC) {
           if (isoFeet(c?.iso) === 20) c20++;
           if (c?.fe === 'E') mty++;
-          if (isReeferContainer(c)) rf++;
+          if (isFullReefer(c)) rf++;   // 4.15 (§7.8-⑪ Fable 판정 — §4-4 한 벌): 배지 «리퍼» 도 풀 리퍼만
         }
         const xray = Object.keys(v?.discharge?.xrayList || {}).length;   // XRAY는 양하 전용
         //  2.82-01: boxes — 그 배의 컨 수. 목록에 안 보이는 나머지의 «일감»을 아래 한 줄로 말한다.

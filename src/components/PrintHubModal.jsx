@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isPyeongtaekPort, computeShiftingMapCached, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -131,6 +131,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       if (k === 'op') { merged.op = pickCarrierOp(v, e && e.op, voyage?.info?.vsl); return; }
       merged[k] = v;
     });
+    if (hasEdi && r.iso_pick) merged.oog = isoPickOog(r, e.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
     // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여
     merged.cn = (hasEdi && !e.cn && !recMap[cn]) ? `__SLOT_${e.bay || ''}_${e.row || ''}_${e.tier || ''}_${cn}` : cn;
     if (hasEdi && !e.cn && !recMap[cn]) { merged.pendingCn = true; merged._slot = true; }

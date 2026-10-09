@@ -10,7 +10,7 @@ import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -182,6 +182,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           if (k === 'op') { safeR.op = pickCarrierOp(v, merged[r.cn] && merged[r.cn].op, voyage?.info?.vsl); return; }
           safeR[k] = v;
         });
+        if (hasEdi && r.iso_pick) safeR.oog = isoPickOog(r, merged[r.cn].oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: hasEdi ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(utils.bookingFillOf)
       });
       //  3.51-02: **이 패널이 제 목록을 따로 병합하므로 별칭도 여기서 씌운다**(§4-4 판정 한 벌).

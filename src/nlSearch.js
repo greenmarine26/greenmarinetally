@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
+import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots } from './utils.js';
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -883,9 +883,9 @@ export function applyNLFilter(containers, parsed) {
   else if (parsed.size === '45') r = r.filter(c => /^L5/i.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('45'));
   if (parsed.fe) r = r.filter(c => c.fe === parsed.fe);
   if (parsed.type === 'rf') {
-    r = r.filter(c => isReeferContainer(c));   // 3.60-10 (진단 M6): 리퍼 한 벌(실데이터 픽스처 13,337대 대조 차이 0)
     // 1.86 (검수사 확정): «리퍼» = 풀이 기본 — 엠티는 «리퍼 엠티»로 물을 때만. 전면에 엠티가 섞이면 헷갈린다.
-    if (!parsed.fe) r = r.filter(c => c.fe !== 'E');
+    //  ★ 4.15 (검수사 2026-10-09 §7.8-⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»): 풀 리퍼 한 벌(utils.isFullReefer) — 리퍼드라이·제작컨도 세지 않는다.
+    r = r.filter(c => (parsed.fe === 'E' ? isReeferContainer(c) : isFullReefer(c)));   // 3.60-10: 리퍼 판정 한 벌
   } else if (parsed.type === 'dg') r = r.filter(c => c.dg);
   else if (parsed.type === 'xray') r = r.filter(c => c._xray);
   else if (parsed.type === 'lolo') r = r.filter(c => c.lolo);       // V9.56: 갠트리(落地) 분
@@ -1690,7 +1690,7 @@ function formatBayStats(bay, results) {
     return !isNaN(t) && t < 80;
   }).length;
   const totalKg = results.reduce((s, c) => s + (parseInt(c.wt, 10) || 0), 0);
-  const rfCount = results.filter(c => isReeferContainer(c)).length;   // 3.60-10: 리퍼 한 벌
+  const rfCount = results.filter(c => isFullReefer(c)).length;   // 4.15 (§7.8-⑪): 답 속 «리퍼 N» 은 풀 리퍼 한 벌
   const dgCount = results.filter(c => c.dg).length;
   const compCount = results.filter(c => c._comp).length;
 
@@ -1948,7 +1948,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
     const t = parseInt(c.tier, 10);
     if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
-    if (isReeferContainer(c) && c.fe !== 'E') { rf.push(c); if (reeferTempOf(c).state === 'A') noTmp.push(c); }   // 3.25: 판정 한 벌(규범 §4-4)   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
+    if (isFullReefer(c)) { rf.push(c); if (reeferTempOf(c).state === 'A') noTmp.push(c); }   // 4.15 (§7.8-⑪): 풀 리퍼 한 벌(엠티·리퍼드라이·제작컨 빼고)   // 3.25: 판정 한 벌(규범 §4-4)   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
     if (c.dg) dg.push(c);
     if (c._xray) xr.push(c);
     if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);

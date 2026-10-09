@@ -53,7 +53,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -926,6 +926,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (v !== 0) safeR[k] = v;
         }
       });
+      if (ediBase && r.iso_pick) safeR.oog = isoPickOog(r, ediBase.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
       merged[r.cn] = { ...(ediBase || {}), ...safeR, _inList: true, _src: ediBase ? 'both' : 'list' };   // V8.86: 리스트 등록 표식(선적 평택 판정 — 별첨·베이와 동일 원칙)
     });
     // V7.99-16: 초과 컨(리스트·EDI에 없는데 내려진 것) 합치기 — 양하신고 점검이 보도록.

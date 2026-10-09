@@ -4,7 +4,7 @@
 //   셀 = (베이,티어) 집계: 숫자=컨 수, 초록=완료, 모드색=미완료, 회색=통과. 베이 클릭 → 2D 이동.
 //   진실원: 사전 tiers, 없으면 tier>=60 데크 폴백. 베이 홀짝 = 20/40 (베이매트릭스가 진실).
 import React, { useMemo } from 'react';
-import { isPyeongtaekPort, isReeferContainer } from '../utils.js';
+import { isPyeongtaekPort, isFullReefer } from '../utils.js';
 
 export default function ShipProfileView({
   containers = [], dictBaysSummary = {}, mode = 'discharge',
@@ -48,7 +48,7 @@ export default function ShipProfileView({
       if (isPyeongtaekPort(port)) e.ptk += 1;
       // 특수화물 (상단 아이콘) — 리퍼/DG/FR/OT/TK
       const sp = (spec[bn] ||= { rf: 0, dg: 0, fr: 0, ot: 0, tk: 0 });
-      if (isReeferContainer(c)) sp.rf += 1;
+      if (isFullReefer(c)) sp.rf += 1;   // 4.15 (§7.8-⑪ Fable 판정 — §4-4 한 벌): 풀 리퍼만
       if (c.dg) sp.dg += 1;
       if (c.fr) sp.fr += 1;
       if (c.ot) sp.ot += 1;

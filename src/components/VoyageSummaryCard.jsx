@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isPtk as _isPtkOne, isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
+import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftCnSetOf, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks} from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -65,7 +65,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     // 2.08-02 (검수사 «전에 한번 수정한건 같습니다. 리퍼 엠티 알림건» — OBWH 선적 실측: 엠티 리퍼 26대가
     //   «리퍼 26대 · 위치미상26» 빨간 알림으로): 1.85-04 정책 «리퍼 전면 표시는 풀만»이 이 요약 카드에는
     //   빠져 있었다. 카운트·위치미상·온도X 전부 풀 리퍼 기준(F 또는 F/E 미상 — 조회·브리핑과 동일 판정).
-    const reefers = containers.filter(c => isReeferContainer(c) && (c.fe === 'F' || c.fe === '' || c.fe == null));
+    const reefers = containers.filter(isFullReefer);   // 4.15 (§7.8-⑪ Fable 판정 — §4-4 한 벌): 풀 리퍼 한 벌(엠티·리퍼드라이·제작컨 빼고) — 드라이·제작컨은 아래 칩이 따로 센다
     //  3.25: 판정 한 벌 — utils.reeferTempSummary (규범 §4-4). 종전엔 여기서 따로 셌다.
     //    «미입력»은 곧 «기준(세팅)이 없다»는 뜻이다. 실측이 없는 것은 «검증 안 됨»으로 따로 센다.
     const rfSum = reeferTempSummary(containers);
@@ -116,7 +116,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
       rfSum,   // 3.25: 리퍼 온도 판정 한 벌 — 칩이 이것을 본다(규범 §4-4)
-      reeferDry: reefers.filter(c => c.rfdry).length,   // V9.20-03: 리퍼드라이(넌플러그)
+      reeferDry: containers.filter(c => c.rfdry && isFullReefer({ ...c, rfdry: false })).length,   // V9.20-03: 리퍼드라이(넌플러그) · 4.15: 풀 리퍼 수에서 빠진 드라이를 칩이 따로 센다
       // V9.28-08: EDI에 위치가 없는 리퍼 (TMPZ 2023E 실측 — 선사 EDI가 리퍼 6대 누락, 냉동리스트에만 존재.
       //   카고플랜에 못 그리는 건 어쩔 수 없지만 숨기면 안 된다 — 검수원이 위치 미상임을 알아야 현장에서 찾는다)
       // 1.24: **덱플랜 위치도 위치다.** 비셀형(RZOR 등)은 bay/row/tier 를 안 쓰고

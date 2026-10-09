@@ -23,7 +23,7 @@ try {
   ok("20피트 장 20' 1 · 20'RF 1", pg[1].map((r) => `${r.size}${r.no}`).join(',') === "20'1,20'RF1", pg[1].map((r) => `${r.size}${r.no}`).join(','));
   console.log('■ 현황 탭 특수화물 — utils 한 벌');
   const ST = fs.readFileSync(path.join(ROOT, 'src/components/StatsTab.jsx'), 'utf8');
-  ok('리퍼는 isReeferContainer · 엠티 리퍼 제외', /const isReefer = isReeferContainer\(c\) && String\(c\.fe \|\| ''\)\.toUpperCase\(\) !== 'E';/.test(ST));
+  ok('리퍼는 풀 리퍼 한 벌(4.15 isFullReefer — 엠티·리퍼드라이·제작컨 제외)', /const isReefer = isFullReefer\(c\);/.test(ST) && /import \{[^}]*\bisFullReefer\b[^}]*\} from '\.\.\/utils\.js'/.test(ST));
   ok('FR 은 isFlatRackContainer · OT 는 FR 아닐 때 오픈탑 판정(규격초과만으로 FR 에 안 센다)', /const _isFr = isFlatRackContainer\(c\);/.test(ST) && !/if \(c\.fr \|\| c\.oog\)/.test(ST));
 } catch (ex) { bad += 1; console.log('  ✘ 검사 중 오류 — ' + (ex && ex.stack || ex)); }
 console.log(`\n3.60-07 연막검사 ${n - bad}/${n} 통과`);

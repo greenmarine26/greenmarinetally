@@ -21,7 +21,7 @@
 //   - 토큰 분당 100만
 //   → 검수원 15명 × 하루 50회 = 750회/일, 한도의 50% 사용
 
-import { fmtPos, normalizeBay, isReeferContainer } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌
+import { fmtPos, normalizeBay, isReeferContainer, isFullReefer } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
 import { lookupUN } from './dgUnDict.js';
 import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
 
@@ -221,7 +221,7 @@ export function ragFilter(question, allContainers, parsed = {}) {
       filtered = filtered.filter(c => c.dg);
       desc.push('DG');
     } else if (parsed.type === 'rf') {
-      filtered = filtered.filter(c => isReeferContainer(c));
+      filtered = filtered.filter(c => (parsed.fe === 'E' ? isReeferContainer(c) : isFullReefer(c)));   // 4.15 (§7.8-⑪): 엠티는 «리퍼 엠티» 로 물을 때만(nlSearch 와 같은 갈래)
       desc.push('리퍼');
     } else if (parsed.type === 'fr') {
       filtered = filtered.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || ''));
@@ -380,7 +380,7 @@ function buildBayStats(allContainers) {
     else bayMap[b].hold++;
     const w = parseInt(c.wt, 10) || 0;
     bayMap[b].wt += w;
-    if (isReeferContainer(c)) bayMap[b].rf++;
+    if (isFullReefer(c)) bayMap[b].rf++;   // 4.15 (§7.8-⑪): 풀 리퍼 한 벌
     if (c.dg) bayMap[b].dg++;
   });
   return bayMap;
@@ -423,7 +423,7 @@ function buildContext(voyage, allContainers) {
     loading: allContainers.filter(c => c._mode === 'loading').length,
     full: allContainers.filter(c => c.fe === 'F').length,
     empty: allContainers.filter(c => c.fe === 'E').length,
-    rf: allContainers.filter(c => isReeferContainer(c)).length,
+    rf: allContainers.filter(c => isFullReefer(c)).length,   // 4.15 (§7.8-⑪): AI 에게 주는 «리퍼 N» 도 풀 리퍼만
     dg: allContainers.filter(c => c.dg).length,
     fr: allContainers.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || '')).length,
     ot: allContainers.filter(c => c.ot).length,

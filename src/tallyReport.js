@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isReeferContainer, isReeferIso, normPortCode, isFlatRackIso } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isReeferContainer, isReeferIso, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -18,6 +18,8 @@ export function tallySizeCol(c) {
 }
 function _sizeColBase(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
+  //  4.15 (§7.8-⑥): 규격이 빈 행을 베이플랜 자리로 채운 값(_isoBlankFilled 의 _sizeFill — 홀수 베이 20' · 짝수 베이 40'). 높이는 아래 SKHU 규칙만 본다.
+  if (!iso && c._sizeFill) return c._sizeFill;
   const l = isoToLabel(iso) || '';
   //  ★ 3.31 — **규격은 `isoToLabel` 이 낸 라벨로만 가른다.** 원본 iso 를 정규식으로 재는 것을 그만둔다.
   //    왜 (정본 대조 2026-09-08, STSE 2653E 양하): 자료에 코드 계열이 둘이다 —
@@ -72,6 +74,42 @@ export function port3(code) {
 const sect = (v, m) => (v && v[m]) || {};
 const vals = (o) => Object.values(o || {});
 
+/** ★ 4.15 — **마감텔리에 규격이 빈 행은 EDI·베이플랜 규격으로 채워 센다** (검수사 2026-10-09 §7.8-⑥ · 감사 574 · 3.41).
+ *  종전엔 규격이 빈 행이 `_sizeColBase` 마지막 줄(«20»)로 떨어져 20' 칸에 섰다 — KBTR 2606E 양하 ASC 20줄(«45GP90 F» 처럼 무게가 두 자리라
+ *  파서가 규격을 못 읽은 줄, 짝수 베이 15 · 홀수 베이 5)이 전부 20' 로 가 미르 «20피트 몇 대» 17 과 마감텔리 37 이 갈렸다.
+ *  채우는 순서 ① 같은 컨번호의 EDI 규격 — 이 행의 EDI 원문 칸(iso_edi·ediIso) → 양하·선적 EDI 의 같은 컨번호 행
+ *            ② 그 항차에 남아 있는 EDI 원문(raw.edi.text)을 같은 파서로 다시 읽은 같은 컨번호(utils.ediMapFromRaw 한 벌 — 4.15 Fable 판정: 파서가 «45GP90 F» 를 읽게 된 뒤 이미 저장된 빈 규격도 원문 규격으로)
+ *            ③ 없으면 베이플랜 자리 — 홀수 베이 20' · 짝수 베이 40'(실은 자리 → 정한 자리 → 계획 자리, effectivePos 한 벌).
+ *  채운 행은 `_isoFrom`('edi'·'ediRaw'·'bay')을 남긴다(서류·화면에는 안 찍는다). 컨을 더하거나 빼지 않는다 — 칸만 정한다. 다 없으면 종전 그대로. */
+const _rawEdiMapCache = new WeakMap();   // 섹션 객체 하나에 원문을 한 번만 다시 읽는다(빈 규격 행이 있을 때만 부른다)
+function _rawEdiMapOf(sec) {
+  if (!sec || !sec.raw || typeof sec !== 'object') return null;
+  if (!_rawEdiMapCache.has(sec)) { let m = null; try { m = ediMapFromRaw(sec); } catch (e) { console.warn('[마감텔리] EDI 원문 다시 읽기 실패(베이플랜 자리로 대신):', e && e.message); } _rawEdiMapCache.set(sec, m); }
+  return _rawEdiMapCache.get(sec);
+}
+function _isoBlankFilled(voyage, c) {
+  if (!c || String(c.iso || '').trim()) return c;
+  let iso = String(c.iso_edi || c.ediIso || '').trim();
+  if (!iso && c.cn) {
+    for (const m of ['discharge', 'loading']) {
+      const e = (sect(voyage, m).ediContainers || {})[c.cn];
+      iso = String((e && e.iso) || '').trim();
+      if (iso) break;
+    }
+  }
+  if (iso) return { ...c, iso, _isoFrom: 'edi' };
+  if (c.cn) {
+    for (const m of ['discharge', 'loading']) {
+      const e = (_rawEdiMapOf(sect(voyage, m)) || {})[c.cn];
+      iso = String((e && e.iso) || '').trim();
+      if (iso) return { ...c, iso, _isoFrom: 'ediRaw' };
+    }
+  }
+  const b = parseInt(effectivePos(c).bay, 10);
+  if (Number.isFinite(b) && b > 0) return { ...c, _sizeFill: b % 2 ? '20' : '40', _isoFrom: 'bay' };
+  return c;
+}
+
 /** 모드별 평택분 컨 목록 (EDI 기준 + 리스트 병합은 호출부 책임 아님 — EDI가 집계의 진실) */
 // V9.57(G6): 선적 평택 판정에 _inList(리스트 등록=평택) 반영 — 화면(BayPlan·카고플랜·별첨)과 동일 규칙.
 //   엠티 선적 리스트는 pol이 비거나 목적지로 오염되는데, 종전엔 그 컨들이 마감 텔리에서 통째로 빠졌다.
@@ -114,6 +152,13 @@ export function ptkContainers(voyage, mode) {
     //  3.53: **검수사·수석이 고른 POD 가 EDI 를 이긴다.** 아래 98행 필터가 이 값을 보고 평택분을 가른다 —
     //    즉 이 한 줄이 마감텔리·검수리스트·VGM 의 **대수**를 바꾼다(검수사 «갯수가 변경되어야만 계획과 맞습니다»).
     if (r.pod_pick && r.pod) out.pod = r.pod;
+    //  ★ 4.15 (§7.8-⑨ Fable 판정): **검수사가 고른 규격도 EDI 를 이긴다** — pod_pick 과 같은 자리. 규격·리퍼·FR·OT·탱크 표식은 records(fbPickIso)가 쓴 그대로,
+    //    규격초과(oog)는 utils.isoPickOog 한 벌(드라이로 골랐으면 없음). 마감텔리 규격 칸(20'·40'·HC)·OS·RF 가 이 값을 센다.
+    if (r.iso_pick && r.iso) {
+      out.iso = r.iso;
+      for (const k of ['rf', 'fr', 'ot', 'tk']) if (typeof r[k] === 'boolean') out[k] = r[k];
+      out.oog = isoPickOog(r, c.oog);
+    }
     if (r.rfdry === true) out.rfdry = true;
     if (r.mkcon === true) out.mkcon = true;
     // TallyOne 1.55: **실적 자리(bay_actual/row_actual/tier_actual)를 들고 온다.**
@@ -132,7 +177,8 @@ export function ptkContainers(voyage, mode) {
   //  3.70-01: applySpecialMarks 가 수화물(lugg)도 찍게 됐지만 **마감텔리 종이는 바꾸지 않는다** — 페리 집계 Lug 줄은 forecast.mode 가
   //    맞을 때만(buildFerry fcOk, OBWH 2692W 실물 대조) 가른다. 여기서 lugg 를 찍으면 그 게이트가 풀린다(감사 지적) — 제작컨만 찍는다.
   const _specOnly = { info: { forecast: { specialCns: voyage?.info?.forecast?.specialCns || [] } } };
-  return applySpecialMarks(_specOnly, merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))));
+  return applySpecialMarks(_specOnly, merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol))))
+    .map((c) => _isoBlankFilled(voyage, c));   // 4.15 (§7.8-⑥): 규격 빈 행은 EDI·베이플랜 규격으로 — Final Work·OS·RF·PERFORMANCE·DAMAGE·페리가 이 목록을 센다
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */
@@ -316,7 +362,7 @@ export function buildSealList(voyage, mode) {
     const reseal = String(r.reseal || '').trim();
     if ((orig && act && orig !== act) || reseal) {
       out.push({
-        cn: r.cn, manifestSeal: orig || act, size: tallySizeCol(r) === '20' ? "20'" : "40'",
+        cn: r.cn, manifestSeal: orig || act, size: tallySizeCol(_isoBlankFilled(voyage, r)) === '20' ? "20'" : "40'",   // 4.15 (§7.8-⑥): 리스트 규격이 비면 같은 컨번호의 EDI·베이플랜 규격
         actualSeal: (orig && act && orig !== act) ? act : '',
         reseal, remarks: _op(pickCarrierOp(r.op, _ediMap[r.cn] && _ediMap[r.cn].op, _vslS)),
         fe: r.fe === 'E' ? 'EMPTY' : 'FULL',

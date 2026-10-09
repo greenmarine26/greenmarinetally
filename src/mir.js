@@ -25,9 +25,9 @@ import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
   resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs,   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
-  isReeferContainer, isReeferIso,   // 3.60-10: 리퍼 판정 한 벌
+  isReeferContainer, isReeferIso, isFullReefer,   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합)
-  EDI_EMPTY_FILL_KEYS, ediCoreEmpty,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A)
+  EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
   currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
   plausibleListWtKg, ediWtField,   // 4.08-02: 컨 하나 40톤 초과는 무게 없음 · EDI 총중량 wtEdi (병합 경로 한 벌)
   dateWordOf,   // 4.12-02: 날짜 말(어제·내일·낼모레…) 해석 한 벌
@@ -628,6 +628,7 @@ export function flattenVoyages(voyages) {
             delete safeR[k];
           }
         }
+        if (_ebM && r.iso_pick) safeR.oog = isoPickOog(r, _ebM.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
       });
       //  ★ 3.70-01 — 특수제작컨·수화물 표시 입구(utils.applySpecialMarks 한 벌). 떠 있는 미르·홈 통합검색·홈에서 여는 컨 상세가
@@ -987,7 +988,7 @@ function attrLine(c, attr, ctx) {
     case 'temp': {
       const r = reeferTempOf(c);
       if (!r.target) {
-        const looksRf = isReeferContainer(c) || isReeferIso(S(c.tp));   // 3.60-10 (진단 M6): 리퍼 판정 한 벌(ASC 장비코드 tp 도 같은 벌)
+        const looksRf = isReeferContainer(c) || (!c.iso_pick && isReeferIso(S(c.tp)));   // 3.60-10 (진단 M6): 리퍼 판정 한 벌(ASC 장비코드 tp 도 같은 벌) · 4.15 (§7.8-⑨): 검수사가 고른 규격(iso_pick)이 tp 를 이긴다
         if (!looksRf) return '리퍼가 아니에요 — 온도 없음.';
         if (c.rfdry) return '리퍼드라이(넌플러그)라 온도 대상이 아니에요.';
         if (c.mkcon) return '특수제작컨이라 온도 대상이 아니에요.';
@@ -2228,7 +2229,7 @@ export function answerOneRaw(query, ctx) {
           const mine = dropFilledBookingSlots((c.flat || []).filter((x) => x.voyageKey === k && x._ptk));
           if (mine.length) {
             const n = (f) => mine.filter(f).length; const sp = [];
-            const rfF = n((x) => x.rf && String(x.fe).toUpperCase() === 'F'); if (rfF) sp.push(`리퍼 ${rfF}`);
+            const rfF = n(isFullReefer); if (rfF) sp.push(`리퍼 ${rfF}`);   // 4.15 (§7.8-⑪): 풀 리퍼 한 벌(종전 rf 표식만 봐 숫자 리퍼를 놓치고 제작컨을 셌다)
             const dg = n((x) => x.dg); if (dg) sp.push(`위험물 ${dg}`);
             const fr = n((x) => x.fr); if (fr) sp.push(`FR ${fr}`);
             const ot = n((x) => x.ot); if (ot) sp.push(`OT ${ot}`);
@@ -2517,6 +2518,7 @@ JSON 한 줄로만 답한다: {"canonical":"...","window":"창구 이름","confi
 const _pos = (c) => c.deckPos ? String(c.deckPos) : [c.bay, c.row, c.tier].filter((x) => x !== undefined && x !== null && x !== '').join('-');   // 4.04-02: RZOR 덱플랜 좌표 먼저
 const _iso = (c) => c.iso || c.tp || c.type || c.size || '';
 const _isRf = (c) => !!(c.rf || c.isReefer || isReeferIso(String(_iso(c))));   // 3.60-10 (진단 M6): 리퍼 한 벌 — 옛 식은 rf 없는 45R1 을 놓쳤다
+const _isRfFull = (c) => _isRf(c) && isFullReefer({ ...c, rf: true });   // 4.15 (§7.8-⑪): 요약 «리퍼» 대수는 풀 리퍼만 — 엠티·리퍼드라이·제작컨 빼는 규칙은 utils.isFullReefer 한 벌
 const _isDg = (c) => !!(c.dg || c.imdg || c.dgc || c.un || c.dgClass);
 const _isX = (c) => !!(c._xray || c.isXray);
 const _isDone = (c) => !!(c._comp || c.comp);
@@ -2530,7 +2532,7 @@ export function buildDataPack(q, ctx) {
   const digs = (String(q).match(/\d{4,7}/g) || []);
   const cnt = (arr, f) => { const m = {}; arr.forEach((c) => { const k = f(c) || '?'; m[k] = (m[k] || 0) + 1; }); return m; };
   const d = cs.filter((c) => (c._mode || c.mode) !== 'loading'), l = cs.filter((c) => (c._mode || c.mode) === 'loading');
-  const sum = (arr) => ({ 총: arr.length, 규격: cnt(arr, _iso), 풀엠티: cnt(arr, (c) => c.fe), 리퍼: arr.filter(_isRf).length, 위험물: arr.filter(_isDg).length, 엑스레이: arr.filter(_isX).length, 규격초과: arr.filter((c) => c.oog).length, 완료: arr.filter(_isDone).length, 미완료: arr.filter((c) => !_isDone(c)).length, 실번호없음: arr.filter((c) => !c.sl).length, POD별: cnt(arr, (c) => c.pod), POL별: cnt(arr, (c) => c.pol) });
+  const sum = (arr) => ({ 총: arr.length, 규격: cnt(arr, _iso), 풀엠티: cnt(arr, (c) => c.fe), 리퍼: arr.filter(_isRfFull).length, 위험물: arr.filter(_isDg).length, 엑스레이: arr.filter(_isX).length, 규격초과: arr.filter((c) => c.oog).length, 완료: arr.filter(_isDone).length, 미완료: arr.filter((c) => !_isDone(c)).length, 실번호없음: arr.filter((c) => !c.sl).length, POD별: cnt(arr, (c) => c.pod), POL별: cnt(arr, (c) => c.pol) });
   const summary = { 배: `${info.vsl || ''} ${info.vslFull || ''}`.trim(), 항차: { 양하: info.voy_d || info.voy || '', 선적: info.voy_l || '' }, 부두: info.pier || '', 선석: info.berth || '', 접안: info.berthSidePick || info.berthSide || '', 작업시작: info.workStartAt || '', 작업끝: info.workEndAt || '', 양하완료시각: (typeof info.dischargeDoneAt === 'number' ? _tm(info.dischargeDoneAt) : (info.dischargeDoneAt || '')), 양하: sum(d), 선적: sum(l) };
   const byWt = cs.filter((c) => Number(c.wt) > 0).sort((a, b) => Number(b.wt) - Number(a.wt));
   const derived = {

@@ -37,7 +37,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
   const B = bundle([
-    `export { shiftReportContainers, plausibleListWtKg, legendItemsOf } from "${ROOT}/src/utils.js";`,
+    `export { shiftReportContainers, plausibleListWtKg, legendItemsOf, isFlatRackContainer, bayCellTypeLabel, legendLiveOf, parseAscFile, emptySealSpec, isReeferContainer } from "${ROOT}/src/utils.js";`,
+    `export { computeTallyData, ptkContainers } from "${ROOT}/src/tallyReport.js";`,
+    `export { generateBriefing } from "${ROOT}/src/nlSearch.js";`,
+    `export { computeAllStats } from "${ROOT}/src/components/StatsTab.jsx";`,
     `export { mergeFolder } from "${ROOT}/src/mergeApi.js";`,
     `export { buildInspectionListDoc, generateInspectionListHTML } from "${ROOT}/src/inspectionList.js";`,
     `export { answerOneRaw, buildDataPack, flattenVoyages, movesOfVoyage } from "${ROOT}/src/mir.js";`,
@@ -273,6 +276,140 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // ── R11 ──────────────────────────────────────────────────────────────
   head('R11 일반 검수원 폰은 고른 항차 본문 하나만 받는다 (4.08·4.08-01) — 이미 고정됨, 가리키기만', '검수사 §2.3(2026-10-07 «필요없는 자료까지 받고 있는지»)');
   ok('build.sh 가 tools/smoke_voyscope408.cjs 를 돌린다(실패하면 배포 금지)', /node tools\/smoke_voyscope408\.cjs "\$PWD" \|\| \{[^}]*exit 1; \}/.test(src('build.sh')));
+
+  // ── R12 ──────────────────────────────────────────────────────────────
+  head('R12 마감텔리에 규격이 빈 행은 EDI·베이플랜 규격으로 채워 센다 — 빈 규격이 20\' 칸으로 몰리지 않는다 (기록부 574 · 3.41 · 4.15 에서 켬)', '검수사 §7.8-⑥(2026-10-09)');
+  {
+    //  KBTR 2606E 양하 — ASC 20줄이 «45GP90 F»(무게 두 자리)라 4.15 전 파서가 규격을 못 읽어 저장된 EDI iso 가 비었다. 원문(raw ASC)은 규격을 말한다.
+    //  기대값은 함수가 아니라 원자료에서 — EDI iso 가 있으면 그것, 비었으면 같은 컨번호의 ASC 줄 44열 규격 4자리.
+    //  칸은 규격 앞 두 자리로 — 첫 자리 2 = 20' · 4 이고 둘째 자리 5~9 = HC(9'6") · 4 이고 0~4 = 40'.
+    const v = JSON.parse(JSON.stringify(fx('mirsame_kbtr.json').voyage)); v.key = 'KBTR_2606E';
+    const E = v.discharge.ediContainers;
+    const rawTxt = String(v.discharge.raw.edi.text || '');
+    const lineOf = {}; rawTxt.split(/\r?\n/).forEach((l) => { const cn = l.substring(7, 18).trim(); if (CN_RE.test(cn)) lineOf[cn] = l; });
+    const ptk = Object.values(E).filter((c) => isPtkCode(c.pod));
+    const specOf = (c) => String(c.iso || '').trim() || (lineOf[c.cn] || '').substring(44, 48);
+    const colOf = (s) => (s[0] === '2' ? '20' : s[0] === '4' ? (/[5-9]/.test(s[1]) ? 'HC' : '40') : '?');
+    const blank = ptk.filter((c) => !String(c.iso || '').trim());
+    const want = { 20: 0, 40: 0, HC: 0 }; ptk.forEach((c) => { const k = colOf(specOf(c)); if (k in want) want[k] += 1; });
+    //  ① 파서 — 원문을 다시 읽으면 무게 두 자리 줄도 규격이 선다(규격 4자리 = 원문 44열 그대로).
+    const P = B.parseAscFile(rawTxt).containers;
+    const bad = P.filter((c) => { const l = lineOf[c.cn]; const tok = l ? l.substring(44, 48) : ''; return /^\d{2}[A-Z]{2}$/.test(tok) && String(c.iso || '').slice(0, 2) !== tok.slice(0, 2); });
+    const twoDigit = Object.values(lineOf).filter((l) => /^\d{2}[A-Z]{2}\d{2} [FE]/.test(l.substring(44, 52))).length;
+    ok(`KBTR 원문 ASC «45GP90 F» 꼴(무게 두 자리) ${twoDigit}줄 — 다시 읽으면 규격 빈 줄 0 · 규격 앞 두 자리 = 원문 44열`, twoDigit > 0 && !P.some((c) => c.cn && !String(c.iso || '').trim()) && !bad.length, `빈 ${P.filter((c) => c.cn && !String(c.iso || '').trim()).length} · 어긋남 ${bad.slice(0, 3).map((c) => c.cn).join(',')}`);
+    //  ② 마감텔리 — 저장된 빈 규격 행도 원문 규격으로 칸이 선다.
+    const t = B.computeTallyData(v).totals.dis;
+    const got = (k) => (t.F[k] || 0) + (t.E[k] || 0);
+    ok(`KBTR 2606E 양하 마감텔리 20' ${want[20]} · 40' ${want[40]} · HC ${want.HC} = 원자료(EDI·원문 ASC 44열)로 센 칸 (규격 빈 행 ${blank.length}대 포함)`, blank.length > 0 && got('20') === want[20] && got('40') === want[40] && got('HC') === want.HC, `20' ${got('20')} · 40' ${got('40')} · HC ${got('HC')}`);
+    ok(`전체 ${ptk.length}대 그대로(컨을 더하거나 빼지 않는다) · 45' 0`, t.n === ptk.length && got('45') === 0, `전체 ${t.n} · 45' ${got('45')}`);
+    const filled = B.ptkContainers(v, 'discharge').filter((c) => blank.some((b) => b.cn === c.cn));
+    ok(`규격 빈 ${blank.length}대는 어디서 채웠는지 표식(_isoFrom)을 남긴다`, filled.length === blank.length && filled.every((c) => ['edi', 'ediRaw', 'bay'].includes(c._isoFrom)), filled.filter((c) => !c._isoFrom).map((c) => c.cn).slice(0, 3).join(','));
+  }
+
+  // ── R13 ──────────────────────────────────────────────────────────────
+  head('R13 검수사가 고른 규격(iso_pick)이 EDI 장비코드 tp 를 이긴다 — 표식 전부(FR·OT·탱크·규격초과)가 고른 규격을 따르고 마감텔리도 읽는다 (기록부 368 · 3.60-11 · 4.15 에서 켬)', '검수사 §7.8-⑨(2026-10-09)');
+  {
+    //  SWTD 9013E 양하 ASC — FR 4대(tp FR40·FR20). 그중 셋을 검수사가 실물로 오픈탑(42UT)·탱크(22T6)·드라이(42G1)로 골랐다고 둔다 — records 에 fbPickIso 가 쓰는 꼴 그대로(iso·iso_pick·표식).
+    const dis = fx('frmark_swtd.json').discharge;
+    const picks = { CXSU1002075: { iso: '42UT', kind: 'OT', len: '40' }, SKHU1640069: { iso: '22T6', kind: 'TK', len: '20' }, SKHU5540670: { iso: '42G1', kind: '', len: '40' } };
+    const recs = {};
+    for (const [cn, p] of Object.entries(picks)) recs[cn] = { cn, iso: p.iso, iso_pick: 'customs', iso_pick_label: p.len + p.kind, rf: false, fr: false, ot: p.kind === 'OT', tk: p.kind === 'TK', fe: dis[cn].fe, pod: dis[cn].pod, pol: dis[cn].pol };
+    const v = { info: { vsl: 'SWTD', voy: '9013E', voy_d: '9013E' }, discharge: { ediContainers: dis, records: recs } };
+    const flat = B.flattenVoyages({ SWTD_9013E: v }).filter((c) => c._mode === 'discharge');
+    //  기대 — EDI 장비코드·규격이 FR 인 행(tp FR·PL·FP · iso 셋째 P)에서 검수사가 다른 종류로 고른 컨을 뺀 수.
+    const ediFr = Object.values(dis).filter((c) => /^(FR|PL|FP)/.test(String(c.tp || '')) || /^[24][0-9]P/.test(String(c.iso || ''))).map((c) => c.cn);
+    const want = ediFr.filter((cn) => !picks[cn]).sort();
+    const got = flat.filter((c) => B.isFlatRackContainer(c)).map((c) => c.cn).sort();
+    ok(`FR 판정 ${want.length}대 [${want.join(' ')}] — 고른 세 대(OT·TK·드라이)는 FR 아님`, got.join(' ') === want.join(' '), `[${got.join(' ')}]`);
+    //  칸 글자 — 특수로 고르면 그 종류(OT40·TK20), 드라이로 고르면 FR 글자가 없다(tp «FR40» 이 칸에 남지 않는다).
+    const cells = flat.filter((c) => picks[c.cn]).map((c) => ({ cn: c.cn, cell: B.bayCellTypeLabel(c), p: picks[c.cn] }));
+    ok('베이플랜 칸 글자 = 고른 규격(OT40·TK20 · 드라이는 FR 글자 없음) — tp «FR40·FR20» 이 아니다', cells.length === 3 && cells.every((x) => (x.p.kind ? x.cell === x.p.kind + x.p.len : !/FR|PL|FP/.test(x.cell))), cells.map((x) => `${x.cn} ${x.cell}`).join(' · '));
+    const cg = B.legendLiveOf(flat, 'discharge', {}).cargos || [];
+    const nOf = (k) => { const x = cg.find(([kk]) => kk === k); return x ? x[1].total.n : 0; };
+    const wantTk = Object.values(dis).filter((c) => /^TK/.test(String(c.tp || '')) || String(c.iso || '')[2] === 'T').length + 1;   // EDI 탱크 + 탱크로 고른 1대
+    ok(`카고플랜 별첨 FR 줄 = ${want.length}대 · Tank 줄 = ${wantTk}대(탱크로 고른 칸은 규격초과 표식도 고른 규격을 따라 OT 로 가지 않는다)`, nOf('FR') === want.length && nOf('Tank') === wantTk, `FR ${nOf('FR')} · Tank ${nOf('Tank')} · OT ${nOf('OT')}`);
+    //  Fable 판정(2026-10-09) «고른 쪽이 이긴다 — 표식 전부»: 드라이로 고른 FR 칸은 OT·FR·규격초과 표식이 없다(EDI 가 FR 장비코드로 켠 oog 를 끈다).
+    const dry = flat.find((c) => c.cn === 'SKHU5540670');
+    const wantOt = Object.values(dis).filter((c) => /^(OT|OP)/.test(String(c.tp || '')) || String(c.iso || '')[2] === 'U').length + 1;   // EDI 오픈탑 + 오픈탑으로 고른 1대
+    ok(`드라이로 고른 FR 칸(SKHU5540670 · EDI oog ${dis.SKHU5540670.oog}) — OT·FR·규격초과 표식 없음 · 별첨 OT 줄 = ${wantOt}대`, !!dry && !dry.oog && !dry.ot && !B.isFlatRackContainer(dry) && nOf('OT') === wantOt, `oog ${dry && dry.oog} · ot ${dry && dry.ot} · OT 줄 ${nOf('OT')}`);
+    //  마감텔리도 고른 규격을 읽는다(pod_pick 과 같은 자리) — 규격 칸·표식이 고른 값.
+    const tr = B.ptkContainers(v, 'discharge').filter((c) => picks[c.cn]);
+    const trBad = tr.filter((c) => c.iso !== picks[c.cn].iso || (c.cn === 'SKHU5540670' && (c.oog || c.fr || c.ot)) || (c.cn === 'SKHU1640069' && !c.tk) || (c.cn === 'CXSU1002075' && !c.ot));
+    ok(`마감텔리 행도 고른 규격(${Object.values(picks).map((p) => p.iso).join('·')}) · 드라이는 규격초과 없음`, tr.length === 3 && !trBad.length, tr.map((c) => `${c.cn} ${c.iso} oog ${c.oog} tk ${c.tk} ot ${c.ot}`).join(' | '));
+  }
+
+  // ── R14 ──────────────────────────────────────────────────────────────
+  head('R14 ASC 엠티 리퍼는 엠티로 세되 리퍼 표기(40HR)를 잃지 않는다 — 40HR→40HE 금지 · 엠티실 규격 45RE (기록부 374 · 3.60-10 · 4.15 에서 켬)', '검수사 §7.8-⑩ · §7.1 «엠티는 엠티이다, 그래도 따로 구분은 한다»');
+  {
+    //  STSE 2669E 선적 예상 ASC 칸(bookingfill_swbt.json stse) — 장비코드 40HR 43칸(엠티 41 · 풀 2). 실 ASC 줄 꼴(asc_djct0219e_shk.asc 첫 줄)에 그 값을 넣어 파서에 다시 먹인다.
+    const tpl = fs.readFileSync(path.join(ROOT, 'tools/fixtures/asc_djct0219e_shk.asc'), 'latin1').split(/\r?\n/).find((l) => /^\d{6} /.test(l));
+    const put = (s, at, x) => s.slice(0, at) + x + s.slice(at + x.length);
+    const wAt = tpl.indexOf('06000');
+    const rows = Object.values(fx('bookingfill_swbt.json').stse.loading.ediContainers).filter((c) => c.tp === '40HR');
+    const lines = rows.map((c) => {
+      let l = put(tpl, 0, `${String(c.bay).padStart(2, '0')}${c.row}${c.tier}`);
+      l = put(l, 7, String(c.cn || '').padEnd(11, ' '));
+      l = put(l, 44, `40HR${String(Math.round(c.wt / 100)).padStart(3, '0')}${c.fe}`);
+      l = put(l, wAt, String(c.wt).padStart(5, '0'));
+      return l.replace(/[A-Z]{10}\s*$/, `${c.pol}${c.pod}`);
+    });
+    const P = B.parseAscFile(['$604SIT/STSE/2670W/x/POD:   /', ...lines].join('\n')).containers;
+    const wantE = rows.filter((c) => c.fe === 'E').length;   // 원자료 F/E 칸
+    const em = P.filter((c) => c.fe === 'E');
+    ok(`엠티 ${wantE}칸은 엠티 그대로(fe E) · 규격은 ASC 원문 «40HR» 그대로`, wantE > 0 && em.length === wantE && em.every((c) => c.iso === '40HR'), `엠티 ${em.length} · ${[...new Set(em.map((c) => c.iso))].join(',')}`);
+    ok(`엠티 ${wantE}칸이 리퍼로 판정된다(§7.1 «HR 로 시작하는 규격은 리퍼»)`, em.every((c) => B.isReeferContainer(c)), `리퍼 ${em.filter((c) => B.isReeferContainer(c)).length}/${em.length}`);
+    const specs = [...new Set(em.map((c) => B.emptySealSpec(c)))];
+    ok('엠티실 규격 = 45RE (45GE 로 나가지 않는다)', specs.length === 1 && specs[0] === '45RE', specs.join(','));
+  }
+
+  // ── R15 ──────────────────────────────────────────────────────────────
+  head('R15 «리퍼 몇 대» 는 풀 리퍼만 — 엠티 리퍼·리퍼드라이·특수제작컨은 세지 않는다 (기록부 375 · 3.60-10 · 4.15 에서 켬)', '검수사 §7.8-⑪ «리퍼 몇대라는 질문은 풀을 이야기 한것»');
+  {
+    //  RZOR R098E 양하(mkcon_rzor.json) — 리퍼 41(엠티 1 · 특수제작컨 HSAP 8) · OBWH 2749E(ferry1700.json) — 선적 엠티 리퍼 30.
+    //  기대값은 원자료에서 — EDI 규격·rf 로 리퍼(§7.1 RF·RE·HR·R + ISO 6346 숫자 냉동군 셋째 자리 3), EDI fe, records mkcon·rfdry.
+    const mk = fx('mkcon_rzor.json').RZOR_R098E;
+    const isRfRaw = (e) => e.rf === true || /^(RF|RE)|HR$|^[24LM][0-9L]R|^(22|45|95)3/.test(String(e.iso || '').toUpperCase());
+    const wantOf = (recs) => Object.values(mk.edi).filter((e) => isPtkCode(e.pod) && isRfRaw(e) && String(e.fe).toUpperCase() !== 'E' && !(recs[e.cn] || {}).mkcon && !(recs[e.cn] || {}).rfdry).length;
+    const ask = (q, recs) => {
+      const v = { info: { vsl: 'RZOR', voy: 'R098E', voy_d: 'R098E' }, discharge: { ediContainers: mk.edi, records: recs } };
+      const flat = B.flattenVoyages({ RZOR_R098E: v });
+      return String(B.answerOneRaw(q, { app: 'tally', voyages: { RZOR_R098E: v }, flat, voyageKey: 'RZOR_R098E', voyage: v, info: v.info, mode: 'discharge', containers: flat.filter((c) => c.voyageKey === 'RZOR_R098E'), portMisData: {}, _trace: {} }) || '');
+    };
+    const num = (a) => Number((a.match(/리퍼:\s*(\d+)대/) || [])[1]);
+    const recs = JSON.parse(JSON.stringify(mk.rec));
+    const want = wantOf(recs);
+    const a1 = ask('리퍼 몇 대', recs);
+    ok(`RZOR R098E «리퍼 몇 대» = 원자료로 센 풀 리퍼 ${want}대 (제작컨·엠티 빼고)`, want > 0 && num(a1) === want, a1.split('\n')[0]);
+    //  검수원이 풀 리퍼 한 대에 «리퍼드라이 지정»을 누른 꼴(records.rfdry) — 한 대 줄어야 한다.
+    const dryCn = Object.keys(mk.edi).find((cn) => mk.edi[cn].rf && mk.edi[cn].fe === 'F' && !(recs[cn] || {}).mkcon);
+    const recsD = JSON.parse(JSON.stringify(recs)); recsD[dryCn] = { ...(recsD[dryCn] || { cn: dryCn }), rfdry: true };
+    const a2 = ask('리퍼 몇 대', recsD);
+    ok(`리퍼드라이 지정 한 대(${dryCn}) 뒤 «리퍼 몇 대» = ${wantOf(recsD)}대`, num(a2) === wantOf(recsD) && wantOf(recsD) === want - 1, a2.split('\n')[0]);
+    //  엠티 리퍼 — OBWH 2749E 선적 엠티 리퍼 30. «리퍼 몇 대» 에는 안 들고, «리퍼 엠티 몇 대» 로 따로 묻는다.
+    {
+      const k = 'OBWH_2749E', vo = fx('ferry1700.json').voyages[k];
+      const cnt = (fe) => ['discharge', 'loading'].reduce((s, md) => s + Object.values((vo[md] || {}).ediContainers || {}).filter((e) => isPtkCode(md === 'discharge' ? e.pod : e.pol) && isRfRaw(e)
+        && (fe === 'E' ? String(e.fe).toUpperCase() === 'E' : String(e.fe).toUpperCase() !== 'E' && !(((vo[md] || {}).records || {})[e.cn] || {}).mkcon && !(((vo[md] || {}).records || {})[e.cn] || {}).rfdry)).length, 0);
+      const wantF = cnt('F'), wantE = cnt('E');
+      const wantFL = Object.values(vo.loading.ediContainers).filter((e) => isPtkCode(e.pol) && isRfRaw(e) && String(e.fe).toUpperCase() !== 'E').length;
+      const flatO = B.flattenVoyages({ [k]: vo });
+      const askO = (q) => String(B.answerOneRaw(q, { app: 'tally', voyages: { [k]: vo }, flat: flatO, voyageKey: k, voyage: vo, info: vo.info, mode: 'loading', containers: flatO.filter((c) => c.voyageKey === k), portMisData: {}, _trace: {} }) || '');
+      const aF = askO('리퍼 몇 대'), aE = askO('리퍼 엠티 몇 대');
+      ok(`OBWH 2749E «리퍼 몇 대» ${wantF} · «리퍼 엠티 몇 대» ${wantE} — 엠티 리퍼는 따로 묻는다`, wantE > 0 && num(aF) === wantF && num(aE) === wantE, `${aF.split('\n')[0]} | ${aE.split('\n')[0]}`);
+      const packO = B.buildDataPack('리퍼 몇 대', { containers: flatO, info: vo.info });
+      ok(`OBWH 2749E AI 자료 묶음 선적 «리퍼» = 풀 리퍼 ${wantFL}대 (엠티 ${wantE}대를 세지 않는다)`, packO.summary && packO.summary.선적 && packO.summary.선적.리퍼 === wantFL, JSON.stringify(packO.summary && packO.summary.선적 && packO.summary.선적.리퍼));
+    }
+    //  같은 판정을 쓰는 자리 — 미르 AI 자료 묶음의 «리퍼» 대수 · 양하 브리핑의 «리퍼 N»
+    const v = { info: { vsl: 'RZOR', voy: 'R098E', voy_d: 'R098E' }, discharge: { ediContainers: mk.edi, records: recs } };
+    const flat = B.flattenVoyages({ RZOR_R098E: v });
+    const pack = B.buildDataPack('리퍼 몇 대', { containers: flat, info: v.info });
+    const br = String(B.generateBriefing(flat.filter((c) => c._mode === 'discharge'), '양하', 'discharge') || '');
+    const brN = Number((br.match(/리퍼 (\d+)/) || [])[1]);
+    //  앱 화면도 같은 한 벌(Fable 판정 2026-10-09 — §4-4) — 현황 탭(StatsTab) 특수화물 «리퍼» 칸.
+    const st = B.computeAllStats(flat.filter((c) => c._mode === 'discharge'), {}, {}, 'discharge', v);
+    ok(`현황 탭(StatsTab) 특수화물 «리퍼» = ${want} — 미르 «리퍼 몇 대» 와 같은 수`, st && st.bySpecial && st.bySpecial.rf.total === want, String(st && st.bySpecial && st.bySpecial.rf.total));
+    ok(`AI 자료 묶음 «리퍼» ${want} · 브리핑 «리퍼 ${want}» — 같은 한 벌`, pack.summary && pack.summary.양하 && pack.summary.양하.리퍼 === want && brN === want, `묶음 ${JSON.stringify(pack.summary && pack.summary.양하 && pack.summary.양하.리퍼)} · 브리핑 ${brN}`);
+  }
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
