@@ -214,8 +214,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
 
   // ── R9 ───────────────────────────────────────────────────────────────
-  head('R9 복합문 «컨테이너 파손됐고 씰도 잘렸어» — 파손·씰 잘림 대처 둘 다 (기록부 540 · 3.43-02)', '검수사(3.43-02 씰 대처법 원장)');
-  console.log('  · 비움 — Fable 판정 필요(현 소스는 복합문에 한쪽만 답한다. 보고서 참고). 단언 없음.');
+  head('R9 복합문 «컨테이너 파손됐고 씰도 잘렸어» — 파손·씰 잘림 대처 둘 다 (기록부 540 · 3.43-02 · 4.14-01 에서 켬)', '검수사(3.43-02 씰 대처법 원장)');
+  {
+    //  smoke_mirsame 의 미르 틀 그대로 — 콘앱 번들 진입점(mirCore.entry) 한 벌에 KBTR 2606E 실항차를 물려 검수앱·콘앱 ctx 로 묻는다.
+    const MC = bundle(`export { answerOneRaw, toMirContainers } from "${ROOT}/src/mirCore.entry.js";\n`, 'mircore', '--loader:.js=jsx --jsx=automatic');
+    const FX = fx('mirsame_kbtr.json');
+    const vk = FX.voyageKey, v = FX.voyage, info = v.info;
+    const D = v.discharge || {}, L = v.loading || {};
+    const comp = Object.assign({}, D.completed || {}, L.completed || {});
+    const cs = MC.toMirContainers(Object.values(D.ediContainers || {}), 'discharge').concat(MC.toMirContainers(Object.values(L.ediContainers || {}), 'loading'));
+    const ctxOf = (app) => (app === 'tally'
+      ? { app, smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, inspector: '연막', isChief: true, portMisData: {}, pilotForecast: FX.pilotForecast, shipSpeed: FX.shipSpeed, voyages: { [vk]: v }, flat: cs, voyageKey: vk, voyage: v, info, mode: 'discharge', containers: cs, compMap: comp, photos: null, diagAlerts: [], _trace: {} }
+      : { app, containers: cs, cone: { rows: [], dischRows: [], stowRows: [] }, execDevice: true, shiftN: 0, mode: 'discharge', modeLabel: '양하', info, compMap: comp, voyage: v, vsl: info.vsl, shipSpeed: FX.shipSpeed, pilotForecast: FX.pilotForecast, voyageKey: vk, _trace: {} });
+    const ask = (q, app) => { const a = MC.answerOneRaw(q, ctxOf(app)); return String(a == null ? '' : a).replace(/\s+/g, ' ').trim(); };
+    //  기대 — 원장(검수사 확정 문구)의 핵심 문장. 코드 출력에서 베끼지 않는다.
+    const DMG = '데미지로 잡아요', SEAL = '리씰한 뒤 사진을 첨부해요';
+    const bad1 = [];
+    for (const q of ['컨테이너 파손됐고 씰도 잘렸어', '컨테이너 파손됐고 씰도 잘렸어 어떻게 해']) {
+      for (const app of ['tally', 'cone']) { const a = ask(q, app); if (!a.includes(DMG) || !a.includes(SEAL)) bad1.push(`${app} «${q}» → ${a.slice(0, 70)}`); }
+    }
+    ok(`복합문(서술·«어떻게 해») 답에 파손 대처(«${DMG}»)와 씰 잘림 대처(«${SEAL}»)가 둘 다 — 검수앱·콘앱`, !bad1.length, bad1.join(' | '));
+    //  단독 질문은 한 갈래만, 그 문장은 복합문 답 속 문장과 같다. «씰 파손됐어 어떻게 해» 의 «파손» 은 손상으로 또 세지 않는다.
+    const sDmg = ask('컨테이너 파손 어떻게', 'tally'), sSeal = ask('씰 잘렸어 어떻게 해', 'tally'), sSeal2 = ask('씰 파손됐어 어떻게 해', 'tally'), sDmg2 = ask('컨테이너 파손됐어', 'tally');
+    const both = ask('컨테이너 파손됐고 씰도 잘렸어', 'tally');
+    ok('단독 질문은 한 갈래만(«컨테이너 파손 어떻게»·«컨테이너 파손됐어» 는 씰 없음 · «씰 잘렸어/씰 파손됐어 어떻게 해» 는 손상 없음) · 단독 두 답의 문장이 복합문 답에 그대로',
+      sDmg.includes(DMG) && !sDmg.includes(SEAL) && !sDmg2.includes(SEAL) && sSeal.includes(SEAL) && !sSeal.includes(DMG) && sSeal2.includes(SEAL) && !sSeal2.includes(DMG) && both.includes(sDmg) && both.includes(sSeal),
+      `파손 ${sDmg.slice(0, 30)} | 씰 ${sSeal.slice(0, 30)} | 씰파손 ${sSeal2.slice(0, 30)} | 서술 ${sDmg2.slice(0, 30)} | 복합 ${both.slice(0, 40)}`);
+  }
 
   // ── R10 ──────────────────────────────────────────────────────────────
   head('R10 검수 리스트 «이어서» 는 한 단 66줄 상한으로 장을 나누고 경계선 때문에 한 장 늘지 않는다 (기록부 306 · 3.62)', '검수사 §7.7(3.60-01 «한장으로» · 3.70-02 66줄)');

@@ -51,7 +51,7 @@ import { buildGuidedQueue } from './guidedQueue.js';
 import { workOrderOf, workOrderText } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌 — 자동 가이드 화면과 같은 읽기
 import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
-import { mirKnowledge } from './data/mirKnowledge.js';
+import { mirKnowledge, mirKnowledgeMulti } from './data/mirKnowledge.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 import { judgeMode, buildReadiness, describeReadiness } from './dataReadiness.js';
 import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60-18: PORT-MIS 매칭 본체(베이사전 없이) — 콘앱 미르용 기본 매처
@@ -2036,6 +2036,11 @@ export function answerOneRaw(query, ctx) {
   if (p.howToQuery) {
     try { const k = mirKnowledge(Q); if (k) { _via('knowledge'); return k; } } catch (e) { /* 원장이 막혀도 색인은 답한다 */ }
     try { const a = generateHowToAnswer(Q, p, { isChief: !!c.isChief }); if (a) { _via('howTo'); return a; } } catch (e) { /* */ }
+  }
+  //  4.14-01 (회귀 기준표 R9 · 3.43-02): 현장 대처 두 갈래를 묻는 말 없이 한 문장에 말하면(«컨테이너 파손됐고 씰도 잘렸어») 원장이 둘 다 답한다 —
+  //    종전엔 아래 본체(⑲)가 «등록된 데미지 없음» 만 냈다. 판정은 mirKnowledgeMulti 한 곳(두 갈래 이상일 때만 답). 한 갈래 서술문(«컨테이너 파손됐어»)은 종전대로 아래로 흐른다.
+  if (!p.asking) {
+    try { const k = mirKnowledgeMulti(Q); if (k) { _via('knowledge'); return k; } } catch (e) { console.warn('[미르] 복합 대처(원장) 실패:', e); }
   }
 
   //  ⑫ 자료 현황 — 배가 있으면 그 배 한 줄(항차 화면) 또는 결론부터(홈), 없으면 전체 가로질러.

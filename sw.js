@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.14';
-const NOTE = '4.14 보조기능에 설치 QR이 생겼습니다. 다른 폰에 앱 깔아 줄 때 사진을 찾지 않고 여기서 바로 보여 주면 됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.14-01';
+const NOTE = '4.14-01 미르가 «파손됐고 씰도 잘렸어» 처럼 두 가지를 한 번에 물으면 파손 대처와 씰 잘림 대처를 둘 다 답합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
