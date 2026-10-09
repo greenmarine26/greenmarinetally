@@ -48,7 +48,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     `export { answerTotalMoves } from "${ROOT}/src/chiefAnswers.js";`,
     `export { toMirContainers } from "${ROOT}/src/mirCore.entry.js";`,
     `export { pickShipCtx } from "${ROOT}/src/mir.js";`,   // 4.17 R21 — 질문 속 배 고르기(홈 통합검색·떠 있는 미르)
-    `export { pickVoyageKey } from "${ROOT}/src/planCommand.js";`,   // 4.17 R21 — 콘앱 배 옮기기(cone.html mirEnsureShip)
+    `export { pickVoyageKey, parseViewCommand } from "${ROOT}/src/planCommand.js";`,   // 4.17 R21 — 콘앱 배 옮기기(cone.html mirEnsureShip) · 4.18-01 콘앱 mirAsk 실소스 시험
+    `export { shipCodeInQuery, knownShipCodes } from "${ROOT}/src/utils.js";`,   // 4.18-01 R21 — 콘앱 mirShipFirst 가 부르는 판정(ConeMir 와 같은 함수)
+    `export { mirTone } from "${ROOT}/src/mir.js";`,
+    `export { parseNaturalQuery } from "${ROOT}/src/nlSearch.js";`,
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
   const stub = './tools/stub_fbdb_mem.js';
   const FB = bundle(`export { fbSetEmptySeal } from "${ROOT}/src/firebase.js";\n`, 'fb', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
@@ -802,6 +805,38 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const vk6 = pick('SWSM 양하 몇 대') || K.voyageKey;
       const c6 = say('SWSM 양하 몇 대', coneCtx417(vk6, voyages[vk6]));
       ok(`두 앱 같은 답 — 콘앱(KBTR 고른 채) «OWBH 양하 몇 대» 는 ${vk5} 로 옮겨 검수앱 홈과 같은 답 · «SWSM» 은 같은 되물음 (수정 전 콘앱은 KBTR 102대)`, vk5 === h1.sc.key && c5 === h1.a && c6 === h3.a, `콘앱 ${vk5} ${c5.replace(/\n/g, ' | ').slice(0, 90)} || ${c6.slice(0, 60)}`);
+      //  ⑥ 4.18-01 (ConeOne 2.69) — 콘앱 «수 질문» 도 질문 속 배가 먼저다. cone.html 의 실제 mirAsk·mirShipFirst·mirEnsureShip(+ 그 길의 mirTryOpen·mirEnsureCalc·표 읽기)를
+      //    vm 에서 돌린다(ConeMir = 같은 번들 · Firebase·화면은 스텁 — 고른 배 자료는 픽스처). 라이브 실측: OBWH 를 고른 채 «KBTR/SMYA/RZSY 양하 몇 대» 가 전부 OBWH 수로 답했다.
+      {
+        const html = src('public/cone.html');
+        const fnOf = (name) => (html.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
+        const names = ['mirAsk', 'mirShipFirst', 'mirEnsureShip', 'mirTryOpen', 'mirEnsureCalc', 'coneQaRowsNow', 'coneRecRows', 'coneRecMark', 'coneIsReefer'];
+        const code = names.map(fnOf);
+        const list = Object.entries(voyages).map(([k, vv]) => ({ key: k, vsl: vv.info.vsl, _info: vv.info, noEdi: !((vv.discharge && (vv.discharge.ediContainers || vv.discharge.raw)) || (vv.loading && (vv.loading.ediContainers || vv.loading.raw))) }));
+        const state = { voyages: list, voyageKey: '', disch: null, stow: null };
+        const CMs = { answerOneRaw: B.answerOneRaw, answerOne: (q, c) => B.answerOneRaw(q, c), toMirContainers: B.toMirContainers, pickVoyageKey: B.pickVoyageKey, parseViewCommand: B.parseViewCommand, parseNaturalQuery: B.parseNaturalQuery,
+          shipCodeInQuery: B.shipCodeInQuery, knownShipCodes: B.knownShipCodes, mirTone: B.mirTone, isReeferContainer: B.isReeferContainer, isoPickOog: B.isoPickOog,
+          askMir: async (q, ctx, f) => ({ text: f(q, {}), via: 'rules', trace: {} }), mirThreadCommit: () => null, mirThreadAlive: () => false };
+        const sel = async (k) => { const vv = voyages[k]; state.voyageKey = k; state.disch = vv.discharge && vv.discharge.ediContainers ? { ediRows: Object.values(vv.discharge.ediContainers) } : null; state.stow = vv.loading && vv.loading.ediContainers ? { ediRows: Object.values(vv.loading.ediContainers) } : null; state.shipName = vv.info.vsl; };
+        const vc = { console, Promise, setTimeout, state, localStorage: { getItem: () => '' }, window: { ConeMir: CMs, __fbShipBayDict: global.window.__fbShipBayDict }, document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+          ensureMir: async () => true, coneYardStatus: async () => null, coneMoodNote() {}, coneMoodEvent() {}, selectVoyage: sel, runCalc: async () => {}, coneRestRowsNow: async () => null,
+          fbFetchBayDict: async () => global.window.__fbShipBayDict, isLoloShip: () => false, fbFetchStowagePlan: async () => null, ctApplyShiftInfo() {}, fbFetchDictCarrier: async () => '', ctPierOf: (i) => (i && i.pier) || '',
+          loadMirCtx: async () => { const vv = voyages[state.voyageKey] || {}; const D = vv.discharge || {}, L = vv.loading || {}; return { info: vv.info || {}, compD: D.completed || {}, compL: L.completed || {}, recD: D.records || {}, recL: L.records || {}, reports: {} }; } };
+        require('vm').createContext(vc);
+        let mirAskFn = null;
+        if (code.every(Boolean)) { require('vm').runInContext('let _mirLastFollow=null;\n' + code.join('') + '\nthis.__mirAsk = mirAsk;', vc); mirAskFn = vc.__mirAsk; }
+        const obwhN = Object.values(F.OBWH_2749E.discharge.ediContainers).filter((c) => isPtkCode(c.pod)).length;          // 고른 배(OBWH 2749E) 양하 평택분 — 답에 나오면 안 되는 수
+        const kbtrN = Object.values(K.voyage.discharge.ediContainers).filter((c) => isPtkCode(c.pod)).length;               // 독립 — KBTR 2606E EDI 행 POD 평택
+        const askC = async (q) => { await sel('OBWH_2749E'); const a = mirAskFn ? String(await mirAskFn(q) || '') : ''; return { a, vk: state.voyageKey }; };
+        const c1 = await askC('KBTR 양하 몇 대'), c2 = await askC('SMYA 양하 몇 대'), c3 = await askC('RZSY 양하 몇 대');
+        const t2 = B.mirTone(home('SMYA 양하 몇 대').a), t3 = B.mirTone(home('RZSY 양하 몇 대').a);
+        const noObwh = (s) => !new RegExp(`(^|[^0-9])${obwhN}대`).test(s);
+        ok(`콘앱(OBWH 고른 채) mirAsk — «KBTR 양하 몇 대» 는 KBTR 로 옮겨 ${kbtrN}대 · «SMYA …» 는 그 배 «컨 자료가 아직»(검수앱 홈과 같은 답) · «RZSY …» 는 SMYA + «옛 코드 RZSY» · 고른 배 수 ${obwhN}대 없음 (수정 전 셋 다 고른 배 수)`,
+          !!mirAskFn && c1.vk === K.voyageKey && c1.a.includes(`양하: ${kbtrN}대`) && noObwh(c1.a)
+          && c2.a === t2 && /컨 자료\(EDI·리스트\)가 아직/.test(c2.a) && noObwh(c2.a)
+          && c3.a === t3 && /옛 코드 RZSY/.test(c3.a) && /SMYA 로 답했어요/.test(c3.a) && !/RZOR/.test(c3.a) && noObwh(c3.a),
+          `KBTR[${c1.vk}] ${c1.a.replace(/\n/g, ' | ').slice(0, 50)} || SMYA ${c2.a.replace(/\n/g, ' | ').slice(0, 60)} / 검수앱 ${t2.replace(/\n/g, ' | ').slice(0, 40)} || RZSY ${c3.a.replace(/\n/g, ' | ').slice(0, 70)}`);
+      }
     } finally { global.window.__fbShipBayDict = dictSave; }
   }
 

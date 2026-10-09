@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.18';
-const NOTE = '4.18 수석 소유자 메뉴에 마감적용 EDI 파일 올리기가 생겼습니다. 동방 선적 시각은 그대로 두고 자리만 바뀝니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.18-01';
+const NOTE = '4.18-01 콘앱 미르도 질문에 다른 배 이름이 있으면 그 배로 답합니다. 자료가 없는 배면 없다고 답합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
