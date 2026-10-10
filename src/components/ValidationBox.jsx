@@ -97,7 +97,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     //    채움 상태는 VoyagePage 가 utils.bookingFillOfSec 로 넘긴다(반대 방향 리스트 제외). 안 넘어오면 여기서 센다.
     const _slotsHere = (ediContainers || []).filter(isSlotEntry);
     const _ediRealCns = new Set((ediContainers || []).map(c => c && c.cn).filter(cn => cn && !String(cn).startsWith('__')));
-    const fill = bookingFill || (_slotsHere.length
+    //  4.22-01: 넘어온 것이 없을 때의 셈도 utils.bookingFillOfSec 와 같은 규칙 — **선적에만**(검수사 12:11 «앵하에 부킹자리가 왜 필요한지?» · KBTR 2608E 양하 183 → 175).
+    const fill = bookingFill || (mode === 'loading' && _slotsHere.length
       ? { slots: _slotsHere.length, real: (records || []).filter(r => r && r.cn && !_ediRealCns.has(r.cn)).length }
       : null);
     if ((!ediContainers || ediContainers.length === 0) && !fill) return null;
@@ -228,13 +229,14 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 들어오면 그것이 진실이고
           예상 수와 달라도 부족이 아니다(예상 202·확정 201이어도 정상, 확정 2면 2가 맞다).
           확정이 있으면 예상 자리수는 표시하지 않는다 — 남아 있으면 미확정으로 오해된다. */}
-      {/* 3.26: 부킹 자리 ↔ 실번호 — 채움 관계를 정보 줄로(경고가 아니다). */}
-      {v.bookingFill && (
-        <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-xxs text-purple-200 font-bold">
+      {/* 3.26: 부킹 자리 ↔ 실번호 — 채움 관계를 정보 줄로(경고가 아니다).
+          ★ 4.22-01 — **빈 자리가 남았을 때만** 보인다. 검수사 2026-10-10 12:19 «선적도 사실은 전부 매칭만 되면 부킹자리가 필요 없습니다.» ·
+            «부킹자리는 저희에게 필요 한게 아니고 터미널 플래너가 필요 한것입니다.» — 리스트(실번호)가 자리를 다 채우면 줄을 내지 않는다(«채움» 글도 없음).
+            자리를 실번호가 채우는 셈(위 ptkTotal·matched·extra)은 3.26 그대로 — 부킹뿐인 선적 EDI 에서 거짓 «EDI에 없음/리스트에 없음» 을 막는다. */}
+      {v.bookingFill && v.bookingFill.real < v.bookingFill.slots && (
+        <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-xxs text-purple-200 font-bold" data-booking-wait>
           📝 부킹 자리 {v.bookingFill.slots} · 실번호 리스트 {v.bookingFill.real}
-          {v.bookingFill.real >= v.bookingFill.slots
-            ? <span className="ml-1 font-normal text-purple-300/70">— 자리를 실번호가 다 채웠습니다(목록·별첨은 한 번만 셉니다)</span>
-            : <span className="ml-1 font-normal text-purple-300/70">— 아직 {v.bookingFill.slots - v.bookingFill.real}자리가 비었습니다(리스트 대기)</span>}
+          <span className="ml-1 font-normal text-purple-300/70">— 아직 {v.bookingFill.slots - v.bookingFill.real}자리가 비었습니다(리스트 대기)</span>
         </div>
       )}
       {v.virtualCount > 0 && (

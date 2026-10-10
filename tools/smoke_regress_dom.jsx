@@ -10,6 +10,7 @@ import { computeStats, VoyageCard } from '../src/pages/HomePage.jsx';
 import Header from '../src/components/Header.jsx';   // 4.19 R24 — 헤더 «사전에 없음»
 import BayPlan from '../src/components/BayPlan.jsx';   // 4.19 R24 — 베이플랜 머리 «사전에 없음»
 import DiagnosticsPanel from '../src/components/DiagnosticsPanel.jsx';   // 4.22 R27 — 주의 박스 «자료별 대조»·잘라 보이기
+import ValidationBox from '../src/components/ValidationBox.jsx';   // 4.22-01 R28 — 데이터 검증 상자(부킹 자리는 선적에만)
 import dm419 from './fixtures/dictmissing419.json';
 import * as U from '../src/utils.js';
 import kskm from './fixtures/shifting_pregone.json';
@@ -69,5 +70,15 @@ if (r27) {
     //  listRows — window.__R27rows = JSON {판 id: 비교한 리스트·세관 행 수(diagListRowCount)} · 없으면 0
     const rows = (() => { try { return JSON.parse(window.__R27rows || '{}')[id] || 0; } catch (e) { return 0; } })();
     createRoot(el).render(React.createElement(DiagnosticsPanel, { alerts, showOk: !id.startsWith('n'), listRows: rows, autoSpeak: false, onToggleSpeak: () => {}, onDismiss: () => {}, onOpenContainer: (cn) => { (window.__R27open = window.__R27open || []).push(cn); } }));
+  }
+}
+
+//  ⑤ 4.22-01 R28 — window.__R28 = JSON {판 id: ValidationBox props(ediContainers·records 배열 · mode · bookingFill)} 이면 판마다 데이터 검증 상자(실소스)를 그린다.
+const r28 = window.__R28 || '';
+if (r28) {
+  const root = document.getElementById('root');
+  for (const [id, p] of Object.entries(JSON.parse(r28))) {
+    const el = document.createElement('div'); el.id = id; root.appendChild(el);
+    createRoot(el).render(React.createElement(ValidationBox, p));
   }
 }

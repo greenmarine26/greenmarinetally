@@ -73,7 +73,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     `export { reconcileSources } from "${ROOT}/src/sourceRecon.js";`,   // 4.22 R27 — 자료별 대조 한 벌
     `export { runDiagnostics, buildVoiceMessage, diagListRowCount } from "${ROOT}/src/diagnostics.js";`,   // 4.22 R27 — 주의 박스 경고 · 음성
     `export { CUSTOMS_RESULT_CODES } from "${ROOT}/src/data/customsCodes.js";`,   // 4.22 R27 — 세관 검수 결과 코드표(검수사 원문)
-    `export { listTypoTwins } from "${ROOT}/src/utils.js";`,   // 4.22 R27 — 번호 오타 짝(CND) — VoyagePage 가 진단에 넘기는 한 벌
+    `export { listTypoTwins, bookingFillOfSec } from "${ROOT}/src/utils.js";`,   // 4.22-01 R28 — bookingFillOfSec   // 4.22 R27 — 번호 오타 짝(CND) — VoyagePage 가 진단에 넘기는 한 벌
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
   const stub = './tools/stub_fbdb_mem.js';
   const FB = bundle(`export { fbSetEmptySeal } from "${ROOT}/src/firebase.js";\n`, 'fb', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
@@ -1846,6 +1846,62 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       ok(`선적 모드 — 예외 없이 돈다 · mode loading · 터미널 배정 ${RL && RL.sources.plan.n} = info.planLod ${F.kbtr.info.planLod} · 예약 자리는 EDI 유닛이 아니다`,
         !err && RL && RL.mode === 'loading' && RL.sources.plan.n === F.kbtr.info.planLod && !RL.sources.edi.has, err || JSON.stringify(RL && RL.sources));
     }
+  }
+
+  // ── R28 ───────────────────────────────────────────────────────────────
+  //  4.22-01 — 부킹 자리 «채움»(3.26 — 선적 예상 EDI 의 컨번호 없는 자리를 실번호 리스트가 채운다)은 선적에만. 양하 EDI 의 컨번호 없는 빈 자리는 «EDI 평택»·부킹 줄·완성율 분모에 안 든다.
+  head('R28 부킹 자리 «채움» 은 선적에만 — 양하 EDI 의 컨번호 없는 빈 자리는 데이터 검증 «EDI 평택»·부킹 줄·홈 카드 완성율 분모에 안 든다 · 자리 그림·선적은 그대로 (4.22-01)',
+    '검수사 2026-10-10 12:11 «KBTR 양하인데 갑자기 183이 튀어나온이유는 선적이면 모르겠지만 앵하에 부킹자리가 왜 필요한지?» · Fable 판정(bookingFillOfSec 한 줄 — 3.26 규칙은 선적용)');
+  {
+    const K = fx('recon422_kbtr.json'), SW = fx('bookingfill_swbt.json').swbt;
+    const sec = K.discharge;
+    //  픽스처 EDI 행은 열쇠가 컨번호다(슬림본 — 행에 cn 칸을 안 실었다). 저장 꼴(행에 cn)로 되살린다 — 자리표시 열쇠(__SLOT_)는 컨번호가 없는 그대로.
+    const E = Object.fromEntries(Object.entries(sec.ediContainers).map(([k, e]) => [k, k.startsWith('__') ? e : { ...e, cn: e.cn || k }]));
+    //  원자료에서 따로 센다 — 컨번호 없이 자리(bay)만 있는 EDI 행 · 컨번호 있는 EDI 평택 행 · 리스트 행
+    const slotRows = Object.entries(E).filter(([, e]) => e && !e.cn && e.bay != null);
+    const realPtk = Object.values(E).filter((e) => e && e.cn && isPtkCode(e.pod)).length;
+    const recN = Object.keys(sec.records).length;
+    const recList = (r) => Object.entries(r || {}).map(([cn, x]) => ({ ...x, cn }));
+    const bf = B.bookingFillOfSec({ ...sec, ediContainers: E }, 'discharge');
+    ok(`KBTR 2608E 양하 — EDI 컨번호 없는 자리 ${slotRows.length}행(${[...new Set(slotRows.map(([, e]) => `${e.bay}베이 ${e.tier}단`))].join('·')}) · bookingFillOfSec(양하) = ${JSON.stringify(bf)} → 홈 카드 완성율 분모 = max(EDI 평택 ${realPtk}, 리스트 ${recN}) (종전 자리 +${slotRows.length})`,
+      slotRows.length === 8 && bf === null && realPtk === 175 && recN === 175, JSON.stringify({ slots: slotRows.length, bf, realPtk, recN }));
+    //  선적은 그대로 — SWBT 2614N(2615S) 부킹 EDI 자리 316 · 실번호 316 · 채움
+    const bfL = B.bookingFillOfSec(SW.loading, 'loading');
+    const swSlots = Object.values(SW.loading.ediContainers).filter((e) => e && (e.isBooking || !e.cn || String(e.cn).startsWith('__'))).length;
+    ok(`선적 불변 — SWBT 2614N 선적 bookingFillOfSec = ${JSON.stringify(bfL)} (원자료 자리 ${swSlots} · 리스트 ${Object.keys(SW.loading.records).length})`,
+      bfL && bfL.slots === swSlots && swSlots === 316 && bfL.real === 316 && bfL.filled === true, JSON.stringify(bfL));
+    //  양하 대수는 원래 175 — 4.20 평택 양하분(마감텔리·홈 카드)·4.22 대조
+    const V28 = { key: K.key, info: K.info, discharge: K.discharge, ...(K.loading ? { loading: K.loading } : {}) };
+    const ss = B.shiftCnSetOf(K.key, V28);
+    const ptkCns = new Set(Object.values(E).filter((e) => e && e.cn && isPtkCode(e.pod)).map((e) => e.cn));
+    const tal = B.ptkContainers(V28, 'discharge').length, home = B.progressOf(sec, 'discharge', ss, ptkCns).ptk.total, rc = B.reconcileSources(V28, 'discharge').app;
+    ok(`양하 대수 불변 — 마감텔리 ${tal} · 홈 카드 ${home} · 4.22 대조 앱 ${rc} = 리스트 ${recN}`, tal === recN && home === recN && rc === recN, JSON.stringify({ tal, home, rc }));
+    //  화면 — 데이터 검증 상자(실소스). 양하: bookingFillOfSec 결과(null)를 넘긴 판 · 아무것도 안 넘긴 판(상자 안 폴백 셈) 둘 다 «EDI 평택 175 · 리스트 175 · 매칭 175» · 부킹 줄 없음.
+    //    선적(SWBT): 부킹 줄 «📝 부킹 자리 316 · 실번호 리스트 316» 그대로
+    const pD = { ediContainers: Object.values(E), records: recList(sec.records), mode: 'discharge' };
+    const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+    const errs = []; dom.window.addEventListener('error', (e) => errs.push(e.message)); dom.window.console.warn = () => {};
+    //  선적 부분 리스트 — SWBT 사본에서 리스트를 100 행으로(자리 316 중 216 이 빈 판). 채움은 같은 한 벌(bookingFillOfSec)로 다시 센다.
+    const SWp = JSON.parse(JSON.stringify(SW.loading)); SWp.records = Object.fromEntries(Object.entries(SW.loading.records).slice(0, 100));
+    const bfP = B.bookingFillOfSec(SWp, 'loading');
+    dom.window.__R28 = JSON.stringify({ d1: { ...pD, bookingFill: bf }, d2: pD, l1: { ediContainers: Object.values(SW.loading.ediContainers), records: recList(SW.loading.records), mode: 'loading', bookingFill: bfL },
+      l2: { ediContainers: Object.values(SWp.ediContainers), records: recList(SWp.records), mode: 'loading', bookingFill: bfP } });
+    try { dom.window.eval(domSrc); } catch (e) { errs.push('THROW ' + e.message); }
+    await sleep(250);
+    const d = dom.window.document;
+    const cells = (id) => { const el = d.getElementById(id); const g = el && el.querySelector('.grid'); return g ? [...g.children].map((c) => c.textContent) : []; };
+    const book = (id) => { const el = d.getElementById(id); return el ? (el.textContent.match(/📝 부킹 자리[^]*?\(리스트 대기\)|📝 부킹 자리 \d+ · 실번호 리스트 \d+|자리를 실번호가 다 채웠습니다/) || [''])[0] : ''; };
+    const c1 = cells('d1'), c2 = cells('d2'), cl = cells('l1'), cp = cells('l2');
+    ok(`화면 — KBTR 양하 데이터 검증 «${c1.join(' · ')}» · 부킹 줄 «${book('d1')}» · 넘긴 것 없이(상자 폴백) «${c2.join(' · ')}» «${book('d2')}»`,
+      c1.join('|') === `EDI 평택${realPtk}|리스트${recN}|매칭${recN}` && !book('d1') && c2.join('|') === c1.join('|') && !book('d2') && !errs.length,
+      JSON.stringify({ c1, c2, b: [book('d1'), book('d2')], errs }).slice(0, 400));
+    //  검수사 12:19 «선적도 사실은 전부 매칭만 되면 부킹자리가 필요 없습니다.» · «부킹자리는 저희에게 필요 한게 아니고 터미널 플래너가 필요 한것입니다.»
+    //    SWBT 316/316(다 채움) → 숫자 줄 «EDI 평택 316 · 리스트 316 · 매칭 316» · 부킹 줄 없음 / 리스트 100 판 → «📝 부킹 자리 316 · 실번호 리스트 100 — 아직 216자리가 비었습니다(리스트 대기)»
+    const swList = Object.keys(SW.loading.records).length;
+    ok(`화면 — SWBT 선적 다 채움 «${cl.join(' · ')}» · 부킹 줄 «${book('l1')}» / 리스트 ${Object.keys(SWp.records).length} 판 «${cp.join(' · ')}» · «${book('l2')}»`,
+      cl.join('|') === `EDI 평택${swSlots}|리스트${swList}|매칭${swList}` && !book('l1') && !d.querySelector('#l1 [data-booking-wait]')
+        && bfP && bfP.slots === 316 && bfP.real === 100 && book('l2') === `📝 부킹 자리 ${swSlots} · 실번호 리스트 100— 아직 ${swSlots - 100}자리가 비었습니다(리스트 대기)` && !errs.length,
+      JSON.stringify({ cl, cp, b: [book('l1'), book('l2')], bfP, errs }).slice(0, 400));
   }
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
