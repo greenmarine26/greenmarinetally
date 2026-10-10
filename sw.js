@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.22-01';
-const NOTE = '4.22-01 양하 데이터 검증이 컨번호 없는 빈 자리를 부킹 자리로 세지 않습니다. 선적 부킹 자리는 리스트가 다 채우면 보이지 않고 빈 자리가 있을 때만 알립니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.22-02';
+const NOTE = '4.22-02 출력 센터 탭의 양하 수가 검수 리스트와 같은 수입니다. 컨번호 없는 빈 자리는 양하 대수에 들지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

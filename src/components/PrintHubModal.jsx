@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn } from '../utils.js';
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -84,6 +84,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     if (c.cn && recMap[c.cn]) return true;
     // M6.94.25: 평택 판정 공용 함수 (KRPYOTM 등 변형 포함). POL/POD 비면 평택 간주.
     if (mode === 'discharge') {
+      //  ★ 4.22-02 — 양하에서 컨번호 없는 자리(EDI 자리표시 — POD 빈칸)는 유닛이 아니다(4.20 ptkDischargeUnitsOf · 4.22-01 과 같은 벌).
+      //    «POD 비면 평택» 이 빈 자리를 평택 양하분으로 세던 구멍(KBTR 2608E 빈 자리 8 — 검수사 15:58 «아까 수정했던 잔재가 남아 있네요»).
+      if (isSlotEntry(c)) return false;
       return !c.pod || isPyeongtaekPort(c.pod);
     } else {
       return !c.pol || isPyeongtaekPort(c.pol);
@@ -282,8 +285,15 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const modeKo = mode === 'discharge' ? '양하' : '선적';
 
   // 양하/선적 카운트 (탭 라벨용 — 평택만)
+  //  ★ 4.22-02 — **탭 라벨은 본문과 같은 집합이다.** 검수사 2026-10-10 15:58(KBTR 2608E 출력 센터 «↓ 양하 (183) · ↑ 선적 (272)» 인데 부제 «양하 175대»)
+  //    «아까 수정했던 잔재가 남아 있네요». 종전엔 탭만 따로 셌고(«POD 비면 평택») 양하 EDI 의 컨번호 없는 빈 자리 8줄이 들어가 183 이었다(Fable 판정).
+  //    · 지금 모드 = 본문 검수 리스트 수(count — 부제와 같은 수)
+  //    · 다른 모드가 양하면 4.20 평택 양하분 한 벌(ptkDischargeUnitsOf — 목록 없는 배는 EDI POD 평택 유닛 · 빈 자리는 유닛이 아니다) — 본문 isPtk 와 같은 판정
+  //    · 다른 모드가 선적이면 종전 셈(아래 — 선적 결과 불변)
   // M5.51: 리스트 등록 컨테이너는 무조건 평택분 (isPtk와 동기화)
-  const countMode = (m) => {
+  const ptkCountOf = (m) => {
+    if (m === mode) return ptkContainers.length;
+    if (m === 'discharge') return ptkDischargeUnitsOf(voyage, _shSetP).set.size;
     const s = voyage?.[m] || {};
     const ed = s.ediContainers || {};
     const rc = s.records || {};
@@ -298,8 +308,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       return !target || isPyeongtaekPort(target);
     }).length;
   };
-  const dischargeCount = countMode('discharge');
-  const loadingCount = countMode('loading');
+  const dischargeCount = ptkCountOf('discharge');
+  const loadingCount = ptkCountOf('loading');
 
   const handlePrintInspection = () => {
     if (count === 0) {

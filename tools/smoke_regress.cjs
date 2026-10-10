@@ -1904,6 +1904,41 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       JSON.stringify({ cl, cp, b: [book('l1'), book('l2')], bfP, errs }).slice(0, 400));
   }
 
+  // ── R29 ───────────────────────────────────────────────────────────────
+  //  4.22-02 — 출력 센터 탭 라벨은 본문(검수 리스트)과 같은 집합 · 양하에서 컨번호 없는 자리는 유닛이 아니다(4.20 · 4.22-01 과 같은 벌).
+  head('R29 출력 센터 탭의 양하 수 = 부제 = 검수 리스트 행 수 · 양하 EDI 의 컨번호 없는 빈 자리는 양하 대수에 안 든다 · 선적 탭 불변 (4.22-02)',
+    '검수사 2026-10-10 15:58(KBTR 2608E 출력 센터 «↓ 양하 (183) · ↑ 선적 (272)» · 부제 «양하 175대») «아까 수정했던 잔재가 남아 있네요» · Fable 판정(탭 라벨은 본문과 같은 집합 · isPtk 폴백은 빈 자리 먼저 제외)');
+  {
+    const S29 = bundle([
+      `export { default as React } from "${ROOT}/node_modules/react/index.js";`,
+      `export { renderToStaticMarkup } from "${ROOT}/node_modules/react-dom/server.node.js";`,
+      `export { default as PrintHubModal } from "${ROOT}/src/components/PrintHubModal.jsx";`,
+    ].join('\n'), 'r42202', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --loader:.js=jsx --jsx=automatic --loader:.png=dataurl`);
+    global.window.matchMedia = global.window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    const hub = (v, key, m) => {
+      const t = S29.renderToStaticMarkup(S29.React.createElement(S29.PrintHubModal, { voyage: v, voyageKey: key, onClose() {}, initialMode: m, inspector: '연막' })).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      return { dis: Number((t.match(/양하 \((\d+)\)/) || [])[1]), lod: Number((t.match(/선적 \((\d+)\)/) || [])[1]), sub: Number((t.match(/(?:양하|선적) (\d+)대 · 평택항/) || [])[1]) };
+    };
+    //  KBTR 2608E — 양하는 R27 사본(recon422_kbtr — EDI 열쇠가 컨번호인 슬림본이라 행에 cn 을 되살린다 · 빈 자리 __SLOT_ 8행은 그대로), 선적은 라이브 GET 슬림본(EDI 272 · 리스트 272)
+    const K = fx('recon422_kbtr.json'), KL = fx('printhub42202_kbtr_l.json');
+    const ED = Object.fromEntries(Object.entries(K.discharge.ediContainers).map(([k, e]) => [k, k.startsWith('__') ? e : { ...e, cn: e.cn || k }]));
+    const v = { key: 'KBTR_2608E', info: KL.info, discharge: { ...K.discharge, ediContainers: ED }, loading: KL.loading };
+    //  원자료에서 따로 센다 — 양하 평택분(4.20 규칙: 세관 목록 + 추가분) · 빈 자리(컨번호 없음) · 선적 EDI POL 평택 행
+    const disWant = unitsByRule(v.discharge).set.size;
+    const slots = Object.entries(ED).filter(([, e]) => !e.cn && e.bay != null).length;
+    const lodWant = Object.values(KL.loading.ediContainers).filter((e) => e && isPtkCode(e.pol)).length;
+    const hD = hub(v, 'KBTR_2608E', 'discharge'), hL = hub(v, 'KBTR_2608E', 'loading');
+    ok(`KBTR 2608E 출력 센터 — 양하 화면 탭 «양하 (${hD.dis}) · 선적 (${hD.lod})» · 부제 «양하 ${hD.sub}대» / 선적 화면 탭 «양하 (${hL.dis}) · 선적 (${hL.lod})» · 부제 «선적 ${hL.sub}대» — 원자료 양하 ${disWant}(빈 자리 ${slots} 빼고) · 선적 ${lodWant} (수정 전 양하 탭 ${disWant + slots})`,
+      slots === 8 && disWant === 175 && hD.dis === disWant && hD.sub === disWant && hL.dis === disWant && lodWant === 272 && hD.lod === lodWant && hL.lod === lodWant && hL.sub === lodWant,
+      JSON.stringify({ hD, hL, disWant, slots, lodWant }));
+    //  목록 없는 배(basis 'edi' — 양하 리스트를 비운 사본): 본문 isPtk 폴백(«POD 비면 평택»)이 빈 자리를 먼저 뺀다 → 탭 = 부제 = EDI POD 평택 유닛
+    const ve = JSON.parse(JSON.stringify(v)); ve.discharge.records = {};
+    const ediPtk = Object.values(ED).filter((e) => e.cn && isPtkCode(e.pod)).length;
+    const hE = hub(ve, 'KBTR_2608E_edi', 'discharge');
+    ok(`목록 없는 사본 — 탭 «양하 (${hE.dis})» · 부제 «양하 ${hE.sub}대» = EDI POD 평택 ${ediPtk}(빈 자리 ${slots} 빼고 · 수정 전 ${ediPtk + slots})`,
+      ediPtk === 175 && hE.dis === ediPtk && hE.sub === ediPtk, JSON.stringify({ hE, ediPtk }));
+  }
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }
