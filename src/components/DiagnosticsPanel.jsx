@@ -9,8 +9,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, AlertCircle, Info, Volume2, VolumeX, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { speak, stopSpeak } from '../voice.js';
 import { buildVoiceMessage, summarizeAlerts, isoConflictText } from '../diagnostics.js';
+import { REF_POD_LABEL, reconTermLabel, reconUnknownText } from '../sourceRecon.js';   // 4.22: 자료별 대조 글 한 벌(진단 한 줄과 같은 글)
+import { CUSTOMS_RESULT_CODES, customsCodeHint, customsCodeLabel } from '../data/customsCodes.js';   // 4.22: 세관 검수 결과 코드표 한 벌(검수사 원문)
 
-export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer }) {
+export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer, showOk = false, listRows = 0 }) {
   const [expanded, setExpanded] = useState(false);
   const lastAlertSig = useRef('');
 
@@ -29,7 +31,14 @@ export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onD
     }
   }, [alerts, autoSpeak]);
 
-  if (!alerts || alerts.length === 0) return null;
+  //  ★ 4.22 — 경고가 하나도 없으면(음성 «데이터 정상») 부른 쪽이 원할 때 한 줄만 — «이상없음 (세관 코드 OKY)»(검수사 09:37 «여러 조건이 발생될때 마다 해당하는 알림에 표기»)
+  //    ⚠ 비교한 리스트·세관 행이 없으면(listRows 0 — diagnostics.diagListRowCount) OKY 가 아니라 «비교할 리스트 없음»(재감사 반영).
+  if (!alerts || alerts.length === 0) {
+    if (!(showOk && Array.isArray(alerts))) return null;
+    return listRows > 0
+      ? <div className="text-2xs text-emerald-300/80 px-1" data-diag-ok="oky" title={CUSTOMS_RESULT_CODES.OKY}>✓ 자료 점검 — {CUSTOMS_RESULT_CODES.OKY} (세관 코드 OKY)</div>
+      : <div className="text-2xs text-dim-300 px-1" data-diag-ok="none">자료 점검 — 비교할 리스트 없음</div>;
+  }
 
   const summary = summarizeAlerts(alerts);
   const hasCritical = summary.critical > 0;
@@ -41,6 +50,7 @@ export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onD
     ? 'border-amber-500 bg-amber-950/30'
     : 'border-blue-500 bg-blue-950/30';
   const iconClass = hasCritical ? 'text-red-400 animate-pulse' : hasWarning ? 'text-amber-400' : 'text-blue-400';
+  const reconShown = alerts.some((a) => a.code === 'source_recon');   // 4.22: 자료별 대조가 있으면 리스트 부족·EDI 밖 목록은 접어 둔다(같은 컨을 두 번 보이지 않게)
 
   return (
     <div className={`border-2 rounded-btn p-3 ${borderClass} ${hasCritical ? 'shadow-lg shadow-red-900/50' : ''}`}>
@@ -91,14 +101,14 @@ export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onD
 
       <div className="space-y-1.5">
         {alerts.map((a, i) => (
-          <AlertRow key={i} alert={a} forceOpen={expanded} onOpenContainer={onOpenContainer}/>
+          <AlertRow key={i} alert={a} forceOpen={expanded} onOpenContainer={onOpenContainer} reconShown={reconShown}/>
         ))}
       </div>
     </div>
   );
 }
 
-function AlertRow({ alert, forceOpen, onOpenContainer }) {
+function AlertRow({ alert, forceOpen, onOpenContainer, reconShown }) {
   const [open, setOpen] = useState(false);
   const isOpen = open || forceOpen;
   const colorClass = alert.level === 'critical'
@@ -119,14 +129,116 @@ function AlertRow({ alert, forceOpen, onOpenContainer }) {
         )}
       </button>
       {isOpen && hasDetails && (
-        <AlertDetails alert={alert} onOpenContainer={onOpenContainer}/>
+        <AlertDetails alert={alert} onOpenContainer={onOpenContainer} reconShown={reconShown}/>
       )}
     </div>
   );
 }
 
-function AlertDetails({ alert, onOpenContainer }) {
+//  ★ 4.22 잘라 보이기 한 벌 — limit 줄까지 보이고 넘치면 «… 외 M건 — 나머지 보기» 로 전부 펼치고 «접기» 로 되돌린다.
+//    검수사 2026-10-10 08:08 «어느정도 갯수가 넘으면 몇개외 몇건이라고 표기만 하고 나머지는 보여주지 않습니다. 나머지도 보고자 하면 볼수 있어야 합니다».
+//    펼침 상태는 목록마다 따로(이 컴포넌트 안). 이 패널의 잘린 목록은 전부 이것을 쓴다(감사 반영 — 풀/엠티·규격·실번호·IMDG·클래스 8·X-RAY 목록까지).
+function TruncList({ items, limit = 10, unit = '건', render }) {
+  const [all, setAll] = useState(false);
+  const list = Array.isArray(items) ? items : [];
+  const more = list.length - limit;
+  return (
+    <>
+      {(all ? list : list.slice(0, limit)).map((x, i) => <React.Fragment key={i}>{render(x, i)}</React.Fragment>)}
+      {more > 0 && (
+        <button type="button" data-trunc-toggle={all ? 'fold' : 'more'}
+          onClick={(e) => { e.stopPropagation(); setAll((v) => !v); }}
+          className="block text-left text-dim-300 underline decoration-dotted px-1.5 py-0.5">
+          {all ? '접기' : `… 외 ${more}${unit} — 나머지 보기`}
+        </button>
+      )}
+    </>
+  );
+}
+
+//  4.22 — 자료별 대조가 같은 컨을 보이면 리스트 부족·EDI 밖 목록은 접어 둔다(펼치면 종전 목록 그대로).
+//    ⚠ EDI 밖 목록에 «⚠ 목적지 확인»(눌러서 POD 확정) 컨이 있으면 접지 않는다 — 고칠 수 있는 줄을 숨기지 않는다(감사 반영).
+function ReconFold({ on, children }) {
+  const [open, setOpen] = useState(false);
+  if (!on) return children;
+  return (
+    <div className="mt-1">
+      <button type="button" data-recon-fold={open ? 'open' : 'closed'}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="text-left text-dim-300 underline decoration-dotted">
+        {open ? '접기' : '자료별 대조 참고 — 이 목록 펼치기'}
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+//  4.22 — 자료별 대조 한 줄: «• BMOU9237016 (45RE) E · KMD · KRINC→KRPTK · 26-10-82 · EDI ✓ 세관 ✗ · 파일»
+function ReconLine({ x, onOpenContainer }) {
+  const pos = fmtPos(x);
+  const route = (x.pol || x.pod) ? `${x.pol || '?'}→${x.pod || '?'}` : '';
+  const parts = [x.fe, x.op, route, pos, x.pattern, x.pick ? `POD 확정 ${x.pick}` : '', x.src].filter(Boolean);
+  return (
+    <button type="button" data-recon-cn={x.cn}
+      onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
+      className="mono block w-full text-left px-1.5 py-0.5 rounded hover:bg-ink-750/50 active:bg-ink-700">
+      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300">{parts.join(' · ')}</span>
+    </button>
+  );
+}
+
+function AlertDetails({ alert, onOpenContainer, reconShown }) {
   const d = alert.details;
+
+  //  ★ 4.22 자료별 대조 — 머리줄(출처마다 대수 또는 «자료 없음» · 터미널 수량 둘) · 터미널 줄 · 번호 대기 줄 · 묶음마다 «라벨 N대 (세관 코드 후보)» + 컨 줄(10줄 넘으면 나머지 보기)
+  //    · 맨 끝에 «POD 확정 — 평택 아님(참고)» — 사람이 확정한 POD 라 어긋남 수에 넣지 않는다.
+  if (alert.code === 'source_recon') {
+    const S = d.sources || {};
+    const chip = (label, x) => (x && x.has ? `${label} ${x.n}` : `${label} 자료 없음`);
+    const chipN = (label, x, note) => (x && x.has ? `${label} ${x.n}(${note})` : `${label} 자료 없음`);
+    const heads = [chipN('터미널 배정', S.plan, '배정표·도선'), chipN('본선현황', S.qc, '호기 합계 완료+잔여'), chip('EDI', S.edi), chip('세관', S.customs),
+      d.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : chip('선사 리스트', S.carrier), `완료 ${(S.done && S.done.n) || 0}`, `실적 ${(S.term && S.term.n) || 0}`];
+    const gap = d.gap;
+    const tl = reconTermLabel(d.term && d.term.basis), tn = (d.term && d.term.n) || 0;
+    const unk = reconUnknownText(d);
+    //  세관 코드 — 검수사 09:37 «KKLC같은건 MFN대상으로 알림» → «MFN 대상 — 뜻» · MGN 은 완료·실적 없는 컨만(일부면 대수)
+    const hint = (g) => (g.code === 'MFN' ? customsCodeLabel('MFN', { kind: '대상' })
+      : g.code === 'MGN' ? customsCodeLabel('MGN', { kind: '대상', n: g.codeN && g.codeN !== g.items.length ? g.codeN : null, note: '완료·실적 없음' })
+      : g.code ? customsCodeHint(g.code) : '');
+    return (
+      <div className="mt-2 pt-2 border-t border-line text-2xs space-y-1" data-recon>
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-dim-200 font-bold" data-recon-head>
+          {heads.map((h, i) => <span key={i}>{i ? '· ' : ''}{h}</span>)}
+        </div>
+        {gap != null && (
+          <div className={gap === 0 ? 'text-dim-300' : 'text-amber-300'} data-recon-term>
+            {gap === 0
+              ? `${tl} ${tn}대 = 앱 ${d.app}대`
+              : `${tl} ${tn}대 · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
+                + (d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
+                + (unk ? ` — ${unk}` : '')}
+          </div>
+        )}
+        {S.pending && S.pending.n > 0 && (
+          <div className="text-amber-300" data-recon-pending title={CUSTOMS_RESULT_CODES.CNN}>
+            번호 대기 {S.pending.n}자리 — EDI 평택 자리인데 컨번호가 없음 {customsCodeHint('CNN')}
+          </div>
+        )}
+        {(d.groups || []).map((g) => (
+          <div key={g.key} data-recon-group={g.key}>
+            <div className="text-amber-300 font-bold" title={g.code ? CUSTOMS_RESULT_CODES[g.code] : undefined}>{g.label} {g.items.length}대{hint(g) ? ` · ${hint(g)}` : ''}</div>
+            <TruncList items={g.items} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
+          </div>
+        ))}
+        {(d.ref || []).length > 0 && (
+          <div data-recon-group="ref">
+            <div className="text-dim-300 font-bold">{REF_POD_LABEL} {d.ref.length}대</div>
+            <TruncList items={d.ref} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (alert.code === 'empty_seal_pending') {
     const isAttach = (Array.isArray(d) ? d[0]?.sealMode : null) === 'attach';
@@ -135,8 +247,8 @@ function AlertDetails({ alert, onOpenContainer }) {
         <div className={`mb-1 ${isAttach ? 'text-red-300' : 'text-cyan-300'}`}>
           📌 클릭하면 컨테이너 모달에서 실 {isAttach ? '부착' : '확인'} 입력 가능
         </div>
-        {(Array.isArray(d) ? d : []).slice(0, 30).map((c, i) => (
-          <button key={i}
+        <TruncList items={Array.isArray(d) ? d : []} limit={30} unit="대" render={(c) => (   // 4.22: «외 N대» 를 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
@@ -144,10 +256,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             <span className="text-dim-300 text-3xs">{isoShown(c.iso)} · POD {c.pod} · @{fmtPos(c) || '?-?-?'}</span>
             <span className={`text-3xs ${isAttach ? 'text-red-400' : 'text-cyan-400'}`}>🔒 입력</span>
           </button>
-        ))}
-        {Array.isArray(d) && d.length > 30 && (
-          <div className="text-dim-400">... 외 {d.length - 30}대</div>
-        )}
+        )}/>
       </div>
     );
   }
@@ -156,8 +265,8 @@ function AlertDetails({ alert, onOpenContainer }) {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">
         <div className="text-amber-300 mb-1">📌 클릭하면 컨테이너 모달에서 규격 수정 가능</div>
-        {(Array.isArray(d) ? d : []).slice(0, 30).map((c, i) => (
-          <button key={i}
+        <TruncList items={Array.isArray(d) ? d : []} limit={30} unit="대" render={(c) => (   // 4.22: «외 N대» 를 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
@@ -165,10 +274,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             <span className="text-dim-300">ISO: {isoShown(c.iso)} @ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-3xs">✏️ 수정</span>
           </button>
-        ))}
-        {Array.isArray(d) && d.length > 30 && (
-          <div className="text-dim-400">... 외 {d.length - 30}대</div>
-        )}
+        )}/>
       </div>
     );
   }
@@ -176,8 +282,8 @@ function AlertDetails({ alert, onOpenContainer }) {
   if (alert.code === 'reefer_no_temp' || alert.code === 'dg_no_class' || alert.code === 'dg_no_un') {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">
-        {(Array.isArray(d) ? d : []).slice(0, 20).map((c, i) => (
-          <button key={i}
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="대" render={(c) => (   // 4.22: «외 N대» 를 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
@@ -185,10 +291,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             <span className="text-dim-300">@ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-3xs">✏️ 수정</span>
           </button>
-        ))}
-        {Array.isArray(d) && d.length > 20 && (
-          <div className="text-dim-400">... 외 {d.length - 20}대</div>
-        )}
+        )}/>
       </div>
     );
   }
@@ -198,37 +301,38 @@ function AlertDetails({ alert, onOpenContainer }) {
       <div className="mt-2 pt-2 border-t border-line text-2xs">
         EDI {d.ediCount || '?'}대 / 리스트 {d.listCount || '?'}대 (매칭 {d.matchedCount ?? '?'}대)
         {d.missing && d.missing.length > 0 && (
+          <ReconFold on={reconShown}>
           <div className="mt-1">
             <div className="text-amber-400 mb-0.5">리스트에 없는 컨번호 (부족):</div>
-            {d.missing.slice(0, 10).map((m, i) => (
-              <div key={i} className="mono">• {m.cn} {m.iso ? `(${isoShown(m.iso)})` : ''} {m.fe || ''}</div>
-            ))}
-            {d.missing.length > 10 && <div className="text-dim-400">... 외 {d.missing.length - 10}건</div>}
+            <TruncList items={d.missing} limit={10} unit="건" render={(m) => (   // 4.22: «외 N건» 을 펼칠 수 있게
+              <div className="mono">• {m.cn} {m.iso ? `(${isoShown(m.iso)})` : ''} {m.fe || ''}</div>
+            )}/>
           </div>
+          </ReconFold>
         )}
         {d.cancelCns && d.cancelCns.length > 0 && (
           <div className="mt-1">
             <div className="text-dim-300 mb-0.5">선사 취소 요청분(리스트에 남음):</div>
-            {d.cancelCns.slice(0, 10).map((cn, i) => <div key={i} className="mono">• {cn}</div>)}
-            {d.cancelCns.length > 10 && <div className="text-dim-400">... 외 {d.cancelCns.length - 10}건</div>}
+            <TruncList items={d.cancelCns} limit={10} unit="건" render={(cn) => <div className="mono">• {cn}</div>}/>
           </div>
         )}
         {d.extraCns && d.extraCns.length > 0 && (
+          <ReconFold on={reconShown && !(d.podAskCns || []).length}>
           <div className="mt-1">
             {/*  3.53: 눌러서 바로 컨 상세로 간다 — 검수사가 **여기서** 그 컨을 보고 POD 를 확정한다
                  (검수사 2026-09-16 «이건을 앱에서 수정할수 있게»). 두 번 찾아 들어가지 않게 한다. */}
             {/*  3.53: **고를 수 있는 것만** «눌러서 POD 확정» 으로 안내한다 — 나머지는 EDI 에 아예 없어
                  눌러도 고를 것이 없다(재감사 지적). 갈리는 컨은 목록 맨 앞으로 올려 둔다. */}
             <div className="text-dim-300 mb-0.5">EDI에 없는 컨번호{(d.podAskCns || []).length ? ` (⚠ 목적지 확인 ${(d.podAskCns || []).length}대 — 눌러서 POD 확정)` : ''}:</div>
-            {d.extraCns.slice(0, 10).map((cn, i) => {
+            <TruncList items={d.extraCns} limit={10} unit="건" render={(cn) => {   // 4.22: «외 N건» 을 펼칠 수 있게
               const ask = (d.podAskCns || []).includes(cn);
               return onOpenContainer
-                ? <button key={i} onClick={(e) => { e.stopPropagation(); onOpenContainer(cn); }} data-extra-cn={cn} data-pod-ask={ask ? '1' : undefined}
+                ? <button onClick={(e) => { e.stopPropagation(); onOpenContainer(cn); }} data-extra-cn={cn} data-pod-ask={ask ? '1' : undefined}
                     className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• {cn}{ask ? ' ⚠' : ''}</button>
-                : <div key={i} className="mono">• {cn}</div>;
-            })}
-            {d.extraCns.length > 10 && <div className="text-dim-400">... 외 {d.extraCns.length - 10}건</div>}
+                : <div className="mono">• {cn}</div>;
+            }}/>
           </div>
+          </ReconFold>
         )}
       </div>
     );
@@ -246,8 +350,8 @@ function AlertDetails({ alert, onOpenContainer }) {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">
         {why && <div className="px-1.5 pb-1.5 text-2xs leading-relaxed text-dim-200/90">{why}</div>}
-        {d.slice(0, 20).map((w, i) => (
-          <button key={i}
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="건" render={(w) => (   // 4.22 감사: «외 N건» 을 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(w.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
@@ -260,7 +364,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             </span>
             <span className="text-amber-400 text-3xs">✏️</span>
           </button>
-        ))}
+        )}/>
       </div>
     );
   }
@@ -268,8 +372,9 @@ function AlertDetails({ alert, onOpenContainer }) {
   if (alert.code === 'seal_diff') {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">
-        {d.slice(0, 20).map((s, i) => (
-          <button key={i}
+        <div className="text-dim-300 px-1.5" data-customs-code="SLN" title={CUSTOMS_RESULT_CODES.SLN}>EDI·리스트 실번호가 다름 · {customsCodeLabel('SLN')}</div>
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="건" render={(s) => (   // 4.22 감사: «외 N건» 을 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(s.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700"
           >
@@ -279,7 +384,21 @@ function AlertDetails({ alert, onOpenContainer }) {
             </div>
             <div className="text-dim-300 ml-2">EDI: {s.ediSl} | 리스트: {s.lrSl}</div>
           </button>
-        ))}
+        )}/>
+      </div>
+    );
+  }
+
+  //  4.22 — 리스트 번호 오타 짝(세관 코드 CND 후보) — «오타 번호 → 바른 번호 · 실번호». 누르면 오타 쪽 컨 상세.
+  if (alert.code === 'cn_typo') {
+    return (
+      <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5" data-cn-typo>
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="건" render={(t) => (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(t.typo); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700" data-cn-typo-line
+          >• {t.typo} → {t.real} · 실번호 {t.seal}</button>
+        )}/>
       </div>
     );
   }
@@ -287,8 +406,8 @@ function AlertDetails({ alert, onOpenContainer }) {
   if (alert.code === 'imdg_violation') {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-1">
-        {d.slice(0, 10).map((v, i) => (
-          <div key={i}>
+        <TruncList items={Array.isArray(d) ? d : []} limit={10} unit="곳" render={(v) => (   // 4.22 감사: «외 N곳» 을 펼칠 수 있게
+          <div>
             <div className="font-bold">위치 {v.location} · 클래스 {v.classes}</div>
             {v.containers.map((cn, j) => (
               <button key={j}
@@ -297,7 +416,7 @@ function AlertDetails({ alert, onOpenContainer }) {
               >• {cn} ✏️</button>
             ))}
           </div>
-        ))}
+        )}/>
       </div>
     );
   }
@@ -307,8 +426,8 @@ function AlertDetails({ alert, onOpenContainer }) {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-1">
         <div className="text-rose-300 font-bold">고려해운 규정 — 클래스 8은 갑판 적재입니다(홀드 금지).</div>
-        {d.slice(0, 20).map((v, i) => (
-          <button key={i}
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="대" render={(v) => (   // 4.22 감사: «외 N대» 를 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(v.cn); }}
             className="w-full flex items-center justify-between gap-2 hover:text-amber-300"
           >
@@ -316,7 +435,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             <span className="mono text-rose-300 font-bold">{v.bay ? `${parseInt(v.bay, 10)}-${v.row}-${v.tier}` : '자리 없음'}</span>
             <span className="text-dim-300">Class {v.dgc || '8'}{v.un ? ` UN${v.un}` : ''}{v.pod ? ` · ${v.pod}` : ''}</span>
           </button>
-        ))}
+        )}/>
       </div>
     );
   }
@@ -324,15 +443,15 @@ function AlertDetails({ alert, onOpenContainer }) {
   if (alert.code === 'xray_no_location') {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">
-        {(Array.isArray(d) ? d : []).slice(0, 20).map((cn, i) => (
-          <button key={i}
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="대" render={(cn) => (   // 4.22 감사: «외 N대» 를 펼칠 수 있게
+          <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between"
           >
             <span>• {cn}</span>
             <span className="text-amber-400 text-3xs">✏️</span>
           </button>
-        ))}
+        )}/>
       </div>
     );
   }

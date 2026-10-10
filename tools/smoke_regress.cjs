@@ -70,6 +70,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     `export { buildPrintModel, deckTotals } from "${ROOT}/src/rzorPrintModel.js";`,   // 4.20 R25 — 덱플랜 칸 글자·덱 집계
     `export { mirTone } from "${ROOT}/src/mir.js";`,
     `export { parseNaturalQuery } from "${ROOT}/src/nlSearch.js";`,
+    `export { reconcileSources } from "${ROOT}/src/sourceRecon.js";`,   // 4.22 R27 — 자료별 대조 한 벌
+    `export { runDiagnostics, buildVoiceMessage, diagListRowCount } from "${ROOT}/src/diagnostics.js";`,   // 4.22 R27 — 주의 박스 경고 · 음성
+    `export { CUSTOMS_RESULT_CODES } from "${ROOT}/src/data/customsCodes.js";`,   // 4.22 R27 — 세관 검수 결과 코드표(검수사 원문)
+    `export { listTypoTwins } from "${ROOT}/src/utils.js";`,   // 4.22 R27 — 번호 오타 짝(CND) — VoyagePage 가 진단에 넘기는 한 벌
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
   const stub = './tools/stub_fbdb_mem.js';
   const FB = bundle(`export { fbSetEmptySeal } from "${ROOT}/src/firebase.js";\n`, 'fb', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
@@ -1433,6 +1437,414 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const p5 = R26.closingEdiPlan({ info: OB.info, loading: OB.loading }, erows);
       const c5 = Object.keys(OB.loading.ediContainers).filter((cn) => { const c = OB.loading.completed[cn]; return c && c.src === 'term' && c.termBasis === 'plan'; }).length;
       ok(`베이 갈래 그대로 — OBWH 2762W EDI 꼴 ${erows.length}행 → fmt bay · 제작컨 0 · 확정 ${p5.counts.confirm} = 원자료 동방 계획 완료 ${c5}`, p5.ok && p5.fmt === 'bay' && p5.madeOnly.length === 0 && p5.counts.confirm === c5 && c5 > 0, JSON.stringify(p5.counts));
+    }
+  }
+
+  // ── R27 ───────────────────────────────────────────────────────────────
+  //  4.22 — 주의 박스 «자료별 대조»(sourceRecon.reconcileSources 한 벌 · 진단 source_recon · 패널 TruncList). 기대값은 픽스처 원자료에서 따로 센다.
+  //    감사 반영(Fable 판정 2026-10-10) — 세관이 있는 배의 «선사 ✗» 는 어긋남 아님(OBWH 2761E) · 사람이 확정한 평택 아닌 POD 는 참고 줄 · 시프팅은 «완료·실적에만» 에 안 든다(MCSC 633N) ·
+  //    후보·번호 없음 셈(XTPG 541E · KBTR 변이) · 진단 skip · 터미널 수량 둘(배정표·본선현황 — KKLC 2609N 라이브 info) · 세관 검수 결과 코드표(검수사 09:34 원문).
+  head('R27 자료별 대조 — EDI·세관·선사 리스트(선사 요구 메일)·완료·터미널 실적·터미널 배정·본선현황 수량 중 어느 한쪽에만 있는 컨을 묶음별로 컨번호·선사·출발항과 함께 알린다 · 넘치면 «외 N건 — 나머지 보기» · 세관 코드 후보 (4.22)',
+    '검수사 2026-10-10 07:52 «부족한건 앱에서 보여주면서 넘치는건 안보여줌» · 07:53 «둘다 앱에 알림표기 … 컨넘버와 관련선사 표기 출발 항구등» · 08:08 «EDI와 선사요구메일 세관 터미널 등이 다 적용 … 나머지도 보고자 하면 볼수 있어야 합니다» · 09:30 동방 본선현황 캡처(KKLC 2609N 양하 139 · QC101 73 · QC103 66) · 09:34 세관 검수 결과 코드표');
+  {
+    const F = { kbtr: fx('recon422_kbtr.json'), kklc: fx('recon422_kklc.json'), mcap: fx('recon422_mcap.json'), tmpz: fx('recon422_tmpz.json'),
+      obwh: fx('recon422_obwh.json'), mcsc: fx('recon422_mcsc.json'), xtpg: fx('recon422_xtpg.json'), tnjp: fx('recon422_tnjp.json') };
+    const NS = fx('recon422_nsfr_l.json');   // NSFR 2619N 선적(재감사 GET 사본) — EDI 104 · records 0
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    const V = (f) => ({ key: f.key, info: f.info, discharge: f.discharge, ...(f.loading ? { loading: f.loading } : {}), ...(f.restowList ? { restowList: f.restowList } : {}) });
+    //  원자료에서 따로 센다 — EDI 유닛 행(행의 cn, 없으면 키 · «_» 로 시작하는 자리표시 키 빼고 · 예약 자리 빼고) · 세관 행 · 선사 행(선사 파서 표식 iso_carrier 칸 · 세관 아닌 파일 행 · 선사 메일 지정)
+    const ediUnits = (sec) => Object.entries(sec.ediContainers || {}).map(([k, e]) => [String((e && e.cn) || k), e]).filter(([cn, e]) => e && cn && !cn.startsWith('_') && !e.isBooking && !e.pendingCn);
+    const ediPtkOf = (sec) => new Set(ediUnits(sec).filter(([, e]) => isPtkCode(e.pod)).map(([cn]) => cn));
+    const custOf = (sec) => new Set(Object.keys(sec.records || {}).filter((cn) => sec.records[cn]._customs));
+    const carOf = (sec) => new Set(Object.keys(sec.records || {}).filter((cn) => { const r = sec.records[cn]; return 'iso_carrier' in r || (!r._customs && r._source) || r.pod_pick === 'mail'; }));
+    const doneTermOf = (sec) => new Set([...Object.keys(sec.completed || {}).filter((cn) => sec.completed[cn] && !(sec.completed[cn] && sec.completed[cn].flag === 'missing')), ...Object.keys(sec.termWork || {})]);
+    //  사람(수석·검수사)이 POD 를 확정한 꼴 — fbPickPod 와 같은 칸(records pod·pod_pick·pod_pick_label·pod_picked_by · EDI 노드는 표식만, pod 는 안 덮는다)
+    const pickPod = (v, cn, pod) => { const r = v.discharge.records[cn] || {}; v.discharge.records[cn] = { ...r, cn, pod, pod_orig: r.pod == null ? '' : r.pod, pod_pick: 'edi', pod_pick_label: pod, pod_picked_by: '수석', pod_picked_at: 1 }; const e = v.discharge.ediContainers[cn]; if (e) Object.assign(e, { pod_pick: 'edi', pod_pick_label: pod }); };
+    const R = {}; for (const [k, f] of Object.entries(F)) R[k] = B.reconcileSources(V(f), 'discharge');
+    const grp = (r, key) => (r.groups.find((g) => g.key === key) || { items: [] }).items;
+    const gOf = (r, key) => r.groups.find((g) => g.key === key) || {};
+    //  진단은 VoyagePage 처럼 — EDI 평택분은 확정 POD 를 반영해(3.53 isPtkResolved) 거른다.
+    const diagOf = (f, mode = 'discharge', extra = {}) => {
+      const sec = f[mode] || {}, recs = sec.records || {};
+      const ediPtk = {}; for (const [cn, e] of ediUnits(sec)) { const pod = recs[cn] && recs[cn].pod_pick && recs[cn].pod ? recs[cn].pod : e.pod; if (mode === 'discharge' ? isPtkCode(pod) : isPtkCode(e.pol)) ediPtk[cn] = { ...e, cn }; }
+      return B.runDiagnostics({ ediContainers: ediPtk, listRecords: recs, xrayList: {}, mode, carrier: '', voyage: V(f), voyageKey: f.key, ...extra });
+    };
+    const srOf = (a) => a.find((x) => x.code === 'source_recon');
+    //  검수사 2026-10-10 09:34 원문 코드표 — 이 파일이 원문에서 따로 옮겨 적었다(앱 표와 ⑩ 에서 맞춰 보고, 화면 머리 글자도 이것으로 기대한다)
+    const RAW_CODES = 'AWP : 생물이 죽었음 / CND : 컨테이너번호 다름 / CNN : 컨테이너 번호 없음 / CSL : 세관봉인부착 / ETC : 기타 / MFN : 화물있으나 적하목록 없음 / MGN : 적하목록있으나 화물없음 / OKY : 이상없음 / PER : 부패 / SLN : 봉인번호 다름 / SLW : 봉인번호 파손 / WET : 비에 젖음';
+    const CC = Object.fromEntries(RAW_CODES.split(' / ').map((x) => x.split(' : ')));
+
+    //  ① KKLC 2609N(라이브 info — 배정 139 · 본선현황 QC101 73 + QC103 66) — EDI 평택 139 · 세관 119 · 선사 리스트 없음 → «EDI 평택인데 세관 밖» = EDI 평택 − 세관 행 · 세관 코드 MFN 후보
+    {
+      const s = F.kklc.discharge, ep = ediPtkOf(s), cu = custOf(s);
+      const want = [...ep].filter((cn) => !cu.has(cn)).sort();
+      const ediRow = Object.fromEntries(ediUnits(s));
+      const g3 = grp(R.kklc, 'g3');
+      ok(`KKLC 2609N — «EDI 평택인데 세관 밖» ${g3.length}대 = 원자료 EDI 평택 ${ep.size} − 세관 ${cu.size} = ${want.length}대 · 전부 45RE E(EDI 칸) · 패턴 «EDI ✓ 세관 ✗» · 다른 묶음 없음 · 세관 코드 ${gOf(R.kklc, 'g3').code} 후보`,
+        g3.map((x) => x.cn).sort().join() === want.join() && want.length === 20 && R.kklc.groups.length === 1 && R.kklc.total === want.length && gOf(R.kklc, 'g3').code === 'MFN'
+          && want.every((cn) => ediRow[cn].iso === '45RE' && ediRow[cn].fe === 'E') && g3.every((x) => x.iso === '45RE' && x.fe === 'E' && x.pattern === 'EDI ✓ 세관 ✗'),
+        JSON.stringify({ n: g3.length, want: want.length, groups: R.kklc.groups.map((g) => [g.key, g.items.length, g.code]), p: g3[0] && g3[0].pattern }));
+      //  터미널 수량 둘 — 배정표(info.planDis)와 본선현황(info.qcWork 호기마다 disDone+disRest 합) · 차이는 배정표로 잰다 · 앱은 4.20 규칙(세관 + 추가분)
+      const I = F.kklc.info, qcSum = Object.values(I.qcWork || {}).reduce((a, q) => a + (Number(q.disDone) || 0) + (Number(q.disRest) || 0), 0);
+      const appWant = unitsByRule(s).set.size, S = R.kklc.sources;
+      ok(`KKLC 터미널 — 배정 ${S.plan.n}(info.planDis ${I.planDis}) · 본선현황 ${S.qc.n}(호기 ${Object.keys(I.qcWork || {}).join('+')} = ${qcSum}) · EDI ${S.edi.n} · 세관 ${S.customs.n} · 선사 리스트 자료 없음 · 앱 ${R.kklc.app} = 원자료 ${appWant} · 차이 ${R.kklc.gap} · 번호 없음 ${R.kklc.unknown}`,
+        S.plan.n === I.planDis && I.planDis === 139 && S.qc.has && S.qc.n === qcSum && qcSum === 139 && R.kklc.term.basis === 'plan' && S.edi.n === ep.size && S.customs.n === cu.size && !S.carrier.has
+          && R.kklc.app === appWant && R.kklc.gap === appWant - I.planDis && R.kklc.gap === 0 && R.kklc.unknown === 0,
+        JSON.stringify({ S, term: R.kklc.term, app: R.kklc.app, gap: R.kklc.gap }));
+      //  배정표가 없으면 본선현황으로 잰다 · 둘 다 없으면 차이를 말하지 않는다
+      const K0 = clone(F.kklc); K0.info.planDis = 0;
+      const K00 = clone(K0); delete K00.info.qcWork;
+      const R0 = B.reconcileSources(V(K0), 'discharge'), R00 = B.reconcileSources(V(K00), 'discharge');
+      ok(`배정표 없는 사본 — 본선현황 ${R0.term.n} 으로 잰다(차이 ${R0.gap}) · 본선현황도 없으면 차이 없음(${R00.gap})`,
+        !R0.sources.plan.has && R0.term.basis === 'qc' && R0.term.n === qcSum && R0.gap === appWant - qcSum && R00.term.basis === null && R00.gap === null && R00.unknown === 0,
+        JSON.stringify({ t0: R0.term, g0: R0.gap, t00: R00.term, g00: R00.gap }));
+    }
+    //  ② KKLC — 수석이 BMOU9237016 POD 를 CNSHA 로 확정한 사본 → 묶음·총수에서 빠지고 «POD 확정 — 평택 아님(참고)» 1대 · 앱 138(4.20 — 고른 평택 아닌 POD 는 뺀다) · 배정 139 와의 −1 은 그 참고 컨이 후보
+    {
+      const KP = clone(F.kklc); pickPod(KP, 'BMOU9237016', 'CNSHA');
+      const RP = B.reconcileSources(V(KP), 'discharge');
+      const s = KP.discharge, recs = s.records;
+      const want = [...ediPtkOf(s)].filter((cn) => !custOf(s).has(cn) && !(recs[cn] && recs[cn].pod_pick && !isPtkCode(recs[cn].pod))).sort();
+      const appWant = [...unitsByRule(s).set].filter((cn) => !(recs[cn] && recs[cn].pod_pick && !isPtkCode(recs[cn].pod))).length;
+      const g3 = grp(RP, 'g3');
+      ok(`KKLC BMOU9237016 수석 확정 CNSHA — «EDI 평택인데 세관 밖» ${g3.length}대 = ${want.length} · 참고 ${RP.ref.length}대(${RP.ref.map((x) => `${x.cn} POD 확정 ${x.pick}`).join()}) · 어긋남 ${RP.total} · 앱 ${RP.app} = 원자료 ${appWant} · 차이 ${RP.gap} · 후보 ${RP.explained} · 번호 없음 ${RP.unknown}`,
+        g3.map((x) => x.cn).sort().join() === want.join() && want.length === 19 && RP.total === 19 && RP.ref.length === 1 && RP.ref[0].cn === 'BMOU9237016' && RP.ref[0].pick === 'CNSHA' && !RP.ref[0].inApp
+          && RP.app === appWant && appWant === 138 && RP.gap === -1 && RP.explained === 1 && RP.unknown === 0,
+        JSON.stringify({ g3: g3.length, ref: RP.ref.map((x) => x.cn), total: RP.total, app: RP.app, gap: RP.gap, ex: RP.explained, unk: RP.unknown }));
+      const dP = diagOf(KP), a = srOf(dP), ls = dP.find((x) => x.code === 'list_short');
+      ok(`진단 — 확정 사본: 리스트 부족 ${ls && ls.count} 와 대조 어긋남 ${a && a.details.total} 이 같은 수 → 대조 음성은 터미널 차이만 «${a && a.voice}» · 음성 서명 수 ${a && a.count}`,
+        a && ls && ls.count === 19 && a.details.total === 19 && a.voice === '터미널과 1대 차이' && a.count === 19, JSON.stringify({ v: a && a.voice, c: a && a.count, ls: ls && ls.count }));
+    }
+    //  ③ MCAP 639N — 선사 메일(STOWAGE INSTRUCTION)이 평택 양하로 지정한 통과 컨 = 세관 표식 없는 records 행. 앱 대수는 3.53 «고른 POD 가 EDI 를 이긴다» 로 센다(R16 과 같음).
+    {
+      const s = F.mcap.discharge, recs = s.records, cu = custOf(s);
+      const nonCust = Object.keys(recs).filter((cn) => !recs[cn]._customs).sort();
+      const g2 = grp(R.mcap, 'g2');
+      const srcOk = g2.every((x) => x.src === (recs[x.cn]._source || recs[x.cn].pod_picked_by) && /STOWAGE INSTRUCTION/.test(x.src));
+      const ediRow = Object.fromEntries(ediUnits(s));
+      const podOf = (cn, e) => (recs[cn] && recs[cn].pod_pick && recs[cn].pod ? recs[cn].pod : e.pod);
+      const appWant = new Set([...cu, ...ediUnits(s).filter(([cn, e]) => isPtkCode(podOf(cn, e))).map(([cn]) => cn)]).size;
+      ok(`MCAP 639N — «선사 리스트·메일에만» ${g2.length}대 = 세관 표식 없는 records 행 ${nonCust.length}대 · 출처(선사 메일 제목) 보존 · EDI 는 통과(원문 POD ${nonCust.map((cn) => ediRow[cn] && ediRow[cn].pod).filter((v, i, a) => a.indexOf(v) === i).join('·')}) · 다른 어긋남 없음 · 참고 없음(메일 지정은 선사 자료)`,
+        g2.map((x) => x.cn).sort().join() === nonCust.join() && nonCust.length === 5 && srcOk && R.mcap.total === 5 && !R.mcap.ref.length && g2.every((x) => x.edi === 'thru' && x.carrier && !x.customs && /^EDI 통과\(/.test(x.pattern)),
+        JSON.stringify(g2.slice(0, 2)).slice(0, 300));
+      ok(`MCAP 터미널 배정 ${F.mcap.info.planDis} · 앱 ${R.mcap.app} = 원자료(세관 ${cu.size} ∪ 고른 POD 반영 EDI 평택) ${appWant} · 차이 0 · 번호 없음 0`,
+        R.mcap.sources.plan.n === F.mcap.info.planDis && R.mcap.app === appWant && appWant === 223 && R.mcap.gap === 0 && R.mcap.unknown === 0,
+        JSON.stringify({ plan: R.mcap.sources.plan, app: R.mcap.app, appWant, gap: R.mcap.gap, unk: R.mcap.unknown }));
+    }
+    //  ④ KBTR 2608E — EDI 평택 = 세관 = 선사 175 · 어긋남 0 · 배정 179 → 앱 175 (−4) 는 번호로 못 가린다 → «번호 없음 4대». EDI 422행 중 «__SLOT_» 빈 자리 8행은 유닛이 아니다.
+    {
+      const s = F.kbtr.discharge;
+      const U = unitsByRule(s);
+      const slots = Object.entries(s.ediContainers).filter(([k, e]) => k.startsWith('__') && !e.cn);
+      const gapWant = U.set.size - F.kbtr.info.planDis;
+      ok(`KBTR 2608E — EDI ${Object.keys(s.ediContainers).length}행(빈 자리 ${slots.length}행) · 어긋남 0 · 배정 ${F.kbtr.info.planDis} · 앱 ${R.kbtr.app} = 원자료 규칙 ${U.set.size} · 차이 ${R.kbtr.gap} = ${gapWant} · 번호 없음 ${R.kbtr.unknown}대`,
+        Object.keys(s.ediContainers).length === 422 && slots.length === 8 && R.kbtr.total === 0 && !R.kbtr.groups.length
+          && R.kbtr.app === U.set.size && R.kbtr.gap === gapWant && gapWant === -4 && R.kbtr.unknown === 4 && R.kbtr.explained === 0 && R.kbtr.sources.edi.n === ediPtkOf(s).size,
+        JSON.stringify({ app: R.kbtr.app, gap: R.kbtr.gap, unk: R.kbtr.unknown, total: R.kbtr.total, S: R.kbtr.sources }).slice(0, 300));
+      //  변이 — 빈 자리 8행의 POD 를 평택으로(번호 없이 평택 자리만 온 EDI) 바꿔도 유닛이 아니다 → 어긋남 0 그대로 · 번호 대기 8자리(세관 코드 CNN 후보)
+      const m = clone(F.kbtr); for (const [k] of slots) m.discharge.ediContainers[k].pod = 'KRPTK';
+      const Rm = B.reconcileSources(V(m), 'discharge');
+      ok(`KBTR 빈 자리(__SLOT_) ${slots.length}행 POD 를 평택으로 바꾼 사본 — 그래도 어긋남 0 · EDI 평택 ${Rm.sources.edi.n} 그대로 · 번호 대기 ${Rm.sources.pending.n}자리(CNN 후보)`,
+        Rm.total === 0 && Rm.sources.edi.n === R.kbtr.sources.edi.n && Rm.sources.pending.n === slots.length && R.kbtr.sources.pending.n === 0,
+        JSON.stringify({ total: Rm.total, groups: Rm.groups.map((g) => [g.key, g.items.length]), edi: Rm.sources.edi, pend: Rm.sources.pending }));
+      //  «번호 없음» 은 차이에서 후보를 뺀 수다(묶음 수가 아니다) · 후보는 앱 안팎(inApp)으로 가린다 — EDI 평택 추가분 2대를 넣은 사본: 앱 177 · 배정 179 (−2) · 그 2대는 앱 안이라 −2 의 후보가 아니다 → 번호 없음 2
+      const kb2 = clone(F.kbtr); ['TSTU9000011', 'TSTU9000022'].forEach((cn) => { kb2.discharge.ediContainers[cn] = { cn, pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', fe: 'F' }; });
+      const R2 = B.reconcileSources(V(kb2), 'discharge'), app2 = unitsByRule(kb2.discharge).set.size;
+      const cand = grp(R2, 'g3').filter((x) => !x.inApp).length;
+      ok(`KBTR + EDI 평택 추가분 2대 — 앱 ${R2.app} = 원자료 ${app2} · 차이 ${R2.gap} · «EDI 평택인데 세관 밖» ${grp(R2, 'g3').length}대(앱 안 — 후보 ${cand}) → 후보 ${R2.explained} · 번호 없음 ${R2.unknown} = |${R2.gap}| − ${cand}`,
+        R2.app === app2 && app2 === 177 && R2.gap === app2 - F.kbtr.info.planDis && grp(R2, 'g3').length === 2 && cand === 0 && R2.explained === 0 && R2.unknown === Math.abs(R2.gap) - cand && R2.unknown === 2,
+        JSON.stringify({ app: R2.app, gap: R2.gap, ex: R2.explained, unk: R2.unknown, g: R2.groups.map((g) => [g.key, g.items.length]) }));
+    }
+    //  ⑤ TMPZ 2034E — 세관 자료 없음 · EDI 평택 30 · 선사 리스트 42 → «선사 리스트에만» = 선사 행 − EDI 평택. 세관이 없는 배는 선사 리스트가 기준(4.20 basis 'list')
+    {
+      const s = F.tmpz.discharge, car = carOf(s), ep = ediPtkOf(s);
+      const want = [...car].filter((cn) => !ep.has(cn)).sort();
+      const g2 = grp(R.tmpz, 'g2');
+      ok(`TMPZ 2034E — 세관 자료 없음 · EDI ${ep.size} · 선사 리스트 ${car.size} · «선사 리스트·메일에만» ${g2.length}대 = ${want.length}대 · 패턴 «EDI ✗ 선사 ✓» · 출처 파일 ${g2[0] && g2[0].src}`,
+        !R.tmpz.sources.customs.has && R.tmpz.sources.carrier.n === car.size && g2.map((x) => x.cn).sort().join() === want.join() && want.length === 12
+          && g2.every((x) => x.pattern === 'EDI ✗ 선사 ✓' && x.src === s.records[x.cn]._source) && R.tmpz.total === 12,
+        JSON.stringify({ g2: g2.length, want: want.length, S: R.tmpz.sources }));
+      //  변이 — EDI 평택인 선사 행 하나를 지운 사본: 세관이 없으니 선사 리스트 밖 EDI 평택은 «EDI 평택인데 선사 리스트 밖» (세관 코드 후보 없음 — 코드표는 세관 적하목록 기준)
+      const gone = [...ep].filter((cn) => car.has(cn)).sort()[0];
+      const tm = clone(F.tmpz); delete tm.discharge.records[gone];
+      const Rt = B.reconcileSources(V(tm), 'discharge'), g3 = gOf(Rt, 'g3');
+      ok(`TMPZ 선사 행 ${gone} 를 지운 사본 — «${g3.label}» ${(g3.items || []).map((x) => x.cn)} · 패턴 «${g3.items && g3.items[0] && g3.items[0].pattern}» · 세관 코드 후보 없음`,
+        (g3.items || []).length === 1 && g3.items[0].cn === gone && g3.label === 'EDI 평택인데 선사 리스트 밖 (추가분)' && g3.items[0].pattern === 'EDI ✓ 선사 ✗' && !g3.code && Rt.total === 13,
+        JSON.stringify({ g: Rt.groups.map((g) => [g.key, g.items.length, g.code]) }));
+    }
+    //  ⑥ OBWH 2761E(보관 GET 사본) — 세관 237 · 선사 리스트 18(일부) · EDI 237 · 배정 237 — 세관에 있고 선사 리스트에 없는 219대는 어긋남이 아니다(감사 상 — 종전 오경보 219대)
+    const dO = diagOf(F.obwh);
+    {
+      const s = F.obwh.discharge, cu = custOf(s), car = carOf(s), ep = ediPtkOf(s);
+      const noCar = [...cu].filter((cn) => !car.has(cn)).length;
+      ok(`OBWH 2761E — 세관 ${cu.size} · 선사 리스트 ${car.size}(«일부 ${R.obwh.sources.carrier.n}/${R.obwh.sources.customs.n}») · EDI 평택 ${ep.size} · 세관에 있고 선사에 없는 ${noCar}대 → 어긋남 ${R.obwh.total} · 주의 없음 · 음성에 «자료별 대조» 없음`,
+        cu.size === 237 && car.size === 18 && ep.size === 237 && [...ep].every((cn) => cu.has(cn)) && noCar === 219 && R.obwh.carrierPartial && R.obwh.total === 0 && !R.obwh.groups.length && R.obwh.gap === 0
+          && !srOf(dO) && !/자료별 대조/.test(B.buildVoiceMessage(dO)),
+        JSON.stringify({ total: R.obwh.total, groups: R.obwh.groups.map((g) => [g.key, g.items.length]), cp: R.obwh.carrierPartial, alert: (srOf(dO) || {}).msg }));
+    }
+    //  ⑦ MCSC 633N(보관 GET 사본) — 완료·실적에만 있는 컨 중 시프팅(선사 RESTOW LIST)은 시프팅 줄이 센다 → «완료·실적에만» 은 그 밖의 것만
+    {
+      const s = F.mcsc.discharge, cu = custOf(s), ep = ediPtkOf(s), restow = new Set(Object.keys(F.mcsc.restowList || {}));
+      const only = [...doneTermOf(s)].filter((cn) => !cu.has(cn) && !ep.has(cn));
+      const want = only.filter((cn) => !restow.has(cn)).sort();
+      const appWant = [...unitsByRule(s).set].filter((cn) => !restow.has(cn)).length;
+      const g5 = grp(R.mcsc, 'g5');
+      ok(`MCSC 633N — 완료·실적에만 ${only.length}대 중 시프팅 ${only.length - want.length}대(RESTOW LIST ${restow.size}) 빼고 «완료·실적에만» ${g5.length}대 = ${want.length}대(${want.join()}) · 배정 ${F.mcsc.info.planDis} · 앱 ${R.mcsc.app} = 원자료 ${appWant} · 차이 ${R.mcsc.gap} · 후보 ${R.mcsc.explained}`,
+        g5.map((x) => x.cn).sort().join() === want.join() && want.length === 1 && only.length - want.length === 94 && R.mcsc.total === 1
+          && R.mcsc.app === appWant && R.mcsc.gap === appWant - F.mcsc.info.planDis && R.mcsc.gap === 1 && R.mcsc.explained === 1 && R.mcsc.unknown === 0,
+        JSON.stringify({ g5: g5.length, want: want.length, only: only.length, app: R.mcsc.app, gap: R.mcsc.gap, ex: R.mcsc.explained }));
+    }
+    //  ⑧ XTPG 541E(보관 GET 사본) — 배정 78 · 앱 128 (+50) · «완료·실적에만» 50대(앱 안) = 후보 50 · 번호 없음 0 · 음성 서명 수에서 «완료·실적에만» 은 빠진다(작업이 진행되며 늘어난다)
+    const dXt = diagOf(F.xtpg);
+    {
+      const s = F.xtpg.discharge, cu = custOf(s), ep = ediPtkOf(s);
+      const want = [...doneTermOf(s)].filter((cn) => !cu.has(cn) && !ep.has(cn)).sort();
+      const appWant = unitsByRule(s).set.size, g5 = grp(R.xtpg, 'g5'), a = srOf(dXt);
+      ok(`XTPG 541E — 배정 ${F.xtpg.info.planDis} · 앱 ${R.xtpg.app} = 원자료 ${appWant} (+${R.xtpg.gap}) · «완료·실적에만» ${g5.length}대 = ${want.length} · 후보 ${R.xtpg.explained} = 앱 안 ${g5.filter((x) => x.inApp).length} · 번호 없음 ${R.xtpg.unknown} · 진단 음성 서명 수 ${a && a.count}(총 ${a && a.details.total})`,
+        g5.map((x) => x.cn).sort().join() === want.join() && want.length === 50 && R.xtpg.app === appWant && appWant === 128 && R.xtpg.gap === appWant - F.xtpg.info.planDis && R.xtpg.gap === 50
+          && R.xtpg.explained === g5.filter((x) => x.inApp).length && R.xtpg.explained === 50 && R.xtpg.unknown === 0 && a && a.count === 0 && a.details.total === 50,
+        JSON.stringify({ app: R.xtpg.app, gap: R.xtpg.gap, ex: R.xtpg.explained, unk: R.xtpg.unknown, g5: g5.length, cnt: a && a.count }));
+    }
+    //  ⑨ 진단 — KKLC 는 source_recon 주의(머리글에 터미널 수량 둘·출처마다 대수·«자료 없음» · 어긋남 20대 · 리스트 부족 20 과 같은 수라 대조 음성 없음), KBTR 은 «번호 없음 4대» 주의. 선적 탭에는 띄우지 않는다.
+    const dK = diagOf(F.kklc), dB = diagOf(F.kbtr), dM = diagOf(F.mcap), dL = diagOf(F.kbtr, 'loading');
+    {
+      const a = srOf(dK), b = srOf(dB), ls = dK.find((x) => x.code === 'list_short');
+      ok(`진단 — KKLC «${a && a.msg}» (주의) · 종전 «리스트 부족 ${ls && ls.count}» 그대로 · 같은 수라 대조 음성 «${a && a.voice}» · 음성 전체에 «자료별 대조» 없음`,
+        a && a.level === 'warning' && a.msg === '자료별 대조 — 터미널 배정 139 · 본선현황 139 · EDI 139 · 세관 119 · 선사 리스트 자료 없음 · 실적 0 — 어긋남 20대' && a.count === 20 && ls && ls.count === 20
+          && a.voice === '' && !/자료별 대조/.test(B.buildVoiceMessage(dK)) && /20개 부족/.test(B.buildVoiceMessage(dK)),
+        JSON.stringify({ a: a && a.msg, v: a && a.voice, ls: ls && ls.count }));
+      ok(`진단 — KBTR «${b && b.msg}» (주의 · 음성 «${b && b.voice}») · MCAP 어긋남 5대 · 선적 탭에는 자료별 대조를 띄우지 않는다`,
+        b && b.level === 'warning' && b.msg === '터미널 배정 179 · 앱 175 (-4) · 번호 없음 4대 — 배정표는 수량뿐, 작업이 시작되면 실적으로 번호가 잡힐 수 있음' && b.voice === '터미널과 4대 차이' && b.count === 4
+          && (srOf(dM) || {}).count === 5 && !srOf(dL),
+        JSON.stringify({ b: b && b.msg, m: (srOf(dM) || {}).msg, l: dL.map((x) => x.code) }).slice(0, 300));
+      //  진단이 검증 대상에서 뺀 컨(선사 취소 요청 · 수화물)은 대조에서도 빠진다 — 두 컨 다 원래 «EDI 평택인데 세관 밖» 에 있다
+      const two = ['BMOU9237016', 'FBIU5959790'];
+      const dS = diagOf(F.kklc, 'discharge', { cancelReq: [two[0]], lugCns: [two[1]] }), sS = srOf(dS);
+      const inS = sS ? sS.details.groups.flatMap((g) => g.items.map((x) => x.cn)) : [];
+      ok(`진단 skip — 취소 요청 ${two[0]} · 수화물 ${two[1]} → 어긋남 ${a && a.details.total} → ${sS && sS.details.total} · 두 컨 다 대조에 없음`,
+        two.every((cn) => grp(R.kklc, 'g3').some((x) => x.cn === cn)) && sS && sS.details.total === 18 && !two.some((cn) => inS.includes(cn)),
+        JSON.stringify({ t: sS && sS.details.total, inS: two.filter((cn) => inS.includes(cn)) }));
+    }
+    let dG = null;   // 화면 ⑪ 에서 그린다(⑩ 의 MGN 사본 진단)
+    //  ⑩ 세관 검수 결과 코드표 — 검수사 2026-10-10 09:34 원문 열두 줄 그대로(이 파일이 원문에서 따로 옮겨 적었다) · «세관(·선사) 목록에만» 중 완료·실적 없는 컨은 MGN 후보
+    {
+      const want = CC;
+      const T = B.CUSTOMS_RESULT_CODES || {};
+      ok(`세관 검수 결과 코드표 ${Object.keys(T).length}개 = 검수사 원문 ${Object.keys(want).length}개 그대로`,
+        Object.keys(want).length === 12 && JSON.stringify(Object.entries(T).sort()) === JSON.stringify(Object.entries(want).sort()), JSON.stringify(T));
+      const KG = clone(F.kklc);
+      KG.discharge.records.TSTU8000001 = { _customs: true, _source: 'R27 customs.xls', pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', fe: 'F', op: 'KMD' };
+      KG.discharge.records.TSTU8000002 = { _customs: true, _source: 'R27 customs.xls', pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', fe: 'F', op: 'KMD' };
+      KG.discharge.records.TSTU8000003 = { _customs: true, _source: 'R27 customs.xls', iso_carrier: '22G1', pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', fe: 'F', op: 'KMD' };
+      KG.discharge.completed = { TSTU8000002: { at: 1, by: 'R27' } };
+      const RG = B.reconcileSources(V(KG), 'discharge'), g1 = gOf(RG, 'g1');
+      ok(`세관에만 3대(그중 1대 선사 리스트에도 · 1대 완료) 넣은 KKLC 사본 — «${g1.label}» ${(g1.items || []).length}대(선사에도 있는 것도 기타로 안 감) · 세관 코드 ${g1.code} 후보 ${g1.codeN}대(완료 없는 것) · «EDI 평택인데 세관 밖» 20 그대로(세관이 있으니 선사 ✗ 는 어긋남 아님)`,
+        (g1.items || []).length === 3 && g1.label === '세관(·선사) 목록에만 — EDI 없음' && g1.code === 'MGN' && g1.codeN === 2 && grp(RG, 'g3').length === 20 && !RG.groups.some((g) => g.key.startsWith('etc'))
+          && RG.total === 23 && RG.carrierPartial,
+        JSON.stringify({ g: RG.groups.map((g) => [g.key, g.items.length, g.code, g.codeN]) }));
+      dG = diagOf(KG);
+    }
+    //  ⑬ 재감사 «가» 하 3건 — 본선현황 = 완료 + 잔여 · «선사 리스트 일부» 경계(절반) · 음성 한 번 · MGN 은 작업 시작 뒤에만
+    {
+      //  TNJP 26364E(보관 GET 사본) — 배정표 없음(planDis 0) · 본선현황 호기 둘 다 잔여 0 · 완료만 83 + 79 → 본선현황으로 잰다
+      const I = F.tnjp.info, qcSum = Object.values(I.qcWork || {}).reduce((a, q) => a + (Number(q.disDone) || 0) + (Number(q.disRest) || 0), 0);
+      const restSum = Object.values(I.qcWork || {}).reduce((a, q) => a + (Number(q.disRest) || 0), 0);
+      const appWant = unitsByRule(F.tnjp.discharge).set.size;
+      ok(`TNJP 26364E — 배정표 ${I.planDis ? I.planDis : '없음'} · 본선현황 ${R.tnjp.sources.qc.n} = 호기 완료+잔여 ${qcSum}(잔여만이면 ${restSum}) · 앱 ${R.tnjp.app} = 원자료 ${appWant} · 차이 ${R.tnjp.gap}(본선현황으로)`,
+        !I.planDis && restSum === 0 && qcSum === 162 && R.tnjp.term.basis === 'qc' && R.tnjp.sources.qc.n === qcSum && R.tnjp.app === appWant && R.tnjp.gap === appWant - qcSum && R.tnjp.gap === 0,
+        JSON.stringify({ term: R.tnjp.term, qc: R.tnjp.sources.qc, gap: R.tnjp.gap, app: R.tnjp.app }));
+      //  OBWH 2761E 사본 — 선사 리스트를 200 · 100 행으로(세관 행에 선사 표식을 더 붙여) → 200/237 은 «일부» 아님(절반 이상) · 100/237 은 «일부» · 둘 다 어긋남 0
+      const carTo = (n) => { const o = clone(F.obwh), recs = o.discharge.records; const car = carOf(o.discharge); for (const cn of Object.keys(recs).sort()) { if (car.size >= n) break; if (!car.has(cn)) { recs[cn].iso_carrier = recs[cn].iso || '45G1'; car.add(cn); } } return o; };
+      const o200 = carTo(200), o100 = carTo(100);
+      const r200 = B.reconcileSources(V(o200), 'discharge'), r100 = B.reconcileSources(V(o100), 'discharge');
+      ok(`«선사 리스트 일부» 경계 — 선사 ${carOf(o200.discharge).size}/${custOf(o200.discharge).size} → 일부 ${r200.carrierPartial ? '예' : '아님'} · 선사 ${carOf(o100.discharge).size}/${custOf(o100.discharge).size} → 일부 ${r100.carrierPartial ? '예' : '아님'} · 어긋남 ${r200.total}·${r100.total}`,
+        carOf(o200.discharge).size === 200 && carOf(o100.discharge).size === 100 && custOf(o200.discharge).size === 237 && !r200.carrierPartial && r100.carrierPartial && r200.total === 0 && r100.total === 0,
+        JSON.stringify({ p200: r200.carrierPartial, p100: r100.carrierPartial, s200: r200.sources.carrier, s100: r100.sources.carrier }));
+      //  음성 한 번 — TMPZ: 대조 12 = EDI 밖 12 → 대조 음성 없음, 전체 음성에 12 가 한 번 · MCAP: EDI 밖 없음 → 대조 «어긋남 5대» 한 번
+      const dTm = diagOf(F.tmpz), sTm = srOf(dTm), leTm = dTm.find((x) => x.code === 'list_extra'), vTm = B.buildVoiceMessage(dTm);
+      const sMc = srOf(dM), vMc = B.buildVoiceMessage(dM);
+      const cnt = (v, re) => (v.match(re) || []).length;
+      ok(`음성 한 번 — TMPZ 대조 ${sTm && sTm.details.total} · EDI 밖 ${leTm && leTm.count} → 대조 음성 «${sTm && sTm.voice}» · 전체 «${vTm}» · MCAP 대조 음성 «${sMc && sMc.voice}» · 전체에 5대 ${cnt(vMc, /(^|[^0-9])5대/g)}번`,
+        sTm && leTm && sTm.details.total === 12 && leTm.count === 12 && sTm.voice === '' && cnt(vTm, /(^|[^0-9])12(개|대)/g) === 1
+          && sMc && !dM.some((x) => (x.code === 'list_extra' || x.code === 'list_short') && x.count === 5) && sMc.voice === '자료별 대조 어긋남 5대' && cnt(vMc, /(^|[^0-9])5대/g) === 1,
+        JSON.stringify({ tm: sTm && sTm.voice, vTm, mc: sMc && sMc.voice, vMc }));
+      //  MGN — 작업 시작 전(배정만 · 완료·실적 없음 · terminalStatus planned)엔 묶음 이름만 · 완료 1 이 생기면 «MGN 대상»
+      const KQ = clone(F.kklc);
+      KQ.discharge.records.TSTU8100001 = { _customs: true, _source: 'R27 customs.xls', pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', fe: 'F', op: 'KMD' };
+      KQ.discharge.records.TSTU8100002 = { _customs: true, _source: 'R27 customs.xls', pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', fe: 'F', op: 'KMD' };
+      const RQ0 = B.reconcileSources(V(KQ), 'discharge');
+      const KQ1 = clone(KQ); KQ1.discharge.completed = { [Object.keys(KQ1.discharge.ediContainers).sort()[0]]: { at: 1, by: 'R27' } };
+      const RQ1 = B.reconcileSources(V(KQ1), 'discharge');
+      const g0 = gOf(RQ0, 'g1'), g1q = gOf(RQ1, 'g1');
+      ok(`MGN 은 작업 시작 뒤에만 — 시작 전(${F.kklc.info.terminalStatus} · workStartAt «${F.kklc.info.workStartAt}» · 완료·실적 0) «세관(·선사) 목록에만» ${(g0.items || []).length}대 코드 ${g0.code || '없음'} · 완료 1 생긴 사본 → ${g1q.code} ${g1q.codeN}대`,
+        F.kklc.info.terminalStatus === 'planned' && !F.kklc.info.workStartAt && (g0.items || []).length === 2 && !g0.code && !RQ0.started && RQ1.started && g1q.code === 'MGN' && g1q.codeN === 2,
+        JSON.stringify({ g0: [g0.code, g0.codeN], g1: [g1q.code, g1q.codeN] }));
+    }
+    //  ⑪ 화면 — 주의 박스(DiagnosticsPanel 실소스)를 jsdom 에서 그린다. KKLC 자료별 대조는 10줄 + «… 외 10건 — 나머지 보기» → 20줄 + «접기».
+    //     기존 잘린 목록(리스트 부족 missing · 취소 요청 cancelCns · EDI 밖 extraCns · 실번호 · 풀/엠티)도 펼칠 수 있다 — 진단 details 가 자르지 않는다.
+    {
+      const K2 = clone(F.kklc);   // 리스트 전용 행 25대(선사 파일) — 그중 21대는 선사 취소 요청분
+      const fake = Array.from({ length: 25 }, (_, i) => `TSTU${String(1000000 + i).slice(1).padStart(7, '0')}`);
+      fake.forEach((cn) => { K2.discharge.records[cn] = { _source: 'R27 extra.xls', fe: 'F', iso: '45G1', iso_carrier: '45G1' }; });
+      const dX = diagOf(K2, 'discharge', { cancelReq: fake.slice(0, 21) });
+      const dE = diagOf(K2);
+      const cp = dX.find((x) => x.code === 'cancel_pending'), le = dE.find((x) => x.code === 'list_extra');
+      //  실번호·풀/엠티 25건 — EDI 평택 25대와 리스트의 실번호·F/E 가 모두 다르다
+      const sd = Array.from({ length: 25 }, (_, i) => `TSTU${String(7000000 + i)}`);
+      const sE = {}, sR = {}; sd.forEach((cn, i) => { sE[cn] = { cn, pod: 'KRPTK', sl: `A${i}`, fe: 'F', iso: '22G1' }; sR[cn] = { cn, _source: 'R27 seal.xls', sl: `B${i}`, fe: 'E', iso: '22G1' }; });
+      const dSd = B.runDiagnostics({ ediContainers: sE, listRecords: sR, xrayList: {}, mode: 'discharge', carrier: '' });
+      const sdA = dSd.find((x) => x.code === 'seal_diff'), feA = dSd.find((x) => x.code === 'fe_conflict');
+      ok(`진단 details 는 자르지 않는다 — 취소 요청 ${cp && cp.details.cancelCns.length} = 21 · EDI 밖 ${le && le.details.extraCns.length} = 25 · 실번호 ${sdA && sdA.details.length} = 25 · 풀/엠티 ${feA && feA.details.length} = 25 (종전 20 에서 잘림)`,
+        cp && cp.details.cancelCns.length === 21 && le && le.details.extraCns.length === 25 && sdA && sdA.details.length === 25 && feA && feA.details.length === 25,
+        JSON.stringify({ cp: cp && cp.count, le: le && le.count, sd: sdA && sdA.details.length, fe: feA && feA.details.length }));
+      //  목적지 확인(⚠ 눌러서 POD 확정) 컨이 있는 EDI 밖 목록 — 접지 않는다. 리스트 POD 평택 · EDI POD 인천(원문)
+      const K6 = clone(F.kklc), pa = 'TSTU6000001';
+      K6.discharge.records[pa] = { _source: 'R27 carrier.xls', pod: 'KRPTK', pol: 'CNSHA', iso: '22G1', iso_carrier: '22G1', fe: 'F', op: 'KMD' };
+      K6.discharge.ediContainers[pa] = { cn: pa, pod: 'KRINC', pol: 'CNSHA', iso: '22G1', fe: 'F', op: 'KMD' };
+      const sec6 = K6.discharge, ep6 = {}; for (const [cn, e] of ediUnits(sec6)) if (isPtkCode(e.pod)) ep6[cn] = { ...e, cn };
+      ep6[pa] = { ...sec6.ediContainers[pa], cn: pa };   // VoyagePage 처럼 — 갈리는 컨도 진단 입력에 든다(podAsk 는 EDI 원문 POD 와 리스트 POD 로 가린다)
+      const d6 = B.runDiagnostics({ ediContainers: ep6, listRecords: sec6.records, xrayList: {}, mode: 'discharge', carrier: '', voyage: V(K6), voyageKey: K6.key });
+      const KP = clone(F.kklc); pickPod(KP, 'BMOU9237016', 'CNSHA');
+      const dP = diagOf(KP);
+      const mS = clone(F.kbtr); for (const [k, e] of Object.entries(mS.discharge.ediContainers)) if (k.startsWith('__') && !e.cn) e.pod = 'KRPTK';
+      const dSl = diagOf(mS);
+      const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+      const errs = []; dom.window.addEventListener('error', (e) => errs.push(e.message));
+      //  리스트 번호 오타 짝(CND) — RZOR R106W 선적 실리스트 두 판(«2차»·«최종», listtypo_real.json 의 시트 행)을 합친 선적 리스트(선적은 판을 합친다 — 3.61-03)
+      const LT = fx('listtypo_real.json').rzor_r106w;
+      const rowsOf = (aoa, file) => { const [h, ...rs] = aoa; const ix = (k) => h.indexOf(k); return rs.filter((r) => r[ix('Cntr. No')]).map((r) => ({ cn: String(r[ix('Cntr. No')]), op: r[ix('Operator')], pol: r[ix('POL')], pod: r[ix('POD')], wt: r[ix('Weight')], fe: r[ix('F/E')], sl: String(r[ix('Seal No.')] || ''), _source: file })); };
+      const recT = {}; [...rowsOf(LT.cll2, LT.cll2_name), ...rowsOf(LT.final, LT.final_name)].forEach((r) => { recT[r.cn] = r; });
+      const finalCns = new Set(rowsOf(LT.final, LT.final_name).map((r) => r.cn));
+      //  기대값 — 최종 판에 없고 2차 판에만 있는 번호 중, 최종 판의 한 컨과 실번호가 같은 것(이 파일이 시트 행에서 따로 찾는다)
+      const wantTypo = rowsOf(LT.cll2, LT.cll2_name).filter((r) => !finalCns.has(r.cn) && r.sl && rowsOf(LT.final, LT.final_name).filter((f) => f.sl === r.sl).length === 1)
+        .map((r) => ({ typo: r.cn, real: rowsOf(LT.final, LT.final_name).find((f) => f.sl === r.sl).cn, seal: r.sl }));
+      const twT = B.listTypoTwins(recT);
+      const dT = B.runDiagnostics({ ediContainers: {}, listRecords: recT, xrayList: {}, mode: 'loading', carrier: '', typoTwins: twT });
+      const dT0 = B.runDiagnostics({ ediContainers: {}, listRecords: recT, xrayList: {}, mode: 'loading', carrier: '' });
+      const ctA = dT.find((x) => x.code === 'cn_typo');
+      ok(`리스트 번호 오타 짝 — RZOR R106W 선적 «2차»·«최종» 합친 리스트 ${Object.keys(recT).length}행 · 시트에서 따로 찾은 짝 ${wantTypo.map((t) => `${t.typo}→${t.real} 실 ${t.seal}`).join()} · 진단 «${ctA && ctA.msg}»(정보 · 음성 없음) · 오타 짝을 안 넘기면 알림 없음`,
+        wantTypo.length === 1 && ctA && ctA.level === 'info' && !ctA.voice && ctA.count === 1 && ctA.msg.endsWith('(세관 코드 CND 후보)') && CC.CND === '컨테이너번호 다름'
+          && JSON.stringify(ctA.details.map((x) => ({ typo: x.typo, real: x.real, seal: x.seal }))) === JSON.stringify(wantTypo) && !dT0.some((x) => x.code === 'cn_typo'),
+        JSON.stringify({ want: wantTypo, ct: ctA && ctA.details, msg: ctA && ctA.msg }));
+      const okE = { TSTU1111111: { cn: 'TSTU1111111', pod: 'KRPTK', pol: 'CNSHA', fe: 'F', iso: '22G1' } }, okR = { TSTU1111111: { _source: 'R27 list.xls', pod: 'KRPTK', fe: 'F', iso: '22G1' } };
+      const dOk = B.runDiagnostics({ ediContainers: okE, listRecords: okR, xrayList: {}, mode: 'discharge', carrier: '' });
+      const nsE = {}; for (const [k, e] of Object.entries(NS.loading.ediContainers)) if (isPtkCode(e.pol)) nsE[e.cn || k] = { ...e, cn: e.cn || k };
+      const dNs = B.runDiagnostics({ ediContainers: nsE, listRecords: NS.loading.records || {}, xrayList: {}, mode: 'loading', carrier: '' });
+      dom.window.__R27rows = JSON.stringify({ p10: B.diagListRowCount(okR), p12: B.diagListRowCount(NS.loading.records || {}) });
+      dom.window.__R27 = JSON.stringify({ p1: dK, p2: dX, p3: dE, p4: dP, p5: dSl, p6: d6, p7: dSd, p8: dG, p9: dT, p10: dOk, p12: dNs, n1: [] }); dom.window.console.warn = () => {};
+      try { dom.window.eval(domSrc); } catch (e) { errs.push('THROW ' + e.message); }
+      await sleep(300);
+      const d = dom.window.document;
+      const click = async (el) => { if (el) { el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); await sleep(40); } };
+      const rowBtn = (pid, re) => [...d.getElementById(pid).querySelectorAll('button')].find((b) => re.test(b.textContent));
+      const txt = (el) => (el ? el.textContent : '');
+      await click(rowBtn('p1', /^자료별 대조/));
+      const rc = d.querySelector('#p1 [data-recon]');
+      const lines0 = rc ? rc.querySelectorAll('[data-recon-cn]').length : -1;
+      const tg = rc && rc.querySelector('[data-trunc-toggle]');
+      const tg0 = tg ? tg.textContent : '';
+      const head = rc ? txt(rc.querySelector('[data-recon-head]')) : '';
+      const term = rc ? txt(rc.querySelector('[data-recon-term]')) : '';
+      const gh = rc ? txt(rc.querySelector('[data-recon-group="g3"] > div')) : '';
+      const l1 = rc ? txt(rc.querySelector('[data-recon-cn="BMOU9237016"]')) : '';
+      await click(tg);
+      const lines1 = rc ? rc.querySelectorAll('[data-recon-cn]').length : -1;
+      const tg1 = rc && rc.querySelector('[data-trunc-toggle]');
+      const tg1t = tg1 ? tg1.textContent : '', tg1k = tg1 ? tg1.getAttribute('data-trunc-toggle') : '';
+      await click(tg1);
+      const lines2 = rc ? rc.querySelectorAll('[data-recon-cn]').length : -1;
+      await click(rc && rc.querySelector('[data-recon-cn="BMOU9237016"]'));
+      ok(`화면 — KKLC 자료별 대조 머리 «${head}» · 터미널 줄 «${term}» · 묶음 «${gh}» · ${lines0}줄 + «${tg0}» → ${lines1}줄 + «${tg1t}» → 다시 ${lines2}줄 · 줄 «${l1}» · 누르면 컨 상세`,
+        lines0 === 10 && tg0 === '… 외 10건 — 나머지 보기' && lines1 === 20 && tg1t === '접기' && tg1k === 'fold' && lines2 === 10
+          && head.includes('터미널 배정 139(배정표·도선)') && head.includes('본선현황 139(호기 합계 완료+잔여)') && head.includes('EDI 139') && head.includes('세관 119') && head.includes('선사 리스트 자료 없음') && head.includes('완료 0') && head.includes('실적 0')
+          && term === '터미널 배정 139대 = 앱 139대' && gh === `EDI 평택인데 세관 밖 (추가분 — 신고 대상) 20대 · MFN 대상 — ${CC.MFN}`
+          && l1 === '• BMOU9237016 (45RE) E · KMD · KRINC→KRPTK · 26-10-82 · EDI ✓ 세관 ✗'
+          && (dom.window.__R27open || []).includes('BMOU9237016') && !errs.length,
+        JSON.stringify({ lines0, tg0, lines1, tg1t, lines2, head, term, gh, l1, errs }).slice(0, 500));
+      //  리스트 부족 목록 — 자료별 대조가 같은 컨을 보이므로 접혀 있다(«자료별 대조 참고») → 펼치면 10줄 + «외 10건» → 20줄
+      await click(rowBtn('p1', /^EDI 실번호 139대/));
+      const p1 = d.getElementById('p1');
+      const fold = p1.querySelector('[data-recon-fold]');
+      const foldClosedHidden = fold && fold.getAttribute('data-recon-fold') === 'closed' && !/리스트에 없는 컨번호/.test(p1.textContent);
+      await click(fold);
+      const missBox = [...p1.querySelectorAll('div')].find((x) => x.firstChild && /리스트에 없는 컨번호/.test(x.firstChild.textContent || ''));
+      const mLines = (b) => (b ? [...b.querySelectorAll('.mono')].length : -1);
+      const m0 = mLines(missBox), mt = missBox && missBox.querySelector('[data-trunc-toggle]');
+      const mt0 = mt ? mt.textContent : '';
+      await click(mt);
+      const m1 = mLines(missBox);
+      //  취소 요청 21대 → 10줄 + «외 11건» → 21줄 · EDI 밖 25대(취소 뺀 4대가 아닌 판 p3) → 접힘 펼치고 10줄 + «외 15건» → 25줄
+      await click(rowBtn('p2', /^선사 취소 요청 21대/));
+      const p2 = d.getElementById('p2');
+      const canBox = [...p2.querySelectorAll('div')].find((x) => x.firstChild && /선사 취소 요청분/.test(x.firstChild.textContent || ''));
+      const c0 = mLines(canBox), ct = canBox && canBox.querySelector('[data-trunc-toggle]'), ct0 = ct ? ct.textContent : '';
+      await click(ct);
+      const c1 = mLines(canBox);
+      await click(rowBtn('p3', /^리스트에 EDI 평택과 매칭 안되는 컨 25개/));
+      const p3 = d.getElementById('p3');
+      const exRow = [...p3.querySelectorAll('[data-recon-fold]')].pop();
+      await click(exRow);
+      const e0 = p3.querySelectorAll('[data-extra-cn]').length;
+      const et = [...p3.querySelectorAll('[data-trunc-toggle]')].find((b) => /외 15건/.test(b.textContent));
+      const et0 = et ? et.textContent : '';
+      await click(et);
+      const e1 = p3.querySelectorAll('[data-extra-cn]').length;
+      ok(`기존 잘린 목록도 펼친다 — 리스트 부족(접힘 «자료별 대조 참고» → ${m0}줄 + «${mt0}» → ${m1}줄) · 취소 요청(${c0}줄 + «${ct0}» → ${c1}줄) · EDI 밖(${e0}줄 + «${et0}» → ${e1}줄)`,
+        foldClosedHidden && m0 === 10 && mt0 === '… 외 10건 — 나머지 보기' && m1 === 20 && c0 === 10 && ct0 === '… 외 11건 — 나머지 보기' && c1 === 21
+          && e0 === 10 && et0 === '… 외 15건 — 나머지 보기' && e1 === 25 && !errs.length,
+        JSON.stringify({ foldClosedHidden, m0, mt0, m1, c0, ct0, c1, e0, et0, e1, errs }).slice(0, 400));
+      //  확정 사본 — 참고 줄 · 터미널 줄 «−1 … 1대가 후보» / 번호 대기 사본 — «번호 대기 8자리 … (세관 코드 CNN 후보)» · «번호 없음 4대 — 배정표는 수량뿐, …»
+      await click(rowBtn('p4', /^자료별 대조/));
+      const rf = d.querySelector('#p4 [data-recon-group="ref"]');
+      const rfHead = rf ? txt(rf.firstChild) : '', rfLine = rf ? txt(rf.querySelector('[data-recon-cn]')) : '';
+      const t4 = txt(d.querySelector('#p4 [data-recon-term]')), g4h = txt(d.querySelector('#p4 [data-recon-group="g3"] > div'));
+      await click(rowBtn('p5', /^터미널 배정 179/));
+      const pend = txt(d.querySelector('#p5 [data-recon-pending]')), t5 = txt(d.querySelector('#p5 [data-recon-term]'));
+      ok(`화면 — 확정 사본 «${rfHead}» 줄 «${rfLine}» · «${g4h}» · «${t4}» / 빈 자리 사본 «${pend}» · «${t5}»`,
+        rfHead === 'POD 확정 — 평택 아님(참고) 1대' && rfLine === '• BMOU9237016 (45RE) E · KMD · KRINC→KRPTK · 26-10-82 · EDI ✓ 세관 ✗ · POD 확정 CNSHA' && g4h === `EDI 평택인데 세관 밖 (추가분 — 신고 대상) 19대 · MFN 대상 — ${CC.MFN}`
+          && t4 === '터미널 배정 139대 · 앱 138대 (-1) — 아래 목록 중 1대가 후보'
+          && pend === '번호 대기 8자리 — EDI 평택 자리인데 컨번호가 없음 (세관 코드 CNN 후보)' && CC.CNN === '컨테이너 번호 없음'
+          && t5 === '터미널 배정 179대 · 앱 175대 (-4) — 번호 없음 4대 — 배정표는 수량뿐, 작업이 시작되면 실적으로 번호가 잡힐 수 있음' && !errs.length,
+        JSON.stringify({ rfHead, rfLine, g4h, t4, pend, t5, errs }).slice(0, 500));
+      //  ⚠ 목적지 확인 컨이 있는 EDI 밖 목록은 접지 않는다 · 실번호(SLN 후보 머리)·풀/엠티 25건은 20줄 + «외 5건» → 25줄 · MGN 후보 머리
+      await click(rowBtn('p6', /^리스트에 EDI 평택과 매칭 안되는 컨/));
+      const p6 = d.getElementById('p6');
+      const askShown = !!p6.querySelector(`[data-extra-cn="${pa}"][data-pod-ask="1"]`), p6fold = [...p6.querySelectorAll('[data-recon-fold]')].length;
+      await click(rowBtn('p7', /^실번호 불일치 25건/));
+      const p7 = d.getElementById('p7');
+      const sln = txt(p7.querySelector('[data-customs-code="SLN"]'));
+      const sdBox = p7.querySelector('[data-customs-code="SLN"]') && p7.querySelector('[data-customs-code="SLN"]').parentElement;
+      const s0 = sdBox ? sdBox.querySelectorAll('button.mono').length : -1, st = sdBox && sdBox.querySelector('[data-trunc-toggle]'), st0 = txt(st);
+      await click(st);
+      const s1 = sdBox ? sdBox.querySelectorAll('button.mono').length : -1;
+      await click(rowBtn('p7', /^풀\/엠티가 EDI 와 리스트에서 다름 25건/));
+      const feT = [...p7.querySelectorAll('[data-trunc-toggle]')].find((b) => b !== st && /외 5건/.test(b.textContent));
+      const fe0 = txt(feT);
+      await click(rowBtn('p8', /^자료별 대조/));
+      const g1h = txt(d.querySelector('#p8 [data-recon-group="g1"] > div'));
+      ok(`화면 — 목적지 확인 컨 있는 EDI 밖 목록 접지 않음(⚠ ${pa} ${askShown ? '보임' : '안 보임'} · 접기 단추 ${p6fold}) · «${sln}» ${s0}줄 + «${st0}» → ${s1}줄 · 풀/엠티 «${fe0}» · «${g1h}»`,
+        askShown && p6fold === 0 && sln === `EDI·리스트 실번호가 다름 · SLN — ${CC.SLN}` && s0 === 20 && st0 === '… 외 5건 — 나머지 보기' && s1 === 25 && fe0 === '… 외 5건 — 나머지 보기'
+          && g1h === `세관(·선사) 목록에만 — EDI 없음 3대 · MGN 대상 2대 — ${CC.MGN}(완료·실적 없음)` && !errs.length,
+        JSON.stringify({ askShown, p6fold, sln, s0, st0, s1, fe0, g1h, errs }).slice(0, 500));
+      //  오타 짝 줄 · 경고가 없으면 «이상없음 (세관 코드 OKY)» 한 줄(항차 화면처럼 showOk) — showOk 를 안 넘긴 종전 호출은 아무것도 안 그린다 · 경고가 있으면 OKY 줄 없음
+      await click(rowBtn('p9', /^리스트 번호 오타 짝 1건/));
+      const tyl = txt(d.querySelector('#p9 [data-cn-typo-line]'));
+      await click(d.querySelector('#p9 [data-cn-typo-line]'));
+      const oky = txt(d.querySelector('#p10 [data-diag-ok]')), nsl = txt(d.querySelector('#p12 [data-diag-ok]'));
+      ok(`화면 — NSFR 2619N 선적(EDI ${Object.keys(NS.loading.ediContainers).length} · records ${Object.keys(NS.loading.records || {}).length} · 경고 ${dNs.length}) «${nsl}» — 비교한 리스트가 없으면 OKY 를 쓰지 않는다`,
+        Object.keys(NS.loading.ediContainers).length === 104 && Object.keys(NS.loading.records || {}).length === 0 && dNs.length === 0 && nsl === '자료 점검 — 비교할 리스트 없음' && !/OKY/.test(txt(d.getElementById('p12'))),
+        JSON.stringify({ nsl, n: dNs.length }));
+      ok(`화면 — 오타 짝 «${tyl}»(누르면 오타 쪽 컨 상세) · 리스트 1행·경고 ${dOk.length} «${oky}» · showOk 없는 호출 «${txt(d.getElementById('n1'))}» · 경고 있는 판에 OKY 줄 ${d.querySelectorAll('#p1 [data-diag-ok]').length}`,
+        tyl === `• ${wantTypo[0].typo} → ${wantTypo[0].real} · 실번호 ${wantTypo[0].seal}` && (dom.window.__R27open || []).includes(wantTypo[0].typo)
+          && dOk.length === 0 && oky === `✓ 자료 점검 — ${CC.OKY} (세관 코드 OKY)` && d.getElementById('n1').children.length === 0 && d.querySelectorAll('#p1 [data-diag-ok]').length === 0 && !errs.length,
+        JSON.stringify({ tyl, oky, n1: d.getElementById('n1').innerHTML, errs }).slice(0, 400));
+    }
+    //  ⑫ 선적 모드로 불러도 예외 없이 돈다(KBTR 2609W — 예약 자리만 있는 선적 EDI)
+    {
+      let RL = null, err = '';
+      try { RL = B.reconcileSources(V(F.kbtr), 'loading'); } catch (e) { err = String(e && e.message); }
+      ok(`선적 모드 — 예외 없이 돈다 · mode loading · 터미널 배정 ${RL && RL.sources.plan.n} = info.planLod ${F.kbtr.info.planLod} · 예약 자리는 EDI 유닛이 아니다`,
+        !err && RL && RL.mode === 'loading' && RL.sources.plan.n === F.kbtr.info.planLod && !RL.sources.edi.has, err || JSON.stringify(RL && RL.sources));
     }
   }
 

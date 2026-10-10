@@ -65,7 +65,7 @@ import ExpectedTimeLine from '../components/ExpectedTimeLine.jsx';   // 4.01: �
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
-import { runDiagnostics } from '../diagnostics.js';
+import { runDiagnostics, diagListRowCount } from '../diagnostics.js';
 import { consumePodFocus, setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import { logView, logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 활동 로그(열람·조회 기록)
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
@@ -1404,6 +1404,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
       cancelReq: voyage?.info?.amend?.cancelReq || [],   // 3.50-02: 수집기가 읽은 선사 취소 요청분 — «EDI에 없는 컨» 이 아니다
       carrier: voyage?.info?.carrier || '',
+      typoTwins: listTypoTwins(recMap),   // 4.22: 리스트 번호 오타 짝(세관 코드 CND 후보) — 저장 때 빼는 것과 같은 한 벌(남은 짝은 keep 이 붙잡은 것)
+      voyage, voyageKey,   // 4.22: 자료별 대조(sourceRecon) — EDI·세관·선사 리스트·완료·터미널 실적·배정 수량을 항차 통째로 맞춘다(voyageKey 는 시프팅 지도 키 — 의존에도 넣었다)
       rfSkip: rfSkipShip,   // 3.72-02: 리퍼 체크 안 하는 배는 «풀 리퍼 온도 미입력» 알람을 만들지 않는다
       sealPolicy: shipPolicy,  // M3.5.5
       lugCount: shipLuggageCount(voyageKey),  // 1.56-02: 수화물은 검증 대상이 아니다(검수사 확정)
@@ -1425,7 +1427,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return [...out];
       })(),
     });
-  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy, rfSkipShip]);
+  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyageKey, voyage, shipPolicy, rfSkipShip]);
   /* ★ 3.41 — 떠 있는 미르(App 의 MirFab)에게 «지금 열린 항차» 재료를 놓아 둔다(검수사 «앱 어디에든 항상 띄워서»).
        MirFab 은 prop 체인 밖(App)에 살아 이 화면의 컨·완료·시프팅·트윈 짝을 받을 길이 없다 — 여기서 publishMirCtx 로 건넨다.
        컨은 홈 통합검색과 같은 벌(flattenVoyages)로 편다 — 홈에서 묻든 여기서 묻든 같은 재료(§4-4). 화면이 닫히면 비운다.
@@ -1732,9 +1734,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
       {/* V9.15: 진단 경고는 탭 바 위(눈에 띄어야 하는 경고) — PORT-MIS 카드는 탭 본문 아래로 내림(전면 점검 2-1) */}
       {/* M3.5.4: 자동 진단 경고 패널 */}
-      {diagAlerts.length > 0 && (
+      {(diagAlerts.length > 0 || (!diagDismissed && (containers || []).length > 0)) && (   /* 4.22: 경고가 없으면 «이상없음 (세관 코드 OKY)» 한 줄 */
         <div className="mb-3">
           <DiagnosticsPanel
+            showOk
+            listRows={diagListRowCount(recMap)}   /* 4.22: 비교한 리스트·세관 행 — 0 이면 OKY 대신 «비교할 리스트 없음» */
             alerts={diagAlerts}
             autoSpeak={diagAutoSpeak}
             onToggleSpeak={() => setDiagAutoSpeak(v => !v)}
@@ -4496,7 +4500,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     const _typoTw = listTypoTwins(cnMap, _typoKeep);
     _typoTw.forEach((t) => { delete cnMap[t.typo]; });
     if (_typoTw.length) {
-      results.push(`✂ 번호 오타 ${_typoTw.length}대 제외 — ${_typoTw.map((t) => `${t.typo}→${t.real}`).join(', ')} (같은 실번호 · 체크디지트가 틀린 쪽)`);
+      results.push(`✂ 번호 오타 ${_typoTw.length}대 제외 — ${_typoTw.map((t) => `${t.typo}→${t.real}`).join(', ')} (같은 실번호 · 체크디지트가 틀린 쪽 · 세관 코드 CND 후보)`);
     }
     // M3.5.4-fix2: 충돌 검출 — EDI vs 리스트 비교
     const ediMap = sec.ediContainers || {};

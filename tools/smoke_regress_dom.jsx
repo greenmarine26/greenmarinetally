@@ -9,6 +9,7 @@ import PrintHubModal from '../src/components/PrintHubModal.jsx';
 import { computeStats, VoyageCard } from '../src/pages/HomePage.jsx';
 import Header from '../src/components/Header.jsx';   // 4.19 R24 — 헤더 «사전에 없음»
 import BayPlan from '../src/components/BayPlan.jsx';   // 4.19 R24 — 베이플랜 머리 «사전에 없음»
+import DiagnosticsPanel from '../src/components/DiagnosticsPanel.jsx';   // 4.22 R27 — 주의 박스 «자료별 대조»·잘라 보이기
 import dm419 from './fixtures/dictmissing419.json';
 import * as U from '../src/utils.js';
 import kskm from './fixtures/shifting_pregone.json';
@@ -56,4 +57,17 @@ if (r24) {
   //  베이플랜은 컨이 있어야 머리를 그린다 — 사전 없는 배의 EDI 꼴(베이·로우·단만) 네 대(내용은 시험 대상이 아니다 · 머리 딱지만 본다)
   const cs = ['02-01-82', '02-02-82', '03-01-84', '06-01-02'].map((p, i) => { const [bay, row, tier] = p.split('-'); return { cn: `TEST000000${i}`, bay: String(parseInt(bay, 10)), row, tier, iso: '45G1', fe: 'F', pod: 'KRPTK', pol: 'CNSHA', _mode: 'discharge' }; });
   createRoot(mk('r24bay')).render(React.createElement(BayPlan, { containers: cs, compMap: {}, xrayMap: {}, restowMap: {}, mode: 'discharge', onOpenContainer: () => {}, shipImo: info.imo || '', shipName: info.vsl, voyageInfo: info }));
+}
+
+//  ④ 4.22 R27 — window.__R27 = JSON {판 id: 경고 배열(runDiagnostics 출력)} 이면 판마다 주의 박스(DiagnosticsPanel 실소스)를 그린다. 컨을 누르면 window.__R27open 에 쌓인다.
+const r27 = window.__R27 || '';
+if (r27) {
+  const root = document.getElementById('root');
+  for (const [id, alerts] of Object.entries(JSON.parse(r27))) {
+    const el = document.createElement('div'); el.id = id; root.appendChild(el);
+    //  showOk — 항차 화면처럼 켠다(경고가 없으면 «이상없음 (세관 코드 OKY)» 한 줄). 판 id 가 n 으로 시작하면 끈 채(종전 호출).
+    //  listRows — window.__R27rows = JSON {판 id: 비교한 리스트·세관 행 수(diagListRowCount)} · 없으면 0
+    const rows = (() => { try { return JSON.parse(window.__R27rows || '{}')[id] || 0; } catch (e) { return 0; } })();
+    createRoot(el).render(React.createElement(DiagnosticsPanel, { alerts, showOk: !id.startsWith('n'), listRows: rows, autoSpeak: false, onToggleSpeak: () => {}, onDismiss: () => {}, onOpenContainer: (cn) => { (window.__R27open = window.__R27open || []).push(cn); } }));
+  }
 }

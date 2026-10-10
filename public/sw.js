@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.21';
-const NOTE = '4.21 마감적용에 RZOR 수석 마감텔리의 STOWAGE PLAN(xlsx)을 올릴 수 있습니다. 수석 텔리의 자리와 완료로 마감하고 제작컨도 대수에 넣습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.22';
+const NOTE = '4.22 주의 박스가 EDI 세관 선사 리스트 터미널 배정 본선현황 수량을 대조해 한쪽에만 있는 컨을 번호 선사 출발항과 함께 보이고 세관 코드 후보를 붙입니다. 열 건이 넘으면 나머지 보기로 펼칩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

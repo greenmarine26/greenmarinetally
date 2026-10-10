@@ -12,7 +12,8 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
+import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf, isListOriginRecord } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
+import { reconcileSources, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 //  ★ 3.53 — **POD 확정을 반영한다**(utils 한 벌 `isPtkResolved`). 2차 시뮬 지적 2026-09-16 —
@@ -71,7 +72,7 @@ export const isoConflictText = (w) => {
   return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
 };
 
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false, voyage = null, voyageKey = '', typoTwins = null }) {   // 4.22: voyage — 자료별 대조(항차 통째) · typoTwins — 리스트 번호 오타 짝(utils.listTypoTwins 결과, 호출부가 넘긴다)
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
@@ -258,6 +259,42 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     }
   }
 
+  // ─── 🟡 3-C. 자료별 대조 (4.22) ───
+  //  ★ 검수사 2026-10-10 07:52 «4개의 컨테이너가 무었인지 앱에 알림표기를 해주세요 부족한건 앱에서 보여주면서 넘치는건 안보여줌» ·
+  //    07:53 «넘치거나 부족한거나 둘다 앱에 알림표기를 해야 주의 깊게 볼수있습니다. 컨넘버와 관련선사 표기 출발 항구등» ·
+  //    08:08 «EDI와 선사요구메일 세관 터미널 등이 다 적용되어야 합니다. 자료없음, 어느쪽에 라도 있으면 표기를 알림표기 박스에 보여주세요».
+  //    대조는 sourceRecon.reconcileSources 한 벌. 수화물·통과화물·선사 취소 요청분은 아래 4번과 같은 판정으로 뺀다(검증 대상이 아니거나 따로 안내한다).
+  //    ⚠ 양하만 알린다 — 선적은 예약 자리·가상 E·CLL 부분본 규칙이 얽혀 홈 카드와 다른 수가 나온다(KBTR 2609W 실측 — 카드 «배정 272 ✓» 인데 리스트 207).
+  //    아래 list_short·list_extra·cancel_pending 은 그대로 둔다(소리·수·연막이 걸려 있다) — 패널이 그 목록을 «자료별 대조 참고» 로 접는다.
+  //    음성 — 같은 수를 리스트 부족·EDI 밖 경고가 이미 말하면 «어긋남 N대» 는 한 번만(그쪽)이다(맨 아래 정렬 앞에서 지운다).
+  //    count 는 음성 서명(패널 code:count)용 — «완료·실적에만»(g5)은 작업이 진행되면 늘어나므로 뺀 수 + «번호 없음» 대수.
+  let _recon = null;
+  if (voyage && mode === 'discharge') {
+    const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) });
+    const gapOn = R.gap != null && R.gap !== 0;
+    if (R.total > 0 || gapOn) {
+      const S = R.sources;
+      const part = (label, x) => (x.has ? `${label} ${x.n}` : `${label} 자료 없음`);
+      const carPart = R.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : part('선사 리스트', S.carrier);
+      const gapTxt = gapOn ? `앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '';
+      const unkTxt = reconUnknownText(R);
+      const g5n = ((R.groups.find((g) => g.key === 'g5') || {}).items || []).length;
+      const vTotal = R.total ? `자료별 대조 어긋남 ${R.total}대` : '';
+      const vGap = gapOn ? `터미널과 ${Math.abs(R.gap)}대 차이` : '';
+      _recon = { R, vGap };
+      alerts.push({
+        level: 'warning',
+        code: 'source_recon',
+        msg: R.total > 0
+          ? `자료별 대조 — ${[part('터미널 배정', S.plan), part('본선현황', S.qc), part('EDI', S.edi), part('세관', S.customs), carPart, `실적 ${S.term.n}`].join(' · ')} — 어긋남 ${R.total}대${gapTxt ? ` · ${gapTxt}` : ''}${unkTxt ? ` · ${unkTxt}` : ''}`
+          : `${reconTermLabel(R.term.basis)} ${R.term.n} · ${gapTxt}${unkTxt ? ` · ${unkTxt}` : ''}`,
+        voice: [vTotal, vGap].filter(Boolean).join(', '),
+        count: (R.total - g5n) + R.unknown,
+        details: R,
+      });
+    }
+  }
+
   // ─── 🟡 4. EDI vs 리스트 카운트 차이 ───
   // M3.5.4-fix2: 평택 EDI 기준으로만 비교
   //   - listCount = 리스트 전체가 아니라, 진짜 컨번호만 카운트
@@ -314,7 +351,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           msg: `선사 취소 요청 ${cancFound.length}대가 리스트에 남아 있음 — 캔슬 리스트를 올리면 빠집니다`,
           voice: '',
           count: cancFound.length,
-          details: { cancelCns: cancFound.slice(0, 20), ediCount, realEdiCount, listCount: realListCount, matchedCount },
+          details: { cancelCns: cancFound, ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 4.22: 전부 싣는다 — 패널이 10건 뒤를 «나머지 보기» 로 펼친다
         });
       }
       // V9.04-02: 가상 자리(virtualEdiCount>0)가 있으면, EDI밖 리스트분 중 fe≠'F'는
@@ -371,9 +408,10 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           count: extraCns.length,
           //  ★ 3.53 — **POD 가 갈리는 컨을 맨 앞으로 올린다.** 재감사 실측 2026-09-16 —
           //    KSKM 2617N 의 `extraCns` 는 59건이고 앞 10건에 정작 그 컨(`SEGU2430571`)이 없어,
-          //    검수사가 말한 «둘 중 한 군데» 의 한쪽이 그 건에 못 닿았다. 20/10 절단은 그대로 두되 **순서**를 바꾼다.
-          details: { extraCns: [...extraCns].sort((a, b) => (_podAsk(b) ? 1 : 0) - (_podAsk(a) ? 1 : 0)).slice(0, 20),
-            podAskCns: extraCns.filter(_podAsk).slice(0, 20),   // 눌러서 고칠 수 있는 것만 따로 — 패널이 라벨을 가른다
+          //    검수사가 말한 «둘 중 한 군데» 의 한쪽이 그 건에 못 닿았다. **순서**를 바꿔 갈리는 컨을 앞 10줄에 둔다.
+          //    (4.22 — 20 자르기는 없앴다. 패널이 10줄 뒤를 «… 외 N건 — 나머지 보기» 로 펼친다.)
+          details: { extraCns: [...extraCns].sort((a, b) => (_podAsk(b) ? 1 : 0) - (_podAsk(a) ? 1 : 0)),   // 4.22: 20 자르기 없앰 — 패널이 «나머지 보기» 로 펼친다
+            podAskCns: extraCns.filter(_podAsk),   // 눌러서 고칠 수 있는 것만 따로 — 패널이 라벨을 가른다
             ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 3.50-02: 패널의 «EDI ?대 / 리스트 ?대» 가 이 셋을 읽는다
         });
       }
@@ -449,7 +487,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       msg: `풀/엠티가 EDI 와 리스트에서 다름 ${feConf.length}건`,
       voice: `풀 엠티 불일치 ${feConf.length}건. 실물 확인 필요`,
       count: feConf.length,
-      details: feConf.slice(0, 20),
+      details: feConf,   // 4.22: 자르지 않는다 — 패널이 «나머지 보기» 로 펼친다
     });
   }
   if (isoConf.length > 0) {
@@ -459,7 +497,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       msg: `규격이 자료마다 다름 ${isoConf.length}건 — 실물 보고 확정`,
       voice: `규격 불일치 ${isoConf.length}건. 실물 확인 필요`,
       count: isoConf.length,
-      details: isoConf.slice(0, 20),
+      details: isoConf,   // 4.22: 자르지 않는다 — 패널이 «나머지 보기» 로 펼친다
     });
   }
 
@@ -479,7 +517,22 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       msg: `실번호 불일치 ${slDiffs.length}건`,
       voice: '',  // info 레벨은 음성 없음
       count: slDiffs.length,
-      details: slDiffs.slice(0, 20),
+      details: slDiffs,   // 4.22: 자르지 않는다 — 패널이 «나머지 보기» 로 펼친다
+    });
+  }
+
+  // ─── 🔵 6-B. 리스트 번호 오타 짝 (4.22) ───
+  //  ★ 검수사 09:37 «여러 조건이 발생될때 마다 해당하는 알림에 표기» — 세관 코드 CND(컨테이너번호 다름) 후보.
+  //    판정은 utils.listTypoTwins 한 벌(같은 실번호를 딱 둘이 갖고 한쪽만 검산이 틀림 — 실측 RZOR R106W 선적 WKIU5243987 → WIKU5243987).
+  //    호출부(VoyagePage)가 이 방향 리스트로 구해 넘긴다. 저장할 때 오타 쪽은 빼지만(3.66-04) 완료 기록·실 EDI 가 붙잡아 남은 짝은 여기서 알린다.
+  if (Array.isArray(typoTwins) && typoTwins.length > 0) {
+    alerts.push({
+      level: 'info',
+      code: 'cn_typo',
+      msg: `리스트 번호 오타 짝 ${typoTwins.length}건 — 같은 실번호 · 검산이 틀린 쪽 (세관 코드 CND 후보)`,
+      voice: '',
+      count: typoTwins.length,
+      details: typoTwins.map((t) => ({ cn: t.typo, typo: t.typo, real: t.real, seal: t.seal })),
     });
   }
 
@@ -552,7 +605,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           msg: `${podStr}엠티 실 ${action}: ${targetContainers.length}대 중 ${missing.length}대 미${action}`,
           voice: `${sealPolicy.name || '선박'} ${podStr}엠티 ${targetContainers.length}대 중 ${missing.length}대 실 ${action} 남음. 작업 필요`,
           count: missing.length,
-          details: missing.slice(0, 30).map(c => ({
+          details: missing.map(c => ({   // 4.22: 30 자르기 없앰 — 패널이 «나머지 보기» 로 펼친다
             cn: c.cn,
             iso: c.iso || '?',
             pod: c.pod || '?',
@@ -564,11 +617,23 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     }
   }
 
+  //  4.22 감사 — 자료별 대조의 «어긋남 N대» 를 리스트 부족·EDI 밖 경고가 같은 수로 이미 말하면 대조 음성은 터미널 차이만 남긴다(같은 말을 두 번 하지 않게).
+  if (_recon && _recon.R.total > 0 && alerts.some((a) => (a.code === 'list_short' || a.code === 'list_extra') && a.count === _recon.R.total)) {
+    const a = alerts.find((x) => x.code === 'source_recon');
+    if (a) a.voice = _recon.vGap;
+  }
+
   // 정렬: critical → warning → info
   const order = { critical: 0, warning: 1, info: 2 };
   alerts.sort((a, b) => (order[a.level] - order[b.level]));
 
   return alerts;
+}
+
+//  ★ 4.22 — 주의 박스가 «이상없음 (세관 코드 OKY)» 를 말할 근거 — 비교한 리스트·세관 행 수(리스트 출신 행 · utils.isListOriginRecord 한 벌).
+//    0 이면 비교한 것이 없으므로 OKY 가 아니라 «비교할 리스트 없음»(재감사 — NSFR 2619N 선적 EDI 104 · records 0 꼴).
+export function diagListRowCount(listRecords) {
+  return Object.entries(listRecords || {}).filter(([cn, r]) => cn && !String(cn).startsWith('_') && isListOriginRecord(r)).length;
 }
 
 // ─── 음성 안내문 빌드 ───
