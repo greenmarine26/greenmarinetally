@@ -74,6 +74,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     `export { runDiagnostics, buildVoiceMessage, diagListRowCount } from "${ROOT}/src/diagnostics.js";`,   // 4.22 R27 — 주의 박스 경고 · 음성
     `export { CUSTOMS_RESULT_CODES } from "${ROOT}/src/data/customsCodes.js";`,   // 4.22 R27 — 세관 검수 결과 코드표(검수사 원문)
     `export { listTypoTwins, bookingFillOfSec } from "${ROOT}/src/utils.js";`,   // 4.22-01 R28 — bookingFillOfSec   // 4.22 R27 — 번호 오타 짝(CND) — VoyagePage 가 진단에 넘기는 한 벌
+    `export { bayViewFollowOf, craneBoardOf, boardBaysOf } from "${ROOT}/src/utils.js";`,   // 4.22-03 R30 — 베이뷰 따라가기 · 호기 줄 자리 · 최근 완료가 몰린 장
   ].join('\n'), 'core', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
   const stub = './tools/stub_fbdb_mem.js';
   const FB = bundle(`export { fbSetEmptySeal } from "${ROOT}/src/firebase.js";\n`, 'fb', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
@@ -1937,6 +1938,213 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const hE = hub(ve, 'KBTR_2608E_edi', 'discharge');
     ok(`목록 없는 사본 — 탭 «양하 (${hE.dis})» · 부제 «양하 ${hE.sub}대» = EDI POD 평택 ${ediPtk}(빈 자리 ${slots} 빼고 · 수정 전 ${ediPtk + slots})`,
       ediPtk === 175 && hE.dis === ediPtk && hE.sub === ediPtk, JSON.stringify({ hE, ediPtk }));
+  }
+
+  // ── R30 ───────────────────────────────────────────────────────────────
+  //  4.22-03 — 베이뷰 «따라가기» 는 내 호기 자리만 따라간다 · 완료 컨 자리 읽기는 한 벌(craneBoardOf 호기 줄 = boardBaysOf 베이 묶음).
+  head('R30 베이뷰 따라가기 — 내 호기가 정해져 있으면 내 호기 자리만(다른 호기 베이로 안 넘어간다) · 호기 줄 자리 = 실적 → 맞교환 → 계획 EDI (4.22-03)',
+    '검수사 2026-10-11 20:13 «오늘 MCAP선적 하는데 베이뷰 자동으로 하다 보면 베이가 자동으로 이동하는것이 자주 생김 22번 하는데 30번 베이로 가거나 44번 베이로 이동되는등 이상한 현상이 여러번 있었습니다. 22번베이랑 18번베이 선적중에 벌어진 일입니다.» · Fable 판정(자리 읽기 한 벌 · 내 호기만)');
+  {
+    //  MCAP 639N(641S) 2026-10-11 보관본 사본 — 시각 T 까지의 완료만 남긴 사본으로 그 시각의 따라가기를 재생한다(터미널 반영 src term 포함).
+    const M = fx('bayview42203_mcap.json');
+    const at = (hm) => Date.parse(`2026-10-11T${hm}:00+09:00`);
+    const cut = (T, base = M) => {
+      const v = JSON.parse(JSON.stringify({ info: base.info, discharge: base.discharge, loading: base.loading }));
+      for (const m of ['discharge', 'loading']) for (const [cn, r] of Object.entries(v[m].completed)) if (!r || !r.at || r.at > T) delete v[m].completed[cn];
+      return v;
+    };
+    //  이 파일의 독립 규칙(앱 함수를 부르지 않는다) — 자리 = 실적 bay_actual(«__» 아님) → 맞교환 bay_assign(«__» 아님) → 계획 EDI(그 모드).
+    //    창고(bay_actual «__…»)·자리 내준 컨(planTaken)은 자리 없음. 단 ≥ 80 이면 데크, 아니면 홀드.
+    const posRule = (sec, cn) => {
+      const r = (sec.records || {})[cn] || {}, e = (sec.ediContainers || {})[cn] || {};
+      if (/^__/.test(String(r.bay_actual || '')) || r.planTaken) return null;
+      const src = (r.bay_actual != null && r.bay_actual !== '') ? 'A' : (r.bay_assign && !/^__/.test(String(r.bay_assign))) ? 'G' : 'E';
+      const b = src === 'A' ? r.bay_actual : src === 'G' ? r.bay_assign : e.bay;
+      const row = src === 'A' ? r.row_actual : src === 'G' ? r.row_assign : e.row, tier = src === 'A' ? r.tier_actual : src === 'G' ? r.tier_assign : e.tier;
+      const n = parseInt(b, 10);
+      return n > 0 ? { src, bay: n, row: String(row ?? '').trim(), tier: String(tier ?? '').trim() } : null;
+    };
+    //  호기의 가장 늦은 완료(양하·선적 함께) — 장비 칸 «N호기» 의 숫자. 같은 호기 같은 시각 둘이면 모호(null).
+    const latestOf = (v, no) => {
+      let best = null, tie = false;
+      for (const m of ['discharge', 'loading']) for (const [cn, r] of Object.entries(v[m].completed)) {
+        if (parseInt(String(r.equip || ''), 10) !== no) continue;
+        if (!best || r.at > best.at) { best = { mode: m, cn, at: r.at, src: r.src || '' }; tie = false; } else if (r.at === best.at) tie = true;
+      }
+      return best && !tie ? { ...best, pos: posRule(v[best.mode], best.cn) } : null;
+    };
+    const tierOf = (p) => (parseInt(p.tier, 10) >= 80 ? 'deck' : 'hold');
+    //  최근 완료가 몰린 장 — 장 = 짝수 베이(홀수는 뒤 짝수와 한 장 · 사전 없음) · 가장 늦은 완료부터 30분 창(없으면 넓힌다) · 많이 찍힌 순, 같으면 늦은 순.
+    const recentBays = (v, want, win = 30) => {
+      const ev = [];
+      for (const m of ['discharge', 'loading']) for (const [cn, r] of Object.entries(v[m].completed)) {
+        if (!r || !r.at) continue;
+        const p = posRule(v[m], cn); if (!p) continue;
+        ev.push({ at: r.at, m, n: p.bay, pair: p.bay % 2 === 0 ? p.bay : p.bay + 1 });
+      }
+      if (!ev.length) return [];
+      const last = Math.max(...ev.map((e) => e.at));
+      for (const w of [win, win * 2, win * 4, 0]) {
+        const g = new Map();
+        for (const e of ev) {
+          if (w && e.at < last - w * 60000) continue;
+          const k = `${e.m}|${e.pair}`; const c = g.get(k) || { bay: '', mode: e.m, n: 0, lastAt: 0 }; g.set(k, c);
+          c.n += 1; if (e.at > c.lastAt) { c.lastAt = e.at; c.bay = String(e.n).padStart(2, '0'); }
+        }
+        const out = [...g.values()].sort((a, b) => b.n - a.n || b.lastAt - a.lastAt).slice(0, Math.max(1, want));
+        if (out.length) return out;
+      }
+      return [];
+    };
+    const F = (T, eq, scr) => { const v = cut(at(T)); return { v, f: B.bayViewFollowOf(v, eq, null, scr) }; };
+    const fs1 = (f) => JSON.stringify({ bay: f.bay, tier: f.tier, mode: f.mode, src: f.src, no: f.no, why: f.why });
+    //  ① 10:30 — 2호기 가장 늦은 완료 = 양하 MNBU3921110 10:26(records 자리 없음 → EDI 22-04-08). 수정 전은 폴백(src recent).
+    {
+      const { v, f } = F('10:30', '2호기', 'discharge'); const L = latestOf(v, 2);
+      const noRec = !((M.discharge.records || {})[L.cn] || {}).bay_actual;
+      ok(`① 10:30 2호기 양하 화면 — 따라가기 BAY ${f.bay} ${f.tier} · ${f.src} · ${f.no}호기 = 원자료 2호기 마지막 완료 ${L.cn}(${L.mode} · 실적 자리 ${noRec ? '없음' : '있음'} → 계획 ${L.pos.bay}-${L.pos.row}-${L.pos.tier})`,
+        L.cn === 'MNBU3921110' && noRec && L.pos.src === 'E' && L.pos.bay === 22 && f.bay === L.pos.bay && f.tier === tierOf(L.pos) && f.mode === 'discharge' && f.src === 'app' && f.no === 2 && f.why === '', fs1(f));
+    }
+    //  ② 13:30 — 2호기 선적 MRSU4260764 13:28 실적 22-07-08 → 단 08 은 홀드
+    {
+      const { v, f } = F('13:30', '2호기', 'loading'); const L = latestOf(v, 2);
+      ok(`② 13:30 2호기 선적 화면 — BAY ${f.bay} ${f.tier} = 원자료 ${L.cn}(실적 ${L.pos.bay}-${L.pos.row}-${L.pos.tier} → ${tierOf(L.pos)})`,
+        L.cn === 'MRSU4260764' && L.pos.src === 'A' && L.pos.bay === 22 && f.bay === 22 && f.tier === tierOf(L.pos) && f.tier === 'hold' && f.mode === 'loading' && f.src === 'app' && f.no === 2 && f.why === '', fs1(f));
+    }
+    //  ③ 14:30 — 18번 베이로 옮긴 뒤
+    {
+      const { v, f } = F('14:30', '2호기', 'loading'); const L = latestOf(v, 2);
+      ok(`③ 14:30 2호기 선적 화면 — BAY ${f.bay} ${f.tier} = 원자료 ${L.cn}(실적 ${L.pos.bay}-${L.pos.row}-${L.pos.tier})`,
+        L.pos.bay === 18 && f.bay === 18 && f.tier === tierOf(L.pos) && f.mode === 'loading' && f.src === 'app' && f.no === 2, fs1(f));
+    }
+    //  ④ 09:34 — 2호기 가장 늦은 완료 = 수석 «터미널 스냅샷 적용» 기록 MNBU4358233 09:33(src term · records 없음 → EDI 2-03-88). 수정 전은 앞 컨 자리(순서에 따라 6)·폴백.
+    {
+      const { v, f } = F('09:34', '2호기', 'loading'); const L = latestOf(v, 2);
+      ok(`④ 09:34 2호기 선적 화면 — BAY ${f.bay} ${f.tier} = 원자료 ${L.cn}(src ${L.src} · 계획 ${L.pos.bay}-${L.pos.row}-${L.pos.tier})`,
+        L.cn === 'MNBU4358233' && L.src === 'term' && L.pos.src === 'E' && L.pos.bay === 2 && f.bay === 2 && f.tier === tierOf(L.pos) && f.mode === 'loading' && f.src === 'app' && f.no === 2, fs1(f));
+    }
+    //  ⑤ 13:30 1호기 — 원자료에 1호기 완료가 없다(호기 줄 자체가 없다) → 다른 호기(2·3·4호기) 자리로 떨어지지 않고 «1호기 완료가 아직 없습니다»
+    {
+      const { v, f } = F('13:30', '1호기', 'loading');
+      ok(`⑤ 13:30 1호기(완료 없음) — bay ${f.bay} · src «${f.src}» · «${f.why}» (다른 호기 ${f.cranes.map((c) => `${c.no}호기 ${c.bay}`).join('·')} 로 안 넘어간다)`,
+        latestOf(v, 1) === null && f.bay === null && f.tier === null && f.src === '' && f.no === 1 && /^1호기 완료가 아직 없습니다/.test(f.why), fs1(f));
+    }
+    //  ⑥ 13:30 호기 미지정 — 종전 폴백 그대로(최근 완료가 몰린 장)
+    {
+      const { v, f } = F('13:30', '', 'loading'); const R = recentBays(v, 1)[0];
+      ok(`⑥ 13:30 호기 미지정 — BAY ${f.bay} ${f.mode} · ${f.src} = 원자료 최근 30분 가장 많이 찍힌 장 ${R.bay}(${R.mode} ${R.n}대)`,
+        R.bay === '30' && R.mode === 'discharge' && f.bay === parseInt(R.bay, 10) && f.mode === R.mode && f.src === 'recent' && f.no === 0 && f.why === '호기가 정해지지 않아 최근 완료가 몰린 장으로', fs1(f));
+    }
+    //  ⑦ 호기 줄 자리(수석 보드와 같은 함수) — 13:30 3호기·4호기는 적용된 터미널 기록만(자리 기록 없음) → 계획 EDI 자리.
+    //    + 같은 규칙 전 구간 — 08:00~16:10 10분마다 호기 줄 자리 = 그 호기 가장 늦은 완료의 규칙 자리 · 맞교환(bay_assign)만 있는 사본도 같은 규칙.
+    {
+      const v = cut(at('13:30')); const rows = B.craneBoardOf(v, []);
+      const row = (no) => rows.find((c) => c.no === no) || {};
+      const L3 = latestOf(v, 3), L4 = latestOf(v, 4);
+      const want = (L) => ({ bay: String(L.pos.bay), row: L.pos.row, tier: L.pos.tier, mode: L.mode });
+      const same = (c, w) => c.bay === w.bay && c.row === w.row && c.tier === w.tier && c.mode === w.mode;
+      const bad7 = [];
+      for (let T = at('08:00'); T <= at('16:10'); T += 10 * 60000) {
+        const vv = cut(T); const rr = B.craneBoardOf(vv, []);
+        for (const no of [2, 3, 4]) {
+          const L = latestOf(vv, no); if (!L || !L.pos) continue;
+          const c = rr.find((x) => x.no === no) || {};
+          if (!same(c, want(L))) bad7.push(`${new Date(T).toTimeString().slice(0, 5)} ${no}호기 ${c.bay}-${c.row}-${c.tier} ≠ ${L.pos.bay}-${L.pos.row}-${L.pos.tier}`);
+        }
+      }
+      //  맞교환 사본 — 2호기 13:30 직전 선적 다섯 대의 실적 자리를 지우고 맞교환 26-02-82 를 준다(계획 22 와 다른 장)
+      const G = JSON.parse(JSON.stringify(M));
+      const last5 = Object.entries(G.loading.completed).filter(([, r]) => parseInt(r.equip, 10) === 2 && r.at <= at('13:30')).sort((a, b) => b[1].at - a[1].at).slice(0, 5).map(([cn]) => cn);
+      for (const cn of last5) { const r = G.loading.records[cn] || (G.loading.records[cn] = {}); delete r.bay_actual; delete r.row_actual; delete r.tier_actual; Object.assign(r, { bay_assign: '26', row_assign: '02', tier_assign: '82' }); }
+      const vg = cut(at('13:30'), G); const cg = B.craneBoardOf(vg, []).find((x) => x.no === 2) || {}; const Lg = latestOf(vg, 2);
+      ok(`⑦ 13:30 호기 줄 — 4호기 BAY ${row(4).bay} ${row(4).row}-${row(4).tier}(${L4.cn} src ${L4.src}) · 3호기 BAY ${row(3).bay} ${row(3).row}-${row(3).tier}(${L3.cn} src ${L3.src}) · 2호기 BAY ${row(2).bay} · 전 구간 10분마다 어긋남 ${bad7.length} · 맞교환 사본 2호기 ${cg.bay}-${cg.row}-${cg.tier}`,
+        row(4).bay === '44' && row(3).bay === '30' && row(2).bay === '22' && L4.src === 'term' && L3.src === 'term' && L4.pos.src === 'E' && L3.pos.src === 'E'
+          && same(row(4), want(L4)) && same(row(3), want(L3)) && !bad7.length && Lg.pos.src === 'G' && same(cg, want(Lg)) && cg.bay === '26',
+        JSON.stringify({ r: rows.map((c) => [c.no, c.bay, c.row, c.tier, c.mode]), bad7: bad7.slice(0, 6), cg: [cg.bay, cg.row, cg.tier] }));
+    }
+    //  ⑧ boardBaysOf(항차, 2, 30, 사전 없음) — 4.22-03 전·후 같은 값. 13:30 은 수정 전 소스로 잰 값을 박아 둔다(총괄 실측과 같음) +
+    //    전 구간 10분마다 · 맞교환/자리 내줌/창고 사본에서 이 파일이 따로 센 «최근 완료가 몰린 장» 과 같다.
+    {
+      const pick = (a) => a.map((c) => ({ bay: c.bay, mode: c.mode, n: c.n }));
+      const got = pick(B.boardBaysOf(cut(at('13:30')), 2, 30, null));
+      const PIN = [{ bay: '30', mode: 'discharge', n: 16 }, { bay: '22', mode: 'loading', n: 16 }];
+      const bad8 = [];
+      const cmp = (v, tag) => { const g = B.boardBaysOf(v, 2, 30, null).map((c) => [c.bay, c.mode, c.n, c.lastAt]); const w = recentBays(v, 2).map((c) => [c.bay, c.mode, c.n, c.lastAt]); if (JSON.stringify(g) !== JSON.stringify(w)) bad8.push(`${tag} ${JSON.stringify(g)} ≠ ${JSON.stringify(w)}`); };
+      const warn0 = console.warn; console.warn = () => {};   // 15:03 이후 자리 못 찾은 완료 1건(HASU4806161 — 리스트·EDI 밖) 경고는 boardBaysOf 의 정상 경고 — 이 줄에선 접는다
+      try { for (let T = at('08:00'); T <= at('16:10'); T += 10 * 60000) cmp(cut(T), new Date(T).toTimeString().slice(0, 5)); } finally { console.warn = warn0; }
+      //  사본 — 2호기 마지막 선적 다섯 대 맞교환 26 · 3호기 양하 한 대 자리 내줌(planTaken) · 4호기 선적 한 대 창고(__STG__) — 마지막 완료는 건드리지 않는다
+      const G = JSON.parse(JSON.stringify(M));
+      const lastN = (m, no, k, skip = 0) => Object.entries(G[m].completed).filter(([, r]) => parseInt(r.equip, 10) === no && r.at <= at('13:30')).sort((a, b) => b[1].at - a[1].at).slice(skip, skip + k).map(([cn]) => cn);
+      for (const cn of lastN('loading', 2, 5)) { const r = G.loading.records[cn] || (G.loading.records[cn] = {}); delete r.bay_actual; delete r.row_actual; delete r.tier_actual; Object.assign(r, { bay_assign: '26', row_assign: '02', tier_assign: '82' }); }
+      for (const cn of lastN('discharge', 3, 1, 1)) (G.discharge.records[cn] = G.discharge.records[cn] || {}).planTaken = true;
+      for (const cn of lastN('loading', 4, 1, 1)) (G.loading.records[cn] = G.loading.records[cn] || {}).bay_actual = '__STG__';
+      const vG = cut(at('13:30'), G); cmp(vG, '사본 13:30');
+      const gG = pick(B.boardBaysOf(vG, 2, 30, null)), wG = pick(recentBays(vG, 2));
+      ok(`⑧ boardBaysOf 13:30 = ${JSON.stringify(got)} (수정 전 소스 값 · 원자료 ${JSON.stringify(pick(recentBays(cut(at('13:30')), 2)))}) · 전 구간 10분마다 어긋남 ${bad8.length} · 맞교환·자리 내줌·창고 사본 ${JSON.stringify(gG)}`,
+        JSON.stringify(got) === JSON.stringify(PIN) && JSON.stringify(pick(recentBays(cut(at('13:30')), 2))) === JSON.stringify(PIN) && !bad8.length && JSON.stringify(gG) === JSON.stringify(wG),
+        JSON.stringify({ got, bad8: bad8.slice(0, 4) }));
+    }
+    //  ── Fable 판정 보강(4.22-03) — 내 호기 줄은 있는데 자리를 모를 때는 «자리를 아직 모릅니다» · 일한 호기가 나뿐이면 최근 완료가 몰린 장으로 ──
+    //  동방 OBWH 2761E 보관본 — termWork 없음 · 완료 524 전부 터미널 반영(호기 없음) · 호기 줄은 qcWork 로만 선다(자리 없음).
+    const O = fx('bayview42203_obwh.json');
+    const warn9 = console.warn; console.warn = () => {};   // 동방 사본의 craneBaysByTime «터미널 자리 자료 없음» 경고는 정상 — 이 세 단언에선 접는다(끝에서 되돌린다)
+    const ob = () => JSON.parse(JSON.stringify({ info: O.info, discharge: O.discharge, loading: O.loading }));
+    const qcNos = (info) => Object.values(info.qcWork || {}).filter((q) => (Number(q.disDone) || 0) + (Number(q.lodDone) || 0) > 0).map((q) => parseInt(String(q.qc).slice(-1), 10));
+    const eqOf = (v) => ['discharge', 'loading'].flatMap((m) => Object.values(v[m].completed)).filter((r) => r && r.equip).length;
+    const twOf = (v) => ['discharge', 'loading'].reduce((a, m) => a + Object.keys(v[m].termWork || {}).length, 0);
+    //  ⑨ 내 호기(1호기) = QC 합계만 있는 줄 · 다른 호기 줄(QC102·QC103)도 있다 → bay null · «1호기 자리를 아직 모릅니다»
+    {
+      const v = ob(); const f = B.bayViewFollowOf(v, '1호기', null, 'discharge'); const nos = qcNos(v.info);
+      ok(`⑨ OBWH 2761E(동방 · QC 호기 ${nos.join('·')} · 호기 찍힌 완료 ${eqOf(v)} · 터미널 실적 ${twOf(v)}) 1호기 — bay ${f.bay} · src «${f.src}» · «${f.why}»`,
+        nos.length >= 2 && nos.includes(1) && eqOf(v) === 0 && twOf(v) === 0 && f.bay === null && f.src === '' && f.no === 1 && /^1호기 자리를 아직 모릅니다/.test(f.why), fs1(f));
+    }
+    //  ⑩ 같은 항차 사본 — qcWork 에 1호기(QC101)만 남기고 다른 호기 완료 기록을 지운다(원자료엔 호기 찍힌 완료가 0 이라 지울 것 없음) → 최근 완료가 몰린 장으로 · no 1
+    {
+      const v = ob(); v.info.qcWork = Object.fromEntries(Object.entries(v.info.qcWork).filter(([, q]) => String(q.qc) === 'QC101'));
+      for (const m of ['discharge', 'loading']) for (const [cn, r] of Object.entries(v[m].completed)) if (r && r.equip && parseInt(String(r.equip), 10) !== 1) delete v[m].completed[cn];
+      const f = B.bayViewFollowOf(v, '1호기', null, 'discharge'); const R = recentBays(v, 1)[0];
+      ok(`⑩ OBWH 사본(1호기 줄만) 1호기 — BAY ${f.bay} ${f.mode} · src «${f.src}» · no ${f.no} · «${f.why}» = 원자료 30분 창 최다 장 ${R.bay}(${R.mode} ${R.n}대)`,
+        qcNos(v.info).join() === '1' && f.bay === parseInt(R.bay, 10) && f.mode === R.mode && f.src === 'recent' && f.no === 1 && /^1호기 자리를 아직 몰라 최근 완료가 몰린 장으로/.test(f.why), fs1(f));
+    }
+    //  ⑪ MCAP 사본 — 2호기 완료의 records 자리·EDI 자리를 모두 비운다(3·4호기 기록은 그대로) → 2호기 줄은 있는데 자리를 모른다 → bay null · «2호기 자리를 아직 모릅니다»
+    {
+      const G = JSON.parse(JSON.stringify(M));
+      for (const m of ['discharge', 'loading']) for (const [cn, r] of Object.entries(G[m].completed)) {
+        if (parseInt(String(r.equip || ''), 10) !== 2) continue;
+        delete G[m].records[cn]; delete G[m].ediContainers[cn];
+      }
+      const v = cut(at('13:30'), G); const f = B.bayViewFollowOf(v, '2호기', null, 'loading'); const L = latestOf(v, 2);
+      const others = [3, 4].filter((no) => latestOf(v, no) && latestOf(v, no).pos);
+      ok(`⑪ MCAP 사본(2호기 완료 자리 비움) 13:30 2호기 — 2호기 마지막 완료 ${L && L.cn} 자리 ${L && L.pos ? '있음' : '없음'} · 다른 호기 ${others.join('·')} 자리 있음 → bay ${f.bay} · src «${f.src}» · «${f.why}»`,
+        L && !L.pos && others.join() === '3,4' && f.bay === null && f.src === '' && f.no === 2 && /^2호기 자리를 아직 모릅니다/.test(f.why), fs1(f));
+    }
+    //  ── 감사(4.22-03) 회귀 사각 둘 ──
+    //  ⑫ OBWH 사본에서 qcWork 를 통째로 지운다 — 호기 줄 0(완료 524건은 호기 없음) → 1호기 따라가기는 «완료가 아직 없습니다» · bay null(최근 완료가 몰린 장으로 떨어지지 않는다)
+    {
+      const v = ob(); delete v.info.qcWork;
+      const nComp = ['discharge', 'loading'].reduce((a, m) => a + Object.keys(v[m].completed).length, 0);
+      const f = B.bayViewFollowOf(v, '1호기', null, 'discharge');
+      ok(`⑫ OBWH 사본(qcWork 없음 · 완료 ${nComp} · 호기 찍힌 완료 ${eqOf(v)} · 터미널 실적 ${twOf(v)} → 호기 줄 0) 1호기 — bay ${f.bay} · src «${f.src}» · «${f.why}»`,
+        nComp > 0 && eqOf(v) === 0 && twOf(v) === 0 && f.bay === null && f.src === '' && f.no === 1 && /^1호기 완료가 아직 없습니다/.test(f.why), fs1(f));
+    }
+    //  ⑬ MCAP 15:05 — 2호기 마지막 완료 HASU4806161 15:03:55(리스트·EDI 밖 · 자리 없음) · 그 앞 MNBU0522251 15:03 실적 18-08-88.
+    //    호기 줄 자리는 «자리 있는 기록 중 가장 늦은 것» — 완료 객체의 키 순서를 바꿔도(그대로 · 거꾸로 · 시각 오름 · 시각 내림 · HASU 먼저) 같아야 한다.
+    {
+      const v = cut(at('15:05'));
+      const c2 = Object.entries(v.loading.completed).concat(Object.entries(v.discharge.completed).map(([cn, r]) => [cn, { ...r, _d: 1 }]))
+        .filter(([, r]) => parseInt(String(r.equip || ''), 10) === 2).sort((a, b) => b[1].at - a[1].at);
+      const lastCn = c2[0][0];
+      const withPos = c2.find(([cn, r]) => posRule(v[r._d ? 'discharge' : 'loading'], cn));
+      const wp = withPos && posRule(v.loading, withPos[0]);
+      const reorder = (fn) => { const w = JSON.parse(JSON.stringify(v)); for (const m of ['discharge', 'loading']) w[m].completed = Object.fromEntries(fn(Object.entries(w[m].completed))); return w; };
+      const orders = { 그대로: (e) => e, 거꾸로: (e) => e.slice().reverse(), 시각오름: (e) => e.slice().sort((a, b) => a[1].at - b[1].at), 시각내림: (e) => e.slice().sort((a, b) => b[1].at - a[1].at), HASU먼저: (e) => [...e.filter(([k]) => k === lastCn), ...e.filter(([k]) => k !== lastCn)] };
+      const got = Object.entries(orders).map(([nm, fn]) => { const w = reorder(fn); const c = B.craneBoardOf(w, []).find((x) => x.no === 2) || {}; const f = B.bayViewFollowOf(w, '2호기', null, 'loading'); return { nm, bay: c.bay, row: c.row, tier: c.tier, fb: f.bay, ft: f.tier }; });
+      const wantT = parseInt(wp ? wp.tier : '', 10) >= 80 ? 'deck' : 'hold';
+      ok(`⑬ MCAP 15:05 2호기 — 마지막 완료 ${lastCn}(자리 ${posRule(v.loading, lastCn) ? '있음' : '없음'}) · 자리 있는 마지막 ${withPos && withPos[0]} ${wp && `${wp.bay}-${wp.row}-${wp.tier}`} → 키 순서 다섯 벌 ${got.map((g) => `${g.nm} ${g.bay}-${g.row}-${g.tier}/${g.fb} ${g.ft}`).join(' · ')}`,
+        lastCn === 'HASU4806161' && !posRule(v.loading, lastCn) && withPos && withPos[0] === 'MNBU0522251' && wp.bay === 18
+          && got.every((g) => g.bay === String(wp.bay) && g.row === wp.row && g.tier === wp.tier && g.fb === wp.bay && g.ft === wantT), JSON.stringify(got));
+    }
+    console.warn = warn9;
   }
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);

@@ -38,6 +38,12 @@ const vM = applyCatosPos({ info: { ...F.info, vsl: 'OBWH' }, discharge: { ...emp
 //  M2: 경계 — 같은 자료에서 B 가 29분 전(그림 유지) / 31분 전(표)
 const mkBnd = (min) => applyCatosPos({ info: { ...F.info, vsl: 'OBWH' }, discharge: { ...emptySec(), completed: { [cA]: { at: now - 3 * 3600000, by: '이인철', equip: '1호기' }, [cB]: { at: now - min * 60000, by: '김검수' } }, ediContainers: F.discharge.ediContainers, records: recsM }, loading: emptySec() });
 const vB29 = mkBnd(29), vB31 = mkBnd(31);
+//  P: 4.22-03 감사 보강 — 호기를 찍은 완료(3호기)가 터미널 실적에서 2호기로 세어져 대수 0 으로만 선 줄은 «자리를 모르는 일한 호기» 가 아니다(실측 STMJ 2659E 3호기 꼴).
+//    일한 호기는 터미널 실적의 1·2호기뿐이고 둘 다 자리가 있다 → «호기별 작업 베이» 그대로(묶음으로 바뀌면 두 장이 한 장으로 줄던 자리).
+const [pA, pB] = Object.keys(F.discharge.ediContainers);
+const vP = { info: { ...F.info, vsl: 'OBWH', qcWork: undefined }, discharge: { ...emptySec(), ediContainers: F.discharge.ediContainers, records: F.discharge.records,
+  termWork: { [pA]: { at: now - 6 * 60000, equip: '1호기', pos: '020384' }, [pB]: { at: now - 5 * 60000, equip: '2호기', pos: '140586' } },
+  completed: { [pB]: { at: now - 5 * 60000, by: '김검수', equip: '3호기' } } }, loading: emptySec() };
 
 //  항차 목록 카드 — RZOR R109E 실데이터(작업중·작업시작 10:25 · 동방 호기 합계) · 검수원 접속 없음
 const mkVoy = (key, info, d, l, extra = {}) => ({ key, info, discharge: d, loading: l, _pier: 'PNCT', _berth: info.berth, _etaMs: now - 5 * 3600000, _etdMs: now + 3 * 3600000, _hasData: true, ...extra });
@@ -62,6 +68,7 @@ function App() {
     card('M', 'OBWH_2757E', vM.info, vM),
     card('B29', 'OBWH_2757E', vB29.info, vB29),
     card('B31', 'OBWH_2757E', vB31.info, vB31),
+    card('P', 'OBWH_2757E', vP.info, vP),
     home('R', vR),
     home('S', vS),
     home('W', vW),

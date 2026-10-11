@@ -36,12 +36,21 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(gRows.includes(`합계|${sObw.total}|${sObw.dd}|${sObw.ld}|${sObw.dr}|${sObw.lr}`), `G: 합계 줄이 터미널 값 그대로(${sObw.total}|${sObw.dd}|${sObw.ld}|${sObw.dr}|${sObw.lr})`, JSON.stringify(gRows));
   ok(/앱 입력 마지막 \d+시간 전/.test(T('G')), 'G: 머리에 «앱 입력 마지막 N시간 전 — 멈춘 동안은 터미널 표를 보입니다» 가 있다', T('G').slice(0, 200));
   ok(!/지금 작업 중인 베이/.test(T('G')) && !/베이 0?2 양하/.test(T('G')), 'G: 옛 «지금 작업 중인 베이» 그림은 치워졌다');
+  //  4.22-03 감사(중 1) — 갈래를 원자료로 한 갈래로 못 박는다(3.38 «전부 아니면 전무»). 일한 호기 = 보관소 qcWork 대수 > 0 인 호기 ·
+  //    자리를 아는 호기 = 앱 완료(호기 찍힘)의 실적·맞교환·EDI 자리가 있는 호기 + 접속 검수원의 호기. 일한 호기가 전부 자리를 알면 «호기별 작업 베이», 하나라도 모르면 «지금 작업 중인 베이».
+  const qcNos = Object.values(F.info.qcWork).filter((q) => (q.disDone || 0) + (q.lodDone || 0) > 0).map((q) => parseInt(String(q.qc).slice(-1), 10));
+  const posNos = new Set(Object.entries(F.discharge.completed).filter(([cn]) => { const r = F.discharge.records[cn] || {}, e = F.discharge.ediContainers[cn] || {}; return r.bay_actual || r.bay_assign || e.bay; }).map(([, r]) => parseInt(String(r.equip || ''), 10)).filter((n) => n > 0));
+  const branch = (live) => (qcNos.every((n) => posNos.has(n) || live.includes(n)) ? '호기별 작업 베이' : '지금 작업 중인 베이');
+  const other = (b) => (b === '호기별 작업 베이' ? '지금 작업 중인 베이' : '호기별 작업 베이');
+  const bH = branch([1]), bI = branch([]);   // H 는 1호기 접속 검수원(베이 2) · I 는 접속 검수원 없음
   const h = scn('H');
-  ok(!!h && !h.querySelector('.tbx') && /지금 작업 중인 베이|호기별 작업 베이/.test(T('H')), 'H(같은 자료 + 접속 검수원 있음): 표가 안 서고 베이 그림 칸이 그대로다', T('H').slice(0, 200));
+  ok(!!h && !h.querySelector('.tbx') && T('H').includes(bH) && !T('H').includes(other(bH)), `H(같은 자료 + 접속 검수원 있음): 표가 안 서고 «${bH}» 그림 칸 한 갈래(일한 호기 ${qcNos.join('·')} · 자리 아는 호기 ${[...new Set([...posNos, 1])].join('·')})`, T('H').slice(0, 200));
   const i = scn('I');
-  ok(!!i && !i.querySelector('.tbx') && /지금 작업 중인 베이|호기별 작업 베이/.test(T('I')), 'I(같은 자료, 마지막 앱 완료 5분 전): 표가 안 서고 베이 그림 칸이 그대로다', T('I').slice(0, 200));
+  ok(!!i && !i.querySelector('.tbx') && T('I').includes(bI) && !T('I').includes(other(bI)), `I(같은 자료, 마지막 앱 완료 5분 전): 표가 안 서고 «${bI}» 그림 칸 한 갈래(일한 호기 ${qcNos.join('·')} · 자리 아는 호기 ${[...posNos].join('·')})`, T('I').slice(0, 200));
 
   //  감사(4.05): 호기를 안 고르고 누른 완료도 «앱 입력»이다 — 마지막 입력이 5분 전이면 그림 유지(옛 호기 완료가 3시간 전이어도)
+  //  P: 터미널 실적 1·2호기(둘 다 자리) + 3호기를 찍은 완료 1건(그 컨은 터미널이 2호기로 셌다 → 3호기 대수 0) — 일한 호기는 1·2호기뿐, 전부 자리를 안다 → «호기별 작업 베이»
+  ok(!!scn('P') && T('P').includes('호기별 작업 베이') && !T('P').includes('지금 작업 중인 베이'), 'P(대수 0 으로만 선 3호기 줄): 일한 호기 1·2호기가 전부 자리를 알아 «호기별 작업 베이» 그대로 — 묶음으로 안 바뀐다', T('P').slice(0, 200));
   const m = scn('M');
   ok(!!m && !m.querySelector('.tbx') && !/앱 입력 마지막/.test(T('M')), 'M(1호기 완료 3시간 전 + 호기 안 고른 완료 5분 전): 멈춤이 아니다 — 표도 «앱 입력 마지막» 도 없다', T('M').slice(0, 200));
   const b29 = scn('B29'), b31 = scn('B31');

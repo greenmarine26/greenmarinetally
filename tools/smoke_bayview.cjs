@@ -50,7 +50,8 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!(bv.follow4.bay === 20 && bv.follow4.tier === 'deck' && bv.follow4.no === 4)) fail('따라가기 4호기 ≠ 베이 20 데크: ' + JSON.stringify(bv.follow4));
   if (!(bv.follow2.bay === 8 && bv.follow2.no === 2)) fail('따라가기 2호기 ≠ 베이 8: ' + JSON.stringify(bv.follow2));
   if (bv.followNone.no !== 0 || !bv.followNone.why) fail('호기 없음 갈래가 이유 없이 자리를 정했다: ' + JSON.stringify(bv.followNone));
-  if (bv.followStmj.bay != null || !/실적이 아직 없/.test(bv.followStmj.why)) fail('실적 없는 배가 자리를 지어냈다: ' + JSON.stringify(bv.followStmj));
+  //  4.22-03: 내 호기(1호기)가 정해져 있으면 그 호기 자리만 본다 — STMJ 사본은 완료·터미널 실적·QC 합계가 모두 없어 1호기 줄 자체가 없다 → «1호기 완료가 아직 없습니다 — 손으로 고르세요»(종전 «터미널 실적이 아직 없습니다» · 줄은 있는데 자리를 모르는 «자리를 아직 모릅니다» 갈래가 아니다)
+  if (bv.followStmj.bay != null || !/1호기 완료가 아직 없/.test(bv.followStmj.why)) fail('실적 없는 배가 자리를 지어냈다: ' + JSON.stringify(bv.followStmj));
   // ④ 선택 화면
   if (!doc.querySelector('[data-bayview="pick"]')) fail('선택 화면이 안 떴다: ' + txt().slice(0, 200));
   let t = txt();

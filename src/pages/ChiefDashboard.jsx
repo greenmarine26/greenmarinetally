@@ -2331,15 +2331,21 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     //    양하는 맞게 내려오고 있고 선적도 계획된 선적이면 맞게 보일테이고 검수앱을 사용하면 맞게보이니까요».
     //    호기→베이를 이을 끈이 동방 자료엔 없으므로(적하목록에 pos·equip 없음) 칸을 **호기가 아니라 베이**로 세운다 —
     //    방금 완료된 컨들의 계획 자리를 해치로 묶은 것(utils.boardBaysOf). 호기별 대수는 머리줄에 그대로 둔다.
-    //    ⚠ 게이트는 «동방이냐»가 아니라 «호기 자리가 하나도 없느냐»다(규범 §4-2 — 선박 전용 로직을 앞단에 두지 않는다).
+    //    ⚠ 게이트는 «동방이냐»가 아니라 «자리를 모르는 호기가 하나라도 있느냐»다(규범 §4-2 — 선박 전용 로직을 앞단에 두지 않는다 · 4.22-03 전에는 «호기 자리가 하나도 없느냐»).
     //    ⚠ 호기 자료(QC 합계)가 **아예 없을 때도** 그린다 — 동방 피드는 완료가 먼저 오고 QC 합계가 늦거나 안 올 수 있다
     //      (실측 ATPR 2640E — 양하 EDI 131대·자리 131, qcWork 아직 없음). 그때는 두 칸으로 본다(동방 기본 2갱).
-    const noCranePos = !cranes.some((c) => c.bay && /\d/.test(String(c.bay)));
+    //  ★ 4.22-03 감사(중 1) — **호기별 그림은 일한 호기 줄 전부(QC 합계 줄 포함)에 숫자 베이가 있을 때만**(3.38 «전부 아니면 전무»). 하나라도 없으면 «베이로 묶음».
+    //    4.22-03 부터 앱 완료가 있는 호기는 계획 EDI 자리를 얻지만 QC 합계만 있는 호기는 자리가 비어, «자리가 하나라도 있으면 호기별» 이던 종전 게이트로는
+    //    보관 100척 2173점 중 29점에서 그림이 줄었다(ATPR 2644E 19:47 «양하 28·24» 두 장 → 2호기 24 한 장 + 1호기 «완료 기록이 와야 그림이 뜹니다»).
+    //    «일한» = 대수가 있는 줄(done > 0). 호기를 찍은 완료가 터미널 실적에서 다른 호기로 세어져 대수 0 으로만 선 줄(실측 STMJ 2659E 3호기)은 자리를 모르는 «일한 호기» 가 아니다 —
+    //    그 줄까지 세면 보관 재생 73점이 호기별에서 묶음으로 바뀌고 그중 1점은 1·2호기 두 장(터미널 자리)이 묶음 한 장으로 줄었다.
+    const _hasPos = (c) => !!(c.bay && /\d/.test(String(c.bay)));
+    const notAllCranePos = !cranes.some(_hasPos) || cranes.some((c) => c.done > 0 && !_hasPos(c));
     //  3.30: 펼치면 갱 수만큼 낸다 — 접혀 있을 때만 3칸으로 자른다(종전에는 언제나 3이라 4·5갱이 조용히 빠졌다).
     //  3.30: **총량을 먼저 뽑고 화면에서 자른다.** boardBaysOf 는 정렬 뒤 slice(0, want) 만 하므로
     //    크게 뽑아 뒤에서 자르는 것과 작게 뽑는 것이 같은 배열이다 — 접힘 결과가 3.29 와 한 글자도 안 달라진다.
     const bayCapShut = Math.min(3, Math.max(2, cranes.length));   // 감사: QC 가 한 대만 올라온 시점에도 두 갱을 본다(동방 기본 2갱)
-    const allBays = noCranePos && voyage ? boardBaysOf(voyage, Math.max(2, cranes.length || 2), 30, boardPages) : [];
+    const allBays = notAllCranePos && voyage ? boardBaysOf(voyage, Math.max(2, cranes.length || 2), 30, boardPages) : [];
     const bays = craneOpen ? allBays : allBays.slice(0, bayCapShut);
     const bayMore = allBays.length - bays.length;
     //  ★ 4.05 — 앱 입력이 멈췄는가. 접속 검수원(workers)이 하나라도 있으면 아니다. 마지막 앱 완료 시각은 베이 묶음(lastAt)과 호기(lastAt·«앱 접속»)에서 가장 늦은 것.

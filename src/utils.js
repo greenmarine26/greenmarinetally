@@ -51,7 +51,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.22-02'   // 4.22-02 **출력 센터 탭의 양하 수가 본문(검수 리스트·부제)과 같은 집합 — 양하 EDI 의 컨번호 없는 빈 자리는 양하 대수에 안 든다** — 검수사 2026-10-10 15:58(KBTR 2608E 출력 센터 «↓ 양하 (183) · ↑ 선적 (272)» 인데 부제 «양하 175대») «아까 수정했던 잔재가 남아 있네요». PrintHubModal 의 탭 셈(countMode)이 «POD 비면 평택» 으로 빈 자리 8줄을 세던 것 — 탭은 지금 모드면 본문 수(count), 다른 모드가 양하면 4.20 ptkDischargeUnitsOf 한 벌, 선적은 종전 셈(불변) · 본문 isPtk 폴백(목록 없는 배)도 빈 자리(isSlotEntry)를 먼저 뺀다. 실측(감사 GET 사본 134벌 양하·선적 화면) — 바뀐 것은 양하 탭뿐이고 전부 본문 부제와 같은 수가 됐다(KBTR 2608E 183 → 175 · MCAP 634N 230 → 326 · XTPG 541E 78 → 128 등 15항차), 선적 탭 불변. 전수(«POD 비면 평택» 꼴) — 양하 대수를 세는 자리는 PrintHubModal 두 곳뿐(utils 의 같은 꼴 넷은 통과·타항 판정에서 «비면 건너뜀» 이라 대수 아님). 앞 판 4.22-01.
+export const APP_VERSION = 'TallyOne 4.22-03'   // 4.22-03 **베이뷰 «따라가기» 가 내 호기 자리만 따라간다 — 다른 호기 베이로 넘어가지 않는다(utils.bayViewFollowOf · 완료 컨 자리 읽기 한 벌 utils.completedPosOf — craneBoardOf·boardBaysOf 가 같이 부른다)** — 검수사 2026-10-11 20:13 «오늘 MCAP선적 하는데 베이뷰 자동으로 하다 보면 베이가 자동으로 이동하는것이 자주 생김 22번 하는데 30번 베이로 가거나 44번 베이로 이동되는등 이상한 현상이 여러번 있었습니다». 원인 — craneBoardOf 가 호기 줄의 자리를 records.bay_actual 로만 읽어, 2호기의 가장 늦은 완료가 양하(자리 기록 없음)·터미널 스냅샷 적용(src term)이면 2호기 줄이 자리를 잃고 따라가기가 boardBaysOf(모든 호기의 최근 완료가 몰린 장 — 3호기 30·34 · 4호기 44·38)로 떨어졌다(MCAP 639N 재생 10:30~11:44 22·34·30 널뛰기). 수정 — 호기 줄 자리는 boardBaysOf 와 같은 순서(실적 → 맞교환 → 계획 EDI)로 읽고, 내 호기가 정해져 있는데 그 호기 자리를 못 내면 bay null — 내 호기 줄이 없으면 «N호기 완료가 아직 없습니다 — 손으로 고르세요», 줄은 있는데 자리를 모르면(동방 QC 합계만 · 자리 못 읽은 완료만) «N호기 자리를 아직 모릅니다 — 손으로 고르세요», 다른 호기 줄이 하나도 없으면(일한 호기가 나뿐) «N호기 자리를 아직 몰라 최근 완료가 몰린 장으로»(Fable 판정 보강). 호기 미지정 폴백은 그대로. 감사 보강 — 수석 보드 호기별 그림은 일한 호기 줄 전부에 자리가 있을 때만(하나라도 모르면 베이로 묶음 · 3.38 전부 아니면 전무 · ChiefDashboard), 호기 줄 자리는 자리 있는 기록 중 가장 늦은 것(posAt — 객체 반복 순서에 기대지 않는다), 매뉴얼 두 줄. 회귀 R30.
+// (이전) TallyOne 4.22-02'   // 4.22-02 **출력 센터 탭의 양하 수가 본문(검수 리스트·부제)과 같은 집합 — 양하 EDI 의 컨번호 없는 빈 자리는 양하 대수에 안 든다** — 검수사 2026-10-10 15:58(KBTR 2608E 출력 센터 «↓ 양하 (183) · ↑ 선적 (272)» 인데 부제 «양하 175대») «아까 수정했던 잔재가 남아 있네요». PrintHubModal 의 탭 셈(countMode)이 «POD 비면 평택» 으로 빈 자리 8줄을 세던 것 — 탭은 지금 모드면 본문 수(count), 다른 모드가 양하면 4.20 ptkDischargeUnitsOf 한 벌, 선적은 종전 셈(불변) · 본문 isPtk 폴백(목록 없는 배)도 빈 자리(isSlotEntry)를 먼저 뺀다. 실측(감사 GET 사본 134벌 양하·선적 화면) — 바뀐 것은 양하 탭뿐이고 전부 본문 부제와 같은 수가 됐다(KBTR 2608E 183 → 175 · MCAP 634N 230 → 326 · XTPG 541E 78 → 128 등 15항차), 선적 탭 불변. 전수(«POD 비면 평택» 꼴) — 양하 대수를 세는 자리는 PrintHubModal 두 곳뿐(utils 의 같은 꼴 넷은 통과·타항 판정에서 «비면 건너뜀» 이라 대수 아님). 앞 판 4.22-01.
 // (이전) TallyOne 4.22-01'   // 4.22-01 **양하 데이터 검증이 컨번호 없는 빈 자리(EDI 자리표시)를 «부킹 자리» 로 세지 않는다 — 부킹 자리 채움은 선적에만(utils.bookingFillOfSec 한 줄 · 검증 상자 폴백 같은 규칙)** — 검수사 2026-10-10 12:11 «KBTR 양하인데 갑자기 183이 튀어나온이유는 선적이면 모르겠지만 앵하에 부킹자리가 왜 필요한지?». 실측 KBTR 2608E 양하 EDI(INC PRE) 컨번호 없는 자리 8줄이 검증 상자 «EDI 평택 183 · 📝 부킹 자리 8» · 홈 카드 완성율 분모 183 을 만들었다 → 175 · 부킹 줄 없음. 이어 검수사 12:19 «선적도 사실은 전부 매칭만 되면 부킹자리가 필요 없습니다.» · «부킹자리는 저희에게 필요 한게 아니고 터미널 플래너가 필요 한것입니다.» — 선적 검증 상자의 📝 부킹 줄은 빈 자리가 남았을 때만(«아직 N자리가 비었습니다(리스트 대기)»), 리스트가 다 채우면 줄 없음(«채움» 글 삭제). 자리를 실번호가 채우는 셈(3.26)·선적 대수(SWBT 2614N 316 = 316 = 316)·자리 그림(베이플랜 📝 대기)·4.20 평택 양하분·마감텔리·4.22 대조는 불변. 앞 판 4.22.
 // (이전) TallyOne 4.22'   // 4.22 **주의 박스 «자료별 대조» — EDI·세관·선사 리스트(선사 요구 메일 포함)·완료·터미널 실적·터미널 배정 수량을 한꺼번에 맞춰 어느 한쪽에만 있는 컨을 묶음별로 컨번호·규격·선사·출발항→도착항·자리와 함께 보인다** — 검수사 2026-10-10 07:52 «4개의 컨테이너가 무었인지 앱에 알림표기를 해주세요 부족한건 앱에서 보여주면서 넘치는건 안보여줌» · 07:53 «넘치거나 부족한거나 둘다 앱에 알림표기를 해야 주의 깊게 볼수있습니다. 컨넘버와 관련선사 표기 출발 항구등» · 08:08 «EDI와 선사요구메일 세관 터미널 등이 다 적용되어야 합니다. 자료없음, 어느쪽에 라도 있으면 표기를 알림표기 박스에 보여주세요 그리고 어느정도 갯수가 넘으면 몇개외 몇건이라고 표기만 하고 나머지는 보여주지 않습니다. 나머지도 보고자 하면 볼수 있어야 합니다». 대조는 sourceRecon.reconcileSources 한 벌(EDI 는 원문 POD · 세관 _customs · 선사 iso_carrier·비세관 파일 행·선사 메일 지정 · 앱 대수는 4.20 평택 양하분 한 벌), 진단 source_recon 경고(양하만)로 주의 박스에 뜬다. 터미널 수량은 둘 — 배정표(info.planDis · 도선)와 본선현황(info.qcWork 호기 합계 완료+잔여, 검수사 09:30 KKLC 2609N 캡처 QC101 73 + QC103 66 = 139) — 차이는 배정표로, 없으면 본선현황으로 잰다. 수량뿐이라 묶음으로 설명 못 하는 차이는 «번호 없음 N대 — 배정표는 수량뿐, 작업이 시작되면 실적으로 번호가 잡힐 수 있음». 패널의 잘린 목록은 감사 반영으로 전부 TruncList(«… 외 N건 — 나머지 보기» · «접기» — 자료별 대조 · 리스트 부족 · EDI 밖 · 취소 요청 · 엠티 실 · 규격 미지 · 리퍼·DG · 풀/엠티 · 규격 다름 · 실번호 · IMDG · 클래스 8 · X-RAY), 진단 details 도 자르지 않는다. 감사 «하» → Fable 판정 반영 — 세관 목록이 있는 배의 «선사 ✗» 는 어긋남 아님(선사 리스트는 «선사 리스트·메일에만» 의 근거로만 · 세관보다 절반 미만이면 머리줄 «선사 리스트 일부 18/237» 한 토막 — 보관 10항차 1,092대 오경보 제거, OBWH 2761E 219 → 0) · 사람이 확정한 평택 아닌 POD 는 «POD 확정 — 평택 아님(참고)» 로 따로(총수·음성 밖) · «세관(·선사) 목록에만 — EDI 없음» 으로 넓힘(DXQD 2637E 6대가 기타로 가던 것) · 기타 묶음 키에서 완료·실적 뺌 · 리스트 부족·EDI 밖과 같은 수면 대조 음성은 한 번만 · 음성 서명 수는 «완료·실적에만» 을 뺀 수 · ⚠ 목적지 확인 컨이 있으면 EDI 밖 목록을 접지 않음. 세관 검수 결과 코드표(data/customsCodes.js — 검수사 09:34 원문 12개) 한 벌로 조건마다 해당 알림 머리에 표기(검수사 09:37 «KKLC같은건 MFN대상으로 알림을 해주고 실오류 SLN 등 여러 조건이 발생될때 마다 해당하는 알림에 표기해주세요» — 뜻은 표에서만 가져온다) — «EDI 평택인데 세관 밖» «MFN 대상 — 화물있으나 적하목록 없음» · «세관(·선사) 목록에만» 중 완료·실적 없는 컨 «MGN 대상 — 적하목록있으나 화물없음(완료·실적 없음)» · 실번호 다름 «SLN — 봉인번호 다름» · EDI 번호 대기 자리 «(세관 코드 CNN 후보)» · 리스트 번호 오타 짝(utils.listTypoTwins 한 벌 — VoyagePage 가 진단에 넘김) 새 정보 알림 cn_typo «(세관 코드 CND 후보)» 와 리스트 업로드 상태 줄의 «✂ 번호 오타» 에도 CND · 경고가 하나도 없으면 주의 박스 자리에 «✓ 자료 점검 — 이상없음 (세관 코드 OKY)» 한 줄(재감사 — 비교한 리스트·세관 행이 0 이면 OKY 대신 «자료 점검 — 비교할 리스트 없음», NSFR 2619N 선적 EDI 104 · records 0 꼴 · diagnostics.diagListRowCount) · MGN 은 작업이 시작됐거나 끝난 항차(workStartAt · 터미널 상태 working·departed 등 · 완료·실적 하나라도)에서만. SLW(봉인번호 파손)는 앱에 그 조건의 알림·목록이 없어 표에만(데미지 입력의 SEAL·BROKEN 조합 · 리씰 칸은 «없거나 손상» 이라 지어 붙이지 않음). 실자료 — KBTR 2608E «터미널 배정 179 · 앱 175 (-4) · 번호 없음 4대» · KKLC 2609N(라이브 배정 139 · 본선현황 139) «EDI 평택인데 세관 밖 20대 (세관 코드 MFN 후보)» · MCAP 639N «선사 리스트·메일에만 5대(EDI 통과 · 선사 메일 STOWAGE INSTRUCTION)» · TMPZ 2034E «선사 리스트에만 12대» · MCSC 633N «완료·실적에만 1대(시프팅 94대는 시프팅 줄)» · XTPG 541E «배정 78 · 앱 128 (+50) · 후보 50».
 // (이전) TallyOne 4.21'   // 4.21 **마감적용이 RZOR 수석 마감텔리의 STOWAGE PLAN(xlsx)도 받는다** — 검수사 2026-10-10 05:31 «RZOR 마감적용에서 EDI대신에 위 파일로 되어 있습니다. 앱은 EDI만 받게 되어 있어서 적용이 되지 않습니다» · 05:32 «마감적용이라 는것 동방의 자료가 맞지 않아서 수기로 입력된 자료로 마감함 수석의 텔리에 있는 자료로 마감을 하기 위한것입니다». 소유자 메뉴 마감적용 카드의 파일 칸이 xlsx 를 받아 항차 업로드와 같은 파서(rzorPlan.parseCheckerPlanWorkbook)로 읽고 행은 rzorPlan.deckPlanRows(덱_줄_칸 — deckCoordMap 과 같은 한 벌). 판정은 loadingEdiExport.closingEdiPlan 한 벌에 덱 갈래(fmt deck — 자리 비교만 덱플랜 좌표 · 수석 플랜 자리가 검수원 지정 자리도 이김(감사 뒤 Fable 판정) · 다른 항차 플랜 거절 · 파일에만 있는 제작컨은 madeOnly). 쓰기(firebase.applyClosingEdiFile)는 완료 확정·채움 그대로 + 자리는 loading/stowagePlan 을 그 플랜으로 update(낡은 지정 핀만 지움 · _src closing) + 바뀐 컨 records moves 한 줄 + 제작컨 리스트 행과 완료(§7.8-⑦ 대수에 넣음 · 마감텔리 선적 모집단에도 · 크기는 플랜 칸). RZOR R111E 실자료 — 전 파일 거부 · 후 확정 215 · 덱플랜 216 · SAWTBP004 추가 · 선적 215→216. 베이 갈래(PTK.EDI)는 그대로.
@@ -87,7 +88,7 @@ export const APP_VERSION = 'TallyOne 4.22-02'   // 4.22-02 **출력 센터 탭�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.22-02 출력 센터 탭의 양하 수가 검수 리스트와 같은 수입니다. 컨번호 없는 빈 자리는 양하 대수에 들지 않습니다.'
+export const APP_NOTE = '4.22-03 베이뷰 따라가기가 내 호기 자리만 따라갑니다. 다른 호기 베이로 넘어가지 않습니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -7372,11 +7373,32 @@ export function craneBaysByTime(voyage, craneNos = null) {
   return out;
 }
 
+//  ★ 4.22-03 — **완료 컨의 자리 읽기 한 벌**(craneBoardOf 호기 줄 · boardBaysOf 베이 묶음이 같이 부른다).
+//    검수사 2026-10-11 MCAP 639N «22번 하는데 30번 베이로 가거나 44번 베이로 이동» — craneBoardOf 는 `bay_actual` 만, boardBaysOf 는
+//    실적 → 맞교환 → 계획 순으로 읽어 같은 저장소에 규칙이 두 벌이었다. 양하 완료·터미널 스냅샷 적용(src term)처럼 실적 자리가 없는 완료가
+//    호기의 마지막이면 호기 줄이 자리를 잃었다. 순위는 그림(`boardContainers`)과 같다 — 실적 `bay_actual` → 맞교환 `bay_assign`(3.13) → 계획 EDI(그 모드 ediContainers).
+//    임시창고(`__STG__`)·자리를 내준 컨(planTaken)은 격자에 없으므로 gone. bay 는 원문 그대로(trim) — 못 찾으면 ''.
+//    반환 { gone, bay, row, tier }
+export function completedPosOf(sec, cn, recs = null) {
+  const rec = ((recs || (sec && sec.records) || {})[cn]) || {};
+  if (String(rec.bay_actual || '').startsWith('__') || rec.planTaken) return { gone: true, bay: '', row: '', tier: '' };
+  const e = ((sec && sec.ediContainers) || {})[cn] || {};
+  const hasA = rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null;
+  const hasG = !hasA && rec.bay_assign && !String(rec.bay_assign).startsWith('__');
+  return {
+    gone: false,
+    bay: String(hasA ? rec.bay_actual : hasG ? rec.bay_assign : (e.bay || '')).trim(),
+    row: String((hasA ? rec.row_actual : hasG ? rec.row_assign : e.row) ?? '').trim(),
+    tier: String((hasA ? rec.tier_actual : hasG ? rec.tier_assign : e.tier) ?? '').trim(),
+  };
+}
+
 export function craneBoardOf(voyage, workers = [], recordsByMode = null) {
   const info = (voyage && voyage.info) || {};
   const rows = {};
   let termHasEquip = false;   // 감사: 터미널 피드에 컨별 호기가 있는가 — 없으면(동방) QC 합계가 호기별 정본(3.8 crewWorkStats 와 같은 갈림)
-  const row = (no) => rows[no] || (rows[no] = { no, name: '', nameAt: 0, mode: '', bay: '', row: '', tier: '', cn: '', done: 0, dis: 0, lod: 0, lastAt: 0, src: '', qc: false });
+  //  4.22-03 감사(하 1): posAt — 지금 자리(bay·row·tier)를 준 기록의 시각. 자리는 «자리 있는 기록 중 가장 늦은 것»으로만 바꾼다(객체 반복 순서에 기대지 않는다). 내보내기 전에 지운다.
+  const row = (no) => rows[no] || (rows[no] = { no, name: '', nameAt: 0, posAt: 0, mode: '', bay: '', row: '', tier: '', cn: '', done: 0, dis: 0, lod: 0, lastAt: 0, src: '', qc: false });
   for (const mode of ['discharge', 'loading']) {
     const sec = (voyage && voyage[mode]) || {};
     const seen = new Set();
@@ -7385,10 +7407,9 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null) {
       const no = crewCraneNo(r.equip); if (!no) continue;
       termHasEquip = true;
       const c = row(no); c.done++; c[mode === 'loading' ? 'lod' : 'dis']++; seen.add(cn);
-      if (r.at > c.lastAt) {
-        const p = parseCatosPos(r.pos);
-        Object.assign(c, { lastAt: r.at, mode, cn, src: 'term', bay: p ? p.bay : c.bay, row: p ? p.row : c.row, tier: p ? p.tier : c.tier });
-      }
+      if (r.at > c.lastAt) Object.assign(c, { lastAt: r.at, mode, cn, src: 'term' });
+      const p = parseCatosPos(r.pos);
+      if (p && r.at > c.posAt) Object.assign(c, { posAt: r.at, bay: p.bay, row: p.row, tier: p.tier });
     }
     const recs = (recordsByMode && recordsByMode[mode]) || sec.records || {};
     for (const [cn, r] of Object.entries(sec.completed || {})) {
@@ -7399,10 +7420,13 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null) {
       if (by && !isTermApplied(r) && r.at >= c.nameAt) { c.name = by; c.nameAt = r.at; }   // 가장 늦게 찍은 사람(3.16: 터미널 반영은 사람이 아니다)
       if (seen.has(cn)) continue;
       c.done++; c[mode === 'loading' ? 'lod' : 'dis']++;
-      if (r.at > c.lastAt) {
-        const rec = recs[cn] || {};
-        Object.assign(c, { lastAt: r.at, mode, cn, src: 'app', bay: String(rec.bay_actual || c.bay || ''), row: String(rec.row_actual || c.row || ''), tier: String(rec.tier_actual || c.tier || '') });
-      }
+      if (r.at > c.lastAt) Object.assign(c, { lastAt: r.at, mode, cn, src: 'app' });   // 시각·모드·컨은 가장 늦은 완료
+      //  4.22-03: 자리는 boardBaysOf 와 같은 한 벌(completedPosOf — 실적 → 맞교환 → 계획 EDI). 셋 다 없으면(창고·자리 내줌 포함) 자리를 바꾸지 않는다 —
+      //    남는 자리는 «자리 있는 기록 중 가장 늦은 것»(posAt)이다(감사 하 1 — MCAP 15:05 HASU4806161 자리 없음 → 키 순서에 따라 18 또는 22 가 남던 것).
+      //    베이 모양은 이 줄의 다른 출처(parseCatosPos · bay_actual)와 같게 앞 0 없이 — EDI 는 '02' 로 온다.
+      const p = completedPosOf(sec, cn, recs);
+      const n = p.gone ? 0 : parseInt(p.bay, 10);
+      if (n > 0 && r.at > c.posAt) Object.assign(c, { posAt: r.at, bay: String(n), row: p.row, tier: p.tier });
     }
   }
   for (const w of workers || []) {
@@ -7432,7 +7456,7 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null) {
     } catch (e) { console.warn('[3.38] 시각으로 호기·베이 잇기 실패', e); }
   }
   const out = Object.values(rows).sort((a, b) => a.no - b.no);
-  for (const c of out) { if (!c.name) c.name = crewNameAt(info, c.lastAt || Date.now(), `${c.no}호기`); delete c.nameAt; }
+  for (const c of out) { if (!c.name) c.name = crewNameAt(info, c.lastAt || Date.now(), `${c.no}호기`); delete c.nameAt; delete c.posAt; }
   return out;
 }
 
@@ -7457,16 +7481,13 @@ export function boardBaysOf(voyage, want = 2, winMin = 30, pages = null) {
   let _noPos = 0;   // 3.20-05: 자리를 못 찾은 완료 — 조용히 버리지 않는다(규범 §4-3)
   for (const mode of ['discharge', 'loading']) {
     const sec = (voyage && voyage[mode]) || {};
-    const edi = sec.ediContainers || {};
-    const recs = sec.records || {};
     for (const [cn, r] of Object.entries(sec.completed || {})) {
       const at = Number(r && r.at) || 0; if (!at) continue;
-      const rec = recs[cn] || {};
+      //  4.22-03: 자리 읽기는 craneBoardOf 와 한 벌(completedPosOf).
       //  임시창고(`__STG__`)·자리를 내준 컨은 그림(`boardContainers`)에서도 격자에서 빠진다 — 세는 쪽도 같이 뺀다.
-      if (String(rec.bay_actual || '').startsWith('__') || rec.planTaken) continue;
-      const hasA = rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null;
-      const hasG = !hasA && rec.bay_assign && !String(rec.bay_assign).startsWith('__');
-      const raw = String(hasA ? rec.bay_actual : hasG ? rec.bay_assign : ((edi[cn] && edi[cn].bay) || '')).trim();
+      const pos = completedPosOf(sec, cn);
+      if (pos.gone) continue;
+      const raw = pos.bay;
       //  ⚠ 3.20-05: 자리를 못 찾은 완료는 베이 셈에서 빠진다 — **조용히 빠지지 않게 센다**(규범 §4-3).
       //    3.20-05 로 리스트 밖 실적(시프팅·통과화물)에 자리 행을 안 만들면서, 그런 컨은 여기서
       //    계획도 실적도 없어 탈락한다. 3.15 가 «계획 자리 못 찾은 완료 0/470» 을 쟀던 것과 같은 셈이다.
@@ -7573,11 +7594,17 @@ export function bayViewOverlayOf(sec) {
 //  ★ 3.48 «베이뷰 작업» — **따라가기: 터미널이 고른 베이.** 검수사 «사용자가 선택을 안한다면 자동모드로 터미널이 선택한 베이로».
 //    수석 보드와 **같은 함수** `craneBoardOf` 한 벌(규범 §4-4) — PCTC 는 컨별 호기(카토스)라 즉시, 동방은 두 호기가 같은 시각 다른 장에 찍힌
 //    마지막 바구니(3.47-02 craneBaysByTime)라 실측 10분 안팎 늦는다(2026-09-15 DXQD 09:30 판정 · 09:40 실적은 이미 04번 베이).
-//    내 호기 자리가 없으면 `boardBaysOf`(최근 완료가 몰린 장)로, 그것도 없으면 bay null — 선택 화면이 손으로 고르게 한다(조용히 아무 데나 찍지 않는다).
+//    ★ 4.22-03 — **내 호기가 정해져 있으면 내 호기만 따라간다.** 내 호기 완료가 아직 없으면 bay null — 선택 화면이 손으로 고르게 한다(다른 호기 자리로 떨어지지 않는다).
+//      검수사 2026-10-11 MCAP 639N «22번 하는데 30번 베이로 가거나 44번 베이로 이동» — 종전엔 내 호기 자리가 없으면 `boardBaysOf`(모든 호기의 최근 완료가 몰린 장)로 떨어져
+//      3호기·4호기 베이로 널뛰었다. 호기가 정해지지 않았을 때만 `boardBaysOf` 로, 그것도 없으면 bay null(조용히 아무 데나 찍지 않는다).
+//      Fable 판정(4.22-03 보강) — 내 호기 자리를 못 낼 때 문구를 가른다. 내 호기 줄이 아예 없으면(완료·QC 합계 모두 0) «완료가 아직 없습니다»,
+//      줄은 있는데 숫자 베이가 없으면(동방 QC 합계만 있는 줄 · 자리를 못 읽은 완료만) «자리를 아직 모릅니다» — 터미널 대수가 있는데 «완료가 없다»고 말하지 않는다.
+//      그 줄 밖에 다른 호기 줄이 하나도 없으면(이 항차에서 일한 호기가 나뿐) 최근 완료가 다른 호기 것일 수 없으니 `boardBaysOf` 로 떨어진다(no 는 내 호기).
 //    반환 { bay, tier:'deck'|'hold'|null, mode, at, src, no, why, cranes:[{no,bay,tier,mode,at,src}] }
 export function bayViewFollowOf(voyage, equipNo, pages = null, screenMode = '') {
   const cranes = [];
-  for (const c of craneBoardOf(voyage, [])) {
+  const rows = craneBoardOf(voyage, []);
+  for (const c of rows) {
     const m = String(c.bay || '').match(/\d+/); if (!m) continue;
     const t = parseInt(c.tier, 10);
     cranes.push({ no: c.no, bay: parseInt(m[0], 10), tier: Number.isFinite(t) ? (t >= 80 ? 'deck' : 'hold') : null, mode: c.mode || '', at: c.lastAt || 0, src: c.src || '' });
@@ -7589,10 +7616,18 @@ export function bayViewFollowOf(voyage, equipNo, pages = null, screenMode = '') 
     const why = (screenMode && mine.mode && mine.mode !== screenMode) ? `${mine.no}호기는 지금 ${mine.mode === 'loading' ? '선적' : '양하'} 중입니다 — 이 화면은 ${screenMode === 'loading' ? '선적' : '양하'}` : '';
     return { ...mine, why, cranes };
   }
+  if (no) {
+    const myRow = rows.some((c) => c.no === no);
+    if (myRow && !rows.some((c) => c.no !== no)) {
+      const bb1 = boardBaysOf(voyage, 1, 30, pages);
+      if (bb1.length) return { no, bay: parseInt(bb1[0].bay, 10), tier: null, mode: bb1[0].mode, at: bb1[0].lastAt, src: 'recent', cranes, why: `${no}호기 자리를 아직 몰라 최근 완료가 몰린 장으로` };
+    }
+    return { no, bay: null, tier: null, mode: '', at: 0, src: '', cranes, why: myRow ? `${no}호기 자리를 아직 모릅니다 — 손으로 고르세요` : `${no}호기 완료가 아직 없습니다 — 손으로 고르세요` };
+  }
   const bb = boardBaysOf(voyage, 1, 30, pages);
   if (bb.length) {
     return { no: 0, bay: parseInt(bb[0].bay, 10), tier: null, mode: bb[0].mode, at: bb[0].lastAt, src: 'recent', cranes,
-      why: no ? `${no}호기 자리가 아직 안 와 최근 완료가 몰린 장으로` : '호기가 정해지지 않아 최근 완료가 몰린 장으로' };
+      why: '호기가 정해지지 않아 최근 완료가 몰린 장으로' };
   }
   return { no: 0, bay: null, tier: null, mode: '', at: 0, src: '', cranes, why: cranes.length ? `${no || '?'}호기 자리가 아직 없습니다` : '터미널 실적이 아직 없습니다 — 손으로 고르세요' };
 }
