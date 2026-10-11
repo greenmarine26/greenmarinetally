@@ -34,6 +34,7 @@ import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSe
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';
+import DamageHistoryCard, { damageHistoryQueryOf } from './DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(통합검색 화면과 공용)
 
 //  ★ 4.07 — 시트 위쪽 가장자리에 두 발로 서 있는 미르(전신 사진). 장식이라 파일을 못 받으면 조용히 안 보일 뿐이다.
 //  기분이 바뀌면 자세가 바뀌고(key=src 로 새로 그려 통통 나타남), 여러 자세가 있는 기분은 시트를 열 때마다 하나를 고른다(seed).
@@ -56,6 +57,9 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const [asked, setAsked] = useState('');   // 3.41-01: 방금 물은 말 — 칸은 비우고 이것을 답 위에 남긴다
   const [out, setOut] = useState('');
   const [follow, setFollow] = useState(null);   // 3.68: 답 뒤 한 마디 {line, chips, confirm} — 칩을 누르면 그 말을 그대로 묻는다
+  //  ★ 4.22-04 — 데미지 이력 질문(«SPSU2041959 데미지»·«8월 17일 데미지»·«데미지 기록»)이면 엔진 답 아래에 데미지 이력 카드(보관 포함 · 📷 사진)를 같이 그린다(통합검색 화면과 같은 꼴).
+  //    작업 시작 탭의 통합 검색 창을 빼면서 검수원이 잃을 뻔한 것(Fable 판정 — 2.36 «누구는 안다고 하고 누구는 모른다고 하면 안되니까요»). 카드가 그려질 때만 색인을 한 번 읽는다.
+  const [dmg, setDmg] = useState({ q: null, n: 0 });   // q = damageHistoryQueryOf 결과 · n = 질문 번호(카드를 질문마다 새로 그려 못 읽은 색인을 다시 읽게)
   const [busy, setBusy] = useState(false);
   const heroSeed = useMemo(() => Math.floor(Math.random() * 1000), [open]);   // 4.07: 시트를 열 때마다 전신 자세를 하나 고른다(열려 있는 동안은 그대로)
   const [listening, setListening] = useState(false);
@@ -135,6 +139,8 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     //  3.68: 한 글자(«응»)는 대화 중일 때만 받는다 — 문지기는 데이터가 들어오는 자리(§4-4)
     if (!t || (t.length < 2 && !mirThreadAlive({ voyageKey: (readMirCtx() || {}).voyageKey || '', inspector }))) return;
     setBusy(true); setOut('…'); setAsked(t); setQ(''); setFollow(null);   // 3.41-01: 칸은 비우고 물은 말은 위에 남긴다
+    const dq = damageHistoryQueryOf(t, parseNaturalQuery(t));   // 4.22-04: 통합검색 화면과 같은 판정 한 벌
+    setDmg((d) => ({ q: dq, n: d.n + 1 }));
     noteMirAsk();                                           // 3.56: 시키는 일이 있었다 — 심심함 시계를 되감는다
     try { stopSpeak(); } catch (e) { /* */ }              // 3.41-01: 쌓인 발화를 끊는다 — 새 답이 옛 말 뒤에 줄 서지 않게
     try {
@@ -191,14 +197,17 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       }
       let a = null, fo = null, r = null;   // 3.69-01: r 을 밖으로 — 야드 답 판정(_yardA)이 try 밖에서 본다
       try {
-        r = await askMir(t, ctx, (cq, trace) => answerOneRaw(cq, { ...ctx, _trace: trace }), { who: inspector || '' });
+        //  4.22-04: 데미지 이력 카드가 같이 뜨는 질문은 모델(Gemini)을 부르지 않는다 — 엔진 답(answerOneRaw)만, 통합검색 화면처럼(«데미지 있어?» 의 이 항차 답은 그대로 · 감사 중 1).
+        if (dq) { const tr = {}; r = { text: answerOneRaw(t, { ...ctx, _trace: tr }), via: 'rules', weak: false, trace: tr }; }
+        else r = await askMir(t, ctx, (cq, trace) => answerOneRaw(cq, { ...ctx, _trace: trace }), { who: inspector || '' });
         a = (r && r.text != null) ? mirTone(r.text) : null;
         //  3.68 [mirThread]: 접수된 말 하나에 한 번 기록 — 답이 정해진 뒤(규칙이면 그 길 trace.via, 모델이면 r.via). 한 마디 {line, chips, confirm} 를 받는다.
         try { fo = mirThreadCommit(t, r && r.text != null ? r.text : null, (r && r.via === 'rules') ? ((r.trace && r.trace.via) || '') : ((r && r.via) || ''), ctx); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
       } catch (e) { console.warn('[미르] 답 실패:', e); a = null; }
       const vk = useLive ? lv.voyageKey : (sc && sc.key) || null;
       try { applySideEffects(parseNaturalQuery(t), vk, useLive ? lv.voyage : (sc && sc.v), t); } catch (e) { /* */ }
-      if (!a) {
+      if (!a && dq) a = '';   // 4.22-04: 엔진 답이 없어도 카드가 답한다 — «못 배웠어요»·무응답 신고를 하지 않는다(통합검색 화면 _mirDontKnow 의 !dmgQ 와 같은 뜻)
+      if (!a && !dq) {
         a = '그건 아직 못 배웠어요 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.';
         mirMoodEvent('missed', `«${t}» 못 배웠어요`);   // 3.56: 슬픔 — 답을 못 줬다
         if (!reportedRef.current.has(t) && /[가-힣]{2,}/.test(t)) {
@@ -274,10 +283,10 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
             <button type="button" onClick={() => { try { stopSpeak(); const plain = String(lastRef.current || out || '').replace(CLEAN_RE, ' '); if (plain) speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* */ } }} className="w-11 rounded border border-line bg-ink-800 text-dim-100" aria-label="다시 읽어 주기">🔊</button>
             <button type="button" onClick={() => ask(q)} disabled={busy} className="px-3 rounded bg-amber-500 text-[#1a1206] font-black text-sm disabled:opacity-60">질문</button>
           </div>
-          {out && (
+          {(out || dmg.q) && (
             <div className="mt-2 p-2.5 rounded bg-ink-950 select-text">
               {asked && <div className="text-2xs text-dim-300 mb-1 truncate">🗨 {asked}</div>}
-              <div className="text-[15px] leading-relaxed font-semibold text-white whitespace-pre-line">{out}</div>
+              {out && <div className="text-[15px] leading-relaxed font-semibold text-white whitespace-pre-line">{out}</div>}
               {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 묻는다). 끝은 검수사가(«됐어»·«고마워»). */}
               {follow && !busy && (
                 <div className="mt-2 pt-2 border-t border-line/60" data-mir-follow="1">
@@ -291,6 +300,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
                   )}
                 </div>
               )}
+              {dmg.q && <div className="mt-2"><DamageHistoryCard key={dmg.n} dmgQ={dmg.q} /></div>}   {/* 4.22-04: 엔진 답·한 마디 아래 — 데미지 이력 카드(보관 포함 · 📷 사진) */}
             </div>
           )}
           </div>

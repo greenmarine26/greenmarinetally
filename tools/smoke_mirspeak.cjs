@@ -313,7 +313,10 @@ const ask = (q) => {
   T(/submitNow\(/.test(gsp) && /slice\(0,\s*30\)/.test(gsp), 'GlobalSearchPage 버튼 제출·카드 상한 30 이 없다 (2.55-01 부작용·쏟기)');
   T(/아직 못 배웠/.test(gsp), 'GlobalSearchPage 무응답 신고가 «못 배웠습니다» 를 안 잡는다 — 반복 학습 관이 끊긴다');
   T(/asking === 'how'/.test(one) && /answerHowCore/.test(one), '한 벌 엔진에 how 갈래 본체 배선(answerHowCore)이 없다 — 질문에 카드만 쏟아진다 (2.59-01 사고)');
-  T(/parsed\.asking\)\s*\?\s*null\s*:\s*parseDamageHistoryQuery/.test(gsp.replace(/\(parsed && parsed\.asking\)/,'parsed.asking)')), 'GlobalSearchPage 데미지 이력 카드에 갈래 게이트가 없다 — 방법 질문에 이력이 뜬다');
+  //  4.22-04: 데미지 이력 판정·카드는 components/DamageHistoryCard 한 벌 — 게이트는 거기, 두 입구(통합검색 화면·떠 있는 미르)는 그 판정을 부른다.
+  const dhc = read('src/components/DamageHistoryCard.jsx');
+  T(/parsed\.asking\)\s*\?\s*null\s*:\s*parseDamageHistoryQuery/.test(dhc.replace(/\(parsed && parsed\.asking\)/,'parsed.asking)')), '데미지 이력 판정(damageHistoryQueryOf)에 갈래 게이트가 없다 — 방법 질문에 이력이 뜬다');
+  T(/damageHistoryQueryOf\(debouncedQuery, parsed\)/.test(gsp) && /damageHistoryQueryOf\(t, parseNaturalQuery\(t\)\)/.test(read('src/components/MirFab.jsx')), 'GlobalSearchPage·MirFab 가 데미지 이력 판정 한 벌(damageHistoryQueryOf)을 안 부른다');
   const vp = read('src/pages/VoyagePage.jsx');
   T(/mirTone/.test(vp), 'VoyagePage 에 말투 겹(mirTone)이 없다');
   T(/search\s*&&\s*!isSentenceQuery\(search\)/.test(vp), 'VoyagePage 문장 입력 중 목록 전량 렌더 게이트가 없다 (화법 규칙 1)');

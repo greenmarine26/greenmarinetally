@@ -622,7 +622,10 @@ export function parseNaturalQuery(text) {
                   && !result.tierStackQuery && !result.progressQuery && !result.bottomQuery
                   && !result.topQuery && !result.weightSum && !result.dupL4Query
                   && !result.shiftingQuery && !result.tierPlaceCountQuery && !result.tierInContextQuery;
-  if (!result.digits && (_strong.test(t) || (_weak.test(t) && _noCond))) {
+  //  4.22-04 (감사 하 5 — 작업 시작 탭의 통합 검색 창을 뺀 판): «통합 검색 창이 없어졌어»·«버튼이 사라졌어» — 화면 요소가 없어졌다는 말도
+  //    그 기능이 어디 갔느냐는 물음이다. 약한 신호와 같이 컨 조건이 없을 때만 받는다(별칭만으로는 기능 색인까지 못 갔다 — «못 배웠어요» 로 샜다).
+  const _gone = /(?:검색\s*창|조회\s*창|입력\s*창|통합\s*검색|버튼|단추|메뉴|탭)\s*(?:이|가|은|는)?\s*(?:없어졌|사라졌|안\s*보(?:여|이))/;
+  if (!result.digits && (_strong.test(t) || ((_weak.test(t) || _gone.test(t)) && _noCond))) {
     result.howToQuery = true;
   }
   // 1.69: **뜻 질문은 용어집이 먼저다.** "리퍼가 뭐예요"의 '리퍼'가 컨 조건으로 잡혀

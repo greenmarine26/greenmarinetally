@@ -6,7 +6,8 @@ import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer } from '../utils.js';   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
-import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
+import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';   // 1.89·1.92·1.97 (2.03 데미지 색인은 DamageHistoryCard 가 읽는다)
+import DamageHistoryCard, { damageHistoryQueryOf } from '../components/DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(떠 있는 미르와 공용)
 import { mirTone, mirSmallTalk, YARD_SPEAK } from '../mir.js';
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
@@ -16,7 +17,7 @@ import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import MirFace from '../components/MirFace.jsx';   // 4.07: 실사 미르 얼굴(작은 정지 아바타) — 2.33 부터 쓰던 그림 아바타를 바꿨다
-import { fbGetDamagePhoto, fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
+import { fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.06: 무응답 자동 신고 (2.03 데미지 사진 단건은 DamageHistoryCard 로 갔다)
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
@@ -25,37 +26,7 @@ import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: �
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-// 2.03 (검수사 확정 «SPSU2041959 혹시 17일날 데미지 잡힌게 있었을까요? 가끔 이런 메시지가 옵니다» ·
-//   «쉽게 미르에게 8월 17일에 발생한 데미지건 알려줘 하면 보여줄수 있게»):
-//   데미지 이력 질의 — 컨번호(전체) 또는 날짜(8월 17일 / 17일)와 «데미지» 가 같이 오면 색인을 뒤진다.
-export function parseDamageHistoryQuery(q) {
-  const t = String(q || '');
-  if (!/데미지|damage|손상/i.test(t)) return null;
-  const cnM = t.toUpperCase().replace(/\s/g, '').match(/[A-Z]{4}\d{7}/);
-  let day = null;
-  let m = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
-  if (m) day = { mo: parseInt(m[1], 10), d: parseInt(m[2], 10) };
-  else { m = t.match(/(\d{1,2})\s*일/); if (m) day = { mo: null, d: parseInt(m[1], 10) }; }
-  if (!cnM && !day) return { recent: true };   // «데미지 기록/데미지건» — 최근 전부
-  return { cn: cnM ? cnM[0] : null, day };
-}
-export function filterDamageHits(damageIndex, dq, now = new Date()) {
-  const rows = [];
-  Object.values(damageIndex || {}).forEach((m) => Object.values(m || {}).forEach((e) => { if (e && e.ts) rows.push(e); }));
-  rows.sort((a, b) => b.ts - a.ts);
-  if (!dq) return [];
-  if (dq.recent) return rows.slice(0, 20);
-  return rows.filter((e) => {
-    if (dq.cn && String(e.cn).toUpperCase() !== dq.cn) return false;
-    if (dq.day) {
-      const d = new Date(e.ts);
-      if (d.getDate() !== dq.day.d) return false;
-      if (dq.day.mo != null && (d.getMonth() + 1) !== dq.day.mo) return false;
-      if (dq.day.mo == null && (now - d) > 62 * 86400000) return false;   // 월 없이 «17일» = 최근 두 달 안
-    }
-    return true;
-  });
-}
+// 2.03 데미지 이력 판정(parseDamageHistoryQuery·filterDamageHits)과 카드는 4.22-04 부터 components/DamageHistoryCard.jsx 한 벌 — 떠 있는 미르(MirFab)와 같이 쓴다.
 
 export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenContainer, portMisData, heartbeat, isChief = true, initialQuery = '', embedded = false, ctxVoyageKey = null }) {   // 2.36: ctxVoyageKey — 항차 화면에 심을 때 배 이름을 안 붙여도 그 배로 답한다(검수사 «검색은 어디서든 같아야»)   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
@@ -135,20 +106,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   const carrierContacts = useCarrierContacts();   // 1.89
   const shipSpeed = useShipSpeed();   // 1.92
   const ediPattern = useEdiPattern();   // 1.97
-  const damageIndex = useDamageIndex();   // 2.03: 데미지 색인(메타만)
-  const [dmgPhotoView, setDmgPhotoView] = useState(null);   // 2.03: { loading } | { imgs:[..], cn } | { err }
-  //  ★ 2.58: 뜻·방법 갈래(asking)가 잡힌 질문에는 이력 카드를 띄우지 않는다 — «물이 새는데 데미지
-  //    어떻게 잡아야 해» 에 남의 항차 이력 목록이 나오던 자리(검수사 실측). «데미지 이력 보여줘»는 그대로.
-  const dmgQ = useMemo(() => (parsed && parsed.asking) ? null : parseDamageHistoryQuery(debouncedQuery), [debouncedQuery, parsed]);
-  const dmgHits = useMemo(() => (dmgQ ? filterDamageHits(damageIndex, dmgQ) : []), [damageIndex, dmgQ]);
-  const openDmgPhoto = async (e) => {
-    setDmgPhotoView({ loading: true });
-    try {
-      const p = await fbGetDamagePhoto(e.voyageKey, e.ts);
-      const imgs = [p?.data, p?.detailPhoto].filter(Boolean);
-      setDmgPhotoView(imgs.length ? { imgs, cn: e.cn } : { err: '사진을 찾지 못했습니다 — 보관에서 지워졌을 수 있습니다' });
-    } catch (er) { setDmgPhotoView({ err: '사진 불러오기 실패: ' + (er?.message || er) }); }
-  };
+  //  ★ 2.58: 뜻·방법 갈래(asking)가 잡힌 질문에는 이력 카드를 띄우지 않는다 — 판정은 DamageHistoryCard.damageHistoryQueryOf 한 벌(4.22-04 떠 있는 미르와 공용).
+  const dmgQ = useMemo(() => damageHistoryQueryOf(debouncedQuery, parsed), [debouncedQuery, parsed]);
   /* ★ 2.86 (검수사 실측 2026-08-29) — 홈(수석 대시보드) 미르도 플랜을 연다.
        검수사 기록 — «20:29 질문 '카고플랜 보여줘'» → 열리지 않았다. 2.85-01 은 항차 화면에만 넣었고
        이 화면은 다른 컴포넌트다.
@@ -608,45 +567,8 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
         </div>
       </div>
 
-      {/* 2.03: 데미지 이력 카드 — 컨번호·날짜로 과거(보관 포함) 데미지 조회 + 사진 */}
-      {dmgQ && (
-        <div className="bg-orange-950/40 border-2 border-orange-700 rounded-btn p-4 mb-3">
-          <div className="text-xxs text-orange-400 font-bold uppercase mb-1">📷 데미지 이력</div>
-          {damageIndex == null ? (
-            <div className="text-sm text-dim-300">색인 불러오는 중…</div>
-          ) : dmgHits.length === 0 ? (
-            <div className="text-sm text-dim-100">기록 없음 — {dmgQ.cn ? `${dmgQ.cn} 의 데미지 기록이 없습니다` : '해당 날짜의 데미지 기록이 없습니다'} (앱으로 보고·예약한 건 기준)</div>
-          ) : (
-            <div className="space-y-2">
-              {dmgHits.map((e) => {
-                const d = new Date(e.ts);
-                const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                return (
-                  <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-ink-900/60 border border-line rounded-pill px-3 py-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm2 mono font-bold text-dim-100">{e.cn} <span className="text-dim-300 font-normal">{when} · {e.voyageKey}</span></div>
-                      <div className="text-xxs text-dim-200 truncate">
-                        {(e.damageParts || []).join(' & ')} {(e.damageTypes || []).join(' & ')}{e.points ? ` ${e.points}P` : ''}{e.dims ? ` (${e.dims})` : ''}{e.note ? ` — ${e.note}` : ''}
-                      </div>
-                    </div>
-                    <button onClick={() => openDmgPhoto(e)} className="px-3 py-2 rounded-pill bg-orange-700 hover:bg-orange-600 text-white text-xs2 font-bold shrink-0">📷 사진</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-      {dmgPhotoView && (
-        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={() => setDmgPhotoView(null)}>
-          {dmgPhotoView.loading && <div className="fixed-white font-bold">사진 불러오는 중…</div>}
-          {dmgPhotoView.err && <div className="text-[#fca5a5] font-bold text-sm">{dmgPhotoView.err}</div>}
-          {(dmgPhotoView.imgs || []).map((src, i) => (
-            <img key={i} src={src} alt="" className="max-h-[45vh] max-w-full rounded-pill border border-line-strong" />
-          ))}
-          {dmgPhotoView.imgs && <div className="fixed-white opacity-80 text-xs2 font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
-        </div>
-      )}
+      {/* 2.03: 데미지 이력 카드 — 컨번호·날짜로 과거(보관 포함) 데미지 조회 + 사진. 4.22-04 부터 components/DamageHistoryCard 한 벌(떠 있는 미르와 공용) — 색인은 카드가 처음 그려질 때 한 번 읽는다 */}
+      <DamageHistoryCard key={`${debouncedQuery}|${askedAt || 0}`} dmgQ={dmgQ} />   {/* 4.22-04 감사 하 1: 질문마다 새로 그린다 — 못 읽은 색인을 다시 읽는다(떠 있는 미르와 같은 꼴) */}
 
       {_modelPending && (
         <div className="text-xxs text-center text-sky-300 font-bold animate-pulse mb-2">🐱 미르가 다시 생각하는 중…</div>

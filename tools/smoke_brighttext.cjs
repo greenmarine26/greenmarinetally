@@ -76,7 +76,8 @@ const fp = fs.readFileSync('src/pages/FoodPage.jsx', 'utf8');
 ok(/className="absolute top-1\/2 text-2xs font-bold fixed-white"/.test(fp), '룰렛 조각 글자가 fixed-white 이다');
 
 // ⑤ 검은 바탕 사진 크게 보기 — 바탕이 밝기와 상관없이 검정이라 그 위 글자는 밝기를 따라 진해지는 text-dim-*·text-red-* 를 쓰면 4단계에서 안 보인다(fixed-white 를 쓴다)
-for (const f of ['src/components/BigResultCard.jsx', 'src/pages/VoyagePage.jsx', 'src/pages/GlobalSearchPage.jsx']) {
+//   4.22-04: 통합검색 화면의 데미지 사진 보기는 components/DamageHistoryCard 한 벌로 옮겼다(떠 있는 미르와 공용) — 그 파일을 잰다.
+for (const f of ['src/components/BigResultCard.jsx', 'src/pages/VoyagePage.jsx', 'src/components/DamageHistoryCard.jsx']) {
   const lines = fs.readFileSync(f, 'utf8').split('\n');
   let seen = 0, badLines = [];
   lines.forEach((l, i) => {

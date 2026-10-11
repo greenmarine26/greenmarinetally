@@ -43,7 +43,6 @@ import { esealSheetHTML } from '../esealSheet.js';
 import { esealPoolOf } from '../esealVoice.js';   // 3.71: 엠티실 구간 → 여섯 자리 실 목록 한 벌(음성 입력과 공용)
 import { downloadEsealSheetXlsx } from '../components/EmptySealReport.jsx';   // 3.60-01: 공컨테이너 씰체결 작업 리스트 양식   // 3.60: 엠티실 기록지 사진 → 여섯 자리 실(검수사 2026-09-24)
 import SheetPhotoModal from '../components/SheetPhotoModal.jsx';   // 3.58: 선적 기록지 사진 → 선적 자리(검수사 2026-09-22)   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
-import GlobalSearchPage from './GlobalSearchPage.jsx';
 import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
 import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
@@ -86,11 +85,11 @@ import { shipOpMapper, opFromListFileName } from '../data/tallyFormats.js';   //
 import PrintableCargoPlanV2 from '../components/PrintableCargoPlanV2.jsx';   // 2.87-01: 미르가 «카고플랜 보여줘» 하면 이것만 띄운다   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null,
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null,
   /* ★ 2.87 (검수사 지시 2026-08-29) — «홈화면에서 물었으면 홈화면에서 보여주고 닫아도 홈화면이어야 합니다».
        홈 미르가 «플랜 보여줘» 하면 App 이 **주소를 바꾸지 않고** 홈 위에 이 화면을 덮어 띄운다.
        그때 mirPlan={what,bay} 이 들어온다 — 플랜만 보이면 되므로 그 화면의 자동 팝업은 재운다. */
-  mirPlan = null, onMirPlanClose = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)
+  mirPlan = null, onMirPlanClose = null }) {   // 4.22-04: voyages·heartbeat 는 작업 시작 탭의 통합 검색 창(2.36)에만 쓰여 그 창과 함께 뺐다 — 전 항차 질문은 떠 있는 미르(App MirFab)가 받는다
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   // 1.94 (검수사 실측 SWSP — 선적 243 매칭까지 된 배가 들어가면 빈 양하부터 열림): 노드 껍데기가 아니라
   //   **실자료(ediContainers·records) 유무**로 판정한다 — 양하 없는 배는 선적이 바로 열린다.
@@ -1928,19 +1927,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (/^[0-9\s]+$/.test(v)) logQuerySettled('lookup', v, { voyageKey, mode });
           else logQuerySettled('nls', v, { voyageKey });
         }}>
-        {/* 2.36 (검수사 확정 «누구는 안다고 하고 누구는 모른다고 하면 안되니까요. 지금 통합해주세요»):
-            항차 화면에도 홈과 **같은 미르**를 심는다. 배 이름을 안 붙여도 ctxVoyageKey 로 이 배가 맥락이 된다.
-            ⚠ 아래 SearchPanel 은 그대로 둔다 — 컨 조회·자동 가이드·트윈 짝꿍·완료 처리는 그쪽이 정본이다.
-            즉 «묻는 것»은 미르가, «작업하는 것»은 SearchPanel 이 맡는다. */}
-        <div className="mb-2">
-          <GlobalSearchPage embedded
-            voyages={voyages || { [voyageKey]: voyage }}
-            ctxVoyageKey={voyageKey}
-            portMisData={portMisData}
-            heartbeat={heartbeat}
-            isChief={isChief(inspector)}
-            onOpenContainer={(c) => setDetailC(c)}/>
-        </div>
+        {/* 2.36 의 통합 검색 창은 3.41 떠 있는 미르가 같은 답을 내므로 4.22-04 에서 작업 시작 탭의 통합 검색 창을 뺐다(검수사 2026-10-11 «조회창이 두개가 나와 헷갈립니다») — 다른 항차·보관 자료 질문은 오른쪽 아래 미르 얼굴 */}
         <SearchPanel
           rfSkip={rfSkipShip}
           esealBrief={esealInfo ? {

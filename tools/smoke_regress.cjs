@@ -2147,6 +2147,192 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     console.warn = warn9;
   }
 
+  // ── R31 ───────────────────────────────────────────────────────────────
+  //  4.22-04 — 작업 시작 탭(기존 방식)의 조회창은 하나(SearchPanel «미르 검색 —»). 2.36 에 심은 «미르 통합 검색» 창(GlobalSearchPage embedded)은 뺐다 — 다른 항차 질문은 3.41 떠 있는 미르.
+  head('R31 작업 시작 탭(기존 방식)의 조회창은 하나 — «미르 통합 검색» 입력창 0 · SearchPanel 조회창(«미르 검색 —») 1 · 선적 기록지 사진 단추는 조회창 위 · 데미지 이력 카드는 떠 있는 미르가 그린다(질문했을 때만 색인 한 번) (4.22-04)',
+    '검수사 2026-10-11 20:13(선적 화면 캡처 — 위 «미르 통합 검색 — 모든 항차» 전체 1,107대 · 아래 «미르 검색 —» 작업 212대) «선적시 수동선적 하는데 조회창이 두개가 나와 헷갈립니다» · Fable 판정(작업 시작 탭의 GlobalSearchPage embedded 블록만 뺀다 · SearchPanel 그대로 · ㈏ 데미지 이력 카드는 떠 있는 미르로 — 2.36 «누구는 안다고 하고 누구는 모른다고 하면 안되니까요»)');
+  {
+    //  항차 화면(VoyagePage 실소스)을 jsdom 에서 통째로 그린다 — 작업 시작 탭을 누르고(검수원 손 그대로) 수동 베이 → 단을 고르면 SearchPanel 조회창이 나온다(캡처의 화면).
+    const e31 = path.join(TMP, 'r42204.jsx'), o31 = path.join(TMP, 'r42204.js');
+    fs.writeFileSync(e31, [
+      `import React from "${ROOT}/node_modules/react/index.js";`,
+      `import { createRoot } from "${ROOT}/node_modules/react-dom/client.js";`,
+      `import VoyagePage from "${ROOT}/src/pages/VoyagePage.jsx";`,
+      `import MirFab from "${ROOT}/src/components/MirFab.jsx";`,
+      `import GlobalSearchPage from "${ROOT}/src/pages/GlobalSearchPage.jsx";`,
+      `window.__R31live = (json, key, mode) => { const v = JSON.parse(json); createRoot(document.getElementById('root')).render(React.createElement(VoyagePage, { voyageKey: key, voyage: v, inspector: '연막', inspectors: [], portMisData: {}, pilotForecast: {}, onGoHome() {}, onModeChange() {}, initModeOverride: mode })); createRoot(document.getElementById('fab')).render(React.createElement(MirFab, { voyages: { [key]: v }, inspector: '연막', isChief: false, portMisData: {}, pilotForecast: {}, heartbeat: null })); };`,
+      `window.__R31gsp = (json, q) => { createRoot(document.getElementById('root')).render(React.createElement(GlobalSearchPage, { voyages: JSON.parse(json), initialQuery: q, embedded: true, isChief: true, portMisData: {}, heartbeat: null, onOpenContainer() {} })); };`,
+      `window.__R31go = (json, key, mode) => { createRoot(document.getElementById('root')).render(React.createElement(VoyagePage, { voyageKey: key, voyage: JSON.parse(json), inspector: '연막', inspectors: [], portMisData: {}, pilotForecast: {}, onGoHome() {}, onModeChange() {}, initModeOverride: mode })); };`,
+      `window.__R31fab = (json) => { createRoot(document.getElementById('root')).render(React.createElement(MirFab, { voyages: JSON.parse(json), inspector: '연막', isChief: false, portMisData: {}, pilotForecast: {}, heartbeat: null })); };`,
+    ].join('\n'));
+    execSync(`npx esbuild "${e31}" --bundle --loader:.jsx=jsx --loader:.js=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url --alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --define:process.env.NODE_ENV='"development"' --log-level=error --outfile="${o31}"`, { cwd: ROOT, stdio: 'pipe' });
+    const vpSrc = fs.readFileSync(o31, 'utf8');
+    //  KBTR 2608E — 선적은 R29 의 라이브 GET 슬림본(EDI 272 · 리스트 272), 양하는 R27 사본(EDI 열쇠가 컨번호 — 행에 cn 을 되살린다)
+    const K = fx('recon422_kbtr.json'), KL = fx('printhub42202_kbtr_l.json');
+    const ED = Object.fromEntries(Object.entries(K.discharge.ediContainers).map(([k, e]) => [k, k.startsWith('__') ? e : { ...e, cn: e.cn || k }]));
+    const v31 = { key: 'KBTR_2608E', info: KL.info, discharge: { ...K.discharge, ediContainers: ED }, loading: KL.loading };
+    const draw = async (mode) => {
+      const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+      const W = dom.window, errs = [];
+      W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
+      W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+      W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+      try { W.eval(vpSrc); W.__R31go(JSON.stringify(v31), v31.key, mode); } catch (er) { errs.push('THROW ' + er.message); }
+      await sleep(300);
+      const d = W.document, click = (b) => b && b.dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
+      const tab = [...d.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent));
+      click(tab); await sleep(300);
+      const bay = [...d.querySelectorAll('button')].find((b) => /^B\d/.test(b.textContent.trim()) && /남은 컨/.test(b.textContent));
+      click(bay); await sleep(250);
+      const tier = [...d.querySelectorAll('button')].find((b) => /^(🔵 데크|🟠 홀드) [1-9]/.test(b.textContent.trim()) && !b.disabled);
+      click(tier); await sleep(350);
+      const t = d.body.textContent;
+      const boxes = [...d.querySelectorAll('input')].filter((i) => /^🎤 \//.test(i.getAttribute('placeholder') || ''));   // 조회창(마이크 자리표시 «🎤 / 4777 …») — 통합 검색 창도 같은 꼴
+      const sheet = [...d.querySelectorAll('button')].find((b) => /기록지 사진으로 선적 자리 넣기/.test(b.textContent));
+      return { _w: W, tabOn: !!tab && tab.getAttribute('aria-selected') === 'true', classic: !!d.querySelector('[data-workstyle="classic"]'), picked: `${bay ? bay.textContent.trim().split('빈')[0] : '?'} ${tier ? tier.textContent.trim().slice(0, 7) : '?'}`,
+        tong: (t.match(/미르 통합 검색/g) || []).length, mir: (t.match(/미르 검색 — /g) || []).length, boxes: boxes.map((i) => i.getAttribute('placeholder')),
+        sheetAbove: !!(sheet && boxes.length && (sheet.compareDocumentPosition(boxes[boxes.length - 1]) & W.Node.DOCUMENT_POSITION_FOLLOWING)), sheet: !!sheet, errs };
+    };
+    const drawClosed = async (mode) => { const r = await draw(mode); try { r._w.close(); } catch (er) { /* 창 닫기 */ } delete r._w; return r; };   // 항차 화면의 시계(setInterval)가 검사를 붙잡지 않게 창을 닫는다
+    for (const [i, mode, nm] of [['①', 'loading', '선적'], ['②', 'discharge', '양하']]) {
+      const r = await drawClosed(mode);
+      ok(`${i} KBTR 2608E ${nm} 작업 시작 탭(기존 방식 · 수동 ${r.picked}) — «미르 통합 검색» ${r.tong} · «미르 검색 —» ${r.mir} · 조회창 ${r.boxes.length}개 (수정 전 통합 1 · 조회창 2)`,
+        r.tabOn && r.classic && r.tong === 0 && r.mir === 1 && r.boxes.length === 1 && /DWSU3000276/.test(r.boxes[0]) && !r.errs.length, JSON.stringify(r).slice(0, 400));
+      if (mode === 'loading') ok(`③ 선적 — «📷 기록지 사진으로 선적 자리 넣기» 단추가 조회창 위(기능 색인 «조회창 위»)`, r.sheet && r.sheetAbove, JSON.stringify({ sheet: r.sheet, above: r.sheetAbove }));
+    }
+    //  ④~⑦ 데미지 이력 — 작업 시작 탭 창을 빼면 검수원이 잃는 것(2.03 카드 · 보관 포함 · 📷 사진). 떠 있는 미르(MirFab 실소스)가 같은 카드 한 벌을 그린다.
+    //    색인은 RTDB damageIndex GET 사본(2026-10-11 · 6컨 9건)을 메모리 스텁에 넣는다. 기대값은 이 파일이 사본에서 따로 센다(컨번호 · 현장 시각 월/일 · 최근순).
+    {
+      const DI = fx('damageindex42204.json');
+      const rowsAll = []; for (const m of Object.values(DI)) for (const e of Object.values(m)) rowsAll.push(e);
+      rowsAll.sort((a, b) => b.ts - a.ts);
+      const kst = (ts) => { const d = new Date(ts + 9 * 3600000); return { mo: d.getUTCMonth() + 1, d: d.getUTCDate(), hm: `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }; };
+      const whenOf = (e) => { const k = kst(e.ts); return `${k.mo}/${k.d} ${k.hm}`; };
+      const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+      const W = dom.window, errs = [], reads = [];
+      W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
+      W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+      W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+      W.global = W; W.__memdb = { damageIndex: DI };   // 메모리 스텁(stub_fbdb_mem)은 global.__memdb 를 읽는다 — 이 창에서는 창이 global
+      W.__memfail = (pth) => { if (String(pth) === 'damageIndex') reads.push(pth); return false; };   // 읽기를 세기만 한다(실패시키지 않음)
+      try { W.eval(vpSrc); W.__R31fab(JSON.stringify({ [v31.key]: v31 })); } catch (er) { errs.push('THROW ' + er.message); }
+      await sleep(250);
+      const d = W.document, click = (b) => b && b.dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
+      click(d.querySelector('button[aria-label="미르에게 묻기"]')); await sleep(250);
+      const setVal = W.Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set;
+      const askFab = async (text) => {
+        const inp = d.getElementById('mirFabIn');
+        if (!inp) return { err: '시트 입력칸 없음' };
+        setVal.call(inp, text); inp.dispatchEvent(new W.Event('input', { bubbles: true })); await sleep(60);
+        click([...d.querySelectorAll('[data-mir-sheet] button')].find((b) => b.textContent.trim() === '질문')); await sleep(700);
+        const sh = d.querySelector('[data-mir-sheet]'), t = sh ? sh.textContent : '';
+        const card = [...(sh ? sh.querySelectorAll('div') : [])].find((x) => /^📷 데미지 이력/.test(x.textContent) && x.className.includes('border-orange-700'));
+        const rows = card ? [...card.querySelectorAll('.mono')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [];
+        return { card: !!card, rows, photos: card ? [...card.querySelectorAll('button')].filter((b) => /📷 사진/.test(b.textContent)).length : 0,
+          none: card ? ((card.textContent.match(/기록 없음 — [^(]*/) || [''])[0].trim()) : '', dunno: /못 배웠/.test(t), reads: reads.length };
+      };
+      const want = (list) => list.map((e) => `${e.cn} ${whenOf(e)} · ${e.voyageKey}`);
+      const r0 = await askFab('BEAU2581215');
+      ok(`④ 떠 있는 미르 — 데미지 아닌 질문(«BEAU2581215»)에는 카드 없음 · damageIndex 읽기 ${r0.reads}회 (색인은 데미지 이력 질문이 들어왔을 때만 읽는다)`,
+        !r0.err && !r0.card && r0.reads === 0 && !errs.length, JSON.stringify({ r0, errs }).slice(0, 300));
+      const cnHit = 'SKHU6312247', wHit = rowsAll.filter((e) => e.cn === cnHit);
+      const r1 = await askFab(`${cnHit} 데미지`);
+      ok(`⑤ «${cnHit} 데미지» → 데미지 이력 카드 ${r1.rows.length}행(${r1.rows.join(' / ')}) · 📷 사진 ${r1.photos} = 사본 ${wHit.length}건 · «못 배웠어요» 없음`,
+        r1.card && wHit.length === 3 && JSON.stringify(r1.rows) === JSON.stringify(want(wHit)) && r1.photos === wHit.length && !r1.dunno, JSON.stringify(r1).slice(0, 400));
+      const cnNone = 'BEAU2581215';
+      const r2 = await askFab(`${cnNone} 데미지`);
+      ok(`⑥ «${cnNone} 데미지»(사본에 그 컨 ${rowsAll.filter((e) => e.cn === cnNone).length}건) → «${r2.none}» · 행 0`,
+        r2.card && !rowsAll.some((e) => e.cn === cnNone) && r2.none === `기록 없음 — ${cnNone} 의 데미지 기록이 없습니다` && r2.rows.length === 0 && !r2.dunno, JSON.stringify(r2).slice(0, 300));
+      const wDay = rowsAll.filter((e) => { const k = kst(e.ts); return k.mo === 10 && k.d === 8; });
+      const r3 = await askFab('10월 8일 데미지');
+      const r4 = await askFab('데미지 기록');
+      ok(`⑦ «10월 8일 데미지» → ${r3.rows.length}행 = 사본 그날 ${wDay.length}건 · «데미지 기록» → ${r4.rows.length}행 = 사본 최근순 ${Math.min(20, rowsAll.length)}건 · 색인 읽기 모두 합쳐 ${r4.reads}회`,
+        r3.card && wDay.length === 3 && JSON.stringify(r3.rows) === JSON.stringify(want(wDay)) && r4.card && JSON.stringify(r4.rows) === JSON.stringify(want(rowsAll.slice(0, 20))) && r4.reads === 1 && !errs.length,
+        JSON.stringify({ r3: r3.rows, r4: r4.rows.length, reads: r4.reads, errs }).slice(0, 400));
+      try { W.close(); } catch (er) { /* 창 닫기 */ }
+      //  ⑧ 같은 카드 한 벌 — 통합검색 화면(GlobalSearchPage · 수석 대시보드 인라인 꼴 embedded)도 같은 질문에 같은 행을 그린다(카드만 공용으로 옮겼다 — 동작 불변)
+      const dom2 = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+      const W2 = dom2.window, errs2 = [], reads2 = [];
+      W2.addEventListener('error', (ev) => errs2.push(ev.message)); W2.console.warn = () => {}; W2.console.log = () => {};
+      W2.matchMedia = W2.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+      W2.scrollTo = () => {}; W2.HTMLElement.prototype.scrollIntoView = function () {};
+      W2.global = W2; W2.__memdb = { damageIndex: DI }; W2.__memfail = (pth) => { if (String(pth) === 'damageIndex') reads2.push(pth); return false; };
+      try { W2.eval(vpSrc); W2.__R31gsp(JSON.stringify({ [v31.key]: v31 }), `${cnHit} 데미지`); } catch (er) { errs2.push('THROW ' + er.message); }
+      await sleep(900);
+      const card2 = [...W2.document.querySelectorAll('div')].find((x) => /^📷 데미지 이력/.test(x.textContent) && x.className.includes('border-orange-700'));
+      const rows2 = card2 ? [...card2.querySelectorAll('.mono')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [];
+      ok(`⑧ 통합검색 화면(GlobalSearchPage embedded) «${cnHit} 데미지» → 같은 카드 ${rows2.length}행 = 사본 ${wHit.length}건 · 색인 읽기 ${reads2.length}회`,
+        JSON.stringify(rows2) === JSON.stringify(want(wHit)) && reads2.length === 1 && !errs2.length, JSON.stringify({ rows2, reads: reads2.length, errs2 }).slice(0, 300));
+      try { W2.close(); } catch (er) { /* 창 닫기 */ }
+
+      //  공용 창 — 메모리 스텁(global.__memdb)·읽기 고리(__memfail)·jsdom 에 없는 것(matchMedia·scrollTo)
+      const openWin = (html, memfail) => {
+        const dm = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+        const w = dm.window, er = [], rd = [];
+        w.addEventListener('error', (ev) => er.push(ev.message)); w.console.warn = () => {}; w.console.log = () => {};
+        w.matchMedia = w.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+        w.scrollTo = () => {}; w.HTMLElement.prototype.scrollIntoView = function () {};
+        w.global = w; w.__memdb = { damageIndex: DI }; w.__fail = !!memfail;
+        w.__memfail = (pth) => { if (String(pth) === 'damageIndex') { rd.push(pth); return w.__fail; } return false; };   // __fail 이 참이면 damageIndex 읽기를 실패시킨다(오프라인 흉내)
+        return { w, er, rd, d: w.document };
+      };
+      const sheetAsk = async (X, text, wait = 900) => {
+        const inp = X.d.getElementById('mirFabIn');
+        if (!inp) return { err: '시트 입력칸 없음' };
+        X.w.Object.getOwnPropertyDescriptor(X.w.HTMLInputElement.prototype, 'value').set.call(inp, text); inp.dispatchEvent(new X.w.Event('input', { bubbles: true })); await sleep(60);
+        const b = [...X.d.querySelectorAll('[data-mir-sheet] button')].find((x) => x.textContent.trim() === '질문'); if (b) b.dispatchEvent(new X.w.MouseEvent('click', { bubbles: true })); await sleep(wait);
+        const sh = X.d.querySelector('[data-mir-sheet]');
+        const card = sh && [...sh.querySelectorAll('div')].find((x) => /^📷 데미지 이력/.test(x.textContent) && x.className.includes('border-orange-700'));
+        const ans = sh && sh.querySelector('.whitespace-pre-line');
+        return { card: !!card, rows: card ? card.querySelectorAll('.mono').length : 0, cardText: card ? card.textContent : '', answer: ans ? ans.textContent.replace(/\s+/g, ' ').trim() : '', reads: X.rd.length };
+      };
+      //  ⑨ 감사 중 1(4.22-04 1차 소스는 카드만 내고 이 항차 엔진 답을 지웠다) — 검수원 실제 자리(항차 화면을 연 채 떠 있는 미르)에서 «데미지 있어?»
+      //    → 4.22-03 과 같은 이 항차 엔진 답(nlSearch dmgQuery — 앱 데미지 보고 꼴 photos 한 건을 사본에 얹는다) **과** 전 항차 이력 카드를 둘 다 낸다.
+      {
+        const dcn = Object.keys(ED).find((k) => !k.startsWith('__'));
+        const vL = JSON.parse(JSON.stringify(v31)); vL.photos = { '1791600000000': { type: 'damage', cn: dcn, damageTypes: ['DENTED'], ts: 1791600000000 } };
+        const nDmg = Object.values(vL.photos).filter((ph) => ph.type === 'damage').length;
+        const X = openWin('<div id="root"></div><div id="fab"></div>', false);
+        try { X.w.eval(vpSrc); X.w.__R31live(JSON.stringify(vL), vL.key, 'discharge'); } catch (er) { X.er.push('THROW ' + er.message); }
+        await sleep(500);
+        const fb = X.d.querySelector('button[aria-label="미르에게 묻기"]'); if (fb) fb.dispatchEvent(new X.w.MouseEvent('click', { bubbles: true })); await sleep(250);
+        const r9 = await sheetAsk(X, '데미지 있어?');
+        ok(`⑨ 항차 화면 + 떠 있는 미르 «데미지 있어?» → 엔진 답 «${r9.answer.slice(0, 48)}…» (이 항차 데미지 ${nDmg}대 · ${dcn}) **와** 이력 카드 ${r9.rows}행(사본 ${Math.min(20, rowsAll.length)}건) 둘 다 · «못 배웠어요» 없음`,
+          r9.answer.includes(`데미지 등록 ${nDmg}대`) && r9.answer.includes(dcn) && r9.card && r9.rows === Math.min(20, rowsAll.length) && !/못 배웠/.test(r9.answer) && !X.er.length,
+          JSON.stringify({ ...r9, cardText: undefined, errs: X.er }).slice(0, 400));
+        try { X.w.close(); } catch (er) { /* 창 닫기 */ }
+      }
+      //  ⑩ 색인을 못 읽으면(오프라인 흉내 — get 이 reject) 떠 있는 미르·통합검색 화면 모두 «데미지 색인을 못 읽었습니다» 를 말한다(종전 빈 catch 는 «불러오는 중…» 에 조용히 멈췄다).
+      //    실패는 기억하지 않는다 — 신호가 돌아온 뒤 다시 물으면(새 질문 = 카드를 새로 그림) 다시 읽어 행이 나온다(감사 하 1 — 통합검색 화면 카드 key).
+      {
+        const NOREAD = '데미지 색인을 못 읽었습니다';
+        const X = openWin('<div id="root"></div>', true);
+        try { X.w.eval(vpSrc); X.w.__R31fab(JSON.stringify({ [v31.key]: v31 })); } catch (er) { X.er.push('THROW ' + er.message); }
+        await sleep(250);
+        const fb = X.d.querySelector('button[aria-label="미르에게 묻기"]'); if (fb) fb.dispatchEvent(new X.w.MouseEvent('click', { bubbles: true })); await sleep(250);
+        const f1 = await sheetAsk(X, `${cnHit} 데미지`);
+        X.w.__fail = false;
+        const f2 = await sheetAsk(X, `${cnHit} 데미지 이력`);
+        try { X.w.close(); } catch (er) { /* 창 닫기 */ }
+        const G = openWin('<div id="root"></div>', true);
+        try { G.w.eval(vpSrc); G.w.__R31gsp(JSON.stringify({ [v31.key]: v31 }), `${cnHit} 데미지`); } catch (er) { G.er.push('THROW ' + er.message); }
+        await sleep(900);
+        const gCard = () => [...G.d.querySelectorAll('div')].find((x) => /^📷 데미지 이력/.test(x.textContent) && x.className.includes('border-orange-700'));
+        const g1 = gCard() ? gCard().textContent : '';
+        G.w.__fail = false;
+        const gin = G.d.querySelector('input[type="text"]');
+        if (gin) { G.w.Object.getOwnPropertyDescriptor(G.w.HTMLInputElement.prototype, 'value').set.call(gin, `${cnHit} 데미지 이력`); gin.dispatchEvent(new G.w.Event('input', { bubbles: true })); await sleep(60); gin.dispatchEvent(new G.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }   // 문장은 Enter 로 접수(화면 그대로)
+        await sleep(1200);
+        const g2 = gCard() ? gCard().querySelectorAll('.mono').length : 0;
+        ok(`⑩ 색인 읽기 실패 — 떠 있는 미르 «${f1.cardText.includes(NOREAD) ? NOREAD : f1.cardText.slice(0, 30)}» · 통합검색 화면 «${g1.includes(NOREAD) ? NOREAD : g1.slice(0, 30)}» → 신호 회복 뒤 새 질문에 다시 읽어 미르 ${f2.rows}행 · 통합검색 ${g2}행(사본 ${wHit.length}건) · 읽기 미르 ${f2.reads}회 · 통합검색 ${G.rd.length}회`,
+          f1.card && f1.cardText.includes(NOREAD) && !/불러오는 중/.test(f1.cardText) && f2.rows === wHit.length && f2.reads === 2
+            && g1.includes(NOREAD) && !/불러오는 중/.test(g1) && g2 === wHit.length && G.rd.length >= 2 && !X.er.length && !G.er.length,
+          JSON.stringify({ f1: f1.cardText.slice(0, 60), f2: f2.rows, fr: f2.reads, g1: g1.slice(0, 60), g2, gr: G.rd.length, xe: X.er, ge: G.er }).slice(0, 400));
+        try { G.w.close(); } catch (er) { /* 창 닫기 */ }
+      }
+    }
+  }
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

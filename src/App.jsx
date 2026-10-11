@@ -735,8 +735,6 @@ export default function App() {
             initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}
-            voyages={visibleVoyages}   /* 2.36: 통합검색 — 항차 화면 미르도 전 항차를 본다 (3.50: 볼 수 있는 항차만) */
-            heartbeat={heartbeat}
             inspector={inspector}
             inspectors={inspectors}
             portMisData={portMisData}
@@ -776,8 +774,6 @@ export default function App() {
             initModeOverride={mirPlan.mode || null}
             voyageKey={mirPlan.voyageKey}
             voyage={voyages[mirPlan.voyageKey]}
-            voyages={visibleVoyages}
-            heartbeat={heartbeat}
             inspector={inspector}
             inspectors={inspectors}
             portMisData={portMisData}
