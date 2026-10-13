@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.23';
-const NOTE = '4.23 글자를 크게 볼 수 있습니다. 메뉴(⋮)의 화면 · 소리 · 글자에서 크게를 고르세요.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.23-01';
+const NOTE = '4.23-01 선적 자동 가이드가 이미 다른 컨이 실린 칸을 다시 내밀지 않고, 다른 호기가 먼저 실어도 베이가 사라지지 않습니다. 규격·풀엠티·항구가 다른 맞교환은 실린 칸을 지정하게 합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

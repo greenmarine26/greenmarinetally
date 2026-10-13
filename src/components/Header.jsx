@@ -195,7 +195,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             className="w-10 h-10 sm:w-11 sm:h-11 rounded-btn flex-shrink-0 select-none"/>
         )}
 
-        <div ref={titleRef} className="min-w-0 flex-1" style={{ minWidth: titleMinW }} data-hdr-title="1">
+        <div ref={titleRef} className="min-w-0 flex-1" style={{ minWidth: titleMinW }} data-hdr-title="1" data-hdr-home={info ? undefined : '1'}>
           {info ? (
             <>
               {/* 작업 화면 — 선박명(크게) · 컴은 항차·선사를 옆에.
@@ -233,7 +233,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <button onClick={() => onChangeWork && onChangeWork()} title="조회만 — 보기만 됩니다(완료·보고가 기록되지 않습니다). 누르면 작업자(선박·호기)로 전환" data-work-mode="view"
               aria-label="조회만 — 누르면 작업자로 전환"
               className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 bg-ink-800 text-sky-200 border border-sky-700 whitespace-nowrap`}>
-              <span aria-hidden="true">🔍</span><span className="sm:hidden max-[359px]:hidden">조회</span><span className="hidden sm:inline">조회만</span>
+              <span aria-hidden="true">🔍</span><span className="sm:hidden max-[359px]:hidden" data-hdr-viewlabel="1">조회</span><span className="hidden sm:inline">조회만</span>
             </button>
           )}
           {(
@@ -250,7 +250,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
                 : 'px-0 sm:px-2 bg-ink-800 text-st-lodHi border border-st-lod/70 animate-pulse'
             }`}
           >
-            <Truck className={`w-4 h-4 shrink-0 ${equipNo ? 'max-[399px]:hidden' : ''}`}/>
+            <Truck className={`w-4 h-4 shrink-0 ${equipNo ? 'max-[399px]:hidden' : ''}`} data-hdr-truck={equipNo ? 'opt' : undefined}/>
             {equipNo ? <span>{equipNo}</span> : <span className="hidden sm:inline">장비?</span>}
           </button>
           )}

@@ -51,7 +51,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-02'   // 4.07-02 **선적 리스트에 «공컨 개정판» 이 오면 취소된 공컨을 합본에서 뺀다 — 앱 화면은 그대로이고 수집기 합본 판정만 고쳤다** — 검수사 2026-10-06 «선적 취소 문건이 와 있는데 적용이 안되고 있습니다. 이번 항차 STSE건입니다.» STSE 2678W 에 SITC 가 «CONTAINERLIST»(풀 30 + 공컨 300) 뒤에 «REVISED EMPTY CONTAINERLIST»(공컨 215)를 보냈다. 파일 이름에 EMPTY 가 끼어 두 리스트가 같은 묶음으로 보이지 않아 옛 공컨 85대가 합본에 그대로 남았다(512 대 427). src/listRevision.js 에 listPartialRevisionDrops 를 두고 merge_entry.js(수집기 합본 헬퍼)가 쓴다 — 공컨만 있는 개정판이 오면 옛 리스트의 공컨 중 개정판에 없는 것만 취소로 보고(풀 컨은 그대로), 다른 리스트에 또 있는 컨은 취소하지 않는다. report.revCancelCns 로 수집기에 알린다. 양하 자동 등록(autoRegApi)은 건드리지 않았다.
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
-export const APP_VERSION = 'TallyOne 4.23'   // 4.23 **글자 두 모드(보통 · 크게)와 머리띠 폰 · 컴 배치** — 검수사 2026-10-12 «수석들이 노안이 심한 사람이 많습니다. 두가지 모드로 했으면 합니다» · 불편 «한 화면에 항목이 너무 많다 · 글자가 작아 안 보인다 · 어디에 뭐가 있는지 찾기 어렵다» · 2026-10-13 00:53 «전부 클로드 안대로 수정하고 배포 해주세요». 글자 토큰(tailwind fontSize 3xs~4xl)과 index.css 부품 글자를 CSS 변수로 옮겼다 — html 의 data-text 속성 하나로 갈린다(밝기 2.40 과 같은 수법). 보통은 4.22-04 보다 가장 작은 셋만 한 단계(3xs 9→10 · 2xs 10→11 · xxs 11→12), 크게는 보통 +2px · 터치 44→48 · 칩 40→44. 켜는 곳 utils.applyTextSize 한 곳(기기마다 localStorage · 저장이 막혀도 화면은 바뀜) · main.jsx 그리기 전 · 화면 · 소리 · 글자 창의 글자 크기 줄 · 미르 «글자 크게 / 글자 보통»(runDeviceCmd · 콘앱은 글자 모드가 없어 못 바꾼다고 답함). 그림(FitBox 안 · 베이 격자)과 인쇄는 4.22-04 글자 그대로(fs-keep 클래스 · 인쇄 미디어) · 보드 베이 제목 boardTitlePx 무관. 머리띠 — 폰은 로고 · 선박명 · 판 번호(절대 안 잘림) · 같은 높이 단추(조회 · 호기 · 변경 · 이름 줄임 · ⋮), 컴은 선박명 항차 · 선사와 판 번호. 판 번호는 머리띠에 한 번 크게 — 바닥글 두 곳과 ⋮ 메뉴 줄의 판 번호는 뺐다. 4.22-04 폰 조회만 로그인의 제목 «T.» 잘림 해소. 회귀 R33.
+export const APP_VERSION = 'TallyOne 4.23-01'   // 4.23-01 **선적 자동 가이드가 이미 다른 컨이 실린 칸을 계획 주인 컨으로 다시 내밀지 않는다(유령 칸) · 다른 호기가 먼저 실어도 그 베이가 가이드 목록에서 사라지지 않는다 · «한 칸에 두 대» 판정 한 벌** — 모의 작업장(MCAP 639N·OBWH 2763E 선적 1·2차, 2026-10-12) 실측 · 검수사 2026-10-11 20:13 «22번 하는데 30번 베이로 가거나 44번 베이로 이동». 뿌리 — 3.13 자동 맞교환(applyAutoSwap, 구독에서 메모리에만 얹는 정해 준 자리)을 effectivePos·항차 화면은 읽는데 자동 가이드가 받는 목록(SearchPanel.allContainers)만 실자리만 올려, 가이드가 «남은 일인가»는 맞교환 자리로 보고 카드·베이 묶음은 계획 칸으로 그렸다 — 이미 찬 칸을 계획 주인으로 다시 내밀고(1차 MCAP 3호기 seq 173~182 · 4호기 22회) 그 주인이 갈 베이는 목록에서 빠졌다(MCAP 2호기 B22 · 3호기 2차 B30). 수리 — ① SearchPanel 이 정해 준 자리(bay_assign)도 실체 다음으로 올린다(항차 화면 3.13 과 같은 순서 · 카드에 «🔄 맞교환 자리 — 계획 칸(…)에 ○○○○ 이(가) 실렸습니다») ② [선적확인] 이 화면이 보인 맞교환 자리를 실린 자리로 적는다(firebase._markLoadedPos — 같은 두 함수를 그 모드 한 벌에 다시 돌림 · 사람이 정한 자리·실자리가 있으면 종전 그대로 · 2차 MCAP 2호기 seq 23 MRSU3244990 자리 없이 완료 → 한 칸 두 대 경보) ③ 재배정 칸 판정이 실자리를 먼저 본다(firebase._dbPosOf — 기록지 사진·위치 지정으로 다른 칸에 실린 컨을 계획 칸에 있다고 보고 밀어내던 것) ④ «한 칸에 두 대» 는 utils.loadedSlotClaims 한 벌(마감 점검·요약 카드) — 자리 기록 없는 완료가 남이 실린 계획 칸으로 추정된 것은 빨강 사고가 아니라 «📍 자리 없이 완료 — 계획 칸엔 다른 컨»(보관본 MCAP 639N 5곳 → 사고 0 · 자리 모름 5) ⑤ 수동 «⚠ 자리 없음» 묶음 — 🅿 목록·조회 우선이 머리 수와 같은 명단 · 위치 지정 창이 그 묶음에서 베이·단을 안 가린다(«남은 자리가 없습니다» 직접 입력 9대). 2차(감사·2차 시뮬 반영) — ⑥ 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn)은 앱이 자리를 정하지 않는다: 선적확인이 실자리로 적지 않고(자리 없이 완료 → 마감 점검 알림) 가이드·큰 카드의 확인 단추는 위치 지정(배정 후 바로 선적확인 켬)을 연다 · 리스트·상세 완료는 먼저 묻는다(loadingNoPosAsk) — 2차 시뮬 OBWH FBIU5779479 풀 리퍼가 엠티 계획 칸 14-05-82 로 저장(마감텔리 14-04-82) ⑦ 보이는 자리 = 저장되는 자리 — 상세·리스트·큰 카드가 utils.loadingSlotOf 한 벌로 «맞교환 자리»·«정해 준 자리»·«계획» 을 같은 낱말로 ⑧ 수동 트윈 두 화면(트윈 조회 · 위치 지정 방식)은 앞 컨이 맞교환 자리면 뒤 컨을 칸으로 짐작해 채우지 않는다(SPSU2020468 거짓 완료 — 4.22-04 는 계획 짝 3338) · 규격 다른 맞교환 컨이 끼거나 맞교환 자리가 낀 두 자리가 한 트윈 칸(짝 베이 · 같은 열·단)이 아니면 [트윈 한 번에] 를 내지 않는다(모의 작업장 7009 05-02-02 + 3338 07-01-02) ⑨ 경고 문구를 검수사 말로(«규격·풀엠티·항구가 다름 — 이 컨 45R1 풀 CNYYY · 그 칸 계획 45GE 엠티 CNYNT» — 규격은 isoShown 글자) · 견주는 상대는 보내는 칸(사슬 끝)의 계획 주인(실시각 재생 OBWH 풀 4대가 엠티 계획 칸으로 경고 없이 가던 것) · 완료 취소 원자리 점유도 _dbPosOf 한 벌 · 미르 펼치기(flattenVoyages)도 정해 준 자리를 올린다(«6242 어디» 가 끝4 답·가이드와 같은 자리 · 콘앱 미르 답은 그대로). · 3차(4.23 위로 옮긴 뒤 재감사·재시뮬) — ⑩ 자동 가이드·미르 다음 차례의 트윈 묶기도 맞교환 자리 컨은 짝을 칸으로 짐작하지 않는다(utils.isSwapSlot·guideTwinOf 한 벌 — 7009 + 0468 한 카드 → 둘 다 싱글) ⑪ 규격 다른 맞교환 컨의 자리 말은 «자리 미정(앱 짐작 X · 계획 Y)» 한 벌(utils.swapWarnWordOf·posWordOf — 미르 머리줄·«XXXX 어디» 목록·특수화물 줄) ⑫ 끝4 조회 «트윈 가능» 안내도 맞교환 자리면 안 뜸 ⑬ 4.23 머리띠가 일곱 자 판 번호(4.23-01)를 받는다 — 크게 + 440px 미만은 조회 칩 🔍 만·고른 호기 🚛 뺌, 360px 미만 크게 홈은 판 번호 16px(R33 ⑤-2·⑤-4 가 4.23-01 에서 넘침을 잡았다). 회귀 R32·R33.
+// (이전) TallyOne 4.23'   // 4.23 **글자 두 모드(보통 · 크게)와 머리띠 폰 · 컴 배치** — 검수사 2026-10-12 «수석들이 노안이 심한 사람이 많습니다. 두가지 모드로 했으면 합니다» · 불편 «한 화면에 항목이 너무 많다 · 글자가 작아 안 보인다 · 어디에 뭐가 있는지 찾기 어렵다» · 2026-10-13 00:53 «전부 클로드 안대로 수정하고 배포 해주세요». 글자 토큰(tailwind fontSize 3xs~4xl)과 index.css 부품 글자를 CSS 변수로 옮겼다 — html 의 data-text 속성 하나로 갈린다(밝기 2.40 과 같은 수법). 보통은 4.22-04 보다 가장 작은 셋만 한 단계(3xs 9→10 · 2xs 10→11 · xxs 11→12), 크게는 보통 +2px · 터치 44→48 · 칩 40→44. 켜는 곳 utils.applyTextSize 한 곳(기기마다 localStorage · 저장이 막혀도 화면은 바뀜) · main.jsx 그리기 전 · 화면 · 소리 · 글자 창의 글자 크기 줄 · 미르 «글자 크게 / 글자 보통»(runDeviceCmd · 콘앱은 글자 모드가 없어 못 바꾼다고 답함). 그림(FitBox 안 · 베이 격자)과 인쇄는 4.22-04 글자 그대로(fs-keep 클래스 · 인쇄 미디어) · 보드 베이 제목 boardTitlePx 무관. 머리띠 — 폰은 로고 · 선박명 · 판 번호(절대 안 잘림) · 같은 높이 단추(조회 · 호기 · 변경 · 이름 줄임 · ⋮), 컴은 선박명 항차 · 선사와 판 번호. 판 번호는 머리띠에 한 번 크게 — 바닥글 두 곳과 ⋮ 메뉴 줄의 판 번호는 뺐다. 4.22-04 폰 조회만 로그인의 제목 «T.» 잘림 해소. 회귀 R33.
 // (이전) TallyOne 4.22-04'   // 4.22-04 **작업 시작 탭(기존 방식)의 조회창이 하나다 — 2.36 에 심은 «미르 통합 검색» 창(GlobalSearchPage embedded)을 뺐다. 3.41 떠 있는 미르(App MirFab)가 같은 답 함수로 모든 항차 질문을 받는다** — 검수사 2026-10-11 20:13 선적 화면 캡처 «선적시 수동선적 하는데 조회창이 두개가 나와 헷갈립니다» · Fable 판정(SearchPanel·활동 기록 감싸개는 그대로 · 베이뷰는 이미 SearchPanel 하나). VoyagePage 의 voyages·heartbeat 는 그 창에만 쓰여 함께 뺐다(App 전달부 포함). 데미지 이력 카드(2.03 — 그 창에만 있었다)는 components/DamageHistoryCard 한 벌로 떼어 통합검색 화면과 떠 있는 미르가 같이 그린다(Fable 판정 ㈏ — 2.36 «누구는 안다고 하고 누구는 모른다고 하면 안되니까요» · 색인은 카드가 그려질 때 한 번 GET). 떠 있는 미르는 엔진 답(이 항차 «데미지 등록 N대» 등)을 그대로 내고 그 아래 카드를 같이 그린다 — 카드가 있으면 «못 배웠어요»·모델·무응답 신고만 건너뛴다(감사 중 1 · Fable ㉮). «통합 검색 창이 없어졌어» 는 기능 색인 146 으로(nlSearch 화면 요소 사라짐 신호 · 감사 하 5). 매뉴얼 — 기능 색인 90·146, 사용 매뉴얼 데미지 이력 위치(미르 얼굴 또는 수석 대시보드 통합검색)·따라가기 예외(일한 호기가 나뿐이면 최근 완료가 몰린 장). 회귀 R31.
 // (이전) TallyOne 4.22-03'   // 4.22-03 **베이뷰 «따라가기» 가 내 호기 자리만 따라간다 — 다른 호기 베이로 넘어가지 않는다(utils.bayViewFollowOf · 완료 컨 자리 읽기 한 벌 utils.completedPosOf — craneBoardOf·boardBaysOf 가 같이 부른다)** — 검수사 2026-10-11 20:13 «오늘 MCAP선적 하는데 베이뷰 자동으로 하다 보면 베이가 자동으로 이동하는것이 자주 생김 22번 하는데 30번 베이로 가거나 44번 베이로 이동되는등 이상한 현상이 여러번 있었습니다». 원인 — craneBoardOf 가 호기 줄의 자리를 records.bay_actual 로만 읽어, 2호기의 가장 늦은 완료가 양하(자리 기록 없음)·터미널 스냅샷 적용(src term)이면 2호기 줄이 자리를 잃고 따라가기가 boardBaysOf(모든 호기의 최근 완료가 몰린 장 — 3호기 30·34 · 4호기 44·38)로 떨어졌다(MCAP 639N 재생 10:30~11:44 22·34·30 널뛰기). 수정 — 호기 줄 자리는 boardBaysOf 와 같은 순서(실적 → 맞교환 → 계획 EDI)로 읽고, 내 호기가 정해져 있는데 그 호기 자리를 못 내면 bay null — 내 호기 줄이 없으면 «N호기 완료가 아직 없습니다 — 손으로 고르세요», 줄은 있는데 자리를 모르면(동방 QC 합계만 · 자리 못 읽은 완료만) «N호기 자리를 아직 모릅니다 — 손으로 고르세요», 다른 호기 줄이 하나도 없으면(일한 호기가 나뿐) «N호기 자리를 아직 몰라 최근 완료가 몰린 장으로»(Fable 판정 보강). 호기 미지정 폴백은 그대로. 감사 보강 — 수석 보드 호기별 그림은 일한 호기 줄 전부에 자리가 있을 때만(하나라도 모르면 베이로 묶음 · 3.38 전부 아니면 전무 · ChiefDashboard), 호기 줄 자리는 자리 있는 기록 중 가장 늦은 것(posAt — 객체 반복 순서에 기대지 않는다), 매뉴얼 두 줄. 회귀 R30.
 // (이전) TallyOne 4.22-02'   // 4.22-02 **출력 센터 탭의 양하 수가 본문(검수 리스트·부제)과 같은 집합 — 양하 EDI 의 컨번호 없는 빈 자리는 양하 대수에 안 든다** — 검수사 2026-10-10 15:58(KBTR 2608E 출력 센터 «↓ 양하 (183) · ↑ 선적 (272)» 인데 부제 «양하 175대») «아까 수정했던 잔재가 남아 있네요». PrintHubModal 의 탭 셈(countMode)이 «POD 비면 평택» 으로 빈 자리 8줄을 세던 것 — 탭은 지금 모드면 본문 수(count), 다른 모드가 양하면 4.20 ptkDischargeUnitsOf 한 벌, 선적은 종전 셈(불변) · 본문 isPtk 폴백(목록 없는 배)도 빈 자리(isSlotEntry)를 먼저 뺀다. 실측(감사 GET 사본 134벌 양하·선적 화면) — 바뀐 것은 양하 탭뿐이고 전부 본문 부제와 같은 수가 됐다(KBTR 2608E 183 → 175 · MCAP 634N 230 → 326 · XTPG 541E 78 → 128 등 15항차), 선적 탭 불변. 전수(«POD 비면 평택» 꼴) — 양하 대수를 세는 자리는 PrintHubModal 두 곳뿐(utils 의 같은 꼴 넷은 통과·타항 판정에서 «비면 건너뜀» 이라 대수 아님). 앞 판 4.22-01.
@@ -90,7 +91,7 @@ export const APP_VERSION = 'TallyOne 4.23'   // 4.23 **글자 두 모드(보통 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.23 글자를 크게 볼 수 있습니다. 메뉴(⋮)의 화면 · 소리 · 글자에서 크게를 고르세요.'
+export const APP_NOTE = '4.23-01 선적 자동 가이드가 이미 다른 컨이 실린 칸을 다시 내밀지 않고, 다른 호기가 먼저 실어도 베이가 사라지지 않습니다. 규격·풀엠티·항구가 다른 맞교환은 실린 칸을 지정하게 합니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -9692,7 +9693,12 @@ export function applyAutoSwap(voyage) {
       const firstA = occupied[plan[B]];
       if (target) {
         const [tb, tr, tt] = target.split('_'); takenBySwap.add(target);
-        const warn = (edi[firstA] && edi[B] && !sameAttr(edi[firstA], edi[B])) ? `속성 다름(${S(edi[B].iso)}/${S(edi[B].fe)}/${S(edi[B].pod)} ↔ ${S(edi[firstA].iso)}/${S(edi[firstA].fe)}/${S(edi[firstA].pod)})` : '';
+        //  ★ 4.23-01 2차 — 견주는 상대는 **보내는 칸(target)의 계획 주인**이다(사슬이 하나면 종전과 같은 컨 firstA). 문구는 검수사 말로(감사 하-3) —
+        //    «규격·풀엠티·항구가 다름 — 이 컨 45G1 풀 CNTAO · 그 칸 계획 42G1 풀 CNSHA». 이 표식이 있으면 앱은 자리를 정하지 않는다(firebase._markLoadedPos).
+        const Z = planAt[target] || firstA;
+        const feK = (x) => (S(x.fe) === 'E' ? '엠티' : S(x.fe) === 'F' ? '풀' : S(x.fe));
+        const side = (x, y) => [S(isoShown(x.iso)), feK(x), S(x.pol) !== S(y.pol) ? `POL ${S(x.pol)}` : '', S(x.pod)].filter(Boolean).join(' ');   // 규격은 화면 글자(4.21 isoShown — 4530 → 45R1 · 450E → 45GE) · 견주기(sameAttr)는 종전 그대로
+        const warn = (edi[Z] && edi[B] && !sameAttr(edi[Z], edi[B])) ? `규격·풀엠티·항구가 다름 — 이 컨 ${side(edi[B], edi[Z])} · 그 칸 계획 ${side(edi[Z], edi[B])}` : '';
         recs[B] = { ...r, bay_assign: String(parseInt(tb, 10)), row_assign: tr, tier_assign: tt, assign_by: 'auto', assign_at: (recs[firstA] && recs[firstA].actual_at) || Date.now(),
                     _assign_src: 'autoswap', _assign_from: plan[B], _assign_byCn: firstA, ...(warn ? { _assign_warn: warn } : {}) };
         if (recs[B].planTaken) delete recs[B].planTaken;
@@ -9832,6 +9838,103 @@ export function buildOccupancy(list, isDone) {
     if (!prev || (done && !prev.done)) occ.set(k, { cn: c.cn, done });
   }
   return occ;
+}
+
+//  ★ 4.23-01 — **«한 칸에 두 대» 판정 한 벌**(마감 점검 WorkClosingChecklist · 항차 요약 카드 VoyageSummaryCard 가 같이 부른다 — 종전엔 같은 코드가 두 곳에 따로 있었다).
+//    칸을 주장하는 것은 실린 컨(isDone)뿐이고 자리는 effectivePos 한 벌(실자리 → 정해 준 자리 → 계획). 창고는 자리 없음. 칸 글자는 종전 그대로 'BB-RR-TT'(두 자리).
+//    ⚠ 실린 자리 기록이 없는 완료(수석 «터미널 스냅샷 적용» src:'term' · 자리 없이 완료 · 실자리를 지운 컨)는 계획 칸으로 **추정**될 뿐이다 —
+//      검수사 2.94-06 «선적확인이 눌려야 실물이 실린거란 말입니다» · 2.80 «확정은 실물이 실려야 확정이다 … 계획은 보여주는 것».
+//      그 계획 칸에 실린 자리 기록이 있는 컨(실자리·정해 준 자리)이 있으면 실물 둘이 아니라 **«자리 없이 완료»**(unknown)이다 —
+//      실측 보관본 MCAP 639N 선적 «한 칸에 두 대» 5곳이 전부 이 꼴이었다(김성일 실자리 대 자리 없이 반영된 4호기 PDA 4대 — 마감텔리로는 38번에 실림 · 02-03-88 실자리를 지운 컨).
+//      기록이 둘 이상이거나, 기록 없이 추정만 둘 이상이면 종전대로 사고(dup)다. 자료는 고치지 않는다 — 판정·표시만이다.
+//    반환 { dup: [[칸, [cn…]]], unknown: [[칸, { at: 자리 기록이 있는 cn, cns: [추정 cn…] }]] }
+export function loadedSlotClaims(containers, isDone) {
+  const p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
+  const claim = new Map();
+  for (const c of (containers || [])) {
+    if (!c || !isDone(c)) continue;                  // 안 실린 컨은 자리를 주장하지 않는다
+    const p = effectivePos(c);
+    if (p.inStorage) continue;                       // 임시창고 = 자리 없음
+    if (!p.bay || !p.tier) continue;
+    const k = `${p2d(p.bay)}-${p2d(p.row)}-${p2d(p.tier)}`;
+    if (k.startsWith('00-')) continue;
+    const real = p.src === 'actual' || p.src === 'assign';
+    const v = claim.get(k) || { cns: [], real: [], guess: [] };
+    v.cns.push(c.cn); (real ? v.real : v.guess).push(c.cn);
+    claim.set(k, v);
+  }
+  const dup = [], unknown = [];
+  for (const [k, v] of claim) {
+    if (v.cns.length < 2) continue;
+    if (v.real.length === 1) unknown.push([k, { at: v.real[0], cns: v.guess }]);
+    else dup.push([k, v.cns]);
+  }
+  return { dup, unknown };
+}
+
+//  ★ 4.23-01 2차 — **«선적확인 한 번에 저장될 자리» 한 벌**(보이는 자리 = 저장되는 자리). 자동 가이드 카드·큰 카드·컨 상세·리스트가 같은 자리를 같은 낱말로 말한다.
+//    차례는 저장(firebase._markLoadedPos)과 같다 — 실자리 → 정해 준 자리(사람) → 맞교환 자리(3.13 자동, 규격·풀엠티·항구 같음) → 계획.
+//    규격·풀엠티·항구가 다른 맞교환(`_assign_warn`)은 앱이 자리를 정하지 않는다 — 저장도 안 한다(자리 없이 완료). 3.13 원문 «속성 같으면 비운 자리로 자동 맞교환».
+//    반환 { kind: 'actual'|'assign'|'swap'|'swapWarn'|'plan'|'none', pos: 'BB-RR-TT'(저장될 자리 · swapWarn 은 앱이 짐작한 칸), plan: 'BB-RR-TT', byCn, warn, inStorage }
+export function loadingSlotOf(c) {
+  const out = { kind: 'none', pos: '', plan: '', byCn: '', warn: '', inStorage: false };
+  if (!c) return out;
+  const f = (b, r, t) => {
+    const s = (v) => (v === undefined || v === null ? '' : String(v));
+    if (!s(b) || s(b).startsWith('__')) return '';
+    const n = parseInt(b, 10);
+    return `${Number.isFinite(n) ? String(n).padStart(2, '0') : s(b)}-${s(r).padStart(2, '0')}-${s(t).padStart(2, '0')}`;
+  };
+  const p = effectivePos(c);
+  out.inStorage = !!p.inStorage;
+  //  계획 — 맞교환이면 그 컨이 떠난 계획 칸(_assign_from «18_05_82»), 아니면 상위가 남긴 계획(_bay_planned·_edi_bay) → 그대로의 c.bay
+  const from = String(c._assign_from || '').split('_');
+  out.plan = from.length === 3 && from[0] ? f(from[0], from[1], from[2])
+    : (c._bay_planned !== undefined && c._bay_planned !== '' ? f(c._bay_planned, c._row_planned, c._tier_planned)
+      : (c._edi_bay !== undefined && c._edi_bay !== '' ? f(c._edi_bay, c._edi_row, c._edi_tier) : (p.src === 'assign' ? '' : f(c.bay, c.row, c.tier))));
+  if (p.inStorage || !p.bay) return out;
+  out.pos = f(p.bay, p.row, p.tier);
+  if (p.src === 'actual') { out.kind = 'actual'; return out; }
+  if (p.src === 'assign') {
+    //  3.13 자동 맞교환 표식 — `_assign_src:'autoswap'`, 또는 `assign_by:'auto'`(항차 화면 베이 그림 목록은 _assign_src 를 안 실어 온다 — 2차 시뮬 paths2 O2 bay 실측)
+    const auto = String(c._assign_src || '') === 'autoswap' || String(c.assign_by || '') === 'auto';
+    out.byCn = auto ? String(c._assign_byCn || '') : '';
+    out.warn = auto ? String(c._assign_warn || '') : '';
+    out.kind = auto ? (out.warn ? 'swapWarn' : 'swap') : 'assign';
+    return out;
+  }
+  out.kind = 'plan';
+  return out;
+}
+
+//  ★ 4.23-01 3차(재감사 중-2) — **선적에서 아직 안 실린 컨이 맞교환 자리(3.13 — 계획 칸을 남이 차지해 옮겨 보이는 자리)인가** 한 벌.
+//    이 컨은 트윈 짝을 칸으로 짐작하지 않는다 — 그 칸 옆 계획 주인은 같은 트윈으로 오는 컨이 아니다(2차 시뮬 OBWH 0468 거짓 완료).
+//    트윈 조회·수동 트윈(SearchPanel)·자동 가이드(GuidedWorkPanel)·미르 다음 차례(mir.js)가 같이 부른다(종전 SearchPanel 안에만 있었다).
+export function isSwapSlot(x) { return !!x && x._mode === 'loading' && !x._comp && ['swap', 'swapWarn'].includes(loadingSlotOf(x).kind); }
+//  ★ 4.23-01 3차(재감사 중-1) — **사람에게 말하는 자리 한 벌.** 규격·풀엠티·항구가 다른 맞교환(loadingSlotOf kind 'swapWarn')은 화면
+//    (자동 가이드·큰 카드·리스트·상세)이 «자리 미정»이다 — 미르의 말(머리줄 entityHead · «XXXX 어디» 목록 · 특수화물·무게 줄 …)도 같은 말을 한다.
+//    앱이 짐작한 칸은 괄호로만. 그 밖은 fmtPos 그대로(RZOR 도면 말 포함). 양하·덱플랜 좌표 컨은 건드리지 않는다.
+export function swapWarnWordOf(c) {
+  if (!c || c._mode === 'discharge' || c.deckPos) return '';
+  const ls = loadingSlotOf(c);
+  return ls.kind === 'swapWarn' ? `자리 미정(앱 짐작 ${ls.pos}${ls.plan ? ` · 계획 ${ls.plan}` : ''})` : '';
+}
+export function posWordOf(c) { return swapWarnWordOf(c) || fmtPos(c); }
+//  자동 가이드·미르의 트윈 묶기(buildGuidedQueue 의 findTwin) — 앞 컨이나 찾은 짝이 맞교환 자리면 묶지 않는다(트윈 조회 autoMate 와 같은 규칙).
+export function guideTwinOf(findFn) {
+  return (t, all, used) => { if (isSwapSlot(t)) return null; const m = findFn(t, all, used); return m && !isSwapSlot(m) ? m : null; };
+}
+
+//  ★ 4.23-01 2차 — 목록 줄(리스트 탭 containersBase)처럼 «정해 준 자리» 칸을 안 들고 온 컨에 그 항차 기록(구독 — 3.13 맞교환은 메모리에만 있다)의 자리 칸을 얹는다.
+//    얹기만 한다 — c.bay(계획)는 그대로라 목록·통계·인쇄의 기준은 안 바뀐다. 화면 말(loadingSlotOf)과 완료 전 물음(loadingNoPosAsk)만 이것을 본다.
+const _ASSIGN_KEYS = ['bay_assign', 'row_assign', 'tier_assign', 'assign_by', 'assign_at', '_assign_src', '_assign_from', '_assign_byCn', '_assign_warn'];
+export function withAssignOf(c, recs) {
+  if (!c || !c.cn || c.bay_assign) return c;
+  const r = recs && recs[c.cn];
+  if (!r || !r.bay_assign) return c;
+  const o = { ...c };
+  for (const k of _ASSIGN_KEYS) if (r[k] !== undefined && r[k] !== null && r[k] !== '') o[k] = r[k];
+  return o;
 }
 
 /** 위치 키 — 베이는 정수 정규화("038"→"38"). 자리가 없으면 '' */
@@ -9975,6 +10078,11 @@ export function loadingNoPosAsk(c, mode) {
   //  리스트로만 들어온 컨(리스트 전용 선적 RZOR·OBWH 의 가상 선적, 자리 없는 엠티 리스트 등)은 원래 자리가 없다 — 묻지 않는다(감사 지적).
   if (c._virtualFromList || c._virtualEdi || c._src === 'list') return '';
   const has = (v) => v !== undefined && v !== null && String(v) !== '' && !String(v).startsWith('__');
+  //  ★ 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn)은 앱이 자리를 정하지 않는다 — 확인하면 자리 없이 완료된다(firebase._markLoadedPos).
+  const ls = loadingSlotOf(c);
+  if (ls.kind === 'swapWarn') {
+    return `${String(c.cn || '').slice(-4) || '이 컨'} — 계획 칸 ${ls.plan || ''} 은 ${ls.byCn ? String(ls.byCn).slice(-4) + ' 이(가)' : '다른 컨이'} 차지했습니다.\n이 컨은 규격·풀엠티·항구가 달라 앱이 자리를 정하지 않습니다.\n(${ls.warn})\n\n이대로 확인하면 자리 없이 완료됩니다.\n[취소] 를 누르고 «위치 지정» 이나 «기록지 사진» 으로 실린 칸을 먼저 넣어 주세요.\n\n그래도 자리 없이 완료할까요?`;
+  }
   if (has(c.bay) || has(c.bay_actual) || has(c.bay_assign)) return '';
   return `${String(c.cn || '').slice(-4) || '이 컨'} — 선적 자리가 없습니다.\n\n자리 없이 완료하면 베이 그림·콘앱에 나오지 않습니다.\n[취소] 를 누르고 «위치 지정» 이나 «기록지 사진» 으로 자리를 먼저 넣어 주세요.\n\n그래도 자리 없이 완료할까요?`;
 }

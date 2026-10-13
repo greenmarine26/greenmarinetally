@@ -22,6 +22,7 @@ import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, YARD_SPEAK 
 import { askGemini } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
+import { loadingSlotOf, isSwapSlot } from '../utils.js';   // 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리 — 수동 트윈 짝 짐작 막기) · 3차: isSwapSlot 한 벌
 import { bayGroupCenter } from '../swapGrade.js';   // 3.49: 장수 셈의 그룹 center(GuidedWorkPanel 과 같은 벌)
 import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록·장수 사전
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 3.49: 장 묶기(hatchEvenOf 가 받는 목록)
@@ -300,6 +301,13 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         return { ...c, bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual,
                  _bay_planned: c.bay, _row_planned: c.row, _tier_planned: c.tier, _position_moved: true };
       }
+      //  ★ 4.23-01 — «정해 준 자리»(bay_assign — 3.13 자동 맞교환·검수원 지정)도 실체 다음·계획 앞으로 올린다(항차 화면 VoyagePage 3.13 · effectivePos 와 같은 순서).
+      //    종전엔 이 패널만 실체만 올려, 자동 가이드가 «남은 일인가»는 effectivePos(맞교환 자리)로 보고 카드·베이 묶음은 계획 칸으로 그렸다 —
+      //    다른 컨이 이미 실린 칸을 계획 주인으로 다시 내밀고(유령 칸) 그 주인이 갈 베이는 목록에서 빠졌다(실측 MCAP 639N 모의 작업 1·2차).
+      if (c.bay_assign && c.row_assign && c.tier_assign && !String(c.bay_assign).startsWith('__') && !String(c.bay_actual || '').startsWith('__')) {
+        return { ...c, bay: c.bay_assign, row: c.row_assign, tier: c.tier_assign,
+                 _bay_planned: c.bay, _row_planned: c.row, _tier_planned: c.tier, _assigned: true };
+      }
       return c;
     });
   }, [voyage, shiftMapAll, shiftInfoAll]);   // 1.76-05: 시프팅 카드가 큐·목록에 들어가려면 의존에 있어야 한다
@@ -382,7 +390,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           if (!(po && po.done)) swapTo = { bay: pb, row: pr, tier: pt };
         }
       }
-      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0, displaced: 0, swapHints: [] });
+      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0, displaced: 0, swapHints: [], cns: [] });
       if (displaced && swapTo) {
         // 목적지가 확정된 맞교환 — 재배정 카드 count 엔 안 넣고 안내만. 컨 수는 목적지 베이(contLeft)로 이관.
         g0.swapHints.push({ l4: String(c.cn || '').slice(-4), to: `${String(swapTo.bay).padStart(2, '0')}-${swapTo.row}-${swapTo.tier}`, taker: String(taker).slice(-4) });
@@ -390,6 +398,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         return;
       }
       g0.count++;
+      g0.cns.push(c.cn);   // 4.23-01: 이 묶음에 센 컨 — 아래 «🅿 배치» 목록·조회 우선순위가 같은 명단을 쓴다(머리 «N대» 와 목록이 갈리지 않게)
       if (displaced) g0.displaced++;
     });
     const eat = (uni, big) => {
@@ -566,6 +575,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   }, [_hatchFollow, voyageKey, hatchPending]);
 
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib,
+    noBayCns: new Set((manualGroups.find(x => x.noBay)?.cns) || []),   // 4.23-01: «자리 없음» 묶음 명단 — 머리 수·🅿 목록과 같은 한 벌
     pier: voyage?.info?.pier || '',   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
     gangs: voyage?.info?.gangs,
     //  3.6-01: 페이스 분모는 «접안~이안 실작업 시간»이다 — 그 시각과 항차 전체 완료를 같이 내린다.
@@ -894,11 +904,14 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           <div className="text-xxs text-amber-300 font-bold">🅿 배치 — 누르면 베이 화면으로 가서 빈 칸(📦+)을 고릅니다</div>
           {/* 2.93/2.94-01: 창고 대신 «계획 자리를 내줬다»(`planTaken`)를 본다 — 검수앱은 창고를 쓰지 않는다.
               옛 표식(`__STG__`)이 남은 자료도 같이 잡아 같은 말을 한다(검수사 지적 2026-08-31). */}
-          {allContainers.filter(c => c._mode === workFilter && !c._comp && (!c.bay || c.bay_actual === '__STG__' || c.planTaken)).map(c => (
+          {/*  4.23-01: 목록 = 머리 «⚠ 자리 없음 N대» 를 센 명단(manualGroups 자리 없음 묶음 cns) ∪ 종전 조건(좌표 없음·옛 창고·계획 자리 내줌 표식).
+                종전엔 조건만 봐서, 계획 칸을 다른 컨이 차지한 컨(머리에는 셈)이 목록에 안 나와 «머리 18대 · 목록 빈칸»이었다(모의 작업 MCAP 3호기 2차). */}
+          {(() => { const _nb = new Set((manualGroups.find(x => x.noBay)?.cns) || []);
+            return allContainers.filter(c => c._mode === workFilter && !c._comp && (_nb.has(c.cn) || !c.bay || c.bay_actual === '__STG__' || c.planTaken)).map(c => (
             <div key={c.cn} className="flex items-center gap-1.5">
               <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-ink-800 rounded px-2 py-1.5 text-xs mono font-bold text-dim-100">
                 {c.cn} <span className="text-2xs text-dim-300 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
-                {(c.planTaken || c.bay_actual === '__STG__')
+                {(c.planTaken || c.bay_actual === '__STG__' || (c.bay && _nb.has(c.cn)))
                   ? (() => {
                       const from = c.planTaken?.from
                         || (c.bay && c.row && c.tier ? `${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}` : '');
@@ -916,7 +929,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
               <button onClick={() => onPlaceUnassigned(c)}
                 className="px-3 py-1.5 rounded bg-lime-800 hover:bg-lime-700 border border-lime-600 text-lime-100 text-xs font-black">🅿 배치</button>
             </div>
-          ))}
+          )); })()}
         </div>
       )}
       <div className="bg-ink-900 border border-line rounded-pill p-1.5 flex gap-1">
@@ -982,12 +995,18 @@ function announceContainer(c) {
 //   그래서 강제 모달로 흐름을 끊지 않고 한 줄로 띄우고, 다른 항목(무게·목적지·규격)을 눈에 띄게 한다.
 //   판정은 새로 만들지 않는다 — 「✋ 싱글 먼저」 배지와 트윈 화면이 쓰는 findTwinCandidate 그 벌을 그대로 쓰고,
 //   위치는 effectivePos 하나로 본다(계획 자리와 실체 자리가 갈리면 안내가 엉뚱한 자리를 가리킨다).
+//  ★ 4.23-01 2차 — **선적에서 아직 안 실린 컨이 맞교환 자리(3.13 — 계획 칸을 남이 차지해 옮겨 보이는 자리)인가.** 트윈 두 화면(TwinSearch · ManualTwinLoad)이
+//    이 컨을 앞으로 받으면 뒤 컨을 칸으로 짐작하지 않는다 — 그 칸 옆 계획 주인은 같은 트윈으로 오는 컨이 아니다(2차 시뮬 OBWH 0468 거짓 완료).
+//    (4.23-01 3차: 판정은 utils.isSwapSlot 한 벌 — 자동 가이드·미르도 같이 부른다)
+
 function twinHintOf(c, allContainers, shipImo, shipName) {
   if (!c || c._comp || c._mode !== 'loading') return null;
+  if (isSwapSlot(c)) return null;   // 4.23-01 3차(재감사 하-2): 맞교환 자리 컨은 칸 옆 계획 주인과 «트윈 가능» 이라 말하지 않는다(트윈 조회·자동 가이드와 같은 한 벌)
   const p = effectivePos(c);
   if (!p.bay || !p.row || !p.tier) return null;
   const mate = findTwinCandidate({ ...c, bay: p.bay, row: p.row, tier: p.tier }, allContainers, new Set(), shipImo, shipName);
   if (!mate || mate._comp) return null;   // 짝 자리가 비었거나 이미 실었으면 트윈이 아니다.
+  if (isSwapSlot(mate)) return null;   // 4.23-01 3차: 찾은 짝이 맞교환 자리여도 같다
   const mp = effectivePos(mate);
   const pos = mp.bay ? `${String(parseInt(mp.bay, 10)).padStart(2, '0')}-${mp.row}-${mp.tier}` : '자리 없음';
   const samePod = String(c.pod || '') === String(mate.pod || '');
@@ -1126,7 +1145,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   //    ⚠ 베이·단을 아직 안 골랐으면 언제나 false — 그때는 종전대로 여럿을 나란히 보인다.
   const inManualTier = React.useCallback((c) => {
     if (!manualCtx || manualCtx.selectedGroup == null || !manualCtx.selectedTier) return false;
-    if (manualCtx.selectedGroup === -1) return !c.bay;   // V9.23-08: 자리 미지정 묶음
+    if (manualCtx.selectedGroup === -1) return !c.bay || !!(manualCtx.noBayCns && manualCtx.noBayCns.has(c.cn));   // V9.23-08: 자리 미지정 묶음 · 4.23-01: 묶음이 센 명단도(계획 칸을 내준 컨)
     const bp = manualCtx.bayPairs || {};
     const gc = (bs) => { const b = parseInt(bs, 10); if (!Number.isFinite(b)) return null; if (b % 2 === 0) return b; const p = bp[String(b)]; return p ? (b + parseInt(p, 10)) / 2 * 2 - (b % 2 === 0 ? 0 : 1) : b - 1; };
     if (gc(c.bay) !== manualCtx.selectedGroup) return false;
@@ -2122,10 +2141,16 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   //   ⚠ 뒤 칸을 검수사가 이미 채웠으면 건드리지 않는다(사람 입력이 우선).
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
+  //  ★ 4.23-01 2차 — **앞 컨이 맞교환 자리(3.13 — 계획 칸을 남이 차지해 옮겨 보이는 자리)면 뒤 컨을 칸으로 짐작하지 않는다.**
+  //    그 자리 옆 칸의 계획 주인은 이 컨과 같은 트윈으로 오는 컨이 아니다 — 2차 시뮬(OBWH 05 홀드) 앞 SPSU2027009 를 넣자 뒤가 계획 짝 3338 대신
+  //    맞교환 자리 옆 칸 주인 0468 로 채워지고 «플랜 그대로 (짝 확인됨)» → 한 번 누르면 0468 거짓 완료. 뒤 번호는 검수원이 넣는다.
+  //    찾은 뒤 컨이 맞교환 자리인 경우도 같다. 계획 짝을 대신 넣지도 않는다 — 앞 컨이 계획 칸에 안 실렸으니 계획 짝이 어디 실렸는지 앱은 모른다.
+  //    판정은 모듈의 isSwapSlot 한 벌(트윈 조회 TwinSearch 와 같다).
   useEffect(() => {
     if (!c1 || c2 || q2) return;
+    if (isSwapSlot(c1)) return;
     const t = findTwinCandidate(c1, pool, new Set(), shipImo, shipName);
-    if (t) setC2(t);
+    if (t && !isSwapSlot(t)) setC2(t);
   }, [c1, c2, q2, pool, shipImo, shipName]);
 
   const bayPairs = useMemo(() => {
@@ -2311,7 +2336,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
         <div className="mt-2 flex items-center justify-between bg-ink-800 rounded px-2 py-1.5">
           <div>
             <span className="mono text-sm font-bold text-dim-100">{cSel.cn}</span>
-            <span className="ml-2 text-2xs mono text-dim-300">기존 위치 {cSel.bay ? fmtPos(cSel) : '자리 없음'}</span>
+            <span className="ml-2 text-2xs mono text-dim-300">기존 위치 {cSel.bay ? fmtPos(cSel) : '자리 없음'}{isSwapSlot(cSel) ? ` (${loadingSlotOf(cSel).kind === 'swap' ? '맞교환 자리' : '자리 미정 — 규격·풀엠티·항구가 다른 맞교환'} · 계획 ${loadingSlotOf(cSel).plan})` : ''}</span>
             {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-2xs font-bold">⚠ 완료기록</span>}
           </div>
           <button onClick={() => { setCSel(null); setQ(''); }} className="text-xxs text-dim-300 px-1.5">✕</button>
@@ -2375,12 +2400,18 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
             </div>
           )}
 
+          {/* ★ 4.23-01 2차: 앞 컨이 맞교환 자리면 뒤 컨을 앱이 정하지 않는다 — 검수원이 넣는다 */}
+          {c1 && !c2 && isSwapSlot(c1) && (
+            <div className="rounded-pill p-3 border bg-amber-950/40 border-amber-700/60 text-xxs font-bold text-amber-200">
+              앞 컨 {c1.cn?.slice(-4)} 은 맞교환 자리({fmtPos(c1)} · 계획 {loadingSlotOf(c1).plan})라 뒤 컨을 앱이 정하지 않습니다 — 같이 실린 뒤 컨 끝 4자리를 넣으세요.
+            </div>
+          )}
           {/* V9.48: 지정 자리가 우선 — 플랜 짝 자리 그대로면 미배정 없이 바로 확인 */}
           {c1 && c2 && planPair && (
             <>
               <div className={`rounded-pill p-3 border ${planPair.swapped ? 'bg-indigo-950/30 border-indigo-700/60' : 'bg-emerald-950/40 border-emerald-700/60'}`}>
                 <div className={`text-xxs font-bold mb-1.5 flex items-center gap-1 ${planPair.swapped ? 'text-indigo-300' : 'text-emerald-300'}`}>
-                  <Link2 className="w-3.5 h-3.5"/>{planPair.swapped ? '지정 자리 — 앞뒤가 플랜과 반대입니다' : '지정 자리 — 플랜 그대로 (짝 확인됨)'}
+                  <Link2 className="w-3.5 h-3.5"/>{(isSwapSlot(c1) || isSwapSlot(c2)) ? '지정 자리 — 맞교환 자리가 들어 있습니다 (계획 짝이 아님 — 두 번호를 실물과 대조)' : planPair.swapped ? '지정 자리 — 앞뒤가 플랜과 반대입니다' : '지정 자리 — 플랜 그대로 (짝 확인됨)'}
                 </div>
                 <div className="flex items-center justify-center gap-3 text-sm mono">
                   <span className="text-amber-200 font-black">{c1.cn?.slice(-4)} <span className="text-dim-300 font-normal">{fmtPos(c1)}</span></span>
@@ -2388,11 +2419,18 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                   <span className="text-cyan-200 font-black">{c2.cn?.slice(-4)} <span className="text-dim-300 font-normal">{fmtPos(c2)}</span></span>
                 </div>
               </div>
-              {/* 자리를 옮기지 않고 확인만 찍는다 — 앞뒤 입력 순서와 무관하게 안전하다. */}
+              {/* 자리를 옮기지 않고 확인만 찍는다 — 앞뒤 입력 순서와 무관하게 안전하다.
+                  4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환 컨이 끼면 앱이 자리를 정하지 않으므로 이 단추를 내지 않는다(아래 위치 지정으로). */}
+              {[c1, c2].some((x) => x && x._mode === 'loading' && !x._comp && loadingSlotOf(x).kind === 'swapWarn') ? (
+                <div className="rounded-pill p-2 border bg-orange-950/40 border-orange-700/60 text-xxs font-bold text-orange-200">
+                  ⚠ 규격·풀엠티·항구가 다른 맞교환 컨이 있어 앱이 자리를 정하지 않습니다 — 아래 «📍 위치 지정» 으로 실린 칸을 넣으세요.
+                </div>
+              ) : (
               <button onClick={completeAtPlan} disabled={busy}
                 className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
                 {busy ? '처리 중…' : '✅ 지정 자리 그대로 트윈 선적확인'}
               </button>
+              )}
               {/* ── TallyOne 1.55: 액츄얼 작업에서 다른 것은 **자리가 아니라 번호**다(검수사 확정 2026-08-12).
                   종전 문구 「실제 자리가 다릅니다 — 위치 지정하기」는 **오도한다** — 자리는 계획대로 전부 찬다.
                   예외 경로로 내리고 문구를 사실에 맞게 고친다. 다만 앞뒤가 반대로 실린 경우는
@@ -2569,6 +2607,25 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   //   검수사 확정 2026-08-12 — *"EDI가 실어라 한대로 실었습니다. 이게 액츄얼 작업입니다."*
   //   액츄얼에서 검수원이 하는 일은 **칸의 번호를 바꾸는 것**이지 자리를 옮기는 것이 아니다.
   const seqMode = voyage?.info?.seqMode || '';
+  //  ★ 4.23-01 2차 — 자동 짝꿍(칸 기준 findTwinCandidate)은 앞 컨이 맞교환 자리가 아닐 때만. 찾은 뒤 컨이 맞교환 자리여도 넣지 않는다(ManualTwinLoad 와 같은 판정 isSwapSlot).
+  //    4.23-01 1차가 이 목록에 정해 준 자리를 올리면서, 앞 SPSU2027009(맞교환 자리)의 짝이 계획 짝 3338 대신 그 칸 옆 계획 주인 0468 로 바뀌었다 — 한 번 누르면 거짓 완료.
+  const autoMate = (front) => {
+    if (isSwapSlot(front)) return null;
+    const t = findTwinCandidate(front, allContainers, new Set(), shipImo, shipName);
+    return t && !isSwapSlot(t) ? t : null;
+  };
+  //  ★ 4.23-01 마무리 — 맞교환 자리(앱이 짐작한 칸)가 끼었는데 두 자리가 한 트윈 칸(짝 베이 · 같은 열·단)이 아니면 [트윈 한 번에] 를 내지 않는다.
+  //    트윈 한 번 들기는 짝 베이 같은 열·단에 둘이 실린다 — 맞교환 자리 05-02-02 + 계획 07-01-02 처럼 짝이 아니면 적힐 자리 하나가 틀린 것이다(모의 작업장 twin3s 실측).
+  //    짝이면 종전대로(속성 같은 맞교환 자리는 확인 한 번에 저장 — 4.23-01 2차 항목 1). 아니면 앞 카드 «📍 위치 지정»(뒤는 짝 칸으로 같이)으로 두 자리를 넣는다.
+  const twinPairOk = (a, b) => {
+    const bn = (v) => (v ? String(parseInt(v, 10)) : '');
+    const p2 = (v) => String(v || '').padStart(2, '0');
+    const b1 = bn(a && a.bay), b2 = bn(b && b.bay);
+    if (!b1 || !b2 || p2(a.row) !== p2(b.row) || p2(a.tier) !== p2(b.tier)) return false;
+    const bp = bayPairsIn || {};
+    return bp[b1] === b2 || bp[b2] === b1;
+  };
+  const swapNoPair = !!(c1 && c2 && c1._mode === 'loading' && (isSwapSlot(c1) || isSwapSlot(c2)) && !twinPairOk(c1, c2));
   useEffect(() => {
     if (replaced) return;   // V9.50: 손으로 바꿔 놓은 카드를 자동 짝꿍이 되돌리지 않는다
     if (r1.length === 1 && autoTwin) {
@@ -2579,7 +2636,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       setC1(front);
       // 짝꿍 탐색 시 완료된 컨도 후보에 포함(excludeCns 비움)해야
       //   앞을 먼저 완료해도 뒤 컨이 계속 보인다.
-      const twin = findTwinCandidate(front, allContainers, new Set(), shipImo, shipName);
+      const twin = autoMate(front);   // 4.23-01 2차: 앞(또는 찾은 뒤)이 맞교환 자리면 짐작하지 않는다 — 뒤 번호는 검수원이 넣는다(아래 ManualTwinPicker)
       setC2(twin && canCompleteContainer(twin, twin._mode) ? twin : null);   // 3.2-01: 통과분은 짝꿍이 못 된다(수동 지정으로)
     } else if (r1.length === 0) {
       setC1(null);
@@ -2736,7 +2793,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
             {r1.length}개 일치 — 정확히 입력 또는 선택:
             <div className="flex flex-wrap gap-1 mt-1 justify-center">
               {r1.slice(0, 8).map(c => (
-                <button key={c.cn} onClick={() => { setC1(c); setC2(findTwinCandidate(c, allContainers, new Set(), shipImo, shipName)); }}
+                <button key={c.cn} onClick={() => { setC1(c); setC2(autoMate(c)); }}
                   className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
                   {c.cn}{/* 3.3-01: 자리까지 보여야 고른다 */}
                   <span className="ml-1 text-3xs text-rose-300 font-black">{c.deckPos || (c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음')}</span>
@@ -2753,7 +2810,15 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           종전에는 앞 카드·뒤 카드 두 장을 지나 맨 아래에 있어서 스크롤하지 않으면 안 보였다.
           각 카드 안에는 개별 「선적확인」이 있으므로, 검수원은 먼저 보이는 그것을 누르고
           **앞 컨만 기록되고 뒤 컨은 미배정으로 떠돌았다**(실측: 5881 완료 / 짝 5755 자리·완료 모두 없음). */}
-      {c1 && c2 && (
+      {c1 && c2 && [c1, c2].some((x) => x && x._mode === 'loading' && !x._comp && loadingSlotOf(x).kind === 'swapWarn') ? (
+        <div className="rounded-pill p-2 border bg-orange-950/40 border-orange-700/60 text-xxs font-bold text-orange-200">
+          ⚠ 규격·풀엠티·항구가 다른 맞교환 컨({[c1, c2].filter((x) => x && x._mode === 'loading' && !x._comp && loadingSlotOf(x).kind === 'swapWarn').map((x) => x.cn.slice(-4)).join(' · ')})이 있어 앱이 자리를 정하지 않습니다 — 그 카드의 [실린 칸 지정] 으로 실린 칸을 넣으세요.
+        </div>
+      ) : swapNoPair ? (
+        <div className="rounded-pill p-2 border bg-orange-950/40 border-orange-700/60 text-xxs font-bold text-orange-200">
+          ⚠ 앞 {c1.cn.slice(-4)}({fmtPos(c1)}) · 뒤 {c2.cn.slice(-4)}({fmtPos(c2)}) 는 한 트윈 칸이 아닙니다 — 맞교환 자리는 앱이 짐작한 칸입니다. 앞 카드의 «📍 위치 지정» 으로 실린 칸을 넣으세요(뒤는 짝 칸으로 같이 들어갑니다).
+        </div>
+      ) : c1 && c2 && (
         <button onClick={handleCompleteBoth} disabled={twinBusy}
           className="w-full py-3 rounded-pill font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
           <Link2 className="w-5 h-5"/>
@@ -2796,7 +2861,8 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       )}
 
       {c1 && !c2 && (
-        <ManualTwinPicker allContainers={allContainers} c1={c1} onPick={setC2}/>
+        <ManualTwinPicker allContainers={allContainers} c1={c1} onPick={setC2}
+          note={isSwapSlot(c1) ? `앞 컨 ${c1.cn?.slice(-4)} 은 맞교환 자리(${fmtPos(c1)} · 계획 ${loadingSlotOf(c1).plan})라 뒤 컨을 앱이 정하지 않습니다 — 같이 실린 뒤 컨 끝 4자리를 넣으세요.` : ''}/>
       )}
 
       {c1 && c2 && (
@@ -2834,7 +2900,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   );
 }
 
-function ManualTwinPicker({ allContainers, c1, onPick }) {
+function ManualTwinPicker({ allContainers, c1, onPick, note = '' }) {   // 4.23-01 2차: note — 앞 컨이 맞교환 자리라 짝을 안 찾은 이유
   const [q, setQ] = useState('');
   const matches = useMemo(() => {
     if (!q || q.length < 2) return [];
@@ -2853,7 +2919,7 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
     <div className="bg-ink-900 border border-cyan-700/40 rounded-pill p-3">
       <div className="text-2xs text-cyan-400 font-bold mb-2 flex items-center gap-1">
         <span className="bg-cyan-700 text-cyan-50 px-1.5 py-0.5 rounded text-2xs font-black">뒤</span>
-        짝꿍 자동 못 찾음 — 수동 입력
+        {note || '짝꿍 자동 못 찾음 — 수동 입력'}
       </div>
       <div className="relative">
         <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim-400"/>

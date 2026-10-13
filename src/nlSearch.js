@@ -6,6 +6,7 @@
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
 import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -1520,7 +1521,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     const lug = (allContainers || []).filter((c) => c.lugg);
     if (!lug.length) return '🧳 이 항차에 수화물 컨 등록이 없습니다 (선사 메일 기준)';
     const L = [`🧳 수화물 컨 ${lug.length}대 — 여객 수하물, **이적(시프팅) 대상이 아닙니다**`];
-    lug.forEach((c) => L.push(`  ${c.cn} — ${fmtPos(c)}${c.luggSeal ? ` · 씰 ${c.luggSeal}` : ''}${c.fe ? ` [${c.fe}]` : ''}`));
+    lug.forEach((c) => L.push(`  ${c.cn} — ${posWordOf(c)}${c.luggSeal ? ` · 씰 ${c.luggSeal}` : ''}${c.fe ? ` [${c.fe}]` : ''}`));
     L.push('목록에서 보라 박스로 표시됩니다. 씰·컨번호 사진이 있으면 아래에 뜹니다.');
     return L.join('\n');
   }
@@ -1528,7 +1529,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     const urg = (allContainers || []).filter((c) => c.urgent);
     if (!urg.length) return '⚡ 이 항차에 긴급 하역 등록이 없습니다 (선사 메일·긴급 리스트 기준)';
     const L = [`⚡ 긴급 하역 ${urg.length}대 — 긴급블럭 최우선`];
-    urg.forEach((c) => L.push(`  ${c.cn} — ${fmtPos(c)}${c.rf ? ' ❄' : ''}${c.fe ? ` [${c.fe}]` : ''}`));
+    urg.forEach((c) => L.push(`  ${c.cn} — ${posWordOf(c)}${c.rf ? ' ❄' : ''}${c.fe ? ` [${c.fe}]` : ''}`));
     return L.join('\n');
   }
   if (parsed.dmgQuery && !parsed.digits) {
@@ -1541,7 +1542,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     for (const [C, arr] of byCn) {
       const c = posOf.get(C);
       const kinds = [...new Set(arr.flatMap((p) => p.damageTypes || []))].join('·');
-      L.push(`  ${C} — ${c ? fmtPos(c) : '위치 자료 대기'}${kinds ? ` · ${kinds}` : ''}${arr.some((p) => p.promotedFrom) ? ' (예약분)' : ''}`);
+      L.push(`  ${C} — ${c ? posWordOf(c) : '위치 자료 대기'}${kinds ? ` · ${kinds}` : ''}${arr.some((p) => p.promotedFrom) ? ' (예약분)' : ''}`);
     }
     L.push('사진은 아래 썸네일(작업 탭은 끝4 조회 카드)에서 봅니다.');
     return L.join('\n');
@@ -1597,7 +1598,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     if (results.length > 0 && results.length <= 30) {
       lines.push('', '컨별 무게:');
       results.slice(0, 30).forEach(c => {
-        lines.push(`  • ${c.cn?.slice(-4) || '?'} (${fmtPos(c)}): ${formatWt(c.wt || 0)}`);
+        lines.push(`  • ${c.cn?.slice(-4) || '?'} (${posWordOf(c)}): ${formatWt(c.wt || 0)}`);
       });
     }
     return lines.join('\n');
@@ -2259,7 +2260,7 @@ function formatDupL4(desc, results) {
     if (!list.length) return;
     lines.push('', head);
     for (const [k, v] of list) {
-      const one = v.map(c => `${c.cn} ${fmtPos(c)}`).join(' │ ');
+      const one = v.map(c => `${c.cn} ${posWordOf(c)}`).join(' │ ');
       const dirs = [...new Set(v.map(c => dirLabel(c._mode)).filter(Boolean))];
       lines.push(`  ${k}  ${one}${dirs.length === 1 && dirs[0] ? `  (둘 다 ${dirs[0]})` : ''}`);
     }
@@ -2360,7 +2361,7 @@ function specialDetailLines(results, parsed) {
     else if (['fr', 'oog', 'ot'].includes(parsed?.type) && !c.dg && !dims.length) bits.push('치수 자료 없음');
     if (c.sl) bits.push(`씰 ${c.sl}`);   // 2.05 (검수사 «FR 실 어디에 있어» — 씰 질문에 씰번호가 답에 있어야)
     if (c.wt) bits.push(`${(Number(c.wt) / 1000).toFixed(1)}t`);
-    lines.push(`  ${c.cn || '?'} — ${fmtPos(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
+    lines.push(`  ${c.cn || '?'} — ${posWordOf(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
   }
   return lines;
 }
@@ -2390,7 +2391,7 @@ function formatLocationList(desc, results, parsed = null) {
     if (c.dbl) tag.push('⇅2단');
     if (c._comp) tag.push('✅');
     const tagStr = tag.length ? ` [${tag.join(' ')}]` : '';
-    lines.push(`${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${fmtPos(c) || '위치미상'}${tagStr}`);
+    lines.push(`${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${posWordOf(c) || '위치미상'}${tagStr}`);   // 4.23-01 3차: 규격 다른 맞교환은 «자리 미정(앱 짐작 …)» — 머리줄(entityHead)과 같은 말
   });
   if (results.length > max) lines.push(`(${results.length - max}대 더 있음)`);
   lines.push(...specialDetailLines(results, parsed));   // 1.85: 나열 답에도 특수화물 상세
@@ -2752,7 +2753,7 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
       if (c.fe) tag.push(c.fe);
       if (c.rf && c.tmp) tag.push(`${c.tmp}°C`);
       if (c.dg) tag.push(`DG${c.dgc || ''}`);
-      lines.push(`  ${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${fmtPos(c) || '?'}${tag.length ? ' [' + tag.join(' ') + ']' : ''}`);
+      lines.push(`  ${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${posWordOf(c) || '?'}${tag.length ? ' [' + tag.join(' ') + ']' : ''}`);
     });
     if (shown.length > 10) lines.push(`  ... 외 ${shown.length - 10}대`);
   }
@@ -3512,7 +3513,7 @@ function formatCustomsReport(parsed, allContainers, ctx) {
     lines.push('', `➕ 초과 ${extra.length}건 (리스트에 없는데 내려짐 / 신고에 추가):`);
     extra.slice(0, 20).forEach((c, i) => {
       const n = compInfo(c)?.note;
-      lines.push(`  ${i + 1}. ${last4(c)}  ${c.cn || ''} @ ${fmtPos(c) || '위치미상'}${n ? ' — ' + n : ''}`);
+      lines.push(`  ${i + 1}. ${last4(c)}  ${c.cn || ''} @ ${posWordOf(c) || '위치미상'}${n ? ' — ' + n : ''}`);
     });
   }
   if (swapped.length) {

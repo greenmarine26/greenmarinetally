@@ -50,6 +50,9 @@ export default function PositionEditModal({
   //   onTwinSaved — 뒤 컨 자리 저장이 끝난 뒤 부른다. 트윈 화면이 뒤 카드(컨·자리)를 그 결과로 갈아 끼운다.
   autoTwin = false,
   onTwinSaved = null,
+  //  ★ 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환 컨의 «실린 칸 지정»(자동 가이드·큰 카드)은 칸을 고르는 것이 곧 선적확인이다 — 그때만 켠 채로 연다.
+  //    기본은 종전대로 끔(1.46 검수사 «위치수정만 저장되고 트윈 모드 화면으로 가야 하는데 선적 처리가 됩니다»).
+  defaultAlsoComplete = false,
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -89,7 +92,7 @@ export default function PositionEditModal({
       setErrMsg('');
       setManualOpen(false);
       setTwinOn(false); setPartnerQuery(''); setPartnerPick(null);
-      setAlsoComplete(false);   // 1.46: 열 때마다 끔 — 위치 저장과 선적확인을 분리
+      setAlsoComplete(!!defaultAlsoComplete);   // 1.46: 열 때마다 끔 — 위치 저장과 선적확인을 분리 · 4.23-01 2차: 부르는 쪽이 켜 달라면 켠다
       twinTouchedRef.current = false; twinAutoSetRef.current = false;   // 3.75
       setPickedSlotCn(null);
       // V7.94-20: 미배정 컨(위치 없음)인데 현재 작업 베이가 있으면 그 베이 자동 선택 — 전체 베이 재선택 단계 생략
@@ -143,13 +146,15 @@ export default function PositionEditModal({
     if (!open || !container) return [];
     // V7.94-24: 작업 단(workTier)이 지정되면 그 단(홀드 tier<80 / 데크 tier>=80)의 자리만 — 홀드 작업 중엔 홀드 빈자리만 보이게
     const tierMatch = (t) => {
-      if (!workTier) return true;
+      if (workTier !== 'hold' && workTier !== 'deck') return true;   // 4.23-01: «자리 없음» 묶음(단 'none')은 단을 안 가린다 — 종전엔 데크만 남았다
       const ti = parseInt(t, 10);
       return workTier === 'hold' ? ti < 80 : ti >= 80;
     };
     // 1.48: 작업 구역 게이트 — 검수원이 고른 그룹(19·20·21 등)의 베이만. 판정은 bayGroupCenter 한 벌.
     const groupMatch = (b) => {
-      if (workGroup == null) return true;
+      //  4.23-01: «자리 없음» 묶음(SearchPanel NOBAY = -1)은 베이를 안 가린다 — 그 묶음의 컨은 정할 자리가 없어서 거기 있다.
+      //    종전엔 -1 과 맞는 베이가 없어 격자가 통째로 비고 «남은 자리가 없습니다 — 직접 입력» 으로 떨어졌다(모의 작업 MCAP 3호기 2차 9대 직접 입력).
+      if (workGroup == null || parseInt(workGroup, 10) < 0) return true;
       const ctr = bayGroupCenter(b, bayPairs || {});
       return ctr != null && String(ctr) === String(parseInt(workGroup, 10));
     };

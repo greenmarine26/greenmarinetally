@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
+import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -55,6 +55,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   // 알림 전용(선택지 없음) — 문구·방식은 ContainerList·ContainerDetailModal 과 같은 벌을 쓴다.
   const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
   const [posTarget, setPosTarget] = useState(null);   // V7.94-10: 위치 선택창 대상 컨 (c 또는 번호수정으로 고른 실제 컨)
+  //  ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(자동 가이드 카드·컨 상세·리스트와 같은 자리·같은 낱말). 규격 다른 맞교환이면 확인 대신 위치 지정(배정 후 바로 선적확인 켬).
+  const ls = useMemo(() => (c && c._mode === 'loading' && !c._comp ? loadingSlotOf(c) : null), [c]);
+  const [posAlso, setPosAlso] = useState(false);
   // V8.70: 출발지(계획 위치) 기준 트윈 짝꿍 자동 계산 제거 — 싱글 자리 배정에 유령 짝꿍이 붙어
   //   존재하지 않는 자리에 무단 배정·완료되던 원인. 트윈 배정은 PositionEditModal 안에서
   //   도착지(배정 자리) 기준 + 검수사의 "트윈 지정"으로만 이뤄진다.
@@ -154,6 +157,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       //  3.2-01: 통과분은 완료할 수 없다 — 카드가 어느 길로 왔든 여기서 한 번 더(감사 P1-2).
       if (!canCompleteContainer(c, c._mode)) { alert(`평택 ${isDischarge ? '양하' : '선적'} 대상이 아닙니다 (${isDischarge ? 'POD ' + (c.pod || '?') : 'POL ' + (c.pol || '?')}) — 통과화물은 ${verb}할 수 없습니다.`); return; }
+      if (ls && ls.kind === 'swapWarn') { setPosAlso(true); setPosTarget(c); return; }   // 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환 — 앱이 자리를 정하지 않는다(실린 칸 지정)
       { const _np = loadingNoPosAsk(c, c._mode); if (_np && !window.confirm(_np)) return; }   // 3.58-05: 자리 없는 선적 완료
       await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
@@ -331,11 +335,21 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
         {/* 부가 정보 */}
         <div className="flex items-center gap-2 text-xxs mono flex-wrap text-dim-300 pt-2 border-t border-line">
-          {(c.bay || c.deckPos) && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
+          {(c.bay || c.deckPos) && (ls && ls.kind === 'swapWarn'
+            ? <span className="text-orange-300 font-bold">자리 미정</span>
+            : <span className="text-amber-300 font-bold">{fmtPos(c)}</span>)}
           {/* V9.56: RO/RO 겸용선(RZOR) — 갠트리(落地) 작업분인지 한눈에. 크레인 검수 대상이 이것뿐이다. */}
           {c.lolo && <span className="px-1.5 py-0.5 rounded bg-lime-700 text-lime-50 text-2xs font-black">🏗갠트리</span>}
           {c.dbl && <span className="px-1.5 py-0.5 rounded bg-amber-700 text-amber-50 text-2xs font-black">⇅2단</span>}
-          {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
+          {/* ★ 4.23-01 2차: 맞교환 자리는 «수정됨»이 아니다(아직 저장 전) — 가이드 카드와 같은 낱말 «맞교환 자리» · 규격 다른 맞교환은 «자리 미정» */}
+          {ls && (ls.kind === 'swap' || ls.kind === 'swapWarn') && ls.plan && (
+            <span className={`ml-1 px-1 rounded text-2xs font-bold ${ls.kind === 'swap' ? 'bg-sky-900 text-sky-200' : 'bg-orange-900 text-orange-200'}`}>
+              {ls.kind === 'swap'
+                ? `🔄 맞교환 자리 · 계획 칸 ${ls.plan}${ls.byCn ? `에 ${String(ls.byCn).slice(-4)} 이(가) 실렸습니다` : '은 다른 컨이 차지했습니다'}`
+                : `⚠ 계획 칸 ${ls.plan} 은 ${ls.byCn ? `${String(ls.byCn).slice(-4)} 이(가)` : '다른 컨이'} 차지했습니다 — 이 컨은 규격·풀엠티·항구가 달라 앱이 자리를 정하지 않습니다. 실제 실린 칸을 지정하세요 (${ls.warn})`}
+            </span>
+          )}
+          {!(ls && (ls.kind === 'swap' || ls.kind === 'swapWarn')) && c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
             <span className="ml-1 px-1 rounded bg-indigo-900 text-indigo-200 text-2xs font-bold">
               📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '자리 없음'}
             </span>
@@ -357,7 +371,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         }`}>
         {isDone
           ? <><RotateCcw className="w-5 h-5"/>{c._mode === 'discharge' ? '양하확인 취소' : '선적확인 취소'}</>
-          : <><Check className="w-5 h-5"/>{c._mode === 'discharge' ? '양하확인' : '선적확인'}</>
+          : (ls && ls.kind === 'swapWarn'
+            ? <><MapPin className="w-5 h-5"/>실린 칸 지정</>
+            : <><Check className="w-5 h-5"/>{c._mode === 'discharge' ? '양하확인' : '선적확인'}</>)
         }
       </button>
 
@@ -480,7 +496,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 setPosTarget(c);
               }}
               className="w-full py-2.5 rounded-pill font-bold text-xs bg-ink-800 hover:bg-amber-900 text-amber-300 border border-amber-800/70 flex items-center justify-center gap-1.5">
-              <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `계획에 없는 칸에 실렸습니다 — 위치 지정${c.bay ? ` (계획 ${fmtPos(c)})` : ''}`}
+              <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `계획에 없는 칸에 실렸습니다 — 위치 지정${(ls && ls.plan) ? ` (계획 ${ls.plan})` : (c.bay ? ` (계획 ${fmtPos(c)})` : '')}`}
             </button>
           </div>
         </details>
@@ -519,9 +535,11 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       {/* M3.87: 위치 수정 모달 */}
       <PositionEditModal
         open={!!posTarget}
-        container={posTarget || c}
+        container={posAlso ? { ...(posTarget || c), bay: '', row: '', tier: '' } : (posTarget || c)}   /* 4.23-01 2차: 규격 다른 맞교환 — 앱이 짐작한 칸을 미리 고르지 않는다 */
         allContainers={allContainers}
-        onClose={() => setPosTarget(null)}
+        onClose={() => { setPosTarget(null); setPosAlso(false); }}
+        defaultAlsoComplete={posAlso}
+        workBay={posAlso ? (c.bay || null) : null}
         onSave={async (newBay, newRow, newTier, opts) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
           // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지, 사용자 확정)
@@ -540,8 +558,8 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           return result;
         }}
         bayPairs={posEditBayPairs}
-        workGroup={workGroup}
-        workTier={workTier}
+        workGroup={posAlso ? null : workGroup}   /* 4.23-01 2차: 규격 다른 맞교환의 실린 칸은 작업 묶음 밖일 수 있다 — 가이드의 [실린 칸 지정] 과 같이 베이를 안 가린다 */
+        workTier={posAlso ? null : workTier}
         defaultPartner={twinPartner}
         autoTwin={autoTwin}
         onTwinSaved={onTwinSaved ? (info) => onTwinSaved({ ...info, frontCn: (posTarget || c).cn }) : null}

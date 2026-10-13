@@ -9,7 +9,7 @@ import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   //
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
 import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk, withAssignOf, loadingSlotOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
@@ -53,7 +53,7 @@ function shiftPosLabel(p) {
 
 // 1.76-05: dupSeals = utils.dupSealMap(그 모드 전체 컨) — **거른 목록이 아니라 전체**로 판정한다.
 //   필터로 짝이 화면에서 빠져도 중복 배지가 사라지면 안 된다(조용히 실패하는 화면 금지).
-export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer, dupSeals = null, voyageInfo = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로 계산
+export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer, dupSeals = null, voyageInfo = null, recs = null }) {   // 4.23-01 2차: recs — 그 모드 기록(구독 · 3.13 맞교환은 메모리에만) — 줄이 «선적확인 한 번에 저장될 자리»를 말한다   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로 계산
   const [cargoFilter, setCargoFilter] = useState('all');
   const [opFilter, setOpFilter] = useState('all'); // 검수업체 필터
   const [podFilter, setPodFilter] = useState('all'); // POD 도시 필터 (선적용)
@@ -355,7 +355,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
         {filtered.map(c => (
           <ContainerCard
             key={c.cn}
-            c={c}
+            c={mode === 'loading' && !compMap[c.cn] ? withAssignOf(c, recs) : c}
             voyageInfo={voyageInfo}
             comp={compMap[c.cn]}
             isXray={mode === 'discharge' && !!xrayMap[c.cn]}
@@ -605,6 +605,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
             {/* 위치 + 무게 + 검수업체 + POD 강조 */}
             <div className="flex items-center gap-2 mt-1 text-2xs mono flex-wrap">
               {(c.bay || c.deckPos) && <span className="text-amber-200 font-bold">{fmtPos(c)}</span>}
+              {/* ★ 4.23-01 2차: 보이는 자리 = 저장되는 자리 — 줄의 자리는 계획 그대로 두고, [완료]가 다른 자리를 적으면 그 자리를 같은 낱말로 붙인다(가이드 카드·큰 카드·상세와 같다) */}
+              {mode === 'loading' && !comp && c.bay_assign && (() => {
+                const ls = loadingSlotOf(c);
+                if (ls.kind === 'swap') return <span className="text-sky-300 font-bold">🔄 맞교환 자리 {ls.pos}</span>;
+                if (ls.kind === 'assign') return <span className="text-sky-300 font-bold">지정 자리 {ls.pos}</span>;
+                if (ls.kind === 'swapWarn') return <span className="text-orange-300 font-bold">⚠ 자리 미정 — 규격·풀엠티·항구가 다른 맞교환</span>;
+                return null;
+              })()}
               {c.wt > 0 && <span className="text-dim-300">{formatWt(c.wt)}</span>}
               {c.op && <span className="bg-ink-800 px-1 py-0.5 rounded text-dim-200 font-bold">{c.op}</span>}
               {c.pol && <span className="text-dim-400">POL <span className="text-dim-200">{c.pol}</span></span>}

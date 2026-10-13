@@ -147,7 +147,9 @@ module.exports = async function r33({ ROOT, TMP, ok, head, fx, stub, css = '' })
     const r360 = rows360.find((r) => r.w === 360 && r.mode === 'large' && r.sc === '항차 · 조회만 · 1호기').m || {};
     //  우선순위 «선박 코드·판 번호 > 항차 > 이름» — 412 크게 조회만+1호기에서 이름이 항차 번호를 밀어내지 않는다(이름이 먼저 접힌다)
     const r412 = rows360.find((r) => r.w === 412 && r.mode === 'large' && r.sc === '항차 · 조회만 · 1호기').m || {};
-    if (!(r412.voy === 'full' && !r412.nameVis)) bad360.push({ w: 412, mode: 'large', sc: '우선순위(항차 > 이름)', m: r412 });
+    //  4.23-01 — 우선순위는 «이름이 펴지려고 항차를 밀어내지 않는다» 다. 둘 다 들어가면 둘 다 보여도 된다(판 번호 넉 자 «4.23» 이면 크게 440 미만 조회 칩 🔍 만 · 호기 글자만으로 자리가 남아 이름도 펴진다).
+    //    종전 «이름은 접혀 있어야» 는 일곱 자 판 번호에서만 맞았다. 항차가 다 보이는지만 본다(이름 넘침은 hdrBad 의 nameOut·spill 이 잡는다).
+    if (r412.voy !== 'full') bad360.push({ w: 412, mode: 'large', sc: '우선순위(항차 > 이름)', m: r412 });
     ok(`⑤-2 폰 360·412 머리띠 — 보통·크게 × 여섯 상태(SWMM 포함) 전부 한 줄 · 겹침 0 · 오른쪽 끝 ≤ 폭 · 판 번호 다 보임 · 선박 코드 «${r360.vsl && r360.vsl.t}»·SWMM 다 보임(크게 조회만+1호기 제목 «${r360.title}») · 이름 글자는 단추 안(400px 미만은 동그라미만) · 항차 번호 «…» 없음 · 412 크게 조회만+1호기 항차 «${r412.voy}»·이름 ${r412.nameVis ? '펴짐' : '접힘'}(항차가 먼저) · 단추 높이 한 벌`,
       !bad360.length, JSON.stringify(bad360.map((r) => ({ w: r.w, mode: r.mode, sc: r.sc, m: r.m && { right: r.m.right, hscroll: r.m.hscroll, vsl: r.m.vsl, voy: r.m.voy, nameOut: r.m.nameOut, btnH: r.m.btnH, title: r.m.title } }))).slice(0, 600));
     //  ⑤-3 다섯 글자 이름 — 이름 접기·펴기가 되풀이되지 않는가(4.23 2차 재감사 중-1 실측: «김판석수석»·OBWH·4호기 400px 크게에서 15ms 마다 접힘↔펴짐,

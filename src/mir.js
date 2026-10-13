@@ -34,6 +34,7 @@ import {
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
+  guideTwinOf, swapWarnWordOf,   // 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -654,7 +655,12 @@ export function flattenVoyages(voyages) {
         arr.push({
           ...(_useU ? markDischargeUnit(c, _U) : c),   // 4.20: 추가분(_extraOfList)·통과(_ediTransit) 표식
           /* 1.55-03: 실체 위치 승격 — 창고(__)는 제외. */
-          ...((c.bay_actual && c.row_actual && c.tier_actual && !String(c.bay_actual).startsWith('__')) ? { bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual } : {}),
+          ...((c.bay_actual && c.row_actual && c.tier_actual && !String(c.bay_actual).startsWith('__')) ? { bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual }
+            /* ★ 4.23-01 2차: «정해 준 자리»(3.13 맞교환·검수원 지정)도 실체 다음으로 — 항차 화면·자동 가이드·베이 그림(effectivePos)과 같은 차례.
+                 종전엔 미르 «6242 어디» 가 계획 칸(30-03-86)을, 가이드는 맞교환 자리를 말했다(2차 시뮬). 계획은 _bay_planned 로 남긴다. 창고 표식(__)·실린 컨은 안 건드린다. */
+            : (c.bay_assign && c.row_assign && c.tier_assign && !String(c.bay_assign).startsWith('__') && !String(c.bay_actual || '').startsWith('__'))
+              ? { bay: c.bay_assign, row: c.row_assign, tier: c.tier_assign, _bay_planned: c.bay, _row_planned: c.row, _tier_planned: c.tier }
+              : {}),
           voyageKey: vKey,
           vsl: v.info.vsl,
           voy: v.info.voy,
@@ -1021,6 +1027,9 @@ function posOf(c) {
   const p = effectivePos(c);
   if (p.inStorage) return '임시창고';
   if (!p.bay) return '자리 미정';
+  //  ★ 4.23-01 3차(재감사 하-5) — 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn)은 화면(자동 가이드·큰 카드·리스트·상세)이 «자리 미정»이다.
+  //    미르도 같은 말을 한다 — 앱이 짐작한 칸은 괄호로만(종전 «14-05-82(지정)» 은 앱이 정한 자리처럼 들렸다). 판정은 utils.swapWarnWordOf 한 벌.
+  { const w = swapWarnWordOf(c); if (w) return w; }   // 판정·문구는 utils 한 벌(«XXXX 어디» 목록 nlSearch 도 같은 것을 부른다)
   const tag = p.src === 'actual' ? '(실체)' : p.src === 'assign' ? '(지정)' : '';
   return `${p.bay}-${p.row}-${p.tier}${tag}`;
 }
@@ -1603,7 +1612,7 @@ export function mirSee(q, ctx) {
     queue = buildGuidedQueue({
       containers: pool, mode,
       evenRowsSeaSide: side === 'starboard',    // 우현 접안 = 짝수 로우가 해상쪽
-      findTwin: (t, arr, used) => findTwinCandidate(t, arr, used, info.imo || '', info.vsl || ''),
+      findTwin: guideTwinOf((t, arr, used) => findTwinCandidate(t, arr, used, info.imo || '', info.vsl || '')),   // 4.23-01 3차: 화면 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함)
       streamPref: null,
       rowFrom: wo.rowFrom,                                   // 3.3: 양하 «해상부터» — 자동 가이드와 한 벌 (4.09: 이 기기 호기의 순서 조건)
       orderPrefs: mode === 'discharge' ? wo.prefs : null,    // 4.09: 양하 부류 조건(리퍼부터·20부터…) — 화면과 같은 읽기

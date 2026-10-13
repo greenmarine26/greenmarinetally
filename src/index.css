@@ -344,6 +344,16 @@ select:-webkit-autofill {
   :root[data-text="large"] [data-hdr-row] { --tap-chip: 40px; }
   :root[data-text="large"] [data-hdr-right] { gap: 2px; }
 }
+/* 4.23-01(판 A 재감사 상-1) — 판 번호가 «4.23-01»(일곱 자)이면 크게 모드 폰 머리띠가 모자랐다(R33 ⑤-2·⑤-4 실측 — 360 홈 조회만+1호기 ⋮ 1px 밖 ·
+   412 항차·조회만+1호기 항차 번호 접힘 · 320 홈 조회만+1호기 단추 5px 밀림). 수리판(-NN)은 늘 일곱 자다.
+   크게 + 440px 미만은 조회 칩을 🔍 만(뜻은 title·aria-label), 고른 호기 단추는 «1호기» 글자만(🚛 빼고 — 400px 미만은 원래 뺐다). */
+@media (max-width: 439px) {
+  :root[data-text="large"] [data-hdr-viewlabel], :root[data-text="large"] [data-hdr-truck="opt"] { display: none; }
+}
+/*   360px 미만 + 크게 + 홈은 판 번호만 보통 크기(16px — 18px 일곱 자는 320px 에서 단추를 5px 밀었다). 제목 칸 최소 폭도 같은 변수로 줄어든다. */
+@media (max-width: 359px) {
+  :root[data-text="large"] [data-hdr-title][data-hdr-home] { --fs-base: 1rem; }
+}
 @media (min-width: 700px) {
   .hud-tab { flex-direction: row; gap: 8px; min-height: calc(var(--tap) + 4px); font-size: var(--fs-tab-pc); letter-spacing: normal; padding: 6px 10px; }
   .hud-tab .hud-ico { font-size: 20px; }

@@ -4,7 +4,7 @@
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
-import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, dropFilledBookingSlots , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn} from '../utils.js';
+import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, dropFilledBookingSlots , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn, loadedSlotClaims } from '../utils.js';   // 4.23-01: 한 칸에 두 대 판정 한 벌
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 온도·사진 항목을 세지 않는다
   const items = useMemo(() => {
@@ -65,26 +65,13 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     //   그래서 **이름표가 내려온 상태(계획 칸을 다른 컨이 쓰는 것)는 사고가 아니라 정상**이다.
     //   ⚠ 그리고 `bay_actual` 은 더 이상 "실렸다"는 뜻이 아니다 — 검수원이 지정한 자리일 뿐이다.
     //     실렸는지는 `completed/{cn}` 하나로만 판단한다.
-    const _p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
-    const _slotKey = (b, r, t) => `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
-
     // 1) 그 칸에 **실물이 있다**고 말하는 컨 — 기준은 `completed` 하나다.
     //    `bay_actual` 은 검수원이 지정한 자리일 뿐 "실렸다"는 뜻이 아니다(1.55 로 깨진 옛 암묵 규칙).
     //    계획 이름표만 걸린 컨은 여기 안 들어온다 — 그 자리는 빈자리다.
-    const _claim = new Map();
-    containers.forEach(c => {
-      if (!compMap[c.cn]) return;                     // 안 실린 컨은 자리를 주장하지 않는다
-      const _p = effectivePos(c);
-      if (_p.inStorage) return;                       // 임시창고 = 자리 없음
-      const b = _p.bay, r = _p.row, t = _p.tier;
-      if (!b || !t) return;
-      const k = _slotKey(b, r, t);
-      if (k.startsWith('00-')) return;
-      if (!_claim.has(k)) _claim.set(k, []);
-      _claim.get(k).push(c.cn);
-    });
     // 2) 사고 — 한 칸에 실물이 둘. 이것만 경고다(STSE 2658W 사고와 같은 계열).
-    const dupPos = [..._claim.entries()].filter(([, v]) => v.length > 1);
+    //  ★ 4.23-01: 판정은 utils.loadedSlotClaims 한 벌(항차 요약 카드와 같은 함수). 자리 기록이 없는 완료가 계획 칸으로 추정돼
+    //    자리 기록이 있는 컨과 겹치면 사고가 아니라 «자리 모름»(unknownPos)으로 따로 센다(보관본 MCAP 639N 5곳 실측).
+    const { dup: dupPos, unknown: unknownPos } = loadedSlotClaims(containers, (c) => !!compMap[c.cn]);
 
     /* ⛔ 2.94-07: nameOnly(이름표 내려온 컨) 계산·항목 제거 (검수사 확정 2026-08-31)
        원문 — *"야적장 표기도 필요 없는거고 20대든 18대든 목록이 필요 없는것입니다"*
@@ -190,6 +177,18 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         count: dupPos.length,
         desc: dupPos.slice(0, 3).map(([k, v]) => `${k.replace(/-/g, '/')}: ${v.join(' · ')}`).join('  |  ') + (dupPos.length > 3 ? ` 외 ${dupPos.length - 3}곳` : ''),
         color: 'red',
+        jumpTo: { tab: 'bay' },
+      }] : []),
+      //  ★ 4.23-01: 자리 기록 없이 완료된 컨(터미널 스냅샷 적용·자리 없이 완료 등)이 계획 칸으로 추정됐는데 그 칸엔 자리 기록이 있는 다른 컨이 실렸다.
+      //    실물 둘이 아니다(보관본 MCAP 639N — 4호기 PDA 4대는 마감텔리로 38번) — 빨강 사고가 아니라 «그 컨이 어디 실렸는지 모른다»는 알림이다(마감을 막지 않는다).
+      ...(unknownPos.length > 0 ? [{
+        id: 'unknownPos',
+        icon: AlertTriangle,
+        label: '📍 자리 없이 완료 — 계획 칸엔 다른 컨',
+        count: unknownPos.reduce((a, [, v]) => a + v.cns.length, 0),
+        desc: unknownPos.slice(0, 3).map(([k, v]) => `${v.cns.join(' · ')} (계획 ${k.replace(/-/g, '/')} 엔 ${v.at})`).join('  |  ') + (unknownPos.length > 3 ? ` 외 ${unknownPos.length - 3}곳` : '') + ' — 실린 자리를 알면 위치 지정으로 넣으십시오',
+        color: 'amber',
+        info: true,
         jumpTo: { tab: 'bay' },
       }] : []),
       ...(doneN > 0 ? [{

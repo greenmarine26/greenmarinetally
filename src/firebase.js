@@ -923,7 +923,32 @@ export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by, sealerOpt) {
 //     있지도 않은 자리 중복 2곳이 떴다(DB 실제 중복은 0). 마감 점검에도 그대로 올라간다.
 //   옛 실체 값은 지우는 게 아니라 경로에 남긴다 — 검수사 확정: *"이력을 남겨야 오류를 찾기 쉽습니다."*
 //   ⚠ 비차단 — 여기서 실패해도 선적확인 자체는 이미 저장됐다. 검수 흐름을 막지 않는다.
-function _markLoadedPos(voyageKey, mode, cn, by) {
+//  ★ 4.23-01 — 화면이 이 컨을 그린 «맞교환 자리»(3.13 applyAutoSwap — 구독에서 메모리에만 얹는 정해 준 자리)를 DB 에서 다시 낸다.
+//    화면(_postVoyage)과 같은 두 함수를 같은 차례(applyCatosPos → applyAutoSwap)로 그 모드 한 벌에 돌린다. 방금 완료한 컨(cns)은
+//    «누르기 직전» 화면 그대로 아직 안 실린 것으로 본다(완료가 먼저 써져 있으면 맞교환 대상에서 빠지므로).
+//    읽기는 구독 캐시에서 온다(항차 본문·뿌리 구독이 켜져 있으면 SDK get 이 서버에 안 묻는다 — fbCompleteContainer 3.60-09 주석과 같다).
+//    못 읽으면 null — 종전 갈래(기록 자리 → 계획)로 간다(완료는 이미 저장됐고, 자리 기록만 종전과 같아진다).
+//    반환 { bay, row, tier, byCn, warn } | null — warn 은 3.13 `_assign_warn`(규격·풀엠티·항구가 다른 맞교환).
+//    3.13 원문 «속성 같으면 비운 자리로 자동 맞교환» · «다르면 ⚠ 로 보인다» — 다르면 앱이 자리를 정하지 않는다(4.23-01 2차, 부르는 쪽이 적지 않는다).
+async function _autoSwapPosOf(voyageKey, mode, cn, cns) {
+  try {
+    const base = `voyages/${voyageKey}/${mode}`;
+    const [e, r, c, tw] = await Promise.all(['ediContainers', 'records', 'completed', 'termWork']
+      .map((k) => get(ref(db, `${base}/${k}`)).then((s) => s.val())));
+    if (!e || !e[cn]) return null;                                   // 계획이 없는 컨은 맞교환 대상이 아니다(applyAutoSwap 과 같은 조건)
+    const comp = { ...(c || {}) };
+    for (const x of (Array.isArray(cns) && cns.length ? cns : [cn])) delete comp[x];
+    const sec = { ediContainers: e, records: r || {}, completed: comp, ...(tw ? { termWork: tw } : {}) };
+    const v = applyAutoSwap(applyCatosPos({ [mode]: sec }));
+    const rr = v && v[mode] && v[mode].records ? v[mode].records[cn] : null;
+    if (rr && rr._assign_src === 'autoswap' && rr.bay_assign && rr.row_assign && rr.tier_assign) {
+      return { bay: String(rr.bay_assign), row: String(rr.row_assign), tier: String(rr.tier_assign), byCn: rr._assign_byCn || '', warn: rr._assign_warn || '' };
+    }
+  } catch (err) { console.warn('[4.23-01] 맞교환 자리 계산 실패 — 기록 자리·계획으로 적습니다', cn, err); }
+  return null;
+}
+
+function _markLoadedPos(voyageKey, mode, cn, by, cns = null) {
   if (mode !== 'loading' || !voyageKey || !cn) return;
   (async () => {
     try {
@@ -942,9 +967,20 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
       //    창고 표식(`__`)은 아래 1.54 흐름대로 간다.
       const _oa0 = String(cur.bay_actual ?? '');
       if (!hasAssign && _oa0 && !_oa0.startsWith('__')) return;
-      const b = hasAssign ? cur.bay_assign  : (cur.bay  !== undefined ? cur.bay  : (edi.bay  || ''));
-      const r = hasAssign ? cur.row_assign  : (cur.row  !== undefined ? cur.row  : (edi.row  || ''));
-      const t = hasAssign ? cur.tier_assign : (cur.tier !== undefined ? cur.tier : (edi.tier || ''));
+      //  ★ 4.23-01 — **화면이 보인 맞교환 자리로 적는다.** 3.13 자동 맞교환은 메모리에만 있어서, 화면(자동 가이드 카드·베이 그림·큰 카드)은
+      //    이 컨을 «다른 컨이 비운 계획 칸»에 그렸는데 [선적확인] 은 DB 의 기록 자리·계획 칸을 적었다 — 계획 칸에는 이미 다른 컨이 실려
+      //    «한 칸에 두 대», 기록 자리가 비어 있으면(«자리 없음») 자리 없이 완료됐다(모의 작업 MCAP 2호기 2차 seq 23 — MRSU3244990).
+      //    사람이 정한 자리(assign)·실자리(actual)가 있으면 종전 그대로다(그때는 화면도 그 자리를 그린다).
+      const auto = hasAssign ? null : await _autoSwapPosOf(voyageKey, mode, cn, cns);
+      //  ★ 4.23-01 2차 — **규격·풀엠티·항구가 다른 맞교환(`_assign_warn`)은 실자리로 적지 않는다.** 3.13 원문 «속성 같으면 비운 자리로
+      //    자동 맞교환» — 다르면 앱이 자리를 정하지 않는다. 모의 작업 2차 시뮬(OBWH FBIU5779479 풀 리퍼 CNYYY)에서 엠티 CNYNT 계획 칸
+      //    14-05-82 가 확인 한 번에 실자리로 저장됐다(마감텔리 14-04-82). 종전 갈래(기록 자리 → 계획)도 쓰지 않는다 — 계획 칸에는 이미
+      //    남이 실려 있어 그 칸을 적으면 «한 칸에 두 대» 다. 자리 없이 완료로 두고 마감 점검 «📍 자리 없이 완료» 가 알린다.
+      //    화면은 이 컨에서 [선적확인] 대신 위치 지정을 연다(GuidedWorkPanel·BigResultCard)·리스트·상세는 utils.loadingNoPosAsk 가 먼저 묻는다.
+      if (auto && auto.warn) { console.info('[4.23-01] 규격·풀엠티·항구가 다른 맞교환 — 실자리를 적지 않습니다', cn, auto.warn); return; }
+      const b = hasAssign ? cur.bay_assign  : auto ? auto.bay  : (cur.bay  !== undefined ? cur.bay  : (edi.bay  || ''));
+      const r = hasAssign ? cur.row_assign  : auto ? auto.row  : (cur.row  !== undefined ? cur.row  : (edi.row  || ''));
+      const t = hasAssign ? cur.tier_assign : auto ? auto.tier : (cur.tier !== undefined ? cur.tier : (edi.tier || ''));
       if (!b || !r || !t) return;                       // 자리 없이 완료된 건은 손대지 않는다
       const bI = String(parseInt(b, 10));
       const oa = String(cur.bay_actual ?? '');
@@ -960,15 +996,22 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
       const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
       moves.push({ at: Date.now(), by: by || '',
                    from: fromStorage ? STORAGE_TXT : pos(cur.bay_actual, cur.row_actual, cur.tier_actual),
-                   to: pos(b, r, t), why: 'loaded', byCn: '' });
+                   to: pos(b, r, t), why: 'loaded', byCn: auto ? auto.byCn : '' });   // 4.23-01: 맞교환 자리면 그 계획 칸을 차지한 컨(«어떤 컨테이너로 바뀌어서» — 1.50)
+      //  4.23-01: 맞교환 자리로 적을 때는 기록 자리(records bay/row/tier)도 같이 옮긴다 — 재배정의 칸 판정(fbReassignContainerPosition)이
+      //    이 컨을 계획 칸에 있는 것으로 읽지 않게. 검수원이 자리를 정해 실었을 때(_updatePositionFields)와 같은 모양이고, 처음 계획(_orig)은 처음 한 번만 남긴다.
+      const _mirror = auto ? {
+        bay: bI, row: r, tier: t,
+        ...(cur.bay_orig === undefined ? { bay_orig: cur.bay !== undefined ? cur.bay : (edi.bay || ''), row_orig: cur.row !== undefined ? cur.row : (edi.row || ''), tier_orig: cur.tier !== undefined ? cur.tier : (edi.tier || '') } : {}),
+      } : {};
       await update(recR, {
         bay_actual: bI, row_actual: r, tier_actual: t,
         actual_at: Date.now(), actual_by: by || '',
         // 2.94-06: 실물이 됐으니 «정해 준 자리»는 걷는다 — 한 컨에 자리가 둘일 수 없다.
         bay_assign: null, row_assign: null, tier_assign: null, assign_at: null, assign_by: null,
+        ..._mirror,
         moves: moves.slice(-40),
       });
-    } catch { /* 경로 기록 실패가 선적확인을 막지 않는다 */ }
+    } catch (err) { console.warn('[1.50] 실린 자리 기록 실패 — 선적확인은 이미 저장됐습니다', cn, err); }   // 경로 기록 실패가 선적확인을 막지 않는다(4.23-01 감사 하-8: 빈 catch 금지)
   })();
 }
 
@@ -1060,7 +1103,7 @@ export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip
     patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = eq ? { by, at, equip: eq } : { by, at };
   }
   await update(ref(db), patch);
-  for (const cn of list) _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 트윈 둘 다 경로 남김
+  for (const cn of list) _markLoadedPos(voyageKey, mode, cn, by, list);   // 1.50: 트윈 둘 다 경로 남김 · 4.23-01: 같이 실은 컨은 맞교환 계산에서 둘 다 «누르기 직전» 상태로
   for (const _ of list) _tallyInspector(voyageKey, mode, by);   // V9.16: 트윈도 대수만큼 누적
 }
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
@@ -1330,10 +1373,10 @@ export async function fbCancelComplete(voyageKey, mode, cn, opts = {}) {
         const e = ediMap[otherCn] || {}, r = recMap[otherCn] || {};
         // TallyOne 1.47: 위 재배정 함수와 같은 잣대(`!== undefined`). 종전 `||` 는 미배정(`''`)을
         //   EDI 계획 자리로 되살려, **이미 비운 컨이 원자리를 막고 있는 것으로** 읽혔다.
-        const xb = r.bay !== undefined ? r.bay : (e.bay || '');
-        const xr = r.row !== undefined ? r.row : (e.row || '');
-        const xt = r.tier !== undefined ? r.tier : (e.tier || '');
-        if (xb && String(parseInt(xb, 10)) === obInt && xr === orow && xt === ot) { occupant = otherCn; break; }
+        //  ★ 4.23-01 2차(감사 하-1): 재배정과 같은 한 벌(_dbPosOf — 실자리 → 기록 자리 → 계획). 종전엔 실자리만 적힌 컨(기록지 사진·맞교환 자리 확인)을
+        //    제 계획 칸에 있는 것으로 읽어, 그 컨이 실제로 실린 원자리를 비어 있다고 보고 되돌렸다.
+        const { bay: xb, row: xr, tier: xt } = _dbPosOf(r, e);
+        if (xb && String(parseInt(xb, 10)) === obInt && String(xr) === String(orow) && String(xt) === String(ot)) { occupant = otherCn; break; }
       }
     }
     if (occupant) {
@@ -1567,6 +1610,24 @@ function isFullCn(c) {
   return String(v === undefined || v === null ? '' : v).trim().toUpperCase() === 'F';
 }
 
+//  ★ 4.23-01 — **재배정이 «이 컨이 지금 DB 에서 어느 칸에 있나»를 읽는 한 벌**(옮기는 컨의 옛 자리 · 충돌 검사 · 밀려난 컨의 빈 칸 검사).
+//    실자리(`bay_actual` — «__» 표식 아님) → 기록 자리(`records.bay` — '' 는 1.47 «미배정», 자리 없음) → 계획(EDI). 화면 effectivePos 의 실자리 우선과 같다.
+//    종전엔 기록 자리 → 계획만 봐서, 실자리만 적는 길(기록지 사진·컨 상세 «위치 지정»·베이 그림 빈 칸 — fbSetActualPosition)로 다른 칸에 실린 컨을
+//    제 계획 칸에 있는 것으로 읽었다 — 그 계획 칸에 다른 컨을 넣으면 실린 컨을 «진짜 충돌»로 밀어내 실자리를 지웠다.
+//    4.23-01 부터 자동 가이드가 맞교환 자리(남이 비운 계획 칸)를 카드로 내므로 그 칸이 바로 그런 칸이 된다. 창고 표식은 부르는 쪽이 따로 거른다(종전 그대로).
+function _dbPosOf(rec, edi) {
+  const r = rec || {}, e = edi || {};
+  const ba = r.bay_actual;
+  if (ba !== undefined && ba !== null && ba !== '' && !String(ba).startsWith('__') && r.row_actual && r.tier_actual) {
+    return { bay: String(ba), row: String(r.row_actual), tier: String(r.tier_actual) };
+  }
+  return {
+    bay: r.bay !== undefined ? r.bay : (e.bay || ''),
+    row: r.row !== undefined ? r.row : (e.row || ''),
+    tier: r.tier !== undefined ? r.tier : (e.tier || ''),
+  };
+}
+
 // M3.87: 컨테이너 위치 재배정 (선적 모드용)
 //   - 새 위치(bay/row/tier)로 이동
 //   - 이력 추적 (edits.bay, edits.row, edits.tier) + 경로 한 줄(moves)
@@ -1612,9 +1673,8 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     const recSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const ediSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`));
     const recA = recSnapA.val() || {}; const ediA = ediSnapA.val() || {};
-    aOldBay = recA.bay !== undefined ? recA.bay : (ediA.bay || '');
-    aOldRow = recA.row !== undefined ? recA.row : (ediA.row || '');
-    aOldTier = recA.tier !== undefined ? recA.tier : (ediA.tier || '');
+    const _pA = _dbPosOf(recA, ediA);   // 4.23-01: 실자리 → 기록 자리 → 계획(한 벌)
+    aOldBay = _pA.bay; aOldRow = _pA.row; aOldTier = _pA.tier;
   }
   // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
   let displaced = null;
@@ -1653,9 +1713,9 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       // TallyOne 1.47: **자리 판정 잣대를 이 함수 안에서 하나로 통일한다.**
       //   종전 `recC.bay || ediC.bay` 는 미배정(`bay:''`)을 falsy 로 보고 **EDI 계획 자리로 되살렸다.**
       //   그래서 자리를 비운 컨이 그림에서도 목록에서도 그 칸을 계속 점유했다(유령 충돌).
-      const oBay = recC.bay !== undefined ? recC.bay : (ediC.bay || '');
-      const oRow = recC.row !== undefined ? recC.row : (ediC.row || '');
-      const oTier = recC.tier !== undefined ? recC.tier : (ediC.tier || '');
+      //  4.23-01: 실자리가 있으면 실자리(_dbPosOf 한 벌) — 기록지 사진·위치 지정으로 다른 칸에 실린 컨이 제 계획 칸을 막지 않는다.
+      const _pC = _dbPosOf(recC, ediC);
+      const oBay = _pC.bay, oRow = _pC.row, oTier = _pC.tier;
       if (!oBay) continue;
       // TallyOne 1.54: **창고에 있는 컨은 배 위 자리를 차지하지 않는다.**
       //   1.54 부터 계획은 안 지우므로 한 칸에 이름표가 둘 이상 남는다(뺏긴 컨 + 뺏은 컨).
@@ -1762,9 +1822,8 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       for (const oc of new Set([...Object.keys(ediMap0), ...Object.keys(recMap0)])) {
         if (oc === cn || oc === displaced) continue;
         const rc = recMap0[oc] || {}, ec = ediMap0[oc] || {};
-        const ob = rc.bay !== undefined ? rc.bay : (ec.bay || '');
-        const orw = rc.row !== undefined ? rc.row : (ec.row || '');
-        const ot2 = rc.tier !== undefined ? rc.tier : (ec.tier || '');
+        const _pO = _dbPosOf(rc, ec);   // 4.23-01: 위 충돌 검사와 같은 한 벌
+        const ob = _pO.bay, orw = _pO.row, ot2 = _pO.tier;
         if (!ob) continue;
         if (String(rc.bay_actual ?? '') === STORAGE_BAY) continue;   // 창고 컨은 자리를 안 막는다
         if (String(parseInt(ob, 10)) === bi && orw === r && ot2 === t) return false;

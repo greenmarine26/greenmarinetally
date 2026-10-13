@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos, shiftSplitOf, isShiftOffPtk, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn} from '../utils.js';
+import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, shiftSplitOf, isShiftOffPtk, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn, loadedSlotClaims } from '../utils.js';   // 4.23-01: 한 칸에 두 대 판정 한 벌
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
   //  2.89-06: 시프팅은 평택 축에서 뺀다 — 재선적 기록이 리스트 등록 조건(recMap)에 걸려 총계·완료를 부풀렸다.
@@ -96,25 +96,11 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     //   `c.bay` 가 진짜 계획이 된 뒤로 **계획 칸을 다른 컨이 쓰는 것은 정상**이다.
     //   ⚠ `bay_actual` 은 "실렸다"가 아니다 — 실렸는지는 `completed/{cn}` 하나로만 판단한다.
     //   (마감 점검 WorkClosingChecklist 와 같은 규칙 — 두 화면이 같은 숫자를 말해야 한다.)
-    const _p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
-    const _slotKey = (b, r, t) => `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
-
     // 그 칸에 **실물이 있다**고 말하는 컨 — 기준은 `completed` 하나다.
     //   `bay_actual` 은 검수원이 지정한 자리일 뿐 "실렸다"가 아니다. 이름표만 걸린 컨은 자리를 주장하지 않는다.
-    const _claim = new Map();
-    containers.forEach(c => {
-      if (!compMap[c.cn]) return;                     // 안 실린 컨은 자리를 주장하지 않는다
-      const _p = effectivePos(c);
-      if (_p.inStorage) return;                       // 임시창고 = 자리 없음
-      const b = _p.bay, r = _p.row, t = _p.tier;
-      if (!b || !t) return;
-      const k = _slotKey(b, r, t);
-      if (k.startsWith('00-')) return;
-      if (!_claim.has(k)) _claim.set(k, []);
-      _claim.get(k).push(c.cn);
-    });
     // 사고 — 한 칸에 실물이 둘 (STSE 2658W 계열). 이것만 빨강이다.
-    const dupPos = [..._claim.entries()].filter(([, v]) => v.length > 1);
+    //  ★ 4.23-01: 판정은 utils.loadedSlotClaims 한 벌(마감 점검과 같은 함수) — 자리 기록 없는 완료가 계획 칸으로 추정돼 겹친 것은 «자리 모름»(빨강 아님).
+    const { dup: dupPos, unknown: unknownPos } = loadedSlotClaims(containers, (c) => !!compMap[c.cn]);
 
     /* ⛔ 2.94-07: nameOnly(이름표 내려온 컨) 계산 제거 — 화면이 안 쓴다.
        검수사 확정 2026-08-31 *"20대든 18대든 목록이 필요 없는것입니다"* */
@@ -138,6 +124,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
       iso403Total: iso403Targets.length,
       iso403Pending: iso403Pending.length,
       dupPos,   // V9.24: [[자리키, [cn,...]], ...]
+      unknownPos,   // 4.23-01: [[자리키, { at, cns }], ...] — 자리 기록 없는 완료가 남이 실린 계획 칸으로 추정된 것
     };
   }, [voyage, mode]);
 
@@ -215,6 +202,15 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
             color="red"
             label="🔴 한 칸에 두 대"
             value={`${summary.dupPos.length}곳 — ${summary.dupPos.slice(0, 2).map(([k, v]) => `${k.replace(/-/g, '/')} ${v.join('·')}`).join(', ')}${summary.dupPos.length > 2 ? ' 외' : ''}`}
+          />
+        )}
+        {/* ★ 4.23-01: 자리 기록 없이 완료된 컨이 남이 실린 계획 칸으로 추정된 것 — 실물 둘이 아니므로 빨강이 아니다(마감 점검 «📍 자리 없이 완료» 와 같은 판정 utils.loadedSlotClaims). */}
+        {summary.unknownPos?.length > 0 && (
+          <Chip
+            icon={AlertTriangle}
+            color="orange"
+            label="📍 자리 없이 완료"
+            value={`${summary.unknownPos.reduce((a, [, v]) => a + v.cns.length, 0)}대 — ${summary.unknownPos.slice(0, 2).map(([k, v]) => `${v.cns.join('·')}(계획 ${k.replace(/-/g, '/')})`).join(', ')}${summary.unknownPos.length > 2 ? ' 외' : ''}`}
           />
         )}
         {/* 1.55: 「자리 뺏김」이 아니다 — 이름만 빌려준 것이고 그 자리는 빈자리다.

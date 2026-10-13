@@ -8,6 +8,7 @@ import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문�
 import { isoConflictOf, ISO_SRC_NAME } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다
+import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
 import { completedByLabel, EXTRA_OF_LIST_LABEL } from '../utils.js';   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
@@ -636,7 +637,8 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             {!c.bay && mode === 'loading' && !c.planTaken && c.bay_actual !== '__STG__' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-2xs px-1.5 py-0.5 rounded font-black">선적대상</span>
             )}
-            {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
+            {/* 4.23-01 2차: 맞교환 자리(아직 저장 전)는 «수정됨»이 아니다 — 아래 «실을 자리» 줄이 같은 낱말로 말한다 */}
+            {!(mode === 'loading' && !c._comp && ['swap', 'swapWarn'].includes(loadingSlotOf(c).kind)) && c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
               <span className="ml-2 bg-indigo-900 text-indigo-200 text-2xs px-1.5 py-0.5 rounded font-bold">
                 📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '자리 없음'}
               </span>
@@ -668,9 +670,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     className="text-2xs text-rose-400 hover:text-rose-300">삭제</button>
                 ) : !editingActualPos ? (
                   <button onClick={() => {
-                    setActualBay(c.bay_actual || c.bay_assign || c.bay || '');
-                    setActualRow(c.row_actual || c.row_assign || c.row || '');
-                    setActualTier(c.tier_actual || c.tier_assign || c.tier || '');
+                    //  4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환은 앱이 짐작한 칸(정해 준 자리)을 미리 채우지 않는다 — 실린 칸을 검수원이 넣는다(가이드·큰 카드 위치 지정과 같은 기준).
+                    const _sw = loadingSlotOf(c).kind === 'swapWarn';
+                    setActualBay(_sw ? '' : (c.bay_actual || c.bay_assign || c.bay || ''));
+                    setActualRow(_sw ? '' : (c.row_actual || c.row_assign || c.row || ''));
+                    setActualTier(_sw ? '' : (c.tier_actual || c.tier_assign || c.tier || ''));
                     setEditingActualPos(true);
                   }}
                   className="bg-cyan-700 hover:bg-cyan-600 text-cyan-50 px-2 py-1 rounded text-2xs font-black flex items-center gap-1">
@@ -701,11 +705,25 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     )}   {/* 3.16: 업체 글자 대신 사람 이름(없으면 조 등록 근무자, 그것도 없으면 «터미널 반영»)
                         3.20: 표식을 안 가린다 — 'catos' 만 보던 탓에 **동방(pnct) 배는 이 자리가 조용히 빈칸**이었다 */}
                   </div>
-                ) : (
-                  <div className="text-xs text-dim-400">
-                    미입력 (계획 위치대로 선적 예정)
-                  </div>
-                )
+                ) : (() => {
+                  //  ★ 4.23-01 2차 — 보이는 자리 = 저장되는 자리. 종전엔 맞교환 자리·지정 자리가 있어도 «계획 위치대로» 라고 했는데 [선적확인] 은 그 자리를 적었다.
+                  const ls = loadingSlotOf(c);
+                  const who = ls.byCn ? `${String(ls.byCn).slice(-4)} 이(가)` : '다른 컨이';
+                  if (ls.kind === 'swap') return (
+                    <div className="text-xs text-sky-300 font-bold">미입력 — [선적확인] 하면 맞교환 자리 {ls.pos} 로 저장됩니다 (계획 칸 {ls.plan} 은 {who} 차지)</div>
+                  );
+                  if (ls.kind === 'assign') return (
+                    <div className="text-xs text-sky-300 font-bold">미입력 — [선적확인] 하면 지정 자리 {ls.pos} 로 저장됩니다</div>
+                  );
+                  if (ls.kind === 'swapWarn') return (
+                    <div className="text-xs text-orange-300 font-bold">미입력 — 계획 칸 {ls.plan} 은 {who} 차지했습니다. 이 컨은 규격·풀엠티·항구가 달라 앱이 자리를 정하지 않습니다 — [수정 위치 입력]으로 실린 칸을 넣으세요 ({ls.warn})</div>
+                  );
+                  return (
+                    <div className="text-xs text-dim-400">
+                      미입력 (계획 위치대로 선적 예정)
+                    </div>
+                  );
+                })()
               ) : (
                 // 입력 모드
                 <div className="space-y-2">

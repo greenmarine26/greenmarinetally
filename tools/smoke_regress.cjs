@@ -2333,6 +2333,614 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     }
   }
 
+  // ── R32 ───────────────────────────────────────────────────────────────
+  //  4.23-01 — 선적 자동 가이드의 «유령 칸»(이미 다른 컨이 실린 칸을 계획 주인으로 다시 내민다)·«베이 묶음 사라짐»(다른 호기가 먼저 실으면 그 베이가 목록에서 빠진다)·«한 칸에 두 대» 판정 한 벌.
+  head('R32 선적 자동 가이드는 이미 실린 칸을 다시 내밀지 않는다 · 계획 칸을 내준 컨은 3.13 맞교환 자리(남이 비운 계획 칸)로 카드·베이 묶음에 서고 [선적확인] 이 그 자리를 적는다 · 다른 호기가 먼저 실어도 베이 묶음이 남는다 · «한 칸에 두 대» 는 자리 기록이 있는 실물 둘만(자리 기록 없는 완료의 계획 추정은 «자리 없이 완료») (4.23-01)',
+    '모의 작업장(실서비스 읽기 사본 · 로컬 에뮬레이터) MCAP 639N 선적 1차 3호기 seq 173~182(유령 칸 11회)·2차 2호기 seq 23(«선적확인» 한 번에 한 칸 두 대)·2차 3호기 B30(그룹 «완료»로 사라짐) · 검수사 2026-10-11 20:13 «22번 하는데 30번 베이로 가거나 44번 베이로 이동» · 검수사 3.13 «밀려난 계획 컨 → 속성 같으면 비운 자리로 자동 맞교환 … 컨테이너가 겹쳐 있어도 안됩니다» · 2.94-06 «선적확인이 눌려야 실물이 실린거란 말입니다» · 자리 확인 매뉴얼 «다른 컨을 넣었다면 그 컨은 온 컨이 있던 옛 자리로 가서 기다립니다»');
+  {
+    const GX = fx('guide42205_mcap.json');
+    const vk = GX.key;
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    const U32 = bundle(`export { applyAutoSwap, applyCatosPos, loadedSlotClaims, effectivePos, loadingSlotOf, withAssignOf, loadingNoPosAsk } from "${ROOT}/src/utils.js";`, 'u32', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
+    const F32 = bundle(`export { fbCompleteContainer, fbCompleteContainersAtomic, fbReassignContainerPosition, fbSetActualPosition } from "${ROOT}/src/firebase.js";\n`, 'f32', `--alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub}`);
+    const p2 = (x) => String(x == null ? '' : x).padStart(2, '0');
+    const P = (b, r, t) => `${parseInt(b, 10)}-${p2(r)}-${p2(t)}`;
+    const planOf = (cn) => { const e = GX.plan.ediContainers[cn]; return P(e.bay, e.row, e.tier); };
+    const fresh = (mut) => { const L = { ediContainers: clone(GX.plan.ediContainers), records: clone(GX.plan.records), completed: {} }; if (mut) mut(L); global.__memdb = { voyages: { [vk]: { info: clone(GX.info), loading: L } } }; global.__memlog = []; return L; };
+    const Lnow = () => global.__memdb.voyages[vk].loading;
+    const actualOf = (cn) => { const r = Lnow().records[cn] || {}; return r.bay_actual ? P(r.bay_actual, r.row_actual, r.tier_actual) : ''; };
+    //  구독 콜백(firebase._postVoyage)과 같은 두 손질 — 화면은 이 모양을 받는다
+    const viewOf = () => U32.applyAutoSwap(U32.applyCatosPos({ key: vk, info: clone(GX.info), loading: clone(Lnow()), discharge: {} }));
+    //  «지금 실린 칸» — 원자료에서 따로 센다: 완료 컨의 실자리(records bay_actual) · 실자리가 없으면 계획(EDI)
+    const filledSlots = (L) => { const m = new Map(); for (const cn of Object.keys(L.completed || {})) { const r = (L.records || {})[cn] || {}; const e = L.ediContainers[cn] || {}; const k = r.bay_actual ? P(r.bay_actual, r.row_actual, r.tier_actual) : (e.bay ? P(e.bay, e.row, e.tier) : ''); if (k) m.set(k, cn); } return m; };
+    localStorage.setItem('tallyone_me_today', JSON.stringify({ name: '김성일', ymd: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) }));
+    localStorage.setItem('master_active_inspector_v1', '연막');
+    //  자동 가이드 화면(항차 화면 VoyagePage 실소스 · jsdom) — 작업 시작 탭 → 🤖 자동 가이드 → 묶음 → 단 → 카드·다음 예정
+    const e32 = path.join(TMP, 'r42205.jsx'), o32 = path.join(TMP, 'r42205.js');
+    fs.writeFileSync(e32, [
+      `import React from "${ROOT}/node_modules/react/index.js";`,
+      `import { createRoot } from "${ROOT}/node_modules/react-dom/client.js";`,
+      `import VoyagePage from "${ROOT}/src/pages/VoyagePage.jsx";`,
+      `import PositionEditModal from "${ROOT}/src/components/PositionEditModal.jsx";`,
+      `window.__R32go = (json, key) => { createRoot(document.getElementById('root')).render(React.createElement(VoyagePage, { voyageKey: key, voyage: JSON.parse(json), inspector: '연막', inspectors: [], portMisData: {}, pilotForecast: {}, onGoHome() {}, onModeChange() {}, initModeOverride: 'loading' })); };`,
+      `window.__R32pos = (json, cn, group, tier) => { const all = JSON.parse(json); const c = all.find((x) => x.cn === cn); createRoot(document.getElementById('root')).render(React.createElement(PositionEditModal, { open: true, container: c, allContainers: all, slotSource: all, onClose() {}, onSave: async () => ({ ok: true }), workGroup: group, workTier: tier })); };`,
+      `import ContainerDetailModal from "${ROOT}/src/components/ContainerDetailModal.jsx";`,
+      `import ContainerList from "${ROOT}/src/components/ContainerList.jsx";`,
+      `import BigResultCard from "${ROOT}/src/components/BigResultCard.jsx";`,
+      //  4.23-01 2차 ⑫ — 보이는 자리 = 저장되는 자리: 컨 상세·리스트 줄·큰 카드를 실소스로 따로 그린다
+      `window.__R32detail = (json, key) => { createRoot(document.getElementById('root')).render(React.createElement(ContainerDetailModal, { c: JSON.parse(json), comp: null, mode: 'loading', voyageKey: key, inspector: '연막', onClose() {} })); };`,
+      `window.__R32list = (json, recs, key) => { createRoot(document.getElementById('root')).render(React.createElement(ContainerList, { list: JSON.parse(json), compMap: {}, xrayMap: {}, xraySeals: {}, mode: 'loading', voyageKey: key, inspector: '연막', onOpenContainer() {}, recs: JSON.parse(recs) })); };`,
+      `window.__R32big = (json, all, key) => { createRoot(document.getElementById('root')).render(React.createElement(BigResultCard, { c: JSON.parse(json), allContainers: JSON.parse(all), voyageKey: key, inspector: '연막', label: '단독' })); };`,
+    ].join('\n'));
+    execSync(`npx esbuild "${e32}" --bundle --loader:.jsx=jsx --loader:.js=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url --alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --define:process.env.NODE_ENV='"development"' --log-level=error --outfile="${o32}"`, { cwd: ROOT, stdio: 'pipe' });
+    const vSrc = fs.readFileSync(o32, 'utf8');
+    const openGuide = async (voy, equip) => {
+      const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+      const W = dom.window, errs = [];
+      W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
+      W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+      W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+      W.global = W; W.__memdb = {}; W.speechSynthesis = { speak() {}, cancel() {}, getVoices() { return []; } };
+      W.localStorage.setItem('gm_equip_no', equip);
+      try { W.eval(vSrc); W.__R32go(JSON.stringify(voy), vk); } catch (er) { errs.push('THROW ' + er.message); }
+      await sleep(350);
+      const d = W.document, click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } return !!b; };
+      const btn = (re) => [...d.querySelectorAll('button')].find((b) => re.test(b.textContent.trim()) && !b.disabled);
+      const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };   // 그릴 때까지 기다린다(빌드 중 다른 일이 돌면 렌더가 늦다)
+      await click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent))), 300);
+      await click(await until(() => btn(/^🤖\s*자동 가이드$/)), 300);
+      await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent));
+      const groups = () => [...d.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()).filter((t) => /^B[\d·]+/.test(t) && /남은 컨/.test(t))
+        .map((t) => ({ t, bays: t.match(/^B([\d·]+)/)[1].split('·').map(Number), deck: +((t.match(/데크 (\d+)/) || [])[1] || 0), hold: +((t.match(/홀드 (\d+)/) || [])[1] || 0) }));
+      const cards = () => [...d.querySelectorAll('div.border-2')].filter((x) => /border-(amber|cyan)-600/.test(x.className)).map((x) => {
+        const pos = [...x.querySelectorAll('span')].map((s) => s.textContent.trim()).find((s) => /^\d{1,3}-\d{2}-\d{2} (데크|홀드)$/.test(s));
+        const cn = [...x.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '')).find((s) => /^[A-Z]{4}\d{7}$/.test(s));
+        const nd = [...x.querySelectorAll('div')].find((y) => /^🔄 맞교환 자리/.test(y.textContent));
+        const wd = [...x.querySelectorAll('div')].find((y) => /^⚠ 계획 칸\(/.test(y.textContent));   // 4.23-01 2차: 규격 다른 맞교환
+        const head = [...x.querySelectorAll('span')].map((s) => s.textContent.trim()).find((s) => s === '자리 미정') || '';
+        return { cn, pos: pos ? pos.split(' ')[0] : '', note: nd ? (nd.firstChild ? nd.textContent.split('⚠')[0] : '') : '', warnNote: wd ? wd.textContent : '', head };
+      }).filter((x) => x.cn);
+      const upcoming = () => { const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && x.firstChild.textContent === '다음 예정'); return box ? [...box.querySelectorAll('div.flex')].map((r) => { const s = r.querySelectorAll('span'); return { cn: (s[1] ? s[1].textContent : '').split(' ')[0], pos: (s[2] ? s[2].textContent : '').split(' ')[0] }; }) : []; };
+      const toGroups = async () => { await click(btn(/^베이 선택$/), 250); await click(btn(/^베이$/), 250); await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent)); };
+      //  «다른 컨테이너가 나옴» 칸을 열면 «이 단 남은 컨» 전부가 자리와 같이 나온다(엠티 카드는 자리 확인 칸이 열려 있어 «계획대로 확인하는 방식으로 돌아가기» 를 먼저)
+      const remainList = async () => {
+        if (!btn(/^다른 컨테이너가 나옴/)) { await click(btn(/^계획대로 확인하는 방식으로 돌아가기$/), 250); await until(() => btn(/^다른 컨테이너가 나옴/)); }
+        await click(btn(/^다른 컨테이너가 나옴/), 250);
+        await until(() => [...d.querySelectorAll('div')].some((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || '')));
+        const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || ''));
+        return box ? [...box.querySelectorAll('button')].map((b) => { const s = b.querySelectorAll('span'); return { cn: s[0] ? s[0].textContent.trim() : '', pos: s[1] ? s[1].textContent.trim() : '' }; }) : [];
+      };
+      const pick = async (bay, tier) => {
+        await toGroups();
+        const g = groups().find((x) => x.bays.includes(bay));
+        if (!g) return { missing: true, groups: groups().map((x) => x.t.split(' ')[0]) };
+        await click([...d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, ' ').trim() === g.t), 300);
+        await until(() => btn(new RegExp(`^${equip} 그대로$`)) || /작업할 단을 선택하세요/.test(d.body.textContent));
+        await click(btn(new RegExp(`^${equip} 그대로$`)), 250);   // «이 베이는 다른 갱이 작업했습니다» — 내 호기 그대로
+        await until(() => /작업할 단을 선택하세요/.test(d.body.textContent));
+        const tb = btn(tier === 'deck' ? /^🔵 데크 [1-9]/ : /^🟠 홀드 [1-9]/);
+        if (!tb) return { group: g, noTier: true };
+        await click(tb, 350);
+        await until(() => cards().length > 0 || /그룹 (양하|선적) 완료!/.test(d.body.textContent));
+        await sleep(150);
+        return { group: g, cards: cards(), next: upcoming() };
+      };
+      return { W, d, errs, groups, pick, remainList, btn, click, until, close: () => { try { W.close(); } catch (er) { /* 창 닫기 */ } } };
+    };
+
+    //  ① 1차 MCAP 3호기 seq 173 — 엠티 MNBU0302853(계획 22-09-86)을 30-03-86(계획 주인 MNBU4566242)에 «자리 확인» 으로 넣는다(화면이 부르는 것과 같은 인자 — swapWith·actualWork) → 선적확인
+    fresh();
+    const A1 = 'MNBU0302853', B1 = 'MNBU4566242';
+    const r1 = await F32.fbReassignContainerPosition(vk, 'loading', A1, '30', '03', '86', '송제욱', { swapWith: B1, actualWork: true });
+    await F32.fbCompleteContainer(vk, 'loading', A1, '송제욱', 'normal', '', '3호기'); await sleep(80);
+    const st1 = new Map(filledSlots(Lnow()));
+    {
+      const G = await openGuide(viewOf(), '3호기');
+      const b30 = await G.pick(30, 'deck');
+      const rest30 = await G.remainList();
+      const shown30 = [...(b30.cards || []), ...rest30];
+      const ghost30 = shown30.filter((c) => st1.has(c.pos) && st1.get(c.pos) !== c.cn);
+      const b22 = await G.pick(22, 'deck');
+      const rest22 = await G.remainList();
+      const b1At = [...(b22.cards || []), ...rest22].find((c) => c.cn === B1);
+      const b1In30 = shown30.find((c) => c.cn === B1);
+      ok(`① 1차 3호기 seq 173 재현 — ${A1}(계획 ${planOf(A1)}) 를 30-03-86 에 자리 확인 → 실자리 ${actualOf(A1)} · 3호기 B30 데크 카드+남은 컨 ${shown30.length}대 중 이미 실린 칸 ${ghost30.length} · ${B1} 가 B30 에 ${b1In30 ? b1In30.pos : '없음'}(수정 전 카드 ${B1}@30-03-86 — 유령 칸) · B22 데크 ${b1At ? b1At.pos : '없음'}(맞교환 — ${A1} 가 비운 계획 ${planOf(A1)})`,
+        r1 && r1.ok && actualOf(A1) === '30-03-86' && rest30.length > 0 && ghost30.length === 0 && !b1In30 && !!b1At && b1At.pos === planOf(A1) && !G.errs.length,
+        JSON.stringify({ r1: r1 && r1.ok, a: actualOf(A1), b30: b30.cards, ghost30, b1In30, b22: (b22.cards || []).slice(0, 2), rest22: rest22.slice(0, 4), errs: G.errs.slice(0, 3) }).slice(0, 500));
+      G.close();
+    }
+    //  ② [선적확인] 은 화면이 보인 맞교환 자리를 적는다 — B1 카드(B22 데크 22-09-86)를 그대로 확인(화면 handleConfirm 과 같은 호출)
+    await F32.fbCompleteContainer(vk, 'loading', B1, '이종현', 'normal', '', '2호기'); await sleep(80);
+    {
+      const r = Lnow().records[B1] || {}; const mv = (r.moves || []).slice(-1)[0] || {};
+      const cl = U32.loadedSlotClaims(Object.keys(Lnow().completed).map((cn) => ({ ...(Lnow().ediContainers[cn] || {}), ...(Lnow().records[cn] || {}), cn })), () => true);
+      ok(`② 맞교환 자리 카드 [선적확인] → ${B1} 실자리 ${actualOf(B1)} = 화면 ${planOf(A1)} · 기록 자리 ${r.bay}-${r.row}-${r.tier} · 처음 계획 ${r.bay_orig}-${r.row_orig}-${r.tier_orig} · 경로 끝 «${mv.why} ${mv.to} · ${mv.byCn}» · 한 칸에 두 대 ${cl.dup.length}(수정 전 ${B1} 실자리 = 제 계획 30-03-86 → ${A1} 와 두 대)`,
+        actualOf(B1) === planOf(A1) && P(r.bay, r.row, r.tier) === planOf(A1) && P(r.bay_orig, r.row_orig, r.tier_orig) === planOf(B1) && mv.why === 'loaded' && mv.byCn === A1 && cl.dup.length === 0,
+        JSON.stringify({ r, cl: cl.dup }).slice(0, 400));
+    }
+
+    //  ③ 2차 MCAP 2호기 seq 22·23 — 풀 CAXU8177336(계획 22-10-10)을 22-07-02(계획 주인 MRSU3244990)에 번호 수정으로(시퀀스 되묻기 «그래도 넣는다» 뒤) → 선적확인 · 그 뒤 화면은 22-07-02 를 다시 내밀지 않고, MRSU3244990 을 확인하면 22-10-10 이 적힌다
+    fresh();
+    const A2 = 'CAXU8177336', B2 = 'MRSU3244990';
+    const r4 = await F32.fbReassignContainerPosition(vk, 'loading', A2, '22', '07', '02', '김성일', { actualWork: true, seqConfirmed: true });
+    await F32.fbCompleteContainer(vk, 'loading', A2, '김성일', 'normal', '', '2호기'); await sleep(80);
+    {
+      const st = filledSlots(Lnow());
+      const G = await openGuide(viewOf(), '2호기');
+      const b = await G.pick(22, 'hold');
+      const shown = [...(b.cards || []), ...(await G.remainList())];
+      const ghost = shown.filter((c) => st.has(c.pos) && st.get(c.pos) !== c.cn);
+      const at2207 = shown.find((c) => c.pos === '22-07-02');
+      const recB = Lnow().records[B2] || {};
+      ok(`③ 2차 2호기 seq 22 재현 — ${A2} 실자리 ${actualOf(A2)} · ${B2} 기록 자리 «${recB.bay}»(밀려남) · B22 홀드 카드+남은 컨 ${shown.length}대 중 이미 실린 칸 ${ghost.length} · 22-07-02 카드 ${at2207 ? at2207.cn : '없음'}(수정 전 ${B2}@22-07-02 — 경고 없이 선적확인 → 한 칸 두 대)`,
+        r4 && r4.ok && actualOf(A2) === '22-07-02' && recB.bay === '' && shown.length > 0 && ghost.length === 0 && !(at2207 && at2207.cn === B2) && !G.errs.length,
+        JSON.stringify({ r4: r4 && r4.ok, a: actualOf(A2), recB, shown: shown.slice(0, 6), ghost, errs: G.errs.slice(0, 3) }).slice(0, 500));
+      G.close();
+    }
+    await F32.fbCompleteContainer(vk, 'loading', B2, '김성일', 'normal', '', '2호기'); await sleep(80);
+    {
+      const cl = U32.loadedSlotClaims(Object.keys(Lnow().completed).map((cn) => ({ ...(Lnow().ediContainers[cn] || {}), ...(Lnow().records[cn] || {}), cn })), () => true);
+      ok(`④ ${B2} 를 확인하면 맞교환 자리 ${planOf(A2)} 가 실자리로(수정 전 기록 자리 «» → 자리 없이 완료 · 계획 22-07-02 로 셈해 한 칸 두 대) — 실자리 ${actualOf(B2)} · 한 칸에 두 대 ${cl.dup.length} · 자리 모름 ${cl.unknown.length}`,
+        actualOf(B2) === planOf(A2) && cl.dup.length === 0 && cl.unknown.length === 0, JSON.stringify({ r: Lnow().records[B2], cl }).slice(0, 400));
+    }
+
+    //  ⑤ 종전 그대로인 갈래 — 계획 칸이 빈 컨은 계획 자리 · 사람이 정한 자리(DB assign)는 그 자리 · 실자리(기록지 사진 등)가 먼저 적혔으면 그 자리 · 트윈 둘은 둘 다 «누르기 직전» 으로 계산
+    {
+      fresh();
+      const ids = Object.keys(GX.plan.ediContainers).filter((cn) => GX.plan.ediContainers[cn].bay && GX.plan.records[cn]);
+      const [c1, c2, c3] = ids;
+      await F32.fbCompleteContainer(vk, 'loading', c1, '연막', 'normal', '', '3호기'); await sleep(60);
+      const freeOk = actualOf(c1) === planOf(c1);
+      const tgt = planOf(ids[10]).split('-');   // 남의 계획 칸(아직 아무도 안 실음)에 사람이 정해 준 자리
+      await F32.fbReassignContainerPosition(vk, 'loading', c2, tgt[0], tgt[1], tgt[2], '연막', { actualWork: true, seqConfirmed: true }); await F32.fbCompleteContainer(vk, 'loading', c2, '연막', 'normal', '', '3호기'); await sleep(60);
+      const humanOk = actualOf(c2) === P(tgt[0], tgt[1], tgt[2]);
+      const tgt3 = planOf(ids[11]).split('-');
+      await F32.fbSetActualPosition(vk, 'loading', c3, tgt3[0], tgt3[1], tgt3[2], '연막'); await F32.fbCompleteContainer(vk, 'loading', c3, '연막', 'normal', '', '3호기'); await sleep(60);
+      const sheetOk = actualOf(c3) === P(tgt3[0], tgt3[1], tgt3[2]);
+      ok(`⑤ 종전 갈래 그대로 — 빈 계획 칸 ${c1} ${actualOf(c1)}(계획 ${planOf(c1)}) · 사람이 정한 자리 ${c2} ${actualOf(c2)} · 기록지 사진 실자리 ${c3} ${actualOf(c3)}`, freeOk && humanOk && sheetOk,
+        JSON.stringify({ c1: Lnow().records[c1], c2: Lnow().records[c2], c3: Lnow().records[c3] }).slice(0, 400));
+    }
+
+    //  ⑥ 재배정 칸 판정은 실자리를 먼저 본다 — 기록지 사진(fbSetActualPosition)으로 다른 칸에 실린 풀 X 의 계획 칸에 다른 풀 Y 를 넣어도 X 를 밀어내지 않는다(수정 전 «진짜 충돌» 로 X 의 실자리를 지웠다)
+    {
+      fresh();
+      const fulls = Object.keys(GX.plan.ediContainers).filter((cn) => GX.plan.ediContainers[cn].fe === 'F' && GX.plan.ediContainers[cn].bay);
+      const X = fulls[0], Y = fulls[1], T = planOf(fulls[2]).split('-');
+      await F32.fbSetActualPosition(vk, 'loading', X, T[0], T[1], T[2], '연막'); await F32.fbCompleteContainer(vk, 'loading', X, '연막', 'normal', '', '4호기'); await sleep(60);
+      const xs = planOf(X).split('-');
+      const rr = await F32.fbReassignContainerPosition(vk, 'loading', Y, xs[0], xs[1], xs[2], '연막', { actualWork: true, seqConfirmed: true });
+      ok(`⑥ 기록지 사진으로 ${P(T[0], T[1], T[2])} 에 실린 ${X} 의 계획 칸 ${planOf(X)} 에 ${Y} 를 넣음 → 밀려난 컨 ${rr && rr.displaced ? rr.displaced : '없음'} · ${X} 실자리 ${actualOf(X) || '«지워짐»'}`,
+        rr && rr.ok && !rr.displaced && actualOf(X) === P(T[0], T[1], T[2]), JSON.stringify({ rr, x: Lnow().records[X] }).slice(0, 400));
+    }
+
+    //  ⑦ 2차 3호기 B30 — 2호기가 먼저 끝까지(114대) 실은 뒤 3호기가 들어오면 B30 묶음이 남고, 카드·다음 예정 어디에도 이미 실린 칸이 없다
+    {
+      fresh((L) => { Object.assign(L.completed, clone(GX.run2_2ho.completed)); for (const [cn, r] of Object.entries(GX.run2_2ho.records)) L.records[cn] = { ...(L.records[cn] || {}), ...clone(r) }; });
+      const st = filledSlots(Lnow());
+      const planB30 = Object.keys(GX.plan.ediContainers).filter((cn) => parseInt(GX.plan.ediContainers[cn].bay, 10) === 30);
+      const takenB30 = planB30.filter((cn) => Lnow().completed[cn]).length;
+      const G = await openGuide(viewOf(), '3호기');
+      const all = G.groups();
+      let ghost = 0, seen = 0; const misses = [], noted = [];
+      const b30 = await G.pick(30, 'deck');
+      for (const g of all) {
+        for (const tier of ['deck', 'hold']) {
+          if (!(tier === 'deck' ? g.deck : g.hold)) continue;
+          const r = await G.pick(g.bays[0], tier);
+          const shown = [...(r.cards || []), ...(r.cards && r.cards.length ? await G.remainList() : [])];
+          seen += shown.length;
+          for (const c of shown) if (st.has(c.pos) && st.get(c.pos) !== c.cn) { ghost++; misses.push(`${c.cn}@${c.pos}`); }
+          for (const c of (r.cards || [])) if (c.note) noted.push(c);
+        }
+      }
+      ok(`⑦ 2차 — 2호기 ${Object.keys(GX.run2_2ho.completed).length}대 먼저(B30 계획 ${planB30.length}대 중 ${takenB30}대를 다른 칸에 실음) → 3호기 가이드 묶음 ${all.map((x) => x.t.split(' ')[0]).join('·')} · B30 데크 ${b30.missing ? '«없음»' : `카드 ${(b30.cards || []).map((c) => `${c.cn.slice(-4)}@${c.pos}`).join(',')}`}(수정 전 B30 이 «완료»로 목록에서 빠짐) · 모든 묶음·단 카드+남은 컨 ${seen}대 중 이미 실린 칸 ${ghost}`,
+        takenB30 > 0 && !b30.missing && (b30.cards || []).length > 0 && ghost === 0 && seen > 0 && !G.errs.length, JSON.stringify({ b30, misses: misses.slice(0, 6), errs: G.errs.slice(0, 3) }).slice(0, 500));
+      //  ⑧ 맞교환 자리 카드의 한 줄 — «🔄 맞교환 자리 — 계획 칸(그 컨의 EDI 계획)에 ○○○○(그 칸에 실린 컨) 이(가) 실렸습니다»(4.23-01 2차: 낱말 «맞교환» · 칸 글자는 fmtPos 처럼 두 자리)
+      const noteBad = noted.filter((c) => { const m = c.note.match(/계획 칸\((\d{1,3})-(\d{2})-(\d{2})\)에 (\d{4})/); const k = m ? P(m[1], m[2], m[3]) : ''; return !m || k !== planOf(c.cn) || !st.has(k) || st.get(k).slice(-4) !== m[4]; });
+      ok(`⑧ 맞교환 자리 카드 ${noted.length}장 — ${noted.slice(0, 3).map((c) => `${c.cn.slice(-4)}@${c.pos} «${c.note.trim()}»`).join(' · ')} · 계획 칸·그 칸 컨이 원자료와 다른 것 ${noteBad.length}`,
+        noted.length > 0 && noteBad.length === 0, JSON.stringify({ noted: noted.slice(0, 4), noteBad }).slice(0, 400));
+      G.close();
+    }
+
+    //  ⑨ «한 칸에 두 대» 한 벌 — 실서비스 보관본 MCAP 639N 선적(R30 사본 bayview42203_mcap.json): 종전 판정 5곳 → 사고 0 · 자리 없이 완료 5(자리 기록 없는 4호기 PDA 4대 + 실자리를 지운 1대 — 각 칸에 김성일 실자리 1대)
+    {
+      const BV = fx('bayview42203_mcap.json').loading;
+      const cs = Object.keys(BV.completed).map((cn) => ({ ...(BV.ediContainers[cn] || {}), ...(BV.records[cn] || {}), cn }));
+      //  종전 판정(완료 컨의 화면 자리 effectivePos 가 겹치면 사고) — 원자료에서 따로 센다
+      const old = new Map(); for (const c of cs) { const r = BV.records[c.cn] || {}, e = BV.ediContainers[c.cn] || {}; const k = r.bay_actual ? P(r.bay_actual, r.row_actual, r.tier_actual) : (e.bay ? P(e.bay, e.row, e.tier) : ''); if (k) old.set(k, (old.get(k) || 0) + 1); }
+      const oldDup = [...old.values()].filter((n) => n > 1).length;
+      const cl = U32.loadedSlotClaims(cs, () => true);
+      const unk = cl.unknown.map(([k, v]) => `${k}:${v.cns.join('+')}/${v.at}`);
+      const allReal = cl.unknown.every(([, v]) => BV.records[v.at] && BV.records[v.at].bay_actual) && cl.unknown.every(([, v]) => v.cns.every((cn) => !(BV.records[cn] || {}).bay_actual));
+      //  변이 — 자리 모름 한 대에 실자리를 그 칸으로 적으면(실물 둘) 사고로 돌아온다
+      const mut = cs.map((c) => (c.cn === (cl.unknown[0] && cl.unknown[0][1].cns[0]) ? { ...c, bay_actual: c.bay, row_actual: c.row, tier_actual: c.tier } : c));
+      const cl2 = U32.loadedSlotClaims(mut, () => true);
+      ok(`⑨ 보관본 MCAP 639N 선적 — 종전 «한 칸에 두 대» ${oldDup}곳 → 사고 ${cl.dup.length} · 자리 없이 완료 ${cl.unknown.length}(${unk.join(' ')}) · 변이(자리 모름 한 대에 실자리) → 사고 ${cl2.dup.length}`,
+        oldDup === 5 && cl.dup.length === 0 && cl.unknown.length === 5 && allReal && cl2.dup.length === 1, JSON.stringify({ oldDup, dup: cl.dup, unk, cl2: cl2.dup }).slice(0, 400));
+    }
+
+    //  ⑩ 수동 «⚠ 자리 없음» 묶음에서 위치 지정 창 — 베이·단을 안 가린다(수정 전 묶음 번호 -1 과 맞는 베이가 없어 «남은 자리가 없습니다 — 직접 입력» · 2차 3호기 9대 직접 입력)
+    {
+      fresh();
+      const cs = Object.values(viewOf().loading.ediContainers).map((e) => ({ ...e, ...(GX.plan.records[e.cn] || {}), _mode: 'loading', _ptk: true, _comp: null }));
+      const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+      const W = dom.window, errs = []; W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.global = W; W.__memdb = {};
+      W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+      try { W.eval(vSrc); W.__R32pos(JSON.stringify(cs), 'MNBU0302853', -1, 'none'); } catch (er) { errs.push('THROW ' + er.message); }
+      await sleep(300);
+      const t = W.document.body.textContent;
+      const bb = [...W.document.querySelectorAll('button')].map((b) => b.textContent.trim().match(/^B\d{1,3}\s*남은 (\d+)자리$/)).filter(Boolean);
+      const bayBtns = bb.length, slotsShown = bb.reduce((a, m) => a + +m[1], 0);
+      //  원자료에서 따로 센다 — 이 컨(40피트)이 갈 수 있는 칸 = 선적 EDI 의 40피트(규격 첫 글자 2 아님) 계획 칸 전부(아직 아무도 안 실음)
+      const want40 = new Set(Object.values(GX.plan.ediContainers).filter((e) => e.bay && String(e.iso || '')[0] !== '2').map((e) => P(e.bay, e.row, e.tier))).size;
+      ok(`⑩ 위치 지정 창(작업 묶음 «자리 없음» −1 · 단 none) — «남은 자리가 없습니다» ${/남은 자리가 없습니다/.test(t) ? '뜸' : '없음'} · 고를 베이 ${bayBtns}개 · 남은 자리 합 ${slotsShown} = 40피트 계획 칸 ${want40}(데크·홀드 다 — 수정 전 «남은 자리가 없습니다»)`, !/남은 자리가 없습니다/.test(t) && bayBtns > 1 && slotsShown === want40 && !errs.length, JSON.stringify({ bayBtns, slotsShown, want40, errs, t: t.slice(0, 200) }));
+      try { W.close(); } catch (er) { /* 창 닫기 */ }
+    }
+
+    //  ⑪ 4.23-01 2차 — 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn — 3.13 원문 «속성 같으면 비운 자리로 자동 맞교환»)은 앱이 자리를 정하지 않는다.
+    //     2차 시뮬 OBWH FBIU5779479(풀 리퍼 CNYYY)가 엠티 CNYNT 계획 칸 14-05-82 로 확인 한 번에 저장됐다(마감텔리 14-04-82).
+    //     가이드 카드 머리 «자리 미정» · «⚠ 계획 칸(…)은 ○○○○ 이(가) 차지했습니다 …» · 큰 단추 [📍 실린 칸 지정](선적확인 단추 없음) → 위치 지정 창(배정 후 바로 선적확인 켬)
+    //     · 다른 완료 길(큰 카드·상세·리스트·트윈 — 전부 fbCompleteContainer)은 실자리를 적지 않는다 → 마감 점검 «자리 없이 완료» · 리스트·상세 완료는 먼저 묻는다(loadingNoPosAsk)
+    {
+      fresh();
+      const E0 = GX.plan.ediContainers;
+      const is40 = (cn) => String(E0[cn].iso || '')[0] === '4';
+      const FW = Object.keys(E0).find((cn) => E0[cn].fe === 'F' && E0[cn].bay && is40(cn));
+      const EW = Object.keys(E0).find((cn) => E0[cn].fe === 'E' && E0[cn].bay && is40(cn) && parseInt(E0[cn].bay, 10) !== parseInt(E0[FW].bay, 10));
+      const fp = planOf(FW).split('-'), ep = planOf(EW).split('-'), deckW = +ep[2] >= 80;
+      const pp = (k) => { const [b, r, t] = k.split('-'); return `${String(b).padStart(2, '0')}-${r}-${t}`; };
+      const rW = await F32.fbReassignContainerPosition(vk, 'loading', EW, fp[0], fp[1], fp[2], '송제욱', { actualWork: true, seqConfirmed: true });
+      await F32.fbCompleteContainer(vk, 'loading', EW, '송제욱', 'normal', '', '3호기'); await sleep(80);
+      let rv = viewOf().loading.records[FW] || {};
+      const pre = rW && rW.ok && actualOf(EW) === planOf(FW) && rv._assign_src === 'autoswap' && !!rv._assign_warn && P(rv.bay_assign, rv.row_assign, rv.tier_assign) === planOf(EW);
+      //  그 묶음·단에서 FW 만 남게 — 같은 묶음·단의 다른 컨을 먼저 싣는다(계획 칸 그대로)
+      let G = await openGuide(viewOf(), '3호기'); const g0 = await G.pick(+ep[0], deckW ? 'deck' : 'hold'); G.close();
+      const gBays = g0.group ? g0.group.bays : [+ep[0]];
+      for (const cn of Object.keys(E0)) {
+        if (cn === FW || Lnow().completed[cn]) continue;
+        const e = E0[cn]; if (!e.bay || !gBays.includes(parseInt(e.bay, 10)) || ((+e.tier >= 80) !== deckW)) continue;
+        await F32.fbCompleteContainer(vk, 'loading', cn, '연막', 'normal', '', '3호기');
+      }
+      await sleep(150);
+      rv = viewOf().loading.records[FW] || {};
+      G = await openGuide(viewOf(), '3호기');
+      const gW = await G.pick(+ep[0], deckW ? 'deck' : 'hold');
+      const cW = (gW.cards || []).find((c) => c.cn === FW) || { cn: '', pos: '', note: '', warnNote: '', head: '' };
+      const bigBtn = G.btn(/^📍 실린 칸 지정/);
+      const confirmBtn = G.btn(/^선적확인$/);
+      await G.click(bigBtn, 300);
+      //  위치 지정 창 — 앱이 짐작한 칸을 미리 고르지 않고(그 칸의 베이를 펴 둘 뿐) · 칸을 고르면 «배정 후 바로 선적확인 — 켬»
+      const opened = await G.until(() => /BAY \d+ — 자리 선택/.test(G.d.body.textContent));
+      const preTgl = [...G.d.querySelectorAll('button')].some((b) => /배정 후 바로 선적확인/.test(b.textContent));
+      const cell = [...G.d.querySelectorAll('button')].find((b) => /^\d{2}\s*(\d{4}|지금)?$/.test(b.textContent.replace(/\s+/g, ' ').trim()) && !b.disabled);
+      await G.click(cell, 300);
+      await G.until(() => /배정 후 바로 선적확인/.test(G.d.body.textContent));
+      const tgl = [...G.d.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()).find((t) => /배정 후 바로 선적확인/.test(t)) || '';
+      const wantNote = `계획 칸(${pp(planOf(FW))})은 ${EW.slice(-4)} 이(가) 차지했습니다`;
+      const askW = U32.loadingNoPosAsk({ ...E0[FW], ...rv, cn: FW, _mode: 'loading' }, 'loading');
+      //  베이 그림(항차 화면 allEdiContainers)에서 연 컨 모양 — _assign_src·_assign_from 을 안 실어 온다(assign_by 'auto' 만) · 2차 시뮬 paths2 O2 bay 실측
+      const bpW = (() => { const { _assign_src: _a, _assign_from: _b, ...rest } = { ...E0[FW], ...rv }; return { ...rest, cn: FW, _mode: 'loading' }; })();
+      const bpKind = U32.loadingSlotOf(bpW).kind, bpAsk = U32.loadingNoPosAsk(bpW, 'loading');
+      G.close();
+      //  다른 완료 길 — 전부 fbCompleteContainer → _markLoadedPos
+      await F32.fbCompleteContainer(vk, 'loading', FW, '연막', 'normal', '', '3호기'); await sleep(120);
+      //  마감 점검이 받는 목록 모양 — 항차 화면 병합(containersBase)처럼 EDI 자리가 리스트 자리를 이긴다(M6.94.32)
+      const cl = U32.loadedSlotClaims(Object.keys(Lnow().completed).map((cn) => ({ ...(Lnow().records[cn] || {}), ...(Lnow().ediContainers[cn] || {}), cn })), () => true);
+      const unkW = cl.unknown.find(([, v]) => v.cns.includes(FW));
+      ok(`⑪ 규격 다른 맞교환 — ${EW}(엠티 ${E0[EW].pod}) 를 ${FW}(풀 ${E0[FW].pod}) 계획 칸 ${planOf(FW)} 에 → ${FW} 맞교환 ${P(rv.bay_assign, rv.row_assign, rv.tier_assign)} «${rv._assign_warn}» · 카드 머리 «${cW.head || cW.pos}» · «${cW.warnNote.slice(0, 60)}…» · [선적확인] ${confirmBtn ? '있음' : '없음'} · [실린 칸 지정] → «${tgl}» · 리스트·상세 물음 ${askW ? '있음' : '없음'}(베이 그림에서 연 상세 ${bpKind}) · 확인하면 실자리 «${actualOf(FW)}»(수정 전 ${planOf(EW)}) · 마감 점검 자리 없이 완료 ${unkW ? unkW[0] : '없음'} · 한 칸에 두 대 ${cl.dup.length}`,
+        pre && cW.head === '자리 미정' && cW.warnNote.includes(wantNote) && /규격·풀엠티·항구가 다름 — 이 컨 .+ · 그 칸 계획 /.test(cW.warnNote) && !!bigBtn && !confirmBtn && !!opened && !preTgl && !!cell && /— 켬/.test(tgl)
+          && /앱이 자리를 정하지 않습니다/.test(askW) && bpKind === 'swapWarn' && /앱이 자리를 정하지 않습니다/.test(bpAsk) && actualOf(FW) === '' && !!Lnow().completed[FW] && !!unkW && cl.dup.length === 0 && !G.errs.length,
+        JSON.stringify({ opened: !!opened, preTgl, cell: cell ? cell.textContent : null, tgl, pre, cW, ask: askW.slice(0, 80), a: actualOf(FW), unk: cl.unknown, dup: cl.dup, errs: G.errs.slice(0, 3), rv }).slice(0, 700));
+      //  ⑪-3 4.23-01 3차(재감사 하-4·하-5) — 미르도 같은 말: 규격 다른 맞교환 컨은 «자리 미정(앱 짐작 …)», 같은 속성 맞교환은 그 자리 «(지정)».
+      //      미르 목록(flattenVoyages)은 정해 준 자리를 실체 다음으로 올린다(4.23-01 2차) — 종전 «14-05-82(지정)» 은 앱이 정한 자리처럼 들렸다. 상태는 사본에서 따로 만든다(전역 메모리 DB 안 건드림).
+      {
+        const M32 = bundle(`export { flattenVoyages, entityHead, answerOneRaw } from "${ROOT}/src/mir.js";`, 'm32', '--external:firebase --external:firebase/* --loader:.js=jsx --jsx=automatic --loader:.png=dataurl');
+        const mk = (mover, target) => {
+          const L = { ediContainers: clone(GX.plan.ediContainers), records: clone(GX.plan.records), completed: { [mover]: { by: '연막', at: 1 } } };
+          const [b, r, t] = planOf(target).split('-');
+          L.records[mover] = { ...(L.records[mover] || {}), cn: mover, bay_actual: b, row_actual: r, tier_actual: t };
+          return U32.applyAutoSwap(U32.applyCatosPos({ key: vk, info: clone(GX.info), loading: L, discharge: {} }));
+        };
+        const headOf = (v, cn) => { const x = M32.flattenVoyages({ [vk]: v }).find((c) => c.cn === cn && (c._mode || 'loading') === 'loading'); return x ? M32.entityHead(x) : '(없음)'; };
+        const vWarn = mk(EW, FW), rw = vWarn.loading.records[FW] || {};
+        const hW = headOf(vWarn, FW);
+        //  같은 속성 맞교환 — FW 와 규격·풀엠티·항구가 같은 다른 컨(원자료에서 고름)
+        const twinOfAttr = Object.keys(E0).find((cn) => cn !== FW && E0[cn].bay && E0[cn].fe === E0[FW].fe && String(E0[cn].iso) === String(E0[FW].iso) && String(E0[cn].pod) === String(E0[FW].pod) && planOf(cn) !== planOf(FW));
+        const vSame = twinOfAttr ? mk(twinOfAttr, FW) : null, rs = vSame ? (vSame.loading.records[FW] || {}) : {};
+        const hS = vSame ? headOf(vSame, FW) : '';
+        const wantW = `자리 미정(앱 짐작 ${pp(P(rw.bay_assign, rw.row_assign, rw.tier_assign))} · 계획 ${pp(planOf(FW))})`;
+        //  «XXXX 어디» — 머리줄(entityHead)과 다른 길(nlSearch 위치 목록 formatLocationList → 자리 말)이다. 재감사·3차 시뮬 실측: 3차 첫 수리 뒤에도 «2805 어디» 는 «@ 02-01-88»(앱 짐작 칸).
+        const flatW = M32.flattenVoyages({ [vk]: vWarn });
+        const ctxW = { app: 'tally', voyages: { [vk]: vWarn }, flat: flatW, voyageKey: vk, voyage: vWarn, info: vWarn.info, mode: 'loading', containers: flatW.filter((c) => c.voyageKey === vk), portMisData: {}, _trace: {} };
+        const whereW = String(M32.answerOneRaw(`${FW.slice(-4)} 어디`, ctxW) || '').replace(/\s+/g, ' ').trim();
+        const flatS = vSame ? M32.flattenVoyages({ [vk]: vSame }) : [];
+        const whereS = vSame ? String(M32.answerOneRaw(`${FW.slice(-4)} 어디`, { ...ctxW, voyages: { [vk]: vSame }, flat: flatS, voyage: vSame, containers: flatS.filter((c) => c.voyageKey === vk) }) || '').replace(/\s+/g, ' ').trim() : '';
+        ok(`⑪-3 미르 — 규격 다른 맞교환 ${FW.slice(-4)} «${hW.includes('자리 미정') ? hW.slice(hW.indexOf('자리 미정')) : hW}» · «${FW.slice(-4)} 어디» «${(whereW.match(/@ [^\[]+/) || [''])[0].trim()}» · 같은 속성 맞교환(${twinOfAttr ? twinOfAttr.slice(-4) : '?'} 이 계획 칸 차지) «${hS.split(' · ').pop()}» · 어디 «${(whereS.match(/@ [^\[]+/) || [''])[0].trim()}»`,
+          !!rw._assign_warn && hW.endsWith(wantW) && whereW.includes(`@ ${wantW}`) && !!twinOfAttr && rs._assign_src === 'autoswap' && !rs._assign_warn && hS.endsWith(`${parseInt(rs.bay_assign, 10)}-${rs.row_assign}-${rs.tier_assign}(지정)`) && whereS.includes(`@ ${pp(P(rs.bay_assign, rs.row_assign, rs.tier_assign))}`),
+          JSON.stringify({ hW, wantW, whereW: whereW.slice(0, 160), hS, whereS: whereS.slice(0, 160), rw: { b: rw.bay_assign, w: rw._assign_warn }, rs: { b: rs.bay_assign, r: rs.row_assign, t: rs.tier_assign, src: rs._assign_src, w: rs._assign_warn } }).slice(0, 600));
+      }
+      //  ⑪-2 컨 상세 [수정 위치 입력] — 규격 다른 맞교환은 앱이 짐작한 칸(정해 준 자리)을 입력칸에 미리 채우지 않는다 · 보통 컨은 종전대로 계획 칸을 채운다.
+      {
+        const detailInputs = async (obj) => {
+          const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+          const W = dom.window, errs = []; W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {}; W.global = W; W.__memdb = {};
+          W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+          W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+          try { W.eval(vSrc); W.__R32detail(JSON.stringify(obj), vk); } catch (er) { errs.push('THROW ' + er.message); }
+          await sleep(300);
+          const b = [...W.document.querySelectorAll('button')].find((x) => /수정 위치 입력/.test(x.textContent));
+          if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(250); }
+          const vals = [...W.document.querySelectorAll('input')].filter((x) => ['01', '00', '02'].includes(x.getAttribute('placeholder'))).map((x) => x.value);
+          try { W.close(); } catch (er) { /* */ }
+          return { vals, errs, btn: !!b };
+        };
+        //  리스트에서 연 모양(EDI 자리 + 그 기록의 정해 준 자리 칸) — FW 는 완료 전 사본으로 그린다
+        const wObj = { ...E0[FW], ...rv, cn: FW, _mode: 'loading' }; delete wObj.bay_actual;
+        const plainCn = Object.keys(E0).find((cn) => !Lnow().completed[cn] && E0[cn].bay && !(rv && cn === FW) && !((viewOf().loading.records[cn] || {}).bay_assign));
+        const dW = await detailInputs(wObj), dP = await detailInputs({ ...E0[plainCn], cn: plainCn, _mode: 'loading' });
+        const pp2 = (x) => String(x == null ? '' : x);
+        ok(`⑪-2 컨 상세 [수정 위치 입력] — 규격 다른 맞교환 ${FW.slice(-4)} 입력칸 «${dW.vals.join('/')}»(앱이 짐작한 ${P(rv.bay_assign, rv.row_assign, rv.tier_assign)} 를 안 채움) · 보통 컨 ${plainCn.slice(-4)} «${dP.vals.join('/')}» = 계획 ${planOf(plainCn)}`,
+          dW.btn && dP.btn && dW.vals.length === 3 && dW.vals.every((x) => x === '') && dP.vals.length === 3 && P(dP.vals[0], dP.vals[1], dP.vals[2]) === planOf(plainCn) && !dW.errs.length && !dP.errs.length,
+          JSON.stringify({ dW, dP, plainCn, e: pp2(E0[plainCn] && E0[plainCn].bay) }).slice(0, 400));
+      }
+    }
+
+    //  ⑫ 4.23-01 2차 — 보이는 자리 = 저장되는 자리(utils.loadingSlotOf 한 벌). 2차 상태(2호기 114대 먼저)에서
+    //     리스트 줄(계획 자리 그대로 + «🔄 맞교환 자리 …»)·컨 상세(«[선적확인] 하면 맞교환 자리 … 로 저장됩니다» — 종전 «계획 위치대로 선적 예정»)·큰 카드(«위치 지정 (계획 …)» 이 진짜 계획)를 실소스로 그리고,
+    //     맞교환·계획 컨을 하나씩 확인해 화면이 말한 자리 = 실자리(규격 다른 맞교환은 안 적음)인지 본다.
+    {
+      fresh((L) => { Object.assign(L.completed, clone(GX.run2_2ho.completed)); for (const [cn, r] of Object.entries(GX.run2_2ho.records)) L.records[cn] = { ...(L.records[cn] || {}), ...clone(r) }; });
+      const E0 = GX.plan.ediContainers;
+      const v0 = viewOf(); const R0 = v0.loading.records;
+      const listItemOf = (cn) => ({ ...(Lnow().records[cn] || {}), ...E0[cn], cn, _mode: 'loading' });   // 리스트 탭 줄 — EDI 자리가 이긴다(정해 준 자리 칸 없음)
+      const S1 = Object.keys(R0).find((cn) => R0[cn]._assign_src === 'autoswap' && !R0[cn]._assign_warn && !Lnow().completed[cn]);
+      const li = listItemOf(S1); const ls1 = U32.loadingSlotOf(U32.withAssignOf(li, R0));
+      const render = async (fnName, args) => {
+        const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+        const W = dom.window, errs = []; W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {}; W.global = W; W.__memdb = {};
+        W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+        W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+        try { W.eval(vSrc); W[fnName](...args); } catch (er) { errs.push('THROW ' + er.message); }
+        await sleep(350);
+        const t = W.document.body.textContent; try { W.close(); } catch (er) { /* */ }
+        return { t, errs };
+      };
+      const lr = await render('__R32list', [JSON.stringify([li]), JSON.stringify(R0), vk]);
+      const dr = await render('__R32detail', [JSON.stringify(U32.withAssignOf(li, R0)), vk]);
+      //  베이 그림에서 연 상세 — 항차 화면 allEdiContainers 모양(자리 = 정해 준 자리 · _bay_planned = 계획 · _assign_src 없음, assign_by 'auto')
+      const bpS = (() => { const r = R0[S1]; const { _assign_src: _a, _assign_from: _b, ...rr } = r; return { ...E0[S1], ...rr, cn: S1, bay: r.bay_assign, row: r.row_assign, tier: r.tier_assign, _bay_planned: E0[S1].bay, _row_planned: E0[S1].row, _tier_planned: E0[S1].tier, _assigned: true, _mode: 'loading' }; })();
+      const dr2 = await render('__R32detail', [JSON.stringify(bpS), vk]);
+      const sp = { ...li, ...R0[S1], bay: R0[S1].bay_assign, row: R0[S1].row_assign, tier: R0[S1].tier_assign, _bay_planned: E0[S1].bay, _row_planned: E0[S1].row, _tier_planned: E0[S1].tier, _assigned: true, _comp: null };   // 작업창(SearchPanel)이 올린 모양
+      const br = await render('__R32big', [JSON.stringify(sp), JSON.stringify([sp]), vk]);
+      const listOk = lr.t.includes(`🔄 맞교환 자리 ${ls1.pos}`);
+      const detailOk = dr.t.includes(`[선적확인] 하면 맞교환 자리 ${ls1.pos} 로 저장됩니다`) && !dr.t.includes('계획 위치대로 선적 예정')
+        && dr2.t.includes(`[선적확인] 하면 맞교환 자리 ${ls1.pos} 로 저장됩니다`) && !dr2.t.includes('📍수정됨');
+      const bigOk = br.t.includes(`🔄 맞교환 자리 · 계획 칸 ${ls1.plan}`) && br.t.includes(`위치 지정 (계획 ${ls1.plan})`) && !br.t.includes(`(계획 ${ls1.pos})`) && !br.t.includes('📍수정됨');
+      //  하나씩 확인 — 그때 화면 말(loadingSlotOf)이 말한 자리 = 실자리
+      const swaps = Object.keys(R0).filter((cn) => R0[cn]._assign_src === 'autoswap' && !Lnow().completed[cn]);
+      const plains = Object.keys(E0).filter((cn) => !Lnow().completed[cn] && !(R0[cn] && R0[cn].bay_assign)).slice(0, 5);
+      let checked = 0; const bad = []; const kinds = {};
+      for (const cn of [...swaps, ...plains]) {
+        if (Lnow().completed[cn]) continue;
+        const vR = viewOf().loading.records;
+        const ls = U32.loadingSlotOf(U32.withAssignOf(listItemOf(cn), vR));
+        await F32.fbCompleteContainer(vk, 'loading', cn, '연막', 'normal', '', '3호기'); await sleep(60);
+        const a = actualOf(cn); const pk = (k) => (k ? P(...k.split('-')) : '');
+        const want = ls.kind === 'swapWarn' ? '' : pk(ls.pos);
+        kinds[ls.kind] = (kinds[ls.kind] || 0) + 1; checked++;
+        if (a !== want) bad.push(`${cn}:${ls.kind} 화면 ${ls.pos} 실자리 ${a}`);
+      }
+      ok(`⑫ 보이는 자리 = 저장되는 자리 — ${S1} 리스트 줄 «🔄 맞교환 자리 ${ls1.pos}» ${listOk ? '있음' : '없음'} · 상세(리스트·베이 그림에서 연 것 둘 다) «[선적확인] 하면 맞교환 자리 ${ls1.pos} 로 저장됩니다» ${detailOk ? '있음(«계획 위치대로»·«수정됨» 없음)' : '없음'} · 큰 카드 «🔄 맞교환 자리 · 계획 칸 ${ls1.plan}» · «위치 지정 (계획 ${ls1.plan})» ${bigOk ? '있음' : '없음'} · 하나씩 확인 ${checked}대(${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join(' · ')}) 중 화면 자리 ≠ 실자리 ${bad.length}`,
+        !!S1 && ls1.kind === 'swap' && listOk && detailOk && bigOk && checked >= 6 && (kinds.swap || 0) >= 1 && bad.length === 0 && !lr.errs.length && !dr.errs.length && !dr2.errs.length && !br.errs.length,
+        JSON.stringify({ S1, ls1, bad: bad.slice(0, 5), kinds, lrE: lr.errs.slice(0, 2), drE: dr.errs.slice(0, 2), brE: br.errs.slice(0, 2), lt: lr.t.slice(0, 160), dt: dr.t.slice(0, 160), bt: br.t.slice(0, 200) }).slice(0, 800));
+      //  ⑫-2 배선(4.23-01 3차 — 재감사 하-4: 위 ⑫ 는 ContainerList·ContainerDetailModal 을 직접 그리며 recs·withAssignOf 를 검사가 넘겨, 항차 화면 배선을 빼도 통과했다).
+      //      항차 화면(VoyagePage)이 리스트 탭 ContainerList 에 recs 를, 목록에서 연 컨 상세에 withAssignOf(…, recMap) 를 넘기는가 — 기준표 «배선» 줄(소스 검사).
+      {
+        const vp = src('src/pages/VoyagePage.jsx');
+        const listWired = /<ContainerList[\s\S]{0,400}?recs=\{recMap\}/.test(vp);
+        const detailWired = /c=\{withAssignOf\(detailC, recMap\)\}/.test(vp);
+        ok(`⑫-2 배선 — 항차 화면 리스트 탭 ContainerList recs ${listWired ? '넘김' : '안 넘김'} · 목록에서 연 컨 상세 withAssignOf(detailC, recMap) ${detailWired ? '있음' : '없음'}`, listWired && detailWired, JSON.stringify({ listWired, detailWired }));
+      }
+    }
+
+    //  ⑬ 4.23-01 2차 — 수동 트윈 «위치 지정 방식»: 앞 컨이 맞교환 자리면 뒤 컨을 칸으로 짐작해 «짝 확인됨» 으로 채우지 않는다.
+    //     2차 시뮬 twin3(OBWH 05 홀드 — SPSU2021037 을 SPSU2027009 의 계획 칸 05-01-02 에 실음): 앞 7009 → 뒤가 계획 짝 3338 대신 맞교환 자리 옆 칸 주인 0468 로 채워지고
+    //     «지정 자리 — 플랜 그대로 (짝 확인됨)» → 한 번 누르면 0468 거짓 완료. 맞교환 아닌 앞 컨은 종전대로 짝을 채운다(V9.48).
+    {
+      const TX = fx('twin42205_obwh.json'); const tk = TX.key;
+      const tv = () => { const L = clone(TX.loading); global.__memdb = { voyages: { [tk]: { info: clone(TX.info), loading: L } } }; return U32.applyAutoSwap(U32.applyCatosPos({ key: tk, info: clone(TX.info), loading: clone(L), discharge: {} })); };
+      const openTwin = async (front) => {
+        const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+        const W = dom.window, errs = [];
+        W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
+        W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+        W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+        W.global = W; W.__memdb = {}; W.speechSynthesis = { speak() {}, cancel() {}, getVoices() { return []; } };
+        W.localStorage.setItem('gm_equip_no', '1호기');
+        try { W.eval(vSrc); W.__R32go(JSON.stringify(tv()), tk); } catch (er) { errs.push('THROW ' + er.message); }
+        await sleep(350);
+        const d = W.document, click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } return !!b; };
+        const btn = (re) => [...d.querySelectorAll('button')].find((b) => re.test(b.textContent.replace(/\s+/g, ' ').trim()) && !b.disabled);
+        const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };
+        const setVal = (el, val) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set.call(el, val); el.dispatchEvent(new W.Event('input', { bubbles: true })); };
+        await click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent))), 300);
+        await click(await until(() => btn(/^✋\s*수동$/)), 300);
+        const g = await until(() => [...d.querySelectorAll('button')].find((b) => { const m = b.textContent.replace(/\s+/g, ' ').trim().match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(5); }));
+        await click(g, 300);
+        await click(await until(() => btn(/^🟠 홀드 [1-9]/)), 300);
+        await click(await until(() => btn(/^트윈$/)), 400);
+        await click(await until(() => btn(/^계획에 없는 칸에 실렸습니다 — 위치 지정 방식으로/)), 400);
+        const inp = await until(() => [...d.querySelectorAll('input')].find((x) => x.getAttribute('placeholder') === '끝 4자리 또는 컨번호'));
+        if (inp) setVal(inp, front.slice(-4));
+        await sleep(600);
+        const t = d.body.textContent;
+        const seg = t.slice(Math.max(0, t.indexOf('📍 위치 지정 방식')), t.indexOf('📍 위치 지정 방식') + 700);
+        try { W.close(); } catch (er) { /* */ }
+        return { seg, errs, opened: t.includes('📍 위치 지정 방식'), hadInput: !!inp };
+      };
+      const OWN = 'SPSU2027009', FILL = 'SPSU2021037', PAIRF = 'SPSU2020468';
+      const tr = tv().loading.records[OWN] || {};
+      const a = await openTwin(OWN);
+      const noAuto = !a.seg.includes(PAIRF) && !a.seg.includes('짝 확인됨') && a.seg.includes('뒤 컨을 앱이 정하지 않습니다') && a.seg.includes('맞교환 자리');
+      //  맞교환 아닌 앞 컨 — 종전대로 짝을 채운다(같은 05·07 홀드의 계획 짝)
+      const E1 = TX.loading.ediContainers; const k5 = (cn) => `${E1[cn].row}-${E1[cn].tier}`;
+      const plainFront = Object.keys(E1).find((cn) => parseInt(E1[cn].bay, 10) === 5 && +E1[cn].tier < 80 && ![OWN, FILL].includes(cn) && !TX.loading.completed[cn]
+        && Object.keys(E1).some((y) => parseInt(E1[y].bay, 10) === 7 && k5(y) === k5(cn) && !TX.loading.completed[y]));
+      const plainPair = plainFront ? Object.keys(E1).find((y) => parseInt(E1[y].bay, 10) === 7 && k5(y) === k5(plainFront)) : '';
+      const b = plainFront ? await openTwin(plainFront) : { seg: '', errs: [] };
+      const autoKept = !!plainFront && b.seg.includes(plainPair) && b.seg.includes('플랜 그대로 (짝 확인됨)');
+      ok(`⑬ 수동 트윈 위치 지정 방식 — 앞 ${OWN.slice(-4)}(맞교환 자리 ${P(tr.bay_assign, tr.row_assign, tr.tier_assign)} · 계획 ${P(E1[OWN].bay, E1[OWN].row, E1[OWN].tier)}) → 뒤 자동 채움 ${a.seg.includes(PAIRF) ? PAIRF.slice(-4) + '(칸 짐작)' : '없음'} · «짝 확인됨» ${a.seg.includes('짝 확인됨') ? '뜸' : '없음'} · «뒤 컨을 앱이 정하지 않습니다» ${a.seg.includes('뒤 컨을 앱이 정하지 않습니다') ? '있음' : '없음'}(수정 전 0468 + «플랜 그대로 (짝 확인됨)») · 맞교환 아닌 앞 ${plainFront ? plainFront.slice(-4) : '?'} → 뒤 ${plainPair ? plainPair.slice(-4) : '?'} 자동 채움 ${autoKept ? '그대로' : '안 됨'}`,
+        a.opened && a.hadInput && tr._assign_src === 'autoswap' && noAuto && autoKept && !a.errs.length && !b.errs.length,
+        JSON.stringify({ tr, seg: a.seg.slice(0, 300), segB: b.seg.slice(0, 200), errs: [...a.errs, ...b.errs].slice(0, 3) }).slice(0, 700));
+
+      //  ⑬-2 같은 상태에서 선적 트윈 기본 화면(트윈 조회 TwinSearch — 앞 끝4 → 뒤 자동 «뒤 (자동)» 카드 · [트윈 한 번에 선적확인 (두 대)])도 같은 기준.
+      //      4.23-01 1차가 작업창 목록에 정해 준 자리를 올리면서 이 화면의 자동 짝도 0468(칸 짐작)이 됐다 — 한 번 누르면 거짓 완료(마무리 담당 실측). 4.22-04 는 계획 짝 3338.
+      const openTwinSearch = async (front, back = '', vv = null) => {
+        const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+        const W = dom.window, errs = [];
+        W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
+        W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+        W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+        W.global = W; W.__memdb = {}; W.speechSynthesis = { speak() {}, cancel() {}, getVoices() { return []; } };
+        W.localStorage.setItem('gm_equip_no', '1호기');
+        try { W.eval(vSrc); W.__R32go(JSON.stringify(vv || tv()), tk); } catch (er) { errs.push('THROW ' + er.message); }
+        await sleep(350);
+        const d = W.document, click = async (bb, ms = 250) => { if (bb) { bb.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } return !!bb; };
+        const btn = (re) => [...d.querySelectorAll('button')].find((x) => re.test(x.textContent.replace(/\s+/g, ' ').trim()) && !x.disabled);
+        const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };
+        const setVal = (el, val) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set.call(el, val); el.dispatchEvent(new W.Event('input', { bubbles: true })); };
+        await click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((x) => /작업 시작/.test(x.textContent))), 300);
+        await click(await until(() => btn(/^✋\s*수동$/)), 300);
+        const g = await until(() => [...d.querySelectorAll('button')].find((x) => { const m = x.textContent.replace(/\s+/g, ' ').trim().match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(5); }));
+        await click(g, 300);
+        await click(await until(() => btn(/^🟠 홀드 [1-9]/)), 300);
+        await click(await until(() => btn(/^트윈$/)), 400);
+        const inp = await until(() => [...d.querySelectorAll('input')].find((x) => x.getAttribute('placeholder') === '끝 4자리 또는 컨번호'));
+        if (inp) setVal(inp, front.slice(-4));
+        await sleep(700);
+        if (back) {   // 뒤 칸 손 입력(ManualTwinPicker «끝 4자리») → 후보 단추
+          const inB = await until(() => [...d.querySelectorAll('input')].find((x) => x.getAttribute('placeholder') === '끝 4자리'));
+          if (inB) setVal(inB, back.slice(-4));
+          await sleep(400);
+          await click(await until(() => [...d.querySelectorAll('button')].find((x) => x.textContent.trim() === back)), 600);
+        }
+        const t = d.body.textContent; const i0 = t.indexOf('🚛 트윈: 앞 컨 입력');
+        const seg = i0 >= 0 ? t.slice(i0, i0 + 4000) : '';
+        const both = !!btn(/^트윈 한 번에 선적확인 \(두 대\)$/);
+        try { W.close(); } catch (er) { /* */ }
+        return { seg, errs, opened: i0 >= 0, hadInput: !!inp, both };
+      };
+      const sA = await openTwinSearch(OWN);
+      const sNoAuto = sA.opened && sA.hadInput && !sA.seg.includes(PAIRF) && !sA.seg.includes('뒤 (자동)') && !sA.both && sA.seg.includes('뒤 컨을 앱이 정하지 않습니다');
+      const sB = plainFront ? await openTwinSearch(plainFront) : { seg: '', errs: [], both: false };
+      const sKept = !!plainFront && sB.seg.includes(plainPair) && sB.seg.includes('뒤 (자동)') && sB.both;
+      ok(`⑬-2 선적 트윈 기본 화면(트윈 조회) — 앞 ${OWN.slice(-4)}(맞교환 자리) → «뒤 (자동)» ${sA.seg.includes('뒤 (자동)') ? '뜸' : '없음'} · ${PAIRF.slice(-4)} ${sA.seg.includes(PAIRF) ? '나옴(칸 짐작)' : '없음'} · [트윈 한 번에] ${sA.both ? '있음' : '없음'} · «뒤 컨을 앱이 정하지 않습니다» ${sA.seg.includes('뒤 컨을 앱이 정하지 않습니다') ? '있음' : '없음'} · 맞교환 아닌 앞 ${plainFront ? plainFront.slice(-4) : '?'} → «뒤 (자동)» ${plainPair ? plainPair.slice(-4) : '?'} ${sKept ? '그대로' : '안 됨'}`,
+        sNoAuto && sKept && !sA.errs.length && !sB.errs.length, JSON.stringify({ seg: sA.seg.slice(0, 300), segB: sB.seg.slice(0, 160), errs: [...sA.errs, ...sB.errs].slice(0, 3) }).slice(0, 700));
+      //  ⑬-3 트윈 조회에서 뒤 컨이 규격·풀엠티·항구가 다른 맞교환이면 [트윈 한 번에 선적확인 (두 대)] 를 내지 않는다(자동 가이드 큰 단추 · 위치 지정 방식과 같은 기준).
+      //      같은 OBWH 계획판 — 엠티 SPSU2023338(계획 07-01-02)이 풀 SPSU2010140(CNYNT · 계획 09-01-82) 칸에 실렸다 → 2010140 은 맞교환 07-01-02(엠티 계획 칸 · ⚠).
+      //      앞 SPSU2041840(11-01-82 · 2010140 의 계획 짝) → 뒤 자동은 맞교환이라 비고 → 뒤 손 입력 0140.
+      {
+        const L13 = clone(TX.loading); L13.completed.SPSU2023338 = { by: '이형출', at: 1 };
+        L13.records.SPSU2023338 = { ...(L13.records.SPSU2023338 || {}), cn: 'SPSU2023338', bay_actual: '9', row_actual: '01', tier_actual: '82' };
+        const v13 = U32.applyAutoSwap(U32.applyCatosPos({ key: tk, info: clone(TX.info), loading: L13, discharge: {} }));
+        const r13 = v13.loading.records.SPSU2010140 || {};
+        const sW = await openTwinSearch('SPSU2041840', 'SPSU2010140', v13);
+        const twoCards = sW.seg.includes('SPSU2041840') && sW.seg.includes('SPSU2010140');
+        ok(`⑬-3 트윈 조회 — 뒤 SPSU2010140 (맞교환 ${P(r13.bay_assign, r13.row_assign, r13.tier_assign)} ${r13._assign_warn ? '⚠' : ''}) 손 입력 → [트윈 한 번에 선적확인 (두 대)] ${sW.both ? '있음' : '없음'} · «앱이 자리를 정하지 않습니다 — 그 카드의 [실린 칸 지정]» ${/앱이 자리를 정하지 않습니다 — 그 카드의 \[실린 칸 지정\]/.test(sW.seg) ? '있음' : '없음'}`,
+          !!r13._assign_warn && twoCards && !sW.both && /앱이 자리를 정하지 않습니다 — 그 카드의 \[실린 칸 지정\]/.test(sW.seg) && !sW.errs.length, JSON.stringify({ r13, seg: sW.seg.slice(0, 400), errs: sW.errs.slice(0, 3) }).slice(0, 700));
+      }
+      //  ⑬-4 마무리 — 맞교환 자리 앞 컨 + 손으로 넣은 뒤 컨이 한 트윈 칸(짝 베이 · 같은 열·단)이 아니면 [트윈 한 번에] 를 내지 않는다(모의 작업장 twin3s — 7009 05-02-02 + 3338 07-01-02 로 적혔다).
+      //      짝이면(7009 05-02-02 + 0468 07-02-02) 종전대로 단추가 선다.
+      {
+        const PLANPAIR = 'SPSU2023338';
+        const nP = await openTwinSearch(OWN, PLANPAIR);
+        const yP = await openTwinSearch(OWN, PAIRF);
+        ok(`⑬-4 트윈 조회 — 앞 ${OWN.slice(-4)}(맞교환 05-02-02) + 뒤 ${PLANPAIR.slice(-4)}(07-01-02) → [트윈 한 번에] ${nP.both ? '있음' : '없음'} · «한 트윈 칸이 아닙니다» ${/한 트윈 칸이 아닙니다/.test(nP.seg) ? '있음' : '없음'} · 뒤 ${PAIRF.slice(-4)}(07-02-02 · 짝 칸) → [트윈 한 번에] ${yP.both ? '있음' : '없음'}`,
+          !nP.both && /한 트윈 칸이 아닙니다/.test(nP.seg) && nP.seg.includes(PLANPAIR) && yP.both && !/한 트윈 칸이 아닙니다/.test(yP.seg) && !nP.errs.length && !yP.errs.length,
+          JSON.stringify({ n: nP.seg.slice(0, 300), y: yP.seg.slice(0, 200), errs: [...nP.errs, ...yP.errs].slice(0, 3) }).slice(0, 700));
+      }
+
+      //  ⑬-5 4.23-01 3차(재감사 중-2) — 자동 가이드의 트윈 묶기도 트윈 조회와 같은 기준: 맞교환 자리 컨(7009 05-02-02)을 그 칸 옆 계획 주인(0468 07-02-02)과 한 카드로 묶지 않는다.
+      //      재감사 실측(B5·B7 홀드 다른 컨을 다 실은 상태) — 고치기 전 «다음 예정 15. SPSU2027009 +0468 5-02-02» 한 카드 → [트윈 한 번에 선적확인] 한 번이면 0468 거짓 완료.
+      //      판정은 utils.guideTwinOf(isSwapSlot) 한 벌 — 화면(GuidedWorkPanel)·미르 다음 차례(mir.js)가 같이 부른다. 기대값은 원자료에서 — 7009 는 맞교환 자리(_assign_src autoswap)다.
+      {
+        const keep = new Set([OWN, PAIRF, 'SPSU2023338']);
+        const L5 = clone(TX.loading);
+        for (const [cn, e] of Object.entries(L5.ediContainers)) {
+          if (!e || !e.bay) continue; const b = parseInt(e.bay, 10), t = parseInt(e.tier, 10);
+          if ((b === 5 || b === 7) && t < 80 && !keep.has(cn) && !L5.completed[cn]) { L5.completed[cn] = { by: '연막', at: 1 }; L5.records[cn] = { ...(L5.records[cn] || {}), cn, bay_actual: String(b), row_actual: e.row, tier_actual: e.tier }; }
+        }
+        global.__memdb = { voyages: { [tk]: { info: clone(TX.info), loading: L5 } } };
+        const v5 = U32.applyAutoSwap(U32.applyCatosPos({ key: tk, info: clone(TX.info), loading: clone(L5), discharge: {} }));
+        const r5 = v5.loading.records[OWN] || {};
+        const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+        const W = dom.window, errs = [];
+        W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
+        W.matchMedia = W.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+        W.scrollTo = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
+        W.global = W; W.__memdb = {}; W.speechSynthesis = { speak() {}, cancel() {}, getVoices() { return []; } };
+        W.localStorage.setItem('gm_equip_no', '1호기');
+        try { W.eval(vSrc); W.__R32go(JSON.stringify(v5), tk); } catch (er) { errs.push('THROW ' + er.message); }
+        await sleep(350);
+        const d = W.document, click = async (bb, ms = 250) => { if (bb) { bb.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } return !!bb; };
+        const btn = (re) => [...d.querySelectorAll('button')].find((x) => re.test(x.textContent.replace(/\s+/g, ' ').trim()) && !x.disabled);
+        const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let x = fn(); while (!x && Date.now() < end) { await sleep(60); x = fn(); } return x; };
+        await click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((x) => /작업 시작/.test(x.textContent))), 300);
+        await click(await until(() => btn(/^🤖\s*자동 가이드$/)), 300);
+        await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent));
+        await click(await until(() => [...d.querySelectorAll('button')].find((x) => { const m = x.textContent.replace(/\s+/g, ' ').trim().match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(5) && /남은 컨/.test(x.textContent); })), 300);
+        await until(() => btn(/^1호기 그대로$/) || /작업할 단을 선택하세요/.test(d.body.textContent));
+        await click(btn(/^1호기 그대로$/), 250);
+        await until(() => /작업할 단을 선택하세요/.test(d.body.textContent));
+        await click(btn(/^🟠 홀드 [1-9]/), 400);
+        await until(() => [...d.querySelectorAll('div.border-2')].some((x) => /border-(amber|cyan)-600/.test(x.className)));
+        await sleep(200);
+        const cardTxt = [...d.querySelectorAll('div.border-2')].filter((x) => /border-(amber|cyan)-600/.test(x.className)).map((x) => x.textContent.replace(/\s+/g, ' ').trim());
+        const upBox = [...d.querySelectorAll('div')].find((x) => x.firstChild && x.firstChild.textContent === '다음 예정');
+        const upRows = upBox ? [...upBox.querySelectorAll('div.flex')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [];
+        const both = (t) => t.includes(OWN) && (t.includes(PAIRF) || t.includes('+' + PAIRF.slice(-4)));
+        const paired = [...cardTxt, ...upRows].filter(both);
+        const seen = [...cardTxt, ...upRows].some((t) => t.includes(OWN)) && [...cardTxt, ...upRows].some((t) => t.includes(PAIRF));
+        const twinBtn = !!btn(/트윈 한 번에/);
+        try { W.close(); } catch (er) { /* */ }
+        ok(`⑬-5 자동 가이드 트윈 묶기 — 맞교환 자리 ${OWN.slice(-4)}(${P(r5.bay_assign, r5.row_assign, r5.tier_assign)} · ${r5._assign_src || '맞교환 아님'}) + 계획 ${PAIRF.slice(-4)}(${P(TX.loading.ediContainers[PAIRF].bay, TX.loading.ediContainers[PAIRF].row, TX.loading.ediContainers[PAIRF].tier)}) 한 카드 ${paired.length ? '있음' : '없음'} · 두 컨 다 큐에 ${seen ? '있음' : '없음'} · [트윈 한 번에] ${twinBtn ? '있음' : '없음'}(고치기 전 «${OWN} +${PAIRF.slice(-4)}» 한 카드)`,
+          r5._assign_src === 'autoswap' && seen && !paired.length && !twinBtn && !errs.length, JSON.stringify({ r5: { b: r5.bay_assign, r: r5.row_assign, t: r5.tier_assign, src: r5._assign_src }, cardTxt: cardTxt.map((x) => x.slice(0, 120)), upRows: upRows.slice(0, 6), errs: errs.slice(0, 3) }).slice(0, 700));
+      }
+
+      //  ⑭ 4.23-01 2차(항목 5) — «속성 다름» 경고는 검수사 말로: «규격·풀엠티·항구가 다름 — 이 컨 45R1 풀 CNYYY · 그 칸 계획 45GE 엠티 CNYNT».
+      //     2차 시뮬 O2 — OBWH EDI 규격 칸은 숫자꼴(4530 · 450E)이라 종전 문구는 «속성 다름(4530/F/CNYYY ↔ 450E/E/CNYNT)». 기대값은 원자료의 리스트 규격(검수원이 보는 글자)에서 따로 만든다.
+      {
+        const FBIU = 'FBIU5779479', TRHU = 'TRHU8809562';
+        global.__memdb = { voyages: { [tk]: { info: clone(TX.info), loading: clone(TX.loading) } } };
+        const r14 = await F32.fbReassignContainerPosition(tk, 'loading', TRHU, '18', '05', '82', '이인철', { actualWork: true, seqConfirmed: true });
+        await F32.fbCompleteContainer(tk, 'loading', TRHU, '이인철', 'normal', '', '2호기'); await sleep(80);
+        const Lm = global.__memdb.voyages[tk].loading;
+        const vw = U32.applyAutoSwap(U32.applyCatosPos({ key: tk, info: clone(TX.info), loading: clone(Lm), discharge: {} }));
+        const rf = vw.loading.records[FBIU] || {};
+        const RF = TX.loading.records[FBIU], RT = TX.loading.records[TRHU], EF = TX.loading.ediContainers[FBIU], ET = TX.loading.ediContainers[TRHU];
+        const want = `규격·풀엠티·항구가 다름 — 이 컨 ${RF.iso} 풀 ${RF.pod} · 그 칸 계획 ${RT.iso} 엠티 ${RT.pod}`;
+        ok(`⑭ 경고 문구 — ${FBIU.slice(-4)}(EDI 규격 ${EF.iso}) 계획 칸을 ${TRHU.slice(-4)}(EDI ${ET.iso}) 가 차지 → «${rf._assign_warn || '(없음)'}» = «${want}»(종전 «속성 다름(${EF.iso}/F/${EF.pod} ↔ ${ET.iso}/E/${ET.pod})»)`,
+          r14 && r14.ok && rf._assign_src === 'autoswap' && rf._assign_warn === want && !/\b\d{3}[0-9E]\b/.test(rf._assign_warn), JSON.stringify({ r14, rf }).slice(0, 400));
+      }
+
+      //  ⑮ 4.23-01 2차 — «속성 다름» 은 보내는 칸(사슬 끝 빈 칸)의 계획 주인과 견준다(3.13 «속성 같으면 비운 자리로» — 그 컨이 갈 칸의 계획). 종전엔 계획 칸을 차지한 첫 컨(firstA)과 견줬다.
+      //     OBWH 2763E 마감텔리 실시각 재생 131대째 — 풀 LYGU4039111(계획 06-04-82) 칸에 풀 LYGU4038162 가 실렸고(06-04-82), 그 컨의 계획 칸 18-08-82 엔 엠티 JDSU1640646 이 실렸다(18-08-82)
+      //     → 4039111 은 사슬 끝 14-08-82(엠티 JDSU1640646 의 계획 칸)로 간다. firstA(풀·같은 POD)와 견주면 경고가 없어 확인 한 번에 엠티 칸으로 저장됐다.
+      {
+        const L15 = clone(TX.loading);
+        for (const [cn, pos] of [['LYGU4038162', '06-04-82'], ['JDSU1640646', '18-08-82']]) { const [b, r, t] = pos.split('-'); L15.completed[cn] = { by: '이형출', at: 1 }; L15.records[cn] = { ...(L15.records[cn] || {}), cn, bay_actual: String(parseInt(b, 10)), row_actual: r, tier_actual: t }; }
+        const v15 = U32.applyAutoSwap(U32.applyCatosPos({ key: tk, info: clone(TX.info), loading: L15, discharge: {} }));
+        const r15 = v15.loading.records['LYGU4039111'] || {};
+        const E15 = TX.loading.ediContainers, R15 = TX.loading.records;
+        const want15 = `규격·풀엠티·항구가 다름 — 이 컨 ${R15.LYGU4039111.iso} 풀 ${E15.LYGU4039111.pod} · 그 칸 계획 ${R15.JDSU1640646.iso} 엠티 ${E15.JDSU1640646.pod}`;
+        ok(`⑮ 사슬 끝 칸과 견준다 — LYGU4039111 → ${P(r15.bay_assign, r15.row_assign, r15.tier_assign)}(계획 주인 JDSU1640646 엠티 · 계획 칸 차지 LYGU4038162 풀) «${r15._assign_warn || '(경고 없음 — 종전 firstA 견주기)'}»`,
+          r15._assign_src === 'autoswap' && P(r15.bay_assign, r15.row_assign, r15.tier_assign) === P(E15.JDSU1640646.bay, E15.JDSU1640646.row, E15.JDSU1640646.tier) && r15._assign_byCn === 'LYGU4038162' && r15._assign_warn === want15,
+          JSON.stringify({ r15, want15 }).slice(0, 400));
+      }
+    }
+
+  }
+
   // ── R33 ───────────────────────────────────────────────────────────────
   //  4.23 — 글자 두 모드(보통·크게)와 머리띠 폰·컴 배치. 크로뮴으로 실제 그려 잰다 — 검사 본문은 tools/regress_r33_textmode.cjs 한 벌(단독 실행도 된다).
   await require('./regress_r33_textmode.cjs')({ ROOT, TMP, ok, head, fx, stub });

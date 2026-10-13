@@ -19,6 +19,8 @@ import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠�
 import { speak, spellKo } from '../voice.js';
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { loadingSlotOf, guideTwinOf } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
+import PositionEditModal from './PositionEditModal.jsx';   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinDiffLimit, twinWtOf } from '../nlSearch.js';
 
@@ -510,7 +512,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return buildGuidedQueue({
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
-      findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
+      //  4.23-01 3차(재감사 중-2): 맞교환 자리 컨은 칸으로 짝을 짐작하지 않는다 — 트윈 조회(SearchPanel autoMate)와 같은 규칙(utils.guideTwinOf)
+      findTwin: guideTwinOf((t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName)),
       streamPref,                                           // V8.50: 갈림 선택 부류
       frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
       rowFrom,                                              // 3.3: 양하 «해상부터» (4.09: 호기별)
@@ -692,11 +695,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return false;
   };
 
+  //  ★ 4.23-01 2차 — 카드 컨 중 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn) 컨. 있으면 큰 확인 단추가 그 자리를 확인하지 않고 위치 지정을 연다.
+  const [posFor, setPosFor] = useState(null);
+  const warnOf = (cd) => (mode === 'loading' && cd ? [cd.main, cd.twin].filter(Boolean).find((x) => loadingSlotOf(x).kind === 'swapWarn') || null : null);
   // 확인 (트윈은 둘 다 한 번에)
   const handleConfirm = async () => {
     if (!card || busy) return;
     if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;   // V8.09-06: XRAY 실번호 미입력 차단
+    //  ★ 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환이면 앱이 자리를 정하지 않는다 — 확인 대신 위치 지정을 연다(배정 후 바로 선적확인 켬).
+    const _w = warnOf(card);
+    if (_w) { setPosFor(_w); return; }
     setBusy(true);
     try {
       // V8.71: 트윈 완료 2건을 멀티패스 한 번에 — 한 대만 먼저 선적되는 틈 제거.
@@ -721,6 +730,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (blockIfXrayMissing()) return;
     const one = which === 'twin' ? card.twin : card.main;
     const mate = which === 'twin' ? card.main : card.twin;   // 4.08-02: 남은 짝
+    if (mode === 'loading' && loadingSlotOf(one).kind === 'swapWarn') { setPosFor(one); return; }   // 4.23-01 2차: 규격 다른 맞교환은 위치 지정으로
     setBusy(true);
     try {
       await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', equip);
@@ -1327,6 +1337,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const handleTwinFixApply = async () => {
     if (busy || !card || !card.twin) return;
     if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
+    //  ★ 4.23-01 2차: 고치지 않은 쪽이 규격·풀엠티·항구가 다른 맞교환이면 «예측대로» 완료하지 않는다 — 그 칸은 앱이 정하지 않는다(큰 확인 단추와 같은 기준 · 위치 지정으로).
+    if (mode === 'loading') {
+      const _keepW = [!fixPickFront && card.main, !fixPickBack && card.twin].filter(Boolean).find((x) => loadingSlotOf(x).kind === 'swapWarn');
+      if (_keepW) { notify('실린 칸을 먼저 지정하세요', `${_keepW.cn.slice(-4)} 는 규격·풀엠티·항구가 다른 맞교환이라 앱이 자리를 정하지 않습니다.\n그쪽도 실제 온 컨을 고르거나, [📍 실린 칸 지정] 으로 실린 칸을 먼저 넣어 주세요.`); return; }
+    }
     // V8.70: 한쪽만 선택하고 적용하면 나머지는 "예측대로" 완료된다 — 실물이 정말 예측 컨인지 확인.
     //   (둘 다 틀렸는데 한쪽만 수정·적용 → 남은 쪽이 허위 완료되던 함정.)
     if (!fixPickFront || !fixPickBack) {
@@ -1624,8 +1639,30 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     <div className={`rounded-pill border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
       <div className="flex items-center justify-between text-2xs mb-1">
         <span className={`font-bold ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>{label}</span>
-        <span className="text-dim-300 mono font-bold">{parseInt(c.bay, 10)}-{c.row}-{c.tier} {parseInt(c.tier, 10) >= 80 ? '데크' : '홀드'}</span>
+        {mode === 'loading' && loadingSlotOf(c).kind === 'swapWarn'
+          ? <span className="text-orange-300 mono font-bold">자리 미정</span>
+          : <span className="text-dim-300 mono font-bold">{parseInt(c.bay, 10)}-{c.row}-{c.tier} {parseInt(c.tier, 10) >= 80 ? '데크' : '홀드'}</span>}
       </div>
+      {/*  ★ 4.23-01 — 이 칸은 «맞교환 자리»다(3.13 자동 맞교환 — 이 컨의 계획 칸에 다른 컨이 실려, 그 컨이 비운 계획 칸으로 옮겨 보인다).
+            근거 — 검수사 확정(3.13) «밀려난 계획 컨을 어떻게 둘지 → 속성 같으면 비운 자리로 자동 맞교환». 같은 뜻을 앱 글이 이미 말한다(검수사 말이 아니다) —
+            이 화면 «이 자리 화물이 아닙니다» 창(2.80-02) «[그래도 넣는다] 를 누르면 앱도 두 자리를 맞바꿔 둡니다» · 매뉴얼 자리 확인 절 «다른 컨을 넣었다면 그 컨은 온 컨이 있던 옛 자리로 가서 기다립니다».
+            [선적확인] 을 누르면 이 칸이 실린 자리로 저장된다(firebase._markLoadedPos — 4.23-01). 낱말·자리는 utils.loadingSlotOf 한 벌(큰 카드·컨 상세·리스트와 같다).
+            ★ 4.23-01 2차 — 규격·풀엠티·항구가 다르면(3.13 _assign_warn) 앱이 자리를 정하지 않는다: 머리는 «자리 미정», 확인 단추는 위치 지정을 연다. */}
+      {(() => {
+        const ls = mode === 'loading' ? loadingSlotOf(c) : null;
+        if (!ls || !ls.plan || (ls.kind !== 'swap' && ls.kind !== 'swapWarn')) return null;
+        const who = ls.byCn ? String(ls.byCn).slice(-4) : '';
+        return ls.kind === 'swap' ? (
+          <div className="text-2xs font-bold mb-1 text-sky-300">
+            🔄 맞교환 자리 — 계획 칸({ls.plan}){who ? `에 ${who} 이(가) 실렸습니다` : '은 다른 컨이 차지했습니다'}
+          </div>
+        ) : (
+          <div className="text-2xs font-bold mb-1 text-orange-300">
+            ⚠ 계획 칸({ls.plan})은 {who ? `${who} 이(가)` : '다른 컨이'} 차지했습니다 — 이 컨은 규격·풀엠티·항구가 달라 앱이 자리를 정하지 않습니다. 실제 실린 칸을 지정하세요
+            <span className="block font-normal text-orange-200">비는 칸 {ls.pos} · {ls.warn}</span>
+          </div>
+        );
+      })()}
       <button onClick={() => onOpenContainer?.(c)} className="w-full text-left">
         <span className="mono text-xl font-bold text-dim-100">{c.cn.slice(0, -4)}</span>
         <span className="mono text-3xl font-black text-emerald-300">{c.cn.slice(-4)}</span>
@@ -1946,8 +1983,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <button key={k} onClick={() => handleConfirmOne(k)} disabled={busy}
                   className="w-full py-3 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white flex items-center justify-between px-4">
                   <span className="mono">{c.cn}</span>
-                  <span className="text-xxs opacity-80">{c.bay}-{c.row}-{c.tier}{c.wt ? ` · ${formatWt(c.wt)}` : ' · 무게 미상'}</span>
-                  <span>이것부터</span>
+                  <span className="text-xxs opacity-80">{mode === 'loading' && loadingSlotOf(c).kind === 'swapWarn' ? '자리 미정' : `${c.bay}-${c.row}-${c.tier}`}{c.wt ? ` · ${formatWt(c.wt)}` : ' · 무게 미상'}</span>
+                  <span>{mode === 'loading' && loadingSlotOf(c).kind === 'swapWarn' ? '실린 칸 지정' : '이것부터'}</span>{/* 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환은 칸을 앱이 정하지 않는다 — 누르면 위치 지정(handleConfirmOne) */}
                 </button>
               ))}
               {(
@@ -1963,11 +2000,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button onClick={() => setSingleMode(false)} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">트윈으로 돌아가기</button>
             </div>
           ) : (
+            warnOf(card) ? (
+              <button onClick={handleConfirm} disabled={busy}
+                className="w-full py-4 rounded-pill font-bold text-lg bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                📍 실린 칸 지정 — {String(warnOf(card).cn).slice(-4)}
+              </button>
+            ) : (
             <button onClick={handleConfirm} disabled={busy}
               className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
               {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
               {card.twin ? `트윈 한 번에 ${mode === 'discharge' ? '양하' : '선적'}확인` : `${mode === 'discharge' ? '양하' : '선적'}확인`}
             </button>
+            )
           )}
 
           {card.twin && !singleMode && (
@@ -2155,7 +2199,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <div key={q.main.cn} className="flex justify-between text-xxs py-0.5 border-b border-line last:border-0">
                   <span className="text-dim-400">{groupDone + 2 + i}.</span>
                   <span className="mono text-dim-200">{q.main.cn}{q.twin ? ` +${q.twin.l4 || q.twin.cn.slice(-4)}` : ''}</span>
-                  <span className="mono text-dim-400">{parseInt(q.main.bay, 10)}-{q.main.row}-{q.main.tier}{q.single ? ' 싱글' : ''}</span>
+                  <span className="mono text-dim-400">{mode === 'loading' && loadingSlotOf(q.main).kind === 'swapWarn' ? '자리 미정' : `${parseInt(q.main.bay, 10)}-${q.main.row}-${q.main.tier}`}{q.single ? ' 싱글' : ''}</span>{/* 4.23-01 2차: 규격 다른 맞교환은 칸을 앱이 정하지 않는다(카드 머리와 같은 말) */}
                 </div>
               ))}
             </div>
@@ -2195,6 +2239,28 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {/* 1.53: 확인창은 앱 안에서 뜬다. 네이티브 confirm() 은 렌더러를 멈춰 앱을 굳혔다. */}
       <ConfirmModal {...confirmState} />
       {hatchCountEl}{/* 4.10: 해치 보고 직전 장수 확인 창 */}
+      {/*  ★ 4.23-01 2차 — 규격·풀엠티·항구가 다른 맞교환 컨의 «실린 칸 지정». 큰 카드(BigResultCard)와 같은 위치 지정 창·같은 저장 함수다(새 경로 없음).
+            앱이 짐작한 칸을 미리 고르지 않는다 — 그 칸이 있는 베이를 펴 둘 뿐이다(자리 칸을 비운 사본으로 연다). 배정 후 바로 선적확인은 켠 채로 연다. */}
+      {posFor && (
+        <PositionEditModal
+          open={!!posFor}
+          container={{ ...posFor, bay: '', row: '', tier: '' }}
+          allContainers={allContainers}
+          slotSource={allContainers}
+          bayPairs={bayPairs}
+          workBay={posFor.bay || null}
+          defaultAlsoComplete
+          onClose={() => setPosFor(null)}
+          onSave={async (b, r, t, opts) => fbReassignContainerPosition(voyageKey, mode, posFor.cn, b, r, t, inspector, { actualWork: true, ...(opts || {}) })}
+          onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}
+          onCompleteBoth={async (cns) => {
+            if (!canWorkNow()) { alert(workGateText('완료')); return; }
+            for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', equip);
+            noteWorked(posFor);
+            setResumeCns([]); setSingleMode(false); setConsecFix(0); setFixOpen(false); setFixQuery('');
+          }}
+        />
+      )}
     </div>
   );
 }

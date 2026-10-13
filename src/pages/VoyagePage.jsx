@@ -54,6 +54,7 @@ import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -1474,7 +1475,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       <ContainerDetailModal
         key={detailC.cn}   // 3.60-03 (진단 T2): PC 우측 칼럼은 컨을 바꿔 눌러도 같은 인스턴스라 실번호 편집값(useState 초기값)이 앞 컨 것으로 남아 다음 컨에 저장됐다 — 컨마다 새로 세운다
         variant={variant}
-        c={detailC}
+        c={withAssignOf(detailC, recMap)}   /* 4.23-01 2차: 목록 줄에서 연 컨에도 그 기록의 맞교환·지정 자리를 얹는다(보이는 자리 = 저장되는 자리) */
         workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
         workTier={(() => { const t = parseInt(detailC.tier || detailC.tier_planned || recMap[detailC.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
         comp={cSec.completed?.[detailC.cn]}
@@ -2733,6 +2734,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
         compMap={compMap}
         xrayMap={xrayMap}
         xraySeals={xraySeals}
+        recs={recMap}   /* 4.23-01 2차: 줄이 «선적확인 한 번에 저장될 자리»(맞교환·지정 자리)를 말한다 */
         mode={mode}
         voyageKey={voyageKey}
         inspector={inspector}
