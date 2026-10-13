@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.25';
-const NOTE = '4.25 홈 화면을 정리했습니다. 배를 누르면 자세한 내용이 오른쪽(폰은 전체 화면)에 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.25-01';
+const NOTE = '4.25-01 규격이 자료마다 다를 때는 확인 전까지 터미널 규격을 따릅니다. L5U0 같은 오픈탑 표기를 터미널처럼 45UT로 읽습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

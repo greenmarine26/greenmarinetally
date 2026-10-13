@@ -2953,6 +2953,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   //  4.25 — 홈(컴 두 칸 · 폰 줄 → 전체화면 시트 · 문 전수 · 숫자 한 벌 · 역할 · 위험 단추). 크로뮴으로 실제 그려 잰다 — 검사 본문은 tools/regress_r35_home.cjs 한 벌(단독 실행도 된다).
   await require('./regress_r35_home.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
+  // ── R36 ───────────────────────────────────────────────────────────────
+  //  4.25-01 — 규격이 자료마다 다를 때 «확인 전에는 터미널(EDI) 규격» · L5U0·40OH 를 터미널처럼 45UT(OT). 본문은 tools/regress_r36_iso.cjs(단독 실행도 된다).
+  await require('./regress_r36_iso.cjs')({ ROOT, TMP, ok, head, fx });
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

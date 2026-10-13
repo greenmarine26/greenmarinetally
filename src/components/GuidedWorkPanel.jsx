@@ -1710,8 +1710,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         ) : null;
         return (
           <div className="mt-1.5 pt-1.5 border-t border-amber-700/60">
-            <div className="text-xxs font-bold text-amber-300">⚠ 규격이 자료마다 다름 — 미확정</div>
-            <div className="text-3xs text-dim-300 leading-snug mt-0.5">실물을 보고 맞는 것을 누르세요.</div>
+            {/* 4.25-01 (검수사 2026-10-14 «뭔가 확인이 안될떄는 터미널의 규격을 따릅니다»): 확인 전에는 터미널(EDI) 규격 — 컨 상세와 같은 말. */}
+            <div className="text-xxs font-bold text-amber-300">⚠ 규격이 자료마다 다름{srcs.some(x => x.k === 'edi') ? ` — 터미널(EDI) ${srcs.find(x => x.k === 'edi').spec} 을 따릅니다` : ' — 미확정'}</div>
+            <div className="text-3xs text-dim-300 leading-snug mt-0.5">{srcs.some(x => x.k === 'edi') ? '실물이 다르면 맞는 것을 누르세요.' : '실물을 보고 맞는 것을 누르세요.'}</div>
             <div className="flex flex-wrap gap-1 mt-1">
               {srcs.map(x => (
                 <button key={x.k} onClick={() => savePickIso(c, x)} disabled={busy}

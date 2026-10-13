@@ -6,6 +6,7 @@
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
 import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { ISO_CONFLICT_WHY, isLen45Iso } from './utils.js';   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
@@ -938,7 +939,7 @@ export function applyNLFilter(containers, parsed) {
   else if (parsed.size === '40') r = r.filter(c => /^4/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('40'));
   // V7.53 fix: ISO '45xx'는 45피트가 아니라 40ft 하이큐브(첫자리 4=40ft, 둘째 5=9'6").
   //   진짜 45피트는 L5xx (cargoPlanCore 주석: 45GP→40HC, L5G1→45HC). label 기준이 정답.
-  else if (parsed.size === '45') r = r.filter(c => /^L5/i.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('45'));
+  else if (parsed.size === '45') r = r.filter(c => (/^L5/i.test(c.iso || '') && isLen45Iso(c.iso)) || (isoToLabel(c.iso) || '').startsWith('45'));   // 4.25-01: L5U0(오픈탑)은 40피트(utils.isLen45Iso) — 40·45 에 겹쳐 세지 않는다
   if (parsed.fe) r = r.filter(c => c.fe === parsed.fe);
   if (parsed.type === 'rf') {
     // 1.86 (검수사 확정): «리퍼» = 풀이 기본 — 엠티는 «리퍼 엠티»로 물을 때만. 전면에 엠티가 섞이면 헷갈린다.
@@ -1311,7 +1312,7 @@ function buildBaySlotMap(allContainers) {
  */
 const _WHY_BY_CODE = {
   fe_conflict:   'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.',
-  iso_conflict:  'EDI · 선사리스트 · 세관리스트의 규격이 서로 다릅니다. 실물을 보기 전에는 확정할 수 없습니다 — 양하·선적할 때 맞는 것을 고르세요.',
+  iso_conflict:  ISO_CONFLICT_WHY,   // 4.25-01: 진단 패널과 같은 말 한 벌(utils) — «확인 전에는 터미널(EDI) 규격을 따릅니다»
   reefer_no_temp:'풀 리퍼인데 온도가 없습니다. 현장에서 온도를 확인해 입력하세요.',
   unknown_iso:   '규격 표기를 앱이 해석하지 못했습니다. 사진을 찍고 1항사에게 확인하세요.',
   dg_no_class:   '위험물인데 클래스 정보가 없습니다.',

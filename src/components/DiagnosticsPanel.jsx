@@ -1,4 +1,4 @@
-import { fmtPos, isoShown } from '../utils';   // 4.21
+import { fmtPos, isoShown, ISO_CONFLICT_WHY } from '../utils';   // 4.21 · 4.25-01 ISO_CONFLICT_WHY
 // 자동 진단 경고 패널 (M3.5.4)
 //   - 자료 업로드 후 자동 호출
 //   - critical: 빨강 점멸 + 자동 음성
@@ -345,7 +345,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
     const why = alert.code === 'fe_conflict'
       ? 'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.'
       : alert.code === 'iso_conflict'
-        ? 'EDI · 선사리스트 · 세관리스트의 규격이 서로 다릅니다. 실물을 보기 전에는 확정할 수 없습니다 — 양하·선적할 때 맞는 것을 고르세요.'
+        ? ISO_CONFLICT_WHY   // 4.25-01: utils 한 벌 — «확인 전에는 터미널(EDI) 규격을 따릅니다»(검수사 2026-10-14)
         : '';
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5">

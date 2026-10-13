@@ -8,7 +8,7 @@
 // V9.57(I14): 죽은 export 정리 — 외부 참조는 generateEmptySealReport 하나뿐(전수 grep 확인).
 //   loadSheetJSStyled·buildSealReportSheet는 내부 사용만 남기고 export 제거,
 //   generateEmptySealEditReport·EmptySealReportButton(참조 0)은 삭제. React/lucide/loadSheetJS 임포트도 함께 정리.
-import { isoToLabel } from '../utils.js';
+import { isoToLabel, isTermOtL } from '../utils.js';
 
 // V7.42: 셀 스타일(음영·테두리·볼드)을 지원하는 SheetJS 호환 라이브러리 로더.
 //   기존 loadSheetJS(xlsx@0.18.5)는 스타일 미지원 → 보고서 출력 전용으로 xlsx-js-style 사용.
@@ -52,7 +52,7 @@ function sizeLabelWithRaw(iso) {
 function sortBySizeThenCn(list) {
   const rank = (c) => {
     const f = String(c.iso || '')[0];
-    return f === '2' ? 0 : f === '4' ? 1 : f === 'L' || f === '9' ? 2 : 3;
+    return f === '2' ? 0 : (f === '4' || isTermOtL(c.iso)) ? 1 : f === 'L' || f === '9' ? 2 : 3;   // 4.25-01: L5U0(오픈탑)은 40피트
   };
   return [...list].sort((a, b) => rank(a) - rank(b) || String(a.cn || '').localeCompare(String(b.cn || '')));
 }

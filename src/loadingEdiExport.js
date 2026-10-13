@@ -3,7 +3,7 @@
 //   - EDI 형식: 실수신 EDI(SWDN 2603S) 실측 문법과 바이트 단위 일치 검증(sim_v895) — 카스피(CASP) 호환.
 //   - 범위: 평택 선적분만(사용자 확정). 위치는 실체(bay_actual) 우선, 없으면 계획.
 //   - 대상: 선적확인(completed)된 컨 우선 — 완료가 하나도 없으면 전체 평택 선적분(경고 표시).
-import { loadSheetJS, isoToLabel, isPtk, isValidCn, closingEdiGate, sideCancelled, isMadeUnitCn, voyEq } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스 · 4.21: 제작컨 판정 한 벌
+import { loadSheetJS, isoToLabel, isTermOtL, isPtk, isValidCn, closingEdiGate, sideCancelled, isMadeUnitCn, voyEq } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스 · 4.21: 제작컨 판정 한 벌
 import { deckCoordMap, deckCoordCode } from './rzorPlan.js';   // 4.21: RZOR 덱플랜 좌표(덱_줄_칸) 한 벌 — 마감적용 덱 갈래
 
 // ── 평택 선적분 컨테이너 조립 (ediContainers + records 병합, 실체 위치 우선) ──
@@ -204,7 +204,7 @@ export function normalizeCntrType(iso) {
       high: z === 'HC' || z === 'HQ' || z === '45' };
   }
   const c1 = s[0] || '', c2 = s[1] || '', c3 = s[2] || '';
-  const len = c1 === '2' ? '20' : c1 === '4' ? '40' : (c1 === '9' || c1 === 'L' || c1 === 'M') ? '45' : '20';
+  const len = c1 === '2' ? '20' : (c1 === '4' || isTermOtL(s)) ? '40' : (c1 === '9' || c1 === 'L' || c1 === 'M') ? '45' : '20';   // 4.25-01: L5U0(오픈탑)은 터미널 읽기로 40피트 하이큐브
   const high = c2 === '4' || c2 === '5' || c2 === '6' || c2 === 'E' || c2 === 'F';
   if (/^\d/.test(c3) || c3 === '') {
     // 구형 숫자 ISO: 3번째 숫자 = 종류 (0·1=GP, 2=벌크, 3·4=리퍼, 5=오픈탑, 6=플랫, 7=탱크)

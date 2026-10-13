@@ -21,6 +21,7 @@
 //   - 토큰 분당 100만
 //   → 검수원 15명 × 하루 50회 = 750회/일, 한도의 50% 사용
 
+import { isTermOtL, isLen45Iso } from './utils.js';   // 4.25-01: L 표기 45피트 판정 한 벌
 import { fmtPos, normalizeBay, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
 import { lookupUN } from './dgUnDict.js';
 import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
@@ -250,8 +251,8 @@ export function ragFilter(question, allContainers, parsed = {}) {
   // 사이즈
   if (parsed.size) {
     if (parsed.size === '20') filtered = filtered.filter(c => c.iso && c.iso.startsWith('2'));
-    else if (parsed.size === '40') filtered = filtered.filter(c => c.iso && c.iso.startsWith('4'));
-    else if (parsed.size === '45') filtered = filtered.filter(c => c.iso && c.iso.startsWith('L'));
+    else if (parsed.size === '40') filtered = filtered.filter(c => c.iso && (c.iso.startsWith('4') || isTermOtL(c.iso)));   // 4.25-01: L5U0(오픈탑)은 40피트
+    else if (parsed.size === '45') filtered = filtered.filter(c => c.iso && isLen45Iso(c.iso));
     desc.push(`${parsed.size}피트`);
   }
 

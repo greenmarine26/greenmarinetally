@@ -491,11 +491,13 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     });
   }
   if (isoConf.length > 0) {
+    //  4.25-01 (검수사 2026-10-14 06:27 «뭔가 확인이 안될떄는 터미널의 규격을 따릅니다»): 확인 전에는 터미널(EDI) 규격으로 센다 — 할 일이 아니라 알림이라 🔵 정보(음성 없음).
+    //    종전(3.47)은 🟡 «실물 보고 확정». 고르기 단추(작업카드·컨 상세)는 그대로다 — 실물이 다르면 고른다.
     alerts.push({
-      level: 'warning',
+      level: 'info',
       code: 'iso_conflict',
-      msg: `규격이 자료마다 다름 ${isoConf.length}건 — 실물 보고 확정`,
-      voice: `규격 불일치 ${isoConf.length}건. 실물 확인 필요`,
+      msg: `규격이 자료마다 다름 ${isoConf.length}건 — 터미널(EDI) 규격을 따름`,
+      voice: '',
       count: isoConf.length,
       details: isoConf,   // 4.22: 자르지 않는다 — 패널이 «나머지 보기» 로 펼친다
     });

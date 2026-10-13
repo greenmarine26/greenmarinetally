@@ -825,8 +825,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   ) : null;
                   return (
                     <div className="mt-2 px-3 py-2 bg-amber-950/50 border border-amber-600 rounded-pill">
-                      <div className="text-xs font-black text-amber-200">⚠ 규격이 자료마다 다릅니다 — 미확정</div>
-                      <div className="text-xxs text-amber-300/90 mt-0.5 leading-snug">실물을 보기 전에는 확정할 수 없습니다. 실물을 보고 맞는 것을 누르세요.</div>
+                      {/* 4.25-01 (검수사 2026-10-14 «뭔가 확인이 안될떄는 터미널의 규격을 따릅니다»): 확인 전에는 터미널(EDI) 규격 — 앱 숫자·출력도 그것으로 센다. */}
+                      <div className="text-xs font-black text-amber-200">⚠ 규격이 자료마다 다릅니다{srcs.some(x => x.k === 'edi') ? ` — 터미널(EDI) ${srcs.find(x => x.k === 'edi').spec} 을 따릅니다` : ' — 미확정'}</div>
+                      <div className="text-xxs text-amber-300/90 mt-0.5 leading-snug">{srcs.some(x => x.k === 'edi') ? '실물이 다르면 맞는 것을 누르세요.' : '실물을 보고 맞는 것을 누르세요.'}</div>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {srcs.map(x => (
                           <button key={x.k} onClick={() => pickIso(x)} disabled={isoBusy}
