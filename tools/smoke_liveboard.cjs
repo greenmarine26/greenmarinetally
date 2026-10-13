@@ -31,7 +31,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (/CATOS|카토스/.test(t)) fail('카드에 터미널(CATOS) 글자가 있다');
   if (!/미등록/.test(t)) fail('조 등록 전 이름 칸이 «미등록»이 아니다');
   //  호기 칸이 옆으로(2칸 격자)
-  const grid = doc.querySelector('.grid-cols-2');
+  const grid = [...doc.querySelectorAll('div')].find((d) => (d.className || '').split(/\s+/).includes('sm:grid-cols-2'));   // 4.24: 컴(sm 이상) 2칸 — 폰 시트만 세로 한 칸
   if (!grid) fail('호기 2개가 옆으로(grid-cols-2) 안 선다');
   //  ★ 3.11 — 호기 칸에 **베이 그림**(베이플랜 BayPage — «BAY (20)21» 머리·칸·완료 초록)이 실제로 선다
   const FX = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'fixtures', 'craneboard_djct.json'), 'utf8'));

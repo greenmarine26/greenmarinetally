@@ -528,3 +528,25 @@ select:-webkit-autofill {
 /* ── 4.12-01 어느 밝기에서도 흰 글자 — 사진 위·검은 칩 위처럼 바탕이 밝기와 상관없이 어두운 자리에만 쓴다.
    보통의 흰 글자는 text-white 를 쓴다(4단계 흰 바탕에서는 brightLight.css 가 진한 글자로 바꿔 준다). 여기엔 그 규칙이 안 걸린다. ── */
 .fixed-white { color: #fff; }
+
+/* ── 4.24 수석 상황판 ─────────────────────────────────────────────────────────
+   ① 컴 상황판 탭은 페이지가 화면 한 장이다(검수사 B13 «페이지 스크롤이 생기면 불편합니다» · D3 «수석 화면 구성도 한화면이면 됩니다»).
+      보드가 상태 줄 밑에서 화면 바닥까지 차므로, 그때만 앱 본문 아래 여백(pb-20)과 바닥글을 접는다 — 켜고 끄는 곳은 ChiefDashboard 한 곳(data-chief-fill).
+   ② 보드 행의 통계 칸(lsc-stat) — 컴(640px 이상)에서 칸 높이가 210px 미만이면 별첨 표(lsc-tables) 대신 한 줄 요약(lsc-compact).
+      1척·2척이나 1920 처럼 행이 높으면 표 그대로(미리보기 preview_chief_pc 실측 — 1440 4척 요약 · 1920 표). 폰 시트(640px 미만)는 늘 표. */
+:root[data-chief-fill] [data-app-main] { padding-bottom: 0; }
+:root[data-chief-fill] [data-app-footer] { display: none; }
+/*   같은 때 카페리 17시 «📋 보고 보관 N» 떠 있는 단추(왼쪽 아래)는 숨긴다 — 켜 둔 보드의 마지막 행 합계를 가렸다(R34 캡처). 같은 창은 관리 › 사람·알림 «📋 17시 카페리 작업보고» 문이 연다.
+     17:00 저절로 뜨는 창은 그대로다 · 다른 탭·폰·다른 화면에서는 단추도 그대로다. */
+:root[data-chief-fill] [data-f1700-chip] { display: none; }
+.lsc-compact { display: none; }
+@media (min-width: 640px) {
+  .lsc-stat { container-type: size; overflow: hidden; }
+  .lsc-stat .lsc-tables { display: none; }
+  .lsc-stat .lsc-compact { display: flex; }
+  @container (min-height: 210px) {
+    .lsc-stat .lsc-tables { display: block; }
+    .lsc-stat .lsc-compact { display: none; }
+  }  /* 4.24 2차(감사 하-2): 통계 칸이 좁으면(1024px 크게 4척) 행 머리 단추를 아이콘만(⤢ · →) — 항차 번호가 «2…» 로 줄던 것 */
+  @container (max-width: 300px) { .lsc-stat .lsc-btxt { display: none; } }
+}

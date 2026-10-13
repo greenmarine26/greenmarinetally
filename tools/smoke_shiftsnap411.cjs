@@ -48,11 +48,12 @@ const bundle = process.argv[3];
   console.log('[2] 구조 — 소유자 메뉴 안에만 있고, 구독이 없고, 쓰는 자리에 문지기가 있다');
   const read = (f) => fs.readFileSync(path.resolve(root, f), 'utf8');
   const CD = read('src/pages/ChiefDashboard.jsx'), FB = read('src/firebase.js');
-  const i0 = CD.indexOf('<Fold id="ownermenu"'), i1 = CD.indexOf('</Fold>\n      )}', i0);
-  const block = CD.slice(CD.lastIndexOf('{owner && (', i0), i1);
-  ok(i0 > 0 && block.includes('{owner && (') && block.includes('<ShiftSnapPanel') && block.includes('<ActivityLogSection') && block.includes('onOpenStaffManager'), '소유자 메뉴 한 묶음 안에 «교대 시각 터미널 기준»·«활동 로그»·«인원 관리»가 같이 있다');
+  //  4.24: 소유자 메뉴는 관리 탭의 «👑 소유자 메뉴» 묶음 — 소유자일 때만 묶음이 생기고(...(owner ? [{ id: 'owner' …) 몸통은 groupBody 의 owner 갈래(owner 다시 확인) 하나다
+  const i0 = CD.indexOf("if (gid === 'owner' && owner) return ("), i1 = CD.indexOf('\n    return null;\n  };', i0);
+  const block = i0 > 0 && i1 > i0 ? CD.slice(i0, i1) : '';
+  ok(i0 > 0 && /\.\.\.\(owner \? \[\{ id: 'owner'/.test(CD) && block.includes('<ShiftSnapPanel') && block.includes('<ActivityLogSection') && block.includes('onOpenStaffManager'), '소유자 메뉴 한 묶음 안에 «교대 시각 터미널 기준»·«활동 로그»·«인원 관리»가 같이 있다');
   ok((CD.match(/<ShiftSnapPanel/g) || []).length === 1 && (CD.match(/<ActivityLogSection/g) || []).length === 1, '패널·활동 로그는 대시보드에 한 곳뿐이다(흩어지지 않는다)');
-  ok(/\['ownermenu', '👑 소유자 메뉴'\]/.test(CD) && !/\['actlog'/.test(CD), '바로가기 칩은 «👑 소유자 메뉴» 하나뿐이다(활동 로그 칩은 그 안으로)');
+  ok((CD.match(/id: 'owner', ico: '👑', name: '소유자 메뉴'/g) || []).length === 1 && !/\['actlog'/.test(CD) && !/id: 'actlog'/.test(CD), '관리 탭 묶음은 «👑 소유자 메뉴» 하나뿐이다(활동 로그는 그 안으로 — 4.24 바로가기 칩 → 관리 묶음)');
   //  구독 금지 — 노드 이름이 나오는 «코드 줄»(주석 제외)이 정확히 셋(get 둘 · set 하나)이고, 그 줄에 onValue·onChild* 가 없다(감사 2026-10-07: 변수 경유 구독도 막는다)
   const fbCode = FB.split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).filter((l) => /term_snapshot/.test(l));
   ok(fbCode.length === 3 && fbCode.filter((l) => /\bget\(ref\(db/.test(l)).length === 2 && fbCode.filter((l) => /\bset\(ref\(db/.test(l)).length === 1 && !fbCode.some((l) => /onValue|onChild|onSnapshot/.test(l)) && !/fbSubscribeTermSnapshot/.test(FB + CD), `term_snapshot 은 구독하지 않는다 — firebase.js 안 코드 ${fbCode.length}곳(get 2 · set 1) 뿐(다운로드 비용 0)`);

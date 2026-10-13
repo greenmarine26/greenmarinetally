@@ -36,7 +36,7 @@ T(/\{fold && \(/.test(H) && /stats\.missing > 0 && <span className="text-xs2 fon
   T((H.match(/onClick=\{onOpenChiefDashboard\}/g) || []).length === 2, '수석 대시보드 입구는 둘(이 버튼 · 소유자 오답 줄) — 진행 줄의 옛 버튼은 없다', String((H.match(/onClick=\{onOpenChiefDashboard\}/g) || []).length));
 }
 const C = strip(rd('src/pages/ChiefDashboard.jsx'));
-T(/\['__pier', '📍 부두 좌표 등록'\]/.test(C) && /id === '__pier' \? setShowPier\(true\)/.test(C) && /\{showPier && <PierRegisterModal /.test(C), '수석 대시보드에 부두 좌표 등록 입구와 모달이 있다');
+T(/<DoorBtn id="pier" title="📍 부두 좌표 등록"[^>]*onClick=\{\(\) => setShowPier\(true\)\}/.test(C) && /\{showPier && <PierRegisterModal /.test(C), '수석 대시보드에 부두 좌표 등록 입구(4.24 관리 › 자료)와 모달이 있다');
 const P = rd('src/components/PierRegisterModal.jsx');
 T(/savePierCoord\(code, coord\.lat, coord\.lng/.test(P) && /fbSavePierCoord\(code, saved\)/.test(P) && /confirm\(/.test(P), '모달이 확인을 받고 기기·보관소 두 곳에 좌표를 저장한다');
 {

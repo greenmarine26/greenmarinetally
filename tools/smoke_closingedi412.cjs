@@ -84,9 +84,10 @@ const bundle = process.argv[3];
   const read = (f) => fs.readFileSync(path.resolve(root, f), 'utf8');
   const noCmt = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/[^\n]*/g, '$1');
   const CD = read('src/pages/ChiefDashboard.jsx'), FB = read('src/firebase.js'), PN = read('src/components/ClosingEdiPanel.jsx');
-  const i0 = CD.indexOf('<Fold id="ownermenu"'), i1 = CD.indexOf('</Fold>\n      )}', i0);
-  const block = CD.slice(CD.lastIndexOf('{owner && (', i0), i1);
-  ok(i0 > 0 && block.includes('<ClosingEdiPanel') && block.includes('<ShiftSnapPanel') && block.includes('<ActivityLogSection') && block.includes('onOpenStaffManager'), '소유자 메뉴 한 묶음 안에 «교대 시각»·«마감적용»·«활동 로그»·«인원 관리»가 같이 있다');
+  //  4.24: 소유자 메뉴는 관리 탭의 «👑 소유자 메뉴» 묶음 — 묶음 목록에 소유자일 때만 들고(...(owner ? [{ id: 'owner' …), 몸통은 groupBody 의 owner 갈래 하나다
+  const i0 = CD.indexOf("if (gid === 'owner' && owner) return ("), i1 = CD.indexOf('\n    return null;\n  };', i0);
+  const block = i0 > 0 && i1 > i0 ? CD.slice(i0, i1) : '';
+  ok(i0 > 0 && /\.\.\.\(owner \? \[\{ id: 'owner'/.test(CD) && block.includes('<ClosingEdiPanel') && block.includes('<ShiftSnapPanel') && block.includes('<ActivityLogSection') && block.includes('onOpenStaffManager'), '소유자 메뉴 한 묶음 안에 «교대 시각»·«마감적용»·«활동 로그»·«인원 관리»가 같이 있다');
   ok((CD.match(/<ClosingEdiPanel/g) || []).length === 1, '마감적용 패널은 대시보드에 한 곳뿐이다(흩어지지 않는다)');
   const fnBody = (name) => { const s = FB.indexOf('export async function ' + name); return FB.slice(s, FB.indexOf('\n}\n', s)); };
   const ap = noCmt(fnBody('fbApplyClosingEdi'));

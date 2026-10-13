@@ -640,7 +640,7 @@ export default function App() {
       {/* 1.58: V9.05 「오래됨」 배너 철거 — 보관소가 정본이라 로컬과 대조할 일이 없다.
           1.60-01: 그 자리에 잠깐 있던 「이 기기 사본을 올렸습니다」 통지도 없앴다.
           자동 업로드가 지운 허상 72건을 되살린 사고(2026-08-13) 뒤 장치 자체를 폐기했다. */}
-      <main className="pb-20">
+      <main className="pb-20" data-app-main="1">{/* 4.24: 수석 상황판(컴)이 화면 한 장일 때 아래 여백을 접는 표식(index.css data-chief-fill) */}
         {/* 4.08: 범위가 바뀐 직후(폰에서 수석이 로그인해 뿌리 전체를 받는 중 등)에는 빈 홈·빈 대시보드 대신 «불러오는 중» — «오늘 항차가 없다» 로 읽히지 않게 */}
         {!voyagesLoaded && ['home', 'chief'].includes(route.name) && (
           <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400" data-voyages-loading="1">
@@ -794,7 +794,7 @@ export default function App() {
       )}
 
       {/* 4.23: 판 번호는 머리띠에 크게 한 번 — 바닥글에서는 뺐다(헤더·바닥글·⋮ 메뉴로 한 화면에 3~4번이었다). */}
-      <footer className="text-center text-xxs text-dim-500 pb-24 pt-4 leading-relaxed">
+      <footer className="text-center text-xxs text-dim-500 pb-24 pt-4 leading-relaxed" data-app-footer="1">{/* 4.24: 수석 상황판(컴) 화면 한 장일 때만 접힌다(index.css data-chief-fill) */}
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다
       </footer>
 

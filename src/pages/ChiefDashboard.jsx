@@ -1,12 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { FitBox } from '../components/FitBox.jsx';   // 3.48: 한 벌 — 베이뷰 작업과 공용
-import { Users, Anchor, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
+import { Users, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';   // 4.24: Anchor 는 옛 보드 머리와 함께 뺐다
 import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -99,9 +100,20 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
   onOpenStaffManager = null,   // 4.11: 소유자 메뉴 안 «인원 관리» — 헤더 ⋮ 메뉴와 같은 창(App 이 넘긴다)
 }) {
-  const [chiefSearchQ, setChiefSearchQ] = useState('');   // 2.03-01: 대시보드 통합검색창
-  const [dashQ, setDashQ] = useState('');   // 2.03-02: 제출된 질문 — 있으면 그 자리에 통합검색 패널을 펼친다(화면 전환 없음, 검수사 확정)
-  const [dashOpen, setDashOpen] = useState(false);   // 2.03-03: 바로가기 [🔍 통합 검색]도 화면 전환 없이 이 패널을 연다(빈 질문)
+  //  ★ 4.24 — 수석 상황판(검수사 2026-10-12 «화면이 복잡하고 난해 합니다 … 간결하고 보기 좋게» · 불편 «한 화면에 항목이 너무 많다 · 글자가 작아 안 보인다 · 어디에 뭐가 있는지 찾기 어렵다»
+  //    · «칩(수석)은 근무중 켜놀것이고 전 필요 할때만 컴과 폰으로 봅니다»). 위 9블록(제목·수집기 배너·BigStat·검색 폼·바로가기 20·접힘 17)을 상태 줄 한 줄과 탭 셋으로 옮겼다.
+  //    탭 — ⚓ 상황판(실시간 작업 보드가 첫 화면 전체) · 📋 진행·마감(진행 상황·완료 저장 + 문 다섯) · 🧰 관리(묶음 넷 + 소유자). 기능은 하나도 안 뺐다 — 자리만 옮겼다.
+  //    검색 입력칸은 없앴다(B1 «검색창을 없애고 미르로») — 통합 검색 화면은 관리 › 사람·알림 «🔍 통합 검색» 에 그대로 있다.
+  const [tab, setTab] = useState('board');
+  const [mgGroup, setMgGroup] = useState(null);   // 관리 묶음 — 컴은 하나를 골라 오른쪽에 펴고(없으면 «자료»), 폰은 누른 묶음만 펴는 아코디언(평소엔 닫힘 — A6)
+  const [phoneSheet, setPhoneSheet] = useState(null);   // 폰 — 누른 배 하나를 전체화면 시트로(컴의 «행 클릭 = 그 배만 전체화면» 과 같은 재료)
+  //  배치는 폭으로 가른다(A1 «컴용화면 폰용화면이 달라야 합니다 … 디자인 구성 배치가 달라야») — 700px 미만 폰(카드·시트) · 이상 컴(보드 전폭). 기준은 독(hud-dock)의 700px 경계와 같다.
+  const [wideUI, setWideUI] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= 700));
+  useEffect(() => {
+    const on = () => setWideUI(window.innerWidth >= 700);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   // 1.41: **화면을 여는 권한**은 따로다. 개발용 접근 명단에 든 사람도 이 화면을 볼 수 있다.
@@ -140,7 +152,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   React.useEffect(() => { reloadArchive(); }, [reloadArchive, refreshedAt]);
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
-  const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
+  //   4.24: 작업 보드·진행 상황은 접힘이 아니라 탭이 됐다 — 남은 접힘은 전부 평소엔 닫혀 있다(A6).
+  const [openSecs, setOpenSecs] = useState({});
   const [boardFocus, setBoardFocus] = useState(null);
   const [boardDetail, setBoardDetail] = useState(null);   // 3.11: 보드 그림에서 누른 컨 {key, mode, c}   // 3.10: 보드에서 고른 배 — 그 배만 전체(검수사 «선박을 선택하면 그 선박만 전체화면, 닫으면 다시 다»)
   // TallyOne 1.66 — 자료 현황. 검수사 지시: *"빠졌다면 뭐가 어느 선사 자료가 비었음을 알리고."*
@@ -160,6 +173,15 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     setOpenSecs(o => ({ ...o, [id]: true }));
     setTimeout(() => { try { document.getElementById('sec-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* skip */ } }, 60);
   };
+  //  4.24: 상태 줄 칩(오답·누락)이 여는 자리 — 탭 → (관리 묶음) → 그 항목을 펴고 그리로 간다.
+  const goTo = (t, group, secId) => {
+    setTab(t);
+    if (group) setMgGroup(group);
+    if (secId) jumpSec(secId);
+  };
+  //  4.24: 위험 구역(마감적용·모든 작업 보고 삭제)의 «한 번 더 묻기» — 기존 ConfirmModal 을 한 벌 더 둔다(D9 «수석은 한번 실수로 … 많은 자료를 잃을수가»).
+  //    이 창에서 [예] 를 눌러야 종전 화면(마감적용 패널 · 종전 삭제 확인창)으로 넘어간다. [취소] 면 아무것도 안 쓴다.
+  const [dangerState, askDanger] = useConfirm();
   const [editKey, setEditKey] = useState(null); // V7.97: 베이상세 편집 대상 항차 (수석/관리자만)
   const [planKey, setPlanKey] = useState(null); // V9.07: 컨펌용 플랜편집 대상 항차
   const [shipLib, setShipLib] = useState({});
@@ -569,15 +591,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //    출항·예정 항차는 보드에서 뺀다(예정은 홈 카드·일정이 보여 준다). 실측 2026-09-05 20:59 — 활성 16척 중 DJCT 0223E 한 척만 남는다.
   const boardRows = useMemo(() => {
     const now = Date.now();
-    const lastCompAt = (key) => {
-      let t = 0;
-      for (const m of ['discharge', 'loading']) for (const r of Object.values(voyages?.[key]?.[m]?.completed || {})) if (r && r.at > t) t = r.at;
-      return t;
-    };
     const rows = voyageStats
       .filter(v => isWorkingNow(voyages?.[v.key], now)
         || (activeByVoyage[v.key] || []).length > 0
-        || (now - lastCompAt(v.key)) < 30 * 60000)
+        || (now - lastCompletedAt(voyages?.[v.key])) < 30 * 60000)   // 4.24: 폰 카드의 «최근 완료 N분 전» 과 같은 한 벌(lastCompletedAt)
       .map(v => {
         const ts = String(v.info?.terminalStatus || '').trim().toLowerCase();
         return { ...v, _departed: ts === 'departed' || ts === 'done' };
@@ -586,6 +603,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   }, [voyageStats, pfMap, voyages, activeByVoyage]);
   //  감사: 고른 배가 보드에서 빠지면(작업 끝·출항) 포커스도 풀어 다음에 그 배가 돌아와도 저절로 크게 안 뜬다
   useEffect(() => { if (boardFocus && !boardRows.some(r => r.key === boardFocus)) setBoardFocus(null); }, [boardRows, boardFocus]);
+  //  4.24: 폰 시트도 같다 — 그 배가 보드에서 빠지면(작업 끝·출항) 시트를 닫는다(다시 와도 저절로 안 열린다)
+  useEffect(() => { if (phoneSheet && !boardRows.some(r => r.key === phoneSheet)) setPhoneSheet(null); }, [boardRows, phoneSheet]);
   //  3.11-01: 보드 높이 = **보드 위 끝에서 화면 바닥까지**(검수사 «밑에 다른 항목만큼 화면이 줄어 들었습니다» — 고정 9rem 은 헤더·접기 단추 높이를 추정한 값이라 실제보다 짧았다).
   const boardScrollRef = React.useRef(null);
   //  ★ 3.17 — **보드 확대.** 검수사 2026-09-06 «작업이 2척이다 보니 수석 화면이 작아 졌습니다. 확대기능 가능한지요?»
@@ -610,6 +629,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //    브라우저마다 달리 보인 것도 이것이다(크롬은 우연히 맞게 잡혔을 뿐이다).
   //  ⇒ 스크롤·레이아웃 변화에도 다시 잰다. 보드 머리가 화면 위로 나가면 top 이 음수가 되므로 0 으로 눌러 **화면보다 큰 그릇**을 만들지 않는다.
   //    그릇이 커지면 그림 배율(FitBox)은 ResizeObserver 로 저절로 따라 커진다 — 좌우가 잘리지 않는다.
+  //  ★ 4.24 — 보드가 상태 줄 바로 밑(첫 화면)에서 시작한다. 그릇이 곧 보드 전체라 «그릇 위 끝 → 화면 바닥 − 8px» 가 그대로 «100vh − 위 높이» 다
+  //    (검수사 B13 «페이지 스크롤이 생기면 불편합니다» · D3 «수석 화면 구성도 한화면이면 됩니다»). 폰(카드 목록)은 재지 않는다.
   useEffect(() => {
     const fit = () => {
       const el = boardScrollRef.current; if (!el) return;
@@ -618,6 +639,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       if (h > 200 && Math.abs(h - boardH) > 1) setBoardH(h);
     };
     fit(); const t = setTimeout(fit, 300);   // 접기 애니메이션·폰트 로딩 뒤 한 번 더
+    //  4.24 2차(모의 확인 중-1): 페이지 스크롤이 없어지자 위 띠가 줄어도(수석 공지 띠 [확인] · 글자 크게→보통) 문서 크기가 그대로라 다시 재는 신호가 안 와
+    //    화면 바닥에 42~52px 빈 띠가 남았다 — 1초마다 한 번 더 잰다(위 끝 하나 읽기 · 값이 바뀔 때만 다시 그림).
+    const iv = setInterval(fit, 1000);
     window.addEventListener('resize', fit);
     window.addEventListener('scroll', fit, { passive: true });   // 스크롤하면 보드 위 끝이 바뀐다
     //  다른 섹션을 펴고 접으면 보드가 위아래로 밀린다 — 문서 크기 변화로 잡는다(토글 상태를 일일이 의존성에 넣지 않는다).
@@ -626,18 +650,31 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(fit); ro.observe(document.body); }
     } catch (e) { console.warn('[작업 보드] 높이 관찰자를 못 걸었다 — 창 크기·스크롤로만 다시 잽니다', e); }
     return () => {
-      clearTimeout(t);
+      clearTimeout(t); clearInterval(iv);
       window.removeEventListener('resize', fit);
       window.removeEventListener('scroll', fit);
       if (ro) ro.disconnect();
     };
-  }, [openSecs.board, boardRows.length, boardH]);
-  //  3.11 감사: 100vw 는 세로 스크롤바를 포함한다(윈도 PC 17px) — 전폭 보드가 가로 스크롤을 만들지 않게 스크롤바 폭을 재 둔다
+  }, [tab, wideUI, boardRows.length, boardH]);
+  //  4.24: 3.11 의 «100vw − 스크롤바 폭» 전폭 꼼수(--sbw)는 뺐다 — 상황판 자체가 전폭이라 보드를 화면 밖으로 넓힐 일이 없다.
+  //  ★ 4.24 — 컴 상황판 탭은 페이지가 화면 한 장이다. 앱 본문 아래 여백(pb-20)·바닥글이 페이지를 늘려 스크롤을 만들지 않게 그때만 접는다(index.css data-chief-fill).
+  //    다른 탭·폰·다른 화면에서는 종전 그대로 — 떠날 때 반드시 걷는다.
   useEffect(() => {
-    const set = () => { try { document.documentElement.style.setProperty('--sbw', (window.innerWidth - document.documentElement.clientWidth) + 'px'); } catch (e) { console.warn('[작업 보드] 스크롤바 폭 측정 실패', e); } };
-    set(); window.addEventListener('resize', set); return () => window.removeEventListener('resize', set);
-  }, []);
+    const el = document.documentElement;
+    if (tab === 'board' && wideUI) el.setAttribute('data-chief-fill', '1'); else el.removeAttribute('data-chief-fill');
+    return () => el.removeAttribute('data-chief-fill');
+  }, [tab, wideUI]);
 
+  //  4.24 2차(감사 하-3): 컴 상황판 탭에서는 떠 있는 «📋 보고 보관 N» 단추를 숨긴다(마지막 행 합계를 가림 — index.css data-chief-fill).
+  //    근무 중 켜 두는 그 화면에서 놓친 카페리 보고가 안 보이지 않게 같은 문을 상태 줄 칩으로 — 수는 Ferry1700Alert(audience chief) 와 같은 셈
+  //    (모든 항차 × utils.ferryReportCuts), 누르면 같은 창(window 'ferry1700Open').
+  //  (훅이라 아래 «수석만 진입» 문지기(return) 앞에 둔다)
+  const f1700Count = useMemo(() => {
+    let n = 0;
+    for (const k of Object.keys(voyages || {})) { const v = voyages[k]; if (!v) continue; try { n += ferryReportCuts(v, hbNow, k).length; } catch (e) { console.warn('[상황판] 카페리 보고 보관 수를 못 셌다', k, e); } }
+    return n;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voyages, Math.floor(hbNow / 60000)]);
   // ★ V9.44(사용자 확정 2026-08-02): **수석검수사만 진입한다.**
   //   종전엔 isChief 가 '완료 저장' 버튼에만 걸려 있어(V7.94-18) 일반 검수원도 화면에 들어와
   //   전체 통계·자료보관소·완료보관소·오답·공지작성·편집·항차삭제를 다 볼 수 있었다.
@@ -666,113 +703,75 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     );
   }
 
-  return (
-    <div className="max-w-3xl mx-auto px-3 py-3 space-y-3">
-      <div>
-        <div className="text-2xs text-purple-400 font-bold uppercase mb-1">수석 검수원 대시보드</div>
-        <div className="text-lg font-bold text-dim-100">전체 현황</div>
-      </div>
+  //  ── 4.24 상태 줄 재료 — 종전 수집기 배너(CollectorStatusBanner)·BigStat 두 칸·미회신 오답 배너가 한 줄로 왔다(같은 판정 그대로: heartbeatState · healthSummary · total · unansweredCount) ──
+  const hhmm = (() => { const d = new Date(hbNow); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })();
+  const hbText = hbView.state === 'ok' ? `수집기 ${hbView.ageMin}분 전`
+    : hbView.state === 'down' ? `수집기 끊김 ${hbView.ageMin}분 — 숫자 갱신 정지`
+    : '수집기 자료 없음';
+  const hbTitle = hbView.state === 'none' ? '수집기 상태 자료 없음 — 하트비트 미수신 · 누르면 항차 건강 점검'
+    : `수집기 v${collectorHb?.version || '?'} · ${hbView.ageMin}분 전 갱신 · 주기 ${hbView.cycleMin}분${hbView.state === 'down' ? ` · 끊김 기준 주기 ${hbView.cycleMin}분×2` : ''} — 누르면 항차 건강 점검`;
+  const goHealth = () => { window.location.hash = '#/health'; };
+  const chipCls = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill px-1.5 hover:bg-ink-800';
+  const sep = <span className="hidden min-[700px]:block w-px h-4 bg-line-strong shrink-0" aria-hidden="true" />;   // 폰은 줄이 접히므로 칸막이 대신 틈만
+  const TABS = [['board', '⚓', '상황판'], ['progress', '📋', '진행·마감'], ['manage', '🧰', '관리']];
 
-      {/* 1.81-01(검수사 요청 2026-08-17): TOP 버튼 — 대시보드가 길어서 맨 위로 한 번에. */}
-      <ScrollTopButton />
+  //  ── 4.24 관리 묶음 — 자료(8) · 사람·알림(6) · 편집 (주의)(2) · 소유자 메뉴(소유자만). 안의 항목은 종전 접힘·창 그대로 ──
+  const groups = [
+    { id: 'data', ico: '📦', name: '자료', sub: '자료 현황 · 베이매트릭스 · PORT-MIS · 엠티 · LOLO',
+      badge: readiness.short.length ? `부족 ${readiness.short.length}` : '준비 완료' },
+    { id: 'people', ico: '👷', name: '사람·알림', sub: '검수원 활동 · 공지 · 오답 · 통합 검색',
+      badge: `${inspectorStats.length}명` },
+    { id: 'edit', ico: '🖐', name: '편집 (주의)', sub: '베이상세 · 컨펌용 플랜', badge: '수석 전용', danger: true },
+    ...(owner ? [{ id: 'owner', ico: '👑', name: '소유자 메뉴', sub: '교대 시각 · 활동 로그 · 인원 · 위험 구역', badge: '소유자만' }] : []),
+  ];
+  const curGroup = (() => {
+    const ok = (g) => groups.some((x) => x.id === g);
+    if (wideUI) return ok(mgGroup) ? mgGroup : 'data';   // 컴은 늘 하나가 펴져 있다(오른쪽 칸)
+    return ok(mgGroup) ? mgGroup : null;                 // 폰은 평소엔 닫힘(A6)
+  })();
 
-      {/* TallyOne 1.0(L1): 수집기 상태 배너 — 끊기면 아래 모든 숫자가 갱신 정지임을 맨 위에서 알린다.
-          하트비트 미수신(prop 미전달 포함)도 조용히 넘기지 않고 '자료 없음'으로 명시. */}
-      <CollectorStatusBanner hbView={hbView} hb={collectorHb} issueCount={healthIssueCount} />
+  //  (종전 «📤 최근 작업 보고» 머리의 [전체 삭제 (테스트용)] — 확인창 문구·처리기 한 글자도 그대로. 자리만 소유자 메뉴 › 위험 구역으로)
+  const askClearAllReports = () => {
+              askConfirm({
+                title: '⚠️ 모든 작업 보고 삭제',
+                message: '모든 항차의 작업 보고와 사진을 삭제합니다.\n테스트 데이터 정리용입니다.\n\n되돌릴 수 없습니다. 계속하시겠습니까?',
+                confirmLabel: '모두 삭제',
+                cancelLabel: '취소',
+                danger: true,
+                onConfirm: async () => {
+                  try {
+                    await fbClearAllReportsAllVoyages();
+                    await fbClearAllActiveWork();
+                    setRepNotice({ kind: 'ok', text: '✅ 모든 작업 보고가 삭제되었습니다' });  // TallyOne 1.0(L5)
+                  } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
+                },
+              });
+  };
+  //  4.24 위험 구역 «한 번 더 묻기» — 이 창 [다음] 뒤에 종전 확인창이 그대로 뜬다(두 번 다 [예]여야 지운다). [취소]면 아무것도 안 쓴다.
+  const askClearAllDanger = () => askDanger({
+    title: '⚠️ 위험 구역 — 모든 작업 보고 삭제',
+    message: '전 항차의 작업 보고와 사진을 지우는 테스트 정리용 단추입니다.\n현장 보고가 통째로 사라지고 되돌릴 수 없습니다.\n\n그래도 진행할까요? 다음 창에서 한 번 더 묻습니다.',
+    confirmLabel: '다음',
+    cancelLabel: '취소',
+    danger: true,
+    onConfirm: () => askClearAllReports(),
+  });
+  //  4.24 위험 구역 — 마감적용은 열기 전에 한 번 묻는다. 열린 패널 안 [🏁 마감적용 …] → [예] 는 종전 그대로(그래서 «한 번 더»).
+  const toggleClosingEdi = () => {
+    if (openSecs.closingedi) { toggleSec('closingedi'); return; }
+    askDanger({
+      title: '⚠️ 위험 구역 — 마감적용',
+      message: '마감적용은 작업이 끝난 동방 선적을 마감텔리 선적 EDI 기준으로 완료로 채웁니다.\n적용하면 되돌릴 수 없습니다.\n\n마감적용 화면을 열까요? 열어도 적용 단추와 [예]를 눌러야 들어갑니다.',
+      confirmLabel: '열기',
+      cancelLabel: '취소',
+      danger: true,
+      onConfirm: () => setOpenSecs((o) => ({ ...o, closingedi: true })),
+    });
+  };
 
-      {/* 전체 카운터 */}
-      <div className="grid grid-cols-2 gap-2">
-        <BigStat label="전체 확인" value={total.done.toLocaleString()} sub={`/ ${total.all.toLocaleString()}대`} color="emerald"/>
-        <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
-      </div>
-
-      {/* TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 구독 재연결(로그인 유지)
-          2.03-01 (검수사 지시 «수석대쉬보드엔 통합검색이 버튼을 클릭해야… 데이터 새로 고침 버튼옆에 통합검색창을»):
-          입력하고 엔터(또는 🔍)를 치면 그 질문을 들고 통합검색으로 간다. */}
-      <div className="flex gap-2 items-center">
-        {/* 4.23 2차: 입력칸이 제 기본 폭(글자 20자)보다 안 줄어 360px «크게»에서 🔄 단추가 22px 밖으로 밀렸다 — 폼·입력칸 둘 다 min-w-0 */}
-        <form className="flex-1 min-w-0 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); if (q) setDashQ(q); }}>
-          <input value={chiefSearchQ} onChange={(e) => setChiefSearchQ(e.target.value)}
-            placeholder="통합검색 · 미르에게 질문 — 컨번호·데미지·브리핑"
-            className="flex-1 min-w-0 bg-ink-800 border border-line-strong focus:border-emerald-500 focus:outline-none rounded-pill px-3 py-2 text-sm text-dim-100 placeholder-dim-400"/>
-          <button type="submit" className="px-3 py-2 rounded-pill bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-sm font-bold shrink-0">🔍</button>
-        </form>
-        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt} className="shrink-0"/>
-      </div>
-
-      {/* 2.03-02 (검수사 실측 «검색창에 입력했더니 역시 화면이 바뀝니다» — 그 자리에서 답한다):
-          제출하면 화면 전환 없이 여기 통합검색 패널이 펼쳐진다. key 로 질문마다 새로 연다. */}
-      {(dashQ || dashOpen) && (
-        <div className="bg-ink-900 border-2 border-emerald-700/60 rounded-btn p-2">
-          <div className="flex items-center justify-between px-1 pb-1">
-            <div className="text-xxs text-emerald-300 font-bold">🔍 통합검색 — 이 자리에서 답합니다</div>
-            <button onClick={() => { setDashQ(''); setDashOpen(false); }} className="text-dim-300 hover:text-dim-100 text-xxs font-bold px-2 py-1">✕ 닫기</button>
-          </div>
-          <GlobalSearchPage key={dashQ || '__open'} embedded
-            voyages={voyages} portMisData={portMisData}
-            heartbeat={collectorHb} isChief initialQuery={dashQ}
-            onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}
-            /* ★ 2.87 — 플랜은 **이동이 아니라 덮개**다 (검수사 지시 2026-08-29).
-                 수석 화면에서 물었으면 닫았을 때 수석 화면이어야 한다. 덮개는 App 이 든다. */
-            onOpenPlan={(pl) => onMirPlan?.(pl)}/>
-        </div>
-      )}
-
-      {/* V9.19-02: 바로가기 — 누르면 그 항목이 펼쳐지며 이동 */}
-      <div className="bg-ink-900 border border-line rounded-btn p-2">
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-          {[
-            ['board', '⚓ 작업 보드'], ['progress', '📋 진행 상황'], ['tally', '📑 마감 텔리'],
-            ['ready', readiness.short.length ? `📦 자료 부족 ${readiness.short.length}` : '📦 자료 현황'],   // 1.66
-            ['inspectors', '👷 검수원'], ['reports', '📤 작업 보고'], ['equip', '🏗 장비 보고'],
-            ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
-            ['seal', '🔒 엠티 실'], ['emptyfind', '🔎 머스크 엠티'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
-            ['notice', '📢 공지'],
-            // TallyOne 1.3: 활동 로그 바로가기 → 4.11: 소유자 메뉴 한 칩으로 모았다 — 소유자에게만 노출
-            ...(owner ? [['ownermenu', '👑 소유자 메뉴']] : []),   // 4.11: 소유자 전용 메뉴는 이 한 칩 — 안에 교대 시각 터미널 기준·마감적용(4.12)·활동 로그·인원 관리
-            // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
-            //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
-            ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
-            ['__pier', '📍 부두 좌표 등록'],   // 3.54: 홈 화면의 부두 위치 카드에서 옮겨 왔다(검수사 2026-09-21 «기능은 유지하고 화면은 삭제»)
-            // TallyOne 1.60 (검수사 지시 2026-08-13): 베이매트릭스를 업로드 화면에서 **분리**해 여기로.
-            //   *"업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다."* — 권한 화면으로 옮긴다.
-            //   항차가 없어도 선박을 조회해 고치고, 조회가 안 되는 선박은 새로 만든다.
-            ['__baymatrix', '🧱 베이매트릭스'],
-            // TallyOne 1.0(L4): 보조기능 바로가기 — 판2 신설 #/aux 라우트(팀K)로 이동
-            ['__aux', '🧰 보조기능'],
-          ].map(([id, label]) => (
-            <button key={id} onClick={() => (id === '__search' ? setDashOpen(true)   /* 2.03-03: 화면 전환 없이 그 자리 패널 — «또 수석 홈화면을 벗어 납니다» */
-                                            : id === '__portmis' ? setShowPortMis(true)
-                                            : id === '__pier' ? setShowPier(true)
-                                            : id === '__baymatrix' ? setShowBayMatrix(true)
-                                            : id === '__aux' ? (window.location.hash = '#/aux')
-                                            : jumpSec(id))}
-              className="px-2 py-2 rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 text-xs2 font-bold text-dim-100 text-left truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight"
-              style={{ minHeight: 40 }}>{/* 4.23 «크게»: 이름을 «…» 로 자르지 않고 두 줄로 */}
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
-      {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
-      {showPier && <PierRegisterModal inspector={inspector} onClose={() => setShowPier(false)} />}
-      {/* ★ 3.63 — 카페리 17:00 주간 작업보고(갱별) — 그 시각 작업 중인 대상 카페리를 한 창에 모아(보기만) */}
-      <Ferry1700Alert audience="chief" voyages={voyages} />
-      {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
-      {showBayMatrix && (
-        /* 3.5: «쓰이는 배»를 화면이 알 수 있게 — 부모가 이미 들고 있는 재료만 넘긴다(추가 요청 0).
-           ⚠ fbListArchive 는 부르지 않는다(키 1건당 GET 4회 — firebase.js:1999 요청 폭주 기록). */
-        <BayMatrixManagerModal onClose={() => setShowBayMatrix(false)}
-          voyages={voyages} shipLib={shipLib} arcList={arcList} inspector={inspector} />
-      )}
-
-      {/* V8.27: 검수원 공지 (흐르는 띠) */}
-      <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
-        <BroadcastComposer inspector={inspector} owner={owner} />
-      </Fold>
-
+  const groupBody = (gid) => {
+    if (gid === 'data') return (
+      <>
       {/* TallyOne 1.66 — 작업 자료가 다 왔나. 빠졌으면 무엇이·어느 선사 것이 비었는지 이름으로 알린다.
           ⛔ 마감자료는 여기서 안 본다 — 검수사: "마감자료는 작업을 하면 저절로 생김." */}
       <Fold id="ready"
@@ -845,263 +844,19 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </>)}
       </div>
       </Fold>
-
-      {/* 전체 검수원 진행률 (인원 무제한) */}
-      <Fold id="inspectors" title={`👷 검수원 활동 (${inspectorStats.length}명)`} open={!!openSecs.inspectors} onToggle={() => toggleSec('inspectors')}>
-      <div className="bg-ink-900 border border-line rounded-btn p-3">
-        <div className="flex items-center gap-2 mb-3">
-          <Users className="w-4 h-4 text-amber-400"/>
-          <div className="text-sm font-bold text-dim-100">검수원 활동 ({inspectorStats.length}명)</div>
-        </div>
-        {inspectorStats.length === 0 ? (
-          <div className="text-xs text-dim-400 text-center py-4">아직 검수 기록 없음</div>
-        ) : (
-          <div className="space-y-1.5">
-            {inspectorStats.map(s => (
-              <InspectorRow key={s.name} s={s}/>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* TallyOne 1.60 (검수사 지시 2026-08-13): 베이매트릭스를 업로드 화면에서 **분리**해 여기로 — «업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다» */}
+      <DoorBtn id="baymatrix" title="🧱 베이매트릭스" sub="항차 없이 선박 조회·수정 · 조회가 안 되는 선박은 새로 만들기" onClick={() => setShowBayMatrix(true)} />
+      {/* V9.42: 홈 상단 3카드를 없애면서 옮겨 온 PORT-MIS 캡처 */}
+      <DoorBtn id="portmis" title="📸 PORT-MIS 캡처" sub="입출항·부두 자료 올리기" onClick={() => setShowPortMis(true)} />
+      {/* 3.54: 홈 화면의 부두 위치 카드에서 옮겨 왔다(검수사 2026-09-21 «기능은 유지하고 화면은 삭제») */}
+      <DoorBtn id="pier" title="📍 부두 좌표 등록" sub="지금 GPS 를 PCTC·PNCT 좌표로 — 홈 «📍 자동» 부두 판정에 쓰임" onClick={() => setShowPier(true)} />
+      {/* 3.73: 머스크 엠티 찾기 — 엠티 리스트가 없으면 검수 리스트를 못 만든다(검수사 2026-10-03). 정본(머스크 EMPTY LOAD LIST)이 오면 정본 우선. */}
+      <Fold id="emptyfind" title={`🔎 머스크 엠티 찾기 (${maerskEmptyCards(voyages, bayDictAll).length})`} open={!!openSecs.emptyfind} onToggle={() => toggleSec('emptyfind')}>
+        <EmptyFindPanel voyages={voyages} dictAll={bayDictAll} inspector={inspector} canMake={chief} />
       </Fold>
-
-      {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
-      {/* 3.11: 보드 그림의 칸 → 컨 상세(VoyagePage renderDetail 과 같은 모양 — 같은 모드 전체 컨 병합, 완료·X-RAY·봉인) */}
-      {boardDetail && (() => {
-        const vy = voyages?.[boardDetail.key]; const sec = vy?.[boardDetail.mode] || {};
-        const ediMap = sec.ediContainers || {}, recMap = sec.records || {}, compMap = sec.completed || {};
-        //  3.52: 선사는 «더 자세한 쪽» — 여기도 리스트 op 를 EDI 위에 그냥 펼치던 자리다(utils 한 벌).
-        //    안 지나면 수석 보드 컨 상세만 세관이 뭉친 값을 보여 마감텔리와 갈린다(감사 실측 22대).
-        const _vslB = String(vy?.info?.vsl || '').toUpperCase();
-        const all = [...new Set([...Object.keys(ediMap), ...Object.keys(recMap)])].map(cn => {
-          const _e = ediMap[cn] || {}, _r = recMap[cn] || {};
-          const _m = { ..._e, ...Object.fromEntries(Object.entries(_r).filter(([, vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
-          if (_r.op || _e.op) _m.op = pickCarrierOp(_r.op, _e.op, _vslB);
-          //  3.52-01: **POL 은 EDI 가 정본이다** — 위 스프레드가 리스트 POL 을 그냥 덮고 있었다(문지기 없음,
-          //    mirCtx 와 같은 구멍). 양하는 «양하 직전 마지막 항구» 규칙까지 태운다(utils 한 벌).
-          if (_e.pol) _m.pol = boardDetail.mode === 'discharge' ? pickDischargePol(_e.pol, _r.pol, _e.pod) : _e.pol;
-          return _m;
-        });
-        //  3.52: 배별 선사 별칭도 지난다 — `pickCarrierOp` 만 지나면 `opAlias`(DXQD 의 NOL→DWS,
-        //    STSE·STMJ 의 WDF→WDG)가 이 화면에만 안 걸려 **수석 보드 컨 상세만 딴 선사**를 보인다
-        //    (재감사 실측 — DXQD 2631E 250대가 여기만 NOL, 나머지 네 경로는 DWS).
-        const _spB2 = shipOpMapper(_vslB, all.map((c) => c && c.op));
-        for (const c of all) { if (!c || !c.op) continue; const o = _spB2(c.op); if (o !== c.op) c.op = o; }
-        const dc = all.find(x => x.cn === boardDetail.c?.cn) || boardDetail.c;
-        if (!dc?.cn) return null;
-        return (
-          <ContainerDetailModal variant="modal" c={dc}
-            workBay={dc.bay || dc.bay_orig || recMap[dc.cn]?.bay_orig || null}
-            workTier={(() => { const t = parseInt(dc.tier || dc.tier_planned || recMap[dc.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
-            comp={compMap[dc.cn]} isXray={boardDetail.mode === 'discharge' && !!(sec.xrayList?.[dc.cn])} xraySeal={sec.xraySeals?.[dc.cn] || null}
-            mode={boardDetail.mode} voyageKey={boardDetail.key} voyageInfo={vy?.info} inspector={inspector} sealMode={null}
-            onClose={() => setBoardDetail(null)} allContainers={all} records={recMap} shiftCns={null} />
-        );
-      })()}
-      <Fold id="board" title={`⚓ 실시간 작업 보드 (작업 중 ${boardRows.length}척)`} open={!!openSecs.board} onToggle={() => toggleSec('board')}>
-      {/* 3.11: 보드는 화면 폭 전체(대시보드 max-w-3xl 밖으로) — 검수사 «좌우 여백을 최소화 하여 충분히 크게» */}
-      <div className="bg-ink-900 border border-blue-800/60 rounded-btn p-1" style={{ width: 'calc(100vw - var(--sbw, 0px) - 8px)', marginLeft: 'calc(50% - 50vw + var(--sbw, 0px) / 2 + 4px)' }}>
-        <div className="flex items-center gap-2 mb-1 px-1">
-          <Anchor className="w-4 h-4 text-blue-400"/>
-          <div className="text-sm font-bold text-dim-100">실시간 작업 보드 (작업 중 {boardRows.length}척{voyageStats.length > boardRows.length ? ` · 등록 ${voyageStats.length}척` : ''})</div>
-          <span className="text-2xs text-dim-400">실시간</span>
-          {/* 3.17: 확대 — 2척 이상이면 그림이 작아진다. 누르면 그 칸 안에서 커지고 넘치면 그 칸만 스크롤한다. */}
-          <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-            <span className="text-2xs text-dim-500 mr-0.5">확대</span>
-            <button type="button" onClick={() => bumpZoom(-1)} disabled={boardZoom <= BOARD_ZOOMS[0]}
-              className="w-6 h-6 rounded bg-ink-800 border border-line text-dim-200 font-black disabled:opacity-30" title="작게">−</button>
-            <button type="button" onClick={() => { setBoardZoom(1); try { localStorage.setItem('gm_board_zoom', '1'); } catch (e) { /* 기억 실패는 무시 */ } }}
-              className="px-1.5 h-6 rounded bg-ink-800 border border-line mono text-2xs text-dim-200 font-bold" title="눌러서 기본으로">{Math.round(boardZoom * 100)}%</button>
-            <button type="button" onClick={() => bumpZoom(1)} disabled={boardZoom >= BOARD_ZOOMS[BOARD_ZOOMS.length - 1]}
-              className="w-6 h-6 rounded bg-ink-800 border border-line text-dim-200 font-black disabled:opacity-30" title="크게">+</button>
-          </div>
-        </div>
-        {boardRows.length === 0 ? (
-          <div className="text-xs text-dim-400 text-center py-4">
-            {hbView.state === 'down'
-              ? `수집기가 멈춰 «작업 중»을 판정할 수 없습니다 — 마지막 자료 ${hbView.ageMin}분 전 (앱을 쓰는 검수원이 있는 배는 그대로 뜹니다)`   /* 감사: 빈 보드가 «없다»로 단정하지 않게 */
-              : '지금 작업 중인 배가 없습니다 — 예정 항차는 홈 카드·일정에서 봅니다'}
-          </div>
-        ) : (
-          <div ref={boardScrollRef} className="fs-keep flex flex-col gap-1 overflow-y-auto" style={{ height: boardH ? boardH + 'px' : 'calc(100vh - 9rem)', minHeight: '20rem' }}>
-            {/* 4.23 fs-keep — 보드 카드(25% 통계 · 75% 베이, 행 높이 고정 — 검수사 D1~D4 확정)는 글자 모드와 무관하게 4.22-04 글자.
-                글자를 한 단계만 키워도 별첨 표 마지막 줄(OBWH YTF · ATPR 합계 · DXQD DWS)이 행 높이에 잘렸다(실측). 모드별 배치는 상황판 판에서. */}
-            {/* 3.10: 한 척 = 가로로 긴 한 줄. 보드 높이를 척수(최대 4)로 등분하고 5척부터 아래로 스크롤 — 검수사 «세로로 4등분해서 최대 4척, 2척이면 2등분, 5척이면 스크롤» · «1척이면 전체화면»
-                · 배를 누르면 그 배만 전체(포커스), [닫기]로 돌아온다. 고른 배가 보드에서 빠지면(작업 끝) 포커스도 풀린다.
-                TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
-            {(() => {
-              const focusRow = boardFocus ? boardRows.find(r => r.key === boardFocus) : null;
-              const shown = focusRow ? [focusRow] : boardRows;
-              return shown.map(v => (
-                <div key={v.key} className="shrink-0 min-h-0 overflow-y-auto sm:[flex-basis:max(var(--fb),12rem)]" style={{ '--fb': `calc(${100 / Math.min(shown.length, 4)}% - ${shown.length > 1 ? '0.25rem' : '0px'})` }}>
-                  {/* 감사: sm 이상은 행 하한 12rem(작은 노트북 4척 겹침 방지) · sm 미만(폰, 세로 쌓임)은 자연 높이로 컨테이너가 스크롤 */}
-                  <LiveShipCard v={v}
-                    workers={activeByVoyage[v.key] || []}
-                    lastReport={lastReportByVoyage[v.key]}
-                    alerts={todayAlertsByVoyage[v.key]}
-                    departed={v._departed}
-                    cranes={craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])}
-                    voyage={voyages?.[v.key]} rows={shown.length}
-                    onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
-                    focused={!!focusRow} canFocus={boardRows.length > 1} zoom={boardZoom}
-                    onFocus={() => setBoardFocus(focusRow ? null : v.key)}
-                    onOpen={() => onOpenVoyage(v.key)}/>
-                </div>
-              ));
-            })()}
-          </div>
-        )}
-      </div>
-      </Fold>
-
-      {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
-      {chief && voyageStats.length > 0 && (
-        <Fold id="edit" title="🖐 베이상세 편집 · 📐 컨펌용 플랜편집" open={!!openSecs.edit} onToggle={() => toggleSec('edit')}>
-        <div className="bg-ink-900 border border-emerald-800/50 rounded-btn p-3">
-          <div className="text-sm font-bold text-emerald-200 mb-2">🖐 베이상세 편집 <span className="text-xxs text-dim-300 font-normal">— 오선적 정정 (수석 전용 · [저장]해야 검수사 화면 반영)</span></div>
-          <div className="flex flex-wrap gap-2">
-            {voyageStats.map(v => (
-              <button key={v.key} onClick={() => setEditKey(v.key)}
-                className="px-3 py-1.5 rounded-pill text-sm font-bold bg-emerald-700 text-white hover:bg-emerald-600">
-                {v.info?.vsl || v.key}
-              </button>
-            ))}
-          </div>
-
-          {/* V9.07: 선적 확정 플랜 편집 — 일항사 협의용. 초안(planDraft) → [확정] 시 검수앱 선적 플랜이 된다.
-              실선적 기록(records.bay_actual)은 건드리지 않는다. */}
-          <div className="text-sm font-bold text-violet-200 mt-3 mb-2">📐 컨펌용 플랜편집 <span className="text-xxs text-dim-300 font-normal">— 일항사 협의용 ([확정] 눌러야 선적 플랜 반영 · 실선적 무관)</span></div>
-          <div className="flex flex-wrap gap-2">
-            {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).map(v => (
-              <button key={'p' + v.key} onClick={() => setPlanKey(v.key)}
-                className="px-3 py-1.5 rounded-pill text-sm font-bold bg-violet-700 text-white hover:bg-violet-600">
-                {v.info?.vsl || v.key}
-              </button>
-            ))}
-            {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).length === 0 && (
-              <span className="text-xxs text-dim-400">선적 EDI가 올라온 항차가 없습니다</span>
-            )}
-          </div>
-        </div>
-        </Fold>
-      )}
-      {editKey && voyages[editKey] && (
-        <ChiefBayEdit voyage={voyages[editKey]} voyageKey={editKey} inspector={inspector} activeWorkers={activeByVoyage[editKey] || []} onClose={() => setEditKey(null)} />
-      )}
-      {planKey && voyages[planKey] && (
-        <LoadingPlanEdit voyage={voyages[planKey]} voyageKey={planKey} inspector={inspector} onClose={() => setPlanKey(null)} />
-      )}
-      <Fold id="progress" title="📋 진행 상황 · 완료 저장" open={!!openSecs.progress} onToggle={() => toggleSec('progress')}>
-        {/* TallyOne 1.0(L3): 도선 예보 전달 — 진행 상황 줄에 일정 정보(완료 저장 타이밍 판단 근거) */}
-        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} portMisData={portMisData} resolveBox={resolveBox} />
-      </Fold>
-      <Fold id="archive" title="📚 선박별 자료 보관소" open={!!openSecs.archive} onToggle={() => toggleSec('archive')}>
-        <ShipArchiveSection shipLib={shipLib} />
-      </Fold>
-
-      {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
-      <Fold id="tally" title="📑 마감 텔리 (DEP.TALLY)" open={!!openSecs.tally} onToggle={() => toggleSec('tally')}>
-        <TallyExportSection voyages={voyages} chief={chief} pfMap={pfMap}
-          archiveList={arcList} onArchiveChanged={reloadArchive}
-          boxRoot={boxRoot} onPickBox={onPickBox} resolveBox={resolveBox}/>
-      </Fold>
-
-      {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
-          있었는데 UI가 0이었다(전면 점검 §1-5). RZOR 통삭제 사건 같은 실수의 되돌리기가 이것. */}
-      <Fold id="restore" title="🗄 완료 보관소 (복원)" open={!!openSecs.restore} onToggle={() => toggleSec('restore')}>
-        <ArchiveRestoreSection chief={chief} onRestored={() => {}} />
-      </Fold>
-
-      {/* M3.5.6: 장비별 오늘 작업 보고 통계 — 3.64-01: 부두별 줄(EquipReportBoard) */}
-      {equipBoard.total > 0 && (
-        <Fold id="equip" title="🏗 오늘 장비별 작업 보고" open={!!openSecs.equip} onToggle={() => toggleSec('equip')}>
-          <EquipReportBoard board={equipBoard} capped={(allReports || []).length >= 300} />
-        </Fold>
-      )}
-
-      {/* M3.5.6: 최근 작업 보고 (시간순) */}
-      {recentReports.length > 0 && (
-        <Fold id="reports" title="📤 최근 작업 보고 (30건)" open={!!openSecs.reports} onToggle={() => toggleSec('reports')}>
-        <div className="bg-ink-900 border border-emerald-700/40 rounded-btn p-3 mt-3">
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <Send className="w-4 h-4 text-emerald-400"/>
-            <div className="text-sm font-bold text-emerald-100">최근 작업 보고</div>
-            <span className="text-2xs text-dim-400">최근 30건</span>
-            <div className="flex-1"/>
-            <button onClick={() => {
-              askConfirm({
-                title: '⚠️ 모든 작업 보고 삭제',
-                message: '모든 항차의 작업 보고와 사진을 삭제합니다.\n테스트 데이터 정리용입니다.\n\n되돌릴 수 없습니다. 계속하시겠습니까?',
-                confirmLabel: '모두 삭제',
-                cancelLabel: '취소',
-                danger: true,
-                onConfirm: async () => {
-                  try {
-                    await fbClearAllReportsAllVoyages();
-                    await fbClearAllActiveWork();
-                    setRepNotice({ kind: 'ok', text: '✅ 모든 작업 보고가 삭제되었습니다' });  // TallyOne 1.0(L5)
-                  } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
-                },
-              });
-            }}
-              className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-2xs font-bold flex items-center gap-1">
-              <Trash2 className="w-3 h-3"/> 전체 삭제 (테스트용)
-            </button>
-          </div>
-          {/* TallyOne 1.0(L5): 삭제 결과 인라인 통지 */}
-          <InlineNotice notice={repNotice} onClose={() => setRepNotice(null)} />
-          <div className="space-y-1 max-h-96 overflow-y-auto">
-            {recentReports.map((r, i) => {
-              const time = r.ts ? new Date(r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-              // V9.57(I2): external_pause(작업중단) 아이콘 누락 → 기본 '📋'로 묻히던 것. 사고성이라 ⛔ + 붉은 테두리.
-              const icon = r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : r.type === 'external_pause' ? '⛔' : '📋';
-              // V9.57(I7): 피드 voy는 firebase 구독이 voy_l 고정으로 붙인다 — 보고의 mode를 보고 voy_d/voy_l 선택.
-              const rInfo = voyages?.[r.voyageKey]?.info;
-              const rVoy = r.mode === 'discharge' ? (rInfo?.voy_d || rInfo?.voy || r.voy)
-                : r.mode === 'loading' ? (rInfo?.voy_l || rInfo?.voy || r.voy)
-                : r.voy;
-              return (
-                <div key={i} className={`bg-ink-950 border rounded p-2 text-xs group ${r.type === 'external_pause' ? 'border-red-700/70' : 'border-line'}`}>
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-1">
-                      <span>{icon}</span>
-                      <span className="font-bold text-dim-100">{r.vsl} {rVoy}</span>
-                      {r.equip && <span className="text-2xs bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-2xs text-dim-400 mono">{time}</span>
-                      <button onClick={() => {
-                        askConfirm({
-                          title: '보고 삭제',
-                          message: `${r.vsl} ${r.voy}\n${r.equip || ''} 보고를 삭제하시겠습니까?`,
-                          confirmLabel: '삭제',
-                          cancelLabel: '취소',
-                          danger: true,
-                          onConfirm: async () => {
-                            try {
-                              await fbDeleteWorkReport(r.voyageKey, r.ts);
-                            } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
-                          },
-                        });
-                      }}
-                        className="p-0.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded opacity-50 group-hover:opacity-100"
-                        title="이 보고 삭제">
-                        <Trash2 className="w-3 h-3"/>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-xxs text-dim-200 whitespace-pre-line ml-4">{r.message || ''}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        </Fold>
-      )}
-
-      {/* M3.5.5: 엠티 실 작업 실시간 현황 */}
-      {sealVoyages.length > 0 && (
-        <Fold id="seal" title={`🔒 엠티 실 작업 현황 (${sealVoyages.length})`} open={!!openSecs.seal} onToggle={() => toggleSec('seal')}>
+      {/* M3.5.5: 엠티 실 작업 실시간 현황 — 4.24: 작업 중인 배가 없어도 문은 남긴다(조용히 없애지 않는다) */}
+      <Fold id="seal" title={`🔒 엠티 실 작업 현황 (${sealVoyages.length})`} open={!!openSecs.seal} onToggle={() => toggleSec('seal')}>
+        {sealVoyages.length > 0 ? (
         <div className="bg-ink-900 border border-amber-700/40 rounded-btn p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Lock className="w-4 h-4 text-amber-400"/>
@@ -1114,17 +869,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ))}
           </div>
         </div>
-        </Fold>
-      )}
-
-      {/* 3.73: 머스크 엠티 찾기 — 엠티 리스트가 없으면 검수 리스트를 못 만든다(검수사 2026-10-03). 정본(머스크 EMPTY LOAD LIST)이 오면 정본 우선. */}
-      <Fold id="emptyfind" title={`🔎 머스크 엠티 찾기 (${maerskEmptyCards(voyages, bayDictAll).length})`} open={!!openSecs.emptyfind} onToggle={() => toggleSec('emptyfind')}>
-        <EmptyFindPanel voyages={voyages} dictAll={bayDictAll} inspector={inspector} canMake={chief} />
+        ) : (
+          <div className="text-xs text-dim-400 text-center py-3">지금 엠티 실 작업이 있는 선적 항차가 없습니다.</div>
+        )}
       </Fold>
-
-      {/* V8.06: LOLO 검수 제출 리스트 (RIZHAO 등 RORO/LOLO 혼용선) */}
-      {loloVoyages.length > 0 && (
-        <Fold id="lolo" title={`🚛 LOLO 검수 제출 리스트 (${loloVoyages.length})`} open={!!openSecs.lolo} onToggle={() => toggleSec('lolo')}>
+      {/* V8.06: LOLO 검수 제출 리스트 (RIZHAO 등 RORO/LOLO 혼용선) — 4.24: 없어도 문은 남긴다 */}
+      <Fold id="lolo" title={`🚛 LOLO 검수 제출 리스트 (${loloVoyages.length})`} open={!!openSecs.lolo} onToggle={() => toggleSec('lolo')}>
+        {loloVoyages.length > 0 ? (
         <div className="bg-ink-900 border border-cyan-800/40 rounded-btn p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="w-4 h-4 text-cyan-400"/>
@@ -1143,24 +894,46 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ))}
           </div>
         </div>
-        </Fold>
-      )}
-
-      {/* TallyOne 1.19: 미회신이 있으면 **섹션 위에** 눈에 띄게. 접힌 섹션 안에 있으면 못 본다. */}
-      {unansweredCount > 0 && (
-        <button onClick={() => { if (!openSecs.feedback) toggleSec('feedback'); }}
-          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-btn px-3 py-2.5 mt-3 hover:bg-red-900/40 transition"
-          style={{ minHeight: 44 }}>
-          <span className="flex items-center gap-2 text-sm2 font-bold text-red-200">
-            ❌ 오답 <b className="text-lg mono">{unansweredCount}</b>건 — 아직 회신 안 함
-          </span>
-          <span className="text-xxs text-red-300/80">
-            {openSecs.feedback ? '아래에 있습니다' : '눌러서 펼치기 →'}
-          </span>
-        </button>
-      )}
-      {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
-      <Fold id="feedback" title={`❌ 오답 리포트${unresolvedCount > 0 ? ` (미해결 ${unresolvedCount})` : ''}`} open={!!openSecs.feedback} onToggle={() => toggleSec('feedback')}>
+        ) : (
+          <div className="text-xs text-dim-400 text-center py-3">LOLO 선박(선박 정책 lolo)의 양하·선적 자료가 없습니다.</div>
+        )}
+      </Fold>
+      {/* TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 구독 재연결(로그인 유지) */}
+      <div className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-btn border bg-ink-900 border-line" style={{ minHeight: 44 }} data-door="refresh">
+        <span className="min-w-0">
+          <span className="block text-sm2 font-bold text-dim-100">🔄 데이터 새로고침</span>
+          <span className="block text-xs text-dim-400">로그인을 유지한 채 자료만 다시 받습니다</span>
+        </span>
+        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt} className="shrink-0"/>
+      </div>
+      </>
+    );
+    if (gid === 'people') return (
+      <>
+      {/* 전체 검수원 진행률 (인원 무제한) */}
+      <Fold id="inspectors" title={`👷 검수원 활동 (${inspectorStats.length}명)`} open={!!openSecs.inspectors} onToggle={() => toggleSec('inspectors')}>
+      <div className="bg-ink-900 border border-line rounded-btn p-3">
+        <div className="flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4 text-amber-400"/>
+          <div className="text-sm font-bold text-dim-100">검수원 활동 ({inspectorStats.length}명)</div>
+        </div>
+        {inspectorStats.length === 0 ? (
+          <div className="text-xs text-dim-400 text-center py-4">아직 검수 기록 없음</div>
+        ) : (
+          <div className="space-y-1.5">
+            {inspectorStats.map(s => (
+              <InspectorRow key={s.name} s={s}/>
+            ))}
+          </div>
+        )}
+      </div>
+      </Fold>
+      {/* V8.27: 검수원 공지 (흐르는 띠) */}
+      <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
+        <BroadcastComposer inspector={inspector} owner={owner} />
+      </Fold>
+      {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) — 4.24: 미회신 배너는 상태 줄 «❌ 오답 N» 칩이 맡는다(누르면 여기로) */}
+      <Fold id="feedback" title={`❌ 오답 리포트${unresolvedCount > 0 ? ` (미해결 ${unresolvedCount})` : ''}${unansweredCount > 0 ? ` · 미회신 ${unansweredCount}` : ''}`} open={!!openSecs.feedback} onToggle={() => toggleSec('feedback')}>
       <div className="bg-ink-900 border border-red-800/40 rounded-btn p-3 mt-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -1220,36 +993,427 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         )}
       </div>
       </Fold>
-
-      {/* 4.11: 소유자 전용 메뉴는 여기 한 곳에 모은다 — 검수사 2026-10-07 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요» · 22:09 «인원관리나 활동로그 마감적용 등».
-          새 소유자 전용 기능은 이 묶음 안에 넣는다(대시보드 곳곳에 흩지 않는다). 기본 접힘 — 열기 전에는 아무 자료도 읽지 않는다.
-          · TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회. */}
-      {owner && (
-        <Fold id="ownermenu" title="👑 소유자 메뉴" open={!!openSecs.ownermenu} onToggle={() => toggleSec('ownermenu')}>
-          <div className="space-y-2">
-            <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
-              <ShiftSnapPanel voyages={voyages} by={inspector} />
-            </Fold>
-            <Fold id="closingedi" title="🏁 마감적용 (동방 선적 EDI 마무리)" open={!!openSecs.closingedi} onToggle={() => toggleSec('closingedi')}>
-              <ClosingEdiPanel voyages={voyages} by={inspector} />
-            </Fold>
-            <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
-              <ActivityLogSection voyages={voyages} />
-            </Fold>
-            {onOpenStaffManager && (
-              <button onClick={onOpenStaffManager}
-                className="w-full flex items-center justify-between px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-left"
-                style={{ minHeight: 44 }}>
-                <span className="text-sm2 font-bold text-dim-100">👥 인원 관리</span>
-                <span className="text-dim-400 text-xs shrink-0 ml-2">창 열기 ▶</span>
+      {/* ★ 3.63 카페리 17:00 주간 작업보고 — 17:00 에는 저절로 뜨고(아래 Ferry1700Alert), 지난 보고는 이 문으로 연다(그 창의 «보고 보관» 과 같은 창) */}
+      <DoorBtn id="ferry1700" title="📋 17시 카페리 작업보고 — 보관한 보고 보기" sub="17:00(주간)·05:30(야간) 마감마다 한 건 · 17:00 에는 저절로 뜹니다"
+        onClick={() => { try { window.dispatchEvent(new CustomEvent('ferry1700Open')); } catch (e) { console.warn('[4.24] 17시 보고 보관 창을 못 열었다', e); } }} />
+      {/* 2.03-02 통합검색 — 화면 전환 없이 이 자리에서 답한다(검수사 «또 수석 홈화면을 벗어 납니다»). 4.24: 위쪽 검색 입력칸은 없앴다(B1) — 이 화면은 그대로 */}
+      <Fold id="search" title="🔍 통합 검색 — 이 자리에서 답합니다" open={!!openSecs.search} onToggle={() => toggleSec('search')}>
+        <div className="bg-ink-900 border-2 border-emerald-700/60 rounded-btn p-2">
+          <GlobalSearchPage key="__open" embedded
+            voyages={voyages} portMisData={portMisData}
+            heartbeat={collectorHb} isChief initialQuery=""
+            onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}
+            /* ★ 2.87 — 플랜은 **이동이 아니라 덮개**다 (검수사 지시 2026-08-29).
+                 수석 화면에서 물었으면 닫았을 때 수석 화면이어야 한다. 덮개는 App 이 든다. */
+            onOpenPlan={(pl) => onMirPlan?.(pl)}/>
+        </div>
+      </Fold>
+      {/* TallyOne 1.0(L4): 보조기능 — #/aux 로 간다(이 화면을 떠나는 문은 이것 하나) */}
+      <DoorBtn id="aux" title="🧰 보조기능" sub="이 화면을 떠납니다 — 돌아오려면 수석 대시보드로 다시 들어옵니다" label="화면 이동 ▶" onClick={() => { window.location.hash = '#/aux'; }} />
+      </>
+    );
+    if (gid === 'edit') return (
+      <>
+      <div className="text-sm2 font-bold text-amber-200 bg-amber-950/30 border border-amber-700/50 rounded-btn px-3 py-2" data-edit-caution="1">
+        ⚠ 작업 중인 배는 작업이 끝난 뒤에 고치십시오 — [저장]·[확정]을 누르면 검수원 화면이 바로 바뀝니다.
+      </div>
+      {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
+      {!chief ? (
+        <div className="text-xs text-dim-300 text-center py-3">🔒 편집은 수석검수사만 합니다 (현재 로그인: {inspector || '미상'})</div>
+      ) : voyageStats.length === 0 ? (
+        <div className="text-xs text-dim-400 text-center py-3">편집할 항차가 없습니다.</div>
+      ) : (
+        <div className="bg-ink-900 border border-emerald-800/50 rounded-btn p-3">
+          <div className="text-sm font-bold text-emerald-200 mb-2">🖐 베이상세 편집 <span className="text-xxs text-dim-300 font-normal">— 오선적 정정 (수석 전용 · [저장]해야 검수사 화면 반영)</span></div>
+          <div className="flex flex-wrap gap-2">
+            {voyageStats.map(v => (
+              <button key={v.key} onClick={() => setEditKey(v.key)}
+                className="px-3 py-1.5 rounded-pill text-sm font-bold bg-emerald-700 text-white hover:bg-emerald-600">
+                {v.info?.vsl || v.key}
               </button>
+            ))}
+          </div>
+
+          {/* V9.07: 선적 확정 플랜 편집 — 일항사 협의용. 초안(planDraft) → [확정] 시 검수앱 선적 플랜이 된다.
+              실선적 기록(records.bay_actual)은 건드리지 않는다. */}
+          <div className="text-sm font-bold text-violet-200 mt-3 mb-2">📐 컨펌용 플랜편집 <span className="text-xxs text-dim-300 font-normal">— 일항사 협의용 ([확정] 눌러야 선적 플랜 반영 · 실선적 무관)</span></div>
+          <div className="flex flex-wrap gap-2">
+            {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).map(v => (
+              <button key={'p' + v.key} onClick={() => setPlanKey(v.key)}
+                className="px-3 py-1.5 rounded-pill text-sm font-bold bg-violet-700 text-white hover:bg-violet-600">
+                {v.info?.vsl || v.key}
+              </button>
+            ))}
+            {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).length === 0 && (
+              <span className="text-xxs text-dim-400">선적 EDI가 올라온 항차가 없습니다</span>
             )}
           </div>
+        </div>
+      )}
+      </>
+    );
+    if (gid === 'owner' && owner) return (
+      /* 4.11: 소유자 전용 메뉴는 여기 한 곳에 모은다 — 검수사 2026-10-07 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요» · 22:09 «인원관리나 활동로그 마감적용 등».
+         새 소유자 전용 기능은 이 묶음 안에 넣는다(대시보드 곳곳에 흩지 않는다). 기본 접힘 — 열기 전에는 아무 자료도 읽지 않는다.
+         · TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회.
+         · 4.24: 되돌릴 수 없는 둘(마감적용 · 모든 작업 보고 삭제)은 아래 «위험 구역» 한 곳 — 빨간 테두리 · 누르면 한 번 더 묻는다(D9). */
+      <div className="space-y-2" data-owner-menu="1">
+        <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
+          <ShiftSnapPanel voyages={voyages} by={inspector} />
         </Fold>
+        <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
+          <ActivityLogSection voyages={voyages} />
+        </Fold>
+        {onOpenStaffManager && (
+          <button onClick={onOpenStaffManager}
+            className="w-full flex items-center justify-between px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-left"
+            style={{ minHeight: 44 }}>
+            <span className="text-sm2 font-bold text-dim-100">👥 인원 관리</span>
+            <span className="text-dim-400 text-xs shrink-0 ml-2">창 열기 ▶</span>
+          </button>
+        )}
+        <div className="rounded-btn border-2 border-red-700/70 bg-red-950/20 p-2 space-y-2" data-danger-zone="1">
+          <div className="text-sm2 font-black text-red-200">⚠ 위험 구역 — 되돌릴 수 없습니다 · 누르면 한 번 더 묻습니다</div>
+          <Fold id="closingedi" danger title="🏁 마감적용 (동방 선적 EDI 마무리) — 위험" open={!!openSecs.closingedi} onToggle={toggleClosingEdi}>
+            <ClosingEdiPanel voyages={voyages} by={inspector} />
+          </Fold>
+          {recentReports.length > 0 ? (
+            <button type="button" onClick={askClearAllDanger} data-danger="clear-reports"
+              className="w-full flex items-center justify-between gap-2 px-3 rounded-btn border-2 border-red-700/70 bg-red-950/30 hover:bg-red-900/40 text-left"
+              style={{ minHeight: 44 }}>
+              <span className="text-sm2 font-bold text-red-200 flex items-center gap-1.5"><Trash2 className="w-4 h-4"/> 모든 작업 보고 삭제 (테스트용) — 위험</span>
+              <span className="text-xs text-red-300 shrink-0">전 항차 보고·사진</span>
+            </button>
+          ) : (
+            <div className="text-xs text-dim-400 px-1" data-danger="clear-reports-none">🗑 모든 작업 보고 삭제 (테스트용) — 지울 작업 보고가 없습니다(최근 보고 0건)</div>
+          )}
+          {/* TallyOne 1.0(L5): 삭제 결과 인라인 통지 */}
+          <InlineNotice notice={repNotice} onClose={() => setRepNotice(null)} />
+        </div>
+      </div>
+    );
+    return null;
+  };
+
+  const boardEmpty = (
+    <div className="text-sm text-dim-400 text-center py-10 px-3" data-board-empty="1">
+      {hbView.state === 'down'
+        ? `수집기가 멈춰 «작업 중»을 판정할 수 없습니다 — 마지막 자료 ${hbView.ageMin}분 전 (앱을 쓰는 검수원이 있는 배는 그대로 뜹니다)`   /* 감사: 빈 보드가 «없다»로 단정하지 않게 */
+        : '지금 작업 중인 배가 없습니다 — 예정 항차는 홈 카드·일정에서 봅니다'}
+    </div>
+  );
+  const sheetRow = !wideUI && phoneSheet ? boardRows.find((r) => r.key === phoneSheet) : null;
+
+  return (
+    <div className={`px-2 pt-2 space-y-2 ${tab === 'board' && wideUI ? '' : 'pb-4'}`} data-chief-root="1" data-chief-cur={tab} data-chief-layout={wideUI ? 'pc' : 'phone'}>
+      {/* 1.81-01(검수사 요청 2026-08-17): TOP 버튼 — 대시보드가 길어서 맨 위로 한 번에. 4.24: 상황판 탭(컴)은 스크롤이 없어 안 뜬다 · 진행·관리 탭엔 뜬다(A19) */}
+      <ScrollTopButton />
+
+      {/* ★ 4.24 상태 줄 — «수석 상황판» · 수집기 점+«N분 전» · 검증 · 오답 · 누락 · 시각 · 탭 셋. 칩은 전부 문이다(수집기·검증 → 항차 건강 점검 · 오답 → 관리 › 사람·알림 · 누락 → 관리 › 자료).
+          수집기가 끊기면(주기×2분) 점이 빨갛고 «숫자 갱신 정지» 를 그 자리에서 말한다(종전 배너와 같은 판정 heartbeatState). */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm2 font-bold text-dim-200" data-chief-strip="1">
+        <span className="text-lg font-black text-dim-100 whitespace-nowrap px-1">수석 상황판</span>
+        {sep}
+        <button type="button" onClick={goHealth} title={hbTitle} className={chipCls} style={{ minHeight: 36 }} data-chief-chip="collector" data-hb={hbView.state}>
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${hbView.state === 'ok' ? 'bg-emerald-400' : hbView.state === 'down' ? 'bg-red-500 animate-pulse' : 'bg-dim-500'}`} aria-hidden="true" />
+          <span className={hbView.state === 'down' ? 'text-red-300' : hbView.state === 'none' ? 'text-dim-400' : ''}>{hbText}</span>
+        </button>
+        {sep}
+        <button type="button" onClick={goHealth} title="항차 건강 점검(#/health)으로 이동" className={`${chipCls} ${healthIssueCount > 0 ? 'text-amber-300' : 'text-emerald-300'}`} style={{ minHeight: 36 }} data-chief-chip="health">
+          {healthIssueCount > 0 ? `⚠ 검증 필요 ${healthIssueCount}항차` : '✓ 검증 이상 없음'}
+        </button>
+        {sep}
+        <button type="button" onClick={() => goTo('manage', 'people', 'feedback')} className={`${chipCls} ${unansweredCount > 0 ? 'text-red-300' : ''}`} style={{ minHeight: 36 }} data-chief-chip="feedback"
+          title={`아직 회신 안 한 오답 ${unansweredCount}건 · 미해결 ${unresolvedCount}건 — 누르면 관리 › 사람·알림 › 오답 리포트`}>
+          ❌ 오답 {unansweredCount}
+        </button>
+        {sep}
+        <button type="button" onClick={() => goTo('manage', 'data', 'ready')} className={`${chipCls} ${total.missing > 0 ? 'text-red-300' : ''}`} style={{ minHeight: 36 }} data-chief-chip="missing"
+          title={`누락(선사 추가 필요) — 평택 ${total.ptkAll}대 중 · 누르면 관리 › 자료 › 자료 현황`}>
+          누락 {total.missing}
+        </button>
+        {tab === 'board' && wideUI && f1700Count > 0 && (<>{sep}
+          <button type="button" onClick={() => { try { window.dispatchEvent(new CustomEvent('ferry1700Open')); } catch (e) { console.warn('[상황판] 보고 보관 창을 못 열었다', e); } }}
+            className={`${chipCls} text-amber-300`} style={{ minHeight: 36 }} data-chief-chip="f1700" title="카페리 17:00·05:30 작업보고 — 보관한 보고 보기(관리 › 사람·알림 «📋 17시 카페리 작업보고» 와 같은 창)">
+            📋 보고 보관 {f1700Count}
+          </button></>)}
+        <span className="hidden min-[700px]:inline-flex items-center gap-1.5">{sep}<span className="whitespace-nowrap px-1" data-chief-clock="1">⏰ {hhmm}</span></span>
+        {tab === 'board' && wideUI && boardRows.length > 0 && (
+          /* 3.17: 확대 — 2척 이상이면 그림이 작아진다. 누르면 그 칸 안에서 커지고 넘치면 그 칸만 스크롤한다(종전 보드 머리에서 이 줄로) */
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-dim-400 font-bold pl-1" data-chief-zoom="1">
+            {sep}
+            <span className="ml-1">작업 중 <b className="text-dim-100">{boardRows.length}</b>척{voyageStats.length > boardRows.length ? <span className="hidden min-[1500px]:inline">{` · 등록 ${voyageStats.length}척`}</span> : ''}</span>
+            <span className="ml-1.5 mr-0.5">확대</span>
+            <button type="button" onClick={() => bumpZoom(-1)} disabled={boardZoom <= BOARD_ZOOMS[0]}
+              className="w-7 h-7 rounded bg-ink-800 border border-line text-dim-200 font-black disabled:opacity-30" title="작게">−</button>
+            <button type="button" onClick={() => { setBoardZoom(1); try { localStorage.setItem('gm_board_zoom', '1'); } catch (e) { /* 기억 실패는 무시 */ } }}
+              className="px-1.5 h-7 rounded bg-ink-800 border border-line mono text-xs text-dim-200 font-bold" title="눌러서 기본으로">{Math.round(boardZoom * 100)}%</button>
+            <button type="button" onClick={() => bumpZoom(1)} disabled={boardZoom >= BOARD_ZOOMS[BOARD_ZOOMS.length - 1]}
+              className="w-7 h-7 rounded bg-ink-800 border border-line text-dim-200 font-black disabled:opacity-30" title="크게">+</button>
+          </span>
+        )}
+        <span className="flex-1" />
+        <nav className="hud-dock w-full min-[700px]:w-auto" role="tablist" aria-label="수석 상황판 탭" data-chief-tabs="1">
+          {TABS.map(([id, ico, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} data-chief-tab={id}
+              className="hud-tab min-[700px]:flex-none min-[700px]:px-4" onClick={() => { setTab(id); setPhoneSheet(null); }}>
+              <span className="hud-ico" aria-hidden="true">{ico}</span>{label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
+      {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
+      {showPier && <PierRegisterModal inspector={inspector} onClose={() => setShowPier(false)} />}
+      {/* ★ 3.63 — 카페리 17:00 주간 작업보고(갱별) — 그 시각 작업 중인 대상 카페리를 한 창에 모아(보기만) */}
+      <Ferry1700Alert audience="chief" voyages={voyages} />
+      {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
+      {showBayMatrix && (
+        /* 3.5: «쓰이는 배»를 화면이 알 수 있게 — 부모가 이미 들고 있는 재료만 넘긴다(추가 요청 0).
+           ⚠ fbListArchive 는 부르지 않는다(키 1건당 GET 4회 — firebase.js:1999 요청 폭주 기록). */
+        <BayMatrixManagerModal onClose={() => setShowBayMatrix(false)}
+          voyages={voyages} shipLib={shipLib} arcList={arcList} inspector={inspector} />
       )}
 
-      {/* M3.74: confirm() → ConfirmModal */}
+      {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
+      {/* 3.11: 보드 그림의 칸 → 컨 상세(VoyagePage renderDetail 과 같은 모양 — 같은 모드 전체 컨 병합, 완료·X-RAY·봉인) */}
+      {boardDetail && (() => {
+        const vy = voyages?.[boardDetail.key]; const sec = vy?.[boardDetail.mode] || {};
+        const ediMap = sec.ediContainers || {}, recMap = sec.records || {}, compMap = sec.completed || {};
+        //  3.52: 선사는 «더 자세한 쪽» — 여기도 리스트 op 를 EDI 위에 그냥 펼치던 자리다(utils 한 벌).
+        //    안 지나면 수석 보드 컨 상세만 세관이 뭉친 값을 보여 마감텔리와 갈린다(감사 실측 22대).
+        const _vslB = String(vy?.info?.vsl || '').toUpperCase();
+        const all = [...new Set([...Object.keys(ediMap), ...Object.keys(recMap)])].map(cn => {
+          const _e = ediMap[cn] || {}, _r = recMap[cn] || {};
+          const _m = { ..._e, ...Object.fromEntries(Object.entries(_r).filter(([, vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
+          if (_r.op || _e.op) _m.op = pickCarrierOp(_r.op, _e.op, _vslB);
+          //  3.52-01: **POL 은 EDI 가 정본이다** — 위 스프레드가 리스트 POL 을 그냥 덮고 있었다(문지기 없음,
+          //    mirCtx 와 같은 구멍). 양하는 «양하 직전 마지막 항구» 규칙까지 태운다(utils 한 벌).
+          if (_e.pol) _m.pol = boardDetail.mode === 'discharge' ? pickDischargePol(_e.pol, _r.pol, _e.pod) : _e.pol;
+          return _m;
+        });
+        //  3.52: 배별 선사 별칭도 지난다 — `pickCarrierOp` 만 지나면 `opAlias`(DXQD 의 NOL→DWS,
+        //    STSE·STMJ 의 WDF→WDG)가 이 화면에만 안 걸려 **수석 보드 컨 상세만 딴 선사**를 보인다
+        //    (재감사 실측 — DXQD 2631E 250대가 여기만 NOL, 나머지 네 경로는 DWS).
+        const _spB2 = shipOpMapper(_vslB, all.map((c) => c && c.op));
+        for (const c of all) { if (!c || !c.op) continue; const o = _spB2(c.op); if (o !== c.op) c.op = o; }
+        const dc = all.find(x => x.cn === boardDetail.c?.cn) || boardDetail.c;
+        if (!dc?.cn) return null;
+        return (
+          <ContainerDetailModal variant="modal" c={dc}
+            workBay={dc.bay || dc.bay_orig || recMap[dc.cn]?.bay_orig || null}
+            workTier={(() => { const t = parseInt(dc.tier || dc.tier_planned || recMap[dc.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
+            comp={compMap[dc.cn]} isXray={boardDetail.mode === 'discharge' && !!(sec.xrayList?.[dc.cn])} xraySeal={sec.xraySeals?.[dc.cn] || null}
+            mode={boardDetail.mode} voyageKey={boardDetail.key} voyageInfo={vy?.info} inspector={inspector} sealMode={null}
+            onClose={() => setBoardDetail(null)} allContainers={all} records={recMap} shiftCns={null} />
+        );
+      })()}
+
+      {/* ★ 4.24 ⚓ 상황판 탭(컴) — 실시간 작업 보드가 상태 줄 바로 밑에서 화면 바닥까지(스크롤 없음). 보드 안은 종전 그대로:
+          한 척 = 가로로 긴 한 줄(25% 통계 · 75% 베이). 보드 높이를 척수(최대 4)로 등분하고 5척부터 보드 안에서 스크롤 — 검수사 «세로로 4등분해서 최대 4척, 2척이면 2등분, 5척이면 스크롤» · «1척이면 전체화면»
+          · 배를 누르면 그 배만 전체(포커스), [닫기]로 돌아온다. 고른 배가 보드에서 빠지면(작업 끝) 포커스도 풀린다.
+          TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단
+          4.24 — 4.23 의 보드 전체 fs-keep 을 걷었다: 통계 칸의 머리·막대·요약·검수원·합계는 글자 모드를 따르고(크게면 커진다) 행이 낮으면 별첨 표 대신 한 줄 요약(index.css lsc-*).
+          그림(FitBox·베이 격자)과 별첨 표는 제 fs-keep 이 그대로 4.22-04 글자로 묶는다 · 베이 제목은 boardTitlePx(모드 무관). */}
+      {tab === 'board' && wideUI && (boardRows.length === 0 ? boardEmpty : (
+        <div ref={boardScrollRef} className="flex flex-col gap-1 overflow-y-auto" data-chief-board="pc" style={{ height: boardH ? boardH + 'px' : 'calc(100vh - 9rem)', minHeight: '20rem' }}>
+          {(() => {
+            const focusRow = boardFocus ? boardRows.find(r => r.key === boardFocus) : null;
+            const shown = focusRow ? [focusRow] : boardRows;
+            return shown.map(v => (
+              <div key={v.key} className="shrink-0 min-h-0 overflow-y-auto sm:[flex-basis:max(var(--fb),9rem)]" style={{ '--fb': `calc(${100 / Math.min(shown.length, 4)}% - ${shown.length > 1 ? '0.25rem' : '0px'})` }} data-board-row={v.key}>
+                {/* 감사: sm 이상은 행 하한(작은 노트북 4척 겹침 방지) · sm 미만(폰, 세로 쌓임)은 자연 높이로 컨테이너가 스크롤.
+                    4.24: 하한 12rem → 10rem — 보드가 첫 화면(상태 줄 밑)에서 시작하니 1440×900 4척 한 행이 184px 다. 12rem(192px)이면 넷째 행이 27px 밀려 보드가 스크롤됐다(R34 ①-3 실측).
+                    통계 칸은 넘치면 숨김(lsc-stat · 한 줄 요약이 줄어든다)이라 낮아져도 겹치지 않는다.
+                    4.24 2차: 10rem → 9rem — 1366·1440×768(노트북) 4척이 한 화면(보드 약 587px ÷ 4). 한 줄 요약은 칸 안에서 스크롤된다. */}
+                <LiveShipCard v={v}
+                  workers={activeByVoyage[v.key] || []}
+                  lastReport={lastReportByVoyage[v.key]}
+                  alerts={todayAlertsByVoyage[v.key]}
+                  departed={v._departed}
+                  cranes={craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])}
+                  voyage={voyages?.[v.key]} rows={shown.length}
+                  onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
+                  focused={!!focusRow} canFocus={boardRows.length > 1} zoom={boardZoom}
+                  onFocus={() => setBoardFocus(focusRow ? null : v.key)}
+                  onOpen={() => onOpenVoyage(v.key)}/>
+              </div>
+            ));
+          })()}
+        </div>
+      ))}
+
+      {/* ★ 4.24 ⚓ 상황판 탭(폰) — 배마다 카드 한 장(선박명·항차·선석·양하/선적 막대+숫자·검수원·최근 완료). 카드를 누르면 그 배만 전체화면 시트(막대 → 별첨 표 → 베이 그림).
+          컴의 «행 클릭 = 그 배만 전체화면» 과 같은 재료·같은 판정이고 배치만 다르다(A1). 4척이면 한 화면, 5척부터 아래로. */}
+      {tab === 'board' && !wideUI && (
+        <div className="space-y-2" data-chief-board="phone">
+          <div className="text-xs text-dim-400 font-bold px-1">
+            작업 중 {boardRows.length}척{voyageStats.length > boardRows.length ? ` · 등록 ${voyageStats.length}척` : ''}{boardRows.length ? ' · 누르면 그 배만 전체화면' : ''}
+          </div>
+          {boardRows.length === 0 ? boardEmpty : boardRows.map((v) => (
+            <PhoneShipCard key={v.key} v={v} workers={activeByVoyage[v.key] || []} departed={v._departed}
+              lastAt={lastCompletedAt(voyages?.[v.key])} onOpen={() => setPhoneSheet(v.key)} />
+          ))}
+        </div>
+      )}
+      {sheetRow && (
+        <div className="fixed inset-0 !mt-0 z-[45] bg-ink-950 overflow-y-auto" role="dialog" aria-label={`${sheetRow.info.vsl} 전체화면`} data-chief-sheet={sheetRow.key}>
+          <div className="sticky top-0 z-10 flex items-center gap-2 px-2 py-2 bg-ink-950 border-b border-line">
+            <button type="button" onClick={() => setPhoneSheet(null)} className="chip-v2 shrink-0" data-sheet-close="1">‹ 보드</button>
+            <div className="min-w-0 flex-1 truncate">
+              <b className="text-lg font-black text-dim-100">{sheetRow.info.vsl}</b>{' '}
+              <span className="text-xs text-dim-300">{voyPairOf(sheetRow.info)}</span>
+            </div>
+          </div>
+          {/* 640~699px 폰(가로 배치 카드)은 그릇 높이가 있어야 그림이 칸을 채운다 — 컴의 «그 배만 전체» 와 같은 그릇 */}
+          <div className="p-1.5 pb-24" style={typeof window !== 'undefined' && window.innerWidth >= 640 ? { height: 'calc(100vh - 64px)' } : undefined}>
+            <LiveShipCard v={sheetRow}
+              workers={activeByVoyage[sheetRow.key] || []}
+              lastReport={lastReportByVoyage[sheetRow.key]}
+              alerts={todayAlertsByVoyage[sheetRow.key]}
+              departed={sheetRow._departed}
+              cranes={craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || [])}
+              voyage={voyages?.[sheetRow.key]} rows={1}
+              onOpenContainer={(c, mode) => setBoardDetail({ key: sheetRow.key, mode, c })}
+              focused={false} canFocus={false} zoom={1}
+              onOpen={() => onOpenVoyage(sheetRow.key)}/>{/* 시트가 곧 «그 배만 전체» 다 — 카드 안 [⤢ 크게]·카드 누르기 포커스는 끈다(시트를 닫는 길은 ‹ 보드 하나 · 스크롤하다 닿아 닫히지 않게) */}
+          </div>
+        </div>
+      )}
+
+      {/* ★ 4.24 📋 진행·마감 탭 — 왼쪽 진행 상황·완료 저장(자료 있는 항차 · 자료 대기는 접힘 한 줄), 오른쪽 문 다섯(마감 텔리 · 완료 보관소 · 자료 보관소 · 장비별 보고 · 최근 작업 보고).
+          처리기(완료 저장·터미널 실적 반영·EDI/ASC/엑셀·마감 텔리 생성·복원·보고 삭제)는 한 줄도 안 바꿨다 — 자리만. */}
+      {tab === 'progress' && (
+        <div className="grid gap-3 items-start min-[700px]:grid-cols-[minmax(0,1fr)_minmax(300px,34%)] max-w-app mx-auto" data-chief-pane="progress">
+          <div className="min-w-0">
+            {/* TallyOne 1.0(L3): 도선 예보 전달 — 진행 상황 줄에 일정 정보(완료 저장 타이밍 판단 근거) */}
+            <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} portMisData={portMisData} resolveBox={resolveBox} />
+          </div>
+          <div className="min-w-0 space-y-2 min-[700px]:pt-3" data-chief-doors="progress">
+            {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
+            <Fold id="tally" title="📑 마감 텔리 (DEP.TALLY)" open={!!openSecs.tally} onToggle={() => toggleSec('tally')}>
+              <TallyExportSection voyages={voyages} chief={chief} pfMap={pfMap}
+                archiveList={arcList} onArchiveChanged={reloadArchive}
+                boxRoot={boxRoot} onPickBox={onPickBox} resolveBox={resolveBox}/>
+            </Fold>
+            {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
+                있었는데 UI가 0이었다(전면 점검 §1-5). RZOR 통삭제 사건 같은 실수의 되돌리기가 이것. */}
+            <Fold id="restore" title="🗄 완료 보관소 (복원)" open={!!openSecs.restore} onToggle={() => toggleSec('restore')}>
+              <ArchiveRestoreSection chief={chief} onRestored={() => {}} />
+            </Fold>
+            <Fold id="archive" title="📚 선박별 자료 보관소" open={!!openSecs.archive} onToggle={() => toggleSec('archive')}>
+              <ShipArchiveSection shipLib={shipLib} />
+            </Fold>
+            {/* M3.5.6: 장비별 오늘 작업 보고 통계 — 3.64-01: 부두별 줄(EquipReportBoard) · 4.24: 보고가 없어도 문은 남긴다 */}
+            <Fold id="equip" title={`🏗 오늘 장비별 작업 보고${equipBoard.total > 0 ? '' : ' — 아직 없음'}`} open={!!openSecs.equip} onToggle={() => toggleSec('equip')}>
+              {equipBoard.total > 0
+                ? <EquipReportBoard board={equipBoard} capped={(allReports || []).length >= 300} />
+                : <div className="text-xs text-dim-400 text-center py-3">오늘 들어온 장비별 작업 보고가 아직 없습니다.</div>}
+            </Fold>
+            {/* M3.5.6: 최근 작업 보고 (시간순) — 4.24: 머리의 [전체 삭제 (테스트용)] 는 👑 소유자 메뉴 › 위험 구역으로 옮겼다(D9) · 보고가 없어도 문은 남긴다 */}
+            <Fold id="reports" title={recentReports.length > 0 ? '📤 최근 작업 보고 (30건)' : '📤 최근 작업 보고 — 아직 없음'} open={!!openSecs.reports} onToggle={() => toggleSec('reports')}>
+            {recentReports.length > 0 ? (
+            <div className="bg-ink-900 border border-emerald-700/40 rounded-btn p-3 mt-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <Send className="w-4 h-4 text-emerald-400"/>
+                <div className="text-sm font-bold text-emerald-100">최근 작업 보고</div>
+                <span className="text-2xs text-dim-400">최근 30건</span>
+                <div className="flex-1"/>
+                <span className="text-2xs text-dim-400">전체 삭제(테스트용)는 👑 소유자 메뉴 › 위험 구역</span>
+              </div>
+              {/* TallyOne 1.0(L5): 삭제 결과 인라인 통지 */}
+              <InlineNotice notice={repNotice} onClose={() => setRepNotice(null)} />
+              <div className="space-y-1 max-h-96 overflow-y-auto">
+                {recentReports.map((r, i) => {
+                  const time = r.ts ? new Date(r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                  // V9.57(I2): external_pause(작업중단) 아이콘 누락 → 기본 '📋'로 묻히던 것. 사고성이라 ⛔ + 붉은 테두리.
+                  const icon = r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : r.type === 'external_pause' ? '⛔' : '📋';
+                  // V9.57(I7): 피드 voy는 firebase 구독이 voy_l 고정으로 붙인다 — 보고의 mode를 보고 voy_d/voy_l 선택.
+                  const rInfo = voyages?.[r.voyageKey]?.info;
+                  const rVoy = r.mode === 'discharge' ? (rInfo?.voy_d || rInfo?.voy || r.voy)
+                    : r.mode === 'loading' ? (rInfo?.voy_l || rInfo?.voy || r.voy)
+                    : r.voy;
+                  return (
+                    <div key={i} className={`bg-ink-950 border rounded p-2 text-xs group ${r.type === 'external_pause' ? 'border-red-700/70' : 'border-line'}`}>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-1">
+                          <span>{icon}</span>
+                          <span className="font-bold text-dim-100">{r.vsl} {rVoy}</span>
+                          {r.equip && <span className="text-2xs bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-2xs text-dim-400 mono">{time}</span>
+                          <button onClick={() => {
+                            askConfirm({
+                              title: '보고 삭제',
+                              message: `${r.vsl} ${r.voy}\n${r.equip || ''} 보고를 삭제하시겠습니까?`,
+                              confirmLabel: '삭제',
+                              cancelLabel: '취소',
+                              danger: true,
+                              onConfirm: async () => {
+                                try {
+                                  await fbDeleteWorkReport(r.voyageKey, r.ts);
+                                } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
+                              },
+                            });
+                          }}
+                            className="p-0.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded opacity-50 group-hover:opacity-100"
+                            title="이 보고 삭제">
+                            <Trash2 className="w-3 h-3"/>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-xxs text-dim-200 whitespace-pre-line ml-4">{r.message || ''}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            ) : (
+              <div className="text-xs text-dim-400 text-center py-3">최근 작업 보고가 없습니다.</div>
+            )}
+            </Fold>
+          </div>
+        </div>
+      )}
+
+      {/* ★ 4.24 🧰 관리 탭 — 묶음 넷(+소유자). 컴은 왼쪽 묶음 · 오른쪽 그 묶음의 항목, 폰은 누른 묶음만 펴지는 아코디언(평소엔 닫힘). */}
+      {tab === 'manage' && (
+        <div className="grid gap-3 items-start min-[700px]:grid-cols-[minmax(220px,300px)_minmax(0,1fr)] max-w-app mx-auto" data-chief-pane="manage">
+          <div className="space-y-2 min-w-0" data-chief-groups="1">
+            {groups.map((g) => (
+              <React.Fragment key={g.id}>
+                <GroupDoor g={g} on={curGroup === g.id} wide={wideUI}
+                  onClick={() => setMgGroup(wideUI ? g.id : (curGroup === g.id ? null : g.id))} />
+                {!wideUI && curGroup === g.id && (
+                  <div className="space-y-2 pl-1" data-chief-group-body={g.id}>{groupBody(g.id)}</div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+          {wideUI && curGroup && (() => {
+            const g = groups.find((x) => x.id === curGroup);
+            return (
+              <div className={`min-w-0 rounded-card border-2 p-3 space-y-2 ${g && g.danger ? 'border-red-700/60 bg-red-950/10' : 'border-ink-700 bg-ink-900/60'}`} data-chief-group-body={curGroup}>
+                <div className="text-lg font-black text-dim-100">{g ? `${g.ico} ${g.name}` : ''}</div>
+                {groupBody(curGroup)}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {editKey && voyages[editKey] && (
+        <ChiefBayEdit voyage={voyages[editKey]} voyageKey={editKey} inspector={inspector} activeWorkers={activeByVoyage[editKey] || []} onClose={() => setEditKey(null)} />
+      )}
+      {planKey && voyages[planKey] && (
+        <LoadingPlanEdit voyage={voyages[planKey]} voyageKey={planKey} inspector={inspector} onClose={() => setPlanKey(null)} />
+      )}
+
+      {/* M3.74: confirm() → ConfirmModal · 4.24: 위험 구역 «한 번 더 묻기» 창 */}
       <ConfirmModal {...confirmState} />
+      <ConfirmModal {...dangerState} />
     </div>
   );
 }
@@ -1574,6 +1738,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
   const [termBusyKey, setTermBusyKey] = useState(null);
   // TallyOne 1.0(L5): 결과 통지 alert() → 섹션 안 인라인 알림(확인창 성격 window.confirm은 유지)
   const [notice, setNotice] = useState(null);
+  const [showWaiting, setShowWaiting] = useState(false);   // 4.24: «⏳ 자료 대기 N척» 접힘 — 평소엔 닫힘(A6)
 
   // 항차별 진행 행 (선박별 합계가 아니라 항차 단위 — 완료는 항차별로 누름)
   const rows = useMemo(() => {
@@ -1800,12 +1965,130 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
     }
   };
 
+  //  4.24: «자료 대기» = 평택분이 양하·선적 모두 0 이고, 완료 저장(검수 완료)도 터미널 실적 반영 대기도 없는 항차 — 눌러야 할 단추가 하나도 없는 줄만 접는다.
+  const isWaitingRow = (r) => r.discharge === 0 && r.loading === 0 && !r.inspectorDone && (r.termApplyD + r.termApplyL) === 0;
+  const liveRows = rows.filter((r) => !isWaitingRow(r));
+  const waitRows = rows.filter(isWaitingRow);
+  //  4.24: 진행 줄 한 벌 — 자료 있는 항차와 «자료 대기» 접힘 안의 항차가 같은 줄을 쓴다(종전 줄 그대로 · 처리기 그대로)
+  const renderRow = (r) => (
+    <div key={r.key} className="bg-ink-800/60 border border-line rounded-pill px-3 py-2">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onOpenVoyage && onOpenVoyage(r.key)}
+          className="font-bold text-dim-100 text-sm flex-1 text-left hover:text-cyan-300 truncate"
+          title="항차 열기"
+        >
+          🚢 {r.vsl}
+        </button>
+        {confirmKey === r.key ? (
+          <div className="flex items-center gap-1">
+            <span className="text-2xs text-amber-300 mr-1">최종 저장?</span>
+            <button
+              onClick={() => doComplete(r)}
+              disabled={busyKey === r.key}
+              className="text-xxs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
+            >{busyKey === r.key ? '저장 중…' : '예'}</button>
+            <button
+              onClick={() => setConfirmKey(null)}
+              className="text-xxs px-2 py-1 rounded bg-ink-750 hover:bg-ink-700 text-dim-100"
+            >취소</button>
+          </div>
+        ) : r.inspectorDone ? (
+          chief ? (
+            <button
+              onClick={() => setConfirmKey(r.key)}
+              className="text-xxs px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
+              title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
+            >✓ 수석 완료 저장</button>
+          ) : (
+            <button
+              onClick={() => alert('⚠️ 완료 저장 권한이 없습니다.\n\n항차 완료 저장은 수석검수사만 할 수 있습니다.\n(현재 로그인: ' + (inspector || '미상') + ')\n\n수석검수사에게 완료 저장을 요청하세요.')}
+              className="text-xxs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40 font-bold"
+              title="수석검수사만 완료 저장할 수 있습니다"
+            >🔒 수석 전용</button>
+          )
+        ) : (
+          <span
+            className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
+            title="검수사가 항차 화면에서 '검수 완료'를 눌러야 수석이 최종 저장할 수 있습니다"
+          >검수 진행 중</span>
+        )}
+      </div>
+      <div className="flex items-center gap-3 mt-1 text-xs">
+        <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
+        <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
+        {r.inspectorDone && (
+          <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
+        )}
+        {(r.voyD || r.voyL) && (
+          <span className="text-dim-400 text-2xs ml-auto">
+            {r.voyD && `양하 ${r.voyD}`}{r.voyD && r.voyL && ' · '}{r.voyL && `선적 ${r.voyL}`}
+          </span>
+        )}
+      </div>
+      {/* 2.79: CATOS 터미널 실적 반영 — 반영 대기(termWork 반입분 − 앱 완료)가 있을 때만.
+          검수사 확정 «수석이 승인 버튼으로 일괄 반영». 수석이 아니면 잠금 표시(자리를 남긴다 — 2-0-D). */}
+      {(r.termApplyD + r.termApplyL) > 0 && (
+        <div className="flex items-center gap-2 mt-1.5">
+          {confirmTermKey === r.key ? (
+            <>
+              <span className="text-2xs text-amber-300">터미널 실적 {r.termApplyD + r.termApplyL}대를 완료로 반영?</span>
+              <button
+                onClick={() => doApplyTerm(r)}
+                disabled={termBusyKey === r.key}
+                style={{ minHeight: 36 }}
+                className="text-xxs px-3 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50"
+              >{termBusyKey === r.key ? '반영 중…' : '예'}</button>
+              <button
+                onClick={() => setConfirmTermKey(null)}
+                style={{ minHeight: 36 }}
+                className="text-xxs px-3 rounded bg-ink-750 hover:bg-ink-700 text-dim-100"
+              >취소</button>
+            </>
+          ) : chief ? (
+            <button
+              onClick={() => setConfirmTermKey(r.key)}
+              style={{ minHeight: 36 }}
+              className="text-xxs px-3 rounded-pill bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 border border-amber-700/50 font-bold"
+              title="터미널 검수 입력(실적) 중 앱에 완료가 안 찍힌 컨을 일괄 완료로 — 완료자는 그 조 등록 근무자, 등록이 없으면 «터미널 반영». 검수원 기록은 덮지 않음"
+            >🏗 터미널 실적 반영 {r.termApplyD + r.termApplyL}{r.termApplyL > 0 ? ` (양하 ${r.termApplyD} · 선적 ${r.termApplyL})` : ''}</button>
+          ) : (
+            <span
+              className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
+              title="터미널 실적 반영은 수석검수사만 할 수 있습니다"
+            >🔒 터미널 실적 {r.termApplyD + r.termApplyL}대 대기 — 수석 전용</span>
+          )}
+        </div>
+      )}
+      {/* TallyOne 1.0(L3): 일정 정보 — 작업일자(출처 뱃지)·도선 입출항. 완료 저장 타이밍 판단 근거 */}
+      <ScheduleLine planDate={r.planDate} planSrc={r.planSrc} pmEta={r.pmEta}
+        pf={(pilotForecast || {})[(r.vsl || '').toUpperCase()]} />
+      {/* TallyOne 1.0(L4): V8.93 도구 4종 — 10px 초소형 버튼을 줄 아래 40px 터치 타깃 행으로 재배치(기능 불변) */}
+      {r.loading > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
+          <button onClick={() => exportActualEdi(r)} style={{ minHeight: 40 }}
+            className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
+            title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 표준 형식이라 그대로 읽힙니다.">실선적 EDI</button>
+          <button onClick={() => exportActualAsc(r)} style={{ minHeight: 40 }}
+            className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
+            title="실선적 ASC 내려받기 — 표준 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
+          <button onClick={() => exportEditExcel(r)} style={{ minHeight: 40 }}
+            className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
+            title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
+          <button onClick={() => startExcelToEdi(r)} style={{ minHeight: 40 }}
+            className="px-2 rounded-pill bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 text-xxs font-bold"
+            title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="bg-ink-900 border border-cyan-800/40 rounded-btn p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
         <Ship className="w-4 h-4 text-cyan-400" />
-        <div className="text-sm font-bold text-dim-100 flex-1">
-          진행 상황 ({rows.length}척 작업 중)
+        <div className="text-base font-bold text-dim-100 flex-1">
+          진행 상황 · 완료 저장 <span className="text-sm text-dim-400 font-normal">자료 있는 {liveRows.length}척{waitRows.length ? ` · 자료 대기 ${waitRows.length}척` : ''}</span>
         </div>
       </div>
       {/* TallyOne 1.0(L5): 이 섹션의 결과 통지(완료 저장·EDI/엑셀 생성) 인라인 표시 */}
@@ -1816,118 +2099,16 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         <div className="text-center text-dim-400 text-xs py-6">현재 작업 중인 항차가 없습니다.</div>
       ) : (
         <div className="space-y-2">
-          {rows.map((r) => (
-            <div key={r.key} className="bg-ink-800/60 border border-line rounded-pill px-3 py-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => onOpenVoyage && onOpenVoyage(r.key)}
-                  className="font-bold text-dim-100 text-sm flex-1 text-left hover:text-cyan-300 truncate"
-                  title="항차 열기"
-                >
-                  🚢 {r.vsl}
-                </button>
-                {confirmKey === r.key ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-2xs text-amber-300 mr-1">최종 저장?</span>
-                    <button
-                      onClick={() => doComplete(r)}
-                      disabled={busyKey === r.key}
-                      className="text-xxs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
-                    >{busyKey === r.key ? '저장 중…' : '예'}</button>
-                    <button
-                      onClick={() => setConfirmKey(null)}
-                      className="text-xxs px-2 py-1 rounded bg-ink-750 hover:bg-ink-700 text-dim-100"
-                    >취소</button>
-                  </div>
-                ) : r.inspectorDone ? (
-                  chief ? (
-                    <button
-                      onClick={() => setConfirmKey(r.key)}
-                      className="text-xxs px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
-                      title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
-                    >✓ 수석 완료 저장</button>
-                  ) : (
-                    <button
-                      onClick={() => alert('⚠️ 완료 저장 권한이 없습니다.\n\n항차 완료 저장은 수석검수사만 할 수 있습니다.\n(현재 로그인: ' + (inspector || '미상') + ')\n\n수석검수사에게 완료 저장을 요청하세요.')}
-                      className="text-xxs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40 font-bold"
-                      title="수석검수사만 완료 저장할 수 있습니다"
-                    >🔒 수석 전용</button>
-                  )
-                ) : (
-                  <span
-                    className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
-                    title="검수사가 항차 화면에서 '검수 완료'를 눌러야 수석이 최종 저장할 수 있습니다"
-                  >검수 진행 중</span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-xs">
-                <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
-                <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
-                {r.inspectorDone && (
-                  <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
-                )}
-                {(r.voyD || r.voyL) && (
-                  <span className="text-dim-400 text-2xs ml-auto">
-                    {r.voyD && `양하 ${r.voyD}`}{r.voyD && r.voyL && ' · '}{r.voyL && `선적 ${r.voyL}`}
-                  </span>
-                )}
-              </div>
-              {/* 2.79: CATOS 터미널 실적 반영 — 반영 대기(termWork 반입분 − 앱 완료)가 있을 때만.
-                  검수사 확정 «수석이 승인 버튼으로 일괄 반영». 수석이 아니면 잠금 표시(자리를 남긴다 — 2-0-D). */}
-              {(r.termApplyD + r.termApplyL) > 0 && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  {confirmTermKey === r.key ? (
-                    <>
-                      <span className="text-2xs text-amber-300">터미널 실적 {r.termApplyD + r.termApplyL}대를 완료로 반영?</span>
-                      <button
-                        onClick={() => doApplyTerm(r)}
-                        disabled={termBusyKey === r.key}
-                        style={{ minHeight: 36 }}
-                        className="text-xxs px-3 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50"
-                      >{termBusyKey === r.key ? '반영 중…' : '예'}</button>
-                      <button
-                        onClick={() => setConfirmTermKey(null)}
-                        style={{ minHeight: 36 }}
-                        className="text-xxs px-3 rounded bg-ink-750 hover:bg-ink-700 text-dim-100"
-                      >취소</button>
-                    </>
-                  ) : chief ? (
-                    <button
-                      onClick={() => setConfirmTermKey(r.key)}
-                      style={{ minHeight: 36 }}
-                      className="text-xxs px-3 rounded-pill bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 border border-amber-700/50 font-bold"
-                      title="터미널 검수 입력(실적) 중 앱에 완료가 안 찍힌 컨을 일괄 완료로 — 완료자는 그 조 등록 근무자, 등록이 없으면 «터미널 반영». 검수원 기록은 덮지 않음"
-                    >🏗 터미널 실적 반영 {r.termApplyD + r.termApplyL}{r.termApplyL > 0 ? ` (양하 ${r.termApplyD} · 선적 ${r.termApplyL})` : ''}</button>
-                  ) : (
-                    <span
-                      className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
-                      title="터미널 실적 반영은 수석검수사만 할 수 있습니다"
-                    >🔒 터미널 실적 {r.termApplyD + r.termApplyL}대 대기 — 수석 전용</span>
-                  )}
-                </div>
-              )}
-              {/* TallyOne 1.0(L3): 일정 정보 — 작업일자(출처 뱃지)·도선 입출항. 완료 저장 타이밍 판단 근거 */}
-              <ScheduleLine planDate={r.planDate} planSrc={r.planSrc} pmEta={r.pmEta}
-                pf={(pilotForecast || {})[(r.vsl || '').toUpperCase()]} />
-              {/* TallyOne 1.0(L4): V8.93 도구 4종 — 10px 초소형 버튼을 줄 아래 40px 터치 타깃 행으로 재배치(기능 불변) */}
-              {r.loading > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
-                  <button onClick={() => exportActualEdi(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
-                    title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 표준 형식이라 그대로 읽힙니다.">실선적 EDI</button>
-                  <button onClick={() => exportActualAsc(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
-                    title="실선적 ASC 내려받기 — 표준 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
-                  <button onClick={() => exportEditExcel(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
-                    title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
-                  <button onClick={() => startExcelToEdi(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-pill bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 text-xxs font-bold"
-                    title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
-                </div>
-              )}
-            </div>
-          ))}
+          {liveRows.map(renderRow)}
+          {/* 4.24: 자료가 아직 없는 항차(양하·선적 평택분 0 · 완료 저장·터미널 반영 대기도 없음)는 한 줄로 접는다(B8 «작업중인지도 모르는 화면» · C15 «몇개외 몇건 … 나머지도 보고자 하면 볼수 있어야»). 펼치면 종전 줄 그대로 */}
+          {waitRows.length > 0 && (
+            <button type="button" onClick={() => setShowWaiting((o) => !o)} data-waiting-fold={waitRows.length}
+              className="w-full flex items-center justify-between gap-2 px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-left" style={{ minHeight: 44 }}>
+              <span className="text-sm2 font-bold text-dim-200 truncate tx-lg:whitespace-normal tx-lg:break-keep">⏳ 자료 대기 {waitRows.length}척 — {waitRows.map((r) => `${r.vsl}${r.voyD || r.voyL ? ' ' + (r.voyD || r.voyL) : ''}`).join(' · ')}</span>
+              <span className="text-dim-400 text-xs shrink-0">{showWaiting ? '▲ 접기' : '▸ 펼치기'}</span>
+            </button>
+          )}
+          {showWaiting && waitRows.map(renderRow)}
         </div>
       )}
       <div className="text-2xs text-dim-400 mt-2">평택분 기준 · 수석검수사 최종 확인 후 완료 저장 → 자료 보관소로 이동</div>
@@ -2065,44 +2246,7 @@ function ShipArchiveSection({ shipLib }) {
   );
 }
 
-// TallyOne 1.0(L1): 수집기 상태 배너 — 끊김(주기×2분 초과)이면 붉은 경고, 살아있으면 컴팩트 한 줄,
-//   하트비트 자체가 없으면(prop 미전달·수집기 미가동) '자료 없음'을 명시(조용한 실패 금지).
-//   '검증 필요 N항차'는 health.js healthSummary 기준 — 누르면 #/health(항차 건강 점검)로 이동.
-function CollectorStatusBanner({ hbView, hb, issueCount }) {
-  const healthBtn = (
-    <button onClick={() => { window.location.hash = '#/health'; }}
-      title="항차 건강 점검(#/health)으로 이동"
-      className={`px-2.5 py-1.5 rounded-pill text-xxs font-bold border shrink-0 ${issueCount > 0
-        ? 'bg-amber-900/40 border-amber-700/50 text-amber-300 hover:bg-amber-800/50'
-        : 'bg-ink-800 border-line text-dim-300 hover:bg-ink-750'}`}
-      style={{ minHeight: 36 }}>
-      {issueCount > 0 ? `⚠ 검증 필요 ${issueCount}항차` : '✓ 항차 검증 이상 없음'}
-    </button>
-  );
-  if (hbView.state === 'down') {
-    return (
-      <div className="bg-red-950/60 border-2 border-red-600/70 rounded-btn px-3 py-2 flex items-center gap-2 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-red-200">🔴 수집기 끊김 — 아래 숫자는 갱신 정지 상태</div>
-          <div className="text-xxs text-red-300/80 mt-0.5">
-            마지막 갱신 {hbView.ageMin}분 전{hb?.version ? ` · 수집기 v${hb.version}` : ''} · 끊김 기준 주기 {hbView.cycleMin}분×2
-          </div>
-        </div>
-        {healthBtn}
-      </div>
-    );
-  }
-  return (
-    <div className={`flex items-center gap-2 flex-wrap rounded-btn border px-3 py-1.5 text-xxs ${hbView.state === 'ok'
-      ? 'bg-ink-900 border-emerald-800/40 text-dim-300' : 'bg-ink-900 border-line text-dim-400'}`}>
-      {hbView.state === 'ok'
-        ? <span>🟢 수집기 v{hb?.version || '?'} · {hbView.ageMin}분 전 갱신 (주기 {hbView.cycleMin}분)</span>
-        : <span>⚪ 수집기 상태 자료 없음 — 하트비트 미수신</span>}
-      <span className="flex-1"/>
-      {healthBtn}
-    </div>
-  );
-}
+// 4.24: 수집기 상태 배너(CollectorStatusBanner)는 상황판 상태 줄 «● 수집기 N분 전» 칩으로 옮겼다 — 같은 판정(heartbeatState · healthSummary), 자세한 판·주기는 칩 title.
 
 // TallyOne 1.0(L3): 진행 상황 줄 일정 표시 — planSrc 출처 뱃지는 HomePage 1026행 _MK와 같은 표기.
 //   자리별 출처('입항출처|출항출처')도 같은 규칙으로 풀며, 일정이 전혀 없으면 '자료 없음'을 명시.
@@ -2150,20 +2294,7 @@ function InlineNotice({ notice, onClose }) {
   );
 }
 
-function BigStat({ label, value, sub, color }) {
-  const map = {
-    emerald: 'border-emerald-700/40 bg-emerald-950/30 text-emerald-300',
-    red: 'border-red-700/40 bg-red-950/30 text-red-300',
-    slate: 'border-line bg-ink-900 text-dim-200',
-  };
-  return (
-    <div className={`rounded-btn border p-3 ${map[color]}`}>
-      <div className="text-2xs uppercase font-bold opacity-70">{label}</div>
-      <div className="text-3xl font-black mono mt-0.5">{value}</div>
-      <div className="text-xxs opacity-60 mono">{sub}</div>
-    </div>
-  );
-}
+// 4.24: BigStat(전체 확인 · 누락) 두 칸은 뺐다 — 각 보드 행의 «완료/전체» 가 그 숫자이고(NaN 수리는 computeStats), 누락은 상태 줄 «누락 N» 칩이 말한다.
 
 function InspectorRow({ s }) {
   return (
@@ -2239,7 +2370,7 @@ function BoardBayCell({ px = 24, fit = {}, plan = {} }) {
 export const BOARD_APP_STALE_MS = 30 * 60 * 1000;
 export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, departed = false, cranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
-  const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
+  const pct = pctOf(v.totalDone, v.totalAll);   // 4.24: 막대 % 한 벌(pctOf — MiniBar·폰 카드와 같은 식)
   const repIcon = lastReport ? (
     lastReport.type === 'work_status' ? '📤' : lastReport.type === 'hatch' ? '🔓' :
     lastReport.type === 'conbox' ? '📦' : lastReport.type === 'damage' ? '⚠️' :
@@ -2379,7 +2510,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
           <span className="text-dim-500 font-normal"> · {cranes.length ? `${cranes.map((c) => `${c.no}호기 ${c.done}대`).join(' · ')} — ` : ''}호기별 자리가 안 와 베이로 묶었습니다</span>
           {openBtn(bayMore)}
         </div>
-        <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${bays.length >= 5 ? 'grid-cols-5' : bays.length === 4 ? 'grid-cols-4' : bays.length >= 3 ? 'grid-cols-3' : bays.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 grid-cols-1 ${bays.length >= 5 ? 'sm:grid-cols-5' : bays.length === 4 ? 'sm:grid-cols-4' : bays.length >= 3 ? 'sm:grid-cols-3' : bays.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>{/* 4.24: 폰(시트)은 베이 그림을 세로로 한 칸씩 — 컴(sm 이상)은 종전 그대로 N칸 */}
           {bays.map((b) => (
             <div key={`${b.mode}-${b.bay}`} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
@@ -2418,7 +2549,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         {boxes.length === 0 ? (
           termBlock ? null : <div className="text-2xs text-dim-500">호기별 실적이 아직 없습니다 — 터미널 자료가 오면 여기 그 베이 그림이 뜹니다</div>
         ) : (
-          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 ${boxes.length >= 5 ? 'grid-cols-5' : boxes.length === 4 ? 'grid-cols-4' : boxes.length >= 3 ? 'grid-cols-3' : boxes.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 grid-cols-1 ${boxes.length >= 5 ? 'sm:grid-cols-5' : boxes.length === 4 ? 'sm:grid-cols-4' : boxes.length >= 3 ? 'sm:grid-cols-3' : boxes.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>{/* 4.24: 폰(시트)은 세로 한 칸씩 · 컴은 종전 N칸 */}
             {boxes.map(c => (
               <div key={c.no} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
@@ -2455,23 +2586,18 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
   return (
     <div ref={cardRef} role="button" tabIndex={0} onClick={clickCard} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); clickCard(); } }}
       className={`w-full h-full text-left bg-ink-800/40 border rounded-btn p-1 hover:bg-ink-750/70 flex flex-col sm:flex-row gap-1 cursor-pointer ${focused ? 'border-cyan-500/70' : 'border-line'} ${departed ? 'opacity-60' : ''}`}>
-      <div className="flex flex-col gap-1 sm:w-[25%] min-w-0 min-h-0">   {/* 검수사 «화면을 4등분해서 25% 통계 75%로 베이를» */}
+      <div className="lsc-stat flex flex-col gap-1 sm:w-[25%] min-w-0 min-h-0">   {/* 검수사 «화면을 4등분해서 25% 통계 75%로 베이를» · 4.24: lsc-stat — 컴은 이 칸 높이로 별첨 표/한 줄 요약을 고른다(index.css 컨테이너 쿼리) */}
       <div className="flex items-center justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="font-bold text-sm text-dim-100 truncate flex items-center gap-1.5">
-            {v.info.vsl}
-            {/* TallyOne 1.0(L2): 터미널이 출항 처리한 항차 — 흐린 카드 + 출항 뱃지 */}
-            {departed && <span className="text-2xs bg-ink-750 text-dim-200 px-1.5 py-0.5 rounded font-bold shrink-0">⚓ 출항</span>}
-            {workers.length > 0 && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>}
-          </div>
-          <div className="text-2xs text-dim-400 truncate">
-            {(() => {
-              const d = v.info.voy_d, l = v.info.voy_l, vv = v.info.voy;
-              if (d && l && d !== l) return `${d} / ${l}`;
-              return d || l || vv || '';
-            })()}
+        {/* 4.24: 선박명·항차를 한 줄로(설계 «DXQD 2640E / 2640W · DWS») — 선박명이 가장 크고(text-base) 항차는 줄임. 두 줄이던 머리 한 줄만큼 통계 칸이 넓어져 «크게»·4척에서도 한 줄 요약 두 줄이 다 보인다(R34 캡처). */}
+        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+          <span className="font-black text-base text-dim-100 shrink-0" data-board-vsl="1">{v.info.vsl}</span>
+          {/* TallyOne 1.0(L2): 터미널이 출항 처리한 항차 — 흐린 카드 + 출항 뱃지 */}
+          {departed && <span className="text-2xs bg-ink-750 text-dim-200 px-1.5 py-0.5 rounded font-bold shrink-0">⚓ 출항</span>}
+          {workers.length > 0 && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>}
+          <span className="text-2xs text-dim-400 truncate min-w-0">
+            {voyPairOf(v.info)}{/* 4.24: 항차 표기 한 벌(voyPairOf — 폰 카드·시트 머리와 같은 식) */}
             {v.info.carrier ? ` · ${v.info.carrier}` : ''}
-          </div>
+          </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {/*  ★ 3.20-04 — **크게 보는 단추를 눈에 보이게.** 검수사 2026-09-06 «트윈 작업할때 크게 보고 싶은데 …
@@ -2483,8 +2609,8 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
               ⇒ 항차 열기 옆에 **늘 보이는** 「⤢ 크게」 를 둔다. 포커스면 그 자리가 「✕ 닫기」 다(자리를 더 안 먹는다). */}
           {focused
             ? <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold" title="원래대로 — 작업 중인 배를 모두 봅니다">✕ 닫기</button>
-            : (canFocus && <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold" title="이 배만 화면 가득 — 트윈 작업 볼 때">⤢ 크게</button>)}
-          <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="text-2xs bg-blue-900/60 text-blue-200 px-2 py-0.5 rounded font-bold">항차 열기 →</button>
+            : (canFocus && <button onClick={(e) => { e.stopPropagation(); onFocus && onFocus(); }} className="text-2xs bg-ink-750 text-dim-200 px-2 py-0.5 rounded font-bold" title="이 배만 화면 가득 — 트윈 작업 볼 때">⤢<span className="lsc-btxt"> 크게</span></button>)}
+          <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="text-2xs bg-blue-900/60 text-blue-200 px-2 py-0.5 rounded font-bold" title="항차 열기"><span className="lsc-btxt">항차 열기 </span>→</button>
         </div>
       </div>
       <div className="space-y-1.5 text-2xs mono">
@@ -2515,11 +2641,26 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         const has45All = modes.some(m => { const L = legendLiveOf(boardContainers[m], m, voyage[m]?.completed); return L.fe['45'].F.n + L.fe['45'].E.n > 0; });
         const ncol = has45All ? 4 : 3;   // 20' 40' (45') 계 — 표 셋이 같은 열 수·같은 colgroup 이라 «/» 가 표 사이에서도 한 줄
         //  검수사 «통계가 항목간 간격이 너무 넓습니다. 조금 줄이면 글자를 조금 키워도» — 라벨 28%, 값 쌍은 «완료|/전체» 붙여 쓰고 줄 여백 0
-        const colgroup = <colgroup><col style={{ width: '28%' }} />{Array.from({ length: ncol * 2 }).map((_, i) => <col key={i} style={{ width: `${72 / (ncol * 2)}%` }} />)}</colgroup>;
+        //  4.24: 45' 가 있어 값 칸이 여덟이면 라벨 28% → 22% · 글자 16 → 13px(아래 lsc-tables) — 25% 칸(1440 컴 340px)·폰 시트(360~390)에서 «106/106» 이 칸을 넘어 옆 칸과 겹쳤다(R34 실측 OBWH 45칸 · 4.22-04 부터 있던 것). 45' 없는 표는 종전 그대로.
+        const lblPct = has45All ? 22 : 28;
+        const colgroup = <colgroup><col style={{ width: `${lblPct}%` }} />{Array.from({ length: ncol * 2 }).map((_, i) => <col key={i} style={{ width: `${(100 - lblPct) / (ncol * 2)}%` }} />)}</colgroup>;
         //  제목은 표 위 한 줄(첫 열 안에 넣으면 좁은 폭에서 «20'» 과 겹친다 — 미리보기 실측)
         const head = (labels) => <thead><tr className="text-dim-400"><th className="text-left px-1"></th>{labels.map((l, i) => <th key={i} className="px-0 text-center" colSpan={2}>{l}</th>)}</tr></thead>;
-        return (
-          <div className="flex-1 min-h-0 overflow-auto space-y-1 text-base leading-tight">
+        return (<>
+          {/* ★ 4.24 한 줄 요약 — 컴에서 행이 낮으면(통계 칸 높이 210px 미만 · index.css lsc-*) 별첨 표 대신 모드마다 한 줄. 표 전체는 [⤢ 크게]·한 척일 때.
+              숫자는 아래 표와 같은 L(legendLiveOf) 한 벌 — 선사별 · 화물 종류(일반 밖) · 규격별 계(별첨3 계 열). 폰(시트)과 높은 행은 표만 보인다. */}
+          {/* 줄은 눌리지 않는다(shrink-0 — 낮은 칸(1366×768 «크게» 4척)에서 두 줄이 반씩 눌려 겹쳐 보였다, R34 ①-4).
+              4.24 2차(감사 하-1 · 모의 확인 중하-2): 칸에 다 안 들어가는 줄을 칸 밖으로 넘겨(flex-wrap) 숨겼더니 «요약 없는 배» 로 읽혔다 —
+              칸 안에서 위아래로 스크롤한다(4.23-01 별첨 표가 칸 안에서 스크롤되던 것과 같다). 줄은 사라지지 않는다. */}
+          <div className="lsc-compact flex-1 min-h-0 overflow-y-auto flex-col gap-px text-xs leading-snug" style={{ scrollbarWidth: 'thin' }} data-board-compact="1">
+            {modes.map(m => {
+              const L = legendLiveOf(boardContainers[m], m, voyage[m]?.completed);
+              if (!L.n) return null;
+              const line = compactLegendLine(L);
+              return <div key={m} className="w-full shrink-0 truncate text-dim-200" title={line}><b className={m === 'loading' ? 'text-amber-300' : 'text-blue-300'}>{m === 'loading' ? '선적' : '양하'}</b> {line}</div>;
+            })}
+          </div>
+          <div className={`lsc-tables fs-keep flex-1 min-h-0 overflow-auto space-y-1 leading-tight ${has45All ? 'text-sm2' : 'text-base'}`}>{/* 4.24: 별첨 표는 그림처럼 4.22-04 글자(fs-keep) — «크게»에서 18px 로 키우면 25% 칸·폰 시트에서 «106/106» 이 칸을 넘었다(R34 실측). 머리·막대·요약·검수원·합계는 글자 모드를 따른다 */}
             {modes.map(m => {
               const L = legendLiveOf(boardContainers[m], m, voyage[m]?.completed);
               if (!L.n) return null;
@@ -2555,7 +2696,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
               );
             })}
           </div>
-        );
+        </>);
       })()}
       {/* 작업 중 검수원 */}
       <div className="flex items-center gap-1 flex-wrap min-h-[18px]">
@@ -2568,7 +2709,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
           <span className="text-2xs text-dim-500">작업 중 검수원 없음</span>
         )}
       </div>
-      <div className="flex items-center gap-2 pt-1.5 border-t border-line text-2xs flex-wrap">
+      <div className="flex items-center gap-2 pt-1.5 border-t border-line text-2xs flex-wrap" data-board-foot="1">{/* 4.24: 보드 행 아래 합계(작업량 완료/전체) — 회귀 R34 ④ 가 «NaN» 을 여기서 잰다 */}
         <span className="text-emerald-300 font-black mono">{v.totalDone}</span>
         <span className="text-dim-400">/{v.totalAll} ({pct}%)</span>
         <div className="flex-1"/>
@@ -2632,7 +2773,7 @@ function BroadcastComposer({ inspector, owner = false }) {   // 2.05-07: owner �
 
 function MiniBar({ label, color, stats }) {
   // V9.57(I4): 진행률 100% 클램프 — done이 모수 교집합으로 제한됐어도 표시 안전망 유지
-  const pct = stats.total > 0 ? Math.min(100, Math.round((stats.done / stats.total) * 100)) : 0;
+  const pct = pctOf(stats.done, stats.total);   // 4.24: 한 벌(pctOf)
   const map = {
     blue: { tag: 'bg-blue-900/60 text-blue-200', bar: 'bg-blue-500' },
     amber: { tag: 'bg-amber-900/60 text-amber-200', bar: 'bg-amber-500' },
@@ -2645,10 +2786,10 @@ function MiniBar({ label, color, stats }) {
       </div>
       <span className="text-dim-300 w-16 text-right">{stats.done}/{stats.total}</span>
       {/* V9.57(I4): 모수 밖 완료(추가컨 등)는 진행률에 안 섞고 따로 알린다 */}
-      {stats.extra > 0 && <span className="text-violet-300 text-right" title="리스트(모수) 밖에서 완료 처리된 컨테이너 — 추가컨·리스트 교체 잔재 등">+{stats.extra} 초과</span>}
+      {stats.extra > 0 && <span className="text-violet-300 text-right whitespace-nowrap" title="리스트(모수) 밖에서 완료 처리된 컨테이너 — 추가컨·리스트 교체 잔재 등">+{stats.extra} 초과</span>}
       {stats.forecastEdi
-        ? <span className="text-orange-300 text-right" title="EDI 컨번호가 리스트와 하나도 일치하지 않음 — 예상(프리스토우) EDI. 확정 EDI 대기.">예상EDI</span>
-        : stats.missing > 0 && <span className="text-red-400 w-12 text-right">누락 {stats.missing}</span>}
+        ? <span className="text-orange-300 text-right whitespace-nowrap" title="EDI 컨번호가 리스트와 하나도 일치하지 않음 — 예상(프리스토우) EDI. 확정 EDI 대기.">예상EDI</span>
+        : stats.missing > 0 && <span className="text-red-400 min-w-[3rem] text-right whitespace-nowrap">누락 {stats.missing}</span>}{/* 4.24: «크게»에서 «누락 59» 가 두 줄로 접혀 막대 줄을 밀었다 — 한 줄로 */}
     </div>
   );
 }
@@ -2664,7 +2805,10 @@ function timeAgo(ts) {
 function computeStats(section, mode, shiftSet) {   // 2.89-06
   // V7.40: 평택분 판정을 모드별로 정확히 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   //   이전: POL∨POD 평택이면 카운트 → 양하 EDI에서 평택발 타항행 컨까지 평택분으로 잡혀 과대 집계.
-  if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0 };
+  //  ★ 4.24 (NaN 수리) — 구역이 없을 때도 아래 끝 줄과 **같은 모양**을 돌려준다. 종전엔 workTotal·workDone 이 없어
+  //    voyageStats 의 totalDone·totalAll 이 undefined + 수 = NaN 이 됐다(한쪽 구역 없는 항차 — 사본 17항차 중 11항차):
+  //    「전체 확인」 «NaN / NaN대» · 보드 카드 하단 «NaN /NaN (0%)». 합산하는 쪽(voyageStats·total·LiveShipCard)은 이 값만 더한다 — 판정은 여기 한 곳.
+  if (!section) return { total: 0, done: 0, workTotal: 0, workDone: 0, extra: 0, ptk: 0, matched: 0, missing: 0, forecastEdi: false, planSlots: 0 };
   const ediContainers = section.ediContainers || {};
   const records = section.records || {};
   const completed = section.completed || {};
@@ -3039,18 +3183,118 @@ export function EquipReportBoard({ board, capped = false }) {
 
 // ── V9.19-02: 접이식 항목 래퍼 — 대시보드 항목을 버튼으로 열고 닫는다 ─────────
 //   상단 바로가기(jumpSec)가 열림 상태를 켜고 스크롤한다. 헤더 44px 터치 타깃.
-function Fold({ id, title, open, onToggle, children }) {
+function Fold({ id, title, open, onToggle, children, danger = false }) {   // 4.24: danger — 위험 구역 항목(빨간 테두리)
   return (
-    <div id={'sec-' + id} className="scroll-mt-16">
-      <button onClick={onToggle}
+    <div id={'sec-' + id} className="scroll-mt-16" data-fold={id}>
+      <button onClick={onToggle} aria-expanded={!!open}
         className={`w-full flex items-center justify-between px-3 rounded-btn border text-left ${
-          open ? 'bg-ink-800/80 border-line-strong' : 'bg-ink-900 border-line hover:border-line-strong'}`}
+          danger ? 'border-red-700/70 bg-red-950/30 hover:bg-red-900/40' : open ? 'bg-ink-800/80 border-line-strong' : 'bg-ink-900 border-line hover:border-line-strong'}`}
         style={{ minHeight: 44 }}>
-        <span className="text-sm2 font-bold text-dim-100 truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight tx-lg:py-1">{title}</span>{/* 4.23 2차 «크게»: «…» 로 자르지 않고 두 줄 */}
+        <span className={`text-sm2 font-bold truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight tx-lg:py-1 ${danger ? 'text-red-200' : 'text-dim-100'}`}>{title}</span>{/* 4.23 2차 «크게»: «…» 로 자르지 않고 두 줄 */}
         <span className="text-dim-400 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
       </button>
       {open && <div className="mt-2">{children}</div>}
     </div>
+  );
+}
+
+// ── 4.24 수석 상황판 조각 ─────────────────────────────────────────────
+//  막대 % 한 벌 — MiniBar(보드 행) · LiveShipCard 아래 합계 · 폰 카드가 같은 식으로 센다(100% 클램프 V9.57 I4).
+export function pctOf(done, total) { return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0; }
+//  그 항차의 가장 늦은 완료 시각(양하·선적) — 보드에 올리는 «30분 안에 완료» 판정과 폰 카드 «최근 완료 N분 전» 이 같이 쓴다.
+export function lastCompletedAt(voyage) {
+  let t = 0;
+  for (const m of ['discharge', 'loading']) for (const r of Object.values(voyage?.[m]?.completed || {})) if (r && r.at > t) t = r.at;
+  return t;
+}
+//  항차 표기 «양하 / 선적» — 보드 카드 머리·폰 카드·폰 시트 머리 한 벌(종전 LiveShipCard 안 식 그대로).
+export function voyPairOf(info) {
+  const d = info?.voy_d, l = info?.voy_l, vv = info?.voy;
+  if (d && l && d !== l) return `${d} / ${l}`;
+  return d || l || vv || '';
+}
+//  보드 통계 칸 «한 줄 요약» — 별첨 표와 같은 L(legendLiveOf) 에서: 선사별 · 화물 종류(일반 밖) · 규격별 계(20'·40'·45' — 별첨3 계 열과 같은 수).
+export function compactLegendLine(L) {
+  const parts = [];
+  for (const [k, e] of L.carriers || []) parts.push(`${k} ${e.total.done}/${e.total.n}`);
+  for (const [k, e] of L.cargos || []) if (k !== '일반') parts.push(`${k} ${e.total.done}/${e.total.n}`);
+  for (const sz of ['20', '40', '45']) {
+    const f = L.fe?.[sz]; if (!f) continue;
+    const n = f.F.n + f.E.n; if (!n) continue;
+    parts.push(`${sz}' ${f.F.done + f.E.done}/${n}`);
+  }
+  return parts.join(' · ');
+}
+//  창을 여는 문 / 화면을 옮기는 문 — 접힘(Fold) 머리와 같은 규격(높이 44 · 같은 글자). 종전 소유자 메뉴 «👥 인원 관리» 단추와 같은 모양.
+function DoorBtn({ id, title, sub = '', onClick, label = '창 열기 ▶' }) {
+  return (
+    <button type="button" onClick={onClick} data-door={id}
+      className="w-full flex items-center justify-between gap-2 px-3 py-1 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-left"
+      style={{ minHeight: 44 }}>
+      <span className="min-w-0">
+        <span className="block text-sm2 font-bold text-dim-100 tx-lg:leading-tight">{title}</span>
+        {sub && <span className="block text-xs text-dim-400">{sub}</span>}
+      </span>
+      <span className="text-dim-400 text-xs shrink-0 ml-2">{label}</span>
+    </button>
+  );
+}
+//  관리 묶음 문 — 아이콘 · 이름(크게) · 안에 든 것 · 오른쪽 숫자/표시. 편집(주의)은 빨간 테두리.
+function GroupDoor({ g, on, onClick, wide }) {
+  return (
+    <button type="button" onClick={onClick} aria-expanded={!!on} data-chief-group={g.id}
+      className={`lift3 w-full flex items-center gap-3 text-left rounded-btn border-2 px-3 py-2 ${g.danger
+        ? `border-red-700/70 ${on ? 'bg-red-950/40' : 'bg-red-950/20'}`
+        : on ? 'border-emerald-500/80 bg-ink-850' : 'border-ink-700 bg-ink-900'}`}
+      style={{ minHeight: 'calc(var(--tap) + 12px)' }}>
+      <span className="fold-ico" aria-hidden="true">{g.ico}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-base font-black ${g.danger ? 'text-red-200' : 'text-dim-100'}`}>{g.name}</span>
+        <span className="block text-xs text-dim-400 leading-snug break-keep">{g.sub}</span>{/* 낱말 가운데서 안 끊기게(«베이매트릭\n스») */}
+      </span>
+      <span className="text-sm2 text-dim-400 whitespace-nowrap shrink-0">{g.badge}</span>
+      <span className="text-dim-400 text-xs shrink-0" aria-hidden="true">{wide ? '▶' : on ? '▲' : '▼'}</span>
+    </button>
+  );
+}
+//  폰 카드의 막대 한 줄 — 양하 파랑 · 선적 호박(항차 화면 seg 와 같은 색 이름표). 숫자는 MiniBar 와 같은 stats.done/total.
+function PhoneBar({ kind, stats }) {
+  const lod = kind === 'loading';
+  return (
+    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 mt-1.5">
+      <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} text-xs font-black px-2 leading-5`}>{lod ? '선적' : '양하'}</span>
+      <div className="xp-bar xp-sm"><div className={`xp-fill ${lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pctOf(stats.done, stats.total)}%` }} /></div>
+      <span className="mono text-sm font-black text-dim-100 whitespace-nowrap">{stats.done}<span className="text-xs text-dim-400 font-bold">/{stats.total}</span></span>
+    </div>
+  );
+}
+//  폰 상황판 카드 — 배 한 척. 누르면 그 배만 전체화면 시트(onOpen). 같은 재료(voyageStats 행 · activeByVoyage · lastCompletedAt).
+function PhoneShipCard({ v, workers = [], departed = false, lastAt = 0, onOpen }) {
+  const ago = (t) => { if (!t) return ''; const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 ${m % 60}분 전`; };
+  const berth = String(v.info?.berth || '').trim();
+  return (
+    <button type="button" onClick={onOpen} data-phone-ship={v.key}
+      className={`ship-card lift3 w-full text-left rounded-btn border-2 border-ink-700 bg-ink-900 px-3 py-2 ${departed ? 'opacity-60' : ''}`}>
+      <div className="flex items-baseline gap-2 min-w-0">
+        {workers.length > 0 && <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse shrink-0 self-center" aria-hidden="true" />}
+        <span className="text-xl font-black text-dim-100 shrink-0">{v.info.vsl}</span>
+        <span className="text-xs text-dim-300 truncate min-w-0">{voyPairOf(v.info)}{berth ? ` · ${berth}` : ''}</span>
+        {departed && <span className="text-2xs bg-ink-750 text-dim-200 px-1.5 py-0.5 rounded font-bold shrink-0">⚓ 출항</span>}
+        <span className="ml-auto text-dim-400 shrink-0" aria-hidden="true">▸</span>
+      </div>
+      {v.dis.total > 0 && <PhoneBar kind="discharge" stats={v.dis} />}
+      {v.loa.total > 0 && <PhoneBar kind="loading" stats={v.loa} />}
+      {v.dis.total === 0 && v.loa.total === 0 && <div className="text-xs text-dim-400 mt-1.5">평택분 자료 대기</div>}
+      {v.shift && v.shift.n > 0 && <div className="text-xs text-sky-300 font-bold mt-1">◆ 시프팅 {v.shift.n} — 내림 {v.shift.out}/{v.shift.n} · 실음 {v.shift.in}/{v.shift.n}</div>}
+      <div className="flex items-center gap-1.5 flex-wrap mt-1.5 text-xs">
+        {workers.length > 0 ? workers.map((w) => (
+          <span key={w.name} className="inline-flex items-center gap-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 font-bold px-1.5 rounded-full">
+            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" aria-hidden="true" />{w.name}
+          </span>
+        )) : <span className="text-dim-400">작업 중 검수원 없음</span>}
+        <span className="ml-auto text-dim-400 whitespace-nowrap">{lastAt ? `최근 완료 ${ago(lastAt)}` : '완료 기록 없음'}</span>
+      </div>
+    </button>
   );
 }
 
