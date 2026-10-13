@@ -42,7 +42,7 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
         <div className="shrink-0 bg-ink-950/95 border-t border-line px-4 py-3 flex items-center gap-3">
           <div className="min-w-0 flex-1">
             {lines.map((line, i) => (
-              <div key={i} className={`${i === 0 ? 'text-[15px] font-black text-white' : 'text-xs2 text-dim-200'} leading-snug truncate`}>
+              <div key={i} className={`${i === 0 ? 'text-base font-black text-white' : 'text-xs2 text-dim-200'} leading-snug truncate`}>
                 {line}
               </div>
             ))}

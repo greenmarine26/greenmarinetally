@@ -603,9 +603,9 @@ export default function App() {
             onClose={handleCloseGreeting}
           />
         )}
-        <footer className="text-center text-[11px] text-dim-500 pb-8 pt-2 leading-relaxed lg:pb-1.5 lg:pt-0.5 lg:shrink-0">
-          © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
-          <span className="opacity-70">{APP_VERSION}</span>
+        {/* 4.23: 판 번호는 로그인 제목에 크게 한 번 — 바닥글에서는 뺐다(한 화면에 두 번이었다). */}
+        <footer className="text-center text-xxs text-dim-500 pb-8 pt-2 leading-relaxed lg:pb-1.5 lg:pt-0.5 lg:shrink-0">
+          © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다
         </footer>
       </div>
     );
@@ -793,9 +793,9 @@ export default function App() {
         <Ferry1700Alert audience="inspector" voyages={voyages} voyageKey={workChoice.voyageKey} />
       )}
 
-      <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">
-        © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
-        <span className="opacity-70">{APP_VERSION}</span>
+      {/* 4.23: 판 번호는 머리띠에 크게 한 번 — 바닥글에서는 뺐다(헤더·바닥글·⋮ 메뉴로 한 화면에 3~4번이었다). */}
+      <footer className="text-center text-xxs text-dim-500 pb-24 pt-4 leading-relaxed">
+        © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다
       </footer>
 
       {showStaffManager && (

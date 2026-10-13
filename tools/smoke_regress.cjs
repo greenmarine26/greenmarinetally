@@ -2333,6 +2333,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     }
   }
 
+  // ── R33 ───────────────────────────────────────────────────────────────
+  //  4.23 — 글자 두 모드(보통·크게)와 머리띠 폰·컴 배치. 크로뮴으로 실제 그려 잰다 — 검사 본문은 tools/regress_r33_textmode.cjs 한 벌(단독 실행도 된다).
+  await require('./regress_r33_textmode.cjs')({ ROOT, TMP, ok, head, fx, stub });
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

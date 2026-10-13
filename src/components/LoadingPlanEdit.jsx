@@ -174,7 +174,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
   );
 
   const sideExtra = (
-    <div style={{ padding: '8px 10px', borderTop: '1px solid #334155', fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
+    <div style={{ padding: '8px 10px', borderTop: '1px solid #334155', fontSize: 'var(--fs-xxs, 11px)', color: '#94a3b8', lineHeight: 1.6 }}>
       <b style={{ color: '#c4b5fd' }}>컨펌용 플랜편집</b><br />
       <b style={{ color: '#e2e8f0' }}>[초안 저장]</b>은 보관만 합니다.<br />
       <b style={{ color: '#e2e8f0' }}>[확정]</b>을 눌러야 검수앱 선적 플랜이 됩니다.<br />

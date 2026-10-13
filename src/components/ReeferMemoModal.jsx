@@ -239,7 +239,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
         <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <div className="flex items-center gap-2">
             <Snowflake className="w-4 h-4 text-cyan-400"/>
-            <span className="font-bold text-cyan-200 text-[14px]">리퍼 온도 확인</span>
+            <span className="font-bold text-cyan-200 text-sm">리퍼 온도 확인</span>
             <span className="text-xxs text-dim-400">{list.length}대</span>
           </div>
           <button onClick={() => onClose?.(false)} className="text-dim-400 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
@@ -249,7 +249,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
           <div className="p-4 space-y-2">
             <button onClick={() => camRef.current?.click()} disabled={!!busy}
               className="w-full text-left px-4 py-3 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 border border-cyan-700/40 disabled:opacity-50" style={{ minHeight: 56 }}>
-              <span className="text-[14px] font-bold text-cyan-100 flex items-center gap-2">
+              <span className="text-sm font-bold text-cyan-100 flex items-center gap-2">
                 {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
                 {busy === 'photo' ? '읽는 중…' : '검수 수기 리스트 촬영'}
               </span>
@@ -257,7 +257,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             </button>
             <button onClick={() => applyAll()} disabled={!!busy || noBase}
               className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
-              <span className="text-[14px] font-bold text-dim-100">세팅온도 채우기</span>
+              <span className="text-sm font-bold text-dim-100">세팅온도 채우기</span>
               <span className="block text-xxs text-dim-300 mt-0.5">
                 {noBase
                   ? '리스트에 세팅온도가 없습니다 — 채울 기준이 없습니다'
@@ -266,7 +266,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             </button>
             <button onClick={() => setStep('edit')} disabled={!!busy}
               className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
-              <span className="text-[14px] font-bold text-dim-100">수기 입력</span>
+              <span className="text-sm font-bold text-dim-100">수기 입력</span>
               <span className="block text-xxs text-dim-300 mt-0.5">목록을 열어 EDI와 다른 컨만 직접 고칩니다</span>
             </button>
             <div className="text-right">

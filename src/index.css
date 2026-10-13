@@ -93,6 +93,62 @@
   color-scheme: light;
 }
 
+/* ══════════════════════════════════════════════════════════
+   ★ TallyOne 4.23 — 글자 두 모드 «보통 / 크게» (검수사 2026-10-12)
+     «수석들이 노안이 심한 사람이 많습니다. 두가지 모드로 했으면 합니다.»
+     불편 — «한 화면에 항목이 너무 많다 · 글자가 작아 안 보인다 · 어디에 뭐가 있는지 찾기 어렵다».
+
+   밝기(위 data-bright)와 같은 수법이다 — `<html data-text="large">` 하나로 아래 변수가 통째로 갈린다.
+   tailwind.config.js 의 글자 토큰(text-3xs … text-4xl)과 이 파일의 부품(.bdg·.hud-tab·.chip-v2·.pop-btn …)이 이 변수만 읽는다.
+   켜고 끄는 곳은 utils.applyTextSize 한 곳(기기마다 따로 — localStorage, 밝기와 같다).
+
+   · 보통 = 4.22-04 보다 **한 단계만**(3xs 9→10 · 2xs 10→11 · xxs 11→12). 나머지는 4.22-04 그대로다.
+     그 이상 올리면 항차 화면의 촘촘한 줄이 넘친다 — 노안 대응은 «크게»가 맡는다.
+   · 크게 = 보통보다 +2px(본문 sm 16 · 보조 xs 14), 터치 최소 44 → 48, 칩 40 → 44.
+   · 기본 키(xs·sm·base…)는 rem 으로 둔다 — 4.22-04 의 Tailwind 기본값이 rem 이었다(폰의 글꼴 크기 설정을 종전처럼 따라간다).
+   ⚠ 수석 보드 베이 제목(boardTitlePx)은 인라인 px 라 모드와 무관하다 — 검수사 규칙(«확대 축소에 상관없이 크게»).
+   ⚠ 그림과 종이는 바뀌면 안 된다 — 아래 `.fs-keep`(그림 칸)과 `@media print`(종이)가 4.22-04 값으로 되돌린다.
+   ══════════════════════════════════════════════════════════ */
+:root {
+  --fs-3xs: 10px;  --fs-2xs: 11px;  --fs-xxs: 12px;  --fs-xs2: 12px;  --fs-sm2: 13px;
+  --fs-xs: .75rem; --fs-sm: .875rem; --fs-base: 1rem; --fs-lg: 1.125rem; --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem; --fs-3xl: 1.875rem; --fs-4xl: 2.25rem;
+  --fs-bdg: 11px;  --fs-bdg-pc: 10px;  --fs-tab: 11px;  --fs-tab-pc: 14px;  --fs-chip: 13px;  --fs-chip-pc: 12px;
+  --fs-btn: 15px;  --fs-btn-sm: 13px;  --fs-seg: 16px;  --fs-seg-pc: 15px;  --fs-pill: 12px;  --fs-count: 14px;  --fs-eta: 17px;
+  --fs-drop: 15px; --fs-step: 18px;   --fs-mood: 11px;
+  --tap: 44px;     --tap-chip: 40px;  --tap-chip-pc: 36px;  --tap-pop-sm: 38px;
+}
+:root[data-text="large"] {
+  --fs-3xs: 12px;  --fs-2xs: 13px;  --fs-xxs: 14px;  --fs-xs2: 14px;  --fs-sm2: 15px;
+  --fs-xs: .875rem; --fs-sm: 1rem; --fs-base: 1.125rem; --fs-lg: 1.25rem; --fs-xl: 1.375rem;
+  --fs-2xl: 1.625rem; --fs-3xl: 2rem; --fs-4xl: 2.375rem;
+  --fs-bdg: 13px;  --fs-bdg-pc: 12px;  --fs-tab: 13px;  --fs-tab-pc: 16px;  --fs-chip: 15px;  --fs-chip-pc: 14px;
+  --fs-btn: 17px;  --fs-btn-sm: 15px;  --fs-seg: 18px;  --fs-seg-pc: 17px;  --fs-pill: 14px;  --fs-count: 16px;  --fs-eta: 19px;
+  --fs-drop: 17px; --fs-step: 20px;   --fs-mood: 13px;
+  --tap: 48px;     --tap-chip: 44px;  --tap-chip-pc: 40px;  --tap-pop-sm: 44px;
+}
+/*  그림 칸 — 베이 격자·FitBox 안 그림은 4.22-04 글자 그대로(모드 무관). 커지면 그림의 자연 폭이 늘어 FitBox 배율이 줄고
+    정작 칸 안 컨번호(인라인 px)가 작아진다. 변수는 물려받으므로 그림의 뿌리 하나에만 달면 그 안 전부가 고정된다. */
+.fs-keep {
+  --fs-3xs: 9px;   --fs-2xs: 10px;  --fs-xxs: 11px;  --fs-xs2: 12px;  --fs-sm2: 13px;
+  --fs-xs: .75rem; --fs-sm: .875rem; --fs-base: 1rem; --fs-lg: 1.125rem; --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem; --fs-3xl: 1.875rem; --fs-4xl: 2.25rem;
+  --fs-bdg: 11px;  --fs-bdg-pc: 10px;  --fs-chip: 13px;  --fs-chip-pc: 12px;  --fs-pill: 12px;
+}
+/*  종이 — 인쇄는 검수사가 확정한 규격이다. 어느 모드에서 인쇄해도 4.22-04 글자 그대로 나간다(앱 화면 그대로 찍는 인쇄 — 엠티 찾기 등).
+    (새 창으로 여는 출력물 — 검수 리스트·카고플랜·베이 상세 — 은 이 CSS 를 안 싣는다. 그쪽은 원래 제 px 이다.) */
+@media print {
+  :root, :root[data-text="large"] {
+    --fs-3xs: 9px;   --fs-2xs: 10px;  --fs-xxs: 11px;  --fs-xs2: 12px;  --fs-sm2: 13px;
+    --fs-xs: .75rem; --fs-sm: .875rem; --fs-base: 1rem; --fs-lg: 1.125rem; --fs-xl: 1.25rem;
+    --fs-2xl: 1.5rem; --fs-3xl: 1.875rem; --fs-4xl: 2.25rem;
+    --fs-bdg: 11px;  --fs-bdg-pc: 10px;  --fs-tab: 11px;  --fs-tab-pc: 14px;  --fs-chip: 13px;  --fs-chip-pc: 12px;
+    --fs-btn: 15px;  --fs-btn-sm: 13px;  --fs-seg: 16px;  --fs-seg-pc: 15px;  --fs-pill: 12px;  --fs-count: 14px;  --fs-eta: 17px;
+    --fs-drop: 15px; --fs-step: 18px;   --fs-mood: 11px;
+    --tap: 44px;     --tap-chip: 40px;  --tap-chip-pc: 36px;  --tap-pop-sm: 38px;
+  }
+}
+
 /* ★ 2.16 — 아이콘 선 굵기 (검수사 시안 V2: «Stroke 1.75px · rounded caps · optical 18px grid»)
    lucide 기본 stroke 는 2px 이라 선이 굵어 투박하다. 1.75 로 낮추고 끝을 둥글게 하면
    같은 아이콘이 확연히 정갈해진다 — 「고급스럽게」의 실체 중 하나가 이것이다.
@@ -186,9 +242,9 @@ svg.lucide {
 .bdg {
   display: inline-flex; align-items: center; gap: 3px;
   height: 22px; padding: 0 7px; border-radius: 6px;
-  font-size: 11px; line-height: 1; white-space: nowrap; flex-shrink: 0;
+  font-size: var(--fs-bdg); line-height: 1; white-space: nowrap; flex-shrink: 0;   /* 4.23: 글자 두 모드 — 11px(크게 13px) */
 }
-@media (min-width: 640px) { .bdg { height: 20px; padding: 0 6px; font-size: 10px; gap: 2px; } }
+@media (min-width: 640px) { .bdg { height: 20px; padding: 0 6px; font-size: var(--fs-bdg-pc); gap: 2px; } }
 
 
 /* ════════════════════════════════════════════════════════════════════
@@ -221,7 +277,7 @@ select:-webkit-autofill {
 /* ★ 3.56 — 미르 기분 표시(검수사 2026-09-22). 얼굴 버튼 왼쪽 위 작은 배지만 여기 둔다.
    4.07 부터 얼굴은 실사 미르 사진 한 칸이고 그 CSS 는 src/components/mirPhotoArt.js 한 벌이 <style id="mirPhotoCss"> 로 넣는다 — 여기(그리고 cone.html)에 같은 규칙을 또 적지 않는다. */
 .mir-mood-badge{ position:absolute; top:-6px; left:-6px; min-width:18px; height:18px; padding:0 3px; border-radius:9px;
-  background:#1a1206; border:1px solid #f59e0b; color:#fde68a; font-size:11px; line-height:16px; text-align:center; pointer-events:none; z-index:1; }
+  background:#1a1206; border:1px solid #f59e0b; color:#fde68a; font-size:var(--fs-mood); line-height:16px; text-align:center; pointer-events:none; z-index:1; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ★ TallyOne 4.00 — 게임 화면 같은 조각들 (검수사 2026-10-04
@@ -244,8 +300,8 @@ select:-webkit-autofill {
 .hud-tab {
   position: relative; flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  min-height: 54px; padding: 6px 2px 5px; border-radius: 18px; border: 2px solid transparent;
-  font-size: 11px; line-height: 1.15; font-weight: 800; white-space: nowrap;
+  min-height: calc(var(--tap) + 10px); padding: 6px 2px 5px; border-radius: 18px; border: 2px solid transparent;   /* 4.23: 54px(크게 58px) */
+  font-size: var(--fs-tab); line-height: 1.15; font-weight: 800; white-space: nowrap;
   color: rgb(var(--dim-300)); background: transparent;
   transition: transform .14s ease, background-color .14s ease, box-shadow .14s ease, color .14s ease;
 }
@@ -261,16 +317,35 @@ select:-webkit-autofill {
 /* 출력 단추는 «켜짐» 대신 늘 호박색 — 탭이 아니라 문(창을 여는 단추)이라는 것이 한눈에 보이게 */
 .hud-tab.hud-door { color: rgb(var(--st-lodHi)); }
 .hud-tab.hud-door .hud-ico { filter: drop-shadow(0 0 6px rgb(var(--st-lod) / .55)); }
+/* 4.23 2차 — 독 높이(베이 탭 도구줄이 독 밑에 붙는 자리 — BayPlan sticky top = 머리띠 --hdr-h + 이것 + 4px).
+   테두리 2×2 + 안쪽 여백 5×2(≤389px 3×2) + 칸 최소 높이(--tap + 10 · 700px 이상 --tap + 4). --tap 이 글자 모드를 따른다(보통 44 · 크게 48). */
+:root { --dock-h: calc(var(--tap) + 24px); }
+@media (max-width: 389px) { :root { --dock-h: calc(var(--tap) + 20px); } }
+@media (min-width: 700px) { :root { --dock-h: calc(var(--tap) + 18px); } }
 /* 좁은 폰(≤389px) — 탭 여섯 칸에 «작업 시작»이 들어가도록 글자·틈을 줄인다 */
 @media (max-width: 389px) {
   .hud-dock { gap: 2px; padding: 3px; }
-  .hud-tab { font-size: 10px; letter-spacing: -.04em; padding: 6px 0 5px; }
+  .hud-tab { font-size: calc(var(--fs-tab) - 1px); letter-spacing: -.04em; padding: 6px 0 5px; }
 }
 @media (max-width: 339px) {
-  .hud-tab { font-size: 9px; letter-spacing: -.06em; }
+  .hud-tab { font-size: calc(var(--fs-tab) - 1px); letter-spacing: -.06em; }   /* 4.23: 9 → 10px(크게 12px) */
+}
+/* 4.23 크게 — 390px 폰에서 13px 여섯 칸(«작업 시작»)이 한 줄에 들도록 자간만 좁힌다(디자인 검증 preview_textmode_check) */
+@media (max-width: 420px) { :root[data-text="large"] .hud-tab { letter-spacing: -.04em; } }
+/* 4.23 2차(감사) — 크게 + 좁은 폰. 위 크게 규칙은 선택자가 더 세서 ≤339 의 −.06em 을 덮었다(340px 이하 «작업 시작» 넘침).
+   같은 세기로 **뒤에** 둔다(실측 «작업 시작» 글자 폭 ≤ 칸 폭) — 399px 이하 자간 −.06em(390px 13px 51.0 ≤ 51),
+   351px 이하 글자 한 단계 더(크게 11px — 340px 43 ≤ 45), 329px 이하 한 단계 더(10px — 보통 모드와 같은 크기, 320px 39 ≤ 42). */
+@media (max-width: 399px) { :root[data-text="large"] .hud-tab { letter-spacing: -.06em; } }
+@media (max-width: 351px) { :root[data-text="large"] .hud-tab { font-size: calc(var(--fs-tab) - 2px); } }
+@media (max-width: 329px) { :root[data-text="large"] .hud-tab { font-size: calc(var(--fs-tab) - 3px); } }
+/* 4.23 3차(재확인 실측 — 320px · 크게 · 조회만 + 1호기 · SWMM 에서 ⋮ 오른끝 323px, 페이지가 가로로 4px 밀렸다. 4.22-04 는 선박 코드를 «SWM…» 로 잘랐다):
+   360px 미만 폰 + 크게는 머리띠 **줄만** 칩을 4.22-04 크기(40px)로, 단추 사이를 2px 로. 머리띠 밑에 뜨는 창(호기 고르기·화면 설정)은 이 줄 밖이라 그대로다. */
+@media (max-width: 359px) {
+  :root[data-text="large"] [data-hdr-row] { --tap-chip: 40px; }
+  :root[data-text="large"] [data-hdr-right] { gap: 2px; }
 }
 @media (min-width: 700px) {
-  .hud-tab { flex-direction: row; gap: 8px; min-height: 48px; font-size: 14px; letter-spacing: normal; padding: 6px 10px; }
+  .hud-tab { flex-direction: row; gap: 8px; min-height: calc(var(--tap) + 4px); font-size: var(--fs-tab-pc); letter-spacing: normal; padding: 6px 10px; }
   .hud-tab .hud-ico { font-size: 20px; }
 }
 
@@ -282,20 +357,20 @@ select:-webkit-autofill {
 }
 .seg-btn {
   flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 50px; padding: 6px 10px; border-radius: 18px; border: 2px solid transparent;
-  font-size: 16px; font-weight: 900; color: rgb(var(--dim-300)); background: transparent;
+  min-height: calc(var(--tap) + 6px); padding: 6px 10px; border-radius: 18px; border: 2px solid transparent;   /* 4.23: 50px(크게 54px) */
+  font-size: var(--fs-seg); font-weight: 900; color: rgb(var(--dim-300)); background: transparent;
   transition: transform .14s ease, box-shadow .14s ease, background-color .14s ease;
 }
 .seg-btn:active { transform: translateY(2px) scale(.98); }
-@media (min-width: 640px) { .seg-btn { min-height: 44px; font-size: 15px; } }
+@media (min-width: 640px) { .seg-btn { min-height: var(--tap); font-size: var(--fs-seg-pc); } }
 .seg-btn.on-dis { color: #fff; background: linear-gradient(180deg, #4f8ff7, #1d4ed8); border-color: #1e3a8a; box-shadow: 0 3px 0 #1e3a8a, 0 0 20px rgb(59 130 246 / .38); text-shadow: 0 1px 0 rgb(0 0 0 / .3); }
 .seg-btn.on-lod { color: #fff; background: linear-gradient(180deg, #f6ae2d, #c2670a); border-color: #7c3f06; box-shadow: 0 3px 0 #7c3f06, 0 0 20px rgb(245 158 11 / .38); text-shadow: 0 1px 0 rgb(0 0 0 / .3); }
 
 /* ── 눌리는 큰 단추(작업 보고·마감 점검·올리기 등) — 바닥이 두꺼워 눌리면 내려앉는다 ── */
 .pop-btn {
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 52px; padding: 10px 16px; border-radius: 18px; border: 2px solid rgb(0 0 0 / .30);
-  font-size: 15px; font-weight: 900; letter-spacing: .01em; color: #fff; text-shadow: 0 1px 0 rgb(0 0 0 / .35);
+  min-height: calc(var(--tap) + 8px); padding: 10px 16px; border-radius: 18px; border: 2px solid rgb(0 0 0 / .30);   /* 4.23: 52px(크게 56px) */
+  font-size: var(--fs-btn); font-weight: 900; letter-spacing: .01em; color: #fff; text-shadow: 0 1px 0 rgb(0 0 0 / .35);
   box-shadow: 0 5px 0 rgb(0 0 0 / .34), 0 10px 18px rgb(0 0 0 / .22);
   transition: transform .1s ease, box-shadow .1s ease, filter .15s ease;
 }
@@ -309,15 +384,15 @@ select:-webkit-autofill {
 
 /* ── 필터 칩(전체·미완·완료…) — 눌린 칩이 호박색으로 «켜진다» ── */
 .chip-v2 {
-  display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 14px; border-radius: 999px;
-  font-size: 13px; font-weight: 800; white-space: nowrap; color: rgb(var(--dim-200));
+  display: inline-flex; align-items: center; gap: 4px; height: var(--tap-chip); padding: 0 14px; border-radius: 999px;   /* 4.23: 40px(크게 44px) */
+  font-size: var(--fs-chip); font-weight: 800; white-space: nowrap; color: rgb(var(--dim-200));
   background: rgb(var(--ink-850)); border: 2px solid rgb(var(--ink-700)); box-shadow: 0 3px 0 rgb(var(--ink-950));
   transition: transform .1s ease, box-shadow .1s ease, background-color .12s ease;
 }
 .chip-v2:active { transform: translateY(2px); box-shadow: 0 1px 0 rgb(var(--ink-950)); }
 .chip-v2.is-on { color: #fff; text-shadow: 0 1px 0 rgb(0 0 0 / .3); background: linear-gradient(180deg, #f6ae2d, #c2670a); border-color: #7c3f06; box-shadow: 0 3px 0 #7c3f06; }
 .chip-v2.is-on.is-cyan { background: linear-gradient(180deg, #22b8cf, #0e7490); border-color: #134e5e; box-shadow: 0 3px 0 #134e5e; }
-@media (min-width: 640px) { .chip-v2 { height: 36px; font-size: 12px; } }
+@media (min-width: 640px) { .chip-v2 { height: var(--tap-chip-pc); font-size: var(--fs-chip-pc); } }
 
 /* ── 영웅 카드(항차 현황) — 모드 색 테두리 + 경험치 바(10칸) ── */
 .hero-card {
@@ -354,14 +429,14 @@ select:-webkit-autofill {
 .quest-card.is-todo { border-color: rgb(var(--st-lod) / .55); }
 .step-badge {
   display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 13px;
-  font-size: 18px; font-weight: 900; color: rgb(var(--dim-100));
+  font-size: var(--fs-step); font-weight: 900; color: rgb(var(--dim-100));
   background: rgb(var(--ink-750)); border: 2px solid rgb(var(--ink-700)); box-shadow: 0 3px 0 rgb(var(--ink-950));
 }
 .is-done > .quest-head .step-badge { background: rgb(var(--act)); color: rgb(var(--act-on)); border-color: rgb(var(--act-dn)); }
 .drop-zone {   /* «여기를 눌러 파일 고르기» 큰 칸 — 라벨 안에 숨은 파일 입력을 감싼다 */
   display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;
   min-height: 64px; padding: 10px 14px; border-radius: 18px; text-align: center;
-  font-size: 15px; font-weight: 900; color: rgb(var(--dim-100));
+  font-size: var(--fs-drop); font-weight: 900; color: rgb(var(--dim-100));
   border: 2px dashed rgb(var(--ink-700)); background: rgb(var(--ink-850) / .7);
   transition: transform .12s ease, border-color .12s ease, background-color .12s ease;
 }
@@ -369,7 +444,7 @@ select:-webkit-autofill {
 @media (hover: hover) { .drop-zone:hover { border-color: rgb(var(--act)); background: rgb(var(--act) / .08); } }
 .status-pill {   /* «277대 ✓» «아직 없음» */
   display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px;
-  font-size: 12px; font-weight: 900; white-space: nowrap; border: 2px solid transparent;
+  font-size: var(--fs-pill); font-weight: 900; white-space: nowrap; border: 2px solid transparent;
 }
 .status-ok   { color: rgb(var(--act-soft)); background: rgb(var(--act) / .14); border-color: rgb(var(--act) / .55); }
 .status-todo { color: rgb(var(--st-lodHi)); background: rgb(var(--st-lod) / .14); border-color: rgb(var(--st-lod) / .55); }
@@ -409,7 +484,7 @@ select:-webkit-autofill {
    ⚠ 색은 4.00 과 같은 이름표만 쓴다. 부두 색은 왼쪽 띠·선박 딱지에만 — 양하(파랑)/선적(호박) 막대 색과 겹쳐 읽히지 않게 띠 폭을 좁게 둔다.
    ══════════════════════════════════════════════════════════════════════════ */
 .home-stage { background: radial-gradient(90% 300px at 50% 0, rgb(var(--act) / .10), transparent 72%) no-repeat; }
-.home-count { padding: 5px 10px; font-size: 14px; }
+.home-count { padding: 5px 10px; font-size: var(--fs-count); }
 .ship-card.pier-pctc { --rail: rgb(59 130 246 / .9); }
 .ship-card.pier-pnct { --rail: rgb(139 92 246 / .9); }
 .card-v2.ship-card.is-today { border-color: rgb(var(--act) / .85); box-shadow: inset 6px 0 0 var(--rail, transparent), 0 5px 0 rgb(var(--act-dn) / .9), 0 0 22px rgb(var(--act) / .26); }
@@ -426,7 +501,7 @@ select:-webkit-autofill {
 .ship-card .xp-fill { position: relative; }
 .ship-card .xp-fill::after { content: ""; position: absolute; left: 5px; right: 5px; top: 2px; height: 3px; border-radius: 99px; background: rgb(255 255 255 / .28); }   /* 윤기 한 줄 */
 .status-wait { color: rgb(var(--dim-300)); background: rgb(var(--ink-800)); border-color: rgb(var(--ink-700)); }
-.pop-btn.pop-sm { min-height: 38px; padding: 4px 10px; border-radius: 999px; font-size: 13px; box-shadow: 0 3px 0 rgb(0 0 0 / .34); }
+.pop-btn.pop-sm { min-height: var(--tap-pop-sm); padding: 4px 10px; border-radius: 999px; font-size: var(--fs-btn-sm); box-shadow: 0 3px 0 rgb(0 0 0 / .34); }
 .pop-btn.pop-sm:active { transform: translateY(2px); box-shadow: 0 1px 0 rgb(0 0 0 / .34); }
 .pop-btn.pop-slate.pop-sm { box-shadow: 0 3px 0 rgb(var(--ink-950)); }
 .home-stage .chip-v2 { min-width: 0; overflow: hidden; padding: 0 9px; }
@@ -438,7 +513,7 @@ select:-webkit-autofill {
 /* ── 4.01 예상 작업 시간 줄(작업 시작 화면 맨 위) ── */
 .eta-line { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 18px; border: 2px solid rgb(var(--act) / .55); background: rgb(var(--act) / .08); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
 .eta-ico { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 13px; font-size: 20px; background: rgb(var(--ink-800)); border: 2px solid rgb(var(--act) / .6); box-shadow: 0 3px 0 rgb(var(--ink-950)); }
-.eta-big { font-size: 17px; font-weight: 900; color: rgb(var(--act-soft)); white-space: nowrap; }
+.eta-big { font-size: var(--fs-eta); font-weight: 900; color: rgb(var(--act-soft)); white-space: nowrap; }
 
 /* ── 4.12-01 어느 밝기에서도 흰 글자 — 사진 위·검은 칩 위처럼 바탕이 밝기와 상관없이 어두운 자리에만 쓴다.
    보통의 흰 글자는 text-white 를 쓴다(4단계 흰 바탕에서는 brightLight.css 가 진한 글자로 바꿔 준다). 여기엔 그 규칙이 안 걸린다. ── */

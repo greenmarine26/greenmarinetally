@@ -286,7 +286,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           {(out || dmg.q) && (
             <div className="mt-2 p-2.5 rounded bg-ink-950 select-text">
               {asked && <div className="text-2xs text-dim-300 mb-1 truncate">🗨 {asked}</div>}
-              {out && <div className="text-[15px] leading-relaxed font-semibold text-white whitespace-pre-line">{out}</div>}
+              {out && <div className="text-base leading-relaxed font-semibold text-white whitespace-pre-line">{out}</div>}
               {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 묻는다). 끝은 검수사가(«됐어»·«고마워»). */}
               {follow && !busy && (
                 <div className="mt-2 pt-2 border-t border-line/60" data-mir-follow="1">

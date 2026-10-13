@@ -650,6 +650,15 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   #   검수사 2026-10-08 06:38 «화면을 밝게 하니 입력하는 글자가 보이지 않습니다» · 07:02 «화면 밝기에 따라서 글자색도 바뀌게 했으면 좋겠습니다».
   #   brightLight.css 가 생성기와 같은지(밀리면 새 색 클래스가 어두운 섬이 된다) · 4단계 text-white 규칙 · 입력칸 전수를 본다.
   node tools/smoke_brighttext.cjs . "$BUILT_CSS" || { echo "✗ 글자색 밝기 연동 연막검사 실패 — 배포 금지"; exit 1; }
+  # 4.23: 글자 두 모드(보통·크게) — 토큰 13개가 변수를 읽는지·보통(가장 작은 셋 +1)·크게(+2)·그림/인쇄 4.22-04 고정 값·저장이 막혀도 안 죽는지·미르 «글자 크게»(업무 질문 가로채기 0)·빌드 CSS 에 변수가 살아남았는지.
+  #   검수사 2026-10-12 «수석들이 노안이 심한 사람이 많습니다. 두가지 모드로 했으면 합니다». 화면에 그려 재는 쪽(폰 390 «크게» 머리띠·독·진행 줄·인쇄)은 회귀 기준표 R33(smoke_regress).
+  SMOKE_TM=$(mktemp /dev/shm/hometmp/_smoketm_XXXXXX.cjs)
+  if npx esbuild tools/smoke_textmode_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_TM" --log-level=error; then
+    node tools/smoke_textmode.cjs "$SMOKE_TM" "$BUILT_CSS" || { echo "✗ 글자 두 모드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_TM"; exit 1; }
+    rm -f "$SMOKE_TM"
+  else
+    echo "✗ 글자 두 모드 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_TM"; exit 1
+  fi
   # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
   #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.

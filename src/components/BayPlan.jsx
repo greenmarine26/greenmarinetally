@@ -722,7 +722,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       {/* TallyOne 1.15: **고정 위치 교정** (검수사 신고 2026-08-06 — "스크롤 대상이 아니다. 베이만 스크롤되고
           이 부분은 고정되어야 한다"). sticky 는 걸려 있었지만 `top-0` 이라 앱 헤더(52px)와
           항차 탭 네비(`sticky top-[52px]`, 높이 ≈38px) 뒤로 숨어 안 보였다. 그 아래로 내린다. */}
-      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[124px] sm:top-[118px] z-10 shadow-lg shadow-slate-950/60">
+      {/* 4.23 2차: 고정 124px(폰)·118px(컴) → 머리띠 실제 높이 + 독 높이 + 4px — 글자 «크게»에서 머리띠·독이 커져 독 밑에 5px 깔리던 것 */}
+      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[calc(var(--hdr-h,52px)_+_var(--dock-h,68px)_+_4px)] z-10 shadow-lg shadow-slate-950/60">
         {/* V8.25-06: PC(터치없음)만 +/− 버튼 표시. 폰은 핀치, PC는 버튼+Ctrl휠 */}
         {!IS_TOUCH_DEVICE && (
           <div className="flex items-center bg-ink-800 rounded-pill overflow-hidden">
@@ -1845,7 +1846,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
   };
 
   return (
-    <div className="space-y-1 inline-block min-w-full">
+    <div className="fs-keep space-y-1 inline-block min-w-full">{/* 4.23 fs-keep — 베이 그림(격자·단·열 표시) 글자는 글자 모드와 무관하게 4.22-04 그대로 */}
       {/* 페이지 제목 */}
       {/* ★ 2.91-01 (검수사 «베이넘버는 항상 베이 그림 중간에 위치. 축소하든 확대하든 항상 베이상단 중앙») —
           종전엔 제목이 **바깥 상자 전체 폭** 기준이라 격자가 좁으면 오른쪽으로 밀려 보였다.

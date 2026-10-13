@@ -156,7 +156,7 @@ export function parseNaturalQuery(text) {
     //    둘 다 **그 자리에서 되돌릴 수 있는 것**이라 안전하다(작업표준 2-0-B).
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
-    deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
+    deviceCmd: null,   // { kind:'bright'|'volume'|'text', dir:+1|-1, to:1..4|'off', ask:true } — 4.23 text: to 1 보통 · 2 크게
     startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
     crewSet: null,     // 3.8: { raw, shift, crew:[{no,name}], unknown:[{no,tok}] } — «주간 1호기 김판석 2호기 송제욱» 호기–검수원 등록
@@ -702,8 +702,6 @@ export function parseNaturalQuery(text) {
     const RE_SND_OFF = /(꺼|끄|음소거|조용히\s*해|말\s*하지\s*마)/;
     //  업무 낱말 — 이게 있으면 조작이 아니다. «밝은 색 컨테이너»·«봉인자 어떻게 등록해» 같은 말을 지킨다.
     const RE_WORK = /\d{4}|컨테이너|리퍼|엑스레이|x-?ray|베이|양하|선적|트윈|씰|실번호|봉인|어디서\s*(하|보)|어떻게\s*(하|해)/i;
-    const hasScreen = RE_SCREEN.test(t);
-    const hasSound = RE_SOUND.test(t);
     /*  ★ 2.41-01: «화면» 이라는 낱말 하나로는 조작이 아니다 — **밝기를 어떻게 하라는 의도**가 있어야 한다.
         2.40 은 업무 게이트를 hasScreen 으로 껐다. 그래서 「베이 화면 어디야」·「홈 화면으로 어떻게 가」·
         「수석 화면 볼 수 있어?」 같은 **매뉴얼 질문이 전부 밝기 되묻기로 덮였다.**
@@ -714,27 +712,82 @@ export function parseNaturalQuery(text) {
     //  ⚠ 활용형까지 받는다 — `아프` 로만 잡으면 **«눈이 아파»·«눈이 아픈데» 를 놓친다**(2.40 부터 있던 구멍).
     //    2.40 은 hasScreen 폴백이 우연히 「화면 때문에 눈이 아파」를 받아 줘 가려져 있었다.
     const RE_EYE    = /(눈이?\s*(아프|아파|아퍼|아픈)|눈이?\s*(피로|시려|시린|뻑뻑))/;
-    const brIntent  = RE_UP.test(t) || RE_DOWN.test(t) || RE_BR_CRY.test(t) || RE_EYE.test(t);
-    if (RE_WORK.test(t) && !brIntent && !hasSound) {
+    /*  ★ 4.23 글자 두 모드 — «글자 크게»·«글씨가 작아 안 보여»·«글자 보통으로». **«글자/글씨» 낱말 + 크기 의도**가 같이 있어야 조작이다.
+        «글자 크기 어떻게 바꿔» 같은 방법 질문(어떻게 해)·업무 낱말이 섞이면 조작이 아니다 — 매뉴얼(기능 색인)이 답한다.
+        ⚠ 타이핑 중에도 판정이 돈다 — «글자 작» 처럼 반쯤 친 말은 어느 쪽에도 안 걸린다(작게 = 보통, 작아·작다 = 호소라 크게). */
+    /*  ★ 4.23 2차(감사 반례) —
+          ① 질문은 조작이 아니다 — «기본 글자 크기가 뭐야» 가 글자를 바꿨다. 질문어(뭐야·뭐지·인가요·몇·어떻게·어디·얼마)가 있으면 매뉴얼이 답한다.
+          ② 인쇄물(인쇄·출력·프린트·덱플랜·카고플랜·종이·PDF·엑셀)은 글자 모드와 무관하다 — 바꾸지 않고 «무관합니다» 라고 답한다(print).
+             «인쇄 글자 작아» 에 «바꿨어요» 는 거짓 안내였다.
+          ③ 컨번호·마킹처럼 **실물에 적힌 글자**가 안 보이는 말은 화면 글자가 아니다 — «컨번호 글자 안 보여».
+          ④ «X 말고 Y» 는 뒤 것이 뜻이고, 뜻 낱말이 여럿이면 **마지막 것**이 뜻이다 — «글자 작게 말고 크게» 는 크게(종전 보통).
+          ⑤ 밝기·소리와 같이 시키면 둘 다 한다 — «소리 크게 글자도 크게» · «화면 밝게 하고 글자 크게»(종전 글자만).
+             글자 마디(«글자…크게»)를 떼어 낸 나머지로 아래 밝기·소리 판정을 다시 본다. 글자 마디는 조작이 아니어도 떼어 낸다
+             («글자 원래대로 하는 법 뭐야» 의 «원래대로» 가 밝기를 바꾸지 않게). */
+    const RE_TEXT  = /(글자|글씨|폰트|활자)/;
+    const RE_TX_ANY = /(작게|줄여|보통|원래대로|기본|크게|키워|확대|더\s*크|잘\s*안\s*보|안\s*보|작아|작다|작네)/g;
+    const RE_TX_DNW = /^(작게|줄여|보통|원래대로|기본)$/;
+    const RE_TX_Q   = /(뭐야|뭐지|뭔가|뭐예요|뭐에요|뭡니까|무엇|무슨|인가요|인가\s*[?？]|몇|어떻게|어디|얼마)/;
+    const RE_TX_PRINT = /(인쇄|출력|프린트|덱\s*플랜|카고\s*플랜|종이|pdf|엑셀)/i;
+    const RE_TX_REAL  = /(컨\s*번호|컨번|번호판|마킹|도색|페인트|레터링|라벨|스티커)/;
+    let txCmd = null;
+    let tDev = t;   // 밝기·소리 판정에 쓸 말 — 글자 마디를 뗀 것
+    const mTx = RE_TEXT.exec(t);
+    if (mTx) {
+      const neg = /(말고|아니고|아니라)/.exec(t);
+      const hits = [...t.matchAll(RE_TX_ANY)];
+      //  글자 마디 — 글자 낱말부터 그 뒤 첫 뜻 낱말까지(«말고» 가 있으면 마지막 뜻 낱말까지). 뒤에 없으면 앞의 마지막 뜻 낱말부터 글자 낱말까지.
+      const after = hits.filter((h) => h.index > mTx.index);
+      const before = hits.filter((h) => h.index < mTx.index);
+      let a = mTx.index, b = mTx.index + mTx[0].length;
+      if (after.length) {
+        //  붙어 이어진 뜻 낱말까지 한 마디 — «글자가 작아서 안 보여» 의 «안 보여» 가 밝기 호소로 새지 않게(사이가 3자 이하 · 소리/화면 낱말 없음)
+        let end = neg ? after[after.length - 1] : after[0];
+        if (!neg) {
+          for (let i = 1; i < after.length; i++) {
+            const gap = t.slice(after[i - 1].index + after[i - 1][0].length, after[i].index);
+            if (gap.length <= 3 && !RE_SOUND.test(gap) && !RE_SCREEN.test(gap)) end = after[i]; else break;
+          }
+        }
+        b = end.index + end[0].length;
+      }
+      else if (before.length) { a = before[before.length - 1].index; }
+      tDev = t.slice(0, a) + ' ' + t.slice(b);
+      //  글자의 뜻은 **글자 마디 안**의 마지막 뜻 낱말(«말고» 뒤) — «글자 크게 하고 소리 줄여» 의 «줄여» 는 소리 몫이다
+      const clause = t.slice(a, b);
+      const negC = /(말고|아니고|아니라)/.exec(clause);
+      const last = [...(negC ? clause.slice(negC.index + negC[0].length) : clause).matchAll(RE_TX_ANY)].pop();
+      if (last && !RE_WORK.test(t) && !RE_TX_Q.test(t) && !RE_TX_REAL.test(t)) {
+        txCmd = RE_TX_PRINT.test(t) ? { kind: 'text', print: true } : { kind: 'text', to: RE_TX_DNW.test(last[1].replace(/\s+/g, '')) ? 1 : 2 };
+      }
+    }
+    //  아래 밝기·소리 판정은 글자 마디를 뗀 말(tDev)로 — 글자 낱말이 없으면 tDev === t 라 종전과 같다
+    const hasScreen = RE_SCREEN.test(tDev);
+    const hasSound = RE_SOUND.test(tDev);
+    const brIntent  = RE_UP.test(tDev) || RE_DOWN.test(tDev) || RE_BR_CRY.test(tDev) || RE_EYE.test(tDev);
+    let devCmd = null;
+    if (RE_WORK.test(tDev) && !brIntent && !hasSound) {
       /* 업무 문맥 — 조작으로 보지 않는다 */
     } else if (hasSound) {
-      if (RE_SND_OFF.test(t)) result.deviceCmd = { kind: 'volume', to: 'off' };
-      else if (RE_SND_UP.test(t)) result.deviceCmd = { kind: 'volume', dir: +1 };
-      else if (RE_SND_DN.test(t)) result.deviceCmd = { kind: 'volume', dir: -1 };
-    } else if (RE_UP.test(t) && (hasScreen || !RE_WORK.test(t))) {
-      result.deviceCmd = RE_MAX.test(t) ? { kind: 'bright', to: 4 } : { kind: 'bright', dir: +1 };
-    } else if (RE_DOWN.test(t) && (hasScreen || !RE_WORK.test(t))) {
-      result.deviceCmd = RE_MIN.test(t) ? { kind: 'bright', to: 1 } : { kind: 'bright', dir: -1 };
-    } else if (hasScreen && RE_BR_CRY.test(t)) {
+      if (RE_SND_OFF.test(tDev)) devCmd = { kind: 'volume', to: 'off' };
+      else if (RE_SND_UP.test(tDev)) devCmd = { kind: 'volume', dir: +1 };
+      else if (RE_SND_DN.test(tDev)) devCmd = { kind: 'volume', dir: -1 };
+    } else if (RE_UP.test(tDev) && (hasScreen || !RE_WORK.test(tDev))) {
+      devCmd = RE_MAX.test(tDev) ? { kind: 'bright', to: 4 } : { kind: 'bright', dir: +1 };
+    } else if (RE_DOWN.test(tDev) && (hasScreen || !RE_WORK.test(tDev))) {
+      devCmd = RE_MIN.test(tDev) ? { kind: 'bright', to: 1 } : { kind: 'bright', dir: -1 };
+    } else if (hasScreen && RE_BR_CRY.test(tDev)) {
       //  검수사 원문이 이 형태다 — *«미르야 화면이 어두운데?»*. 되묻지 말고 한 단계 올린다.
       //  ⚠ 2.40-01: 여기를 «어두» 로 넓게 잡으면 안 된다 — 검수사가 「화면 어둡게」를 **치는 도중**
       //    「화면 어두」 에서 걸려 **반대로 밝아진다.** 서술형(어두운·어두워)만 받고 명령형은 위 RE_DOWN 이 받는다.
-      result.deviceCmd = { kind: 'bright', dir: +1 };
-    } else if (RE_EYE.test(t)) {
+      devCmd = { kind: 'bright', dir: +1 };
+    } else if (RE_EYE.test(tDev)) {
       //  ⚠ «눈이 아프다»는 **어두워서인지 눈부셔서인지 모른다.** 지어내지 말고 되묻는다(2-0-D).
       //  ⛔ 2.41-01: 여기에 hasScreen 을 다시 넣지 마라 — 「화면」이 든 매뉴얼 질문이 통째로 여기로 샌다.
-      result.deviceCmd = { kind: 'bright', ask: true };
+      devCmd = { kind: 'bright', ask: true };
     }
+    //  4.23 2차 ⑤: 글자 + 밝기·소리를 같이 시키면 둘 다(utils.runDeviceCmd 가 차례로 하고 답을 이어 말한다)
+    result.deviceCmd = (txCmd && devCmd) ? { kind: 'multi', cmds: [devCmd, txCmd] } : (txCmd || devCmd);
   }
 
   //  ══ 2.41 미르 — 선박 연락처(이메일) ═══════════════════════════════

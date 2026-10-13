@@ -10,7 +10,7 @@ export default function AccessLockScreen() {
     <div data-testid="access-lock" role="alert" aria-label={ACCESS_DENIED_MSG.replace('\n', ' ')}
       style={{ position: 'fixed', inset: 0, zIndex: 2147483647, background: '#0b0d12', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, touchAction: 'none' }}>
       <img src={LOCK_PNG} alt="접근 불허" draggable={false} style={{ width: 'min(46vw, 260px)', height: 'auto', userSelect: 'none' }} />
-      <div style={{ color: '#8b93a3', fontSize: 13, textAlign: 'center', whiteSpace: 'pre-line', lineHeight: 1.5 }}>{ACCESS_DENIED_MSG}</div>
+      <div style={{ color: '#8b93a3', fontSize: 'var(--fs-sm2, 13px)', textAlign: 'center', whiteSpace: 'pre-line', lineHeight: 1.5 }}>{ACCESS_DENIED_MSG}</div>
     </div>
   );
 }

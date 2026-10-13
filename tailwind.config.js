@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+import plugin from 'tailwindcss/plugin';
 // TallyOne 2.13 — 디자인 토큰 단일 소스 (검수사 확정 2026-08-23)
 //   «반드시 컴용화면 폰용화면이 달라야 합니다. 항목이 다른게 아니고 디자인 구성 배치가 달라야 합니다.»
 //   «어쩔수 없이 여백이 남으면 관련그림이나 부가 설명을 넣고, 폰은 아이콘 크기를 맞추면
@@ -44,12 +45,26 @@ export default {
                 300:'rgb(var(--dim-300) / <alpha-value>)', 400:'rgb(var(--dim-400) / <alpha-value>)',
                 500:'rgb(var(--dim-500) / <alpha-value>)' },
       },
+      //  ★ 4.23 — 글자 두 모드(보통·크게, 검수사 2026-10-12 «수석들이 노안이 심한 사람이 많습니다. 두가지 모드로 했으면 합니다»).
+      //    색(2.40)과 같은 수법 — 값 대신 **CSS 변수**를 참조한다. 실제 값은 `src/index.css` 의 :root(보통) / :root[data-text="large"](크게)가 정한다.
+      //    ⚠ 클래스는 한 글자도 안 바꿨다 — text-2xs 701회·text-xs 502회 …(2,6xx건)가 그대로 모드를 따라온다. 기본 키(xs·sm·base·lg…)도 여기서 덮는다.
+      //    ⚠ 줄 높이 — 기본 키는 Tailwind 기본값(xs 1rem · sm 1.25rem …)을 **글자 크기에 대한 비율**로 옮겨 적었다. 보통 모드에서 px 가 4.22-04 와 똑같고(12×4/3=16)
+      //      크게 모드에서 같은 비율로 커진다. 절대 길이(calc)라 자식에게 종전처럼 px 로 물려준다. 3xs~sm2 는 종전 그대로 단위 없는 비율.
+      //    ⚠ 그림(FitBox 안 · 베이 격자)과 인쇄는 4.22-04 값에 고정된다 — index.css `.fs-keep` · `@media print`.
       fontSize: {
-        '3xs': ['9px',  { lineHeight:'1.2'  }],
-        '2xs': ['10px', { lineHeight:'1.3'  }],
-        'xxs': ['11px', { lineHeight:'1.4'  }],
-        'xs2': ['12px', { lineHeight:'1.45' }],
-        'sm2': ['13px', { lineHeight:'1.5'  }],
+        '3xs': ['var(--fs-3xs)', { lineHeight:'1.2'  }],
+        '2xs': ['var(--fs-2xs)', { lineHeight:'1.3'  }],
+        'xxs': ['var(--fs-xxs)', { lineHeight:'1.4'  }],
+        'xs2': ['var(--fs-xs2)', { lineHeight:'1.45' }],
+        'sm2': ['var(--fs-sm2)', { lineHeight:'1.5'  }],
+        'xs':   ['var(--fs-xs)',   { lineHeight:'calc(var(--fs-xs) * 4 / 3)'   }],   // Tailwind 기본 .75rem / 1rem
+        'sm':   ['var(--fs-sm)',   { lineHeight:'calc(var(--fs-sm) * 10 / 7)'  }],   // .875rem / 1.25rem
+        'base': ['var(--fs-base)', { lineHeight:'calc(var(--fs-base) * 1.5)'   }],   // 1rem / 1.5rem
+        'lg':   ['var(--fs-lg)',   { lineHeight:'calc(var(--fs-lg) * 14 / 9)'  }],   // 1.125rem / 1.75rem
+        'xl':   ['var(--fs-xl)',   { lineHeight:'calc(var(--fs-xl) * 1.4)'     }],   // 1.25rem / 1.75rem
+        '2xl':  ['var(--fs-2xl)',  { lineHeight:'calc(var(--fs-2xl) * 4 / 3)'  }],   // 1.5rem / 2rem
+        '3xl':  ['var(--fs-3xl)',  { lineHeight:'calc(var(--fs-3xl) * 1.2)'    }],   // 1.875rem / 2.25rem
+        '4xl':  ['var(--fs-4xl)',  { lineHeight:'calc(var(--fs-4xl) * 10 / 9)' }],   // 2.25rem / 2.5rem
       },
       borderRadius: { card:'20px', btn:'18px', sheet:'32px', pill:'14px' },   // 시안 V2: 카드 20px radius
       height:       { row:'64px', row2:'62px', cta:'60px', fld:'56px' },
@@ -58,5 +73,9 @@ export default {
       transitionDuration: { 160:'160ms' },
     },
   },
-  plugins: [],
+  plugins: [
+    //  ★ 4.23 — «크게» 모드에서만 거는 배치 `tx-lg:…`(예 tx-lg:whitespace-normal). 글자 크기는 변수가 알아서 바꾸므로 이것은
+    //    «크게에서 한 줄이 넘칠 때 두 줄을 허용» 같은 배치 손질에만 쓴다. 보통 모드 화면은 이 접두가 붙은 클래스로 바뀌지 않는다.
+    plugin(({ addVariant }) => { addVariant('tx-lg', ':root[data-text="large"] &'); }),
+  ],
 };

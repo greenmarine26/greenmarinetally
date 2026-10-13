@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.22-04';
-const NOTE = '4.22-04 작업 시작 탭의 조회창이 하나입니다. 다른 항차나 지난 자료는 오른쪽 아래 미르 얼굴에 물어보세요.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.23';
+const NOTE = '4.23 글자를 크게 볼 수 있습니다. 메뉴(⋮)의 화면 · 소리 · 글자에서 크게를 고르세요.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

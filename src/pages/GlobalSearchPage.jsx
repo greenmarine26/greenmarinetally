@@ -20,7 +20,7 @@ import MirFace from '../components/MirFace.jsx';   // 4.07: 실사 미르 얼굴
 import { fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.06: 무응답 자동 신고 (2.03 데미지 사진 단건은 DamageHistoryCard 로 갔다)
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
+import { runDeviceCmd, deviceCmdWaitsForSubmit } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌 · 4.23 2차: 글자는 전송 때만
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
@@ -271,6 +271,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   useEffect(() => {
     const cmd = parsed.deviceCmd || _rqDeviceCmd;
     if (!cmd) { return; }
+    if (!askedAt && deviceCmdWaitsForSubmit(cmd)) return;   // 4.23 2차: 글자 크기는 전송(엔터·질문·음성) 때만 — 치는 중에 입력칸까지 커지면 거슬린다(밝기·소리는 종전대로 치는 중에도)
     //  ⚠ 2.40-01 은 askedAt(전송 누름) 요구를 걷고 «치기만 해도 실행»으로 갔었다.
     //  ★ 2.57 주석 정정 — 2.55-01(문장은 전송까지 대기) 뒤로 조작 문장도 전송(엔터·➤·음성)해야
     //    debouncedQuery 에 들어오므로, 실동작은 다시 «전송해야 실행»이다. 동작은 이대로 둔다 —
@@ -506,7 +507,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
             title="검색을 마치고 들어온 화면으로 돌아갑니다">
             ← 나가기
           </button>}
-          <span className="min-w-0 truncate flex items-center gap-1.5"><MirFace mood="basic" size={20} still className="inline-block" />미르 통합 검색 — 모든 항차·양/선적</span>
+          <span className="min-w-0 flex items-center gap-1.5 break-keep leading-tight"><MirFace mood="basic" size={20} still className="inline-block shrink-0" />미르 통합 검색 — 모든 항차·양/선적</span>{/* 4.23 2차: «…» 로 자르지 않고 좁으면 두 줄 */}
           <span className="text-dim-300 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">

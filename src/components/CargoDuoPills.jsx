@@ -3,7 +3,7 @@ import React from 'react';
 
 export default function CargoDuoPills({ duo }) {
   if (!duo || !Array.isArray(duo.tabs)) return null;
-  const base = { padding: '6px 11px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1.2 };
+  const base = { padding: '6px 11px', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-xs, 12px)', fontWeight: 700, lineHeight: 1.2 };   // 4.23: 검수앱은 글자 모드를 따른다 — 콘앱(변수 없음)은 12px 그대로
   return (
     <div className="cpv2-duo-pills" style={{ display: 'flex', borderRadius: 4, overflow: 'hidden' }}>
       {duo.tabs.map((t) => {

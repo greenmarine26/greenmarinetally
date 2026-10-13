@@ -287,10 +287,10 @@ function ReportGroup({ title, items, groupBy, voyageInfo = null }) {   // 3.16: 
       {expanded && (
         <div className="p-2 space-y-1">
           {items.map(r => (
-            <div key={r.cn} className="bg-ink-950/50 rounded px-2 py-1.5 flex items-center gap-2">
+            <div key={r.cn} className="bg-ink-950/50 rounded px-2 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">{/* 4.23: 컨번호는 자르지 않는다 — 폭이 모자라면(글자 한 단계·«크게») 자리·시각이 다음 줄로 */}
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0"/>
               <span className="font-black text-amber-300 mono text-sm">{r.l4 || r.cn?.slice(-4)}</span>
-              <span className="text-xxs mono text-dim-300 truncate flex-1">{r.cn}</span>
+              <span className="text-xxs mono text-dim-300 whitespace-nowrap flex-1 shrink-0">{r.cn}</span>
               {r.bay && <span className="text-2xs mono text-amber-400">{r.bay}-{r.row}-{r.tier}</span>}
               {groupBy === 'time' && completedByLabel(r, voyageInfo) && <span className="text-2xs text-emerald-400 font-bold">[{completedByLabel(r, voyageInfo)}]</span>}
               {r.completedAt && (

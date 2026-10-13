@@ -690,13 +690,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           2.03-01 (검수사 지시 «수석대쉬보드엔 통합검색이 버튼을 클릭해야… 데이터 새로 고침 버튼옆에 통합검색창을»):
           입력하고 엔터(또는 🔍)를 치면 그 질문을 들고 통합검색으로 간다. */}
       <div className="flex gap-2 items-center">
-        <form className="flex-1 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); if (q) setDashQ(q); }}>
+        {/* 4.23 2차: 입력칸이 제 기본 폭(글자 20자)보다 안 줄어 360px «크게»에서 🔄 단추가 22px 밖으로 밀렸다 — 폼·입력칸 둘 다 min-w-0 */}
+        <form className="flex-1 min-w-0 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); if (q) setDashQ(q); }}>
           <input value={chiefSearchQ} onChange={(e) => setChiefSearchQ(e.target.value)}
             placeholder="통합검색 · 미르에게 질문 — 컨번호·데미지·브리핑"
-            className="flex-1 bg-ink-800 border border-line-strong focus:border-emerald-500 focus:outline-none rounded-pill px-3 py-2 text-sm text-dim-100 placeholder-dim-400"/>
+            className="flex-1 min-w-0 bg-ink-800 border border-line-strong focus:border-emerald-500 focus:outline-none rounded-pill px-3 py-2 text-sm text-dim-100 placeholder-dim-400"/>
           <button type="submit" className="px-3 py-2 rounded-pill bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-sm font-bold shrink-0">🔍</button>
         </form>
-        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
+        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt} className="shrink-0"/>
       </div>
 
       {/* 2.03-02 (검수사 실측 «검색창에 입력했더니 역시 화면이 바뀝니다» — 그 자리에서 답한다):
@@ -746,8 +747,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                                             : id === '__baymatrix' ? setShowBayMatrix(true)
                                             : id === '__aux' ? (window.location.hash = '#/aux')
                                             : jumpSec(id))}
-              className="px-2 py-2 rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 text-xs2 font-bold text-dim-100 text-left truncate"
-              style={{ minHeight: 40 }}>
+              className="px-2 py-2 rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 text-xs2 font-bold text-dim-100 text-left truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight"
+              style={{ minHeight: 40 }}>{/* 4.23 «크게»: 이름을 «…» 로 자르지 않고 두 줄로 */}
               {label}
             </button>
           ))}
@@ -820,6 +821,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           )}
 
           <div className="text-xxs font-bold text-dim-300 mb-1">전체 {readiness.total}건</div>
+          {/* 4.23 2차: 줄이 폰 폭보다 길면(4.22-04 도 426px · 크게 473px) 페이지 전체가 옆으로 밀렸다 — 표만 옆으로 민다(표 개편은 상황판 판에서) */}
+          <div className="overflow-x-auto" data-ready-table="1">
+          <div className="min-w-max">
           {readiness.rows.map((r) => (
             <div key={'a' + r.key + r.mode} className="flex items-center gap-2 px-2 py-1 text-xxs border-b border-line-soft">
               <span className="font-bold text-dim-100 w-12 shrink-0">{r.code}</span>
@@ -830,6 +834,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               <span className={`ml-auto shrink-0 ${r.state === 'ready' ? 'text-emerald-400' : 'text-amber-300'}`}>{r.label}</span>
             </div>
           ))}
+          </div>
+          </div>
 
           {readiness.noCarrier > 0 && (
             <div className="text-2xs text-dim-400 mt-2">
@@ -917,7 +923,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               : '지금 작업 중인 배가 없습니다 — 예정 항차는 홈 카드·일정에서 봅니다'}
           </div>
         ) : (
-          <div ref={boardScrollRef} className="flex flex-col gap-1 overflow-y-auto" style={{ height: boardH ? boardH + 'px' : 'calc(100vh - 9rem)', minHeight: '20rem' }}>
+          <div ref={boardScrollRef} className="fs-keep flex flex-col gap-1 overflow-y-auto" style={{ height: boardH ? boardH + 'px' : 'calc(100vh - 9rem)', minHeight: '20rem' }}>
+            {/* 4.23 fs-keep — 보드 카드(25% 통계 · 75% 베이, 행 높이 고정 — 검수사 D1~D4 확정)는 글자 모드와 무관하게 4.22-04 글자.
+                글자를 한 단계만 키워도 별첨 표 마지막 줄(OBWH YTF · ATPR 합계 · DXQD DWS)이 행 높이에 잘렸다(실측). 모드별 배치는 상황판 판에서. */}
             {/* 3.10: 한 척 = 가로로 긴 한 줄. 보드 높이를 척수(최대 4)로 등분하고 5척부터 아래로 스크롤 — 검수사 «세로로 4등분해서 최대 4척, 2척이면 2등분, 5척이면 스크롤» · «1척이면 전체화면»
                 · 배를 누르면 그 배만 전체(포커스), [닫기]로 돌아온다. 고른 배가 보드에서 빠지면(작업 끝) 포커스도 풀린다.
                 TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
@@ -3038,7 +3046,7 @@ function Fold({ id, title, open, onToggle, children }) {
         className={`w-full flex items-center justify-between px-3 rounded-btn border text-left ${
           open ? 'bg-ink-800/80 border-line-strong' : 'bg-ink-900 border-line hover:border-line-strong'}`}
         style={{ minHeight: 44 }}>
-        <span className="text-sm2 font-bold text-dim-100 truncate">{title}</span>
+        <span className="text-sm2 font-bold text-dim-100 truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight tx-lg:py-1">{title}</span>{/* 4.23 2차 «크게»: «…» 로 자르지 않고 두 줄 */}
         <span className="text-dim-400 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
       </button>
       {open && <div className="mt-2">{children}</div>}

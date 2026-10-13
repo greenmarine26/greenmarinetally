@@ -1995,9 +1995,9 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
     <div onClick={onClick} className="cursor-pointer">
       {/* 3.55: 접힌 모습(폰) — 한 줄. 대수 내역(평택·매칭·터미널·쉬프팅…)은 «자세히»에서 종전 그대로 나온다. 누락은 접혀 있어도 보인다. */}
       {fold && (
-        <div className="lg:hidden flex items-center gap-2 min-h-[32px]">
+        <div className="lg:hidden flex flex-wrap items-center gap-x-2 gap-y-1 min-h-[32px]">{/* 4.23: 글자 «크게» 에서 꼬리(본선·터미널 ±)가 폰 폭을 넘으면 다음 줄로 — 보통에서는 한 줄 그대로 */}
           <span className={`${colorClasses.label} px-2.5 py-1 font-black leading-none text-sm2 shrink-0`}>{label}</span>
-          <div className="flex-1 xp-bar xp-sm"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/></div>
+          <div className="flex-1 min-w-[24px] xp-bar xp-sm"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/></div>
           <span className="text-sm2 font-bold text-dim-100 mono shrink-0">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
           {term && <span className="text-2xs font-bold text-cyan-300 mono shrink-0" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 완료 ${term.done} · 잔여 ${term.rest} — 검수원이 누른 완료와 다를 수 있습니다`}>본선 {term.done}/{term.done + term.rest} ({(term.done + term.rest) > 0 ? Math.min(100, Math.round((term.done / (term.done + term.rest)) * 100)) : 0}%)</span>}
           {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && <span className="text-xs2 font-bold text-red-300 shrink-0">누락 {stats.missing}</span>}

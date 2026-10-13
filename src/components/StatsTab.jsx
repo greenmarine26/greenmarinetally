@@ -41,7 +41,7 @@ export default function StatsTab({ containers, compMap, xrayMap, mode, voyage })
               const max = Math.max(...Object.values(stats.byHour));
               return (
                 <div key={h} className="flex items-center gap-2 text-xs2">
-                  <span className="w-20 shrink-0 text-dim-300 mono">{h}</span>
+                  <span className="min-w-[5rem] shrink-0 whitespace-nowrap text-dim-300 mono">{h}</span>
                   <div className="flex-1 bg-ink-800 rounded h-4 overflow-hidden">
                     <div className="h-full bg-emerald-600/70 rounded" style={{ width: `${Math.max(4, Math.round(n / max * 100))}%` }}/>
                   </div>

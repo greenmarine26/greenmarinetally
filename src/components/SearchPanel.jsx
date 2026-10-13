@@ -43,7 +43,7 @@ import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(작은 정지 아바타)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
-import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
+import { runDeviceCmd, deviceCmdWaitsForSubmit } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌 · 4.23 2차: 글자는 전송 때만
 
 // ── TallyOne 1.55: 지금 어느 갱(호기)으로 작업 중인가 ───────────────────
 //   검수사 원문 2026-08-12 — *"장비를 바꿔서 해야 하는데 4호기로 다함.
@@ -597,7 +597,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           <div className={`flex-[3] py-2.5 rounded text-center font-bold ${
             workFilter === 'loading' ? 'bg-sky-800/70 text-sky-100' : 'bg-rose-800/70 text-rose-100'
           }`}>
-            <span className="text-[14px]">{workFilter === 'loading' ? '⬆ 선적 시작' : '⬇ 양하 시작'}</span>
+            <span className="text-sm">{workFilter === 'loading' ? '⬆ 선적 시작' : '⬇ 양하 시작'}</span>
             <span className="block text-xxs opacity-80">대기 {workFilter === 'loading' ? loadCount : dischCount}대</span>
           </div>
         ) : (
@@ -1246,6 +1246,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   useEffect(() => {
     const cmd = parsed.deviceCmd || _rqDeviceCmd;
     if (!cmd) { return; }
+    if (!askedAt && deviceCmdWaitsForSubmit(cmd)) return;   // 4.23 2차: 글자 크기는 전송(엔터·질문·음성) 때만 — 치는 중에 입력칸까지 커지면 거슬린다(밝기·소리는 종전대로 치는 중에도)
     //  ⚠ 2.40-01: 종전엔 `askedAt`(전송 누름)을 요구했다. 그래서 검수사가 「미르야 화면이 너무 밝아」를
     //    **치기만 하고** 전송을 안 누르자 아무 일도 안 일어났다 — 다른 조회는 치기만 해도 답이 나오는데.
     //    ⇒ 디바운스된 질의로 곧장 실행한다. 같은 문장을 두 번 실행하지 않게 **질의+명령**을 키로 잠근다.

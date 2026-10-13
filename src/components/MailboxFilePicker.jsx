@@ -119,7 +119,7 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
           <br />선박 폴더({vessel})나 항차 폴더({voy})를 골라도 동작하지만, 그러면 그 폴더 안에서만 찾습니다.
         </div>
         <button onClick={connect}
-          className="pop-btn pop-amber" style={{ minHeight: 44, fontSize: 13 }}>
+          className="pop-btn pop-amber" style={{ minHeight: 'var(--tap)', fontSize: 'var(--fs-btn-sm)' }}>
           <Link2 className="w-3.5 h-3.5" /> 메일함 폴더 연결
         </button>
         {err && <div className="text-xxs text-red-400 mt-2">{err}</div>}
@@ -137,7 +137,7 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
         <div className="text-xxs text-dim-300 mb-2">브라우저를 다시 연 뒤에는 한 번 눌러 되살립니다.</div>
         <div className="flex gap-2">
           <button onClick={revive}
-            className="pop-btn pop-amber" style={{ minHeight: 44, fontSize: 13 }}>
+            className="pop-btn pop-amber" style={{ minHeight: 'var(--tap)', fontSize: 'var(--fs-btn-sm)' }}>
             폴더 접근 허용
           </button>
           <button onClick={connect}

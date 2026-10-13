@@ -270,7 +270,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           <button key={x.k || 'all'} onClick={() => setKindFilter(x.k)}
             className={`rounded-btn border p-3 text-left ${x.bg} ${kindFilter === x.k ? 'ring-2 ring-amber-400' : ''}`}>
             <div className="text-2xs text-dim-300">{x.t}</div>
-            <div className={`text-[22px] font-black leading-none mt-1 ${x.c}`}>{x.n}</div>
+            <div className={`text-2xl font-black leading-none mt-1 ${x.c}`}>{x.n}</div>
           </button>
         ))}
       </div>

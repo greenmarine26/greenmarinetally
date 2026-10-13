@@ -1757,7 +1757,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               업로드 탭은 **올리기만**, 베이 탭 도구줄의 「출력」 단추도 같은 문을 연다(경로가 하나라 종이가 갈리지 않는다).
             · 업로드는 더보기에서 꺼냈다 — 통계·결과·X-RAY 만 «더보기 ⋯» 에 남는다.
           ⚠ tab state·점프 경로(jumpTo 8곳)는 불변 — 표시만 바뀌었다. 키: list·search·bay|lolo·data·stats·report·xray. */}
-      <nav className="hud-dock mb-3 sticky top-[52px] z-20" role="tablist" aria-label="항차 메뉴">
+      <nav className="hud-dock mb-3 sticky top-[var(--hdr-h,52px)] z-20" role="tablist" aria-label="항차 메뉴">{/* 4.23 2차: 머리띠 실제 높이(--hdr-h, Header 가 잰다 — 보통 53 · 크게 57 · 컴 61) 바로 밑 */}
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', e: '📋' },
           { k: 'search', t: '작업 시작', e: '🚀' },
@@ -1791,7 +1791,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           {[['stats', '📊 통계'], ['report', '📋 결과'],
             ...(mode === 'discharge' ? [['xray', '🔍 X-RAY']] : [])].map(([k, t]) => (
             <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
-              className={`pop-btn ${tab === k ? 'pop-green' : 'pop-slate'} flex-1 !px-2`} style={{ minHeight: 44, fontSize: 14 }}>{t}</button>
+              className={`pop-btn ${tab === k ? 'pop-green' : 'pop-slate'} flex-1 !px-2`} style={{ minHeight: 'var(--tap)', fontSize: 'var(--fs-sm)' }}>{t}</button>
           ))}
         </div>
       )}
@@ -4735,7 +4735,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               </span>
             </div>
             <button onClick={handleReprocess}
-              className="pop-btn pop-slate w-full mt-2" style={{ minHeight: 44, fontSize: 13 }}>
+              className="pop-btn pop-slate w-full mt-2" style={{ minHeight: 'var(--tap)', fontSize: 'var(--fs-btn-sm)' }}>
               🔄 EDI 다시 분석 <span className="text-dim-300 font-normal">(선택사항)</span>
             </button>
             <div className="text-2xs text-dim-400 mt-1 leading-tight">
@@ -4768,7 +4768,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           </label>
           <button
             onClick={() => cameraRef.current?.click()}
-            className="pop-btn pop-violet flex-shrink-0" style={{ minHeight: 64, padding: '0 14px', flexDirection: 'column', gap: 2, fontSize: 12 }}
+            className="pop-btn pop-violet flex-shrink-0" style={{ minHeight: 64, padding: '0 14px', flexDirection: 'column', gap: 2, fontSize: 'var(--fs-xs)' }}
             title="카메라로 종이 리스트 촬영"
           >
             <Camera className="w-5 h-5"/>📷 촬영
@@ -4860,7 +4860,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             }}
             disabled={!otherVoyInput.trim()}
             className={`pop-btn w-full ${otherMode === 'discharge' ? 'pop-blue' : 'pop-amber'} disabled:opacity-40`}
-            style={{ minHeight: 46, fontSize: 14 }}
+            style={{ minHeight: 'calc(var(--tap) + 2px)', fontSize: 'var(--fs-sm)' }}
           >
             + {otherMode === 'discharge' ? '양하' : '선적'} 섹션 추가
           </button>
@@ -4883,7 +4883,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             <span className="text-dim-400 text-xs2">{showTools ? '▲ 접기' : '▼ 펼치기'}</span>
           </button>
           {showTools && (
-            <button onClick={() => setShowTestLab(true)} className="pop-btn pop-violet w-full mt-3" style={{ minHeight: 46, fontSize: 14 }}>
+            <button onClick={() => setShowTestLab(true)} className="pop-btn pop-violet w-full mt-3" style={{ minHeight: 'calc(var(--tap) + 2px)', fontSize: 'var(--fs-sm)' }}>
               🧪 검증 모드 (테스트 랩) <span className="font-normal text-2xs opacity-80">검수확인 전체 취소 등 재검수 도구</span>
             </button>
           )}

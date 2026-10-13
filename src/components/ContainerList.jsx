@@ -557,7 +557,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                 </span>
               )}
               {sealConflict && (
-                <span className="bg-amber-700/80 text-amber-50 bdg font-black"
+                /* 4.23 2차: 실번호 둘이 길어 «크게»에서 칸 밖으로 잘렸다(390px 6px · 360px 36px) — 좁으면 두 줄로 */
+                <span className="bg-amber-700/80 text-amber-50 bdg font-black max-w-full !h-auto min-h-[22px] sm:min-h-[20px] !py-0.5 !whitespace-normal !leading-tight break-words"
                   title={`리스트마다 실번호가 다릅니다 — ${c.sl_conflict.map(h => h.sl + (h.src ? ` (${h.src})` : '')).join(' / ')}`}>
                   ⚠ 실번호 불일치 {_slcVals.join('↔')}
                 </span>

@@ -201,7 +201,7 @@ function PartialCancel({ voyage, voyageKey, busy, setBusy, setLog }) {
           선택 {sel.size}건 검수확인 취소
         </button>
       )}
-      <div className="text-[9.5px] text-dim-400">초록=완료(선택 가능) · 빨강=선택됨 · PC는 누른 채 드래그, 폰은 탭</div>
+      <div className="text-2xs text-dim-400">초록=완료(선택 가능) · 빨강=선택됨 · PC는 누른 채 드래그, 폰은 탭</div>
     </div>
   );
 }

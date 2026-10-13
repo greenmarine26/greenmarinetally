@@ -52,7 +52,8 @@ export function FitBox({ children, className = '', maxH = null, fill = false, bo
   }, [children, maxH, fill, boost, force]);
   return (
     <div ref={boxRef} className={`${Number(boost) > 1 ? 'overflow-auto' : 'overflow-hidden'} w-full ${className}`} style={fit.h != null ? { height: fit.h } : undefined}>
-      <div ref={innerRef} style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
+      {/* 4.23 fs-keep — 그림 안 글자는 글자 모드(보통·크게)와 무관하게 4.22-04 그대로. 커지면 그림 자연 폭이 늘어 배율이 줄고 칸 안 컨번호가 작아진다. */}
+      <div ref={innerRef} className="fs-keep" style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
     </div>
   );
 }

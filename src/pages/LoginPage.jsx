@@ -531,7 +531,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
         <div className="mt-3 bg-ink-950/60 border border-line rounded-card p-2">
           {/* 2.82: 차순으로 채웠으면 제목이 그 사실을 말한다 — 없는 작업을 있다고 하지 않는다. */}
-          <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">
+          <div className="text-2xs tracking-[0.16em] text-dim-300 mb-1.5 font-bold">
             {board.ships.length === 0
               ? '■ 다음 작업 예정 선박'
               : board.soon.length > 0 && boardShown.length > board.ships.length + board.soon.length
@@ -608,11 +608,11 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 <span className={`text-3xs font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
               </div>
               <div className="text-xl font-black text-dim-100">{st.n}</div>
-              <div className="text-[10.5px] text-dim-400 mt-0.5">{st.cap}</div>
+              <div className="text-2xs text-dim-400 mt-0.5">{st.cap}</div>
               {st.breakdown && st.breakdown.length > 0 && (
                 <div className="mt-1.5 pt-1.5 border-t border-line-faint flex flex-col gap-0.5">
                   {st.breakdown.map(([label, n]) => (
-                    <div key={label} className="flex items-center justify-between text-[10px] text-dim-400">
+                    <div key={label} className="flex items-center justify-between text-2xs text-dim-400">
                       <span>{label}</span><span className="font-bold text-dim-200">{n.toLocaleString()}</span>
                     </div>
                   ))}
@@ -640,8 +640,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <img src={logoUrl} alt="TallyOne" draggable="false"
                  className="w-[56px] h-[56px] rounded-[18px] select-none"
                  style={{ boxShadow: '0 12px 32px rgba(212,175,55,.26)' }}/>
-            <div className="mt-2.5 text-[23px] font-black tracking-tight text-white leading-none" data-app-version="1"><AppVerTitle/></div>
-            <div className="mt-1 text-[11.5px] font-medium text-dim-300">평택항 컨테이너 검수</div>
+            <div className="mt-2.5 text-2xl font-black tracking-tight text-white leading-none" data-app-version="1"><AppVerTitle/></div>
+            <div className="mt-1 text-xxs font-medium text-dim-300">평택항 컨테이너 검수</div>
             <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-xxs font-semibold text-act-soft"
                   style={{ border: '1px solid rgba(0,209,143,.28)', background: 'rgba(0,209,143,.10)' }}>
               <span className="relative flex w-2 h-2">
@@ -659,7 +659,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                         lg:bg-transparent lg:rounded-none lg:mt-0 lg:border-0 lg:overflow-visible lg:shadow-none lg:flex-1 lg:min-h-0">
           <div className="lg:hidden flex justify-center pt-3 pb-2 shrink-0"><div className="w-9 h-[5px] rounded-full bg-ink-750"/></div>
           <div className="lg:hidden px-5 pb-2.5 flex items-center justify-between shrink-0">
-            <h2 className="text-[18px] font-bold tracking-tight text-white">작업자 선택</h2>
+            <h2 className="text-lg font-bold tracking-tight text-white">작업자 선택</h2>
             <span className="text-xs2 font-semibold px-2.5 h-[22px] rounded-full bg-ink-850 text-dim-200 border border-line-faint flex items-center">{list.length}명</span>
           </div>
           {boardShown.length > 0 && (
@@ -700,7 +700,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           <div className="px-3.5 pb-2 shrink-0">
             <div className="rounded-card border border-dashed border-line-faint px-4 py-5 text-center">
               <div className="text-sm2 font-bold text-dim-200">오늘 이 기기에서 로그인한 사람이 없습니다</div>
-              <div className="mt-1.5 text-[11.5px] text-dim-400 leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
+              <div className="mt-1.5 text-xxs text-dim-400 leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
             </div>
           </div>
         )}
@@ -720,7 +720,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                           : 'bg-ink-800 border-line-faint hover:border-line-faint hover:bg-ink-850'}`}
                 >
                   {isSel && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-act"/>}
-                  <span className={`w-[42px] h-[42px] rounded-full flex items-center justify-center text-[15px] font-bold text-white flex-shrink-0
+                  <span className={`w-[42px] h-[42px] rounded-full flex items-center justify-center text-base font-bold text-white flex-shrink-0
                     lg:w-10 lg:h-10 lg:text-sm bg-gradient-to-br ${
                     chief ? 'from-violet-400 to-violet-700' : 'from-amber-400 to-amber-700'}`}
                     style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18)' }}>
@@ -728,7 +728,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[15px] font-bold tracking-tight text-white truncate leading-none">{i.name}</span>
+                      <span className="text-base font-bold tracking-tight text-white truncate leading-none">{i.name}</span>
                       {/* 2.22: 본인 표시 — 로그인 중이 **아니어도** 오늘 하루는 목록에 남는다.
                           표가 없으면 «왜 이 사람만 남아 있지?» 가 된다. */}
                       {meName && i.name === meName && (
@@ -748,12 +748,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                       )}
                     </div>
                     {role && (
-                      <div className={`mt-1 text-[11.5px] truncate leading-none ${chief ? 'text-violet-300 font-bold' : 'text-dim-200'}`}>
+                      <div className={`mt-1 text-xxs truncate leading-none ${chief ? 'text-violet-300 font-bold' : 'text-dim-200'}`}>
                         {chief && '👑 '}{role}
                       </div>
                     )}
                   </div>
-                  <span className={`w-7 h-7 rounded-full flex items-center justify-center border text-[14px] font-black flex-shrink-0 lg:hidden ${
+                  <span className={`w-7 h-7 rounded-full flex items-center justify-center border text-sm font-black flex-shrink-0 lg:hidden ${
                     isSel ? 'bg-act border-act text-act-on' : 'bg-ink-900 border-line-faint text-transparent'}`}>✓</span>
                 </button>
               );
@@ -787,7 +787,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleDirect()}
               placeholder="목록에 없으면 이름 입력"
-              className="flex-1 min-w-0 h-14 bg-ink-800 border border-line-faint rounded-card px-3.5 text-[15px] font-medium text-dim-100 placeholder:text-dim-500 focus:outline-none focus:border-act/60
+              className="flex-1 min-w-0 h-14 bg-ink-800 border border-line-faint rounded-card px-3.5 text-base font-medium text-dim-100 placeholder:text-dim-500 focus:outline-none focus:border-act/60
                          lg:h-auto lg:rounded lg:py-2 lg:text-sm lg:bg-ink-800 lg:border-line"
               autoFocus={list.length === 0}
             />
@@ -821,7 +821,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <ArrowLeft className="w-4 h-4"/>{current} 그대로 돌아가기
           </button>
         )}
-        <div className="lg:hidden mt-2 text-center text-[10.5px] text-dim-500 font-medium">🔒 표시는 비밀번호를 한 번 확인합니다</div>
+        <div className="lg:hidden mt-2 text-center text-2xs text-dim-500 font-medium">🔒 표시는 비밀번호를 한 번 확인합니다</div>
         </div>{/* 2.11: 하단 고정 바 닫기 */}
         </div>{/* 2.11: 폰 바텀시트 닫기 (PC 에서는 껍데기만) */}
       </div>
