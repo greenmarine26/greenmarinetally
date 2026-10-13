@@ -1,12 +1,12 @@
 // 회귀 기준표 R16·R17(4.16 · §7.8-①②) 화면 입구 — smoke_regress.cjs 가 묶어 jsdom 에서 돌린다(쓰기 없음 — Firebase 는 메모리 스텁).
 //   ① window.__r416.homeTotals — 홈 카드 막대가 쓰는 HomePage.computeStats 실소스(JSON 으로 받아 이 창 안에서 센다 — Set 이 창을 건너지 않게)
 //   ② window.__R17 = 'kskm' | 'mcap' 이면 출력 센터(PrintHubModal)를 연다 — 검사가 카고플랜 단추를 누른다.
-//   ③ 4.19 R24 — window.__R24 = 항차 키(dictmissing419.json 의 info)면 그 배로 항차 목록 카드·헤더·베이플랜 머리를 그린다(사전 = 그 사본의 키·bayDef 유무).
+//   ③ 4.19 R24 — window.__R24 = 항차 키(dictmissing419.json 의 info)면 그 배로 항차 목록 줄(4.25 ShipRow — 종전 카드)·헤더·베이플랜 머리를 그린다(사전 = 그 사본의 키·bayDef 유무).
 //      KSKM 2617N — 선사 서류·선적 EDI 가 없는 배(앱 예측만) · MCAP 639N — 선사 RESTOW LIST 5대(확정).
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PrintHubModal from '../src/components/PrintHubModal.jsx';
-import { computeStats, VoyageCard } from '../src/pages/HomePage.jsx';
+import { computeStats, ShipRow } from '../src/pages/HomePage.jsx';   // 4.25: 항차 목록 카드 → 배 줄(ShipRow — «사전에 없음» 은 줄 알림 자리)
 import Header from '../src/components/Header.jsx';   // 4.19 R24 — 헤더 «사전에 없음»
 import BayPlan from '../src/components/BayPlan.jsx';   // 4.19 R24 — 베이플랜 머리 «사전에 없음»
 import DiagnosticsPanel from '../src/components/DiagnosticsPanel.jsx';   // 4.22 R27 — 주의 박스 «자료별 대조»·잘라 보이기
@@ -53,7 +53,7 @@ if (r24) {
   const voyage = { key: r24, info };
   const root = document.getElementById('root');
   const mk = (id) => { const d = document.createElement('div'); d.id = id; root.appendChild(d); return d; };
-  createRoot(mk('r24card')).render(React.createElement(VoyageCard, { voyage, activeInspectors: [], onOpen: () => {}, onDelete: null, onComplete: null, inspectorDone: false, modeDone: { d: false, l: false, hasD: false, hasL: false }, onUndoComplete: () => {} }));
+  createRoot(mk('r24card')).render(React.createElement(ShipRow, { voyage, activeInspectors: [], onSelect: () => {}, onOpen: () => {}, canComplete: false, inspectorDone: false, modeDone: { d: false, l: false, hasD: false, hasL: false } }));
   createRoot(mk('r24head')).render(React.createElement(Header, { version: '', inspector: '연막', online: true, route: { name: 'voyage', voyageKey: r24 }, voyages: { [r24]: voyage }, onChangeInspector: () => {}, onGoHome: () => {}, onLogout: () => {} }));
   //  베이플랜은 컨이 있어야 머리를 그린다 — 사전 없는 배의 EDI 꼴(베이·로우·단만) 네 대(내용은 시험 대상이 아니다 · 머리 딱지만 본다)
   const cs = ['02-01-82', '02-02-82', '03-01-84', '06-01-02'].map((p, i) => { const [bay, row, tier] = p.split('-'); return { cn: `TEST000000${i}`, bay: String(parseInt(bay, 10)), row, tier, iso: '45G1', fe: 'F', pod: 'KRPTK', pol: 'CNSHA', _mode: 'discharge' }; });

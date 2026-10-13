@@ -14,7 +14,7 @@ import AccessLockScreen from './components/AccessLockScreen.jsx';   // 3.76: 접
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief, setStaffOff, isStaffOff, lockedNameOf } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
-import { parseHash, exitApp } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6)
+import { parseHash, exitApp, closeHomeSheetIfOpen } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6) · 4.25: 폰 홈 시트가 열려 있으면 뒤로가기는 시트만 닫는다
 import { setActivityUser, logActivity, logView, activityUserName } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
@@ -346,6 +346,8 @@ export default function App() {
     const handler = () => {
       const h = window.location.hash;
       if (h && h !== '#' && h !== '#/') return;   // 다른 라우트로의 정상 이동은 통과
+      //  4.25: 폰 홈의 배 전체화면 시트가 열려 있으면 뒤로가기는 시트만 닫는다(종료 확인을 띄우지 않고 가드만 다시 장전) — 4.24 홈엔 시트가 없었다.
+      if (closeHomeSheetIfOpen()) { window.history.pushState({ gmHomeGuard: true }, '', '#/'); return; }
       const okExit = window.confirm('TallyOne 검수앱을 종료할까요?');
       if (okExit) exitApp();
       else window.history.pushState({ gmHomeGuard: true }, '', '#/');

@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, BarChart3, CheckCircle } from 'lucide-react';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, CheckCircle } from 'lucide-react';
 import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
-import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
+import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -20,6 +20,7 @@ import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyO
 import { canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
+import { setHomeSheetClose } from '../backHandler.js';   // 4.25 2차: 폰 시트가 열려 있으면 뒤로가기(App 홈 가드)가 시트만 닫는다
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
@@ -533,6 +534,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   //   ⚠ 아예 지우지 않는다 — 자료가 없는 배는 목록에서 열어야만 EDI 를 직접 올릴 수 있다(새로 만든 항차도 처음엔 자료가 없다).
   //   ⚠ 접은 줄도 언마운트하지 않는다(`hidden`) — VoyageCard 의 departBadgeAt sticky 기록이 죽으면 콘앱 출항 표시가 멈춘다.
   const _isWaitData = (v) => !v._hasData && !v.info?.forecast;
+  //  이미 지난 배(출항 — 없으면 작업시작 — 이 지금보다 앞) · 2.82-01 채움에서 건너뛰는 배와 같은 판정 한 벌
+  const _isPastVoy = (v, now) => { const t = v?._etdMs ?? v?._etaMs; return t != null && t < now; };
   const _pierFirst = (arr) => {
     if (!effectivePier) return arr;
     const here = arr.filter(v => v._pier === effectivePier);   // 현 부두 위로
@@ -560,7 +563,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     //    채움에 끌려 목록 맨 위로 올라올 수 있었다. 검수사가 원한 것은 «앞으로 올 배»다.
     const MIN_OPEN = 6;
     const _now = Date.now();
-    const _past = (v) => { const t = v?._etdMs ?? v?._etaMs; return t != null && t < _now; };
+    const _past = (v) => _isPastVoy(v, _now);   // 4.25 2차: 판정 한 벌 — 컴 날짜 묶음(아래 groups)도 같은 함수로 «그 밖의 배»를 고른다
     const _rest = [];
     while (o.length < MIN_OPEN && f.length) {
       const v = f.shift();
@@ -693,334 +696,390 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     return (!hasD || !!v?.info?.dischargeDone) && (!hasL || !!v?.info?.loadingDone);
   };
 
-  return (
-    <div className="max-w-6xl mx-auto px-3 py-3 home-stage">
-      {/* V9.15: 브랜드 배지 삭제 — 헤더(🌊 그린마린 검수팀 전용)와 완전 중복, 첫 화면 44px 회수.
-          버전은 헤더 ⋯ 메뉴와 도움말에서 확인. */}
-      {/* V9.42(사용자 지시 2026-08-02): 상단 3카드(통합검색·수석대시보드·PORT-MIS 캡처) 블록 삭제.
-          첫 화면에서 가장 큰 자리를 차지했는데 매일 쓰는 것은 아래 항차 목록이다.
-          · 수석 대시보드 → '진행 중인 항차' 줄 가운데(빈 공간)로
-          · 통합 검색·PORT-MIS 캡처 → 수석 대시보드 바로가기 그리드의 빈칸으로 */}
-      {/* 1.69-01: 홈 검색 진입 복원 — 검수사: "통합검색이든 자연어 검색이든 검수앱 홈화면에 넣어 달라고
-          했는데 그게 창에서 사라짐." V9.42가 3카드를 지울 때 검색 진입로까지 같이 사라졌었다.
-          카드 대신 한 줄 검색창 — 치고 검색을 누르면 통합검색이 그 질문으로 바로 답한다(검수원도 진입 가능). */}
-      {/* 3.54(검수사 2026-09-21 «검색창을 없애고 미르로 대체 합니다»): 홈 검색창을 없앴다 — 질문은 떠 있는 미르가 같은 답 엔진으로 받는다. */}
-      {/* TallyOne 1.19: 미회신 오답 — 소유자만 본다. 누르면 수석 대시보드(오답 리포트)로. */}
-      {fbUnanswered > 0 && isOwnerName(inspector) && (
-        <button onClick={onOpenChiefDashboard}
-          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-pill px-3 py-2 mb-3 hover:bg-red-900/40 transition"
-          style={{ minHeight: 44 }}>
-          <span className="flex items-center gap-2 text-xs2 font-bold text-red-200">
-            ❌ 오답 <b className="text-base mono">{fbUnanswered}</b>건 — 아직 회신 안 함
-          </span>
-          <span className="text-xxs text-red-300/80">눌러서 보기 →</span>
-        </button>
-      )}
+  // ── ★ 4.25 홈 배치(판 D) ─────────────────────────────────────────────────
+  //   검수사 2026-10-12 19:42 «검수앱과 수석대쉬보드의 폰화면과 컴퓨터의 화면이 복잡하고 난해 합니다 … 간결하고 보기 좋게»
+  //   · 불편 «한 화면에 항목이 너무 많다 · 글자가 작아 안 보인다 · 어디에 뭐가 있는지 찾기 어렵다» · 2026-10-13 00:53 «전부 클로드 안대로».
+  //   컴(1024px 이상) — 상태 띠 한 줄 + 왼쪽 배 목록(묶음 작업 중 → 오늘 → 내일 → 날짜 → 그 밖의 배 · 맨 아래 접힘 둘) + 오른쪽 고른 배 상세
+  //     (종전 카드 한 장의 내용 전부 + 베이별 진행 · 자료 대수). 페이지 스크롤 없음 — 목록·상세는 칸 안에서 구른다.
+  //   폰 — 상태 띠 + 조작 줄(같은 높이 셋) + 배 줄. 줄을 누르면 그 배 전체화면 시트(컴 상세와 같은 내용 · [양하 열기][선적 열기]).
+  //   처리기(새 항차·예보·삭제·완료·되돌리기·지금 처리·목적지 확인·실 정책)는 자리만 옮겼다 — 본문은 그대로다.
+  const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= 1024));
+  useEffect(() => {
+    const on = () => setWide(window.innerWidth >= 1024);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  const [selKey, setSelKey] = useState('');       // 컴 — 오른쪽 상세에 편 배
+  const [sheetKey, setSheetKey] = useState('');   // 폰 — 전체화면 시트로 연 배
+  const [meOpen, setMeOpen] = useState(false);    // 상태 띠 «나 오늘» 칩 — 누르면 종전 «오늘의 나» 줄(시간당·마지막 완료)
+  //  ⚡ 지금 처리 상태 — 종전엔 카드마다 따로 있었다. 상세는 고른 배 하나라 배마다 여기 둔다(다른 배를 보고 와도 결과가 남는다).
+  const [zapMap, setZapMap] = useState({});
+  const zapOf = (key) => {
+    const cur = zapMap[key] || {};
+    const put = (field) => (val) => setZapMap((m) => {
+      const c = m[key] || {};
+      const nv = typeof val === 'function' ? val(c[field] || '') : val;
+      return { ...m, [key]: { ...c, [field]: nv } };
+    });
+    return { zap: cur.zap || '', zapMsg: cur.zapMsg || '', setZap: put('zap'), setZapMsg: put('zapMsg') };
+  };
+  //  컴 — 두 칸 높이를 «칸 위 끝 → 화면 바닥 − 8px» 로 잰다(4.24 수석 상황판 보드와 같은 수법). 위 띠가 줄거나 늘어도(공지 띠·글자 크게) 1초마다 다시 잰다.
+  const panesRef = useRef(null);
+  const [paneH, setPaneH] = useState(0);
+  useEffect(() => {
+    if (!wide) return undefined;
+    const fit = () => {
+      const el = panesRef.current; if (!el) return;
+      const top = Math.max(0, el.getBoundingClientRect().top);
+      const h = Math.floor(window.innerHeight - top - 8);
+      if (h > 240 && Math.abs(h - paneH) > 1) setPaneH(h);
+    };
+    fit(); const t = setTimeout(fit, 300);
+    const iv = setInterval(fit, 1000);
+    window.addEventListener('resize', fit);
+    let ro = null;
+    try {
+      if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(fit); ro.observe(document.body); }
+    } catch (e) { console.warn('[홈] 칸 높이 관찰자를 못 걸었다 — 창 크기·1초마다로만 다시 잽니다', e); }
+    return () => { clearTimeout(t); clearInterval(iv); window.removeEventListener('resize', fit); if (ro) ro.disconnect(); };
+  }, [wide, paneH]);
+  //  컴 홈은 페이지가 화면 한 장이다 — 앱 본문 아래 여백(pb-20)·바닥글이 페이지를 늘리지 않게 그때만 접는다(index.css data-home-fill). 폰·다른 화면은 종전 그대로.
+  useEffect(() => {
+    const el = document.documentElement;
+    if (wide) el.setAttribute('data-home-fill', '1'); else el.removeAttribute('data-home-fill');
+    return () => el.removeAttribute('data-home-fill');
+  }, [wide]);
+  //  목록 묶음 — 종전 openList(작업중·당일·명일·모레 + 6개 채움 · 2.82)를 날짜로 묶는다. 묶음 순서는 날짜, 묶음 안 순서는 종전(현 부두 우선 → 작업일시).
+  //    폰 — 그 밖의 배(foldList)는 접힘 한 줄(종전과 같다). 판정(isOpenVoyage·MIN_OPEN·자료 대기)은 위 그대로다 — 첫 화면에 서는 배가 4.24 와 같다.
+  //    컴 — 4.25 2차(감사 하-1): 컴은 그 밖의 배까지 다 펴므로 목록 전체를 날짜로 묶는다(6개 채움은 폰 접힘용). 채움이 현 부두의 먼 배를 끌어와
+  //      «10-17·10-18» 묶음이 다른 부두의 더 가까운 배(10-15·10-16 — «그 밖의 배» 묶음) 위에 서던 날짜 역전이 없어진다. 지난 배만 맨 아래 «🗓 그 밖의 배».
+  const groups = useMemo(() => {
+    const now = Date.now();
+    const openSet = new Set(openList.map((v) => v.key));
+    const out = new Map();
+    const dateGroupOf = (v) => {
+      if (isWorkingNow(v)) return { id: 'work', rank: -100, ico: '⚓', label: '작업 중' };
+      const t = v._etaMs ?? v._etdMs ?? null;
+      const n = dayDiff(t);
+      return n == null ? { id: 'nodate', rank: 999, ico: '🗓', label: '일정 미상' }
+        : n === 0 ? { id: 'd0', rank: 0, ico: '📅', label: '오늘' }
+        : n === 1 ? { id: 'd1', rank: 1, ico: '📅', label: '내일' }
+        : { id: `d${n}`, rank: n, ico: '📅', label: dayLabel(t) };
+    };
+    //  list 순서(현 부두 우선 → 작업일시)대로 넣는다 — 폰은 openList 만(종전과 같은 줄·같은 순서), 컴은 나머지도.
+    for (const v of list) {
+      let g;
+      if (openSet.has(v.key)) g = dateGroupOf(v);
+      else if (wide) g = _isPastVoy(v, now) ? { id: 'other', rank: 10000, ico: '🗓', label: '그 밖의 배' } : dateGroupOf(v);
+      else continue;
+      const e = out.get(g.id) || { ...g, rows: [] };
+      e.rows.push(v);
+      out.set(g.id, e);
+    }
+    return [...out.values()].sort((a, b) => a.rank - b.rank);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, openList, wide, Math.floor(hbNow / 60000)]);
+  //  그 밖의 배 이름(폰 접힘 줄) — 모두 앞으로 7일 안이면 «이번 주»(설계), 지난 배·먼 배가 섞이면 종전 이름 «그 밖의 배».
+  const otherLabel = (() => {
+    const now = Date.now();
+    return foldList.length && foldList.every((v) => { const t = v._etaMs ?? v._etdMs; return t != null && t >= now && t - now < 7 * 86400000; }) ? '이번 주' : '그 밖의 배';
+  })();
+  const byKey = useMemo(() => Object.fromEntries(voyagesWithPier.map((v) => [v.key, v])), [voyagesWithPier]);
+  const orderKeys = [...groups.flatMap((g) => g.rows.map((v) => v.key)), ...(wide ? [] : foldList.map((v) => v.key)), ...waitList.map((v) => v.key)];
+  const curKey = selKey && byKey[selKey] ? selKey : (orderKeys[0] || '');
+  const curV = byKey[curKey] || null;
+  const sheetV = !wide && sheetKey ? byKey[sheetKey] || null : null;
+  //  4.25 2차(모의 확인 ④): 시트가 열려 있는 동안 폰 «뒤로» 는 시트만 닫는다 — App 홈 가드가 종료 확인 앞에서 이 함수를 부른다(backHandler 한 벌).
+  const _sheetOpen = !!sheetV;
+  useEffect(() => {
+    if (!_sheetOpen) return undefined;
+    setHomeSheetClose(() => setSheetKey(''));
+    return () => setHomeSheetClose(null);
+  }, [_sheetOpen]);
+  //  같은 배에 같은 재료 — 줄·상세·시트가 이 두 묶음만 받는다(종전 VoyageCard 에 넘기던 값 그대로).
+  const modeDoneOf = (v) => ({
+    d: v.info?.inspectorDone || !!v.info?.dischargeDone,
+    l: v.info?.inspectorDone || !!v.info?.loadingDone,
+    hasD: !!(v.discharge && Object.keys(v.discharge).length),
+    hasL: !!(v.loading && Object.keys(v.loading).length),
+  });
+  const rowOf = (v) => (
+    <ShipRow key={v.key} voyage={v} pilotForecast={pilotForecast} activeInspectors={activeInspectors[v.key] || []}
+      selected={wide && v.key === curKey} canComplete={!_viewOnly} inspectorDone={isAllDone(v)} modeDone={modeDoneOf(v)}
+      onOpen={(m) => onOpenVoyage(v.key, m)}
+      onSelect={() => { if (wide) setSelKey(v.key); else setSheetKey(v.key); }} />
+  );
+  const detailOf = (v, showOpen) => (
+    <ShipDetail key={v.key} voyage={v} inspector={inspector} pilotForecast={pilotForecast} showOpen={showOpen}
+      activeInspectors={activeInspectors[v.key] || []}
+      onOpen={(m) => onOpenVoyage(v.key, m)}
+      onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
+      onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
+      inspectorDone={isAllDone(v)}
+      modeDone={modeDoneOf(v)}
+      onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
+      laneRow={laneOf(v.info?.lane)}
+      zapSt={zapOf(v.key)}
+      policy={matchShipPolicy(v.info?.vsl || '', shipPols)}
+      onEditPolicy={(pol) => setPolEdit({ vsl: pol.name || v.info?.vsl || '', policy: pol })} />
+  );
+  const waitRef = useRef(null);
+  const polRef = useRef(null);
+  //  컴 — 접힘 둘은 목록 칸 맨 아래에 붙어 있다(목록이 길어도 첫 화면). 펴면 그 내용이 목록 끝에 서고 그 자리로 굴러간다.
+  const reveal = (ref) => { if (!wide) return; try { requestAnimationFrame(() => { if (ref.current) ref.current.scrollIntoView({ block: 'nearest' }); }); } catch (e) { console.warn('[홈] 펼친 자리로 못 굴렀다', e); } };
+  const _me = computeMyToday(voyages, inspector, Date.now());
+  const _hbText = hbView.state === 'ok' ? `수집기 ${hbView.ageMin}분 전`
+    : hbView.state === 'down' ? `수집기 끊김 ${hbView.ageMin}분 — 숫자 갱신 정지` : '수집기 자료 없음';
+  const _hbTitle = hbView.state === 'none' ? '수집기 상태 자료 없음 — 하트비트 미수신 · 누르면 보조기능(항차 건강 점검 · 맛집 수첩 …)'
+    : `수집기 v${heartbeat?.version || '?'} · ${hbView.ageMin}분 전 갱신 · 주기 ${hbView.cycleMin}분${hbView.state === 'down' ? ` · 끊김 기준 주기 ${hbView.cycleMin}분×2` : ''} — 누르면 보조기능(항차 건강 점검 · 맛집 수첩 …)`;
+  const _workN = (groups.find((g) => g.id === 'work') || { rows: [] }).rows.length;
+  const _waitNames = (() => {
+    const cnt = {}; for (const v of voyagesWithPier) { const s = v.info?.vsl || ''; cnt[s] = (cnt[s] || 0) + 1; }
+    return waitList.map((v) => (cnt[v.info?.vsl || ''] > 1 ? `${v.info?.vsl} ${v.info?.voy_d || v.info?.voy || ''}`.trim() : (v.info?.vsl || v.key))).join(' · ');
+  })();
 
-      {/* V9.16: 오늘의 나 — 내 처리량·페이스 (완료 기록이 있을 때만) */}
-      {(() => {
-        const me = computeMyToday(voyages, inspector, Date.now());
-        if (!me || me.count === 0) return null;
-        const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
-        return (
-          <div className="flex items-center gap-3 bg-ink-900 border border-emerald-800/50 rounded-pill px-3 py-2 mb-3">
-            <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-ink-950 text-xs2 font-black shrink-0">{inspector[0]}</span>
-            <div className="flex items-baseline gap-3 flex-wrap text-xs2">
-              <span className="text-dim-200">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
-              {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대<span className="text-dim-500"> (내 몫)</span></span>}
-              {me.perHour == null && me.paceNote && <span className="text-dim-400">페이스 못 잼 · {me.paceNote}</span>}
-              {ago != null && <span className="text-dim-400">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* TallyOne 1.0 (K5): 수집기 상태 요약은 유지하되 진입은 보조기능(#/aux)으로 —
-          건강 점검·맛집 수첩 등 개별 버튼은 AuxPage 안으로 통합됐다 */}
-      <div className="flex items-stretch gap-2 mb-3">
-      <button onClick={() => onOpenAux && onOpenAux()}
-        className={`flex-1 min-w-0 flex items-center gap-2 rounded-pill border px-3 py-2 text-left transition-colors ${
-          hbView.state === 'down' || healthIssueCount
-            ? 'border-amber-700/60 bg-amber-950/30 hover:bg-amber-950/45'
-            : 'border-line/40 bg-ink-900/50 hover:bg-ink-750/60'}`}>
-        <span className={`w-2 h-2 rounded-full shrink-0 ${
-          hbView.state === 'ok' ? 'bg-emerald-400 animate-pulse' : hbView.state === 'down' ? 'bg-red-500' : 'bg-dim-500'}`} />
-        {/* 3.54: 수석 버튼과 절반씩 쓰는 폰에서는 짧게 적는다(상태는 왼쪽 점 색이 말한다) — 잘린 글자를 보이지 않는다. */}
-        <span className={`text-xs font-bold text-dim-100 truncate ${_chiefBtn ? 'hidden sm:inline' : ''}`}>
-          {hbView.state === 'ok' ? `수집기 정상 · ${hbView.ageMin}분 전`
-            : hbView.state === 'down' ? `수집기 끊김 · ${hbView.ageMin}분 전` : '수집기 기록 없음'}
-        </span>
-        {_chiefBtn && <span className="sm:hidden text-xs font-bold text-dim-100 truncate">
-          {hbView.state === 'ok' ? `수집기 ${hbView.ageMin}분` : hbView.state === 'down' ? `끊김 ${hbView.ageMin}분` : '기록 없음'}
-        </span>}
-        <span className={`text-xs font-bold ml-auto shrink-0 ${healthIssueCount ? 'text-amber-300' : 'text-emerald-300/80'}`}>
-          {healthIssueCount
-            ? <>⚠ <span className={_chiefBtn ? 'hidden sm:inline' : ''}>검증 필요 </span>{healthIssueCount}건</>
-            : <>✓<span className={_chiefBtn ? 'hidden sm:inline' : ''}> 자료 정상</span></>}
-        </span>
-        {/* TallyOne 1.0: 보조기능 진입 표시 (건강 점검 · 맛집 수첩 등) */}
-        <span className={`text-2xs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0 ${_chiefBtn ? 'hidden sm:inline' : ''}`}>보조기능</span>
-        <ChevronRight size={14} className={`text-dim-400 shrink-0 ${_chiefBtn ? 'hidden sm:block' : ''}`} />
-      </button>
-      {/* 3.54(검수사 2026-09-21 «수집기표시는 수석대쉬보드 표기를 절반으로 같이 사용합니다»): 수석 대시보드 버튼을 이 줄로 올려 절반씩 쓴다.
-          V9.44·1.41 그대로 — canOpenChief 인 사람에게만 보인다. 안 보이는 사람은 수집기 줄이 한 줄을 다 쓴다. */}
-      {_chiefBtn && <button onClick={onOpenChiefDashboard}
-        className="lift3 flex-1 min-w-0 flex items-center gap-2 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border-2 border-purple-700/50 rounded-pill px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
-        <BarChart3 className="ico text-purple-300 shrink-0"/>
-        <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
-        <span className="hidden sm:inline text-2xs text-purple-300/70 truncate">전체 검수원 진행률·통계</span>
-        <ChevronRight size={14} className="hidden sm:block text-purple-300/70 shrink-0 ml-auto" />
-      </button>}
-      </div>
-
-      {/* 1.80(검수사 신고 2026-08-17): 폰에서 이 줄이 한 줄에 안 들어가 — 수석 대시보드 버튼이
-          형태를 알아볼 수 없게 쭈그러들고, 데이터 새로고침이 화면 밖으로 밀렸다.
-          → 폰(<640px)에서는 두 줄로 갈라 앉힌다. ①항차 수+수석 대시보드 ②양하·선적·예보·새로고침.
-          PC(sm 이상)는 종전 그대로 한 줄. */}
-      {/* 3.55(검수사 2026-09-21 «제안안대로 해주세요»): 이 줄은 한 줄이다 — 「진행 N건」 · 부두 고르기 · 새 항차 · 새로고침.
-          부두 고르기(자동·PCTC·PNCT·전체)와 새 항차(양하·선적·예보)는 누르면 펼쳐지는 버튼 하나씩으로 묶었다. 기능은 종전 그대로. */}
-      <div className="flex items-center flex-wrap mb-3 gap-1">   {/* 4.01: 좁은 폰(≤340px)에서 단추가 눌려 글자가 사라지지 않고 두 줄로 내려간다 */}
-        <div className="shrink-0 flex items-center mr-auto">
-          <span className="sticker home-count">
-            <span aria-hidden="true" className="hidden sm:inline">🚢</span>
-            <span className="text-2xs text-dim-300 font-bold">
-              <span className="sm:hidden">진행</span><span className="hidden sm:inline">진행 중인 항차</span>
-            </span>
-            <span className="text-lg font-black text-dim-100 leading-none">{list.length}건</span>
-          </span>
+  //  상태 띠 조각 — 컴은 한 줄(오른쪽에 조작 단추), 폰은 상태 띠 + 조작 줄(같은 높이 셋). 문은 종전과 같은 처리기를 부른다.
+  const collectorBtn = (
+    //  TallyOne 1.0 (K5) 수집기 줄 → 보조기능(#/aux) 그대로. 3.54 «수집기표시는 수석대쉬보드 표기를 … 같이 사용» — 글자는 4.24 수석 상황판 상태 줄과 같은 꼴.
+    <button type="button" onClick={() => onOpenAux && onOpenAux()} title={_hbTitle} data-home-chip="collector" data-hb={hbView.state}
+      className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 max-w-full text-left rounded-pill px-1.5 hover:bg-ink-800 text-sm2 font-bold text-dim-200" style={{ minHeight: 'var(--tap-chip)' }}>
+      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${hbView.state === 'ok' ? 'bg-emerald-400' : hbView.state === 'down' ? 'bg-red-500 animate-pulse' : 'bg-dim-500'}`} aria-hidden="true" />
+      <span className={`whitespace-nowrap ${hbView.state === 'down' ? 'text-red-300' : hbView.state === 'none' ? 'text-dim-400' : ''}`}>{_hbText}</span>
+      <span className="w-px h-4 bg-line-strong shrink-0 mx-0.5" aria-hidden="true" />
+      <span className={`whitespace-nowrap ${healthIssueCount ? 'text-amber-300' : 'text-emerald-300'}`} data-home-health={healthIssueCount}>
+        {healthIssueCount ? `⚠ 검증 필요 ${healthIssueCount}건` : '✓ 자료 정상'}
+      </span>
+    </button>
+  );
+  //  TallyOne 1.19: 미회신 오답 — 소유자만 본다. 누르면 수석 상황판(오답 리포트)으로.
+  const fbChip = fbUnanswered > 0 && isOwnerName(inspector) ? (
+    <button type="button" onClick={onOpenChiefDashboard} data-home-chip="feedback" title={`오답 ${fbUnanswered}건 — 아직 회신 안 함 · 눌러서 보기`}
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2 border-2 border-red-800/60 bg-red-950/40 text-red-200 text-sm2 font-bold hover:bg-red-900/40" style={{ minHeight: 'var(--tap-chip)' }}>
+      ❌ 오답 <b className="mono">{fbUnanswered}</b>
+    </button>
+  ) : null;
+  //  V9.16: 오늘의 나 — 내 완료 기록이 있을 때만. 칩을 누르면 종전 줄(오늘 N대 · 시간당 · 마지막 완료)이 띠 아래에 펴진다.
+  const meChip = _me && _me.count > 0 ? (
+    <button type="button" onClick={() => setMeOpen((o) => !o)} aria-expanded={meOpen} data-home-chip="me" title="오늘 내 처리량 — 누르면 시간당·마지막 완료"
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2 border-2 border-emerald-800/60 bg-ink-900 text-dim-200 text-sm2 font-bold" style={{ minHeight: 'var(--tap-chip)' }}>
+      🙋 나 오늘 <b className="text-emerald-300 mono">{_me.count}</b>대
+    </button>
+  ) : null;
+  const meLine = meOpen && _me && _me.count > 0 ? (() => {
+    const me = _me;
+    const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
+    return (
+      <div className="flex items-center gap-3 bg-ink-900 border border-emerald-800/50 rounded-pill px-3 py-2 mb-2" data-home-me="1">
+        <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-ink-950 text-xs font-black shrink-0">{inspector[0]}</span>
+        <div className="flex items-baseline gap-3 flex-wrap text-xs">
+          <span className="text-dim-200">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
+          {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대<span className="text-dim-500"> (내 몫)</span></span>}
+          {me.perHour == null && me.paceNote && <span className="text-dim-400">페이스 못 잼 · {me.paceNote}</span>}
+          {ago != null && <span className="text-dim-400">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
         </div>
-        {(() => {
-          const _autoLabel = currentPier ? `자동·${currentPier.code}` : gpsState === 'loading' ? '자동…' : gpsState === 'far' ? '자동·외부' : gpsState === 'denied' ? '자동·위치꺼짐' : '자동';
-          const _cur = pierFilter === 'auto' ? _autoLabel : pierFilter === 'all' ? '전체' : pierFilter;
-          const _tone = pierFilter === 'PCTC' ? 'is-blue' : pierFilter === 'PNCT' ? 'is-violet' : '';   // 4.01: 눌린 칩(chip-v2 is-on) — 부두 색
-          const _opts = [{ id: 'auto', label: _autoLabel }, { id: 'PCTC', label: 'PCTC' }, { id: 'PNCT', label: 'PNCT' }, { id: 'all', label: '전체' }];
-          return (
-            <div className="relative shrink-0">
-              <button onClick={() => setTopMenu(m => (m === 'pier' ? '' : 'pier'))} aria-haspopup="menu" aria-expanded={topMenu === 'pier'}
-                className={`chip-v2 is-on ${_tone} max-w-full`}>
-                <span className="truncate">📍 {_cur} ▾</span>
-              </button>
-              {topMenu === 'pier' && (
-                <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[150px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
-                  {_opts.map(b => (
-                    <button key={b.id} role="menuitem" onClick={() => { setPierFilter(b.id); setTopMenu(''); }}
-                      className={`w-full text-left px-3 py-2.5 rounded text-xs font-bold ${pierFilter === b.id ? 'bg-ink-750 text-dim-100' : 'text-dim-200 hover:bg-ink-800'}`}>
-                      {pierFilter === b.id ? '✓ ' : ''}{b.label}
-                    </button>
-                  ))}
-                  <button role="menuitem" onClick={() => { measureGps(true); setPierFilter('auto'); setTopMenu(''); }}
-                    className="w-full text-left px-3 py-2.5 rounded text-xs text-dim-300 hover:bg-ink-800 border-t border-line-soft mt-1">
-                    🔄 위치 다시 재기
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        {/* 3.55-01(검수사 2026-09-22): 조회만은 보기만 — 새 항차·완료·삭제 버튼을 그리지 않는다(3.51 은 눌렀을 때 막았다). */}
-        {!_viewOnly && <div className="relative shrink-0">
-          <button onClick={() => setTopMenu(m => (m === 'new' ? '' : 'new'))} aria-haspopup="menu" aria-expanded={topMenu === 'new'}
-            className="pop-btn pop-green pop-sm whitespace-nowrap">
-            <Plus className="ico-s"/>새 항차 ▾
-          </button>
-          {topMenu === 'new' && (
-            <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[170px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
-              <button role="menuitem" onClick={() => { setTopMenu(''); setShowCreate('discharge'); }}
-                className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-blue-200 hover:bg-ink-800 flex items-center gap-1"><ArrowDown className="ico-s"/>양하 항차</button>
-              <button role="menuitem" onClick={() => { setTopMenu(''); setShowCreate('loading'); }}
-                className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-amber-200 hover:bg-ink-800 flex items-center gap-1"><ArrowUp className="ico-s"/>선적 항차</button>
-              <button role="menuitem" onClick={() => { setTopMenu(''); setShowForecast(true); setFcText(''); }}
-                title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
-                className="w-full text-left px-3 py-2.5 rounded text-xs font-bold text-orange-200 hover:bg-ink-800">📋 물량 예보 붙여넣기</button>
-            </div>
-          )}
-        </div>}
-        {/* TallyOne 1.5: 화면 데이터만 새로고침 — 로그인을 유지한 채 구독만 재연결한다. */}
-        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt} className="lift3 border-2 !min-h-[40px] !px-2"/>
       </div>
-      {/* 펼친 메뉴 밖을 누르면 닫힌다 */}
-      {topMenu && <div className="fixed inset-0 z-20" onClick={() => setTopMenu('')} />}
+    );
+  })() : null;
+  //  3.54(검수사 2026-09-21 «수집기표시는 수석대쉬보드 표기를 절반으로 같이 사용합니다»): 수석 상황판 입구는 상태 띠에. V9.44·1.41 그대로 — canOpenChief 인 사람에게만.
+  const chiefBtn = _chiefBtn ? (
+    <button type="button" onClick={onOpenChiefDashboard} data-home-chip="chief" title="수석 상황판 — 전체 검수원 진행률·통계"
+      className="lift3 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-pill px-3 border-2 border-purple-600/70 bg-purple-950/50 text-purple-100 text-sm2 font-black hover:bg-purple-900/60" style={{ minHeight: 'var(--tap-chip)' }}>
+      📊 수석 상황판 →
+    </button>
+  ) : null;
+  //  3.55: 부두 고르기(자동·PCTC·PNCT·전체 · 위치 다시 재기)와 새 항차(양하·선적·예보)는 누르면 펼쳐지는 단추 하나씩 — 처리기 그대로.
+  const pierMenu = (() => {
+    const _autoLabel = currentPier ? `자동·${currentPier.code}` : gpsState === 'loading' ? '자동…' : gpsState === 'far' ? '자동·외부' : gpsState === 'denied' ? '자동·위치꺼짐' : '자동';
+    const _cur = pierFilter === 'auto' ? _autoLabel : pierFilter === 'all' ? '전체' : pierFilter;
+    const _tone = pierFilter === 'PCTC' ? 'is-blue' : pierFilter === 'PNCT' ? 'is-violet' : '';   // 4.01: 눌린 칩(chip-v2 is-on) — 부두 색
+    const _opts = [{ id: 'auto', label: _autoLabel }, { id: 'PCTC', label: 'PCTC' }, { id: 'PNCT', label: 'PNCT' }, { id: 'all', label: '전체' }];
+    return (
+      <div className="relative min-w-0" data-home-menu="pier">
+        <button onClick={() => setTopMenu(m => (m === 'pier' ? '' : 'pier'))} aria-haspopup="menu" aria-expanded={topMenu === 'pier'}
+          className={`chip-v2 is-on ${_tone} max-w-full w-full justify-center ${wide ? '' : '!h-[var(--tap)]'}`}>
+          <span className="truncate">📍 {_cur} ▾</span>
+        </button>
+        {topMenu === 'pier' && (
+          <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[150px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
+            {_opts.map(b => (
+              <button key={b.id} role="menuitem" onClick={() => { setPierFilter(b.id); setTopMenu(''); }}
+                className={`w-full text-left px-3 py-2.5 rounded text-sm font-bold ${pierFilter === b.id ? 'bg-ink-750 text-dim-100' : 'text-dim-200 hover:bg-ink-800'}`}>
+                {pierFilter === b.id ? '✓ ' : ''}{b.label}
+              </button>
+            ))}
+            <button role="menuitem" onClick={() => { measureGps(true); setPierFilter('auto'); setTopMenu(''); }}
+              className="w-full text-left px-3 py-2.5 rounded text-sm text-dim-300 hover:bg-ink-800 border-t border-line-soft mt-1">
+              🔄 위치 다시 재기
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  })();
+  //  3.55-01(검수사 2026-09-22): 조회만은 보기만 — 새 항차·완료·삭제 버튼을 그리지 않는다(3.51 은 눌렀을 때 막았다).
+  const newMenu = !_viewOnly ? (
+    <div className="relative min-w-0" data-home-menu="new">
+      <button onClick={() => setTopMenu(m => (m === 'new' ? '' : 'new'))} aria-haspopup="menu" aria-expanded={topMenu === 'new'}
+        className={`pop-btn pop-green pop-sm whitespace-nowrap w-full ${wide ? '' : '!h-[var(--tap)]'}`}>
+        <Plus className="ico-s"/>새 항차 ▾
+      </button>
+      {topMenu === 'new' && (
+        <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[170px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
+          <button role="menuitem" onClick={() => { setTopMenu(''); setShowCreate('discharge'); }}
+            className="w-full text-left px-3 py-2.5 rounded text-sm font-bold text-blue-200 hover:bg-ink-800 flex items-center gap-1"><ArrowDown className="ico-s"/>양하 항차</button>
+          <button role="menuitem" onClick={() => { setTopMenu(''); setShowCreate('loading'); }}
+            className="w-full text-left px-3 py-2.5 rounded text-sm font-bold text-amber-200 hover:bg-ink-800 flex items-center gap-1"><ArrowUp className="ico-s"/>선적 항차</button>
+          <button role="menuitem" onClick={() => { setTopMenu(''); setShowForecast(true); setFcText(''); }}
+            title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
+            className="w-full text-left px-3 py-2.5 rounded text-sm font-bold text-orange-200 hover:bg-ink-800">📋 물량 예보 붙여넣기</button>
+        </div>
+      )}
+    </div>
+  ) : null;
+  //  TallyOne 1.5: 화면 데이터만 새로고침 — 로그인을 유지한 채 구독만 재연결한다.
+  const refreshBtn = <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt} className={`lift3 border-2 !px-2 ${wide ? '!min-h-[var(--tap-chip)]' : '!min-h-[var(--tap)] !h-[var(--tap)] min-w-[var(--tap)]'}`}/>;
 
+  //  목록 몸통 — 컴·폰 같은 줄. 묶음 머리 «⚓ 작업 중 3» · 줄 · 그 밖의 배 · 자료 대기 · 선박 실 정책.
+  //  4.25 2차: 컴은 날짜 묶음이 하나 둘 늘어난다(그 밖의 배까지 날짜로 편다) — 머리 위 여백을 4→2px 로 줄여 1440 보통에서 종전처럼 마지막 줄까지 첫 화면.
+  const grpHead = (id, text) => <div className="text-xs font-black text-dim-400 tracking-wide px-1.5 pt-0.5" data-home-group={id}>{text}</div>;
+  const foldBar = (id, ico, title, sub, open, onToggle) => (
+    <button type="button" onClick={onToggle} aria-expanded={open} data-home-fold={id}
+      className="fold-bar w-full min-w-0 flex items-center gap-2 px-2.5 py-1 text-left" style={{ minHeight: 'var(--tap)' }}>
+      <span className="fold-ico">{ico}</span>
+      <span className="text-sm2 font-black text-dim-200 whitespace-nowrap">{title}</span>
+      <span className="text-xs text-dim-400 min-w-0 truncate">{sub}</span>
+      <span className="ml-auto text-dim-500 shrink-0">{open ? '▾' : '▸'}</span>
+    </button>
+  );
+  const waitBar = waitList.length > 0 ? foldBar('wait', '⏳', `자료 대기 ${waitList.length}척`, _waitNames, waitOpen, () => { setWaitOpen(o => { if (!o) reveal(waitRef); return !o; }); }) : null;
+  const polBar = foldBar('policy', '🔒', '선박 실 정책', `${Object.keys({ ...DEFAULT_SHIP_POLICIES, ...shipPols }).length}척 등록 · 탭하면 수정`, polOpen, () => { setPolOpen(o => { if (!o) reveal(polRef); return !o; }); });
+  const listBody = (
+    <>
       {list.length === 0 && waitList.length === 0 && (
         <div className="bg-ink-900 border border-line rounded-btn p-10 text-center">
           <div className="text-dim-400 text-sm mb-2">진행 중인 항차가 없습니다</div>
           <div className="text-xs text-dim-500">위 [＋ 새 항차] 버튼으로 새 항차를 만드세요</div>
         </div>
       )}
-
-      {/* 2.09: 부두 구분줄의 idx 계산은 **그룹 배열 기준**이다 — 전체 list 기준으로 두면 접을 때 헤더가 사라지거나 겹친다. */}
-      <div className="space-y-3 sm:space-y-4">
-        {openList.map((v, idx) => {
-          const _grp = openList;
-          const isHerePier = effectivePier && v._pier === effectivePier;
-          const isFirstHere = isHerePier && (idx === 0 || _grp[idx - 1]._pier !== effectivePier);
-          const isFirstOther = effectivePier && !isHerePier && idx > 0 && _grp[idx - 1]._pier === effectivePier;
-          return (
-            <React.Fragment key={v.key}>
-              {isFirstHere && effectivePier && (
-                <div className={`text-2xs font-bold uppercase tracking-wider px-2 ${
-                  effectivePier === 'PCTC' ? 'text-blue-300' : 'text-purple-300'
-                }`}>
-                  📍 {effectivePier} (현 위치)
-                </div>
-              )}
-              {isFirstOther && (
-                <div className="text-2xs font-bold uppercase tracking-wider text-dim-400 px-2 mt-3">
-                  ── 다른 부두 ──
-                </div>
-              )}
-              <VoyageCard
-                voyage={v}
-                inspector={inspector}
-                pilotForecast={pilotForecast}
-                activeInspectors={activeInspectors[v.key] || []}
-                onOpen={(m) => onOpenVoyage(v.key, m)}
-                onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
-                onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
-                inspectorDone={isAllDone(v)}
-                modeDone={{
-                  d: v.info?.inspectorDone || !!v.info?.dischargeDone,
-                  l: v.info?.inspectorDone || !!v.info?.loadingDone,
-                  hasD: !!(v.discharge && Object.keys(v.discharge).length),
-                  hasL: !!(v.loading && Object.keys(v.loading).length),
-                }}
-                onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
-                laneRow={laneOf(v.info?.lane)}
-                showRoute
-              />
-            </React.Fragment>
-          );
-        })}
-      </div>
-
-      {/* ── 2.09 (검수사 확정 2026-08-23): 나머지 배는 접어 둔다. 규격은 「선박 실 정책」 판과 같다. ── */}
-      {foldList.length > 0 && (
-        <div className="mt-2 fold-bar">
-          <button onClick={() => setFoldOpen(o => !o)}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-            <span className="fold-ico">🚢</span>
-            <span className="text-sm2 font-black text-dim-200 whitespace-nowrap">그 밖의 배</span>
-            <span className="text-xxs text-dim-400">{foldList.length}척 · 탭하면 펼침</span>
-            <span className="ml-auto text-dim-500">{foldOpen ? '▾' : '▸'}</span>
-          </button>
-          {/* ⚠ 언마운트하지 않는다 — departBadgeAt sticky 기록이 죽으면 콘앱 출항 표시가 멈춘다. */}
-          <div className={foldOpen ? 'px-2 pb-2 space-y-3 sm:space-y-4' : 'hidden'}>
-            {foldList.map((v, idx) => {
-              const _grp = foldList;
-              const isHerePier = effectivePier && v._pier === effectivePier;
-              const isFirstHere = isHerePier && (idx === 0 || _grp[idx - 1]._pier !== effectivePier);
-              const isFirstOther = effectivePier && !isHerePier && idx > 0 && _grp[idx - 1]._pier === effectivePier;
-              return (
-                <React.Fragment key={v.key}>
-                  {isFirstHere && effectivePier && (
-                    <div className={`text-2xs font-bold uppercase tracking-wider px-2 ${
-                      effectivePier === 'PCTC' ? 'text-blue-300' : 'text-purple-300'
-                    }`}>📍 {effectivePier} (현 위치)</div>
-                  )}
-                  {isFirstOther && (
-                    <div className="text-2xs font-bold uppercase tracking-wider text-dim-400 px-2 mt-3">── 다른 부두 ──</div>
-                  )}
-                  <VoyageCard
-                    voyage={v}
-                    inspector={inspector}
-                    pilotForecast={pilotForecast}
-                    activeInspectors={activeInspectors[v.key] || []}
-                    onOpen={(m) => onOpenVoyage(v.key, m)}
-                    onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
-                    onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
-                    inspectorDone={isAllDone(v)}
-                    modeDone={{
-                      d: v.info?.inspectorDone || !!v.info?.dischargeDone,
-                      l: v.info?.inspectorDone || !!v.info?.loadingDone,
-                      hasD: !!(v.discharge && Object.keys(v.discharge).length),
-                      hasL: !!(v.loading && Object.keys(v.loading).length),
-                    }}
-                    onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
-                    laneRow={laneOf(v.info?.lane)}
-                  />
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── 4.01: 자료 대기 — 자료가 하나도 없는 배는 목록에서 빼고 한 줄로 접어 둔다(위 list 주석). 펼치면 종전 카드 그대로. ── */}
+      {groups.map((g) => (
+        <React.Fragment key={g.id}>
+          {grpHead(g.id, `${g.ico} ${g.label} ${g.rows.length}`)}
+          {g.rows.map(rowOf)}
+        </React.Fragment>
+      ))}
+      {/* ── 2.09: 나머지 배(foldList) — 폰은 접힘 한 줄(컴은 위 날짜 묶음 안에 이미 섰다 — 4.25 2차). ⚠ 줄은 언마운트하지 않는다(hidden) — 출항 배지 sticky 기록(departBadgeAt)이 줄 안에서 쓰인다(콘앱 출항 표시). ── */}
+      {!wide && foldList.length > 0 && foldBar('other', '🗓', `${otherLabel} ${foldList.length}척`, foldList.map((v) => v.info?.vsl || v.key).join(' · '), foldOpen, () => setFoldOpen(o => !o))}
+      {!wide && foldList.length > 0 && <div className={foldOpen ? 'space-y-1.5' : 'hidden'} data-home-other="1">{foldList.map(rowOf)}</div>}
+      {/* ── 4.01: 자료 대기 — 자료가 하나도 없는 배는 목록에서 빼고 한 줄로 접어 둔다(위 list 주석). 펼치면 그 배 줄. 폰은 접힘 줄 바로 아래, 컴은 목록 끝(접힘 줄은 칸 맨 아래에 붙어 있다). ── */}
+      {!wide && waitBar}
       {waitList.length > 0 && (
-        <div className="mt-3 fold-bar">
-          <button onClick={() => setWaitOpen(o => !o)} aria-expanded={waitOpen}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-            <span className="fold-ico">⏳</span>
-            <span className="text-sm2 font-black text-dim-200 whitespace-nowrap">자료 대기</span>
-            <span className="text-xxs text-dim-400" title="자료가 들어오면 위 목록으로 올라갑니다">{waitList.length}척 · 탭하면 펼침</span>
-            <span className="ml-auto text-dim-500">{waitOpen ? '▾' : '▸'}</span>
-          </button>
-          {/* ⚠ 언마운트하지 않는다 — departBadgeAt sticky 기록(콘앱 출항 표시)이 이 카드 안에서 쓰인다. */}
-          <div className={waitOpen ? 'px-2 pb-2 space-y-3 sm:space-y-4' : 'hidden'}>
-            {waitList.map(v => (
-              <VoyageCard
-                key={v.key}
-                voyage={v}
-                inspector={inspector}
-                pilotForecast={pilotForecast}
-                activeInspectors={activeInspectors[v.key] || []}
-                onOpen={(m) => onOpenVoyage(v.key, m)}
-                onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
-                onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
-                inspectorDone={isAllDone(v)}
-                modeDone={{
-                  d: v.info?.inspectorDone || !!v.info?.dischargeDone,
-                  l: v.info?.inspectorDone || !!v.info?.loadingDone,
-                  hasD: !!(v.discharge && Object.keys(v.discharge).length),
-                  hasL: !!(v.loading && Object.keys(v.loading).length),
-                }}
-                onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
-                laneRow={laneOf(v.info?.lane)}
-              />
-            ))}
-          </div>
+        //  ⚠ 언마운트하지 않는다 — departBadgeAt sticky 기록(콘앱 출항 표시)이 줄 안에서 쓰인다.
+        <div ref={waitRef} className={waitOpen ? 'space-y-1.5' : 'hidden'} data-home-wait="1">
+          {wide && grpHead('wait', `⏳ 자료 대기 ${waitList.length}`)}
+          {waitList.map(rowOf)}
         </div>
       )}
-
       {/* ── 1.83: 선박 실 정책 판 — 조합(LOLO+실확인)이 한눈에. 탭하면 수정 모드. ── */}
-      <div className="mt-3 fold-bar">
-        <button onClick={() => setPolOpen(o => !o)}
-          className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-          <span className="fold-ico">🔒</span>
-          <span className="text-sm2 font-black text-dim-200 whitespace-nowrap">선박 실 정책</span>
-          <span className="text-xxs text-dim-400">{Object.keys({ ...DEFAULT_SHIP_POLICIES, ...shipPols }).length}척 등록 · 탭하면 수정</span>
-          <span className="ml-auto text-dim-500">{polOpen ? '▾' : '▸'}</span>
-        </button>
-        {polOpen && (() => {
-          const all = { ...DEFAULT_SHIP_POLICIES, ...shipPols };
-          const groups = {};
-          Object.entries(all).forEach(([k, pol]) => {
-            const lbl = policyComboLabel(pol) || '일반';
-            (groups[lbl] = groups[lbl] || []).push({ k, pol });
-          });
-          const order = ['일반', '엠티실 확인', '엠티실 부착', 'LOLO', 'LOLO+엠티실 확인', 'LOLO+엠티실 부착'];
-          const keys = [...order.filter(o => groups[o]), ...Object.keys(groups).filter(g => !order.includes(g))];
-          return (
-            <div className="px-3 pb-3 space-y-1.5">
-              {keys.map(g => (
-                <div key={g} className="flex items-start gap-2 text-xs2">
-                  <span className={`flex-none px-1.5 py-0.5 rounded font-bold ${g === '일반' ? 'bg-ink-800 text-dim-300'
-                    : g.startsWith('LOLO') ? 'bg-purple-900/60 text-purple-200' : 'bg-cyan-900/50 text-cyan-200'}`}>{g}</span>
-                  <span className="flex flex-wrap gap-1">
-                    {groups[g].map(({ k, pol }) => (
-                      <button key={k} onClick={() => setPolEdit({ vsl: pol.name || k, policy: pol })}
-                        className="px-1.5 py-0.5 rounded bg-ink-800/80 hover:bg-ink-750 text-dim-100">
-                        {pol.code || pol.name || k}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-              ))}
-              <div className="text-xxs text-dim-500">신규 선박은 선적 화면을 처음 열 때 한 번만 묻습니다.</div>
-            </div>
-          );
-        })()}
-      </div>
+      {!wide && polBar}
+      {polOpen && (() => {
+        const all = { ...DEFAULT_SHIP_POLICIES, ...shipPols };
+        const groups = {};
+        Object.entries(all).forEach(([k, pol]) => {
+          const lbl = policyComboLabel(pol) || '일반';
+          (groups[lbl] = groups[lbl] || []).push({ k, pol });
+        });
+        const order = ['일반', '엠티실 확인', '엠티실 부착', 'LOLO', 'LOLO+엠티실 확인', 'LOLO+엠티실 부착'];
+        const keys = [...order.filter(o => groups[o]), ...Object.keys(groups).filter(g => !order.includes(g))];
+        return (
+          <div ref={polRef} className="fold-bar px-3 py-2.5 space-y-1.5" data-home-policy="1">
+            {wide && <div className="text-sm2 font-black text-dim-200">🔒 선박 실 정책</div>}
+            {keys.map(g => (
+              <div key={g} className="flex items-start gap-2 text-sm">
+                <span className={`flex-none px-1.5 py-0.5 rounded font-bold ${g === '일반' ? 'bg-ink-800 text-dim-300'
+                  : g.startsWith('LOLO') ? 'bg-purple-900/60 text-purple-200' : 'bg-cyan-900/50 text-cyan-200'}`}>{g}</span>
+                <span className="flex flex-wrap gap-1">
+                  {groups[g].map(({ k, pol }) => (
+                    <button key={k} onClick={() => setPolEdit({ vsl: pol.name || k, policy: pol })}
+                      className="px-2 py-0.5 rounded bg-ink-800/80 hover:bg-ink-750 text-dim-100">
+                      {pol.code || pol.name || k}
+                    </button>
+                  ))}
+                </span>
+              </div>
+            ))}
+            <div className="text-xs text-dim-500">신규 선박은 선적 화면을 처음 열 때 한 번만 묻습니다.</div>
+          </div>
+        );
+      })()}
+    </>
+  );
+
+  return (
+    <div className={`home-stage px-3 ${wide ? 'pt-2' : 'pt-2 pb-4'}`} data-home-root="1" data-home-layout={wide ? 'pc' : 'phone'}>
+      {/* V9.15 브랜드 배지 삭제 · V9.42 상단 3카드 삭제 · 3.54 «검색창을 없애고 미르로 대체» — 질문은 떠 있는 미르가 같은 답 엔진으로 받는다. */}
+      {wide ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pb-2" data-home-strip="pc">
+          {collectorBtn}
+          <span className="w-px h-4 bg-line-strong shrink-0" aria-hidden="true" />
+          <span className="whitespace-nowrap text-sm2 font-bold text-dim-300 px-1" data-home-chip="count"
+            title={`자료 있는 항차 ${list.length} · 자료 대기 ${waitList.length}`}>
+            🚢 항차 {list.length + waitList.length} · <b className="text-dim-100">작업 중 {_workN}</b>
+          </span>
+          {fbChip}
+          {meChip}
+          <span className="flex-1" />
+          {pierMenu}
+          {newMenu}
+          {refreshBtn}
+          {chiefBtn}
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pb-1.5" data-home-strip="phone">
+            {collectorBtn}
+            {fbChip}
+            {meChip}
+            <span className="flex-1" />
+            {chiefBtn}
+          </div>
+          <div className={`grid ${newMenu ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto]'} gap-2 pb-2 items-stretch`} data-home-ctrl="1">
+            {pierMenu}
+            {newMenu}
+            {refreshBtn}
+          </div>
+        </>
+      )}
+      {meLine}
+      {/* 펼친 메뉴 밖을 누르면 닫힌다 */}
+      {topMenu && <div className="fixed inset-0 z-20" onClick={() => setTopMenu('')} />}
+
+      {wide ? (
+        <div ref={panesRef} className="grid grid-cols-[minmax(380px,38%)_minmax(0,1fr)] gap-3" style={{ height: paneH ? paneH + 'px' : 'calc(100vh - 7rem)' }} data-home-panes="1">
+          <div className="min-h-0 flex flex-col gap-1.5" data-home-list="1">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5" style={{ scrollbarWidth: 'thin' }} data-home-scroll="1">{listBody}</div>
+            {waitBar}
+            {polBar}
+          </div>
+          <div key={curKey || 'none'} className="min-h-0 overflow-y-auto pb-32" style={{ scrollbarWidth: 'thin' }} data-home-detail="1">
+            {curV ? detailOf(curV, true) : <div className="text-sm text-dim-400 text-center py-16">배를 고르면 여기에 자세히 나옵니다</div>}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5" data-home-list="1">{listBody}</div>
+      )}
+
+      {/* 폰 — 줄을 누르면 그 배만 전체화면(컴 오른쪽 상세와 같은 내용). [‹ 목록] 으로 닫는다. 4.24 수석 상황판 폰 시트와 같은 그릇(z-45 · 창은 그 위 z-50). */}
+      {sheetV && (
+        <div className="fixed inset-0 z-[45] bg-ink-950 overflow-y-auto" role="dialog" aria-label={`${sheetV.info.vsl} 전체화면`} data-home-sheet={sheetV.key}>
+          <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-ink-950 border-b border-line">
+            <button type="button" onClick={() => setSheetKey('')} className="chip-v2 shrink-0 !h-[var(--tap)]" data-home-sheet-close="1">‹ 목록</button>
+            <span className="flex-1" />
+            <ShipOpenButtons voyage={sheetV} onOpen={(m) => onOpenVoyage(sheetV.key, m)} />
+          </div>
+          {/* 아래 여백 pb-36(144px) — 떠 있는 미르 얼굴(바닥에서 76~124px · 오른쪽)이 끝까지 내린 마지막 줄(🗑 삭제 · 조회만이면 자료 대수 줄)을 덮지 않게(4.25 2차 · 모의 확인 ②) */}
+          <div className="px-3 pt-3 pb-36" data-home-sheet-body="1">{detailOf(sheetV, false)}</div>
+        </div>
+      )}
 
       {polEdit && (
         <ShipPolicyModal open vsl={polEdit.vsl} code={polEdit.policy?.code || ''} inspector={inspector}
@@ -1351,18 +1410,9 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, showRoute = false }) {
-  // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 48 고정 · 한 줄 고정 · 폰 균등 / PC 전폭.
-  //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
-  const ACT_BTN = 'h-12 px-2.5 rounded-pill text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
-  // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
-  const [zap, setZap] = useState('');
-  //  3.55(검수사 2026-09-21): 폰에서는 카드가 **접힌 모습**이 기본이다 — 선박·부두·알림·작업일시·자료 상태·진행만 보인다.
-  //    신고도착·자동 배지·항차·항로·대수 내역·완료 버튼·삭제는 «자세히»를 눌렀을 때 나온다. PC(lg 이상)는 종전 그대로(2.15 시안).
-  //    ⚠ 감추기는 CSS 뿐이다 — 트리와 계산은 그대로라 출항 배지 sticky 기록 같은 부수 동작이 멈추지 않는다.
-  const [more, setMore] = useState(false);
-  const FOLD = more ? '' : 'max-lg:hidden';
-  const [zapMsg, setZapMsg] = useState('');
+// ── ★ 4.25 배 한 척의 재료 한 벌 — 줄(ShipRow)·상세(ShipDetail)·시트가 이것 하나를 부른다(종전 VoyageCard 본문의 계산을 그대로 옮겼다). ──
+//   막대·대수 = computeStats(평택분 · progressOf 한 벌) · 터미널 본선 = termAggOf 한 벌 · 출항 배지 = badgeRule.decideBadge 한 벌.
+export function shipViewOf(voyage, pilotForecast = {}) {
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
@@ -1383,11 +1433,6 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
     //  4.13: 항차 목록 카드에도 상태(미확정·확정·불일치) — «시프팅 5건»이 확정인지 모르는 채로 보이지 않게(검수사 2026-10-09). EDI 는 다시 파싱하지 않는다(light).
     try { const _se = shiftEvidenceOf(voyage.key, voyage, _shiftMap, { light: true }); disStats.shiftState = _se.label || ''; loaStats.shiftState = _se.label || ''; } catch (e) { console.warn('[4.13] 시프팅 상태 판정 실패 — 카드에 상태를 안 적습니다:', e); }
     // 1.78-01(인계함 2026-08-16): 모브 수를 «×2 고정»이 아니라 **실제 완료로** 센다.
-    //   검수사 확정 — *"그게 그래서 양하 리스트에 있어야 하고 선적 리스트에 있어야 하는 이유입니다.
-    //   그러면 투타임이 적히게 되었을테니까요."* 마감텔리 실물(MAMP 631N&633S Vol 시트)도
-    //   SHIFT 를 1 TIME / 2 TIME 으로 나눠 센다 — 양하 완료 1 + 선적 완료 1 = 2 TIME.
-    //   1.76-05 카드 둘(_shift:'out'/'in') 구조가 그대로 답이다: 완료 도장(sec.completed)을 양쪽에서 센다.
-    //   완료가 하나도 없으면(작업 전) 종전대로 ×2 를 보여주되 «예정»임을 밝힌다.
     //  2.89-07 (검수사 «양하는 양하 선적은 선적이지») — 모브를 모드별로 가른다.
     //    양하 줄 = 내림(시프팅∩양하완료)만, 선적 줄 = 실음(시프팅∩선적완료)만.
     const _dc = voyage.discharge?.completed || {}, _lc = voyage.loading?.completed || {};
@@ -1401,8 +1446,6 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
   const pier = voyage._pier || '';
   const berth = voyage._berth || '';
 
-  // V9.57: 출항 배지 판정을 렌더 JSX 밖으로 끌어올림 — sticky 기록(Firebase 쓰기)을
-  //   렌더 중 부수효과가 아니라 useEffect에서 하기 위함. 판정 자체는 badgeRule.decideBadge 그대로.
   // V9.57: ±12h 창 검사 인라인 2벌 → badgeRule.inWindow(WINDOW_H) 한 곳으로 단일화.
   const pfDep = (() => {
     // V9.36-01: 도선 nextDep에도 같은 작업창 가드 — 도선 예보는 '다음 출항'으로 계속 갱신되므로
@@ -1414,18 +1457,17 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
   //  3.53-13 (검수사 «출항 시간은 포트미스 도선협회 두곳자료로 사용합니다») — 도선 예보가 없으면 PORT-MIS 신고 출항. 같은 작업창(±12h) 가드.
   const pmDep = (() => { const t = voyage._pm && voyage._pm.etd ? parsePortMisDateTime(voyage._pm.etd) : null; return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null; })();
   // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료).
-  //   V9.57: disStats/loaStats(위에서 같은 인자로 계산)를 재사용 — IIFE 안 중복 computeStats 제거.
   const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0 || loaStats.workTotal > 0));
   const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
   //  ★ 4.16: 출항 배지는 **작업량**(평택분 + 이 모드 시프팅 모브)이 남았는지로 판정한다 — 종전 값 그대로. 막대·«남음» 은 평택분(§7.8-①).
   const _remW = (st) => (st.workTotal > 0 ? Math.max(0, st.workTotal - st.workDone) : null);
-  // 2.15: 우측 액션 패널의 «남은 수» — 좌측 총계와 다른 숫자라야 두 번 쓰는 값이 안 된다.
   //  2.67-02: 캔슬된 쪽은 «남음» 도 없다 — 남은 일이 아니라 없는 일이다.
   const remD = sideCancelled(voyage.info, 'discharge') ? null : _rem(disStats);
   const remL = sideCancelled(voyage.info, 'loading') ? null : _rem(loaStats);
   //  ★ 4.05 (검수사 2026-10-05 «앱 항차목록은 작업중인지도 모르는 화면» · «1개 단위로 맞추긴 힘들지만 어느정도는 맞아야») —
-  //    ① «대기 중» 은 앱에 접속한 검수원이 없다는 뜻일 뿐이라 터미널이 작업 중인 배도 대기로 보였다 → 터미널이 작업 중으로 알리면(isWorkingNow — 작업시작일시를 지난 것만) «본선 작업중».
-  //    ② 컨별 터미널 실적은 안 받으므로(2.40-01) 완료 수는 누른 것뿐이다 → 터미널 호기 합계(termBoardOf)의 완료·잔여를 참고 숫자로 곁들인다. 완료 기록·남음 계산은 그대로.
+  //    ① 터미널이 작업 중으로 알리면(isWorkingNow — 작업시작일시를 지난 것만) «본선 작업중».
+  //    ② 터미널 호기 합계(termBoardOf)의 완료·잔여를 참고 숫자로 곁들인다. 완료 기록·남음 계산은 그대로.
+  //    4.25: 같은 숫자를 한 번만 — 상세 칸 아래 «본선 n/전체» 한 자리(종전 청록 막대·글줄·오른쪽 패널 «본선 잔여» 는 그 한 자리로 모았다 · 설계 ⑥).
   const _termWorking = isWorkingNow(voyage);
   const _tp = termAggOf(voyage.info);
   const _tpOf = (side) => (_tp && _tp[side] && (_tp[side].done + _tp[side].rest) > 0 ? _tp[side] : null);
@@ -1436,8 +1478,61 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
     pfDep, pmDep, stickyAt: voyage.info?.departBadgeAt || null,
     eta: voyage._etaMs, etd: voyage._etdMs, src: voyage._etaSrc,
   });
-  // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — 렌더 IIFE 안 fire-and-forget에서 useEffect로 이동.
-  //   departBadgeAt이 이미 있으면 발화하지 않고, 실패는 console.warn으로 드러낸다.
+  // ★ 4.01: 오늘 작업하는 배 — 작업일시 배지의 «오늘»과 같은 판정(dayLabel). 이미 끝났으면(출항 지남) 아니다. 줄 테두리만 밝힌다.
+  const _isToday = (() => {
+    const e = voyage._etaMs, t = voyage._etdMs;
+    if (t != null && t < Date.now()) return false;
+    return e != null ? (dayLabel(e) === '오늘' || e <= Date.now()) : (t != null && dayLabel(t) === '오늘');
+  })();
+  return { dis, loa, disStats, loaStats, pier, berth, pfDep, pmDep, remD, remL, _termWorking, _tp, _tpDis, _tpLod, departBadge, _isToday };
+}
+
+const _hm2 = (ms) => { const x = new Date(ms); return `${_two(x.getHours())}:${_two(x.getMinutes())}`; };
+//  줄 오른쪽 일정 글 — 오늘·내일·어제는 그 말로, 그 밖은 «10/15 08:00»(설계 줄 모양).
+const _dayShort = (ms) => { const d = dayLabel(ms); if (d === '오늘' || d === '내일' || d === '어제') return d; const x = new Date(ms); return `${x.getMonth() + 1}/${x.getDate()}`; };
+const _agoTxt = (t) => {
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if (m < 1) return '방금';
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}시간 ${m % 60}분 전` : `${Math.floor(h / 24)}일 전`;
+};
+const _lastDoneAt = (sec) => { let t = 0; for (const r of Object.values(sec?.completed || {})) { const a = r && typeof r === 'object' ? Number(r.at) || 0 : 0; if (a > t) t = a; } return t; };
+//  3.53 목적지 확인 칩을 누르면 그 컨 상세로 — 줄·상세 같은 처리(종전 카드 머리 칩 그대로).
+const _podGo = (voyage, cns, onOpen) => { setPodFocus({ voyageKey: voyage.key, mode: 'discharge', cn: cns[0] }); onOpen('discharge'); };
+function PodIssueChip({ voyage, cns, onOpen, big = false }) {
+  if (!cns || !cns.length) return null;
+  //  ★ 3.53 — **선박명 옆 문제 알림.** 검수사 2026-09-16 *«진행상황에서 선박명 옆빈곳에 발생된 문제 알림을 주었으면 합니다. 둘중 한군데를 누르면 상세카드가 나오고 수정 할수 있게»*
+  //    ⚠ 줄(`<button>`) 안에도 서므로 `<span role="button">` 으로 둔다(단추 속 단추는 HTML 이 아니다). 세는 자리는 utils 한 벌(`podConflictOf`).
+  return (
+    <span role="button" tabIndex={0} data-pod-issue={cns.length}
+      onClick={(e) => { e.stopPropagation(); _podGo(voyage, cns, onOpen); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); _podGo(voyage, cns, onOpen); } }}
+      title="목적지(POD)가 자료마다 다른 컨이 있습니다 — 눌러서 확인·확정"
+      className={`${big ? 'text-sm px-2.5 py-1' : 'text-xs px-1.5 py-0'} inline-flex items-center bg-amber-900/70 border border-amber-500 text-amber-100 rounded-pill font-black leading-none whitespace-nowrap active:bg-amber-800`}>
+      ⚠ {big ? '목적지 확인 ' : '목적지 '}{cns.length}
+    </span>
+  );
+}
+
+//  줄 안 작은 막대 — 이름표 · 막대 · 완료/전체(상세 큰 숫자와 같은 computeStats 값).
+function RowBar({ label, mode, stats }) {
+  const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+  const lod = mode === 'loading';
+  return (
+    <span className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5" data-row-bar={mode} data-done={stats.done} data-total={stats.total}>
+      <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} !border !rounded-md px-1.5 text-xs font-black leading-4`}>{label}</span>
+      <span className="xp-bar xp-sm block"><span className={`xp-fill block ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></span>
+      <span className="mono text-xs font-black text-dim-100 whitespace-nowrap">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
+    </span>
+  );
+}
+
+// ── ★ 4.25 배 줄(설계 «한 줄 = 부두 띠·선박명·항차·선석·막대 둘·상태») — 누르면 컴은 오른쪽 상세, 폰은 전체화면 시트(onSelect). ──
+//   V9.57(H6) 출항 배지 «한 번 뜨면 유지»(departBadgeAt) 기록은 이 줄이 한다. 줄은 접힌 묶음 안에서도 언마운트하지 않는다(hidden) — 콘앱(cone.html)이 이 값으로 출항을 표시한다.
+export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], selected = false, onSelect, onOpen = null, canComplete = false, inspectorDone = false, modeDone = null }) {
+  const { dis, loa, disStats, loaStats, pier, berth, departBadge, _termWorking, _isToday } = shipViewOf(voyage, pilotForecast);
+  // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — departBadgeAt이 이미 있으면 발화하지 않고, 실패는 console.warn으로 드러낸다.
   const _isDepart = !!(departBadge && departBadge.kind === 'depart');
   useEffect(() => {
     if (!_isDepart || voyage.info?.departBadgeAt) return;
@@ -1446,488 +1541,515 @@ export function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onCompl
         .catch(e => console.warn('[배지] sticky 저장 실패', voyage.key, e));
     } catch (e) { console.warn('[배지] sticky 저장 실패', voyage.key, e); }
   }, [_isDepart, voyage.key, voyage.info?.departBadgeAt]);
-
-  // ★ 4.01: 오늘 작업하는 배 — 작업일시 배지의 «오늘»과 같은 판정(dayLabel). 이미 끝났으면(출항 지남) 아니다. 카드 테두리만 밝힌다(문구는 배지가 말한다).
-  const _isToday = (() => {
-    const e = voyage._etaMs, t = voyage._etdMs;
-    if (t != null && t < Date.now()) return false;
-    return e != null ? (dayLabel(e) === '오늘' || e <= Date.now()) : (t != null && dayLabel(t) === '오늘');
-  })();
-  // V9.15: 카드 테두리 부두색 제거 — 파랑=양하/호박=선적 전용으로 잠금(전면 점검 1-4). 부두는 📍배지가 말한다.
-  //  4.01: 카드 왼쪽 띠·선박 딱지만 부두색(PCTC 파랑 · PNCT 보라)으로 칠한다 — 양하/선적 막대 색(파랑/호박)과는 따로 읽힌다.
+  const voyTxt = voyage.info.voy_d || voyage.info.voy_l || voyage.info.voy || '';
+  const sub = [voyTxt, formatBerth(berth) || pier].filter(Boolean).join(' · ');
+  //  상태 — 접속 검수원 > (작업자면) 검수 완료 표시 > 본선 작업중 > 일정(출항 배지면 출항 시각)
+  const doneTxt = canComplete && (inspectorDone || modeDone?.d || modeDone?.l)
+    ? (inspectorDone ? '검수 완료 · 수석 대기' : [modeDone?.d && '양하 완료 ✓', modeDone?.l && '선적 완료 ✓'].filter(Boolean).join(' · ')) : '';
+  let st = '', stCls = 'text-dim-300', stTitle = '';
+  if (activeInspectors.length) { st = `● ${activeInspectors.map(a => a.name).join(', ')} 작업중`; stCls = 'text-emerald-300'; }
+  else if (doneTxt) { st = doneTxt; stCls = 'text-amber-300'; }
+  else if (_termWorking) { st = '본선 작업중'; stCls = 'text-cyan-200'; stTitle = '터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.'; }
+  else if (departBadge && departBadge.kind === 'depart') { st = `출항 ${_dayShort(departBadge.at)} ${_hm2(departBadge.at)}`; stCls = 'text-amber-200'; }
+  else if (voyage._etaMs != null) st = `${_dayShort(voyage._etaMs)} ${_hm2(voyage._etaMs)}`;
+  else if (voyage._etdMs != null) st = `~ ${_dayShort(voyage._etdMs)} ${_hm2(voyage._etdMs)}`;
+  else { st = '일정 미상'; stCls = 'text-dim-500'; }
+  const podCns = disStats.podIssueCns || [];
+  //  알림 줄 — 목적지 확인 · 사전에 없음 · 누락 · 예상(3.55 «누락은 접혀 있어도 보인다»). 없으면 줄을 안 만든다.
+  const alertOf = (st0, lbl) => [
+    !st0.forecastEdi && !st0.listOnly && !st0.partialEdi && st0.missing > 0 ? <span key={lbl + 'm'} className="text-xs font-bold text-red-300 whitespace-nowrap">{lbl} 누락 {st0.missing}</span> : null,
+    (st0.planOnly || st0.forecastEdi) ? <span key={lbl + 'f'} className="text-xs font-black px-1 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 whitespace-nowrap" title="확정 자료가 아닌 예상 수치입니다 — 상세에 내역이 나옵니다">{lbl} 예상</span> : null,
+  ];
+  const alerts = [...(dis && !sideCancelled(voyage.info, 'discharge') ? alertOf(disStats, '양하') : []), ...(loa && !sideCancelled(voyage.info, 'loading') ? alertOf(loaStats, '선적') : [])].filter(Boolean);
   return (
-    // ── 2.15 (검수사 시안 «컴용 — 우측 여백 활용») ──────────────────────────────
-    //   *«카드 전체를 좌(정보) 70% + 우(액션) 30% 로 분할 … 우측 280px 전용 액션 패널»*
-    //   PC 에서 카드 오른쪽이 비어 있던 자리에 «지금 처리 / 양하 완료 / 선적 완료» 를 세로로 세운다.
-    //   ⚠ 트리는 그대로 두고 클래스만 뒤집는다(LoginPage 에서 검증한 관용구) — 폰은 종전 세로 흐름.
-    <div className={`card-v2 ship-card ${pier === 'PCTC' ? 'pier-pctc' : pier === 'PNCT' ? 'pier-pnct' : ''} ${_isToday ? 'is-today' : ''} bg-ink-850 overflow-hidden lg:flex lg:items-stretch`}>  {/* 2.16 시안 V2: card-v2 가 radius 20 · 보더 white/6% · shadow · hover 2px 들림(PC만)을 준다.
-      카드면은 #151F32(ink-850), 우측 액션 패널은 한 단계 깊은 #0F172A — 종전엔 둘 다 #0F172A 라
-      패널이 카드에서 안 떨어져 보였다. */}
-      <div className="lg:flex-1 lg:min-w-0">
-      <button
-        onClick={() => onOpen()}
-        className="w-full px-3 py-2.5 hover:bg-ink-750/50 flex items-center justify-between gap-2"
-      >
-        <div className="text-left min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="ship-ico" aria-hidden="true">🚢</span>
-            <span className="font-black text-lg sm:text-base text-dim-100 truncate">{voyage.info.vsl}</span>
-            <DictMissingChip info={voyage.info} />{/* 4.19 §7.8-⑬ «항차는 등록하기 사전에 없음 표기» */}
-            {/*  ★ 3.53 — **선박명 옆 문제 알림.** 검수사 2026-09-16 *«진행상황에서 선박명 옆빈곳에
-                 발생된 문제 알림을 주었으면 합니다. 둘중 한군데를 누르면 상세카드가 나오고 수정 할수 있게»*
-                 누르면 그 컨의 상세 카드로 바로 간다(수정은 거기서 — 수석·검수사만).
-                 ⚠ `<button>` 안이라 `<span role="button">` 으로 둔다(단추 속 단추는 HTML 이 아니다).
-                 ⚠ 세는 자리는 utils 한 벌(`podConflictOf`) — 진단 경고·컨 상세와 **같은 답**이다. */}
-            {(disStats.podIssueCns || []).length > 0 && (
-              <span role="button" tabIndex={0} data-pod-issue={(disStats.podIssueCns || []).length}
-                onClick={(e) => { e.stopPropagation(); setPodFocus({ voyageKey: voyage.key, mode: 'discharge', cn: disStats.podIssueCns[0] }); onOpen('discharge'); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setPodFocus({ voyageKey: voyage.key, mode: 'discharge', cn: disStats.podIssueCns[0] }); onOpen('discharge'); } }}
-                title="목적지(POD)가 자료마다 다른 컨이 있습니다 — 눌러서 확인·확정"
-                className="text-sm2 sm:text-xxs bg-amber-900/70 border border-amber-500 text-amber-100 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded-pill font-black leading-none active:bg-amber-800">
-                ⚠ 목적지 확인 {(disStats.podIssueCns || []).length}
-              </span>
-            )}
-            {/* M5.82: 부두 배지 */}
-            {pier === 'PCTC' && (
-              <span className="text-sm2 sm:text-xxs bg-blue-900/60 border-2 border-blue-700/60 text-blue-200 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded-pill font-bold leading-none">
-                📍 PCTC {berth ? `· ${formatBerth(berth)}` : ''}
-              </span>
-            )}
-            {pier === 'PNCT' && (
-              <span className="text-sm2 sm:text-xxs bg-purple-900/60 border-2 border-purple-700/60 text-purple-200 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded-pill font-bold leading-none">
-                📍 PNCT {berth ? `· ${formatBerth(berth)}` : ''}
-              </span>
-            )}
-            {!pier && berth && (
-              <span className="text-sm2 sm:text-xxs bg-ink-750 text-dim-300 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded leading-none">
-                📍 {berth}
-              </span>
-            )}
-            {/* V9.35: 작업일시 배지 — 항상 표시 (사용자 요청 2026-08-01).
-                종전엔 autoStatus === 'expected'일 때만 떠서, PORT-MIS·자료가 들어와 '수집중/확정'으로
-                승격되는 순간 사라졌다. 그래서 금일 작업인지 명일 작업인지 배정목록을 따로 찾아봐야 했다.
-                출처는 항상 표기 — 📋 선석배정 · ⚓ 도선 예보 · 🚢 PORT-MIS 신고. */}
-            {(() => {
-              // V9.36: 작업이 마무리될 무렵이면 '작업일시' 대신 '출항시간'을 보여준다 (사용자 요청 2026-08-01).
-              //   V9.38: 전환 기준은 **선적 잔여 ≤ DEPART_REMAIN_MAX(20)** — 규칙은 badgeRule.js 한 곳.
-              //   출항시각은 도선 예보 우선(사용자 확정) → 없으면 PORT-MIS 신고 출항(3.53-13).
-              // V9.57: 판정(departBadge)·창 가드·sticky 기록은 컴포넌트 본문 상단으로 이동 —
-              //   렌더 IIFE는 표시만 담당한다.
-              const _b = departBadge;
-              if (_b && _b.kind === 'depart') {
-                const dep = _b.at;
-                const day = dayLabel(dep);   // 2.09: 복제본 제거 — 모듈 공용 한 벌
-                const _hm = (ms) => { const x = new Date(ms); return `${_two(x.getHours())}:${_two(x.getMinutes())}`; };
-                const src = _b.src === 'pilot' ? '⚓도선' : '🚢PORT-MIS';
-                const late = _b.delayed;
-                // V9.38: 한 번 뜨면 유지(사용자 확답) — sticky 기록은 V9.57에서 useEffect로 이동(위).
-                const _why = { departed: '터미널 출항 처리됨', sticky: '이미 출항 표시로 전환됨' }[_b.reason]
-                  || `선적 잔여 ${String(_b.reason).replace('remain', '')}개 이하 (기준 ${DEPART_REMAIN_MAX}개 · 갱당 시간당 20개 ≈ 1시간분)`;
-                return (
-                  <span title={`출항 표시 이유: ${_why}`}
-                    className={`text-xxs px-2 py-0.5 rounded-pill font-bold border-2 ${dep < Date.now()
-                    ? 'bg-ink-800 border-line-strong text-dim-300'
-                    : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
-                    🚢 출항 {day} {_hm(dep)} {src}
-                    {late ? <span className="text-red-300 ml-1">· 지연</span> : ''}
-                  </span>
-                );
-              }
-              const eta = voyage._etaMs, etd = voyage._etdMs;
-              if (!eta && !etd) return null;
-              const two = (n) => String(n).padStart(2, '0');
-              const hm = (ms) => { const d = new Date(ms); return `${two(d.getHours())}:${two(d.getMinutes())}`; };
-              // 2.09: dayLabel 은 모듈 공용(위) — 복제본 제거. 접기 판정(isOpenVoyage)과 같은 식을 쓴다.
-              // V9.40: 선사 일정 메일(VESSEL MOVEMENT)에서 온 일정은 📧메일 로 구분한다.
-              //   수집기가 planDate 를 메일 값으로 교체하면 info.planSrc='mail' 을 함께 남긴다
-              //   (사용자 지시 2026-08-02: 같으면 패스, 틀리면 메일 정보로 교체).
-              // V9.41: planDate 는 수집기가 **판단해서** 넣는다(사용자 규칙 2026-08-02) —
-              //   메일 있으면 메일 확정 / PCTC는 배정 신뢰 / PNCT는 도선 출항이 배정과 크게 벌어지면 도선.
-              //   그 판단 결과가 info.planSrc 다. 표시는 그 출처를 그대로 보여준다.
-              // V9.43: 출처를 **자리별로** 보여준다 (사용자 지시 2026-08-02:
-              //   "출처 두 군데면 다 보여주면 됩니다. 입항에 도선 출항에 포트미스").
-              //   수집기 planSrc 는 한 출처면 'pilot', 자리별로 다르면 '입항출처|출항출처'.
-              //   도선 예보에 한쪽만 올라온 배는 나머지를 PORT-MIS·배정 **예정값**으로 채우고
-              //   도선이 확정되면 자동으로 갈아끼운다 — 그 사실이 화면에 그대로 보여야 한다.
-              const _MK = { mail: '📧메일', pilot: '⚓도선', portmis: '🚢신고', plan: '📋배정' };
-              const _pSrc = voyage.info?.planSrc || '';
-              const _pp = _pSrc.split('|');
-              const _srcIn = _MK[_pp[0]] || '';
-              const _srcOut = _MK[_pp[1] || _pp[0]] || '';
-              // ★ 사용자 확정(2026-08-02): **표시 자체가 확정/예정을 말한다.**
-              //   "도선 2개가 붙으면 확정으로 알면 되고 신고가 붙으면 예정으로 알면 되니까요."
-              //   → 별도 기호(*)나 배지 없이 **항상 자리별로** 출처를 붙인다. 둘 다 ⚓도선이면 확정.
-              const _perSlot = !!(voyage._etaSrc === 'plan' && _pSrc);
-              const srcMark = _perSlot ? ''
-                : ({ plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '');
-              const srcTip = _perSlot
-                ? '⚓도선이 양쪽에 붙으면 확정입니다. 🚢신고·📋배정이 붙은 쪽은 예정값이며, 도선 예보가 올라오면 자동으로 바뀝니다.'
-                : '';
-              const head = eta ? `${dayLabel(eta)} ${hm(eta)}` : '';
-              const tail = etd ? (eta && dayLabel(etd) !== dayLabel(eta) ? `${dayLabel(etd)} ${hm(etd)}` : hm(etd)) : '';
-              // V9.43: 자리별 출처가 다르면 각 시각 뒤에 붙여 보여준다.
-              const _h = head && _perSlot && _srcIn ? `${head} ${_srcIn}` : head;
-              const _t = tail && _perSlot && _srcOut ? `${tail} ${_srcOut}` : tail;
-              const body = _h && _t ? `${_h} ~ ${_t}` : (_h || `~ ${_t}`);
-              const past = etd && etd < Date.now();
-              return (
-                <span title={srcTip || undefined}
-                  className={`text-xxs px-2 py-0.5 rounded-pill font-bold border-2 ${past
-                  ? 'bg-ink-800 border-line-strong text-dim-300'
-                  : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
-                  📅 {body}{srcMark ? ` ${srcMark}` : ''}
-                </span>
-              );
-            })()}
-            {/* 1.40-01: 🚢 신고도착 — PORT-MIS 세관 신고 항 도착시각. 도선(도선 시작)과 다른 사건이라
-                따로 세운다. 값은 신고 원본 그대로 — 작업시작 환산(+30분)을 여기 적용하면 안 된다. */}
-            {(() => {
-              const ms = voyage._pmEta ? parsePortMisDateTime(voyage._pmEta) : null;
-              if (ms == null) return null;
-              const d = new Date(ms), p2 = (n) => String(n).padStart(2, '0');
-              return (
-                <span title="PORT-MIS 세관 신고 기준 항 도착시각입니다. 도선 시작·작업시작과는 다릅니다."
-                  className={`text-xxs px-1.5 py-0.5 rounded font-bold border bg-ink-800/70 border-line-strong text-dim-200 ${FOLD}`}>
-                  🚢신고도착 {p2(d.getHours())}:{p2(d.getMinutes())}
-                </span>
-              );
-            })()}
-            {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
-            {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
-              <span className={`text-xxs bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold ${FOLD}`}>
-                🤖 자동(수집중)
-              </span>
-            )}
-            {voyage.info?.autoRegistered && voyage.info?.autoStatus === 'confirmed' && (
-              <span className={`text-xxs bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold ${FOLD}`}>
-                🤖 자동(확정)
-              </span>
-            )}
-          </div>
-          <div className={`text-xxs text-dim-400 truncate ${FOLD}`}>
-            {/* M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W) */}
-            {(() => {
-              const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
-              if (d && l && d !== l) return `${d} / ${l}`;
-              return d || l || v || '';
-            })()}
-            {' · '}{voyage.info.carrier || ''}
-          </div>
-          {/* ── 2.09 (검수사 지시 2026-08-23 «각선박의 자세히 항로 약자와 항로 전체를 홈화면 각선박에 등록») ── */}
-          {laneRow && laneRow.lane && (
-            <div className={`text-xxs leading-snug ${FOLD}`}>
-              <span className="text-dim-400">항로 </span>
-              <span className="font-bold text-cyan-300">{laneRow.lane}</span>
-              {laneRow.name ? <span className="text-dim-400"> · {laneRow.name}</span> : null}
-              {showRoute && laneRow.ports.length > 0 && (() => {
-                /* ★ 2.24 (검수사 신고 2026-08-23) — «평택 다음»은 **이번 항차 화물이 정본이다.**
-                   검수사: *«KKAK 제가 알기론 인천인듯 한데 앱은 다른곳을 잡습니다»* — 맞았다.
-                   2.09-02 는 항로표에서 «평택 자리 +1»을 집었다. 그런데 KPX 는 **인천이 회항점이라
-                   한 바퀴에 평택을 두 번 기항한다**(올라갈 때 남중국→평택→인천 · 내려올 때 인천→평택→광양).
-                   배열엔 평택이 한 칸뿐이라 방향과 무관하게 언제나 같은 답이 나왔다.
-                   실측 KKAK 2608N — 항로표·PORT-MIS 차항지·EDI 헤더가 **셋 다 광양**인데
-                   배에 남는 화물은 인천 429대다. 셋은 독립 근거가 아니다 — 선사 신고 하나가 세 곳으로 흘러간 것이다.
-                   같은 항차 자료에 «인천» 선적지시서가 따로 온 것이 결정타였다.
-                   ⚠ 화물만 믿어도 안 된다 — MCSN 632N 은 화물 최다가 신강 344 인데 실제 다음은 대련 214 다.
-                     그래서 «2등의 1.5배 이상»일 때만 화물이 헤더를 이긴다(nextPortAfterPtk).
-                   ⚠ 색은 하나만 칠한다 — 못 가리면 종전 항로표 자리를 칠하고 «항로표 기준»이라고 밝힌다. */
-                const nx = nextPortAfterPtk(voyage, voyage._pm);
-                const pi = laneRow.ports.findIndex(p => isPyeongtaekPort(p));
-                const rot = pi >= 0 ? normPortCode(laneRow.ports[(pi + 1) % laneRow.ports.length]) : '';
-                const pick = (nx && nx.port) || rot;
-                return (
-                  <div className="mt-0.5 text-2xs text-dim-300 break-words">
-                    {laneRow.ports.map((pt, i) => (
-                      <span key={`${pt}-${i}`}>
-                        {i > 0 && <span className="text-dim-500"> › </span>}
-                        {isPyeongtaekPort(pt)
-                          ? <span className="text-emerald-300 font-bold">평택</span>
-                          : (pick && normPortCode(pt) === pick)
-                            ? <span className="text-amber-300 font-bold">{pt}</span>
-                            : <span>{pt}</span>}
-                      </span>
-                    ))}
-                    {pick && <span className="text-amber-400/70"> ← 평택 다음</span>}
-                    {/* 근거를 같이 적는다 — 검수사 확정 «화물 최다 + 근거 표기». 조용히 단정하지 않는다. */}
-                    {nx && nx.basis === 'portmis' && <span className="text-dim-400"> · PORT-MIS 차항지</span>}
-                    {nx && nx.basis === 'cargo' && (
-                      <span className="text-dim-400"> · 남는 화물 {nx.cnt}대{nx.hdrDisagree ? ` (자료 헤더는 ${nx.hdr})` : ''}</span>
-                    )}
-                    {nx && nx.basis === 'header' && <span className="text-dim-400"> · 자료 헤더</span>}
-                    {(!nx || nx.basis === 'unsure') && (
-                      <span className="text-dim-400"> · 항로표 기준{nx ? ` (화물로는 ${nx.cargo} ${nx.cnt} · ${nx.second} ${nx.secondCnt} — 못 가림)` : ''}</span>
-                    )}
-                    {laneRow.src ? <span className="text-dim-500"> · {laneRow.src}</span> : null}
-                  </div>
-                );
-              })()}
-              {showRoute && laneRow.ports.length === 0 && (
-                <span className="text-amber-400/80"> · 기항 순서 미등록</span>
-              )}
-            </div>
-          )}
-          {/* 2.09-03 (검수사 확정 2026-08-23): *«전체항로에 다음항만 다른색으로표기 그러니 **위 한줄만 있으면 됩니다**»*
-              — 종전 «이번 항차 A → 평택 → B» 줄은 뺐다. 항로 줄의 호박색이 같은 답을 말하므로 두 줄은 군더더기였다.
-              ⚠ 판정 함수 utils.voyageLegOf 는 남겨 둔다(미르 답변·항로 미등록 배 진단용). */}
-          {/* TallyOne 1.13: 등록일자 → **작업일시 + 자료 상태**.
-                검수사 확정 2026-08-06 — "등록일자는 사실상 무의미하다. 작업일자를 표기하고 자료 갱신일시를 그 옆에.
-                자료가 완성되면 갱신일시를 없애고 '자료 확정', 확정 후 수정 자료가 있으면 '수정본'.
-                작업일시도 변경될 수 있으니 변경 시점으로 표기."
-                작업일시(_etaMs/_etdMs)는 선석배정 > 도선 > PORT-MIS 순으로 **매 렌더 다시 고르므로**
-                일정이 바뀌면 저절로 바뀐 값이 나온다(V9.35). 별도 보관이 필요 없다. */}
-          <div className="text-xxs text-dim-400 mt-0.5">
-            {(() => {
-              const fmt = (ms, withDate = true) => {
-                if (!ms) return '';
-                const d = new Date(ms);
-                const p = (n) => String(n).padStart(2, '0');
-                return `${withDate ? `${p(d.getMonth() + 1)}-${p(d.getDate())} ` : ''}${p(d.getHours())}:${p(d.getMinutes())}`;
-              };
-              const eta = voyage._etaMs, etd = voyage._etdMs;
-              const sameDay = eta && etd && new Date(eta).toDateString() === new Date(etd).toDateString();
-              const work = eta && etd ? `${fmt(eta)} ~ ${fmt(etd, !sameDay)}` : (eta ? fmt(eta) : (etd ? `~ ${fmt(etd)}` : ''));
-              return <span className={FOLD}>🗓 작업 {work || <span className="text-dim-500">일정 미상</span>} · </span>;   /* 3.55: 구분점은 이 토막에 붙인다 — 접힌 모습에서 자료 상태가 점으로 시작하지 않게 */
-            })()}
-            {(() => {
-              // 자료 상태 — 확정 > 수정본 > 갱신일시 > 자료 없음.
-              const fixed = Number(voyage.info?.dataFixedAt) || 0;
-              const at = Number(voyage._dataAt) || 0;
-              const fmt2 = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, '0');
-                return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
-              if (fixed) {
-                // 확정 뒤에 자료가 또 들어왔으면 수정본. 1분 여유 — 확정 기록과 저장이 거의 동시일 수 있다.
-                if (at > fixed + 60000) {
-                  return <span className="text-amber-300">✏ 수정본 {fmt2(at)}</span>;
-                }
-                return <span className="text-emerald-300">✅ 자료 확정</span>;
-              }
-              // TallyOne 1.13-01: 한쪽만 끝난 배 — 무엇을 기다리는지 적는다(검수사 요청).
-              //   종전엔 선적 섹션이 아직 없다는 이유로 계산에서 빠져 '자료 확정'으로 떴다.
-              if (voyage._waitFor) {
-                return <span className="text-sky-300">⏳ {voyage._waitFor}자료 대기중{at ? ` · 갱신 ${fmt2(at)}` : ''}</span>;
-              }
-              if (at) return <span>갱신 {fmt2(at)}</span>;
-              if (voyage._hasData) return <span className="text-dim-500">갱신 —</span>;
-              return <span className="text-dim-500">자료 없음</span>;
-            })()}
-            {(() => {
-              // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다. 이 경고만 남긴다.
-              const worked = lastWorkAt(voyage);
-              if (worked > 0) {
-                const workDays = Math.floor((Date.now() - worked) / 86400000);
-                if (workDays >= 7) return <span className="text-amber-500 ml-1">· 작업 {workDays}일 전 (곧 자동삭제)</span>;
-              }
-              return null;
-            })()}
-          </div>
-        </div>
-        <ChevronRight className="w-5 h-5 text-dim-500 flex-shrink-0"/>
-      </button>
-
-      <div className="px-3 pb-3 space-y-2">
-        {/* V8.81: 양하/선적 막대를 누르면 그 모드로 항차를 연다 (구: 둘 다 기본 모드로 열려 "반응 없음"처럼 보임). */}
-        {/*  ★ 2.67-01 (검수사): 캔슬인데 카드에 «선적평택 81 · 예상EDI 80 · 확정 대기» 가 그대로 떠서
-             *«저걸로 인해 선적카드를 눌러보게 됩니다. 그후에야 캔슬사실을 알게 되죠»* —
-             누르기 **전에** 알아야 한다. 숫자를 지우고 캔슬 한 줄만 남긴다. */}
-        {dis && (sideCancelled(voyage.info, 'discharge') 
-          ? <CancelledSide label="양하"/>
-          : <SectionBar label="양하" color="blue" stats={disStats} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} fold={!more} onClick={() => onOpen('discharge')}/>)}
+    <button type="button" onClick={onSelect} data-ship-row={voyage.key} aria-pressed={selected}
+      className={`home-row ${pier === 'PCTC' ? 'pier-pctc' : pier === 'PNCT' ? 'pier-pnct' : ''} ${_isToday ? 'is-today' : ''} ${selected ? 'is-on' : ''}`}>
+      <span className="home-rail" aria-hidden="true" />
+      <span className="home-row-name min-w-0 flex flex-col">
+        <span className="text-lg font-black text-dim-100 leading-tight truncate">{voyage.info.vsl}</span>
+        <span className="text-xs text-dim-400 font-bold truncate">{sub}</span>
+      </span>
+      <span className="home-row-bars min-w-0 flex flex-col gap-1">
+        {dis && (sideCancelled(voyage.info, 'discharge')
+          ? <span className="text-xs font-black text-st-badHi" data-row-bar="discharge" data-cancelled="1">양하 ⛔ 전량 캔슬</span>
+          : <RowBar label="양하" mode="discharge" stats={disStats} />)}
         {loa && (sideCancelled(voyage.info, 'loading')
-          ? <CancelledSide label="선적"/>
-          : <SectionBar label="선적" color="amber" stats={loaStats} term={_tpLod} termOver={!!(_tp && _tp.overPlan)} fold={!more} onClick={() => onOpen('loading')}/>)}
-        {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건).
-            한쪽이라도 자료가 있는 항차만 — 순수 예정 항차는 이미 「자료 없음」 한 줄로 충분하다. */}
-        {(dis || loa) && !dis && <MissingSideNote label="양하" qty={voyage.info?.planDis}/>}
-        {(dis || loa) && !loa && <MissingSideNote label="선적" qty={voyage.info?.planLod}/>}
+          ? <span className="text-xs font-black text-st-badHi" data-row-bar="loading" data-cancelled="1">선적 ⛔ 전량 캔슬</span>
+          : <RowBar label="선적" mode="loading" stats={loaStats} />)}
+        {!dis && !loa && <span className="text-xs text-dim-400">자료 대기</span>}
+      </span>
+      {/* 오른쪽 — 상태 한 줄 + (있으면) 알림 한 줄: 목적지 확인 · 사전에 없음 · 누락 · 예상(3.55 «누락은 접혀 있어도 보인다»). 줄 높이는 그대로(A4 «크기가 틀려 다음줄을 만들기도»). */}
+      <span className="home-row-side min-w-0 flex flex-col items-end gap-0.5">
+        <span className={`home-row-st text-xs font-bold ${stCls}`} title={stTitle || st} data-row-status="1">{st}</span>
+        {/* 감싸개는 늘 그린다 — 비면 CSS(.home-row-al:empty)가 숨긴다. «사전에 없음» 딱지가 베이사전이 늦게 와도 그 자리에서 뜬다(딱지가 스스로 다시 그린다 · 4.25 2차 감사 기록). */}
+        <span className="home-row-al" data-row-alerts="1">
+          <PodIssueChip voyage={voyage} cns={podCns} onOpen={(m) => { if (onOpen) onOpen(m); }} />
+          <DictMissingChip info={voyage.info} className="!text-xs !px-1.5 !py-0" />
+          {alerts}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+//  상세 머리·폰 시트 위 — 그 배 화면을 연다. 구역이 있으면 [양하 열기][선적 열기], 하나도 없으면(자료 대기) [항차 열기 →] — 자료 없는 배도 열어야 EDI 를 직접 올린다(4.01).
+export function ShipOpenButtons({ voyage, onOpen }) {
+  const hasD = !!voyage.discharge, hasL = !!voyage.loading;
+  const cls = 'pop-btn pop-sm whitespace-nowrap !h-[var(--tap)]';
+  return (
+    <span className="inline-flex items-center gap-2 shrink-0" data-ship-open="1">
+      {hasD && <button type="button" onClick={() => onOpen('discharge')} className={`${cls} pop-blue`} data-act="open-discharge">양하 열기</button>}
+      {hasL && <button type="button" onClick={() => onOpen('loading')} className={`${cls} pop-amber`} data-act="open-loading">선적 열기</button>}
+      {!hasD && !hasL && <button type="button" onClick={() => onOpen()} className={`${cls} pop-slate`} data-act="open">항차 열기 →</button>}
+    </span>
+  );
+}
+
+//  4.25 베이별 진행 — 상세 칸의 «완료/전체» 와 같은 유닛 한 벌(computeStats.units = progressOf 의 분모 집합)을 계획 베이(EDI bay → 리스트 bay)로 나눈다.
+//    자리를 모르는 유닛(리스트만 온 컨 등)은 «자리 없음» 한 칸 — 칸들의 합 = 상세 대수. 그림이 아니라 숫자 칸이다(그림은 항차 화면 베이 탭).
+function bayProgressOf(section, units) {
+  const edi = section?.ediContainers || {}, rec = section?.records || {}, comp = section?.completed || {};
+  const byCn = {};
+  for (const [k, c] of Object.entries(edi)) if (c) byCn[c.cn || k] = c;
+  const out = new Map();
+  for (const cn of units || []) {
+    const c = byCn[cn], r = rec[cn];
+    const b = parseInt((c && c.bay) || (r && r.bay) || '', 10);
+    const key = Number.isFinite(b) ? b : -1;
+    const e = out.get(key) || { bay: key, n: 0, done: 0 };
+    e.n += 1;
+    if (comp[cn]) e.done += 1;
+    out.set(key, e);
+  }
+  return [...out.values()].sort((a, b) => ((a.bay < 0) - (b.bay < 0)) || (a.bay - b.bay));
+}
+
+// ── ★ 4.25 고른 배 상세 — 종전 카드 한 장의 내용 전부(배지·항로·예보·대수 내역·상태·완료·지금 처리·삭제)를 한 판에 편다 + 베이별 진행 · 자료 대수 · 실 정책 한 줄. ──
+//   컴은 오른쪽 칸, 폰은 전체화면 시트 안. 처리기(onOpen·onDelete·onComplete·onUndoComplete·지금 처리)는 종전 카드에 넘기던 그대로다.
+export function ShipDetail({ voyage, activeInspectors = [], onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, zapSt = null, policy = null, onEditPolicy = null, showOpen = true }) {
+  // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 한 칸 · 한 줄 고정 · 폰 균등.
+  //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
+  //   4.25 2차(모의 확인 ①): 폰에서 단추가 줄지 않는다(flex 1 0 auto — 글자 너비 밑으로 안 줄고 남는 폭만 나눠 갖는다). 한 줄에 안 들어가면 다음 줄로 내려간다.
+  //     종전 flex-1 min-w-0 은 셋(⚡·⬇·⬆)이 한 줄에서 51~65px 까지 줄어 «지금 처i» 처럼 글자가 잘렸다(360·390·412).
+  const ACT_BTN = 'min-h-[var(--tap)] px-3 rounded-pill text-sm font-bold border-2 flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-[1_0_auto] min-[700px]:flex-none';
+  // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout — 4.25: 배마다 HomePage 가 들고 있다(상세를 다른 배로 바꿔도 남는다)
+  const { zap, setZap, zapMsg, setZapMsg } = zapSt || { zap: '', zapMsg: '', setZap: () => {}, setZapMsg: () => {} };
+  const sv = shipViewOf(voyage, pilotForecast);
+  const { dis, loa, disStats, loaStats, pier, berth, pfDep, pmDep, remD, remL, _termWorking, _tp, _tpDis, _tpLod, departBadge } = sv;
+  const TAG = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-pill border-2 text-xs font-bold whitespace-nowrap';
+  //  베이별 진행 — 지금 하는 쪽이 먼저(양하가 다 끝났고 선적이 있으면 선적). 둘 다 있으면 [양하][선적] 으로 바꿔 본다.
+  const bayModes = ['discharge', 'loading'].filter((m) => (m === 'discharge' ? dis : loa) && !sideCancelled(voyage.info, m) && (m === 'discharge' ? disStats : loaStats).total > 0);
+  const _bayDefault = bayModes.includes('discharge') && !(disStats.done >= disStats.total && bayModes.includes('loading')) ? 'discharge' : (bayModes[0] || '');
+  const [bayPick, setBayPick] = useState('');
+  const bayMode = bayModes.includes(bayPick) ? bayPick : _bayDefault;
+  const voyPair = (() => {
+    // M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W)
+    const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
+    if (d && l && d !== l) return `${d} / ${l}`;
+    return d || l || v || '';
+  })();
+  return (
+    <div className="home-detail space-y-3" data-ship-detail={voyage.key}>
+      {/* 머리 — 선박명(누르면 그 배 화면 · 종전 카드 머리) · 정식 이름 · 항차 · 선사 · 문제 알림 · 열기 단추 */}
+      <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
+        <button type="button" onClick={() => onOpen()} className="text-left shrink-0" title="눌러서 이 항차 열기" data-act="open-head">
+          <span className="text-3xl font-black text-dim-100 leading-none">{voyage.info.vsl}</span>
+        </button>
+        <span className="text-sm text-dim-300 min-w-0" data-ship-head="1">
+          {[voyage.info.vslFull, voyPair, voyage.info.carrier].filter(Boolean).join(' · ')}
+        </span>
+        <PodIssueChip voyage={voyage} cns={disStats.podIssueCns || []} onOpen={onOpen} big />
+        <DictMissingChip info={voyage.info} />
+        {showOpen && <span className="ml-auto"><ShipOpenButtons voyage={voyage} onOpen={onOpen} /></span>}
+      </div>
+
+      {/* 배지 — 부두·선석 · 작업일시(또는 출항) · 신고도착 · 출항 예보 · 자동 등록 · 자료 상태 · 곧 자동삭제 */}
+      <div className="flex flex-wrap gap-1.5" data-ship-tags="1">
+        {/* M5.82: 부두 배지 */}
+        {pier === 'PCTC' && <span className={`${TAG} bg-blue-900/60 border-blue-700/60 text-blue-200`}>📍 PCTC {berth ? `· ${formatBerth(berth)}` : ''}</span>}
+        {pier === 'PNCT' && <span className={`${TAG} bg-purple-900/60 border-purple-700/60 text-purple-200`}>📍 PNCT {berth ? `· ${formatBerth(berth)}` : ''}</span>}
+        {!pier && berth && <span className={`${TAG} bg-ink-750 border-line text-dim-300`}>📍 {berth}</span>}
+        {/* V9.35: 작업일시 배지 — 항상 표시. 출처는 항상 표기 — 📋 선석배정 · ⚓ 도선 예보 · 🚢 PORT-MIS 신고.
+            V9.36·V9.38: 작업이 마무리될 무렵(선적 잔여 ≤ DEPART_REMAIN_MAX)이면 '출항시간' — 판정은 badgeRule.decideBadge 한 곳(shipViewOf). */}
         {(() => {
-          // V9.02: 카톡 물량 예보 — 해당 모드의 EDI(컨 리스트)가 아직 없을 때만 표시, 생기면 자동 대체(숨김)
-          const f = voyage.info?.forecast;
-          if (!f) return null;
-          const isL = (f.mode || 'loading') === 'loading';
-          // V9.02-01: 'EDI 도착' 판정은 실제 EDI 컨테이너(ediContainers)로만 — 수집기 가등록 섹션의
-          //   _created 같은 메타 키를 도착으로 오인해 예보가 숨던 버그 수정 (RZOR_R075E 사례).
-          const hasReal = isL ? !!(loa && Object.keys(loa.ediContainers || {}).length)
-            : !!(dis && Object.keys(dis.ediContainers || {}).length);
-          const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join(' ');
-          const tot = (f.teu && f.teu.total) || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
-          // 2.06-03 (검수사 스크린샷 «선적 예보 · 0TEU» — R090E): 덱플랜 LUG 승격(2.06-01)이 luggageCns 만
-          //   있는 forecast 를 만들자, 물량 예보가 아닌데 mode 기본값(loading) 탓에 «선적 예보 0TEU» 카드가
-          //   떠버렸다. 물량(teu/full/empty/calc)이 하나도 없으면 예보 카드가 아니다 — 수화물·긴급 배지만
-          //   모드 라벨 없이 한 줄로 보인다(EDI 도착 여부와 무관 — 번호 정보는 계속 유효하므로).
-          const hasQty = !!(tot || (f.full && Object.keys(f.full).length) || (f.empty && Object.keys(f.empty).length));
-          if (!hasQty) {
-            const nUrg = (f.urgentCns || []).length, nLug = (f.luggageCns || []).length;
-            if (!nUrg && !nLug) return null;
+          const _b = departBadge;
+          if (_b && _b.kind === 'depart') {
+            const dep = _b.at;
+            const day = dayLabel(dep);   // 2.09: 복제본 제거 — 모듈 공용 한 벌
+            const src = _b.src === 'pilot' ? '⚓도선' : '🚢PORT-MIS';
+            const late = _b.delayed;
+            const _why = { departed: '터미널 출항 처리됨', sticky: '이미 출항 표시로 전환됨' }[_b.reason]
+              || `선적 잔여 ${String(_b.reason).replace('remain', '')}개 이하 (기준 ${DEPART_REMAIN_MAX}개 · 갱당 시간당 20개 ≈ 1시간분)`;
             return (
-              <div className="flex gap-2 flex-wrap text-2xs font-bold">
-                {nUrg > 0 && <span className="text-rose-300">▲ 긴급 {nUrg}대</span>}
-                {nLug > 0 && <span className="text-violet-300">🧳 수화물 컨 {nLug}대</span>}
-              </div>
+              <span title={`출항 표시 이유: ${_why}`} data-ship-depart="1"
+                className={`${TAG} ${dep < Date.now() ? 'bg-ink-800 border-line-strong text-dim-300' : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
+                🚢 출항 {day} {_hm2(dep)} {src}
+                {late ? <span className="text-red-300 ml-1">· 지연</span> : ''}
+              </span>
             );
           }
-          if (hasReal) return null;
+          const eta = voyage._etaMs, etd = voyage._etdMs;
+          //  종전 카드의 «🗓 작업 … 일정 미상» 줄 — 일정이 없으면 이 배지가 그 말을 한다.
+          if (!eta && !etd) return <span className={`${TAG} bg-ink-800 border-line text-dim-400`}>📅 일정 미상</span>;
+          // V9.40·V9.41·V9.43: 출처를 **자리별로** — 수집기 planSrc 는 한 출처면 'pilot', 자리별로 다르면 '입항출처|출항출처'.
+          //   ★ 사용자 확정(2026-08-02): **표시 자체가 확정/예정을 말한다.** 둘 다 ⚓도선이면 확정.
+          const _MK = { mail: '📧메일', pilot: '⚓도선', portmis: '🚢신고', plan: '📋배정' };
+          const _pSrc = voyage.info?.planSrc || '';
+          const _pp = _pSrc.split('|');
+          const _srcIn = _MK[_pp[0]] || '';
+          const _srcOut = _MK[_pp[1] || _pp[0]] || '';
+          const _perSlot = !!(voyage._etaSrc === 'plan' && _pSrc);
+          const srcMark = _perSlot ? ''
+            : ({ plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '');
+          const srcTip = _perSlot
+            ? '⚓도선이 양쪽에 붙으면 확정입니다. 🚢신고·📋배정이 붙은 쪽은 예정값이며, 도선 예보가 올라오면 자동으로 바뀝니다.'
+            : '';
+          const head = eta ? `${dayLabel(eta)} ${_hm2(eta)}` : '';
+          const tail = etd ? (eta && dayLabel(etd) !== dayLabel(eta) ? `${dayLabel(etd)} ${_hm2(etd)}` : _hm2(etd)) : '';
+          const _h = head && _perSlot && _srcIn ? `${head} ${_srcIn}` : head;
+          const _t = tail && _perSlot && _srcOut ? `${tail} ${_srcOut}` : tail;
+          const body = _h && _t ? `${_h} ~ ${_t}` : (_h || `~ ${_t}`);
+          const past = etd && etd < Date.now();
+          //  TallyOne 1.13 «작업일자를 표기» — 날짜(MM-DD)는 배지 제목에(종전 «🗓 작업 MM-DD HH:MM ~» 줄과 같은 값).
+          const _md = (ms) => { const d = new Date(ms); return `${_two(d.getMonth() + 1)}-${_two(d.getDate())} ${_hm2(ms)}`; };
+          const _work = eta && etd ? `${_md(eta)} ~ ${_md(etd)}` : (eta ? _md(eta) : `~ ${_md(etd)}`);
           return (
-            <div className="rounded-pill border border-dashed border-orange-600/50 bg-orange-950/30 px-2.5 py-1.5">
-              <div className="text-xxs font-bold text-orange-300">
-                📋 {isL ? '선적' : '양하'} 예보 {f.voy || ''} · {tot}TEU
-                <span className="font-normal text-orange-400/60 ml-1">(EDI 도착 시 자동 대체)</span>
-              </div>
-              {f.full && Object.keys(f.full).length > 0 && <div className="text-2xs text-dim-200">FULL {fmt(f.full)}</div>}
-              {f.empty && Object.keys(f.empty).length > 0 && <div className="text-2xs text-dim-300">EMPTY {fmt(f.empty)}</div>}
-              {f.luggage && Object.keys(f.luggage).length > 0 && <div className="text-2xs text-dim-400">수화물 {fmt(f.luggage)}</div>}
-              {/* V9.03: 긴급/수화물 컨번호 — EDI 도착 후엔 리스트·카고플랜에 ▲·보라 마커로 표시됨 */}
-              {f.urgentCns && f.urgentCns.length > 0 && <div className="text-2xs text-rose-300 font-bold">▲ 긴급 {f.urgentCns.length}대</div>}
-              {f.luggageCns && f.luggageCns.length > 0 && <div className="text-2xs text-violet-300 font-bold">🧳 수화물 컨 {f.luggageCns.length}대</div>}
-            </div>
+            <span title={`작업 ${_work}${srcTip ? ' — ' + srcTip : ''}`} data-ship-plan="1"
+              className={`${TAG} ${past ? 'bg-ink-800 border-line-strong text-dim-300' : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
+              📅 {body}{srcMark ? ` ${srcMark}` : ''}
+            </span>
           );
         })()}
+        {/* 1.40-01: 🚢 신고도착 — PORT-MIS 세관 신고 항 도착시각. 도선(도선 시작)과 다른 사건이라 따로 세운다. 값은 신고 원본 그대로. */}
+        {(() => {
+          const ms = voyage._pmEta ? parsePortMisDateTime(voyage._pmEta) : null;
+          if (ms == null) return null;
+          return (
+            <span title="PORT-MIS 세관 신고 기준 항 도착시각입니다. 도선 시작·작업시작과는 다릅니다."
+              className={`${TAG} bg-ink-800/70 border-line-strong text-dim-200`}>
+              🚢신고도착 {_hm2(ms)}
+            </span>
+          );
+        })()}
+        {/* 4.25(설계 ④ 상세): 출항 예보 — 3.53-13 «출항 시간은 포트미스 도선협회 두곳자료로» · 같은 작업창(±12h) 가드(shipViewOf). 출항 배지로 바뀐 뒤에는 그 배지가 같은 시각을 말한다. */}
+        {!(departBadge && departBadge.kind === 'depart') && (pfDep ?? pmDep) != null && (() => {
+          const t = pfDep ?? pmDep;
+          const d = new Date(t);
+          return (
+            <span className={`${TAG} bg-amber-950/40 border-amber-700/50 text-amber-200`} data-ship-dep="1"
+              title={pfDep != null ? '도선 예보의 출항 시각입니다.' : 'PORT-MIS 신고 출항 시각입니다(도선 예보가 아직 없음).'}>
+              ⚓ 출항 {_two(d.getMonth() + 1)}-{_two(d.getDate())} {_hm2(t)} {pfDep != null ? '도선' : '신고'}
+            </span>
+          );
+        })()}
+        {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
+        {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
+          <span className={`${TAG} bg-amber-900/60 border-amber-700/50 text-amber-200`}>🤖 자동(수집중)</span>
+        )}
+        {voyage.info?.autoRegistered && voyage.info?.autoStatus === 'confirmed' && (
+          <span className={`${TAG} bg-emerald-900/60 border-emerald-700/50 text-emerald-200`}>🤖 자동(확정)</span>
+        )}
+        {(() => {
+          // TallyOne 1.13: 자료 상태 — 확정 > 수정본 > 갱신일시 > 자료 없음.
+          const fixed = Number(voyage.info?.dataFixedAt) || 0;
+          const at = Number(voyage._dataAt) || 0;
+          const fmt2 = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, '0');
+            return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+          if (fixed) {
+            // 확정 뒤에 자료가 또 들어왔으면 수정본. 1분 여유 — 확정 기록과 저장이 거의 동시일 수 있다.
+            if (at > fixed + 60000) {
+              return <span className={`${TAG} bg-amber-950/40 border-amber-700/50 text-amber-300`} data-ship-data="revised">✏ 수정본 {fmt2(at)}</span>;
+            }
+            return <span className={`${TAG} bg-emerald-950/40 border-emerald-700/50 text-emerald-300`} data-ship-data="fixed">✅ 자료 확정</span>;
+          }
+          // TallyOne 1.13-01: 한쪽만 끝난 배 — 무엇을 기다리는지 적는다(검수사 요청).
+          if (voyage._waitFor) {
+            return <span className={`${TAG} bg-sky-950/40 border-sky-700/50 text-sky-300`} data-ship-data="wait">⏳ {voyage._waitFor}자료 대기중{at ? ` · 갱신 ${fmt2(at)}` : ''}</span>;
+          }
+          if (at) return <span className={`${TAG} bg-ink-800 border-line text-dim-300`} data-ship-data="at">갱신 {fmt2(at)}</span>;
+          if (voyage._hasData) return <span className={`${TAG} bg-ink-800 border-line text-dim-500`} data-ship-data="at">갱신 —</span>;
+          return <span className={`${TAG} bg-ink-800 border-line text-dim-500`} data-ship-data="none">자료 없음</span>;
+        })()}
+        {(() => {
+          // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다. 이 경고만 남긴다.
+          const worked = lastWorkAt(voyage);
+          if (worked > 0) {
+            const workDays = Math.floor((Date.now() - worked) / 86400000);
+            if (workDays >= 7) return <span className={`${TAG} bg-amber-950/40 border-amber-600/60 text-amber-400`}>작업 {workDays}일 전 (곧 자동삭제)</span>;
+          }
+          return null;
+        })()}
       </div>
-      </div>{/* 2.15: 좌측 정보 영역 닫기 */}
 
-      {(activeInspectors.length > 0 || onDelete || _termWorking) && (
-        <div className={`px-3 flex flex-wrap items-center justify-between gap-2 border-t border-line lg:flex-nowrap ${more ? 'pb-2 pt-2' : 'py-1.5'}
-                        lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
-                        lg:border-t-0 lg:border-l lg:border-line lg:bg-ink-900 lg:p-5 lg:gap-3
-                        lg:hover:bg-ink-900 lg:transition-colors`}>
-          {/* 상단 — 상태 */}
-          <div className="row-1 text-2xs text-dim-400 flex-1 min-w-0 lg:flex-none">
-            {activeInspectors.length > 0 ? (
-              <>
-                <Users className="ico-s text-emerald-400"/>
-                <span className="text-emerald-300 font-bold">●</span>
-                <span className="truncate">{activeInspectors.map(a => a.name).join(', ')} 작업중</span>
-              </>
-            ) : _termWorking ? (
-              <span className="status-pill bg-cyan-900/30 text-cyan-200 border border-cyan-700/50"
-                title="터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.">
-                <span className="inline-block w-2 h-2 rounded-full bg-cyan-300"/>본선 작업중 · 접속 검수원 없음
-              </span>
-            ) : <span className="status-pill status-wait"><span className="inline-block w-2 h-2 rounded-full bg-dim-500"/>대기 중</span>}
-            {!more && onComplete && (inspectorDone || modeDone?.d || modeDone?.l) && (
-              <span className="lg:hidden ml-2 font-bold text-amber-300 whitespace-nowrap">
-                {inspectorDone ? '검수 완료 · 수석 대기' : `${modeDone?.d ? '양하 완료 ✓' : ''}${modeDone?.d && modeDone?.l ? ' · ' : ''}${modeDone?.l ? '선적 완료 ✓' : ''}`}
-              </span>
-            )}
+      {/* ── 2.09 (검수사 지시 2026-08-23 «각선박의 자세히 항로 약자와 항로 전체를 홈화면 각선박에 등록») — 4.25 상세는 늘 기항 순서까지 ── */}
+      {laneRow && laneRow.lane && (
+        <div className="text-sm leading-snug" data-ship-lane="1">
+          <span className="text-dim-400">항로 </span>
+          <span className="font-bold text-cyan-300">{laneRow.lane}</span>
+          {laneRow.name ? <span className="text-dim-400"> · {laneRow.name}</span> : null}
+          {laneRow.ports.length > 0 && (() => {
+            /* ★ 2.24 (검수사 신고 2026-08-23) — «평택 다음»은 **이번 항차 화물이 정본이다.** (nextPortAfterPtk — 화물 최다가 2등의 1.5배 이상일 때만 헤더를 이긴다)
+               ⚠ 색은 하나만 칠한다 — 못 가리면 종전 항로표 자리를 칠하고 «항로표 기준»이라고 밝힌다. */
+            const nx = nextPortAfterPtk(voyage, voyage._pm);
+            const pi = laneRow.ports.findIndex(p => isPyeongtaekPort(p));
+            const rot = pi >= 0 ? normPortCode(laneRow.ports[(pi + 1) % laneRow.ports.length]) : '';
+            const pick = (nx && nx.port) || rot;
+            return (
+              <div className="mt-0.5 text-xs text-dim-300 break-words">
+                {laneRow.ports.map((pt, i) => (
+                  <span key={`${pt}-${i}`}>
+                    {i > 0 && <span className="text-dim-500"> › </span>}
+                    {isPyeongtaekPort(pt)
+                      ? <span className="text-emerald-300 font-bold">평택</span>
+                      : (pick && normPortCode(pt) === pick)
+                        ? <span className="text-amber-300 font-bold">{pt}</span>
+                        : <span>{pt}</span>}
+                  </span>
+                ))}
+                {pick && <span className="text-amber-400/70"> ← 평택 다음</span>}
+                {/* 근거를 같이 적는다 — 검수사 확정 «화물 최다 + 근거 표기». 조용히 단정하지 않는다. */}
+                {nx && nx.basis === 'portmis' && <span className="text-dim-400"> · PORT-MIS 차항지</span>}
+                {nx && nx.basis === 'cargo' && (
+                  <span className="text-dim-400"> · 남는 화물 {nx.cnt}대{nx.hdrDisagree ? ` (자료 헤더는 ${nx.hdr})` : ''}</span>
+                )}
+                {nx && nx.basis === 'header' && <span className="text-dim-400"> · 자료 헤더</span>}
+                {(!nx || nx.basis === 'unsure') && (
+                  <span className="text-dim-400"> · 항로표 기준{nx ? ` (화물로는 ${nx.cargo} ${nx.cnt} · ${nx.second} ${nx.secondCnt} — 못 가림)` : ''}</span>
+                )}
+                {laneRow.src ? <span className="text-dim-500"> · {laneRow.src}</span> : null}
+              </div>
+            );
+          })()}
+          {laneRow.ports.length === 0 && (
+            <span className="text-amber-400/80"> · 기항 순서 미등록</span>
+          )}
+        </div>
+      )}
+
+      {(() => {
+        // V9.02: 카톡 물량 예보 — 해당 모드의 EDI(컨 리스트)가 아직 없을 때만 표시, 생기면 자동 대체(숨김)
+        const f = voyage.info?.forecast;
+        if (!f) return null;
+        const isL = (f.mode || 'loading') === 'loading';
+        // V9.02-01: 'EDI 도착' 판정은 실제 EDI 컨테이너(ediContainers)로만.
+        const hasReal = isL ? !!(loa && Object.keys(loa.ediContainers || {}).length)
+          : !!(dis && Object.keys(dis.ediContainers || {}).length);
+        const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join(' ');
+        const tot = (f.teu && f.teu.total) || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
+        // 2.06-03: 물량(teu/full/empty/calc)이 하나도 없으면 예보 카드가 아니다 — 수화물·긴급 배지만 모드 라벨 없이 한 줄로.
+        const hasQty = !!(tot || (f.full && Object.keys(f.full).length) || (f.empty && Object.keys(f.empty).length));
+        if (!hasQty) {
+          const nUrg = (f.urgentCns || []).length, nLug = (f.luggageCns || []).length;
+          if (!nUrg && !nLug) return null;
+          return (
+            <div className="flex gap-2 flex-wrap text-xs font-bold" data-ship-forecast="marks">
+              {nUrg > 0 && <span className="text-rose-300">▲ 긴급 {nUrg}대</span>}
+              {nLug > 0 && <span className="text-violet-300">🧳 수화물 컨 {nLug}대</span>}
+            </div>
+          );
+        }
+        if (hasReal) return null;
+        return (
+          <div className="rounded-pill border border-dashed border-orange-600/50 bg-orange-950/30 px-3 py-2" data-ship-forecast="box">
+            <div className="text-sm font-bold text-orange-300">
+              📋 {isL ? '선적' : '양하'} 예보 {f.voy || ''} · {tot}TEU
+              <span className="font-normal text-orange-400/60 ml-1 text-xs">(EDI 도착 시 자동 대체)</span>
+            </div>
+            {f.full && Object.keys(f.full).length > 0 && <div className="text-xs text-dim-200">FULL {fmt(f.full)}</div>}
+            {f.empty && Object.keys(f.empty).length > 0 && <div className="text-xs text-dim-300">EMPTY {fmt(f.empty)}</div>}
+            {f.luggage && Object.keys(f.luggage).length > 0 && <div className="text-xs text-dim-400">수화물 {fmt(f.luggage)}</div>}
+            {/* V9.03: 긴급/수화물 컨번호 — EDI 도착 후엔 리스트·카고플랜에 ▲·보라 마커로 표시됨 */}
+            {f.urgentCns && f.urgentCns.length > 0 && <div className="text-xs text-rose-300 font-bold">▲ 긴급 {f.urgentCns.length}대</div>}
+            {f.luggageCns && f.luggageCns.length > 0 && <div className="text-xs text-violet-300 font-bold">🧳 수화물 컨 {f.luggageCns.length}대</div>}
           </div>
-          {/* 중단 — PC 전용 큰 숫자. ⚠ 좌측에 이미 «양하 271 · 매칭 271» 이 있으므로 같은 수를 또 쓰지 않는다.
-              현장에서 필요한 것은 «남은 수» 다 — 작업이 진행되면 좌측 총계와 갈라진다. */}
-          {(remD != null || remL != null) && (
-            <div className="hidden lg:flex items-end gap-3 border-y border-line/70 py-2.5">
-              {remD != null && (
-                <div className="min-w-0">
-                  <div className="text-3xs text-blue-400/70 font-bold">양하 남음</div>
-                  <div className="text-2xl font-black text-blue-200 leading-none">{remD}</div>
-                  {_tpDis && <div className="text-3xs text-cyan-300/80 mt-0.5" title="터미널 본선 작업 현황의 잔여 — 참고">본선 잔여 {_tpDis.rest}</div>}
-                </div>
-              )}
-              {remL != null && (
-                <div className="min-w-0">
-                  <div className="text-3xs text-amber-400/70 font-bold">선적 남음</div>
-                  <div className="text-2xl font-black text-amber-200 leading-none">{remL}</div>
-                  {_tpLod && <div className="text-3xs text-cyan-300/80 mt-0.5" title="터미널 본선 작업 현황의 잔여 — 참고">본선 잔여 {_tpLod.rest}</div>}
-                </div>
+        );
+      })()}
+
+      {/* 양하·선적 — 큰 숫자 + 막대 한 벌(설계 ⑥ «진행률은 상세의 큰 숫자+막대 하나, 본선·남음은 그 아래 작은 글»). 누르면 그 작업으로 들어간다(V8.81). */}
+      <div className="grid gap-2.5 min-[700px]:grid-cols-2" data-side-boxes="1">
+        {/*  ★ 2.67-01 (검수사): 캔슬이면 숫자를 지우고 캔슬 한 줄만 — 누르기 **전에** 알아야 한다. */}
+        {dis && (sideCancelled(voyage.info, 'discharge')
+          ? <div className="home-big is-dis" data-side-box="discharge" data-cancelled="1"><CancelledSide label="양하"/></div>
+          : <SideBox label="양하" mode="discharge" stats={disStats} rem={remD} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(dis)} onOpen={onOpen}/>)}
+        {loa && (sideCancelled(voyage.info, 'loading')
+          ? <div className="home-big is-lod" data-side-box="loading" data-cancelled="1"><CancelledSide label="선적"/></div>
+          : <SideBox label="선적" mode="loading" stats={loaStats} rem={remL} term={_tpLod} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(loa)} onOpen={onOpen}/>)}
+        {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건). */}
+        {(dis || loa) && !dis && <div className="home-big is-none"><MissingSideNote label="양하" qty={voyage.info?.planDis}/></div>}
+        {(dis || loa) && !loa && <div className="home-big is-none"><MissingSideNote label="선적" qty={voyage.info?.planLod}/></div>}
+        {!dis && !loa && (
+          <div className="home-big is-none text-sm text-dim-300 min-[700px]:col-span-2" data-side-box="none">
+            아직 자료가 없습니다 — EDI·리스트·카톡 물량 예보가 들어오면 여기에 대수가 나옵니다. 직접 올리려면 [항차 열기].
+          </div>
+        )}
+      </div>
+
+      {/* 상태 — 접속 검수원 · 본선 작업중(4.05) · 대기 중 */}
+      <div className="text-sm text-dim-300 flex items-center gap-1.5 flex-wrap" data-ship-status="1">
+        {activeInspectors.length > 0 ? (
+          <>
+            <Users className="ico-s text-emerald-400"/>
+            <b className="text-emerald-300">● {activeInspectors.map(a => a.name).join(', ')} 작업중</b>
+          </>
+        ) : _termWorking ? (
+          <span title="터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.">
+            <b className="text-cyan-200">본선 작업중</b> · 접속 검수원 없음
+          </span>
+        ) : <span>대기 중</span>}
+        {/* 1.83 선박 실 정책 — 이 배 방침 한 줄(설계 ⑤ «상세에 그 배 정책 한 줄»). 누르면 홈 실 정책 판과 같은 수정 창. */}
+        {policy && onEditPolicy && (
+          <button type="button" onClick={() => onEditPolicy(policy)} data-act="policy"
+            className="ml-auto inline-flex items-center gap-1 px-2.5 py-0.5 rounded-pill border-2 border-line bg-ink-850 text-xs font-bold text-dim-200 hover:bg-ink-800 whitespace-nowrap">
+            🔒 실 정책 · {policyComboLabel(policy) || '일반'} ›
+          </button>
+        )}
+      </div>
+
+      {/* 4.25 베이별 진행 — 위 큰 숫자와 같은 유닛(computeStats.units)을 계획 베이로 나눈 칸. 칸 합 = 위 대수. */}
+      {bayMode && (() => {
+        const st = bayMode === 'discharge' ? disStats : loaStats;
+        const cells = bayProgressOf(bayMode === 'discharge' ? dis : loa, st.units);
+        const lod = bayMode === 'loading';
+        return (
+          <div className="space-y-1.5" data-ship-bays={bayMode}>
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <b className="text-dim-100">베이별 진행 ({lod ? '선적' : '양하'})</b>
+              <span className="text-dim-400">· 평택분 {st.total}대 · {cells.filter((c) => c.bay >= 0).length}개 베이</span>
+              {bayModes.length > 1 && (
+                <span className="ml-auto inline-flex gap-1">
+                  {bayModes.map((m) => (
+                    <button key={m} type="button" onClick={() => setBayPick(m)} aria-pressed={bayMode === m} data-bay-mode={m}
+                      className={`px-2.5 rounded-pill border-2 text-xs font-bold ${bayMode === m ? (m === 'loading' ? 'lbl-lod' : 'lbl-dis') : 'border-line bg-ink-850 text-dim-300'}`} style={{ minHeight: 'var(--tap-chip-pc)' }}>
+                      {m === 'loading' ? '선적' : '양하'}
+                    </button>
+                  ))}
+                </span>
               )}
             </div>
-          )}
-          {/* 하단 — 버튼. 폰은 가로 한 줄, PC 는 세로 스택(시안).
-              ★ 2.19 (검수사 지적) — *«양하완료 선적완료 버튼 크기가 틀리고 지금 처리는 두줄로 보입니다.
-                 같은 4자씩인데 지금 처리만 두줄이라 다른것보다 박스 높이가 틀립니다»*
-              원인이 셋이었다. ①「지금 처리」만 minHeight 48, 나머지는 44 — **4px 을 코드가 직접 벌려 놨다.**
-              ② 패딩도 px-2.5 / px-3 로 달랐다. ③ **셋 다 줄바꿈 금지가 없어** 폭이 모자라면 두 줄이 됐고,
-                 두 줄이 되는 순간 그 버튼만 키가 커진다.
-              ⇒ 아래 한 규격(ACT_BTN)으로 묶는다. 높이·패딩·글자를 개별 버튼에서 다시 주지 않는다.
-                 폰은 flex-1 로 **균등 분할**(같은 4자면 같은 폭), PC 는 w-full 세로 스택. */}
-          {/* 3.55: 폰의 접힌 모습에서는 «자세히» 하나만 — 누르면 아래 버튼 묶음이 나온다. */}
-          <button onClick={(e) => { e.stopPropagation(); setMore(m => !m); }} aria-expanded={more}
-            className="lg:hidden shrink-0 pop-btn pop-slate pop-sm whitespace-nowrap">
-            {more ? '▴ 접기' : '▾ 자세히'}
-          </button>
-          {onDelete && <div className={`flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5 ${more ? 'max-lg:basis-full' : 'max-lg:hidden'}`}>
-            {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈 카드에** 둔다.
-                "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" — 자료를 폴더에 넣은 직후
-                수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록시킨다.
-                항차 상세 안쪽에 두면 급할 때 못 쓴다(V9.37의 위치 오류를 교정). */}
-            {(() => {
-              const _vsl = voyage?.info?.vsl || '';
-              const _voy = voyage?.info?.voy_l || voyage?.info?.voy || voyage?.info?.voy_d || '';
-              if (!_vsl || !_voy) return null;
-              const busy = zap === 'run';
-              return (
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (busy) return;
-                    setZap('run'); setZapMsg('요청 보냄');
-                    try {
-                      const k = await fbRequestProcessNow(_vsl, _voy, inspector || '');
-                      const off = fbSubscribeProcessDone(k, (r) => {
-                        if (!r) return;
-                        setZap(r.ok ? 'ok' : 'fail');
-                        setZapMsg(r.ok ? `✅ ${r.msg || ''}` : `❌ ${r.msg || ''}`);
-                        try { off && off(); } catch { /* skip */ }
-                        setTimeout(() => { setZap(''); setZapMsg(''); }, 20000);
-                      });
-                      setTimeout(() => setZap((s) => (s === 'run' ? 'timeout' : s)), 180000);
-                    } catch (err) {
-                      setZap('fail'); setZapMsg('❌ 요청 실패');
-                    }
-                  }}
-                  className={`${ACT_BTN} ${busy
-                    ? 'bg-ink-800 border-line text-dim-400'
-                    : zap === 'ok' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
-                    : zap === 'fail' || zap === 'timeout' ? 'bg-red-900/40 border-red-700/50 text-red-300'
-                    : 'bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/40'}`}
-                  title={zapMsg || '수집기에 이 항차를 지금 처리하라고 요청 (메일박스 폴더에 자료를 넣은 직후 사용)'}
-                >{busy ? '⚡ 처리 중…' : zap === 'timeout' ? '⚡ 응답 없음' : zapMsg ? `⚡ ${zapMsg.slice(0, 8)}` : '⚡ 지금 처리'}</button>
-              );
-            })()}
-            {/* V7.90: 완료 분리 — 양하/선적 각각 완료 표시 (작업시간 구분 + 콘앱 분리작업 자동 판정 근거) */}
-            {onComplete && inspectorDone && (
-              <span className="h-12 flex items-center justify-center gap-1 px-2.5 rounded-pill bg-amber-900/40 text-amber-300 text-xxs font-bold border border-amber-700/40 whitespace-nowrap flex-1 min-w-0 overflow-hidden lg:flex-none lg:w-full" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
-                <CheckCircle className="ico-s"/>검수 완료 · 수석 대기
+            <div className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))]">
+              {cells.map((c) => {
+                const p = c.n > 0 ? Math.round((c.done / c.n) * 100) : 0, full = c.done >= c.n;
+                return (
+                  <div key={c.bay} className="rounded-pill border border-line bg-ink-850 px-2 py-1" data-bay-cell={c.bay} data-done={c.done} data-total={c.n}>
+                    <div className="flex items-baseline justify-between gap-1 mono text-xs">
+                      <b className="text-dim-100">{c.bay >= 0 ? `B${_two(c.bay)}` : '자리 없음'}</b>
+                      <span className={full ? 'text-emerald-300' : 'text-dim-300'}>{c.done}/{c.n}</span>
+                    </div>
+                    <div className="xp-bar xp-sm mt-1"><div className={`xp-fill ${full ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${p}%` }}/></div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 4.25 자료 대수 — 이 항차에 들어온 자료 그대로(EDI 전체 행 · 세관 목록 행 · 선사 리스트 행). 대조는 항차 화면 주의 박스가 한다. */}
+      {(dis || loa) && (
+        <div className="text-sm text-dim-300" data-ship-data-counts="1">
+          자료 — {['discharge', 'loading'].filter((m) => voyage[m]).map((m) => {
+            const sec = voyage[m] || {};
+            const recs = Object.values(sec.records || {});
+            const nE = Object.keys(sec.ediContainers || {}).length;
+            const nC = recs.filter((r) => r && r._customs).length;
+            const nL = recs.filter((r) => isListOriginRecord(r)).length;
+            return (
+              <span key={m} data-ship-data-mode={m}>
+                {m === 'loading' && voyage.discharge ? ' / ' : ''}{m === 'loading' ? '선적' : '양하'} EDI <b className="text-dim-100">{nE}</b>
+                {nC > 0 && <> · 세관 목록 <b className="text-dim-100">{nC}</b></>}
+                {' · '}리스트 <b className="text-dim-100">{nL}</b>
               </span>
-            )}
-            {onComplete && modeDone?.hasD && (
-              modeDone.d ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('discharge'); }}
-                  className={`${ACT_BTN} bg-blue-900/40 text-blue-300 border-blue-700/40`}
-                  title="양하 완료됨 — 누르면 취소 (수석 확인 전까지)"
-                >⬇ 양하 완료 ✓</button>
-              ) : (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onComplete('discharge'); }}
-                  className={`${ACT_BTN} bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 border-blue-800/40`}
-                  title="양하 작업 완료 표시 — 삭제 안 됨"
-                >⬇ 양하 완료</button>
-              )
-            )}
-            {onComplete && modeDone?.hasL && (
-              modeDone.l ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('loading'); }}
-                  className={`${ACT_BTN} bg-amber-900/40 text-amber-300 border-amber-700/40`}
-                  title="선적 완료됨 — 누르면 취소 (수석 확인 전까지)"
-                >⬆ 선적 완료 ✓</button>
-              ) : (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onComplete('loading'); }}
-                  className={`${ACT_BTN} bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 border-amber-800/40`}
-                  title="선적 작업 완료 표시 — 삭제 안 됨"
-                >⬆ 선적 완료
-                </button>
-              )
-            )}
-            {/* V9.15: 삭제는 완료 버튼과 오터치되지 않게 간격 + 40px 타깃 */}
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-2 ml-2 rounded-pill hover:bg-red-900/30 text-dim-500 hover:text-red-400 border border-transparent hover:border-red-800/40"
-              style={{ minWidth: 40, minHeight: 40 }}
-              title="항차 삭제 (기록 없이 제거)"
-            >
-              <Trash2 className="w-4 h-4 mx-auto"/>
-            </button>
-          </div>}
+            );
+          })}
+        </div>
+      )}
+
+      {/* 동작 — 지금 처리 · 양하/선적 완료(되돌리기) · 검수 완료 표시 … 떨어진 자리에 🗑 삭제(D9 «수석은 한번 실수로 … 많은 자료를 잃을수가»). 조회만이면 통째로 없다(3.55-01). */}
+      {onDelete && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3" data-ship-acts="1">
+          {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈에** 둔다. "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" —
+              자료를 폴더에 넣은 직후 수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록시킨다. */}
+          {(() => {
+            const _vsl = voyage?.info?.vsl || '';
+            const _voy = voyage?.info?.voy_l || voyage?.info?.voy || voyage?.info?.voy_d || '';
+            if (!_vsl || !_voy) return null;
+            const busy = zap === 'run';
+            return (
+              <button data-act="zap"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (busy) return;
+                  setZap('run'); setZapMsg('요청 보냄');
+                  try {
+                    const k = await fbRequestProcessNow(_vsl, _voy, inspector || '');
+                    const off = fbSubscribeProcessDone(k, (r) => {
+                      if (!r) return;
+                      setZap(r.ok ? 'ok' : 'fail');
+                      setZapMsg(r.ok ? `✅ ${r.msg || ''}` : `❌ ${r.msg || ''}`);
+                      try { off && off(); } catch { /* skip */ }
+                      setTimeout(() => { setZap(''); setZapMsg(''); }, 20000);
+                    });
+                    setTimeout(() => setZap((s) => (s === 'run' ? 'timeout' : s)), 180000);
+                  } catch (err) {
+                    setZap('fail'); setZapMsg('❌ 요청 실패');
+                  }
+                }}
+                className={`${ACT_BTN} ${busy
+                  ? 'bg-ink-800 border-line text-dim-400'
+                  : zap === 'ok' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
+                  : zap === 'fail' || zap === 'timeout' ? 'bg-red-900/40 border-red-700/50 text-red-300'
+                  : 'bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/40'}`}
+                title={zapMsg || '수집기에 이 항차를 지금 처리하라고 요청 (메일박스 폴더에 자료를 넣은 직후 사용)'}
+              >{busy ? '⚡ 처리 중…' : zap === 'timeout' ? '⚡ 응답 없음' : zapMsg ? `⚡ ${zapMsg.slice(0, 8)}` : '⚡ 지금 처리'}</button>
+            );
+          })()}
+          {/* V7.90: 완료 분리 — 양하/선적 각각 완료 표시 (작업시간 구분 + 콘앱 분리작업 자동 판정 근거) */}
+          {onComplete && inspectorDone && (
+            <span className={`${ACT_BTN} bg-amber-900/40 text-amber-300 border-amber-700/40`} title="모든 작업 완료 — 수석검수사 최종 확인 대기 중" data-act="all-done">
+              <CheckCircle className="ico-s"/>검수 완료 · 수석 대기
+            </span>
+          )}
+          {onComplete && modeDone?.hasD && (
+            modeDone.d ? (
+              <button data-act="undo-discharge"
+                onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('discharge'); }}
+                className={`${ACT_BTN} bg-blue-900/40 text-blue-300 border-blue-700/40`}
+                title="양하 완료됨 — 누르면 취소 (수석 확인 전까지)"
+              >⬇ 양하 완료 ✓</button>
+            ) : (
+              <button data-act="done-discharge"
+                onClick={(e) => { e.stopPropagation(); onComplete('discharge'); }}
+                className={`${ACT_BTN} bg-blue-900/30 hover:bg-blue-800/50 text-blue-300 border-blue-800/50`}
+                title="양하 작업 완료 표시 — 삭제 안 됨"
+              >⬇ 양하 완료</button>
+            )
+          )}
+          {onComplete && modeDone?.hasL && (
+            modeDone.l ? (
+              <button data-act="undo-loading"
+                onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('loading'); }}
+                className={`${ACT_BTN} bg-amber-900/40 text-amber-300 border-amber-700/40`}
+                title="선적 완료됨 — 누르면 취소 (수석 확인 전까지)"
+              >⬆ 선적 완료 ✓</button>
+            ) : (
+              <button data-act="done-loading"
+                onClick={(e) => { e.stopPropagation(); onComplete('loading'); }}
+                className={`${ACT_BTN} bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/50`}
+                title="선적 작업 완료 표시 — 삭제 안 됨"
+              >⬆ 선적 완료
+              </button>
+            )
+          )}
+          {/* V9.15 → 4.25(D9): 삭제는 평범한 단추와 떨어진 자리(줄 오른쪽 끝 · 폰은 다음 줄 오른쪽)에 빨간 테두리. 확인창은 종전 그대로(양하만·선적만·전체 → 한 번 더).
+              폰(700px 미만)은 빈칸이 한 줄을 다 차지해(basis-full) 🗑 이 늘 다음 줄 오른쪽에 선다 — 4.25 2차(모의 확인 ①) */}
+          <span className="flex-1 basis-full min-[700px]:basis-8" aria-hidden="true" data-act-gap="1" />
+          <button data-act="delete" data-danger="1"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="ml-auto min-h-[var(--tap)] px-3 rounded-pill border-2 border-red-700/70 bg-red-950/30 hover:bg-red-900/40 text-red-200 text-sm font-bold flex items-center gap-1 whitespace-nowrap"
+            title="항차 삭제 (기록 없이 제거 — 양하만·선적만·전체를 고르고 한 번 더 묻습니다)"
+          >
+            <Trash2 className="ico-s"/>삭제
+          </button>
         </div>
       )}
     </div>
@@ -1979,60 +2101,39 @@ function CancelledSide({ label }) {
   );
 }
 
-function SectionBar({ label, color, stats, onClick, fold = false, term = null, termOver = false }) {
-  const colorClasses = {
-    blue: { bg: 'bg-blue-500', xp: 'xp-dis', label: 'lbl-dis' },
-    amber: { bg: 'bg-amber-500', xp: 'xp-lod', label: 'lbl-lod' },
-  }[color];
-
+// ── ★ 4.25 상세의 양하·선적 칸 — 종전 SectionBar(카드 막대 + «자세히» 내역)를 한 칸에 편다. ──
+//   머리 줄 = 대수 내역(평택·매칭·LUG·예상 EDI·부분 EDI·리스트만·컨펌전·실/가상E/E확정·쉬프팅·가상/리스트·누락 — 종전 식 그대로)
+//   큰 숫자 + 막대 = 완료/전체(평택분 · computeStats 한 벌 — 목록 줄·수석 상황판 보드와 같은 값)
+//   아래 작은 글 = 남음 · 본선 n/전체(터미널 호기 합계 · 참고) · 배정(터미널 배정목록 · 대조용 참고치) · 마지막 완료. 누르면 그 작업으로 들어간다.
+function SideBox({ label, mode, stats, rem = null, term = null, termOver = false, lastAt = 0, onOpen }) {
+  const lod = mode === 'loading';
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
-  //  3.55: 접힌 줄에 적을 터미널 대수 차이 — 아래 1.82 대조와 **같은 식**이다(앱 수 고르기 포함).
-  const _foldApp = stats.planOnly ? stats.planSlots : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount : stats.ptk;
-  const _foldGap = stats.planQty != null ? (Number(_foldApp) || 0) - stats.planQty : 0;
-  // 2.15 시안: 폰은 «양하/선적 행 높이 36px» — 현장에서 눈에 들어와야 한다.
-
   return (
-    <div onClick={onClick} className="cursor-pointer">
-      {/* 3.55: 접힌 모습(폰) — 한 줄. 대수 내역(평택·매칭·터미널·쉬프팅…)은 «자세히»에서 종전 그대로 나온다. 누락은 접혀 있어도 보인다. */}
-      {fold && (
-        <div className="lg:hidden flex flex-wrap items-center gap-x-2 gap-y-1 min-h-[32px]">{/* 4.23: 글자 «크게» 에서 꼬리(본선·터미널 ±)가 폰 폭을 넘으면 다음 줄로 — 보통에서는 한 줄 그대로 */}
-          <span className={`${colorClasses.label} px-2.5 py-1 font-black leading-none text-sm2 shrink-0`}>{label}</span>
-          <div className="flex-1 min-w-[24px] xp-bar xp-sm"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/></div>
-          <span className="text-sm2 font-bold text-dim-100 mono shrink-0">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
-          {term && <span className="text-2xs font-bold text-cyan-300 mono shrink-0" title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 완료 ${term.done} · 잔여 ${term.rest} — 검수원이 누른 완료와 다를 수 있습니다`}>본선 {term.done}/{term.done + term.rest} ({(term.done + term.rest) > 0 ? Math.min(100, Math.round((term.done / (term.done + term.rest)) * 100)) : 0}%)</span>}
-          {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && <span className="text-xs2 font-bold text-red-300 shrink-0">누락 {stats.missing}</span>}
-          {(stats.planOnly || stats.forecastEdi) && <span className="text-2xs font-black px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 shrink-0" title="확정 자료가 아닌 예상 수치입니다 — 자세히를 누르면 내역이 나옵니다">예상</span>}
-          {_foldGap !== 0 && <span className="text-xs2 font-bold text-amber-300 shrink-0" title="터미널 배정 대수와 앱 대수가 다릅니다 — 자세히를 누르면 내역이 나옵니다">터미널 {_foldGap > 0 ? '+' : ''}{_foldGap}</span>}
-        </div>
-      )}
-      <div className={fold ? 'max-lg:hidden' : ''}>
-      <div className="flex items-center gap-2 mb-1.5 text-sm2 sm:text-xxs min-h-[36px] sm:min-h-0">
-        <span className={`${colorClasses.label} px-2 sm:px-1.5 py-1 sm:py-0.5 font-black leading-none`}>{label}</span>
-        {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) —
-            리스트(실데이터)가 있는데 EDI 평택분과 매칭 0이면 그 EDI는 확정본이 아니라 예상(프리스토우)본.
-            '누락 293' 같은 허수 대신 리스트 개수를 녹색(기준 수치)으로 + '예상 EDI · 확정 대기' 배지.
-            매칭>0(확정 EDI)이면 EDI·매칭 녹색, 누락만 적색. */}
+    <button type="button" onClick={() => onOpen(mode)} title={`눌러서 ${label} 열기`}
+      className={`home-big ${lod ? 'is-lod' : 'is-dis'} text-left w-full`} data-side-box={mode} data-done={stats.done} data-total={stats.total}>
+      <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs">
+        <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} px-2 py-0.5 font-black text-sm leading-none`}>{label}</span>
+        {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) — 매칭 0이면 예상(프리스토우)본. */}
         {stats.planOnly ? (
-          /* V9.37-02: 프리스토우 플랜 자리(TMPZ) — 컨번호 없는 __SLOT_ 이라 매칭·누락이 성립하지 않는다.
-             자리 수(플랜)와 리스트 수(NOLIST 등)를 나란히. 사용자 확답 2026-07-11 ④. */
+          /* V9.37-02: 프리스토우 플랜 자리(TMPZ) — 컨번호 없는 __SLOT_ 이라 매칭·누락이 성립하지 않는다. 사용자 확답 2026-07-11 ④. */
           <>
             <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.planSlots}</span><span className="text-dim-400">자리</span></span>
             <span className="text-dim-500">·</span>
             <span className="text-dim-300">리스트 <span className={`${stats.recCount > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.recCount}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 text-2xs font-black" title="컨펌전 플랜 — 선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박. 자리마다 규격은 정해져 있고 컨번호만 배정하면 되는 상태입니다(컨번호는 NOLIST 담당). 일항사가 컨펌하면 규격 자리는 그대로지만 개별 컨의 위치는 바뀔 수 있습니다 — 확정 위치가 아닙니다. 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">컨펌전</span>
+            <span className="px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 font-black" title="컨펌전 플랜 — 선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박. 자리마다 규격은 정해져 있고 컨번호만 배정하면 되는 상태입니다(컨번호는 NOLIST 담당). 일항사가 컨펌하면 규격 자리는 그대로지만 개별 컨의 위치는 바뀔 수 있습니다 — 확정 위치가 아닙니다. 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">컨펌전</span>
           </>
         ) : stats.forecastEdi ? (
           <>
             <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
             <span className="text-dim-500">·</span>
             <span className="text-dim-400">예상EDI {stats.ptk}</span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-2xs font-black" title="EDI 컨번호가 리스트(실데이터)와 하나도 일치하지 않음 — 예상(프리스토우) EDI로 판단. 평택 개수는 리스트 기준. 확정 EDI가 오면 자동으로 매칭·누락 표기로 전환됩니다.">예상 EDI · 확정 대기</span>
+            <span className="px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 font-black" title="EDI 컨번호가 리스트(실데이터)와 하나도 일치하지 않음 — 예상(프리스토우) EDI로 판단. 평택 개수는 리스트 기준. 확정 EDI가 오면 자동으로 매칭·누락 표기로 전환됩니다.">예상 EDI · 확정 대기</span>
           </>
         ) : stats.listOnly ? (
           /* V8.91: 리스트만(EDI 없음) — 평택 = 리스트 개수(실데이터 기준), MAMP 628S 사건 */
           <>
             <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/40 text-2xs font-black" title="EDI가 아직 없음 — 수집된 리스트(실데이터) 기준 개수. EDI가 오면 매칭·누락 표기로 전환됩니다.">리스트만 · EDI 대기</span>
+            <span className="px-1 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/40 font-black" title="EDI가 아직 없음 — 수집된 리스트(실데이터) 기준 개수. EDI가 오면 매칭·누락 표기로 전환됩니다.">리스트만 · EDI 대기</span>
           </>
         ) : stats.partialEdi ? (
           /* V8.91: 부분 EDI(리스트 > EDI) — 평택 = 리스트 개수, EDI·매칭은 참고, TNJP 26349W 사건 */
@@ -2040,18 +2141,16 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
             <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
             <span className="text-dim-500">·</span>
             <span className="text-dim-400">매칭 {stats.matched}</span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-2xs font-black" title="EDI가 리스트 일부(한 선사분 등)만 담은 부분본 — 평택 개수는 리스트(실데이터) 기준. 전체 EDI가 오면 매칭·누락 표기로 전환됩니다.">부분 EDI {stats.ptk}</span>
+            <span className="px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 font-black" title="EDI가 리스트 일부(한 선사분 등)만 담은 부분본 — 평택 개수는 리스트(실데이터) 기준. 전체 EDI가 오면 매칭·누락 표기로 전환됩니다.">부분 EDI {stats.ptk}</span>
           </>
         ) : stats.luggage > 0 ? (
-          /* TallyOne 1.52: LUGGAGE(여객 수하물) 만큼 차이가 나는 것은 **부분본이 아니다.**
-             검수사 확정 2026-08-12 — *"170 169 LUG1이 맞습니다."*
-             평택은 리스트 기준(수하물 포함), 매칭은 EDI 기준, 차이는 LUG 로 따로 적는다.
+          /* TallyOne 1.52: LUGGAGE(여객 수하물) 만큼 차이가 나는 것은 **부분본이 아니다.** 검수사 확정 2026-08-12 — *"170 169 LUG1이 맞습니다."*
              ⚠ LUGGAGE 는 **양하 개수에 포함되지 않는다** — 컨RORO·벌크와 반대다. */
           <>
             <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
             <span className="text-dim-500">·</span>
             <span className="text-dim-300">매칭 <span className="text-emerald-300 font-bold">{stats.matched}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-2xs font-black"
+            <span className="px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 font-black"
               title="여객 수하물 컨테이너 — EDI로 오지 않는 것이 정상입니다. 자료가 덜 온 것이 아니며, 양하 개수에는 포함되지 않습니다.">LUG {stats.luggage}</span>
           </>
         ) : (
@@ -2061,22 +2160,18 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
             <span className="text-dim-300">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
             {/* 1.51: LUGGAGE(여객 수하물) — EDI로 오지 않는 것이 정상이므로 부족이 아니다. 따로 센다. */}
             {stats.luggage > 0 && (
-              <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-2xs font-black"
+              <span className="px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 font-black"
                 title="여객 수하물 컨테이너 — EDI로 오지 않는 것이 정상입니다. 리스트에는 있고 EDI에는 없지만 자료가 덜 온 것이 아닙니다. 선적 요약에서도 FULL·EMPTY와 섞지 않고 LUG 로 따로 셉니다.">LUGGAGE {stats.luggage}</span>
             )}
           </>
         )}
-        {/* V9.03: 선적 가상엠티(DUME)·엠티확정 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
-            실번호와 가상엠티를 나눠 보여주고, 수집기가 기록한 엠티 확정(엑셀 실번호) 개수가 있으면
-            "실+E확정=총"으로 터미널 집계와 바로 대조되게 한다. */}
+        {/* V9.03: 선적 가상엠티(DUME)·엠티확정 분리 — MCSN 629S 사건(앱 212 vs PCTC 287). */}
         {(stats.dummyE > 0 || stats.emptyConfirmed > 0) && (
           <>
             <span className="text-dim-500">·</span>
             <span className="text-purple-300" title="실 = EDI 실번호. E확정 = 선사가 엑셀로 준 엠티 실번호(수집기 기록). 총 = 실 + E확정 — 터미널 선적 집계와 대조용. 가상E는 EDI의 엠티 예약자리(예상치)라 확정이 오면 표시하지 않는다 — 예상과 확정 수가 달라도 부족이 아니다.">
               실 {stats.ptk - stats.dummyE}
-              {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 들어오면 그것이 진실이고
-                  예상 수와 달라도 부족이 아니다(예상 202·확정 201이어도 정상). 확정이 있으면
-                  예상 자리수는 표시하지 않는다 — 남아 있으면 미확정으로 오해된다. */}
+              {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 있으면 예상 자리수는 표시하지 않는다. */}
               {stats.dummyE > 0 && !(stats.emptyConfirmed > 0) ? `+가상E${stats.dummyE}` : ''}
               {/* V9.04-03: E확정은 EDI에 없는 엠티 실번호만 총계에 가산(emptyConfirmedAdd) — 실번호 EDI면 '반영됨' 표기 */}
               {stats.emptyConfirmed > 0 ? (stats.emptyConfirmedAdd > 0
@@ -2085,24 +2180,6 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
             </span>
           </>
         )}
-        {/* 1.82: 터미널 배정 수량 ↔ 앱 수집량 대조. 같으면 회색, 어긋나면 호박색으로 차이를 적는다. */}
-        {stats.planQty != null && (() => {
-          const app = stats.planOnly ? stats.planSlots
-            : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount
-            : stats.ptk;
-          const gap = (Number(app) || 0) - stats.planQty;
-          return (
-            <>
-              <span className="text-dim-500">·</span>
-              <span className={gap === 0 ? 'text-dim-400' : 'text-amber-300 font-bold'}
-                title={gap === 0
-                  ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — 일치합니다.`
-                  : `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). 배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.`}>
-                터미널 {stats.planQty}{gap === 0 ? ' ✓' : ` (${gap > 0 ? '+' : ''}${gap})`}
-              </span>
-            </>
-          );
-        })()}
         {stats.shiftCount > 0 && (
           <>
             <span className="text-dim-500">·</span>
@@ -2110,44 +2187,64 @@ function SectionBar({ label, color, stats, onClick, fold = false, term = null, t
           </>
         )}
         {stats.virtualFromList && (
-          <span className="ml-1 px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 text-2xs font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
+          <span className="px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
         )}
         {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && (
           <>
             <span className="text-dim-500">·</span>
-            <span className="text-red-300">누락 {stats.missing}</span>
+            <span className="text-red-300 font-bold">누락 {stats.missing}</span>
           </>
         )}
       </div>
-      {/* 2.15 시안: 폰은 «진행바 2px → 6px 두껍게», PC 는 «얇은 4px». */}
-      <div className="xp-bar xp-sm">
-        <div className={`xp-fill ${pct >= 100 ? 'xp-done' : colorClasses.xp}`} style={{ width: `${pct}%` }}/>
+      <div className="flex items-baseline gap-2 mono mt-1.5">
+        <span className="text-3xl font-black text-dim-100 leading-none">{stats.done}</span>
+        <span className="text-base font-bold text-dim-400">/ {stats.total}</span>
+        <span className={`text-base font-black ${lod ? 'text-amber-300' : 'text-blue-300'}`}>{pct}%</span>
       </div>
-      <div className="flex items-center justify-between text-2xs mt-0.5 text-dim-400">
-        <span>완료 {stats.done}/{stats.total} ({pct}%)</span>
+      <div className="xp-bar mt-1.5"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim-300 mt-1.5">
+        {rem != null && <span>남음 <b className="text-dim-100">{rem}</b></span>}
+        {/*  ★ 4.05-01 (검수사 «진행상황을 안보임 · 터미널별 본선작업현황에 있는 갯수라도 표기»): 터미널(동방 QC 합계·PCTC 본선작업현황)이 말하는 완료/전체.
+            참고 숫자 — 앱 완료·남음·작업중 판정에 섞지 않는다(컨 단위 터미널 완료는 안 받는다 — 검수사 2026-10-03). 4.25: 같은 숫자를 한 자리에만(설계 ⑥). */}
+        {term && (() => {
+          const _tot = term.done + term.rest, _tpct = _tot > 0 ? Math.min(100, Math.round((term.done / _tot) * 100)) : 0;
+          return (
+            <span className="text-cyan-300" data-term={`${term.done}/${_tot}`}
+              title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 완료 ${term.done} · 잔여 ${term.rest} (${_tpct}%) — 검수원이 앱에서 누른 완료와는 별개이며 다를 수 있습니다.${termOver ? ' 계획보다 커서 타 항 하역분이 섞였을 수 있습니다.' : ''}`}>
+              본선 <b>{term.done}</b>/{_tot}{termOver ? ' ⚠' : ''}
+            </span>
+          );
+        })()}
+        {/* 1.82: 터미널 배정 수량 ↔ 앱 수집량 대조. 같으면 ✓, 어긋나면 호박색으로 차이를 적는다.
+            4.25(설계 critique 7 «터미널 0 (+250)»): 배정이 0 이면 대조할 수가 없다(수량을 안 주는 배정표·아직 안 잡힌 배정) — 경고처럼 «+250» 을 붙이지 않고 «배정 0» 만 적는다. */}
+        {stats.planQty != null && (() => {
+          const app = stats.planOnly ? stats.planSlots
+            : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount
+            : stats.ptk;
+          const gap = (Number(app) || 0) - stats.planQty;
+          const warn = gap !== 0 && stats.planQty > 0;
+          return (
+            <span className={warn ? 'text-amber-300 font-bold' : 'text-dim-400'} data-plan-qty={stats.planQty}
+              title={gap === 0
+                ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — 일치합니다.`
+                : stats.planQty > 0
+                  ? `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). 배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.`
+                  : `터미널 배정목록 수량이 0 입니다 — 수량을 안 주는 배정표이거나 배정이 아직 안 잡힌 것이라 대조하지 않습니다(앱 ${app}대). 대조용 참고치입니다.`}>
+              배정 {stats.planQty}{gap === 0 ? ' ✓' : warn ? ` (앱 ${gap > 0 ? '+' : ''}${gap})` : ''}
+            </span>
+          );
+        })()}
+        {lastAt > 0 && <span className="text-dim-400">마지막 {_agoTxt(lastAt)}</span>}
       </div>
-      {/*  ★ 4.05-01 (검수사 «진행상황을 안보임 · 터미널별 본선작업현황에 있는 갯수라도 표기»): 터미널(동방 QC 합계·PCTC 본선작업현황)이 말하는 완료·잔여를
-          앱 막대와 **따로** 한 줄 막대로 보인다. 참고 숫자 — 앱 완료·남음·작업중 판정에 섞지 않는다(컨 단위 터미널 완료는 안 받는다 — 검수사 2026-10-03). */}
-      {term && (() => {
-        const _tot = term.done + term.rest, _tpct = _tot > 0 ? Math.min(100, Math.round((term.done / _tot) * 100)) : 0;
-        return (
-          <div className="mt-1.5" data-term-bar title={`터미널 본선 작업 현황(호기 합계)이 말하는 ${label} 숫자입니다. 검수원이 앱에서 누른 완료와는 별개이며 다를 수 있습니다.${termOver ? ' 계획보다 커서 타 항 하역분이 섞였을 수 있습니다.' : ''}`}>
-            <div className="h-2 rounded-full overflow-hidden bg-ink-950/75 border border-ink-700"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${_tpct}%` }}/></div>
-            <div className="flex items-center justify-between text-2xs mt-0.5 text-cyan-300 font-bold mono">
-              <span>본선 작업현황 완료 {term.done}/{_tot} ({_tpct}%)</span>
-              <span>잔여 {term.rest}{termOver ? ' ⚠' : ''}</span>
-            </div>
-          </div>
-        );
-      })()}
-      </div>
-    </div>
+    </button>
   );
 }
 
 export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)   // 2.89-06: 시프팅 제외 집합
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
-  if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0, virtual: false };
+  //  ★ 4.25 (4.24 감사 기록 7 — 수석 상황판 computeStats 와 같은 수리): 구역이 없을 때도 아래 끝 줄과 **같은 모양**을 돌려준다.
+  //    종전엔 workTotal·workDone 등이 없어 한쪽 구역만 있는 항차에서 합산하는 쪽이 undefined 를 더할 수 있었다(4.24 수석 보드 «NaN /NaN» 의 같은 뿌리).
+  if (!section) return { total: 0, done: 0, workTotal: 0, workDone: 0, ptk: 0, matched: 0, missing: 0, virtual: false, podIssueCns: [], virtualFromList: false, forecastEdi: false, listOnly: false, partialEdi: false, luggage: 0, recCount: 0, dummyE: 0, emptyConfirmed: 0, emptyConfirmedAdd: 0, planSlots: 0, planOnly: false, units: new Set() };
   const ediContainers = section.ediContainers || {};
   const records = section.records || {};
   const completed = section.completed || {};
@@ -2266,7 +2363,8 @@ export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.
       if (_r && podConflictOf(c.pod, _r)) podIssueCns.push(c.cn || key);
     }
   }
-  return { total, done, workTotal, workDone, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
+  //  4.25: units = 막대 분모 집합 그대로(progressOf 한 벌) — 상세 «베이별 진행» 칸이 이것을 베이로 나눈다(칸 합 = 이 total).
+  return { total, done, workTotal, workDone, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly, units: prog.set || new Set() };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

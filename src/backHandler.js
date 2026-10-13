@@ -43,6 +43,19 @@ export function useBackHandler(onBack, enabled = true) {
   }, [enabled, onBack]);
 }
 
+// 4.25 2차(모의 확인 ④): 폰 홈의 배 전체화면 시트가 열려 있는 동안 홈 뒤로가기 가드(App B-6)가 «앱 종료?» 대신 시트를 닫게 하는 자리 — 한 벌.
+//   HomePage 가 시트를 열면 닫는 함수를 걸고(setHomeSheetClose), 닫히면 비운다. App 의 가드는 종료 확인 앞에서 closeHomeSheetIfOpen() 을 부르고,
+//   닫았으면(true) 가드만 다시 장전한다 — history 칸을 더 쌓지 않는다(B-6 «가짜 엔트리 무한 누적»과 같은 병을 만들지 않게).
+let _homeSheetClose = null;
+export function setHomeSheetClose(fn) { _homeSheetClose = typeof fn === 'function' ? fn : null; }
+export function closeHomeSheetIfOpen() {
+  const f = _homeSheetClose;
+  if (!f) return false;
+  _homeSheetClose = null;
+  f();
+  return true;
+}
+
 // 앱 종료 (PWA에서는 window.close가 작동하지 않음 — 사용자에게 안내)
 // M3.74: confirm() 제거 - 호출자에서 ConfirmModal로 미리 확인 후 호출
 export function exitApp() {

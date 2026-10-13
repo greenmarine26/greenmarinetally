@@ -1,9 +1,9 @@
-// 4.05 렌더 진입점 — ① 수석 실시간 보드: 앱 입력이 멈춘 배(OBWH 2757E 실데이터)는 터미널 본선 현황 표, 접속 검수원이 있거나 방금 찍은 배는 베이 그림 ② 항차 목록 카드: 터미널 작업중 표시·본선 집계.
+// 4.05 렌더 진입점 — ① 수석 실시간 보드: 앱 입력이 멈춘 배(OBWH 2757E 실데이터)는 터미널 본선 현황 표, 접속 검수원이 있거나 방금 찍은 배는 베이 그림 ② 홈(4.25 배 줄 + 상세 — 종전 항차 목록 카드): 터미널 작업중 표시·본선 집계.
 //   firebase 는 tools/fb_stub_search.js 스텁(실제 쓰기 없음). 숫자는 보관소 실측(2026-10-05 15:5x KST, 읽기 전용) — tools/fixtures/work405_realtime.json.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { LiveShipCard } from '../src/pages/ChiefDashboard.jsx';
-import { VoyageCard } from '../src/pages/HomePage.jsx';
+import { ShipRow, ShipDetail } from '../src/pages/HomePage.jsx';   // 4.25: 종전 VoyageCard(카드 한 장)의 내용이 배 줄 + 상세로 나뉘었다 — 둘을 같이 그린다
 import { craneBoardOf, applyCatosPos } from '../src/utils.js';
 import F from './fixtures/work405_realtime.json';
 
@@ -58,7 +58,8 @@ const vS = mkVoy('RZOR_R109E', { ...liveInfo, qcWork: qcShot }, { ...emptySec(),
 const iWait = { ...F.rzorInfo, terminalStatus: 'planned', workStartAt: '', qcWork: undefined, atbActual: '', planDate: `${kst(now + 20 * 3600000)} ~ ${kst(now + 30 * 3600000)}` };
 const vW = mkVoy('RZOR_R110E', iWait, { ...emptySec(), ediContainers: F.rzorDisEdi }, { ...emptySec(), ediContainers: F.rzorLodEdi }, { _etaMs: now + 20 * 3600000, _etdMs: now + 30 * 3600000 });
 const home = (id, voyage, act = [], over = {}) => React.createElement('div', { key: id, 'data-scn': id, style: { width: 900 } },
-  React.createElement(VoyageCard, { voyage, activeInspectors: act, onOpen: () => {}, onDelete: () => {}, onComplete: () => {}, ...over, inspectorDone: false, modeDone: {}, onUndoComplete: null, pilotForecast: {}, inspector: '검수원', laneRow: null, showRoute: false }));
+  React.createElement(ShipRow, { voyage, activeInspectors: act, onSelect: () => {}, onOpen: () => {}, canComplete: over.onComplete !== null, inspectorDone: false, modeDone: {}, pilotForecast: {} }),
+  React.createElement(ShipDetail, { voyage, activeInspectors: act, onOpen: () => {}, onDelete: () => {}, onComplete: () => {}, ...over, inspectorDone: false, modeDone: {}, onUndoComplete: null, pilotForecast: {}, inspector: '검수원', laneRow: null }));
 
 function App() {
   return React.createElement('div', null,

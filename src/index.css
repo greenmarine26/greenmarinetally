@@ -550,3 +550,52 @@ select:-webkit-autofill {
   }  /* 4.24 2차(감사 하-2): 통계 칸이 좁으면(1024px 크게 4척) 행 머리 단추를 아이콘만(⤢ · →) — 항차 번호가 «2…» 로 줄던 것 */
   @container (max-width: 300px) { .lsc-stat .lsc-btxt { display: none; } }
 }
+
+/* ── 4.25 홈 — 컴은 상태 띠 + 배 목록·고른 배 상세 두 칸(페이지 스크롤 없음), 폰은 배 줄 → 전체화면 시트 ─────────────────
+   ① 컴 홈은 페이지가 화면 한 장이다(검수사 B13 «페이지 스크롤이 생기면 불편합니다»). 그때만 앱 본문 아래 여백·바닥글을 접는다 — 켜고 끄는 곳은 HomePage 한 곳(data-home-fill).
+      카페리 17시 «📋 보고 보관» 떠 있는 단추(왼쪽 아래)는 목록 칸 맨 아래 접힘 줄을 가리지 않게 그때만 오른쪽(미르 얼굴 왼쪽)으로 비킨다 — 단추·창은 그대로.
+   ② 배 줄(.home-row) — 부두 띠 · 선박명/항차·선석 · 막대 둘 · 상태(+ 알림 한 줄). 높이는 손가락 한 칸 + 8px(크게면 같이 커진다). 고른 줄은 초록 테두리, 오늘 일하는 배는 옅은 초록.
+   ③ 상세 칸(.home-big) — 양하 파랑 · 선적 호박(항차 화면 모드 색과 같다). 색은 밝기 변수라 사무실(밝기 4)에서도 따라간다. */
+:root[data-home-fill] [data-app-main] { padding-bottom: 0; }
+:root[data-home-fill] [data-app-footer] { display: none; }
+:root[data-home-fill] [data-f1700-chip] { left: auto; right: 5rem; }
+.home-row {
+  display: grid; grid-template-columns: 6px calc(var(--fs-lg) * 4.6) minmax(0, 1fr) calc(var(--fs-xs) * 8.5); align-items: center; gap: 8px;
+  width: 100%; min-height: calc(var(--tap) + 8px); padding: 4px 10px 4px 6px; text-align: left;
+  border-radius: 14px; border: 2px solid rgb(var(--ink-700)); background: rgb(var(--ink-900));
+  box-shadow: 0 3px 0 rgb(var(--ink-950)); transition: transform .1s ease, border-color .12s ease;
+}
+.home-row:active { transform: translateY(2px); box-shadow: 0 1px 0 rgb(var(--ink-950)); }
+@media (hover: hover) { .home-row:hover { border-color: rgb(var(--act) / .55); } }
+.home-row .home-rail { width: 6px; align-self: stretch; min-height: 2.25rem; border-radius: 4px; background: var(--rail, rgb(var(--ink-700))); }
+.home-row.pier-pctc { --rail: rgb(59 130 246 / .9); }
+.home-row.pier-pnct { --rail: rgb(139 92 246 / .9); }
+.home-row.is-today { border-color: rgb(var(--act) / .45); }
+.home-row.is-on { border-color: rgb(var(--act) / .9); box-shadow: 0 0 0 2px rgb(var(--act) / .22), 0 3px 0 rgb(var(--ink-950)); }
+.home-row .home-row-st { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.home-row .home-row-al { max-width: 100%; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; }
+/*   폰 — 칸을 좁히고 상태 글은 두 줄까지 접는다(«● 최관식 / 작업중») — 막대 칸이 넓어진다. 열 너비가 줄마다 같아 막대가 한 줄로 선다(A2 «불규칙»). */
+@media (max-width: 699px) {
+  .home-row { grid-template-columns: 6px calc(var(--fs-lg) * 4.3) minmax(0, 1fr) calc(var(--fs-xs) * 5.6); gap: 6px; }
+  .home-row .home-row-st { white-space: normal; word-break: keep-all; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /*   4.25 2차(모의 확인 ③): 알림(«양하 누락 262» · «⚠ 목적지 N» · «사전에 없음»)이 칸보다 길면 낱말 단위로 줄을 바꿔 다 보인다.
+       오른쪽 정렬 + 넘침 숨김이라 앞 글자가 잘렸다(«하 누락 262» — 360·390·412 보통·크게). */
+  .home-row .home-row-al > * { white-space: normal; word-break: keep-all; text-align: right; max-width: 100%; }
+}
+/*   알림이 하나도 없으면 줄을 안 만든다(감싸개는 늘 그려 둔다 — «사전에 없음» 딱지가 베이사전이 늦게 와도 그 자리에서 바로 뜨게 · 4.25 2차 감사 기록). */
+.home-row .home-row-al:empty { display: none; }
+/*   4.25 2차(모의 확인 ⑤ · 감사 하-2): 좁은 폰(390px 미만) «크게» — 막대 칸이 10~30px 로 눌려 막대가 점처럼 보였다(360 크게 «양하 ▪ 128/250»).
+     상태·알림을 막대 아래 줄로 내려 막대가 줄 너비를 쓴다(부두 띠·선박명은 두 줄에 걸쳐 선다). 숫자·순서는 그대로다. */
+@media (max-width: 389px) {
+  :root[data-text="large"] .home-row { grid-template-columns: 6px calc(var(--fs-lg) * 4) minmax(0, 1fr); row-gap: 3px; }
+  :root[data-text="large"] .home-row .home-rail,
+  :root[data-text="large"] .home-row .home-row-name { grid-row: span 2; }
+  :root[data-text="large"] .home-row .home-row-side { grid-column: 3; }
+}
+.home-detail { border-radius: 20px; border: 2px solid rgb(var(--ink-700)); background: rgb(var(--ink-900) / .6); padding: 14px 16px; }
+[data-home-sheet] .home-detail { border: 0; padding: 0; background: none; }
+.home-big { display: block; border-radius: 16px; border: 2px solid rgb(var(--ink-700)); padding: 10px 12px; background: rgb(var(--ink-900) / .5); }
+.home-big.is-dis { border-color: rgb(var(--st-dis) / .7); background: rgb(var(--st-dis) / .08); }
+.home-big.is-lod { border-color: rgb(var(--st-lod) / .7); background: rgb(var(--st-lod) / .08); }
+button.home-big { transition: transform .1s ease; }
+button.home-big:active { transform: translateY(2px); }
