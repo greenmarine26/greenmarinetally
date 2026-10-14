@@ -325,7 +325,13 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const countPool = useMemo(() => dropFilledBookingSlots(allContainers), [allContainers]);
   const dischCount = useMemo(() => countPool.filter(c => c._mode === 'discharge' && c._ptk && !c._comp).length, [countPool]);   // V7.92-02: 평택분만
   const loadCount = useMemo(() => countPool.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [countPool]);   // V7.92-02: 평택분만
-  const completedCount = useMemo(() => allContainers.filter(c => c._comp).length, [allContainers]);
+  //  ★ 4.25-02 (모의 작업 MCAP 2호기 — 선적을 0대 했는데 «✓ 완료 241대»(양하 완료가 섞인 합) · 검수사 2026-10-13 00:53 «전부 클로드 안대로 수정»):
+  //    완료 탭 목록은 종전대로 양하·선적 모두(위 filteredContainers)지만, 칸 숫자는 모드별로 나눠 «⬇양하 · ⬆선적» 으로 보인다(합 = 목록 대수).
+  const completedByMode = useMemo(() => {
+    let d = 0, l = 0;
+    for (const c of allContainers) { if (!c._comp) continue; if (c._mode === 'loading') l += 1; else d += 1; }
+    return { d, l };
+  }, [allContainers]);
   // V8.04: 초과분만 따로 — 별도 집계·제출(검수리스트처럼) 및 색 강조용.
   const extraList = useMemo(() => allContainers.filter(c => c._extra), [allContainers]);
 
@@ -525,6 +531,43 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     _snapArmedRef.current = false;   // «물려받은 직후 1회 정리»가 방금 넣은 값을 비우지 않게
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_presetKey]);
+  //  ★ 4.25-02 — **작업 탭을 떠났다 돌아와도 자동/수동·베이·단이 그대로다.** 모의 작업(MCAP 2호기 `047` · 3호기 `051`) — 베이 그림 탭을 보고 오면
+  //    이 패널이 새로 그려져(VoyagePage tab === 'search' 일 때만 있음) 자동이 수동으로, 고른 베이·단이 비어 매번 3번 다시 눌렀다.
+  //    항차 + 검수원 + 작업 모드마다 기억한다(sessionStorage — 이 기기·이 창에서만, 앱을 닫으면 잊는다). 위 리셋([workFilter]) 뒤에 되살린다.
+  //    ⚠ 호기는 열쇠에 넣지 않는다 — «다른 갱» 창에서 호기를 바꾸며 베이를 고르는 그 순간 그 호기의 옛 베이가 되살아나 방금 고른 베이를 덮는다.
+  //      한 기기 = 한 검수원이고, 호기를 바꿔도 하던 베이는 그대로 두는 것이 종전 동작이다.
+  //    되살린 베이가 지금 묶음에 없으면 위 «물려받은 직후 1회 정리» 가 품은 묶음으로 옮기거나 비운다.
+  //    ⚠ 검수원 이름은 열쇠에 넣는다(감사 중 — 로그아웃은 새로고침을 안 해 같은 창에서 다음 사람이 앞사람의 베이·단을 물려받고 수석 보드에 그 자리로 올라갔다).
+  //    ⚠ 베이뷰(bayView)는 적지도 되살리지도 않는다 — 덮개가 제 프리셋을 주고, «따라가기» 가 터미널에서 짐작한 베이를 사람이 고른 자리로 남기지 않는다(3.48 되먹임 방지 · 감사·2차 시뮬 기록).
+  const _wctxKey = voyageKey && inspector && workFilter !== 'completed' && !bayView ? `gm_wctx|${voyageKey}|${inspector}|${workFilter}` : '';
+  const _wctxReadyRef = useRef('');
+  useEffect(() => {
+    _wctxReadyRef.current = '';
+    if (!_wctxKey) return;
+    {
+      let sv = null;
+      try { sv = JSON.parse(sessionStorage.getItem(_wctxKey) || 'null'); } catch (e) { sv = null; }
+      if (sv && typeof sv === 'object') {
+        _setPresetApplied((n) => n + 1);   // 베이·단을 같이 넣는 것이라 GuidedWorkPanel 이 «그룹 변경 → 단 지움» 으로 읽지 않게(베이뷰 프리셋과 같은 표식)
+        if (typeof sv.guide === 'boolean') setGuideMode(sv.guide);
+        //  «자리 없음» 묶음(−1 · 단 'none')은 되살리지 않는다 — 🅿 배치로 비면 «-1번 데크 작업 중 · 잔여 0» 이 남았다(감사 하). 베이·단은 진짜 묶음(>0)·홀드·데크만.
+        const _okBay = sv.bay === null || (Number.isFinite(sv.bay) && sv.bay > 0);
+        if (_okBay) setManualBay(sv.bay);
+        if (_okBay && (sv.tier === null || sv.tier === 'hold' || sv.tier === 'deck')) setManualTier(sv.tier);
+        _snapArmedRef.current = true;
+      }
+    }
+    _wctxReadyRef.current = 'pending:' + _wctxKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_wctxKey]);
+  useEffect(() => {
+    if (!_wctxKey) return;
+    //  되살린 그 커밋의 값은 옛 키(앞 모드)의 것이라 적지 않는다 — 다음 커밋부터 적는다.
+    if (_wctxReadyRef.current === 'pending:' + _wctxKey) { _wctxReadyRef.current = _wctxKey; return; }
+    if (_wctxReadyRef.current !== _wctxKey) return;
+    try { sessionStorage.setItem(_wctxKey, JSON.stringify({ guide: !!guideMode, bay: manualBay, tier: manualTier })); } catch (e) { /* 저장소 막힘 — 기억만 못 할 뿐 */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_wctxKey, guideMode, manualBay, manualTier]);
   //  3.48 베이뷰 — 지금 작업 맥락을 덮개에 올린다(아래 칸 그림·띠 글자가 이것을 본다). 값이 바뀔 때만.
   const _ctxCb = bayView && bayView.onWorkCtxChange;
   useEffect(() => {
@@ -621,7 +664,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             workFilter === 'completed' ? 'bg-emerald-700 text-emerald-100' : 'text-dim-300 hover:bg-ink-750'
           }`}>
           <span>✓ 완료</span>
-          <span className="text-2xs opacity-80">{completedCount}대</span>
+          <span className="text-2xs opacity-80 whitespace-nowrap" data-done-split="1">⬇{completedByMode.d} · ⬆{completedByMode.l}</span>
         </button>
       </div>
       )}

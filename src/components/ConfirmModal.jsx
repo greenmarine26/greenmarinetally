@@ -13,6 +13,7 @@ export default function ConfirmModal({
   danger = false,           // true면 빨간색 (삭제 등 되돌릴 수 없는 작업)
   onConfirm,
   onCancel,
+  onClose,                  // 4.25-02: ✕(닫기)가 [취소] 단추와 다른 뜻일 때만 준다 — 없으면 종전대로 onCancel
 }) {
   if (!open) return null;
 
@@ -25,7 +26,7 @@ export default function ConfirmModal({
           <div className={`flex-1 font-black text-base ${danger ? 'text-st-badHi' : 'text-dim-100'}`}>
             {title || (danger ? '⚠️ 확인 필요' : '확인')}
           </div>
-          <button onClick={onCancel} className="text-dim-400 hover:text-dim-200 p-1">
+          <button onClick={onClose || onCancel} className="text-dim-400 hover:text-dim-200 p-1">
             <X className="w-4 h-4"/>
           </button>
         </div>
@@ -76,8 +77,14 @@ export default function ConfirmModal({
 //   <ConfirmModal {...confirmState} />
 export function useConfirm() {
   const [state, setState] = React.useState({ open: false });
+  //  ★ 4.25-02 — 물음 번호. 단추를 눌러 이어진 일이 **곧바로 다음 물음을 열면**(await ask → 또 ask) 앞 물음의 닫기(finally)가 새 물음을 닫아 버려
+  //    다음 물음이 영영 안 뜨고 그 일이 멈췄다(감사 — 트윈 «이 한 대만» 뒤 «이 자리 화물이 아닙니다» · 종전에도 단독 수정의 «다른 베이 → 이미 완료된 컨» 이 같았다).
+  //    닫기는 «아직 내가 띄운 물음일 때» 만 한다.
+  const seqRef = React.useRef(0);
 
   const askConfirm = React.useCallback((opts) => {
+    const my = ++seqRef.current;
+    const shut = () => { if (seqRef.current === my) setState({ open: false }); };
     setState({
       open: true,
       title: opts.title,
@@ -87,13 +94,15 @@ export function useConfirm() {
       danger: opts.danger,
       onConfirm: async () => {
         try { await opts.onConfirm?.(); } finally {
-          setState({ open: false });
+          shut();
         }
       },
       onCancel: () => {
         opts.onCancel?.();
-        setState({ open: false });
+        shut();
       },
+      //  4.25-02: ✕ 가 «아무것도 안 함» 이어야 하는 물음(두 단추가 둘 다 일을 하는 물음)만 opts.onClose 를 준다.
+      onClose: opts.onClose ? () => { opts.onClose(); shut(); } : undefined,
     });
   }, []);
 

@@ -2957,6 +2957,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   //  4.25-01 — 규격이 자료마다 다를 때 «확인 전에는 터미널(EDI) 규격» · L5U0·40OH 를 터미널처럼 45UT(OT). 본문은 tools/regress_r36_iso.cjs(단독 실행도 된다).
   await require('./regress_r36_iso.cjs')({ ROOT, TMP, ok, head, fx });
 
+  // ── R37 ───────────────────────────────────────────────────────────────
+  //  4.25-02 — 작업 화면 수리 묶음(트윈 «이 한 대만» · 가이드 밖 X-RAY 입력칸 · 탭을 옮겨도 가이드 기억 · 완료 칸 ⬇양하·⬆선적 · 묶음 «완료» 오판 · «다른 갱» 창 기본 = 내 갱 그대로).
+  //    항차 화면(VoyagePage 실소스)을 jsdom 에서 검수원 손 그대로 누른다. 본문은 tools/regress_r37_work.cjs(단독 실행도 된다).
+  await require('./regress_r37_work.cjs')({ ROOT, TMP, ok, head, fx, stub });
+
+  // ── R38 ───────────────────────────────────────────────────────────────
+  //  4.25-02 — 검수리스트 실번호 칸: 엠티는 엠티실(eseal)도 본다(TNJP 26367W). 본문은 tools/regress_r38_eseal.cjs(단독 실행도 된다).
+  await require('./regress_r38_eseal.cjs')({ ROOT, TMP, ok, head, fx });
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

@@ -10,6 +10,7 @@
 import { shipOpMapper } from './data/tallyFormats.js';
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { inspectionSealOf } from './utils.js';   // 4.25-02: 실번호 칸 한 벌 — 엠티는 엠티실(eseal)도 본다(종이·CSV)
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
   //    그대상컨테이너 줄을 노란색으로 색칠해 주세요» · 확정 «X-RAY 대상 줄 전부» · «노랑이 기존 색을 이긴다»).
@@ -243,7 +244,7 @@ function renderRow(c, idx, opts) {
   //  ★ 3.53-10 — **실번호를 자르지 않는다.** 검수사 2026-09-21 «검수리스트에서 셀 자리수 부족으로 실번호 잘림현상 해결바람»
   //    (ATPR 2642E — 실번호 SINOKOR011526 이 종이에 «SINOKOR011» 로 나갔다). M5.52 가 선사 칸 공간을 위해 10자로 잘랐는데
   //    검수는 실번호로 실물을 맞추는 일이라 뒷자리를 잃으면 종이가 거짓이 된다. 칸을 넓히고(실번호 16→18%, 컨번호 19→17%) 10자 넘으면 6pt 로 줄인다 — 줄바꿈은 장당 줄수를 깨므로 안 쓴다.
-  const sl = (c._madeUnit || isMadeUnitCn(c.cn)) ? splitJoinedSeals(c.sl).join(' ') : String(c.sl || '').trim();   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다(일반 컨 씰은 그대로)
+  const sl = (c._madeUnit || isMadeUnitCn(c.cn)) ? splitJoinedSeals(c.sl).join(' ') : inspectionSealOf(c);   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다(일반 컨 씰은 그대로)
   const _slCls = sl.length > 13 ? ' s3' : sl.length > 10 ? ' s2' : sl.length > 8 ? ' s1' : '';   // 3.60: 9~10자 7.5pt · 11자부터 6pt   // 3.60: 세 단 — 9자부터 6pt(10자 실번호가 8pt 로 칸을 넘었다, 크로뮴 실측)
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
   const isBooking = c.isBooking === true || c.pendingCn === true ||
@@ -819,7 +820,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     const _no = inspNumber(d.containers);   // 3.60: 종이와 같은 묶음별 순번
     d.containers.forEach((c, i) => {
       const cn = (c.cn || '').replace(/,/g, '');
-      const seal = String(c.sl || c.seal || '').replace(/,/g, '');   // TallyOne 2.00: 실번호 필드는 sl — seal 만 봐서 CSV 실번호가 늘 비었다
+      const seal = String(inspectionSealOf(c) || c.seal || '').replace(/,/g, '');   // 4.25-02: 종이와 같은 실번호 칸 한 벌(엠티는 엠티실)   // TallyOne 2.00: 실번호 필드는 sl — seal 만 봐서 CSV 실번호가 늘 비었다
       //  ★ 3.45 — 종이와 같은 규격·F/E 를 쓴다. 종전엔 규격이 iso 날것(4510)이고
 //    F/E 기본값이 종이(E)와 반대(F)여서 같은 배를 종이와 엑셀이 다르게 적었다.
       const iso = _specOf(c).replace(/,/g, '');

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.25-01';
-const NOTE = '4.25-01 규격이 자료마다 다를 때는 확인 전까지 터미널 규격을 따릅니다. L5U0 같은 오픈탑 표기를 터미널처럼 45UT로 읽습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.25-02';
+const NOTE = '4.25-02 트윈 카드에서 한 대만 왔으면 이 한 대만으로 확인합니다. XRAY 칸이 그 자리에서 열리고, 탭을 옮겨도 자동 가이드가 그대로이며 검수리스트에 엠티 실번호가 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -71,6 +71,9 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
+//  4.25-02 — «다른 갱» 물음을 이미 한 장(항차·모드·장·두 호기). 모듈에 두어 탭을 옮기거나 자동↔수동을 바꿔도 앱을 다시 열기 전까지는 다시 묻지 않는다(감사 기록 — 컴포넌트에 두면 다시 그려질 때마다 물었다).
+const _askedGang = new Set();
+
 export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false }) {   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
@@ -175,6 +178,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const ask = (opts) => new Promise((resolve) => {
     askConfirm({ ...opts, onConfirm: () => resolve(true), onCancel: () => resolve(false) });
   });
+  //  ★ 4.25-02 — 두 단추가 둘 다 일을 하는 물음(«내 갱 그대로» 대 «○호기로 바꾼다» · «이 한 대만» 대 «짝도 확인»).
+  //    ✕ 는 어느 쪽도 아니다(null) — 종전 ask 는 ✕ 를 [취소] 단추와 같게 받아, 닫기만 해도 둘째 단추의 일을 했다.
+  const askPick = (opts) => new Promise((resolve) => {
+    askConfirm({ ...opts, onConfirm: () => resolve('confirm'), onCancel: () => resolve('cancel'), onClose: () => resolve(null) });
+  });
   // 알림 전용(선택지 없음) — 문구·방식은 ContainerList·ContainerDetailModal 과 같은 벌을 쓴다.
   const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
 
@@ -205,6 +213,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (dup) { alert(`XRAY 실번호 중복입니다.\n${xVal.trim()} 은(는) 이미 ${dup.slice(-4)} 컨에 입력돼 있습니다.\n(실 부족이면 0000으로 입력하세요.)`); return; }
     await fbSetXraySeal(voyageKey, c.cn, xVal.trim(), xEVal.trim(), inspector);
     setEditXCn(null); setXVal(''); setXEVal('');
+  };
+  //  ★ 4.25-02 (모의 작업 MCAP 2호기 seq47 · OBWH 11대 — 가이드 밖에서 온 X-RAY 컨은 «XRAY 실번호를 먼저 입력하세요» 경고만 뜨고
+  //    수정 칸·큰 카드에 입력칸이 없어 리스트 탭으로 6~13번 눌러 돌아가야 했다): 막는 자리에서 **그 컨의 XRAY 입력칸을 바로 연다.**
+  //    카드에 있는 컨이면 카드 안 칸이, 카드 밖 컨(수정으로 고른 컨)이면 카드 아래 같은 모양의 칸이 열린다(xrayEditRow 한 벌).
+  //    입력 자판은 종전대로 숫자(검수사 확정 2026-06-18 — 실측 XRAY 실 OBWH 2763E 28대·STMJ 2659E 6대 전부 숫자 여섯 자리).
+  const needXray = (cn, listTxt = '') => {
+    const src = allContainers.find(x => x.cn === cn && x._mode === mode) || {};
+    setEditXCn(cn); setXVal(src._xraySeal?.seal || ''); setXEVal(src._xraySeal?.eseal || '');
+    alert(`XRAY 실번호를 먼저 입력하세요.\n${listTxt || String(cn || '').slice(-4)}은 XRAY 대상입니다 — 열린 칸에 넣고 [XRAY 저장] 뒤 다시 누르세요.`);
   };
 
   //  ★ 3.47 — **규격이 자료마다 다른 컨은 여기서 실물을 보고 확정한다.**
@@ -453,18 +470,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // 베이 묶음 선택 — 다른 갱이 이미 작업한 베이면 앱 안 모달로 되묻는다.
   //   ⛔ window.confirm 은 쓰지 않는다(1.54 에서 검수 흐름의 네이티브 창을 전부 걷어냈다 — 뜨는 순간 앱이 굳는다).
+  //  ★ 4.25-02 (모의 작업 MCAP 2호기 — 한 장 고를 때마다 이 창이 떴고, 큰 초록 단추가 «○호기로 바꾼다» 라 3~5번 남의 호기로 넘어갔다 · 검수사 2026-10-13 00:53 «전부 클로드 안대로 수정»):
+  //    큰 단추(기본) = **지금 내 갱 그대로**, 바꾸기는 회색 단추로만. ✕ 로 닫아도 그대로다. 같은 장·같은 두 호기면 이 화면에서 한 번만 묻는다.
+  //    한 장을 두 호기가 나눠 하는 것은 흔한 일이다(공유 장) — 묻는 까닭은 «호기를 잘못 고른 채 시작했는지» 한 번 보게 하는 것뿐이다.
   const pickGroup = async (g) => {
     if (!g) return;
     const prior = priorEquipOf(g.center);
-    if (prior && equip && prior.equip !== equip) {
+    const _gk = prior ? `${voyageKey}|${inspector || ''}|${mode}|${g.center}|${prior.equip}|${equip}` : '';   // 검수원도 열쇠에(같은 창 다음 사람은 다시 묻는다 — 재감사 하)
+    if (prior && equip && prior.equip !== equip && !_askedGang.has(_gk)) {
       const bayLbl = `B${[...g.bays].sort((a, b) => a - b).join('·')}`;
-      const ok = await ask({
-        title: '이 베이는 다른 갱이 작업했습니다',
-        message: `${bayLbl}는 ${prior.equip}가 작업했습니다.\n지금 갱은 ${equip}입니다 — 바꿀까요?\n(그대로 두면 이 베이 작업이 ${equip} 실적으로 올라갑니다.)`,
-        confirmLabel: `${prior.equip}로 바꾼다`,
-        cancelLabel: `${equip} 그대로`,
+      const pick = await askPick({
+        title: '이 베이는 다른 갱도 작업했습니다',
+        message: `${bayLbl}는 ${prior.equip}가 작업했습니다.\n지금 내 갱은 ${equip}입니다.\n같은 장을 나눠 하는 것이면 [${equip} 그대로] — 이 베이 작업이 ${equip} 실적으로 올라갑니다.\n호기를 잘못 고른 것이면 [${prior.equip}로 바꾼다].`,
+        confirmLabel: `${equip} 그대로`,
+        cancelLabel: `${prior.equip}로 바꾼다`,
       });
-      if (ok) pickEquip(prior.equip);   // 헤더·작업 보고와 한 벌(localStorage + equipChanged)로 같이 바뀐다
+      _askedGang.add(_gk);
+      if (pick === 'cancel') pickEquip(prior.equip);   // 헤더·작업 보고와 한 벌(localStorage + equipChanged)로 같이 바뀐다
     }
     setSelectedGroup(g.center); setConsecFix(0); setDeckPromptDone(false); setFixOpen(false);
   };
@@ -524,6 +546,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }, [remaining, modeAll, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns, rowFrom, orderKey, bayFirst]);
 
   const card = queue[0] || null;
+  //  4.25-02 (2차 시뮬 하): XRAY 입력칸은 그 카드에서만 — 카드가 넘어가면 닫는다(카드 밖 수정 컨의 칸이 다음 카드 아래에 남아 있었다).
+  useEffect(() => { setEditXCn(null); setXVal(''); setXEVal(''); }, [card?.main?.cn, card?.twin?.cn]);
 
   //  2.80: 선적 + 지금 카드가 엠티면 «자리 확인» 모드를 스스로 켠다(검수사가 직접 만진 뒤에는 그 뜻을 지킨다).
   //    풀로 넘어가면 도로 끈다 — 풀은 계획대로 들어간다(실측).
@@ -647,6 +671,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return allContainers.filter(c => c._mode === mode && c._ptk && c._comp && groupCenterOf(c.bay) === selectedGroup).length;
   }, [allContainers, mode, selectedGroup, bayPairs]);
   const groupTotal = groupDone + (selectedGroup == null ? 0 : remaining.filter(c => groupCenterOf(c.bay) === selectedGroup).length);
+  //  ★ 4.25-02 (모의 작업 MCAP 2호기 «B22 31/63 선적 완료!» · OBWH 1호기 데크만 끝났는데 «이 베이 그룹 양하 완료!»): 큐가 비어도 그 묶음에 남은 컨이 있으면 «완료» 라 하지 않는다.
+  //    남은 것 = 위 groupTotal 과 같은 remaining 한 벌(머리 «B○ 그룹 — n/N대» 와 같은 수). 왜 큐에 없는지(보류 · 다른 단)만 나눠 말한다.
+  const groupLeft = useMemo(() => {
+    if (selectedGroup == null) return { n: 0, held: 0, other: 0 };
+    const rest = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
+    const held = rest.filter(c => heldSet.has(String(c.cn || '').toUpperCase())).length;
+    const other = rest.length - held;
+    return { n: rest.length, held, other };
+  }, [remaining, selectedGroup, heldSet, bayPairs]);
 
   // V7.99-8 (메모6): 현재 작업 위치(호기·베이·홀드/데크·잔여 컨번호 리스트)를 inspector 활동에 기록 →
   //   수석이 베이상세에서 "N호기 · 20번 홀드 · 남은 N개"를 보고 그 화면을 연다.
@@ -686,10 +719,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     !String(c?._xraySeal?.seal || '').trim();
   const blockIfXrayMissing = () => {
     const miss = [];
-    if (card?.main && xraySealMissing(card.main)) miss.push(card.main.l4 || card.main.cn?.slice(-4));
-    if (card?.twin && xraySealMissing(card.twin)) miss.push(card.twin.l4 || card.twin.cn?.slice(-4));
+    if (card?.main && xraySealMissing(card.main)) miss.push(card.main);
+    if (card?.twin && xraySealMissing(card.twin)) miss.push(card.twin);
     if (miss.length) {
-      alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      needXray(miss[0].cn, miss.map((x) => x.l4 || x.cn?.slice(-4)).join(', '));   // 4.25-02: 경고만이 아니라 첫 컨의 입력칸을 연다
       return true;
     }
     return false;
@@ -1195,7 +1228,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // 수정 1대 적용: 선적이면 실제 컨을 예측 슬롯 위치로 재배정(그 자리 예측 컨은 자동 미배정+완료취소 — 이중 수정 방지) 후 완료
   //   1.54: 자리 배정이 안 되면 **완료를 찍지 않는다.** 돌려주는 값이 false 면 부르는 쪽이 멈춘다.
-  const applyFixOne = async (actual, slot) => {
+  const applyFixOne = async (actual, slot, opts = null) => {   // 4.25-02 opts.swap === false — 맞바꿈 안 함(트윈 한 대만에서 풀·엠티가 섞인 칸)
     if (mode === 'loading') {
       //  ★ 2.80-01 (검수사 실사용 보고 2026-08-28 21:0x) — **밀려난 계획 컨은 창고가 아니라 «온 컨의 옛 자리»로 간다.**
       //    실측 사고: 28-07-82(계획 SKHU6475028)에 4172 를 넣자 5028 이 `planTaken` 으로 **창고**로 갔다.
@@ -1205,7 +1238,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       //    ⇒ 자리 확인 모드에서 다른 컨을 넣는 것은 **두 컨의 자리 맞바꿈**이다(현장 뜻). `swapWith` 로 못 박는다.
       //      이것이 없으면 밀려난 컨이 계획 자리를 든 채 창고로 떠 큐·그림에 유령으로 남는다.
       //    ⚠ 맞바꿈은 «온 컨이 원래 자리를 갖고 있을 때»만 성립한다 — 미배정·창고에서 온 컨은 종전대로.
-      const canSwap = slotMode && !!actual.bay && !!actual.row && !!actual.tier
+      const canSwap = slotMode && !(opts && opts.swap === false) && !!actual.bay && !!actual.row && !!actual.tier
         && String(actual.bay_actual ?? '') !== '__STG__';
       const r = await reassignAsk(actual.cn, slot.bay, slot.row, slot.tier,
         canSwap ? { swapWith: slot.cn, actualWork: true } : undefined);
@@ -1290,34 +1323,35 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return !String(src._xraySeal?.seal || '').trim();
   };
 
+  //  ★ 2.80-02: 다른 베이 화물이면 그 자리에서 막고 «어디로 가야 하는지» 말한다(검수사 확정 — PDA 와 같은 안내).
+  //    그래도 실었다면 **현장 절차를 그대로 띄운다.** 검수사 확정 2026-08-28 —
+  //      *«이미 실수로 실었을때 입니다. 포트가 같다면 통제실에 무전을 합니다. 18번베이 컨테이너를 선적했다고
+  //        알려주고 컨번호를 불러줘야 합니다. 그러면 저희 베이에 남을 1개의 컨테이너를 그쪽 베이로 보내줍니다.»*
+  //    ⇒ 그 무전이 곧 **자리 맞바꿈**이다 — 앱이 하는 swapWith 와 같은 일이라 총량이 맞는다.
+  //    ⚠ POD 가 다르면 맞바꿈이 성립하지 않는다(그 배에서 내릴 항이 다르다) — 그때는 세게 경고한다.
+  //  4.25-02: 단독 수정(handleFixPick)과 트윈 «이 한 대만»(applyTwinFixOne)이 같이 부르게 함수로 뺐다(감사·2차 시뮬 — 트윈 한 대만에 이 안내가 없어 CNSHD 컨이 CNTAO 칸에 경고 없이 실렸다). 넣지 말라면 false.
+  const askIfAway = async (c, slotC, slotPos) => {
+    const away = otherBayNote(c);
+    if (!away) return true;
+    const samePod = String(c.pod || '').toUpperCase() === String(slotC.pod || '').toUpperCase();
+    const guide = samePod
+      ? `이미 실었다면 통제실에 무전하십시오.\n«${parseInt(c.bay, 10)}번 베이 ${c.cn} 를 실었다» 고 알리고 컨번호를 불러 주면,\n이 베이에 남을 컨 한 대를 그쪽으로 보내 줍니다.\n\n[그래도 넣는다] 를 누르면 앱도 두 자리를 맞바꿔 둡니다.`
+      : `⛔ 양하항이 다릅니다 — 여기는 ${slotC.pod || '?'}, 그 컨은 ${c.pod || '?'} 입니다.\n맞바꿔 담을 수 없으니 통제실에 먼저 무전해 확인하십시오.`;
+    return ask({
+      title: '이 자리 화물이 아닙니다',
+      message: `${c.cn.slice(-4)} 는 ${away}.\n지금 자리는 ${slotPos} 입니다.\n\n${guide}`,
+      confirmLabel: '그래도 넣는다', cancelLabel: '취소',
+    });
+  };
+
   // 단독 카드 수정: 실제 온 컨 1대
   const handleFixPick = async (c) => {
     if (busy || !card) return;
     if (xrayMissingByCn(c.cn)) {   // V8.09-06: 실제 컨이 XRAY 대상인데 실번호 미입력이면 차단
-      alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      needXray(c.cn);   // 4.25-02: 그 컨의 입력칸을 연다(카드 밖 컨이면 카드 아래)
       return;
     }
-    //  ★ 2.80-02: 다른 베이 화물이면 그 자리에서 막고 «어디로 가야 하는지» 말한다(검수사 확정 — PDA 와 같은 안내).
-    //    그래도 실었다면 **현장 절차를 그대로 띄운다.** 검수사 확정 2026-08-28 —
-    //      *«이미 실수로 실었을때 입니다. 포트가 같다면 통제실에 무전을 합니다. 18번베이 컨테이너를 선적했다고
-    //        알려주고 컨넘버를 불러줘야 합니다. 그러면 저희 베이에 남을 1개의 컨테이너를 그쪽 베이로 보내줍니다.»*
-    //    ⇒ 그 무전이 곧 **자리 맞바꿈**이다 — 앱이 하는 swapWith 와 같은 일이라 총량이 맞는다.
-    //    ⚠ POD 가 다르면 맞바꿈이 성립하지 않는다(그 배에서 내릴 항이 다르다) — 그때는 세게 경고한다.
-    {
-      const away = otherBayNote(c);
-      if (away) {
-        const samePod = String(c.pod || '').toUpperCase() === String(card.main.pod || '').toUpperCase();
-        const guide = samePod
-          ? `이미 실었다면 통제실에 무전하십시오.\n«${parseInt(c.bay, 10)}번 베이 ${c.cn} 를 실었다» 고 알리고 컨번호를 불러 주면,\n이 베이에 남을 컨 한 대를 그쪽으로 보내 줍니다.\n\n[그래도 넣는다] 를 누르면 앱도 두 자리를 맞바꿔 둡니다.`
-          : `⛔ 양하항이 다릅니다 — 여기는 ${card.main.pod || '?'}, 그 컨은 ${c.pod || '?'} 입니다.\n맞바꿔 담을 수 없으니 통제실에 먼저 무전해 확인하십시오.`;
-        const go = await ask({
-          title: '이 자리 화물이 아닙니다',
-          message: `${c.cn.slice(-4)} 는 ${away}.\n지금 자리는 ${card.pos} 입니다.\n\n${guide}`,
-          confirmLabel: '그래도 넣는다', cancelLabel: '취소',
-        });
-        if (!go) return;
-      }
-    }
+    if (!(await askIfAway(c, card.main, card.pos))) return;   // 2.80-02 다른 베이·다른 양하항 안내(4.25-02 — 트윈 «이 한 대만» 과 한 벌)
     if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
     setBusy(true);
     let done = false;
@@ -1333,41 +1367,98 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     afterFix();
   };
 
+  //  ★ 4.25-02 — 트윈 카드에서 **한 대만** 왔을 때: 고른 실제 컨 한 대를 그 자리(앞=card.main · 뒤=card.twin 자리)로 확인하고, 카드의 남은 컨은 큐에 남겨 바로 다음 카드로 올린다.
+  //    한 대 확인의 길은 단독 카드 수정(handleFixPick → applyFixOne)과 같은 한 벌이다 — XRAY·다른 베이·다른 양하항 안내(askIfAway)·완료 기록 확인이 같다.
+  //    남은 컨을 다음 카드로 올리는 것은 2.75 «한 대씩»(handleConfirmOne · 4.08-02)과 같은 규칙(resumeCns)이다.
+  //    · 엇갈림 — 카드의 다른 쪽 컨을 이 칸에 골랐으면(앞뒤가 바뀌어 옴) 남는 것은 이 칸의 예측 컨이다(감사·2차 시뮬 «○○○○ 은 다음 카드에 남습니다» 를 못 지킴).
+  //    · 선적 맞바꿈(2.80-01 자리 확인)은 고른 컨과 이 칸 계획 컨이 **둘 다 엠티**일 때만 — slotMode 는 앞 컨의 풀·엠티로만 켜져, 섞인 트윈에서 풀 계획 컨이 남의 칸으로 옮겨지면 안 된다(감사 하).
+  const applyTwinFixOne = async (side) => {
+    if (busy || !card || !card.twin) return;
+    const pick = side === 'front' ? fixPickFront : fixPickBack;
+    const slot = side === 'front' ? card.main : card.twin;
+    const mate = side === 'front' ? card.twin : card.main;   // 다른 쪽 예측 컨
+    if (!pick) return;
+    const tangled = pick.cn === mate.cn;   // 카드의 다른 쪽 컨을 이 칸에 골랐다(앞뒤가 바뀌어 옴)
+    const rest = tangled ? slot : mate;   // 남아서 다음 카드로 갈 카드 컨
+    if (xrayMissingByCn(pick.cn)) { needXray(pick.cn); return; }
+    if (!(await askIfAway(pick, slot, `${parseInt(slot.bay, 10)}-${slot.row}-${slot.tier}`))) return;
+    if (!(await confirmIfDone(pick))) return;
+    const _E = (x) => String((x && x.fe) || '').toUpperCase() === 'E';
+    setBusy(true);
+    let done = false;
+    try { done = await applyFixOne(pick, slot, { swap: !tangled && _E(pick) && _E(slot) }); }
+    catch (e) {
+      if (e && e.viewOnly) { alert(e.message); return; }
+      alert(`확인 중 오류 — 다시 시도하세요.\n(${e?.message || e})`);
+      return;
+    } finally { setBusy(false); }
+    if (!done) return;
+    //  3.77 «혼자 내림» 판정은 단독 수정(handleFixPick)과 같은 셈 — 카드 안 컨이거나 짝 자리 컨이 남아 있을 때만(짝 없는 40ft·다른 베이 컨은 세지 않는다)
+    const _alone = (pick.cn === card.main.cn || pick.cn === card.twin.cn)
+      || !!findTwinCandidate(pick, remaining.filter(x => x.cn !== pick.cn), new Set(), shipImo, shipName);
+    noteWorked(pick, _alone);
+    //  선적 엇갈림 — 고른 컨(카드의 다른 쪽 컨)이 이 칸에 실렸으니 남은 이 칸 계획 컨은 비워진 저쪽 칸으로 옮겨 둔다(회색 [도 확인] 길과 같은 두 번째 재배정, 완료는 안 함).
+    //    안 옮기면 계획 칸을 내줘 «자리 없음» 으로 가 «다음 카드에 남습니다» 를 못 지켰다(재감사 하 — 엠티 1037 · 풀 9509). 못 옮기면 종전대로 🅿 배치 목록에 남는다.
+    if (mode === 'loading' && tangled && rest && mate.bay && mate.row && mate.tier) {
+      try { await reassignAsk(rest.cn, mate.bay, mate.row, mate.tier); } catch (e) { console.warn('[4.25-02] 엇갈림 남은 컨 옮기기 실패 — 자리 없음 목록에 남는다', e); }
+    }
+    afterFix();
+    if (rest && rest.cn && rest.cn !== pick.cn) setResumeCns([rest.cn]);
+  };
+
   // 트윈 카드 수정: 앞/뒤 동시 — 바뀐 슬롯은 재배정+완료, 안 바뀐 슬롯은 예측 컨 그대로 완료
   const handleTwinFixApply = async () => {
     if (busy || !card || !card.twin) return;
     if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
-    //  ★ 4.23-01 2차: 고치지 않은 쪽이 규격·풀엠티·항구가 다른 맞교환이면 «예측대로» 완료하지 않는다 — 그 칸은 앱이 정하지 않는다(큰 확인 단추와 같은 기준 · 위치 지정으로).
-    if (mode === 'loading') {
-      const _keepW = [!fixPickFront && card.main, !fixPickBack && card.twin].filter(Boolean).find((x) => loadingSlotOf(x).kind === 'swapWarn');
-      if (_keepW) { notify('실린 칸을 먼저 지정하세요', `${_keepW.cn.slice(-4)} 는 규격·풀엠티·항구가 다른 맞교환이라 앱이 자리를 정하지 않습니다.\n그쪽도 실제 온 컨을 고르거나, [📍 실린 칸 지정] 으로 실린 칸을 먼저 넣어 주세요.`); return; }
-    }
+    //  4.25-02: 아래에서 «엇갈림» 이면 비운 쪽을 채우므로 상태 대신 이 두 값으로 끝까지 간다.
+    let pf = fixPickFront, pb = fixPickBack;
     // V8.70: 한쪽만 선택하고 적용하면 나머지는 "예측대로" 완료된다 — 실물이 정말 예측 컨인지 확인.
     //   (둘 다 틀렸는데 한쪽만 수정·적용 → 남은 쪽이 허위 완료되던 함정.)
-    if (!fixPickFront || !fixPickBack) {
-      const sideName = !fixPickFront ? '앞' : '뒤';
-      const sideCn = !fixPickFront ? card.main.cn : card.twin.cn;
-      // 1.53: window.confirm → 앱 안 모달.
-      const okSide = await ask({
-        title: `${sideName}쪽은 예측대로 맞습니까`,
-        message: `${sideName} 자리는 예측 컨 ${(sideCn || '').slice(-4)} 그대로 맞습니까?\n[맞습니다] → 예측대로 완료 처리\n둘 다 틀렸으면 [취소] 후 ${sideName}쪽도 수정하세요.`,
-        confirmLabel: '맞습니다', cancelLabel: '취소',
+    //  ★ 4.25-02 (모의 작업 OBWH 2호기 13대 · 1호기 seq7 — 트윈 카드인데 20피트가 한 대만 나왔다): 종전 물음은 [맞습니다](= 남은 쪽도 예측대로 완료)와 [취소]뿐이라
+    //    한 대만 왔을 때 길이 없었다 — 맞습니다를 누르면 안 온 컨이 거짓 완료되고, 취소면 막다른 길. 이제 큰 단추가 **[이 한 대만]**(고른 컨만 확인, 남은 쪽은 다음 카드로) 이고
+    //    남은 쪽도 실제로 왔을 때만 회색 [짝도 확인] 을 누른다. ✕ 는 아무것도 안 한다.
+    if (!pf || !pb) {
+      const sideName = !pf ? '앞' : '뒤';
+      const pick = pf || pb;
+      //  엇갈림 — 카드의 다른 쪽 컨을 이 칸에 골랐다(앞뒤가 바뀌어 옴). 그때 «같이 왔는지» 물을 컨은 카드에 남은 다른 한 대다(감사·2차 시뮬 — «3791 도 왔습니까 … 3791 은 다음 카드에 남습니다» 자기모순).
+      const tangled = pick.cn === card.main.cn || pick.cn === card.twin.cn;
+      const other = tangled ? [card.main, card.twin].find((x) => x.cn !== pick.cn) : (!pf ? card.main : card.twin);
+      const o4 = String(other.cn || '').slice(-4), p4 = String(pick.cn || '').slice(-4);
+      const how = await askPick({
+        title: tangled ? `${o4} 도 왔습니까` : `${sideName}쪽 ${o4} 도 왔습니까`,
+        message: tangled
+          ? `카드의 ${p4} 가 ${sideName === '앞' ? '뒤' : '앞'} 자리로 왔습니다(앞뒤가 바뀜).\n남은 ${o4} 은?\n— 한 대만 왔으면 [이 한 대만] (${o4} 은 다음 카드에 남습니다)\n— ${o4} 도 ${sideName} 자리로 왔으면 [${o4} 도 확인] (두 대 자리를 맞바꿔 확인)`
+          : `고른 컨 ${p4} 를 ${sideName === '앞' ? '뒤' : '앞'} 자리로 확인합니다.\n${sideName} 자리 예측 컨 ${o4} 은?\n— 한 대만 왔으면 [이 한 대만] (${o4} 은 다음 카드에 남습니다)\n— ${o4} 도 그대로 왔으면 [${o4} 도 확인]\n— ${sideName}쪽도 다른 컨이면 ✕ 로 닫고 ${sideName}쪽도 고르세요.`,
+        confirmLabel: '이 한 대만', cancelLabel: `${o4} 도 확인`,
       });
-      if (!okSide) return;
+      if (!how) return;
+      //  한 대만 — 남기는 쪽은 완료하지 않으므로 아래 «맞교환 자리 미정» 막음(_keepW)을 거치지 않는다(감사 하 — 막으면 한 대만 왔을 때 길이 다시 막힌다).
+      if (how === 'confirm') { await applyTwinFixOne(pf ? 'front' : 'back'); return; }
+      //  둘 다 왔다 — 엇갈림이면 남은 카드 컨이 비운 칸으로 왔다(앞뒤 맞바꿈). 종전엔 같은 컨을 두 번 확인하고 다른 하나를 빠뜨렸다.
+      if (tangled) { if (pf) pb = other; else pf = other; }
     }
+    //  ★ 4.23-01 2차: 고치지 않은 쪽이 규격·풀엠티·항구가 다른 맞교환이면 «예측대로» 완료하지 않는다 — 그 칸은 앱이 정하지 않는다(큰 확인 단추와 같은 기준 · 위치 지정으로).
+    if (mode === 'loading') {
+      const _keepW = [!pf && card.main, !pb && card.twin].filter(Boolean).find((x) => loadingSlotOf(x).kind === 'swapWarn');
+      if (_keepW) { notify('실린 칸을 먼저 지정하세요', `${_keepW.cn.slice(-4)} 는 규격·풀엠티·항구가 다른 맞교환이라 앱이 자리를 정하지 않습니다.\n그쪽도 실제 온 컨을 고르거나, [📍 실린 칸 지정] 으로 실린 칸을 먼저 넣어 주세요.`); return; }
+    }
+    //  4.25-02 (2차 시뮬 재검 하): 둘 다 확인하는 길에도 카드 밖 컨이면 단독 수정·한 대만과 같은 «이 자리 화물이 아닙니다» 를 먼저 묻는다(종전부터 없던 안내 — CNSHD 컨이 CNTAO 칸에 경고 없이 실렸다).
+    const _cardCn = new Set([card.main.cn, card.twin.cn]);
+    if (pf && !_cardCn.has(pf.cn) && !(await askIfAway(pf, card.main, card.pos))) return;
+    if (pb && !_cardCn.has(pb.cn) && !(await askIfAway(pb, card.twin, `${parseInt(card.twin.bay, 10)}-${card.twin.row}-${card.twin.tier}`))) return;
     // V8.09-06: XRAY 실번호 검증 — 바뀐 쪽은 실제 컨, 안 바뀐 쪽은 예측 컨 기준.
-    const frontCn = fixPickFront ? fixPickFront.cn : card.main.cn;
-    const backCn = fixPickBack ? fixPickBack.cn : card.twin.cn;
-    const frontMiss = fixPickFront ? xrayMissingByCn(frontCn) : xraySealMissing(card.main);
-    const backMiss = fixPickBack ? xrayMissingByCn(backCn) : xraySealMissing(card.twin);
+    const frontCn = pf ? pf.cn : card.main.cn;
+    const backCn = pb ? pb.cn : card.twin.cn;
+    const frontMiss = pf ? xrayMissingByCn(frontCn) : xraySealMissing(card.main);
+    const backMiss = pb ? xrayMissingByCn(backCn) : xraySealMissing(card.twin);
     if (frontMiss || backMiss) {
       const miss = [frontMiss && frontCn?.slice(-4), backMiss && backCn?.slice(-4)].filter(Boolean);
-      alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      needXray(frontMiss ? frontCn : backCn, miss.join(', '));   // 4.25-02: 경고만이 아니라 첫 컨의 입력칸을 연다
       return;
     }
     // V8.71 (1.53: 모달이라 await — 한쪽씩 차례로 묻는다)
-    if (fixPickFront && !(await confirmIfDone(fixPickFront))) return;
-    if (fixPickBack && !(await confirmIfDone(fixPickBack))) return;
+    if (pf && !(await confirmIfDone(pf))) return;
+    if (pb && !(await confirmIfDone(pb))) return;
     setBusy(true);
     // V8.71: 원자화 — 재배정(위치)을 앞·뒤 모두 끝낸 뒤에만 완료를 찍는다.
     //   (구: 앞 재배정+완료 → 뒤 재배정+완료 순서라, 뒤가 중간에 실패하면 앞 한 대만 선적된 채 멈춤 — 현장 보고 2026-07-08.)
@@ -1375,18 +1466,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (mode === 'loading') {
         // 1.54: 시퀀스 항차면 여기서 되묻는다. 취소되면 **선적확인을 찍지 않고** 멈춘다
         //   (자리는 안 들어갔는데 완료만 찍히는 것이 가장 나쁘다 — 그림과 기록이 갈린다).
-        if (fixPickFront && !(await reassignAsk(fixPickFront.cn, card.main.bay, card.main.row, card.main.tier))) { setBusy(false); return; }
-        if (fixPickBack && !(await reassignAsk(fixPickBack.cn, card.twin.bay, card.twin.row, card.twin.tier))) { setBusy(false); return; }
+        if (pf && !(await reassignAsk(pf.cn, card.main.bay, card.main.row, card.main.tier))) { setBusy(false); return; }
+        if (pb && !(await reassignAsk(pb.cn, card.twin.bay, card.twin.row, card.twin.tier))) { setBusy(false); return; }
       }
       await fbCompleteContainersAtomic(voyageKey, mode,
-        [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector, equip);   // 1.55: 갱(호기)
+        [frontCn, backCn], inspector, equip);   // 1.55: 갱(호기)
     } catch (e) {
       if (e && e.viewOnly) { alert(e.message); setBusy(false); return; }   // 3.51: 조회만은 보기만
       alert(`수정 적용 중 오류 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n(${e?.message || e})`);
       setBusy(false);
       return;
     } finally { setBusy(false); }
-    noteWorked(fixPickFront || fixPickBack);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
+    noteWorked(pf || pb);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
     afterFix();
   };
 
@@ -1635,6 +1726,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }
 
   // ── 4단계: 예측 카드 (V7.94-05: 기본 정보 전부 표시 — 실번호 확인·XRAY 번호 입력·규격 확인) ──
+  //  ★ 4.25-02 — XRAY 입력칸 한 벌(카드 안 · 카드 밖 수정 컨 둘 다 이 모양). 종전엔 카드 안에만 있었다.
+  const xrayEditRow = (c) => (
+    <div className="space-y-1">
+      <div className="flex gap-1.5">
+        <input autoFocus value={xVal} onChange={e => setXVal(e.target.value)} {...NUM_INPUT_PROPS}
+          placeholder="XRAY 실번호" className="flex-1 min-w-0 bg-ink-800 border border-fuchsia-600 rounded px-2 py-1 text-sm mono text-dim-100"/>
+        <input value={xEVal} onChange={e => setXEVal(e.target.value)} {...NUM_INPUT_PROPS}
+          onKeyDown={e => { if (e.key === 'Enter') saveXSeal(c); }}
+          placeholder="E-실(선택)" className="w-24 bg-ink-800 border border-line-strong rounded px-2 py-1 text-sm mono text-dim-100"/>
+      </div>
+      <div className="flex gap-1.5">
+        <button onClick={() => saveXSeal(c)} className="flex-1 py-1 rounded bg-fuchsia-700 text-white text-xs font-bold">XRAY 저장</button>
+        <button onClick={() => { setEditXCn(null); setXVal(''); setXEVal(''); }} className="px-2 rounded bg-ink-800 text-dim-300 text-xs">취소</button>
+      </div>
+    </div>
+  );
   const renderCon = (c, label, color) => (
     <div className={`rounded-pill border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
       <div className="flex items-center justify-between text-2xs mb-1">
@@ -1727,21 +1834,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {/* XRAY 번호 — 대상만 표시·입력 */}
       {c._xray && (
         <div className="mt-1.5">
-          {editXCn === c.cn ? (
-            <div className="space-y-1">
-              <div className="flex gap-1.5">
-                <input autoFocus value={xVal} onChange={e => setXVal(e.target.value)} {...NUM_INPUT_PROPS}
-                  placeholder="XRAY 실번호" className="flex-1 min-w-0 bg-ink-800 border border-fuchsia-600 rounded px-2 py-1 text-sm mono text-dim-100"/>
-                <input value={xEVal} onChange={e => setXEVal(e.target.value)} {...NUM_INPUT_PROPS}
-                  onKeyDown={e => { if (e.key === 'Enter') saveXSeal(c); }}
-                  placeholder="E-실(선택)" className="w-24 bg-ink-800 border border-line-strong rounded px-2 py-1 text-sm mono text-dim-100"/>
-              </div>
-              <div className="flex gap-1.5">
-                <button onClick={() => saveXSeal(c)} className="flex-1 py-1 rounded bg-fuchsia-700 text-white text-xs font-bold">XRAY 저장</button>
-                <button onClick={() => { setEditXCn(null); setXVal(''); setXEVal(''); }} className="px-2 rounded bg-ink-800 text-dim-300 text-xs">취소</button>
-              </div>
-            </div>
-          ) : (
+          {editXCn === c.cn ? xrayEditRow(c) : (
             <button onClick={() => { setEditXCn(c.cn); setXVal(c._xraySeal?.seal || ''); setXEVal(c._xraySeal?.eseal || ''); }} className="w-full flex items-center gap-1.5 text-left">
               <span className="text-xxs text-fuchsia-400 font-bold flex-shrink-0">XRAY:</span>
               <span className={`mono text-sm font-bold ${c._xraySeal?.seal ? 'text-fuchsia-200' : 'text-amber-400'}`}>{c._xraySeal?.seal || '미입력'}{c._xraySeal?.eseal ? ` / E:${c._xraySeal.eseal}` : ''}</span>
@@ -1887,9 +1980,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           </div>
         </div>
       ) : !card ? (
-        <div className="bg-emerald-950/40 border border-emerald-700 rounded-pill p-6 text-center">
-          <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>
-          <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
+        <div className={`${groupLeft.n === 0 ? 'bg-emerald-950/40 border-emerald-700' : 'bg-amber-950/30 border-amber-700'} border rounded-pill p-6 text-center`}>
+          {groupLeft.n === 0 && <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>}{/* 4.25-02: 남은 컨이 있으면 완료처럼 보이지 않게(초록·✓ 없음) */}
+          {groupLeft.n === 0 ? (
+            <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
+          ) : (
+            <div data-group-left="1">
+              <div className="font-bold text-amber-300">{selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : '이 단'}에서 지금 할 컨이 없습니다</div>
+              <div className="text-xxs text-dim-300 mt-1">이 베이 그룹에 남은 {groupLeft.n}대{groupLeft.held ? ` · 보류 ${groupLeft.held}대` : ''}{groupLeft.other ? ` · ${selectedTier ? '다른 단' : '큐 밖'} ${groupLeft.other}대` : ''}</div>
+            </div>
+          )}
           {!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (   // 3.49: 따라가기면 자동 판정이 적는다 — 버튼까지 숨겨 이중 보고를 막는다(감사 지적)
             <div className="mt-3 space-y-2">
               <div className="text-xxs text-dim-300">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
@@ -2042,6 +2142,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   className="px-3 rounded-pill text-sm font-bold bg-rose-800 disabled:opacity-40 text-white">보류</button>
               </div>
               <button onClick={() => { setHoldOpen(false); setHoldNote(''); }} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">취소</button>
+            </div>
+          )}
+
+          {/* ★ 4.25-02 — 카드 밖 컨(수정으로 고른 실제 컨)의 XRAY 입력칸. 카드 안 컨은 카드 안 칸이 열린다. */}
+          {editXCn && editXCn !== card.main.cn && editXCn !== card.twin?.cn && (fixOpen || (slotMode && !card.twin)) && (
+            <div className="bg-ink-900 border border-fuchsia-700 rounded-xl p-2.5 space-y-1.5" data-xray-out="1">
+              <div className="text-xxs font-bold text-fuchsia-300">XRAY 실번호 — <span className="mono text-dim-100">{editXCn}</span></div>
+              {xrayEditRow(allContainers.find(x => x.cn === editXCn && x._mode === mode) || { cn: editXCn })}
             </div>
           )}
 

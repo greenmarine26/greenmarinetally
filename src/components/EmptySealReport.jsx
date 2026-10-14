@@ -8,7 +8,7 @@
 // V9.57(I14): 죽은 export 정리 — 외부 참조는 generateEmptySealReport 하나뿐(전수 grep 확인).
 //   loadSheetJSStyled·buildSealReportSheet는 내부 사용만 남기고 export 제거,
 //   generateEmptySealEditReport·EmptySealReportButton(참조 0)은 삭제. React/lucide/loadSheetJS 임포트도 함께 정리.
-import { isoToLabel, isTermOtL } from '../utils.js';
+import { isoToLabel, isTermOtL, looksLikeIsoType } from '../utils.js';   // 4.25-02: 엠티실 칸 거름은 utils 한 벌(검수리스트 실번호 칸과 같은 판정)
 
 // V7.42: 셀 스타일(음영·테두리·볼드)을 지원하는 SheetJS 호환 라이브러리 로더.
 //   기존 loadSheetJS(xlsx@0.18.5)는 스타일 미지원 → 보고서 출력 전용으로 xlsx-js-style 사용.
@@ -35,12 +35,7 @@ function fmtDateSafe(v) {
 }
 
 // V7.43: 엠티실 칸 ISO 타입 오염 제거 (사용자 확정 — 선사마다 규격 표기가 달라
-//   22GP/45GP 같은 ISO형 표기가 엠티실번호 칸으로 들어오는 케이스).
-//   4자 ISO 타입 패턴(첫 자 2/4/L/9 + 영숫자)이면 실번호가 아님 → 제거.
-function looksLikeIsoType(v) {
-  const s = String(v || '').trim().toUpperCase();
-  return /^[24L9][0-9][A-Z][A-Z0-9]$/.test(s);
-}
+//   22GP/45GP 같은 ISO형 표기가 엠티실번호 칸으로 들어오는 케이스). 4.25-02 부터 utils.looksLikeIsoType 한 벌(검수리스트 실번호 칸과 같이 쓴다).
 // 규격 표기: 라벨 + (선사 원표기) 병기 — 예: 20DC(22GP). 같으면 라벨만.
 function sizeLabelWithRaw(iso) {
   const label = isoToLabel(iso) || iso || '-';

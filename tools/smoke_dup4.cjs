@@ -142,6 +142,8 @@ const FX = require('./fixtures/dup4_nsdc.json');
   if (at.length !== n1 + 1 || JSON.stringify(at[at.length - 1].cns) !== JSON.stringify(['HALU2067196', 'HALU2449075'])) fail('평택 짝 선적확인 호출이 다르다: ' + JSON.stringify(at.slice(-1)) + ' alerts=' + JSON.stringify(dom.window.__alerts || []));
   // ── ⑩ 리스트 전용 컨(재감사 P1-1) — 항구 빈칸 CRTU7600877 은 선적확인 큰 카드가 돼야 한다 ──
   dom.window.__unmountLoading();
+  //  4.25-02~ 작업 시작 화면은 항차·검수원·모드마다 고른 베이·단을 기억해 다시 그려지면 되살린다(sessionStorage) — 이 검사는 «처음 여는 화면» 을 보려는 것이라 기억을 비운다.
+  try { dom.window.sessionStorage.clear(); } catch (e) { /* 저장소 없음 */ }
   dom.window.__renderLoading({});
   await wait(500);
   if (!lclick(/^B29·30·31/)) fail("⑩ B29·30·31 없음"); await wait(300);
