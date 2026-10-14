@@ -142,6 +142,8 @@
 :root[data-bright="4"] .bg-fuchsia-500{background-color:rgb(217 70 239)}
 :root[data-bright="4"] .bg-fuchsia-600{background-color:rgb(232 121 249)}
 :root[data-bright="4"] .bg-fuchsia-700{background-color:rgb(240 171 252)}
+:root[data-bright="4"] .bg-fuchsia-800{background-color:rgb(245 208 254)}
+:root[data-bright="4"] .bg-fuchsia-900{background-color:rgb(250 232 255)}
 :root[data-bright="4"] .bg-green-950\/20{background-color:rgb(240 253 244 / 0.20)}
 :root[data-bright="4"] .bg-indigo-600{background-color:rgb(129 140 248)}
 :root[data-bright="4"] .bg-indigo-700{background-color:rgb(165 180 252)}
@@ -359,6 +361,7 @@
 :root[data-bright="4"] .border-emerald-800\/40{border-color:rgb(167 243 208 / 0.40)}
 :root[data-bright="4"] .border-emerald-800\/50{border-color:rgb(167 243 208 / 0.50)}
 :root[data-bright="4"] .border-emerald-800\/60{border-color:rgb(167 243 208 / 0.60)}
+:root[data-bright="4"] .border-fuchsia-500{border-color:rgb(217 70 239)}
 :root[data-bright="4"] .border-fuchsia-600{border-color:rgb(232 121 249)}
 :root[data-bright="4"] .border-fuchsia-700{border-color:rgb(240 171 252)}
 :root[data-bright="4"] .border-fuchsia-800\/40{border-color:rgb(245 208 254 / 0.40)}

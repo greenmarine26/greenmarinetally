@@ -19,6 +19,7 @@ import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠�
 import { speak, spellKo } from '../voice.js';
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
 import { loadingSlotOf, guideTwinOf } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -141,6 +142,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [fixQuery2, setFixQuery2] = useState('');
   const [fixPickFront, setFixPickFront] = useState(null);
   const [fixPickBack, setFixPickBack] = useState(null);
+  //  ★ 4.26 — 트윈 수정 칸에서 보일 쪽. 'front'(앞만 다름) · 'back'(뒤만 다름) · null(둘 다 다름 — 종전처럼 두 칸). 검수사 2026-10-14 10:33 «앞이 다름 뒤가 다름 그럼 둘다 다름은?»
+  const [fixSide, setFixSide] = useState(null);
   // V7.94-08: 홀드 선적 완료 → 다음 베이 선택 프롬프트 (사용자 메모 ②)
   const [deckPromptDone, setDeckPromptDone] = useState(false);
   // V7.94-16: 해치커버 프롬프트 (사용자 요구 — 베이 데크/홀드 완료 시 해치 액션 선택창)
@@ -154,6 +157,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [busy, setBusy] = useState(false);
   //  ★ 2.75: 보류·해제·싱글 전환
   const [resumeCns, setResumeCns] = useState([]);   // 해제 직후 한 번 맨 앞으로 끌어올릴 컨
+  const gwHeadRef = useRef(null);   // 4.26: 카드 화면 머리 줄 — 장·단을 고르면 카드가 화면 위로 오게 스크롤
+  const gwChipsRef = useRef(null);  // 4.26: 장 칩 줄 — 지금 장 칩이 보이게 가로 스크롤
+  const [pulled, setPulled] = useState(null);   // 4.26: «다음 예정» 줄로 올릴 때 넣은 resumeCns 배열 그 자체(띠 표시용 — 해제·한 대씩 등 다른 길이 resumeCns 를 새로 정하면 같은 배열이 아니라 띠가 사라진다)
   const [holdOpen, setHoldOpen] = useState(false);  // 사유 고르는 칸 열림
   const [holdNote, setHoldNote] = useState('');     // 직접 입력 사유
   const [holdList, setHoldList] = useState(false);  // «⏸ 보류 N대» 줄 펼침
@@ -203,6 +209,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   const saveSeal = async (c) => {
+    //  4.26 (재감사 하-B): 실번호 칸이 엠티실을 보여 주며 열렸는데(sl 비어 있음) 고치지 않고 [저장] 하면 쓰지 않고 닫는다 — 안 그러면 sl·이력이 생겨, 뒤에 엠티실 리스트가 고쳐 들어와도 검수리스트가 옛 값을 읽는다.
+    if (!String(c.sl || '').trim() && sealVal.trim() && sealVal.trim() === inspectionSealOf(c)) { setEditSealCn(null); setSealVal(''); return; }
     const dup = dupSealOwner(sealVal, c.cn, 'normal');
     if (dup) { alert(`실번호 중복입니다.\n${sealVal.trim()} 은(는) 이미 ${dup.slice(-4)} 컨에 입력돼 있습니다.\n(실 부족이면 0000으로 입력하세요.)`); return; }
     await fbUpdateRecordSeal(voyageKey, mode, c.cn, sealVal.trim(), inspector);
@@ -531,13 +539,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       const cn = String(c.cn || '').toUpperCase();
       return !heldSet.has(cn) || dueCns.includes(cn);
     });
+    const dueHere = dueCns.filter((cn) => targets.some((c) => String(c.cn || '').toUpperCase() === cn));
     return buildGuidedQueue({
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
       //  4.23-01 3차(재감사 중-2): 맞교환 자리 컨은 칸으로 짝을 짐작하지 않는다 — 트윈 조회(SearchPanel autoMate)와 같은 규칙(utils.guideTwinOf)
       findTwin: guideTwinOf((t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName)),
       streamPref,                                           // V8.50: 갈림 선택 부류
-      frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
+      //  4.26 (감사·2차 시뮬 중-1): 되묻기 컨이 **이 큐에 있을 때만** 그것이 맨 앞을 차지한다. 종전엔 다른 장·다른 호기의 콘 잠김 보류가 되묻기 차례가 되면
+      //    (이 큐엔 없어 아무것도 안 올리면서) 해제·한 대씩 남은 짝(4.08-02)·한 대만 남은 컨(4.25-02)·다음 예정 줄의 «맨 앞» 을 전부 지웠다.
+      frontCns: dueHere.length ? dueHere : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
       rowFrom,                                              // 3.3: 양하 «해상부터» (4.09: 호기별)
       orderPrefs,                                           // 4.09: 양하 부류 조건(리퍼부터·20부터…) — 호기별로 기억한 것
       bayFirst,                                             // 3.77: 양하·선적 «베이 먼저»
@@ -665,6 +676,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (total > TWIN_CAUTION_TOTAL_KG) return { heavy: true, total, diff };   // 50~55톤 — 한계 근처 주의
     return null;
   }, [card, voyage]);
+
+  //  ★ 4.26 — 작업 카드 표시칩 재료. 이 패널의 목록(SearchPanel.allContainers)은 항차 화면 목록과 따로 병합돼 긴급·수화물·제작컨 표식이 없다 —
+  //    판정을 새로 만들지 않고 목록 입구 함수 한 벌로 카드 컨에만 찍는다(긴급 = tagForecastMarks · 수화물·제작컨 = applySpecialMarks — 항차 화면 리스트·컨 상세와 같은 값).
+  const _urgSet = useMemo(
+    () => new Set(Array.isArray(voyage?.info?.forecast?.urgentCns) ? voyage.info.forecast.urgentCns : []), [voyage?.info?.forecast]);
+  const markOf = (c) => {
+    if (!c) return c;
+    const a = (applySpecialMarks(voyage, [c]) || [])[0] || c;
+    return (tagForecastMarks([a], _urgSet, null, null, null) || [])[0] || a;
+  };
 
   const groupDone = useMemo(() => {
     if (selectedGroup == null) return 0;
@@ -925,6 +946,25 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }, [selectedGroup]);
   useEffect(() => { _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0; }, [workCtx ? workCtx.presetSeq : 0]);   // 3.48: 단만 바뀐 프리셋도 기준을 맞춰 둔다(다음 «진짜» 그룹 변경이 프리셋으로 오해되지 않게)
   useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);
+  //  4.26 (감사 하): «다음 예정» 줄로 올린 카드는 그 장·단에서만 — 장·단·모드를 바꾸면 내린다(돌아왔을 때 예전에 올린 카드가 다시 맨 앞에 서지 않게). 해제·한 대씩이 정한 맨 앞(다른 배열)은 그대로 둔다.
+  useEffect(() => { if (!pulled) return; setResumeCns((r) => (r === pulled ? [] : r)); setPulled(null); }, [selectedGroup, selectedTier, mode]);   // eslint-disable-line react-hooks/exhaustive-deps
+  //  4.26 — 장·단을 고르면(탭을 옮겨 돌아온 때 포함) 카드 머리를 화면 위로(설계 §0 «스크롤 없이 확인까지» — 항차 화면 위쪽 칸들 때문에 확인 단추가 화면 아래 1,300px 쯤이었다).
+  //    카드 머리가 이미 화면 위쪽(45% 안)에 있으면 움직이지 않는다. 카드가 바뀔 때마다가 아니라 장·단·모드가 바뀔 때만. 베이뷰 위 칸(compact)은 안 한다.
+  const _hasCard = !!(selectedGroup != null && selectedTier);
+  useEffect(() => {
+    if (compact || !_hasCard) return;
+    const el = gwHeadRef.current;
+    if (!el || typeof el.getBoundingClientRect !== 'function' || typeof window === 'undefined') return;
+    const r = el.getBoundingClientRect();
+    if (r.top > (window.innerHeight || 0) * 0.45 && typeof el.scrollIntoView === 'function') { try { el.scrollIntoView({ block: 'start' }); } catch (e) { /* 옛 브라우저 */ } }
+  }, [selectedGroup, selectedTier, mode, compact, _hasCard]);
+  //  4.26 (2차 시뮬 하-4): 장 칩 줄은 가로 스크롤 — 지금 장 칩이 첫 화면에 보이게 그 칩 쪽으로 민다.
+  useEffect(() => {
+    const row = gwChipsRef.current;
+    if (!row) return;
+    const cur = row.querySelector('[data-gw-cur="1"]');
+    if (cur && typeof cur.offsetLeft === 'number') row.scrollLeft = Math.max(0, cur.offsetLeft - 12);
+  }, [selectedGroup, selectedTier, compact]);
   useEffect(() => { setBayFirst(null); singleBaysRef.current = []; }, [selectedTier, mode]);   // 3.77: 단·모드가 바뀌면 «베이 먼저» 도 푼다   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
@@ -1300,7 +1340,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //  2.80: «자리 확인» 모드에서는 계획과 다른 것이 정상이다 — 수정 횟수로 세지 않고 수동 전환도 안 한다.
     //    (종전엔 3연속이면 자동 가이드가 꺼져, 엠티 구간에서 세 대마다 베이·단을 다시 골라야 했다.)
     if (slotMode) {
-      setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
+      setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null);   // 4.26: 다음 트윈 카드가 앞 카드의 «앞만/뒤만» 칸으로 열리지 않게
       setConsecFix(0);
       return;
     }
@@ -1427,11 +1467,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       const how = await askPick({
         title: tangled ? `${o4} 도 왔습니까` : `${sideName}쪽 ${o4} 도 왔습니까`,
         message: tangled
-          ? `카드의 ${p4} 가 ${sideName === '앞' ? '뒤' : '앞'} 자리로 왔습니다(앞뒤가 바뀜).\n남은 ${o4} 은?\n— 한 대만 왔으면 [이 한 대만] (${o4} 은 다음 카드에 남습니다)\n— ${o4} 도 ${sideName} 자리로 왔으면 [${o4} 도 확인] (두 대 자리를 맞바꿔 확인)`
-          : `고른 컨 ${p4} 를 ${sideName === '앞' ? '뒤' : '앞'} 자리로 확인합니다.\n${sideName} 자리 예측 컨 ${o4} 은?\n— 한 대만 왔으면 [이 한 대만] (${o4} 은 다음 카드에 남습니다)\n— ${o4} 도 그대로 왔으면 [${o4} 도 확인]\n— ${sideName}쪽도 다른 컨이면 ✕ 로 닫고 ${sideName}쪽도 고르세요.`,
-        confirmLabel: '이 한 대만', cancelLabel: `${o4} 도 확인`,
+          ? `카드의 ${p4} 가 ${sideName === '앞' ? '뒤' : '앞'} 자리로 왔습니다(앞뒤가 바뀜).\n남은 ${o4} 은?\n— 한 대만 왔으면(싱글) [싱글 — 이 한 대만] (${o4} 은 다음 카드에 남습니다)\n— ${o4} 도 ${sideName} 자리로 왔으면 [${o4} 도 확인] (두 대 자리를 맞바꿔 확인)`
+          : `고른 컨 ${p4} 를 ${sideName === '앞' ? '뒤' : '앞'} 자리로 확인합니다.\n${sideName} 자리 예측 컨 ${o4} 은?\n— 한 대만 왔으면(싱글) [싱글 — 이 한 대만] (${o4} 은 다음 카드에 남습니다)\n— ${o4} 도 그대로 왔으면 [${o4} 도 확인]\n— ${sideName}쪽도 다른 컨이면 ✕ 로 닫고 ${sideName}쪽도 고르세요.`,
+        confirmLabel: '싱글 — 이 한 대만', cancelLabel: `${o4} 도 확인`,   // 4.26: 검수사 2026-10-14 10:35 «한대만 오면 싱글작업입니다» — 카드의 [싱글로 한 대씩] 과 같은 말
       });
-      if (!how) return;
+      if (!how) { if (fixSide) setFixSide(null); return; }   // 4.26: ✕ = «그쪽도 다른 컨» — 한쪽만 보이던 칸을 두 칸으로 편다(물음이 «○쪽도 고르세요» 라 한다)
       //  한 대만 — 남기는 쪽은 완료하지 않으므로 아래 «맞교환 자리 미정» 막음(_keepW)을 거치지 않는다(감사 하 — 막으면 한 대만 왔을 때 길이 다시 막힌다).
       if (how === 'confirm') { await applyTwinFixOne(pf ? 'front' : 'back'); return; }
       //  둘 다 왔다 — 엇갈림이면 남은 카드 컨이 비운 칸으로 왔다(앞뒤 맞바꿈). 종전엔 같은 컨을 두 번 확인하고 다른 하나를 빠뜨렸다.
@@ -1742,13 +1782,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       </div>
     </div>
   );
-  const renderCon = (c, label, color) => (
-    <div className={`rounded-pill border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
+  //  ★ 4.26 — **작업 카드 위계**(화면 개편 판 F · 모의 작업장 설계 proposal_work §2 — 검수사 2026-10-13 00:53 «전부 클로드 안대로 수정하고 배포»).
+  //    읽는 순서 = 크기 순서: 끝 4자리(36·크게 40) > 앞 7자리(28·31) > 자리 상자(24·26) > 데크·홀드 · 출발→도착 > 칩 한 줄 > 실번호.
+  //    종전엔 자리가 머리 오른쪽 10px 이었다. 동작은 그대로다 — 컨번호를 누르면 컨 상세, 실번호·XRAY·규격 고르기 칸도 종전 그 함수들이다.
+  //    베이뷰 위 칸(compact)은 1/3 화면이라 종전 크기를 쓴다. data-gw-* 는 회귀 검사가 읽는 자리다.
+  const renderCon = (c, label, color) => {
+    const _warn = mode === 'loading' && loadingSlotOf(c).kind === 'swapWarn';
+    const _pos = `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`;
+    const _deck = parseInt(c.tier, 10) >= 80;
+    const m = markOf(c);
+    const _empty = String(c.fe || '').toUpperCase() === 'E';
+    const _seal = inspectionSealOf(c);   // 검수리스트 실번호 칸과 같은 값(4.25-02 — 엠티는 엠티실)
+    const chip = 'gw-chip font-bold';
+    return (
+    <div data-gw-card={label} data-gw-cn={c.cn} data-gw-pos={_warn ? '' : _pos}
+      className={`rounded-pill border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
       <div className="flex items-center justify-between text-2xs mb-1">
         <span className={`font-bold ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>{label}</span>
-        {mode === 'loading' && loadingSlotOf(c).kind === 'swapWarn'
-          ? <span className="text-orange-300 mono font-bold">자리 미정</span>
-          : <span className="text-dim-300 mono font-bold">{parseInt(c.bay, 10)}-{c.row}-{c.tier} {parseInt(c.tier, 10) >= 80 ? '데크' : '홀드'}</span>}
+        {_warn && <span className="text-orange-300 mono font-bold">자리 미정</span>}
       </div>
       {/*  ★ 4.23-01 — 이 칸은 «맞교환 자리»다(3.13 자동 맞교환 — 이 컨의 계획 칸에 다른 컨이 실려, 그 컨이 비운 계획 칸으로 옮겨 보인다).
             근거 — 검수사 확정(3.13) «밀려난 계획 컨을 어떻게 둘지 → 속성 같으면 비운 자리로 자동 맞교환». 같은 뜻을 앱 글이 이미 말한다(검수사 말이 아니다) —
@@ -1771,26 +1822,35 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         );
       })()}
       <button onClick={() => onOpenContainer?.(c)} className="w-full text-left">
-        <span className="mono text-xl font-bold text-dim-100">{c.cn.slice(0, -4)}</span>
-        <span className="mono text-3xl font-black text-emerald-300">{c.cn.slice(-4)}</span>
+        <span className={`mono font-bold text-dim-100 ${compact ? 'text-xl' : 'gw-cn-a'}`}>{c.cn.slice(0, -4)}</span>
+        <span className={`mono font-black text-emerald-300 ${compact ? 'text-3xl' : 'gw-cn-b'}`}>{c.cn.slice(-4)}</span>
       </button>
-      {/* 기본 정보 줄: 규격·F/E·무게·선사·항로 */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-xxs mono text-dim-200">
-        <span className="font-bold text-dim-100">{c.tp || isoToLabel(c.iso) || isoShown(c.iso)}</span>
-        <span className={c.fe === 'E' ? 'text-dim-300 font-bold' : 'text-emerald-400 font-bold'}>{c.fe === 'E' ? 'EMPTY' : 'FULL'}</span>
-        {c.wt ? <span>{formatWt(c.wt)}</span> : null}
-        {c.op && <span className="px-1 rounded bg-ink-800 text-dim-200">{c.op}</span>}
-        <span className="text-dim-400">{c.pol} → {c.pod}</span>
+      {/* 4.26 자리 줄 — 자리 상자 · 데크/홀드 · 출발 → 도착(맞교환 «자리 미정» 이면 상자 없음 — 머리와 아래 경고가 말한다) */}
+      {!_warn && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+          <span className={`mono font-black text-dim-100 bg-ink-800 border border-line-strong ${compact ? 'text-base px-1.5 rounded' : 'gw-pos'}`}>{_pos}</span>
+          <span className={`font-bold ${_deck ? 'text-sky-300' : 'text-amber-300'} ${compact ? 'text-xs' : 'text-base'}`}>{_deck ? '데크' : '홀드'}</span>
+          {(c.pol || c.pod) && <span className={`mono font-bold text-teal-300 ${compact ? 'text-xs' : 'text-lg'}`}>{c.pol || '?'} → {c.pod || '?'}</span>}
+        </div>
+      )}
+      {/* 4.26 칩 한 줄 — 규격 · 풀/엠티·무게 · 선사 · 특수 표시(수화물·긴급·X-RAY·풀 리퍼·제작컨·DG·FR·O/T·OOG·시프팅·추가분) */}
+      <div className="flex flex-wrap items-center gap-1 mt-1.5 mono">
+        <span className={`${chip} bg-ink-800 text-dim-100`}>{c.tp || isoToLabel(c.iso) || isoShown(c.iso)}</span>
+        <span className={`${chip} bg-ink-800 ${_empty ? 'text-dim-300' : 'text-emerald-300'}`}>{_empty ? 'EMPTY' : 'FULL'}{c.wt ? ` ${formatWt(c.wt)}` : ''}</span>
+        {c.op && <span className={`${chip} bg-ink-800 text-dim-200`}>{c.op}</span>}
+        {m.lugg && <span className={`${chip} bg-violet-700 text-violet-50`}>🧳 수화물</span>}
+        {m.urgent && <span className={`${chip} bg-rose-600 text-rose-50`}>▲ 긴급</span>}
+        {c._xray && <span className={`${chip} bg-fuchsia-700 text-fuchsia-100`}>★ X-RAY</span>}
+        {isFullReefer(m) && <span className={`${chip} bg-sky-700 text-sky-100`}><Snowflake className="w-3 h-3 inline"/> 리퍼{c.tmp ? ` ${c.tmp}` : ''}</span>}
+        {m.mkcon && <span className={`${chip} bg-ink-700 text-dim-100`}>제작컨</span>}
+        {c.dg && <span className={`${chip} bg-red-700 text-red-100`}>DG</span>}
+        {c.fr && <span className={`${chip} bg-orange-700 text-orange-100`}>FR</span>}
+        {c.ot && <span className={`${chip} bg-yellow-700 text-yellow-100`}>O/T</span>}
+        {c.oog && <span className={`${chip} bg-rose-700 text-rose-100`}>OOG</span>}
+        {c._shift && <span className={`${chip} bg-indigo-700 text-indigo-100`}>◆ 시프팅</span>}
+        {c._extraOfList && <span className={`${chip} bg-lime-800 text-lime-100`}>＋ 추가분</span>}
       </div>
-      <div className="flex flex-wrap gap-1 mt-1">
-        {c._xray && <span className="px-1.5 py-0.5 rounded bg-fuchsia-700 text-fuchsia-100 text-2xs font-bold">★XRAY</span>}
-        {c.rf && <span className="px-1.5 py-0.5 rounded bg-sky-700 text-sky-100 text-2xs font-bold"><Snowflake className="w-3 h-3 inline"/>리퍼{c.tmp ? ` ${c.tmp}` : ''}</span>}
-        {c.dg && <span className="px-1.5 py-0.5 rounded bg-red-700 text-red-100 text-2xs font-bold">DG</span>}
-        {c.fr && <span className="px-1.5 py-0.5 rounded bg-orange-700 text-orange-100 text-2xs font-bold">FR</span>}
-        {c.ot && <span className="px-1.5 py-0.5 rounded bg-yellow-700 text-yellow-100 text-2xs font-bold">O/T</span>}
-        {c.oog && <span className="px-1.5 py-0.5 rounded bg-rose-700 text-rose-100 text-2xs font-bold">OOG</span>}
-      </div>
-      {/* 실번호 — 확인·수정 */}
+      {/* 실번호 — 확인·수정. 4.26: 검수리스트와 같은 값(inspectionSealOf — 엠티는 엠티실). 엠티에 실이 없으면 경고가 아니라 «엠티 · 실 없음». 고치는 칸은 종전대로 sl. */}
       <div className="mt-1.5 pt-1.5 border-t border-line">
         {editSealCn === c.cn ? (
           <div className="flex gap-1.5">
@@ -1801,9 +1861,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             <button onClick={() => { setEditSealCn(null); setSealVal(''); }} className="px-2 rounded bg-ink-800 text-dim-300 text-xs">취소</button>
           </div>
         ) : (
-          <button onClick={() => { setEditSealCn(c.cn); setSealVal(c.sl || ''); }} className="w-full flex items-center gap-1.5 text-left">
-            <span className="text-xxs text-dim-400 flex-shrink-0">실:</span>
-            <span className={`mono text-sm font-bold ${c.sl ? 'text-cyan-300' : 'text-amber-400'}`}>{c.sl || '⚠ 미입력'}</span>
+          <button onClick={() => { setEditSealCn(c.cn); setSealVal(c.sl || _seal || ''); }} className="w-full flex items-center gap-1.5 text-left" data-gw-seal={_seal || ''}>
+            <span className="text-xxs text-dim-400 flex-shrink-0">{_seal && !String(c.sl || '').trim() ? '엠티실:' : '실:'}</span>
+            <span className={`mono font-bold ${compact ? 'text-sm' : 'text-base'} ${_seal ? 'text-cyan-300' : _empty ? 'text-dim-300' : 'text-amber-400'}`}>{_seal || (_empty ? '엠티 · 실 없음' : '⚠ 미입력')}</span>
             <Pencil className="w-3 h-3 text-dim-400"/>
           </button>
         )}
@@ -1844,16 +1904,51 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
       )}
     </div>
+    );
+  };
+
+  //  ★ 4.26 — 예외 줄. 종전엔 확인 단추 아래에 «싱글로 한 대씩» · «⏸ 지금 양하 불가» · «📍 자리 확인 방식으로» · «다른 컨테이너가 나옴» 이 한 줄씩 쌓여 확인 단추가 화면 아래로 밀렸다(모의 작업장 — 단을 고르면 확인 단추 y≈1,400).
+  //    같은 일을 하는 단추를 한 줄(44px · 크게 48px)로 모은다. 누르면 종전 그 칸이 아래에 열린다 — 하는 일은 한 줄도 안 바뀐다.
+  //    트윈은 «앞만 다름 · 뒤만 다름 · 둘 다 다름»(검수사 2026-10-14 10:33 «앞이 다름 뒤가 다름 그럼 둘다 다름은?») + «싱글로 한 대씩 · 보류».
+  const closeFix = () => { setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null); };
+  const openFix = (side) => {
+    if (fixOpen && fixSide === side) { closeFix(); return; }   // 같은 단추를 다시 누르면 닫는다
+    setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
+    setFixSide(side); setFixOpen(true); setHoldOpen(false); setSingleMode(false);
+  };
+  const xrayTargets = card ? [card.main, card.twin].filter((x) => x && x._xray) : [];
+  const openCardXray = () => {
+    const t = xrayTargets.find((x) => !String(x._xraySeal?.seal || '').trim()) || xrayTargets[0];
+    if (!t) return;
+    if (editXCn === t.cn) { setEditXCn(null); setXVal(''); setXEVal(''); return; }
+    setEditXCn(t.cn); setXVal(t._xraySeal?.seal || ''); setXEVal(t._xraySeal?.eseal || '');
+  };
+  const exBtn = (key, text, onClick, on = false, tone = 'amber') => (
+    <button key={key} data-gw-ex={key} onClick={onClick} disabled={busy}
+      className={`gw-ex flex-1 min-w-0 px-1 rounded-pill font-bold border truncate disabled:opacity-50 ${on
+        ? (tone === 'rose' ? 'bg-rose-800 border-rose-500 text-white' : tone === 'sky' ? 'bg-sky-700 border-sky-500 text-white' : tone === 'fuchsia' ? 'bg-fuchsia-800 border-fuchsia-500 text-white' : 'bg-amber-700 border-amber-500 text-white')
+        : (tone === 'rose' ? 'bg-ink-800 border-line text-rose-300 hover:bg-rose-900' : tone === 'sky' ? 'bg-ink-800 border-line text-sky-300 hover:bg-sky-900' : tone === 'skyhint' ? 'bg-sky-950 border-sky-500 text-sky-200 hover:bg-sky-900' : tone === 'fuchsia' ? 'bg-ink-800 border-line text-fuchsia-300 hover:bg-fuchsia-900' : 'bg-ink-800 border-line text-amber-300 hover:bg-amber-900')}`}>
+      {text}
+    </button>
   );
+  //  다음 예정 줄을 누르면 그 컨이 든 카드를 맨 앞으로(2.75 해제·4.08-02 한 대씩과 같은 resumeCns — 순서 규칙은 안 건드리고 그 카드만 끌어올린다). 확인은 카드의 큰 단추로 한다(줄 한 번에 완료되지 않게).
+  //  잘못 눌러 카드가 바뀐 줄 모르고 확인하는 일이 없게, 올린 카드에는 «다음 예정에서 올린 카드 — [원래 순서로]» 띠가 붙는다(pulled).
+  const bringFront = (q) => { if (!q || !q.main) return; const arr = [q.main.cn]; setResumeCns(arr); setPulled(arr); closeFix(); setHoldOpen(false); setSingleMode(false); };
+  const pulledOn = !!(card && pulled && resumeCns === pulled && (card.main.cn === pulled[0] || card.twin?.cn === pulled[0]));
+  //  되묻기(«⏸ 보류했던 컨테이너입니다 — 이제 됩니까?») 카드가 맨 앞이면 줄로 올리지 못한다(되묻기가 먼저) — 줄을 잠그고 까닭을 적는다(감사·2차 시뮬 중-1 — 눌러도 아무 일이 없었다).
+  const dueOnCard = !!(holdDue && card && holdGroupOf(holdDue).some((x) => { const u = String(x).toUpperCase(); return String(card.main.cn).toUpperCase() === u || (card.twin && String(card.twin.cn).toUpperCase() === u); }));
 
   return (
     <div className="space-y-2">
       {!compact && <SettingsBar hideOrder/>}
-      <div className="flex items-center justify-between bg-ink-900 border border-line rounded-pill px-2 py-1.5">
+      <div ref={gwHeadRef} style={{ scrollMarginTop: 'calc(var(--hdr-h, 52px) + var(--dock-h, 68px) + 12px)' }} className="flex items-center justify-between bg-ink-900 border border-line rounded-pill px-2 py-1.5">
         <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-dim-300 hover:text-violet-300">
           <ChevronLeft className="w-4 h-4"/>베이 선택
         </button>
-        <div className="text-xs font-bold text-violet-300">B{selectedGroup} 그룹 — {groupDone}/{groupTotal}대</div>
+        {/* 4.26 — 머리는 «남은 수» 로만 말한다(설계 §4 — «B22 31/63» 처럼 묶음 전체 완료/합계를 섞은 숫자는 데크만 하는 중에 헷갈렸다). 남은 = 이 묶음·이 단(보류 포함) — 수석에게 보내는 활동 위치 «남은 N개» 와 같은 수. */}
+        <div className="text-sm font-bold text-violet-300" data-gw-head="1">
+          B{(() => { const g = groups.find((x) => x.center === selectedGroup); return g ? [...g.bays].sort((a, b) => a - b).join('·') : selectedGroup; })()} {selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : ''} — 남은 {tierRemainConts.length}대
+        </div>
         <button onClick={() => setVoiceOn(v => !v)} className="text-dim-300 hover:text-violet-300">
           {voiceOn ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
         </button>
@@ -1861,6 +1956,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       <div className="h-1.5 bg-ink-800 rounded overflow-hidden">
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
+
+      {/* ★ 4.26 — 장 칩 한 줄(설계 §1 «내 장 고르기»). 다른 장은 한 번 눌러 그 장으로(단 고르기로 간다 — «다른 갱» 물음도 종전 pickGroup 그대로), 지금 장은 누르면 단(데크⇄홀드)을 다시 고른다. 베이뷰 위 칸(compact)은 접는다. */}
+      {!compact && groups.length > 0 && (
+        <div ref={gwChipsRef} className="flex gap-1.5 overflow-x-auto pb-0.5" data-gw-groups="1">
+          {groups.map((g) => {
+            const cur = g.center === selectedGroup;
+            return (
+              <button key={g.center} data-gw-group={g.center} data-gw-cur={cur ? '1' : undefined} disabled={busy}
+                onClick={() => { if (cur) { closeFix(); setSelectedTier(null); } else pickGroup(g); }}
+                className={`gw-ex shrink-0 px-3 rounded-pill border font-bold whitespace-nowrap disabled:opacity-50 ${cur ? 'bg-violet-800 border-violet-500 text-white' : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>
+                B{[...g.bays].sort((a, b) => a - b).join('·')}{' '}
+                <span className={cur ? 'font-normal text-violet-100' : 'font-normal text-dim-400'}>{cur ? `${selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : ''} ⇄` : g.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ★ 4.09 — 양하 순서 한 줄(폰 베이뷰 포함). 누르면 «양하 순서» 창이 열린다. */}
       {mode === 'discharge' && (
@@ -2010,6 +2122,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             다음 예측 <span className="text-violet-300 font-bold">{groupDone + 1}번째</span>
             {card.single && <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-800 text-amber-100 font-bold">싱글모드 구간</span>}
           </div>
+          {/* 4.26 — «다음 예정» 줄을 눌러 올린 카드면 띠를 붙인다(잘못 눌렀으면 [원래 순서로]). */}
+          {pulledOn && (
+            <div className="flex items-center justify-between gap-2 bg-violet-950/60 border border-violet-600 rounded-pill px-3 py-1.5" data-gw-pulled="1">
+              <span className="text-xs font-bold text-violet-200">↑ 다음 예정에서 올린 카드입니다</span>
+              <button onClick={() => { setResumeCns([]); setPulled(null); }} disabled={busy}
+                className="shrink-0 px-2.5 py-1 rounded-pill border border-violet-500 bg-ink-800 text-xs font-bold text-violet-200 disabled:opacity-50">원래 순서로</button>
+            </div>
+          )}
           {renderCon(card.main, card.twin ? '앞' : '단독', 'amber')}
           {card.twin && (
             <>
@@ -2079,7 +2199,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
           {card.twin && singleMode ? (
             <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2">
-              <div className="text-xxs text-sky-300 font-bold">한 대씩 — 캐빈에서 먼 쪽부터, 갱을 피해서 (어느 쪽인지는 캐빈이 정합니다)</div>
+              <div className="text-xxs text-sky-300 font-bold">싱글 — 한 대씩. 온 쪽을 누르면 그 한 대만 확인되고 남은 한 대는 다음 카드입니다 (보통 캐빈에서 먼 쪽부터, 갱을 피해서 — 어느 쪽인지는 캐빈이 정합니다)</div>
               {[['main', card.main], ['twin', card.twin]].map(([k, c]) => (
                 <button key={k} onClick={() => handleConfirmOne(k)} disabled={busy}
                   className="w-full py-3 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white flex items-center justify-between px-4">
@@ -2103,34 +2223,54 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           ) : (
             warnOf(card) ? (
               <button onClick={handleConfirm} disabled={busy}
-                className="w-full py-4 rounded-pill font-bold text-lg bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                className="gw-go w-full rounded-pill font-bold bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-white flex items-center justify-center gap-2">
                 📍 실린 칸 지정 — {String(warnOf(card).cn).slice(-4)}
               </button>
             ) : (
             <button onClick={handleConfirm} disabled={busy}
-              className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+              className="gw-go w-full rounded-pill font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
               {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
               {card.twin ? `트윈 한 번에 ${mode === 'discharge' ? '양하' : '선적'}확인` : `${mode === 'discharge' ? '양하' : '선적'}확인`}
             </button>
             )
           )}
 
-          {card.twin && !singleMode && (
-            <button onClick={() => setSingleMode(true)}
-              className={`w-full py-2.5 rounded-pill font-bold text-sm flex items-center justify-center gap-2 ${twinWtWarn?.over ? 'bg-sky-700 hover:bg-sky-600 text-white' : 'bg-ink-800 hover:bg-ink-700 text-sky-300'}`}>
-              싱글로 한 대씩{twinWtWarn?.over ? ' — 권합니다' : ''}
+          {/* ★ 4.26 예외 줄 — 단독: [다른 컨] (선적 [다른 칸]) [⏸ 보류] [★ XRAY] · 트윈: [앞만 다름] [뒤만 다름] [둘 다 다름] / [싱글로 한 대씩] [⏸ 보류] [★ XRAY].
+                 XRAY 단추는 카드에 X-RAY 대상이 있을 때만(누르면 카드 안 그 컨의 XRAY 칸 — 카드 밖 컨은 막는 자리에서 4.25-02 needXray 가 연다).
+                 선적 엠티 «자리 확인» 칸이 열려 있으면 그 칸이 «다른 컨» 이라 단추를 따로 두지 않는다. */}
+          {card.twin ? (
+            <div className="space-y-1.5" data-gw-exrow="twin">
+              <div className="flex gap-1.5">
+                {exBtn('front', '앞만 다름', () => openFix('front'), fixOpen && fixSide === 'front')}
+                {exBtn('back', '뒤만 다름', () => openFix('back'), fixOpen && fixSide === 'back')}
+                {exBtn('both', '둘 다 다름', () => openFix(null), fixOpen && fixSide == null)}
+              </div>
+              <div className="flex gap-1.5">
+                {exBtn('single', '싱글로 한 대씩', () => { if (singleMode) { setSingleMode(false); return; } closeFix(); setHoldOpen(false); setSingleMode(true); }, singleMode, twinWtWarn?.over && !singleMode ? 'skyhint' : 'sky')}
+                {exBtn('hold', '⏸ 보류', () => { if (holdOpen) { setHoldOpen(false); setHoldNote(''); return; } closeFix(); setSingleMode(false); setHoldOpen(true); }, holdOpen, 'rose')}
+                {xrayTargets.length > 0 && exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-1.5" data-gw-exrow="single">
+              {!slotMode && exBtn('fix', '다른 컨', () => openFix(null), fixOpen)}
+              {exBtn('hold', '⏸ 보류', () => { if (holdOpen) { setHoldOpen(false); setHoldNote(''); return; } closeFix(); setHoldOpen(true); }, holdOpen, 'rose')}
+              {xrayTargets.length > 0 && exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}
+            </div>
+          )}
+          {/* ★ 4.26 선적 — 이 컨을 계획과 다른 칸에 실었다(위치 지정 창 — 4.23-01 2차 «실린 칸 지정» 과 같은 창·같은 저장). 감사·2차 시뮬 중-3: «다른 컨» 과 한 글자 차이라 줄에서 빼 따로 둔다.
+               엠티 «자리 확인» 중에는 숨긴다(그때 계획 컨은 참고일 뿐 — 실은 컨 번호를 자리 확인 칸에 넣는다). */}
+          {mode === 'loading' && !card.twin && !slotMode && !warnOf(card) && (
+            <button data-gw-ex="slot" onClick={() => { closeFix(); setHoldOpen(false); setPosFor(card.main); }} disabled={busy}
+              className="gw-ex w-full rounded-pill font-bold border bg-ink-800 border-sky-800 text-sky-300 hover:bg-sky-900 disabled:opacity-50">
+              📍 이 컨을 다른 칸에 실음 — {String(card.main.cn).slice(-4)}
             </button>
           )}
 
-          {/* ★ 2.75 — ⏸ 양하 불가. 못 하는 한 대만 빼고 큐는 계속 돈다(멈추면 수동으로 가야 했다). */}
-          {!holdOpen ? (
-            <button onClick={() => setHoldOpen(true)} disabled={busy}
-              className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-rose-900 disabled:opacity-50 text-rose-300 flex items-center justify-center gap-2">
-              ⏸ 지금 {mode === 'discharge' ? '양하' : '선적'} 불가 — 다음 컨테이너로
-            </button>
-          ) : (
-            <div className="bg-ink-900 border border-rose-800 rounded-xl p-2.5 space-y-2">
-              <div className="text-xxs text-rose-300 font-bold">왜 못 합니까? (기록에 남습니다 — 완료로는 안 셉니다)</div>
+          {/* ★ 2.75 — ⏸ 양하 불가. 못 하는 한 대만 빼고 큐는 계속 돈다(멈추면 수동으로 가야 했다). 4.26: 여는 단추는 예외 줄의 [⏸ 보류]. */}
+          {holdOpen && (
+            <div className="bg-ink-900 border border-rose-800 rounded-xl p-2.5 space-y-2" data-gw-hold="1">
+              <div className="text-xxs text-rose-300 font-bold">⏸ 지금 {mode === 'discharge' ? '양하' : '선적'} 불가 — 왜 못 합니까? (기록에 남습니다 — 완료로는 안 셉니다. 고르면 다음 컨테이너로)</div>
               {HOLD_REASONS.map((r) => (
                 <button key={r} onClick={() => doHold(r)} disabled={busy}
                   className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-rose-800 disabled:opacity-50 text-dim-100">{r}</button>
@@ -2196,20 +2336,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
 
-          {/* 2.80: 껐다가 다시 켜는 길 — 없으면 검수사가 한 번 끄고 영영 못 돌아온다(2-0-D). */}
-          {mode === 'loading' && !slotMode && !card.twin && (
-            <button onClick={() => { setSlotMode(true); setSlotUserSet(true); setFixOpen(false); }}
-              className="w-full py-2 rounded-pill font-bold text-xxs bg-ink-800 hover:bg-sky-900 text-sky-300">
-              📍 자리 확인 방식으로 — 이 자리에 실은 번호만 넣기
-            </button>
-          )}
-
-          {slotMode && !card.twin ? null : !fixOpen ? (
-            <button onClick={() => setFixOpen(true)}
-              className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-amber-800 text-amber-300 flex items-center justify-center gap-2">
-              <Pencil className="w-4 h-4"/>다른 컨테이너가 나옴 (수정{card.twin ? ' — 앞·뒤 동시' : ''})
-            </button>
-          ) : !card.twin ? (
+          {/* 4.26: 여는 단추는 예외 줄 — 단독 [다른 컨] · 트윈 [앞만 다름]·[뒤만 다름]·[둘 다 다름]. 칸 안은 종전 그대로(트윈은 고른 쪽만 보인다). */}
+          {(slotMode && !card.twin) || !fixOpen ? null : !card.twin ? (
             <div className="bg-ink-900 border border-amber-700 rounded-pill p-2 space-y-2">
               <div className="text-xxs text-amber-300 font-bold">실제 나온 컨테이너 번호 (끝 4자리 이상){mode === 'loading' && <span className="text-dim-400 font-normal"> · 이 자리({card.pos})로 배정되고 예측 컨은 자리를 비움</span>}</div>
               <input autoFocus value={fixQuery} onChange={e => setFixQuery(e.target.value)}
@@ -2252,11 +2380,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           ) : (
             <div className="bg-ink-900 border border-amber-700 rounded-pill p-2 space-y-2">
-              <div className="text-xxs text-amber-300 font-bold">트윈 수정 — 바뀐 쪽만 선택 (안 바뀐 쪽은 비워두면 예측대로 확인)</div>
+              <div className="text-xxs text-amber-300 font-bold" data-gw-fixhead={fixSide || 'both'}>
+                {fixSide === 'front' ? '앞만 다름 — 앞 자리에 실제 온 컨을 고르세요 (뒤는 고른 뒤에 묻습니다)'
+                  : fixSide === 'back' ? '뒤만 다름 — 뒤 자리에 실제 온 컨을 고르세요 (앞은 고른 뒤에 묻습니다)'
+                  : '둘 다 다름 — 앞·뒤 자리에 실제 온 컨을 각각 고르세요 (한쪽만 고르면 다른 쪽을 묻습니다)'}
+              </div>
+              {/* 4.26: [앞만 다름]·[뒤만 다름] 이면 그쪽 칸만 보인다 — 고른 뒤의 물음·적용은 종전 handleTwinFixApply 그대로(✕ 로 닫으면 두 칸으로 편다). */}
               {[
-                { label: `앞 (${card.pos})`, q: fixQuery, setQ: setFixQuery, pick: fixPickFront, setPick: setFixPickFront, matches: fixMatches },
-                { label: `뒤 (${parseInt(card.twin.bay, 10)}-${card.twin.row}-${card.twin.tier})`, q: fixQuery2, setQ: setFixQuery2, pick: fixPickBack, setPick: setFixPickBack, matches: fixMatches2 },
-              ].map((s) => (
+                { k: 'front', label: `앞 (${card.pos})`, q: fixQuery, setQ: setFixQuery, pick: fixPickFront, setPick: setFixPickFront, matches: fixMatches },
+                { k: 'back', label: `뒤 (${parseInt(card.twin.bay, 10)}-${card.twin.row}-${card.twin.tier})`, q: fixQuery2, setQ: setFixQuery2, pick: fixPickBack, setPick: setFixPickBack, matches: fixMatches2 },
+              ].filter((s) => !fixSide || s.k === fixSide).map((s) => (
                 <div key={s.label} className="border border-line rounded p-1.5 space-y-1">
                   <div className="text-2xs text-dim-300 font-bold">{s.label}</div>
                   {s.pick ? (
@@ -2288,10 +2421,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button onClick={handleTwinFixApply} disabled={busy || (!fixPickFront && !fixPickBack)}
                 className="w-full py-2.5 rounded-pill font-bold text-sm bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white flex items-center justify-center gap-2">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
-                선택한 수정 적용 (나머지는 예측대로 확인)
+                선택한 수정 적용{fixPickFront && fixPickBack ? ' (두 대 확인)' : ' (다른 쪽은 묻습니다)'}
               </button>
-              <button onClick={() => { setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); }} className="w-full text-xxs text-dim-300 py-1">닫기</button>
+              <button onClick={closeFix} className="w-full text-xxs text-dim-300 py-1">닫기</button>
             </div>
+          )}
+
+          {/* 2.80: 껐다가 다시 켜는 길 — 없으면 검수사가 한 번 끄고 영영 못 돌아온다(2-0-D). 4.26: 예외 줄 아래 작은 줄로(수정 칸이 단추 바로 밑에 열리게). */}
+          {mode === 'loading' && !slotMode && !card.twin && (
+            <button onClick={() => { setSlotMode(true); setSlotUserSet(true); closeFix(); }}
+              className="w-full py-2 rounded-pill font-bold text-xxs bg-ink-800 hover:bg-sky-900 text-sky-300">
+              📍 자리 확인 방식으로 — 이 자리에 실은 번호만 넣기
+            </button>
           )}
 
           {consecFix > 0 && (
@@ -2301,16 +2442,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           )}
 
           {/* 다음 예정 미리보기 — 3.48: 베이뷰(compact)에서는 접는다(아래 칸 그림이 다음 자리를 보여 준다) */}
+          {/* 4.26 — 줄 44px(크게 48) · 끝 4자리 굵게. 줄을 누르면 그 컨이 위 카드로 올라온다(bringFront — 확인은 카드의 큰 단추로, 줄 한 번에 완료되지 않게). */}
           {!compact && queue.length > 1 && (
-            <div className="bg-ink-900 border border-line rounded-pill p-2">
-              <div className="text-2xs text-dim-400 font-bold mb-1">다음 예정</div>
-              {queue.slice(1, 5).map((q, i) => (
-                <div key={q.main.cn} className="flex justify-between text-xxs py-0.5 border-b border-line last:border-0">
-                  <span className="text-dim-400">{groupDone + 2 + i}.</span>
-                  <span className="mono text-dim-200">{q.main.cn}{q.twin ? ` +${q.twin.l4 || q.twin.cn.slice(-4)}` : ''}</span>
-                  <span className="mono text-dim-400">{mode === 'loading' && loadingSlotOf(q.main).kind === 'swapWarn' ? '자리 미정' : `${parseInt(q.main.bay, 10)}-${q.main.row}-${q.main.tier}`}{q.single ? ' 싱글' : ''}</span>{/* 4.23-01 2차: 규격 다른 맞교환은 칸을 앱이 정하지 않는다(카드 머리와 같은 말) */}
-                </div>
-              ))}
+            <div className="bg-ink-900 border border-line rounded-pill p-2" data-gw-next="1">
+              <div className="text-xs text-dim-300 font-bold mb-1">다음 예정</div>
+              {queue.slice(1, 5).map((q, i) => {
+                const _np = mode === 'loading' && loadingSlotOf(q.main).kind === 'swapWarn' ? '자리 미정' : `${parseInt(q.main.bay, 10)}-${q.main.row}-${q.main.tier}`;   // 4.23-01 2차: 규격 다른 맞교환은 칸을 앱이 정하지 않는다(카드 머리와 같은 말)
+                return (
+                  <button key={q.main.cn} onClick={() => bringFront(q)} disabled={busy || dueOnCard}
+                    data-gw-next-cn={q.main.cn} data-gw-next-twin={q.twin ? q.twin.cn : ''} data-gw-next-pos={_np}
+                    className="gw-next w-full flex items-center gap-2 pl-1 pr-11 text-left border-b border-line last:border-0 hover:bg-ink-850 disabled:opacity-50">{/* 4.26 (2차 시뮬 하-C): 오른쪽 44px 는 화면 고정 TOP 단추 자리 — «먼저 ▲» 가 그 밑에 깔리지 않게 */}
+                    <span className="text-xs text-dim-400 w-6 shrink-0">{groupDone + 2 + i}.</span>
+                    <span className="mono text-sm text-dim-200 flex-1 min-w-0 truncate">{q.main.cn.slice(0, -4)}<b className="text-emerald-300">{q.main.cn.slice(-4)}</b>{q.twin ? ` +${q.twin.l4 || q.twin.cn.slice(-4)}` : ''}</span>
+                    <span className="mono text-xs text-dim-300 shrink-0">{_np}{q.single ? ' 싱글' : ''}</span>
+                    <span className="text-2xs font-bold text-violet-300 shrink-0">먼저 ▲</span>
+                  </button>
+                );
+              })}
+              <div className="text-3xs text-dim-500 mt-1">{dueOnCard ? '⏸ 보류했던 컨 물음(이제 됩니까?)이 떠 있는 동안은 줄이 잠깁니다 — [예, 지금 합니다] 를 누르거나 [⏸ 보류] 로 다시 빼면 누를 수 있습니다(1시간 넘은 콘 잠김은 [아직] 뒤에도 바로 다시 묻습니다).' : '이 컨이 먼저 오면 줄을 누르세요 — 위 카드로 올라옵니다(확인은 카드에서).'}</div>
             </div>
           )}
         </>
@@ -2353,7 +2502,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {posFor && (
         <PositionEditModal
           open={!!posFor}
-          container={{ ...posFor, bay: '', row: '', tier: '' }}
+          container={loadingSlotOf(posFor).kind === 'swapWarn' ? { ...posFor, bay: '', row: '', tier: '' } : posFor}   // 4.26(감사·2차 시뮬 상-1): 빈칸 사본은 «자리 미정»(4.23-01 2차) 때만 — 일반 카드 [다른 칸] 은 지금 자리 그대로(빈칸이면 같은 베이 이동도 «다른 베이» 강한 물음 · «자리 없음 →» 문구가 됐다)
           allContainers={allContainers}
           slotSource={allContainers}
           bayPairs={bayPairs}

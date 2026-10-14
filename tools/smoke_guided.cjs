@@ -373,7 +373,7 @@ T(/rec\.group = list\.join/.test(F), '트윈 두 대를 한 몸으로 안 묶는
 T(/const HOLD_ASK_AFTER = 3;/.test(P), '되묻기 기준이 3대가 아니다(검수사 확정 3~5대)');
 T(/const HOLD_LONG_MS = 60 \* 60000;/.test(P), '1시간 기준이 없다(검수사 확정 «길어야 1시간»)');
 T(/HOLD_REASONS = \['콘 잠김', '트윈 무게 초과', '컨 홀 불량\(스프레더 안착 불가\)'\]/.test(P), '사유 3택이 검수사가 준 그대로가 아니다');
-T(/frontCns: dueCns\.length \? dueCns : \(resumeCns\.length \? resumeCns : null\)/.test(P), '해제·되묻기 컨을 맨 앞으로 안 보낸다');
+T(/frontCns: dueHere\.length \? dueHere : \(resumeCns\.length \? resumeCns : null\)/.test(P) && /const dueHere = dueCns\.filter\(\(cn\) => targets\.some/.test(P), '해제·되묻기 컨을 맨 앞으로 안 보낸다(4.26: 되묻기는 이 큐에 그 컨이 있을 때만 맨 앞 — 다른 장 보류가 해제·짝·다음 예정의 맨 앞을 지우지 않게)');
 T(/!heldSet\.has\(cn\) \|\| dueCns\.includes\(cn\)/.test(P), '보류한 컨을 큐에서 안 뺀다');
 //  ★ 4.08-02 (검수사 2026-10-07 «강제 싱글 전환은 안됩니다» · «경보알림만으로 충분 합니다»): 2.75 의 «55톤 초과면 한 번에 잠금» 을 뒤집었다 — 경보뿐이고 버튼은 항상 눌린다.
 T(/<button onClick=\{handleConfirm\} disabled=\{busy\}/.test(P), '«트윈 한 번에» 가 busy 외 조건으로 잠긴다 — 55톤 초과여도 막지 않는다(경보뿐)');

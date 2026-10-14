@@ -599,3 +599,20 @@ select:-webkit-autofill {
 .home-big.is-lod { border-color: rgb(var(--st-lod) / .7); background: rgb(var(--st-lod) / .08); }
 button.home-big { transition: transform .1s ease; }
 button.home-big:active { transform: translateY(2px); }
+
+/* ══════════════════════════════════════════════════════════
+   ★ TallyOne 4.26 — 작업 카드(자동 가이드) 위계 · 화면 개편 판 F (설계 proposal_work §2·§5 — 검수사 2026-10-13 00:53 «전부 클로드 안대로»)
+     읽는 순서 = 크기 순서: 끝 4자리 36 > 앞 7자리 28 > 자리 상자 24 > 칩 13 · 실번호 16. 크게 모드는 40 · 31 · 26 · 15 · 18.
+     확인 단추 60px(글자 20 · 크게 22), 예외 줄·다음 예정 줄은 터치 높이 변수(--tap 44 · 크게 48)를 따른다.
+     ⚠ 베이뷰 위 칸(compact)은 이 클래스를 안 쓴다(1/3 화면 — 종전 크기). 인쇄는 이 화면을 찍지 않는다.
+   ══════════════════════════════════════════════════════════ */
+.gw-cn-a { font-size: 28px; line-height: 1.15; letter-spacing: -.01em; }
+.gw-cn-b { font-size: 36px; line-height: 1.05; letter-spacing: -.01em; }
+.gw-pos  { font-size: 24px; line-height: 1.2; padding: 1px 8px; border-radius: 8px; }
+.gw-chip { font-size: var(--fs-chip); line-height: 1.25; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+.gw-go   { min-height: 60px; font-size: var(--fs-xl); }
+.gw-ex   { min-height: var(--tap); font-size: var(--fs-btn-sm); }
+.gw-next { min-height: var(--tap); }
+:root[data-text="large"] .gw-cn-a { font-size: 31px; }
+:root[data-text="large"] .gw-cn-b { font-size: 40px; }
+:root[data-text="large"] .gw-pos  { font-size: 26px; }

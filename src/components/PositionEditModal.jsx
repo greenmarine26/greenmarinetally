@@ -891,7 +891,9 @@ export default function PositionEditModal({
           </div>
         )}
       </div>
-      <ConfirmModal {...confirmState} />
+      {/*  4.26 (감사·2차 시뮬 상-1): 확인창은 위 바깥막(onClick=onClose) 안에 있어 확인창 단추의 클릭이 바깥막까지 올라가 이 창을 같이 닫았다 —
+           그러면 이어지는 물음(«시퀀스 자리입니다» 등)이 뜰 자리가 없어 아무것도 저장되지 않은 채 끝났다(시퀀스 항차 풀 컨 · 다른 베이 칸). 클릭을 여기서 멈춘다. */}
+      <div onClick={e => e.stopPropagation()}><ConfirmModal {...confirmState} /></div>
     </div>
   );
 }

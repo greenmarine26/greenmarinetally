@@ -2393,19 +2393,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const groups = () => [...d.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()).filter((t) => /^B[\d·]+/.test(t) && /남은 컨/.test(t))
         .map((t) => ({ t, bays: t.match(/^B([\d·]+)/)[1].split('·').map(Number), deck: +((t.match(/데크 (\d+)/) || [])[1] || 0), hold: +((t.match(/홀드 (\d+)/) || [])[1] || 0) }));
       const cards = () => [...d.querySelectorAll('div.border-2')].filter((x) => /border-(amber|cyan)-600/.test(x.className)).map((x) => {
-        const pos = [...x.querySelectorAll('span')].map((s) => s.textContent.trim()).find((s) => /^\d{1,3}-\d{2}-\d{2} (데크|홀드)$/.test(s));
+        const pos = x.getAttribute('data-gw-pos') || '';   // 4.26: 자리는 카드의 자리 상자(data-gw-pos — 맞교환 «자리 미정» 이면 빈칸)
         const cn = [...x.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '')).find((s) => /^[A-Z]{4}\d{7}$/.test(s));
         const nd = [...x.querySelectorAll('div')].find((y) => /^🔄 맞교환 자리/.test(y.textContent));
         const wd = [...x.querySelectorAll('div')].find((y) => /^⚠ 계획 칸\(/.test(y.textContent));   // 4.23-01 2차: 규격 다른 맞교환
         const head = [...x.querySelectorAll('span')].map((s) => s.textContent.trim()).find((s) => s === '자리 미정') || '';
-        return { cn, pos: pos ? pos.split(' ')[0] : '', note: nd ? (nd.firstChild ? nd.textContent.split('⚠')[0] : '') : '', warnNote: wd ? wd.textContent : '', head };
+        return { cn, pos, note: nd ? (nd.firstChild ? nd.textContent.split('⚠')[0] : '') : '', warnNote: wd ? wd.textContent : '', head };
       }).filter((x) => x.cn);
-      const upcoming = () => { const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && x.firstChild.textContent === '다음 예정'); return box ? [...box.querySelectorAll('div.flex')].map((r) => { const s = r.querySelectorAll('span'); return { cn: (s[1] ? s[1].textContent : '').split(' ')[0], pos: (s[2] ? s[2].textContent : '').split(' ')[0] }; }) : []; };
+      const upcoming = () => { const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && x.firstChild.textContent === '다음 예정'); return box ? [...box.querySelectorAll('[data-gw-next-cn]')].map((r) => ({ cn: r.getAttribute('data-gw-next-cn') || '', pos: (r.getAttribute('data-gw-next-pos') || '').split(' ')[0] })) : []; };   // 4.26: 다음 예정 줄은 단추(data-gw-next-*)
       const toGroups = async () => { await click(btn(/^베이 선택$/), 250); await click(btn(/^베이$/), 250); await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent)); };
       //  «다른 컨테이너가 나옴» 칸을 열면 «이 단 남은 컨» 전부가 자리와 같이 나온다(엠티 카드는 자리 확인 칸이 열려 있어 «계획대로 확인하는 방식으로 돌아가기» 를 먼저)
       const remainList = async () => {
-        if (!btn(/^다른 컨테이너가 나옴/)) { await click(btn(/^계획대로 확인하는 방식으로 돌아가기$/), 250); await until(() => btn(/^다른 컨테이너가 나옴/)); }
-        await click(btn(/^다른 컨테이너가 나옴/), 250);
+        //  4.26: 여는 단추는 예외 줄 [다른 컨](누르면 열고 다시 누르면 닫는다 — 이미 열려 있으면 누르지 않는다)
+        const _open = () => [...d.querySelectorAll('div')].some((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || ''));
+        if (!_open()) {
+          if (!btn(/^다른 컨$/)) { await click(btn(/^계획대로 확인하는 방식으로 돌아가기$/), 250); await until(() => btn(/^다른 컨$/)); }
+          await click(btn(/^다른 컨$/), 250);
+        }
         await until(() => [...d.querySelectorAll('div')].some((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || '')));
         const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || ''));
         return box ? [...box.querySelectorAll('button')].map((b) => { const s = b.querySelectorAll('span'); return { cn: s[0] ? s[0].textContent.trim() : '', pos: s[1] ? s[1].textContent.trim() : '' }; }) : [];
@@ -2897,7 +2901,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await sleep(200);
         const cardTxt = [...d.querySelectorAll('div.border-2')].filter((x) => /border-(amber|cyan)-600/.test(x.className)).map((x) => x.textContent.replace(/\s+/g, ' ').trim());
         const upBox = [...d.querySelectorAll('div')].find((x) => x.firstChild && x.firstChild.textContent === '다음 예정');
-        const upRows = upBox ? [...upBox.querySelectorAll('div.flex')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [];
+        const upRows = upBox ? [...upBox.querySelectorAll('[data-gw-next-cn]')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [];   // 4.26: 다음 예정 줄은 단추
         const both = (t) => t.includes(OWN) && (t.includes(PAIRF) || t.includes('+' + PAIRF.slice(-4)));
         const paired = [...cardTxt, ...upRows].filter(both);
         const seen = [...cardTxt, ...upRows].some((t) => t.includes(OWN)) && [...cardTxt, ...upRows].some((t) => t.includes(PAIRF));
@@ -2965,6 +2969,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // ── R38 ───────────────────────────────────────────────────────────────
   //  4.25-02 — 검수리스트 실번호 칸: 엠티는 엠티실(eseal)도 본다(TNJP 26367W). 본문은 tools/regress_r38_eseal.cjs(단독 실행도 된다).
   await require('./regress_r38_eseal.cjs')({ ROOT, TMP, ok, head, fx });
+
+  // ── R39 ─────────────────────────────────────────────────────────────
+  //  4.26 — 작업 카드 개편(화면 개편 판 F): 자리 상자·칩 한 줄·실번호(검수리스트와 같은 값) · 예외 줄 · 트윈 앞만/뒤만/둘 다 다름 · 싱글로 한 대씩 · 다음 예정 줄 → 맨 앞 · 장 칩.
+  //    항차 화면(VoyagePage 실소스)을 jsdom 에서 검수원 손 그대로 누른다(양하 OBWH 2763E · 선적 TNJP 26367W). 본문은 tools/regress_r39_card.cjs(단독 실행도 된다).
+  await require('./regress_r39_card.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }

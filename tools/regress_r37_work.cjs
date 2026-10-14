@@ -68,9 +68,11 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const tab = async (re) => click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((b) => re.test(b.textContent))), 350);
     const dialog = () => { const t = [...d.querySelectorAll('div.fixed.inset-0')].find((x) => /z-\[100\]/.test(x.className)); return t || null; };
     const cardCns = () => [...d.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '')).filter((s) => /^[A-Z]{4}\d{7}$/.test(s));
+    //  4.26: 작업 카드 머리는 «B5·6·7 데크 — 남은 N대»(data-gw-head)
+    const headOf = () => { const h = d.querySelector('[data-gw-head]'); return h ? txt(h) : ''; };
     const groupBtn = (center) => [...d.querySelectorAll('button')].find((b) => { const m = txt(b).match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(center) && /남은 컨/.test(txt(b)); });
     const startGuide = async () => { await tab(/작업 시작/); await click(await until(() => btn(/^🤖\s*자동 가이드$/)), 350); await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent)); };
-    return { W, d, errs, alerts, click, btn, until, type, mem, refresh, tab, dialog, txt, cardCns, groupBtn, startGuide, close: () => { try { W.close(); } catch (er) { /* 창 닫기 */ } } };
+    return { W, d, errs, alerts, click, btn, until, type, mem, refresh, tab, dialog, txt, cardCns, headOf, groupBtn, startGuide, close: () => { try { W.close(); } catch (er) { /* 창 닫기 */ } } };
   };
   const doneCns = (S) => Object.keys((S.mem().discharge || {}).completed || {}).sort();
 
@@ -81,17 +83,17 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     await S.click(S.groupBtn(6), 350);
     await S.click(await S.until(() => S.btn(/^🔵 데크 [1-9]/)), 400);
     await S.until(() => S.cardCns().length > 0);
-    const before = { head: (S.d.body.textContent.match(/B\d+ 그룹 — \d+\/\d+대/) || [''])[0], first: S.cardCns()[0] };
+    const before = { head: S.headOf(), first: S.cardCns()[0] };
     const saved = S.W.sessionStorage.getItem(`gm_wctx|${vk}|연막|discharge`);
     await S.tab(/베이/);
-    const away = !/그룹 — \d+\/\d+대/.test(S.d.body.textContent);
+    const away = !S.d.querySelector('[data-gw-head]');
     await S.tab(/작업 시작/);
     await S.until(() => S.cardCns().length > 0);
-    const after = { head: (S.d.body.textContent.match(/B\d+ 그룹 — \d+\/\d+대/) || [''])[0], first: S.cardCns()[0], guideOn: !!S.btn(/^수동 모드로 전환$/) };
-    //  기대 — 픽스처에서 따로 센 B6 묶음(5·6·7) 대수
-    const n6 = Object.keys(E).filter((cn) => inGroup(cn, 6)).length;
+    const after = { head: S.headOf(), first: S.cardCns()[0], guideOn: !!S.btn(/^수동 모드로 전환$/) };
+    //  기대 — 픽스처에서 따로 센 B6 묶음(5·6·7) 데크 대수(4.26 머리는 «이 단 남은 수»)
+    const n6 = Object.keys(E).filter((cn) => inGroup(cn, 6) && isDeck(cn)).length;
     ok(`⑦-1 작업 시작 → 🤖 자동 가이드 → B5·6·7 → 데크 → 카드 «${before.first}» · 머리 «${before.head}» → 🚢베이 탭 갔다(작업 화면 내림 ${away}) 돌아오면 자동 가이드 그대로(수동 전환 단추 ${after.guideOn}) · 머리 «${after.head}» · 카드 «${after.first}» · 기억 ${saved}`,
-      away && after.guideOn && before.head === `B6 그룹 — 0/${n6}대` && after.head === before.head && !!before.first && after.first === before.first
+      away && after.guideOn && before.head === `B5·6·7 데크 — 남은 ${n6}대` && after.head === before.head && !!before.first && after.first === before.first
         && /"guide":true/.test(saved || '') && /"bay":6/.test(saved || '') && /"tier":"deck"/.test(saved || '') && !S.errs.length,
       JSON.stringify({ before, after, saved, errs: S.errs.slice(0, 3) }));
     //  ⑦-2 화면을 새로 열어도(같은 창 — 서비스워커 갱신 새로고침) 기억이 남는다 · 다른 항차 열쇠는 안 섞인다
@@ -99,7 +101,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const S2 = await open(baseVoy(), '1호기', { [`gm_wctx|${vk}|연막|discharge`]: saved, [`gm_wctx|OTHER_1E|연막|discharge`]: '{"guide":false,"bay":30,"tier":"hold"}' });
     await S2.tab(/작업 시작/);
     await S2.until(() => S2.cardCns().length > 0);
-    const re = { head: (S2.d.body.textContent.match(/B\d+ 그룹 — \d+\/\d+대/) || [''])[0], first: S2.cardCns()[0], guideOn: !!S2.btn(/^수동 모드로 전환$/) };
+    const re = { head: S2.headOf(), first: S2.cardCns()[0], guideOn: !!S2.btn(/^수동 모드로 전환$/) };
     ok(`⑦-2 같은 창에서 화면을 새로 열어도 «${re.head}» · 카드 «${re.first}» · 자동 가이드 ${re.guideOn}(다른 항차 기억은 안 섞임)`,
       re.guideOn && re.head === before.head && re.first === before.first && !S2.errs.length, JSON.stringify({ re, errs: S2.errs.slice(0, 3) }));
     S2.close();
@@ -129,7 +131,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const onCard = S.cardCns().slice(0, 2);
     //  XRAY 대상 — 보관소 xrayList 에서 B6 데크 컨 중 지금 카드에 없는 것(이 파일이 고른다)
     const xcn = Object.keys(XL).filter((cn) => E[cn] && inGroup(cn, 6) && isDeck(cn) && !onCard.includes(cn)).sort()[0];
-    await S.click(S.btn(/^다른 컨테이너가 나옴/), 300);
+    await S.click(S.btn(/^다른 컨$/), 300);   // 4.26 예외 줄
     const inp = await S.until(() => [...S.d.querySelectorAll('input')].find((i) => /예: 1234/.test(i.getAttribute('placeholder') || '')));
     await S.type(inp, xcn.slice(-4));
     const m = await S.until(() => [...S.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(xcn)));
@@ -157,7 +159,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     //  ④-3 저장하지 않고 수정 칸을 [닫기] 하면 카드 밖 XRAY 칸도 닫힌다(2차 시뮬 하 — 다음 카드 아래에 남아 있었다)
     //  B6 데크의 XRAY 대상은 하나뿐이라 같은 묶음 홀드 것을 고른다(XRAY 막음이 «다른 단» 안내보다 먼저다 — handleFixPick 순서 그대로)
     const xcn2 = Object.keys(XL).filter((cn) => E[cn] && inGroup(cn, 6) && cn !== xcn && !S.cardCns().slice(0, 2).includes(cn)).sort()[0];
-    if (!S.btn(/^닫기$/)) await S.click(S.btn(/^다른 컨테이너가 나옴/), 300);
+    if (!S.btn(/^닫기$/)) await S.click(S.btn(/^다른 컨$/), 300);
     const inp2 = await S.until(() => [...S.d.querySelectorAll('input')].find((i) => /예: 1234/.test(i.getAttribute('placeholder') || '')));
     if (inp2) await S.type(inp2, xcn2.slice(-4));
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(xcn2))), 400);
@@ -187,7 +189,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     await S.click(await S.until(() => S.btn(/^🟠 홀드 [1-9]/)), 400);
     await S.until(() => S.btn(/^트윈 한 번에 양하확인/));
     const [front, back] = S.cardCns();
-    await S.click(S.btn(/^다른 컨테이너가 나옴 \(수정 — 앞·뒤 동시\)/), 300);
+    await S.click(S.btn(/^둘 다 다름$/), 300);   // 4.26 예외 줄 — 두 칸(앞·뒤)
     const ins = await S.until(() => { const a = [...S.d.querySelectorAll('input')].filter((x) => /실제 온 컨 끝 4자리/.test(x.getAttribute('placeholder') || '')); return a.length === 2 ? a : null; });
     return { S, front, back, ins };
   };
@@ -210,7 +212,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     await S.click(bs[0], 400);
     const doneX = doneCns(S);
     ok(`③-1 트윈 카드 ${front}(앞)·${back}(뒤) — 픽스처 앞뒤 짝 ${realPair} · 뒤 칸에 실제 온 컨 ${act} 를 고르고 적용 → 물음 «${title}» · 큰 단추 «${big ? S.txt(big) : '-'}» · 회색 «${grey ? S.txt(grey) : '-'}» · ✕ 로 닫으면 완료 그대로(${doneX.length - done0.length}대 늘음)`,
-      realPair && !!act && /^앞쪽 \d{4} 도 왔습니까$/.test(title || '') && !!big && S.txt(big) === '이 한 대만' && !!grey && S.txt(grey) === `${front.slice(-4)} 도 확인` && doneX.length === done0.length && !S.dialog() && !S.errs.length,
+      realPair && !!act && /^앞쪽 \d{4} 도 왔습니까$/.test(title || '') && !!big && S.txt(big) === '싱글 — 이 한 대만' && !!grey && S.txt(grey) === `${front.slice(-4)} 도 확인` && doneX.length === done0.length && !S.dialog() && !S.errs.length,
       JSON.stringify({ front, back, act, title, big: big && S.txt(big), grey: grey && S.txt(grey), done0: done0.length, doneX: doneX.length, errs: S.errs.slice(0, 3) }));
     //  [이 한 대만] — 고른 컨만 완료, 카드의 두 컨은 남고 앞(남은 짝)이 바로 다음 카드
     await S.click(S.btn(/^선택한 수정 적용/), 400);
@@ -362,7 +364,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const t = S.d.body.textContent.replace(/\s+/g, ' ');
     ok(`⑧-2 B1·2·3 데크 ${deck.length}대를 전부 보류 → 데크 큐 빔 · «${left ? left.textContent.replace(/\s+/g, ' ') : '-'}» (픽스처 — 묶음 남은 ${deck.length + hold.length} · 보류 ${deck.length} · 다른 단 ${hold.length}) · «그룹 양하 완료!» 없음`,
       !!left && left.textContent.includes('데크에서 지금 할 컨이 없습니다') && left.textContent.includes(`이 베이 그룹에 남은 ${deck.length + hold.length}대 · 보류 ${deck.length}대 · 다른 단 ${hold.length}대`) && !/그룹 양하 완료!/.test(t) && !S.errs.length,
-      JSON.stringify({ left: left && left.textContent, tail: t.slice(t.indexOf('그룹 —') - 10, t.indexOf('그룹 —') + 300), errs: S.errs.slice(0, 3) }));
+      JSON.stringify({ left: left && left.textContent, tail: t.slice(0, 300), errs: S.errs.slice(0, 3) }));
     S.close();
   }
 };

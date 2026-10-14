@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.25-02';
-const NOTE = '4.25-02 트윈 카드에서 한 대만 왔으면 이 한 대만으로 확인합니다. XRAY 칸이 그 자리에서 열리고, 탭을 옮겨도 자동 가이드가 그대로이며 검수리스트에 엠티 실번호가 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.26';
+const NOTE = '4.26 작업 카드를 크게 다시 그렸습니다. 확인 단추 밑 한 줄에 다른 컨과 보류와 싱글이 모이고, 다음 예정 줄을 누르면 그 컨이 카드로 올라옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
