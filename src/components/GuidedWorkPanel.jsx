@@ -1285,7 +1285,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   선적확인만 찍히면 그림과 기록이 갈린다. 그래서 자리부터 확실히 잡고 완료를 찍는다.
   //   ⛔ 네이티브 confirm() 은 쓰지 않는다 — 뜨는 순간 앱이 통째로 멈춘다(실측 30분 정지).
   //   돌려주는 값: 성공하면 결과 객체, 검수사가 취소했거나 실패하면 null.
-  const reassignAsk = async (cn, b, r, t, opts, failMsg = '') => {   // 4.26-02: failMsg — 앞 컨은 이미 선적확인된 두 번째 재배정(엇갈림 남은 컨)은 공용 «선적확인은 찍지 않았습니다» 가 틀린 말이다
+  const reassignAsk = async (cn, b, r, t, opts, failMsg = '', cancelMsg = '') => {   // 4.26-03(감사 하-2): cancelMsg — 앞 컨은 이미 넣었는데 뒤 컨 물음에서 취소하면 말없이 끝나지 않게   // 4.26-02: failMsg — 앞 컨은 이미 선적확인된 두 번째 재배정(엇갈림 남은 컨)은 공용 «선적확인은 찍지 않았습니다» 가 틀린 말이다
     let res = await fbReassignContainerPosition(voyageKey, mode, cn, b, r, t, inspector, opts || undefined);
     if (res && res.ok === false && res.needConfirm === 'seqFull') {
       const ok = await ask({
@@ -1293,7 +1293,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         message: seqFullConfirmText(res),
         confirmLabel: '그래도 넣는다', cancelLabel: '취소',
       });
-      if (!ok) return null;
+      if (!ok) { if (cancelMsg) notify('뒤 컨은 넣지 않았습니다', cancelMsg); return null; }
       res = await fbReassignContainerPosition(voyageKey, mode, cn, b, r, t, inspector,
         { ...(opts || {}), seqConfirmed: true });
     }
@@ -1318,10 +1318,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       //    ⇒ 자리 확인 모드에서 다른 컨을 넣는 것은 **두 컨의 자리 맞바꿈**이다(현장 뜻). `swapWith` 로 못 박는다.
       //      이것이 없으면 밀려난 컨이 계획 자리를 든 채 창고로 떠 큐·그림에 유령으로 남는다.
       //    ⚠ 맞바꿈은 «온 컨이 원래 자리를 갖고 있을 때»만 성립한다 — 미배정·창고에서 온 컨은 종전대로.
+      //  4.26-03(감사 하-5): 풀과 엠티는 서로 바뀌지 않는다(검수사 2026-10-14 «다만 풀이 풀끼리만 바뀌는거지 엠티와 풀이 서로 바뀌지는 않습니다») —
+      //    고른 컨과 이 칸 계획 컨의 풀·엠티가 둘 다 있고 다르면 맞바꾸지 않는다. 그때는 맞바꿈 없이 자리 게이트로 가서 «⚠ 풀과 엠티는 서로 바뀌지 않습니다» 를 묻는다.
+      const _fe = (x) => String((x && x.fe) || '').trim().toUpperCase();
+      const feMix = !!_fe(actual) && !!_fe(slot) && (_fe(actual) === 'E') !== (_fe(slot) === 'E');
       const canSwap = slotMode && !(opts && opts.swap === false) && !!actual.bay && !!actual.row && !!actual.tier
-        && String(actual.bay_actual ?? '') !== '__STG__';
+        && String(actual.bay_actual ?? '') !== '__STG__' && !feMix;
       const r = await reassignAsk(actual.cn, slot.bay, slot.row, slot.tier,
-        canSwap ? { swapWith: slot.cn, actualWork: true } : undefined);
+        canSwap ? { swapWith: slot.cn, actualWork: true } : (slotMode ? { actualWork: true } : undefined));   // 4.26-03(2차 시뮬 하-1): 자리 확인에서 풀·엠티가 달라 안 맞바꿔도 이동 사유는 «실제 실린 자리(actual)» 그대로
       if (!r) return false;
     }
     if (!canWorkNow()) { alert(workGateText('완료')); return false; }   // 3.51: 조회만은 보기만
@@ -1560,7 +1564,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         // 1.54: 시퀀스 항차면 여기서 되묻는다. 취소되면 **선적확인을 찍지 않고** 멈춘다
         //   (자리는 안 들어갔는데 완료만 찍히는 것이 가장 나쁘다 — 그림과 기록이 갈린다).
         if (pf && !(await reassignAsk(pf.cn, card.main.bay, card.main.row, card.main.tier))) { setBusy(false); return; }
-        if (pb && !(await reassignAsk(pb.cn, card.twin.bay, card.twin.row, card.twin.tier))) { setBusy(false); return; }
+        //  4.26-03(감사 하-2): 앞 컨을 이미 넣었으면 뒤 컨 물음 취소·실패를 말없이 넘기지 않는다(전체 시퀀스가 기본이 되어 답 없는 항차에서도 뜬다).
+        const _half = pf ? `앞 컨 ${pf.cn.slice(-4)} 은(는) ${parseInt(card.main.bay, 10)}-${card.main.row}-${card.main.tier} 에 넣었습니다.\n뒤 컨 ${pb ? pb.cn.slice(-4) : ''} 은(는) 넣지 않았고 선적확인은 두 대 모두 찍지 않았습니다.\n뒤 컨 자리를 다시 정하거나, 앞 컨을 조회 → 큰 카드 «📍 위치 지정» 으로 되돌리세요.` : '';
+        if (pb && !(await reassignAsk(pb.cn, card.twin.bay, card.twin.row, card.twin.tier, undefined, _half, _half))) { setBusy(false); return; }
       }
       await fbCompleteContainersAtomic(voyageKey, mode,
         [frontCn, backCn], inspector, equip);   // 1.55: 갱(호기)

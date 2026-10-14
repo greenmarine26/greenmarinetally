@@ -321,7 +321,7 @@ export default function PositionEditModal({
 
 
   // V9.53: 이 자리에 있던 컨과 비교해 **얼마나 세게 물어볼지**. 판정은 swapGrade.js 한 벌.
-  //   엠티+같은포트=통과 · 풀+같은베이=간단 · 다른베이/다른포트/특수컨=강한 확인.
+  //   엠티+같은포트=통과 · 풀+같은베이=간단 · 다른베이/다른포트/특수컨/풀↔엠티(4.26-03)=강한 확인.
   const swapG = useMemo(() => {
     if (!container || !bay || !row || !tier) return null;
     const slotCon = findByCn(pickedSlotCn) || findAtPos(bay, row, tier) || conflict;

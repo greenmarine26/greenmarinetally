@@ -27,7 +27,7 @@ import {
   fbSaveEdiRaw, fbGetEdiRaw,
   fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
-  fbSetActualPosition, fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
+  fbSetActualPosition   // 4.26-03: 시퀀스 질문 카드를 걷어내 fbSetVoyageSeqMode·resolveSeqMode·fbSetShipSeqPref·fbGetShipSeqPref 를 여기서 안 쓴다.
   , fbSubscribeWorkReports, fbSetStowagePlan , fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -59,7 +59,6 @@ import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
-import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';   // 4.26-02: 시퀀스 방침을 바꿀 때 한 번 묻는다(앱 안 창)
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import ExpectedTimeLine from '../components/ExpectedTimeLine.jsx';   // 4.01: 작업 시작 화면 맨 위 «예상 작업 시간»
@@ -197,22 +196,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     } catch (e) { /* 못 열어도 화면은 그대로 */ }
   }, []);
   const [relayQ, setRelayQ] = useState('');   // 1.84-01: 양하 탭 검색창의 문장 질문을 「작업 시작」 탭으로 릴레이   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
-  // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
-  const [seqEdit, setSeqEdit] = useState(false);
-  const [seqAskState, seqAsk] = useConfirm();   // 4.26-02: 정해진 방침을 다른 것으로 바꿀 때만 묻는다(누가·언제 정했는지 보인다)
-  // 1.56-01: 선박 기억은 **추천으로만** 쓴다 — 검수사 정정 2026-08-12:
-  //   *"상황에 따라 틀려집니다. 선박당 1회는 매항차마다 물어야 합니다."*
-  //   1.56 이 답 없는 항차에 지난 답을 자동 적용했는데 **틀린 설계**였다. 질문은 항차마다 한 번 뜨고,
-  //   지난 답은 카드 안에 「이 배의 지난 답」으로 보여 주기만 한다(강조 링).
-  const [shipSeqPref, setShipSeqPref] = useState(null);
-  useEffect(() => {
-    if (mode !== 'loading') { setShipSeqPref(null); return; }
-    const vsl = voyage?.info?.vsl;
-    if (!vsl) { setShipSeqPref(null); return; }
-    let alive = true;
-    fbGetShipSeqPref(vsl).then(m3 => { if (alive) setShipSeqPref(m3 || null); }).catch(() => { if (alive) setShipSeqPref(null); });
-    return () => { alive = false; };
-  }, [voyageKey, mode, voyage?.info?.vsl]);
+  // 4.26-03: 「풀 컨테이너 시퀀스 작업입니까?」 카드·칩과 선박 기억(ship_prefs) 추천을 걷어냈다 — 검수사 2026-10-14 «이화면을 없애주세요 기본은 전체 시퀀스로 갑니다 … 일일이 지정하기 힘듭니다».
+  //   답이 없는 항차는 firebase 자리 게이트가 «전체 시퀀스»로 본다(fbReassignContainerPosition).
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -1646,116 +1631,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           🏁 마감 점검
         </button>
       </div>
-
-      {/* ── TallyOne 1.55: 「풀 컨테이너 시퀀스 작업입니까?」 — **작업 개념은 셋이다.** ── (검수사 확정 2026-08-12)
-          원문 — *"선적을 하기 전에 묻습니다. 풀 컨테이너 시퀀스 작업인지 아닌지를.
-                   엠티는 안 묻는 이유는 포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
-          ⚠ 1.54 는 「예/아니오」 두 갈래뿐이라 *"풀만 시퀀스"* 와 *"풀·엠티 둘 다 시퀀스"* 를 구분하지 못했다.
-            실제 사고 — DXQD 2631W 는 **풀만 시퀀스**였는데(풀 11대는 계획대로, 엠티 324대 중 173칸의 번호만 섞였다)
-            작업자가 「아니오 — 액츄얼」을 골라 **풀 어긋남 방어가 꺼진 채 335대를 실었다.**
-          ⚠ **항차 속성이다.** 자연어 탭의 자동/수동 모드와 별개다 — 자동/수동은 **가이드를 받을지 말지**이고
-            시퀀스/액츄얼은 **일항사가 정하는 적재 방침**이다.
-          한 번 답하면 끝이다(작업 흐름을 막지 않는다). 답이 있으면 작은 칩만 남고, 눌러서 바꿀 수 있다.
-          답을 안 하면(미정) 앱은 **액츄얼**로 본다(firebase.js — 모르면 안 막는 쪽이 안전하다). */}
-      {!_sideCanc && mode === 'loading' && (tab === 'list' || tab === 'search' || tab === 'bay' || tab === 'lolo') && (() => {
-        // 작업하는 탭에서만 묻는다 — 업로드·통계·결과 탭에서까지 붙잡지 않는다.
-        //   ⛔ `info.seqFull` 을 직접 읽지 않는다. 옛 항차는 `seqFull` 만 있고 새 항차는 `seqMode` 라
-        //   두 모양을 아는 곳은 `resolveSeqMode` 하나뿐이다. 미정이면 null 이고 그때만 묻는 카드를 띄운다.
-        const _mode3 = resolveSeqMode(voyage?.info);
-        const _save = async (m3) => {
-          try {
-            await fbSetVoyageSeqMode(voyageKey, m3, inspector || '');
-            // 1.56: 선박별로 기억한다(검수사 확정) — 다음 항차는 안 묻고 이 답을 자동 적용.
-            fbSetShipSeqPref(voyage?.info?.vsl, m3, inspector || '').catch(() => {});
-            setSeqEdit(false);
-          }
-          catch (e) { alert('저장 실패: ' + (e?.message || e)); }
-        };
-        // 문구는 **검수사 표현 그대로** 쓴다. 지어낸 용어를 넣지 않는다.
-        const _CH = [
-          { m: 'fullSeq', t: '풀 시퀀스 (풀+엠티)', lock: true,
-            d: '풀도 엠티도 계획 자리 주인이 그 자리를 지킵니다 — 남의 자리에 넣으면 한 번 더 묻습니다.',
-            cls: 'bg-amber-700 hover:bg-amber-600 text-white' },
-          { m: 'fullOnlySeq', t: '풀만 시퀀스 (엠티는 액츄얼)', lock: true,
-            d: '풀만 자리를 지킵니다. 엠티 자리는 안 묻고 바로 내줍니다.',
-            cls: 'bg-amber-800 hover:bg-amber-700 text-white' },
-          { m: 'allActual', t: '풀 액츄얼 (풀+엠티)', lock: false,
-            d: '풀도 엠티도 계획은 예약일 뿐 — 안 묻고 바로 내주고, 자리를 내준 컨은 «자리 없음·계획 자리 내줌»으로 남아 실을 때 자리를 다시 정합니다.',
-            cls: 'bg-ink-750 hover:bg-ink-700 text-dim-100' },
-        ];
-        const _cur = _CH.find(x => x.m === _mode3) || null;
-        // 1.56: 옛 2갈래 답(seqFull)만 있는 항차는 **한 번 재확인**한다 — 두 갈래엔 「풀 시퀀스」가 없어
-        //   답이 자동 매핑으로 조용히 굳었다(독립 재검증 P1-7). 확인 전에도 방어는 종전 답대로 동작한다.
-        const _legacyOnly = !voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null;
-        const _chipCls = { fullSeq: 'text-rose-300', fullOnlySeq: 'text-amber-300', allActual: 'text-dim-100' };
-        //  ★ 4.26-02 (모의 작업 MCAP 2호기 — 작은 칩을 누구나 눌러 배 전체 방침이 바뀌었다): 이 답은 항차의 모든 검수원 자리 보호를 바꾼다.
-        //    정해진 방침을 **다른 것으로** 바꿀 때만 누가·언제 정했는지 보이고 한 번 묻는다(큰 단추 = 그대로 · ✕ 도 그대로). 처음 답·옛 답 재확인은 묻지 않는다.
-        //    ⚠ 조회만도 바꿀 수 있다 — 3.51-01 «관리 기록은 조회만도 적는다»(검수사 확정 · smoke_workchoice ⑥-E). 그래서 막지 않고 묻는다.
-        const _setBy = String(voyage?.info?.seqFullBy || '');
-        const _setAt = Number(voyage?.info?.seqFullAt) || 0;
-        const _setWho = _setBy ? `${_setBy}${_setAt ? ' ' + new Date(_setAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}` : '';
-        const _pick = (m3) => {
-          if (_cur && !_legacyOnly && m3 === _cur.m) { setSeqEdit(false); return; }
-          if (_cur && !_legacyOnly) {
-            const _to = _CH.find(x => x.m === m3);
-            seqAsk({
-              title: '배 전체 방침을 바꿉니다',
-              message: `지금 «${_cur.t}»${_setWho ? ` — ${_setWho} 정함` : ''}.\n«${_to ? _to.t : m3}» 로 바꾸면 이 항차 모든 검수원의 자리 보호가 바로 바뀝니다.\n일항사 방침이 바뀐 것이 맞을 때만 바꾸십시오.`,
-              confirmLabel: '그대로 둔다', cancelLabel: '바꾼다',
-              onConfirm: () => setSeqEdit(false),
-              onCancel: () => { _save(m3); },
-              onClose: () => {},
-            });
-            return;
-          }
-          _save(m3);
-        };
-        if (_cur && !seqEdit && !_legacyOnly) {
-          return (
-            <button onClick={() => setSeqEdit(true)}
-              className="mb-3 px-2 py-1 rounded border border-line bg-ink-900 text-xxs text-dim-200 flex items-center gap-1.5">
-              <span className={`font-black ${_chipCls[_cur.m] || 'text-dim-100'}`}>
-                {_cur.lock ? '🔒' : '↔'} {_cur.t}
-              </span>
-              <span className="text-dim-400">— {_setWho ? `${_setWho} 정함 · ` : ''}눌러서 바꾸기</span>
-            </button>
-          );
-        }
-        return (
-          <div className="mb-3 bg-amber-950/40 border-2 border-amber-700/60 rounded-pill p-3">
-            <div className="text-sm2 font-black text-amber-200">풀 컨테이너 시퀀스 작업입니까?</div>
-            {(!voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null) && (
-              <div className="text-xxs text-amber-100 bg-amber-900/40 rounded px-2 py-1 mt-1">
-                종전 답(예/아니오)이 있습니다 — 세 갈래로 한 번만 확정해 주세요. 확정 전에도 방어는 종전 답({resolveSeqMode(voyage?.info) === 'fullOnlySeq' ? '풀만 시퀀스' : '풀 액츄얼'})대로 동작합니다.
-              </div>
-            )}
-            <div className="text-xxs text-amber-300/80 mt-0.5 leading-snug">
-              시퀀스면 계획 자리 주인이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
-              <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 «자리 없음·계획 자리 내줌»으로 남아 실을 때 자리를 다시 정합니다.
-              <br/>풀과 엠티가 다를 수 있으니 셋 중에서 고르세요.
-            </div>
-            {shipSeqPref && !_mode3 && (
-              <div className="text-xxs text-dim-200 mt-1">
-                이 배의 지난 답: <b className="text-amber-200">{_CH.find(x => x.m === shipSeqPref)?.t || shipSeqPref}</b> — 이번 항차도 같으면 그걸 누르세요. 상황이 다르면 다르게 고르면 됩니다.
-              </div>
-            )}
-            <div className="grid grid-cols-1 gap-2 mt-2.5">
-              {_CH.map(ch => (
-                <button key={ch.m} onClick={() => _pick(ch.m)}
-                  className={`py-2.5 px-3 rounded text-left ${ch.cls} ${ch.m === (_mode3 || shipSeqPref) ? 'ring-2 ring-amber-300' : ''}`}>
-                  <div className="font-bold text-sm">{ch.lock ? '🔒' : '↔'} {ch.t}</div>
-                  <div className="text-xxs opacity-80 mt-0.5 leading-snug">{ch.d}</div>
-                </button>
-              ))}
-            </div>
-            {seqEdit && (
-              <button onClick={() => setSeqEdit(false)}
-                className="w-full mt-1.5 text-xxs text-dim-300 py-1">그대로 두기</button>
-            )}
-            <ConfirmModal {...seqAskState} />
-          </div>
-        );
-      })()}
 
       {/* V9.15: 진단 경고는 탭 바 위(눈에 띄어야 하는 경고) — PORT-MIS 카드는 탭 본문 아래로 내림(전면 점검 2-1) */}
       {/* M3.5.4: 자동 진단 경고 패널 */}

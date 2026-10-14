@@ -206,7 +206,7 @@ export async function fbUpdateVoyageInfo(voyageKey, patch) {
 //   앞선 판은 자연어 탭의 자동/수동(`opts.actualWork`)을 시퀀스/액츄얼로 잘못 읽었다.
 //   자동/수동은 **가이드를 받을지 말지**이고, 시퀀스/액츄얼은 **일항사가 정하는 적재 방침**이다. 별개다.
 //   ⛔ info 는 PATCH 원칙이다 — 통째 교체 금지(수집기가 채운 필드가 증발한다).
-//   값이 없으면 **액츄얼**로 본다. 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
+//   값이 없으면 4.26-03 부터 **전체 시퀀스**로 본다(fbReassignContainerPosition — 검수사 2026-10-14 «기본은 전체 시퀀스로 갑니다»).
 //   읽기는 따로 두지 않는다 — 화면은 이미 항차 구독으로 `info` 를 통째로 받는다.
 export async function fbSetSeqFull(voyageKey, v, by) {
   if (!voyageKey) return;
@@ -243,24 +243,8 @@ export function resolveSeqMode(info) {
 // 저장 — 세 갈래를 `info/seqMode` 에 쓰고, 옛 화면·옛 코드가 읽는 `seqFull` 도 같이 맞춘다.
 //   `fullSeq`·`fullOnlySeq` → `seqFull:true` / `allActual` → `seqFull:false`.
 //   (`seqFull` 하나만 보는 곳은 「시퀀스인가 아닌가」만 알면 되므로 이 대응으로 손실이 없다.)
-// 1.56: 선박별 작업 모드 기억. ⚠ 1.56-01 정정(검수사) — *"상황에 따라 틀려집니다. 선박당 1회는
-//   매항차마다 물어야 합니다."* 자동 적용 금지. 이 값은 **질문 카드의 추천 표시**에만 쓴다.
-//   노드: ship_prefs/{선박약자}/seqMode.
-export async function fbSetShipSeqPref(vsl, mode3, by) {
-  const v = String(vsl || '').trim();
-  if (!v || !SEQ_MODES.includes(mode3)) return;
-  await update(ref(db, `ship_prefs/${v}`), { seqMode: mode3, seqModeBy: by || '', seqModeAt: Date.now() });
-}
-export async function fbGetShipSeqPref(vsl) {
-  const v = String(vsl || '').trim();
-  if (!v) return null;
-  try {
-    const s = await get(ref(db, `ship_prefs/${v}/seqMode`));
-    const m = s.val();
-    return SEQ_MODES.includes(m) ? m : null;
-  } catch { return null; }
-}
-
+// 1.56 선박별 작업 모드 기억(ship_prefs/{선박약자}/seqMode — fbSetShipSeqPref·fbGetShipSeqPref)은 4.26-03 에서 지웠다 — 질문 카드가 없어져 쓰는 곳이 없다
+//   (검수사 2026-10-14 «이화면을 없애주세요 기본은 전체 시퀀스로 갑니다»). 보관소의 옛 ship_prefs 값은 남아 있어도 아무도 읽지 않는다.
 export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
   if (!voyageKey) return;
   const m = SEQ_MODES.includes(String(mode3)) ? String(mode3) : null;
@@ -1698,8 +1682,10 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     const recMap = recSnap.val() || {};
     const compMap = compSnap.val() || {};
     ediMap0 = ediMap; recMap0 = recMap;   // 1.36: 아래 2)에서 계획 자리 점유 검사에 쓴다
-    // 값이 없으면(미정) 액츄얼로 본다 — 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
-    seqMode = resolveSeqMode((infoSnap && infoSnap.exists()) ? infoSnap.val() : null);
+    // 4.26-03: 값이 없으면(미정) **전체 시퀀스('fullSeq')** 로 본다 — 검수사 2026-10-14 «이화면을 없애주세요 기본은 전체 시퀀스로 갑니다 …
+    //   일일이 지정하기 힘듭니다». 질문 카드가 없어졌으므로 답이 없는 항차가 기본이다. 이미 답이 저장된 항차는 그 답대로 간다.
+    //   (종전 — 미정은 액츄얼로 보고 안 막았다.) 선적에서만 읽으므로(infoSnap) 양하는 그대로 null 이다.
+    seqMode = isLoading ? (resolveSeqMode((infoSnap && infoSnap.exists()) ? infoSnap.val() : null) || 'fullSeq') : null;
     seqFull = (seqMode === 'fullSeq' || seqMode === 'fullOnlySeq');
     // ediContainers + records 양쪽 봐서 같은 위치 컨 검색
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
@@ -1746,7 +1732,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         //                     검수사 원문 — *"엠티는 안 묻는 이유는 포트만 바뀌지 않으면
         //                     언제든 액츄얼이 가능하기 때문입니다."*
         //   · 'fullSeq'     — 풀·엠티 **둘 다** 자리를 지킨다.
-        //   미정(null)은 안 막는다 — 모르면 안 막는 쪽이 안전하다(위 seqMode 주석과 같은 원칙).
+        //   미정은 4.26-03 부터 위에서 'fullSeq' 로 채운다(검수사 «기본은 전체 시퀀스로 갑니다»).
         //   F/E 판정은 `isFullCn` 하나로 한다 — 빈 값(`fe:''`)은 풀이 아니므로 어느 갈래에서도 안 막힌다.
         const feView = (x) => {
           const r0 = recMap[x] || {}, e0 = ediMap[x] || {};
@@ -1766,7 +1752,10 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         } else {
         const gateOn = !opts.seqConfirmed && !explicitMode;
         let seqBlock = [];
-        if (gateOn && seqMode === 'fullSeq') seqBlock = planHits.slice();
+        //  4.26-03(감사 하-1): 넣는 컨의 풀·엠티를 모르면(fe 빈 값 — 선적 목록에 없는 시프팅 컨 등) 전체 시퀀스라도 엠티 주인 칸은 묻지 않고 풀 주인 칸만 지킨다
+        //    (1.55 «모르면 안 막는 쪽» · 2.95 시프팅 완화 — 매뉴얼 «엠티·시프팅은 엠티 칸에서 안 묻는다»와 같은 말).
+        const feTri = (x) => { const u = String(feView(x).fe || '').trim().toUpperCase(); return u === 'F' ? true : u === 'E' ? false : null; };
+        if (gateOn && seqMode === 'fullSeq') seqBlock = feTri(cn) === null ? planHits.filter(x => isFullCn(feView(x))) : planHits.slice();
         else if (gateOn && seqMode === 'fullOnlySeq') seqBlock = planHits.filter(x => isFullCn(feView(x)));
         if (seqBlock.length) {
           // 시퀀스 작업 — 그 컨이 자리 주인이 될 수 있다.
@@ -1777,6 +1766,12 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
             ok: false, needConfirm: 'seqFull',
             displaced: seqBlock[0], seqConflict: seqBlock, seqFull: true,
             seqMode,                                       // 1.55: 세 갈래 중 무엇 때문에 막혔나
+            seqConflictFull: seqBlock.map(feTri),           // 4.26-03: 주인마다 풀(true)·엠티(false)·모름(null) — 전체 시퀀스가 기본이 되어 엠티 주인도 묻는다(문구가 «(풀)»로 못 박지 않게)
+            // 4.26-03: 넣는 컨의 풀·엠티와 포트 · 주인들의 포트 — 검수사 2026-10-14 «다만 풀이 풀끼리만 바뀌는거지 엠티와 풀이 서로 바뀌지는 않습니다.
+            //   포트도 바뀌지 않습니다.» 둘이 어긋나면 물음 문구(utils.seqFullConfirmText)가 먼저 경고한다. 포트는 확정 반영 한 벌(resolvedPod).
+            incomingFull: feTri(cn),                        // 모르면 null — 문구가 «이 컨 엠티»로 지어내지 않게(감사 하-1)
+            incomingPod: String(resolvedPod(ediMap[cn], recMap[cn]) || '').trim().toUpperCase(),
+            seqConflictPod: seqBlock.map(x => String(resolvedPod(ediMap[x], recMap[x]) || '').trim().toUpperCase()),
             needConfirmSeq: true,                          // 1.55: 되묻기가 필요하다는 명시 신호
             target: { bay: newBayInt, row: newRow, tier: newTier },
           };
@@ -1882,7 +1877,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     displacedPlanOnly,                                 // 1.47 호환: 계획만 있던 컨을 비켰음
     swappedTo: displacedTo,                            // 기존 이름 유지 — 호출부 안내문이 이 필드를 읽는다
     seqFull,                                           // 1.54: 이 항차가 시퀀스 작업인가(참고용)
-    seqMode,                                           // 1.55: 세 갈래 중 무엇인가 (미정이면 null)
+    seqMode,                                           // 1.55: 세 갈래 중 무엇인가 (4.26-03: 선적 미정은 'fullSeq' · 양하는 null)
     needConfirmSeq: false,                             // 1.55: 여기까지 왔으면 되묻기는 필요 없었다
   };
 }

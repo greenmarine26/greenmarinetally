@@ -2286,16 +2286,16 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   // TallyOne 1.54: 자리 배정 한 번 — 시퀀스 항차에서 되물어야 하면 앱 안 모달로 묻고 다시 부른다.
   //   ⛔ 네이티브 confirm() 은 뜨는 순간 앱이 통째로 멈춘다(실측 30분 정지). 1.53 에서 전부 걷어냈다.
   //   실패(취소 포함)면 null 을 돌려준다 — 부르는 쪽이 선적확인을 찍지 않고 멈춘다.
-  const _seqAsk = async (cn, b, r, t) => {
+  const _seqAsk = async (cn, b, r, t, halfNote = '') => {   // 4.26-03(감사 하-2): halfNote — 앞 컨은 이미 넣었는데 뒤 컨이 취소·실패하면 그 사실을 말한다
     let res = await fbReassignContainerPosition(voyageKey, 'loading', cn, b, r, t, inspector, { actualWork: true });
     if (res && res.ok === false && res.needConfirm === 'seqFull') {
       const ok = await askYN('시퀀스 자리입니다', seqFullConfirmText(res), '그래도 넣는다');
-      if (!ok) return null;
+      if (!ok) { if (halfNote) alert(halfNote); return null; }
       res = await fbReassignContainerPosition(voyageKey, 'loading', cn, b, r, t, inspector,
         { actualWork: true, seqConfirmed: true });
     }
     if (!res || res.ok === false) {
-      alert(`${cn.slice(-4)} 자리를 배정하지 못했습니다 — 선적확인은 찍지 않았습니다.`);
+      alert(`${cn.slice(-4)} 자리를 배정하지 못했습니다 — 선적확인은 찍지 않았습니다.${halfNote ? `\n${halfNote}` : ''}`);
       return null;
     }
     return res;
@@ -2358,7 +2358,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       //   안 받으면 조용한 실패다(선적확인만 찍히고 자리는 그대로).
       const r1 = await _seqAsk(c1.cn, bay, rowP, tierP);
       if (!r1) return;
-      const r2 = await _seqAsk(c2.cn, backPos.bay, backPos.row, backPos.tier);
+      const r2 = await _seqAsk(c2.cn, backPos.bay, backPos.row, backPos.tier,
+        `앞 컨 ${c1.cn.slice(-4)} 은(는) ${parseInt(bay, 10)}-${rowP}-${tierP} 에 넣었습니다.\n뒤 컨 ${c2.cn.slice(-4)} 은(는) 넣지 않았고 선적확인은 두 대 모두 찍지 않았습니다.\n뒤 컨 자리를 다시 정하거나, 앞 컨을 조회 → 큰 카드 «📍 위치 지정» 으로 되돌리세요.`);
       if (!r2) return;
       {   //  3.2-01: 통과분 문지기
         const _tr = [c1, c2].filter(c => !canCompleteContainer(c, 'loading'));

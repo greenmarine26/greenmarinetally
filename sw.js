@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.26-02';
-const NOTE = '4.26-02 순서가 세 번 연속 다르면 말없이 수동으로 넘기지 않고 묻습니다. 보류 줄은 이 장과 다른 장을 나누고 실린 컨은 저절로 빠집니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.26-03';
+const NOTE = '4.26-03 선적 시작 때 풀 컨테이너 시퀀스 작업입니까 묻는 화면을 없앴습니다. 기본은 전체 시퀀스로 보고 풀이 끼어 남의 계획 칸에 들어갈 때 묻습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

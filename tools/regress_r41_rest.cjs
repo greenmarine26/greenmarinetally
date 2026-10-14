@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
-  head('R41 작업 화면 나머지 수리 — 수정 3연속은 묻는다 · 보류 줄 이 장/다른 장 · 실린 컨 보류 빠짐 · 묶음 이름 고정 · 베이매트릭스에 있는 칸 · 시퀀스 방침 바꿀 때 묻기 (4.26-02)',
+  head('R41 작업 화면 나머지 수리 — 수정 3연속은 묻는다 · 보류 줄 이 장/다른 장 · 실린 컨 보류 빠짐 · 묶음 이름 고정 · 베이매트릭스에 있는 칸 · 시퀀스 질문 카드 없음·전체 시퀀스 기본·풀↔엠티 경고 (4.26-02 · 4.26-03)',
     '모의 작업장 1차 수리 목록 5·6·14·16·17·18 · 검수사 2026-10-13 00:53 «전부 클로드 안대로 수정하고 배포»');
   const { JSDOM } = require(path.join(ROOT, 'node_modules/jsdom'));
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -31,12 +31,14 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     `import React from "${ROOT}/node_modules/react/index.js";`,
     `import { createRoot } from "${ROOT}/node_modules/react-dom/client.js";`,
     `import VoyagePage from "${ROOT}/src/pages/VoyagePage.jsx";`,
-    `import { activeHeldOf, bayDictSlotOk, unknownSlotAskOf } from "${ROOT}/src/utils.js";`,
+    `import { activeHeldOf, bayDictSlotOk, unknownSlotAskOf, seqFullConfirmText } from "${ROOT}/src/utils.js";`,
+    `import { fbReassignContainerPosition } from "${ROOT}/src/firebase.js";`,
+    `import { gradeSwap } from "${ROOT}/src/swapGrade.js";`,
     `import { buildBayPagesFromSummary } from "${ROOT}/src/cargoPlanCore.js";`,
     `import { buildGangShift } from "${ROOT}/src/chiefAnswers.js";`,
     `let root = null; const el = (v, key, mode) => React.createElement(VoyagePage, { voyageKey: key, voyage: v, inspector: '연막', inspectors: [], portMisData: {}, pilotForecast: {}, onGoHome() {}, onModeChange() {}, initModeOverride: mode });`,
     `window.__R41go = (json, key, mode) => { root = createRoot(document.getElementById('root')); root.render(el(JSON.parse(json), key, mode)); };`,
-    `window.__R41fn = { activeHeldOf, bayDictSlotOk, unknownSlotAskOf, buildGangShift, buildBayPagesFromSummary };`,
+    `window.__R41fn = { activeHeldOf, bayDictSlotOk, unknownSlotAskOf, buildGangShift, buildBayPagesFromSummary, seqFullConfirmText, fbReassignContainerPosition, gradeSwap };`,
   ].join('\n'));
   execSync(`npx esbuild "${eF}" --bundle --loader:.jsx=jsx --loader:.js=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url --alias:firebase/app=${stub} --alias:firebase/database=${stub} --alias:firebase/storage=${stub} --alias:pdfjs-dist/build/pdf=${ROOT}/tools/stub_pdfjs.js --define:process.env.NODE_ENV='"development"' --log-level=error --outfile="${oF}"`, { cwd: ROOT, stdio: 'pipe' });
   const vSrc = fs.readFileSync(oF, 'utf8');
@@ -287,29 +289,161 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     S.close();
   }
 
-  //  ── ⑤ 시퀀스 방침 — 바꿀 때만 묻는다(모의 작업 MCAP 2호기 — 작은 칩을 누구나 눌러 배 전체 방침 변경)
+  //  ── ⑤ 4.26-03 — 「풀 컨테이너 시퀀스 작업입니까?」 카드·칩이 없다 · 답이 없는 항차는 전체 시퀀스 · 풀↔엠티·포트 다름은 먼저 경고
+  //    검수사 2026-10-14 16:04 «이화면을 없애주세요 기본은 전체 시퀀스로 갑니다 … 일일이 지정하기 힘듭니다» · 16:11 «다만 풀이 풀끼리만 바뀌는거지 엠티와 풀이 서로 바뀌지는 않습니다.
+  //    포트도 바뀌지 않습니다. 되도록이면 같은 베이안에서만 바꿉니다.» · 16:14 «엠티는 전베이에서 바뀔수도 있지만 풀은 같은 베이안에서 바뀌고 했던 작업입니다»(어제 MCAP 641S).
+  //    기대값은 검수사 말에서 — 엠티→엠티 칸은 안 묻는다(2.95 그대로) · 풀이 끼어 남의 계획 칸에 가면 묻는다 · 풀↔엠티·포트 다름은 물음 맨 위 경고 · 이미 답이 있는 항차는 그 답대로 · 양하는 그대로.
   {
-    const v = baseVoy();
-    v.info.seqMode = 'fullOnlySeq'; v.info.seqFull = true; v.info.seqFullBy = '김성일'; v.info.seqFullAt = new Date(2026, 9, 12, 14, 5).getTime();
-    const S = await open(v, 'loading');
-    await S.tab(/작업 시작|리스트|조회/);
-    const chip = await S.until(() => S.btn(/풀만 시퀀스 \(엠티는 액츄얼\)/));
-    const chipTxt = chip ? S.txt(chip) : '';
-    await S.click(chip, 300);
-    await S.click(await S.until(() => S.btn(/^↔ 풀 액츄얼 \(풀\+엠티\)/)), 300);
-    const dd = S.dialog();
-    const ddTxt = dd ? S.txt(dd) : '';
-    const xBtn = dd ? [...dd.querySelectorAll('button')].find((b) => !S.txt(b)) : null;
-    await S.click(xBtn, 300);
-    const afterX = S.mem().info.seqMode;
-    await S.click(await S.until(() => S.btn(/^↔ 풀 액츄얼 \(풀\+엠티\)/)), 300);
-    const dd2 = S.dialog();
-    await S.click(dd2 ? S.btn(/^바꾼다$/, dd2) : null, 400);
-    const after = S.mem().info;
-    ok(`⑤ 칩 «${chipTxt}» → [풀 액츄얼] → «배 전체 방침을 바꿉니다»(${ddTxt.includes('김성일 14:05 정함')}) · ✕ → 그대로(${afterX}) · [바꾼다] → ${after.seqMode}(정한 사람 ${after.seqFullBy})`,
-      /김성일 14:05 정함 · 눌러서 바꾸기/.test(chipTxt) && /배 전체 방침을 바꿉니다/.test(ddTxt) && ddTxt.includes('김성일 14:05 정함') && afterX === 'fullOnlySeq' && after.seqMode === 'allActual' && after.seqFullBy === '연막' && !S.errs.length,
-      JSON.stringify({ chipTxt, ddTxt: ddTxt.slice(0, 160), afterX, seqMode: after.seqMode, by: after.seqFullBy, errs: S.errs.slice(0, 3) }));
+    const noAns = () => { const v = baseVoy(); for (const k of Object.keys(v.info)) if (/^seq/.test(k)) delete v.info[k]; return v; };
+    //  ⑤-1 화면 — 답이 없는 항차·답이 있는 항차 둘 다 선적 화면 어디에도 카드·칩이 없다 · 앱이 seqMode 를 쓰지 않는다
+    const seen = [];
+    for (const [nm, mk] of [['답 없음', noAns], ['풀만 시퀀스 저장', () => { const v = baseVoy(); v.info.seqMode = 'fullOnlySeq'; v.info.seqFull = true; v.info.seqFullBy = '김성일'; return v; }]]) {
+      const S = await open(mk(), 'loading');
+      const hits = [];
+      const look = (w) => { const t = S.d.body.textContent; if (/풀 컨테이너 시퀀스 작업입니까/.test(t)) hits.push(w + ':카드'); if ([...S.d.querySelectorAll('button')].some((b) => /풀만 시퀀스|풀 시퀀스 \(풀\+엠티\)|풀 액츄얼 \(풀\+엠티\)|눌러서 바꾸기/.test(S.txt(b)))) hits.push(w + ':칩'); };
+      look('첫 화면');
+      for (const re of [/작업 시작/, /리스트/]) { await S.tab(re); look(String(re)); }
+      seen.push({ nm, hits, seqMode: S.mem().info.seqMode === undefined ? '없음' : S.mem().info.seqMode, errs: S.errs.slice(0, 2) });
+      S.close();
+    }
+    ok(`⑤-1 선적 화면 — 카드·칩 ${seen.map((x) => `${x.nm} ${x.hits.length ? x.hits.join(',') : '없음'}`).join(' · ')} · 저장된 방침 ${seen.map((x) => x.seqMode).join('·')}(앱이 쓰지 않음)`,
+      seen.every((x) => !x.hits.length && !x.errs.length) && seen[0].seqMode === '없음' && seen[1].seqMode === 'fullOnlySeq', JSON.stringify(seen));
+
+    //  ⑤-2 자리 게이트(실소스 firebase.fbReassignContainerPosition · 메모리 스텁) — 고를 컨은 이 파일이 원자료에서: 같은 베이 풀 둘(같은 포트) · 같은 베이 일반 엠티 둘 · 포트 다른 풀 하나
+    const S = await open(noAns(), 'loading');
+    const vk = FX.key;
+    const plain = (c) => c.fe === 'E' && !c.rf && !c.dg && !c.fr && !c.oog && !c.tk && !String(c.dgc || '').trim() && !/^[249LM][0-9A-Z][RHPUTSB]/.test(String(c.iso || ''));   // 일반 엠티(특수 아님 — 앱 내부 표식 450E 등 포함)
+    const byBay = (b) => Object.values(L).filter((c) => parseInt(c.bay, 10) === b && isDeck(c)).sort((x, y) => (x.row + x.tier).localeCompare(y.row + y.tier));
+    const fulls6 = byBay(6).filter((c) => c.fe === 'F' && c.pod === 'CNYNT');
+    const emps6 = byBay(6).filter((c) => plain(c) && c.pod === 'CNYNT');
+    const [fA, fB] = fulls6, [eA, eB] = emps6;
+    const fX = Object.values(L).find((c) => c.fe === 'F' && c.pod !== 'CNYNT' && !c.rf && byBay(parseInt(c.bay, 10)).some((o) => o.fe === 'F' && o.pod === 'CNYNT'));
+    const fXo = fX ? byBay(parseInt(fX.bay, 10)).find((o) => o.fe === 'F' && o.pod === 'CNYNT') : null;
+    const D0 = Object.values(E).sort((x, y) => x.cn.localeCompare(y.cn));
+    const [dA, dB] = [D0[0], D0.find((c) => posOf(c) !== posOf(D0[0]))];
+    const reset = (info) => { const v = info ? (() => { const x = baseVoy(); for (const k of Object.keys(x.info)) if (/^seq/.test(k)) delete x.info[k]; Object.assign(x.info, info); return x; })() : noAns(); S.W.__memdb.voyages[vk] = clone(v); };
+    const mv = async (mode, a, to, opts) => { const r = await S.fn.fbReassignContainerPosition(vk, mode, a.cn, String(parseInt(to.bay, 10)), to.row, to.tier, '연막', opts); return r || {}; };
+    const res = {};
+    reset(); res.ff = await mv('loading', fA, fB);
+    const ffTxt = S.fn.seqFullConfirmText(res.ff);
+    reset(); res.fe = await mv('loading', fA, eB);
+    const feTxt = S.fn.seqFullConfirmText(res.fe);
+    reset(); res.ee = await mv('loading', eA, eB);
+    const eeRecB = ((S.mem().loading.records || {})[eB.cn]) || {};
+    reset(); res.ef = await mv('loading', eA, fB);
+    const efTxt = S.fn.seqFullConfirmText(res.ef);
+    reset(); res.px = fX && fXo ? await mv('loading', fX, fXo) : {};
+    const pxTxt = S.fn.seqFullConfirmText(res.px);
+    reset(); res.ffOk = await mv('loading', fA, fB, { seqConfirmed: true });
+    const ffRecA = ((S.mem().loading.records || {})[fA.cn]) || {};
+    reset({ seqMode: 'allActual', seqFull: false }); res.aa = await mv('loading', fA, fB);
+    reset({ seqMode: 'fullOnlySeq', seqFull: true }); res.foE = await mv('loading', fA, eB);
+    reset({ seqMode: 'fullOnlySeq', seqFull: true }); res.foF = await mv('loading', fA, fB);
+    reset({ seqFull: true }); res.old = await mv('loading', fA, fB);   // 옛 항차(seqFull 만) — 풀만 시퀀스
+    reset(); res.dis = await mv('discharge', dA, dB);
+    //  선적 목록에 없는 컨(풀·엠티를 모름 — 시프팅 재선적처럼 선적 자료에 없는 컨 · 여기선 양하 컨 번호를 빌림): 풀 주인 칸은 묻되 «⚠ 풀과 엠티» 를 지어내지 않고, 엠티 주인 칸은 안 묻는다(감사 하-1)
+    const uX = { cn: dA.cn };
+    reset(); res.uF = await mv('loading', uX, fB);
+    const uFTxt = S.fn.seqFullConfirmText(res.uF);
+    reset(); res.uE = await mv('loading', uX, eB);
+    const q = (r) => r.ok === false && r.needConfirm === 'seqFull';
+    const own4 = (c) => c.cn.slice(-4);
+    const pos2 = (c) => `${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}`;
+    const noWarn = (t) => !/⚠/.test(t);
+    ok(`⑤-2 답 없는 항차 = 전체 시퀀스 — 풀 ${own4(fA)}→풀 ${own4(fB)} 칸 ${q(res.ff) ? '묻는다' : '안 묻는다'}(«주인 ${own4(fB)}(풀)» ${ffTxt.includes(`${pos2(fB)} 주인 ${own4(fB)}(풀)`)} · 경고 없음 ${noWarn(ffTxt)}) · [그래도 넣는다] → ${own4(fA)} ${ffRecA.bay ? `${parseInt(ffRecA.bay, 10)}-${ffRecA.row}-${ffRecA.tier}` : '-'} · 엠티 ${own4(eA)}→엠티 ${own4(eB)} 칸 ${q(res.ee) ? '묻는다' : '안 묻는다'}(주인 기록 손 안 댐 ${!eeRecB.bay && eeRecB.bay !== ''}) · 풀→엠티 칸·엠티→풀 칸 «⚠ 풀과 엠티는 서로 바뀌지 않습니다» ${/⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(feTxt)}·${/⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 엠티 · 그 칸 주인 풀/.test(efTxt)} · 포트 다른 풀 ${fX ? own4(fX) : '-'}(${fX && fX.pod})→${fXo ? own4(fXo) : '-'} «⚠ 포트가 다릅니다» ${/⚠ 포트가 다릅니다/.test(pxTxt)}`,
+      q(res.ff) && ffTxt.includes(`${pos2(fB)} 주인 ${own4(fB)}(풀)`) && noWarn(ffTxt) && JSON.stringify(res.ff.seqConflict) === JSON.stringify([fB.cn])
+        && res.ffOk.ok === true && `${parseInt(ffRecA.bay, 10)}-${ffRecA.row}-${ffRecA.tier}` === posOf(fB)
+        && res.ee.ok === true && !res.ee.displaced
+        && q(res.fe) && feTxt.includes(`주인 ${own4(eB)}(엠티)`) && /⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(feTxt) && !/⚠ 포트가 다릅니다/.test(feTxt)
+        && q(res.ef) && /⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 엠티 · 그 칸 주인 풀/.test(efTxt)
+        && !!fX && q(res.px) && pxTxt.includes(`⚠ 포트가 다릅니다 — 이 컨 ${fX.pod} · 그 칸 주인 ${fXo.pod}`) && !/풀과 엠티/.test(pxTxt),
+      JSON.stringify({ fA: fA && fA.cn, fB: fB && fB.cn, eA: eA && eA.cn, eB: eB && eB.cn, fX: fX && fX.cn, fXo: fXo && fXo.cn, ff: res.ff, ee: res.ee, fe: res.fe && res.fe.needConfirm, ef: res.ef && res.ef.needConfirm, px: res.px && res.px.needConfirm, ffOk: res.ffOk.ok, ffRecA, ffTxt, feTxt: feTxt.slice(0, 120) }));
+    ok(`⑤-2b 선적 목록에 없는 컨 ${own4(dA)}(풀·엠티 모름) → 풀 ${own4(fB)} 칸 ${q(res.uF) ? '묻는다' : '안 묻는다'}(«⚠» ${/⚠/.test(uFTxt) ? '붙음' : '없음'} · incomingFull ${res.uF.incomingFull}) · 엠티 ${own4(eB)} 칸 ${q(res.uE) ? '묻는다' : '안 묻는다'}`,
+      q(res.uF) && res.uF.incomingFull === null && uFTxt.includes(`주인 ${own4(fB)}(풀)`) && !/풀과 엠티/.test(uFTxt) && res.uE.ok === true && !q(res.uE),
+      JSON.stringify({ uF: { nc: res.uF.needConfirm, inc: res.uF.incomingFull, conf: res.uF.seqConflictFull }, uE: res.uE.ok, uFTxt: uFTxt.slice(0, 120) }));
+    ok(`⑤-3 답이 저장된 항차는 그 답대로 — 풀 액츄얼: 풀→풀 칸 ${q(res.aa) ? '묻는다' : '안 묻는다'} · 풀만 시퀀스: 풀→엠티 칸 ${q(res.foE) ? '묻는다' : '안 묻는다'} · 풀→풀 칸 ${q(res.foF) ? '묻는다' : '안 묻는다'} · 옛 항차(seqFull 만) 풀→풀 ${q(res.old) ? '묻는다' : '안 묻는다'} · 양하 ${own4(dA)}→${own4(dB)} 칸 ${q(res.dis) ? '묻는다' : '안 묻는다'}(종전 그대로)`,
+      res.aa.ok === true && res.foE.ok === true && q(res.foF) && q(res.old) && res.dis.ok === true && !q(res.dis) && res.dis.seqMode === null,
+      JSON.stringify({ aa: res.aa.ok, foE: res.foE.ok, foF: res.foF.needConfirm, old: res.old.needConfirm, dis: { ok: res.dis.ok, seqMode: res.dis.seqMode } }));
+    //  ⑤-4 바꿔도 되는지 등급(swapGrade 한 벌 — 위치 지정 창·번호 수정 창) — 풀↔엠티는 강한 확인(종전 같은 베이면 «간단») · 풀↔풀 같은 베이 간단 · 엠티↔엠티 같은 포트 통과
+    const g = (a, b) => S.fn.gradeSwap(a, b, {});
+    const gFE = g(fA, eB), gEF = g(eA, fB), gFF = g(fA, fB), gEE = g(eA, eB);
+    ok(`⑤-4 등급 — 풀→엠티 자리 ${gFE.level}(«${gFE.reason}») · 엠티→풀 자리 ${gEF.level} · 풀↔풀 같은 베이 ${gFF.level} · 엠티↔엠티 같은 포트 ${gEE.level}`,
+      gFE.level === 'strong' && /^풀과 엠티는 서로 바뀌지 않습니다 — 온 컨 풀 · 이 자리 엠티$/.test(gFE.reason) && gEF.level === 'strong' && /온 컨 엠티 · 이 자리 풀$/.test(gEF.reason) && gFF.level === 'mild' && gEE.level === 'ok',
+      JSON.stringify({ gFE, gEF, gFF: gFF.level, gEE: gEE.level }));
     S.close();
+
+    //  ⑤-5 화면 — 답 없는 항차 선적 가이드: 풀 카드 [📍 이 컨을 다른 칸에 실음] → 직접 입력: 같은 베이 다른 풀의 계획 칸 → «시퀀스 자리입니다»(주인 번호·풀) → [취소] → 쓰기 0
+    const S5 = await open(noAns(), 'loading');
+    await S5.startGuide();
+    let cn5 = '';
+    //  카드 컨이 풀이고 같은 베이에 같은 포트 풀(계획 주인)이 하나 더 있는 묶음 — 원자료로 가린다
+    //  (이 사본은 첫 풀 카드가 B10 SPSU6018983 CNYYY · 같은 베이 풀은 CNYNT 뿐 — 그러면 포트 경고와 위치 창 강한 확인(목적지가 다릅니다)까지 같이 본다)
+    const mate = (cn) => { const m = L[cn]; if (!m || m.fe !== 'F') return null; const fs = byBay(parseInt(m.bay, 10)).filter((o) => o.cn !== cn && o.fe === 'F' && !o.rf); return fs.find((o) => o.pod === m.pod) || fs[0] || null; };
+    for (const [center, re] of [[6, /^🔵 데크 [1-9]/], [10, /^🔵 데크 [1-9]/], [18, /^🔵 데크 [1-9]/]]) {
+      await S5.pick(center, re);
+      if (S5.btn(/^📍 이 컨을 다른 칸에 실음/)) { const c0 = S5.cards()[0]; cn5 = c0 ? c0.getAttribute('data-gw-cn') : ''; if (cn5 && mate(cn5)) break; cn5 = ''; }
+      await S5.click(S5.btn(/^B\d+ 변경$/), 300);
+    }
+    const own5 = cn5 ? mate(cn5) : null;
+    let seqTxt5 = '', strong5 = false;
+    if (cn5 && own5) {
+      await S5.click(await S5.until(() => S5.btn(/^📍 이 컨을 다른 칸에 실음/)), 400);
+      await S5.click(await S5.until(() => S5.btn(/직접 입력 \/ 자리 비우기/)), 300);
+      const ins = () => [...S5.d.querySelectorAll('input')];
+      const bIn = ins().find((x) => x.getAttribute('placeholder') === '14'), rIn = ins().find((x) => x.getAttribute('placeholder') === '00'), tIn = ins().find((x) => x.getAttribute('placeholder') === '02');
+      if (bIn) await S5.type(bIn, String(parseInt(own5.bay, 10))); if (rIn) await S5.type(rIn, own5.row); if (tIn) await S5.type(tIn, own5.tier);
+      await S5.click(S5.btn(/^다음 →$/), 300);
+      await S5.click(await S5.until(() => S5.btn(/^⚠? ?변경 확정$/)), 500);
+      strong5 = /자리를 바꿉니다/.test(S5.d.body.textContent);
+      if (strong5) await S5.click(S5.btn(/^바꾸기$/), 800);
+      const dd = await S5.until(() => { const x = S5.dialog(); return x && /시퀀스 자리입니다/.test(x.textContent) ? x : null; }, 3000);
+      seqTxt5 = dd ? S5.txt(dd) : '';
+      await S5.click(dd ? S5.btn(/^취소$/, dd) : null, 400);
+    }
+    const L5 = S5.mem().loading, r5 = (L5.records || {})[cn5] || {}, o5 = (L5.records || {})[own5 ? own5.cn : ''] || {};
+    const podDiff5 = !!own5 && L[cn5].pod !== own5.pod;   // 원자료 — 포트가 다르면 위치 창 강한 확인(목적지가 다릅니다) + 물음 맨 위 «⚠ 포트가 다릅니다»
+    const podLine5 = own5 ? `⚠ 포트가 다릅니다 — 이 컨 ${L[cn5].pod} · 그 칸 주인 ${own5.pod}` : '';
+    ok(`⑤-5 선적 가이드 풀 ${cn5}(${cn5 && L[cn5].pod}) [📍] 직접 입력 ${own5 ? posOf(own5) : '-'}(같은 베이 풀 ${own5 ? `${own5.cn} ${own5.pod}` : '-'} 계획 칸) → 강한 확인 ${strong5 ? '뜸 → [바꾸기]' : '안 뜸'}(포트 다름 ${podDiff5}) · «시퀀스 자리입니다» ${seqTxt5 ? '뜸' : '안 뜸'}(주인 ${own5 ? own5.cn.slice(-4) : '-'}(풀) ${!!own5 && seqTxt5.includes(`주인 ${own5.cn.slice(-4)}(풀)`)} · 포트 경고 ${seqTxt5.includes(podLine5)}) → [취소] → 쓰기 ${Object.keys(r5).length + Object.keys(o5).length + Object.keys(L5.completed || {}).length}`,
+      !!cn5 && !!own5 && strong5 === podDiff5 && !!seqTxt5 && seqTxt5.includes(`주인 ${own5.cn.slice(-4)}(풀)`) && (podDiff5 ? seqTxt5.includes(podLine5) : !/⚠/.test(seqTxt5)) && !/풀과 엠티/.test(seqTxt5)
+        && !r5.bay && !r5.bay_actual && !Object.keys(o5).length && !Object.keys(L5.completed || {}).length && !S5.errs.length,
+      JSON.stringify({ cn5, own5: own5 && own5.cn, strong5, seqTxt5: seqTxt5.slice(0, 200), r5, o5, errs: S5.errs.slice(0, 3) }));
+    S5.close();
+
+    //  ⑤-6 화면 — 엠티 카드 «자리 확인»(이 자리에 실제로 실은 컨테이너)에 같은 베이 풀 번호 → 두 컨을 맞바꾸지 않고(감사 하-5 — 종전 말없이 맞바꿈) «시퀀스 자리입니다»(⚠ 풀과 엠티) → [취소] → 쓰기 0
+    const S6 = await open(noAns(), 'loading');
+    await S6.startGuide();
+    await S6.pick(6, /^🔵 데크 [1-9]/);
+    const c6 = (S6.cards()[0] || { getAttribute: () => '' }).getAttribute('data-gw-cn');
+    const slotIn = S6.d.querySelector('input[placeholder="끝 4자리"]');
+    const full6 = fulls6.find((x) => x.cn !== c6);
+    if (slotIn && full6) {
+      await S6.type(slotIn, full6.cn.slice(-4));
+      await S6.click(await S6.until(() => [...S6.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(full6.cn))), 600);
+    }
+    const dd6 = await S6.until(() => { const x = S6.dialog(); return x && /시퀀스 자리입니다/.test(x.textContent) ? x : null; }, 3000);
+    const t6 = dd6 ? S6.txt(dd6) : '';
+    await S6.click(dd6 ? S6.btn(/^취소$/, dd6) : null, 400);
+    const L6 = S6.mem().loading, w6 = Object.keys(L6.records || {}).length + Object.keys(L6.completed || {}).length;
+    ok(`⑤-6 엠티 카드 ${c6}(${(L[c6] || {}).fe}) «자리 확인» 에 풀 ${full6 ? full6.cn : '-'} → 맞바꾸지 않고 «시퀀스 자리입니다» ${t6 ? '뜸' : '안 뜸'}(«⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티» ${/⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(t6)}) → [취소] → 쓰기 ${w6}`,
+      (L[c6] || {}).fe === 'E' && !!slotIn && !!full6 && /⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(t6) && t6.includes(`주인 ${c6.slice(-4)}(엠티)`) && w6 === 0 && !S6.errs.length,
+      JSON.stringify({ c6, full6: full6 && full6.cn, slotIn: !!slotIn, t6: t6.slice(0, 200), w6, errs: S6.errs.slice(0, 3) }));
+    //  ⑤-6b 같은 길에서 [그래도 넣는다] — 풀이 그 칸에 들어가 선적확인 · 이동 사유는 «actual»(실제 실린 자리 — 2차 시뮬 하-1, 종전 맞바꿈과 같은 사유) · 계획 엠티는 맞바꿈 없이 «자리 없음»
+    const slotIn2 = S6.d.querySelector('input[placeholder="끝 4자리"]');
+    if (slotIn2 && full6) {
+      if (slotIn2.value !== full6.cn.slice(-4)) await S6.type(slotIn2, full6.cn.slice(-4));
+      await S6.click(await S6.until(() => [...S6.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(full6.cn))), 600);
+    }
+    const dd6b = await S6.until(() => { const x = S6.dialog(); return x && /시퀀스 자리입니다/.test(x.textContent) ? x : null; }, 3000);
+    await S6.click(dd6b ? S6.btn(/^그래도 넣는다$/, dd6b) : null, 900);
+    await S6.until(() => !!(S6.mem().loading.completed || {})[full6 ? full6.cn : ''], 3000);
+    const L6b = S6.mem().loading, rf6 = (L6b.records || {})[full6 ? full6.cn : ''] || {}, re6 = (L6b.records || {})[c6] || {};
+    //  사유는 재배정 줄(그 칸으로 간 줄 중 선적확인 «loaded» 가 아닌 것)에서 본다 — 선적확인은 따로 «loaded» 줄을 남긴다
+    const mv6 = (rf6.moves || []).find((m) => m.to === `${String(parseInt((L[c6] || {}).bay, 10)).padStart(2, '0')}-${(L[c6] || {}).row}-${(L[c6] || {}).tier}` && m.why !== 'loaded') || {}, mvE = (re6.moves || []).slice(-1)[0] || {};
+    const pos6 = posOf(L[c6] || {});
+    ok(`⑤-6b [그래도 넣는다] → ${full6 ? full6.cn.slice(-4) : '-'} 선적확인 ${!!(L6b.completed || {})[full6 ? full6.cn : '']} · 자리 ${rf6.bay ? `${parseInt(rf6.bay, 10)}-${rf6.row}-${rf6.tier}` : '-'}(= 칸 ${pos6}) · 사유 «${mv6.why}» · 계획 엠티 ${c6.slice(-4)} → «${mvE.to}»(사유 ${mvE.why}) · 완료 ${!!(L6b.completed || {})[c6]}`,
+      !!dd6b && !!(L6b.completed || {})[full6.cn] && `${parseInt(rf6.bay, 10)}-${rf6.row}-${rf6.tier}` === pos6 && mv6.why === 'actual' && re6.bay === '' && mvE.to === '자리 없음' && mvE.why === 'displaced' && !(L6b.completed || {})[c6] && !S6.errs.length,
+      JSON.stringify({ rf6: { bay: rf6.bay, row: rf6.row, tier: rf6.tier, mv6, moves: rf6.moves }, re6: { bay: re6.bay, mvE }, errs: S6.errs.slice(0, 3) }));
+    S6.close();
   }
 
   //  ── ⑥ 시프팅 행 베이 꼴 — EDI 행과 같이 «6» (종전 «006» 이 카드·물음에 «006-11-84» 로 · 모의 작업 MCAP 2·3호기 «002-04-88»·«034-07-88»)

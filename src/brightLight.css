@@ -490,7 +490,6 @@
 :root[data-bright="4"] .from-violet-900\/40{--tw-gradient-from:rgb(237 233 254 / 0.40) var(--tw-gradient-from-position);--tw-gradient-to:rgb(237 233 254 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}
 :root[data-bright="4"] .from-violet-900\/50{--tw-gradient-from:rgb(237 233 254 / 0.50) var(--tw-gradient-from-position);--tw-gradient-to:rgb(237 233 254 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}
 :root[data-bright="4"] .from-violet-950\/60{--tw-gradient-from:rgb(245 243 255 / 0.60) var(--tw-gradient-from-position);--tw-gradient-to:rgb(245 243 255 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}
-:root[data-bright="4"] .ring-amber-300{--tw-ring-color:rgb(180 83 9)}
 :root[data-bright="4"] .ring-amber-400{--tw-ring-color:rgb(217 119 6)}
 :root[data-bright="4"] .ring-cyan-500{--tw-ring-color:rgb(6 182 212)}
 :root[data-bright="4"] .ring-emerald-400{--tw-ring-color:rgb(5 150 105)}

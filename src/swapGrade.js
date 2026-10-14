@@ -2,6 +2,7 @@
 //
 // 현장 규칙 (사용자 확정 2026-08-03):
 //   · 엠티는 **포트만 같으면** 자리를 바꿔도 된다.  (지침 Ⅱ: "같은 포트 엠티끼리 베이 교환 가능")
+//   · 4.26-03(검수사 2026-10-14): **풀과 엠티는 서로 바뀌지 않는다** — 섞이면 강한 확인.
 //   · 풀은 **같은 베이 안**이면 간단한 알림, **다른 베이**면 진짜 바꿀지 강하게 확인한다.
 //   · 트윈 짝꿍 베이(19↔21)와 사이 짝수 베이(20)는 **한 슬롯이라 같은 베이로 본다** — 단 포트가 같을 때.
 //   · 포트가 다르면 풀·엠티 가릴 것 없이 강한 확인이다(엉뚱한 항에 실리면 되돌릴 수 없다).
@@ -120,6 +121,14 @@ export function gradeSwap(incoming, planned, bayPairs = {}) {
   if (!podSame) {
     return { level: 'strong', podSame, sameBay, empty,
              reason: `목적지가 다릅니다 — 온 컨 ${podOf(incoming)} · 이 자리 ${podOf(planned)}` };
+  }
+  //  4.26-03: 풀과 엠티는 서로 바뀌지 않는다 — 검수사 2026-10-14 «다만 풀이 풀끼리만 바뀌는거지 엠티와 풀이 서로 바뀌지는 않습니다. 포트도 바뀌지 않습니다.
+  //    되도록이면 같은 베이안에서만 바꿉니다.» · «엠티는 전베이에서 바뀔수도 있지만 풀은 같은 베이안에서 바뀌고 했던 작업입니다»(어제 MCAP 641S).
+  //    종전에는 같은 베이·같은 포트면 풀↔엠티도 «같은 베이 안에서 바뀝니다»(간단)로 넘어갔다. 풀·엠티를 둘 다 알 때만 본다.
+  const feK = (c) => String(c?.fe || '').trim().toUpperCase();
+  if (feK(incoming) && feK(planned) && isEmptyCon(incoming) !== isEmptyCon(planned)) {
+    return { level: 'strong', podSame, sameBay, empty, feDiff: true,
+             reason: `풀과 엠티는 서로 바뀌지 않습니다 — 온 컨 ${isEmptyCon(incoming) ? '엠티' : '풀'} · 이 자리 ${isEmptyCon(planned) ? '엠티' : '풀'}` };
   }
   if (empty) {
     return { level: 'ok', podSame, sameBay, empty,
