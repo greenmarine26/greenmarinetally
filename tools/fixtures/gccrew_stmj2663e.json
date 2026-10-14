@@ -1,0 +1,88 @@
+{
+ "_src": "보관소 GET 읽기 사본 2026-10-14 12:52 KST — voyages/STMJ_2663E/info (SITC MOJI · PCTC 7B · 본선현황 termStat 11:52 · 호기 등록 10-14 주간 2호기 박진우 3호기 이종현). 양하·선적 completed·termWork 노드 없음(앱 완료 0 · PCTC 컨별 실적 없음).",
+ "key": "STMJ_2663E",
+ "info": {
+  "ascHdr": "$600",
+  "ascName": "3 STMJ 2664W PTK PRE.ASC",
+  "autoRegistered": true,
+  "autoStatus": "confirmed",
+  "berth": "동부두 7번선석",
+  "berthShift": 0,
+  "craneCrew": {
+   "10-14 주간": {
+    "2호기": {
+     "at": 1791945794852,
+     "name": "박진우"
+    },
+    "3호기": {
+     "at": 1791945794852,
+     "name": "이종현"
+    }
+   }
+  },
+  "createdAt": 1791251599236,
+  "createdBy": "예정등록(수집기)",
+  "dataFixedAt": 1791913105402,
+  "lane": "PTK",
+  "mode": "discharge",
+  "mrnIn": "26SCLKPT42I",
+  "pier": "PCTC",
+  "planDate": "2026-10-14 10:00 ~ 2026-10-15 14:00",
+  "planDis": 519,
+  "planLod": 522,
+  "planSrc": "plan",
+  "termStat": {
+   "at": 1791946376676,
+   "atw": "2026-10-14 10:05",
+   "berth": "7B",
+   "dis": {
+    "done": 46,
+    "rest": 473,
+    "tot": 519
+   },
+   "etb": "2026-10-14 10:00",
+   "etd": "2026-10-15 14:00",
+   "gc": {
+    "101": {
+     "disRest": 0,
+     "disTot": 0,
+     "lodRest": 0,
+     "lodTot": 0
+    },
+    "102": {
+     "disRest": 260,
+     "disTot": 22,
+     "lodRest": 248,
+     "lodTot": 0
+    },
+    "103": {
+     "disRest": 213,
+     "disTot": 24,
+     "lodRest": 274,
+     "lodTot": 0
+    },
+    "104": {
+     "disRest": 0,
+     "disTot": 0,
+     "lodRest": 0,
+     "lodTot": 0
+    }
+   },
+   "lod": {
+    "done": 0,
+    "rest": 522,
+    "tot": 522
+   },
+   "src": "PCTC"
+  },
+  "termVoy": "STMJ-0012",
+  "terminalStatus": "working",
+  "voy": "2663E",
+  "voy_d": "2663E",
+  "voy_l": "2664W",
+  "vsl": "STMJ",
+  "vslFull": "SITC MOJI",
+  "workEndAt": "",
+  "workStartAt": "2026-10-14 10:05"
+ }
+}

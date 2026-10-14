@@ -2975,6 +2975,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   //    항차 화면(VoyagePage 실소스)을 jsdom 에서 검수원 손 그대로 누른다(양하 OBWH 2763E · 선적 TNJP 26367W). 본문은 tools/regress_r39_card.cjs(단독 실행도 된다).
   await require('./regress_r39_card.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
+  // ── R40 ─────────────────────────────────────────────────────────────
+  //  4.26-01 — PCTC 배 미르 «호기별 검수원·작업량» 은 컨별 실적이 없으면 본선현황 GC별 완료(합이 본선현황 완료와 맞을 때만)로 답한다(STMJ 2663E). 본문은 tools/regress_r40_gccrew.cjs(단독 실행도 된다).
+  await require('./regress_r40_gccrew.cjs')({ ROOT, TMP, ok, head, fx });
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

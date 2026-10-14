@@ -2818,6 +2818,21 @@ export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
 const _hm = (ms) => { if (!ms || !isFinite(ms)) return ''; const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 //  날이 바뀌면 날짜를 붙인다 — «23:28~23:10» 처럼 끝이 시작보다 앞으로 보이던 것(감사 실측 SWTD)
 const _hmRange = (a, b) => { if (!a || !b) return ''; const da = new Date(a), db = new Date(b); const same = da.getMonth() === db.getMonth() && da.getDate() === db.getDate(); const md = (d) => `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} `; return same ? `${_hm(a)}~${_hm(b)}` : `${md(da)}${_hm(a)}~${md(db)}${_hm(b)}`; };
+//  ★ 4.26-01 (감사 하-1): 터미널 본선현황 자료 시각은 한국 시각으로 — 오늘이면 HH:MM, 다른 날이면 MM-DD HH:MM(수석 보드 본선현황 표의 받은 시각 글자와 같은 꼴 · 폰 지역 설정과 무관).
+const _kstAt = (ms, now) => {
+  if (!ms || !isFinite(ms)) return '';
+  const k = (t) => new Date(Number(t) + 9 * 3600000), p2 = (x) => String(x).padStart(2, '0');
+  const a = k(ms), b = k(now || Date.now());
+  const hm = `${p2(a.getUTCHours())}:${p2(a.getUTCMinutes())}`;
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate() ? hm : `${p2(a.getUTCMonth() + 1)}-${p2(a.getUTCDate())} ${hm}`;
+};
+//  ★ 4.26-01 (감사 중-1): 앱 완료가 있는 PCTC 배 — 호기별 답은 종전대로 앱 기록이고, 터미널 본선현황 GC 합계를 한 줄로 덧붙인다(crewWorkStats.gcRef — 합이 본선현황과 맞을 때만).
+const _gcRefLine = (g, now, only = 0) => {
+  if (!g || !g.byNo) return '';
+  const parts = Object.keys(g.byNo).map(Number).sort((a, b) => a - b).filter((no) => !only || no === only)
+    .map((no) => { const v = g.byNo[no]; return `${no}호기 ${v.dis + v.lod}대${v.dis && v.lod ? `(양하 ${v.dis}·선적 ${v.lod})` : ''}`; });
+  return parts.length ? `\n(터미널 본선현황 GC 합계 ${_kstAt(g.at, now)} — ${parts.join(' · ')} · 앱 입력 대수와 다를 수 있어요)` : '';
+};
 const _posKo = (pos) => { const p = parseCatosPos(pos); return p ? `${p.bay}번 베이 ${p.row}열 ${p.tier}단` : ''; };
 export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   if (!voyage || !cq) return null;
@@ -2837,7 +2852,7 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   //  거르는 중이면 조 표시가 없는 기록(앱으로 직접 찍은 완료)은 그 날에 넣을 수 없다 — 조용히 빼지 않고 몇 대인지 밝힌다.
   const _unkN = (pred) => (keyOk ? st.rows.filter((r) => !r.key && pred(r)).reduce((a, r) => a + (r.n || 0), 0) : 0);
   const _unkTxt = (n) => (n > 0 ? `\n(조 표시가 없는 앱 완료 기록 ${n}대는 이 조에 넣지 못했어요)` : '');
-  if (keyOk && st.qcOnly && cq.kind !== 'who') return `${ship} ${keyLbl} — 동방 배는 QC 합계라 날짜·조별로는 못 나눠요. 날짜를 빼고 물으면 합계로 답해요.`;
+  if (keyOk && st.qcOnly && cq.kind !== 'who') return `${ship} ${keyLbl} — ${st.aggSrc === 'gc' ? '이 배는 터미널 본선현황 GC 합계라' : '동방 배는 QC 합계라'} 날짜·조별로는 못 나눠요. 날짜를 빼고 물으면 합계로 답해요.`;   // 4.26-01
   const rowLine = (r) => {
     const parts = [`${r.no ? r.no + '호기 ' : ''}${r.name || '(검수원 미등록)'} — ${r.n}대`];
     if (r.dis && r.lod) parts.push(`양하 ${r.dis}·선적 ${r.lod}`);
@@ -2847,8 +2862,34 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
     if (r.src === 'qc' && r.appN) parts.push(`앱으로 직접 찍은 것 ${r.appN}대`);
     return parts.join(' · ');
   };
-  const src = (st.qcOnly ? '동방 QC 합계 — 조별로는 못 나눠요, 자리도 안 와요' : '터미널 컨별 기록 + 앱 완료')
+  //  4.26-01: PCTC 컨별 실적이 안 오는 배는 본선현황 GC 합계(자료 시각을 붙인다 — 1분마다 오는 표라 «언제 숫자인가» 가 같이 가야 한다)
+  const src = (st.qcOnly ? (st.aggSrc === 'gc' ? `PCTC 본선현황 GC 합계${st.aggAt ? ' ' + _kstAt(st.aggAt, nowMs) : ''} — 조별로는 못 나눠요, 자리도 안 와요` : '동방 QC 합계 — 조별로는 못 나눠요, 자리도 안 와요') : '터미널 컨별 기록 + 앱 완료')
     + (st.outside ? ` · 등록된 조 밖 ${st.outside}대는 «조 미상» — 다음 조 등록이 없어요` : '');
+  //  ★ 4.26-01 (2차 시뮬 중-1·하-1): PCTC 본선현황 GC 합계만 있는 배(앱 완료·컨별 실적 없음) — 대수는 호기 **항차 누계**뿐이라 조·사람으로 못 나눈다.
+  //    등록은 등록대로(조마다 한 줄) 보이고, 대수는 «항차 누계» 한 줄로 말한다 — 조 아래·사람 이름 아래 넣지 않는다(«(아직 잡힌 작업 없음)» · «조 미상» 이 섞이지 않게).
+  if (st.aggSrc === 'gc' && !keyOk && cq.kind !== 'who') {
+    const nos = Object.keys(st.byCrane).map(Number).sort((a, b) => a - b);
+    const cnt = (no) => { const c = st.byCrane[no]; return c ? `${c.n}대${c.dis && c.lod ? ` (양하 ${c.dis}·선적 ${c.lod})` : ''}` : ''; };
+    const regOf = (no) => st.shifts.filter((s) => s.cranes[no]).map((s) => `${s.key} ${s.cranes[no]}`);
+    if (cq.kind === 'crane') {
+      if (!st.byCrane[cq.no]) return `${ship} ${cq.no}호기 — 터미널 본선현황에 이 호기 대수가 없어요.\n(${src})`;
+      const rg = regOf(cq.no);
+      return [`${ship} ${cq.no}호기 — 항차 누계 ${cnt(cq.no)}`, ...(rg.length ? [`등록 ${rg.join(' · ')}`] : []), `(${src})`].join('\n');
+    }
+    if (cq.kind === 'name') {
+      const regs = [];
+      for (const s of st.shifts) for (const no of Object.keys(s.cranes)) if (s.cranes[no] === cq.name) regs.push({ key: s.key, no: Number(no) });
+      if (!regs.length) return `${koJosa(cq.name, '은')} 이 항차에 등록이 없고 앱 완료 기록도 없어요 😿${hint}`;
+      const crs = [...new Set(regs.map((r) => r.no))].sort((a, b) => a - b);
+      return [`${ship} ${cq.name} — ${regs.map((r) => `${r.key} ${r.no}호기`).join(' · ')} 등록`,
+        `터미널 본선현황은 호기 누계만 줘서 사람별로는 못 나눠요 — ${crs.map((no) => `${no}호기 항차 누계 ${cnt(no) || '0대'}`).join(' · ')}`, `(${src})`].join('\n');
+    }
+    const L = [`👷 ${ship} 호기별 검수원·작업량`];
+    for (const s of st.shifts) L.push(`${s.key} — ${Object.keys(s.cranes).map(Number).sort((a, b) => a - b).map((n) => `${n}호기 ${s.cranes[n]}`).join(' · ')}`);
+    L.push(`항차 누계 — ${nos.map((no) => `${no}호기 ${cnt(no)}`).join(' · ')}`);
+    L.push(`(${src})`);
+    return L.join('\n');
+  }
   if (cq.kind === 'who') {
     const no = cq.no;
     const hits = st.shifts.filter((s) => s.cranes[no] && (!keyOk || keyOk(s.key)));
@@ -2895,12 +2936,12 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   }
   if (cq.kind === 'crane') {
     const c = st.byCrane[cq.no];
-    if (!c) return `${ship} ${cq.no}호기로 잡힌 작업이 아직 없어요.${st.registered ? '' : hint}`;
+    if (!c) return `${ship} ${cq.no}호기로 잡힌 작업이 아직 없어요.${st.registered ? '' : hint}${_gcRefLine(st.gcRef, nowMs, cq.no)}`;   // 4.26-01: 앱 기록은 없어도 터미널 합계는 말한다
     const rows = st.rows.filter((r) => r.no === cq.no);
     const L = [`${ship} ${cq.no}호기 — ${c.n}대${c.dis && c.lod ? ` (양하 ${c.dis}·선적 ${c.lod})` : ''}${c.lastPos ? ` · 마지막 ${_posKo(c.lastPos)} ${_hm(c.lastAt)}` : c.lastAt ? ` · 마지막 ${_hm(c.lastAt)}` : ''}`];
     rows.forEach((r) => L.push(`  ${r.key || '조 미상'} ${r.name || '(검수원 미등록)'} ${r.n}대${r.src === 'cn' && r.firstAt ? ` · ${_hmRange(r.firstAt, r.lastAt)}` : ''}${r.src === 'qc' && r.appN ? ` · 앱으로 직접 찍은 것 ${r.appN}대` : ''}`));
     L.push(`(${src})`);
-    return L.join('\n');
+    return L.join('\n') + _gcRefLine(st.gcRef, nowMs, cq.no);   // 4.26-01
   }
   //  all — 조별로 호기·사람·대수
   if (!st.rows.length && !st.registered) return `${ship} 호기별 검수원 등록이 아직 없어요 😿${hint}`;
@@ -2916,7 +2957,7 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
     if (sh && !rs.length) L.push('  (아직 잡힌 작업 없음)');
   }
   L.push(`(${src})`);
-  return L.join('\n') + _unkTxt(_unkN(() => true));
+  return L.join('\n') + _unkTxt(_unkN(() => true)) + (keyOk ? '' : _gcRefLine(st.gcRef, nowMs));   // 4.26-01: 날짜로 거른 답에는 안 붙인다(GC 합계는 조로 못 나눈다)
 }
 
 //  3.53-12 — 외부 합계 피드(옛 합계 노드)를 읽던 자리(옛 함수 넷)는 없앴다.
