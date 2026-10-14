@@ -2979,6 +2979,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   //  4.26-01 — PCTC 배 미르 «호기별 검수원·작업량» 은 컨별 실적이 없으면 본선현황 GC별 완료(합이 본선현황 완료와 맞을 때만)로 답한다(STMJ 2663E). 본문은 tools/regress_r40_gccrew.cjs(단독 실행도 된다).
   await require('./regress_r40_gccrew.cjs')({ ROOT, TMP, ok, head, fx });
 
+  // ── R41 ─────────────────────────────────────────────────────────────
+  //  4.26-02 — 작업 화면 나머지 수리(화면 개편 판 G): 수정 3연속은 묻는다 · 보류 줄 이 장/다른 장 · 실린 컨 보류 빠짐 · 묶음 이름 고정 · 베이매트릭스에 있는 칸 · 시퀀스 방침 바꿀 때 묻기 · 시프팅 행 베이 꼴.
+  //    항차 화면(VoyagePage 실소스)을 jsdom 에서 검수원 손 그대로 누른다(OBWH 2763E·2764W · MCAP 639N · MCAP 사전). 본문은 tools/regress_r41_rest.cjs(단독 실행도 된다).
+  await require('./regress_r41_rest.cjs')({ ROOT, TMP, ok, head, fx, stub });
+
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }

@@ -34,6 +34,7 @@ import {
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
+  activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
   guideTwinOf, swapWarnWordOf,   // 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
 import {
@@ -1130,7 +1131,7 @@ function attrLine(c, attr, ctx) {
       const a = [];
       const comp = c._comp || c.comp;
       a.push(comp ? `완료 ${hhmm(comp.at)}${S(comp.by) ? ' ' + comp.by : ''}${S(comp.equip) ? ' ' + (/호기$/.test(S(comp.equip)) ? comp.equip : comp.equip + '호기') : ''}` : '미완료');
-      if (h && !h.doneAt) a.push(`보류(${S(h.reason) || '사유 없음'}${S(h.by) ? ' ' + h.by : ''})`);
+      if (h && S(h.reason) && !comp) a.push(`보류(${S(h.reason)}${S(h.by) ? ' ' + h.by : ''})`);   // 4.26-02: 종전 `!h.doneAt` — doneAt 은 «보류 당시 완료 대수»라 첫 완료 뒤 건 보류를 못 봤다(보류 한 벌 activeHeldOf 와 같은 기준)
       if (lg) a.push(`수화물 확인${S(lg.by) ? ' ' + lg.by : ''}`);
       if (c.lugg) a.push('수화물');
       if (c.urgent) a.push('긴급');
@@ -1260,10 +1261,12 @@ export function answerVoyageFacts(parsed, ctx) {
       }).join('\n');
     }
     if (k === 'held') {
-      const h = { ...(secOf(ctx, 'discharge').held || {}), ...(secOf(ctx, 'loading').held || {}) };
-      const ks = Object.keys(h).filter((cn) => h[cn] && !h[cn].doneAt);
-      if (!ks.length) return `${ship} 보류 중인 컨 없음.`;
-      return `보류 ${ks.length}대\n` + ks.map((cn) => `${cn} · ${S(h[cn].reason) || '사유 없음'}${S(h[cn].by) ? ' ' + h[cn].by : ''}${h[cn].at ? ' ' + hhmm(h[cn].at) : ''}${S(h[cn].equip) ? ' · ' + (/호기$/.test(S(h[cn].equip)) ? h[cn].equip : h[cn].equip + '호기') : ''}`).join('\n');
+      //  4.26-02: 보류 한 벌(activeHeldOf) — 종전 `!doneAt` 거르기는 doneAt(보류 당시 완료 대수)을 완료로 잘못 읽어 첫 완료 뒤 건 보류를 «없음» 으로 답했고, 실린 컨의 보류는 남겼다.
+      const _hm = new Map();   // 컨번호로 한 줄(같은 컨이 두 모드에 걸리면 선적 쪽 — 종전 {...양하, ...선적} 과 같다 · 2차 시뮬 하-3)
+      for (const x of [...activeHeldOf(ctx && ctx.voyage, 'discharge'), ...activeHeldOf(ctx && ctx.voyage, 'loading')]) _hm.set(x.cn, x);
+      const hl = [..._hm.values()];
+      if (!hl.length) return `${ship} 보류 중인 컨 없음.`;
+      return `보류 ${hl.length}대\n` + hl.map((x) => `${x.cn} · ${S(x.reason)}${S(x.by) ? ' ' + x.by : ''}${x.at ? ' ' + hhmm(x.at) : ''}${S(x.equip) ? ' · ' + (/호기$/.test(S(x.equip)) ? x.equip : x.equip + '호기') : ''}`).join('\n');
     }
     if (k === 'lugg') {
       const lg = { ...(secOf(ctx, 'discharge').luggConfirm || {}), ...(secOf(ctx, 'loading').luggConfirm || {}) };
@@ -1455,8 +1458,10 @@ function sayCard(card, n, pier) {
   const head = n ? `${n}번째` : '지금 차례';
   const one = (x) => {
     const bits = [`${l4(x)} (${x.cn})`];
-    const sl = String(x.sl || '').trim();
-    bits.push(sl ? `실번호 ${sl}` : '실번호 없음');
+    //  4.26-02 (4.25-02 기록만): 실번호는 작업 카드·검수리스트와 한 벌(inspectionSealOf — 엠티는 엠티실) · 엠티에 실이 없으면 «엠티 · 실 없음»(카드와 같은 말)
+    const sl = inspectionSealOf(x);
+    const _emp = String(x.fe || '').toUpperCase() === 'E';
+    bits.push(sl ? `${!String(x.sl || '').trim() ? '엠티실' : '실번호'} ${sl}` : (_emp ? '엠티 · 실 없음' : '실번호 없음'));
     if (eyePosOf(x)) bits.push(eyePosOf(x));
     const ft = feetOf(x.iso); if (ft) bits.push(ft);
     if (x.rf && String(x.tmp ?? '').trim() !== '') bits.push(`리퍼 ${x.tmp}°C`);
@@ -2771,7 +2776,7 @@ export function buildDataPack(q, ctx) {
   const digs = (String(q).match(/\d{4,7}/g) || []);
   const cnt = (arr, f) => { const m = {}; arr.forEach((c) => { const k = f(c) || '?'; m[k] = (m[k] || 0) + 1; }); return m; };
   const d = cs.filter((c) => (c._mode || c.mode) !== 'loading'), l = cs.filter((c) => (c._mode || c.mode) === 'loading');
-  const sum = (arr) => ({ 총: arr.length, 규격: cnt(arr, _iso), 풀엠티: cnt(arr, (c) => c.fe), 리퍼엠티: arr.filter((c) => c.fe === 'E' && isEmptyReefer({ ...c, rf: _isRf(c) })).length, 리퍼: arr.filter(_isRfFull).length, 위험물: arr.filter(_isDg).length, 엑스레이: arr.filter(_isX).length, 규격초과: arr.filter((c) => c.oog).length, 완료: arr.filter(_isDone).length, 미완료: arr.filter((c) => !_isDone(c)).length, 실번호없음: arr.filter((c) => !c.sl).length, POD별: cnt(arr, (c) => c.pod), POL별: cnt(arr, (c) => c.pol) });
+  const sum = (arr) => ({ 총: arr.length, 규격: cnt(arr, _iso), 풀엠티: cnt(arr, (c) => c.fe), 리퍼엠티: arr.filter((c) => c.fe === 'E' && isEmptyReefer({ ...c, rf: _isRf(c) })).length, 리퍼: arr.filter(_isRfFull).length, 위험물: arr.filter(_isDg).length, 엑스레이: arr.filter(_isX).length, 규격초과: arr.filter((c) => c.oog).length, 완료: arr.filter(_isDone).length, 미완료: arr.filter((c) => !_isDone(c)).length, 실번호없음: arr.filter((c) => !inspectionSealOf(c)).length,   /* 4.26-02: 엠티실만 있는 엠티는 «실번호 없음» 이 아니다(검수리스트와 한 벌) */ POD별: cnt(arr, (c) => c.pod), POL별: cnt(arr, (c) => c.pol) });
   const summary = { 배: `${info.vsl || ''} ${info.vslFull || ''}`.trim(), 항차: { 양하: info.voy_d || info.voy || '', 선적: info.voy_l || '' }, 부두: info.pier || '', 선석: info.berth || '', 접안: info.berthSidePick || info.berthSide || '', 작업시작: info.workStartAt || '', 작업끝: info.workEndAt || '', 양하완료시각: (typeof info.dischargeDoneAt === 'number' ? _tm(info.dischargeDoneAt) : (info.dischargeDoneAt || '')), 양하: sum(d), 선적: sum(l) };
   const byWt = cs.filter((c) => Number(c.wt) > 0).sort((a, b) => Number(b.wt) - Number(a.wt));
   const derived = {

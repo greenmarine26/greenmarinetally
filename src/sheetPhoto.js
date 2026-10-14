@@ -8,6 +8,7 @@
    실측(2026-09-22 20:27 사진 · 30칸) — 칸 30/30 · 자동 맞음 29 · 틀림 0 · 확인 필요 1(14-02-06, AI 가 숫자 6자리만 읽음).
    ⚠ 이 파일은 읽기만 한다. RTDB 쓰기는 SheetPhotoModal 이 기존 저장 함수(fbUpdateRecordField·fbSetActualPosition·fbCompleteContainer)로 한다. */
 import { aiCall } from './gemini.js';
+import { bayDictSlotOk } from './utils.js';   // 4.26-02: 베이사전 칸 판정 한 벌(본문은 utils)
 
 export const SHEET_PROMPT = `이 사진은 컨테이너선 베이플랜 인쇄물에 검수원이 손으로 표시한 선적 기록지입니다.
 
@@ -100,29 +101,9 @@ function _diff(a, b) {
 }
 /** 칸마다 후보 중 가장 가까운 실제 컨을 고른다. 숫자가 무겁다(×3) — 머리글자는 손글씨가 인쇄 글자와 겹쳐 AI 가 자주 틀린다.
  *  자동으로 정하는 조건: 숫자 차이 ≤ 2 이고 2위와 점수 차 ≥ 2. 아니면 cn=null(«확인 필요») 로 두고 1·2위를 보여 준다. */
-/** 3.58-05: 기록지 칸이 이 배 베이사전에 있는 칸인가 — 없으면 false, 사전이 그 베이를 모르면 null(판정 안 함).
+/** 3.58-05 (4.26-02 부터 본문은 utils.bayDictSlotOk 한 벌 — 위치 지정 창의 «자료에 없는 자리» 물음도 같은 판정을 쓴다): 기록지 칸이 이 배 베이사전에 있는 칸인가 — 없으면 false, 사전이 그 베이를 모르면 null(판정 안 함).
  *  실측 (10)11 기록지 — AI 가 홀드 6열뿐인 베이에 «10-07-04» 를 지어냈다. 열은 그 구역(데크/홀드) 최대 칸 수 안이어야 한다. */
-export function sheetSlotOk(bayDef, bay, row, tier) {
-  const bs = bayDef && Array.isArray(bayDef.baysSummary) ? bayDef.baysSummary : null;
-  if (!bs) return null;
-  const b = parseInt(bay, 10), r = parseInt(row, 10), t = parseInt(tier, 10);
-  if (!Number.isFinite(b) || !Number.isFinite(r) || !Number.isFinite(t)) return false;
-  const no = (x) => parseInt(x && (x.bayNo || x.bay), 10);
-  const e = bs.find((x) => no(x) === b) || bs.find((x) => no(x) === b + 1) || bs.find((x) => no(x) === b - 1);
-  if (!e) return null;
-  const deck = t >= 80;
-  const tiers = ((deck ? e.deckTiers : e.holdTiers) || []).map(Number).filter(Number.isFinite);
-  if (!tiers.length) return null;   // 사전에 단 목록이 없으면 판정하지 않는다(막지 않는다)
-  if (!tiers.includes(t)) return false;
-  //  칸 수(deckCells·holdCells)는 00열을 뺀 수다(BayGridEditor·coneCargoPlan 과 같은 셈) — 열은 1..n, 00열은 따로.
-  const cells = ((deck ? e.deckCells : e.holdCells) || []).map(Number).filter(Number.isFinite);
-  const n = cells.length ? Math.max(...cells) : (Number(e.rowCount) || 0);
-  if (!n) return null;
-  const zf = deck ? e.deckHasZero : e.holdHasZero;
-  const zero = zf !== undefined && zf !== null ? !!zf : !!e.hasZero;
-  if (r === 0) return zero;
-  return r >= 1 && r <= n;
-}
+export const sheetSlotOk = (bayDef, bay, row, tier) => bayDictSlotOk(bayDef, bay, row, tier);   // 기본 판정(구역 최대 칸 수) 그대로 — strict 는 «자료에 없는 자리» 물음만
 
 export function matchSheetItems(items, candidates, slotOk) {
   const pool = Array.from(new Set(candidates || []));

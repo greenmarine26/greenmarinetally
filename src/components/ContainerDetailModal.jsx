@@ -1494,6 +1494,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       <PositionEditModal
         open={showPosEdit}
         container={{ ...c, _comp: comp, _mode: c._mode || mode }}
+        shipCode={voyageInfo?.vsl || String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
         allContainers={allContainers}
         onClose={() => setShowPosEdit(false)}
         onSave={async (newBay, newRow, newTier, opts) => {

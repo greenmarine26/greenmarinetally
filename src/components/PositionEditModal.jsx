@@ -4,7 +4,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
 import { bayParityError, seqFullConfirmText, buildSlotUniverse, buildOccupancy, effectivePos, isoToLabel } from '../utils.js';   // 2.95: 충돌은 실물이 실린 칸 하나뿐   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌) · 1.55: 칸·점유는 utils 한 벌
-import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown } from '../utils.js';
+import { unknownSlotAskOf, bayDefOfShipCode } from '../utils.js';   // 4.26-02: «자료에 없는 자리» 물음 한 벌 — 베이매트릭스에 있는 칸이면 «이번 항차 계획에 없는 칸» 으로 낮춘다   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter, isSlotRelaxed } from '../swapGrade.js';   // 2.95: 완화는 엠티·시프팅만   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
@@ -53,6 +54,8 @@ export default function PositionEditModal({
   //  ★ 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환 컨의 «실린 칸 지정»(자동 가이드·큰 카드)은 칸을 고르는 것이 곧 선적확인이다 — 그때만 켠 채로 연다.
   //    기본은 종전대로 끔(1.46 검수사 «위치수정만 저장되고 트윈 모드 화면으로 가야 하는데 선적 처리가 됩니다»).
   defaultAlsoComplete = false,
+  // 4.26-02: 그 배 선박 약자(voyage.info.vsl) — 베이매트릭스로 «정말 없는 칸» 인지 가린다. 없으면 종전 물음 그대로.
+  shipCode = '',
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -485,11 +488,13 @@ export default function PositionEditModal({
       const _exists = (slotUniverse[_bb] || []).some(s => s.row === r && s.tier === t);
       if (!isUnassign && bay && r && t && !_exists && !opts?.slotConfirmed) {
         setStep('input');
+        //  4.26-02: 물음 글은 utils.unknownSlotAskOf 한 벌(수동 트윈 직접 입력과 같은 말). 베이매트릭스에 있는 칸이면 «이번 항차 계획에 없는 칸»(붉지 않음).
+        const _q = unknownSlotAskOf({ bay: _bb, row: r, tier: t, rowsText: [...new Set((slotUniverse[_bb] || []).map(s => s.row))].sort().join(' '), bayDef: bayDefOfShipCode(shipCode) });
         askConfirm({
-          title: '이 배 자료에 없는 자리입니다',
-          message: `B${_bb} ${r}-${t} 는 이 배의 알려진 칸에 없습니다.\n(B${_bb}에 있는 열: ${[...new Set((slotUniverse[_bb] || []).map(s => s.row))].sort().join(' ') || '없음'})\n분실 사고가 났던 경로입니다 — 시프팅·특수 적재가 확실할 때만 계속하세요.`,
-          confirmLabel: '특수 적재 — 그래도 저장',
-          danger: true,
+          title: _q.title,
+          message: _q.message,
+          confirmLabel: _q.confirmLabel,
+          danger: _q.danger,
           onConfirm: () => { doConfirm({ ...(opts || {}), slotConfirmed: true }); },
           onCancel: () => setStep('input'),
         });

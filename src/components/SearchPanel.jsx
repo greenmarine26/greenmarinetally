@@ -22,6 +22,7 @@ import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, YARD_SPEAK 
 import { askGemini } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
+import { normalizeBay, unknownSlotAskOf, bayDefOfShipCode } from '../utils.js';   // 4.26-02: 시프팅 행 베이를 EDI 행과 같은 꼴로 · «자료에 없는 자리» 물음 한 벌
 import { loadingSlotOf, isSwapSlot } from '../utils.js';   // 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리 — 수동 트윈 짝 짐작 막기) · 3차: isSwapSlot 한 벌
 import { bayGroupCenter } from '../swapGrade.js';   // 3.49: 장수 셈의 그룹 center(GuidedWorkPanel 과 같은 벌)
 import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록·장수 사전
@@ -264,7 +265,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           if (row) {
             row._shift = m === 'discharge' ? 'out' : 'in';
             row._shiftFrom = s.from || s.pos || ''; row._shiftTo = s.to || '';
-            if (!row.bay || !row.tier) { row.bay = pos.slice(0, 3); row.row = pos.slice(3, 5); row.tier = pos.slice(5, 7); }
+            if (!row.bay || !row.tier) { row.bay = normalizeBay(pos.slice(0, 3)); row.row = pos.slice(3, 5); row.tier = pos.slice(5, 7); }   // 4.26-02: 베이는 다른 행과 같은 꼴(«34») — 세 자리(«034»)가 카드·물음에 «034-07-88» 로 나갔다(모의 작업 MCAP 2·3호기)
           }
           return;
         }
@@ -281,7 +282,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           _shift: m === 'discharge' ? 'out' : 'in',
           _shiftFrom: s.from || s.pos || '', _shiftTo: s.to || '',
           _comp: sec.completed?.[cn] || null,
-          bay: pos.slice(0, 3), row: pos.slice(3, 5), tier: pos.slice(5, 7),
+          bay: normalizeBay(pos.slice(0, 3)), row: pos.slice(3, 5), tier: pos.slice(5, 7),   // 4.26-02: 위와 같은 까닭(EDI 행 utils.js normalizeBay 와 한 벌)
         });
       });
     });
@@ -509,8 +510,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     if (manualBay == null || !manualTier || _suppressBay) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch(() => {}); return; }
     const g = manualGroups.find(x => x.center === manualBay);
     const bays = g ? [...g.bays].sort((a, b) => a - b) : [manualBay];
-    const bayLabel = g?.noBay ? '미지정' : (bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0'));
-    const remain = g?.noBay ? (g.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
+    const _nb = !!g?.noBay || manualBay < 0;   // 4.26-02: «자리 없음» 묶음(center -1)이 다 배치돼 목록에서 빠져도 -1 을 베이 번호로 보내지 않는다(수석 보드가 «-1» 의 숫자를 B1 로 읽었다)
+    const bayLabel = _nb ? '미지정' : (bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0'));
+    const remain = _nb ? (g?.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
     // TallyOne 1.55: 갱(호기)을 같이 보낸다 — 종전엔 빈 문자열이라 수석 화면에서 어느 갱인지 알 수 없었다.
     fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: equipNo || '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
   }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo, _suppressBay]);
@@ -851,7 +853,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       )}
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
-        const noBay = !!g?.noBay;
+        const noBay = !!g?.noBay || manualBay < 0;   // 4.26-02: 묶음이 비어 목록에서 빠져도 «-1번 데크 작업 중» 이 아니라 «자리 없는 컨»(모의 작업 MCAP 2호기)
         const bayLbl = noBay ? '자리 없음' : (g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay));
         // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
         const remain = tierLeftOf(g, manualTier);   // 2.93: 빈 칸 ∩ 남은 컨 (한 곳에서 센다)
@@ -901,7 +903,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             같은 판에서 함께 고쳤다. */}
       {workFilter !== 'completed' && !noWorkLeft && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
-        const noBay = !!g?.noBay;
+        const noBay = !!g?.noBay || manualBay < 0;   // 4.26-02: «✅ B-1 데크 끝났습니다» 대신 «자리 없음 끝났습니다»
         const left = tierLeftOf(g, manualTier);   // 2.93
         if (left > 0) return null;
         // 같은 베이의 다른 단이 남았으면 그쪽을 먼저 권한다(스프레더를 덜 바꾼다).
@@ -910,7 +912,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         const nextG = manualGroups.find(x => x.center !== manualBay && !x.noBay && x.count > 0)
                    || manualGroups.find(x => x.center !== manualBay && x.count > 0);
         const lbl = (x) => (x.noBay ? '자리 없음' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);
-        const hereLbl = g ? lbl(g) : `B${manualBay}`;
+        const hereLbl = g ? lbl(g) : (noBay ? '자리 없음' : `B${manualBay}`);
         return (
           <div className="bg-emerald-950/50 border-2 border-emerald-600 rounded-pill p-3 space-y-2">
             <div className="text-sm font-black text-emerald-200">
@@ -2108,8 +2110,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   //   ReferenceError 로 손이 멈춘다.** 실오류가 나면 카메라까지 멈추므로 그냥 두면 안 된다.
   //   같은 모양(`useConfirm` + `ConfirmModal`)으로 이 컴포넌트에도 한 벌 둔다.
   const [confirmState, askConfirm] = useConfirm();
-  const askYN = (title, message, confirmLabel = '계속') => new Promise(r => askConfirm({
-    title, message, confirmLabel, danger: true, onConfirm: () => r(true), onCancel: () => r(false),
+  const askYN = (title, message, confirmLabel = '계속', danger = true) => new Promise(r => askConfirm({   // 4.26-02: danger — «이번 항차 계획에 없는 칸»(베이매트릭스엔 있음)은 붉지 않게
+    title, message, confirmLabel, danger, onConfirm: () => r(true), onCancel: () => r(false),
   }));
   const [q1, setQ1] = useState(''); const [q2, setQ2] = useState('');
   const [c1, setC1] = useState(null); const [c2, setC2] = useState(null);
@@ -2321,9 +2323,12 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
         const bb = String(parseInt(b, 10));
         return [...new Set((slotUniverse[bb] || []).map(s => s.row))].sort().join(' ');
       };
+      //  4.26-02: 물음 글은 utils.unknownSlotAskOf 한 벌(위치 지정 창과 같은 말) — 베이매트릭스에 있는 칸이면 «이번 항차 계획에 없는 칸»(붉지 않음).
+      const _bd = bayDefOfShipCode(voyage?.info?.vsl || String(voyageKey || '').split('_')[0]);
       for (const [lbl, b, r, t] of [['앞', bay, rowP, tierP], ['뒤', backPos.bay, backPos.row, backPos.tier]]) {
-        if (!_known(b, r, t) && !(await askYN('이 배 자료에 없는 자리입니다',
-          `${lbl} 컨 자리 B${parseInt(b, 10)} ${r}-${t} 는 이 배의 알려진 칸에 없습니다.\n(B${parseInt(b, 10)}에 있는 열: ${_rowsTxt(b) || '없음'})\n분실 사고가 났던 그 경로입니다 — 시프팅·특수 적재가 확실할 때만 계속하세요.`))) return;
+        if (_known(b, r, t)) continue;
+        const _q = unknownSlotAskOf({ lbl, bay: b, row: r, tier: t, rowsText: _rowsTxt(b), bayDef: _bd });
+        if (!(await askYN(_q.title, _q.message, _q.confirmLabel, _q.danger))) return;
       }
       // ── 1.56: **아래 단이 비어 있으면 허공 적재다** (검수사 확정 — "2단이 비었는데 3단 즉 허공에 띄웠습니다").
       //   홀드 02→04→06(→08), 데크 82→84→86 — 아래 칸이 이 배에 있고 아직 실물이 없으면 묻는다.

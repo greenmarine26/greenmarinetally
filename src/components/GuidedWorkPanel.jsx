@@ -1,7 +1,7 @@
 // 가이드 작업 패널 (V7.94) — 앱이 크레인 순서대로 다음 컨테이너를 예측 제시, 검수사는 확인/수정만
 // 흐름: 장비(호기) 결정 → 접안 방향(좌/우현, 확인 후 저장) → 베이 그룹 결정 → 예측 카드
 // 설정 칩(장비·접안·베이)은 항상 표시 — 탭하면 해당 단계로 돌아가 변경 (접안 변경은 재확인)
-// 수정 3연속 = 플랜대로 진행되지 않음 판단 → 자동으로 수동 모드 전환
+// 수정 3연속 = 플랜대로 진행되지 않음 → 4.26-02 부터는 말없이 수동으로 넘기지 않고 묻는다(자동 그대로 · 순서 바꾸기 · 수동)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from '../guidedQueue.js';
@@ -20,12 +20,13 @@ import { speak, spellKo } from '../voice.js';
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
+import { activeHeldOf } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
 import { loadingSlotOf, guideTwinOf } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinDiffLimit, twinWtOf } from '../nlSearch.js';
 
-const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
+const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 순서를 묻는다(4.26-02 — 종전 수동 전환)
 // TallyOne 1.57: 같은 부류가 몇 대 연속되면 그 흐름으로 보는가 (검수사 확정 2026-08-13 — 3대).
 //   2대면 층 순서상 우연히 붙은 것과 구분이 안 되고, 4대면 작은 베이에서 끝날 때까지 안 걸린다.
 const STREAM_STREAK = 3;
@@ -425,6 +426,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     }
     return Object.values(map).sort((a, b) => a.center - b.center);
   }, [remaining, bayPairs]);
+  //  ★ 4.26-02 (모의 작업 OBWH 1호기 — «B5·6·7» 이 6번 베이를 끝내자 «B5·7» 로 바뀌어 다른 묶음처럼 보였다) — 묶음 이름은 그 묶음의 **전체 작업분**(완료 포함)으로 짓는다.
+  //    대수·단 집계(위 groups)는 종전대로 남은 컨이다. 이름만 고정한다(해치 보고 키·묶음 center 는 손대지 않는다).
+  const groupBaysAll = useMemo(() => {
+    const m = new Map();
+    for (const c of modeAll) {
+      const center = groupCenterOf(c.bay);
+      const b = parseInt(c.bay, 10);
+      if (center == null || !Number.isFinite(b)) continue;
+      if (!m.has(center)) m.set(center, new Set());
+      m.get(center).add(b);
+    }
+    return m;
+  }, [modeAll, bayPairs]);
+  const groupLbl = (center, g) => {
+    const set = groupBaysAll.get(center) || g?.bays;
+    return set && set.size ? [...set].sort((a, b) => a - b).join('·') : String(center);
+  };
 
   //  2.90: 물려받은 베이가 이쪽 묶음 center 와 안 맞으면(짝 계산 입력 차이) 그 베이를 품은 묶음으로
   //    옮겨 앉는다. 품은 묶음도 없으면 비운다 — 이쪽 모집단에 그 베이 일이 없는 것이라 게이트가 다시 묻는다.
@@ -486,7 +504,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const prior = priorEquipOf(g.center);
     const _gk = prior ? `${voyageKey}|${inspector || ''}|${mode}|${g.center}|${prior.equip}|${equip}` : '';   // 검수원도 열쇠에(같은 창 다음 사람은 다시 묻는다 — 재감사 하)
     if (prior && equip && prior.equip !== equip && !_askedGang.has(_gk)) {
-      const bayLbl = `B${[...g.bays].sort((a, b) => a - b).join('·')}`;
+      const bayLbl = `B${groupLbl(g.center, g)}`;   // 4.26-02: 묶음 이름 한 벌
       const pick = await askPick({
         title: '이 베이는 다른 갱도 작업했습니다',
         message: `${bayLbl}는 ${prior.equip}가 작업했습니다.\n지금 내 갱은 ${equip}입니다.\n같은 장을 나눠 하는 것이면 [${equip} 그대로] — 이 베이 작업이 ${equip} 실적으로 올라갑니다.\n호기를 잘못 고른 것이면 [${prior.equip}로 바꾼다].`,
@@ -506,12 +524,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const HOLD_ASK_AFTER = 3;          // 검수사 확정: *«보통은 컨테이너 3-5개 다른거 작업하고 있으면 라싱인력이 옵니다»*
   const HOLD_LONG_MS = 60 * 60000;   // 검수사 확정: *«콘 잠김은 길어야 1시간이내입니다»* — 넘으면 매 카드마다 묻는다
   const HOLD_REASONS = ['콘 잠김', '트윈 무게 초과', '컨 홀 불량(스프레더 안착 불가)'];
-  const held = useMemo(() => {
-    const h = voyage?.[mode]?.held || {};
-    return Object.keys(h).map((cn) => ({ cn: String(cn).toUpperCase(), ...(h[cn] || {}) }))
-      .filter((x) => x.reason).sort((a, b) => (a.at || 0) - (b.at || 0));
-  }, [voyage, mode]);
+  const held = useMemo(() => activeHeldOf(voyage, mode), [voyage, mode]);   // 4.26-02: 실린(완료된) 컨의 보류는 뺀다 — 종전엔 실어도 «보류 12대» 로 남았다(모의 작업 MCAP 3호기)
   const heldSet = useMemo(() => new Set(held.map((x) => x.cn)), [held]);
+  //  ★ 4.26-02 (모의 작업 MCAP 3호기 — 2호기가 건 보류가 3호기 화면에 [해제] 와 함께 떴다): 보류는 항차에 하나다(콘이 잠기면 누구에게나 잠긴 것 — 노드는 그대로).
+  //    줄은 «이 장» 과 «다른 장» 으로 나눠 보이고, 다른 장 보류를 풀 때는 누가 무슨 까닭으로 건 것인지 한 번 묻는다. 자리(베이-열-단)도 붙인다.
+  const heldSplit = useMemo(() => {
+    const byCn = new Map(allContainers.filter((c) => c._mode === mode).map((c) => [String(c.cn || '').toUpperCase(), c]));
+    const mine = [], other = [];
+    for (const h of held) {
+      const c = byCn.get(h.cn);
+      const pos = c && c.bay && c.row && c.tier ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '';
+      const here = selectedGroup == null || (!!c && groupCenterOf(c.bay) === selectedGroup);
+      (here ? mine : other).push({ ...h, _pos: pos });
+    }
+    return { mine, other };
+  }, [held, allContainers, mode, selectedGroup, bayPairs]);
   //  이 모드의 완료 대수 — «몇 대 지났나»의 기준(새로고침해도 같은 수가 나온다).
   const doneN = useMemo(() => allContainers.filter((c) => c._mode === mode && c._ptk && c._comp).length,
     [allContainers, mode]);
@@ -809,15 +836,26 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   //  ▶ 해제 — 검수사가 [해제]를 눌렀거나 되묻기에 «예»라고 답했을 때. 그 컨이 **바로 앞 순서로** 온다.
-  const doRelease = async (h) => {
+  const doRelease = async (h, front = true) => {
     if (!h || busy) return;
     const cns = holdGroupOf(h);
     setBusy(true);
     try {
       await fbReleaseHold(voyageKey, mode, cns);
-      setResumeCns(cns.map((x) => String(x).toUpperCase()));
+      if (front) setResumeCns(cns.map((x) => String(x).toUpperCase()));   // 4.26-02: 다른 장 보류를 풀면 내 카드 «맨 앞» 을 건드리지 않는다(그 컨은 내 큐에 없다)
       setHoldList(false);
     } finally { setBusy(false); }
+  };
+  //  4.26-02: 다른 장(남의 호기)의 보류 — 누가 건 것인지 보이고 한 번 묻는다. 큰 단추는 [그대로].
+  const releaseOther = async (h) => {
+    if (!h || busy) return;
+    const who = [h.equip, h.by].filter(Boolean).join(' ');
+    const pick = await askPick({   // ✕ 는 아무것도 안 함(null) — ask 는 ✕ 를 둘째 단추(해제)로 받는다
+      title: '다른 장의 보류입니다',
+      message: `${h.cn}${h._pos ? ` (${h._pos})` : ''}\n보류 사유 «${h.reason}»${who ? ` · 건 사람 ${who}` : ''}\n풀면 그 컨이 그 장 작업 순서에 다시 들어갑니다.`,   // 감사 하-2: 이름 뒤 조사(가/이)를 쓰지 않는 꼴
+      confirmLabel: '그대로 둔다', cancelLabel: '해제',
+    });
+    if (pick === 'cancel') doRelease(h, false);
   };
 
   //  «아직» — 지금 완료 대수를 기준점으로 다시 잡는다(3대 더 지나야 또 묻는다).
@@ -1065,9 +1103,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           const ok = await ask({
             title: '커버 위에 화물이 있습니다',
             danger: true,
-            message: `이 커버 위 데크에 컨테이너 ${blk.length}대가 있습니다`
+            message: `이 베이 데크에 컨테이너 ${blk.length}대가 남아 있습니다`   // 4.26-02: 장(패널)을 가리지 않은 수라 «이 커버 위» 라 단정하지 않는다 — 장마다 위 화물은 다음 장수 확인 창
               + (thru ? ` (통과화물 ${thru}대 포함)` : '') + '.\n'
-              + '화물이 얹힌 커버는 열 수 없습니다.\n\n' + where + '\n\n'
+              + '여는 장 위에 화물이 얹혀 있으면 그 커버는 열 수 없습니다.\n\n' + where + '\n\n'
               + '자료가 틀렸다면 그래도 보고할 수 있습니다. 보고할까요?',
             confirmLabel: '그래도 보고', cancelLabel: '취소',
           });
@@ -1247,7 +1285,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   선적확인만 찍히면 그림과 기록이 갈린다. 그래서 자리부터 확실히 잡고 완료를 찍는다.
   //   ⛔ 네이티브 confirm() 은 쓰지 않는다 — 뜨는 순간 앱이 통째로 멈춘다(실측 30분 정지).
   //   돌려주는 값: 성공하면 결과 객체, 검수사가 취소했거나 실패하면 null.
-  const reassignAsk = async (cn, b, r, t, opts) => {
+  const reassignAsk = async (cn, b, r, t, opts, failMsg = '') => {   // 4.26-02: failMsg — 앞 컨은 이미 선적확인된 두 번째 재배정(엇갈림 남은 컨)은 공용 «선적확인은 찍지 않았습니다» 가 틀린 말이다
     let res = await fbReassignContainerPosition(voyageKey, mode, cn, b, r, t, inspector, opts || undefined);
     if (res && res.ok === false && res.needConfirm === 'seqFull') {
       const ok = await ask({
@@ -1260,6 +1298,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         { ...(opts || {}), seqConfirmed: true });
     }
     if (!res || res.ok === false) {
+      //  4.26-02(감사 하-3): failMsg 알림(엇갈림 남은 컨 — 앞 컨은 이미 선적확인)은 닫을 때까지 기다린다 — 곧바로 이어지는 «순서가 3번 연속» 물음이 같은 창을 덮어 못 보았다.
+      if (failMsg) { await new Promise((r) => askConfirm({ title: '자리를 넣지 못했습니다', message: failMsg, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: r, onCancel: r, onClose: r })); return null; }
       notify('자리를 넣지 못했습니다', `${String(cn).slice(-4)} — 신호를 확인하고 다시 해 주세요.\n선적확인은 찍지 않았습니다.`);
       return null;
     }
@@ -1348,9 +1388,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     setConsecFix(n);
     setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
     if (n >= AUTO_MANUAL_THRESHOLD) {
-      speak('수동 모드로 전환합니다');
-      alert(`수정이 ${AUTO_MANUAL_THRESHOLD}회 연속되었습니다.\n플랜대로 진행되지 않는 것으로 판단해 수동 모드로 전환합니다.`);
-      onSwitchManual?.();
+      //  ★ 4.26-02 (모의 작업 — OBWH 1호기 11회 · MCAP 4호기: 기사는 «한 열을 세로로», 앱은 «층 먼저» 라 세 번 고치면 2.6초 토스트 뒤 가이드가 꺼져 베이·단을 다시 골랐다):
+      //    말없이 수동으로 넘기지 않는다. 큰 단추는 [자동 그대로], 회색은 양하 [순서 바꾸기 ⚙](4.09 순서 창) · 선적 [수동으로]. ✕ 도 그대로다.
+      //    세는 수는 물은 뒤 0 으로 — 다시 세 번 다르면 또 묻는다.
+      setConsecFix(0);
+      try { speak('순서가 계속 다릅니다'); } catch { /* 소리 꺼짐 */ }
+      askPick({
+        title: `순서가 ${AUTO_MANUAL_THRESHOLD}번 연속 달랐습니다`,
+        message: mode === 'discharge'
+          ? `기사 작업 순서가 앱 순서(${workOrderText(wo)})와 다릅니다.\n[순서 바꾸기]에서 해상부터·리퍼부터 같은 조건을 고르면 가이드가 그 순서로 내밉니다.\n먼저 올 컨이 «다음 예정» 줄에 있으면 그 줄을 눌러도 됩니다.\n수동으로 가려면 맨 아래 [수동 모드로 전환].`
+          : `실제로 실은 컨이 앱 순서와 계속 다릅니다.\n먼저 실을 컨이 «다음 예정» 줄에 있으면 그 줄을 누르면 카드로 올라옵니다.`,
+        confirmLabel: '자동 그대로',
+        cancelLabel: mode === 'discharge' ? '순서 바꾸기 ⚙' : '수동으로',
+      }).then((pick) => {
+        if (pick !== 'cancel') return;
+        if (mode === 'discharge') setOrderOpen(true); else onSwitchManual?.();
+      });
     }
   };
 
@@ -1440,7 +1493,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //  선적 엇갈림 — 고른 컨(카드의 다른 쪽 컨)이 이 칸에 실렸으니 남은 이 칸 계획 컨은 비워진 저쪽 칸으로 옮겨 둔다(회색 [도 확인] 길과 같은 두 번째 재배정, 완료는 안 함).
     //    안 옮기면 계획 칸을 내줘 «자리 없음» 으로 가 «다음 카드에 남습니다» 를 못 지켰다(재감사 하 — 엠티 1037 · 풀 9509). 못 옮기면 종전대로 🅿 배치 목록에 남는다.
     if (mode === 'loading' && tangled && rest && mate.bay && mate.row && mate.tier) {
-      try { await reassignAsk(rest.cn, mate.bay, mate.row, mate.tier); } catch (e) { console.warn('[4.25-02] 엇갈림 남은 컨 옮기기 실패 — 자리 없음 목록에 남는다', e); }
+      try { await reassignAsk(rest.cn, mate.bay, mate.row, mate.tier, undefined, `${String(rest.cn).slice(-4)} 를 비워진 칸(${parseInt(mate.bay, 10)}-${mate.row}-${mate.tier})으로 옮기지 못했습니다 — 🅿 자리 없음 목록에 남습니다.\n고른 ${String(pick.cn).slice(-4)} 는 이미 선적확인됐습니다.`); } catch (e) { console.warn('[4.25-02] 엇갈림 남은 컨 옮기기 실패 — 자리 없음 목록에 남는다', e); }
     }
     afterFix();
     if (rest && rest.cn && rest.cn !== pick.cn) setResumeCns([rest.cn]);
@@ -1700,7 +1753,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             {groups.map(g => (
               <button key={g.center} onClick={() => { pickGroup(g); }}
                 className="py-3 rounded-pill bg-ink-800 hover:bg-violet-800 border border-line text-dim-100">
-                <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
+                <div className="font-bold text-base">B{groupLbl(g.center, g)}</div>
                 {/* 1.95: 빈 칸(수동 기준·정본)을 앞에, 컨 머릿수를 뒤에 — 계산은 SearchPanel manualGroups 한 벌 */}
                 <div className="text-2xs text-dim-300">
                   {(() => { const s = slotGroups && slotGroups.find(x => x.center === g.center); return s ? `빈 칸 ${s.count} · ` : ''; })()}남은 컨 {g.count}대
@@ -1725,7 +1778,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   검수사가 누른 단이 ① 수석에게 작업 위치 전달 ② 큐를 그 단만 표시 ③ 다른컨 수정 후보를 그 단으로 좁힘.
   if (selectedTier == null) {
     const g = groups.find(x => x.center === selectedGroup);
-    const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${selectedGroup}`;
+    const bayLbl = `B${groupLbl(selectedGroup, g)}`;   // 4.26-02: 묶음 이름 한 벌(전체 작업분)
     // #5 (V8.45): 자동 양하는 정상 작업(데크→홀드) 전제. 그 베이 데크가 남았으면 홀드 비활성 —
     //   커버 위 데크를 다 내려야 그 아래 홀드에 접근하기 때문. 커버 부분개방 등 예외 상황은 수동 몫(자동은 대처 못 함).
     const deckFirstBlock = mode === 'discharge' && !!g && g.deck > 0;
@@ -1910,7 +1963,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  ★ 4.26 — 예외 줄. 종전엔 확인 단추 아래에 «싱글로 한 대씩» · «⏸ 지금 양하 불가» · «📍 자리 확인 방식으로» · «다른 컨테이너가 나옴» 이 한 줄씩 쌓여 확인 단추가 화면 아래로 밀렸다(모의 작업장 — 단을 고르면 확인 단추 y≈1,400).
   //    같은 일을 하는 단추를 한 줄(44px · 크게 48px)로 모은다. 누르면 종전 그 칸이 아래에 열린다 — 하는 일은 한 줄도 안 바뀐다.
   //    트윈은 «앞만 다름 · 뒤만 다름 · 둘 다 다름»(검수사 2026-10-14 10:33 «앞이 다름 뒤가 다름 그럼 둘다 다름은?») + «싱글로 한 대씩 · 보류».
-  const closeFix = () => { setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null); };
+  const closeFix = () => {
+    setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null);
+    //  4.26-02 (4.25-02 기록만): 수정 칸이 닫히면 카드 밖 컨(수정으로 고른 컨)의 XRAY 칸도 닫는다 — 다시 열면 치다 만 값이 남아 있었다. 카드 안 컨의 칸은 그대로.
+    if (editXCn && editXCn !== card?.main?.cn && editXCn !== card?.twin?.cn) { setEditXCn(null); setXVal(''); setXEVal(''); }
+  };
   const openFix = (side) => {
     if (fixOpen && fixSide === side) { closeFix(); return; }   // 같은 단추를 다시 누르면 닫는다
     setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
@@ -1947,7 +2004,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </button>
         {/* 4.26 — 머리는 «남은 수» 로만 말한다(설계 §4 — «B22 31/63» 처럼 묶음 전체 완료/합계를 섞은 숫자는 데크만 하는 중에 헷갈렸다). 남은 = 이 묶음·이 단(보류 포함) — 수석에게 보내는 활동 위치 «남은 N개» 와 같은 수. */}
         <div className="text-sm font-bold text-violet-300" data-gw-head="1">
-          B{(() => { const g = groups.find((x) => x.center === selectedGroup); return g ? [...g.bays].sort((a, b) => a - b).join('·') : selectedGroup; })()} {selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : ''} — 남은 {tierRemainConts.length}대
+          B{groupLbl(selectedGroup, groups.find((x) => x.center === selectedGroup))} {selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : ''} — 남은 {tierRemainConts.length}대
         </div>
         <button onClick={() => setVoiceOn(v => !v)} className="text-dim-300 hover:text-violet-300">
           {voiceOn ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
@@ -1966,7 +2023,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button key={g.center} data-gw-group={g.center} data-gw-cur={cur ? '1' : undefined} disabled={busy}
                 onClick={() => { if (cur) { closeFix(); setSelectedTier(null); } else pickGroup(g); }}
                 className={`gw-ex shrink-0 px-3 rounded-pill border font-bold whitespace-nowrap disabled:opacity-50 ${cur ? 'bg-violet-800 border-violet-500 text-white' : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>
-                B{[...g.bays].sort((a, b) => a - b).join('·')}{' '}
+                B{groupLbl(g.center, g)}{' '}
                 <span className={cur ? 'font-normal text-violet-100' : 'font-normal text-dim-400'}>{cur ? `${selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : ''} ⇄` : g.count}</span>
               </button>
             );
@@ -1986,31 +2043,47 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
       {/* ★ 2.75 — ⏸ 보류 줄. 검수사가 먼저 풀렸으면 되묻기를 기다릴 것 없이 여기서 [해제] 하면
           그 컨이 바로 앞 순서로 온다(검수사 확정 «해제 탭만 있으면 될듯»). */}
-      {held.length > 0 && (
-        <div className="bg-amber-950 border border-amber-700 rounded-xl">
-          <button onClick={() => setHoldList(v => !v)} className="w-full flex items-center justify-between px-3 py-2">
-            <span className="text-sm font-bold text-amber-200">⏸ 보류 {held.length}대</span>
-            <span className="text-xxs text-amber-300">
-              {held[0].reason}{held.length > 1 ? ` 외 ${held.length - 1}` : ''} · {Math.max(1, Math.round((Date.now() - (held[0].at || 0)) / 60000))}분째
-              {(Date.now() - (held[0].at || 0) > HOLD_LONG_MS) && <span className="text-rose-300"> · ⏱ 1시간 넘음</span>}
-            </span>
-          </button>
-          {holdList && (
-            <div className="px-2 pb-2 space-y-1">
-              {held.map((h) => (
-                <div key={h.cn} className="flex items-center justify-between gap-2 bg-ink-900 rounded-pill px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="mono text-sm text-dim-100 truncate">{h.cn}</div>
-                    <div className="text-xxs text-amber-300">{h.reason} · {Math.max(1, Math.round((Date.now() - (h.at || 0)) / 60000))}분째{h.equip ? ` · ${h.equip}` : ''}</div>
-                  </div>
-                  <button onClick={() => doRelease(h)} disabled={busy}
-                    className="shrink-0 px-3 py-1.5 rounded-pill text-xs font-bold bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white">해제</button>
-                </div>
-              ))}
+      {/* 4.26-02: «이 장» 보류가 머리 · 다른 장 보류는 흐린 줄로 따로(누르면 펼침) — 다른 장 [해제] 는 누가 건 것인지 묻는다. */}
+      {held.length > 0 && (() => {
+        const top = heldSplit.mine[0] || heldSplit.other[0];
+        const onlyOther = !heldSplit.mine.length;
+        const row = (h, other) => (
+          <div key={h.cn} className={`flex items-center justify-between gap-2 rounded-pill px-3 py-2 ${other ? 'bg-ink-900/60' : 'bg-ink-900'}`} data-held-row={other ? 'other' : 'mine'}>
+            <div className="min-w-0">
+              <div className="mono text-sm text-dim-100 truncate">{h.cn}{h._pos ? <span className="text-xxs text-dim-400"> {h._pos}</span> : null}</div>
+              <div className="text-xxs text-amber-300">{h.reason} · {Math.max(1, Math.round((Date.now() - (h.at || 0)) / 60000))}분째{h.equip ? ` · ${h.equip}` : ''}{h.by ? ` ${h.by}` : ''}</div>
             </div>
-          )}
-        </div>
-      )}
+            {other ? (
+              <button onClick={() => releaseOther(h)} disabled={busy}
+                className="shrink-0 px-3 py-1.5 rounded-pill text-xs font-bold bg-ink-800 border border-line text-dim-200 hover:bg-ink-750 disabled:opacity-50">해제…</button>
+            ) : (
+              <button onClick={() => doRelease(h)} disabled={busy}
+                className="shrink-0 px-3 py-1.5 rounded-pill text-xs font-bold bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white">해제</button>
+            )}
+          </div>
+        );
+        return (
+          <div className={`${onlyOther ? 'bg-ink-900 border-line' : 'bg-amber-950 border-amber-700'} border rounded-xl`} data-held-strip="1">
+            <button onClick={() => setHoldList(v => !v)} className="w-full flex items-center justify-between px-3 py-2">
+              <span className={`text-sm font-bold ${onlyOther ? 'text-dim-300' : 'text-amber-200'}`}>
+                {onlyOther ? `⏸ 다른 장 보류 ${heldSplit.other.length}대` : `⏸ 보류 ${heldSplit.mine.length}대`}
+                {!onlyOther && heldSplit.other.length ? <span className="text-xxs font-normal text-dim-300"> · 다른 장 {heldSplit.other.length}대</span> : null}
+              </span>
+              <span className="text-xxs text-amber-300">
+                {top.reason}{(onlyOther ? heldSplit.other.length : heldSplit.mine.length) > 1 ? ` 외 ${(onlyOther ? heldSplit.other.length : heldSplit.mine.length) - 1}` : ''} · {Math.max(1, Math.round((Date.now() - (top.at || 0)) / 60000))}분째
+                {(Date.now() - (top.at || 0) > HOLD_LONG_MS) && <span className="text-rose-300"> · ⏱ 1시간 넘음</span>}
+              </span>
+            </button>
+            {holdList && (
+              <div className="px-2 pb-2 space-y-1">
+                {heldSplit.mine.map((h) => row(h, false))}
+                {heldSplit.other.length > 0 && <div className="text-2xs text-dim-400 px-1 pt-1">다른 장 — 누가 건 것인지 보고 푸십시오</div>}
+                {heldSplit.other.map((h) => row(h, true))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ★ 3.77 — 양하 «베이 먼저»: 무게로 싱글이 된 트윈을 한쪽 베이부터 몰아 내리는 중. 누르면 트윈으로 복귀. */}
       {card && bayFirst != null && (
@@ -2062,9 +2135,20 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               </div>
               <div className="text-2xs text-amber-200/80">커버가 이 자리를 무는지 보십시오. 물면 치우고 <b>베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 앱이 맞춥니다.</div>
             </div>
+          ) : coverInfo.list.length > 0 && coverInfo.approx ? (
+            /* ★ 4.26-02 (모의 작업 MCAP 3호기 B34 — 시프팅 예측을 못 낸 배에서 «28대 — 치워야 열립니다» 라 했는데 실제 시프팅은 다른 베이 5대뿐이었다):
+                 예측이 없으면 어느 장 위인지 모른다 — 단정하지 않고 «확인» 으로 말한다(붉은 경보 아님). 장마다 위 화물 수는 오픈 보고의 장수 확인 창이 보인다. */
+            <div className="text-xxs text-amber-100 bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5 space-y-0.5" data-cover-approx="1">
+              <div className="font-bold">🔍 데크에 통과화물 {coverInfo.list.length}대 — 어느 장 위인지 앱이 모릅니다</div>
+              <div className="mono text-2xs text-amber-300">
+                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
+                {coverInfo.list.length > 8 ? ' …' : ''}
+              </div>
+              <div className="text-2xs text-amber-200/80">여는 장 위에 있으면 치워야 열립니다(시프팅). 안 여는 장 위 화물은 그대로 둡니다.</div>
+            </div>
           ) : coverInfo.list.length > 0 ? (
             <div className="text-xxs text-rose-200 bg-rose-950/50 border border-rose-800 rounded px-2 py-1.5 space-y-0.5">
-              <div className="font-bold">⚠ 커버 위에 통과화물 {coverInfo.list.length}대 — 치워야 열립니다 (시프팅){coverInfo.approx ? ' · 패널 미확인' : ''}</div>
+              <div className="font-bold">⚠ 커버 위에 통과화물 {coverInfo.list.length}대 — 치워야 열립니다 (시프팅)</div>
               <div className="mono text-2xs text-rose-300">
                 {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
                 {coverInfo.list.length > 8 ? ' …' : ''}
@@ -2437,7 +2521,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
           {consecFix > 0 && (
             <div className="text-xxs text-amber-400 text-center flex items-center justify-center gap-1">
-              <AlertTriangle className="w-3 h-3"/>연속 수정 {consecFix}회 — {AUTO_MANUAL_THRESHOLD}회면 수동 모드로 전환됩니다
+              <AlertTriangle className="w-3 h-3"/>연속 수정 {consecFix}회 — {AUTO_MANUAL_THRESHOLD}회면 순서를 묻습니다
             </div>
           )}
 
@@ -2508,6 +2592,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           bayPairs={bayPairs}
           workBay={posFor.bay || null}
           defaultAlsoComplete
+          shipCode={voyage?.info?.vsl || String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
           onClose={() => setPosFor(null)}
           onSave={async (b, r, t, opts) => fbReassignContainerPosition(voyageKey, mode, posFor.cn, b, r, t, inspector, { actualWork: true, ...(opts || {}) })}
           onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}

@@ -7,7 +7,8 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { ptkDischargeJudgeOf } from './utils.js';   // 4.20 후속: 평택 양하분 한 벌
+import { ptkDischargeJudgeOf } from './utils.js';
+import { activeHeldOf } from './utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(자동 가이드 보류 줄 · 미르와 같은 목록)   // 4.20 후속: 평택 양하분 한 벌
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer, isFullReefer } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromRecords, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
@@ -528,8 +529,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   const heldLines = [];
   { const byR = {};
     for (const md of ['discharge', 'loading']) {
-      const h = voyage?.[md]?.held || {};
-      for (const cn of Object.keys(h)) { const r = h[cn]?.reason; if (r) (byR[r] = byR[r] || []).push(cn); }
+      for (const x of activeHeldOf(voyage, md)) (byR[x.reason] = byR[x.reason] || []).push(x.cn);   // 4.26-02: 실린 컨의 보류는 뺀다(보류 한 벌)
     }
     for (const r of Object.keys(byR)) heldLines.push(`⏸ 보류 ${byR[r].length}대 — ${r} (${byR[r].slice(0, 3).join('·')}${byR[r].length > 3 ? ' 외' : ''})`);
   }

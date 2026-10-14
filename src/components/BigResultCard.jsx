@@ -539,6 +539,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         allContainers={allContainers}
         onClose={() => { setPosTarget(null); setPosAlso(false); }}
         defaultAlsoComplete={posAlso}
+        shipCode={String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
         workBay={posAlso ? (c.bay || null) : null}
         onSave={async (newBay, newRow, newTier, opts) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }

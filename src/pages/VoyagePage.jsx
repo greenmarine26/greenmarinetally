@@ -59,6 +59,7 @@ import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
+import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';   // 4.26-02: 시퀀스 방침을 바꿀 때 한 번 묻는다(앱 안 창)
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import ExpectedTimeLine from '../components/ExpectedTimeLine.jsx';   // 4.01: 작업 시작 화면 맨 위 «예상 작업 시간»
@@ -198,6 +199,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [relayQ, setRelayQ] = useState('');   // 1.84-01: 양하 탭 검색창의 문장 질문을 「작업 시작」 탭으로 릴레이   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);
+  const [seqAskState, seqAsk] = useConfirm();   // 4.26-02: 정해진 방침을 다른 것으로 바꿀 때만 묻는다(누가·언제 정했는지 보인다)
   // 1.56-01: 선박 기억은 **추천으로만** 쓴다 — 검수사 정정 2026-08-12:
   //   *"상황에 따라 틀려집니다. 선박당 1회는 매항차마다 물어야 합니다."*
   //   1.56 이 답 없는 항차에 지난 답을 자동 적용했는데 **틀린 설계**였다. 질문은 항차마다 한 번 뜨고,
@@ -1686,6 +1688,28 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   답이 자동 매핑으로 조용히 굳었다(독립 재검증 P1-7). 확인 전에도 방어는 종전 답대로 동작한다.
         const _legacyOnly = !voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null;
         const _chipCls = { fullSeq: 'text-rose-300', fullOnlySeq: 'text-amber-300', allActual: 'text-dim-100' };
+        //  ★ 4.26-02 (모의 작업 MCAP 2호기 — 작은 칩을 누구나 눌러 배 전체 방침이 바뀌었다): 이 답은 항차의 모든 검수원 자리 보호를 바꾼다.
+        //    정해진 방침을 **다른 것으로** 바꿀 때만 누가·언제 정했는지 보이고 한 번 묻는다(큰 단추 = 그대로 · ✕ 도 그대로). 처음 답·옛 답 재확인은 묻지 않는다.
+        //    ⚠ 조회만도 바꿀 수 있다 — 3.51-01 «관리 기록은 조회만도 적는다»(검수사 확정 · smoke_workchoice ⑥-E). 그래서 막지 않고 묻는다.
+        const _setBy = String(voyage?.info?.seqFullBy || '');
+        const _setAt = Number(voyage?.info?.seqFullAt) || 0;
+        const _setWho = _setBy ? `${_setBy}${_setAt ? ' ' + new Date(_setAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}` : '';
+        const _pick = (m3) => {
+          if (_cur && !_legacyOnly && m3 === _cur.m) { setSeqEdit(false); return; }
+          if (_cur && !_legacyOnly) {
+            const _to = _CH.find(x => x.m === m3);
+            seqAsk({
+              title: '배 전체 방침을 바꿉니다',
+              message: `지금 «${_cur.t}»${_setWho ? ` — ${_setWho} 정함` : ''}.\n«${_to ? _to.t : m3}» 로 바꾸면 이 항차 모든 검수원의 자리 보호가 바로 바뀝니다.\n일항사 방침이 바뀐 것이 맞을 때만 바꾸십시오.`,
+              confirmLabel: '그대로 둔다', cancelLabel: '바꾼다',
+              onConfirm: () => setSeqEdit(false),
+              onCancel: () => { _save(m3); },
+              onClose: () => {},
+            });
+            return;
+          }
+          _save(m3);
+        };
         if (_cur && !seqEdit && !_legacyOnly) {
           return (
             <button onClick={() => setSeqEdit(true)}
@@ -1693,7 +1717,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               <span className={`font-black ${_chipCls[_cur.m] || 'text-dim-100'}`}>
                 {_cur.lock ? '🔒' : '↔'} {_cur.t}
               </span>
-              <span className="text-dim-400">— 눌러서 바꾸기</span>
+              <span className="text-dim-400">— {_setWho ? `${_setWho} 정함 · ` : ''}눌러서 바꾸기</span>
             </button>
           );
         }
@@ -1717,7 +1741,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             )}
             <div className="grid grid-cols-1 gap-2 mt-2.5">
               {_CH.map(ch => (
-                <button key={ch.m} onClick={() => _save(ch.m)}
+                <button key={ch.m} onClick={() => _pick(ch.m)}
                   className={`py-2.5 px-3 rounded text-left ${ch.cls} ${ch.m === (_mode3 || shipSeqPref) ? 'ring-2 ring-amber-300' : ''}`}>
                   <div className="font-bold text-sm">{ch.lock ? '🔒' : '↔'} {ch.t}</div>
                   <div className="text-xxs opacity-80 mt-0.5 leading-snug">{ch.d}</div>
@@ -1728,6 +1752,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               <button onClick={() => setSeqEdit(false)}
                 className="w-full mt-1.5 text-xxs text-dim-300 py-1">그대로 두기</button>
             )}
+            <ConfirmModal {...seqAskState} />
           </div>
         );
       })()}
