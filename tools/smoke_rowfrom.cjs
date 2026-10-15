@@ -98,7 +98,9 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   wo = dom.window.__calls.filter(c => c.fn === 'workOrder');
   if (wo[wo.length - 1].order.prefs.join(',') !== '20,E') fail('엠티를 누르면 리퍼가 빠지고 «20,E» 가 저장돼야 한다: ' + JSON.stringify(wo[wo.length - 1]));
   //  조건 칩 개수 — 베이 고르는 화면으로 돌아가면 칩에 «+2»
-  if (!clickBy(/^베이 선택$/)) fail('[베이 선택] 되돌아가기 버튼이 없다');
+  //  ★ 4.27: 카드가 서면 한 화면 틀 — 머리 줄([베이 선택]) 대신 맨 위 한 줄 [◀ 전 화면](단 고르기로). 거기서 [베이 선택].
+  { const wb = doc.querySelector('[data-wf-back]'); if (wb) { wb.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); await wait(300); } }
+  if (!clickBy(/^베이 선택$/) && !clickBy(/^B\d+ 변경$/)) fail('[베이 선택]·[B.. 변경] 되돌아가기 버튼이 없다');   // 4.27: ◀ 전 화면 → 단 고르기 화면의 [B10 변경] → 베이 고르기
   await wait(400);
   t = txt();
   if (!/⇄ 육상부터 \+2/.test(t)) fail('조건 2개일 때 베이 화면 칩이 «⇄ 육상부터 +2» 가 아니다: ' + t.slice(0, 200));

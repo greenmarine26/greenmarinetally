@@ -31,6 +31,9 @@ import { recordHatchEvent } from '../hatchReport.js';   // 3.49: 따라가기 �
 import HatchAlertBanner from './HatchAlertBanner.jsx';   // 3.49: 비따라가기 알림
 import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
+import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 수동 트윈 한 화면 틀(조회창 앞·뒤 → [확인] → 카드 두 장 · 아래 칸 변경 단추)
+import { fbHoldContainers } from '../firebase.js';   // ★ 4.27: 수동 한 화면 틀의 ⏸ 보류(자동 가이드와 같은 저장)
+import { HOLD_REASONS } from '../utils.js';   // ★ 4.27: 보류 사유 한 벌
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
@@ -1004,7 +1007,11 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}
               /* TallyOne 1.48: 검수원이 이미 고른 작업 구역·단을 위치 지정 모달까지 내린다. */
               workGroup={manualBay} workTier={manualTier} slotSource={allContainers} bayPairsIn={manualBayPairs}
-              onManualMode={workFilter === 'loading' ? () => setLoadTwinMode('manual') : null}/>}
+              onManualMode={workFilter === 'loading' ? () => setLoadTwinMode('manual') : null}
+              /* ★ 4.27 — 기존 수동(베이뷰 아님) · 데크/홀드를 고른 뒤면 한 화면 틀. 검수사 2026-10-15 08:46·09:07. */
+              full={!(bayView && bayView.compact) && workFilter !== 'completed' && !isLoloShip && manualBay != null && manualBay >= 0 && (manualTier === 'deck' || manualTier === 'hold')}
+              barInfo={(() => { const g = manualGroups.find((x) => x.center === manualBay); return { bayText: g ? bayGroupText([...g.bays], g.center) : String(manualBay), tier: manualTier, remain: g ? tierLeftOf(g, manualTier) : null }; })()}
+              onBack={() => setManualTier(null)} onSwitchAuto={() => setGuideMode(true)} onSingleSearch={() => setSearchMode('single')}/>}
       </>
       )}
       </>
@@ -2620,7 +2627,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 }
 
 // ─── 트윈 모드 (자동 짝꿍) ───
-function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null, workGroup = null, workTier = null, slotSource = null, bayPairsIn = null }) {
+function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null, workGroup = null, workTier = null, slotSource = null, bayPairsIn = null,
+  full = false, barInfo = null, onBack = null, onSwitchAuto = null, onSingleSearch = null }) {   // ★ 4.27: full — 한 화면 틀(기존 수동 · 베이뷰 아님)
   const [confirmState, askConfirm] = useConfirm();   // 1.49: 맞교환 확인창 — 브라우저 confirm 대체
   // 1.53: 기다릴 수 있는 물음 — 네이티브 confirm() 은 렌더러를 멈춰 앱을 굳힌다.
   const askYN = (title, message) => new Promise(r => askConfirm({ title, message, confirmLabel: '계속', danger: true, onConfirm: () => r(true), onCancel: () => r(false) }));
@@ -2631,6 +2639,16 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   // V9.50: 검수사가 '실제 온 컨'으로 갈아 끼웠으면 자동 계산이 그걸 덮어쓰면 안 된다.
   const [replaced, setReplaced] = useState(false);
   const [twinBusy, setTwinBusy] = useState(false); // 통합 완료 처리 중
+  //  ★ 4.27 한 화면 틀 — 검수사 2026-10-15 08:46 «수동은 카드 두장 전에 조회창 앞뒤 두개를 보여주고 2개다 컨번을 입력하면 카드 두장을 보여주고 자동과 같은 화면으로 전환» ·
+  //    09:07 «2개 다 넣고 확인 버튼을 누르면 다음으로 넣어가게 해주세요 넣자마자 넘어가면 잘못입력했을 경우 수정을 할수가 없으니».
+  //    stage 'input' = 앞·뒤 조회창 + [확인] · 'cards' = 카드 두 장 + [트윈 한 번에 확인] + 아래 칸(앞만/뒤만/둘 다 다름 · 싱글로 한 대씩 · 보류 · 위치 틀림/선박에 없음).
+  //    뒤 칸은 자동으로 채우지 않는다(짝 후보 단추를 눌러야 들어간다) — 앞 번호만 넣고 넘어가지 않게.
+  const [stage, setStage] = useState('input');
+  const [q2, setQ2] = useState('');
+  const [singleOnly, setSingleOnly] = useState(false);   // 앞 한 대만(짝 없음)
+  const [panel, setPanel] = useState(null);              // 'single' | 'hold' | 'pos' | 'missing'
+  const [holdNote, setHoldNote] = useState('');
+  const frontRef = useRef(null), backRef = useRef(null);
   const equipNo = useEquipNo();   // TallyOne 1.55: 완료 기록에 갱(호기)을 남긴다
 
   // 이미 검수 완료된 컨번호 = 짝 후보에서 제외
@@ -2677,6 +2695,14 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const swapNoPair = !!(c1 && c2 && c1._mode === 'loading' && (isSwapSlot(c1) || isSwapSlot(c2)) && !twinPairOk(c1, c2));
   useEffect(() => {
     if (replaced) return;   // V9.50: 손으로 바꿔 놓은 카드를 자동 짝꿍이 되돌리지 않는다
+    //  ★ 4.27 한 화면 틀 — 앞 칸은 앞 컨만 정한다(뒤는 뒤 칸이 정한다 · 자동으로 채우지 않는다). 카드 단계에서는 목록이 바뀌어도(완료로 빠짐) 카드를 바꾸지 않는다.
+    if (full) {
+      if (stage !== 'input') return;
+      if (r1.length === 1) { if (!c1 || c1.cn !== r1[0].cn) setC1(r1[0]); }
+      else if (r1.length === 0) { if (c1) setC1(null); }
+      else if (c1 && !r1.some((x) => x.cn === c1.cn)) setC1(null);
+      return;
+    }
     if (r1.length === 1 && autoTwin) {
       const front = r1[0];
       // 증상2 수정: 같은 앞 컨이 이미 선택돼 있으면(완료로 인한 재실행 등)
@@ -2695,11 +2721,39 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       //   (구) 무조건 null → 버튼 클릭으로 선택해도 즉시 지워져 "선택이 안 됨" (메모 버그).
       if (!c1 || !r1.some(c => c.cn === c1.cn)) { setC1(null); setC2(null); }
     }
-  }, [r1, autoTwin, allContainers, shipImo, shipName, c1, replaced]);
+  }, [r1, autoTwin, allContainers, shipImo, shipName, c1, replaced, full, stage]);
+  //  ★ 4.27 한 화면 틀 — 뒤 칸(끝 4자리 또는 컨번호). 앞 컨은 후보에서 뺀다(같은 컨 두 번 금지). 작업분만(3.2-01 — 앞 칸과 같은 문지기).
+  const r2 = useMemo(() => {
+    if (!full || !q2 || q2.length < 2) return [];
+    const Q = q2.toUpperCase();
+    return allContainers.filter((c) => {
+      if (!canCompleteContainer(c, c._mode)) return false;
+      if (c1 && c.cn === c1.cn) return false;
+      const last4 = c.l4 || c.cn?.slice(-4) || '';
+      if (Q.length === 4) return last4 === Q;
+      return last4.endsWith(Q) || c.cn?.includes(Q);
+    });
+  }, [full, q2, allContainers, c1]);
+  useEffect(() => {
+    if (!full || stage !== 'input') return;
+    if (r2.length === 1) { if (!c2 || c2.cn !== r2[0].cn) setC2(r2[0]); }
+    else if (r2.length === 0) { if (c2) setC2(null); }
+    else if (c2 && !r2.some((x) => x.cn === c2.cn)) setC2(null);
+  }, [full, stage, r2]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  //  ★ 4.27 감사 중-2 — 한 화면 틀의 카드는 [확인] 을 누른 때의 c1·c2 사본을 들고 있다. 컨 상세에서 넣은 XRAY 실번호·완료 여부를 보려면 지금 목록에서 다시 읽는다.
+  //    같은 컨번호가 양하·선적 둘에 있을 수 있어(시프팅) 모드까지 맞춘다. slotSource 는 완료분까지 든 전체 풀이다.
+  const liveOf = (x) => {
+    if (!x) return null;
+    const src = slotSource || allContainers || [];
+    return src.find((y) => y && y.cn === x.cn && y._mode === x._mode) || null;
+  };
+  const is20 = (x) => !!x && (String(x.tp || '').startsWith('20') || String(x.iso || '')[0] === '2' || String(isoToLabel(x.iso) || '').startsWith('20'));
 
   // 증상3 수정: 옛 c1/c2 객체의 _comp는 갱신되지 않으므로,
   //   최신 allContainers에서 두 컨의 완료 여부를 다시 조회해 판단한다.
   const handleAfterComplete = () => {
+    if (full) return;   // ★ 4.27 감사 하-A: 한 화면 틀은 아래 카드 단계 효과 한 벌이 조회창으로 돌린다(늦은 리셋이 다음 쌍 입력을 지우지 않게)
     if (!c1) return;
     const isComp = (cn) => {
       const live = allContainers.find(x => x.cn === cn);
@@ -2721,12 +2775,14 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
     if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!equipNo) { alert(equipGateText()); return; }
+    //  ★ 4.27 감사 중-2: 한 화면 틀은 지금 목록 값으로 본다(컨 상세에서 넣은 XRAY 실번호 · 이미 확인한 한 대).
+    const _pair = full ? [c1, c2].map((x) => ({ ...x, ...(liveOf(x) || {}) })) : [c1, c2];
     //  3.2-01: 통과분은 완료할 수 없다(감사 P1-2 — 뒤 칸에 통과분이 남는 길).
-    const _tr = [c1, c2].filter(c => !c._comp && !canCompleteContainer(c, c._mode)).map(c => `${c.cn?.slice(-4)}(${c._mode === 'loading' ? c.pol : c.pod})`);
+    const _tr = _pair.filter(c => !c._comp && !canCompleteContainer(c, c._mode)).map(c => `${c.cn?.slice(-4)}(${c._mode === 'loading' ? c.pol : c.pod})`);
     if (_tr.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_tr.join(', ')}은 확인할 수 없습니다.`); return; }
     // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
     const xMiss = (c) => c._mode === 'discharge' && c._xray && !String(c._xraySeal?.seal || '').trim();
-    const miss = [c1, c2].filter(c => !c._comp && xMiss(c)).map(c => c.cn?.slice(-4));
+    const miss = _pair.filter(c => !c._comp && xMiss(c)).map(c => c.cn?.slice(-4));
     if (miss.length) {
       alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
@@ -2737,9 +2793,12 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       //   종전엔 fbCompleteContainer 를 한 건씩 두 번 불렀다. 앞이 반영되는 순간 그 컨이
       //   목록(filteredContainers)에서 빠져 카드가 통째로 사라지므로, 뒤가 실패해도
       //   화면에는 "처리된 것"처럼 보였다(catch 도 없어 조용히 묻혔다).
-      const cns = [c1, c2].filter(c => !c._comp).map(c => c.cn);
+      //  ★ 4.27 한 화면 틀: 한 대를 먼저 확인했으면(싱글로 한 대씩·위치 틀림) 그 컨은 다시 찍지 않는다 — 카드의 c 는 옛 값이라 지금 목록으로 본다(완료분은 목록에서 빠진다).
+      const _doneNow = (x) => (full ? (() => { const live = allContainers.find((y) => y.cn === x.cn); return !live || !!live._comp; })() : !!x._comp);
+      const cns = [c1, c2].filter(c => !_doneNow(c)).map(c => c.cn);
       if (cns.length) await fbCompleteContainersAtomic(voyageKey, c1._mode, cns, inspector, equipNo);   // 1.55: 갱(호기)
-      setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }, 500);
+      //  ★ 4.27 감사 하-A: 한 화면 틀은 카드 단계 효과가 조회창으로 돌린다 — 여기 0.5초 타이머까지 두면, 서버 확인이 늦을 때 이미 넣기 시작한 다음 쌍 번호를 지운다.
+      if (!full) setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }, 500);
     } catch (e) {
       alert('처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도해 주세요.\n' + (e?.message || e));
     } finally {
@@ -2806,6 +2865,295 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       speak('앞뒤 위치를 맞바꿨습니다');
     } finally { setTwinBusy(false); }
   };
+
+  //  ★ 4.27 감사 중-1 — 카드 단계에서 그 쌍이 다 확인되면(싱글로 한 대씩 둘 다 · 40피트 · 앞 한 대만 · 📍 위치 틀림 · 🚫 배에 없음) 조회창으로 돌아간다.
+  //    카드의 onAfterComplete(handleAfterComplete)는 누른 때의 목록을 보고, 위 앞 칸 효과는 카드 단계에서 쉰다 — 그래서 여기서 지금 목록으로 본다.
+  //    0.5초 뒤(✓ 를 보이고) — [트윈 한 번에 확인] 과 같은 틈. 목록(allContainers)은 완료분이 빠진 풀이라 «없음» 이 곧 완료다.
+  useEffect(() => {
+    if (!full || stage !== 'cards' || !c1) return undefined;
+    const gone = (x) => { const live = allContainers.find((y) => y.cn === x.cn); return !live || !!live._comp; };
+    const need = (!singleOnly && is20(c1) && c2) ? [c1, c2] : [c1];
+    if (!need.every(gone)) return undefined;
+    const t = setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setQ2(''); setC2(null); setStage('input'); setPanel(null); setSingleOnly(false); }, 500);
+    return () => clearTimeout(t);
+  }, [full, stage, c1, c2, singleOnly, allContainers]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  //  ★ 4.27 — 기존 수동 트윈 한 화면 틀(베이뷰 아님). 판정·저장은 종전 함수 그대로(handleCompleteBoth · 카드의 handleComplete·위치 수정 창·handleMissing · fbHoldContainers).
+  if (full) {
+    const isLoad = workFilter === 'loading';
+    const verb = isLoad ? '선적' : '양하';
+    const c1Is40 = !!c1 && !is20(c1);
+    //  짝 후보 — 누르면 뒤 칸에(자동으로 넣지 않는다). 통과분은 짝이 못 된다(3.2-01 — 종전 길 setC2 와 같은 문지기 · 감사 하).
+    const mate = (c1 && !c2 && !c1Is40 && !q2) ? (() => { const t = autoMate(c1); return t && canCompleteContainer(t, t._mode) ? t : null; })() : null;
+    const ready = !!c1 && (c1Is40 || !!c2);
+    const doneNow = (x) => { if (!x) return false; const live = allContainers.find((y) => y.cn === x.cn); return !live || !!live._comp; };
+    const L1 = c1 ? { ...c1, ...(liveOf(c1) || {}), _comp: doneNow(c1) } : null;   // 감사 중-2: 지금 목록 값(XRAY 실번호 등)
+    const L2 = (!singleOnly && !c1Is40 && c2) ? { ...c2, ...(liveOf(c2) || {}), _comp: doneNow(c2) } : null;
+    const twin = !!(L1 && L2);
+    const l4 = (x) => String((x && x.cn) || '').slice(-4);
+    const posTxt = (x) => (x ? (x.deckPos || (x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '자리 없음')) : '');
+    const bar = <WorkBarInfo mode={workFilter} kind="manual" bayText={barInfo && barInfo.bayText} tier={barInfo && barInfo.tier} remain={barInfo ? barInfo.remain : null} />;
+    const exB = (key, text, onClick, on = false, tone = 'amber', disabled = false) => (
+      <button key={key} data-twin-ex={key} onClick={onClick} disabled={twinBusy || disabled}
+        className={`gw-ex flex-1 min-w-0 px-1 rounded-pill font-bold border truncate disabled:opacity-40 ${on
+          ? (tone === 'rose' ? 'bg-rose-800 border-rose-500 text-white' : tone === 'sky' ? 'bg-sky-700 border-sky-500 text-white' : tone === 'orange' ? 'bg-orange-700 border-orange-500 text-white' : 'bg-amber-700 border-amber-500 text-white')
+          : (tone === 'rose' ? 'bg-ink-800 border-line text-rose-300' : tone === 'sky' ? 'bg-ink-800 border-line text-sky-300' : tone === 'orange' ? 'bg-ink-800 border-line text-orange-300' : 'bg-ink-800 border-line text-amber-300')}`}>
+        {text}
+      </button>
+    );
+    const toggle = (k) => setPanel((v) => (v === k ? null : k));
+    //  앞만·뒤만·둘 다 다름 = 그 칸을 비우고 조회창으로(다시 넣고 [확인]) — 다른 칸은 그대로 둔다.
+    const reenter = (which) => {
+      setStage('input'); setPanel(null); setSingleOnly(false);
+      //  이미 확인한 쪽은 목록에서 빠졌으므로 남겨 두지 않는다(남기면 그 칸이 «컨테이너 없음» 으로 보인다) — 남은 한 대는 앞 칸에 넣고 «싱글 — 앞 한 대만».
+      if (which !== 'back' || (L1 && L1._comp)) { setReplaced(false); setQ1(''); setC1(null); }
+      if (which !== 'front' || (L2 && L2._comp)) { setQ2(''); setC2(null); }
+    };
+    const resetAll = () => { setReplaced(false); setQ1(''); setC1(null); setQ2(''); setC2(null); setStage('input'); setPanel(null); setSingleOnly(false); setHoldNote(''); };
+    //  ⏸ 보류 — 자동 가이드 doHold 와 같은 저장(fbHoldContainers · 트윈은 두 대가 한 몸 · doneN = 그 모드 평택분 완료 수).
+    const doHoldManual = async (reason) => {
+      if (!reason || !L1) return;
+      if (!canWorkNow()) { alert(workGateText('보류')); return; }
+      const cns = [L1, L2].filter((x) => x && !x._comp).map((x) => x.cn);
+      if (!cns.length) return;
+      const doneN = (slotSource || allContainers).filter((x) => x._mode === workFilter && x._ptk && x._comp).length;
+      setTwinBusy(true);
+      try {
+        await fbHoldContainers(voyageKey, workFilter, cns, reason, inspector, equipNo, doneN);
+        try { speak(`${reason}. 보류했습니다.`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
+        resetAll();
+      } catch (e) {
+        alert('보류하지 못했습니다 — ' + (e?.message || e));
+      } finally { setTwinBusy(false); }
+    };
+    const switchAuto = onSwitchAuto ? (
+      <button onClick={onSwitchAuto} className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 text-dim-200 border border-line" data-twin-auto="1">🤖 자동 모드로 전환</button>
+    ) : null;
+    const notes = (
+      <>
+        {seqMode === 'allActual' && (
+          <div className="bg-cyan-950/30 border border-cyan-800/50 rounded-pill px-2.5 py-1.5 text-xxs text-cyan-200 leading-snug">
+            🔁 액츄얼 작업 — <b>자리는 계획대로</b> 찹니다. 다른 컨이 왔으면 <b>[앞만 다름·뒤만 다름]</b> 으로 온 컨 번호를 넣고{isLoad ? <>, 카드 자리가 실린 칸과 다르면 <b>📍 위치 틀림</b> 으로 실린 칸을 지정하세요.</> : ' 확인하세요.'}
+          </div>
+        )}
+      </>
+    );
+
+    if (stage === 'cards' && L1) {
+      const swapWarnAny = twin && [L1, L2].some((x) => x._mode === 'loading' && !x._comp && loadingSlotOf(x).kind === 'swapWarn');
+      const needPos = isLoad && (swapWarnAny || (twin && swapNoPair) || (!twin && L1._mode === 'loading' && !L1._comp && loadingSlotOf(L1).kind === 'swapWarn'));
+      const top = (
+        <>
+          {swapWarnAny ? (
+            <div className="rounded-pill p-2 border bg-orange-950/40 border-orange-700/60 text-xxs font-bold text-orange-200">
+              ⚠ 규격·풀엠티·항구가 다른 맞교환 컨({[L1, L2].filter((x) => x._mode === 'loading' && !x._comp && loadingSlotOf(x).kind === 'swapWarn').map((x) => l4(x)).join(' · ')})이 있어 앱이 자리를 정하지 않습니다 — 📍 위치 틀림으로 실린 칸을 지정하세요.
+            </div>
+          ) : (twin && swapNoPair) ? (
+            <div className="rounded-pill p-2 border bg-orange-950/40 border-orange-700/60 text-xxs font-bold text-orange-200">
+              ⚠ 앞 {l4(L1)}({fmtPos(L1)}) · 뒤 {l4(L2)}({fmtPos(L2)}) 는 한 트윈 칸이 아닙니다 — 맞교환 자리는 앱이 짐작한 칸입니다. 📍 위치 틀림 → 둘 다 로 실린 칸을 넣으세요.
+            </div>
+          ) : null}
+          <BigResultCard ref={frontRef} look="work" voyagePhotos={voyage?.photos || null} c={L1} allContainers={allContainers}
+            voyageKey={voyageKey} inspector={inspector}
+            onOpen={() => onOpenContainer?.(c1)}
+            onAfterComplete={handleAfterComplete}
+            onReplace={replaceFront}
+            autoTwin={L1._mode === 'loading' && !!L2} onTwinSaved={handleTwinSaved}
+            workGroup={workGroup} workTier={workTier} twinPartner={L2 ? c2 : null} slotSource={slotSource} bayPairsIn={bayPairsIn}
+            label={twin ? '앞' : ''} labelColor="amber" />
+          {twin && (
+            <div className="flex items-center gap-2 px-2">
+              <div className="flex-1 border-t border-line"/>
+              <div className="text-2xs text-dim-400 font-bold flex items-center gap-1"><Link2 className="w-3 h-3"/>트윈 짝꿍</div>
+              <button onClick={handleSwapPos} disabled={twinBusy}
+                className="text-2xs font-bold px-2 py-0.5 rounded bg-indigo-800 hover:bg-indigo-700 text-indigo-100 disabled:opacity-50 flex items-center gap-1">⇅ 앞뒤 맞교환</button>
+              <div className="flex-1 border-t border-line"/>
+            </div>
+          )}
+          {twin && (
+            <BigResultCard ref={backRef} look="work" voyagePhotos={voyage?.photos || null} c={L2} allContainers={allContainers}
+              voyageKey={voyageKey} inspector={inspector}
+              onOpen={() => onOpenContainer?.(c2)}
+              onAfterComplete={handleAfterComplete}
+              onReplace={replaceBack}
+              workGroup={workGroup} workTier={workTier} twinPartner={c1} slotSource={slotSource} bayPairsIn={bayPairsIn}
+              label="뒤" labelColor="cyan" />
+          )}
+        </>
+      );
+      const action = needPos ? (
+        <button onClick={() => (twin ? setPanel('pos') : frontRef.current?.openPos({ twin: false }))} disabled={twinBusy}
+          className="gw-go w-full rounded-pill font-bold bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-white flex items-center justify-center gap-2">📍 실린 칸 지정 — 위치 틀림</button>
+      ) : twin ? (
+        <button onClick={handleCompleteBoth} disabled={twinBusy || (L1._comp && L2._comp)}
+          className="gw-go w-full rounded-pill font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2" data-twin-go="both">
+          {twinBusy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}트윈 한 번에 {verb}확인
+        </button>
+      ) : (
+        <button onClick={() => frontRef.current?.complete()} disabled={twinBusy}
+          className={`gw-go w-full rounded-pill font-bold disabled:opacity-50 text-white flex items-center justify-center gap-2 ${L1._comp ? 'bg-rose-800 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-500'}`} data-twin-go="one">
+          <Check className="w-6 h-6"/>{L1._comp ? `${verb}확인 취소` : `${verb}확인`}
+        </button>
+      );
+      const lastBtn = isLoad
+        ? exB('pos', '📍 위치 틀림', () => (twin ? toggle('pos') : frontRef.current?.openPos({ twin: false })), panel === 'pos', 'orange')
+        : exB('missing', '🚫 배에 없음', () => (twin ? toggle('missing') : frontRef.current?.missing()), panel === 'missing', 'rose');
+      const bottom = (
+        <>
+          <ConfirmModal {...confirmState} />
+          {twin ? (
+            <div className="space-y-1.5" data-twin-exrow="twin">
+              <div className="flex gap-1.5">
+                {exB('front', '앞만 다름', () => reenter('front'))}
+                {exB('back', '뒤만 다름', () => reenter('back'))}
+                {exB('both', '둘 다 다름', () => reenter('both'))}
+              </div>
+              <div className="flex gap-1.5">
+                {exB('single', '싱글로 한 대씩', () => toggle('single'), panel === 'single', 'sky')}
+                {exB('hold', '⏸ 보류', () => toggle('hold'), panel === 'hold', 'rose')}
+                {lastBtn}
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-1.5" data-twin-exrow="single">
+              {exB('front', '번호 다름', () => reenter('both'))}
+              {exB('hold', '⏸ 보류', () => toggle('hold'), panel === 'hold', 'rose')}
+              {lastBtn}
+            </div>
+          )}
+          {panel === 'single' && twin && (
+            <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2" data-twin-panel="single">
+              <div className="text-xxs text-sky-300 font-bold">싱글 — 한 대씩. 온 쪽을 누르면 그 한 대만 {verb}확인되고 남은 한 대는 카드에 남습니다</div>
+              {[['front', L1, frontRef], ['back', L2, backRef]].map(([k, x, rf]) => (
+                <button key={k} onClick={() => rf.current?.complete()} disabled={twinBusy || x._comp}
+                  className="w-full py-3 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white flex items-center justify-between px-4">
+                  <span>{k === 'front' ? '앞' : '뒤'} <span className="mono">{l4(x)}</span>{x._comp ? ' ✓' : ''}</span>
+                  <span className="mono text-xxs opacity-80">{posTxt(x)}</span>
+                  <span>{x._comp ? '완료됨' : '이것만 확인'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {panel === 'hold' && (
+            <div className="bg-ink-900 border border-rose-800 rounded-xl p-2.5 space-y-2" data-twin-panel="hold">
+              <div className="text-xxs text-rose-300 font-bold">⏸ 지금 {verb} 불가 — 왜 못 합니까? (기록에 남습니다 — 완료로는 안 셉니다. 고르면 조회창으로)</div>
+              {HOLD_REASONS.map((r) => (
+                <button key={r} onClick={() => doHoldManual(r)} disabled={twinBusy}
+                  className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-rose-800 disabled:opacity-50 text-dim-100">{r}</button>
+              ))}
+              <div className="flex gap-2">
+                <input value={holdNote} onChange={(e) => setHoldNote(e.target.value)} placeholder="직접 적기"
+                  className="flex-1 bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
+                <button onClick={() => doHoldManual(holdNote.trim())} disabled={twinBusy || !holdNote.trim()}
+                  className="px-3 rounded-pill text-sm font-bold bg-rose-800 disabled:opacity-40 text-white">보류</button>
+              </div>
+            </div>
+          )}
+          {panel === 'pos' && twin && (
+            <div className="bg-ink-900 border border-orange-700 rounded-xl p-2 space-y-1.5" data-twin-panel="pos">
+              <div className="text-xs font-black text-orange-300">📍 어느 컨의 자리가 틀렸습니까? — 고르면 위치 수정 창(베이 → 칸)이 열리고, 칸을 고르면 그 자리로 {verb}확인합니다</div>
+              <div className="flex gap-1.5">
+                {exB('posFront', `앞 ${l4(L1)}`, () => { setPanel(null); frontRef.current?.openPos({ twin: false }); }, false, 'orange', L1._comp)}
+                {exB('posBack', `뒤 ${l4(L2)}`, () => { setPanel(null); backRef.current?.openPos({ twin: false }); }, false, 'orange', L2._comp)}
+                {exB('posBoth', '둘 다', () => { setPanel(null); frontRef.current?.openPos({ twin: true }); }, false, 'orange', L1._comp || L2._comp)}
+              </div>
+            </div>
+          )}
+          {panel === 'missing' && twin && (
+            <div className="bg-ink-900 border border-rose-800 rounded-xl p-2 space-y-1.5" data-twin-panel="missing">
+              <div className="text-xs font-black text-rose-300">🚫 선박에 없는 컨은? (누락으로 기록하고 완료합니다)</div>
+              <div className="flex gap-1.5">
+                {exB('missFront', `앞 ${l4(L1)}`, () => { setPanel(null); frontRef.current?.missing(); }, false, 'rose', L1._comp)}
+                {exB('missBack', `뒤 ${l4(L2)}`, () => { setPanel(null); backRef.current?.missing(); }, false, 'rose', L2._comp)}
+              </div>
+            </div>
+          )}
+          {switchAuto}
+          {notes}
+        </>
+      );
+      return <WorkFrame name="manual-cards" onBack={() => { setStage('input'); setPanel(null); }} bar={bar} top={top} action={action} bottom={bottom} />;
+    }
+
+    //  조회창 단계 — 앞·뒤 칸 · 두 칸 다 잡히면(40피트는 앞만) [확인] 이 켜진다.
+    const cand = (list, pick) => list.length > 1 && (
+      <div className="mt-2 text-xxs text-amber-400 text-center">
+        {list.length}개 일치 — 정확히 입력 또는 선택:
+        <div className="flex flex-wrap gap-1 mt-1 justify-center">
+          {list.slice(0, 8).map((x) => (
+            <button key={x.cn} onClick={() => pick(x)} className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
+              {x.cn}<span className="ml-1 text-3xs text-rose-300 font-black">{posTxt(x)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+    const okLine = (x) => x && (
+      <div className="mt-2 text-xs text-emerald-300 font-bold text-center" data-twin-ok={x.cn}>✓ <span className="mono">{x.cn}</span> · 계획 <span className="mono">{posTxt(x)}</span> · {x.tp || isoToLabel(x.iso) || ''} {String(x.fe || '').toUpperCase() === 'E' ? 'EMPTY' : 'FULL'}</div>
+    );
+    const box = (lab, tone, val, setVal, onClear, extra, disabled = false) => (
+      <div className={`bg-ink-900 border ${tone === 'amber' ? 'border-amber-700/40' : 'border-cyan-700/40'} rounded-pill p-3`} data-twin-box={lab}>
+        <div className={`text-2xs font-bold mb-2 flex items-center gap-1 ${tone === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>
+          <span className={`${tone === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'} px-1.5 py-0.5 rounded text-2xs font-black`}>{lab}</span>
+          {lab} 컨테이너 — 끝4자리{disabled ? ' (40피트 — 뒤 없음)' : ''}
+        </div>
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim-400"/>
+          <input type="text" value={val} disabled={disabled}
+            onChange={(e) => setVal(e.target.value.toUpperCase())}
+            placeholder="끝 4자리" inputMode="numeric" autoComplete="off"
+            className={`w-full pl-9 pr-10 py-3 bg-ink-800 border ${tone === 'amber' ? 'border-amber-700/40 text-amber-200 focus:border-amber-500' : 'border-cyan-700/40 text-cyan-200 focus:border-cyan-500'} rounded text-2xl font-black mono text-center tracking-widest focus:outline-none disabled:opacity-40`}/>
+          {val && <button onClick={onClear} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-5 h-5 text-dim-400"/></button>}
+        </div>
+        {extra}
+      </div>
+    );
+    const top = (
+      <>
+        {box('앞', 'amber', q1, (v) => { setReplaced(false); setQ1(v); }, () => { setReplaced(false); setQ1(''); setC1(null); },
+          <>
+            {q1.length >= 2 && r1.length === 0 && <div className="mt-2 text-xxs text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
+            {cand(r1, (x) => setC1(x))}
+            {okLine(c1)}
+          </>)}
+        {box('뒤', 'cyan', q2, (v) => setQ2(v), () => { setQ2(''); setC2(null); },
+          <>
+            {q2.length >= 2 && r2.length === 0 && <div className="mt-2 text-xxs text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
+            {cand(r2, (x) => setC2(x))}
+            {okLine(c2)}
+            {mate && (
+              <button onClick={() => setQ2(mate.cn)} className="mt-2 w-full py-2 rounded-pill border border-cyan-600 bg-cyan-950 text-cyan-200 text-sm font-black" data-twin-mate={mate.cn}>
+                짝 후보 <span className="mono">{l4(mate)}</span> · <span className="mono">{posTxt(mate)}</span> — 누르면 넣기
+              </button>
+            )}
+            {c1 && !c2 && !c1Is40 && isSwapSlot(c1) && <div className="mt-2 text-2xs text-orange-300">앞 컨 {l4(c1)} 은 맞교환 자리({fmtPos(c1)} · 계획 {loadingSlotOf(c1).plan})라 뒤 컨을 앱이 정하지 않습니다 — 같이 실린 뒤 컨 끝 4자리를 넣으세요.</div>}
+          </>, c1Is40)}
+        <div className="text-xxs text-dim-400 text-center">두 칸을 다 넣고 [확인]을 누르면 카드 두 장 화면으로 넘어갑니다. 40피트는 앞 칸만 넣으면 됩니다.</div>
+      </>
+    );
+    const action = (
+      <button onClick={() => { if (!ready) return; setSingleOnly(false); setPanel(null); setStage('cards'); }} disabled={!ready}
+        className={`gw-go w-full rounded-pill font-bold flex items-center justify-center gap-2 ${ready ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-ink-800 text-dim-500 border border-line'}`} data-twin-go="next">
+        <Check className="w-6 h-6"/>{!c1 ? '앞 번호를 넣으세요' : (c1Is40 ? '확인 — 카드로' : (c2 ? '확인 — 카드 두 장으로' : '뒤 번호를 넣으세요'))}
+      </button>
+    );
+    const bottom = (
+      <>
+        <ConfirmModal {...confirmState} />
+        <button onClick={() => { if (!c1 || c1Is40) return; setSingleOnly(true); setPanel(null); setStage('cards'); }} disabled={!c1 || c1Is40}
+          className="gw-ex w-full rounded-pill font-bold border bg-ink-800 border-line text-sky-300 disabled:opacity-40" data-twin-ex="singleOnly">싱글 — 앞 한 대만 (짝 없음)</button>
+        {onSingleSearch && (
+          <button onClick={onSingleSearch} className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 text-dim-200 border border-line">🎤 싱글 조회 화면으로</button>
+        )}
+        {switchAuto}
+        {notes}
+        {onManualMode && (
+          <button onClick={onManualMode} className="w-full py-2 rounded-pill text-xxs bg-ink-800 border border-line text-dim-300">계획에 없는 칸에 실렸습니다 — 위치 지정 방식으로</button>
+        )}
+      </>
+    );
+    return <WorkFrame name="manual-input" onBack={() => { if (onBack) onBack(); }} bar={bar} top={top} action={action} bottom={bottom} />;
+  }
 
   return (
     <>

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.26-04';
-const NOTE = '4.26-04 선적 자동 가이드에서 풀부터 엠티부터 칩이 다시 뜹니다. 같은 높이에 풀과 엠티가 함께 남으면 골라서 먼저 할 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.27';
+const NOTE = '4.27 작업 화면이 폰 한 화면에 고정됩니다. 위 칸에 카드와 확인 단추, 아래 칸에 변경 단추가 있고 수동은 앞뒤 번호를 넣고 확인을 누릅니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

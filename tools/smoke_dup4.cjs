@@ -78,22 +78,33 @@ const FX = require('./fixtures/dup4_nsdc.json');
   await type('');
   if (!clickBy(/트윈/)) fail('트윈 버튼이 없다');
   await wait(300);
-  const q1 = [...doc.querySelectorAll('input')].find(i => /끝 4자리 또는 컨번호/.test(i.placeholder || ''));
+  //  ★ 4.27 한 화면 틀(데크/홀드를 고른 뒤 수동 트윈) — 앞·뒤 조회창 [data-twin-box]. 틀이 아니면 종전 입력칸.
+  const wfIn = (lab) => doc.querySelector(`[data-twin-box="${lab}"] input`);
+  const q1 = wfIn('앞') || [...doc.querySelectorAll('input')].find(i => /끝 4자리 또는 컨번호/.test(i.placeholder || ''));
   if (!q1) fail('트윈 앞 컨 입력칸이 없다');
   const typeIn = async (el, v) => { setVal.call(el, v); el.dispatchEvent(new dom.window.Event('input', { bubbles: true })); await wait(400); };
   await typeIn(q1, '4219');
   t = doc.body.textContent || '';
   if (!/BEAU2314219/.test(t)) fail('트윈 앞 컨 4219(BEAU2314219)가 안 잡힌다: ' + t.slice(0, 160));
-  const q2 = [...doc.querySelectorAll('input')].find(i => (i.placeholder || '') === '끝 4자리');
+  const q2 = wfIn('뒤') || [...doc.querySelectorAll('input')].find(i => (i.placeholder || '') === '끝 4자리');
   if (!q2) fail('짝꿍 수동 입력칸(«끝 4자리»)이 없다 — 픽스처에 짝꿍이 없으니 떠야 한다: ' + t.slice(0, 200));
   await typeIn(q2, '9526');
   t = doc.body.textContent || '';
   if (/BEAU2309526/.test(t)) fail('짝꿍 후보에 통과분 BEAU2309526 이 올랐다(사고의 뒤 칸 길)');
   //  2560 = 평택 KMTU9292560 + 통과 HPCU5332560·TCKU6672560(KRKAN) — 평택 것만 후보 (FFAU 는 ③에서 완료돼 풀에 없다)
   await typeIn(q2, '2560');
+  if (wfIn('뒤')) {
+    //  4.27 뒤 칸 — 평택분 하나만 걸리면 그 컨이 잡힌다(✓ 줄 data-twin-ok) · 여럿이면 후보 단추 — 통과분은 어느 쪽에도 없어야 한다
+    const box = doc.querySelector('[data-twin-box="뒤"]');
+    const okc = box.querySelector('[data-twin-ok]');
+    const cand = [...box.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+    if (!((okc && okc.getAttribute('data-twin-ok') === 'KMTU9292560') || cand.some(x => x.startsWith('KMTU9292560')))) fail('뒤 칸 2560 에 평택분 KMTU9292560 이 안 잡힌다 — 필터가 과했다: ' + (box.textContent || '').slice(0, 200));
+    if (/HPCU5332560|TCKU6672560/.test(box.textContent || '')) fail('뒤 칸 2560 에 통과분(HPCU5332560·TCKU6672560)이 올랐다');
+  } else {
   const chips = [...doc.querySelectorAll('button')].map(b => (b.textContent || '').trim());
   if (!chips.some(x => /^KMTU9292560$/.test(x))) fail('짝꿍 후보에 평택분 KMTU9292560(2560)이 안 오른다 — 필터가 과했다: ' + chips.filter(x => /2560/.test(x)).join(' | '));
   if (chips.some(x => /HPCU5332560|TCKU6672560/.test(x))) fail('짝꿍 후보 2560 에 통과분(HPCU5332560·TCKU6672560)이 올랐다');
+  }
   // ── ⑧ 상세창 옆길(감사 P1-2 a) — 플래그 없는 통과분 객체로 [양하확인]을 눌러도 안 찍힌다 · 시프팅이면 찍힌다 ──
   const n0 = dom.window.__calls.filter(c => c.fn === 'complete').length;
   const SEGU = FX.ediContainers.SEGU2520320;

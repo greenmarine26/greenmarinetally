@@ -318,17 +318,19 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
       S2.firstCn() === cn && /엠티 · 실 없음/.test(s2) && !/미입력/.test(s2) && ch2.includes('▲ 긴급') && ch2.includes('🧳 수화물') && ch2.some((x) => x === 'EMPTY' || x.startsWith('EMPTY ')) && !ch2.some((x) => /리퍼/.test(x)) && !S2.errs.length,
       JSON.stringify({ s2, ch2, first: S2.firstCn() }));
     S2.close();
-    //  ⑥-4 풀 카드(B18 홀드 — 풀만) — 예외 줄 [다른 컨][⏸ 보류] · 그 밑 [📍 이 컨을 다른 칸에 실음] · «📍 자리 확인 방식으로» 길이 남아 있다(2-0-D)
+    //  ⑥-4 풀 카드(B18 홀드 — 풀만) — 예외 줄 [다른 컨][⏸ 보류][📍 위치 틀림] · «📍 자리 확인 방식으로» 길이 남아 있다(2-0-D)
+    //     ★ 4.27 한 화면 틀: 종전 따로 줄 «📍 이 컨을 다른 칸에 실음 — xxxx» 는 예외 줄 [📍 위치 틀림] 이 되었다(같은 창 — setPosFor(card.main)) · 검수사 2026-10-15 08:43·08:52.
     const S3 = await open(tnVoy(), 'loading', '1호기', null);
     await S3.startGuide();
     await S3.pick(18, /^🟠 홀드 [1-9]/);
     const cn3 = S3.firstCn();
     const ex3 = S3.exBtns();
     const slotTgl = !!S3.btn(/^📍 자리 확인 방식으로/);
-    const sb3 = S3.d.querySelector('[data-gw-ex="slot"]');
-    ok(`⑥-4 선적 풀 카드 ${cn3}(원자료 ${(EL[cn3] || {}).fe}) — 예외 줄 [${ex3.join('][')}] · «${sb3 ? S3.txt(sb3) : '-'}» · «📍 자리 확인 방식으로» ${slotTgl}`,
-      (EL[cn3] || {}).fe === 'F' && JSON.stringify(ex3) === JSON.stringify(['다른 컨', '⏸ 보류']) && !!sb3 && S3.txt(sb3) === `📍 이 컨을 다른 칸에 실음 — ${cn3.slice(-4)}` && slotTgl && !S3.errs.length, JSON.stringify({ cn3, ex3, slotTgl }));
-    //  ⑥-2 (감사·2차 시뮬 상-1) [📍 이 컨을 다른 칸에 실음] → 위치 지정 창 → B18 → 이름표가 걸린 칸 → 다음 → 변경 확정 → (자리를 바꿉니다 → 바꾸기) → (시퀀스 자리입니다 → 그래도 넣는다)
+    const sb3 = S3.d.querySelector('[data-gw-exrow] [data-gw-ex="pos"]');
+    const oldSlot3 = !!S3.d.querySelector('[data-gw-ex="slot"]');
+    ok(`⑥-4 선적 풀 카드 ${cn3}(원자료 ${(EL[cn3] || {}).fe}) — 예외 줄 [${ex3.join('][')}] · «${sb3 ? S3.txt(sb3) : '-'}» · 옛 따로 줄 ${oldSlot3 ? '남음' : '없음'} · «📍 자리 확인 방식으로» ${slotTgl}`,
+      (EL[cn3] || {}).fe === 'F' && JSON.stringify(ex3) === JSON.stringify(['다른 컨', '⏸ 보류', '📍 위치 틀림']) && !!sb3 && S3.txt(sb3) === '📍 위치 틀림' && !oldSlot3 && slotTgl && !S3.errs.length, JSON.stringify({ cn3, ex3, slotTgl, oldSlot3 }));
+    //  ⑥-2 (감사·2차 시뮬 상-1) [📍 위치 틀림](4.26 «📍 이 컨을 다른 칸에 실음») → 위치 지정 창 → B18 → 이름표가 걸린 칸 → 다음 → 변경 확정 → (자리를 바꿉니다 → 바꾸기) → (시퀀스 자리입니다 → 그래도 넣는다)
     //     이 보관소 사본은 «풀만 시퀀스» 항차(info.seqMode) — 고치기 전에는 바꾸기를 누르는 순간 창이 닫혀 쓰기 0 · 카드 그대로였다. 이제 그 칸에 배정·선적확인, 밀린 이름표 주인은 이 컨의 계획 칸으로.
     const plan3 = posOf(EL[cn3] || {});
     await S3.click(sb3, 500);
@@ -351,7 +353,7 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     await S3.until(() => !!(S3.mem().loading.completed || {})[cn3], 3000);
     const L3 = S3.mem().loading, r3 = (L3.records || {})[cn3] || {}, ro = (L3.records || {})[ownerCn] || {};
     const at = (r) => (r.bay_actual != null && r.bay_actual !== '' ? `${parseInt(r.bay_actual, 10)}-${r.row_actual}-${r.tier_actual}` : r.bay_assign ? `${parseInt(r.bay_assign, 10)}-${r.row_assign}-${r.tier_assign}` : '');
-    ok(`⑥-2 [📍 이 컨을 다른 칸에 실음] → B18 이름표 칸 ${tgt}(주인 ${ownerCn}) · «${tgl}» · 강한 확인 ${strong ? '뜸' : '안 뜸'}(같은 베이 문구 ${sameBay}) · 시퀀스 물음 ${seqAsk ? '뜸 → 그래도 넣는다' : '안 뜸'} → ${cn3} 완료 ${!!(L3.completed || {})[cn3]} · 실자리 ${at(r3)} · 밀린 ${ownerCn.slice(-4)} → ${at(ro) || '계획 자리 내줌'}(이 컨 계획 칸 ${plan3} · 알림 ${S3.alerts.some((x) => x.includes(ownerCn)) ? '있음' : '없음'}) · 창 닫힘`,
+    ok(`⑥-2 [📍 위치 틀림] → B18 이름표 칸 ${tgt}(주인 ${ownerCn}) · «${tgl}» · 강한 확인 ${strong ? '뜸' : '안 뜸'}(같은 베이 문구 ${sameBay}) · 시퀀스 물음 ${seqAsk ? '뜸 → 그래도 넣는다' : '안 뜸'} → ${cn3} 완료 ${!!(L3.completed || {})[cn3]} · 실자리 ${at(r3)} · 밀린 ${ownerCn.slice(-4)} → ${at(ro) || '계획 자리 내줌'}(이 컨 계획 칸 ${plan3} · 알림 ${S3.alerts.some((x) => x.includes(ownerCn)) ? '있음' : '없음'}) · 창 닫힘`,
       //  밀린 이름표 주인은 앱 규칙(firebase.fbReassignContainerPosition — 수동 큰 카드 «위치 지정» 과 같은 함수·같은 인자)대로 — 이 컨의 계획 칸으로 가거나, 계획 자리를 내주고 알림(«…는 계획 자리를 내줬습니다»)
       !!named && !!ownerCn && /— 켬$/.test(tgl) && sameBay && !!(L3.completed || {})[cn3] && at(r3) === tgt
         && (at(ro) === plan3 || (ro.bay === '' && S3.alerts.some((x) => x.includes(ownerCn) && /계획 자리를 내줬습니다/.test(x)))) && !/BAY \d+ — 자리 선택/.test(S3.d.body.textContent) && !S3.errs.length,
@@ -363,7 +365,7 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     await S4.startGuide();
     await S4.pick(18, /^🟠 홀드 [1-9]/);
     const cn4 = S4.firstCn();
-    await S4.click(S4.d.querySelector('[data-gw-ex="slot"]'), 500);
+    await S4.click(S4.d.querySelector('[data-gw-exrow] [data-gw-ex="pos"]'), 500);   // ★ 4.27: 종전 [data-gw-ex="slot"] 따로 줄 → 예외 줄 [📍 위치 틀림](같은 창)
     await S4.until(() => /선적할 베이를 먼저 선택하세요|BAY \d+ — 자리 선택/.test(S4.d.body.textContent));
     if (/BAY \d+ — 자리 선택/.test(S4.d.body.textContent)) await S4.click(S4.btn(/베이 다시 선택|다른 베이/) || null, 300);
     await S4.click([...S4.d.querySelectorAll('button')].find((b) => /^B22\s*남은/.test(S4.txt(b))) || null, 300);

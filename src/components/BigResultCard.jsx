@@ -1,8 +1,9 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf } from '../utils.js';   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
+import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf } from '../utils.js';
+import { inspectionSealOf, formatWt, isoShown } from '../utils.js';   // ★ 4.27 한 화면 카드(look='work') — 자동 가이드 카드와 같은 실번호 값·무게·규격 글자   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -13,7 +14,10 @@ import PositionEditModal from './PositionEditModal.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51: 원래 자리로 되돌리기
 import { gradeSwap, confirmTextOf, GRADE_STYLE } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급
 
-export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null,
+//  ★ 4.27 — look='work': 한 화면 틀(WorkFrame)의 카드. 자동 가이드 카드와 같은 모양(번호 끝 4자리 크게 · 자리 상자 · 데크/홀드 · 출발→도착 · 칩 · 실)이고
+//    확인·위치·누락 단추는 카드 밖 아래 칸에 있다 — 부르는 쪽(TwinSearch)이 ref 로 이 카드의 종전 함수(handleComplete·위치 수정 창·handleMissing)를 그대로 부른다.
+//    검수사 2026-10-15 08:46 «수동은 카드 두장 전에 조회창 앞뒤 두개를 보여주고 2개다 컨번을 입력하면 카드 두장을 보여주고 자동과 같은 화면으로 전환».
+const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null, look = '',
   // TallyOne 1.48: 검수원이 고른 작업 구역·단, 그리고 트윈 화면에서 이미 고른 짝꿍 컨.
   //   종전엔 이 셋을 PositionEditModal 로 안 내려서, 모달이 전체 베이를 다시 묻고 뒤 컨도 다시 물었다.
   workGroup = null, workTier = null, twinPartner = null,
@@ -27,7 +31,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   // TallyOne 2.03: 항차 photos(데미지 사진 포함) — 있으면 이 컨의 데미지 기록·사진을 카드에 띄운다.
   voyagePhotos = null,
   // TallyOne 3.75: 트윈 앞 카드 — 위치 수정 모달이 트윈 지정을 처음부터 켜고, 뒤 컨 저장 결과를 트윈 화면에 알린다.
-  autoTwin = false, onTwinSaved = null }) {
+  autoTwin = false, onTwinSaved = null }, ref) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
   //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
   //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
@@ -58,6 +62,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   //  ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(자동 가이드 카드·컨 상세·리스트와 같은 자리·같은 낱말). 규격 다른 맞교환이면 확인 대신 위치 지정(배정 후 바로 선적확인 켬).
   const ls = useMemo(() => (c && c._mode === 'loading' && !c._comp ? loadingSlotOf(c) : null), [c]);
   const [posAlso, setPosAlso] = useState(false);
+  //  ★ 4.27 — 한 화면 틀의 📍 위치 틀림: 칸을 고르면 그 자리로 확인(자동 가이드와 같은 defaultAlsoComplete) · 앞만이면 트윈 지정을 처음부터 켜지 않는다.
+  const [posDone, setPosDone] = useState(false);
+  const [posNoTwin, setPosNoTwin] = useState(false);
   // V8.70: 출발지(계획 위치) 기준 트윈 짝꿍 자동 계산 제거 — 싱글 자리 배정에 유령 짝꿍이 붙어
   //   존재하지 않는 자리에 무단 배정·완료되던 원인. 트윈 배정은 PositionEditModal 안에서
   //   도착지(배정 자리) 기준 + 검수사의 "트윈 지정"으로만 이뤄진다.
@@ -168,6 +175,158 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
     }
   };
 
+  // ★ 4.27 — 두 모양(종전 큰 카드 · 한 화면 카드)이 같은 창·같은 물음을 쓰도록 한 벌로 꺼내 둔다.
+  const dmgViewEl = (<>
+      {dmgView && (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={(e) => { e.stopPropagation(); setDmgView(null); }}>
+          {[dmgView.data, dmgView.detailPhoto].filter(Boolean).map((src, i) => (
+            <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-pill border border-line-strong" />
+          ))}
+          <div className="fixed-white text-xs2 font-bold text-center">
+            {c.cn} — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
+            <br/>화면을 누르면 닫힙니다
+          </div>
+        </div>
+      )}
+  </>);
+  const modalsEl = (<>
+      <ConfirmModal {...confirmState} />
+      <ChoiceModal {...choiceState} />
+  </>);
+  const posModalEl = (<>
+      <PositionEditModal
+        open={!!posTarget}
+        container={posAlso ? { ...(posTarget || c), bay: '', row: '', tier: '' } : (posTarget || c)}   /* 4.23-01 2차: 규격 다른 맞교환 — 앱이 짐작한 칸을 미리 고르지 않는다 */
+        allContainers={allContainers}
+        onClose={() => { setPosTarget(null); setPosAlso(false); setPosDone(false); setPosNoTwin(false); }}
+        defaultAlsoComplete={posAlso || posDone}   /* ★ 4.27 한 화면 틀 📍 위치 틀림 — 칸을 고르면 그 자리로 확인(자동 가이드와 같다) */
+        shipCode={String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
+        workBay={posAlso ? (c.bay || null) : null}
+        onSave={async (newBay, newRow, newTier, opts) => {
+          if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
+          // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지, 사용자 확정)
+          const _t = posTarget || c;
+          // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨(_t)의 옛 계획 자리로 옮겨 대기시킨다.
+          //   (종전 'unassign' → 미배정 떠돌이 발생. 지침 현장 규칙으로 복귀)
+          // TallyOne 1.54: `actualWork` 는 **시퀀스 여부가 아니다** — 자연어 탭의 자동/수동 모드에서 온 값이다.
+          //   시퀀스는 항차 속성(`info.seqFull`)이고 firebase 가 그것으로 판정한다(검수사 정정 2026-08-12).
+          //   `opts` 는 모달이 되물어 받아온 `{ seqConfirmed:true }` — 그대로 흘려보낸다(안 넘기면 조용한 실패).
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, _t.cn, newBay, newRow, newTier, inspector, { actualWork: true, ...(opts || {}) });
+          // V9.50: 다른 컨이 와서 그 자리에 배정했다면 카드를 그 컨으로 갈아 끼운다.
+          //   (같은 컨의 단순 위치 이동이면 갈아 끼울 것이 없다)
+          if (result && result.ok !== false && _t.cn !== c.cn && onReplace) {
+            onReplace({ ..._t, bay: String(parseInt(newBay, 10)), row: newRow, tier: newTier });
+          }
+          return result;
+        }}
+        bayPairs={posEditBayPairs}
+        workGroup={posAlso ? null : workGroup}   /* 4.23-01 2차: 규격 다른 맞교환의 실린 칸은 작업 묶음 밖일 수 있다 — 가이드의 [실린 칸 지정] 과 같이 베이를 안 가린다 */
+        workTier={posAlso ? null : workTier}
+        defaultPartner={posNoTwin ? null : twinPartner}
+        autoTwin={autoTwin && !posNoTwin}   /* ★ 4.27: «앞만» 은 트윈 지정을 켜지 않는다 */
+        onTwinSaved={onTwinSaved ? (info) => onTwinSaved({ ...info, frontCn: (posTarget || c).cn }) : null}
+        /* 1.55: 기본 칸은 **지금 작업 중인 칸**(이 카드의 컨이 있는 칸)이다 — 고른 컨의 계획 자리가 아니다. */
+        defaultPos={cardPos}
+        slotSource={slotSource}
+        onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
+        onCompleteBoth={async (cns) => {
+          //  3.2-01: 짝꿍이 통과분이면 둘 다 안 찍는다(감사 P1-2).
+          const _src = slotSource || allContainers || [];
+          const _bad = cns.map(cn => _src.find(x => x && x.cn === cn)).filter(o => o && !canCompleteContainer(o, c._mode));
+          if (_bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_bad.map(o => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
+          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+          if (!getEquipNumber()) { alert(equipGateText()); return; }   // ★ 4.27 감사 하-4: 📍 위치 틀림으로 확인할 때도 호기 없이 완료 금지(카드 [확인] 과 같은 문지기)
+          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());
+          // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
+          cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
+          if (onAfterComplete) setTimeout(() => onAfterComplete(c), 600);
+        }}
+      />
+  </>);
+  //  ★ 4.27 — 한 화면 틀(TwinSearch)이 카드 밖 아래 칸 단추로 이 카드의 종전 함수를 부른다(판정·저장·물음은 종전 그대로).
+  const _noEvt = { stopPropagation() {} };
+  useImperativeHandle(ref, () => ({
+    complete: () => handleComplete(_noEvt),
+    missing: () => handleMissing(_noEvt),
+    //  위치 틀림은 칸을 고르면 곧 확인까지 간다 — 자리를 쓰기 전에 문지기(조회만·호기)를 먼저 본다(2차 시뮬 하-1: 창 안의 확인 단계에서 막으면 자리만 옮겨지고 완료는 안 찍힌 채 남는다).
+    openPos: ({ twin = true } = {}) => {
+      if (!canWorkNow()) { alert(workGateText('완료')); return; }
+      if (!getEquipNumber()) { alert(equipGateText()); return; }
+      setPosNoTwin(!twin); setPosDone(true); setPosTarget(c);
+    },
+    isDone,
+  }));
+
+  //  ★ 4.27 — 한 화면 카드(look='work'). 자동 가이드 카드(GuidedWorkPanel.renderCon)와 같은 모양·같은 값(실번호 inspectionSealOf · 규격 tp/isoToLabel · 무게 formatWt).
+  //    단추는 카드 밖(아래 칸)에 있다. 카드를 누르면 종전처럼 컨 상세(XRAY 실번호 입력 포함)가 열린다.
+  if (look === 'work') {
+    const _warn = !!(ls && ls.kind === 'swapWarn');
+    const _bn = parseInt(c.bay, 10);
+    const _pos = _bn > 0 && c.row && c.tier ? `${_bn}-${c.row}-${c.tier}` : '';
+    const _deck = parseInt(c.tier, 10) >= 80;
+    const _empty = String(c.fe || '').toUpperCase() === 'E';
+    const _seal = inspectionSealOf(c);
+    const chip = 'gw-chip font-bold';
+    const amber = labelColor !== 'cyan';
+    return (
+      <div data-twin-card={label || ''} data-twin-cn={c.cn}
+        className={`rounded-pill border-2 p-2.5 ${isDone ? 'border-emerald-600 bg-emerald-950/30' : sealError ? 'border-red-600 bg-red-950/30' : amber ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
+        {dmgList.length > 0 && (
+          <button onClick={() => setDmgView(dmgList[0])} className="mb-1 text-xxs font-black text-orange-300">📷 사진 {dmgList.length}건 — 누르면 크게</button>
+        )}
+        {dmgViewEl}
+        {ls && ls.plan && (ls.kind === 'swap' || ls.kind === 'swapWarn') && (
+          <div className={`text-2xs font-bold mb-1 ${ls.kind === 'swap' ? 'text-sky-300' : 'text-orange-300'}`}>
+            {ls.kind === 'swap'
+              ? `🔄 맞교환 자리 — 계획 칸(${ls.plan})${ls.byCn ? `에 ${String(ls.byCn).slice(-4)} 이(가) 실렸습니다` : '은 다른 컨이 차지했습니다'}`
+              : `⚠ 계획 칸(${ls.plan})은 ${ls.byCn ? `${String(ls.byCn).slice(-4)} 이(가)` : '다른 컨이'} 차지했습니다 — 규격·풀엠티·항구가 달라 앱이 자리를 정하지 않습니다. 📍 위치 틀림으로 실린 칸을 지정하세요`}
+          </div>
+        )}
+        <button onClick={onOpen} className="w-full text-left">
+          {label && <span className={`mr-1 align-middle text-2xs font-black px-1.5 py-0.5 rounded ${labelMap[labelColor] || labelMap.amber}`}>{label}</span>}
+          <span className="mono font-bold text-dim-100 gw-cn-a">{String(c.cn || '').slice(0, -4)}</span>
+          <span className="mono font-black text-emerald-300 gw-cn-b">{String(c.cn || '').slice(-4)}</span>
+          {isDone && <span className="ml-1.5 align-middle bg-emerald-700 text-emerald-100 text-2xs px-1.5 py-0.5 rounded font-black">✓완료</span>}
+        </button>
+        {(c.deckPos || _pos || _warn) && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            {_warn ? <span className="text-orange-300 mono font-bold text-base">자리 미정</span>
+              : <span className="mono font-black text-dim-100 bg-ink-800 border border-line-strong gw-pos">{c.deckPos || _pos}</span>}
+            {!c.deckPos && _pos && <span className={`font-bold text-base ${_deck ? 'text-sky-300' : 'text-amber-300'}`}>{_deck ? '데크' : '홀드'}</span>}
+            {(c.pol || c.pod) && <span className="mono font-bold text-teal-300 text-lg">{c.pol || '?'} → {c.pod || '?'}</span>}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1 mt-1.5 mono">
+          <span className={`${chip} bg-ink-800 text-dim-100`}>{c.tp || isoToLabel(c.iso) || isoShown(c.iso)}</span>
+          <span className={`${chip} bg-ink-800 ${_empty ? 'text-dim-300' : 'text-emerald-300'}`}>{_empty ? 'EMPTY' : 'FULL'}{c.wt ? ` ${formatWt(c.wt)}` : ''}</span>
+          {c.op && <span className={`${chip} bg-ink-800 text-dim-200`}>{c.op}</span>}
+          {c._xray && <span className={`${chip} bg-fuchsia-700 text-fuchsia-100`}>★ X-RAY</span>}
+          {showTmp && <span className={`${chip} bg-sky-700 text-sky-100`}><Snowflake className="w-3 h-3 inline"/> 리퍼 {c.tmp}°C</span>}
+          {!showTmp && isReefer && c.fe !== 'E' && !c.rfdry && !reeferTempExempt(c) && <span className={`${chip} bg-red-700 text-white`}>리퍼 온도 미입력</span>}
+          {c.mkcon && <span className={`${chip} bg-ink-700 text-dim-100`}>제작컨</span>}
+          {c.dg && <span className={`${chip} bg-red-700 text-red-100`}>DG{c.un ? ` UN${c.un}` : ''}</span>}
+          {c.fr && <span className={`${chip} bg-orange-700 text-orange-100`}>FR</span>}
+          {c.ot && <span className={`${chip} bg-yellow-700 text-yellow-100`}>O/T</span>}
+          {c.tk && <span className={`${chip} bg-pink-700 text-pink-100`}>TK</span>}
+          {c.lolo && <span className={`${chip} bg-lime-700 text-lime-50`}>🏗갠트리</span>}
+        </div>
+        <div className="mt-1.5 pt-1.5 border-t border-line flex items-center gap-1.5" data-twin-seal={_seal || ''}>
+          <span className="text-xxs text-dim-400 flex-shrink-0">{_seal && !String(c.sl || '').trim() ? '엠티실:' : '실:'}</span>
+          <span className={`mono font-bold text-base ${sealError ? 'text-red-300' : _seal ? 'text-cyan-300' : _empty ? 'text-dim-300' : 'text-amber-400'}`}>{_seal || (_empty ? '엠티 · 실 없음' : '⚠ 미입력')}</span>
+          {sealError && <span className="bg-red-700 text-red-50 text-3xs px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><AlertOctagon className="w-2.5 h-2.5"/>실오류 · 원 {slOrig}</span>}
+        </div>
+        {c._xray && (
+          <div className="mt-1 text-xxs font-bold flex items-center gap-1.5" data-twin-xray={c._xraySeal?.seal || ''}>
+            <span className="text-fuchsia-400">XRAY:</span>
+            <span className={`mono text-sm ${c._xraySeal?.seal ? 'text-fuchsia-200' : 'text-amber-400'}`}>{c._xraySeal?.seal || '미입력 — 카드를 눌러 넣기'}{c._xraySeal?.eseal ? ` / E:${c._xraySeal.eseal}` : ''}</span>
+          </div>
+        )}
+        {modalsEl}
+        {posModalEl}
+      </div>
+    );
+  }
+
   return (
     <div className={`bg-ink-900 border-2 rounded-btn p-3 ${
       sealError ? 'border-red-600 bg-red-950/30' :
@@ -192,17 +351,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           </div>
         </div>
       )}
-      {dmgView && (
-        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={(e) => { e.stopPropagation(); setDmgView(null); }}>
-          {[dmgView.data, dmgView.detailPhoto].filter(Boolean).map((src, i) => (
-            <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-pill border border-line-strong" />
-          ))}
-          <div className="fixed-white text-xs2 font-bold text-center">
-            {c.cn} — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
-            <br/>화면을 누르면 닫힙니다
-          </div>
-        </div>
-      )}
+      {dmgViewEl}
       <button onClick={onOpen} className="w-full text-left">
         {/* M3.86: 라벨/모드 배지만 한 줄에 (컨번호는 다음 줄에 크게) */}
         <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -503,8 +652,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       )}
 
       {/* M3.74: confirm() → ConfirmModal · 1.53: 취소 갈래는 ChoiceModal */}
-      <ConfirmModal {...confirmState} />
-      <ChoiceModal {...choiceState} />
+      {modalsEl}
 
       {/* TallyOne 1.50: **지나온 자리.** 검수사 확정 2026-08-11 — *"이력을 남겨야 오류를 찾기 쉽습니다."*
           결과만 남아 있으면 왜 여기 왔는지 되짚을 수가 없다. 오늘 없는 중복 2곳·샌 3대·겹친 두 대가
@@ -533,53 +681,8 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       )}
 
       {/* M3.87: 위치 수정 모달 */}
-      <PositionEditModal
-        open={!!posTarget}
-        container={posAlso ? { ...(posTarget || c), bay: '', row: '', tier: '' } : (posTarget || c)}   /* 4.23-01 2차: 규격 다른 맞교환 — 앱이 짐작한 칸을 미리 고르지 않는다 */
-        allContainers={allContainers}
-        onClose={() => { setPosTarget(null); setPosAlso(false); }}
-        defaultAlsoComplete={posAlso}
-        shipCode={String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
-        workBay={posAlso ? (c.bay || null) : null}
-        onSave={async (newBay, newRow, newTier, opts) => {
-          if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
-          // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지, 사용자 확정)
-          const _t = posTarget || c;
-          // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨(_t)의 옛 계획 자리로 옮겨 대기시킨다.
-          //   (종전 'unassign' → 미배정 떠돌이 발생. 지침 현장 규칙으로 복귀)
-          // TallyOne 1.54: `actualWork` 는 **시퀀스 여부가 아니다** — 자연어 탭의 자동/수동 모드에서 온 값이다.
-          //   시퀀스는 항차 속성(`info.seqFull`)이고 firebase 가 그것으로 판정한다(검수사 정정 2026-08-12).
-          //   `opts` 는 모달이 되물어 받아온 `{ seqConfirmed:true }` — 그대로 흘려보낸다(안 넘기면 조용한 실패).
-          const result = await fbReassignContainerPosition(voyageKey, c._mode, _t.cn, newBay, newRow, newTier, inspector, { actualWork: true, ...(opts || {}) });
-          // V9.50: 다른 컨이 와서 그 자리에 배정했다면 카드를 그 컨으로 갈아 끼운다.
-          //   (같은 컨의 단순 위치 이동이면 갈아 끼울 것이 없다)
-          if (result && result.ok !== false && _t.cn !== c.cn && onReplace) {
-            onReplace({ ..._t, bay: String(parseInt(newBay, 10)), row: newRow, tier: newTier });
-          }
-          return result;
-        }}
-        bayPairs={posEditBayPairs}
-        workGroup={posAlso ? null : workGroup}   /* 4.23-01 2차: 규격 다른 맞교환의 실린 칸은 작업 묶음 밖일 수 있다 — 가이드의 [실린 칸 지정] 과 같이 베이를 안 가린다 */
-        workTier={posAlso ? null : workTier}
-        defaultPartner={twinPartner}
-        autoTwin={autoTwin}
-        onTwinSaved={onTwinSaved ? (info) => onTwinSaved({ ...info, frontCn: (posTarget || c).cn }) : null}
-        /* 1.55: 기본 칸은 **지금 작업 중인 칸**(이 카드의 컨이 있는 칸)이다 — 고른 컨의 계획 자리가 아니다. */
-        defaultPos={cardPos}
-        slotSource={slotSource}
-        onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
-        onCompleteBoth={async (cns) => {
-          //  3.2-01: 짝꿍이 통과분이면 둘 다 안 찍는다(감사 P1-2).
-          const _src = slotSource || allContainers || [];
-          const _bad = cns.map(cn => _src.find(x => x && x.cn === cn)).filter(o => o && !canCompleteContainer(o, c._mode));
-          if (_bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_bad.map(o => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
-          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
-          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());
-          // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
-          cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
-          if (onAfterComplete) setTimeout(() => onAfterComplete(c), 600);
-        }}
-      />
+      {posModalEl}
     </div>
   );
-}
+});
+export default BigResultCard;

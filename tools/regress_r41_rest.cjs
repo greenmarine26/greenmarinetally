@@ -84,6 +84,9 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     return { W, d, errs, alerts, click, btn, until, type, mem, tab, dialog, dialogs, txt, cards, groupBtn, startGuide, pick, fn: W.__R41fn, close: () => { try { W.close(); } catch (er) { /* 창 닫기 */ } } };
   };
 
+  //  ★ 4.27 한 화면 틀: 선적 단독 카드의 [📍 위치 틀림](예외 줄) — 종전 따로 줄 «📍 이 컨을 다른 칸에 실음 — xxxx» 와 같은 창(setPosFor(card.main))
+  const POS1 = '[data-gw-exrow="single"] [data-gw-ex="pos"]';
+
   //  ── ① 수정 3연속 — 말없이 수동으로 넘기지 않고 묻는다(OBWH 2763E 양하 B6 데크 · 모의 작업 OBWH 1호기 11회·MCAP 4호기)
   {
     const S = await open(baseVoy());
@@ -194,11 +197,16 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     const gb = S.groupBtn(6);
     const lab = gb ? (S.txt(gb).match(/^B([\d·]+)/) || [])[1] : '';
     await S.pick(6, /^🔵 데크 [1-9]/);
+    //  ★ 4.27 한 화면 틀: 카드가 서면 머리 줄(data-gw-head «B5·6·7 데크 …») 대신 맨 위 한 줄 «양하 자동 05(06)07 🔵 데크 남은 N대» — 묶음 이름은 같은 규칙(전체 작업분)으로 본다.
+    const p2 = (n) => String(n).padStart(2, '0');
+    const grpTxt = (bays) => { const odd = bays.filter((b) => b % 2 === 1); const lo = odd.filter((b) => b < 6), hi = odd.filter((b) => b > 6); return `${lo.length ? p2(lo[lo.length - 1]) : ''}(06)${hi.length ? p2(hi[0]) : ''}`; };
+    const bar = S.d.querySelector('[data-workframe="guide"] [data-wf-bar]');
     const hd = S.d.querySelector('[data-gw-head]');
-    const hdTxt = hd ? S.txt(hd) : '';
-    ok(`③ 5번 베이 ${b5.length}대를 다 끝낸 뒤 — 묶음 단추 «B${lab}» · 머리 «${hdTxt.slice(0, 40)}» = 전체 작업분 B${baysAll.join('·')}(남은 컨만이면 B${baysLeft.join('·')})`,
-      b5.length > 0 && lab === baysAll.join('·') && hdTxt.startsWith(`B${baysAll.join('·')} 데크`) && baysLeft.join('·') !== baysAll.join('·') && !S.errs.length,
-      JSON.stringify({ lab, hdTxt, baysAll, baysLeft }));
+    const hdTxt = bar ? S.txt(bar) : hd ? S.txt(hd) : '';
+    const barBay = bar ? S.txt(bar.querySelector('[data-wf-bay]') || bar) : '';
+    ok(`③ 5번 베이 ${b5.length}대를 다 끝낸 뒤 — 묶음 단추 «B${lab}» · 맨 위 줄 «${hdTxt.slice(0, 40)}» 베이 «${barBay}» = 전체 작업분 ${grpTxt(baysAll)}(남은 컨만이면 ${grpTxt(baysLeft)})`,
+      b5.length > 0 && lab === baysAll.join('·') && !!bar && barBay === grpTxt(baysAll) && /🔵 데크/.test(hdTxt) && grpTxt(baysLeft) !== grpTxt(baysAll) && !S.errs.length,
+      JSON.stringify({ lab, hdTxt, barBay, baysAll, baysLeft }));
     S.close();
   }
 
@@ -245,7 +253,7 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
         && q3.title === '이 배 자료에 없는 자리입니다' && /^앞 컨 자리 B98/.test(q3.message) && q4.title === '이 배 자료에 없는 자리입니다' && q4.danger === true,
       JSON.stringify({ got, want, lowHold, loose, zc, ghost, has08, tier92in14, tier92in15, q1, q2: q2.title, qLow: qLow.title, qZ: qZ.title, qEst: qEst.title, q3: q3.title, q4: q4.title }));
     S0.close();
-    //  ④-2 화면 — OBWH 2764W 선적 B6 데크 카드 [📍 이 컨을 다른 칸에 실음] → 직접 입력: 사전엔 있고 이번 항차 선적 자리엔 없는 칸 → «이번 항차 계획에 없는 칸입니다»(붉지 않음) · 사전에도 없는 단 → «베이매트릭스에도 없는 자리입니다» · 취소하면 쓰기 0
+    //  ④-2 화면 — OBWH 2764W 선적 B6 데크 카드 [📍 위치 틀림](4.26 «📍 이 컨을 다른 칸에 실음» — 4.27 한 화면 틀의 예외 줄 · 같은 창) → 직접 입력: 사전엔 있고 이번 항차 선적 자리엔 없는 칸 → «이번 항차 계획에 없는 칸입니다»(붉지 않음) · 사전에도 없는 단 → «베이매트릭스에도 없는 자리입니다» · 취소하면 쓰기 0
     const used = new Set(Object.values(L).map((c) => `${parseInt(c.bay, 10)}/${String(c.row).padStart(2, '0')}/${c.tier}`));
     const obwhBd = FX.shipDict.OBWH.bayDef;
     const S = await open(baseVoy(), 'loading');
@@ -254,7 +262,8 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     let cn = '', cBay = 0, cDeck = true;
     for (const [center, re] of [[18, /^🟠 홀드 [1-9]/], [14, /^🟠 홀드 [1-9]/], [6, /^🟠 홀드 [1-9]/], [10, /^🔵 데크 [1-9]/], [18, /^🔵 데크 [1-9]/], [14, /^🔵 데크 [1-9]/]]) {
       await S.pick(center, re);
-      if (S.btn(/^📍 이 컨을 다른 칸에 실음/)) { const c0 = S.cards()[0]; cn = c0 ? c0.getAttribute('data-gw-cn') : ''; break; }
+      if (S.d.querySelector(POS1)) { const c0 = S.cards()[0]; cn = c0 ? c0.getAttribute('data-gw-cn') : ''; break; }
+      await S.click(S.d.querySelector('[data-wf-back]'), 300);   // 4.27: 한 화면 틀 ◀ 전 화면 → 단 고르기 화면
       await S.click(S.btn(/^B\d+ 변경$/), 300);
     }
     if (cn && L[cn]) { cBay = parseInt(L[cn].bay, 10); cDeck = isDeck(L[cn]); }
@@ -265,7 +274,7 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     for (const t of zTiers) { for (let r = 1; r <= Math.max(0, ...zCells) && !free; r++) { const k = `${cBay}/${String(r).padStart(2, '0')}/${String(t).padStart(2, '0')}`; if (!used.has(k)) free = { r: String(r).padStart(2, '0'), t: String(t).padStart(2, '0') }; } if (free) break; }
     const badTier = String(Math.max(0, ...zTiers) + 2).padStart(2, '0');
     const tryCell = async (r, t) => {
-      await S.click(await S.until(() => S.btn(/^📍 이 컨을 다른 칸에 실음/)), 400);
+      await S.click(await S.until(() => S.d.querySelector(POS1)), 400);
       await S.click(await S.until(() => S.btn(/직접 입력 \/ 자리 비우기/)), 300);
       const ins = () => [...S.d.querySelectorAll('input')];
       const bIn = ins().find((x) => x.getAttribute('placeholder') === '14'), rIn = ins().find((x) => x.getAttribute('placeholder') === '00'), tIn = ins().find((x) => x.getAttribute('placeholder') === '02');
@@ -372,7 +381,7 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
       JSON.stringify({ gFE, gEF, gFF: gFF.level, gEE: gEE.level }));
     S.close();
 
-    //  ⑤-5 화면 — 답 없는 항차 선적 가이드: 풀 카드 [📍 이 컨을 다른 칸에 실음] → 직접 입력: 같은 베이 다른 풀의 계획 칸 → «시퀀스 자리입니다»(주인 번호·풀) → [취소] → 쓰기 0
+    //  ⑤-5 화면 — 답 없는 항차 선적 가이드: 풀 카드 [📍 위치 틀림](4.27 — 종전 «📍 이 컨을 다른 칸에 실음») → 직접 입력: 같은 베이 다른 풀의 계획 칸 → «시퀀스 자리입니다»(주인 번호·풀) → [취소] → 쓰기 0
     const S5 = await open(noAns(), 'loading');
     await S5.startGuide();
     let cn5 = '';
@@ -381,13 +390,14 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     const mate = (cn) => { const m = L[cn]; if (!m || m.fe !== 'F') return null; const fs = byBay(parseInt(m.bay, 10)).filter((o) => o.cn !== cn && o.fe === 'F' && !o.rf); return fs.find((o) => o.pod === m.pod) || fs[0] || null; };
     for (const [center, re] of [[6, /^🔵 데크 [1-9]/], [10, /^🔵 데크 [1-9]/], [18, /^🔵 데크 [1-9]/]]) {
       await S5.pick(center, re);
-      if (S5.btn(/^📍 이 컨을 다른 칸에 실음/)) { const c0 = S5.cards()[0]; cn5 = c0 ? c0.getAttribute('data-gw-cn') : ''; if (cn5 && mate(cn5)) break; cn5 = ''; }
+      if (S5.d.querySelector(POS1)) { const c0 = S5.cards()[0]; cn5 = c0 ? c0.getAttribute('data-gw-cn') : ''; if (cn5 && mate(cn5)) break; cn5 = ''; }
+      await S5.click(S5.d.querySelector('[data-wf-back]'), 300);   // 4.27: ◀ 전 화면
       await S5.click(S5.btn(/^B\d+ 변경$/), 300);
     }
     const own5 = cn5 ? mate(cn5) : null;
     let seqTxt5 = '', strong5 = false;
     if (cn5 && own5) {
-      await S5.click(await S5.until(() => S5.btn(/^📍 이 컨을 다른 칸에 실음/)), 400);
+      await S5.click(await S5.until(() => S5.d.querySelector(POS1)), 400);
       await S5.click(await S5.until(() => S5.btn(/직접 입력 \/ 자리 비우기/)), 300);
       const ins = () => [...S5.d.querySelectorAll('input')];
       const bIn = ins().find((x) => x.getAttribute('placeholder') === '14'), rIn = ins().find((x) => x.getAttribute('placeholder') === '00'), tIn = ins().find((x) => x.getAttribute('placeholder') === '02');

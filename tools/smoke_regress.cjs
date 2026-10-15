@@ -2394,14 +2394,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         .map((t) => ({ t, bays: t.match(/^B([\d·]+)/)[1].split('·').map(Number), deck: +((t.match(/데크 (\d+)/) || [])[1] || 0), hold: +((t.match(/홀드 (\d+)/) || [])[1] || 0) }));
       const cards = () => [...d.querySelectorAll('div.border-2')].filter((x) => /border-(amber|cyan)-600/.test(x.className)).map((x) => {
         const pos = x.getAttribute('data-gw-pos') || '';   // 4.26: 자리는 카드의 자리 상자(data-gw-pos — 맞교환 «자리 미정» 이면 빈칸)
-        const cn = [...x.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '')).find((s) => /^[A-Z]{4}\d{7}$/.test(s));
+        const cn = [...x.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '').replace(/^(앞|뒤)(?=[A-Z]{4}\d{7}$)/, '')).find((s) => /^[A-Z]{4}\d{7}$/.test(s));   // 4.27: 트윈 카드 이름표(앞·뒤)는 떼고 읽는다
         const nd = [...x.querySelectorAll('div')].find((y) => /^🔄 맞교환 자리/.test(y.textContent));
         const wd = [...x.querySelectorAll('div')].find((y) => /^⚠ 계획 칸\(/.test(y.textContent));   // 4.23-01 2차: 규격 다른 맞교환
         const head = [...x.querySelectorAll('span')].map((s) => s.textContent.trim()).find((s) => s === '자리 미정') || '';
         return { cn, pos, note: nd ? (nd.firstChild ? nd.textContent.split('⚠')[0] : '') : '', warnNote: wd ? wd.textContent : '', head };
       }).filter((x) => x.cn);
       const upcoming = () => { const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && x.firstChild.textContent === '다음 예정'); return box ? [...box.querySelectorAll('[data-gw-next-cn]')].map((r) => ({ cn: r.getAttribute('data-gw-next-cn') || '', pos: (r.getAttribute('data-gw-next-pos') || '').split(' ')[0] })) : []; };   // 4.26: 다음 예정 줄은 단추(data-gw-next-*)
-      const toGroups = async () => { await click(btn(/^베이 선택$/), 250); await click(btn(/^베이$/), 250); await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent)); };
+      //  4.27: 카드가 나온 기존 자동은 한 화면 틀 — [◀ 전 화면](단 고르기)을 먼저 누른다
+      const toGroups = async () => { await click(d.querySelector('[data-wf-back]'), 250); await click(btn(/^베이 선택$/), 250); await click(btn(/^베이$/), 250); await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent)); };
       //  «다른 컨테이너가 나옴» 칸을 열면 «이 단 남은 컨» 전부가 자리와 같이 나온다(엠티 카드는 자리 확인 칸이 열려 있어 «계획대로 확인하는 방식으로 돌아가기» 를 먼저)
       const remainList = async () => {
         //  4.26: 여는 단추는 예외 줄 [다른 컨](누르면 열고 다시 누르면 닫는다 — 이미 열려 있으면 누르지 않는다)
@@ -2799,7 +2800,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
       //  ⑬-2 같은 상태에서 선적 트윈 기본 화면(트윈 조회 TwinSearch — 앞 끝4 → 뒤 자동 «뒤 (자동)» 카드 · [트윈 한 번에 선적확인 (두 대)])도 같은 기준.
       //      4.23-01 1차가 작업창 목록에 정해 준 자리를 올리면서 이 화면의 자동 짝도 0468(칸 짐작)이 됐다 — 한 번 누르면 거짓 완료(마무리 담당 실측). 4.22-04 는 계획 짝 3338.
-      const openTwinSearch = async (front, back = '', vv = null) => {
+      //  4.27 — 기존 수동 [트윈] 은 한 화면 틀(조회창 앞·뒤 → [확인] → 카드). 검수사 2026-10-15 08:46·09:07 — 뒤 칸은 자동으로 채우지 않고 «짝 후보» 단추로 보인다.
+      //    이 검사의 뜻(4.23-01 — 맞교환 자리 앞 컨이면 칸으로 짝을 짐작하지 않는다 · 규격 다른 맞교환·한 트윈 칸 아님이면 [트윈 한 번에] 를 내지 않는다)은 그대로 — 화면 길만 새 틀로 간다.
+      //    useMate — 뒤를 안 넣었으면 «짝 후보» 단추를 누른다(있을 때만). 조회창 글(입력 단계)과 카드 화면 글을 함께 돌려준다.
+      const openTwinSearch = async (front, back = '', vv = null, useMate = true) => {
         const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
         const W = dom.window, errs = [];
         W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
@@ -2819,26 +2823,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await click(g, 300);
         await click(await until(() => btn(/^🟠 홀드 [1-9]/)), 300);
         await click(await until(() => btn(/^트윈$/)), 400);
-        const inp = await until(() => [...d.querySelectorAll('input')].find((x) => x.getAttribute('placeholder') === '끝 4자리 또는 컨번호'));
+        const inp = await until(() => d.querySelector('[data-twin-box="앞"] input'));
         if (inp) setVal(inp, front.slice(-4));
         await sleep(700);
-        if (back) {   // 뒤 칸 손 입력(ManualTwinPicker «끝 4자리») → 후보 단추
-          const inB = await until(() => [...d.querySelectorAll('input')].find((x) => x.getAttribute('placeholder') === '끝 4자리'));
+        const mateBtn = d.querySelector('[data-twin-mate]');
+        const mate = mateBtn ? mateBtn.getAttribute('data-twin-mate') : '';
+        if (back) {   // 뒤 칸 손 입력 — 끝 4자리가 여럿이면 후보 단추에서 고른다
+          const inB = d.querySelector('[data-twin-box="뒤"] input');
           if (inB) setVal(inB, back.slice(-4));
-          await sleep(400);
-          await click(await until(() => [...d.querySelectorAll('button')].find((x) => x.textContent.trim() === back)), 600);
-        }
-        const t = d.body.textContent; const i0 = t.indexOf('🚛 트윈: 앞 컨 입력');
-        const seg = i0 >= 0 ? t.slice(i0, i0 + 4000) : '';
-        const both = !!btn(/^트윈 한 번에 선적확인 \(두 대\)$/);
+          await sleep(500);
+          const cand = [...d.querySelectorAll('[data-twin-box="뒤"] button')].find((x) => x.textContent.replace(/\s+/g, '').startsWith(back));
+          if (cand) await click(cand, 400);
+        } else if (useMate && mateBtn) await click(mateBtn, 500);
+        const segIn = (d.querySelector('[data-workframe]') || d.body).textContent;
+        await click(btn(/^확인 — 카드/), 600);
+        const wf = d.querySelector('[data-workframe]');
+        const segCards = wf && wf.getAttribute('data-workframe') === 'manual-cards' ? wf.textContent : '';
+        const both = !!btn(/^트윈 한 번에 선적확인$/);
         try { W.close(); } catch (er) { /* */ }
-        return { seg, errs, opened: i0 >= 0, hadInput: !!inp, both };
+        return { seg: `${segIn} ‖ ${segCards}`, segIn, segCards, mate, errs, opened: !!wf, hadInput: !!inp, both };
       };
       const sA = await openTwinSearch(OWN);
-      const sNoAuto = sA.opened && sA.hadInput && !sA.seg.includes(PAIRF) && !sA.seg.includes('뒤 (자동)') && !sA.both && sA.seg.includes('뒤 컨을 앱이 정하지 않습니다');
+      const sNoAuto = sA.opened && sA.hadInput && !sA.mate && !sA.seg.includes(PAIRF) && !sA.both && !sA.segCards && sA.segIn.includes('뒤 컨을 앱이 정하지 않습니다');
       const sB = plainFront ? await openTwinSearch(plainFront) : { seg: '', errs: [], both: false };
-      const sKept = !!plainFront && sB.seg.includes(plainPair) && sB.seg.includes('뒤 (자동)') && sB.both;
-      ok(`⑬-2 선적 트윈 기본 화면(트윈 조회) — 앞 ${OWN.slice(-4)}(맞교환 자리) → «뒤 (자동)» ${sA.seg.includes('뒤 (자동)') ? '뜸' : '없음'} · ${PAIRF.slice(-4)} ${sA.seg.includes(PAIRF) ? '나옴(칸 짐작)' : '없음'} · [트윈 한 번에] ${sA.both ? '있음' : '없음'} · «뒤 컨을 앱이 정하지 않습니다» ${sA.seg.includes('뒤 컨을 앱이 정하지 않습니다') ? '있음' : '없음'} · 맞교환 아닌 앞 ${plainFront ? plainFront.slice(-4) : '?'} → «뒤 (자동)» ${plainPair ? plainPair.slice(-4) : '?'} ${sKept ? '그대로' : '안 됨'}`,
+      const sKept = !!plainFront && sB.mate === plainPair && sB.segCards.includes(plainPair) && sB.both;   // 4.27: 짝 후보 단추(누르면 뒤 칸) → [확인] → 카드 두 장 · [트윈 한 번에]
+      ok(`⑬-2 선적 트윈 기본 화면(트윈 조회 · 4.27 한 화면 틀) — 앞 ${OWN.slice(-4)}(맞교환 자리) → «짝 후보» ${sA.mate ? '뜸 ' + sA.mate.slice(-4) : '없음'} · ${PAIRF.slice(-4)} ${sA.seg.includes(PAIRF) ? '나옴(칸 짐작)' : '없음'} · [트윈 한 번에] ${sA.both ? '있음' : '없음'} · «뒤 컨을 앱이 정하지 않습니다» ${sA.seg.includes('뒤 컨을 앱이 정하지 않습니다') ? '있음' : '없음'} · 맞교환 아닌 앞 ${plainFront ? plainFront.slice(-4) : '?'} → «뒤 (자동)» ${plainPair ? plainPair.slice(-4) : '?'} ${sKept ? '그대로' : '안 됨'}`,
         sNoAuto && sKept && !sA.errs.length && !sB.errs.length, JSON.stringify({ seg: sA.seg.slice(0, 300), segB: sB.seg.slice(0, 160), errs: [...sA.errs, ...sB.errs].slice(0, 3) }).slice(0, 700));
       //  ⑬-3 트윈 조회에서 뒤 컨이 규격·풀엠티·항구가 다른 맞교환이면 [트윈 한 번에 선적확인 (두 대)] 를 내지 않는다(자동 가이드 큰 단추 · 위치 지정 방식과 같은 기준).
       //      같은 OBWH 계획판 — 엠티 SPSU2023338(계획 07-01-02)이 풀 SPSU2010140(CNYNT · 계획 09-01-82) 칸에 실렸다 → 2010140 은 맞교환 07-01-02(엠티 계획 칸 · ⚠).
@@ -2849,9 +2858,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const v13 = U32.applyAutoSwap(U32.applyCatosPos({ key: tk, info: clone(TX.info), loading: L13, discharge: {} }));
         const r13 = v13.loading.records.SPSU2010140 || {};
         const sW = await openTwinSearch('SPSU2041840', 'SPSU2010140', v13);
-        const twoCards = sW.seg.includes('SPSU2041840') && sW.seg.includes('SPSU2010140');
-        ok(`⑬-3 트윈 조회 — 뒤 SPSU2010140 (맞교환 ${P(r13.bay_assign, r13.row_assign, r13.tier_assign)} ${r13._assign_warn ? '⚠' : ''}) 손 입력 → [트윈 한 번에 선적확인 (두 대)] ${sW.both ? '있음' : '없음'} · «앱이 자리를 정하지 않습니다 — 그 카드의 [실린 칸 지정]» ${/앱이 자리를 정하지 않습니다 — 그 카드의 \[실린 칸 지정\]/.test(sW.seg) ? '있음' : '없음'}`,
-          !!r13._assign_warn && twoCards && !sW.both && /앱이 자리를 정하지 않습니다 — 그 카드의 \[실린 칸 지정\]/.test(sW.seg) && !sW.errs.length, JSON.stringify({ r13, seg: sW.seg.slice(0, 400), errs: sW.errs.slice(0, 3) }).slice(0, 700));
+        const twoCards = sW.segCards.includes('SPSU2041840') && sW.segCards.includes('SPSU2010140');   // 4.27: [확인] 뒤 카드 화면에 두 장
+        ok(`⑬-3 트윈 조회 — 뒤 SPSU2010140 (맞교환 ${P(r13.bay_assign, r13.row_assign, r13.tier_assign)} ${r13._assign_warn ? '⚠' : ''}) 손 입력 → [확인] → 카드 두 장 · [트윈 한 번에 선적확인] ${sW.both ? '있음' : '없음'} · «앱이 자리를 정하지 않습니다 — 📍 위치 틀림으로 실린 칸을 지정하세요» ${/앱이 자리를 정하지 않습니다 — 📍 위치 틀림으로 실린 칸을 지정하세요/.test(sW.segCards) ? '있음' : '없음'} · 확인 단추 자리 «📍 실린 칸 지정» ${/📍 실린 칸 지정/.test(sW.segCards) ? '있음' : '없음'}`,
+          !!r13._assign_warn && twoCards && !sW.both && /앱이 자리를 정하지 않습니다 — 📍 위치 틀림으로 실린 칸을 지정하세요/.test(sW.segCards) && !!/📍 실린 칸 지정/.test(sW.segCards) && !sW.errs.length, JSON.stringify({ r13, seg: sW.seg.slice(0, 400), errs: sW.errs.slice(0, 3) }).slice(0, 700));
       }
       //  ⑬-4 마무리 — 맞교환 자리 앞 컨 + 손으로 넣은 뒤 컨이 한 트윈 칸(짝 베이 · 같은 열·단)이 아니면 [트윈 한 번에] 를 내지 않는다(모의 작업장 twin3s — 7009 05-02-02 + 3338 07-01-02 로 적혔다).
       //      짝이면(7009 05-02-02 + 0468 07-02-02) 종전대로 단추가 선다.
@@ -2985,6 +2994,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await require('./regress_r41_rest.cjs')({ ROOT, TMP, ok, head, fx, stub });
   //  4.26-04 — 선적 자동 가이드 «풀부터 / 엠티부터» 칩은 선적 판정(아래 칸 먼저)으로 «지금 할 수 있는 컨» 을 센다(STMJ 2664W 3호기 10-15 03:58 18홀드 — 칩이 안 떠 가이드가 막혔다). 본문은 tools/regress_r42_fork.cjs(단독 실행도 된다).
   await require('./regress_r42_fork.cjs')({ ROOT, TMP, ok, head, fx, stub });
+  //  4.27 — 작업 화면 한 화면 고정(기존 자동·기존 수동 트윈 — 맨 위 한 줄 · 위 칸 카드+확인 · 아래 칸 변경 단추 · 수동 [확인] 뒤에 카드). 실제 크로뮴·빌드 CSS. 본문은 tools/regress_r43_workframe.cjs(단독 실행도 된다).
+  await require('./regress_r43_workframe.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }

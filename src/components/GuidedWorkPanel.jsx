@@ -20,9 +20,10 @@ import { speak, spellKo } from '../voice.js';
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
-import { activeHeldOf } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
+import { activeHeldOf, HOLD_REASONS } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
 import { loadingSlotOf, guideTwinOf } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
-import PositionEditModal from './PositionEditModal.jsx';   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
+import PositionEditModal from './PositionEditModal.jsx';
+import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 기존 자동 한 화면 틀(맨 위 한 줄 · 위 칸 카드·확인 · 아래 칸 변경 단추)   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinDiffLimit, twinWtOf } from '../nlSearch.js';
 
@@ -523,7 +524,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    ⚠ 보류는 **완료가 아니다** — 대수·인건비 집계에 안 섞인다(별도 노드 `held`).
   const HOLD_ASK_AFTER = 3;          // 검수사 확정: *«보통은 컨테이너 3-5개 다른거 작업하고 있으면 라싱인력이 옵니다»*
   const HOLD_LONG_MS = 60 * 60000;   // 검수사 확정: *«콘 잠김은 길어야 1시간이내입니다»* — 넘으면 매 카드마다 묻는다
-  const HOLD_REASONS = ['콘 잠김', '트윈 무게 초과', '컨 홀 불량(스프레더 안착 불가)'];
+  //  ★ 4.27: 보류 사유 목록은 utils.HOLD_REASONS 한 벌(수동 한 화면 틀도 같은 목록)
   const held = useMemo(() => activeHeldOf(voyage, mode), [voyage, mode]);   // 4.26-02: 실린(완료된) 컨의 보류는 뺀다 — 종전엔 실어도 «보류 12대» 로 남았다(모의 작업 MCAP 3호기)
   const heldSet = useMemo(() => new Set(held.map((x) => x.cn)), [held]);
   //  ★ 4.26-02 (모의 작업 MCAP 3호기 — 2호기가 건 보류가 3호기 화면에 [해제] 와 함께 떴다): 보류는 항차에 하나다(콘이 잠기면 누구에게나 잠긴 것 — 노드는 그대로).
@@ -778,6 +779,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   //  ★ 4.23-01 2차 — 카드 컨 중 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn) 컨. 있으면 큰 확인 단추가 그 자리를 확인하지 않고 위치 지정을 연다.
   const [posFor, setPosFor] = useState(null);
+  const [posPick, setPosPick] = useState(false);     // ★ 4.27: 📍 위치 틀림 — 트윈이면 앞·뒤·둘 다 고르는 줄
+  const [posTwin, setPosTwin] = useState(null);      // ★ 4.27: «둘 다» — 앞 칸을 고르면 뒤는 짝 칸(3.75 autoTwin)
+  const [posMateCn, setPosMateCn] = useState(null);  // ★ 4.27: 한 대만 고쳐 실으면 남은 짝을 바로 다음 카드로
   const warnOf = (cd) => (mode === 'loading' && cd ? [cd.main, cd.twin].filter(Boolean).find((x) => loadingSlotOf(x).kind === 'swapWarn') || null : null);
   // 확인 (트윈은 둘 다 한 번에)
   const handleConfirm = async () => {
@@ -1852,14 +1856,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const m = markOf(c);
     const _empty = String(c.fe || '').toUpperCase() === 'E';
     const _seal = inspectionSealOf(c);   // 검수리스트 실번호 칸과 같은 값(4.25-02 — 엠티는 엠티실)
+    const _twinLab = label === '앞' || label === '뒤';   // ★ 4.27: 트윈 카드(앞·뒤)
     const chip = 'gw-chip font-bold';
     return (
     <div data-gw-card={label} data-gw-cn={c.cn} data-gw-pos={_warn ? '' : _pos}
-      className={`rounded-pill border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
+      className={`rounded-pill border-2 ${_twinLab && !compact ? 'p-2.5' : 'p-3'} ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
+      {/* ★ 4.27: 트윈 카드(앞·뒤)는 이름표를 컨번호 앞에 붙인다 — 한 줄을 줄여 카드 두 장과 [트윈 한 번에 …확인] 이 한 화면(검수사 2026-10-15 07:45 «자동이나 수동이나 한 화면에 나와야 합니다»). 단독·«자리 미정» 은 종전 줄. */}
+      {(!_twinLab || _warn || compact) && (
       <div className="flex items-center justify-between text-2xs mb-1">
         <span className={`font-bold ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>{label}</span>
         {_warn && <span className="text-orange-300 mono font-bold">자리 미정</span>}
       </div>
+      )}
       {/*  ★ 4.23-01 — 이 칸은 «맞교환 자리»다(3.13 자동 맞교환 — 이 컨의 계획 칸에 다른 컨이 실려, 그 컨이 비운 계획 칸으로 옮겨 보인다).
             근거 — 검수사 확정(3.13) «밀려난 계획 컨을 어떻게 둘지 → 속성 같으면 비운 자리로 자동 맞교환». 같은 뜻을 앱 글이 이미 말한다(검수사 말이 아니다) —
             이 화면 «이 자리 화물이 아닙니다» 창(2.80-02) «[그래도 넣는다] 를 누르면 앱도 두 자리를 맞바꿔 둡니다» · 매뉴얼 자리 확인 절 «다른 컨을 넣었다면 그 컨은 온 컨이 있던 옛 자리로 가서 기다립니다».
@@ -1881,6 +1889,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         );
       })()}
       <button onClick={() => onOpenContainer?.(c)} className="w-full text-left">
+        {_twinLab && !_warn && !compact && <span className={`mr-1 align-middle text-2xs font-black px-1.5 py-0.5 rounded ${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'}`}>{label}</span>}
         <span className={`mono font-bold text-dim-100 ${compact ? 'text-xl' : 'gw-cn-a'}`}>{c.cn.slice(0, -4)}</span>
         <span className={`mono font-black text-emerald-300 ${compact ? 'text-3xl' : 'gw-cn-b'}`}>{c.cn.slice(-4)}</span>
       </button>
@@ -1970,7 +1979,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    같은 일을 하는 단추를 한 줄(44px · 크게 48px)로 모은다. 누르면 종전 그 칸이 아래에 열린다 — 하는 일은 한 줄도 안 바뀐다.
   //    트윈은 «앞만 다름 · 뒤만 다름 · 둘 다 다름»(검수사 2026-10-14 10:33 «앞이 다름 뒤가 다름 그럼 둘다 다름은?») + «싱글로 한 대씩 · 보류».
   const closeFix = () => {
-    setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null);
+    setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null); setPosPick(false);   // 4.27: 위치 틀림 고르기 줄도 닫는다
     //  4.26-02 (4.25-02 기록만): 수정 칸이 닫히면 카드 밖 컨(수정으로 고른 컨)의 XRAY 칸도 닫는다 — 다시 열면 치다 만 값이 남아 있었다. 카드 안 컨의 칸은 그대로.
     if (editXCn && editXCn !== card?.main?.cn && editXCn !== card?.twin?.cn) { setEditXCn(null); setXVal(''); setXEVal(''); }
   };
@@ -1989,8 +1998,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const exBtn = (key, text, onClick, on = false, tone = 'amber') => (
     <button key={key} data-gw-ex={key} onClick={onClick} disabled={busy}
       className={`gw-ex flex-1 min-w-0 px-1 rounded-pill font-bold border truncate disabled:opacity-50 ${on
-        ? (tone === 'rose' ? 'bg-rose-800 border-rose-500 text-white' : tone === 'sky' ? 'bg-sky-700 border-sky-500 text-white' : tone === 'fuchsia' ? 'bg-fuchsia-800 border-fuchsia-500 text-white' : 'bg-amber-700 border-amber-500 text-white')
-        : (tone === 'rose' ? 'bg-ink-800 border-line text-rose-300 hover:bg-rose-900' : tone === 'sky' ? 'bg-ink-800 border-line text-sky-300 hover:bg-sky-900' : tone === 'skyhint' ? 'bg-sky-950 border-sky-500 text-sky-200 hover:bg-sky-900' : tone === 'fuchsia' ? 'bg-ink-800 border-line text-fuchsia-300 hover:bg-fuchsia-900' : 'bg-ink-800 border-line text-amber-300 hover:bg-amber-900')}`}>
+        ? (tone === 'rose' ? 'bg-rose-800 border-rose-500 text-white' : tone === 'sky' ? 'bg-sky-700 border-sky-500 text-white' : tone === 'fuchsia' ? 'bg-fuchsia-800 border-fuchsia-500 text-white' : tone === 'orange' ? 'bg-orange-700 border-orange-500 text-white' : 'bg-amber-700 border-amber-500 text-white')
+        : (tone === 'rose' ? 'bg-ink-800 border-line text-rose-300 hover:bg-rose-900' : tone === 'sky' ? 'bg-ink-800 border-line text-sky-300 hover:bg-sky-900' : tone === 'skyhint' ? 'bg-sky-950 border-sky-500 text-sky-200 hover:bg-sky-900' : tone === 'fuchsia' ? 'bg-ink-800 border-line text-fuchsia-300 hover:bg-fuchsia-900' : tone === 'orange' ? 'bg-ink-800 border-line text-orange-300 hover:bg-orange-900' : 'bg-ink-800 border-line text-amber-300 hover:bg-amber-900')}`}>
       {text}
     </button>
   );
@@ -2000,10 +2009,40 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const pulledOn = !!(card && pulled && resumeCns === pulled && (card.main.cn === pulled[0] || card.twin?.cn === pulled[0]));
   //  되묻기(«⏸ 보류했던 컨테이너입니다 — 이제 됩니까?») 카드가 맨 앞이면 줄로 올리지 못한다(되묻기가 먼저) — 줄을 잠그고 까닭을 적는다(감사·2차 시뮬 중-1 — 눌러도 아무 일이 없었다).
   const dueOnCard = !!(holdDue && card && holdGroupOf(holdDue).some((x) => { const u = String(x).toUpperCase(); return String(card.main.cn).toUpperCase() === u || (card.twin && String(card.twin.cn).toUpperCase() === u); }));
+  //  ★ 4.27 — 📍 위치 틀림(선적 · 한 화면 틀). 검수사 08:52 «아까는 자동에서 위치지정이 어려워서 수동으로 했습니다. 베이를 눌러서 선적 하는 방법으로».
+  //    수동에서 쓰던 그 위치 수정 창(PositionEditModal — 베이 고르고 칸 누르기)을 연다. 칸을 고르면 그 자리로 선적확인(defaultAlsoComplete — 4.23-01 2차와 같은 창·같은 저장).
+  //    트윈은 앞·뒤·둘 다 중 먼저 고른다. 둘 다 = 앞 칸을 고르면 뒤는 짝 칸으로(3.75 autoTwin) · 한 대만이면 남은 짝이 바로 다음 카드(handleConfirmOne 과 같은 resumeCns).
+  const openPosWrong = () => {
+    if (!card) return;
+    const nv = !posPick;
+    closeFix(); setHoldOpen(false); setSingleMode(false);
+    if (!card.twin) { setPosTwin(null); setPosMateCn(null); setPosFor(card.main); return; }
+    setPosPick(nv);
+  };
+  const pickPosWrong = (which) => {
+    if (!card || !card.twin) return;
+    setPosPick(false);
+    if (which === 'both') { setPosTwin(card.twin); setPosMateCn(null); setPosFor(card.main); return; }
+    const c = which === 'back' ? card.twin : card.main, m = which === 'back' ? card.main : card.twin;
+    setPosTwin(null); setPosMateCn(m.cn); setPosFor(c);
+  };
+  const posPickEl = (posPick && card && card.twin) ? (
+    <div className="bg-ink-900 border border-orange-700 rounded-xl p-2 space-y-1.5" data-gw-pospick="1">
+      <div className="text-xs font-black text-orange-300">📍 어느 컨의 자리가 틀렸습니까? — 고르면 위치 수정 창(베이 → 칸)이 열리고, 칸을 고르면 그 자리로 선적확인합니다</div>
+      <div className="flex gap-1.5">
+        {exBtn('posFront', `앞 ${String(card.main.cn).slice(-4)}`, () => pickPosWrong('front'), false, 'orange')}
+        {exBtn('posBack', `뒤 ${String(card.twin.cn).slice(-4)}`, () => pickPosWrong('back'), false, 'orange')}
+        {exBtn('posBoth', '둘 다', () => pickPosWrong('both'), false, 'orange')}
+      </div>
+    </div>
+  ) : null;
 
-  return (
-    <div className="space-y-2">
+  //  ★ 4.27 — 화면 블록을 이름 붙여 둔다(안의 내용·순서는 종전 그대로). 기존 자동(compact 아님)에서 카드가 있으면 한 화면 틀(WorkFrame)에 나눠 담는다 —
+  //    검수사 2026-10-15 08:43 «상단엔 카드 앞뒤 두장과 일괄선적(양하)버튼 하단엔 변경사항». 베이뷰 위 칸(compact)은 종전 배치 그대로.
+  const settingsEl = (<>
       {!compact && <SettingsBar hideOrder/>}
+  </>);
+  const headEl = (<>
       <div ref={gwHeadRef} style={{ scrollMarginTop: 'calc(var(--hdr-h, 52px) + var(--dock-h, 68px) + 12px)' }} className="flex items-center justify-between bg-ink-900 border border-line rounded-pill px-2 py-1.5">
         <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-dim-300 hover:text-violet-300">
           <ChevronLeft className="w-4 h-4"/>베이 선택
@@ -2019,7 +2058,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       <div className="h-1.5 bg-ink-800 rounded overflow-hidden">
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
-
+  </>);
+  const chipsEl = (<>
       {/* ★ 4.26 — 장 칩 한 줄(설계 §1 «내 장 고르기»). 다른 장은 한 번 눌러 그 장으로(단 고르기로 간다 — «다른 갱» 물음도 종전 pickGroup 그대로), 지금 장은 누르면 단(데크⇄홀드)을 다시 고른다. 베이뷰 위 칸(compact)은 접는다. */}
       {!compact && groups.length > 0 && (
         <div ref={gwChipsRef} className="flex gap-1.5 overflow-x-auto pb-0.5" data-gw-groups="1">
@@ -2036,7 +2076,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           })}
         </div>
       )}
-
+  </>);
+  const orderEl = (<>
       {/* ★ 4.09 — 양하 순서 한 줄(폰 베이뷰 포함). 누르면 «양하 순서» 창이 열린다. */}
       {mode === 'discharge' && (
         <button onClick={() => setOrderOpen((v) => !v)}
@@ -2046,7 +2087,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </button>
       )}
       {mode === 'discharge' && orderOpen && orderSheet()}
-
+  </>);
+  const heldEl = (<>
       {/* ★ 2.75 — ⏸ 보류 줄. 검수사가 먼저 풀렸으면 되묻기를 기다릴 것 없이 여기서 [해제] 하면
           그 컨이 바로 앞 순서로 온다(검수사 확정 «해제 탭만 있으면 될듯»). */}
       {/* 4.26-02: «이 장» 보류가 머리 · 다른 장 보류는 흐린 줄로 따로(누르면 펼침) — 다른 장 [해제] 는 누가 건 것인지 묻는다. */}
@@ -2090,7 +2132,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           </div>
         );
       })()}
-
+  </>);
+  const bayFirstEl = (<>
       {/* ★ 3.77 — 양하 «베이 먼저»: 무게로 싱글이 된 트윈을 한쪽 베이부터 몰아 내리는 중. 누르면 트윈으로 복귀. */}
       {card && bayFirst != null && (
         <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-sky-700 rounded-pill px-2 py-1.5">
@@ -2101,7 +2144,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           </button>
         </div>
       )}
-
+  </>);
+  const forkEl = (<>
       {/* V8.50: 갈림 — 지금 내릴 수 있는 컨에 부류 혼재 시 선택 버튼 (기사 흐름 따라가기) */}
       {card && (forkChips || streamPref) && (
         <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-line rounded-pill px-2 py-1.5">
@@ -2124,94 +2168,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           )}
         </div>
       )}
-
-      {/* 1.76-05: 종전 `deckDonePromptD && card` — 데크를 다 내린 **그 순간** 큐가 비어 card 가 null 이 되고
-            아래 `!card` 분기(「이 베이 그룹 양하 완료!」)로 떨어져, 홀드가 남았는데도 오픈 배너에 도달할 수
-            없었다. 실측 MAMP 631N — 34 데크를 09:16 에 끝내고 홀드는 11:10 에야 시작했다. */}
-      {deckDonePromptD ? (
-        <div className="bg-amber-950/50 border-2 border-amber-600 rounded-pill p-4 text-center space-y-3">
-          <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
-          {coverInfo.list.length > 0 && coverInfo.doubt ? (
-            /* 2.08-15: 배정목록 이적 확정 0 — 대수에서는 뺐지만 «커버 영역»은 알린다(검수사 지시). */
-            <div className="text-xxs text-amber-100 bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5 space-y-0.5">
-              <div className="font-bold">🔍 커버 영역 확인 {coverInfo.list.length}대 — 배정목록 이적은 <b>확정 0모브</b>입니다</div>
-              <div className="mono text-2xs text-amber-300">
-                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
-                {coverInfo.list.length > 8 ? ' …' : ''}
-              </div>
-              <div className="text-2xs text-amber-200/80">커버가 이 자리를 무는지 보십시오. 물면 치우고 <b>베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 앱이 맞춥니다.</div>
-            </div>
-          ) : coverInfo.list.length > 0 && coverInfo.approx ? (
-            /* ★ 4.26-02 (모의 작업 MCAP 3호기 B34 — 시프팅 예측을 못 낸 배에서 «28대 — 치워야 열립니다» 라 했는데 실제 시프팅은 다른 베이 5대뿐이었다):
-                 예측이 없으면 어느 장 위인지 모른다 — 단정하지 않고 «확인» 으로 말한다(붉은 경보 아님). 장마다 위 화물 수는 오픈 보고의 장수 확인 창이 보인다. */
-            <div className="text-xxs text-amber-100 bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5 space-y-0.5" data-cover-approx="1">
-              <div className="font-bold">🔍 데크에 통과화물 {coverInfo.list.length}대 — 어느 장 위인지 앱이 모릅니다</div>
-              <div className="mono text-2xs text-amber-300">
-                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
-                {coverInfo.list.length > 8 ? ' …' : ''}
-              </div>
-              <div className="text-2xs text-amber-200/80">여는 장 위에 있으면 치워야 열립니다(시프팅). 안 여는 장 위 화물은 그대로 둡니다.</div>
-            </div>
-          ) : coverInfo.list.length > 0 ? (
-            <div className="text-xxs text-rose-200 bg-rose-950/50 border border-rose-800 rounded px-2 py-1.5 space-y-0.5">
-              <div className="font-bold">⚠ 커버 위에 통과화물 {coverInfo.list.length}대 — 치워야 열립니다 (시프팅)</div>
-              <div className="mono text-2xs text-rose-300">
-                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
-                {coverInfo.list.length > 8 ? ' …' : ''}
-              </div>
-            </div>
-          ) : (
-            <div className="text-xxs text-dim-300">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
-          )}
-          <div className="flex gap-2">
-            <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('open')) === false) return; setHatchOpenDone(true); markHatchDone(selectedGroup, 'open'); }}
-              className="flex-1 py-3 rounded-pill bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm">🔓 해치커버 오픈 → 홀드 진행</button>
-            <button onClick={() => setSelectedGroup(null)}
-              className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 데크로 이동</button>
-          </div>
-        </div>
-      ) : holdDonePrompt && card ? (
-        <div className="bg-sky-950/50 border-2 border-sky-600 rounded-pill p-4 text-center space-y-3">
-          <div className="font-bold text-sky-200">⚓ 이 베이 홀드 선적 완료!</div>
-          <div className="text-xxs text-dim-300">데크를 하려면 해치커버를 닫아야 합니다. 다음 작업을 선택하세요.</div>
-          <div className="flex gap-2">
-            <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('close')) === false) return; setDeckPromptDone(true); markHatchDone(selectedGroup, 'close'); }}
-              className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈 → 데크 계속</button>
-            <button onClick={() => { setSelectedGroup(null); setDeckPromptDone(false); }}
-              className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 베이 홀드 이동</button>
-          </div>
-        </div>
-      ) : !card ? (
-        <div className={`${groupLeft.n === 0 ? 'bg-emerald-950/40 border-emerald-700' : 'bg-amber-950/30 border-amber-700'} border rounded-pill p-6 text-center`}>
-          {groupLeft.n === 0 && <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>}{/* 4.25-02: 남은 컨이 있으면 완료처럼 보이지 않게(초록·✓ 없음) */}
-          {groupLeft.n === 0 ? (
-            <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
-          ) : (
-            <div data-group-left="1">
-              <div className="font-bold text-amber-300">{selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : '이 단'}에서 지금 할 컨이 없습니다</div>
-              <div className="text-xxs text-dim-300 mt-1">이 베이 그룹에 남은 {groupLeft.n}대{groupLeft.held ? ` · 보류 ${groupLeft.held}대` : ''}{groupLeft.other ? ` · ${selectedTier ? '다른 단' : '큐 밖'} ${groupLeft.other}대` : ''}</div>
-            </div>
-          )}
-          {!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (   // 3.49: 따라가기면 자동 판정이 적는다 — 버튼까지 숨겨 이중 보고를 막는다(감사 지적)
-            <div className="mt-3 space-y-2">
-              <div className="text-xxs text-dim-300">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
-              <div className="flex gap-2 justify-center">
-                <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('close')) === false) return; setHatchCloseDone(true); markHatchDone(selectedGroup, 'close'); }}
-                  className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈</button>
-                <button onClick={() => setSelectedGroup(null)}
-                  className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 베이 홀드 이동</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setSelectedGroup(null)} className="mt-3 px-4 py-2 rounded bg-ink-800 hover:bg-ink-750 text-sm text-dim-100">다른 베이 선택</button>
-          )}
-        </div>
-      ) : (
-        <>
+  </>);
+  const showCards = !deckDonePromptD && !(holdDonePrompt && card) && !!card;
+  const fs = !compact && showCards;   // ★ 4.27 한 화면 틀
+  const P = showCards ? {
+    pred: (<>
           <div className="text-xxs text-center text-dim-300">
             다음 예측 <span className="text-violet-300 font-bold">{groupDone + 1}번째</span>
             {card.single && <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-800 text-amber-100 font-bold">싱글모드 구간</span>}
           </div>
+    </>),
+    pulled: (<>
           {/* 4.26 — «다음 예정» 줄을 눌러 올린 카드면 띠를 붙인다(잘못 눌렀으면 [원래 순서로]). */}
           {pulledOn && (
             <div className="flex items-center justify-between gap-2 bg-violet-950/60 border border-violet-600 rounded-pill px-3 py-1.5" data-gw-pulled="1">
@@ -2220,6 +2187,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 className="shrink-0 px-2.5 py-1 rounded-pill border border-violet-500 bg-ink-800 text-xs font-bold text-violet-200 disabled:opacity-50">원래 순서로</button>
             </div>
           )}
+    </>),
+    cards: (<>
           {renderCon(card.main, card.twin ? '앞' : '단독', 'amber')}
           {card.twin && (
             <>
@@ -2235,7 +2204,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               {renderCon(card.twin, '뒤', 'cyan')}
             </>
           )}
-
+    </>),
+    sealDup: (<>
           {sealDupWarn.length > 0 && (
             <div className="rounded-pill px-3 py-2 text-sm font-bold flex items-start gap-2 bg-rose-950/60 border border-rose-700 text-rose-200">
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5"/>
@@ -2249,7 +2219,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               </div>
             </div>
           )}
-
+    </>),
+    wt: (<>
           {/* ★ 4.08-02 — 경보뿐이다. 55톤 초과는 «싱글 권유» 이고 들 수 있으면 트윈으로 한다(검수사 2026-10-07 «무게가 55톤을 초과하면 싱글 작업을 권유 하되 들수 있으면 트윈작업을 합니다»). */}
           {twinWtWarn && (twinWtWarn.over || twinWtWarn.imbal || twinWtWarn.heavy) && (
             <div className={`rounded-pill px-3 py-2 text-sm font-bold flex items-start gap-2 ${twinWtWarn.over ? 'bg-rose-950/60 border border-rose-700 text-rose-200' : 'bg-amber-950/60 border border-amber-700 text-amber-200'}`}>
@@ -2263,7 +2234,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               )}
             </div>
           )}
-
+    </>),
+    holdDue: (<>
           {/* ★ 2.75 — **되묻기.** 검수사 확정: 콘은 «3-5개 다른거 작업하고 있으면 라싱인력이 온다».
               그래서 검수사가 목록을 열 것 없이 앱이 먼저 꺼낸다. 1시간 넘으면 매 카드마다 묻는다. */}
           {holdDue && (String(card.main.cn).toUpperCase() === String(holdDue.cn).toUpperCase()
@@ -2282,11 +2254,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               </div>
             </div>
           )}
-
+    </>),
+    eseal: (<>
           {/* ★ 2.75 — 트윈을 한 대씩. ★ 4.08-02 — 55톤 초과여도 «트윈 한 번에» 는 잠그지 않는다(2.75 잠금을 풀었다 — 검수사 2026-10-07 «강제 싱글 전환은 안됩니다»). */}
           {/* ★ 3.71 — ATPR 위해행 엠티 선적: 컨번호를 부른 뒤 엠티실 뒷 세 자리를 듣는다(다른 배·다른 POD 는 그리지 않는다) */}
           <EsealVoiceBar voyage={voyage} voyageKey={voyageKey} inspector={inspector} card={card} mode={mode} voiceOn={voiceOn} />
-
+    </>),
+    action: (<>
           {card.twin && singleMode ? (
             <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2">
               <div className="text-xxs text-sky-300 font-bold">싱글 — 한 대씩. 온 쪽을 누르면 그 한 대만 확인되고 남은 한 대는 다음 카드입니다 (보통 캐빈에서 먼 쪽부터, 갱을 피해서 — 어느 쪽인지는 캐빈이 정합니다)</div>
@@ -2324,7 +2298,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </button>
             )
           )}
-
+    </>),
+    ex: (<>
           {/* ★ 4.26 예외 줄 — 단독: [다른 컨] (선적 [다른 칸]) [⏸ 보류] [★ XRAY] · 트윈: [앞만 다름] [뒤만 다름] [둘 다 다름] / [싱글로 한 대씩] [⏸ 보류] [★ XRAY].
                  XRAY 단추는 카드에 X-RAY 대상이 있을 때만(누르면 카드 안 그 컨의 XRAY 칸 — 카드 밖 컨은 막는 자리에서 4.25-02 needXray 가 연다).
                  선적 엠티 «자리 확인» 칸이 열려 있으면 그 칸이 «다른 컨» 이라 단추를 따로 두지 않는다. */}
@@ -2338,16 +2313,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <div className="flex gap-1.5">
                 {exBtn('single', '싱글로 한 대씩', () => { if (singleMode) { setSingleMode(false); return; } closeFix(); setHoldOpen(false); setSingleMode(true); }, singleMode, twinWtWarn?.over && !singleMode ? 'skyhint' : 'sky')}
                 {exBtn('hold', '⏸ 보류', () => { if (holdOpen) { setHoldOpen(false); setHoldNote(''); return; } closeFix(); setSingleMode(false); setHoldOpen(true); }, holdOpen, 'rose')}
-                {xrayTargets.length > 0 && exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}
+                {fs && mode === 'loading' && exBtn('pos', '📍 위치 틀림', openPosWrong, posPick, 'orange')}{/* ★ 4.27 검수사 08:43 «보류 뺴고 위치틀림을 넣어서 위치 수정가능하게» → 08:52 보류는 둔다 «베이를 눌러서 선적 하는 방법으로» */}
+                {xrayTargets.length > 0 && !(fs && mode === 'loading') && exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}
               </div>
+              {fs && mode === 'loading' && xrayTargets.length > 0 && <div className="flex gap-1.5">{exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}</div>}
             </div>
           ) : (
             <div className="flex gap-1.5" data-gw-exrow="single">
               {!slotMode && exBtn('fix', '다른 컨', () => openFix(null), fixOpen)}
               {exBtn('hold', '⏸ 보류', () => { if (holdOpen) { setHoldOpen(false); setHoldNote(''); return; } closeFix(); setHoldOpen(true); }, holdOpen, 'rose')}
+              {fs && mode === 'loading' && !slotMode && !warnOf(card) && exBtn('pos', '📍 위치 틀림', openPosWrong, false, 'orange')}{/* ★ 4.27 한 화면 틀 — 종전 «📍 이 컨을 다른 칸에 실음» 줄과 같은 창 */}
               {xrayTargets.length > 0 && exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}
             </div>
           )}
+    </>),
+    slotBtn: (<>
           {/* ★ 4.26 선적 — 이 컨을 계획과 다른 칸에 실었다(위치 지정 창 — 4.23-01 2차 «실린 칸 지정» 과 같은 창·같은 저장). 감사·2차 시뮬 중-3: «다른 컨» 과 한 글자 차이라 줄에서 빼 따로 둔다.
                엠티 «자리 확인» 중에는 숨긴다(그때 계획 컨은 참고일 뿐 — 실은 컨 번호를 자리 확인 칸에 넣는다). */}
           {mode === 'loading' && !card.twin && !slotMode && !warnOf(card) && (
@@ -2356,7 +2336,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               📍 이 컨을 다른 칸에 실음 — {String(card.main.cn).slice(-4)}
             </button>
           )}
-
+    </>),
+    holdPanel: (<>
           {/* ★ 2.75 — ⏸ 양하 불가. 못 하는 한 대만 빼고 큐는 계속 돈다(멈추면 수동으로 가야 했다). 4.26: 여는 단추는 예외 줄의 [⏸ 보류]. */}
           {holdOpen && (
             <div className="bg-ink-900 border border-rose-800 rounded-xl p-2.5 space-y-2" data-gw-hold="1">
@@ -2374,7 +2355,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button onClick={() => { setHoldOpen(false); setHoldNote(''); }} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">취소</button>
             </div>
           )}
-
+    </>),
+    xrayOut: (<>
           {/* ★ 4.25-02 — 카드 밖 컨(수정으로 고른 실제 컨)의 XRAY 입력칸. 카드 안 컨은 카드 안 칸이 열린다. */}
           {editXCn && editXCn !== card.main.cn && editXCn !== card.twin?.cn && (fixOpen || (slotMode && !card.twin)) && (
             <div className="bg-ink-900 border border-fuchsia-700 rounded-xl p-2.5 space-y-1.5" data-xray-out="1">
@@ -2382,7 +2364,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               {xrayEditRow(allContainers.find(x => x.cn === editXCn && x._mode === mode) || { cn: editXCn })}
             </div>
           )}
-
+    </>),
+    slotMode: (<>
           {/* ★ 2.80 «자리 확인» — 이 자리에 실제로 무엇을 실었는지 묻는다. 엠티 선적의 기본 경로.
               계획 컨은 «참고»로만 보이고, 다른 컨을 넣어도 «수정»이 아니라 정상 입력이다. */}
           {slotMode && !card.twin && (
@@ -2425,7 +2408,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 className="w-full text-2xs text-dim-400 py-1">계획대로 확인하는 방식으로 돌아가기</button>
             </div>
           )}
-
+    </>),
+    fix: (<>
           {/* 4.26: 여는 단추는 예외 줄 — 단독 [다른 컨] · 트윈 [앞만 다름]·[뒤만 다름]·[둘 다 다름]. 칸 안은 종전 그대로(트윈은 고른 쪽만 보인다). */}
           {(slotMode && !card.twin) || !fixOpen ? null : !card.twin ? (
             <div className="bg-ink-900 border border-amber-700 rounded-pill p-2 space-y-2">
@@ -2516,7 +2500,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button onClick={closeFix} className="w-full text-xxs text-dim-300 py-1">닫기</button>
             </div>
           )}
-
+    </>),
+    slotSwitch: (<>
           {/* 2.80: 껐다가 다시 켜는 길 — 없으면 검수사가 한 번 끄고 영영 못 돌아온다(2-0-D). 4.26: 예외 줄 아래 작은 줄로(수정 칸이 단추 바로 밑에 열리게). */}
           {mode === 'loading' && !slotMode && !card.twin && (
             <button onClick={() => { setSlotMode(true); setSlotUserSet(true); closeFix(); }}
@@ -2524,13 +2509,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               📍 자리 확인 방식으로 — 이 자리에 실은 번호만 넣기
             </button>
           )}
-
+    </>),
+    consec: (<>
           {consecFix > 0 && (
             <div className="text-xxs text-amber-400 text-center flex items-center justify-center gap-1">
               <AlertTriangle className="w-3 h-3"/>연속 수정 {consecFix}회 — {AUTO_MANUAL_THRESHOLD}회면 순서를 묻습니다
             </div>
           )}
-
+    </>),
+    next: (<>
           {/* 다음 예정 미리보기 — 3.48: 베이뷰(compact)에서는 접는다(아래 칸 그림이 다음 자리를 보여 준다) */}
           {/* 4.26 — 줄 44px(크게 48) · 끝 4자리 굵게. 줄을 누르면 그 컨이 위 카드로 올라온다(bringFront — 확인은 카드의 큰 단추로, 줄 한 번에 완료되지 않게). */}
           {!compact && queue.length > 1 && (
@@ -2552,9 +2539,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <div className="text-3xs text-dim-500 mt-1">{dueOnCard ? '⏸ 보류했던 컨 물음(이제 됩니까?)이 떠 있는 동안은 줄이 잠깁니다 — [예, 지금 합니다] 를 누르거나 [⏸ 보류] 로 다시 빼면 누를 수 있습니다(1시간 넘은 콘 잠김은 [아직] 뒤에도 바로 다시 묻습니다).' : '이 컨이 먼저 오면 줄을 누르세요 — 위 카드로 올라옵니다(확인은 카드에서).'}</div>
             </div>
           )}
-        </>
-      )}
-
+    </>),
+  } : null;
+  const unassignedEl = (<>
       {unassigned.length > 0 && (
         <div className="bg-amber-950/40 border border-amber-700 rounded-pill p-2">
           <button onClick={() => setShowUnassigned(v => !v)} className="w-full flex items-center justify-center gap-1.5 text-xs2 font-bold text-amber-300">
@@ -2579,11 +2566,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           )}
         </div>
       )}
+  </>);
+  const manualEl = (<>
       <button onClick={onSwitchManual}
         className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-ink-750 text-dim-200 flex items-center justify-center gap-2 border border-line">
         <Hand className="w-4 h-4"/>수동 모드로 전환
       </button>
-
+  </>);
+  const modalsEl = (<>
       {/* 1.53: 확인창은 앱 안에서 뜬다. 네이티브 confirm() 은 렌더러를 멈춰 앱을 굳혔다. */}
       <ConfirmModal {...confirmState} />
       {hatchCountEl}{/* 4.10: 해치 보고 직전 장수 확인 창 */}
@@ -2598,18 +2588,139 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           bayPairs={bayPairs}
           workBay={posFor.bay || null}
           defaultAlsoComplete
+          defaultPartner={posTwin || null} autoTwin={!!posTwin}   /* ★ 4.27 위치 틀림 «둘 다» — 앞 칸을 고르면 뒤는 짝 칸으로(수동 트윈 앞 카드와 같은 3.75 길) */
           shipCode={voyage?.info?.vsl || String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
-          onClose={() => setPosFor(null)}
+          onClose={() => { setPosFor(null); setPosTwin(null); setPosMateCn(null); }}
           onSave={async (b, r, t, opts) => fbReassignContainerPosition(voyageKey, mode, posFor.cn, b, r, t, inspector, { actualWork: true, ...(opts || {}) })}
           onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}
           onCompleteBoth={async (cns) => {
             if (!canWorkNow()) { alert(workGateText('완료')); return; }
             for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', equip);
             noteWorked(posFor);
-            setResumeCns([]); setSingleMode(false); setConsecFix(0); setFixOpen(false); setFixQuery('');
+            setResumeCns(cns.length === 1 && posMateCn ? [posMateCn] : []); setSingleMode(false); setConsecFix(0); setFixOpen(false); setFixQuery('');   // 4.27: 트윈 중 한 대만 고쳐 실었으면 남은 짝이 다음 카드
+            setPosTwin(null); setPosMateCn(null);
           }}
         />
       )}
+  </>);
+
+  if (fs) return (
+    <WorkFrame name="guide" onBack={() => { closeFix(); setHoldOpen(false); setSingleMode(false); setPosPick(false); setPosFor(null); setPosTwin(null); setPosMateCn(null); setSelectedTier(null); }}
+      bar={<WorkBarInfo mode={mode} kind="auto" bayText={bayGroupText([...(groupBaysAll.get(selectedGroup) || [])], selectedGroup)} tier={selectedTier} remain={tierRemainConts.length} />}
+      top={<>{P.pulled}{P.cards}{P.sealDup}{P.wt}{P.holdDue}{P.eseal}</>}
+      action={P.action}
+      bottom={<>
+        {forkEl}{P.ex}{posPickEl}{P.holdPanel}{P.xrayOut}{P.slotMode}{P.fix}{P.slotSwitch}{P.consec}
+        {manualEl}{P.pred}{orderEl}{heldEl}{bayFirstEl}{P.next}{unassignedEl}{chipsEl}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setVoiceOn(v => !v)} className="flex items-center gap-1 px-3 py-1.5 rounded-pill border border-line bg-ink-800 text-xs text-dim-200" data-gw-voice="1">
+            {voiceOn ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}{voiceOn ? '소리 켜짐' : '소리 꺼짐'}
+          </button>
+        </div>
+        {settingsEl}
+        {modalsEl}
+      </>} />
+  );
+
+  return (
+    <div className="space-y-2">
+      {settingsEl}
+      {headEl}
+      {chipsEl}
+      {orderEl}
+      {heldEl}
+      {bayFirstEl}
+      {forkEl}
+      {/* 1.76-05: 종전 `deckDonePromptD && card` — 데크를 다 내린 **그 순간** 큐가 비어 card 가 null 이 되고
+            아래 `!card` 분기(「이 베이 그룹 양하 완료!」)로 떨어져, 홀드가 남았는데도 오픈 배너에 도달할 수
+            없었다. 실측 MAMP 631N — 34 데크를 09:16 에 끝내고 홀드는 11:10 에야 시작했다. */}
+      {deckDonePromptD ? (
+        <div className="bg-amber-950/50 border-2 border-amber-600 rounded-pill p-4 text-center space-y-3">
+          <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
+          {coverInfo.list.length > 0 && coverInfo.doubt ? (
+            /* 2.08-15: 배정목록 이적 확정 0 — 대수에서는 뺐지만 «커버 영역»은 알린다(검수사 지시). */
+            <div className="text-xxs text-amber-100 bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5 space-y-0.5">
+              <div className="font-bold">🔍 커버 영역 확인 {coverInfo.list.length}대 — 배정목록 이적은 <b>확정 0모브</b>입니다</div>
+              <div className="mono text-2xs text-amber-300">
+                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
+                {coverInfo.list.length > 8 ? ' …' : ''}
+              </div>
+              <div className="text-2xs text-amber-200/80">커버가 이 자리를 무는지 보십시오. 물면 치우고 <b>베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 앱이 맞춥니다.</div>
+            </div>
+          ) : coverInfo.list.length > 0 && coverInfo.approx ? (
+            /* ★ 4.26-02 (모의 작업 MCAP 3호기 B34 — 시프팅 예측을 못 낸 배에서 «28대 — 치워야 열립니다» 라 했는데 실제 시프팅은 다른 베이 5대뿐이었다):
+                 예측이 없으면 어느 장 위인지 모른다 — 단정하지 않고 «확인» 으로 말한다(붉은 경보 아님). 장마다 위 화물 수는 오픈 보고의 장수 확인 창이 보인다. */
+            <div className="text-xxs text-amber-100 bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5 space-y-0.5" data-cover-approx="1">
+              <div className="font-bold">🔍 데크에 통과화물 {coverInfo.list.length}대 — 어느 장 위인지 앱이 모릅니다</div>
+              <div className="mono text-2xs text-amber-300">
+                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
+                {coverInfo.list.length > 8 ? ' …' : ''}
+              </div>
+              <div className="text-2xs text-amber-200/80">여는 장 위에 있으면 치워야 열립니다(시프팅). 안 여는 장 위 화물은 그대로 둡니다.</div>
+            </div>
+          ) : coverInfo.list.length > 0 ? (
+            <div className="text-xxs text-rose-200 bg-rose-950/50 border border-rose-800 rounded px-2 py-1.5 space-y-0.5">
+              <div className="font-bold">⚠ 커버 위에 통과화물 {coverInfo.list.length}대 — 치워야 열립니다 (시프팅)</div>
+              <div className="mono text-2xs text-rose-300">
+                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
+                {coverInfo.list.length > 8 ? ' …' : ''}
+              </div>
+            </div>
+          ) : (
+            <div className="text-xxs text-dim-300">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
+          )}
+          <div className="flex gap-2">
+            <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('open')) === false) return; setHatchOpenDone(true); markHatchDone(selectedGroup, 'open'); }}
+              className="flex-1 py-3 rounded-pill bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm">🔓 해치커버 오픈 → 홀드 진행</button>
+            <button onClick={() => setSelectedGroup(null)}
+              className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 데크로 이동</button>
+          </div>
+        </div>
+      ) : holdDonePrompt && card ? (
+        <div className="bg-sky-950/50 border-2 border-sky-600 rounded-pill p-4 text-center space-y-3">
+          <div className="font-bold text-sky-200">⚓ 이 베이 홀드 선적 완료!</div>
+          <div className="text-xxs text-dim-300">데크를 하려면 해치커버를 닫아야 합니다. 다음 작업을 선택하세요.</div>
+          <div className="flex gap-2">
+            <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('close')) === false) return; setDeckPromptDone(true); markHatchDone(selectedGroup, 'close'); }}
+              className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈 → 데크 계속</button>
+            <button onClick={() => { setSelectedGroup(null); setDeckPromptDone(false); }}
+              className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 베이 홀드 이동</button>
+          </div>
+        </div>
+      ) : !card ? (
+        <div className={`${groupLeft.n === 0 ? 'bg-emerald-950/40 border-emerald-700' : 'bg-amber-950/30 border-amber-700'} border rounded-pill p-6 text-center`}>
+          {groupLeft.n === 0 && <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>}{/* 4.25-02: 남은 컨이 있으면 완료처럼 보이지 않게(초록·✓ 없음) */}
+          {groupLeft.n === 0 ? (
+            <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
+          ) : (
+            <div data-group-left="1">
+              <div className="font-bold text-amber-300">{selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : '이 단'}에서 지금 할 컨이 없습니다</div>
+              <div className="text-xxs text-dim-300 mt-1">이 베이 그룹에 남은 {groupLeft.n}대{groupLeft.held ? ` · 보류 ${groupLeft.held}대` : ''}{groupLeft.other ? ` · ${selectedTier ? '다른 단' : '큐 밖'} ${groupLeft.other}대` : ''}</div>
+            </div>
+          )}
+          {!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (   // 3.49: 따라가기면 자동 판정이 적는다 — 버튼까지 숨겨 이중 보고를 막는다(감사 지적)
+            <div className="mt-3 space-y-2">
+              <div className="text-xxs text-dim-300">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
+              <div className="flex gap-2 justify-center">
+                <button disabled={hatchBusy} onClick={async () => { if ((await sendHatchReport('close')) === false) return; setHatchCloseDone(true); markHatchDone(selectedGroup, 'close'); }}
+                  className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈</button>
+                <button onClick={() => setSelectedGroup(null)}
+                  className="flex-1 py-3 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-dim-100 font-bold text-sm">다른 베이 홀드 이동</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setSelectedGroup(null)} className="mt-3 px-4 py-2 rounded bg-ink-800 hover:bg-ink-750 text-sm text-dim-100">다른 베이 선택</button>
+          )}
+        </div>
+      ) : (
+        <>
+          {P.pred}{P.pulled}{P.cards}{P.sealDup}{P.wt}{P.holdDue}{P.eseal}{P.action}{P.ex}{posPickEl}{P.slotBtn}{P.holdPanel}{P.xrayOut}{P.slotMode}{P.fix}{P.slotSwitch}{P.consec}{P.next}
+        </>
+      )}
+
+      {unassignedEl}
+      {manualEl}
+      {modalsEl}
     </div>
   );
 }

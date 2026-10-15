@@ -67,9 +67,11 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const refresh = async () => { const v = clone(mem()); v.key = vk; W.__R37upd(JSON.stringify(v), vk); await sleep(300); };
     const tab = async (re) => click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((b) => re.test(b.textContent))), 350);
     const dialog = () => { const t = [...d.querySelectorAll('div.fixed.inset-0')].find((x) => /z-\[100\]/.test(x.className)); return t || null; };
-    const cardCns = () => [...d.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '')).filter((s) => /^[A-Z]{4}\d{7}$/.test(s));
+    //  4.27: 트윈 카드는 이름표(앞·뒤)가 컨번호 앞에 붙는다 — 이름표를 떼고 읽는다
+    const cardCns = () => [...d.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '').replace(/^(앞|뒤)(?=[A-Z]{4}\d{7}$)/, '')).filter((s) => /^[A-Z]{4}\d{7}$/.test(s));
     //  4.26: 작업 카드 머리는 «B5·6·7 데크 — 남은 N대»(data-gw-head)
-    const headOf = () => { const h = d.querySelector('[data-gw-head]'); return h ? txt(h) : ''; };
+    //  4.27: 기존 자동은 카드가 나오면 한 화면 틀 — 머리 줄 대신 맨 위 한 줄(data-wf-bar «양하 자동 05(06)07 🔵 데크 남은 N대 ◀ 전 화면»)
+    const headOf = () => { const h = d.querySelector('[data-gw-head]') || d.querySelector('[data-workframe="guide"] [data-wf-bar]'); return h ? txt(h) : ''; };
     const groupBtn = (center) => [...d.querySelectorAll('button')].find((b) => { const m = txt(b).match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(center) && /남은 컨/.test(txt(b)); });
     const startGuide = async () => { await tab(/작업 시작/); await click(await until(() => btn(/^🤖\s*자동 가이드$/)), 350); await until(() => /작업할 베이를 선택하세요/.test(d.body.textContent)); };
     return { W, d, errs, alerts, click, btn, until, type, mem, refresh, tab, dialog, txt, cardCns, headOf, groupBtn, startGuide, close: () => { try { W.close(); } catch (er) { /* 창 닫기 */ } } };
@@ -93,7 +95,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     //  기대 — 픽스처에서 따로 센 B6 묶음(5·6·7) 데크 대수(4.26 머리는 «이 단 남은 수»)
     const n6 = Object.keys(E).filter((cn) => inGroup(cn, 6) && isDeck(cn)).length;
     ok(`⑦-1 작업 시작 → 🤖 자동 가이드 → B5·6·7 → 데크 → 카드 «${before.first}» · 머리 «${before.head}» → 🚢베이 탭 갔다(작업 화면 내림 ${away}) 돌아오면 자동 가이드 그대로(수동 전환 단추 ${after.guideOn}) · 머리 «${after.head}» · 카드 «${after.first}» · 기억 ${saved}`,
-      away && after.guideOn && before.head === `B5·6·7 데크 — 남은 ${n6}대` && after.head === before.head && !!before.first && after.first === before.first
+      away && after.guideOn && before.head === `양하 자동 05(06)07 🔵 데크 남은 ${n6}대 ◀ 전 화면` && after.head === before.head && !!before.first && after.first === before.first
         && /"guide":true/.test(saved || '') && /"bay":6/.test(saved || '') && /"tier":"deck"/.test(saved || '') && !S.errs.length,
       JSON.stringify({ before, after, saved, errs: S.errs.slice(0, 3) }));
     //  ⑦-2 화면을 새로 열어도(같은 창 — 서비스워커 갱신 새로고침) 기억이 남는다 · 다른 항차 열쇠는 안 섞인다

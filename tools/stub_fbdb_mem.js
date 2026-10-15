@@ -30,11 +30,13 @@ function assertNoUndefined(v, p = '') {
   if (v && typeof v === 'object') for (const k of Object.keys(v)) assertNoUndefined(v[k], p ? p + '.' + k : k);
 }
 export async function set(r, v) { if (global.__setfail && global.__setfail(r.path)) throw new Error('PERMISSION_DENIED 흉내');   // 3.70: 저장 실패를 흉내 낼 때만(검사가 켠다)
-  assertNoUndefined(v, r.path); LOG().push({ op: 'set', path: r.path }); setAt(r.path, v); }
+  assertNoUndefined(v, r.path); LOG().push({ op: 'set', path: r.path }); setAt(r.path, v);
+  if (global.__memlag) await new Promise((ok) => setTimeout(ok, global.__memlag)); }   // 4.27: 로컬엔 곧 반영 · 서버 확인(약속 풀림)은 늦게 — 검사가 켤 때만
 export async function update(r, patch) {
   assertNoUndefined(patch, r.path);
   LOG().push({ op: 'update', path: r.path });
   for (const [k, v] of Object.entries(patch || {})) setAt([r.path, k].filter(Boolean).join('/'), v);
+  if (global.__memlag) await new Promise((ok) => setTimeout(ok, global.__memlag));   // 4.27: 서버 확인 늦음 흉내(검사가 켤 때만)
 }
 export async function remove(r) { LOG().push({ op: 'remove', path: r.path }); setAt(r.path, null); }
 export function onValue(r, cb) { try { cb(snap(getAt(r.path))); } catch (e) { /* 검사 밖 */ } return () => {}; }
