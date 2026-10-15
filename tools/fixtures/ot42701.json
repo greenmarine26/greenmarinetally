@@ -1,0 +1,165 @@
+{
+"_note": "4.27-01 회귀 R36 ⑧ — 보관소 archive 61항차(선박별 최근 3항차 · STMJ·STSE 10항차) list records 중 선사·세관 칸에 오픈탑 표기가 있는 컨 전부와 그 EDI iso(GET 읽기 사본 2026-10-15 14:3x KST). t = [EDI iso, 선사 iso_carrier, 세관 iso_customs].",
+"combos": [
+{
+"t": [
+"",
+"42UT",
+""
+],
+"n": 5,
+"ex": [
+"SWSP_2608N|loading|SEGU7338771",
+"SWSP_2608N|loading|SEGU7342909",
+"SWSP_2608N|loading|SKHU5500893"
+]
+},
+{
+"t": [
+"42U0",
+"40OT",
+"42UT"
+],
+"n": 5,
+"ex": [
+"STSE_2677E|discharge|CAXU5536387",
+"STSE_2673E|discharge|CAXU5535689",
+"STMJ_2663E|discharge|SEGU7359060"
+]
+},
+{
+"t": [
+"22U0",
+"20OT",
+"22UT"
+],
+"n": 14,
+"ex": [
+"STSE_2677E|discharge|TRIU0303550",
+"STSE_2673E|discharge|CAIU5242950",
+"STSE_2673E|discharge|CAXU3506399"
+]
+},
+{
+"t": [
+"2250",
+"",
+"22UT"
+],
+"n": 4,
+"ex": [
+"DJCF_0151N|discharge|DJLU0200010",
+"DJCF_0151N|discharge|DJLU0200088",
+"DJCF_0151N|discharge|DJLU0200128"
+]
+},
+{
+"t": [
+"L5U0",
+"40OH",
+"40OH"
+],
+"n": 3,
+"ex": [
+"STMJ_2663E|discharge|CAXU5572234",
+"STMJ_2659E|discharge|CAIU5618879",
+"STMJ_2659E|discharge|SEGU7363120"
+]
+},
+{
+"t": [
+"20OT",
+"20OT",
+"22UT"
+],
+"n": 4,
+"ex": [
+"STMJ_2652E|discharge|CAIU5245610",
+"STMJ_2652E|discharge|CAIU5245836",
+"STMJ_2652E|discharge|FBLU2209712"
+]
+},
+{
+"t": [
+"40OT",
+"40OT",
+"42UT"
+],
+"n": 4,
+"ex": [
+"STMJ_2652E|discharge|FBLU4208320",
+"STMJ_2652E|discharge|FBLU4213347",
+"STMJ_2652E|discharge|FBLU4215210"
+]
+},
+{
+"t": [
+"4350",
+"42UT",
+"42UT"
+],
+"n": 1,
+"ex": [
+"PCSZ_2631E|discharge|TRIU0512930"
+]
+},
+{
+"t": [
+"22UT",
+"22UT",
+"22UT"
+],
+"n": 1,
+"ex": [
+"PCSZ_2630E|discharge|SKOU2000086"
+]
+},
+{
+"t": [
+"42UT",
+"42UT",
+"42UT"
+],
+"n": 4,
+"ex": [
+"PCSZ_2628E|discharge|SEGU7342241",
+"PCSZ_2628E|discharge|SEGU7342426",
+"PCSZ_2628E|discharge|SKHU5501539"
+]
+},
+{
+"t": [
+"22V7",
+"",
+"22U6"
+],
+"n": 2,
+"ex": [
+"OBWH_2765E|discharge|SPSU2036335",
+"OBWH_2765E|discharge|TEMU5280018"
+]
+},
+{
+"t": [
+"435E",
+"42U1",
+""
+],
+"n": 1,
+"ex": [
+"DXQD_2638E|loading|YZCU2300680"
+]
+},
+{
+"t": [
+"42U1",
+"42U1",
+"42UT"
+],
+"n": 1,
+"ex": [
+"DXQD_2638E|discharge|YZCU2300627"
+]
+}
+]
+}

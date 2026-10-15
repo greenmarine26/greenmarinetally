@@ -1,4 +1,4 @@
-import { fmtPos, isoShown, ISO_CONFLICT_WHY } from '../utils';   // 4.21 · 4.25-01 ISO_CONFLICT_WHY
+import { fmtPos, isoShown, ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY } from '../utils';   // 4.21 · 4.25-01 ISO_CONFLICT_WHY · 4.27-01 ISO_OT_CHECK_WHY
 // 자동 진단 경고 패널 (M3.5.4)
 //   - 자료 업로드 후 자동 호출
 //   - critical: 빨강 점멸 + 자동 음성
@@ -341,9 +341,11 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
   // TallyOne 1.23: 무게 대조 경고(weight_diff)는 없앴다 — 무게가 벌어지는 이유가 여럿이라
   //   원인을 가릴 수 없고, 실 자료 17항차에서 한 번도 맞은 적이 없었다(검수사 확정 2026-08-07).
   //   대신 **풀/엠티**와 **규격**만 대조한다. `weight_diff` 분기는 옛 자료 호환으로 남긴다.
-  if (alert.code === 'fe_conflict' || alert.code === 'iso_conflict' || alert.code === 'weight_diff') {
+  if (alert.code === 'fe_conflict' || alert.code === 'iso_conflict' || alert.code === 'iso_ot_check' || alert.code === 'weight_diff') {   // 4.27-01: iso_ot_check(오픈탑 높이 점검요망)
     const why = alert.code === 'fe_conflict'
       ? 'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.'
+      : alert.code === 'iso_ot_check'
+        ? ISO_OT_CHECK_WHY   // 4.27-01: utils 한 벌 — 오픈탑 높이 갈림 «점검요망»(검수사 2026-10-15 14:31)
       : alert.code === 'iso_conflict'
         ? ISO_CONFLICT_WHY   // 4.25-01: utils 한 벌 — «확인 전에는 터미널(EDI) 규격을 따릅니다»(검수사 2026-10-14)
         : '';
@@ -358,7 +360,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
             <span className="font-bold">{w.cn}</span>
             <span className="text-dim-300">
               {w.ediFe && w.lrFe ? `EDI ${w.ediFe} / 리스트 ${w.lrFe}` : ''}
-              {alert.code === 'iso_conflict' ? isoConflictText(w) : ''}
+              {(alert.code === 'iso_conflict' || alert.code === 'iso_ot_check') ? isoConflictText(w) : ''}
               {w.ediW != null && w.lrW != null ? `EDI ${(w.ediW/1000).toFixed(1)}t / 리스트 ${(w.lrW/1000).toFixed(1)}t` : ''}
               {w.bay ? ` · ${w.bay}-${w.row}-${w.tier}` : ''}
             </span>

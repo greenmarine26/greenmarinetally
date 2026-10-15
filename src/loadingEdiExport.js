@@ -241,6 +241,7 @@ export function ediIso(iso) {
   const s = String(iso || '').toUpperCase().trim();
   if (!s) return '22GP';                                             // 타입 미상 기본값(20DC 상당, 2026-07-13 결정)
   if (/^\d{3}E$/.test(s)) return s.slice(0, 3) + '0';                // '450E' → '4500'
+  if (s === '40OH') return '45UT';                                   // 4.27-01: 40OH = 45U1(9'6" 오픈탑) — 검수사 2026-10-15 · 2차 시뮬 참고
   const label = s.match(/^(20|40)['\s]?(DC|GP|HC|HQ|RF|RH|OT|OP|FR|FL|TK|BK)$/) || s.match(/^(45)['\s]?(DC|HC)$/);
   if (!label) return s;                                              // '45G1'·'22GP'·'4530' 등 ISO꼴은 그대로 (카스피 판독 실증)
   const t = normalizeCntrType(s);

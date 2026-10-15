@@ -51,6 +51,7 @@ function _sizeColBase(c) {
   //    (ContainerList 1.55-01 «20HC(26xx)도 20피트 칸에»). 길이를 먼저 보고 높이를 나중에 본다.
   if (/^(20|40)[A-Z]{2}$/.test(iso)) {
     if (!iso.startsWith('40')) return '20';
+    if (iso === '40OH') return 'HC';   // 4.27-01: 40OH = 45U1(40피트 하이큐브 오픈탑) — 검수사 2026-10-15 14:29 «40OH=45U1과 동일» · 라벨(40OT)엔 높이가 없다
     return (l.includes('HC') || l.includes('RH')) ? 'HC' : '40';
   }
   //  3.60-12 (진단 M5): 글자로 시작하는 장비코드(DCHC·DCHE·RF40·FR20 …)는 원본 첫 자리가 길이가 아니다 — 라벨(isoToLabel 이 이제 푼다)로.

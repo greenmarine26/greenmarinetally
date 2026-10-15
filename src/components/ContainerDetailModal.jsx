@@ -5,7 +5,7 @@ import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, 
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
-import { isoConflictOf, ISO_SRC_NAME } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
+import { isoConflictOf, ISO_SRC_NAME, isoOtHeightConflict } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
@@ -826,7 +826,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   return (
                     <div className="mt-2 px-3 py-2 bg-amber-950/50 border border-amber-600 rounded-pill">
                       {/* 4.25-01 (검수사 2026-10-14 «뭔가 확인이 안될떄는 터미널의 규격을 따릅니다»): 확인 전에는 터미널(EDI) 규격 — 앱 숫자·출력도 그것으로 센다. */}
-                      <div className="text-xs font-black text-amber-200">⚠ 규격이 자료마다 다릅니다{srcs.some(x => x.k === 'edi') ? ` — 터미널(EDI) ${srcs.find(x => x.k === 'edi').spec} 을 따릅니다` : ' — 미확정'}</div>
+                      <div className="text-xs font-black text-amber-200">{isoOtHeightConflict(srcs) ? '⚠ 점검요망 — 오픈탑 높이가 자료마다 다릅니다' : '⚠ 규격이 자료마다 다릅니다'}{srcs.some(x => x.k === 'edi') ? ` — 터미널(EDI) ${srcs.find(x => x.k === 'edi').spec} 을 따릅니다` : ' — 미확정'}</div>{/* 4.27-01 검수사 2026-10-15 14:31 «점검요망이라고 표기» */}
                       <div className="text-xxs text-amber-300/90 mt-0.5 leading-snug">{srcs.some(x => x.k === 'edi') ? '실물이 다르면 맞는 것을 누르세요.' : '실물을 보고 맞는 것을 누르세요.'}</div>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {srcs.map(x => (

@@ -12,6 +12,7 @@
 //     ...
 //   ]
 
+import { isoOtHeightConflict } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
 import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf, isListOriginRecord } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 import { reconcileSources, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
 
@@ -67,7 +68,8 @@ function extractDg(containers) {
 export const isoConflictText = (w) => {
   if (!w) return '';
   if (Array.isArray(w.srcs) && w.srcs.length) {
-    return w.srcs.map(x => `${x.name} ${x.spec || x.label}`).join(' / ');
+    const t = w.srcs.map(x => `${x.name} ${x.spec || x.label}`).join(' / ');
+    return isoOtHeightConflict(w.srcs) ? `점검요망 — ${t}` : t;   // 4.27-01: 오픈탑 높이 갈림
   }
   return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
 };
@@ -488,6 +490,20 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       voice: `풀 엠티 불일치 ${feConf.length}건. 실물 확인 필요`,
       count: feConf.length,
       details: feConf,   // 4.22: 자르지 않는다 — 패널이 «나머지 보기» 로 펼친다
+    });
+  }
+  //  ★ 4.27-01 — 40피트 오픈탑 **높이** 갈림(8'6" 42UT·40OT ↔ 9'6" 45UT·40OH)은 따로 🟡 «점검요망» 으로 적는다(검수사 2026-10-15 14:31
+  //    «세관은 42UT이고 선사나 터미널이 40OH 45U1이라고 하면 그떄는 점검요망이라고 표기 바랍니다»). 셈은 종전대로 터미널(EDI) 규격이다.
+  const otCheck = isoConf.filter(w => isoOtHeightConflict(w.srcs));
+  if (otCheck.length > 0) {
+    for (let i = isoConf.length - 1; i >= 0; i--) if (isoOtHeightConflict(isoConf[i].srcs)) isoConf.splice(i, 1);
+    alerts.push({
+      level: 'warning',
+      code: 'iso_ot_check',
+      msg: `점검요망 — 오픈탑 높이가 자료마다 다름 ${otCheck.length}건`,
+      voice: '',
+      count: otCheck.length,
+      details: otCheck,
     });
   }
   if (isoConf.length > 0) {

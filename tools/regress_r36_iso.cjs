@@ -28,7 +28,7 @@ module.exports = async function r36({ ROOT, TMP, ok, head, fx }) {
   head('R36 규격 갈림 — 확인 전에는 터미널(EDI) 규격 · L5U0·40OH 는 터미널처럼 45UT(OT) · 진단 🔵(음성 없음) · 말 한 벌 (4.25-01)',
     '검수사 2026-10-14 06:27 «뭔가 확인이 안될떄는 터미널의 규격을 따릅니다. L5U0 45UT(OT)» · STMJ 2663E CAXU5572234 캡처 · 실서비스 읽기 사본 2026-10-14 06:40');
   const e = path.join(TMP, 'r36.mjs'), o = path.join(TMP, 'r36.cjs');
-  fs.writeFileSync(e, `export * from "${ROOT}/src/utils.js";\nexport { runDiagnostics, isoConflictText, buildVoiceMessage } from "${ROOT}/src/diagnostics.js";\nexport { tallySizeCol } from "${ROOT}/src/tallyReport.js";\nexport { applyNLFilter, parseNaturalQuery } from "${ROOT}/src/nlSearch.js";\nexport { normalizeCntrType } from "${ROOT}/src/loadingEdiExport.js";\n`);
+  fs.writeFileSync(e, `export * from "${ROOT}/src/utils.js";\nexport { runDiagnostics, isoConflictText, buildVoiceMessage } from "${ROOT}/src/diagnostics.js";\nexport { tallySizeCol } from "${ROOT}/src/tallyReport.js";\nexport { applyNLFilter, parseNaturalQuery, answerAboutAlert } from "${ROOT}/src/nlSearch.js";\nexport { ediIso } from "${ROOT}/src/loadingEdiExport.js";\nexport { normalizeCntrType } from "${ROOT}/src/loadingEdiExport.js";\n`);
   execSync(`npx esbuild "${e}" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --log-level=error --outfile="${o}"`, { cwd: ROOT, stdio: 'pipe' });
   const U = require(o);
   const F = fx('iso42501.json');
@@ -128,6 +128,65 @@ module.exports = async function r36({ ROOT, TMP, ok, head, fx }) {
     const okWhy = /확인 전에는 터미널\(EDI\) 규격을 따릅니다/.test(why) && files.every((f) => /ISO_CONFLICT_WHY/.test(src(f)) && !/실물을 보기 전에는 확정할 수 없습니다/.test(src(f)));
     const okCard = cards.every((f) => /터미널\(EDI\) \$\{srcs\.find\(x => x\.k === 'edi'\)\.spec\} 을 따릅니다/.test(src(f)));
     ok(`⑤-1 말 한 벌 — utils.ISO_CONFLICT_WHY «${why.slice(0, 40)}…» 를 진단 패널·미르가 부르고, 작업카드·컨 상세 머리는 «터미널(EDI) ○○ 을 따릅니다»`, okWhy && okCard, JSON.stringify({ okWhy, okCard }));
+  }
+  //  ⑧ 4.27-01 — 40피트 오픈탑 높이(검수사 2026-10-15 14:29 «40OT=42U1과 동일하고 40OH=45U1과 동일 합니다. 이걸로 규격이 틀리다고 알람이 발생되지 않게 해주세요» ·
+  //     14:31 «만약에 세관은 42UT이고 선사나 터미널이 40OH 45U1이라고 하면 그떄는 점검요망이라고 표기 바랍니다»).
+  //     기대값은 검수사 말 — 8'6" 묶음(40OT·42UT·42U1·42U0·4350) · 9'6" 묶음(40OH·45UT·45U1·L5U0·4550). 같은 묶음끼리는 조용, 묶음이 갈리면 «점검요망».
+  {
+    const SIG = (raw) => { const iso = U.normalizeSpecIso(raw) || raw; return [iso, U.isoToCustomsSpec(iso, raw), U.tallySizeCol({ iso: raw, cn: 'TEST0000001' })].join('/'); };
+    const low = ['40OT', '42UT', '42U1'].map((v) => [v, SIG(v)]), high = ['40OH', '45UT', '45U1'].map((v) => [v, SIG(v)]);
+    ok(`⑧-1 높이 묶음 — 8'6" ${low.map(([v, g]) => `${v} ${g}`).join(' · ')} · 9'6" ${high.map(([v, g]) => `${v} ${g}`).join(' · ')} (iso/규격 글자/마감텔리 칸)`,
+      low.every(([, g]) => g === '42U1/42UT/40') && high.every(([, g]) => g === '45U1/45UT/HC'), JSON.stringify({ low, high }));
+    //  리스트 전용 컨(저장값이 원문 40OT·40OH)의 검수리스트 규격 칸·EDI 내보내기 — 같은 높이(감사 하-1 · 2차 시뮬 참고)
+    const raw = [['40OT', U.isoToCustomsSpec('40OT', ''), U.ediIso('40OT')], ['40OH', U.isoToCustomsSpec('40OH', ''), U.ediIso('40OH')]];
+    ok(`⑧-1b 저장값 원문 — ${raw.map(([v, a, b]) => `${v} 검수리스트 ${a} · 내보내기 ${b}`).join(' / ')}`,
+      raw[0][1] === '42UT' && raw[0][2] === '42UT' && raw[1][1] === '45UT' && raw[1][2] === '45UT', JSON.stringify(raw));
+    //  보관소 사본 — 선사·세관에 오픈탑 표기가 있는 컨 전부(61항차 49대 · 13조합). 같은 높이끼리는 갈림 0 · 규격 글자가 셋 다 같다.
+    const OT = fx('ot42701.json');
+    const loud = [], mixed = [];
+    for (const c of OT.combos) {
+      const [edi, ca, cu] = c.t;
+      const lr = { iso_carrier: ca, iso_customs: cu };
+      const conf = U.isoConflictOf(edi, lr);
+      if (conf && U.isoOtHeightConflict(conf)) loud.push(c.ex[0]);
+      const tri = U.isoTriad(edi, lr);
+      if (tri.every((x) => x.label === '40OT') && new Set(tri.map((x) => x.spec)).size > 1) mixed.push(`${c.ex[0]} ${tri.map((x) => `${x.name} ${x.spec}`).join('/')}`);
+    }
+    const stse = U.isoTriad('42U0', { iso_carrier: '40OT', iso_customs: '42UT' }).map((x) => `${x.name} ${x.spec}`).join(' / ');
+    ok(`⑧-2 보관소 사본 ${OT.combos.reduce((a, c) => a + c.n, 0)}대 — 점검요망 ${loud.length}건 · 40피트 오픈탑 규격 글자 갈림 ${mixed.length}건 · STSE 2677E CAXU5536387 «${stse}»(종전 선사 45UT)`,
+      !loud.length && !mixed.length && stse === 'EDI 42UT / 선사 42UT / 세관 42UT', JSON.stringify({ loud, mixed }));
+    //  검수사 14:31 의 경우 — 세관 42UT · 선사 40OH · 터미널 45U1 → 점검요망(진단 🟡 · 줄 · 미르 같은 말). 규격 갈림(20' 통풍 대 오픈탑)은 종전 🔵 그대로.
+    const lrA = { iso_carrier: '40OH', iso_customs: '42UT' };
+    const confA = U.isoConflictOf('45U1', lrA);
+    const voy = {
+      ediContainers: {
+        TEST4500001: { cn: 'TEST4500001', iso: '45U1', iso_edi: '45U1', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '10', row: '02', tier: '82' },
+        TEST4200002: { cn: 'TEST4200002', iso: '42U1', iso_edi: '42U1', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '14', row: '02', tier: '82' },
+        TEST2200003: { cn: 'TEST2200003', iso: '22V7', iso_edi: '22V7', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '01', row: '02', tier: '82' },
+      },
+      records: {
+        TEST4500001: { cn: 'TEST4500001', ...lrA, pod: 'KRPTK', fe: 'F' },
+        TEST4200002: { cn: 'TEST4200002', iso_carrier: '40OT', iso_customs: '42UT', pod: 'KRPTK', fe: 'F' },
+        TEST2200003: { cn: 'TEST2200003', iso_customs: '22U6', pod: 'KRPTK', fe: 'F' },
+      },
+    };
+    const dg = U.runDiagnostics({ ediContainers: voy.ediContainers, listRecords: voy.records, xrayList: {}, mode: 'discharge' }) || [];
+    const hOt = dg.find((a) => a.code === 'iso_ot_check'), hIso = dg.find((a) => a.code === 'iso_conflict');
+    const line = hOt && hOt.details && hOt.details[0] ? U.isoConflictText(hOt.details[0]) : '';
+    ok(`⑧-3 세관 42UT · 선사 40OH · 터미널 45U1 → «${hOt ? hOt.msg : '(없음)'}»(${hOt ? hOt.level : '?'}) · 줄 «${line}» · 같은 높이 TEST4200002 조용 · 20' 통풍↔오픈탑은 종전 «${hIso ? hIso.msg : '(없음)'}»`,
+      !!confA && U.isoOtHeightConflict(confA) && !!hOt && hOt.level === 'warning' && hOt.count === 1 && hOt.details[0].cn === 'TEST4500001' && /^점검요망 — 오픈탑 높이가 자료마다 다름 1건$/.test(hOt.msg)
+        && /^점검요망 — EDI 45UT \/ 선사 45UT \/ 세관 42UT$/.test(line) && !!hIso && hIso.count === 1 && hIso.details[0].cn === 'TEST2200003' && hIso.level === 'info',
+      JSON.stringify({ dg: dg.map((a) => [a.code, a.level, a.msg]), line }));
+    //  미르 — «규격이 다르다는게 무슨 말이야» 한 물음에 두 경고(🟡 점검요망 · 🔵 규격 다름)를 같이 · «오픈탑 높이 점검요망» 은 그 경고(감사 하 — 처음 맞는 하나만 답해 한쪽이 빠졌다)
+    const m1 = U.answerAboutAlert('규격이 다르다는게 무슨 말이야', dg) || '', m2 = U.answerAboutAlert('오픈탑 높이 점검요망 뭐야', dg) || '';
+    ok(`⑧-3b 미르 «규격이 다르다는게 무슨 말이야» → 두 경고 다(${/점검요망 — 오픈탑 높이가 자료마다 다름 1건/.test(m1)} · ${/규격이 자료마다 다름 1건/.test(m1)}) · «오픈탑 높이 점검요망 뭐야» → ${(m2.split('\n')[0] || '').slice(0, 40)}`,
+      /점검요망 — 오픈탑 높이가 자료마다 다름 1건/.test(m1) && /규격이 자료마다 다름 1건/.test(m1) && /^🟡 점검요망 — 오픈탑 높이가 자료마다 다름 1건/.test(m2) && /CAXU|TEST4500001/.test(m2),
+      JSON.stringify({ m1: m1.slice(0, 300), m2: m2.slice(0, 300) }));
+    //  화면 머리(작업카드·컨 상세)와 진단 패널·미르가 같은 판정(isoOtHeightConflict)·같은 말(ISO_OT_CHECK_WHY)을 부른다
+    const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const heads = ['src/components/ContainerDetailModal.jsx', 'src/components/GuidedWorkPanel.jsx'].every((f) => /isoOtHeightConflict\(srcs\) \? '⚠ 점검요망 — 오픈탑 높이가 자료마다/.test(src(f)));
+    const why = /점검요망/.test(U.ISO_OT_CHECK_WHY || '') && ['src/components/DiagnosticsPanel.jsx', 'src/nlSearch.js'].every((f) => /ISO_OT_CHECK_WHY/.test(src(f)) && /iso_ot_check/.test(src(f)));
+    ok(`⑧-4 말 한 벌 — 작업카드·컨 상세 머리 «⚠ 점검요망 — 오픈탑 높이가 자료마다 다름» · 진단 패널·미르 ISO_OT_CHECK_WHY «${String(U.ISO_OT_CHECK_WHY || '').slice(0, 30)}…»`, heads && why, JSON.stringify({ heads, why }));
   }
 };
 

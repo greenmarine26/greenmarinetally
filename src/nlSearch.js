@@ -6,7 +6,7 @@
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
 import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
-import { ISO_CONFLICT_WHY, isLen45Iso } from './utils.js';   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
+import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
@@ -1312,6 +1312,7 @@ function buildBaySlotMap(allContainers) {
  */
 const _WHY_BY_CODE = {
   fe_conflict:   'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.',
+  iso_ot_check:  ISO_OT_CHECK_WHY,   // 4.27-01: 오픈탑 높이 갈림 «점검요망»(검수사 2026-10-15 14:31) — 진단 패널과 같은 말
   iso_conflict:  ISO_CONFLICT_WHY,   // 4.25-01: 진단 패널과 같은 말 한 벌(utils) — «확인 전에는 터미널(EDI) 규격을 따릅니다»
   reefer_no_temp:'풀 리퍼인데 온도가 없습니다. 현장에서 온도를 확인해 입력하세요.',
   unknown_iso:   '규격 표기를 앱이 해석하지 못했습니다. 사진을 찍고 1항사에게 확인하세요.',
@@ -1332,6 +1333,7 @@ const _WHY_BY_CODE = {
 const _ALERT_TERMS = {
   fe_conflict:       [['풀', 'F/E', 'FE'], ['엠티', '공컨', '빈컨'], ['다름', '다르', '불일치', '차이', '충돌']],
   iso_conflict:      [['규격', '사이즈', '타입'], ['다름', '다르', '불일치', '차이', '충돌']],
+  iso_ot_check:      [['오픈탑', '높이', '점검요망', '규격'], ['다름', '다르', '불일치', '차이', '충돌', '점검']],   // 4.27-01
   reefer_no_temp:    [['리퍼', '냉동'], ['온도'], ['미입력', '없', '누락', '안']],
   unknown_iso:       [['규격', '표기'], ['알수없', '알 수 없', '모르', '미상', '이상']],
   dg_no_class:       [['위험물', 'DG'], ['클래스', '급']],
@@ -1394,13 +1396,18 @@ export function answerAboutAlert(query, alerts) {
       const pos = x.bay ? ` @ ${x.bay}-${x.row}-${x.tier}` : '';
       const extra =
         (x.ediFe && x.lrFe) ? ` · EDI ${x.ediFe} / 리스트 ${x.lrFe}` :
-        (hit.code === 'iso_conflict' && (x.srcs || x.ediIso)) ? ` · ${isoConflictText(x)}` :
+        ((hit.code === 'iso_conflict' || hit.code === 'iso_ot_check') && (x.srcs || x.ediIso)) ? ` · ${isoConflictText(x)}` :
         (x.ediSl && x.lrSl) ? ` · EDI ${x.ediSl} / 리스트 ${x.lrSl}` :
         (x.iso ? ` · ${isoShown(x.iso)}` : '');
       lines.push(`${i + 1}. ${x.cn || x.location || ''}${pos}${extra}`);
     });
     if (d.length > 12) lines.push(`… 외 ${d.length - 12}건`);
   }
+  //  ★ 4.27-01 — 규격 갈림 둘(🔵 iso_conflict «규격이 자료마다 다름» · 🟡 iso_ot_check «점검요망 — 오픈탑 높이»)은 한 물음에 같이 말한다.
+  //    처음 맞는 경고 하나만 답하므로 «규격이 다르다는게 뭐야» 에 한쪽이 빠졌다(감사 지적). 다른 쪽은 머리 한 줄만 덧붙인다.
+  const _pairCode = { iso_conflict: 'iso_ot_check', iso_ot_check: 'iso_conflict' }[hit.code];
+  const _pair = _pairCode ? alerts.find((a) => a && a.code === _pairCode) : null;
+  if (_pair) lines.push('', `${_pair.level === 'critical' ? '🔴' : _pair.level === 'warning' ? '🟡' : '🔵'} ${_pair.msg}`);
   return lines.join('\n');
 }
 
