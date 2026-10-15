@@ -386,8 +386,15 @@ function blockedByAbove(card, cards) {
       sameStackPos(op, p) && parseInt(op.tier, 10) > parseInt(p.tier, 10)));
   });
 }
-// 지금 바로 내릴 수 있는 카드들 — 패널의 갈림 감지용.
-export function availableCardsOf(queue) { return queue.filter(card => !blockedByAbove(card, queue)); }
+// 지금 바로 할 수 있는 카드들 — 패널의 갈림 감지용.
+//   ★ 4.26-04: dir='below' = 선적(아래 칸이 안 실렸으면 못 한다) · 'above' = 양하(위가 안 내려갔으면 못 한다) — pullStreamForward 와 같은 판정.
+//     종전엔 선적도 양하 판정(blockedByAbove)이라 각 열 맨 위(가장 나중에 실을 칸)만 남아 «풀부터/엠티부터» 칩이 거의 안 떴고,
+//     칩이 없으니 3대 연속 흐름 감지(1.57)도 멈췄다 — STMJ 2664W 3호기 2026-10-15 03:58 18홀드 02단 풀 트윈 3쌍·엠티 4쌍(칩 «풀 3 / 엠티 4» 이어야 했다).
+//     검수사 08:53 «선적시 풀먼저 엠티먼저 선택이 있었던거 같은 데 오늘은 안보였습니다. 그것때문에 자동이 막혔씁니다».
+export function availableCardsOf(queue, dir = 'above') {
+  const blocked = dir === 'below' ? blockedByBelow : blockedByAbove;
+  return queue.filter(card => !blocked(card, queue));
+}
 // 1.57: 선적은 '아래 단이 아직 안 실렸으면' 못 당긴다 — 양하의 blockedByAbove 와 대칭.
 //   이것이 없으면 20싱글 우선이 아래 단을 건너뛰고 허공에 얹는다(DJCF 0149N 선적 `7-07-84` 실증).
 //   검수사 교정 2026-08-11: "2단이 비었는데 3단 즉 허공에 띄웠습니다."

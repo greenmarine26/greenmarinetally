@@ -597,7 +597,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V8.50: 갈림 감지 — 지금 바로 내릴 수 있는 카드들에 부류가 섞여 있으면 선택 버튼 제시 (양하만).
   //   1.57: 선적에도 건다. 종전엔 양하 전용이라 선적은 고정 순서(20싱글→트윈→40)밖에 안 나왔다.
-  const availCards = useMemo(() => availableCardsOf(queue), [queue]);
+  const availCards = useMemo(() => availableCardsOf(queue, mode === 'loading' ? 'below' : 'above'), [queue, mode]);   // ★ 4.26-04: 선적은 선적 판정(아래 먼저) — 순서를 당기는 pullStreamForward(…,'below') 와 같은 판정
   const forkChips = useMemo(() => {
     if (availCards.length < 2) return null;
     const cnt = { F: 0, E: 0, RF: 0, GEN: 0, '40': 0, '20': 0 };

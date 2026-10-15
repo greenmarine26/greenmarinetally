@@ -2983,6 +2983,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   //  4.26-02 — 작업 화면 나머지 수리(화면 개편 판 G): 수정 3연속은 묻는다 · 보류 줄 이 장/다른 장 · 실린 컨 보류 빠짐 · 묶음 이름 고정 · 베이매트릭스에 있는 칸 · 시퀀스 방침 바꿀 때 묻기 · 시프팅 행 베이 꼴.
   //    항차 화면(VoyagePage 실소스)을 jsdom 에서 검수원 손 그대로 누른다(OBWH 2763E·2764W · MCAP 639N · MCAP 사전). 본문은 tools/regress_r41_rest.cjs(단독 실행도 된다).
   await require('./regress_r41_rest.cjs')({ ROOT, TMP, ok, head, fx, stub });
+  //  4.26-04 — 선적 자동 가이드 «풀부터 / 엠티부터» 칩은 선적 판정(아래 칸 먼저)으로 «지금 할 수 있는 컨» 을 센다(STMJ 2664W 3호기 10-15 03:58 18홀드 — 칩이 안 떠 가이드가 막혔다). 본문은 tools/regress_r42_fork.cjs(단독 실행도 된다).
+  await require('./regress_r42_fork.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
