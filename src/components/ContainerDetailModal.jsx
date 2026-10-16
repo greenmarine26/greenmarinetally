@@ -18,6 +18,7 @@ import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
 import PositionEditModal from './PositionEditModal.jsx';
+import SlotLookupModal from './SlotLookupModal.jsx';   // 4.29: 선적 지정 컨 칸의 [수정] — 조회창으로 실제 온 컨을 골라 그 칸에 선적
 import { getBayPairs } from '../twin.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { formatDgLabel, lookupUN } from '../dgUnDict.js';
@@ -113,6 +114,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
   // M4.9d-fix: 선적 실체 위치 입력 state
   const [editingActualPos, setEditingActualPos] = useState(false);
+  const [slotLookupOpen, setSlotLookupOpen] = useState(false);   // 4.29
   const [actualBay, setActualBay] = useState('');
   const [actualRow, setActualRow] = useState('');
   const [actualTier, setActualTier] = useState('');
@@ -665,6 +667,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 {/* 2.94-06: **선적확인이 눌려야 실물이다**(검수사 확정 2026-08-31).
                     누르기 전에는 «실체»라 부르지 않는다 — 그 말이 앱과 사람 모두를 속였다. */}
                 <span>{c._comp ? '실린 자리 (선적확인됨)' : '실을 자리 (아직 안 실림)'}</span>
+                {/* ★ 4.29 — 지정 컨이 있는 칸에서 다른 컨이 왔을 때: [수정] → 컨 조회창 → 고른 컨을 이 칸에 선적(큰 카드의 «컨테이너 번호 수정»과 같은 판정). 검수사 2026-10-16 최원형 민원. */}
+                {!c._comp && !editingActualPos ? (
+                  <button onClick={() => setSlotLookupOpen(true)}
+                    className="bg-amber-600 hover:bg-amber-500 text-amber-50 px-2 py-1 rounded text-2xs font-black">✏️ 수정 (다른 컨이 옴)</button>
+                ) : null}
                 {!editingActualPos && (c.bay_actual || c.row_actual || c.tier_actual) ? (
                   <button onClick={handleClearActualPosition}
                     className="text-2xs text-rose-400 hover:text-rose-300">삭제</button>
@@ -1491,6 +1498,8 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       <ChoiceModal {...choiceState} />
 
       {/* M3.87: 위치 수정 모달 (선적 모드) */}
+      <SlotLookupModal open={slotLookupOpen} base={c} voyageKey={voyageKey} voyageInfo={voyageInfo} inspector={inspector} allContainers={allContainers} mode={mode} records={records} shiftCns={shiftCns}
+        onClose={() => setSlotLookupOpen(false)} onDone={() => { try { onClose?.(); } catch (e) { /* 닫기 실패는 화면만 */ } }} />
       <PositionEditModal
         open={showPosEdit}
         container={{ ...c, _comp: comp, _mode: c._mode || mode }}
