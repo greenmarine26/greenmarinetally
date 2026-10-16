@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.29';
-const NOTE = '4.29 선적 베이플랜 칸에서 수정을 누르면 컨 조회창이 열립니다. 다른 컨이 오면 끝자리로 찾아 그 칸에 선적합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.29-01';
+const NOTE = '4.29 실시간 수집 스위치를 켜면 1분마다 끄면 작업 중인 배만 30분마다 읽습니다. 선적 칸에서 수정을 누르면 컨 조회창이 열립니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

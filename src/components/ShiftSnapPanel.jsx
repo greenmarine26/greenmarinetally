@@ -122,8 +122,8 @@ export default function ShiftSnapPanel({ voyages, by }) {
       await fbSetTermLive(pier, on, by);
       setData((d) => ({ ...(d || {}), _live: { ...((d && d._live) || {}), [pier]: on } }));
       setNotice({ kind: 'ok', text: on
-        ? `${pier === 'PCTC' ? 'PCTC' : '동방'} 실시간 수집을 켰습니다 — 수집기가 1분 안에 작업 중인 배를 읽고, 이후 30분마다 읽습니다.`
-        : `${pier === 'PCTC' ? 'PCTC' : '동방'} 실시간 수집을 껐습니다 — 다음 분부터 멈춥니다. 이미 넣은 완료는 그대로입니다.` });
+        ? `${pier === 'PCTC' ? 'PCTC' : '동방'} 실시간 수집을 켰습니다 — 수집기가 작업 중인 배를 1분마다 읽습니다.`
+        : `${pier === 'PCTC' ? 'PCTC' : '동방'} 실시간 수집을 껐습니다 — 작업 중인 배만 30분마다 읽는 보통 수집으로 돌아갑니다. 이미 넣은 완료는 그대로입니다.` });
     } catch (e) {
       setNotice({ kind: 'err', text: `스위치 변경 실패 — ${e?.message || e}` });
     }
@@ -172,15 +172,15 @@ export default function ShiftSnapPanel({ voyages, by }) {
               return (
                 <button key={pier} onClick={() => doLive(pier, !on)} disabled={!!liveBusy}
                   className={`text-xxs px-3 rounded-pill font-bold border disabled:opacity-50 ${on ? 'bg-emerald-900/50 text-emerald-200 border-emerald-600/60' : 'bg-ink-800 text-dim-200 border-line-strong'}`}
-                  style={{ minHeight: 36 }} title="켜면 이 부두의 작업 중인 배를 30분마다 읽어, 검수사가 입력 중이 아닌 호기의 컨만 완료에 추가합니다">
+                  style={{ minHeight: 36 }} title="켜면 이 부두의 작업 중인 배를 1분마다, 끄면 30분마다 읽어 검수사가 입력 중이 아닌 호기의 컨만 완료에 추가합니다">
                   {liveBusy === pier ? '변경 중…' : `${on ? '🟢 켜짐' : '⚪ 꺼짐'} · ${label}`}
                 </button>
               );
             })}
           </div>
           <div className="text-dim-300">
-            켜면 해당 부두의 <b className="text-dim-100">작업 중인 배</b>만 30분마다 읽습니다. <b className="text-dim-100">검수사가 입력 중인 호기는 건드리지 않고</b>, 입력이 없는 호기의 컨만 완료에 추가합니다(있는 컨은 안 덮음).
-            동방은 자료에 호기가 없어서, 그 배에 검수사 입력이 하나라도 있으면 그 배를 통째로 건너뜁니다. 동방 선적은 계획 기준이라 완료로 넣지 않습니다. 끄면 다음 분부터 멈춥니다.
+            <b className="text-dim-100">켜면 1분마다, 끄면 30분마다</b> 해당 부두의 <b className="text-dim-100">작업 중인 배</b>만 읽습니다. <b className="text-dim-100">검수사가 입력 중인 호기는 건드리지 않고</b>, 입력이 없는 호기의 컨만 완료에 추가합니다(있는 컨은 안 덮음).
+            동방은 자료에 호기가 없어 컨 위치와 베이별 계획 수량으로 호기를 가르고, 검수사가 최근 10분 안에 입력한 호기는 건드리지 않습니다. 동방 선적은 계획 기준이라 완료로 넣지 않습니다.
           </div>
           {data._live_status && typeof data._live_status === 'object' && (
             <div className="text-dim-300">
