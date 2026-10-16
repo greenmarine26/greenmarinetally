@@ -1,6 +1,6 @@
 // 수석(소유자) 전용 — 06:30·17:30 에 읽어 둔 터미널 실적(카토스·동방)을 앱 완료와 맞대 보고, 승인 단추로 완료에 반영하는 화면
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { fbGetTermSnapshot, fbApplyTermSnapshot, fbRequestTermSnapshot } from '../firebase.js';
+import { fbGetTermSnapshot, fbApplyTermSnapshot, fbRequestTermSnapshot, fbSetTermLive } from '../firebase.js';
 import { snapApplyEntries, snapBasisOf } from '../utils.js';
 
 //  4.11 — 검수사 2026-10-07 21:42 «전 근무자가 어디 까지 했는지 정확히 알수가 없습니다. 그래서 아침 6시30분 저녁 5시30분 두차례만 읽어서 적용 시켰으면 합니다.»
@@ -43,6 +43,7 @@ export default function ShiftSnapPanel({ voyages, by }) {
   const [confirmKey, setConfirmKey] = useState(null);
   const [notice, setNotice] = useState(null);
   const [reqBusy, setReqBusy] = useState(false);
+  const [liveBusy, setLiveBusy] = useState('');   // 4.28 — 스위치를 쓰는 중인 부두
   const now = Date.now();
 
   const load = useCallback(async () => {
@@ -114,6 +115,21 @@ export default function ShiftSnapPanel({ voyages, by }) {
     setConfirmKey(null);
   };
 
+  //  4.28 — 실시간 수집 스위치. 쓰고 나면 화면의 값도 바로 바꾼다(다시 읽지 않는다). 실패는 숨기지 않는다.
+  const doLive = async (pier, on) => {
+    setLiveBusy(pier);
+    try {
+      await fbSetTermLive(pier, on, by);
+      setData((d) => ({ ...(d || {}), _live: { ...((d && d._live) || {}), [pier]: on } }));
+      setNotice({ kind: 'ok', text: on
+        ? `${pier === 'PCTC' ? 'PCTC' : '동방'} 실시간 수집을 켰습니다 — 수집기가 1분 안에 작업 중인 배를 읽고, 이후 30분마다 읽습니다.`
+        : `${pier === 'PCTC' ? 'PCTC' : '동방'} 실시간 수집을 껐습니다 — 다음 분부터 멈춥니다. 이미 넣은 완료는 그대로입니다.` });
+    } catch (e) {
+      setNotice({ kind: 'err', text: `스위치 변경 실패 — ${e?.message || e}` });
+    }
+    setLiveBusy('');
+  };
+
   const doRequest = async () => {
     setReqBusy(true);
     try {
@@ -146,6 +162,40 @@ export default function ShiftSnapPanel({ voyages, by }) {
           {reqBusy ? '요청 중…' : '📡 지금 다시 읽기'}
         </button>
       </div>
+
+      {data !== null && !err && (
+        <div className="rounded-btn border border-line bg-ink-900 px-3 py-2 text-xs2 text-dim-200 space-y-2">
+          <div className="font-bold text-dim-100">⚡ 실시간 수집 스위치 (소유자 전용)</div>
+          <div className="flex flex-wrap gap-2">
+            {[['PCTC', 'PCTC'], ['PNCT', '동방 (PNCT)']].map(([pier, label]) => {
+              const on = !!(data._live && data._live[pier] === true);
+              return (
+                <button key={pier} onClick={() => doLive(pier, !on)} disabled={!!liveBusy}
+                  className={`text-xxs px-3 rounded-pill font-bold border disabled:opacity-50 ${on ? 'bg-emerald-900/50 text-emerald-200 border-emerald-600/60' : 'bg-ink-800 text-dim-200 border-line-strong'}`}
+                  style={{ minHeight: 36 }} title="켜면 이 부두의 작업 중인 배를 30분마다 읽어, 검수사가 입력 중이 아닌 호기의 컨만 완료에 추가합니다">
+                  {liveBusy === pier ? '변경 중…' : `${on ? '🟢 켜짐' : '⚪ 꺼짐'} · ${label}`}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-dim-300">
+            켜면 해당 부두의 <b className="text-dim-100">작업 중인 배</b>만 30분마다 읽습니다. <b className="text-dim-100">검수사가 입력 중인 호기는 건드리지 않고</b>, 입력이 없는 호기의 컨만 완료에 추가합니다(있는 컨은 안 덮음).
+            동방은 자료에 호기가 없어서, 그 배에 검수사 입력이 하나라도 있으면 그 배를 통째로 건너뜁니다. 동방 선적은 계획 기준이라 완료로 넣지 않습니다. 끄면 다음 분부터 멈춥니다.
+          </div>
+          {data._live_status && typeof data._live_status === 'object' && (
+            <div className="text-dim-300">
+              마지막 실시간 읽기 {hm(data._live_status.at)} ({ago(data._live_status.at, now)}) · {(data._live_status.piers || []).join('·')}
+              {Array.isArray(data._live_status.vessels) && data._live_status.vessels.length > 0 && (
+                <ul className="mt-1 space-y-0.5 list-disc pl-4">
+                  {data._live_status.vessels.map((v, i) => (
+                    <li key={i}>{v.vk} {MODE_LABEL[v.mode] || ''} — {v.skip ? `건너뜀: ${v.skip}` : `추가 ${v.added || 0}대 · 입력 중 호기 ${(v.busy || []).join(', ') || '없음'} · 앱 ${v.app} / 터미널 ${v.terminal}`}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {err && <div className="rounded-btn border px-3 py-2 text-xs2 bg-red-950/40 border-red-800/60 text-red-200">스냅샷을 읽지 못했습니다 — {err}</div>}
       {notice && <div className={`rounded-btn border px-3 py-2 text-xs2 ${noticeCls(notice.kind)}`}>{notice.text}</div>}

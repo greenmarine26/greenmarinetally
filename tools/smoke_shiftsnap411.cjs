@@ -56,10 +56,10 @@ const bundle = process.argv[3];
   ok((CD.match(/id: 'owner', ico: '👑', name: '소유자 메뉴'/g) || []).length === 1 && !/\['actlog'/.test(CD) && !/id: 'actlog'/.test(CD), '관리 탭 묶음은 «👑 소유자 메뉴» 하나뿐이다(활동 로그는 그 안으로 — 4.24 바로가기 칩 → 관리 묶음)');
   //  구독 금지 — 노드 이름이 나오는 «코드 줄»(주석 제외)이 정확히 셋(get 둘 · set 하나)이고, 그 줄에 onValue·onChild* 가 없다(감사 2026-10-07: 변수 경유 구독도 막는다)
   const fbCode = FB.split('\n').map((l) => l.replace(/(^|[^:'"`])\/\/.*$/, '$1')).filter((l) => /term_snapshot/.test(l));
-  ok(fbCode.length === 3 && fbCode.filter((l) => /\bget\(ref\(db/.test(l)).length === 2 && fbCode.filter((l) => /\bset\(ref\(db/.test(l)).length === 1 && !fbCode.some((l) => /onValue|onChild|onSnapshot/.test(l)) && !/fbSubscribeTermSnapshot/.test(FB + CD), `term_snapshot 은 구독하지 않는다 — firebase.js 안 코드 ${fbCode.length}곳(get 2 · set 1) 뿐(다운로드 비용 0)`);
+  ok(fbCode.length === 4 && fbCode.filter((l) => /\bget\(ref\(db/.test(l)).length === 2 && fbCode.filter((l) => /\bset\(ref\(db/.test(l)).length === 1 && fbCode.filter((l) => /\bupdate\(ref\(db/.test(l)).length === 1 && !fbCode.some((l) => /onValue|onChild|onSnapshot/.test(l)) && !/fbSubscribeTermSnapshot/.test(FB + CD), `term_snapshot 은 구독하지 않는다 — firebase.js 안 코드 ${fbCode.length}곳(get 2 · set 1 · update 1 — 4.28 스위치) 뿐(다운로드 비용 0)`);
   ok(!/(onValue|onChild\w*)\s*\(\s*(termRef|snapRef|r\b)/.test(FB.slice(FB.indexOf('4.11: 교대 시각'), FB.indexOf('export async function fbAddExtraContainer'))), '새 구간(4.11) 안에는 구독 호출 자체가 없다');
   const fnBody = (name) => { const s = FB.indexOf('export async function ' + name); return FB.slice(s, FB.indexOf('\n}\n', s)); };
-  for (const f of ['fbGetTermSnapshot', 'fbRequestTermSnapshot', 'fbApplyTermSnapshot']) ok(/assertOwner\(/.test(fnBody(f)), `${f} 는 쓰는 자리에서 소유자만 통과시킨다(assertOwner)`);
+  for (const f of ['fbGetTermSnapshot', 'fbRequestTermSnapshot', 'fbApplyTermSnapshot', 'fbSetTermLive']) ok(/assertOwner\(/.test(fnBody(f)), `${f} 는 쓰는 자리에서 소유자만 통과시킨다(assertOwner)`);
   const ap = fnBody('fbApplyTermSnapshot');
   ok(/assertCanWork\(/.test(ap) && /snapApplyEntries\(/.test(ap) && /update\(ref\(db\), patch\)/.test(ap) && !/\bset\(/.test(ap) && !/remove\(/.test(ap), '반영은 «조회만» 문지기 + 한 벌 판정 + completed 추가(update)뿐이다 — set·remove 없음');
   const apCode = ap.replace(/\/\/[^\n]*/g, '');

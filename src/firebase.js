@@ -1141,6 +1141,15 @@ export async function fbRequestTermSnapshot(by) {
   await set(ref(db, 'term_snapshot/_req'), { at: Date.now(), by: String(by || getMeToday() || '') });
 }
 
+//  4.28 — **실시간 수집 스위치**(부두별). 검수사 2026-10-16 «온오프 시스템을 만들어 주세요. 실시간 수집 pctc 와 동방 각각의 스위치 · 저만 가능해야 합니다 · 제가 로그인 한곳은 어디든 가능해야 합니다(집 폰 회사)».
+//  켜면 수집기(MailPilot 2.44-07 shiftsnap.run_live)가 그 부두의 **작업 중인 배**를 30분마다 읽어 «검수사가 입력 중이 아닌 호기» 의 컨만 완료에 추가한다. 기본은 꺼짐(없는 값 = 꺼짐).
+//  ⚠ 쓰는 자리에서 소유자만 통과시킨다(assertOwner) — 일반 검수원은 이 메뉴도 못 연다. 값은 term_snapshot/_live 에 {PCTC,PNCT,by,at}.
+export async function fbSetTermLive(pier, on, by) {
+  assertOwner('실시간 수집 스위치', by);
+  if (pier !== 'PCTC' && pier !== 'PNCT') throw new Error(`스위치 부두가 올바르지 않습니다(${pier})`);
+  await update(ref(db, 'term_snapshot/_live'), { [pier]: !!on, by: String(by || getMeToday() || ''), at: Date.now() });
+}
+
 export async function fbApplyTermSnapshot(voyageKey, mode, by) {
   assertOwner('터미널 스냅샷 반영', by);
   assertCanWork('터미널 스냅샷 반영');

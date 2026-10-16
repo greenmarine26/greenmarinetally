@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.27-01';
-const NOTE = '4.27-01 오픈탑 40OT는 42U1, 40OH는 45U1과 같은 규격으로 봅니다. 자료마다 높이가 다르면 점검요망으로 표시합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.28';
+const NOTE = '4.28 실시간 수집 스위치를 만들었습니다. 소유자 메뉴에서 PCTC와 동방을 따로 켜고 끕니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
