@@ -52,7 +52,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
 //   (앞 판) 'TallyOne 4.29-02'   // 4.29-02 **업데이트 배너는 검수사가 쓸 수 있는 변화만 알린다**(검수사 2026-10-16 13:32 «검수사들이 모르는 수정 업데이트 공고는 보여주면 안됩니다. 보여줘도 다른 검수사들이 쓸수 없는 기능이기 때문입니다»). 4.28·4.29-01 의 배너 문구는 소유자 전용 스위치 이야기라 모든 검수사에게 보였다 — 소유자 메뉴·수집기 안쪽 변경만 있는 판은 배너 문구를 직전 «모두가 쓰는 변화» 그대로 두고, 4.29 선적 칸 [수정] 문구로 되돌린다.
-export const APP_VERSION = 'TallyOne 4.29-03'   // 4.29-03 **다른 컨 선택은 확인 뒤에 처리 · 후보에 실번호 · 풀 맞교환은 무게를 보지 않는다** — 검수사 2026-10-17 «선적시 다른컨이 왔을때나 양하시 다른컨이 내려 왔을떄 컨번호를 조회하면 실번호를 볼수도 없고 컨을 지정하면 바로 선적이나 양하 처리가 되어 수정이 어려움» · «무게이슈는 선적할떄의 문제 … 위치 수정과는 다른건» (SWSP 2609N 34·38번 베이). GuidedWorkPanel 단독 [다른 컨] 후보 줄에 실번호(inspectionSealOf)·확인 창(실번호·규격·풀엠티·원래 자리 → 선적확인/양하확인) 추가, 트윈 후보도 실번호. utils.swapFixGate 풀 무게 동일 조건 폐지(일항사 확인만).
+export const APP_VERSION = 'TallyOne 4.30'   // 4.30 **RZOR 선적 덱플랜 — 크레인(LOLO) 칸을 예보 대수로 정하고 풀은 낮은 줄 칸에 미리 정해 어림값을 높였습니다** — 검수사 2026-10-17 «LOLO는 순서만 알면 위치는 100퍼센트» · «이번 수정의 가장 중요한것은 최대 근사치» · «67-18=49 · 49개 이상이면 시프팅». 예보의 «LO LO X N» 을 읽어 info.forecast.lolo 에 두고(개수 집계는 그대로), 크레인 칸 순서 = A 21 → 넘침 4 → B 24 → 시프팅 18, 풀은 줄 낮은 칸. 마감텔리 11항차 크레인 칸 346 → 424 / 450. 수집기 2.44-19 가 같은 규칙.
+//   (앞 판) 'TallyOne 4.29-03'   // 4.29-03 **다른 컨 선택은 확인 뒤에 처리 · 후보에 실번호 · 풀 맞교환은 무게를 보지 않는다** — 검수사 2026-10-17 «선적시 다른컨이 왔을때나 양하시 다른컨이 내려 왔을떄 컨번호를 조회하면 실번호를 볼수도 없고 컨을 지정하면 바로 선적이나 양하 처리가 되어 수정이 어려움» · «무게이슈는 선적할떄의 문제 … 위치 수정과는 다른건» (SWSP 2609N 34·38번 베이). GuidedWorkPanel 단독 [다른 컨] 후보 줄에 실번호(inspectionSealOf)·확인 창(실번호·규격·풀엠티·원래 자리 → 선적확인/양하확인) 추가, 트윈 후보도 실번호. utils.swapFixGate 풀 무게 동일 조건 폐지(일항사 확인만).
 //   (앞 판) 'TallyOne 4.29-01'   // 4.29-01 **실시간 수집 스위치의 뜻을 바로잡음 — 켜면 1분마다(전처럼), 끄면 작업 중인 배만 30분마다**(검수사 2026-10-16 «켜노면 전처럼 1분마다 수집을 하는거고 꺼노면 작업중인 선박에 한해서 30분마다 수집하는걸로 이야기 했는데 잘못이해 하신듯»). 4.28 은 끄면 수집이 없고 켜면 30분이라 반대였다. 수집기 MailPilot 2.44-11 이 간격을 부두별 스위치로 정하고, 이 판은 소유자 메뉴의 안내 글과 매뉴얼만 바로잡는다.
 //   (앞 판) 'TallyOne 4.29'   // 4.29 **선적 베이플랜 칸의 [수정 (다른 컨이 옴)] — 지정 컨이 있는 칸에서 수정을 누르면 컨 조회창이 열리고, 끝자리로 찾아 고른 컨을 그 칸에 선적한다**(RZOR 덱플랜의 빈자리 조회창과 같은 방식을 일반 선박에 적용 · 검수사 2026-10-16 최원형 민원 «선적시 베이플랜에서 컨테이너 번호 바로바로 수정할 수 있었으면» · «다만 틀린건 RZOR은 지정 컨테이너가 없는데 다른 선박은 지정 컨테이너가 있습니다. 거기서 수정을 누르면 조회창이 나오고 조회후 선적하는 방법»). 고른 컨의 자리·교환·충돌·시퀀스 판정은 큰 카드의 [컨테이너 번호 수정]과 같은 PositionEditModal·fbReassignContainerPosition 한 벌이고, 조회만·호기 없음 문지기도 같다(SlotLookupModal).
 //   (앞 판) 'TallyOne 4.28'   // 4.28 **실시간 수집 스위치(PCTC·동방 각각 · 소유자 전용 · 기본 꺼짐)** — 검수사 2026-10-16 «온오프 시스템을 만들어 주세요. 실시간 수집 pctc 와 동방 각각의 스위치 · 저만 가능해야 합니다 · 제가 로그인 한곳은 어디든 가능해야 합니다» · 켜면 수집기(2.44-07)가 작업 중인 배를 30분마다 읽어 검수사가 입력 중이 아닌 호기의 컨만 완료에 추가(호기별). 소유자 메뉴 «교대 시각 터미널 기준» 안. 직전 4.27-01 **40피트 오픈탑 높이 — 40OT 는 42U1(8피트6) · 40OH 는 45U1(9피트6), 같은 높이끼리는 «규격 다름» 이 없고 높이가 갈리면 «점검요망»** — 검수사 2026-10-15 14:29 «40OT와 42U1 동일 · 40OH와 45U1 동일 · 이걸로 규격이 틀리다고 알람이 발생되지 않게» · 14:31 «세관은 42UT이고 선사나 터미널이 40OH 45U1이라고 하면 그떄는 점검요망이라고 표기» (원문은 기록부). utils _SPEC_ALIAS·箱量·리스트 파서 40OT → 42U1 · isOtHighIso·isoOtHeightConflict·ISO_OT_CHECK_WHY · isoConflictOf 대조 잣대가 40OT 를 높이로 가름 · tallySizeCol 40OH → HC · 진단 🟡 iso_ot_check «점검요망 — 오픈탑 높이가 자료마다 다름 N건» · 작업카드·컨 상세 머리 · 미르. 회귀 R36 ⑧ 넷.
@@ -106,7 +107,7 @@ export const APP_VERSION = 'TallyOne 4.29-03'   // 4.29-03 **다른 컨 선택�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.29 다른 컨이 오면 후보에 실번호가 보이고 고른 뒤 확인합니다. 풀 맞교환은 무게를 안 봅니다.'
+export const APP_NOTE = '4.30 RZOR 선적 덱플랜의 크레인 칸을 예보 대수로 정하고 풀은 낮은 줄 칸에 둡니다. 직접 찍기 전까지 쓰는 어림값입니다.'
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -306,6 +307,7 @@ export function parseCargoForecast(text) {
   let sec = null;
   let cnSec = null;      // V9.03: 'urgent' | 'lugg' — "*** 긴급리스트 ***" / "*** 수화물 컨테이너 ***" 아래 컨번호 나열 구간
   let lastLuggCn = '';   // V9.03: "SEAL NO. : X" 줄을 직전 CNTR와 짝짓기
+  let loloOn = false;    // 4.30: «-LO LO X N VAN» 아래 «40H FULL X 8VAN» 줄들 — 크레인 대수·풀 수. 위 집계(full/empty/vans)에는 넣지 않는다(이중 집계 방지)
   for (const raw of String(text || '').split(/\r?\n/)) {
     // ── TallyOne 1.43: 카톡 발신자·시각 머리말을 떼고 읽는다 ──────────────────
     //   카톡에서 복사하면 **말한 사람의 첫 줄에만** `[이다희] [10:38] ` 이 붙는다.
@@ -366,10 +368,19 @@ export function parseCargoForecast(text) {
       continue;
     }
     // RZOR형 섹션 헤더
+    if (/^\*\s*(FULL|EMPTY|LUG)/i.test(line)) loloOn = false;   // 4.30: 다음 섹션 헤더에서 LO LO 하위 줄 읽기를 끝낸다
     if (/^\*\s*FULL\s*$/i.test(line)) { sec = 'full'; continue; }
     if (/^\*\s*EMPTY\s*$/i.test(line)) { sec = 'empty'; continue; }
     if (/^\*\s*LUG/i.test(line)) { sec = 'luggage'; continue; }
     // 위치·화주 상세('-LO LO', '-CORNNING'…)나 온도 상세("40RHX7 (-18'C)") 등은 이중 집계 방지 위해 제외
+    //  4.30: 크레인(LO LO) 대수 — «-LO LO X 67 VAN» · 아래 줄 «40H FULL X 8VAN» / «40R EMPTY X 22VAN». 집계 필드는 건드리지 않고 out.lolo 에만 둔다.
+    const lm = line.match(/^[-=]?\s*LO\s*LO\s*[Xx×]\s*(\d+)/i);
+    if (lm) { if (!out.lolo) { out.lolo = { n: +lm[1], full: 0, empty: 0 }; loloOn = true; } else loloOn = false; sec = null; continue; }   // 두 번째 LO LO 줄은 첫 줄을 덮지 않는다
+    if (loloOn && /^[-=]/.test(line)) loloOn = false;
+    if (loloOn && out.lolo) {
+      const sm = line.match(/(\d{2})\s*[A-Z]{0,2}\s*(FULL|EMPTY)\s*[Xx×]\s*(\d+)/i);
+      if (sm) { out.lolo[sm[2].toLowerCase()] += +sm[3]; continue; }
+    }
     if (/^[-=]/.test(line)) { sec = null; continue; }
     if (!sec) continue;
     const m = line.match(/^(\d{2})\s*([A-Z]{1,2})\s*[Xx×]\s*(\d+)/);
@@ -10335,4 +10346,11 @@ export function loadingNoPosAsk(c, mode) {
   }
   if (has(c.bay) || has(c.bay_actual) || has(c.bay_assign)) return '';
   return `${String(c.cn || '').slice(-4) || '이 컨'} — 선적 자리가 없습니다.\n\n자리 없이 완료하면 베이 그림·콘앱에 나오지 않습니다.\n[취소] 를 누르고 «위치 지정» 이나 «기록지 사진» 으로 자리를 먼저 넣어 주세요.\n\n그래도 자리 없이 완료할까요?`;
+}
+
+// 4.30: 예보 «LO LO N»은 선적 예보일 때만 RZOR 선적 덱플랜의 크레인 대수로 쓴다(양하 예보가 선적 플랜을 흔들지 않게)
+export function _foreLoloOf(voyage) {
+  const f = voyage?.info?.forecast;
+  if (!f || (f.mode || 'loading') !== 'loading' || !f.lolo) return { n: 0, full: 0 };
+  return { n: Number(f.lolo.n) || 0, full: Number(f.lolo.full) || 0 };
 }

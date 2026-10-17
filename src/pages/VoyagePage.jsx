@@ -53,7 +53,7 @@ import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
-import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { _foreLoloOf, isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
@@ -1015,9 +1015,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const list = containersBase.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__'));
     try {
       return buildRzorLoadingDeckPlan({ containers: list, termWork: sec.termWork || {}, bayWork: sec.bayWork || null,
+                                       foreLolo: _foreLoloOf(voyage).n, foreLoloFull: _foreLoloOf(voyage).full,   // 4.30: 예보 «LO LO N»
                                        assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });   // 선적 항차(R106W) — info.voy 는 양하 항차(R106E)
     } catch (e) { console.warn('[3.67] RZOR 덱플랜 생성 실패', e); return null; }
-  }, [mode, containersBase, sec.stowagePlan, sec.termWork, sec.bayWork, voyage?.info?.vsl, voyage?.info?.voy, voyageKey, extraPolicies]);
+  }, [mode, containersBase, sec.stowagePlan, sec.termWork, sec.bayWork, voyage?.info?.vsl, voyage?.info?.voy, voyage?.info?.forecast?.mode, voyage?.info?.forecast?.lolo?.n, voyage?.info?.forecast?.lolo?.full, voyageKey, extraPolicies]);
   const _deckPlanEff = _rzorGen || voyage?.[mode]?.stowagePlan;   // LOLO 탭이 그리는 것 — 올린 것 우선, 없으면 생성
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입

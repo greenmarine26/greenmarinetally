@@ -13,7 +13,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
+import { _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -342,7 +342,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       else if (mode === 'loading') {
         try {
           rzDeckPlan = buildRzorLoadingDeckPlan({ containers: allContainers.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__')),
-            termWork: sec.termWork || {}, bayWork: sec.bayWork || null, assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });
+            termWork: sec.termWork || {}, bayWork: sec.bayWork || null, assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '',
+            foreLolo: _foreLoloOf(voyage).n, foreLoloFull: _foreLoloOf(voyage).full });   // 4.30: 예보 «LO LO N»
         } catch (e) { console.warn('[4.04] RZOR 덱플랜 생성 실패 — 카고플랜으로 연다', e); }
       }
     }
