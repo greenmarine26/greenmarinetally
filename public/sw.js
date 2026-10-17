@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.30';
-const NOTE = '4.30 RZOR 선적 덱플랜의 크레인 칸을 예보 대수로 정하고 풀은 낮은 줄 칸에 둡니다. 직접 찍기 전까지 쓰는 어림값입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.30-02';
+const NOTE = '4.30-02 마감적용에서 폰으로 파일을 고르면 읽는 중 표시가 뜨고 수석 보드는 퇴근한 조의 이름을 지웁니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
