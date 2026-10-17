@@ -1152,6 +1152,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             // V9.03: 긴급/수화물 컨번호 — 리스트·카고플랜 마커는 렌더 시점에 이 목록으로 주입
             //   (EDI가 예보보다 늦게 와도, EDI가 갱신돼도 마커 유지 — 연태훼리 CLL 메일)
             urgentCns: fc.urgentCns || [], luggageCns: fc.luggageCns || [], luggageSeals: fc.luggageSeals || {},
+            ...(fc.lolo ? { lolo: fc.lolo } : {}),   // 4.30: 크레인(LO LO) 대수 — 덱플랜 자동 입력이 쓴다(개수 집계와 별개)
             // 1.42: 카톡으로 온 **그림**(덱 그림 등). 검수사 확정 — "덱플랜파일이 아니라 그림을 올리는것입니다."
             //   1600px JPEG 로 줄여 담는다(사진 보고와 같은 축소기). 없으면 기존 그림을 지우지 않는다.
             ...(fcImage ? { image: fcImage, imageAt: Date.now() } : {}),

@@ -1015,9 +1015,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const list = containersBase.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__'));
     try {
       return buildRzorLoadingDeckPlan({ containers: list, termWork: sec.termWork || {}, bayWork: sec.bayWork || null,
+                                       foreLolo: voyage?.info?.forecast?.lolo?.n || 0, foreLoloFull: voyage?.info?.forecast?.lolo?.full || 0,   // 4.30: 예보 «LO LO N»
                                        assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });   // 선적 항차(R106W) — info.voy 는 양하 항차(R106E)
     } catch (e) { console.warn('[3.67] RZOR 덱플랜 생성 실패', e); return null; }
-  }, [mode, containersBase, sec.stowagePlan, sec.termWork, sec.bayWork, voyage?.info?.vsl, voyage?.info?.voy, voyageKey, extraPolicies]);
+  }, [mode, containersBase, sec.stowagePlan, sec.termWork, sec.bayWork, voyage?.info?.vsl, voyage?.info?.voy, voyage?.info?.forecast?.lolo?.n, voyage?.info?.forecast?.lolo?.full, voyageKey, extraPolicies]);
   const _deckPlanEff = _rzorGen || voyage?.[mode]?.stowagePlan;   // LOLO 탭이 그리는 것 — 올린 것 우선, 없으면 생성
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입

@@ -15,7 +15,8 @@ const ENTRY = path.join(TMP, 'entry.mjs');
 fs.writeFileSync(ENTRY, `export { isDeckPlanWorkbook, isCheckerPlanWorkbook, parseDeckPlanWorkbook } from "${ROOT}/src/rzorPlan.js";
 export { buildRzorLoadingDeckPlan, rzorLoadSequence, rzorSizeOf, rzorSlotCandidates } from "${ROOT}/src/rzorDeckPredict.js";
 export { buildCheckerPlanWorkbook, checkerTypeOf } from "${ROOT}/src/rzorPlanExcel.js";
-export { craneSlots, RZOR_DECK_SLOTS, RZOR_PATH_TWENTY } from "${ROOT}/src/data/rzorDeckRules.js";\n`);
+export { craneSlots, craneSlotsFE, RZOR_DECK_SLOTS, RZOR_PATH_TWENTY } from "${ROOT}/src/data/rzorDeckRules.js";
+export { parseCargoForecast } from "${ROOT}/src/utils.js";\n`);
 const OUT = path.join(TMP, 'rz.cjs');
 execSync(`npx esbuild "${ENTRY}" --bundle --platform=node --format=cjs --log-level=error --outfile="${OUT}"`, { cwd: ROOT, stdio: 'pipe' });
 const M = require(OUT);
@@ -138,6 +139,13 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
     ok('후보 — 자리가 있는 컨(placedAt)은 빼지 않고 잠가 맨 뒤에 · 그 자리를 들고 온다', lk.length === 2 && lk[0].cn === 'LYGU4039765' && !lk[0].locked && lk[1].cn === 'SPSU2019765' && lk[1].locked && lk[1].at.pos === 'D덱 1줄 18칸');
     ok('후보 — 전체 번호·소문자·공백도 찾는다 · 규격(sz)·예측 자리 표시', C({ containers: F.containers, q: ' spsu2019765 ' }).length === 1 && /^(20|40|45)$/.test(h1[0].sz) && C({ containers: F.containers, q: '9765', predPos: { SPSU2019765: 'D덱 1줄 15칸' } }).find((x) => x.cn === 'SPSU2019765').pred === 'D덱 1줄 15칸');
   }
+  // 4.30 — 크레인 칸 규칙(검수사 2026-10-17: 30대 2단 · 45대 3단 · 최대 67대 순서 일정 · 49대 넘으면 시프팅 18칸 · 풀은 낮은 줄 칸) · 예보 LO LO 읽기
+  ok('크레인 길 4.30 — N=30 은 두 단(10·11, 13·14 칸)·7줄 14 + 8줄 16', (() => { const a = M.craneSlots(30); return a.length === 30 && a.every((x) => [10, 11, 13, 14].includes(x[1])) && a.filter((x) => x[1] < 12).length === 14; })());
+  ok('크레인 길 4.30 — N=67 은 A 21 → 넘침 4(1·2줄 16·17) → B 24 → 시프팅 18(5·4·3줄 19~21 → 22~24)', (() => { const a = M.craneSlots(67).map((x) => x.join('-')); return a.length === 67 && a.slice(21, 25).join() === '1-16,1-17,2-16,2-17' && a[25] === '8-13' && a.slice(49, 52).join() === '5-19,5-20,5-21' && a[66] === '3-24'; })());
+  ok('크레인 풀 4.30 — 풀 18 = 두 띠 1~3줄 18칸 · 엠티는 나머지(풀 6 = 1줄 6칸)', (() => { const f = M.craneSlotsFE(45, 18), g = M.craneSlotsFE(45, 6); return f.full.length === 18 && f.full.every((x) => x[0] <= 3) && f.empty.length === 27 && g.full.length === 6 && g.full.every((x) => x[0] === 1); })());
+  ok('예보 4.30 — «-LO LO X 67VAN» + «40H FULL X 10» · «40HEMPTY X 18» → lolo {n 67, full 10, empty 57}, 개수 집계는 그대로', (() => {
+    const t = 'R104W\n*FULL\n40H X 3\n*EMPTY\n40H X 5\n\n-LO LO X 67VAN\n MID-49VAN\n 40H FULL X 10\n 40H EMPTY X 39\n\n STERN-18VAN\n 40HEMPTY X 18\n\n-CORNNING\n 40H X 17(COC X 9, SOC X 8)\n';
+    const r = M.parseCargoForecast(t); return r.lolo && r.lolo.n === 67 && r.lolo.full === 10 && r.lolo.empty === 57 && r.vans.full === 3 && r.vans.empty === 5; })());
   ok('크레인 길 — N=45 → 7+8줄(D 10~12 는 1~7줄, 13~15 는 1~8줄) · N=36 → 5+7줄', (() => { const a = M.craneSlots(45), b = M.craneSlots(36); const rows = (arr, p) => new Set(arr.filter((x) => x[1] === p).map((x) => x[0])).size; return a.length === 45 && rows(a, 10) === 7 && rows(a, 13) === 8 && b.length === 36 && rows(b, 10) === 5 && rows(b, 13) === 7; })());
 
   console.log('■ ③ 엑셀 내보내기 — 마감텔리 양식으로 나가고, 같은 파서가 그대로 다시 읽는다');

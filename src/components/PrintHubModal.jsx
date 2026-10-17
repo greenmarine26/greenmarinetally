@@ -342,7 +342,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       else if (mode === 'loading') {
         try {
           rzDeckPlan = buildRzorLoadingDeckPlan({ containers: allContainers.filter((c) => c && c.cn && !c._slot && !String(c.cn).startsWith('__')),
-            termWork: sec.termWork || {}, bayWork: sec.bayWork || null, assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '' });
+            termWork: sec.termWork || {}, bayWork: sec.bayWork || null, assign: sec.stowagePlan?.assign || null, voy: voyage?.info?.voy_l || voyage?.info?.voy || '',
+            foreLolo: voyage?.info?.forecast?.lolo?.n || 0, foreLoloFull: voyage?.info?.forecast?.lolo?.full || 0 });   // 4.30: 예보 «LO LO N»
         } catch (e) { console.warn('[4.04] RZOR 덱플랜 생성 실패 — 카고플랜으로 연다', e); }
       }
     }

@@ -7,7 +7,7 @@
 //     (2차 시뮬 지적 — 종전 «덱-ri-ci» 키는 40피트 두 칸과 그 옆 칸이 같은 키라 예측 칸을 확정하면 한 칸 옆에 놓였다.)
 //   결과 slots: 확정 = {cn, sure:true} · 예측 = {cn, pred:true} · 빈자리 = {empty:true}. 좌표는 검수사 양식(위치 1=선수, numbering 'bow').
 import { RZOR_PATH_CBOW, RZOR_PATH_DALT, RZOR_PATH_DSTERN2, RZOR_PATH_CMID, RZOR_PATH_DEXTRA, RZOR_PATH_TWENTY,
-         RZOR_DECK_SLOTS, craneSlots, RZOR_CRANE_BAY, RZOR_CBOW_CAP, RZOR_FULL_TO_CMID_AFTER } from './data/rzorDeckRules.js';
+         RZOR_DECK_SLOTS, craneSlots, craneSlotsFE, RZOR_CRANE_BAY, RZOR_CBOW_CAP, RZOR_FULL_TO_CMID_AFTER } from './data/rzorDeckRules.js';
 import { isReeferIso, isoFeet } from './utils.js';   // 리퍼·크기 판정 한 벌(3.60-10 lint — 자체 정규식 금지)
 
 const DECK_TIER = { U: '84', C: '86', D: '88' };
@@ -44,8 +44,10 @@ export function rzorLoadSequence(termWork) {
  * @param {object} p.bayWork     voyages/{키}/loading/bayWork (크레인 대수 N 추정용, 없어도 됨)
  * @param {object} p.assign      stowagePlan/assign — {slotKey(덱-줄-위치):{cn,by,at}}
  * @param {string} p.voy         항차(표시용)
+ * @param {number} p.foreLoloFull 4.30: 예보 크레인 풀 대수 — 풀 칸 수가 항차 끝까지 흔들리지 않게 한다(없으면 실적에 보인 풀 수)
+ * @param {number} p.foreLolo    4.30: 예보 «LO LO N» 의 N(크레인 대수) — 있으면 크레인 길의 N 으로 쓴다(터미널 대수보다 먼저 정해지고 항차 끝까지 변하지 않는다)
  */
-export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWork = null, assign = null, voy = '' } = {}) {
+export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWork = null, assign = null, voy = '', foreLolo = 0, foreLoloFull = 0 } = {}) {
   const byCn = {};
   for (const c of containers) if (c && c.cn) byCn[c.cn] = c;
   // 템플릿 자리(36항차 실물) — 키 → {deck,line,pos,sz}
@@ -74,14 +76,17 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
   const seq = rzorLoadSequence(termWork);
   const craneSeq = seq.filter((s) => s.bay === RZOR_CRANE_BAY);
   const bw = bayWork && bayWork[RZOR_CRANE_BAY];
-  const craneN = Math.max(craneSeq.length, bw ? ((Number(bw.deck) || 0) + (Number(bw.hold) || 0)) : 0, 0);
-  // 크레인 길 — N 칸 뒤에 넘침 칸(craneSlots(99) 의 나머지)을 이어 둔다. 확정 자리가 길 안에 있어 칸이 모자라도 컨이 사라지지 않는다.
-  const cranePath0 = craneSlots(craneN || 45);
-  const _seen = new Set(cranePath0.map((x) => x.join('-')));
-  const cranePath = cranePath0.concat(craneSlots(99).filter((x) => !_seen.has(x.join('-'))));
+  const craneN = Math.max(craneSeq.length, bw ? ((Number(bw.deck) || 0) + (Number(bw.hold) || 0)) : 0, Math.round(Number(foreLolo) || 0), 0);
+  // 크레인 길 — 4.30: 풀은 줄 번호 낮은 칸(미리 정해진 자리), 엠티는 나머지를 craneSlots 순서로. N 칸 뒤에 넘침 칸(craneSlots(99) 의 나머지)을 이어 둔다.
+  //   확정 자리가 길 안에 있어 칸이 모자라도 컨이 사라지지 않는다.
+  const _craneFull = Math.max(craneSeq.filter((x) => (byCn[x.cn] || {}).fe !== 'E').length, Math.round(Number(foreLoloFull) || 0));
+  const _fe = craneSlotsFE(craneN || 45, _craneFull);
+  const _rest = craneSlotsFE(99, 0).empty;
+  const _tail = (path) => { const seen = new Set(path.map((x) => x.join('-'))); return path.concat(_rest.filter((x) => !seen.has(x.join('-')) && !_fe.full.some((y) => y.join('-') === x.join('-')))); };
+  const cranePathF = _tail(_fe.full), cranePathE = _tail(_fe.empty);
   const pred = {};   // cn → {deck,line,pos,key,zone}
   const unplaced = [];   // 자리를 못 받은 컨(템플릿까지 다 찼을 때만) — 화면이 알린다
-  const used = { CBOW: 0, DALT: 0, DSTERN2: 0, CMID: 0, DEXTRA: 0, TWENTY: 0, CRANE: 0 };
+  const used = { CBOW: 0, DALT: 0, DSTERN2: 0, CMID: 0, DEXTRA: 0, TWENTY: 0, CRANE: 0, CRANE_F: 0, CRANE_E: 0 };
   // 2차 시뮬 지적 — 확정 컨을 순번 걷기에서 그냥 건너뛰면 구역 문턱(C덱 선수 41·D덱 40)이 한 칸씩 어긋나 나머지 예측이
   //   탭마다 움직였다(189경우 중 87경우, 최대 30대). 그래서 확정 컨도 예측과 똑같이 구역을 정해 그 수에 세고, 놓기만 건너뛴다.
   //   예측 자리 그대로 확정하면 길의 상태가 예측 때와 같아 나머지 예측이 안 움직인다.
@@ -96,9 +101,10 @@ export function buildRzorLoadingDeckPlan({ containers = [], termWork = {}, bayWo
     else if (fe === 'F' && used.DALT >= RZOR_FULL_TO_CMID_AFTER) z = used.DSTERN2 < RZOR_PATH_DSTERN2.length ? 'DSTERN2' : (used.CMID < RZOR_PATH_CMID.length ? 'CMID' : (used.DALT < RZOR_PATH_DALT.length ? 'DALT' : 'DEXTRA'));
     else z = used.DALT < RZOR_PATH_DALT.length ? 'DALT' : (fe === 'E' ? 'DEXTRA' : (used.DSTERN2 < RZOR_PATH_DSTERN2.length ? 'DSTERN2' : (used.CMID < RZOR_PATH_CMID.length ? 'CMID' : 'DEXTRA')));
     const off = used[z]; used[z] += 1;
+    const offC = z === 'CRANE' ? used[fe === 'F' ? 'CRANE_F' : 'CRANE_E']++ : 0;   // 4.30: 크레인은 풀·엠티 길을 따로 걷는다
     if (sureByCn[s.cn]) continue;   // 확정 컨 — 구역 수에는 셌고, 자리는 이미 taken 에 있다
     let slot = null;
-    if (z === 'CRANE') slot = pickFrom(cranePath.slice(off), 'D');
+    if (z === 'CRANE') slot = pickFrom((fe === 'F' ? cranePathF : cranePathE).slice(offC), 'D');
     else if (z === 'TWENTY') slot = pickFrom(RZOR_PATH_TWENTY, null);
     else {
       // 섀시 40·45: C덱 선수 → D덱 양끝 → (풀·D 40대 뒤) D 1~2줄 18~21 → C덱 중간 · (엠티) D 여분
