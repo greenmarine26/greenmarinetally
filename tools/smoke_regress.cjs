@@ -2384,7 +2384,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       W.localStorage.setItem('gm_equip_no', equip);
       try { W.eval(vSrc); W.__R32go(JSON.stringify(voy), vk); } catch (er) { errs.push('THROW ' + er.message); }
       await sleep(350);
-      const d = W.document, click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } return !!b; };
+      const d = W.document, click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); /* 4.29-03: 다른 컨 후보 확인 창(«이 컨으로 처리합니까») 확인까지 누른다 */ const _md = [...W.document.querySelectorAll('div.fixed.inset-0')].filter((x) => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0]; const _cf = _md ? [..._md.querySelectorAll('button')].find((x) => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null; if (_cf) { _cf.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } } return !!b; };
       const btn = (re) => [...d.querySelectorAll('button')].find((b) => re.test(b.textContent.trim()) && !b.disabled);
       const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };   // 그릴 때까지 기다린다(빌드 중 다른 일이 돌면 렌더가 늦다)
       await click(await until(() => [...d.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent))), 300);
@@ -2413,7 +2413,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         }
         await until(() => [...d.querySelectorAll('div')].some((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || '')));
         const box = [...d.querySelectorAll('div')].find((x) => x.firstChild && /^또는 이 (데크|홀드) 남은 컨에서 선택/.test(x.firstChild.textContent || ''));
-        return box ? [...box.querySelectorAll('button')].map((b) => { const s = b.querySelectorAll('span'); return { cn: s[0] ? s[0].textContent.trim() : '', pos: s[1] ? s[1].textContent.trim() : '' }; }) : [];
+        return box ? [...box.querySelectorAll('button')].map((b) => { const s = b.querySelectorAll('span'); return { cn: s[0] ? s[0].textContent.trim() : '', pos: s.length > 1 ? s[s.length - 1].textContent.trim() : '' }; }) : [];   /* 4.29-03: 후보 줄 가운데에 실번호 칸이 들어 위치 칸은 마지막 칸 */
       };
       const pick = async (bay, tier) => {
         await toGroups();
@@ -2764,7 +2764,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         W.localStorage.setItem('gm_equip_no', '1호기');
         try { W.eval(vSrc); W.__R32go(JSON.stringify(tv()), tk); } catch (er) { errs.push('THROW ' + er.message); }
         await sleep(350);
-        const d = W.document, click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } return !!b; };
+        const d = W.document, click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); /* 4.29-03: 다른 컨 후보 확인 창(«이 컨으로 처리합니까») 확인까지 누른다 */ const _md = [...W.document.querySelectorAll('div.fixed.inset-0')].filter((x) => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0]; const _cf = _md ? [..._md.querySelectorAll('button')].find((x) => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null; if (_cf) { _cf.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } } return !!b; };
         const btn = (re) => [...d.querySelectorAll('button')].find((b) => re.test(b.textContent.replace(/\s+/g, ' ').trim()) && !b.disabled);
         const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };
         const setVal = (el, val) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set.call(el, val); el.dispatchEvent(new W.Event('input', { bubbles: true })); };

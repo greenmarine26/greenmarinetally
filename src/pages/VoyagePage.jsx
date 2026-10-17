@@ -404,7 +404,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (!g.ok) { alert('⛔ 맞교환 불가 — ' + g.reason); return; }
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const q = g.chiefMate
-      ? `풀 맞교환입니다 — 무게가 같아 가능하지만 **일항사와 상의 후** 진행해야 합니다.\n일항사와 상의하셨습니까?\n\n${a.cn} ⇄ ${c2.cn}`
+      ? `풀 맞교환입니다 — 무게는 보지 않습니다. **일항사와 상의 후** 진행해야 합니다.\n일항사와 상의하셨습니까?\n\n${a.cn} ⇄ ${c2.cn}`
       : `두 컨의 자리 기록을 맞바꿉니다 (양하·선적 함께).\n${a.cn} @ ${ra.bay || '?'}-${ra.row || '?'}-${ra.tier || '?'}\n${c2.cn} @ ${rb.bay || '?'}-${rb.row || '?'}-${rb.tier || '?'}\n\n칸은 그대로 — 번호만 바뀝니다. 진행하시겠습니까?`;
     if (!confirm(q)) return;
     try {
