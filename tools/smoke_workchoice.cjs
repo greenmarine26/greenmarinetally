@@ -80,15 +80,15 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   W.__mount({ choiceFor: '김성일', onCancelChoice: () => { cancelled++; } });
   if (!(await until(() => doc.querySelector('[data-login-choice="role"]')))) fail('자유 열람이 역할 단계로 안 뜬다: ' + txt().slice(0, 300));
   noErr();
-  if (!doc.querySelector('[data-choice-role="view"]') || !doc.querySelector('[data-choice-role="work"]')) fail('조회만/작업자 단추가 없다');
+  if (!doc.querySelector('[data-choice-role="admin"]') || !doc.querySelector('[data-choice-role="work"]') || doc.querySelector('[data-choice-role="view"]')) fail('4.30-03 소유자에게 관리자/작업자 단추만 있어야 한다(조회만 없음)');
   if (doc.querySelector('[data-choice-voyage]')) fail('역할 단계인데 선박 목록이 떠 있다');
   const back = byText(/그대로 두기/);
   if (!back) fail('choiceFor 경로에 «그대로 두기» 가 없다');
   back.click(); await wait(80);
   if (cancelled !== 1) fail('«그대로 두기» 가 onCancelChoice 를 안 불렀다');
-  doc.querySelector('[data-choice-role="view"]').click(); await wait(80);
+  doc.querySelector('[data-choice-role="admin"]').click(); await wait(80);
   s = lastSel();
-  if (!s || s.name !== '김성일' || !s.choice || s.choice.mode !== 'view') fail('조회만 선택 결과가 틀리다: ' + JSON.stringify(s));
+  if (!s || s.name !== '김성일' || !s.choice || s.choice.mode !== 'admin') fail('관리자 선택 결과가 틀리다: ' + JSON.stringify(s));
   W.__mount({ choiceFor: '김성일' });
   await until(() => doc.querySelector('[data-login-choice="role"]'));
   doc.querySelector('[data-choice-role="work"]').click();
@@ -119,10 +119,10 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   //  3.51: 테스터(클로드 포함)도 작업자를 고를 수 있다 — 실테스트는 작업자로 들어와야 한다(검수사 «실테스트를 할려면 작업자로 들어 와야 합니다»)
   W.__mount({ choiceFor: '클로드', extraStaff: FX });
   if (!(await until(() => doc.querySelector('[data-login-choice="role"]')))) fail('테스터가 역할 단계로 안 뜬다');
-  if (!doc.querySelector('[data-choice-role="work"]') || !doc.querySelector('[data-choice-role="view"]')) fail('테스터에게 조회만/작업자 둘 다 있어야 한다');
-  doc.querySelector('[data-choice-role="view"]').click(); await wait(120);
+  if (!doc.querySelector('[data-choice-role="work"]') || !doc.querySelector('[data-choice-role="admin"]')) fail('4.30-03 클로드에게 관리자/작업자 둘 다 있어야 한다');
+  doc.querySelector('[data-choice-role="admin"]').click(); await wait(120);
   s = lastSel();
-  if (!s || s.name !== '클로드' || s.choice.mode !== 'view') fail('테스터 조회만 결과가 틀리다: ' + JSON.stringify(s));
+  if (!s || s.name !== '클로드' || s.choice.mode !== 'admin') fail('클로드 관리자 결과가 틀리다: ' + JSON.stringify(s));
   //  [작업자] 뒤 명단이 또 바뀌어도 안 되돌아가는지는 자유 열람(김성일)로 잰다
   W.__mount({ choiceFor: '김성일', extraStaff: FX });
   await until(() => doc.querySelector('[data-login-choice="role"]'));
@@ -355,6 +355,39 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
     console.log('  ⑦ 선택 판이 PC 에서 제 안에서 구른다(lg:flex-1 · lg:min-h-0 · lg:overflow-y-auto) ✔');
   }
   noErr();
+  // ── ⑧-B (4.30-03) 실소스 firebase — 관리자는 활동을 작업자처럼 적지 않는다(workMode 'view'·항차/호기 null) · 선택 기록도 'view'
+  {
+    const fg = W.__fbgate;
+    if (fg && fg.rememberMe && fg.saveWorkChoice) {
+      fg.rememberMe('김성일');
+      fg.saveWorkChoice({ name: '김성일', mode: 'admin' }); fg.setActiveWorkChoice({ name: '김성일', mode: 'admin' });
+      fg.writes().length = 0;
+      await fg.fbSetInspectorActivity('김성일', 'STMJ_2652E', 'discharge', { equip: '1호기', bayLabel: 'BAY 20', tier: 'deck', remain: 3, auto: true });
+      const w = fg.writes().filter((x) => x.op === 'update' && x.path === 'inspectors/김성일').pop();
+      if (!w || w.value.workMode !== 'view' || w.value.lastVoyage !== null || w.value.workEquip !== null) fail('⑧-B 관리자 활동이 작업자처럼 적힌다: ' + JSON.stringify(w && w.value));
+      await fg.fbSetInspectorChoice('김성일', { mode: 'admin' });
+      const c = fg.writes().filter((x) => x.op === 'update' && x.path === 'inspectors/김성일').pop();
+      if (!c || c.value.workMode !== 'view' || c.value.assignVoyage !== '') fail('⑧-B 관리자 선택 기록이 작업자로 적힌다: ' + JSON.stringify(c && c.value));
+      fg.setActiveWorkChoice(null); fg.clearWorkChoice && fg.clearWorkChoice();
+      console.log("  ⑧-B 관리자 활동·선택 기록 — 서버에는 workMode 'view'(작업중·작업량에 안 잡힘) ✔");
+    }
+  }
+  // ── ⑧ (4.30-03) 관리자 — 쓰기 문지기는 통과(업로드·수정 열림)하되 작업자는 아니다(작업중·호기에 안 잡힌다)
+  {
+    if (!wc.isAdminUser('김성일') || !wc.isAdminUser('클로드') || !wc.isAdminUser('클로드2') || wc.isAdminUser('박진우') || wc.isAdminUser('표인수')) fail('⑧ 관리자 명단 판정이 틀리다(소유자·클로드·클로드2 만)');
+    wc.setActiveWorkChoice({ name: '김성일', mode: 'admin' });
+    if (wc.isViewOnlyNow() || !wc.canWorkNow()) fail('⑧ 관리자인데 쓰기 문지기가 막는다 — 업로드·수정이 열려야 한다');
+    if (!wc.isAdminNow() || !wc.isNotWorkerNow()) fail('⑧ 관리자 판정(isAdminNow·isNotWorkerNow)이 틀리다');
+    if (wc.myWorkVoyageNow() !== '') fail('⑧ 관리자에게 작업 선박이 잡힌다');
+    wc.setActiveWorkChoice({ name: '김성일', mode: 'view' });
+    if (!wc.isViewOnlyNow() || wc.canWorkNow() || wc.isAdminNow() || !wc.isNotWorkerNow()) fail('⑧ 조회만이 종전과 달라졌다(쓰기는 막혀야 한다)');
+    wc.setActiveWorkChoice({ name: '김성일', mode: 'work', voyageKey: 'STMJ_2652E', equip: '' });
+    if (wc.isNotWorkerNow() || !wc.canWorkNow()) fail('⑧ 작업자 판정이 달라졌다');
+    const sv = wc.saveWorkChoice({ name: '김성일', mode: 'admin', voyageKey: 'X', equip: '1호기' });
+    if (!sv || sv.mode !== 'admin' || sv.voyageKey !== '' || sv.equip !== '') fail('⑧ 관리자 저장값이 틀리다: ' + JSON.stringify(sv));
+    if (!wc.readWorkChoice('김성일') || wc.readWorkChoice('김성일').mode !== 'admin') fail('⑧ 관리자 선택이 다시 읽히지 않는다');
+    console.log('  ⑧ 관리자 — 쓰기 문지기 통과·작업자 아님·저장/읽기 ✔ (조회만은 종전대로 막힘)');
+  }
   console.log('✅ 작업자/조회만 선택 연막검사 PASS');
   process.exit(0);
 })().catch((e) => { console.log('✗ 예외: ' + (e && e.stack || e)); process.exit(1); });

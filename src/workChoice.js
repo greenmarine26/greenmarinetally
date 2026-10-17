@@ -13,7 +13,7 @@
 //   · 그 밖(일반 검수원) = 작업자뿐. 작업 선박(+호기)을 고르지 않으면 들어갈 수 없고, 고른 선박 안에서만 앱이 돈다.
 //   · 기억은 기기·이름·오늘(KST) 단위 — meToday 와 같은 규칙. 로그아웃하면 지운다. 헤더 [변경] 으로 다시 고른다.
 //  ⚠ 이 파일은 localStorage 와 명단만 본다(utils·firebase 를 부르지 않는다) — utils.setEquipNumber·firebase.fbSetInspectorActivity 가 이 파일을 부르므로 순환을 만들면 안 된다.
-import { canOpenChief } from './staffList.js';
+import { canOpenChief, isHiddenStaff } from './staffList.js';
 import { isOwnerName } from './adminGuard.js';
 import { getMeToday, ymdKST } from './meToday.js';
 
@@ -39,7 +39,7 @@ export function readWorkChoice(name) {
   try {
     const v = JSON.parse(localStorage.getItem(WORK_CHOICE_KEY) || 'null');
     if (!v || v.name !== n || v.ymd !== ymdKST()) return null;
-    if (v.mode !== 'work' && v.mode !== 'view') return null;
+    if (v.mode !== 'work' && v.mode !== 'view' && v.mode !== 'admin') return null;   // 4.30-03: 'admin' = 관리자(제약 없이 수정·자료 등록, 작업량·호기에는 안 잡힌다)
     if (v.mode === 'work' && !v.voyageKey) return null;
     return v;
   } catch (e) { return null; }
@@ -47,7 +47,7 @@ export function readWorkChoice(name) {
 
 export function saveWorkChoice(choice) {
   if (!choice || !choice.name) return null;
-  const v = { name: String(choice.name), ymd: ymdKST(), mode: choice.mode === 'view' ? 'view' : 'work', voyageKey: choice.mode === 'view' ? '' : String(choice.voyageKey || ''), equip: choice.mode === 'view' ? '' : String(choice.equip || ''), at: Date.now() };
+  const v = { name: String(choice.name), ymd: ymdKST(), mode: (choice.mode === 'view' || choice.mode === 'admin') ? choice.mode : 'work', voyageKey: (choice.mode === 'view' || choice.mode === 'admin') ? '' : String(choice.voyageKey || ''), equip: (choice.mode === 'view' || choice.mode === 'admin') ? '' : String(choice.equip || ''), at: Date.now() };
   try { localStorage.setItem(WORK_CHOICE_KEY, JSON.stringify(v)); } catch (e) { /* 저장 못 해도 이번 세션은 App state 로 돈다 */ }
   return v;
 }
@@ -62,6 +62,24 @@ export function isViewOnlyNow() {
   const c = readWorkChoice(getMeToday());
   return !!(c && c.mode === 'view');
 }
+
+//  ★ 4.30-03 (검수사 2026-10-17 «클로드나 저나 관리자 모드로 제약 없이 수정이나 자료 등록을 할 수 있게 해야 합니다. 제가 작업자로 갈 때는 모드를 선택하게 하면 됩니다» ·
+//    «업로드 하기 위해 로그인 한 건데 매번 작업중 문구가 뜨고 있습니다»)
+//    관리자 = 검수사(소유자)·클로드(개발·시험 계정). 로그인하면 선택 없이 곧바로 관리자다. 쓰는 일(업로드·수정)은 **전부 열려 있다** — isViewOnlyNow 가 false 라 assertCanWork·canWorkNow 가 그대로 통과한다.
+//    다만 작업자가 아니다 — 호기·작업중·작업량에는 안 잡힌다(isNotWorkerNow). 서버 명단에는 workMode 'view' 로 적어 수석 보드·작업중 판정(inspectorStatus)이 손대지 않고 «작업중 아님» 으로 읽는다.
+/** 관리자 모드로 들어갈 수 있는 사람 — 소유자(검수사)·클로드(HIDDEN_STAFF). */
+export function isAdminUser(name) {
+  const n = String(name || '').trim();
+  return !!n && (isOwnerName(n) || isHiddenStaff(n));
+}
+/** 지금 이 기기의 오늘 본인이 «관리자» 로 들어와 있는가. */
+export function isAdminNow() {
+  if (_active !== undefined) return !!(_active && _active.mode === 'admin');
+  const c = readWorkChoice(getMeToday());
+  return !!(c && c.mode === 'admin');
+}
+/** 작업자가 아닌가 — 조회만 또는 관리자. 호기·작업중·활동 기록 문지기가 부른다(쓰기 문지기 isViewOnlyNow 와 다르다). */
+export function isNotWorkerNow() { return isViewOnlyNow() || isAdminNow(); }
 
 /** 지금 이 기기의 본인이 «작업자» 로 고른 작업 선박 키 — 조회만·미선택이면 ''. 활동 기록 문지기가 «지금 보는 화면이 내 작업 선박인가» 를 잴 때 부른다(판정 한 벌). */
 export function myWorkVoyageNow() {

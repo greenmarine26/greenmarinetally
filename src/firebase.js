@@ -18,7 +18,7 @@ import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';  
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
-import { isViewOnlyNow, myWorkVoyageNow, workGateText } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
+import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 
 const firebaseConfig = {
@@ -2292,7 +2292,7 @@ export async function fbSetInspector(name) {
 //    workMode 'work'|'view' · assignVoyage 항차 키('' = 없음) · assignEquip 호기('' = 아직) · assignAt. 활동(fbSetInspectorActivity)의 workMode 와 같은 값이 유지된다.
 export async function fbSetInspectorChoice(name, choice) {
   if (!name || !choice) return;
-  const view = choice.mode === 'view';
+  const view = choice.mode === 'view' || choice.mode === 'admin';   // 4.30-03: 관리자도 서버에는 'view' 로 — 작업중·작업량에 안 잡힌다
   await update(ref(db, `inspectors/${name}`), {
     workMode: view ? 'view' : 'work',
     assignVoyage: view ? '' : String(choice.voyageKey || ''),
@@ -2343,7 +2343,7 @@ export async function fbSetInspectorActivity(name, voyageKey, mode, detail = nul
   //   수석이 "몇 호기가 어느 베이의 홀드/데크를 작업 중·몇 개 남음"을 실시간으로 보게 함.
   //  ★ 3.50 문지기(데이터 들어오는 자리) — «조회만» 으로 들어온 사람은 항차·호기·베이를 안 적는다(검수사 «단순 조회로 접속을 하면 호기에 기록이 안되게»).
   //    lastActive 는 적어 «접속(online)» 은 보이되, workMode:'view' 로 «작업중» 에서 빠진다(inspectorStatus). 호출부(App 30초 틱·SearchPanel·GuidedWorkPanel)는 손대지 않는다.
-  const viewOnly = isViewOnlyNow();
+  const viewOnly = isNotWorkerNow();   // 4.30-03: 조회만·관리자 둘 다 작업자가 아니다(쓰기 문지기 assertCanWork 는 isViewOnlyNow 그대로 — 관리자는 쓴다)
   if (viewOnly) { voyageKey = null; mode = null; detail = null; }
   //  ★ 3.50-03 (검수사 2026-09-15 «클로드가 원인인 버그 작업중이지도 않는 선박 노출» · «클로드가 작업중으로 보임») —
   //    **자리 기록은 «내가 고른 작업 선박» 화면일 때만 적는다.** 자유 열람(수석·검수사·테스터)은 작업자로 골라도 모든 선박을 보므로,

@@ -236,6 +236,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
               <span aria-hidden="true">🔍</span><span className="sm:hidden max-[359px]:hidden" data-hdr-viewlabel="1">조회</span><span className="hidden sm:inline">조회만</span>
             </button>
           )}
+          {workChoice && workChoice.mode === 'admin' && (
+            <button onClick={() => onChangeWork && onChangeWork()} title="관리자 — 제약 없이 수정·자료 등록(작업량·호기에는 안 잡힙니다). 누르면 작업자(선박·호기)로 전환" data-work-mode="admin"
+              aria-label="관리자 — 누르면 작업자로 전환"
+              className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 bg-ink-800 text-amber-200 border border-amber-600 whitespace-nowrap`}>
+              <span aria-hidden="true">🛠</span><span className="hidden sm:inline">관리자</span>
+            </button>
+          )}
           {(
           /* M3.5.6: 장비 번호 빠른 변경 · 4.23: 호기를 안 골랐으면 폰은 🚛 아이콘만(깜빡임) · 2차: 400px 미만은 고른 호기면 «1호기» 글자만(🚛 빼고 — 선박 코드 자리를 지킨다) */
           <button

@@ -13,7 +13,7 @@ import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaff
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
 import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
-import { isFreeRoamer, readWorkChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
+import { isFreeRoamer, readWorkChoice, isAdminUser } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -109,6 +109,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     rememberMe(name);
     const prev = readWorkChoice(name);
     if (prev) { onSelect(name, prev); return; }
+    if (isAdminUser(name)) { onSelect(name, { mode: 'admin' }); return; }   // 4.30-03: 검수사·클로드는 선택 없이 곧바로 관리자 — 작업자로 갈 때만 헤더에서 고른다
     openChoice(name);
   };
 
@@ -444,8 +445,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               <div className="text-xs text-dim-300 bg-ink-900 border border-line rounded-pill p-3 leading-relaxed">
                 <b className="text-dim-100">조회만</b>은 <b className="text-dim-100">보기만</b> 됩니다 — 모든 선박을 보고 호기도 지정해 자동 가이드·베이뷰까지 그대로 보지만, 완료·보고가 기록되지 않고 작업중으로 세지 않습니다. <b className="text-dim-100">작업자</b>는 선박·호기를 골라 검수(완료·보고)가 기록됩니다 — 그래도 모든 선박을 볼 수 있습니다.
               </div>
+              {isAdminUser(choiceName) ? (
+                <button onClick={() => onSelect(choiceName, { mode: 'admin' })} data-choice-role="admin"
+                  className="w-full py-4 rounded-pill bg-ink-800 border-2 border-amber-600 text-amber-100 font-black text-base">🛠 관리자 — 제약 없이 수정·자료 등록 (작업량·호기 기록 없음)</button>
+              ) : (
               <button onClick={() => onSelect(choiceName, { mode: 'view' })} data-choice-role="view"
                 className="w-full py-4 rounded-pill bg-ink-800 border-2 border-sky-700 text-sky-100 font-black text-base">🔍 조회만 — 보기만 (완료·보고 기록 없음)</button>
+              )}
               <button onClick={() => { setRoleDecided(true); setChoiceStage('vessel'); }} data-choice-role="work"
                 className="w-full py-4 rounded-pill bg-violet-700 border-2 border-violet-400 text-white font-black text-base">🏗 작업자 — 선박·호기를 골라 검수</button>
             </div>
