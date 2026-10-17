@@ -27,5 +27,5 @@ window.alert = function (m) { (window.__ALERTS = window.__ALERTS || []).push(Str
 window.print = function () {};
 
 createRoot(document.getElementById('root')).render(
-  React.createElement(PrintHubModal, { voyage: fx, voyageKey: 'KBTR_2606E', onClose: () => {} })
+  React.createElement(PrintHubModal, { voyage: fx, voyageKey: 'KBTR_2606E', onClose: () => {}, inspector: '김성일' })   // 4.31: VGM·작업 보고서는 수석 자료 — 이 검사는 다섯 출구를 다 눌러 보므로 소유자로 연다(검수원 화면은 smoke_chiefprint431)
 );

@@ -443,7 +443,7 @@ export function installInspectionSplit(w, splits) {
     try { w.scrollTo(0, 0); } catch (e) { /* 맨 위로 못 올려도 본문은 바뀌었다 */ }
   };
 }
-export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingList = []) {
+export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingList = [], opts = {}) {   // 4.31: opts.appendix === false 면 특수화물 별첨(시트2)을 내지 않는다 — 별첨은 수석 자료(검수사 2026-10-17)
   const list = withShipOp(containers, voyageInfo);
   if (list.length === 0) return { html: '<p>컨테이너 없음</p>', splits: null };
 
@@ -467,7 +467,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     return _isSpecialCargo(c);
   });
 
-  let sheet2Html = special.length > 0 ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
+  let sheet2Html = (special.length > 0 && opts.appendix !== false) ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
 
   const modeKo = mode === 'discharge' ? '양하' : '선적';
   const vsl = voyageInfo?.vsl || '';
@@ -791,9 +791,9 @@ export function openVgmListPrint(containers, voyageInfo) {
   w.document.close();
 }
 
-export function openInspectionListPrint(containers, mode, voyageInfo, shiftingList = []) {
+export function openInspectionListPrint(containers, mode, voyageInfo, shiftingList = [], opts = {}) {
   containers = withShipOp(containers, voyageInfo);   // 3.31: CSV 도 화면과 같은 선사로
-  const { html, splits } = buildInspectionListDoc(containers, mode, voyageInfo, shiftingList);   // 3.62: 장 나누기 판은 창에 따로 심는다
+  const { html, splits } = buildInspectionListDoc(containers, mode, voyageInfo, shiftingList, opts);   // 3.62: 장 나누기 판은 창에 따로 심는다
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) {
     alert('팝업 차단을 해제해주세요');

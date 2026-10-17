@@ -540,6 +540,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 출력 허브 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_PH"; exit 1
   fi
+  # 4.31: 수석 전용 자료(VGM·작업 보고서·특수화물 별첨·베이사전 진단)가 검수원 화면에 안 나오는가 — 검수원·소유자 두 사람 눈으로 같은 항차를 그려 비교한다.
+  SMOKE_CP=$(mktemp /dev/shm/hometmp/_smokecp_XXXXXX.js)
+  if npx esbuild tools/smoke_chiefprint431.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_CP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_chiefprint431.cjs "$SMOKE_CP" || { echo "✗ 수석 전용 출력 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
+    rm -f "$SMOKE_CP"
+  else
+    echo "✗ 수석 전용 출력 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
+  fi
   # 3.36: 시작보고 호기 = 앱 호기 — 작업 보고 창을 실제로 그려 단추를 눌러 본다.
   SMOKE_EQ=$(mktemp /dev/shm/hometmp/_smokeeq_XXXXXX.js)
   if npx esbuild tools/smoke_equipone.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \

@@ -37,13 +37,14 @@ import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
 import BayViewWork from '../components/BayViewWork.jsx';
-import { canWorkNow } from '../workChoice.js';   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
+import { canWorkNow, isAdminUser } from '../workChoice.js';   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
 import EsealPhotoModal from '../components/EsealPhotoModal.jsx';
 import { esealSheetHTML } from '../esealSheet.js';
 import { esealPoolOf } from '../esealVoice.js';   // 3.71: 엠티실 구간 → 여섯 자리 실 목록 한 벌(음성 입력과 공용)
 import { downloadEsealSheetXlsx } from '../components/EmptySealReport.jsx';   // 3.60-01: 공컨테이너 씰체결 작업 리스트 양식   // 3.60: 엠티실 기록지 사진 → 여섯 자리 실(검수사 2026-09-24)
 import SheetPhotoModal from '../components/SheetPhotoModal.jsx';   // 3.58: 선적 기록지 사진 → 선적 자리(검수사 2026-09-22)   // 3.48: 베이뷰 작업 — «작업 시작» 탭 자리에 대신 그리는 전면 덮개(SearchPanel 인스턴스 하나)
-import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
+import { isChief, canOpenChief } from '../staffList.js';
+import { isOwnerName } from '../adminGuard.js';   // 4.31: 베이사전 진단은 수석 자료   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
 import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
@@ -1996,10 +1997,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {!_sideCanc && tab === 'data' && (
         <div className="space-y-3">
           {/* V9.15: 자료 진단은 자료 화면에 — 통계 탭에서 이사 */}
+          {/* 4.31 (검수사 2026-10-17 «베이사전은 수석용입니다» · «베이사전은 검수들이 알필요가 없습니다») — 수석 대시보드를 여는 사람에게만 */}
+          {(() => { try { return canOpenChief(inspector, isOwnerName(inspector)) || isAdminUser(inspector); } catch (e) { return false; } })() && (
           <BayDictVerifyWidget
             shipInfo={voyage?.info ? { imo: voyage.info.imo, name: voyage.info.vsl } : null}
             ediContainers={Object.values(ediMap)}
-          />
+          />)}
           <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} inspector={inspector} />
         </div>
       )}

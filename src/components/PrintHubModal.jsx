@@ -6,6 +6,9 @@ import React, { useState, useMemo } from 'react';
 import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
+import { canOpenChief } from '../staffList.js';   // 4.31: VGM·작업 보고서·특수화물 별첨은 수석 자료 — 수석 대시보드를 여는 사람(수석·소유자·개발 열람)과 같은 판정 한 벌
+import { isOwnerName } from '../adminGuard.js';
+import { isAdminUser } from '../workChoice.js';
 import PrintableCargoPlanV2, { SPECIAL_FILL } from './PrintableCargoPlanV2.jsx';
 import PrintableDeckPlan, { deckPlanDate } from './PrintableDeckPlan.jsx';   // 4.04: RZOR 는 카고플랜 자리에 덱플랜이 열린다
 import { buildRzorLoadingDeckPlan } from '../rzorDeckPredict.js';
@@ -22,6 +25,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
   const [voucherBerth, setVoucherBerth] = useState(voyage?.info?.berth || voyage?.discharge?.info?.berth || '');
 
+  const chiefView = (() => { try { return canOpenChief(inspector, isOwnerName(inspector)) || isAdminUser(inspector); } catch (e) { return false; } })();   // 4.31: 수석 자료(VGM·작업 보고서·특수화물 별첨)를 볼 수 있는가
   const [mode, setMode] = useState(initialMode === 'loading' ? 'loading' : 'discharge');  // 'discharge' | 'loading'
   const [printSub, setPrintSub] = useState(null);  // 'cargo' | 'detail' | null
 
@@ -319,7 +323,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     // V8.98-05: 쉬프팅 별첨 — 컨 정보 보강해 전달
     //  3.65: 항차 화면 목록과 같은 한 벌(utils.shiftingListOf) — 실제 칸(실은 자리·시각)이 같이 간다(감사 — 둘째 벌이었다).
     const _shiftList = shiftingListOf(shiftingMap, fullEdiMap, voyage);
-    openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList);
+    openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList, { appendix: chiefView });   // 4.31: 특수화물 별첨은 수석에게만
   };
 
   // 서브 모달 (카고플랜 V2/베이 상세) 표시 중이면 그것만
@@ -501,7 +505,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               </button>
 
               {/* 2.07: VGM 리스트 — 선적분만 의미 있음(본선 «VGM list for {voy} KRPTK» 요청 대응) */}
-              {mode === 'loading' && (
+              {mode === 'loading' && chiefView && (
                 <button
                   onClick={() => {
                     if (!ptkContainers.length) { alert('선적 컨테이너가 없습니다'); return; }
@@ -522,7 +526,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
             </>
           )}
 
-          {/* FINAL WORKING REPORT (VOUCHER) — 입력 폼 + 두 버튼. 손으로 적어 배에 내는 서류라 아래로 내렸다. */}
+          {/* FINAL WORKING REPORT (VOUCHER) — 입력 폼 + 두 버튼. 손으로 적어 배에 내는 서류라 아래로 내렸다. 4.31: 수석 자료 */}
+          {chiefView && (
           <div className="quest-card space-y-2" style={{ borderColor: 'rgb(var(--st-lod) / .55)' }}>
             <div className="text-sm2 font-black text-amber-200 mb-1">📄 FINAL WORKING REPORT 출력</div>
             {/* 항차 + BERTH 입력 */}
@@ -580,11 +585,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               </button>
             </div>
           </div>
+          )}
         </div>
 
         {/* 하단 안내 */}
         <div className="p-4 border-t-2 border-ink-700 text-xs text-dim-400 leading-relaxed">
-          출력을 누르면 미리보기가 뜹니다 — 검수 리스트·VGM·작업 보고서는 새 창, 카고플랜·베이 상세는 이 화면 위. 미리보기에서 인쇄하거나 PDF로 저장하세요(단추가 없는 창은 Ctrl+P).<br />
+          출력을 누르면 미리보기가 뜹니다 — 검수 리스트{chiefView ? '·VGM·작업 보고서' : ''}는 새 창, 카고플랜·베이 상세는 이 화면 위. 미리보기에서 인쇄하거나 PDF로 저장하세요(단추가 없는 창은 Ctrl+P).<br />
           💡 컬러 인쇄 권장 (특수화물 색상 구분)
         </div>
       </div>
