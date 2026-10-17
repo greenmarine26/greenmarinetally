@@ -143,7 +143,7 @@ export default function ClosingEdiPanel({ voyages, by }) {
             </div>
             <div className="rounded-btn border border-line bg-ink-950 px-2 py-1.5 space-y-1 mt-1">
               <div className="text-2xs text-dim-300">📎 <b>마감텔리 선적 EDI 또는 STOWAGE PLAN(xlsx)</b> 파일을 올리면 실제 실린 자리와 비교합니다. 동방 완료의 선적 시각은 그대로 두고 자리만 바꿉니다. RZOR 는 수석 마감텔리의 STOWAGE PLAN 을 올립니다.</div>
-              <input type="file" onChange={async (e) => { const el = e.target; const f = el.files && el.files[0]; let buf = null; try { if (f) buf = await f.arrayBuffer(); } catch (_) { buf = null; } el.value = ''; onFile(r.vk, f, buf); }} className="text-2xs text-dim-200" />
+              <input type="file" accept=".edi,.EDI,.txt,.xlsx,.xls,*/*" onChange={async (e) => { const el = e.target; const f = el.files && el.files[0]; let buf = null; try { if (f) buf = await f.arrayBuffer(); } catch (_) { buf = null; } el.value = ''; onFile(r.vk, f, buf); }} className="text-2xs text-dim-200" />
               {files[r.vk] && files[r.vk].err && <div className="text-2xs text-red-300">{files[r.vk].err}</div>}
               {files[r.vk] && !files[r.vk].err && (() => {
                 const pl = closingEdiPlan({ info: r.info, loading: (voyages[r.vk] || {}).loading }, files[r.vk].rows);
