@@ -550,6 +550,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 수석 전용 출력 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP"; exit 1
   fi
+  # 4.32: 카고플랜 머리줄 «# ___ , 이름» · 인쇄 직전 짝 이름 질문 · 한 장 더(복제 인쇄) — SWTD 9013E 선적 실자료로 그려 인쇄 순간의 장 수와 이름을 잰다.
+  SMOKE_WP=$(mktemp /dev/shm/hometmp/_smokewp_XXXXXX.js)
+  if npx esbuild tools/smoke_workerprint432.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_WP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_workerprint432.cjs "$SMOKE_WP" || { echo "✗ 카고플랜 작업자 이름 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_WP"; exit 1; }
+    rm -f "$SMOKE_WP"
+  else
+    echo "✗ 카고플랜 작업자 이름 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_WP"; exit 1
+  fi
   # 3.36: 시작보고 호기 = 앱 호기 — 작업 보고 창을 실제로 그려 단추를 눌러 본다.
   SMOKE_EQ=$(mktemp /dev/shm/hometmp/_smokeeq_XXXXXX.js)
   if npx esbuild tools/smoke_equipone.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \

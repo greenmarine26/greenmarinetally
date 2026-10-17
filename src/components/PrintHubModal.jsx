@@ -386,6 +386,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
           xrayMap={xrayMap}
           shiftingMap={shiftingMapDraw}
           shiftStatus={shiftEvid.label}
+          inspector={inspector}   // 4.32: 머리줄 «# ___ , 이름»
           onClose={() => setPrintSub(null)}
         />
       </ErrorBoundary>

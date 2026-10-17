@@ -13,6 +13,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import { WorkerPrintDialog, WorkerHeadMark, installClonePrint } from '../workerPrint.jsx';   // 4.32: 머리줄 «# ___ , 이름» + 인쇄 직전 짝 이름 질문 + 한 장 더
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
 import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode, legendCargoCatOf, isEmptyReefer, emptySplitLabel } from '../utils.js';   // 4.15-01: 별첨 화물 종류·엠티 구분 한 벌 · 2.98-14: 커버 막대 경계
@@ -792,6 +793,7 @@ export default function PrintableCargoPlanV2({
   shiftingMap = {},   // V8.98: 쉬프팅(재적부) { cn: {from,to} } — 셀 ◆ 마크 + 헤더 카운트
   shiftStatus = '',   // 4.13: 시프팅 상태 말(미확정·확정·불일치·예측) — 머리 «쉬프팅 5 미확정». 없으면 종전 그대로(utils.shiftEvidenceOf 가 정한다)
   pod: explicitPod,
+  inspector = '',   // 4.32: 머리줄에 찍을 로그인한 사람 이름(없으면 빈칸)
   duo = null,   // ★ ConeOne 2.60 — 콘앱 첫 화면이 넘긴다 {mode, tabs:[{mode,label}], onPick}. 없으면(검수앱) 아무것도 안 그린다.
   onClose,
 }) {
@@ -997,6 +999,11 @@ export default function PrintableCargoPlanV2({
   //   너무 작아지지 않게 5.5px 바닥, 너무 커지지 않게 9.5px 천장을 둔다.
   //  3.7-05: 그린 뒤 별첨 상자를 실제로 재서 맞춘다 — 계산만으로는 배마다 어긋난다.
   const pageRef = useRef(null);
+  //  4.32 — 머리줄 작업자 이름 · 인쇄 직전 질문 창 · 짝 장 복제(인쇄할 때만). 훅은 아래 조기 return 보다 위에 둔다.
+  const [wkDlg, setWkDlg] = useState(false);
+  const [wkMe, setWkMe] = useState(String(inspector || ''));
+  const wkNamesRef = useRef([]);
+  useEffect(() => installClonePrint(() => (pageRef.current ? pageRef.current.closest('.cpv2-zoom-wrap') : null), () => wkNamesRef.current), []);
   //  ★ 3.27 — 별첨은 **평상시 크기로 한 칸에 안 들어갈 때만** 빈 칸으로 나눈다.
   //    검수사 확정 2026-09-08 — *«최대한 한곳에 모으되 넘치거나 잘림 겹침이 생기면 빈곳을 이용해
   //    보기 좋게 만든다»* · *«나눔건은 조건이 한칸에 표기 불가능할 경우만입니다»* ·
@@ -1338,7 +1345,7 @@ export default function PrintableCargoPlanV2({
         <button onClick={() => { const f = calcFit(); setZoom(f || 0.22); }} style={{ padding: '6px 10px', background: '#546e7a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>맞춤</button>
       </>)}
       <button onClick={toggleBw} title="흑백 프린터는 흑백, 컬러 프린터는 컬러로 고른 뒤 인쇄합니다. ★ X-RAY 만 두 쪽 다 빨강입니다." style={{ padding: '6px 10px', background: bw ? '#fff' : '#f59e0b', color: bw ? '#111' : '#111', border: '1px solid #111', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' }}>{bw ? '◐ 흑백' : '● 컬러'}</button>
-      <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
+      <button onClick={() => setWkDlg(true)} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
       <button onClick={onClose} style={{ padding: '6px 10px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>✕ 닫기</button>
     </div>
   ) : null;
@@ -1384,6 +1391,10 @@ export default function PrintableCargoPlanV2({
     <div className="cpv2-overlay" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <style>{CARGO_V2_CSS}</style>
       {closeBtn}
+      {wkDlg && (
+        <WorkerPrintDialog me={wkMe} onCancel={() => setWkDlg(false)}
+          onDone={({ names }) => { wkNamesRef.current = names; setWkMe(names[0] || ''); setWkDlg(false); setTimeout(() => { window.print(); wkNamesRef.current = []; }, 80); }} />
+      )}
       <div
         className="cpv2-zoom-wrap"
         style={rotated
@@ -1400,7 +1411,7 @@ export default function PrintableCargoPlanV2({
         {/*  ★ 3.7-03 — 매번 같은 설명은 **바닥글**로 내렸다(검수사 «설명이 길어서 상단이 두줄 또는 세줄로
             되어 있습니다. 매번 같은 설명은 하단 아래 바닥글로 처리 바랍니다»). 머리글에는 이 항차의 것만 남는다. */}
         <div className="cpv2-page-header">
-          <div className="col">VOY NO : {effVoyNo}</div>
+          <div className="col">VOY NO : {effVoyNo}<WorkerHeadMark name={wkMe} /></div>
           <div className="title-center">{title}</div>
 
           {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.

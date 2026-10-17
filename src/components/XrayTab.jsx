@@ -25,6 +25,7 @@
 //   ⛔ 앱 전반의 X-RAY 표시 판정은 건드리지 않았다(검수사 확정). 화물구분은 여기서만 쓴다.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
+import { getPartnerName, setPartnerName, partnerChoices } from '../workerPrint.jsx';   // 4.32: 짝 이름 한 벌(카고플랜 질문 창과 같은 값)
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
 import { isoShown } from '../utils.js';   // 4.20-01: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { fbSetXraySeal, fbUpdateVoyageInfo, fbSubscribeInspectCheck, fbSaveInspectCheck } from '../firebase.js';
@@ -59,6 +60,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   const [q, setQ] = useState('');
   //  2.39: 표에서 바로 고친다 — 사무실에서 미리 채워 인쇄해 나가려면 컨을 하나씩 열 수 없다.
   //  편집 상태는 한 벌만 둔다(같은 순간에 두 칸을 고치지 않는다).
+  const [partner, setPartner] = useState(() => getPartnerName());   // 4.32: 같이 작업하는 분 — 로그인하지 않아도 그 이름으로 봉인자 등록
   const [edit, setEdit] = useState(null);      // { cn, field: 'seal' | 'sealer', val }
   const [busy, setBusy] = useState('');        // 저장 중인 컨 — 두 번 눌러 두 번 쓰는 것을 막는다
   //  ★ 2.77: MRN 손입력 — PORT-MIS 에 없는 배(평택 미등록)는 여기서 적어 넣는다.
@@ -335,6 +337,14 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           {icMsg && <span className="ml-2 text-amber-200">{icMsg}</span>}
         </div>
       )}
+      {/* 4.32 — 짝 이름: 한 번만 적어 두면 봉인자 칸에 «짝 이름» 단추가 생긴다(짝이 자기 이름으로 로그인하지 않아도 된다). */}
+      <div className="flex items-center gap-2 text-xs2">
+        <span className="text-dim-400 whitespace-nowrap">같이 작업하는 분</span>
+        <input value={partner} list="xray-partner-list" onChange={(e) => setPartner(e.target.value)}
+          onBlur={() => setPartnerName(partner)} placeholder="이름 (한 번만 입력)"
+          className="flex-1 min-w-0 bg-ink-900 border border-line rounded-pill px-3 h-9 outline-none"/>
+        <datalist id="xray-partner-list">{partnerChoices(inspector).map((n) => <option key={n} value={n}/>)}</datalist>
+      </div>
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
           <SearchIcon className="w-4 h-4 text-dim-400"/>
@@ -447,7 +457,15 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                         <button disabled={!canEdit} onClick={() => setEdit({ cn: r.cn, field: 'sealer', val: r.sealer })}
                           className="text-emerald-300 font-bold disabled:cursor-default">{r.sealer}</button>
                       ) : (
-                        <span className="text-dim-500 italic whitespace-nowrap">미등록</span>
+                        <>
+                          <span className="text-dim-500 italic whitespace-nowrap">미등록</span>
+                          {partner.trim() && (
+                            <button disabled={!canEdit || busy === r.cn || !r.cSeal}
+                              title={!r.cSeal ? '봉인번호를 먼저 입력하십시오' : `${partner.trim()} 이름으로 봉인자 등록`}
+                              onClick={() => saveXray(r.cn, r.cSeal, r.eseal, { sealer: partner.trim() })}
+                              className="px-2 py-0.5 rounded-pill border border-emerald-500 text-emerald-300 text-xs2 disabled:opacity-30 whitespace-nowrap">{partner.trim()}</button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>

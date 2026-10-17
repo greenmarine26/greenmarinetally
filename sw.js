@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.31';
-const NOTE = '4.31 VGM 리스트와 작업 보고서와 베이사전 진단은 이제 수석 화면에만 나오고, 검수 리스트에는 특수화물 별첨이 붙지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.32';
+const NOTE = '4.32 카고플랜 머리줄에 작업자 이름이 들어가고, 인쇄를 누르면 같이 작업하는 분을 물어 한 장 더 나옵니다. X-RAY 봉인자도 짝 이름으로 등록할 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
