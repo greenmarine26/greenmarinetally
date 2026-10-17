@@ -560,6 +560,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 카고플랜 작업자 이름 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_WP"; exit 1
   fi
+  # 4.33: 출력센터 X-RAY 리스트 출구(양하만) · X-RAY 탭 자동 출력 — 양하·선적 두 허브를 그려 단추를 세고, 숨긴 탭이 인쇄를 한 번 내는지 잰다.
+  SMOKE_XH=$(mktemp /dev/shm/hometmp/_smokexh_XXXXXX.js)
+  if npx esbuild tools/smoke_xrayhub433.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_XH" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_xrayhub433.cjs "$SMOKE_XH" || { echo "✗ 출력센터 X-RAY 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_XH"; exit 1; }
+    rm -f "$SMOKE_XH"
+  else
+    echo "✗ 출력센터 X-RAY 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_XH"; exit 1
+  fi
   # 3.36: 시작보고 호기 = 앱 호기 — 작업 보고 창을 실제로 그려 단추를 눌러 본다.
   SMOKE_EQ=$(mktemp /dev/shm/hometmp/_smokeeq_XXXXXX.js)
   if npx esbuild tools/smoke_equipone.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \

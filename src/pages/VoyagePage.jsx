@@ -123,6 +123,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //    'classic'(종전 그대로) | 'bayview'(전면 덮개). 폰에 기억하되 항차 화면을 열 때는 기존 방식으로 시작한다 — 덮개가 저절로 뜨면 화면을 가린다.
   const [workStyle, setWorkStyle] = useState('classic');
   const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과 접이 메뉴(표시 전용) — 4.00: 업로드는 독으로 꺼냈다
+  const [xrayPrintNow, setXrayPrintNow] = useState(false);   // 4.33: 출력센터 «X-RAY 리스트» — 숨긴 X-RAY 탭이 출력 단추를 한 번 눌러 준다
   const [showPrintHub, setShowPrintHub] = useState(false);   // 4.00: 출력 센터(독의 「출력」 단추 · 베이 탭 「출력」 단추 · 한 곳)
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 (넓은 화면 = 우측 고정 칼럼 / 폰 = 바텀시트)
   const isWide = useIsWide();   // 2.18: **어디에 그릴지**를 JS 로 정한다 — 인스턴스는 하나(구독 중복 방지)
@@ -1713,7 +1714,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           두 곳이었다. 지금 보고 있는 모드(양하/선적)로 열린다. */}
       {showPrintHub && (
         <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode} isLolo={isLoloShip} inspector={inspector || ''} viewDeckPlan={_deckPlanEff}
+          onXrayPrint={() => setXrayPrintNow(true)} xrayPrintOk={mode === 'discharge'}
           onClose={() => setShowPrintHub(false)} />
+      )}
+      {/* 4.33 — 출력센터 «X-RAY 리스트» 의 실체: X-RAY 탭을 보이지 않게 올려 [출력] 을 한 번 누르고 내린다(제출용·인계용 머리·봉인자 판정을 둘째 벌로 만들지 않는다). */}
+      {xrayPrintNow && mode === 'discharge' && (
+        <div style={{ display: 'none' }} aria-hidden="true">
+          <XrayTab voyage={voyage} voyageKey={voyageKey} mode={mode} containers={containers}
+                   inspector={inspector} xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap} portMisData={portMisData}
+                   autoPrint onPrinted={() => setXrayPrintNow(false)}/>
+        </div>
       )}
 
       {/* ★ 2.87 플랜 오버레이 (검수사 지시 2026-08-29) —

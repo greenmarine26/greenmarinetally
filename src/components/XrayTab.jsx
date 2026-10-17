@@ -23,7 +23,7 @@
 //       *«앱에서 컨번호를 조회하면 실번호와 XRAY번호를 둘다 볼수 있기 때문»* ← 미리 넣는 진짜 이유
 //
 //   ⛔ 앱 전반의 X-RAY 표시 판정은 건드리지 않았다(검수사 확정). 화물구분은 여기서만 쓴다.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { getPartnerName, setPartnerName, partnerChoices } from '../workerPrint.jsx';   // 4.32: 짝 이름 한 벌(카고플랜 질문 창과 같은 값)
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
@@ -55,7 +55,8 @@ const pos = (c) => (c && c.bay && c.row && c.tier
 const posOf = (r) => (r && r.deckPos) || pos(r);
 
 export default function XrayTab({ voyage, voyageKey, mode, containers = [], inspector = '',
-                                  xrayMap = {}, xraySeals = {}, compMap = {}, portMisData = {} }) {
+                                  xrayMap = {}, xraySeals = {}, compMap = {}, portMisData = {},
+                                  autoPrint = false, onPrinted = null }) {   // 4.33: autoPrint — 출력센터 «X-RAY 리스트» 가 이 탭을 숨겨 올려 [출력] 단추를 한 번 눌러 준다(인쇄 계산은 이 탭 한 벌)
   const [kindFilter, setKindFilter] = useState('');
   const [q, setQ] = useState('');
   //  2.39: 표에서 바로 고친다 — 사무실에서 미리 채워 인쇄해 나가려면 컨을 하나씩 열 수 없다.
@@ -69,7 +70,22 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  ★ 3.59: 세관 «적하목록 검수예정 목록» — 검수원이 올린 xls(inspect_checklist). 양하 MRN 과 서류 상태를 여기서 읽는다.
   const [icList, setIcList] = useState({});
   const [icMsg, setIcMsg] = useState('');
-  useEffect(() => { try { return fbSubscribeInspectCheck(setIcList); } catch (e) { console.warn('[3.59] 검수예정 목록 구독 실패', e); return undefined; } }, []);
+  const [icLoaded, setIcLoaded] = useState(false);   // 4.33: 첫 구독 응답이 와야 머리의 MRN(검수예정 목록)이 채워진다 — 자동 출력은 그 뒤에
+  useEffect(() => { try { return fbSubscribeInspectCheck((v) => { setIcList(v); setIcLoaded(true); }); } catch (e) { console.warn('[3.59] 검수예정 목록 구독 실패', e); setIcLoaded(true); return undefined; } }, []);
+  const printBtnRef = useRef(null);
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (!autoPrint || autoFired.current) return undefined;
+    const t = setTimeout(() => {
+      if (autoFired.current) return;
+      autoFired.current = true;
+      const b = printBtnRef.current;
+      if (b && !b.disabled) b.click();
+      else alert('세관 X-RAY 목록이 없습니다 — 업로드 탭에서 「검수업체컨테이너목록조회」 파일을 올려 주세요.');
+      if (onPrinted) onPrinted();
+    }, icLoaded ? 60 : 2500);
+    return () => clearTimeout(t);
+  }, [autoPrint, icLoaded]);
   async function uploadInspectCheck(ev) {
     const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
     if (!f) return;
@@ -375,7 +391,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
             + ` · 봉인 ${sealedCount}/${rows.length}`
             + (sealedCount === rows.length && rows.length ? ' 완료' : ' (인계용)') },
           PER_PAGE)}
-          disabled={!shown.length}
+          disabled={!shown.length} ref={printBtnRef}
           className="h-11 px-4 rounded-pill bg-amber-500 text-ink-950 font-bold text-sm2 flex items-center gap-1.5 whitespace-nowrap shrink-0 disabled:opacity-40">
           <Printer className="w-4 h-4"/>출력 {pages.length > 1 ? `(${pages.length}장)` : ''}
         </button>

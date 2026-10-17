@@ -19,7 +19,7 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 import { _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
-export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
+export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
   const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
   const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
@@ -504,6 +504,21 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
                 </div>
                 <Printer className="w-5 h-5 text-dim-400 shrink-0" />
               </button>
+
+              {/* 4. X-RAY 리스트 (4.33 · 검수사 «양하에서 출력을 들어가면 검수리스트 카고플랜 베이상세 XRAY · 선적에서 들어가면 XRAY 제외한 세가지») — 양하만 */}
+              {mode === 'discharge' && onXrayPrint && (
+                <button onClick={() => { if (!xrayPrintOk) { alert('X-RAY 리스트는 양하 화면에서 출력을 열어야 나옵니다.'); return; } onXrayPrint(); }}
+                        className="print-tile" data-testid="hub-xray">
+                  <span className="print-ico" style={{ background: 'linear-gradient(180deg, #ef4444, #991b1b)' }}>🔍</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-black text-dim-100">X-RAY 리스트</div>
+                    <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                      세관 X-RAY 대상 · 봉인번호·봉인자 · 제출용/인계용 (양하)
+                    </div>
+                  </div>
+                  <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+                </button>
+              )}
 
               {/* 2.07: VGM 리스트 — 선적분만 의미 있음(본선 «VGM list for {voy} KRPTK» 요청 대응) */}
               {mode === 'loading' && chiefView && (
