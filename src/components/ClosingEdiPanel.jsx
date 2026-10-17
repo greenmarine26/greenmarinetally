@@ -51,13 +51,17 @@ export default function ClosingEdiPanel({ voyages, by }) {
   //  4.17 — 마감텔리 선적 EDI 파일 올리기(읽기만 · 쓰기는 «예» 뒤에 fbApplyClosingEdi 가 한다)
   //  ★ 4.21 — 검수사 2026-10-10 05:31 «RZOR 마감적용에서 EDI대신에 위 파일로 되어 있습니다. 앱은 EDI만 받게 되어 있어서 적용이 되지 않습니다»:
   //    xlsx 는 수석 마감텔리 STOWAGE PLAN(검수사 양식 — 항차 업로드와 같은 파서)으로 읽는다. 선사 rzdf(양하 그림)는 받지 않는다. 행은 rzorPlan.deckPlanRows 한 벌.
-  const onFile = async (vk, f) => {
-    if (!f) return;
+  //  4.30-01 — 검수사 2026-10-17 «폴더에서 파일을 지정하면 컴에선 적용할 것인지 묻는데 폰에서는 변화가 없었습니다»:
+  //    폰은 파일 선택 뒤 아무 글도 안 떠서 어디서 멈췄는지 알 수 없었다. ① 고르자마자 «읽는 중» ② 파일 내용을 먼저 메모리로 받고 나서 선택칸을 비운다
+  //    (폰 파일 선택기는 선택칸을 비우면 파일 접근이 끊길 수 있다) ③ 파일이 안 잡혀도 이유를 화면에 쓴다.
+  const onFile = async (vk, f, buf) => {
+    if (!f) { setFiles((o) => ({ ...o, [vk]: { name: '', rows: [], err: '파일이 선택되지 않았습니다 — 다시 골라 주세요.' } })); return; }
     const bad = { name: f.name, rows: [], err: '컨테이너와 자리를 읽지 못했습니다(.EDI 나 STOWAGE PLAN(xlsx)인지 확인).' };
+    setFiles((o) => ({ ...o, [vk]: { name: f.name, rows: [], err: '파일을 읽는 중입니다…' } }));
     try {
       if (/\.xlsx?$/i.test(f.name)) {
         const XLSX = await loadSheetJS();
-        const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: 'array', cellStyles: true });
+        const wb = XLSX.read(new Uint8Array(buf || await f.arrayBuffer()), { type: 'array', cellStyles: true });
         const plan = isDeckPlanWorkbook(wb) ? parseDeckPlanWorkbook(wb, XLSX) : null;
         if (plan && plan._fmt !== 'checker') {   // 4.21 감사 — 선사 rzdf 는 양하 그림이다
           setFiles((o) => ({ ...o, [vk]: { name: f.name, rows: [], err: '선사 덱플랜(양하 그림)은 마감적용 파일이 아닙니다 — 수석 마감텔리의 STOWAGE PLAN(xlsx)을 올리세요.' } }));
@@ -67,7 +71,7 @@ export default function ClosingEdiPanel({ voyages, by }) {
         setFiles((o) => ({ ...o, [vk]: rows.length ? { name: f.name, rows, plan, fmt: 'deck' } : bad }));
         return;
       }
-      const txt = await f.text();
+      const txt = buf ? new TextDecoder('utf-8').decode(buf) : await f.text();
       const p = parseBAPLIE(txt);
       const rows = (p.containers || []).filter((c) => c.cn);
       setFiles((o) => ({ ...o, [vk]: rows.length ? { name: f.name, rows } : bad }));
@@ -139,7 +143,7 @@ export default function ClosingEdiPanel({ voyages, by }) {
             </div>
             <div className="rounded-btn border border-line bg-ink-950 px-2 py-1.5 space-y-1 mt-1">
               <div className="text-2xs text-dim-300">📎 <b>마감텔리 선적 EDI 또는 STOWAGE PLAN(xlsx)</b> 파일을 올리면 실제 실린 자리와 비교합니다. 동방 완료의 선적 시각은 그대로 두고 자리만 바꿉니다. RZOR 는 수석 마감텔리의 STOWAGE PLAN 을 올립니다.</div>
-              <input type="file" accept=".edi,.EDI,.txt,.xlsx,.xls" onChange={(e) => { onFile(r.vk, e.target.files && e.target.files[0]); e.target.value = ''; }} className="text-2xs text-dim-200" />
+              <input type="file" accept=".edi,.EDI,.txt,.xlsx,.xls,*/*" onChange={async (e) => { const el = e.target; const f = el.files && el.files[0]; let buf = null; try { if (f) buf = await f.arrayBuffer(); } catch (_) { buf = null; } el.value = ''; onFile(r.vk, f, buf); }} className="text-2xs text-dim-200" />
               {files[r.vk] && files[r.vk].err && <div className="text-2xs text-red-300">{files[r.vk].err}</div>}
               {files[r.vk] && !files[r.vk].err && (() => {
                 const pl = closingEdiPlan({ info: r.info, loading: (voyages[r.vk] || {}).loading }, files[r.vk].rows);

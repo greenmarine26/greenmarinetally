@@ -26,14 +26,14 @@ ok(rows.reduce((a, r) => a + r.done, 0) === Object.values(FX.termWork).filter(r 
 //  조 등록 → 이름
 const at = Math.max(...Object.values(FX.termWork).map(r => r.at || 0));
 const v2 = { ...v, info: { ...FX.info, craneCrew: { '09-05 야간': { '1호기': { name: '홍길동', at }, '2호기': { name: '김철수', at } } } } };
-const r2 = U.craneBoardOf(v2, []);
+const r2 = U.craneBoardOf(v2, [], null, at + 1);   // 4.30-02: 판정 시각을 픽스처 시각에 맞춘다(지난 조는 비우기 때문)
 ok(r2.find(r => r.no === 1).name === '홍길동' && r2.find(r => r.no === 2).name === '김철수', '조 등록(야간 1호기 홍길동 2호기 김철수) → 호기 이름');
 //  앱 접속 검수원이 가장 최신 — 이름·베이가 그것으로
 const r3 = U.craneBoardOf(v2, [{ name: '박진우', equip: '2호기', bay: '14', tier: '86', mode: 'discharge' }]);
 ok(r3.find(r => r.no === 2).name === '박진우' && r3.find(r => r.no === 2).bay === '14' && r3.find(r => r.no === 2).src === 'live' && r3.find(r => r.no === 1).bay === rows[0].bay, '앱 접속 검수원(2호기 박진우 BAY 14) → 그 호기만 앱 값, 1호기는 터미널 값 그대로');
 //  앱으로 직접 찍은 완료(by 사람·equip)는 termWork 에 없는 컨만 더하고 이름을 준다
 const v4 = { info: FX.info, discharge: { termWork: {}, completed: { AAAU1111111: { by: '김성일', at, equip: '3호기' }, BBBU2222222: { by: '김성일', at: at - 1000, equip: '3호기' } }, records: { AAAU1111111: { bay_actual: '22', row_actual: '01', tier_actual: '82' } } }, loading: {} };
-const r4 = U.craneBoardOf(v4, []);
+const r4 = U.craneBoardOf(v4, [], null, at + 1);
 ok(r4.length === 1 && r4[0].no === 3 && r4[0].name === '김성일' && r4[0].done === 2 && r4[0].bay === '22' && r4[0].src === 'app', `앱 완료만 있는 배 → 3호기 김성일 2대 BAY 22 (${JSON.stringify(r4[0])})`);
 //  동방 — 컨별 호기 없음 → qcWork 합계, 자리 없음
 const r5 = U.craneBoardOf({ info: { vsl: 'OBWH', qcWork: { QC101: { qc: 'QC101', disDone: 110, lodDone: 85 }, QC103: { qc: 'QC103', disDone: 78, lodDone: 68 } } }, discharge: {}, loading: {} }, []);
@@ -43,8 +43,17 @@ const r6 = U.craneBoardOf({ info: { vsl: 'OBWH', qcWork: { QC101: { qc: 'QC101',
 ok(r6.length === 2 && r6[0].no === 1 && r6[0].qc && r6[0].dis === 257 && r6[0].name === '김성일' && r6[0].bay === '12' && r6[1].no === 3 && r6[1].qc && r6[1].dis === 213 && r6[1].name === '이인철' && r6[1].bay === '6' && r6[1].src === 'live', `동방 + 앱 완료·접속 혼합 → QC 257·213 유지 + 이름·베이 (${JSON.stringify(r6.map(r => [r.no, r.name, r.dis, r.bay, r.src]))})`);
 //  감사: 접속 검수원 베이가 덮을 때 다른 컨의 로우가 안 남는다 · by 는 가장 늦게 찍은 사람
 ok(r3.find(r => r.no === 2).row === '' && r3.find(r => r.no === 2).tier === '86', '접속 검수원 BAY 14 → 로우 빈칸·단 86(터미널 컨의 로우가 안 남는다)');
-const r7 = U.craneBoardOf({ info: {}, discharge: { termWork: {}, completed: { A1: { by: '먼저', at: at - 5000, equip: '1호기' }, A2: { by: '나중', at, equip: '1호기' } } }, loading: {} }, []);
+const r7 = U.craneBoardOf({ info: {}, discharge: { termWork: {}, completed: { A1: { by: '먼저', at: at - 5000, equip: '1호기' }, A2: { by: '나중', at, equip: '1호기' } } }, loading: {} }, [], null, at + 1);
 ok(r7[0].name === '나중', '이름은 가장 늦게 찍은 사람(나중)');
+//  4.30-02: 마지막 기록의 근무조가 끝났으면 이름을 비운다(검수사 2026-10-17 «아침에 퇴근했으면 클리어가 되어 있어야 합니다»)
+const afterShift = U.currentShift(at).endMs + 3600000;
+const r8 = U.craneBoardOf(v4, [], null, afterShift);
+ok(r8[0].name === '' && r8[0].done === 2 && r8[0].bay === '22', '조가 끝난 뒤 — 이름만 비고 대수·자리는 그대로');
+const v8 = { ...v4, info: { ...FX.info, craneCrew: { [new Date(afterShift).toISOString().slice(5, 10) + ' 주간']: { '3호기': { name: '오늘주간', at: afterShift } } } } };
+ok(U.craneBoardOf(v8, [], null, afterShift)[0].name === '오늘주간' || U.craneBoardOf(v8, [], null, afterShift)[0].name === '', '지금 조 등록이 있으면 그 이름(없으면 빈칸)');
+const r9 = U.craneBoardOf({ ...v4, info: { vsl: 'OBWH' } }, [], null, afterShift);
+ok(r9[0].name === '김성일', '교대 없는 배(OBWH)는 지우지 않는다');
+ok(U.craneBoardOf(v4, [{ name: '박진우', equip: '3호기', bay: '9', tier: '82', mode: 'discharge' }], null, afterShift)[0].name === '박진우', '앱에 붙은 검수원(live)은 그대로');
 //  빈 항차·null 방어
 ok(U.craneBoardOf(null, []).length === 0 && U.craneBoardOf({ info: {} }, null).length === 0, '빈 항차·null 도 조용히 빈 배열');
 //  터미널 표기·«카토스» 글자가 이름에 새지 않는다
