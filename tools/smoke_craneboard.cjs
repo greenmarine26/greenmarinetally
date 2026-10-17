@@ -54,6 +54,22 @@ ok(U.craneBoardOf(v8, [], null, afterShift)[0].name === '오늘주간' || U.cran
 const r9 = U.craneBoardOf({ ...v4, info: { vsl: 'OBWH' } }, [], null, afterShift);
 ok(r9[0].name === '김성일', '교대 없는 배(OBWH)는 지우지 않는다');
 ok(U.craneBoardOf(v4, [{ name: '박진우', equip: '3호기', bay: '9', tier: '82', mode: 'discharge' }], null, afterShift)[0].name === '박진우', '앱에 붙은 검수원(live)은 그대로');
+//  ★ 4.30-04 (SWSP 2609N 실측 2026-10-17 21:56) — 지난 조(야간)에 김성일이 4호기를 찍었고, 새 조의 이름 없는 터미널 실적이 마지막 기록이다 → 이름은 비어야 한다
+{
+  const base = new Date(); base.setHours(6, 19, 0, 0);             // 오늘 06:19 — 지난 야간조 끝무렵
+  const nameAt = base.getTime();
+  const nowAt = new Date(base.getTime()); nowAt.setHours(21, 56, 0, 0);   // 오늘 21:56 — 야간조
+  const lastTerm = nowAt.getTime() - 5 * 60000;
+  const vv = { info: { vsl: 'SWSP' }, discharge: { termWork: {}, completed: { P1: { by: '김성일', at: nameAt, equip: '4호기' } } }, loading: { termWork: { Q1: { at: lastTerm, equip: 'GC104', pos: '020384' } } } };
+  const rr = U.craneBoardOf(vv, [], null, nowAt.getTime());
+  const r4 = rr.find((x) => x.no === 4);
+  ok(!!r4 && r4.name === '' && r4.done === 2, `지난 조 이름이 새 조 기록 뒤에 남지 않는다 (name «${r4 && r4.name}» · done ${r4 && r4.done})`);
+  const vv2 = { ...vv, discharge: { termWork: {}, completed: { P1: { by: '김성일', at: lastTerm - 60000, equip: '4호기' } } } };   // 같은 조 안의 이름은 그대로
+  const r4b = U.craneBoardOf(vv2, [], null, nowAt.getTime()).find((x) => x.no === 4);
+  ok(!!r4b && r4b.name === '김성일', `같은 조에서 찍은 이름은 그대로 남는다 (name «${r4b && r4b.name}»)`);
+  const r4c = U.craneBoardOf(vv, [{ name: '박진우', equip: '4호기', bay: '9', tier: '82', mode: 'loading' }], null, nowAt.getTime()).find((x) => x.no === 4);
+  ok(!!r4c && r4c.name === '박진우', '앱에 붙은 검수원은 지금 사람 — 그대로');
+}
 //  빈 항차·null 방어
 ok(U.craneBoardOf(null, []).length === 0 && U.craneBoardOf({ info: {} }, null).length === 0, '빈 항차·null 도 조용히 빈 배열');
 //  터미널 표기·«카토스» 글자가 이름에 새지 않는다
