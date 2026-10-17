@@ -368,13 +368,14 @@ export function parseCargoForecast(text) {
       continue;
     }
     // RZOR형 섹션 헤더
+    if (/^\*\s*(FULL|EMPTY|LUG)/i.test(line)) loloOn = false;   // 4.30: 다음 섹션 헤더에서 LO LO 하위 줄 읽기를 끝낸다
     if (/^\*\s*FULL\s*$/i.test(line)) { sec = 'full'; continue; }
     if (/^\*\s*EMPTY\s*$/i.test(line)) { sec = 'empty'; continue; }
     if (/^\*\s*LUG/i.test(line)) { sec = 'luggage'; continue; }
     // 위치·화주 상세('-LO LO', '-CORNNING'…)나 온도 상세("40RHX7 (-18'C)") 등은 이중 집계 방지 위해 제외
     //  4.30: 크레인(LO LO) 대수 — «-LO LO X 67 VAN» · 아래 줄 «40H FULL X 8VAN» / «40R EMPTY X 22VAN». 집계 필드는 건드리지 않고 out.lolo 에만 둔다.
     const lm = line.match(/^[-=]?\s*LO\s*LO\s*[Xx×]\s*(\d+)/i);
-    if (lm) { out.lolo = { n: +lm[1], full: 0, empty: 0 }; loloOn = true; sec = null; continue; }
+    if (lm) { if (!out.lolo) { out.lolo = { n: +lm[1], full: 0, empty: 0 }; loloOn = true; } else loloOn = false; sec = null; continue; }   // 두 번째 LO LO 줄은 첫 줄을 덮지 않는다
     if (loloOn && /^[-=]/.test(line)) loloOn = false;
     if (loloOn && out.lolo) {
       const sm = line.match(/(\d{2})\s*[A-Z]{0,2}\s*(FULL|EMPTY)\s*[Xx×]\s*(\d+)/i);
@@ -10345,4 +10346,11 @@ export function loadingNoPosAsk(c, mode) {
   }
   if (has(c.bay) || has(c.bay_actual) || has(c.bay_assign)) return '';
   return `${String(c.cn || '').slice(-4) || '이 컨'} — 선적 자리가 없습니다.\n\n자리 없이 완료하면 베이 그림·콘앱에 나오지 않습니다.\n[취소] 를 누르고 «위치 지정» 이나 «기록지 사진» 으로 자리를 먼저 넣어 주세요.\n\n그래도 자리 없이 완료할까요?`;
+}
+
+// 4.30: 예보 «LO LO N»은 선적 예보일 때만 RZOR 선적 덱플랜의 크레인 대수로 쓴다(양하 예보가 선적 플랜을 흔들지 않게)
+export function _foreLoloOf(voyage) {
+  const f = voyage?.info?.forecast;
+  if (!f || (f.mode || 'loading') !== 'loading' || !f.lolo) return { n: 0, full: 0 };
+  return { n: Number(f.lolo.n) || 0, full: Number(f.lolo.full) || 0 };
 }

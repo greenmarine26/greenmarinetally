@@ -39,7 +39,7 @@ function _craneBands(N) {
     for (const ln of [5, 4, 3]) for (const p of [19, 20, 21]) Y.push([ln, p]);
     for (const ln of [5, 4, 3]) for (const p of [22, 23, 24]) Y.push([ln, p]);
   }
-  return { n, A, B, X, Y: Y.slice(0, Math.max(0, n - 49)) };
+  return { n, per, A, B, X, Y: Y.slice(0, Math.max(0, n - 49)) };
 }
 export function craneSlots(N) {
   const { A, B, X, Y } = _craneBands(N);
@@ -51,10 +51,10 @@ export function craneSlots(N) {
  *  엠티 순서 — 풀이 있으면 A 띠(묶음 밖) → B 띠(묶음 밖) → [풀] → 묶음에 남은 칸 → 넘침 4칸 → 시프팅 18칸(R098·R102·R104),
  *  풀이 없으면 A → 넘침 4칸 → B → 18칸(R096·R107). */
 export function craneSlotsFE(N, nFull) {
-  const { A, B, X, Y } = _craneBands(N);
+  const { per, A, B, X, Y } = _craneBands(N);
   const base = A.concat(B);
   const nf = Math.max(0, Math.min(Math.round(Number(nFull) || 0), base.length));
-  const k = nf ? Math.ceil(nf / ((A.length ? A[0] && (new Set(A.map((x) => x[1]))).size : 3) * 2)) : 0;
+  const k = nf ? Math.ceil(nf / (per * 2)) : 0;
   // 묶음 = 각 띠의 «가장 낮은 줄»부터 k 줄(33대 항차는 두 띠 모두 3줄이 맨 앞이라 3·4줄이 풀 자리 — R099 실측)
   const minA = A.length ? Math.min(...A.map((x) => x[0])) : 1, minB = B.length ? Math.min(...B.map((x) => x[0])) : 1;
   const inA = (x) => x[0] < minA + k, inB = (x) => x[0] < minB + k;
