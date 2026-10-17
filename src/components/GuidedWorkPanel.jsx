@@ -1453,6 +1453,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       needXray(c.cn);   // 4.25-02: 그 컨의 입력칸을 연다(카드 밖 컨이면 카드 아래)
       return;
     }
+    //  4.30: 고르면 바로 처리하지 않는다 — 검수사 2026-10-17 «컨을 지정하면 바로 선적이나 양하 처리가 되어 수정이 어려움». 실번호·규격·자리를 보여 주고 한 번 확인한 뒤에만 처리한다.
+    {
+      const _sl = inspectionSealOf(c) || '미입력';
+      const _vb = mode === 'loading' ? '선적확인' : '양하확인';
+      const _fe = String(c.fe || '').toUpperCase() === 'E' ? '엠티' : (String(c.fe || '').toUpperCase() === 'F' ? '풀' : '풀/엠티 미상');
+      const okPick = await ask({
+        title: '이 컨으로 처리합니까',
+        message: `${c.cn}\n실번호 ${_sl} · ${isoShown(c.iso) || c.iso || '규격 미상'} · ${_fe} · POD ${c.pod || '-'}\n원래 자리 ${c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}\n\n${card.pos} 자리로 ${_vb}합니다. 번호가 다르면 [취소] 하고 다시 고르세요.`,
+        confirmLabel: _vb, cancelLabel: '취소',
+      });
+      if (!okPick) return;
+    }
     if (!(await askIfAway(c, card.main, card.pos))) return;   // 2.80-02 다른 베이·다른 양하항 안내(4.25-02 — 트윈 «이 한 대만» 과 한 벌)
     if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
     setBusy(true);
@@ -1750,6 +1762,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   <button onClick={() => onOpenContainer?.(c)}
                     className="flex-1 flex justify-between items-center bg-ink-900 border border-line rounded px-2 py-1.5 text-xs">
                     <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-sky-300 flex-1 text-center truncate">실 {inspectionSealOf(c) || '-'}</span>
                     <span className="text-2xs text-amber-400">조회</span>
                   </button>
                   {onPlaceUnassigned && (
@@ -2394,6 +2407,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                     className={`w-full flex justify-between items-center rounded px-2 py-2 text-xs ${sameSpec ? 'bg-emerald-950/50 border border-emerald-700 hover:bg-emerald-900' : 'bg-ink-800 border border-line hover:bg-amber-900'}`}>
                     <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-sky-300 flex-1 text-center truncate">실 {inspectionSealOf(c) || '-'}</span>
                     <span className="mono text-2xs text-dim-300">
                       {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                       {!sameSpec && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">규격 다름</span>}
@@ -2428,6 +2442,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                       <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                         className="w-full flex justify-between items-center bg-ink-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                         <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-sky-300 flex-1 text-center truncate">실 {inspectionSealOf(c) || '-'}</span>
                         <span className="mono text-dim-300">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}</span>
                       </button>
                     ))}
@@ -2443,6 +2458,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                   className="w-full flex justify-between items-center bg-ink-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-sky-300 flex-1 text-center truncate">실 {inspectionSealOf(c) || '-'}</span>
                   <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-dim-300'}`}>
                     {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
@@ -2470,6 +2486,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   {s.pick ? (
                     <div className="flex items-center justify-between bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5">
                       <span className="mono text-sm font-bold text-amber-200">{s.pick.cn}</span>
+                      <span className="mono text-2xs text-sky-300">실 {inspectionSealOf(s.pick) || '-'}</span>
                       <button onClick={() => s.setPick(null)} className="text-xxs text-dim-300 px-1.5">✕ 취소</button>
                     </div>
                   ) : (
@@ -2482,6 +2499,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                         <button key={c.cn} onClick={() => { s.setPick(c); s.setQ(''); }} disabled={busy}
                           className="w-full flex justify-between items-center bg-ink-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                           <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-sky-300 flex-1 text-center truncate">실 {inspectionSealOf(c) || '-'}</span>
                           <span className="mono text-dim-300">
                             {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                             {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
@@ -2555,6 +2573,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   <button onClick={() => onOpenContainer?.(c)}
                     className="flex-1 flex justify-between items-center bg-ink-900 rounded px-2 py-1.5 text-xs">
                     <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-sky-300 flex-1 text-center truncate">실 {inspectionSealOf(c) || '-'}</span>
                     <span className="text-2xs text-amber-400">조회</span>
                   </button>
                   {onPlaceUnassigned && (

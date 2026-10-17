@@ -129,7 +129,7 @@ const fs = require('fs');
     const g2 = U.swapFixGate({ ...D[A], pol: 'PHDVO' }, { ...D[B], pol: 'PHDVO', pod: 'CNDLC' });
     ok(g2.ok === false, '게이트: 도착지 다르면 차단');
     const F1 = { pol: 'X', pod: 'Y', iso: '45G1', fe: 'F', wt: 1000 };
-    ok(U.swapFixGate(F1, { ...F1, wt: 2000 }).ok === false, '게이트: 풀 무게 다르면 차단');
+    ok(U.swapFixGate(F1, { ...F1, wt: 2000 }).ok === true, '게이트: 풀 무게가 달라도 허용(4.30 — 무게는 위치 교환과 무관)');
     const gF = U.swapFixGate(F1, { ...F1 });
     ok(gF.ok === true && gF.chiefMate === true, '게이트: 풀 무게 같으면 일항사 상의 조건부 허용');
     //  콘앱 배선 — 같은 한 벌을 콘앱 시프팅 3곳이 겹친다 (2.5 «콘앱 66·검수앱 95» 재발 방지)

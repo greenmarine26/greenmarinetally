@@ -83,7 +83,7 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
   const swapFix = useCallback(async (a, b, gate) => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const q = gate?.chiefMate
-      ? `풀 맞교환 — 무게가 같아 가능하지만 일항사와 상의 후 진행해야 합니다.\n일항사와 상의하셨습니까?\n\n${a} ⇄ ${b}`
+      ? `풀 맞교환 — 무게는 보지 않습니다. 일항사와 상의 후 진행해야 합니다.\n일항사와 상의하셨습니까?\n\n${a} ⇄ ${b}`
       : `통과 고정분 맞교환 — 두 컨의 자리 기록을 양하·선적 함께 바꿉니다.\n${a} ⇄ ${b}\n\n즉시 적용됩니다(저장 버튼과 무관). 되돌리려면 같은 두 대를 다시 맞바꾸면 됩니다.`;
     if (!confirm(q)) return;
     try {

@@ -54,6 +54,12 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   const cand = [...doc.querySelectorAll('button')].find(x => /BEAU2977719/.test(x.textContent || ''));
   if (!cand) fail('후보 버튼을 못 찾았다');
   cand.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  await wait(400);
+  //  4.29-03: 후보를 누르면 «이 컨으로 처리합니까» 확인 창이 먼저 뜬다 — 확인 단추까지 눌러야 재배정이 불린다.
+  { const md = [...doc.querySelectorAll('div.fixed.inset-0')].filter(x => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0];
+    const cf = md ? [...md.querySelectorAll('button')].find(x => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null;
+    if (!cf) fail('후보를 눌렀는데 확인 창(이 컨으로 처리합니까)이 안 떴다');
+    cf.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); }
   await wait(700);
   const calls = dom.window.__calls || [];
   const re = calls.find(c => c.fn === 'reassign');
