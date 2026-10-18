@@ -2614,9 +2614,11 @@ export function answerOne(query, ctx) {
 const FB = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
 const GEM = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5';   // 4.30: 미르는 클로드(소네트)를 먼저 부르고, 막히면 제미나이로 돌아간다
 const DEFAULT_CAP = 300;
 const CFG_TTL = 10 * 60 * 1000;
 const TIMEOUT_MS = 10000;
+const CLAUDE_TIMEOUT_MS = 15000;   // 4.35: 첫 호출이 7초까지 걸린 실측(소네트) — 제미나이(10초)보다 넉넉히
 
 // ── 미르가 모르는 낱말 — 종전 SearchPanel 음성 교정의 KNOWN 표를 한 벌로 옮기고(거기 사본은 지웠다) **토큰 사전**으로 바꿨다.
 //   감사 실측(3.42 첫 판): 부분 문자열 정규식은 «시프팅»에서 «시»를 떼어 «프팅»을 모르는 낱말로 만들었고, 창구 예시 84개 중 22개가 «모르는 낱말 남음»이었다.
@@ -2693,11 +2695,11 @@ export async function getMirConfig(force = false) {
       const j = (r.ok && r.j && typeof r.j === 'object') ? r.j : {};
       let key = String(j.aiKey || '').trim();
       if (!key) { try { key = localStorage.getItem('master_gemini_api_key_v1') || ''; } catch (e) { key = ''; } }   // 공용 키가 비어 있으면 개인 키(종전 길)
-      _cfg = { aiKey: key, model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim() };
+      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim() };
       _cfgAt = Date.now();
     } catch (e) {
       console.warn('[미르 모델] mir_config 를 못 읽었어요 — 이번엔 모델 없이 갑니다:', e && e.message);
-      _cfg = _cfg || { aiKey: '', model: DEFAULT_MODEL, dailyCap: DEFAULT_CAP, enabled: false, sharedKey: false };
+      _cfg = _cfg || { aiKey: '', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, model: DEFAULT_MODEL, dailyCap: DEFAULT_CAP, enabled: false, sharedKey: false };
       _cfgAt = Date.now() - CFG_TTL + 60 * 1000;   // 1분 뒤 다시 시도
     } finally { _cfgP = null; }
     return _cfg;
@@ -2735,7 +2737,37 @@ function _logMiss(q, meta) {
 }
 
 // ── 모델 호출(공용 함수) ─────────────────────────────────────────────────────
+/* ★ 4.30 — 클로드 먼저, 막히면 제미나이. 검수사 2026-10-18 «클로드 비용을 다 쓰면 제미나이가 다시 도는 방식으로».
+   한도(HTTP 400)·키 오류(401·403)·과부하(429·5xx)·시간 초과·빈 답이면 쉬었다가 다시 부른다(한도·키 문제는 30분, 그 밖은 2분) — 그동안은 제미나이가 받는다.
+   소네트는 생각(thinking)을 끄지 않으면 토큰을 먼저 써서 답이 잘린다 → thinking:{type:'between_tools'}. temperature 는 이 모델이 받지 않는다. */
+let _claudeOffUntil = 0;
+async function _claude(cfg, prompt, maxOut, json) {
+  const t0 = Date.now();
+  const r = await _fetchJson('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: cfg.claudeModel || DEFAULT_CLAUDE_MODEL, max_tokens: Math.max(maxOut, 400), thinking: { type: 'between_tools' }, messages: [{ role: 'user', content: prompt }] }),
+  }, CLAUDE_TIMEOUT_MS);
+  if (!r.ok) { const e = new Error((r.j && r.j.error && r.j.error.message) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  const text = ((r.j && Array.isArray(r.j.content) ? r.j.content : []).filter((c) => c && c.type === 'text').map((c) => c.text || '').join(' ')).trim();
+  if (!text) { const e = new Error('클로드 빈 답(' + ((r.j && r.j.stop_reason) || '?') + ')'); e.status = 0; throw e; }
+  const u = (r.j && r.j.usage) || {};
+  return { text, tokIn: u.input_tokens || 0, tokOut: u.output_tokens || 0, ms: Date.now() - t0, prov: 'claude' };
+}
 async function _gem(cfg, prompt, maxOut, json) {
+  if (cfg.claudeKey && Date.now() >= _claudeOffUntil) {
+    try { return await _claude(cfg, prompt, maxOut, json); }
+    catch (e) {
+      const st = e && e.status;
+      _claudeOffUntil = Math.max(_claudeOffUntil, Date.now() + ((st === 400 || st === 401 || st === 403) ? 30 : 2) * 60 * 1000);   // 동시에 떠 있던 짧은 휴지가 긴 휴지를 지우지 않게(감사 지적)
+      console.warn('[미르 모델] 클로드가 안 돼서 제미나이로 갑니다:', e && e.message);
+      if (!cfg.aiKey) throw e;
+    }
+  }
+  if (!cfg.aiKey) throw new Error('AI 키가 없어요');
+  return _gemRaw(cfg, prompt, maxOut, json);
+}
+async function _gemRaw(cfg, prompt, maxOut, json) {
   const t0 = Date.now();
   const r = await _fetchJson(`${GEM}/${encodeURIComponent(cfg.model)}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.aiKey },
@@ -2744,7 +2776,7 @@ async function _gem(cfg, prompt, maxOut, json) {
   if (!r.ok) { const m = (r.j && r.j.error && r.j.error.message) || ('HTTP ' + r.status); throw new Error(m); }
   const text = (r.j && r.j.candidates && r.j.candidates[0] && r.j.candidates[0].content && r.j.candidates[0].content.parts && r.j.candidates[0].content.parts[0] && r.j.candidates[0].content.parts[0].text || '').trim();
   const u = (r.j && r.j.usageMetadata) || {};
-  return { text, tokIn: u.promptTokenCount || 0, tokOut: u.candidatesTokenCount || 0, ms: Date.now() - t0 };
+  return { text, tokIn: u.promptTokenCount || 0, tokOut: u.candidatesTokenCount || 0, ms: Date.now() - t0, prov: 'gemini' };
 }
 
 // ── ① 번역 — 미르가 아는 말 목록(창구) ─────────────────────────────────────
@@ -2778,10 +2810,15 @@ export async function translateQuestion(q, ctx, cfg) {
 3. 잡담·인사·감정 표현은 canonical 빈 문자열, window "잡담".
 JSON 한 줄로만 답한다: {"canonical":"...","window":"창구 이름","confidence":0.0}
 질문: "${q}"`;
-  const r = await _gem(cfg, prompt, 120, true);
+  let r = await _gem(cfg, prompt, 120, true);
   let j = null;
-  try { j = JSON.parse(r.text.replace(/^```json|```$/g, '').trim()); } catch (e) { return { canonical: '', window: '', confidence: 0, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, bad: r.text.slice(0, 80) }; }
-  return { canonical: String((j && j.canonical) || '').trim(), window: String((j && j.window) || ''), confidence: Number((j && j.confidence) || 0), tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms };
+  const _parse = (t) => { const c = String(t || '').replace(/^```json|```$/g, '').trim(); try { return JSON.parse(c); } catch (e) { const a = c.indexOf('{'), b = c.lastIndexOf('}'); if (a >= 0 && b > a) { try { return JSON.parse(c.slice(a, b + 1)); } catch (e2) { return undefined; } } return undefined; } };
+  j = _parse(r.text);
+  if (j === undefined && r.prov === 'claude' && cfg.aiKey) {   // 4.35: 클로드가 JSON 형식을 어기면 제미나이로 한 번 더(감사 지적 — 종전엔 «번역 없음»으로 굳었다)
+    try { r = await _gemRaw(cfg, prompt, 120, true); j = _parse(r.text); } catch (e) { console.warn('[미르 모델] 제미나이 재시도 실패:', e && e.message); }
+  }
+  if (j === undefined) { return { canonical: '', window: '', confidence: 0, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, prov: r.prov, bad: r.text.slice(0, 80) }; }
+  return { canonical: String((j && j.canonical) || '').trim(), window: String((j && j.window) || ''), confidence: Number((j && j.confidence) || 0), tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, prov: r.prov };
 }
 
 // ── ② 자료 답 — 요약 + 계산해 둔 사실 + 질문에 맞는 컨 ───────────────────────
@@ -2808,6 +2845,7 @@ export function buildDataPack(q, ctx) {
   const derived = {
     제일무거운5: byWt.slice(0, 5).map((c) => `${c.cn} ${c.wt}kg ${_modeKo(c)} ${_pos(c)}`),
     제일가벼운5: byWt.slice(-5).reverse().map((c) => `${c.cn} ${c.wt}kg`),
+    최대중량_같은중량_대수: byWt.length ? byWt.filter((c) => Number(c.wt) === Number(byWt[0].wt)).length : 0,   // 4.30: 실데이터 시험(OBWH 2769E)에서 모델이 «제일무거운5» 목록 길이 5 를 «같은 중량 5대»로 말했다(실제 46대) — 대수는 앱이 센다
     위험물_클래스별: cnt(cs.filter(_isDg), (c) => '클래스 ' + (c.dgc || c.dgClass || c.imdg || '?')),
     위험물_목록: cs.filter(_isDg).slice(0, 20).map((c) => `${c.cn} 클래스${c.dgc || c.dgClass || c.imdg || '?'} UN${c.un || c.unno || '?'} ${_pos(c)} ${_modeKo(c)}`),
     리퍼_목록: cs.filter(_isRf).slice(0, 20).map((c) => `${c.cn} 온도 ${c.tmp || c.rfSet || c.temp || '기록없음'} ${c.fe === 'E' ? '엠티' : '풀'} ${_pos(c)}`),
@@ -2834,18 +2872,26 @@ export function buildDataPack(q, ctx) {
 export async function dataAnswer(q, ctx, cfg) {
   const pack = buildDataPack(q, ctx);
   const packTxt = JSON.stringify(pack);
-  const prompt = `너는 평택항 검수앱의 도우미 «미르»다. 아래 자료만 보고 검수원의 질문에 한국어로 3문장 이내로 답한다. «계산해둔것»에 있으면 그것을 그대로 쓰고 직접 세지 않는다. 목록을 말할 땐 5개까지만. 자료의 항목 이름(«계산해둔것» 같은 말)은 입에 올리지 않는다. 자료에 없는 것은 «자료에 없어요»라고 말하고 지어내지 않는다. 숫자·번호는 자료 그대로 쓴다. 존댓말(~예요).
+  const prompt = `너는 평택항 검수앱의 도우미 «미르»다. 아래 자료만 보고 검수원의 질문에 한국어로 3문장 이내로 답한다. «계산해둔것»에 있으면 그것을 그대로 쓰고 직접 세지 않는다. 목록을 말할 땐 5개까지만. 자료의 항목 이름(«계산해둔것» 같은 말)은 입에 올리지 않는다. 자료에 없는 것은 «자료에 없어요»라고 말하고 지어내지 않는다. 숫자·번호는 자료 그대로 쓴다. 자료 속 목록(이름이 «_목록»·«5»·«10»으로 끝나는 것)은 앞쪽 일부만 담은 것이니 목록의 길이를 대수로 말하지 않는다 — 대수는 «총»이나 «계산해둔것»에 적힌 숫자만 쓰고 없으면 «정확한 대수는 자료에 없어요»라고 한다. 존댓말(~예요).
 자료(JSON): ${packTxt}
 질문: "${q}"`;
   const r = await _gem(cfg, prompt, 220, false);
   let text = r.text;
   let rejected = null;
   if (text) {
-    //  문지기 — 답 속 숫자(2자리 이상)가 자료에 없으면 지어낸 것이다. 버린다.
-    const bad = (text.match(/\d{2,}/g) || []).filter((n) => !packTxt.includes(n));
+    //  문지기 — 답 속 숫자가 자료(또는 질문)에 «그 숫자 그대로» 없으면 지어낸 것이다. 버린다.
+    //  4.30: 종전엔 2자리 이상만 보고 «부분 문자열»로 맞췄다(83 이 1083 안에 있어도 통과). 이제 모든 숫자 덩어리를 자료의 숫자 덩어리와 통째로 맞춘다 — 검수사 «대화는 틀려도 되지만 자료는 정확해야 합니다».
+    //  4.35 감사 반영 — 같은 숫자를 다르게 적은 것은 같은 숫자로 본다: ① 0 채움(09:30 ↔ 9시, 07 ↔ 7번) ② 컨번호는 끝 4자리 ③ 천 단위 쉼표(29,200)와 목록 쉼표(101,102)는 둘 중 한 읽기만 맞으면 된다
+    //  ④ 규격 말(20·40·45 피트)만 단위로 본다 — 지어낸 «99피트» 는 그대로 걸린다
+    const have = new Set();
+    (packTxt.match(/\d+/g) || []).concat(String(q).match(/\d+/g) || []).forEach((n) => { have.add(n); have.add(String(Number(n))); if (n.length >= 7) have.add(n.slice(-4)); });
+    const strip = (t) => t.replace(/\b(20|40|45)\s*(피트|ft|FT|풋)/g, ' ');
+    const badOf = (t) => (strip(t).match(/\d+/g) || []).filter((n) => !have.has(n) && !have.has(String(Number(n))));
+    const raw = badOf(text);
+    const bad = raw.length ? (() => { const alt = badOf(text.replace(/(\d),(?=\d{3}(?!\d))/g, '$1')); return alt.length < raw.length ? alt : raw; })() : raw;
     if (bad.length) { rejected = { text, bad }; text = '자료로는 확실한 답을 못 만들었어요 — 화면에서 확인해 주세요.'; }
   }
-  return { text, rejected, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, packChars: packTxt.length };
+  return { text, rejected, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, prov: r.prov, packChars: packTxt.length };
 }
 
 /** 사전 등록 한 벌 — 이 폰 메모리(mirLearnAlias) + 보관소. 검수앱은 App 이 건 쓰기 손(window.__mirLexiconWrite)이 적고, 손이 없는 콘앱은 REST 로 적는다. */
@@ -2878,14 +2924,14 @@ export async function askMirModel(q, ctx, rules, opts = {}) {
   if (cached) return _finish(q, ctx, rules, opts, cached, true);                       // 끝난 것 — 번역·자료 답은 기억, 규칙은 다시
   const p = (async () => {
     const cfg = await getMirConfig();
-    if (!cfg.enabled || !cfg.aiKey) { _memo.delete(key); return { text: null, via: null, reason: cfg.enabled ? 'nokey' : 'off' }; }
+    if (!cfg.enabled || !(cfg.aiKey || cfg.claudeKey)) { _memo.delete(key); return { text: null, via: null, reason: cfg.enabled ? 'nokey' : 'off' }; }
     const n = await _todayCount();
     if (n >= cfg.dailyCap) { _memo.delete(key); console.warn(`[미르 모델] 오늘 상한 ${cfg.dailyCap}회에 닿았어요 — 규칙만으로 갑니다`); return { text: null, via: null, reason: 'cap' }; }
     const who = opts.who || '';
     let tr = null;
     try {
       tr = await translateQuestion(q, ctx, cfg);
-      _logCall({ kind: 'translate', q: String(q).slice(0, 80), canonical: tr.canonical, window: tr.window, conf: tr.confidence, ok: true, tokIn: tr.tokIn, tokOut: tr.tokOut, ms: tr.ms, who, app: ctx.app || '' });
+      _logCall({ kind: 'translate', q: String(q).slice(0, 80), canonical: tr.canonical, window: tr.window, conf: tr.confidence, ok: true, tokIn: tr.tokIn, tokOut: tr.tokOut, ms: tr.ms, prov: tr.prov || '', who, app: ctx.app || '' });
     } catch (e) {
       console.warn('[미르 모델] 번역 실패:', e && e.message);
       _logCall({ kind: 'translate', q: String(q).slice(0, 80), ok: false, err: String(e && e.message || e).slice(0, 120), who, app: ctx.app || '' });
@@ -2936,10 +2982,10 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   //  ② 자료 답 — 기억된 것이 있으면 그것(같은 항차·같은 문장), 없으면 모델
   if (rec.model && Date.now() - (rec.at || 0) < 10 * 60 * 1000) { out.text = rec.model; out.via = 'model'; return out; }   // 자료 답은 10분만 기억 — 진행이 바뀌면 다시(재감사)
   if (!cfg) cfg = await getMirConfig();
-  if (!cfg.aiKey) { out.reason = 'nokey'; return weakByWordsOnly ? confirmed() : out; }
+  if (!(cfg.aiKey || cfg.claudeKey)) { out.reason = 'nokey'; return weakByWordsOnly ? confirmed() : out; }
   try {
     const da = await dataAnswer(q, ctx, cfg);
-    _logCall({ kind: 'data', q: String(q).slice(0, 80), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, packChars: da.packChars, who, app: ctx.app || '' });
+    _logCall({ kind: 'data', q: String(q).slice(0, 80), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, prov: da.prov || '', packChars: da.packChars, who, app: ctx.app || '' });
     const empty = !da.text || /자료에 없어요|자료에는 없|확실한 답을 못/.test(String(da.text));
     if (weakByWordsOnly && (da.rejected || empty)) return confirmed();
     if (da.text && !da.rejected) { out.text = da.text + ' (AI)'; out.via = 'model'; rec.model = out.text; }
