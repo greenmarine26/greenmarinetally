@@ -18,7 +18,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
-import { answerOneRaw } from '../mir.js';
+import { answerOneRaw, workPauseOf } from '../mir.js';
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
 import { mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디 더 · «응/아니/됐어» 는 직전 답에 이어서
@@ -30,7 +30,7 @@ import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
 import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain } from '../voice.js';
 import { logQuerySettled } from '../activityLog.js';
-import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart } from '../firebase.js';
+import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport } from '../firebase.js';
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';
@@ -131,6 +131,19 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           if (sideRef.current !== key) { sideRef.current = key; fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[미르] 시작 시각 저장 실패', e)); }
         }
       }
+      //  4.34-02 «미르야 강풍대기 상태야 쉬고 있어» — 작업 보고의 «작업 중단»과 같은 기록(external_pause)을 남긴다. 말로 알린 것이니 카톡 공유(shareText)는 하지 않는다.
+      //    이미 같은 사유로 중단 중이면 다시 적지 않는다. 조회만이면 fbAddWorkReport 가 막는다 → 답 밑에 알린다.
+      if (parsed.pauseSet) {   // 미르 칸에 치는 말은 부름말이 없어도 미르에게 하는 말이다
+        const R = parsed.pauseSet.reason;
+        const wp = voyage ? workPauseOf(voyage, Date.now()) : null;
+        const key = `pause|${voyageKey}|${R}|${Math.floor(Date.now() / 600000)}`;
+        if (!(wp && (wp.reason === R || !parsed.pauseSet.known)) && sideRef.current !== key) {
+          sideRef.current = key;
+          const vsl = (voyage && voyage.info && voyage.info.vsl) || '';
+          fbAddWorkReport(voyageKey, { type: 'external_pause', reason: R, message: `[작업 중단 보고]\n선박: ${vsl}\n사유: ${R}\n(미르에게 말로 알림${inspector ? ' — ' + inspector : ''})`, by: inspector || '', via: 'mir' })
+            .catch((e) => { console.warn('[미르] 중단 기록 실패', e); sideRef.current = ''; setOut((o) => (o || '') + '\n⚠ 중단 기록이 안 됐어요 — 조회만이거나 연결 문제예요. 작업 보고 → 작업 중단에서 직접 남겨 주세요.'); });
+        }
+      }
     } catch (e) { console.warn('[미르] 저장 부작용 실패:', e); }
   }, [inspector]);
 
@@ -183,6 +196,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       let weatherText = null;
       if (parseNaturalQuery(t).weatherQuery) { try { weatherText = await fetchWeatherText(); } catch (e) { weatherText = null; } }
       const ctx = {
+        mirBox: true,   // 4.34-02: 미르 칸에 치는 말은 «미르야» 없이도 미르에게 하는 말이다(멈춤 알림 판정)
         app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, weatherText, accepted: true,   // 3.60-18: 전송된 질문 — 못 알아들으면 miss 기록
         inspector, isChief, chiefData, heartbeat, portMisData, pilotForecast,
         carrierContacts, shipSpeed, ediPattern, voyages, flat,

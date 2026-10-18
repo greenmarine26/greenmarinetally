@@ -1407,6 +1407,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()]?.carrier : ''),
       // 2.94-01: 통과화물은 «EDI에 없는 컨» 경고에서 뺀다 — 판정은 utils 한 벌.
       thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
+      shiftCns: [...shiftCnSet],   // 4.34-03: 시프팅 대상이 양하 리스트에 섞여 들면 «EDI에 없음» 이 아니다
       cancelReq: voyage?.info?.amend?.cancelReq || [],   // 3.50-02: 수집기가 읽은 선사 취소 요청분 — «EDI에 없는 컨» 이 아니다
       carrier: voyage?.info?.carrier || '',
       typoTwins: listTypoTwins(recMap),   // 4.22: 리스트 번호 오타 짝(세관 코드 CND 후보) — 저장 때 빼는 것과 같은 한 벌(남은 짝은 keep 이 붙잡은 것)
@@ -1432,7 +1433,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return [...out];
       })(),
     });
-  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyageKey, voyage, shipPolicy, rfSkipShip]);
+  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyageKey, shiftCnSet, voyage, shipPolicy, rfSkipShip]);
   /* ★ 3.41 — 떠 있는 미르(App 의 MirFab)에게 «지금 열린 항차» 재료를 놓아 둔다(검수사 «앱 어디에든 항상 띄워서»).
        MirFab 은 prop 체인 밖(App)에 살아 이 화면의 컨·완료·시프팅·트윈 짝을 받을 길이 없다 — 여기서 publishMirCtx 로 건넨다.
        컨은 홈 통합검색과 같은 벌(flattenVoyages)로 편다 — 홈에서 묻든 여기서 묻든 같은 재료(§4-4). 화면이 닫히면 비운다.

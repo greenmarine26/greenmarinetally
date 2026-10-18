@@ -132,7 +132,13 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     };
     const thruInList = (records || []).filter(isThru);
     const thruSet = new Set(thruInList.map(r => r.cn));
-    let extraInList = (records || []).filter(r => !ediCns.has(r.cn) && !thruSet.has(r.cn));
+    //  ★ 4.34-03 — 검수사 2026-10-18 15:26 «가끔 시프팅 대상이 양하리스트에 추가되는 경우» (MCAT 640N 실측: MRSU7262992 는 시프팅 47대 중 하나(0441286→0101186, POD CNHSK)인데
+    //    선사 양하 리스트에도 들어 있어 «EDI에 없음 1대»가 뜨고 «총 작업 369 = 리스트 322 + 쉬프팅 47» 이 한 대를 두 번 셌다). 시프팅 목록(shiftingList)에 있는 컨은 «EDI 밖 추가»가 아니라
+    //    시프팅이다 — 경고에서 빼고, 총 작업에서는 한 번만 센다. 시프팅 목록이 판정의 한 벌이다(리스트 ◆ 박스·인쇄 [별첨2]와 같은 목록).
+    const _shSet = new Set((shiftingList || []).map(x => String(x && x.cn || '').toUpperCase()).filter(Boolean));
+    const shiftInList = mode === 'discharge' ? (records || []).filter(r => r && !ediCns.has(r.cn) && !thruSet.has(r.cn) && _shSet.has(String(r.cn || '').toUpperCase())) : [];
+    const _shInSet = new Set(shiftInList.map(r => r.cn));
+    let extraInList = (records || []).filter(r => !ediCns.has(r.cn) && !thruSet.has(r.cn) && !_shInSet.has(r.cn));
     //  3.26: 부킹 자리가 있으면 EDI 밖 실번호는 그 자리를 채우는 것이다 — 자리 수만큼은 «추가»가 아니다. 남는 만큼만 추가.
     if (fill && fill.slots > 0) extraInList = extraInList.slice(fill.slots);
     let emptyConfirmed = 0;
@@ -167,13 +173,14 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       missingCount: missingInList.length,
       missingByOp,
       missingDetails: missingInList.slice(0, 5),
+      shiftInListCount: shiftInList.length,   // 4.34-03: 시프팅 대상이면서 양하 리스트에도 있는 컨 — 총 작업에서 한 번만 센다
       extraCount: extraInList.length,
       extraByOp,
       extraDetails: extraInList.slice(0, 5),
       virtualCount: virtualInEdi.length,   // V9.04-01: 가상E(실번호 미배정 자리)
       emptyConfirmed,                      // V9.04-01: 리스트 엠티 실번호(가상 자리 확정분)
     };
-  }, [ediContainers, records, mode, dischargeEdi, bookingFill]);
+  }, [ediContainers, records, mode, dischargeEdi, bookingFill, shiftingList]);
 
   if (!v) return null;
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;
@@ -219,8 +226,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           상세 목록은 리스트 하단 ◆ 박스 + 인쇄 검수리스트 [별첨2]. */}
       {shiftCount > 0 && (
         <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-xxs text-blue-200 font-bold">
-          총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}
-          <span className="ml-1 font-normal text-blue-300/70">(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])</span>
+          총 작업 {v.listTotal + shiftCount - v.shiftInListCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}{v.shiftInListCount > 0 ? ` − 겹침 ${v.shiftInListCount}` : ''}
+          <span className="ml-1 font-normal text-blue-300/70">{v.shiftInListCount > 0 ? `(시프팅 ${v.shiftInListCount}대가 선사 양하 리스트에도 있어 한 번만 셉니다)` : '(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])'}</span>
         </div>
       )}
 

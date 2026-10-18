@@ -570,6 +570,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 출력센터 X-RAY 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_XH"; exit 1
   fi
+  # 4.34-03: 시프팅 대상이 양하 리스트에 섞인 경우(MCAT 640N 실데이터) — 경고에서 빼고 총 작업은 한 번만.
+  SMOKE_SL=$(mktemp /dev/shm/hometmp/_smokesl_XXXXXX.js)
+  if npx esbuild tools/smoke_shiftlist434.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_SL" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_shiftlist434.cjs "$SMOKE_SL" || { echo "✗ 시프팅 리스트 겹침 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SL"; exit 1; }
+    rm -f "$SMOKE_SL"
+  else
+    echo "✗ 시프팅 리스트 겹침 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SL"; exit 1
+  fi
   # 4.34: 자료 센터 화면·출력 허브 바로 열기·주소·대기 저장소.
   SMOKE_DC=$(mktemp /dev/shm/hometmp/_smokedc_XXXXXX.js)
   if npx esbuild tools/smoke_datacenter434.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \

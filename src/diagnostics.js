@@ -74,7 +74,7 @@ export const isoConflictText = (w) => {
   return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
 };
 
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false, voyage = null, voyageKey = '', typoTwins = null }) {   // 4.22: voyage — 자료별 대조(항차 통째) · typoTwins — 리스트 번호 오타 짝(utils.listTypoTwins 결과, 호출부가 넘긴다)
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], shiftCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false, voyage = null, voyageKey = '', typoTwins = null }) {   // 4.22: voyage — 자료별 대조(항차 통째) · typoTwins — 리스트 번호 오타 짝(utils.listTypoTwins 결과, 호출부가 넘긴다)
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
@@ -86,6 +86,10 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   //   재적부(시프팅)라 **선적 EDI 에 있을 수 없다.** 수화물과 같은 자리에서 뺀다.
   const _thruSet = new Set((thruCns || []).map(c => String(c || '').trim().toUpperCase()));
   const _isThru = (cn) => _thruSet.has(String(cn || '').trim().toUpperCase());
+  //  ★ 4.34-03 — 시프팅 대상이 양하 리스트에 섞여 들어온 경우(MCAT 640N MRSU7262992 · 검수사 2026-10-18 «가끔 시프팅 대상이 양하리스트에 추가되는 경우»).
+  //    시프팅 목록(utils.shiftingListOf — 리스트 ◆ 박스와 같은 한 벌)에 있는 컨은 «EDI 밖 추가»가 아니라 시프팅이다. 통과화물과 같은 자리에서 뺀다.
+  const _shiftSet = new Set((shiftCns || []).map(c => String(c || '').trim().toUpperCase()));
+  const _isShift = (cn) => _shiftSet.has(String(cn || '').trim().toUpperCase());
   //  ★ 3.50-02: **선사 취소 요청분(수집기 info/amend.cancelReq)은 «EDI에 없는 컨» 이 아니다** — 빼야 할 컨이 아직 리스트에 남은 것이다.
   //    실측 SWSP 2609S — 캔슬 리스트 13대가 앱 리스트에 더해져 경고 13개. 경고 대신 «취소 요청 N대 리스트에 남아 있음» 안내로 가른다.
   const _cancSet = new Set((Array.isArray(cancelReq) ? cancelReq : Object.entries(cancelReq || {}).map(([k, v]) => (typeof v === 'string' ? v : k))).map(c => String(c || '').replace(/[\s-]/g, '').toUpperCase()).filter(Boolean));
@@ -272,7 +276,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   //    count 는 음성 서명(패널 code:count)용 — «완료·실적에만»(g5)은 작업이 진행되면 늘어나므로 뺀 수 + «번호 없음» 대수.
   let _recon = null;
   if (voyage && mode === 'discharge') {
-    const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) });
+    const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) || (mode === 'discharge' && _isShift(cn)) });
     const gapOn = R.gap != null && R.gap !== 0;
     if (R.total > 0 || gapOn) {
       const S = R.sources;
@@ -379,6 +383,18 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       //   ① 알려진 번호(isLuggageCn) ② 선박 상시 대수(lugCount) 이내의 잔여 — 두 겹으로 잡는다.
       const thruFound = extraCns.filter(cn => _isThru(cn));
       extraCns = extraCns.filter(cn => !_isThru(cn));       // 2.94-01: 통과화물 먼저 뺀다
+      const shiftFound = mode === 'discharge' ? extraCns.filter(cn => _isShift(cn)) : [];   // 4.34-03: 시프팅 대상 — 양하 리스트에 섞여 든 것
+      extraCns = extraCns.filter(cn => !shiftFound.includes(cn));
+      if (shiftFound.length > 0) {
+        alerts.push({
+          level: 'info',
+          code: 'shift_in_list',
+          msg: `시프팅 대상 ${shiftFound.length}대가 양하 리스트에도 있음 — 시프팅으로 셈`,
+          voice: '',
+          count: shiftFound.length,
+          details: { shiftCns: shiftFound },
+        });
+      }
       let lugFound = extraCns.filter(cn => _isLug(cn));
       extraCns = extraCns.filter(cn => !_isLug(cn));
       const lugRemain = Math.max(0, (lugCount || 0) - lugFound.length);

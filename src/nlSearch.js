@@ -159,6 +159,7 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume'|'text', dir:+1|-1, to:1..4|'off', ask:true } — 4.23 text: to 1 보통 · 2 크게
+    pauseSet: null,    // 4.34-02: { reason, raw } — «미르야 강풍대기 상태야 쉬고 있어» 말로 알린 작업 멈춤(사유는 작업 보고 칩과 같은 이름). 기록은 화면(MirFab·SearchPanel)이 한다.
     startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
     crewSet: null,     // 3.8: { raw, shift, crew:[{no,name}], unknown:[{no,tok}] } — «주간 1호기 김판석 2호기 송제욱» 호기–검수원 등록
@@ -183,6 +184,18 @@ export function parseNaturalQuery(text) {
       result.mirCalled = true;
       t = t.replace(_mir, '');
       if (!t.trim()) result.mirHello = true;
+    }
+    //  ★ 4.34-02 — 검수사 2026-10-18 14:49 «미르가 작업신호가 없으면 불안해 합니다. 그래서 쉬고 있으라고 알려준것이고. 다른 사용자가 왜 작업또는 일 안해 하고 물으면 중단사유를 알려줘야 합니다.»
+    //    사유 낱말 + 멈춤 낱말이 있고 묻는 말이 아니면 «작업이 멈췄다는 알림»이다.
+    //    사유 낱말이 없어도 «작업중단 이라고 했잖아 쉬고있어» 처럼 멈춤을 알리면 같은 알림이다(사유는 «쉬는 중»). 미르를 부른 말이 아니어도 서지만
+    //    (미르 칸에는 부름말 없이 치므로) 미르가 답하고 적는 쪽이 부름 여부를 확인한다 — called 에 담는다.
+    if (t.trim()) {
+      const _wr = /강풍|안개|우천|장비\s*고장|야드\s*혼잡|점심|식사/.exec(t);
+      if (/대기|쉬고|쉬는|쉬어|멈|중단|스톱|스탑|작업\s*안|못\s*(?:해|하)/.test(t) && !/[?？]|왜|몇|언제|얼마|어디|누구|이유|재개|다시\s*시작|시작했|끝났|풀렸|걷혔|그쳤|그만/.test(t)) {
+        const _k = _wr ? _wr[0].replace(/\s+/g, '') : '';
+        const _name = _wr ? ({ 강풍: '강풍 대기', 안개: '안개 대기', 우천: '우천 대기', 장비고장: '장비 고장', 야드혼잡: '야드 혼잡', 점심: '점심 식사', 식사: '점심 식사' }[_k] || _k) : '쉬는 중';
+        result.pauseSet = { reason: _name, raw: t, known: !!_wr, called: !!result.mirCalled };
+      }
     }
   }
 

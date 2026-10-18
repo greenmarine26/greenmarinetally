@@ -2044,6 +2044,32 @@ export function answerOneRaw(query, ctx) {
       : '어느 배 말씀인지 배 이름을 붙여 주시면 연락처를 찾아 드립니다. (예: "PCSZ 이메일")';
   }
 
+  //  ②-3-B ★ 4.34-02 작업 멈춤 — 검수사 2026-10-18 14:49 «미르가 작업신호가 없으면 불안해 합니다. 그래서 쉬고 있으라고 알려준것이고. 다른 사용자가 왜 작업또는 일 안해 하고 물으면 중단사유를 알려줘야 합니다.»
+  //    ① «미르야 강풍대기 상태야 쉬고 있어» → 중단 사유로 적는다(저장은 화면이 fbAddWorkReport 로 — 작업 보고의 «작업 중단»과 같은 기록이라 미르 초조함도 꺼지고 다른 검수원·미르도 같은 사유를 읽는다).
+  //    ② «왜 작업 안 해?» → 앱 중단 보고가 있으면 그 사유·시각을 알려 준다. 보고가 없으면 건드리지 않는다(아래 옛 길이 답한다). 야드 갈래보다 먼저 본다(«야드 혼잡» 이 사유일 수 있다).
+  {
+    const _hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    if (p.pauseSet && (p.mirCalled || c.mirBox)) {
+      _via('workStop');
+      const R = p.pauseSet.reason;
+      if (!hasShip || !v) return `알겠어요, ${R}로 쉬는 걸로 들었어요 🐱 다만 어느 배인지 몰라 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 MCAT ${R.replace(' ', '')}")`;
+      if (app === 'cone') return `알겠어요, ${R}로 쉬는 걸로 들었어요 🐱 중단 기록은 검수앱 작업 보고 → 작업 중단에서 남겨 주세요 — 콘앱은 적는 손이 없어요.`;
+      const wp0 = workPauseOf(v, c._now || Date.now());
+      if (wp0 && (wp0.reason === R || !p.pauseSet.known)) return `알겠어요 🐱 앱에도 ${wp0.equip ? wp0.equip + ' ' : ''}${wp0.ko} ${_hm(wp0.ts)} 중단(사유 ${wp0.reason || R})으로 기록돼 있어요. 누가 왜 쉬냐고 물으면 그 사유를 알려 드릴게요.`;
+      return p.pauseSet.known
+        ? `⏸ ${R}로 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`
+        : `⏸ 작업이 멈춘 걸로 적을게요 🐱 사유를 말씀 안 하셔서 «쉬는 중»으로 적어요 — 강풍대기·안개·우천처럼 말씀해 주시면 사유를 바꿔 둘게요. 작업 신호가 없어도 기다릴게요.`;
+    }
+    if (v && /왜|이유|어째서|어때서/.test(q) && /작업|일|양하|선적|하역|쉬|멈|중단/.test(q) && /안\s*해|안\s*하|안\s*돼|안\s*되|멈|쉬|중단|못|없|조용/.test(q) && !/느려|느린|늦|지연/.test(q)) {
+      const wp1 = workPauseOf(v, c._now || Date.now());
+      if (wp1) {
+        _via('workStop');
+        const tail1 = wp1.resumeAt ? (( c._now || Date.now()) < wp1.resumeAt ? ` ${wp1.breakKo}과 겹쳐 보통 ${_hm(wp1.resumeAt)}에 재개돼요.` : ` 보통 ${_hm(wp1.resumeAt)} 재개인데 아직 재개·완료 기록이 없어요.`) : '';
+        return `${hasShip && ship ? ship + ' — ' : ''}${wp1.equip ? wp1.equip + ' ' : ''}${wp1.ko} 작업이 ${_hm(wp1.ts)}부터 중단 중이에요. 사유는 ${wp1.reason || '적혀 있지 않아요'}.${tail1}`;
+      }
+    }
+  }
+
   //  ②-4 야드 상황 — «야드 바빠?·왜 차 안 와?·작업 왜 느려?·반입 반출 몇 대?» (3.69, [mirYard] 한 벌). 배가 없어도 답한다 —
   //    열린 항차의 부두 → 없으면 지금 일하는 배들의 부두 → 그것도 없으면 두 터미널 다. 재료는 화면이 넣은 ctx.yard 가 먼저, 없으면 setMirYard 로 받은 것.
   if (p.yardQuery) {
@@ -2058,22 +2084,6 @@ export function answerOneRaw(query, ctx) {
     try {
       return answerYard(p.yardQuery, yd, { piers, ship: hasShip ? (c.vsl || ship) : '', containers: cs, flat: c.flat, voyages: c.voyages, voyage: v, mode: p.mode || mode, now: c._now || Date.now() });   // «선적 왜 안 나가» 는 질문의 모드가 먼저(감사 12) · voyage — 중단 보고(3.69-01)
     } catch (e) { console.warn('[미르] 야드 답 실패:', e); return '야드 자료를 읽다가 막혔어요 — 잠시 후 다시 물어봐 주세요.'; }
-  }
-
-  //  ②-5 작업 멈춤 알림 — «미르야 강풍대기 상태야 쉬고 있어» (4.34-01). 질문이 아니라 현장 상황을 알려 주는 말이다.
-  //    종전엔 뒤에 붙은 말을 못 읽어 «뭐 확인해 드릴까요?» 로 되물었다. 앱 보고(workPauseOf)가 있으면 그대로 확인해 주고, 없으면 기록하는 길을 알려 준다(미르는 기록을 쓰지 않는다).
-  if (p.mirCalled && !p.asking && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !hasAnyCondition(p) && !/[?？]|왜|몇|언제|얼마|어디|누구/.test(q)) {
-    const _rs = (q.match(/강풍|안개|우천|장비\s*고장|야드\s*혼잡|점심|식사|교대/) || [])[0];
-    const _stop = /대기|쉬고|쉬는|멈|중단|스톱|스탑|못\s*(해|하)|작업\s*안/.test(q);
-    if (_rs && _stop) {
-      _via('workStop');
-      const now = c._now || Date.now();
-      const wp = v ? workPauseOf(v, now) : null;
-      const hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-      const rsName = _rs.replace(/\s+/g, '');
-      if (wp) return `알겠어요 🐱 앱에도 ${wp.equip ? wp.equip + ' ' : ''}${wp.ko} ${hm(wp.ts)} 중단${wp.reason ? `(사유 ${wp.reason})` : ''}으로 기록돼 있어요.`;
-      return `알겠어요, ${rsName}로 작업이 멈춘 걸로 들었어요 🐱 다만 앱에는 아직 중단 보고가 없어요.${hasShip ? '' : ' 배를 열고'} 작업 보고 → 작업 중단에서 사유를 고르면 기록돼요.`;
-    }
   }
 
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.

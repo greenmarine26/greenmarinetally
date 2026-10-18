@@ -29,7 +29,7 @@ import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록�
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 3.49: 장 묶기(hatchEvenOf 가 받는 목록)
 import { recordHatchEvent } from '../hatchReport.js';   // 3.49: 따라가기 자동 기록
 import HatchAlertBanner from './HatchAlertBanner.jsx';   // 3.49: 비따라가기 알림
-import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
+import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddWorkReport} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 수동 트윈 한 화면 틀(조회창 앞·뒤 → [확인] → 카드 두 장 · 아래 칸 변경 단추)
 import { fbHoldContainers } from '../firebase.js';   // ★ 4.27: 수동 한 화면 틀의 ⏸ 보류(자동 가이드와 같은 저장)
@@ -41,7 +41,7 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 import { mirTone } from '../mir.js';
-import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
+import { answerOneRaw, workPauseOf } from '../mir.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
 import { mirKnowledge } from '../data/mirKnowledge.js';
@@ -1350,6 +1350,20 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       .then((txt) => { try { speak(cr.length ? `${String(txt)} 시작으로 다시 계산했어요` : `${String(txt).slice(11)} 시작으로 다시 계산했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
       .catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [parsed.startSet, voyageKey, inspector, query]);
+
+  //  ★ 4.34-02 «미르야 강풍대기 상태야 쉬고 있어» — 작업 보고의 «작업 중단»과 같은 기록. MirFab 과 같은 규칙(미르를 불렀을 때만 · 같은 사유로 이미 중단 중이면 안 적는다).
+  const pauseSetRef = useRef('');
+  useEffect(() => {
+    if (!parsed.pauseSet || !parsed.mirCalled || !voyageKey) return;
+    const R = parsed.pauseSet.reason;
+    const wp = voyage ? workPauseOf(voyage, Date.now()) : null;
+    if (wp && (wp.reason === R || !parsed.pauseSet.known)) return;
+    const key = `${voyageKey}|${R}|${Math.floor(Date.now() / 600000)}`;
+    if (pauseSetRef.current === key) return;
+    pauseSetRef.current = key;
+    fbAddWorkReport(voyageKey, { type: 'external_pause', reason: R, message: `[작업 중단 보고]\n선박: ${(voyage && voyage.info && voyage.info.vsl) || ''}\n사유: ${R}\n(미르에게 말로 알림${inspector ? ' — ' + inspector : ''})`, by: inspector || '', via: 'mir' })
+      .catch((e) => { console.warn('[4.34-02] 중단 기록 실패', e); pauseSetRef.current = ''; });
+  }, [parsed.pauseSet, parsed.mirCalled, voyageKey, inspector]);
 
   const gangSetRef = useRef('');
   useEffect(() => {
