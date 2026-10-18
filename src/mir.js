@@ -40,7 +40,7 @@ import {
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
-  generateHowToAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
+  generateHowToAnswer, featureHelpExact, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
   voyageReportSpan, WORK_SHIFTS, workMinutesBetween,   // 3.56 [mirMood] 식사 창은 근무표 그대로 · 3.69-01 완료 공백은 실작업 분으로 잰다
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
@@ -917,6 +917,32 @@ export function workingShipCtx(voyages) {
   if (!list.length) return null;
   if (list.length === 1) { const [k, v] = list[0]; return { key: k, info: v.info, v, has: !!(v.discharge?.ediContainers || v.loading?.ediContainers), working: true }; }
   return { ambiguous: list.map(([, v]) => String(v.info.vsl || v.info.vslFull || '')).filter(Boolean), working: true };
+}
+
+/** 4.35-02 — 배 이름을 못 떠올릴 때 보여 줄 배 코드: 지금 일하는 배 먼저, 그다음 곧 시작할 배(시작 가까운 순). 최대 6. (검수사 2026-10-19 «갑자기 생각이 안날수도 있습니다. 그때 대상들을 보여주면 바로 알수 있습니다») */
+export function shipPickCodes(voyages, now = Date.now()) {
+  const work = [], wait = [];
+  Object.values(voyages || {}).forEach((v) => {
+    if (!v || !v.info) return;
+    const code = String(v.info.vsl || '').toUpperCase();
+    if (!/^[A-Z0-9]{2,8}$/.test(code)) return;
+    if (isWorkingNow(v, now)) work.push(code);
+    else { const st = _upcomingStartMs(v, now); if (st) wait.push({ code, st }); }
+  });
+  wait.sort((x, y) => x.st - y.st);
+  return [...new Set(work.concat(wait.map((w) => w.code)))].slice(0, 6);
+}
+//  배를 되묻는 답인가 — 엔진 열두 곳·떠 있는 미르 두 곳의 «어느 배 말씀인지»·«배 이름을 붙여»·«… 중 어느 배요?»
+const SHIP_ASK_RE = /어느 배 말씀|어느 배요\?|어느 배인지|어느 배의 플랜|배 이름을 붙여\s*(?:주세요|주시면|보세요)|배 이름을 붙이면 그 배(?:만| 브리)/;
+export const isShipAskText = (t) => SHIP_ASK_RE.test(String(t == null ? '' : t));
+/** 배를 되묻는 답 뒤에 붙일 칩 — «OBWH 몇 시에 끝나» 꼴(누르면 그 말 그대로 묻는다). 되묻는 글에 코드들이 있으면(같은 거리 두 배) 그 배들이 먼저. 배가 없으면 []. */
+export function shipPickChips(text, rq, voyages, now = Date.now()) {
+  const codes = shipPickCodes(voyages, now);
+  const am = String(text || '').match(/((?:[A-Z0-9]{2,8}·)*[A-Z0-9]{2,8}) 중 어느 배요/);
+  const first = am ? am[1].split('·') : [];
+  const all = [...new Set(first.concat(codes))].slice(0, 6);
+  const base = String(rq || '').replace(WORKING_SHIP_RE, ' ').replace(/\s+/g, ' ').trim() || '브리핑';
+  return all.map((c) => `${c} ${base}`);
 }
 
 /** 질문 속 배 이름으로 항차를 고른다 — 홈 통합검색(shipCtx)과 같은 규칙(정확 포함 → 편집거리 1 유일). */
@@ -1892,6 +1918,7 @@ function _normalize(ctx) {
 /*  ★ 3.42 (판 B) — `ctx._trace` 를 주면 **어느 길에서 답이 나왔는지** 적어 준다(`_trace.via`).
       «잡아채는 길»(사용법 매뉴얼·현재 시각·되묻기·베이사전 타령·진행 잡답·지식 추측·콘 안내)은 규칙이 자신 없이 낸 답이라,
       mirModel.askMir 가 그때만 모델을 부른다(번역 → 규칙 재실행 → 자료 답). 그 밖의 답에는 모델이 끼지 않는다. */
+const TERM_ASK_RE = /(?:뭐|뭔|무엇)(?:야|예요|에요|죠|지|냐|니|가요|입니까)?\s*[?？!.~]*$|무슨\s*뜻|뜻이?\s*(?:뭐|무엇)|(?:이란|란)\s*[?？!.~]*$/;   // 4.35-02
 export function answerOneRaw(query, ctx) {
   const q0 = S(query);
   //  3.68 [mirThread]: 대화 중의 «응·두 번째·아니 ○○·그거·됐어» 는 직전 답에 이어 푼다(순수 — 기억은 화면이 접수 시점에 mirThreadCommit 으로 바꾼다).
@@ -1959,6 +1986,22 @@ export function answerOneRaw(query, ctx) {
   let p = null;
   try { p = parseNaturalQuery(q); } catch (e) { p = null; }
   if (!p) return null;
+
+  //  ★ 4.35-02 — 기능 이름 + 어디/어떻게/사용법: 항차가 열려 있든 아니든·콘앱이든 **같은 매뉴얼 답**이 데이터 인텐트(진행·콜사인·개체 조회)보다 먼저 나간다.
+  //    검수사 2026-10-19 «메뉴얼에 있는데 질문 위치가 어디냐에 따라 답을 하기도 하고 못하기도 합니다». 컨 번호가 붙은 말은 조회이니 제외.
+  if (!p.digits || String(p.digits).length < 3) {   // 끝 네 자리(컨 번호)가 붙은 말은 조회다 — «4.1» 같은 두 자리 숫자는 뜻 질문에 흔하다
+    try {
+      const fh = featureHelpExact(q, { isChief: !!c.isChief });
+      if (fh) { _via('featureHelp'); return fh; }
+    } catch (e) { console.warn('[미르] 기능 이름 사용법 관문 실패 — 종전 길로 갑니다:', e); }
+    //  순수한 뜻 질문(«4.1 인화성 고체 뭐야»·«FEU 뭐야»)은 항차가 열려 있어도 사전이 먼저다 — 열려 있으면 DG 클래스·규격 같은 컨 조건 인텐트가 정의를 가렸다.
+    //    집계·진행·목록·베이 조건이 잡힌 말(«남은 거 뭐야»)은 뜻 질문이 아니니 제외 — nlSearch termQuery 와 같은 문지기.
+    //  경고 문구를 그대로 읽어 물으면(«X-RAY 6대 중 1대가 EDI 에 없음 이거 뭐야») 용어가 아니라 그 경고 설명이다 — 3.60-05 가 먼저 받는다.
+    const _alertQ = (() => { try { return Array.isArray(c.diagAlerts) && c.diagAlerts.length && !!answerAboutAlert(q, c.diagAlerts); } catch (e) { return false; } })();
+    if (!_alertQ && TERM_ASK_RE.test(q) && !p.isStat && !p.progressQuery && !p.etaQuery && !p.listQuery && p.bay == null && !p.vacantQuery && !p.capacityQuery && !p.weightSum) {
+      try { const k = mirKnowledge(q); if (k && /^📖/.test(k)) { _via('termDef'); return k; } } catch (e) { /* 사전이 막혀도 종전 길로 */ }
+    }
+  }
 
   //  ① 콘 이야기 — 콘앱이면 콘 지식이 먼저. 단 검수 속성(끝네자리·온도·실번호·엑스레이…)을 물으면 검수 답이 우선이다
   //    (2.48 — 종전엔 콘앱에서 «베이»만 들어가면 콘 답이 전부 가로챘다. 관문 2 실측).
@@ -2295,7 +2338,7 @@ export function answerOneRaw(query, ctx) {
       if (d) {
         //  3.42: 뜻풀이가 지식·사전이 아니라 **사용법 매뉴얼 추측**(generateHowToAnswer)에서 왔으면 약한 답 — «제일 무거운 컨 뭐야»가 «컨테이너 번호 수정» 매뉴얼로 잡혔다(판 B 시뮬)
         let strong = null; try { strong = mirKnowledge(q) || mirLearnedDef(q) || (p._learnedDef || null); } catch (e) { strong = null; }
-        if (!strong) _via('howTo');
+        _via(strong ? 'termDef' : 'howTo');   // 4.35-02: 사전·원장이 뜻을 답했으면 모르는 낱말(안벽·예선…)이 남아도 얼버무린 답이 아니다 — 모델로 새지 않는다
         return d;
       }
     } catch (e) { /* */ }
@@ -2308,7 +2351,7 @@ export function answerOneRaw(query, ctx) {
   //    «씰 잘림(씰 파손) 대처법을 물었는데 씰번호 틀림을 알립니다»). answerHowCore(asking=how)와 같은 순서.
   if (p.howToQuery) {
     try { const k = mirKnowledge(Q); if (k) { _via('knowledge'); return k; } } catch (e) { /* 원장이 막혀도 색인은 답한다 */ }
-    try { const a = generateHowToAnswer(Q, p, { isChief: !!c.isChief }); if (a) { _via('howTo'); return a; } } catch (e) { /* */ }
+    try { const a = generateHowToAnswer(Q, p, { isChief: !!c.isChief }); if (a) { _via(/^📍 사용 매뉴얼/.test(a) ? 'featureHelp' : 'howTo'); return a; } } catch (e) { /* */ }   // 4.35-02: «사용법 알려줘» 홀로는 매뉴얼 안내가 정답이다 — 약한 답으로 보지 않는다
   }
   //  4.14-01 (회귀 기준표 R9 · 3.43-02): 현장 대처 두 갈래를 묻는 말 없이 한 문장에 말하면(«컨테이너 파손됐고 씰도 잘렸어») 원장이 둘 다 답한다 —
   //    종전엔 아래 본체(⑲)가 «등록된 데미지 없음» 만 냈다. 판정은 mirKnowledgeMulti 한 곳(두 갈래 이상일 때만 답). 한 갈래 서술문(«컨테이너 파손됐어»)은 종전대로 아래로 흐른다.
@@ -2668,6 +2711,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'modeChoice') return false;
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
+  if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
@@ -3374,6 +3418,18 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
     return { kind: 'none', q: r.q, line: '', chips: [], confirm: '' };
   }
   const rq = r.q;
+  //  4.35-02: 배를 되묻는 답이면 이름을 치라고만 하지 않고 일하는 배·곧 시작할 배를 단추로 보여 준다(누르면 그 배로 같은 말을 묻는다). 되묻기는 얼버무림이 아니다 — «맞게 알아들었나요?» 를 붙이지 않는다.
+  if (isShipAskText(text) && ctx && ctx.voyages) {
+    const PC = shipPickChips(text, rq, ctx.voyages, now);
+    if (PC.length) {
+      const fol = { line: '배 이름이 생각 안 나시면 아래에서 골라 주세요.', chips: PC };
+      const tn = { q, rq, intent: 'shipAsk', entity: {}, ship: '', answer: _thNorm(text).slice(0, 200), follow: fol, confirm: '', at: now };
+      const th0 = hit ? hit.th : null;
+      if (th0) { th0.turns.push(tn); if (th0.turns.length > THREAD_MAX_TURNS) th0.turns.shift(); th0.at = now; th0.missAt = 0; th0.lastUtter = { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut }; }
+      else _threads[key] = { turns: [tn], at: now, missAt: 0, lastUtter: { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut } };
+      return { kind: 'answer', q: rq, line: fol.line, chips: fol.chips.slice(), confirm: '' };
+    }
+  }
   let p = null; try { p = parseNaturalQuery(rq); } catch (e) { p = null; }
   const hedged = _thHedged(rq, text, via);
   const intent = _thIntent(rq, p, text);

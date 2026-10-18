@@ -558,7 +558,9 @@ export function parseNaturalQuery(text) {
   }
   // TallyOne 1.22: 도선·접안·작업개시 — "도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?"
   //   도선 시각은 **입항 시각**이라 그 시각에 작업을 시작할 수 없다. 부두별 소요를 더해 작업개시를 답한다.
-  if (/도선|파일럿|접안|작업\s*(?:시작|개시|예정)|몇\s*시(?:부터|에)?\s*작업|작업\s*(?:시간|시각)\s*(?:이|은|는)?\s*(?:몇|언제|가능)|언제\s*작업/i.test(t)) {
+  //  4.35-02: «도선이 뭐야»·«도선사란» 은 시각 질문이 아니라 뜻 질문이다 — 시각·작업 낱말이 없고 뜻을 묻는 꼴이면 도선 시각 갈래로 보내지 않는다(실측: 배 이름을 되물었다).
+  const _pilotDefQ = /도선/.test(t) && !/접안|작업|출항|입항|몇\s*시|언제|시각|가능/.test(t) && /뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭔데|무슨\s*뜻|(?:이란|란)\s*[?？!.~]*$/.test(t);
+  if (!_pilotDefQ && /도선|파일럿|접안|작업\s*(?:시작|개시|예정)|몇\s*시(?:부터|에)?\s*작업|작업\s*(?:시간|시각)\s*(?:이|은|는)?\s*(?:몇|언제|가능)|언제\s*작업/i.test(t)) {
     result.pilotQuery = true;
   }
   // TallyOne 1.21: 기상·출근 시각 — "몇 시에 일어나야 하지"는 **현재 시각 질문이 아니다**(오답 1786028593439).
@@ -1190,10 +1192,12 @@ function _teachLines(b, { canDo = true } = {}) {
   return L;
 }
 
+let _howTopRef = null;
 /** 기능 위치 답변 — 못 찾으면 null (그러면 종전 경로로 넘어간다) */
 export function generateHowToAnswer(query, parsed, opts = {}) {
   // 1.69: 육공 — 검수사 확정 원문 *"육공은 저도 모름"*. 지어내지 않는다.
   if (/육공/.test(String(query || ''))) return '「육공」은 확인된 용어가 아닙니다.';
+  _howTopRef = null;
   const T0 = _htToks(query);                     // 사용자가 **실제로 한 말**
   const T = _htExpand(T0);                       // + 같은 뜻 다른 말
   //  2.30: 동의어는 **절반만** 센다.
@@ -1259,6 +1263,7 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
   }
 
   const top = hits[0].it;
+  _howTopRef = top;   // 4.35-02: featureHelpExact 가 «맨 위로 뽑힌 항목이 질문 속 그 이름인가» 를 본다
   const lines = [];
   // 첫 줄이 음성으로 읽히므로 여기에 핵심을 놓는다.
   lines.push(`📍 ${top.l}`);
@@ -1294,6 +1299,41 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
   }
   lines.push('', '더 자세히는 [사용 매뉴얼]에서 볼 수 있습니다.');
   return lines.join('\n');
+}
+
+// ─── 4.35-02: 기능 이름이 질문에 그대로 들어 있으면 어느 화면에서든 같은 매뉴얼 답 ──────────────────────
+//   검수사 2026-10-19 «메뉴얼에 있는데 질문 위치가 어디냐에 따라 답을 하기도 하고 못하기도 합니다».
+//   항차를 열면 진행·콜사인 같은 데이터 인텐트가 매뉴얼보다 먼저 답했고, 홈에서는 조건이 붙은 말(LOLO 탭·풀 리퍼 사진 촬영)을 놓쳤다.
+//   기능 색인·매뉴얼의 이름(또는 별칭)이 질문 속에 **통째로** 들어 있고 «어디/어떻게/사용법» 을 물을 때만 답한다 — 이름 없는 데이터 질문(FR 어디 있어)은 건드리지 않는다.
+const _FH_ASK = /어디|어느|어떻게|사용법|사용\s*방법|매뉴얼|도움말|쓰는\s*법|하는\s*법|보는\s*법|설명/;
+const _FH_UI = /탭|메뉴|버튼|카드|칩|모달|화면|기능|사용법|사용\s*방법|매뉴얼|도움말|어떻게|쓰는\s*법|하는\s*법|보는\s*법|설명/;
+const _fhNorm = (x) => String(x || '').replace(/\([^)]*\)/g, '').replace(/[^가-힣A-Za-z0-9]+/g, '').toLowerCase();
+const _fhKeyOf = (name) => _fhNorm(name).replace(/(탭|버튼|카드|메뉴|화면|기능)$/, '');
+let _fhKeys = null;
+function _fhKeyList() {
+  if (_fhKeys) return _fhKeys;
+  const out = [];
+  const add = (name) => { const k = _fhKeyOf(name); if (k.length >= 3) out.push(k); };
+  FEATURE_INDEX.forEach((f) => { add(f.l); (f.a || []).forEach(add); });
+  _htManualIndex().forEach((m) => { add(m.l); (m.a || []).forEach(add); });
+  _fhKeys = [...new Set(out)].sort((a, b) => b.length - a.length);
+  return _fhKeys;
+}
+export function featureHelpExact(query, opts = {}) {
+  const raw = String(query || '');
+  if (!_FH_ASK.test(raw)) return null;
+  const qs = _fhNorm(raw);
+  const found = _fhKeyList().filter((k) => qs.includes(k));
+  if (!found.length) return null;
+  const ans = generateHowToAnswer(raw, null, opts);
+  const top = _howTopRef;
+  if (!ans || !top) return null;
+  //  맨 위로 뽑힌 항목의 이름(또는 별칭)이 질문 속에 통째로 들어 있을 때만 — 엉뚱한 항목이면 종전 경로
+  const topKeys = [top.l].concat(top.a || []).map(_fhKeyOf);
+  const key = found.find((k) => topKeys.includes(k));
+  if (!key) return null;
+  if (!_FH_UI.test(raw) && key.length < 5) return null;   // «X 어디 있어» 만으로는 이름이 충분히 길 때(다섯 글자 이상)만 — «FR 어디 있어»·«X-RAY 어디 있어» 는 컨 조회다
+  return ans;
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───

@@ -43,7 +43,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   const [askedAt, setAskedAt] = useState(null);   // 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
   const [reasked, setReasked] = useState(false);  // 같은 질문 재제출 — 답 박스에 «다시 확인했습니다»
   //  3.68 [mirThread]: 대화 키(항차|검수원) — 이 화면은 inspector prop 이 없다(저장된 검수원 이름, 모델 기록과 같은 키). 1글자 «응» 문지기와 기록에 쓴다.
-  const _thCtx = () => ({ voyageKey: (shipCtx && shipCtx.key) || ctxVoyageKey || '', inspector: _storage.get(SK.activeInspector) || '', vsl: (shipCtx && shipCtx.info && shipCtx.info.vsl) || '' });
+  const _thCtx = () => ({ voyages, voyageKey: (shipCtx && shipCtx.key) || ctxVoyageKey || '', inspector: _storage.get(SK.activeInspector) || '', vsl: (shipCtx && shipCtx.info && shipCtx.info.vsl) || '' });
 
   // M6.10: debounce — 키 입력마다 즉시 검색하지 않고 200ms 후 검색
   //   대용량 (수천 대 컨테이너) 환경에서 입력 반응성 개선

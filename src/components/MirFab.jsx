@@ -24,7 +24,7 @@ import { mirTone } from '../mir.js';
 import { mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디 더 · «응/아니/됐어» 는 직전 답에 이어서
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
-import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE } from '../mir.js';
+import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE, shipPickChips } from '../mir.js';
 import { computeTallyData } from '../tallyReport.js';
 import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
@@ -168,7 +168,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         const w = workingShipCtx(voyages);
         if (w && w.ambiguous && w.ambiguous.length > 1) {
           const a = `지금 작업 중인 배가 ${w.ambiguous.length}척이에요 — ${w.ambiguous.join(' · ')}. 어느 배인지 이름을 붙여 주세요 🐱`;
-          lastRef.current = a; setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
+          lastRef.current = a; setOut(a); { const _pc = shipPickChips(a, t, voyages); if (_pc.length) setFollow({ line: '배 이름이 생각 안 나시면 아래에서 골라 주세요.', chips: _pc, confirm: '' }); }   try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
           return;
         }
       }
@@ -186,7 +186,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           return;
         }
         const a = '어느 배의 플랜인지 못 찾았어요 😿 «KBTR 카고플랜» 처럼 배 이름을 붙여 주세요.';
-        lastRef.current = a; setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
+        lastRef.current = a; setOut(a); { const _pc = shipPickChips(a, t, voyages); if (_pc.length) setFollow({ line: '배 이름이 생각 안 나시면 아래에서 골라 주세요.', chips: _pc, confirm: '' }); }   try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
         return;
       }
       //  ② 재료 — 열린 항차(live) > 질문 속 배(shipCtx) > 전 항차(flat).
