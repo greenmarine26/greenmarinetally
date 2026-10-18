@@ -287,7 +287,7 @@ export const CARGO_V2_CSS = `
 .cpv2-hatch-break { display: flex; gap: 4px; width: calc(100% - 18px); height: 0; margin: 3px 0; flex-shrink: 0; box-sizing: border-box; }
 .cpv2-hatch-seg { flex: 1 1 0; border-top: 1.5px solid #000; height: 0; }
 .cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; }
-.cpv2-tier-labels > span { flex: 1 1 0; display: flex; align-items: center; line-height: 1; }
+.cpv2-tier-labels > span { flex: 1 1 0; min-height: 0; max-height: var(--cph, 999px); display: flex; align-items: center; line-height: 1; }   /* 4.34: 글자 높이(9px)가 줄 높이보다 커도 줄을 밀어내지 않는다 — 단 표기가 셀 줄과 같은 칸에 선다 */
 .cpv2-tier-labels > span.cpv2-invisible-label { display: none; }
 .cpv2-banner { display: none; }
 .cpv2-empty-slot { border: none; background: transparent; }
@@ -455,6 +455,11 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
       paddingRight: `calc(var(${fixedCellVar}) * ${pc.r})`,
     };
   };
+  //  ★ 4.34 (검수사 2026-10-18 «데크만 있는 베이 셀높이 표기랑 셀이 맞지 않습니다 셀높이 표기대로 셀을 맞춰 주세요. 다른 선박도 데크만 있는 베이가 전반적으로 맞지 않습니다»)
+  //    데크 전용 베이는 해치선 기준(maxSide)에서 빠져 있어, 단 수가 maxSide 보다 많으면(MCAT 41·43·44/45 = 8단 > 6) **8줄이 6칸 몫에 눌려** 셀이 옆 베이보다 낮고 단 표기와 어긋났다.
+  //    ⇒ 이 베이는 **제 단 수만큼** 몫을 받고, 대신 비워 두는 아래 자리(홀드 몫)를 줄여 총 높이는 옆 베이와 같게 둔다(윗줄 정렬 유지).
+  const deckShare = globalHatch ? (nHold === 0 ? Math.max(globalHatch.maxSide, deckTiers.length) : globalHatch.maxSide) : Math.max(deckTiers.length, 1);
+  const holdShareEmpty = globalHatch ? Math.max(1, 2 * globalHatch.maxSide - deckShare) : 0;
   const deckPadStyle = _mkPad(deckAlign, deckPadLeft, deckPadRight, nDeckCols);
   const holdPadStyle = _mkPad(holdAlign, holdPadLeft, holdPadRight, nHoldCols);
 
@@ -468,10 +473,10 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
            데크 전용 베이도 위 «빈 홀드 자리» 덕에 총 높이가 같으므로 **같이 가운데**로 둔다 —
            그래야 옆 상자와 로우 표기 윗줄이 한 줄에 선다(검수사 확답 2026-09-09 «윗줄을 맞춘다»). */}
       <div className="cpv2-bay-content" style={{ justifyContent: 'center' }}>
-        <div className="cpv2-deck-area" style={{ flex: `${globalHatch ? globalHatch.maxSide : Math.max(deckTiers.length, 1)} 1 0`,
+        <div className="cpv2-deck-area" data-share={deckShare} style={{ flex: `${deckShare} 1 0`,
             //  3.7: 이 영역이 가질 수 있는 최대 높이 = 제 단 수 × 칸 높이. 넘게 늘어나지 않는다.
             //  3.36: 해치가 있는 베이는 데크·홀드가 **같은 몫**(maxSide) — 그래야 해치선이 한가운데 온다.
-            maxHeight: `calc(var(--cph, 999px) * ${globalHatch ? globalHatch.maxSide : Math.max(deckTiers.length, 1)})` }}>
+            maxHeight: `calc(var(--cph, 999px) * ${deckShare})` }}>
           {/*  ★ 3.7-03 — 로우 표기는 **언제나 맨 위**다(검수사 «상단/하단 로우 표기 위치가 일정해야 합니다.
               티어가 많고 적음에 따라 올라갔다 내려갔다 합니다. 항상 위치는 가장 높은것 과 가장 낮은것을 기준으로»).
               종전엔 라벨이 여백칸(spacer) **아래**에 있어 데크 단이 적은 베이는 라벨이 그만큼 내려왔다.
@@ -480,8 +485,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
           {/* V7.58: 해치선 수평 — 데크는 아래(82)가 해치선에 붙음. 단수 부족분은 위 spacer */}
-          {globalHatch && globalHatch.maxSide > deckTiers.length && (
-            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxSide - deckTiers.length} 1 0` }}></div>
+          {globalHatch && deckShare > deckTiers.length && (
+            <div className="cpv2-tier-spacer" style={{ flex: `${deckShare - deckTiers.length} 1 0` }}></div>
           )}
           {/*  ⚠ 3.39-01 — **홀드 없는 베이에서 줄이 눌리던 자리.** 검수사 2026-09-09
               *«제눈에는 셀 높이가 다른베이보다 낮아 보입니다»* · *«38번은 4단인데 옆베이 3단 보다도 낮아 보입니다»*.
@@ -600,8 +605,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         {nHold === 0 && globalHatch && (<>
           {/*  해치선이 먹는 자리(높이 0 + 상하 여백 3px)도 같이 잡는다 — 안 그러면 3.1px 만큼 윗줄이 남는다. */}
           <div className="cpv2-hatch-break" aria-hidden="true" style={{ visibility: 'hidden' }}></div>
-          <div className="cpv2-hold-area" aria-hidden="true"
-               style={{ flex: `${globalHatch.maxSide} 1 0`, maxHeight: `calc(var(--cph, 999px) * ${globalHatch.maxSide})` }}></div>
+          <div className="cpv2-hold-area" aria-hidden="true" data-share={holdShareEmpty}
+               style={{ flex: `${holdShareEmpty} 1 0`, maxHeight: `calc(var(--cph, 999px) * ${holdShareEmpty})` }}></div>
         </>)}
         {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
         {nHold > 0 && (<>

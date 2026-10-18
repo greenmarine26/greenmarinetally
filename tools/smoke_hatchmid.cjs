@@ -58,6 +58,8 @@ setTimeout(() => {
   const capOf = (el) => { const m = (el && el.style && el.style.maxHeight || '').match(/\*\s*([\d.]+)\)/); return m ? Number(m[1]) : null; };
   const flexN = capOf;
   const hasHoldRows = (hold) => !!hold && hold.querySelectorAll('.cpv2-tier-row').length > 0;
+  //  4.33-01: 데크 전용 베이의 «데크 몫 + 빈 홀드 몫» 은 해치 베이 한쪽 몫(maxSide)의 두 배여야 한다(단이 몫보다 많으면 데크가 더 받고 빈 홀드가 그만큼 준다).
+  const sideRef = (() => { for (const box of boxes) for (const sec of box.querySelectorAll('.cpv2-bay-content')) { const d = sec.querySelector(':scope > .cpv2-deck-area'); const h = sec.querySelector(':scope > .cpv2-hold-area'); if (d && hasHoldRows(h)) return flexN(d); } return null; })();
   let spDeck = 0, spHold = 0;
   let withHold = 0, deckOnly = 0, midOk = 0, midBad = [], topOk = 0, topBad = [];
   for (const box of boxes) {
@@ -90,7 +92,7 @@ setTimeout(() => {
         deckOnly++;
         if (jc !== 'center') topBad.push(`데크 전용인데 ${jc || '(비었음)'}`);
         if (!hold) topBad.push('데크 전용에 빈 홀드 자리가 없다 — 윗줄이 옆 상자와 갈린다');
-        else if (dn !== hn) topBad.push(`데크 전용 총 높이가 다르다(데크 ${dn} : 빈 홀드 ${hn})`);
+        else if (sideRef != null && dn + hn !== 2 * sideRef) topBad.push(`데크 전용 총 높이가 다르다(데크 ${dn} : 빈 홀드 ${hn} · 해치 베이 한쪽 ${sideRef})`);
       }
     }
   }
@@ -116,14 +118,14 @@ setTimeout(() => {
   ok(/justifyContent: 'center'/.test(SRC), '남는 자리를 위·아래로 나눈다는 것이 코드에 있다');
   ok(/nHold === 0 && globalHatch && \(/.test(SRC), '데크 전용 베이에 빈 홀드 자리를 잡는다는 것이 코드에 있다');
   //  ⚠ `flex` 는 그림에서 못 재므로(위) **글자로** 잰다 — 데크·홀드 영역의 `flex` 와 `maxHeight` 가 둘 다 maxSide 여야 한다.
-  for (const [who, re] of [['데크 영역', /className="cpv2-deck-area" style=\{\{ flex: `\$\{globalHatch \? globalHatch\.maxSide[\s\S]{0,400}?maxHeight: `calc\(var\(--cph, 999px\) \* \$\{globalHatch \? globalHatch\.maxSide/],
+  for (const [who, re] of [['데크 영역', /const deckShare = globalHatch \? \(nHold === 0 \? Math\.max\(globalHatch\.maxSide, deckTiers\.length\) : globalHatch\.maxSide\)[\s\S]{0,1500}?className="cpv2-deck-area"[^\n]*flex: `\$\{deckShare\} 1 0`[\s\S]{0,400}?maxHeight: `calc\(var\(--cph, 999px\) \* \$\{deckShare\}\)`/],
                            ['홀드 영역', /className="cpv2-hold-area" style=\{\{ flex: `\$\{globalHatch \? globalHatch\.maxSide[\s\S]{0,200}?maxHeight: `calc\(var\(--cph, 999px\) \* \$\{globalHatch \? globalHatch\.maxSide/],
-                           ['빈 홀드 자리', /flex: `\$\{globalHatch\.maxSide\} 1 0`, maxHeight: `calc\(var\(--cph, 999px\) \* \$\{globalHatch\.maxSide\}\)`/]]) {
+                           ['빈 홀드 자리', /const holdShareEmpty = globalHatch \? Math\.max\(1, 2 \* globalHatch\.maxSide - deckShare\) : 0;[\s\S]{0,30000}?flex: `\$\{holdShareEmpty\} 1 0`, maxHeight: `calc\(var\(--cph, 999px\) \* \$\{holdShareEmpty\}\)`/]]) {
     ok(re.test(SRC), `${who} 의 flex 와 높이 상한이 둘 다 maxSide 다 — 한쪽만 되돌리면 해치가 밀린다`);
   }
   //  ⚠ 단 수가 몫보다 적은 베이는 **여백칸**으로 채워야 해치선이 한 줄에 선다(V7.58). 그림에서는 못 잰다 —
   //    `.cpv2-tier-row` 는 격자 안쪽까지 세어져 «단 수»가 아니다(실측 데크 8 vs 몫 5). 그래서 글자로 잰다.
-  for (const [who, re] of [['데크 여백칸', /globalHatch && globalHatch\.maxSide > deckTiers\.length && \(\s*\n\s*<div className="cpv2-tier-spacer" style=\{\{ flex: `\$\{globalHatch\.maxSide - deckTiers\.length\}/],
+  for (const [who, re] of [['데크 여백칸', /globalHatch && deckShare > deckTiers\.length && \(\s*\n\s*<div className="cpv2-tier-spacer" style=\{\{ flex: `\$\{deckShare - deckTiers\.length\}/],
                            ['홀드 여백칸', /globalHatch && globalHatch\.maxSide > holdTiers\.length && \(\s*\n\s*<div className="cpv2-tier-spacer" style=\{\{ flex: `\$\{globalHatch\.maxSide - holdTiers\.length\}/]]) {
     ok(re.test(SRC), `${who} 이 몫과 단 수의 차이만큼 남아 있다 — 없애면 해치선이 밀린다`);
   }

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.33';
-const NOTE = '4.33 출력센터에 X-RAY 리스트가 들어왔습니다. 양하에서 출력을 열면 검수 리스트와 카고플랜과 베이 상세와 X-RAY 리스트를 뽑고, 선적에서는 X-RAY를 뺀 세 가지입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.33-01';
+const NOTE = '4.33-01 데크만 있는 베이 셀 높이를 단 표기에 맞췄습니다. 카고플랜에서 데크만 있는 베이도 셀이 다른 베이와 같은 높이로 서고 단 표기가 셀 줄마다 맞습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

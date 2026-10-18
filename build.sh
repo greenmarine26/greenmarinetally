@@ -570,6 +570,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 출력센터 X-RAY 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_XH"; exit 1
   fi
+  # 4.33-01: 카고플랜 데크만 있는 베이 — MCAT 실사전·양하 321대로 그려 데크 몫·단 표기 칸을 잰다.
+  SMOKE_DO=$(mktemp /dev/shm/hometmp/_smokedo_XXXXXX.js)
+  if npx esbuild tools/smoke_deckonly434.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_DO" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_deckonly434.cjs "$SMOKE_DO" || { echo "✗ 데크만 있는 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_DO"; exit 1; }
+    rm -f "$SMOKE_DO"
+  else
+    echo "✗ 데크만 있는 베이 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_DO"; exit 1
+  fi
   # 3.36: 시작보고 호기 = 앱 호기 — 작업 보고 창을 실제로 그려 단추를 눌러 본다.
   SMOKE_EQ=$(mktemp /dev/shm/hometmp/_smokeeq_XXXXXX.js)
   if npx esbuild tools/smoke_equipone.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
