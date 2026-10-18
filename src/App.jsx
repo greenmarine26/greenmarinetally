@@ -14,9 +14,10 @@ import AccessLockScreen from './components/AccessLockScreen.jsx';   // 3.76: 접
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief, setStaffOff, isStaffOff, lockedNameOf } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
-import { parseHash, exitApp, closeHomeSheetIfOpen } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6) · 4.25: 폰 홈 시트가 열려 있으면 뒤로가기는 시트만 닫는다
+import { parseHash, exitApp, closeHomeSheetIfOpen, setPendingDo } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6) · 4.25: 폰 홈 시트가 열려 있으면 뒤로가기는 시트만 닫는다
 import { setActivityUser, logActivity, logView, activityUserName } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
 import HomePage from './pages/HomePage.jsx';
+import DataCenterPage from './pages/DataCenterPage.jsx';   // 4.34: 자료 센터
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
@@ -563,6 +564,7 @@ export default function App() {
     else if (target === 'health') window.location.hash = '#/health';  // V8.40
     else if (target === 'food') window.location.hash = '#/food';      // V8.60
     else if (target === 'aux') window.location.hash = '#/aux';        // TallyOne 1.0: 보조기능
+    else if (target === 'data') window.location.hash = '#/data';      // 4.34: 자료 센터
     else if (target === 'login') window.location.hash = '#/login';    // TallyOne 1.0: 검수원 변경
     // TallyOne 1.0 (B-1): 양하/선적 모드까지 해시에 인코딩 — #/voyage/KEY/discharge|loading
     else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}${target.mode ? `/${target.mode}` : ''}`;
@@ -644,12 +646,25 @@ export default function App() {
           자동 업로드가 지운 허상 72건을 되살린 사고(2026-08-13) 뒤 장치 자체를 폐기했다. */}
       <main className="pb-20" data-app-main="1">{/* 4.24: 수석 상황판(컴)이 화면 한 장일 때 아래 여백을 접는 표식(index.css data-chief-fill) */}
         {/* 4.08: 범위가 바뀐 직후(폰에서 수석이 로그인해 뿌리 전체를 받는 중 등)에는 빈 홈·빈 대시보드 대신 «불러오는 중» — «오늘 항차가 없다» 로 읽히지 않게 */}
-        {!voyagesLoaded && ['home', 'chief'].includes(route.name) && (
+        {!voyagesLoaded && ['home', 'chief', 'data'].includes(route.name) && (
           <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400" data-voyages-loading="1">
             항차 불러오는 중…
             <div className="mt-3 text-xs text-dim-500">오래 걸리면 아래 단추로 서버 연결을 다시 잡아 보세요.</div>
             <div className="mt-2"><button onClick={handleRefreshData} disabled={refreshing} className="px-4 py-2 bg-ink-800 border border-line rounded-pill text-dim-100 font-bold disabled:opacity-50">{refreshing ? '다시 연결 중…' : '데이터 새로고침'}</button></div>
           </div>
+        )}
+        {/*  ★ 4.34 — 항차 홈 | 자료 센터 두 칸. 홈과 센터 두 화면 위에만 붙는다(항차 화면에서는 안 보인다). */}
+        {(route.name === 'home' || route.name === 'data') && voyagesLoaded && (
+          <div className="max-w-3xl mx-auto px-3 pt-2 flex gap-2" data-dc-tabs="1" role="group" aria-label="화면">
+            <button data-dc-tab="home" aria-pressed={route.name === 'home'} onClick={() => navigate('home')}
+              className={`flex-1 py-2 rounded-pill font-bold text-sm border ${route.name === 'home' ? 'bg-sky-700 border-sky-500 text-white' : 'bg-ink-800 border-line text-dim-300'}`}>항차 홈</button>
+            <button data-dc-tab="data" aria-pressed={route.name === 'data'} onClick={() => navigate('data')}
+              className={`flex-1 py-2 rounded-pill font-bold text-sm border ${route.name === 'data' ? 'bg-sky-700 border-sky-500 text-white' : 'bg-ink-800 border-line text-dim-300'}`}>자료 센터</button>
+          </div>
+        )}
+        {route.name === 'data' && voyagesLoaded && (
+          <DataCenterPage voyages={visibleVoyages}
+            onDo={(action, voyageKey, mode) => { setPendingDo({ action, voyageKey, mode }); navigate({ voyageKey, mode }); }} />
         )}
         {route.name === 'home' && voyagesLoaded && (
           <HomePage

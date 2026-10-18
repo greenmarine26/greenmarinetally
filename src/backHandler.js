@@ -19,6 +19,7 @@ export function parseHash(h) {
   if (s.startsWith('#/health')) return { name: 'health' };
   if (s.startsWith('#/food')) return { name: 'food' };
   if (s.startsWith('#/aux')) return { name: 'aux' };
+  if (s.startsWith('#/data')) return { name: 'data' };   // 4.34: 자료 센터
   return { name: 'home' };
 }
 
@@ -41,6 +42,16 @@ export function useBackHandler(onBack, enabled = true) {
       window.removeEventListener('popstate', handler);
     };
   }, [enabled, onBack]);
+}
+
+// 4.34: 자료 센터가 «이 선박·이 모드로 이 일을 해라» 를 항차 화면에 넘기는 한 칸. 항차 화면이 마운트하며 한 번 꺼내 쓴다(해시에 싣지 않는다 — 새로고침하면 사라져야 한다).
+let _pendingDo = null;
+export function setPendingDo(obj) { _pendingDo = obj && obj.action ? obj : null; }
+export function takePendingDo(voyageKey) {
+  const d = _pendingDo;
+  if (!d || (voyageKey && d.voyageKey && d.voyageKey !== voyageKey)) return null;
+  _pendingDo = null;
+  return d;
 }
 
 // 4.25 2차(모의 확인 ④): 폰 홈의 배 전체화면 시트가 열려 있는 동안 홈 뒤로가기 가드(App B-6)가 «앱 종료?» 대신 시트를 닫게 하는 자리 — 한 벌.

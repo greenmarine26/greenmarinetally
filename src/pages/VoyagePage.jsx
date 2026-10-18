@@ -81,6 +81,8 @@ import { fbGetPendingDamage, fbPromotePendingDamage } from '../firebase.js';   /
 import { fbSubscribeVoyagePhotos } from '../firebase.js';   // 3.61: 사진 본체는 photos/{항차} 에서 따로
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
+import { takePendingDo } from '../backHandler.js';
+import { splitDroppedFiles, describeSplit } from '../dropRoute.js';   // 4.34: 등록 한 칸 — 놓은 파일을 세 칸으로 나눔   // 4.34: 자료 센터가 넘긴 «바로 할 일»
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';
 import { shipOpMapper, opFromListFileName } from '../data/tallyFormats.js';   // 3.60-21: 파일 이름 선사
@@ -124,6 +126,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [workStyle, setWorkStyle] = useState('classic');
   const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과 접이 메뉴(표시 전용) — 4.00: 업로드는 독으로 꺼냈다
   const [xrayPrintNow, setXrayPrintNow] = useState(false);   // 4.33: 출력센터 «X-RAY 리스트» — 숨긴 X-RAY 탭이 출력 단추를 한 번 눌러 준다
+  //  ★ 4.34 — 자료 센터가 «이 선박·모드로 이 일을 해라» 를 넘기면 항차 화면이 열리자마자 그 일을 한다(허브 메뉴·탭 찾기 건너뜀). 끝나면 자료 센터로 돌아간다.
+  const [hubAuto, setHubAuto] = useState(null);   // 'inspection'|'cargo'|'detail' — PrintHubModal autoAction
+  const [dcBack, setDcBack] = useState(false);    // 자료 센터에서 바로 열었는가 — 닫으면 자료 센터로
   const [showPrintHub, setShowPrintHub] = useState(false);   // 4.00: 출력 센터(독의 「출력」 단추 · 베이 탭 「출력」 단추 · 한 곳)
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 (넓은 화면 = 우측 고정 칼럼 / 폰 = 바텀시트)
   const isWide = useIsWide();   // 2.18: **어디에 그릴지**를 JS 로 정한다 — 인스턴스는 하나(구독 중복 방지)
@@ -172,6 +177,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     } catch (e) {}
     setPlanOv({ what, bay: bay == null ? null : bay });
   }, []);
+  useEffect(() => {
+    const d = takePendingDo(voyageKey);
+    if (!d) return;
+    setDcBack(true);
+    if (d.action === 'inspection' || d.action === 'cargo' || d.action === 'detail') { setHubAuto(d.action); setShowPrintHub(true); }
+    else if (d.action === 'xray') setXrayPrintNow(true);
+    else if (d.action === 'reg') setTab('data');
+    else if (d.action === 'eseal') setTab('list');
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  const _backToCenter = () => { if (dcBack) { try { window.location.hash = '#/data'; } catch (e) { /* 주소 못 바꾸면 이 화면에 남는다 */ } } };
   /* 홈에서 물은 경우 — App 이 mirPlan 을 넘긴다. 마운트하자마자 그 플랜을 덮는다. */
   useEffect(() => {
     if (!mirPlan) return;
@@ -1715,14 +1730,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {showPrintHub && (
         <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode} isLolo={isLoloShip} inspector={inspector || ''} viewDeckPlan={_deckPlanEff}
           onXrayPrint={() => setXrayPrintNow(true)} xrayPrintOk={mode === 'discharge'}
-          onClose={() => setShowPrintHub(false)} />
+          autoAction={hubAuto}
+          onClose={() => { setShowPrintHub(false); setHubAuto(null); _backToCenter(); }} />
       )}
       {/* 4.33 — 출력센터 «X-RAY 리스트» 의 실체: X-RAY 탭을 보이지 않게 올려 [출력] 을 한 번 누르고 내린다(제출용·인계용 머리·봉인자 판정을 둘째 벌로 만들지 않는다). */}
       {xrayPrintNow && mode === 'discharge' && (
         <div style={{ display: 'none' }} aria-hidden="true">
           <XrayTab voyage={voyage} voyageKey={voyageKey} mode={mode} containers={containers}
                    inspector={inspector} xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap} portMisData={portMisData}
-                   autoPrint onPrinted={() => setXrayPrintNow(false)}/>
+                   autoPrint onPrinted={() => { setXrayPrintNow(false); _backToCenter(); }}/>
         </div>
       )}
 
@@ -3530,6 +3546,44 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
 }
 
 // === 자료 탭 ===
+function OneDropBox({ mode, onEdi, onList, onXray }) {
+  const [over, setOver] = useState(false);
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const inRef = useRef(null);
+  const go = async (fileList) => {
+    const sp = splitDroppedFiles(fileList, mode);
+    setRows(describeSplit(sp));
+    if (!sp.edi.length && !sp.list.length && !sp.xray.length) return;
+    setBusy(true);
+    try {
+      //  EDI → 리스트 → X-RAY 차례로 — EDI 가 먼저 있어야 리스트가 컨에 붙는다. 각 핸들러가 자기 확인 창·상태줄을 그대로 쓴다.
+      if (sp.edi.length) await onEdi(sp.edi);
+      if (sp.list.length) await onList(sp.list);
+      if (sp.xray.length) await onXray(sp.xray);
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="mb-3" data-onedrop="1">
+      <label className={`drop-zone ${over ? 'is-over' : ''}`} style={over ? { borderColor: '#38bdf8' } : undefined}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); go(e.dataTransfer && e.dataTransfer.files); }}>
+        <input ref={inRef} type="file" multiple accept="*/*" className="hidden"
+          onChange={(e) => { go(e.target.files); try { e.target.value = ''; } catch (err) { /* 같은 파일을 다시 고를 수 있게 비우기만 한다 */ } }}/>
+        <span style={{ fontSize: 26 }}>🗂️</span>
+        <span>{busy ? '올리는 중…' : '여기에 한꺼번에 놓으세요 (EDI · 세관 리스트 · X-RAY · 사진)'}</span>
+      </label>
+      <div className="text-2xs text-dim-400 mt-1">파일 이름으로 EDI·리스트·X-RAY 칸에 나눠 올립니다. 못 읽는 파일은 건너뛰고 이유를 보여 드립니다.</div>
+      {rows.length > 0 && (
+        <div className="mt-1 text-2xs text-dim-200 space-y-0.5" data-onedrop-result="1">
+          {rows.map((r, i) => <div key={i}>{r}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   const [status, setStatus] = useState('');
   // M3.5.4-fix2: 업로드 충돌 검토 모달
@@ -4609,6 +4663,10 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         onList={handleListUpload}
         onXray={handleXrayUpload}
       />
+
+      {/*  ★ 4.34 — 등록 한 칸. 검수사 «등록 한 칸 드롭» — 종류를 몰라도 한꺼번에 놓으면 파일 이름으로 EDI·리스트·X-RAY 칸에 나눠 **아래 세 칸이 쓰는 같은 핸들러**로 올린다(둘째 업로드 길을 만들지 않는다).
+          이름으로 못 읽는 파일은 건너뛰고 이유를 보여 준다. 조회만(쓰기 금지)이면 핸들러가 막는다. */}
+      <OneDropBox mode={mode} onEdi={handleEdiUpload} onList={handleListUpload} onXray={handleXrayUpload}/>
 
       {/* 컴 화면은 세 칸을 나란히(폭이 넓다), 폰은 위에서 아래로 한 칸씩 — 배치가 다르다 */}
       <div className={`grid grid-cols-1 gap-3 items-start ${mode === 'discharge' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>

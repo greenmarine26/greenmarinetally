@@ -2,7 +2,7 @@
 // 양하/선적 탭 × 항목별 (검수 리스트 / 카고플랜 / 베이 상세) 출력
 //   - 평택분만 (양하 mode = 평택 양하 대상, 선적 mode = 평택 선적 대상)
 //   - 컨테이너는 이미 mode별로 분리되어 voyage.discharge / voyage.loading에 있음
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
@@ -19,7 +19,7 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 import { _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
-export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false }) {   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
+export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false, autoAction = null }) {   // 4.34: autoAction = 자료 센터에서 고른 할 일('inspection'|'cargo'|'detail') — 허브 메뉴를 건너뛰고 바로 연다   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
   const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
   const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
@@ -27,7 +27,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
 
   const chiefView = (() => { try { return canOpenChief(inspector, isOwnerName(inspector)) || isAdminUser(inspector); } catch (e) { return false; } })();   // 4.31: 수석 자료(VGM·작업 보고서·특수화물 별첨)를 볼 수 있는가
   const [mode, setMode] = useState(initialMode === 'loading' ? 'loading' : 'discharge');  // 'discharge' | 'loading'
-  const [printSub, setPrintSub] = useState(null);  // 'cargo' | 'detail' | null
+  const [printSub, setPrintSub] = useState(autoAction === 'cargo' ? 'cargo-v2' : autoAction === 'detail' ? 'detail' : null);  // 'cargo' | 'detail' | null  (4.34: 자료 센터에서 바로 열면 처음부터 그 화면)
+  //  4.34: 바로 연 화면을 닫으면 허브 메뉴가 아니라 부른 곳(자료 센터)으로 돌아간다.
+  const closeSub = () => { if (autoAction) onClose(); else setPrintSub(null); };
 
   // M5.30-fix: 카고플랜/베이상세는 전체 컨테이너 (평택+통과), 검수리스트는 평택만
   //   원인: 카고플랜은 선박 적부도라 모든 화물 표시 필요. 평택 필터 X
@@ -326,6 +328,15 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList, { appendix: chiefView });   // 4.31: 특수화물 별첨은 수석에게만
   };
 
+  //  ★ 4.34 — 자료 센터에서 «검수 리스트» 를 고르면 허브 메뉴 없이 곧바로 인쇄 창을 열고 허브를 닫는다(한 번만).
+  const _autoDone = useRef(false);
+  useEffect(() => {
+    if (autoAction !== 'inspection' || _autoDone.current) return;
+    _autoDone.current = true;
+    handlePrintInspection();
+    onClose();
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
   // 서브 모달 (카고플랜 V2/베이 상세) 표시 중이면 그것만
   // M6.93.11: V1 카고플랜 폐기 (사용자 결정). 'cargo' subroute → V2로 redirect.
   if (printSub === 'cargo') {
@@ -359,7 +370,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
         ? () => exportCheckerPlanXlsx({ plan: rzDeckPlan, vsl: _vslFull, voy: voyageInfo.voy_l || voyageInfo.voy || (voyageKey || '').split('_').pop() || '', date: _date, inspector: inspector || '' })
         : () => exportCarrierPlanXlsx({ plan: rzDeckPlan, containers: allContainers, xrayMap, vsl: _vslFull, date: _date, fills: SPECIAL_FILL });
       return (
-        <ErrorBoundary name="덱플랜 출력" onClose={() => setPrintSub(null)}>
+        <ErrorBoundary name="덱플랜 출력" onClose={closeSub}>
           <PrintableDeckPlan
             plan={rzDeckPlan}
             containers={allContainers}
@@ -369,13 +380,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
             mode={mode}
             inspector={inspector}
             onExcel={_onExcel}
-            onClose={() => setPrintSub(null)}
+            onClose={closeSub}
           />
         </ErrorBoundary>
       );
     }
     return (
-      <ErrorBoundary name="카고플랜" onClose={() => setPrintSub(null)}>
+      <ErrorBoundary name="카고플랜" onClose={closeSub}>
         <PrintableCargoPlanV2
           containers={printContainers}
           legendContainers={ptkAll}
@@ -387,14 +398,14 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
           shiftingMap={shiftingMapDraw}
           shiftStatus={shiftEvid.label}
           inspector={inspector}   // 4.32: 머리줄 «# ___ , 이름»
-          onClose={() => setPrintSub(null)}
+          onClose={closeSub}
         />
       </ErrorBoundary>
     );
   }
   if (printSub === 'detail') {
     return (
-      <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintSub(null)}>
+      <ErrorBoundary name="베이 상세 인쇄" onClose={closeSub}>
         {/*  3.46: 컨에 이미 _xray·_xraySealNo 가 얹혀 있지만(위 merge), 지도도 같이 넘긴다 —
              붙이는 자리를 한 곳(PrintableBayDetail)으로 모으기 위해서다. */}
         <PrintableBayDetail
@@ -408,7 +419,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
           shipName={shipName}
           globalRowRange={globalRowRange}
           globalTiers={globalTiers}
-          onClose={() => setPrintSub(null)}
+          onClose={closeSub}
         />
       </ErrorBoundary>
     );

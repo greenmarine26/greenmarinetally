@@ -570,6 +570,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 출력센터 X-RAY 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_XH"; exit 1
   fi
+  # 4.34: 자료 센터 화면·출력 허브 바로 열기·주소·대기 저장소.
+  SMOKE_DC=$(mktemp /dev/shm/hometmp/_smokedc_XXXXXX.js)
+  if npx esbuild tools/smoke_datacenter434.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+       --external:fs --external:path --external:url \
+       --outfile="$SMOKE_DC" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_datacenter434.cjs "$SMOKE_DC" || { echo "✗ 자료 센터 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_DC"; exit 1; }
+    rm -f "$SMOKE_DC"
+  else
+    echo "✗ 자료 센터 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_DC"; exit 1
+  fi
   # 4.33-01: 카고플랜 데크만 있는 베이 — MCAT 실사전·양하 321대로 그려 데크 몫·단 표기 칸을 잰다.
   SMOKE_DO=$(mktemp /dev/shm/hometmp/_smokedo_XXXXXX.js)
   if npx esbuild tools/smoke_deckonly434.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \

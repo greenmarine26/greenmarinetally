@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.33-02';
-const NOTE = '4.33-02 수동 보고에 양하완료와 선적완료 단추가 생겼습니다. 전 근무자가 시작보고를 안 했어도 한 번에 완료 보고를 보낼 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.34';
+const NOTE = '4.34 자료 센터가 생겼습니다. 할 일을 먼저 고르고 선박과 양하 선적을 누르면 바로 열리고 등록은 한 칸에 한꺼번에 놓으면 됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
