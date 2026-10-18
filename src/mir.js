@@ -2060,6 +2060,22 @@ export function answerOneRaw(query, ctx) {
     } catch (e) { console.warn('[미르] 야드 답 실패:', e); return '야드 자료를 읽다가 막혔어요 — 잠시 후 다시 물어봐 주세요.'; }
   }
 
+  //  ②-5 작업 멈춤 알림 — «미르야 강풍대기 상태야 쉬고 있어» (4.34-01). 질문이 아니라 현장 상황을 알려 주는 말이다.
+  //    종전엔 뒤에 붙은 말을 못 읽어 «뭐 확인해 드릴까요?» 로 되물었다. 앱 보고(workPauseOf)가 있으면 그대로 확인해 주고, 없으면 기록하는 길을 알려 준다(미르는 기록을 쓰지 않는다).
+  if (p.mirCalled && !p.asking && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !hasAnyCondition(p) && !/[?？]|왜|몇|언제|얼마|어디|누구/.test(q)) {
+    const _rs = (q.match(/강풍|안개|우천|장비\s*고장|야드\s*혼잡|점심|식사|교대/) || [])[0];
+    const _stop = /대기|쉬고|쉬는|멈|중단|스톱|스탑|못\s*(해|하)|작업\s*안/.test(q);
+    if (_rs && _stop) {
+      _via('workStop');
+      const now = c._now || Date.now();
+      const wp = v ? workPauseOf(v, now) : null;
+      const hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+      const rsName = _rs.replace(/\s+/g, '');
+      if (wp) return `알겠어요 🐱 앱에도 ${wp.equip ? wp.equip + ' ' : ''}${wp.ko} ${hm(wp.ts)} 중단${wp.reason ? `(사유 ${wp.reason})` : ''}으로 기록돼 있어요.`;
+      return `알겠어요, ${rsName}로 작업이 멈춘 걸로 들었어요 🐱 다만 앱에는 아직 중단 보고가 없어요.${hasShip ? '' : ' 배를 열고'} 작업 보고 → 작업 중단에서 사유를 고르면 기록돼요.`;
+    }
+  }
+
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.
   const _bareCall = p.mirCalled && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking;
   if (p.mirHello || _bareCall) {
