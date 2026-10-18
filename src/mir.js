@@ -244,11 +244,13 @@ export function mirTone(s) {
   return t;
 }
 
+const MIR_SURNAMES = '김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부황가갈강구금나독동라마만목묵반배변복빈상서석선소손승시양어엄여오옥왕용원은음이인장전제조좌주지진채천초최추탁태판편표하한함허현호홍화황'+'.';
 // ── 호칭 — 로그인 이름에서 성을 떼고 «성호 아저씨»처럼(검수사 지시). 이름 없으면 «검수사님».
 function mirCall(kind) {
   const full = (_storage.get(SK.activeInspector) || '').trim();
   if (!full) return '검수사님';
-  const given = full.length >= 3 ? full.slice(-2) : full;
+  //  4.35-01: 첫 글자가 실제 성씨일 때만 성을 뗀다 — «클로드» 가 «로드 아저씨» 로 불리던 것(라이브 실측 2026-10-19). 성씨 밖 이름은 통째로 부른다.
+  const given = (full.length >= 3 && MIR_SURNAMES.includes(full[0])) ? full.slice(-2) : full;
   //  ★ 3.69-05 — 꼬리도 **씨앗**으로 고른다. 종전엔 Math.random 이라 한 사람을 부를 때마다 «아저씨»·«형님» 이 오갔고,
   //    그 바람에 같은 질문의 답 길이가 흔들려 낭독이 처음부터 다시 읽혔다(2.65-02 가 막으려던 바로 그것 — 검수원을
   //    등록한 실앱 조건에서만 나서 여태 안 잡혔다. 기준본 3.69-04 에도 있던 병이다).
@@ -908,6 +910,7 @@ export function subscribeMirCtx(f) { _subs.add(f); return () => _subs.delete(f);
     판정은 utils.isWorkingNow 한 벌(수석 보드·홈·로그인 화면이 쓰는 그것)이다. 한 척이면 그 배, 여럿이면
     `ambiguous`(이름들)로 돌려 부르는 쪽이 «어느 배?» 하고 되묻는다 — 아무 배나 고르지 않는다. */
 export const WORKING_SHIP_RE = /작업\s*중인?\s*(선박|배)|지금\s*(하는|작업하는|일하는|작업\s*중인)\s*(선박|배)|(우리|이|지금|그)\s*(배|선박)/;
+const WORKING_SHIP_ASK_RE = /몇\s*시.{0,4}끝|언제.{0,3}끝|끝날\s*(것|거|까)|얼마나\s*남|몇\s*대\s*남/;
 export function workingShipCtx(voyages) {
   const now = Date.now();
   const list = Object.entries(voyages || {}).filter(([, v]) => v && v.info && isWorkingNow(v, now));
@@ -926,7 +929,8 @@ export function pickShipCtx(query, voyages, ctxVoyageKey = null) {
     }
     //  이름도 열린 항차도 없는데 «작업중인 배» 라고 불렀으면 지금 일하는 배(3.41-01). 여럿이면 여기서는 고르지 않는다 —
     //  떠 있는 미르가 workingShipCtx 로 «어느 배?» 하고 되묻는다.
-    if (WORKING_SHIP_RE.test(String(query || ''))) { const w = workingShipCtx(voyages); return (w && w.key) ? w : null; }
+    //  4.35-01: 배 이름 없이 «몇 시에 끝나»·«얼마나 남았어»·«브리핑» 을 물었고 지금 일하는 배가 **한 척뿐**이면 그 배로 답한다(여럿이면 종전대로 되묻는다).
+    if (WORKING_SHIP_RE.test(String(query || '')) || WORKING_SHIP_ASK_RE.test(String(query || ''))) { const w = workingShipCtx(voyages); return (w && w.key) ? w : null; }
     return null;
   };
   if (Q.length < 3) return _fallback();
@@ -2872,7 +2876,7 @@ export function buildDataPack(q, ctx) {
 export async function dataAnswer(q, ctx, cfg) {
   const pack = buildDataPack(q, ctx);
   const packTxt = JSON.stringify(pack);
-  const prompt = `너는 평택항 검수앱의 도우미 «미르»다. 아래 자료만 보고 검수원의 질문에 한국어로 3문장 이내로 답한다. «계산해둔것»에 있으면 그것을 그대로 쓰고 직접 세지 않는다. 목록을 말할 땐 5개까지만. 자료의 항목 이름(«계산해둔것» 같은 말)은 입에 올리지 않는다. 자료에 없는 것은 «자료에 없어요»라고 말하고 지어내지 않는다. 숫자·번호는 자료 그대로 쓴다. 자료 속 목록(이름이 «_목록»·«5»·«10»으로 끝나는 것)은 앞쪽 일부만 담은 것이니 목록의 길이를 대수로 말하지 않는다 — 대수는 «총»이나 «계산해둔것»에 적힌 숫자만 쓰고 없으면 «정확한 대수는 자료에 없어요»라고 한다. 존댓말(~예요).
+  const prompt = `너는 평택항 검수앱의 도우미 «미르»다. 아래 자료만 보고 검수원의 질문에 한국어로 3문장 이내로 답한다. «계산해둔것»에 있으면 그것을 그대로 쓰고 직접 세지 않는다. 목록을 말할 땐 5개까지만. 자료의 항목 이름(«계산해둔것» 같은 말)은 입에 올리지 않는다. 자료에 없는 것은 «자료에 없어요»라고 말하고 지어내지 않는다. 숫자·번호는 자료 그대로 쓴다. 자료 속 목록(이름이 «_목록»·«5»·«10»으로 끝나는 것)은 앞쪽 일부만 담은 것이니 목록의 길이를 대수로 말하지 않는다 — 대수는 «총»이나 «계산해둔것»에 적힌 숫자만 쓰고 없으면 «정확한 대수는 자료에 없어요»라고 한다. 존댓말(~예요). 열린 항차가 없어 자료가 비어 있으면 «자료가 비었다»고 하지 말고 «배 이름을 붙여 물어봐 주세요(예 OBWH 몇 시에 끝나)»라고 안내한다.
 자료(JSON): ${packTxt}
 질문: "${q}"`;
   const r = await _gem(cfg, prompt, 220, false);
@@ -2988,6 +2992,8 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     _logCall({ kind: 'data', q: String(q).slice(0, 80), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, prov: da.prov || '', packChars: da.packChars, who, app: ctx.app || '' });
     const empty = !da.text || /자료에 없어요|자료에는 없|확실한 답을 못/.test(String(da.text));
     if (weakByWordsOnly && (da.rejected || empty)) return confirmed();
+    //  4.35-01: 규칙이 사용법 안내(howTo)를 냈는데 모델이 «자료에 없어요» 로 덮지 않는다(라이브 실측 «사용법 알려줘»).
+    if (opts.weakText && opts.weakVia === 'howTo' && !da.rejected && empty && !WEAK_TEXT.test(String(opts.weakText))) return confirmed();
     if (da.text && !da.rejected) { out.text = da.text + ' (AI)'; out.via = 'model'; rec.model = out.text; }
     else if (da.rejected) { out.text = '자료로는 확실한 답을 못 만들었어요 — 화면에서 확인해 주세요. (AI)'; out.via = 'model'; out.rejected = da.rejected; }   // 지어낸 숫자 — 잡아채는 길의 엉뚱한 답으로 돌아가느니 솔직하게
     _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: opts.weakText ? 'weak→model' : 'null→model', rejected: !!da.rejected });
