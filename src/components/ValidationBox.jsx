@@ -167,7 +167,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     return {
       ediTotal: (ediContainers || []).length,
       ptkTotal: ptkInEdi.length + (fill ? fill.slots : 0),                                  // 3.26: 부킹 자리도 EDI 평택 대상이다(ptkInEdi 는 자리를 뺀 뒤라 두 번 안 센다)
-      listTotal: (records || []).length - thruInList.length,   // 2.94: 통과화물은 평택 선적 리스트가 아니다
+      listTotal: (records || []).length - thruInList.length - shiftInList.length,   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
       matched: ptkInEdi.filter(c => recCns.has(c.cn)).length + (fill ? Math.min(fill.real, fill.slots) : 0),   // 3.26: 자리를 채운 실번호 = 매칭
       bookingFill: fill,
       missingCount: missingInList.length,
@@ -226,8 +226,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           상세 목록은 리스트 하단 ◆ 박스 + 인쇄 검수리스트 [별첨2]. */}
       {shiftCount > 0 && (
         <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-xxs text-blue-200 font-bold">
-          총 작업 {v.listTotal + shiftCount - v.shiftInListCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}{v.shiftInListCount > 0 ? ` − 겹침 ${v.shiftInListCount}` : ''}
-          <span className="ml-1 font-normal text-blue-300/70">{v.shiftInListCount > 0 ? `(시프팅 ${v.shiftInListCount}대가 선사 양하 리스트에도 있어 한 번만 셉니다)` : '(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])'}</span>
+          총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}
+          <span className="ml-1 font-normal text-blue-300/70">{v.shiftInListCount > 0 ? `(시프팅 ${v.shiftInListCount}대는 선사 양하 리스트에도 있어 리스트에서 빼고 시프팅으로 한 번만 셉니다)` : '(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])'}</span>
         </div>
       )}
 
