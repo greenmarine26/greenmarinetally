@@ -586,6 +586,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
        --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
        --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_EQ" --log-level=error; then
     node tools/smoke_equipone.cjs "$SMOKE_EQ" || { echo "✗ 시작보고 호기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_EQ"; exit 1; }
+    node tools/smoke_manualdone4332.cjs "$SMOKE_EQ" || { echo "✗ 수동 보고 양하완료·선적완료 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_EQ"; exit 1; }   # 4.33-02
     rm -f "$SMOKE_EQ"
   else
     echo "✗ 시작보고 호기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_EQ"; exit 1

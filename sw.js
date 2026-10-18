@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.33-01';
-const NOTE = '4.33-01 데크만 있는 베이 셀 높이를 단 표기에 맞췄습니다. 카고플랜에서 데크만 있는 베이도 셀이 다른 베이와 같은 높이로 서고 단 표기가 셀 줄마다 맞습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.33-02';
+const NOTE = '4.33-02 수동 보고에 양하완료와 선적완료 단추가 생겼습니다. 전 근무자가 시작보고를 안 했어도 한 번에 완료 보고를 보낼 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

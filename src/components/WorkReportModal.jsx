@@ -760,7 +760,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             {/* 액션 선택 */}
             <div>
               <div className="text-xs font-bold text-dim-200 mb-1">보고 종류</div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <button onClick={() => setManualAction('pause')}
                   className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'pause' ? 'bg-amber-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   <Pause className="w-3.5 h-3.5"/> 중단
@@ -769,9 +769,16 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                   className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'resume' ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   <Play className="w-3.5 h-3.5"/> 재개
                 </button>
-                <button onClick={() => setManualAction('done')}
-                  className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'done' ? 'bg-blue-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
-                  <CheckCircle2 className="w-3.5 h-3.5"/> 완료
+                {/*  ★ 4.33-02 — 검수사 2026-10-18 «이어서 작업을 하면 수동 작업보고에서 양하완료 선적완료가 없습니다» · «전 근무자가 시작보고를 안해서 입니다».
+                    전 근무자가 시작보고를 안 했으면 활성 작업 기록이 없어 메인 화면에 «완료» 단추가 안 나온다 — 그때 시작 보고를 억지로 눌렀다 끝내야 했다.
+                    ⇒ 작업 종류를 따로 고르지 않아도 «양하완료» «선적완료» 한 번으로 그 종류의 완료 보고가 선택된다(기존 완료 보고 그대로, 시작 기록 없으면 수동 완료 표시). */}
+                <button onClick={() => { setManualMode('discharge'); setManualAction('done'); }}
+                  className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'done' && manualMode === 'discharge' ? 'bg-blue-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5"/> 양하완료
+                </button>
+                <button onClick={() => { setManualMode('loading'); setManualAction('done'); }}
+                  className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'done' && manualMode === 'loading' ? 'bg-amber-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5"/> 선적완료
                 </button>
               </div>
             </div>
@@ -828,7 +835,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               <Send className="w-4 h-4"/>
               {manualAction === 'pause' ? '중단 보고' :
                manualAction === 'resume' ? '재개 보고' :
-               manualAction === 'done' ? '완료 보고' : '보고 종류 선택'}
+               manualAction === 'done' ? `${manualMode === 'discharge' ? '양하' : '선적'} 완료 보고` : '보고 종류 선택'}
             </button>
           </div>
         )}
