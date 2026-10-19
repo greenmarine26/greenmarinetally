@@ -2743,7 +2743,7 @@ export async function getMirConfig(force = false) {
       const j = (r.ok && r.j && typeof r.j === 'object') ? r.j : {};
       let key = String(j.aiKey || '').trim();
       if (!key) { try { key = localStorage.getItem('master_gemini_api_key_v1') || ''; } catch (e) { key = ''; } }   // 공용 키가 비어 있으면 개인 키(종전 길)
-      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim() };
+      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), claudeOpusModel: String(j.claudeOpusModel || '').trim(), visionProvider: String(j.visionProvider || '').trim(), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim() };
       _cfgAt = Date.now();
     } catch (e) {
       console.warn('[미르 모델] mir_config 를 못 읽었어요 — 이번엔 모델 없이 갑니다:', e && e.message);
@@ -2917,6 +2917,36 @@ export function buildDataPack(q, ctx) {
   const cols = '컨번호|양하선적|규격|풀엠티|POL|POD|자리(베이-로우-티어)|중량kg|리퍼온도|위험물|UN|실번호|전자봉인|엑스레이|완료|규격초과';
   return { summary, 계산해둔것: derived, 컨목록_열: cols, 질문에맞는컨: [...hit, ...rel].map(line) };
 }
+/* ★ 4.36 생활회화 층 — 검수사 2026-10-19 «생활회화는 클로드 SONNET 버전이라 더 많은 것을 할 수 있을 것입니다. 기존에 하던 말들이 아닌 일반 생활회화를 할 수 있어야 할 것입니다.»
+   규칙이 못 받은 말 중 일(자료) 질문이 아닌 것을 소네트가 자연스럽게 받는다 — 안부·농담·위로·잡학·일반 상식. 일 자료(대수·시각·컨번호·씰)는 이 층이 모른다:
+   일 질문이면 «배 이름을 붙여 물어봐 달라»고만 하고 숫자를 지어내지 않는다(아래 문지기가 컨번호·«N대»가 든 답을 버린다). 앞 대화 세 턴을 같이 보내 이어 말한다.
+   표기는 «생활회화» 로만 쓴다(검수사 지시). */
+const MIR_WORKISH_RE = /(선박|컨테이너|컨\s|컨$|베이|홀드|양하|선적|씰|실번호|리퍼|호기|갱|도선|입항|출항|접안|엑스레이|x-?ray|위험물|플랜|완료|야드|대수|몇\s*대|몇\s*개|진행|남았|끝나|끝날|어디|위치|무게|중량|온도|몇\s*시|언제|시각|해치|크레인|마감|텔리|속도|브리핑|시프팅|트윈|수량|합계|현황|가장|제일|뭐\s*있|몇\s*(?:분|시간|톤|번|척)|\d{3,})/i;
+export const isChatCandidate = (q, win) => !MIR_WORKISH_RE.test(String(q || ''));
+export async function chatAnswer(q, ctx, cfg) {
+  let hist = '';
+  try {
+    const t = _thOf(ctx || {}, Date.now());
+    if (t) hist = t.th.turns.slice(-3).map((x) => `검수사: ${String(x.q || '').slice(0, 120)}\n미르: ${String(x.answer || '').slice(0, 160)}`).join('\n');
+  } catch (e) { hist = ''; }
+  const prompt = `너는 평택항 컨테이너 검수앱의 도우미 «미르»다. 검수사의 고양이 이름에서 왔고, 부두에서 같이 일하는 다정한 고양이 후배처럼 말한다.
+말투: 해요체, 한두 문장(길어도 세 문장), 이모지는 😺 정도로 가끔만. 대화를 받아 주고 자연스럽게 이어 간다.
+할 일: 안부·농담·위로·응원·취미·음식·잡학·일반 상식 질문에 자연스럽게 답한다. 같은 말을 되풀이하지 않는다.
+규칙:
+1. 이 앱의 일 자료(컨번호·대수·시각·베이·씰·진행)는 네가 모른다. 일 자료를 묻는 말이면 «배 이름을 붙여서 물어봐 주세요» 라고만 안내하고 숫자를 지어내지 않는다.
+2. 실시간 정보(날씨·뉴스·주가·경기 결과)와 네가 확실히 모르는 것은 모른다고 말한다. 날씨는 «미르야 날씨 알려줘» 라고 하면 앱이 안내한다고 알려 준다.
+3. 의료·법률·투자는 일반 정보만 말하고 전문가 확인을 권한다.
+4. «AI입니다» 같은 꼬리 말은 붙이지 않는다. 위험하거나 해로운 부탁은 정중히 거절한다.
+5. 힘들다·죽고 싶다 같은 위기 신호면 가볍게 넘기지 말고 곁에 있다고 따뜻하게 말하고, 가까운 사람이나 자살예방상담전화 109에 바로 연락하도록 권한다.
+${hist ? `지금까지 대화:\n${hist}\n` : ''}검수사: "${String(q).slice(0, 300)}"
+미르:`;
+  const r = await _gem(cfg, prompt, 360, false);
+  let text = String(r.text || '').trim().replace(/^미르\s*[:：]\s*/, '');
+  let rejected = null;
+  if (text && (/[A-Z]{4}\d{7}/.test(text) || /\d+\s*(대|무브|척|개|시간|분|톤|%|퍼센트)(?![가-힣])/.test(text) || /\d{1,2}:\d{2}/.test(text))) { rejected = text; text = ''; }   // 일 자료를 지어낸 답은 버린다
+  if (text.length > 420) text = text.slice(0, 420).replace(/[^.!?요다 ]*$/, '').trim() || text.slice(0, 420);
+  return { text, rejected, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, prov: r.prov };
+}
 export async function dataAnswer(q, ctx, cfg) {
   const pack = buildDataPack(q, ctx);
   const packTxt = JSON.stringify(pack);
@@ -3025,7 +3055,21 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   const confirmed = () => { out.text = opts.weakText; out.via = 'confirmed'; return out; };
   if (weakByWordsOnly && identity && rec.translated && !rec.canonical) { /* 번역도 «없다»고 한 말 — 자료 답을 한 번 본다 */ }
   else if (weakByWordsOnly) return confirmed();
-  //  잡담은 자료 답으로 가지 않는다
+  //  ★ 4.36 생활회화 층 — 규칙이 못 받은 일 아닌 말은 소네트가 이어서 말한다(자료 답으로 가지 않는다). 막히면 종전 길(규칙 답)로 돌아간다.
+  if (!weakByWordsOnly && (rec.window === '잡담' || rec.window === '생활회화' || (rec.translated && !rec.canonical && !rec.window)) && isChatCandidate(q, rec.window)) {
+    if (!cfg) cfg = await getMirConfig();
+    if (cfg.claudeKey || cfg.aiKey) {
+      try {
+        const ca = await chatAnswer(q, ctx, cfg);
+        _logCall({ kind: 'chat', q: String(q).slice(0, 80), ok: !!ca.text, rejected: !!ca.rejected, tokIn: ca.tokIn, tokOut: ca.tokOut, ms: ca.ms, prov: ca.prov || '', who, app: ctx.app || '' });
+        if (ca.text) { _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'chat' }); out.text = ca.text; out.via = 'chat'; out.reason = 'chat'; return out; }
+      } catch (e) {
+        console.warn('[미르 모델] 생활회화 답 실패:', e && e.message);
+        _logCall({ kind: 'chat', q: String(q).slice(0, 80), ok: false, err: String(e && e.message || e).slice(0, 120), who, app: ctx.app || '' });
+      }
+    }
+  }
+  //  생활회화로 못 받은 낱말 말(미르·인사·식사)은 자료 답으로 가지 않는다
   if (rec.window === '잡담' && /미르|힘드|수고|고마|안녕|밥|점심|저녁|아침|커피/.test(q)) { out.reason = 'smalltalk'; return weakByWordsOnly ? confirmed() : out; }
   //  ② 자료 답 — 기억된 것이 있으면 그것(같은 항차·같은 문장), 없으면 모델
   if (rec.model && Date.now() - (rec.at || 0) < 10 * 60 * 1000) { out.text = rec.model; out.via = 'model'; return out; }   // 자료 답은 10분만 기억 — 진행이 바뀌면 다시(재감사)

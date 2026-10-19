@@ -1420,6 +1420,7 @@ fi
     #  3.68: **미르 대화**([mirThread]) — 답 뒤 한 마디·«응/두 번째/아니 ○○/그거»·끝맺음·확인 질문·3분 창·같은 접수 재풀이·칩 전수·다섯 창구 배선. 같은 번들(mirCore.entry).
     node tools/smoke_mirthread.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 대화 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_mirshippick.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 배 고르기 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_mir436.cjs "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 4.36 생활회화·사진 읽기·예상 실오류 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.69: **미르 야드 상황**([mirYard]) — 말귀 다섯 갈래·터미널 판정어·우리 배 몫 대조·자료 나이·두 터미널·콘앱 ctx.yard·대화 칩. 같은 번들.
     node tools/smoke_mirstop434.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 멈춤 알림 연막검사 실패 — 배포 금지"; exit 1; }   # 4.34-01
     node tools/smoke_yard.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 야드 상황 연막검사 실패 — 배포 금지"; exit 1; }

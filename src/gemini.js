@@ -63,7 +63,108 @@ export async function resolveAiKey() {
    `ai_call_log/{YYMMDD}` 한 줄(누가·어느 창구·몇 초·HTTP 코드 — 값이 어디서 새는지 결산의 눈). 응답 처리는 창구마다 다르니
    Response 를 그대로 돌려준다. 시간 초과는 «네트워크 오류: aborted» 가 아니라 이유가 보이는 Error 로 던진다. */
 const FB_URL = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
+/* ★ TallyOne 4.36 — 사진 읽기 클로드 전환. 검수사 2026-10-19 «사진판독은 정밀한 것을 요할 때는 OPUS 버전이 그 외 다른 것은 SONNET 가 할 것입니다.»
+   여섯 창구 중 손글씨 둘(씰 사진 esealPhoto · 기록지 sheetPhoto)은 오퍼스, 인쇄된 표 셋(리스트 사진 listPhoto · 리퍼 사진 reeferPhoto · PORT-MIS 캡처 portMisCapture)은 소네트.
+   PDF 베이(stowagePdf)도 소네트 먼저 — 검수사 «제미나이 사용은 클로드 사용량을 다 쓴 후 넘어 간다». 3만 토큰 JSON 이라 시간 초과(126초)가 나면 제미나이로 넘어간다.
+   부르는 쪽 코드는 그대로다 — 요청 본문(제미나이 모양)을 여기서 클로드 요청으로 바꾸고, 응답을 제미나이 모양(candidates[0].content.parts[0].text · finishReason)으로 돌려준다.
+   클로드가 안 되면(키 없음·한도·과부하·시간 초과·빈 답) 종전 제미나이 길로 간다 — 한도·키 문제(크레딧 소진 포함)는 30분, 과부하·시간 초과는 2분 쉬고, 사진 한 장이 거부된 400 은 쉬지 않는다.
+   스위치 — mir_config/visionProvider 가 'gemini' 면 클로드를 건너뛴다(배포 없이 되돌리기). */
+const CLAUDE_VISION_KINDS = { esealPhoto: 'opus', sheetPhoto: 'opus', listPhoto: 'sonnet', reeferPhoto: 'sonnet', portMisCapture: 'sonnet', stowagePdf: 'sonnet' };
+const DEFAULT_OPUS_MODEL = 'claude-opus-5-5';
+const DEFAULT_SONNET_MODEL = 'claude-sonnet-5-5';
+let _visionClaudeOffUntil = 0;
+function _aiLogLine(kind, status, ms, model) {
+  let who = '';
+  try { who = localStorage.getItem('master_active_inspector_v1') || ''; } catch (e) { who = ''; }
+  const d = new Date();
+  const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  try {
+    fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), kind, who, status, ms, model }) })
+      .catch((e) => console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message));
+  } catch (e) { console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message); }
+}
+/** 제미나이 모양 요청 → 클로드 메시지 요청. 사진은 image 블록, PDF 는 document 블록. */
+export function claudeVisionRequest(body, model, maxTokens) {
+  const parts = (body && body.contents && body.contents[0] && body.contents[0].parts) || [];
+  const content = [];
+  for (const p of parts) {
+    if (p && typeof p.text === 'string') content.push({ type: 'text', text: p.text });
+    const inl = p && (p.inline_data || p.inlineData);
+    if (inl && inl.data) {
+      const mt = inl.mime_type || inl.mimeType || 'image/jpeg';
+      content.push({ type: mt === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mt, data: inl.data } });
+    }
+  }
+  const sys = body && body.systemInstruction && body.systemInstruction.parts && body.systemInstruction.parts.map((x) => x.text || '').join('\n');
+  const wantJson = !!(body && body.generationConfig && body.generationConfig.responseMimeType === 'application/json');
+  const jsonRule = wantJson ? '\n답은 JSON 만 낸다. 설명·머리말·코드 울타리(```)를 쓰지 않는다.' : '';
+  return {
+    model, max_tokens: Math.min(Math.max(Number(maxTokens) || 8192, 1024), 32000),
+    ...(/opus/i.test(String(model)) ? {} : { thinking: { type: 'between_tools' } }),   // 실측 2026-10-19 — 오퍼스는 between_tools 를 400 으로 거부, 소네트만 받는다
+    ...((sys || jsonRule) ? { system: String(sys || '') + jsonRule } : {}),
+    messages: [{ role: 'user', content }],
+  };
+}
+/** 클로드 응답 → 제미나이 모양 JSON. 코드 울타리는 벗긴다. */
+export function claudeVisionToGemini(j) {
+  const text = ((j && Array.isArray(j.content) ? j.content : []).filter((c) => c && c.type === 'text').map((c) => c.text || '').join(' ')).trim()
+    .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const u = (j && j.usage) || {};
+  return { candidates: [{ content: { parts: [{ text }] }, finishReason: (j && j.stop_reason === 'max_tokens') ? 'MAX_TOKENS' : 'STOP' }], usageMetadata: { promptTokenCount: u.input_tokens || 0, candidatesTokenCount: u.output_tokens || 0 } };
+}
+function _visionMediaOk(body) {
+  const parts = (body && body.contents && body.contents[0] && body.contents[0].parts) || [];
+  for (const p of parts) {
+    const inl = p && (p.inline_data || p.inlineData);
+    if (!inl || !inl.data) continue;
+    const mt = inl.mime_type || inl.mimeType || 'image/jpeg';
+    if (!/^(image\/(jpeg|png|gif|webp)|application\/pdf)$/.test(mt)) return false;
+    if (inl.data.length > 6800000 && mt !== 'application/pdf') return false;   // 이미지 5MB 한도(base64 약 6.8M자)
+  }
+  return true;
+}
+async function _tryClaudeVision(kind, body, timeoutMs) {
+  const tier = CLAUDE_VISION_KINDS[kind];
+  if (!tier || Date.now() < _visionClaudeOffUntil) return null;
+  let cfg = null;
+  try { cfg = await getMirConfig(); } catch (e) { return null; }
+  if (!cfg || !cfg.claudeKey || cfg.visionProvider === 'gemini') return null;
+  if (!_visionMediaOk(body)) return null;   // HEIC 등 클로드가 못 받는 형식은 쉬지 않고 이번만 제미나이로
+  const model = tier === 'opus' ? (cfg.claudeOpusModel || DEFAULT_OPUS_MODEL) : (cfg.claudeModel || DEFAULT_SONNET_MODEL);
+  const t0 = Date.now();
+  const ac = (typeof AbortController === 'function') ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), Math.round(timeoutMs * 0.7)) : null;
+  let status = 0;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify(claudeVisionRequest(body, model, body && body.generationConfig && body.generationConfig.maxOutputTokens)),
+      signal: ac ? ac.signal : undefined,
+    });
+    status = res.status;
+    const j = await res.json().catch(() => null);
+    if (!res.ok) { const e = new Error((j && j.error && j.error.message) || ('HTTP ' + res.status)); e.status = res.status; throw e; }
+    const out = claudeVisionToGemini(j);
+    if (!out.candidates[0].content.parts[0].text) { const e = new Error('클로드 빈 답'); e.status = 0; throw e; }
+    return new Response(JSON.stringify(out), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (e) {
+    const st = (e && e.status) || (e && e.name === 'AbortError' ? -1 : -2);
+    status = status || st;
+    const msg = String((e && e.message) || '');
+    const hard = st === 401 || st === 403 || (st === 400 && /credit|balance|billing|api key|authentic|permission|usage|limit/i.test(msg));
+    const rest = hard ? 30 : (st === 400 ? 0 : 2);
+    if (rest) _visionClaudeOffUntil = Math.max(_visionClaudeOffUntil, Date.now() + rest * 60 * 1000);
+    console.warn(`[사진 읽기] 클로드(${model})가 안 돼서 제미나이로 갑니다:`, e && e.message);
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+    _aiLogLine(kind, status, Date.now() - t0, model);
+  }
+}
 export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MODEL, key = '' } = {}) {
+  const cv = await _tryClaudeVision(kind, body, timeoutMs);   // 4.36: 사진 읽기 클로드 우선(오퍼스·소네트) — 안 되면 아래 제미나이 길
+  if (cv) return cv;
   const k = key || await resolveAiKey();
   if (!k) throw new Error(NO_KEY_MSG);
   const ac = (typeof AbortController === 'function') ? new AbortController() : null;

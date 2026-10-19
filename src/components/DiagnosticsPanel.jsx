@@ -391,6 +391,20 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
     );
   }
 
+  //  4.36 — 예상 실오류(씰 모양) — «컨번호 · 리스트 씰 · 이유». 누르면 컨 상세.
+  if (alert.code === 'seal_format') {
+    return (
+      <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5" data-seal-format>
+        <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="건" render={(t) => (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(t.cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700" data-seal-format-line
+          >• {t.cn} · 씰 {t.seal} · {t.why}</button>
+        )}/>
+      </div>
+    );
+  }
+
   //  4.22 — 리스트 번호 오타 짝(세관 코드 CND 후보) — «오타 번호 → 바른 번호 · 실번호». 누르면 오타 쪽 컨 상세.
   if (alert.code === 'cn_typo') {
     return (
