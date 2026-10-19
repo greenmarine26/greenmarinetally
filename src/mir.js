@@ -3166,7 +3166,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     const da = await dataAnswer(q, ctx, cfg);
     _logCall({ kind: 'data', q: String(q).slice(0, 80), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, prov: da.prov || '', packChars: da.packChars, who, app: ctx.app || '' });
     const empty = !da.text || /자료에 없어요|자료에는 없|확실한 답을 못/.test(String(da.text));
-    if (!weakByWordsOnly && !rec.canonical && !chatTried && !/[A-Za-z]{4}|\d{3,}/.test(String(q)) && /자료에 없어요|자료에는 없/.test(String(da.text || '')) && (await tryChat())) return out;   // 배 이름·번호가 든 일 질문은 «자료에 없어요» 그대로(상식으로 바꾸지 않는다)   // 4.36-02: 일 낱말이 든 상식 질문 구제
+    if (!weakByWordsOnly && !rec.canonical && !chatTried && !/[A-Za-z]{4}|\d{3,}/.test(String(q)) && /자료에(는)?\s*없|자료만\s*(볼|봐|보고)|확실한 답을 못/.test(String(da.text || '')) && (await tryChat())) return out;   // 배 이름·번호가 든 일 질문은 «자료에 없어요» 그대로(상식으로 바꾸지 않는다)   // 4.36-02: 일 낱말이 든 상식 질문 구제
     if (weakByWordsOnly && (da.rejected || empty)) return confirmed();
     //  4.35-01: 규칙이 사용법 안내(howTo)를 냈는데 모델이 «자료에 없어요» 로 덮지 않는다(라이브 실측 «사용법 알려줘»).
     if (opts.weakText && opts.weakVia === 'howTo' && !da.rejected && empty && !WEAK_TEXT.test(String(opts.weakText))) return confirmed();

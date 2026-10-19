@@ -198,7 +198,7 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
   const w3 = await B.askMirModel('요즘 뜨는 노래 순위', ctx5, () => null, noW);
   T(w3.via === 'chat' && /NEON/.test(w3.text), '한도는 mir_config.webSearchUsd 로 바꾼다(3달러면 2달러 쓴 뒤에도 검색)', JSON.stringify(w3).slice(0, 80));
   CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true }; await B.getMirConfig(true); WEBROWS = {};
-  claudeText = (b) => { const p = JSON.stringify(b); if (p.includes('번역기다')) return '{"canonical":"","window":"","confidence":0.3}'; if (p.includes('자료(JSON)')) return '임진왜란이나 역사 이야기는 자료에 없어요.'; return '임진왜란은 1592년에 일어났고 7년 동안 이어졌어요 😺'; };
+  claudeText = (b) => { const p = JSON.stringify(b); if (p.includes('번역기다')) return '{"canonical":"","window":"","confidence":0.3}'; if (p.includes('자료(JSON)')) return '임진왜란은 자료에 없는 내용이라 답을 드리기 어려워요. 저는 평택항 검수 자료만 볼 수 있어요.'; return '임진왜란은 1592년에 일어났고 7년 동안 이어졌어요 😺'; };
   calls.length = 0;
   const w4 = await B.askMirModel('조선시대 임진왜란은 언제야', ctx5, () => null, noW);
   T(w4.via === 'chat' && /1592/.test(w4.text) && !/자료에 없/.test(w4.text), '«언제야»가 든 상식 질문도 자료 답이 «자료에 없어요»면 생활회화로 받는다', JSON.stringify(w4).slice(0, 120));
