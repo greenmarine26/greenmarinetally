@@ -131,6 +131,9 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
   claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"잡담","confidence":0.95}' : 'MNBU1234567 은 12대예요');
   const r2 = await B.askMirModel('심심해', { app: 'smoke', voyageKey: '', inspector: '시험' }, () => null, { who: '시험', weakText: null, weakVia: '' });
   T(r2.via !== 'chat', '일 자료(컨번호·N대)를 지어낸 생활회화 답은 버린다', JSON.stringify(r2).slice(0, 100));
+  claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.4}' : '파이썬은 1991년에 나온 프로그래밍 언어예요. 문법이 쉬워서 입문용으로 많이 쓰고 장점이 3개쯤 돼요 😺');
+  const r2b = await B.askMirModel('파이썬이 뭐야', { app: 'smoke', voyageKey: '', inspector: '시험' }, () => null, { who: '시험', weakText: null, weakVia: '' });
+  T(r2b.via === 'chat' && /1991년/.test(r2b.text) && !/자료에 없/.test(r2b.text), '일반 상식(«파이썬이 뭐야»)도 클로드가 아는 대로 답한다 — 숫자가 든 답을 버리지 않는다', JSON.stringify(r2b).slice(0, 120));
   claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"리퍼 몇 대","window":"대수","confidence":0.95}' : '안 불려야 한다');
   calls.length = 0;
   const r3 = await B.askMirModel('냉동 컨 개수 알려줘', { app: 'smoke', voyageKey: '', inspector: '시험' }, (cq) => (cq === '리퍼 몇 대' ? '리퍼 12대예요' : null), { who: '시험', weakText: null, weakVia: '' });

@@ -2930,8 +2930,8 @@ export async function chatAnswer(q, ctx, cfg) {
     if (t) hist = t.th.turns.slice(-3).map((x) => `검수사: ${String(x.q || '').slice(0, 120)}\n미르: ${String(x.answer || '').slice(0, 160)}`).join('\n');
   } catch (e) { hist = ''; }
   const prompt = `너는 평택항 컨테이너 검수앱의 도우미 «미르»다. 검수사의 고양이 이름에서 왔고, 부두에서 같이 일하는 다정한 고양이 후배처럼 말한다.
-말투: 해요체, 한두 문장(길어도 세 문장), 이모지는 😺 정도로 가끔만. 대화를 받아 주고 자연스럽게 이어 간다.
-할 일: 안부·농담·위로·응원·취미·음식·잡학·일반 상식 질문에 자연스럽게 답한다. 같은 말을 되풀이하지 않는다.
+말투: 해요체, 가벼운 이야기는 한두 문장, 상식이나 설명을 묻는 말은 알고 있는 만큼 쉽고 정확하게 여섯 문장 안으로 답한다. 이모지는 😺 정도로 가끔만. 대화를 받아 주고 자연스럽게 이어 간다.
+할 일: 안부·농담·위로·응원·취미·음식·잡학·일반 상식·과학·역사·언어·컴퓨터 같은 질문에 아는 대로 다 답한다(평택항 검수와 상관없어도 된다). 같은 말을 되풀이하지 않는다.
 규칙:
 1. 이 앱의 일 자료(컨번호·대수·시각·베이·씰·진행)는 네가 모른다. 일 자료를 묻는 말이면 «배 이름을 붙여서 물어봐 주세요» 라고만 안내하고 숫자를 지어내지 않는다.
 2. 실시간 정보(날씨·뉴스·주가·경기 결과)와 네가 확실히 모르는 것은 모른다고 말한다. 날씨는 «미르야 날씨 알려줘» 라고 하면 앱이 안내한다고 알려 준다.
@@ -2940,11 +2940,11 @@ export async function chatAnswer(q, ctx, cfg) {
 5. 힘들다·죽고 싶다 같은 위기 신호면 가볍게 넘기지 말고 곁에 있다고 따뜻하게 말하고, 가까운 사람이나 자살예방상담전화 109에 바로 연락하도록 권한다.
 ${hist ? `지금까지 대화:\n${hist}\n` : ''}검수사: "${String(q).slice(0, 300)}"
 미르:`;
-  const r = await _gem(cfg, prompt, 360, false);
+  const r = await _gem(cfg, prompt, 700, false);
   let text = String(r.text || '').trim().replace(/^미르\s*[:：]\s*/, '');
   let rejected = null;
-  if (text && (/[A-Z]{4}\d{7}/.test(text) || /\d+\s*(대|무브|척|개|시간|분|톤|%|퍼센트)(?![가-힣])/.test(text) || /\d{1,2}:\d{2}/.test(text))) { rejected = text; text = ''; }   // 일 자료를 지어낸 답은 버린다
-  if (text.length > 420) text = text.slice(0, 420).replace(/[^.!?요다 ]*$/, '').trim() || text.slice(0, 420);
+  if (text && (/[A-Z]{4}\d{7}/.test(text) || /\d+\s*(대|무브)(?![가-힣])/.test(text))) { rejected = text; text = ''; }   // 일 자료를 지어낸 답은 버린다
+  if (text.length > 900) text = text.slice(0, 900).replace(/[^.!?요다 ]*$/, '').trim() || text.slice(0, 900);
   return { text, rejected, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, prov: r.prov };
 }
 export async function dataAnswer(q, ctx, cfg) {
@@ -3056,7 +3056,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   if (weakByWordsOnly && identity && rec.translated && !rec.canonical) { /* 번역도 «없다»고 한 말 — 자료 답을 한 번 본다 */ }
   else if (weakByWordsOnly) return confirmed();
   //  ★ 4.36 생활회화 층 — 규칙이 못 받은 일 아닌 말은 소네트가 이어서 말한다(자료 답으로 가지 않는다). 막히면 종전 길(규칙 답)로 돌아간다.
-  if (!weakByWordsOnly && (rec.window === '잡담' || rec.window === '생활회화' || (rec.translated && !rec.canonical && !rec.window)) && isChatCandidate(q, rec.window)) {
+  if (!weakByWordsOnly && !rec.canonical && isChatCandidate(q, rec.window)) {   // 4.36-01: 일 낱말이 없고 번역도 일 뜻으로 못 옮긴 말은 전부 클로드가 받는다(일반 상식 포함)
     if (!cfg) cfg = await getMirConfig();
     if (cfg.claudeKey || cfg.aiKey) {
       try {

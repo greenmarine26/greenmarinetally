@@ -65,7 +65,7 @@ export async function resolveAiKey() {
 const FB_URL = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
 /* ★ TallyOne 4.36 — 사진 읽기 클로드 전환. 검수사 2026-10-19 «사진판독은 정밀한 것을 요할 때는 OPUS 버전이 그 외 다른 것은 SONNET 가 할 것입니다.»
    여섯 창구 중 손글씨 둘(씰 사진 esealPhoto · 기록지 sheetPhoto)은 오퍼스, 인쇄된 표 셋(리스트 사진 listPhoto · 리퍼 사진 reeferPhoto · PORT-MIS 캡처 portMisCapture)은 소네트.
-   PDF 베이(stowagePdf)도 소네트 먼저 — 검수사 «제미나이 사용은 클로드 사용량을 다 쓴 후 넘어 간다». 3만 토큰 JSON 이라 시간 초과(126초)가 나면 제미나이로 넘어간다.
+   PDF 베이(stowagePdf)도 소네트 먼저 — 검수사 «제미나이 사용은 클로드 사용량을 다 쓴 후 넘어 간다». 3만 토큰 JSON 이라 시간 초과(171초 — 실측 2026-10-19 소네트 10베이 41초·출력이 길면 더)가 나면 제미나이로 넘어간다.
    부르는 쪽 코드는 그대로다 — 요청 본문(제미나이 모양)을 여기서 클로드 요청으로 바꾸고, 응답을 제미나이 모양(candidates[0].content.parts[0].text · finishReason)으로 돌려준다.
    클로드가 안 되면(키 없음·한도·과부하·시간 초과·빈 답) 종전 제미나이 길로 간다 — 한도·키 문제(크레딧 소진 포함)는 30분, 과부하·시간 초과는 2분 쉬고, 사진 한 장이 거부된 400 은 쉬지 않는다.
    스위치 — mir_config/visionProvider 가 'gemini' 면 클로드를 건너뛴다(배포 없이 되돌리기). */
@@ -133,7 +133,7 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
   const model = tier === 'opus' ? (cfg.claudeOpusModel || DEFAULT_OPUS_MODEL) : (cfg.claudeModel || DEFAULT_SONNET_MODEL);
   const t0 = Date.now();
   const ac = (typeof AbortController === 'function') ? new AbortController() : null;
-  const timer = ac ? setTimeout(() => ac.abort(), Math.round(timeoutMs * 0.7)) : null;
+  const timer = ac ? setTimeout(() => ac.abort(), Math.round(timeoutMs * (kind === 'stowagePdf' ? 0.95 : 0.7))) : null;
   let status = 0;
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
