@@ -910,8 +910,8 @@ export function subscribeMirCtx(f) { _subs.add(f); return () => _subs.delete(f);
     검수사 2026-09-10 «작업중인 선박 언제끝나 하면 선박명을 쳐달라고 함. 이미 작업중인 선박이라고 했는데...».
     판정은 utils.isWorkingNow 한 벌(수석 보드·홈·로그인 화면이 쓰는 그것)이다. 한 척이면 그 배, 여럿이면
     `ambiguous`(이름들)로 돌려 부르는 쪽이 «어느 배?» 하고 되묻는다 — 아무 배나 고르지 않는다. */
-export const WORKING_SHIP_RE = /작업\s*중인?\s*(선박|배)|지금\s*(하는|작업하는|일하는|작업\s*중인)\s*(선박|배)|(우리|이|지금|그)\s*(배|선박)/;
-const WORKING_SHIP_ASK_RE = /몇\s*시.{0,4}끝|언제.{0,3}끝|끝날\s*(것|거|까)|얼마나\s*남|몇\s*대\s*남/;
+export const WORKING_SHIP_RE = /작업\s*중인?\s*(선박|배)|지금\s*(하는|작업하는|일하는|작업\s*중인)\s*(선박|배)|(우리|이|지금|그)\s*(배|선박)|(?:^|[^가-힣A-Za-z0-9])(?:지금|이번|이|우리)\s*항차(?:은|는|의|이|가)?/;   // 4.37-01: «지금 항차» (검수사 2026-10-19 «지금 항차 작업시간이 얼마나 될꺼 같아?») — 앞이 낱말 경계일 때만(«선박이 항차» 아님) · 단추 문구에서 토씨까지 뺀다
+const WORKING_SHIP_ASK_RE = /몇\s*시.{0,4}끝|언제.{0,3}끝|끝날\s*(것|거|까)|얼마나\s*남|몇\s*대\s*남|작업\s*시간.{0,8}얼마나?\s*(?:더\s*)?(?:될|걸리|걸릴|걸려|남)|^\s*(?:(?:작업|일|하역|남은\s*(?:것|거|작업)|나머지)\s*(?:은|는|이|가)?\s*)?(?:앞으로\s*)?얼마나\s*(?:더\s*)?(?:걸려|걸릴|걸리)/;   // 4.37-01: «작업시간이 얼마나 될» · 머리에서 시작하는 «(작업) 얼마나 걸려» — 감사: «작업 시간 몇 시간»(근무 시간)·«서울까지 얼마나 걸려»·과거형 «걸렸어» 는 잡지 않는다
 export function workingShipCtx(voyages) {
   const now = Date.now();
   const list = Object.entries(voyages || {}).filter(([, v]) => v && v.info && isWorkingNow(v, now));
@@ -934,7 +934,7 @@ export function shipPickCodes(voyages, now = Date.now()) {
   return [...new Set(work.concat(wait.map((w) => w.code)))].slice(0, 6);
 }
 //  배를 되묻는 답인가 — 엔진 열두 곳·떠 있는 미르 두 곳의 «어느 배 말씀인지»·«배 이름을 붙여»·«… 중 어느 배요?»
-const SHIP_ASK_RE = /어느 배 말씀|어느 배요\?|어느 배인지|어느 배의 플랜|배 이름을 붙여\s*(?:주세요|주시면|보세요)|배 이름을 붙이면 그 배(?:만| 브리)/;
+const SHIP_ASK_RE = /어느 배 말씀|어느 배요\?|어느 배인지|어느 배의 플랜|배 이름을 붙여\s*(?:주세요|주시면|보세요)|배 이름을 붙이면 그 배(?:만| 브리)|배 이름을 붙여(?:서)?\s*물어/;   // 4.37-01: 모델 답 «배 이름을 붙여서 물어봐 주세요»(생활회화·자료 답 프롬프트 문구)에도 고르기 단추
 export const isShipAskText = (t) => SHIP_ASK_RE.test(String(t == null ? '' : t));
 /** 배를 되묻는 답 뒤에 붙일 칩 — «OBWH 몇 시에 끝나» 꼴(누르면 그 말 그대로 묻는다). 되묻는 글에 코드들이 있으면(같은 거리 두 배) 그 배들이 먼저. 배가 없으면 []. */
 export function shipPickChips(text, rq, voyages, now = Date.now()) {
@@ -1932,6 +1932,16 @@ export function answerOneRaw(query, ctx) {
     if (th && th.q) { q = S(th.q); if (q !== q0 && ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.rq = q; }   // rq — 되쓴 말. isWeakAnswer 가 원문(«응»·«두 번째») 대신 이것으로 약함을 잰다(모델 누출 방지, 감사 3)
   }
   if (!q || q.length < 2) return null;
+  //  ★ 4.37-01 — 화면이 배를 못 고른 채(배 이름 없음 · 열린 항차 없음) 들어온 말도 엔진이 같은 판정(pickShipCtx — 배 이름 → 한 척뿐인 일하는 배)으로 한 번 더 고른다.
+  //    번역문으로 규칙을 다시 돌릴 때 필요하다 — 화면은 원문으로만 배를 골라, 번역문이 «지금 일하는 배» 질문이 되어도 배 없이 돌았다.
+  //    실측 2026-10-19 13:05 홈 «지금 항차 작업시간이 얼마나 될꺼 같아?» → 번역 «몇 시쯤에 끝나»(0.8) → 배를 몰라 자료 답(AI)으로 빠짐(검수사 13:08 «미르가 답변이 전과 같네요»).
+  //    일하는 배가 여럿이면 고르지 않는다(되묻는 답 뒤에 화면이 고르기 단추를 붙인다). 콘앱은 배 고르기가 따로라(mirEnsureShip) 건드리지 않는다.
+  if (ctx && !ctx.shipCtx && !ctx.voyage && !ctx.voyageKey && !ctx.vsl && !ctx.info && ctx.voyages && typeof ctx.voyages === 'object' && ctx.app !== 'cone') {
+    let _sc = null;
+    try { _sc = pickShipCtx(q, ctx.voyages, null); } catch (e) { console.warn('[미르] 배 고르기 실패:', e); _sc = null; }
+    if (_sc && _sc.key) ctx = { ...ctx, shipCtx: _sc };
+  }
+  //    (감사 — 선박코드 고치기보다 먼저 고른다: 화면 경로처럼 고른 배가 ctx 에 있어야 «QDTR 로 답했어요» 한 줄이 붙는다)
   //  ★ 4.17 (검수사 §7.8-⑧ «2») — 없는 선박코드(«OWBH»)는 가장 가까운 코드로 고쳐 바로 답하고 «OBWH 로 답했어요» 한 줄을 붙인다(되묻지 않는다).
   //    같은 거리에 둘 이상이면 그때만 «… 중 어느 배요?». 한 줄은 그 배로 답했을 때만 — 다른 배 항차가 열려 있으면(정확한 코드를 댔을 때처럼) 그 항차로 답한다.
   //    판정은 _shipCodeFix → utils.shipCodeFixOf 한 벌(질문 속 배 고르기 pickShipCtx·콘앱 배 옮기기 pickVoyageKey 와 같은 판정).

@@ -91,5 +91,68 @@ console.log('⑤ 항만 기본 용어 — 어디서 물어도 정의가 나온�
   T(/^📍 사용 매뉴얼/.test(norm(a4)) && !M.isWeakAnswer('사용법 알려줘', a4, t4), '«사용법 알려줘» 홀로는 매뉴얼 안내이고 모델로 새지 않는다', norm(a4).slice(0, 30));
 }
 
+console.log('⑥ 4.37-01 — 배를 안 댄 «지금 항차 …» 는 일하는 배 · 번역문으로 다시 돌릴 때도 엔진이 배를 고른다');
+{
+  //  검수사 2026-10-19 13:08 «지금 항차 작업시간이 얼마나 될꺼 같아? 미르가 답변이 전과 같네요. 지정된 선박을 모르면 작업중인 선박이 우선이고 대상이 여러대 이면 선박을 선택할수있는 버튼…»
+  //  실측 13:05 — 번역 «몇 시쯤에 끝나»(0.8)인데 배를 몰라 자료 답(AI)으로 빠졌다. 일하는 배가 한 척(픽스처 07:30 = MCAT)이면 그 배, 여럿이면 되묻고 단추.
+  const _realNow = Date.now; Date.now = () => NOW;
+  try {
+    const home = { app: 'tally', voyages, flat: [], voyageKey: '', inspector: '연막', accepted: true, smallTalkLast: true, _now: NOW, _utterAt: NOW };
+    const ORIG = '지금 항차 작업시간이 얼마나 될꺼 같아?';
+    const sc = M.pickShipCtx(ORIG, voyages, null);
+    T(sc && sc.key && /^MCAT_/.test(sc.key), '«지금 항차 작업시간이 얼마나 될꺼 같아?» — 화면이 일하는 배 MCAT 를 고른다', sc ? sc.key : 'null');
+    for (const q of ['작업시간이 얼마나 걸려', '언제쯤 끝날까', '이번 항차 몇 시에 끝나']) {
+      const s2 = M.pickShipCtx(q, voyages, null);
+      T(s2 && /^MCAT_/.test(s2.key), `«${q}» — 일하는 배 MCAT`, s2 ? s2.key : 'null');
+    }
+    M._mirThreadReset();
+    const t1 = {}; const a1 = M.answerOneRaw('몇 시쯤에 끝나', { ...home, _trace: t1 });
+    //  감사 — 픽스처가 info 뿐이라 «📭» 로도 통과하지 않게, 화면이 배를 골라 넘긴 «MCAT 몇 시쯤에 끝나» 답과 글자까지 같은지 잰다
+    const qx = 'MCAT 몇 시쯤에 끝나'; const ax = M.answerOneRaw(qx, { ...home, shipCtx: M.pickShipCtx(qx, voyages, null), _trace: {} });
+    T(a1 && ax && norm(a1) === norm(ax) && !M.isShipAskText(a1), '번역문 «몇 시쯤에 끝나» 를 배 없이 돌려도 엔진 답 = 화면이 MCAT 를 골라 물은 답(종전엔 «어느 배 말씀인지»)', norm(a1).slice(0, 60));
+    //  감사 오탐 — 근무 시간·다른 «얼마나 걸려»·지난 일·«선박이 항차» 는 일하는 배를 고르지 않는다
+    for (const q of ['작업 시간 몇 시간이야', '작업시간이 몇 시간이야', '점심 작업 시간 몇 시부터야', '오늘 작업 시간 몇 시까지야', '서울까지 얼마나 걸려', '집까지 차로 얼마나 걸려', '라면 끓이는데 얼마나 걸려', '어제 작업 얼마나 걸렸어', '지난 항차 얼마나 걸렸어', '선박이 항차 바뀌었어']) {
+      const sx = M.pickShipCtx(q, voyages, null);
+      const ay = M.answerOneRaw(q, { ...home, _trace: {} });
+      T(sx === null && !/^(?:📭\s*)?(?:MCAT|ARTOTINA)\b|남은\s*\d+\s*대/.test(norm(ay)), `«${q}» — 일하는 배 한 척으로 답하지 않는다(감사 오탐 · «오늘 작업 선박 5척» 같은 여러 배 답은 종전 그대로)`, `${sx ? sx.key : 'null'} | ${norm(ay).slice(0, 40)}`);
+    }
+    for (const q of ['얼마나 걸려', '작업 얼마나 걸릴까', '얼마나 더 걸려']) {
+      const sx = M.pickShipCtx(q, voyages, null);
+      T(sx && /^MCAT_/.test(sx.key), `«${q}» — 일하는 배 MCAT`, sx ? sx.key : 'null');
+    }
+    //  콘앱 ctx 는 엔진이 배를 고르지 않는다(콘앱 배 고르기는 cone.html mirEnsureShip 한 벌)
+    const ac = M.answerOneRaw('몇 시쯤에 끝나', { ...home, app: 'cone', _trace: {} });
+    T(!/MCAT|ARTOTINA/.test(norm(ac)), '콘앱 ctx(app cone) 에서는 엔진이 일하는 배를 고르지 않는다', norm(ac).slice(0, 40));
+    //  감사 — 엔진이 고른 배도 화면 경로처럼 «… 로 답했어요» 한 줄이 붙는다(선박코드 고치기보다 먼저 고른다)
+    const ak = M.answerOneRaw('KBTR 출항 언제야', { ...home, _trace: {} });
+    const sk = M.pickShipCtx('KBTR 출항 언제야', voyages, null);
+    const akS = M.answerOneRaw('KBTR 출항 언제야', { ...home, shipCtx: sk, _trace: {} });
+    T(/로 답했어요/.test(norm(ak)) && norm(ak) === norm(akS), '«KBTR 출항 언제야» — 엔진 경로도 화면 경로와 같은 답 · «… 로 답했어요» 한 줄', norm(ak).slice(-30));
+    //  단추 문구에서 «이번 항차는» 의 토씨까지 뺀다
+    const pp = M.shipPickChips('어느 배 말씀인지', '이번 항차는 언제 끝나', voyages, NOW);
+    T(pp[0] === 'MCAT 언제 끝나', '«이번 항차는 언제 끝나» 단추는 «MCAT 언제 끝나»', pp[0]);
+    for (const q of ['남은 대수 알려줘', '출항 언제야', '도선 몇 시야']) {
+      const a2 = M.answerOneRaw(q, { ...home, _trace: {} });
+      T(M.isShipAskText(a2), `«${q}» 는 종전대로 배를 묻는다(일하는 배를 마음대로 고르지 않는다)`, norm(a2).slice(0, 40));
+    }
+    T(M.isShipAskText('일 자료는 배 이름을 붙여서 물어봐 주세요.') && M.isShipAskText('배 이름을 붙여 물어봐 주세요'), '모델 답 «배 이름을 붙여서 물어봐 주세요» 도 배를 되묻는 답이다(단추가 붙는다)');
+    const pc = M.shipPickChips('배 이름을 붙여서 물어봐 주세요.', ORIG, voyages, NOW);
+    T(pc[0] === 'MCAT 작업시간이 얼마나 될꺼 같아?', '단추는 «MCAT 작업시간이 얼마나 될꺼 같아?» — «지금 항차» 를 배 코드로 바꾼다', pc.join(' / '));
+    //  일하는 배가 둘이면 고르지 않고 되묻는다 + 두 배 단추
+    const mk = Object.entries(voyages).find(([k]) => /^MCAT_/.test(k));
+    const two = { ...voyages, ZZTS_0001E: { ...mk[1], info: { ...mk[1].info, vsl: 'ZZTS', vslFull: 'ZZ TEST' } } };
+    T(M.pickShipCtx(ORIG, two, null) === null, '일하는 배가 둘이면 화면이 고르지 않는다');
+    M._mirThreadReset();
+    const c2 = { ...home, voyages: two };
+    const t3 = {}; const a3 = M.answerOneRaw('몇 시쯤에 끝나', { ...c2, _trace: t3 });
+    const fo3 = M.mirThreadCommit(ORIG, a3, t3.via || '', c2, NOW);
+    T(M.isShipAskText(a3) && fo3.chips.length >= 2 && fo3.chips.some((c) => /^MCAT /.test(c)) && fo3.chips.some((c) => /^ZZTS /.test(c)), '둘이면 «어느 배» 로 되묻고 두 배 단추를 붙인다', `${norm(a3).slice(0, 30)} | ${fo3.chips.join(' / ')}`);
+    //  열린 항차가 있으면 그 항차 — 엔진이 덮지 않는다
+    const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/mirsame_kbtr.json'), 'utf8'));
+    const t4 = {}; const a4 = M.answerOneRaw('몇 시쯤에 끝나', { ...home, voyageKey: FX.voyageKey, voyage: FX.voyage, info: FX.voyage.info, vsl: FX.voyage.info.vsl, mode: 'discharge', containers: [], _trace: t4 });
+    T(!/MCAT|ARTOTINA/.test(norm(a4)), '항차 화면 안(열린 항차 KBTR)에서는 그 항차로 답한다(일하는 배로 바꾸지 않는다)', norm(a4).slice(0, 50));
+  } finally { Date.now = _realNow; }
+}
+
 console.log(`\n${bad ? '✗' : '✔'} 미르 배 고르기·관문·용어 연막검사 ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);
