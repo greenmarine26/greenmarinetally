@@ -132,7 +132,7 @@ function _isoBlankFilled(voyage, c) {
       if (iso) return { ...c, iso, _isoFrom: 'ediRaw' };
     }
   }
-  //  4.21: 마감적용이 넣은 제작컨(EDI 없음 · 규격 코드 없음)은 STOWAGE PLAN 칸의 크기(size)로 — R111W SAWTBP004 F45'H → 45' 칸
+  //  4.21: 마감적용(4.39 에 없앰)이 그동안 넣은 제작컨(EDI 없음 · 규격 코드 없음)은 STOWAGE PLAN 칸의 크기(size)로 — R111W SAWTBP004 F45'H → 45' 칸
   if (c._madeUnit && [20, 40, 45].includes(Number(c.size))) return { ...c, _sizeFill: String(Number(c.size)), _isoFrom: 'plan' };
   const b = parseInt(effectivePos(c).bay, 10);
   if (Number.isFinite(b) && b > 0) return { ...c, _sizeFill: b % 2 ? '20' : '40', _isoFrom: 'bay' };
@@ -160,7 +160,7 @@ export function ptkContainers(voyage, mode) {
   };
   const edi = _useU ? [..._U.set].map(_unitRow) : vals(_ediMap);
   //  ★ 4.21 (§7.8-⑦ · 마감적용 덱 갈래 — 검수사 2026-10-10 05:32 «수석의 텔리에 있는 자료로 마감을 하기 위한것입니다»): 선적 모집단은 EDI 행 그대로다.
-  //    단 수석 마감텔리 STOWAGE PLAN 에만 있어 마감적용(firebase.applyClosingEdiFile)이 리스트 행으로 넣은 제작컨(records `_madeUnit`)은 EDI 가 없어도 센다
+  //    단 수석 마감텔리 STOWAGE PLAN 에만 있어 마감적용(4.21~4.37 · 4.39 에 기능째 없앰 — 남은 지난 항차 기록은 그대로 읽는다)이 리스트 행으로 넣은 제작컨(records `_madeUnit`)은 EDI 가 없어도 센다
   //    («대수엔 들어 가지만 규격엔 없습니다» — RZOR R111W SAWTBP004). 그 밖의 리스트 전용 행은 종전대로 넣지 않는다(아래 «컨을 추가하지 않는다» 원칙).
   if (mode === 'loading') {
     const _have = new Set(edi.map((c) => c && c.cn));

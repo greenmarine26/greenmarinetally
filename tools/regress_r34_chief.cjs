@@ -86,7 +86,7 @@ const OLD_DOORS = [
   ['소유자 메뉴 › 🕰 교대 시각 터미널 기준', '관리 › 👑 소유자 메뉴 › 🕰', 'shiftsnap'],
   ['소유자 메뉴 › 🕵️ 활동 로그', '관리 › 👑 소유자 메뉴 › 🕵️', 'actlog'],
   ['소유자 메뉴 › 👥 인원 관리(창)', '관리 › 👑 소유자 메뉴 › 👥 인원 관리', 'staff'],
-  ['소유자 메뉴 › 🏁 마감적용', '관리 › 👑 소유자 메뉴 › ⚠ 위험 구역(한 번 더 묻기)', 'closingedi'],
+  //  ['소유자 메뉴 › 🏁 마감적용', …, 'closingedi'] — 4.39 에 메뉴째 없앴다(검수사 2026-10-19 «메뉴 자체도 없애주세요»). 없어진 것은 ⑤-1 이 잰다.
   ['보드 그림 칸 → 컨 상세 창', '그대로(보드 행 · 폰 시트)', 'cellDetail'],
 ];
 
@@ -459,17 +459,14 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
     const modal = () => pg.evaluate(() => { const ms = [...document.querySelectorAll('.fixed.inset-0')].filter((m) => /z-\[100\]/.test(m.className)); return ms.map((m) => m.innerText.split('\n')[0]); });
     //  맨 위(마지막에 뜬) 확인창의 단추를 누른다 — 창이 겹쳐 있으면 위의 것만
     const btnIn = async (re) => { const hit = await pg.evaluate((src) => { const ms = [...document.querySelectorAll('.fixed.inset-0')].filter((m) => /z-\[100\]/.test(m.className)); const top = ms[ms.length - 1]; if (!top) return false; const b = [...top.querySelectorAll('button')].find((x) => new RegExp(src).test((x.innerText || '').trim())); if (!b) return false; b.click(); return true; }, re); await sleep(400); return hit; };
+    //  4.39 — 🏁 마감적용은 메뉴째 없앴다(검수사 2026-10-19 21:25 «마감 적용기능은 없애주세요» · 21:26 «메뉴 자체도 없애주세요»). 접이·글자가 없고 위험 구역에는 «모든 작업 보고 삭제» 만 남는다.
     const w0 = await writes();
-    await click('[data-fold="closingedi"] > button');
-    const m1 = await modal();
-    await btnIn('^취소$');
-    const panelAfterCancel = await pg.evaluate(() => !!document.querySelector('[data-fold="closingedi"] > div.mt-2'));
+    const ceGone = await pg.evaluate(() => { const o = document.querySelector('[data-owner-menu]'); const dz = document.querySelector('[data-danger-zone]');
+      return { fold: !!document.querySelector('[data-fold="closingedi"]'), text: !!o && /마감적용/.test(o.innerText), dz: !!dz, clear: !!(dz && dz.querySelector('[data-danger^="clear-reports"]')), folds: dz ? dz.querySelectorAll('[data-fold]').length : -1 }; });
     const w1 = await writes();
-    await click('[data-fold="closingedi"] > button'); await btnIn('^열기$');
-    const panelAfterOk = await pg.evaluate(() => !!document.querySelector('[data-fold="closingedi"] > div.mt-2'));
-    st.closingedi = /위험 구역 — 마감적용/.test(m1.join('|')) && !panelAfterCancel && panelAfterOk && w1 === w0;
-    ok(`⑤-1 위험 구역 🏁 마감적용 — 누르면 «⚠️ 위험 구역 — 마감적용» 을 먼저 묻고(${m1.join('|') || '안 물음'}) · [취소] → 패널 안 열림 · 쓰기 ${w1 - w0}건 · [열기] → 종전 패널(적용은 그 안 [예] 뒤)`,
-      st.closingedi, JSON.stringify({ m1, panelAfterCancel, panelAfterOk, w0, w1 }));
+    st.closingGone = !ceGone.fold && !ceGone.text && ceGone.dz && ceGone.clear && ceGone.folds === 0 && w1 === w0;
+    ok(`⑤-1 🏁 마감적용은 없다(4.39) — 소유자 메뉴에 접이·글자 없음 · 위험 구역은 «모든 작업 보고 삭제» 만(접이 ${ceGone.folds}개) · 쓰기 ${w1 - w0}건`,
+      st.closingGone, JSON.stringify(ceGone));
     const w2 = await writes();
     await click('[data-danger="clear-reports"]'); const d1 = await modal(); await btnIn('^취소$'); const w3 = await writes();
     await click('[data-danger="clear-reports"]'); await btnIn('^다음$'); const d2 = await modal(); await btnIn('^취소$'); const w4 = await writes();
@@ -492,12 +489,12 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
       ['관리 › 자료(자료 현황·베이매트릭스·PORT-MIS·부두 좌표·머스크 엠티·엠티 실·LOLO·새로고침)', ['ready', 'baymatrix', 'portmis', 'pier', 'emptyfind', 'seal', 'lolo', 'refresh']],
       ['관리 › 사람·알림(검수원·공지·오답·17시 보고·통합 검색·보조기능)', ['inspectors', 'notice', 'feedback', 'ferry', 'search', 'search2', 'aux']],
       ['관리 › 편집 (주의)(빨간 테두리·한 줄 주의·🖐 창·📐 창)', ['edit']],
-      ['관리 › 👑 소유자 메뉴(소유자만 · 교대 시각 · 활동 로그 · 인원 관리 · 위험 구역 둘)', ['ownerGroup', 'shiftsnap', 'actlog', 'staff', 'closingedi', 'clearAll']],
+      ['관리 › 👑 소유자 메뉴(소유자만 · 교대 시각 · 활동 로그 · 인원 관리 · 위험 구역 — 4.39 마감적용 없앰)', ['ownerGroup', 'shiftsnap', 'actlog', 'staff', 'clearAll']],
     ]) {
       const b = keys.filter((k) => !st[k]);
       ok(`③ 문 전수 — ${grp} : ${keys.length - b.length}/${keys.length} 새 자리에서 열림`, !b.length, b.map((k) => `${k} — ${(OLD_DOORS.find((d) => d[2] === k) || [])[0] || k}`).join(' | '));
     }
-    ok(`③ 빠진 문 0 — 옛 수석 대시보드의 문 ${OLD_DOORS.length}개(바로가기 21 · 접힘 19 · 맨 위 단추·창 · 보드·진행 줄 단추)가 전부 새 자리에서 열린다`, !badDoors.length, badDoors.map((d) => d[0]).join(' | '));
+    ok(`③ 빠진 문 0 — 옛 수석 대시보드의 문 ${OLD_DOORS.length}개(바로가기 21 · 접힘 19 · 맨 위 단추·창 · 보드·진행 줄 단추 — 4.39 에 없앤 🏁 마감적용 하나는 뺐다)가 전부 새 자리에서 열린다`, !badDoors.length, badDoors.map((d) => d[0]).join(' | '));
 
     //  ⑥ 조회만(view) 수석으로 들어와도 같은 배치 — 컴 1440 보통 4척 · 폰 390 보통 4척
     await mount({ w: 1440, h: 900, keys: KEYS4, view: true });

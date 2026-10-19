@@ -92,7 +92,7 @@ const FX = JSON.parse(fs.readFileSync(path.join(root, 'tools/fixtures/ai_cost_26
   ok(/import \{ aiCostUsd, AI_PRICE \} from '\.\/aiCost\.js'/.test(M) && /const _webCost = \(tokIn, tokOut, searches, model\) => aiCostUsd\(/.test(M) && !/\* 3 \/ 1e6|\* 15 \/ 1e6/.test(noCmt(M)), '미르 웹 검색 비용은 aiCost.js 단가 한 벌(옛 3·15달러 식 없음)');
   ok(/const WEB_EST_USD = 0\.05;/.test(M) && /const CONE_WEB_SHARE = 0\.5;/.test(M) && /isCone \? Math\.round\(cfg\.webSearchUsd \* CONE_WEB_SHARE \* 100\) \/ 100 : cfg\.webSearchUsd/.test(M), '예상 선금 0.05 · 콘앱은 한도 절반에서 먼저 멈춘다');
   const FI = read('src/data/featureIndex.js'), HC = read('src/data/helpDataChief.js');
-  ok(/l: '💳 AI 비용 \(클로드 · 제미나이\)'.*r: 'o'/.test(FI) && /💳 AI 비용/.test(HC) && /안에 다섯 가지가 있고/.test(HC), '기능 색인(소유자 전용) · 수석 매뉴얼에 AI 비용');
+  ok(/l: '💳 AI 비용 \(클로드 · 제미나이\)'.*r: 'o'/.test(FI) && /💳 AI 비용/.test(HC) && /안에 네 가지가 있고/.test(HC), '기능 색인(소유자 전용) · 수석 매뉴얼에 AI 비용');
 
   console.log('[3] 실소스 firebase.js — 소유자만 읽고 적는다 · 키 칸은 돌려주지 않는다');
   if (!fbBundle) ok(false, 'firebase 번들 경로가 없다');

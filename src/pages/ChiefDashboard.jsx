@@ -39,7 +39,6 @@ import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: T
 import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
 import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
 import ShiftSnapPanel from '../components/ShiftSnapPanel.jsx';   // 4.11: 교대 시각(06:30·17:30) 터미널 기준 — 소유자 메뉴 안
-import ClosingEdiPanel from '../components/ClosingEdiPanel.jsx';   // 4.12: 마감적용 — 동방 선적을 마감텔리 선적 EDI 기준으로 마무리(소유자 메뉴 안)
 import AiCostPanel from '../components/AiCostPanel.jsx';   // 4.37: AI 비용 — 미르·사진 읽기 클로드 비용과 Console 숫자(소유자 메뉴 안)
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
@@ -180,8 +179,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     if (group) setMgGroup(group);
     if (secId) jumpSec(secId);
   };
-  //  4.24: 위험 구역(마감적용·모든 작업 보고 삭제)의 «한 번 더 묻기» — 기존 ConfirmModal 을 한 벌 더 둔다(D9 «수석은 한번 실수로 … 많은 자료를 잃을수가»).
-  //    이 창에서 [예] 를 눌러야 종전 화면(마감적용 패널 · 종전 삭제 확인창)으로 넘어간다. [취소] 면 아무것도 안 쓴다.
+  //  4.24: 위험 구역(모든 작업 보고 삭제)의 «한 번 더 묻기» — 기존 ConfirmModal 을 한 벌 더 둔다(D9 «수석은 한번 실수로 … 많은 자료를 잃을수가»).
+  //    이 창에서 [예] 를 눌러야 종전 삭제 확인창으로 넘어간다. [취소] 면 아무것도 안 쓴다. (4.39: 마감적용은 검수사 2026-10-19 지시로 기능째 없앴다)
   const [dangerState, askDanger] = useConfirm();
   const [editKey, setEditKey] = useState(null); // V7.97: 베이상세 편집 대상 항차 (수석/관리자만)
   const [planKey, setPlanKey] = useState(null); // V9.07: 컨펌용 플랜편집 대상 항차
@@ -757,18 +756,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     danger: true,
     onConfirm: () => askClearAllReports(),
   });
-  //  4.24 위험 구역 — 마감적용은 열기 전에 한 번 묻는다. 열린 패널 안 [🏁 마감적용 …] → [예] 는 종전 그대로(그래서 «한 번 더»).
-  const toggleClosingEdi = () => {
-    if (openSecs.closingedi) { toggleSec('closingedi'); return; }
-    askDanger({
-      title: '⚠️ 위험 구역 — 마감적용',
-      message: '마감적용은 작업이 끝난 동방 선적을 마감텔리 선적 EDI 기준으로 완료로 채웁니다.\n적용하면 되돌릴 수 없습니다.\n\n마감적용 화면을 열까요? 열어도 적용 단추와 [예]를 눌러야 들어갑니다.',
-      confirmLabel: '열기',
-      cancelLabel: '취소',
-      danger: true,
-      onConfirm: () => setOpenSecs((o) => ({ ...o, closingedi: true })),
-    });
-  };
 
   const groupBody = (gid) => {
     if (gid === 'data') return (
@@ -1058,7 +1045,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
          새 소유자 전용 기능은 이 묶음 안에 넣는다(대시보드 곳곳에 흩지 않는다). 기본 접힘 — 열기 전에는 아무 자료도 읽지 않는다.
          · TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회.
          · 4.37: 💳 AI 비용 — 검수사 2026-10-19 «비용관리 보고는 소유자 관리 안에둡니다». 펼칠 때 한 번 읽기(구독 없음), 키 값은 안 그린다.
-         · 4.24: 되돌릴 수 없는 둘(마감적용 · 모든 작업 보고 삭제)은 아래 «위험 구역» 한 곳 — 빨간 테두리 · 누르면 한 번 더 묻는다(D9). */
+         · 4.24: 되돌릴 수 없는 것(모든 작업 보고 삭제)은 아래 «위험 구역» 한 곳 — 빨간 테두리 · 누르면 한 번 더 묻는다(D9).
+         · 4.39: 🏁 마감적용은 메뉴째 없앴다 — 검수사 2026-10-19 21:25 «마감 적용기능은 없애주세요 앱을 사용하게 되면 필요 없어지는 기능입니다» · 21:26 «메뉴 자체도 없애주세요». */
       <div className="space-y-2" data-owner-menu="1">
         <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
           <ShiftSnapPanel voyages={voyages} by={inspector} />
@@ -1079,9 +1067,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         )}
         <div className="rounded-btn border-2 border-red-700/70 bg-red-950/20 p-2 space-y-2" data-danger-zone="1">
           <div className="text-sm2 font-black text-red-200">⚠ 위험 구역 — 되돌릴 수 없습니다 · 누르면 한 번 더 묻습니다</div>
-          <Fold id="closingedi" danger title="🏁 마감적용 (동방 선적 EDI 마무리) — 위험" open={!!openSecs.closingedi} onToggle={toggleClosingEdi}>
-            <ClosingEdiPanel voyages={voyages} by={inspector} />
-          </Fold>
           {recentReports.length > 0 ? (
             <button type="button" onClick={askClearAllDanger} data-danger="clear-reports"
               className="w-full flex items-center justify-between gap-2 px-3 rounded-btn border-2 border-red-700/70 bg-red-950/30 hover:bg-red-900/40 text-left"
@@ -3188,14 +3173,14 @@ export function EquipReportBoard({ board, capped = false }) {
 
 // ── V9.19-02: 접이식 항목 래퍼 — 대시보드 항목을 버튼으로 열고 닫는다 ─────────
 //   상단 바로가기(jumpSec)가 열림 상태를 켜고 스크롤한다. 헤더 44px 터치 타깃.
-function Fold({ id, title, open, onToggle, children, danger = false }) {   // 4.24: danger — 위험 구역 항목(빨간 테두리)
+function Fold({ id, title, open, onToggle, children }) {   // 4.39: 위험 구역 접이(danger — 빨간 테두리)를 쓰던 마감적용을 없애 그 인자도 뺐다
   return (
     <div id={'sec-' + id} className="scroll-mt-16" data-fold={id}>
       <button onClick={onToggle} aria-expanded={!!open}
         className={`w-full flex items-center justify-between px-3 rounded-btn border text-left ${
-          danger ? 'border-red-700/70 bg-red-950/30 hover:bg-red-900/40' : open ? 'bg-ink-800/80 border-line-strong' : 'bg-ink-900 border-line hover:border-line-strong'}`}
+          open ? 'bg-ink-800/80 border-line-strong' : 'bg-ink-900 border-line hover:border-line-strong'}`}
         style={{ minHeight: 44 }}>
-        <span className={`text-sm2 font-bold truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight tx-lg:py-1 ${danger ? 'text-red-200' : 'text-dim-100'}`}>{title}</span>{/* 4.23 2차 «크게»: «…» 로 자르지 않고 두 줄 */}
+        <span className={`text-sm2 font-bold truncate tx-lg:whitespace-normal tx-lg:break-keep tx-lg:leading-tight tx-lg:py-1 text-dim-100`}>{title}</span>{/* 4.23 2차 «크게»: «…» 로 자르지 않고 두 줄 */}
         <span className="text-dim-400 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
       </button>
       {open && <div className="mt-2">{children}</div>}

@@ -1118,35 +1118,14 @@ else
   cp "$SMOKE_AC.fbbak" src/firebase.js; rm -f "$SMOKE_AC.fbbak"
   echo "✗ 4.37 AI 비용 패널 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_AC" "$SMOKE_ACF"; exit 1
 fi
-#  4.12: **마감적용(동방 선적을 마감텔리 선적 EDI 기준으로 마무리)** — 채울 컨이 마감텔리 선적 EDI 가 고르는 컨과 한 벌인가 · 앱 완료는 안 덮는가 · 동방·작업 끝·시각 문지기 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
-#    ATPR 2645W 실제 항차 자료(보관소 GET 픽스처)로 패널을 그려 단추·확인창·결과 안내를 본다. 검수사 2026-10-07 «앱으로 사용안한부분만 덮어쓰는것입니다» · 2026-10-08 «=마감적용».
-SMOKE_CE=$(mktemp /dev/shm/hometmp/_smokece_XXXXXX.js)
-cp src/firebase.js "$SMOKE_CE.fbbak" && cp tools/fb_stub_search.js src/firebase.js
-if npx esbuild tools/smoke_closingedi412.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
-     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
-     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_CE"; then
-  cp "$SMOKE_CE.fbbak" src/firebase.js && rm -f "$SMOKE_CE.fbbak"
-  node tools/smoke_closingedi412.cjs "$(pwd)" "$SMOKE_CE" || { echo "✗ 4.12 마감적용 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CE"; exit 1; }
-  rm -f "$SMOKE_CE"
+#  4.39: **🏁 마감적용을 메뉴째 없앴다** — 검수사 2026-10-19 21:25 «마감 적용기능은 없애주세요 앱을 사용하게 되면 필요 없어지는 기능입니다» · 21:26 «메뉴 자체도 없애주세요».
+#    (4.12·4.17 마감적용 연막 셋을 이것으로 갈음) 기능·메뉴·쓰는 함수가 남지 않았는가 · 이미 남은 지난 항차 «마감 EDI 적용» 기록은 그대로 읽히고 사람 [완료]가 덮는가 — 실소스 firebase.js(메모리 RTDB).
+SMOKE_ER=$(mktemp /dev/shm/hometmp/_smokeer_XXXXXX.cjs)
+if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_ER" --log-level=error; then
+  node tools/smoke_ediread439.cjs "$(pwd)" "$SMOKE_ER" || { echo "✗ 4.39 마감적용 없앰 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ER"; exit 1; }
+  rm -f "$SMOKE_ER"
 else
-  cp "$SMOKE_CE.fbbak" src/firebase.js; rm -f "$SMOKE_CE.fbbak"
-  echo "✗ 4.12 마감적용 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CE"; exit 1
-fi
-#  4.12(2): **실소스 firebase.js** 로 fbApplyClosingEdi 를 친다(메모리 RTDB) — 소유자가 아니면 막히고 아무것도 안 쓰는가 · 동방이 아니거나 작업 중이면 막히는가 · 쓰는 것은 completed/{컨} 추가뿐이고 앱 완료는 그대로인가 · 사람 [완료]가 덮는가
-SMOKE_CEF=$(mktemp /dev/shm/hometmp/_smokecef_XXXXXX.cjs)
-if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_CEF" --log-level=error; then
-  node tools/smoke_closingedi412_fb.cjs "$SMOKE_CEF" || { echo "✗ 4.12 마감적용 쓰기 함수 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CEF"; exit 1; }
-  rm -f "$SMOKE_CEF"
-else
-  echo "✗ 4.12 마감적용 쓰기 함수 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CEF"; exit 1
-fi
-#  4.17: **마감적용 파일 올리기** — 마감텔리 선적 EDI 로 동방 계획 완료를 확정하고 자리를 바꾼다(시각은 그대로 · 사람 기록 불가침) — OBWH 2762W 실제 항차 287대(메모리 RTDB, 실제 쓰기 없음).
-SMOKE_CE17=$(mktemp /dev/shm/hometmp/_smokece17_XXXXXX.cjs)
-if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_CE17" --log-level=error; then
-  node tools/smoke_closingedi417.cjs "$SMOKE_CE17" || { echo "✗ 4.17 마감적용 파일 올리기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CE17"; exit 1; }
-  rm -f "$SMOKE_CE17"
-else
-  echo "✗ 4.17 마감적용 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CE17"; exit 1
+  echo "✗ 4.39 마감적용 없앰 firebase 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ER"; exit 1
 fi
 #  4.18-02: **45피트 규격(950E·9500·L5G1·L5GE)이 비지 않는가** — 실제 마감텔리 EDI·OBWH 2762W 실제 선적으로. 검수사 2026-10-09 22:10 «규격을 놓쳐서는 안된다».
 node tools/smoke_l5spec418.cjs "$(pwd)" || { echo "✗ 4.18-02 45피트 규격 연막검사 실패 — 배포 금지"; exit 1; }
