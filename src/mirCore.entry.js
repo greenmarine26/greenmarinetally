@@ -63,6 +63,7 @@ export function toMirContainers(rows, mode, plan) {
 export { answerOne, answerOneRaw } from './mir.js';
 export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATALOG } from './mir.js';   // 3.42 판 B: 콘앱도 같은 모델 창구(공용 키·문지기)
 export { mirBusyNow, mirDeferredPending, mirIsDeferred, _mirDeferReset, MIR_DEFER_TEXT, MIR_BUSY_FREE_PER_HOUR } from './mir.js';   // 4.38: 작업 중 사담 미루기 — 콘앱도 같은 판정(연막검사도 이 번들로 잰다)
+export { flattenVoyages, isChatCandidate, expectedWorkTimeOf } from './mir.js';   // 4.39-01: «작업 분석» 연막검사가 화면과 같은 병합 행·같은 예상 시간 계산으로 잰다
 export { mirThreadResolve, mirThreadCommit, mirThreadAlive, _mirThreadReset } from './mir.js';   // 3.68 / 2.57 [mirThread]: 답 뒤 한 마디·응/아니/끝맺음 — 콘앱도 같은 대화 층
 export { shipPickChips, shipPickCodes, isShipAskText, pickShipCtx } from './mir.js';   // 4.35-02: 배 이름을 못 떠올릴 때 일하는 배·곧 시작할 배 단추 · 4.37-01: pickShipCtx(엔진이 이미 부르는 배 고르기 — 연막검사가 같은 판정을 본다)
 export { answerYard, setMirYard, readMirYard, YARD_SPEAK, workPauseOf, anxiousReasons, angryReasons, isUpcomingWork } from './mir.js';   // 3.69-01: 중단 보고 한 벌(연막·콘앱)   // 3.69 / 2.58 [mirYard]: 야드 상황 — 콘앱은 mirAsk 가 yard_status 를 GET 해 ctx.yard 로 넣는다
@@ -77,6 +78,6 @@ export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subs
 export { isReeferContainer, isFullReefer, isEmptyReefer, isoPickOog } from './utils.js';   // 4.15-01 / ConeOne 2.67: 콘앱 행의 리퍼 판정도 검수앱 utils 한 벌(cone.html coneIsReefer — 정규식 사본 없음)
 export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn } from './utils.js';   // 4.20 / ConeOne 2.70: 평택 양하분 한 벌(세관 목록 + 추가분)·제작컨 판정 — 콘앱 미르 «양하 몇 대» 가 검수앱과 같은 집합(cone.html mirAsk)
 export { shipCodeInQuery, knownShipCodes } from './utils.js';   // 4.18-01 / ConeOne 2.69: 질문 속 다른 배(정확·오타·옛 코드)를 콘앱이 검수앱과 같은 판정으로 가린다(cone.html mirShipFirst)
-export { isWorkingNow } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52
+export { isWorkingNow, isPyeongtaekPort } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52   // 4.39-01: isPyeongtaekPort — 작업 분석 연막이 콘앱 평택분(EDI POD·POL)을 cone.html 처럼 가린다
 export { mirPhotoHtml, mirHeroHtml, mirHeroSrc, mirPoseNo, mirPhotoKey, ensureMirPhotoCss, MIR_PHOTO_KEYS, MIR_POSES, MIR_PHOTO_CSS } from './components/mirPhotoArt.js';   // 4.07 / 2.63: 실사 미르 한 벌(얼굴 스프라이트·전신 자세·몸짓 CSS — React·이미지 파일을 import 하지 않는 순수 문자열). 3.57~4.06 의 그림 인형(mirFaceArt)은 걷었다 — 콘앱 얼굴도 같은 규칙으로 움직인다
 export { termBoardOf, termBoardHtml, ensureTermBoardCss } from './termBoard.js';   // 4.03 / 2.61: 터미널 본선 현황 표 — 수석 실시간 보드와 콘앱 실시간 화면이 같은 값·같은 모양(검수사 2026-10-04)

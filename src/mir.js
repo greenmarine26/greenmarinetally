@@ -45,6 +45,7 @@ import {
   voyageReportSpan, WORK_SHIFTS, workMinutesBetween,   // 3.56 [mirMood] 식사 창은 근무표 그대로 · 3.69-01 완료 공백은 실작업 분으로 잰다
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
   termProgressOf, termDoneAts,   // 3.74: 터미널 본선현황으로 센다
+  briefCountsOf, ptkRowOf,   // 4.39-01: «작업 분석» 이 브리핑과 같은 판정으로 센다
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
@@ -824,7 +825,9 @@ export function twinSplitOf(voyage, cnsByMode, given = null) {
     let n20 = 0;
     for (const cn of cns) {
       const c = ed[cn];
-      if (c) cs.push({ ...c, cn: c.cn || cn, _mode: m });
+      //  ★ 4.39-01 (검수사 2026-10-19 22:02~22:05 — ATPR 2646E «무게가 있고 EDI가 있으니 위치도 있습니다» · 화면 «20피트 116대는 자리나 무게를 몰라» 는 거짓):
+      //    EDI 총중량이 빈 컨(20피트 116대 wt 0)은 리스트 무게로 잰다 — 화면 병합 행과 같은 모양(wt = 리스트 무게 · wtEdi = EDI 총중량)이라 트윈 판정(twinWtOf: EDI 먼저, 없으면 리스트)이 작업 카드·자동 가이드와 한 벌이 된다.
+      if (c) { const _lw = plausibleListWtKg(recs[cn] && recs[cn].wt); cs.push({ ...c, ...ediWtField(c), ...(_lw > 0 ? { wt: _lw } : {}), cn: c.cn || cn, _mode: m }); }
       if (is20((c && c.iso) || (recs[cn] && recs[cn].iso))) n20 += 1;
     }
     let pairsMap = {};
@@ -879,7 +882,77 @@ export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now(), gi
     disMoves: vc.byMode.discharge.total - tw.byMode.discharge, lodMoves: vc.byMode.loading.total - tw.byMode.loading, done: vc.done,
     shiftN: (vc.shift && vc.shift.n) || 0, shiftMoves: (vc.shift && vc.shift.moves.total) || 0,   // 4.16: 시프팅 대당 2무브(트윈으로 안 든다)
     gangs, gangsKnown, rate, rateMin, twinShare: vc.total ? (2 * tw.ok) / vc.total : 0, minutes: mins(moves, gangs, rate), minutesMin: mins(movesMin, gangs, rateMin), minutes1: mins(moves, 1, rate), planTotal,
-    planGap: planTotal - vc.total > Math.max(20, vc.total * 0.1) };
+    planGap: planTotal - vc.total > Math.max(20, vc.total * 0.1),
+    cns: vc.cns };   // 4.39-01: 센 컨 번호(모드별) — «작업 분석» 이 같은 집합으로 특수화물을 센다(감사 B1)
+}
+
+//  ★ 4.39-01 미르 «작업 분석» · «예상 작업 시간(N갱)» — 검수사 2026-10-19 22:02
+//    «예상시간까지 들어 가고 갱당 무브수도 알려주고 특수화물 개개별로 안알려줘도 되고 설명을 하자면 20피트 몇대 40피트 몇대 총 몇대이며 리퍼는 20피트2개 40피트 20개
+//     FR은 4대 OT는 3대 XRAY는 5대가 있습니다. 트윈 무게를 감안해서 총 무브수는 몇대이고 평균 시간당 무브수는 갱당 25개이고2갱 계산으로 총 몇시간 걸릴것입니다.
+//     주의 할점은 FR사진 XRAY 실달기 리퍼온도 체크또는 리스트 받기등이 있습니다» · 22:05 «여기(작업 시작 화면 예상 작업 시간 줄)가 확실했으면 미르에게 분석해달라고 하지 않았을 것입니다».
+//    숫자는 한 벌 — 규격·특수화물은 브리핑과 같은 briefCountsOf(평택분 · 채워진 예약 칸 뺌), 무브·시간은 화면 «예상 작업 시간» 줄과 같은 expectedWorkTimeOf(갱당 시간당 25·30 은 4.01 규칙).
+const WORK_ANALYSIS_RE = /작업\s*(?:분석|분선)|^\s*(?:미르\s*(?:야|아)?\s*)?(?:분석|분선)\s*(?:해\s*줘|해\s*주세요|좀|해)?\s*[?.!~]*\s*$/;   // «작업 분선해줘» 는 21:47 실제 오타
+const EXPECT_TIME_RE = /예상\s*작업\s*시간|작업\s*예상\s*시간/;   // «작업» 이 있어야 한다 — «도선·출항·입항 예상 시간» 은 다른 질문
+const _hmK = (min) => { const h = Math.floor(min / 60), m = min % 60; return h ? `${h}시간${m ? ` ${m}분` : ''}` : `${m}분`; };
+/** 예상 작업 시간 줄들 — gangsHyp(질문 속 «2갱으로») 이 있으면 그 갱 수로, 없으면 화면 줄과 같은 갱 수(조별 → 항차 → 2갱). */
+export function workTimeLinesOf(E, gangsHyp = 0) {
+  if (!E) return [];
+  const g = gangsHyp > 0 ? Math.min(4, Math.max(1, gangsHyp)) : E.gangs;
+  const mins = (mv, gg, r) => Math.round((mv / (gg * r)) * 60);
+  const L = [];
+  const pair = E.posPairs - E.twinLifts > 0 && (E.twinOver || E.twinDiff) ? ` (${[E.twinOver ? `55톤 넘는 ${E.twinOver}쌍` : '', E.twinDiff ? `무게차 큰 ${E.twinDiff}쌍` : ''].filter(Boolean).join(' · ')}은 싱글로 셈)` : '';
+  L.push(`· 트윈 ${E.twinLifts}쌍 → 총 ${E.exact ? '' : '최대 '}${E.moves}무브${E.shiftN ? `(시프팅 ${E.shiftN}대 ${E.shiftMoves}무브 포함)` : ''}${pair}`);
+  if (!E.exact) L.push(`  ⚠ 20피트 ${E.unres20}대는 자리나 무게가 없어 트윈을 못 정했어요 — 트윈이 되면 ${E.movesMin}무브까지 줄어요`);
+  const t = E.exact ? `약 ${_hmK(mins(E.moves, g, E.rate))}` : `약 ${_hmK(mins(E.movesMin, g, E.rateMin))} ~ ${_hmK(mins(E.moves, g, E.rate))}`;
+  const t1 = g > 1 ? ` (1갱이면 ${_hmK(mins(E.moves, 1, E.rate))})` : '';
+  const why = gangsHyp > 0 ? '' : (!E.gangsKnown ? ' · 갱 수 미등록이라 2갱으로 셈' : '');
+  L.push(`· 갱당 시간당 ${E.rate}무브(트윈 ${Math.round(E.twinShare * 100)}%라 ${E.rate === 30 ? '트윈이 있는 작업' : '싱글이 많은 작업'}) · ${g}갱이면 ${t}${t1}${why}`);
+  return L;
+}
+/** «작업 분석» 답 — 그 배 평택분 규격·특수화물·트윈 무브·예상 시간·주의.
+ *  대수·규격·무브·시간은 E(expectedWorkTimeOf — 화면 «예상 작업 시간» 줄과 같은 집합·같은 수) 하나로, 특수화물은 그 집합(E.cns)에 든 행만 센다(감사 B1 — 숫자끼리 맞게).
+ *  rows 는 그 항차 병합 행 전부(검수앱은 항차 원본을 편 것 — 열린 탭과 무관 · 콘앱은 넘겨받은 행). opts.collecting — 선적 자료 수집중이면 무브·시간을 세지 않는다(4.17 한 벌). */
+export function answerWorkAnalysis(voyage, ship, rows, E, opts = {}) {
+  if (!E || !((E.dis || 0) + (E.lod || 0) > 0)) return null;
+  const info = (voyage && voyage.info) || {};
+  const sides = []; const K = { rf20: 0, rf40: 0, dg: 0, xr: 0, fr: 0, ot: 0, tk: 0, oog: 0 };
+  const noList = [];
+  for (const [m, kr] of [['discharge', '양하'], ['loading', '선적']]) {
+    const n = m === 'discharge' ? E.dis : E.lod;
+    if (!n) continue;
+    sides.push(`${kr} ${n}대`);
+    const want = new Set((E.cns && E.cns[m]) || []);
+    const seen = new Set();
+    const _xl = (m === 'discharge' && voyage && voyage.discharge && voyage.discharge.xrayList) || {};   // X-RAY 대상은 항차 X-RAY 목록 한 벌(콘앱 맨 행·리스트 행에는 표식이 없다 — 재감사)
+    const arr = (rows || []).filter((x) => x && x.cn && (x._mode === 'loading' ? 'loading' : 'discharge') === m && want.has(x.cn) && !seen.has(x.cn) && seen.add(x.cn)).map((x) => (_xl[x.cn] && !x._xray ? { ...x, _xray: true } : x));
+    //  센 컨인데 행이 없는 것(콘앱 행은 자리 있는 EDI 행뿐 — RZOR 선적 EDI 는 자리가 없다)은 그 항차 리스트 행으로 센다(재감사 — 두 앱 특수화물 수가 갈리지 않게)
+    const _rec = (voyage && voyage[m] && voyage[m].records) || {};
+    for (const cn of want) if (!seen.has(cn) && _rec[cn] && typeof _rec[cn] === 'object') { seen.add(cn); arr.push({ ..._rec[cn], cn, _mode: m, ...(_xl[cn] ? { _xray: true } : {}) }); }
+    const B = briefCountsOf(arr);
+    for (const c of B.rf) { if (/^2/.test(String(c.iso || ''))) K.rf20 += 1; else K.rf40 += 1; }
+    K.dg += B.dg.length; K.fr += B.fr.length; K.ot += B.ot.length; K.tk += B.tk.length; K.oog += B.oog.length;
+    if (m === 'discharge') K.xr += B.xr.length;
+    const recs = voyage && voyage[m] && voyage[m].records;
+    if (!recs || !Object.keys(recs).length) noList.push(kr);
+  }
+  if (!sides.length) return null;
+  const L = [`📊 ${ship || '이 배'}${info.voy ? ` ${info.voy}` : ''} 작업 분석 — ${sides.join(' · ')}${E.done >= (E.units || 0) && E.done > 0 ? ' (작업 끝남 — 아래 시간은 처음부터의 계획값)' : E.done > 0 ? ' (작업 중 — 아래 시간은 처음부터의 계획값)' : ''}`];
+  L.push(`· 20피트 ${E.n20}대 · 40피트 ${E.n40}대 · 총 ${E.n20 + E.n40}대${E.shiftN ? ` · 시프팅 ${E.shiftN}대 따로` : ''}`);
+  const sp = [];
+  if (K.rf20 || K.rf40) sp.push(`리퍼 ${[K.rf20 ? `20피트 ${K.rf20}대` : '', K.rf40 ? `40피트 ${K.rf40}대` : ''].filter(Boolean).join(' · ')}`);
+  if (K.fr) sp.push(`FR ${K.fr}대`); if (K.ot) sp.push(`OT ${K.ot}대`); if (K.dg) sp.push(`위험물 ${K.dg}대`); if (K.tk) sp.push(`탱크 ${K.tk}대`); if (K.oog) sp.push(`OOG ${K.oog}대`); if (K.xr) sp.push(`XRAY ${K.xr}대`);
+  const none = [!K.fr && 'FR', !K.ot && 'OT', !K.dg && '위험물'].filter(Boolean);
+  L.push(`· ${sp.length ? sp.join(' · ') : '특수화물 없음'}${sp.length && none.length ? ` (${none.join('·')} 없음)` : ''}`);
+  if (opts.collecting) L.push('· 선적 자료 수집중이라(리스트만 왔고 EDI 는 아직) 무브·예상 시간은 아직 세지 않아요');
+  else for (const x of workTimeLinesOf(E, opts.gangsHyp || 0)) L.push(x);
+  const warn = [];
+  if (K.fr) warn.push(`FR 사진 ${K.fr}대`);
+  if (K.xr) warn.push(`XRAY 실 달기 ${K.xr}대`);
+  if ((K.rf20 + K.rf40) && !opts.rfSkip) warn.push(`리퍼 온도 체크 ${K.rf20 + K.rf40}대`);   // 감사 B2 — 온도 세부(기준 없음·실물 미확인)는 두 앱 행의 온도 칸이 달라 여기서 세지 않는다(«리퍼» 조회·브리핑이 말한다)
+  if (noList.length) warn.push(`${noList.join('·')} 리스트 받기`);
+  if (K.dg) warn.push(`위험물 ${K.dg}대 별도 취급`);
+  if (warn.length) L.push(`· 주의 — ${warn.join(' · ')}`);
+  return L.join('\n');
 }
 
 //  수석 답변(X-RAY 조별 가능 수·교대 브리핑 인수 시점 예상)이 쓰는 시간당 무브 — 예상 작업 시간 줄과 **같은 규칙**(싱글 위주 25 · 트윈 있으면 30).
@@ -2157,7 +2230,7 @@ export function answerOneRaw(query, ctx) {
   }
 
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.
-  const _bareCall = p.mirCalled && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking;
+  const _bareCall = p.mirCalled && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
   if (p.mirHello || _bareCall) {
     //  2차 시뮬 지적 — «미르 점심 먹었어?»·«미르 점심은?» 은 인사가 아니라 잡담(3.7-06)이다. 부름만 있어도 잡담 그물이 먼저 받는다.
     try { const st = mirSmallTalk(q); if (st) return st; } catch (e) { /* */ }
@@ -2282,7 +2355,15 @@ export function answerOneRaw(query, ctx) {
     const isFirstQ = /(?:최초|처음|어디서?\s*부터|몇\s*번\s*부터).{0,10}(?:양하|시작|해)|양하.{0,12}(?:어디부터|어디서\s*시작|시작\s*어디|몇\s*번\s*부터)/.test(Q);
     const isXrayShiftQ = /엑스레이|x[\s.\-]*ray|xray/i.test(Q) && /(?:조별|주간|야간|부착|몇\s*대\s*가능)/.test(Q);
     const isShiftBriefQ = SHIFT_BRIEF_RE.test(Q);
-    const anyCalc = isArrivalQ || isHatchQ || isGangQ || isMoveQ || isFirstQ || isXrayShiftQ || isShiftBriefQ;
+    //  4.39-01: «작업 분석(해줘)» · 시작 전 «예상 작업시간» · «2갱으로 하면 몇 시간» — 화면 «예상 작업 시간» 줄과 같은 계산(검수사 2026-10-19 22:02).
+    //    «작업 분선해줘» 는 실제 입력 오타(21:47). «2갱으로» 는 계산 가정일 뿐 갱 수를 적지 않는다(gangSet 아님).
+    const _notAsk = /하지\s*마|어제|그제|지난|틀렸|틀려|이상해|없애|지워|안\s*맞/.test(Q);   // 감사 M4 — 하지 말라는 말·지난 날·틀렸다는 말은 계산을 내지 않는다(«2갱 말고 3갱» 의 «말고»·«왜 이렇게 길어» 의 «왜» 는 막지 않는다 — 재감사)
+    const isAnalysisQ = WORK_ANALYSIS_RE.test(Q) && !p.howToQuery && !hasAnyCondition(p) && !_notAsk;
+    const _ghs = [...Q.matchAll(/([1-4])\s*갱\s*(?:으로|이면|기준|일\s*때|이라면|짜리|씩)/g)];   // «2갱 말고 3갱으로» 는 뒤 숫자
+    const gangsHyp = _ghs.length ? Number(_ghs[_ghs.length - 1][1]) : 0;
+    const isExpectQ = !isAnalysisQ && !isGangQ && !p.howToQuery && !_notAsk && (EXPECT_TIME_RE.test(Q) || (gangsHyp > 0 && /시간|걸|끝|얼마/.test(Q)));   // «예상 작업 시간 어디서 봐» 는 기능 위치 질문(매뉴얼)
+    const anyCalc = isArrivalQ || isHatchQ || isGangQ || isMoveQ || isFirstQ || isXrayShiftQ || isShiftBriefQ || isAnalysisQ;
+    if (isAnalysisQ && !v) return _via('shipAsk'), '어느 배 말씀인지 배 이름을 붙여 주시면 바로 분석합니다. (예: "ATPR 작업 분석")';   // 4.39-01 — 배 되묻기(배 고르기 단추가 붙는다 · 모델로 안 보낸다)
     if (anyCalc && !v) return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 계산합니다. (예: "HAYN 갱 2개로 분배")';
     if (v) {
       const _voy = { ...v, key: c.voyageKey || '', _key: c.voyageKey || '' };
@@ -2308,6 +2389,32 @@ export function answerOneRaw(query, ctx) {
         } catch (e) { console.warn('[미르] 콘앱 항차 사본 만들기 실패 — 원본으로 셉니다:', e); return _voy; }
       })();
       try {
+        if (isAnalysisQ || isExpectQ) {
+          const _E = movesOfVoyage(_voy, c.voyageKey || '', _mvGiven);   // 화면 «예상 작업 시간» 줄과 같은 계산 한 벌
+          //  행 — 검수앱(EDI 있는 항차)은 항차 원본을 펴서(열린 탭과 무관 · 감사 M3), 콘앱은 넘겨받은 행. E 도 같은 규칙(hasAnyEdi)으로 센다.
+          //  자료 수집중 — «몇 시에 끝나»·«총 무브수» 가 쓰는 머리 판정(_vcOf: 터미널 본선현황이 있으면 그 수로 세고 수집중이 아니다) 한 벌(재감사 N1 — RZOR 콘앱만 수집중으로 갈렸다)
+          const _coll = (() => { try { return (_vcOf() || {}).collecting === 'loading'; } catch (e) { return false; } })();
+          if (isAnalysisQ) {
+            let _rows = _mvGiven || [];
+            if (!_mvGiven || hasAnyEdi(_voy)) { try { _rows = flattenVoyages({ [c.voyageKey || '_']: _voy }); } catch (e) { _rows = c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs; } }
+            const _a = answerWorkAnalysis(_voy, ship, _rows, _E, { gangsHyp, rfSkip: !!c.rfSkip, collecting: _coll });
+            if (_a) { _via('workAnalysis'); return _a; }
+          }
+          //  예상 시간은 완료 10대 전까지만 — 화면 줄과 같은 «처음 시작할 때» 계획값이다. 그 뒤에는 실측 페이스(종전 길)가 답한다(갱 수 가정이 있어도).
+          else if (_E && !_coll && _E.done < 10) return _via('workAnalysis'), [`⏱ ${ship || '이 배'} 예상 작업 시간 — 평택 ${_E.n20 + _E.n40}대${_E.shiftN ? ` · 시프팅 ${_E.shiftN}대` : ''} (${_E.done > 0 ? `완료 ${_E.done} · ` : '시작 전 · '}정상 작업 기준 · 처음부터의 계획값)`].concat(workTimeLinesOf(_E, gangsHyp)).join('\n');   // 화면 줄과 같은 «완료 10대 전까지» (감사 M1) · 수집중이면 종전 길(감사 M2)
+          else if (_coll) { _via('collecting'); return _collectingAnswer(ship, _vcOf(), null); }   // 선적 자료 수집중 — «몇 시에 끝나» 와 같은 «자료 수집중» 답
+          //  시작한 배(완료 10대 이상) — «몇 시에 끝나» 와 같은 실측 페이스 답(그 말 그대로 한 번 돌린다 · 기능 관문 4.37-02 와 같은 꼴). 강한 답일 때만 쓰고, 아니면 종전 길.
+          //    종전엔 규칙이 못 받아 번역이 «예상 작업시간은 2갱으로» 를 «갱 2개» 로 옮겨 갱 분배(«베이매트릭스가 없어…»)로 샜다. «N갱» 가정은 버린다고 밝힌다(재감사).
+          else if (_E && !(ctx && ctx._expectInner)) {
+            const _t2 = {};
+            const _base = answerOneRaw('몇 시에 끝나', { ...(ctx || {}), _expectInner: true, _fhLoose: true, accepted: false, _trace: _t2 });
+            if (_base != null && !isWeakAnswer('몇 시에 끝나', _base, _t2)) {
+              _via('expectEta');
+              //  바탕 답이 터미널 수로 «아직 시작 전» 이면(앱 완료는 10대를 넘었어도 본선현황이 아직 0) «이미 시작돼» 를 붙이지 않는다 — 한 답 안에서 서로 어긋나지 않게(3차 감사 권고)
+              return (gangsHyp > 0 && _E.done < (_E.units || 0) && !/아직\s*시작\s*전/.test(_base)) ? `${_base}\n· 작업이 이미 시작돼(완료 ${_E.done}대) ${gangsHyp}갱 가정 대신 실측 페이스로 셌어요 — 갱 수를 가정한 계산은 완료 10대 전까지만 해요` : _base;
+            }
+          }
+        }
         if (isArrivalQ) return answerDataArrival(_voy, ship);
         if (isHatchQ) return answerHatchStatus(_voy, de, ship) || answerVoyageFacts({ factQuery: 'hatch' }, c);
         if (isGangQ) return answerGangSplit(_voyE, de, ship);
@@ -2737,6 +2844,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
+  if (via === 'workAnalysis' || via === 'expectEta') return false;   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다

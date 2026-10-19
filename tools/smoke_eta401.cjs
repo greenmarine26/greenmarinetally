@@ -38,8 +38,14 @@ ok(M.workPaceOf(atpr, 'ATPR_2644E') === 30, '수석 답변 속도(workPaceOf)도
 const a3 = JSON.parse(JSON.stringify(atpr)); a3.info.gangs = 3;
 const A3 = M.expectedWorkTimeOf(a3, M.shiftCnSetOf('ATPR_2644E', a3), NOW);
 ok(A3.gangs === 3 && A3.gangsKnown === true && A3.minutes === Math.round(230 / 90 * 60), '갱 수를 정해 두면(3갱) 그 수로 센다', `${A3.gangs}/${A3.minutes}`);
-const ap = JSON.parse(JSON.stringify(atpr));   // 무게를 지우면 쌍을 판정 못 한다 — 트윈으로 치지 않고(한 대씩) 범위로 돌린다
+//  4.39-01: EDI 총중량만 비고 리스트 무게가 있으면 리스트 무게로 잰다(화면 병합 행·twinWtOf 와 한 벌) — ATPR 2646E 실측(ASC 20피트 무게 0, 리스트 267대 무게 있음) «거짓» 지적
+const al = JSON.parse(JSON.stringify(atpr));
+Object.values(al.discharge.ediContainers).forEach((c) => { c.wt = 0; });
+const AL = M.expectedWorkTimeOf(al, M.shiftCnSetOf('ATPR_2644E', al), NOW);
+ok(AL.twinLifts === A.twinLifts && AL.moves === A.moves, 'EDI 무게가 비어도 리스트 무게로 트윈을 확정한다(EDI 무게 있을 때와 같은 39쌍 · 230무브 — 리스트에 무게가 없는 20피트만 미확정으로 남는다)', `${AL.twinLifts}/${AL.moves}/${AL.exact}/미확정 ${AL.unres20}`);
+const ap = JSON.parse(JSON.stringify(atpr));   // 무게를 지우면(EDI·리스트 둘 다) 쌍을 판정 못 한다 — 트윈으로 치지 않고(한 대씩) 범위로 돌린다
 Object.values(ap.discharge.ediContainers).forEach((c) => { c.wt = 0; });
+Object.values(ap.discharge.records || {}).forEach((r) => { if (r && typeof r === 'object') delete r.wt; });
 const AP = M.expectedWorkTimeOf(ap, M.shiftCnSetOf('ATPR_2644E', ap), NOW);
 ok(AP.twinLifts === 0 && AP.moves === 269 && AP.exact === false && AP.movesMin < 269, '무게가 없으면 트윈을 확정하지 않는다(한 대씩 269) · 범위로 낮은 쪽을 같이 준다', `${AP.twinLifts}/${AP.moves}/${AP.exact}/${AP.movesMin}`);
 

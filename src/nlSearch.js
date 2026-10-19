@@ -1783,6 +1783,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
 //  ★ 4.20 후속·감사 (Fable 판정 ④-4 · 중-5 · 규범 §4-4): 평택분 행 판정 한 벌 — 양하는 행에 찍힌 평택 표식(_ptk — 미르 펼치기·_normalize·콘앱이 utils.ptkDischargeUnitsOf 한 벌로 찍는다)을 먼저 본다.
 //    «양하 몇 대» 와 브리핑 «양하 평택 N대»·단(갑판·홀드)별 남은 수가 같은 집합(세관 목록 + 추가분 − 시프팅)을 센다. 표식이 없는 행만 종전 POD 판정. 선적은 종전 그대로(POL).
 const _ptkRow = (c, mode) => (mode === 'discharge' ? (typeof c._ptk === 'boolean' ? c._ptk : isPyeongtaekPort(c.pod)) : isPyeongtaekPort(c.pol));
+export const ptkRowOf = _ptkRow;   // 4.39-01: 미르 «작업 분석» 이 브리핑과 같은 평택분 판정을 쓴다
 
 // V7.99-10 (메모6 수동): "홀드 몇 개 남았어" — 작업 남은 단(홀드/데크)이 몇 곳인지 + 베이 번호 한 번에.
 //   되묻지 않게 곳수와 베이를 같이: "4, 12, 20 3곳입니다".
@@ -2102,6 +2103,33 @@ export function briefingVoiceLines(txt) {
   return out;
 }
 
+//  ★ 4.39-01: 브리핑과 미르 «작업 분석» 이 같은 판정으로 센다(규범 §4-4 한 벌) — 규격·풀/엠티·갑판/홀드·리퍼(풀만)·위험물·X-RAY·FR·OT·탱크·OOG.
+export function briefCountsOf(cs) {
+  const szOf = (c) => {
+    const lbl = isoToLabel(c.iso) || '';
+    if (/^45/.test(lbl)) return '45'; if (/^40/.test(lbl)) return '40'; if (/^20/.test(lbl)) return '20';
+    const f = (c.iso || '')[0];
+    return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
+  };
+  const sz = {}; let F = 0, E = 0, ERf = 0, deck = 0, hold = 0;   // 4.15-01: ERf — 엠티 중 리퍼 엠티(엠티 구분 표기)
+  const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], oog = [], noTmp = [];
+  const bays = new Set();
+  for (const c of cs) {
+    const s = szOf(c); sz[s] = (sz[s] || 0) + 1;
+    if (c.fe === 'E') { E++; if (isEmptyReefer(c)) ERf++; } else F++;
+    const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
+    const t = parseInt(c.tier, 10);
+    if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
+    if (isFullReefer(c)) { rf.push(c); if (reeferTempOf(c).state === 'A') noTmp.push(c); }   // 4.15 (§7.8-⑪): 풀 리퍼 한 벌(엠티·리퍼드라이·제작컨 빼고)   // 3.25: 판정 한 벌(규범 §4-4)   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
+    if (c.dg) dg.push(c);
+    if (c._xray) xr.push(c);
+    if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
+    if (c.ot || /OT$/.test(isoToLabel(c.iso) || '')) ot.push(c);
+    if (c.tk || /TK$/.test(isoToLabel(c.iso) || '')) tk.push(c);
+    if (c.oog) oog.push(c);
+  }
+  return { sz, F, E, ERf, deck, hold, rf, dg, xr, fr, ot, tk, oog, noTmp, bays };
+}
 export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '', opts = null) {   // V7.93: pairsMap·pier — 트윈 무게 예견 · 1.86: opts.rfSkip(머스크류 — 리퍼 체크 안 함)
   // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
   //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
@@ -2123,31 +2151,9 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   const cs = all.filter(isPtk);
   const transit = all.filter(c => !isPtk(c));
   if (!cs.length) return `📋 ${modeLabel} 브리핑 — 평택분 컨테이너가 없습니다`;
-  const szOf = (c) => {
-    const lbl = isoToLabel(c.iso) || '';
-    if (/^45/.test(lbl)) return '45'; if (/^40/.test(lbl)) return '40'; if (/^20/.test(lbl)) return '20';
-    const f = (c.iso || '')[0];
-    return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
-  };
   const total = cs.length;
   const done = cs.filter(c => c._comp).length;
-  const sz = {}; let F = 0, E = 0, ERf = 0, deck = 0, hold = 0;   // 4.15-01: ERf — 엠티 중 리퍼 엠티(엠티 구분 표기)
-  const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], oog = [], noTmp = [];
-  const bays = new Set();
-  for (const c of cs) {
-    const s = szOf(c); sz[s] = (sz[s] || 0) + 1;
-    if (c.fe === 'E') { E++; if (isEmptyReefer(c)) ERf++; } else F++;
-    const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
-    const t = parseInt(c.tier, 10);
-    if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
-    if (isFullReefer(c)) { rf.push(c); if (reeferTempOf(c).state === 'A') noTmp.push(c); }   // 4.15 (§7.8-⑪): 풀 리퍼 한 벌(엠티·리퍼드라이·제작컨 빼고)   // 3.25: 판정 한 벌(규범 §4-4)   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
-    if (c.dg) dg.push(c);
-    if (c._xray) xr.push(c);
-    if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
-    if (c.ot || /OT$/.test(isoToLabel(c.iso) || '')) ot.push(c);
-    if (c.tk || /TK$/.test(isoToLabel(c.iso) || '')) tk.push(c);
-    if (c.oog) oog.push(c);
-  }
+  const { sz, F, E, ERf, deck, hold, rf, dg, xr, fr, ot, tk, oog, noTmp, bays } = briefCountsOf(cs);   // 4.39-01: 미르 «작업 분석» 과 한 벌
   const bayArr = [...bays].sort((a, b) => a - b);
   const baysOf = (arr) => {
     const bs = [...new Set(arr.map(c => parseInt(c.bay, 10)).filter(Number.isFinite))].sort((a, b) => a - b);
