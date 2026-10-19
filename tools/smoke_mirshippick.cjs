@@ -154,5 +154,58 @@ console.log('⑥ 4.37-01 — 배를 안 댄 «지금 항차 …» 는 일하는 
   } finally { Date.now = _realNow; }
 }
 
+console.log('⑦ 4.37-02 — «어디다 올려» 입말 · 두 글자 기능 이름(«예보») 도 어느 화면에서든 매뉴얼 답 · 자료 질문은 가로채지 않는다');
+{
+  //  검수사 2026-10-19 16:56 «일조나 연태 예보는 어디다 올려야 하지?» → 규칙 답 없음 → 클로드 자료 답(설명서 안 봄) — 17:01 «분명있는기능은 다 답하게 해놓지 않았나요»
+  //  항차 ctx 는 실컨을 싣는다(감사 — 컨이 비어 있으면 «FR·DG 어디다 넣어» 같은 자료 답 가로채기를 못 잡는다)
+  const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/mirsame_kbtr.json'), 'utf8'));
+  const D = FX.voyage.discharge || {}, L = FX.voyage.loading || {};
+  const rowsOf = (sec) => Object.values(sec.ediContainers || {});
+  const kcs = M.toMirContainers(rowsOf(D), 'discharge').concat(M.toMirContainers(rowsOf(L), 'loading'));
+  const homeC = { app: 'tally', voyages, flat: [], voyageKey: '', inspector: '연막', accepted: true };
+  const voyC = { app: 'tally', smallTalkLast: true, modeChoice: 'both', countFallback: true, voyages: { [FX.voyageKey]: FX.voyage }, flat: kcs, voyageKey: FX.voyageKey, voyage: FX.voyage, info: FX.voyage.info, vsl: FX.voyage.info.vsl, mode: 'discharge', containers: kcs, compMap: {}, diagAlerts: [], inspector: '연막', accepted: true };
+  const ask = (q, c) => { M._mirThreadReset(); const t = {}; const a = M.answerOneRaw(q, { ...c, _trace: t }); return { a, t, first: String(a == null ? '' : a).split('\n')[0] }; };
+  for (const q of ['일조나 연태 예보는 어디다 올려야 하지?', 'RZOR 일조나 연태 예보는 어디다 올려야 하지?', '예보 어디다 넣어', '연태 예보 어디 올려', '카톡 예보 어디에 올려', '물량 예보 어디에다 붙여']) {
+    for (const [nm, c] of [['홈', homeC], ['항차', voyC]]) {
+      const r = ask(q, c);
+      T(r.t.via === 'featureHelp' && /물량 예보 붙여넣기/.test(r.first) && !M.isWeakAnswer(q, r.a, r.t), `${nm} «${q}» — 📋 물량 예보 붙여넣기 매뉴얼(강한 답 · 모델로 안 감)`, `${r.t.via} | ${norm(r.a).slice(0, 40)}`);
+    }
+  }
+  //  자료 질문·다른 기능 이름이 든 말은 매뉴얼 강한 답으로 가로채지 않는다(감사 A-1·A-2) — 실컨 항차(KBTR) · FR 11대 항차(SWTD 9013E)
+  for (const q of ['FR 어디다 넣어', 'DG 어디 올려', 'DG 어디다 넣어', 'XRAY 어디 올려', '리퍼 어디다가 실어', '엠티 어디다 넣어', '4777 어디다 올려', '위험물 어디다 넣어']) {
+    const r = ask(q, voyC);
+    T(!(r.t.via === 'featureHelp' && !M.isWeakAnswer(q, r.a, r.t)) && r.t.via !== 'howTo', `항차 «${q}» — 자료 질문은 종전 자료 길(매뉴얼로 가로채지 않음)`, `${r.t.via || ''} | ${norm(r.a).slice(0, 34)}`);
+  }
+  for (const q of ['장비 보고 어디다 올려', '도선 예보 어디다 올려', '취소 리스트 어디다 올려', '일기 예보 어디다 올려', '마감텔리 어디다 올려', '보류 어디다 넣어']) {
+    for (const [nm, c] of [['홈', homeC], ['항차', voyC]]) {
+      const r = ask(q, c);
+      T(!(r.t.via === 'featureHelp' && !M.isWeakAnswer(q, r.a, r.t)), `${nm} «${q}» — 강한 매뉴얼 답으로 단정하지 않는다(모델이 다시 본다)`, `${r.t.via || ''} | ${norm(r.a).slice(0, 34)}`);
+    }
+  }
+  {
+    const fr = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/frmark_swtd.json'), 'utf8'));
+    const rows = (x) => Array.isArray(x) ? x : Object.values(x || {});
+    const cs = M.toMirContainers(rows(fr.discharge), 'discharge').concat(M.toMirContainers(rows(fr.loading), 'loading'));
+    const info = { vsl: 'SWTD', vslFull: 'SWTD', voy: '9013E' };
+    const v = { info, discharge: { ediContainers: fr.discharge }, loading: { ediContainers: fr.loading } };
+    const c = { app: 'tally', smallTalkLast: true, modeChoice: 'both', countFallback: true, inspector: '연막', voyages: { SWTD_9013E: v }, flat: cs, voyageKey: 'SWTD_9013E', voyage: v, info, mode: 'loading', containers: cs, compMap: {}, diagAlerts: [] };
+    const r = ask('FR 어디다 넣어', c);
+    T(/FR\s*11대/.test(r.first), 'SWTD 9013E «FR 어디다 넣어» — 종전 자료 답 «FR 11대 — 베이 …» 그대로', norm(r.a).slice(0, 40));
+  }
+  //  재감사 C-1 — 느슨한 관문이 매뉴얼로 답한 말은 «못 알아들은 말»(gm-mir-miss → mir_misses)로 적히지 않는다(접수된 질문 accepted)
+  {
+    const ev = []; const _d = global.window.dispatchEvent;
+    global.window.dispatchEvent = (e) => { ev.push(e && e.type); return true; };
+    try {
+      for (const q of ['일조나 연태 예보는 어디다 올려야 돼?', '연태 예보는 어디 올려', '일조 예보는 어디다 올려야 해']) {   // 앞에서 안 물은 말 — 같은 말은 미답 기록이 한 번만 나간다
+        ev.length = 0; const r = ask(q, { ...homeC, accepted: true });
+        T(r.t.via === 'featureHelp' && !ev.includes('gm-mir-miss'), `홈 «${q}» — 매뉴얼로 답하고 미답 기록(gm-mir-miss)은 남기지 않는다`, `${r.t.via} | 사건 ${ev.join(',') || '없음'}`);
+      }
+    } finally { global.window.dispatchEvent = _d; }
+  }
+  { const r = ask('예보 어디서 봐', homeC);
+    T(r.t.via === 'howTo', '«예보 어디서 봐» 는 종전 그대로 약한 답(howTo) — 두 글자 열쇠는 «올려·넣어» 꼴만', `${r.t.via} | ${norm(r.a).slice(0, 30)}`); }
+}
+
 console.log(`\n${bad ? '✗' : '✔'} 미르 배 고르기·관문·용어 연막검사 ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

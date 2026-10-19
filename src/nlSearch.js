@@ -620,7 +620,7 @@ export function parseNaturalQuery(text) {
   //   ⚠ movePathQuery·posQuery 보다 **먼저** 잡고, 잡히면 그 둘을 끈다(아래 두 줄에 !howToQuery 가드도 같이 있다).
   //   ⚠ 단독 '어디'는 절대 안 잡는다 — "4777 어디" "엑스레이 어디" 는 종전대로 컨 조회다.
   //      동작 동사와 붙은 '어디서/어디에/어떻게' 만 받고, 컨번호(digits)가 잡히면 무조건 끈다.
-  const _actV = '하|해|찾|눌|바꾸|바꿔|고치|고쳐|수정|등록|설정|지정|켜|끄|보|봐|뽑|만들|만드|쓰|써|넣|입력|적|치|찍|사용|확인|남기|남겨|올리|올려|지우|지워|불러|열|골라|고르|인쇄|출력|나와|나오|시작|가';
+  const _actV = '하|해|찾|눌|바꾸|바꿔|고치|고쳐|수정|등록|설정|지정|켜|끄|보|봐|뽑|만들|만드|쓰|써|넣|입력|적|치|찍|사용|확인|남기|남겨|올리|올려|지우|지워|불러|열|골라|고르|인쇄|출력|나와|나오|시작|가|저장|업로드';   // 4.37-02: 저장·업로드 (붙이·붙여는 넣지 않는다 — «DG 라벨 어디다 붙여» 는 현장 질문, 감사 A-3)
   const _strong = new RegExp(`도움말|사용법|사용\\s*방법|매뉴얼|대처\\s*(?:법|방법)|처리\\s*(?:법|방법)|조치\\s*(?:법|방법)|어떻게\\s*(?:대처|조치|처리|해야|하나|하지|하죠|할까)|무슨\\s*버튼|어느\\s*버튼|버튼\\s*(?:어디|어느)|(?:어디서|어디에서|어디에)\\s*(?:${_actV})|어떻게\\s*(?:${_actV})|보는\\s*법|하는\\s*법|쓰는\\s*법`);
   // 약한 신호("○○ 어디 있어")는 **컨테이너 조건이 하나도 없을 때만** 기능 질문으로 본다.
   //   "리퍼 어디 있어"는 컨 조회이고 "돌림판 어디 있어"는 기능 질문이다 — 가르는 것은 컨 조건의 유무다.
@@ -629,20 +629,29 @@ export function parseNaturalQuery(text) {
   //   둘 다 컨 조건이 없을 때만이라 `4777 어디` 같은 조회는 그대로 간다.
   //   1.68: 뜻 질문("시프팅이 뭐야"·"VGM이 무슨 뜻")도 약한 신호로 받는다 — 용어집이 색인에 들어갔다.
   //     못 찾으면 generateHowToAnswer 가 null 을 돌려 종전 경로로 흘러가므로 오탐 피해가 없다.
-  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어디에?\s*$|어느\s*(?:화면|탭|메뉴)|어느\s*쪽|기능|메뉴|버튼|화면\s*(?:어디|어느)|(?:이|가|은|는)?\s*뭐(?:야|예요|에요|죠|지)\s*\??\s*$|무슨\s*뜻|뜻이?\s*뭐/;
+  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어디에?\s*$|어디\s*(?:올리|올려|넣|등록|입력|저장|업로드)|어느\s*(?:화면|탭|메뉴)|어느\s*쪽|기능|메뉴|버튼|화면\s*(?:어디|어느)|(?:이|가|은|는)?\s*뭐(?:야|예요|에요|죠|지)\s*\??\s*$|무슨\s*뜻|뜻이?\s*뭐/;
+  //   4.37-02(검수사 2026-10-19 16:56 «일조나 연태 예보는 어디다 올려야 하지?» — 미르가 엉뚱한 답): 입말 «어디다 올려»(= 어디에다)와
+  //     조사 없는 «어디 올려/넣어» 는 약한 신호(컨 조건 없을 때만)로 받는다(아래 _weakPut). 항구·배 별명(«연태»)이 든 말은 느슨한 기능 관문(featureHelpLoose)이 받는다.
   //   ⚠ 1.66-03: 컨 조건뿐 아니라 **컨 관련 인텐트가 하나라도 켜져 있으면 약한 신호는 안 받는다.**
   //     실측 — `빈자리 어디` 가 기능 설명(「베이 분석」)에 뺏겼다. 그건 작업 질문이다.
-  const _noCond = !result.digits && !result.size && !result.fe && !result.type && result.temp === null
-                  && result.bay == null && !result.pol && !result.pod && !result.portAny && !result.zone
+  const _noContCond = !result.digits && !result.size && !result.fe && !result.type && result.temp === null
+                  && result.bay == null && !result.pol && !result.pod && !result.zone
                   && !result.dgClass && !result.un
                   && !result.vacantQuery && !result.capacityQuery && !result.bayBreakdown
                   && !result.tierStackQuery && !result.progressQuery && !result.bottomQuery
                   && !result.topQuery && !result.weightSum && !result.dupL4Query
                   && !result.shiftingQuery && !result.tierPlaceCountQuery && !result.tierInContextQuery;
+  const _noCond = _noContCond && !result.portAny;
+  //  4.37-02: 항구 이름을 뺀 컨 조건 — 느슨한 기능 관문(featureHelpLoose)이 같은 판정을 쓴다(한 벌).
+  //    항구를 빼는 까닭 — «일조나 연태 예보는 어디다 올려» 의 «연태» 가 항구(CNYAT)로 잡힌다. 배 별명이지 컨 조건이 아니다.
+  result.contCond = !_noContCond;
   //  4.22-04 (감사 하 5 — 작업 시작 탭의 통합 검색 창을 뺀 판): «통합 검색 창이 없어졌어»·«버튼이 사라졌어» — 화면 요소가 없어졌다는 말도
   //    그 기능이 어디 갔느냐는 물음이다. 약한 신호와 같이 컨 조건이 없을 때만 받는다(별칭만으로는 기능 색인까지 못 갔다 — «못 배웠어요» 로 샜다).
   const _gone = /(?:검색\s*창|조회\s*창|입력\s*창|통합\s*검색|버튼|단추|메뉴|탭)\s*(?:이|가|은|는)?\s*(?:없어졌|사라졌|안\s*보(?:여|이))/;
-  if (!result.digits && (_strong.test(t) || ((_weak.test(t) || _gone.test(t)) && _noCond))) {
+  //   입말 «어디다(가)·어디에다 + 동사» 는 약한 신호다 — 컨 조건이 있으면(«FR 어디다 넣어» — FR 11대 — 베이 9…) 종전 자료 답(감사 A-1·A-3).
+  //     동사 «가» 는 빼고 본다(«리퍼 어디다가 실어» 의 «가» 는 조사).
+  const _weakPut = new RegExp(`어디(?:에)?다가?\\s*(?:${_actV.split('|').filter((v) => v !== '가').join('|')})`);
+  if (!result.digits && (_strong.test(t) || ((_weak.test(t) || _weakPut.test(t) || _gone.test(t)) && _noCond))) {
     result.howToQuery = true;
   }
   // 1.69: **뜻 질문은 용어집이 먼저다.** "리퍼가 뭐예요"의 '리퍼'가 컨 조건으로 잡혀
@@ -1333,6 +1342,55 @@ export function featureHelpExact(query, opts = {}) {
   const key = found.find((k) => topKeys.includes(k));
   if (!key) return null;
   if (!_FH_UI.test(raw) && key.length < 5) return null;   // «X 어디 있어» 만으로는 이름이 충분히 길 때(다섯 글자 이상)만 — «FR 어디 있어»·«X-RAY 어디 있어» 는 컨 조회다
+  return ans;
+}
+
+//  ★ 4.37-02 — **느슨한 관문**: «어디·어디다·어디에·어떻게 + 올려·넣어·붙여·등록·입력·저장» 으로 기능 자리를 물을 때
+//    ① 세 글자·네 글자 이름(«카톡 예보»)도 화면 낱말 없이 받고 ② 두 글자 이름(«예보»)은 **낱말 그대로**(조사만 뗀다) 맨 위 항목의 이름·별칭과 같을 때 받는다.
+//    검수사 2026-10-19 16:56 «일조나 연태 예보는 어디다 올려야 하지?» — 세 글자 미만 이름은 엄격한 관문(featureHelpExact)의 열쇠에서 빠져 지나쳤다.
+//    ⚠ 엄격한 관문과 달리 **종전 답보다 앞서지 않는다** — 미르(answerOneRaw)가 종전 길을 먼저 돌려 강한 답(자료 답 «FR 11대 — 베이 9…»)이면 그것을 쓰고,
+//      없거나 약할 때만 이 답을 쓴다(감사 A-1: «FR·DG·보류·XRAY 어디다 넣어» 를 가로챘다).
+//    ⚠ 질문에 맨 위가 아닌 다른 기능의 한글 이름(세 글자 이상) 또는 다른 기능의 두 글자 이름이 같이 있으면 두 글자 구제를 하지 않는다
+//      (감사 A-2: «장비 보고 어디다 올려» 가 «장비 번호 선택», «날씨 예보» 가 물량 예보로 갔다). 영문 낱말(«RZOR»)은 배 코드라 보지 않는다.
+const _FH_PUT = /(?:어디서|어디에서|어디에다|어디에|어디다|어디|어떻게)\s*(?:올리|올려|넣|붙이|붙여|등록|입력|저장|업로드)/;
+const _fhTok2 = (raw) => String(raw || '').replace(/\([^)]*\)/g, ' ').split(/[^가-힣A-Za-z0-9]+/)
+  .map((w) => w.toLowerCase().replace(/(?:은|는|이|가|을|를|도|만|의|에|로|좀)$/, '')).filter((w) => w.length === 2);
+let _fh2Map = null;
+function _fhKey2Map() {   // 두 글자 이름·별칭 → 그 이름을 가진 항목 이름들
+  if (_fh2Map) return _fh2Map;
+  const m = new Map();
+  const add = (name, l) => { const k = _fhKeyOf(name); if (k.length === 2) { if (!m.has(k)) m.set(k, new Set()); m.get(k).add(l); } };
+  FEATURE_INDEX.forEach((f) => { add(f.l, f.l); (f.a || []).forEach((x) => add(x, f.l)); });
+  _htManualIndex().forEach((it) => { add(it.l, it.l); (it.a || []).forEach((x) => add(x, it.l)); });
+  _fh2Map = m;
+  return m;
+}
+export function featureHelpLoose(query, opts = {}) {
+  const raw = String(query || '');
+  if (!_FH_ASK.test(raw) || !_FH_PUT.test(raw)) return null;
+  //  컨 번호·컨 조건(규격·풀/엠티·종류·위험물·베이…)이 든 말은 자료 질문일 수 있다 — 종전 길로 둔다(감사 A-1 «FR·DG 어디다 넣어»).
+  //  다른 일 인텐트(도선·날씨…)가 잡힌 말도 마찬가지다(감사 A-2 «도선 예보»·«일기 예보»). 위치·뜻·목록 신호는 기능 질문에도 붙는다.
+  let pq = null; try { pq = parseNaturalQuery(raw); } catch (e) { pq = null; }
+  if (!pq || pq.digits || pq.contCond) return null;
+  if (Object.keys(pq).some((k) => /Query$/.test(k) && pq[k] === true && !/^(howTo|pos|term|list)Query$/.test(k))) return null;
+  const qs = _fhNorm(raw);
+  const found = _fhKeyList().filter((k) => qs.includes(k));
+  const tok2 = _fhTok2(raw);
+  if (!found.length && !tok2.length) return null;
+  const ans = generateHowToAnswer(raw, null, opts);
+  const top = _howTopRef;
+  if (!ans || !top) return null;
+  const topKeys = [top.l].concat(top.a || []).map(_fhKeyOf);
+  //  맨 위 항목이 «무엇을 넣고·올리고·붙이는» 기능일 때만 — «마감텔리 어디다 올려» 의 📑 마감 텔리(엑셀을 만든다)·«보류 어디다 넣어» 의 보류는 올리는 기능이 아니다(감사 A-1·A-2).
+  if (!/붙여|붙이|올리|올려|업로드|넣|입력|등록|저장/.test(`${top.l} ${top.w || ''}`)) return null;   // 이름·자리만 본다(설명 속 «저장» 같은 곁말은 보지 않는다)
+  if (found.some((k) => k.length >= 4 && topKeys.includes(k))) return ans;   // ① 네 글자 이상 이름(«카톡 예보»·«물량 예보») + 올려·넣어
+  //  ② 두 글자 이름 — 질문에 한글 이름(세 글자 이상, «리스트»·«장비보고»)이 하나라도 같이 있으면 하지 않는다(감사 A-2 «취소 리스트»·«장비 보고»). 영문(«RZOR»)은 배 코드라 보지 않는다.
+  if (found.some((k) => /[가-힣]/.test(k))) return null;
+  //  두 글자 이름은 «어디·어떻게» 바로 앞 낱말일 때만(조사는 붙어도 된다) — «취소 리스트 어디다 올려» 의 «취소» 는 꾸밈말이다(감사 A-2).
+  const _esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!tok2.some((k) => topKeys.includes(k) && new RegExp(`(?:^|[^가-힣A-Za-z0-9])${_esc(k)}(?:은|는|이|가|을|를|도|만|의|에|로|좀)?\\s*(?:어디|어떻게)`, 'i').test(raw))) return null;
+  const m2 = _fhKey2Map();
+  if (tok2.some((k) => !topKeys.includes(k) && m2.has(k) && ![...m2.get(k)].includes(top.l))) return null;   // 다른 기능의 두 글자 이름이 같이 있다(«날씨 예보»)
   return ans;
 }
 

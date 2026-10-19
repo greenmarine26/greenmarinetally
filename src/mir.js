@@ -40,7 +40,7 @@ import {
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
-  generateHowToAnswer, featureHelpExact, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
+  generateHowToAnswer, featureHelpExact, featureHelpLoose, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
   answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
   voyageReportSpan, WORK_SHIFTS, workMinutesBetween,   // 3.56 [mirMood] 식사 창은 근무표 그대로 · 3.69-01 완료 공백은 실작업 분으로 잰다
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
@@ -1925,7 +1925,7 @@ export function answerOneRaw(query, ctx) {
   //  3.68 [mirThread]: 대화 중의 «응·두 번째·아니 ○○·그거·됐어» 는 직전 답에 이어 푼다(순수 — 기억은 화면이 접수 시점에 mirThreadCommit 으로 바꾼다).
   //    대화 층이 직접 낸 답은 via='thread'(isWeakAnswer 가 강한 답으로 본다 — 모델·miss 로 안 간다).
   let q = q0;
-  if (q0) {
+  if (q0 && !(ctx && ctx._fhLoose)) {   // 4.37-02: 느슨한 관문이 종전 길을 한 번 더 돌릴 때는 대화 층을 다시 풀지 않는다(이미 푼 말)
     let th = null;
     try { th = mirThreadResolve(q0, ctx || {}, (ctx && ctx._now) || Date.now()); } catch (e) { console.warn('[미르 대화] 풀기 실패:', e); th = null; }   // _now — 연막검사가 시계를 준다
     if (th && th.direct != null) { if (ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.via = 'thread'; return th.direct; }
@@ -2004,6 +2004,18 @@ export function answerOneRaw(query, ctx) {
     try {
       const fh = featureHelpExact(q, { isChief: !!c.isChief });
       if (fh) { _via('featureHelp'); return fh; }
+      //  ★ 4.37-02 — 느슨한 관문(«예보는 어디다 올려» · 두 글자·짧은 이름 + 올려·넣어): **종전 길을 먼저** 돌려 강한 답(자료 답)이면 그것, 없거나 약하면 매뉴얼 답.
+      //    검수사 2026-10-19 16:56 «일조나 연태 예보는 어디다 올려야 하지?» → 규칙 답이 없어 클로드 자료 답(설명서를 안 본다)으로 갔다.
+      //    앞에서 가로채지 않는 까닭 — 강한 자료 답(브리핑 등)을 덮지 않기 위해서다. 컨 조건이 든 말(«FR 어디다 넣어» — FR 11대 — 베이 9…)은 featureHelpLoose 가 아예 받지 않는다(감사 A-1).
+      if (!(ctx && ctx._fhLoose)) {
+        const fl = featureHelpLoose(q, { isChief: !!c.isChief });
+        if (fl) {
+          const t2 = {};
+          const base = answerOneRaw(q, { ...(ctx || {}), _fhLoose: true, accepted: false, _trace: t2 });   // accepted:false — 안쪽 종전 길이 null 로 끝나도 «못 알아들은 말»(mir_misses)로 적지 않는다. 겉에서 매뉴얼 답을 내기 때문이다(재감사 C-1)
+          if (base != null && !isWeakAnswer(q, base, t2)) { if (c._trace && typeof c._trace === 'object') Object.assign(c._trace, t2); return base; }
+          _via('featureHelp'); return fl;
+        }
+      }
     } catch (e) { console.warn('[미르] 기능 이름 사용법 관문 실패 — 종전 길로 갑니다:', e); }
     //  순수한 뜻 질문(«4.1 인화성 고체 뭐야»·«FEU 뭐야»)은 항차가 열려 있어도 사전이 먼저다 — 열려 있으면 DG 클래스·규격 같은 컨 조건 인텐트가 정의를 가렸다.
     //    집계·진행·목록·베이 조건이 잡힌 말(«남은 거 뭐야»)은 뜻 질문이 아니니 제외 — nlSearch termQuery 와 같은 문지기.
