@@ -32,7 +32,7 @@ let n = 0, bad = 0;
 const T = (cond, name, detail = '') => { n += 1; if (cond) console.log(`  ✔ ${name}`); else { bad += 1; console.log(`  ✘ ${name}${detail ? ' — ' + detail : ''}`); } };
 
 // ── 가짜 네트워크: 보관소 설정 · 클로드 · 제미나이 · 기록 ──
-let CFG = {}; const calls = []; let claudeMode = 'ok'; let claudeText = '{"items":[]}';
+let CFG = {}; let WEBROWS = null; let WEBFAIL = ''; const calls = []; let claudeMode = 'ok'; let claudeText = '{"items":[]}';
 const resp = (status, j) => ({ ok: status >= 200 && status < 300, status, json: async () => j, text: async () => JSON.stringify(j) });
 global.fetch = async (url, opts = {}) => {
   url = String(url);
@@ -40,9 +40,15 @@ global.fetch = async (url, opts = {}) => {
   calls.push({ url, body });
   if (url.includes('/mir_config.json')) return resp(200, CFG);
   if (url.includes('/mir_model_log/')) return resp(200, opts.method === 'POST' ? { name: 'x' } : {});
+  if (url.includes('/mir_websearch/')) {
+    if (opts.method === 'POST') return WEBFAIL === 'write' ? resp(401, { error: 'denied' }) : resp(200, { name: 'slot1' });
+    if (opts.method === 'PATCH') return resp(200, {});
+    return WEBFAIL === 'read' ? resp(500, {}) : resp(200, WEBROWS);
+  }
   if (url.includes('/ai_call_log/') || url.includes('/mir_misses/')) return resp(200, { name: 'x' });
   if (url.includes('api.anthropic.com')) {
     if (claudeMode === 'fail') return resp(529, { error: { message: 'overloaded' } });
+    if (body && body.tools) return resp(200, { content: [{ type: 'server_tool_use', name: 'web_search', input: { query: 'x' } }, { type: 'text', text: '멜론 1위는 A2O LITE의 "NEON"' }, { type: 'text', text: '이고, 18일 기준이에요.' }], stop_reason: 'end_turn', usage: { input_tokens: 14913, output_tokens: 219, server_tool_use: { web_search_requests: 1 } } });
     return resp(200, { content: [{ type: 'text', text: typeof claudeText === 'function' ? claudeText(body) : claudeText }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } });
   }
   if (url.includes('generativelanguage.googleapis.com')) return resp(200, { candidates: [{ content: { parts: [{ text: '{"items":["제미나이"]}' }] }, finishReason: 'STOP' }] });
@@ -142,6 +148,73 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
   const r4 = await B.askMirModel('외로워', { app: 'smoke', voyageKey: '', inspector: '시험' }, () => null, { who: '시험', weakText: null, weakVia: '' });
   T(r4 !== undefined && r4.via !== 'chat' || r4.via === 'chat', '클로드가 막혀도 터지지 않고 제미나이·종전 길로 돌아간다', JSON.stringify(r4).slice(0, 100));
   claudeMode = 'ok';
+
+  console.log('⑤ 4.36-02 — 웹 검색(하루 1달러 한도) · 일 낱말이 든 상식 질문 · 사진 토큰 기록');
+  const ctx5 = { app: 'smoke', voyageKey: '', inspector: '시험' };
+  const realNow = Date.now; let TOFF = 3 * 60 * 1000;   // 앞 시험(클로드 과부하)이 건 2분 휴지와 30초 비용 캐시를 시계를 앞으로 돌려 건너뛴다
+  Date.now = () => realNow() + TOFF;
+  const noW = { who: '시험', weakText: null, weakVia: '' };
+  claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.4}' : '일반 대화예요');
+  CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true }; await B.getMirConfig(true);
+  WEBROWS = { a: { usd: 0.2 } };
+  calls.length = 0;
+  const w1 = await B.askMirModel('지금 한국 가요차트에서 1위가 누구야', ctx5, () => null, noW);
+  const wc = claudeCalls().find((c) => c.body && c.body.tools);
+  T(w1.via === 'chat' && /A2O LITE의 "NEON"이고/.test(w1.text) && !/ 이고/.test(w1.text), '실시간 질문(차트 1위)은 웹 검색으로 답한다 — 글 조각 사이에 띄어쓰기를 넣지 않는다', JSON.stringify(w1).slice(0, 120));
+  T(!!wc && wc.body.tools[0].name === 'web_search' && wc.body.tools[0].max_uses === 1, '검색 도구는 질문당 1회만 허용한다');
+  const rsv = calls.findIndex((c) => c.url.includes('/mir_websearch/') && c.body && c.body.reserve === true && c.body.usd === 0.07);
+  const srch = calls.findIndex((c) => c.url.includes('api.anthropic.com') && c.body && c.body.tools);
+  T(rsv >= 0 && srch > rsv, '검색을 부르기 전에 예상 비용(0.07달러)을 서버에 먼저 잡는다 — 여러 폰이 동시에 물어도 한도를 넘지 않게');
+  const wl = calls.find((c) => c.url.includes('/mir_websearch/') && c.url.includes('slot1') && c.body && c.body.reserve === false);
+  T(!!wl && Math.abs(wl.body.usd - 0.058) < 0.001 && wl.body.searches === 1, '응답이 오면 실제 usage 로 비용을 확정한다 (입력 14,913·출력 219·검색 1회 ≈ 0.058달러)', wl ? JSON.stringify(wl.body) : '기록 없음');
+  const webLogRow = calls.find((c) => c.url.includes('/mir_model_log/') && c.body && c.body.kind === 'web');
+  T(!!webLogRow && webLogRow.body.searches === 1 && webLogRow.body.usd > 0, 'mir_model_log 에 kind web 으로 토큰과 비용이 남는다');
+  TOFF += 40000; WEBROWS = { a: { usd: 0.5 }, b: { usd: 0.45 } };   // 오늘 0.95달러 썼다 → 남은 0.05 < 한 번 예상 0.07
+  claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.4}' : '일반 대화예요');
+  await B.getMirConfig(true);
+  calls.length = 0;
+  const w2 = await B.askMirModel('오늘 뉴스 속보 알려줘', ctx5, () => null, noW);
+  T(w2.via === 'chat' && /한도/.test(w2.text) && /1달러/.test(w2.text) && !claudeCalls().some((c) => c.body && c.body.tools), '하루 한도(1달러)에 닿으면 검색하지 않고 한도를 다 썼다고 말한다', JSON.stringify(w2).slice(0, 120));
+  { // 비용을 읽지 못하거나 적지 못하면 한도가 풀리지 않게 검색하지 않는다 · 일 낱말·소네트 아닌 모델도 검색 안 함
+    for (const mode of ['read', 'write']) {
+      WEBFAIL = mode; TOFF += 40000; WEBROWS = {}; calls.length = 0;
+      const wf = await B.askMirModel('코스피 주가 어때', ctx5, () => null, noW);
+      T(!claudeCalls().some((c) => c.body && c.body.tools) && wf.via === 'chat', `비용 ${mode === 'read' ? '읽기' : '쓰기'}가 실패하면 검색하지 않고 종전 생활회화로 답한다`, JSON.stringify(wf).slice(0, 80));
+    }
+    WEBFAIL = ''; TOFF += 40000; WEBROWS = {}; calls.length = 0;
+    await B.askMirModel('양하 순위 알려줘', ctx5, () => null, noW);
+    await B.askMirModel('1위 호기 어디야', ctx5, () => null, noW);
+    T(!claudeCalls().some((c) => c.body && c.body.tools), '일 낱말이 든 말(«양하 순위»·«1위 호기»)은 웹 검색으로 새지 않는다');
+    CFG = { aiKey: 'g-key', claudeKey: 'c-key', claudeModel: 'claude-opus-5-5', dailyCap: 500, enabled: true }; await B.getMirConfig(true); TOFF += 40000; calls.length = 0;
+    await B.askMirModel('오늘 뉴스 속보', ctx5, () => null, noW);
+    T(!claudeCalls().some((c) => c.body && c.body.tools), '모델이 소네트가 아니면(단가를 모르므로) 검색하지 않는다');
+  }
+  CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true, webSearchUsd: 0 }; await B.getMirConfig(true); TOFF += 40000; WEBROWS = {};
+  calls.length = 0;
+  await B.askMirModel('코스피 주가 어때', ctx5, () => null, noW);
+  T(!claudeCalls().some((c) => c.body && c.body.tools), 'mir_config.webSearchUsd=0 이면 배포 없이 검색을 끈다');
+  CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true, webSearchUsd: 3 }; await B.getMirConfig(true); TOFF += 40000; WEBROWS = { a: { usd: 2 } };
+  calls.length = 0;
+  const w3 = await B.askMirModel('요즘 뜨는 노래 순위', ctx5, () => null, noW);
+  T(w3.via === 'chat' && /NEON/.test(w3.text), '한도는 mir_config.webSearchUsd 로 바꾼다(3달러면 2달러 쓴 뒤에도 검색)', JSON.stringify(w3).slice(0, 80));
+  CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true }; await B.getMirConfig(true); WEBROWS = {};
+  claudeText = (b) => { const p = JSON.stringify(b); if (p.includes('번역기다')) return '{"canonical":"","window":"","confidence":0.3}'; if (p.includes('자료(JSON)')) return '임진왜란이나 역사 이야기는 자료에 없어요.'; return '임진왜란은 1592년에 일어났고 7년 동안 이어졌어요 😺'; };
+  calls.length = 0;
+  const w4 = await B.askMirModel('조선시대 임진왜란은 언제야', ctx5, () => null, noW);
+  T(w4.via === 'chat' && /1592/.test(w4.text) && !/자료에 없/.test(w4.text), '«언제야»가 든 상식 질문도 자료 답이 «자료에 없어요»면 생활회화로 받는다', JSON.stringify(w4).slice(0, 120));
+  calls.length = 0;
+  const w4b = await B.askMirModel('OBWH 2769E 언제 끝나', ctx5, () => null, noW);
+  T(w4b.via !== 'chat' && !claudeCalls().some((c) => JSON.stringify(c.body).includes('다정한 고양이')), '배 이름·번호가 든 일 질문은 «자료에 없어요» 를 상식 답으로 바꾸지 않는다', JSON.stringify(w4b).slice(0, 100));
+  claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"리퍼 몇 대","window":"대수","confidence":0.95}' : '안 불려야 한다');
+  calls.length = 0;
+  const w5 = await B.askMirModel('냉동 컨 개수 언제야', ctx5, (cq) => (cq === '리퍼 몇 대' ? '리퍼 12대예요' : null), noW);
+  T(w5.via === 'translate' && !claudeCalls().some((c) => JSON.stringify(c.body).includes('다정한 고양이')), '일 질문은 여전히 규칙 답이 먼저다(상식 구제가 일 질문을 가로채지 않는다)');
+  claudeText = '{"items":[{"cn":"A"}]}';
+  Date.now = realNow;
+  calls.length = 0;
+  await B.aiCall('listPhoto', body, { timeoutMs: 20000 });
+  const pl = calls.find((c) => c.url.includes('/ai_call_log/') && c.body && c.body.kind === 'listPhoto');
+  T(!!pl && pl.body.tokIn === 10 && pl.body.tokOut === 5 && pl.body.model, '사진·PDF 호출 기록(ai_call_log)에 입력·출력 토큰이 남는다', pl ? JSON.stringify(pl.body) : '기록 없음');
 
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n4.36 연막검사 ${n - bad}/${n} 통과`);

@@ -2743,7 +2743,7 @@ export async function getMirConfig(force = false) {
       const j = (r.ok && r.j && typeof r.j === 'object') ? r.j : {};
       let key = String(j.aiKey || '').trim();
       if (!key) { try { key = localStorage.getItem('master_gemini_api_key_v1') || ''; } catch (e) { key = ''; } }   // 공용 키가 비어 있으면 개인 키(종전 길)
-      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), claudeOpusModel: String(j.claudeOpusModel || '').trim(), visionProvider: String(j.visionProvider || '').trim(), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim() };
+      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), claudeOpusModel: String(j.claudeOpusModel || '').trim(), visionProvider: String(j.visionProvider || '').trim(), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim(), webSearchUsd: (j.webSearchUsd === undefined || j.webSearchUsd === null || j.webSearchUsd === '' || isNaN(Number(j.webSearchUsd))) ? WEB_USD_DEFAULT : Math.max(0, Number(j.webSearchUsd)) };
       _cfgAt = Date.now();
     } catch (e) {
       console.warn('[미르 모델] mir_config 를 못 읽었어요 — 이번엔 모델 없이 갑니다:', e && e.message);
@@ -2801,6 +2801,59 @@ async function _claude(cfg, prompt, maxOut, json) {
   if (!text) { const e = new Error('클로드 빈 답(' + ((r.j && r.j.stop_reason) || '?') + ')'); e.status = 0; throw e; }
   const u = (r.j && r.j.usage) || {};
   return { text, tokIn: u.input_tokens || 0, tokOut: u.output_tokens || 0, ms: Date.now() - t0, prov: 'claude' };
+}
+/* ★ 4.36-02 — 미르 웹 검색(클로드 웹 검색 도구). 검수사 2026-10-19 «1불로 제한 합니다» — 하루 합계 비용이 한도(mir_config.webSearchUsd, 처음 1달러)에 닿으면 그날은 검색을 멈춘다.
+   비용 = 입력 토큰×3달러/100만 + 출력 토큰×15달러/100만 + 검색 1회 0.01달러(소네트 단가 가정). 실제 응답의 usage 로 계산해 mir_websearch/{날짜} 에 한 줄씩 남기고, 읽을 때 합산한다. */
+const WEB_USD_DEFAULT = 1;
+const WEB_EST_USD = 0.07;   // 한 번 부르기 전에 서버에 먼저 잡아 두는 예상 비용(실측 1회 약 0.06달러) — 다른 폰도 이만큼 쓴 것으로 본다
+const MIR_REALTIME_RE = /(차트|순위|1위|뉴스|속보|주가|환율|시세|코스피|코스닥|나스닥|비트코인|경기\s*결과|스코어|박스오피스|실시간\s*(검색어|차트|순위|뉴스)|최근\s*(소식|뉴스)|요즘\s*(뜨는|인기))/;
+const _webCost = (tokIn, tokOut, searches) => (Number(tokIn) || 0) * 3 / 1e6 + (Number(tokOut) || 0) * 15 / 1e6 + (Number(searches) || 0) * 0.01;
+let _webSpent = { day: '', usd: 0, at: 0 };
+/** 오늘 쓴 검색 비용(달러). 읽지 못하면 null — 부르는 쪽이 «검색 안 함» 으로 닫는다(한도가 풀리지 않게). 이 폰이 방금 잡은 금액은 서버 합계보다 낮지 않게 합친다. */
+async function _webSpentToday() {
+  const day = _dayKey();
+  if (_webSpent.day === day && Date.now() - _webSpent.at < 10 * 1000) return _webSpent.usd;
+  try {
+    const r = await _fetchJson(`${FB}/mir_websearch/${day}.json`, {}, 6000);
+    if (!r.ok) { console.warn('[미르 모델] 오늘 검색 비용을 못 읽었어요(HTTP ' + r.status + ') — 검색을 쉽니다'); return null; }
+    const rows = (r.j && typeof r.j === 'object') ? Object.values(r.j) : [];
+    const usd = rows.reduce((a, x) => a + (Number(x && x.usd) || 0), 0);
+    _webSpent = { day, usd, at: Date.now() };
+    return usd;
+  } catch (e) { console.warn('[미르 모델] 오늘 검색 비용을 못 읽었어요 — 검색을 쉽니다:', e && e.message); return null; }
+}
+/** 호출 직전에 예상 비용을 서버에 한 줄 잡는다(다른 폰도 곧 보인다). 못 적으면 null → 검색하지 않는다. */
+async function _webReserve(q) {
+  const day = _dayKey();
+  try {
+    const r = await _fetchJson(`${FB}/mir_websearch/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), usd: WEB_EST_USD, reserve: true, q: String(q).slice(0, 60) }) }, 6000);
+    if (!r.ok || !r.j || !r.j.name) { console.warn('[미르 모델] 검색 비용을 못 적었어요(HTTP ' + r.status + ') — 검색을 쉽니다'); return null; }
+    _webSpent = { day, usd: (_webSpent.day === day ? _webSpent.usd : 0) + WEB_EST_USD, at: _webSpent.day === day ? _webSpent.at : Date.now() };
+    return r.j.name;
+  } catch (e) { console.warn('[미르 모델] 검색 비용을 못 적었어요 — 검색을 쉽니다:', e && e.message); return null; }
+}
+/** 응답이 오면 잡아 둔 한 줄을 실제 비용으로 고친다. 청구가 없었던 실패(HTTP 오류)는 0, 시간 초과처럼 청구됐을 수 있는 실패는 예상 비용을 그대로 둔다. */
+async function _webSettle(name, usd, extra) {
+  if (!name) return;
+  const day = _dayKey();
+  if (_webSpent.day === day) _webSpent.usd = Math.max(0, _webSpent.usd + (usd - WEB_EST_USD));
+  try {
+    await _fetchJson(`${FB}/mir_websearch/${day}/${name}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usd: Math.round(usd * 10000) / 10000, reserve: false, ...(extra || {}) }) }, 6000);
+  } catch (e) { console.warn('[미르 모델] 검색 비용 확정 기록 실패(예상치가 남습니다):', e && e.message); }
+}
+async function _claudeSearch(cfg, prompt, maxOut) {
+  const t0 = Date.now();
+  const r = await _fetchJson('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: cfg.claudeModel || DEFAULT_CLAUDE_MODEL, max_tokens: maxOut, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }], messages: [{ role: 'user', content: prompt }] }),
+  }, 60000);
+  if (!r.ok) { const e = new Error((r.j && r.j.error && r.j.error.message) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  const blocks = (r.j && Array.isArray(r.j.content)) ? r.j.content : [];
+  const text = blocks.filter((c) => c && c.type === 'text').map((c) => c.text || '').join('').replace(/\s+/g, ' ').trim();   // 글 조각은 이어 붙인다(조각 사이에 띄어쓰기를 넣지 않는다)
+  const u = (r.j && r.j.usage) || {};
+  const searches = (u.server_tool_use && u.server_tool_use.web_search_requests) || 0;
+  return { text, tokIn: u.input_tokens || 0, tokOut: u.output_tokens || 0, searches, stop: (r.j && r.j.stop_reason) || '', ms: Date.now() - t0, prov: 'claude-web' };
 }
 async function _gem(cfg, prompt, maxOut, json) {
   if (cfg.claudeKey && Date.now() >= _claudeOffUntil) {
@@ -2940,6 +2993,34 @@ export async function chatAnswer(q, ctx, cfg) {
 5. 힘들다·죽고 싶다 같은 위기 신호면 가볍게 넘기지 말고 곁에 있다고 따뜻하게 말하고, 가까운 사람이나 자살예방상담전화 109에 바로 연락하도록 권한다.
 ${hist ? `지금까지 대화:\n${hist}\n` : ''}검수사: "${String(q).slice(0, 300)}"
 미르:`;
+  //  ★ 4.36-02 웹 검색 — 차트·순위·뉴스·주가 같은 실시간 질문만(일 낱말이 든 말은 제외). 하루 합계 비용이 한도에 닿으면 검색 없이 «한도 다 썼다»고 말한다.
+  //    비용을 읽거나 적지 못하면 검색하지 않는다(한도가 풀리지 않게). 모델이 소네트가 아니면 단가를 모르므로 검색하지 않는다. 검색이 안 되면 종전 생활회화로 답한다.
+  if (cfg.claudeKey && MIR_REALTIME_RE.test(String(q)) && isChatCandidate(q, '') && !(cfg.webSearchUsd <= 0) && /sonnet/i.test(String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL))) {
+    const limit = cfg.webSearchUsd;
+    const spent = await _webSpentToday();
+    if (spent !== null && spent + WEB_EST_USD > limit) {
+      return { text: `오늘 검색에 쓸 수 있는 한도(하루 ${limit}달러)를 다 써서 지금은 찾아볼 수 없어요. 내일 다시 물어봐 주세요 😺`, rejected: null, tokIn: 0, tokOut: 0, ms: 0, prov: 'web-cap', searches: 0, usd: 0 };
+    }
+    const slot = spent === null ? null : await _webReserve(q);
+    if (slot) {
+      try {
+        const wprompt = prompt.replace('2. 실시간 정보(날씨·뉴스·주가·경기 결과)와 네가 확실히 모르는 것은 모른다고 말한다. 날씨는 «미르야 날씨 알려줘» 라고 하면 앱이 안내한다고 알려 준다.', '2. 이번 질문은 웹 검색 도구를 쓸 수 있다. 실시간 정보는 검색을 한 번만 하고 찾은 것만 말하며, 기준 날짜·시각을 함께 말하고 출처 주소는 쓰지 않는다. 검색해도 확실하지 않으면 그렇다고 말한다. 네가 지어내지 않는다.');
+        const w = await _claudeSearch(cfg, wprompt, 700);
+        const usd = _webCost(w.tokIn, w.tokOut, w.searches);
+        await _webSettle(slot, usd, { tokIn: w.tokIn, tokOut: w.tokOut, searches: w.searches, ms: w.ms, ok: !!w.text, stop: w.stop });
+        let wt = String(w.text || '').trim().replace(/^미르\s*[:：]\s*/, '');
+        if (wt && /[A-Z]{4}\d{7}/.test(wt)) wt = '';
+        if (wt.length > 900) wt = wt.slice(0, 900).replace(/[^.!?요다 ]*$/, '').trim() || wt.slice(0, 900);
+        if (wt) return { text: wt, rejected: null, tokIn: w.tokIn, tokOut: w.tokOut, ms: w.ms, prov: w.prov, searches: w.searches, usd };
+        _logCall({ kind: 'web', ok: false, err: '빈 답(' + (w.stop || '?') + ')', q: String(q).slice(0, 80), tokIn: w.tokIn, tokOut: w.tokOut, searches: w.searches, usd: Math.round(usd * 10000) / 10000 });
+      } catch (e) {
+        const hasStatus = !!(e && typeof e.status === 'number' && e.status >= 400);
+        await _webSettle(slot, hasStatus ? 0 : WEB_EST_USD, { ok: false, err: String(e && e.message || e).slice(0, 80) });   // HTTP 오류는 청구가 없다 · 시간 초과는 청구됐을 수 있어 예상치를 둔다
+        console.warn('[미르 모델] 웹 검색이 안 돼서 검색 없이 답합니다:', e && e.message);
+        _logCall({ kind: 'web', ok: false, err: String(e && e.message || e).slice(0, 120), status: (e && e.status) || 0, q: String(q).slice(0, 80) });
+      }
+    }
+  }
   const r = await _gem(cfg, prompt, 700, false);
   let text = String(r.text || '').trim().replace(/^미르\s*[:：]\s*/, '');
   let rejected = null;
@@ -3056,18 +3137,24 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   if (weakByWordsOnly && identity && rec.translated && !rec.canonical) { /* 번역도 «없다»고 한 말 — 자료 답을 한 번 본다 */ }
   else if (weakByWordsOnly) return confirmed();
   //  ★ 4.36 생활회화 층 — 규칙이 못 받은 일 아닌 말은 소네트가 이어서 말한다(자료 답으로 가지 않는다). 막히면 종전 길(규칙 답)로 돌아간다.
-  if (!weakByWordsOnly && !rec.canonical && isChatCandidate(q, rec.window)) {   // 4.36-01: 일 낱말이 없고 번역도 일 뜻으로 못 옮긴 말은 전부 클로드가 받는다(일반 상식 포함)
+  //  4.36-02: 생활회화 시도를 한 함수로 — «언제·몇 시» 같은 일 낱말이 든 상식 질문(임진왜란은 언제야)은 자료 답이 «자료에 없어요»로 끝났을 때 한 번 더 이 길로 받는다.
+  let chatTried = false;
+  const tryChat = async () => {
+    chatTried = true;
     if (!cfg) cfg = await getMirConfig();
-    if (cfg.claudeKey || cfg.aiKey) {
-      try {
-        const ca = await chatAnswer(q, ctx, cfg);
-        _logCall({ kind: 'chat', q: String(q).slice(0, 80), ok: !!ca.text, rejected: !!ca.rejected, tokIn: ca.tokIn, tokOut: ca.tokOut, ms: ca.ms, prov: ca.prov || '', who, app: ctx.app || '' });
-        if (ca.text) { _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'chat' }); out.text = ca.text; out.via = 'chat'; out.reason = 'chat'; return out; }
-      } catch (e) {
-        console.warn('[미르 모델] 생활회화 답 실패:', e && e.message);
-        _logCall({ kind: 'chat', q: String(q).slice(0, 80), ok: false, err: String(e && e.message || e).slice(0, 120), who, app: ctx.app || '' });
-      }
+    if (!(cfg.claudeKey || cfg.aiKey)) return false;
+    try {
+      const ca = await chatAnswer(q, ctx, cfg);
+      _logCall({ kind: ca.searches ? 'web' : 'chat', q: String(q).slice(0, 80), ok: !!ca.text, rejected: !!ca.rejected, tokIn: ca.tokIn, tokOut: ca.tokOut, ms: ca.ms, prov: ca.prov || '', ...(ca.searches ? { searches: ca.searches, usd: Math.round((ca.usd || 0) * 10000) / 10000 } : {}), who, app: ctx.app || '' });
+      if (ca.text) { _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'chat' }); out.text = ca.text; out.via = 'chat'; out.reason = 'chat'; return true; }
+    } catch (e) {
+      console.warn('[미르 모델] 생활회화 답 실패:', e && e.message);
+      _logCall({ kind: 'chat', q: String(q).slice(0, 80), ok: false, err: String(e && e.message || e).slice(0, 120), who, app: ctx.app || '' });
     }
+    return false;
+  };
+  if (!weakByWordsOnly && !rec.canonical && isChatCandidate(q, rec.window)) {   // 4.36-01: 일 낱말이 없고 번역도 일 뜻으로 못 옮긴 말은 전부 클로드가 받는다(일반 상식 포함)
+    if (await tryChat()) return out;
   }
   //  생활회화로 못 받은 낱말 말(미르·인사·식사)은 자료 답으로 가지 않는다
   if (rec.window === '잡담' && /미르|힘드|수고|고마|안녕|밥|점심|저녁|아침|커피/.test(q)) { out.reason = 'smalltalk'; return weakByWordsOnly ? confirmed() : out; }
@@ -3079,6 +3166,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     const da = await dataAnswer(q, ctx, cfg);
     _logCall({ kind: 'data', q: String(q).slice(0, 80), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, prov: da.prov || '', packChars: da.packChars, who, app: ctx.app || '' });
     const empty = !da.text || /자료에 없어요|자료에는 없|확실한 답을 못/.test(String(da.text));
+    if (!weakByWordsOnly && !rec.canonical && !chatTried && !/[A-Za-z]{4}|\d{3,}/.test(String(q)) && /자료에 없어요|자료에는 없/.test(String(da.text || '')) && (await tryChat())) return out;   // 배 이름·번호가 든 일 질문은 «자료에 없어요» 그대로(상식으로 바꾸지 않는다)   // 4.36-02: 일 낱말이 든 상식 질문 구제
     if (weakByWordsOnly && (da.rejected || empty)) return confirmed();
     //  4.35-01: 규칙이 사용법 안내(howTo)를 냈는데 모델이 «자료에 없어요» 로 덮지 않는다(라이브 실측 «사용법 알려줘»).
     if (opts.weakText && opts.weakVia === 'howTo' && !da.rejected && empty && !WEAK_TEXT.test(String(opts.weakText))) return confirmed();

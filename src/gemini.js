@@ -73,13 +73,13 @@ const CLAUDE_VISION_KINDS = { esealPhoto: 'opus', sheetPhoto: 'opus', listPhoto:
 const DEFAULT_OPUS_MODEL = 'claude-opus-5-5';
 const DEFAULT_SONNET_MODEL = 'claude-sonnet-5-5';
 let _visionClaudeOffUntil = 0;
-function _aiLogLine(kind, status, ms, model) {
+function _aiLogLine(kind, status, ms, model, tok) {   // 4.36-02: tok = {tokIn, tokOut} — 사진·PDF 비용을 종류별로 정확히 세려고 남긴다
   let who = '';
   try { who = localStorage.getItem('master_active_inspector_v1') || ''; } catch (e) { who = ''; }
   const d = new Date();
   const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   try {
-    fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), kind, who, status, ms, model }) })
+    fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), kind, who, status, ms, model, ...(tok ? { tokIn: tok.tokIn || 0, tokOut: tok.tokOut || 0 } : {}) }) })
       .catch((e) => console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message));
   } catch (e) { console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message); }
 }
@@ -135,6 +135,7 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
   const ac = (typeof AbortController === 'function') ? new AbortController() : null;
   const timer = ac ? setTimeout(() => ac.abort(), Math.round(timeoutMs * (kind === 'stowagePdf' ? 0.95 : 0.7))) : null;
   let status = 0;
+  const tok = { tokIn: 0, tokOut: 0 };
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -145,6 +146,7 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
     status = res.status;
     const j = await res.json().catch(() => null);
     if (!res.ok) { const e = new Error((j && j.error && j.error.message) || ('HTTP ' + res.status)); e.status = res.status; throw e; }
+    tok.tokIn = (j && j.usage && j.usage.input_tokens) || 0; tok.tokOut = (j && j.usage && j.usage.output_tokens) || 0;
     const out = claudeVisionToGemini(j);
     if (!out.candidates[0].content.parts[0].text) { const e = new Error('클로드 빈 답'); e.status = 0; throw e; }
     return new Response(JSON.stringify(out), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -159,7 +161,7 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
     return null;
   } finally {
     if (timer) clearTimeout(timer);
-    _aiLogLine(kind, status, Date.now() - t0, model);
+    _aiLogLine(kind, status, Date.now() - t0, model, tok);
   }
 }
 export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MODEL, key = '' } = {}) {
