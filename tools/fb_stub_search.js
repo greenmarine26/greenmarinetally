@@ -17,6 +17,8 @@ export const fbAddSwapFix = async () => true;
 export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };
 export const fbApplyTermWork = async () => true;
 export const fbApplyTermSnapshot = async (vk, mode, by) => { window.__calls.push({ fn: 'applySnap', vk, mode, by }); return { ok: true, applied: window.__applyN || 0, basis: window.__applyBasis || '' }; };   // 4.11
+export const fbGetAiCost = async (keys, by) => { window.__calls.push({ fn: 'getAiCost', keys, by }); if (window.__aiErr) throw new Error(window.__aiErr); const W = window.__aiDays || {}; return { days: keys.filter((k) => W[k]).map((k) => ({ day: k, ...W[k] })), cfg: window.__aiCfg || {}, console: window.__aiConsole || null }; };   // 4.37: AI 비용 — 시험이 window.__aiDays 에 날짜별 기록을 넣는다
+export const fbSaveAiConsole = async (patch, by) => { window.__calls.push({ fn: 'saveAiConsole', patch, by }); window.__aiConsole = { ...(window.__aiConsole || {}), ...patch, at: Date.now(), by }; return window.__aiConsole; };   // 4.37
 export const fbGetTermSnapshot = async (by) => { window.__getBy = by; return (window.__snap || {}); };   // 4.11: 교대 시각 터미널 스냅샷 — 시험이 window.__snap 에 넣는다
 export const fbRequestTermSnapshot = async (by) => { window.__calls.push({ fn: 'reqSnap', by }); return true; };   // 4.11
 export const fbSetTermLive = async (pier, on, by) => { window.__calls.push({ fn: 'setLive', pier, on, by }); return true; };   // 4.28

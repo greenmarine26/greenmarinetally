@@ -40,6 +40,7 @@ import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페
 import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
 import ShiftSnapPanel from '../components/ShiftSnapPanel.jsx';   // 4.11: 교대 시각(06:30·17:30) 터미널 기준 — 소유자 메뉴 안
 import ClosingEdiPanel from '../components/ClosingEdiPanel.jsx';   // 4.12: 마감적용 — 동방 선적을 마감텔리 선적 EDI 기준으로 마무리(소유자 메뉴 안)
+import AiCostPanel from '../components/AiCostPanel.jsx';   // 4.37: AI 비용 — 미르·사진 읽기 클로드 비용과 Console 숫자(소유자 메뉴 안)
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -722,7 +723,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     { id: 'people', ico: '👷', name: '사람·알림', sub: '검수원 활동 · 공지 · 오답 · 통합 검색',
       badge: `${inspectorStats.length}명` },
     { id: 'edit', ico: '🖐', name: '편집 (주의)', sub: '베이상세 · 컨펌용 플랜', badge: '수석 전용', danger: true },
-    ...(owner ? [{ id: 'owner', ico: '👑', name: '소유자 메뉴', sub: '교대 시각 · 활동 로그 · 인원 · 위험 구역', badge: '소유자만' }] : []),
+    ...(owner ? [{ id: 'owner', ico: '👑', name: '소유자 메뉴', sub: '교대 시각 · 활동 로그 · AI 비용 · 인원 · 위험 구역', badge: '소유자만' }] : []),
   ];
   const curGroup = (() => {
     const ok = (g) => groups.some((x) => x.id === g);
@@ -1056,6 +1057,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       /* 4.11: 소유자 전용 메뉴는 여기 한 곳에 모은다 — 검수사 2026-10-07 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요» · 22:09 «인원관리나 활동로그 마감적용 등».
          새 소유자 전용 기능은 이 묶음 안에 넣는다(대시보드 곳곳에 흩지 않는다). 기본 접힘 — 열기 전에는 아무 자료도 읽지 않는다.
          · TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회.
+         · 4.37: 💳 AI 비용 — 검수사 2026-10-19 «비용관리 보고는 소유자 관리 안에둡니다». 펼칠 때 한 번 읽기(구독 없음), 키 값은 안 그린다.
          · 4.24: 되돌릴 수 없는 둘(마감적용 · 모든 작업 보고 삭제)은 아래 «위험 구역» 한 곳 — 빨간 테두리 · 누르면 한 번 더 묻는다(D9). */
       <div className="space-y-2" data-owner-menu="1">
         <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
@@ -1063,6 +1065,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </Fold>
         <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
           <ActivityLogSection voyages={voyages} />
+        </Fold>
+        <Fold id="aicost" title="💳 AI 비용 (클로드 · 제미나이)" open={!!openSecs.aicost} onToggle={() => toggleSec('aicost')}>
+          <AiCostPanel by={inspector} />
         </Fold>
         {onOpenStaffManager && (
           <button onClick={onOpenStaffManager}

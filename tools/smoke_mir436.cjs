@@ -162,19 +162,33 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
   const wc = claudeCalls().find((c) => c.body && c.body.tools);
   T(w1.via === 'chat' && /A2O LITE의 "NEON"이고/.test(w1.text) && !/ 이고/.test(w1.text), '실시간 질문(차트 1위)은 웹 검색으로 답한다 — 글 조각 사이에 띄어쓰기를 넣지 않는다', JSON.stringify(w1).slice(0, 120));
   T(!!wc && wc.body.tools[0].name === 'web_search' && wc.body.tools[0].max_uses === 1, '검색 도구는 질문당 1회만 허용한다');
-  const rsv = calls.findIndex((c) => c.url.includes('/mir_websearch/') && c.body && c.body.reserve === true && c.body.usd === 0.07);
+  const rsv = calls.findIndex((c) => c.url.includes('/mir_websearch/') && c.body && c.body.reserve === true && c.body.usd === 0.05);
   const srch = calls.findIndex((c) => c.url.includes('api.anthropic.com') && c.body && c.body.tools);
-  T(rsv >= 0 && srch > rsv, '검색을 부르기 전에 예상 비용(0.07달러)을 서버에 먼저 잡는다 — 여러 폰이 동시에 물어도 한도를 넘지 않게');
+  T(rsv >= 0 && srch > rsv, '검색을 부르기 전에 예상 비용(0.05달러)을 서버에 먼저 잡는다 — 여러 폰이 동시에 물어도 한도를 넘지 않게');
   const wl = calls.find((c) => c.url.includes('/mir_websearch/') && c.url.includes('slot1') && c.body && c.body.reserve === false);
-  T(!!wl && Math.abs(wl.body.usd - 0.058) < 0.001 && wl.body.searches === 1, '응답이 오면 실제 usage 로 비용을 확정한다 (입력 14,913·출력 219·검색 1회 ≈ 0.058달러)', wl ? JSON.stringify(wl.body) : '기록 없음');
+  T(!!wl && Math.abs(wl.body.usd - 0.042) < 0.001 && wl.body.searches === 1, '응답이 오면 실제 usage 로 비용을 확정한다 — 소네트 5.5 단가 2·10달러 (입력 14,913·출력 219·검색 1회 ≈ 0.042달러)', wl ? JSON.stringify(wl.body) : '기록 없음');
   const webLogRow = calls.find((c) => c.url.includes('/mir_model_log/') && c.body && c.body.kind === 'web');
   T(!!webLogRow && webLogRow.body.searches === 1 && webLogRow.body.usd > 0, 'mir_model_log 에 kind web 으로 토큰과 비용이 남는다');
-  TOFF += 40000; WEBROWS = { a: { usd: 0.5 }, b: { usd: 0.45 } };   // 오늘 0.95달러 썼다 → 남은 0.05 < 한 번 예상 0.07
+  TOFF += 40000; WEBROWS = { a: { usd: 0.5 }, b: { usd: 0.46 } };   // 오늘 0.96달러 썼다 → 남은 0.04 < 한 번 예상 0.05
   claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.4}' : '일반 대화예요');
   await B.getMirConfig(true);
   calls.length = 0;
   const w2 = await B.askMirModel('오늘 뉴스 속보 알려줘', ctx5, () => null, noW);
   T(w2.via === 'chat' && /한도/.test(w2.text) && /1달러/.test(w2.text) && !claudeCalls().some((c) => c.body && c.body.tools), '하루 한도(1달러)에 닿으면 검색하지 않고 한도를 다 썼다고 말한다', JSON.stringify(w2).slice(0, 120));
+  { // 4.37: 콘앱 웹 검색은 하루 합계가 한도의 절반에 닿으면 먼저 멈춘다 — 검수사 2026-10-19 «콘앱 사용자는 이기능을 모릅니다. 일 1불이 넘게되면 콘앱 웹검색을 먼저 막습니다»
+    const ctxCone = { ...ctx5, app: 'cone' };
+    TOFF += 40000; WEBROWS = { a: { usd: 0.46 } }; calls.length = 0;
+    const c1 = await B.askMirModel('오늘 속보 뉴스 알려줘', ctxCone, () => null, noW);
+    T(!claudeCalls().some((c) => c.body && c.body.tools) && /한도를 다 써서/.test(c1.text || '') && !/달러/.test(c1.text || ''), '콘앱은 오늘 0.46달러 쓴 날 검색을 멈춘다(0.46 + 예상 0.05 > 0.5) — 콘앱 문구에는 금액을 말하지 않는다', JSON.stringify(c1).slice(0, 100));
+    TOFF += 40000; calls.length = 0;
+    const t1 = await B.askMirModel('오늘 주가 시세 어때', ctx5, () => null, noW);
+    const rv = calls.find((c) => c.url.includes('/mir_websearch/') && c.body && c.body.reserve === true);
+    T(claudeCalls().some((c) => c.body && c.body.tools) && !!rv && rv.body.app === 'smoke', '같은 날 콘앱이 아닌 앱은 1달러까지 검색하고, 검색 장부에 앱 이름을 남긴다', JSON.stringify(t1).slice(0, 80));
+    TOFF += 40000; WEBROWS = { a: { usd: 0.3 } }; calls.length = 0;
+    await B.askMirModel('요즘 인기 영화 순위', ctxCone, () => null, noW);
+    const rc = calls.find((c) => c.url.includes('/mir_websearch/') && c.body && c.body.reserve === true);
+    T(claudeCalls().some((c) => c.body && c.body.tools) && !!rc && rc.body.app === 'cone', '콘앱도 절반 전(0.3달러)에는 검색하고 장부에 cone 을 남긴다');
+  }
   { // 비용을 읽지 못하거나 적지 못하면 한도가 풀리지 않게 검색하지 않는다 · 일 낱말·소네트 아닌 모델도 검색 안 함
     for (const mode of ['read', 'write']) {
       WEBFAIL = mode; TOFF += 40000; WEBROWS = {}; calls.length = 0;
@@ -188,6 +202,9 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
     CFG = { aiKey: 'g-key', claudeKey: 'c-key', claudeModel: 'claude-opus-5-5', dailyCap: 500, enabled: true }; await B.getMirConfig(true); TOFF += 40000; calls.length = 0;
     await B.askMirModel('오늘 뉴스 속보', ctx5, () => null, noW);
     T(!claudeCalls().some((c) => c.body && c.body.tools), '모델이 소네트가 아니면(단가를 모르므로) 검색하지 않는다');
+    CFG = { aiKey: 'g-key', claudeKey: 'c-key', claudeModel: 'claude-sonnet-4-5', dailyCap: 500, enabled: true }; await B.getMirConfig(true); TOFF += 40000; calls.length = 0;
+    await B.askMirModel('오늘 뉴스 속보 좀', ctx5, () => null, noW);
+    T(!claudeCalls().some((c) => c.body && c.body.tools), '4.37: 소네트라도 단가표(aiCost.js)에 없는 모델이면 검색하지 않는다(소유자 화면과 같은 판정)');
   }
   CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true, webSearchUsd: 0 }; await B.getMirConfig(true); TOFF += 40000; WEBROWS = {};
   calls.length = 0;

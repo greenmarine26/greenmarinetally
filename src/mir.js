@@ -62,6 +62,7 @@ import { judgeMode, buildReadiness, describeReadiness, loadingCollecting } from 
 import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60-18: PORT-MIS 매칭 본체(베이사전 없이) — 콘앱 미르용 기본 매처
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
+import { aiCostUsd, AI_PRICE } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
 //    · mirEyes ← guidedQueue: 순서는 화면이 쓰는 그 벌을 그대로 쓴다
 //    · mirEyes ← nlSearch: 트윈 무게 한계는 화면이 쓰는 그 상수를 그대로   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
@@ -2803,11 +2804,14 @@ async function _claude(cfg, prompt, maxOut, json) {
   return { text, tokIn: u.input_tokens || 0, tokOut: u.output_tokens || 0, ms: Date.now() - t0, prov: 'claude' };
 }
 /* ★ 4.36-02 — 미르 웹 검색(클로드 웹 검색 도구). 검수사 2026-10-19 «1불로 제한 합니다» — 하루 합계 비용이 한도(mir_config.webSearchUsd, 처음 1달러)에 닿으면 그날은 검색을 멈춘다.
-   비용 = 입력 토큰×3달러/100만 + 출력 토큰×15달러/100만 + 검색 1회 0.01달러(소네트 단가 가정). 실제 응답의 usage 로 계산해 mir_websearch/{날짜} 에 한 줄씩 남기고, 읽을 때 합산한다. */
+   비용 = 입력 토큰×2달러/100만 + 출력 토큰×10달러/100만 + 검색 1회 0.01달러(소네트 5.5 단가, 2026-10-19 가격표). 실제 응답의 usage 로 계산해 mir_websearch/{날짜} 에 한 줄씩 남기고, 읽을 때 합산한다.
+   4.37: 종전 3·15달러(옛 소네트 단가)로 셈해 실제보다 39% 크게 적혔다 — 실측 261019 «가요차트 1위» 입력 16,505·출력 351·검색 1 → 장부 0.0648, 실제 0.0465. 그래서 1달러 한도가 실제 약 0.70달러에서 멈췄다. */
 const WEB_USD_DEFAULT = 1;
-const WEB_EST_USD = 0.07;   // 한 번 부르기 전에 서버에 먼저 잡아 두는 예상 비용(실측 1회 약 0.06달러) — 다른 폰도 이만큼 쓴 것으로 본다
+const WEB_EST_USD = 0.05;   // 한 번 부르기 전에 서버에 먼저 잡아 두는 예상 비용(실측 1회 0.0465달러, 4.37 이전 0.07) — 다른 폰도 이만큼 쓴 것으로 본다
 const MIR_REALTIME_RE = /(차트|순위|1위|뉴스|속보|주가|환율|시세|코스피|코스닥|나스닥|비트코인|경기\s*결과|스코어|박스오피스|실시간\s*(검색어|차트|순위|뉴스)|최근\s*(소식|뉴스)|요즘\s*(뜨는|인기))/;
-const _webCost = (tokIn, tokOut, searches) => (Number(tokIn) || 0) * 3 / 1e6 + (Number(tokOut) || 0) * 15 / 1e6 + (Number(searches) || 0) * 0.01;
+const _webCost = (tokIn, tokOut, searches, model) => aiCostUsd(AI_PRICE[model] ? model : DEFAULT_CLAUDE_MODEL, tokIn, tokOut, searches);   // 4.37: 단가는 aiCost.js 한 곳
+//  4.37: 콘앱 웹 검색은 하루 합계가 한도의 절반에 닿으면 먼저 멈춘다 — 검수사 2026-10-19 «콘앱 사용자는 이기능을 모릅니다. 일 1불이 넘게되면 콘앱 웹검색을 먼저 막습니다.»
+const CONE_WEB_SHARE = 0.5;
 let _webSpent = { day: '', usd: 0, at: 0 };
 /** 오늘 쓴 검색 비용(달러). 읽지 못하면 null — 부르는 쪽이 «검색 안 함» 으로 닫는다(한도가 풀리지 않게). 이 폰이 방금 잡은 금액은 서버 합계보다 낮지 않게 합친다. */
 async function _webSpentToday() {
@@ -2823,10 +2827,10 @@ async function _webSpentToday() {
   } catch (e) { console.warn('[미르 모델] 오늘 검색 비용을 못 읽었어요 — 검색을 쉽니다:', e && e.message); return null; }
 }
 /** 호출 직전에 예상 비용을 서버에 한 줄 잡는다(다른 폰도 곧 보인다). 못 적으면 null → 검색하지 않는다. */
-async function _webReserve(q) {
+async function _webReserve(q, app) {
   const day = _dayKey();
   try {
-    const r = await _fetchJson(`${FB}/mir_websearch/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), usd: WEB_EST_USD, reserve: true, q: String(q).slice(0, 60) }) }, 6000);
+    const r = await _fetchJson(`${FB}/mir_websearch/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), usd: WEB_EST_USD, reserve: true, q: String(q).slice(0, 60), app: String(app || '') }) }, 6000);   // 4.37: app — 소유자 화면이 앱별 검색 금액을 센다
     if (!r.ok || !r.j || !r.j.name) { console.warn('[미르 모델] 검색 비용을 못 적었어요(HTTP ' + r.status + ') — 검색을 쉽니다'); return null; }
     _webSpent = { day, usd: (_webSpent.day === day ? _webSpent.usd : 0) + WEB_EST_USD, at: _webSpent.day === day ? _webSpent.at : Date.now() };
     return r.j.name;
@@ -2995,29 +2999,30 @@ ${hist ? `지금까지 대화:\n${hist}\n` : ''}검수사: "${String(q).slice(0,
 미르:`;
   //  ★ 4.36-02 웹 검색 — 차트·순위·뉴스·주가 같은 실시간 질문만(일 낱말이 든 말은 제외). 하루 합계 비용이 한도에 닿으면 검색 없이 «한도 다 썼다»고 말한다.
   //    비용을 읽거나 적지 못하면 검색하지 않는다(한도가 풀리지 않게). 모델이 소네트가 아니면 단가를 모르므로 검색하지 않는다. 검색이 안 되면 종전 생활회화로 답한다.
-  if (cfg.claudeKey && MIR_REALTIME_RE.test(String(q)) && isChatCandidate(q, '') && !(cfg.webSearchUsd <= 0) && /sonnet/i.test(String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL))) {
-    const limit = cfg.webSearchUsd;
+  if (cfg.claudeKey && MIR_REALTIME_RE.test(String(q)) && isChatCandidate(q, '') && !(cfg.webSearchUsd <= 0) && /sonnet/i.test(String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL)) && AI_PRICE[String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL)]) {   // 4.37: 단가표(aiCost.js)에 없는 모델은 비용을 모르므로 검색하지 않는다(소유자 화면과 같은 판정)
+    const isCone = !!(ctx && ctx.app === 'cone');
+    const limit = isCone ? Math.round(cfg.webSearchUsd * CONE_WEB_SHARE * 100) / 100 : cfg.webSearchUsd;   // 4.37: 콘앱은 절반에서 먼저 멈춘다(합계는 두 앱 공용)
     const spent = await _webSpentToday();
     if (spent !== null && spent + WEB_EST_USD > limit) {
-      return { text: `오늘 검색에 쓸 수 있는 한도(하루 ${limit}달러)를 다 써서 지금은 찾아볼 수 없어요. 내일 다시 물어봐 주세요 😺`, rejected: null, tokIn: 0, tokOut: 0, ms: 0, prov: 'web-cap', searches: 0, usd: 0 };
+      return { text: isCone ? '오늘 검색에 쓸 수 있는 한도를 다 써서 지금은 찾아볼 수 없어요. 내일 다시 물어봐 주세요 😺' : `오늘 검색에 쓸 수 있는 한도(하루 ${limit}달러)를 다 써서 지금은 찾아볼 수 없어요. 내일 다시 물어봐 주세요 😺`, rejected: null, tokIn: 0, tokOut: 0, ms: 0, prov: 'web-cap', searches: 0, usd: 0 };   // 4.37: 콘앱에는 금액을 말하지 않는다(콘앱 사용자는 모르는 기능)
     }
-    const slot = spent === null ? null : await _webReserve(q);
+    const slot = spent === null ? null : await _webReserve(q, (ctx && ctx.app) || '');
     if (slot) {
       try {
         const wprompt = prompt.replace('2. 실시간 정보(날씨·뉴스·주가·경기 결과)와 네가 확실히 모르는 것은 모른다고 말한다. 날씨는 «미르야 날씨 알려줘» 라고 하면 앱이 안내한다고 알려 준다.', '2. 이번 질문은 웹 검색 도구를 쓸 수 있다. 실시간 정보는 검색을 한 번만 하고 찾은 것만 말하며, 기준 날짜·시각을 함께 말하고 출처 주소는 쓰지 않는다. 검색해도 확실하지 않으면 그렇다고 말한다. 네가 지어내지 않는다.');
         const w = await _claudeSearch(cfg, wprompt, 700);
-        const usd = _webCost(w.tokIn, w.tokOut, w.searches);
+        const usd = _webCost(w.tokIn, w.tokOut, w.searches, cfg.claudeModel);
         await _webSettle(slot, usd, { tokIn: w.tokIn, tokOut: w.tokOut, searches: w.searches, ms: w.ms, ok: !!w.text, stop: w.stop });
         let wt = String(w.text || '').trim().replace(/^미르\s*[:：]\s*/, '');
         if (wt && /[A-Z]{4}\d{7}/.test(wt)) wt = '';
         if (wt.length > 900) wt = wt.slice(0, 900).replace(/[^.!?요다 ]*$/, '').trim() || wt.slice(0, 900);
         if (wt) return { text: wt, rejected: null, tokIn: w.tokIn, tokOut: w.tokOut, ms: w.ms, prov: w.prov, searches: w.searches, usd };
-        _logCall({ kind: 'web', ok: false, err: '빈 답(' + (w.stop || '?') + ')', q: String(q).slice(0, 80), tokIn: w.tokIn, tokOut: w.tokOut, searches: w.searches, usd: Math.round(usd * 10000) / 10000 });
+        _logCall({ kind: 'web', ok: false, err: '빈 답(' + (w.stop || '?') + ')', q: String(q).slice(0, 80), tokIn: w.tokIn, tokOut: w.tokOut, searches: w.searches, usd: Math.round(usd * 10000) / 10000, who: (ctx && ctx.inspector) || '', app: (ctx && ctx.app) || '' });   // 4.37: 누가·어느 앱(소유자 화면 «누가 썼나»)
       } catch (e) {
         const hasStatus = !!(e && typeof e.status === 'number' && e.status >= 400);
         await _webSettle(slot, hasStatus ? 0 : WEB_EST_USD, { ok: false, err: String(e && e.message || e).slice(0, 80) });   // HTTP 오류는 청구가 없다 · 시간 초과는 청구됐을 수 있어 예상치를 둔다
         console.warn('[미르 모델] 웹 검색이 안 돼서 검색 없이 답합니다:', e && e.message);
-        _logCall({ kind: 'web', ok: false, err: String(e && e.message || e).slice(0, 120), status: (e && e.status) || 0, q: String(q).slice(0, 80) });
+        _logCall({ kind: 'web', ok: false, err: String(e && e.message || e).slice(0, 120), status: (e && e.status) || 0, q: String(q).slice(0, 80), who: (ctx && ctx.inspector) || '', app: (ctx && ctx.app) || '' });
       }
     }
   }

@@ -1098,6 +1098,25 @@ if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:fir
 else
   echo "✗ 4.11 교대 시각 스냅샷 반영 함수 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SSF"; exit 1
 fi
+#  4.37: **소유자 «💳 AI 비용»** — 단가·합산(aiCost.js)이 실기록 원자료를 따로 센 값과 같은가 · 소유자 메뉴 안 한 곳·구독 없음·키 안 그림 · 웹 검색 단가 한 벌·콘앱 절반 멈춤 ·
+#    실소스 firebase.js 로 소유자만 읽고 적는가(키 칸 안 돌려줌) · 2026-10-19 실기록으로 그린 패널. 검수사 2026-10-19 «비용관리 보고는 소유자 관리 안에둡니다».
+SMOKE_AC=$(mktemp /dev/shm/hometmp/_smokeac_XXXXXX.js)
+SMOKE_ACF=$(mktemp /dev/shm/hometmp/_smokeacf_XXXXXX.cjs)
+cp src/firebase.js "$SMOKE_AC.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_aicost437.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_AC"; then
+  cp "$SMOKE_AC.fbbak" src/firebase.js && rm -f "$SMOKE_AC.fbbak"
+  if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_ACF" --log-level=error; then
+    node tools/smoke_aicost437.cjs "$(pwd)" "$SMOKE_AC" "$SMOKE_ACF" || { echo "✗ 4.37 AI 비용 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_AC" "$SMOKE_ACF"; exit 1; }
+    rm -f "$SMOKE_AC" "$SMOKE_ACF"
+  else
+    echo "✗ 4.37 AI 비용 firebase 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_AC" "$SMOKE_ACF"; exit 1
+  fi
+else
+  cp "$SMOKE_AC.fbbak" src/firebase.js; rm -f "$SMOKE_AC.fbbak"
+  echo "✗ 4.37 AI 비용 패널 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_AC" "$SMOKE_ACF"; exit 1
+fi
 #  4.12: **마감적용(동방 선적을 마감텔리 선적 EDI 기준으로 마무리)** — 채울 컨이 마감텔리 선적 EDI 가 고르는 컨과 한 벌인가 · 앱 완료는 안 덮는가 · 동방·작업 끝·시각 문지기 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    ATPR 2645W 실제 항차 자료(보관소 GET 픽스처)로 패널을 그려 단추·확인창·결과 안내를 본다. 검수사 2026-10-07 «앱으로 사용안한부분만 덮어쓰는것입니다» · 2026-10-08 «=마감적용».
 SMOKE_CE=$(mktemp /dev/shm/hometmp/_smokece_XXXXXX.js)

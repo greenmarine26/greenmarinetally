@@ -1135,6 +1135,42 @@ export async function fbGetTermSnapshot(by) {
   return v && typeof v === 'object' ? v : {};
 }
 
+//  ★ 4.37 — 소유자 «💳 AI 비용». 검수사 2026-10-19 «비용관리 보고는 소유자 관리 안에둡니다» · Console 화면을 보내며 «이것도 같이 넣어 주세요».
+//   미르·사진 읽기 호출 기록 세 노드(mir_model_log · ai_call_log · mir_websearch)를 날짜마다 한 번 읽는다 — 구독하지 않는다(펼칠 때·새로 고침 때만).
+//   설정은 mir_config 에서 **키가 아닌 칸만** 하나씩 읽는다(claudeKey·aiKey 는 이 함수가 읽지도 돌려주지도 않는다).
+//   ai_console — Console 첫 화면 숫자(크레딧 잔액·이번 달 지출·한도·7일 토큰). 크레딧·한도는 어떤 API 로도 못 받아 소유자가 적는다.
+const AI_CFG_FIELDS = ['claudeModel', 'claudeOpusModel', 'visionProvider', 'dailyCap', 'webSearchUsd', 'enabled', 'model'];
+export async function fbGetAiCost(dayKeys, by) {
+  assertOwner('AI 비용 보기', by);
+  const keys = [...new Set((Array.isArray(dayKeys) ? dayKeys : []).filter((k) => /^\d{6}$/.test(String(k))))].slice(0, 40);
+  const days = await Promise.all(keys.map(async (day) => {
+    const [a, b, c] = await Promise.all(['mir_model_log', 'ai_call_log', 'mir_websearch'].map((n) => get(ref(db, `${n}/${day}`))));
+    return { day, mml: a.val() || {}, acl: b.val() || {}, mws: c.val() || {} };
+  }));
+  const cfgVals = await Promise.all(AI_CFG_FIELDS.map((f) => get(ref(db, `mir_config/${f}`))));
+  const cfg = {};
+  AI_CFG_FIELDS.forEach((f, i) => { const v = cfgVals[i].val(); if (v !== null && v !== undefined) cfg[f] = v; });
+  const cs = await get(ref(db, 'ai_console'));
+  return { days, cfg, console: cs.val() || null };
+}
+//  Console 숫자 적기 — 숫자 칸만 받아 PATCH(다른 칸은 안 건드림). 누가·언제를 같이 남긴다.
+export async function fbSaveAiConsole(patch, by) {
+  assertOwner('Console 숫자 적기', by);
+  const who = String(by || getMeToday() || '').trim();
+  const out = {};
+  for (const k of ['credit', 'monthSpend', 'monthLimit', 'tokens7d']) {
+    if (!(k in (patch || {}))) continue;
+    const raw = patch[k];
+    if (raw === '' || raw === null || raw === undefined) { out[k] = null; continue; }
+    const v = Number(String(raw).replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(v) || v < 0) throw new Error(`숫자가 아닙니다 — ${k}`);
+    out[k] = v;
+  }
+  out.at = Date.now(); out.by = who;
+  await update(ref(db, 'ai_console'), out);
+  return out;
+}
+
 //  «지금 다시 읽기» — 수집기가 1분마다 이 값(밀리초) 하나를 보고, 새 값이면 한 번 읽는다(10분 넘게 묵은 요청은 버린다).
 export async function fbRequestTermSnapshot(by) {
   assertOwner('터미널 다시 읽기', by);
