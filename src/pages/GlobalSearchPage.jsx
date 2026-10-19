@@ -10,7 +10,7 @@ import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierCo
 import DamageHistoryCard, { damageHistoryQueryOf } from '../components/DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(떠 있는 미르와 공용)
 import { mirTone, mirSmallTalk, YARD_SPEAK } from '../mir.js';
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
-import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
+import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve, mirIsDeferred } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
 import { flattenVoyages, pickShipCtx } from '../mir.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
@@ -21,6 +21,7 @@ import { fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { runDeviceCmd, deviceCmdWaitsForSubmit } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌 · 4.23 2차: 글자는 전송 때만
+import { mirWorkCtx } from '../workChoice.js';   // 4.38: 작업 중 사담 미루기 — 내 작업 표지(작업자·작업 선박·호기)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
@@ -43,7 +44,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   const [askedAt, setAskedAt] = useState(null);   // 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
   const [reasked, setReasked] = useState(false);  // 같은 질문 재제출 — 답 박스에 «다시 확인했습니다»
   //  3.68 [mirThread]: 대화 키(항차|검수원) — 이 화면은 inspector prop 이 없다(저장된 검수원 이름, 모델 기록과 같은 키). 1글자 «응» 문지기와 기록에 쓴다.
-  const _thCtx = () => ({ voyages, voyageKey: (shipCtx && shipCtx.key) || ctxVoyageKey || '', inspector: _storage.get(SK.activeInspector) || '', vsl: (shipCtx && shipCtx.info && shipCtx.info.vsl) || '' });
+  const _thCtx = () => ({ voyages, voyageKey: (shipCtx && shipCtx.key) || ctxVoyageKey || '', inspector: _storage.get(SK.activeInspector) || '', vsl: (shipCtx && shipCtx.info && shipCtx.info.vsl) || '', work: mirWorkCtx() });   // 4.38: work — 쉬는 틈의 미룬 질문 단추
 
   // M6.10: debounce — 키 입력마다 즉시 검색하지 않고 200ms 후 검색
   //   대용량 (수천 대 컨테이너) 환경에서 입력 반응성 개선
@@ -218,15 +219,16 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   });
   useEffect(() => {
     const q = String(debouncedQuery || '').trim();
-    if (!q || q.length < 4 || !askedAt || !/[가-힣]{2,}|[A-Za-z]{3,}/.test(q) || /^[0-9\s]+$/.test(q)) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
+    const _dw = _storage.get(SK.activeInspector) || ''; const _dq = (traceRef.current && traceRef.current.rq && mirIsDeferred(traceRef.current.rq, Date.now(), _dw)) ? traceRef.current.rq : (mirIsDeferred(q, Date.now(), _dw) ? q : '');   // 4.38: 미뤄 둔 질문(단추·«응») 은 짧아도 모델로(감사 M1·M2)
+    if (!q || (!_dq && (q.length < 4 || !/[가-힣]{2,}|[A-Za-z]{3,}/.test(q))) || !askedAt || /^[0-9\s]+$/.test(q)) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
     if (parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) return undefined;
     if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
     let alive = true;
     setModelState({ q, pending: true, text: null, via: null });
     const _who = _storage.get(SK.activeInspector) || '';   // 이 화면은 inspector prop 이 없다 — 저장된 검수원 이름(App 과 같은 키)
     const ctx = { app: 'tally', voyages, voyageKey: shipCtx && shipCtx.key, voyage: shipCtx && shipCtx.v, info: (shipCtx && shipCtx.info) || null,
-      containers: (shipCtx && shipCtx.key) ? flat.filter((c) => c.voyageKey === shipCtx.key) : flat, inspector: _who };
-    askMirModel(q, ctx, (cq) => _rulesFor(cq), { who: _who, weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
+      containers: (shipCtx && shipCtx.key) ? flat.filter((c) => c.voyageKey === shipCtx.key) : flat, inspector: _who, work: mirWorkCtx() };   // 4.38: 작업 중 사담 미루기
+    askMirModel(_dq || q, ctx, (cq) => _rulesFor(cq), { who: _who, weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
       .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey: (shipCtx && shipCtx.key) || '', via: m.via }); })
       .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
     return () => { alive = false; };

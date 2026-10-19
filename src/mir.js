@@ -35,7 +35,7 @@ import {
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
-  guideTwinOf, swapWarnWordOf,   // 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
+  guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -2736,6 +2736,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
+  if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다
@@ -3168,12 +3169,15 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   let chatTried = false;
   const tryChat = async () => {
     chatTried = true;
+    //  4.38: 작업 중 사담 미루기 — 미루는 자리는 여기 하나다(두 앱 같은 판정). 번역이 일 뜻으로 옮긴 말은 여기까지 오지 않고,
+    //    여기 온 말도 일 낱말·앱 말이 있으면(«화장실 어디 있어»·«사진 올리는 법»·«콘 빠졌어») 미루지 않는다(감사 B2·B3·B4). 미루면 생활회화·웹 검색을 부르지 않는다.
+    if (_isGeneralTalk(q)) { const _t = (ctx && ctx._now) || Date.now(); const bz = mirBusyNow(ctx, _t); if (bz.busy) { _deferPush(q, _t, who); if (!fromMemo) _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'defer', why: bz.why }); out.text = MIR_DEFER_TEXT; out.via = 'defer'; out.reason = bz.why; return true; } }   // 미룬 말은 mir_misses(how defer)에 — 잘못 미룬 말을 결산에서 찾는다(mir_model_log 는 하루 상한·비용 집계라 쓰지 않는다)
     if (!cfg) cfg = await getMirConfig();
     if (!(cfg.claudeKey || cfg.aiKey)) return false;
     try {
       const ca = await chatAnswer(q, ctx, cfg);
       _logCall({ kind: ca.searches ? 'web' : 'chat', q: String(q).slice(0, 80), ok: !!ca.text, rejected: !!ca.rejected, tokIn: ca.tokIn, tokOut: ca.tokOut, ms: ca.ms, prov: ca.prov || '', ...(ca.searches ? { searches: ca.searches, usd: Math.round((ca.usd || 0) * 10000) / 10000 } : {}), who, app: ctx.app || '' });
-      if (ca.text) { _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'chat' }); out.text = ca.text; out.via = 'chat'; out.reason = 'chat'; return true; }
+      if (ca.text) { _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'chat' }); out.text = ca.text; out.via = 'chat'; out.reason = 'chat'; _deferDrop(q, (ctx && ctx._now) || Date.now(), who); return true; }   // 4.38: 답했으면 미룬 목록에서 지운다
     } catch (e) {
       console.warn('[미르 모델] 생활회화 답 실패:', e && e.message);
       _logCall({ kind: 'chat', q: String(q).slice(0, 80), ok: false, err: String(e && e.message || e).slice(0, 120), who, app: ctx.app || '' });
@@ -3217,6 +3221,8 @@ export async function askMir(q, ctx, rulesFn, opts = {}) {
   const weak = isWeakAnswer(q, rulesText, trace);
   if (!weak) return { text: rulesText, via: 'rules', weak: false, rulesText, trace };
   //  숫자만·한글 없음 → 모델을 부를 말이 아니다(끝네자리 조회는 화면 카드가 답한다). 조작·적는 말(밝기·호기·시작·갱)은 규칙이 이미 했다 — 번역문으로 두 번 실행하지 않는다(감사 실측 밝기 두 칸).
+  //  4.38 (감사 M1): «아까 미뤄 둔 이야기» 단추에 «응·네·sp» 로 답하면 대화 층이 그 질문으로 되쓴다(trace.rq) — 모델에는 원문 «응» 이 아니라 그 질문을 넘긴다.
+  if (trace.rq && _norm(trace.rq) !== _norm(q) && mirIsDeferred(trace.rq, (ctx && ctx._now) || Date.now(), opts.who || (ctx && ctx.inspector) || '')) q = trace.rq;
   let p = null; try { p = parseNaturalQuery(q); } catch (e) { p = null; }
   if (/^[\d\s.,-]+$/.test(String(q)) || !/[가-힣]{2,}|[A-Za-z]{3,}/.test(String(q)) || (p && (p.deviceCmd || p.crewSet || p.startSet || p.gangSet))) return { text: rulesText, via: rulesText ? 'rules' : null, weak, rulesText, trace };
   //  배운 별칭이 있으면 모델 없이 그것으로(nlSearch 의 되쓰기는 «못 알아들었을 때»만 도는데, 여기는 «약하게 알아들은 말»도 받는다)
@@ -3600,7 +3606,14 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   const done = !!(inf && inf.dischargeDone && (inf.loadingDone || _pl === 0)) || _thIsDone(text) || !!(th && th.turns.some((t) => _thIsDone(t.answer || '')));
   //  그 턴의 배 코드 — 홈에서 배 이름 붙인 질문 뒤의 «응» 에 붙인다(ctx.vsl · info.vsl · shipCtx.info.vsl · 되쓴 말 머리의 배 코드)
   const ship = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
-  const follow = hedged ? null : _thFollowFor(intent, rq, text, entity, now, th, via, done, ship);   // 3.69: ship — 야드 갈래가 배 유무로 칩을 고른다
+  let follow = hedged ? null : _thFollowFor(intent, rq, text, entity, now, th, via, done, ship);   // 3.69: ship — 야드 갈래가 배 유무로 칩을 고른다
+  //  4.38: 쉬는 틈(바쁘지 않음을 잴 수 있을 때만)에 미뤄 둔 사담이 있으면 그 말을 단추로 먼저 띄운다 — 누르면 그 말 그대로 묻는다(그때 클로드가 답한다).
+  if (via !== 'defer' && ctx && (ctx.work || ctx.app === 'cone') && !MIR_NEVER_DEFER_RE.test(String(q0 || '')) && !MIR_NEVER_DEFER_RE.test(String(rq || ''))) {   // 위기·안전·몸·마음 말 답 뒤에는 미룬 사담 단추를 붙이지 않는다(마지막 감사 C1 — «죽고 싶어» 뒤 «농담 나눌까요?» · 이어 한 «응» 이 농담으로 갔다)
+    try {
+      const pend = mirDeferredPending(now, { fresh: true, who: (ctx && ctx.inspector) || '' }).filter((x) => _norm(x) !== _norm(rq));   // 한 번 띄운 것은 다시 띄우지 않는다(감사 M3 — «아니» 로 넘겨도 답마다 되풀이하던 것)
+      if (pend.length) { const bz = mirBusyNow(ctx, now); if (bz.known && !bz.busy) { follow = { line: `아까 미뤄 둔 이야기(«${pend[0]}»), 지금 나눌까요?`, chips: [pend[0]].concat(((follow && follow.chips) || []).filter((x) => x !== pend[0])).slice(0, 4) }; _deferOffered(pend[0], now, (ctx && ctx.inspector) || ''); } }
+    } catch (e) { /* 단추가 없어도 답은 그대로 */ }
+  }
   const confirm = hedged ? TH_CONFIRM_LINE : '';
   const turn = { q, rq, intent, entity: { cn: entity.cn, l4: entity.l4, bay: entity.bay }, ship, answer: _thNorm(text).slice(0, 200), follow, confirm, at: now };
   if (th) { th.turns.push(turn); if (th.turns.length > THREAD_MAX_TURNS) th.turns.shift(); th.at = now; th.missAt = 0; th.lastUtter = { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut }; }
@@ -3746,6 +3759,94 @@ function _inWorkWindow(now, pier) {
   const d = new Date(now); const m = d.getHours() * 60 + d.getMinutes();
   return wins.some(([a, b]) => m >= a && m < b);
 }
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// [mirBusy] 작업 중 사담 미루기 (4.38) — 검수사 2026-10-19 19:08~19:21 확정
+//   «미르야를 부르면 일반회화 또는 웹검색기능사용이고 그냥 뭐 어디있어 하면 기능이나 컨위치등으로 인식하는식으로»
+//   «작업중에 일반 질문을 하면 작업중에는 사담이 안됩니다. 쉬는 타임에 대화가 가능합니다 라는 식으로 미룹니다 최대한 공손하게»
+//   «쉬는 타임은 해치커버 열고 닫는시간 5분이내 중식 석식 중단보고» · «시간당 처리댓수를 보고 … 시간당 30대를 처리하는중엔 일반 대화가 힘듭니다» · «15대 이하라면 여유 시간이 많습니다»
+//   (야식·아침 교대 쉬는 시간도 식사 창으로 넣는다 — 실데이터 표를 보이고 «이대로 만든다» 로 확정)
+//   «작업 중» = 작업자로 로그인(조회만·관리자 아님)했고 고른 배가 지금 작업 중(utils.isWorkingNow). 그 밖엔 언제든 대화한다.
+//   판정 재료는 화면이 ctx.work = { voyageKey, worker, equip } 로 싣는다(workChoice.mirWorkCtx — 이 파일은 workChoice 를 부르지 않는다, 콘앱 번들).
+//   콘앱은 고른 배(ctx.voyageKey)에서 일하는 사람으로 본다.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+export const MIR_BUSY_FREE_PER_HOUR = 15;   // 시간당 이 대수 이하면 여유(검수사 «15대 이하라면 여유 시간이 많습니다»)
+const MIR_HATCH_FREE_MS = 5 * MIN;           // 해치커버 열기·닫기 보고 뒤 5분
+export const MIR_DEFER_TEXT = '죄송해요, 지금은 작업 중이라 사담은 잠시 미뤄 둘게요 🙏 쉬는 시간에 편하게 다시 말씀해 주시면 그때 꼭 이야기 나눠요.';
+/** 지금 이 검수원이 사담을 미뤄야 할 만큼 바쁜가. { busy, known, why } — known=false 면 잴 재료가 없다(그때는 바쁘지 않은 것으로 본다). */
+export function mirBusyNow(ctx, now = Date.now()) {
+  const c = ctx || {};
+  const w = c.work || (c.app === 'cone' && c.voyageKey ? { voyageKey: c.voyageKey, worker: true, equip: '' } : null);
+  if (!w || !w.worker || !w.voyageKey) return { busy: false, known: true, why: '작업자로 고른 배 없음' };
+  const v = (c.voyages && c.voyages[w.voyageKey]) || (String(c.voyageKey || '') === String(w.voyageKey) ? c.voyage : null);
+  if (!v || !v.info) return { busy: false, known: false, why: '작업 배 자료 없음' };
+  if (!isWorkingNow(v, now)) return { busy: false, known: true, why: '배가 작업 중이 아님' };
+  const pier = pierOf(v);
+  const d = new Date(now); const mins = d.getHours() * 60 + d.getMinutes();
+  for (const [a, b] of mealWindows(pier)) for (const off of [0, -1440, 1440]) { if (mins >= a + off && mins < b + off) return { busy: false, known: true, why: `쉬는 시간(${_mmHHMM(a + off)}~${_mmHHMM(b + off)})` }; }
+  const pz = workPauseOf(v, now);
+  if (pz) return { busy: false, known: true, why: `중단 보고${pz.reason ? ` «${pz.reason}»` : ''}` };
+  const myNo = String(w.equip || '').replace(/[^0-9]/g, '');
+  const reps = (v.reports && typeof v.reports === 'object') ? v.reports : {};
+  for (const k of Object.keys(reps)) {
+    const r = reps[k]; if (!r || r.type !== 'hatch') continue;
+    const ts = hatchReportTs(r) || Number(k) || 0;   // 사건 시각 — 자동 기록은 적힌 때(ts)가 아니라 eventTs(utils 한 벌)
+    if (!ts || ts > now + MIN || now - ts > MIR_HATCH_FREE_MS) continue;
+    const rNo = String(r.equip || '').replace(/[^0-9]/g, '');
+    if (!myNo || !rNo || rNo === myNo) return { busy: false, known: true, why: '해치커버 작업(5분)' };
+  }
+  //  시간당 처리 대수 — 내 호기(모르면 배 전체를 그 시간에 일한 호기 수로 나눈다)
+  let mine = 0, all = 0; const eqs = new Set();
+  for (const m of ['discharge', 'loading']) {
+    const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue;
+    for (const x of Object.values(comp)) {
+      const at = x && Number(x.at); if (!at || at > now || at <= now - 60 * MIN) continue;   // 최근 1시간(검수사에게 보인 표와 같은 창)
+      all++; const no = String((x && x.equip) || '').replace(/[^0-9]/g, ''); if (no) eqs.add(no); if (myNo && no === myNo) mine++;
+    }
+  }
+  if (all > 0 && !eqs.size) return { busy: false, known: false, why: `완료 기록에 호기가 없어 처리 대수를 못 잼(1시간 ${all}대)` };   // 감사 — 호기 없는 기록을 1로 나눠 과대평가·내 호기 0대로 과소평가하지 않는다(모르면 종전처럼 대화)
+  const rate = myNo ? mine : Math.round(all / eqs.size);
+  if (rate <= MIR_BUSY_FREE_PER_HOUR) return { busy: false, known: true, why: `시간당 ${rate}대(여유)` };
+  return { busy: true, known: true, why: `시간당 ${rate}대 처리 중` };
+}
+//  미룬 질문 — 이 기기에만(쉬는 틈에 다시 묻는 단추). 12시간 지나면 버린다. 저장이 막혀도 이번 실행 동안은 기억한다.
+const DEFER_KEY = 'mir_deferred_v1';
+let _deferMem = null;
+let _deferStoreOk = true;   // 마지막 저장이 실패했으면(가득 찬 기기) 저장소의 옛 값으로 방금 미룬 말을 덮지 않는다
+function _deferLoad(now) {
+  //  저장소가 정본이다 — 읽힐 때마다 다시 읽는다(다른 창·콘앱이 쓴 것을 덮지 않게). 저장이 막힌 기기는 이번 실행의 기억(_deferMem)을 쓴다.
+  if (_deferStoreOk || !Array.isArray(_deferMem)) { try { const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(DEFER_KEY) : null; if (raw != null) { const j = JSON.parse(raw); if (Array.isArray(j)) _deferMem = j; } } catch (e) { /* 이번 실행 기억으로 */ } }
+  if (!Array.isArray(_deferMem)) _deferMem = [];
+  _deferMem = _deferMem.filter((d) => d && d.q && now - Number(d.at || 0) < 12 * 3600000);
+  return _deferMem;
+}
+function _deferSave() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(DEFER_KEY, JSON.stringify(_deferMem || [])); _deferStoreOk = true; } catch (e) { _deferStoreOk = false; /* 저장이 막힌 기기 — 이번 실행만 기억 */ } }
+//  미룬 질문은 검수원마다 따로 — 한 기기를 여럿이 쓰면(검수원 변경·사무실 PC) 남의 사담이 단추로 뜨지 않게(4차 감사 M1). 검수원마다 3개.
+const _dw = (who) => String(who || '').trim();
+const _dSame = (d, q, who) => _norm(d.q) === _norm(q) && _dw(d.who) === _dw(who);
+function _deferPush(q, now, who = '') { const t = String(q).trim().slice(0, 200); const w = _dw(who); const L = _deferLoad(now).filter((d) => !_dSame(d, t, w)); L.push({ q: t, at: now, who: w }); const mine = L.filter((d) => _dw(d.who) === w); const drop = new Set(mine.slice(0, Math.max(0, mine.length - 3))); _deferMem = L.filter((d) => !drop.has(d)); _deferSave(); }   // 200자 — 자른 말과 원문이 두 칸을 차지하지 않게(감사)
+function _deferOffered(q, now = Date.now(), who = '') { _deferMem = _deferLoad(now).map((d) => (_dSame(d, q, who) ? { ...d, offered: true } : d)); _deferSave(); }
+function _deferDrop(q, now = Date.now(), who = '') { _deferMem = _deferLoad(now).filter((d) => !_dSame(d, q, who)); _deferSave(); }
+/** 쉬는 틈에 다시 꺼낼 미룬 질문(최근 것부터). opts.fresh — 아직 단추로 띄우지 않은 것만. */
+export function mirDeferredPending(now = Date.now(), opts = {}) { const w = _dw(opts && opts.who); return _deferLoad(now).filter((d) => _dw(d.who) === w && !(opts && opts.fresh && d.offered)).slice().reverse().map((d) => d.q); }
+/** 이 말이 미뤄 둔 질문인가 — 단추를 누르거나 «응» 으로 고른 말은 짧아도(«심심해») 모델로 보낸다(화면의 네 글자 문턱·askMir 의 한 글자 문턱). */
+export function mirIsDeferred(q, now = Date.now(), who = '') { return !!_norm(q) && _deferLoad(now).some((d) => _dSame(d, q, who)); }
+export function _mirDeferReset() { _deferMem = []; _deferSave(); }   // 연막검사용
+//  사담(일반 말)인가 — 일 낱말(MIR_WORKISH_RE)도, 앱 사용법 말도 없는 말. «미르야» 를 붙인 일반 말도 여기(작업 말이 있으면 아니다 — 검수사 확정).
+const MIR_APPISH_RE = /사용법|사용\s*방법|매뉴얼|도움말|설명서|어떻게|버튼|단추|탭|메뉴|화면|기능|설정|업로드|올려|올리|붙여|입력|강풍|우천|대기|중단|멈춤|정지|고장|쉬고\s*있|쉬는\s*중|콘|라싱|트위스트|봉인|실\s*(?:이|은|번호)?\s*(?:끊|잘|떨어|없)|전원|천장|일정|다음|신고|오답|메모|검수원|카톡|보고|사진|큐알|QR|설치|로그인|비밀번호|알림|순서|밝기|소리|글자|데미지|파손|작업|선택|변경|바꾸|바꿔|로그아웃|계정|컨|카고|부두|터미널|게이트|화물|세관|사무실|도로|트럭|직원|대리점|전화|기사|현장|본선|갑판|통제|선석|막혔|막혀|차\s*(?:막|밀)|(?:^|[^가-힣])배(?:\s|가|에|를|는|도|네|야|로|$)/i;   // 일 멈춤 알림(«강풍대기 상태야 쉬고 있어»)도 사담이 아니다 · 감사 B3 — 현장 대처(«실 끊어졌어»·«콘 빠졌어»·«전원 나갔어»)·앱 일(«오답 신고»·«메모 남겨줘»)도 사담이 아니다
+//  ★ 위기·안전·몸·마음 말은 무슨 일이 있어도 미루지 않는다(재감사 — «죽고 싶어»·«사람 다쳤어»·«불났어»·«어지러워» 가 미룸 문구를 받았다). 생활회화 프롬프트의 위기 신호 규칙(109 안내)으로 그대로 간다.
+const MIR_NEVER_DEFER_RE = /다치|다쳤|다쳐|부상|(?:^|[^가-힣])피\s*(?:가|를)?\s*(?:나|흘|많이)|쓰러|넘어|떨어졌|추락|깔렸|끼었|끼였|감전|충돌|폭발|불\s*(?:났|이야|붙|나)|화재|연기|가스|냄새|누수|샌다|새고|기름|유출|구급|119|112|살려|도와|위험|사고|죽|자살|살\s*(?:기\s*싫|고\s*싶|이유|맛)|극단|그만두|그만둔|그만둘|그만\s*두|끝내고|외롭|괴롭|무섭|서럽|두렵|졸립|아픕|아퍼|힘듭|힘드|힘\s*들|지쳤|다쳣|미치|미쳐|공황|기절|빠졌|실려|경찰|칼|급해|급하|큰일|돌아가셨|입원|부러|날렸|농담\s*(?:아니|말고|할\s*때|이지|하지\s*마)|ㅠ|ㅜ|출혈|의식|골절|수술|수혈|불길|화염|사이렌|경광등|구조|헬기|시신|대피|정전|해경|무너|사라지|없어지|포기|헤어|떠났|가슴|숨|어지러|머리|아파|아프|몸|컨디션|토할|구토|응급|병원|약\s*(?:먹|좀|있)|우울|외로|괴로|서러|답답|속상|막막|처져|최악|불안|무서|겁나|슬퍼|슬프|눈물|울고|울어|힘들|지쳐|지친|피곤|졸려|졸리|졸음|졸아|감겨|잠\s*와|스트레스|화나|짜증|싶|싫|없어|안\s*좋|못\s*하겠|소용|무전|신호수|조명|사다리|안전|미끄러|문\s*안\s*(?:닫|열)|도어|노트|선속|배터리|충전|교대|어두워/;   // ★ 넓게 — 사담 신호 낱말과 같이 와도(«기분이 너무 외로워»·«여자친구랑 헤어졌어 살 이유가 없어»·«졸려서 눈이 감겨») 미루지 않는다(3차 감사). 자기 상태를 바라거나 부정하는 말(싶·싫·없어·안 좋)이면 사담이라도 안 미룬다 — 덜 미루는 쪽이 안전하다
+//  사담 신호 — 이 낱말이 있는 말만 미룬다(재감사: «일 낱말이 없으면 사담» 이라는 부정형은 목록 밖 현장 말 «무전기 안 돼»·«신호수 없어» 를 미뤘다). 못 잡은 사담은 종전처럼 답한다(덜 미루는 쪽이 안전하다).
+//  ★ 사담 = 문장 «전체» 가 아래 두 꼴일 때만(4차 감사 — 신호 낱말이 문장 어디에든 있으면 미루던 것이 «농담 아니고 사람이 바다에 빠졌어»·«카페리 들어왔어» 까지 미뤘다.
+//    5차 감사 — 자유 글자를 둔 상식 질문 꼴이 «출혈 심한데 혈액형 뭐야»·«야구장 쪽 화염 뭐야» 를 미뤄 뺐다. 말벗을 청하는 «얘기 좀 하자» 도 마음이 힘든 사람이 먼저 꺼내는 말일 수 있어 뺐다.)
+//    ① 재미를 청하는 짧은 말(«농담 하나 해줘»·«퀴즈 내줘»·«노래 추천해줘»·«끝말잇기 하자») ② 미르에게 묻는 안부(«오늘 기분 어때»·«심심해»·«놀아줘»).
+//    그 밖은 사담이어도 종전처럼 답한다(덜 미루는 쪽이 안전하다). 우는 표시(ㅠ·ㅜ)가 붙으면 미루지 않는다(금지 목록).
+const MIR_CHAT_EXACT_RE = [
+  /^(?:재밌는|재미있는|웃긴|웃기는|짧은)?\s*(?:농담|개그|아재\s*개그|퀴즈|수수께끼|넌센스\s*퀴즈|끝말잇기|노래)\s*(?:하나|한\s*곡|한\s*개|좀|또|더)?\s*(?:해|내|불러|들려|추천해|추천|알려|하자|해\s*봐|들려\s*봐)?\s*(?:줘|줄래|주세요|줄래요|봐|요|라)?$/,
+  /^(?:너|넌|미르)?\s*(?:오늘|요즘|지금)?\s*(?:기분\s*(?:어때|어떠니|어때요|좋아|좋니)|심심해|심심하다|심심하네|놀아\s*줘|놀자)$/,
+];
+const _chatNorm = (q) => String(q || '').trim().replace(/^미르\s*(?:야|아|님)?(?![가-힣])[\s,!~.]*/, '').replace(/[\s?？!！.~…ㅋㅎ^]+$/g, '').replace(/\s+/g, ' ');
+function _isGeneralTalk(q) { const t = String(q || ''); const n = _chatNorm(t); return isChatCandidate(t, '') && !MIR_APPISH_RE.test(t) && !MIR_NEVER_DEFER_RE.test(t) && MIR_CHAT_EXACT_RE.some((r) => r.test(n)); }
+
 /** 앱 작업 보고(workPauseOf 와 같은 12시간 안의 work_status)에서 ① «시작·재개» 중 가장 늦은 시각(restartAt) ② 모든 «모드·호기» 의 가장 늦은 보고가 «끝(…_done)» 이면 그 가운데 가장 늦은 끝 시각(allClosedAt, 아니면 0).
  *  (4.06 감사 — 재개 직후·끝 보고 뒤에 화내지 않게. 호기별로 따진다: 1호기가 끝 보고를 올려도 2호기가 일하고 있으면 «끝» 이 아니다.) */
 function _statusReportMarks(v, now) {

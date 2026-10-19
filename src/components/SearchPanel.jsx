@@ -4,7 +4,7 @@
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
+import { equipGateText, canWorkNow, workGateText, mirWorkCtx } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트 · 4.38: mirWorkCtx — 작업 중 사담 미루기
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
@@ -18,7 +18,7 @@ import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.6
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
-import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, YARD_SPEAK } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
+import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, YARD_SPEAK, mirIsDeferred } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
 import { askGemini } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
@@ -1472,14 +1472,15 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
        ⚠ 접수된 질문(askedAt — 엔터·전송·음성)만. 타이핑 중엔 부르지 않는다(모델 호출 한 번 = 값). 같은 문장은 mirModel 이 한 번만 부른다. */
   useEffect(() => {
     const q = query.trim();
-    if (!q || q.length < 4 || !askedAt) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
+    const _dq = (traceRef.current && traceRef.current.rq && mirIsDeferred(traceRef.current.rq, Date.now(), inspector || '')) ? traceRef.current.rq : (mirIsDeferred(q, Date.now(), inspector || '') ? q : '');   // 4.38: 미뤄 둔 질문(단추·«응») 은 짧아도 모델로(감사 M1·M2)
+    if (!q || (q.length < 4 && !_dq) || !askedAt) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
     if (/^[0-9\s]+$/.test(q)) return undefined;                 // 숫자(끝4자리)는 화면 카드가 답한다
     if (parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) return undefined;   // 조작·적는 말은 규칙이 다 한다
     if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
     let alive = true;
     setModelState({ q, pending: true, text: null, via: null });
-    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainers, inspector };
-    askMirModel(q, ctx, (cq) => _rulesFor(cq), { who: inspector || '', weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
+    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainers, inspector, work: mirWorkCtx() };   // 4.38: work — 작업 중 사담 미루기
+    askMirModel(_dq || q, ctx, (cq) => _rulesFor(cq), { who: inspector || '', weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
       .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey, via: m.via }); })
       .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
     return () => { alive = false; };
@@ -1556,7 +1557,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     const text = _devMsg || (_m ? _m.text : _localAnswerRaw);
     const via = _devMsg ? '' : (_m ? (_m.via || 'model') : ((traceRef.current && traceRef.current.via) || ''));
     let fo = null;
-    try { fo = mirThreadCommit(q, text, via, { voyageKey, inspector, _utterAt: askedAt }); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
+    try { fo = mirThreadCommit(q, text, via, { voyageKey, voyage, inspector, _utterAt: askedAt, work: mirWorkCtx() }); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }   // 4.38: voyage·work — 쉬는 틈의 미룬 질문 단추
     const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
     setMirFollow(show);
     if (show && autoSpeak && !parsed.briefingQuery && chatMessages.length === 0) {

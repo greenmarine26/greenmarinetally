@@ -16,6 +16,7 @@
 import { canOpenChief, isHiddenStaff } from './staffList.js';
 import { isOwnerName } from './adminGuard.js';
 import { getMeToday, ymdKST } from './meToday.js';
+import { getEquipNumber } from './utils.js';   // 4.38: mirWorkCtx — 내 호기(utils 는 workChoice 를 부르지 않아 순환 없음)
 
 export const WORK_CHOICE_KEY = 'tallyone_work_choice';
 
@@ -85,6 +86,15 @@ export function isNotWorkerNow() { return isViewOnlyNow() || isAdminNow(); }
 export function myWorkVoyageNow() {
   const c = (_active !== undefined) ? _active : readWorkChoice(getMeToday());
   return (c && c.mode === 'work' && c.voyageKey) ? String(c.voyageKey) : '';
+}
+
+/** ★ 4.38 — 미르가 «이 검수원이 지금 작업 중인가»(작업 중 사담 미루기)를 잴 때 화면이 ctx.work 로 싣는 내 작업 표지 한 벌.
+ *  { voyageKey, worker, equip } — 작업자로 고른 배가 없거나 조회만·관리자면 worker=false. mir.js 는 콘앱 번들에도 실려 이 파일을 직접 부르지 않는다. */
+export function mirWorkCtx() {
+  let voyageKey = '', worker = false, equip = '';
+  try { voyageKey = myWorkVoyageNow() || ''; worker = !!voyageKey && !isNotWorkerNow(); } catch (e) { voyageKey = ''; worker = false; }
+  try { equip = getEquipNumber() || ''; } catch (e) { equip = ''; }
+  return { voyageKey, worker, equip };
 }
 
 /** ★ 4.08 — 이 사람이 서버에서 **어디까지 받아야 하는가**. 'all' = 항차 뿌리 전체 · 'body:항차키' = 그 항차 본문 하나만(다른 항차는 받지 않는다) · 'light' = 항차마다 info 만(선택 화면 목록).

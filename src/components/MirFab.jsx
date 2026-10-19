@@ -33,6 +33,7 @@ import { logQuerySettled } from '../activityLog.js';
 import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport } from '../firebase.js';
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
+import { mirWorkCtx } from '../workChoice.js';   // 4.38: 작업 중 사담 미루기 — 내 작업 표지(작업자·작업 선박·호기)
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';
 import DamageHistoryCard, { damageHistoryQueryOf } from './DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(통합검색 화면과 공용)
 
@@ -196,6 +197,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       let weatherText = null;
       if (parseNaturalQuery(t).weatherQuery) { try { weatherText = await fetchWeatherText(); } catch (e) { weatherText = null; } }
       const ctx = {
+        work: mirWorkCtx(),   // 4.38: 작업 중 사담 미루기 · 쉬는 틈의 미룬 질문 단추
         mirBox: true,   // 4.34-02: 미르 칸에 치는 말은 «미르야» 없이도 미르에게 하는 말이다(멈춤 알림 판정)
         app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, weatherText, accepted: true,   // 3.60-18: 전송된 질문 — 못 알아들으면 miss 기록
         inspector, isChief, chiefData, heartbeat, portMisData, pilotForecast,
