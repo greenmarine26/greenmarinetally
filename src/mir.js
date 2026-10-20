@@ -894,6 +894,12 @@ export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now(), gi
 //     주의 할점은 FR사진 XRAY 실달기 리퍼온도 체크또는 리스트 받기등이 있습니다» · 22:05 «여기(작업 시작 화면 예상 작업 시간 줄)가 확실했으면 미르에게 분석해달라고 하지 않았을 것입니다».
 //    숫자는 한 벌 — 규격·특수화물은 브리핑과 같은 briefCountsOf(평택분 · 채워진 예약 칸 뺌), 무브·시간은 화면 «예상 작업 시간» 줄과 같은 expectedWorkTimeOf(갱당 시간당 25·30 은 4.01 규칙).
 const WORK_ANALYSIS_RE = /작업\s*(?:분석|분선)|^\s*(?:미르\s*(?:야|아)?\s*)?(?:분석|분선)\s*(?:해\s*줘|해\s*주세요|좀|해)?\s*[?.!~]*\s*$/;   // «작업 분선해줘» 는 21:47 실제 오타
+//  ★ 4.40-01 — «언제·몇 시에 끝나» 처럼 끝나는 시각을 **묻는** 말. etaQuery 는 «끝나» 만 있어도 서므로(«인쇄가 끝나면 …») 강한 답은 이것까지 맞을 때만 준다 —
+//    나머지는 종전대로 모르는 낱말이 남으면 모델이 다시 읽는다(검수사 2026-10-20 20:07 «몇시에 끝나 같은 질문을 검수앱과 콘앱에 하면 답변이 틀리게»).
+const ETA_ASK_RE = /몇\s*시|언제|퇴근|집에|예상\s*(?:완료|종료|시간)|완료\s*(?:예상|예정|시각|시간)|끝(?:나는|날)\s*(?:시간|시각)|몇\s*시간/;
+//    배 작업이 아닌 것의 끝(«쉬는 시간·강풍·인쇄·회의·야드 작업 언제 끝나»)·섞인 말(«… 그리고 리퍼 몇 대야»)·남에게 전하라는 말(«수석한테 알려줘»·«카톡 보내줘»)은
+//    강한 답으로 굳히지 않는다 — 종전대로(감사 지적 2026-10-20).
+const ETA_OTHER_RE = /쉬는|휴식|점심|식사|밥|강풍|바람|태풍|비\s*(?:가|는|언제|그치)|눈\s*(?:이|은)\s|회의|인쇄|야드|그리고|한테|에게|카톡|문자|보내|전해/;
 const EXPECT_TIME_RE = /예상\s*작업\s*시간|작업\s*예상\s*시간/;   // «작업» 이 있어야 한다 — «도선·출항·입항 예상 시간» 은 다른 질문
 const _hmK = (min) => { const h = Math.floor(min / 60), m = min % 60; return h ? `${h}시간${m ? ` ${m}분` : ''}` : `${m}분`; };
 /** 예상 작업 시간 줄들 — gangsHyp(질문 속 «2갱으로») 이 있으면 그 갱 수로, 없으면 화면 줄과 같은 갱 수(조별 → 항차 → 2갱). */
@@ -2683,7 +2689,7 @@ export function answerOneRaw(query, ctx) {
     const pool = cs.filter((x) => x._ptk !== false && x._mode === m && !x._comp);
     return generateTwinCheckAnswer(p, pool, c.pairsMap || {}, info.pier || '');
   }
-  if (hasShip && isSpeedQuery(Q)) { try { const a = answerShipSpeed(v, c.shipSpeed, ship, _vcOf()); if (a && !/못 불러왔/.test(a)) return a; } catch (e) { /* */ } }   // 4.17: 자료 수집중이면 _vcOf().collecting — 남은 대수·끝나는 시각 줄을 안 낸다   // 2차 시뮬 5: 속도 자료가 없으면 본체 ETA 가 답한다
+  if (hasShip && isSpeedQuery(Q)) { try { const a = answerShipSpeed(v, c.shipSpeed, ship, _vcOf()); if (a && !/못 불러왔/.test(a)) { if (ETA_ASK_RE.test(Q) && !ETA_OTHER_RE.test(Q)) _via('eta'); return a; } } catch (e) { /* */ } }   // 4.40-01: «작업시간 몇 시간 걸릴거같아» — 남은 대수·끝나는 시각까지 내는 답이라 끝나는 시각 답과 같이 강한 답(모델로 안 감 · 2차 시뮬 실입력 콘 10-15)   // 4.17: 자료 수집중이면 _vcOf().collecting — 남은 대수·끝나는 시각 줄을 안 낸다   // 2차 시뮬 5: 속도 자료가 없으면 본체 ETA 가 답한다
   if (hasShip && isPlanOutlookQuery(Q)) { try { const m = outlookModeOf(Q); const a = m ? answerPlanOutlook(v, m, ship) : answerPlanOutlookBoth(v, ship); if (a) return a; } catch (e) { /* */ } }
 
   //  ⑯ 관련 선사 · 브리핑 · 실 점검.
@@ -2815,14 +2821,15 @@ export function answerOneRaw(query, ctx) {
       if (needsModeChoice(p, results) && c.modeChoice === null) { _via('modeChoice'); return '양하인가요, 선적인가요? 🐱 아래 버튼으로 골라 주세요 — 잠시 뒤엔 둘 다 보여드릴게요.'; }
       const eff = (c.modeChoice && c.modeChoice !== 'both') ? { ...p, mode: c.modeChoice } : p;
       const effRes = (c.modeChoice && c.modeChoice !== 'both') ? results.filter((x) => (c.modeChoice === 'loading' ? x._mode === 'loading' : x._mode !== 'loading')) : results;
-      const a = generateLocalAnswer(eff, effRes, cs.filter((x) => x._ptk !== false), {
+      const _gctx = {
         ...(c.manualCtx || null), mode: c.mode || null, bayPairs: c.bayPairs || c.pairsMap || null, selectedGroup: c.selectedGroup, selectedTier: c.selectedTier, shipLib: c.shipLib || null,
         gangShift: c.gangShift || null, crewAnswer: c.crewAnswer || null, voyage: v, carrierContacts: c.carrierContacts || null, shipSpeed: c.shipSpeed || null,
         vsl: c.vsl, vslFull: c.vslFull, pier: c.pier, info: info || null, voyageCounts: (p.etaQuery || p.paceQuery || p.progressQuery) ? _vcOf() : null, voyageDoneAts: c.voyageDoneAts || null,   // 3.60-18: voyageCounts 를 먼저 세야 voyageDoneAts 가 같은 분모
         photos: c.photos || null, shiftMap: c.shiftMap || null, shiftEvid: c.shiftEvid || null, compMap: c.compMap || null, bowStern: c.bowStern || null, gangs: info && info.gangs,
         who: c.inspector || '', inspector: c.inspector || '', voyageKey: c.voyageKey || '',
-      });
-      if (a) return a;
+      };
+      const a = generateLocalAnswer(eff, effRes, cs.filter((x) => x._ptk !== false), _gctx);
+      if (a) { if (_gctx._etaAnswered && ETA_ASK_RE.test(q) && !ETA_OTHER_RE.test(q)) _via('eta'); return a; }   // 4.40-01: 끝나는 시각을 **물은** 말에 나간 끝나는 시각 답(nlSearch.formatEta 가 표식) — 강한 답(isWeakAnswer)
     } catch (e) { console.warn('[미르] 본체 답 실패:', e); }
     //  조건은 잡혔는데 어미가 없어 답이 안 나오는 말(«40피트 풀») — 결과를 세어 준다.
     //  ⚠ 카드 목록이 있는 화면(작업창·홈·탭 카드)에서는 null 이 답이다 — 글이 나가면 카드 65장이 숨는다(감사 치명 3). 콘앱·떠 있는 미르만 센다.
@@ -2953,6 +2960,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
   if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
+  if (via === 'eta') return false;      // 4.40-01: 끝나는 시각을 물은 말의 끝나는 시각 답(완료 기록·본선현황으로 잰 것) — 사전에 없는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보낸다. 보내면 앱마다 다른 답(검수사 2026-10-20 20:07)
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다

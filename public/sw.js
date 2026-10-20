@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.40';
-const NOTE = '4.40 미르에게 25번 베이부터 해야 돼 하면 25번 베이로 옮겨 드릴까요 묻고 이동을 누르면 자동 가이드가 그 베이 카드부터 보여 줍니다. 어느 베이든 됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.40-01';
+const NOTE = '4.40-01 콘앱 실시간 화면에 실시간 수집으로 들어온 다른 호기도 함께 나옵니다. 미르에게 몇 시에 끝나 하면 검수앱과 콘앱이 같은 답으로 끝나는 시각까지 알려 줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

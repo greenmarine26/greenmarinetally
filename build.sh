@@ -821,6 +821,8 @@ node tools/smoke_reeferphoto.cjs || { echo "✗ 리퍼 사진 판독 연막검�
 node tools/smoke_conebayfit.cjs || { echo "✗ 콘앱 베이뷰 연막검사 실패 — 배포 금지"; exit 1; }
   # 2.43: 콘 트윈 — 트윈을 자료로 가리고 두 베이를 같이 적는가 · 전체 화면이 한 화면에 다 드는가(jsdom 실렌더)
   node tools/smoke_conetwin.cjs || { echo "✗ 콘 트윈 연막검사 실패 — 배포 금지"; exit 1; }
+  #  ConeOne 2.70-03 (TallyOne 4.40-01): 콘앱 실시간 화면 — 실시간 수집이 호기를 적어 넣은 터미널 완료도 그 호기로 그린다(검수사 2026-10-20 «2호기 4호기가 보여야 하는데 한호기 밖에»). 소스에서 ctCompute 를 꺼내 ATPR 2646E·DJCT 0226E GET 사본으로.
+  node tools/smoke_conelive27003.cjs || { echo "✗ 콘앱 실시간 화면(수집기 호기) 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.5-01: 작업 속도 페이스 — 몰아 입력에 속지 않는가(NSDC 2608N 선적 실완료 114대)
 SMOKE_PC=$(mktemp /dev/shm/hometmp/_smokepace_XXXXXX.cjs)
 if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs \
@@ -1423,6 +1425,8 @@ fi
     node tools/smoke_workanalysis438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 분석 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-01
     node tools/smoke_mir43902.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.39-02(예상 실오류·장 바꾸기·집에 몇 시) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-02
     node tools/smoke_mir440.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40(베이로 옮기기 [이동]·[취소]) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.40 — 화면은 회귀 기준표 R44
+    #  4.40-01: «몇 시에 끝나» 두 앱 같은 답 — 끝나는 시각을 묻는 말은 via eta 강한 답(모델로 안 감) · 도선 갈래·속도 표가 안 가로챔 · 배 작업 아닌 것은 종전대로. 같은 번들.
+    node tools/smoke_eta44001.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40-01(몇 시에 끝나 두 앱 같은 답) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_mir436.cjs "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 4.36 생활회화·사진 읽기·예상 실오류 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.69: **미르 야드 상황**([mirYard]) — 말귀 다섯 갈래·터미널 판정어·우리 배 몫 대조·자료 나이·두 터미널·콘앱 ctx.yard·대화 칩. 같은 번들.
     node tools/smoke_mirstop434.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 멈춤 알림 연막검사 실패 — 배포 금지"; exit 1; }   # 4.34-01
