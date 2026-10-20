@@ -891,6 +891,7 @@ if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:fir
   npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_HK" --log-level=error \
     || { echo "✗ 해치 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }
   node tools/smoke_boardbays.cjs "$SMOKE_CP" "$SMOKE_HK" || { echo "✗ 동방 지금 작업 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 3.15
+  node tools/smoke_baydone441.cjs "$SMOKE_CP" "$SMOKE_HK" || { echo "✗ 수석 상황판 완료·남은 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 4.41
   node tools/smoke_termby.cjs "$SMOKE_CP" "$PWD" || { echo "✗ 완료자 표기(터미널 업체 글자) 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP" "$SMOKE_HK"; exit 1; }   # 3.16
   rm -f "$SMOKE_HK"
   rm -f "$SMOKE_CP"
@@ -1254,6 +1255,20 @@ fi
       else
         cp "$SMOKE_LP.fbbak" src/firebase.js; rm -f "$SMOKE_LP.fbbak"
         echo "✗ 동방 보드 카드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LP"; exit 1
+      fi
+      #  4.41: **수석 상황판 «완료·남은 베이» 한 줄** — TMPZ 2035E·DXQD 2641E·STSE 2681E 실데이터로 배 카드를 그려 확정 글자(관문 4)대로 서는지 본다.
+      SMOKE_BD=$(mktemp /dev/shm/hometmp/_smokebd_XXXXXX.js)
+      cp src/firebase.js "$SMOKE_BD.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+      if npx esbuild tools/smoke_baydone441_render.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+           --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+           --external:fs --external:path --external:url \
+           --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_BD"; then
+        cp "$SMOKE_BD.fbbak" src/firebase.js && rm -f "$SMOKE_BD.fbbak"
+        node tools/smoke_baydone441_render.cjs "$SMOKE_BD" || { echo "✗ 수석 상황판 완료·남은 베이 렌더 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_BD"; exit 1; }
+        rm -f "$SMOKE_BD"
+      else
+        cp "$SMOKE_BD.fbbak" src/firebase.js; rm -f "$SMOKE_BD.fbbak"
+        echo "✗ 수석 상황판 완료·남은 베이 렌더 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BD"; exit 1
       fi
       #  4.03: **터미널 본선 현황 표** — 검수원 기록이 없는 PCTC(MCSC 7B 실값)·동방(RZOR 보관본) 카드에 표가 서고, 호기 그림이 그려지는 배(DJCT)·숨은 호기에 그림이 있는 배에는 안 서는지 실제로 그려 본다.
       SMOKE_TBR=$(mktemp /dev/shm/hometmp/_smoketbr_XXXXXX.js)

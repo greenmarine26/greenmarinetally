@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -2451,6 +2451,26 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     const min = Math.min(...Object.values(cur));
     setGroupFit((g) => (g != null && Math.abs(g - min) < 0.005 ? g : min));
   }, []);
+  //  ★ 4.41 «완료·남은 베이» — 검수사 2026-10-21 05:09 «어디가 완료 되었는지 한눈에 보이질 않습니다 … 작업완료된 베이가 많으면 남은 베이를 보여주거나 이제 시작된것이 라면 완료된 베이를».
+  //    자리 — 오른쪽 그림 칸 머리줄(«호기별 작업 베이» · «터미널 본선 현황» · «지금 작업 중인 베이»)의 늘 비어 있는 오른쪽.
+  //    검수사 06:22 «저는 이곳 우측이 항상 비어 있어서 이곳을 사용할줄 알았는데 지금 사용한곳은 그거 없어도 복잡한곳인데» — 첫 판은 왼쪽 통계 칸에 넣었다가 옮겼다.
+  //    판정은 utils.bayDoneSplitOf 한 벌(분모 = 별첨 · 장 = 그림과 같은 boardPages · 사전 없으면 줄 없음).
+  const bayLines = !voyage ? [] : ['discharge', 'loading'].filter((m) => (boardContainers[m] || []).length).map((m) => {
+    const S = bayDoneSplitOf(boardContainers[m], m, voyage[m]?.completed, boardPages);
+    const txt = bayDoneTextOf(S);
+    return txt ? { m, S, txt } : null;
+  }).filter(Boolean);
+  const bayHead = bayLines.length ? (
+    <span className="ml-auto min-w-0 flex items-center gap-3 flex-wrap justify-end text-sm font-bold" data-board-baydone="head">
+      {/* 재감사 2026-10-21: 줄마다 nowrap 이면 폰 시트(360·390)에서 긴 줄(«남은 — 데크 16(5)·20(40)… 홀드 …» 약 465px)이 칸을 넘어 가로 스크롤이 생긴다 — 폰은 접고 컴(sm)만 한 줄 */}
+      {bayLines.map(({ m, S, txt }) => (
+        <span key={m} className="min-w-0 sm:whitespace-nowrap [overflow-wrap:anywhere]" data-baydone={m} data-baydone-show={S.show}>
+          <span className={m === 'loading' ? 'text-amber-300' : 'text-blue-300'}>{m === 'loading' ? '선적' : '양하'}</span>{' '}
+          <span className={S.show === 'left' ? 'text-orange-200' : 'text-emerald-300'}>{txt}</span>
+        </span>
+      ))}
+    </span>
+  ) : null;
   const cranePanel = (() => {
     //  검수사 «최대 3갱까지 보이게 — 좌측 통계, 1 2 3호기, 그 밑에 다른 선박» → 호기는 옆으로 최대 3칸(그 이상은 +N).
     //  펼쳐도 상한은 둔다 — 부두 정본이 5호기까지이고, 6칸을 넘으면 격자가 두 줄로 접혀 그림이 뭉갠다.
@@ -2499,6 +2519,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
           <span>지금 작업 중인 베이</span>
           <span className="text-dim-500 font-normal"> · {cranes.length ? `${cranes.map((c) => `${c.no}호기 ${c.done}대`).join(' · ')} — ` : ''}호기별 자리가 안 와 베이로 묶었습니다</span>
           {openBtn(bayMore)}
+          {bayHead}
         </div>
         <div className={`grid gap-1 items-start sm:items-stretch sm:flex-1 sm:min-h-0 grid-cols-1 ${bays.length >= 5 ? 'sm:grid-cols-5' : bays.length === 4 ? 'sm:grid-cols-4' : bays.length >= 3 ? 'sm:grid-cols-3' : bays.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>{/* 4.24: 폰(시트)은 베이 그림을 세로로 한 칸씩 — 컴(sm 이상)은 종전 그대로 N칸 */}
           {bays.map((b) => (
@@ -2527,10 +2548,11 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
     const boxes = _appStale ? [] : _termOnly ? shown.filter((c) => !(c.qc && !_canDraw(c))) : shown;   // 4.05: 멈췄으면 옛 호기 그림을 치우고 표만
     return (
       <div className="sm:w-[75%] sm:h-full sm:min-h-0 sm:border-l sm:border-line sm:pl-1 flex flex-col gap-0.5">   {/* 2갱이면 75/2 · 3갱이면 75/3 (grid-cols-N) · PC 는 줄 높이를 다 쓴다 */}
-        <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5">
+        <div className="text-2xs text-dim-400 font-bold flex items-center gap-1.5 flex-wrap">
           <span>{_appStale ? '터미널 본선 현황' : '호기별 작업 베이'}</span>
           {_appStale && <span className="text-amber-300 font-normal">· 앱 입력 마지막 {fmtAgo(_lastApp)} — 멈춘 동안은 터미널 표를 보입니다</span>}
           {openBtn(_termOnly && boxes.length === 0 ? 0 : more)}   {/* 4.03: 표가 호기 칸을 대신하면 «+N칸 더» 가 펼칠 것이 없다 */}
+          {bayHead}
         </div>
         {/* ★ 4.03 — 검수사 2026-10-04 «수석대쉬보드의 실시간 작업 현황과 콘앱의 실시간 작업 현황이 검수사가 찍지 않으면 안보일 경우 PCTC의 선박별 본선 작업 현황과 동방의 선박별 본선작업 현황을 보여줄수 있게 해주세요».
             호기별 베이 그림을 하나도 못 그릴 때(= 검수원이 호기·자리를 안 찍음)만 터미널 현황 표를 채운다. 그림이 그려지는 배는 종전 그대로.

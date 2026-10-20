@@ -52,7 +52,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
 //   (앞 판) 'TallyOne 4.29-02'   // 4.29-02 **업데이트 배너는 검수사가 쓸 수 있는 변화만 알린다**(검수사 2026-10-16 13:32 «검수사들이 모르는 수정 업데이트 공고는 보여주면 안됩니다. 보여줘도 다른 검수사들이 쓸수 없는 기능이기 때문입니다»). 4.28·4.29-01 의 배너 문구는 소유자 전용 스위치 이야기라 모든 검수사에게 보였다 — 소유자 메뉴·수집기 안쪽 변경만 있는 판은 배너 문구를 직전 «모두가 쓰는 변화» 그대로 두고, 4.29 선적 칸 [수정] 문구로 되돌린다.
-export const APP_VERSION = 'TallyOne 4.40-01'   // 4.40-01 **콘앱 실시간 화면에 실시간 수집 호기도 · «몇 시에 끝나» 두 앱 같은 답** — 검수사 2026-10-20 20:02 «콘앱화면에는 실시간 작업 화면이 2호기 4호기가 보여야 하는데 한호기 밖에 보이지 않았습니다» · 20:07 «몇시에 끝나 같은 질문을 검수앱과 콘앱에 하면 답변이 틀리게 나옵니다 검수앱은 자세히 시간 설명까지 콘앱은 남은 갯수만». ① 수집기는 2.40-01 부터 termWork 를 안 쓰고 실시간 수집이 완료에 {src:term, equip} 로 넣는다 — 콘앱 ctCompute(ConeOne 2.70-03)가 그 완료를 건너뛰어 그 호기를 못 그렸다(ATPR 2646E 2호기 120대 · DJCT 0226E 3·4호기). 수석 보드(craneBoardOf)와 같은 판정으로 호기가 적힌 완료를 그린다(마감 EDI 적용·호기 없는 것은 그대로 뺌). ② nlSearch.formatEta 표식(ctx._etaAnswered) + 끝나는 시각을 묻는 말(ETA_ASK_RE · 배 작업 아닌 것·섞인 말·전하라는 말 ETA_OTHER_RE 제외)이면 via eta 강한 답 — 모르는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보내 두 앱이 같은 규칙 답. 작업 속도 답(몇 시간 걸려)도 같은 문. ③ etaQuery «언제 마쳐/마무리»·«다 하면 몇 시»·«몇 시에 작업이 끝날»·«몇 시에 다 끝날» · 도선 갈래가 «끝나는·걸리는» 말을 안 가로챔 · «이 속도면 언제 끝나» 는 끝나는 시각 답. 연막 smoke_conelive27003 · smoke_eta44001.
+export const APP_VERSION = 'TallyOne 4.41'   // 4.41 **수석 상황판 배 카드에 «완료·남은 베이» 한 줄** — 검수사 2026-10-21 05:09 «수석 상황판은 보면 어디가 완료 되었는지 한눈에 보이질 않습니다. 작업중인 베이만 보여서일것입니다. 한눈에 볼수있게 작업완료된 베이가 많으면 남은 베이를 보여주거나 이제 시작된것이 라면 완료된 베이를 보여 주었으면 합니다» · 05:19 «네»(관문 4 확정). utils.bayDoneSplitOf(장 = 보드 그림과 같은 hatchEvenOf · 데크·홀드 따로 · 분모 = 별첨 legendLiveOf 와 같음) + bayDoneTextOf → LiveShipCard 오른쪽 그림 칸 머리줄 맨 오른쪽(검수사 06:22 «이곳 우측이 항상 비어 있어서») 양하·선적. 다 끝난 칸이 남은 칸보다 많으면 «남은 — 데크 06(1)·14(6)», 아니면 «완료 — 데크 16 (남은 14곳)», 완료 0 이면 줄 없음, 다 끝나면 «✔ 전부 완료». 장 이름은 사전에 그 짝수 베이가 없으면 홀로 선 홀수(DXQD·STSE 01). 연막 smoke_baydone441.
+//   (앞 판) 'TallyOne 4.40-01'   // 4.40-01 **콘앱 실시간 화면에 실시간 수집 호기도 · «몇 시에 끝나» 두 앱 같은 답** — 검수사 2026-10-20 20:02 «콘앱화면에는 실시간 작업 화면이 2호기 4호기가 보여야 하는데 한호기 밖에 보이지 않았습니다» · 20:07 «몇시에 끝나 같은 질문을 검수앱과 콘앱에 하면 답변이 틀리게 나옵니다 검수앱은 자세히 시간 설명까지 콘앱은 남은 갯수만». ① 수집기는 2.40-01 부터 termWork 를 안 쓰고 실시간 수집이 완료에 {src:term, equip} 로 넣는다 — 콘앱 ctCompute(ConeOne 2.70-03)가 그 완료를 건너뛰어 그 호기를 못 그렸다(ATPR 2646E 2호기 120대 · DJCT 0226E 3·4호기). 수석 보드(craneBoardOf)와 같은 판정으로 호기가 적힌 완료를 그린다(마감 EDI 적용·호기 없는 것은 그대로 뺌). ② nlSearch.formatEta 표식(ctx._etaAnswered) + 끝나는 시각을 묻는 말(ETA_ASK_RE · 배 작업 아닌 것·섞인 말·전하라는 말 ETA_OTHER_RE 제외)이면 via eta 강한 답 — 모르는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보내 두 앱이 같은 규칙 답. 작업 속도 답(몇 시간 걸려)도 같은 문. ③ etaQuery «언제 마쳐/마무리»·«다 하면 몇 시»·«몇 시에 작업이 끝날»·«몇 시에 다 끝날» · 도선 갈래가 «끝나는·걸리는» 말을 안 가로챔 · «이 속도면 언제 끝나» 는 끝나는 시각 답. 연막 smoke_conelive27003 · smoke_eta44001.
 //   (앞 판) 'TallyOne 4.40'   // 4.40 **미르가 자동 가이드를 그 베이로 옮긴다 — «25번 베이로 옮겨 드릴까요?» [이동]·[취소]** — 검수사 2026-10-20 18:16 «25번베이부터 해야 되는데 어떻게 바꾸지? 안내대로 바꿔 보셨나요?» · 18:18 «그걸 바꿔 주십시요 25번 베이로 옮겨 드릴까요? 되묻고 이동 또는 취소 버튼을 보여주고 이동을 누르면 25번 베이 작업으로 갈수 있게» · 18:19 «모든 베이를 미르가 이동 시킬수 있게 해주시면 됩니다». 4.39-02 의 장 칩 안내 대신 mir.guideGotoAnswerOf(남은 일은 자동 가이드와 같은 잣대 — 양하·선적 고르기) → mirThreadCommit [이동]·[취소] → 대화 층 kind 'act'(«응·옮겨 줘·취소·아니») → guideGoto.js 요청 함 → App(다른 화면이면 그 항차로)·VoyagePage(작업 시작 탭·기존 방식·그 모드) → SearchPanel(자동 가이드 켬) → GuidedWorkPanel(그 베이가 든 장 pickGroup → 단 → «N번 베이 먼저» bayFirst). «N번 베이로 이동·보여 줘» 는 종전대로 베이플랜.
 //   (앞 판) 'TallyOne 4.39-02'   // 4.39-02 **미르가 놓친 질문 넷 — 예상 실오류(같은 패턴 실 가운데 하나만 자릿수 부족) · 장 바꾸기 · 집에 몇 시에 가 · 군말** — 검수사 2026-10-20 16:42 «미르에게 질문한건 살펴봐주세요» · 16:46 «미르(앱)가 놓친건 같은 패턴실이 많았는데 그중 하나만 자릿수 부족 이상하다고 안봄». 실입력(mir_model_log·mir_misses 261020) — 14:43 «25번베이부터 해야 되는데 어떻게 바꾸지?»(ATPR 2646E · 매뉴얼 추측 «브리핑»·«켜는 법과 순서» 약한 답 → 모델) · 15:22~15:47 콘앱 «집에 몇 시에 끝나»·«집에 몇 시에가»·«집에 몇 시에»(잡담 창 → 생활회화) · «그럼 몇 개 남았어»(군말 «그럼» → 모델 번역) · 16:37 «밀양(미르야) 실오류 하나 있었는데 왜 안알려줬어?»(«267건 모두 이상 없음» → 모델) · 16:41 «실오류 있지?»(번역 0.55 → 못 알아들음). 원인과 고침 ① utils.sealFormatAnomalies(4.36) 가 선사 씰 전체에서 한 모양이 60% 이상일 때만 봤다 — ATPR 2646E SKR 은 «S+5자리» 123 · «숫자 6자리» 136 으로 갈려 아무것도 못 잡았다 → 같은 접두(같은 패턴) 씰끼리 한 자릿수가 60% 이상이고 이 씰이 더 짧고 드물면(10% 미만 · 같은 짧은 모양 3개 이하) «자릿수 부족» · «0000» 제외 · 긴 쪽은 안 올림(0507xxx 7자리 5대). 독립 감사 1차 «부» 반영 — EDI 실이 리스트 실과 같으면 이 새 갈래에서 뺀다(RZOR HTF·RZF 27건이 다 그랬고 25건은 같은 배·선사 지난 항차에도 같은 모양 — 1.85-03 «4자리 실도 있다»). 활성+보관 692벌 169,153대에서 새로 잡힌 것 8건(옛 509 → 517 · ATPR·TNJP 3·XTPG 2·OBWH 2) · 실제 고친 기록 3건 중 ATPR 2646E 를 새로 잡음. ② 미르 «실번호 점검»(generateSealAuditAnswer)·브리핑(generateBriefing)·작업 분석이 예상 실오류를 안 봤다 → nlSearch.sealPredictOf(새 · 리스트 records + EDI 실(검수앱 항차 EDI · 콘앱 행 slEdi — ConeOne 2.70-02 _ediRowOf) · 미르는 «자릿수 부족(short)»·«컨번호 같은 씰» 두 꼴만 말함 — 다른 회사 씰(RZOR R106E 선적 10건)은 주의 박스에만) · 실번호 점검은 via sealAudit 강한 답 · 콘앱 행에 없는 실 칸은 리스트 값으로 채움(감사 E1 — 콘앱 «점검할 데이터 없음»). ③ «N번 베이부터 … 어떻게 바꾸지» → 자동 가이드 장 칩 안내(featureHelp · 콘앱은 종전 · 끝 네 자리·컨·옮기·위치·자리·해치·커버·트윈·실 이 든 말은 안 가로챔 — 감사 C1). ④ «집에 몇 시/언제 집에 가» → etaQuery · «집에»·«점검» 사전 · 군말 «그럼·그러면·근데·있지·있잖아» · 음성 오인식 «밀양» = «미르야». 연막 smoke_mir43902 68건.
 //   (앞 판) 'TallyOne 4.39-01'   // 4.39-01 **미르 «작업 분석» · 시작 전 «예상 작업시간(N갱)» · 예상 작업 시간 트윈 무게(EDI 무게가 비면 리스트 무게)** — 검수사 2026-10-19 21:50 «방금 미르에게 몇건을 질문 했는데 맞는것도 있지만 엉뚱한 대답을 하는 경우가 있습니다» · 실입력(ATPR 2646E 21:47~21:49) «작업 분선해줘»→클로드 잡담 · «작업 분석해줘»→번역 «브리핑»(0.45) · «예상 작업시간은 2갱으로»→번역 «갱 2개»→갱 분배 «베이매트릭스가 없어 갱 분배를 계산할 수 없습니다» · «작업 예상시간 알려줘»→«아직 시작 전이에요». 22:02 «예상시간까지 들어 가고 갱당 무브수도 알려주고 특수화물 개개별로 안알려줘도 되고 … 20피트 몇대 40피트 몇대 총 몇대이며 리퍼는 20피트2개 40피트 20개 FR은 4대 OT는 3대 XRAY는 5대가 있습니다. 트윈 무게를 감안해서 총 무브수는 몇대이고 평균 시간당 무브수는 갱당 25개이고2갱 계산으로 총 몇시간 걸릴것입니다. 주의 할점은 FR사진 XRAY 실달기 리퍼온도 체크또는 리스트 받기등» · 22:03 «거짓이라고 이야기 한것은 무게가 있고 EDI가 있으니 위치도 있습니다» · 22:05 «여기가 확실했으면 미르에게 분석해달라고 하지 않았을 것입니다»(작업 시작 화면 «예상 작업 시간 약 3시간 29분 ~ 5시간 20분 · 20피트 116대는 자리나 무게를 몰라»). 원인 ① mir.twinSplitOf 가 EDI 총중량만 봐 ASC 20피트 무게 0(다른 클로드 진단 — utils.parseAscFile m1 갈래가 세 자리 무게를 버림)인 배를 «무게 없음» 으로 셌다 → EDI 무게가 비면 리스트 무게(plausibleListWtKg)로 — 화면 병합 행과 같은 모양(wt 리스트 · wtEdi EDI)이라 twinWtOf 한 벌. 화면 줄·미르·총 무브수·수석 속도가 같이 바로잡힌다(ATPR 2646E 267무브 범위 → 트윈 32쌍 235무브 · 2갱 3시간 55분). ② «작업 분석» 인텐트가 없었다 → answerWorkAnalysis(새 — 규격·리퍼 크기별·FR·OT·위험물·탱크·OOG·XRAY 개수는 브리핑과 같은 nlSearch.briefCountsOf(새, 브리핑 루프를 뺀 한 벌) · 무브·갱당 무브·예상 시간은 expectedWorkTimeOf · 주의 FR 사진·XRAY 실 달기·리퍼 온도 체크·리스트 받기·위험물). ③ 시작 전 «예상 작업시간»(EXPECT_TIME_RE)·«N갱으로/기준/이면» 은 화면 줄과 같은 계산으로(갱 수는 가정일 뿐 적지 않는다 · 시작한 배는 종전 실측 페이스). ④ via 'workAnalysis' 는 강한 답(모르는 낱말 «분석해줘»·«2갱으로» 로 모델에 안 감). ⑤ 독립 감사 1차 «부» 반영 — 대수·규격·무브·시간은 E(expectedWorkTimeOf) 한 벌, 특수화물은 그 집합(E.cns)에 든 행만(검수앱은 열린 탭이 아니라 항차 원본을 편 행 · 콘앱은 넘겨받은 행) · 시프팅은 대당 2무브로 무브에 포함 · 리퍼 온도 세부 줄 뺌(두 앱 온도 칸이 다름) · 예상 시간은 화면 줄처럼 완료 10대 전까지 · 선적 자료 수집중이면 무브·시간 안 셈 · «하지 마·어제·틀렸어» 같은 말은 계산 안 냄 · MIR_WORKISH_RE «작업» 넣은 것 되돌림. 갱당 시간당 무브는 4.01 규칙(트윈 15% 이상 30 · 아니면 25) 그대로. 재감사 «부»(N1) 반영 — 자료 수집중 판정을 «몇 시에 끝나»·«총 무브수» 와 같은 머리 판정(_vcOf)으로(RZOR 콘앱만 수집중으로 갈렸다) · 완료 10대 넘은 배의 «예상 작업시간(N갱)» 은 «몇 시에 끝나» 답을 그대로 돌려 강한 답으로(N갱 가정을 안 쓴다고 한 줄) · «갱 분배» 말은 종전 갈래 · «2갱 말고 3갱» 은 뒤 숫자 · 콘앱 행에 없는 센 컨은 리스트 행으로·X-RAY 는 항차 X-RAY 목록으로 세어 두 앱 특수화물 수를 맞춤. 연막 smoke_workanalysis438 85건 · smoke_eta401 에 «EDI 무게 0 + 리스트 무게» 1건.
@@ -127,7 +128,8 @@ export const APP_VERSION = 'TallyOne 4.40-01'   // 4.40-01 **콘앱 실시간 �
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.40-01 콘앱 실시간 화면에 실시간 수집으로 들어온 다른 호기도 함께 나옵니다. 미르에게 몇 시에 끝나 하면 검수앱과 콘앱이 같은 답으로 끝나는 시각까지 알려 줍니다.'
+export const APP_NOTE = '4.41 수석 상황판 배 카드에 완료된 베이 또는 남은 베이가 한 줄로 나옵니다. 많이 끝났으면 남은 베이와 남은 대수를, 이제 시작이면 끝난 베이를 데크와 홀드로 나눠 보여 줍니다.'
+// (앞 판 APP_NOTE) '4.40-01 콘앱 실시간 화면에 실시간 수집으로 들어온 다른 호기도 함께 나옵니다. 미르에게 몇 시에 끝나 하면 검수앱과 콘앱이 같은 답으로 끝나는 시각까지 알려 줍니다.'
 // (앞 판 APP_NOTE) '4.40 미르에게 25번 베이부터 해야 돼 하면 25번 베이로 옮겨 드릴까요 묻고 이동을 누르면 자동 가이드가 그 베이 카드부터 보여 줍니다. 어느 베이든 됩니다.'
 // (앞 판 APP_NOTE) '4.39-02 미르가 실오류 있어 하면 같은 선사 실 가운데 자릿수가 모자란 실도 알려 주고 25번 베이부터 하려면 장 칩을 안내하며 집에 몇 시에 가 도 알아듣습니다.'
 // (앞 판 APP_NOTE) '4.39-01 미르가 어느 화면에서 물어도 «작업 분석해줘» 하면 규격·특수화물·트윈 무브·예상 시간을 답하고 예상 작업 시간 줄의 트윈 무게를 바로잡았습니다.'
@@ -8057,6 +8059,59 @@ export function legendLiveOf(rows, mode, compMap) {
     cargos: [...cargos.entries()].sort((a, b) => (a[0] === '일반' ? -1 : b[0] === '일반' ? 1 : b[1].total.n - a[1].total.n)),
     fe, emptyRf, n, done,
   };
+}
+
+//  ★ 4.41 — **장마다 완료/남음(데크·홀드 따로)** — 수석 상황판 배 카드의 «완료·남은 베이» 한 줄.
+//    검수사 2026-10-21 05:09 «어디가 완료 되었는지 한눈에 보이질 않습니다 … 작업완료된 베이가 많으면 남은 베이를 보여주거나 이제 시작된것이 라면 완료된 베이를 보여 주었으면 합니다».
+//    분모·완료는 별첨(legendLiveOf)과 같다 — legendItemsOf + isPtk, 완료 = completed 에 있고 flag missing 아님. 막대·별첨 숫자와 갈리지 않는다.
+//    장 묶음은 보드 그림과 같은 cargoPlanCore.hatchEvenOf(rows 의 bay, pages) 한 벌. rows 는 보드의 boardContainers[mode](실적 > 맞교환 > 계획 자리).
+//    데크 = 단 80 이상. 자리(베이·단)를 모르는 컨은 noPos 로 따로 센다(지어내지 않는다).
+//    장 이름은 사전에 그 짝수 베이가 있으면 짝수, 없으면 홀로 선 홀수(배 앞 20피트 베이 — DXQD·STSE 01). 실측 TMPZ 2035E·DXQD 2641E 장별 데크·홀드 대수가 동방 bayWork 와 칸마다 같다.
+//    부분 = 장 × 데크/홀드. 다 끝난 부분이 남은 부분보다 많으면 show 'left'(남은 것), 아니면 'done'(끝난 것) · 완료 0 이면 null · 남은 것이 없으면 'all'.
+export function bayDoneSplitOf(rows, mode, compMap, pages) {
+  //  ⚠ 감사 2026-10-21 — 사전(pages)이 없으면 hatchEvenOf 폴백이 홀수+1 짝수를 만들어 **없는 베이 번호**를 지어낸다(DXQD «02» · TMPZ «04·08…»).
+  //    hatchEventsOf·갱 규격표처럼 사전 없으면 판정하지 않는다 — 줄을 안 낸다(utils 7767 «폴백은 없는 장을 만든다»).
+  if (!Array.isArray(pages) || !pages.length) return { n: 0, done: 0, noPos: 0, noPosLeft: 0, parts: [], show: null, leftN: 0, doneN: 0, list: { deck: [], hold: [] }, noDict: true };
+  const comp = compMap || {};
+  const H = new Map();
+  let n = 0, done = 0, noPos = 0, noPosLeft = 0;
+  for (const c of legendItemsOf(rows || [])) {
+    if (!c || !isPtk(c, mode)) continue;
+    const dn = !!(c.cn && comp[c.cn] && comp[c.cn].flag !== 'missing');
+    n++; if (dn) done++;
+    const ev = hatchEvenOf(c.bay, pages);
+    const t = parseInt(c.tier, 10);
+    if (!ev || !(t > 0)) { noPos++; if (!dn) noPosLeft++; continue; }
+    const k = t >= 80 ? 'deck' : 'hold';
+    let h = H.get(ev);
+    if (!h) { h = { even: ev, deck: { n: 0, done: 0 }, hold: { n: 0, done: 0 } }; H.set(ev, h); }
+    h[k].n++; if (dn) h[k].done++;
+  }
+  const evOf = (p) => (p ? (p.evenBay != null ? p.evenBay : p.even) : null);   // hatchEvenOf 와 같이 두 모양({even}·{evenBay})을 받는다
+  const hasEven = (ev) => pages.some((p) => evOf(p) != null && parseInt(evOf(p), 10) === ev);
+  const parts = [];
+  for (const h of [...H.values()].sort((a, b) => a.even - b.even)) {
+    const lab = String(hasEven(h.even) ? h.even : h.even - 1).padStart(2, '0');
+    for (const k of ['deck', 'hold']) if (h[k].n) parts.push({ lab, even: h.even, k, n: h[k].n, done: h[k].done });
+  }
+  const doneP = parts.filter((p) => p.done === p.n), leftP = parts.filter((p) => p.done < p.n);
+  const show = done === 0 ? null : (!leftP.length && !noPosLeft) ? 'all' : doneP.length > leftP.length ? 'left' : 'done';
+  const pick = show === 'left' ? leftP : show === 'done' ? doneP : [];
+  return { n, done, noPos, noPosLeft, parts, show, leftN: leftP.length, doneN: doneP.length,
+    list: { deck: pick.filter((p) => p.k === 'deck'), hold: pick.filter((p) => p.k === 'hold') } };
+}
+
+//  ★ 4.41 — bayDoneSplitOf 를 상황판 한 줄 글자로. «남은 — 데크 06(1)·14(6)» · «완료 — 데크 16 (남은 14곳)» · «✔ 전부 완료» · show 가 없으면 ''.
+export function bayDoneTextOf(S) {
+  if (!S || !S.show) return '';
+  if (S.show === 'all') return '✔ 전부 완료';
+  const kName = { deck: '데크', hold: '홀드' };
+  const seg = (k, withLeft) => (S.list[k].length ? `${kName[k]} ${S.list[k].map((p) => (withLeft ? `${p.lab}(${p.n - p.done})` : p.lab)).join('·')}` : '');
+  const np = S.noPosLeft ? `자리 모름 ${S.noPosLeft}대` : '';
+  if (S.show === 'left') return '남은 — ' + [seg('deck', true), seg('hold', true), np].filter(Boolean).join('  ');
+  const body = [seg('deck'), seg('hold')].filter(Boolean).join('  ');
+  const rest = [S.leftN ? `남은 ${S.leftN}곳` : '', np].filter(Boolean).join(' · ');   // 감사: 칸은 다 끝났고 자리 모름만 남으면 «남은 0곳» 을 쓰지 않는다
+  return '완료 — ' + (body || '다 끝난 칸 아직 없음') + (rest ? `  (${rest})` : '');
 }
 
 //  ★ 4.26-02 보류 한 벌 — **지금 걸려 있는** 보류만(사유가 있고 그 모드에서 아직 완료 안 된 컨). 자동 가이드 보류 줄 · 미르 «보류» · 갱 배분 답이 같은 목록을 쓴다.
