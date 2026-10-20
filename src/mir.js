@@ -46,6 +46,7 @@ import {
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
   termProgressOf, termDoneAts,   // 3.74: 터미널 본선현황으로 센다
   briefCountsOf, ptkRowOf,   // 4.39-01: «작업 분석» 이 브리핑과 같은 판정으로 센다
+  sealPredictOf,   // 4.39-02: 예상 실오류(주의 박스와 같은 판정) — 실번호 점검·브리핑·작업 분석
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
@@ -916,6 +917,7 @@ export function answerWorkAnalysis(voyage, ship, rows, E, opts = {}) {
   if (!E || !((E.dis || 0) + (E.lod || 0) > 0)) return null;
   const info = (voyage && voyage.info) || {};
   const sides = []; const K = { rf20: 0, rf40: 0, dg: 0, xr: 0, fr: 0, ot: 0, tk: 0, oog: 0 };
+  const SP = [];   // 4.39-02: 예상 실오류(주의 박스와 같은 판정 · 리스트로 센다)
   const noList = [];
   for (const [m, kr] of [['discharge', '양하'], ['loading', '선적']]) {
     const n = m === 'discharge' ? E.dis : E.lod;
@@ -932,6 +934,7 @@ export function answerWorkAnalysis(voyage, ship, rows, E, opts = {}) {
     for (const c of B.rf) { if (/^2/.test(String(c.iso || ''))) K.rf20 += 1; else K.rf40 += 1; }
     K.dg += B.dg.length; K.fr += B.fr.length; K.ot += B.ot.length; K.tk += B.tk.length; K.oog += B.oog.length;
     if (m === 'discharge') K.xr += B.xr.length;
+    for (const x of sealPredictOf(arr, (voyage && voyage[m] && voyage[m].records) || null, (voyage && voyage[m] && voyage[m].ediContainers) || null)) SP.push(x);
     const recs = voyage && voyage[m] && voyage[m].records;
     if (!recs || !Object.keys(recs).length) noList.push(kr);
   }
@@ -948,7 +951,8 @@ export function answerWorkAnalysis(voyage, ship, rows, E, opts = {}) {
   const warn = [];
   if (K.fr) warn.push(`FR 사진 ${K.fr}대`);
   if (K.xr) warn.push(`XRAY 실 달기 ${K.xr}대`);
-  if ((K.rf20 + K.rf40) && !opts.rfSkip) warn.push(`리퍼 온도 체크 ${K.rf20 + K.rf40}대`);   // 감사 B2 — 온도 세부(기준 없음·실물 미확인)는 두 앱 행의 온도 칸이 달라 여기서 세지 않는다(«리퍼» 조회·브리핑이 말한다)
+  if ((K.rf20 + K.rf40) && !opts.rfSkip) warn.push(`리퍼 온도 체크 ${K.rf20 + K.rf40}대`);
+  if (SP.length) warn.push(`예상 실오류 ${SP.length}건(${SP.slice(0, 3).map((x) => `${x.cn.slice(-4)} 「${x.seal}」`).join(', ')}${SP.length > 3 ? ' 등' : ''} — 실물 확인)`);   // 4.39-02 검수사 2026-10-20 «실오류 하나 있었는데 왜 안알려줬어?»   // 감사 B2 — 온도 세부(기준 없음·실물 미확인)는 두 앱 행의 온도 칸이 달라 여기서 세지 않는다(«리퍼» 조회·브리핑이 말한다)
   if (noList.length) warn.push(`${noList.join('·')} 리스트 받기`);
   if (K.dg) warn.push(`위험물 ${K.dg}대 별도 취급`);
   if (warn.length) L.push(`· 주의 — ${warn.join(' · ')}`);
@@ -2144,7 +2148,7 @@ export function answerOneRaw(query, ctx) {
           try {
             const b = generateBriefing(sub, m === 'loading' ? '선적' : '양하', m, c.pairsMap || null, c.pier || '',
               { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null,
-                gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m), compMap: c.compMap || null, shiftMap: c.shiftMap || null });
+                gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m), compMap: c.compMap || null, shiftMap: c.shiftMap || null, records: (v && v[m] && v[m].records) || null, edi: (v && v[m] && v[m].ediContainers) || null });
             if (b) parts.push('【' + (m === 'loading' ? '선적' : '양하') + '】\n' + b);
           } catch (e) { /* 한쪽이 막혀도 다른 쪽은 낸다 */ }
         }
@@ -2458,7 +2462,7 @@ export function answerOneRaw(query, ctx) {
   //  ⑩ 브리핑 속 «N건» 후속 — 직전 주제가 실 점검·브리핑이면 그 상세(1.69-01).
   if (hasShip && /(?:\d+\s*건|그게|그거|저거|아까\s*(?:그|말한)\s*거?)\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(Q)) {
     const topic = p.sealAuditQuery ? 'seal' : c.lastTopic;
-    if (topic === 'seal' || (topic === 'briefing' && /건/.test(Q))) return generateSealAuditAnswer(cs.filter((x) => x._mode === mode), modeKr);
+    if (topic === 'seal' || (topic === 'briefing' && /건/.test(Q))) return generateSealAuditAnswer(cs.filter((x) => x._mode === mode), modeKr, (v && v[mode] && v[mode].records) || null, (v && v[mode] && v[mode].ediContainers) || null);
   }
 
   //  ⑪ 뜻·방법 — 본체 한 벌(2.57-02·2.59-01). 홈은 조회 폴백이 없으니 못 찾으면 고백한다.
@@ -2476,6 +2480,18 @@ export function answerOneRaw(query, ctx) {
   if (p.asking === 'how') {
     try { const h = answerHowCore(p); if (h) { try { if (mirKnowledge(Q) === h) _via('knowledge'); } catch (e) { /* */ } return h; } } catch (e) { /* */ }   // 3.43-02: 원장 답은 표시해 둔다(모델 번역이 덮지 않게)
     if (!hasShip) { _via('unlearned'); return '그 방법은 아직 못 배웠습니다 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.'; }
+  }
+  //  ★ 4.39-02 — «25번베이부터 해야 되는데 어떻게 바꾸지?»(검수사 2026-10-20 14:43 ATPR 2646E 실입력) = 자동 가이드에서 장을 바꾸는 법.
+  //    종전엔 매뉴얼 추측이 «시작 전에 한 번 — 브리핑»·«켜는 법과 순서» 를 냈고(약한 답) 모델이 덮었다. 콘앱에는 자동 가이드가 없어 종전 길.
+  //    감사 C1 — 컨 옮기기(끝 네 자리·«컨·옮기·위치·자리»)·해치커버·트윈·실 같은 다른 «어떻게» 질문은 가로채지 않는다.
+  if (app !== 'cone' && p.bay != null && !p.digits && /베이\s*(?:부터|먼저)|부터\s*(?:해야|하려|할|시작)|먼저\s*(?:해야|하려|할)/.test(Q)
+      && /어떻게|바꾸|바꿔|바꿀|하려면|해야\s*(?:돼|되|하)/.test(Q)
+      && !/몇\s*(?:대|개)|남았|끝나|언제|무게|리퍼|온도|엑스레이|위험물|컨|옮|위치|자리|해치|커버|트윈|실|씰|봉인|사진|보고|콘|라싱|시간|걸려|걸리/.test(Q)) {
+    _via('featureHelp');
+    return `📍 ${p.bay}번 베이부터 하려면 — 자동 가이드에서 장을 바꿉니다\n   [🚀 작업 시작] → [🤖 자동 가이드] 머리 줄 밑 장 칩 줄\n\n`
+      + `1. 장 칩 줄(«B○○ 대수» 칩이 가로로 늘어선 줄)에서 ${p.bay}번 베이가 든 장 칩을 누릅니다 — 그 장으로 가고, 단(데크/홀드)만 고르면 그 장 순서대로 카드가 나옵니다.\n`
+      + `2. 칩 줄이 안 보이면 위쪽 설정 칩 [B○○ 변경] 을 눌러 베이 그룹을 처음부터 다시 고릅니다.\n`
+      + `3. 다른 갱이 작업한 베이면 «이 베이는 다른 갱도 작업했습니다» 를 한 번 묻습니다 — 내 호기로 하면 [○호기 그대로] 를 누릅니다.`;
   }
   //  3.43-02: 기능 사용법(howToQuery)도 **실무 지식(원장)이 먼저** — «씰 잘림 대처법» 이 색인의 「실번호 입력」 기능 설명으로 갔다(검수사 실측
   //    «씰 잘림(씰 파손) 대처법을 물었는데 씰번호 틀림을 알립니다»). answerHowCore(asking=how)와 같은 순서.
@@ -2592,14 +2608,15 @@ export function answerOneRaw(query, ctx) {
       const arr = dropFilledBookingSlots(cs.filter((x) => x._mode === m || x._mode === 'transit'));   // 통과분은 양쪽 다 넘긴다(_ptk false 라 집계엔 안 들고 «자리 주의»에만 쓴인다)
       if (!arr.filter((x) => x._ptk !== false).length) continue;
       try {
-        const b = generateBriefing(arr, kr, m, c.pairsMap || null, c.pier || '', { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null, gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m), compMap: c.compMap || null, shiftMap: c.shiftMap || null });
+        const b = generateBriefing(arr, kr, m, c.pairsMap || null, c.pier || '', { rfSkip: !!c.rfSkip, eseal: m === 'loading' ? (c.esealBrief || c.eseal || null) : null, photos: c.photos || null, gang: c.gangBrief ? c.gangBrief() : null, cancelled: sideCancelled(info, m), compMap: c.compMap || null, shiftMap: c.shiftMap || null, records: (v && v[m] && v[m].records) || null, edi: (v && v[m] && v[m].ediContainers) || null });
         if (b) parts.push(c.mode ? b : `【${kr}】\n` + b);
       } catch (e) { console.warn('[미르] 브리핑 실패:', e); }
     }
     if (parts.length) return (c.mode ? '' : `${ship}\n`) + parts.join('\n\n');
     try { const ov = answerShipOverview(v, ship, c.matchPortMis(c.portMisData || {}, info), c.ediPattern || null); if (ov) return ov; } catch (e) { /* */ }
   }
-  if (hasShip && (p.sealAuditQuery || /[실씰]\s*(?:번호\s*)?의심|실\s*점검|씰\s*점검/.test(Q))) return generateSealAuditAnswer(cs.filter((x) => c.mode ? x._mode === mode : true), c.mode ? modeKr : '양하·선적');
+  //  4.39-02: 리스트(records)를 같이 넘겨 예상 실오류를 주의 박스와 같은 표본으로 센다 · 실번호 점검은 자료 답(강) — «실오류 있지?»·«…왜 안알려줬어?» 가 모델로 가서 덮이지 않게
+  if (hasShip && (p.sealAuditQuery || /[실씰]\s*(?:번호\s*)?의심|실\s*점검|씰\s*점검/.test(Q))) { _via('sealAudit'); return generateSealAuditAnswer(cs.filter((x) => c.mode ? x._mode === mode : true), c.mode ? modeKr : '양하·선적', c.mode ? (v && v[mode] && v[mode].records) || null : [v && v.discharge && v.discharge.records, v && v.loading && v.loading.records], c.mode ? (v && v[mode] && v[mode].ediContainers) || null : [v && v.discharge && v.discharge.ediContainers, v && v.loading && v.loading.ediContainers]); }
 
   //  ⑰ 홈(배 없음) — 실오류 선박 현황 · «우리 배?» · 오늘/내일 작업 선박 · 배 없는 브리핑.
   if (Array.isArray(c.flat) && /[실씰]\s*오류|실번호\s*(불일치|오류)/.test(Q)) {
@@ -2801,10 +2818,11 @@ const CLAUDE_TIMEOUT_MS = 15000;   // 4.35: 첫 호출이 7초까지 걸린 실�
 //   감사 실측(3.42 첫 판): 부분 문자열 정규식은 «시프팅»에서 «시»를 떼어 «프팅»을 모르는 낱말로 만들었고, 창구 예시 84개 중 22개가 «모르는 낱말 남음»이었다.
 //   그래서 ① mirTokens(조사·문장부호 제거) 로 낱말을 자르고 ② 사전(아래 낱말 + 창구 예시의 낱말 전부)에 있으면 아는 말, ③ 사전 낱말이 앞머리로 붙은 것(«리퍼가»)·
 //   흔한 어미(했어·열었어·됐어…)를 뗀 것도 아는 말로 본다. 한 글자 낱말은 세지 않는다.
-const KNOWN_WORDS = `베이 리퍼 냉동 엠티 풀 위험물 디지 엑스레이 갑판 데크 홀드 선창 컨테이너 피트 온도 영하 영상 실번호 씰 봉인 잘림 잘린 파손 훼손 손상 대처 대처법 처리 조치 절차 무게 톤 위치 어디 몇 대 개 남은 남았 완료 진행 전체 전부 모두 몽땅 싹 죄다 도합 통틀어 합쳐 합치 수량 불러 뽑아 달라 다오 내렸 내린 누구 누가 소개 시야 시간 지금 오늘 내일 어제 날씨 기온 바람 입항 출항 입출항 접안 언제 며칠 요일 날짜 트윈 가능 불가 초과 불균형 수평 크레인 목록 리스트 양하 선적 쌓 빈자리 자리 평택 끝 끝나 끝났 페이스 속도 퇴근 점심 저녁 아침 걸려 걸리 예상 마치 종료 신고 세관 누락 바뀜 리씰 이상 인계 인수 교대 넘겨 특이사항 전달 있어 없어 있나 없나 찾아 알려 보여 보여줘 주세요 호기 갱 브리핑 마감 마감텔리 텔리 수치 해치 해치커버 커버 현측 우현 좌현 시작 커트 커트씰 봉인 전자봉인 전자 보류 수화물 환적 창고 임시창고 특수 특수제작 특수제작컨 규격 규격초과 치수 콜사인 호출부호 아이엠오 선속 도선 카고플랜 카고 플랜 베이플랜 밝게 어둡게 소리 순서 순서대로 다음 의심 클래스 오픈탑 하이큐브 플랫 탱크 무거운 가벼운 기록 적어 등록 담당 검수원 근무 주간 야간 뜻 어떻게 뭐야 뭔 무슨 미르 미르야 안녕 수고 고마워 힘들 먹 밥 배정 선박 배 작업 선수 선미 현황 상황 상태 대상 번호 열어 열었어 띄워 보자 이거 그거 저거 여기 거기 저기 아직 벌써 우리 이제 얼마 얼마나 언제쯤 몇시 시간당 시간별 제일 가장 화물 비엘 확인 확인된 선사 실오류 화면 하자 맞아 대수 우리배 우리 항 항구 정박 남아 남았어 걸린 걸렸어 들어와 나가 들어 나가는 몇시쯤 쯤 대략 마지막 처음 첫 완료된 완료했어 시작했어 끝났어 열렸어 붙었어 어때 어떤 뭐 무엇 몇번 오픈 클로즈 닫아 닫았어 닫혔어 조 근무자 사람 이름 담당자 현재 지금까지 중 안 못 잘 더 덜 것 거 건 개수 대수 척 척이야 갯수 모레 내일모레 낼모레 엊그제 그제 그저께 그끄저께 글피 어저께`.split(/\s+/).filter(Boolean);
+const KNOWN_WORDS = `베이 리퍼 냉동 엠티 풀 위험물 디지 엑스레이 갑판 데크 홀드 선창 컨테이너 피트 온도 영하 영상 실번호 씰 봉인 잘림 잘린 파손 훼손 손상 대처 대처법 처리 조치 절차 무게 톤 위치 어디 몇 대 개 남은 남았 완료 진행 전체 전부 모두 몽땅 싹 죄다 도합 통틀어 합쳐 합치 수량 불러 뽑아 달라 다오 내렸 내린 누구 누가 소개 시야 시간 지금 오늘 내일 어제 날씨 기온 바람 입항 출항 입출항 접안 언제 며칠 요일 날짜 트윈 가능 불가 초과 불균형 수평 크레인 목록 리스트 양하 선적 쌓 빈자리 자리 평택 끝 끝나 끝났 페이스 속도 퇴근 점심 저녁 아침 걸려 걸리 예상 마치 종료 신고 세관 누락 바뀜 리씰 이상 인계 인수 교대 넘겨 특이사항 전달 있어 없어 있나 없나 찾아 알려 보여 보여줘 주세요 호기 갱 브리핑 마감 마감텔리 텔리 수치 해치 해치커버 커버 현측 우현 좌현 시작 커트 커트씰 봉인 전자봉인 전자 보류 수화물 환적 창고 임시창고 특수 특수제작 특수제작컨 규격 규격초과 치수 콜사인 호출부호 아이엠오 선속 도선 카고플랜 카고 플랜 베이플랜 밝게 어둡게 소리 순서 순서대로 다음 의심 클래스 오픈탑 하이큐브 플랫 탱크 무거운 가벼운 기록 적어 등록 담당 검수원 근무 주간 야간 뜻 어떻게 뭐야 뭔 무슨 미르 미르야 안녕 수고 고마워 힘들 먹 밥 배정 선박 배 작업 선수 선미 현황 상황 상태 대상 번호 열어 열었어 띄워 보자 이거 그거 저거 여기 거기 저기 아직 벌써 우리 이제 얼마 얼마나 언제쯤 몇시 시간당 시간별 제일 가장 화물 비엘 확인 확인된 선사 실오류 화면 하자 맞아 대수 우리배 우리 항 항구 정박 남아 남았어 걸린 걸렸어 들어와 나가 들어 나가는 몇시쯤 쯤 대략 마지막 처음 첫 완료된 완료했어 시작했어 끝났어 열렸어 붙었어 어때 어떤 뭐 무엇 몇번 오픈 클로즈 닫아 닫았어 닫혔어 조 근무자 사람 이름 담당자 현재 지금까지 중 안 못 잘 더 덜 것 거 건 개수 대수 척 척이야 갯수 모레 내일모레 낼모레 엊그제 그제 그저께 그끄저께 글피 어저께 점검 집에`.split(/\s+/).filter(Boolean);
 const _ENDINGS = /(했어요|했어|했나요|했니|했지|됐어|됐나요|됐니|났어|었어|였어|있어요|있어|있나요|있니|없어요|없어|없나요|없니|해줘|해요|하자|할까|할래|해봐|해|줘요|줘|인가요|인지|이야|이에요|예요|이지|지요|지|야|요|까|니|나요|는지|은지|던|던가|어요|어|아요|아|을까|을래|ㄹ까|세요|십시오|십시요|주십시오|주세요|주라|해주세요)$/;
 //  낱말 자르기 — mirLearn.mirTokens 는 조사(«로»)까지 떼어 «킬로»를 «킬»로 만든다. 여기서는 어미만 뗀다.
-const _STOP = new Set(['보여줘', '보여', '알려줘', '알려', '해줘', '해', '줘', '주세요', '좀', '미르야', '미르', '봐줘', '봐', '좀요', '해봐', '해주세요', '있어', '없어', '이야', '이거', '그거', '저거']);
+const _STOP = new Set(['보여줘', '보여', '알려줘', '알려', '해줘', '해', '줘', '주세요', '좀', '미르야', '미르', '봐줘', '봐', '좀요', '해봐', '해주세요', '있어', '없어', '이야', '이거', '그거', '저거',
+  '있지', '있잖아', '그럼', '그러면', '근데', '그런데', '그래서', '밀양']);   // 4.39-02: 이어 말하는 군말(«그럼 몇 개 남았어»·«실오류 있지?»)·«미르야» 음성 오인식 «밀양» — 남는 낱말로 세면 맞는 규칙 답이 모델로 갔다(2026-10-20 실입력)
 function _toks(q) {
   return String(q || '').replace(/[?？!.,~·…()\[\]"'«»#$/:;-]/g, ' ').trim().split(/\s+/).filter(Boolean).filter((t) => !_STOP.has(t));
 }
@@ -2844,7 +2862,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
-  if (via === 'workAnalysis' || via === 'expectEta') return false;   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
+  if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit') return false;   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다

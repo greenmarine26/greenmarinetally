@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoOtHeightConflict, sealFormatAnomalies } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
+import { isoOtHeightConflict, sealFormatAnomalies, ediSealMapOf } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
 import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf, isListOriginRecord } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 import { reconcileSources, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
 
@@ -573,7 +573,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   //  ★ 4.36 예상 실오류 — 리스트 씰 번호의 모양이 그 선사의 학습된 모양과 다르거나 컨번호를 품은 것(utils.sealFormatAnomalies 한 벌).
   //    검수사 2026-10-19 MCAP 639N 마감텔리 실오류 보고서가 정답지 — «자릿수 부족실 2 · 컨넘버랑 동일한 실 1». 고쳐진 컨은 빠진다.
   try {
-    const sa = sealFormatAnomalies(listRecords || {});
+    const sa = sealFormatAnomalies(listRecords || {}, { edi: ediSealMapOf(ediContainers) });   // 4.39-02: EDI 실이 같으면 새 «자릿수 부족» 갈래에서 뺀다
     const saShape = sa.filter((x) => x.kind === 'shape'), saCn = sa.filter((x) => x.kind === 'cn');
     if (sa.length > 0) {
       alerts.push({

@@ -5,7 +5,7 @@
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
-import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown, sealFormatAnomalies, ediSealMapOf } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -179,7 +179,7 @@ export function parseNaturalQuery(text) {
   let t = String(text).toLowerCase();
   // 1.91 (검수사 확정 «미르야 하면 네 하고 답변도 하고»): 호출어를 벗기고 나머지를 질문으로.
   {
-    const _mir = /^\s*미르\s*(?:(?:야|아|님)(?![가-힣]))?\s*[,!~.\s]*/;   // 3.69: «미르 야드 바빠» 의 «야» 는 호격이 아니다(«야드»·«야간»·«야식» — 재감사 1)
+    const _mir = /^\s*(?:미르\s*(?:(?:야|아|님)(?![가-힣]))?|밀양(?=[\s,!~.]))\s*[,!~.\s]*/;   // 4.39-02: «밀양 실오류 …» — 음성이 «미르야» 를 «밀양» 으로 받아 적었다(검수사 2026-10-20 16:37 실입력)   // 3.69: «미르 야드 바빠» 의 «야» 는 호격이 아니다(«야드»·«야간»·«야식» — 재감사 1)
     if (_mir.test(t)) {
       result.mirCalled = true;
       t = t.replace(_mir, '');
@@ -369,7 +369,7 @@ export function parseNaturalQuery(text) {
     result.progressQuery = null;   // 대수 질문으로 새지 않게(이 판의 오답이 정확히 그것이었다)
   }
   //   진행 페이스(완료 타임스탬프)로 남은 시간·완료 시각을 계산해 대화체로 답한다.
-  if (/몇\s*시(?:에|쯤|까지|쯤에|즈음)*\s*(?:끝|완료|마|종료)|언제\s*(?:끝|완료|마치|다\s*돼|다\s*해)|끝나(?:는|나|려|)\s*(?:시간|시각|시|때)?|완료\s*(?:예상|예정|시각|시간)|이\s*(?:속도|페이스)|얼마나\s*(?:걸|남았.*끝|더.*걸)|몇\s*시간\s*(?:남|걸|더)|예상\s*(?:완료|종료|시간)|퇴근|점심.*(?:전|까지).*(?:끝|돼)/i.test(t)) {
+  if (/몇\s*시(?:에|쯤|까지|쯤에|즈음)*\s*(?:끝|완료|마|종료)|언제\s*(?:끝|완료|마치|다\s*돼|다\s*해)|끝나(?:는|나|려|)\s*(?:시간|시각|시|때)?|완료\s*(?:예상|예정|시각|시간)|이\s*(?:속도|페이스)|얼마나\s*(?:걸|남았.*끝|더.*걸)|몇\s*시간\s*(?:남|걸|더)|예상\s*(?:완료|종료|시간)|퇴근|점심.*(?:전|까지).*(?:끝|돼)|집에?\s*(?:몇\s*시|언제)|(?:몇\s*시|언제).{0,6}집에?\s*(?:가|갈|들어)/i.test(t)) {
     result.etaQuery = true;
     result.timeQuery = false;   // V8.03-01: "끝/완료" 의도면 현재 시각이 아니라 종료 추정으로 (오답 [4])
   }
@@ -1954,13 +1954,53 @@ export function sealIssuesOf(containers) {
 }
 
 // V7.90-05: 실번호 점검 전용 답변 ("실번호 점검" 질문)
-export function generateSealAuditAnswer(containers, modeLabel) {
+//  ★ 4.39-02 — 예상 실오류(주의 박스 4.36 과 같은 판정 utils.sealFormatAnomalies 한 벌). 검수사 2026-10-20 16:37 «미르야 실오류 하나 있었는데 왜 안알려줬어?» ·
+//    16:46 «같은 패턴실이 많았는데 그중 하나만 자릿수 부족 이상하다고 안봄» — 미르 «실번호 점검»·브리핑·작업 분석이 주의 박스의 예상 실오류를 보지 않았다.
+//    리스트(records)를 받으면 그것으로(주의 박스와 같은 표본 · 두 앱 같은 수), 없으면 컨 행으로 센다. 넘겨받은 컨에 든 것만 돌려준다. 검수원이 고친 컨은 빠진다(고친 뒤는 «실오류» 로).
+export function sealPredictOf(containers, recordsList, ediList) {
+  try {
+    const cnSet = new Set((containers || []).map((c) => String((c && c.cn) || '').toUpperCase()).filter(Boolean));
+    const lists = (Array.isArray(recordsList) ? recordsList : [recordsList]).filter((r) => r && typeof r === 'object' && Object.keys(r).length);
+    //  EDI 실 — 항차 EDI(검수앱)가 있으면 그것, 없으면 행의 slEdi(콘앱 행 — cone.html _ediRowOf 가 EDI 실을 싣는다). 같은 짧은 실을 EDI 도 말하면 새 «자릿수 부족» 갈래에서 뺀다(utils 주석).
+    const edi = {};
+    for (const e of (Array.isArray(ediList) ? ediList : [ediList])) Object.assign(edi, ediSealMapOf(e && typeof e === 'object' ? e : {}));
+    for (const c of containers || []) { const cn = String((c && c.cn) || '').toUpperCase(); if (cn && !edi[cn] && c.slEdi) edi[cn] = String(c.slEdi); }
+    let out = [];
+    if (lists.length) { for (const r of lists) out = out.concat(sealFormatAnomalies(r, { edi })); }
+    else { const recs = {}; for (const c of containers || []) if (c && c.cn) recs[c.cn] = { sl: c.sl, sl_orig: c.sl_orig, op: c.op }; out = sealFormatAnomalies(recs, { edi }); }
+    const seen = new Set();
+    //  미르는 검수사가 정한 두 꼴만 말한다 — «자릿수 부족실»(숫자 자릿수가 그 선사 대표 모양보다 모자람 — MCAP 639N MLPH+6 ↔ PH+7) · «컨넘버랑 동일한 실»(검수사 2026-10-19 «알림은 자릿수 부족실 2 컨넘버랑 동일한 실 1»).
+    //    접두가 다른 씰(다른 회사 씰 — RZOR R106E 선적 LYG·HS·SKR·LF·ES·BHGJ 10건)은 주의 박스에만 남기고 말·브리핑으로 늘어놓지 않는다(소리 브리핑이 시끄러워진다).
+    return out.filter((x) => x && (x.kind === 'cn' || x.short) && cnSet.has(x.cn) && !seen.has(x.cn) && seen.add(x.cn));
+  } catch (e) { console.warn('[실번호] 예상 실오류 판정 실패 — 이 줄만 뺍니다:', e && e.message); return []; }
+}
+//  4.39-02 (감사 E1) — 콘앱 행(cone.html _ediRowOf)에는 실 칸(sl·sl_orig·sl_history…)이 없어 실번호 점검이 «점검할 실번호 데이터가 없습니다» 로 갈렸다.
+//    리스트(records)를 받으면 행에 없는 실 칸만 리스트 값으로 채운다(있는 칸은 그대로 — 검수앱 행은 바뀌지 않는다).
+const _SEAL_KEYS = ['sl', 'sl_orig', 'sl_history', 'sl_src', 'sl_conflict', '_source', 'eseal', 'eseal_orig'];
+function _withRecordSeals(cs, recordsList) {
+  const lists = (Array.isArray(recordsList) ? recordsList : [recordsList]).filter((r) => r && typeof r === 'object' && Object.keys(r).length);
+  if (!lists.length) return cs || [];
+  const byCn = {};
+  for (const r of lists) for (const [cn, rec] of Object.entries(r)) if (rec && typeof rec === 'object') byCn[String(rec.cn || cn).toUpperCase()] = rec;
+  return (cs || []).map((c) => {
+    const rec = c && c.cn ? byCn[String(c.cn).toUpperCase()] : null;
+    if (!rec) return c;
+    let o = null;
+    for (const k of _SEAL_KEYS) if ((c[k] === undefined || c[k] === null) && rec[k] !== undefined && rec[k] !== null) (o || (o = { ...c }))[k] = rec[k];
+    return o || c;
+  });
+}
+export function generateSealAuditAnswer(containers0, modeLabel, recordsList = null, ediList = null) {
+  const containers = _withRecordSeals(containers0, recordsList);   // 4.39-02 감사 E1: 콘앱 행에 리스트 실 칸을 채운다
   const audit = auditSeals(containers || []);
   const { errs, confs, hasCustoms } = sealIssuesOf(containers);   // 2.06-05·06: 실오류·불일치 합류(세관 기준)
-  if (!audit.checked && !errs.length && !confs.length) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
-  if (!audit.items.length && !errs.length && !confs.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)`;
-  const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length + errs.length + confs.length}건 (점검 ${audit.checked}건 중)`];
+  //  4.39-02: 예상 실오류 — auditSeals 가 이미 올린 컨(컨번호 혼입 등)은 겹쳐 세지 않는다
+  const pre = sealPredictOf(containers, recordsList, ediList).filter((x) => !audit.items.some((it) => String(it.cn || '').includes(x.cn.slice(-4))));
+  if (!audit.checked && !errs.length && !confs.length && !pre.length) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
+  if (!audit.items.length && !errs.length && !confs.length && !pre.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)`;
+  const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length + errs.length + confs.length + pre.length}건 (점검 ${audit.checked}건 중)`];
   for (const e of errs) lines.push(`• ${e.cn} — ⚠ 실오류: 리스트 「${e.from}」 → 실물 「${e.to}」 (세관 신고 사안)`);
+  for (const x of pre) lines.push(`• ${x.cn} — 🔎 예상 실오류: 리스트 「${x.seal}」 — ${x.why} · 실물 확인`);
   for (const f of confs) {
     const det = (f.entries || []).map(e => `「${e.v}」(${e.srcs.length ? e.srcs.join('·') : '출처 미기록'}${e.customs ? ' — 세관리스트' : ''})`).join(' ↔ ');
     const mark = f.grade === 'suspect' ? '🔴 실오류 의심' : '⚠ 불일치';
@@ -2141,6 +2181,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
       + (nList ? `\n📌 받은 리스트 ${nList}대는 실리지 않습니다 — 자료는 참고로 남겨 둡니다` : '');
   }
   let all = containers || [];
+  if (opts && opts.records) all = _withRecordSeals(all, opts.records);   // 4.39-02 감사 E1: 콘앱 행에 리스트 실 칸(실오류·불일치·실번호 의심)을 채운다 — 검수앱 행은 그대로
   //  2.55: 항차 화면은 완료를 `opts.compMap` 으로 따로 넘긴다(generateLocalAnswer 와 같은 구멍) —
   //  안 입히면 브리핑 진행 줄이 «완료 0» 이 된다.
   if (opts && opts.compMap && all.length && !all.some((c) => c && c._comp)) {
@@ -2240,6 +2281,9 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   if (!_si.hasCustoms && _si.confs.length) {
     warns.push({ k: null, line: `📋 이 항차 자료에 세관리스트가 없습니다 — **세관리스트를 첨부해 주세요.** 실오류 판정은 세관리스트 기준입니다.` });
   }
+  //  4.39-02: 예상 실오류(주의 박스와 같은 판정) — 미르가 브리핑에서 말하지 않았다(검수사 2026-10-20 «왜 안알려줬어»)
+  const _sp = sealPredictOf(cs, opts && opts.records, opts && opts.edi).filter((x) => !audit.items.some((it) => String(it.cn || '').includes(x.cn.slice(-4))));
+  if (_sp.length) warns.push({ k: `예상 실오류 ${_sp.length}건`, line: `🔎 예상 실오류 ${_sp.length}건 (${_sp.slice(0, 3).map((x) => `${x.cn.slice(-4)} 「${x.seal}」`).join(', ')}${_sp.length > 3 ? ' 등' : ''}) — 같은 선사 실과 자릿수·모양이 다름, 실물 확인 · "실번호 점검"으로 상세` });
   if (audit.items.length) {
     const kinds = [...new Set(audit.items.map(it => it.reason.split(' — ')[0].replace(/^(풀씰|엠티실)\s*/, '')))].slice(0, 2).join(', ');
     warns.push({ k: `실번호 ${audit.items.length}건`, line: `🔍 실번호 의심 ${audit.items.length}건 (${kinds}${audit.items.length > 2 ? ' 등' : ''}) — "실번호 점검"으로 상세 확인` });
