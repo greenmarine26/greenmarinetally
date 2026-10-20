@@ -34,6 +34,7 @@ import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSe
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
 import { mirWorkCtx } from '../workChoice.js';   // 4.38: 작업 중 사담 미루기 — 내 작업 표지(작업자·작업 선박·호기)
+import { mirGotoRequest } from '../guideGoto.js';   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';
 import DamageHistoryCard, { damageHistoryQueryOf } from './DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(통합검색 화면과 공용)
 
@@ -241,6 +242,8 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) { _long = true; speakLong(plain); } else speak(plain.slice(0, 400), _yardA ? YARD_SPEAK : { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
       //  3.68: 한 마디는 답 뒤에 이어 읽는다(끊지 않고 append). 칩은 읽지 않는다. 긴 낭독(speakLong·브리핑)은 우선순위 보호가 있어 뒤에 붙이지 않는다(감사 6).
       try { const more = (_fo && !_long) ? (_fo.confirm || _fo.line) : ''; if (more) speak(String(more).replace(CLEAN_RE, ' ').replace(/[«»]/g, ' '), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ }
+      //  ★ 4.40: [이동] — 그 베이로 자동 가이드를 옮긴다(mirGoto 한 벌). 시트는 내려 가이드 첫 카드가 보이게 한다.
+      if (fo && fo.kind === 'act' && fo.act && mirGotoRequest(fo.act)) setTimeout(() => setOpen(false), 900);
     } finally { setBusy(false); }
   }, [voyages, flat, inspector, isChief, heartbeat, portMisData, pilotForecast, carrierContacts, shipSpeed, ediPattern, onOpenPlan, ensureChiefData, applySideEffects]);
 

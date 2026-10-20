@@ -17,6 +17,7 @@ import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LAB
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
+import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
 import { isoOtHeightConflict } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
@@ -78,7 +79,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
 //  4.25-02 — «다른 갱» 물음을 이미 한 장(항차·모드·장·두 호기). 모듈에 두어 탭을 옮기거나 자동↔수동을 바꿔도 앱을 다시 열기 전까지는 다시 묻지 않는다(감사 기록 — 컴포넌트에 두면 다시 그려질 때마다 물었다).
 const _askedGang = new Set();
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false }) {   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null }) {   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -1009,6 +1010,67 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (cur && typeof cur.offsetLeft === 'number') row.scrollLeft = Math.max(0, cur.offsetLeft - 12);
   }, [selectedGroup, selectedTier, compact]);
   useEffect(() => { setBayFirst(null); singleBaysRef.current = []; }, [selectedTier, mode]);   // 3.77: 단·모드가 바뀌면 «베이 먼저» 도 푼다   // V8.50: 단 변경 시 스트림 리셋
+  //  ★ 4.40 — 미르 [이동](검수사 2026-10-20 18:18 «25번 베이로 옮겨 드릴까요? 되묻고 이동 또는 취소 버튼을 보여주고 이동을 누르면 25번 베이 작업으로 갈수 있게»
+  //    · 18:19 «모든 베이를 미르가 이동 시킬수 있게 해주시면 됩니다»). 장 칩을 누른 것과 같은 길로 간다 —
+  //    ① 그 베이가 든 장(pickGroup — «다른 갱» 물음 그대로) ② 단(양하: 이 장 데크가 남았으면 데크 — 홀드는 데크 다음(V8.45 게이트) · 아니면 홀드 / 선적: 그 베이 홀드가 남았으면 홀드 · 아니면 데크)
+  //    ③ «N번 베이 먼저»(3.77 bayFirst — 남은 쌍은 한 대씩). 장·단이 바뀌면 위 효과들이 bayFirst 를 푸므로 장·단이 자리 잡은 뒤에 건다(이 효과는 그 효과들 뒤에 둔다).
+  //    부모(SearchPanel)의 모드 리셋·작업 맥락 되살리기가 같은 커밋에 장을 지울 수 있어 자리 잡을 때까지 0.15초마다 다시 본다(최대 30번 · «다른 갱» 물음 중에는 기다린다).
+  //    결과는 앱 띠(writeNotice) 한 줄. 못 옮긴 때만 소리로도 — 옮겼을 때는 미르가 이미 «옮길게요» 라고 말했다.
+  //    끝남은 요청 함(guideGoto.js)에 적는다 — 이 화면이 다시 그려져도(탭을 떠났다 오기 · 수동 → 자동) 끝난 [이동] 을 다시 돌리지 않는다(4.40 감사 상-1).
+  const _gotoRef = useRef({ seq: 0, tries: 0, busy: false });
+  const [_gotoTick, _setGotoTick] = useState(0);
+  useEffect(() => {
+    const g = mirGoto;
+    const st = _gotoRef.current;
+    if (!g || !g.seq || mirGotoFinished(g.seq)) return undefined;
+    mirGotoTouch(g.seq);   // 자동 가이드가 맡았다(항차 화면의 «못 옮김» 시계가 본다)
+    if (st.seq !== g.seq) { st.seq = g.seq; st.tries = 0; st.busy = false; st.lastG = undefined; st.lastT = undefined; }
+    const again = () => { const t = setTimeout(() => _setGotoTick((n) => n + 1), 150); return () => clearTimeout(t); };
+    const note = (m, say) => {
+      try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: m } })); } catch (e) { /* 알릴 화면 없음 */ }
+      if (say) { try { speak(m, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } }
+    };
+    const bay = parseInt(g.bay, 10);
+    //  못 옮기고 멈출 때도 한 줄 — 미르가 이미 «옮길게요» 라고 했다(감사 권고)
+    const giveUp = () => { mirGotoFinish(g.seq); console.warn('[미르 이동] 장·단이 자리 잡지 않아 멈춤', g); note(`미르가 ${bay}번 베이로 옮기지 못했어요 — 장 칩에서 그 베이가 든 장을 눌러 주세요.`, true); return undefined; };
+    if (g.mode && g.mode !== mode) return (++st.tries > 30) ? giveUp() : again();   // 모드가 따라오는 중
+    const kr = mode === 'loading' ? '선적' : '양하';
+    //  그 베이가 든 장 — 그 베이가 끝났으면 같은 장(묶음 가운데가 같은 것 — «24번 베이부터» 처럼 장으로 부른 말)
+    const host = groups.find((x) => x.bays && x.bays.has(bay)) || groups.find((x) => x.center === groupCenterOf(String(bay)));
+    if (!host) { mirGotoFinish(g.seq); note(`${bay}번 베이는 ${kr} 남은 작업이 없어요.`, true); return undefined; }
+    if (st.busy) return again();                         // «다른 갱» 물음 중 — 답을 기다린다
+    //  장·단이 방금 바뀌었으면 한 박자 기다린다 — 같은 커밋의 «장 변경 → 단 지움»(위 효과)이 아직 반영 전이라 옛 단(앞 장의 홀드)을 보고 끝냈다(화면 실측 — B9·10·11 홀드에서 옮기면 단 고르기 화면으로 남음).
+    if (st.lastG !== selectedGroup || st.lastT !== selectedTier) { st.lastG = selectedGroup; st.lastT = selectedTier; return (++st.tries > 30) ? giveUp() : again(); }
+    if (selectedGroup !== host.center) {
+      if (++st.tries > 30) return giveUp();
+      st.busy = true;
+      Promise.resolve(pickGroup(host)).catch((e) => console.warn('[미르 이동] 장 고르기 실패:', e)).finally(() => { st.busy = false; _setGotoTick((n) => n + 1); });
+      return again();
+    }
+    const bayLeft = remaining.filter((c) => parseInt(c.bay, 10) === bay && groupCenterOf(c.bay) === host.center);
+    const bHold = bayLeft.filter((c) => parseInt(c.tier, 10) < 80).length;
+    const want = mode === 'discharge' ? (host.deck > 0 ? 'deck' : 'hold')
+      : (bayLeft.length ? (bHold > 0 ? 'hold' : 'deck') : (host.hold > 0 ? 'hold' : 'deck'));   // 선적 — 그 베이가 끝났으면 장의 홀드 먼저
+    if (selectedTier !== want) { if (++st.tries > 30) return giveUp(); setSelectedTier(want); return again(); }
+    const tierKo = want === 'deck' ? '데크' : '홀드';
+    const lbl = `B${groupLbl(host.center, host)}`;
+    const hasBay = queue.some((cd) => [cd.main, cd.twin].some((x) => x && parseInt(x.bay, 10) === bay));
+    if (hasBay && bayFirst !== bay) { if (++st.tries > 30) return giveUp(); setBayFirst(bay); return again(); }   // 다음 박자에 «베이 먼저» 가 걸린 큐의 첫 카드를 보고 알린다
+    //  그 베이에 남은 카드가 없으면(장으로 옮김) 앞서 건 «M번 베이 먼저» 를 푼다 — 안 풀면 «이 장 순서대로» 라 말하고 첫 카드는 옛 M번이었다(2차 시뮬 재실행 — 같은 장·같은 단에서 연달아 옮길 때 16/28)
+    if (!hasBay && bayFirst != null) { if (++st.tries > 30) return giveUp(); setBayFirst(null); singleBaysRef.current = []; return again(); }
+    mirGotoFinish(g.seq);
+    if (hasBay) {
+      //  «베이 먼저» 는 지금 할 수 있는 카드만 당긴다 — 선적은 아래 칸, 양하는 위 칸이 먼저라 첫 카드가 다른 베이일 수 있다(OBWH 2764W 선적 6번 → 7-04-02 가 먼저). 그때는 그렇다고 말한다.
+      const f = queue[0];
+      const fb = !!f && [f.main, f.twin].some((x) => x && parseInt(x.bay, 10) === bay);
+      const fp = f && f.main ? `${parseInt(f.main.bay, 10)}-${f.main.row}-${f.main.tier}` : '';
+      note(fb ? `미르가 ${kr} ${lbl} ${tierKo}로 옮겼어요 — ${bay}번 베이 카드부터.`
+        : `미르가 ${kr} ${lbl} ${tierKo}로 옮겼어요 — ${bay}번 베이 카드를 앞으로 당겼지만 ${fp} 가 먼저예요(${mode === 'loading' ? '아래 칸부터 싣습니다' : '위 칸부터 내립니다'}).`, !fb);
+    } else if (!bayLeft.length) note(`미르가 ${kr} ${lbl} ${tierKo}로 옮겼어요 — ${bay}번 베이는 남은 컨이 없어 이 장 순서대로예요.`, false);
+    else if (mode === 'discharge' && want === 'deck' && !bayLeft.some((c) => parseInt(c.tier, 10) >= 80)) note(`${bay}번 베이는 홀드만 남았어요 — 이 장 데크 ${host.deck}대를 먼저 내려야 해서(커버 아래) 데크로 왔어요.`, true);
+    else note(`${bay}번 베이 남은 컨은 보류 중이에요 — 장만 옮겼어요.`, true);
+    return undefined;
+  }, [mirGoto && mirGoto.seq, _gotoTick, mode, groups, remaining, selectedGroup, selectedTier, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.

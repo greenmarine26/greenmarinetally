@@ -11,6 +11,7 @@ import DamageHistoryCard, { damageHistoryQueryOf } from '../components/DamageHis
 import { mirTone, mirSmallTalk, YARD_SPEAK } from '../mir.js';
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve, mirIsDeferred } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
+import { mirGotoRequest } from '../guideGoto.js';   // 4.40: 미르 [이동] — 그 항차 작업 화면으로
 import { flattenVoyages, pickShipCtx } from '../mir.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
@@ -478,6 +479,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     const via = _devMsg ? '' : (_m ? (_m.via || 'model') : ((traceRef.current && traceRef.current.via) || ''));
     let fo = null;
     try { fo = mirThreadCommit(q, text, via, Object.assign(_thCtx(), { _utterAt: askedAt })); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
+    if (fo && fo.kind === 'act' && fo.act) mirGotoRequest(fo.act);   // 4.40: 미르 [이동] — 홈에서 눌렀으면 App 이 그 항차 작업 화면으로 옮긴다(mirGoto 한 벌)
     const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
     setMirFollow(show);
     if (show && autoSpeak && !parsed.briefingQuery) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
 import { mirThreadCommit, mirThreadAlive } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어» — 탭 카드도 같은 대화 층
+import { mirGotoRequest, mirGotoTake, mirGotoState, mirGotoFinish, MIR_GOTO_EVENT } from '../guideGoto.js';   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로(요청을 꺼내 가는 자리)
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
@@ -1127,6 +1128,30 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const hints = [voyage?.info?.voy, voyage?.info?.voyage, voyage?.info?.callsign].filter(Boolean);
     return isLoloShipByPolicy(vsl, extraPolicies, hints);
   }, [voyage, extraPolicies]);
+  //  ★ 4.40 — 미르 [이동](guideGoto.js): 이 항차 요청이면 «작업 시작» 탭 · 기존 방식 · 그 모드로 열고 SearchPanel → 자동 가이드가 그 베이로 가게 넘긴다.
+  //    화면이 열리는 순간(홈·다른 화면에서 눌러 App 이 옮겨 온 때)과 열려 있는 동안(알림) 둘 다 꺼내 간다. 미르 플랜 덮개(mirPlan)는 꺼내 가지 않는다.
+  //    LOLO 배(셀 좌표 없음)는 자동 가이드가 없다 — 옮기지 않고 앱 띠 한 줄로 알린다. ⚠ isLoloShip 아래에 둔다(의존이 아니라 ref 로 읽지만 순서를 지킨다).
+  const [mirGoto, setMirGoto] = useState(null);
+  const _loloRef = useRef(isLoloShip);
+  _loloRef.current = isLoloShip;
+  useEffect(() => {
+    if (mirPlan) return undefined;
+    const take = () => {
+      const g = mirGotoTake(voyageKey);
+      if (!g) return;
+      if (_loloRef.current) { try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: '이 배는 자동 가이드가 없어 베이로 옮길 수 없어요(덱플랜 배).' } })); } catch (e) { /* 알릴 화면 없음 */ } return; }
+      setMode(g.mode); setWorkStyle('classic'); setTab('search'); setMirGoto(g);
+      //  자동 가이드가 끝내 맡지 못하면(가이드가 안 열림 — 완료 보기·수동 기억 등) 미르가 «옮길게요» 한 뒤 조용히 끝나지 않게 한 줄(감사 상-2). 맡았으면(busy·done) 가이드가 알린다.
+      setTimeout(() => {
+        if (mirGotoState(g.seq) !== 'taken') return;
+        mirGotoFinish(g.seq);
+        try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: `미르가 ${g.bay}번 베이로 옮기지 못했어요 — 자동 가이드가 열리지 않았어요. [🤖 자동 가이드] 를 눌러 장 칩에서 고르세요.` } })); } catch (e) { /* 알릴 화면 없음 */ }
+      }, 6000);
+    };
+    take();
+    window.addEventListener(MIR_GOTO_EVENT, take);
+    return () => window.removeEventListener(MIR_GOTO_EVENT, take);
+  }, [voyageKey, mirPlan]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   //  ★ 3.53 — 홈 카드 «⚠ 목적지 확인» 배지로 들어왔으면 **그 컨 상세를 바로 편다.**
   //    검수사 «둘중 한군데를 누르면 상세카드가 나오고 수정 할수 있게». 쪽지는 한 번만 읽힌다(podFocus).
@@ -1448,10 +1473,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         rfSkip: !!briefCtx.rfSkip, esealBrief: briefCtx.eseal || null, photos: photosAll,   // 3.61
         gangShift: briefCtx.gangShift, gangBrief: briefCtx.gangBrief, crewAnswer: briefCtx.crewAnswer,
         diagAlerts: diagAlerts || [],
+        isLoloShip,   // 4.40: 덱플랜 배는 미르가 «베이로 옮겨 드릴까요?» 를 묻지 않는다(RTDB 정책까지 본 이 화면 판정 그대로)
       });
     } catch (e) { console.warn('[3.41] 미르 재료 놓기 실패:', e); }
     return () => publishMirCtx(null);
-  }, [voyageKey, voyage, mode, briefCtx, diagAlerts, mirPlan]);
+  }, [voyageKey, voyage, mode, briefCtx, diagAlerts, mirPlan, isLoloShip]);
 
     // 2.18 — 컨테이너 상세는 **한 벌**만 만들고 담기는 자리만 바꾼다.
   //   넓은 화면(lg+) 이고 리스트 탭이면 → 우측 고정 칼럼(variant='panel').
@@ -1876,6 +1902,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           diagAlerts={diagAlerts}
           mode={mode}
           onWorkFilterChange={(m) => setMode(m)}
+          mirGoto={mirGoto}   /* 4.40: 미르 [이동] — 자동 가이드를 그 베이로 */
           /* ★ 2.85 — 미르가 «베이플랜/카고플랜 보여줘» 하면 **여기서 연다.**
                해석은 SearchPanel 이, 여는 것은 탭·인쇄 상태를 쥔 이 자리가 한다.
              검수사 — «양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것» — 지금 탭 것을 열면 된다.
@@ -3192,6 +3219,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
     let fo = null;
     try { fo = mirThreadCommit(q, rawRef.current || (answer ? String(answer) : null), (traceRef.current && traceRef.current.via) || '', { voyageKey: briefCtx?.voyageKey || '', inspector: briefCtx?.inspector || '', _utterAt: ask.at || 0 }); }
     catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
+    if (fo && fo.kind === 'act' && fo.act) mirGotoRequest(fo.act);   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로(이 화면 위 VoyagePage 가 꺼내 간다)
     const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
     setMirFollow(show);
     if (show && !parsed?.briefingQuery) {

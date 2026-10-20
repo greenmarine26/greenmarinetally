@@ -19,6 +19,7 @@ import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트�
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, YARD_SPEAK, mirIsDeferred } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답) — 종전 fixQuestionWithAI(음성 교정)를 이 한 함수가 대신한다
+import { mirGotoRequest, mirGotoFinished } from '../guideGoto.js';   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로 · 끝난 요청은 다시 안 켠다
 import { askGemini } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
@@ -95,7 +96,7 @@ function narrowByFullCn(list, q) {
 //  3.49: 따라가기 자동 기록 «적는 중/적음» 표 — 모듈 수준(항차키|장|동작). 화면이 다시 마운트되거나(모드 전환 key) 언마운트 뒤에도 같은 사건을 두 번 적지 않는다(2차 감사). 실패하면 지워 다음 갱신에 다시.
 const _hatchInFlightAll = new Set();
 
-export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, relayQuery = '', bayView = null }) {   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, relayQuery = '', bayView = null, mirGoto = null }) {   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(VoyagePage 가 꺼내 넘긴다)   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -573,6 +574,16 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     try { sessionStorage.setItem(_wctxKey, JSON.stringify({ guide: !!guideMode, bay: manualBay, tier: manualTier })); } catch (e) { /* 저장소 막힘 — 기억만 못 할 뿐 */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_wctxKey, guideMode, manualBay, manualTier]);
+  //  ★ 4.40 — 미르 [이동]: 자동 가이드를 켜고 그 모드로(완료 보기였어도) — 장·단·«베이 먼저» 는 GuidedWorkPanel 이 제 묶음으로 맞춘다.
+  //    질문 답 칸(askMode)은 닫는다(가이드 첫 카드가 바로 보이게 — «✕ 닫고 작업으로» 와 같다). 위 리셋·되살리기 효과 뒤에 둬야 같은 커밋에서 이 값이 남는다.
+  //    모드가 바뀌는 [이동] 은 다음 커밋에 작업 맥락 되살리기(_wctxKey — 그 모드에 기억한 «수동»)가 가이드를 끈다 — 끝나기 전에는 모드·되살리기가 바뀔 때마다 다시 켠다(4.40 감사 상-2).
+  //    끝난 [이동](요청 함 «끝남»)은 다시 켜지 않는다 — 탭을 떠났다 오거나 수동으로 바꾼 검수원의 선택을 덮지 않게(감사 상-1).
+  useEffect(() => {
+    if (!mirGoto || !mirGoto.seq || mirGotoFinished(mirGoto.seq)) return;
+    if (mirGoto.mode && workFilter !== mirGoto.mode) { setWorkFilter(mirGoto.mode); return; }
+    setGuideMode(true); setAskMode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mirGoto && mirGoto.seq, workFilter, _wctxKey]);
   //  3.48 베이뷰 — 지금 작업 맥락을 덮개에 올린다(아래 칸 그림·띠 글자가 이것을 본다). 값이 바뀔 때만.
   const _ctxCb = bayView && bayView.onWorkCtxChange;
   useEffect(() => {
@@ -761,6 +772,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           onSwitchManual={() => setGuideMode(false)}
           onOpenContainer={onOpenContainer}
           compact={!!(bayView && bayView.compact)} suppressBayActivity={_suppressBay} hatchAuto={_hatchFollow}
+          mirGoto={mirGoto}   /* 4.40: 미르 [이동] */
         />
       ) : (
       <>
@@ -1558,6 +1570,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     const via = _devMsg ? '' : (_m ? (_m.via || 'model') : ((traceRef.current && traceRef.current.via) || ''));
     let fo = null;
     try { fo = mirThreadCommit(q, text, via, { voyageKey, voyage, inspector, _utterAt: askedAt, work: mirWorkCtx() }); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }   // 4.38: voyage·work — 쉬는 틈의 미룬 질문 단추
+    if (fo && fo.kind === 'act' && fo.act) mirGotoRequest(fo.act);   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로(mirGoto 한 벌)
     const show = (fo && (fo.line || fo.confirm || (fo.chips && fo.chips.length))) ? fo : null;
     setMirFollow(show);
     if (show && autoSpeak && !parsed.briefingQuery && chatMessages.length === 0) {

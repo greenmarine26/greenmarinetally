@@ -1422,6 +1422,7 @@ fi
     node tools/smoke_mirbusy438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 중 사담 미루기 연막검사 실패 — 배포 금지"; exit 1; }   # 4.38
     node tools/smoke_workanalysis438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 분석 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-01
     node tools/smoke_mir43902.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.39-02(예상 실오류·장 바꾸기·집에 몇 시) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-02
+    node tools/smoke_mir440.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40(베이로 옮기기 [이동]·[취소]) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.40 — 화면은 회귀 기준표 R44
     node tools/smoke_mir436.cjs "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 4.36 생활회화·사진 읽기·예상 실오류 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.69: **미르 야드 상황**([mirYard]) — 말귀 다섯 갈래·터미널 판정어·우리 배 몫 대조·자료 나이·두 터미널·콘앱 ctx.yard·대화 칩. 같은 번들.
     node tools/smoke_mirstop434.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 멈춤 알림 연막검사 실패 — 배포 금지"; exit 1; }   # 4.34-01

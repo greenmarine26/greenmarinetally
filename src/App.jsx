@@ -36,6 +36,7 @@ import GreetingModal from './components/GreetingModal.jsx';
 import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 import UpdatePrompt from './components/UpdatePrompt.jsx';
+import { MIR_GOTO_EVENT } from './guideGoto.js';   // 4.40: 미르 [이동] — 다른 화면에서 눌렀으면 그 항차 작업 화면으로
 
 // TallyOne 1.0 (K2): 수석 전용 라우트(#/chief·#/search) 접근 차단 안내 화면
 function DeniedChiefOnly({ onGoHome }) {
@@ -569,6 +570,22 @@ export default function App() {
     // TallyOne 1.0 (B-1): 양하/선적 모드까지 해시에 인코딩 — #/voyage/KEY/discharge|loading
     else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}${target.mode ? `/${target.mode}` : ''}`;
   }, []);
+  //  ★ 4.40 — 미르 [이동](guideGoto.js): 다른 화면(홈·수석·다른 항차)에서 눌렀으면 그 항차 작업 화면으로 옮긴다 — 화면이 열리면서 요청을 꺼내 간다(VoyagePage).
+  //    그 항차 화면이 이미 열려 있으면 그 화면이 바로 꺼내 가므로 옮기지 않는다. 미르 플랜 덮개는 걷는다(가이드가 보이게).
+  const _routeRef = React.useRef(route);
+  _routeRef.current = route;
+  useEffect(() => {
+    const h = (e) => {
+      const d = (e && e.detail) || {};
+      if (!d.voyageKey) return;
+      setMirPlan(null);
+      const r = _routeRef.current || {};
+      if (r.name === 'voyage' && r.voyageKey === d.voyageKey) return;
+      navigate({ voyageKey: d.voyageKey, mode: d.mode });
+    };
+    window.addEventListener(MIR_GOTO_EVENT, h);
+    return () => window.removeEventListener(MIR_GOTO_EVENT, h);
+  }, [navigate]);
 
   // ── TallyOne 1.0: 로그인 게이트 — 로그인 전에는 어떤 라우트도 렌더하지 않는다. ──
   //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).

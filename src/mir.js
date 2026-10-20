@@ -65,6 +65,7 @@ import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
 import { aiCostUsd, AI_PRICE } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
+import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
 //    · mirEyes ← guidedQueue: 순서는 화면이 쓰는 그 벌을 그대로 쓴다
 //    · mirEyes ← nlSearch: 트윈 무게 한계는 화면이 쓰는 그 상수를 그대로   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
@@ -1023,6 +1024,94 @@ export function shipPickChips(text, rq, voyages, now = Date.now()) {
   return all.map((c) => `${c} ${base}`);
 }
 
+/* ★ 4.40 — 미르가 자동 가이드를 그 베이로 옮긴다(검수사 2026-10-20 18:18·18:19 — 원문은 answerOneRaw 의 규칙 자리).
+     묻기만 한다 — «○○ 양하 25번 베이로 옮겨 드릴까요?». 옮기는 것은 화면이 [이동]을 눌렀을 때(mirThreadCommit 이 이 답 글자로 행동을 찾아 단추를 단다 →
+     눌린 말 «이동» 을 대화 층이 kind 'act' 로 받는다 → 화면이 guideGoto.mirGotoRequest).
+     남은 일은 자동 가이드와 같은 잣대(평택분 또는 시프팅 · 미완 · 자리 있음 — GuidedWorkPanel remaining)로 센다. 열린 탭과 무관하게 항차 원본을 편 행(flattenVoyages)으로.
+     모드 — 지금 화면 모드에 그 베이 일이 남았으면 그 모드, 아니면 다른 모드. 화면 모드가 없으면(홈) 양하 먼저. */
+const _gotoActs = new Map();   // 답 글자 → { type:'guideGoto', voyageKey, mode, bay } (최근 20개)
+export function mirGotoActOf(text) {
+  const t = String(text == null ? '' : text);
+  if (_gotoActs.has(t)) return _gotoActs.get(t);
+  for (const [k, a] of _gotoActs) if (t.startsWith(k)) return a;   // 엔진이 뒤에 한 줄을 붙인 답(«OBWH 로 답했어요» — 선박코드 고치기)
+  return null;
+}
+//  «그 베이로 옮겨 달라» 는 말인가 — 판정 한 벌(엔진 규칙 answerOneRaw 와 미르의 눈 mirSee 가 같이 쓴다 · §4-4). 베이 번호·끝 네 자리·앱은 부르는 쪽이 본다.
+//    ① «N번 베이부터·먼저 / N번 베이로 바꾸·넘어가» + «어떻게·바꾸·하려면·해야» (4.39-02 실입력 «25번베이부터 해야 되는데 어떻게 바꾸지?»)
+//    ② 시키는 말로 끝나는 것만 — «N번 베이로 바꿔(줘)·바꾸자·옮겨 줘» · «N번 베이부터·먼저 하자·할게·할래·해 줘·할까(요) · 작업(하자·할까) · 작업 시작»
+//       («N번 베이로 넘어가자·넘어가 줘·가자·이동» 은 플랜 명령(planCommand «가자·가 줘·이동»)이 엔진보다 먼저 받아 베이플랜을 연다 — 판정이 두 벌로 겹치지 않게 여기서는 안 받는다 · 2차 시뮬)
+//    컨 옮기기(«컨·위치·자리» — 4.39-02 감사 C1)·자료 질문(몇 대·남았·언제·리퍼 …)·플랜(«플랜·그림·보여·열어»)·지난 일·남의 일(«시작했어?·작업 중이야?·이유·맞아?·누구·
+//    순서·전해 줘·리스트·하래·다른 갱») 은 아니다(4.40 감사 — 끝말을 안 묶었더니 상태 질문 273꼴이 «옮겨 드릴까요?» 강한 답이 됐다). «N번 베이로 옮기려면 어떻게 해» 도 컨 자리 옮기기일 수 있어 아니다.
+//    «실» 은 실번호 뜻만 뺀다 — «실어야·실으려면»(싣다)은 선적 말이다.
+const _GOTO_A1 = /베이\s*(?:부터|먼저)|부터\s*(?:해야|하려|할|시작)|먼저\s*(?:해야|하려|할)|베이로\s*(?:바꾸|바꿀|넘어가)/;
+const _GOTO_A2 = /어떻게|바꾸|바꿔|바꿀|하려면|해야\s*(?:돼|되|하)/;
+const _GOTO_B = /(?:베이로\s*(?:바꿔\s*(?:줘|주세요|줄래|봐)?|바꾸자|바꿀래|옮겨\s*(?:줘|주세요|줄래|주라))|베이\s*(?:부터|먼저)\s*(?:하자|할게|할께|할래|합시다|해\s*줘|할까요?|(?:작업|시작|양하|선적)\s*(?:하자|할게|할께|할래|합시다|해\s*줘|할까요?|시작)?))\s*[?？.!~]*$/;
+const _GOTO_NOT = /몇\s*(?:대|개)|남았|끝나|언제|무게|리퍼|온도|엑스레이|위험물|컨|위치|자리|해치|커버|트윈|실(?!어|으)|씰|봉인|사진|보고|콘|라싱|시간|걸려|걸리|플랜|그림|보여|열어|했어|했나|했지|했잖|하자고|중이|중인|이유|왜|맞아|맞나|맞지|누구|순서|전해|리스트|목록|하래|하라|소리|끝내|끝났|됐어|해도\s*(?:돼|되)|돼도|어디|뭐야|뭔데|내일|아까|어제|시작해\s*[?？.!~]*$|다른\s*(?:갱|호기)|호기(?:가|는|도)\s/;
+export function isGuideGotoAsk(q) {
+  const Q = String(q == null ? '' : q);
+  return ((_GOTO_A1.test(Q) && _GOTO_A2.test(Q)) || _GOTO_B.test(Q)) && !_GOTO_NOT.test(Q);
+}
+//  말에 든 모드(«선적 1번 베이부터 하자» · «25번 베이부터 실어야») — 없으면 null(화면 모드로 고른다)
+const _modeSaid = (q) => (/선적|싣|실어|실으|적하|로딩/.test(String(q || '')) ? 'loading' : /양하|내리|내려|내림/.test(String(q || '')) ? 'discharge' : null);
+export function guideGotoAnswerOf(c, bay, q = '') {
+  const v = (c && c.voyage) || null;
+  const vk = (c && c.voyageKey) || '';
+  if (!v || !vk) return { text: `${bay}번 베이로 옮겨 드리려면 배를 알아야 해요 — 어느 배 말씀인지 배 이름을 붙여 주세요.`, act: null, shipAsk: true };
+  let rows = [];
+  try { rows = flattenVoyages({ [vk]: v }); } catch (e) { console.warn('[미르 4.40] 항차 펴기 실패:', e); rows = []; }
+  const posd = rows.filter((x) => x && x.bay && x.row && x.tier && !String(x.bay).startsWith('__'));
+  const ship = S((c && (c.vsl || (c.info && c.info.vsl))) || (v.info && v.info.vsl)).toUpperCase();
+  const sp = ship ? `${ship} ` : '';
+  //  덱플랜 배(선박 정책 lolo — RZOR)는 자동 가이드가 없다(VoyagePage isLoloShip 과 같은 판정 — 화면이 실어 준 값이 먼저, 없으면 기본 정책). 좌표가 있어도 묻지 않는다(4.40 감사 중-2 — R082E 191/191 좌표).
+  const _lolo = (c && c.isLoloShip === true) || isLoloShipByPolicy(S((c && c.info && c.info.vsl) || (v.info && v.info.vsl)), {}, [(v.info || {}).voy, (v.info || {}).voyage, (v.info || {}).callsign].filter(Boolean));
+  if (_lolo || !posd.length) return { text: `${sp}이 배는 ${_lolo ? '덱플랜 배' : '베이 자리(셀 좌표)가 없는 배'}라 자동 가이드가 없어요 — 베이로 옮길 수 없어요.`, act: null };
+  if (!posd.some((x) => parseInt(x.bay, 10) === bay)) return { text: `${sp}${bay}번 베이는 이 배 자료에 없어요. 베이 번호를 다시 불러 주세요.`, act: null };
+  const left = (m) => posd.filter((x) => x._mode === m && (x._ptk || x._shift) && !x._comp && parseInt(x.bay, 10) === bay);
+  //  그 베이는 끝났어도 같은 장(해치 묶음)에 남은 일이 있으면 장으로 옮긴다 — «24번 베이부터 작업하자»(40피트 베이 = 장 가운데) 에 «다 끝났어요» 라던 것(4.40 감사 — 2.51 미르의 눈은 장으로 받았다).
+  //    장 묶음은 화면(GuidedWorkPanel)과 같은 한 벌 — 그 모드 작업분으로 짝을 세우고(getBayPairs) bayGroupCenter 로 묶는다.
+  const _inf = (v && v.info) || {};
+  const _pairsM = {};
+  const _pairsOf = (m) => { if (!(m in _pairsM)) { try { _pairsM[m] = getBayPairs(posd.filter((x) => x._mode === m && (x._ptk || x._shift)), S(_inf.imo), S(_inf.vsl)); } catch (e) { _pairsM[m] = null; } } return _pairsM[m]; };
+  const _cen = (b, m) => { try { return bayGroupCenter(String(b), _pairsOf(m)); } catch (e) { return null; } };
+  const leftG = (m) => { const myC = _cen(bay, m); return myC == null ? [] : posd.filter((x) => x._mode === m && (x._ptk || x._shift) && !x._comp && _cen(x.bay, m) === myC); };
+  const has = (m) => left(m).length > 0 || leftG(m).length > 0;
+  //  말에 모드가 있으면 그 모드만(4.40 감사 중-1 — «선적 1번 베이부터 하자» 를 양하로 옮기던 것). 그 모드에 남은 일이 없으면 그렇게 말한다.
+  const said = _modeSaid(q);
+  if (said && !has(said)) {
+    const ot = said === 'loading' ? 'discharge' : 'loading', on = left(ot).length || leftG(ot).length;
+    const sk = said === 'loading' ? '선적' : '양하', ok = ot === 'loading' ? '선적' : '양하';
+    return { text: `${sp}${bay}번 베이는 ${sk} 남은 작업이 없어요${on ? ` — ${ot === 'loading' ? '선적은' : '양하는'} 남은 ${on}대예요(«${ok} ${bay}번 베이부터 하자» 하시면 옮겨 드릴게요)` : ''}.`, act: null };
+  }
+  const cur = said || (c.mode === 'loading' || c.mode === 'discharge' ? c.mode : null);
+  const order = cur ? [cur, cur === 'loading' ? 'discharge' : 'loading'] : ['discharge', 'loading'];
+  const m = order.find(has);   // 말한 모드 → 화면 모드 → 다른 모드 차례(그 모드 안에서는 그 베이 → 같은 장)
+  if (!m) return { text: `${sp}${bay}번 베이는 양하·선적 남은 작업이 없어요(다 끝났어요).`, act: null };
+  const L = left(m);
+  if (!L.length) {   // 그 베이는 끝났고 장에 남은 일만
+    const G = leftG(m), gdk = G.filter((x) => parseInt(x.tier, 10) >= 80).length, ghd = G.length - gdk;
+    const myC = _cen(bay, m);
+    const lbl = [...new Set(posd.filter((x) => x._mode === m && (x._ptk || x._shift) && _cen(x.bay, m) === myC).map((x) => parseInt(x.bay, 10)).filter(Number.isFinite))].sort((x, y) => x - y).join('·');
+    const kr0 = m === 'loading' ? '선적' : '양하';
+    const text0 = `📍 ${sp}${kr0} ${bay}번 베이 장(B${lbl})으로 옮겨 드릴까요?\n`
+      + `   ${bay}번 베이는 ${posd.some((x) => x._mode === m && (x._ptk || x._shift) && parseInt(x.bay, 10) === bay) ? '끝났고' : `${kr0} 일이 없고`} 이 장에 남은 ${G.length}대(${[gdk ? `데크 ${gdk}` : '', ghd ? `홀드 ${ghd}` : ''].filter(Boolean).join(' · ')}) — [이동]을 누르면 자동 가이드가 이 장으로 가서 장 순서대로 카드를 놓아요.`;
+    const act0 = { type: 'guideGoto', voyageKey: vk, mode: m, bay };
+    _gotoActs.set(text0, act0);
+    if (_gotoActs.size > 20) _gotoActs.delete(_gotoActs.keys().next().value);
+    return { text: text0, act: act0 };
+  }
+  const dk = L.filter((x) => parseInt(x.tier, 10) >= 80).length;
+  const hd = L.length - dk;
+  const kr = m === 'loading' ? '선적' : '양하';
+  const _had = cur && posd.some((x) => x._mode === cur && (x._ptk || x._shift) && parseInt(x.bay, 10) === bay);
+  const other = cur && m !== cur ? ` (${cur === 'loading' ? '선적은' : '양하는'} ${bay}번 베이 ${_had ? '작업이 끝났어요' : '작업이 없어요'})` : '';
+  const text = `📍 ${sp}${kr} ${bay}번 베이로 옮겨 드릴까요?${other}\n`
+    + `   ${bay}번 베이 남은 ${L.length}대(${[dk ? `데크 ${dk}` : '', hd ? `홀드 ${hd}` : ''].filter(Boolean).join(' · ')}) — [이동]을 누르면 자동 가이드가 이 베이가 든 장으로 가서 ${bay}번 베이 카드를 맨 앞에 놓아요(남은 쌍은 한 대씩).`;
+  const act = { type: 'guideGoto', voyageKey: vk, mode: m, bay };
+  _gotoActs.set(text, act);
+  if (_gotoActs.size > 20) _gotoActs.delete(_gotoActs.keys().next().value);
+  return { text, act };
+}
+
 /** 질문 속 배 이름으로 항차를 고른다 — 홈 통합검색(shipCtx)과 같은 규칙(정확 포함 → 편집거리 1 유일). */
 export function pickShipCtx(query, voyages, ctxVoyageKey = null) {
   const Q = String(query || '').toUpperCase();
@@ -1618,6 +1707,9 @@ export function mirSee(q, ctx) {
   //    ⛔ 커버 단계도 자동 가이드가 이미 배너로 묻고 읽는다.
   //    여기서 하는 것은 **검수원이 먼저 말을 걸었을 때** 순서를 불러 주는 것 하나다.
   const wish = readBayWish(text);                     // 2.51: 「24번 베이 양하하자」 「10번 홀드 작업할거야」
+  //  ★ 4.40 — «25번 베이부터 하자»·«25번 베이 먼저 할게» 처럼 그 베이로 옮겨 달라는 말은 엔진이 «옮겨 드릴까요?» [이동] 으로 받는다 — 떠 있는 미르(이 눈을 안 거친다)와
+  //    탭 카드·조회창·통합검색(이 눈을 먼저 거친다)이 같은 말에 다른 답을 하지 않게 비켜 준다. 「24번 베이 양하하자」 「10번 홀드 작업할거야」(2.51)는 그대로 여기서 순서를 부른다.
+  if (wish && isGuideGotoAsk(text)) return null;
   if (!wish && !RE_ORDER_START.test(text) && !RE_NEXT.test(text)) return null;
 
   const all = (ctx && ctx.containers) || [];
@@ -2481,17 +2573,15 @@ export function answerOneRaw(query, ctx) {
     try { const h = answerHowCore(p); if (h) { try { if (mirKnowledge(Q) === h) _via('knowledge'); } catch (e) { /* */ } return h; } } catch (e) { /* */ }   // 3.43-02: 원장 답은 표시해 둔다(모델 번역이 덮지 않게)
     if (!hasShip) { _via('unlearned'); return '그 방법은 아직 못 배웠습니다 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.'; }
   }
-  //  ★ 4.39-02 — «25번베이부터 해야 되는데 어떻게 바꾸지?»(검수사 2026-10-20 14:43 ATPR 2646E 실입력) = 자동 가이드에서 장을 바꾸는 법.
-  //    종전엔 매뉴얼 추측이 «시작 전에 한 번 — 브리핑»·«켜는 법과 순서» 를 냈고(약한 답) 모델이 덮었다. 콘앱에는 자동 가이드가 없어 종전 길.
-  //    감사 C1 — 컨 옮기기(끝 네 자리·«컨·옮기·위치·자리»)·해치커버·트윈·실 같은 다른 «어떻게» 질문은 가로채지 않는다.
-  if (app !== 'cone' && p.bay != null && !p.digits && /베이\s*(?:부터|먼저)|부터\s*(?:해야|하려|할|시작)|먼저\s*(?:해야|하려|할)/.test(Q)
-      && /어떻게|바꾸|바꿔|바꿀|하려면|해야\s*(?:돼|되|하)/.test(Q)
-      && !/몇\s*(?:대|개)|남았|끝나|언제|무게|리퍼|온도|엑스레이|위험물|컨|옮|위치|자리|해치|커버|트윈|실|씰|봉인|사진|보고|콘|라싱|시간|걸려|걸리/.test(Q)) {
-    _via('featureHelp');
-    return `📍 ${p.bay}번 베이부터 하려면 — 자동 가이드에서 장을 바꿉니다\n   [🚀 작업 시작] → [🤖 자동 가이드] 머리 줄 밑 장 칩 줄\n\n`
-      + `1. 장 칩 줄(«B○○ 대수» 칩이 가로로 늘어선 줄)에서 ${p.bay}번 베이가 든 장 칩을 누릅니다 — 그 장으로 가고, 단(데크/홀드)만 고르면 그 장 순서대로 카드가 나옵니다.\n`
-      + `2. 칩 줄이 안 보이면 위쪽 설정 칩 [B○○ 변경] 을 눌러 베이 그룹을 처음부터 다시 고릅니다.\n`
-      + `3. 다른 갱이 작업한 베이면 «이 베이는 다른 갱도 작업했습니다» 를 한 번 묻습니다 — 내 호기로 하면 [○호기 그대로] 를 누릅니다.`;
+  //  ★ 4.39-02 — «25번베이부터 해야 되는데 어떻게 바꾸지?»(검수사 2026-10-20 14:43 ATPR 2646E 실입력) — 종전엔 매뉴얼 추측이 «브리핑» 을 냈다(약한 답 → 모델). 콘앱에는 자동 가이드가 없어 종전 길.
+  //    감사 C1 — 컨 옮기기(끝 네 자리·«컨·위치·자리»)·해치커버·트윈·실 같은 다른 질문은 가로채지 않는다.
+  //  ★ 4.40 — 장 칩 안내 대신 미르가 옮긴다(검수사 2026-10-20 18:18 «그걸 바꿔 주십시요 25번 베이로 옮겨 드릴까요? 되묻고 이동 또는 취소 버튼을 보여주고 이동을 누르면 25번 베이 작업으로 갈수 있게»
+  //    · 18:19 «모든 베이를 미르가 이동 시킬수 있게 해주시면 됩니다»). 답은 «○○ 양하 N번 베이로 옮겨 드릴까요?» — 화면이 [이동]·[취소] 단추를 단다(mirThreadCommit).
+  //    «N번 베이로 바꿔·옮겨 줘»·«N번 베이부터 하자» 도 같은 길. «N번 베이로 이동·가자·보여 줘» 는 종전대로 베이플랜을 연다(planCommand — 엔진보다 먼저 돈다).
+  if (app !== 'cone' && p.bay != null && !p.digits && isGuideGotoAsk(Q)) {   // 판정은 isGuideGotoAsk 한 벌(미르의 눈 mirSee 도 같은 것으로 비켜 준다)
+    const g = guideGotoAnswerOf(c, parseInt(p.bay, 10), Q);
+    _via(g.shipAsk ? 'shipAsk' : 'guideGoto');
+    return g.text;
   }
   //  3.43-02: 기능 사용법(howToQuery)도 **실무 지식(원장)이 먼저** — «씰 잘림 대처법» 이 색인의 「실번호 입력」 기능 설명으로 갔다(검수사 실측
   //    «씰 잘림(씰 파손) 대처법을 물었는데 씰번호 틀림을 알립니다»). answerHowCore(asking=how)와 같은 순서.
@@ -2862,7 +2952,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
-  if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit') return false;   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
+  if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다
@@ -3412,6 +3502,12 @@ const TH_REF_ASK = '어느 컨 말씀이세요? 끝 네 자리로 불러 주시�
 const TH_PROMPT_CHIPS = ['몇 시에 끝나', '남은 대수', '브리핑'];
 const TH_CLOSE_LINES = ['네, 언제든 부르세요 😺', '네! 수고하세요, 또 불러 주세요 😺', '알겠어요. 필요하면 미르야 하고 부르시면 돼요 😺'];
 const TH_NO_LINE = '네, 그럼 두고 볼게요. 필요하면 또 부르세요 😺';
+//  4.40: «N번 베이로 옮겨 드릴까요?» 뒤의 [이동]·[취소](누른 단추 글자 그대로 오거나 말로 «응·옮겨 줘·아니·그대로»)
+const TH_GO_RE = /^(?:(?:응|네|예|그래)\s*,?\s*)?(?:이동(?:해|해요|하자|할게|할께|합시다|해\s*줘|해\s*주세요)?|옮겨(?:요|\s*줘|\s*주세요)?|옮기자|가자|가\s*줘)[.!~]*$/;
+//  [이동] 을 받는 «네» — 되묻는 «네?·응?» 과 «알려줘·보여줘·맞아» 는 아니다(4.40 감사 d — TH_YES_RE 는 «?» 와 그 말들을 받아 옮기기로 풀렸다)
+const TH_ACT_YES_RE = /^(?:(?:응|어|네|예)\s*,?\s*)?(응|어|네|넵|예|그래|그래요|좋아|좋아요|좋지|해줘|해 줘|부탁해|ㅇㅇ|sp|웅|응응|그러자|오케이|ok)[.!~]*$/i;
+const TH_STAY_RE = /^(?:취소|취소해|취소해\s*줘|안\s*해|하지\s*마|그대로|그대로\s*둬|그냥\s*둬|안\s*옮겨|옮기지\s*마)[.!~]*$/;
+const TH_ACT_STAY = '네, 그대로 둘게요. 하던 장에서 계속하세요 😺';
 const _thSeed = (arr, s) => arr[[...String(s)].reduce((a, ch) => a + ch.charCodeAt(0), 0) % arr.length];
 const _thNorm = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 const _thIsClose = (q) => q.length <= 14 && !TH_ASK_WORD.test(q) && !/\d/.test(q) && TH_CLOSE_RE.test(q);
@@ -3469,6 +3565,16 @@ export function mirThreadResolve(q0, ctx, now = Date.now()) {
   const ctxShip = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
   const lastShip = (last.ship && /^[A-Z0-9]{2,8}$/.test(last.ship)) ? last.ship : '';
   const withShip = (rq) => (lastShip && ctxShip !== lastShip && !rq.toUpperCase().startsWith(lastShip + ' ')) ? `${lastShip} ${rq}` : rq;
+  //  ★ 4.40 — 직전 답이 «N번 베이로 옮겨 드릴까요?»(단추 [이동]·[취소])면 «이동·응·옮겨 줘» 는 옮기고(kind 'act' — 화면이 mirGotoRequest), «취소·아니·그대로» 는 둔다.
+  //    단추를 누르면 그 글자(«이동»·«취소»)가 그대로 온다. 대화 층이 직접 답하므로 엔진·모델로 가지 않는다.
+  const _act = (!afterMiss && last.follow && last.follow.act) ? last.follow.act : null;
+  if (_act) {
+    //  번호로 고르기(«첫 번째·1번» = [이동] · 그 밖의 번호 = [취소]) — 맨숫자는 접수된 말에서만(검색창에 치기 시작한 숫자가 풀리지 않게 — 칩 풀이와 같은 문지기)
+    const _pk = TH_PICK_RE.test(q) && (!/^\d$/.test(q) || ut) ? (/둘|두|2|셋|세|3/.test(q) ? 'no' : 'go') : '';
+    if (TH_GO_RE.test(q) || TH_ACT_YES_RE.test(q) || _pk === 'go') return { q, direct: `🚀 ${_act.bay}번 베이로 옮길게요 — 자동 가이드 첫 카드를 보세요.`, kind: 'act', how: `«${q}» → ${_act.bay}번 베이로 이동` };
+    if (TH_STAY_RE.test(q) || TH_NO_RE.test(q) || _pk === 'no') return { q, direct: TH_ACT_STAY, kind: 'actNo', how: `«${q}» → 옮기지 않음` };
+    if (/^(?:네|응|어|예|그래|뭐|뭐라고|왜)\s*[?？]+$/.test(q) || /^(?:알려\s*줘|보여\s*줘|맞아요?|맞지)[.!~?？]*$/.test(q)) return { q, direct: `${_act.bay}번 베이로 옮길까요? [이동] 이나 «응» 하시면 옮기고, [취소] 나 «아니» 하시면 그대로 둘게요.`, kind: 'prompt', how: '되묻는 «네?» · «알려줘·보여줘·맞아»(재감사 하-2 — 칩 풀이로 «이동» 글자가 엔진에 가 모델로 새던 것)' };
+  }
   const chips = (!afterMiss && last.follow && Array.isArray(last.follow.chips)) ? last.follow.chips : [];
   if (chips.length) {
     //  3.68-01: 칩을 눌러 그 말 그대로 온 것도 «고른 것»이다 — 홈(열린 항차 없음)에서 칩 «남은 대수» 를 누르면 배 없이 엔진에 가 «어느 배 말씀인지» 로 모델까지 가던 것(라이브 실측 DJCF «갱별 진행» → «자료에 없어요 (AI)»)
@@ -3693,6 +3799,12 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
     if (hit) { const last = hit.th.turns[hit.th.turns.length - 1]; if (last) last.confirm = ''; hit.th.at = now; hit.th.lastUtter = { raw: q, q, direct: r.direct, kind: r.kind, utterAt: ut }; }
     return { kind: r.kind, q, line: '', chips: [], confirm: '' };
   }
+  //  ★ 4.40 — [이동]·[취소] 를 받았다 — 단추를 거두고(한 번만 옮긴다) 옮길 것(act)을 화면에 돌려준다. 화면이 kind 'act' 일 때 mirGotoRequest(act).
+  if (r.kind === 'act' || r.kind === 'actNo') {
+    let act = null;
+    if (hit) { const last = hit.th.turns[hit.th.turns.length - 1]; if (last && last.follow) { act = last.follow.act || null; last.follow = { line: '', chips: [] }; } hit.th.at = now; hit.th.lastUtter = { raw: q, q, direct: r.direct, kind: r.kind, utterAt: ut }; }
+    return { kind: r.kind, q, line: '', chips: [], confirm: '', act: r.kind === 'act' ? act : null };
+  }
   if (r.kind === 'prompt') {
     //  되물음의 칩도 이 대화에서 이미 본 것은 뺀다(제안이 다 소진된 뒤의 «응» 이 처음 제안으로 되돌아 무한히 돌지 않게)
     const sq0 = hit ? _thSeenQs(hit.th, q) : q;
@@ -3733,8 +3845,12 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   //  그 턴의 배 코드 — 홈에서 배 이름 붙인 질문 뒤의 «응» 에 붙인다(ctx.vsl · info.vsl · shipCtx.info.vsl · 되쓴 말 머리의 배 코드)
   const ship = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
   let follow = hedged ? null : _thFollowFor(intent, rq, text, entity, now, th, via, done, ship);   // 3.69: ship — 야드 갈래가 배 유무로 칩을 고른다
+  //  ★ 4.40 — «N번 베이로 옮겨 드릴까요?» 뒤에는 [이동]·[취소] 단추만(행동 act 를 같이 기억 — 다음 «이동·응» 을 대화 층이 kind 'act' 로 받는다)
+  const _gact = via === 'guideGoto' ? mirGotoActOf(text) : null;
+  if (_gact) follow = { line: '', chips: ['이동', '취소'], act: _gact };
+  else if (via === 'guideGoto') follow = null;   // 옮길 수 없다는 답(다 끝남·자료에 없음·셀 좌표 없음) 뒤에는 단추를 달지 않는다
   //  4.38: 쉬는 틈(바쁘지 않음을 잴 수 있을 때만)에 미뤄 둔 사담이 있으면 그 말을 단추로 먼저 띄운다 — 누르면 그 말 그대로 묻는다(그때 클로드가 답한다).
-  if (via !== 'defer' && ctx && (ctx.work || ctx.app === 'cone') && !MIR_NEVER_DEFER_RE.test(String(q0 || '')) && !MIR_NEVER_DEFER_RE.test(String(rq || ''))) {   // 위기·안전·몸·마음 말 답 뒤에는 미룬 사담 단추를 붙이지 않는다(마지막 감사 C1 — «죽고 싶어» 뒤 «농담 나눌까요?» · 이어 한 «응» 이 농담으로 갔다)
+  if (!_gact && via !== 'defer' && ctx && (ctx.work || ctx.app === 'cone') && !MIR_NEVER_DEFER_RE.test(String(q0 || '')) && !MIR_NEVER_DEFER_RE.test(String(rq || ''))) {   // 위기·안전·몸·마음 말 답 뒤에는 미룬 사담 단추를 붙이지 않는다(마지막 감사 C1 — «죽고 싶어» 뒤 «농담 나눌까요?» · 이어 한 «응» 이 농담으로 갔다)
     try {
       const pend = mirDeferredPending(now, { fresh: true, who: (ctx && ctx.inspector) || '' }).filter((x) => _norm(x) !== _norm(rq));   // 한 번 띄운 것은 다시 띄우지 않는다(감사 M3 — «아니» 로 넘겨도 답마다 되풀이하던 것)
       if (pend.length) { const bz = mirBusyNow(ctx, now); if (bz.known && !bz.busy) { follow = { line: `아까 미뤄 둔 이야기(«${pend[0]}»), 지금 나눌까요?`, chips: [pend[0]].concat(((follow && follow.chips) || []).filter((x) => x !== pend[0])).slice(0, 4) }; _deferOffered(pend[0], now, (ctx && ctx.inspector) || ''); } }
@@ -3744,7 +3860,7 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   const turn = { q, rq, intent, entity: { cn: entity.cn, l4: entity.l4, bay: entity.bay }, ship, answer: _thNorm(text).slice(0, 200), follow, confirm, at: now };
   if (th) { th.turns.push(turn); if (th.turns.length > THREAD_MAX_TURNS) th.turns.shift(); th.at = now; th.missAt = 0; th.lastUtter = { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut }; }
   else _threads[key] = { turns: [turn], at: now, missAt: 0, lastUtter: { raw: q, q: rq, direct: null, kind: r.kind, utterAt: ut } };
-  return { kind: 'answer', q: rq, line: follow ? follow.line : '', chips: follow ? follow.chips.slice() : [], confirm };
+  return { kind: 'answer', q: rq, line: follow ? follow.line : '', chips: follow ? follow.chips.slice() : [], confirm, act: (follow && follow.act) || null };   // 4.40: act — [이동]·[취소] 단추가 붙은 답(화면은 그리기만, 옮기는 것은 «이동» 을 받은 kind 'act')
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════
