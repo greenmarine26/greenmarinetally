@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.41';
-const NOTE = '4.41 수석 상황판 배 카드에 완료된 베이 또는 남은 베이가 한 줄로 나옵니다. 많이 끝났으면 남은 베이와 남은 대수를, 이제 시작이면 끝난 베이를 데크와 홀드로 나눠 보여 줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.42';
+const NOTE = '4.42 자동 가이드에서 23번 베이와 (24)25번 베이를 따로 고를 수 있습니다. 베이 선택 칸과 작업 중 장 칩 줄에 단추가 있고, 고른 베이 컨이 한 대씩 먼저 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

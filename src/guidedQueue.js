@@ -80,6 +80,8 @@ function _frontFirst(cards, frontCns) {
 
 export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null, rowFrom = null, planAll = null, bayFirst = null, orderPrefs = null }) {
   const landToSea = mode === 'discharge' && rowFrom !== 'sea';   // 3.3: 양하 «해상부터»면 해상→육상
+  //  4.42: «베이 먼저» 는 베이 하나(3.77·미르 [이동]) 또는 베이사전 한 쪽의 베이들(«(24)25번» 단추 — 24 40피트와 25 20피트를 같이)
+  const bfSet = bayFirst == null ? null : new Set([].concat(bayFirst).map((b) => parseInt(b, 10)).filter((b) => b > 0));
   const topFirst = mode === 'discharge';
 
   // V7.94-23: 선적 시 같은 베이 안에서 POD(목적항)별로 묶어 제시 (현장: 포트별 선적).
@@ -168,6 +170,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   // 1차: 트윈 짝짓기 → 카드화 + 싱글모드(짝 없는 20ft)·FR 식별
   const used = new Set();
   const normal = [], singles = [], frs = [];
+  const bfSplitCns = new Set();   // 4.42: «베이 먼저» 로 쪼갠 트윈의 두 컨 — 선적에선 진짜 20싱글이 아니라 트윈 자리 그대로 둔다(아래)
   for (const c of sorted) {
     if (used.has(c.cn)) continue;
     used.add(c.cn);
@@ -175,15 +178,19 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     if (findTwin && is20ft(c)) {
       twin = findTwin(c, containers, used);
       //  ★ 3.77 — 양하·선적 «베이 먼저»: 고른 베이가 낀 트윈 짝은 짝짓지 않고 한 대씩 카드로 낸다(아래 pullBayForward 가 그 베이를 먼저 세운다).
-      if (twin && bayFirst != null && (parseInt(c.bay, 10) === bayFirst || parseInt(twin.bay, 10) === bayFirst)) twin = null;
+      if (twin && bfSet && (bfSet.has(parseInt(c.bay, 10)) || bfSet.has(parseInt(twin.bay, 10)))) { bfSplitCns.add(c.cn); bfSplitCns.add(twin.cn); twin = null; }
       if (twin) used.add(twin.cn);
     }
     const card = { kind: 'work', main: c, twin, pos: `${c.bay}-${c.row}-${c.tier}`, single: false, fr: false };
+    //  ★ 4.42 — 선적: 쪼갠 짝은 «20싱글 먼저»(아래 singles · buildStageOrder 20SINGLE) 에 넣지 않는다 — 트윈은 40피트 한 개와 같다(검수사 2026-08-13).
+    //    쪼갠 짝을 싱글로 당기면 «(02)03번» 을 눌렀을 때 3-02-82 한 대가 그 쪽 40피트 전부보다 앞에 섰다(2차 시뮬 2026-10-21 KBTR 2606E · OBWH 2762W 선적 — 28걸음 23 → 0).
+    if (mode === 'loading' && bfSplitCns.has(c.cn)) card.bfSplit = true;
     const isSpecialLast = mode === 'loading'
       ? (c.fr || c.ot || c.oog || twin?.fr || twin?.ot || twin?.oog)   // 선적: FR+OT 마지막 (V7.94-15: oog 필드 누락 — SWRG 오픈탑 ISO 2261이 oog만 참)
       : (c.fr || twin?.fr);                       // 양하: FR만 우선
     if (isSpecialLast) { card.fr = true; frs.push(card); }
-    else if (is20ft(c) && !twin && !isDeckTier(c.tier)) { card.single = true; singles.push(card); }
+    else if (is20ft(c) && !twin && !isDeckTier(c.tier) && !card.bfSplit) { card.single = true; singles.push(card); }
+    else if (card.bfSplit && is20ft(c) && !isDeckTier(c.tier)) { card.single = true; normal.push(card); }   // 4.42: 쪼갠 짝 — «싱글모드 구간» 표시는 종전대로, 자리는 트윈 자리(감사 권고 2026-10-21)
     else normal.push(card);
   }
 
@@ -269,7 +276,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     //  V8.50 ③ 갈림 칩·3대 연속 감지(streamPref)는 그 위에 한 번 더 — 지금 흐름이 조건보다 앞선다.
     if (streamPref) body = pullStreamForward(body, streamPref);
     let ordered = [...pureFrs, ...body];
-    if (bayFirst != null) ordered = [...pureFrs, ...pullBayForward(ordered.slice(pureFrs.length), bayFirst)];
+    if (bfSet) ordered = [...pureFrs, ...pullBayForward(ordered.slice(pureFrs.length), bfSet)];
     return _frontFirst(ordered, frontCns);
   }
   // ── 선적 (1.57 개편). 단 사이 순서는 종전대로 홀드 먼저 → 데크. ──
@@ -294,7 +301,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   //   3.72-01: 싱글·FR/OT 무리도 POD 묶음이 같은 열 종속을 깨지 않게 같은 보정을 건다(실데이터 250항목 중 싱글 3무리에서 위 싱글이 아래 싱글보다 먼저 나왔다).
   //  ★ 3.77 — 선적 «베이 먼저» (검수사 2026-10-03 «선적도 같은 기능이 있어야 합니다»): 고른 베이를 아래 단이 안 실린 칸은 못 당기는 종속을 지키며 앞으로.
   let front = [...enforceBelowFirst(pureSingles), ...body];
-  if (bayFirst != null) front = pullBayForward(front, bayFirst, 'below');
+  if (bfSet) front = pullBayForward(front, bfSet, 'below');
   return _frontFirst([...front, ...enforceBelowFirst(pureFrs)], frontCns);
 }
 
@@ -365,7 +372,7 @@ export function cardMatchesPref(card, pref) {
   if (pref === '40') return cardIs40(card);
   if (pref === '20') return !cardIs40(card);
   // 1.57: 선적 20싱글 우선 — 물리 종속을 지키며 당기기 위해 내부 전용 키로 둔다.
-  if (pref === '20SINGLE') return !card.twin && !cardIs40(card);
+  if (pref === '20SINGLE') return !card.twin && !cardIs40(card) && !card.bfSplit;   // 4.42: «베이 먼저» 로 쪼갠 짝은 20싱글이 아니다
   return true;
 }
 // 같은 수직 스택 판정 — 같은 로우 + (같은 베이거나 한쪽이 짝수베이 40(양쪽 20슬롯에 걸침)).
@@ -463,13 +470,13 @@ function pullStreamForward(cards, pref, dir = 'above') {
 
 // ★ 3.77 — 고른 베이의 카드를 앞으로 당긴다. 양하는 위에 안 내린 카드가 있으면(blockedByAbove)·선적은 아래가 안 실렸으면(blockedByBelow) 못 당기고, 지금 작업하는 단(데크/홀드)과 같은 단만 당긴다
 //   — 단 순서를 뒤집지 않는다. 못 당긴 카드는 기본 순서에 남는다.
-function pullBayForward(cards, bay, dir = 'above') {
+function pullBayForward(cards, bays, dir = 'above') {   // bays — 베이 번호 Set(4.42 — 한 쪽의 베이들도 한 번에)
   const blocked = dir === 'below' ? blockedByBelow : blockedByAbove;
   const rest = [...cards];
   const out = [];
   while (rest.length) {
     const deckNow = isDeckTier(rest[0].main.tier);
-    const idx = rest.findIndex(card => cardPositions(card).some(p => parseInt(p.bay, 10) === bay)
+    const idx = rest.findIndex(card => cardPositions(card).some(p => bays.has(parseInt(p.bay, 10)))
       && isDeckTier(card.main.tier) === deckNow && !blocked(card, rest));
     if (idx === -1) break;
     out.push(...rest.splice(idx, 1));

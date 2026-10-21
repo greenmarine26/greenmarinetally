@@ -2817,6 +2817,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   //  4.40 — 미르 [이동]: «N번 베이로 옮겨 드릴까요?» [이동]·[취소] → 자동 가이드가 그 베이가 든 장·단으로 가서 그 베이 카드부터(떠 있는 미르·탭 카드·홈 · 다른 갱 물음 · 데크 먼저 · 취소·«응»).
   //    항차 화면(VoyagePage)과 떠 있는 미르(MirFab) 실소스를 jsdom 에서 같이 누른다(ATPR 2646E 보관본 — 그 시각의 완료만). 본문은 tools/regress_r44_mirgoto.cjs(단독 실행도 된다).
   await require('./regress_r44_mirgoto.cjs')({ ROOT, TMP, ok, head, fx, stub });
+  //  4.42 — 자동 가이드 «23번 / (24)25번» 나눠 고르기(베이 선택 칸 · 작업 중 장 칩 줄 → 그 베이 컨부터 · 다시 누르면 풂 · 사전 없는 배는 단추 없음). 본문은 tools/regress_r45_baysplit.cjs(단독 실행도 된다).
+  await require('./regress_r45_baysplit.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }

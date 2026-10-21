@@ -8,6 +8,7 @@ import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from 
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { bayGroupCenter } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 그룹 계산 단일 소스
 import { getShipBayDictData } from '../shipStructure.js';
+import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 4.42: «23번 / (24)25번» 나눠 고르기 — 베이사전 쪽(카고플랜·보드 그림과 같은 장)
 import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «몇 호기 화물인가» 안내 — 계산은 한 벌
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
@@ -22,7 +23,7 @@ import { isoOtHeightConflict } from '../utils.js';   // 4.27-01: 오픈탑 높�
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
-import { activeHeldOf, HOLD_REASONS } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
+import { activeHeldOf, HOLD_REASONS, bayPageSplitOf } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
 import { loadingSlotOf, guideTwinOf } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 기존 자동 한 화면 틀(맨 위 한 줄 · 위 칸 카드·확인 · 아래 칸 변경 단추)   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
@@ -131,6 +132,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [streamPref, setStreamPref] = useState(null);
   //  ★ 3.77 — 양하 «베이 먼저»: 트윈이 무게로 싱글이 될 때 한쪽 베이(33 또는 35)를 먼저 몰아 내리는 흐름. null = 짝 번갈아(기본).
   const [bayFirst, setBayFirst] = useState(null);
+  //  4.42: bayFirst 는 베이 하나(3.77·미르 [이동]) 또는 베이사전 한 쪽의 베이들 [24, 25](«(24)25번» 단추 — 그 쪽의 40피트와 20피트를 같이 먼저)
+  const bfList = bayFirst == null ? [] : [].concat(bayFirst);
+  const bfLabel = !bfList.length ? '' : bfList.length === 1 ? `${bfList[0]}번`
+    : `(${String(Math.min(...bfList)).padStart(2, '0')})${String(Math.max(...bfList)).padStart(2, '0')}번`;
+  const [localGoto, setLocalGoto] = useState(null);   // 4.42: «23번 / (24)25번» 단추 — 미르 [이동](mirGoto)과 같은 길로 간다 {seq, mode, bay, bays, lab, tier, local}
   const singleBaysRef = useRef([]);   // 최근 «짝이 남은 채 혼자 내린» 컨의 베이(최대 2개) — 같은 베이 연속이면 자동으로 베이 먼저
   const [fixOpen, setFixOpen] = useState(false);
   //  ★ 2.80 «자리 확인» 모드 (검수사 확정 2026-08-28) — 엠티 선적에서 계획과 다른 것은 예외가 아니라 정상이다.
@@ -446,6 +452,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const set = groupBaysAll.get(center) || g?.bays;
     return set && set.size ? [...set].sort((a, b) => a - b).join('·') : String(center);
   };
+  //  ★ 4.42 — «23번 / (24)25번» 나눠 고르기(검수사 2026-10-21 07:20 «베이선택을 23번베이 (24)25번베이로 분리해서 선택할수 있게 … 1(2)3 베이라면 1 번베이 (2)3번 베이로 분리»).
+  //    어제 ATPR 2646E 24번 홀드 — 트윈 둘 뒤 싱글로 25번 16대를 먼저 내렸는데 가이드는 같은 칸이면 앞 베이(23)부터라 «23번만» 말했고, 25번으로 옮길 단추가 없었다
+  //    (3.77 «N번 베이 먼저» 단추는 트윈 카드 싱글 화면에만 있다). 나누는 기준은 베이사전 쪽(utils.bayPageSplitOf 한 벌 — 사전 없으면 안 나눈다).
+  //    누르면 미르 [이동](4.40)과 같은 길 — 그 베이가 든 장·단 → «그 베이 먼저»(bayFirst). 이미 그 쪽이 먼저면 누르면 푼다(트윈으로 복귀와 같다).
+  const bayPages = useMemo(() => {
+    try { const d = getShipBayDictData(shipImo, shipName); return d && d.bayDef ? (buildBayPagesFromSummary(d.bayDef) || null) : null; }
+    catch (e) { console.warn('[자동 가이드] 베이사전 장 목록 실패 — 23번/(24)25번 나눠 고르기를 띄우지 않습니다', e); return null; }
+  }, [shipImo, shipName, bayPairs]);   // bayPairs — 트윈 짝과 같은 사전을 본다(사전이 늦게 오면 짝과 함께 다시 읽는다)
+  const splitOf = (center, tier = null) => bayPageSplitOf(remaining.filter((c) => groupCenterOf(c.bay) === center
+    && (tier === 'deck' ? parseInt(c.tier, 10) >= 80 : tier === 'hold' ? parseInt(c.tier, 10) < 80 : true)), bayPages);
+  //    작업 중 칩은 지금 단(tier)을 같이 넘긴다 — 지금 단에서 센 쪽이라, 미르 규칙(선적 홀드 먼저 · 양하 데크 먼저)으로 단을 다시 고르면 다른 단으로 넘어간다(감사 2026-10-21 OBWH 2762E 선적 데크).
+  const bfOn = (pt) => bfList.some((b) => pt.bays.includes(b));
+  const goBay = (part, tier = null) => {
+    if (bfOn(part) && selectedGroup === groupCenterOf(String(part.bay))) { setBayFirst(null); singleBaysRef.current = []; return; }
+    if (mirGoto && mirGoto.seq) mirGotoFinish(mirGoto.seq);   // 맡은 미르 [이동] 이 남아 있으면 끝낸다 — 이 단추가 이긴다(끝난 뒤 옛 요청이 다시 돌지 않게)
+    setLocalGoto({ seq: Date.now(), mode, bay: part.bay, bays: part.bays, lab: part.lab, tier, local: true });
+  };
 
   //  2.90: 물려받은 베이가 이쪽 묶음 center 와 안 맞으면(짝 계산 입력 차이) 그 베이를 품은 묶음으로
   //    옮겨 앉는다. 품은 묶음도 없으면 비운다 — 이쪽 모집단에 그 베이 일이 없는 것이라 게이트가 다시 묻는다.
@@ -630,7 +653,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  ★ 3.77: 고른 베이가 소진되면 자동 해제 — 남은 짝은 다시 트윈으로.
   useEffect(() => {
     if (bayFirst == null) return;
-    if (!queue.some(cd => [cd.main, cd.twin].some(x => x && parseInt(x.bay, 10) === bayFirst))) setBayFirst(null);
+    if (!queue.some(cd => [cd.main, cd.twin].some(x => x && bfList.includes(parseInt(x.bay, 10))))) setBayFirst(null);
   }, [queue, bayFirst]);
 
   // ★ TallyOne 1.57: 흐름 감지 — 실제로 처리한 컨 3대가 연속 같은 부류면 그 흐름으로 바꾼다.
@@ -652,7 +675,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         const b = parseInt(c.bay, 10);
         singleBaysRef.current = [...singleBaysRef.current, b].slice(-2);
         const sb = singleBaysRef.current;
-        if (sb.length === 2 && sb[0] === sb[1] && bayFirst !== b) { setBayFirst(b); speak(`${b}번 베이 먼저로 바꿉니다`); }
+        if (sb.length === 2 && sb[0] === sb[1] && !bfList.includes(b)) { setBayFirst(b); speak(`${b}번 베이 먼저로 바꿉니다`); }
       } else singleBaysRef.current = [];
     }
     const k = conClassOf(c);
@@ -1009,6 +1032,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const cur = row.querySelector('[data-gw-cur="1"]');
     if (cur && typeof cur.offsetLeft === 'number') row.scrollLeft = Math.max(0, cur.offsetLeft - 12);
   }, [selectedGroup, selectedTier, compact]);
+  //  4.42: 눌린 «(24)25번 먼저 ✓» 칩이 줄 오른쪽 끝에 잘리면 그만큼만 더 민다(폰 412 미리보기 실측 — «✓» 가 화면 밖).
+  //    위 효과와 나눈다 — «베이 먼저» 가 바뀔 때마다 줄을 지금 장 칩으로 되돌리면 손으로 밀어 보던 줄이 튄다(감사 권고).
+  useEffect(() => {
+    const row = gwChipsRef.current;
+    const on = row && row.querySelector('[data-gw-split-on="1"]');
+    if (!on || !on.getBoundingClientRect) return;
+    const rr = row.getBoundingClientRect(), orr = on.getBoundingClientRect();
+    if (orr.right > rr.right) row.scrollLeft += orr.right - rr.right + 8;
+  }, [bayFirst]);
   useEffect(() => { setBayFirst(null); singleBaysRef.current = []; }, [selectedTier, mode]);   // 3.77: 단·모드가 바뀌면 «베이 먼저» 도 푼다   // V8.50: 단 변경 시 스트림 리셋
   //  ★ 4.40 — 미르 [이동](검수사 2026-10-20 18:18 «25번 베이로 옮겨 드릴까요? 되묻고 이동 또는 취소 버튼을 보여주고 이동을 누르면 25번 베이 작업으로 갈수 있게»
   //    · 18:19 «모든 베이를 미르가 이동 시킬수 있게 해주시면 됩니다»). 장 칩을 누른 것과 같은 길로 간다 —
@@ -1020,9 +1052,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const _gotoRef = useRef({ seq: 0, tries: 0, busy: false });
   const [_gotoTick, _setGotoTick] = useState(0);
   useEffect(() => {
-    const g = mirGoto;
+    //  4.42: «23번 / (24)25번» 단추(localGoto)도 같은 길 — 더 늦게 들어온 요청 하나만 본다
+    const g = (localGoto && localGoto.seq && (!mirGoto || !mirGoto.seq || localGoto.seq > mirGoto.seq)) ? localGoto : mirGoto;
     const st = _gotoRef.current;
     if (!g || !g.seq || mirGotoFinished(g.seq)) return undefined;
+    const who = g.local ? '' : '미르가 ', went = g.local ? '' : '로 옮겼어요';   // 4.42: 단추로 고른 것은 «미르가 … 옮겼어요» 라고 하지 않는다
     mirGotoTouch(g.seq);   // 자동 가이드가 맡았다(항차 화면의 «못 옮김» 시계가 본다)
     if (st.seq !== g.seq) { st.seq = g.seq; st.tries = 0; st.busy = false; st.lastG = undefined; st.lastT = undefined; }
     const again = () => { const t = setTimeout(() => _setGotoTick((n) => n + 1), 150); return () => clearTimeout(t); };
@@ -1031,8 +1065,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (say) { try { speak(m, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } }
     };
     const bay = parseInt(g.bay, 10);
+    //  4.42: 단추는 한 쪽의 베이들(«(24)25번» = 24·25)과 그 이름을 같이 넘긴다 — 미르는 베이 하나
+    const bays = (g.local && Array.isArray(g.bays) && g.bays.length) ? g.bays.map((b) => parseInt(b, 10)) : [bay];
+    const bayName = (g.local && g.lab) ? `${g.lab} 베이` : `${bay}번 베이`;
     //  못 옮기고 멈출 때도 한 줄 — 미르가 이미 «옮길게요» 라고 했다(감사 권고)
-    const giveUp = () => { mirGotoFinish(g.seq); console.warn('[미르 이동] 장·단이 자리 잡지 않아 멈춤', g); note(`미르가 ${bay}번 베이로 옮기지 못했어요 — 장 칩에서 그 베이가 든 장을 눌러 주세요.`, true); return undefined; };
+    const giveUp = () => { mirGotoFinish(g.seq); console.warn('[미르 이동] 장·단이 자리 잡지 않아 멈춤', g); note(`${who}${bayName}로 옮기지 못했어요 — 장 칩에서 그 베이가 든 장을 눌러 주세요.`, true); return undefined; };
     if (g.mode && g.mode !== mode) return (++st.tries > 30) ? giveUp() : again();   // 모드가 따라오는 중
     const kr = mode === 'loading' ? '선적' : '양하';
     //  그 베이가 든 장 — 그 베이가 끝났으면 같은 장(묶음 가운데가 같은 것 — «24번 베이부터» 처럼 장으로 부른 말)
@@ -1047,30 +1084,33 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       Promise.resolve(pickGroup(host)).catch((e) => console.warn('[미르 이동] 장 고르기 실패:', e)).finally(() => { st.busy = false; _setGotoTick((n) => n + 1); });
       return again();
     }
-    const bayLeft = remaining.filter((c) => parseInt(c.bay, 10) === bay && groupCenterOf(c.bay) === host.center);
+    const bayLeft = remaining.filter((c) => bays.includes(parseInt(c.bay, 10)) && groupCenterOf(c.bay) === host.center);
     const bHold = bayLeft.filter((c) => parseInt(c.tier, 10) < 80).length;
-    const want = mode === 'discharge' ? (host.deck > 0 ? 'deck' : 'hold')
+    const want = (g.local && g.tier) ? g.tier   // 4.42: 작업 중 칩 — 지금 단 그대로
+      : mode === 'discharge' ? (host.deck > 0 ? 'deck' : 'hold')
       : (bayLeft.length ? (bHold > 0 ? 'hold' : 'deck') : (host.hold > 0 ? 'hold' : 'deck'));   // 선적 — 그 베이가 끝났으면 장의 홀드 먼저
     if (selectedTier !== want) { if (++st.tries > 30) return giveUp(); setSelectedTier(want); return again(); }
     const tierKo = want === 'deck' ? '데크' : '홀드';
     const lbl = `B${groupLbl(host.center, host)}`;
-    const hasBay = queue.some((cd) => [cd.main, cd.twin].some((x) => x && parseInt(x.bay, 10) === bay));
-    if (hasBay && bayFirst !== bay) { if (++st.tries > 30) return giveUp(); setBayFirst(bay); return again(); }   // 다음 박자에 «베이 먼저» 가 걸린 큐의 첫 카드를 보고 알린다
+    const hasBay = queue.some((cd) => [cd.main, cd.twin].some((x) => x && bays.includes(parseInt(x.bay, 10))));
+    const sameBF = bfList.length === bays.length && bays.every((b) => bfList.includes(b));
+    //  단추는 늘 배열(한 쪽 — 띠도 그 쪽 이름) · 미르는 숫자 하나(띠 «N번 베이 먼저 중» 그대로 — 4.40 R44)
+    if (hasBay && !sameBF) { if (++st.tries > 30) return giveUp(); setBayFirst(g.local ? bays : (bays.length === 1 ? bays[0] : bays)); return again(); }   // 다음 박자에 «베이 먼저» 가 걸린 큐의 첫 카드를 보고 알린다
     //  그 베이에 남은 카드가 없으면(장으로 옮김) 앞서 건 «M번 베이 먼저» 를 푼다 — 안 풀면 «이 장 순서대로» 라 말하고 첫 카드는 옛 M번이었다(2차 시뮬 재실행 — 같은 장·같은 단에서 연달아 옮길 때 16/28)
     if (!hasBay && bayFirst != null) { if (++st.tries > 30) return giveUp(); setBayFirst(null); singleBaysRef.current = []; return again(); }
     mirGotoFinish(g.seq);
     if (hasBay) {
       //  «베이 먼저» 는 지금 할 수 있는 카드만 당긴다 — 선적은 아래 칸, 양하는 위 칸이 먼저라 첫 카드가 다른 베이일 수 있다(OBWH 2764W 선적 6번 → 7-04-02 가 먼저). 그때는 그렇다고 말한다.
       const f = queue[0];
-      const fb = !!f && [f.main, f.twin].some((x) => x && parseInt(x.bay, 10) === bay);
+      const fb = !!f && [f.main, f.twin].some((x) => x && bays.includes(parseInt(x.bay, 10)));
       const fp = f && f.main ? `${parseInt(f.main.bay, 10)}-${f.main.row}-${f.main.tier}` : '';
-      note(fb ? `미르가 ${kr} ${lbl} ${tierKo}로 옮겼어요 — ${bay}번 베이 카드부터.`
-        : `미르가 ${kr} ${lbl} ${tierKo}로 옮겼어요 — ${bay}번 베이 카드를 앞으로 당겼지만 ${fp} 가 먼저예요(${mode === 'loading' ? '아래 칸부터 싣습니다' : '위 칸부터 내립니다'}).`, !fb);
-    } else if (!bayLeft.length) note(`미르가 ${kr} ${lbl} ${tierKo}로 옮겼어요 — ${bay}번 베이는 남은 컨이 없어 이 장 순서대로예요.`, false);
-    else if (mode === 'discharge' && want === 'deck' && !bayLeft.some((c) => parseInt(c.tier, 10) >= 80)) note(`${bay}번 베이는 홀드만 남았어요 — 이 장 데크 ${host.deck}대를 먼저 내려야 해서(커버 아래) 데크로 왔어요.`, true);
-    else note(`${bay}번 베이 남은 컨은 보류 중이에요 — 장만 옮겼어요.`, true);
+      note(fb ? `${who}${kr} ${lbl} ${tierKo}${went} — ${bayName} 카드부터.`
+        : `${who}${kr} ${lbl} ${tierKo}${went} — ${bayName} 카드를 앞으로 당겼지만 ${fp} 가 먼저예요(${mode === 'loading' ? '아래 칸부터 싣습니다' : '위 칸부터 내립니다'}).`, !fb);
+    } else if (!bayLeft.length) note(`${who}${kr} ${lbl} ${tierKo}${went} — ${bayName}는 남은 컨이 없어 이 장 순서대로예요.`, false);
+    else if (mode === 'discharge' && want === 'deck' && !bayLeft.some((c) => parseInt(c.tier, 10) >= 80)) note(`${bayName}는 홀드만 남았어요 — 이 장 데크 ${host.deck}대를 먼저 내려야 해서(커버 아래) 데크로 왔어요.`, true);
+    else note(`${bayName} 남은 컨은 보류 중이에요 — 장만 옮겼어요.`, true);
     return undefined;
-  }, [mirGoto && mirGoto.seq, _gotoTick, mode, groups, remaining, selectedGroup, selectedTier, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mirGoto && mirGoto.seq, localGoto && localGoto.seq, _gotoTick, mode, groups, remaining, selectedGroup, selectedTier, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -1836,9 +1876,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
           <div className="grid grid-cols-3 gap-2">
-            {groups.map(g => (
-              <button key={g.center} onClick={() => { pickGroup(g); }}
-                className="py-3 rounded-pill bg-ink-800 hover:bg-violet-800 border border-line text-dim-100">
+            {groups.map(g => (<div key={g.center} className="flex flex-col gap-1 min-w-0">
+              <button onClick={() => { pickGroup(g); }}
+                className="w-full py-3 rounded-pill bg-ink-800 hover:bg-violet-800 border border-line text-dim-100">
                 <div className="font-bold text-base">B{groupLbl(g.center, g)}</div>
                 {/* 1.95: 빈 칸(수동 기준·정본)을 앞에, 컨 머릿수를 뒤에 — 계산은 SearchPanel manualGroups 한 벌 */}
                 <div className="text-2xs text-dim-300">
@@ -1850,7 +1890,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   {g.hold > 0 && <span className="text-amber-300">홀드 {g.hold}</span>}
                 </div>
               </button>
-            ))}
+              {/* ★ 4.42 «23번 / (24)25번» — 이 장을 베이사전 쪽으로 나눠 바로 고른다(그 베이 컨이 한 대씩 먼저) */}
+              {(() => { const sp = splitOf(g.center); return sp.length ? (
+                <div className="flex flex-col gap-1.5" data-gw-split-grid={g.center}>
+                  {/* 위아래로 — 폰 360 폭에서 옆으로 두면 «(24)25 / 번» 으로 이름이 끊겼다(미리보기 실측) */}
+                  {sp.map((pt) => (
+                    <button key={pt.key} onClick={() => goBay(pt)} data-gw-split={pt.lab}
+                      className="w-full min-w-0 py-1 min-h-[var(--tap-pop-sm)] rounded-pill bg-ink-900 hover:bg-sky-900 border border-sky-800 text-sky-200 text-xs font-bold whitespace-nowrap truncate">
+                      {pt.lab} <span className="font-normal text-dim-400">{pt.n}</span>
+                    </button>
+                  ))}
+                </div>) : null; })()}
+            </div>))}
           </div>
         </div>
         {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
@@ -2141,7 +2192,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div ref={gwChipsRef} className="flex gap-1.5 overflow-x-auto pb-0.5" data-gw-groups="1">
           {groups.map((g) => {
             const cur = g.center === selectedGroup;
-            return (
+            const chip = (
               <button key={g.center} data-gw-group={g.center} data-gw-cur={cur ? '1' : undefined} disabled={busy}
                 onClick={() => { if (cur) { closeFix(); setSelectedTier(null); } else pickGroup(g); }}
                 className={`gw-ex shrink-0 px-3 rounded-pill border font-bold whitespace-nowrap disabled:opacity-50 ${cur ? 'bg-violet-800 border-violet-500 text-white' : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>
@@ -2149,6 +2200,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <span className={cur ? 'font-normal text-violet-100' : 'font-normal text-dim-400'}>{cur ? `${selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : ''} ⇄` : g.count}</span>
               </button>
             );
+            //  ★ 4.42 — 지금 장 옆에 «23번 / (24)25번»(이 단에 두 쪽 다 남았을 때만). 고른 쪽은 진하게 — 다시 누르면 풀린다.
+            const sp = cur ? splitOf(g.center, selectedTier) : [];
+            return sp.length ? (
+              <React.Fragment key={g.center}>
+                {chip}
+                {sp.map((pt) => {
+                  const on = bfOn(pt);
+                  return (
+                    <button key={`sp-${pt.key}`} data-gw-split={pt.lab} data-gw-split-on={on ? '1' : undefined} disabled={busy} onClick={() => goBay(pt, selectedTier)}
+                      className={`gw-ex shrink-0 px-2.5 rounded-pill border font-bold whitespace-nowrap disabled:opacity-50 ${on ? 'bg-sky-700 border-sky-400 text-white' : 'bg-ink-900 border-sky-800 text-sky-200 hover:bg-sky-900'}`}>
+                      {pt.lab} <span className={on ? 'font-normal text-sky-100' : 'font-normal text-dim-400'}>{on ? '먼저 ✓' : pt.n}</span>
+                    </button>
+                  );
+                })}
+              </React.Fragment>
+            ) : chip;
           })}
         </div>
       )}
@@ -2209,11 +2276,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         );
       })()}
   </>);
+  //  4.42: 쪽 단추로 고른 것(배열)은 띠 이름을 칩 이름과 같게 — 지금 단의 한 쪽과 꼭 같으면 그 쪽 이름(«(24)25번» · «03번»), 아니면 베이 번호(2차 시뮬 표시 지적).
+  //    미르 [이동]·3.77 자동(숫자 하나)은 종전 «N번 베이 먼저 중» 그대로 — 미르가 «N번 베이로» 라고 한 말과 같게.
+  const bfBandLab = (Array.isArray(bayFirst) && selectedGroup != null
+    && (splitOf(selectedGroup, selectedTier).find((pt) => pt.bays.length === bfList.length && bfList.every((b) => pt.bays.includes(b))) || {}).lab) || bfLabel;
   const bayFirstEl = (<>
       {/* ★ 3.77 — 양하 «베이 먼저»: 무게로 싱글이 된 트윈을 한쪽 베이부터 몰아 내리는 중. 누르면 트윈으로 복귀. */}
       {card && bayFirst != null && (
         <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-sky-700 rounded-pill px-2 py-1.5">
-          <span className="text-2xs font-bold text-sky-300">{bayFirst}번 베이 먼저 중 — 남은 쌍은 한 대씩</span>
+          <span className="text-2xs font-bold text-sky-300">{bfBandLab} 베이 먼저 중 — 남은 쌍은 한 대씩</span>
           <button onClick={() => { setBayFirst(null); singleBaysRef.current = []; }}
             className="px-2 py-1 rounded text-xxs font-bold border bg-ink-800 border-amber-700 text-amber-300 hover:bg-ink-750">
             트윈으로 복귀
