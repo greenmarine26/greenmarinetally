@@ -24,7 +24,7 @@ import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «�
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
-  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs, koJosa,   // 4.42-02: koJosa — «강풍 대기로·장비 고장으로»   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
+  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs, koJosa, qcRowsOf,   // 4.42-03: qcRowsOf — 동방 호기 표 한 벌(갱 기다리는 배) · 4.42-02: koJosa — «강풍 대기로·장비 고장으로»   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
   isReeferContainer, isReeferIso, isFullReefer, isEmptyReefer, emptySplitLabel,   // 4.15-01: 엠티 구분 한 벌 · 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf, shiftSplitOf, isShiftOffPtk,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합) · 4.16: 시프팅 분리 한 벌
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
@@ -4263,6 +4263,28 @@ export function angryReasons(voyages, heartbeat, now = Date.now()) {
 export function pauseTargetsOf(voyages, heartbeat, now = Date.now()) {
   return _angryList(voyages, heartbeat, now).map((x) => ({ key: x.key, vsl: x.vsl }));
 }
+//  ★ 4.42-03 — 동방(PNCT)은 갱을 우선 배에 몰아 준다. 검수사 2026-10-21 16:34 «동방은 3갱 작업위주로 합니다. 그래서 연태 2갱 연운항1갱 작업 우선입니다.
+//    그러므로 DXQD는 연태 작업이 끝나야 가능합니다. 미르가 DXQD 작업 실적이 없어서 화나있습니다.» (실측 16:37 — DXQD 2641E 양하 302/302 15:10 끝 · 선적 0/175 ·
+//    호기 표 QC102·QC104 선적 «했다 0»; 동방 갱 1·2호기는 OBWH 2771E(연태) · 3호기는 TNJP 26369E(연운항) 에서 «하는 중»).
+//    동방 호기 표(info.qcWork — qcRowsOf 한 벌)에서 이 배에 «하는 중»인 호기(한 방향을 시작했고 아직 남음)가 하나도 없거나, 있어도 전부 같은 부두 다른 배에서도
+//    «하는 중»이면(어느 배에 있는지 가릴 수 없다) 이 배는 갱을 기다리는 중이다. 남은 일이 없거나 호기 표가 없으면 이 문은 닫혀 있다(종전 판정).
+function _qcBusyNos(v) {
+  const rows = qcRowsOf(v && v.info && v.info.qcWork);
+  if (!rows.length) return null;
+  return { rest: rows.some((q) => q.disRest + q.lodRest > 0), busy: rows.filter((q) => (q.disDone > 0 && q.disRest > 0) || (q.lodDone > 0 && q.lodRest > 0)).map((q) => q.no) };
+}
+function _pnctGangWaiting(vKey, v, voyages, now) {
+  if (pierOf(v) !== 'PNCT') return false;
+  const me = _qcBusyNos(v);
+  if (!me || !me.rest) return false;
+  if (!me.busy.length) return true;
+  const others = new Set();
+  for (const [k2, v2] of Object.entries(voyages || {})) {
+    if (k2 === vKey || !v2 || !v2.info || pierOf(v2) !== 'PNCT' || !isWorkingNow(v2, now)) continue;   // 끝난 항차에 남은 옛 호기 표는 안 본다
+    const o = _qcBusyNos(v2); if (o) o.busy.forEach((n) => others.add(n));
+  }
+  return me.busy.every((n) => others.has(n));
+}
 function _angryList(voyages, heartbeat, now) {
   const r = [];
   if (_collectorSilentMs(heartbeat, now)) return r;
@@ -4272,6 +4294,7 @@ function _angryList(voyages, heartbeat, now) {
     if (!isWorkingNow(v, now)) continue;
     if (!_inWorkWindow(now, pierOf(v))) continue;   // 4.06: 밥 먹는 시간에 화내지 않는다
     if (workPauseOf(v, now)) continue;   // 3.69-01: 앱에 중단 보고가 있으면 완료가 없는 게 당연하다 — 화내지 않는다
+    if (_pnctGangWaiting(vKey, v, voyages, now)) continue;   // 4.42-03: 동방 갱이 다른 배(우선 배)에 가 있어 이 배는 기다리는 중 — 화내지 않는다
     if (_inspectorFinished(v)) continue;  // 4.06 재감사 D1: 검수원이 «검수 완료» 를 눌렀으면 입력할 게 없다(터미널은 출항 전까지 «작업중» 으로 남는다 — 동방은 workEndAt 이 실출항 ATD)
     const marks = _statusReportMarks(v, now);
     let last = 0, any = false;

@@ -1447,6 +1447,8 @@ fi
     node tools/smoke_eta44001.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40-01(몇 시에 끝나 두 앱 같은 답) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.42-02: 미르가 화났을 때 배 이름 없이 알린 멈춤(«아무래도 강풍대기 인듯 하네») → 화난 그 배들(pauseTargetsOf) · 강한 답 · 답 뒤 칩 없음 · 기쁨에 배 이름(mirDoneUpWhy). RTDB GET 사본. 같은 번들.
     node tools/smoke_mirpause44202.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.42-02(화난 배에 멈춤 알림 · 기쁨에 배 이름) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.42-03: 동방(PNCT)에서 갱이 다른 배에 가 있어 기다리는 배(DXQD 2641E 16:37 — 양하 끝 · 선적 갱 대기 · 연태 OBWH 2갱 · 연운항 TNJP 1갱)에는 미르가 화내지 않는다. 갱이 오면·남은 일 없으면·표 없으면·PCTC 는 종전. GET 사본 mirgang44203.json.
+    node tools/smoke_mirgang44203.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.42-03(동방 갱 기다리는 배에 화내지 않음) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_mir436.cjs "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 4.36 생활회화·사진 읽기·예상 실오류 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.69: **미르 야드 상황**([mirYard]) — 말귀 다섯 갈래·터미널 판정어·우리 배 몫 대조·자료 나이·두 터미널·콘앱 ctx.yard·대화 칩. 같은 번들.
     node tools/smoke_mirstop434.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 멈춤 알림 연막검사 실패 — 배포 금지"; exit 1; }   # 4.34-01
