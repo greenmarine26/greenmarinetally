@@ -24,7 +24,7 @@ import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «�
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
-  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs,   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
+  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs, koJosa,   // 4.42-02: koJosa — «강풍 대기로·장비 고장으로»   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
   isReeferContainer, isReeferIso, isFullReefer, isEmptyReefer, emptySplitLabel,   // 4.15-01: 엠티 구분 한 벌 · 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf, shiftSplitOf, isShiftOffPtk,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합) · 4.16: 시프팅 분리 한 벌
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
@@ -2297,12 +2297,41 @@ export function answerOneRaw(query, ctx) {
     if (p.pauseSet && (p.mirCalled || c.mirBox)) {
       _via('workStop');
       const R = p.pauseSet.reason;
-      if (!hasShip || !v) return `알겠어요, ${R}로 쉬는 걸로 들었어요 🐱 다만 어느 배인지 몰라 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 MCAT ${R.replace(' ', '')}")`;
-      if (app === 'cone') return `알겠어요, ${R}로 쉬는 걸로 들었어요 🐱 중단 기록은 검수앱 작업 보고 → 작업 중단에서 남겨 주세요 — 콘앱은 적는 손이 없어요.`;
+      //  4.42-02 (2차 시뮬 6): 멈춤을 분명히 알린 말(사유 낱말·«작업 중단»)의 규칙 답만 강한 답이다(isWeakAnswer). «소리 멈춰»·«스캔 못 해» 처럼 잘못 잡았을 수 있는 말은 종전대로 약한 답.
+      if (p.pauseSet.sure && c._trace && typeof c._trace === 'object') c._trace.pauseSure = true;
+      if (!hasShip || !v) {
+        //  ★ 4.42-02 — 배 이름 없이 미르의 화남(«DJCF·STSE … 75분째 없어요»)에 답한 멈춤 알림은 화난 그 배들 얘기다(pauseTargetsOf — 화남 판정 한 벌). 적는 것은 화면(MirFab)이 같은 판정으로 한다.
+        //    검수사 2026-10-21 13:25 «시간상 작업중인데 작업량이 없어서 미르가 화남 상태 상황을 알려줬더니» — 실입력 «아무래도 강풍대기 인듯 하네».
+        //    적는 손은 떠 있는 미르(MirFab — mirBox)뿐이다 — 그 칸에서만 대상을 고르고, 고른 대상은 trace.pauseTargets 로 화면에 넘긴다(화면은 이것만 적는다 · 감사 중-1·중-2).
+        //    여러 배를 한꺼번에 적는 것은 날씨 사유(강풍·안개·우천 — 부두가 같이 멈춘다)뿐이다. 장비 고장·야드 혼잡·점심·사유 없음은 한 배 일일 수 있어 «… 중 어느 배요?» 로 되묻는다(감사 권고).
+        //    2차 시뮬 1·2·4 — 잘못 잡았을 수 있는 말(sure 아님 — «소리 멈춰»·«잠깐 쉬고 올게»·«YT 대기»)은 대상을 고르지 않는다(한 척이어도) · 글에 영문 배 이름 꼴이 있는데 앱 항차에서 못 찾았으면
+        //    화난 다른 배로 돌리지 않는다(«MCAT 작업중단 …») · 화난 배가 없고 같은 사유로 이미 멈춤이 적힌 배가 있으면 «이미 적혀 있어요».
+        if (c.mirBox && p.pauseSet.sure && c.voyages && typeof c.voyages === 'object') {
+          const _now = c._now || Date.now();
+          const _tok = (String(p.pauseSet.raw || q).toUpperCase().match(/(?<![A-Z])[A-Z]{4}(?![A-Z])/g) || []).filter((w) => !/^(?:STOP|WIND|RAIN|WAIT|REST|YARD|GANG|PCTC|PNCT|LOLO|RORO|XRAY|CFS|TIDE|GATE|BERT|HOLD|DECK)$/.test(w));   // 배 코드 꼴(영문 네 글자)만 — «TOS·GPS·CATOS» 는 배 이름이 아니다(2차 시뮬 재)
+          if (_tok.length) return `${_tok[0]} — 앱 항차 목록에서 그 배를 찾지 못해 적지 못했어요 🐱 배 이름(영문 네 글자)을 확인해서 다시 말씀해 주세요.`;
+          const _tg = pauseTargetsOf(c.voyages, c.heartbeat || null, _now);
+          if (_tg.length) {
+            const _nm = _tg.map((x) => x.vsl || String(x.key).split('_')[0]).join('·');
+            if (_tg.length > 1 && !/^(?:강풍|안개|우천) 대기$/.test(R)) return `알겠어요, ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}멈춘 배가 ${_nm} 중 어느 배요? 🐱 배 이름을 붙여 말씀해 주시면 그 배에 적을게요.`;
+            if (c._trace && typeof c._trace === 'object') c._trace.pauseTargets = _tg.map((x) => x.key);
+            return `⏸ ${_nm} — ${koJosa(R, '으로')} 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`;
+          }
+          const _pz = [];
+          for (const [k0, v0] of Object.entries(c.voyages)) {
+            if (!v0 || !v0.info || !isWorkingNow(v0, _now)) continue;
+            const w0 = workPauseOf(v0, _now);
+            if (w0 && (!p.pauseSet.known || w0.reason === R)) _pz.push({ vsl: v0.info.vsl || String(k0).split('_')[0], w0 });
+          }
+          if (_pz.length) return `알겠어요 🐱 ${_pz.map((x) => `${x.vsl} ${_hm(x.w0.ts)} 중단(사유 ${x.w0.reason || R})`).join(' · ')} — 이미 앱에 적혀 있어요. 작업 신호가 없어도 기다릴게요.`;
+        }
+        return `알겠어요, ${koJosa(R, '으로')} 쉬는 걸로 들었어요 🐱 다만 어느 배인지 몰라 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 MCAT ${R.replace(' ', '')}")`;
+      }
+      if (app === 'cone') return `알겠어요, ${koJosa(R, '으로')} 쉬는 걸로 들었어요 🐱 중단 기록은 검수앱 작업 보고 → 작업 중단에서 남겨 주세요 — 콘앱은 적는 손이 없어요.`;
       const wp0 = workPauseOf(v, c._now || Date.now());
       if (wp0 && (wp0.reason === R || !p.pauseSet.known)) return `알겠어요 🐱 앱에도 ${wp0.equip ? wp0.equip + ' ' : ''}${wp0.ko} ${_hm(wp0.ts)} 중단(사유 ${wp0.reason || R})으로 기록돼 있어요. 누가 왜 쉬냐고 물으면 그 사유를 알려 드릴게요.`;
       return p.pauseSet.known
-        ? `⏸ ${R}로 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`
+        ? `⏸ ${koJosa(R, '으로')} 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`   // 4.42-02: koJosa — «장비 고장으로»(종전 «장비 고장로»)
         : `⏸ 작업이 멈춘 걸로 적을게요 🐱 사유를 말씀 안 하셔서 «쉬는 중»으로 적어요 — 강풍대기·안개·우천처럼 말씀해 주시면 사유를 바꿔 둘게요. 작업 신호가 없어도 기다릴게요.`;
     }
     if (v && /왜|이유|어째서|어때서/.test(q) && /작업|일|양하|선적|하역|쉬|멈|중단/.test(q) && /안\s*해|안\s*하|안\s*돼|안\s*되|멈|쉬|중단|못|없|조용/.test(q) && !/느려|느린|늦|지연/.test(q)) {
@@ -2960,6 +2989,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
   if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
+  if (via === 'workStop' && trace && trace.pauseSure) return false; // 4.42-02 (2차 시뮬 6 — 멈춤을 분명히 알린 말의 답만): 작업 멈춤 알림 — 말 파서가 사유 낱말·«작업 중단» 으로 멈춤이라 확신한(sure) 말의 자료 답이다. «아무래도 … 인듯 하네» 같은 군말이 남았다고 모델로 보내면 «열린 항차 정보가 없어요» 를 지어냈다(검수사 2026-10-21 13:25)
   if (via === 'eta') return false;      // 4.40-01: 끝나는 시각을 물은 말의 끝나는 시각 답(완료 기록·본선현황으로 잰 것) — 사전에 없는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보낸다. 보내면 앱마다 다른 답(검수사 2026-10-20 20:07)
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
@@ -3857,6 +3887,7 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   const _gact = via === 'guideGoto' ? mirGotoActOf(text) : null;
   if (_gact) follow = { line: '', chips: ['이동', '취소'], act: _gact };
   else if (via === 'guideGoto') follow = null;   // 옮길 수 없다는 답(다 끝남·자료에 없음·셀 좌표 없음) 뒤에는 단추를 달지 않는다
+  else if (via === 'workStop') follow = null;   // 4.42-02: «⏸ 강풍 대기로 멈춘 걸로 적을게요» 뒤에 «이 속도면 몇 시에 끝나는지도 볼까요?» 를 붙이지 않는다 — 멈춘 배에 속도·남은 시각 제안은 맞지 않는다(검수사 2026-10-21 13:25 화면)
   //  4.38: 쉬는 틈(바쁘지 않음을 잴 수 있을 때만)에 미뤄 둔 사담이 있으면 그 말을 단추로 먼저 띄운다 — 누르면 그 말 그대로 묻는다(그때 클로드가 답한다).
   if (!_gact && via !== 'defer' && ctx && (ctx.work || ctx.app === 'cone') && !MIR_NEVER_DEFER_RE.test(String(q0 || '')) && !MIR_NEVER_DEFER_RE.test(String(rq || ''))) {   // 위기·안전·몸·마음 말 답 뒤에는 미룬 사담 단추를 붙이지 않는다(마지막 감사 C1 — «죽고 싶어» 뒤 «농담 나눌까요?» · 이어 한 «응» 이 농담으로 갔다)
     try {
@@ -4224,6 +4255,15 @@ export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
  *  · 앱에 입력할 게 없는 배도 화내지 않는다 — «검수 완료»(inspectorDone·보유 모드 전부 dischargeDone/loadingDone) · 모든 호기가 끝 보고 · 앱에 올라온 컨을 완료가 다 채움(재감사).
  *  ⚠ 여기서 보는 완료는 검수원이 앱에서 누른 completed 뿐이다. 터미널 합계는 완료로 세지 않는다(터미널 완료 자동 반영 금지 — 검수사 2026-10-03). */
 export function angryReasons(voyages, heartbeat, now = Date.now()) {
+  return _angryList(voyages, heartbeat, now).map((x) => `${x.vsl} 터미널은 작업 중인데 앱 완료 기록이 실작업 ${x.wmin}분째 없어요`);
+}
+/** ★ 4.42-02 — 미르가 화난 그 배들 { key, vsl } — 이유 글(angryReasons)과 같은 판정 한 벌.
+ *  검수사 2026-10-21 13:25 — 미르가 «DJCF·STSE 터미널은 작업 중인데 앱 완료 기록이 실작업 75분째 없어요» 로 화났을 때 홈 미르 칸에 «아무래도 강풍대기 인듯 하네» 라고 알려 줬는데
+ *  배 이름이 없다고 «어느 배인지 몰라 적지 못했어요» → 모르는 낱말이 남아 모델로 넘어가 «열린 항차 정보가 없어요» 를 답했다. 배 이름 없이 미르의 화남에 답한 멈춤 알림은 그 배들 얘기다. */
+export function pauseTargetsOf(voyages, heartbeat, now = Date.now()) {
+  return _angryList(voyages, heartbeat, now).map((x) => ({ key: x.key, vsl: x.vsl }));
+}
+function _angryList(voyages, heartbeat, now) {
   const r = [];
   if (_collectorSilentMs(heartbeat, now)) return r;
   for (const [vKey, v] of Object.entries(voyages || {})) {
@@ -4246,7 +4286,7 @@ export function angryReasons(voyages, heartbeat, now = Date.now()) {
     let wmin = 0; try { wmin = workMinutesBetween(last, now, pierOf(v)); } catch (e) { wmin = Math.round((now - last) / MIN); }
     if (!(any && wmin * MIN > MOOD_NO_DONE_MS)) continue;
     if (_appAllDone(v, vKey)) continue;   // 4.06 감사: 앱에 올라온 컨을 완료가 다 채웠으면 입력할 게 없다 — 센 값은 비싸서(항차 펼치기) 60분이 넘었을 때만 본다
-    r.push(`${vsl} 터미널은 작업 중인데 앱 완료 기록이 실작업 ${wmin}분째 없어요`);
+    r.push({ key: vKey, vsl, wmin });
   }
   return r;
 }
@@ -4299,6 +4339,19 @@ function _moodEmit() { for (const f of _moodSubs) { try { f(); } catch (e) { con
 export function noteMirAsk(now = Date.now()) { _moodSt.lastAskAt = now; _moodEmit(); }
 export function noteMirOpen(now = Date.now()) { _moodSt.openedAt = now; _moodEmit(); }
 /** kind: 'workPick' | 'workDone' | 'missed' */
+/** ★ 4.42-02 — 기쁨(작업 완료) 이유 한 줄 — **어느 배**가 몇 대. 검수사 2026-10-21 13:25 «미르가 1대 처리 되었다고 알리는데 오히려 그한대가 어느 선박인지 안알려줌».
+ *  prev·cur = 항차키 → 완료 수. 이미 보던 항차의 수가 늘었을 때만 센다(새 항차 첫 등장·켤 때 자료 도착은 완료가 아니다 — 3.56 감사). 늘어난 것이 없으면 ''. */
+export function mirDoneUpWhy(prev, cur, voyages) {
+  if (!prev || !cur) return '';
+  const ups = [];
+  for (const [k, n] of Object.entries(cur)) {
+    if (!(k in prev) || !(n > prev[k])) continue;
+    const v = voyages && voyages[k];
+    const vsl = String((v && v.info && (v.info.vsl || v.info.vslFull)) || String(k).split('_')[0] || '').trim();
+    ups.push(`${vsl ? vsl + ' ' : ''}${n - prev[k]}대`);
+  }
+  return ups.length ? `${ups.join(' · ')} 완료했어요!` : '';
+}
 export function mirMoodEvent(kind, why = '', now = Date.now()) { _moodSt.lastEvent = { kind, why, at: now }; if (kind === 'workPick' || kind === 'workDone') _moodSt.lastAskAt = now; _moodEmit(); }
 export function subscribeMirMood(f) { _moodSubs.add(f); return () => _moodSubs.delete(f); }
 export function mirMoodState() { return { ..._moodSt }; }

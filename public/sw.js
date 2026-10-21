@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.42-01';
-const NOTE = '4.42-01 자동 가이드에서 23번 베이와 (24)25번 베이를 따로 고를 수 있습니다. 실 정책을 지정한 배는 선적 화면에서 실 정책 창이 다시 뜨지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.42-02';
+const NOTE = '4.42-02 미르가 화났을 때 강풍대기 같은 사유를 말하면 화난 그 배들에 작업 중단으로 적습니다. 미르가 완료 대수를 말할 때 배 이름도 붙입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

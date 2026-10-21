@@ -66,7 +66,7 @@ export { mirBusyNow, mirDeferredPending, mirIsDeferred, _mirDeferReset, MIR_DEFE
 export { flattenVoyages, isChatCandidate, expectedWorkTimeOf } from './mir.js';   // 4.39-01: «작업 분석» 연막검사가 화면과 같은 병합 행·같은 예상 시간 계산으로 잰다
 export { mirThreadResolve, mirThreadCommit, mirThreadAlive, _mirThreadReset } from './mir.js';   // 3.68 / 2.57 [mirThread]: 답 뒤 한 마디·응/아니/끝맺음 — 콘앱도 같은 대화 층
 export { shipPickChips, shipPickCodes, isShipAskText, pickShipCtx } from './mir.js';   // 4.35-02: 배 이름을 못 떠올릴 때 일하는 배·곧 시작할 배 단추 · 4.37-01: pickShipCtx(엔진이 이미 부르는 배 고르기 — 연막검사가 같은 판정을 본다)
-export { answerYard, setMirYard, readMirYard, YARD_SPEAK, workPauseOf, anxiousReasons, angryReasons, isUpcomingWork } from './mir.js';   // 3.69-01: 중단 보고 한 벌(연막·콘앱)   // 3.69 / 2.58 [mirYard]: 야드 상황 — 콘앱은 mirAsk 가 yard_status 를 GET 해 ctx.yard 로 넣는다
+export { answerYard, setMirYard, readMirYard, YARD_SPEAK, workPauseOf, anxiousReasons, angryReasons, isUpcomingWork, pauseTargetsOf, mirDoneUpWhy } from './mir.js';   // 4.42-02: pauseTargetsOf·mirDoneUpWhy — 화난 배들에 멈춤 알림 · 기쁨 이유에 배 이름(연막검사가 같은 함수를 잰다)   // 3.69-01: 중단 보고 한 벌(연막·콘앱)   // 3.69 / 2.58 [mirYard]: 야드 상황 — 콘앱은 mirAsk 가 yard_status 를 GET 해 ctx.yard 로 넣는다
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };

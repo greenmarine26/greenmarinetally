@@ -18,7 +18,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
-import { answerOneRaw, workPauseOf } from '../mir.js';
+import { answerOneRaw, workPauseOf, mirDoneUpWhy } from '../mir.js';   // 4.42-02: mirDoneUpWhy — 기쁨 이유에 배 이름
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
 import { mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디 더 · «응/아니/됐어» 는 직전 답에 이어서
@@ -86,7 +86,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     const cur = {};
     for (const [k, v] of Object.entries(voyages || {})) { let n = 0; for (const m of ['discharge', 'loading']) { const c = v && v[m] && v[m].completed; if (c && typeof c === 'object') n += Object.keys(c).length; } cur[k] = n; }
     const prev = doneRef.current;
-    if (prev) { let up = 0; for (const [k, n] of Object.entries(cur)) if (k in prev && n > prev[k]) up += n - prev[k]; if (up > 0) mirMoodEvent('workDone', `${up}대 완료했어요!`); }
+    if (prev) { const why = mirDoneUpWhy(prev, cur, voyages); if (why) mirMoodEvent('workDone', why); }   // 4.42-02: «DJCF 1대 완료했어요!» — 어느 배인지(검수사 2026-10-21 «그한대가 어느 선박인지 안알려줌»)
     if (prev || Object.keys(cur).length) doneRef.current = cur;   // 자료가 아직 비어 있으면 기준을 잡지 않는다
   }, [voyages]);
 
@@ -222,7 +222,15 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         try { fo = mirThreadCommit(t, r && r.text != null ? r.text : null, (r && r.via === 'rules') ? ((r.trace && r.trace.via) || '') : ((r && r.via) || ''), ctx); } catch (e) { console.warn('[미르 대화] 기록 실패:', e); fo = null; }
       } catch (e) { console.warn('[미르] 답 실패:', e); a = null; }
       const vk = useLive ? lv.voyageKey : (sc && sc.key) || null;
-      try { applySideEffects(parseNaturalQuery(t), vk, useLive ? lv.voyage : (sc && sc.v), t); } catch (e) { /* */ }
+      const _pq = parseNaturalQuery(t);
+      try { applySideEffects(_pq, vk, useLive ? lv.voyage : (sc && sc.v), t); } catch (e) { /* */ }
+      //  ★ 4.42-02 — 배 이름 없이 미르의 화남에 «아무래도 강풍대기 인듯 하네» 처럼 답했으면 화난 그 배들에 적는다(엔진이 pauseTargetsOf 로 고른 배).
+      //    적는 대상은 엔진이 그 갈래로 답했을 때 넘긴 trace.pauseTargets 뿐이다 — 엔진이 다른 갈래로 답했으면(기능 설명·되묻기) 적지 않는다(감사 중-1).
+      const _ptg = (r && r.via === 'rules' && r.trace && r.trace.via === 'workStop' && Array.isArray(r.trace.pauseTargets)) ? r.trace.pauseTargets : null;
+      if (!vk && _pq && _pq.pauseSet && _ptg) {
+        try { for (const key of _ptg) applySideEffects({ pauseSet: _pq.pauseSet }, key, voyages && voyages[key], t); }
+        catch (e) { console.warn('[미르] 화난 배들에 중단 기록 실패:', e); }
+      }
       if (!a && dq) a = '';   // 4.22-04: 엔진 답이 없어도 카드가 답한다 — «못 배웠어요»·무응답 신고를 하지 않는다(통합검색 화면 _mirDontKnow 의 !dmgQ 와 같은 뜻)
       if (!a && !dq) {
         a = '그건 아직 못 배웠어요 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.';
