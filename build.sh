@@ -824,6 +824,8 @@ node tools/smoke_conebayfit.cjs || { echo "✗ 콘앱 베이뷰 연막검사 실
   node tools/smoke_conetwin.cjs || { echo "✗ 콘 트윈 연막검사 실패 — 배포 금지"; exit 1; }
   #  ConeOne 2.70-03 (TallyOne 4.40-01): 콘앱 실시간 화면 — 실시간 수집이 호기를 적어 넣은 터미널 완료도 그 호기로 그린다(검수사 2026-10-20 «2호기 4호기가 보여야 하는데 한호기 밖에»). 소스에서 ctCompute 를 꺼내 ATPR 2646E·DJCT 0226E GET 사본으로.
   node tools/smoke_conelive27003.cjs || { echo "✗ 콘앱 실시간 화면(수집기 호기) 연막검사 실패 — 배포 금지"; exit 1; }
+  #  ConeOne 2.70-04 (TallyOne 4.42-01): 콘앱 선종은 배마다 한 번 — 보관소 coneShipTypes/{배 코드} · 모든 폰 같이 · 바꾸기 전까지 다시 묻지 않는다(검수사 2026-10-21 13:05).
+  node tools/smoke_conetype27004.cjs || { echo "✗ 콘앱 선종(배마다 한 번) 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.5-01: 작업 속도 페이스 — 몰아 입력에 속지 않는가(NSDC 2608N 선적 실완료 114대)
 SMOKE_PC=$(mktemp /dev/shm/hometmp/_smokepace_XXXXXX.cjs)
 if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs \

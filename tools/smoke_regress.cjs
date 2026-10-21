@@ -2819,6 +2819,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await require('./regress_r44_mirgoto.cjs')({ ROOT, TMP, ok, head, fx, stub });
   //  4.42 — 자동 가이드 «23번 / (24)25번» 나눠 고르기(베이 선택 칸 · 작업 중 장 칩 줄 → 그 베이 컨부터 · 다시 누르면 풂 · 사전 없는 배는 단추 없음). 본문은 tools/regress_r45_baysplit.cjs(단독 실행도 된다).
   await require('./regress_r45_baysplit.cjs')({ ROOT, TMP, ok, head, fx, stub });
+  //  4.42-01 — 선박 실 정책을 지정한 배는 선적 화면을 열어도 «선박 실 정책» 창이 다시 뜨지 않는다(정책 목록을 받은 뒤에만 판단) · 처음 오는 배만 묻는다. 본문은 tools/regress_r46_sealpolicy.cjs(단독 실행도 된다).
+  await require('./regress_r46_sealpolicy.cjs')({ ROOT, TMP, ok, head, fx, stub });
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }

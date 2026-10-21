@@ -147,6 +147,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [diagDismissed, setDiagDismissed] = useState(false);
   // M3.5.5: 선박 엠티 실 정책
   const [extraPolicies, setExtraPolicies] = useState({});
+  const [policiesLoaded, setPoliciesLoaded] = useState(false);   // 4.42-01: 정책 목록을 받기 전에는 «정책 없는 배» 라고 판단하지 않는다
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [showSheetPhoto, setShowSheetPhoto] = useState(false);   // 3.58: 기록지 사진 넣기
   const [policyAsked, setPolicyAsked] = useState(false);
@@ -219,7 +220,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
-    const unsub = fbSubscribeShipPolicies(db, (data) => setExtraPolicies(data || {}));
+    const unsub = fbSubscribeShipPolicies(db, (data) => { setExtraPolicies(data || {}); setPoliciesLoaded(true); });
     return () => { try { unsub && unsub(); } catch (e) { console.warn('[선박정책] 구독 해제 실패', e); } };  // V9.57: 조용한 실패 금지
   }, []);
 
@@ -1344,8 +1345,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   - 선박별 키 (IMO 또는 vsl)로 구분 — 다른 선박 작업하면 그건 또 뜰 수 있음
   // M6.45: Firebase 백업 추가 — localStorage 작동 안 하는 환경에서도 적용
   //   다른 폰/브라우저에서 같은 검수원이 접속해도 1일 1회 보장
+  //  ★ 4.42-01 (검수사 2026-10-21 13:00 «선박마다 실 정책을 지정하면 그만인데 왜 매번 띄우는지 모르겠습니다» · 13:01 «한번 지정하면 사용자가 바꾸기 전까지는
+  //    1년이든 2년이든 다시 띄우면 안됩니다»): 정책 목록 구독(위)과 이 효과가 화면을 여는 같은 커밋에서 돌아, 여기서는 목록이 들기 전의 빈 목록으로
+  //    «정책 없음» 을 정하고 아래 보관소 확인을 기다린 뒤 창을 띄웠다 — 목록이 곧 들어와도 이미 시작한 것은 멈추지 않았다.
+  //    실측(보관소 2026-10-21) — DJCT(09-23 등록 → 10-20 최원형) · KKLC(09-14 → 10-10 이인철) · MCSN(08-23 → 09-28) 정책이 있는데 떴다.
+  //    ⇒ 목록을 받은 뒤에만 판단한다. 목록을 못 받으면(통신 끊김) 묻지 않는다. 회귀 R46.
   useEffect(() => {
     if (policyAsked) return;
+    if (!policiesLoaded) return;
+    if (mirPlan) return;   // 미르 플랜 덮개(두 번째 항차 화면)는 이 창을 그리지 않는다 — 여기서 묻지 않아야 그날 «물었음» 이 창 없이 남지 않는다(감사 권고)
     if (!voyage?.info?.vsl) return;
     if (shipPolicy) return;  // 이미 매칭됨 — 1.83: «일반»도 저장되므로 등록된 배는 여기서 걸러진다(신규만 묻는다)
     if (mode !== 'loading') return;   // 1.83: 엠티 실은 선적 작업(M8.08) — 양하 화면에서 묻지 않는다
@@ -1388,7 +1396,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         }
       } catch (e) { console.warn('[정책질문 기록] Firebase 백업 저장 실패(로컬 기록은 유지)', e); }  // V9.57: 조용한 실패 금지
     })();
-  }, [voyage, shipPolicy, policyAsked, containers, voyageKey, inspector, mode]);
+  }, [voyage, shipPolicy, policyAsked, policiesLoaded, containers, voyageKey, inspector, mode, mirPlan]);
 
   // M3.5.4: 자동 진단 (containers/recMap/xrayMap 변경 시 재계산)
   const diagAlerts = useMemo(() => {

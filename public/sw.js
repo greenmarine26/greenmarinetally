@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.42';
-const NOTE = '4.42 자동 가이드에서 23번 베이와 (24)25번 베이를 따로 고를 수 있습니다. 베이 선택 칸과 작업 중 장 칩 줄에 단추가 있고, 고른 베이 컨이 한 대씩 먼저 나옵니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.42-01';
+const NOTE = '4.42-01 자동 가이드에서 23번 베이와 (24)25번 베이를 따로 고를 수 있습니다. 실 정책을 지정한 배는 선적 화면에서 실 정책 창이 다시 뜨지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

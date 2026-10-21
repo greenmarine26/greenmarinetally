@@ -39,7 +39,8 @@ export async function update(r, patch) {
   if (global.__memlag) await new Promise((ok) => setTimeout(ok, global.__memlag));   // 4.27: 서버 확인 늦음 흉내(검사가 켤 때만)
 }
 export async function remove(r) { LOG().push({ op: 'remove', path: r.path }); setAt(r.path, null); }
-export function onValue(r, cb) { try { cb(snap(getAt(r.path))); } catch (e) { /* 검사 밖 */ } return () => {}; }
+export function onValue(r, cb) { if (typeof global !== 'undefined' && global.__memNoValue && global.__memNoValue(r.path)) return () => {};   // 4.42-01: 구독 값이 안 오는(통신 끊김) 흉내 — 검사가 켤 때만
+  try { cb(snap(getAt(r.path))); } catch (e) { /* 검사 밖 */ } return () => {}; }
 export function off() {}
 export function push(r) { const k = 'k' + Math.random().toString(36).slice(2, 8); return { path: [r.path, k].join('/'), key: k }; }
 export function goOffline() {}
