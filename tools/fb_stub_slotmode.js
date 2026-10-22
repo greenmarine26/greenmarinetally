@@ -17,6 +17,7 @@ export const fbSetXraySeal = async () => true;
 export const fbSetEmptySeal = async () => true;   // 3.71: GuidedWorkPanel → EsealVoiceBar 가 부른다
 export const fbAddWorkReport = async () => true;
 export const fbSetActualPosition = async () => true;
+export const fbPeekCompleted = async () => false;
 export const fbBatchMoveToStorage = async () => true;
 export const fbUnassignContainer = async () => true;
 export const fbCancelComplete = async () => true;

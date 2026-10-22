@@ -112,6 +112,7 @@ export const fbSaveShipStructure = async () => true;
 export const fbSaveXrayList = async () => true;
 export const fbSeedFoodSpotsOnce = async () => true;
 export const fbSetActualPosition = async () => true;
+export const fbPeekCompleted = async () => false;
 export const fbSetBroadcast = async () => true;
 export const fbSetDevAccess = async () => true;
 export const fbSetEmptySeal = async () => true;

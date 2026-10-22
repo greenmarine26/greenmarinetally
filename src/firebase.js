@@ -1038,6 +1038,11 @@ async function _peekVal(r, ms = 1500) {
     return got ? got.v : null;
   } catch (e) { return null; } finally { if (t) clearTimeout(t); }
 }
+//  4.42-04: 그 컨이 «지금 DB 에서» 이미 완료됐는가 — 양하 자리 기록 직전(칸 주인이 다른 기기에서 먼저 완료됐으면 한 칸 두 대가 되지 않게). 못 읽으면(1.5초·통신) false — 종전대로 진행한다.
+export async function fbPeekCompleted(voyageKey, mode, cn) {
+  const v = await _peekVal(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
+  return !!(v && v.at);
+}
 //  3.60-09: 쓰기 층이 사람에게 한 줄 알릴 때(App 의 띠 — 조회만 안내와 같은 자리). 브라우저 밖(연막·노드)에서는 조용히 넘어간다.
 function _writeNotice(message) {
   try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message } })); } catch (x) { /* 알릴 화면 없음 */ }

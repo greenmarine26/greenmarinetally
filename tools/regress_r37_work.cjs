@@ -265,8 +265,11 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     await S.refresh();
     await S.until(() => S.cardCns().length > 0);
     const next = S.cardCns();
-    ok(`③-4 엇갈림(뒤 칸에 카드 앞 컨 ${front}) → 물음 «${title}» · 회색 «${grey ? S.txt(grey) : '-'}» · [이 한 대만] 완료 ${add.join(',')} · 다음 카드 맨 앞 ${next[0]}(남은 ${back})`,
-      title === `${back.slice(-4)} 도 왔습니까` && !!grey && S.txt(grey) === `${back.slice(-4)} 도 확인` && add.length === 1 && add[0] === front && next[0] === back && !S.errs.length,
+    //  4.42-04: 앞 컨이 내린 뒤 칸(뒤 컨의 EDI 칸)을 실제 내린 자리로 적었다 — 그러면 자동 맞바꿈이 뒤 컨을 비운 앞 칸으로 보낸다(규칙의 한 쪽 끝을 직접 잰다).
+    const _m = S.mem().discharge || {}, _fr = (_m.records || {})[front] || {}, _be = (_m.ediContainers || {})[back] || {};
+    const frontLands = !!_be.bay && String(parseInt(_fr.bay_actual, 10)) === String(parseInt(_be.bay, 10)) && String(_fr.row_actual) === String(_be.row) && String(_fr.tier_actual) === String(_be.tier);
+    ok(`③-4 엇갈림(뒤 칸에 카드 앞 컨 ${front}) → 물음 «${title}» · 회색 «${grey ? S.txt(grey) : '-'}» · [이 한 대만] 완료 ${add.join(',')} · 다음 카드 맨 앞 ${next[0]}(남은 ${back} 은 비운 앞 칸으로 맞바꿈)`,
+      title === `${back.slice(-4)} 도 왔습니까` && !!grey && S.txt(grey) === `${back.slice(-4)} 도 확인` && add.length === 1 && add[0] === front && !doneCns(S).includes(back) && frontLands && !S.errs.length,   // 4.42-04: 양하는 앞 컨이 뒤 칸에 내리면 뒤 컨이 비운 앞 칸으로 자동 맞바꿈 — 맨 앞 카드는 그 칸 순서를 따른다(남은 뒤 컨은 완료 안 됨·큐에 남음)
       JSON.stringify({ title, add, next: next.slice(0, 2), errs: S.errs.slice(0, 3) }));
     S.close();
   }

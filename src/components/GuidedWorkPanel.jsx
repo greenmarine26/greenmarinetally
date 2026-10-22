@@ -13,7 +13,7 @@ import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «�
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
-import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
+import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbSetActualPosition, fbPeekCompleted, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LABEL, ALL_EQUIP_KEY } from '../workOrder.js';   // 4.09: 양하 순서 조건 한 벌(호기별 기억)
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
@@ -24,7 +24,7 @@ import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_N
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
 import { activeHeldOf, HOLD_REASONS, bayPageSplitOf } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
-import { loadingSlotOf, guideTwinOf } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
+import { loadingSlotOf, guideTwinOf, effectivePos } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 기존 자동 한 화면 틀(맨 위 한 줄 · 위 칸 카드·확인 · 아래 칸 변경 단추)   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -1415,6 +1415,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // 수정 1대 적용: 선적이면 실제 컨을 예측 슬롯 위치로 재배정(그 자리 예측 컨은 자동 미배정+완료취소 — 이중 수정 방지) 후 완료
   //   1.54: 자리 배정이 안 되면 **완료를 찍지 않는다.** 돌려주는 값이 false 면 부르는 쪽이 멈춘다.
+  //  4.42-04 — 양하: 카드 칸(slot)에 다른 컨(actual)이 내렸으면 그 칸을 실제 내린 자리로 기록한다(선적 _markLoadedPos 와 같은 뜻).
+  //    기록하면 3.13 자동 맞교환(applyAutoSwap — 양하·선적 공통)이 칸 주인이던 EDI 컨을 «온 컨이 비운 EDI 칸»으로 옮긴다(한 대 들어오면 한 대 나간다).
+  //    실패해도 완료는 막지 않는다 — 자리 기록은 보조다. 조회만(viewOnly)은 위로 올려 보낸다.
+  const markDischargeSlot = async (actual, slot) => {
+    if (mode !== 'discharge' || !actual || !slot || actual.cn === slot.cn || !slot.bay || !slot.row || !slot.tier) return;
+    if (slot._comp || await fbPeekCompleted(voyageKey, mode, slot.cn)) { console.info('[4.42-04] 칸 주인이 이미 완료 — 자리를 새로 적지 않습니다(한 칸 두 대 방지)', slot.cn, actual.cn); return; }
+    const _ep = effectivePos(actual);
+    if (String(parseInt(_ep.bay, 10)) === String(parseInt(slot.bay, 10)) && String(_ep.row) === String(slot.row) && String(_ep.tier) === String(slot.tier)) return;   // 이미 그 칸이다
+    try { await fbSetActualPosition(voyageKey, mode, actual.cn, String(parseInt(slot.bay, 10)), String(slot.row), String(slot.tier), inspector); }
+    catch (e) {
+      if (e && e.viewOnly) throw e;
+      console.warn('[4.42-04] 양하 실제 내린 자리 기록 실패 — 완료는 계속합니다', actual.cn, `${slot.bay}-${slot.row}-${slot.tier}`, e);
+    }
+  };
+
   const applyFixOne = async (actual, slot, opts = null) => {   // 4.25-02 opts.swap === false — 맞바꿈 안 함(트윈 한 대만에서 풀·엠티가 섞인 칸)
     if (mode === 'loading') {
       //  ★ 2.80-01 (검수사 실사용 보고 2026-08-28 21:0x) — **밀려난 계획 컨은 창고가 아니라 «온 컨의 옛 자리»로 간다.**
@@ -1436,7 +1451,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (!r) return false;
     }
     if (!canWorkNow()) { alert(workGateText('완료')); return false; }   // 3.51: 조회만은 보기만
-    await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', equip);   // 1.55: 갱(호기)
+    const _cr = await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', equip);
+    if (_cr && _cr.ok !== false) await markDischargeSlot(actual, slot);   // 4.42-04: 완료가 찍힌 뒤에만 자리를 적는다(이미 남이 완료했거나 실패했으면 유령 자리를 남기지 않는다)   // 1.55: 갱(호기)
     return true;
   };
 
@@ -1689,6 +1705,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       }
       await fbCompleteContainersAtomic(voyageKey, mode,
         [frontCn, backCn], inspector, equip);   // 1.55: 갱(호기)
+      if (pf) await markDischargeSlot(pf, card.main);   // 4.42-04: 완료가 찍힌 뒤에 적는다
+      if (pb) await markDischargeSlot(pb, card.twin);
     } catch (e) {
       if (e && e.viewOnly) { alert(e.message); setBusy(false); return; }   // 3.51: 조회만은 보기만
       alert(`수정 적용 중 오류 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n(${e?.message || e})`);
