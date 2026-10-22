@@ -36,12 +36,15 @@
 
 | 파일(이름 고정, 매번 덮어쓴다) | 내용 | bat이 하는 일 |
 |---|---|---|
-| `C:\TALLYTEST\_deploy_payload.tgz` | 빌드 산출물 묶음(§3-1) | 없으면 `[ERROR] payload 없음` |
+| `C:\TALLYTEST\_deploy_payload.tgz` | 빌드 산출물 묶음(§3-1) | 없으면 `[ERROR] payload missing` |
 | `C:\TALLYTEST\_deploy_msg.txt` | 커밋 메시지 — **UTF-8·한글**(bat은 `chcp 65001` + `commit -F`, 4.43 한글 커밋 실측) | 없으면 `[ERROR]` |
-| `C:\TALLYTEST\_deploy_base.txt` | `git rev-parse origin/main` 한 줄 | 없으면 `[ABORT] _deploy_base.txt 없음`, 지금 origin과 다르면 `[ABORT] 빌드 기준이 지금 origin 과 다르다` — 둘 다 reset 전에 멈춘다(fail closed). push 뒤 지운다 |
+| `C:\TALLYTEST\_deploy_base.txt` | `git rev-parse origin/main` 한 줄 | 없으면 `[ABORT] _deploy_base.txt missing`, 지금 origin과 다르면 `[ABORT] build base differs from current origin` — 둘 다 reset 전에 멈춘다(fail closed). push 뒤 지운다 |
 | `C:\TALLYTEST\_deploy_del.txt` (선택) | 지울 경로, 줄마다 `assets\index-xxx.js` 꼴, CRLF | `if exist` → `del /q`, 끝나면 파일 삭제 |
 | 트리거 `_deploy.bat` → `_deploy_run.bat` 복사 | — | 작업 스케줄러 `TallyDeployWatcher`(1분)가 vbs로 실행, 끝나면 `_deploy_last.bat`으로 옮겨 두 번 안 돌게 한다 |
 | 결과 `C:\TALLYTEST\_deploy_log.txt` | 매 실행 덮어쓴다, CP949+UTF-16 혼재 | `tr -d '\000' < 로그 \| grep -a` 로 읽는다. `---RESULT---` 아래 `git log -2` |
+| bat 자체 출력 `C:\TALLYTEST\_deploy_out_last.txt` | 워처가 bat의 stdout·stderr를 담는다 | **정상이면 0바이트.** 한 줄이라도 있으면 bat이 깨진 것이다 — 배포 후 확인(§4)에서 같이 본다 |
+
+`_deploy.bat`은 **ASCII 전용**이다(주석·로그 문구까지, 규범 §4-8). `chcp 65001` 뒤의 cmd는 한글이 든 줄의 꼬리를 새 명령으로 다시 읽는다 — 2026-10-22 15:00 실행이 한글 주석 꼬리에서 `'면' is not recognized`·tar 사용법을 찍었고, 꼬리가 `goto :end`에 걸리면 push 없이 조용히 끝난다. 그래서 16:50에 주석·로그 문구만 ASCII로 바꿨다(명령 줄은 한 바이트도 안 바꿈, 백업 `_claude\backup\_deploy.bat.20261022_1540_korean`). 커밋 메시지 한글은 `_deploy_msg.txt`에 있어 영향 없다. bat을 고칠 때 한글을 다시 넣지 않는다.
 
 bat 순서 — `index.lock` 제거 → `fetch origin` → 기준 대조 → `reset --hard origin/main` → `tar -xzf payload` → del.txt → `add -A` → `commit -F msg` → `push origin main` → `del base` → `---RESULT---`. payload·msg는 **지우지 않는다**(끝나면 내가 치운다). 같은 채널(`_deploy_run.bat`)을 수집기 재시작·`_gbridge`도 쓴다 — 넣은 뒤 1분 안에 실행됐는지 로그로 확인하고, 사이에 딴 일을 하지 않는다.
 
@@ -91,7 +94,7 @@ for f in $(curl -s "$B/index.html?cb=$(date +%s)" | grep -oE 'assets/[A-Za-z0-9_
 curl -s "$B/<새 번들>" | grep -c "<이번 판 핵심 문자열>"                                    # 라이브 번들 되읽기
 curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/runs?per_page=1"  # 결론 success
 ```
-1. 라이브 `sw.js?cb=` 버전 · `index.html`이 부르는 **js·css 파일마다** HTTP 200(sw.js만 보면 CSS 404를 못 잡는다) · 옛 번들 404 · 라이브 번들에서 새 문자열 되읽기 · `git ls-tree origin/main`/`git show FETCH_HEAD --stat --name-only`로 payload 파일(한글 이름 포함)이 실제로 들어갔는지. Pages 반영은 푸시 뒤 2~3분. «새로고침 해보세요»는 검증이 아니다.
+1. 라이브 `sw.js?cb=` 버전 · `index.html`이 부르는 **js·css 파일마다** HTTP 200(sw.js만 보면 CSS 404를 못 잡는다) · 옛 번들 404 · 라이브 번들에서 새 문자열 되읽기 · `git ls-tree origin/main`/`git show FETCH_HEAD --stat --name-only`로 payload 파일(한글 이름 포함)이 실제로 들어갔는지. Pages 반영은 푸시 뒤 2~3분. `C:\TALLYTEST\_deploy_out_last.txt`가 **0바이트**인지(한 줄이라도 있으면 bat이 깨진 것 — 2026-10-22 한글 꼬리 사고). «새로고침 해보세요»는 검증이 아니다.
 2. Actions — 결론 `success`. **10분 넘게 queued**면 폴링만 하지 말고 githubstatus(`https://www.githubstatus.com/api/v2/status.json`)를 보고 검수사에게 «Actions 화면에서 재실행/승인 클릭»을 청한다(시작 안 된 런을 푸는 클릭이다 — 2026-08-27 침묵으로 1시간을 버렸다). **실패한 deploy 잡의 Re-run은 금지** — github-pages 아티팩트가 둘이 되어 «Multiple artifacts named "github-pages"»로 즉사한다(#1085). 새 커밋 또는 Actions 탭 → Run workflow(workflow_dispatch)로 새 런을 만든다. actions/deploy-pages 타임아웃은 상한 10분(설정 30분은 10분으로 잘린다) — 백엔드가 10분 넘게 걸리는 동안은 기다리는 것이 유일한 해법이다.
 3. `python C:\TALLYTEST\_claude\healthcheck.py` — **윈도 호스트에서**(리눅스 VM에서 돌리면 `C:\` 경로를 못 봐 «배포 채널 없음» 4건이 헛경보). ⚠가 뜨면 그것부터.
 4. 라이브 화면은 **«클로드 전용» 크롬 프로필**로만 연다(`switch_browser`로 이름 확인). 로그인 이름 칸에 «클로드»(암행 테스터, 비밀번호 없음)를 쳐서 들어가 검수사 눈으로 눌러 본다. 수집기 크롬(9222, tallyman-chrome)에는 어떤 자동화도 붙지 않는다.
@@ -153,5 +156,6 @@ curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/run
 ---
 
 ## 개정 이력
+- 2026-10-22 v2.0-01 — `_deploy.bat` ASCII화(한글 주석·로그 문구 → 영문, 명령 줄 불변)에 맞춰 §3 표의 bat 메시지 문구와 `_deploy_out_last.txt`(정상이면 0바이트) 확인 항목을 적었다. 규범 §4-8(bat은 주석까지 ASCII) 적용.
 - 2026-10-22 v2.0 — 배포 절차 정본을 이 파일 하나로 통일(규범 v2.0 표준화). 두 사본(저장소 25KB 2026-07-26 체계 · G드라이브 56KB 2026-09-25)과 `tally-deploy` 스킬을 대조해 갈린 23곳을 정리 — 채널 넷(`_deploy_base.txt` 포함)·한 벌 절차·자가 점검 10항·배포 후 확인·폰 알림 한 번·폐기 목록. 옛 판의 사고 기록(2.38 tar 실패·2.63-01 del.txt·2.64 슬래시·CP949·1GB·#1085·2026-08-27 queued·2026-09-04 잠금)은 §3·§4·§7에 압축해 남겼다.
 - 2026-09-25 — 3.60-18 실측 정정(30분 표기·버전 규칙·github.io curl). 2026-09-04 §0-G 잠금 장치. 2026-08-27 §0-F del.txt. 2026-08-25 §0-E 3대조. 2026-08-07 §0-D Actions. 2026-07-26 코워크 워처 채널 신설.
