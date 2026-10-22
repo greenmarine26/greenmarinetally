@@ -19,7 +19,7 @@ import {
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
   getAdminNames, isTrustedDeviceFor, isOwnerName, OWNER_NAME,
   verifyPasswordFor, needsPasswordSetup, hasSessionPassFor, setSessionPassFor,
-  isLockedName, lockEntry, lockPath, ownerCanUnlock,
+  isLockedName, isGeneralLockName, lockEntry, lockPath, ownerCanUnlock,
   hasRecoveryCode, verifyRecoveryCode,   // 2.53: 복구 코드 — 소유자가 잠겼을 때의 유일한 길
   recoveryMadeAtText,                   // 2.77: 복구 코드를 언제 만든 것인지 알려 준다
 } from '../adminGuard.js';
@@ -121,6 +121,10 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     if (isStaffOff(name) && !isOwnerName(name)) { onSelect(name); return; }   // App 이 로그인 대신 자물쇠 화면을 띄운다
     if (!isLockedName(guard, name)) { commitSelect(name); return; }  // 일반 검수원은 그대로
     if (hasSessionPassFor(name)) { commitSelect(name); return; }     // 이 탭에서 이미 비번 통과
+    //  4.43: 검수사(소유자) 신뢰 기기에서는 다른 사람 이름이 비밀번호 없이 열린다 — 검수사 2026-10-22 «저는 비번 없이 사용자들 것으로 접속할수 있게 해주세여».
+    //    그 사람의 비밀번호는 건드리지 않는다(설정을 강요하지도, 신뢰 기기로 등록하지도 않는다).
+    //    일반 검수원에게만 — 수석검수·부수석·관리자는 종전대로(검수사 «수석검수사는 대상이 아니고 일반 검수사들만 대상입니다»).
+    if (isGeneralLockName(guard, name) && isTrustedDeviceFor(guard, OWNER_NAME)) { commitSelect(name); return; }
     setGateName(name);
     // 비번 미설정 = 아직 한 번도 안 정한 사람 → 본인이 직접 정한다
     if (needsPasswordSetup(guard, name)) { setGateMode('setup'); return; }

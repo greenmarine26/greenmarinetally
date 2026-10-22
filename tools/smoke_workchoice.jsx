@@ -8,11 +8,14 @@ import { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, setActiv
 import { getEquipNumber, setEquipNumber } from '../src/utils.js';
 import { inspectorStatus } from '../src/inspectorStatus.js';
 import { rememberMe } from '../src/meToday.js';
+import { getAdminDeviceId } from '../src/adminGuard.js';
 import FX from './fixtures/workchoice_live.json';
 
 window.__calls = [];
 setServerRoles(FX.staffList);
 try { localStorage.clear(); } catch (e) { /* */ }
+//  4.43: 일반 검수원도 비밀번호 잠금 — 이 검사는 «검수사(소유자) 신뢰 기기» 에서 연다(그 기기에서는 일반 검수원이 비번 없이 열린다).
+window.__guardStub = { admins: { 김성일: { pwHash: 'x', salt: 'y', devices: { [getAdminDeviceId()]: { label: 'test', addedAt: 1 } } } } };
 window.__wc = { isFreeRoamer, readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, myWorkVoyageNow, canWorkNow, workGateText, isViewOnlyNow, visibleVoyagesOf, canSeeVoyage, equipGateText, isAdminUser, isAdminNow, isNotWorkerNow, getEquipNumber, setEquipNumber, inspectorStatus, rememberMe, voyages: FX.voyages };
 
 //  로그인 화면을 이름·choiceFor 바꿔 가며 다시 그릴 수 있게 둔다

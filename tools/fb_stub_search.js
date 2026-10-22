@@ -61,7 +61,7 @@ export const fbDeleteWorkReport = async () => true;
 export const fbFetchVoyageBoxCounts = async () => ({});   // 4.08-01: 선택 화면 «N대» — 빈 결과(항차마다 못 셌음)로 둔다
 export const fbFoodListen = async () => true;
 export const fbGetActivityDays = async () => true;
-export const fbGetAdminGuard = async () => true;
+export const fbGetAdminGuard = async () => (typeof window !== 'undefined' && window.__guardStub) || true;   // 4.43: 로그인 화면 검사가 «검수사 신뢰 기기» 상태를 넣을 수 있다
 export const fbGetArchiveVoyage = async () => true;
 export const fbGetClaudeMemos = async () => true;
 export const fbGetDamagePhoto = async () => true;

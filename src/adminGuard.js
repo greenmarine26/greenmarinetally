@@ -5,7 +5,7 @@
 // 기기 식별: localStorage 'gm_admin_device_id_v1' (기기·브라우저별 1회 생성 UUID)
 // 세션 허용: 비신뢰 기기에서 비밀번호 통과 시 sessionStorage 'gm_admin_session_ok' (탭 닫으면 소멸)
 
-import { isChief } from './staffList.js';
+import { isChief, allStaffNames, isHiddenStaff } from './staffList.js';
 
 export const OWNER_NAME = '김성일';          // V9.10: 소유자(개발·운영자) — 권한 회수 불가, 퇴사해도 유지
 export const ADMIN_NAME = OWNER_NAME;        // 하위호환 별칭 (기존 호출부 유지)
@@ -121,7 +121,23 @@ export function adminEntry(guard, name) {
 /** V9.45: 이 이름이 잠금 대상인가 (관리자 + 수석검수·부수석) */
 export function isLockedName(guard, name) {
   const n = String(name || '').trim();
-  return isAdminName(guard, n) || isChief(n);
+  return isAdminName(guard, n) || isChief(n) || isPersonalLockName(n);
+}
+
+// ── 4.43: 일반 검수원도 본인 비밀번호로 로그인 (검수사 2026-10-22 «개인 사용자들도 비번을 넣고 로그인 하게»
+//   «본인이 집어넣게 하세요 수석검수사처럼») — 명단에 있는 사람 전부. 개발·시험 계정(HIDDEN_STAFF)은 제외한다.
+//   저장은 수석검수와 같은 locks/{이름}(관리자 권한이 딸려 붙지 않는다). 비번을 안 정한 사람은 첫 선택 때 본인이 정한다.
+//   ⚠ 명단 밖 이름(직접 입력)은 잠그지 않는다 — 종전대로.
+export function isPersonalLockName(name) {
+  const n = String(name || '').trim();
+  return !!n && !isHiddenStaff(n) && allStaffNames().includes(n);
+}
+
+/** 4.43: «일반 검수원» — 수석검수·부수석·테스터·관리자가 아닌 명단 인원. 검수사 2026-10-22 «수석검수사는 대상이 아니고 일반 검수사들만 대상입니다».
+ *  소유자 신뢰 기기 무비번 접속은 이 사람들에게만 쓴다(수석·관리자는 종전대로 본인 비밀번호/소유자 비밀번호). */
+export function isGeneralLockName(guard, name) {
+  const n = String(name || '').trim();
+  return isPersonalLockName(n) && !isChief(n) && !isAdminName(guard, n);
 }
 
 /** V9.45: 잠금 대상 1명의 인증 정보 (관리자는 admins, 그 외는 locks) */
