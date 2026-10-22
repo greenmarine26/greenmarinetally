@@ -1,299 +1,157 @@
-# 배포 — 이 저장소를 건드리는 모든 클로드 필독
+# DEPLOY.md — 배포 절차 정본(하나) · DEPLOY v2.0 · 2026-10-22
 
-> **정본 전문**: 구글 드라이브 `CLAUDE_SHARED\★배포_표준절차_모든클로드_필독.md`
-> 이 파일은 저장소만 보고 있는 클로드를 위한 **자립 요약**이다. 절차·판단은 이것만으로 충분하다.
-> 개정 2026-07-26 (V9.07-01 배포 실측 반영)
-
-## 0-D. 배포 경로 (2026-08-07 실측 정정) — Pages 소스는 GitHub Actions다
-
-- **현재 배포 경로**: push → `.github/workflows/deploy.yml` ("Deploy to GitHub Pages") → actions/deploy-pages.
-  Settings→Pages Source는 **GitHub Actions**다. branch 모드로 되돌리지 마라(내장 워크플로는 Jekyll
-  빌드가 끼고, 과거처럼 배포기 2개가 동시에 도는 구조로 돌아간다).
-- **타임아웃의 진실 (#1085 로그 실측)**: actions/deploy-pages는 타임아웃 **상한 10분(600000ms) 캡**.
-  더 크게 설정하면 "timeout set to the maximum of 600000" 경고와 함께 10분으로 잘린다.
-  **어느 경로든 10분이 한계다.** 1GB 사고 직후처럼 백엔드 처리가 10분을 넘는 동안은 어떤 설정으로도
-  못 뚫는다 — 냉각을 기다리는 것이 유일한 해법이다(실측: 사고 당일 백엔드 65분 걸려 #1024 성공).
-  deploy.yml의 `timeout: 1800000`(30분) 표기는 그대로 둔다 — 값은 30분이되 액션이 10분으로 잘라 실제는 10분이다. 표기 정정 항목은 없다. (3.60-18 실측 정정)
-- ⛔ **이 워크플로는 Re-run 금지.** deploy 잡을 재실행하면 같은 런에 github-pages 아티팩트가 2개가 되어
-  "Multiple artifacts named \"github-pages\"" 로 즉사한다(#1085 attempt2 실측). 다시 돌리려면
-  **새 커밋** 또는 Actions 탭 → Deploy to GitHub Pages → **Run workflow**(workflow_dispatch)로 새 런을 만든다.
-- 배포 검증은 기존과 동일: 라이브 `sw.js` 버전 문자열 + 메인 번들 200. 캐시 우회(`?cb=`) 필수.
-- ⛔ **queued 10분 규칙 (2026-08-27 사고 — 1시간을 버렸다).** 푸시 후 Actions 가 **10분 넘게 queued** 면
-  폴링만 반복하지 마라. 즉시 둘을 한다 — ①`https://www.githubstatus.com/api/v2/status.json` 으로
-  GitHub 장애 여부 확인 ②**사용자에게 바로 보고하고 Actions 화면에서 클릭(재실행/승인)을 청한다.**
-  실측: GitHub Partial Outage 로 1시간 queued 였는데 사용자 클릭 한 번에 즉시 풀렸다. 클로드는
-  폴링하며 침묵했고 그 침묵이 1시간을 버리게 했다. «수단이 없다»가 아니다 — 사용자에게 청하는 것이 수단이다.
-
-## 0-E. 페이로드는 «보내기 전에» 작업본과 맞춰본다 (2026-08-25 사고 후 신설)
-
-**사고**: 2.38 배포에서 라이브가 **2.30으로 돌아가고 CSS가 404** 나 화면이 통째로 깨졌다.
-원인은 코드가 아니라 **묶음**이었다. `/tmp/_p.tgz` 에 이전 세션이 남긴 파일이 **다른 소유자(nobody)**로
-있어 `tar` 가 *Permission denied* 로 실패했는데, 명령에 `2>/dev/null` 이 붙어 있어 **실패가 안 보였다.**
-그 자리에 있던 **어제자 2.30 묶음**이 그대로 올라갔다. 빌드는 정상, 번들 grep도 정상,
-시뮬도 11/11 통과 — **검증이 코드에서 끝나고 배달에서 끊긴 것이다.**
-
-**그래서 앞으로**
-
-1. ⛔ 페이로드 만들 때 `2>/dev/null` 금지. `tar` 종료코드를 **반드시 읽는다**(`echo $?`).
-2. ⛔ `/tmp` 고정 이름 금지 — 세션마다 다른 이름(`/tmp/p_$$.tgz`)을 쓴다. 남의 파일을 덮어쓸 수 없다.
-3. ✅ **복사 전 3대조** — 묶음을 풀어 작업본과 같은지 확인하고, 하나라도 다르면 배포를 멈춘다.
-   - 묶음 속 `index.html` 이 가리키는 번들 해시 == 작업본 `index.html` 의 해시
-   - 묶음 속 `sw.js` 의 버전 문자열 == 이번 판 `APP_VERSION`
-   - `index.html` 이 가리키는 **js·css 두 파일이 묶음 안에 실제로 들어 있는지**
-4. ✅ 라이브 검증에 **`index.html` 이 부르는 파일마다 HTTP 코드**를 찍는다.
-   sw.js 버전만 보면 이번처럼 **CSS 404를 못 잡는다** — 검수사가 깨진 화면을 먼저 본다.
-
-## 0-F. 삭제 목록(del.txt)은 «로컬에 없는 파일»만 담는다 (2026-08-27 사고 — 라이브 CSS·컴포넌트를 지웠다)
-
-**사고**: 2.63-01 배포에서 라이브 화면이 통째로 깨졌다(검수사: *«화면 뭘 바꾸신듯 화면 깨짐»*).
-원인은 코드가 아니라 **삭제 목록**이었다. `git diff --name-status origin/main` 의 `D` 를 통째로
-`_deploy_del.txt` 에 담았는데, **로컬에서 git 에 한 번도 add 되지 않은(untracked) 파일**은
-origin 에는 있고 로컬 인덱스에는 없어 `D` 로 나온다. 그렇게 직전 판이 올린
-`assets/index-*.css`(라이브 index.html 이 참조)와 `src/components/GangStrip.jsx` 가
-삭제 목록에 들어가 워처가 라이브에서 지웠다 — CSS 404, 무스타일 화면.
-
-**그래서 앞으로**
-
-1. ⛔ `git diff origin/main` 의 `D` 를 그대로 del.txt 로 쓰지 않는다.
-2. ✅ del.txt 는 **로컬 워킹카피에 실재하지 않는 파일만** 담는다:
-   `git diff --name-status origin/main | awk '$1=="D"{print $2}' | while read f; do [ -f "$f" ] || echo "$f"; done`
-   — 파일이 로컬에 있으면 그것은 «지울 옛 자산»이 아니라 «아직 안 올라간 산출물»이다.
-3. ✅ 배포 검증(0-E ④)의 «index.html 이 부르는 파일마다 HTTP 코드» 확인은 **배포 후 라이브**에서도 한다
-   — 이번에도 그 검사를 배포 후에 했더라면 검수사보다 먼저 봤다.
-
-### 0-F-2. del.txt 는 **역슬래시**로 쓴다 · 한글 이름 파일은 tar 로 못 보낸다 (2026-08-27 실측)
-
-2.64 배포 뒤 확인해 보니 **두 가지가 조용히 실패**해 있었다(배포는 «성공»으로 끝났다).
-
-1. **하위 폴더 삭제가 안 먹었다.** `_deploy.bat` 은 `del /q "%REPO%\%%F"` 로 지우는데,
-   del.txt 에 `assets/index-xxx.js` 처럼 **슬래시**로 적으면 `del` 이 이를 스위치로 읽어 실패한다.
-   최상위 파일(슬래시 없음)만 지워졌다. ⇒ **del.txt 는 `assets\index-xxx.js` 로 적는다**
-   (`sed 's#/#\\#g'`). 지워지지 않아도 라이브는 안 깨지지만 저장소에 옛 자산이 계속 쌓인다.
-2. **한글 이름 파일이 tar 에서 사라졌다.** 통합지침서(`평택항_..._TallyOne 2.64.md`)를 payload 에 넣었는데
-   윈도우 `tar -xzf` 가 그 항목을 풀지 못해 **저장소에서 지침서가 통째로 없어졌다**(옛 판은 del.txt 로 지워진 뒤였다).
-   ⇒ 해법은 **§0-F-3 의 CP949 이름**이다. 여기 있던 «직접 복사» 방식은 **2026-09-03 에 폐기했다** — 아래를 보라.
-3. ✅ 배포 후 **`git ls-tree origin/main` 로 payload 파일이 실제로 들어갔는지** 센다 — 커밋 «성공»은 증거가 아니다.
-
-### 0-F-3. 한글 이름 파일은 **CP949 이름으로 tar 에 태워** 보낸다 (2026-09-03 실측·확정 — 옛 «직접 복사» 폐기)
-
-**옛 규칙(직접 복사)은 틀렸다.** «untracked 라 `reset --hard` 가 안 지운다»고 적혀 있었는데,
-지침서는 **저장소에 이미 있는 tracked 파일**이라 `_deploy.bat` 첫 줄의 `git reset --hard origin/main` 이
-**내가 복사해 둔 새 판을 origin 판으로 되돌려 버린다.** 그래서 3.5 배포에서 지침서 수정이 조용히 빠졌다
-(커밋은 «성공», 소스 30개는 다 들어갔는데 md 만 없었다 — `git show --stat` 으로 잡았다).
-
-**진짜 원인.** 윈도우 `tar`(bsdtar)는 아카이브 안의 이름을 **현재 코드페이지(한글 윈도우 = CP949)** 로 읽는다.
-리눅스에서 만든 tgz 는 이름이 UTF-8 바이트라 CP949 로 해석되지 않아 `Invalid empty pathname` 으로 **그 항목만 조용히 건너뛴다.**
-
-**해법 — 스테이징할 때 파일명을 CP949 바이트로 써서 tar 에 넣는다.**
-```python
-name = '평택항_검수_통합지침서_3앱통합본_TallyOne 2.90.md'
-shutil.copyfile(src, name.encode('cp949'))   # 파일명 자체가 CP949 바이트
-```
-그 폴더를 `tar -czf` 하면 윈도우가 CP949 로 읽어 **정확한 한글 이름**으로 푼다.
-실측 2026-09-03 — 커밋 `9c38726` 「1 file changed, 5 insertions(+), 2 deletions(-)」. 쓰레기 이름 파일은 생기지 않았다.
-
-⚠ 확인은 **`git show FETCH_HEAD --stat --name-only` 에 그 파일이 있는지**로 한다.
-`tar -tzf` 는 리눅스 쪽 목록이라 윈도우가 풀었다는 증거가 못 된다.
-
-## 0-G. 배포는 «내 빌드 기준 = 지금 origin» 일 때만 나간다 (2026-09-04 신설 — 잠금 장치)
-
-**검수사 질문** — *«지금 클로드가 업데이트를 했습니다. 그런데 바로 다른클로드가 업데이트를 할경우 생기는 문제가 있을지 입니다.»* 있었다. 그리고 조용했다.
-
-`_deploy.bat` 은 **언제나** `git reset --hard origin/main` 으로 시작해 payload 를 그 위에 덮는다.
-그래서 payload 를 만든 시점의 origin 과 쏘는 시점의 origin 이 다르면, **그 사이 남이 올린 것을 소리 없이 되돌린다.**
-충돌도 경고도 로그의 오류도 없다 — 커밋은 정상으로 보인다.
-그리고 `src/utils.js`·`sw.js`·`index.html`·`assets/*` 는 어느 판이든 반드시 건드리므로 **거의 확실히 일어난다.**
-
-**장치** — 클로드는 배포 직전에 빌드 기준 커밋을 적는다.
-
-```
-git rev-parse origin/main > C:\TALLYTEST\_deploy_base.txt
-```
-
-`_deploy.bat` 은 `fetch` 뒤에 그것을 지금 `origin/main` 과 대조해 **다르면 멈춘다**(`[ABORT]`).
-payload 는 그대로 두므로, 늦은 쪽은 **다시 받아서 빌드하면 된다.** 기준 파일이 아예 없어도 멈춘다(fail closed).
-성공적으로 밀면 기준 파일을 지운다 — 묵은 기준으로 다음 배포가 통과하지 않게.
-
-실측(2026-09-04 08:12) — 일부러 `0000…0000` 을 기준으로 넣고 쏘니
-`BASE=0000…` / `HEAD=28e5a3f` / `[ABORT] 빌드 기준이 지금 origin 과 다르다` 로 멈췄고 origin 은 그대로였다.
-
-**남는 것 두 가지 — 이것은 장치가 아니라 순서로 막는다.**
-- `_deploy_payload.tgz`·`_deploy_msg.txt` 는 이름이 하나뿐이다. 둘이 겹치면 **남의 payload 가 내 메시지로** 커밋된다.
-  ⇒ payload·msg·base·del 을 쓰고 **바로** `_deploy_run.bat` 을 복사한다. 그 사이에 딴 일을 하지 않는다.
-- 워처는 1분마다 한 번 돌고 `_deploy_run.bat` 을 `_deploy_last.bat` 으로 옮겨 두 번 안 돌게 한다.
-  같은 1분 안에 둘이 복사하면 **한쪽 트리거가 없어진다.** ⇒ 배포 뒤 `---RESULT---` 에 **내 커밋 메시지가 있는지** 반드시 확인한다.
-
-## 0. 절대 원칙
-
-- **배포는 클로드가 끝까지 직접 한다.** 아래 문장은 전부 금지다.
-  "이제 git push 하시면 됩니다" · "ZIP 압축 푸신 뒤 덮어써 주세요" ·
-  "명령어 드릴 테니 붙여넣으세요" · "권한만 열리면 제가 할 수 있습니다"
-  사용자가 여러 번 교정한 사항이다. 사용자 개입은 1장의 모든 경로가 실제로 막혔을 때뿐이다.
-- 작업 파일 정리도 클로드가 한다.
-- 버전 문자열을 안 올리면 폰 서비스워커 캐시가 안 비워져 배포해도 화면이 그대로다.
-- 루트 `index.html`은 반드시 빌드본이어야 한다. 소스형으로 두면 production 404.
-
-## 0-A. 수정 전 3금지 / 수정 후 2필수 (사용자 확정 2026-08-01 — 최근 사고가 전부 여기서 났다)
-
-**고치기 전 — 3금지**
-
-1. ⛔ **호출부 안 보고 고치지 않는다.** 고칠 함수·상수를 저장소 전체 grep해 부르는 곳·복제본을 전부 나열한다.
-   (`merge_all`만 고치고 같은 결함의 `merge_priority`를 놓쳐 반나절 막힘 — 2026-07-31)
-2. ⛔ **특정 케이스 전용 로직을 공용 경로 앞단에 두지 않는다.** 게이트를 먼저 건다.
-   (RZOR 전용 덱플랜 감지가 전 선박 업로드를 수 분씩 느리게 함 — V9.22→V9.31)
-3. ⛔ **조용히 실패하는 코드를 만들지 않는다.** 새 `await`·동적 import·외부 요청·저장 호출은 실패가 화면/로그에 드러나야 하고, 외부 요청엔 타임아웃+대체 경로.
-   (예외를 삼켜 "처리 중"에 멈춘 채 세 판을 헛되이 배포 — 2026-07-31)
-
-**고친 뒤 — 2필수**
-
-4. ✅ **파급 검증** — 배포 전/후 같은 기준표(항차별 EDI·records·완료 수 · 수집기 하트비트·autoreg 건수·사이클 시간)를 찍어 대조. 내가 **안 건드린 곳**이 변했는지 보는 그물.
-5. ✅ **효과 확인** — 함수 반환값·로그 "완료"는 검증이 아니다. 결과 상태를 다시 읽어 확인(원본 사라짐+대상 존재 / 서버 되읽기 / 라이브 문자열).
-   (정리 스크립트가 "32개 이동 완료"를 찍었지만 실제로는 30개가 그대로 — 2026-08-01)
-
-**재현 우선** — 재현 가능한 증상은 코드 추리보다 재현이 먼저다. 재현 1판 > 추리 3판(실측).
-
-## 0-B. 미완 이월 금지 · 답을 아는 질문 금지 (사용자 확정 2026-08-01 — 절대)
-
-- 🔴 **그날 할 일은 그날 끝낸다.** 원인을 알고 수정 지점까지 특정했으면 그 세션에서 수정·검증·배포까지 간다. 한 번 미루면 사용자가 다시 설명하고, 클로드가 다시 찾고, 같은 검증을 다시 한다 — **한 번 미루면 세 번 일한다.** 이월 가능한 것은 사용자가 미루라고 한 것과 사용자 결정 대기뿐.
-- 🔴 **답을 아는 질문은 하지 않는다.** 데이터로 알 수 있는 것·이미 답을 받은 것·"진행할까요?" 류 승인 요청은 질문이 아니라 지연이다. 되돌릴 수 없는 행위(삭제·발송·과금·외부 게시)만 확인받고 나머지는 보수적으로 정해 진행 후 보고한다.
-- 🔴 **한 판에 하나** — 급한 수리와 신규 기능을 같은 판에 섞지 않는다. 섞으면 파급 검증이 무의미해진다.
+> **판.** DEPLOY v2.0 · 2026-10-22 · 규범 v2.0 §8의 절차 전문이다. 배포 절차 정본은 **이 파일 하나**다. G드라이브 `★배포_표준절차_모든클로드_필독.md`는 이 파일을 가리키는 글만 둔다(두 사본 체계는 2026-10-22 폐기 — 25KB 대 56KB로 갈라져 서로를 정본이라 가리키고 있었다).
+> **대상.** 저장소 `greenmarine26/greenmarinetally` — TallyOne(검수앱)·ConeOne(콘앱)·벌크탤리가 한 저장소. MailPilot(수집기)은 §6. 배포 경로는 push → `.github/workflows/deploy.yml`(«Deploy to GitHub Pages», 저장소 루트 그대로) → Pages. Pages Source는 **GitHub Actions**(branch 모드로 되돌리지 않는다).
+> **세 줄 요약.** ① 배포는 클로드가 끝까지 직접 한다 — «push 하시면 됩니다»·«푸시 권한이 없다» 금지. ② 길은 하나 — 고정 이름 넷 + `_deploy_run.bat` 워처(§3). ③ 완료는 라이브 되읽기까지(§4) — 커밋·푸시 «성공»은 완료가 아니다.
+> 이 파일을 고치면 규범 §8·`tally-deploy` 스킬·모드 `tally-guard`의 점검표를 같은 날 맞춘다(규범 §10-7).
 
 ---
 
-## 0-C. 판을 쪼개지 마라 — 배포 예산은 유한하다 (2026-08-06 사고, build.sh가 자동으로 막는다)
+## 1. 배포 전 — 지키는 선(규범 §0·§2·§3·§6의 배포 부분)
 
-**0-B의 "한 판에 하나"는 섞지 말라는 뜻이지, 잘게 나누라는 뜻이 아니다.** 둘은 다르다.
-같은 성격의 수정 셋은 **한 판**이다. 성격이 다른 급수리와 신규 기능이 **두 판**이다.
-
-**무슨 일이 있었나.** 1.11부터 1.20까지 하루 **15판**을 올렸다. 각 판은 작았고 검증도 했다.
-그런데 묶었어야 할 것들이었다 — 화면 수정 셋은 1.15 하나로, 표기 둘은 1.19·1.20 대신 한 판으로 충분했다.
-푸시마다 워크플로 두 개가 돌아 하루 약 30 배포가 걸렸고, **13번째 판(1.20)부터 Pages가 배포를 거부**했다.
-
-```
-build                 22초 성공        ← 통과한다
-아티팩트 github-pages  9.4MB 정상       ← 크기 문제 아니다
-deploy #1022          Timeout reached, aborting!
-deploy #1023          Deployment failed, try again later.   ← GitHub이 직접 나중에 하라고 한다
-```
-
-**이 사고가 무서운 이유는 커밋도 푸시도 전부 정상이라는 것이다.** 로그 어디에도 빨간 줄이 없고,
-저장소를 열면 1.20이 멀쩡히 올라가 있다. 라이브만 1.19에 멈춰 있다. 원인이 보이지 않는다.
-
-**규칙.**
-
-- **배포 직전에 한 번 묻는다** — *지금 대기 중인 수정이 더 있나? 있으면 같은 판으로 묶을 수 있나?*
-  ★인계함_밀린작업.md와 이번 세션에서 "나중에"로 미룬 것을 함께 본다.
-- ★★★ **판수 상한은 폐기됐다 (2026-08-13 실측 정정 — 드라이브 정본과 동기화 2026-08-17).**
-  종전 규칙 *"하루 8판 · build.sh 가 8판부터 차단 · TALLY_BATCH_OK 우회"* 는 **틀렸다.**
-  그날 하루 **18판**을 올려 Actions 16건 **전부 success, 실패 0건**(API 실측). 검수사 관찰 —
-  *"제한이 아니라 **트래픽** 같습니다."* 8/06 실패의 진짜 원인은 판수가 아니라 ①그 시간대 GitHub 혼잡
-  ②저장소 1,337MB 로 Pages 1GB 한도 초과였고, ②는 build.sh 의 assets 자동 정리로 해소됐다.
-  `build.sh` 는 이제 **경고만** 한다. `TALLY_BATCH_OK` 는 필요 없다.
-  ⚠ 이 옛 문구가 2026-08-17 까지 이 파일에 남아 있어 **클로드가 "8판이 한계"라며 작업을 접으려 했다**
-  (검수사가 잡았다). 차단 규칙은 미완 이월 금지와 정면으로 부딪힌다 — 판을 묶는 건 좋은 습관이지만 상한은 없다.
-- **배포가 실제로 거부되면 푸시로 뚫으려 하지 마라.** 새 커밋을 만들지 말고 Actions 에서 **「재실행」**
-  (1.55-01 실측: 24초 만에 성공). 그래도 안 되면 시간대를 옮겨 한 번만 다시.
-
-> ⚠ 이 사고의 뿌리는 이 문서에 **"옛 해시 assets는 누적 무해"**라고 적혀 있었다는 것이다.
-> 그 줄을 의심 없이 따랐고, 빌드 2,103회분이 쌓여 저장소가 1,337MB가 됐다.
-> **적혀 있다고 맞는 건 아니다.** 이 문서의 규칙도 데이터와 어긋나면 데이터가 이긴다 —
-> 그리고 고쳤으면 이 문서와 드라이브 정본을 **같이** 고친다. 한쪽만 고치면 다음 클로드가 옛 규칙을 다시 배운다.
+1. **수정 지시가 곧 배포 지시다.** «올려도 되겟습니까»를 묻지 않는다. 올리기 직전 «지금 올립니다(폰에 업데이트 배너가 뜹니다)» 한 줄로 알리고 바로 올린다(시각 통지이지 승인 요청이 아니다 — 검수사 2026-10-17 «수정 즉시 묻지 말고 올려 주세요,,, 단 테스트 완벽 통과시에...» · 2026-10-21 «수정지시를 내리면 배포지시를 내린것과 같습니다»).
+2. **한 판에 하나, 묶을 수 있으면 묶는다.** 급한 수리와 신규 기능은 두 판. 같은 성격의 수정 셋은 한 판(검수사가 새로고침을 덜 한다). **판수 상한은 없다**(하루 18판 실측).
+3. **수정 전** — 호출부 전수 grep(Explore 서브에이전트) → 실근거(어느 배·어느 항차의 무엇이 틀렸나)를 화면으로, 수정안을 아티팩트로(규범 §2-0) → 외과 수정 → 실데이터 검증 → 다른 클로드의 2차 시뮬 «가»·코드 감사 «가».
+4. **버전** — TallyOne `src/utils.js` APP_VERSION(기능 = 0.1 올림 4.42→4.43, 수리 = -NN 4.42-04, 언더스코어 금지), ConeOne `public/cone.html` __CONEV, MailPilot `app_gui.py` VERSION. 앱 동작이 바뀌면 반드시 올린다(안 올리면 SW 캐시로 화면이 그대로다). `APP_NOTE`는 그 판 내용 두 문장 이내, 개발자용 수정은 배너에 내지 않는다. 새 화면·버튼·인텐트면 매뉴얼(`helpData.js`)·연막검사(`tools/smoke_*.cjs`)를 같은 판에.
+5. **빌드** — 저장소 최신본을 **VM 안이나 컨테이너 안에 새로 클론**해서(`git clone --depth 30 https://github.com/greenmarine26/greenmarinetally.git`), 마운트 폴더(`C:\TALLYTEST\*`)에서는 git을 돌리지 않고 윈도우 작업본 `_v90604_repo`를 복사해 오지도 않는다(CRLF). `npm ci` → **`bash build.sh`** 만(`npm run build` 직접 호출 금지). 클라우드 컨테이너에서는 `TZ=Asia/Seoul bash build.sh`. 끝나면 **번들 grep**(버전 문자열 + 이번 판 핵심 문자열 + 지운 식별자 0건), babel 미정의 참조 0, 연막검사 «건너뜀» 0, `du -sh assets`(수십 MB면 잘못된 것). 빌드 통과는 안전이 아니다 — 화면은 jsdom·브라우저로 눌러 본다.
 
 ---
 
-## 1. 방법 판단 (여기서 갈라진다 — 고르지 말고 따른다)
+## 2. 자가 점검 10항 — 채팅에 ✔/✘로 찍는다(✘ 하나면 올리지 않는다)
 
-| 내 세션에 있는 것 | 방법 |
-|---|---|
-| bash + 마운트된 `C:\TALLYTEST` + computer-use | **A. 커밋 배치 (정본)** — 3장 |
-| Chrome 확장만 (로컬 파일 접근 없음) | B. 브라우저 업로드 (`/upload/main/<경로>`, 커밋 버튼은 좌표 클릭) |
-| Chrome 확장인데 file_upload 거부됨 | C. 바이트 패치 주입 (raw fetch → sha 검증 → DataTransfer 주입) |
+1. 실데이터 시뮬 PASS(관문 4 확정본과 같은 결과)
+2. `bash build.sh` 종료코드 0 · 연막검사 «건너뜀» 0 · babel 미정의 참조 0
+3. 번들 grep — 버전 문자열 + 이번 판 핵심 문자열 · 지운 식별자 0건
+4. 다른 클로드의 2차 시뮬 «가» · 코드 감사 «가»
+5. 새 UI면 매뉴얼·연막검사·APP_NOTE 동반 수정(개발자용 수정은 배너 금지)
+6. 페이로드 3대조 — 묶음 `index.html`의 번들 해시 = 작업본 · 묶음 `sw.js` 버전 = APP_VERSION · `index.html`이 부르는 js·css가 묶음 안에 실재
+7. `tar` 종료코드 확인(`2>/dev/null` 금지) · `/tmp` 고정 이름 금지(`p_$$.tgz`) · 한글 파일명은 CP949 바이트 이름으로 tar에 넣었다
+8. `_deploy_del.txt`는 로컬에 실재하지 않는 파일만 · 백슬래시 · CRLF
+9. `_deploy_base.txt` = **밀기 직전 다시 받은** origin/main 해시(다른 세션이 올렸으면 새 origin 위에 재빌드)
+10. «지금 올립니다» 한 줄을 알렸다(묻지 않았다)
 
-A가 되면 무조건 A다. **코워크 샌드박스의 git에는 push 자격증명이 없다**(실측). 클론만 된다.
-A는 사용자 PC의 GitHub Desktop git을 배치파일로 돌리는 방식이다.
+---
 
-## 2. 완료의 정의 (비협상 — 전부 통과해야 "완료")
+## 3. 채널 — 고정 이름 넷 + 트리거 하나(실제 `_deploy.bat` 동작 그대로)
 
-1. 실데이터 시뮬 PASS (추론 금지)  2. `bash build.sh` 성공  3. 번들 grep으로 새 문자열·APP_VERSION 확인
-4. push 로그에 `xxxxxxx..yyyyyyy  main -> main`  5. 라이브 `sw.js?v=캐시버스터`의 VERSION 확인
-   ⚠ **라이브 번들 해시 = 저장소 HEAD** — Pages는 Actions(`.github/workflows/deploy.yml`)가 checkout → upload-pages-artifact(path: .) → deploy 로 **저장소 루트를 그대로** 배포한다(빌드 단계 없음 · `bash build.sh`로 커밋한 assets가 곧 라이브). (3.60-18 실측 정정)
-   라이브 검증은 **sw.js VERSION · 캐시명(`tallyman-Vx.xx`) · 번들 내 새 문자열**에 더해 **해시 대조**로도 한다 (저장소 assets 파일명 = 라이브 파일명). (3.60-18 실측 정정)
-+ blob 해시 전수 대조 권장 (`git rev-parse origin/main:<파일>` vs `git hash-object <검증본>`)
+| 파일(이름 고정, 매번 덮어쓴다) | 내용 | bat이 하는 일 |
+|---|---|---|
+| `C:\TALLYTEST\_deploy_payload.tgz` | 빌드 산출물 묶음(§3-1) | 없으면 `[ERROR] payload 없음` |
+| `C:\TALLYTEST\_deploy_msg.txt` | 커밋 메시지 — **UTF-8·한글**(bat은 `chcp 65001` + `commit -F`, 4.43 한글 커밋 실측) | 없으면 `[ERROR]` |
+| `C:\TALLYTEST\_deploy_base.txt` | `git rev-parse origin/main` 한 줄 | 없으면 `[ABORT] _deploy_base.txt 없음`, 지금 origin과 다르면 `[ABORT] 빌드 기준이 지금 origin 과 다르다` — 둘 다 reset 전에 멈춘다(fail closed). push 뒤 지운다 |
+| `C:\TALLYTEST\_deploy_del.txt` (선택) | 지울 경로, 줄마다 `assets\index-xxx.js` 꼴, CRLF | `if exist` → `del /q`, 끝나면 파일 삭제 |
+| 트리거 `_deploy.bat` → `_deploy_run.bat` 복사 | — | 작업 스케줄러 `TallyDeployWatcher`(1분)가 vbs로 실행, 끝나면 `_deploy_last.bat`으로 옮겨 두 번 안 돌게 한다 |
+| 결과 `C:\TALLYTEST\_deploy_log.txt` | 매 실행 덮어쓴다, CP949+UTF-16 혼재 | `tr -d '\000' < 로그 \| grep -a` 로 읽는다. `---RESULT---` 아래 `git log -2` |
 
-## 3. 방법 A 절차
+bat 순서 — `index.lock` 제거 → `fetch origin` → 기준 대조 → `reset --hard origin/main` → `tar -xzf payload` → del.txt → `add -A` → `commit -F msg` → `push origin main` → `del base` → `---RESULT---`. payload·msg는 **지우지 않는다**(끝나면 내가 치운다). 같은 채널(`_deploy_run.bat`)을 수집기 재시작·`_gbridge`도 쓴다 — 넣은 뒤 1분 안에 실행됐는지 로그로 확인하고, 사이에 딴 일을 하지 않는다.
 
-1. **VM 내부**(`/tmp/repo`)에 클론해 수정·빌드한다. ⚠ 마운트 폴더에서 git 실행 금지 (4장 1번).
-2. `src/utils.js`의 `APP_VERSION`을 올린다 (단일 소스). 기능 추가 = 마이너 두 자리 올림(3.59→3.60, 실이력 3.56→3.57→3.58→3.60) / 버그 수리 = -NN(3.60-01). 언더스코어 금지. (3.60-18 실측 정정 — CLAUDE.md Ⅱ-2.4 와 같음)
-3. `bash build.sh` (npm run build 직접 호출 금지).
-4. 변경 목록에서 **삭제분(`^ D`)은 제외**한다.
-   ⛔ **단 "옛 해시 assets는 누적 무해"는 틀렸다 — 2026-08-06 사고.** 빌드 2,103회분이 쌓여
-   저장소가 **1,337MB**(assets 671MB + dist 649MB)가 됐고 **GitHub Pages 사이트 한도 1GB를 넘겨
-   배포가 통째로 실패**했다(1.20). `Deploy to GitHub Pages`·`pages build and deployment` 두 워크플로가
-   다 빨간 X 였고, 라이브는 옛 버전(1.19)에 멈춰 있었다. 커밋·푸시는 정상이라 원인이 안 보였다.
-   → `build.sh` 가 매 빌드마다 **미참조 루트 자산을 자동 삭제**한다(정리 후 1,337MB → 28MB).
-   → `dist/` 는 `.gitignore` — **루트 서빙이라 사이트에 안 쓰인다.** 649MB 를 그냥 먹고 있었다.
-   → 배포 전 `du -sh assets` 를 한 번 보라. **수십 MB를 넘으면 뭔가 잘못된 것이다.**
-5. payload tgz는 `./` 접두사·디렉터리 엔트리 없이 파일만 (`tar -czf out.tgz --no-recursion -T list`).
-6. **한글 파일명은 이름을 CP949 바이트로 바꿔 tar 에 태운다**(§0-F-3). 워킹카피 직접 복사는 tracked 파일에 안 통한다 — `reset --hard` 가 되돌린다.
-7. bat 작성 후 **CRLF 변환 필수** (`sed -i 's/$/\r/'`). 커밋 메시지는 영문 (코드페이지).
-8. 실행은 computer-use `open_application("실행")` → 입력칸 클릭 ×2 → `ctrl+a` → `Delete` → 경로 타이핑 → zoom 확인 → Enter.
-   ⚠ `triple_click`으로는 기존 텍스트가 안 지워진다(실측, 경로 깨짐).
+### 3-1. 묶기(클론 폴더 안에서, 빌드 직후)
 
-```bat
-@echo off
-set LOG=C:\TALLYTEST\_vXXXXX_commit_log.txt
-set GIT=git
-for /d %%D in ("%LOCALAPPDATA%\GitHubDesktop\app-*") do if exist "%%D\resources\app\git\cmd\git.exe" set GIT=%%D\resources\app\git\cmd\git.exe
-echo GIT=%GIT% > %LOG%
-set REPO=C:\TALLYTEST\_v90604_repo
-if not exist %REPO% "%GIT%" clone --depth 1 https://github.com/greenmarine26/greenmarinetally.git %REPO% >> %LOG% 2>&1
-cd /d %REPO%
-if exist "%REPO%\.git\index.lock" del /f /q "%REPO%\.git\index.lock" >> %LOG% 2>&1
-"%GIT%" fetch origin >> %LOG% 2>&1
-"%GIT%" reset --hard origin/main >> %LOG% 2>&1
-tar -xzf C:\TALLYTEST\_vXXXXX_payload.tgz >> %LOG% 2>&1
-"%GIT%" add -A >> %LOG% 2>&1
-"%GIT%" -c user.name=greenmarine26 -c user.email=yjkim1313@gmail.com commit -m "Vx.xx <english summary>" >> %LOG% 2>&1
-"%GIT%" push origin main >> %LOG% 2>&1
-echo ---LOG---- >> %LOG%
-"%GIT%" log --oneline -3 >> %LOG% 2>&1
-echo ---STATUS---- >> %LOG%
-"%GIT%" status --short >> %LOG% 2>&1
-echo DONE %DATE% %TIME% >> %LOG%
+```bash
+cd <클론>
+git fetch -q origin                                   # 밀기 직전 origin 재확인(두 세션이 같은 저장소를 고친다)
+git status --porcelain | grep -E '^( M|\?\?|A |M |MM)' | sed 's/^...//' | grep -v '^"' > /tmp/plist_$$.txt
+tar -czf /tmp/p_$$.tgz --no-recursion -T /tmp/plist_$$.txt; echo TAR_EXIT=$?      # 0 이 아니면 멈춘다
+git status --porcelain | grep -E '^( D|D )' | sed 's/^...//' \
+  | while read -r f; do [ -e "$f" ] || echo "$f"; done | sed 's#/#\\#g; s/$/\r/' > /tmp/del_$$.txt
+git rev-parse origin/main > /tmp/base_$$.txt
+```
+- `git status --porcelain`이 정본이다 — untracked(새 해시 자산)를 포함한다. `git diff --name-only`·`git diff HEAD~1`은 새 자산을 놓쳐 라이브 백지 사고를 냈다.
+- 한글 이름 파일(`"…"`로 감싸인 줄)은 목록에서 빼고, **파일명을 CP949 바이트로 복사한 스테이징 폴더**를 따로 tar에 넣는다(`shutil.copyfile(src, name.encode('cp949'))`). 윈도우 bsdtar는 이름을 CP949로 읽어 UTF-8 이름 항목을 조용히 건너뛴다(2026-09-03 실측, 커밋 9c38726). 「직접 복사」는 tracked 파일을 `reset --hard`가 되돌리므로 폐기.
+- **페이로드 3대조**(점검 6) — `tar -tzf`로 목록을 보고, 묶음 속 `index.html` 해시 = 작업본, `sw.js` 버전 = APP_VERSION, 그 js·css가 목록에 있는지. 2.38 배포에서 `2>/dev/null`에 가려진 tar 실패로 어제자 묶음이 올라가 라이브가 2.30으로 돌아갔다.
+- del.txt — 로컬에 **없는** 파일만. `git diff origin/main`의 `D`를 그대로 쓰면 아직 안 올라간 untracked 산출물이 섞여 라이브 CSS·컴포넌트를 지운다(2.63-01). 슬래시로 적으면 `del`이 스위치로 읽어 조용히 안 지워진다(2.64) — 백슬래시 + CRLF. 옛 해시 assets는 «누적 무해»가 아니다 — 1,337MB로 Pages 1GB를 넘겨 배포가 통째로 실패했다(2026-08-06). 삭제도 전파한다.
+- md5로 전송 무결성을 확인한다(묶음 md5를 넣기 전·후 대조).
+
+### 3-2. 넣기와 쏘기
+
+로컬 VM(마운트 `$HOME/mnt/TALLYTEST`)이면 `cp`로, 클라우드 컨테이너면 `device_commit_files`로 — **넷을 한 번에 넣고 바로 트리거**.
+```bash
+M=$HOME/mnt/TALLYTEST
+cp /tmp/p_$$.tgz   $M/_deploy_payload.tgz
+cp /tmp/del_$$.txt $M/_deploy_del.txt            # 비어 있으면 넣지 않는다
+cp /tmp/base_$$.txt $M/_deploy_base.txt
+printf 'TallyOne 4.44: 한 줄 한글 요약\r\n' > $M/_deploy_msg.txt
+cp $M/_deploy.bat $M/_deploy_run.bat             # ← «지금 올립니다» 한 줄을 채팅에 적은 다음
+sleep 100
+tr -d '\000' < $M/_deploy_log.txt | grep -a -v "^warning: in the working copy" | tail -20
+```
+- 로그에 `[ABORT]`면 payload는 그대로 두고 클론을 `git fetch && git reset --hard origin/main` 한 뒤 재빌드·재묶기한다(다른 세션이 먼저 올린 것을 소리 없이 되돌리지 않기 위한 잠금 — 2026-09-04).
+- `_deploy_run.bat`이 사라지고 `_deploy_last.bat`이 생겼으면 실행된 것이다. `---RESULT---` 아래에 **내 커밋 메시지**와 `xxxxxxx..yyyyyyy main -> main`을 확인한다(같은 1분 안에 둘이 복사하면 한쪽 트리거가 없어진다).
+- 검수사는 아무것도 안 누른다. Win+R 실행창·computer-use는 쓰지 않는다(2026-07-26·08-03 두 번 막혔다).
+
+---
+
+## 4. 배포 후 — 확인 선언(규범 §0-B-③)과 폰 알림
+
+```bash
+B=https://greenmarine26.github.io/greenmarinetally
+curl -s "$B/sw.js?cb=$(date +%s)" | grep -oE "TallyOne [0-9.]+(-[0-9]+)?" | head -1       # 새 버전
+for f in $(curl -s "$B/index.html?cb=$(date +%s)" | grep -oE 'assets/[A-Za-z0-9_.-]+\.(js|css)'); do
+  echo "$f $(curl -s -o /dev/null -w '%{http_code}' "$B/$f?cb=$(date +%s)")"; done        # 파일마다 200
+curl -s "$B/<새 번들>" | grep -c "<이번 판 핵심 문자열>"                                    # 라이브 번들 되읽기
+curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/runs?per_page=1"  # 결론 success
+```
+1. 라이브 `sw.js?cb=` 버전 · `index.html`이 부르는 **js·css 파일마다** HTTP 200(sw.js만 보면 CSS 404를 못 잡는다) · 옛 번들 404 · 라이브 번들에서 새 문자열 되읽기 · `git ls-tree origin/main`/`git show FETCH_HEAD --stat --name-only`로 payload 파일(한글 이름 포함)이 실제로 들어갔는지. Pages 반영은 푸시 뒤 2~3분. «새로고침 해보세요»는 검증이 아니다.
+2. Actions — 결론 `success`. **10분 넘게 queued**면 폴링만 하지 말고 githubstatus(`https://www.githubstatus.com/api/v2/status.json`)를 보고 검수사에게 «Actions 화면에서 재실행/승인 클릭»을 청한다(시작 안 된 런을 푸는 클릭이다 — 2026-08-27 침묵으로 1시간을 버렸다). **실패한 deploy 잡의 Re-run은 금지** — github-pages 아티팩트가 둘이 되어 «Multiple artifacts named "github-pages"»로 즉사한다(#1085). 새 커밋 또는 Actions 탭 → Run workflow(workflow_dispatch)로 새 런을 만든다. actions/deploy-pages 타임아웃은 상한 10분(설정 30분은 10분으로 잘린다) — 백엔드가 10분 넘게 걸리는 동안은 기다리는 것이 유일한 해법이다.
+3. `python C:\TALLYTEST\_claude\healthcheck.py` — **윈도 호스트에서**(리눅스 VM에서 돌리면 `C:\` 경로를 못 봐 «배포 채널 없음» 4건이 헛경보). ⚠가 뜨면 그것부터.
+4. 라이브 화면은 **«클로드 전용» 크롬 프로필**로만 연다(`switch_browser`로 이름 확인). 로그인 이름 칸에 «클로드»(암행 테스터, 비밀번호 없음)를 쳐서 들어가 검수사 눈으로 눌러 본다. 수집기 크롬(9222, tallyman-chrome)에는 어떤 자동화도 붙지 않는다.
+5. 채팅에 **배포 후 확인 선언**(위 1~3)을 찍은 뒤 — 그리고 그때만 — 폰 알림 한 번(«배포 완료 TallyOne x.xx»). 빌드 중·대기 중은 폰 알림 금지(규범 §0-2).
+
+---
+
+## 5. 기록과 정리(여기까지가 완료)
+
+1. `★앱_통합지침서.md` 작업 기록부(최신이 위) — 날짜·버전·커밋 해시·무엇을 왜(검수사 원문 «…»)·검증·배포 확인. 확정 규칙은 `★통합운영지침서`로 승격.
+2. `★인계함_밀린작업.md` — 업데이트 내용(무엇을·어디를·주의) 세 줄 안팎. 남은 일을 넘기지 않는다.
+3. 프로젝트 문서 «클로드_공유_완료_…» 한 장(기록부 사본).
+4. 정리 — 실행 끝난 payload·msg·`/tmp/p_$$.tgz`·일회성 조사 스크립트·판별 로그는 그 자리에서 치운다. 남긴다 — `_deploy.bat`·워처 vbs·`_gbridge.bat`·`_gpush.bat`·`_fcm_key.json`·`_mp_which.txt`·`_v90604_repo`·실데이터 표본. 클로드 부산물은 `C:\TALLYTEST\_claude\` 아래. 애매하면 남기고 지운 목록을 보고에 적는다.
+5. 누적 ZIP(`Tallyman_Master_Vx.xx.zip`)은 검수사가 달라고 할 때만.
+
+**완료 보고 형식**
+```
+배포 완료 — TallyOne 4.43 → 4.44 (커밋 xxxxxxx, 12:37)
+- 수정: <파일:함수> (호출부 n곳 전부 반영)
+- 검증: 실데이터 시뮬 PASS · 기준표 diff 악화 0 · 2차 시뮬 «가» · 감사 «가»
+- 빌드: build.sh 0 · 건너뜀 0 · babel 0 · 번들 grep «4.44»·«<핵심>»
+- 채널: base=<origin 해시> · ---RESULT--- 에 내 메시지 · main -> main
+- 라이브: sw.js 4.44 · index-xxxx.js 200 · index-xxxx.css 200 · 옛 번들 404 · Actions success · healthcheck 정상
+- 기록: 기록부 · 인계함 · 프로젝트 문서 / 정리: 지운 것 n건
 ```
 
-## 4. 함정 (전부 실측)
+---
 
-1. **마운트 폴더에서 샌드박스 git 실행 금지** — 삭제 권한이 없어 `.git/index.lock`이 남고 안 지워진다.
-   이후 모든 git이 "Another git process seems to be running"으로 죽는다(V9.07 첫 커밋 통째 실패).
-2. `build.sh`의 `rm`이 마운트에서 실패한다 → VM 내부 사본에서 빌드하고 산출물만 되가져온다.
-3. bat는 CRLF 아니면 실행조차 안 된다.
-4. 한글 파일명 tar 추출 시 "Invalid empty pathname". 지워야 할 땐 ASCII 와일드카드로.
-   `powershell -NoProfile -Command "Get-ChildItem -Filter '*_V9.07.md' | Remove-Item -Force"`
-5. **큰 base64를 클로드가 직접 옮기지 말 것** — V8.85에서 두 번 다 글자 유실로 훼손됐다.
-   4.2MB ZIP은 base64로 약 139만 토큰이라 애초에 컨텍스트를 통과할 수 없다.
-6. `.gitignore`가 없으면 `add -A`가 node_modules 19,027개를 쓸어담는다 (V9.07에서 신설).
-7. 컨테이너에서 github.io로 curl 된다(HTTP 200 · `?cb=` 캐시 우회로 sw.js VERSION 확인 가능 — 클라우드 컨테이너의 에이전트 프록시 허용목록 기준, 코워크 VM 은 별도 확인). (3.60-18 실측 정정) **⚠ Chrome MCP로 라이브 확인 금지 (2026-07-31 사용자 지시)** —
-   수집기가 CDP(9222)로 전용 크롬(tallyman-chrome 프로필)을 조종하는데, 클로드의 크롬 탭 조작이 수집기를
-   멈추게 한다(사용자 실측). 크롬 없는 검증 체계: ① blob 전수 대조(저장소 진실) ② `web_fetch`로
-   `raw.githubusercontent.com/.../main/sw.js?v=캐시버스터` VERSION 확인(text/plain이라 읽힘 — github.io는 [binary]로 안 읽힘)
-   ③ 최종 라이브는 사용자 폰 버전 라벨. 크롬이 꼭 필요한 검증은 사용자 승인 후 최소한으로.
-8. 샌드박스에 Chromium 설치 불가(dl.google.com 차단). CSS·렌더 검증은 사용자 Chrome에서 `getComputedStyle`.
-9. `raw.githubusercontent`는 CDN이 낡다 — **커밋 목록이 진실**. raw 검증 시 `?v=` 필수.
-10. `Edit` 도구는 대형 파일을 조용히 자를 수 있다 — 대형 jsx는 python 치환 + 치환 횟수 assert.
+## 6. MailPilot(수집기) — 경로가 다르다
 
-## 5. 배포 후 인계 (여기까지가 완료)
+1. 소스 수정(`C:\TALLYTEST\TallymanMailCollector_*\app_gui.py` 등, VERSION 올림) → `python -m py_compile`.
+2. 파서를 고쳤으면 `collector/autoreg_helper.html` 재생성(안 하면 옛 파서로 돈다).
+3. **버전을 올렸으면 묻지 않고 그 자리에서 재가동**(검수사 2026-10-17 «항시 버전업이 되면 그시점에 바로 재가동 해야 합니다. 물을 필요도 없이») — 재시작 배치(ASCII·CRLF)를 `_deploy_run.bat`으로 워처 실행. 수집기 콘솔 창은 닫지 않고 그 창에 print를 남기지 않는다.
+4. 확인 — `collector_heartbeat.json`의 version·at·mailOkAt, «연결됨 · 열린 탭 N개» 로그, 첫 실전 사이클 로그, healthcheck.
+5. 설정 실사용 경로는 `%LOCALAPPDATA%\TallymanCollector\config.json` 하나.
 
-1. 누적 ZIP — 전체 소스+dist+build.sh+통합지침서+README. 부분 ZIP 금지.
-   최상위 폴더 하나(`Tallyman_Master_Vx.xx/`), `node_modules`·`.git` 제외.
-   위치 `Downloads\Tallyman_Master_Vx.xx.zip` (+`C:\TALLYTEST` 사본).
-2. 통합지침서 갱신 — 파일명 버전과 최상단 "최종 버전" 줄을 함께 바꾸고 이번 판 이력 append. 옛 버전 파일은 삭제.
-3. 드라이브 정본 문서의 배포 이력에 한 줄 추가.
+---
 
-## 6. 이 저장소 밖
+## 7. 폐기 목록 — 보이면 지우고, 따르지 않는다
 
-| 대상 | 배포 |
+| 폐기된 것 | 언제·왜 |
 |---|---|
-| 콘앱 `cone.html` · 벌크탤리 | **같은 저장소** — 위 절차 그대로 |
-| TWA APK | PC에서 `C:\TALLYTEST\_twa_build.bat`. `greenmarine26.github.io` 리포에 커밋 → `/tally.apk` `/cone.apk`. 웹 배포만으로 내용은 자동 반영되므로 재배포는 아이콘·버전 변경 시만 |
-| 수집기 TallymanMailCollector | PC 로컬 프로그램. GitHub 배포 아님 |
+| «지금 올려도 되겟습니까» 묻고 답 기다리기 | 2026-10-17·10-21 검수사. 통지 한 줄만 |
+| 판별 이름 bat·payload·로그(`_vXXXX_commit.bat` 등), 판마다 새 bat | 2026-08-09. 하루 59개 쌓이고 경로 오타로 실패 — 고정 이름 넷만 |
+| 실행 대화상자(Win+R)·computer-use로 bat 실행 | 2026-07-26·08-03 두 번 막힘. 워처만 |
+| GitHub 웹 편집·브라우저 업로드(방법 B)·바이트 패치 주입(방법 C) | 2026-07-13 로컬 git 성공 뒤 대체, 09-25 권한 분류기가 막음 |
+| 샌드박스·VM·컨테이너에서 `git push` | 자격증명이 없고, 있어도 채널 밖 배포 |
+| ZIP을 검수사에게 주고 덮어쓰게 하기, 매 배포 누적 ZIP | 규범 §8. ZIP은 검수사가 달라고 할 때만 |
+| «푸시 권한이 없다»는 말 | 2026-10-19 검수사 «권한을 드리면 혼동을 일으킨다고 막았던것이 클로드들 입니다» |
+| 판수 상한 «8판»·«배포 예산 유한»·`TALLY_BATCH_OK` | 2026-08-13 실측(18판 전부 성공) |
+| 커밋 메시지 영문 | bat이 `chcp 65001`+`commit -F` — 한글이 된다(4.43 실측) |
+| 한글 파일명 «직접 복사» | 2026-09-03. tracked 파일은 `reset --hard`가 되돌린다 — CP949 이름으로 tar |
+| 크롬 라이브 확인 전면 금지·«사용자 Chrome에 붙어» | 2026-08-09 프로필 셋으로 분리 — «클로드 전용»만 |
+| «옛 해시 assets는 누적 무해» | 2026-08-06 1GB 사고 |
+| 실패한 deploy 잡 Re-run | 2026-08-07 #1085 — 새 커밋 또는 workflow_dispatch |
+| 임시 payload·bat·로그 «그대로 둬도 된다» | 2026-08-09·08-10 — 그 자리에서 치운다 |
+| 인계함에 남은 일 넘기기 | 2026-09-17 검수사 — 업데이트 내용만 |
+
+---
+
+## 개정 이력
+- 2026-10-22 v2.0 — 배포 절차 정본을 이 파일 하나로 통일(규범 v2.0 표준화). 두 사본(저장소 25KB 2026-07-26 체계 · G드라이브 56KB 2026-09-25)과 `tally-deploy` 스킬을 대조해 갈린 23곳을 정리 — 채널 넷(`_deploy_base.txt` 포함)·한 벌 절차·자가 점검 10항·배포 후 확인·폰 알림 한 번·폐기 목록. 옛 판의 사고 기록(2.38 tar 실패·2.63-01 del.txt·2.64 슬래시·CP949·1GB·#1085·2026-08-27 queued·2026-09-04 잠금)은 §3·§4·§7에 압축해 남겼다.
+- 2026-09-25 — 3.60-18 실측 정정(30분 표기·버전 규칙·github.io curl). 2026-09-04 §0-G 잠금 장치. 2026-08-27 §0-F del.txt. 2026-08-25 §0-E 3대조. 2026-08-07 §0-D Actions. 2026-07-26 코워크 워처 채널 신설.
