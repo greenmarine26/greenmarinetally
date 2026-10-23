@@ -23,7 +23,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke444_'));
 const entry = path.join(tmp, 'entry.js');
 const out = path.join(tmp, 'bundle.cjs');
 fs.writeFileSync(entry, `
-export { answerOneRaw, RZOR_LEARN_RE } from ${JSON.stringify(path.join(ROOT, 'src/mir.js'))};
+export { answerOneRaw, RZOR_LEARN_RE, isWeakAnswer } from ${JSON.stringify(path.join(ROOT, 'src/mir.js'))};
 export { answerRzorLearn } from ${JSON.stringify(path.join(ROOT, 'src/chiefAnswers.js'))};
 `);
 execFileSync('npx', ['esbuild', entry, '--bundle', '--platform=node', '--format=cjs', `--outfile=${out}`, '--loader:.js=jsx', '--jsx=automatic', '--log-level=error'], { cwd: ROOT, stdio: 'inherit' });
@@ -50,6 +50,10 @@ for (const q of ['RZOR 학습 현황', '덱플랜 학습 어때', '리자오 채
   const r = ask(q, base());
   T(/보관소 17항차/.test(r), `수석 «${q}» → 학습 현황 답`, r.slice(0, 70));
 }
+for (const q of ['RZOR 학습 현황', '덱플랜 학습 어때', '리자오 채점 결과']) {
+  const tr = {}; const a = B.answerOneRaw(q, Object.assign(base(), { _trace: tr }));
+  T(tr.via === 'rzorLearn' && B.isWeakAnswer(q, a, tr) === false, `«${q}» — 길 rzorLearn · 약한 답 아님(모델로 안 넘김, 4.44-01 실측 수리)`, `via=${tr.via}`);
+}
 T(/수석 전용 정보/.test(ask('RZOR 학습 현황', base({ isChief: false, chiefData: null }))), '검수원이 물으면 수석 유도');
 T(/읽는 중/.test(ask('RZOR 학습 현황', base({ chiefData: { rzorLearn: null } }))), '아직 안 읽었으면 «읽는 중»');
 T(/읽지 못했습니다/.test(ask('RZOR 학습 현황', base({ chiefData: { rzorLearn: { __error: true } } }))), '읽기 실패면 «읽지 못했습니다»');
@@ -69,7 +73,7 @@ T(!/fbGetSimple\('rzor_learn'\)/.test(fab + gsp), '항차 원자료(rzor_learn �
 const help = fs.readFileSync(path.join(ROOT, 'src/data/helpData.js'), 'utf8');
 T((help.match(/RZOR 학습 현황/g) || []).length >= 2, '매뉴얼 — 미르·통합검색 예시 둘');
 const utils = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
-T(/APP_VERSION = 'TallyOne 4\.44'/.test(utils) && /APP_NOTE = '4\.44 [^']*RZOR 학습 현황/.test(utils), '버전 4.44 · 배너 문구');
+T(/APP_VERSION = 'TallyOne 4\.44(-\d\d)?'/.test(utils) && /APP_NOTE = '4\.44 [^']*RZOR 학습 현황/.test(utils), '버전 4.44(-NN) · 배너 문구');
 
 console.log(`\n${bad ? '✘ 실패' : '✔ 통과'} ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

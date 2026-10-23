@@ -2395,7 +2395,7 @@ export function answerOneRaw(query, ctx) {
     const cd = c.chiefData;
     const _err = (x, what) => (x && x.__error) ? `${what}를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.` : null;
     if (/오답|미회신|피드백/.test(Q)) return _err(cd.feedback, '오답 리포트') || answerFeedback(cd.feedback ?? null);
-    if (RZOR_LEARN_RE.test(Q)) return _err(cd.rzorLearn, 'RZOR 학습 기록') || answerRzorLearn(cd.rzorLearn === undefined ? null : cd.rzorLearn);
+    if (RZOR_LEARN_RE.test(Q)) { _via('rzorLearn'); return _err(cd.rzorLearn, 'RZOR 학습 기록') || answerRzorLearn(cd.rzorLearn === undefined ? null : cd.rzorLearn); }   // 4.44-01: 길 표시 — «학습»·«현황» 이 사전에 없어도 모델로 안 넘긴다(10-23 실측 — 미르 칸에서 모델이 «배 이름을 붙여» 로 덮었다)
     if (/수집기|메일\s*수집|하트비트|mailpilot/i.test(Q)) return answerCollector(c.heartbeat || null);
     if (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q)) return _err(cd.tallyPending, '마감 목록') || answerTallyPending(cd.tallyPending ?? null);
     if (/이번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위/.test(Q) || /지난\s*달|저번\s*달/.test(Q)) {
@@ -2996,6 +2996,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
   if (via === 'workStop' && trace && trace.pauseSure) return false; // 4.42-02 (2차 시뮬 6 — 멈춤을 분명히 알린 말의 답만): 작업 멈춤 알림 — 말 파서가 사유 낱말·«작업 중단» 으로 멈춤이라 확신한(sure) 말의 자료 답이다. «아무래도 … 인듯 하네» 같은 군말이 남았다고 모델로 보내면 «열린 항차 정보가 없어요» 를 지어냈다(검수사 2026-10-21 13:25)
   if (via === 'eta') return false;      // 4.40-01: 끝나는 시각을 물은 말의 끝나는 시각 답(완료 기록·본선현황으로 잰 것) — 사전에 없는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보낸다. 보내면 앱마다 다른 답(검수사 2026-10-20 20:07)
+  if (via === 'rzorLearn') return false;   // 4.44-01: 수집기 2.45 채점 요약은 자료 답 — «학습»·«현황»·«채점» 이 사전에 없어도 모델로 보내지 않는다
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
   //  감사 지적 — 시각·진행 길이 **정답인 질문**(«지금 몇 시» «진행 상황»)까지 약하게 보면 모델이 그 답을 덮는다
