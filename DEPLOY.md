@@ -1,6 +1,6 @@
-# DEPLOY.md — 배포 절차 정본(하나) · DEPLOY v2.0 · 2026-10-22
+# DEPLOY.md — 배포 절차 정본(하나) · DEPLOY v2.0-02 · 2026-10-23
 
-> **판.** DEPLOY v2.0 · 2026-10-22 · 규범 v2.0 §8의 절차 전문이다. 배포 절차 정본은 **이 파일 하나**다. G드라이브 `★배포_표준절차_모든클로드_필독.md`는 이 파일을 가리키는 글만 둔다(두 사본 체계는 2026-10-22 폐기 — 25KB 대 56KB로 갈라져 서로를 정본이라 가리키고 있었다).
+> **판.** DEPLOY v2.0-02 · 2026-10-23 · 규범 v2.1 §8의 절차 전문이다. 배포 절차 정본은 **이 파일 하나**다. G드라이브 `★배포_표준절차_모든클로드_필독.md`는 이 파일을 가리키는 글만 둔다(두 사본 체계는 2026-10-22 폐기 — 25KB 대 56KB로 갈라져 서로를 정본이라 가리키고 있었다).
 > **대상.** 저장소 `greenmarine26/greenmarinetally` — TallyOne(검수앱)·ConeOne(콘앱)·벌크탤리가 한 저장소. MailPilot(수집기)은 §6. 배포 경로는 push → `.github/workflows/deploy.yml`(«Deploy to GitHub Pages», 저장소 루트 그대로) → Pages. Pages Source는 **GitHub Actions**(branch 모드로 되돌리지 않는다).
 > **세 줄 요약.** ① 배포는 클로드가 끝까지 직접 한다 — «push 하시면 됩니다»·«푸시 권한이 없다» 금지. ② 길은 하나 — 고정 이름 넷 + `_deploy_run.bat` 워처(§3). ③ 완료는 라이브 되읽기까지(§4) — 커밋·푸시 «성공»은 완료가 아니다.
 > 이 파일을 고치면 규범 §8·`tally-deploy` 스킬·모드 `tally-guard`의 점검표를 같은 날 맞춘다(규범 §10-7).
@@ -97,7 +97,7 @@ curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/run
 1. 라이브 `sw.js?cb=` 버전 · `index.html`이 부르는 **js·css 파일마다** HTTP 200(sw.js만 보면 CSS 404를 못 잡는다) · 옛 번들 404 · 라이브 번들에서 새 문자열 되읽기 · `git ls-tree origin/main`/`git show FETCH_HEAD --stat --name-only`로 payload 파일(한글 이름 포함)이 실제로 들어갔는지. Pages 반영은 푸시 뒤 2~3분. `C:\TALLYTEST\_deploy_out_last.txt`가 **0바이트**인지(한 줄이라도 있으면 bat이 깨진 것 — 2026-10-22 한글 꼬리 사고). «새로고침 해보세요»는 검증이 아니다.
 2. Actions — 결론 `success`. **10분 넘게 queued**면 폴링만 하지 말고 githubstatus(`https://www.githubstatus.com/api/v2/status.json`)를 보고 검수사에게 «Actions 화면에서 재실행/승인 클릭»을 청한다(시작 안 된 런을 푸는 클릭이다 — 2026-08-27 침묵으로 1시간을 버렸다). **실패한 deploy 잡의 Re-run은 금지** — github-pages 아티팩트가 둘이 되어 «Multiple artifacts named "github-pages"»로 즉사한다(#1085). 새 커밋 또는 Actions 탭 → Run workflow(workflow_dispatch)로 새 런을 만든다. actions/deploy-pages 타임아웃은 상한 10분(설정 30분은 10분으로 잘린다) — 백엔드가 10분 넘게 걸리는 동안은 기다리는 것이 유일한 해법이다.
 3. `python C:\TALLYTEST\_claude\healthcheck.py` — **윈도 호스트에서**(리눅스 VM에서 돌리면 `C:\` 경로를 못 봐 «배포 채널 없음» 4건이 헛경보). ⚠가 뜨면 그것부터.
-4. 라이브 화면은 **«클로드 전용» 크롬 프로필**로만 연다(`switch_browser`로 이름 확인). 로그인 이름 칸에 «클로드»(암행 테스터, 비밀번호 없음)를 쳐서 들어가 검수사 눈으로 눌러 본다. 수집기 크롬(9222, tallyman-chrome)에는 어떤 자동화도 붙지 않는다.
+4. 라이브 화면은 **클로드 내장 브라우저**(데스크톱 앱의 브라우저 창)로 연다 — 검수사 2026-10-23 «클로드는 자체 내장 브라우저를 사용하기로 정했습니다». 크롬에는 붙지 않는다. 로그인 이름 칸에 «클로드»(암행 테스터, 비밀번호 없음)를 쳐서 들어가 검수사 눈으로 눌러 본다. 수집기 크롬(9222, tallyman-chrome)에는 어떤 자동화도 붙지 않는다.
 5. 채팅에 **배포 후 확인 선언**(위 1~3)을 찍은 뒤 — 그리고 그때만 — 폰 알림 한 번(«배포 완료 TallyOne x.xx»). 빌드 중·대기 중은 폰 알림 금지(규범 §0-2).
 
 ---
@@ -148,6 +148,7 @@ curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/run
 | 커밋 메시지 영문 | bat이 `chcp 65001`+`commit -F` — 한글이 된다(4.43 실측) |
 | 한글 파일명 «직접 복사» | 2026-09-03. tracked 파일은 `reset --hard`가 되돌린다 — CP949 이름으로 tar |
 | 크롬 라이브 확인 전면 금지·«사용자 Chrome에 붙어» | 2026-08-09 프로필 셋으로 분리 — «클로드 전용»만 |
+| «클로드 전용» 크롬 프로필로 라이브 확인(`switch_browser`) | 2026-10-23 검수사 — 클로드 내장 브라우저로 |
 | «옛 해시 assets는 누적 무해» | 2026-08-06 1GB 사고 |
 | 실패한 deploy 잡 Re-run | 2026-08-07 #1085 — 새 커밋 또는 workflow_dispatch |
 | 임시 payload·bat·로그 «그대로 둬도 된다» | 2026-08-09·08-10 — 그 자리에서 치운다 |
