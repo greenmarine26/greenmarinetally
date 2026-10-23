@@ -723,18 +723,21 @@ export function answerRzorLearn(sm) {
   if (sm == null) return 'RZOR 학습 기록을 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
   if (!sm || !sm.n) return 'RZOR 덱플랜 학습 기록이 아직 없습니다 — 수집기가 마감텔리(실제 플랜)를 받으면 항차마다 쌓입니다.';
   const L = [`🧭 RZOR 덱플랜 학습 — 보관소 ${sm.n}항차 (마지막 ${sm.last || '?'}).`];
-  if (sm.avg5 && sm.avg5.voys) L.push(`최근 ${sm.avg5.voys}항차 평균(그 항차를 빼고 배운 예측): 구역 ${sm.avg5.zone5}% · 칸 ${sm.avg5.slot}%`);
+  if (sm.avg5 && sm.avg5.voys) L.push(`최근 ${sm.avg5.voys}항차 평균(그 항차를 빼고 배운 예측): 구역 ${sm.avg5.zone5}%${sm.avg5.layer != null ? ` · 층 ${sm.avg5.layer}%` : ''} · 칸 ${sm.avg5.slot}%`);
+  //  4.45: 개수별 번호표 모델(수집기 2.46, 측정 전용 — 검수사 2026-10-23 «선적 갯수별로 모델을 만들고…») 을 나란히 — 번호표가 꾸준히 앞서면 예측기를 바꾼다.
+  if (sm.avg5n && sm.avg5n.voys) L.push(`같은 ${sm.avg5n.voys}항차, 개수별 번호표 모델: 구역 ${sm.avg5n.zone5}% · 층 ${sm.avg5n.layer}% · 칸 ${sm.avg5n.slot}%`);
   const rec = Array.isArray(sm.recent) ? sm.recent.slice(-5).reverse() : [];
   if (rec.length) {
     L.push('', '항차별 채점');
     rec.forEach((r) => {
-      const a = r.learn ? `학습 예측 구역 ${r.learn.zone5}% · 칸 ${r.learn.slot}% (${r.learn.n}대)` : '학습 채점 없음';
+      const a = r.learn ? `학습 예측 구역 ${r.learn.zone5}%${r.learn.layer != null ? ` · 층 ${r.learn.layer}%` : ''} · 칸 ${r.learn.slot}% (${r.learn.n}대)` : '학습 채점 없음';
+      const n2 = r.learn2 ? ` · 번호표 구역 ${r.learn2.zone5}% 층 ${r.learn2.layer}% 칸 ${r.learn2.slot}%` : '';
       const lo = r.live && r.live.lolo && r.live.lolo.n ? ` · LOLO ${r.live.lolo.hit}/${r.live.lolo.n}` : '';
       const b = r.live ? ` · 실시간 자가 테스트 칸 ${r.live.slot}% 덱 ${r.live.deck}%${lo}` : '';
-      L.push(`· ${r.voy} — ${a}${b}`);
+      L.push(`· ${r.voy} — ${a}${n2}${b}`);
     });
   }
-  L.push('', '구역은 배워서 맞히고 칸은 검수원 입력이 정답입니다. 마감텔리가 들어오면 수집기가 그 항차를 채점해 보관소에 더합니다.');
+  L.push('', '구역은 배워서 맞히고 칸은 검수원 입력이 정답입니다. 마감텔리가 들어오면 수집기가 그 항차를 두 모델로 채점해 보관소에 더합니다 — 번호표가 꾸준히 앞서면 예측을 번호표로 바꿉니다.');
   return L.join('\n');
 }
 

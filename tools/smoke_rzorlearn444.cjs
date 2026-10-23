@@ -1,4 +1,4 @@
-// 미르 «RZOR 학습 현황»(TallyOne 4.44) 연막검사 — 실소스(mir.js·chiefAnswers.js)를 묶어 실 보관소 요약(2026-10-23 씨앗 17항차)으로 답을 잰다.
+// 미르 «RZOR 학습 현황»(TallyOne 4.44 · 4.45 두 모델 나란히) 연막검사 — 실소스(mir.js·chiefAnswers.js)를 묶어 실 보관소 요약(2026-10-23 씨앗 17항차)으로 답을 잰다.
 //   검수사 2026-10-23 «앱이 스스로 테스트 하고 마감텔리에서 실제작업 파일이 오면 그걸로 테스트한 결과 채점을 받아야 할것입니다».
 //   재는 것 — ① 수석이 물으면 보관소 항차 수·최근 평균·항차별 채점이 나온다 ② 검수원·콘앱에는 수석 유도(수석 전용 정보)
 //           ③ 아직 안 읽었으면 «읽는 중», 읽기 실패면 «읽지 못했습니다» ④ 다른 RZOR 질문(브리핑·수집기)은 가로채지 않는다
@@ -44,6 +44,11 @@ T(/구역은 배워서 맞히고 칸은 검수원 입력이 정답/.test(a), '�
 T(/아직 없습니다/.test(B.answerRzorLearn({ n: 0 })) && /읽는 중/.test(B.answerRzorLearn(null)), '빈 보관소·읽는 중');
 const live = B.answerRzorLearn({ n: 18, last: 'R116W', avg5: { zone5: 70, slot: 18, voys: 5 }, recent: [{ voy: 'R116W', learn: { zone5: 72, slot: 20, n: 150 }, live: { slot: 12, deck: 61, n: 180, lolo: { n: 30, hit: 30 } } }] });
 T(/실시간 자가 테스트 칸 12% 덱 61% · LOLO 30\/30/.test(live), '실시간 자가 테스트 줄(마감텔리 뒤 채점)');
+const two = B.answerRzorLearn({ n: 18, last: 'R116W', avg5: { zone5: 73, slot: 19, voys: 5 }, avg5n: { zone5: 70, layer: 28, slot: 12, voys: 5 }, recent: [{ voy: 'R116W', learn: { zone5: 65, slot: 21, layer: 27, n: 147 }, learn2: { zone5: 67, layer: 27, slot: 12, n: 147 }, live: null }] });
+T(/개수별 번호표 모델: 구역 70% · 층 28% · 칸 12%/.test(two) && /· R116W — 학습 예측 구역 65% · 층 27% · 칸 21% \(147대\) · 번호표 구역 67% 층 27% 칸 12%/.test(two), '4.45 — 두 모델 나란히(평균 줄 + 항차 줄, 지금 모델 층 포함)');
+const two2 = B.answerRzorLearn({ n: 18, last: 'R116W', avg5: { zone5: 73, slot: 19, layer: 30, voys: 5 }, avg5n: { zone5: 70, layer: 28, slot: 12, voys: 5 }, recent: [] });
+T(/평균\(그 항차를 빼고 배운 예측\): 구역 73% · 층 30% · 칸 19%/.test(two2), '지금 모델 평균 줄에도 층(있을 때만)');
+T(!/번호표 구역|번호표 모델:/.test(B.answerRzorLearn(FIX)), '번호표 채점이 없는 옛 요약에는 번호표 수치 줄이 없다');
 
 console.log('② 미르 길 — 수석·검수원·콘앱·읽기 상태');
 for (const q of ['RZOR 학습 현황', '덱플랜 학습 어때', '리자오 채점 결과', '미르야 RZOR 학습 채점 어때']) {
@@ -73,7 +78,7 @@ T(!/fbGetSimple\('rzor_learn'\)/.test(fab + gsp), '항차 원자료(rzor_learn �
 const help = fs.readFileSync(path.join(ROOT, 'src/data/helpData.js'), 'utf8');
 T((help.match(/RZOR 학습 현황/g) || []).length >= 2, '매뉴얼 — 미르·통합검색 예시 둘');
 const utils = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
-T(/APP_VERSION = 'TallyOne 4\.44(-\d\d)?'/.test(utils) && /APP_NOTE = '4\.44 [^']*RZOR 학습 현황/.test(utils), '버전 4.44(-NN) · 배너 문구');
+T(/APP_VERSION = 'TallyOne 4\.4[5-9](-\d\d)?'/.test(utils) && /APP_NOTE = '4\.4[5-9] [^']*RZOR 학습 현황/.test(utils), '버전 4.45+(-NN) · 배너 문구');
 
 console.log(`\n${bad ? '✘ 실패' : '✔ 통과'} ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);
