@@ -1101,6 +1101,20 @@ else
   cp "$SMOKE_HE.fbbak" src/firebase.js; rm -f "$SMOKE_HE.fbbak"
   echo "✗ 4.45-01 해치·호기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HE"; exit 1
 fi
+#  4.45-02: **주의 박스 «예상 실오류»는 자릿수 부족·컨번호와 같은 씰만 · 대표 모양과 다른 씰 계열은 «씰 모양 다름»(참고)** — MAMP 641N 실데이터(4.45-01 «예상 실오류 28건» →
+#    다른 씰 계열 28: 화주 씰 숫자 8자리 18 · ID+7 9 · MLPH+7 1)와 정답지 MCAP 639N(자릿수 부족 1 · 컨번호와 같은 씰 1 그대로). 검수사 2026-10-24 «씰모양이 다른거랑 … 실오류 와는 다른 관점으로».
+SMOKE_SK=$(mktemp /dev/shm/hometmp/_smokesk_XXXXXX.js)
+cp src/firebase.js "$SMOKE_SK.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_sealkind44502.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_SK"; then
+  cp "$SMOKE_SK.fbbak" src/firebase.js && rm -f "$SMOKE_SK.fbbak"
+  node tools/smoke_sealkind44502.cjs "$(pwd)" "$SMOKE_SK" || { echo "✗ 4.45-02 씰 모양 다름 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SK"; exit 1; }
+  rm -f "$SMOKE_SK"
+else
+  cp "$SMOKE_SK.fbbak" src/firebase.js; rm -f "$SMOKE_SK.fbbak"
+  echo "✗ 4.45-02 씰 모양 다름 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SK"; exit 1
+fi
 #  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
 SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)

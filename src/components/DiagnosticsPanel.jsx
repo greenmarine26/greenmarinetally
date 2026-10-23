@@ -392,7 +392,8 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
   }
 
   //  4.36 — 예상 실오류(씰 모양) — «컨번호 · 리스트 씰 · 이유». 누르면 컨 상세.
-  if (alert.code === 'seal_format') {
+  //  4.45-02 — «씰 모양 다름»(참고)도 같은 목록 꼴(검수사 2026-10-24 «씰모양이 다른거랑 … 실오류 와는 다른 관점»).
+  if (alert.code === 'seal_format' || alert.code === 'seal_kind') {
     return (
       <div className="mt-2 pt-2 border-t border-line text-2xs space-y-0.5" data-seal-format>
         <TruncList items={Array.isArray(d) ? d : []} limit={20} unit="건" render={(t) => (

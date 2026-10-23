@@ -1459,7 +1459,8 @@ const _WHY_BY_CODE = {
   list_extra:    '리스트에는 있는데 EDI 평택분에 없는 컨입니다. 통과화물이거나 타선박 자료일 수 있습니다.',
   empty_confirmed:'실 컨과 엠티 확정분을 더한 수입니다. 이상이 아니라 집계입니다.',
   seal_diff:     'EDI 와 리스트의 실번호가 다릅니다.',
-  seal_format:   '리스트 씰 번호의 모양이 이 선사의 다른 씰과 다르거나(자릿수·접두 문자), 컨번호가 그대로 들어 있습니다. 실물 씰을 확인해 맞는 번호를 입력하세요. (선사별 모양은 이 항차 리스트에서 학습한 값입니다.)',
+  seal_format:   '리스트 씰 번호의 모양이 같은 계열(같은 접두) 씰보다 숫자 자릿수가 모자라거나, 컨번호가 그대로 들어 있습니다. 실물 씰을 확인해 맞는 번호를 입력하세요. (선사별 모양은 이 항차 리스트에서 학습한 값입니다.)',
+  seal_kind:     '리스트 씰 번호의 모양이 이 선사 대표 씰과 다른 계열입니다 — 화주 씰·다른 지역 선사 씰처럼 씰 종류가 다르면 번호 형식도 다를 수 있어(검수사 2026-10-24 «씰 모양이 다르면 실번호 형식도 다를수 있습니다») 자릿수 부족과 따로 참고로 보입니다. 실물 씰이 이 번호와 같은지 보세요.',
   xray_no_location:'X-RAY 대상인데 EDI 에서 위치를 못 찾았습니다.',
   empty_seal_pending:'엠티 실 부착·확인이 남았습니다.',
   weight_diff:   '무게 대조 경고는 1.23 에서 없앴습니다. 무게가 벌어지는 이유가 여럿이라 원인을 가릴 수 없습니다.',
@@ -1482,7 +1483,8 @@ const _ALERT_TERMS = {
   list_short:        [['리스트'], ['부족', '모자', '매칭', '안맞', '적']],
   list_extra:        [['리스트'], ['매칭', '없', '남', '더']],
   seal_diff:         [['실번호', '씰', '실'], ['다름', '다르', '불일치', '차이']],
-  seal_format:       [['예상실오류', '씰모양', '실모양', '자릿수'], ['실', '씰', '오류', '부족']],   // 4.36
+  seal_format:       [['예상실오류', '자릿수'], ['실', '씰', '오류', '부족']],   // 4.36 · 4.45-02 «씰모양·실모양» 은 seal_kind 로
+  seal_kind:         [['씰모양', '실모양'], ['다름', '다르', '뭐', '무슨']],   // 4.45-02 (감사 — «실 종류별로»·«씰 계열» 같은 말은 안 삼킨다)
   xray_no_location:  [['XRAY', 'X-RAY', '엑스레이'], ['매칭', '위치', '없']],
   empty_seal_pending:[['엠티', '공컨'], ['실', '씰'], ['부착', '확인', '미']],
   empty_confirmed:   [['확정'], ['엠티', '실']],
@@ -1514,10 +1516,15 @@ export function answerAboutAlert(query, alerts) {
   if (!hit) {
     const qFlat = q.replace(/\s/g, '');
     const has = (arr) => arr.some(w => qFlat.includes(w));
+    //  4.45-02 (감사 하1): 여러 경고가 다 맞으면 맞은 낱말이 더 긴(더 구체적인) 쪽 — «씰 모양 다름 뭐야» 는 seal_diff(«씰»+«다름»)보다
+    //    seal_kind(«씰모양»+«다름»). 같으면 종전대로 먼저 든 경고.
+    let best = -1;
     for (const a of alerts) {
       const groups = _ALERT_TERMS[a?.code];
       if (!groups || !groups.length) continue;
-      if (groups.every(has)) { hit = a; break; }
+      if (!groups.every(has)) continue;
+      const score = groups.reduce((t, arr) => t + Math.max(...arr.filter((w) => qFlat.includes(w)).map((w) => w.length)), 0);
+      if (score > best) { best = score; hit = a; }
     }
   }
   if (!hit) return null;

@@ -572,17 +572,39 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
 
   //  ★ 4.36 예상 실오류 — 리스트 씰 번호의 모양이 그 선사의 학습된 모양과 다르거나 컨번호를 품은 것(utils.sealFormatAnomalies 한 벌).
   //    검수사 2026-10-19 MCAP 639N 마감텔리 실오류 보고서가 정답지 — «자릿수 부족실 2 · 컨넘버랑 동일한 실 1». 고쳐진 컨은 빠진다.
+  //  ★ 4.45-02 — 검수사 2026-10-24 06:28 «씰모양이 다른거랑 실번호 즉 실오류 와는 다른 관점으로 봐야 합니다. 말대로 씰 모양이 다르면 실번호 형식도 다를수 있습니다.
+  //    이는 같은 실번호에서 자리수가 안맞는거랑은 틀린 것입니다». MAMP 641N 양하 «예상 실오류 28건» 은 전부 다른 씰 계열이었다(화주 씰 숫자 8자리 18 ·
+  //    인도네시아 머스크 씰 ID+7 9 · MLPH+7 1 — 이 선사 대표 PH+7). 그래서 «예상 실오류»(주의)는 자릿수 부족(short)·컨번호와 같은 씰(cn)만 세고,
+  //    대표 모양과 다른 계열은 «씰 모양 다름»(참고) 줄로 따로 보인다 — 지우지 않고 «실오류 아님»으로 단정하지도 않는다(독립 감사 — 보관 MCSC 633N MLPH057895 → MLPH0578959 처럼
+  //    그 항차에 같은 계열 표본이 없어 자릿수 부족으로 못 가린 실오류가 여기 남는다). 판정은 utils.sealFormatAnomalies 한 벌 그대로 — 미르(sealPredictOf)도 short·cn 만 말한다.
   try {
     const sa = sealFormatAnomalies(listRecords || {}, { edi: ediSealMapOf(ediContainers) });   // 4.39-02: EDI 실이 같으면 새 «자릿수 부족» 갈래에서 뺀다
-    const saShape = sa.filter((x) => x.kind === 'shape'), saCn = sa.filter((x) => x.kind === 'cn');
-    if (sa.length > 0) {
+    const saShort = sa.filter((x) => x.kind === 'shape' && x.short), saCn = sa.filter((x) => x.kind === 'cn');
+    const saErr = sa.filter((x) => x.kind === 'cn' || (x.kind === 'shape' && x.short));
+    const saKind = sa.filter((x) => x.kind === 'shape' && !x.short);
+    if (saErr.length > 0) {
       alerts.push({
         level: 'warning',
         code: 'seal_format',
-        msg: `예상 실오류 ${sa.length}건 — 씰 모양이 다름` + (saShape.length ? ` · 자릿수·형식 ${saShape.length}` : '') + (saCn.length ? ` · 컨번호와 같은 씰 ${saCn.length}` : ''),
+        msg: `예상 실오류 ${saErr.length}건 — ` + [saShort.length ? `자릿수 부족 ${saShort.length}` : '', saCn.length ? `컨번호와 같은 씰 ${saCn.length}` : ''].filter(Boolean).join(' · '),
         voice: '',
-        count: sa.length,
-        details: sa,
+        count: saErr.length,
+        details: saErr,
+      });
+    }
+    if (saKind.length > 0) {
+      //  모양별 대수 — «숫자 8자리 18 · ID+7 9 · MLPH+7 1». 대표 모양은 판정 이유(why «이 선사는 PH+7자리가 87%»)에서 읽는다.
+      const shapeLabel = (s) => { const m = /^([A-Z]*)(\d+)$/.exec(String(s || '')); return m ? (m[1] ? `${m[1]}+${m[2].length}` : `숫자 ${m[2].length}자리`) : String(s || ''); };
+      const groups = {};
+      for (const x of saKind) { const k = shapeLabel(x.seal); groups[k] = (groups[k] || 0) + 1; }
+      const reps = [...new Set(saKind.map((x) => { const m = /이 선사는 ([A-Z]*)\+(\d+)자리/.exec(x.why || ''); return m ? (m[1] ? `${m[1]}+${m[2]}` : `숫자 ${m[2]}자리`) : ''; }).filter(Boolean))];
+      alerts.push({
+        level: 'info',
+        code: 'seal_kind',
+        msg: `씰 모양 다름 ${saKind.length}건(참고)` + (reps.length ? ` · 대표 ${reps.join('·')}` : '') + ' · ' + Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · '),
+        voice: '',
+        count: saKind.length,
+        details: saKind,
       });
     }
   } catch (e) { console.warn('[진단] 예상 실오류 판정 실패:', e && e.message); }

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.45-01';
-const NOTE = '4.45-01 선적 자동 가이드에서 작업 보고로 이미 닫은 해치커버를 다시 묻지 않습니다. 해치커버와 콘박스 보고도 내가 고른 호기가 기본으로 잡힙니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.45-02';
+const NOTE = '4.45-02 주의 박스의 «예상 실오류»는 자릿수 부족과 컨번호와 같은 씰만 셉니다. 모양이 다른 씰 계열은 «씰 모양 다름(참고)» 줄로 따로 보입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
