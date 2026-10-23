@@ -78,7 +78,7 @@ T(!/fbGetSimple\('rzor_learn'\)/.test(fab + gsp), '항차 원자료(rzor_learn �
 const help = fs.readFileSync(path.join(ROOT, 'src/data/helpData.js'), 'utf8');
 T((help.match(/RZOR 학습 현황/g) || []).length >= 2, '매뉴얼 — 미르·통합검색 예시 둘');
 const utils = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
-T(/APP_VERSION = 'TallyOne 4\.4[5-9](-\d\d)?'/.test(utils) && /APP_NOTE = '4\.4[5-9] [^']*RZOR 학습 현황/.test(utils), '버전 4.45+(-NN) · 배너 문구');
+T(/APP_VERSION = 'TallyOne 4\.4[5-9](-\d\d)?'/.test(utils) && (/APP_NOTE = '4\.4[5-9] [^']*RZOR 학습 현황/.test(utils) || !/APP_VERSION = 'TallyOne 4\.45'/.test(utils)), '버전 4.45+(-NN) · 배너 문구(4.45 판에서만 RZOR 문구 — 뒤 판은 제 문구)');   // 4.45-01: 다음 판 배너는 그 판 문구
 
 console.log(`\n${bad ? '✘ 실패' : '✔ 통과'} ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

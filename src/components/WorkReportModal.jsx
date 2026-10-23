@@ -1,7 +1,7 @@
 // 작업 보고 모달 (M3.5.6)
 // 흐름: 작업 시작 → 장비+작업종류 선택 → 카톡 발송
 //       이후 중단/완료/해치/콘박스는 활성 장비 자동 사용
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AlertTriangle, X, Play, Pause, CheckCircle2, Lock, Unlock, Box, Send, Truck, RefreshCw } from 'lucide-react';
 import {
   shareText,
@@ -24,7 +24,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
 
-export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip }) {
+export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip, pageMode = '' }) {   // 4.45-01: pageMode — 항차 화면에서 지금 보고 있는 작업(양하·선적)
   // M5.79: view에 'manual' 추가 — 시작 안 눌러도 중단/재개/완료 직접 보고
   //  사유: (1) 전 작업을 이어받을 때 (다른 검수원이 시작한 작업) (2) 한 갱 먼저 작업 완료
   const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual | daynight
@@ -172,11 +172,27 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (!open) return;
     const now = getEquipNumber();
     if (now) setSelectedEquip(now);
+    /* ★ 4.45-01 (검수사 2026-10-23 «호기를 정하고 작업을 하면 모든 보고에도 그 호기를 기본으로 지정되어 있어야 하는데 다시 호기를 선택해야 하는 경우가 발생되곤 합니다.
+         그러다 클릭 미스나 무심코 보고를 누르면 잘못된 호기로 보고가 됩니다») — 해치커버·콘박스·수동 보고도 **열 때마다 앱 호기**로 맞춘다.
+         종전 해치·콘박스 기본값은 «이 배에서 작업 시작을 누른 호기 중 첫 번호»(activeWork 첫 키)였다 — 앱 호기와 무관했고 끝난 배에 남은 «진행 중» 기록까지 끌어왔다
+         (실측 DJCF 0152N 10-22 02:56 김성일 4호기인데 기본 3호기 · SWBT 2614N 09-08 박진우 3호기인데 4호기로 콘박스·해치 보고 · XTPG 542E 10-02 박진우 3호기인데 기본 2호기).
+         수동 보고는 항차 화면에 처음 들어온 때의 호기(lastEquip)에 머물렀다. 한 번 누른 다른 호기는 창을 닫았다 열어도 남았다.
+         다른 갱 몫을 대신 보고할 때는 눌러 바꾼다 — 그 값은 이번 열림에만 쓰인다(STMJ 2663E 10-15 05:43 3호기 작업 중 2호기 몫 닫힘, 정상).
+         앱 호기가 없거나 이 부두에 없는 번호면 종전대로(해치·콘박스 = 진행 중 호기). */
+    setHatchEquip(''); setConBoxEquip('');
+    if (equipNumbers.includes(now)) setManualEquip(now);
+    /*   양하·선적도 지금 보고 있는 작업으로 맞춘다 — 호기의 진행 중 작업이 하나가 아니면(시작을 안 눌렀거나 양하·선적 둘 다) 보고 모드·항차를 이것으로 정한다(equipModeOf).
+         종전엔 지난번 시작 화면에서 고른 값(처음엔 양하)이라, 선적 중 닫힘이 양하 항차로 나갔다(실측 STMJ 2663E 10-15 05:43 2호기 6번 CLOSE — 선적 중인데 mode discharge). */
+    if (pageMode === 'loading' || pageMode === 'discharge') setSelectedMode(pageMode);
   }, [open]);
   //  3.36(감사 딸림): 창이 열려 있는 동안 **헤더에서** 호기를 바꿔도 따라간다 —
   //    안 그러면 두 값이 다시 갈라져 이 판이 없앤 어긋남이 되살아난다(`Header`·`GuidedWorkPanel`·`SearchPanel` 과 같은 알림을 듣는다).
+  //  4.45-01(감사 하2): 알림 처리는 첫 렌더에 한 번 붙으므로 부두 번호 목록은 ref 로 그때그때 읽는다 — 열림 때와 같이 이 부두 번호일 때만 수동 보고 호기를 맞춘다.
+  const equipNumbersRef = useRef(equipNumbers);
+  equipNumbersRef.current = equipNumbers;
   useEffect(() => {
-    const onEq = (e) => setSelectedEquip((e && e.detail) || getEquipNumber() || '1호기');
+    //  4.45-01: 앱 호기가 바뀌면 해치·콘박스·수동 보고도 따라간다(위 열림 때와 같은 뜻).
+    const onEq = (e) => { const n = (e && e.detail) || getEquipNumber() || '1호기'; setSelectedEquip(n); setHatchEquip(''); setConBoxEquip(''); if (equipNumbersRef.current.includes(n)) setManualEquip(n); };
     window.addEventListener('equipChanged', onEq);
     return () => window.removeEventListener('equipChanged', onEq);
   }, []);
@@ -223,6 +239,9 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (!activeByEquip[w.equip]) activeByEquip[w.equip] = [];
     activeByEquip[w.equip].push(w);
   });
+  //  4.45-01: 앱 호기(이 부두 번호일 때만) — 해치·콘박스 기본값의 첫째. 없을 때만 진행 중 호기 첫 번호(종전).
+  const myEquip = equipNumbers.includes(getEquipNumber()) ? getEquipNumber() : '';
+  const defaultReportEquip = myEquip || Object.keys(activeByEquip)[0] || '';
 
   /*  ★ 2.98-11 — **조용한 실패 금지** (3금지 ③).
         작업 보고의 다섯 쓰기에 try/catch 가 없어, RTDB 쓰기가 거부되면(권한·오프라인)
@@ -394,7 +413,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   };
 
   const handleHatch = async () => {
-    const equip = hatchEquip || Object.keys(activeByEquip)[0] || '';
+    const equip = hatchEquip || defaultReportEquip;   // 4.45-01: 앱 호기 먼저
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
     const bays = bayInput.split(/[,\s]+/).filter(b => b.trim()).map(b => b.trim());
     if (bays.length === 0) { alert('베이 번호를 입력하세요'); return; }
@@ -459,7 +478,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   };
 
   const handleConBox = async () => {
-    const equip = conBoxEquip || Object.keys(activeByEquip)[0] || '';
+    const equip = conBoxEquip || defaultReportEquip;   // 4.45-01: 앱 호기 먼저
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
     const voy = getVoy(equipModeOf(equip));  // V7.94-16: 항차 오표시 수정
     const time = Date.now();
@@ -496,11 +515,13 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             {Object.keys(activeByEquip).length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs font-bold text-dim-200">진행 중인 작업</div>
-                {Object.entries(activeByEquip).map(([equip, works]) => (
-                  <div key={equip} className="bg-ink-800/40 border border-line rounded-pill p-2 space-y-2">
+                {/* 4.45-01: 내 호기 줄을 맨 위에 «내 호기» 로 — 옆 줄의 중단·완료를 잘못 누르지 않게(검수사 «클릭 미스나 무심코 보고를 누르면 잘못된 호기로 보고가 됩니다») */}
+                {Object.entries(activeByEquip).sort(([a], [b]) => (b === myEquip) - (a === myEquip)).map(([equip, works]) => (
+                  <div key={equip} className="bg-ink-800/40 border border-line rounded-pill p-2 space-y-2" data-my-equip={equip === myEquip ? '1' : undefined}>
                     <div className="flex items-center gap-2 mb-1">
                       <Truck className="w-4 h-4 text-orange-400"/>
                       <span className="font-bold text-base text-orange-200">{equip}</span>
+                      {equip === myEquip && <span className="text-2xs font-bold px-1.5 py-0.5 rounded bg-orange-700 text-white">내 호기</span>}
                     </div>
                     {works.map(w => {
                       const isPaused = w.status === 'paused';
@@ -850,7 +871,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               <div className="grid grid-cols-4 gap-1">
                 {equipNumbers.map(n => (
                   <button key={n} onClick={() => setHatchEquip(n)}
-                    className={`py-2 rounded text-xs font-bold ${(hatchEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
+                    className={`py-2 rounded text-xs font-bold ${(hatchEquip || defaultReportEquip) === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}
                   </button>
                 ))}
@@ -928,7 +949,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               <div className="grid grid-cols-4 gap-1">
                 {equipNumbers.map(n => (
                   <button key={n} onClick={() => setConBoxEquip(n)}
-                    className={`py-2 rounded text-xs font-bold ${(conBoxEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
+                    className={`py-2 rounded text-xs font-bold ${(conBoxEquip || defaultReportEquip) === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}
                   </button>
                 ))}

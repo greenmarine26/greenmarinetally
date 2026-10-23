@@ -2088,6 +2088,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         voyageKey={voyageKey}
         voyage={voyage}
         lastEquip={getEquipNumber()}
+        pageMode={mode}   // 4.45-01: 호기의 진행 중 작업이 하나가 아니면 보고 모드·항차를 지금 보고 있는 작업으로
         onClose={() => setShowWorkReport(false)}
       />
 

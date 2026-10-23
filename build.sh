@@ -1087,6 +1087,20 @@ else
   cp "$SMOKE_HC.fbbak" src/firebase.js; rm -f "$SMOKE_HC.fbbak"
   echo "✗ 4.10 해치 장수 확인 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HC"; exit 1
 fi
+#  4.45-01: **선적 «홀드 선적 완료 → 커버 닫을까요» 가 보고 기록을 보는가 · 작업 보고의 호기는 앱 호기가 기본인가** — XTPG 545W 실데이터(23:01 작업 보고 창 닫힘 뒤 가이드가
+#    01·04·09(10)11 을 다시 물어 닫힘이 세 번 더 나감)와 STSE 2677E(홀드 선적 전 닫힘은 세지 않는 경계). 검수사 2026-10-23 «수동 작업 보고한것을 자동가이드에서 인식을 못하고» · «모든 보고에도 그 호기를 기본으로».
+SMOKE_HE=$(mktemp /dev/shm/hometmp/_smokehe_XXXXXX.js)
+cp src/firebase.js "$SMOKE_HE.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_hatchequip44501.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_HE"; then
+  cp "$SMOKE_HE.fbbak" src/firebase.js && rm -f "$SMOKE_HE.fbbak"
+  node tools/smoke_hatchequip44501.cjs "$(pwd)" "$SMOKE_HE" || { echo "✗ 4.45-01 해치·호기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_HE"; exit 1; }
+  rm -f "$SMOKE_HE"
+else
+  cp "$SMOKE_HE.fbbak" src/firebase.js; rm -f "$SMOKE_HE.fbbak"
+  echo "✗ 4.45-01 해치·호기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_HE"; exit 1
+fi
 #  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
 SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)

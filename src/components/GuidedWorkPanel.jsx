@@ -365,7 +365,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
      ⇒ 키에서 모드를 뺀다. 옛 키는 읽기에서만 받아 준다(이미 쌓인 기록을 버리지 않는다). */
   const hatchKeyOf = (center) => String(center);
   /*  reports 는 시간순 사실이다 — **마지막 보고가 곧 지금 상태**다. */
-  const lastHatchAction = (center) => {
+  //  4.45-01: 마지막 보고의 시각도 돌려준다(lastHatchOf) — 선적 홀드 끝 창이 «이 홀드 선적을 시작한 뒤의 닫힘인가» 를 본다.
+  const lastHatchOf = (center) => {
     const reps = voyage?.reports;
     if (!reps) return null;
     let act = null, bestTs = -1;
@@ -376,8 +377,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       const ts = hatchReportTs(r);   // 3.49: 자동 기록은 적힌 때가 아니라 사건 시각 — 나중에 적힌 옛 열림이 수동 닫힘을 덮지 않게(2차 감사)
       if (ts >= bestTs) { bestTs = ts; act = r.action; }
     }
-    return act;
+    return act ? { act, ts: bestTs } : null;
   };
+  const lastHatchAction = (center) => { const h = lastHatchOf(center); return h ? h.act : null; };
   const isHatchDoneSaved = (center, action) => {
     if (center == null) return false;
     //  ① 보고 기록(시간순 마지막)이 진실이다
@@ -1340,8 +1342,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const holdRemain = groupRemain.filter(c => parseInt(c.tier, 10) < 80).length;
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
-    return holdRemain === 0 && deckDone === 0 && groupDone > 0;
-  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished, hatchAuto]);
+    if (!(holdRemain === 0 && deckDone === 0 && groupDone > 0)) return false;
+    /* ★ 4.45-01 (검수사 2026-10-23 «수동으로 해치 커버를 5개 베이를 2번에 걸쳐서 했는데 수동 작업 보고한것을 자동가이드에서 인식을 못하고 다시 어떻게 할건지 묻는일이 있었습니다»)
+         — 이 창만 보고 기록을 안 봤다(양하 두 창은 isHatchDoneSaved 로 본다). 화면 표시(deckPromptDone)는 묶음을 고를 때마다 지워져 같은 묶음에서 또 떴다.
+         실측 XTPG 545W — 23:01 작업 보고 창 닫힘 1·4·7 / 10·14 뒤에 01(23:02)·04(23:23)·09(10)11(23:42) 닫힘이 가이드로 세 번 더 나갔다(카톡까지).
+       ⇒ 그 묶음의 마지막 해치 보고가 닫힘이고 **이 묶음 홀드 선적 첫 완료 뒤**에 있으면 묻지 않는다(수동·가이드·자동 기록 가리지 않음).
+       ⚠ 홀드 선적을 시작하기 전의 닫힘은 세지 않는다 — 양하 뒤 닫았다가 선적 때 열고 열림 보고를 안 한 배가 있다
+         (STSE 2677E 1번 10-07 06:02 양하 닫힘 → 06:15~06:18 선적 홀드 — 2차 시뮬 31항차 1분 단위 재생에서 옛·새 배너가 같다). 그것까지 세면 홀드 선적 뒤 닫힘을 못 묻는다.
+         감사 하1(남김) — 홀드 도중 닫았다가 열림 보고 없이 홀드를 마저 실으면 그 닫힘도 센다(STMJ 2663E 6·22번 꼴 · 그때는 데크가 이미 시작돼 배너 차이 0). «마지막 홀드 완료 뒤 닫힘만» 은 몰아 입력이 닫힘 뒤에 오면 다시 묻는다.
+         완료 시각이 없으면(옛 기록) 종전대로 묻는다. */
+    const holdAts = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
+      groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) < 80).map(c => Number(c._comp.at) || 0).filter(t => t > 0);
+    const lastH = lastHatchOf(selectedGroup);
+    if (lastH && lastH.act === 'close' && holdAts.length && lastH.ts >= Math.min(...holdAts)) return false;
+    return true;
+  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished, hatchAuto, voyage]);
 
   // V8.09-15 (사용자 점검 2026-06-18): 해치커버/베이 선택 갈림길 음성 처리.
   //   ① 선택 배너가 떠 있는 동안에는 "다음 컨테이너" 음성을 막는다(어디로 갈지 미정인데 앞서 말하던 버그).
