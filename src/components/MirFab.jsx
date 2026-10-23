@@ -21,6 +21,7 @@ import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';  
 import { answerOneRaw, workPauseOf, mirDoneUpWhy } from '../mir.js';   // 4.42-02: mirDoneUpWhy — 기쁨 이유에 배 이름
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
+import { RZOR_LEARN_RE } from '../mir.js';   // 4.44: «RZOR 학습 현황» — 물었을 때만 rzor_learn/summary 1회
 import { mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디 더 · «응/아니/됐어» 는 직전 답에 이어서
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
@@ -95,6 +96,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     if (!isChief) return chiefRef.current;
     const want = [];
     if (/오답|미회신|피드백/.test(text) && chiefRef.current.feedback === undefined) want.push(['feedback', () => fbGetSimple('feedback')]);
+    if (RZOR_LEARN_RE.test(text) && chiefRef.current.rzorLearn === undefined) want.push(['rzorLearn', () => fbGetSimple('rzor_learn/summary')]);   // 4.44: 작은 요약 노드만(항차 원자료는 안 읽는다)
     if (/마감|텔리/.test(text) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(text) && chiefRef.current.tallyPending === undefined) want.push(['tallyPending', () => fbGetSimple('tally_pending')]);
     //  감사 지적(중 9) — 보관소(월 통계·어제 실적·완료 배·«보관 몇 항차»)도 홈과 같은 규칙으로 1회 읽는다(1.6 사고 — 자동 호출 금지, 물었을 때만).
     if (/이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*(?:항차|된\s*배)|보관|몇\s*항차|최근\s*완료/.test(text) && chiefRef.current.archiveList === undefined) want.push(['archiveList', fbListArchive]);

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.43';
-const NOTE = '4.43 모든 검수원이 처음 로그인할 때 본인 비밀번호를 정합니다. 검수사 기기에서는 일반 검수원 이름으로 비밀번호 없이 들어갈 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.44';
+const NOTE = '4.44 수석이 미르에게 RZOR 학습 현황을 물으면 덱플랜 예측 채점을 답합니다. 마감텔리가 들어오면 수집기가 항차마다 채점해 더합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

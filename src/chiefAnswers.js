@@ -715,6 +715,29 @@ export function answerCollector(hb, now = Date.now()) {
   return `${hb.version || 'MailPilot'} — ${min}분 전 하트비트, ${cyc}분 주기 ${ok ? '정상' : `⚠ 끊김 의심(${min}분째 무신호)`}.`;
 }
 
+// RZOR 덱플랜 자가 학습 현황(4.44) — 수집기 2.45 가 쓰는 rzor_learn/summary
+//   {n, at, last, recent[{voy, learn{zone5,slot,n}, live{slot,deck,n,lolo{n,hit}}}], avg5{zone5,slot,voys}}
+//   learn = 그 항차를 빼고 배운 예측의 채점(구역 5구역 엄격·칸) · live = 작업 중 수집기 자동 입력(실시간 자가 테스트)의 채점.
+//   검수사 2026-10-23 «앱이 스스로 테스트 하고 마감텔리에서 실제작업 파일이 오면 그걸로 테스트한 결과 채점을 받아야 할것입니다».
+export function answerRzorLearn(sm) {
+  if (sm == null) return 'RZOR 학습 기록을 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+  if (!sm || !sm.n) return 'RZOR 덱플랜 학습 기록이 아직 없습니다 — 수집기가 마감텔리(실제 플랜)를 받으면 항차마다 쌓입니다.';
+  const L = [`🧭 RZOR 덱플랜 학습 — 보관소 ${sm.n}항차 (마지막 ${sm.last || '?'}).`];
+  if (sm.avg5 && sm.avg5.voys) L.push(`최근 ${sm.avg5.voys}항차 평균(그 항차를 빼고 배운 예측): 구역 ${sm.avg5.zone5}% · 칸 ${sm.avg5.slot}%`);
+  const rec = Array.isArray(sm.recent) ? sm.recent.slice(-5).reverse() : [];
+  if (rec.length) {
+    L.push('', '항차별 채점');
+    rec.forEach((r) => {
+      const a = r.learn ? `학습 예측 구역 ${r.learn.zone5}% · 칸 ${r.learn.slot}% (${r.learn.n}대)` : '학습 채점 없음';
+      const lo = r.live && r.live.lolo && r.live.lolo.n ? ` · LOLO ${r.live.lolo.hit}/${r.live.lolo.n}` : '';
+      const b = r.live ? ` · 실시간 자가 테스트 칸 ${r.live.slot}% 덱 ${r.live.deck}%${lo}` : '';
+      L.push(`· ${r.voy} — ${a}${b}`);
+    });
+  }
+  L.push('', '구역은 배워서 맞히고 칸은 검수원 입력이 정답입니다. 마감텔리가 들어오면 수집기가 그 항차를 채점해 보관소에 더합니다.');
+  return L.join('\n');
+}
+
 // 마감 미발송(미생성) — tally_pending {key: {vsl, voy_d, voy_l, archivedAt, tallyMadeAt}}
 export function answerTallyPending(tp) {
   if (tp == null) return '마감 목록을 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';

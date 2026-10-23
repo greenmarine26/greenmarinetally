@@ -983,6 +983,8 @@ node tools/smoke_fix36005.cjs "$PWD" || { echo "✗ 3.60-05 미르 파서 연막
 node tools/smoke_fix36006.cjs "$PWD" || { echo "✗ 3.60-06 안정 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.67: RZOR 선적 덱플랜 — 검수사 STOWAGE PLAN 파서(실물 R106W·R079W) · 자동 덱플랜(실적 189대) · 엑셀 왕복 · 화면 배선.
 node tools/smoke_rzorplan.cjs "$PWD" || { echo "✗ RZOR 선적 덱플랜 연막검사 실패 — 배포 금지"; exit 1; }
+# 4.44: 미르 «RZOR 학습 현황» — 수집기 2.45 자가 학습 채점 요약(rzor_learn/summary, 2026-10-23 씨앗 17항차 실물) · 수석만 · 두 읽기 자리 · 매뉴얼 · 배너.
+node tools/smoke_rzorlearn444.cjs "$PWD" || { echo "✗ 4.44 RZOR 학습 현황 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.70: RZOR 선적 덱플랜 빈자리 조회창 — 리스트 없어도 덱플랜 · 끝자리로 찾아 맞는 컨 다 보여 주고 고르면 선적(실소스를 jsdom 에서 실제로 누른다)
 node tools/smoke_rzorslotpick.cjs "$PWD" || { echo "✗ RZOR 빈자리 조회창 연막검사 실패 — 배포 금지"; exit 1; }
 # 3.72: RZOR 양하(선적) 덱플랜 — 완료 칸이 눌러 보지 않고도 보인다(밝은 초록 + ✓ 배지 · 방금 양하 줄 · 남음) — R107E 실데이터(196대·완료 116대)로 실소스를 jsdom 에서 그린다

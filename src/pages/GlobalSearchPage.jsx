@@ -10,6 +10,7 @@ import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierCo
 import DamageHistoryCard, { damageHistoryQueryOf } from '../components/DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(떠 있는 미르와 공용)
 import { mirTone, mirSmallTalk, YARD_SPEAK } from '../mir.js';
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
+import { RZOR_LEARN_RE } from '../mir.js';   // 4.44: «RZOR 학습 현황» — 물었을 때만 rzor_learn/summary 1회
 import { askMirModel, isWeakAnswer, mirThreadCommit, mirThreadAlive, mirThreadResolve, mirIsDeferred } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어»   // 3.42 판 B: 약한 답일 때만 모델(번역 → 규칙 재실행 → 자료 답)
 import { mirGotoRequest } from '../guideGoto.js';   // 4.40: 미르 [이동] — 그 항차 작업 화면으로
 import { flattenVoyages, pickShipCtx } from '../mir.js';   // 3.41: 전 항차 펼치기 한 벌(떠 있는 미르와 공용)
@@ -83,6 +84,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     if (q.length < 2) return;
     const want = [];
     if (/오답|미회신|피드백/.test(q) && chiefData.feedback === undefined) want.push(['feedback', () => fbGetSimple('feedback'), {}]);
+    if (RZOR_LEARN_RE.test(q) && chiefData.rzorLearn === undefined) want.push(['rzorLearn', () => fbGetSimple('rzor_learn/summary'), {}]);   // 4.44
     if (/마감|텔리/.test(q) && chiefData.tallyPending === undefined) want.push(['tallyPending', () => fbGetSimple('tally_pending'), {}]);
     if (/이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*(?:항차|된\s*배)|보관|몇\s*항차|최근\s*완료/.test(q) && chiefData.archiveList === undefined) want.push(['archiveList', fbListArchive, []]);   // 2.37: «보관»·«몇 항차»(검수사 «몇항차 텔리 보관하고 있어»)
     if (!want.length) return;

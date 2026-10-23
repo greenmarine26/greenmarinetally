@@ -50,7 +50,7 @@ import {
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
-  answerHatchStatus, answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerGangSplit,
+  answerHatchStatus, answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerGangSplit, answerRzorLearn,
   answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth,
   isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview, buildGangShift, gangBriefLines, answerGangShift,
 } from './chiefAnswers.js';
@@ -101,6 +101,9 @@ import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 �
 const PARTICLE = /(이야|인가요|인지|인가|입니까|이죠|하나요|할까요|할까|나요|에서|으로|이|가|은|는|을|를|의|에|로|도|요|야|죠|네|까)$/;
 const STOP = new Set(['보여줘', '보여', '알려줘', '알려', '해줘', '해', '줘', '주세요', '좀', '미르야', '미르', '봐줘', '봐', '좀요', '해봐', '해주세요']);
 const SLOT_RE = { ship: /^[A-Z]{4}$/, cn: /^[A-Z]{4}\d{7}$/, n: /^\d+$/ };
+
+// 4.44: RZOR 덱플랜 학습 현황을 묻는 말(수석 통계) — «RZOR 학습 현황» · «덱플랜 학습 어때» · «리자오 채점 결과». 홈 통합검색·미르 시트가 같은 식으로 1회 읽는다.
+export const RZOR_LEARN_RE = /(?:RZOR|리자오|일조|덱\s*플랜).{0,12}(?:학습|채점)|(?:학습|채점).{0,12}(?:RZOR|리자오|일조|덱\s*플랜)/i;   // 4.44 감사: 배·덱플랜 닻이 꼭 있어야 한다 — «미르 학습 어때»·«채점 결과»(미르 자체 학습 질문)는 가로채지 않는다
 
 export function mirTokens(q) {
   //  ⚠ RTDB 키 금지 문자(. # $ / [ ])도 여기서 지운다 — 감사 지적: 폰 키와 저장 키가 다르면 배운 것이 다음 구독에 사라진다.
@@ -438,7 +441,7 @@ const MIR_MENU_HEARD = [
 ];
 
 // ── 잡담 그물 — 명시 패턴에만 답한다. 업무 냄새가 나면 물러선다(무응답 신고가 막히면 미르가 못 배운다).
-const WORK = /\d{4,}|[A-Z]{4}\s?\d{7}|베이|리퍼|양하|선적|컨테이너|위험물|온도|씰|실번|엠티|풀|피트|홀드|데크|브리핑|출항|입항|도선|크레인|해치|시프팅|엑스레이|x-?ray|검수|항차|터미널|명단|리스트/i;
+const WORK = /\d{4,}|[A-Z]{4}\s?\d{7}|베이|리퍼|양하|선적|컨테이너|위험물|온도|씰|실번|엠티|풀|피트|홀드|데크|브리핑|출항|입항|도선|크레인|해치|시프팅|엑스레이|x-?ray|검수|항차|터미널|명단|리스트|덱\s*플랜/i;   // 4.44: 덱플랜은 일 이야기. RZOR 학습·채점 질문은 아래에서 RZOR_LEARN_RE 로 물러선다(«학습»·«채점» 낱말만으로는 잡담을 막지 않는다 — 감사 경①)
 
 export function mirSmallTalk(q) {
   const d = String(q || '').trim();
@@ -446,7 +449,7 @@ export function mirSmallTalk(q) {
   // 실측(«미르야 검수 해봤어?») — 미르 호명 + 경험 질문은 업무 단어가 섞여도 받아준다.
   if (/미르/.test(d) && /(해\s*봤어|해본\s*적|할\s*줄\s*알아)/.test(d))
     return '당연하죠! 매일 검수사님들 옆에서 컨테이너 번호 맞춰보는 게 제 일인걸요 😼 야드에서 눈으로 배운 검수 경력 3년이에요. 그래도 실번호 확인은 ' + mirCall() + ' 손끝이 제일 정확해요!';
-  if (WORK.test(d)) return null;
+  if (WORK.test(d) || RZOR_LEARN_RE.test(d)) return null;   // 4.44: «미르야 RZOR 학습 채점 어때» 는 잡담이 아니다
   if (/야드/.test(d) && /바[빠쁘뻐쁜쁨]|복잡|혼잡|적체|정체|어[때떄]|어떻|상황|현황|추이|블록|왜|괜찮|막[혀히혔]|밀[려리렸]|꽉|장비/.test(d)) return null;   // 3.69: 야드 상황 질문은 일 이야기 — «야드 다녀올게»·«야드 순찰» 잡담은 그대로 받는다(감사 3)
   const nim = mirCall();
   const isMe = d.includes('미르') || d.includes('너');
@@ -2361,7 +2364,7 @@ export function answerOneRaw(query, ctx) {
   }
 
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.
-  const _bareCall = p.mirCalled && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
+  const _bareCall = p.mirCalled && !RZOR_LEARN_RE.test(q) && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
   if (p.mirHello || _bareCall) {
     //  2차 시뮬 지적 — «미르 점심 먹었어?»·«미르 점심은?» 은 인사가 아니라 잡담(3.7-06)이다. 부름만 있어도 잡담 그물이 먼저 받는다.
     try { const st = mirSmallTalk(q); if (st) return st; } catch (e) { /* */ }
@@ -2373,6 +2376,7 @@ export function answerOneRaw(query, ctx) {
   //  ④ 수석 통계 — 배 이름 없이 묻는 것. 검수원에게는 수석 유도 한 줄(1.69-01).
   const Q = q;
   const chiefLike = /오답|미회신|피드백|수집기|하트비트|mailpilot/i.test(Q)
+    || RZOR_LEARN_RE.test(Q)   // 4.44: «RZOR 학습 현황» — 수집기 2.45 채점 요약(수석 통계)
     || (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q))
     || /이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*항차/.test(Q)
     || READY_RE.test(Q);
@@ -2391,6 +2395,7 @@ export function answerOneRaw(query, ctx) {
     const cd = c.chiefData;
     const _err = (x, what) => (x && x.__error) ? `${what}를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.` : null;
     if (/오답|미회신|피드백/.test(Q)) return _err(cd.feedback, '오답 리포트') || answerFeedback(cd.feedback ?? null);
+    if (RZOR_LEARN_RE.test(Q)) return _err(cd.rzorLearn, 'RZOR 학습 기록') || answerRzorLearn(cd.rzorLearn === undefined ? null : cd.rzorLearn);
     if (/수집기|메일\s*수집|하트비트|mailpilot/i.test(Q)) return answerCollector(c.heartbeat || null);
     if (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q)) return _err(cd.tallyPending, '마감 목록') || answerTallyPending(cd.tallyPending ?? null);
     if (/이번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위/.test(Q) || /지난\s*달|저번\s*달/.test(Q)) {
