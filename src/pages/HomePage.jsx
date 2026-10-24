@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { resolvedPod, podConflictOf, keepOnboardOf } from '../utils.js';   // 4.48: keepOnboardOf — 본선 잔류 한 벌   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
+import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
@@ -2279,7 +2279,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
     recordCns.forEach(cn => ptkCns.add(cn));
   }
   //  ★ 4.48 감사(상 1) — 선사 지시 본선 잔류 컨은 평택에서 안 내린다. EDI 평택분(ptk — 홈 «완료 확인» 창의 평택분 작업량)에서도 뺀다(MAMP 641N 317 → 315).
-  if (mode === 'discharge') for (const cn of Object.keys(keepOnboardOf({ keepOnboard }))) { ptkCns.delete(cn); recordCns.delete(cn); }
+  //  4.48-03: 선사 지시 본선 잔류는 예정 — 평택분 합계에서 빼지 않는다(자료대로 · 검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»).
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
   //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)

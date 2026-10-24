@@ -182,7 +182,7 @@ function ReconLine({ x, onOpenContainer }) {
     <button type="button" data-recon-cn={x.cn}
       onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
       className="mono block w-full text-left px-1.5 py-0.5 rounded hover:bg-ink-750/50 active:bg-ink-700">
-      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-all">{parts.join(' · ')}</span>{/* 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
+      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-words">{parts.join(' · ')}</span>{/* 4.48-03: break-all → break-words(319px 에서 «PHDVO» 같은 낱말이 중간에서 갈렸다 — 긴 파일 이름만 갈린다) · 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
     </button>
   );
 }
@@ -203,6 +203,9 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
     const unk = reconUnknownText(d);
     //  4.48-01 감사(하-3) — 선사 메일 수정(본선 잔류)은 «POD 확정 — 평택 아님»과 따로 묶고, 터미널 차이가 그 대수면 «터미널은 아직 선사 메일 수정 전»(한 줄과 같은 말).
     const _kRefN = (d.ref || []).filter((x) => x && x.keep).length;
+    //  4.48-03 — 앱 수(d.app)는 자료대로(지시 컨 포함 — 예정). 앱 예상 = 앱 − 앱 안의 지시·참고 컨. 터미널이 자료 그대로면 «아직 수정 전», 앱 예상과 같으면 «반영 — 수정본 대기».
+    const _kApp = d.app - (d.ref || []).filter((x) => x && x.inApp).length;
+    const _kPre = !!(_kRefN && tn && tn === d.app && _kApp !== d.app), _kDone = !!(_kRefN && tn && tn === _kApp && _kApp !== d.app);
     //  세관 코드 — 검수사 09:37 «KKLC같은건 MFN대상으로 알림» → «MFN 대상 — 뜻» · MGN 은 완료·실적 없는 컨만(일부면 대수)
     const hint = (g) => (g.code === 'MFN' ? customsCodeLabel('MFN', { kind: '대상' })
       : g.code === 'MGN' ? customsCodeLabel('MGN', { kind: '대상', n: g.codeN && g.codeN !== g.items.length ? g.codeN : null, note: '완료·실적 없음' })
@@ -215,9 +218,9 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
         {gap != null && (
           <div className={gap === 0 ? 'text-dim-300' : 'text-amber-300'} data-recon-term>
             {gap === 0
-              ? `${tl} ${tn}대 = 앱 ${d.app}대`
+              ? `${tl} ${tn}대 = 앱 ${d.app}대` + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
               : `${tl} ${tn}대 · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
-                + (_kRefN && tn - d.app === _kRefN ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 ${_kRefN}대)` : d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
+                + (_kDone ? ` — 터미널은 선사 메일 반영(본선 잔류 예정 ${_kRefN}대) · EDI·리스트 수정본 대기` : d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
                 + (unk ? ` — ${unk}` : '')}
           </div>
         )}
@@ -234,7 +237,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
         ))}
         {_kRefN > 0 && (
           <div data-recon-group="keep">
-            <div className="text-dim-300 font-bold">선사 메일 수정 — 본선 잔류(평택에서 안 내림 · 참고) {_kRefN}대</div>
+            <div className="text-dim-300 font-bold">선사 메일 수정 — 본선 잔류 예정(평택에서 안 내림 · 확정 아님 · 참고) {_kRefN}대</div>
             <TruncList items={d.ref.filter((x) => x && x.keep)} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
           </div>
         )}

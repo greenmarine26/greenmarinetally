@@ -1305,12 +1305,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             const _k = _k0 && !_k0.cleared ? _k0 : null;   // 풀린 지시는 없는 것과 같다(다시 넣을 수 있다)
             if (_k) return (
               <div className="mt-2 px-3 py-2 bg-yellow-950/40 border border-yellow-600 rounded-pill" data-keep="1">
-                <div className="text-xs font-black text-yellow-200">🟡 선사 지시 — 본선 잔류(평택에서 안 내림)</div>
+                <div className="text-xs font-black text-yellow-200">🟡 선사 지시 — 본선 잔류 예정(평택에서 안 내림 · 확정 아님)</div>
                 <div className="text-xxs text-yellow-100/90 mt-0.5 leading-snug" data-keep-pod={_k.pod}>
                   POD 변경 {(_k.pod_orig || c.pod || '?')} → {_k.pod}{_k.mailAt ? ` · 선사 메일 ${_k.mailAt}` : ''}{_k.src === 'mail' ? ' · 수집기(메일)' : _k.by ? ` · ${_k.by}` : ''}
                 </div>
                 {_k.note && <div className="text-3xs text-yellow-100/70 mt-0.5 break-words">«{_k.note}»</div>}
-                <div className="text-3xs text-yellow-200/80 mt-0.5 leading-snug">평택 양하 대수에서 뺍니다. 이 컨 아래 평택 컨을 내리려면 들어냈다 다시 실어야 하면 카고플랜·베이뷰에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 시프팅으로 확정하면 파란 ◆ 로 바뀝니다.</div>
+                <div className="text-3xs text-yellow-200/80 mt-0.5 leading-snug">예정입니다 — 평택 양하 대수는 자료(EDI·리스트)대로 셉니다. 양하 EDI·리스트 수정본이 오면 그 자료대로 바뀝니다. 이 컨 아래 평택 컨을 내리려면 들어냈다 다시 실어야 하면 카고플랜·베이뷰에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 시프팅으로 확정하면 파란 ◆ 로 바뀝니다.</div>
                 {podCan && (
                   <button onClick={clearKeep} disabled={keepBusy} data-keep-clear="1"
                     className="mt-1 px-2 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">{keepBusy ? '푸는 중…' : '지시 풀기'}</button>
@@ -1329,7 +1329,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             return (
               <div className="mt-2 px-3 py-2 bg-ink-900 border border-yellow-700/60 rounded-pill" data-keep-form="1">
                 <div className="text-xs font-black text-yellow-200">🟡 선사 지시 · 본선 잔류 — 평택에서 내리지 않는 컨</div>
-                <div className="text-3xs text-dim-300 mt-0.5 leading-snug">선사 메일(예 «Pls keep below cntrs onboard for CNDAI discharge»)대로 넣습니다. 평택 양하 대수에서 빠지고, 아래 평택 컨을 막으면 시프팅 예보(노란 ◆)가 됩니다.</div>
+                <div className="text-3xs text-dim-300 mt-0.5 leading-snug">선사 메일(예 «Pls keep below cntrs onboard for CNDAI discharge»)대로 넣습니다. 예정으로 남고(평택 양하 대수는 자료대로), 아래 평택 컨을 막으면 시프팅 예보(노란 ◆)가 됩니다.</div>
                 <div className="grid grid-cols-2 gap-1.5 mt-1.5">
                   <input value={keepPod} onChange={(e) => setKeepPod(e.target.value.toUpperCase())} placeholder="양하항 (예 CNDAI)" data-keep-pod-input="1"
                     className="px-2 py-1 rounded bg-ink-800 border border-line text-xs mono text-dim-100"/>

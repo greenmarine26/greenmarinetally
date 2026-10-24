@@ -280,7 +280,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
         <div className="mb-2 px-2 py-1.5 bg-yellow-950/30 border border-yellow-700/40 rounded text-xxs text-yellow-100" data-app-expect={`${app.ptk}/${app.list}/${app.matched}/${app.shift}`}>
           <div className="font-bold">앱 예상(선사 메일 수정 {v.keepN}건 적용 · 확정 아님) — EDI 평택 {app.ptk} · 리스트 {app.list} · 매칭 {app.matched} · 쉬프팅 {app.shift}{shiftKeepCount > 0 ? `(예보◆${shiftKeepCount})` : ''} · 총 작업 {app.list + app.shift - v.shiftOverlapNoKeep}대</div>
           {keepEvid.map((e, i) => (
-            <div key={i} className="text-2xs text-yellow-200/90 break-all" data-keep-evid={e.cns.join(',')}>
+            <div key={i} className="text-2xs text-yellow-200/90 break-words" data-keep-evid={e.cns.join(',')}>
               근거 — 선사 메일{e.at ? ` ${e.at}` : ''}{e.note ? ` «${e.note}»` : ''} · {e.cns.join(' · ')}{e.pod ? ` → ${e.pod}` : ''}(평택에서 안 내림{v.keepPtkInEdi > 0 ? ' — 양하 EDI 는 아직 평택 · 수정 전' : ''})
             </div>
           ))}

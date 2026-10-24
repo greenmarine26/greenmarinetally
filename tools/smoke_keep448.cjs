@@ -34,13 +34,14 @@ const bundle = process.argv[3];
   ok(Object.keys(k0).sort().join(',') === [K1, K2].sort().join(',') && k0[K1].pod === 'CNDAI', '지시 두 대만 — 평택을 지시한 줄·컨번호 아닌 키·_ 키는 뺀다', JSON.stringify(Object.keys(k0)));
   ok(Object.keys(T.keepOnboardOf({})).length === 0 && Object.keys(T.keepOnboardOf(null)).length === 0, '지시가 없으면 빈 묶음');
 
-  console.log('② 평택 양하분 — 317 꼴에서 두 대를 뺀다 (22베이 픽스처 리스트 ' + Object.keys(FX.voyage.discharge.records).length + '대)');
+  console.log('② 평택 양하분 — 4.48-03: 지시는 예정이라 빼지 않는다(자료대로 · 22베이 픽스처 리스트 ' + Object.keys(FX.voyage.discharge.records).length + '대)');
   const U0 = T.ptkDischargeUnitsOf(voy(null));
   const U1 = T.ptkDischargeUnitsOf(voy(mail()));
-  ok(U0.set.has(K1) && U0.set.has(K2) && !U1.set.has(K1) && !U1.set.has(K2) && U1.set.size === U0.set.size - 2, `지시 넣으면 ${U0.set.size} → ${U1.set.size}(두 대만 빠짐)`, `${U0.set.size}/${U1.set.size}`);
+  ok(U0.set.has(K1) && U0.set.has(K2) && U1.set.has(K1) && U1.set.has(K2) && U1.set.size === U0.set.size && U1.keepIn && U1.keepIn.has(K1) && U1.keepIn.has(K2) && !U1.extra.has(K1),
+    `지시 넣어도 ${U0.set.size} → ${U1.set.size}(자료대로 · 예정 두 대는 keepIn — «추가분(신고 대상)» 표식 없음)`, `${U0.set.size}/${U1.set.size}`);
   const vE = voy(mail()); vE.discharge.records = {};
   const UE = T.ptkDischargeUnitsOf(vE);
-  ok(UE.basis === 'edi' && !UE.set.has(K1) && !UE.set.has(K2), '리스트 없는 배(EDI 기준)도 지시 컨은 뺀다');
+  ok(UE.basis === 'edi' && UE.set.has(K1) && UE.set.has(K2) && UE.keepIn.has(K1), '리스트 없는 배(EDI 기준)도 지시 컨을 빼지 않는다(예정 표시만)');
 
   console.log('③ 시프팅 예보 — 같은 스택 아래 평택 컨');
   const v1 = voy(mail());
@@ -50,7 +51,7 @@ const bundle = process.argv[3];
   //  아래가 평택이 아닌 컨(22-06-82 맨 아래, 그 밑 홀드 22-06 은 전부 CNTXG)은 예보가 아니다 — 평택 양하에서만 빠진다
   const v2 = voy({ MCAU5003650: { pod: 'CNDAI', src: 'manual' } });
   const fc2 = T.keepShiftForecastOf(VK + '_b', v2);
-  ok(!fc2.MCAU5003650 && !T.ptkDischargeUnitsOf(v2).set.has('MCAU5003650'), '아래 평택 컨이 없는 지시(22-06-82)는 예보가 아니다 — 평택 양하에서만 빠짐', JSON.stringify(fc2));
+  ok(!fc2.MCAU5003650 && T.ptkDischargeUnitsOf(v2).set.has('MCAU5003650'), '아래 평택 컨이 없는 지시(22-06-82)는 예보가 아니다 — 평택 양하분에도 그대로(예정)', JSON.stringify(fc2));
 
   console.log('④ 화면 지도 — 확정(파란 ◆) 62꼴 + 예보(노란 ◆)');
   const conf = T.computeShiftingMapCached(VK, v1);
@@ -115,8 +116,8 @@ const bundle = process.argv[3];
   W.__renderDetail({ c: row, mode: 'discharge', voyageKey: VK, voyageInfo: FX.voyage.info, inspector: ME, records: FX.voyage.discharge.records, allContainers: [row] });
   await wait(500);
   const k = doc.querySelector('[data-keep="1"]');
-  ok(!!k && /선사 지시 — 본선 잔류\(평택에서 안 내림\)/.test(k.textContent) && /POD 변경 KRPYOTM → CNDAI · 선사 메일 10-24 12:49/.test(k.textContent) && !!doc.querySelector('[data-keep-clear]'),
-    '«🟡 선사 지시 — 본선 잔류» · «POD 변경 KRPYOTM → CNDAI · 선사 메일 10-24 12:49» · [지시 풀기](검수사)', k ? k.textContent.slice(0, 200) : doc.body.textContent.slice(0, 200));
+  ok(!!k && /선사 지시 — 본선 잔류 예정\(평택에서 안 내림 · 확정 아님\)/.test(k.textContent) && /POD 변경 KRPYOTM → CNDAI · 선사 메일 10-24 12:49/.test(k.textContent) && /평택 양하 대수는 자료\(EDI·리스트\)대로/.test(k.textContent) && !/대수에서 뺍니다/.test(k.textContent) && !!doc.querySelector('[data-keep-clear]'),
+    '«🟡 선사 지시 — 본선 잔류 예정(… 확정 아님)» · «POD 변경 KRPYOTM → CNDAI · 선사 메일 10-24 12:49» · «대수는 자료대로»(4.48-03) · [지시 풀기](검수사)', k ? k.textContent.slice(0, 200) : doc.body.textContent.slice(0, 200));
   W.__memdb = { voyages: { [VK]: clone(FX.voyage) } };
   const row2 = { ...FX.voyage.discharge.ediContainers.MNBU0567132, ...FX.voyage.discharge.records.MNBU0567132, _mode: 'discharge' };
   W.__renderDetail({ c: row2, mode: 'discharge', voyageKey: VK, voyageInfo: FX.voyage.info, inspector: ME, records: FX.voyage.discharge.records, allContainers: [row2] });
@@ -159,13 +160,13 @@ const bundle = process.argv[3];
   ok(!!ev9 && ev9.getAttribute('data-keep-evid').split(',').sort().join(',') === [K1, K2].sort().join(',') && /선사 메일 10-24 12:49/.test(ev9.textContent) && /→ CNDAI/.test(ev9.textContent),
     '메일 근거 — 지시 기록 없이 시프팅 목록만 받아도 «선사 메일 10-24 12:49 · 두 컨 → CNDAI»', ev9 && ev9.textContent);
 
-  console.log('⑩ 감사 «부» 입구들 — 같은 두 대를 어느 입구에서든 평택 양하에서 뺀다(상 1~3 · 중 1~3 · 하 1·3)');
+  console.log('⑩ 입구들 — 4.48-03: 지시는 예정이라 어느 입구에서든 평택 양하는 자료대로(4.48 은 두 대를 뺐다 — 검수사 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서»)');
   const vA = voy(mail()); vA.key = VK;
   const ssA = T.shiftSplitOf(VK, vA).set;
   const pr0 = T.progressOf(vA.discharge, 'discharge', ssA), pr1 = T.progressOf(vA.discharge, 'discharge', ssA, undefined, vA.keepOnboard);
-  ok(pr1.ptk.total === pr0.ptk.total - 2 && pr1.listTotal === pr0.listTotal - 2, `진행 숫자 한 벌(progressOf) — 지시를 넘기면 평택분 ${pr0.ptk.total} → ${pr1.ptk.total}(홈 카드·수석 보드·현황 요약)`, `${pr0.ptk.total}/${pr1.ptk.total}`);
+  ok(pr1.ptk.total === pr0.ptk.total && pr1.listTotal === pr0.listTotal, `진행 숫자 한 벌(progressOf) — 지시를 넘겨도 평택분 ${pr0.ptk.total} → ${pr1.ptk.total}(홈 카드·수석 보드·현황 요약 — 자료대로)`, `${pr0.ptk.total}/${pr1.ptk.total}`);
   const cs0 = T.computeStats(vA.discharge, 'discharge', vA.info, VK, ssA), cs1 = T.computeStats(vA.discharge, 'discharge', vA.info, VK, ssA, vA.keepOnboard);
-  ok(cs1.total === cs0.total - 2 && cs1.ptk === cs0.ptk - 2, `홈 카드 computeStats — 막대 ${cs0.total} → ${cs1.total} · 완료 확인 창 평택분 ${cs0.ptk} → ${cs1.ptk}`, JSON.stringify({ a: [cs0.total, cs0.ptk], b: [cs1.total, cs1.ptk] }));
+  ok(cs1.total === cs0.total && cs1.ptk === cs0.ptk, `홈 카드 computeStats — 막대 ${cs0.total} → ${cs1.total} · 완료 확인 창 평택분 ${cs0.ptk} → ${cs1.ptk}(자료대로)`, JSON.stringify({ a: [cs0.total, cs0.ptk], b: [cs1.total, cs1.ptk] }));
   const src = (f) => fs.readFileSync(require('path').join(root, f), 'utf8');
   const hp = src('src/pages/HomePage.jsx'), cd = src('src/pages/ChiefDashboard.jsx'), vsc = src('src/components/VoyageSummaryCard.jsx');
   ok(/computeStats\(dis, 'discharge', voyage\.info, voyage\.key, _shiftSet, voyage\.keepOnboard\)/.test(hp) && /computeStats\(v\?\.discharge, 'discharge', undefined, undefined, undefined, v\?\.keepOnboard\)/.test(hp)
@@ -174,22 +175,22 @@ const bundle = process.argv[3];
   const rowsA = Object.values(vA.discharge.ediContainers).map((c) => ({ ...c, _mode: 'discharge' }));
   const ad0 = T.applyDischargeUnits(rowsA, { discharge: { records: vA.discharge.records } }, ssA), ad1 = T.applyDischargeUnits(rowsA, { keepOnboard: vA.keepOnboard, discharge: { records: vA.discharge.records } }, ssA);
   const r1 = ad1.rows.find((x) => x.cn === K1) || {};
-  ok(ad1.U.set.size === ad0.U.set.size - 2 && r1._ptk === false && !r1._extraOfList, `콘앱 미르 행(applyDischargeUnits) — 지시 두 대는 _ptk false · «세관 목록 밖 추가분» 아님 (${ad0.U.set.size} → ${ad1.U.set.size})`, JSON.stringify({ n: [ad0.U.set.size, ad1.U.set.size], r1: { p: r1._ptk, x: r1._extraOfList } }));
+  ok(ad1.U.set.size === ad0.U.set.size && r1._ptk === true && !r1._extraOfList, `콘앱 미르 행(applyDischargeUnits) — 지시 두 대도 _ptk(자료대로) · «세관 목록 밖 추가분» 표식 없음 (${ad0.U.set.size} → ${ad1.U.set.size})`, JSON.stringify({ n: [ad0.U.set.size, ad1.U.set.size], r1: { p: r1._ptk, x: r1._extraOfList } }));
   const vcA0 = T.voyageCountsOf(voy(null)), vcA1 = T.voyageCountsOf(vA);
-  ok(vcA1.byMode.discharge.total === vcA0.byMode.discharge.total - 2, `미르 잔여·무브수 분모(voyageCountsOf) ${vcA0.byMode.discharge.total} → ${vcA1.byMode.discharge.total}`, JSON.stringify([vcA0.byMode.discharge, vcA1.byMode.discharge]));
+  ok(vcA1.byMode.discharge.total === vcA0.byMode.discharge.total, `미르 잔여·무브수 분모(voyageCountsOf) ${vcA0.byMode.discharge.total} → ${vcA1.byMode.discharge.total}(자료대로)`, JSON.stringify([vcA0.byMode.discharge, vcA1.byMode.discharge]));
   const dispA = T.shiftingMapForDisplay(VK, vA), confA = T.computeShiftingMapCached(VK, vA), cN = Object.keys(confA).length;
   const contsA = Object.values(vA.discharge.ediContainers);
   const planHead = async (pr) => { W.__renderPlan({ containers: contsA, mode: 'discharge', voyageInfo: vA.info, shipName: 'MAMP', ...pr }); await wait(400); const el = doc.querySelector('[data-cp-count]'); return el ? el.getAttribute('data-cp-count') : ''; };
   const hN = (await planHead({})).split('/')[0] * 1;
   const hK = await planHead({ shiftingMap: dispA, keepOnboard: vA.keepOnboard });
   const hM = await planHead({ shiftingMap: dispA });
-  ok(hK === `${hN - 2}/${hN - 2 + cN + 2}` && hM === hK, `종이 카고플랜 머리 — «양하 ${hN - 2} · 쉬프팅 ${cN} 예보◆2 · 작업분 ${hN - 2 + cN + 2}»(두 대를 양하와 예보에 두 번 세지 않는다 · keepOnboard 없이 지도만 받아도 같다)`, `${hN} ${hK} ${hM}`);
+  ok(hK === `${hN}/${hN + cN}` && hM === hK, `종이 카고플랜 머리 — «양하 ${hN} · 쉬프팅 ${cN} 예보◆2 · 작업분 ${hN + cN}»(양하는 자료대로 · 예보 두 칸은 작업분에서 한 번만 · keepOnboard 없이 지도만 받아도 같다)`, `${hN} ${hK} ${hM}`);
   ok(/keepOnboard=\{voyage\?\.keepOnboard\}/.test(src('src/pages/VoyagePage.jsx')) && /keepOnboard=\{voyage\?\.keepOnboard\}/.test(src('src/components/PrintHubModal.jsx')), '배선 — 항차 화면·출력 센터 카고플랜이 keepOnboard 를 넘긴다');
   const slA = T.shiftingListOf(dispA, vA.discharge.ediContainers, vA);
   const dgA = (cns) => (T.runDiagnostics({ ediContainers: contsA.filter((c) => c.pod === 'KRPTK'), listRecords: Object.values(vA.discharge.records), mode: 'discharge', shiftCns: cns, voyage: vA, voyageKey: VK }) || []).find((a) => a.code === 'source_recon');
   const ra = dgA(slA.filter((x) => !x.keep).map((x) => x.cn)), rb = dgA(slA.map((x) => x.cn));
-  ok(!!ra && ra.details.explained === 2 && ra.details.unknown === 0 && (ra.details.ref || []).filter((x) => x.keep).length === 2 && !/번호 없음/.test(ra.msg) && !!rb && /번호 없음 2대/.test(rb.msg),
-    '주의 박스 자료별 대조 — 예보를 뺀 시프팅 목록을 넘기면 «POD 확정 — 평택 아님(참고)» 2 · 설명 2 · «번호 없음» 0 (예보까지 넘기면 «번호 없음 2대» — 고치기 전)', JSON.stringify({ a: ra && [ra.msg, ra.details.explained, ra.details.unknown], b: rb && rb.msg }));
+  ok(!!ra && ra.details.unknown === 0 && (ra.details.ref || []).filter((x) => x.keep).length === 2 && !/번호 없음/.test(ra.msg) && /적용하면 37 · 터미널 배정 39\(터미널은 아직 선사 메일 수정 전\)/.test(ra.msg) && (!rb || !/번호 없음/.test(rb.msg)),
+    '주의 박스 자료별 대조 — 지시 두 대는 참고 줄 2 · «번호 없음» 0 · «적용하면 37 · 터미널 배정 39(아직 수정 전)»(4.48-03 — 앱 수가 자료대로라 터미널과 차이 없음 · 예보까지 넘겨도 «번호 없음» 없음)', JSON.stringify({ a: ra && [ra.msg, ra.details.explained, ra.details.unknown], b: rb && rb.msg }));
   ok(/shiftCns: shiftingList\.filter\(\(x\) => x && !x\.keep\)\.map\(\(x\) => x\.cn\)/.test(src('src/pages/VoyagePage.jsx')), '배선 — 항차 화면이 주의 박스에 예보를 뺀 목록을 넘긴다');
   ok(/keepShiftForecastOf\(voyageKey, voyage, null, \{ confirmed: shiftingMap \}\)/.test(src('src/components/PrintHubModal.jsx')) && /shiftingListOf\(\{ \.\.\.shiftingMap, \.\.\._fc \}, fullEdiMap, voyage\)/.test(src('src/components/PrintHubModal.jsx')),
     '배선 — 출력 센터 검수 리스트 [별첨2]가 확정 + 예보를 싣는다(항차 화면 ◆ 목록 인쇄와 같은 수)');
@@ -223,7 +224,7 @@ const bundle = process.argv[3];
   const hB0 = (await planHead({})).split('/')[0] * 1;
   W.__renderPlan({ containers: Object.values(vB.discharge.ediContainers), mode: 'discharge', voyageInfo: vB.info, shipName: 'MAMP', shiftingMap: dispB, keepOnboard: vB.keepOnboard }); await wait(400);
   const hB = (doc.querySelector('[data-cp-count]') || { getAttribute: () => '' }).getAttribute('data-cp-count');
-  ok(hB === `${hB0 - 3}/${hB0 - 3 + cntB}`, `카고플랜 머리 — 확정된 지시·아래 평택 없는 지시까지 셋 다 양하에서 뺀다(«${hB0 - 3}/${hB0 - 3 + cntB}» · 지도 칸만 보면 ${hB0 - 1})`, `${hB0} ${hB}`);
+  ok(hB === `${hB0 - 1}/${hB0 - 1 + cntB - 1}`, `카고플랜 머리 — 플래너가 확정한 지시(파란 ◆)만 양하에서 빠지고 예정 둘은 양하분에 그대로 · 예보 칸은 작업분에서 한 번만(«${hB0 - 1}/${hB0 - 1 + cntB - 1}» · 4.48-03)`, `${hB0} ${hB}`);
   const helpSrc = src('src/data/helpData.js'), fiSrc = src('src/data/featureIndex.js');
   const ht1 = String(T.generateHowToAnswer('연태 예보 어디 올려', null, { isChief: true }) || ''), ht2 = String(T.generateHowToAnswer('일조나 연태 예보는 어디다 올려야 하지?', null, { isChief: true }) || '');
   const ht3 = String(T.generateHowToAnswer('본선 잔류 어디서 넣어', null, { isChief: true }) || '');
@@ -269,7 +270,7 @@ const bundle = process.argv[3];
   {
     const vD = voy(mail()); vD.key = VK;
     const dispD = T.shiftingMapForDisplay(VK + '_D', vD), slD = T.shiftingListOf(dispD, vD.discharge.ediContainers, vD);
-    const UD = T.ptkDischargeUnitsOf(vD); const ediD = {}; for (const c of Object.values(vD.discharge.ediContainers)) if (c && c.cn && UD.set.has(c.cn)) ediD[c.cn] = c;   // 항차 화면 isPtk 와 같은 평택 양하분(본선 잔류 뺌)
+    const UD = T.ptkDischargeUnitsOf(vD), _kD = T.keepOnboardOf(vD); const ediD = {}; for (const c of Object.values(vD.discharge.ediContainers)) if (c && c.cn && UD.set.has(c.cn) && !_kD[c.cn]) ediD[c.cn] = c;   // 항차 화면 진단 입력과 같은 평택 양하분(4.48-03: 유닛은 지시 컨을 세고 진단 입력만 _keepDiag 로 뺀다)
     const recD = {}; for (const [cn, r] of Object.entries(vD.discharge.records)) recD[cn] = { ...r, cn };
     const dg = (keepCns) => T.runDiagnostics({ keepCns, ediContainers: ediD, listRecords: recD, mode: 'discharge', shiftCns: slD.filter((x) => !x.keep).map((x) => x.cn), voyage: vD, voyageKey: VK + '_D' }) || [];
     const a1 = dg([K1, K2]), a0 = dg([]);
@@ -282,7 +283,7 @@ const bundle = process.argv[3];
     //  감사(중-3) — 문구 전체 · 지시 없는 배 · 터미널 숫자가 다를 때 · 터미널이 이미 반영했을 때 · POD 확정 참고가 같이 있을 때 · 다른 어긋남이 같이 있을 때(하-1)
     const mk = (keep, tweak, keepCns) => { const v = voy(keep); v.key = VK; if (tweak) tweak(v);
       const disp = T.shiftingMapForDisplay(VK + '_M' + (++__mkn), v), sl = T.shiftingListOf(disp, v.discharge.ediContainers, v);
-      const U = T.ptkDischargeUnitsOf(v); const ed = {}; for (const c of Object.values(v.discharge.ediContainers)) if (c && c.cn && U.set.has(c.cn)) ed[c.cn] = c;
+      const U = T.ptkDischargeUnitsOf(v), _kv = T.keepOnboardOf(v); const ed = {}; for (const c of Object.values(v.discharge.ediContainers)) if (c && c.cn && U.set.has(c.cn) && !_kv[c.cn]) ed[c.cn] = c;
       const rec = {}; for (const [cn, r] of Object.entries(v.discharge.records)) rec[cn] = { ...r, cn };
       return T.runDiagnostics({ keepCns: keepCns || Object.keys(T.keepOnboardOf(v)), ediContainers: ed, listRecords: rec, mode: 'discharge', shiftCns: sl.filter((x) => !x.keep).map((x) => x.cn), voyage: v, voyageKey: VK + '_M' }) || []; };
     let __mkn = 0;
@@ -293,22 +294,23 @@ const bundle = process.argv[3];
     const b0 = mk(null);
     ok(!b0.some((a) => ['source_recon', 'keep_onboard', 'list_extra'].includes(a.code)), '지시 없는 배 — 자료별 대조·본선 잔류·매칭 안 되는 컨 줄이 안 선다(종전과 같음)', JSON.stringify(b0.map((a) => a.code + ':' + a.msg)));
     const c1 = one(mk(mail(), (v) => { v.info.planDis = 40; }), 'source_recon')[0];
-    ok(!!c1 && c1.msg.startsWith(HEAD + ' 적용하면 37 · 터미널 배정 40 · 앱 37 (-3) · 번호 없음 1대') && !/수정 전/.test(c1.msg) && c1.voice === '터미널과 3대 차이',
-      '터미널 배정 40(지시 대수와 다른 차이) — «터미널 배정 40 · 앱 37 (-3)» · «수정 전» 이라 하지 않는다(감사 중-2 — 부호가 앱 쪽에 붙는다)', c1 && c1.msg);
+    ok(!!c1 && c1.msg.startsWith(HEAD + ' 적용하면 37 · 터미널 배정 40 · 앱 39 (-1) · 번호 없음 1대') && !/수정 전/.test(c1.msg) && c1.voice === '터미널과 1대 차이',
+      '터미널 배정 40(자료 39 와도 다름) — «적용하면 37 · 터미널 배정 40 · 앱 39 (-1)»(4.48-03: 앱 수는 자료대로) · «수정 전» 이라 하지 않는다', c1 && c1.msg);
     const d1 = mk(mail(), (v) => { v.info.planDis = 37; });
     const d1k = one(d1, 'keep_onboard')[0];
-    ok(!one(d1, 'source_recon').length && !!d1k && d1k.level === 'info' && d1k.msg === '선사 메일 수정 2건 — 본선 잔류(평택에서 안 내림) · 리스트에 있어도 평택 양하분에서 뺐음',
-      '터미널이 이미 반영(배정 37 = 앱) — 자료별 대조 줄 없이 정보 줄 «본선 잔류 · 리스트에 있어도 평택 양하분에서 뺐음»(자료마다 어떤지 단정 안 함 · 감사 하-2)', JSON.stringify(d1.map((a) => a.code + ':' + a.msg)));
+    const d1r = one(d1, 'source_recon')[0];
+    ok(!!d1r && d1r.msg === HEAD + ' 적용하면 37 · 터미널 배정 37(터미널은 선사 메일 반영 — EDI·리스트 수정본 대기)' && d1r.level !== 'critical' && !d1k && /msg: `선사 메일 수정 \$\{keepFound\.length\}건 — 본선 잔류 예정\(평택에서 안 내림 · 확정 아님\) · 평택 양하 대수는 자료대로`/.test(src('src/diagnostics.js')),
+      '터미널이 먼저 반영(배정 37 = 앱 예상) — «… 적용하면 37 · 터미널 배정 37(터미널은 선사 메일 반영 — EDI·리스트 수정본 대기)» · 자료별 대조 줄이 서면 정보 줄은 겹쳐 내지 않음 · 정보 줄 문구 «본선 잔류 예정 … 대수는 자료대로»(4.48-03 — 빨간 경고 없음)', JSON.stringify(d1.map((a) => a.code + ':' + a.level + ':' + a.msg)));
     let _pk = '';
     const e1 = one(mk(mail(), (v) => { _pk = Object.keys(v.discharge.records).find((c) => c !== K1 && c !== K2); v.discharge.records[_pk].pod_pick = 'manual'; v.discharge.records[_pk].pod = 'CNSHA'; }), 'source_recon')[0];
-    ok(!!e1 && e1.msg === HEAD + ' · POD 확정 평택 아님 1대 적용하면 36 · 터미널 배정 39 · 앱 36 (-3)',
+    ok(!!e1 && e1.msg === HEAD + ' · POD 확정 평택 아님 1대 적용하면 36 · 터미널 배정 39 · 앱 38 (-1)',
       `POD 확정(평택 아님) 참고 1대(${_pk})가 같이 있으면 «· POD 확정 평택 아님 1대 적용하면 36»(39 − 2 − 1 · 감사 중-1)`, e1 && e1.msg);
     let _ek = '';
     const g1 = one(mk(mail(), (v) => { _ek = Object.keys(v.discharge.ediContainers).find((c) => c !== K1 && c !== K2 && v.discharge.records[c]); delete v.discharge.ediContainers[_ek]; }), 'source_recon')[0];
     ok(!!g1 && /— 어긋남 1대 · 선사 메일 수정 2건\(본선 잔류 CNDAI — 평택에서 안 내림\) 적용하면 앱 37 · 터미널 배정 39\(터미널은 아직 선사 메일 수정 전\)$/.test(g1.msg),
       `다른 어긋남이 같이 있으면(EDI 에서 ${_ek} 뺀 사본) «어긋남 1대 · 선사 메일 수정 2건(…) 적용하면 앱 37 · 터미널 배정 39(… 수정 전)»(감사 하-1)`, g1 && g1.msg);
     const dp = src('src/components/DiagnosticsPanel.jsx');
-    ok(/data-recon-group="keep"/.test(dp) && /선사 메일 수정 — 본선 잔류\(평택에서 안 내림 · 참고\)/.test(dp) && /터미널은 아직 선사 메일 수정 전\(본선 잔류 \$\{_kRefN\}대\)/.test(dp),
+    ok(/data-recon-group="keep"/.test(dp) && /선사 메일 수정 — 본선 잔류 예정\(평택에서 안 내림 · 확정 아님 · 참고\)/.test(dp) && /터미널은 아직 선사 메일 수정 전\(본선 잔류 예정 \$\{_kRefN\}대 · 앱 예상 \$\{_kApp\}대\)/.test(dp),
       '주의 박스 펼친 칸 — 본선 잔류는 «POD 확정 — 평택 아님» 과 따로 묶고 터미널 줄도 «아직 선사 메일 수정 전»(감사 하-3)');
     const vp = src('src/pages/VoyagePage.jsx');
     const _ip = vp.slice(vp.indexOf('const isPtk = (c) => {'), vp.indexOf('const isPtk = (c) => {') + 2600);
@@ -347,8 +349,8 @@ const bundle = process.argv[3];
     };
     const P1 = await _openRecon(a1);
     const kLines = P1.keep ? [...P1.keep.querySelectorAll('[data-recon-cn]')] : [];
-    ok(!!P1.rc0 && !!P1.keep && !P1.ref && kLines.length === 2 && /^선사 메일 수정 — 본선 잔류\(평택에서 안 내림 · 참고\) 2대/.test(P1.keep.textContent) && kLines.every((x) => !/POD 확정/.test(x.textContent) && /CNDAI · 선사 지시 본선 잔류/.test(x.textContent))
-      && P1.term === '터미널 배정 39대 · 앱 37대 (-2) — 터미널은 아직 선사 메일 수정 전(본선 잔류 2대)',
+    ok(!!P1.rc0 && !!P1.keep && !P1.ref && kLines.length === 2 && /^선사 메일 수정 — 본선 잔류 예정\(평택에서 안 내림 · 확정 아님 · 참고\) 2대/.test(P1.keep.textContent) && kLines.every((x) => !/POD 확정/.test(x.textContent) && /CNDAI · 선사 지시 본선 잔류/.test(x.textContent))
+      && P1.term === '터미널 배정 39대 = 앱 39대 — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 2대 · 앱 예상 37대)',
       '펼친 칸 — «선사 메일 수정 — 본선 잔류(평택에서 안 내림 · 참고) 2대» 묶음 하나 · 줄에 «POD 확정» 앞말 없음 · «POD 확정 — 평택 아님» 묶음 없음 · 터미널 줄 «… — 터미널은 아직 선사 메일 수정 전(본선 잔류 2대)»',
       JSON.stringify({ rc: !!P1.rc0, keep: P1.keep && P1.keep.textContent.slice(0, 160), ref: !!P1.ref, term: P1.term }));
     const aE = mk(mail(), (v) => { v.discharge.records[_pk].pod_pick = 'manual'; v.discharge.records[_pk].pod = 'CNSHA'; });
@@ -388,7 +390,7 @@ const bundle = process.argv[3];
     W.__renderValidation({ ediContainers: Object.values(vM.discharge.ediContainers).filter((c) => c.pod === 'KRPTK'), records: Object.values(vM.discharge.records), mode: 'discharge', shiftingList: slM.filter((x) => !x.keep), voyageKey: VK });
     await wait(200);
     ok(!doc.querySelector('[data-app-expect]') && !doc.querySelector('[data-list-app]'), '지시가 없는 배 — 앱 예상 줄·괄호 수 없음(종전 그대로)');
-    ok(/break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(폰 가로 밀림 수리)');
+    ok(/className="text-dim-300 break-words"/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]) && !/className="[^"]*break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(4.48-03 break-words — 낱말 중간은 안 갈림 · 폰 가로 밀림 수리)');
   }
 
   console.log('⑭ 4.48-02 감사(중-1) — 항차 화면 본체(VoyagePage)를 통째로 그린다: 배정표 대조·앱 예상 줄이 화면 안 계산·전달을 거친다(배정표는 지도 계산 전에 넣는다)');
@@ -414,8 +416,8 @@ const bundle = process.argv[3];
     const chipQ = [...doc.querySelectorAll('button')].map((b) => (b.textContent || '').trim()).find((t) => /^전체 \d+$/.test(t));
     const appList = axQ ? Number(axQ.getAttribute('data-app-expect').split('/')[1]) : NaN;
     const recN = Object.keys(vQ.discharge.records).length;
-    ok(!!axQ && appList === recN - 1 && chipQ === `전체 ${appList}` && !doc.querySelector('[data-shift-keep]'),
-      `막지 않는 지시 1건만 — 앱 예상 리스트 ${recN - 1} = 칩 «${chipQ}» · 예보◆ 없음(지시 기록으로 앱 예상 줄을 세운다)`, JSON.stringify({ ax: axQ && axQ.getAttribute('data-app-expect'), chipQ }));
+    ok(!!axQ && appList === recN - 1 && chipQ === `전체 ${recN}` && !doc.querySelector('[data-shift-keep]'),
+      `막지 않는 지시 1건만 — 칩 «${chipQ}»(자료대로 · 4.48-03) · 앱 예상 리스트 ${recN - 1} · 예보◆ 없음(지시 기록으로 앱 예상 줄을 세운다)`, JSON.stringify({ ax: axQ && axQ.getAttribute('data-app-expect'), chipQ }));
   }
   console.log('⑮ 4.48-02 감사(하-1) — 플래너가 지시 두 대를 선사 시프팅 목록에 넣어 확정한 뒤 «총 작업» 은 두 대를 한 번만 센다');
   {
@@ -432,6 +434,107 @@ const bundle = process.argv[3];
     ok(slC.filter((x) => x.keep).length === 0 && !!ovl && ovl.getAttribute('data-shift-overlap') === '2' && new RegExp(`총 작업 ${recN + shN - 2}대 = 리스트 ${recN} \\+ 쉬프팅 ${shN} − 겹침 2`).test(tx),
       `확정 뒤 위 칸 — «총 작업 ${recN + shN - 2}대 = 리스트 ${recN} + 쉬프팅 ${shN} − 겹침 2»(두 번 세지 않는다 · 청구 근거)`, tx.slice(0, 260));
     ok(!!axC && new RegExp(`총 작업 ${recN - 2 + shN}대`).test(axC.textContent), `확정 뒤 앱 예상 줄 — 총 작업 ${recN - 2 + shN}대(위 칸과 같은 총 작업)`, axC && axC.textContent);
+  }
+  console.log('⑯ 4.48-03 — 본선 잔류는 «예정»: 항차 화면 칩은 자료대로 · 터미널이 먼저 반영(배정표 = 확정 + 예보)이면 빨간 경고 없음 · 자동 가이드만 내밀지 않음(검수사 2026-10-24 20:02~20:08)');
+  {
+    const vR = voy(mail()); vR.key = VK;
+    const confR = Object.keys(T.computeShiftingMapCached(VK + '_16c', vR)).length;
+    vR.info = { ...vR.info, berthShift: confR * 2, terminalStatus: 'working' };
+    W.__renderVP(vR, VK);
+    await wait(1500);
+    const chipsR = [...doc.querySelectorAll('button')].map((b) => (b.textContent || '').trim()).filter((t) => /^전체 \d+$|본선 잔류/.test(t) && t.length < 30);
+    const recN = Object.keys(vR.discharge.records).length;
+    ok(chipsR.includes(`전체 ${recN}`) && chipsR.includes('🟡 본선 잔류 예정 2'), `리스트 칩 — «전체 ${recN}»(지시 두 대 포함 · 자료대로) · «🟡 본선 잔류 예정 2»`, JSON.stringify(chipsR));
+    //  터미널이 선사 메일을 먼저 반영 — 배정표 이적 = (확정 + 예보) × 2
+    const vK = voy(mail()); vK.key = VK; vK.info = { ...vK.info, berthShift: (confR + 2) * 2, terminalStatus: 'working' };
+    W.__renderVP(vK, VK);
+    await wait(1500);
+    const hbK = [...doc.querySelectorAll('button')].find((b) => /쉬프팅\(재적부\)/.test(b.textContent || ''));
+    const htK = hbK ? hbK.textContent.replace(/\s+/g, ' ') : '', bodyK = doc.body.textContent.replace(/\s+/g, ' ');
+    const evK = T.shiftEvidenceOf(VK + '_16k', vK, T.shiftingMapForDisplay(VK + '_16k', vK));
+    ok(new RegExp(`배정표 이적 ${(confR + 2) * 2}모브\\(${confR + 2}대\\) = 확정 ${confR} \\+ 예보◆2 — 터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기`).test(htK) && !/⛔/.test(htK) && !/불일치/.test(htK) && !/⚠ 배정표/.test(htK) && !/앱은 \d+대를 냈습니다/.test(bodyK)
+       && evK && evK.status === '미확정' && evK.keepMatch === true
+       && /선사 시프팅 목록 수정본\(또는 EDI 수정본\)이 오면 저절로 확정으로 바뀝니다/.test(bodyK) && !/터미널이 작업을 시작해 배정표 이적이 나오면 저절로/.test(bodyK)
+       && /_ev\.keepMatch \? '아직 확정이 아닙니다 — 터미널은 선사 메일\(본선 잔류\)을 반영했고, 선사 시프팅 목록 수정본\(또는 EDI 수정본\)이 오면 확정으로 바뀝니다\.'/.test(src('src/nlSearch.js')),
+      `배정표 ${confR + 2}대 = 확정 ${confR} + 예보◆2 — «터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기» · ⛔·불일치·«⚠ 배정표»·«앱은 N대» 없음 · 근거 판정 «미확정»(keepMatch)`, htK.slice(0, 400) + ' | ' + (evK && evK.status));
+    //  진짜 어긋남(배정표 = 확정 + 예보 + 1)은 그대로 ⛔
+    const vX = voy(mail()); vX.key = VK; vX.info = { ...vX.info, berthShift: (confR + 3) * 2, terminalStatus: 'working' };
+    W.__renderVP(vX, VK);
+    await wait(1500);
+    const hbX = [...doc.querySelectorAll('button')].find((b) => /쉬프팅\(재적부\)/.test(b.textContent || ''));
+    const evX = T.shiftEvidenceOf(VK + '_16x', vX, T.shiftingMapForDisplay(VK + '_16x', vX));
+    ok(!!hbX && /⛔ 불일치/.test(hbX.textContent) && evX && evX.status === '불일치' && !evX.keepMatch, `배정표 ${confR + 3}대(확정 + 예보 + 1) — 진짜 어긋남은 종전대로 «⛔ 불일치»`, hbX && hbX.textContent.replace(/\s+/g, ' ').slice(0, 300));
+    //  감사(중-1) — 자동 가이드를 실제로 누른다: 22번 데크의 평택분을 지시 두 대만 빼고 완료로 두면, 가이드는 지시 컨을 카드·남은 수에 내밀지 않는다
+    const centerOf = (b) => { b = parseInt(b, 10); return b % 2 === 0 ? b : (b % 4 === 1 ? b + 1 : b - 1); };
+    const txt = (b) => b.textContent.replace(/\s+/g, ' ').trim();
+    const until = async (fn, ms = 5000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await wait(80); v = fn(); } return v; };
+    const click = async (b, ms = 400) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await wait(ms); } return !!b; };
+    const guideRun = async (keep) => {
+      const vG = voy(keep); vG.key = VK; vG.info = { ...vG.info, berthSide: 'port' };
+      vG.discharge.completed = {};
+      for (const [cn, c] of Object.entries(vG.discharge.ediContainers)) if (c && centerOf(c.bay) === 22 && parseInt(c.tier, 10) >= 80 && /^KRP/.test(String(c.pod || '')) && cn !== K1 && cn !== K2) vG.discharge.completed[cn] = { at: 1, by: '연막' };
+      try { W.localStorage.setItem('gm_equip_no', '1호기'); W.localStorage.setItem('master_active_inspector_v1', '연막'); } catch (e) { errs.push('localStorage ' + e.message); }
+      W.__memdb = { voyages: { [VK]: clone(vG) } };
+      W.__renderVP(vG, VK); await wait(1500);
+      const tabB = await until(() => [...doc.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent)));
+      await click(tabB, 700);
+      const gb = await until(() => [...doc.querySelectorAll('button')].find((b) => /^🤖\s*자동 가이드$/.test(txt(b))));
+      await click(gb, 900);
+      const side = [...doc.querySelectorAll('button')].find((b) => /^좌현 접안/.test(txt(b)));
+      if (side) { await click(side, 700); const yes = [...doc.querySelectorAll('button')].find((b) => /^(확인|예|네|맞습니다|좌현 접안 확정|좌현 확정)/.test(txt(b))); if (yes) await click(yes, 700); }
+      const g22 = await until(() => [...doc.querySelectorAll('button')].find((b) => { const m = txt(b).match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(22) && /남은 컨/.test(txt(b)); }));
+      const g22t = g22 ? txt(g22) : '';
+      await click(g22, 700);
+      const deck = [...doc.querySelectorAll('button')].find((b) => /^🔵 데크 [0-9]/.test(txt(b)));
+      const deckT = deck ? txt(deck) : '';
+      await click(deck, 900);
+      const cards = [...doc.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, '').replace(/^(앞|뒤)(?=[A-Z]{4}\d{7}$)/, '')).filter((x) => /^[A-Z]{4}\d{7}$/.test(x));
+      return { g22t, deckT, cards, keepOnCard: cards.filter((x) => x === K1 || x === K2) };
+    };
+    const gK = await guideRun(mail()), g0 = await guideRun(null);
+    ok(/남은 컨 1대/.test(gK.g22t) && /^🔵 데크 1개/.test(gK.deckT) && gK.cards.length > 0 && gK.keepOnCard.length === 0 && g0.keepOnCard.length > 0,
+      `자동 가이드 실클릭 — 22번 데크를 지시 두 대만 남기고 끝낸 꼴: «${gK.g22t}» · 카드 ${gK.cards.join(',')}(지시 컨 없음) · 지시가 없으면 카드에 ${g0.keepOnCard.join(',')} 가 나온다`, JSON.stringify({ gK, g0: { g22t: g0.g22t, keep: g0.keepOnCard } }));
+    //  재감사(중-1) — 같은 «작업 시작» 탭의 미르 «양하 몇 대» 는 자료대로(리스트 칩 «전체 N» 과 같은 수) · 작업 화면만 지시 컨을 내밀지 않는다
+    const askWork = async (q) => {
+      const vW = voy(mail()); vW.key = VK; vW.info = { ...vW.info, berthSide: 'port' };
+      W.__memdb = { voyages: { [VK]: clone(vW) } };
+      W.__renderVP(vW, VK); await wait(1500);
+      await click(await until(() => [...doc.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent))), 1000);
+      const head = (doc.body.textContent.replace(/\s+/g, ' ').match(/시작대기 ?\d+대/) || [''])[0];
+      const findInp = () => [...doc.querySelectorAll('input,textarea')].find((i) => /자유 질문|4자리/.test(i.getAttribute('placeholder') || ''));
+      if (!findInp()) { const man = [...doc.querySelectorAll('button')].find((b) => /^✋/.test(txt(b))); if (man) await click(man, 800); }
+      if (!findInp()) { await click([...doc.querySelectorAll('button')].find((b) => /^B[\d·]*22/.test(txt(b)) && /남은 컨/.test(txt(b))), 800); await click([...doc.querySelectorAll('button')].find((b) => /^🔵 데크/.test(txt(b))), 900); }
+      const inp = findInp();
+      let ans = '';
+      if (inp) {
+        const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(inp), 'value').set;
+        setter.call(inp, q); inp.dispatchEvent(new W.Event('input', { bubbles: true })); await wait(300);
+        inp.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await wait(2500);
+        const t = doc.body.textContent.replace(/\s+/g, ' ');
+        ans = ((t.match(/📊 양하[^]{0,160}/) || t.match(/MAMP — [^]{0,200}/) || [''])[0]);
+      }
+      return { head, ans, hasInp: !!inp, inputs: [...doc.querySelectorAll('input,textarea')].map((i) => i.getAttribute('placeholder')).filter(Boolean).slice(0, 4), btns: [...doc.querySelectorAll('button')].map(txt).filter((t) => t.length < 20).slice(0, 25) };
+    };
+    const aw = await askWork('양하 몇 대');
+    const recW = Object.keys(FX.voyage.discharge.records).length;
+    ok(aw.hasInp && new RegExp(`${recW}대`).test(aw.ans) && !new RegExp(`(^|[^0-9])${recW - 2}대`).test(aw.ans) && new RegExp(`시작대기 ?${recW}대`).test(aw.head),
+      `작업 시작 탭 미르 «양하 몇 대» — 자료대로 ${recW}대(리스트 칩 «전체 ${recW}» 와 같음) · 머리 «시작대기 ${recW}대»`, JSON.stringify(aw));
+    ok(/const allContainers = useMemo\(\(\) => allContainersData\.map\(\(c\) => \(c && c\._keep && c\._mode === 'discharge' && c\._ptk && !c\._comp\) \? \{ \.\.\.c, _ptk: false, _keepHeld: true \}/.test(src('src/components/SearchPanel.jsx')),
+      '배선 — 작업 시작 패널의 작업 화면(allContainers)만 지시 컨을 작업에서 뺀다 · 미르·시작 대기 수는 자료대로(allContainersData)');
+    //  감사(중-1) — 콘앱 분기를 실제로 돌린다(cone.html 의 그 블록을 꺼내 번들 shiftEvidenceCore 로 실행)
+    const coneS = src('public/cone.html');
+    const blk = (coneS.match(/            if\(shiftStatus === '불일치'\)\{[\s\S]*?\n            \}\n/) || [''])[0];
+    const runBlk = (berth) => { const confM = {}; for (let i = 0; i < 62; i++) confM['TEST' + String(1000000 + i)] = { from: '0010182', to: '0010182', _doc: true };
+      const _o = { ...confM, MNBU0129687: { _forecast: 'keep' }, MNBU3119872: { _forecast: 'keep' } };
+      const f = new Function('shiftStatus', 'shiftingMap', '_o', '_sh', 'P_ec', blk + '\nreturn shiftStatus;');
+      return f('불일치', confM, _o, { berthShift: berth, terminalStatus: 'working' }, () => T.shiftEvidenceCore); };
+    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.71-01'/.test(coneS),
+      '콘앱 2.71-01 분기 실행 — 배정표 128(= 확정 62 + 예보 2)이면 «미확정» · 130 이면 «불일치» 그대로(검수앱 shiftEvidenceCore keepN 한 벌)', JSON.stringify([runBlk(128), runBlk(130), blk.length]));
+    ok(/async function ctKeepShiftMap[\s\S]{0,700}for\(const k of \['completed','termWork'\]\)[\s\S]{0,300}voy\.discharge\[k\] = j/.test(coneS), '콘앱 2.71-01 — 본선 잔류 예보 재료에 양하 완료·실적을 싣는다(내린 지시 컨은 검수앱처럼 예보에서 빠짐 · 재감사 하-3)');
+    //  감사(하-4) — 지시 컨을 실제로 내렸으면 예정은 끝 — 예보·칩·앱 예상에서 빠지고 유닛은 추가분(신고 대상)으로 센다
+    const vD2 = voy(mail()); vD2.key = VK; vD2.discharge.completed = { [K1]: { at: 1, by: '연막' } };
+    const UD2 = T.ptkDischargeUnitsOf(vD2), kD2 = T.keepOnboardOf(vD2), fD2 = T.keepShiftForecastOf(VK + '_16d', vD2);
+    ok(!kD2[K1] && !!kD2[K2] && !fD2[K1] && UD2.set.has(K1) && !UD2.keepIn.has(K1) && UD2.keepIn.has(K2), '내린 지시 컨(완료 기록) — 예정에서 빠짐(keepOnboardOf·예보) · 유닛은 그대로 세고 keepIn 아님(추가분 갈래)', JSON.stringify({ k: Object.keys(kD2), f: Object.keys(fD2), keepIn: [...UD2.keepIn] }));
   }
   ok(errs.length === 0, '화면 오류 0', errs.join(' | '));
   console.log(`\n4.48 선사 지시 본선 잔류 연막 — ${n - bad}/${n} 통과`);

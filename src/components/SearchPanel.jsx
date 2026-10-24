@@ -140,7 +140,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     catch (e) { return {}; }
   }, [shiftMapAll, _rawSig]);
 
-  const allContainers = useMemo(() => {
+  const allContainersData = useMemo(() => {   // 4.48-03: 자료대로(_ptk = 평택 양하 유닛 한 벌) — 미르 대수 답이 이것을 받는다
     const _sw = swapFixList(voyage);   // 2.89-05: 맞교환 겹침 — 이 풀만 안 겹쳐 «자리 뺏김 20» 허깨비 그룹이 떴다
     const _shSetAll = new Set(Object.keys(shiftMapAll || {}).filter((k) => k && !k.startsWith('_')));   // 4.16: 시프팅 분리 문지기 재료(확정 지도 — 작업 카드와 같은 것)
     const arr = [];
@@ -156,7 +156,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       //  ★ 4.20 (Fable 판정 ④): 양하 평택분 = 유닛 한 벌(세관 목록 + 추가분 — 마감텔리·갱별·홈 카드·미르와 같은 집합). 목록 없는 배(basis 'edi')는 종전 POD 판정.
       const _U = m === 'discharge' ? ptkDischargeUnitsOf(voyage) : null;
       const _useU = !!(_U && _U.basis !== 'edi');
-      const _keepS = m === 'discharge' ? keepOnboardOf(voyage) : {};   // 4.48: 본선 잔류 — 평택 양하 작업이 아니다(유닛 한 벌이 이미 뺀다 · EDI 만 있는 배도 같게)
+      const _keepS = m === 'discharge' ? keepOnboardOf(voyage) : {};   // 4.48: 본선 잔류 표식(_keep) — 작업 화면 빼기는 아래 allContainers 한 자리
       //  4.08-02: EDI 총중량을 `wtEdi` 로 따로 남긴다 — 화면 무게(`wt`)는 «무게는 리스트가 기준»(1.23)대로 리스트가 덮지만,
       //    트윈 판정은 갱이 드는 총중량(화물+자중)으로 해야 한다(nlSearch.twinWtOf 한 벌 — 화면·미르·브리핑·무브 계산이 같은 값을 본다).
       Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, ...ediWtField(c) }; });   // 4.08-02: EDI 총중량 → wtEdi (utils 한 벌)
@@ -215,7 +215,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           //    POD·POL 열이 없는 리스트(남성 CLL 104대)가 평택분에서 빠져 «선적 N» 이 212 로 섰다(2차 감사 실측).
           //  ★ 4.16 (§7.8-① «양하리스트와 분리 시프팅 리스트 별도 관리»): 시프팅이면 평택분이 아니다(문지기 한 벌 isShiftOffPtk — 선사 리스트에 실려 온 시프팅은 평택분에도).
           //    종전엔 시프팅 재선적 기록(records)이 생기면 «리스트 등재 = 평택» 으로 «선적 N» 에 섞였다. 카드는 아래 1.76-05 블록이 _shift 로 큐에 남긴다(Fable 판정 ③).
-          _ptk: (m === 'discharge' ? (_useU ? _U.set.has(c.cn) : (isPyeongtaekPort(c.pod) && !_keepS[c.cn])) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m)) && !isShiftOffPtk(_shSetAll, recMap, m, c.cn),   // 4.20: 양하는 유닛 한 벌 · 4.48: 본선 잔류는 빼고
+          _ptk: (m === 'discharge' ? (_useU ? _U.set.has(c.cn) : isPyeongtaekPort(c.pod)) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m)) && !isShiftOffPtk(_shSetAll, recMap, m, c.cn),   // 4.20: 양하는 유닛 한 벌 · 4.48-03: 본선 잔류 지시는 예정 — 여기는 자료대로, 작업 화면은 아래 allContainers 가 내밀지 않는다
           ...(m === 'discharge' && _keepS[c.cn] ? { _keep: _keepS[c.cn] } : {}),   // 4.48: 카드·컨 상세가 «선사 지시 본선 잔류» 를 보인다
           _transit: isTransitContainer(c, m, recMap),   // 3.2-01: 통과분(항구 적혀 있고 평택 아님·리스트 미등재) — 완료 카드가 되지 않는다
           _xray: m === 'discharge' && !!xrayMap[c.cn],
@@ -319,6 +319,9 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       return c;
     });
   }, [voyage, shiftMapAll, shiftInfoAll]);   // 1.76-05: 시프팅 카드가 큐·목록에 들어가려면 의존에 있어야 한다
+  //  ★ 4.48-03 — «작업 시작» 패널의 작업 화면(자동 가이드·수동 묶음·빈 칸·남은 컨·조회 카드)은 선사 지시 본선 잔류(예정) 컨을 작업으로 내밀지 않는다(4.48 과 같은 작업 화면).
+  //    대수는 자료대로라 미르 대수 답·«시작 대기» 수는 allContainersData(_ptk = 유닛)를 쓴다 — 재감사 중-1(작업 시작 탭 미르 «양하 몇 대» 가 315 로 섰다).
+  const allContainers = useMemo(() => allContainersData.map((c) => (c && c._keep && c._mode === 'discharge' && c._ptk && !c._comp) ? { ...c, _ptk: false, _keepHeld: true } : c), [allContainersData]);
 
   // M5.75: 작업 모드 필터 적용 — 양하 작업 중엔 양하만, 선적엔 선적만, 완료는 별도
   const filteredContainers = useMemo(() => {
@@ -330,7 +333,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
 
   // 갯수 표시용
   //  3.26: 대수는 부킹 자리·실번호를 한 번만 센다(utils.dropFilledBookingSlots — 풀 자체는 자리를 남긴다: 가이드·자리 확인 모드가 자리를 본다).
-  const countPool = useMemo(() => dropFilledBookingSlots(allContainers), [allContainers]);
+  const countPool = useMemo(() => dropFilledBookingSlots(allContainersData), [allContainersData]);   // 4.48-03: «시작 대기» 수는 자료대로(본선 잔류 예정 포함)
   const dischCount = useMemo(() => countPool.filter(c => c._mode === 'discharge' && c._ptk && !c._comp).length, [countPool]);   // V7.92-02: 평택분만
   const loadCount = useMemo(() => countPool.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [countPool]);   // V7.92-02: 평택분만
   //  ★ 4.25-02 (모의 작업 MCAP 2호기 — 선적을 0대 했는데 «✓ 완료 241대»(양하 완료가 섞인 합) · 검수사 2026-10-13 00:53 «전부 클로드 안대로 수정»):
@@ -655,7 +658,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             <span className="text-xs2 font-bold text-amber-300">💬 질문 답변</span>
             <button onClick={() => setAskMode(false)} className="text-xs2 text-dim-300 px-2 py-1 rounded hover:bg-ink-750">✕ 닫고 작업으로</button>
           </div>
-          <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} relayQuery={relayQuery} />
+          <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} allContainersData={allContainersData} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} relayQuery={relayQuery} />
         </div>
       )}
 
@@ -1011,7 +1014,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} />
+        ? <SingleSearch onOpenPlan={onOpenPlan} rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} allContainersData={allContainersData} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -1109,7 +1112,7 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
+function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers, allContainersData = null, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
   //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
@@ -1276,7 +1279,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       app: 'tally', smallTalkLast: true, execDevice: false, modeChoice, _trace: traceRef.current,
       _utterAt: askedAt || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다(기록 뒤에도)
       voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
-      containers: allContainers, photos: voyage?.photos || null,
+      containers: allContainersData || allContainers, photos: voyage?.photos || null,   // 4.48-03: 미르 대수는 자료대로(부모가 넘긴 유닛 기준 목록)
       shiftMap: shiftingMapForDisplay(voyageKey, voyage),   // V7.92-02 · 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
       bayPairs: (manualCtx && manualCtx.bayPairs) || getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
       rfSkip, esealBrief, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
@@ -1285,12 +1288,12 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       voyageDoneAts: (manualCtx && manualCtx.voyageDoneAts) || voyageDoneAts(voyage),
       computeTallyData, matchPortMis,   // 콘앱 번들을 무겁게 하지 않으려고 화면이 싣는 두 함수
     });
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan, askedAt]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan · 3.68: askedAt(접수 표)
+  }, [parsed, results, allContainers, allContainersData, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan, askedAt]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan · 3.68: askedAt(접수 표)
   //  3.42: 모델이 «미르 말»로 바꾼 문장을 같은 재료로 규칙에 다시 돌린다(위 _localAnswerRaw 와 같은 ctx — 두 벌이 되면 안 된다).
   const _rulesFor = (cq) => answerOneRaw(cq, {
     app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
     voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
-    containers: allContainers, photos: voyage?.photos || null,
+    containers: allContainersData || allContainers, photos: voyage?.photos || null,   // 4.48-03: 미르 대수는 자료대로(부모가 넘긴 유닛 기준 목록)
     shiftMap: shiftingMapForDisplay(voyageKey, voyage),
     bayPairs: (manualCtx && manualCtx.bayPairs) || getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
     rfSkip, esealBrief, portMisData, pilotForecast, weatherText, shipSpeed, carrierContacts, shipContacts, diagAlerts,
@@ -1494,7 +1497,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
     let alive = true;
     setModelState({ q, pending: true, text: null, via: null });
-    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainers, inspector, work: mirWorkCtx() };   // 4.38: work — 작업 중 사담 미루기
+    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainersData || allContainers, inspector, work: mirWorkCtx() };   // 4.48-03: 모델 재료도 자료대로   // 4.38: work — 작업 중 사담 미루기
     askMirModel(_dq || q, ctx, (cq) => _rulesFor(cq), { who: inspector || '', weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
       .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey, via: m.via }); })
       .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
@@ -1658,7 +1661,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-2xs text-dim-400 font-bold">
-            <MirFace mood="basic" size={20} still className="inline-block align-middle mr-1" />미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
+            <MirFace mood="basic" size={20} still className="inline-block align-middle mr-1" />미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {(allContainersData || allContainers).filter(c => c._ptk).length}대{/* 4.48-03 재감사(하-2): 대수는 자료대로 */}
           </div>
           <button onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-2xs font-bold border border-amber-700/40 whitespace-nowrap shrink-0">

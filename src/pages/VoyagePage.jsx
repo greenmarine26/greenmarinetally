@@ -479,9 +479,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //    이 상자만 64 로 배정표와 맞대 «⛔ 불일치»·«앱 추정 62 — 차이 2»·«⚠ 배정표 62대 — 차이 2» 를 냈다. 예보는 터미널이 아직 선사 메일을 반영하기 전 몫이다.
   const shiftKeepN = useMemo(() => shiftingList.filter((x) => x && x.keep).length, [shiftingList]);
   const shiftConfN = shiftingList.length - shiftKeepN;
-  const truthChk = useMemo(
-    () => shiftingTruthCheck(voyage, shiftConfN),
-    [voyage?.info?.berthShift, shiftConfN]);
+  //  ★ 4.48-03 — 터미널이 선사 메일(본선 잔류)을 먼저 반영해 배정표 이적 = 확정 + 예보이면 «⛔ 불일치»가 아니다(예정 — 선사 시프팅 목록 수정본 대기).
+  //    검수사 2026-10-24 20:06 «확정도 아닌데 빨간 경고 문구가 나온것 … 을 문제로 삼은것입니다». 빨간 줄·커버 역산 없이 «예보 포함 같음» 으로 적는다.
+  const truthChk = useMemo(() => {
+    const t = shiftingTruthCheck(voyage, shiftConfN);
+    if (t && !t.pending && !t.ok && shiftKeepN > 0) {
+      const t2 = shiftingTruthCheck(voyage, shiftConfN + shiftKeepN);
+      if (t2 && t2.ok) return { ...t, ok: true, keepMatch: true, keepN: shiftKeepN };
+    }
+    return t;
+  }, [voyage?.info?.berthShift, shiftConfN, shiftKeepN]);
   //   불일치면 커버 분할을 역산한다. 축이 길면 조합이 폭주하므로 상한을 둔다(무응답 방지).
   const hatchSolve = useMemo(() => {
     if (!truthChk || truthChk.pending || truthChk.ok) return null;   // 1.76-01: 확정 전에는 역산도 하지 않는다
@@ -2554,7 +2561,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
   const _isShiftRow = (c) => !!(c && !c._keep && (c._shift || _shCnL.has(c.cn)));   // 4.48 감사(하 3): 본선 잔류 예보는 작업 항목이 아니다 — «◆ 시프팅 내림 x/62» 는 확정만, 두 대는 «🟡 본선 잔류» 칩
   const filtered = useMemo(() => {
     if (!filter && !search) return [];   // 1.84: 칩 미선택·검색어 없음 = 목록 안 연다
-    let arr = filter === 'shift' || filter === 'keep' ? containers : (filter ? containers.filter(c => !c._shift && !c._keep) : containers);   // 4.48: 본선 잔류는 양하 리스트 칩 밖
+    let arr = filter === 'shift' || filter === 'keep' ? containers : (filter ? containers.filter(c => !c._shift) : containers);   // 4.48-03: 본선 잔류 지시는 예정 — 양하 리스트 칩 안(자료대로)
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
@@ -2598,7 +2605,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     // 2.06-04 (검수사 확정 «실려 있는건 209개가 맞는거죠 내리는거 확정은 208이고» + «LUG는 미정으로 노면 됩니다»):
     //   덱 전용 수화물(_deckOnly — EDI·리스트에 없고 덱플랜에만, 내릴지 미정)은 시프팅(1.76-05)처럼
     //   총계에 섞지 않고 자기 칸(미정)에서 센다. 전체=확정분(선사·터미널 숫자와 일치) 유지.
-    const base = containers.filter(c => !c._shift && !c._deckOnly && !c._keep);   // 4.48: 본선 잔류(평택에서 안 내림)는 총계 밖 — 홈 카드·마감텔리 평택 양하분과 같은 수
+    const base = containers.filter(c => !c._shift && !c._deckOnly);   // 4.48-03: 본선 잔류 지시는 예정이라 총계 안(자료대로 317 — 홈 카드·마감텔리와 같은 수) · «🟡 본선 잔류 N» 칩은 그 안의 몇 대
     const sh = containers.filter(_isShiftRow);   // 4.16: 선사 리스트에 실려 온 시프팅도 시프팅 리스트에 든다
     const lg = containers.filter(c => c._deckOnly);
     return {
@@ -2716,7 +2723,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           // 2.06-04: 덱 전용 수화물 = 미정 칸 — 총계(확정분)에 안 섞는다 (검수사 «LUG는 미정으로 노면 됩니다»)
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
           //  4.48: 선사 지시 본선 잔류 — 평택에서 안 내림(총계 밖). 아래 평택 컨을 막으면 ◆ 시프팅 칩에도 예보로 든다.
-          ...(stats.keep > 0 ? [{ k: 'keep', t: `🟡 본선 잔류 ${stats.keep}` }] : []),
+          ...(stats.keep > 0 ? [{ k: 'keep', t: `🟡 본선 잔류 예정 ${stats.keep}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
             className={`chip-v2 ${filter === k ? 'is-on' : ''}`}>{t}</button>
@@ -2781,9 +2788,9 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             {/*  ★ 3.44-01 — **배정표가 서류와 다르면 그것을 말한다.** 검수사 2026-09-12 «배정이 바뀌었는데 앱은 그대로».
                  배정목록 이적이 28 → 38 모브(14 → 19대)로 바뀌었는데 서류를 정본으로 쓰며 조용히 덮었다.
                  규범 «배정표가 확정이면 배정표가 정본» — 덮지 말고 둘 다 보이고, 큰 쪽을 먼저 의심하게 한다. */}
-            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== _shConfN && (
+            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== _shConfN && !(shiftInfo?.truthChk && shiftInfo.truthChk.keepMatch) && (
               <span className="text-amber-300 font-bold">
-                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - _shConfN)}`}{/* 4.48-02: 배정표와는 확정만 */}
+                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - _shConfN)}`}{/* 4.48-02: 배정표와는 확정만 · 4.48-03: 예보 포함 같음이면 이 줄 대신 아래 */}
               </span>
             )}
             {/*  ⚠ 감사 지적(3.44) — 서류에 못 읽은 행이 있으면 조용히 모자란 대수가 정본이 된다. 화면이 밝힌다. */}
@@ -2805,7 +2812,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 : (shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300')}>
                 · 배정표 이적 {shiftInfo.berthShift}모브
                 {shiftInfo?.truthChk?.pending ? ' (작업 전 — 대조 보류)'
-                  : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치'}` : '(정본)'}
+                  : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.keepMatch ? ` = 확정 ${_shConfN} + 예보◆${shiftInfo.truthChk.keepN} — 터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기` : shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치'}` : '(정본)'}
               </span>
             )}
             <span className="ml-auto text-2xs font-normal text-dim-400">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>
@@ -2820,7 +2827,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               {shiftInfo.evid.label && (<><b className={shiftInfo.evid.label === '확정' ? 'text-emerald-300' : shiftInfo.evid.label === '불일치' ? 'text-rose-300' : 'text-amber-300'}>{shiftInfo.evid.label}</b>{' · '}</>)}
               {shiftInfo.evid.line}
               {(shiftInfo.evid.label === '미확정' || shiftInfo.evid.label === '예측') && (
-                <span className="text-dim-300"> — 터미널이 작업을 시작해 배정표 이적이 나오면 저절로 확정(또는 불일치)으로 바뀝니다.</span>
+                <span className="text-dim-300">{shiftInfo.evid.keepMatch ? ' — 선사 시프팅 목록 수정본(또는 EDI 수정본)이 오면 저절로 확정으로 바뀝니다.' : ' — 터미널이 작업을 시작해 배정표 이적이 나오면 저절로 확정(또는 불일치)으로 바뀝니다.'}</span>
               )}
             </div>
           )}

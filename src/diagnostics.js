@@ -282,7 +282,9 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
   if (voyage && mode === 'discharge') {
     const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) || (mode === 'discharge' && _isShift(cn)) });
     const gapOn = R.gap != null && R.gap !== 0;
-    if (R.total > 0 || gapOn) {
+    //  4.48-03 — 본선 잔류 지시는 예정이라 앱 수(R.app)는 자료대로(지시 컨 포함)다. 터미널과 차이가 없어도 지시가 있으면 자료별 대조 줄을 세운다(검수사 17:05 «세관리스트와 틀린거죠 그걸 명시해야 합니다»).
+    const _hasKeep = (R.ref || []).some((x) => x && x.keep);
+    if (R.total > 0 || gapOn || _hasKeep) {
       const S = R.sources;
       const part = (label, x) => (x.has ? `${label} ${x.n}` : `${label} 자료 없음`);
       const carPart = R.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : part('선사 리스트', S.carrier);
@@ -299,17 +301,23 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
       const _oRefN = (R.ref || []).length - _kRef.length;
       const _kPods = [...new Set(_kRef.map((x) => String(x.pick || '').split(' · ')[0]).filter(Boolean))].join('·');
       const _kMail = `선사 메일 수정 ${_kRef.length}건(본선 잔류${_kPods ? ' ' + _kPods : ''} — 평택에서 안 내림)`;
-      const _kTermPre = !!(gapOn && _kRef.length && R.term.n - R.app === _kRef.length);   // 터미널이 메일 수정 전 숫자 그대로
-      const _kTerm = gapOn
-        ? (_kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)` : ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})`)
-        : '';
+      //  4.48-03 — 앱 수(R.app)는 자료대로(지시 컨 포함 — 예정). «적용하면» 수는 앱 수에서 앱 안의 지시 컨·참고 컨을 뺀 앱 예상(_kApp)이다.
+      const _kInApp = (R.ref || []).filter((x) => x && x.inApp).length;
+      const _kApp = R.app - _kInApp;
+      const _kTN = (R.term && R.term.n) || 0;
+      const _kTermPre = !!(_kRef.length && _kTN && _kInApp > 0 && _kTN === R.app);       // 터미널 = 자료(선사 메일 수정 전 숫자 그대로)
+      const _kTermApplied = !!(_kRef.length && _kTN && _kInApp > 0 && _kTN === _kApp);   // 터미널이 먼저 선사 메일을 반영 — EDI·리스트 수정본 대기
+      const _kTerm = _kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)`
+        : _kTermApplied ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 선사 메일 반영 — EDI·리스트 수정본 대기)`
+        : gapOn ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '';
       const _kTxt = _kRef.length
-        ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 ${R.app}${_kTerm}`
+        ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 ${_kApp}${_kTerm}`
         : '';
       if (_kTermPre) _recon.vGap = `선사 메일 수정 ${_kRef.length}건, 터미널은 아직 수정 전`;
+      else if (_kTermApplied) _recon.vGap = `선사 메일 수정 ${_kRef.length}건, 터미널은 반영, 자료 수정본 대기`;
       //  감사(하-1) — 다른 어긋남이 같이 있으면 종전 머리줄 · 어긋남 N대 뒤에 «메일 수정 N건 … 적용하면 앱 N» 을 앱 수 앞에 붙인다(«적용» 으로 끝나 흐리던 꼴).
       const _kTot = _kRef.length
-        ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 앱 ${R.app}${gapOn ? (_kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)` : ` (${R.gap > 0 ? '+' : ''}${R.gap})`) : ''}`
+        ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 앱 ${_kApp}${_kTerm}`
         : (gapTxt ? ` · ${gapTxt}` : '');
       alerts.push({
         level: 'warning',
@@ -391,7 +399,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
         alerts.push({
           level: 'info',
           code: 'keep_onboard',
-          msg: `선사 메일 수정 ${keepFound.length}건 — 본선 잔류(평택에서 안 내림) · 리스트에 있어도 평택 양하분에서 뺐음`,   // 감사(하-2) — 자료마다 어떤지는 단정하지 않는다(EDI 가 이미 고쳐 올 수 있다)
+          msg: `선사 메일 수정 ${keepFound.length}건 — 본선 잔류 예정(평택에서 안 내림 · 확정 아님) · 평택 양하 대수는 자료대로`,   // 4.48-03: 예정 — 빼지 않는다   // 감사(하-2) — 자료마다 어떤지는 단정하지 않는다(EDI 가 이미 고쳐 올 수 있다)
           voice: '',
           count: keepFound.length,
           details: { keepCns: keepFound },

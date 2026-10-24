@@ -23,12 +23,12 @@ import KKAK from './fixtures/keep448_kkak2606n.json';   // 재감사 하-A: 예�
 import { generateHowToAnswer, answerAboutAlert } from '../src/nlSearch.js';   // 4.48-01 감사 — «본선 잔류 뭐야»
 import DiagnosticsPanel from '../src/components/DiagnosticsPanel.jsx';   // 4.48-01 재감사(하-2) — 펼친 칸을 실제로 그린다
 import { ListTab } from '../src/pages/VoyagePage.jsx';   // 4.48-02 — 시프팅 목록 머리(배정표와 확정만 맞댄다)
-import { shiftingTruthCheck } from '../src/utils.js';
+import { shiftingTruthCheck, shiftEvidenceCore } from '../src/utils.js';   // 4.48-03: 콘앱 분기 실행용
 import VoyagePage from '../src/pages/VoyagePage.jsx';   // 4.48-02 감사(중-1) — 항차 화면 본체를 통째로 그려 배선(truthChk·keepOnboard 전달)을 잰다
 
 window.__T = { keepOnboardOf, keepShiftForecastOf, ptkDischargeUnitsOf, shiftingMapForDisplay, isKeepShift, isPredShift, shiftEvidenceOf, shiftSplitOf, shiftingListOf, computeShiftingMapCached,
   buildPosMap, buildBayMarks, reconcileSources, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, setActiveWorkChoice, FX,
-  progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, voyageCountsOf, answerTotalMoves, runDiagnostics, computeStats, PREGONE, KKAK, generateHowToAnswer, answerAboutAlert, shiftingTruthCheck };
+  progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, voyageCountsOf, answerTotalMoves, runDiagnostics, computeStats, PREGONE, KKAK, generateHowToAnswer, answerAboutAlert, shiftingTruthCheck, shiftEvidenceCore };
 const root = createRoot(document.getElementById('root'));
 let __mk = 0;
 window.__renderDetail = (props) => { __mk += 1; root.render(React.createElement(ContainerDetailModal, { key: 'd' + __mk, onClose: () => {}, ...props })); };

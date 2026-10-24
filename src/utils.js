@@ -52,7 +52,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
 //   (앞 판) 'TallyOne 4.29-02'   // 4.29-02 **업데이트 배너는 검수사가 쓸 수 있는 변화만 알린다**(검수사 2026-10-16 13:32 «검수사들이 모르는 수정 업데이트 공고는 보여주면 안됩니다. 보여줘도 다른 검수사들이 쓸수 없는 기능이기 때문입니다»). 4.28·4.29-01 의 배너 문구는 소유자 전용 스위치 이야기라 모든 검수사에게 보였다 — 소유자 메뉴·수집기 안쪽 변경만 있는 판은 배너 문구를 직전 «모두가 쓰는 변화» 그대로 두고, 4.29 선적 칸 [수정] 문구로 되돌린다.
-export const APP_VERSION = 'TallyOne 4.48-02'   // 4.48-02 **본선 잔류 배의 시프팅 상자·데이터 검증 칸 — 배정표와는 확정 시프팅만 맞대고 노란 예보는 따로** — 검수사 2026-10-24 18:54 MAMP 641N «◆쉬프팅(재적부) 64 · 내림 0/62 · 실음 0/62 확정 · 선사 서류 정본 · 앱 추정 62 — 차이 2 · ⚠ 배정표 62대 — 차이 2 · 배정표 이적 124모브(62대) ⛔ 불일치 … ⛔ 배정표 이적 62대(124모브)인데 앱은 64대를 냈습니다 — 어느 한쪽이 틀립니다. ↳ 커버 분할 130가지를 전부 돌려도 정답이 안 나옵니다» · «앱이 같은 정보를 다루지 않는것 같습니다. 한쪽은 알고 한쪽은 모르고». 실근거 — 근거 판정(shiftEvidenceOf «확정»)·카고플랜 머리(«쉬프팅 62 예보◆2»)·현황 요약은 예보를 갈라 셌는데, 항차 화면 시프팅 목록 머리와 배정표 대조(shiftingTruthCheck)만 목록 전체(64 = 확정 62 + 본선 잔류 예보 2)를 썼다. 라이브 확인(다른 클로드)에서 데이터 검증 칸도 «EDI 평택 317 · 리스트 315 · 매칭 317» 로 세 기준이 섞였고, 주의 박스 펼친 줄의 긴 파일 이름이 폰 화면을 가로로 밀었다(319px → 541px). VoyagePage — shiftKeepN·shiftConfN · truthChk = shiftingTruthCheck(voyage, 확정 수) · shiftInfo.confN·keepN · ListTab 머리 «쉬프팅(재적부) 62 · 예보◆2(선사 메일 수정 — 본선 잔류)» · 앱 추정·배정표 차이는 확정끼리. ValidationBox — 검수사 19:16 «확정이 아닌 상태입니다. 그러므로 EDI317 리스트317(315) 매칭 317로 보여주는것이 맞습니다. 별도로 앱 예상EDI 평택 315 · 리스트 315 · 매칭 315를 따로 표기해줘야 하고요 메일을 근거로 제시하고» — 위 칸은 지금 자료 그대로(EDI 평택 317 · 리스트 317(315) · 매칭 317 · 쉬프팅 62 + 예보◆2), 아래 «앱 예상(선사 메일 수정 2건 적용 · 확정 아님) — EDI 평택 315 · 리스트 315 · 매칭 315 · 쉬프팅 64(예보◆2)» 한 줄과 «근거 — 선사 메일 10-24 12:49 «Pls keep …» · 두 컨 → CNDAI» 줄을 따로. 지시 컨 = keepOnboard ∪ 시프팅 목록 예보 행. 감사 «부»(중-1 연막이 항차 화면 본체를 안 거침 · 하-1 플래너 확정 뒤 총 작업 두 번 셈 · 하-3 매뉴얼) → 연막 ⑭(VoyagePage 통째 렌더)·⑮(− 겹침 N) · helpData·featureIndex 문구. DiagnosticsPanel ReconLine — break-all. 실자료(MAMP 641N RTDB GET 18:1x · 항차 화면 jsdom 렌더) — 머리 «쉬프팅(재적부) 62 · 예보◆2 … 확정 · 앱 추정과 같음 · 배정표 이적 124모브(62대) ✓ 일치» · ⛔ 줄 없음 · 지시 없는 배는 종전 그대로 · 배정표 65대 변형은 ⛔ 그대로. 연막 smoke_keep448 ⑬(74/74).
+export const APP_VERSION = 'TallyOne 4.48-03'   // 4.48-03 **선사 지시 본선 잔류는 «예정» — 평택 양하 대수는 자료(EDI·리스트)대로** — 검수사 2026-10-24 20:02 «모든 서류는 317을 이야기 하는데 세관만 315라고 말합니다. 어느 누가 봐도 317로 보입니다 … 앱이 인정할 자료가 필요 할것입니다. 선적EDI라든지 취소가 된 리스트라든지 그런거 없이 강제로 고쳐서 문제가 생긴것 같습니다» · 20:06 «확정도 아닌데 빨간 경고 문구가 나온것과 확정도 아닌데 확정인것처럼 315 315 315 답을 낸것을 문제로 삼은것입니다» · 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다» · 20:08 «수정본이 오면 또 수정본 대로 맞아질것입니다. 자료가 맞춰서 올테니까요». 실근거 — 4.48 이 keepOnboard 한 통으로 평택 양하분(ptkDischargeUnitsOf·progressOf·홈 computeStats·수석 보드·종이 카고플랜 matchPodC·자동 가이드 재료 _ptk)에서 두 대를 빼 MAMP 641N 홈 카드·리스트 «전체»·마감텔리·미르·콘앱이 315 였다(EDI·선사 리스트·터미널 배정 317). 수리 — 유닛 한 벌이 지시 컨을 빼지 않고 keepIn(표시용 · 안 내린 지시 컨은 «추가분(신고 대상)» 표식 안 닮)으로만 · progressOf·computeStats·수석 보드 빼기 지움 · 카고플랜 머리 «작업분» 은 예보 칸이 양하분에도 들면 한 번만(_keepPtkN) · «작업 시작» 패널의 작업 화면(SearchPanel allContainers — 자동 가이드·수동 묶음·빈 칸·남은 컨·조회 카드)은 지시 컨을 작업으로 내밀지 않음(4.48 과 같은 작업 화면) · 같은 패널의 미르 대수 답·«시작 대기» 수는 자료대로(allContainersData — 재감사 중-1) · 감사 «부»(중-1 가이드·콘앱 분기를 연막이 실제로 안 돌림 · 하-1 빈 칸 수 기준 섞임 · 하-2 수동 · 하-3 미확정 꼬리말 · 하-4 내린 지시 컨이 예정에 남음 · 하-6 주석) → 가이드 실클릭·콘앱 분기 실행 연막 · 작업 패널 한 자리로 · keepOnboardOf 가 완료·실적 컨을 뺌 · keepMatch 꼬리말 → 재감사 «부»(중-1 작업 시작 탭 미르 «양하 몇 대» 315) → 작업 화면과 대수 재료를 가름 · 콘앱 예보 재료에 완료·실적 · 주의 박스·근거 줄 break-words · 리스트 칩 «🟡 본선 잔류 예정 N»(전체 안의 몇 대) · 컨 상세·리스트 제목·주의 박스 정보 줄·미르 설명·매뉴얼 «예정» 문구. 노란 ◆ 예보·앱 예상 줄·주의 박스 자료별 대조는 그대로. 콘앱 2.71-01.
+// (앞 판) 'TallyOne 4.48-02'   // 4.48-02 본선 잔류 배의 시프팅 상자·데이터 검증 칸(확정 시프팅만 배정표와 · 앱 예상 줄 따로)
 // (앞 판) 'TallyOne 4.48-01'   // 4.48-01 **선사 지시 본선 잔류가 든 배의 주의 박스 — «EDI · 선사 리스트 · 세관 리스트 · 선사 메일 수정 N건 적용하면 앱 수»** — 검수사 2026-10-24 17:05 «리스트에 EDI 평택과 매칭 안되는 컨 2개 그리고 이것도 잘못된것입니다. 선사리스트와 EDI는 맞습니다. 세관리스트와 틀린거죠 그걸 명시해야 합니다» · 17:06 «EDI 317 선사리스트 317 세관리스트 315 메일 수정 2건 변경 적용하면 315» · 17:07 «터미널에서 아직 선사메일을 보지 않았고 수정전입니다». 실측 MAMP 641N(17:03 두 대 입력 뒤) — 주의 박스 «터미널 배정 317 · 앱 315 (-2)»(설명 없음)와 «리스트에 EDI 평택과 매칭 안되는 컨 2개»(평택 양하분 EDI 목록은 두 대를 빼는데 리스트에는 남음). diagnostics.runDiagnostics 에 keepCns(항차 화면이 keepOnboardOf 로 넘김) — 두 대는 list_extra 에서 빠지고, 자료별 대조 문구가 «자료별 대조 — EDI 317 · 선사 리스트 317 · 세관 리스트 315 · 선사 메일 수정 2건(본선 잔류 CNDAI — 평택에서 안 내림) 적용하면 315 · 터미널 배정 317(터미널은 아직 선사 메일 수정 전)» · 자료별 대조가 안 뜨는 배는 정보 줄 keep_onboard · 미르 경고 설명 한 줄. 지시 없는 배는 문구 그대로. 독립 감사 «부»(중 3 · 하 4) → 재감사 «부»(중 1 · 하 4) 반영 — 터미널 차이가 지시 대수와 다르면 «터미널 배정 N · 앱 N (gap)» · POD 확정 참고는 «· POD 확정 평택 아님 N대 적용하면» · 다른 어긋남이 같이 있으면 «어긋남 N대 · 선사 메일 수정 … 적용하면 앱 N» · 정보 줄·미르 설명은 자료를 단정하지 않음 · 주의 박스 펼친 칸 본선 잔류 묶음 따로 · 진단 입력(EDI 평택분)에서만 본선 잔류를 뺌(항차 화면 목록 isPtk 는 그대로) · 본선 잔류는 가상 E 확정보다 먼저 가름(플래너가 확정해 시프팅에 든 지시는 «시프팅으로 셈» 그대로 — 3차 감사 하-1) · 미르 «본선 잔류 뭐야» 낱말표. 연막 smoke_keep448 ⑫ 18항(70/70).
 // (앞 판) 'TallyOne 4.48'   // 4.48 **선사 지시 «본선 잔류» — 평택에서 안 내리는 컨을 평택 양하에서 빼고, 아래 평택 컨을 막으면 시프팅 예보(노란 ◆)** — 검수사 2026-10-24 12:49 MAMP 641N 선사 메일 «Pls keep below cntrs onboard for CNDAI discharge. MNBU0129687 MNBU3119872» · «메일대로 315 (평택 아님)» · 13:05 «시프팅 64로 기록 바랍니다» · 13:09 «만약 확정 떄문에 그렇다면 예보로 하세요 시프팅 확정은 파란 다이아몬드 표시 입니다. 메일 적용은 한다면 노란 다이아 몬드로 시프팅 대상이라는걸 보여주세요» · «차후에 플래너가 확정하면 그떄 같이 바뀌게» · «이렇게 만든다». 실근거 — 세관 리스트 315(머스크 리스트·EDI 317)에 없던 두 대가 바로 그 두 대(B/L 칸 빈 45R8 풀, 22-05-86·22-07-86) · 베이플랜 22번 덱 05·07줄 82·84·88·90 이 평택 컨이라 86단 두 대는 들어냈다 다시 실어야 한다 · 터미널 MOVINS(10-23 16:18)는 그 두 자리에 CNHSK 엠티를 채워 넣는 계획. 자료 `voyages/{항차}/keepOnboard/{컨}`(pod·src·by·at·mailAt·note·pod_orig — 컨 상세 «🟡 선사 지시 · 본선 잔류» 단추, 수석·검수사만 · firebase.fbSetKeepOnboard·fbClearKeepOnboard·fbGetKeepOnboard 12초 제한·되읽기). utils 한 벌 — keepOnboardOf · ptkDischargeUnitsOf 가 빼고(317 → 315) · keepShiftForecastOf(예측 시프팅 한 벌 predictShiftingFromVoyage 에 forcePod 로 그 컨만 지시 양하항 — 실측 두 대 «같은 스택 22베이 양하분 위 — 들어내야 양하», 다른 예측 변화 0 · 확정 지도에 들면 빠짐) · shiftingMapForDisplay 에 _forecast:'keep' 로 얹음 · cargoPlanCore.isKeepShift(칸 'keep') · shiftEvidenceOf 는 예보를 빼고 판정 · shiftSplitOf.forecast · shiftingListOf.keep. 화면 — 종이 카고플랜 노란 ◆(흑백 ◈)·머리 «예보◆N» · 베이뷰 노란 칸·◆ · 검증 상자 «◆ 예보 N 포함»·리스트에서 뺌 · 시프팅 목록 창·검수 리스트 [별첨2] «예보(본선 잔류 CNDAI)» · 현황 요약·수석 보드 «◆ 예보 N» · 리스트 «🟡 본선 잔류 N» 칩(총계 밖) · 작업 카드·목록 칩 · 자동 가이드 큐에서 빠짐(_ptk) · 주의 박스 자료별 대조 «POD 확정 — 평택 아님(참고)» · 미르 시프팅 답 «🟡 시프팅 예보 N대». 콘앱 2.71 — 같은 자료·판정(카고플랜 노란 ◆ · 미르 양하분 315).
 // (앞 판) 'TallyOne 4.47-01'   // 4.47-01 **수동 보고를 닫았다가 다른 탭에서 다시 열어도 작업 종류가 지금 화면의 작업** — 4.47 라이브 확인 «부»(다른 클로드 2026-10-24, 내장 브라우저): 수동 보고 화면에서 X 로 닫고 양하·선적 탭을 바꿔 다시 열면 창이 수동 보고로 바로 열리면서 작업 종류가 앞 탭 값으로 남았다(선적 탭에서 닫음 → 양하 탭 «양하 0/317» 에서 다시 열어도 «선적» · 반대도 같음). 수동 보고 단추를 누를 때만 pageMode 로 맞췄기 때문 — WorkReportModal 여는 효과에서 manualMode 도 pageMode 로 맞추고 보고 종류·사유(manualAction·manualReason)를 비운다(독립 감사 «부» — 안 비우면 «양하 · 중단 · 사유 양하 재개» 같은 어긋난 조합이 확인 창 없이 나갈 수 있었다). 연막 smoke_switch447 세 항(다시 열기 양쪽 — 따로 시작 · 골라 둔 중단·사유 비움).
@@ -141,7 +142,8 @@ export const APP_VERSION = 'TallyOne 4.48-02'   // 4.48-02 **본선 잔류 배�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.48-02 선사 지시로 본선에 남는 컨이 있는 배는 시프팅 상자가 확정만 배정표와 맞댑니다. 데이터 검증 칸은 지금 자료 그대로 세고 메일을 적용한 앱 예상 수는 아래 줄에 따로 적습니다.'
+export const APP_NOTE = '4.48-03 선사 지시로 본선에 남는 컨은 예정으로만 보이고 평택 양하 대수는 EDI와 리스트 자료대로 셉니다. 수정 자료가 오면 그 자료대로 바뀝니다.'
+// (앞 판 APP_NOTE) '4.48-02 선사 지시로 본선에 남는 컨이 있는 배는 시프팅 상자가 확정만 배정표와 맞댑니다. 데이터 검증 칸은 지금 자료 그대로 세고 메일을 적용한 앱 예상 수는 아래 줄에 따로 적습니다.'
 // (앞 판 APP_NOTE) '4.48-01 선사 지시로 본선에 남는 컨이 있는 배는 주의 박스가 «EDI · 선사 리스트 · 세관 리스트 · 메일 수정 N건 적용하면 …»으로 밝힙니다. 그 컨은 매칭 안 되는 컨으로 세지 않습니다.'
 // (앞 판 APP_NOTE) '4.48 선사 지시로 본선에 남는 컨은 컨 상세 «선사 지시 · 본선 잔류»로 넣으면 평택 양하에서 빠지고 카고플랜에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 확정하면 파란 ◆로 바뀝니다.'
 // (앞 판 APP_NOTE) '4.42-02 미르가 화났을 때 강풍대기 같은 사유를 말하면 화난 그 배들에 작업 중단으로 적습니다. 미르가 완료 대수를 말할 때 배 이름도 붙입니다.'
@@ -9157,11 +9159,15 @@ export function keepOnboardOf(voyage) {
   const src = voyage && voyage.keepOnboard;
   const out = {};
   if (!src || typeof src !== 'object') return out;
+  //  ★ 4.48-03 감사(하-4) — 지시 컨을 실제로 내렸으면(완료 기록 · 터미널 실적) 예정은 끝난 것이다 — 예보·칩·앱 예상에 남기지 않는다(유닛은 그 컨을 종전대로 추가분으로 센다).
+  const _dSec = (voyage && voyage.discharge) || {}, _comp = _dSec.completed || {}, _tw = _dSec.termWork || {};
+  const _done = (cn) => { const w = _comp[cn]; return !!(w && !(typeof w === 'object' && w.flag === 'missing')) || !!_tw[cn]; };
   for (const [k, e] of Object.entries(src)) {
     if (!e || typeof e !== 'object' || String(k).startsWith('_')) continue;
     if (e.cleared) continue;   // 풀린 지시 — 줄은 남긴다(수집기가 같은 메일로 다시 넣지 않게)
     const cn = String(e.cn || k || '').trim().toUpperCase();
     if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
+    if (_done(cn)) continue;
     const pod = String(e.pod || '').trim().toUpperCase();
     if (!pod || isPyeongtaekPort(pod)) continue;   // 평택을 지시하면 잔류가 아니다
     out[cn] = { ...e, cn, pod };
@@ -9297,14 +9303,14 @@ export function progressOf(section, mode, shiftSet, ptkCns, keepOnboard) {
   const records = section?.records || {};
   const completed = section?.completed || {};
   const ss = shiftSet || new Set();
-  const _keep = mode === 'discharge' ? keepOnboardOf({ keepOnboard }) : {};
-  const listCns = new Set(ownDirCns(records, mode).filter((cn) => isListOriginRecord(records[cn]) && !isShiftOffPtk(ss, records, mode, cn) && !_keep[cn]));   // 4.16 Fable 판정: 양하는 리스트에 실려 있어도 시프팅으로만 · 선적만 예외 · 4.48 본선 잔류 뺌
+  //  4.48-03: 본선 잔류 지시는 예정 — 분모에서 빼지 않는다(keepOnboard 는 유닛 한 벌에 그대로 넘겨 keepIn 만 표시용으로 쓴다).
+  const listCns = new Set(ownDirCns(records, mode).filter((cn) => isListOriginRecord(records[cn]) && !isShiftOffPtk(ss, records, mode, cn)));   // 4.16 Fable 판정: 양하는 리스트에 실려 있어도 시프팅으로만 · 선적만 예외 · 4.48 본선 잔류 뺌
   //  ★ 4.20 (Fable 판정 ④): 양하 분모 = 평택 양하분 한 벌(ptkDischargeUnitsOf — 세관 목록 + 추가분). 홈 카드·수석 통계·현황 요약 세 호출부가 여기를 지난다.
   //    목록이 없으면(basis 'edi') 종전 그대로 호출부의 EDI 평택분(ptkCns).
   const _U = mode === 'discharge' ? ptkDischargeUnitsOf({ discharge: section || {}, keepOnboard }, ss) : null;   // 4.20 감사: 이 진행 숫자의 시프팅 집합으로 · 4.48 본선 잔류
   const usePtk = !(_U && _U.basis !== 'edi') && listCns.size === 0 && ptkCns && ptkCns.size > 0;
   const baseSet = (_U && _U.basis !== 'edi') ? new Set([..._U.set].filter((cn) => !isShiftOffPtk(ss, records, mode, cn)))
-    : usePtk ? new Set([...ptkCns].filter((cn) => !ss.has(cn) && !_keep[cn])) : listCns;
+    : usePtk ? new Set([...ptkCns].filter((cn) => !ss.has(cn))) : listCns;
   let baseDone = 0, moves = 0, extra = 0;
   for (const cn of Object.keys(completed)) {
     const inBase = baseSet.has(cn), inShift = ss.has(cn);
@@ -9366,18 +9372,27 @@ export function ptkDischargeUnitsOf(voyage, shiftSet) {
   const cust = rows.filter(([, r]) => r._customs);
   const basis = cust.length ? 'customs' : (rows.length ? 'list' : 'edi');
   const extra = new Set();
-  if (basis === 'edi') { const _kp = keepOnboardOf(voyage); return { basis, set: new Set([...ediPtk].filter((cn) => onPtk(cn) && !_kp[cn])), extra, listSet: new Set(), ediKeyOf, transit: new Set(), shiftSet: shSet }; }
-  const picked = (r) => !!(r.pod_pick && r.pod && !isPyeongtaekPort(r.pod));   // 3.53: 평택 아닌 POD 를 고른 행
-  //  ★ 4.48 — 선사 지시 «본선 잔류»(keepOnboard) 컨은 평택에서 내리지 않는다 — 리스트·EDI 에 평택으로 있어도 평택 양하분에서 뺀다
-  //    (검수사 2026-10-24 «메일대로 315 (평택 아님)» — MAMP 641N MNBU0129687 · MNBU3119872).
+  //  ★ 4.48-03 — 선사 지시 «본선 잔류»(keepOnboard)는 **예정**이다 — 평택 양하분에서 빼지 않는다(자료대로 센다). 검수사 2026-10-24 20:02 «모든 서류는 317을 이야기 하는데 세관만 315 …
+  //    앱이 인정할 자료가 필요 할것입니다. 선적EDI라든지 취소가 된 리스트라든지 그런거 없이 강제로 고쳐서 문제가 생긴것 같습니다» · 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다» ·
+  //    20:08 «수정본이 오면 또 수정본 대로 맞아질것입니다. 자료가 맞춰서 올테니까요». 4.48 은 메일 한 통으로 317 → 315 를 만들었다(MAMP 641N). 이제 양하 EDI·리스트가 고쳐져 와야 수가 바뀐다.
+  //    keepIn — 지시 컨 가운데 이 집합에 든 것(아직 안 내린 것). 세관 목록 밖이어도 «추가분(신고 대상)» 표식은 달지 않는다(메일이 설명한다) — 내렸으면(완료 기록) 종전대로 추가분.
   const keep = keepOnboardOf(voyage);
-  const listSet = new Set((basis === 'customs' ? cust : rows).filter(([cn, r]) => !picked(r) && !keep[cn]).map(([cn]) => cn));
-  const add = (cn) => { if (_unitKey(cn) && !listSet.has(cn) && !keep[cn] && !(recs[cn] && picked(recs[cn])) && onPtk(cn)) extra.add(cn); };
+  if (basis === 'edi') { const _ke = new Set([...ediPtk].filter((cn) => onPtk(cn) && keep[cn])); return { basis, set: new Set([...ediPtk].filter((cn) => onPtk(cn))), extra, listSet: new Set(), ediKeyOf, transit: new Set(), shiftSet: shSet, keepIn: _ke }; }
+  const picked = (r) => !!(r.pod_pick && r.pod && !isPyeongtaekPort(r.pod));   // 3.53: 평택 아닌 POD 를 고른 행
+  const listSet = new Set((basis === 'customs' ? cust : rows).filter(([cn, r]) => !picked(r)).map(([cn]) => cn));
+  const keepIn = new Set();
+  const _doneCn = (cn) => { const w = comp[cn]; return !!(w && !(typeof w === 'object' && w.flag === 'missing')) || !!tw[cn]; };
+  const add = (cn) => {
+    if (!(_unitKey(cn) && !listSet.has(cn) && !(recs[cn] && picked(recs[cn])) && onPtk(cn))) return;
+    if (keep[cn] && !_doneCn(cn)) { keepIn.add(cn); return; }   // 4.48-03: 예정 — 세지만 추가분(신고 대상) 표식은 안 단다
+    extra.add(cn);
+  };
   for (const cn of ediPtk) add(cn);
   for (const [cn, w] of Object.entries(comp)) if (w && !(typeof w === 'object' && w.flag === 'missing')) add(cn);
   for (const cn of Object.keys(tw)) add(cn);
   const transit = new Set([...listSet].filter((cn) => ediNotPtk.has(cn) && onPtk(cn)));
-  return { basis, set: new Set([...[...listSet].filter(onPtk), ...extra]), extra, listSet, ediKeyOf, transit, shiftSet: shSet };
+  for (const cn of listSet) if (keep[cn] && onPtk(cn)) keepIn.add(cn);
+  return { basis, set: new Set([...[...listSet].filter(onPtk), ...extra, ...keepIn]), extra, listSet, ediKeyOf, transit, shiftSet: shSet, keepIn };
 }
 //  4.20 후속 (Fable 판정 ④-4 — 규범 §4-4): 미르 «양하 몇 대»·«총 무브수»·교대 브리핑·갱 배분이 같은 양하 수를 말하게 하는 한 벌.
 //    pred(c) — 그 양하 행(EDI 행 등 cn 이 있는 행)이 평택 양하분인가(시프팅이면 아님). 목록 없는 배(basis 'edi')는 pred 가 null — 부르는 쪽 종전 POD 판정.
@@ -9607,7 +9622,9 @@ export function computeShiftingMapCached(voyageKey, voyage) {
       서류 자리와 양하/선적 EDI 자리의 일치 대수. 서류가 없으면 EDI 자리 비교 또는 앱 예측이라고 밝힌다.
     · 컨별 표식 — 서류일 때만. 양하 EDI 자리·선적 EDI 자리가 서류와 같은지(true/false/null=EDI 에 없음).
     순수 함수라 콘앱(window.ConeParse)도 같이 부른다. dMap/lMap = { 컨번호: {bay,row,tier,...} }. */
-export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, terminalStatus }) {
+//  ★ 4.48-03 — keepN(선사 지시 본선 잔류 예보 대수, 노란 ◆ — 이 지도에는 안 든다). 배정표 이적이 «확정 + 예보» 와 같으면 터미널이 선사 메일을 먼저 반영한 것이다 —
+//    «불일치»(빨간 경고)가 아니라 «미확정»(선사 시프팅 목록 수정본 대기). 검수사 2026-10-24 20:06 «확정도 아닌데 빨간 경고 문구가 나온것 … 을 문제로 삼은것입니다».
+export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, terminalStatus, keepN = 0 }) {
   const sm = shiftingMap || {};
   const keys = Object.keys(sm).filter((k) => k && !k.startsWith('_'));
   const count = keys.length;
@@ -9616,7 +9633,9 @@ export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, termina
   const kind = isDoc ? 'carrier' : (!count ? 'none' : (keys.some((k) => sm[k] && sm[k].to) ? 'compare' : 'predict'));
   const berth = _berthTruthRaw({ info: { berthShift, terminalStatus } });   // null=자료 없음 · {pending} · {truth,moves}
   const ready = !!(berth && !berth.pending);
-  const status = (!count && !(isDoc && ready)) ? '' : (ready ? (berth.truth === count ? '확정' : '불일치') : '미확정');   // 4.13 감사: 서류 0대 + 배정표 이적 N모브 는 «불일치» 라고 말한다(라벨이 비면 근거 줄과 모순)
+  const _kN = Number(keepN) > 0 ? Number(keepN) : 0;
+  const keepMatch = !!(ready && _kN > 0 && count > 0 && berth.truth !== count && berth.truth === count + _kN);
+  const status = (!count && !(isDoc && ready)) ? '' : (ready ? (berth.truth === count ? '확정' : keepMatch ? '미확정' : '불일치') : '미확정');   // 4.13 감사: 서류 0대 + 배정표 이적 N모브 는 «불일치» 라고 말한다(라벨이 비면 근거 줄과 모순)
   //  메일/수집 시각 — ms 로 오지 않은 값(초 단위)도 읽는다.
   const asMs = (v) => { const t = Number(v); if (!Number.isFinite(t) || t <= 0) return 0; return t < 1e11 ? t * 1000 : t; };
   const fmt = (ms) => { if (!ms) return ''; const d = new Date(ms + 9 * 3600e3); const p = (n) => String(n).padStart(2, '0'); return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; };
@@ -9654,11 +9673,11 @@ export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, termina
   if (kind !== 'none') {
     if (!berth) parts.push('배정표 이적 아직 없음');
     else if (berth.pending) parts.push(`배정표 이적 ${berth.moves}모브(작업 시작 후 확정)`);
-    else parts.push(`배정표 이적 ${berth.moves}모브=${berth.truth}대${berth.truth === count ? '' : ` ≠ ${count}대`}`);
+    else parts.push(`배정표 이적 ${berth.moves}모브=${berth.truth}대${berth.truth === count ? '' : keepMatch ? ` = 확정 ${count} + 예보◆${_kN}(터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기)` : ` ≠ ${count}대`}`);
   }
   //  label = 화면·카고플랜 머리에 쓰는 말. 앱 예측뿐이고 배정표가 아직이면 «미확정»이 아니라 «예측»(자리도 추정이다).
   const label = (kind === 'predict' && status === '미확정') ? '예측' : status;
-  return { status, label, kind, count, doc, per, line: parts.join(' · '),
+  return { status, label, kind, count, keepMatch, keepN: _kN, doc, per, line: parts.join(' · '),
            arv: { ok: arvOk, bad: arvBad, none: arvNone, badCns: arvBadCns, usable: arvUsable },
            dep: { ok: depOk, bad: depBad, none: depNone, badCns: depBadCns, usable: depUsable },
            berth: berth ? { moves: berth.moves, truth: berth.pending ? null : berth.truth, pending: !!berth.pending, terminalStatus: berth.terminalStatus || '' } : null };
@@ -9669,14 +9688,16 @@ const _shiftEvidCache = new Map();   // voyageKey → { sig, res }
 //    opts.light — 상태·근거 한 줄만 필요한 곳(항차 목록 카드)은 EDI 를 다시 파싱하지 않는다(컨별 자리 대조는 비운다). 캐시 칸이 따로다.
 export function shiftEvidenceOf(voyageKey, voyage, shiftingMap, opts) {
   //  ★ 4.48 — 본선 잔류 시프팅 예보(노란 ◆)는 근거 판정(배정표·선사 서류·EDI 대조)에 넣지 않는다 — 확정·예측만 센다(64 를 배정표 62 와 «불일치»로 읽지 않게).
+  let _keepN = 0;   // 4.48-03: 뺀 예보 대수 — 배정표 = 확정 + 예보 갈래(core keepN)
   if (shiftingMap && Object.values(shiftingMap).some(_isKeepShift)) {
+    _keepN = Object.values(shiftingMap).filter(_isKeepShift).length;
     const s = {};
     for (const [k, v] of Object.entries(shiftingMap)) if (!_isKeepShift(v)) s[k] = v;
     const md = Object.getOwnPropertyDescriptor(shiftingMap, '_meta');
     if (md) { try { Object.defineProperty(s, '_meta', md); } catch (e) { console.warn('[4.48 시프팅 근거] 부가정보 옮기기 실패:', e); } }
     shiftingMap = s;
   }
-  if (!voyage) return shiftEvidenceCore({ shiftingMap });
+  if (!voyage) return shiftEvidenceCore({ shiftingMap, keepN: _keepN });
   const light = !!(opts && opts.light);
   const info = voyage.info || {};
   const isDoc = !!(shiftingMap && shiftingMap._meta && shiftingMap._meta.source === 'carrier');
@@ -9687,13 +9708,13 @@ export function shiftEvidenceOf(voyageKey, voyage, shiftingMap, opts) {
     voyage.restowList?._meta?.mailAt ?? '', voyage.restowList?._meta?.at ?? '', voyage.restowList?._meta?.file ?? '',
     d?.raw?.edi?.uploadedAt || 0, d?.raw?.edi?.sizeBytes || 0, l?.raw?.edi?.uploadedAt || 0, l?.raw?.edi?.sizeBytes || 0,
     Object.keys(d?.ediContainers || {}).length, Object.keys(l?.ediContainers || {}).length,
-    isDoc ? _restowSig(voyage.restowList) : '',
+    isDoc ? _restowSig(voyage.restowList) : '', _keepN,
   ].join('|');
   const key = (voyageKey || 'unknown') + (light ? '|L' : '');
   const hit = _shiftEvidCache.get(key);
   if (hit && hit.sig === sig) return hit.res;
   const mapOf = (sec) => (isDoc && !light ? (ediMapFromRaw(sec) || sec?.ediContainers || null) : null);
-  const res = shiftEvidenceCore({ shiftingMap, dMap: mapOf(d), lMap: mapOf(l), berthShift: info.berthShift, terminalStatus: info.terminalStatus });
+  const res = shiftEvidenceCore({ shiftingMap, dMap: mapOf(d), lMap: mapOf(l), berthShift: info.berthShift, terminalStatus: info.terminalStatus, keepN: _keepN });
   if (_shiftEvidCache.size > 60) _shiftEvidCache.clear();
   _shiftEvidCache.set(key, { sig, res });
   return res;

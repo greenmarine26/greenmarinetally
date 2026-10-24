@@ -65,7 +65,8 @@ const fs = require('fs');
     const cpv2 = fs.readFileSync(path.resolve('src/components/PrintableCargoPlanV2.jsx'), 'utf8');
     ok(/const _ptkCount = \(containers \|\| \[\]\)\.filter\(\(c\) => c && matchPodC\(c\)\)\.length;/.test(cpv2),
        '카고플랜 평택분은 matchPodC(pod/pol 평택)로만 센다 — 시프팅은 안 걸린다');
-    ok(/작업분 \{_ptkCount \+ shiftCount\}/.test(cpv2), '검수앱 문구는 «작업분»(검수사 확정)');
+    // 4.48-03: 작업분은 _workN(= 평택분 + 시프팅 − 양하분이면서 예보 칸) — 본선 잔류 예보 칸을 두 번 세지 않는다.
+    ok(/const _workN = _ptkCount \+ shiftCount - _keepPtkN;/.test(cpv2) && /작업분 \{_workN\}/.test(cpv2), '검수앱 문구는 «작업분»(검수사 확정)');
   }
 
   console.log('[2] 규칙 재현 — 15척에서 몇 장이 그려지는가');

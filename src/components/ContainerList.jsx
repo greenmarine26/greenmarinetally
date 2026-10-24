@@ -553,7 +553,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {/* 4.48 — 선사 지시 본선 잔류(평택에서 안 내림) · 아래 평택 컨을 막으면 시프팅 예보(노란 ◆) */}
               {c._keep && (
                 <span className="bg-yellow-500 text-ink-950 bdg font-black" data-keep-chip="1"
-                  title={`선사 지시 — 본선 잔류(${c._keep.pod} 양하)${c._keep.mailAt ? ` · 선사 메일 ${c._keep.mailAt}` : ''} · 평택 양하 대수에서 뺍니다`}>
+                  title={`선사 지시 — 본선 잔류(${c._keep.pod} 양하)${c._keep.mailAt ? ` · 선사 메일 ${c._keep.mailAt}` : ''} · 예정(확정 아님) — 평택 양하 대수는 자료대로`}>
                   🟡 본선 잔류 {c._keep.pod}
                 </span>
               )}

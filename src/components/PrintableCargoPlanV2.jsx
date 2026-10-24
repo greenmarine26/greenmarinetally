@@ -1064,9 +1064,16 @@ export default function PrintableCargoPlanV2({
   //  ★ 4.48 감사(상 3) — 본선 잔류 컨은 평택에서 안 내린다. EDI POD 가 평택이어도 양하 평택분이 아니다(머리 «양하 317» 이 두 대를 양하와 시프팅 예보에 두 번 셌다 — 맞는 값 315 · 작업분 379).
   const _keepCns = (() => { const k = new Set(Object.keys(keepOnboardOf({ keepOnboard }))); for (const [cn, e] of Object.entries(shiftingMap || {})) if (isKeepShift(e)) k.add(String((e && e.cn) || cn)); return k; })();
   const _keepSig = [..._keepCns].sort().join(',');
-  const matchPodC = (c) => _isPtkOne(c, mode) && !(mode === 'discharge' && c && _keepCns.has(c.cn));   // 3.60-19: 한 벌(선적 리스트 등재라도 EDI 통과화물이면 제외 — 별첨·머리 합계가 화면과 같은 수)
+  //  ★ 4.48-03 — 본선 잔류 지시는 «예정»이다(검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다») — 양하 평택분은 자료대로(EDI·리스트 317) 센다.
+  //    노란 ◆ 예보 칸은 그대로 그리되, 그 칸이 양하분에도 들면 «작업분» 에서 한 번만 센다(_keepPtkN).
+  //    플래너가 확정한 시프팅(파란 ◆ — 선사 시프팅 목록)은 양하 평택분이 아니다(유닛 한 벌 ptkDischargeUnitsOf 의 isShiftOffPtk 와 같은 답 — EDI POD 가 아직 평택이어도).
+  const _confShiftCns = mode === 'discharge' ? new Set(Object.entries(shiftingMap || {}).filter(([k, e]) => k && !String(k).startsWith('_') && e && !isPredShift(e) && !isKeepShift(e)).map(([k, e]) => String((e && e.cn) || k))) : new Set();
+  const matchPodC = (c) => _isPtkOne(c, mode) && !(c && _confShiftCns.has(c.cn));   // 3.60-19: 한 벌(선적 리스트 등재라도 EDI 통과화물이면 제외 — 별첨·머리 합계가 화면과 같은 수)
+  const _confSig = [..._confShiftCns].sort().join(',');   // 4.48-03: 확정 시프팅이 바뀌면 칸 수도
   //  2.83: 머리 합계용 평택분 대수 — **별첨·베이 카운트와 같은 판정(matchPodC)** 을 쓴다.
   const _ptkCount = (containers || []).filter((c) => c && matchPodC(c)).length;
+  const _keepPtkN = mode === 'discharge' ? (containers || []).filter((c) => c && matchPodC(c) && _keepCns.has(c.cn) && isKeepShift((shiftingMap || {})[c.cn])).length : 0;   // 4.48-03: 양하분이면서 예보 칸
+  const _workN = _ptkCount + shiftCount - _keepPtkN;
   const boxCounts = useMemo(() => {
     const matchBay = (c, num) => Number(c.bay) === num;
     const byBay = new Map();
@@ -1094,7 +1101,7 @@ export default function PrintableCargoPlanV2({
       counts[s] = String(d['20'] + d['40'] + d['45']);
     });
     return counts;
-  }, [trios, singles, containers, pod, _keepSig, mode]);   // 4.48: 본선 잔류가 바뀌면 칸 수도
+  }, [trios, singles, containers, pod, _keepSig, _confSig, mode]);   // 4.48: 본선 잔류가 바뀌면 칸 수도 · 4.48-03: 확정 시프팅도
 
   // M6.92.0: 공통 색 함수 (utils.js) 사용 — 베이플랜/카고플랜/베이상세 통일
   const colorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
@@ -1429,7 +1436,7 @@ export default function PrintableCargoPlanV2({
 
           {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.
               시프팅이 0이면 종전대로 대수만(없는 줄을 만들지 않는다). */}
-          <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }} data-cp-count={`${_ptkCount}/${_ptkCount + shiftCount}`}>
+          <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }} data-cp-count={`${_ptkCount}/${_workN}`}>
             {mode === 'discharge' ? '양하' : '선적'} {_ptkCount}
             {shiftCount > 0 && (
               <>
@@ -1443,7 +1450,7 @@ export default function PrintableCargoPlanV2({
                       양하 279 시프팅 95 **작업분** 374 이런식으로»*
                     ⚠ 검수앱은 양하 대수(279)를 **그대로 둔다**. 검수 리스트가 그 수이기 때문이다.
                       시프팅을 대수에 **합치는 것은 콘앱만의 계산법**이다(내리고 싣는 것만 세므로). */}
-                <span> · 작업분 {_ptkCount + shiftCount}</span>
+                <span> · 작업분 {_workN}</span>{/* 4.48-03: 예보 칸이 양하분에도 들면 한 번만 */}
               </>
             )}
           </div>
