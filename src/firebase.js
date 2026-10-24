@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES } from './utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES, isCustomsSrc, sealLegacyOf } from './utils.js';   // 4.49 재감사: 옛 꼴 판정 한 벌(sealLegacyOf)   // 4.49: isCustomsSrc — 세관 출처 판정 한 벌   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, dropStaleRawEdi, restoreStaleRawEdi, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
@@ -515,16 +515,21 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     //     선사 리스트 `482869` / 세관 CDL `549844`. **자료가 실제로 어긋나 있었다.**
     //   1.8-02 로 실오류 오탐은 막았지만 그 바람에 이 어긋남까지 조용해졌다. 그건 더 나쁘다.
     //   ⚠ 이것은 '실오류'가 아니다 — 실물 봉인을 본 사람이 없다. 검수 전에 확인할 신호다.
-    if (nv && nv.sl && ov.sl && String(nv.sl).trim() !== String(ov.sl).trim()) {
+    //  ★ 4.49 — 검수원이 실물을 보고 고친 컨(sl_history)은 ov.sl 이 실물 값이다 — 서류끼리 대조에는 고치기 전 서류 값(sl_orig)을 쓴다.
+    //    종전엔 다시 올린 리스트와 «실물 값»을 비교해 실물 값이 서류 출처처럼 sl_conflict 에 들어갔다(알려진 실에 실물이 섞이면 실오류를 못 잡는다).
+    const _ovDocSl = (Array.isArray(ov.sl_history) && ov.sl_history.length) ? (ov.sl_orig != null ? ov.sl_orig : '') : ov.sl;
+    if (nv && nv.sl && _ovDocSl && String(nv.sl).trim() !== String(_ovDocSl).trim()) {
       const hist = Array.isArray(ov.sl_conflict) ? [...ov.sl_conflict] : [];
       // 2.06-07 (검수사 «같은 리스트에서 다른 실번호라는 이야기 인가요?» — 아니었다): 종전엔 기존 값의
       //   출처를 ov._source 로 찍었는데 _source 는 **마지막으로 이 컨을 덮은 파일명**이라, 세관 값도
       //   선사 파일명으로 표시됐다(2719E 실측 — 0035634 는 적하목록 값인데 RF LIST 로 찍힘).
       //   sl 의 진짜 출처는 sl_src 에 따로 지킨다.
-      const prevSrc = ov.sl_src || ov._source || '';
-      const nextSrc = nv._source || '';
-      if (!hist.length) hist.push({ sl: String(ov.sl), src: prevSrc });
-      if (!hist.some((h) => h.sl === String(nv.sl))) hist.push({ sl: String(nv.sl), src: nextSrc });
+      //  4.49 감사(상-2) — 옛 꼴(고친 기록 없이 sl ≠ sl_orig)의 sl_src 는 sl_orig 쪽 출처라 sl 에 붙이지 않는다(아래 2.08-14 블록이 sl_orig 를 그 출처로 옮긴다).
+      const _legOv = sealLegacyOf(ov);   // 재감사(하): 옛 꼴 판정 한 벌(utils)
+      const prevSrc = _legOv ? '' : (ov.sl_src || ov._source || '');
+      const nextSrc = nv.sl_src || nv._source || '';   // 4.49 재감사(중-1): 올리기 병합(mergeUploadSeal)이 다른 파일 값을 골랐으면 그 출처
+      if (!hist.length) hist.push({ sl: String(_ovDocSl), src: prevSrc });
+      { const _i = hist.findIndex((h) => h && String(h.sl).toUpperCase().replace(/[\s\-]/g, '') === String(nv.sl).toUpperCase().replace(/[\s\-]/g, '')); if (_i < 0) hist.push({ sl: String(nv.sl), src: nextSrc }); else if (isCustomsSrc(nextSrc) && !isCustomsSrc(hist[_i].src)) hist[_i] = { ...hist[_i], src: nextSrc }; }   // 재감사(중-1): 같은 값에 세관 출처가 오면 세관으로
       m.sl_conflict = hist;
     }
     // 2.08-14 (검수사 «MCSN 실번호 이상이 재발되었네요» — 실측: records 는 정상 PH계열인데
@@ -533,6 +538,19 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     //   현장 수정 이력(sl_history)이 없는 한 옛 sl_orig 는 근거가 아니다 — 함께 지운다.
     if (m.sl && ov.sl_orig && !(Array.isArray(ov.sl_history) && ov.sl_history.length)
         && String(m.sl).trim() !== String(ov.sl_orig).trim()) {
+      //  ★ 4.49 감사(상-2) — 옛 꼴의 sl_orig 는 서류 값이다(sl_src 가 그 출처 — MAMP 641N MMAU1264907 세관 MLPH046339). 지우기 전에 «다른 자료 실»(sl_conflict)로 옮긴다.
+      //    안 옮기면 선사 리스트를 다시 올리기만 해도 세관 잘림(실오류)이 기록에서 사라졌다.
+      //    재감사(하) — 서류 값이 분명할 때만 옮긴다 · 출처가 세관이거나(sl_src·_source) 한쪽이 다른 쪽의 앞부분(잘림·이어 붙은 씰 컷)일 때. 옛 파서 Bookno 같은 엉뚱한 값은 종전대로 지운다(2.08-14).
+      const _nk = (x) => String(x || '').toUpperCase().replace(/[\s\-]/g, '');
+      const _oSrc = String(ov.sl_src || ov._source || '');
+      const _po = _nk(ov.sl_orig), _ps = _nk(ov.sl);
+      if (isCustomsSrc(_oSrc) || (_po && _ps && (_ps.startsWith(_po) || _po.startsWith(_ps)))) {
+        const _h = Array.isArray(m.sl_conflict) ? [...m.sl_conflict] : [];
+        const _i = _h.findIndex((x) => x && _nk(x.sl) === _po);
+        if (_i < 0) _h.push({ sl: String(ov.sl_orig), src: _oSrc }); else if (isCustomsSrc(_oSrc) && !isCustomsSrc(_h[_i].src)) _h[_i] = { ..._h[_i], src: _oSrc };
+        if (ov.sl && !_h.some((x) => x && _nk(x.sl) === _ps)) _h.push({ sl: String(ov.sl), src: '' });
+        m.sl_conflict = _h;
+      }
       m.sl_orig = null;
     }
     // 2.06-07: 이번 리스트가 sl 을 실제로 쓰면(빈 값 아님) 그 출처를 sl_src 로 동봉 — 다음 충돌 때 정확한 출처 표기
@@ -540,17 +558,25 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     //   세관리스트 인식(hasCustoms)이 꺼짐): **같은 값이면 세관 출처를 유지한다.** 세관이 정본이고,
     //   값이 달라질 때만 새 출처로 바뀐다(그때는 sl_conflict 도 함께 남는다). 정규식은 nlSearch _isCustomsSrc 와 동일.
     if (nv && nv.sl && String(nv.sl).trim() !== '') {
-      const _CUSTOMS_RE = /적하\s*목록|적하|세관|CDL|MANIFEST|신고|^Excel_\d{14}/i;
       const _newSrc = nv._source || '';
-      const _keepCustoms = _CUSTOMS_RE.test(String(ov.sl_src || '').trim()) && !_CUSTOMS_RE.test(String(_newSrc).trim())
-        && String(nv.sl).trim() === String(ov.sl || '').trim();
+      //  4.49: 세관 출처 판정 한 벌(utils.isCustomsSrc) · 감사(하-7) — 고친 컨은 고치기 전 서류 값(_ovDocSl)과 비교 · 옛 꼴(sl_src 가 sl_orig 쪽 출처)은 sl 의 세관 출처로 지키지 않는다.
+      const _ovLegacy = sealLegacyOf(ov);   // 재감사(하): 옛 꼴 판정 한 벌(utils)
+      const _keepCustoms = isCustomsSrc(ov.sl_src) && !isCustomsSrc(_newSrc) && !_ovLegacy
+        && String(nv.sl).trim() === String(_ovDocSl || '').trim();
       if (!_keepCustoms) m.sl_src = _newSrc;
     }
     for (const [k, v] of Object.entries(nv || {})) {
       if (_emptyFor(k, v)) continue;           // ① 빈 값(무게 0 포함)은 기존을 덮지 않는다
+      if (k === 'sl_conflict') continue;       // 4.49: 아래에서 합친다(올리기 병합이 만든 묶음 + 저장된 묶음 — 한쪽이 다른 쪽을 지우지 않게)
       m[k] = v;
     }
     if (m.sl_conflict === undefined && ov.sl_conflict !== undefined) m.sl_conflict = ov.sl_conflict;
+    if (Array.isArray(nv && nv.sl_conflict) && nv.sl_conflict.length) {   // 4.49: 같은 실은 한 줄(대소문자·공백 무시) — 출처는 먼저 적힌 것
+      const _u = Array.isArray(m.sl_conflict) ? [...m.sl_conflict] : [];
+      const _nk = (x) => String((x && x.sl) || '').toUpperCase().replace(/[\s\-]/g, '');
+      for (const h of nv.sl_conflict) { if (!h || !_nk(h)) continue; const _i = _u.findIndex((x) => _nk(x) === _nk(h)); if (_i < 0) _u.push({ sl: String(h.sl), src: String(h.src || '') }); else if (isCustomsSrc(h.src) && !isCustomsSrc(_u[_i] && _u[_i].src)) _u[_i] = { ..._u[_i], src: String(h.src) }; }   // 재감사(중-1): 같은 값에 세관 출처가 오면 세관으로 올린다
+      m.sl_conflict = _u;
+    }
     for (const k of _FIELD_WORK_KEYS) {        // ② 현장 입력은 리스트가 못 덮는다
       if (ov[k] !== undefined) m[k] = ov[k];
     }
@@ -582,6 +608,15 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     if (Array.isArray(ov.sl_history) && ov.sl_history.length) {
       if (ov.sl) m.sl = ov.sl;
       if (ov.sl_orig !== undefined) m.sl_orig = ov.sl_orig;
+      //  ★ 4.49 감사 3차(중) — 고친 컨의 sl_src 는 지켜 둔 sl_orig(고치기 전 서류 값)의 출처다(utils.sealKnownOf 가 그렇게 읽는다). 다른 값이 새로 왔으면
+      //    그 출처는 sl_conflict 에만 남기고 sl_src 는 그대로 — 안 그러면 옛 서류 값에 새 파일(세관) 이름이 붙어 신고 실·큰 실 판정이 뒤집힌다
+      //    (선사 리스트만 → 검수원이 고침 → 세관 리스트 교체·병합 꼴). 같은 값이 세관 파일로 왔으면 세관으로 올린다(2.06-11 «같은 값이면 세관 출처»).
+      const _nkE = (x) => String(x || '').toUpperCase().replace(/[\s\-]/g, '');
+      const _ovS = String(ov.sl_src || ov._source || '');
+      const _nvS = String((nv && nv._source) || '');
+      const _same = !!(nv && nv.sl && _nkE(nv.sl) && _nkE(nv.sl) === _nkE(_ovDocSl));
+      //    재감사(중) — 출처 칸이 둘 다 없던 기록(수집기 등록 꼴 · 보관 29% — PCSZ 2618E SKHU6510432)은 비워 두면 같은 저장의 새 _source(세관 파일)로 읽힌다 — 세관이 아닌 표시를 적는다.
+      m.sl_src = (_same && isCustomsSrc(_nvS) && !isCustomsSrc(_ovS)) ? _nvS : (_ovS || '리스트(출처 미기록)');
     }
     out[cn] = m;
   }

@@ -10,6 +10,7 @@ import {
 } from '../kakaoShare.js';
 import { fbAddWorkReport, fbAddPhotoReport } from '../firebase.js';
 import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
+import { sealCheckOf } from '../utils.js';   // 4.49: 기존 실 = 신고 실(판정 한 벌)
 
 // 서류 표기 — tallyReport.js 의 DMG_PART_LABEL 과 같은 값(미리보기용 사본)
 const PART_DOC = {
@@ -33,7 +34,7 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   //   POINT 수와 치수가 필요한데 앱이 안 받고 있었다. 둘 다 선택 입력 — 비우면 그 부분만 빠진다.
   const [points, setPoints] = useState('1');
   const [dimW, setDimW] = useState(''); const [dimH, setDimH] = useState(''); const [dimD, setDimD] = useState('');
-  const [sealOrig, setSealOrig] = useState(c?.sl_orig || c?.sl || '');
+  const [sealOrig, setSealOrig] = useState(() => { try { return (c && sealCheckOf(c).from) || c?.sl_orig || c?.sl || ''; } catch (e) { console.warn('[4.49 실번호] 사진 보고 기존실 판정 실패 — sl_orig·sl 로:', c && c.cn, e); return c?.sl_orig || c?.sl || ''; } });   // 4.49 감사(하-7): 기존 실 = 신고 실(판정 한 벌)
   const [sealNew, setSealNew] = useState('');
   const [sending, setSending] = useState(false);
   // M5.78: ref 불필요 — label 직접 클릭

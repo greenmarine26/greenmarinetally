@@ -22,7 +22,8 @@ import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js'; 
 import { isoOtHeightConflict } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
-import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
+import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';
+import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 · 실오류 한 줄   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
 import { activeHeldOf, HOLD_REASONS, bayPageSplitOf } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
 import { loadingSlotOf, guideTwinOf, effectivePos } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';
@@ -2096,6 +2097,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             <Pencil className="w-3 h-3 text-dim-400"/>
           </button>
         )}
+        {editSealCn !== c.cn && <SealKnownLine c={c} size="xs" showError />}{/* 4.49: 다른 자료 실 · 세관 잘림 · 실오류(판정 한 벌 utils.sealCheckOf) */}
       </div>
       {/*  ★ 3.47 — 규격 3자 불일치. 실물을 보고 고른다(검수사 «세개중에 어느것이 맞는지 선택»).
            고르기 전에도 완료는 막지 않는다 — 「미확정」만 보인다. */}

@@ -56,7 +56,7 @@ import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';   // 4.46: 보고 고치기·지우기(보낸 사람만)
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
-import { _foreLoloOf, isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
@@ -614,6 +614,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           const _dp = pickDischargePol(merged[r.cn].pol, r.pol, merged[r.cn].pod);
           if (_dp !== merged[r.cn].pol) safeR.pol = _dp;
         }
+        if (merged[r.cn].sl) safeR.slEdi = String(merged[r.cn].sl);   // 4.49: EDI 실은 «다른 자료 실»로 남긴다(utils.sealKnownOf — 리스트 실이 덮어도 사라지지 않게 · RZOR VPLU8414662 EDI 250499)
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
         // M8.07: EDI 실번호가 잘린 경우(IFCSUM 20자 컷 등) records의 완전한 실번호 우선.
@@ -847,6 +848,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       'pod_pick', 'pod_pick_label', 'pod_picked_by', 'pod_picked_at', 'pod_orig',
       '_rz',           // 3.61-01: RZOR(RIZHAO 판독) 표식 — 규격 3자 대조(utils.isoTriad)가 이걸 보고 선사 «40RE·40RF» 를 높이 대조에서 뺀다. 여기 없으면 진단은 0인데 컨 상세만 고르라고 묻는다(감사 C-1 실측 20/20).
       'sl_conflict',   // 1.8-03: 리스트끼리 실번호가 다를 때 두 값 모두 — 배지가 이걸 읽는다
+      'sl_alt',        // 4.49: 머스크 보조실(Shipper Seal) — 주실은 ML Seal. 여기 없으면 «다른 자료 실»에 안 보인다
       '_source',       // 2.06-06: 이 컨을 채운 리스트 파일명 — 세관리스트 존재 판정(sealIssuesOf)이 읽는다
       'sl_src',        // 2.06-07: 채택 씰(sl)의 진짜 출처 — _source 는 마지막 파일로 덮이므로 따로 지킨다
       'desc',  // M8.07: 품명(내용물) — EDI에 없는 참조 정보, 카고플랜 그림에 영향 없음
@@ -961,6 +963,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (v !== 0) safeR[k] = v;
         }
       });
+      if (ediBase && ediBase.sl) safeR.slEdi = String(ediBase.sl);   // 4.49: EDI 실은 «다른 자료 실»로(리스트 실이 sl 을 덮어도 남는다)
       if (ediBase && r.iso_pick) safeR.oog = isoPickOog(r, ediBase.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
       merged[r.cn] = { ...(ediBase || {}), ...safeR, _inList: true, _src: ediBase ? 'both' : 'list' };   // V8.86: 리스트 등록 표식(선적 평택 판정 — 별첨·베이와 동일 원칙)
       //  ★ 4.16: 시프팅 컨에 검수원 작업 기록(재선적 자리 등)만 있으면 리스트 행이 아니라 시프팅 행이다 — 자리 원본(fullEdiMap)이 없어 위 1.76-05 블록을 못 탄 경우에도.
@@ -4455,14 +4458,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               if (k === 'op' && !r._opFromFile) merged._opFromFile = false;   // 실제 선사 칸이 들어오면 파일명 표식을 지운다(감사 M-2b)
               merged[k] = v;
             }
-            // 실번호: 한쪽이 다른 쪽의 앞부분이면서 더 길면 긴 쪽 채택(잘림 보정).
-            const a = String(prev.sl || '').trim(), b = String(r.sl || '').trim();
-            if (a && b) {
-              if (a.length > b.length && a.startsWith(b)) merged.sl = a;
-              else if (b.length > a.length && b.startsWith(a)) merged.sl = b;
-            } else {
-              merged.sl = a || b;
-            }
+            //  ★ 4.49 — 실번호 병합은 utils.mergeUploadSeal 한 벌(서로 다르면 둘 다 «다른 자료 실» · 큰 실은 세관 값 · 연막검사 smoke_seal449 가 실자료로 부른다).
+            Object.assign(merged, mergeUploadSeal(prev, r, file.name));
             // 온도: 기존(선사)에 유효 온도 있으면 보존.
             const prevTmp = String(prev.tmp || '').trim();
             if (prevTmp && !prev.tmp_missing) { merged.tmp = prev.tmp; merged.tmp_missing = false; }
@@ -4625,9 +4622,16 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     });
 
     // 3. 실번호: 'edi' 선택 시 EDI 실번호로
+    //    4.49 감사(중-1) — EDI 를 고르면 큰 실(sl·sl_orig)을 EDI 값으로 · 출처 «EDI» · 리스트 값은 «다른 자료 실»(sl_conflict)로 남긴다.
+    //      종전엔 sl 만 바꿔 «고친 기록 없이 sl ≠ sl_orig»(옛 꼴)가 생기고 sl_src 가 세관 파일이면 EDI 값에 «세관» 표시가 붙었다.
     resolution.sealActions.forEach(a => {
       if (a.action === 'edi' && finalMap[a.cn]) {
-        finalMap[a.cn] = { ...finalMap[a.cn], sl: a.ediSl };
+        const cur = finalMap[a.cn];
+        const hist = Array.isArray(cur.sl_conflict) ? [...cur.sl_conflict] : [];
+        const nk = (x) => String(x || '').toUpperCase().replace(/[\s\-]/g, '');
+        if (a.listSl && !hist.some((h) => h && nk(h.sl) === nk(a.listSl))) hist.push({ sl: String(a.listSl), src: String(cur.sl_src || cur._source || '') });
+        if (a.ediSl && !hist.some((h) => h && nk(h.sl) === nk(a.ediSl))) hist.push({ sl: String(a.ediSl), src: 'EDI' });
+        finalMap[a.cn] = { ...cur, sl: a.ediSl, sl_orig: a.ediSl, sl_src: 'EDI', sl_conflict: hist };
       }
     });
 

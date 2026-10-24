@@ -211,7 +211,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
       : g.code === 'MGN' ? customsCodeLabel('MGN', { kind: '대상', n: g.codeN && g.codeN !== g.items.length ? g.codeN : null, note: '완료·실적 없음' })
       : g.code ? customsCodeHint(g.code) : '');
     return (
-      <div className="mt-2 pt-2 border-t border-line text-2xs space-y-1" data-recon>
+      <div className="mt-2 pt-2 border-t border-line text-2xs space-y-1 break-words break-keep" data-recon>{/* 4.49: 자료별 대조 칸 전체 — 한글은 띄어쓰기 자리에서만 줄바꿈(4.48-04 는 컨 줄만 고쳐 머리줄·터미널 줄·묶음 머리가 320px 에서 «수⏎정» «평택에⏎서» 로 끊겼다 · 라이브 확인) · 긴 파일 이름만 갈린다 */}
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-dim-200 font-bold" data-recon-head>
           {heads.map((h, i) => <span key={i}>{i ? '· ' : ''}{h}</span>)}
         </div>

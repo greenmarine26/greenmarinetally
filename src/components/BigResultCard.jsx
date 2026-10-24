@@ -3,7 +3,8 @@ import React, { useState, useMemo, forwardRef, useImperativeHandle } from 'react
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf } from '../utils.js';
-import { inspectionSealOf, formatWt, isoShown } from '../utils.js';   // ★ 4.27 한 화면 카드(look='work') — 자동 가이드 카드와 같은 실번호 값·무게·규격 글자   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
+import { inspectionSealOf, formatWt, isoShown, sealCheckOf } from '../utils.js';
+import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 한 줄   // 4.49: sealCheckOf — 실오류 판정 한 벌   // ★ 4.27 한 화면 카드(look='work') — 자동 가이드 카드와 같은 실번호 값·무게·규격 글자   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -36,8 +37,9 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
   //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
   //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
   const isDone = !!c._comp;
-  const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
-  const sealError = c.sl && slOrig && c.sl !== slOrig;
+  const _sealK = sealCheckOf(c);   // 4.49: 판정 한 벌 — 실오류는 고친 기록이 있고 알려진 실 어느 것과도 다를 때
+  const slOrig = _sealK.from;
+  const sealError = _sealK.error;
   const isReefer = isReeferContainer(c);
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
   // 리퍼 + 온도 있으면 무조건 표시 (Empty + 온도는 현장에 없음)
@@ -388,14 +390,14 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
               <div className="text-2xs text-dim-400">원: <span className="text-dim-300 line-through mono">{slOrig}</span></div>
               <div className="text-3xl sm:text-4xl font-black mono text-red-300 tracking-wider text-center py-1 animate-pulse"
                 style={{ textShadow: '0 0 20px rgba(248, 113, 113, 0.6)' }}>
-                {c.sl}
+                {_sealK.actual || c.sl}
               </div>
             </div>
           ) : (c.sl && (c.fe !== 'E' || c.sl.length >= 5)) ? (
-            // 풀(또는 미정)일 때만 sl 표시. 엠티+짧은 sl(<5자)은 잘못된 데이터로 간주
+            // 풀(또는 미정)일 때만 sl 표시. 엠티+짧은 sl(<5자)은 잘못된 데이터로 간주 · 4.49: 큰 실은 세관 값(검수원이 고쳤으면 실물)
             <div className="text-4xl sm:text-5xl font-black mono text-amber-300 tracking-wider text-center py-1 animate-pulse"
               style={{ textShadow: '0 0 20px rgba(251, 191, 36, 0.6)' }}>
-              {c.sl}
+              {_sealK.edited ? c.sl : (_sealK.big || c.sl)}
             </div>
           ) : (c.fe === 'E' && c.eseal && String(c.eseal).trim().length >= 4) ? (
             // V9.20-02: 엠티실 — 엠티에도 실이 붙는 선박(26353W LYG 실측). eseal을 크게, 청록으로 구분.
@@ -422,6 +424,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
               ⚠ 실번호 미입력
             </div>
           )}
+          <SealKnownLine c={c} className="text-center" />{/* 4.49: 다른 자료 실 · 세관 잘림 */}
         </div>
 
         {/* 2순위: X-RAY */}

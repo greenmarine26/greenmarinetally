@@ -191,6 +191,13 @@ const bundle = process.argv[3];
       && /const ss = shiftSetForUnitsOf\(c\.shiftMap\);[^\n]*\n\s+c\.containers = applyDischargeUnits\(/.test(mirS0) && /shiftSetForUnitsOf \} from '\.\/utils\.js'/.test(src('src/mirCore.entry.js'))
       && /window\.__CONEV='ConeOne 2\.71-02'/.test(coneS0),
       '배선 — 콘앱 미르(ConeOne 2.71-02)·미르 4.20 갈래가 shiftSetForUnitsOf 로 시프팅 집합을 만든다 · mir-core 가 내보낸다');
+    //  4.48-04 감사(하-2): 콘앱 `_shS` 줄을 떼어 실제로 돌린다 — 새 본체(ConeMir.shiftSetForUnitsOf 있음)와 옛 본체(없음 → 인라인 대체)가 같은 집합인가.
+    const shLine = (coneS0.match(/\n\s*(const _shS=window\.ConeMir\.shiftSetForUnitsOf[^\n]*)\n/) || [])[1] || '';
+    const runSh = (cm) => { try { return [...new Function('window', 'shiftMap', shLine + '\nreturn _shS;')({ ConeMir: cm }, dispK)].sort(); } catch (e) { return ['ERR ' + e.message]; } };
+    const want = [...unitSet].sort();
+    const shNew = runSh({ shiftSetForUnitsOf: T.shiftSetForUnitsOf }), shOld = runSh({});
+    ok(!!shLine && JSON.stringify(shNew) === JSON.stringify(want) && JSON.stringify(shOld) === JSON.stringify(want) && !shOld.includes(K1),
+      `콘앱 _shS 줄 실행 — 새 본체 ${shNew.length}키 · 옛 본체(인라인 대체) ${shOld.length}키 = utils ${want.length}키(예보 두 대 없음)`, JSON.stringify({ n: shNew.length, o: shOld.length, w: want.length }));
   }
   const vcA0 = T.voyageCountsOf(voy(null)), vcA1 = T.voyageCountsOf(vA);
   ok(vcA1.byMode.discharge.total === vcA0.byMode.discharge.total, `미르 잔여·무브수 분모(voyageCountsOf) ${vcA0.byMode.discharge.total} → ${vcA1.byMode.discharge.total}(자료대로)`, JSON.stringify([vcA0.byMode.discharge, vcA1.byMode.discharge]));
@@ -407,6 +414,8 @@ const bundle = process.argv[3];
     await wait(200);
     ok(!doc.querySelector('[data-app-expect]') && !doc.querySelector('[data-list-app]'), '지시가 없는 배 — 앱 예상 줄·괄호 수 없음(종전 그대로)');
     ok(/className="text-dim-300 break-words break-keep"/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]) && !/className="[^"]*break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(4.48-03 break-words — 낱말 중간은 안 갈림 · 폰 가로 밀림 수리)');
+    ok(/className="mt-2 pt-2 border-t border-line text-2xs space-y-1 break-words break-keep" data-recon>/.test(src('src/components/DiagnosticsPanel.jsx')) && /className="text-2xs text-yellow-200\/90 break-words break-keep" data-keep-evid=/.test(src('src/components/ValidationBox.jsx')),
+      '자료별 대조 칸 전체·데이터 검증 메일 근거 줄도 한글은 띄어쓰기 자리에서만 줄바꿈(4.49 — 4.48-04 라이브 확인 «수⏎정» «평택에⏎서» · 긴 파일 이름만 갈림)');
   }
 
   console.log('⑭ 4.48-02 감사(중-1) — 항차 화면 본체(VoyagePage)를 통째로 그린다: 배정표 대조·앱 예상 줄이 화면 안 계산·전달을 거친다(배정표는 지도 계산 전에 넣는다)');

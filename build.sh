@@ -1149,6 +1149,18 @@ if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=
 else
   echo "✗ 4.48 본선 잔류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KP"; exit 1
 fi
+#  4.49: **실번호 판정 한 벌** — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류 —
+#    MAMP 641N 선사·세관 리스트 실파일 사본(파서) · 실 firebase.js(메모리 DB) 추가 병합 · 보관 항차 정답지 10대 · RZOR R117E EDI 실 · 마감텔리·미르·인계·컨 상세가 같은 답.
+#    검수사 2026-10-24 12:50 «다 보이고 하나만 맞으면 맞음» · «큰 글씨 실은 세관 값» · «MLPH 끝자리 빠짐은 실오류로 센다».
+SMOKE_S9=$(mktemp /dev/shm/hometmp/_smokes9_XXXXXX.js)
+if npx esbuild tools/smoke_seal449.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_S9"; then
+  node tools/smoke_seal449.cjs "$(pwd)" "$SMOKE_S9" || { echo "✗ 4.49 실번호 판정 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_S9"; exit 1; }
+  rm -f "$SMOKE_S9"
+else
+  echo "✗ 4.49 실번호 판정 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_S9"; exit 1
+fi
 #  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
 SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)

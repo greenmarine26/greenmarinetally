@@ -42,8 +42,9 @@ module.exports = async function r38({ ROOT, TMP, ok, head, fx }) {
     rows3.get(c0) === '' && rows3.get(c1) === 'SL0000001' && rows3.get(f0) === String(R[f0].sl).trim(), JSON.stringify({ a: rows3.get(c0), b: rows3.get(c1), c: rows3.get(f0) }));
   //  ①-4 CSV(인쇄 창 «엑셀») 도 같은 한 벌 — 소스 배선(종이 칸과 CSV 가 같은 함수를 부른다)
   const src = fs.readFileSync(path.join(ROOT, 'src/inspectionList.js'), 'utf8');
+  //  4.49 재감사(중-2): 제작컨 갈래도 큰 실(inspectionSealOf)에서 가른다 — 종이 두 곳 + CSV 한 곳
   ok('①-4 배선 — 종이 실번호 칸과 CSV 실번호가 utils.inspectionSealOf 한 벌을 부른다(따로 셈 0)',
-    (src.match(/inspectionSealOf\(c\)/g) || []).length === 2 && !/String\(c\.sl \|\| c\.seal/.test(src) && M.inspectionSealOf({ fe: 'E', eseal: '177057' }) === '177057');
+    (src.match(/inspectionSealOf\(c\)/g) || []).length === 3 && /splitJoinedSeals\(inspectionSealOf\(c\) \|\| c\.sl\)/.test(src) && !/String\(c\.sl \|\| c\.seal/.test(src) && M.inspectionSealOf({ fe: 'E', eseal: '177057' }) === '177057');
 };
 
 //  단독 실행 — node tools/regress_r38_eseal.cjs <저장소 루트>

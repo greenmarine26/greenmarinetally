@@ -1,5 +1,5 @@
 // CSV 내보내기 — 결재용 + 세관 신고용
-import { reeferTempOf, isoToLabel, fmtPos, completedByLabel } from '../utils.js';   // 3.16: 완료자 표기 한 벌
+import { reeferTempOf, isoToLabel, fmtPos, completedByLabel, sealCheckOf } from '../utils.js';   // 4.49: sealCheckOf — 실오류 판정 한 벌   // 3.16: 완료자 표기 한 벌
 
 export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo = null) {   // 3.16: info 는 조 등록 근무자를 찾는 데 쓴다
   const headers = [
@@ -16,8 +16,10 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
     const comp = compMap[c.cn];
     const isX = mode === 'discharge' && !!xrayMap[c.cn];
     const xs = xraySeals[c.cn] || {};
-    const slOrig = c.sl_orig != null ? c.sl_orig : c.sl || '';
-    const slErr = c.sl && slOrig && c.sl !== slOrig ? 'O' : '';
+    const _k = sealCheckOf(c);   // 4.49: 판정 한 벌
+    const slOrig = (_k.edited || _k.error) ? (_k.from || '') : (_k.big || c.sl || '');   // 감사(하-1): 실오류면 신고 실 → 실물(끝자리 빠짐은 안 고쳐도)
+    const slAct = _k.error ? (_k.actual || c.sl || '') : (c.sl || '');
+    const slErr = _k.error ? 'O' : '';
     const xSealOrig = xs.seal_orig != null ? xs.seal_orig : xs.seal || '';
     const xErr = xs.seal && xSealOrig && xs.seal !== xSealOrig ? 'O' : '';
     const lastSlHist = (c.sl_history || []).slice(-1)[0];
@@ -32,7 +34,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
       i + 1,
       fmtPos(c),
       c.cn || '',
-      slOrig, c.sl || '', slErr,
+      slOrig, slAct, slErr,
       xSealOrig, xs.seal || '', xs.eseal || '', xErr,
       isoToLabel(c.iso) || c.tp || '',
       c.fe || '',
@@ -73,15 +75,16 @@ export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, x
   let no = 1;
 
   containers.forEach(c => {
-    const slOrig = c.sl_orig != null ? c.sl_orig : c.sl || '';
-    if (c.sl && slOrig && c.sl !== slOrig) {
+    const _k = sealCheckOf(c);   // 4.49: 판정 한 벌 — 세관 신고용 원실번호는 신고 실(세관 값)
+    const slOrig = _k.from || '';
+    if (_k.error) {
       const last = (c.sl_history || []).slice(-1)[0];
       rows.push([
         voyageKey, voyageInfo?.vsl || '', voy, mode === 'discharge' ? '양하' : '선적',
         no++, fmtPos(c),
         c.cn,
         '실번호',
-        slOrig, c.sl,
+        slOrig, _k.actual || c.sl,
         c.op || '', c.pol || '', c.pod || '',
         last?.by || '',
         last?.at ? new Date(last.at).toLocaleString('ko-KR') : '',

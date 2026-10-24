@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
+import { completedByLabel, sealCheckOf } from '../utils.js';   // 4.49: sealCheckOf — 실오류 판정 한 벌   // ★ 3.16: 완료자 표기 한 벌
 import { CheckCircle2, Clock, Download, ArrowDown, ArrowUp, AlertOctagon, FileWarning, Copy } from 'lucide-react';
 import { exportSectionToCSV, exportSealErrorsToCSV } from './CSVExport.jsx';
 
@@ -28,13 +28,14 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
   const sealErrors = useMemo(() => {
     const list = [];
     containers.forEach(c => {
-      const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
-      if (c.sl && slOrig && c.sl !== slOrig) {
+      const _k = sealCheckOf(c);   // 4.49: 판정 한 벌(고친 기록 · 알려진 실 어느 것과도 다름 · 신고 끝자리 잘림) — 신고 실은 세관 값
+      const slOrig = _k.from;
+      if (_k.error) {
         const last = (c.sl_history || []).slice(-1)[0];
         list.push({
           ...c,
           errType: '실번호',
-          orig: slOrig, actual: c.sl,
+          orig: slOrig, actual: _k.actual || c.sl,
           by: last?.by || '', at: last?.at || 0
         });
       }

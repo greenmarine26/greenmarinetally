@@ -4,7 +4,7 @@
 //   ② LOADING LIST — 처리분 전체. NO·컨번호·실번호·규격·F/E·ACT(변경 시).
 //   기존 records(실번호 수정/리씰/실오류) + completed(처리)를 병합해 생성.
 
-import { isoToLabel, completedByLabel } from './utils.js';   // 3.16: 완료자 표기 한 벌
+import { isoToLabel, completedByLabel, sealCheckOf } from './utils.js';   // 4.49: sealCheckOf — 실오류 판정 한 벌   // 3.16: 완료자 표기 한 벌
 
 // 모드 구역(discharge/loading)에서 처리된(=completed) 컨 목록을 만든다.
 //   records의 수정 필드(sl/sl_orig/eseal/eseal_wrong/reseal)를 ediContainers에 덮어쓴다.
@@ -22,9 +22,11 @@ export function buildLoloRows(sec) {
     const e = ediMap[cn] || {};
     const r = recMap[cn] || {};
     const comp = compMap[cn] || {};
-    const slOrig = r.sl_orig || r.sl || e.sl || '';
     const slNow = r.sl != null ? r.sl : (e.sl || '');
-    const sealError = slOrig && slNow && slOrig !== slNow;     // 실오류(V)
+    //  4.49: 실오류(V)는 판정 한 벌(utils.sealCheckOf — 고친 기록 · 알려진 실 어느 것과도 다름 · 신고 끝자리 잘림). 종전엔 기록 없이 sl_orig ≠ sl 로 셌다.
+    const _k = sealCheckOf({ ...r, sl: slNow }, e.sl || '');
+    const slOrig = (_k.error ? _k.from : (_k.big || r.sl_orig || r.sl || e.sl)) || '';
+    const sealError = _k.error;     // 실오류(V)
     const reseal = r.reseal || '';                              // 리씰(★)
     const esealWrong = r.eseal_wrong || '';
     rows.push({
@@ -33,7 +35,7 @@ export function buildLoloRows(sec) {
       sizeLabel: isoToLabel(e.iso || r.iso || '') || '',
       fe: e.fe || r.fe || 'F',
       manifestSeal: slOrig,
-      actualSeal: slNow,
+      actualSeal: _k.error ? (_k.actual || slNow) : slNow,
       eseal: e.eseal || r.eseal || '',
       esealWrong,
       reseal,

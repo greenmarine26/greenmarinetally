@@ -1249,10 +1249,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const r0 = v.discharge.records.SAWTBP004, cut = !!r0 && String(r0.sl).startsWith(String(r0.sl_orig)) && String(r0.sl).length > String(r0.sl_orig).length;
       const rows0 = B.buildSealList(v, 'discharge');
       const v2 = JSON.parse(JSON.stringify(v)); v2.discharge.records.SAWTBP004.sl_orig = 'LF999999';
+      //  4.49: 실오류(실번호 상이)는 검수원이 실물을 보고 고친 기록이 있어야 한다(판정 한 벌 sealCheckOf) — 다른 씰 사본에는 고친 기록을 붙인다(고친 기록 없이 리스트끼리 다르면 «다른 자료 실»일 뿐).
+      v2.discharge.records.SAWTBP004.sl_history = [{ from: 'LF999999', to: v2.discharge.records.SAWTBP004.sl, by: '시험' }];
       const row2 = B.buildSealList(v2, 'discharge').find((x) => x.cn === 'SAWTBP004') || {};
       const act = String(row2.actualSeal || '').split(' ').filter(Boolean);
       ok(`R106E 씰 시트 — SAWTBP004 행 없음(세관 «${r0 && r0.sl_orig}» 은 «${r0 && r0.sl}» 의 잘린 앞부분 = 같은 씰) · 다른 씰 사본이면 SIZE ${row2.size} · ACTUAL ${act.length}개`,
         cut && !rows0.some((x) => x.cn === 'SAWTBP004') && row2.size === "45'" && act.length === 4 && act.join(' ') === 'LF102335 LF102350 LF102345 LF102336', JSON.stringify({ n0: rows0.length, row2 }));
+      const v3 = JSON.parse(JSON.stringify(v)); v3.discharge.records.SAWTBP004.sl_orig = 'LF999999';
+      ok('4.49 — 고친 기록 없이 리스트끼리만 다른 제작컨(sl_orig LF999999)은 씰 시트에 안 싣는다(실물 본 사람 없음 · 판정 한 벌)', !B.buildSealList(v3, 'discharge').some((x) => x.cn === 'SAWTBP004'));
     }
   }
 

@@ -3,7 +3,7 @@
 //   - 각 컨에 "위치 지정" 버튼 → PositionEditModal 호출
 import React, { useMemo } from 'react';
 import { X, Truck, MapPin } from 'lucide-react';
-import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 
 export default function UnassignedListModal({
   open,
@@ -47,7 +47,7 @@ export default function UnassignedListModal({
                         {isFull ? '풀' : c.fe === 'E' ? '엠티' : '미정'}
                       </span>
                       {c.iso && <span className="bg-ink-750 text-dim-200 px-1.5 py-0.5 rounded mono">{isoShown(c.iso)}</span>}
-                      {c.sl && <span className="bg-ink-750 text-amber-300 px-1.5 py-0.5 rounded mono">실 {c.sl}</span>}
+                      {c.sl && <span className="bg-ink-750 text-amber-300 px-1.5 py-0.5 rounded mono">실 {inspectionSealOf(c) || c.sl}</span>}{/* 4.49 감사(하-7): 큰 실 */}
                       {isCompleted && <span className="bg-emerald-700 text-emerald-50 px-1.5 py-0.5 rounded font-black">✓완료</span>}
                     </div>
                     <button onClick={() => onPickContainer(c)}

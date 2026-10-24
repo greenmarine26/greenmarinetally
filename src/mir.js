@@ -35,6 +35,7 @@ import {
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, shiftSetForUnitsOf,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
+  isSealError, sealCheckOf,   // 4.49: 실번호 판정 한 벌
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
@@ -654,6 +655,7 @@ export function flattenVoyages(voyages) {
             delete safeR[k];
           }
         }
+        if (_ebM && _ebM.sl) safeR.slEdi = String(_ebM.sl);   // 4.49 감사(중-2): EDI 실은 «다른 자료 실»로(항차 화면·작업 목록 병합과 같은 칸 — 미르·홈 실오류·양하신고·인계가 같은 답)
         if (_ebM && r.iso_pick) safeR.oog = isoPickOog(r, _ebM.oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
       });
@@ -1283,10 +1285,25 @@ function attrLine(c, attr, ctx) {
       return `세팅 ${r.set}℃ · 실측 ${r.act}℃${src}${who}${when} · 차이 ${r.diff == null ? '계산 불가' : (r.diff > 0 ? '+' : '') + r.diff + '℃'}`;
     }
     case 'seal': {
+      //  4.49 감사(중-3) — 콘앱 행(cone.html — slEdi 만 있고 리스트 실 칸이 없음)도 항차 리스트(records)에서 실 칸을 채운다(검수앱과 같은 답 — «4907 실번호»).
+      {
+        const _sec = secOf(ctx, c && c._mode === 'loading' ? 'loading' : 'discharge');
+        const _rec = c && c.cn ? (_sec.records || {})[c.cn] : null;
+        if (_rec) { let o = null; for (const k of ['sl', 'sl_orig', 'sl_history', 'sl_src', 'sl_conflict', '_source', 'sl_alt']) if ((c[k] === undefined || c[k] === null) && _rec[k] !== undefined && _rec[k] !== null) (o || (o = { ...c }))[k] = _rec[k]; if (o) c = o; }
+        const _e = c && c.cn && !S(c.slEdi) ? (_sec.ediContainers || {})[c.cn] : null;
+        if (_e && S(_e.sl) && S(_e.sl) !== S(c.sl)) c = { ...c, slEdi: _e.sl };
+      }
       const parts = [];
-      if (S(c.sl)) {
-        const src = S(c.sl_src) || S(c.sl_conflict && c.sl_conflict.src) || S(c._source);
-        parts.push(`실번호 ${c.sl}${src ? '(' + src + ')' : ''}${S(c.sl_orig) && S(c.sl_orig) !== S(c.sl) ? ' · 리스트 원래값 ' + c.sl_orig : ''}`);
+      if (S(c.sl) || S(c.slEdi)) {
+        //  4.49: 판정 한 벌(utils.sealCheckOf) — 큰 실(세관 값이 있으면 세관) · 다른 자료 실 · 실오류(하나만 맞으면 맞음 · 신고 끝자리 잘림은 실오류)
+        const _k = sealCheckOf(c);
+        const _big = _k.edited ? c.sl : (_k.big || c.sl || c.slEdi);
+        //  재감사(중-3) — 괄호 출처는 큰 실의 출처(sl 의 출처가 아니다 — 세관 값에 선사 파일 이름이 붙던 것). 고쳤으면 «검수원 실물».
+        const src = _k.edited ? '검수원 실물' : ((_k.bigK && _k.bigK.srcs && _k.bigK.srcs[0]) || (_k.bigK && _k.bigK.kind === 'edi' ? 'EDI' : ''));
+        const _others = _k.known.filter((x) => x.n !== String(_big || '').toUpperCase().replace(/[\s\-]/g, ''));
+        parts.push(`실번호 ${_big}${src ? '(' + src + ')' : ''}${_k.error ? ` · 실오류(신고 ${_k.from} → 실물 ${_k.actual || c.sl})` : (_k.edited && S(c.sl_orig) && S(c.sl_orig) !== S(c.sl) ? ' · 리스트 원래값 ' + c.sl_orig : '')}`);
+        if (_others.length) parts.push(`다른 자료 실 ${_others.map((x) => x.v + '(' + (x.customs ? '세관' : x.kind === 'edi' || (x.srcs || []).includes('EDI') ? 'EDI' : x.kind === 'alt' ? '보조실' : x.kind === 'orig' ? '처음 리스트' : '선사 리스트') + ')').join(' · ')}${_k.trunc && _k.error ? '' : ' — 실물이 하나면 맞음'}`);
+        if (_k.trunc && _k.error && _k.decl) parts.push(`⚠ 신고 실 ${_k.decl.v} 은 ${_k.truncLong} 의 끝자리가 빠진 값 — 실오류(신고 정정 대상)`);   // 감사(중-4): 긴 짝은 decl 의 짝 · 실오류일 때만
       }
       if (Array.isArray(c.sl_conflict) && c.sl_conflict.length > 1) {
         const vals = [...new Set(c.sl_conflict.map((h) => S(h.sl)).filter(Boolean))];
@@ -2758,7 +2775,7 @@ export function answerOneRaw(query, ctx) {
       const rows = [];
       for (const x of c.flat) {
         if (!x || !x.cn) continue;
-        const fix = x.sl_orig && x.sl && String(x.sl) !== String(x.sl_orig);
+        const fix = isSealError(x);   // 4.49: 실오류 판정 한 벌(고친 기록 · 알려진 실 어느 것과도 다름 · 신고 끝자리 잘림)
         const cf = Array.isArray(x.sl_conflict) && [...new Set(x.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))].length > 1;
         if (fix || cf) rows.push({ x, fix, cf });
       }
@@ -2766,9 +2783,9 @@ export function answerOneRaw(query, ctx) {
       const byShip = new Map();
       for (const r of rows) { const k = r.x.voyageKey || '?'; if (!byShip.has(k)) byShip.set(k, []); byShip.get(k).push(r); }
       const L = [`⚠ 실오류·실번호 불일치 ${rows.length}건 — ${byShip.size}척`];
-      for (const [k, arr] of byShip) { L.push(`【${k}】 ${arr.length}건`); arr.slice(0, 10).forEach(({ x, fix }) => L.push(`  ${x.cn} — ${fix ? `리스트 ${x.sl_orig} → 실물 ${x.sl}` : `불일치 ${[...new Set(x.sl_conflict.map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`}`)); if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`); }
+      for (const [k, arr] of byShip) { L.push(`【${k}】 ${arr.length}건`); arr.slice(0, 10).forEach(({ x, fix }) => L.push(`  ${x.cn} — ${fix ? `신고 ${sealCheckOf(x).from} → 실물 ${sealCheckOf(x).actual || x.sl}` : `불일치 ${[...new Set(x.sl_conflict.map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`}`)); if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`); }
       return L.join('\n');
-    } catch (e) { /* */ }
+    } catch (e) { console.warn('[미르] 홈 실오류 현황 답 실패 — 다음 갈래로 갑니다:', e); }
   }
   if (c.voyages && /(우리|저희)\s*(가|는|도)?\s*(작업|검수)|작업\s*해야|검수\s*해야|우리\s*배/.test(Q)) {
     if (v) {

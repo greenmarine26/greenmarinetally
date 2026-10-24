@@ -23,6 +23,7 @@ import { mirGotoRequest, mirGotoFinished } from '../guideGoto.js';   // 4.40: �
 import { askGemini } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { hatchEventsOf, hatchReportedOf, hatchPanelCountOf, crewCraneNo } from '../utils.js';   // 3.49: 해치커버 자동 판정 한 벌
+import { inspectionSealOf } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌
 import { normalizeBay, unknownSlotAskOf, bayDefOfShipCode } from '../utils.js';   // 4.26-02: 시프팅 행 베이를 EDI 행과 같은 꼴로 · «자료에 없는 자리» 물음 한 벌
 import { loadingSlotOf, isSwapSlot } from '../utils.js';   // 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리 — 수동 트윈 짝 짐작 막기) · 3차: isSwapSlot 한 벌
 import { bayGroupCenter } from '../swapGrade.js';   // 3.49: 장수 셈의 그룹 center(GuidedWorkPanel 과 같은 벌)
@@ -194,6 +195,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           if (k === 'op') { safeR.op = pickCarrierOp(v, merged[r.cn] && merged[r.cn].op, voyage?.info?.vsl); return; }
           safeR[k] = v;
         });
+        if (hasEdi && merged[r.cn].sl) safeR.slEdi = String(merged[r.cn].sl);   // 4.49 감사(중-2): EDI 실은 «다른 자료 실»로 남긴다(항차 화면 병합·미르 재료와 같은 칸 — 자동 가이드·큰 카드가 리스트 카드와 같은 답)
         if (hasEdi && r.iso_pick) safeR.oog = isoPickOog(r, merged[r.cn].oog);   // 4.15 (§7.8-⑨ Fable 판정): 검수사가 고른 규격이면 규격초과(oog) 표식도 고른 규격을 따른다(utils.isoPickOog 한 벌 — 드라이로 골랐으면 OT·FR·규격초과 없음)
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR, _src: hasEdi ? 'both' : 'list' };   // 3.26: 부킹 자리를 채우는 실번호 표식(utils.bookingFillOf)
       });
@@ -1052,7 +1054,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
 function announceContainer(c) {
   const last4 = c.l4 || c.cn?.slice(-4) || '';
   const parts = [spellKo(last4)];
-  if (c.sl) parts.push(`실번호 ${spellKo(c.sl)}`);
+  if (c.sl) parts.push(`실번호 ${spellKo(inspectionSealOf(c) || c.sl)}`);   // 4.49 감사(하-7): 읽어 주는 실도 큰 실(세관 값) — 화면 카드와 같은 값
   else parts.push('실번호 미입력');
   if (c._xray) parts.push('엑스레이');
   speak(parts.join(', '));

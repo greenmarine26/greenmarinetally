@@ -11,7 +11,8 @@ import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
-import { completedByLabel, EXTRA_OF_LIST_LABEL } from '../utils.js';   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
+import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf } from '../utils.js';
+import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // 4.49: sealCheckOf — 실오류·큰 실 판정 한 벌   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
@@ -198,8 +199,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   const needsISO403Photo = isISO403(c);
   const iso403PhotoTaken = isISO403PhotoTaken(c);
 
-  const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
-  const sealError = c.sl && slOrig && c.sl !== slOrig;
+  //  4.49: 실번호 판정 한 벌(utils.sealCheckOf) — 실오류는 고친 기록이 있고 알려진 실 어느 것과도 다를 때(하나만 맞으면 맞음) · 신고 끝자리 잘림.
+  //    종전엔 고친 기록 없이 sl ≠ sl_orig 로 빨간 머리 «세관 신고 대상» 을 띄웠다(충돌 창 기본값 EDI·리스트 병합이 만든 거짓 실오류). slOrig = 신고 실.
+  const _sealK = sealCheckOf(c);
+  const slOrig = _sealK.from;
+  const sealError = _sealK.error;
   const xSealOrig = xraySeal?.seal_orig != null ? xraySeal.seal_orig : xraySeal?.seal || '';
   const xSeal = xraySeal?.seal || '';
   const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
@@ -642,7 +646,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               {c.sl_conflict.map((h, i) => (
                 <div key={i} className="text-xxs mono text-amber-100">{h.sl}{h.src ? <span className="text-amber-400/80"> — {h.src}</span> : null}</div>
               ))}
-              <div className="text-2xs text-amber-200/90 mt-1">⚠ 실오류 사안 — 자릿수(앞 0)까지 다른 번호입니다. <b>세관 신고 번호(적하목록)</b>와 실물 씰을 대조해 맞는 번호로 확정하세요. 현재 채택값: <b className="mono">{c.sl || '없음'}</b>{c._customs ? ' (세관 자료 계열)' : ''}</div>
+              <div className="text-2xs text-amber-200/90 mt-1">실물 씰이 이 가운데 하나면 맞음입니다(4.49 — 검수사 «다 보이고 하나만 맞으면 맞음»). 큰 글씨는 <b>세관 신고 번호</b>이고, 실물이 어느 것과도 다르면 실번호를 고쳐 넣으십시오 — 그때 실오류(세관 신고 대상)로 셉니다. 자릿수(앞 0)까지 다르면 다른 번호입니다.</div>
             </div>
           );
         })()}
@@ -1383,7 +1387,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           {sealError && (
             <div className="bg-red-950/50 border border-red-700/50 rounded p-2 mb-2 text-xxs">
               <div className="text-red-300 font-bold mb-0.5">세관 신고 양식:</div>
-              <div className="mono text-red-100">원실번호 <span className="font-black">{slOrig}</span> → 실제 <span className="font-black">{c.sl}</span></div>
+              <div className="mono text-red-100">원실번호 <span className="font-black">{slOrig}</span> → 실제 <span className="font-black">{_sealK.actual || c.sl}</span></div>
             </div>
           )}
           {editingSeal ? (
@@ -1399,7 +1403,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           ) : (
             <button onClick={() => setEditingSeal(true)} className="flex items-center gap-2 w-full text-left">
               {c.sl ? (
-                <span className={`text-lg mono font-bold ${sealError ? 'text-red-300' : 'text-amber-200'}`}>{c.sl}</span>
+                <span className={`text-lg mono font-bold ${sealError ? 'text-red-300' : 'text-amber-200'}`}>{_sealK.edited ? c.sl : (_sealK.big || c.sl)}</span>
               ) : c.fe === 'E' ? (
                 // M3.88: 엠티는 실번호 없는 게 정상
                 <span className="text-lg mono font-bold text-dim-200">📦 엠티 (실번호 없음)</span>
@@ -1409,6 +1413,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               <Edit3 className="w-4 h-4 text-dim-400"/>
             </button>
           )}
+          {!editingSeal && <SealKnownLine c={c} className="mt-1" />}
           {slHistory.length > 0 && (
             <button onClick={() => setShowHistory(!showHistory)}
               className="mt-2 text-2xs text-dim-300 hover:text-dim-200 flex items-center gap-1">

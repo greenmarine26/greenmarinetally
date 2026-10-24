@@ -6,7 +6,7 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
-import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
@@ -331,7 +331,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             cn,
             iso: r.iso || e.iso || '',
             fe: r.fe || e.fe || '',
-            sl: r.sl || e.sl || '',
+            sl: (r.sl ? inspectionSealOf({ ...e, ...r, cn, slEdi: e.sl || '' }) : '') || e.sl || '',   // 4.49 감사(하-7): 큰 실(세관 값 · 고쳤으면 실물) — 작업 화면과 같은 값
             done: !!comp,
             by: completedByLabel(comp, v?.info || null),   // 3.16: 완료자 표기 한 벌(업체 글자 금지)
             at: comp?.at || comp?.ts || 0,

@@ -46,7 +46,7 @@ console.log('① 예상 실오류 — 같은 패턴(숫자 6자리) 실 가운�
   const sa = M.sealFormatAnomalies(R);
   T(sa.length === 1 && sa[0].cn === 'HALU2331077' && sa[0].seal === '00240' && /자릿수 부족/.test(sa[0].why) && /6자리가 96% \(136\/142\)/.test(sa[0].why), 'ATPR 2646E SKR — HALU2331077 «00240» 하나만 «자릿수 부족»(숫자 실 6자리 136/142)', JSON.stringify(sa));
   T(!sa.some((x) => /^0507/.test(x.seal)), '같은 선사의 다른 실 계열(0507xxx 7자리 5대)은 올리지 않는다 — 긴 쪽은 자릿수 부족이 아니다');
-  const fixed = JSON.parse(JSON.stringify(R)); fixed.HALU2331077.sl = '002403'; fixed.HALU2331077.sl_orig = '00240';
+  const fixed = JSON.parse(JSON.stringify(R)); fixed.HALU2331077.sl = '002403'; fixed.HALU2331077.sl_orig = '00240'; fixed.HALU2331077.sl_history = [{ from: '00240', to: '002403', by: '연막', at: 1792800000000 }];   // 4.49: 검수원 고침은 sl_history 가 증거다(firebase 실번호 고치기와 같은 모양) — 이력 없는 sl≠sl_orig 는 옛 병합 흔적(utils.sealLegacyOf)
   T(M.sealFormatAnomalies(fixed).length === 0, '검수원이 고친 뒤(sl 002403 · sl_orig 00240)는 빠진다(그때부터는 «실오류»)');
   //  표본 밖 가드 — «0000»(실 없음 표기) · 같은 짧은 모양이 4개 이상(다른 실 계열) · 20개 미만
   //  가짜 컨번호 숫자(5000xxx)와 실 숫자(9xxxxx)가 겹치지 않게 — 겹치면 «컨번호와 같은 씰» 로 따로 잡힌다

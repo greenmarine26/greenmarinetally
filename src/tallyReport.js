@@ -3,6 +3,7 @@
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
 import { isTermOtL, isLen45Iso } from './utils.js';   // 4.25-01: L5U0(오픈탑)은 터미널 읽기로 40피트 하이큐브 — 크기 칸 한 벌
+import { sealCheckOf } from './utils.js';   // 4.49: Act. Cntr-Seal 실번호 상이 = 실오류 판정 한 벌
 import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, isMadeUnitCn, isListOriginRecord, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
@@ -421,13 +422,15 @@ export function buildSealList(voyage, mode) {
     //  ★ 4.20 감사(Fable 판정 중-4): **제작컨 행만** — 원래 값(sl_orig)이 실번호(sl)의 잘린 앞부분이면 같은 씰이다(상이 아님 · ptkContainers 의 «잘린 값» 규칙과 같은 벌).
     //    RZOR R106E SAWTBP004 — 세관 셀 «LF102335LF102350LF10»(잘림) vs «LF102335LF102350LF102345LF102336». 일반 컨은 손대지 않는다.
     const mu = isMadeUnitCn(r.cn);
-    const cut = mu && orig && act && act.length > orig.length && act.startsWith(orig);
-    if ((orig && act && orig !== act && !cut) || reseal) {
+    //  ★ 4.49 — 실번호 상이는 실오류 판정 한 벌(utils.sealCheckOf — 검수원이 고친 기록이 있고 실물이 알려진 실 어느 것과도 다를 때 · 신고 끝자리 잘림은 안 고쳐도 실오류).
+    //    제작컨의 «잘린 앞부분이면 같은 씰»(4.20)은 이어 붙은 씰 가르기(splitJoinedSeals)로 그 판정 안에 들었다. 종전엔 고친 기록 없이 sl_orig ≠ sl 로 셌다(RZOR SAWTBP 10항차).
+    const _k = sealCheckOf(r, (_ediMap[r.cn] && _ediMap[r.cn].sl) || '');
+    if (_k.error || reseal) {
       const _sl = (x) => (mu ? splitJoinedSeals(x).join(' ') : x);   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다
       const _col = tallySizeCol(_isoBlankFilled(voyage, r));
       out.push({
-        cn: r.cn, manifestSeal: _sl(orig || act), size: (mu && _col === '45') ? "45'" : _col === '20' ? "20'" : "40'",   // 4.15 (§7.8-⑥): 리스트 규격이 비면 같은 컨번호의 EDI·베이플랜 규격 · 4.20 감사: 제작컨은 45' 칸 그대로(SAWTBP L5G1)
-        actualSeal: (orig && act && orig !== act) ? _sl(act) : '',
+        cn: r.cn, manifestSeal: _sl(_k.error ? _k.from : (orig || act)), size: (mu && _col === '45') ? "45'" : _col === '20' ? "20'" : "40'",   // 4.15 (§7.8-⑥): 리스트 규격이 비면 같은 컨번호의 EDI·베이플랜 규격 · 4.20 감사: 제작컨은 45' 칸 그대로(SAWTBP L5G1)
+        actualSeal: _k.error ? _sl(_k.actual || act) : '',
         reseal, remarks: _op(pickCarrierOp(r.op, _ediMap[r.cn] && _ediMap[r.cn].op, _vslS)),
         fe: r.fe === 'E' ? 'EMPTY' : 'FULL',
       });

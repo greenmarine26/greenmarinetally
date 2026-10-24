@@ -8,7 +8,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
-import { completedByLabel } from '../utils.js';   // ★ 3.16: 완료자 표기 한 벌
+import { completedByLabel, isSealError, sealCheckOf } from '../utils.js';   // 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
+import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // ★ 3.16: 완료자 표기 한 벌
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk, withAssignOf, loadingSlotOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -143,9 +144,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
         }
       }
 
-      // 실오류
-      const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
-      if (c.sl && slOrig && c.sl !== slOrig) k.sealerr++;
+      // 실오류 — 4.49: 판정 한 벌(utils.isSealError — 고친 기록이 있고 알려진 실 어느 것과도 다름 · 신고 끝자리 잘림). 종전엔 칩·필터가 고친 기록 없이 sl ≠ sl_orig 로 셌다(카드 배지와 갈렸다).
+      if (isSealError(c)) k.sealerr++;
       const xs = xraySeals?.[c.cn];
       const xSealOrig = xs?.seal_orig != null ? xs.seal_orig : xs?.seal;
       if (xs?.seal && xSealOrig && xs.seal !== xSealOrig) k.sealerr++;
@@ -221,10 +221,9 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'oog' && !(c.oog || c.fr)) return false;
       if (f === 'xray' && !xrayMap[c.cn]) return false;
       if (f === 'sealerr') {
-        const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
         const xs = xraySeals?.[c.cn];
         const xSealOrig = xs?.seal_orig != null ? xs.seal_orig : xs?.seal;
-        const slErr = c.sl && slOrig && c.sl !== slOrig;
+        const slErr = isSealError(c);   // 4.49: 칩과 같은 판정
         const xErr = xs?.seal && xSealOrig && xs.seal !== xSealOrig;
         if (!slErr && !xErr) return false;
       }
@@ -397,14 +396,15 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   // M5.79: 평택 적재 부킹 슬롯 (컨번호 미입력)
   const isBooking = isBookingSlot(c);
 
-  const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
+  //  4.49: 판정 한 벌(utils.sealCheckOf) — slOrig 는 신고 실(세관 값이 있으면 세관 · 세관 잘림이면 세관 값)
+  const _sealK = sealCheckOf(c);
+  const slOrig = _sealK.from;
   // TallyOne 1.8-03: '실오류'와 '자료 불일치'를 가른다.
   //   실오류 = 검수원이 **실물 봉인을 보고** 다르다고 판정한 것. 세관 신고 대상이라 붉은색.
   //     판정 근거는 sl_history(수정 이력)다. 종전엔 `sl !== sl_orig` 만 봐서, 리스트끼리
   //     달라도 실오류로 떴다(2026-08-04 STMJ 2643E SKHU8912132 실측).
   //   자료 불일치 = 리스트끼리 안 맞음. **아무도 실물을 안 봤다.** 검수 전에 확인할 신호.
-  const sealEdited = Array.isArray(c.sl_history) && c.sl_history.length > 0;
-  const sealError = sealEdited && c.sl && slOrig && c.sl !== slOrig;
+  const sealError = _sealK.error;   // 4.49: 고친 기록 · 알려진 실 어느 것과도 다름(하나만 맞으면 맞음)
   // 2.05-06 (검수사 도메인 확정 «035634↔0035634 이거라면 실오류 입니다» — 2.05-05 의 앞 0 정규화 억제는
   //   **오판이라 철회**): 씰번호는 문자 그대로가 번호다 — 자릿수(앞 0)까지 다르면 다른 번호이고 실오류 사안.
   //   세관 신고(적하목록 #B1)와 자릿수까지 대조해야 한다(2719E 실측 — 세관 0035634 / RF 리스트 035634).
@@ -650,12 +650,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                     <>
                       <span className="text-dim-400 line-through">{slOrig}</span>
                       <span className="text-red-400 mx-0.5">→</span>
-                      <span className="text-red-300 font-black">{c.sl}</span>
+                      <span className="text-red-300 font-black">{_sealK.actual || c.sl}</span>
                     </>
                   ) : (
                     // M3.88.1: 엠티 컨이고 sl이 짧으면(<5자) 의심값으로 무시 → "엠티" 표시
                     c.sl && (c.fe !== 'E' || c.sl.length >= 5) ? (
-                      <span className="text-amber-200 font-bold">{c.sl}</span>
+                      <span className="text-amber-200 font-bold">{_sealK.edited ? c.sl : (_sealK.big || c.sl)}</span>
                     ) : c.fe === 'E' ? (
                       <span className="text-dim-200">📦 엠티{c.sl && c.sl.length < 5 ? ` (sl="${c.sl}" 무시)` : ''}</span>
                     ) : (
@@ -666,6 +666,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                 </button>
               )}
             </div>
+            {!editingSeal && <SealKnownLine c={c} size="xs" />}
 
             {/* X-RAY 봉인 */}
             {mode === 'discharge' && isXray && (

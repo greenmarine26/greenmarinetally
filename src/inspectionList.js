@@ -244,7 +244,7 @@ function renderRow(c, idx, opts) {
   //  ★ 3.53-10 — **실번호를 자르지 않는다.** 검수사 2026-09-21 «검수리스트에서 셀 자리수 부족으로 실번호 잘림현상 해결바람»
   //    (ATPR 2642E — 실번호 SINOKOR011526 이 종이에 «SINOKOR011» 로 나갔다). M5.52 가 선사 칸 공간을 위해 10자로 잘랐는데
   //    검수는 실번호로 실물을 맞추는 일이라 뒷자리를 잃으면 종이가 거짓이 된다. 칸을 넓히고(실번호 16→18%, 컨번호 19→17%) 10자 넘으면 6pt 로 줄인다 — 줄바꿈은 장당 줄수를 깨므로 안 쓴다.
-  const sl = (c._madeUnit || isMadeUnitCn(c.cn)) ? splitJoinedSeals(c.sl).join(' ') : inspectionSealOf(c);   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다(일반 컨 씰은 그대로)
+  const sl = (c._madeUnit || isMadeUnitCn(c.cn)) ? splitJoinedSeals(inspectionSealOf(c) || c.sl).join(' ') : inspectionSealOf(c);   // 4.49 재감사(중-2): 제작컨도 큰 실(세관이 20자 컷이면 이어 붙은 긴 값)에서 가른다   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다(일반 컨 씰은 그대로)
   const _slCls = sl.length > 13 ? ' s3' : sl.length > 10 ? ' s2' : sl.length > 8 ? ' s1' : '';   // 3.60: 9~10자 7.5pt · 11자부터 6pt   // 3.60: 세 단 — 9자부터 6pt(10자 실번호가 8pt 로 칸을 넘었다, 크로뮴 실측)
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
   const isBooking = c.isBooking === true || c.pendingCn === true ||

@@ -69,7 +69,7 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
       })),
       sealActions: sealDiffs.map(c => ({
         cn: c.cn,
-        action: decisions['seal:' + c.cn] || 'edi',  // 기본 EDI 우선
+        action: decisions['seal:' + c.cn] || 'list',  // 4.49 감사(중-1): 기본 리스트 — EDI 실은 «다른 자료 실»(slEdi · sl_conflict)로 남는다. 종전 기본 EDI 는 세관 리스트를 올릴 때 EDI 값을 «세관» 큰 실로 만들었다
         ediSl: c.ediSl, listSl: c.listSl,
       })),
     });
@@ -204,6 +204,7 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-bold text-purple-300">
                   🔒 실번호 불일치 ({sealDiffs.length}건)
+                  <div className="text-3xs text-dim-300 font-normal">두 실 다 «다른 자료 실»로 남습니다 — 고르지 않으면 리스트 실이 큰 실(4.49)</div>
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => setAllSeals('edi')}

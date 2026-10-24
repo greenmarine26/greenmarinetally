@@ -52,7 +52,9 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
 //   (앞 판) 'TallyOne 4.29-02'   // 4.29-02 **업데이트 배너는 검수사가 쓸 수 있는 변화만 알린다**(검수사 2026-10-16 13:32 «검수사들이 모르는 수정 업데이트 공고는 보여주면 안됩니다. 보여줘도 다른 검수사들이 쓸수 없는 기능이기 때문입니다»). 4.28·4.29-01 의 배너 문구는 소유자 전용 스위치 이야기라 모든 검수사에게 보였다 — 소유자 메뉴·수집기 안쪽 변경만 있는 판은 배너 문구를 직전 «모두가 쓰는 변화» 그대로 두고, 4.29 선적 칸 [수정] 문구로 되돌린다.
-export const APP_VERSION = 'TallyOne 4.48-04'   // 4.48-04 **4.48-03 라이브 확인 수리 둘** — ① 콘앱 미르(ConeOne 2.71-02)·미르 4.20 갈래가 표시용 시프팅 지도(본선 잔류 예보 노란 ◆ 를 싣는다)의 키를 시프팅 집합으로 넘겨 지시 두 대를 평택 양하분에서 빼 «양하 315대»(검수앱 미르·홈 카드 317)라고 답했다 → utils.shiftSetForUnitsOf 한 벌(꼬리표·예보 제외)로 — 검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다» · 선호 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 한다». ② 주의 박스 자료별 대조 컨 줄(ReconLine)이 폰 폭에서 «세관 ✗ 선|사 ✓» · «메일 10-|24» 처럼 한글 낱말 중간에서 끊겼다 → break-keep(한글은 띄어쓰기 자리에서만 · 긴 파일 이름만 갈림).
+export const APP_VERSION = 'TallyOne 4.49'   // 4.49 **실번호 판정 한 벌 — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류** — 검수사 2026-10-24 06:42 «머스크는 일반적으로 보조실과 주실이 있습니다. 보조실은 리스트에 기록하지 않고 주실만 기록합니다» · «일조rzor은 컨테이너 자체가 상품인 경우 도어가 여러군데 있어서 보통 4군데에 실을 채웁니다» · 06:48 «실번호가 있으면 다 보여주고 그중 하나만 맞으면 된다고 알려 주는 방식입니다» · 12:50 확정(통합운영지침서 7.8-F 7·8·9 — ML Seal 칸 · 큰 글씨 실은 세관 값 · MLPH 끝자리 빠짐은 실오류로 센다). 실근거 — 실오류 판정이 열한 곳 넘게 흩어져(고친 기록 sl_history 를 보는 곳 둘 · 안 보는 곳 아홉) 보관·활성 396항차에서 리스트 칩 19 · 카드 배지 3 으로 갈렸다 · 올리기 병합 «한쪽이 앞부분이면 긴 쪽 채택»이 세관 잘림(MAMP 641N MMAU1264907 세관 MLPH046339 ↔ 선사 MLPH0463390)을 지웠다 · 머스크 파서가 Shipper Seal 을 주실로 써 «숫자 8자리 18»이 났다 · RZOR R117E VPLU8414662 리스트 000064 ↔ EDI 250499 에서 화면에 하나만 남았다. utils 한 벌 — isCustomsSrc(세관 출처 파일 이름 · firebase·nlSearch 두 벌을 하나로) · sealKnownOf(리스트 실 · 처음 리스트 sl_orig · 리스트끼리 다른 값 sl_conflict · 보조실 sl_alt · EDI 실 slEdi) · sealCheckOf(큰 실 big = 세관 값 · 실오류 = 고친 기록이 있고 알려진 실 어느 것과도 다름 · 잘린 신고 trunc = 한 실이 다른 단일 실의 한두 자 짧은 앞부분이면 안 고쳐도 실오류 · 이어 붙은 씰은 splitJoinedSeals 로 갈라 하나면 맞음 · 실 칸에 컨번호는 잘림으로 안 셈) · isSealError · mergeUploadSeal(올리기 병합 — 서로 다르면 둘 다 sl_conflict, 큰 실은 세관 값) · inspectionSealOf 큰 글씨 = 세관 값 · sealFormatAnomalies «예상 실오류»는 이미 실오류인 컨을 뺌. 파서 — 머스크 StandardDischargeList ML Seal 칸이 주실, Shipper Seal 은 sl_alt. 항차 화면 병합 — EDI 실을 slEdi 로 남김 · sl_alt 통과. firebase.fbSaveListRecords — 고친 컨은 고치기 전 서류 값으로 대조 · 올리기 병합이 만든 sl_conflict 와 저장분을 합침. 화면 — 새 SealKnownLine(«다른 자료 실 … — 실물이 이 가운데 하나면 맞음» · «🚨 실오류 — 신고 X → 실물 Y» · «⚠ 신고 실 … 의 끝자리가 빠진 값») 리스트 카드·컨 상세·큰 카드·자동 가이드 · 칩·필터·카드 배지 같은 판정 · 결과 탭·CSV·LOLO 보고·마감텔리 Act. Cntr-Seal·미르 실번호·홈 실오류·양하신고·인계 리씰이 같은 판정. 실자료 — 보관·활성 396항차 실오류 6(검수원 고친 3 + 신고 끝자리 빠짐 MCAP 639N MNBU4491858 · MCSC 638N MNBU4710196 · MAMP 641N MMAU1264907) · RZOR SAWTBP 10항차 · STMJ 2643E SKHU8912132 · 컨번호 실은 실오류 아님 · MAMP 641N 세관 리스트 추가 병합 뒤 실오류 1. 연막 smoke_seal449(실파일 사본 · 실 firebase.js 메모리 DB) · 회귀 기준표·씰 모양·미르 4.39-02·4.36 갱신.
+//   4.49 덧붙임(4.48-04 라이브 확인 «부») — 주의 박스 «자료별 대조» 칸 전체와 데이터 검증 메일 근거 줄에 break-keep. 4.48-04 는 컨 줄만 고쳐 머리줄·터미널 줄·묶음 머리가 320px 에서 «수⏎정» «평택에⏎서» «터미⏎널» 로 끊겼다(APP_NOTE «낱말 중간에서 끊기지 않습니다»와 어긋남). 콘앱 미르 «양하 317» 은 라이브에서 맞음.
+// (앞 판) 'TallyOne 4.48-04'   // 4.48-04 4.48-03 라이브 확인 수리 — 콘앱 미르·미르 4.20 갈래 시프팅 집합은 shiftSetForUnitsOf(본선 잔류 예보 제외 — 콘앱 미르 «양하 315» → 317) · 주의 박스 지시 컨 줄 break-keep
 // (앞 판) 'TallyOne 4.48-03'   // 4.48-03 **선사 지시 본선 잔류는 «예정» — 평택 양하 대수는 자료(EDI·리스트)대로** — 검수사 2026-10-24 20:02 «모든 서류는 317을 이야기 하는데 세관만 315라고 말합니다. 어느 누가 봐도 317로 보입니다 … 앱이 인정할 자료가 필요 할것입니다. 선적EDI라든지 취소가 된 리스트라든지 그런거 없이 강제로 고쳐서 문제가 생긴것 같습니다» · 20:06 «확정도 아닌데 빨간 경고 문구가 나온것과 확정도 아닌데 확정인것처럼 315 315 315 답을 낸것을 문제로 삼은것입니다» · 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다» · 20:08 «수정본이 오면 또 수정본 대로 맞아질것입니다. 자료가 맞춰서 올테니까요». 실근거 — 4.48 이 keepOnboard 한 통으로 평택 양하분(ptkDischargeUnitsOf·progressOf·홈 computeStats·수석 보드·종이 카고플랜 matchPodC·자동 가이드 재료 _ptk)에서 두 대를 빼 MAMP 641N 홈 카드·리스트 «전체»·마감텔리·미르·콘앱이 315 였다(EDI·선사 리스트·터미널 배정 317). 수리 — 유닛 한 벌이 지시 컨을 빼지 않고 keepIn(표시용 · 안 내린 지시 컨은 «추가분(신고 대상)» 표식 안 닮)으로만 · progressOf·computeStats·수석 보드 빼기 지움 · 카고플랜 머리 «작업분» 은 예보 칸이 양하분에도 들면 한 번만(_keepPtkN) · «작업 시작» 패널의 작업 화면(SearchPanel allContainers — 자동 가이드·수동 묶음·빈 칸·남은 컨·조회 카드)은 지시 컨을 작업으로 내밀지 않음(4.48 과 같은 작업 화면) · 같은 패널의 미르 대수 답·«시작 대기» 수는 자료대로(allContainersData — 재감사 중-1) · 감사 «부»(중-1 가이드·콘앱 분기를 연막이 실제로 안 돌림 · 하-1 빈 칸 수 기준 섞임 · 하-2 수동 · 하-3 미확정 꼬리말 · 하-4 내린 지시 컨이 예정에 남음 · 하-6 주석) → 가이드 실클릭·콘앱 분기 실행 연막 · 작업 패널 한 자리로 · keepOnboardOf 가 완료·실적 컨을 뺌 · keepMatch 꼬리말 → 재감사 «부»(중-1 작업 시작 탭 미르 «양하 몇 대» 315) → 작업 화면과 대수 재료를 가름 · 콘앱 예보 재료에 완료·실적 · 주의 박스·근거 줄 break-words · 리스트 칩 «🟡 본선 잔류 예정 N»(전체 안의 몇 대) · 컨 상세·리스트 제목·주의 박스 정보 줄·미르 설명·매뉴얼 «예정» 문구. 노란 ◆ 예보·앱 예상 줄·주의 박스 자료별 대조는 그대로. 콘앱 2.71-01.
 // (앞 판) 'TallyOne 4.48-02'   // 4.48-02 본선 잔류 배의 시프팅 상자·데이터 검증 칸(확정 시프팅만 배정표와 · 앱 예상 줄 따로)
 // (앞 판) 'TallyOne 4.48-01'   // 4.48-01 **선사 지시 본선 잔류가 든 배의 주의 박스 — «EDI · 선사 리스트 · 세관 리스트 · 선사 메일 수정 N건 적용하면 앱 수»** — 검수사 2026-10-24 17:05 «리스트에 EDI 평택과 매칭 안되는 컨 2개 그리고 이것도 잘못된것입니다. 선사리스트와 EDI는 맞습니다. 세관리스트와 틀린거죠 그걸 명시해야 합니다» · 17:06 «EDI 317 선사리스트 317 세관리스트 315 메일 수정 2건 변경 적용하면 315» · 17:07 «터미널에서 아직 선사메일을 보지 않았고 수정전입니다». 실측 MAMP 641N(17:03 두 대 입력 뒤) — 주의 박스 «터미널 배정 317 · 앱 315 (-2)»(설명 없음)와 «리스트에 EDI 평택과 매칭 안되는 컨 2개»(평택 양하분 EDI 목록은 두 대를 빼는데 리스트에는 남음). diagnostics.runDiagnostics 에 keepCns(항차 화면이 keepOnboardOf 로 넘김) — 두 대는 list_extra 에서 빠지고, 자료별 대조 문구가 «자료별 대조 — EDI 317 · 선사 리스트 317 · 세관 리스트 315 · 선사 메일 수정 2건(본선 잔류 CNDAI — 평택에서 안 내림) 적용하면 315 · 터미널 배정 317(터미널은 아직 선사 메일 수정 전)» · 자료별 대조가 안 뜨는 배는 정보 줄 keep_onboard · 미르 경고 설명 한 줄. 지시 없는 배는 문구 그대로. 독립 감사 «부»(중 3 · 하 4) → 재감사 «부»(중 1 · 하 4) 반영 — 터미널 차이가 지시 대수와 다르면 «터미널 배정 N · 앱 N (gap)» · POD 확정 참고는 «· POD 확정 평택 아님 N대 적용하면» · 다른 어긋남이 같이 있으면 «어긋남 N대 · 선사 메일 수정 … 적용하면 앱 N» · 정보 줄·미르 설명은 자료를 단정하지 않음 · 주의 박스 펼친 칸 본선 잔류 묶음 따로 · 진단 입력(EDI 평택분)에서만 본선 잔류를 뺌(항차 화면 목록 isPtk 는 그대로) · 본선 잔류는 가상 E 확정보다 먼저 가름(플래너가 확정해 시프팅에 든 지시는 «시프팅으로 셈» 그대로 — 3차 감사 하-1) · 미르 «본선 잔류 뭐야» 낱말표. 연막 smoke_keep448 ⑫ 18항(70/70).
@@ -143,7 +145,8 @@ export const APP_VERSION = 'TallyOne 4.48-04'   // 4.48-04 **4.48-03 라이브 �
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.48-04 선사 지시로 본선에 남는 컨은 콘앱 미르도 평택 양하 대수에 넣어 검수앱과 같은 수로 답합니다. 주의 박스 자료별 대조 줄은 낱말 중간에서 끊기지 않습니다.'
+export const APP_NOTE = '4.49 실번호가 자료마다 다르면 다른 자료 실을 다 보여 주고 실물이 하나와 맞으면 맞음입니다. 큰 글씨 실은 세관 값이고 신고 실 끝자리가 빠졌으면 실오류로 셉니다.'
+// (앞 판 APP_NOTE) '4.48-04 선사 지시로 본선에 남는 컨은 콘앱 미르도 평택 양하 대수에 넣어 검수앱과 같은 수로 답합니다. 주의 박스 자료별 대조 줄은 낱말 중간에서 끊기지 않습니다.'
 // (앞 판 APP_NOTE) '4.48-03 선사 지시로 본선에 남는 컨은 예정으로만 보이고 평택 양하 대수는 EDI와 리스트 자료대로 셉니다. 수정 자료가 오면 그 자료대로 바뀝니다.'
 // (앞 판 APP_NOTE) '4.48-02 선사 지시로 본선에 남는 컨이 있는 배는 시프팅 상자가 확정만 배정표와 맞댑니다. 데이터 검증 칸은 지금 자료 그대로 세고 메일을 적용한 앱 예상 수는 아래 줄에 따로 적습니다.'
 // (앞 판 APP_NOTE) '4.48-01 선사 지시로 본선에 남는 컨이 있는 배는 주의 박스가 «EDI · 선사 리스트 · 세관 리스트 · 메일 수정 N건 적용하면 …»으로 밝힙니다. 그 컨은 매칭 안 되는 컨으로 세지 않습니다.'
@@ -3576,6 +3579,7 @@ export async function parseListExcel(arrayBuffer) {
       // 실번호: 헤더로 못 찾으면 같은 행에서 자동 탐색 (V38: 병합셀 대응)
       // M3.86: SOC fallback에 sl이 필요하므로 fe보다 먼저 추출
       let sl = '';
+      let slAlt = '';   // 4.49: 머스크 보조실(Shipper Seal — 화주 씰). 주실은 ML Seal
       // M8.08: 규격(ISO) 형태 값은 실번호가 아님 — 자동 탐색에서 제외.
       const looksLikeIso = (v) => {
         const s = String(v || '').toUpperCase().replace(/[\s\-]/g, '');
@@ -3588,7 +3592,9 @@ export async function parseListExcel(arrayBuffer) {
         //   (ATRP: SEAL 빈칸인데 옆 TYSZ/BLNO를 실번호로 오인하던 버그 방지.)
         sl = String(row[sl_i] || '').trim();
         //  3.60-14: 씰 칸의 «0000» 은 적힌 그대로 둔다 — 검수사가 쓰는 «실 부족» 표기다(dupSealMap·GuidedWorkPanel). 카토스 SWTD 9012E·PCSZ 2625E 7줄은 세관리스트도 같은 값이다.
-        if (!sl && mlSeal_i >= 0) sl = String(row[mlSeal_i] || '').trim();   // 2.08-12: ML Seal 폴백
+        //  ★ 4.49 — 머스크 주실은 ML Seal 칸이다(검수사 2026-10-24 12:50 «ML Seal 칸» · 통합운영지침서 7.8-F 7 — MAMP 641N 두 칸이 다른 18대·지난 46대 모두 세관 신고본이 ML 값).
+        //    Shipper Seal(화주 씰)은 보조실 sl_alt 로 남긴다(지우지 않는다 — 화면에 «다른 자료 실»로 보인다). ML 이 비면 종전대로 Shipper Seal(2.08-12 는 거꾸로였다).
+        if (mlSeal_i >= 0 && mlSeal_i !== sl_i) { const _ml = String(row[mlSeal_i] || '').trim(); if (_ml) { if (sl && normSeal(sl) !== normSeal(_ml)) slAlt = sl; sl = _ml; } }
       } else {
         // SEAL 헤더를 못 찾은 경우만 컨번호 옆 5칸 자동 탐색 (병합셀 등 대응, 규격 제외).
         // 2.08-12: 열 헤더가 부킹/BL 계열이면 후보에서 제외 — Bookno 를 씰로 채택하던 오탐 봉쇄.
@@ -3820,6 +3826,7 @@ export async function parseListExcel(arrayBuffer) {
         ...(_feText ? { _feText: true } : {}),   // 3.60-17: 아래 끝글자 맞추기가 건너뛰고 지운다
         sl: finalSl,
         sl_orig: finalSl,
+        ...(slAlt && finalSl && normSeal(slAlt) !== normSeal(finalSl) ? { sl_alt: slAlt } : {}),   // 4.49: 머스크 보조실(풀 컨만)
         eseal: finalEseal,
         eseal_orig: finalEseal,
         bl: bl_i >= 0 ? String(row[bl_i] || '').trim() : '',
@@ -9501,9 +9508,119 @@ export function looksLikeIsoType(v) {
 //    sl 이 있으면 그대로(종전). 엠티(F 가 아님 — 검수리스트 F/E 칸과 같은 기준)이고 sl 이 비면 엠티실(eseal — 엠티실 리스트와 같은 값·같은 거름)을 쓴다.
 //  ★ 4.27 — 보류(⏸ 지금 양하·선적 불가) 사유 한 벌. 자동 가이드(GuidedWorkPanel)·수동 한 화면 틀(SearchPanel TwinSearch)이 같은 목록을 쓴다(종전 가이드 안 상수).
 export const HOLD_REASONS = ['콘 잠김', '트윈 무게 초과', '컨 홀 불량(스프레더 안착 불가)'];
+/*  ★ 4.49 — **실번호 판정 한 벌.** 검수사 2026-10-24 12:50 확정(통합운영지침서 7.8-F 7·8·9) — «ML Seal 칸» · «다 보이고 하나만 맞으면 맞음» · «MLPH 끝자리 빠짐은 실오류로 센다».
+    종전엔 «실오류 = sl ≠ sl_orig» 가 열한 벌 넘게 흩어져(검수원 고친 기록 sl_history 를 보는 곳 둘 · 안 보는 곳 아홉) 같은 컨을 화면마다 다르게 셌다 —
+    충돌 창 기본값 «EDI»·리스트끼리 병합이 sl ≠ sl_orig 를 고친 기록 없이 만들어 거짓 실오류가 났다(RZOR SAWTBP 제작컨 10항차 · 조사 2026-10-24).
+    ① 알려진 실(sealKnownOf) — 자료마다 적힌 실을 다 모은다: 리스트 실(검수원이 고쳤으면 고치기 전 값 sl_orig) · 리스트끼리 다른 값(sl_conflict) · 머스크 보조실(sl_alt — Shipper Seal) · EDI 실(slEdi).
+       같은 실은 한 줄(대문자·공백·하이픈 무시). «0000»(실 부족 표기)은 실이 아니다. 세관 출처(isCustomsSrc — 파일 이름)는 customs 로 표시한다.
+    ② 큰 실(big) — 세관 값이 있으면 세관 값, 없으면 리스트 실(검수사 «큰 글씨 실은 세관 값»).
+    ③ 실오류(error) — 검수원이 실물을 보고 고친 기록(sl_history)이 있고, 실물 실이 알려진 실 어느 것과도 다르면. 하나만 맞으면 맞음(RZOR 상품컨은 문이 여러 개라 실이 여럿 — 7.8-F 8).
+       잘린 신고(trunc) — 알려진 실 하나가 다른 단일 실의 앞부분이고 한두 자 짧으면(MAMP 641N MMAU1264907 «MLPH0463390» ↔ 세관 «MLPH046339») 신고 값은 짧은 쪽(세관 표시가 있으면 세관)이고
+       검수원이 안 고쳐도 실오류다(7.8-F 9 — 신고본을 고쳐야 한다 · 보관 MCAP 639N · MCSC 638N 검수원 기록과 같은 답). 실 칸에 컨번호가 적힌 자료는 잘림으로 세지 않는다.
+       이어 붙은 씰(제작컨 «LF102335LF102350…» · 20자 컷)은 갈라 본다(splitJoinedSeals) — 그중 하나면 맞음. 잘림은 단일 실에만. */
+export function isCustomsSrc(src) {
+  return /적하\s*목록|적하|세관|CDL|MANIFEST|신고|^Excel_\d{14}/i.test(String(src || '').trim());
+}
+function _sealEdited(c) { return !!(c && Array.isArray(c.sl_history) && c.sl_history.length); }
+function _sealLegacy(c) { return !!(c && !_sealEdited(c) && c.sl_orig && c.sl && normSeal(c.sl_orig) !== normSeal(c.sl)); }   // 옛 병합 흔적(고친 기록 없이 sl ≠ sl_orig — sl_src 는 sl_orig 쪽 출처)
+export { _sealLegacy as sealLegacyOf };
+export function sealKnownOf(c, ediSl) {
+  const out = [], seen = new Map();
+  const add = (v, src, kind) => {
+    const sv = String(v == null ? '' : v).trim(), n = normSeal(sv);
+    if (!n || n === '0000') return;
+    const cus = isCustomsSrc(src);
+    const e = seen.get(n);
+    if (e) { if (src && !e.srcs.includes(src)) e.srcs.push(src); if (cus) e.customs = true; return; }
+    const x = { v: sv, n, srcs: src ? [String(src)] : [], kind, customs: cus };
+    seen.set(n, x); out.push(x);
+  };
+  if (!c) return out;
+  const main = _sealEdited(c) ? (c.sl_orig != null ? c.sl_orig : '') : c.sl;
+  //  옛 꼴(_sealLegacy) — 고친 기록 없이 sl ≠ sl_orig 는 앞 병합이 남긴 흔적이다(4.49 전 «긴 쪽 채택» · 충돌 창 «EDI» 고름). 그때 sl_src 는 sl_orig 쪽 출처였다
+  //    (MAMP 641N MMAU1264907 — sl 선사 MLPH0463390 · sl_orig 세관 MLPH046339 · sl_src 세관 파일 · 보관 MCAP 639N MNBU4491858 · MCSC 638N MNBU4710196). 감사(상-2·하-2) — 출처를 sl_orig 에 붙인다.
+  const legacy = _sealLegacy(c);
+  add(main, legacy ? '' : (c.sl_src || c._source || ''), 'list');
+  if (legacy) add(c.sl_orig, c.sl_src || c._source || '', 'orig');   // 재감사(하): sl_src 가 없는 옛 기록은 _source(STMJ 2643E SKHU8912132 — CDL)
+  for (const h of (Array.isArray(c.sl_conflict) ? c.sl_conflict : [])) if (h) add(h.sl, h.src || '', 'conflict');
+  if (c.sl_alt) add(c.sl_alt, '보조실(Shipper Seal)', 'alt');
+  const ed = ediSl != null ? ediSl : c.slEdi;
+  if (ed) add(ed, 'EDI', 'edi');
+  return out;
+}
+export function sealCheckOf(c, ediSl) {
+  const known = sealKnownOf(c, ediSl);
+  const cust = known.find((k) => k.customs) || null;
+  const edited = _sealEdited(c);
+  const actual = edited ? String((c && c.sl) || '').trim() : '';
+  //  잘린 신고(trunc) — 알려진 실 가운데 하나가 다른 단일 실의 앞부분이고 한두 자 짧다(MLPH0463390 ↔ MLPH046339). 잘림은 신고본(세관·IFCSUM)에서만 생긴다 — 세관 표시가 있으면 그것,
+  //    없으면 짧은 쪽을 신고 값으로 본다. 검수사 «실오류로 센다»(7.8-F 9) — 신고를 고쳐야 하므로 검수원이 안 고쳐도 실오류다(실물은 긴 쪽 · 고쳤으면 고친 실물).
+  //    이어 붙은 씰의 20자 잘림(제작컨 «LF102274LF102279LF10» ↔ 네 개 이어 붙음)은 길이 차가 커서 여기 안 든다 — 갈라서 하나면 맞음.
+  //    실 칸에 컨번호가 적힌 자료(STMJ 2659E FFAU1654550 · STSE 2681E CAAU9893623 — 세관 10자 컷)는 실이 아니라서 잘림으로 세지 않는다.
+  //    감사(상-1) — 세관 값이 있으면 세관이 짧은 쪽일 때만 잘림이다(세관이 긴 쪽이면 짧은 선사·EDI 값은 «다른 자료 실»일 뿐 · 신고는 세관 값). 세관이 없을 때만 «짧은 쪽이 신고».
+  //    감사(하-5) — 짧은 쪽이 8자 미만이면(123456 ↔ 1234567 · 00 ↔ 000) 잘림으로 보지 않는다(실례는 모두 10자 — 세관 칸 컷).
+  const _cnN = normSeal((c && c.cn) || '');
+  const _isCnLike = (x) => !!(_cnN && x.n.length >= 8 && _cnN.startsWith(x.n));
+  const _longerOf = (x) => (_isCnLike(x) || x.n.length < 8 ? null : known.find((k) => k !== x && !_isCnLike(k) && k.n.length > x.n.length && k.n.length - x.n.length <= 2 && k.n.startsWith(x.n) && splitJoinedSeals(k.v).length === 1) || null);
+  const decl = cust ? (_longerOf(cust) ? cust : null) : (known.find((x) => _longerOf(x)) || null);
+  const trunc = !!decl;
+  const toks = new Set();
+  for (const k of known) { toks.add(k.n); const parts = splitJoinedSeals(k.v); if (parts.length > 1) for (const p of parts) toks.add(normSeal(p)); }
+  const an = normSeal(actual);
+  const error = trunc ? (edited ? !!(an && an !== decl.n) : true) : !!(edited && an && known.length && !toks.has(an));
+  //  재감사(중-2) — 세관 값이 이어 붙은 씰의 20자 컷이면(RZOR SAWTBP «LF102335LF102350LF10» ↔ «LF102335LF102350LF102345LF102336») 같은 씰이다 — 큰 실은 긴 값(4.20 «잘린 앞부분이면 같은 씰 · 씰 전부 적는다»).
+  const _joinedOf = (x) => (x ? known.find((k) => k !== x && k.n.length > x.n.length && k.n.startsWith(x.n) && splitJoinedSeals(k.v).length > 1) || null : null);
+  const _cJ = _joinedOf(cust);
+  const big = cust ? (_cJ ? _cJ.v : cust.v) : (known[0] ? known[0].v : String((c && c.sl) || '').trim());
+  const truncLong = trunc ? _longerOf(decl).v : '';
+  const shownActual = trunc && !edited ? truncLong : actual;
+  const bigK = known.find((k) => k.v === big) || null;   // 큰 실의 출처(미르 «실번호 X(출처)» 괄호 — 재감사 중-3)
+  return { known, customs: cust, decl, truncLong, big, bigK, trunc, edited, actual: shownActual, error, from: trunc ? decl.v : big };
+}
+/*  ★ 4.49 — 리스트 올리기 병합(VoyagePage «📥 추가 병합»·여러 파일 한 번에)의 실번호 한 벌. prev = 이미 있는 행, r = 새 파일 행 → merged 에 덮을 칸만 돌려준다.
+    서로 다르면 둘 다 «다른 자료 실»(sl_conflict · 출처 파일)로 남기고, 큰 실(sl)은 세관 값이다(검수사 2026-10-24 «큰 글씨 실은 세관 값»).
+    종전 «한쪽이 앞부분이면 긴 쪽 채택(잘림 보정)»은 세관 잘림(MAMP 641N MMAU1264907 세관 «MLPH046339» ↔ 선사 «MLPH0463390»)을 지워 실오류 신고 대상(7.8-F 9)을 못 보게 했고,
+    sl_src 는 세관인데 값은 선사 것이 됐다. 세관이 아닌 두 리스트끼리는 종전대로 긴 앞부분 → 아니면 새 값.
+    검수원이 고친 컨(sl_history)은 고치기 전 서류 값으로 대조한다(실물 값을 서류처럼 남기지 않는다 — 저장은 fbSaveListRecords 가 실물을 지킨다). */
+export function mergeUploadSeal(prev, r, fileName) {
+  const _docSl = (x) => String(((x && Array.isArray(x.sl_history) && x.sl_history.length) ? x.sl_orig : (x && x.sl)) || '').trim();
+  const a = _docSl(prev), b = String((r && r.sl) || '').trim();
+  //  감사(상-2) — 옛 꼴(고친 기록 없이 sl ≠ sl_orig · sl_src 는 sl_orig 쪽 출처)은 sl_orig 서류 값을 «다른 자료 실»로 옮겨 남긴다(새 파일이 sl_orig 를 덮어도 세관 잘림이 안 사라지게).
+  const legacy = _sealLegacy(prev);
+  const legV = legacy ? String(prev.sl_orig).trim() : '', legSrc = legacy ? String(prev.sl_src || prev._source || '') : '';
+  const legCus = !!(legacy && isCustomsSrc(legSrc));
+  const aSrc = legacy ? '' : ((prev && (prev.sl_src || prev._source)) || ''), bSrc = String(fileName || '');
+  const hist = prev && Array.isArray(prev.sl_conflict) && prev.sl_conflict.length ? [...prev.sl_conflict] : [];
+  const addH = (v, src) => {
+    if (!v) return;
+    const i = hist.findIndex((h) => h && normSeal(h.sl) === normSeal(v));
+    if (i < 0) { hist.push({ sl: String(v), src: String(src || '') }); return; }
+    if (isCustomsSrc(src) && !isCustomsSrc(hist[i].src)) hist[i] = { ...hist[i], src: String(src) };   // 재감사(중-1): 같은 값에 세관 출처가 오면 세관으로 올린다
+  };
+  //  재감사(중-2): 세관 값이 이어 붙은 긴 씰의 앞부분(20자 컷)이면 같은 씰 — 큰 실은 긴 값
+  const _joinedLong = (cut, full) => !!(cut && full && normSeal(full).length > normSeal(cut).length && normSeal(full).startsWith(normSeal(cut)) && splitJoinedSeals(full).length > 1);
+  if (legacy) addH(legV, legSrc);
+  if (a && b && normSeal(a) !== normSeal(b)) {
+    addH(a, aSrc); addH(b, bSrc);
+    const bCus = isCustomsSrc(bSrc), aCus = isCustomsSrc(aSrc);
+    let main = bCus ? b : aCus ? a : legCus ? legV : (a.length > b.length && a.startsWith(b)) ? a : b;
+    if (bCus && _joinedLong(b, a)) main = a; else if (aCus && _joinedLong(a, b)) main = b;   // 세관 컷 ↔ 이어 붙은 긴 씰
+    //  재감사(중-1) — 출처는 세관 쪽을 먼저 본다(옛 꼴 세관 값과 새 선사 값이 같으면 세관 출처)
+    const src = (main === legV && legCus) ? legSrc : main === b ? bSrc : aSrc;
+    return { sl_conflict: hist, sl: main, sl_orig: main, sl_src: src };
+  }
+  if (legacy) {   // 같은 값(또는 한쪽 빈칸)이 다시 왔다 — 옛 꼴을 새 꼴(sl = 큰 실 · sl_conflict 에 다른 자료 실)로 바꿔 둔다
+    const cur = a || b; addH(cur, b ? bSrc : aSrc);
+    let main = legCus && !isCustomsSrc(bSrc) ? legV : cur;
+    if (legCus && _joinedLong(legV, cur)) main = cur;   // 세관 컷 ↔ 이어 붙은 긴 씰 — 큰 실은 긴 값
+    return { sl_conflict: hist, sl: main, sl_orig: main, sl_src: (main === legV && legCus) ? legSrc : (b ? bSrc : aSrc) };
+  }
+  return { sl: a || b, ...(!b && a ? { sl_src: aSrc } : {}) };
+}
+export function isSealError(c, ediSl) { try { return sealCheckOf(c, ediSl).error; } catch (e) { console.warn('[4.49 실번호] 실오류 판정 실패 — 실오류 아님으로 봅니다:', c && c.cn, e); return false; } }
 export function inspectionSealOf(c) {
   const s = String((c && c.sl) || '').trim();
-  if (s) return s;
+  if (s) { if (!_sealEdited(c)) { const k = sealCheckOf(c); if (k.customs) return k.big || k.customs.v; } return s; }   // 4.49: 검수원이 안 고쳤으면 세관 값(큰 실 — 세관이 이어 붙은 씰의 컷이면 긴 값)
   if (String((c && c.fe) || '').toUpperCase() === 'F') return '';
   const e = String((c && c.eseal) || '').trim();
   return e && !looksLikeIsoType(e) ? e : '';
@@ -10873,7 +10990,7 @@ export function sealFormatAnomalies(listRecords, opts = {}) {
   const out = [];
   for (const [cn, r] of recs) {
     const s = seal0(r); if (!s) continue;
-    if (!opts.includeFixed && r && r.sl && r.sl_orig && String(r.sl) !== String(r.sl_orig)) continue;   // 검수원이 이미 고침(시험에서만 includeFixed 로 포함)
+    if (!opts.includeFixed && ((_sealEdited(r) && r.sl && r.sl_orig && String(r.sl) !== String(r.sl_orig)) || isSealError({ ...r, cn }))) continue;   // 검수원이 이미 고침 · 4.49: 이미 실오류로 잡힌 컨(판정 한 벌 isSealError — 신고 끝자리 빠짐 MCAP 639N MNBU4491858)도 «예상» 이 아니다(시험에서만 includeFixed 로 포함)
     const cnU = String(cn || '').toUpperCase();
     const digits = s.replace(/\D/g, ''), body = cnU.replace(/^[A-Z]{4}/, '');
     if (digits.length >= 6 && body.length >= 6 && (body.indexOf(digits) >= 0 || digits.indexOf(body) >= 0)) {

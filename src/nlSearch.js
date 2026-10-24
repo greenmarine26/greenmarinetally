@@ -5,7 +5,7 @@
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
-import { isoShown, sealFormatAnomalies, ediSealMapOf } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -1947,7 +1947,7 @@ function formatBayStats(bay, results) {
 // 2.06-08 (검수사 확정 «Excel_YYYYMMDDHHMMSS.xls 이것이 세관리스트 입니다. 파일명 형식과 내용을 보면
 //   일관될것입니다» — 실측: 2719E·8/1자 두 파일 모두 헤더 MSN·M-B/L·화물구분·Seal No 1/2/3 동일):
 //   세관 조회본 파일명 패턴 `Excel_숫자14자리`도 세관리스트로 인식한다.
-const _isCustomsSrc = (src) => /적하\s*목록|적하|세관|CDL|MANIFEST|신고|^Excel_\d{14}/i.test(String(src || '').trim());
+const _isCustomsSrc = isCustomsSrc;   // 4.49: utils 한 벌(firebase 저장 문지기와 같은 식)
 // 2.06-06 (검수사 최종 단순화 «세관리스트와 다르면 실오류 의심으로 표기. 자료중 세관리스트가 빠진 선박은
 //   세관리스트를 첨부해 주세요 라고 알림»): 판정은 두 가지뿐 —
 //   suspect = 선사 값이 세관(신고)값과 다름 → 실오류 의심
@@ -1961,10 +1961,10 @@ export function sealIssuesOf(containers) {
     if (_isCustomsSrc(c._source) || _isCustomsSrc(c.sl_src)) hasCustoms = true;   // 2.06-11: 채택 씰 출처(sl_src)도 근거 — 세관 올린 뒤 선사 리스트가 _source 를 덮어도 유지
     const hist = Array.isArray(c.sl_conflict) ? c.sl_conflict : [];
     if (hist.some((h) => _isCustomsSrc(h.src))) hasCustoms = true;
-    const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
-    if (Array.isArray(c.sl_history) && c.sl_history.length > 0 && c.sl && slOrig && c.sl !== slOrig) {
-      errs.push({ cn: c.cn, from: slOrig, to: c.sl }); continue;
-    }
+    //  4.49: 실오류는 한 벌(utils.sealCheckOf) — 검수원이 고친 기록이 있고 실물이 알려진 실 어느 것과도 다를 때(하나만 맞으면 맞음) · 신고 끝자리 잘림(안 고쳐도 실오류).
+    const _sk = sealCheckOf(c);
+    if (_sk.error) { errs.push({ cn: c.cn, from: _sk.from, to: _sk.actual, trunc: _sk.trunc }); continue; }
+    if (_sk.edited) continue;   // 고쳤지만 알려진 실 가운데 하나와 맞다 — 실오류 아님(리스트끼리 다름도 실물로 풀렸다)
     const seen = new Map();   // 값 → 출처들 (값은 문자 그대로 — 정규화 금지)
     for (const h of hist) {
       const v = String(h.sl || '').trim().toUpperCase();
@@ -2005,7 +2005,7 @@ export function sealPredictOf(containers, recordsList, ediList) {
     for (const c of containers || []) { const cn = String((c && c.cn) || '').toUpperCase(); if (cn && !edi[cn] && c.slEdi) edi[cn] = String(c.slEdi); }
     let out = [];
     if (lists.length) { for (const r of lists) out = out.concat(sealFormatAnomalies(r, { edi })); }
-    else { const recs = {}; for (const c of containers || []) if (c && c.cn) recs[c.cn] = { sl: c.sl, sl_orig: c.sl_orig, op: c.op }; out = sealFormatAnomalies(recs, { edi }); }
+    else { const recs = {}; for (const c of containers || []) if (c && c.cn) recs[c.cn] = { sl: c.sl, sl_orig: c.sl_orig, sl_history: c.sl_history, sl_src: c.sl_src, sl_conflict: c.sl_conflict, op: c.op }; out = sealFormatAnomalies(recs, { edi }); }   // 4.49 감사(하-4): 고친 기록·다른 자료 실도 넘겨야 «이미 고친 컨·이미 실오류인 컨 제외» 가 이 길에서도 먹는다
     const seen = new Set();
     //  미르는 검수사가 정한 두 꼴만 말한다 — «자릿수 부족실»(숫자 자릿수가 그 선사 대표 모양보다 모자람 — MCAP 639N MLPH+6 ↔ PH+7) · «컨넘버랑 동일한 실»(검수사 2026-10-19 «알림은 자릿수 부족실 2 컨넘버랑 동일한 실 1»).
     //    접두가 다른 씰(다른 회사 씰 — RZOR R106E 선적 LYG·HS·SKR·LF·ES·BHGJ 10건)은 주의 박스에만 남기고 말·브리핑으로 늘어놓지 않는다(소리 브리핑이 시끄러워진다).
@@ -2014,7 +2014,7 @@ export function sealPredictOf(containers, recordsList, ediList) {
 }
 //  4.39-02 (감사 E1) — 콘앱 행(cone.html _ediRowOf)에는 실 칸(sl·sl_orig·sl_history…)이 없어 실번호 점검이 «점검할 실번호 데이터가 없습니다» 로 갈렸다.
 //    리스트(records)를 받으면 행에 없는 실 칸만 리스트 값으로 채운다(있는 칸은 그대로 — 검수앱 행은 바뀌지 않는다).
-const _SEAL_KEYS = ['sl', 'sl_orig', 'sl_history', 'sl_src', 'sl_conflict', '_source', 'eseal', 'eseal_orig'];
+const _SEAL_KEYS = ['sl', 'sl_orig', 'sl_history', 'sl_src', 'sl_conflict', '_source', 'eseal', 'eseal_orig', 'sl_alt'];   // 4.49 감사(중-3): 보조실(sl_alt)도
 function _withRecordSeals(cs, recordsList) {
   const lists = (Array.isArray(recordsList) ? recordsList : [recordsList]).filter((r) => r && typeof r === 'object' && Object.keys(r).length);
   if (!lists.length) return cs || [];
@@ -3723,8 +3723,8 @@ function formatCustomsReport(parsed, allContainers, ctx) {
   // 3) 바뀜
   const swapped = cs.filter(c => compInfo(c)?.flag === 'swapped');
   // 4) 리씰 (원본 실번호와 현재가 다름)
-  const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-]/g, '');
-  const reseal = cs.filter(c => c.sl_orig && c.sl && norm(c.sl_orig) !== norm(c.sl));
+  //  4.49: 리씰(현장에서 실번호가 신고와 다름 — 신고서 반영) = 실오류 판정 한 벌(utils.isSealError). 고친 기록 없는 sl ≠ sl_orig(병합 흔적)는 리씰이 아니다.
+  const reseal = cs.filter(c => isSealError(c));
   // 5) 실오류
   const audit = auditSeals(cs);
   const sealErrs = audit.items || [];
@@ -3781,7 +3781,7 @@ function formatCustomsReport(parsed, allContainers, ctx) {
   if (reseal.length) {
     lines.push('', `🔒 리씰 ${reseal.length}건 (현장에서 실번호 변경 — 신고서 실번호 반영):`);
     reseal.slice(0, 20).forEach((c, i) => {
-      lines.push(`  ${i + 1}. ${last4(c)}  ${c.sl_orig} → ${c.sl}`);
+      { const _k = sealCheckOf(c); lines.push(`  ${i + 1}. ${last4(c)}  ${_k.from} → ${_k.actual || c.sl}`); }
     });
   }
   if (sealErrs.length) {
@@ -3855,12 +3855,11 @@ export function generateHandover(allContainers, handoverInfo = {}) {
 
   // 2) 양하신고할 것 (양하분이 있으면) — formatCustomsReport와 같은 판별
   if (disch.length) {
-    const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-]/g, '');
     const onList = (c) => c._src === 'list' || c._src === 'both';
     const missing = disch.filter(c => compInfo(c)?.flag === 'missing');
     const extra = disch.filter(c => compInfo(c)?.flag === 'extra' || (c._src === 'edi' && c._comp));
     const swapped = disch.filter(c => compInfo(c)?.flag === 'swapped');
-    const reseal = disch.filter(c => c.sl_orig && c.sl && norm(c.sl_orig) !== norm(c.sl));
+    const reseal = disch.filter(c => isSealError(c));   // 4.49: 양하신고와 같은 판정 한 벌
     const audit = auditSeals(disch);
     const sealErrs = audit.items || [];
     const uniq = (arr) => { const s = new Set(); return arr.filter(c => { if (s.has(c.cn)) return false; s.add(c.cn); return true; }); };
@@ -3874,7 +3873,7 @@ export function generateHandover(allContainers, handoverInfo = {}) {
       if (mU.length) lines.push(`🚫 누락 ${mU.length}: ${mU.slice(0, 10).map(last4).join(', ')}`);
       if (eU.length) lines.push(`➕ 초과 ${eU.length}: ${eU.slice(0, 10).map(last4).join(', ')}`);
       if (swapped.length) lines.push(`🔄 바뀜 ${swapped.length}: ${swapped.slice(0, 10).map(last4).join(', ')}`);
-      if (reseal.length) lines.push(`🔒 리씰 ${reseal.length}: ${reseal.slice(0, 10).map(c => `${last4(c)}(${c.sl_orig}→${c.sl})`).join(', ')}`);
+      if (reseal.length) lines.push(`🔒 리씰 ${reseal.length}: ${reseal.slice(0, 10).map(c => { const _k = sealCheckOf(c); return `${last4(c)}(${_k.from}→${_k.actual || c.sl})`; }).join(', ')}`);
       if (sealErrs.length) lines.push(`⚠ 실오류 ${sealErrs.length}: ${sealErrs.slice(0, 10).map(e => e.cn).join(', ')}`);
     }
   }
