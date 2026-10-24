@@ -123,7 +123,7 @@ function AlertRow({ alert, forceOpen, onOpenContainer, reconShown }) {
     <div className={`border rounded-pill p-2 ${colorClass}`}>
       <button onClick={() => setOpen(v => !v)} className="w-full flex items-start gap-2 text-left">
         <Icon className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>
-        <div className="text-xs flex-1 leading-relaxed font-bold">{alert.msg}</div>
+        <div className="text-xs flex-1 leading-relaxed font-bold break-words break-keep">{alert.msg}</div>{/* 4.49-01: 알림 한 줄(«자료별 대조 — … 적용하면 315 …»)도 한글은 띄어쓰기 자리에서만 — 4.49 라이브 확인 320px «적⏎용하면» «수⏎정 전» */}
         {hasDetails && (
           <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}/>
         )}

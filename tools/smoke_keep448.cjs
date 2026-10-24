@@ -416,6 +416,7 @@ const bundle = process.argv[3];
     ok(/className="text-dim-300 break-words break-keep"/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]) && !/className="[^"]*break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(4.48-03 break-words — 낱말 중간은 안 갈림 · 폰 가로 밀림 수리)');
     ok(/className="mt-2 pt-2 border-t border-line text-2xs space-y-1 break-words break-keep" data-recon>/.test(src('src/components/DiagnosticsPanel.jsx')) && /className="text-2xs text-yellow-200\/90 break-words break-keep" data-keep-evid=/.test(src('src/components/ValidationBox.jsx')),
       '자료별 대조 칸 전체·데이터 검증 메일 근거 줄도 한글은 띄어쓰기 자리에서만 줄바꿈(4.49 — 4.48-04 라이브 확인 «수⏎정» «평택에⏎서» · 긴 파일 이름만 갈림)');
+    ok(/className="text-xs flex-1 leading-relaxed font-bold break-words break-keep">\{alert\.msg\}/.test(src('src/components/DiagnosticsPanel.jsx')), '주의 박스 알림 한 줄(alert.msg)도 한글은 띄어쓰기 자리에서만 줄바꿈(4.49-01 — 4.49 라이브 확인 «적⏎용하면» «수⏎정 전»)');
   }
 
   console.log('⑭ 4.48-02 감사(중-1) — 항차 화면 본체(VoyagePage)를 통째로 그린다: 배정표 대조·앱 예상 줄이 화면 안 계산·전달을 거친다(배정표는 지도 계산 전에 넣는다)');
