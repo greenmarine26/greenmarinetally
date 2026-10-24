@@ -1115,6 +1115,18 @@ else
   cp "$SMOKE_SK.fbbak" src/firebase.js; rm -f "$SMOKE_SK.fbbak"
   echo "✗ 4.45-02 씰 모양 다름 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SK"; exit 1
 fi
+#  4.46: **잘못 보낸 작업 보고를 고치고 지운다 — 보낸 사람만** — XTPG 545E 실보고 17건(보관소 그대로, 이름을 넣은 사본)과 실소스 firebase.js(SDK 만 메모리 DB)로
+#    누가(보낸 사람만 · 이름 없는 옛 보고는 아무도) · 베이 숫자만(«10번베이»→10) · 고친 기록(orig·edits) · 타임시트 · 진행 중 작업 줄·해치 표시 맞추기 · 쓰는 자리 문지기 · 화면(고치기→확인→저장·지우기→지운 보고) · 작업 보고 창 «내가 보낸 보고».
+#    검수사 2026-10-23 «잘못된 보고는 수정이 가능해야 합니다» · 2026-10-24 «잘못된 보고 수정기능은 보고자만 수정또는 삭제 할수 있게».
+SMOKE_RE=$(mktemp /dev/shm/hometmp/_smokere_XXXXXX.js)
+if npx esbuild tools/smoke_reportedit446.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_RE"; then
+  node tools/smoke_reportedit446.cjs "$(pwd)" "$SMOKE_RE" || { echo "✗ 4.46 보고 고치기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_RE"; exit 1; }
+  rm -f "$SMOKE_RE"
+else
+  echo "✗ 4.46 보고 고치기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_RE"; exit 1
+fi
 #  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
 SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)

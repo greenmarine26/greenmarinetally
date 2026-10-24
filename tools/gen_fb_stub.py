@@ -46,7 +46,19 @@ special = {
 out = ["// 검색·완료 렌더 연막검사용 firebase 메모리 스텁(3.2-01) — src 가 firebase.js 에서 가져오는 이름 전부를 무해한 함수로. 실제 쓰기 없음.",
        "//   fbCompleteContainer·fbCompleteContainersAtomic·fbReassignContainerPosition·fbAddWorkReport·fbSetInspectorActivity 만 window.__calls 에 남긴다.",
        "//   ⚠ 새 이름이 firebase.js 에 생기면 tools/gen_fb_stub.py 로 다시 만든다(빌드가 «is not exported» 로 막는다)."]
-for n in sorted(names):
-    out.append(special.get(n, f"export const {n} = async () => true;"))
+#  4.46(독립 감사 상-1): 다시 만들 때 **손으로 고친 스텁 줄을 지우지 않는다** — 지금 스텁에 있는 이름은 그 줄을 그대로 살리고(special 이 이긴다),
+#    여기서 못 찾은 이름(정규식이 놓친 import · resolveSeqMode 같은 본문 복사)도 남긴다. 새 이름만 기본 함수로 붙인다.
+import os
+existing = {}
+if os.path.exists('tools/fb_stub_search.js'):
+    for line in open('tools/fb_stub_search.js', encoding='utf-8').read().split('\n'):
+        m2 = re.match(r'export const ([A-Za-z_$][\w$]*)\s*=', line)
+        if m2 and m2.group(1) not in existing: existing[m2.group(1)] = line
+        m3 = re.match(r'export \{\s*([A-Za-z_$][\w$]*)\s*\}', line)   # 본문을 복사한 이름(resolveSeqMode 등) — special 이 다시 만든다
+        if m3 and m3.group(1) not in existing: existing[m3.group(1)] = None
+for n in sorted(names | set(existing)):
+    if n in special: out.append(special[n])
+    elif existing.get(n): out.append(existing[n])
+    else: out.append(f"export const {n} = async () => true;")
 open('tools/fb_stub_search.js', 'w', encoding='utf-8').write('\n'.join(out) + '\n')
 print('fb_stub_search.js exports', len(names))

@@ -25,6 +25,8 @@ export const WORK_CHOICE_KEY = 'tallyone_work_choice';
 //    localStorage 만 보면 ① KST 자정을 넘긴 조회만 수석이 작업자로 둔갑하고 ② [검수원 변경] 으로 남의 이름을 눌렀다 돌아오면 meToday 가 남이라 문지기가 열리고 ③ 저장이 막힌 기기에서는 처음부터 열려 있다(3.50 감사 지적).
 let _active;
 export function setActiveWorkChoice(choice) { _active = choice || null; }
+/** 4.46 — 지금 이 화면 세션의 로그인 이름(App 이 세운 workChoice.name). App 이 아직 안 세웠으면 ''(로그인 화면·연막검사). 보고 고치기 문지기가 «넘겨받은 이름»만 믿지 않게 대조한다. */
+export function activeChoiceName() { return (_active && _active.name) ? String(_active.name).trim() : ''; }
 
 /** 모든 선박을 자유로 보는 사람인가 — 수석·부수석·테스터·소유자·개발 열람. */
 export function isFreeRoamer(name) {

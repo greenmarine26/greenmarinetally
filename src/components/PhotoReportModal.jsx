@@ -19,7 +19,7 @@ const PART_DOC = {
   'CORNER POST': 'CORNER POST', 'LOCK ROD': 'LOCK ROD', 'SEAL': 'SEAL',
 };
 
-export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equipNo, onClose }) {
+export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equipNo, onClose, inspector = '' }) {   // 4.46: inspector — 보고에 보낸 사람 이름
   // type: 'seal_error' | 'damage'
   // M5.77: 사진 2장 (컨번호 사진 + 상세 사진 — 데미지부분 or 액츄얼실)
   const [cnPhotoBlob, setCnPhotoBlob] = useState(null);
@@ -151,7 +151,7 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           note, message,
         });
         await fbAddWorkReport(voyageKey, {
-          type, cn, equip: equipNo, message, hasPhoto: true,
+          type, cn, equip: equipNo, message, hasPhoto: true, by: inspector || '',
         });
         console.log('[PhotoReport] Firebase 저장 완료');
       } catch (fbErr) {

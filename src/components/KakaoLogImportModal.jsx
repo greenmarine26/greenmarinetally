@@ -58,7 +58,7 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
   const rows = useMemo(() => {
     if (!text.trim()) return [];
     const { items } = parseKakaoWorkLog(text, { baseDate });
-    return diffAgainstReports(items, voyage?.reports || {}, groupOf);
+    return diffAgainstReports(items, voyage?.reports || {}, groupOf, voyage?.reports_deleted || null);   // 4.46: 고친·지운 보고는 되살리지 않는다
   }, [text, voyage, bayPairs, baseDate]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const missing = rows.filter((r) => !r.dup);
@@ -166,7 +166,7 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
                   <span className="text-xs2 text-dim-100">{HHMM(r.ts)}</span>
                   <span className="text-xs2 text-amber-200 ml-2">{label}</span>
                   {r.equip && <span className="text-xxs text-dim-400 ml-2">{r.equip}</span>}
-                  {r.dup && <span className="text-2xs text-dim-400 ml-2">{r.takenByEarlier ? '위의 카톡 줄이 이 자리를 옮겼습니다' : '이미 기록됨'}</span>}
+                  {r.dup && <span className="text-2xs text-dim-400 ml-2">{r.stale === 'edited' ? '고쳐진 보고 — 넣지 않음' : r.stale === 'deleted' ? '지운 보고 — 넣지 않음' : r.takenByEarlier ? '위의 카톡 줄이 이 자리를 옮겼습니다' : '이미 기록됨'}</span>}
                   {/* 3.53-01: 앱 기록을 카톡 시각으로 옮긴다 — 무엇이 무엇으로 바뀌는지 그대로 적는다 */}
                   {r.replaces && (
                     <span className="text-2xs text-sky-300 ml-2">

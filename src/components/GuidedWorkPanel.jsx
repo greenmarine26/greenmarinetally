@@ -1247,11 +1247,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       // V9.57(I8): DB 기록 실패를 삼키고 카톡만 나가던 것 — 수석 대시보드엔 보고가 없는데
       //   카톡엔 있는 불일치가 생겼다. 재시도 1회 후에도 실패면 공유 진행 여부를 묻는다.
       let dbOk = false;
-      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
+      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message, by: inspector || '' }); dbOk = true; }
       catch (e1) {
         if (e1 && e1.viewOnly) { alert(e1.message); return false; }   // 3.51: 조회만은 보기만 — 카톡도 내보내지 않는다
         console.warn('[V9.57] 해치 보고 DB 기록 실패 — 1회 재시도', e1);
-        try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
+        try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message, by: inspector || '' }); dbOk = true; }
         catch (e2) { console.warn('[V9.57] 해치 보고 DB 기록 재시도 실패', e2); }
       }
       if (!dbOk) {

@@ -58,6 +58,9 @@ export const fbDeleteShipBayDict = async () => true;
 export const fbDeleteStaff = async () => true;
 export const fbDeleteVoyage = async () => true;
 export const fbDeleteWorkReport = async () => true;
+export const fbEditWorkReport = async () => true;   // 4.46
+export const fbDeleteMyWorkReport = async () => true;   // 4.46
+export const fbSyncActiveWorkSlot = async () => true;   // 4.46
 export const fbFetchVoyageBoxCounts = async () => ({});   // 4.08-01: 선택 화면 «N대» — 빈 결과(항차마다 못 셌음)로 둔다
 export const fbFoodListen = async () => true;
 export const fbGetActivityDays = async () => true;

@@ -9,14 +9,14 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { resolvedPod, ptkDischargeUnitsOf } from './utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES } from './utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, dropStaleRawEdi, restoreStaleRawEdi, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
-import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
+import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 
 const firebaseConfig = {
@@ -3000,6 +3000,7 @@ export async function fbAddReportsAt(base, items) {
           const ov = old.val() || {};
           //  되돌릴 근거 — 시각뿐 아니라 원문·기록 시각까지 옮겨 적는다(감사 지적 2026-09-17).
           extra = {
+            ...(ov.by && !rest.by ? { by: ov.by } : {}),   // 4.46: 같은 사건이다 — 보낸 사람은 그대로 둔다(그래야 보낸 사람이 계속 고칠 수 있다 · 감사 하-10)
             ts_orig: Number(ov.ts) || null,
             _replacedFrom: String(_replaceKey),
             _replacedAt: Date.now(),
@@ -3031,12 +3032,99 @@ export async function fbAddWorkReport(voyageKey, report) {
   assertCanWork('작업 보고');
   const ts = Math.max(Date.now(), _lastReportTs + 1); _lastReportTs = ts;
   const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);
+  //  ★ 4.46 — **모든 보고에 보낸 사람 이름을 남긴다**(보고 고치기는 보낸 사람만 — utils.canEditReport). 화면이 넘긴 이름(by)이 먼저, 없으면 이 기기의 오늘 이름.
+  //    종전엔 작업 보고 창·가이드 해치·사진 보고가 이름을 안 남겨 보관 446건 중 14건에만 이름이 있었다.
+  const by = String((report && report.by) || getMeToday() || '').trim();
   await set(r, {
     ...report,
+    ...(by ? { by } : {}),
     ts,
     created_at: new Date(ts).toISOString(),
   });
   return ts;
+}
+
+//  ★ 4.46 — **보고 고치기·지우기.** 검수사 2026-10-24 08:46 «잘못된 보고 수정기능은 보고자만 수정또는 삭제 할수 있게».
+//    문지기는 여기(쓰는 자리)에도 있다 — 화면이 단추를 감추는 것은 보조다. 판정은 utils.canEditReport 한 벌.
+//    next 는 화면이 utils.applyReportEdit 로 만든 고친 보고(orig·edits 포함, message 는 다시 쓴 것). 보고 시각(ts)은 그대로다.
+function _assertReporter(cur, me, what) {
+  //  넘겨받은 이름(me)만 믿지 않는다 — 이 화면 세션의 로그인 이름이 있으면 그것과 같아야 한다(독립 감사 하-2: me 에 r.by 를 넘기면 남의 보고도 지워졌다).
+  const sess = activeChoiceName();
+  if (canEditReport(cur, me) && (!sess || sess === String(me || '').trim())) {
+    if (REPORT_PHOTO_TYPES.includes(cur && cur.type)) {
+      const e = new Error('사진 보고(데미지·실오류)는 사진 기록과 묶여 있어 여기서 고치거나 지우지 않습니다.');
+      e.photoLocked = true;
+      throw e;
+    }
+    return;
+  }
+  const e = new Error(`${what} 은 그 보고를 보낸 사람만 할 수 있습니다.`);
+  e.reporterOnly = true;
+  throw e;
+}
+//  쓰기마다 시간 제한(12초) — 신호가 끊기면 단추가 눌린 채 아무 말도 없이 멈추던 것(독립 감사 중-3 · 규범 «타임아웃 없는 외부 호출 금지»).
+const REPORT_EDIT_TIMEOUT_MS = 12000;
+function _withTimeout(p, what) {
+  let t;
+  return Promise.race([
+    p,
+    new Promise((_, rej) => { t = setTimeout(() => { const e = new Error(`${what} — ${REPORT_EDIT_TIMEOUT_MS / 1000}초 안에 서버 확인을 못 받았습니다. 연결을 확인하고 목록을 다시 보십시오.`); e.timeout = true; rej(e); }, REPORT_EDIT_TIMEOUT_MS); }),
+  ]).finally(() => clearTimeout(t));
+}
+export async function fbEditWorkReport(voyageKey, ts, next, me) {
+  assertCanWork('보고 고치기');
+  const path = `voyages/${voyageKey}/reports/${ts}`;
+  const snap = await _withTimeout(get(ref(db, path)), '보고 읽기');
+  if (!snap.exists()) throw new Error('고칠 보고가 없습니다 — 이미 지워졌거나 보관된 항차입니다.');
+  const cur = snap.val();
+  _assertReporter(cur, me, '보고 고치기');
+  if (!next || String(next.ts) !== String(cur.ts) || next.by !== cur.by) throw new Error('보고 시각·보낸 사람은 고칠 수 없습니다.');
+  await _withTimeout(set(ref(db, path), next), '보고 고치기 저장');
+  let n = -1;
+  try {
+    const back = await _withTimeout(get(ref(db, `${path}/edits`)), '고친 기록 되읽기');
+    n = back.exists() ? (Array.isArray(back.val()) ? back.val().length : Object.keys(back.val() || {}).length) : 0;
+  } catch (e) {
+    const x = new Error(`고친 값은 저장됐을 수 있지만 되읽기를 못 했습니다 — 목록을 다시 보십시오. (${e && e.message ? e.message : e})`);
+    x.unverified = true;
+    throw x;
+  }
+  if (n !== (Array.isArray(next.edits) ? next.edits.length : 0)) { const x = new Error('고친 기록을 되읽지 못했습니다 — 목록을 다시 보십시오.'); x.unverified = true; throw x; }
+  return next;
+}
+//  지운 보고는 흔적 없이 사라지지 않는다 — `voyages/{항차}/reports_deleted/{ts}` 에 «누가·언제» 와 함께 옮기고, 되읽기가 확인될 때만 원래 자리를 지운다.
+export async function fbDeleteMyWorkReport(voyageKey, ts, me) {
+  assertCanWork('보고 지우기');
+  const path = `voyages/${voyageKey}/reports/${ts}`;
+  const snap = await _withTimeout(get(ref(db, path)), '보고 읽기');
+  if (!snap.exists()) throw new Error('지울 보고가 없습니다 — 이미 지워졌거나 보관된 항차입니다.');
+  const cur = snap.val();
+  _assertReporter(cur, me, '보고 지우기');
+  const dpath = `voyages/${voyageKey}/reports_deleted/${ts}`;
+  await _withTimeout(set(ref(db, dpath), { ...cur, _deletedAt: Date.now(), _deletedBy: String(me || '') }), '지운 보고 옮기기');
+  const back = await _withTimeout(get(ref(db, `${dpath}/_deletedAt`)), '지운 보고 되읽기');
+  if (!back.exists()) throw new Error('지운 보고를 옮겨 두지 못해 지우지 않았습니다 — 연결을 확인하고 다시 해 주세요.');
+  try { await _withTimeout(remove(ref(db, path)), '원래 자리 지우기'); }
+  catch (e) { const x = new Error(`지운 보고로 옮겼지만 원래 자리를 못 지웠습니다 — [지우기]를 다시 누르십시오. (${e && e.message ? e.message : e})`); x.partial = true; throw x; }
+  return cur;
+}
+//  진행 중인 작업 줄 한 칸(activeWork/{항차}/{호기}/{작업})을 남은 보고가 말하는 상태(utils.activeWorkStateFromReports)에 맞춘다.
+//    desired — null(완료·보고 없음 → 줄을 지운다) · {status:'running'} · {status:'paused', pauseReason, at}. base — 줄을 새로 만들 때의 값(mode·vsl·voy·startedAt).
+//    ⚠ 줄이 없을 때는 allowCreate 일 때만 새로 만든다 — 옛 칸의 줄을 옮길 때와 완료 보고를 지우거나 옮길 때뿐이다(독립 감사 중-1: 보관 85칸 중 41칸이 완료 없이 끝나
+//      그 칸의 옛 보고를 고치면 없던 «진행 중» 줄이 생겨 다음 해치·콘박스 보고의 작업·항차를 흔들었다). 돌려주는 had — 고치기 전에 줄이 있었나.
+export async function fbSyncActiveWorkSlot(voyageKey, equip, mode, desired, base = {}, { allowCreate = false } = {}) {
+  assertCanWork('진행 중 작업 맞추기');
+  if (!voyageKey || !equip || !mode) return { had: false };
+  const r = ref(db, `activeWork/${voyageKey}/${equip}/${mode}`);
+  const snap = await _withTimeout(get(r), '진행 중 작업 읽기');
+  const cur = snap.exists() ? snap.val() : null;
+  if (!desired) { if (cur) await _withTimeout(set(r, null), '진행 중 작업 맞추기'); return { had: !!cur }; }
+  if (!cur && !allowCreate) return { had: false };
+  const row = { ...(cur || { ...base, mode }), mode };
+  if (desired.status === 'paused') { row.status = 'paused'; row.pausedAt = desired.at || Date.now(); row.pauseReason = desired.pauseReason || ''; }
+  else { row.status = 'running'; row.pauseReason = null; }
+  await _withTimeout(set(r, row), '진행 중 작업 맞추기');
+  return { had: !!cur };
 }
 
 export function fbSubscribeWorkReports(voyageKey, callback) {

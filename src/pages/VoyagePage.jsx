@@ -54,6 +54,7 @@ import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세�
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
+import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';   // 4.46: 보고 고치기·지우기(보낸 사람만)
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
@@ -2053,7 +2054,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           />
           {/* V9.16: 이 항차 작업 보고 이력 — 구독 함수는 있었는데 호출 0회였다(전면 점검 §1-7).
               검수원이 자기가 보낸 시작·중단·해치·콘박스 보고를 여기서 확인한다. */}
-          <WorkReportHistory voyageKey={voyageKey}/>
+          <WorkReportHistory voyageKey={voyageKey} voyage={voyage} inspector={inspector || ''}/>
         </div>
       )}
       {!_sideCanc && tab === 'data' && (
@@ -2089,6 +2090,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         voyage={voyage}
         lastEquip={getEquipNumber()}
         pageMode={mode}   // 4.45-01: 호기의 진행 중 작업이 하나가 아니면 보고 모드·항차를 지금 보고 있는 작업으로
+        inspector={inspector || ''}   // 4.46: 보고에 보낸 사람 이름 · 내가 보낸 보고 고치기
         onClose={() => setShowWorkReport(false)}
       />
 
@@ -4931,8 +4933,9 @@ function ModeSetup({ voyageKey }) {
 // M8.08: SealPolicyBanner 제거 — 양하/선적 작업 화면에서 엠티 실 작업 패널 미표시.
 //   동일 기능은 수석 대시보드(ChiefDashboard)에 구현됨.
 
-// ── V9.16: 이 항차 작업 보고 이력 (읽기 전용) ─────────────────────────
-function WorkReportHistory({ voyageKey }) {
+// ── V9.16: 이 항차 작업 보고 이력 ─────────────────────────
+//   4.46: 내가 보낸 보고는 ✏ 고치기·🗑 지우기(보낸 사람만 — ReportEditRow · utils.canEditReport) · 고친 보고는 «수정됨» 줄 · 지운 보고는 맨 아래 «지운 보고 N건».
+function WorkReportHistory({ voyageKey, voyage = null, inspector = '' }) {
   const [reports, setReports] = useState({});
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -4962,8 +4965,10 @@ function WorkReportHistory({ voyageKey }) {
                 <div className="text-dim-300 whitespace-pre-wrap mt-0.5 leading-snug">{String(r.text || r.message || r.summary).slice(0, 200)}</div>
               )}
               {r.by && <div className="text-dim-500 text-xxs mt-0.5">{r.by}</div>}
+              <ReportEditRow voyageKey={voyageKey} voyage={voyage} reports={reports} report={(reports || {})[r.k] || r} me={inspector}/>   {/* 원본을 넘긴다 — 목록용 k 칸이 고친 보고에 섞여 저장되지 않게(감사 하-1) */}
             </div>
           ))}
+          <DeletedReports deleted={voyage && voyage.reports_deleted}/>
         </div>
       )}
     </div>

@@ -52,7 +52,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
 //   (앞 판) 'TallyOne 4.29-02'   // 4.29-02 **업데이트 배너는 검수사가 쓸 수 있는 변화만 알린다**(검수사 2026-10-16 13:32 «검수사들이 모르는 수정 업데이트 공고는 보여주면 안됩니다. 보여줘도 다른 검수사들이 쓸수 없는 기능이기 때문입니다»). 4.28·4.29-01 의 배너 문구는 소유자 전용 스위치 이야기라 모든 검수사에게 보였다 — 소유자 메뉴·수집기 안쪽 변경만 있는 판은 배너 문구를 직전 «모두가 쓰는 변화» 그대로 두고, 4.29 선적 칸 [수정] 문구로 되돌린다.
-export const APP_VERSION = 'TallyOne 4.45-02'   // 4.45-02 **주의 박스 «예상 실오류»와 «씰 모양 다름»을 나눈다** — 검수사 2026-10-24 06:28 «예상 실오류 28건 — 씰 모양이 다름 · 자릿수·형식 28 씰모양이 다른거랑 실번호 즉 실오류 와는 다른 관점으로 봐야 합니다. 말대로 씰 모양이 다르면 실번호 형식도 다를수 있습니다. 이는 같은 실번호에서 자리수가 안맞는거랑은 틀린 것입니다» · «mamp 선박입니다». 실근거 MAMP 641N 양하 리스트 317 — 메일 StandardDischargeList(씰 칸 Shipper·Customs·ML·Vet 넷)에서 28건 전부 다른 씰 계열(화주 씰 숫자 8자리 18 — ML 칸에는 PH+7 이 함께 있음 · 인도네시아 머스크 씰 ID+7 9 · MLPH+7 1), 자릿수 부족 0. diagnostics — «예상 실오류»(주의) = utils.sealFormatAnomalies 의 short·cn 만 · 대표 모양과 다른 계열(shape·short 아님)은 새 «씰 모양 다름»(참고 seal_kind · 대표 모양 · 모양별 대수) — 지우지 않고 «실오류 아님»으로 단정하지도 않는다(보관 MCSC 633N MLPH057895 → MLPH0578959 는 그 항차에 같은 계열 표본이 없어 여기 남는다). utils — 첫 갈래(4.36)가 모양 다름으로 잡아도 같은 계열(같은 접두) 자릿수 부족이면 short(독립 감사 — TNJP 26344E 선적 CKFU9260210 «0825», 숫자 실 6자리 18/20) · 둘째 갈래와 같은 셈 famShort 한 벌. 미르 경고 설명은 맞은 낱말이 더 긴 경고(«씰 모양 다름 뭐야» → seal_kind, seal_diff 가 같이 서도). 판정 한 벌은 그대로(미르 sealPredictOf 는 4.39-02 부터 short·cn 만). 전수(활성 16 + 보관 380, 711벌 173,705대) — 예상 실오류 경고가 서는 벌 90 → 32(건 555 → 42), 다른 모양 513건은 참고로, 검수원이 실제로 고친 실 18건 중 예상 실오류로 잡던 4건(ATPR 2646E · MCAP 639N · MCSC 638N · STSE 2681E)은 그대로. 미르 «씰 모양 다름 뭐야» 설명(nlSearch _WHY_BY_CODE·_ALERT_TERMS seal_kind) · 매뉴얼 두 줄 · 연막 smoke_sealkind44502(MAMP 641N 실데이터).
+export const APP_VERSION = 'TallyOne 4.46'   // 4.46 **잘못 보낸 작업 보고를 고치고 지운다 — 보낸 사람만** — 검수사 2026-10-23 15:31 «잘못된 보고는 수정이 가능해야 합니다. 만약 14번 해치인데 10번 해치로 잘못기재 하거나 할때 수정내용을 기록할수 있게» · 2026-10-24 08:46 «잘못된 보고 수정기능은 보고자만 수정또는 삭제 할수 있게» · 08:57 «클로드 권유를 따르겠습니다». 실근거 XTPG 545E(보관) 22:57 홀드 선적 뒤 같은 닫힘이 세 번 더 나감 · 베이 칸 «10번베이»(보관 22건) · 보고 446건 중 보낸 사람 이름 14건. 판정 한 벌 utils — canEditReport(보낸 사람 r.by = 지금 로그인한 사람만, 이름 없는 옛 보고는 아무도) · REPORT_EDIT_FIELDS · cleanReportBays(숫자만) · applyReportEdit(처음 원래 값 orig 한 번 · 고칠 때마다 edits{at,by,from,to}) · reportEditSummary · activeWorkStateFromReports · isLastWorkStatusOfSlot · hatchDoneAfterReports. 쓰기 firebase — fbAddWorkReport 가 보낸 사람(by: 화면이 넘긴 이름 → 없으면 오늘 이름)을 남김 · fbEditWorkReport(쓰는 자리에서 보낸 사람 다시 확인 · 되읽기) · fbDeleteMyWorkReport(reports_deleted/{ts} 로 옮기고 되읽은 뒤 지움) · fbSyncActiveWorkSlot. 화면 — ReportEditRow(새 파일 — 수정됨 줄·고치기·지우기·지운 보고) 를 항차 «보고» 탭 목록과 작업 보고 창 «내가 보낸 보고»가 같이 씀 · 작업 보고 창·가이드 해치·사진 보고가 이름을 넘김 · 새 해치 보고의 베이도 숫자만. 수석 대시보드 🗑 는 그대로(검수사 결정). 카톡은 다시 보내지 않고 보고 시각은 고치지 않는다.
+//   (앞 판) 'TallyOne 4.45-02'   // 4.45-02 **주의 박스 «예상 실오류»와 «씰 모양 다름»을 나눈다** — 검수사 2026-10-24 06:28 «예상 실오류 28건 — 씰 모양이 다름 · 자릿수·형식 28 씰모양이 다른거랑 실번호 즉 실오류 와는 다른 관점으로 봐야 합니다. 말대로 씰 모양이 다르면 실번호 형식도 다를수 있습니다. 이는 같은 실번호에서 자리수가 안맞는거랑은 틀린 것입니다» · «mamp 선박입니다». 실근거 MAMP 641N 양하 리스트 317 — 메일 StandardDischargeList(씰 칸 Shipper·Customs·ML·Vet 넷)에서 28건 전부 다른 씰 계열(화주 씰 숫자 8자리 18 — ML 칸에는 PH+7 이 함께 있음 · 인도네시아 머스크 씰 ID+7 9 · MLPH+7 1), 자릿수 부족 0. diagnostics — «예상 실오류»(주의) = utils.sealFormatAnomalies 의 short·cn 만 · 대표 모양과 다른 계열(shape·short 아님)은 새 «씰 모양 다름»(참고 seal_kind · 대표 모양 · 모양별 대수) — 지우지 않고 «실오류 아님»으로 단정하지도 않는다(보관 MCSC 633N MLPH057895 → MLPH0578959 는 그 항차에 같은 계열 표본이 없어 여기 남는다). utils — 첫 갈래(4.36)가 모양 다름으로 잡아도 같은 계열(같은 접두) 자릿수 부족이면 short(독립 감사 — TNJP 26344E 선적 CKFU9260210 «0825», 숫자 실 6자리 18/20) · 둘째 갈래와 같은 셈 famShort 한 벌. 미르 경고 설명은 맞은 낱말이 더 긴 경고(«씰 모양 다름 뭐야» → seal_kind, seal_diff 가 같이 서도). 판정 한 벌은 그대로(미르 sealPredictOf 는 4.39-02 부터 short·cn 만). 전수(활성 16 + 보관 380, 711벌 173,705대) — 예상 실오류 경고가 서는 벌 90 → 32(건 555 → 42), 다른 모양 513건은 참고로, 검수원이 실제로 고친 실 18건 중 예상 실오류로 잡던 4건(ATPR 2646E · MCAP 639N · MCSC 638N · STSE 2681E)은 그대로. 미르 «씰 모양 다름 뭐야» 설명(nlSearch _WHY_BY_CODE·_ALERT_TERMS seal_kind) · 매뉴얼 두 줄 · 연막 smoke_sealkind44502(MAMP 641N 실데이터).
 //   (앞 판) 'TallyOne 4.45-01'   // 4.45-01 **선적 자동 가이드가 이미 닫은 해치커버를 다시 묻지 않는다 · 작업 보고의 호기는 앱 호기가 기본** — 검수사 2026-10-23 15:16 «어제 작업 보고 중에 수동으로 해치 커버를 5개 베이를 2번에 걸쳐서 했는데 수동 작업 보고한것을 자동가이드에서 인식을 못하고 다시 어떻게 할건지 묻는일이 있었습니다. XTPG 야간 작업을 살펴보세요» · «호기를 정하고 작업을 하면 모든 보고에도 그 호기를 기본으로 지정되어 있어야 하는데 다시 호기를 선택해야 하는 경우가 발생되곤 합니다. 그러다 클릭 미스나 무심코 보고를 누르면 잘못된 호기로 보고가 됩니다». 수리 ① GuidedWorkPanel holdDonePrompt(선적 «홀드 선적 완료 → 커버 닫을까요») 가 보고 기록을 안 보고 화면 표시(deckPromptDone, 묶음 고를 때마다 지워짐)만 봤다 — XTPG 545W 23:01 작업 보고 창 닫힘 1·4·7 / 10·14 뒤 01·04·09(10)11 닫힘이 가이드로 세 번 더 나갔다. 그 묶음 마지막 해치 보고(lastHatchOf)가 닫힘이고 이 묶음 홀드 선적 첫 완료 뒤면 안 묻는다(홀드 선적 전 닫힘은 안 셈 — STSE 2677E 1번). ② WorkReportModal 해치커버·콘박스 호기 기본값이 activeWork 첫 키(앱 호기와 무관·끝난 배 기록까지)였고 수동 보고는 lastEquip 에 머물렀다 — 열 때마다 앱 호기로(defaultReportEquip), 진행 중 작업 내 호기 맨 위 «내 호기». 호기의 진행 중 작업이 하나가 아니면 보고 모드·항차를 항차 화면 모드(pageMode)로(STMJ 2663E 선적 중 닫힘이 양하 항차로 나간 것). 연막 tools/smoke_hatchequip44501.cjs.
 //   (앞 판) 'TallyOne 4.45'   // 4.44 미르 «RZOR 학습 현황» — 수집기 2.45 RZOR 덱플랜 자가 학습 채점(rzor_learn/summary)을 수석에게 답한다(검수사 2026-10-23 «앱이 스스로 테스트 하고 마감텔리에서 실제작업 파일이 오면 그걸로 테스트한 결과 채점을 받아야 할것입니다»)
 //   // 4.43 **일반 검수원도 본인 비밀번호로 로그인 · 검수사 신뢰 기기에서는 비번 없이 다른 사용자로 접속** — 검수사 2026-10-22 «개인 사용자들도 비번을 넣고 로그인 하게 해주세요 · 대신 저는 비번 없이 사용자들 것으로 접속할수 있게» «본인이 집어넣게 하세요 수석검수사처럼» (일반 검수원만 — 수석·관리자는 종전대로 · locks/{이름} 해시 · 첫 선택 때 본인이 정함 · 개발 계정 제외 · 입사일은 쓰지 않음). 4.42-04 **양하에서 다른 컨이 카드 칸에 내리면 그 칸을 실제 내린 자리로 기록하고, 칸 주인이던 컨은 비운 칸으로 자동 맞바꿈** — 검수사 2026-10-22 «하나를 가져 오면 하나를 보내야 17번 19번 갯수가 같아집니다» (DJCF 0152N BMOU1395416 EDI 19-01-04 가 실제 17-05-08 에 내렸는데 앱이 옛 칸을 붙들어 SKLU2300550 자리로 남았다). 선적 3.13 규칙을 양하에도. 4.42-03 **동방에서 갱이 다른 배에 가 있어 기다리는 배에는 미르가 화내지 않는다** — 검수사 2026-10-21 16:34 «동방은 3갱 작업위주로 합니다. 그래서 연태 2갱 연운항1갱 작업 우선입니다. 그러므로 DXQD는 연태 작업이 끝나야 가능합니다. 미르가 DXQD 작업 실적이 없어서 화나있습니다». 실측 16:37 — DXQD 2641E 양하 302 대 15:10 끝 · 선적 0 대(호기 표 QC102·QC104 선적 했다 0) · 동방 1·2호기는 OBWH 2771E · 3호기는 TNJP 26369E 에서 하는 중 → 화남 «DXQD … 87분째». mir._angryList 에 _pnctGangWaiting(동방 호기 표 qcRowsOf 한 벌 — 이 배에 하는 중인 호기가 없거나 전부 같은 부두 작업 중인 다른 배에서도 하는 중이면 기다림 · 남은 일 없거나 표 없으면 종전) · 멈춤 알림 대상(pauseTargetsOf)도 같은 판정. 연막 smoke_mirgang44203.
@@ -135,7 +136,7 @@ export const APP_VERSION = 'TallyOne 4.45-02'   // 4.45-02 **주의 박스 «예
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.45-02 주의 박스의 «예상 실오류»는 자릿수 부족과 컨번호와 같은 씰만 셉니다. 모양이 다른 씰 계열은 «씰 모양 다름(참고)» 줄로 따로 보입니다.'
+export const APP_NOTE = '4.46 내가 보낸 작업 보고를 고치거나 지울 수 있습니다(보낸 사람만). 작업 보고 창 아래 «내가 보낸 보고»나 보고 탭 목록에서 고치기·지우기를 누르십시오.'
 // (앞 판 APP_NOTE) '4.42-02 미르가 화났을 때 강풍대기 같은 사유를 말하면 화난 그 배들에 작업 중단으로 적습니다. 미르가 완료 대수를 말할 때 배 이름도 붙입니다.'
 // (앞 판 APP_NOTE) '4.42-01 자동 가이드에서 23번 베이와 (24)25번 베이를 따로 고를 수 있습니다. 실 정책을 지정한 배는 선적 화면에서 실 정책 창이 다시 뜨지 않습니다.'
 // (앞 판 APP_NOTE) '4.41 수석 상황판 배 카드에 완료된 베이 또는 남은 베이가 한 줄로 나옵니다. 많이 끝났으면 남은 베이와 남은 대수를, 이제 시작이면 끝난 베이를 데크와 홀드로 나눠 보여 줍니다.'
@@ -8055,6 +8056,148 @@ export function hatchReportedOf(voyage, pages = null) {
     }
   }
   return m;
+}
+
+//  ★ 4.46 — **작업 보고 고치기·지우기 판정 한 벌.** 검수사 2026-10-23 15:31 «잘못된 보고는 수정이 가능해야 합니다. 만약 14번 해치인데 10번 해치로 잘못기재 하거나 할때 수정내용을 기록할수 있게» ·
+//    2026-10-24 08:46 «잘못된 보고 수정기능은 보고자만 수정또는 삭제 할수 있게».
+//    누가 — 그 보고를 보낸 사람(r.by)만. 보낸 사람 이름이 없는 옛 보고(4.46 전 — 보관 446건 중 이름 14건)는 아무도 못 고친다.
+//    화면(단추를 보일지)과 저장하는 자리(firebase.fbEditWorkReport · fbDeleteMyWorkReport)가 이 함수를 같이 부른다 — 문지기는 쓰는 자리에.
+//    보고 시각(ts)은 고치지 않는다(«내용만»). 카톡은 다시 보내지 않는다(«기록만 고친다»).
+export function canEditReport(r, me) {
+  const by = String((r && r.by) || '').trim(), who = String(me || '').trim();
+  return !!(r && by && who && by === who);
+}
+
+/** 보고 종류마다 고칠 수 있는 칸. 없는 종류(daynight 등)는 못 고친다(지우기만). */
+export const REPORT_EDIT_FIELDS = {
+  hatch: ['equip', 'action', 'bays', 'panelCount', 'mode'],
+  work_status: ['equip', 'mode', 'reason'],
+  conbox: ['equip', 'conBoxType', 'conBoxCount'],
+  external_pause: ['reason'],
+};
+/** 사진 보고(데미지·실오류)는 사진 기록(photos·photoIndex — 마감 텔리 DAMAGE 시트)과 묶여 있어 보고만 고치거나 지우면 둘이 갈린다(독립 감사 중-4) — 여기서는 고치지도 지우지도 않는다. */
+export const REPORT_PHOTO_TYPES = ['damage', 'seal_error'];
+
+/** 베이 칸은 숫자만 — «10번베이» → ['10'] · «11-13» → ['11','13'] · «01, 04 07» → ['01','04','07'].
+ *  실측 보관 22건(XTPG 545E «10번베이» · NSDC 2608N «22번베이» · PCSZ 2631E «30번베이» · DXQD 2631E «11-13»)이 타임시트에 글자째 찍혔다. */
+export function cleanReportBays(v) {
+  const toks = Array.isArray(v) ? v.map((x) => String(x == null ? '' : x)) : String(v == null ? '' : v).split(/[,\s]+/);
+  const out = [];
+  for (const t of toks) for (const d of (t.match(/\d+/g) || [])) if (!out.includes(d)) out.push(d);
+  return out;
+}
+
+/** 작업 상태 보고의 작업(양하·선적)과 동작(start·pause·resume·done). 옛 'load_start' 도 선적으로 읽는다. */
+export function workStatusParts(r) {
+  const a = String((r && r.action) || '');
+  const m = /^(discharge|loading|load)_(start|pause|resume|done)$/.exec(a);
+  if (!m) return null;
+  return { mode: m[1] === 'load' ? 'loading' : m[1], verb: m[2] };
+}
+
+const _REPORT_FIELD_LABEL = { equip: '호기', action: '동작', bays: '베이', panelCount: '장수', mode: '작업', reason: '사유', conBoxType: '규격', conBoxCount: '개수' };
+const _reportFieldText = (k, v) => {
+  if (v == null || v === '') return '없음';
+  if (k === 'bays') return (Array.isArray(v) ? v : [v]).join(', ');
+  if (k === 'action') return String(v).toUpperCase();
+  if (k === 'mode') return v === 'loading' ? '선적' : v === 'discharge' ? '양하' : String(v);
+  if (k === 'panelCount') return `${v}장`;
+  if (k === 'conBoxType') return `${v}자`;
+  if (k === 'conBoxCount') return `${v}개`;
+  return String(v);
+};
+/** «베이 10번베이 → 10 · 호기 2호기 → 3호기» — 저장 전 확인 줄과 «수정됨» 줄이 같이 쓴다. */
+export function reportEditSummary(from, to) {
+  const ks = Object.keys(to || {});
+  return ks.map((k) => `${_REPORT_FIELD_LABEL[k] || k} ${_reportFieldText(k, (from || {})[k])} → ${_reportFieldText(k, to[k])}`).join(' · ');
+}
+
+/** 고친 보고를 만든다(쓰기 없음). patch 는 화면에서 고른 값. 바뀐 것이 없으면 null.
+ *  돌려주는 next — 고친 칸 · 처음 고칠 때 원래 값 한 번(orig) · 고칠 때마다 쌓는 edits({at, by, from, to}). message 는 부르는 쪽이 다시 쓴다(kakaoShare 한 벌). */
+export function applyReportEdit(r, patch, { me = '', at = Date.now() } = {}) {
+  if (!r) return null;
+  const fields = REPORT_EDIT_FIELDS[r.type] || [];
+  const ws = r.type === 'work_status' ? workStatusParts(r) : null;
+  const cur = (k) => (k === 'mode' && ws ? ws.mode : r[k]);
+  const norm = (k, v) => {
+    if (k === 'bays') return cleanReportBays(v);
+    if (k === 'panelCount' || k === 'conBoxCount') { const n = parseInt(v, 10); return n > 0 ? n : null; }
+    if (k === 'action') return String(v || '').toLowerCase();
+    return String(v == null ? '' : v).trim();
+  };
+  //  베이는 저장된 원래 글자와 견준다 — «10번베이» 를 10 으로 바로잡는 것도 고침이다
+  const same = (k, a, b) => (k === 'bays' ? JSON.stringify((Array.isArray(a) ? a : [a]).filter((x) => x != null).map(String)) === JSON.stringify(b) : String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim());   // 사유 끝 빈칸(«양하재개 » 보관 8건)은 고침이 아니다
+  const from = {}, to = {};
+  for (const k of fields) {
+    if (!patch || !(k in patch)) continue;
+    if (k === 'reason' && r.type === 'work_status' && !(ws && ws.verb === 'pause')) continue;   // 사유는 중단 보고만
+    const v = norm(k, patch[k]);
+    if (k === 'bays' && !v.length) continue;            // 베이를 비울 수는 없다 — 지우려면 지우기
+    if ((k === 'panelCount' || k === 'conBoxCount') && v == null) continue;
+    if (k === 'action' && !/^(open|close)$/.test(v)) continue;
+    if (k === 'mode' && !/^(discharge|loading)$/.test(v)) continue;
+    if (same(k, cur(k), v)) continue;
+    from[k] = cur(k) == null ? '' : cur(k); to[k] = v;
+  }
+  if (!Object.keys(to).length) return null;
+  const next = { ...r };
+  for (const [k, v] of Object.entries(to)) next[k] = v;
+  if (ws && to.mode) next.action = `${to.mode}_${ws.verb}`;   // 작업을 바꾸면 동작 이름도 그 작업으로(타임시트·미르가 action 을 본다)
+  if (!r.orig) {
+    const o = {};
+    for (const k of [...fields, 'action', 'message']) if (r[k] !== undefined) o[k] = r[k];
+    next.orig = o;
+  }
+  const prevEdits = Array.isArray(r.edits) ? r.edits : (r.edits && typeof r.edits === 'object' ? Object.values(r.edits) : []);   // RTDB 가 배열을 객체로 돌려줄 때도 앞 고침을 버리지 않는다
+  next.edits = [...prevEdits, { at, by: String(me || ''), from, to }];
+  return next;
+}
+
+/** 진행 중인 작업 줄(activeWork/{항차}/{호기}/{작업})이 남은 보고로 보면 어때야 하는가.
+ *  그 호기·작업의 마지막 작업 상태 보고 — 시작·재개 → 'running' · 중단 → 'paused'(사유) · 완료나 보고 없음 → null. */
+export function activeWorkStateFromReports(reports, equip, mode) {
+  let last = null, lastTs = -1;
+  for (const r of Object.values(reports || {})) {
+    if (!r || r.type !== 'work_status' || String(r.equip || '') !== String(equip || '')) continue;
+    const p = workStatusParts(r);
+    if (!p || p.mode !== mode) continue;
+    const ts = Number(r.ts) || 0;
+    if (ts >= lastTs) { lastTs = ts; last = { r, p }; }
+  }
+  if (!last || last.p.verb === 'done') return null;
+  return last.p.verb === 'pause' ? { status: 'paused', pauseReason: last.r.reason || '', at: lastTs } : { status: 'running', at: lastTs };
+}
+
+/** 그 보고가 그 호기·작업의 마지막 작업 상태 보고인가 — 진행 중인 작업 줄을 고칠지 가른다(옛 보고를 고쳐 지금 상태를 흔들지 않게). */
+export function isLastWorkStatusOfSlot(reports, rep) {
+  const p = rep && rep.type === 'work_status' ? workStatusParts(rep) : null;
+  if (!p) return false;
+  let lastTs = -1;
+  for (const r of Object.values(reports || {})) {
+    if (!r || r.type !== 'work_status' || String(r.equip || '') !== String(rep.equip || '')) continue;
+    const q = workStatusParts(r); if (!q || q.mode !== p.mode) continue;
+    lastTs = Math.max(lastTs, Number(r.ts) || 0);
+  }
+  return (Number(rep.ts) || 0) === lastTs;
+}
+
+/** 해치 보고를 고치거나 지운 뒤 «열림·닫힘 표시»(info.hatchDone)를 남은 보고에 맞춘다(쓰기 없음).
+ *  centers — 영향받은 장(고치기 전·후 베이의 장), groupOf — 베이 → 장(bayGroupCenter 한 벌). 남은 보고가 없는 장은 표시를 지운다(옛 모드 키 포함). 바뀐 게 없으면 null. */
+export function hatchDoneAfterReports(prevHd, reports, centers, groupOf) {
+  const prev = prevHd || {};
+  const next = { ...prev };
+  for (const c of new Set((centers || []).filter((x) => x != null).map(String))) {
+    let act = null, best = -1;
+    for (const r of Object.values(reports || {})) {
+      if (!r || r.type !== 'hatch') continue;
+      if (!(Array.isArray(r.bays) ? r.bays : []).some((b) => String(groupOf(b)) === c)) continue;
+      const ts = hatchReportTs(r);
+      if (ts >= best) { best = ts; act = String(r.action || '').toLowerCase(); }
+    }
+    if (act) { next[c] = act; delete next[`loading_${c}`]; delete next[`discharge_${c}`]; }
+    else { delete next[c]; delete next[`loading_${c}`]; delete next[`discharge_${c}`]; }
+  }
+  return JSON.stringify(next) === JSON.stringify(prev) ? null : next;
 }
 
 //  ★ 4.15-01 — **별첨 «화물 종류» 한 벌** — 인쇄 별첨(PrintableCargoPlanV2 legends)과 수석 보드 별첨(legendLiveOf)이 이것만 부른다.

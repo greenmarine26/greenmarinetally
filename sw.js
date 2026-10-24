@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.45-02';
-const NOTE = '4.45-02 주의 박스의 «예상 실오류»는 자릿수 부족과 컨번호와 같은 씰만 셉니다. 모양이 다른 씰 계열은 «씰 모양 다름(참고)» 줄로 따로 보입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.46';
+const NOTE = '4.46 내가 보낸 작업 보고를 고치거나 지울 수 있습니다(보낸 사람만). 작업 보고 창 아래 «내가 보낸 보고»나 보고 탭 목록에서 고치기·지우기를 누르십시오.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -189,8 +189,21 @@ export function parseKakaoWorkLog(text, opts = {}) {
 
 /** 이미 앱에 있는 기록과 대조해 **빠진 것만** 추린다.
  *  같은 동작·같은 그룹이 ±20분 안에 있으면 중복으로 본다(사람이 친 시각과 앱 시각이 조금 다르다). */
-export function diffAgainstReports(items, reports, groupOf) {
+export function diffAgainstReports(items, reports, groupOf, deleted = null) {
   const have = [];
+  //  ★ 4.46 — **고친 보고·지운 보고를 카톡이 되살리지 않는다**(독립 감사 중-2). 앱이 보낸 카톡 글은 고치기 전 값 그대로라,
+  //    고친 보고의 원래 값(orig)·지운 보고(reports_deleted)와 같은 사건이면 «고쳐진 보고 / 지운 보고 — 넣지 않음» 으로 둔다.
+  const ghosts = [];
+  const ghostOf = (r, stale) => {
+    if (!r) return null;
+    if (r.type === 'hatch') return { stale, kind: 'hatch', action: r.action, ts: hatchReportTs(r), groups: (r.bays || []).map(groupOf).filter((g) => g != null) };
+    if (r.type === 'work_status') return { stale, kind: 'work_status', action: r.action, ts: Number(r.ts) || 0, equip: r.equip || '' };
+    return null;
+  };
+  for (const r of Object.values(reports || {})) if (r && r.orig) { const g = ghostOf({ ...r, ...r.orig, ts: r.ts, eventTs: r.eventTs, auto: r.auto }, 'edited'); if (g) ghosts.push(g); }
+  for (const r of Object.values(deleted || {})) { const g = ghostOf(r, 'deleted'); if (g) ghosts.push(g); }
+  const ghostHit = (it) => ghosts.find((g) => g.kind === it.kind && g.action === it.action && Math.abs(g.ts - it.ts) <= 20 * 60000
+    && (it.kind === 'hatch' ? it.bays.map(groupOf).filter((x) => x != null).some((x) => g.groups.includes(x)) : (!g.equip || !it.equip || g.equip === it.equip)));
   //  3.53-01: 교체하려면 **원래 키**가 필요하다 — values 가 아니라 entries 로 읽는다.
   for (const [key, r] of Object.entries(reports || {})) {
     if (!r || !r.ts) continue;
@@ -221,6 +234,8 @@ export function diffAgainstReports(items, reports, groupOf) {
   const out = [];
   for (const it of items) {
     let dup = false, replaces = null, prevTs = null, takenByEarlier = false;
+    const gh = ghostHit(it);
+    if (gh) { out.push({ ...it, dup: true, replaces: null, prevTs: null, takenByEarlier: false, stale: gh.stale }); continue; }
     if (it.kind === 'hatch') {
       const gs = it.bays.map(groupOf).filter(g => g != null);
       dup = have.some(h => h.kind === 'hatch' && h.action === it.action &&

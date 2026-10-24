@@ -14,17 +14,18 @@ import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, hatchPanelDetailOf, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
+import { cleanReportBays, canEditReport, getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, hatchPanelDetailOf, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { VoyageBlock, ferryPagesOf, ferryCutItem } from './Ferry1700Alert.jsx';   // 3.66: 주야간 작업보고도 17시 창과 같은 갱별 카드·계산 한 벌
 import { ref, set, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
 import { getShipBayDictData } from '../shipStructure.js';
+import ReportEditRow from './ReportEditRow.jsx';   // 4.46: 내가 보낸 보고 고치기·지우기
 
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
 
-export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip, pageMode = '' }) {   // 4.45-01: pageMode — 항차 화면에서 지금 보고 있는 작업(양하·선적)
+export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip, pageMode = '', inspector = '' }) {   // 4.46: inspector — 보고에 보낸 사람 이름(보고 고치기는 보낸 사람만)   // 4.45-01: pageMode — 항차 화면에서 지금 보고 있는 작업(양하·선적)
   // M5.79: view에 'manual' 추가 — 시작 안 눌러도 중단/재개/완료 직접 보고
   //  사유: (1) 전 작업을 이어받을 때 (다른 검수원이 시작한 작업) (2) 한 갱 먼저 작업 완료
   const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual | daynight
@@ -98,6 +99,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [conBoxType, setConBoxType] = useState('20');
   const [conBoxCount, setConBoxCount] = useState(1);
   const [conBoxEquip, setConBoxEquip] = useState('');
+  // 4.46: 첫 화면 아래 «내가 보낸 보고» — 접어 둔다
+  const [myRepOpen, setMyRepOpen] = useState(false);
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
@@ -274,7 +277,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     }, '작업 시작 보고')) return;
 
     // 보고 이력 저장
-    await fbAddWorkReport(voyageKey, {
+    await fbAddWorkReport(voyageKey, { by: inspector || '',
       type: 'work_status',
       action,
       mode: selectedMode,
@@ -305,7 +308,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       pauseReason,
     }, '작업 중단 보고')) return;
 
-    await fbAddWorkReport(voyageKey, {
+    await fbAddWorkReport(voyageKey, { by: inspector || '',
       type: 'work_status',
       action,
       mode: modeArg,
@@ -327,7 +330,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const time = Date.now();
     const timeStr = new Date(time).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     const message = `[작업 중단 보고]\n선박: ${vsl}\n항차: ${voy}\n시간: ${timeStr}\n사유: ${reason}`;
-    await fbAddWorkReport(voyageKey, {
+    await fbAddWorkReport(voyageKey, { by: inspector || '',
       type: 'external_pause',
       reason,
       message,
@@ -356,7 +359,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       pauseReason: null,
     }, '작업 재개 보고')) return;
 
-    await fbAddWorkReport(voyageKey, {
+    await fbAddWorkReport(voyageKey, { by: inspector || '',
       type: 'work_status',
       action: `${modeArg}_resume`,
       mode: modeArg,
@@ -388,7 +391,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         // mode별로 활성 작업 종료 (이미 없는 경우도 null 세팅으로 안전)
         if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${equipNo}/${modeArg}`, null, '작업 완료 보고')) return;
 
-        await fbAddWorkReport(voyageKey, {
+        await fbAddWorkReport(voyageKey, { by: inspector || '',
           type: 'work_status',
           action,
           mode: modeArg,
@@ -415,7 +418,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const handleHatch = async () => {
     const equip = hatchEquip || defaultReportEquip;   // 4.45-01: 앱 호기 먼저
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
-    const bays = bayInput.split(/[,\s]+/).filter(b => b.trim()).map(b => b.trim());
+    const bays = cleanReportBays(bayInput);   // 4.46: 베이 칸은 숫자만 — «10번베이» 가 타임시트에 글자째 찍혔다(보관 22건)
     if (bays.length === 0) { alert('베이 번호를 입력하세요'); return; }
     const voy = getVoy(equipModeOf(equip));
 
@@ -433,7 +436,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const panelCount = chosen;  // V8.31: 자동계산 제거 → 4.10: 보고 직전 확인 창에서 검수사가 확인해 고른 장수
     const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip, panelCount });
 
-    await fbAddWorkReport(voyageKey, {
+    await fbAddWorkReport(voyageKey, { by: inspector || '',
       type: 'hatch',
       action: hatchAction,
       // TallyOne 1.8-10: mode 를 함께 남긴다 — 자동 유도가 reports 로 소급 인식할 때
@@ -484,7 +487,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const time = Date.now();
     const message = buildConBoxMessage({ vsl, voy, type: conBoxType, count: conBoxCount, time, equip });
 
-    await fbAddWorkReport(voyageKey, {
+    await fbAddWorkReport(voyageKey, { by: inspector || '',
       type: 'conbox',
       conBoxType, conBoxCount, equip,
       message,
@@ -600,6 +603,30 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-red-600">
               <AlertTriangle className="w-4 h-4"/> 작업 중단 (장비고장 / 강풍 / 안개 / 기타)
             </button>
+
+            {/* 4.46: 내가 보낸 보고 — 보낸 사람만 고치고 지운다(검수사 2026-10-24 «잘못된 보고 수정기능은 보고자만 수정또는 삭제 할수 있게»). 보고 탭 목록과 같은 줄(ReportEditRow). */}
+            {(() => {
+              const mine = Object.values(voyage?.reports || {}).filter((r) => canEditReport(r, inspector)).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+              if (!mine.length) return null;
+              return (
+                <div className="bg-ink-800/40 border border-line rounded-pill" data-my-reports={mine.length}>
+                  <button type="button" onClick={() => setMyRepOpen((v) => !v)} className="w-full flex items-center justify-between px-3 py-2 text-left">
+                    <span className="text-xs font-bold text-dim-100">✏ 내가 보낸 보고 {mine.length}건 — 잘못 보냈으면 고치기·지우기</span>
+                    <span className="text-dim-400 text-xs">{myRepOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {myRepOpen && (
+                    <div className="px-3 pb-2 space-y-1.5 max-h-72 overflow-y-auto">
+                      {mine.slice(0, 20).map((r) => (
+                        <div key={r.ts} className="text-xs2 bg-ink-900/60 rounded px-2.5 py-1.5">
+                          <div className="text-dim-200 whitespace-pre-wrap leading-snug">{String(r.message || '').split('\n').slice(0, 5).join(' · ')}</div>
+                          <ReportEditRow voyageKey={voyageKey} voyage={voyage} reports={voyage?.reports || {}} report={r} me={inspector}/>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="text-2xs text-dim-400 text-center">
               💡 카톡 공유창이 열리면 단톡방을 선택하세요
@@ -838,7 +865,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                   if (!await setActiveWorkSafe(`activeWork/${voyageKey}/${manualEquip}/${manualMode}`, {
                     ...aw, status: 'paused', pausedAt: time, pauseReason: manualReason,
                   }, '수동 중단 보고')) return;
-                  await fbAddWorkReport(voyageKey, {
+                  await fbAddWorkReport(voyageKey, { by: inspector || '',
                     type: 'work_status', action, mode: manualMode, equip: manualEquip,
                     reason: manualReason, message, manual: true,
                   });
