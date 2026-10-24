@@ -1138,6 +1138,17 @@ if npx esbuild tools/smoke_switch447.jsx --bundle --loader:.jsx=jsx --loader:.pn
 else
   echo "✗ 4.47 양하·선적 바꿈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SW"; exit 1
 fi
+#  4.48: **선사 지시 «본선 잔류» — 평택 양하에서 빼고, 아래 평택 컨을 막으면 시프팅 예보(노란 ◆)** — MAMP 641N 22베이 실자료(베이플랜·리스트·선사 시프팅 목록·베이사전)를
+#    실소스 판정·컨 상세·검증 상자·실 firebase.js(메모리 DB)로 잰다. 검수사 2026-10-24 «메일대로 315» · «노란 다이아 몬드로» · «플래너가 확정하면 그떄 같이 바뀌게».
+SMOKE_KP=$(mktemp /dev/shm/hometmp/_smokekp_XXXXXX.js)
+if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_KP"; then
+  node tools/smoke_keep448.cjs "$(pwd)" "$SMOKE_KP" || { echo "✗ 4.48 본선 잔류 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_KP"; exit 1; }
+  rm -f "$SMOKE_KP"
+else
+  echo "✗ 4.48 본선 잔류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KP"; exit 1
+fi
 #  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
 SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)

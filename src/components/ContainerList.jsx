@@ -550,6 +550,13 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                   {c._shiftFrom && c._shiftTo ? ` ${shiftPosLabel(c._shiftFrom)}→${shiftPosLabel(c._shiftTo)}` : ''}
                 </span>
               )}
+              {/* 4.48 — 선사 지시 본선 잔류(평택에서 안 내림) · 아래 평택 컨을 막으면 시프팅 예보(노란 ◆) */}
+              {c._keep && (
+                <span className="bg-yellow-500 text-ink-950 bdg font-black" data-keep-chip="1"
+                  title={`선사 지시 — 본선 잔류(${c._keep.pod} 양하)${c._keep.mailAt ? ` · 선사 메일 ${c._keep.mailAt}` : ''} · 평택 양하 대수에서 뺍니다`}>
+                  🟡 본선 잔류 {c._keep.pod}
+                </span>
+              )}
               {dupPartners.length > 0 && (
                 <span className="bg-rose-700/90 text-rose-50 bdg font-black"
                   title={`이 실번호가 다른 컨테이너에도 들어 있습니다 — ${dupPartners.join(' / ')}. 양쪽 모두 실물 확인.`}>

@@ -684,7 +684,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(`MCAP 639N(선사 RESTOW LIST ${mcDoc}대 — 확정) 은 ◆ ${mcDoc}칸 · ◇ 0칸 그대로`, pm.errs.length === 0 && pm.shift === mcDoc && pm.pred === 0, JSON.stringify(pm).slice(0, 200));
     //  두 앱 같은 예측 — 콘앱 cone.html 의 실제 함수(ctPredShiftMap)를 꺼내 같은 재료로 돌린다(번들 예측 함수 · 항로표 · 양하 리스트 · 베이사전).
     const html = src('public/cone.html');
-    const fnSrc = (html.match(/let _ctLaneLoaded = false;\nasync function ctPredShiftMap\(v, sh\)\{[\s\S]*?\n\}\n/) || [''])[0];
+    const fnSrc = (html.match(/let _ctLaneLoaded = false;\nasync function ctPredShiftMap\(v, sh\)\{[\s\S]*?\nasync function _ctPredVoy\(v, sh\)\{[\s\S]*?\n\}\n/) || [''])[0];   // 4.48 — 재료 모으기가 도우미 _ctPredVoy 로 나뉘었다(본선 잔류 예보와 한 벌) · 같이 꺼낸다
     B.setLaneRoutes({ IHS1: { rotation: ['CNXMN', 'KRINC', 'KRPTK'] } });
     global.window.__fbShipBayDict = { KSKM: { bayDef: { baysSummary: K.bay27 } } };
     const vT = { key: 'KSKM_2617N', info: { ...K.info }, discharge: { raw: { edi: { text: K.text, fileName: 'KSKM2617NXMNB.ASC' } } }, loading: {} };

@@ -2076,6 +2076,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         {c.ot && <span className={`${chip} bg-yellow-700 text-yellow-100`}>O/T</span>}
         {c.oog && <span className={`${chip} bg-rose-700 text-rose-100`}>OOG</span>}
         {c._shift && <span className={`${chip} bg-indigo-700 text-indigo-100`}>◆ 시프팅</span>}
+        {c._keep && <span className={`${chip} bg-yellow-600 text-ink-950`} data-keep-chip="1">🟡 본선 잔류 {c._keep.pod} · 평택에서 안 내림</span>}{/* 4.48 선사 지시 */}
         {c._extraOfList && <span className={`${chip} bg-lime-800 text-lime-100`}>＋ 추가분</span>}
       </div>
       {/* 실번호 — 확인·수정. 4.26: 검수리스트와 같은 값(inspectionSealOf — 엠티는 엠티실). 엠티에 실이 없으면 경고가 아니라 «엠티 · 실 없음». 고치는 칸은 종전대로 sl. */}

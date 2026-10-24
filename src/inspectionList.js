@@ -543,8 +543,9 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     //    자리 글자는 fmtShiftPos 한 벌(종전엔 7자리 날것 0180786 이 찍혔다).
     const rows = shiftingList.map((c, i) => `<tr>
       <td>${i + 1}</td><td class="cn">${c.cn || ''}</td><td>${isoShown(c.iso) || ''}</td><td>${c.pod || ''}</td>
-      <td class="cn">${fmtShiftPos(c.from)}</td><td class="cn">${c.same ? '제자리' : fmtShiftPos(c.to)}</td><td class="cn">${c.act ? `${fmtShiftAct(c)} ${fmtShiftTime(c.actAt)}` : ''}</td><td></td></tr>`).join('');
-    shiftHtml = `<div class="ititle">[별첨2] ◆ 시프팅(재적부) ${shiftingList.length}대 — 평택 작업에 걸려 옮기는 화물 (양하·선적 공통, 1대=크레인 2모브)</div>
+      <td class="cn">${fmtShiftPos(c.from)}</td><td class="cn">${c.keep ? `예보(본선 잔류 ${c.keep.pod || ''})` : c.same ? '제자리' : fmtShiftPos(c.to)}</td><td class="cn">${c.act ? `${fmtShiftAct(c)} ${fmtShiftTime(c.actAt)}` : ''}</td><td></td></tr>`).join('');
+    const _keepN = shiftingList.filter((c) => c && c.keep).length;   // 4.48: 선사 지시 본선 잔류 예보(확정 아님)
+    shiftHtml = `<div class="ititle">[별첨2] ◆ 시프팅(재적부) ${shiftingList.length}대${_keepN ? `(예보 ${_keepN} — 선사 지시 본선 잔류, 확정 아님)` : ''} — 평택 작업에 걸려 옮기는 화물 (양하·선적 공통, 1대=크레인 2모브)</div>
       <div class="ipage"><table class="ilist" style="max-width:140mm;margin:0 auto;">
       <!--  ★ 3.45 — 이 표엔 colgroup 이 없어, table-layout:fixed 아래서 7칸이 **균등분할**돼
             컨테이너번호 칸이 30mm→17mm 로 줄었다(재감사 실측). 3.44 의 내용폭 비율을 그대로 적어 둔다. -->

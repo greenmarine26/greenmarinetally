@@ -17,7 +17,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   const title = `쉬프팅(재적부) 목록 — ${String(voyageKey || '').replace('_', ' ')}`;
   const openPrint = () => {
     const rows = list.map((s, i) =>
-      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${isoShown(s.iso) || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.same ? '제자리' : _sp(s.to)}</td><td class="mono">${_act(s)}</td><td>${_hm(s.actAt)}</td><td></td></tr>`).join('');
+      `<tr><td>${i + 1}</td><td class="mono">${s.cn}</td><td>${isoShown(s.iso) || ''}</td><td>${s.fe || ''}</td><td>${s.pod || ''}</td><td class="mono">${_sp(s.from)}</td><td class="mono">${s.keep ? `예보 — 선사 지시 본선 잔류(${s.keep.pod})` : s.same ? '제자리' : _sp(s.to)}</td><td class="mono">${_act(s)}</td><td>${_hm(s.actAt)}</td><td></td></tr>`).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>
       body{font-family:'Malgun Gothic',sans-serif;margin:24px;color:#111}
       h2{font-size:16px;margin:0 0 2px}
@@ -41,7 +41,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
       const XLSX = await loadSheetJS();
       const aoa = [[title], [`총 ${list.length}대 · 통과화물 재적부(양하·선적 공통)`], [],
         ['No', '컨테이너 번호', '규격', 'F/E', 'POD', '양하 위치', '선적 위치', '실제 위치', '실은 시각'],
-        ...list.map((s, i) => [i + 1, s.cn, isoShown(s.iso) || '', s.fe || '', s.pod || '', _sp(s.from), s.same ? '제자리' : _sp(s.to), _act(s), _hm(s.actAt)])];   // 3.44: 제자리 재적재 · 3.65: 실제
+        ...list.map((s, i) => [i + 1, s.cn, isoShown(s.iso) || '', s.fe || '', s.pod || '', _sp(s.from), s.keep ? `예보 — 선사 지시 본선 잔류(${s.keep.pod})` : s.same ? '제자리' : _sp(s.to), _act(s), _hm(s.actAt)])];   // 3.44: 제자리 재적재 · 3.65: 실제
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 7 }, { wch: 5 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 8 }];
       const wb = XLSX.utils.book_new();
@@ -77,7 +77,9 @@ function ShiftingModal({ list, voyageKey, onClose }) {
               <span className="mono font-bold text-dim-100">{s.cn}</span>
               <span className="text-dim-400">{isoShown(s.iso)}</span>
               {s.pod && <span className="text-dim-400">{s.pod}</span>}
-              <span className="ml-auto mono text-blue-300">{s.same ? `${_sp(s.from)} (제자리)` : `${_sp(s.from)} → ${_sp(s.to)}`}</span>
+              {s.keep
+                ? <span className="ml-auto mono text-yellow-300" data-shift-keep-row={s.cn}>◆ {_sp(s.from)} 예보 — 선사 지시 본선 잔류({s.keep.pod})</span>
+                : <span className="ml-auto mono text-blue-300">{s.same ? `${_sp(s.from)} (제자리)` : `${_sp(s.from)} → ${_sp(s.to)}`}</span>}
               {/* 3.65: 실제 실은 자리 — 실릴 때마다 채워진다 */}
               {s.act ? <span className={`mono font-bold ${s.actDiff ? 'text-amber-300' : 'text-emerald-300'}`}>실제 {_act(s)} {_hm(s.actAt)}</span> : <span className="text-dim-500 text-2xs">실제 —</span>}
             </div>
@@ -90,6 +92,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
 
 export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null }) {
   const shiftCount = shiftingList.length;
+  const shiftKeepCount = (shiftingList || []).filter((x) => x && x.keep).length;   // 4.48: 그중 선사 지시 본선 잔류 예보(확정 아님)
   const [shiftOpen, setShiftOpen] = useState(false);
   const v = useMemo(() => {
     //  3.26: 부킹 자리(예상 EDI — `__BOOK_`·cn 없는 자리)는 실번호가 없어 리스트와 겹칠 수가 없다. «리스트에 없음»도
@@ -138,6 +141,9 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     const _shSet = new Set((shiftingList || []).map(x => String(x && x.cn || '').toUpperCase()).filter(Boolean));
     const shiftInList = mode === 'discharge' ? (records || []).filter(r => r && !ediCns.has(r.cn) && !thruSet.has(r.cn) && _shSet.has(String(r.cn || '').toUpperCase())) : [];
     const _shInSet = new Set(shiftInList.map(r => r.cn));
+    //  ★ 4.48 — 선사 지시 본선 잔류의 시프팅 예보(목록 keep 행)는 평택 양하가 아니다 — 리스트 수에서 빼고 시프팅(예보)으로 한 번만 센다(MAMP 641N 리스트 317 = 평택 315 + 예보 2).
+    const _keepSet = new Set((shiftingList || []).filter(x => x && x.keep).map(x => String(x.cn || '').toUpperCase()));
+    const keepInList = mode === 'discharge' ? (records || []).filter(r => r && !_shInSet.has(r.cn) && _keepSet.has(String(r.cn || '').toUpperCase())) : [];
     let extraInList = (records || []).filter(r => !ediCns.has(r.cn) && !thruSet.has(r.cn) && !_shInSet.has(r.cn));
     //  3.26: 부킹 자리가 있으면 EDI 밖 실번호는 그 자리를 채우는 것이다 — 자리 수만큼은 «추가»가 아니다. 남는 만큼만 추가.
     if (fill && fill.slots > 0) extraInList = extraInList.slice(fill.slots);
@@ -167,13 +173,14 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     return {
       ediTotal: (ediContainers || []).length,
       ptkTotal: ptkInEdi.length + (fill ? fill.slots : 0),                                  // 3.26: 부킹 자리도 EDI 평택 대상이다(ptkInEdi 는 자리를 뺀 뒤라 두 번 안 센다)
-      listTotal: (records || []).length - thruInList.length - shiftInList.length,   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
+      listTotal: (records || []).length - thruInList.length - shiftInList.length - keepInList.length,   // 4.48: 본선 잔류 예보도 리스트에서 빼고 시프팅으로   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
       matched: ptkInEdi.filter(c => recCns.has(c.cn)).length + (fill ? Math.min(fill.real, fill.slots) : 0),   // 3.26: 자리를 채운 실번호 = 매칭
       bookingFill: fill,
       missingCount: missingInList.length,
       missingByOp,
       missingDetails: missingInList.slice(0, 5),
       shiftInListCount: shiftInList.length,   // 4.34-03: 시프팅 대상이면서 양하 리스트에도 있는 컨 — 총 작업에서 한 번만 센다
+      keepInListCount: keepInList.length,     // 4.48: 본선 잔류 예보(노란 ◆) — 리스트에서 빼고 시프팅 예보로 센다
       extraCount: extraInList.length,
       extraByOp,
       extraDetails: extraInList.slice(0, 5),
@@ -218,6 +225,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
             className="bg-blue-950/50 rounded p-1.5 border border-blue-800/40 hover:bg-blue-900/60 active:scale-95 transition">
             <div className="text-blue-300/80 text-2xs">◆ 쉬프팅</div>
             <div className="text-blue-300 font-black mono">{shiftCount}</div>
+            {shiftKeepCount > 0 && <div className="text-yellow-300 text-3xs font-bold" data-shift-keep={shiftKeepCount}>◆ 예보 {shiftKeepCount} 포함</div>}
             <div className="text-blue-400/60 text-3xs">목록·인쇄 ▸</div>
           </button>
         )}
@@ -226,7 +234,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           상세 목록은 리스트 하단 ◆ 박스 + 인쇄 검수리스트 [별첨2]. */}
       {shiftCount > 0 && (
         <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-xxs text-blue-200 font-bold">
-          총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}
+          총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}{shiftKeepCount > 0 ? `(예보 ${shiftKeepCount})` : ''}
+          {v.keepInListCount > 0 && <span className="ml-1 font-normal text-yellow-300/90" data-keep-in-list={v.keepInListCount}>(선사 지시 본선 잔류 {v.keepInListCount}대는 평택에서 안 내려 리스트에서 빼고 시프팅 예보로 셉니다)</span>}
           <span className="ml-1 font-normal text-blue-300/70">{v.shiftInListCount > 0 ? `(시프팅 ${v.shiftInListCount}대는 선사 양하 리스트에도 있어 리스트에서 빼고 시프팅으로 한 번만 셉니다)` : '(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])'}</span>
         </div>
       )}

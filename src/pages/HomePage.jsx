@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
+import { resolvedPod, podConflictOf, keepOnboardOf } from '../utils.js';   // 4.48: keepOnboardOf — 본선 잔류 한 벌   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
@@ -1282,7 +1282,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {completeTarget && (() => {
         const v = voyages[completeTarget.key];
         // 항차 리스트와 동일 기준: 평택분(PTK)만 (타지역 제외)
-        const dCnt = computeStats(v?.discharge, 'discharge').ptk;
+        const dCnt = computeStats(v?.discharge, 'discharge', undefined, undefined, undefined, v?.keepOnboard).ptk;   // 4.48: 본선 잔류 뺌
         const lCnt = computeStats(v?.loading, 'loading').ptk;
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCompleteTarget(null)}>
@@ -1418,7 +1418,7 @@ export function shipViewOf(voyage, pilotForecast = {}) {
   const loa = voyage.loading;
 
   const _shiftSet = shiftCnSetOf(voyage.key, voyage);   // 2.89-06: 평택 축에서 뺄 시프팅 컨
-  const disStats = computeStats(dis, 'discharge', voyage.info, voyage.key, _shiftSet);
+  const disStats = computeStats(dis, 'discharge', voyage.info, voyage.key, _shiftSet, voyage.keepOnboard);   // 4.48 감사(상 1): 선사 지시 본선 잔류를 평택 양하분에서 뺀다
   const loaStats = computeStats(loa, 'loading', voyage.info, voyage.key, _shiftSet);   // V9.03: info.emptyConfirmed(엠티 확정) 표시용
   // 1.82(검수사 요청 2026-08-17): *"항차목록에 터미널과 수집량을 비교할 수 있도록"*
   //   수집기 1.6 이 PCTC·PNCT 배정목록에서 HTTP 로 직접 받아 info.planDis/planLod 에 실어 온다
@@ -2241,7 +2241,7 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
   );
 }
 
-export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)   // 2.89-06: 시프팅 제외 집합
+export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboard) {   // 3.53: 연막검사가 **동작으로** 재도록 내보낸다(순수 함수)   // 2.89-06: 시프팅 제외 집합
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   //  ★ 4.25 (4.24 감사 기록 7 — 수석 상황판 computeStats 와 같은 수리): 구역이 없을 때도 아래 끝 줄과 **같은 모양**을 돌려준다.
   //    종전엔 workTotal·workDone 등이 없어 한쪽 구역만 있는 항차에서 합산하는 쪽이 undefined 를 더할 수 있었다(4.24 수석 보드 «NaN /NaN» 의 같은 뿌리).
@@ -2278,6 +2278,8 @@ export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.
     [...ptkCns].filter(cn => String(cn).startsWith('__')).forEach(cn => ptkCns.delete(cn));
     recordCns.forEach(cn => ptkCns.add(cn));
   }
+  //  ★ 4.48 감사(상 1) — 선사 지시 본선 잔류 컨은 평택에서 안 내린다. EDI 평택분(ptk — 홈 «완료 확인» 창의 평택분 작업량)에서도 뺀다(MAMP 641N 317 → 315).
+  if (mode === 'discharge') for (const cn of Object.keys(keepOnboardOf({ keepOnboard }))) { ptkCns.delete(cn); recordCns.delete(cn); }
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
   //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)
@@ -2288,7 +2290,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet) {   // 3.
   //  2.89-07 (검수사 «항차목록은 변치 않습니다 … 변하는건 작업내용이 실시간 카운트 될뿐») —
   //    작업량·완료는 progressOf 한 벌(작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브).
   //    recordCns(위)는 매칭·수화물 판정용으로 그대로 둔다 — 분모에는 안 쓴다.
-  const prog = progressOf(section, mode, shiftSet, ptkCns);
+  const prog = progressOf(section, mode, shiftSet, ptkCns, keepOnboard);   // 4.48: 본선 잔류(양하만 쓴다)
   //  ★ 4.16 (§7.8-① · Fable 판정 ①): 막대·대수 = **평택분**. 시프팅은 SectionBar 의 «쉬프팅 N (내림 x/N)» 줄이 따로 센다.
   //    작업량(평택분 + 이 모드 모브 — «279+95»)은 workTotal·workDone 으로 남겨 출항 배지가 쓴다.
   const total = prog.ptk.total;

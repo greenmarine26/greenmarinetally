@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { ptkDischargeJudgeOf } from './utils.js';
+import { ptkDischargeJudgeOf, isKeepShift } from './utils.js';   // 4.48: 본선 잔류 예보(노란 ◆) 판정 한 벌
 import { activeHeldOf } from './utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(자동 가이드 보류 줄 · 미르와 같은 목록)   // 4.20 후속: 평택 양하분 한 벌
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer, isFullReefer } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromRecords, workMinutesBetween } from './nlSearch.js';
@@ -131,13 +131,17 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
   const dp = _J && _J.cns ? _J.cns.length : dis.filter((c) => _ptk(c, 'discharge')).length;
   const dpEdi = _J && _J.pred ? dis.filter((c) => _J.pred(c)).length : dp;   // 양하 EDI 행 중 평택분
   const lp = lod.filter((c) => _ptk(c, 'loading')).length;
-  let shifting = 0;
+  let shifting = 0, keepFc = 0;
   try {
     // 2.08-15: 확정∨예측 폴백 한 벌 — 배정표 확정 이적 0이면 허수를 수석 집계에 넣지 않는다.
-    shifting = Object.keys(shiftingMapForDisplay(voyage.key || 'k', voyage) || {}).length;
-  } catch (e) { shifting = -1; }
+    const _shM = shiftingMapForDisplay(voyage.key || 'k', voyage) || {};
+    shifting = Object.keys(_shM).length;
+    keepFc = Object.values(_shM).filter(isKeepShift).length;   // 4.48 감사(중 3): 본선 잔류 예보는 «예측»이 아니라 «예보»로 따로 말한다
+  } catch (e) { console.warn('[총 무브수] 시프팅 지도 실패 — «계산 불가» 로 답합니다:', e); shifting = -1; }
   //  4.02: 콘앱은 항차에 EDI 를 안 싣고 행(_shift 표시 포함)만 넘긴다 — 콘이 센 시프팅 수를 그대로 쓴다(opts.shifting).
   if (opts && Number.isFinite(opts.shifting)) shifting = opts.shifting;
+  //  4.48 감사(중-C) — 콘앱은 확정 수(opts.shifting)와 본선 잔류 예보 수(opts.keepFc)를 따로 넘긴다 — 끝줄을 검수앱과 같게(확정 + 예보).
+  if (opts && Number.isFinite(opts.shifting) && Number.isFinite(opts.keepFc)) { keepFc = opts.keepFc; shifting = opts.shifting + opts.keepFc; }
   const allPtk = dpEdi === dis.length && lp === lod.length;
   //  ★ 4.01 — 무브 ≠ 대수. 트윈으로 드는 쌍은 1무브, 나머지는 한 대당 1무브(화면 «예상 작업 시간» 줄과 같은 수 — mir.movesOfVoyage).
   //    검수사 2026-10-04 «ATPR 양하가 269인데 무브수가 269무브 맞습니까?» · «트윈 가능 갯수와 싱글갯수가 정확히 파악해야 무브수가 계산 됩니다.»
@@ -151,7 +155,10 @@ export function answerTotalMoves(voyage, shipName = '', opts = {}) {
     L2.push(`${[E.dis > 0 ? `양하 ${E.dis}대 → ${E.disMoves}무브` : '', E.lod > 0 ? `선적 ${E.lod}대 → ${E.lodMoves}무브` : '', _sn > 0 ? `시프팅 ${_sn}대 → ${Number(E.shiftMoves) || 2 * _sn}무브` : ''].filter(Boolean).join(' · ')}${E.exact ? '' : '(최대)'}.`);
     if (!E.exact) L2.push(`자리·무게를 모르는 20피트 ${E.unres20}대는 한 대씩으로 센 값이 최대이고, 트윈이 되면 최소까지 줄어요.`);
     //  끝줄 N = 시프팅 지도 대수(R5). 확정 대수보다 많으면 나머지는 예측(확정 아님)이라 무브 수에는 안 넣었다(§7.8-②).
-    L2.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting}${shifting > _sn ? '(예측 — 확정 아님, 무브 수에는 안 넣었어요)' : ''} · 해치커버 별도.`);
+    //  4.48 감사(중 3) — 넘는 몫을 «예보»(선사 지시 본선 잔류 · 노란 ◆)와 «예측»(◇)으로 나눠 말한다(«시프팅 64 — 확정 62 · 🟡 예보 2»).
+    const _over = shifting - _sn, _kf = Math.min(keepFc, Math.max(0, _over)), _pr = Math.max(0, _over - _kf);
+    const _tail = shifting > _sn ? ` (확정 ${_sn}${_kf ? ` · 🟡 예보 ${_kf} — 선사 지시 본선 잔류` : ''}${_pr ? ` · 예측 ${_pr}` : ''} — 확정 아닌 몫은 무브 수에 안 넣었어요)` : '';
+    L2.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting}${_tail} · 해치커버 별도.`);
     return L2.join('\n');
   }
   const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}대 (무브 아님 — 트윈 계산을 못 해 대수로만 말씀드려요) — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dpEdi - lp} 제외)`}.`];

@@ -1558,7 +1558,12 @@ export function answerAboutAlert(query, alerts) {
 // TallyOne 1.27: 시프팅 답변. ctx.shiftMap 은 VoyagePage 와 같은 값(확정 대조 우선, 없으면 예측).
 function formatShifting(ctx) {
   const map = (ctx && ctx.shiftMap) || null;
-  const cns = map ? Object.keys(map) : [];
+  const cns0 = map ? Object.keys(map) : [];
+  //  ★ 4.48 — 선사 지시 본선 잔류의 시프팅 예보(노란 ◆)는 확정·예측 대수와 따로 말한다(확정이 아니다 — 플래너가 확정하면 위 목록으로 들어간다).
+  const keepCns = cns0.filter((cn) => map[cn] && map[cn]._forecast === 'keep');
+  const cns = cns0.filter((cn) => !keepCns.includes(cn));
+  const keepTail = keepCns.length ? '\n\n🟡 시프팅 예보 ' + keepCns.length + '대 — 선사 지시 본선 잔류(평택에서 안 내림 · 확정 아님, 플래너가 확정하면 위 목록으로 갑니다)\n' +
+    keepCns.map((cn) => { const v = map[cn] || {}; return `${cn.slice(-4)}  ${v.pos || v.from || ''}  ${isoShown(v.iso) || ''} POD ${v.pod || (v._keep && v._keep.pod) || ''}${v._why ? ` — ${v._why}` : ''}`.trimEnd(); }).join('\n') : '';
   // 1.69-07: 판정 근거 한 줄 — 예측(_meta 있음)일 때만. 확정 대조 맵은 근거 표기 불필요.
   //   검수사 확정(2026-08-14, KKLC 인천 선행): 기항 순서를 모르면 모른다고 말한다.
   const meta = map && map._meta;
@@ -1573,7 +1578,7 @@ function formatShifting(ctx) {
     (meta.excluded && meta.excluded.length) ? `\n평택 전 기항(${meta.excluded.join('·')}) 양하 ${meta.excludedCnt}대는 평택 도착 전에 내려 제외했습니다${meta.rot === 'edi' ? ' (다음 기항 EDI 실측)' : ' (항로 사전)'}.` :
     '\n⚠ 로테이션 미확인 — 평택 전 기항 양하분이 섞여 있을 수 있습니다.';
   if (!cns.length) {
-    return '🔄 시프팅 0대\n홀드 양하분 위(커버 여는 현측)에 얹힌 통과화물이 없습니다.' + basis;
+    return '🔄 시프팅 0대\n홀드 양하분 위(커버 여는 현측)에 얹힌 통과화물이 없습니다.' + basis + keepTail;
   }
   const posOf = (v) => {
     if (v && v.pos) return v.pos;                       // 예측값
@@ -1596,7 +1601,7 @@ function formatShifting(ctx) {
     if (_ev.label === '미확정' || _ev.label === '예측') lines.push('아직 확정이 아닙니다 — 터미널이 작업을 시작해 배정표 이적이 나오면 확정(또는 불일치)으로 바뀝니다.');
   }
   lines.push('', '커버를 열려면 치워야 하는 통과화물입니다 — 평택 양하분은 세지 않습니다.');
-  return lines.join('\n') + basis;
+  return lines.join('\n') + basis + keepTail;
 }
 
 // TallyOne 1.50: "○○ 어디 갔어?" — 지나온 자리를 문장으로.

@@ -467,7 +467,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   };
   const tagShift = (c, tier, rowLbl) => {
     if (shiftMap && c.cn && shiftMap[c.cn]) {
-      ensureShiftTier(tier).set(rowLbl, isPredShift(shiftMap[c.cn]) ? 'pred' : true);   // 4.16: 예측은 'pred'(칸 ◇ — 확정 아님)
+      ensureShiftTier(tier).set(rowLbl, isKeepShift(shiftMap[c.cn]) ? 'keep' : isPredShift(shiftMap[c.cn]) ? 'pred' : true);   // 4.16: 예측은 'pred'(칸 ◇ — 확정 아님) · 4.48: 선사 지시 본선 잔류 예보는 'keep'(노란 ◆)
     }
   };
   const ensureUrgentTier = (tier) => { if (!urgents.has(tier)) urgents.set(tier, new Map()); return urgents.get(tier); };
@@ -1054,7 +1054,11 @@ export function summaryToMatrixBays(shipBayDef) {
 //    선적 자리(to)도 선사 서류 표식(_doc)도 없으면 앱 예측이다(utils.shiftingMapForDisplay 의 예측 갈래 — 양하 EDI 하나로 커버 위를 본 것).
 //    대수가 배정표로 확정이어도 자리가 예측이면 예측이다(Fable 판정 ⑥). 칸은 ◇ — 확정(선사 서류·EDI 대조)은 종전대로 ◆.
 export function isPredShift(e) {
-  return !!(e && typeof e === 'object' && !e.to && !e._doc);
+  return !!(e && typeof e === 'object' && !e.to && !e._doc && e._forecast !== 'keep');
+}
+//  ★ 4.48 — 선사 지시 «본선 잔류»의 시프팅 예보 항목인가(utils.keepShiftForecastOf 가 _forecast:'keep' 로 표시). 칸은 노란 ◆ — 확정 파란 ◆ · 앱 예측 ◇ 와 따로 그린다.
+export function isKeepShift(e) {
+  return !!(e && typeof e === 'object' && e._forecast === 'keep');
 }
 export function hatchEvenOf(bayNo, pages) {
   const b = parseInt(bayNo, 10);

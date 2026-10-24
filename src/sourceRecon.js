@@ -15,7 +15,7 @@
 //    · 세관 검수 결과 코드(data/customsCodes.js 한 벌) 후보 — g3 «MFN» · g1 중 완료·실적 없는 컨 «MGN» · EDI 번호 대기 자리 «CNN». 후보일 뿐 확정 아님.
 //  앱 대수(app)는 4.20 평택 양하분 한 벌(utils.ptkDischargeUnitsOf)의 set — 홈 카드·마감텔리와 같은 수다. 선적은 진행 숫자 한 벌(progressOf)의 평택분.
 //  터미널 수량은 번호를 모른다 — 차이를 묶음(·참고)으로 설명 못 하는 만큼은 «번호 없음» 으로 센다(후보일 뿐 확정 아님).
-import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf } from './utils.js';
+import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 
 const unitKey = (k) => !!k && !String(k).startsWith('_');   // __SLOT_ 자리표시·빈 번호는 유닛이 아니다(4.20 과 같은 판정)
@@ -110,6 +110,7 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
     inApp = (cn) => base.has(cn) && !(P.usePtk && ss.has(cn));
   }
 
+  const keep = dis ? keepOnboardOf(voyage) : {};   // 4.48: 선사 지시 본선 잔류 — 평택 아님(참고) 줄로(POD 확정과 같은 자리)
   const opMap = shipOpMapper(String(info.vsl || '').toUpperCase(), [...Object.values(recs), ...Object.values(edi)].map((x) => x && x.op));
   const union = new Set([...[...ediRow].filter(([, x]) => x.st === 'ptk').map(([cn]) => cn), ...custSet, ...carSet, ...doneSet, ...termSet]);
   const groups = new Map();
@@ -122,7 +123,7 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
     const inC = custSet.has(cn), inR = carSet.has(cn), inD = doneSet.has(cn), inT = termSet.has(cn);
     const c = (e && e.c) || {}, r = recs[cn] || {}, t = tw[cn] || {};
     //  사람이 확정한 POD(수석·검수사 — 선사 메일 지정 'mail' 은 선사 자료)가 평택이 아니면 참고 줄로만(4.20 평택 양하분도 이 컨을 뺀다)
-    const pickedOff = dis && !!r.pod_pick && r.pod_pick !== 'mail' && !!r.pod && !isPyeongtaekPort(r.pod);
+    const pickedOff = (dis && !!r.pod_pick && r.pod_pick !== 'mail' && !!r.pod && !isPyeongtaekPort(r.pod)) || !!keep[cn];
     //  어긋남 — 자료가 있는 출처(EDI·세관, 세관이 없으면 선사) 중 하나라도 이 컨이 없다. 완료·실적은 작업 진행이라 «없음» 은 어긋남이 아니지만, 그것들에만 있으면 어긋남이다.
     const miss = (sources.edi.has && eS !== 'ptk') || (sources.customs.has && !inC) || (carBasis && !inR) || (eS !== 'ptk' && !inC && !inR);
     if (!miss && !pickedOff) continue;
@@ -142,6 +143,7 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
       bay: c.bay || '', row: c.row || '', tier: c.tier || '', ...(c.deckPos || r.deckPos ? { deckPos: c.deckPos || r.deckPos } : {}),
       src: r._source || (r.pod_pick === 'mail' ? (r.pod_picked_by || '선사 메일') : ''),
       ...(r.pod_pick && r.pod_pick !== 'mail' ? { pick: r.pod_pick_label || r.pod || '' } : {}),
+      ...(keep[cn] ? { pick: `${keep[cn].pod} · 선사 지시 본선 잔류${keep[cn].mailAt ? ` (메일 ${keep[cn].mailAt})` : ''}`, keep: true } : {}),   // 4.48
       edi: eS, customs: inC, carrier: inR, done: inD, term: inT, pattern, inApp: inApp(cn),
     };
     if (pickedOff) { ref.push(item); continue; }

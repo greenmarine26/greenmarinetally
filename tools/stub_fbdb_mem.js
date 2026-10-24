@@ -35,6 +35,7 @@ export async function set(r, v) { if (global.__setfail && global.__setfail(r.pat
 export async function update(r, patch) {
   assertNoUndefined(patch, r.path);
   LOG().push({ op: 'update', path: r.path });
+  if (global.__updDrop && global.__updDrop(r.path)) return;   // 4.48: 서버에 안 닿은 쓰기(되읽기 검사가 잡는지) 흉내 — 검사가 켤 때만
   for (const [k, v] of Object.entries(patch || {})) setAt([r.path, k].filter(Boolean).join('/'), v);
   if (global.__memlag) await new Promise((ok) => setTimeout(ok, global.__memlag));   // 4.27: 서버 확인 늦음 흉내(검사가 켤 때만)
 }

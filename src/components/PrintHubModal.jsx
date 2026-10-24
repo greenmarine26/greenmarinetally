@@ -16,7 +16,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
+import { keepShiftForecastOf, _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false, autoAction = null }) {   // 4.34: autoAction = 자료 센터에서 고른 할 일('inspection'|'cargo'|'detail') — 허브 메뉴를 건너뛰고 바로 연다   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
@@ -61,7 +61,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const shiftingMapDraw = useMemo(
     () => { try { return shiftingMapForDisplay(voyageKey, voyage); } catch (e) { console.warn('[4.16 출력 센터] 예측 시프팅 지도 실패 — 확정만 그립니다:', e); return shiftingMap; } },
     [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus, voyage?.info?.lane,
-     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes]
+     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.keepOnboard]   // 4.48 감사(하 6): 본선 잔류를 넣고 풀면 다시 그린다
   );
   //  ★ 4.13 — 카고플랜 머리 «쉬프팅 5 미확정/확정/불일치». 판정은 항차 화면·콘앱과 같은 utils.shiftEvidenceOf 한 벌이다.
   //    터미널이 작업을 시작해 배정표 이적(berthShift)이 나오면 바뀌어야 하므로 berthShift·terminalStatus 가 의존성이다.
@@ -324,7 +324,10 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     }
     // V8.98-05: 쉬프팅 별첨 — 컨 정보 보강해 전달
     //  3.65: 항차 화면 목록과 같은 한 벌(utils.shiftingListOf) — 실제 칸(실은 자리·시각)이 같이 간다(감사 — 둘째 벌이었다).
-    const _shiftList = shiftingListOf(shiftingMap, fullEdiMap, voyage);
+    //  ★ 4.48 감사(중 2) — [별첨2]에 선사 지시 본선 잔류 예보(노란 ◆)도 싣는다(확정 지도 + 예보, 예측 ◇ 는 안 싣는다). 항차 화면 ◆ 목록 창 인쇄와 같은 64(예보 2).
+    let _fc = {};
+    try { _fc = keepShiftForecastOf(voyageKey, voyage, null, { confirmed: shiftingMap }) || {}; } catch (e) { console.warn('[4.48 출력 센터] 본선 잔류 예보 실패 — 별첨2 는 확정만 싣습니다:', e); _fc = {}; }
+    const _shiftList = shiftingListOf({ ...shiftingMap, ..._fc }, fullEdiMap, voyage);
     openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList, { appendix: chiefView });   // 4.31: 특수화물 별첨은 수석에게만
   };
 
@@ -396,6 +399,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
           shipName={shipName}
           xrayMap={xrayMap}
           shiftingMap={shiftingMapDraw}
+          keepOnboard={voyage?.keepOnboard}   // 4.48 감사(상 3): 양하 평택분에서 뺀다
           shiftStatus={shiftEvid.label}
           inspector={inspector}   // 4.32: 머리줄 «# ___ , 이름»
           onClose={closeSub}

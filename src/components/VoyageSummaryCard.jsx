@@ -65,7 +65,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     //  2.89-07: 분모 고정 — 리스트가 있으면 (리스트+시프팅)/(리스트완료+모브)를 progressOf 한 벌로.
     //    리스트 전(EDI·플랜 슬롯만)이면 종전 계산을 유지하되 시프팅·모브를 같은 규칙으로 더한다.
     //  ★ 4.16 (§7.8-① · Fable 판정 ①): 막대·대수 = **평택분**. 시프팅은 아래 «◆ 시프팅 N — 내림 x/N · 실음 y/N» 줄이 따로 센다(작업량 «279+95» 는 화면 막대에 안 섞는다).
-    const _prog = progressOf(sec, mode, _shiftSet);
+    const _prog = progressOf(sec, mode, _shiftSet, undefined, voyage && voyage.keepOnboard);   // 4.48 감사(상 1): 본선 잔류 뺌
     const _base0 = _slotN > 0 ? Math.max(_slotN, _realN) : containers.length;
     const _done0 = Object.keys(compMap).filter((cn) => !isShiftOffPtk(_shiftSet, recMap, mode, cn)).length;
     const total = _prog.listTotal > 0 ? _prog.ptk.total : _base0;
@@ -107,7 +107,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     return {
       total, done,
       pct: total ? Math.round(done / total * 100) : 0,
-      shift: { n: _shSp.n, out: _shSp.out.done, in: _shSp.in.done },   // 4.16: 시프팅 줄
+      shift: { n: _shSp.n, out: _shSp.out.done, in: _shSp.in.done, fc: (_shSp.forecast && _shSp.forecast.n) || 0 },   // 4.16: 시프팅 줄 · 4.48: 본선 잔류 예보(노란 ◆)
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
       rfSum,   // 3.25: 리퍼 온도 판정 한 벌 — 칩이 이것을 본다(규범 §4-4)
@@ -128,7 +128,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     };
   }, [voyage, mode]);
 
-  if (summary.total === 0 && !(summary.shift && summary.shift.n > 0)) return null;
+  if (summary.total === 0 && !(summary.shift && (summary.shift.n > 0 || summary.shift.fc > 0))) return null;
 
   const modeLabel = mode === 'discharge' ? '양하' : '선적';
   const modeColor = mode === 'discharge' ? 'blue' : 'amber';
@@ -160,7 +160,11 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
         {summary.shift && summary.shift.n > 0 && (
           <div className="mt-1.5 text-xs2 font-bold text-sky-300" data-shift-line={summary.shift.n}>
             ◆ 시프팅 {summary.shift.n} — 내림 {summary.shift.out}/{summary.shift.n} · 실음 {summary.shift.in}/{summary.shift.n}
+            {summary.shift.fc > 0 && <span className="text-yellow-300" data-shift-keep={summary.shift.fc}> · ◆ 예보 {summary.shift.fc}(선사 지시 본선 잔류)</span>}
           </div>
+        )}
+        {summary.shift && !(summary.shift.n > 0) && summary.shift.fc > 0 && (
+          <div className="mt-1.5 text-xs2 font-bold text-yellow-300" data-shift-keep={summary.shift.fc}>◆ 시프팅 예보 {summary.shift.fc}(선사 지시 본선 잔류 · 확정 아님)</div>
         )}
       </div>
 

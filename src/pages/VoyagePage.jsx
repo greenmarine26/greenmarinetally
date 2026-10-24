@@ -55,7 +55,7 @@ import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';   // 4.46: 보고 고치기·지우기(보낸 사람만)
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
@@ -362,7 +362,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
-     voyage?.info?.lane, dictTick,   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도
+     voyage?.info?.lane, dictTick, voyage?.keepOnboard,   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도 · 4.48: 본선 잔류 예보
      //  ★ 3.53-02(감사 지적 [중대]) — 배정표 이적·작업 상태가 되돌림 판정을 바꾼다. 이 둘이 의존성에
      //    없으면, 수집기가 berthShift 를 넣거나 planned→working 이 되는 **바로 그 순간** 베이플랜은
      //    되돌린 그림을 그리는데 시프팅 패널만 옛 값에 머문다(한 화면에서 두 판정이 갈린다).
@@ -455,9 +455,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const shiftConfSet = useMemo(() => new Set(Object.keys(shiftingConfirmed || {}).filter((k) => k && !k.startsWith('_'))), [shiftingConfirmed]);
   //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관 … 추가분만 더하면 됩니다»): 양하 평택분 한 벌(세관 목록 + 추가분). 목록 없는 배(basis 'edi')는 종전 판정.
   //    4.20 감사: 시프팅은 이 화면의 확정 지도(shiftConfSet)로 뺀다 — 그래서 그 아래에 둔다(isPtk·목록 머지는 이 뒤에서만 불린다).
-  const dischUnits = useMemo(() => (mode === 'discharge' ? ptkDischargeUnitsOf(voyage, shiftConfSet) : null), [mode, voyage?.discharge, shiftConfSet]);
+  const dischUnits = useMemo(() => (mode === 'discharge' ? ptkDischargeUnitsOf(voyage, shiftConfSet) : null), [mode, voyage?.discharge, shiftConfSet, voyage?.keepOnboard]);   // 4.48: 본선 잔류가 바뀌면 평택 양하분도 다시
   const shiftSplit = useMemo(() => shiftSplitOf(voyageKey, voyage),
-    [shiftingConfirmed, voyageKey, voyage?.discharge?.completed, voyage?.loading?.completed]);
+    [shiftingConfirmed, voyageKey, voyage?.discharge?.completed, voyage?.loading?.completed, voyage?.keepOnboard]);
   //  3.65: 카토스가 시프팅이라고 한 컨 중 목록에 없는 것 — 목록은 안 바꾸고 아래에 따로 적는다.
   const restowExtra = useMemo(() => restowActualExtra(voyage, shiftCnSet), [voyage?.restowActual, shiftCnSet]);
 
@@ -963,6 +963,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       for (const cn of dischUnits.set) if (!merged[cn] && !isShiftOffPtk(shiftConfSet, recMap, mode, cn)) merged[cn] = { ...dischargeUnitBareRow(voyage, cn), _src: 'unit' };
       for (const cn of Object.keys(merged)) merged[cn] = markDischargeUnit(merged[cn], dischUnits);
     }
+    //  ★ 4.48 — 선사 지시 «본선 잔류»(평택에서 안 내림) 컨 표식. 리스트 총계·전체·미완·완료 칩에서 빼고(평택 양하분 한 벌과 같은 수) «🟡 본선 잔류» 칩·시프팅 예보 칩에서 센다.
+    if (mode === 'discharge') {
+      const _kp = keepOnboardOf(voyage);
+      for (const cn of Object.keys(_kp)) if (merged[cn]) merged[cn] = { ...merged[cn], _keep: _kp[cn] };
+    }
     // 2.08-11 (검수사 확정 «실 리스트가 존재 하는데 예상EDI에 있는 가상리스트를 선적리스트에
     //   포함시키는것은 없어야 합니다 — 원천봉쇄», SWAT 2607N 실측: 실번호 리스트 523(F166·E357)이
     //   있는데 예상 EDI 의 __BOOK 자리 523이 별도 행으로 잡혀 목록이 1046으로 두 배):
@@ -1017,7 +1022,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl, dischUnits]);   // 4.20: dischUnits · 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
+  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl, dischUnits, voyage?.keepOnboard]);   // 4.20: dischUnits · 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
 
   // ★ 3.67 — RZOR 선적 자동 덱플랜. 검수사 «선적 순번대로 자리가 정해지는것만 확실하다면» —
   //   마감텔리 STOWAGE PLAN 을 아직 안 올린 선적 항차는 동방 실적(termWork) 순번과 규칙표(36항차 실물)로
@@ -1441,7 +1446,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()]?.carrier : ''),
       // 2.94-01: 통과화물은 «EDI에 없는 컨» 경고에서 뺀다 — 판정은 utils 한 벌.
       thruCns: [...thruCnSetOf(mode, recMap, ediMap, voyage?.discharge?.ediContainers || null)],
-      shiftCns: [...shiftCnSet],   // 4.34-03: 시프팅 대상이 양하 리스트에 섞여 들면 «EDI에 없음» 이 아니다
+      shiftCns: shiftingList.filter((x) => x && !x.keep).map((x) => x.cn),   // 4.34-03: 시프팅 대상이 양하 리스트에 섞여 들면 «EDI에 없음» 이 아니다 · 4.48 감사(중 1): 본선 잔류 예보는 빼고 넘긴다 — 자료별 대조가 «POD 확정 — 평택 아님(참고)» 로 설명해야 한다(빼면 «번호 없음 2대» 로 남았다)
       cancelReq: voyage?.info?.amend?.cancelReq || [],   // 3.50-02: 수집기가 읽은 선사 취소 요청분 — «EDI에 없는 컨» 이 아니다
       carrier: voyage?.info?.carrier || '',
       typoTwins: listTypoTwins(recMap),   // 4.22: 리스트 번호 오타 짝(세관 코드 CND 후보) — 저장 때 빼는 것과 같은 한 벌(남은 짝은 keep 이 붙잡은 것)
@@ -1467,7 +1472,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return [...out];
       })(),
     });
-  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyageKey, shiftCnSet, voyage, shipPolicy, rfSkipShip]);
+  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyageKey, shiftCnSet, shiftingList, voyage, shipPolicy, rfSkipShip]);
   /* ★ 3.41 — 떠 있는 미르(App 의 MirFab)에게 «지금 열린 항차» 재료를 놓아 둔다(검수사 «앱 어디에든 항상 띄워서»).
        MirFab 은 prop 체인 밖(App)에 살아 이 화면의 컨·완료·시프팅·트윈 짝을 받을 길이 없다 — 여기서 publishMirCtx 로 건넨다.
        컨은 홈 통합검색과 같은 벌(flattenVoyages)로 편다 — 홈에서 묻든 여기서 묻든 같은 재료(§4-4). 화면이 닫히면 비운다.
@@ -1554,6 +1559,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shipName={voyage?.info?.vsl}
           xrayMap={xrayMap}
           shiftingMap={shiftingMap}
+          keepOnboard={voyage?.keepOnboard}   // 4.48 감사(상 3): 양하 평택분(머리·칸 수·별첨)에서 뺀다
           shiftStatus={shiftEvid.label}
           onClose={_closePlanOv}
         />
@@ -2529,15 +2535,16 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
   //    종전 «전체 223» 칩은 시프팅 5행을 섞어 228행을 보였다(MCAP 639N). 끝4자리·컨번호 검색은 둘 다 찾는다(현장 조회).
   //    선사 리스트에 실려 온 시프팅(Fable 판정 ⑤)은 리스트 행이면서 시프팅 칩에도 든다.
   const _shCnL = useMemo(() => new Set((shiftingList || []).map((x) => x.cn)), [shiftingList]);
-  const _isShiftRow = (c) => !!(c && (c._shift || _shCnL.has(c.cn)));
+  const _isShiftRow = (c) => !!(c && !c._keep && (c._shift || _shCnL.has(c.cn)));   // 4.48 감사(하 3): 본선 잔류 예보는 작업 항목이 아니다 — «◆ 시프팅 내림 x/62» 는 확정만, 두 대는 «🟡 본선 잔류» 칩
   const filtered = useMemo(() => {
     if (!filter && !search) return [];   // 1.84: 칩 미선택·검색어 없음 = 목록 안 연다
-    let arr = filter === 'shift' ? containers : (filter ? containers.filter(c => !c._shift) : containers);
+    let arr = filter === 'shift' || filter === 'keep' ? containers : (filter ? containers.filter(c => !c._shift && !c._keep) : containers);   // 4.48: 본선 잔류는 양하 리스트 칩 밖
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     else if (filter === 'shift') arr = arr.filter(_isShiftRow);   // 1.76-05: 시프팅만 보기 · 4.16: 시프팅 리스트(내림·실음 완료는 여기서)
     else if (filter === 'lugg') arr = arr.filter(c => c._deckOnly || c.lugg);   // 2.06-04: 수화물(미정)만 보기
+    else if (filter === 'keep') arr = arr.filter(c => c._keep);   // 4.48: 선사 지시 본선 잔류만 보기
     /*  마감 점검 「리퍼」 항목 점프용 — 3.25: **판정 한 벌**(규범 §4-4).
         종전엔 여기서 `!c.tmp` 만 봐서 B(기준은 있고 안 잰 것)를 하나도 못 담았다 —
         마감이 «미확인 74대»라 해도 목록은 0대였다(감사 실측 OBWH 29·STSE 69·SWBT 74·DXQD 19 전부 0). */
@@ -2575,7 +2582,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     // 2.06-04 (검수사 확정 «실려 있는건 209개가 맞는거죠 내리는거 확정은 208이고» + «LUG는 미정으로 노면 됩니다»):
     //   덱 전용 수화물(_deckOnly — EDI·리스트에 없고 덱플랜에만, 내릴지 미정)은 시프팅(1.76-05)처럼
     //   총계에 섞지 않고 자기 칸(미정)에서 센다. 전체=확정분(선사·터미널 숫자와 일치) 유지.
-    const base = containers.filter(c => !c._shift && !c._deckOnly);
+    const base = containers.filter(c => !c._shift && !c._deckOnly && !c._keep);   // 4.48: 본선 잔류(평택에서 안 내림)는 총계 밖 — 홈 카드·마감텔리 평택 양하분과 같은 수
     const sh = containers.filter(_isShiftRow);   // 4.16: 선사 리스트에 실려 온 시프팅도 시프팅 리스트에 든다
     const lg = containers.filter(c => c._deckOnly);
     return {
@@ -2586,6 +2593,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       shiftDone: sh.filter(c => compMap[c.cn]).length,
       lug: lg.length,
       lugDone: lg.filter(c => compMap[c.cn]).length,
+      keep: containers.filter(c => c._keep).length,   // 4.48
     };
   }, [containers, compMap, xrayMap, mode, _shCnL]);
 
@@ -2690,6 +2698,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           ...(stats.shift > 0 ? [{ k: 'shift', t: `◆ 시프팅 ${mode === 'discharge' ? '내림' : '실음'} ${stats.shiftDone}/${stats.shift}` }] : []),
           // 2.06-04: 덱 전용 수화물 = 미정 칸 — 총계(확정분)에 안 섞는다 (검수사 «LUG는 미정으로 노면 됩니다»)
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
+          //  4.48: 선사 지시 본선 잔류 — 평택에서 안 내림(총계 밖). 아래 평택 컨을 막으면 ◆ 시프팅 칩에도 예보로 든다.
+          ...(stats.keep > 0 ? [{ k: 'keep', t: `🟡 본선 잔류 ${stats.keep}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
             className={`chip-v2 ${filter === k ? 'is-on' : ''}`}>{t}</button>

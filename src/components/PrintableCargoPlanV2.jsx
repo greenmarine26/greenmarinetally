@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeepShift, keepOnboardOf } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { WorkerPrintDialog, WorkerHeadMark, installClonePrint } from '../workerPrint.jsx';   // 4.32: 머리줄 «# ___ , 이름» + 인쇄 직전 짝 이름 질문 + 한 장 더
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
@@ -226,7 +226,8 @@ export const CARGO_V2_CSS = `
     ⚠ 세 글자 표기(DGE 류)도 좌우로 **못 가른다** — 3자 × 0.667em 이 칸 폭을 거의 다 쓴다. 종전대로 가운데.  */
 .cpv2-page.cpv2-podsplit .cpv2-cell:not(.cpv2-mark3):not(.cpv2-shift):not(.cpv2-urgent):not(.cpv2-lugg):not(.cpv2-oog-W):not(.cpv2-oog-HW) { justify-content: flex-start; }
 .cpv2-page.cpv2-podsplit .cpv2-cell.cpv2-mark2:not(.cpv2-shift):not(.cpv2-urgent):not(.cpv2-lugg):not(.cpv2-oog-W):not(.cpv2-oog-HW) { font-size: calc(var(--mf, 9.6px) * 0.78); }
-.cpv2-cell.cpv2-shift.cpv2-shift-pred::before { content: '◇'; }   /* ★ 4.16 (§7.8-②): 예측 시프팅(확정 아님) — 모양이 달라 흑백 인쇄에서도 갈린다 */
+.cpv2-cell.cpv2-shift.cpv2-shift-pred::before { content: '◇'; }
+.cpv2-cell.cpv2-shift.cpv2-shift-keep::before { color: #ca8a04; }   /* ★ 4.48: 선사 지시 본선 잔류의 시프팅 예보 — 노란 ◆(검수사 «메일 적용은 … 노란 다이아 몬드로») · 확정은 파란 ◆ */   /* ★ 4.16 (§7.8-②): 예측 시프팅(확정 아님) — 모양이 달라 흑백 인쇄에서도 갈린다 */
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: 0; left: 0; line-height: 1;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
    V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서
@@ -385,6 +386,7 @@ export const CARGO_V2_CSS = `
 .cpv2-bw .cpv2-cell:not(.cpv2-through):not(.cpv2-shadow20) { background: #fff !important; color: #000 !important; }
 .cpv2-bw .cpv2-cell.cpv2-through { color: #000 !important; }
 .cpv2-bw .cpv2-cell.cpv2-shift::before { color: #000 !important; }
+.cpv2-bw .cpv2-cell.cpv2-shift.cpv2-shift-keep::before { content: '◈'; }   /* 4.48: 흑백에서는 색이 안 갈리므로 모양으로(◈ = 예보) */
 .cpv2-bw .cpv2-cell .cpv2-um { color: #000 !important; }
 .cpv2-bw .cpv2-cell.cpv2-lugg:not(.cpv2-oog-W):not(.cpv2-oog-HW) { box-shadow: inset 0 0 0 2px #000 !important; }
 .cpv2-bw .cpv2-cell.cpv2-xray::after { color: #dc2626 !important; }
@@ -505,7 +507,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (renderCellContent) {
                       return (
                         <span key={ci} {...(cellExtra ? cellExtra(cell, row.tier) : {})}
-                          className={[`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`,
+                          className={[`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'keep' ? ' cpv2-shift cpv2-shift-keep' : cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`,
                                       (cellExtra ? (cellExtra(cell, row.tier) || {}).className : '')].filter(Boolean).join(' ')}>
                           {renderCellContent(cell, row.tier)}
                           {cell.isUrgent && <i className="cpv2-um">▲</i>}
@@ -572,7 +574,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${_mk2 ? ' cpv2-mark2' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${_mk2 ? ' cpv2-mark2' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'keep' ? ' cpv2-shift cpv2-shift-keep' : cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
@@ -641,7 +643,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (renderCellContent) {
                       return (
                         <span key={ci} {...(cellExtra ? cellExtra(cell, row.tier) : {})}
-                          className={[`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`,
+                          className={[`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'keep' ? ' cpv2-shift cpv2-shift-keep' : cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}`,
                                       (cellExtra ? (cellExtra(cell, row.tier) || {}).className : '')].filter(Boolean).join(' ')}>
                           {renderCellContent(cell, row.tier)}
                           {cell.isUrgent && <i className="cpv2-um">▲</i>}
@@ -708,7 +710,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${_mk2 ? ' cpv2-mark2' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${_mk3 ? ' cpv2-mark3' : ''}${_mk2 ? ' cpv2-mark2' : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? (cell.isShift === 'keep' ? ' cpv2-shift cpv2-shift-keep' : cell.isShift === 'pred' ? ' cpv2-shift cpv2-shift-pred' : ' cpv2-shift') : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.oog ? ` cpv2-oog-${cell.oog}` : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${podMode && (cell.isThrough || cell.isShadow20) ? ' cpv2-load' : ''}`}
                         style={style}
                       >
                         {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
@@ -796,6 +798,7 @@ export default function PrintableCargoPlanV2({
   mode = 'discharge',
   xrayMap = {},
   shiftingMap = {},   // V8.98: 쉬프팅(재적부) { cn: {from,to} } — 셀 ◆ 마크 + 헤더 카운트
+  keepOnboard = null,   // 4.48 감사(상 3): 선사 지시 본선 잔류(voyage.keepOnboard) — 양하 평택분(머리·베이 칸 수·별첨)에서 뺀다. 없으면 지도 안의 예보 칸(isKeepShift)만으로 뺀다.
   shiftStatus = '',   // 4.13: 시프팅 상태 말(미확정·확정·불일치·예측) — 머리 «쉬프팅 5 미확정». 없으면 종전 그대로(utils.shiftEvidenceOf 가 정한다)
   pod: explicitPod,
   inspector = '',   // 4.32: 머리줄에 찍을 로그인한 사람 이름(없으면 빈칸)
@@ -817,7 +820,9 @@ export default function PrintableCargoPlanV2({
   const shiftCount = Object.keys(shiftingMap || {}).length;   // V8.98
   //  ★ 4.16 (§7.8-② · Fable 판정 ⑥): 예측(확정 아님) 칸 수 — 머리 «쉬프팅 ◆N ◇M» · 바닥글 «◇ 예측(확정 아님)». 판정은 cargoPlanCore.isPredShift 한 벌.
   const shiftPredCount = Object.values(shiftingMap || {}).filter(isPredShift).length;
-  const shiftConfCount = shiftCount - shiftPredCount;
+  //  ★ 4.48: 선사 지시 본선 잔류의 시프팅 예보(노란 ◆) — 확정·예측과 따로 센다(«쉬프팅 ◆62 예보◆2»). 작업분 합(평택분 + 시프팅)에는 들어간다.
+  const shiftKeepCount = Object.values(shiftingMap || {}).filter(isKeepShift).length;
+  const shiftConfCount = shiftCount - shiftPredCount - shiftKeepCount;
   //  ★ 2.83 (검수사 지시 2026-08-29) — *«카고플랜이던지 양하 선적등 갯수가 기록되는부분에
   //    시프팅 갯수도 포함시켜 주시기 바랍니다. 양하279 시프팅95 합 374개 이런식으로.
   //    그래야 **작업량 계산**도 편할것이고 **콘 작업하는 사람**도 콘계산 하는데 도움이 될것입니다»*
@@ -1056,7 +1061,10 @@ export default function PrintableCargoPlanV2({
   //   기존엔 pol만 봐서 엠티 285대가 별첨에서 누락됐다.
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
   //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 잡힘)
-  const matchPodC = (c) => _isPtkOne(c, mode);   // 3.60-19: 한 벌(선적 리스트 등재라도 EDI 통과화물이면 제외 — 별첨·머리 합계가 화면과 같은 수)
+  //  ★ 4.48 감사(상 3) — 본선 잔류 컨은 평택에서 안 내린다. EDI POD 가 평택이어도 양하 평택분이 아니다(머리 «양하 317» 이 두 대를 양하와 시프팅 예보에 두 번 셌다 — 맞는 값 315 · 작업분 379).
+  const _keepCns = (() => { const k = new Set(Object.keys(keepOnboardOf({ keepOnboard }))); for (const [cn, e] of Object.entries(shiftingMap || {})) if (isKeepShift(e)) k.add(String((e && e.cn) || cn)); return k; })();
+  const _keepSig = [..._keepCns].sort().join(',');
+  const matchPodC = (c) => _isPtkOne(c, mode) && !(mode === 'discharge' && c && _keepCns.has(c.cn));   // 3.60-19: 한 벌(선적 리스트 등재라도 EDI 통과화물이면 제외 — 별첨·머리 합계가 화면과 같은 수)
   //  2.83: 머리 합계용 평택분 대수 — **별첨·베이 카운트와 같은 판정(matchPodC)** 을 쓴다.
   const _ptkCount = (containers || []).filter((c) => c && matchPodC(c)).length;
   const boxCounts = useMemo(() => {
@@ -1086,7 +1094,7 @@ export default function PrintableCargoPlanV2({
       counts[s] = String(d['20'] + d['40'] + d['45']);
     });
     return counts;
-  }, [trios, singles, containers, pod]);
+  }, [trios, singles, containers, pod, _keepSig, mode]);   // 4.48: 본선 잔류가 바뀌면 칸 수도
 
   // M6.92.0: 공통 색 함수 (utils.js) 사용 — 베이플랜/카고플랜/베이상세 통일
   const colorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
@@ -1421,11 +1429,11 @@ export default function PrintableCargoPlanV2({
 
           {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.
               시프팅이 0이면 종전대로 대수만(없는 줄을 만들지 않는다). */}
-          <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }}>
+          <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }} data-cp-count={`${_ptkCount}/${_ptkCount + shiftCount}`}>
             {mode === 'discharge' ? '양하' : '선적'} {_ptkCount}
             {shiftCount > 0 && (
               <>
-                <span style={{ color: '#1d4ed8' }} data-shift-head={`${shiftConfCount}/${shiftPredCount}`}> · 쉬프팅 {shiftPredCount > 0 ? `${shiftConfCount > 0 ? `◆${shiftConfCount} ` : ''}◇${shiftPredCount}` : shiftCount}</span>
+                <span style={{ color: '#1d4ed8' }} data-shift-head={`${shiftConfCount}/${shiftPredCount}`}> · 쉬프팅 {shiftPredCount > 0 ? `${shiftConfCount > 0 ? `◆${shiftConfCount} ` : ''}◇${shiftPredCount}` : shiftCount - shiftKeepCount}</span>{shiftKeepCount > 0 && <span style={{ color: '#ca8a04' }} data-shift-keep={shiftKeepCount}> 예보◆{shiftKeepCount}</span>}
                 {shiftStatus && (
                   <span data-shift-status={shiftStatus}
                     style={{ color: shiftStatus === '확정' ? '#15803d' : shiftStatus === '불일치' ? '#dc2626' : '#b45309' }}> {shiftStatus}</span>
@@ -1626,7 +1634,7 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-footer">{podMode
           ? `칠한 칸=풀 · 테두리만=엠티 · 색=목적지(별첨1)${podLen ? ` · 칸 오른쪽 위 ${podLen}자=목적지` : ' · 이 배는 칸이 좁아 목적지 글자를 안 적는다'} · 가운데 글자=종류 — F 풀 · e 20ft엠티 · E 40ft엠티 · RF 리퍼풀 · RE 리퍼엠티 · DG 위험물 · FR 플랫랙 · OT 오픈탑 · TK 탱크 (이 넷은 글자만으로 풀, 엠티면 뒤에 E — FRE·DGE·OTE·TKE)`
           : '칠한 칸=풀(하늘색=일반, 특수화물은 제 색·별첨2) · 안 칠한 칸=엠티 · 별첨1 ■ 색=선사 · 가운데 글자=종류(F 풀 · e 20ft엠티 · E 40ft엠티 · RF RE DG FR OT TK)'}
-          {' · X=옆 40ft가 차지 · 회색=통과'}{shiftConfCount > 0 ? ' · ◆=쉬프팅' : ''}{shiftPredCount > 0 ? ' · ◇=예측(확정 아님)' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}
+          {' · X=옆 40ft가 차지 · 회색=통과'}{shiftConfCount > 0 ? ' · ◆=쉬프팅' : ''}{shiftPredCount > 0 ? ' · ◇=예측(확정 아님)' : ''}{shiftKeepCount > 0 ? ' · 노란◆(흑백 ◈)=시프팅 예보(선사 지시 본선 잔류 · 확정 아님)' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}
         </div>
       </div>
       </div>

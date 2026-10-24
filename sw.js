@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.47-01';
-const NOTE = '4.47-01 같은 호기에서 양하와 선적을 바꿀 때 등 수동 보고를 닫았다가 다시 열면 작업 종류는 지금 화면의 작업(양하·선적)으로 켜지고 앞서 고른 보고 종류·사유는 비워집니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.48';
+const NOTE = '4.48 선사 지시로 본선에 남는 컨은 컨 상세 «선사 지시 · 본선 잔류»로 넣으면 평택 양하에서 빠지고 카고플랜에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 확정하면 파란 ◆로 바뀝니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -1,4 +1,4 @@
-import React, { useState , useMemo, useRef } from 'react';
+import React, { useState , useMemo, useRef, useEffect } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
@@ -12,7 +12,7 @@ import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
 import { completedByLabel, EXTRA_OF_LIST_LABEL } from '../utils.js';   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -406,6 +406,44 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   //    ⚠ 화면 게이트는 **보조**다 — 진짜 문지기는 `firebase.js` 의 `assertChief` 다(3.51 교훈).
   const podCan = isChief(inspector) || isOwnerName(inspector);
   const [podBusy, setPodBusy] = useState(false);
+  //  ★ 4.48 — 선사 지시 «본선 잔류»(평택에서 안 내림). 검수사 2026-10-24 MAMP 641N 메일 «Pls keep below cntrs onboard for CNDAI discharge» ·
+  //    «POD변경 내용이 어딘가에 적혀 있어야 합니다» · «컨 상세» · «이렇게 만든다». 쓰기 문지기는 firebase.fbSetKeepOnboard(수석·검수사만) — 화면 게이트는 보조.
+  //    어느 화면에서 열어도 같은 값이 보이게 열 때 한 번 읽는다(행 표식 _keep 은 먼저 보이는 값).
+  const [keepLocal, setKeepLocal] = useState(undefined);   // undefined = 아직 안 읽음(행 표식 c._keep 을 쓴다) · null = 지시 없음
+  const [keepOpen, setKeepOpen] = useState(false);
+  const [keepBusy, setKeepBusy] = useState(false);
+  const [keepPod, setKeepPod] = useState('');
+  const [keepMail, setKeepMail] = useState('');
+  const [keepNote, setKeepNote] = useState('');
+  const [keepErr, setKeepErr] = useState('');
+  //  4.48 감사(하 5) — key 없이 그리는 자리(App · 수석 보드)에서 컨이 바뀌면 입력칸을 비우고, 늦게 끝난 저장·풀기는 지금 보이는 컨일 때만 반영한다.
+  const _keepCnRef = useRef(c && c.cn);
+  _keepCnRef.current = c && c.cn;
+  useEffect(() => {
+    setKeepLocal(undefined); setKeepOpen(false); setKeepErr(''); setKeepPod(''); setKeepMail(''); setKeepNote('');
+    if (mode !== 'discharge' || !voyageKey || !c || !c.cn || String(c.cn).startsWith('_')) return undefined;
+    let alive = true;
+    fbGetKeepOnboard(voyageKey, c.cn).then((v) => { if (alive) setKeepLocal(v || null); })
+      .catch((e) => { console.warn('[4.48 본선 잔류] 읽기 실패 — 행 표식만 보입니다:', e); if (alive) setKeepErr(`선사 지시를 못 읽었습니다(${(e && e.message) || e}) — 행 표식만 보입니다.`); });
+    return () => { alive = false; };
+  }, [mode, voyageKey, c && c.cn]);
+  const saveKeep = async () => {
+    if (keepBusy) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const cn0 = c.cn;
+    setKeepBusy(true); setKeepErr('');
+    try { const v = await fbSetKeepOnboard(voyageKey, cn0, { pod: keepPod, mailAt: keepMail, note: keepNote }, inspector); if (_keepCnRef.current === cn0) { setKeepLocal(v); setKeepOpen(false); } }
+    catch (e) { if (_keepCnRef.current === cn0) setKeepErr(`저장하지 못했습니다 — ${(e && e.message) || e}`); else alert(`${cn0} 선사 지시 저장 실패 — ${(e && e.message) || e}`); }   // §4-3 조용히 실패 금지
+    finally { setKeepBusy(false); }
+  };
+  const clearKeep = async () => {
+    if (keepBusy) return;
+    const cn0 = c.cn;
+    setKeepBusy(true); setKeepErr('');
+    try { await fbClearKeepOnboard(voyageKey, cn0, inspector); if (_keepCnRef.current === cn0) setKeepLocal(null); }
+    catch (e) { if (_keepCnRef.current === cn0) setKeepErr(`풀지 못했습니다 — ${(e && e.message) || e}`); else alert(`${cn0} 선사 지시 풀기 실패 — ${(e && e.message) || e}`); }
+    finally { setKeepBusy(false); }
+  };
   const pickPod = async (src) => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (!src || podBusy) return;
@@ -1261,6 +1299,55 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               <Field label="최종지(97)" value={c.fpod} mono highlight="purple"/>
             )}
           </div>
+          {/*  ★ 4.48 — 선사 지시 «본선 잔류»(평택에서 안 내림) — 양하에서만. 있으면 POD 변경 내용을 보이고, 없으면 수석·검수사에게 넣는 단추. */}
+          {mode === 'discharge' && c.cn && !String(c.cn).startsWith('_') && (() => {
+            const _k0 = keepLocal !== undefined ? keepLocal : (c._keep || null);
+            const _k = _k0 && !_k0.cleared ? _k0 : null;   // 풀린 지시는 없는 것과 같다(다시 넣을 수 있다)
+            if (_k) return (
+              <div className="mt-2 px-3 py-2 bg-yellow-950/40 border border-yellow-600 rounded-pill" data-keep="1">
+                <div className="text-xs font-black text-yellow-200">🟡 선사 지시 — 본선 잔류(평택에서 안 내림)</div>
+                <div className="text-xxs text-yellow-100/90 mt-0.5 leading-snug" data-keep-pod={_k.pod}>
+                  POD 변경 {(_k.pod_orig || c.pod || '?')} → {_k.pod}{_k.mailAt ? ` · 선사 메일 ${_k.mailAt}` : ''}{_k.src === 'mail' ? ' · 수집기(메일)' : _k.by ? ` · ${_k.by}` : ''}
+                </div>
+                {_k.note && <div className="text-3xs text-yellow-100/70 mt-0.5 break-words">«{_k.note}»</div>}
+                <div className="text-3xs text-yellow-200/80 mt-0.5 leading-snug">평택 양하 대수에서 뺍니다. 이 컨 아래 평택 컨을 내리려면 들어냈다 다시 실어야 하면 카고플랜·베이뷰에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 시프팅으로 확정하면 파란 ◆ 로 바뀝니다.</div>
+                {podCan && (
+                  <button onClick={clearKeep} disabled={keepBusy} data-keep-clear="1"
+                    className="mt-1 px-2 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">{keepBusy ? '푸는 중…' : '지시 풀기'}</button>
+                )}
+                {keepErr && <div className="text-3xs text-rose-300 mt-0.5">{keepErr}</div>}
+              </div>
+            );
+            if (!podCan) return keepErr ? <div className="mt-2 text-3xs text-rose-300">{keepErr}</div> : null;
+            if (!keepOpen) return (
+              <div className="mt-2">
+                <button onClick={() => { setKeepOpen(true); setKeepErr(''); }} data-keep-open="1"
+                  className="px-2 py-1 rounded bg-ink-800 border border-yellow-700/60 text-2xs font-bold text-yellow-200">🟡 선사 지시 · 본선 잔류(평택에서 안 내림)</button>
+                {keepErr && <div className="text-3xs text-rose-300 mt-0.5">{keepErr}</div>}
+              </div>
+            );
+            return (
+              <div className="mt-2 px-3 py-2 bg-ink-900 border border-yellow-700/60 rounded-pill" data-keep-form="1">
+                <div className="text-xs font-black text-yellow-200">🟡 선사 지시 · 본선 잔류 — 평택에서 내리지 않는 컨</div>
+                <div className="text-3xs text-dim-300 mt-0.5 leading-snug">선사 메일(예 «Pls keep below cntrs onboard for CNDAI discharge»)대로 넣습니다. 평택 양하 대수에서 빠지고, 아래 평택 컨을 막으면 시프팅 예보(노란 ◆)가 됩니다.</div>
+                <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                  <input value={keepPod} onChange={(e) => setKeepPod(e.target.value.toUpperCase())} placeholder="양하항 (예 CNDAI)" data-keep-pod-input="1"
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-xs mono text-dim-100"/>
+                  <input value={keepMail} onChange={(e) => setKeepMail(e.target.value)} placeholder="메일 시각 (예 10-24 12:49)" data-keep-mail-input="1"
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-xs text-dim-100"/>
+                  <input value={keepNote} onChange={(e) => setKeepNote(e.target.value)} placeholder="메일 한 줄(선택)" data-keep-note-input="1"
+                    className="col-span-2 px-2 py-1 rounded bg-ink-800 border border-line text-xs text-dim-100"/>
+                </div>
+                <div className="flex gap-1.5 mt-1.5">
+                  <button onClick={saveKeep} disabled={keepBusy || !keepPod.trim()} data-keep-save="1"
+                    className="flex-1 px-2 py-1 rounded bg-yellow-700 text-ink-950 text-2xs font-black disabled:opacity-50">{keepBusy ? '저장 중…' : '저장'}</button>
+                  <button onClick={() => { setKeepOpen(false); setKeepErr(''); }} disabled={keepBusy}
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-2xs text-dim-300 disabled:opacity-50">취소</button>
+                </div>
+                {keepErr && <div className="text-3xs text-rose-300 mt-1">{keepErr}</div>}
+              </div>
+            );
+          })()}
           {/* M8.07: 품명(내용물) — 평소 숨김. 이상 발생 시 탭하여 확인. desc 있을 때만. */}
           {c.desc && (
             <div className="mt-2">

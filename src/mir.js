@@ -35,6 +35,7 @@ import {
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
+  isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
 import {
@@ -722,7 +723,7 @@ export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = nul
         const dSec = (voyage && voyage.discharge) || {};
         const ownE = dSec.ediContainers && Object.keys(dSec.ediContainers).length ? dSec.ediContainers : null;
         const giv = Array.isArray(fallbackContainers) ? fallbackContainers.filter((x) => x && x.cn && (x._mode || 'discharge') === 'discharge') : [];
-        const U = ptkDischargeUnitsOf({ discharge: { ...dSec, ediContainers: ownE || Object.fromEntries(giv.map((x) => [x.cn, x])) } }, ss);   // 4.20 감사: 이 분모의 시프팅 집합으로
+        const U = ptkDischargeUnitsOf({ discharge: { ...dSec, ediContainers: ownE || Object.fromEntries(giv.map((x) => [x.cn, x])) }, keepOnboard: voyage && voyage.keepOnboard }, ss);   // 4.20 감사: 이 분모의 시프팅 집합으로 · 4.48 감사(상 2): 본선 잔류를 같이(잔여·무브수가 317 로 셌다)
         if (U.basis !== 'edi') listOf[m] = U.set;
       }
     } catch (e) { console.warn('[미르] 리스트 분모 세기 실패 — EDI 평택분으로 셉니다:', e); listOf[m] = null; }
@@ -2555,7 +2556,10 @@ export function answerOneRaw(query, ctx) {
         if (isHatchQ) return answerHatchStatus(_voy, de, ship) || answerVoyageFacts({ factQuery: 'hatch' }, c);
         if (isGangQ) return answerGangSplit(_voyE, de, ship);
         //  4.02: 콘앱도 같은 계산 — 콘앱이 넘긴 컨(cs)으로 트윈·무브를 센다(검수사 «콘앱 첫 답 «EDI 가 아직 없어» 는 통합이 안 된 것»). 시프팅 수는 콘앱이 합친 수(shiftN).
-        if (isMoveQ) return answerTotalMoves(_voy, ship, { eta: movesOfVoyage(_voy, c.voyageKey || '', _mvGiven), shifting: (_isCone && !hasAnyEdi(_voy) && Number.isFinite(c.shiftN)) ? c.shiftN : undefined });
+        //  4.48 감사(중-C) — 콘앱은 EDI 원문이 없어 예보를 스스로 못 센다. 콘앱이 넘긴 시프팅 지도(ctx.shiftMap — 확정 + 본선 잔류 예보)의 예보 수를 같이 넘겨 검수앱과 같은 끝줄(«시프팅 64 (확정 62 · 🟡 예보 2 …)»)을 낸다.
+        const _cone = _isCone && !hasAnyEdi(_voy) && Number.isFinite(c.shiftN);
+        const _kfN = _cone && c.shiftMap ? Object.values(c.shiftMap).filter(isKeepShift).length : 0;
+        if (isMoveQ) return answerTotalMoves(_voy, ship, { eta: movesOfVoyage(_voy, c.voyageKey || '', _mvGiven), shifting: _cone ? c.shiftN : undefined, keepFc: _cone ? _kfN : undefined });
         if (isFirstQ) return answerFirstStart(_voyE, de, ship);
         if (isXrayShiftQ) return answerXrayShifts(_voyE, de, { shipName: ship, pier: info.pier, pace: workPaceOf(_voy, c.voyageKey || '', _mvGiven) });
         if (isShiftBriefQ) return answerShiftBriefing(_voyE, de, { shipName: ship, voyages: c.voyages || null, pace: workPaceOf(_voy, c.voyageKey || '', _mvGiven) });

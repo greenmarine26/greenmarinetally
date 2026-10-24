@@ -3071,6 +3071,42 @@ function _withTimeout(p, what) {
     new Promise((_, rej) => { t = setTimeout(() => { const e = new Error(`${what} — ${REPORT_EDIT_TIMEOUT_MS / 1000}초 안에 서버 확인을 못 받았습니다. 연결을 확인하고 목록을 다시 보십시오.`); e.timeout = true; rej(e); }, REPORT_EDIT_TIMEOUT_MS); }),
   ]).finally(() => clearTimeout(t));
 }
+//  ★ 4.48 — 선사 지시 «본선 잔류»(평택에서 안 내림) 쓰기 — `voyages/{항차}/keepOnboard/{컨}`. 문지기는 쓰는 자리(POD 확정과 같은 수석·검수사만).
+//    검수사 2026-10-24 13:09 «이렇게 만든다»(컨 상세 단추 · 수집기 메일) · «차후에 플래너가 확정하면 그떄 같이 바뀌게» — 확정은 선사 시프팅 목록·EDI 가 하고, 이 쓰기는 예보만 만든다.
+//    리스트·EDI 노드는 건드리지 않는다(되돌릴 근거) — 풀면 그 노드만 지운다. 쓰고 되읽어 맞는지 본다(조용히 넘기지 않는다).
+export async function fbSetKeepOnboard(voyageKey, cn, opts = {}, by) {
+  assertCanWork('선사 지시 본선 잔류');
+  assertChief('선사 지시 본선 잔류', by);
+  const c = String(cn || '').trim().toUpperCase();
+  const p = String((opts && opts.pod) || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!voyageKey || !/^[A-Z]{4}\d{7}$/.test(c)) throw new Error(`컨번호가 이상합니다(${cn || '빈칸'}) — 저장하지 않았습니다.`);
+  if (!/^[A-Z0-9]{3,6}$/.test(p) || isPyeongtaekPort(p)) throw new Error('양하항을 평택이 아닌 항구 코드로 적어 주세요(예 CNDAI) — 저장하지 않았습니다.');
+  const path = `voyages/${voyageKey}/keepOnboard/${c}`;
+  const curPod = (await _withTimeout(get(ref(db, `voyages/${voyageKey}/discharge/records/${c}/pod`)), '원래 POD 읽기')).val();
+  const val = { cn: c, pod: p, src: 'manual', by: String(by || '').trim(), at: Date.now(),
+    mailAt: String((opts && opts.mailAt) || '').trim().slice(0, 40), note: String((opts && opts.note) || '').trim().slice(0, 300), pod_orig: curPod == null ? '' : String(curPod) };
+  await _withTimeout(set(ref(db, path), val), '본선 잔류 저장');
+  const back = (await _withTimeout(get(ref(db, path)), '본선 잔류 되읽기')).val();
+  if (!back || back.pod !== p) { const e = new Error('저장했는데 되읽은 값이 다릅니다 — 다시 눌러 주십시오.'); e.unverified = true; throw e; }
+  return val;
+}
+//  컨 상세가 열 때 그 컨의 지시를 읽는다(어느 화면에서 열어도 같은 값 — 베이뷰 칸처럼 행에 표식이 없는 입구도). 읽기 실패는 던진다(부르는 쪽이 알린다).
+export async function fbGetKeepOnboard(voyageKey, cn) {
+  const c = String(cn || '').trim().toUpperCase();
+  if (!voyageKey || !/^[A-Z]{4}\d{7}$/.test(c)) return null;
+  return (await _withTimeout(get(ref(db, `voyages/${voyageKey}/keepOnboard/${c}`)), '본선 잔류 읽기')).val() || null;
+}
+export async function fbClearKeepOnboard(voyageKey, cn, by) {
+  assertCanWork('선사 지시 본선 잔류 풀기');
+  assertChief('선사 지시 본선 잔류 풀기', by);
+  const c = String(cn || '').trim().toUpperCase();
+  if (!voyageKey || !/^[A-Z]{4}\d{7}$/.test(c)) throw new Error(`컨번호가 이상합니다(${cn || '빈칸'}).`);
+  const path = `voyages/${voyageKey}/keepOnboard/${c}`;
+  //  지우지 않고 «풀림» 으로 남긴다 — 수집기(메일)가 같은 지시를 다음 사이클에 다시 넣지 않게(수집기는 줄이 있으면 건드리지 않는다).
+  await _withTimeout(update(ref(db, path), { cn: c, cleared: true, clearedBy: String(by || '').trim(), clearedAt: Date.now() }), '본선 잔류 풀기');
+  const back = (await _withTimeout(get(ref(db, path)), '본선 잔류 풀기 되읽기')).val();
+  if (!back || !back.cleared) { const e = new Error('풀었는데 되읽은 값이 다릅니다 — 다시 눌러 주십시오.'); e.unverified = true; throw e; }
+}
 export async function fbEditWorkReport(voyageKey, ts, next, me) {
   assertCanWork('보고 고치기');
   const path = `voyages/${voyageKey}/reports/${ts}`;

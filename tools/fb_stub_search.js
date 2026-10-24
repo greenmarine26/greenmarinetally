@@ -84,6 +84,9 @@ export const fbMarkBroadcastRead = async () => true;
 export const fbMarkDeletedStaff = async () => true;
 export const fbPickIso = async () => true;
 export const fbPickPod = async () => true;
+export const fbSetKeepOnboard = async () => ({});   // 4.48: 선사 지시 본선 잔류
+export const fbClearKeepOnboard = async () => true;   // 4.48
+export const fbGetKeepOnboard = async () => null;   // 4.48
 export const fbPromotePendingDamage = async () => true;
 export const fbRateFoodSpot = async () => true;
 export const fbReassignContainerPosition = async (vk, mode, cn, b, r, t, by, opts) => { window.__calls.push({ fn: 'reassign', cn, to: `${b}-${r}-${t}`, opts: opts || null }); return { ok: true }; };

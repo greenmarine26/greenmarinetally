@@ -5,7 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { resolvedPod, ptkDischargeUnitsOf, keepOnboardOf } from '../utils.js';   // 4.48: keepOnboardOf   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
@@ -473,13 +473,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         //    전체 %(totalAll·totalDone)는 작업량(평택분 + 시프팅 2무브)으로 — 종전 숫자 그대로다.
         const _sp = shiftSplitOf(k, v);
         const _ss = _sp.set;   // 2.89-06
-        const dis = computeStats(v.discharge, 'discharge', _ss);
+        const dis = computeStats(v.discharge, 'discharge', _ss, v.keepOnboard);   // 4.48 감사(상 1): 본선 잔류 뺌
         const loa = computeStats(v.loading, 'loading', _ss);
         return {
           key: k,
           info: v.info,
           dis, loa,
-          shift: { n: _sp.n, out: _sp.out.done, in: _sp.in.done },
+          shift: { n: _sp.n, out: _sp.out.done, in: _sp.in.done, fc: (_sp.forecast && _sp.forecast.n) || 0 },   // 4.48: 본선 잔류 예보
           totalDone: dis.workDone + loa.workDone,
           totalAll: dis.workTotal + loa.workTotal,
         };
@@ -2630,7 +2630,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
         {/*  ★ 4.16: 시프팅은 양하·선적 막대에 안 섞고 따로(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). */}
         {v.shift && v.shift.n > 0 && (
-          <div className="text-sky-300 font-bold" data-shift-line={v.shift.n}>◆ 시프팅 {v.shift.n} — 내림 {v.shift.out}/{v.shift.n} · 실음 {v.shift.in}/{v.shift.n}</div>
+          <div className="text-sky-300 font-bold" data-shift-line={v.shift.n}>◆ 시프팅 {v.shift.n} — 내림 {v.shift.out}/{v.shift.n} · 실음 {v.shift.in}/{v.shift.n}{v.shift.fc > 0 && <span className="text-yellow-300"> · ◆ 예보 {v.shift.fc}</span>}</div>
         )}
       </div>
       {/*  3.20 — **터미널 대수는 화면에 안 쓴다.** 검수사 2026-09-06 «카토스(앱) 카운트는 놔두고 터미널 카운트는 이제 없어도 될듯합니다».
@@ -2814,7 +2814,7 @@ function timeAgo(ts) {
   return `${Math.floor(sec/86400)}일 전`;
 }
 
-function computeStats(section, mode, shiftSet) {   // 2.89-06
+function computeStats(section, mode, shiftSet, keepOnboard) {   // 2.89-06 · 4.48 keepOnboard
   // V7.40: 평택분 판정을 모드별로 정확히 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   //   이전: POL∨POD 평택이면 카운트 → 양하 EDI에서 평택발 타항행 컨까지 평택분으로 잡혀 과대 집계.
   //  ★ 4.24 (NaN 수리) — 구역이 없을 때도 아래 끝 줄과 **같은 모양**을 돌려준다. 종전엔 workTotal·workDone 이 없어
@@ -2846,13 +2846,14 @@ function computeStats(section, mode, shiftSet) {   // 2.89-06
     [...ptkCns].filter(cn => String(cn).startsWith('__')).forEach(cn => ptkCns.delete(cn));
     recordCns.forEach(cn => ptkCns.add(cn));
   }
+  if (mode === 'discharge') for (const cn of Object.keys(keepOnboardOf({ keepOnboard }))) { ptkCns.delete(cn); recordCns.delete(cn); }   // 4.48 감사(상 1): 본선 잔류는 평택분(ptk 합계)에서도 뺀다 — 홈 computeStats 와 같은 한 벌
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당. 3.26: 부킹 자리 `__BOOK_` 도 자리다.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__')).length;
   const missing = Math.max(0, ptkCns.size - matched - planSlots);
   //  2.89-07: 작업량·완료는 progressOf 한 벌(홈 카드·현황 요약과 같은 숫자) —
   //    작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브 · extra = 분모 밖 완료(V9.57 I4 유지).
-  const prog = progressOf(section, mode, shiftSet, ptkCns);
+  const prog = progressOf(section, mode, shiftSet, ptkCns, keepOnboard);   // 4.48: 본선 잔류(양하만 쓴다)
   //  ★ 4.16: 막대 = 평택분(홈 카드와 같은 한 벌). 작업량(평택분 + 이 모드 모브)은 workTotal·workDone — 보드 전체 % 가 쓴다.
   const total = prog.ptk.total;
   const done = prog.ptk.done;
@@ -3297,7 +3298,7 @@ function PhoneShipCard({ v, workers = [], departed = false, lastAt = 0, onOpen }
       {v.dis.total > 0 && <PhoneBar kind="discharge" stats={v.dis} />}
       {v.loa.total > 0 && <PhoneBar kind="loading" stats={v.loa} />}
       {v.dis.total === 0 && v.loa.total === 0 && <div className="text-xs text-dim-400 mt-1.5">평택분 자료 대기</div>}
-      {v.shift && v.shift.n > 0 && <div className="text-xs text-sky-300 font-bold mt-1">◆ 시프팅 {v.shift.n} — 내림 {v.shift.out}/{v.shift.n} · 실음 {v.shift.in}/{v.shift.n}</div>}
+      {v.shift && v.shift.n > 0 && <div className="text-xs text-sky-300 font-bold mt-1">◆ 시프팅 {v.shift.n} — 내림 {v.shift.out}/{v.shift.n} · 실음 {v.shift.in}/{v.shift.n}{v.shift.fc > 0 && <span className="text-yellow-300"> · ◆ 예보 {v.shift.fc}</span>}</div>}
       <div className="flex items-center gap-1.5 flex-wrap mt-1.5 text-xs">
         {workers.length > 0 ? workers.map((w) => (
           <span key={w.name} className="inline-flex items-center gap-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 font-bold px-1.5 rounded-full">
