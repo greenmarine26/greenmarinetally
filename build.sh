@@ -1141,7 +1141,7 @@ fi
 #  4.48: **선사 지시 «본선 잔류» — 평택 양하에서 빼고, 아래 평택 컨을 막으면 시프팅 예보(노란 ◆)** — MAMP 641N 22베이 실자료(베이플랜·리스트·선사 시프팅 목록·베이사전)를
 #    실소스 판정·컨 상세·검증 상자·실 firebase.js(메모리 DB)로 잰다. 검수사 2026-10-24 «메일대로 315» · «노란 다이아 몬드로» · «플래너가 확정하면 그떄 같이 바뀌게».
 SMOKE_KP=$(mktemp /dev/shm/hometmp/_smokekp_XXXXXX.js)
-if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
      --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
      --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_KP"; then
   node tools/smoke_keep448.cjs "$(pwd)" "$SMOKE_KP" || { echo "✗ 4.48 본선 잔류 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_KP"; exit 1; }

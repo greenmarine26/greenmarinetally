@@ -182,7 +182,7 @@ function ReconLine({ x, onOpenContainer }) {
     <button type="button" data-recon-cn={x.cn}
       onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
       className="mono block w-full text-left px-1.5 py-0.5 rounded hover:bg-ink-750/50 active:bg-ink-700">
-      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300">{parts.join(' · ')}</span>
+      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-all">{parts.join(' · ')}</span>{/* 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
     </button>
   );
 }

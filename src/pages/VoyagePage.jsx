@@ -473,9 +473,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   시프팅이 0인지를 계산 했을것입니다."* 정답은 `info.berthShift` 로 이미 들어와 있었는데
   //   앱은 두 숫자를 나란히 보여주기만 하고 «틀렸다» 고 말하지 않았다.
   //   그래서 KSKM 2615N 4대·XTPG 536E 7대 허수가 조용히 떠 있었다.
+  //  ★ 4.48-02 — 배정표 이적과 맞대는 수는 **확정 시프팅만**이다(선사 지시 본선 잔류 예보 — 노란 ◆ — 는 뺀다). 검수사 2026-10-24 18:54 MAMP 641N
+  //    «◆쉬프팅(재적부) 64 … ⚠ 배정표 62대 — 차이 2 … 앱은 64대를 냈습니다 — 어느 한쪽이 틀립니다 … 커버 분할 130가지를 전부 돌려도 정답이 안 나옵니다»
+  //    · «앱이 같은 정보를 다루지 않는것 같습니다. 한쪽은 알고 한쪽은 모르고». 근거 판정(shiftEvidenceOf)·카고플랜 머리·현황 요약은 이미 «62 + 예보 2» 로 갈라 셌는데
+  //    이 상자만 64 로 배정표와 맞대 «⛔ 불일치»·«앱 추정 62 — 차이 2»·«⚠ 배정표 62대 — 차이 2» 를 냈다. 예보는 터미널이 아직 선사 메일을 반영하기 전 몫이다.
+  const shiftKeepN = useMemo(() => shiftingList.filter((x) => x && x.keep).length, [shiftingList]);
+  const shiftConfN = shiftingList.length - shiftKeepN;
   const truthChk = useMemo(
-    () => shiftingTruthCheck(voyage, shiftingList.length),
-    [voyage?.info?.berthShift, shiftingList.length]);
+    () => shiftingTruthCheck(voyage, shiftConfN),
+    [voyage?.info?.berthShift, shiftConfN]);
   //   불일치면 커버 분할을 역산한다. 축이 길면 조합이 폭주하므로 상한을 둔다(무응답 방지).
   const hatchSolve = useMemo(() => {
     if (!truthChk || truthChk.pending || truthChk.ok) return null;   // 1.76-01: 확정 전에는 역산도 하지 않는다
@@ -509,6 +515,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     hatchSolve,
     restowExtra,   // 3.65: 카토스 시프팅 실적에만 있는 컨
     split: { n: shiftSplit.n, out: shiftSplit.out.done, in: shiftSplit.in.done },   // 4.16: 목록 머리 «내림 x/N · 실음 y/N»
+    confN: shiftConfN, keepN: shiftKeepN,   // 4.48-02: 확정 시프팅 · 본선 잔류 예보(노란 ◆) — 목록 머리가 배정표와 확정만 맞댄다
   };
 
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
@@ -1843,6 +1850,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
+          keepOnboard={mode === 'discharge' ? keepOnboardOf(voyage) : null}   /* 4.48-02: 자료 점검 상자 «앱 예상» 줄의 메일 근거 */
           briefCtx={briefCtx}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
           detailPanel={!isWide ? null : (detailPanelHere ? renderDetail('panel') : (
@@ -2439,10 +2447,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null }) {   // 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
+export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null }) {   // 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
+  //  4.48-02: 시프팅 목록 머리는 확정 시프팅만 배정표·서류와 맞댄다 — 선사 지시 본선 잔류 예보(노란 ◆)는 따로(항차 화면이 넘긴 shiftInfo.confN · 없으면 목록에서 센다)
+  const _shKeepN = shiftInfo && shiftInfo.keepN != null ? shiftInfo.keepN : (shiftingList || []).filter((x) => x && x.keep).length;
+  const _shConfN = shiftInfo && shiftInfo.confN != null ? shiftInfo.confN : (shiftingList || []).length - _shKeepN;
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   /* ★ 2.92 (검수사 «이렇게 강제적으로 화면을 띄우면 사용자는 불편해 합니다. 한번은 그렇다고 하더라도
        반복해서 보이면 짜증납니다. 강조문구와 볼려면 클릭하게 만들어 주세요») —
@@ -2636,6 +2647,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
         shiftingList={shiftingList}
         voyageKey={voyageKey}
         dischargeEdi={dischargeEdi}   // 2.94: 통과화물 판정용(VoyagePage 에서 내려온 prop)
+        keepOnboard={keepOnboard}   // 4.48-02: 앱 예상 줄의 메일 근거(메일 시각 · 메일 한 줄 · 양하항)
       />
 
       {/* ★ 1.84-01 (검수사 확정 2026-08-19): **검색창은 통합검색 하나로.**
@@ -2737,7 +2749,11 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
         <div className="mt-3 bg-ink-900 border border-blue-800/50 rounded-pill overflow-hidden">
           <button type="button" onClick={() => setShiftOpen(!shiftOpen)}
             className="w-full text-left px-3 py-2 bg-blue-950/60 hover:bg-blue-900/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
-            <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            <span className="text-blue-400">◆</span> 쉬프팅(재적부) {_shConfN}
+            {/*  ★ 4.48-02 — 선사 지시 본선 잔류 예보(노란 ◆)는 따로 — 카고플랜 머리 «쉬프팅 62 예보◆2» 와 같은 말. 배정표와는 확정만 맞댄다. */}
+            {_shKeepN > 0 && (
+              <span className="text-yellow-300" data-shift-keep-head={_shKeepN}>· 예보◆{_shKeepN}(선사 메일 수정 — 본선 잔류)</span>
+            )}
             {/*  ★ 4.16 — 시프팅 리스트 머리: 내림(양하 완료) · 실음(선적 완료). 양하·선적 대수에는 안 섞는다(§7.8-①). */}
             {shiftInfo?.split && shiftInfo.split.n > 0 && (
               <span className="text-blue-200" data-shift-split={`${shiftInfo.split.out}/${shiftInfo.split.in}/${shiftInfo.split.n}`}>· 내림 {shiftInfo.split.out}/{shiftInfo.split.n} · 실음 {shiftInfo.split.in}/{shiftInfo.split.n}</span>
@@ -2758,16 +2774,16 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             {shiftInfo?.meta?.source === 'carrier' && (
               <span className="text-emerald-300">
                 · 선사 서류 정본
-                {shiftInfo.meta.estN != null && shiftInfo.meta.estN !== shiftingList.length
-                  ? ` · 앱 추정 ${shiftInfo.meta.estN} — 차이 ${Math.abs(shiftingList.length - shiftInfo.meta.estN)}` : ' · 앱 추정과 같음'}
+                {shiftInfo.meta.estN != null && shiftInfo.meta.estN !== _shConfN
+                  ? ` · 앱 추정 ${shiftInfo.meta.estN} — 차이 ${Math.abs(_shConfN - shiftInfo.meta.estN)}` : ' · 앱 추정과 같음'}{/* 4.48-02: 서류·추정은 확정 시프팅끼리 */}
               </span>
             )}
             {/*  ★ 3.44-01 — **배정표가 서류와 다르면 그것을 말한다.** 검수사 2026-09-12 «배정이 바뀌었는데 앱은 그대로».
                  배정목록 이적이 28 → 38 모브(14 → 19대)로 바뀌었는데 서류를 정본으로 쓰며 조용히 덮었다.
                  규범 «배정표가 확정이면 배정표가 정본» — 덮지 말고 둘 다 보이고, 큰 쪽을 먼저 의심하게 한다. */}
-            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== shiftingList.length && (
+            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== _shConfN && (
               <span className="text-amber-300 font-bold">
-                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - shiftingList.length)}`}
+                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - _shConfN)}`}{/* 4.48-02: 배정표와는 확정만 */}
               </span>
             )}
             {/*  ⚠ 감사 지적(3.44) — 서류에 못 읽은 행이 있으면 조용히 모자란 대수가 정본이 된다. 화면이 밝힌다. */}

@@ -90,10 +90,11 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   );
 }
 
-export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null }) {
+export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null, keepOnboard = null }) {   // 4.48-02: keepOnboard — 앱 예상 줄의 메일 근거
   const shiftCount = shiftingList.length;
   const shiftKeepCount = (shiftingList || []).filter((x) => x && x.keep).length;   // 4.48: 그중 선사 지시 본선 잔류 예보(확정 아님)
   const [shiftOpen, setShiftOpen] = useState(false);
+  const _keepKey = Object.keys(keepOnboard || {}).sort().join(',');
   const v = useMemo(() => {
     //  3.26: 부킹 자리(예상 EDI — `__BOOK_`·cn 없는 자리)는 실번호가 없어 리스트와 겹칠 수가 없다. «리스트에 없음»도
     //    «EDI에 없음»도 아니다 — 자리를 실번호가 **채우는** 관계다(SWBT 2614N: 316/316 이 양쪽 경고로 떴다).
@@ -110,6 +111,12 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     const _recByCn = {};
     for (const r of (records || [])) { if (r && r.cn) _recByCn[String(r.cn).toUpperCase()] = r; }
     const isPtk = (c) => isPtkResolved(c, _recByCn[String(c && c.cn || '').toUpperCase()] || null, mode === 'discharge' ? 'discharge' : 'loading');
+    //  ★ 4.48-02 — 검수사 2026-10-24 19:16 «확정이 아닌 상태입니다. 그러므로 EDI317 리스트317(315) 매칭 317로 보여주는것이 맞습니다. 별도로 앱 예상EDI 평택 315 · 리스트 315 · 매칭 315를
+    //    따로 표기해줘야 하고요 메일을 근거로 제시하고». 위 칸은 **지금 자료 그대로**(EDI·선사 리스트·터미널 배정이 아직 317), 선사 지시 본선 잔류를 적용한 수는 아래 «앱 예상» 한 줄 + 메일 근거로 따로.
+    //    종전(4.48)엔 리스트만 빼서 «EDI 평택 317 · 리스트 315 · 매칭 317» 로 세 칸 기준이 섞였다.
+    //    지시 컨 = 지시 기록(keepOnboard — 아래 평택 컨이 없어 시프팅 예보가 아닌 지시도 든다) ∪ 시프팅 목록의 예보 행.
+    const _keepSet = new Set([...Object.keys(keepOnboard || {}), ...(shiftingList || []).filter(x => x && x.keep).map(x => x.cn)].map(cn => String(cn || '').toUpperCase()).filter(Boolean));
+    const _isKeepC = (c) => mode === 'discharge' && _keepSet.has(String((c && c.cn) || '').toUpperCase());
     const ptkInEdi = (ediContainers || []).filter(c => !isSlotEntry(c)).filter(isPtk);   // 3.26: 자리는 실컨 대조 밖
     const recCns = new Set((records || []).map(r => r.cn));
     const ediCns = new Set((ediContainers || []).map(c => c.cn));
@@ -142,8 +149,11 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     const shiftInList = mode === 'discharge' ? (records || []).filter(r => r && !ediCns.has(r.cn) && !thruSet.has(r.cn) && _shSet.has(String(r.cn || '').toUpperCase())) : [];
     const _shInSet = new Set(shiftInList.map(r => r.cn));
     //  ★ 4.48 — 선사 지시 본선 잔류의 시프팅 예보(목록 keep 행)는 평택 양하가 아니다 — 리스트 수에서 빼고 시프팅(예보)으로 한 번만 센다(MAMP 641N 리스트 317 = 평택 315 + 예보 2).
-    const _keepSet = new Set((shiftingList || []).filter(x => x && x.keep).map(x => String(x.cn || '').toUpperCase()));
     const keepInList = mode === 'discharge' ? (records || []).filter(r => r && !_shInSet.has(r.cn) && _keepSet.has(String(r.cn || '').toUpperCase())) : [];
+    //  ★ 4.48-02 감사(하-1) — 플래너가 본선 잔류 지시 컨을 선사 시프팅 목록에 넣어 확정하면(파란 ◆) 그 컨은 확정 시프팅이면서 EDI 평택·리스트에도 남는다(EDI POD 수정 전).
+    //    «총 작업» 은 청구 근거(V8.98-07)라 한 번만 센다(4.34-03 원칙) — 확정 시프팅 행 가운데 EDI 평택 리스트에도 있는 컨을 겹침으로 뺀다. 예보 행은 위 칸 쉬프팅 수에 안 들어 겹치지 않는다.
+    const _shConfSet = new Set((shiftingList || []).filter(x => x && !x.keep).map(x => String(x.cn || '').toUpperCase()).filter(Boolean));
+    const shiftOverlap = mode === 'discharge' ? (() => { const _ptkCns = new Set(ptkInEdi.map(c => c.cn)); return (records || []).filter(r => r && _ptkCns.has(r.cn) && !thruSet.has(r.cn) && _shConfSet.has(String(r.cn || '').toUpperCase())); })() : [];
     let extraInList = (records || []).filter(r => !ediCns.has(r.cn) && !thruSet.has(r.cn) && !_shInSet.has(r.cn));
     //  3.26: 부킹 자리가 있으면 EDI 밖 실번호는 그 자리를 채우는 것이다 — 자리 수만큼은 «추가»가 아니다. 남는 만큼만 추가.
     if (fill && fill.slots > 0) extraInList = extraInList.slice(fill.slots);
@@ -173,24 +183,49 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     return {
       ediTotal: (ediContainers || []).length,
       ptkTotal: ptkInEdi.length + (fill ? fill.slots : 0),                                  // 3.26: 부킹 자리도 EDI 평택 대상이다(ptkInEdi 는 자리를 뺀 뒤라 두 번 안 센다)
-      listTotal: (records || []).length - thruInList.length - shiftInList.length - keepInList.length,   // 4.48: 본선 잔류 예보도 리스트에서 빼고 시프팅으로   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
+      listTotal: (records || []).length - thruInList.length - shiftInList.length,   // 4.48-02: 지금 자료 그대로(본선 잔류도 센다 — 확정 아님)   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
       matched: ptkInEdi.filter(c => recCns.has(c.cn)).length + (fill ? Math.min(fill.real, fill.slots) : 0),   // 3.26: 자리를 채운 실번호 = 매칭
+      //  4.48-02 — 앱 예상(선사 메일 수정 적용): 본선 잔류 예보 컨을 EDI 평택·리스트·매칭에서 뺀 수
+      keepPtkInEdi: ptkInEdi.filter(_isKeepC).length,
+      keepMatched: ptkInEdi.filter(c => _isKeepC(c) && recCns.has(c.cn)).length,
+      keepN: mode === 'discharge' ? _keepSet.size : 0,
+      keepCns: mode === 'discharge' ? [..._keepSet] : [],
       bookingFill: fill,
       missingCount: missingInList.length,
       missingByOp,
       missingDetails: missingInList.slice(0, 5),
       shiftInListCount: shiftInList.length,   // 4.34-03: 시프팅 대상이면서 양하 리스트에도 있는 컨 — 총 작업에서 한 번만 센다
-      keepInListCount: keepInList.length,     // 4.48: 본선 잔류 예보(노란 ◆) — 리스트에서 빼고 시프팅 예보로 센다
+      keepInListCount: keepInList.length,
+      shiftOverlap: shiftOverlap.length,      // 4.48-02 감사(하-1): 확정 시프팅이면서 EDI 평택 리스트에도 있는 컨 — 총 작업에서 한 번만
+      shiftOverlapNoKeep: shiftOverlap.filter(r => !_isKeepC(r)).length,   // 앱 예상 줄은 지시 컨을 리스트에서 이미 뺐다 — 남는 겹침만     // 4.48: 본선 잔류 예보(노란 ◆) — 리스트에서 빼고 시프팅 예보로 센다
       extraCount: extraInList.length,
       extraByOp,
       extraDetails: extraInList.slice(0, 5),
       virtualCount: virtualInEdi.length,   // V9.04-01: 가상E(실번호 미배정 자리)
       emptyConfirmed,                      // V9.04-01: 리스트 엠티 실번호(가상 자리 확정분)
     };
-  }, [ediContainers, records, mode, dischargeEdi, bookingFill, shiftingList]);
+  }, [ediContainers, records, mode, dischargeEdi, bookingFill, shiftingList, _keepKey]);   // 4.48-02: _keepKey — 지시 기록이 바뀔 때만(객체는 렌더마다 새로 온다)
 
   if (!v) return null;
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;
+  //  4.48-02 — 지금 자료(확정 시프팅)와 앱 예상(선사 메일 수정 적용 — 본선 잔류 예보)을 가른다
+  const shiftConf = shiftCount - shiftKeepCount;
+  const keepOn = mode === 'discharge' && v.keepN > 0;
+  const app = keepOn ? { ptk: v.ptkTotal - v.keepPtkInEdi, list: v.listTotal - v.keepInListCount, matched: v.matched - v.keepMatched, shift: shiftCount } : null;
+  //  메일 근거 — keepOnboard(지시 기록: 메일 시각 · 메일 한 줄 · 양하항)가 있으면 그것, 없으면 시프팅 목록 keep 행(메일 시각 · 양하항)
+  const keepEvid = (() => {
+    if (!keepOn) return [];
+    const _row = new Map((shiftingList || []).filter((x) => x && x.keep).map((x) => [String(x.cn || '').toUpperCase(), x]));
+    const g = new Map();
+    for (const cn of v.keepCns) {
+      const e = (keepOnboard && keepOnboard[cn]) || {}, x = _row.get(cn);
+      const at = String(e.mailAt || (x && x.keep && x.keep.mailAt) || '').trim(), note = String(e.note || '').trim(), pod = String(e.pod || (x && x.keep && x.keep.pod) || '').trim();
+      const k = `${at}|${note}|${pod}`;
+      if (!g.has(k)) g.set(k, { at, note, pod, cns: [] });
+      g.get(k).cns.push(cn);
+    }
+    return [...g.values()];
+  })();
 
   return (
     <div className={`rounded-pill p-3 ${
@@ -214,7 +249,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
         </div>
         <div className="bg-ink-800/60 rounded p-1.5">
           <div className="text-dim-400 text-2xs">리스트</div>
-          <div className="text-dim-100 font-black mono">{v.listTotal}</div>
+          <div className="text-dim-100 font-black mono">{v.listTotal}{app && <span className="text-yellow-300 text-2xs" data-list-app={app.list}>({app.list})</span>}</div>
         </div>
         <div className="bg-ink-800/60 rounded p-1.5">
           <div className="text-dim-400 text-2xs">매칭</div>
@@ -224,8 +259,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           <button onClick={() => setShiftOpen(true)}
             className="bg-blue-950/50 rounded p-1.5 border border-blue-800/40 hover:bg-blue-900/60 active:scale-95 transition">
             <div className="text-blue-300/80 text-2xs">◆ 쉬프팅</div>
-            <div className="text-blue-300 font-black mono">{shiftCount}</div>
-            {shiftKeepCount > 0 && <div className="text-yellow-300 text-3xs font-bold" data-shift-keep={shiftKeepCount}>◆ 예보 {shiftKeepCount} 포함</div>}
+            <div className="text-blue-300 font-black mono">{shiftConf}</div>
+            {shiftKeepCount > 0 && <div className="text-yellow-300 text-3xs font-bold" data-shift-keep={shiftKeepCount}>+ 예보◆{shiftKeepCount}</div>}
             <div className="text-blue-400/60 text-3xs">목록·인쇄 ▸</div>
           </button>
         )}
@@ -234,9 +269,21 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           상세 목록은 리스트 하단 ◆ 박스 + 인쇄 검수리스트 [별첨2]. */}
       {shiftCount > 0 && (
         <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-xxs text-blue-200 font-bold">
-          총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}{shiftKeepCount > 0 ? `(예보 ${shiftKeepCount})` : ''}
-          {v.keepInListCount > 0 && <span className="ml-1 font-normal text-yellow-300/90" data-keep-in-list={v.keepInListCount}>(선사 지시 본선 잔류 {v.keepInListCount}대는 평택에서 안 내려 리스트에서 빼고 시프팅 예보로 셉니다)</span>}
+          총 작업 {v.listTotal + shiftConf - v.shiftOverlap}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftConf}{v.shiftOverlap > 0 ? ` − 겹침 ${v.shiftOverlap}` : ''}
+          {v.shiftOverlap > 0 && <span className="ml-1 font-normal text-blue-300/80" data-shift-overlap={v.shiftOverlap}>(겹침 {v.shiftOverlap}대는 확정 시프팅이면서 평택 양하 리스트에도 있어 한 번만 셉니다)</span>}
+          {!keepOn && shiftKeepCount > 0 && <span className="ml-1 font-normal text-yellow-300/90">(+ 예보◆{shiftKeepCount})</span>}
           <span className="ml-1 font-normal text-blue-300/70">{v.shiftInListCount > 0 ? `(시프팅 ${v.shiftInListCount}대는 선사 양하 리스트에도 있어 리스트에서 빼고 시프팅으로 한 번만 셉니다)` : '(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])'}</span>
+        </div>
+      )}
+      {/*  ★ 4.48-02 — 앱 예상(선사 메일 수정 적용 · 터미널 아직 미반영)과 그 근거 메일. 확정이 아니므로 위 칸(지금 자료)과 따로 적는다. */}
+      {app && (
+        <div className="mb-2 px-2 py-1.5 bg-yellow-950/30 border border-yellow-700/40 rounded text-xxs text-yellow-100" data-app-expect={`${app.ptk}/${app.list}/${app.matched}/${app.shift}`}>
+          <div className="font-bold">앱 예상(선사 메일 수정 {v.keepN}건 적용 · 확정 아님) — EDI 평택 {app.ptk} · 리스트 {app.list} · 매칭 {app.matched} · 쉬프팅 {app.shift}{shiftKeepCount > 0 ? `(예보◆${shiftKeepCount})` : ''} · 총 작업 {app.list + app.shift - v.shiftOverlapNoKeep}대</div>
+          {keepEvid.map((e, i) => (
+            <div key={i} className="text-2xs text-yellow-200/90 break-all" data-keep-evid={e.cns.join(',')}>
+              근거 — 선사 메일{e.at ? ` ${e.at}` : ''}{e.note ? ` «${e.note}»` : ''} · {e.cns.join(' · ')}{e.pod ? ` → ${e.pod}` : ''}(평택에서 안 내림{v.keepPtkInEdi > 0 ? ' — 양하 EDI 는 아직 평택 · 수정 전' : ''})
+            </div>
+          ))}
         </div>
       )}
 

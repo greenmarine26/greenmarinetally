@@ -142,7 +142,7 @@ const bundle = process.argv[3];
   await wait(300);
   ok(!doc.querySelector('[data-keep="1"]') && !doc.querySelector('[data-keep-open]'), '선적 화면에서는 안 보인다(양하만)');
 
-  console.log('⑨ 검증 상자 — 리스트에서 빼고 시프팅 예보로 한 번만');
+  console.log('⑨ 검증 상자 — 위 칸은 지금 자료 그대로 · 앱 예상(메일 적용)은 따로 한 줄 + 메일 근거(검수사 2026-10-24 19:16)');
   const v9 = voy(mail());
   const recArr = Object.values(v9.discharge.records);
   const ediArr = Object.values(v9.discharge.ediContainers).filter((c) => c.pod === 'KRPTK');
@@ -150,10 +150,14 @@ const bundle = process.argv[3];
   const sl9 = T.shiftingListOf(disp9, v9.discharge.ediContainers, v9);
   W.__renderValidation({ ediContainers: ediArr, records: recArr, mode: 'discharge', shiftingList: sl9, voyageKey: VK });
   await wait(300);
-  const kl = doc.querySelector('[data-keep-in-list]'), ks = doc.querySelector('[data-shift-keep]');
-  const listN = recArr.length - 2;
-  ok(!!kl && kl.getAttribute('data-keep-in-list') === '2' && !!ks && new RegExp(`총 작업 ${listN + sl9.length}대 = 리스트 ${listN} \\+ 쉬프팅 ${sl9.length}\\(예보 2\\)`).test(doc.body.textContent),
-    `«총 작업 ${listN + sl9.length}대 = 리스트 ${listN} + 쉬프팅 ${sl9.length}(예보 2)» · 본선 잔류 2대 안내`, doc.body.textContent.replace(/\s+/g, ' ').slice(0, 300));
+  const ks = doc.querySelector('[data-shift-keep]'), ax = doc.querySelector('[data-app-expect]'), ev9 = doc.querySelector('[data-keep-evid]');
+  const listN = recArr.length, conf9 = sl9.length - 2, tx9 = doc.body.textContent.replace(/\s+/g, ' ');
+  ok(!!ks && new RegExp(`총 작업 ${listN + conf9}대 = 리스트 ${listN} \\+ 쉬프팅 ${conf9}`).test(tx9) && !doc.querySelector('[data-keep-in-list]'),
+    `위 칸 — «총 작업 ${listN + conf9}대 = 리스트 ${listN} + 쉬프팅 ${conf9}» (지금 자료 그대로 · 확정 아님이라 본선 잔류를 빼지 않는다)`, tx9.slice(0, 300));
+  ok(!!ax && (([, l9, , s9]) => `${l9}/${s9}`)(ax.getAttribute('data-app-expect').split('/')) === `${listN - 2}/${sl9.length}` && new RegExp(`앱 예상\\(선사 메일 수정 2건 적용 · 확정 아님\\)`).test(ax.textContent) && new RegExp(`총 작업 ${listN - 2 + sl9.length}대`).test(ax.textContent),
+    `앱 예상 줄 — 리스트 ${listN - 2} · 쉬프팅 ${sl9.length}(예보◆2) · 총 작업 ${listN - 2 + sl9.length}대`, ax && ax.textContent);
+  ok(!!ev9 && ev9.getAttribute('data-keep-evid').split(',').sort().join(',') === [K1, K2].sort().join(',') && /선사 메일 10-24 12:49/.test(ev9.textContent) && /→ CNDAI/.test(ev9.textContent),
+    '메일 근거 — 지시 기록 없이 시프팅 목록만 받아도 «선사 메일 10-24 12:49 · 두 컨 → CNDAI»', ev9 && ev9.textContent);
 
   console.log('⑩ 감사 «부» 입구들 — 같은 두 대를 어느 입구에서든 평택 양하에서 뺀다(상 1~3 · 중 1~3 · 하 1·3)');
   const vA = voy(mail()); vA.key = VK;
@@ -353,6 +357,82 @@ const bundle = process.argv[3];
       'POD 확정 참고가 같이 있으면 묶음이 둘로 나뉜다(본선 잔류 2 · POD 확정 1 — «POD 확정 CNSHA» 앞말은 그쪽만) · 터미널 줄은 «수정 전» 이라 하지 않는다', JSON.stringify({ keep: !!P2.keep, ref: P2.ref && P2.ref.textContent.slice(0, 120), term: P2.term }));
   }
 
+  console.log('⑬ 4.48-02 — 시프팅 목록 머리 · 데이터 검증 칸은 확정 시프팅만 배정표와 맞대고 본선 잔류 예보는 따로(검수사 2026-10-24 18:54)');
+  {
+    const vM = voy(mail()); vM.key = VK;
+    const dispM = T.shiftingMapForDisplay(VK + '_13', vM), slM = T.shiftingListOf(dispM, vM.discharge.ediContainers, vM);
+    const keepN = slM.filter((x) => x.keep).length, confN = slM.length - keepN;
+    const truth = Math.round(confN * 2);
+    vM.info = { ...vM.info, berthShift: truth, terminalStatus: 'working' };
+    const tc = T.shiftingTruthCheck(vM, confN), tcAll = T.shiftingTruthCheck(vM, slM.length);
+    ok(keepN === 2 && tc && tc.ok && tcAll && !tcAll.ok, `배정표 이적 ${truth}모브(${confN}대) — 확정 ${confN} 은 일치 · 예보까지 넣은 ${slM.length} 는 불일치(고치기 전 꼴)`, JSON.stringify({ keepN, confN, tc, tcAll }));
+    W.__renderListTab({ voyageKey: VK, containers: Object.values(vM.discharge.records).map((r) => ({ ...r })), shiftingList: slM,
+      shiftInfo: { evid: null, meta: dispM._meta || null, berthShift: truth, lane: '', loadEdiPending: false, truthChk: tc, hatchSolve: null, restowExtra: [], split: { n: confN, out: 0, in: 0 }, confN, keepN } });
+    await wait(300);
+    const hb = [...doc.querySelectorAll('button')].find((b) => /쉬프팅\(재적부\)/.test(b.textContent || ''));
+    const ht = hb ? hb.textContent.replace(/\s+/g, ' ') : '';
+    ok(new RegExp(`쉬프팅\\(재적부\\) ${confN}\\s*· 예보◆2\\(선사 메일 수정 — 본선 잔류\\)`).test(ht) && new RegExp(`배정표 이적 ${truth}모브\\(${confN}대\\) ✓ 일치`).test(ht) && !/불일치/.test(ht) && !/⚠ 배정표/.test(ht) && !/앱은 .*대를 냈습니다/.test(doc.body.textContent),
+      `목록 머리 «쉬프팅(재적부) ${confN} · 예보◆2(선사 메일 수정 — 본선 잔류) … 배정표 이적 ${truth}모브(${confN}대) ✓ 일치» · «⛔ 불일치»·«⚠ 배정표 N대 — 차이»·«앱은 N대를 냈습니다» 없음`, ht);
+    W.__renderValidation({ ediContainers: Object.values(vM.discharge.ediContainers).filter((c) => c.pod === 'KRPTK'), records: Object.values(vM.discharge.records), mode: 'discharge', shiftingList: slM, voyageKey: VK, keepOnboard: T.keepOnboardOf(vM) });
+    await wait(250);
+    const cell = (lab) => { const d = [...doc.querySelectorAll('div')].find((x) => (x.textContent || '').trim() === lab && x.nextElementSibling); return d ? parseInt(d.nextElementSibling.textContent, 10) : NaN; };
+    const eN = cell('EDI 평택'), lN = cell('리스트'), mN = cell('매칭'), sN = cell('◆ 쉬프팅');
+    const la = doc.querySelector('[data-list-app]'), axM = doc.querySelector('[data-app-expect]'), evM = doc.querySelector('[data-keep-evid]');
+    const recN = Object.keys(vM.discharge.records).length;
+    ok(eN === lN && lN === mN && lN === recN && sN === confN && !!la && la.getAttribute('data-list-app') === String(recN - 2) && la.parentElement.textContent === `${recN}(${recN - 2})`,
+      `데이터 검증 위 칸 — 지금 자료 그대로 «EDI 평택 ${eN} · 리스트 ${recN}(${recN - 2}) · 매칭 ${mN} · 쉬프팅 ${sN}» (라이브 꼴 «EDI317 리스트317(315) 매칭 317»)`, JSON.stringify({ eN, lN, mN, sN, la: la && la.parentElement.textContent }));
+    ok(!!axM && axM.getAttribute('data-app-expect') === `${eN - 2}/${recN - 2}/${mN - 2}/${slM.length}` && new RegExp(`EDI 평택 ${eN - 2} · 리스트 ${recN - 2} · 매칭 ${mN - 2} · 쉬프팅 ${slM.length}\\(예보◆2\\)`).test(axM.textContent),
+      `앱 예상 따로 한 줄 — «EDI 평택 ${eN - 2} · 리스트 ${recN - 2} · 매칭 ${mN - 2} · 쉬프팅 ${slM.length}(예보◆2)»`, axM && axM.textContent);
+    ok(!!evM && /근거 — 선사 메일 10-24 12:49 «Pls keep below cntrs onboard for CNDAI discharge»/.test(evM.textContent) && evM.textContent.includes(K1) && evM.textContent.includes(K2) && /→ CNDAI/.test(evM.textContent) && /양하 EDI 는 아직 평택 · 수정 전/.test(evM.textContent),
+      '메일을 근거로 — «근거 — 선사 메일 10-24 12:49 «Pls keep …» · 두 컨 → CNDAI(평택에서 안 내림 — 양하 EDI 는 아직 평택 · 수정 전)»', evM && evM.textContent);
+    W.__renderValidation({ ediContainers: Object.values(vM.discharge.ediContainers).filter((c) => c.pod === 'KRPTK'), records: Object.values(vM.discharge.records), mode: 'discharge', shiftingList: slM.filter((x) => !x.keep), voyageKey: VK });
+    await wait(200);
+    ok(!doc.querySelector('[data-app-expect]') && !doc.querySelector('[data-list-app]'), '지시가 없는 배 — 앱 예상 줄·괄호 수 없음(종전 그대로)');
+    ok(/break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(폰 가로 밀림 수리)');
+  }
+
+  console.log('⑭ 4.48-02 감사(중-1) — 항차 화면 본체(VoyagePage)를 통째로 그린다: 배정표 대조·앱 예상 줄이 화면 안 계산·전달을 거친다(배정표는 지도 계산 전에 넣는다)');
+  {
+    const vP = voy(mail()); vP.key = VK;
+    const conf0 = Object.keys(T.computeShiftingMapCached(VK + '_14c', vP)).length;
+    vP.info = { ...vP.info, berthShift: conf0 * 2, terminalStatus: 'working' };
+    W.__renderVP(vP, VK);
+    await wait(1500);
+    const hb = [...doc.querySelectorAll('button')].find((b) => /쉬프팅\(재적부\)/.test(b.textContent || ''));
+    const ht = hb ? hb.textContent.replace(/\s+/g, ' ') : '';
+    const body = doc.body.textContent.replace(/\s+/g, ' ');
+    ok(new RegExp(`쉬프팅\\(재적부\\) ${conf0}\\s*· 예보◆2`).test(ht) && new RegExp(`배정표 이적 ${conf0 * 2}모브\\(${conf0}대\\) ✓ 일치`).test(ht) && !/⛔/.test(ht) && !/불일치/.test(ht) && !/⚠ 배정표/.test(ht) && ((m) => !m || Math.abs(Number(m[1]) - conf0) === Number(m[2]))(ht.match(/앱 추정 (\d+) — 차이 (\d+)/)) && !/앱은 \d+대를 냈습니다/.test(body),
+      `항차 화면 머리 — «쉬프팅(재적부) ${conf0} · 예보◆2 … 배정표 이적 ${conf0 * 2}모브(${conf0}대) ✓ 일치» · ⛔·불일치·«⚠ 배정표 N대 — 차이»·«앱은 N대» 없음 · «앱 추정 N — 차이» 는 확정 수와의 차이(이 22베이 픽스처는 추정 0 — truthChk·estN·berthN 이 확정 수와 맞댄다)`, ht.slice(0, 600));
+    ok(/배정표 이적 \d+모브/.test(ht) && /(앱 추정|선사 서류)/.test(ht), '머리에 배정표·서류 줄이 실제로 선다(빈 meta 로 통과하지 않는다)', ht.slice(0, 300));
+    const axP = doc.querySelector('[data-app-expect]'), evP = doc.querySelector('[data-keep-evid]');
+    ok(!!axP && !!evP && /«Pls keep below cntrs onboard for CNDAI discharge»/.test(evP.textContent), '항차 화면 — 앱 예상 줄과 메일 한 줄 근거(부모가 keepOnboard 를 ListTab 에 넘긴다)', evP && evP.textContent);
+    //  아래 평택 컨을 막지 않는 지시 한 건만(22-06-82 MCAU5003650) — 시프팅 예보 행이 없어도 앱 예상 줄이 서고 칩 «전체 N» 과 같은 수
+    const vQ = voy({ MCAU5003650: { cn: 'MCAU5003650', pod: 'CNDAI', src: 'manual', by: ME, at: 1792813740000, mailAt: '10-24 12:49', note: '시험 지시' } }); vQ.key = VK;
+    W.__renderVP(vQ, VK);
+    await wait(1500);
+    const axQ = doc.querySelector('[data-app-expect]');
+    const chipQ = [...doc.querySelectorAll('button')].map((b) => (b.textContent || '').trim()).find((t) => /^전체 \d+$/.test(t));
+    const appList = axQ ? Number(axQ.getAttribute('data-app-expect').split('/')[1]) : NaN;
+    const recN = Object.keys(vQ.discharge.records).length;
+    ok(!!axQ && appList === recN - 1 && chipQ === `전체 ${appList}` && !doc.querySelector('[data-shift-keep]'),
+      `막지 않는 지시 1건만 — 앱 예상 리스트 ${recN - 1} = 칩 «${chipQ}» · 예보◆ 없음(지시 기록으로 앱 예상 줄을 세운다)`, JSON.stringify({ ax: axQ && axQ.getAttribute('data-app-expect'), chipQ }));
+  }
+  console.log('⑮ 4.48-02 감사(하-1) — 플래너가 지시 두 대를 선사 시프팅 목록에 넣어 확정한 뒤 «총 작업» 은 두 대를 한 번만 센다');
+  {
+    const vC = voy(mail()); vC.key = VK;
+    const rl = clone(vC.restowList || {}); const meta = rl._meta || {};
+    for (const cn of [K1, K2]) { const e = vC.discharge.ediContainers[cn]; const pos = String(e.bay).padStart(3, '0') + String(e.row).padStart(2, '0') + String(e.tier).padStart(2, '0'); rl[cn] = { fe: e.fe || 'F', from: pos, to: pos, pod: 'CNDAI', pol: e.pol || '', sztp: '45RF', wt: 0 }; }
+    rl._meta = { ...meta, total: (meta.total || 0) + 2, at: (meta.at || 0) + 1000 }; vC.restowList = rl;
+    const dC = T.shiftingMapForDisplay(VK + '_15', vC), slC = T.shiftingListOf(dC, vC.discharge.ediContainers, vC);
+    W.__renderValidation({ ediContainers: Object.values(vC.discharge.ediContainers).filter((c) => c.pod === 'KRPTK'), records: Object.values(vC.discharge.records), mode: 'discharge', shiftingList: slC, voyageKey: VK, keepOnboard: T.keepOnboardOf(vC) });
+    await wait(250);
+    const recN = Object.keys(vC.discharge.records).length, shN = slC.filter((x) => !x.keep).length;
+    const ovl = doc.querySelector('[data-shift-overlap]'), axC = doc.querySelector('[data-app-expect]');
+    const tx = doc.body.textContent.replace(/\s+/g, ' ');
+    ok(slC.filter((x) => x.keep).length === 0 && !!ovl && ovl.getAttribute('data-shift-overlap') === '2' && new RegExp(`총 작업 ${recN + shN - 2}대 = 리스트 ${recN} \\+ 쉬프팅 ${shN} − 겹침 2`).test(tx),
+      `확정 뒤 위 칸 — «총 작업 ${recN + shN - 2}대 = 리스트 ${recN} + 쉬프팅 ${shN} − 겹침 2»(두 번 세지 않는다 · 청구 근거)`, tx.slice(0, 260));
+    ok(!!axC && new RegExp(`총 작업 ${recN - 2 + shN}대`).test(axC.textContent), `확정 뒤 앱 예상 줄 — 총 작업 ${recN - 2 + shN}대(위 칸과 같은 총 작업)`, axC && axC.textContent);
+  }
   ok(errs.length === 0, '화면 오류 0', errs.join(' | '));
   console.log(`\n4.48 선사 지시 본선 잔류 연막 — ${n - bad}/${n} 통과`);
   process.exit(bad ? 1 : 0);

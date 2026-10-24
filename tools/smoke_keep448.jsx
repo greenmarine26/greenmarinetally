@@ -22,14 +22,19 @@ import PREGONE from './fixtures/shifting_pregone.json';
 import KKAK from './fixtures/keep448_kkak2606n.json';   // 재감사 하-A: 예측 갈래에서 지시 컨이 ◇ 로 잡히는 실자료(KKAK 2606N 04~06베이)
 import { generateHowToAnswer, answerAboutAlert } from '../src/nlSearch.js';   // 4.48-01 감사 — «본선 잔류 뭐야»
 import DiagnosticsPanel from '../src/components/DiagnosticsPanel.jsx';   // 4.48-01 재감사(하-2) — 펼친 칸을 실제로 그린다
+import { ListTab } from '../src/pages/VoyagePage.jsx';   // 4.48-02 — 시프팅 목록 머리(배정표와 확정만 맞댄다)
+import { shiftingTruthCheck } from '../src/utils.js';
+import VoyagePage from '../src/pages/VoyagePage.jsx';   // 4.48-02 감사(중-1) — 항차 화면 본체를 통째로 그려 배선(truthChk·keepOnboard 전달)을 잰다
 
 window.__T = { keepOnboardOf, keepShiftForecastOf, ptkDischargeUnitsOf, shiftingMapForDisplay, isKeepShift, isPredShift, shiftEvidenceOf, shiftSplitOf, shiftingListOf, computeShiftingMapCached,
   buildPosMap, buildBayMarks, reconcileSources, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, setActiveWorkChoice, FX,
-  progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, voyageCountsOf, answerTotalMoves, runDiagnostics, computeStats, PREGONE, KKAK, generateHowToAnswer, answerAboutAlert };
+  progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, voyageCountsOf, answerTotalMoves, runDiagnostics, computeStats, PREGONE, KKAK, generateHowToAnswer, answerAboutAlert, shiftingTruthCheck };
 const root = createRoot(document.getElementById('root'));
 let __mk = 0;
 window.__renderDetail = (props) => { __mk += 1; root.render(React.createElement(ContainerDetailModal, { key: 'd' + __mk, onClose: () => {}, ...props })); };
 window.__renderValidation = (props) => { __mk += 1; root.render(React.createElement(ValidationBox, { key: 'v' + __mk, ...props })); };
+window.__renderVP = (voyage, voyageKey) => { __mk += 1; root.render(React.createElement(VoyagePage, { key: 'vp' + __mk, voyageKey, voyage, inspector: '연막', inspectors: [], onGoHome: () => {}, initModeOverride: 'discharge' })); };
+window.__renderListTab = (props) => { __mk += 1; root.render(React.createElement(ListTab, { key: 'lt' + __mk, mode: 'discharge', ediMap: {}, recMap: {}, xrayMap: {}, xraySeals: {}, compMap: {}, inspector: '연막', onOpenContainer: () => {}, externalFilter: null, onAsk: null, vsl: 'MAMP', pier: 'PCTC', briefCtx: null, ...props })); };
 window.__renderDiag = (alerts) => { __mk += 1; root.render(React.createElement(DiagnosticsPanel, { key: 'g' + __mk, alerts, autoSpeak: false, onToggleSpeak: () => {}, onDismiss: () => {}, onOpenContainer: () => {} })); };
 window.__renderPlan = (props) => { __mk += 1; root.render(React.createElement(PrintableCargoPlanV2, { key: 'p' + __mk, onClose: () => {}, ...props })); };
 window.__renderDetailSame = (props) => { root.render(React.createElement(ContainerDetailModal, { key: 'same', onClose: () => {}, ...props })); };   // 재감사 하-A: key 없이 그리는 자리(App·수석 보드) 흉내 — 컨만 바뀐다

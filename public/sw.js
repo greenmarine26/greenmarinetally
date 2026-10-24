@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.48-01';
-const NOTE = '4.48-01 선사 지시로 본선에 남는 컨이 있는 배는 주의 박스가 «EDI · 선사 리스트 · 세관 리스트 · 메일 수정 N건 적용하면 …»으로 밝힙니다. 그 컨은 매칭 안 되는 컨으로 세지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.48-02';
+const NOTE = '4.48-02 선사 지시로 본선에 남는 컨이 있는 배는 시프팅 상자가 확정만 배정표와 맞댑니다. 데이터 검증 칸은 지금 자료 그대로 세고 메일을 적용한 앱 예상 수는 아래 줄에 따로 적습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
