@@ -33,7 +33,7 @@ import {
   dateWordOf,   // 4.12-02: 날짜 말(어제·내일·낼모레…) 해석 한 벌
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
-  ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
+  ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, shiftSetForUnitsOf,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
@@ -2049,7 +2049,7 @@ function _normalize(ctx) {
       const vk = c.voyageKey || null;
       const mine = c.containers.filter((x) => x && (!vk || !x.voyageKey || x.voyageKey === vk));
       if (mine.length === c.containers.length) {
-        const ss = new Set(Object.keys(c.shiftMap || {}).filter((k) => k && !k.startsWith('_')));
+        const ss = shiftSetForUnitsOf(c.shiftMap);   // 4.48-04: 표시용 지도의 본선 잔류 예보(노란 ◆)는 시프팅 집합에서 뺀다(평택 양하 대수는 자료대로 — 콘앱 미르와 한 벌)
         c.containers = applyDischargeUnits(c.containers.map((x) => (x && !x._mode && (x.mode || c.mode) ? { ...x, _mode: x.mode || c.mode } : x)), v, ss).rows;
       }
     } catch (e) { console.warn('[미르 4.20] 평택 양하분 입히기 실패 — 종전 판정으로 셉니다:', e); }

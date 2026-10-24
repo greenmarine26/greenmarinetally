@@ -12,7 +12,7 @@ import { fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard } from '../src/f
 import { setActiveWorkChoice } from '../src/workChoice.js';
 import FX from './fixtures/keep448_mamp641n.json';
 //  4.48 감사(«부» 상 3 · 중 3 · 하 6) — 연막이 재지 않던 입구를 잰다: 진행 숫자(홈 카드·수석 보드·현황 요약) · 미르 분모·콘앱 미르 행 · 종이 카고플랜 머리 · 주의 박스 · 총 무브수 답 · 확정 없는 배 예측.
-import { progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes } from '../src/utils.js';
+import { progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, shiftSetForUnitsOf } from '../src/utils.js';
 import { voyageCountsOf } from '../src/mir.js';
 import { answerTotalMoves } from '../src/chiefAnswers.js';
 import { runDiagnostics } from '../src/diagnostics.js';
@@ -28,7 +28,7 @@ import VoyagePage from '../src/pages/VoyagePage.jsx';   // 4.48-02 감사(중-1)
 
 window.__T = { keepOnboardOf, keepShiftForecastOf, ptkDischargeUnitsOf, shiftingMapForDisplay, isKeepShift, isPredShift, shiftEvidenceOf, shiftSplitOf, shiftingListOf, computeShiftingMapCached,
   buildPosMap, buildBayMarks, reconcileSources, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, setActiveWorkChoice, FX,
-  progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, voyageCountsOf, answerTotalMoves, runDiagnostics, computeStats, PREGONE, KKAK, generateHowToAnswer, answerAboutAlert, shiftingTruthCheck, shiftEvidenceCore };
+  progressOf, applyDischargeUnits, predictedShiftingForDisplay, setLaneRoutes, shiftSetForUnitsOf, voyageCountsOf, answerTotalMoves, runDiagnostics, computeStats, PREGONE, KKAK, generateHowToAnswer, answerAboutAlert, shiftingTruthCheck, shiftEvidenceCore };
 const root = createRoot(document.getElementById('root'));
 let __mk = 0;
 window.__renderDetail = (props) => { __mk += 1; root.render(React.createElement(ContainerDetailModal, { key: 'd' + __mk, onClose: () => {}, ...props })); };

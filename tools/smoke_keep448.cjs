@@ -176,6 +176,22 @@ const bundle = process.argv[3];
   const ad0 = T.applyDischargeUnits(rowsA, { discharge: { records: vA.discharge.records } }, ssA), ad1 = T.applyDischargeUnits(rowsA, { keepOnboard: vA.keepOnboard, discharge: { records: vA.discharge.records } }, ssA);
   const r1 = ad1.rows.find((x) => x.cn === K1) || {};
   ok(ad1.U.set.size === ad0.U.set.size && r1._ptk === true && !r1._extraOfList, `콘앱 미르 행(applyDischargeUnits) — 지시 두 대도 _ptk(자료대로) · «세관 목록 밖 추가분» 표식 없음 (${ad0.U.set.size} → ${ad1.U.set.size})`, JSON.stringify({ n: [ad0.U.set.size, ad1.U.set.size], r1: { p: r1._ptk, x: r1._extraOfList } }));
+  //  ★ 4.48-04 (4.48-03 라이브 확인 — 콘앱 미르 «양하 315대» ↔ 검수앱 317) — 콘앱 미르·미르 4.20 갈래는 **표시용 지도**(예보 노란 ◆ 를 싣는다)에서 시프팅 집합을 만든다.
+  {
+    const dispK = T.shiftingMapForDisplay(VK, vA);
+    const rawSet = new W.Set(Object.keys(dispK).filter((k) => k && !k.startsWith('_')));   // 4.48-03 까지의 만들기(예보도 시프팅으로) · 번들(jsdom 창)의 Set 으로 만든다(바깥 Set 은 instanceof 가 안 맞아 빈 집합으로 읽힌다)
+    const unitSet = T.shiftSetForUnitsOf(dispK);
+    const adR = T.applyDischargeUnits(rowsA, { keepOnboard: vA.keepOnboard, discharge: { records: vA.discharge.records } }, rawSet);
+    const adU = T.applyDischargeUnits(rowsA, { keepOnboard: vA.keepOnboard, discharge: { records: vA.discharge.records } }, unitSet);
+    const pK = (ad) => ad.rows.filter((x) => x && x._ptk && (x._mode || 'discharge') === 'discharge').length;
+    ok(rawSet.has(K1) && rawSet.has(K2) && !unitSet.has(K1) && !unitSet.has(K2) && unitSet.size === rawSet.size - 2 && pK(adU) === pK(ad1) && pK(adR) === pK(ad1) - 2,
+      `콘앱 미르 갈래(표시용 지도로 만든 시프팅 집합) — 예보 두 대는 집합에서 빠지고 평택 양하 ${pK(ad1)}(검수앱과 같은 답) · 종전 만들기는 ${pK(adR)}(4.48-03 라이브 콘앱 미르 315 재현)`, JSON.stringify({ raw: rawSet.size, unit: unitSet.size, n: [pK(ad1), pK(adU), pK(adR)] }));
+    const coneS0 = src('public/cone.html'), mirS0 = src('src/mir.js');
+    ok(/const _shS=window\.ConeMir\.shiftSetForUnitsOf \? window\.ConeMir\.shiftSetForUnitsOf\(shiftMap\)/.test(coneS0) && /window\.ConeMir\.applyDischargeUnits\(cs, \{[^\n]*\}, _shS\)/.test(coneS0)
+      && /const ss = shiftSetForUnitsOf\(c\.shiftMap\);[^\n]*\n\s+c\.containers = applyDischargeUnits\(/.test(mirS0) && /shiftSetForUnitsOf \} from '\.\/utils\.js'/.test(src('src/mirCore.entry.js'))
+      && /window\.__CONEV='ConeOne 2\.71-02'/.test(coneS0),
+      '배선 — 콘앱 미르(ConeOne 2.71-02)·미르 4.20 갈래가 shiftSetForUnitsOf 로 시프팅 집합을 만든다 · mir-core 가 내보낸다');
+  }
   const vcA0 = T.voyageCountsOf(voy(null)), vcA1 = T.voyageCountsOf(vA);
   ok(vcA1.byMode.discharge.total === vcA0.byMode.discharge.total, `미르 잔여·무브수 분모(voyageCountsOf) ${vcA0.byMode.discharge.total} → ${vcA1.byMode.discharge.total}(자료대로)`, JSON.stringify([vcA0.byMode.discharge, vcA1.byMode.discharge]));
   const dispA = T.shiftingMapForDisplay(VK, vA), confA = T.computeShiftingMapCached(VK, vA), cN = Object.keys(confA).length;
@@ -390,7 +406,7 @@ const bundle = process.argv[3];
     W.__renderValidation({ ediContainers: Object.values(vM.discharge.ediContainers).filter((c) => c.pod === 'KRPTK'), records: Object.values(vM.discharge.records), mode: 'discharge', shiftingList: slM.filter((x) => !x.keep), voyageKey: VK });
     await wait(200);
     ok(!doc.querySelector('[data-app-expect]') && !doc.querySelector('[data-list-app]'), '지시가 없는 배 — 앱 예상 줄·괄호 수 없음(종전 그대로)');
-    ok(/className="text-dim-300 break-words"/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]) && !/className="[^"]*break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(4.48-03 break-words — 낱말 중간은 안 갈림 · 폰 가로 밀림 수리)');
+    ok(/className="text-dim-300 break-words break-keep"/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]) && !/className="[^"]*break-all/.test(src('src/components/DiagnosticsPanel.jsx').match(/function ReconLine[\s\S]{0,900}/)[0]), '주의 박스 펼친 줄 — 긴 파일 이름이 줄바꿈된다(4.48-03 break-words — 낱말 중간은 안 갈림 · 폰 가로 밀림 수리)');
   }
 
   console.log('⑭ 4.48-02 감사(중-1) — 항차 화면 본체(VoyagePage)를 통째로 그린다: 배정표 대조·앱 예상 줄이 화면 안 계산·전달을 거친다(배정표는 지도 계산 전에 넣는다)');
@@ -528,7 +544,7 @@ const bundle = process.argv[3];
       const _o = { ...confM, MNBU0129687: { _forecast: 'keep' }, MNBU3119872: { _forecast: 'keep' } };
       const f = new Function('shiftStatus', 'shiftingMap', '_o', '_sh', 'P_ec', blk + '\nreturn shiftStatus;');
       return f('불일치', confM, _o, { berthShift: berth, terminalStatus: 'working' }, () => T.shiftEvidenceCore); };
-    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.71-01'/.test(coneS),
+    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.71-0[12]'/.test(coneS),
       '콘앱 2.71-01 분기 실행 — 배정표 128(= 확정 62 + 예보 2)이면 «미확정» · 130 이면 «불일치» 그대로(검수앱 shiftEvidenceCore keepN 한 벌)', JSON.stringify([runBlk(128), runBlk(130), blk.length]));
     ok(/async function ctKeepShiftMap[\s\S]{0,700}for\(const k of \['completed','termWork'\]\)[\s\S]{0,300}voy\.discharge\[k\] = j/.test(coneS), '콘앱 2.71-01 — 본선 잔류 예보 재료에 양하 완료·실적을 싣는다(내린 지시 컨은 검수앱처럼 예보에서 빠짐 · 재감사 하-3)');
     //  감사(하-4) — 지시 컨을 실제로 내렸으면 예정은 끝 — 예보·칩·앱 예상에서 빠지고 유닛은 추가분(신고 대상)으로 센다

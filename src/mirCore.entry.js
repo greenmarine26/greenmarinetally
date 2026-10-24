@@ -76,7 +76,7 @@ export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };
 export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';
 export { isReeferContainer, isFullReefer, isEmptyReefer, isoPickOog } from './utils.js';   // 4.15-01 / ConeOne 2.67: 콘앱 행의 리퍼 판정도 검수앱 utils 한 벌(cone.html coneIsReefer — 정규식 사본 없음)
-export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn } from './utils.js';   // 4.20 / ConeOne 2.70: 평택 양하분 한 벌(세관 목록 + 추가분)·제작컨 판정 — 콘앱 미르 «양하 몇 대» 가 검수앱과 같은 집합(cone.html mirAsk)
+export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn, shiftSetForUnitsOf } from './utils.js';   // 4.48-04: shiftSetForUnitsOf — 평택 양하분에서 빼는 시프팅 집합(본선 잔류 예보 제외) 한 벌   // 4.20 / ConeOne 2.70: 평택 양하분 한 벌(세관 목록 + 추가분)·제작컨 판정 — 콘앱 미르 «양하 몇 대» 가 검수앱과 같은 집합(cone.html mirAsk)
 export { shipCodeInQuery, knownShipCodes } from './utils.js';   // 4.18-01 / ConeOne 2.69: 질문 속 다른 배(정확·오타·옛 코드)를 콘앱이 검수앱과 같은 판정으로 가린다(cone.html mirShipFirst)
 export { isWorkingNow, isPyeongtaekPort } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52   // 4.39-01: isPyeongtaekPort — 작업 분석 연막이 콘앱 평택분(EDI POD·POL)을 cone.html 처럼 가린다
 export { sealFormatAnomalies, ediSealMapOf } from './utils.js';

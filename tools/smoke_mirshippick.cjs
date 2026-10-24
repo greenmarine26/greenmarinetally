@@ -17,6 +17,10 @@ global.fetch = () => Promise.reject(new Error('연막: 네트워크 없음'));
 const M = require(path.resolve(OUT));
 const voyages = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/voyages_info_261019.json'), 'utf8'));
 const NOW = new Date('2026-10-19T07:30:00+09:00').getTime();
+//  4.48-04: 시계를 NOW(픽스처를 읽은 날)로 고정한다 — mir._shipsOnDay 처럼 진짜 시계를 쓰는 곳이 픽스처와 다른 날을 보면
+//    «브리핑해줘» 가 «오늘 작업할 선박이 없습니다» 로 바뀌어 헛걸렸다(2026-10-25 0시 넘어 첫 빌드 — 앱 변경과 무관). 인자 없는 new Date() · Date.now() 만 옮긴다.
+{ const _RD = Date, _OFF = NOW - _RD.now();
+  global.Date = class extends _RD { constructor(...a) { if (a.length) super(...a); else super(_RD.now() + _OFF); } static now() { return _RD.now() + _OFF; } }; }
 let n = 0, bad = 0;
 const T = (cond, name, detail = '') => { n += 1; if (cond) console.log(`  ✔ ${name}`); else { bad += 1; console.log(`  ✘ ${name}${detail ? ' — ' + detail : ''}`); } };
 const norm = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();

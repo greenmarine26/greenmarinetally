@@ -182,7 +182,7 @@ function ReconLine({ x, onOpenContainer }) {
     <button type="button" data-recon-cn={x.cn}
       onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
       className="mono block w-full text-left px-1.5 py-0.5 rounded hover:bg-ink-750/50 active:bg-ink-700">
-      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-words">{parts.join(' · ')}</span>{/* 4.48-03: break-all → break-words(319px 에서 «PHDVO» 같은 낱말이 중간에서 갈렸다 — 긴 파일 이름만 갈린다) · 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
+      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-words break-keep">{parts.join(' · ')}</span>{/* 4.48-04: + break-keep(한글 낱말 «선사»·«10-24» 가 폰 폭에서 중간에 끊겼다 — 띄어쓰기 자리에서만) · 4.48-03: break-all → break-words(319px 에서 «PHDVO» 같은 낱말이 중간에서 갈렸다 — 긴 파일 이름만 갈린다) · 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
     </button>
   );
 }
