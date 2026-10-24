@@ -74,7 +74,7 @@ export const isoConflictText = (w) => {
   return (w.ediIso && w.lrIso) ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : '';
 };
 
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], shiftCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false, voyage = null, voyageKey = '', typoTwins = null }) {   // 4.22: voyage — 자료별 대조(항차 통째) · typoTwins — 리스트 번호 오타 짝(utils.listTypoTwins 결과, 호출부가 넘긴다)
+export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [], thruCns = [], shiftCns = [], dg8HoldRule = false, cancelReq = [], rfSkip = false, voyage = null, voyageKey = '', typoTwins = null }) {   // 4.22: voyage — 자료별 대조(항차 통째) · typoTwins — 리스트 번호 오타 짝(utils.listTypoTwins 결과, 호출부가 넘긴다)
   const alerts = [];
   // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
   //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
@@ -90,6 +90,10 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   //    시프팅 목록(utils.shiftingListOf — 리스트 ◆ 박스와 같은 한 벌)에 있는 컨은 «EDI 밖 추가»가 아니라 시프팅이다. 통과화물과 같은 자리에서 뺀다.
   const _shiftSet = new Set((shiftCns || []).map(c => String(c || '').trim().toUpperCase()));
   const _isShift = (cn) => _shiftSet.has(String(cn || '').trim().toUpperCase());
+  //  ★ 4.48-01 — 선사 지시 본선 잔류(voyage.keepOnboard — utils.keepOnboardOf)는 «EDI 평택과 매칭 안 되는 컨» 이 아니다. 검수사 2026-10-24 17:05 «선사리스트와 EDI는 맞습니다.
+  //    세관리스트와 틀린거죠 그걸 명시해야 합니다» · 17:06 «EDI 317 선사리스트 317 세관리스트 315 메일 수정 2건 변경 적용하면 315». 평택 양하분(EDI 평택 목록)이 두 대를 빼는데 리스트에는 남아 2개로 떴다.
+  const _keepSet = new Set((keepCns || []).map(c => String(c || '').trim().toUpperCase()));
+  const _isKeep = (cn) => _keepSet.has(String(cn || '').trim().toUpperCase());
   //  ★ 3.50-02: **선사 취소 요청분(수집기 info/amend.cancelReq)은 «EDI에 없는 컨» 이 아니다** — 빼야 할 컨이 아직 리스트에 남은 것이다.
   //    실측 SWSP 2609S — 캔슬 리스트 13대가 앱 리스트에 더해져 경고 13개. 경고 대신 «취소 요청 N대 리스트에 남아 있음» 안내로 가른다.
   const _cancSet = new Set((Array.isArray(cancelReq) ? cancelReq : Object.entries(cancelReq || {}).map(([k, v]) => (typeof v === 'string' ? v : k))).map(c => String(c || '').replace(/[\s-]/g, '').toUpperCase()).filter(Boolean));
@@ -288,13 +292,33 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       const vTotal = R.total ? `자료별 대조 어긋남 ${R.total}대` : '';
       const vGap = gapOn ? `터미널과 ${Math.abs(R.gap)}대 차이` : '';
       _recon = { R, vGap };
+      //  ★ 4.48-01 — 선사 메일 수정(본선 잔류)이 들어간 항차는 자료마다 몇 대인지와 «메일 수정 N건 적용하면 앱 수» 를 밝힌다(검수사 17:06 원문 그대로의 꼴 · 17:07 «터미널에서 아직 선사메일을 보지 않았고 수정전»).
+      //    감사(중-1) — 지시 아닌 참고(사람이 고른 POD 평택 아님)가 같이 있으면 그 수를 «적용하면» 앞에 따로 밝힌다(EDI 317 − 지시 2 − 참고 1 = 314 가 맞게 읽히게).
+      //    감사(중-2) — 터미널 숫자와 앱 수 차이가 지시 대수와 다르면 «터미널 배정 318 · 앱 315 (-3)»(종전 꼴 — 부호는 앱 − 터미널)로 적는다.
+      const _kRef = (R.ref || []).filter((x) => x && x.keep);
+      const _oRefN = (R.ref || []).length - _kRef.length;
+      const _kPods = [...new Set(_kRef.map((x) => String(x.pick || '').split(' · ')[0]).filter(Boolean))].join('·');
+      const _kMail = `선사 메일 수정 ${_kRef.length}건(본선 잔류${_kPods ? ' ' + _kPods : ''} — 평택에서 안 내림)`;
+      const _kTermPre = !!(gapOn && _kRef.length && R.term.n - R.app === _kRef.length);   // 터미널이 메일 수정 전 숫자 그대로
+      const _kTerm = gapOn
+        ? (_kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)` : ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})`)
+        : '';
+      const _kTxt = _kRef.length
+        ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 ${R.app}${_kTerm}`
+        : '';
+      if (_kTermPre) _recon.vGap = `선사 메일 수정 ${_kRef.length}건, 터미널은 아직 수정 전`;
+      //  감사(하-1) — 다른 어긋남이 같이 있으면 종전 머리줄 · 어긋남 N대 뒤에 «메일 수정 N건 … 적용하면 앱 N» 을 앱 수 앞에 붙인다(«적용» 으로 끝나 흐리던 꼴).
+      const _kTot = _kRef.length
+        ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 앱 ${R.app}${gapOn ? (_kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)` : ` (${R.gap > 0 ? '+' : ''}${R.gap})`) : ''}`
+        : (gapTxt ? ` · ${gapTxt}` : '');
       alerts.push({
         level: 'warning',
         code: 'source_recon',
         msg: R.total > 0
-          ? `자료별 대조 — ${[part('터미널 배정', S.plan), part('본선현황', S.qc), part('EDI', S.edi), part('세관', S.customs), carPart, `실적 ${S.term.n}`].join(' · ')} — 어긋남 ${R.total}대${gapTxt ? ` · ${gapTxt}` : ''}${unkTxt ? ` · ${unkTxt}` : ''}`
+          ? `자료별 대조 — ${[part('터미널 배정', S.plan), part('본선현황', S.qc), part('EDI', S.edi), part('세관', S.customs), carPart, `실적 ${S.term.n}`].join(' · ')} — 어긋남 ${R.total}대${_kTot}${unkTxt ? ` · ${unkTxt}` : ''}`
+          : _kTxt ? `자료별 대조 — ${_kTxt}${unkTxt ? ` · ${unkTxt}` : ''}`
           : `${reconTermLabel(R.term.basis)} ${R.term.n} · ${gapTxt}${unkTxt ? ` · ${unkTxt}` : ''}`,
-        voice: [vTotal, vGap].filter(Boolean).join(', '),
+        voice: [vTotal, _recon.vGap].filter(Boolean).join(', '),
         count: (R.total - g5n) + R.unknown,
         details: R,
       });
@@ -358,6 +382,19 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           voice: '',
           count: cancFound.length,
           details: { cancelCns: cancFound, ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 4.22: 전부 싣는다 — 패널이 10건 뒤를 «나머지 보기» 로 펼친다
+        });
+      }
+      //  4.48-01: 선사 지시 본선 잔류 — 평택 양하분에서 뺀 컨이 리스트에 남아 있는 것이다. 재감사(하-1) — 취소 요청분처럼 가상 E 확정보다 먼저 가른다(RZOR R064E 꼴 — 지시 컨이 «E확정»으로 먹혔다). «매칭 안 되는 컨» 이 아니다(자료별 대조가 밝힌다).
+      const keepFound = mode === 'discharge' ? extraCns.filter(cn => _isKeep(cn) && !_isShift(cn)) : [];   // 3차 감사(하-1): 플래너가 확정해 시프팅에 든 지시 컨은 아래 «시프팅으로 셈» 줄로(4.48 과 같은 말 · 검수사 13:09 «플래너가 확정하면 그떄 같이 바뀌게»)
+      extraCns = extraCns.filter(cn => !keepFound.includes(cn));
+      if (keepFound.length > 0 && !(_recon && _recon.R && (_recon.R.ref || []).some((x) => x && x.keep))) {
+        alerts.push({
+          level: 'info',
+          code: 'keep_onboard',
+          msg: `선사 메일 수정 ${keepFound.length}건 — 본선 잔류(평택에서 안 내림) · 리스트에 있어도 평택 양하분에서 뺐음`,   // 감사(하-2) — 자료마다 어떤지는 단정하지 않는다(EDI 가 이미 고쳐 올 수 있다)
+          voice: '',
+          count: keepFound.length,
+          details: { keepCns: keepFound },
         });
       }
       // V9.04-02: 가상 자리(virtualEdiCount>0)가 있으면, EDI밖 리스트분 중 fe≠'F'는

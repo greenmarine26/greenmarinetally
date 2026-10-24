@@ -261,6 +261,98 @@ const bundle = process.argv[3];
   ok(!!obR && !!(W.__memdb.voyages[VK].keepOnboard || {})[cnR[1]] && !kR && !podIn && !!doc.querySelector('[data-keep-open]'),
     `컨 상세(key 없이 그림) — ${cnR[1].slice(-4)} 저장이 늦게 끝나는 사이 ${cnR[2].slice(-4)} 로 바뀌면 새 컨에 앞 컨 지시 줄·입력칸이 남지 않는다(저장은 앞 컨에 됨)`, kR ? kR.textContent.slice(0, 120) : (podIn ? '입력칸 남음' : ''));
 
+  console.log('⑫ 4.48-01 — 주의 박스: «EDI · 선사 리스트 · 세관 리스트 · 선사 메일 수정 N건 적용하면» (검수사 2026-10-24 17:05~17:07)');
+  {
+    const vD = voy(mail()); vD.key = VK;
+    const dispD = T.shiftingMapForDisplay(VK + '_D', vD), slD = T.shiftingListOf(dispD, vD.discharge.ediContainers, vD);
+    const UD = T.ptkDischargeUnitsOf(vD); const ediD = {}; for (const c of Object.values(vD.discharge.ediContainers)) if (c && c.cn && UD.set.has(c.cn)) ediD[c.cn] = c;   // 항차 화면 isPtk 와 같은 평택 양하분(본선 잔류 뺌)
+    const recD = {}; for (const [cn, r] of Object.entries(vD.discharge.records)) recD[cn] = { ...r, cn };
+    const dg = (keepCns) => T.runDiagnostics({ keepCns, ediContainers: ediD, listRecords: recD, mode: 'discharge', shiftCns: slD.filter((x) => !x.keep).map((x) => x.cn), voyage: vD, voyageKey: VK + '_D' }) || [];
+    const a1 = dg([K1, K2]), a0 = dg([]);
+    const rc = a1.find((a) => a.code === 'source_recon');
+    ok(!a1.some((a) => a.code === 'list_extra' && (a.details.extraCns || []).some((cn) => cn === K1 || cn === K2)) && a0.some((a) => a.code === 'list_extra' && (a.details.extraCns || []).includes(K1)),
+      '두 대는 «리스트에 EDI 평택과 매칭 안되는 컨» 에서 빠진다(keepCns 를 안 넘기면 종전처럼 2개 — 고치기 전)', JSON.stringify(a1.map((a) => a.code)));
+    ok(!!rc && /^자료별 대조 — EDI \d+ · 선사 리스트 (\d+|자료 없음) · 세관 리스트 (\d+|자료 없음) · 선사 메일 수정 2건\(본선 잔류 CNDAI — 평택에서 안 내림\) 적용하면 \d+/.test(rc.msg),
+      '자료별 대조 문구 — «EDI · 선사 리스트 · 세관 리스트 · 선사 메일 수정 2건(본선 잔류 CNDAI) 적용하면 N»', rc && rc.msg);
+    ok(/keepCns: Object\.keys\(keepOnboardOf\(voyage\)\)/.test(src('src/pages/VoyagePage.jsx')), '배선 — 항차 화면이 진단에 keepCns 를 넘긴다');
+    //  감사(중-3) — 문구 전체 · 지시 없는 배 · 터미널 숫자가 다를 때 · 터미널이 이미 반영했을 때 · POD 확정 참고가 같이 있을 때 · 다른 어긋남이 같이 있을 때(하-1)
+    const mk = (keep, tweak, keepCns) => { const v = voy(keep); v.key = VK; if (tweak) tweak(v);
+      const disp = T.shiftingMapForDisplay(VK + '_M' + (++__mkn), v), sl = T.shiftingListOf(disp, v.discharge.ediContainers, v);
+      const U = T.ptkDischargeUnitsOf(v); const ed = {}; for (const c of Object.values(v.discharge.ediContainers)) if (c && c.cn && U.set.has(c.cn)) ed[c.cn] = c;
+      const rec = {}; for (const [cn, r] of Object.entries(v.discharge.records)) rec[cn] = { ...r, cn };
+      return T.runDiagnostics({ keepCns: keepCns || Object.keys(T.keepOnboardOf(v)), ediContainers: ed, listRecords: rec, mode: 'discharge', shiftCns: sl.filter((x) => !x.keep).map((x) => x.cn), voyage: v, voyageKey: VK + '_M' }) || []; };
+    let __mkn = 0;
+    const one = (al, code) => al.filter((a) => a.code === code);
+    const HEAD = '자료별 대조 — EDI 39 · 선사 리스트 39 · 세관 리스트 자료 없음 · 선사 메일 수정 2건(본선 잔류 CNDAI — 평택에서 안 내림)';
+    ok(!!rc && rc.msg === HEAD + ' 적용하면 37 · 터미널 배정 39(터미널은 아직 선사 메일 수정 전)' && rc.voice === '선사 메일 수정 2건, 터미널은 아직 수정 전',
+      '문구 전체 — «… 적용하면 37 · 터미널 배정 39(터미널은 아직 선사 메일 수정 전)» · 음성도 같은 말(22베이 사본 — EDI 39 · 배정 39)', rc && rc.msg + ' / ' + rc.voice);
+    const b0 = mk(null);
+    ok(!b0.some((a) => ['source_recon', 'keep_onboard', 'list_extra'].includes(a.code)), '지시 없는 배 — 자료별 대조·본선 잔류·매칭 안 되는 컨 줄이 안 선다(종전과 같음)', JSON.stringify(b0.map((a) => a.code + ':' + a.msg)));
+    const c1 = one(mk(mail(), (v) => { v.info.planDis = 40; }), 'source_recon')[0];
+    ok(!!c1 && c1.msg.startsWith(HEAD + ' 적용하면 37 · 터미널 배정 40 · 앱 37 (-3) · 번호 없음 1대') && !/수정 전/.test(c1.msg) && c1.voice === '터미널과 3대 차이',
+      '터미널 배정 40(지시 대수와 다른 차이) — «터미널 배정 40 · 앱 37 (-3)» · «수정 전» 이라 하지 않는다(감사 중-2 — 부호가 앱 쪽에 붙는다)', c1 && c1.msg);
+    const d1 = mk(mail(), (v) => { v.info.planDis = 37; });
+    const d1k = one(d1, 'keep_onboard')[0];
+    ok(!one(d1, 'source_recon').length && !!d1k && d1k.level === 'info' && d1k.msg === '선사 메일 수정 2건 — 본선 잔류(평택에서 안 내림) · 리스트에 있어도 평택 양하분에서 뺐음',
+      '터미널이 이미 반영(배정 37 = 앱) — 자료별 대조 줄 없이 정보 줄 «본선 잔류 · 리스트에 있어도 평택 양하분에서 뺐음»(자료마다 어떤지 단정 안 함 · 감사 하-2)', JSON.stringify(d1.map((a) => a.code + ':' + a.msg)));
+    let _pk = '';
+    const e1 = one(mk(mail(), (v) => { _pk = Object.keys(v.discharge.records).find((c) => c !== K1 && c !== K2); v.discharge.records[_pk].pod_pick = 'manual'; v.discharge.records[_pk].pod = 'CNSHA'; }), 'source_recon')[0];
+    ok(!!e1 && e1.msg === HEAD + ' · POD 확정 평택 아님 1대 적용하면 36 · 터미널 배정 39 · 앱 36 (-3)',
+      `POD 확정(평택 아님) 참고 1대(${_pk})가 같이 있으면 «· POD 확정 평택 아님 1대 적용하면 36»(39 − 2 − 1 · 감사 중-1)`, e1 && e1.msg);
+    let _ek = '';
+    const g1 = one(mk(mail(), (v) => { _ek = Object.keys(v.discharge.ediContainers).find((c) => c !== K1 && c !== K2 && v.discharge.records[c]); delete v.discharge.ediContainers[_ek]; }), 'source_recon')[0];
+    ok(!!g1 && /— 어긋남 1대 · 선사 메일 수정 2건\(본선 잔류 CNDAI — 평택에서 안 내림\) 적용하면 앱 37 · 터미널 배정 39\(터미널은 아직 선사 메일 수정 전\)$/.test(g1.msg),
+      `다른 어긋남이 같이 있으면(EDI 에서 ${_ek} 뺀 사본) «어긋남 1대 · 선사 메일 수정 2건(…) 적용하면 앱 37 · 터미널 배정 39(… 수정 전)»(감사 하-1)`, g1 && g1.msg);
+    const dp = src('src/components/DiagnosticsPanel.jsx');
+    ok(/data-recon-group="keep"/.test(dp) && /선사 메일 수정 — 본선 잔류\(평택에서 안 내림 · 참고\)/.test(dp) && /터미널은 아직 선사 메일 수정 전\(본선 잔류 \$\{_kRefN\}대\)/.test(dp),
+      '주의 박스 펼친 칸 — 본선 잔류는 «POD 확정 — 평택 아님» 과 따로 묶고 터미널 줄도 «아직 선사 메일 수정 전»(감사 하-3)');
+    const vp = src('src/pages/VoyagePage.jsx');
+    const _ip = vp.slice(vp.indexOf('const isPtk = (c) => {'), vp.indexOf('const isPtk = (c) => {') + 2600);
+    ok(/const _keepDiag = mode === 'discharge' \? keepOnboardOf\(voyage\) : \{\};[\s\S]{0,300}if \(!isPtkC\) return;\s*\n\s*if \(c\.cn && _keepDiag\[c\.cn\]\) return;/.test(vp) && !/keepOnboardOf/.test(_ip),
+      '진단 입력(EDI 평택분)에서만 본선 잔류를 뺀다 — 항차 화면 isPtk 는 그대로(리스트 없는 배도 목록에 «🟡 본선 잔류» 줄이 남는다 · 재감사 중-1)');
+    //  3차 감사(하-1) — 플래너가 지시 두 대를 선사 시프팅 목록에 넣으면(확정) 주의 박스 말이 4.48 과 같다(«시프팅으로 셈» · 본선 잔류 줄 없음 — 4.48 번들로 뽑은 값)
+    const _rs2 = (v) => { const r = v.restowList; r[K1] = { fe: 'F', from: '0220586', to: '0220586', pod: 'CNDAI', pol: 'PHDVO', sztp: '40RH' }; r[K2] = { fe: 'F', from: '0220786', to: '0220786', pod: 'CNDAI', pol: 'PHDVO', sztp: '40RH' }; r._meta = { ...r._meta, total: (r._meta.total || 0) + 2 }; };
+    const sig = (al) => al.filter((a) => ['source_recon', 'keep_onboard', 'shift_in_list', 'list_extra'].includes(a.code)).map((a) => a.code + ' | ' + a.msg);
+    const r1 = sig(mk(mail(), _rs2)), r2 = sig(mk(mail(), (v) => { _rs2(v); v.info.planDis = 37; }));
+    ok(JSON.stringify(r1) === JSON.stringify(['source_recon | 터미널 배정 39 · 앱 37 (-2) · 번호 없음 2대 — 배정표는 수량뿐, 작업이 시작되면 실적으로 번호가 잡힐 수 있음', 'shift_in_list | 시프팅 대상 2대가 양하 리스트에도 있음 — 시프팅으로 셈'])
+      && JSON.stringify(r2) === JSON.stringify(['shift_in_list | 시프팅 대상 2대가 양하 리스트에도 있음 — 시프팅으로 셈']),
+      '플래너가 확정한 지시(선사 시프팅 목록) — «시프팅 대상 2대가 양하 리스트에도 있음 — 시프팅으로 셈»(4.48 과 같은 말 · 본선 잔류 줄 없음 · 3차 감사 하-1)', JSON.stringify([r1, r2]));
+    const dsrc = src('src/diagnostics.js');
+    ok(dsrc.indexOf('const keepFound =') > dsrc.indexOf('const cancFound =') && dsrc.indexOf('const keepFound =') < dsrc.indexOf('let emptyConfirmedCount = 0;'),
+      '진단 — 본선 잔류는 취소 요청분 바로 뒤, 가상 E 확정보다 먼저 가른다(RZOR R064E 꼴 — 지시 컨이 «E확정»으로 먹히지 않게 · 재감사 하-1)');
+    const why = T.answerAboutAlert ? T.answerAboutAlert('본선 잔류 뭐야', d1) : null;
+    ok(!!why && /본선 잔류/.test(why) && !/세관 리스트에는 없습니다/.test(why), '미르 «본선 잔류 뭐야» — 정보 줄을 찾아 설명한다(낱말표 · 단정 문구 없음)', why);
+    const why2 = T.answerAboutAlert('메일 수정 2건 뭐야', a1), why3 = T.answerAboutAlert('본선 잔류 뭐야', a1);
+    ok(!!why2 && why2.startsWith('🟡 ' + rc.msg) && /플래너가 확정하면/.test(why2) && !!why3 && why3.startsWith('🟡 ' + rc.msg),
+      '미르 «메일 수정 2건 뭐야»·«본선 잔류 뭐야» — 터미널이 아직 수정 전이라 자료별 대조 줄만 서 있어도 그 줄을 찾아 설명한다(재감사 하-4)', why2);
+    //  재감사(하-2) — 지시 없는 배의 종전 문구가 4.48 과 한 글자도 같다(4.48 번들로 뽑은 값 · 22베이 사본)
+    const noK = (tw) => one(mk(null, tw), 'source_recon').map((a) => a.msg + ' | ' + a.voice);
+    const _del1 = (v) => { const cn = Object.keys(v.discharge.ediContainers).find((c) => c !== K1 && c !== K2 && v.discharge.records[c]); delete v.discharge.ediContainers[cn]; };
+    ok(JSON.stringify(noK((v) => { v.info.planDis = 40; _del1(v); })) === JSON.stringify(['자료별 대조 — 터미널 배정 40 · 본선현황 자료 없음 · EDI 38 · 세관 자료 없음 · 선사 리스트 39 · 실적 0 — 어긋남 1대 · 앱 39 (-1) · 번호 없음 1대 — 배정표는 수량뿐, 작업이 시작되면 실적으로 번호가 잡힐 수 있음 | 터미널과 1대 차이'])
+      && JSON.stringify(noK((v) => { v.info.planDis = 40; })) === JSON.stringify(['터미널 배정 40 · 앱 39 (-1) · 번호 없음 1대 — 배정표는 수량뿐, 작업이 시작되면 실적으로 번호가 잡힐 수 있음 | 터미널과 1대 차이'])
+      && JSON.stringify(noK(_del1)) === JSON.stringify(['자료별 대조 — 터미널 배정 39 · 본선현황 자료 없음 · EDI 38 · 세관 자료 없음 · 선사 리스트 39 · 실적 0 — 어긋남 1대 | ']),
+      '지시 없는 배 — «어긋남 N대 · 앱 N (gap)» · «터미널 배정 N · 앱 N (gap)» 문구·음성이 4.48 과 같다(어긋남 갈래 · 차이 갈래 · 둘 다)', JSON.stringify([noK((v) => { v.info.planDis = 40; _del1(v); }), noK(_del1)]));
+    //  재감사(하-2·하-3) — 펼친 칸을 실제로 그린다: 본선 잔류 묶음 · POD 확정 묶음 · 터미널 줄
+    const _openRecon = async (alerts) => {
+      W.__renderDiag(alerts); await wait(150);
+      const b = [...doc.querySelectorAll('button')].find((x) => /^자료별 대조/.test((x.textContent || '').trim()) || /자료별 대조 —/.test(x.textContent || ''));
+      if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await wait(100); }
+      const rc0 = doc.querySelector('[data-recon]');
+      const g = (k) => rc0 ? rc0.querySelector(`[data-recon-group="${k}"]`) : null;
+      return { rc0, keep: g('keep'), ref: g('ref'), term: rc0 && rc0.querySelector('[data-recon-term]') ? rc0.querySelector('[data-recon-term]').textContent : '' };
+    };
+    const P1 = await _openRecon(a1);
+    const kLines = P1.keep ? [...P1.keep.querySelectorAll('[data-recon-cn]')] : [];
+    ok(!!P1.rc0 && !!P1.keep && !P1.ref && kLines.length === 2 && /^선사 메일 수정 — 본선 잔류\(평택에서 안 내림 · 참고\) 2대/.test(P1.keep.textContent) && kLines.every((x) => !/POD 확정/.test(x.textContent) && /CNDAI · 선사 지시 본선 잔류/.test(x.textContent))
+      && P1.term === '터미널 배정 39대 · 앱 37대 (-2) — 터미널은 아직 선사 메일 수정 전(본선 잔류 2대)',
+      '펼친 칸 — «선사 메일 수정 — 본선 잔류(평택에서 안 내림 · 참고) 2대» 묶음 하나 · 줄에 «POD 확정» 앞말 없음 · «POD 확정 — 평택 아님» 묶음 없음 · 터미널 줄 «… — 터미널은 아직 선사 메일 수정 전(본선 잔류 2대)»',
+      JSON.stringify({ rc: !!P1.rc0, keep: P1.keep && P1.keep.textContent.slice(0, 160), ref: !!P1.ref, term: P1.term }));
+    const aE = mk(mail(), (v) => { v.discharge.records[_pk].pod_pick = 'manual'; v.discharge.records[_pk].pod = 'CNSHA'; });
+    const P2 = await _openRecon(aE.filter((a) => a.code === 'source_recon'));
+    ok(!!P2.keep && !!P2.ref && P2.keep.querySelectorAll('[data-recon-cn]').length === 2 && P2.ref.querySelectorAll('[data-recon-cn]').length === 1 && /POD 확정 — 평택 아님\(참고\) 1대/.test(P2.ref.textContent) && /POD 확정 CNSHA/.test(P2.ref.textContent) && !/수정 전/.test(P2.term),
+      'POD 확정 참고가 같이 있으면 묶음이 둘로 나뉜다(본선 잔류 2 · POD 확정 1 — «POD 확정 CNSHA» 앞말은 그쪽만) · 터미널 줄은 «수정 전» 이라 하지 않는다', JSON.stringify({ keep: !!P2.keep, ref: P2.ref && P2.ref.textContent.slice(0, 120), term: P2.term }));
+  }
+
   ok(errs.length === 0, '화면 오류 0', errs.join(' | '));
   console.log(`\n4.48 선사 지시 본선 잔류 연막 — ${n - bad}/${n} 통과`);
   process.exit(bad ? 1 : 0);

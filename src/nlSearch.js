@@ -1446,6 +1446,7 @@ function buildBaySlotMap(allContainers) {
  *   맞으면 그 경고의 상세(details)까지 붙여 답한다. 못 맞추면 null 을 돌려 기존 경로로 넘긴다.
  */
 const _WHY_BY_CODE = {
+  keep_onboard:  '선사가 메일로 평택에서 내리지 말라고 한 컨입니다(본선 잔류). 리스트·EDI 에 평택 양하로 남아 있어도 평택 양하 대수에서 뺐습니다 — 플래너가 확정하면 시프팅 확정(파란 ◆)으로 바뀝니다.',   // 4.48-01 · 감사(하-2) — 자료마다 어떤지는 단정하지 않는다
   fe_conflict:   'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.',
   iso_ot_check:  ISO_OT_CHECK_WHY,   // 4.27-01: 오픈탑 높이 갈림 «점검요망»(검수사 2026-10-15 14:31) — 진단 패널과 같은 말
   iso_conflict:  ISO_CONFLICT_WHY,   // 4.25-01: 진단 패널과 같은 말 한 벌(utils) — «확인 전에는 터미널(EDI) 규격을 따릅니다»
@@ -1482,6 +1483,7 @@ const _ALERT_TERMS = {
   dg8_hold:          [['클래스', '부식', 'CLASS', '고려해운', '규정'], ['홀드', '선창', '갑판', '데크', '위반', '경고', 'KMTC']],
   list_short:        [['리스트'], ['부족', '모자', '매칭', '안맞', '적']],
   list_extra:        [['리스트'], ['매칭', '없', '남', '더']],
+  keep_onboard:      [['본선잔류', '메일수정'], ['뭐', '무슨', '왜', '건']],   // 4.48-01 감사(하-2) — «본선 잔류 뭐야»·«메일 수정 2건 뭐야»
   seal_diff:         [['실번호', '씰', '실'], ['다름', '다르', '불일치', '차이']],
   seal_format:       [['예상실오류', '자릿수'], ['실', '씰', '오류', '부족']],   // 4.36 · 4.45-02 «씰모양·실모양» 은 seal_kind 로
   seal_kind:         [['씰모양', '실모양'], ['다름', '다르', '뭐', '무슨']],   // 4.45-02 (감사 — «실 종류별로»·«씰 계열» 같은 말은 안 삼킨다)
@@ -1520,7 +1522,8 @@ export function answerAboutAlert(query, alerts) {
     //    seal_kind(«씰모양»+«다름»). 같으면 종전대로 먼저 든 경고.
     let best = -1;
     for (const a of alerts) {
-      const groups = _ALERT_TERMS[a?.code];
+      //  4.48-01 재감사(하-4): 자료별 대조 한 줄이 «선사 메일 수정 N건» 을 담으면 «본선 잔류 뭐야»·«메일 수정 2건 뭐야» 로도 찾는다(터미널이 아직 수정 전이면 정보 줄 없이 이 줄만 선다).
+      const groups = _ALERT_TERMS[a?.code === 'source_recon' && /선사 메일 수정 \d+건/.test(String(a?.msg || '')) ? 'keep_onboard' : a?.code];
       if (!groups || !groups.length) continue;
       if (!groups.every(has)) continue;
       const score = groups.reduce((t, arr) => t + Math.max(...arr.filter((w) => qFlat.includes(w)).map((w) => w.length)), 0);
@@ -1530,7 +1533,7 @@ export function answerAboutAlert(query, alerts) {
   if (!hit) return null;
   const icon = hit.level === 'critical' ? '🔴' : hit.level === 'warning' ? '🟡' : '🔵';
   const lines = [`${icon} ${hit.msg}`];
-  const why = _WHY_BY_CODE[hit.code];
+  const why = _WHY_BY_CODE[hit.code] || (hit.code === 'source_recon' && /선사 메일 수정 \d+건/.test(String(hit.msg || '')) ? _WHY_BY_CODE.keep_onboard : '');   // 4.48-01 재감사(하-4)
   if (why) lines.push('', why);
   const d = hit.details;
   if (Array.isArray(d) && d.length) {

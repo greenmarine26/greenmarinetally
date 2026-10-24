@@ -177,7 +177,7 @@ function ReconFold({ on, children }) {
 function ReconLine({ x, onOpenContainer }) {
   const pos = fmtPos(x);
   const route = (x.pol || x.pod) ? `${x.pol || '?'}→${x.pod || '?'}` : '';
-  const parts = [x.fe, x.op, route, pos, x.pattern, x.pick ? `POD 확정 ${x.pick}` : '', x.src].filter(Boolean);
+  const parts = [x.fe, x.op, route, pos, x.pattern, x.pick ? (x.keep ? x.pick : `POD 확정 ${x.pick}`) : '', x.src].filter(Boolean);   // 4.48-01 재감사(하-3): 본선 잔류 줄은 «POD 확정» 앞말 없이(묶음 이름이 «선사 메일 수정 — 본선 잔류»)
   return (
     <button type="button" data-recon-cn={x.cn}
       onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
@@ -201,6 +201,8 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
     const gap = d.gap;
     const tl = reconTermLabel(d.term && d.term.basis), tn = (d.term && d.term.n) || 0;
     const unk = reconUnknownText(d);
+    //  4.48-01 감사(하-3) — 선사 메일 수정(본선 잔류)은 «POD 확정 — 평택 아님»과 따로 묶고, 터미널 차이가 그 대수면 «터미널은 아직 선사 메일 수정 전»(한 줄과 같은 말).
+    const _kRefN = (d.ref || []).filter((x) => x && x.keep).length;
     //  세관 코드 — 검수사 09:37 «KKLC같은건 MFN대상으로 알림» → «MFN 대상 — 뜻» · MGN 은 완료·실적 없는 컨만(일부면 대수)
     const hint = (g) => (g.code === 'MFN' ? customsCodeLabel('MFN', { kind: '대상' })
       : g.code === 'MGN' ? customsCodeLabel('MGN', { kind: '대상', n: g.codeN && g.codeN !== g.items.length ? g.codeN : null, note: '완료·실적 없음' })
@@ -215,7 +217,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
             {gap === 0
               ? `${tl} ${tn}대 = 앱 ${d.app}대`
               : `${tl} ${tn}대 · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
-                + (d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
+                + (_kRefN && tn - d.app === _kRefN ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 ${_kRefN}대)` : d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
                 + (unk ? ` — ${unk}` : '')}
           </div>
         )}
@@ -230,10 +232,16 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
             <TruncList items={g.items} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
           </div>
         ))}
-        {(d.ref || []).length > 0 && (
+        {_kRefN > 0 && (
+          <div data-recon-group="keep">
+            <div className="text-dim-300 font-bold">선사 메일 수정 — 본선 잔류(평택에서 안 내림 · 참고) {_kRefN}대</div>
+            <TruncList items={d.ref.filter((x) => x && x.keep)} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
+          </div>
+        )}
+        {(d.ref || []).length - _kRefN > 0 && (
           <div data-recon-group="ref">
-            <div className="text-dim-300 font-bold">{REF_POD_LABEL} {d.ref.length}대</div>
-            <TruncList items={d.ref} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
+            <div className="text-dim-300 font-bold">{REF_POD_LABEL} {d.ref.length - _kRefN}대</div>
+            <TruncList items={d.ref.filter((x) => !(x && x.keep))} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
           </div>
         )}
       </div>

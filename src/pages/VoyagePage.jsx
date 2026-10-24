@@ -1410,9 +1410,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (diagDismissed) return [];
     // 평택 화물만 필터된 ediMap 만들기
     const ediPtkObj = {};
+    //  4.48-01 감사(하-4·재감사 중-1) — 진단 입력에서만 선사 지시 본선 잔류를 뺀다(utils.ptkDischargeUnitsOf 와 같은 답 — 리스트 없는 배에서 리퍼 온도·위험물 진단이 두 대를 더 보지 않게).
+    //    목록(containersBase)은 isPtk 그대로 — 리스트 없는 배도 «🟡 본선 잔류 N» 칩과 그 컨 줄이 남아야 한다(isPtk 에서 빼면 목록에서 사라졌다).
+    const _keepDiag = mode === 'discharge' ? keepOnboardOf(voyage) : {};
     Object.values(ediMap || {}).forEach(c => {
       const isPtkC = isPtk(c);   // V9.29: TS 화물 포함 — 판정 단일 소스
       if (!isPtkC) return;
+      if (c.cn && _keepDiag[c.cn]) return;
       // M8.07: 진단용 보강 — EDI에 온도/F/E가 없으면 검수 리스트(records) 값으로 채움.
       //   RIZHAO 등 IFCSUM은 EDI에 온도 필드가 없고 검수 엑셀에만 있음.
       //   EDI에 값이 있으면 보존(EDI 우선). 진단 입력만 보강, 원본 ediMap 불변.
@@ -1436,6 +1440,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const _recMarked = {};
     applySpecialMarks(voyage, Object.entries(recMap).map(([cn, r]) => ({ ...r, cn }))).forEach((r) => { _recMarked[r.cn] = r; });
     return runDiagnostics({
+      keepCns: Object.keys(keepOnboardOf(voyage)),   // 4.48-01: 선사 지시 본선 잔류 — «EDI 평택과 매칭 안 되는 컨» 이 아니다(자료별 대조가 «메일 수정 N건 적용하면» 으로 밝힌다)
       ediContainers: _ediPtkObj2,
       listRecords: _recMarked,
       xrayList: xrayMap,
