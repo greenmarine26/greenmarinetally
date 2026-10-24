@@ -13,4 +13,4 @@ let n = 0;
 let last = null;
 window.__renderModal = (props) => { n += 1; last = props; root.render(React.createElement(WorkReportModal, { key: 'm' + n, open: true, onClose: () => { window.__closed = (window.__closed || 0) + 1; }, ...props })); };
 //  같은 창을 닫았다 다시 연다(늘 마운트된 채 open 만 바뀌는 실제 앱과 같게)
-window.__reopen = async () => { const mk = (open) => root.render(React.createElement(WorkReportModal, { key: 'm' + n, open, onClose: () => {}, ...last })); mk(false); await new Promise((r) => setTimeout(r, 80)); mk(true); };
+window.__reopen = async (over) => { if (over) last = { ...last, ...over }; const mk = (open) => root.render(React.createElement(WorkReportModal, { key: 'm' + n, open, onClose: () => {}, ...last })); mk(false); await new Promise((r) => setTimeout(r, 80)); mk(true); };

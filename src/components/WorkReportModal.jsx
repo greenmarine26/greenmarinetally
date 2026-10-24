@@ -190,6 +190,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     /*   양하·선적도 지금 보고 있는 작업으로 맞춘다 — 호기의 진행 중 작업이 하나가 아니면(시작을 안 눌렀거나 양하·선적 둘 다) 보고 모드·항차를 이것으로 정한다(equipModeOf).
          종전엔 지난번 시작 화면에서 고른 값(처음엔 양하)이라, 선적 중 닫힘이 양하 항차로 나갔다(실측 STMJ 2663E 10-15 05:43 2호기 6번 CLOSE — 선적 중인데 mode discharge). */
     if (pageMode === 'loading' || pageMode === 'discharge') setSelectedMode(pageMode);
+    //  ★ 4.47-01 (라이브 확인 «부» 2026-10-24 — 다른 클로드): 수동 보고 화면에서 닫았다가 탭을 바꿔 다시 열면 창이 수동 보고로 바로 열리면서
+    //    작업 종류가 앞 탭 값(선적 탭에서 닫음 → 양하 탭에서 다시 열어도 «선적»)으로 남았다. 수동 보고 단추를 누를 때만 맞췄기 때문이다 — 열 때마다 화면 작업으로 맞춘다.
+    //    감사 «부» 반영 — 앞서 고른 보고 종류·사유도 비운다(단추와 같은 세 줄). 안 비우면 «양하 · 중단 · 사유 양하 재개» 처럼 바뀐 작업 종류와 어긋난 조합이 확인 창 없이 나갈 수 있었다.
+    if (pageMode === 'loading' || pageMode === 'discharge') setManualMode(pageMode);
+    setManualAction(''); setManualReason('');
     //  4.47(감사 중2): 닫았다 다시 열면 묵은 바꿈 물음을 띄우지 않는다
     setSwitchCtx(null);
     setView((v) => (v === 'switch' ? 'main' : v));

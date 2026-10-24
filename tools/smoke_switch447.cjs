@@ -114,6 +114,21 @@ const bundle = process.argv[3];
   setup({}, 'discharge'); await wait(250);
   await click(btn(/수동 보고 \(시작 안 누른 작업\)/));
   ok(/bg-blue-700/.test(sel('⬇ 양하')) && !/bg-amber-700/.test(sel('⬆ 선적')), '양하 화면에서 연 수동 보고 — «양하»');
+  //  4.47-01 (라이브 확인 «부»): 수동 보고 화면에서 닫고 탭을 바꿔 다시 열면 — 창이 수동 보고로 바로 열려도 작업 종류는 지금 화면 작업
+  await W.__reopen({ pageMode: 'loading' }); await wait(200);
+  ok(/bg-amber-700/.test(sel('⬆ 선적')) && !/bg-blue-700/.test(sel('⬇ 양하')), '양하 탭 수동 보고에서 닫고 선적 탭에서 다시 열면 «선적»(종전엔 «양하» 그대로)', `${sel('⬆ 선적')} | ${sel('⬇ 양하')}`);
+  setup({}, 'loading'); await wait(250);   // 감사 «부» — 앞 항에 기대지 않게 따로 시작
+  await click(btn(/수동 보고 \(시작 안 누른 작업\)/));
+  await W.__reopen({ pageMode: 'discharge' }); await wait(200);
+  ok(/bg-blue-700/.test(sel('⬇ 양하')) && !/bg-amber-700/.test(sel('⬆ 선적')), '선적 탭 수동 보고에서 닫고 양하 탭에서 다시 열면 «양하»(종전엔 «선적» 그대로)', `${sel('⬆ 선적')} | ${sel('⬇ 양하')}`);
+  //  감사 «부» 재현 1 — 선적 탭에서 «중단»·사유 «양하 재개»를 골라 둔 채 닫고 양하 탭에서 다시 열면 보고 종류·사유가 비고 실행 단추가 없다(종전엔 «양하 · 중단 · 양하 재개»가 확인 없이 나갈 수 있었다)
+  setup({ '2호기': { loading: { mode: 'loading', status: 'running', startedAt: 2 } } }, 'loading'); await wait(250);
+  await click(btn(/수동 보고 \(시작 안 누른 작업\)/));
+  await click(btn(/^2호기$/)); await click(btn(/^중단$/)); await click(btn(/^양하 재개$/));
+  const _pre = !!btn(/^중단 보고$/);
+  await W.__reopen({ pageMode: 'discharge' }); await wait(200);
+  ok(_pre && !btn(/^중단 보고$/) && !btn(/^재개 보고$/) && /보고 종류 선택/.test(doc.body.textContent) && reps().length === 0 && shares.length === 0,
+    '골라 둔 «중단 · 양하 재개»는 다시 열면 비워진다 — 실행 단추 없음 · 기록 0 · 카톡 0', `pre=${_pre} · ${doc.body.textContent.slice(0, 160)}`);
   //  수동 보고의 재개도 같은 물음(2호기 양하 진행 중 · 선적 이어받아 재개)
   setup({ '2호기': { discharge: { mode: 'discharge', status: 'running', startedAt: 1 }, loading: { mode: 'loading', status: 'paused', pauseReason: '양하 재개', startedAt: 2 } } }, 'loading');
   await wait(250);
