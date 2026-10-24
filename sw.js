@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.46';
-const NOTE = '4.46 내가 보낸 작업 보고를 고치거나 지울 수 있습니다(보낸 사람만). 작업 보고 창 아래 «내가 보낸 보고»나 보고 탭 목록에서 고치기·지우기를 누르십시오.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.47';
+const NOTE = '4.47 같은 호기에서 양하와 선적을 바꿀 때 «양하 중단하고 선적 시작»을 한 번 누르면 중단 사유를 앱이 적고 카톡을 한 번에 보냅니다. 수동 보고의 작업 종류는 지금 보고 있는 화면의 작업으로 켜집니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

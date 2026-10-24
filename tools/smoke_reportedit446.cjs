@@ -237,6 +237,27 @@ const bundle = process.argv[3];
     for (const m of src.matchAll(/fbAddWorkReport\(\s*voyageKey\s*,/g)) calls.push({ f: path.basename(f), by: /\bby\s*:/.test(argOf(m.index + 'fbAddWorkReport'.length)) });
   }
   ok(calls.length >= 14 && calls.every((c) => c.by), `보고를 쓰는 ${calls.length}곳 모두 by(보낸 사람)를 넘긴다`, calls.filter((c) => !c.by).map((c) => c.f).join(','));
+  //  4.47(4.46 재감사 하-1): 돌연변이가 새던 배선 다섯 — 소스로 못박는다
+  const rd2 = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  ok(/diffAgainstReports\([^)]*reports_deleted/.test(rd2('src/components/KakaoLogImportModal.jsx')), '카톡 보강 창이 지운 보고(reports_deleted)를 대조에 넘긴다');
+  ok(/report=\{\(reports \|\| \{\}\)\[r\.k\] \|\| r\}/.test(rd2('src/pages/VoyagePage.jsx')), '보고 탭은 목록용 k 칸 없는 원본 보고를 넘긴다');
+  ok(/ov\.by && !rest\.by \? \{ by: ov\.by \}/.test(rd2('src/firebase.js')), '카톡 교체 때 보낸 사람을 살린다');
+  ok(/e\.partial/.test(rd2('src/components/ReportEditRow.jsx')) && /n !== \(Array\.isArray\(next\.edits\)/.test(rd2('src/firebase.js')), '지우기 반쯤 실패 문구 · 고친 기록 개수 되읽기 대조');
+  //  카톡 대조 — 앱 중단 글의 «사유: 양하재개» 는 재개가 아니고, 앱 재개 글(«🟢 양하 시작» + «(재개)»)은 시작이 아니다
+  const pz = REPS['1792673041883'], rz = REPS['1792673104895'];
+  const kz = [kText(pz, 21, 44), kText(rz, 21, 45)].join('\n');
+  const iz = T.parseKakaoWorkLog(kz, { baseDate: new Date(2026, 9, 22) }).items;
+  const dz = T.diffAgainstReports(iz, REPS, groupOf);
+  ok(iz.length === 2 && iz[0].action === 'pause' && iz[1].action === 'resume' && iz[1].mode === 'discharge' && dz.every((x) => x.dup && !x.replaces),
+    '카톡 «⏸ 선적 중단 … 사유: 양하재개» → 중단 하나 · «🟢 양하 시작 (재개)» → 재개 하나(시작 아님) · 둘 다 앱 기록과 같은 사건', JSON.stringify(iz.map((x) => [x.action, x.mode])) + ' ' + JSON.stringify(dz.map((x) => [x.dup, x.replaces])));
+  //  4.47(재감사 상): «카톡 한 번» 묶음 글(선적 중단 + 양하 재개)은 조각마다 — 재개 조각이 시작으로 읽혀 앱 시작 시각을 옮기지 않는다
+  const combo = `${pz.message}\n\n${rz.message}`;
+  const ic = T.parseKakaoWorkLog(kText({ message: combo }, 21, 44), { baseDate: new Date(2026, 9, 22) }).items;
+  const dc = T.diffAgainstReports(ic, REPS, groupOf);
+  ok(ic.length === 2 && ic.some((x) => x.action === 'pause') && ic.some((x) => x.action === 'resume' && x.mode === 'discharge') && !ic.some((x) => /_start$/.test(x.action)) && dc.every((x) => x.dup && !x.replaces),
+    '묶음 글 «⏸ 선적 중단 … ‖ 🟢 양하 시작 (재개)» → 중단·재개 둘(시작 없음) · 앱 기록을 옮기지 않음', JSON.stringify(ic.map((x) => [x.action, x.mode])) + ' ' + JSON.stringify(dc.map((x) => [x.dup, x.replaces])));
+  const ih = T.parseKakaoWorkLog('2026년 10월 22일 오후 9:44, 김성일 : 2호기 양하\n사유: 강풍으로 작업 중단', { baseDate: new Date(2026, 9, 22) }).items;
+  ok(ih.length === 1 && ih[0].action === 'pause', '손글 «사유: 강풍으로 작업 중단» 은 중단으로 읽는다', JSON.stringify(ih.map((x) => x.action)));
   W.localStorage.setItem('tallyone_me_today', JSON.stringify({ name: ME, ymd: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) }));
   const tsMe = await T.fbAddWorkReport(VK, { type: 'conbox', conBoxType: '20', conBoxCount: 1, equip: '2호기', message: 'z' });
   W.localStorage.removeItem('tallyone_me_today');

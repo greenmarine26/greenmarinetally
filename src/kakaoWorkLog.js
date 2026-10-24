@@ -168,18 +168,31 @@ export function parseKakaoWorkLog(text, opts = {}) {
     }
 
     // ── 작업 시작·종료 (한 줄에 둘이 올 수 있다: "2호기 양하완료 선적시작")
+    //  4.47(4.46 감사 하-2): 앱이 보낸 글의 «사유: 양하재개»·«사유: 선적 시작» 줄은 동작이 아니다 — 사유 줄은 동작을 읽지 않는다.
+    //    앱의 재개 글(«🟢 양하 시작» + «(재개)»)은 시작이 아니라 재개다 — 시작으로 읽으면 대조가 앱의 시작 기록 시각을 재개 시각으로 옮겼다.
+    //  4.47(재감사 상): 앱의 «카톡 한 번» 묶음 글(두 보고를 빈 줄로 이음)은 조각마다 읽는다 — 통째로 읽으면 «선적 중단 + 양하 재개» 의 «중단» 때문에 재개 조각이 시작으로 읽혀
+    //    앱 시작 기록 시각을 재개 시각으로 옮겼다. 중단 낱말은 사유 줄에 있어도 중단이다(손글 «사유: 강풍으로 작업 중단»).
     let hit = false;
-    for (const [re, action, mode] of [
-      [/양하\s*(시작|개시)/, 'discharge_start', 'discharge'],
-      [/양하\s*(종료|완료|끝)/, 'discharge_done', 'discharge'],
-      [/선적\s*(시작|개시)/, 'loading_start', 'loading'],
-      [/선적\s*(종료|완료|끝)/, 'loading_done', 'loading'],
-      [/(중단|중지|정지)/, 'pause', ''],
-      [/(재개)/, 'resume', ''],
-    ]) {
-      if (!re.test(body)) continue;
-      const it = { ts, kind: 'work_status', action, mode, equip, raw: body.split('\n')[0].slice(0, 60) };
-      items.push(it); pending = it; hit = true;
+    for (const seg of body.split(/\n\s*\n/)) {
+      const vbody = seg.split('\n').filter((l) => !/^\s*사유\s*[:：]/.test(l)).join('\n');
+      const appResume = /\(재개\)/.test(vbody) && /(양하|선적)\s*시작/.test(vbody) && !/(중단|중지|정지|완료|종료)/.test(vbody);
+      if (appResume) {
+        const md = /선적\s*시작/.test(vbody) ? 'loading' : 'discharge';
+        const it = { ts, kind: 'work_status', action: 'resume', mode: md, equip, raw: seg.split('\n')[0].slice(0, 60) };
+        items.push(it); pending = it; hit = true; continue;
+      }
+      for (const [re, action, mode] of [
+        [/양하\s*(시작|개시)/, 'discharge_start', 'discharge'],
+        [/양하\s*(종료|완료|끝)/, 'discharge_done', 'discharge'],
+        [/선적\s*(시작|개시)/, 'loading_start', 'loading'],
+        [/선적\s*(종료|완료|끝)/, 'loading_done', 'loading'],
+        [/(중단|중지|정지)/, 'pause', ''],
+        [/(재개)/, 'resume', ''],
+      ]) {
+        if (!re.test(action === 'pause' ? seg : vbody)) continue;
+        const it = { ts, kind: 'work_status', action, mode, equip, raw: seg.split('\n')[0].slice(0, 60) };
+        items.push(it); pending = it; hit = true;
+      }
     }
     if (!hit) skipped += 1;
   }
@@ -202,7 +215,8 @@ export function diffAgainstReports(items, reports, groupOf, deleted = null) {
   };
   for (const r of Object.values(reports || {})) if (r && r.orig) { const g = ghostOf({ ...r, ...r.orig, ts: r.ts, eventTs: r.eventTs, auto: r.auto }, 'edited'); if (g) ghosts.push(g); }
   for (const r of Object.values(deleted || {})) { const g = ghostOf(r, 'deleted'); if (g) ghosts.push(g); }
-  const ghostHit = (it) => ghosts.find((g) => g.kind === it.kind && g.action === it.action && Math.abs(g.ts - it.ts) <= 20 * 60000
+  const sameVerb = (a, b) => { const x = String(a || ''), y = String(b || ''); if (x === y) return true; const vx = x.replace(/^(discharge|loading)_/, ''), vy = y.replace(/^(discharge|loading)_/, ''); return (vx === 'pause' || vx === 'resume') && vx === vy && (!x.includes('_') || !y.includes('_')); };
+  const ghostHit = (it) => ghosts.find((g) => g.kind === it.kind && (it.kind === 'hatch' ? g.action === it.action : sameVerb(g.action, it.action)) && Math.abs(g.ts - it.ts) <= 20 * 60000
     && (it.kind === 'hatch' ? it.bays.map(groupOf).filter((x) => x != null).some((x) => g.groups.includes(x)) : (!g.equip || !it.equip || g.equip === it.equip)));
   //  3.53-01: 교체하려면 **원래 키**가 필요하다 — values 가 아니라 entries 로 읽는다.
   for (const [key, r] of Object.entries(reports || {})) {
@@ -262,8 +276,8 @@ export function diffAgainstReports(items, reports, groupOf, deleted = null) {
         }
       }
     } else {
-      //  중단·재개 — 여러 번 나올 수 있어 시각 창으로 본다.
-      dup = have.some(h => h.kind === 'work_status' && h.action === it.action
+      //  중단·재개 — 여러 번 나올 수 있어 시각 창으로 본다. 카톡 줄은 작업 접두가 없다(«pause»·«resume») — 앱 기록 «discharge_pause» 와 동사로 견준다(4.46 감사 하-2).
+      dup = have.some(h => h.kind === 'work_status' && sameVerb(h.action, it.action)
         && (!h.equip || !it.equip || h.equip === it.equip)
         && Math.abs(h.ts - it.ts) <= 20 * 60000);
     }

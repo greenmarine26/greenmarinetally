@@ -107,7 +107,13 @@ export default function ReportEditRow({ voyageKey, voyage, reports, report, me }
       const groupOf = (b) => bayGroupCenter(String(b), bayPairs);
       const centers = [...(rep.bays || []), ...((next && next.bays) || [])].map(groupOf);
       const hd = hatchDoneAfterReports(info.hatchDone, after, centers, groupOf);
-      if (hd) { try { await fbUpdateVoyageInfo(voyageKey, { hatchDone: hd }); } catch (e) { console.warn('[4.46] 해치 표시 맞추기 실패', e); notes.push('해치 열림·닫힘 표시를 못 맞췄습니다 — 자동 가이드가 다시 물을 수 있습니다.'); } }
+      if (hd) {
+        //  4.47(4.46 감사 하-4): 해치 표시 저장에도 12초 제한
+        let t;
+        try { await Promise.race([fbUpdateVoyageInfo(voyageKey, { hatchDone: hd }), new Promise((_, rej) => { t = setTimeout(() => rej(new Error('12초 안에 서버 확인을 못 받았습니다')), 12000); })]); }
+        catch (e) { console.warn('[4.46] 해치 표시 맞추기 실패', e); notes.push(`해치 열림·닫힘 표시를 못 맞췄습니다 — 자동 가이드가 다시 물을 수 있습니다. (${e && e.message ? e.message : e})`); }
+        finally { clearTimeout(t); }
+      }
     }
     if (rep.type === 'work_status') {
       //  옛 칸(고치기 전 호기·작업) → 새 칸 순서. 줄이 없을 때 새로 만드는 것은 ① 옛 칸 줄을 옮길 때 ② 완료 보고를 지우거나 옮길 때뿐(감사 중-1 —
