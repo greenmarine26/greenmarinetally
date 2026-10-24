@@ -11,7 +11,7 @@ import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
-import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf } from '../utils.js';
+import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf, sealConflictOf } from '../utils.js';
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // 4.49: sealCheckOf — 실오류·큰 실 판정 한 벌   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
@@ -638,15 +638,20 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
         {/* 2.05-05 (검수사 실측 «자료 불일치? 내용을 설명 안함»): 실번호 불일치 — 무엇이 어떻게 다른지 여기서 설명 */}
         {(() => {
-          const _v = Array.isArray(c.sl_conflict) ? [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))] : [];
+          const _scf = sealConflictOf(c);   // 4.49-02: RF CONTAINER LIST 실은 뺀다(검수사 «실번호는 본리스트»)
+          const _v = [...new Set(_scf.map((h) => String(h.sl || '').trim().toUpperCase()))];
           if (_v.length < 2) return null;   // 2.05-06: 앞 0 차이도 다른 번호 — 억제하지 않는다(검수사 확정 «실오류 입니다»)
+          let _kc = null; try { _kc = sealCheckOf(c); } catch (e) { console.warn('[4.49-02 실번호] 컨 상세 실오류 판정 실패 — «하나면 맞음» 안내를 그대로 둡니다:', c && c.cn, e); }
+          const _declErr = !!(_kc && (_kc.trunc || _kc.zero) && _kc.error);   // 4.49-02 감사(하-2): 신고 실이 잘렸으면 «하나면 맞음»이 아니다
           return (
             <div className="mx-4 my-3 bg-amber-950/40 border border-amber-700/60 rounded-pill p-3">
               <div className="text-xxs font-black text-amber-300 mb-1">⚠ 실번호 자료 불일치 — 리스트마다 다르게 적혀 있습니다</div>
-              {c.sl_conflict.map((h, i) => (
+              {_scf.map((h, i) => (
                 <div key={i} className="text-xxs mono text-amber-100">{h.sl}{h.src ? <span className="text-amber-400/80"> — {h.src}</span> : null}</div>
               ))}
-              <div className="text-2xs text-amber-200/90 mt-1">실물 씰이 이 가운데 하나면 맞음입니다(4.49 — 검수사 «다 보이고 하나만 맞으면 맞음»). 큰 글씨는 <b>세관 신고 번호</b>이고, 실물이 어느 것과도 다르면 실번호를 고쳐 넣으십시오 — 그때 실오류(세관 신고 대상)로 셉니다. 자릿수(앞 0)까지 다르면 다른 번호입니다.</div>
+              {_declErr ? (
+                <div className="text-2xs text-red-300 mt-1" data-seal-decl-err="1">세관 신고 실이 다른 자료 실의 {_kc.zero ? '앞자리 0 이 빠진' : '끝자리가 빠진'} 값이라 실오류(신고 정정 대상)로 셉니다.</div>
+              ) : <div className="text-2xs text-amber-200/90 mt-1">실물 씰이 이 가운데 하나면 맞음입니다(4.49 — 검수사 «다 보이고 하나만 맞으면 맞음»). 큰 글씨는 <b>세관 신고 번호</b>이고, 실물이 어느 것과도 다르면 실번호를 고쳐 넣으십시오 — 그때 실오류(세관 신고 대상)로 셉니다. 자릿수(앞 0)까지 다르면 다른 번호입니다.</div>}
             </div>
           );
         })()}

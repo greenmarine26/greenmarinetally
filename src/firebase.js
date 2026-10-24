@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES, isCustomsSrc, sealLegacyOf } from './utils.js';   // 4.49 재감사: 옛 꼴 판정 한 벌(sealLegacyOf)   // 4.49: isCustomsSrc — 세관 출처 판정 한 벌   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES, isCustomsSrc, sealLegacyOf, isRfListSrc } from './utils.js';   // 4.49-02: isRfListSrc — RF CONTAINER LIST 는 실 출처가 안 됨   // 4.49 재감사: 옛 꼴 판정 한 벌(sealLegacyOf)   // 4.49: isCustomsSrc — 세관 출처 판정 한 벌   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, stripCatosPos, applyAutoSwap, dropStaleRawEdi, restoreStaleRawEdi, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
@@ -563,7 +563,9 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
       const _ovLegacy = sealLegacyOf(ov);   // 재감사(하): 옛 꼴 판정 한 벌(utils)
       const _keepCustoms = isCustomsSrc(ov.sl_src) && !isCustomsSrc(_newSrc) && !_ovLegacy
         && String(nv.sl).trim() === String(_ovDocSl || '').trim();
-      if (!_keepCustoms) m.sl_src = _newSrc;
+      //  4.49-02 독립 감사(상-2) — RF CONTAINER LIST 는 실의 출처가 되지 않는다(앞 실이 있으면). 같은 값이어도 sl_src 를 RF 파일로 바꾸면 sealKnownOf 가 본 리스트 실을 RF 로 보고 뺐다.
+      const _rfKeep = isRfListSrc(_newSrc) && String(ov.sl || '').trim() !== '';
+      if (!_keepCustoms && !_rfKeep) m.sl_src = _newSrc;
     }
     for (const [k, v] of Object.entries(nv || {})) {
       if (_emptyFor(k, v)) continue;           // ① 빈 값(무게 0 포함)은 기존을 덮지 않는다

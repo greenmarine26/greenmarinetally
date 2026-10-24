@@ -8,7 +8,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
-import { completedByLabel, isSealError, sealCheckOf } from '../utils.js';   // 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
+import { completedByLabel, isSealError, sealCheckOf, sealConflictOf } from '../utils.js';   // 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // ★ 3.16: 완료자 표기 한 벌
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk, withAssignOf, loadingSlotOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
@@ -408,8 +408,9 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   // 2.05-06 (검수사 도메인 확정 «035634↔0035634 이거라면 실오류 입니다» — 2.05-05 의 앞 0 정규화 억제는
   //   **오판이라 철회**): 씰번호는 문자 그대로가 번호다 — 자릿수(앞 0)까지 다르면 다른 번호이고 실오류 사안.
   //   세관 신고(적하목록 #B1)와 자릿수까지 대조해야 한다(2719E 실측 — 세관 0035634 / RF 리스트 035634).
-  const _slcVals = Array.isArray(c.sl_conflict)
-    ? [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))] : [];
+  //   ★ 4.49-02 (검수사 2026-10-25 «RF CONTAINER LIST는 단순하게 보면 됩니다 … 실번호는 본리스트에 있는걸 사용합니다») — 그 RF 리스트 035634 는 엑셀 숫자 칸 잘림이라
+  //     실 자료로 안 친다(sealConflictOf). 앞자리 0 실오류는 세관 신고 값 쪽이 0 이 빠졌을 때만(utils.sealCheckOf zero).
+  const _slcVals = [...new Set(sealConflictOf(c).map((h) => String(h.sl || '').trim().toUpperCase()))];   // 4.49-02: RF CONTAINER LIST 실은 뺀다(검수사 «실번호는 본리스트»)
   const sealConflict = !sealError && _slcVals.length > 1;
   // 1.76-05: 실번호 중복 — **두 컨에 한 실**(sealConflict 는 «한 컨에 두 실»로 축이 다르다).
   //   검수사 신고 2026-08-16 MAMP 631N — PH0570668 이 두 대에 들어간 채 둘 다 완료됐다.
@@ -566,7 +567,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {sealConflict && (
                 /* 4.23 2차: 실번호 둘이 길어 «크게»에서 칸 밖으로 잘렸다(390px 6px · 360px 36px) — 좁으면 두 줄로 */
                 <span className="bg-amber-700/80 text-amber-50 bdg font-black max-w-full !h-auto min-h-[22px] sm:min-h-[20px] !py-0.5 !whitespace-normal !leading-tight break-words"
-                  title={`리스트마다 실번호가 다릅니다 — ${c.sl_conflict.map(h => h.sl + (h.src ? ` (${h.src})` : '')).join(' / ')}`}>
+                  title={`리스트마다 실번호가 다릅니다 — ${sealConflictOf(c).map(h => h.sl + (h.src ? ` (${h.src})` : '')).join(' / ')}`}>
                   ⚠ 실번호 불일치 {_slcVals.join('↔')}
                 </span>
               )}

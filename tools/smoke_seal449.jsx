@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
 import SealKnownLine from '../src/components/SealKnownLine.jsx';
 import ContainerDetailModal from '../src/components/ContainerDetailModal.jsx';
-import { parseListExcel, sealCheckOf, sealKnownOf, isSealError, inspectionSealOf, mergeUploadSeal, isCustomsSrc, APP_NOTE, APP_VERSION } from '../src/utils.js';
+import { parseListExcel, sealCheckOf, sealKnownOf, isSealError, inspectionSealOf, mergeUploadSeal, isCustomsSrc, sealConflictOf, isRfListSrc, APP_NOTE, APP_VERSION } from '../src/utils.js';
 import { fbSaveListRecords } from '../src/firebase.js';
 import { buildSealList } from '../src/tallyReport.js';
 import { sealIssuesOf, generateHandover } from '../src/nlSearch.js';
@@ -19,7 +19,7 @@ import { exportSectionToCSV } from '../src/components/CSVExport.jsx';   // 재�
 import { generateInspectionListHTML } from '../src/inspectionList.js';   // 감사 3차(하) — 종이 검수리스트 제작컨 큰 실
 
 window.XLSX = XLSX;
-window.__T = { parseListExcel, sealCheckOf, sealKnownOf, isSealError, inspectionSealOf, mergeUploadSeal, isCustomsSrc, APP_NOTE, APP_VERSION,
+window.__T = { parseListExcel, sealCheckOf, sealKnownOf, isSealError, inspectionSealOf, mergeUploadSeal, isCustomsSrc, sealConflictOf, isRfListSrc, APP_NOTE, APP_VERSION,
   fbSaveListRecords, buildSealList, sealIssuesOf, generateHandover, HELP_DATA, FX, answerOneRaw, flattenVoyages, _mirThreadReset, toMirContainers, applyDischargeUnits, sealLegacyOf, exportSectionToCSV, generateInspectionListHTML };
 const root = createRoot(document.getElementById('root'));
 let __mk = 0;

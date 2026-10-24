@@ -5,6 +5,7 @@
 //   - Firebase 쓰기는 여기서 하지 않는다 — 순수 함수라 시뮬·헬퍼 재사용이 쉽다.
 import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOppositeDirRecord, loadSheetJS, cancelListKind, listTypoTwins } from './utils.js';   // 3.50-02: cancelListKind — 캔슬(·추가 혼합) 리스트는 등록 재료가 아니다
 import { APP_VERSION, CONTAINER_WT_MAX_KG } from './utils.js';   // 4.08-02: 컨 하나 40톤 상한
+import { isRfListSrc } from './utils.js';   // 4.49-02: RF CONTAINER LIST 판별 한 벌(실번호 판정과 같은 함수)
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 파일 이름이 선사
 import { listRevisionDrops } from './listRevision.js';   // 3.61-02: 같은 기본이름 리스트는 새 판만(선적 합본과 같은 판정 한 벌)
 
@@ -201,6 +202,12 @@ export async function buildAutoPayload(files, opts) {
     _listFiles.push({ name, mtime: Number(f.mtime) || 0 });
   }
   const _revDrop = listRevisionDrops(_listFiles, n => _listCns[n]);
+  //  ★ 4.49-02 — **RF CONTAINER LIST 의 실번호는 본 리스트 실에 진다.** 리스트끼리는 먼저 읽은 값이 남고 뒤 파일은 빈칸만 채우는데,
+  //    RF 리스트가 먼저 읽히면 그 실(엑셀 숫자 칸이라 앞자리 0 이 빠진 000930 등)이 실번호로 남았다(실측 OBWH 2719E 리퍼 5대 ·
+  //    2689E·2695E 21대씩). 검수사 2026-10-25 «RF CONTAINER LIST는 단순하게 보면 됩니다. 리퍼갯수와 컨넘버로 실번호는 본리스트에
+  //    있는걸 사용합니다». 실번호(sl·sl_orig)만 본 리스트 값으로 바꾸고 sl_src 에 그 파일을 적는다 — 무게·규격 등 나머지는 종전대로
+  //    (파일 순서를 바꾸면 RF 리스트 무게가 빠진다 — 2719E 18대 실측). 앱 올리기 병합(utils.mergeUploadSeal)과 같은 규칙.
+  const _slFromRf = new Set();
   for (const f of files || []) {
     const name = f.name || '';
     try {
@@ -266,13 +273,17 @@ export async function buildAutoPayload(files, opts) {
         if (_revDrop.has(name)) { perFile.push({ name, kind: 'list(구판 제외)', count: 0 }); continue; }   // 3.61-02
         const out = (name in _listParsed) ? _listParsed[name] : await parseListExcel(await _asU8(f));
         const recs = (out && out.records) || [];
+        const _isRfList = isRfListSrc(name);   // 4.49-02
         const _fop = opFromListFileName(name);   // 3.60-21 감사 M-1: 자동등록 경로에도 파일명 선사 규칙(빈 op 에만, 표시 _opFromFile)
         recs.forEach(r => {
           if (!r.cn) return;
           const cn = r.cn.toUpperCase();
           if (_fop && !(r.op && String(r.op).trim())) { r.op = _fop; r._opFromFile = true; }
-          if (!records[cn]) { records[cn] = { ...r, cn, _source: name }; return; }
+          if (!records[cn]) { records[cn] = { ...r, cn, _source: name }; if (_isRfList) _slFromRf.add(cn); return; }   // 감사(중-1): 실이 빈칸이어도 — 본 리스트 실이 오면 그 출처(sl_src)를 적는다
           const prev = records[cn];
+          if (!_isRfList && _slFromRf.has(cn) && r.sl != null && String(r.sl).trim() !== '') {   // 4.49-02: RF 리스트 실 → 본 리스트 실
+            prev.sl = r.sl; prev.sl_orig = (r.sl_orig != null && r.sl_orig !== '') ? r.sl_orig : r.sl; prev.sl_src = name; _slFromRf.delete(cn);
+          }
           for (const [k, v] of Object.entries(r)) {
             if (v === '' || v == null) continue;
             if (k === 'op' && prev._opFromFile && !r._opFromFile) { prev.op = v; prev._opFromFile = false; continue; }   // 실제 선사 칸(세관 선사부호)이 파일명 선사를 이긴다

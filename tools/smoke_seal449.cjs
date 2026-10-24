@@ -324,6 +324,101 @@ const bundle = process.argv[3];
   ok(/실번호가 자료마다 다를 때 — 다른 자료 실 · 하나만 맞으면 맞음 \(4\.49~\)/.test(help) && /ML Seal 칸이 주실/.test(help) && /끝자리가 빠진 값/.test(help), '매뉴얼 — 4.49 절(다른 자료 실 · ML Seal · 끝자리 빠짐)');
   ok(/^TallyOne 4\.49/.test(T.APP_VERSION) && /실번호/.test(T.APP_NOTE), `버전 ${T.APP_VERSION} · APP_NOTE 실번호`, T.APP_NOTE);
 
+  console.log('⑫ 4.49-02 앞자리 0 · RF CONTAINER LIST — 신고(세관) 값의 앞 0 이 빠졌으면 실오류 · RF 리스트 실은 실 자료로 안 친다(검수사 2026-10-25 «검수리스트 위주» · «실번호는 본리스트»)');
+  {
+    //  보관 항차 실기록(RTDB archive GET) 그대로
+    const zA = { cn: 'SEGU9581651', fe: 'F', sl: '21816', sl_orig: '21816', sl_src: 'Excel_20260916023527.xls', _source: 'Excel_20260916023527.xls', _customs: true,
+      sl_conflict: [{ sl: '021816', src: '2741E RF CONTAINER LIST.xlsx' }, { sl: '21816', src: 'Excel_20260916023527.xls' }] };   // OBWH 2741E — 세관 21816 · RF 리스트 021816
+    const zB = { cn: 'CAAU4289478', fe: 'F', sl: '0035634', sl_orig: '0035634', _source: '2719E RF CONTAINER LIST.xlsx', _customs: true,
+      sl_conflict: [{ sl: '035634', src: '2719E RF CONTAINER LIST.xlsx' }, { sl: '0035634', src: '2719E.txt 적하목록(세관)' }] };   // OBWH 2719E — RF 리스트 엑셀 숫자 칸 035634
+    const zC = { cn: 'CAAU4288105', fe: 'F', sl: '0049755', sl_orig: '0049755', _source: '2709E RF CONTAINER LIST.xlsx', _customs: true,
+      sl_conflict: [{ sl: '0049755', src: '2709E RF CONTAINER LIST.xlsx' }, { sl: '049755', src: '2709E RF CONTAINER LIST.xlsx' }] };   // OBWH 2709E — RF 리스트뿐(같은 파일 두 값)
+    const zD = { cn: 'WDFU3023651', fe: 'F', sl: '0255053', sl_orig: '0255053', sl_src: 'Excel_20260907175812.xls', _source: 'Excel_20260907175812.xls', _customs: true,
+      sl_conflict: [{ sl: '255053', src: 'STSE 2669E WDG CDL.xlsx' }, { sl: '0255053', src: 'Excel_20260907175812.xls' }] };   // STSE 2669E — 세관(CDL)끼리
+    const kA = T.sealCheckOf(zA), kB = T.sealCheckOf(zB), kC = T.sealCheckOf(zC), kD = T.sealCheckOf(zD);
+    ok(!kA.error && !kA.zero && kA.big === '21816' && !kA.known.some((x) => x.v === '021816') && kA.rfDropped === 1 && T.sealConflictOf(zA).length === 1,
+      'OBWH 2741E SEGU9581651 — RF 리스트 021816 은 실 자료로 안 친다 → 실오류 아님 · 큰 실 세관 21816 · 불일치 배지 없음', JSON.stringify(kA));
+    ok(!kB.error && kB.big === '0035634' && kB.known.length === 1 && T.sealConflictOf(zB).length === 1 && T.inspectionSealOf(zB) === '0035634',
+      'OBWH 2719E CAAU4289478 — RF 리스트 035634 를 뺀다 → 다른 자료 실·불일치 배지 없음 · 큰 실 0035634(세관)', JSON.stringify(kB));
+    ok(!kC.error && T.sealConflictOf(zC).length === 0 && kC.known.length === 2, 'OBWH 2709E CAAU4288105 — RF 리스트뿐이면 그대로 두되 불일치 배지는 없음(본 리스트 실 대기)', JSON.stringify(kC));
+    ok(!kD.zero && !kD.error, 'STSE 2669E WDFU3023651 — 세관(CDL)끼리 앞 0 차이 → 실오류 아님', JSON.stringify(kD));
+    const zDs = { ...zD, sl: '255053', sl_orig: '255053', sl_src: 'STSE 2669E WDG CDL.xlsx', _source: 'STSE 2669E WDG CDL.xlsx' };   // 감사(하-1) — 짧은 쪽이 큰 실이어도 세관끼리면 안 센다
+    ok(!T.sealCheckOf(zDs).zero && !T.sealCheckOf(zDs).error, '세관(CDL 255053)이 큰 실이고 다른 세관(0255053)이 길어도 앞자리 0 실오류 아님', JSON.stringify(T.sealCheckOf(zDs)));
+    //  앞자리 0 규칙 — 본 리스트(선사 CLL)가 0 을 더 갖고 세관이 빠졌을 때(위 SEGU9581651 의 출처만 선사 본 리스트로 바꾼 사본)
+    const zL = { ...zA, sl_conflict: [{ sl: '021816', src: 'OBWH 2741E CLL.xlsx' }, { sl: '21816', src: 'Excel_20260916023527.xls' }] };
+    const kL = T.sealCheckOf(zL);
+    ok(kL.zero && kL.error && kL.from === '21816' && kL.actual === '021816' && kL.big === '21816' && T.isSealError(zL),
+      '사본 — 세관 21816 ↔ 선사 본 리스트 021816 → 실오류(신고 21816 → 021816) · 큰 실은 세관 값', JSON.stringify(kL));
+    const edOk = { ...zL, sl_history: [{ from: '21816', to: '21816', by: '시험' }] };
+    const edLong = { ...zL, sl: '021816', sl_history: [{ from: '21816', to: '021816', by: '시험' }] };
+    ok(!T.sealCheckOf(edOk).error && T.sealCheckOf(edLong).error && T.sealCheckOf(edLong).actual === '021816', '검수원이 실물을 신고 값 21816 으로 확인하면 실오류 아님 · 021816 으로 고치면 실오류(신고 정정)');
+    const z0 = { cn: 'TEST0000001', fe: 'F', sl: '000000', sl_orig: '000000', sl_src: 'Excel_20260916023527.xls', sl_conflict: [{ sl: '0000000', src: 'X CLL.xlsx' }, { sl: '000000', src: 'Excel_20260916023527.xls' }] };
+    ok(!T.sealCheckOf(z0).zero, '감사(하-2) — 0 뿐인 값(000000 ↔ 0000000)은 앞자리 0 실오류로 안 센다');
+    const trA = T.sealCheckOf({ ...zA, sl_conflict: [{ sl: 'MLPH0463390', src: 'x.xlsx' }, { sl: 'MLPH046339', src: 'Excel_20261024122429.xls' }], sl: 'MLPH046339', sl_orig: 'MLPH046339', sl_src: 'Excel_20261024122429.xls' });
+    ok(trA.trunc && !trA.zero && trA.error, '끝자리 빠짐(trunc)은 그대로 — 앞자리 0 판정과 겹치지 않는다', JSON.stringify(trA));
+    //  올리기 병합 — RF 리스트는 실을 바꾸지 않고 «다른 자료 실»도 안 남긴다
+    const m1 = T.mergeUploadSeal({ cn: 'CAAU4289478', sl: '0035634', sl_src: '2719E.txt 적하목록(세관)' }, { cn: 'CAAU4289478', sl: '035634' }, '2719E RF CONTAINER LIST.xlsx');
+    const m2 = T.mergeUploadSeal({ cn: 'CAAU4289478', sl: '035634', sl_src: '2719E RF CONTAINER LIST.xlsx' }, { cn: 'CAAU4289478', sl: '0035634' }, '2719E.txt 적하목록(세관)');
+    ok(m1.sl === '0035634' && !m1.sl_conflict && m1.sl_src === '2719E.txt 적하목록(세관)' && m2.sl === '0035634' && m2.sl_orig === '0035634' && T.sealConflictOf({ sl_conflict: m2.sl_conflict || [] }).length === 0 && m2.sl_src === '2719E.txt 적하목록(세관)',
+      '올리기 병합 — RF 리스트 뒤에 와도·앞에 와도 실은 본 리스트(세관) 값 · 출처는 세관 · 화면에 보이는 불일치 안 남김', JSON.stringify({ m1, m2 }));
+    //  독립 감사(상-1·상-2·중-2) — 실 firebase.js(메모리 DB)로 올리기 순서를 돌린다. RF 리스트가 끼어도 RF 없는 대조군과 같은 답이어야 한다.
+    const RF = '2741E RF CONTAINER LIST.xlsx', CLL = 'OBWH 2741E CLL.xlsx', CU2 = 'Excel_20260916023527.xls', RK = 'SEGU9581651';
+    const seq = async (steps, start) => { W.__memdb = { voyages: { [VK]: { discharge: { records: {} } } } }; let rr = start ? clone(start) : {}; if (start) W.__memdb.voyages[VK].discharge.records = clone(start); for (const [f, v] of steps) rr = await upload([{ cn: RK, fe: 'F', sl: v, sl_orig: v }], f, rr); return { ...rr[RK], cn: RK }; };
+    const ctlA = await seq([[CU2, '21816'], [CLL, '021816']]);
+    const sA = await seq([[CU2, '21816'], [RF, '021816'], [CLL, '021816']]);
+    const kAc = T.sealCheckOf(ctlA), kAs = T.sealCheckOf(sA);
+    ok(kAc.zero && kAc.error && kAs.zero && kAs.error && kAs.big === '21816' && T.inspectionSealOf(sA) === '21816' && kAs.customs && kAs.customs.v === '21816',
+      '세관 21816 → RF 021816 → 선사 021816 — RF 를 끼워도 앞자리 0 실오류 · 큰 실 세관 21816(대조군과 같음)', JSON.stringify({ sA, kAs }));
+    const sB = await seq([[CU2, 'MLPH046339'], [RF, 'MLPH0463'], [CLL, 'MLPH0463390']]);
+    const kBs = T.sealCheckOf(sB);
+    ok(kBs.trunc && kBs.error && kBs.big === 'MLPH046339' && T.inspectionSealOf(sB) === 'MLPH046339', '세관 MLPH046339 → RF MLPH0463 → 선사 MLPH0463390 — 큰 실 세관 값 · 끝자리 빠짐 실오류 그대로', JSON.stringify({ sB, kBs }));
+    const sC = await seq([[CU2, '0035634'], [RF, '035634']]);
+    ok(sC.sl === '0035634' && (sC.sl_orig == null || sC.sl_orig === '0035634') && sC.sl_src === CU2 && T.sealCheckOf(sC).customs && !T.sealCheckOf(sC).error,
+      '세관 0035634 → RF 035634 — 저장 sl·sl_orig·sl_src 그대로(세관) · 고친 기록 없는 sl≠sl_orig 옛 꼴을 만들지 않는다', JSON.stringify(sC));
+    const old = { [RK]: { cn: RK, fe: 'F', sl: 'MLPH0463390', sl_orig: 'MLPH046339', sl_src: CUS, _source: CUS } };
+    const sD = await seq([[RF, 'MLPH0463']], old);
+    ok(T.inspectionSealOf(sD) === 'MLPH046339' && T.sealCheckOf(sD).big === 'MLPH046339' && sD.sl_orig === 'MLPH046339', '옛 꼴(sl 선사 · sl_orig 세관) 위에 RF 를 올려도 큰 실은 세관 MLPH046339 · sl_orig 그대로', JSON.stringify(sD));
+    const ctlE = await seq([[CLL, '021816'], [CU2, '21816']]);
+    const sE = await seq([[CLL, '021816'], [RF, '021816'], [CU2, '21816']]);
+    const kEs = T.sealCheckOf(sE);
+    ok(T.sealCheckOf(ctlE).zero && kEs.zero && kEs.error && kEs.known.some((x) => x.v === '021816') && sE.sl_src === CU2,
+      '선사 021816 → RF 021816(같은 값) → 세관 21816 — 본 리스트 실이 RF 로 오인되지 않는다 · 앞자리 0 실오류', JSON.stringify({ sE, kEs }));
+    const sF = await seq([[CLL, 'PH0570668'], [RF, 'PH0570668'], [CU2, 'PH0570999']]);
+    ok(T.sealCheckOf(sF).known.length === 2 && T.sealConflictOf(sF).length === 2, '선사 PH0570668 → RF(같은 값) → 세관 PH0570999 — 다른 자료 실·불일치 배지가 남는다', JSON.stringify(sF));
+    const sG = await seq([[RF, '049722'], [CLL, '0049722']]);
+    ok(sG.sl === '0049722' && sG.sl_src === CLL && T.inspectionSealOf(sG) === '0049722' && T.sealConflictOf(sG).length < 2 && T.sealCheckOf(sG).known.length === 1, 'RF 049722 먼저 → 선사 0049722 — 실은 본 리스트 값 · 출처 선사 · RF 값은 화면에 안 보임', JSON.stringify(sG));
+    const sH = await seq([[RF, '049755']]);
+    ok(sH.sl === '049755' && T.sealCheckOf(sH).big === '049755', 'RF 리스트에만 실이 있으면 그 실을 그대로 쓴다', JSON.stringify(sH));
+    const edI = { [RK]: { cn: RK, fe: 'F', sl: '9999999', sl_orig: '0035634', sl_src: CLL, _source: CLL, sl_history: [{ from: '0035634', to: '9999999', by: '시험' }] } };
+    const kI0 = T.sealCheckOf({ ...edI[RK] });
+    const sI = await seq([[RF, '035634']], edI);
+    const kI = T.sealCheckOf(sI);
+    ok(kI0.error && kI.error && sI.sl === '9999999' && !T.sealCheckOf(sI).known.some((x) => x.v === '9999999'), '재감사(상) — 검수원이 고친 컨(서류 0035634 → 실물 9999999)에 RF 리스트를 올려도 실물이 서류 실로 안 섞이고 실오류 그대로', JSON.stringify({ sI, kI }));
+    const rD = { cn: RK, fe: 'F', sl: '049722', sl_orig: '049722', sl_src: RF, _source: RF, slEdi: '0049722' };
+    ok(T.sealCheckOf(rD).rfDropped === 1 && T.inspectionSealOf(rD) === '0049722', 'rfDropped 갈래 — sl 에 RF 실이 앉았고 EDI 가 있으면 큰 실은 EDI 값', JSON.stringify(T.sealCheckOf(rD)));
+    const kAlt = T.sealCheckOf({ cn: RK, fe: 'F', sl: '21816', sl_orig: '21816', sl_src: CU2, sl_alt: '021816' });
+    ok(!kAlt.zero && !kAlt.error, '감사(하-4) — 보조실(Shipper Seal) 021816 은 앞자리 0 짝으로 안 본다(다른 실물)', JSON.stringify(kAlt));
+    W.__renderLine({ c: zL, showError: true }); await wait(80);
+    const tz = doc.getElementById('root').textContent;
+    ok(/⚠ 신고 실 21816 은 021816 의 앞자리 0 이 빠진 값입니다/.test(tz) && /🚨 실오류 — 신고 21816 → 실물 021816/.test(tz) && !/하나면 맞음/.test(tz), '화면 — «⚠ 신고 실 21816 은 021816 의 앞자리 0 이 빠진 값입니다 — 실오류(신고 정정 대상)로 셉니다.»', tz);
+    W.__renderLine({ c: zB, showError: true }); await wait(80);
+    ok(doc.getElementById('root').textContent === '', '화면 — OBWH 2719E CAAU4289478 은 다른 자료 실 줄을 안 그린다(RF 리스트 실 뺌)', doc.getElementById('root').textContent);
+    const mirSrc = fs.readFileSync(path.join(root, 'src/mir.js'), 'utf8');
+    ok(/_k\.zero && _k\.error && _k\.decl\) parts\.push\(`⚠ 신고 실 \$\{_k\.decl\.v\} 은 \$\{_k\.zeroLong\} 의 앞자리 0 이 빠진 값/.test(mirSrc) && /\(_k\.trunc \|\| _k\.zero\) && _k\.error \? '' : ' — 실물이 하나면 맞음'/.test(mirSrc), '배선 — 미르 «4907 실번호» 답도 앞자리 0 빠짐 줄 · «하나면 맞음» 빼기(같은 판정)');
+    const _rd = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+    ok(/sealConflictOf\(c\)\.map/.test(_rd('src/components/ContainerList.jsx')) && /const _scf = sealConflictOf\(c\)/.test(_rd('src/components/ContainerDetailModal.jsx')) && /const hist = sealConflictOf\(c\)/.test(_rd('src/nlSearch.js'))
+      && /sealConflictOf\(c\)\.length > 1/.test(mirSrc) && /sealConflictOf\(x\)\.map/.test(mirSrc) && !/c\.sl_conflict\.map\(h =>/.test(_rd('src/components/ContainerList.jsx')),
+      '배선 — 실번호 불일치 배지·컨 상세 카드·미르 실번호 점검·홈 실오류 목록이 sealConflictOf 한 벌(RF CONTAINER LIST 뺌)');
+    ok(/const _declErr = !!\(_kc && \(_kc\.trunc \|\| _kc\.zero\) && _kc\.error\)/.test(_rd('src/components/ContainerDetailModal.jsx')) && /data-seal-decl-err/.test(_rd('src/components/ContainerDetailModal.jsx')),
+      '배선 — 컨 상세 노란 상자도 끝자리·앞자리 0 빠짐 실오류면 «하나면 맞음» 대신 실오류 안내(감사 하-2)');
+    ok(/sealConflictOf\(x\)\.map\(\(h\) => String\(h\.sl/.test(mirSrc) && !/x\.sl_conflict\.map\(\(h\) => String/.test(mirSrc) && /'RF 리스트'/.test(mirSrc) && /return 'RF 리스트'/.test(_rd('src/components/SealKnownLine.jsx')),
+      '배선 — 홈 실오류 «불일치» 줄도 sealConflictOf · RF 에서만 온 실은 «(RF 리스트)» 표기(감사 하-1·하-3)');
+    ok(/const _rfKeep = isRfListSrc\(_newSrc\) && String\(ov\.sl \|\| ''\)\.trim\(\) !== ''/.test(_rd('src/firebase.js')), '배선 — 저장(fbSaveListRecords)도 RF 파일로 sl_src 를 안 바꾼다(감사 상-2)');
+    const _ar = _rd('src/autoRegApi.js');
+    ok(/import \{ isRfListSrc \} from '\.\/utils\.js'/.test(_ar) && /const _isRfList = isRfListSrc\(name\)/.test(_ar) && /if \(_isRfList\) _slFromRf\.add\(cn\)/.test(_ar)
+      && /if \(!_isRfList && _slFromRf\.has\(cn\) && r\.sl != null[^\n]*\n\s*prev\.sl = r\.sl; prev\.sl_orig = [^\n]*prev\.sl_src = name;/.test(_ar) && !/_rfLastFiles/.test(_ar),
+      '배선 — 수집기 자동 등록(autoRegApi)도 RF CONTAINER LIST 실은 본 리스트 실에 진다(실번호만 · 무게·규격은 종전대로 · 같은 isRfListSrc)');
+  }
   ok(errs.length === 0, '화면 오류 0', errs.join(' | '));
   console.log(`\n4.49 실번호 판정 한 벌 연막 — ${n - bad}/${n} 통과`);
   process.exit(bad ? 1 : 0);

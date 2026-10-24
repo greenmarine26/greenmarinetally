@@ -52,7 +52,8 @@ export function isSentenceQuery(v) {
 //   (앞 판) 'TallyOne 4.07-03'   // 4.07-03 **해치커버 «총 N장» — 홀드 중심이 4 의 배수인 배(STSE 등)에서 베이 셋을 묶으면 6장으로 세던 것을 2장으로 고쳤다** — 검수사 2026-10-06 22:33 «STSE해치카버 오픈이 자동가이드에서 24번베이가 왜 총6장인지?» 실측 STSE 2677E — 자동가이드 «23 (24)25 총 6장»·«19 (20)21 총 6장», 수동으로 24번만 적으면 2장. 사전은 23·24·25가 한 홀드 2장(같은 경계)이라 정답은 2장이다. 원인은 makePanelResolver._groupOf 가 홀드 중심을 «4로 나눠 2가 남는 짝수(22·26·30)»로만 알아 홀수 베이(23·25)를 혼자로 돌려 24와 합쳐지지 않았던 것. 새 coverGroupOf 가 혼자 남은 홀수 베이를 해치 있는 반대쪽 짝수 이웃으로 묶고 hatchOpenable 만 쓴다(시프팅 축 계산 _groupOf 는 그대로). 사전 63척 대조 — 바뀌는 곳은 혼자 남던 홀수 베이 101곳(13척 ATPR·BERO·DJCT·DXQD·KSKM·NBTD·NSFR·PCBJ·PCSG·PCSZ·STSE·TMPZ·XTPG)뿐.
 //   (앞 판) 'TallyOne 4.08'   // 4.08 **일반 검수원 폰은 고른 작업 선박 자료만 받는다 — 항차 뿌리 전체(실측 3.6MB)를 연결마다 다시 받던 것을 끊었다** — 검수사 2026-10-07 00:38 «앱이 데이터를 많이 사용하는군요. 필요없는 자료까지 받고 있는지 알아봐 주세요.» 밤새 파이어베이스 내려받기 정산 — 수집기 바닥이 시간당 20~24MB, 나머지는 앱 세션이 연결(재연결)마다 항차 뿌리 3MB 안팎을 통째로 받은 것(04시 스파이크). 일반 검수원은 고른 선박 하나만 보는 사람이라 그 선박 본문만 구독(firebase.fbSubscribeVoyageBody), 선박을 고르기 전 선택 화면은 항차 키 목록(REST shallow)과 항차마다 info 만(fbSubscribeVoyageInfos, 전체 10KB). 수석·부수석·테스터·소유자·개발 열람과 로그인 전 PC 화면은 종전 그대로 뿌리 전체. 범위 판정은 workChoice.voyagesScopeOf 한 벌, App.jsx 가 받은 만큼만 voyages 에 담는다(본문이 없는 항차는 홈·자동삭제·검색에 안 넘긴다). 폰 선택 화면 목록의 «N대» 배지는 본문을 안 받으므로 빠진다.
 //   (앞 판) 'TallyOne 4.29-02'   // 4.29-02 **업데이트 배너는 검수사가 쓸 수 있는 변화만 알린다**(검수사 2026-10-16 13:32 «검수사들이 모르는 수정 업데이트 공고는 보여주면 안됩니다. 보여줘도 다른 검수사들이 쓸수 없는 기능이기 때문입니다»). 4.28·4.29-01 의 배너 문구는 소유자 전용 스위치 이야기라 모든 검수사에게 보였다 — 소유자 메뉴·수집기 안쪽 변경만 있는 판은 배너 문구를 직전 «모두가 쓰는 변화» 그대로 두고, 4.29 선적 칸 [수정] 문구로 되돌린다.
-export const APP_VERSION = 'TallyOne 4.49-01'   // 4.49-01 4.49 라이브 확인 수리 — 주의 박스 알림 한 줄(alert.msg — «자료별 대조 — … 적용하면 315 · 터미널 배정 317(터미널은 아직 선사 메일 수정 전)»)이 320·360px 에서 «적⏎용하면» «수⏎정 전» 으로 한글 낱말 중간에서 끊겼다(4.48-04·4.49 는 펼친 칸만 고침) → break-words break-keep. 배너 문구는 4.49 그대로(작은 화면 수리).
+export const APP_VERSION = 'TallyOne 4.49-02'   // 4.49-02 **신고 실의 앞자리 0 빠짐은 실오류 · RF CONTAINER LIST 실은 안 씀** — 검수사 2026-10-25 05:0x «RF CONTAINER LIST는 단순하게 보면 됩니다. 리퍼갯수와 컨넘버로 실번호는 본리스트에 있는걸 사용합니다» — isRfListSrc · sealConflictOf 한 벌(배지·컨 상세·미르 점검·홈 실오류) · sealKnownOf 가 RF 리스트에서만 온 실을 뺌(본 리스트 실이 있을 때) · mergeUploadSeal 이 RF 리스트로 실을 안 바꿈 · 보관 172,040대 중 실오류 바뀜 0 · OBWH «실번호 불일치» 배지 125대 사라짐 · 큰 실 바뀜 0 · EDI 실 넣어도 0. 검수사 2026-10-25 04:26 «실오류입니다» · «검수리스트 위주 입니다. 검수리스트가 세관리스트와 거의 동일 합니다. 다만 자릿수 부족이나 그런것이 선사리스트에는 맞게 나와 있을수도 있습니다». sealCheckOf zero — 세관 값이 다른 자료(본 리스트·EDI — RF 리스트·보조실은 뺌) 실에서 앞 0 만 빠진 값이면 끝자리 빠짐과 같은 몫(안 고쳐도 실오류 · 실물을 신고 값으로 확인하면 아님). 리스트 쪽만 0 이 빠진 것(OBWH RF 리스트 049722 ↔ 세관 0049722 — 보관 98대 · 완료 83대 고친 기록 0)·세관 값 없는 같은 파일 두 값·세관끼리는 안 센다. 보관·활성 전수에서 앞자리 0 실례는 0(RF 쌍은 RF 실을 빼서 안 선다 — 규칙은 합성 사본으로 증명). 독립 감사(부 → 수리) — RF 리스트를 추가 병합해도 앞 실의 값·출처(sl·sl_orig·sl_src)를 그대로 두고(fbSaveListRecords 도 RF 파일로 sl_src 를 안 바꿈), 수집기 헬퍼는 RF 리스트가 만든 행이면 실이 빈칸이어도 본 리스트 실과 그 출처를 적는다 · 홈 실오류 «불일치» 줄도 sealConflictOf · RF 에서만 온 실은 «(RF 리스트)»로 표시.
+// (앞 판) 'TallyOne 4.49-01'   // 4.49-01 4.49 라이브 확인 수리 — 주의 박스 알림 한 줄(alert.msg — «자료별 대조 — … 적용하면 315 · 터미널 배정 317(터미널은 아직 선사 메일 수정 전)»)이 320·360px 에서 «적⏎용하면» «수⏎정 전» 으로 한글 낱말 중간에서 끊겼다(4.48-04·4.49 는 펼친 칸만 고침) → break-words break-keep. 배너 문구는 4.49 그대로(작은 화면 수리).
 // (앞 판) 'TallyOne 4.49'   // 4.49 **실번호 판정 한 벌 — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류** — 검수사 2026-10-24 06:42 «머스크는 일반적으로 보조실과 주실이 있습니다. 보조실은 리스트에 기록하지 않고 주실만 기록합니다» · «일조rzor은 컨테이너 자체가 상품인 경우 도어가 여러군데 있어서 보통 4군데에 실을 채웁니다» · 06:48 «실번호가 있으면 다 보여주고 그중 하나만 맞으면 된다고 알려 주는 방식입니다» · 12:50 확정(통합운영지침서 7.8-F 7·8·9 — ML Seal 칸 · 큰 글씨 실은 세관 값 · MLPH 끝자리 빠짐은 실오류로 센다). 실근거 — 실오류 판정이 열한 곳 넘게 흩어져(고친 기록 sl_history 를 보는 곳 둘 · 안 보는 곳 아홉) 보관·활성 396항차에서 리스트 칩 19 · 카드 배지 3 으로 갈렸다 · 올리기 병합 «한쪽이 앞부분이면 긴 쪽 채택»이 세관 잘림(MAMP 641N MMAU1264907 세관 MLPH046339 ↔ 선사 MLPH0463390)을 지웠다 · 머스크 파서가 Shipper Seal 을 주실로 써 «숫자 8자리 18»이 났다 · RZOR R117E VPLU8414662 리스트 000064 ↔ EDI 250499 에서 화면에 하나만 남았다. utils 한 벌 — isCustomsSrc(세관 출처 파일 이름 · firebase·nlSearch 두 벌을 하나로) · sealKnownOf(리스트 실 · 처음 리스트 sl_orig · 리스트끼리 다른 값 sl_conflict · 보조실 sl_alt · EDI 실 slEdi) · sealCheckOf(큰 실 big = 세관 값 · 실오류 = 고친 기록이 있고 알려진 실 어느 것과도 다름 · 잘린 신고 trunc = 한 실이 다른 단일 실의 한두 자 짧은 앞부분이면 안 고쳐도 실오류 · 이어 붙은 씰은 splitJoinedSeals 로 갈라 하나면 맞음 · 실 칸에 컨번호는 잘림으로 안 셈) · isSealError · mergeUploadSeal(올리기 병합 — 서로 다르면 둘 다 sl_conflict, 큰 실은 세관 값) · inspectionSealOf 큰 글씨 = 세관 값 · sealFormatAnomalies «예상 실오류»는 이미 실오류인 컨을 뺌. 파서 — 머스크 StandardDischargeList ML Seal 칸이 주실, Shipper Seal 은 sl_alt. 항차 화면 병합 — EDI 실을 slEdi 로 남김 · sl_alt 통과. firebase.fbSaveListRecords — 고친 컨은 고치기 전 서류 값으로 대조 · 올리기 병합이 만든 sl_conflict 와 저장분을 합침. 화면 — 새 SealKnownLine(«다른 자료 실 … — 실물이 이 가운데 하나면 맞음» · «🚨 실오류 — 신고 X → 실물 Y» · «⚠ 신고 실 … 의 끝자리가 빠진 값») 리스트 카드·컨 상세·큰 카드·자동 가이드 · 칩·필터·카드 배지 같은 판정 · 결과 탭·CSV·LOLO 보고·마감텔리 Act. Cntr-Seal·미르 실번호·홈 실오류·양하신고·인계 리씰이 같은 판정. 실자료 — 보관·활성 396항차 실오류 6(검수원 고친 3 + 신고 끝자리 빠짐 MCAP 639N MNBU4491858 · MCSC 638N MNBU4710196 · MAMP 641N MMAU1264907) · RZOR SAWTBP 10항차 · STMJ 2643E SKHU8912132 · 컨번호 실은 실오류 아님 · MAMP 641N 세관 리스트 추가 병합 뒤 실오류 1. 연막 smoke_seal449(실파일 사본 · 실 firebase.js 메모리 DB) · 회귀 기준표·씰 모양·미르 4.39-02·4.36 갱신.
 //   4.49 덧붙임(4.48-04 라이브 확인 «부») — 주의 박스 «자료별 대조» 칸 전체와 데이터 검증 메일 근거 줄에 break-keep. 4.48-04 는 컨 줄만 고쳐 머리줄·터미널 줄·묶음 머리가 320px 에서 «수⏎정» «평택에⏎서» «터미⏎널» 로 끊겼다(APP_NOTE «낱말 중간에서 끊기지 않습니다»와 어긋남). 콘앱 미르 «양하 317» 은 라이브에서 맞음.
 // (앞 판) 'TallyOne 4.48-04'   // 4.48-04 4.48-03 라이브 확인 수리 — 콘앱 미르·미르 4.20 갈래 시프팅 집합은 shiftSetForUnitsOf(본선 잔류 예보 제외 — 콘앱 미르 «양하 315» → 317) · 주의 박스 지시 컨 줄 break-keep
@@ -146,7 +147,8 @@ export const APP_VERSION = 'TallyOne 4.49-01'   // 4.49-01 4.49 라이브 확인
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.49-01 실번호가 자료마다 다르면 다른 자료 실을 다 보여 주고 실물이 하나와 맞으면 맞음입니다. 큰 글씨 실은 세관 값이고 신고 실 끝자리가 빠졌으면 실오류로 셉니다.'
+export const APP_NOTE = '4.49-02 실번호가 자료마다 다르면 다른 자료 실로 보이고 세관 신고 실의 앞자리 0 이 빠졌으면 실오류로 셉니다. RF CONTAINER LIST 의 실번호는 쓰지 않고 본 리스트 실을 씁니다.'
+// (앞 판 APP_NOTE) '4.49-01 실번호가 자료마다 다르면 다른 자료 실을 다 보여 주고 실물이 하나와 맞으면 맞음입니다. 큰 글씨 실은 세관 값이고 신고 실 끝자리가 빠졌으면 실오류로 셉니다.'
 // (앞 판 APP_NOTE) '4.49 실번호가 자료마다 다르면 다른 자료 실을 다 보여 주고 실물이 하나와 맞으면 맞음입니다. 큰 글씨 실은 세관 값이고 신고 실 끝자리가 빠졌으면 실오류로 셉니다.'
 // (앞 판 APP_NOTE) '4.48-04 선사 지시로 본선에 남는 컨은 콘앱 미르도 평택 양하 대수에 넣어 검수앱과 같은 수로 답합니다. 주의 박스 자료별 대조 줄은 낱말 중간에서 끊기지 않습니다.'
 // (앞 판 APP_NOTE) '4.48-03 선사 지시로 본선에 남는 컨은 예정으로만 보이고 평택 양하 대수는 EDI와 리스트 자료대로 셉니다. 수정 자료가 오면 그 자료대로 바뀝니다.'
@@ -9523,6 +9525,17 @@ export const HOLD_REASONS = ['콘 잠김', '트윈 무게 초과', '컨 홀 불�
 export function isCustomsSrc(src) {
   return /적하\s*목록|적하|세관|CDL|MANIFEST|신고|^Excel_\d{14}/i.test(String(src || '').trim());
 }
+//  ★ 4.49-02 — **RF CONTAINER LIST 의 실번호는 실 자료로 안 친다.** 검수사 2026-10-25 05:0x «RF CONTAINER LIST는 단순하게 보면 됩니다. 리퍼갯수와 컨넘버로 실번호는 본리스트에 있는걸 사용합니다».
+//    실측 — OBWH(연태훼리) RF CONTAINER LIST 의 실 칸은 엑셀 숫자 칸(35634 · 서식 000000)이라 앞 0 이 잘려(035634) 세관 적하목록 0035634 와 «⚠ 실번호 불일치»가 섰다
+//    (보관 OBWH 98대 · 그날 카톡 씰오류 보고 대부분 0건 · 8월 2.05-06 실측 2719E CAAU4289478). 본 리스트(선사·세관) 실이 있으면 RF 리스트 실은 «다른 자료 실»·«실번호 불일치»에서 뺀다.
+export function isRfListSrc(src) {
+  return /RF\s*CONTAINER\s*LIST|REEFER\s*CONTAINER\s*LIST/i.test(String(src || ''));
+}
+//  «실번호 불일치»(한 컨에 서류마다 다른 실 — sl_conflict) 한 벌 — RF CONTAINER LIST 출처는 뺀다(배지·컨 상세 카드·미르 점검·브리핑이 같은 목록을 쓴다).
+export function sealConflictOf(c) {
+  const h = Array.isArray(c && c.sl_conflict) ? c.sl_conflict : [];
+  return h.filter((x) => x && !isRfListSrc(x.src));
+}
 function _sealEdited(c) { return !!(c && Array.isArray(c.sl_history) && c.sl_history.length); }
 function _sealLegacy(c) { return !!(c && !_sealEdited(c) && c.sl_orig && c.sl && normSeal(c.sl_orig) !== normSeal(c.sl)); }   // 옛 병합 흔적(고친 기록 없이 sl ≠ sl_orig — sl_src 는 sl_orig 쪽 출처)
 export { _sealLegacy as sealLegacyOf };
@@ -9548,6 +9561,12 @@ export function sealKnownOf(c, ediSl) {
   if (c.sl_alt) add(c.sl_alt, '보조실(Shipper Seal)', 'alt');
   const ed = ediSl != null ? ediSl : c.slEdi;
   if (ed) add(ed, 'EDI', 'edi');
+  //  4.49-02 — RF CONTAINER LIST 에서만 온 실은 뺀다(본 리스트·세관·EDI 실이 하나라도 있을 때만 — 그것뿐이면 그대로 둔다).
+  const _rfOnly = (x) => x.srcs.length > 0 && x.srcs.every((sv) => isRfListSrc(sv));
+  if (out.some((x) => !_rfOnly(x))) {
+    const kept = out.filter((x) => !_rfOnly(x));
+    if (kept.length !== out.length) { kept.rfDropped = out.length - kept.length; return kept; }
+  }
   return out;
 }
 export function sealCheckOf(c, ediSl) {
@@ -9566,18 +9585,26 @@ export function sealCheckOf(c, ediSl) {
   const _longerOf = (x) => (_isCnLike(x) || x.n.length < 8 ? null : known.find((k) => k !== x && !_isCnLike(k) && k.n.length > x.n.length && k.n.length - x.n.length <= 2 && k.n.startsWith(x.n) && splitJoinedSeals(k.v).length === 1) || null);
   const decl = cust ? (_longerOf(cust) ? cust : null) : (known.find((x) => _longerOf(x)) || null);
   const trunc = !!decl;
+  //  ★ 4.49-02 — 앞자리 0 빠진 신고(zero) — 세관 값이 다른 자료(본 리스트·EDI) 실에서 앞 0 만 빠진 값이다(꼴 — 세관 21816 ↔ 선사 리스트 021816 · RF 리스트 실은 sealKnownOf 가 이미 빼서 짝이 되지 않는다 · 보조실(Shipper Seal)은 다른 실물이라 짝에서 뺀다 — 감사 하-4).
+  //    검수사 2026-10-25 04:26 «실오류입니다» · «검수리스트 위주 입니다. 검수리스트가 세관리스트와 거의 동일 합니다. 다만 자릿수 부족이나 그런것이 선사리스트에는 맞게 나와 있을수도 있습니다».
+  //    끝자리 빠짐(trunc)과 같은 몫 — 신고를 고쳐야 하므로 검수원이 안 고쳐도 실오류(검수원이 실물을 신고 값으로 확인했으면 아님). 거꾸로 리스트 쪽만 0 이 빠진 것
+  //    (OBWH RF 리스트 049722 ↔ 세관 0049722 — 보관 98대, 완료 83대 고친 기록 0)은 «다른 자료 실»로만 둔다. 세관 값이 없거나 세관끼리면 안 센다(같은 파일 두 값 19대 — 판독 흔적).
+  const _zeroTwinOf = (x) => (x && !trunc && !_isCnLike(x) ? known.find((k) => k !== x && !k.customs && k.kind !== 'alt' && !_isCnLike(k) && k.n.length > x.n.length && /^0+$/.test(k.n.slice(0, k.n.length - x.n.length)) && x.n.replace(/^0+/, '').length >= 4 && splitJoinedSeals(k.v).length === 1 && k.n.endsWith(x.n)) || null : null);
+  const zTwin = cust ? _zeroTwinOf(cust) : null;
+  const zero = !!zTwin;
   const toks = new Set();
   for (const k of known) { toks.add(k.n); const parts = splitJoinedSeals(k.v); if (parts.length > 1) for (const p of parts) toks.add(normSeal(p)); }
   const an = normSeal(actual);
-  const error = trunc ? (edited ? !!(an && an !== decl.n) : true) : !!(edited && an && known.length && !toks.has(an));
+  const error = trunc ? (edited ? !!(an && an !== decl.n) : true) : zero ? (edited ? !!(an && an !== cust.n) : true) : !!(edited && an && known.length && !toks.has(an));
   //  재감사(중-2) — 세관 값이 이어 붙은 씰의 20자 컷이면(RZOR SAWTBP «LF102335LF102350LF10» ↔ «LF102335LF102350LF102345LF102336») 같은 씰이다 — 큰 실은 긴 값(4.20 «잘린 앞부분이면 같은 씰 · 씰 전부 적는다»).
   const _joinedOf = (x) => (x ? known.find((k) => k !== x && k.n.length > x.n.length && k.n.startsWith(x.n) && splitJoinedSeals(k.v).length > 1) || null : null);
   const _cJ = _joinedOf(cust);
   const big = cust ? (_cJ ? _cJ.v : cust.v) : (known[0] ? known[0].v : String((c && c.sl) || '').trim());
   const truncLong = trunc ? _longerOf(decl).v : '';
-  const shownActual = trunc && !edited ? truncLong : actual;
+  const zeroLong = zero ? zTwin.v : '';
+  const shownActual = trunc && !edited ? truncLong : zero && !edited ? zeroLong : actual;
   const bigK = known.find((k) => k.v === big) || null;   // 큰 실의 출처(미르 «실번호 X(출처)» 괄호 — 재감사 중-3)
-  return { known, customs: cust, decl, truncLong, big, bigK, trunc, edited, actual: shownActual, error, from: trunc ? decl.v : big };
+  return { known, customs: cust, decl: trunc ? decl : zero ? cust : decl, truncLong, zero, zeroLong, big, bigK, trunc, edited, actual: shownActual, error, from: trunc ? decl.v : big, rfDropped: known.rfDropped || 0 };
 }
 /*  ★ 4.49 — 리스트 올리기 병합(VoyagePage «📥 추가 병합»·여러 파일 한 번에)의 실번호 한 벌. prev = 이미 있는 행, r = 새 파일 행 → merged 에 덮을 칸만 돌려준다.
     서로 다르면 둘 다 «다른 자료 실»(sl_conflict · 출처 파일)로 남기고, 큰 실(sl)은 세관 값이다(검수사 2026-10-24 «큰 글씨 실은 세관 값»).
@@ -9587,6 +9614,28 @@ export function sealCheckOf(c, ediSl) {
 export function mergeUploadSeal(prev, r, fileName) {
   const _docSl = (x) => String(((x && Array.isArray(x.sl_history) && x.sl_history.length) ? x.sl_orig : (x && x.sl)) || '').trim();
   const a = _docSl(prev), b = String((r && r.sl) || '').trim();
+  //  4.49-02 — RF CONTAINER LIST 는 리퍼 대수·컨번호만(실은 본 리스트). 검수사 2026-10-25 «리퍼갯수와 컨넘버로 실번호는 본리스트에 있는걸 사용합니다».
+  //    ① RF 리스트가 오면 앞 실의 값·출처를 그대로 돌려준다 — 호출부(VoyagePage 일반 복사)가 RF 행의 sl·sl_orig·_source 를 이미 덮었으므로 되돌리고,
+  //       sl_src 를 앞 출처로 못 박는다(안 그러면 merged._source = RF 파일이 실의 출처가 되어 세관 표시가 사라졌다 — 독립 감사 상-1·상-2).
+  //       앞에 실이 없으면 RF 실을 그 출처로 쓴다(RF 리스트에만 실이 있는 컨).
+  if (isRfListSrc(fileName)) {
+    if (!String((prev && prev.sl) || '').trim() && !a) return b ? { sl: b, sl_orig: (r && r.sl_orig) || b, sl_src: String(fileName || '') } : {};
+    //  재감사(상) — 고친 컨은 서류 값(a)을 돌려준다. 실물 값을 넘기면 fbSaveListRecords 가 그것을 서류 값과 다르다고 «다른 자료 실»에 넣어 실오류가 꺼졌다(실물은 저장 쪽이 지킨다).
+    const keep = { sl: _sealEdited(prev) ? a : ((prev && prev.sl != null) ? prev.sl : null), sl_orig: (prev && prev.sl_orig != null) ? prev.sl_orig : null };
+    const ps = String((prev && (prev.sl_src || prev._source)) || '');
+    if (ps) keep.sl_src = ps;
+    return keep;
+  }
+  //  ② 앞 실이 RF 리스트에서 왔고(고친 기록 없음) 본 리스트 실이 오면 본 리스트 실로 — RF 값은 «다른 자료 실» 기록에 RF 출처로 남긴다(화면에선 sealConflictOf 가 뺀다).
+  if (a && b && !_sealLegacy(prev) && !(prev && Array.isArray(prev.sl_history) && prev.sl_history.length) && isRfListSrc((prev && (prev.sl_src || prev._source)) || '') && !isRfListSrc(fileName)) {
+    const out = { sl: b, sl_orig: b, sl_src: String(fileName || '') };
+    if (normSeal(a) !== normSeal(b)) {
+      const h = prev && Array.isArray(prev.sl_conflict) ? [...prev.sl_conflict] : [];
+      if (!h.some((x) => x && normSeal(x.sl) === normSeal(a))) h.push({ sl: a, src: String(prev.sl_src || prev._source || '') });
+      out.sl_conflict = h;
+    }
+    return out;
+  }
   //  감사(상-2) — 옛 꼴(고친 기록 없이 sl ≠ sl_orig · sl_src 는 sl_orig 쪽 출처)은 sl_orig 서류 값을 «다른 자료 실»로 옮겨 남긴다(새 파일이 sl_orig 를 덮어도 세관 잘림이 안 사라지게).
   const legacy = _sealLegacy(prev);
   const legV = legacy ? String(prev.sl_orig).trim() : '', legSrc = legacy ? String(prev.sl_src || prev._source || '') : '';
@@ -9622,7 +9671,7 @@ export function mergeUploadSeal(prev, r, fileName) {
 export function isSealError(c, ediSl) { try { return sealCheckOf(c, ediSl).error; } catch (e) { console.warn('[4.49 실번호] 실오류 판정 실패 — 실오류 아님으로 봅니다:', c && c.cn, e); return false; } }
 export function inspectionSealOf(c) {
   const s = String((c && c.sl) || '').trim();
-  if (s) { if (!_sealEdited(c)) { const k = sealCheckOf(c); if (k.customs) return k.big || k.customs.v; } return s; }   // 4.49: 검수원이 안 고쳤으면 세관 값(큰 실 — 세관이 이어 붙은 씰의 컷이면 긴 값)
+  if (s) { if (!_sealEdited(c)) { const k = sealCheckOf(c); if (k.customs) return k.big || k.customs.v; if (k.rfDropped && k.big) return k.big; } return s; }   // 4.49-02: RF CONTAINER LIST 실이 sl 에 앉았으면 본 리스트 값   // 4.49: 검수원이 안 고쳤으면 세관 값(큰 실 — 세관이 이어 붙은 씰의 컷이면 긴 값)
   if (String((c && c.fe) || '').toUpperCase() === 'F') return '';
   const e = String((c && c.eseal) || '').trim();
   return e && !looksLikeIsoType(e) ? e : '';

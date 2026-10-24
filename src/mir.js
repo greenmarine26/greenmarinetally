@@ -35,7 +35,7 @@ import {
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, shiftSetForUnitsOf,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
-  isSealError, sealCheckOf,   // 4.49: 실번호 판정 한 벌
+  isSealError, sealCheckOf, sealConflictOf, isRfListSrc,   // 4.49: 실번호 판정 한 벌 · 4.49-02: 실번호 불일치(RF CONTAINER LIST 뺌) · RF 리스트 출처 표기
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
@@ -1302,11 +1302,12 @@ function attrLine(c, attr, ctx) {
         const src = _k.edited ? '검수원 실물' : ((_k.bigK && _k.bigK.srcs && _k.bigK.srcs[0]) || (_k.bigK && _k.bigK.kind === 'edi' ? 'EDI' : ''));
         const _others = _k.known.filter((x) => x.n !== String(_big || '').toUpperCase().replace(/[\s\-]/g, ''));
         parts.push(`실번호 ${_big}${src ? '(' + src + ')' : ''}${_k.error ? ` · 실오류(신고 ${_k.from} → 실물 ${_k.actual || c.sl})` : (_k.edited && S(c.sl_orig) && S(c.sl_orig) !== S(c.sl) ? ' · 리스트 원래값 ' + c.sl_orig : '')}`);
-        if (_others.length) parts.push(`다른 자료 실 ${_others.map((x) => x.v + '(' + (x.customs ? '세관' : x.kind === 'edi' || (x.srcs || []).includes('EDI') ? 'EDI' : x.kind === 'alt' ? '보조실' : x.kind === 'orig' ? '처음 리스트' : '선사 리스트') + ')').join(' · ')}${_k.trunc && _k.error ? '' : ' — 실물이 하나면 맞음'}`);
+        if (_others.length) parts.push(`다른 자료 실 ${_others.map((x) => x.v + '(' + (x.customs ? '세관' : x.kind === 'edi' || (x.srcs || []).includes('EDI') ? 'EDI' : x.kind === 'alt' ? '보조실' : x.kind === 'orig' ? '처음 리스트' : (x.srcs || []).length && x.srcs.every((sv) => isRfListSrc(sv)) ? 'RF 리스트' : '선사 리스트') + ')').join(' · ')}${(_k.trunc || _k.zero) && _k.error ? '' : ' — 실물이 하나면 맞음'}`);
         if (_k.trunc && _k.error && _k.decl) parts.push(`⚠ 신고 실 ${_k.decl.v} 은 ${_k.truncLong} 의 끝자리가 빠진 값 — 실오류(신고 정정 대상)`);   // 감사(중-4): 긴 짝은 decl 의 짝 · 실오류일 때만
+        if (_k.zero && _k.error && _k.decl) parts.push(`⚠ 신고 실 ${_k.decl.v} 은 ${_k.zeroLong} 의 앞자리 0 이 빠진 값 — 실오류(신고 정정 대상)`);   // 4.49-02
       }
-      if (Array.isArray(c.sl_conflict) && c.sl_conflict.length > 1) {
-        const vals = [...new Set(c.sl_conflict.map((h) => S(h.sl)).filter(Boolean))];
+      if (sealConflictOf(c).length > 1) {   // 4.49-02: RF CONTAINER LIST 실은 뺀다
+        const vals = [...new Set(sealConflictOf(c).map((h) => S(h.sl)).filter(Boolean))];
         if (vals.length > 1) parts.push(`⚠ 리스트끼리 다름 ${vals.join(' ↔ ')}`);
       }
       if (S(c.eseal)) parts.push(`엠티실 ${c.eseal}${c.eseal_wrong ? '(오류 표시)' : ''}`);
@@ -2776,14 +2777,14 @@ export function answerOneRaw(query, ctx) {
       for (const x of c.flat) {
         if (!x || !x.cn) continue;
         const fix = isSealError(x);   // 4.49: 실오류 판정 한 벌(고친 기록 · 알려진 실 어느 것과도 다름 · 신고 끝자리 잘림)
-        const cf = Array.isArray(x.sl_conflict) && [...new Set(x.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))].length > 1;
+        const cf = [...new Set(sealConflictOf(x).map((h) => String(h.sl || '').trim().toUpperCase()))].length > 1;   // 4.49-02: RF CONTAINER LIST 실은 뺀다
         if (fix || cf) rows.push({ x, fix, cf });
       }
       if (!rows.length) return '실오류·실번호 불일치로 기록된 컨이 없습니다 (앱 기록 기준 — 현장 발견분은 실오류 보고로 남겨 주세요).';
       const byShip = new Map();
       for (const r of rows) { const k = r.x.voyageKey || '?'; if (!byShip.has(k)) byShip.set(k, []); byShip.get(k).push(r); }
       const L = [`⚠ 실오류·실번호 불일치 ${rows.length}건 — ${byShip.size}척`];
-      for (const [k, arr] of byShip) { L.push(`【${k}】 ${arr.length}건`); arr.slice(0, 10).forEach(({ x, fix }) => L.push(`  ${x.cn} — ${fix ? `신고 ${sealCheckOf(x).from} → 실물 ${sealCheckOf(x).actual || x.sl}` : `불일치 ${[...new Set(x.sl_conflict.map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`}`)); if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`); }
+      for (const [k, arr] of byShip) { L.push(`【${k}】 ${arr.length}건`); arr.slice(0, 10).forEach(({ x, fix }) => L.push(`  ${x.cn} — ${fix ? `신고 ${sealCheckOf(x).from} → 실물 ${sealCheckOf(x).actual || x.sl}` : `불일치 ${[...new Set(sealConflictOf(x).map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`}`)); if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`); }
       return L.join('\n');
     } catch (e) { console.warn('[미르] 홈 실오류 현황 답 실패 — 다음 갈래로 갑니다:', e); }
   }
