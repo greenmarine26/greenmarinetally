@@ -2036,14 +2036,17 @@ export function generateSealAuditAnswer(containers0, modeLabel, recordsList = nu
   const pre = sealPredictOf(containers, recordsList, ediList).filter((x) => !audit.items.some((it) => String(it.cn || '').includes(x.cn.slice(-4))));
   if (!audit.checked && !errs.length && !confs.length && !pre.length) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
   if (!audit.items.length && !errs.length && !confs.length && !pre.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)`;
-  const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length + errs.length + confs.length + pre.length}건 (점검 ${audit.checked}건 중)`];
+  //  4.49-04 (검수사 2026-10-25 12:49 «자릿수 하나 부족한건 실오류가 맞는데 의심대상은 너무 많습니다. 그런건 한마디면 족합니다. 실 패턴이 틀리니 유의해야한다고 건건마다 불러주면 보기도 힘들고 듣기도 힘듭니다»):
+  //    실오류·예상 실오류(자릿수 부족)·형식 점검은 한 대씩, «세관 실과 모양이 다른 의심»·«선사 리스트끼리 다름» 은 한마디로(MAMP 641N 머스크 Shipper Seal 18대가 한 대씩 18줄로 나오던 것).
+  const _listed = audit.items.length + errs.length + pre.length;
+  const lines = [_listed ? `🔍 ${modeLabel} 실번호 주의 ${_listed}건 (점검 ${audit.checked}건 중)` : `🔍 ${modeLabel} 실번호 점검 — 확정할 실오류 없음 (점검 ${audit.checked}건 중)`];
   for (const e of errs) lines.push(`• ${e.cn} — ⚠ 실오류: 리스트 「${e.from}」 → 실물 「${e.to}」 (세관 신고 사안)`);
   for (const x of pre) lines.push(`• ${x.cn} — 🔎 예상 실오류: 리스트 「${x.seal}」 — ${x.why} · 실물 확인`);
-  for (const f of confs) {
-    const det = (f.entries || []).map(e => `「${e.v}」(${e.srcs.length ? e.srcs.join('·') : '출처 미기록'}${e.customs ? ' — 세관리스트' : ''})`).join(' ↔ ');
-    const mark = f.grade === 'suspect' ? '🔴 실오류 의심' : '⚠ 불일치';
-    lines.push(`• ${f.cn} — ${mark}: ${det}\n    ${f.note}`);
-  }
+  const _l4 = (arr) => `${arr.slice(0, 3).map((f) => String(f.cn || '').slice(-4)).join('·')}${arr.length > 3 ? ' 등' : ''}`;
+  const _inPre = (f) => pre.some((x) => x.cn === f.cn);   // 예상 실오류로 이미 한 대씩 말한 컨은 한마디 줄에 또 세지 않는다(4.49-04 감사)
+  const _sus = confs.filter((f) => f.grade === 'suspect' && !_inPre(f)), _pen = confs.filter((f) => f.grade !== 'suspect' && !_inPre(f));
+  if (_sus.length) lines.push(`🔎 리스트 실이 세관 실과 모양이 다른 컨 ${_sus.length}대(${_l4(_sus)}) — 실 패턴이 달라 보이니 유의하세요 · 실물 확인`);
+  if (_pen.length) lines.push(`🔎 선사 리스트끼리 실이 다른 컨 ${_pen.length}대(${_l4(_pen)}) — 세관리스트가 오면 판정합니다`);
   if (!hasCustoms && confs.length) lines.push('📋 이 항차 자료에 세관리스트가 없습니다 — **세관리스트를 첨부해 주세요.** 실오류 판정은 세관리스트 기준입니다.');
   for (const it of audit.items) lines.push(`• ${it.cn} 「${it.seal}」 — ${it.reason}`);
   return lines.join('\n');

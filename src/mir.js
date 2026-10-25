@@ -2781,10 +2781,13 @@ export function answerOneRaw(query, ctx) {
         if (fix || cf) rows.push({ x, fix, cf });
       }
       if (!rows.length) return '실오류·실번호 불일치로 기록된 컨이 없습니다 (앱 기록 기준 — 현장 발견분은 실오류 보고로 남겨 주세요).';
+      //  4.49-04 (검수사 2026-10-25 «의심대상은 너무 많습니다. 그런건 한마디면 족합니다… 건건마다 불러주면 보기도 힘들고 듣기도 힘듭니다»): 실오류만 한 대씩, 실이 서로 다른 의심은 한마디로.
+      const real = rows.filter((r) => r.fix), soft = rows.filter((r) => !r.fix);
       const byShip = new Map();
-      for (const r of rows) { const k = r.x.voyageKey || '?'; if (!byShip.has(k)) byShip.set(k, []); byShip.get(k).push(r); }
-      const L = [`⚠ 실오류·실번호 불일치 ${rows.length}건 — ${byShip.size}척`];
-      for (const [k, arr] of byShip) { L.push(`【${k}】 ${arr.length}건`); arr.slice(0, 10).forEach(({ x, fix }) => L.push(`  ${x.cn} — ${fix ? `신고 ${sealCheckOf(x).from} → 실물 ${sealCheckOf(x).actual || x.sl}` : `불일치 ${[...new Set(sealConflictOf(x).map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`}`)); if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`); }
+      for (const r of real) { const k = r.x.voyageKey || '?'; if (!byShip.has(k)) byShip.set(k, []); byShip.get(k).push(r); }
+      const L = [real.length ? `⚠ 실오류 ${real.length}건 — ${byShip.size}척` : '실오류로 확정된 컨은 없습니다.'];
+      for (const [k, arr] of byShip) { L.push(`【${k}】 ${arr.length}건`); arr.slice(0, 10).forEach(({ x }) => L.push(`  ${x.cn} — 신고 ${sealCheckOf(x).from} → 실물 ${sealCheckOf(x).actual || x.sl}`)); if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`); }
+      if (soft.length) L.push(`🔎 리스트 실이 서로 다른 컨 ${soft.length}대(${soft.slice(0, 3).map((r) => String(r.x.cn).slice(-4)).join('·')}${soft.length > 3 ? ' 등' : ''}) — 실 패턴이 달라 보이니 유의하세요 · 실물 확인`);
       return L.join('\n');
     } catch (e) { console.warn('[미르] 홈 실오류 현황 답 실패 — 다음 갈래로 갑니다:', e); }
   }

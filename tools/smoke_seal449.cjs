@@ -116,6 +116,30 @@ const bundle = process.argv[3];
   ok(sl.length === 1 && s7 && s7.manifestSeal === 'MLPH046339' && s7.actualSeal === 'MLPH0463390', `마감텔리 실번호 상이 1줄 — ${T7} 신고 MLPH046339 · 실물 MLPH0463390`, JSON.stringify(sl));
   const si = T.sealIssuesOf(Object.entries(s2).map(([cn, r]) => ({ cn, ...r })));
   ok(si.errs.length === 1 && si.errs[0].cn === T7 && si.errs[0].from === 'MLPH046339' && si.errs[0].to === 'MLPH0463390', '미르 실번호 점검 — 실오류 1건(같은 판정)', JSON.stringify(si.errs));
+  //  4.49-04 — 미르 «실번호 점검»: 실오류는 한 대씩 · 세관 실과 모양이 다른 의심 여럿은 한마디(MAMP 641N 머스크 Shipper Seal 18대가 18줄로 나오던 것)
+  {
+    const _sus = [1, 2, 3, 4, 5].map((i) => ({ cn: `TEST123456${i}`, _mode: 'discharge', _source: 'a_list.xlsx', sl: `1064540${i}`, sl_src: 'a_list.xlsx',
+      sl_conflict: [{ sl: `1064540${i}`, src: 'a_list.xlsx' }, { sl: `PH052271${i}`, src: 'Excel_20261024122429.xls' }] }));
+    const _cs = [...Object.entries(s2).map(([cn, r]) => ({ cn, ...r, _mode: 'discharge' })), ..._sus];
+    const _base = (/^🔎 리스트 실이 세관 실과 모양이 다른 컨 (\d+)대/m.exec(T.generateSealAuditAnswer(_cs.slice(0, _cs.length - _sus.length), '양하')) || [0, 0])[1] | 0;   // 검수 자료 자체에 이미 있는 모양 다른 컨 대수
+    const ans = T.generateSealAuditAnswer(_cs, '양하');
+    const _ln = ans.split('\n');
+    ok(/⚠ 실오류: 리스트 「MLPH046339」 → 실물 「MLPH0463390」/.test(ans), '4.49-04 미르 실번호 점검 — 실오류는 한 대씩 말한다', ans);
+    ok(_ln.filter((l) => new RegExp(`^🔎 리스트 실이 세관 실과 모양이 다른 컨 ${_base + 5}대`).test(l)).length === 1 && !/실오류 의심:/.test(ans) && !_sus.some((x) => ans.includes(x.cn)),
+      `4.49-04 미르 실번호 점검 — 세관 실과 모양이 다른 의심 ${_base + 5}대(기존 ${_base} + 추가 5)는 한 줄(한 대씩 안 부름 · 컨번호 전체를 늘어놓지 않음)`, ans);
+    ok(_ln.length <= 4, `4.49-04 미르 실번호 점검 — 줄 수 ${_ln.length}(실오류 1 + 의심 한마디 + 머리)`, ans);
+    //  같은 컨이 예상 실오류(자릿수 부족)이면서 세관 실과도 다를 때 — 한 대씩 말하고 한마디 줄에는 또 세지 않는다(독립 감사 재현)
+    {
+      const LST = 'a_list.xlsx', CUS = 'Excel_20261024122429.xls';
+      const _cl = Array.from({ length: 30 }, (_, i) => ({ cn: `TEST${1000000 + i}`, fe: 'F', op: 'MAE', _mode: 'discharge', _source: LST, sl: `PH${5000000 + i}`, sl_orig: `PH${5000000 + i}`, sl_src: LST }));
+      const _j = { cn: 'SHRT0000001', fe: 'F', op: 'MAE', _mode: 'discharge', _source: LST, sl: 'PH052271', sl_orig: 'PH052271', sl_src: LST, sl_conflict: [{ sl: 'PH052271', src: LST }, { sl: 'PH0522711', src: CUS }] };
+      const _cs2 = [..._cl, _j];
+      const _recs = Object.fromEntries(_cs2.map((c) => [c.cn, { sl: c.sl, sl_orig: c.sl_orig, sl_src: c.sl_src, sl_conflict: c.sl_conflict, op: c.op }]));
+      const a2 = T.generateSealAuditAnswer(_cs2, '양하', _recs);
+      ok(/• SHRT0000001 — 🔎 예상 실오류/.test(a2) && !/세관 실과 모양이 다른 컨/.test(a2) && (a2.match(/SHRT0000001/g) || []).length === 1,
+        '4.49-04 미르 실번호 점검 — 예상 실오류로 말한 컨은 «모양이 다른 컨 N대» 한 줄에 또 세지 않는다', a2);
+    }
+  }
   const ho = T.generateHandover(Object.entries(s2).map(([cn, r]) => ({ cn, ...r, _mode: 'discharge', _src: 'list' })), {});
   ok(/리씰 1: 4907\(MLPH046339→MLPH0463390\)/.test(ho), '인계 «리씰 1: 4907(MLPH046339→MLPH0463390)»', String(ho).split('\n').filter((l) => /리씰/.test(l)).join(' / '));
 

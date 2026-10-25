@@ -9,7 +9,7 @@ import ContainerDetailModal from '../src/components/ContainerDetailModal.jsx';
 import { parseListExcel, sealCheckOf, sealKnownOf, isSealError, inspectionSealOf, mergeUploadSeal, isCustomsSrc, sealConflictOf, isRfListSrc, APP_NOTE, APP_VERSION } from '../src/utils.js';
 import { fbSaveListRecords } from '../src/firebase.js';
 import { buildSealList } from '../src/tallyReport.js';
-import { sealIssuesOf, generateHandover } from '../src/nlSearch.js';
+import { sealIssuesOf, generateHandover, generateSealAuditAnswer } from '../src/nlSearch.js';
 import { HELP_DATA } from '../src/data/helpData.js';
 import FX from './fixtures/seal449_real.json';
 import { answerOneRaw, flattenVoyages, _mirThreadReset } from '../src/mir.js';   // 감사(중-3) — 두 앱 같은 답
@@ -20,7 +20,7 @@ import { generateInspectionListHTML } from '../src/inspectionList.js';   // 감�
 
 window.XLSX = XLSX;
 window.__T = { parseListExcel, sealCheckOf, sealKnownOf, isSealError, inspectionSealOf, mergeUploadSeal, isCustomsSrc, sealConflictOf, isRfListSrc, APP_NOTE, APP_VERSION,
-  fbSaveListRecords, buildSealList, sealIssuesOf, generateHandover, HELP_DATA, FX, answerOneRaw, flattenVoyages, _mirThreadReset, toMirContainers, applyDischargeUnits, sealLegacyOf, exportSectionToCSV, generateInspectionListHTML };
+  fbSaveListRecords, buildSealList, sealIssuesOf, generateHandover, generateSealAuditAnswer, HELP_DATA, FX, answerOneRaw, flattenVoyages, _mirThreadReset, toMirContainers, applyDischargeUnits, sealLegacyOf, exportSectionToCSV, generateInspectionListHTML };
 const root = createRoot(document.getElementById('root'));
 let __mk = 0;
 window.__renderLine = (props) => { __mk += 1; root.render(React.createElement(SealKnownLine, { key: 'l' + __mk, ...props })); };

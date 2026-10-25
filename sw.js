@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.49-03';
-const NOTE = '4.49-02 실번호가 자료마다 다르면 다른 자료 실로 보이고 세관 신고 실의 앞자리 0 이 빠졌으면 실오류로 셉니다. RF CONTAINER LIST 의 실번호는 쓰지 않고 본 리스트 실을 씁니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.49-04';
+const NOTE = '4.49-04 미르 실번호 점검은 실오류와 자릿수 부족만 한 대씩 말하고 세관 실과 모양이 다른 의심은 몇 대인지 한마디로 알려 줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
