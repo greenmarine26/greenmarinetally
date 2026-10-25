@@ -1331,7 +1331,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             if (!keepOpen) return (
               <div className="mt-2">
                 <button onClick={() => { setKeepOpen(true); setKeepErr(''); }} data-keep-open="1"
-                  className="px-2 py-1 rounded bg-ink-800 border border-yellow-700/60 text-2xs font-bold text-yellow-200">🟡 선사 지시 · 본선 잔류(평택에서 안 내림)</button>
+                  className="px-2 py-1 rounded bg-ink-800 border border-line text-2xs font-bold text-dim-300">＋ 본선 잔류 지시 넣기 (선사 메일을 받았을 때만)</button>
                 {keepErr && <div className="text-3xs text-rose-300 mt-0.5">{keepErr}</div>}
               </div>
             );
