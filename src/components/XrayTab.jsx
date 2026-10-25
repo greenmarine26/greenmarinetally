@@ -62,6 +62,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  2.39: 표에서 바로 고친다 — 사무실에서 미리 채워 인쇄해 나가려면 컨을 하나씩 열 수 없다.
   //  편집 상태는 한 벌만 둔다(같은 순간에 두 칸을 고치지 않는다).
   const [partner, setPartner] = useState(() => getPartnerName());   // 4.32: 같이 작업하는 분 — 로그인하지 않아도 그 이름으로 봉인자 등록
+  const [bulk, setBulk] = useState({ run: false, ask: false, msg: '' });   // 4.50: «남은 컨 전부 파트너 몫으로 등록» — 진행·확인·결과 한 벌
   const [edit, setEdit] = useState(null);      // { cn, field: 'seal' | 'sealer', val }
   const [busy, setBusy] = useState('');        // 저장 중인 컨 — 두 번 눌러 두 번 쓰는 것을 막는다
   //  ★ 2.77: MRN 손입력 — PORT-MIS 에 없는 배(평택 미등록)는 여기서 적어 넣는다.
@@ -253,6 +254,82 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  2.39: 봉인자가 기록된 대수 — 전부 차야 «사무실 제출본»이다.
   const sealedCount = useMemo(() => rows.filter((r) => r.sealer).length, [rows]);
 
+  //  ★ 4.50 — 두 단계 등록. ① 내 몫(체크칸) → ② 번호는 있는데 봉인자가 아직 없는 컨 전부를 파트너 이름으로.
+  //    검수사 2026-10-26 05:52 «실번호를 등록후 일단 실번호 등록자 본인것을 다 등록후 파트너가 할 부분을 등록할수 있게 해주셔야 합니다.»
+  //    (4.32 의 이름 단추는 있었지만 표 맨 오른쪽이라 폰에서 안 보였고, 이름을 넣기 전엔 단추가 없어 «재로그인밖에 없다»로 보였다.)
+  //    저장은 fbSetXraySeal 한 벌을 컨마다 차례로 부른다 — 한 대가 실패해도 나머지는 남고, 실패한 컨번호는 화면에 적는다(3금지 ③).
+  //    봉인자 판정(xraySealerOf)은 그대로다 — 이름을 저장하는 길만 하나 늘었다.
+  const myName = String(inspector || '').trim();
+  const mineCount = useMemo(() => rows.filter((r) => r.sealer && r.sealer === myName).length, [rows, myName]);
+  const restRows = useMemo(() => rows.filter((r) => r.cSeal && !r.sealer), [rows]);
+  const noNumCount = useMemo(() => rows.filter((r) => !r.cSeal && !r.sealer).length, [rows]);
+  //  감사(2차 시뮬)가 잡은 것 — ① 확인 상자가 떠 있는 채 같은 단추를 또 누르면 상자를 건너뛰고 저장됐다 ② 누른 순간의 낡은 줄로 N대를 쓰면
+  //    저장 중에 다른 기기가 바꾼 봉인번호를 되돌리고 먼저 등록된 봉인자를 덮었다 ③ 조회만 로그인은 저장이 막히는데 «다시 눌러 주십시오»라고 했다.
+  //    ⇒ 단추는 확인 상자가 있는 동안 잠그고, 저장은 컨마다 **그때의 최신 줄**을 다시 읽어 봉인자가 생겼거나 번호가 바뀐 컨은 건너뛰며,
+  //      진행 중에는 표 입력을 잠그고, 저장 중인 칸이 있으면 시작하지 않는다. 동시 두 번 도는 것은 ref 로 막는다(상태는 한 틱 늦다).
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const bulkBusy = useRef(false);
+  const alive = useRef(true);   // 탭을 옮겨 이 화면이 사라지면 일괄을 멈춘다 — 얼어붙은 rowsRef 로 계속 쓰면 그 사이 바뀐 값을 덮는다
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const viewOnly = canEdit && !canWorkNow();   // 조회만은 저장이 막힌다(3.55-01) — 단추도 같이 잠그고 이유를 말한다
+  const canBulk = canEdit && !viewOnly;
+  const normSeal = (v) => String(v || '').trim().toUpperCase();
+  //  컨 하나 저장이 15초 안에 안 끝나면(오프라인 등) 그 컨은 실패로 두고 다음으로 간다 — 응답을 끝없이 기다리며 표를 잠가 두지 않는다(규범 §4).
+  //  쓰기는 연결이 돌아오면 SDK 가 마저 보낸다 — 다시 누르면 그 컨은 이미 봉인자가 있어 건너뛴다.
+  const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} 응답이 ${ms / 1000}초 안에 오지 않았습니다`)), ms))]);
+  async function registerRest() {
+    const name = partner.trim();
+    if (!canBulk || !name || bulk.run || bulkBusy.current) return;
+    if (myName && name === myName) {
+      setBulk({ run: false, ask: false, msg: '파트너 이름이 내 이름과 같습니다. 파트너 이름을 다시 확인해 주십시오.' });
+      return;
+    }
+    if (busy) {   // 표에서 방금 입력한 칸이 아직 저장 중이면 그 값이 반영되기 전에 옛 값을 다시 쓰게 된다
+      setBulk({ run: false, ask: false, msg: '저장 중인 칸이 있습니다. 잠시 뒤 다시 눌러 주십시오.' });
+      return;
+    }
+    bulkBusy.current = true;
+    try {
+      setPartnerName(name);
+      const targets = restRows.slice();   // 누른 순간의 남은 컨 — 저장 직전에 한 대씩 최신 줄로 다시 본다
+      setBulk({ run: true, ask: false, msg: `등록 중 0/${targets.length}` });
+      const fails = [], skipped = [];
+      let done = 0;
+      for (let i = 0; i < targets.length; i += 1) {
+        if (!alive.current) return;   // 화면이 사라졌다 — 더 쓰지 않는다(지금까지 쓴 것은 돌아오면 «남은 N대» 에 반영된다)
+        const r = targets[i];
+        const cur = rowsRef.current.find((x) => x.cn === r.cn);   // 저장 중에 다른 기기·다른 칸이 바꾼 값까지 반영된 최신 줄
+        if (!cur || cur.sealer || !normSeal(cur.cSeal) || normSeal(cur.cSeal) !== normSeal(r.cSeal)) {
+          skipped.push(r.cn);   // 그 사이 봉인자가 생겼거나 봉인번호가 바뀐 컨 — 덮어쓰지 않는다
+        } else {
+          try {
+            await withTimeout(fbSetXraySeal(voyageKey, cur.cn, normSeal(cur.cSeal), String(cur.eseal || '').trim(), inspector, { sealer: name }), 15000, '저장');
+            done += 1;
+          } catch (e) {
+            fails.push(r.cn);
+            console.warn('[4.50] 파트너 몫 봉인자 등록 실패', r.cn, e);
+          }
+        }
+        if (!alive.current) return;
+        setBulk({ run: true, ask: false, msg: `등록 중 ${i + 1}/${targets.length}` });
+      }
+      if (!alive.current) return;
+      setBulk({ run: false, ask: false,
+        msg: `${done}대를 ${name} 몫으로 등록했습니다.`
+          + (skipped.length ? ` ${skipped.length}대는 그 사이 봉인자나 번호가 바뀌어 건너뛰었습니다 — ${skipped.map((c) => c.slice(-4)).join(' · ')}.` : '')
+          + (fails.length ? ` ${fails.length}대는 저장하지 못했습니다 — ${fails.map((c) => c.slice(-4)).join(' · ')} · 다시 눌러 주십시오.` : '') });
+    } finally { bulkBusy.current = false; }
+  }
+  //  내 몫이 한 대도 없는데 누르면 한 번 묻는다 — 내 컨까지 전부 파트너 이름으로 가는 실수를 막는다.
+  //  확인 상자가 떠 있는 동안 이 단추는 잠겨 있고(아래 disabled), 여기서도 한 번 더 막는다 — 같은 단추를 또 눌러 상자를 건너뛰지 못하게.
+  const onRestClick = () => {
+    if (bulk.ask || bulk.run || bulkBusy.current) return;
+    if (!partner.trim() || !restRows.length) return;
+    if (mineCount === 0) { setBulk({ run: false, ask: true, msg: '' }); return; }
+    registerRest();
+  };
+
   const shown = useMemo(() => {
     const t = q.trim().toUpperCase();
     return rows.filter((r) => (!kindFilter || r.kind === kindFilter)
@@ -353,13 +430,41 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           {icMsg && <span className="ml-2 text-amber-200">{icMsg}</span>}
         </div>
       )}
-      {/* 4.32 — 짝 이름: 한 번만 적어 두면 봉인자 칸에 «짝 이름» 단추가 생긴다(짝이 자기 이름으로 로그인하지 않아도 된다). */}
-      <div className="flex items-center gap-2 text-xs2">
-        <span className="text-dim-400 whitespace-nowrap">같이 작업하는 분</span>
-        <input value={partner} list="xray-partner-list" onChange={(e) => setPartner(e.target.value)}
-          onBlur={() => setPartnerName(partner)} placeholder="이름 (한 번만 입력)"
-          className="flex-1 min-w-0 bg-ink-900 border border-line rounded-pill px-3 h-9 outline-none"/>
+      {/* 4.32 — 짝 이름: 한 번만 적어 두면 봉인자 칸에 «짝 이름» 단추가 생긴다(짝이 자기 이름으로 로그인하지 않아도 된다).
+          4.50 — 같은 이름 칸을 두 단계 카드로 올렸다. ① 내 몫(표의 체크칸) → ② 파트너 몫(남은 컨 전부를 한 번에). 표를 옆으로 밀지 않아도 보인다. */}
+      <div className="bg-ink-900 border border-line rounded-btn p-3 space-y-2 text-xs2" data-testid="xray-sealer-card">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-bold">① 내 몫 — {myName || '로그인 이름 없음'}</span>
+          <span className="text-dim-300 whitespace-nowrap">{mineCount}대 등록</span>
+        </div>
+        <div className="text-2xs text-dim-400">내가 봉인할 컨은 아래 표에서 번호를 넣고 체크칸을 눌러 등록합니다.</div>
+        <div className="flex items-baseline justify-between gap-2 pt-1">
+          <span className="font-bold">② 파트너 몫 <span className="font-normal text-dim-400">— 같이 작업하는 분</span></span>
+          <span className="text-dim-300 whitespace-nowrap">남은 {restRows.length}대</span>
+        </div>
+        <input value={partner} list="xray-partner-list" aria-label="파트너 이름"
+          onChange={(e) => { setPartner(e.target.value); if (bulk.ask || bulk.msg) setBulk({ run: false, ask: false, msg: '' }); }}
+          onBlur={() => setPartnerName(partner)} placeholder="파트너 이름 (한 번만 입력)"
+          className="w-full min-w-0 bg-ink-800 border border-line rounded-pill px-3 h-10 outline-none"/>
         <datalist id="xray-partner-list">{partnerChoices(inspector).map((n) => <option key={n} value={n}/>)}</datalist>
+        <button type="button" data-testid="xray-rest-btn" onClick={onRestClick}
+          disabled={!canBulk || bulk.run || bulk.ask || !partner.trim() || !restRows.length}
+          title={!canEdit ? '양하 화면에서만 등록할 수 있습니다' : viewOnly ? '조회만 로그인에서는 등록할 수 없습니다' : !partner.trim() ? '파트너 이름을 먼저 넣으십시오' : !restRows.length ? '봉인번호가 입력됐고 봉인자가 비어 있는 컨이 없습니다' : bulk.ask ? '아래 확인 상자에서 고르십시오' : ''}
+          className="w-full min-h-10 px-4 py-2 rounded-pill bg-emerald-500 text-ink-950 font-bold disabled:opacity-40">
+          {partner.trim() ? `남은 ${restRows.length}대를 ${partner.trim()} 몫으로 등록` : `남은 ${restRows.length}대 등록 (파트너 이름 먼저)`}
+        </button>
+        {bulk.ask && (
+          <div className="rounded-btn border border-amber-500/40 bg-amber-500/10 text-amber-200 p-2 space-y-2" data-testid="xray-rest-ask">
+            <div>내 몫을 아직 등록하지 않았습니다. 그래도 남은 {restRows.length}대를 전부 {partner.trim()} 몫으로 등록할까요?</div>
+            <div className="flex gap-2">
+              <button type="button" onClick={registerRest} className="px-3 h-9 rounded-pill border border-amber-400 font-bold">그래도 등록</button>
+              <button type="button" onClick={() => setBulk({ run: false, ask: false, msg: '' })} className="px-3 h-9 rounded-pill border border-line text-dim-300">취소</button>
+            </div>
+          </div>
+        )}
+        {viewOnly && <div className="text-2xs text-dim-400" data-testid="xray-rest-viewonly">조회만으로 들어와 있어 등록할 수 없습니다. 작업자로 다시 들어오십시오.</div>}
+        {bulk.msg && <div className="text-2xs text-emerald-300" data-testid="xray-rest-msg">{bulk.msg}</div>}
+        {noNumCount > 0 && <div className="text-2xs text-dim-400">봉인번호가 아직 없는 {noNumCount}대는 번호를 넣은 뒤 등록됩니다.</div>}
       </div>
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
@@ -442,7 +547,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                         placeholder="세관봉인번호"
                         className="w-36 bg-ink-800 border border-purple-500 rounded px-2 py-1 mono text-purple-200 outline-none"/>
                     ) : (
-                      <button disabled={!canEdit} onClick={() => setEdit({ cn: r.cn, field: 'seal', val: r.cSeal })}
+                      <button disabled={!canEdit || bulk.run} onClick={() => setEdit({ cn: r.cn, field: 'seal', val: r.cSeal })}
                         className="text-left disabled:cursor-default">
                         {r.cSeal
                           ? <span className="text-purple-200">{r.cSeal}</span>
@@ -457,7 +562,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                   <td className="px-2 py-2">
                     <div className="flex items-center gap-2">
                       <input type="checkbox" checked={!!r.sealer}
-                        disabled={!canEdit || busy === r.cn || (!r.sealer && !r.cSeal)}
+                        disabled={!canEdit || bulk.run || busy === r.cn || (!r.sealer && !r.cSeal)}
                         onChange={() => toggleRegister(r)}
                         title={!r.cSeal && !r.sealer ? '봉인번호를 먼저 입력하십시오' : '봉인자 등록'}
                         className="w-4 h-4 accent-emerald-500 disabled:opacity-30"/>
@@ -470,13 +575,13 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                           placeholder="봉인자"
                           className="w-24 bg-ink-800 border border-emerald-500 rounded px-2 py-1 text-emerald-200 outline-none"/>
                       ) : r.sealer ? (
-                        <button disabled={!canEdit} onClick={() => setEdit({ cn: r.cn, field: 'sealer', val: r.sealer })}
+                        <button disabled={!canEdit || bulk.run} onClick={() => setEdit({ cn: r.cn, field: 'sealer', val: r.sealer })}
                           className="text-emerald-300 font-bold disabled:cursor-default">{r.sealer}</button>
                       ) : (
                         <>
                           <span className="text-dim-500 italic whitespace-nowrap">미등록</span>
                           {partner.trim() && (
-                            <button disabled={!canEdit || busy === r.cn || !r.cSeal}
+                            <button disabled={!canEdit || bulk.run || busy === r.cn || !r.cSeal}
                               title={!r.cSeal ? '봉인번호를 먼저 입력하십시오' : `${partner.trim()} 이름으로 봉인자 등록`}
                               onClick={() => saveXray(r.cn, r.cSeal, r.eseal, { sealer: partner.trim() })}
                               className="px-2 py-0.5 rounded-pill border border-emerald-500 text-emerald-300 text-xs2 disabled:opacity-30 whitespace-nowrap">{partner.trim()}</button>

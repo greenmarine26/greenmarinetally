@@ -138,7 +138,7 @@ export const fbSetVoyageGangs = async () => true;
 export const fbSetVoyageSeqMode = async () => true;
 export const fbSetVoyageWorkStart = async () => true;
 export const fbSetWorkOrder = async (vk, equip, order, by) => { window.__calls.push({ fn: 'workOrder', vk, equip, order: order || null, by }); return order || null; };   // 4.09: 양하 순서 조건 저장 기록
-export const fbSetXraySeal = async () => true;
+export const fbSetXraySeal = async (vk, cn, seal, eseal, by, opt) => { (window.__calls = window.__calls || []).push({ fn: 'xseal', vk, cn, seal, eseal, by, opt: opt === undefined ? null : opt }); if (typeof window.__onXseal === 'function') await window.__onXseal(cn, window.__calls.length); if ((window.__failSeal || []).includes(cn)) throw new Error('시뮬 저장 실패 ' + cn); return true; };   // 4.50: 파트너 몫 일괄 등록 시험이 호출 모양을 센다 — window.__failSeal 에 컨번호를 넣으면 그 컨만 실패 · window.__onXseal(cn, 번째) 는 저장 도중 다른 기기가 값을 바꾸는 상황을 흉내
 export const fbSnoozeHold = async () => true;
 export const fbSubscribeAllReports = async () => true;
 export const fbSubscribeBroadcast = async () => true;

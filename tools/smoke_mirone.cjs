@@ -76,6 +76,33 @@ const kE = K.containers.filter((c) => c._mode === 'loading' && c.fe === 'E').len
 { const a = ask('엠티실 몇 대 남았어', K); T(has(a, `엠티 ${kE}대`) && has(a, '남은 것'), `«엠티실 몇 대 남았어» → 엠티 ${kE}대·남은 것 (${String(a).slice(0, 80)})`); }
 { const a = ask('해치커버 열었어', K); T(/해치/.test(String(a)), '«해치커버 열었어» → 해치 답(홈에만 있던 것)'); }
 { const a = ask('커트씰 기록', N); T(has(a, 'X-RAY 대상 2대') && has(a, 'NSSU0170686'), '«커트씰 기록» → 대상 2대 나열'); }
+//  4.50 — 봉인자 이름은 X-RAY 탭·인쇄와 같은 판정(xraySealerOf) — 파트너 몫으로 미리 등록한 뒤 내가 양하확인하면 마지막 봉인자는 나다(검수사 2026-10-26 06:10)
+{
+  const cn = nX[0], short = String(cn).slice(-4);
+  const mk = (comp, loadComp) => {
+    const v = JSON.parse(JSON.stringify(FX.NSFR_2617N));
+    v.discharge = v.discharge || {};
+    v.discharge.xraySeals = Object.assign({}, v.discharge.xraySeals, { [cn]: { seal: 'ZZ123456', sealer: '홍길동', sealerAt: 1000 } });
+    v.discharge.completed = Object.assign({}, v.discharge.completed);
+    delete v.discharge.completed[cn];
+    if (comp) v.discharge.completed[cn] = comp;
+    if (loadComp) { v.loading = v.loading || {}; v.loading.completed = Object.assign({}, v.loading.completed, { [cn]: loadComp }); }
+    FX.__t450 = v;
+    try { return ctxOf('__t450', 'discharge'); } finally { delete FX.__t450; }
+  };
+  const a1 = ask(short + ' 엑스레이 대상이야', mk(null));
+  T(has(a1, '봉인자 홍길동'), `양하확인 전에는 등록된 이름이 봉인자다 (${String(a1).slice(0, 90)})`);
+  const a2 = ask(short + ' 엑스레이 대상이야', mk({ by: '김성일', at: 2000 }));
+  T(has(a2, '봉인자 김성일') && !has(a2, '봉인자 홍길동'), `나중에 내가 양하확인하면 마지막 봉인자는 나다 — 화면·인쇄와 같은 답 (${String(a2).slice(0, 90)})`);
+  const a3 = ask(short + ' 엑스레이 대상이야', mk({ by: '홍길동', at: 2000 }));
+  T(has(a3, '봉인자 홍길동'), '파트너 본인이 양하확인하면 그 이름 그대로');
+  const a6 = ask(short + ' 엑스레이 대상이야', mk(null, { by: '박철민', at: 3000 }));
+  T(has(a6, '봉인자 홍길동') && !has(a6, '박철민'), `선적 완료자는 양하 봉인자로 새지 않는다 — X-RAY 탭은 양하 완료만 본다 (${String(a6).slice(0, 100)})`);
+  const a4 = ask('커트씰 기록', mk({ by: '김성일', at: 2000 }));
+  T(has(a4, cn) && has(a4, '봉인자 김성일') && !has(a4, '봉인자 홍길동'), `«커트씰 기록» 줄도 같은 판정 (${String(a4).split('\n').find((l) => l.includes(cn)) || ''})`);
+  const a5 = ask(short + ' 실번호', mk({ by: '김성일', at: 2000 }));
+  T(has(a5, '봉인자 김성일') && !has(a5, '봉인자 홍길동'), `«끝4자리 실번호» 의 커트씰 줄도 같은 판정 (${String(a5).slice(0, 100)})`);
+}
 { const a = ask('보류 뭐 있어', K); T(has(a, '보류'), '«보류 뭐 있어» → 보류 답'); }
 { const a = ask('임시창고 뭐 있어', K); T(has(a, '임시창고'), '«임시창고 뭐 있어» → 창고 답'); }
 { const a = ask('환적 화물 몇 대', K); T(/환적항|다음 양하항|없음/.test(String(a)), '«환적 화물 몇 대» → 환적 집계'); }

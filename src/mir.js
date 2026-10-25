@@ -34,6 +34,7 @@ import {
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, shiftSetForUnitsOf,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
+  xraySealerOf,   // 4.50: 봉인자 이름은 화면·인쇄·엑셀과 같은 한 벌로 읽는다(미리 등록한 이름이 아니라 마지막 봉인자)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
   isSealError, sealCheckOf, sealConflictOf, isRfListSrc,   // 4.49: 실번호 판정 한 벌 · 4.49-02: 실번호 불일치(RF CONTAINER LIST 뺌) · RF 리스트 출처 표기
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
@@ -1254,6 +1255,18 @@ function xrayOf(ctx, c) {
   const seal = (d.xraySeals || {})[c.cn] || c._xraySeal || c.xraySeal || null;
   return { inList, seal };
 }
+//  ★ 4.50 — «봉인자» 는 저장된 이름이 아니라 xraySealerOf 한 벌의 답이다(X-RAY 탭·인쇄·엑셀·컨 목록·컨 상세와 같은 답).
+//    파트너 몫으로 미리 등록한 뒤 내가 양하확인하면 마지막 봉인자는 나다 — 저장된 sealer 만 읽으면 미르가 «파트너»라고 답해 화면과 갈린다
+//    (검수사 2026-10-26 06:10 «마지막 봉인자는 실 양하자 명으로»). 완료 기록은 항차 completed → 없으면 콘앱이 넘긴 행의 _comp.
+function sealerNameOf(ctx, cn, xs, c) {
+  const d = secOf(ctx, 'discharge');
+  //  양하 완료 기록만 본다(X-RAY 탭과 같다) — 항차 양하 completed 가 있으면 그것만, 없을 때(콘앱)만 양하 행의 _comp·양하 화면의 compMap.
+  //  선적 완료자가 양하 봉인자로 새지 않게 선적 쪽 값은 쓰지 않는다.
+  const comp = d.completed ? (d.completed[cn] || null)
+    : ((ctx && ctx.mode !== 'loading' && ctx.compMap && ctx.compMap[cn]) || (c && c._mode !== 'loading' && c._comp) || null);
+  const info = (ctx && ctx.voyage && ctx.voyage.info) || (ctx && ctx.info) || null;
+  return S(xraySealerOf(xs, comp, info));
+}
 function findByDigits(ctx, digits) {
   const d = S(digits);
   if (!d) return [];
@@ -1312,7 +1325,7 @@ function attrLine(c, attr, ctx) {
       }
       if (S(c.eseal)) parts.push(`엠티실 ${c.eseal}${c.eseal_wrong ? '(오류 표시)' : ''}`);
       const x = xrayOf(ctx, c);
-      if (x.seal && S(x.seal.seal)) parts.push(`커트씰 ${x.seal.seal}${S(x.seal.sealer) ? ' 봉인자 ' + x.seal.sealer : ''}`);
+      if (x.seal && S(x.seal.seal)) { const _sn = sealerNameOf(ctx, c.cn, x.seal, c); parts.push(`커트씰 ${x.seal.seal}${_sn ? ' 봉인자 ' + _sn : ''}`); }   // 4.50: 봉인자 = 화면과 같은 판정
       else if (x.inList) parts.push('X-RAY 대상 · 커트씰 아직 없음');
       return parts.length ? parts.join(' · ') : '실번호 없음 — EDI·리스트·기록 어디에도 없어요.';
     }
@@ -1347,7 +1360,8 @@ function attrLine(c, attr, ctx) {
     case 'xray': {
       const x = xrayOf(ctx, c);
       if (!x.inList) return 'X-RAY 대상 아님.';
-      return `X-RAY 대상${x.seal && S(x.seal.seal) ? ' · 커트씰 ' + x.seal.seal + (S(x.seal.sealer) ? ' 봉인자 ' + x.seal.sealer : '') : ' · 커트씰 아직 없음'}`;
+      const _sn = x.seal && S(x.seal.seal) ? sealerNameOf(ctx, c.cn, x.seal, c) : '';   // 4.50: 봉인자 = 화면과 같은 판정
+      return `X-RAY 대상${x.seal && S(x.seal.seal) ? ' · 커트씰 ' + x.seal.seal + (_sn ? ' 봉인자 ' + _sn : '') : ' · 커트씰 아직 없음'}`;
     }
     case 'status': {
       const sec = secOf(ctx, c._mode === 'loading' ? 'loading' : 'discharge');
@@ -1482,7 +1496,8 @@ export function answerVoyageFacts(parsed, ctx) {
       return `${ship} X-RAY 대상 ${keys.length}대 · 커트씰 기록 ${n}대\n` + keys.map((cn) => {
         const c = cs.find((x) => x.cn === cn);
         const s = xs[cn] || (c && (c._xraySeal || c.xraySeal)) || null;
-        return `${cn}${c ? ' @ ' + posOf(c) : ''} — ${s && S(s.seal) ? '커트씰 ' + s.seal + (S(s.sealer) ? ' 봉인자 ' + s.sealer : '') : '커트씰 아직 없음'}`;
+        const _sn = s && S(s.seal) ? sealerNameOf(ctx, cn, s, c) : '';   // 4.50: 봉인자 = 화면과 같은 판정
+        return `${cn}${c ? ' @ ' + posOf(c) : ''} — ${s && S(s.seal) ? '커트씰 ' + s.seal + (_sn ? ' 봉인자 ' + _sn : '') : '커트씰 아직 없음'}`;
       }).join('\n');
     }
     if (k === 'held') {

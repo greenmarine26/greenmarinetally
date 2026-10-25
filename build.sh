@@ -1229,6 +1229,21 @@ else
   cp "$SMOKE_BS.fbbak" src/firebase.js; rm -f "$SMOKE_BS.fbbak"
   echo "✗ 접안 현측 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_BS"; exit 1
 fi
+#  4.50: **X-RAY 봉인자 두 단계 등록** — ① 내 몫 먼저 ② 파트너 이름 한 번 넣고 남은 컨 한 번에(파트너가 다시 로그인하지 않는다). 실 XrayTab·실 utils.js ·
+#    실 항차 DXQD 2642E X-RAY 12대(tools/fixtures/xray_dxqd2642e.json). firebase 는 기록 스텁(fbSetXraySeal 호출만 센다) — 실 Firebase 쓰기 없음.
+#    검수사 2026-10-26 05:52·06:10 «실번호를 등록후 일단 실번호 등록자 본인것을 다 등록후 파트너가 할 부분을 등록할수 있게» · «마지막 봉인자는 실 양하자 명으로 하면 됩니다».
+SMOKE_SB=$(mktemp /dev/shm/hometmp/_smokesb_XXXXXX.js)
+cp src/firebase.js "$SMOKE_SB.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_sealerbulk450.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+     --external:fs --external:path --external:url --outfile="$SMOKE_SB"; then
+  cp "$SMOKE_SB.fbbak" src/firebase.js && rm -f "$SMOKE_SB.fbbak"
+  node tools/smoke_sealerbulk450.cjs "$SMOKE_SB" || { echo "✗ X-RAY 봉인자 두 단계 등록 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SB"; exit 1; }
+  rm -f "$SMOKE_SB"
+else
+  cp "$SMOKE_SB.fbbak" src/firebase.js; rm -f "$SMOKE_SB.fbbak"
+  echo "✗ X-RAY 봉인자 두 단계 등록 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SB"; exit 1
+fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).
