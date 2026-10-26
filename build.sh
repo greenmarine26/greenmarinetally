@@ -1176,6 +1176,18 @@ if npx esbuild tools/smoke_seal449.jsx --bundle --loader:.jsx=jsx --loader:.png=
 else
   echo "✗ 4.49 실번호 판정 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_S9"; exit 1
 fi
+#  4.52: **오픈탑 표기 한 벌** — 연태(YTF) 오픈탑 실 컨(OBWH 2775E 양하 3대 RTDB 실 읽기 · 2765E 실서비스 사본)으로 컨 상세 화면(실소스)을 그려
+#    «20OT»·«40OT» 한 가지 + 하이큐일 때만 «하이큐 오픈탑» 글자 · EDI V코드(22V7·42V1)와 세관 HT/U6 는 «규격이 자료마다 다릅니다» 카드를 안 띄우는지 잰다. 실 firebase.js(SDK 만 메모리 DB — 실제 쓰기 없음).
+#    검수사 2026-10-26 08:51 «오픈탑중에 일반 20OT와 20 하이큐 OT이 있는데 표기가 여러개 입니다» · 09:16 «오픈탑으로 잡고 하이큐 오픈탑으로 표기 하먄되는것인데».
+SMOKE_OT=$(mktemp /dev/shm/hometmp/_smokeot_XXXXXX.js)
+if npx esbuild tools/smoke_ot452.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_OT"; then
+  node tools/smoke_ot452.cjs "$(pwd)" "$SMOKE_OT" || { echo "✗ 4.52 오픈탑 표기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_OT"; exit 1; }
+  rm -f "$SMOKE_OT"
+else
+  echo "✗ 4.52 오픈탑 표기 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_OT"; exit 1
+fi
 #  4.11: **교대 시각(06:30·17:30) 터미널 기준 패널** — 반영 판정이 computeTermApply 와 한 벌이고 추가만 하는가 · 동방 선적만 «계획 기준» 표식 · 소유자 메뉴 안에만 있고 구독이 없는가 ·
 #    수집기 shiftsnap 이 실제 동방 서버에서 읽어 만든 스냅샷(ATPR 2645W 선적)으로 패널을 그려 [반영] 단추와 안내 문구를 본다. 검수사 2026-10-07 «자동으로 읽어서 승인을 버튼을 누르면 적용되게».
 SMOKE_SS=$(mktemp /dev/shm/hometmp/_smokess_XXXXXX.js)

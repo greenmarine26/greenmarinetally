@@ -190,8 +190,8 @@ const bundle = process.argv[3];
     const coneS0 = src('public/cone.html'), mirS0 = src('src/mir.js');
     ok(/const _shS=window\.ConeMir\.shiftSetForUnitsOf \? window\.ConeMir\.shiftSetForUnitsOf\(shiftMap\)/.test(coneS0) && /window\.ConeMir\.applyDischargeUnits\(cs, \{[^\n]*\}, _shS\)/.test(coneS0)
       && /const ss = shiftSetForUnitsOf\(c\.shiftMap\);[^\n]*\n\s+c\.containers = applyDischargeUnits\(/.test(mirS0) && /shiftSetForUnitsOf \} from '\.\/utils\.js'/.test(src('src/mirCore.entry.js'))
-      && /window\.__CONEV='ConeOne 2\.71-02'/.test(coneS0),
-      '배선 — 콘앱 미르(ConeOne 2.71-02)·미르 4.20 갈래가 shiftSetForUnitsOf 로 시프팅 집합을 만든다 · mir-core 가 내보낸다');
+      && /window\.__CONEV='ConeOne 2\.71-0[23]'/.test(coneS0),
+      '배선 — 콘앱 미르(ConeOne 2.71-02 이상)·미르 4.20 갈래가 shiftSetForUnitsOf 로 시프팅 집합을 만든다 · mir-core 가 내보낸다');
     //  4.48-04 감사(하-2): 콘앱 `_shS` 줄을 떼어 실제로 돌린다 — 새 본체(ConeMir.shiftSetForUnitsOf 있음)와 옛 본체(없음 → 인라인 대체)가 같은 집합인가.
     const shLine = (coneS0.match(/\n\s*(const _shS=window\.ConeMir\.shiftSetForUnitsOf[^\n]*)\n/) || [])[1] || '';
     const runSh = (cm) => { try { return [...new Function('window', 'shiftMap', shLine + '\nreturn _shS;')({ ConeMir: cm }, dispK)].sort(); } catch (e) { return ['ERR ' + e.message]; } };
@@ -555,7 +555,7 @@ const bundle = process.argv[3];
       const _o = { ...confM, MNBU0129687: { _forecast: 'keep' }, MNBU3119872: { _forecast: 'keep' } };
       const f = new Function('shiftStatus', 'shiftingMap', '_o', '_sh', 'P_ec', blk + '\nreturn shiftStatus;');
       return f('불일치', confM, _o, { berthShift: berth, terminalStatus: 'working' }, () => T.shiftEvidenceCore); };
-    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.71-0[12]'/.test(coneS),
+    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.71-0[123]'/.test(coneS),
       '콘앱 2.71-01 분기 실행 — 배정표 128(= 확정 62 + 예보 2)이면 «미확정» · 130 이면 «불일치» 그대로(검수앱 shiftEvidenceCore keepN 한 벌)', JSON.stringify([runBlk(128), runBlk(130), blk.length]));
     ok(/async function ctKeepShiftMap[\s\S]{0,700}for\(const k of \['completed','termWork'\]\)[\s\S]{0,300}voy\.discharge\[k\] = j/.test(coneS), '콘앱 2.71-01 — 본선 잔류 예보 재료에 양하 완료·실적을 싣는다(내린 지시 컨은 검수앱처럼 예보에서 빠짐 · 재감사 하-3)');
     //  감사(하-4) — 지시 컨을 실제로 내렸으면 예정은 끝 — 예보·칩·앱 예상에서 빠지고 유닛은 추가분(신고 대상)으로 센다

@@ -519,7 +519,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const html = src('public/cone.html');
         const fnSrc = (name) => (html.match(new RegExp(`function ${name}\\(c\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
         const vctx = { console, window: { ConeMir: { isReeferContainer: B.isReeferContainer }, ConeParse: { isFlatRackContainer: B.isFlatRackContainer } } };
-        require('vm').createContext(vctx); require('vm').runInContext(fnSrc('coneIsReefer') + fnSrc('_ediRowOf') + '\nthis.__rowOf = typeof _ediRowOf === "function" ? _ediRowOf : null;', vctx);
+        require('vm').createContext(vctx); require('vm').runInContext(fnSrc('coneIsReefer') + (html.match(/function coneAlphaOt\(iso\)\{[\s\S]*?\n\}\n/) || [''])[0] + fnSrc('_ediRowOf') + '\nthis.__rowOf = typeof _ediRowOf === "function" ? _ediRowOf : null;', vctx);
         const both = [['STSE_2669E', { info: vs.info, loading: sec, discharge: fx('conepos_live.json')['STSE_2669E|discharge'] }], ['OBWH_2749E', fx('ferry1700.json').voyages.OBWH_2749E]].map(([kk, vo]) => {
           const ptkM = (m, e) => isPtkCode(m === 'discharge' ? e.pod : e.pol);
           const ed = (m) => Object.values((vo[m] || {}).ediContainers || {}).filter((e) => e.bay && e.tier && ptkM(m, e));
@@ -542,7 +542,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             const vc2 = { console, window: { ConeMir: { isReeferContainer: B.isReeferContainer, isoPickOog: B.isoPickOog }, ConeParse: { isFlatRackContainer: B.isFlatRackContainer } } };
             const fnSrc2 = (name) => (html.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
             require('vm').createContext(vc2);
-            require('vm').runInContext(['coneIsReefer', 'coneRecMark', 'coneRecRows', '_ediRowOf'].map(fnSrc2).join('') + '\nthis.__rowOf = _ediRowOf; this.__recRows = typeof coneRecRows === "function" ? coneRecRows : null;', vc2);
+            require('vm').runInContext(['coneIsReefer', 'coneAlphaOt', 'coneRecMark', 'coneRecRows', '_ediRowOf'].map(fnSrc2).join('') + '\nthis.__rowOf = _ediRowOf; this.__recRows = typeof coneRecRows === "function" ? coneRecRows : null;', vc2);
             const kR = 'RZOR_R098E', vR = { info: { vsl: 'RZOR', voy: 'R098E', voy_d: 'R098E' }, discharge: { ediContainers: mk.edi, records: mk.rec } };
             const dR2 = Object.values(mk.edi).filter((e) => isPtkCode(e.pod)).map(vc2.__rowOf);
             const marked = vc2.__recRows ? vc2.__recRows(dR2, mk.rec) : dR2;
@@ -2825,6 +2825,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await require('./regress_r45_baysplit.cjs')({ ROOT, TMP, ok, head, fx, stub });
   //  4.42-01 — 선박 실 정책을 지정한 배는 선적 화면을 열어도 «선박 실 정책» 창이 다시 뜨지 않는다(정책 목록을 받은 뒤에만 판단) · 처음 오는 배만 묻는다. 본문은 tools/regress_r46_sealpolicy.cjs(단독 실행도 된다).
   await require('./regress_r46_sealpolicy.cjs')({ ROOT, TMP, ok, head, fx, stub });
+  //  4.52 — 오픈탑 표기 한 벌(20HT·40HT·25OT·연태 V코드 22V7·42V1 은 오픈탑 · 하이큐 오픈탑은 25UT · 흔한 표기로 보여 줌 · 같은 컨의 표기 차이를 «규격 다름» 으로 세지 않음). 본문은 tools/regress_r47_opentop.cjs(단독 실행도 된다).
+  await require('./regress_r47_opentop.cjs')({ ROOT, TMP, ok, head, fx });
 
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }

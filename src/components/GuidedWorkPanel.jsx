@@ -19,8 +19,8 @@ import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회�
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
-import { isoOtHeightConflict } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
-import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, ISO_SRC_NAME, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
+import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { inspectionSealOf, isFullReefer, applySpecialMarks, tagForecastMarks } from '../utils.js';
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 · 실오류 한 줄   // 4.26 작업 카드: 실번호 칸(검수리스트와 한 벌) · 풀 리퍼만 ❄ · 수화물·제작컨·긴급 표시(목록 입구와 한 벌)
@@ -2103,8 +2103,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
            고르기 전에도 완료는 막지 않는다 — 「미확정」만 보인다. */}
       {(() => {
         const srcs = isoPickOf(c);
-        if (!srcs) return c.iso_pick ? (
-          <div className="mt-1.5 text-xxs text-emerald-400">규격 확정 — {ISO_SRC_NAME[c.iso_pick] || c.iso_pick} 것 {c.iso_pick_label || ''}</div>
+        //  ★ 4.52 (감사 재판정 2026-10-26) — 고를 것이 없는 오픈탑 확정은 줄을 안 그리고 라벨은 지금 규격으로(컨 상세와 같은 한 벌 utils.pickConfirmLineOf).
+        const _pcl = pickConfirmLineOf(c);
+        if (!srcs) return _pcl ? (
+          <div className="mt-1.5 text-xxs text-emerald-400">규격 확정 — {_pcl.src} 것 {_pcl.label}</div>
         ) : null;
         return (
           <div className="mt-1.5 pt-1.5 border-t border-amber-700/60">

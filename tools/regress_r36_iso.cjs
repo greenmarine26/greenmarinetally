@@ -13,9 +13,11 @@ const { execSync } = require('child_process');
 //  수정 전(4.25) 실서비스 사본의 갈림 4건 — 사람이 읽은 판정(남아야 하는 셋 · 사라져야 하는 하나)
 const BEFORE = {
   'STMJ_2663E|discharge|CAXU5572234': { stay: false, why: 'EDI L5U0 · 선사·세관 40OH — 셋 다 40피트 하이큐브 오픈탑(터미널 45UT)' },
-  'OBWH_2765E|discharge|SPSU2036335': { stay: true, why: 'EDI 22V7(통풍) · 세관 22U6(오픈탑) — 진짜 다름' },
-  'OBWH_2765E|discharge|TEMU5280018': { stay: true, why: 'EDI 22V7(통풍) · 세관 22U6(오픈탑) — 진짜 다름' },
-  'OBWH_2765E|discharge|TGHU4437784': { stay: true, why: 'EDI 42V1(통풍) · 세관 40HT — 진짜 다름' },
+  //  ★ 4.52 (검수사 2026-10-26 09:14 «둘다 틀리고 기본 지정된것이 맞기때문입니다» · 09:16 «오픈탑으로 잡고 하이큐 오픈탑으로 표기 하면 되는것인데»):
+  //    아래 셋은 4.25-01 때 «EDI 22V7·42V1 은 통풍(Ventilated)이라 오픈탑과 진짜 다름» 으로 남겼으나, 연태훼리의 V코드는 오픈탑(하드탑) 표기다 — 사라져야 하는 갈림이다(R47).
+  'OBWH_2765E|discharge|SPSU2036335': { stay: false, why: 'EDI 22V7(연태 오픈탑 V코드) · 세관 22U6(오픈탑) — 같은 오픈탑(4.52)' },
+  'OBWH_2765E|discharge|TEMU5280018': { stay: false, why: 'EDI 22V7(연태 오픈탑 V코드) · 세관 22U6(오픈탑) — 같은 오픈탑(4.52)' },
+  'OBWH_2765E|discharge|TGHU4437784': { stay: false, why: 'EDI 42V1(연태 오픈탑 V코드) · 세관 40HT(하이큐 오픈탑) — 같은 오픈탑(4.52)' },
 };
 //  터미널이 읽는 대로 — 검수사 원문 «L5U0 45UT(OT)» · 오픈탑 하이큐브 «40OH». 진짜 45피트 일반(L5G1)은 그대로 45피트.
 const TERM = [
@@ -65,17 +67,23 @@ module.exports = async function r36({ ROOT, TMP, ok, head, fx }) {
       if (U.isoConflictOf(edi, lr)) for (const ex of c.ex) left.push(ex);
     }
     const want = Object.keys(BEFORE).filter((k) => BEFORE[k].stay).sort();
-    ok(`③-1 실서비스 사본 전수 ${pairs}짝 — 갈림 ${left.length}건 = 수정 전 4건 중 남아야 할 셋(${want.map((k) => k.split('|')[2]).join(' · ')}) · 사라진 하나 CAXU5572234`,
+    ok(`③-1 실서비스 사본 전수 ${pairs}짝 — 갈림 ${left.length}건 = 0 (수정 전 4건이 모두 사라짐 — 4.25-01 에 CAXU5572234 · 4.52 에 연태 V코드 셋 ${Object.keys(BEFORE).filter((k) => !BEFORE[k].stay && !/CAXU/.test(k)).map((k) => k.split('|')[2]).join(' · ')})`,
       JSON.stringify(left.sort()) === JSON.stringify(want), `${left.join(' , ')}`);
   }
-  //  ④ 진단 — 남은 갈림은 🔵 정보(음성 없음) · «터미널(EDI) 규격을 따름» · 단추·줄이 같은 말
+  //  ④ 진단 — 갈림이 남으면 🔵 정보(음성 없음) · «터미널(EDI) 규격을 따름» · 단추·줄이 같은 말. 4.52 — 실 OBWH 2765E 에서는 갈림이 더 남지 않는다(연태 V코드 셋이 오픈탑으로 풀림).
   {
     const O = F.obwh2765e_d;
     const dg = U.runDiagnostics({ ediContainers: O.ediContainers, listRecords: O.records, xrayList: {}, mode: 'discharge' }) || [];
-    const h = dg.find((a) => a.code === 'iso_conflict');
-    const spoken = U.buildVoiceMessage(dg);   // 음성 안내 문장(경고·위험만 읽는다)
-    ok(`④-1 OBWH 2765E 양하 — 진단 «${h ? h.msg : '(없음)'}» · 등급 ${h ? h.level : '?'} · 음성 없음 · 대수 3`,
-      !!h && h.level === 'info' && h.voice === '' && h.count === 3 && /터미널\(EDI\) 규격을 따름/.test(h.msg) && !/규격 불일치/.test(String(spoken || '')),
+    const h0 = dg.find((a) => a.code === 'iso_conflict');
+    ok(`④-1 OBWH 2765E 양하 — 진단 «규격이 자료마다 다름» ${h0 ? h0.count : 0}건 (4.52 전 3건 — EDI 22V7·42V1 대 세관 22U6·40HT)`, !h0, JSON.stringify(h0 && { msg: h0.msg, count: h0.count }));
+    //  남는 갈림의 말 — 20피트 진짜 통풍(22V0) 대 세관 오픈탑(22U6)을 합성해 본다(통풍은 종전 그대로 20VH)
+    const S = { ediContainers: { TEST2200009: { cn: 'TEST2200009', iso: '22V0', iso_edi: '22V0', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '01', row: '02', tier: '82' } },
+      records: { TEST2200009: { cn: 'TEST2200009', iso_customs: '22U6', pod: 'KRPTK', fe: 'F' } } };
+    const dg2 = U.runDiagnostics({ ediContainers: S.ediContainers, listRecords: S.records, xrayList: {}, mode: 'discharge' }) || [];
+    const h = dg2.find((a) => a.code === 'iso_conflict');
+    const spoken = U.buildVoiceMessage(dg2);   // 음성 안내 문장(경고·위험만 읽는다)
+    ok(`④-1b 진짜 통풍 22V0 ↔ 세관 22U6 은 종전 그대로 «${h ? h.msg : '(없음)'}» · 등급 ${h ? h.level : '?'} · 음성 없음 · 대수 1`,
+      !!h && h.level === 'info' && h.voice === '' && h.count === 1 && /터미널\(EDI\) 규격을 따름/.test(h.msg) && !/규격 불일치/.test(String(spoken || '')),
       JSON.stringify(h && { level: h.level, msg: h.msg, voice: h.voice, count: h.count }));
     const w = h && h.details && h.details[0];
     ok('④-2 진단 줄과 고르기 단추가 같은 말(EDI 를 맨 앞에 — 따르는 규격)', !!w && U.isoConflictText(w) === w.srcs.map((x) => `${x.name} ${x.spec}`).join(' / ') && w.srcs[0].k === 'edi',
@@ -162,7 +170,7 @@ module.exports = async function r36({ ROOT, TMP, ok, head, fx }) {
       ediContainers: {
         TEST4500001: { cn: 'TEST4500001', iso: '45U1', iso_edi: '45U1', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '10', row: '02', tier: '82' },
         TEST4200002: { cn: 'TEST4200002', iso: '42U1', iso_edi: '42U1', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '14', row: '02', tier: '82' },
-        TEST2200003: { cn: 'TEST2200003', iso: '22V7', iso_edi: '22V7', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '01', row: '02', tier: '82' },
+        TEST2200003: { cn: 'TEST2200003', iso: '22V0', iso_edi: '22V0', pod: 'KRPTK', pol: 'CNTAO', fe: 'F', bay: '01', row: '02', tier: '82' },   // 4.52: 22V7 은 이제 오픈탑 — 진짜 통풍(22V0)으로 «20' 통풍↔오픈탑» 갈림을 시험한다
       },
       records: {
         TEST4500001: { cn: 'TEST4500001', ...lrA, pod: 'KRPTK', fe: 'F' },

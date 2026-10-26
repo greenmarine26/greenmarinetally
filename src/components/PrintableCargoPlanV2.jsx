@@ -16,7 +16,7 @@ import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeep
 import { WorkerPrintDialog, WorkerHeadMark, installClonePrint } from '../workerPrint.jsx';   // 4.32: 머리줄 «# ___ , 이름» + 인쇄 직전 짝 이름 질문 + 한 장 더
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
-import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode, legendCargoCatOf, isEmptyReefer, emptySplitLabel } from '../utils.js';   // 4.15-01: 별첨 화물 종류·엠티 구분 한 벌 · 2.98-14: 커버 막대 경계
+import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode, legendCargoCatOf, isEmptyReefer, emptySplitLabel, isAlphaOpenTopIso } from '../utils.js';   // 4.15-01: 별첨 화물 종류·엠티 구분 한 벌 · 2.98-14: 커버 막대 경계
 import {
   autoPairBays,
   generatePdfBays,
@@ -108,7 +108,7 @@ function getMarkV2(c, pod, mode) {
   else if (isReeferContainer(c)) specialLetter = isEmpty ? 'RE' : 'RF';   // 2.38-01: 그림은 RE·RF (리스트는 R/E·R/F 유지)
   else if (isFlatRackContainer(c)) specialLetter = 'FR';   // 3.43-03 (검수사 «SWTD 카고플랜에서 FR을 OT로 오류 표기»): ASC 로 들어온 FR 은 fr 없이 oog 만 있어 아래 OT 가지로 떨어졌다 — FR 판정 한 벌(utils)
   else if (c.tk) specialLetter = 'TK';   // 2.38 (검수사): 탱크도 TK 2글자
-  else if (c.ot || c.oog) specialLetter = 'OT';   // 2.98-10 (검수사): «OT를 A로 표기하는데 OT로» · «특수화물은 두글자 표기입니다»
+  else if (c.ot || c.oog || isAlphaOpenTopIso(c.iso)) specialLetter = 'OT';   // 4.52: EDI 만 있는 V코드·20HT·40HT·25OT 도 OT 표식(utils 한 벌) · 2.98-10 (검수사): «OT를 A로 표기하는데 OT로» · «특수화물은 두글자 표기입니다»
 
   // ★ 2.79-03 (검수사 확정 2026-08-28) — **통과화물은 글자를 안 쓴다. 회색 자리만 남긴다.**
   //   원문 둘을 같이 읽어야 뜻이 맞는다:

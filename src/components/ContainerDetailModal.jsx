@@ -5,9 +5,9 @@ import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, 
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
-import { isoConflictOf, ISO_SRC_NAME, isoOtHeightConflict } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
+import { isoConflictOf, isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
-import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다
+import { isoShown, hcOpenTopOf, isoShownOf } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다 · 4.52: 하이큐 오픈탑 표기
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
@@ -56,6 +56,7 @@ const ISO_OPTIONS = [
   { iso: '45P1', label: '45FR (45피트 플랫랙)',       flags: { fr: true } },
   // 오픈탑
   { iso: '22U1', label: '20OT (20피트 오픈탑)',       flags: { ot: true } },
+  { iso: '25U1', label: '20HC 오픈탑 (20피트 하이큐 오픈탑 · 20HT)', flags: { ot: true } },   // 4.52
   { iso: '42U1', label: '40OT (40피트 오픈탑)',       flags: { ot: true } },
   { iso: '45U1', label: '40HC 오픈탑',                flags: { ot: true } },
   // 탱크
@@ -857,7 +858,8 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold mono text-dim-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
-                  <span className="text-xs text-dim-400 mono">({isoShown(c.iso) || '-'})</span>
+                  {hcOpenTopOf(c) && <span className="text-xs font-bold text-fuchsia-300">하이큐 오픈탑</span>}{/* 4.52: 오픈탑으로 잡고 하이큐는 이 글자로 — 20HC(드라이)로 읽지 않는다 */}
+                  <span className="text-xs text-dim-400 mono">({isoShownOf(c) || '-'})</span>
                   {/* V9.57(I10): c.iso_orig → 폴백 조회값(isoOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
                   {isoOrigShow && isoOrigShow !== c.iso && (
                     <span className="text-2xs text-amber-400 mono">원본: {isoOrigShow} → 수정됨</span>
@@ -869,9 +871,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   //  EDI 자리는 **EDI 제 칸만** 본다 — `c.iso` 는 이 화면을 부르는 세 경로마다
                   //    병합 규칙이 달라 어느 자료의 값인지 모른다(감사 지적 2026-09-14).
                   const srcs = isoConflictOf(c.iso_edi || '', c);
-                  if (!srcs) return c.iso_pick ? (
+                  //  ★ 4.52 (감사 지적 2026-10-26) — 고른 오픈탑 기록은 고를 것이 없으면 줄을 안 그린다(검수사 09:14 «다시고르기를 선택할것이 없습니다»). 판정은 utils.pickConfirmLineOf 한 벌(작업 카드와 같은 답).
+                  const _pcl = pickConfirmLineOf(c);
+                  if (!srcs) return _pcl ? (
                     <div className="mt-1 text-2xs text-emerald-400 flex items-center gap-1.5">
-                      <span>규격 확정 — {ISO_SRC_NAME[c.iso_pick] || c.iso_pick} 것 {c.iso_pick_label || ''}{c.iso_picked_by ? ` (${c.iso_picked_by})` : ''}</span>
+                      <span>규격 확정 — {_pcl.src} 것 {_pcl.label}{c.iso_picked_by ? ` (${c.iso_picked_by})` : ''}</span>
                       {/* 오확정을 되돌릴 길 — 없으면 그 컨은 그 항차 내내 침묵한다(감사 지적). */}
                       <button onClick={clearPickIso} disabled={isoBusy}
                         className="px-1.5 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">다시 고르기</button>

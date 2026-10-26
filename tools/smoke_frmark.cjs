@@ -116,7 +116,8 @@ const cnt = (d, sel) => d.querySelectorAll(sel).length;
     const run = (withBundle) => {
       const ctx = { console }; if (withBundle && Uf) ctx.window = { ConeParse: { isFlatRackContainer: Uf } };
       const isRf = (html.match(/function coneIsReefer\(c\)\{[\s\S]*?\n\}\n/) || [''])[0];   // ConeOne 2.67: _ediRowOf 가 부르는 리퍼 판정 한 벌(본체 없으면 rf 표식만)
-      vm.createContext(ctx); vm.runInContext(isRf + rowOf[0] + '\nthis.__rowOf = _ediRowOf;', ctx);
+      const isAot = (html.match(/function coneAlphaOt\(iso\)\{[\s\S]*?\n\}\n/) || [''])[0];   // ConeOne 2.71-03: _ediRowOf 가 부르는 오픈탑 알파 표기 한 벌(번들 없으면 false)
+      vm.createContext(ctx); vm.runInContext(isRf + isAot + rowOf[0] + '\nthis.__rowOf = _ediRowOf;', ctx);
       const rows = Object.values(dis).map(ctx.__rowOf);
       return { fr: rows.filter((x) => x.fr).map((x) => x.cn).sort(), ot: rows.filter((x) => x.ot && !x.fr).map((x) => x.cn) };
     };

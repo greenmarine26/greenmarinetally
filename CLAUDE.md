@@ -54,7 +54,7 @@
 | 수집기(MailPilot, PC 로컬) | `C:\TALLYTEST\TallymanMailCollector_*\app_gui.py` → `VERSION` |
 
 - `bash build.sh`가 `sw.js`·`cone.html`(라벨/`__APPV`)·`bulk_tally.html`·`README.md`를 자동 동기화한다. ⛔ 폴더명·ZIP 파일명·기억은 버전의 근거가 아니다. 콘앱 독자 버전 `C7.xx`는 폐기됐다.
-- 배포 절차 정본은 이 저장소의 `DEPLOY.md`(DEPLOY v2.0-02) 하나다. 배포는 클로드가 끝까지 직접 한다.
+- 배포 절차 정본은 이 저장소의 `DEPLOY.md`(DEPLOY v2.0-03) 하나다. 배포는 클로드가 끝까지 직접 한다.
 - 작업 규칙·이력은 G드라이브 `CLAUDE_SHARED`의 규범·★통합운영지침서·★앱_통합지침서(작업 기록부)다. 저장소에 지침서 사본·`_인계_*.md`·`HANDOFF_*.md`·`변경_*.md`를 두지 않는다. 파일명이 `#Uxxxx`로 깨진 파일을 보면 낡은 사본이니 지운다.
 - Pages가 저장소 루트 전체를 서빙한다(`deploy.yml path: .`) — 실데이터 픽스처·개인 경로를 새로 넣을 때 그 점을 생각한다.
 

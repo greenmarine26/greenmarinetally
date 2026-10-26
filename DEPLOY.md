@@ -1,6 +1,6 @@
-# DEPLOY.md — 배포 절차 정본(하나) · DEPLOY v2.0-02 · 2026-10-23
+# DEPLOY.md — 배포 절차 정본(하나) · DEPLOY v2.0-03 · 2026-10-26
 
-> **판.** DEPLOY v2.0-02 · 2026-10-23 · 규범 v2.1 §8의 절차 전문이다. 배포 절차 정본은 **이 파일 하나**다. G드라이브 `★배포_표준절차_모든클로드_필독.md`는 이 파일을 가리키는 글만 둔다(두 사본 체계는 2026-10-22 폐기 — 25KB 대 56KB로 갈라져 서로를 정본이라 가리키고 있었다).
+> **판.** DEPLOY v2.0-03 · 2026-10-26 · 규범 v2.1 §8의 절차 전문이다. 배포 절차 정본은 **이 파일 하나**다. G드라이브 `★배포_표준절차_모든클로드_필독.md`는 이 파일을 가리키는 글만 둔다(두 사본 체계는 2026-10-22 폐기 — 25KB 대 56KB로 갈라져 서로를 정본이라 가리키고 있었다).
 > **대상.** 저장소 `greenmarine26/greenmarinetally` — TallyOne(검수앱)·ConeOne(콘앱)·벌크탤리가 한 저장소. MailPilot(수집기)은 §6. 배포 경로는 push → `.github/workflows/deploy.yml`(«Deploy to GitHub Pages», 저장소 루트 그대로) → Pages. Pages Source는 **GitHub Actions**(branch 모드로 되돌리지 않는다).
 > **세 줄 요약.** ① 배포는 클로드가 끝까지 직접 한다 — «push 하시면 됩니다»·«푸시 권한이 없다» 금지. ② 길은 하나 — 고정 이름 넷 + `_deploy_run.bat` 워처(§3). ③ 완료는 라이브 되읽기까지(§4) — 커밋·푸시 «성공»은 완료가 아니다.
 > 이 파일을 고치면 규범 §8·`tally-deploy` 스킬·모드 `tally-guard`의 점검표를 같은 날 맞춘다(규범 §10-7).
@@ -25,7 +25,7 @@
 4. 다른 클로드의 2차 시뮬 «가» · 코드 감사 «가»
 5. 새 UI면 매뉴얼·연막검사·APP_NOTE 동반 수정(개발자용 수정은 배너 금지)
 6. 페이로드 3대조 — 묶음 `index.html`의 번들 해시 = 작업본 · 묶음 `sw.js` 버전 = APP_VERSION · `index.html`이 부르는 js·css가 묶음 안에 실재
-7. `tar` 종료코드 확인(`2>/dev/null` 금지) · `/tmp` 고정 이름 금지(`p_$$.tgz`) · 한글 파일명은 CP949 바이트 이름으로 tar에 넣었다
+7. `tar` 종료코드 확인(`2>/dev/null` 금지) · `/tmp` 고정 이름 금지(`p_$$.tgz`) · 한글 파일명은 CP949 바이트 이름으로 tar에 넣었다 · **클라우드 컨테이너에서 `device_commit_files` 로 넣었으면 기기에서 `md5sum`·크기가 컨테이너 원본과 같은지 확인한 뒤 트리거한다**(2026-10-26 `9fe7874` — 같은 이름의 앞 판 payload 가 덮이지 않아 4.49-03 내용이 4.51 메시지로 나갔다)
 8. `_deploy_del.txt`는 로컬에 실재하지 않는 파일만 · 백슬래시 · CRLF
 9. `_deploy_base.txt` = **밀기 직전 다시 받은** origin/main 해시(다른 세션이 올렸으면 새 origin 위에 재빌드)
 10. «지금 올립니다» 한 줄을 알렸다(묻지 않았다)
@@ -78,6 +78,7 @@ cp $M/_deploy.bat $M/_deploy_run.bat             # ← «지금 올립니다» �
 sleep 100
 tr -d '\000' < $M/_deploy_log.txt | grep -a -v "^warning: in the working copy" | tail -20
 ```
+- **넣은 뒤 트리거 전에 기기 쪽 파일을 원본과 대조한다(클라우드 컨테이너 경로).** `device_commit_files` 가 같은 이름의 앞 판 파일을 못 덮는 일이 있다(큰 payload 만 — 작은 msg·base 는 정상이라 메시지만 새것으로 나간다). 스테이징은 **그때그때 새 파일명**으로 하고, 기기에서 `device_bash` 로 `md5sum $M/_deploy_payload.tgz` 가 컨테이너 원본 `md5sum` 과 같은지(크기도) 본 다음에만 `_deploy_run.bat` 을 복사한다. 다르면 트리거하지 않고 새 이름으로 다시 올린다. 이미 잘못 나갔으면 `git reset -q origin/main`(mixed)으로 payload·del 목록을 현재 origin 기준으로 새로 계산해 바로잡는다.
 - 로그에 `[ABORT]`면 payload는 그대로 두고 클론을 `git fetch && git reset --hard origin/main` 한 뒤 재빌드·재묶기한다(다른 세션이 먼저 올린 것을 소리 없이 되돌리지 않기 위한 잠금 — 2026-09-04).
 - `_deploy_run.bat`이 사라지고 `_deploy_last.bat`이 생겼으면 실행된 것이다. `---RESULT---` 아래에 **내 커밋 메시지**와 `xxxxxxx..yyyyyyy main -> main`을 확인한다(같은 1분 안에 둘이 복사하면 한쪽 트리거가 없어진다).
 - 검수사는 아무것도 안 누른다. Win+R 실행창·computer-use는 쓰지 않는다(2026-07-26·08-03 두 번 막혔다).
@@ -157,6 +158,7 @@ curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/run
 ---
 
 ## 개정 이력
+- 2026-10-26 v2.0-03 — 기기 쪽 payload 대조 규칙. 09:43 `9fe7874` 가 4.51 메시지로 나갔는데 묶음은 4.49-03 옛 내용이었다(윈도 쪽 `_deploy_payload.tgz` 가 앞 판으로 남은 채 같은 이름의 `device_commit_files` 가 덮이지 않음). §2 7항·§3-2 에 «기기에서 md5sum 대조 뒤 트리거 · 스테이징은 새 파일명»을 적었다. 규범 §8·`tally-deploy` 스킬·`tally-guard` 점검표는 같은 날 맞춘다.
 - 2026-10-22 v2.0-01 — `_deploy.bat` ASCII화(한글 주석·로그 문구 → 영문, 명령 줄 불변)에 맞춰 §3 표의 bat 메시지 문구와 `_deploy_out_last.txt`(정상이면 0바이트) 확인 항목을 적었다. 규범 §4-8(bat은 주석까지 ASCII) 적용.
 - 2026-10-22 v2.0 — 배포 절차 정본을 이 파일 하나로 통일(규범 v2.0 표준화). 두 사본(저장소 25KB 2026-07-26 체계 · G드라이브 56KB 2026-09-25)과 `tally-deploy` 스킬을 대조해 갈린 23곳을 정리 — 채널 넷(`_deploy_base.txt` 포함)·한 벌 절차·자가 점검 10항·배포 후 확인·폰 알림 한 번·폐기 목록. 옛 판의 사고 기록(2.38 tar 실패·2.63-01 del.txt·2.64 슬래시·CP949·1GB·#1085·2026-08-27 queued·2026-09-04 잠금)은 §3·§4·§7에 압축해 남겼다.
 - 2026-09-25 — 3.60-18 실측 정정(30분 표기·버전 규칙·github.io curl). 2026-09-04 §0-G 잠금 장치. 2026-08-27 §0-F del.txt. 2026-08-25 §0-E 3대조. 2026-08-07 §0-D Actions. 2026-07-26 코워크 워처 채널 신설.
