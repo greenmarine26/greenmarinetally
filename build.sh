@@ -1176,6 +1176,18 @@ if npx esbuild tools/smoke_keepconf453.jsx --bundle --loader:.jsx=jsx --loader:.
 else
   echo "✗ 4.53 본선 잔류 확정 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KC"; exit 1
 fi
+#  4.54: **빈 FR 묶음 — 터미널은 같은 칸의 빈 플랫랙 2대 이상을 1대로 센다** — ATPR 2647E 실자료(양하 282 · 터미널 배정 276)를 실소스 묶음 판정(bundleKeyOf)·
+#    sourceRecon·진단·홈 상세 «배정 276(+6)»·항차 요약 칩·마감 점검 «한 칸에 두 대»·서류 Final Work 로 잰다(섞인 칸·다른 선사·다른 항구는 그대로 빨강).
+#    검수사 2026-10-26 19:14 «4개 한묶음 2개로 그래야 양쪽 갯수가 맞는거고 알림을 붉은색으로 보여줄 필요도 없는것입니다» · 19:17 «동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(276 의 오타로 읽음).
+SMOKE_B4=$(mktemp /dev/shm/hometmp/_smokeb4_XXXXXX.js)
+if npx esbuild tools/smoke_bundle454.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_B4"; then
+  node tools/smoke_bundle454.cjs "$(pwd)" "$SMOKE_B4" || { echo "✗ 4.54 빈 FR 묶음 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_B4"; exit 1; }
+  rm -f "$SMOKE_B4"
+else
+  echo "✗ 4.54 빈 FR 묶음 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_B4"; exit 1
+fi
 #  4.49: **실번호 판정 한 벌** — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류 —
 #    MAMP 641N 선사·세관 리스트 실파일 사본(파서) · 실 firebase.js(메모리 DB) 추가 병합 · 보관 항차 정답지 10대 · RZOR R117E EDI 실 · 마감텔리·미르·인계·컨 상세가 같은 답.
 #    검수사 2026-10-24 12:50 «다 보이고 하나만 맞으면 맞음» · «큰 글씨 실은 세관 값» · «MLPH 끝자리 빠짐은 실오류로 센다».

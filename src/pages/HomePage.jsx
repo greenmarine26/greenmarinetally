@@ -9,6 +9,7 @@ import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { frBundlesOf, bundleExplainOf } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -1415,6 +1416,24 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
 
 // ── ★ 4.25 배 한 척의 재료 한 벌 — 줄(ShipRow)·상세(ShipDetail)·시트가 이것 하나를 부른다(종전 VoyageCard 본문의 계산을 그대로 옮겼다). ──
 //   막대·대수 = computeStats(평택분 · progressOf 한 벌) · 터미널 본선 = termAggOf 한 벌 · 출항 배지 = badgeRule.decideBadge 한 벌.
+//  ★ 4.54 — 터미널 배정 수량과 맞대는 «앱 수» 한 벌(SideBox 와 shipViewOf 가 같은 수를 쓴다) · 빈 FR 묶음이 그 차이를 얼마나 설명하는가.
+//    검수사 2026-10-26 19:17 «검수리스트는 182개가 맞는거고 동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(282·276 의 오타로 읽음) — 앱 수(282)는 낱개 그대로, 터미널 쪽에 «(+6)» 을 붙인다.
+export function planCompareAppOf(stats) {
+  return stats.planOnly ? stats.planSlots
+    : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount
+    : stats.ptk;
+}
+export function frBundleOf(voyage, mode, stats) {
+  if (!stats || !(stats.planQty > 0)) return null;
+  const gap = (Number(planCompareAppOf(stats)) || 0) - stats.planQty;
+  if (!(gap > 0)) return null;   // 앱이 많을 때만 — 터미널이 묶음을 1대로 센 만큼
+  const b = frBundlesOf(voyage, mode);
+  if (!b.length) return null;
+  const diff = b.reduce((a, x) => a + x.n - 1, 0);
+  const explained = bundleExplainOf(b, gap);   // sourceRecon 과 같은 산식 한 벌 — 묶음으로 맞아떨어지는 차이만
+  if (!(explained > 0)) return null;
+  return { bundles: b.length, cns: b.reduce((a, x) => a + x.n, 0), diff, explained, ns: [...new Set(b.map((x) => x.n))] };
+}
 export function shipViewOf(voyage, pilotForecast = {}) {
   const dis = voyage.discharge;
   const loa = voyage.loading;
@@ -1428,6 +1447,8 @@ export function shipViewOf(voyage, pilotForecast = {}) {
   //   ⚠ 이 값은 **대조용 참고치**다 — 카운트 기준으로 쓰지 않는다(예정 수량이 섞인다, 수집기 v2.17.26 교훈).
   disStats.planQty = voyage.info?.planDis != null ? Number(voyage.info.planDis) : null;
   loaStats.planQty = voyage.info?.planLod != null ? Number(voyage.info.planLod) : null;
+  disStats.frBundle = frBundleOf(voyage, 'discharge', disStats);   // 4.54: «배정 276(+6)» — 빈 FR 묶음 설명(앱이 터미널보다 많을 때만 · 없으면 null)
+  loaStats.frBundle = frBundleOf(voyage, 'loading', loaStats);
   // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
   const _shiftMap = computeShiftingMapCached(voyage.key, voyage) || {};
   const shiftCount = Object.keys(_shiftMap).length;
@@ -2221,19 +2242,22 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
         {/* 1.82: 터미널 배정 수량 ↔ 앱 수집량 대조. 같으면 ✓, 어긋나면 호박색으로 차이를 적는다.
             4.25(설계 critique 7 «터미널 0 (+250)»): 배정이 0 이면 대조할 수가 없다(수량을 안 주는 배정표·아직 안 잡힌 배정) — 경고처럼 «+250» 을 붙이지 않고 «배정 0» 만 적는다. */}
         {stats.planQty != null && (() => {
-          const app = stats.planOnly ? stats.planSlots
-            : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount
-            : stats.ptk;
-          const gap = (Number(app) || 0) - stats.planQty;
+          const app = planCompareAppOf(stats);
+          const gap0 = (Number(app) || 0) - stats.planQty;
+          //  ★ 4.54: 터미널은 같은 칸의 빈 FR 묶음을 1대로 센다 — 그만큼은 «(+6)» 으로 적고 호박색을 끈다(앱 수는 낱개 그대로).
+          const fb = stats.frBundle || null, bx = fb ? fb.explained : 0;
+          const gap = gap0 - bx;
           const warn = gap !== 0 && stats.planQty > 0;
+          const fbWhat = fb ? (fb.ns.length === 1 ? `빈 FR ${fb.ns[0]}대 한 묶음 ${fb.bundles}곳` : `빈 FR 묶음 ${fb.bundles}곳`) : '';
           return (
-            <span className={warn ? 'text-amber-300 font-bold' : 'text-dim-400'} data-plan-qty={stats.planQty}
-              title={gap === 0
+            <span className={warn ? 'text-amber-300 font-bold' : 'text-dim-400'} data-plan-qty={stats.planQty} data-fr-bundle={bx || undefined}
+              title={gap0 === 0
                 ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — 일치합니다.`
                 : stats.planQty > 0
-                  ? `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). 배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.`
+                  ? (bx > 0 ? `터미널 배정 ${stats.planQty}대(+${bx}) ${gap === 0 ? '= ' : '· '}앱 ${app}대${gap === 0 ? '' : ` (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'})`} — ${fbWhat}, 터미널은 한 묶음을 1대로 세어 ${bx}대 적게 셉니다(앱 컨 대수는 낱개 그대로). ` : `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). `)
+                    + (gap === 0 ? '' : '배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.')
                   : `터미널 배정목록 수량이 0 입니다 — 수량을 안 주는 배정표이거나 배정이 아직 안 잡힌 것이라 대조하지 않습니다(앱 ${app}대). 대조용 참고치입니다.`}>
-              배정 {stats.planQty}{gap === 0 ? ' ✓' : warn ? ` (앱 ${gap > 0 ? '+' : ''}${gap})` : ''}
+              배정 {stats.planQty}{bx > 0 ? `(+${bx})` : ''}{gap === 0 ? ' ✓' : warn ? ` (앱 ${gap > 0 ? '+' : ''}${gap})` : ''}
             </span>
           );
         })()}

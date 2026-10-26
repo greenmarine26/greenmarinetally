@@ -207,6 +207,10 @@ export function ptkContainers(voyage, mode) {
     if (r.pod_pick && r.pod) out.pod = r.pod;
     //  ★ 4.15 (§7.8-⑨ Fable 판정): **검수사가 고른 규격도 EDI 를 이긴다** — pod_pick 과 같은 자리. 규격·리퍼·FR·OT·탱크 표식은 records(fbPickIso)가 쓴 그대로,
     //    규격초과(oog)는 utils.isoPickOog 한 벌(드라이로 골랐으면 없음). 마감텔리 규격 칸(20'·40'·HC)·OS·RF 가 이 값을 센다.
+    //  ★ 4.54 (검수사 2026-10-26 19:10 «빈FR4개 짜리 두건이라는거죠?» — ATPR 2647E): 리스트(세관·선사)가 플랫랙으로 표시한 컨(records.fr — 45P1 등)은 EDI 가 45GE 로 줘도 플랫랙이다.
+    //    화면 병합(VoyagePage FLAG_FILL)은 이미 false→true 로 올리는데 이 병합만 안 올려, 완료된 SRLU 4대(EDI 45GE · 세관 45P1)가 «빈 FR 묶음» 으로 안 읽혔다(bundleKeyOf 가 c.fr 을 본다).
+    //    false→true 승격만(리스트가 EDI 의 true 를 뒤집지 못한다). 고른 규격(iso_pick)이면 아래가 고른 값으로 다시 덮는다. c.fr 을 보는 곳은 bundleKeyOf 하나뿐이라 서류 영향은 묶음 접기뿐이다.
+    if (r.fr === true && c.fr !== true) out.fr = true;
     if (r.iso_pick && r.iso) {
       out.iso = r.iso;
       for (const k of ['rf', 'fr', 'ot', 'tk']) if (typeof r[k] === 'boolean') out[k] = r[k];
@@ -245,21 +249,24 @@ export function ptkContainers(voyage, mode) {
 //  bundleFold — 집계용 컨 목록: 같은 자리의 엠티 플랫랙 2대 이상은 «FULL 1대» 가상 컨 하나로 접는다. Final Work 와 Performance 가 같은 목록을 센다(감사: 한 서류 안 두 표가 6대 달랐다).
 //    자리 문자열은 정규화해 비교(베이 앞 0 제거 · row/tier 두 자리 — ContainerDetailModal _p2 와 같은 규칙; bay_actual 이 '01' 과 '1' 로 갈리는 사례를 앱이 이미 안다).
 //    다른 선사·다른 포트의 엠티 플랫랙은 같은 자리라도 따로 묶는다(실물 근거 없음 — 한 묶음은 한 선사·한 출발지).
+//  ★ 4.54 — 묶음 키 한 벌. bundleFold(서류)·emptyFrBundlesOf(화면 «빈 FR 묶음» 설명)·loadedSlotClaims(«한 칸에 두 대» 에서 묶음 빼기)가 이것만 부른다 — 같은 판정을 두 벌로 두지 않는다.
+//    묶음 후보 = 엠티(fe 'E') 플랫랙(c.fr · 또는 iso 가 플랫랙 코드) + 자리(bay·row·tier)가 모두 있는 컨. 키 = 선사 · 포트(양하 POL·선적 POD) · 규격 칸 · 정규화한 자리. 후보가 아니면 ''.
+const _bp2 = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? s.padStart(2, '0') : s; };
+const _bbay = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s; };
+export function bundleKeyOf(c, mode) {
+  if (!(c && c.fe === 'E' && (c.fr || isFlatRackIso(c.iso)))) return '';
+  const p = effectivePos(c);
+  if (!(p && p.bay && p.row && p.tier)) return '';
+  const op = String(c.op || '').toUpperCase().trim() || '???';
+  const port = port3(mode === 'discharge' ? c.pol : c.pod) || '???';
+  return [op, port, tallySizeCol(c), _bbay(p.bay), _bp2(p.row), _bp2(p.tier)].join('|');
+}
 export function bundleFold(containers, mode) {
   const out = [];
   const bundles = {};
-  const _p2 = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? s.padStart(2, '0') : s; };
-  const _bay = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s; };
   for (const c of containers) {
-    if (c && c.fe === 'E' && (c.fr || isFlatRackIso(c.iso))) {
-      const p = effectivePos(c);
-      if (p && p.bay && p.row && p.tier) {
-        const op = String(c.op || '').toUpperCase().trim() || '???';
-        const port = port3(mode === 'discharge' ? c.pol : c.pod) || '???';
-        const k = [op, port, tallySizeCol(c), _bay(p.bay), _p2(p.row), _p2(p.tier)].join('|');
-        (bundles[k] ??= []).push(c); continue;
-      }
-    }
+    const k = bundleKeyOf(c, mode);
+    if (k) { (bundles[k] ??= []).push(c); continue; }
     out.push(c);
   }
   for (const arr of Object.values(bundles)) {
@@ -267,6 +274,50 @@ export function bundleFold(containers, mode) {
     else out.push(...arr);
   }
   return out;
+}
+//  ★ 4.54 — 빈 FR 묶음 목록(화면·진단 설명용). 같은 키 2대 이상 = 한 묶음. 반환 [{ key, n, cns, op, port, sz, pos: 'BB-RR-TT' }] — 서류(bundleFold)와 같은 묶음이다.
+//    검수사 2026-10-26 19:14 «4개 한묶음 2개로 그래야 양쪽 갯수가 맞는거고 알림을 붉은색으로 보여줄 필요도 없는것입니다» · 19:17 «검수리스트는 182개가 맞는거고 동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(282·276 의 오타로 읽음).
+//    컨 대수(검수 리스트 · 진행 숫자)는 낱개 그대로다 — 이 목록은 «터미널이 묶음을 1대로 센다» 는 설명에만 쓴다.
+export function emptyFrBundlesOf(containers, mode) {
+  const g = new Map();
+  for (const c of (containers || [])) {
+    const k = bundleKeyOf(c, mode);
+    if (!k) continue;
+    if (!g.has(k)) g.set(k, []);
+    g.get(k).push(c);
+  }
+  const out = [];
+  for (const [key, arr] of g) {
+    if (arr.length < 2) continue;
+    const [op, port, sz, bay, row, tier] = key.split('|');
+    out.push({ key, n: arr.length, cns: arr.map((x) => x.cn), op, port, sz, pos: `${_bp2(bay)}-${row}-${tier}` });
+  }
+  return out.sort((a, b) => a.pos.localeCompare(b.pos));
+}
+//  묶음이 설명하는 차이 — 묶음 하나는 «통째로» (n−1)대만큼만 차이를 낸다(4대 묶음 = 3대). 차이(앞 − 터미널)가 묶음 몫의 합과 맞아떨어질 때만 설명으로 센다:
+//    gap 이하로 만들 수 있는 가장 큰 부분합. (예 4대 묶음 둘 — 차이 0·3·6 이면 설명 · 1·2 는 0 · 4·5 는 3 · 8 은 6.) 독립 감사 2026-10-26 «차이 1·2·4·5대를 풀린 것처럼 덮는다» 수리.
+//    sourceRecon(진단)과 홈 카드(frBundleOf)가 이 한 벌을 쓴다.
+export function bundleExplainOf(bundles, gap) {
+  const g = Math.floor(Number(gap) || 0);
+  if (!(g > 0) || !Array.isArray(bundles) || !bundles.length) return 0;
+  const reach = new Set([0]);
+  for (const b of bundles) {
+    const w = (Number(b && b.n) || 0) - 1;
+    if (!(w > 0)) continue;
+    for (const t of [...reach]) if (t + w <= g) reach.add(t + w);
+  }
+  return Math.max(...reach);
+}
+//  마감텔리 모집단(ptkContainers) 위의 묶음 목록 — 항차·방향마다 한 번만(항차 객체가 바뀌면 다시). 홈 카드·진단이 같이 쓴다.
+const _frBundleCache = new WeakMap();
+export function frBundlesOf(voyage, mode) {
+  if (!voyage || typeof voyage !== 'object') return [];
+  const sec = voyage[mode];
+  if (!sec || typeof sec !== 'object') return [];
+  let m = _frBundleCache.get(sec);
+  if (!m || m.v !== voyage) { m = { v: voyage, r: null }; _frBundleCache.set(sec, m); }
+  if (!m.r) { try { m.r = emptyFrBundlesOf(ptkContainers(voyage, mode), mode); } catch (e) { console.warn('[빈 FR 묶음] 판정 실패(설명 없이 진행):', e && e.message); m.r = []; } }
+  return m.r;
 }
 //  번들 요약 — 실물 Final Work Remarks «* 20'FR E x 8 ( 2 BUNDLE ) → 20'F x 2 CALCULATION» · OS 비고 «FR x 8 ( 2 BUNDLE )». 검수사 2026-09-25 «보통은 4개 한묶음인데 2개 이상만 묶여 있으면 풀 1개로 칩니다. 물론 위치는 같아야 합니다».
 export function bundleSummary(containers, mode) {

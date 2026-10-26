@@ -14,7 +14,7 @@
 
 import { isoOtHeightConflict, sealFormatAnomalies, ediSealMapOf } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
 import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf, isListOriginRecord } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
-import { reconcileSources, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
+import { reconcileSources, reconBundleText, reconTermNum, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 //  ★ 3.53 — **POD 확정을 반영한다**(utils 한 벌 `isPtkResolved`). 2차 시뮬 지적 2026-09-16 —
@@ -281,19 +281,24 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
   let _recon = null;
   if (voyage && mode === 'discharge') {
     const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) || (mode === 'discharge' && _isShift(cn)) });
-    const gapOn = R.gap != null && R.gap !== 0;
+    //  ★ 4.54 — 앱 − 터미널 차이에서 «빈 FR 묶음»(터미널은 1대로 센다)이 설명하는 만큼은 어긋남이 아니다. gapOn 은 묶음으로 설명하고 남은 차이(gapRest)가 있을 때만 켠다.
+    //    검수사 2026-10-26 19:17 «검수리스트는 182개가 맞는거고 동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(282·276 의 오타로 읽음).
+    const _bTxt = reconBundleText(R);
+    const _bOn = !!_bTxt;
+    const _gR = R.gapRest != null ? R.gapRest : R.gap;
+    const gapOn = _gR != null && _gR !== 0;
     //  4.48-03 — 본선 잔류 지시는 예정이라 앱 수(R.app)는 자료대로(지시 컨 포함)다. 터미널과 차이가 없어도 지시가 있으면 자료별 대조 줄을 세운다(검수사 17:05 «세관리스트와 틀린거죠 그걸 명시해야 합니다»).
     const _hasKeep = (R.ref || []).some((x) => x && x.keep);
     const _kcN = (R.refConf || []).length;   // 4.53 — 선적 EDI 가 확정한 본선 잔류(평택 양하분에서 이미 빠짐 — 앱 수는 그만큼 터미널 배정표보다 적다)
-    if (R.total > 0 || gapOn || _hasKeep || _kcN > 0) {
+    if (R.total > 0 || gapOn || _hasKeep || _kcN > 0 || _bOn) {
       const S = R.sources;
       const part = (label, x) => (x.has ? `${label} ${x.n}` : `${label} 자료 없음`);
       const carPart = R.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : part('선사 리스트', S.carrier);
-      const gapTxt = gapOn ? `앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '';
+      const gapTxt = gapOn ? `앱 ${R.app} (${_gR > 0 ? '+' : ''}${_gR})` : '';
       const unkTxt = reconUnknownText(R);
       const g5n = ((R.groups.find((g) => g.key === 'g5') || {}).items || []).length;
       const vTotal = R.total ? `자료별 대조 어긋남 ${R.total}대` : '';
-      const vGap = gapOn ? `터미널과 ${Math.abs(R.gap)}대 차이` : '';
+      const vGap = gapOn ? `터미널과 ${Math.abs(_gR)}대 차이` : '';
       _recon = { R, vGap };
       //  ★ 4.48-01 — 선사 메일 수정(본선 잔류)이 들어간 항차는 자료마다 몇 대인지와 «메일 수정 N건 적용하면 앱 수» 를 밝힌다(검수사 17:06 원문 그대로의 꼴 · 17:07 «터미널에서 아직 선사메일을 보지 않았고 수정전»).
       //    감사(중-1) — 지시 아닌 참고(사람이 고른 POD 평택 아님)가 같이 있으면 그 수를 «적용하면» 앞에 따로 밝힌다(EDI 317 − 지시 2 − 참고 1 = 314 가 맞게 읽히게).
@@ -310,13 +315,13 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
       const _kTermApplied = !!(_kRef.length && _kTN && _kInApp > 0 && _kTN === _kApp);   // 터미널이 먼저 선사 메일을 반영 — EDI·리스트 수정본 대기
       const _kTerm = _kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)`
         : _kTermApplied ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 선사 메일 반영 — EDI·리스트 수정본 대기)`
-        : gapOn ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '';
+        : gapOn ? ` · ${reconTermLabel(R.term.basis)} ${reconTermNum(R)} · 앱 ${R.app} (${_gR > 0 ? '+' : ''}${_gR})` : '';
       //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류 — «적용해 앱 N» 은 이미 확정이 빠진 수다. 터미널 배정이 앱 + 확정 대수면 «아직 반영 전».
       const _kcMail = _kcN ? `선사 지시 본선 잔류 확정 ${_kcN}건(선적 EDI 에 실림 — 평택에서 안 내림)` : '';
       const _kcTermPre = !!(_kcN && _kTN && _kTN === R.app + _kcN);
       const _kcTerm = _kcTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 반영 전)` : '';
       const _kcOnly = !!(_kcN && !_kRef.length);
-      const _kcTxt = _kcOnly ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kcMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용해 앱 ${R.app}${_kcTerm || (gapOn ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '')}` : '';
+      const _kcTxt = _kcOnly ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kcMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용해 앱 ${R.app}${_kcTerm || (gapOn ? ` · ${reconTermLabel(R.term.basis)} ${reconTermNum(R)} · 앱 ${R.app} (${_gR > 0 ? '+' : ''}${_gR})` : '')}` : '';
       const _kTxt = _kRef.length
         ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''}${_kcN ? ` · ${_kcMail}` : ''} 적용하면 ${_kApp}${_kTerm}`
         : _kcTxt;
@@ -327,14 +332,20 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
       const _kTot = _kRef.length
         ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''}${_kcN ? ` · ${_kcMail}` : ''} 적용하면 앱 ${_kApp}${_kTerm}`
         : (_kcN ? ` · ${_kcMail}${_kcTerm || (gapTxt ? ` · ${gapTxt}` : '')}` : (gapTxt ? ` · ${gapTxt}` : ''));
+      //  ★ 4.54 — 빈 FR 묶음: «터미널 배정 276(+6) = 앱 282 · 빈 FR 4대 한 묶음 2곳 — 터미널은 한 묶음을 1대로 세어 6대 적게 셈 (…)». 묶음만으로 차이가 설명되고 다른 어긋남·본선 잔류가 없으면 경고가 아니라 정보(경고 표시 없음 · 묶음 몫의 부분합으로 맞아떨어지는 차이만).
+      const _bOnly = _bOn && !gapOn && R.total === 0 && !_hasKeep && !_kcN;
+      const _bTail = _bOn ? ` · ${_bTxt}` : '';
+      const _plainTxt = _bOn
+        ? `${reconTermLabel(R.term.basis)} ${reconTermNum(R)}${gapOn ? ` · ${gapTxt}` : ` = 앱 ${R.app}`}`
+        : `${reconTermLabel(R.term.basis)} ${R.term.n} · ${gapTxt}`;
       alerts.push({
-        level: 'warning',
+        level: _bOnly ? 'info' : 'warning',
         code: 'source_recon',
         msg: R.total > 0
-          ? `자료별 대조 — ${[part('터미널 배정', S.plan), part('본선현황', S.qc), part('EDI', S.edi), part('세관', S.customs), carPart, `실적 ${S.term.n}`].join(' · ')} — 어긋남 ${R.total}대${_kTot}${unkTxt ? ` · ${unkTxt}` : ''}`
-          : _kTxt ? `자료별 대조 — ${_kTxt}${unkTxt ? ` · ${unkTxt}` : ''}`
-          : `${reconTermLabel(R.term.basis)} ${R.term.n} · ${gapTxt}${unkTxt ? ` · ${unkTxt}` : ''}`,
-        voice: [vTotal, _recon.vGap].filter(Boolean).join(', '),
+          ? `자료별 대조 — ${[part('터미널 배정', S.plan), part('본선현황', S.qc), part('EDI', S.edi), part('세관', S.customs), carPart, `실적 ${S.term.n}`].join(' · ')} — 어긋남 ${R.total}대${_kTot}${_bTail}${unkTxt ? ` · ${unkTxt}` : ''}`
+          : _kTxt ? `자료별 대조 — ${_kTxt}${_bTail}${unkTxt ? ` · ${unkTxt}` : ''}`
+          : `${_plainTxt}${_bTail}${unkTxt ? ` · ${unkTxt}` : ''}`,
+        voice: _bOnly ? '' : [vTotal, _recon.vGap].filter(Boolean).join(', '),
         count: (R.total - g5n) + R.unknown,
         details: R,
       });

@@ -198,8 +198,11 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
     const chipN = (label, x, note) => (x && x.has ? `${label} ${x.n}(${note})` : `${label} 자료 없음`);
     const heads = [chipN('터미널 배정', S.plan, '배정표·도선'), chipN('본선현황', S.qc, '호기 합계 완료+잔여'), chip('EDI', S.edi), chip('세관', S.customs),
       d.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : chip('선사 리스트', S.carrier), `완료 ${(S.done && S.done.n) || 0}`, `실적 ${(S.term && S.term.n) || 0}`];
-    const gap = d.gap;
+    //  ★ 4.54 — 앱 − 터미널 차이에서 «빈 FR 묶음»(터미널은 한 묶음을 1대로 센다)이 설명하는 만큼은 «터미널 276(+6)» 으로 적고 호박색을 끈다(검수사 2026-10-26 19:17).
+    const gap = d.gapRest != null ? d.gapRest : d.gap;
+    const _bx = d.bundleExplained > 0 ? d.bundleExplained : 0;
     const tl = reconTermLabel(d.term && d.term.basis), tn = (d.term && d.term.n) || 0;
+    const tnTxt = `${tn}대${_bx ? `(+${_bx})` : ''}`;
     const unk = reconUnknownText(d);
     //  4.48-01 감사(하-3) — 선사 메일 수정(본선 잔류)은 «POD 확정 — 평택 아님»과 따로 묶고, 터미널 차이가 그 대수면 «터미널은 아직 선사 메일 수정 전»(한 줄과 같은 말).
     const _kRefN = (d.ref || []).filter((x) => x && x.keep).length;
@@ -220,10 +223,24 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
         {gap != null && (
           <div className={gap === 0 ? 'text-dim-300' : 'text-amber-300'} data-recon-term>
             {gap === 0
-              ? `${tl} ${tn}대 = 앱 ${d.app}대` + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
-              : `${tl} ${tn}대 · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
+              ? `${tl} ${tnTxt} = 앱 ${d.app}대` + (_bx ? ` — 빈 FR 묶음 ${d.bundles.length}곳(아래)을 터미널은 1대로 셈` : '') + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
+              : `${tl} ${tnTxt} · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
                 + (_kcPre ? ` — 터미널은 아직 본선 잔류 확정 ${_kcN}대를 반영하지 않음(앱 ${d.app}대 + ${_kcN}대 = ${tn}대)` : _kDone ? ` — 터미널은 선사 메일 반영(본선 잔류 예정 ${_kRefN}대) · EDI·리스트 수정본 대기` : d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
                 + (unk ? ` — ${unk}` : '')}
+          </div>
+        )}
+        {_bx > 0 && (
+          <div data-recon-group="bundle">
+            <div className="text-dim-300 font-bold">빈 FR 묶음 — 터미널은 한 묶음을 1대로 셈(앱 컨 대수는 낱개 그대로 · 참고) {d.bundles.length}곳 · {d.bundles.reduce((a, b) => a + b.n, 0)}대</div>
+            <TruncList items={d.bundles} limit={10} unit="곳" render={(b) => (
+              <div className="mono flex flex-wrap items-center gap-x-2" data-recon-bundle={b.pos}>
+                <span className="text-dim-200 font-bold">{b.pos.replace(/-/g, '/')}</span>
+                <span className="text-dim-300">{b.sz === '20' ? "20'" : b.sz === '45' ? "45'" : b.sz === 'HC' ? 'HC' : "40'"} FR {b.n}대 → 터미널 1대</span>
+                {b.cns.map((cn) => (
+                  <button key={cn} type="button" onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }} className="font-bold underline decoration-dotted">{cn}</button>
+                ))}
+              </div>
+            )}/>
           </div>
         )}
         {S.pending && S.pending.n > 0 && (
