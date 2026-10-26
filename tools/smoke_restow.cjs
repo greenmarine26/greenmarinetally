@@ -104,8 +104,8 @@ ok(/서류 \$\{shiftInfo\.meta\.docTotal/.test(vp) && /대만 읽음/.test(vp), 
   ok(Object.getOwnPropertyDescriptor(m0, '_meta').value.berthN === null, '배정표가 0·없음이면 null(없는 숫자를 지어내지 않는다)');
   const m39 = U.computeShiftingMapCached('MCAT_635N__b39', { ...v, info: { ...FX.info, berthShift: 39 } });
   ok(Object.getOwnPropertyDescriptor(m39, '_meta').value.berthN === 20, '홀수 모브는 올림해 «적어도 이만큼»(39 → 20)');
-  ok(/배정표 \$\{shiftInfo\.meta\.berthN\}대/.test(vp) && /meta\?\.berthN != null && shiftInfo\.meta\.berthN !== _shConfN/.test(vp),
-     '화면이 배정표와 다르면 그 차이를 적는다(4.48-02 — 확정 시프팅 수 _shConfN 과 맞댄다 · 본선 잔류 예보는 따로)');
+  ok(/배정표 \$\{shiftInfo\.meta\.berthN\}대/.test(vp) && /meta\?\.berthN != null && shiftInfo\.meta\.berthN !== _shPureN/.test(vp) && /const _shPureN = _shConfN - _shConfKeepN;/.test(vp),
+     '화면이 배정표와 다르면 그 차이를 적는다(4.48-02 — 확정 시프팅 수와 맞댄다 · 4.53: 선적 EDI 로 확정한 본선 잔류 _shConfKeepN 은 터미널 배정표가 아직 모르니 빼고 _shPureN 과 맞댄다 · 본선 잔류 예보는 따로)');
 }
 
 console.log(fail ? `\n✗ 선사 시프팅 목록 연막검사 실패 ${fail}건` : '\n✓ 선사 시프팅 목록 연막검사 통과');

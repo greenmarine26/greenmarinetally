@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -1284,7 +1284,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {completeTarget && (() => {
         const v = voyages[completeTarget.key];
         // 항차 리스트와 동일 기준: 평택분(PTK)만 (타지역 제외)
-        const dCnt = computeStats(v?.discharge, 'discharge', undefined, undefined, undefined, v?.keepOnboard).ptk;   // 4.48: 본선 잔류 뺌
+        const dCnt = computeStats(v?.discharge, 'discharge', undefined, undefined, v ? shiftCnSetOf(completeTarget.key, v) : undefined, v?.keepOnboard).ptk;   // 4.53: 선적 EDI 가 확정한 본선 잔류는 평택분에서 뺌(예정은 자료대로 — 4.48-03)
         const lCnt = computeStats(v?.loading, 'loading').ptk;
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCompleteTarget(null)}>
@@ -2280,6 +2280,8 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
     [...ptkCns].filter(cn => String(cn).startsWith('__')).forEach(cn => ptkCns.delete(cn));
     recordCns.forEach(cn => ptkCns.add(cn));
   }
+  //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류(시프팅 집합에 든 지시 컨)는 양하 EDI 가 아직 평택 POD 여도 평택 양하분이 아니다 — EDI 평택분에서 뺀다(안 빼면 «누락 2»). 예정은 그대로(4.48-03).
+  if (mode === 'discharge') for (const cn of keepInShiftOf(keepOnboard, shiftSet)) ptkCns.delete(cn);
   //  ★ 4.48 감사(상 1) — 선사 지시 본선 잔류 컨은 평택에서 안 내린다. EDI 평택분(ptk — 홈 «완료 확인» 창의 평택분 작업량)에서도 뺀다(MAMP 641N 317 → 315).
   //  4.48-03: 선사 지시 본선 잔류는 예정 — 평택분 합계에서 빼지 않는다(자료대로 · 검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»).
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;

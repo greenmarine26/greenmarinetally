@@ -1164,6 +1164,18 @@ if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=
 else
   echo "✗ 4.48 본선 잔류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KP"; exit 1
 fi
+#  4.53: **선사 지시 «본선 잔류» 확정 — 출항 선적 EDI 에 다른 자리로 실려 오면 양하 315 · 시프팅 파란 ◆ 64** — MAMP 641N 실자료(10-25·10-26 두 시점 항차 사본 · 선적 EDI 원문)를
+#    실소스 판정(keepConfirmedOf)·홈 카드·수석 보드·항차 화면·진단·컨 상세·카고플랜·미르·콘앱 함수·실 firebase.js(메모리 DB)로 잰다.
+#    검수사 2026-10-26 14:50 «양하는 315 시프팅은 64개로 확정된듯합니다» · 15:02 «시프팅 예정건이 선적플랜 10번 데크에 존재하는걸 볼수있습니다. 이로서 확정합니다.»
+SMOKE_KC=$(mktemp /dev/shm/hometmp/_smokekc_XXXXXX.js)
+if npx esbuild tools/smoke_keepconf453.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_KC"; then
+  node tools/smoke_keepconf453.cjs "$(pwd)" "$SMOKE_KC" || { echo "✗ 4.53 본선 잔류 확정 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_KC"; exit 1; }
+  rm -f "$SMOKE_KC"
+else
+  echo "✗ 4.53 본선 잔류 확정 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KC"; exit 1
+fi
 #  4.49: **실번호 판정 한 벌** — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류 —
 #    MAMP 641N 선사·세관 리스트 실파일 사본(파서) · 실 firebase.js(메모리 DB) 추가 병합 · 보관 항차 정답지 10대 · RZOR R117E EDI 실 · 마감텔리·미르·인계·컨 상세가 같은 답.
 #    검수사 2026-10-24 12:50 «다 보이고 하나만 맞으면 맞음» · «큰 글씨 실은 세관 값» · «MLPH 끝자리 빠짐은 실오류로 센다».

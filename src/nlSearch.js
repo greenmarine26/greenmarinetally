@@ -1565,6 +1565,9 @@ function formatShifting(ctx) {
   //  ★ 4.48 — 선사 지시 본선 잔류의 시프팅 예보(노란 ◆)는 확정·예측 대수와 따로 말한다(확정이 아니다 — 플래너가 확정하면 위 목록으로 들어간다).
   const keepCns = cns0.filter((cn) => map[cn] && map[cn]._forecast === 'keep');
   const cns = cns0.filter((cn) => !keepCns.includes(cn));
+  //  ★ 4.53 — 선적 EDI 가 확정한 선사 지시 본선 잔류(_keepConf — 파란 ◆)는 확정 목록에 들지만 서류·배정표 근거 몫은 아니다 — 근거 대수(shiftEvid.count)는 그것을 뺀 수다.
+  const keepConfCns = cns.filter((cn) => map[cn] && map[cn]._keepConf);
+  const _kcN = keepConfCns.length;
   const keepTail = keepCns.length ? '\n\n🟡 시프팅 예보 ' + keepCns.length + '대 — 선사 지시 본선 잔류(평택에서 안 내림 · 확정 아님, 플래너가 확정하면 위 목록으로 갑니다)\n' +
     keepCns.map((cn) => { const v = map[cn] || {}; return `${cn.slice(-4)}  ${v.pos || v.from || ''}  ${isoShown(v.iso) || ''} POD ${v.pod || (v._keep && v._keep.pod) || ''}${v._why ? ` — ${v._why}` : ''}`.trimEnd(); }).join('\n') : '';
   // 1.69-07: 판정 근거 한 줄 — 예측(_meta 있음)일 때만. 확정 대조 맵은 근거 표기 불필요.
@@ -1589,21 +1592,22 @@ function formatShifting(ctx) {
     return p.length >= 7 ? `${Number(p.slice(0, 3))}-${p.slice(3, 5)}-${p.slice(5, 7)}` : p;
   };
   //  ★ 4.13 — 상태(미확정·확정·불일치)와 근거 한 줄. 검수사 2026-10-09 «시프팅건은 근거를 앱에 제시 하여야 한다는것입니다. 메일이 존재한다는것.»
-  const _ev = ctx && ctx.shiftEvid && ctx.shiftEvid.count === cns.length ? ctx.shiftEvid : null;
+  const _ev = ctx && ctx.shiftEvid && ctx.shiftEvid.count + _kcN === cns.length ? ctx.shiftEvid : null;
   //  4.13 감사: 배정표가 아직이거나 다르면 «배정목록 표기로는 N» 이 근거 줄(배정표 이적 0모브…)과 부딪친다 — 그때는 대수를 이적으로 환산한 값이라고 말한다.
-  const _moveTail = (_ev && _ev.label && _ev.label !== '확정') ? `대수를 이적(모브)으로 환산하면 ${cns.length * 2} — 양하 1 + 재선적 1` : `배정목록 표기로는 ${cns.length * 2} — 양하 1 + 재선적 1`;
+  const _moveTail = (_ev && _ev.label && _ev.label !== '확정') ? `대수를 이적(모브)으로 환산하면 ${cns.length * 2} — 양하 1 + 재선적 1` : `배정목록 표기로는 ${(cns.length - _kcN) * 2}${_kcN ? ` + 본선 잔류 확정 ${_kcN * 2}` : ''} — 양하 1 + 재선적 1`;
   const lines = [`🔄 시프팅 ${cns.length}대${_ev && _ev.label ? ` [${_ev.label}]` : ''} (${_moveTail})`];
   const sorted = cns.slice().sort((a, b) => String(posOf(map[a])).localeCompare(String(posOf(map[b]))));
   for (const cn of sorted) {
     const v = map[cn] || {};
     const to = v.to ? ` → ${String(v.to).length >= 7 ? `${Number(String(v.to).slice(0, 3))}-${String(v.to).slice(3, 5)}-${String(v.to).slice(5, 7)}` : v.to}` : '';
-    lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${isoShown(v.iso) || ''} ${v.pod ? 'POD ' + v.pod : ''}`.trimEnd());
+    lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${isoShown(v.iso) || ''} ${v.pod ? 'POD ' + v.pod : ''}${v._keepConf ? ' — 🔵 본선 잔류 확정(선적 EDI)' : ''}`.trimEnd());
   }
   if (_ev && _ev.line) {
     lines.push('', `근거 — ${_ev.line}`);
     if (_ev.label === '미확정' || _ev.label === '예측') lines.push(_ev.keepMatch ? '아직 확정이 아닙니다 — 터미널은 선사 메일(본선 잔류)을 반영했고, 선사 시프팅 목록 수정본(또는 EDI 수정본)이 오면 확정으로 바뀝니다.' : '아직 확정이 아닙니다 — 터미널이 작업을 시작해 배정표 이적이 나오면 확정(또는 불일치)으로 바뀝니다.');   // 4.48-03 감사(하-3)
   }
   lines.push('', '커버를 열려면 치워야 하는 통과화물입니다 — 평택 양하분은 세지 않습니다.');
+  if (_kcN) lines.push(`🔵 본선 잔류 확정 ${_kcN}대는 선사 지시(평택에서 안 내림)로 선적 EDI 에 실려 있어 양하 대수에서 빼고 시프팅으로 셉니다.`);
   return lines.join('\n') + basis + keepTail;
 }
 

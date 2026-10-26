@@ -5,7 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { resolvedPod, ptkDischargeUnitsOf } from '../utils.js';   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
@@ -2814,7 +2814,7 @@ function timeAgo(ts) {
   return `${Math.floor(sec/86400)}일 전`;
 }
 
-function computeStats(section, mode, shiftSet, keepOnboard) {   // 2.89-06 · 4.48 keepOnboard
+export function computeStats(section, mode, shiftSet, keepOnboard) {   // 2.89-06 · 4.48 keepOnboard · 4.53: 연막검사가 동작으로 재도록 내보낸다(HomePage.computeStats 와 같은 사정)
   // V7.40: 평택분 판정을 모드별로 정확히 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   //   이전: POL∨POD 평택이면 카운트 → 양하 EDI에서 평택발 타항행 컨까지 평택분으로 잡혀 과대 집계.
   //  ★ 4.24 (NaN 수리) — 구역이 없을 때도 아래 끝 줄과 **같은 모양**을 돌려준다. 종전엔 workTotal·workDone 이 없어
@@ -2846,6 +2846,8 @@ function computeStats(section, mode, shiftSet, keepOnboard) {   // 2.89-06 · 4.
     [...ptkCns].filter(cn => String(cn).startsWith('__')).forEach(cn => ptkCns.delete(cn));
     recordCns.forEach(cn => ptkCns.add(cn));
   }
+  //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류(시프팅 집합에 든 지시 컨)는 EDI 평택분에서 뺀다(홈 computeStats 와 같은 한 벌 — 안 빼면 보드에 «누락 2»).
+  if (mode === 'discharge') for (const cn of keepInShiftOf(keepOnboard, shiftSet)) ptkCns.delete(cn);
   //  4.48-03: 선사 지시 본선 잔류는 예정 — 평택분 합계에서 빼지 않는다(홈 computeStats 와 같은 한 벌
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당. 3.26: 부킹 자리 `__BOOK_` 도 자리다.

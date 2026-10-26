@@ -55,7 +55,7 @@ import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';   // 4.46: 보고 고치기·지우기(보낸 사람만)
-import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf, keepConfirmedOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
@@ -442,7 +442,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { return {}; }
   }, [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
       voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix]);
+      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix, voyage?.keepOnboard]);   // 4.53: 선사 지시 본선 잔류가 바뀌면(넣음·풀음) 선적 EDI 확정 판정도 다시
 
   //  3.65: 목록 행 만들기는 utils.shiftingListOf 한 벌(연막검사가 같은 함수를 잰다) — 실제 칸(실은 자리·시각)이 붙었다.
   const shiftingList = useMemo(() => shiftingListOf(shiftingMap, fullEdiMap, voyage),
@@ -479,16 +479,25 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //    이 상자만 64 로 배정표와 맞대 «⛔ 불일치»·«앱 추정 62 — 차이 2»·«⚠ 배정표 62대 — 차이 2» 를 냈다. 예보는 터미널이 아직 선사 메일을 반영하기 전 몫이다.
   const shiftKeepN = useMemo(() => shiftingList.filter((x) => x && x.keep).length, [shiftingList]);
   const shiftConfN = shiftingList.length - shiftKeepN;
+  //  ★ 4.53 — 선적 EDI 가 확정한 선사 지시 본선 잔류(파란 ◆)는 확정 시프팅(shiftConfN)에 든다. 그러나 선사 서류·터미널 배정표와 맞대는 수는 그것을 뺀 «서류 몫»이다 — 이 컨들의 근거는 선적 EDI 자리다.
+  //    검수사 2026-10-26 15:02 «시프팅 예정건이 선적플랜 10번 데크에 존재하는걸 볼수있습니다. 이로서 확정합니다.» — 터미널 배정표는 아직 62대(124모브)라 빨간 불일치가 아니라 «반영 전»으로 적는다.
+  const shiftConfKeepN = useMemo(() => shiftingList.filter((x) => x && x.confKeep).length, [shiftingList]);
+  const shiftPureN = shiftConfN - shiftConfKeepN;
   //  ★ 4.48-03 — 터미널이 선사 메일(본선 잔류)을 먼저 반영해 배정표 이적 = 확정 + 예보이면 «⛔ 불일치»가 아니다(예정 — 선사 시프팅 목록 수정본 대기).
   //    검수사 2026-10-24 20:06 «확정도 아닌데 빨간 경고 문구가 나온것 … 을 문제로 삼은것입니다». 빨간 줄·커버 역산 없이 «예보 포함 같음» 으로 적는다.
   const truthChk = useMemo(() => {
-    const t = shiftingTruthCheck(voyage, shiftConfN);
-    if (t && !t.pending && !t.ok && shiftKeepN > 0) {
-      const t2 = shiftingTruthCheck(voyage, shiftConfN + shiftKeepN);
-      if (t2 && t2.ok) return { ...t, ok: true, keepMatch: true, keepN: shiftKeepN };
+    const t = shiftingTruthCheck(voyage, shiftPureN);
+    if (t && !t.pending && !t.ok && shiftConfKeepN > 0) {
+      //  4.53: 터미널 배정표가 «서류 + 본선 잔류 확정» 까지 센 경우 — 일치.
+      const t3 = shiftingTruthCheck(voyage, shiftPureN + shiftConfKeepN);
+      if (t3 && t3.ok) return { ...t, ok: true, confKeepIncl: true, confKeepN: shiftConfKeepN };
     }
-    return t;
-  }, [voyage?.info?.berthShift, shiftConfN, shiftKeepN]);
+    if (t && !t.pending && !t.ok && shiftKeepN > 0) {
+      const t2 = shiftingTruthCheck(voyage, shiftPureN + shiftKeepN);
+      if (t2 && t2.ok) return { ...t, ok: true, keepMatch: true, keepN: shiftKeepN, confKeepN: shiftConfKeepN };
+    }
+    return t && shiftConfKeepN > 0 ? { ...t, confKeepN: shiftConfKeepN } : t;
+  }, [voyage?.info?.berthShift, shiftPureN, shiftKeepN, shiftConfKeepN]);
   //   불일치면 커버 분할을 역산한다. 축이 길면 조합이 폭주하므로 상한을 둔다(무응답 방지).
   const hatchSolve = useMemo(() => {
     if (!truthChk || truthChk.pending || truthChk.ok) return null;   // 1.76-01: 확정 전에는 역산도 하지 않는다
@@ -522,7 +531,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     hatchSolve,
     restowExtra,   // 3.65: 카토스 시프팅 실적에만 있는 컨
     split: { n: shiftSplit.n, out: shiftSplit.out.done, in: shiftSplit.in.done },   // 4.16: 목록 머리 «내림 x/N · 실음 y/N»
-    confN: shiftConfN, keepN: shiftKeepN,   // 4.48-02: 확정 시프팅 · 본선 잔류 예보(노란 ◆) — 목록 머리가 배정표와 확정만 맞댄다
+    confN: shiftConfN, keepN: shiftKeepN, confKeepN: shiftConfKeepN,   // 4.48-02: 확정 시프팅 · 본선 잔류 예보(노란 ◆) — 목록 머리가 배정표와 확정만 맞댄다 · 4.53: 그중 선적 EDI 확정 본선 잔류(파란 ◆ — 서류 몫과 따로)
   };
 
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
@@ -984,6 +993,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (mode === 'discharge') {
       const _kp = keepOnboardOf(voyage);
       for (const cn of Object.keys(_kp)) if (merged[cn]) merged[cn] = { ...merged[cn], _keep: _kp[cn] };
+      //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류(파란 ◆ — 시프팅 행이다) 표식. 칩 «🔵 본선 잔류 확정 N» 과 컨 상세가 읽는다.
+      const _kcf = keepConfirmedOf(voyage);
+      for (const cn of Object.keys(_kcf)) if (merged[cn]) merged[cn] = { ...merged[cn], _keepConf: _kcf[cn] };
     }
     // 2.08-11 (검수사 확정 «실 리스트가 존재 하는데 예상EDI에 있는 가상리스트를 선적리스트에
     //   포함시키는것은 없어야 합니다 — 원천봉쇄», SWAT 2607N 실측: 실번호 리스트 523(F166·E357)이
@@ -2464,6 +2476,9 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
   //  4.48-02: 시프팅 목록 머리는 확정 시프팅만 배정표·서류와 맞댄다 — 선사 지시 본선 잔류 예보(노란 ◆)는 따로(항차 화면이 넘긴 shiftInfo.confN · 없으면 목록에서 센다)
   const _shKeepN = shiftInfo && shiftInfo.keepN != null ? shiftInfo.keepN : (shiftingList || []).filter((x) => x && x.keep).length;
   const _shConfN = shiftInfo && shiftInfo.confN != null ? shiftInfo.confN : (shiftingList || []).length - _shKeepN;
+  //  4.53: 확정 시프팅 중 선적 EDI 가 확정한 본선 잔류(파란 ◆) — 서류·배정표와 맞대는 수(_shPureN)는 그것을 뺀다.
+  const _shConfKeepN = shiftInfo && shiftInfo.confKeepN != null ? shiftInfo.confKeepN : (shiftingList || []).filter((x) => x && x.confKeep).length;
+  const _shPureN = _shConfN - _shConfKeepN;
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   /* ★ 2.92 (검수사 «이렇게 강제적으로 화면을 띄우면 사용자는 불편해 합니다. 한번은 그렇다고 하더라도
        반복해서 보이면 짜증납니다. 강조문구와 볼려면 클릭하게 만들어 주세요») —
@@ -2564,13 +2579,14 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
   const _isShiftRow = (c) => !!(c && !c._keep && (c._shift || _shCnL.has(c.cn)));   // 4.48 감사(하 3): 본선 잔류 예보는 작업 항목이 아니다 — «◆ 시프팅 내림 x/62» 는 확정만, 두 대는 «🟡 본선 잔류» 칩
   const filtered = useMemo(() => {
     if (!filter && !search) return [];   // 1.84: 칩 미선택·검색어 없음 = 목록 안 연다
-    let arr = filter === 'shift' || filter === 'keep' ? containers : (filter ? containers.filter(c => !c._shift) : containers);   // 4.48-03: 본선 잔류 지시는 예정 — 양하 리스트 칩 안(자료대로)
+    let arr = filter === 'shift' || filter === 'keep' || filter === 'keepconf' ? containers : (filter ? containers.filter(c => !c._shift) : containers);   // 4.48-03: 본선 잔류 지시는 예정 — 양하 리스트 칩 안(자료대로)
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     else if (filter === 'shift') arr = arr.filter(_isShiftRow);   // 1.76-05: 시프팅만 보기 · 4.16: 시프팅 리스트(내림·실음 완료는 여기서)
     else if (filter === 'lugg') arr = arr.filter(c => c._deckOnly || c.lugg);   // 2.06-04: 수화물(미정)만 보기
     else if (filter === 'keep') arr = arr.filter(c => c._keep);   // 4.48: 선사 지시 본선 잔류만 보기
+    else if (filter === 'keepconf') arr = arr.filter(c => c._keepConf);   // 4.53: 선적 EDI 가 확정한 본선 잔류만 보기
     /*  마감 점검 「리퍼」 항목 점프용 — 3.25: **판정 한 벌**(규범 §4-4).
         종전엔 여기서 `!c.tmp` 만 봐서 B(기준은 있고 안 잰 것)를 하나도 못 담았다 —
         마감이 «미확인 74대»라 해도 목록은 0대였다(감사 실측 OBWH 29·STSE 69·SWBT 74·DXQD 19 전부 0). */
@@ -2620,6 +2636,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       lug: lg.length,
       lugDone: lg.filter(c => compMap[c.cn]).length,
       keep: containers.filter(c => c._keep).length,   // 4.48
+      keepConf: containers.filter(c => c._keepConf).length,   // 4.53
     };
   }, [containers, compMap, xrayMap, mode, _shCnL]);
 
@@ -2727,6 +2744,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
           //  4.48: 선사 지시 본선 잔류 — 평택에서 안 내림(총계 밖). 아래 평택 컨을 막으면 ◆ 시프팅 칩에도 예보로 든다.
           ...(stats.keep > 0 ? [{ k: 'keep', t: `🟡 본선 잔류 예정 ${stats.keep}` }] : []),
+          //  4.53: 선적 EDI 에 실려 확정된 본선 잔류 — 양하 대수에서 빠지고 ◆ 시프팅으로 센다(위 «◆ 시프팅» 칩 안의 몇 대).
+          ...(stats.keepConf > 0 ? [{ k: 'keepconf', t: `🔵 본선 잔류 확정 ${stats.keepConf}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
             className={`chip-v2 ${filter === k ? 'is-on' : ''}`}>{t}</button>
@@ -2764,6 +2783,10 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             {_shKeepN > 0 && (
               <span className="text-yellow-300" data-shift-keep-head={_shKeepN}>· 예보◆{_shKeepN}(선사 메일 수정 — 본선 잔류)</span>
             )}
+            {/*  ★ 4.53 — 선적 EDI 에 실려 확정된 선사 지시 본선 잔류(파란 ◆ — 위 쉬프팅 수에 든다). 서류·배정표와는 이 수를 뺀 몫으로 맞댄다. */}
+            {_shConfKeepN > 0 && (
+              <span className="text-blue-300" data-shift-keepconf-head={_shConfKeepN}>· 🔵 본선 잔류 확정 {_shConfKeepN}(선적 EDI에 실림)</span>
+            )}
             {/*  ★ 4.16 — 시프팅 리스트 머리: 내림(양하 완료) · 실음(선적 완료). 양하·선적 대수에는 안 섞는다(§7.8-①). */}
             {shiftInfo?.split && shiftInfo.split.n > 0 && (
               <span className="text-blue-200" data-shift-split={`${shiftInfo.split.out}/${shiftInfo.split.in}/${shiftInfo.split.n}`}>· 내림 {shiftInfo.split.out}/{shiftInfo.split.n} · 실음 {shiftInfo.split.in}/{shiftInfo.split.n}</span>
@@ -2784,16 +2807,16 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             {shiftInfo?.meta?.source === 'carrier' && (
               <span className="text-emerald-300">
                 · 선사 서류 정본
-                {shiftInfo.meta.estN != null && shiftInfo.meta.estN !== _shConfN
-                  ? ` · 앱 추정 ${shiftInfo.meta.estN} — 차이 ${Math.abs(_shConfN - shiftInfo.meta.estN)}` : ' · 앱 추정과 같음'}{/* 4.48-02: 서류·추정은 확정 시프팅끼리 */}
+                {shiftInfo.meta.estN != null && shiftInfo.meta.estN !== _shPureN
+                  ? ` · 앱 추정 ${shiftInfo.meta.estN} — 차이 ${Math.abs(_shPureN - shiftInfo.meta.estN)}` : ' · 앱 추정과 같음'}{/* 4.48-02: 서류·추정은 확정 시프팅끼리 · 4.53: 선적 EDI 확정 본선 잔류는 서류 몫이 아니라 뺀다 */}
               </span>
             )}
             {/*  ★ 3.44-01 — **배정표가 서류와 다르면 그것을 말한다.** 검수사 2026-09-12 «배정이 바뀌었는데 앱은 그대로».
                  배정목록 이적이 28 → 38 모브(14 → 19대)로 바뀌었는데 서류를 정본으로 쓰며 조용히 덮었다.
                  규범 «배정표가 확정이면 배정표가 정본» — 덮지 말고 둘 다 보이고, 큰 쪽을 먼저 의심하게 한다. */}
-            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== _shConfN && !(shiftInfo?.truthChk && shiftInfo.truthChk.keepMatch) && (
+            {shiftInfo?.meta?.berthN != null && shiftInfo.meta.berthN !== _shPureN && !(shiftInfo?.truthChk && (shiftInfo.truthChk.keepMatch || shiftInfo.truthChk.confKeepIncl)) && (
               <span className="text-amber-300 font-bold">
-                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - _shConfN)}`}{/* 4.48-02: 배정표와는 확정만 · 4.48-03: 예보 포함 같음이면 이 줄 대신 아래 */}
+                {` · ⚠ 배정표 ${shiftInfo.meta.berthN}대 — 차이 ${Math.abs(shiftInfo.meta.berthN - _shPureN)}`}{/* 4.48-02: 배정표와는 확정만 · 4.48-03: 예보 포함 같음이면 이 줄 대신 아래 */}
               </span>
             )}
             {/*  ⚠ 감사 지적(3.44) — 서류에 못 읽은 행이 있으면 조용히 모자란 대수가 정본이 된다. 화면이 밝힌다. */}
@@ -2815,7 +2838,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 : (shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300')}>
                 · 배정표 이적 {shiftInfo.berthShift}모브
                 {shiftInfo?.truthChk?.pending ? ' (작업 전 — 대조 보류)'
-                  : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.keepMatch ? ` = 확정 ${_shConfN} + 예보◆${shiftInfo.truthChk.keepN} — 터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기` : shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치'}` : '(정본)'}
+                  : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.confKeepIncl ? ` = ${_shPureN} + 본선 잔류 확정 ${_shConfKeepN} ✓ 일치` : shiftInfo.truthChk.keepMatch ? ` = 확정 ${_shPureN} + 예보◆${shiftInfo.truthChk.keepN} — 터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기` : shiftInfo.truthChk.ok ? ` ✓ 일치${shiftInfo.truthChk.confKeepN > 0 ? ` — 본선 잔류 확정 ${shiftInfo.truthChk.confKeepN}대는 터미널 반영 전` : ''}` : ' ⛔ 불일치'}` : '(정본)'}
               </span>
             )}
             <span className="ml-auto text-2xs font-normal text-dim-400">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>

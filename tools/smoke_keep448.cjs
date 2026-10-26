@@ -170,7 +170,7 @@ const bundle = process.argv[3];
   ok(cs1.total === cs0.total && cs1.ptk === cs0.ptk, `홈 카드 computeStats — 막대 ${cs0.total} → ${cs1.total} · 완료 확인 창 평택분 ${cs0.ptk} → ${cs1.ptk}(자료대로)`, JSON.stringify({ a: [cs0.total, cs0.ptk], b: [cs1.total, cs1.ptk] }));
   const src = (f) => fs.readFileSync(require('path').join(root, f), 'utf8');
   const hp = src('src/pages/HomePage.jsx'), cd = src('src/pages/ChiefDashboard.jsx'), vsc = src('src/components/VoyageSummaryCard.jsx');
-  ok(/computeStats\(dis, 'discharge', voyage\.info, voyage\.key, _shiftSet, voyage\.keepOnboard\)/.test(hp) && /computeStats\(v\?\.discharge, 'discharge', undefined, undefined, undefined, v\?\.keepOnboard\)/.test(hp)
+  ok(/computeStats\(dis, 'discharge', voyage\.info, voyage\.key, _shiftSet, voyage\.keepOnboard\)/.test(hp) && /computeStats\(v\?\.discharge, 'discharge', undefined, undefined, (?:undefined|v \? shiftCnSetOf\(completeTarget\.key, v\) : undefined), v\?\.keepOnboard\)/.test(hp)
     && /computeStats\(v\.discharge, 'discharge', _ss, v\.keepOnboard\)/.test(cd) && /progressOf\(section, mode, shiftSet, ptkCns, keepOnboard\)/.test(cd) && /progressOf\(sec, mode, _shiftSet, undefined, voyage && voyage\.keepOnboard\)/.test(vsc),
     '배선 — 홈 카드·완료 확인 창·수석 보드·현황 요약이 voyage.keepOnboard 를 넘긴다');
   const rowsA = Object.values(vA.discharge.ediContainers).map((c) => ({ ...c, _mode: 'discharge' }));
@@ -190,7 +190,7 @@ const bundle = process.argv[3];
     const coneS0 = src('public/cone.html'), mirS0 = src('src/mir.js');
     ok(/const _shS=window\.ConeMir\.shiftSetForUnitsOf \? window\.ConeMir\.shiftSetForUnitsOf\(shiftMap\)/.test(coneS0) && /window\.ConeMir\.applyDischargeUnits\(cs, \{[^\n]*\}, _shS\)/.test(coneS0)
       && /const ss = shiftSetForUnitsOf\(c\.shiftMap\);[^\n]*\n\s+c\.containers = applyDischargeUnits\(/.test(mirS0) && /shiftSetForUnitsOf \} from '\.\/utils\.js'/.test(src('src/mirCore.entry.js'))
-      && /window\.__CONEV='ConeOne 2\.71-0[23]'/.test(coneS0),
+      && /window\.__CONEV='ConeOne 2\.7(1-0[23]|2)'/.test(coneS0),   // 4.53: 콘앱 2.72
       '배선 — 콘앱 미르(ConeOne 2.71-02 이상)·미르 4.20 갈래가 shiftSetForUnitsOf 로 시프팅 집합을 만든다 · mir-core 가 내보낸다');
     //  4.48-04 감사(하-2): 콘앱 `_shS` 줄을 떼어 실제로 돌린다 — 새 본체(ConeMir.shiftSetForUnitsOf 있음)와 옛 본체(없음 → 인라인 대체)가 같은 집합인가.
     const shLine = (coneS0.match(/\n\s*(const _shS=window\.ConeMir\.shiftSetForUnitsOf[^\n]*)\n/) || [])[1] || '';
@@ -221,7 +221,7 @@ const bundle = process.argv[3];
   const tm = T.answerTotalMoves(vA, 'MAMP', { eta: { units: 100, moves: 90, exact: true, twinLifts: 10, singles: 80, dis: 37, lod: 0, disMoves: 30, lodMoves: 0, shiftN: cN, shiftMoves: 2 * cN } });
   ok(new RegExp(`시프팅 ${cN + 2} \\(확정 ${cN} · 🟡 예보 2 — 선사 지시 본선 잔류`).test(tm) && !/예측 — 확정 아님/.test(tm), `미르 «총 무브수» — «시프팅 ${cN + 2} (확정 ${cN} · 🟡 예보 2 — 선사 지시 본선 잔류 …)» («예측»이라 부르지 않는다)`, tm.split('\n').pop());
   const coneSrc = src('public/cone.html');
-  ok(/if\(!shiftMap && state\.keepOnboard\)\{[\s\S]{0,400}ctKeepShiftMap\(\{ _info: info \}/.test(coneSrc) && /console\.warn\('\[콘앱 2\.71\] 선사 지시 본선 잔류 읽기 실패 HTTP/.test(coneSrc),
+  ok(/if\(!shiftMap && state\.keepOnboard\)\{[\s\S]{0,1500}ctKeepShiftMap\(\{ _info: info \}/.test(coneSrc) && /console\.warn\('\[콘앱 2\.71\] 선사 지시 본선 잔류 읽기 실패 HTTP/.test(coneSrc),
     '배선 — 콘앱 미르 시프팅 지도에 예보를 얹는다(검수앱처럼 «🟡 시프팅 예보 2대») · 지시 읽기 HTTP 실패는 콘솔에 남긴다');
   const chips = src('src/pages/VoyagePage.jsx');
   ok(/const _isShiftRow = \(c\) => !!\(c && !c\._keep && /.test(chips), '항차 리스트 «◆ 시프팅 내림 x/N» 칩은 확정만(예보 두 대는 «🟡 본선 잔류» 칩)');
@@ -555,7 +555,7 @@ const bundle = process.argv[3];
       const _o = { ...confM, MNBU0129687: { _forecast: 'keep' }, MNBU3119872: { _forecast: 'keep' } };
       const f = new Function('shiftStatus', 'shiftingMap', '_o', '_sh', 'P_ec', blk + '\nreturn shiftStatus;');
       return f('불일치', confM, _o, { berthShift: berth, terminalStatus: 'working' }, () => T.shiftEvidenceCore); };
-    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.71-0[123]'/.test(coneS),
+    ok(!!blk && runBlk(128) === '미확정' && runBlk(130) === '불일치' && /window\.__CONEV='ConeOne 2\.7(1-0[123]|2)'/.test(coneS),
       '콘앱 2.71-01 분기 실행 — 배정표 128(= 확정 62 + 예보 2)이면 «미확정» · 130 이면 «불일치» 그대로(검수앱 shiftEvidenceCore keepN 한 벌)', JSON.stringify([runBlk(128), runBlk(130), blk.length]));
     ok(/async function ctKeepShiftMap[\s\S]{0,700}for\(const k of \['completed','termWork'\]\)[\s\S]{0,300}voy\.discharge\[k\] = j/.test(coneS), '콘앱 2.71-01 — 본선 잔류 예보 재료에 양하 완료·실적을 싣는다(내린 지시 컨은 검수앱처럼 예보에서 빠짐 · 재감사 하-3)');
     //  감사(하-4) — 지시 컨을 실제로 내렸으면 예정은 끝 — 예보·칩·앱 예상에서 빠지고 유닛은 추가분(신고 대상)으로 센다

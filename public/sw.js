@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.52-01';
-const NOTE = '4.52-01 오픈탑 컨은 20OT와 40OT 한 가지로 보이고 하이큐 오픈탑은 그 옆에 글자로 표시됩니다. 같은 컨의 표기 차이는 규격 다름으로 세지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.53';
+const NOTE = '4.53 본선 잔류 지시 컨이 선적 EDI 에 다른 자리로 실려 오면 본선 잔류 확정으로 보고 양하에서 빼 시프팅으로 셉니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

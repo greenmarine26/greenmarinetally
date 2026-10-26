@@ -8,6 +8,7 @@ import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문�
 import { isoConflictOf, isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
 import { isoShown, hcOpenTopOf, isoShownOf } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다 · 4.52: 하이큐 오픈탑 표기
+import { fmtShiftPos } from '../utils.js';   // 4.53: 본선 잔류 확정 상자의 «양하 자리 → 선적 자리» 글자(시프팅 줄과 같은 글자)
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
@@ -1316,6 +1317,28 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           {mode === 'discharge' && c.cn && !String(c.cn).startsWith('_') && (() => {
             const _k0 = keepLocal !== undefined ? keepLocal : (c._keep || null);
             const _k = _k0 && !_k0.cleared ? _k0 : null;   // 풀린 지시는 없는 것과 같다(다시 넣을 수 있다)
+            //  ★ 4.53 — 선적 EDI 에 실려 확정된 본선 잔류(c._keepConf — 양하 EDI 자리 → 선적 EDI 자리) 이거나, 선사 시프팅 목록에 올라 확정 시프팅(c._shift)이 된 지시 컨은 «예정»이 아니다.
+            //    행 표식이 없는 자리(수석 보드·작업 화면)에서 열어도 확정 시프팅 행이면 같은 말을 한다.
+            if (_k && (c._keepConf || c._shift)) return (
+              <div className="mt-2 px-3 py-2 bg-blue-950/40 border border-blue-600 rounded-pill" data-keep-conf="1">
+                <div className="text-xs font-black text-blue-200">🔵 선사 지시 — 본선 잔류 확정(평택에서 안 내림 · 시프팅 대상)</div>
+                <div className="text-xxs text-blue-100/90 mt-0.5 leading-snug" data-keep-pod={_k.pod}>
+                  POD 변경 {(_k.pod_orig || c.pod || '?')} → {_k.pod}{_k.mailAt ? ` · 선사 메일 ${_k.mailAt}` : ''}{_k.src === 'mail' ? ' · 수집기(메일)' : _k.by ? ` · ${_k.by}` : ''}
+                </div>
+                {c._keepConf && c._keepConf.from && c._keepConf.to && (
+                  <div className="text-xxs text-blue-100/90 mt-0.5 leading-snug" data-keep-conf-pos={`${c._keepConf.from}>${c._keepConf.to}`}>
+                    선적 EDI 에 실림 — 자리 {fmtShiftPos(c._keepConf.from)} → {fmtShiftPos(c._keepConf.to)}
+                  </div>
+                )}
+                {_k.note && <div className="text-3xs text-blue-100/70 mt-0.5 break-words">«{_k.note}»</div>}
+                <div className="text-3xs text-blue-200/80 mt-0.5 leading-snug">확정입니다 — 평택 양하 대수에서 빠지고 ◆ 시프팅으로 셉니다(내림·실음). 선사 시프팅 목록·EDI 수정본이 오면 그 자료대로 바뀝니다.</div>
+                {podCan && (
+                  <button onClick={clearKeep} disabled={keepBusy} data-keep-clear="1"
+                    className="mt-1 px-2 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">{keepBusy ? '푸는 중…' : '지시 풀기'}</button>
+                )}
+                {keepErr && <div className="text-3xs text-rose-300 mt-0.5">{keepErr}</div>}
+              </div>
+            );
             if (_k) return (
               <div className="mt-2 px-3 py-2 bg-yellow-950/40 border border-yellow-600 rounded-pill" data-keep="1">
                 <div className="text-xs font-black text-yellow-200">🟡 선사 지시 — 본선 잔류 예정(평택에서 안 내림 · 확정 아님)</div>

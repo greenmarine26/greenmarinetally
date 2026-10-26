@@ -15,7 +15,7 @@
 //    · 세관 검수 결과 코드(data/customsCodes.js 한 벌) 후보 — g3 «MFN» · g1 중 완료·실적 없는 컨 «MGN» · EDI 번호 대기 자리 «CNN». 후보일 뿐 확정 아님.
 //  앱 대수(app)는 4.20 평택 양하분 한 벌(utils.ptkDischargeUnitsOf)의 set — 홈 카드·마감텔리와 같은 수다. 선적은 진행 숫자 한 벌(progressOf)의 평택분.
 //  터미널 수량은 번호를 모른다 — 차이를 묶음(·참고)으로 설명 못 하는 만큼은 «번호 없음» 으로 센다(후보일 뿐 확정 아님).
-import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf } from './utils.js';
+import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 
 const unitKey = (k) => !!k && !String(k).startsWith('_');   // __SLOT_ 자리표시·빈 번호는 유닛이 아니다(4.20 과 같은 판정)
@@ -168,6 +168,17 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
       return gg;
     });
 
+  //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류(keepConfirmedOf)는 평택 양하분(앱 수)에서 이미 빠져 있다. 터미널 배정표가 아직 그 컨들을 양하로 세면 앱과 터미널의 차이(예 317 − 315)는
+  //    «번호 없음» 이 아니라 이 컨들이 설명한다 — 참고 줄(refConf)로 따로 싣는다(어긋남 수·POD 확정 참고 줄에는 넣지 않는다).
+  const refConf = [];
+  const kconf = dis ? keepConfirmedOf(voyage) : {};
+  for (const cn of Object.keys(kconf).sort()) {
+    const k = kconf[cn], e = ediRow.get(cn), c = (e && e.c) || {}, r = recs[cn] || {};
+    refConf.push({ cn, iso: k._iso || r.iso || c.iso || '', fe: k._fe || r.fe || c.fe || '', op: '', pol: r.pol || c.pol || '', pod: k.pod || '', bay: c.bay || '', row: c.row || '', tier: c.tier || '',
+      pick: `${k.pod} · 선사 지시 본선 잔류 확정(선적 EDI 에 실림 ${fmtShiftPos(k.from)} → ${fmtShiftPos(k.to)})`, keepConf: true,
+      edi: e ? e.st : 'none', customs: custSet.has(cn), carrier: carSet.has(cn), done: doneSet.has(cn), term: termSet.has(cn), pattern: '', inApp: false });
+  }
+
   //  터미널 수량 — 배정표가 있으면 배정표, 없으면 본선현황. gap = 앱 − 터미널. 앱이 적으면 앱 밖에 있는 어긋남·참고 컨이, 많으면 앱 안에 있는 어긋남 컨이 후보다.
   //    후보로 못 채운 만큼이 «번호 없음»(묶음 수가 아니라 차이에서 후보를 뺀 수 · 음수는 0).
   const termBasis = sources.plan.has ? 'plan' : (sources.qc.has ? 'qc' : null);
@@ -176,10 +187,10 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
   if (termBasis) {
     gap = app - termN;
     if (gap !== 0) {
-      const all = [...gl.flatMap((x) => x.items), ...ref];
+      const all = [...gl.flatMap((x) => x.items), ...ref, ...refConf];
       explained = Math.min(Math.abs(gap), all.filter((x) => (gap < 0 ? !x.inApp : x.inApp)).length);
       unknown = Math.max(0, Math.abs(gap) - explained);
     }
   }
-  return { mode: mk, sources, carrierPartial, started, app, term: { basis: termBasis, n: termN }, gap, explained, unknown, groups: gl, ref, total };
+  return { mode: mk, sources, carrierPartial, started, app, term: { basis: termBasis, n: termN }, gap, explained, unknown, groups: gl, ref, refConf, total };
 }

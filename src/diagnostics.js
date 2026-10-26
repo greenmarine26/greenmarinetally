@@ -284,7 +284,8 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
     const gapOn = R.gap != null && R.gap !== 0;
     //  4.48-03 — 본선 잔류 지시는 예정이라 앱 수(R.app)는 자료대로(지시 컨 포함)다. 터미널과 차이가 없어도 지시가 있으면 자료별 대조 줄을 세운다(검수사 17:05 «세관리스트와 틀린거죠 그걸 명시해야 합니다»).
     const _hasKeep = (R.ref || []).some((x) => x && x.keep);
-    if (R.total > 0 || gapOn || _hasKeep) {
+    const _kcN = (R.refConf || []).length;   // 4.53 — 선적 EDI 가 확정한 본선 잔류(평택 양하분에서 이미 빠짐 — 앱 수는 그만큼 터미널 배정표보다 적다)
+    if (R.total > 0 || gapOn || _hasKeep || _kcN > 0) {
       const S = R.sources;
       const part = (label, x) => (x.has ? `${label} ${x.n}` : `${label} 자료 없음`);
       const carPart = R.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : part('선사 리스트', S.carrier);
@@ -305,20 +306,27 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
       const _kInApp = (R.ref || []).filter((x) => x && x.inApp).length;
       const _kApp = R.app - _kInApp;
       const _kTN = (R.term && R.term.n) || 0;
-      const _kTermPre = !!(_kRef.length && _kTN && _kInApp > 0 && _kTN === R.app);       // 터미널 = 자료(선사 메일 수정 전 숫자 그대로)
+      const _kTermPre = !!(_kRef.length && _kTN && _kInApp > 0 && _kTN === R.app + _kcN);       // 터미널 = 자료(선사 메일 수정 전 숫자 그대로)
       const _kTermApplied = !!(_kRef.length && _kTN && _kInApp > 0 && _kTN === _kApp);   // 터미널이 먼저 선사 메일을 반영 — EDI·리스트 수정본 대기
       const _kTerm = _kTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 선사 메일 수정 전)`
         : _kTermApplied ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 선사 메일 반영 — EDI·리스트 수정본 대기)`
         : gapOn ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '';
+      //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류 — «적용해 앱 N» 은 이미 확정이 빠진 수다. 터미널 배정이 앱 + 확정 대수면 «아직 반영 전».
+      const _kcMail = _kcN ? `선사 지시 본선 잔류 확정 ${_kcN}건(선적 EDI 에 실림 — 평택에서 안 내림)` : '';
+      const _kcTermPre = !!(_kcN && _kTN && _kTN === R.app + _kcN);
+      const _kcTerm = _kcTermPre ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n}(터미널은 아직 반영 전)` : '';
+      const _kcOnly = !!(_kcN && !_kRef.length);
+      const _kcTxt = _kcOnly ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kcMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용해 앱 ${R.app}${_kcTerm || (gapOn ? ` · ${reconTermLabel(R.term.basis)} ${R.term.n} · 앱 ${R.app} (${R.gap > 0 ? '+' : ''}${R.gap})` : '')}` : '';
       const _kTxt = _kRef.length
-        ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 ${_kApp}${_kTerm}`
-        : '';
+        ? `${part('EDI', S.edi)} · ${part('선사 리스트', S.carrier)} · ${part('세관 리스트', S.customs)} · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''}${_kcN ? ` · ${_kcMail}` : ''} 적용하면 ${_kApp}${_kTerm}`
+        : _kcTxt;
       if (_kTermPre) _recon.vGap = `선사 메일 수정 ${_kRef.length}건, 터미널은 아직 수정 전`;
+      else if (_kcOnly && _kcTermPre) _recon.vGap = `선사 지시 본선 잔류 확정 ${_kcN}건, 터미널은 아직 반영 전`;
       else if (_kTermApplied) _recon.vGap = `선사 메일 수정 ${_kRef.length}건, 터미널은 반영, 자료 수정본 대기`;
       //  감사(하-1) — 다른 어긋남이 같이 있으면 종전 머리줄 · 어긋남 N대 뒤에 «메일 수정 N건 … 적용하면 앱 N» 을 앱 수 앞에 붙인다(«적용» 으로 끝나 흐리던 꼴).
       const _kTot = _kRef.length
-        ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''} 적용하면 앱 ${_kApp}${_kTerm}`
-        : (gapTxt ? ` · ${gapTxt}` : '');
+        ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''}${_kcN ? ` · ${_kcMail}` : ''} 적용하면 앱 ${_kApp}${_kTerm}`
+        : (_kcN ? ` · ${_kcMail}${_kcTerm || (gapTxt ? ` · ${gapTxt}` : '')}` : (gapTxt ? ` · ${gapTxt}` : ''));
       alerts.push({
         level: 'warning',
         code: 'source_recon',

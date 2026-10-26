@@ -36,7 +36,7 @@ import BigResultCard from './BigResultCard.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 수동 트윈 한 화면 틀(조회창 앞·뒤 → [확인] → 카드 두 장 · 아래 칸 변경 단추)
 import { fbHoldContainers } from '../firebase.js';   // ★ 4.27: 수동 한 화면 틀의 ⏸ 보류(자동 가이드와 같은 저장)
 import { HOLD_REASONS } from '../utils.js';
-import { keepOnboardOf } from '../utils.js';   // 4.48: 선사 지시 본선 잔류 — 양하 작업 카드에 «안 내림» 으로   // ★ 4.27: 보류 사유 한 벌
+import { keepOnboardOf, keepConfirmedOf } from '../utils.js';   // 4.48: 선사 지시 본선 잔류 — 양하 작업 카드에 «안 내림» 으로   // ★ 4.27: 보류 사유 한 벌
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
@@ -158,6 +158,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       const _U = m === 'discharge' ? ptkDischargeUnitsOf(voyage) : null;
       const _useU = !!(_U && _U.basis !== 'edi');
       const _keepS = m === 'discharge' ? keepOnboardOf(voyage) : {};   // 4.48: 본선 잔류 표식(_keep) — 작업 화면 빼기는 아래 allContainers 한 자리
+      const _keepC = m === 'discharge' ? keepConfirmedOf(voyage) : {};   // 4.53: 선적 EDI 가 확정한 본선 잔류 — 확정 시프팅 컨이다(컨 상세가 «확정» 으로 말한다)
       //  4.08-02: EDI 총중량을 `wtEdi` 로 따로 남긴다 — 화면 무게(`wt`)는 «무게는 리스트가 기준»(1.23)대로 리스트가 덮지만,
       //    트윈 판정은 갱이 드는 총중량(화물+자중)으로 해야 한다(nlSearch.twinWtOf 한 벌 — 화면·미르·브리핑·무브 계산이 같은 값을 본다).
       Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, ...ediWtField(c) }; });   // 4.08-02: EDI 총중량 → wtEdi (utils 한 벌)
@@ -219,6 +220,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           //    종전엔 시프팅 재선적 기록(records)이 생기면 «리스트 등재 = 평택» 으로 «선적 N» 에 섞였다. 카드는 아래 1.76-05 블록이 _shift 로 큐에 남긴다(Fable 판정 ③).
           _ptk: (m === 'discharge' ? (_useU ? _U.set.has(c.cn) : isPyeongtaekPort(c.pod)) : isPtk({ ...c, _inList: !!recMap[c.cn] }, m)) && !isShiftOffPtk(_shSetAll, recMap, m, c.cn),   // 4.20: 양하는 유닛 한 벌 · 4.48-03: 본선 잔류 지시는 예정 — 여기는 자료대로, 작업 화면은 아래 allContainers 가 내밀지 않는다
           ...(m === 'discharge' && _keepS[c.cn] ? { _keep: _keepS[c.cn] } : {}),   // 4.48: 카드·컨 상세가 «선사 지시 본선 잔류» 를 보인다
+          ...(m === 'discharge' && _keepC[c.cn] ? { _keepConf: _keepC[c.cn] } : {}),   // 4.53: 선적 EDI 가 확정한 본선 잔류 — 컨 상세가 «확정(시프팅 대상)» 으로 보인다
           _transit: isTransitContainer(c, m, recMap),   // 3.2-01: 통과분(항구 적혀 있고 평택 아님·리스트 미등재) — 완료 카드가 되지 않는다
           _xray: m === 'discharge' && !!xrayMap[c.cn],
           _xraySeal: xraySeals[c.cn] || null,
