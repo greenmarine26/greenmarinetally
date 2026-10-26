@@ -10,6 +10,7 @@ import { AlertTriangle, AlertCircle, Info, Volume2, VolumeX, ChevronDown, Chevro
 import { speak, stopSpeak } from '../voice.js';
 import { buildVoiceMessage, summarizeAlerts, isoConflictText } from '../diagnostics.js';
 import { REF_POD_LABEL, reconTermLabel, reconUnknownText } from '../sourceRecon.js';   // 4.22: 자료별 대조 글 한 벌(진단 한 줄과 같은 글)
+import { bundleDocNote, bundleDocOffText } from '../tallyReport.js';   // 4.55: 빈 FR 묶음이 터미널 서류 기준이면 그 말(진단 한 줄 reconBundleText 와 같은 글)
 import { CUSTOMS_RESULT_CODES, customsCodeHint, customsCodeLabel } from '../data/customsCodes.js';   // 4.22: 세관 검수 결과 코드표 한 벌(검수사 원문)
 
 export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer, showOk = false, listRows = 0 }) {
@@ -229,9 +230,14 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
                 + (unk ? ` — ${unk}` : '')}
           </div>
         )}
+        {d.doc && (d.doc.off || d.doc.why) && (
+          <div className="text-amber-300" data-recon-doc>
+            {[d.doc.why ? `묶음 서류를 쓰지 못함 — ${d.doc.why}` : '', d.doc.off ? `${bundleDocOffText(d.doc, d.app, tn)} — 서류가 낡았거나 터미널이 묶음을 낱개로 센 것일 수 있음${d.doc.file ? ` (${d.doc.file})` : ''}` : ''].filter(Boolean).join(' · ')}
+          </div>
+        )}
         {_bx > 0 && (
           <div data-recon-group="bundle">
-            <div className="text-dim-300 font-bold">빈 FR 묶음 — 터미널은 한 묶음을 1대로 셈(앱 컨 대수는 낱개 그대로 · 참고) {d.bundles.length}곳 · {d.bundles.reduce((a, b) => a + b.n, 0)}대</div>
+            <div className="text-dim-300 font-bold">빈 FR 묶음 — 터미널은 한 묶음을 1대로 셈(앱 컨 대수는 낱개 그대로 · 참고) {d.bundles.length}곳 · {d.bundles.reduce((a, b) => a + b.n, 0)}대{bundleDocNote(d.bundles) ? ` · ${bundleDocNote(d.bundles)}` : ''}</div>
             <TruncList items={d.bundles} limit={10} unit="곳" render={(b) => (
               <div className="mono flex flex-wrap items-center gap-x-2" data-recon-bundle={b.pos}>
                 <span className="text-dim-200 font-bold">{b.pos.replace(/-/g, '/')}</span>

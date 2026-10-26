@@ -9,7 +9,7 @@ import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
-import { frBundlesOf, bundleExplainOf } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
+import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -1425,14 +1425,16 @@ export function planCompareAppOf(stats) {
 }
 export function frBundleOf(voyage, mode, stats) {
   if (!stats || !(stats.planQty > 0)) return null;
-  const gap = (Number(planCompareAppOf(stats)) || 0) - stats.planQty;
-  if (!(gap > 0)) return null;   // 앱이 많을 때만 — 터미널이 묶음을 1대로 센 만큼
+  const app = Number(planCompareAppOf(stats)) || 0;
+  const gap = app - stats.planQty;
   const b = frBundlesOf(voyage, mode);
-  if (!b.length) return null;
-  const diff = b.reduce((a, x) => a + x.n - 1, 0);
-  const explained = bundleExplainOf(b, gap);   // sourceRecon 과 같은 산식 한 벌 — 묶음으로 맞아떨어지는 차이만
-  if (!(explained > 0)) return null;
-  return { bundles: b.length, cns: b.reduce((a, x) => a + x.n, 0), diff, explained, ns: [...new Set(b.map((x) => x.n))] };
+  //  ★ 4.55 — 서류 기준 점검은 차이가 0 이어도 본다(독립 감사 3차 중-3·중-4). docWhy = 서류가 있는데 못 씀 · docOff = 서류 묶음 몫이 있는데 터미널 배정이 앱과 똑같음(차이 0 인데 «✓» 로 덮지 않는다 · sourceRecon 과 같은 bundleDocExpect 한 벌 · 감사 4차: 차이가 있으면 켜지 않는다).
+  const dx = bundleDocExpect(b, app, stats.planQty);
+  const docOff = dx.off ? { expect: dx.expect, sigma: dx.sigma, text: bundleDocOffText(dx, app, stats.planQty) } : null;
+  const docWhy = b.docWhy || '';
+  const explained = gap > 0 && b.length ? bundleExplainOf(b, gap) : 0;   // 앱이 많을 때만 — 터미널이 묶음을 1대로 센 만큼 · sourceRecon 과 같은 산식 한 벌(묶음으로 맞아떨어지는 차이만)
+  if (!(explained > 0) && !docOff && !docWhy) return null;
+  return { bundles: b.length, cns: b.reduce((a, x) => a + x.n, 0), diff: b.reduce((a, x) => a + x.n - 1, 0), explained, ns: [...new Set(b.map((x) => x.n))], doc: b.length > 0 && b.every((x) => x.src === 'doc'), docWhy, docOff, docSrc: bundleDocSrc(b) };   // doc: 터미널 묶음 서류 기준 · docSrc: 서류 파일·메일 시각
 }
 export function shipViewOf(voyage, pilotForecast = {}) {
   const dis = voyage.discharge;
@@ -2248,16 +2250,18 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
           const fb = stats.frBundle || null, bx = fb ? fb.explained : 0;
           const gap = gap0 - bx;
           const warn = gap !== 0 && stats.planQty > 0;
-          const fbWhat = fb ? (fb.ns.length === 1 ? `빈 FR ${fb.ns[0]}대 한 묶음 ${fb.bundles}곳` : `빈 FR 묶음 ${fb.bundles}곳`) : '';
+          const fbWhat = fb && fb.bundles > 0 ? (fb.ns.length === 1 ? `빈 FR ${fb.ns[0]}대 한 묶음 ${fb.bundles}곳` : `빈 FR 묶음 ${fb.bundles}곳`) + (fb.doc ? `(터미널 묶음 목록 서류 기준${fb.docSrc ? ' · ' + fb.docSrc : ''})` : fb.docWhy ? '(묶음 서류를 쓰지 못해 자리로 짐작 중)' : '') : '';   // 4.55: 서류 기준이면 그 말 · 서류 출처
+          const docNote = fb ? [fb.docWhy ? `묶음 서류를 쓰지 못함 — ${fb.docWhy}.` : '', fb.docOff ? `${fb.docOff.text}입니다 — 서류가 낡았거나 터미널이 묶음을 낱개로 센 것일 수 있습니다.` : ''].filter(Boolean).join(' ') : '';   // 4.55 중-3·중-4
+          const docWarn = !!(fb && (fb.docOff || fb.docWhy));
           return (
-            <span className={warn ? 'text-amber-300 font-bold' : 'text-dim-400'} data-plan-qty={stats.planQty} data-fr-bundle={bx || undefined}
-              title={gap0 === 0
-                ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — 일치합니다.`
+            <span className={warn || docWarn ? 'text-amber-300 font-bold' : 'text-dim-400'} data-plan-qty={stats.planQty} data-fr-bundle={bx || undefined} data-fr-doc-off={fb && fb.docOff ? fb.docOff.expect : undefined}
+              title={(gap0 === 0
+                ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — ${fb && fb.docOff ? '숫자는 같습니다.' : '일치합니다.'}`
                 : stats.planQty > 0
                   ? (bx > 0 ? `터미널 배정 ${stats.planQty}대(+${bx}) ${gap === 0 ? '= ' : '· '}앱 ${app}대${gap === 0 ? '' : ` (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'})`} — ${fbWhat}, 터미널은 한 묶음을 1대로 세어 ${bx}대 적게 셉니다(앱 컨 대수는 낱개 그대로). ` : `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). `)
                     + (gap === 0 ? '' : '배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.')
-                  : `터미널 배정목록 수량이 0 입니다 — 수량을 안 주는 배정표이거나 배정이 아직 안 잡힌 것이라 대조하지 않습니다(앱 ${app}대). 대조용 참고치입니다.`}>
-              배정 {stats.planQty}{bx > 0 ? `(+${bx})` : ''}{gap === 0 ? ' ✓' : warn ? ` (앱 ${gap > 0 ? '+' : ''}${gap})` : ''}
+                  : `터미널 배정목록 수량이 0 입니다 — 수량을 안 주는 배정표이거나 배정이 아직 안 잡힌 것이라 대조하지 않습니다(앱 ${app}대). 대조용 참고치입니다.`) + (docNote ? ` ${docNote}` : '')}>
+              배정 {stats.planQty}{bx > 0 ? `(+${bx})` : ''}{gap === 0 && !(fb && fb.docOff) ? ' ✓' : warn ? ` (앱 ${gap > 0 ? '+' : ''}${gap})` : ''}{fb && fb.docOff ? ` ⚠ 서류 ${fb.docOff.expect}` : fb && fb.docWhy ? ' ⚠ 서류' : ''}
             </span>
           );
         })()}

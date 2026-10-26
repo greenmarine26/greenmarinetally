@@ -4,7 +4,7 @@
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, Hash, Construction } from 'lucide-react';   // TallyOne 1.55: 갱(호기) 보고 점검
-import { bundleKeyOf } from '../tallyReport.js';   // 4.54: 빈 FR 묶음은 «한 칸에 두 대» 사고가 아니다 — 묶음 판정 한 벌
+import { bundleKeyOf, bundleDocFor } from '../tallyReport.js';   // 4.54: 빈 FR 묶음은 «한 칸에 두 대» 사고가 아니다 — 묶음 판정 한 벌
 import { isReeferContainer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, dropFilledBookingSlots , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn, loadedSlotClaims } from '../utils.js';   // 4.23-01: 한 칸에 두 대 판정 한 벌
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 온도·사진 항목을 세지 않는다
@@ -72,7 +72,8 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     // 2) 사고 — 한 칸에 실물이 둘. 이것만 경고다(STSE 2658W 사고와 같은 계열).
     //  ★ 4.23-01: 판정은 utils.loadedSlotClaims 한 벌(항차 요약 카드와 같은 함수). 자리 기록이 없는 완료가 계획 칸으로 추정돼
     //    자리 기록이 있는 컨과 겹치면 사고가 아니라 «자리 모름»(unknownPos)으로 따로 센다(보관본 MCAP 639N 5곳 실측).
-    const { dup: dupPos, unknown: unknownPos } = loadedSlotClaims(containers, (c) => !!compMap[c.cn], (c) => bundleKeyOf(c, mode));   // 4.54: 같은 선사·항구·규격 빈 플랫랙 묶음은 사고가 아니다(검수사 2026-10-26 19:14)
+    const bdoc = bundleDocFor(voyage, containers);
+    const { dup: dupPos, unknown: unknownPos } = loadedSlotClaims(containers, (c) => !!compMap[c.cn], (c) => bundleKeyOf(c, mode, bdoc));   // 4.55: 터미널 묶음 목록 서류가 이 방향 컨에 닿으면 서류 묶음이 묶음이다(아니면 자리 규칙) · 4.54: 같은 선사·항구·규격 빈 플랫랙 묶음은 사고가 아니다(검수사 2026-10-26 19:14)
 
     /* ⛔ 2.94-07: nameOnly(이름표 내려온 컨) 계산·항목 제거 (검수사 확정 2026-08-31)
        원문 — *"야적장 표기도 필요 없는거고 20대든 18대든 목록이 필요 없는것입니다"*

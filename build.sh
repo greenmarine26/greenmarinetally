@@ -1188,6 +1188,18 @@ if npx esbuild tools/smoke_bundle454.jsx --bundle --loader:.jsx=jsx --loader:.pn
 else
   echo "✗ 4.54 빈 FR 묶음 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_B4"; exit 1
 fi
+#  4.55: **빈 FR 묶음은 터미널이 보낸 BUNDLE LIST 서류가 정본** — 서류가 있는 항차는 서류의 묶음을 묶음으로 센다(자리로 짐작하지 않음 · 서류 없으면 4.54 그대로). ATPR 2647E 실 RTDB 읽기 사본 + 실서류(수집기 2.48 이 읽어 올린 모양)를
+#    실소스 tallyReport(bundleDocOf·tagBundleDoc·bundleKeyOf 셋째 인자·emptyFrBundlesOf 서류 가지·bundleDocNote)·sourceRecon·진단·홈 상세·항차 요약 칩·마감 점검·서류 Final Work 로 잰다(3대·2대 묶음 · 서류 밖 컨 · 서류와 앱이 어긋난 곳 · 이상한 서류).
+#    검수사 2026-10-26 21:00 «갯수가 4개 묶음이 아닐때에는 이메일이나 다른 문서로 갯수가 기록되어서 올것입니다. 2개 나 3개 묶음 표시로해서....» · 21:09 «재가동보다 정확한 데이터가 더 중요합니다».
+SMOKE_B5=$(mktemp /dev/shm/hometmp/_smokeb5_XXXXXX.js)
+if npx esbuild tools/smoke_bundledoc455.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_B5"; then
+  node tools/smoke_bundledoc455.cjs "$(pwd)" "$SMOKE_B5" || { echo "✗ 4.55 빈 FR 묶음 서류 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_B5"; exit 1; }
+  rm -f "$SMOKE_B5"
+else
+  echo "✗ 4.55 빈 FR 묶음 서류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_B5"; exit 1
+fi
 #  4.49: **실번호 판정 한 벌** — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류 —
 #    MAMP 641N 선사·세관 리스트 실파일 사본(파서) · 실 firebase.js(메모리 DB) 추가 병합 · 보관 항차 정답지 10대 · RZOR R117E EDI 실 · 마감텔리·미르·인계·컨 상세가 같은 답.
 #    검수사 2026-10-24 12:50 «다 보이고 하나만 맞으면 맞음» · «큰 글씨 실은 세관 값» · «MLPH 끝자리 빠짐은 실오류로 센다».

@@ -237,8 +237,8 @@ export function ptkContainers(voyage, mode) {
   //  ★ 4.16 (§7.8-①): 시프팅이면 평택분이 아니다 — 문지기 한 벌(isShiftOffPtk). 시프팅은 SHIFTING 시트·Final Work 시프팅 칸에서 따로 센다.
   const _ss = shiftCnSetOf(voyageKeyOf(voyage), voyage);
   //  4.20: 양하(목록 있음)는 평택 판정이 끝났다(유닛 한 벌) — 세관 «최종항» 을 다시 보지 않는다. 시프팅 문지기만 지난다. 추가분·통과 표식은 markDischargeUnit 한 벌.
-  return applySpecialMarks(_specOnly, merged.filter(c => (_useU ? true : (mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)))) && !isShiftOffPtk(_ss, recs, mode, c.cn)))
-    .map((c) => _isoBlankFilled(voyage, _useU ? markDischargeUnit(c, _U) : c));   // 4.15 (§7.8-⑥): 규격 빈 행은 EDI·베이플랜 규격으로 — Final Work·OS·RF·PERFORMANCE·DAMAGE·페리가 이 목록을 센다
+  return tagBundleDoc(applySpecialMarks(_specOnly, merged.filter(c => (_useU ? true : (mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)))) && !isShiftOffPtk(_ss, recs, mode, c.cn)))
+    .map((c) => _isoBlankFilled(voyage, _useU ? markDischargeUnit(c, _U) : c)), voyage);   // 4.15 (§7.8-⑥): 규격 빈 행은 EDI·베이플랜 규격으로 — Final Work·OS·RF·PERFORMANCE·DAMAGE·페리가 이 목록을 센다 · 4.55: 마지막에 서류 묶음 키(_bdoc)를 찍는다(서류가 있는 항차만)
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */
@@ -253,7 +253,124 @@ export function ptkContainers(voyage, mode) {
 //    묶음 후보 = 엠티(fe 'E') 플랫랙(c.fr · 또는 iso 가 플랫랙 코드) + 자리(bay·row·tier)가 모두 있는 컨. 키 = 선사 · 포트(양하 POL·선적 POD) · 규격 칸 · 정규화한 자리. 후보가 아니면 ''.
 const _bp2 = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? s.padStart(2, '0') : s; };
 const _bbay = (v) => { const s = String(v == null ? '' : v).trim(); return /^\d+$/.test(s) ? String(parseInt(s, 10)) : s; };
-export function bundleKeyOf(c, mode) {
+//  ★ 4.55 — 터미널 «빈 FR 묶음 목록(BUNDLE LIST)» 서류가 있는 항차는 묶음을 서류가 정한다(자리로 짐작하지 않는다). 수집기 MailPilot 2.48 이 항차 폴더의 서류를 읽어 voyages/{키}/bundleList 에 넣는다.
+//    검수사 2026-10-26 21:00 «갯수가 4개 묶음이 아닐때에는 이메일이나 다른 문서로 갯수가 기록되어서 올것입니다. 2개 나 3개 묶음 표시로해서....» · 21:09 «재가동보다 정확한 데이터가 더 중요합니다».
+//    서류가 있으면 서류 묶음에 든 컨만 묶음이고 나머지는 낱개다(자리가 같아도). 서류가 없는 항차는 4.54 그대로(위 자리 규칙). 서류 판정이 닿는 길 둘 — ① bundleKeyOf 의 셋째 인자(항차) ② ptkContainers 가 컨에 찍은 _bdoc.
+//    모양 { groups: [{ no, size, cns: [...] }], _meta: { file, total, groups, at, mailAt } } — RTDB 는 배열을 객체로 줄 수 있어 vals 로 읽는다.
+//    ★ 독립 감사(2026-10-26) 수리 — ① 서류는 방향·항차를 가리지 않고 항차 전체에 닿아 «양하 서류가 선적까지 서류 기준으로 바꾸고, 엉뚱한 서류가 자리 규칙을 꺼 버렸다».
+//      → 서류는 «이 방향의 컨에 실제로 닿을 때만» 쓴다(bundleDocFor — 이 방향 모집단에 서류 한 묶음의 컨이 2대 이상 있을 때). 아니면 그 방향은 4.54 자리 규칙 그대로.
+//      ② 서류 일부가 조용히 줄었다(쉼표로 이은 글·하이픈·공백 컨 번호·10자리 번호) → 모양이 어긋난 서류는 일부만 쓰지 않고 통째로 안 쓴다(자리 규칙으로). _meta.total·groups 와 읽은 수가 다르면 마찬가지.
+const _bdocCache = new WeakMap();
+const _bdocWhyCache = new WeakMap();   // 서류 객체 → 못 쓰는 이유(''=정상)
+const _bcn = (x) => String(x == null ? '' : x).toUpperCase().replace(/[\s-]+/g, '');
+export function bundleDocOf(voyage) {
+  const bl = voyage && voyage.bundleList;
+  if (!bl || typeof bl !== 'object') return null;
+  if (_bdocCache.has(bl)) return _bdocCache.get(bl);
+  let r = null, bad = '';
+  try {
+    const byCn = new Map(), groups = [];
+    const m0 = bl._meta && typeof bl._meta === 'object' && !Array.isArray(bl._meta) ? bl._meta : {};
+    if (Array.isArray(bl)) bad = '서류 모양이 깨짐(묶음 목록이 아니라 배열)';   // 4.55 감사 4차 하-8 — 모양이 깨진 서류도 «서류 없음» 으로 읽지 않고 이유를 말한다
+    else if (m0.error) bad = `수집기가 서류를 못 읽음 — ${(typeof m0.error === 'object' ? JSON.stringify(m0.error) : String(m0.error)).slice(0, 80)}`;   // 수집기가 걷어 낸 표시(옛 groups 가 같이 남아 있어도 쓰지 않는다) · 글이 아닌 값도 «[object Object]» 로 안 나온다
+    else if (bl.groups != null && typeof bl.groups !== 'object') bad = 'groups 모양이 깨짐(묶음 목록이 아님)';
+    if (!bad) vals(bl.groups).forEach((g, i) => {
+      if (bad) return;
+      if (!g || typeof g !== 'object') { bad = '묶음 항목이 객체가 아님'; return; }
+      const gk = `doc|${groups.length}`, cns = [];   // 키 = 서류에서 읽은 순서 번호(서류의 NO 가 겹쳐도 키는 겹치지 않는다)
+      for (const x of (typeof g.cns === 'string' ? g.cns.split(/[,;]+/) : vals(g.cns))) {
+        const cn = _bcn(x);
+        if (!cn) continue;
+        if (!/^[A-Z]{4}\d{7}$/.test(cn)) { bad = `컨 번호가 아닌 값 «${String(x).slice(0, 14)}»`; return; }
+        if (byCn.has(cn)) { bad = `같은 컨이 두 묶음에 있음 ${cn}`; return; }
+        byCn.set(cn, gk);
+        cns.push(cn);
+      }
+      if (!cns.length) { bad = '컨이 없는 묶음'; return; }
+      groups.push({ key: gk, no: g.no == null ? String(i + 1) : String(g.no), size: String(g.size || ''), cns });
+    });
+    const m = bl._meta && typeof bl._meta === 'object' ? bl._meta : {};
+    if (!bad && groups.length && m.total != null && Number(m.total) !== byCn.size) bad = `_meta.total ${m.total} ≠ 읽은 ${byCn.size}`;
+    if (!bad && groups.length && m.groups != null && Number(m.groups) !== groups.length) bad = `_meta.groups ${m.groups} ≠ 읽은 ${groups.length}`;
+    if (bad) console.warn('[묶음 서류] 서류를 쓰지 않습니다(자리로 판정) —', bad);
+    else r = groups.length ? { groups, byCn, meta: m, n: byCn.size } : null;   // groups 가 없으면 서류 없음
+  } catch (e) { bad = `읽기 실패 ${e && e.message}`; console.warn('[묶음 서류] 읽기 실패(서류 없이 자리로 판정):', e && e.message); r = null; }
+  //  서류가 «있는데 못 쓰는» 이유 — 화면이 «묶음 서류를 쓰지 못해 자리로 짐작 중» 으로 밝힌다(독립 감사 2026-10-26: 서류를 거부해도 화면은 서류 없을 때와 똑같았다).
+  //  모든 묶음이 한 대뿐인 서류도 쓸모가 없다(터미널 묶음은 2대 이상 — 서류 양식이 다른 듯하다).
+  if (!bad && r && r.groups.every((g) => g.cns.length < 2)) { bad = '서류의 묶음이 모두 한 대뿐이라 쓰지 않음(서류 양식 확인)'; r = null; console.warn('[묶음 서류] 서류를 쓰지 않습니다(자리로 판정) —', bad); }
+  _bdocWhyCache.set(bl, bad);
+  _bdocCache.set(bl, r);
+  return r;
+}
+//  서류가 있는데 못 쓰는 이유(없으면 ''). 서류가 없거나 정상이면 ''.
+export function bundleDocWhy(voyage) {
+  const bl = voyage && voyage.bundleList;
+  if (bl && typeof bl !== 'object') return '서류 모양이 깨짐(객체가 아님)';   // 4.55 감사 4차 하-8 — 글·숫자가 들어와도 «서류 없음» 과 같게 보이지 않는다
+  if (!bl) return '';
+  bundleDocOf(voyage);
+  return _bdocWhyCache.get(bl) || '';
+}
+//  서류가 있는데 이 방향 목록에 «한 묶음당 1대» 이하로만 걸려 쓰지 못하는 경우의 이유 — 서류는 «이 SKHU 는 앱에 없는 컨 3대와 한 묶음» 이라 하는데 앱이 서류가 있었다는 말도 안 하던 것(독립 감사 3차 중-3).
+//  서류의 컨이 이 목록에 1대도 없으면(다른 방향 서류) 조용하다 — 그건 정상이다.
+export function bundleDocMiss(voyage, containers) {
+  const d = bundleDocOf(voyage);
+  if (!d || !Array.isArray(containers) || bundleDocFor(voyage, containers)) return '';
+  const have = new Set();
+  for (const c of containers) if (c && c.cn) have.add(String(c.cn).toUpperCase());
+  let hit = 0;
+  for (const cn of d.byCn.keys()) if (have.has(cn)) hit++;
+  return hit > 0 ? `서류의 컨 ${hit}대만 이 목록에 있어 묶음으로 맞지 않음(서류 ${d.n}대)` : '';
+}
+//  서류 출처 한 줄 — 파일명 · 메일 받은 시각(없으면 수집 시각). 오래된 서류인지 화면에서 알아보게 한다(독립 감사 3차 하-5 · 시프팅 목록의 «메일 10-08 17:05(파일명)» 과 같은 근거 규칙).
+const _kst = (ms) => { const d = new Date(Number(ms) + 9 * 3600 * 1000); const p2 = (n) => String(n).padStart(2, '0'); return `${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`; };
+export function bundleDocSrc(bundles) {
+  const d = bundles && bundles.doc;
+  if (!d) return '';
+  const when = d.mailAt > 0 ? `메일 ${_kst(d.mailAt)}` : d.at > 0 ? `수집 ${_kst(d.at)}` : '';
+  return [d.file, when].filter(Boolean).join(' · ');
+}
+//  서류 기준 «터미널 배정이 몇 대여야 하는가» — 서류가 이 방향에 닿으면 터미널은 서류 묶음 하나를 1대로 센다: 예상 = 앱 − Σ(n−1).
+//  off(서류 어긋남) = 서류 묶음 몫 Σ 가 있는데 터미널 수량이 앱과 «똑같을 때» 뿐이다 — 종전(4.54)은 이 경우를 «일치 ✓» 로 덮었다(터미널이 서류 묶음을 낱개로 셈 · 서류가 낡음. 독립 감사 3차 중-4).
+//  차이가 0 이 아니면 이미 어긋남으로 보이므로 서류 탓이라 말하지 않는다 — 앱 목록이 덜 들어옴·본선 잔류·수화물·터미널이 더 많음은 서류와 무관하다(독립 감사 4차 중-1: 서류가 맞는데 «서류가 틀렸다» 고 말하던 오경보).
+//  서류 기준이 아닌(자리 규칙) 묶음은 짐작이라 이 비교를 하지 않는다.
+export function bundleDocExpect(bundles, appN, termN) {
+  const b = Array.isArray(bundles) ? bundles : [];
+  const why = b.docWhy || '';
+  const applied = b.length > 0 && b.every((x) => x && x.src === 'doc');
+  const sigma = applied ? b.reduce((a, x) => a + Math.max(0, (Number(x.n) || 0) - 1), 0) : 0;
+  const app = Number(appN) || 0, term = Number(termN) || 0;
+  const expect = applied ? app - sigma : null;
+  return { why, applied, sigma, expect, off: applied && sigma > 0 && term > 0 && app === term };
+}
+//  서류 기준 어긋남 한 문장 — 화면 툴팁·진단이 같은 글을 쓴다(같은 판정 한 벌).
+export function bundleDocOffText(dx, appN, termN) {
+  if (!dx || !dx.off) return '';
+  return `터미널 묶음 목록(서류) 기준 터미널 배정은 ${dx.expect}대여야 하는데(앱 ${Number(appN) || 0}대 − 서류 묶음 몫 ${dx.sigma}대) 실제 ${Number(termN) || 0}대`;
+}
+//  이 방향의 컨 모집단(containers)에 서류가 «닿는가» — 서류 한 묶음의 컨이 2대 이상 있으면 닿는다. 닿지 않으면 null(그 방향은 자리 규칙). 서류 하나가 양하·선적 둘 다의 묶음을 싣고 있어도,
+//  한 방향만 싣고 있어도 방향마다 따로 판정한다. containers 배열마다 한 번만 센다.
+const _bdocForCache = new WeakMap();
+export function bundleDocFor(voyage, containers) {
+  const d = bundleDocOf(voyage);
+  if (!d || !Array.isArray(containers)) return null;
+  const m = _bdocForCache.get(containers);
+  if (m && m.d === d) return m.r;
+  const have = new Set();
+  for (const c of containers) if (c && c.cn) have.add(String(c.cn).toUpperCase());
+  const r = d.groups.some((g) => { let n = 0; for (const cn of g.cns) if (have.has(cn) && ++n >= 2) return true; return false; }) ? d : null;
+  _bdocForCache.set(containers, { d, r });
+  return r;
+}
+//  마감텔리 모집단(ptkContainers)이 컨마다 서류 묶음 키를 찍는다 — bundleFold·buildMatrix 처럼 항차를 안 받는 집계가 서류를 따르게 하는 입구 한 곳. 서류가 닿지 않으면 그대로 돌려준다(복사 없음).
+export function tagBundleDoc(containers, voyage) {
+  const d = bundleDocFor(voyage, containers);
+  if (!d) return containers;
+  return containers.map((c) => (c && typeof c === 'object' ? { ...c, _bdoc: d.byCn.get(String(c.cn || '').toUpperCase()) || '' } : c));
+}
+//  bdoc — bundleDocFor(항차, 컨 목록) 의 결과(서류가 이 방향에 닿을 때만 있다). 없으면 ptkContainers 가 찍은 _bdoc → 그것도 없으면 4.54 자리 규칙.
+export function bundleKeyOf(c, mode, bdoc) {
+  if (bdoc) return (c && bdoc.byCn.get(String(c.cn || '').toUpperCase())) || '';
+  if (c && c._bdoc !== undefined) return c._bdoc;   // 4.55: ptkContainers 가 서류 묶음 키(없으면 '' = 낱개)를 찍어 둔 컨
   if (!(c && c.fe === 'E' && (c.fr || isFlatRackIso(c.iso)))) return '';
   const p = effectivePos(c);
   if (!(p && p.bay && p.row && p.tier)) return '';
@@ -278,21 +395,47 @@ export function bundleFold(containers, mode) {
 //  ★ 4.54 — 빈 FR 묶음 목록(화면·진단 설명용). 같은 키 2대 이상 = 한 묶음. 반환 [{ key, n, cns, op, port, sz, pos: 'BB-RR-TT' }] — 서류(bundleFold)와 같은 묶음이다.
 //    검수사 2026-10-26 19:14 «4개 한묶음 2개로 그래야 양쪽 갯수가 맞는거고 알림을 붉은색으로 보여줄 필요도 없는것입니다» · 19:17 «검수리스트는 182개가 맞는거고 동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(282·276 의 오타로 읽음).
 //    컨 대수(검수 리스트 · 진행 숫자)는 낱개 그대로다 — 이 목록은 «터미널이 묶음을 1대로 센다» 는 설명에만 쓴다.
-export function emptyFrBundlesOf(containers, mode) {
+export function emptyFrBundlesOf(containers, mode, voyage) {
   const g = new Map();
+  const doc = voyage ? bundleDocFor(voyage, containers) : null;   // 서류가 이 방향 컨에 닿을 때만(아니면 자리 규칙)
   for (const c of (containers || [])) {
-    const k = bundleKeyOf(c, mode);
+    const k = bundleKeyOf(c, mode, doc);
     if (!k) continue;
     if (!g.has(k)) g.set(k, []);
     g.get(k).push(c);
   }
+  const have = doc ? new Set((containers || []).map((c) => String((c && c.cn) || '').toUpperCase())) : null;
+  //  서류는 닿는데 앱 목록에 없는 컨(서류 묶음이 한 대라도 보이는 묶음만) — 한 대만 보여 묶음으로 안 잡히는 묶음의 빠진 컨도 센다.
+  const docMissing = doc ? doc.groups.flatMap((dg) => { const n = dg.cns.filter((cn) => have.has(cn)).length; return n >= 1 && n < dg.cns.length ? dg.cns.filter((cn) => !have.has(cn)) : []; }) : [];
   const out = [];
   for (const [key, arr] of g) {
     if (arr.length < 2) continue;
+    if (key.startsWith('doc|')) {
+      //  ★ 4.55 — 서류 묶음. 선사·항구·규격·자리는 첫 컨 값(서류는 컨 번호만 준다) · 자리가 없으면 «자리 미상». mixed = 묶음 안에서 선사·항구·규격·자리가 갈리거나 엠티가 아닌 컨이 섞임(서류와 앱 자료가 어긋난 신호) ·
+      //    missing = 서류에는 있는데 앱 목록에 없는 컨. src 'doc' = 서류 기준(화면이 «터미널 묶음 서류 기준» 으로 밝힌다).
+      const dg = doc && doc.groups.find((x) => x.key === key);
+      const f = (c) => { const p = effectivePos(c) || {}; return { op: String(c.op || '').toUpperCase().trim() || '???', port: port3(mode === 'discharge' ? c.pol : c.pod) || '???', sz: tallySizeCol(c), pos: p.bay && p.row && p.tier ? `${_bp2(_bbay(p.bay))}-${_bp2(p.row)}-${_bp2(p.tier)}` : '' }; };
+      const a0 = f(arr[0]), sigs = new Set(arr.map((c) => { const x = f(c); return [x.op, x.port, x.sz].join('|'); }));   // 자리가 아직 없는 컨은 «자리가 다르다» 로 치지 않는다(자리 있는 컨끼리만 비교)
+      const poss = new Set(arr.map(f).map((x) => x.pos).filter(Boolean));
+      const posOf = arr.map(f).find((x) => x.pos);
+      out.push({ key, n: arr.length, cns: arr.map((x) => x.cn), op: a0.op, port: a0.port, sz: a0.sz, pos: posOf ? posOf.pos : '자리 미상', src: 'doc', no: dg ? dg.no : '', docN: dg ? dg.cns.length : arr.length,
+        missing: dg && have ? dg.cns.filter((cn) => !have.has(cn)) : [], mixed: sigs.size > 1 || poss.size > 1 || arr.some((c) => c.fe !== 'E' || !(c.fr || isFlatRackIso(c.iso))), dm: docMissing.length });
+      continue;
+    }
     const [op, port, sz, bay, row, tier] = key.split('|');
-    out.push({ key, n: arr.length, cns: arr.map((x) => x.cn), op, port, sz, pos: `${_bp2(bay)}-${row}-${tier}` });
+    out.push({ key, n: arr.length, cns: arr.map((x) => x.cn), op, port, sz, pos: `${_bp2(bay)}-${row}-${tier}`, src: 'pos' });
   }
-  return out.sort((a, b) => a.pos.localeCompare(b.pos));
+  out.sort((a, b) => a.pos.localeCompare(b.pos));
+  out.doc = doc ? { missing: docMissing, groups: doc.groups.length, file: String((doc.meta && doc.meta.file) || ''), mailAt: Number(doc.meta && doc.meta.mailAt) || 0, at: Number(doc.meta && doc.meta.at) || 0 } : null;   // 서류 기준 방향이면 서류 쪽 어긋남(빠진 컨)을 묶음이 0곳이어도 알린다
+  return out;
+}
+//  ★ 4.55 — 묶음이 서류 기준이면 그 사실과 서류·앱이 어긋난 곳을 한 줄로(진단·툴팁이 같은 말을 쓴다). 자리 규칙 묶음이면 ''.
+export function bundleDocNote(bundles) {
+  const d = (bundles || []).filter((b) => b && b.src === 'doc');
+  if (!d.length) return bundles && bundles.docWhy ? `묶음 서류를 쓰지 못해 자리로 짐작 중(${bundles.docWhy})` : '';   // 서류가 있는데 못 쓰는 경우 — 조용히 자리 규칙으로 돌아가지 않는다
+  const miss = Math.max(0, ...d.map((b) => Number(b.dm) || 0)), mixed = d.filter((b) => b.mixed).length;   // dm = 서류에는 있는데 앱 목록에 없는 컨(묶음마다 같은 서류 전체 수)
+  const _src = bundleDocSrc(bundles);
+  return '터미널 묶음 목록(서류) 기준' + (_src ? `(${_src})` : '') + (miss ? ` · 서류에는 있는데 앱 목록에 없는 컨 ${miss}대` : '') + (mixed ? ` · 한 묶음 안에 자리·규격이 다르거나 엠티 플랫랙이 아닌 컨이 섞인 곳 ${mixed}곳` : '');
 }
 //  묶음이 설명하는 차이 — 묶음 하나는 «통째로» (n−1)대만큼만 차이를 낸다(4대 묶음 = 3대). 차이(앞 − 터미널)가 묶음 몫의 합과 맞아떨어질 때만 설명으로 센다:
 //    gap 이하로 만들 수 있는 가장 큰 부분합. (예 4대 묶음 둘 — 차이 0·3·6 이면 설명 · 1·2 는 0 · 4·5 는 3 · 8 은 6.) 독립 감사 2026-10-26 «차이 1·2·4·5대를 풀린 것처럼 덮는다» 수리.
@@ -300,6 +443,10 @@ export function emptyFrBundlesOf(containers, mode) {
 export function bundleExplainOf(bundles, gap) {
   const g = Math.floor(Number(gap) || 0);
   if (!(g > 0) || !Array.isArray(bundles) || !bundles.length) return 0;
+  //  서류 기준(src 'doc') 묶음은 확정이다 — 터미널이 서류대로 센다면 차이에는 묶음 몫의 합 Σ(n−1) 전체가 들어 있다. 부분합으로 일부만 풀지 않는다:
+  //    차이 ≥ Σ 이면 Σ 만큼만 설명하고 나머지(차이 − Σ)는 그대로 경고 쪽(본선 잔류·수화물·터미널이 모르는 컨)에 남긴다 · 차이 < Σ 이면 0(서류와 터미널 숫자가 다르다는 뜻이라 덮지 않는다).
+  //    독립 감사 2026-10-26 «서류에 4대 묶음 둘인데 배정 279(차이 3)를 부분합이 정상으로 덮는다» · 감사 4차 중-1 «본선 잔류 2대·수화물이 낀 차이 8·9 에서 서류 몫 6 이 사라져 «터미널이 모르는 8대» 로 과대하다».
+  if (bundles.every((b) => b && b.src === 'doc')) { const sg = bundles.reduce((a, b) => a + Math.max(0, (Number(b.n) || 0) - 1), 0); return sg > 0 && sg <= g ? sg : 0; }
   const reach = new Set([0]);
   for (const b of bundles) {
     const w = (Number(b && b.n) || 0) - 1;
@@ -315,8 +462,15 @@ export function frBundlesOf(voyage, mode) {
   const sec = voyage[mode];
   if (!sec || typeof sec !== 'object') return [];
   let m = _frBundleCache.get(sec);
-  if (!m || m.v !== voyage) { m = { v: voyage, r: null }; _frBundleCache.set(sec, m); }
-  if (!m.r) { try { m.r = emptyFrBundlesOf(ptkContainers(voyage, mode), mode); } catch (e) { console.warn('[빈 FR 묶음] 판정 실패(설명 없이 진행):', e && e.message); m.r = []; } }
+  if (!m || m.v !== voyage || m.bl !== voyage.bundleList) { m = { v: voyage, bl: voyage.bundleList, r: null }; _frBundleCache.set(sec, m); }   // 4.55: 묶음 서류가 바뀌면 다시
+  if (!m.r) {
+    try {
+      const cs = ptkContainers(voyage, mode);
+      m.r = emptyFrBundlesOf(cs, mode, voyage);
+      //  서류가 있는데 못 쓰는 이유(거부 · 이 방향 목록에 한 묶음당 1대 이하로만 걸림) — 묶음이 0곳이어도 화면·진단이 «자리로 짐작 중» 을 밝힌다. 이 방향 컨이 없으면 말할 것이 없다.
+      m.r.docWhy = cs.length ? (bundleDocWhy(voyage) || bundleDocMiss(voyage, cs)) : '';
+    } catch (e) { console.warn('[빈 FR 묶음] 판정 실패(설명 없이 진행):', e && e.message); m.r = []; m.r.docWhy = ''; }
+  }
   return m.r;
 }
 //  번들 요약 — 실물 Final Work Remarks «* 20'FR E x 8 ( 2 BUNDLE ) → 20'F x 2 CALCULATION» · OS 비고 «FR x 8 ( 2 BUNDLE )». 검수사 2026-09-25 «보통은 4개 한묶음인데 2개 이상만 묶여 있으면 풀 1개로 칩니다. 물론 위치는 같아야 합니다».

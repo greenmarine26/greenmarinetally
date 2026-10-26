@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { bundleKeyOf, emptyFrBundlesOf } from '../tallyReport.js';   // 4.54: 빈 FR 묶음 판정 한 벌 — «한 칸에 두 대» 에서 묶음을 빼고 «빈 FR 묶음» 칩으로 밝힌다
+import { bundleKeyOf, bundleDocFor, emptyFrBundlesOf } from '../tallyReport.js';   // 4.54: 빈 FR 묶음 판정 한 벌 — «한 칸에 두 대» 에서 묶음을 빼고 «빈 FR 묶음» 칩으로 밝힌다
 import { isPtk as _isPtkOne, isFullReefer, reeferTempSummary, isISO403, isISO403PhotoTaken, isPyeongtaekPort, shiftSplitOf, isShiftOffPtk, progressOf, dropFilledBookingSlots, isSlotEntry , applySpecialMarks, ptkDischargeUnitsOf, ediByUnitCn, loadedSlotClaims } from '../utils.js';   // 4.23-01: 한 칸에 두 대 판정 한 벌
 
 export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reeferCheck = null, rfSkip = false }) {   // 3.72-02: rfSkip — 리퍼 체크 안 하는 배는 리퍼 칩이 빨갛게 깜빡이지 않는다
@@ -102,8 +102,9 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
     // 사고 — 한 칸에 실물이 둘 (STSE 2658W 계열). 이것만 빨강이다.
     //  ★ 4.23-01: 판정은 utils.loadedSlotClaims 한 벌(마감 점검과 같은 함수) — 자리 기록 없는 완료가 계획 칸으로 추정돼 겹친 것은 «자리 모름»(빨강 아님).
     //  ★ 4.54: 같은 선사·항구·규격 빈 플랫랙이 한 칸에 모인 것은 «묶음» — 사고(빨강)가 아니라 따로 밝힌다(검수사 2026-10-26 19:14 «알림을 붉은색으로 보여줄 필요도 없는것입니다»).
-    const { dup: dupPos, unknown: unknownPos } = loadedSlotClaims(containers, (c) => !!compMap[c.cn], (c) => bundleKeyOf(c, mode));
-    const frBundles = emptyFrBundlesOf(containers, mode);
+    const bdoc = bundleDocFor(voyage, containers);
+    const { dup: dupPos, unknown: unknownPos } = loadedSlotClaims(containers, (c) => !!compMap[c.cn], (c) => bundleKeyOf(c, mode, bdoc));   // 4.55: 터미널 묶음 목록 서류가 이 방향 컨에 닿으면 서류 묶음이 묶음이다(아니면 자리 규칙)
+    const frBundles = emptyFrBundlesOf(containers, mode, voyage);
 
     /* ⛔ 2.94-07: nameOnly(이름표 내려온 컨) 계산 제거 — 화면이 안 쓴다.
        검수사 확정 2026-08-31 *"20대든 18대든 목록이 필요 없는것입니다"* */
@@ -218,7 +219,7 @@ export default function VoyageSummaryCard({ voyage, mode, voyageKey = '', reefer
             icon={CheckCircle2}
             color="cyan"
             label="🔗 빈 FR 묶음"
-            value={`${(() => { const ns = [...new Set(summary.frBundles.map((b) => b.n))]; return ns.length === 1 ? `${ns[0]}대 한 묶음 ${summary.frBundles.length}곳` : `${summary.frBundles.length}곳(${summary.frBundles.map((b) => b.n + '대').join('·')})`; })()} — 터미널은 1대로 셈 · ${summary.frBundles.slice(0, 2).map((b) => `${b.pos.replace(/-/g, '/')} ${b.cns[0]}${b.n > 1 ? ' 외 ' + (b.n - 1) : ''}`).join(', ')}${summary.frBundles.length > 2 ? ' 외' : ''}`}
+            value={`${(() => { const ns = [...new Set(summary.frBundles.map((b) => b.n))]; return ns.length === 1 ? `${ns[0]}대 한 묶음 ${summary.frBundles.length}곳` : `${summary.frBundles.length}곳(${summary.frBundles.map((b) => b.n + '대').join('·')})`; })()} — 터미널은 1대로 셈 · ${summary.frBundles.slice(0, 2).map((b) => `${b.pos.replace(/-/g, '/')} ${b.cns[0]}${b.n > 1 ? ' 외 ' + (b.n - 1) : ''}`).join(', ')}${summary.frBundles.length > 2 ? ' 외' : ''}${summary.frBundles.some((b) => b.src === 'doc') ? ' · 터미널 묶음 서류 기준' : ''}`}
           />
         )}
         {/* ★ 4.23-01: 자리 기록 없이 완료된 컨이 남이 실린 계획 칸으로 추정된 것 — 실물 둘이 아니므로 빨강이 아니다(마감 점검 «📍 자리 없이 완료» 와 같은 판정 utils.loadedSlotClaims). */}

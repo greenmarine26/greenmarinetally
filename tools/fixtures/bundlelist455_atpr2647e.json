@@ -1,0 +1,33 @@
+{
+ "groups": [
+  {
+   "no": "1",
+   "size": "42PC",
+   "cns": [
+    "TRLU5040847",
+    "SKHU5640895",
+    "SKHU5541444",
+    "TRIU0821436"
+   ]
+  },
+  {
+   "no": "2",
+   "size": "45PC",
+   "cns": [
+    "SRLU1001498",
+    "SRLU1001672",
+    "SRLU1001029",
+    "SRLU1001203"
+   ]
+  }
+ ],
+ "_meta": {
+  "source": "terminal",
+  "file": "_문서_ATPR 2647E BUNDLE LIST.xls",
+  "total": 8,
+  "groups": 2,
+  "at": 1792905000000,
+  "by": "MailPilot bundlelist",
+  "mailAt": 1792904820000
+ }
+}

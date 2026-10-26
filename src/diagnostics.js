@@ -15,6 +15,7 @@
 import { isoOtHeightConflict, sealFormatAnomalies, ediSealMapOf } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
 import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf, isListOriginRecord } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 import { reconcileSources, reconBundleText, reconTermNum, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
+import { frBundlesOf, bundleDocOffText } from './tallyReport.js';   // 4.55: 터미널 묶음 목록(서류)과 앱 목록이 어긋나는 곳을 따로 알린다(양하·선적 모두)
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 //  ★ 3.53 — **POD 확정을 반영한다**(utils 한 벌 `isPtkResolved`). 2차 시뮬 지적 2026-09-16 —
@@ -279,8 +280,10 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
   //    음성 — 같은 수를 리스트 부족·EDI 밖 경고가 이미 말하면 «어긋남 N대» 는 한 번만(그쪽)이다(맨 아래 정렬 앞에서 지운다).
   //    count 는 음성 서명(패널 code:count)용 — «완료·실적에만»(g5)은 작업이 진행되면 늘어나므로 뺀 수 + «번호 없음» 대수.
   let _recon = null;
+  let _docOffTxt = '';   // 4.55 — 서류 기준 «터미널은 앱 − 서류 묶음 몫 이어야 한다» 와 실제가 다르면 그 문장(차이 0 이라 자료별 대조 줄이 안 서도 아래 bundle_doc 이 쓴다)
   if (voyage && mode === 'discharge') {
     const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) || (mode === 'discharge' && _isShift(cn)) });
+    _docOffTxt = (R.doc && R.doc.off) ? bundleDocOffText(R.doc, R.app, R.term.n) : '';
     //  ★ 4.54 — 앱 − 터미널 차이에서 «빈 FR 묶음»(터미널은 1대로 센다)이 설명하는 만큼은 어긋남이 아니다. gapOn 은 묶음으로 설명하고 남은 차이(gapRest)가 있을 때만 켠다.
     //    검수사 2026-10-26 19:17 «검수리스트는 182개가 맞는거고 동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(282·276 의 오타로 읽음).
     const _bTxt = reconBundleText(R);
@@ -751,6 +754,33 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
           })),
         });
       }
+    }
+  }
+
+  //  ★ 4.55 — 터미널이 보낸 «BUNDLE LIST»(묶음 목록) 서류가 이 방향 컨에 닿는데 앱 목록과 어긋나면 따로 알린다(양하·선적 모두 — 차이가 0 이어도).
+  //    서류에는 있는데 앱 목록에 없는 컨 · 한 묶음 안에 자리·규격이 다르거나 엠티가 아닌 컨이 섞인 곳. 검수사 2026-10-26 21:09 «재가동보다 정확한 데이터가 더 중요합니다.»
+  //    서류가 닿지 않는 방향·서류 없는 항차는 조용하다(종전 자리 규칙 그대로). 판정 실패는 경고를 빼고 진행하되 로그를 남긴다.
+  if (voyage && (mode === 'discharge' || mode === 'loading')) {
+    let _bl = [];
+    try { _bl = frBundlesOf(voyage, mode); } catch (e) { console.warn('[묶음 서류 대조] 판정 실패(경고 없이 진행):', e && e.message); }
+    const _dm = (_bl && _bl.doc && _bl.doc.missing) || [];
+    const _dx = (_bl || []).filter((b) => b && b.src === 'doc' && b.mixed);
+    const _dw = (_bl && _bl.docWhy) ? String(_bl.docWhy) : '';   // 서류가 있는데 못 씀 — 자리로 짐작한 묶음이 0곳이어도 말한다(독립 감사 3차 중-3)
+    //  서류 기준 «터미널은 앱 − 서류 묶음 몫 이어야 한다» 와 터미널 실제 수량이 다름 — 차이가 0 이어도(터미널이 서류 묶음을 낱개로 셈) 말한다(중-4). 터미널 수량을 맞대는 양하만(source_recon 과 같은 자리).
+    const _dd = mode === 'discharge' ? _docOffTxt : '';
+    if (_dm.length || _dx.length || _dw || _dd) {
+      const _parts = [];
+      if (_dw) _parts.push(`묶음 서류가 있으나 쓰지 못함(${_dw})${(_bl || []).length > 0 ? ` — 빈 FR 묶음 ${_bl.length}곳은 자리로 짐작 중` : ''}`);
+      if (_dd) _parts.push(_dd);
+      if (_dm.length) _parts.push(`서류에는 있는데 앱 목록에 없는 컨 ${_dm.length}대(${_dm.slice(0, 4).join('·')}${_dm.length > 4 ? ` 외 ${_dm.length - 4}` : ''})`);
+      if (_dx.length) _parts.push(`한 묶음 안에 자리·규격이 다르거나 엠티 플랫랙이 아닌 컨이 섞인 곳 ${_dx.length}곳(${_dx.slice(0, 3).map((b) => String(b.pos || '').replace(/-/g, '/')).join(' · ')}${_dx.length > 3 ? ` 외 ${_dx.length - 3}곳` : ''})`);
+      alerts.push({
+        level: 'warning',
+        code: 'bundle_doc',
+        msg: `터미널 묶음 목록(서류)과 앱 목록이 맞지 않음 — ${_parts.join(' · ')}`,
+        voice: '터미널 묶음 목록과 앱 목록이 맞지 않습니다. 화면에서 확인',
+        count: _dm.length + _dx.length + (_dw ? 1 : 0) + (_dd ? 1 : 0),
+      });
     }
   }
 

@@ -17,7 +17,7 @@
 //  터미널 수량은 번호를 모른다 — 차이를 묶음(·참고)으로 설명 못 하는 만큼은 «번호 없음» 으로 센다(후보일 뿐 확정 아님).
 import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
-import { frBundlesOf, bundleExplainOf } from './tallyReport.js';   // 4.54: 빈 FR 묶음 — 터미널은 한 묶음을 1대로 센다(마감텔리 묶음 판정 한 벌)
+import { frBundlesOf, bundleExplainOf, bundleDocNote, bundleDocExpect, bundleDocSrc } from './tallyReport.js';   // 4.54: 빈 FR 묶음 — 터미널은 한 묶음을 1대로 센다(마감텔리 묶음 판정 한 벌)
 
 const unitKey = (k) => !!k && !String(k).startsWith('_');   // __SLOT_ 자리표시·빈 번호는 유닛이 아니다(4.20 과 같은 판정)
 
@@ -50,7 +50,8 @@ export function reconBundleText(R) {
   const what = ns.length === 1 ? `빈 FR ${ns[0]}대 한 묶음 ${b.length}곳` : `빈 FR 묶음 ${b.length}곳(${b.map((x) => x.n + '대').join('·')})`;
   const spots = b.slice(0, 3).map((x) => `${x.pos.replace(/-/g, '/')} ${x.cns[0]}${x.n > 1 ? ` 외 ${x.n - 1}` : ''}`).join(' · ') + (b.length > 3 ? ` 외 ${b.length - 3}곳` : '');
   const how = R.bundleExplained >= R.bundleDiff ? `터미널은 한 묶음을 1대로 세어 ${R.bundleExplained}대 적게 셈` : `터미널은 한 묶음을 1대로 세는데 이 차이에는 ${R.bundleExplained}대만 맞음`;
-  return `${what} — ${how} (${spots})`;
+  const _dn = bundleDocNote(b);   // 4.55: 서류 기준이면 그 말과 서류·앱이 어긋난 곳
+  return `${what} — ${how} (${spots})${_dn ? ` · ${_dn}` : ''}`;
 }
 
 //  opts.skip(cn) — 검증 대상이 아닌 컨(수화물·통과화물·선사 취소 요청분 — 진단이 이미 가르는 것). opts.voyageKey — 시프팅 지도 캐시 키.
@@ -199,11 +200,15 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
   const termN = termBasis === 'plan' ? planN : termBasis === 'qc' ? qcN : 0;
   //  ★ 4.54 — 앱이 터미널보다 많으면 먼저 «빈 FR 묶음»(같은 칸의 빈 플랫랙 2대 이상 — 터미널은 1대로 센다)이 얼마나 설명하는지 본다. 묶음 판정은 마감텔리와 한 벌(tallyReport.frBundlesOf).
   //    gapRest = 묶음으로 설명하고 남은 차이 — 후보(explained)·«번호 없음»(unknown)은 이 남은 차이로 센다. 앱 대수(app)·gap 은 종전 그대로(낱개).
-  let gap = null, gapRest = null, explained = 0, unknown = 0, bundles = [], bundleDiff = 0, bundleExplained = 0;
+  let gap = null, gapRest = null, explained = 0, unknown = 0, bundles = [], bundleDiff = 0, bundleExplained = 0, doc = null;
   if (termBasis) {
     gap = app - termN;
+    //  ★ 4.55 — 서류가 이 방향에 닿는지·못 쓰는지는 차이가 0 이어도 본다. 서류 묶음 몫이 있는데 터미널 배정이 앱과 똑같으면 doc.off(독립 감사 3차 중-3·중-4 — 차이 0 이 서류와의 어긋남을 덮던 것 · 4차: 차이 0 일 때만).
+    const _bl = frBundlesOf(voyage, mk);
+    doc = Object.assign(bundleDocExpect(_bl, app, termN), { file: bundleDocSrc(_bl) });
+    if (termBasis !== 'plan') doc.off = false;   // 감사 4차 중-1 — 본선현황(QC) 부분합은 «터미널 배정» 이 아니라 서류 몫과 맞대지 않는다
     if (gap > 0) {
-      bundles = frBundlesOf(voyage, mk);
+      bundles = _bl;
       bundleDiff = bundles.reduce((a, b) => a + b.n - 1, 0);
       bundleExplained = bundleExplainOf(bundles, gap);   // 묶음 몫(n−1)의 부분합 중 gap 이하 최대 — 1·2·4·5대 같은 풀 수 없는 차이는 덮지 않는다
     }
@@ -214,5 +219,5 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
       unknown = Math.max(0, Math.abs(gapRest) - explained);
     }
   }
-  return { mode: mk, sources, carrierPartial, started, app, term: { basis: termBasis, n: termN }, gap, gapRest, explained, unknown, bundles, bundleDiff, bundleExplained, groups: gl, ref, refConf, total };
+  return { mode: mk, sources, carrierPartial, started, app, term: { basis: termBasis, n: termN }, gap, gapRest, explained, unknown, bundles, bundleDiff, bundleExplained, doc, groups: gl, ref, refConf, total };
 }
