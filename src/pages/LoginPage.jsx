@@ -393,6 +393,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   //  2.82-01: 화면 목록 = 작업중·당일·명일 + **모레**. 그래도 6대에 못 미치면 차순으로 채운다.
   //    ⛔ «지난 배»는 채움에서 뺀다 — 앞으로 올 배를 보려는 것이지 지나간 배를 보려는 게 아니다.
   const MIN_SHOWN = 6;
+  const MAX_CELLS = 12;   // 4.52-01: 현황판이 그리는 칸 수 — 그리는 쪽(slice)과 «그 밖 대기» 로 세는 쪽(boardRest)이 같은 수를 쓴다
   const boardShown = React.useMemo(() => {
     const base = [...board.ships, ...board.soon];
     if (base.length >= MIN_SHOWN) return base;
@@ -408,12 +409,17 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   //      그후의 일들은 **남은 검수사들이 고된 작업**을 하게 됩니다»*.
   //      이 화면은 **사람을 몇 명 부를지 정하는 자리**다. «몇 척·몇 개·언제까지»가 다 보여야 한다.
   const boardRest = React.useMemo(() => {
-    const shownKeys = new Set(boardShown.map(s => s.key));
+    //  ★ 4.52-01 (4.51 독립 감사 중-2) — 화면은 MAX_CELLS 칸만 그리므로 «그려진 배» 는 앞 MAX_CELLS 척이다. 종전엔 boardShown 전부를 «그려진 배» 로 쳐서
+    //    13번째 이후 배가 화면에도 «그 밖 대기» 에도 없이 사라졌다(밀린 배가 «오늘» 줄에 합류하면서 줄 서는 배가 늘어 걸릴 수 있었다). 조용한 실패 금지.
+    const shownKeys = new Set(boardShown.slice(0, MAX_CELLS).map(s => s.key));
     const now = Date.now();
+    //  ★ 4.52-01 (4.51 독립 감사 재판정) — «지난 배» 가름을 시작 시각(ms < now)으로만 재면, 줄 서는 배가 12척을 넘을 때 13번째 이후의 **이미 시작한 안 끝난 배**
+    //    (작업중·오늘 일찍 시작·밀린 배)가 화면에도 «그 밖 대기» 에도 없이 사라진다. 시작이 지난 배는 계획 끝이 지났을 때(over)만, rank 9(먼 배·지난 배)는 그대로 뺀다 —
+    //    작업중(rank 0)은 계획 끝이 지났어도 아직 끝나지 않은 일이라 센다. 시작이 아직 안 지난 배(계획 끝이 과거인 자료 오류 포함)는 종전처럼 센다(조용히 사라지게 하지 않는다).
     const rest = [...board.ships, ...board.soon, ...board.upcoming]
       .filter(s => !shownKeys.has(s.key))
-      .filter(s => !(s.ms != null && s.ms < now));           // 지난 배는 «앞으로 올 일감»이 아니다
-    const days = rest.map(s => s.ms).filter(m => m != null).sort((a, b) => a - b);
+      .filter(s => s.rank === 0 || !(s.ms != null && s.ms < now && (s.rank === 9 || s.over)));   // 끝난 배·지난 배는 «앞으로 올 일감»이 아니다
+    const days = rest.map(s => s.ms).filter(Boolean).sort((a, b) => a - b);   // 계획 일시가 없는 배(ms 0)가 «1/1» 로 끼지 않게
     const md = (m) => `${new Date(m).getMonth() + 1}/${new Date(m).getDate()}`;
     return {
       n: rest.length,
@@ -570,7 +576,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             // 2.4x (검수사 확정 -- 시안 구조): 선박 2열 카드 그리드. 좌측 코드 박스(작업중=act 초록 /
             //   예정=회색) · 우측 상태 2줄(1줄 작업중·번선석 또는 예정 시각 / 2줄 수량 배지 + 인원 0 경고).
             <div className="grid grid-cols-3 gap-1.5">
-              {boardShown.slice(0, 12).map(sp => {
+              {boardShown.slice(0, MAX_CELLS).map(sp => {
                 const isWorking = sp.rank === 0;
                 // ② 2.4x (검수사 확정): 시작 시각이 지난(=작업중) 배인데 활동 검수원이 0일 때만 경고.
                 //   시작 전 배는 0명이 정상이라 절대 경고하지 않는다 (2026-08-25 NSFR 사고 재발 방지).

@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import LoginPage from '../src/pages/LoginPage.jsx';
 import HomePage from '../src/pages/HomePage.jsx';
 import { setActiveWorkChoice } from '../src/workChoice.js';
+import { isWorkingNow, planIsLive, voyagePlanMs, voyagePlanEndMs } from '../src/utils.js';
 import F from './fixtures/planorder451.json';
 
 window.__calls = window.__calls || [];   // 스텁 firebase 의 기록 통(홈의 출항 표시 저장 시도가 여기에 쌓일 뿐 실제 쓰기는 없다)
@@ -54,6 +55,50 @@ voyages.SWBTOLD_2616N = {
   };
 }
 
+//  4.52-01 — 여분 배(내일 12:00 시작 · 끝은 모레 새벽 — 안 끝난 배). window.__EXTRA 척을 더해 로그인 현황판이 12칸에서 자를 때 잘린 배가 «그 밖 대기» 로 가는지 잰다.
+{
+  const nExtra = Number(window.__EXTRA || 0);
+  for (let i = 0; i < nExtra; i++) {
+    const nm = 'EX' + 'ABCDEFGH'[i], vy = `27${i}0N`;
+    voyages[`${nm}_${vy}`] = {
+      info: { vsl: nm, voy: vy, voy_d: vy, voy_l: `27${i}0S`, pier: 'PCTC', berth: '동부두 3번선석', terminalStatus: 'planned', workStartAt: '',
+              planDate: `${fmt(at(1, `12:${p2(i)}`))} ~ ${fmt(at(2, '04:00'))}` },
+      discharge: { ediContainers: oneC() },
+    };
+  }
+}
+
+//  4.52-01 재판정 — 이미 시작한 안 끝난 여분 배(오늘 00:01~ 시작 · 끝은 모레 새벽). window.__EXTRA_LIVE 척을 더해 줄 서는 배가 12척을 넘을 때 13번째 이후의 «시작한 배» 도 «그 밖 대기» 로 가는지 잰다.
+//  (오늘 00:01 이후면 시작이 지난 배, 자정 직후 14분 안이면 아직 시작 전인 배 — 어느 쪽이든 «그려진 칸 + 그 밖 대기» 에는 전부 들어가야 한다.)
+{
+  const nLive = Number(window.__EXTRA_LIVE || 0);
+  for (let i = 0; i < nLive; i++) {
+    const nm = 'LV' + 'ABCDEFGHIJKLMN'[i], vy = `28${i}0N`;
+    voyages[`${nm}_${vy}`] = {
+      info: { vsl: nm, voy: vy, voy_d: vy, voy_l: `28${i}0S`, pier: 'PCTC', berth: '동부두 4번선석', terminalStatus: 'planned', workStartAt: '',
+              planDate: `${fmt(at(0, `00:${p2(i + 1)}`))} ~ ${fmt(at(2, '04:00'))}` },
+      discharge: { ediContainers: oneC() },
+    };
+  }
+}
+
+//  4.52-01 재감사 — 작업중(rank 0)이면서 계획 끝이 이미 지난 여분 배(작업중 13척이 12칸을 넘는 날 — 작업중 배는 계획 끝이 지나도 아직 끝나지 않은 일이라 «그 밖 대기» 로 센다).
+{
+  const nWork = Number(window.__EXTRA_WORK || 0), t0 = Date.now();
+  for (let i = 0; i < nWork; i++) {
+    const nm = 'WK' + 'ABCDEFGHIJKLM'[i], vy = `29${i}0N`;
+    voyages[`${nm}_${vy}`] = {
+      info: { vsl: nm, voy: vy, voy_d: vy, voy_l: `29${i}0S`, pier: 'PCTC', berth: '동부두 5번선석', terminalStatus: 'working', workStartAt: fmt(new Date(t0 - 2 * 3600e3 - i * 60e3)),
+              planDate: `${fmt(new Date(t0 - 3 * 3600e3 - i * 60e3))} ~ ${fmt(new Date(t0 - 3600e3))}` },
+      discharge: { ediContainers: oneC() },
+    };
+  }
+}
+
+//  «그 밖 대기» 합계 기대값 계산용 — 지금 기준 계획 끝이 지난 배(작업중 제외)의 이름. 이 배가 12칸 밖으로 밀리면 «앞으로 올 일감이 아니다» 라서 일부러 «그 밖 대기» 에서 빠진다(설계).
+//  (시각 하드코딩 금지 — 19:30 이후에는 시험 자료 OBWH 도 끝난 배가 된다. 판정은 로그인 현황판의 over 와 같은 식이다.)
+window.__OVER_NAMES = Object.values(voyages).filter((v) => { const e = voyagePlanEndMs(v); return e > 0 && !planIsLive(voyagePlanMs(v), e, Date.now()) && !isWorkingNow(v); }).map((v) => v.info.vsl);
+
 const inspectors = { a: { name: '김성일', lastActive: Date.now() - 5000, loggedIn: true } };
 const mode = window.__MODE || 'login';
 const root = createRoot(document.getElementById('root'));
@@ -61,6 +106,9 @@ if (mode === 'home') {
   setActiveWorkChoice({ mode: 'view' });
   root.render(React.createElement(HomePage, { voyages, inspectors, inspector: '김성일', portMisData: {}, pilotForecast: {}, heartbeat: null,
     onRefreshData() {}, refreshing: false, refreshedAt: 0, onOpenVoyage() {}, onOpenChiefDashboard() {}, onOpenAux() {} }));
+} else if (mode === 'choice') {
+  //  4.52-01 — 로그인 뒤 «작업 선박 선택» 단계(일반 검수원이 이름을 고른 뒤) — 선박 줄의 이름표(작업중·오늘·어제 …)를 잰다.
+  root.render(React.createElement(LoginPage, { inspectors, voyages, onSelect: () => {}, extraStaff: {}, deletedStaff: {}, choiceFor: '시험작업자', current: '시험작업자', onCancelChoice() {} }));
 } else {
   root.render(React.createElement(LoginPage, { inspectors, voyages, onSelect: () => {}, extraStaff: {}, deletedStaff: {} }));
 }
