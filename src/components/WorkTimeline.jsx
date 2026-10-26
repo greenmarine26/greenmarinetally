@@ -23,6 +23,8 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
   const rows = ships.slice(0, 8);
   if (!rows.length) return null;
   const fmt = (ms) => `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}`;
+  //  4.51: 시작이 어제 이전인 «밀린 배»(로그인 현황판이 «오늘» 줄에 올림)는 라벨에 날짜를 같이 — «오늘 08:00» 으로 읽히지 않게. 오늘 이후 시작은 종전 그대로.
+  const fmtD = (ms) => (ms < day0 ? `${new Date(ms).getMonth() + 1}/${new Date(ms).getDate()} ` : '') + fmt(ms);
   const pfArr = (vsl) => {   //  도선 예보 입항 시각(ms) — 코드 키(수집기가 코드로 저장)
     const p = pilotForecast[String(vsl || '').toUpperCase()];
     const m = String(p?.nextArr || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
@@ -74,14 +76,14 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
                 <div className={`absolute rounded-sm ${working ? 'bg-emerald-500/35 border border-emerald-400/50'
                   : (sp.ms - day0 < 24 * H ? 'bg-sky-500/25 border border-sky-400/40' : 'bg-amber-500/20 border border-amber-500/35')}`}
                   style={{ top: y + 2, height: ROW_H - 6, left: start + '%', width: Math.max(0.4, span - start) + '%' }}
-                  title={`${sp.vsl} 작업 ${fmt(sp.ms)} ~ ${fmt(sp.msEnd)}`} />)}
+                  title={`${sp.vsl} 작업 ${fmtD(sp.ms)} ~ ${fmt(sp.msEnd)}`} />)}
               {start != null && (
                 <span className={`absolute text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap border ${working
                   ? 'bg-emerald-600/80 text-white border-emerald-400/50'
                   : (sp.ms - day0 < 24 * H ? 'bg-sky-700/80 text-sky-50 border-sky-500/50' : 'bg-amber-800/70 text-amber-100 border-amber-600/50')}`}
                   style={{ top: y, left: `min(${start}%, 93%)` }}
-                  title={`${sp.vsl} 작업 ${fmt(sp.ms)}${working ? ' (작업중)' : ''}`}>
-                  {sp.vsl} {working ? '작업중' : fmt(sp.ms)}
+                  title={`${sp.vsl} 작업 ${fmtD(sp.ms)}${working ? ' (작업중)' : ''}`}>
+                  {sp.vsl} {working ? '작업중' : fmtD(sp.ms)}
                 </span>)}
             </React.Fragment>
           );

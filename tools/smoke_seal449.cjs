@@ -346,7 +346,7 @@ const bundle = process.argv[3];
   for (const f of ['src/components/ReportTab.jsx', 'src/components/CSVExport.jsx', 'src/loloReport.js', 'src/tallyReport.js', 'src/mir.js']) ok(/sealCheckOf/.test(src(f)) && !/sl_orig\s*!==?\s*c\.sl|c\.sl\s*!==?\s*slOrig/.test(src(f)), `${f.split('/').pop()} — 실오류 판정 한 벌(sealCheckOf)`);
   const help = JSON.stringify(T.HELP_DATA);
   ok(/실번호가 자료마다 다를 때 — 다른 자료 실 · 하나만 맞으면 맞음 \(4\.49~\)/.test(help) && /ML Seal 칸이 주실/.test(help) && /끝자리가 빠진 값/.test(help), '매뉴얼 — 4.49 절(다른 자료 실 · ML Seal · 끝자리 빠짐)');
-  ok(/^TallyOne 4\.(49|5[0-9])/.test(T.APP_VERSION) && /실번호|X-RAY 탭 맨 위에 내 몫과 파트너 몫 두 단계 카드/.test(T.APP_NOTE), `버전 ${T.APP_VERSION} · APP_NOTE 실번호`, T.APP_NOTE);
+  ok(/^TallyOne 4\.(49|5[0-9])/.test(T.APP_VERSION) && /실번호|작업자 선택 화면에서 같은 시작이면 먼저 끝나는 배가 위로|X-RAY 탭 맨 위에 내 몫과 파트너 몫 두 단계 카드/.test(T.APP_NOTE), `버전 ${T.APP_VERSION} · APP_NOTE 실번호`, T.APP_NOTE);
 
   console.log('⑫ 4.49-02 앞자리 0 · RF CONTAINER LIST — 신고(세관) 값의 앞 0 이 빠졌으면 실오류 · RF 리스트 실은 실 자료로 안 친다(검수사 2026-10-25 «검수리스트 위주» · «실번호는 본리스트»)');
   {

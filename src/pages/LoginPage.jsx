@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, planIsLive, planEndCompare, voyageHasLeft, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
 import { isFreeRoamer, readWorkChoice, isAdminUser } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
@@ -319,6 +319,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   //   ⚠ 폰은 종전 화면 그대로다("컴용 로그인 화면") -- lg 이상에서만 2단이 된다.
   const board = React.useMemo(() => {
     const vs = Object.entries(voyages || {}).map(([key, v]) => ({ key, ...v }));
+    const now = Date.now();   // 4.51: 시작은 지났어도 끝이 안 지난 배를 가르는 한 시각
     let boxes = 0;
     // -- 2.4x (검수사 확정): KPI「검수 대상 컨테이너」터미널별 분해 -- info.pier 로 가른다.
     //   PCTC→평택컨테이너터미널 · PNCT→동방아이포트 · 그 외(빈 배 있음, 실측 OBWH·RZOR)→미상.
@@ -340,7 +341,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       //    13시 시작인 배가 12시 30분에 "작업중"으로 떠서 담당자가 준비도 못 한 채 볼 뻔했다.
       //  ★ 2.82-01: rank 3 = **모레**. 검수사 *«내일 아님 모레 작업이 있는 선박인데 …눌러야만 보여서»*
       //    ⚠ 3 은 화면 목록에만 넣는다. 타임라인은 48시간 창이라 **rank<3 만** 받는다(아래 ships).
-      const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : n === 2 ? 3 : 9;
+      //  ★ 4.51 (검수사 2026-10-26 06:47 «틀린 배정 순서 왜 일까요? 같은 앱인데 틀린 배정 화면?» · 07:33 «지난 배가 아니고 작업배정이 뒤로 밀린것입니다»)
+      //    시작 날짜가 어제 이전이어도 **계획 끝이 아직 안 지난 배**(작업 배정이 뒤로 밀렸거나 아직 시작 전인 배)는 «지난 배» 가 아니다 — 홈은 그 배를 맨 위 «작업 중·예정»
+      //    줄에 두는데(utils.planIsLive) 이 현황판은 rank 9(=«지난 배»)로 떨어뜨려 두 화면이 달랐다. «오늘» 줄(rank 1)에 올린다 — 화면에는 «어제 08:00» 처럼 날짜가 같이 붙는다.
+      //    ⚠ 이미 떠났거나 터미널 작업이 끝난 배(utils.voyageHasLeft)는 계획 끝이 미래여도 올리지 않는다(일찍 떠난 다일 배).
+      //    ⚠ 끝 시각을 모르는 배(msEnd 0)는 «밀렸다» 고 단정하지 않는다 — 종전 날짜 판정 그대로. 오늘 시작해 계획 끝이 이미 지난 배도 종전대로 «오늘» 줄이다(홈도 «오늘» 묶음 맨 끝에 둔다).
+      //    ⚠ 작업중(isWorkingNow)은 그대로 rank 0.
+      const delayedLive = n != null && n < 0 && msEnd > 0 && planIsLive(ms, msEnd, now) && !voyageHasLeft(v, now);
+      const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : n === 2 ? 3 : delayedLive ? 1 : 9;
       //  ★ 2.82 (검수사 지시 2026-08-29) — *«오늘 작업이 없으면 차순으로 기본 6대를 보여 주세요.
       //    화면이 비어 보입니다»*. 종전엔 `rank < 9`(작업중·오늘·내일)만 담아서, 실측 2026-08-29
       //    활성 15항차 중 화면에 뜨는 것이 **단 2척**이었다(나머지는 D+2 이후라 통째로 버려졌다).
@@ -363,10 +371,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         }
         const xray = Object.keys(v?.discharge?.xrayList || {}).length;   // XRAY는 양하 전용
         //  2.82-01: boxes — 그 배의 컨 수. 목록에 안 보이는 나머지의 «일감»을 아래 한 줄로 말한다.
-        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, key: v.key, c20, mty, mtyRf, rf, xray, boxes: vBoxes });
+        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, over: msEnd > 0 && !planIsLive(ms, msEnd, now) ? 1 : 0, key: v.key, c20, mty, mtyRf, rf, xray, boxes: vBoxes });
       }
     }
-    ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
+    //  4.51: 홈 목록과 같은 순서 규칙 한 벌(utils.planIsLive · planEndCompare) — ① 같은 줄(rank)에서 계획 끝이 이미 지난 배(over)는 안 끝난 배들 뒤로(홈 «끝난 배» 등급),
+    //    끝난 배끼리는 나중에 끝난 배가 위 ② 안 끝난 배는 시작 순, 같은 시작이면 먼저 끝나는 배가 위(1.77-01). 종전엔 시작 순뿐이라 방금 끝난 배가 «오늘» 줄 맨 위에 올라 있고
+    //    같은 시작이면 키 가나다순이었다(홈과 갈림). 숨기지는 않는다 — 순서만이다.
+    ships.sort((a, b) => a.rank - b.rank || a.over - b.over || (a.over ? b.msEnd - a.msEnd : 0) || (a.ms || 9e15) - (b.ms || 9e15) || planEndCompare(a.msEnd, b.msEnd));
     //  2.82: 종전 소비처(타임라인·작업중 척수)는 rank<9 만 본다 — 그 뜻을 바꾸지 않는다.
     //    `upcoming` 은 화면이 빌 때만 쓰는 «차순» 이다(작업일시 가까운 순, 위 정렬 그대로).
     //  2.82-01: ships(rank<3) = 작업중·당일·명일 — **타임라인 48시간 창과 «오늘 N척 작업중» 이 쓰는 것.**
@@ -420,7 +431,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const infoOf = (key) => (voyages && voyages[key] && voyages[key].info) || {};
     const boxesOf = (sh) => (lightOnly ? (lightBoxes[sh.key] || 0) : (sh.boxes || 0));   // 4.08-01: 본문이 있으면 board 가 센 값 그대로, 없으면(일반 검수원) 키만 센 값
     const pierOf = (key) => voyagePierOf(infoOf(key));   // 3.64-01: 부두 판정 한 벌(utils.voyagePierOf — 수석 대시보드 장비 보고 부두 줄과 같은 규칙)
-    const rankLabel = (r) => (r === 0 ? '작업중' : r === 1 ? '오늘' : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
+    //  4.51: «오늘» 줄이지만 시작 날짜가 어제 이전인 배(작업이 뒤로 밀린 배)는 «오늘» 대신 «어제»·날짜로 — 시작이 오늘인 것처럼 읽히지 않게.
+    const rankLabel = (r, ms) => (r === 0 ? '작업중' : r === 1 ? ((dayDiff(ms) ?? 0) < 0 ? dayLabel(ms) : '오늘') : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
     const equips = choiceVoyage ? equipNumbersForPier(pierOf(choiceVoyage)) : [];
     const chosen = choiceVoyage ? infoOf(choiceVoyage) : null;
     const start = () => { if (!choiceVoyage) return; onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip }); };
@@ -476,7 +488,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                       className={`w-full text-left rounded-pill px-3 py-2.5 border-2 ${on ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-dim-100'}`}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-black text-base truncate">{inf.vsl || sh.vsl || sh.key} <span className="font-bold text-sm opacity-80">{voyTxt}</span></span>
-                        <span className={`text-xxs font-bold px-1.5 py-0.5 rounded ${sh.rank === 0 ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>{rankLabel(sh.rank)}</span>
+                        <span className={`text-xxs font-bold px-1.5 py-0.5 rounded ${sh.rank === 0 ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>{rankLabel(sh.rank, sh.ms)}</span>
                       </div>
                       <div className="text-xxs opacity-80">{pierOf(sh.key) || '부두 미상'}{inf.berth ? ` · ${inf.berth}` : ''}{boxesOf(sh) ? ` · ${boxesOf(sh)}대` : ''}{sh.ms ? ` · ${hhmm(sh.ms)}` : ''}</div>
                     </button>

@@ -971,6 +971,21 @@ node tools/smoke_xrayxlsx.cjs || { echo "✗ X-RAY 엑셀 양식 연막검사 �
 node tools/smoke_progress.cjs || { echo "✗ 작업량 고정(2.89-07) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_markfont.cjs || { echo "✗ 카고플랜 글자(2.89-08) 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_list6.cjs || { echo "✗ 목록 기본 6개 연막검사 실패 — 배포 금지"; exit 1; }
+#  4.51: **홈·로그인 «순서» 한 벌** — 같은 실데이터(2026-10-26 08:09 KST 실 15항차 + 옛 데이터 SWBT + 끝난 배)로 실제 홈과 로그인 현황판을 그려 배 순서를 비교한다.
+#    검수사 2026-10-26 06:47 «틀린 배정 순서 왜 일까요? 같은 앱인데 틀린 배정 화면?» · 07:33 «지난배가 아니고 작업배정이 뒤로 밀린것입니다.» firebase 는 메모리 스텁(실제 쓰기 없음).
+SMOKE_PO=$(mktemp /dev/shm/hometmp/_smokepo_XXXXXX.js)
+cp src/firebase.js "$SMOKE_PO.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+if npx esbuild tools/smoke_planorder451.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+     --external:fs --external:path --external:url \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_PO"; then
+  cp "$SMOKE_PO.fbbak" src/firebase.js && rm -f "$SMOKE_PO.fbbak"
+  node tools/smoke_planorder451.cjs "$SMOKE_PO" || { echo "✗ 4.51 홈·로그인 순서 한 벌 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_PO"; exit 1; }
+  rm -f "$SMOKE_PO"
+else
+  cp "$SMOKE_PO.fbbak" src/firebase.js; rm -f "$SMOKE_PO.fbbak"
+  echo "✗ 4.51 홈·로그인 순서 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_PO"; exit 1
+fi
 node tools/smoke_scrolltop.cjs || { echo "✗ TOP 버튼 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_conepick.cjs || { echo "✗ 콘앱 선박 접기 연막검사 실패 — 배포 금지"; exit 1; }
 #  3.60-03: 전체 진단 뒤 기록 오염 수리 8건 — 기록지 자리 유지·startSet·42RH·key·unsub·SW 범위·엠티실 «바꾸는 칸만»(실소스 실행, 스텁 Firebase).

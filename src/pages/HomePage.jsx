@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -440,7 +440,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const now = Date.now();
         const rank = (v) => {
           const eta = v._etaMs, etd = v._etdMs;
-          if (eta != null && (etd == null || etd >= now)) return [0, eta];
+          if (planIsLive(eta, etd, now)) return [0, eta];   // 4.51: 로그인 현황판과 한 벌(utils.planIsLive)
           // V9.36-01: 도선만 있는 항차(nextArr 없이 nextDep만 — "도선만 잡고 대기")가 미상으로
           //   떨어지던 결함. etd만 미래면 같은 급에 두고 그 시각으로 줄 세운다.
           if (eta == null && etd != null && etd >= now) return [0, etd];
@@ -454,8 +454,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         // 1.77-01 검수사 확정 2026-08-17: *"같은 시작시간이라고 끝나는 시간이 먼저인 걸 앞에 놓겠습니다.
         //   이유는 먼저 사라지기 때문입니다."* · *"같이 08시 시작이지만 하나는 16:00 하나는 중간
         //   하나는 그 다음날까지 갑니다."* → **끝나는 시각이 빠른 배가 위.** 종료 미상은 뒤로.
-        if ((a._etdMs == null) !== (b._etdMs == null)) return a._etdMs == null ? 1 : -1;
-        if (a._etdMs != null && b._etdMs != null && a._etdMs !== b._etdMs) return a._etdMs - b._etdMs;
+        {   // 4.51: 이 동률 규칙은 utils.planEndCompare 한 벌 — 로그인 현황판도 같은 함수로 잇는다
+          const te = planEndCompare(a._etdMs, b._etdMs);
+          if (te) return te;
+        }
         if (!!b._hasData !== !!a._hasData) return (b._hasData ? 1 : 0) - (a._hasData ? 1 : 0);
         return (b._ready || 0) - (a._ready || 0);
       });
@@ -535,7 +537,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   //   ⚠ 접은 줄도 언마운트하지 않는다(`hidden`) — VoyageCard 의 departBadgeAt sticky 기록이 죽으면 콘앱 출항 표시가 멈춘다.
   const _isWaitData = (v) => !v._hasData && !v.info?.forecast;
   //  이미 지난 배(출항 — 없으면 작업시작 — 이 지금보다 앞) · 2.82-01 채움에서 건너뛰는 배와 같은 판정 한 벌
-  const _isPastVoy = (v, now) => { const t = v?._etdMs ?? v?._etaMs; return t != null && t < now; };
+  const _isPastVoy = (v, now) => planIsPast(v?._etaMs, v?._etdMs, now);   // 4.51: 판정은 utils.planIsPast 한 벌(로그인 현황판 공용)
   const _pierFirst = (arr) => {
     if (!effectivePier) return arr;
     const here = arr.filter(v => v._pier === effectivePier);   // 현 부두 위로
