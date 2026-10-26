@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.50';
-const NOTE = '4.50 X-RAY 탭 맨 위에 내 몫과 파트너 몫 두 단계 카드가 생겼습니다. 내 컨을 먼저 등록한 뒤 파트너 이름을 넣고 한 번 누르면 남은 컨이 그 이름으로 등록되어 파트너가 다시 로그인하지 않아도 됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.49-03';
+const NOTE = '4.49-02 실번호가 자료마다 다르면 다른 자료 실로 보이고 세관 신고 실의 앞자리 0 이 빠졌으면 실오류로 셉니다. RF CONTAINER LIST 의 실번호는 쓰지 않고 본 리스트 실을 씁니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
