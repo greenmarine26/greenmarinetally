@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, planIsLive, planEndCompare, voyageHasLeft, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, planIsLive, planEndCompare, planDelayedLive, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
 import { isFreeRoamer, readWorkChoice, isAdminUser } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
@@ -347,7 +347,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       //    ⚠ 이미 떠났거나 터미널 작업이 끝난 배(utils.voyageHasLeft)는 계획 끝이 미래여도 올리지 않는다(일찍 떠난 다일 배).
       //    ⚠ 끝 시각을 모르는 배(msEnd 0)는 «밀렸다» 고 단정하지 않는다 — 종전 날짜 판정 그대로. 오늘 시작해 계획 끝이 이미 지난 배도 종전대로 «오늘» 줄이다(홈도 «오늘» 묶음 맨 끝에 둔다).
       //    ⚠ 작업중(isWorkingNow)은 그대로 rank 0.
-      const delayedLive = n != null && n < 0 && msEnd > 0 && planIsLive(ms, msEnd, now) && !voyageHasLeft(v, now);
+      const delayedLive = planDelayedLive(ms, msEnd, v, now);   // 4.55-01: 판정은 utils.planDelayedLive 한 벌(홈 펼침·날짜 묶음 공용) — 종전 인라인 식과 같다
       const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : n === 2 ? 3 : delayedLive ? 1 : 9;
       //  ★ 2.82 (검수사 지시 2026-08-29) — *«오늘 작업이 없으면 차순으로 기본 6대를 보여 주세요.
       //    화면이 비어 보입니다»*. 종전엔 `rank < 9`(작업중·오늘·내일)만 담아서, 실측 2026-08-29

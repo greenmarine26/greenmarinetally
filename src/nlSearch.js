@@ -3326,8 +3326,9 @@ export function workWindowOf(info, lastAtMs) {
   //  «끝났다»는 추측하지 않고 자료로 본다 — 터미널이 떠났다고 하거나, 양하·선적이 둘 다 마감됐거나, 진척 100%.
   //  ⚠ `pct>=100` 에는 신선도 걸쇠를 건다 — 지난 기항 피드가 100 인 채로 남아 있을 수 있다
   //    (2.99-01·BUG-2026-008 과 같은 계열). 미래 시각은 «신선»이 아니다.
-  //  ★ «끝났다» 판정은 앱의 다른 자리와 **한 벌**이어야 한다 — ChiefDashboard 는
-  //    `dischargeDone || loadingDone || inspectorDone` (OR) 로 본다. 여기만 AND 로 두면
+  //  ★ «끝났다» 판정(속도 분모를 멈추는 문)은 `dischargeDone || loadingDone || inspectorDone` (OR) 한 벌이다
+  //    (4.55-01 전까지는 ChiefDashboard 마감 텔리 목록도 같은 OR 였고 지금은 utils.inspectorAllDone 이다 —
+  //    그 목록은 «수석 완료 저장을 기다리나» 를 말하고, 여기는 «한쪽이라도 끝났으면 분모를 멈춘다» 라 일부러 다르다). 여기만 AND 로 두면
   //    양하 전용선·선적 전용선이 안 걸려 **떠난 배의 분모가 시계를 따라 계속 늘어난다**
   //    (감사 실측 — 마지막 완료 1주 뒤 46대/h 가 1.9대/h 로 내려앉는다).
   const over = !!(info && (String(info.terminalStatus || '').trim().toLowerCase() === 'departed'

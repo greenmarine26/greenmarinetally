@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
@@ -41,6 +41,8 @@ const _two = (n) => String(n).padStart(2, '0');
 function isOpenVoyage(v) {
   //  2.40-02: 종전엔 터미널 상태만 보고 **시각을 안 봤다** — 시작 전 배가 종일 «작업중»으로 펼쳐졌다.
   if (isWorkingNow(v)) return true;
+  //  4.55-01: 시작 날짜는 어제 이전인데 계획 끝이 아직 안 지난 배(작업 배정이 뒤로 밀렸거나 양하만 끝나고 선적을 기다리는 배 — DXQD 2642E)는 «그 밖의 배» 가 아니다. 로그인 현황판과 한 벌(utils.planDelayedLive).
+  if (planDelayedLive(v?._etaMs, v?._etdMs, v)) return true;
   const n = dayDiff(v?._etaMs ?? v?._etdMs ?? null);
   //  ★ 2.82-01 (검수사가 이유를 밝혀 줌 2026-08-29) —
   //    *«이렇게 바꾼이유는 **내일 아님 모레 작업이 있는 선박**인데 그밖의 선박을 눌러야만 보여서였습니다»*
@@ -691,13 +693,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     } catch (e) { console.error('[검수완료 취소] 실패:', key, e); }
   };
   // 보유 모드 전부 완료 여부 (구 inspectorDone 데이터 하위호환)
-  const isAllDone = (v) => {
-    if (v?.info?.inspectorDone) return true;
-    const hasD = v?.discharge && Object.keys(v.discharge).length > 0;
-    const hasL = v?.loading && Object.keys(v.loading).length > 0;
-    if (!hasD && !hasL) return false;
-    return (!hasD || !!v?.info?.dischargeDone) && (!hasL || !!v?.info?.loadingDone);
-  };
+  const isAllDone = (v) => inspectorAllDone(v);   // 4.55-01: 판정은 utils.inspectorAllDone 한 벌 — 수석 대시보드 진행 줄·17시 보관·미르와 같다(선적 EDI 대기 배는 «선적 있음»)
 
   // ── ★ 4.25 홈 배치(판 D) ─────────────────────────────────────────────────
   //   검수사 2026-10-12 19:42 «검수앱과 수석대쉬보드의 폰화면과 컴퓨터의 화면이 복잡하고 난해 합니다 … 간결하고 보기 좋게»
@@ -762,6 +758,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     const out = new Map();
     const dateGroupOf = (v) => {
       if (isWorkingNow(v)) return { id: 'work', rank: -100, ico: '⚓', label: '작업 중' };
+      if (planDelayedLive(v._etaMs, v._etdMs, v, now)) return { id: 'd0', rank: 0, ico: '📅', label: '오늘' };   // 4.55-01: 밀린 배는 «오늘» 묶음(줄에는 «10-26 19:00» 처럼 날짜가 같이 찍힌다) — 로그인 현황판과 한 벌
       const t = v._etaMs ?? v._etdMs ?? null;
       const n = dayDiff(t);
       return n == null ? { id: 'nodate', rank: 999, ico: '🗓', label: '일정 미상' }

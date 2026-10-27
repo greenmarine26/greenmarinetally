@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -80,7 +80,9 @@ function scheduleOf(info, pfMap) {
 export function tallyTargetState(v, pfMap, now = Date.now()) {
   const info = v?.info;
   if (!info) return null;
-  if (info.dischargeDone || info.loadingDone || info.inspectorDone) return 'done';
+  //  4.55-01: «검수 완료» 는 홈·수석 보드와 같은 한 벌(utils.inspectorAllDone) — 양하만 끝나고 선적 EDI 를 기다리는 배(DXQD 2642E)가 «검수 완료 · 수석 대기» 로 올라오지 않게 한다. 한쪽만 끝난 배는 작업 중이다.
+  if (inspectorAllDone(v)) return 'done';
+  if (info.dischargeDone || info.loadingDone) return 'working';
   const sched = scheduleOf(info, pfMap);
   if (isWorkingNow(v, now)) return 'working';               // 터미널이 «작업 중»이라고 적었다(배정목록 작업시작·동방 호기별 실적 — utils 한 벌)
   if (sched.etaMs != null && sched.etaMs <= now) return 'working';  // 작업 시작 시각이 지났다
@@ -1737,11 +1739,15 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
       const info = v.info || {};
       const vsl = info.vsl || key.split('_')[0] || '(선박명 미상)';
       const dPtk = countPtkSection(v.discharge, 'discharge', { ...v, key });   // 4.20 감사: 양하는 평택 양하분 한 벌(항차째로 넘겨 시프팅을 뺀다)
-      const lPtk = countPtkSection(v.loading, 'loading');
+      //  ★ 4.55-01 (검수사 2026-10-27 06:22 «수석완료확인 버튼을 활성화 시킨이유는?» · 06:33 «선적EDI가 없다고 선적이 없는건 아닙니다. EDI 대기 상태인거죠») — 선적 **EDI 없이 리스트(records)만** 온 배(DXQD 2642E — 2642W LOADLIST 371대)는
+      //    EDI 평택 대수가 0 이라 «선적 없음» 으로 읽혀, 양하 완료 표시만으로 «✓ 수석 완료 저장» 이 켜졌다. 표시 대수는 EDI 가 없으면 홈 카드(HomePage.computeStats 의 recCount)와 같은 수 — 이 방향 리스트 대수 — 를 센다.
+      //    «검수 완료(수석 대기)» 판정은 아래 inspectorDone 의 utils.inspectorAllDone 한 벌(홈과 같다 — 선적 자료·선적 계획 수량이 있으면 EDI 대기도 «선적 있음»).
+      const lPtkEdi = countPtkSection(v.loading, 'loading');
+      const lPtk = lPtkEdi || ownDirCns((v.loading && v.loading.records) || {}, 'loading').length;
       out.push({
         key, vsl,
         voyD: info.voy_d || '', voyL: info.voy_l || '',
-        discharge: dPtk, loading: lPtk,
+        discharge: dPtk, loading: lPtkEdi, loadingShow: lPtk,   // loading = EDI 평택 대수(실선적 EDI 단추·자료 대기 판정이 쓴다 — 종전 그대로) · loadingShow = 줄에 적는 선적 수(EDI 없으면 리스트 수 — 홈 카드와 같은 수)
         //  2.79: CATOS 터미널 실적 반영 대기 수 — 판정은 utils.computeTermApply 한 벌(쓰기와 동일).
         termApplyD: computeTermApply(v.discharge?.termWork, v.discharge?.completed).length,
         termApplyL: computeTermApply(v.loading?.termWork, v.loading?.completed).length,
@@ -1758,9 +1764,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         imo: info.imo || '',
         createdAt: info.createdAt || 0,
         // V7.90: 완료 분리 — 보유 모드가 전부 완료되면 수석 최종 저장 가능 (구 inspectorDone 하위호환)
-        inspectorDone: !!info.inspectorDone
-          || ((dPtk === 0 && lPtk === 0) ? false
-              : (dPtk === 0 || !!info.dischargeDone) && (lPtk === 0 || !!info.loadingDone)),
+        inspectorDone: inspectorAllDone(v),   // 4.55-01: 홈 isAllDone 과 같은 한 벌(종전엔 평택 대수 0 이면 «그 방향 없음» — 선적 EDI 대기 배의 단추가 양하만으로 켜졌다)
         inspectorDoneAt: info.inspectorDoneAt || Math.max(info.dischargeDoneAt || 0, info.loadingDoneAt || 0),
         dDone: !!(info.inspectorDone || info.dischargeDone), dDoneAt: info.dischargeDoneAt || 0,
         lDone: !!(info.inspectorDone || info.loadingDone), lDoneAt: info.loadingDoneAt || 0,
@@ -2006,7 +2010,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
       </div>
       <div className="flex items-center gap-3 mt-1 text-xs">
         <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
-        <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
+        <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loadingShow ?? r.loading}</b>{(r.loadingShow ?? r.loading) > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
         {r.inspectorDone && (
           <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
         )}

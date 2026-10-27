@@ -38,6 +38,8 @@ import {
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
   isSealError, sealCheckOf, sealConflictOf, isRfListSrc,   // 4.49: 실번호 판정 한 벌 · 4.49-02: 실번호 불일치(RF CONTAINER LIST 뺌) · RF 리스트 출처 표기
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
+  ediWaitingOnlyLeft,   // 4.55-01: 양하는 끝 · 남은 선적이 EDI 대기뿐 — 미르는 입력할 게 없다고 본다
+  inspectorAllDone,   // 4.55-01: «검수 완료» 판정 한 벌(홈·수석 보드·보관 보고·홀드 잔여 공용)
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
 import {
@@ -3925,6 +3927,7 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   //  다 끝났는가 — 재료(항차 info 의 양하·선적 완료 표시)가 먼저, 없으면 답 문장(«다 끝났어요»·«남은 작업: 0대»)·이 대화의 앞 답(2차 시뮬 ①: 속도 답 뒤에 ETA 를 권하던 것)
   const inf = (ctx && (ctx.info || (ctx.voyage && ctx.voyage.info))) || null;
   const _pl = inf ? Number(inf.planLod) : NaN;   // 양하만 하는 배(선적 계획 planLod 0 — utils 와 같은 칸)는 양하 완료만으로 끝
+  //  4.55-01: 이 줄은 일부러 info 만 본다 — 콘앱은 항차 전체 없이 {info} 만 넘겨(public/cone.html) inspectorAllDone 을 부르면 콘앱·검수앱의 «다 끝났나» 대답이 갈린다(두 앱 같은 답). 선적 EDI 를 기다리는 배(DXQD)가 화면에서 «검수 완료» 로 읽히던 것은 홈·수석 보드·보관 보고·홀드 잔여가 고쳤다.
   const done = !!(inf && inf.dischargeDone && (inf.loadingDone || _pl === 0)) || _thIsDone(text) || !!(th && th.turns.some((t) => _thIsDone(t.answer || '')));
   //  그 턴의 배 코드 — 홈에서 배 이름 붙인 질문 뒤의 «응» 에 붙인다(ctx.vsl · info.vsl · shipCtx.info.vsl · 되쓴 말 머리의 배 코드)
   const ship = S((ctx && (ctx.vsl || (ctx.info && ctx.info.vsl) || (ctx.shipCtx && ctx.shipCtx.info && ctx.shipCtx.info.vsl))) || String((ctx && ctx.voyageKey) || '').split('_')[0]).toUpperCase();
@@ -4208,11 +4211,8 @@ function _statusReportMarks(v, now) {
 /** 검수원이 홈 카드에서 «검수 완료» 를 눌렀나 — 수석 완료(inspectorDone)이거나 보유 모드가 전부 완료 표식(dischargeDone·loadingDone)이면 true.
  *  HomePage.isAllDone · utils.ferryWorkDone · 홀드 잔여 finishedAll 과 같은 규칙(보유 모드만 따진다). 작업 끝 시각(workEndAt)·터미널 상태는 isWorkingNow 가 본다 — 출항(ATD) 뒤에도 터미널이 «작업중» 으로 남는 항차는 이 «검수 완료» 표시가 끝낸다. (4.06 재감사 D1) */
 function _inspectorFinished(v) {
-  const info = (v && v.info) || {};
-  if (info.inspectorDone) return true;
-  const hasD = !!(v && v.discharge && Object.keys(v.discharge).length), hasL = !!(v && v.loading && Object.keys(v.loading).length);
-  if (!hasD && !hasL) return false;
-  return (!hasD || !!info.dischargeDone) && (!hasL || !!info.loadingDone);
+  //  4.55-01: 홈·수석 보드의 «검수 완료» 는 utils.inspectorAllDone 한 벌(선적 EDI 대기 배는 «선적 있음»). 미르는 «입력할 게 남았나» 만 본다 — 양하가 끝났고 남은 선적이 EDI 대기(자료 없이 계획 수량만)뿐이면 입력할 것이 없으니 종전 4.55 처럼 «끝» 으로 읽는다(화남·다음 작업 판정은 현실에서 나오는 모양 전부 종전과 같다 — 구역이 하나도 없는데 선적 완료 표식만 켜진 비현실 모양만 다르다 · 콘앱도 같다).
+  return inspectorAllDone(v) || ediWaitingOnlyLeft(v);
 }
 /** 앱에 올라온 평택분 컨(voyageCountsOf — 홈 카드와 같은 분모)을 앱 완료가 다 채웠으면 true — 앱에 더 입력할 컨이 없다.
  *  배정목록 수량(info.planDis·planLod)은 «대조용 참고치» 라 대수 기준으로 쓰지 않는다 — 다만 «배정은 있다는데 앱엔 아직 컨이 안 올라온» 모드는 입력할 게 남았을 수 있으니 true 로 치지 않는다.

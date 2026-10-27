@@ -170,7 +170,7 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
     pg.on('pageerror', (er) => perr.push(String(er).slice(0, 200)));
     await pg.clock.setFixedTime(new Date(NOW));   // 사본 시각(2026-10-12 20:16 KST) — «작업 중»·«N분 전» 판정이 빌드 날짜와 무관하게
     await pg.goto('file://' + html); await sleep(300);
-    const mount = async ({ w, h, mode = 'normal', keys, inspector = '김성일', owner = true, view = false, active = keys }) => {
+    const mount = async ({ w, h, mode = 'normal', keys, inspector = '김성일', owner = true, view = false, active = keys, vset = null }) => {
       await pg.setViewportSize({ width: w, height: h });
       await pg.evaluate(({ mode, seedJson }) => {
         window.__R34.unmount();
@@ -180,7 +180,7 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
         try { localStorage.setItem('gm_board_zoom', '1'); } catch (er) { /* 저장 막힘 */ }
         window.__memdb = JSON.parse(seedJson); window.__memlog = []; window.__calls = [];
       }, { mode, seedJson });
-      await pg.evaluate((p) => window.__R34.mount(p), { voyagesJson: vsetOf(keys), inspector, owner, view, hb, inspectors: actOf(active) });
+      await pg.evaluate((p) => window.__R34.mount(p), { voyagesJson: vset ? JSON.stringify(vset) : vsetOf(keys), inspector, owner, view, hb, inspectors: actOf(active) });
       await sleep(900);
     };
     const shot = async (name) => { if (shots) { fs.mkdirSync(shots, { recursive: true }); await pg.screenshot({ path: path.join(shots, name + '.png') }); } };
@@ -313,6 +313,26 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
       JSON.stringify({ want, gotN, nan: mN.nan }).slice(0, 400));
     const ph4 = await (async () => { await mount({ w: 390, h: 844, keys: NK }); return MPH(); })();
     ok('④-2 폰 카드에도 «NaN» 없음(같은 세 항차)', !ph4.nan && ph4.n === 3, JSON.stringify(ph4));
+
+    //  ④-3 수석 «✓ 수석 완료 저장» — 선적 EDI 가 아직 안 왔어도 선적 리스트·선적 계획 수량이 있으면 «선적 대기»(4.55-01)
+    //    검수사 2026-10-27 06:22 «DXQD는 아직 작업중인데 … 수석완료확인 버튼을 활성화 시킨이유는?» · 06:33 «선적EDI가 없다고 선적이 없는건 아닙니다. EDI 대기 상태인거죠 EDI만 오면 바로 선적시작할것이라는 이야기 입니다.»
+    //    기대값은 앱 함수가 아니라 이 파일이 낸다 — 양하만 끝낸 세 모양이 화면에서 다르게 읽혀야 한다.
+    {
+      const clone = (k) => JSON.parse(JSON.stringify(F.voyages[k]));
+      const rowOf = async (k, vs) => {
+        await mount({ w: 1440, h: 900, keys: [k], vset: { [k]: vs } }); await pg.click('button[data-chief-tab="progress"]'); await sleep(350);
+        if (!(await pg.$('[data-fold="tally"] > div.mt-2'))) { const fb = await pg.$('[data-fold="tally"] > button'); if (fb) { await fb.click(); await sleep(350); } }   // 마감 텔리 접힘을 연다(이미 열려 있으면 그대로)
+        return pg.evaluate(() => { const b = document.querySelector('[data-chief-pane="progress"] button[title="항차 열기"]'); const r = b && b.closest('div.rounded-pill'); const pane = document.querySelector('[data-chief-pane="progress"]'); const txt = r ? r.innerText.replace(/\s+/g, ' ') : null; return txt === null ? null : txt + (pane && /검수 완료 · 수석 완료 저장을 누르면 열립니다/.test(pane.innerText) ? ' ◆마감텔리-검수완료' : ' ◆마감텔리-작업중'); });
+      };
+      const xl = clone('XTPG_544E'); xl.info.dischargeDone = true; delete xl.loading.ediContainers;   // 양하 완료 + 선적은 리스트(records)뿐 — DXQD 모양
+      const ad = clone('ATPR_2645E'); ad.info.dischargeDone = true;                                   // 양하만 있는 항차(선적 자료도 선적 계획 수량도 0) — 진짜 «선적 없음»
+      const ap = clone('ATPR_2645E'); ap.info.dischargeDone = true; ap.info.planLod = 300;              // 선적 계획 수량은 있는데 자료는 아직 — EDI 대기
+      const xdone = clone('XTPG_544E'); xdone.info.dischargeDone = true; xdone.info.loadingDone = true; // 양하·선적 둘 다 끝
+      const T = { xl: await rowOf('XTPG_544E', xl), ad: await rowOf('ATPR_2645E', ad), ap: await rowOf('ATPR_2645E', ap), xdone: await rowOf('XTPG_544E', xdone) };
+      ok(`④-3 수석 완료 저장 단추 — 선적 리스트만 있는 배(양하 완료 · DXQD 모양)는 «검수 진행 중» · 선적이 진짜 없는 배는 «수석 완료 저장» · 선적 계획 수량만 있는 배(EDI 대기)도 «검수 진행 중» · 양하·선적 둘 다 끝나면 «수석 완료 저장» · 마감 텔리 목록의 «검수 완료 · 수석 대기» 도 같은 답(DXQD 모양·EDI 대기 배는 «작업 중»)`,
+        !!T.xl && !!T.ad && !!T.ap && !!T.xdone && /검수 진행 중/.test(T.xl) && !/수석 완료 저장/.test(T.xl) && /수석 완료 저장/.test(T.ad) && /검수 진행 중/.test(T.ap) && !/수석 완료 저장/.test(T.ap) && /수석 완료 저장/.test(T.xdone) && /◆마감텔리-작업중/.test(T.xl) && /◆마감텔리-작업중/.test(T.ap) && /◆마감텔리-검수완료/.test(T.ad) && /◆마감텔리-검수완료/.test(T.xdone),
+        JSON.stringify(Object.fromEntries(Object.entries(T).map(([k, v]) => [k, v && v.slice(0, 200)]))));
+    }
 
     //  ③ 문 전수 — 옛 자리 → 새 자리에서 실제로 열리는가(1440 보통 · 소유자 김성일 · 4척 + 자료 대기 7척)
     const st = {};

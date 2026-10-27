@@ -29,6 +29,36 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
   ok(U.voyageHasLeft(V({ terminalStatus: 'departed' }), now) === true && U.voyageHasLeft(V({ terminalStatus: 'done' }), now) === true, '터미널 상태 떠남·완료면 떠난 배');
   ok(U.voyageHasLeft(V({ workEndAt: fmt(now - 2 * H) }), now) === true && U.voyageHasLeft(V({ workEndAt: fmt(now + 2 * H) }), now) === false, '작업 끝 시각이 지났으면 떠난 배 · 앞이면 아니다');
   ok(U.voyageHasLeft(V({ terminalStatus: 'planned' }), now) === false && U.voyageHasLeft(V({}), now) === false && U.voyageHasLeft(null, now) === false, '계획 상태·빈 칸·null 은 떠난 배가 아니다');
+  //  4.55-01 — «작업 배정이 뒤로 밀린 배» 판정 한 벌(홈 펼침·날짜 묶음 + 로그인 현황판). 실데이터 DXQD 2642E(계획 10-26 19:00 ~ 10-28 08:00 · 터미널 planned · 지금 10-27 06:22) 모양을 상대 시각으로 옮겨 쓴다.
+  {
+    const day0 = new Date(now); day0.setHours(0, 0, 0, 0);
+    const yst19 = day0.getTime() - 5 * H, in26h = day0.getTime() + 26 * H;      // 어제 19:00 · 모레 02:00(지금이 하루 어느 때든 «어제 시작 · 끝은 아직 안 지남»)
+    const planned = V({ terminalStatus: 'planned' });
+    ok(U.planDelayedLive(yst19, in26h, planned, now) === true, 'DXQD 모양 — 시작은 어제, 계획 끝이 안 지났고 떠나지 않았으면 밀린 배');
+    ok(U.planDelayedLive(yst19, day0.getTime() - H, planned, now) === false, '계획 끝이 이미 지났으면 밀린 배가 아니다(지난 배 — ATPR 처럼 끝이 지난 배는 작업 중이면 isWorkingNow 가 맡는다)');
+    ok(U.planDelayedLive(day0.getTime() + H, in26h, planned, now) === false && U.planDelayedLive(day0.getTime(), in26h, planned, now) === false, '오늘 시작한 배(자정 포함)는 밀린 배가 아니다 — 날짜 판정(오늘 묶음)이 그대로 맡는다');
+    ok(U.planDelayedLive(yst19, 0, planned, now) === false && U.planDelayedLive(yst19, null, planned, now) === false, '끝 시각을 모르면 «밀렸다» 고 단정하지 않는다');
+    ok(U.planDelayedLive(0, in26h, planned, now) === false && U.planDelayedLive(null, in26h, planned, now) === false, '시작 시각을 모르면 아니다');
+    ok(U.planDelayedLive(yst19, in26h, V({ terminalStatus: 'departed' }), now) === false && U.planDelayedLive(yst19, in26h, V({ workEndAt: fmt(now - H) }), now) === false, '이미 떠났거나 작업 끝 시각이 지난 배는 계획 끝이 미래여도 아니다(일찍 떠난 다일 배)');
+    ok(U.planDelayedLive(yst19, in26h, V({ terminalStatus: 'planned', dischargeDone: true }), now) === true, '양하 완료 표시가 있어도 선적을 기다리는 배는 밀린 배다(DXQD — 양하 208 끝 · 선적 371 대기)');
+  }
+  //  4.55-01 — «선적 EDI 가 없다 ≠ 선적이 없다»(검수사 2026-10-27 06:33 «EDI 대기 상태인거죠 EDI만 오면 바로 선적시작할것이라는 이야기 입니다»). 홈 isAllDone · 수석 보드 진행 줄 · 보관 보고 · 홀드 잔여 · 미르가 쓰는 한 벌.
+  {
+    const E1 = { ediContainers: { A: { cn: 'AAAA1234567', pod: 'KRPTK' } } };
+    const dxqd = (info, loading) => ({ info: { dischargeDone: true, ...info }, discharge: E1, ...(loading ? { loading } : {}) });
+    ok(U.hasLoadingSide(dxqd({}, { dataAt: 1, records: { X: { cn: 'XXXX1234567', pol: 'KRPTK' } } })) === true && U.inspectorAllDone(dxqd({}, { dataAt: 1, records: { X: { cn: 'XXXX1234567', pol: 'KRPTK' } } })) === false,
+       'DXQD 모양 — 선적 구역에 리스트만 있고(EDI 없음) 양하 완료 표시만 있으면 «검수 완료» 가 아니다');
+    ok(U.inspectorAllDone(dxqd({ loadingDone: true }, { dataAt: 1, records: { X: {} } })) === true, '선적 완료 표시까지 있으면 «검수 완료»');
+    ok(U.hasLoadingSide(dxqd({ planLod: 300 })) === true && U.inspectorAllDone(dxqd({ planLod: 300 })) === false, 'EDI 대기 — 선적 구역은 아직 없어도 선적 계획 수량(planLod 300)이 있으면 선적 있음 · 양하만으로는 «검수 완료» 아님(DPRT 2612N 모양)');
+    ok(U.hasLoadingSide(dxqd({ planLod: 0 })) === false && U.inspectorAllDone(dxqd({ planLod: 0 })) === true, '선적 구역도 계획 수량도 없으면 선적 없음 — 양하 완료만으로 «검수 완료»(KBTR 2609E 모양 · 종전 그대로)');
+    ok(U.hasLoadingSide(dxqd({ planLod: 300, cancelLod: true })) === false && U.inspectorAllDone(dxqd({ planLod: 300, cancelLod: true })) === true, '선적 전량 캔슬로 표시된 배는 계획 수량만으로 «선적 있음» 이 아니다');
+    ok(U.hasLoadingSide(dxqd({ planLod: 300, cancelLod: true }, { dataAt: 1 })) === true, '캔슬 표시가 있어도 선적 구역에 자료가 와 있으면 종전대로 선적 있음');
+    ok(U.inspectorAllDone({ info: { inspectorDone: true } }) === true && U.inspectorAllDone({ info: { planLod: 300 } }) === false && U.inspectorAllDone(null) === false, '수석 완료 표식이면 true · 양하·선적 아무 구역도 없는 배(계획만)는 false · null 도 false');
+    ok(U.ferryWorkDone(dxqd({}, { dataAt: 1, records: { X: {} } }), now) === false && U.ferryWorkDone(dxqd({ loadingDone: true }, { dataAt: 1, records: { X: {} } }), now) === true, '17시 보관 보고(ferryWorkDone)도 같은 한 벌 — 선적 EDI 대기 배는 안 끝남');
+    //  미르용 한 칸 — 양하가 끝났고 남은 선적이 «자료 없이 계획 수량만»(EDI 대기)일 때만 true(미르는 입력할 게 없다고 본다 · 종전 4.55 와 같은 답).
+    ok(U.ediWaitingOnlyLeft(dxqd({ planLod: 300 })) === true && U.ediWaitingOnlyLeft(dxqd({}, { dataAt: 1, records: { X: {} } })) === false && U.ediWaitingOnlyLeft(dxqd({ planLod: 0 })) === false && U.ediWaitingOnlyLeft(dxqd({ planLod: 300, dischargeDone: false })) === false && U.ediWaitingOnlyLeft(dxqd({ planLod: 300, cancelLod: true })) === false && U.ediWaitingOnlyLeft({ info: { planLod: 300 } }) === false,
+       'ediWaitingOnlyLeft — 양하 끝 + 선적 계획 수량만(EDI 대기)만 true · 선적 자료가 와 있거나 · 선적 없음 · 양하 안 끝남 · 선적 취소 표시 · 양하 구역 없음은 false');
+  }
 
   console.log('② 소스 배선 — 두 화면이 한 벌을 쓴다');
   const home = fs.readFileSync(path.join(ROOT, 'src/pages/HomePage.jsx'), 'utf8');
@@ -37,8 +67,20 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
   ok(/if \(planIsLive\(eta, etd, now\)\) return \[0, eta\];/.test(home), '홈: 정렬 ⓪등급 = planIsLive');
   ok(/planEndCompare\(a\._etdMs, b\._etdMs\)/.test(home) && !/if \(\(a\._etdMs == null\) !== \(b\._etdMs == null\)\)/.test(home), '홈: 같은 시작 동률 = planEndCompare(옛 인라인 비교는 없다)');
   ok(/const _isPastVoy = \(v, now\) => planIsPast\(v\?\._etaMs, v\?\._etdMs, now\);/.test(home), '홈: 지난 배 = planIsPast');
-  ok(/planIsLive, planEndCompare, voyageHasLeft/.test(login), '로그인: planIsLive·planEndCompare·voyageHasLeft 를 가져온다');
-  ok(/const delayedLive = n != null && n < 0 && msEnd > 0 && planIsLive\(ms, msEnd, now\) && !voyageHasLeft\(v, now\);/.test(login) && /n === 2 \? 3 : delayedLive \? 1 : 9/.test(login), '로그인: 시작은 지났어도 끝이 안 지난 배는 rank 1(떠난 배 제외)');
+  ok(/planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone\}/.test(home) && /const isAllDone = \(v\) => inspectorAllDone\(v\);/.test(home), '홈: planDelayedLive·inspectorAllDone 을 utils 에서 가져온다 · isAllDone 은 한 벌 함수(4.55-01)');
+  //  «검수 완료» 판정 복사본 여섯(홈 · 수석 보드 · 마감 텔리 목록 · 카페리 유지 · 홀드 잔여 · 미르 홈 카드)이 utils 한 벌을 부른다 — 손으로 다시 쓴 비교식이 되살아나면 DXQD 모양(선적 리스트만 있는 배)이 화면마다 다시 갈린다.
+  const chief = fs.readFileSync(path.join(ROOT, 'src/pages/ChiefDashboard.jsx'), 'utf8');
+  const mirSrc = fs.readFileSync(path.join(ROOT, 'src/mir.js'), 'utf8');
+  const utilsSrc = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
+  ok(/inspectorDone: inspectorAllDone\(v\),/.test(chief), '수석 진행 줄 — inspectorDone 은 utils.inspectorAllDone 한 벌');
+  ok(/function _inspectorFinished\(v\) \{[^}]*return inspectorAllDone\(v\) \|\| ediWaitingOnlyLeft\(v\);/.test(mirSrc), '미르 — «검수 완료» 판정(_inspectorFinished)은 inspectorAllDone 에 «양하 끝 + EDI 대기뿐» 한 칸(ediWaitingOnlyLeft)만 더한다 — 화남·다음 작업은 종전 4.55 와 같은 답');
+  ok(/const done = !!\(inf && inf\.dischargeDone && \(inf\.loadingDone \|\| _pl === 0\)\)/.test(mirSrc) && !/ctx\.voyage\) \? inspectorAllDone/.test(mirSrc), '미르 대화 층 «다 끝났는가» 는 info 만 본다 — 콘앱은 {info} 만 넘겨 항차 전체 판정을 쓰면 두 앱 답이 갈린다(감사 중-5)');
+  ok(/if \(inspectorAllDone\(v\)\) return 'done';\s*if \(info\.dischargeDone \|\| info\.loadingDone\) return 'working';/.test(chief), '마감 텔리 목록(tallyTargetState) — «검수 완료 · 수석 대기» 는 inspectorAllDone 한 벌 · 한쪽만 끝난 배는 «작업 중»');
+  ok((utilsSrc.match(/return inspectorAllDone\(voyage\);/g) || []).length >= 2, 'utils — ferryWorkDone·홀드 잔여 finishedAll 도 inspectorAllDone 한 벌');
+  ok(/if \(planDelayedLive\(v\?\._etaMs, v\?\._etdMs, v\)\) return true;/.test(home), '홈: 펼침 판정(isOpenVoyage)이 밀린 배를 펼친다 — 로그인 현황판과 같은 함수');
+  ok(/if \(planDelayedLive\(v\._etaMs, v\._etdMs, v, now\)\) return \{ id: 'd0'/.test(home), '홈: 날짜 묶음(dateGroupOf)이 밀린 배를 «오늘» 묶음에 둔다 — 로그인 현황판의 «오늘» 줄과 같은 답');
+  ok(/planIsLive, planEndCompare, planDelayedLive/.test(login), '로그인: planIsLive·planEndCompare·planDelayedLive 를 가져온다(4.55-01 — 밀린 배 판정은 utils 한 벌)');
+  ok(/const delayedLive = planDelayedLive\(ms, msEnd, v, now\);/.test(login) && !/n != null && n < 0 && msEnd > 0/.test(login) && /n === 2 \? 3 : delayedLive \? 1 : 9/.test(login), '로그인: 시작은 지났어도 끝이 안 지난 배는 rank 1(떠난 배 제외)');
   ok(/over: msEnd > 0 && !planIsLive\(ms, msEnd, now\) \? 1 : 0/.test(login) && /a\.over - b\.over/.test(login) && /planEndCompare\(a\.msEnd, b\.msEnd\)/.test(login), '로그인: 순서 = rank → 끝난 배는 뒤 → 시작 → planEndCompare');
   ok((login.match(/\.filter\(s => !\(s\.ms != null && s\.ms < now\)\)/g) || []).length === 1 && /\.filter\(s => s\.rank === 0 \|\| !\(s\.ms != null && s\.ms < now && \(s\.rank === 9 \|\| s\.over\)\)\)/.test(login),
      '로그인: 채움은 종전 그대로 · «그 밖 대기» 는 시작이 지난 배를 계획 끝(over)이 지났을 때·rank 9 일 때만 빼고 작업중(rank 0)과 시작 전 배는 센다(시작한 안 끝난 배는 세고 떠난 다일 배는 «그 밖 대기» 로 새지 않는다)');
@@ -65,7 +107,7 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
     try { dom.window.eval(fs.readFileSync(bundle, 'utf8')); } catch (e) { errs.push('THROW ' + e.message); }
     setTimeout(() => {
       const d = dom.window.document;
-      let order = [], labels = {}, restN = null, choice = {};
+      let order = [], labels = {}, restN = null, choice = {}, foldAt = -1; const pos = {};
       if (mode === 'choice') {
         //  작업 선박 선택 — 선박 줄(data-choice-voyage) 별 글자(이름표·시각)
         [...d.querySelectorAll('[data-choice-voyage]')].forEach((b) => { choice[b.getAttribute('data-choice-voyage')] = (b.textContent || '').replace(/\s+/g, ' '); });
@@ -82,8 +124,12 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
         const re = /(SWBTOLD|ENDEDTODAY|DEPEARLY|ATPR|DPRT|DXQD|MAMP|NSDC|NSFR|OBWH|PCSZ|RZOR|STMJ|SWBT|TMPZ|TNJP|XTPG|YKTD)(?=\d|[A-Z]\d|R\d)/g;
         let m; while ((m = re.exec(txt))) { if (!seen.has(m[1])) { seen.add(m[1]); order.push(m[1]); } }
         labels = Object.fromEntries(order.map((n) => [n, '']));
+        //  4.55-01 — 폰 폭의 «그 밖의 배» 접힘 줄 자리(문서 안 글자 위치) — 접힘 앞에 선 배는 펼친 묶음 안에 있다.
+        const fm = /(그 밖의 배|이번 주)\s*\d+\s*척/.exec(txt); foldAt = fm ? fm.index : -1;
+        for (const n of order) pos[n] = txt.search(new RegExp(n + '(?=\\d|[A-Z]\\d|R\\d)'));
+        if (process.env.PO_DEBUG) console.log('     [debug]', mode, width, JSON.stringify({ foldAt, fm: fm && fm[0], pos }));
       }
-      resolve({ order, labels, errs, restN, choice, over: dom.window.__OVER_NAMES || [], endedOk: dom.window.__ENDED_OK !== false });
+      resolve({ order, labels, errs, restN, choice, foldAt, pos, over: dom.window.__OVER_NAMES || [], endedOk: dom.window.__ENDED_OK !== false });
     }, 1200);
   });
   const L = await run('login', 1280);
@@ -100,8 +146,13 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
   ok(L.order.length >= 10 && L.order.length <= 13, `로그인 현황판 화면 목록 10~13칸(${L.order.length})`);
   ok(!L.order.includes('DEPEARLY'), '이미 떠난 다일 배(계획 끝은 앞이어도 터미널이 «떠남»)는 로그인 현황판에 올리지 않는다');
   ok(L.order[0] === 'SWBTOLD' && /어제\s*08:00/.test(L.labels.SWBTOLD || ''), '시작은 어제인데 끝이 안 지난 배(SWBT 옛 데이터)가 «지난 배»로 안 빠지고 로그인 맨 위에 «어제 08:00» 로 보인다');
-  ok(Hm.order[0] === 'SWBTOLD', '컴 폭 홈도 같은 배가 맨 위(어제 묶음)');
-  ok(Hp.order.includes('SWBTOLD'), '폰 폭 홈에도 같은 배가 이름으로 보인다(«그 밖의 배» 접힘 — 알려진 차이, 기록부에 적음)');
+  //  4.55-01 — 시작은 어제인데 끝이 안 지난 배는 «어제» 묶음이 아니라 «오늘» 묶음(로그인과 같다). 이미 떠난 배(DEPEARLY)는 컴 폭에서만 «어제» 묶음에 따로 남는다.
+  const nonDep = (a) => a.filter((n) => n !== 'DEPEARLY');
+  ok(nonDep(Hm.order)[0] === 'SWBTOLD' && Hm.order.indexOf('DEPEARLY') < Hm.order.indexOf('SWBTOLD'), '컴 폭 홈도 같은 배가 떠난 배를 뺀 맨 위(«오늘» 묶음 첫 줄) — 떠난 배는 어제 묶음에 따로');
+  ok(Hp.order.includes('SWBTOLD'), '폰 폭 홈에도 같은 배가 이름으로 보인다');
+  //  4.55-01 — 4.51 때 «알려진 차이» 로 남겨 둔 것(폰은 같은 배가 «그 밖의 배» 접힘 안)을 고쳤다 — 검수사 2026-10-27 06:22 «DXQD는 아직 작업중인데 분류를 따로 한 이유는?»(DXQD 2642E 가 폰에서만 «그 밖의 배»).
+  ok(Hp.foldAt > 0 && Hp.pos.SWBTOLD >= 0 && Hp.pos.SWBTOLD < Hp.foldAt, '폰 폭 홈 — 시작은 어제인데 끝이 안 지난 배(SWBTOLD · DXQD 모양)가 «그 밖의 배» 접힘 앞(펼친 «오늘» 묶음 안)에 선다', JSON.stringify({ foldAt: Hp.foldAt, pos: Hp.pos.SWBTOLD }));
+  ok(nonDep(Hm.order)[0] === nonDep(Hp.order)[0], '컴 폭 첫 줄과 폰 폭 첫 줄이 같은 배다(떠난 배 빼고 — 분류가 폭에 따라 달라지지 않는다)', `${nonDep(Hm.order)[0]} / ${nonDep(Hp.order)[0]}`);
   if (EN) {
     ok(L.order.includes('ENDEDTODAY') && Hm.order.includes('ENDEDTODAY'), '오늘 시작해 계획 끝이 지난 배(ENDEDTODAY)는 두 화면 모두에 남는다(홈도 «오늘» 묶음에 둔다 — 숨기지 않는다)');
     ok(L.order.indexOf('ENDEDTODAY') > L.order.indexOf('DXQD') && Hm.order.indexOf('ENDEDTODAY') > Hm.order.indexOf('DXQD') && Hp.order.indexOf('ENDEDTODAY') > Hp.order.indexOf('DXQD'),
