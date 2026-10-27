@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.55-01';
-const NOTE = '4.55-01 선적 EDI 를 기다리는 배가 그 밖의 배로 접히거나 수석 완료 저장이 열리던 것을 고쳤습니다. 선적 자료나 계획이 있으면 EDI 가 아직이어도 선적은 대기로 봅니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.55-02';
+const NOTE = '4.55-02 선박명에 오타가 있어도 콜사인이 같으면 EDI 를 같은 배로 받습니다. 한 글자 오타는 알림 줄을 남기고 받습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

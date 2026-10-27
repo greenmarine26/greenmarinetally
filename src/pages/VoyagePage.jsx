@@ -9,7 +9,7 @@ import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakL
 import { voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
-import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
+import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)   // 4.55-02: shipIdentityOf — EDI 올리기가 선박 사전 콜사인을 같이 본다
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { mirSee } from '../mir.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
 import { mirTone } from '../mir.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
@@ -22,7 +22,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime, shiftSplitOf, isShiftOffPtk} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime, shiftSplitOf, isShiftOffPtk, ediShipVerdict} from '../utils.js';   // 4.55-02: ediShipVerdict — EDI 올리기 «다른 선박» 판정 한 벌   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -3897,6 +3897,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         const isAsc = /\.asc$/i.test(file.name) || /^\$604/.test(text.slice(0, 10));
         const r = isAsc ? parseAscFile(text) : parseBAPLIE(text);
         const total = r.containers.length;
+        let _shipV = { bad: '', basis: '', note: '', keepName: false };   // 4.55-02: «다른 선박 EDI» 판정 결과 — 가드 뒤(알림 줄·저장 이름)에서도 쓴다
 
         // ===== V8.24-03: 다른 선박/항차 EDI 차단 (사용자 확정 2026-06-24) =====
         //   다른 배 EDI나 항차 안 맞는 EDI를 넣어도 경고 없이 적용되던 위험 버그 차단.
@@ -3905,18 +3906,13 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         //         항차 안 맞으면 적용 안 함 — 평택분 있으면 "파일명 항차 고쳐 재등록" 유도, 없으면 다른 항차로 차단.
         {
           const _norm = (x) => String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
-          const _looksName = (x) => /\s/.test(String(x || '').trim()) || _norm(x).length >= 7;
           const _voyCs = _norm(voyage.info.callsign), _ediCs = _norm(r.callsign);
           const _voyNm = _norm(voyage.info.vslFull), _ediNm = _norm(r.vsl);
-          let _shipBad = '';
-          if (_voyCs && _ediCs && _voyCs !== _ediCs) {
-            _shipBad = `콜사인 ${voyage.info.callsign} ≠ EDI ${r.callsign}`;
-          } else if (_voyNm && _ediNm && _looksName(voyage.info.vslFull) && _looksName(r.vsl)
-                     && !(_voyNm.includes(_ediNm.slice(0, 5)) || _ediNm.includes(_voyNm.slice(0, 5)))) {
-            _shipBad = `선박명 ${voyage.info.vslFull} ≠ EDI ${r.vsl}`;
-          }
-          if (_shipBad) {
-            results.push(`⛔ ${file.name}: 다른 선박 EDI (${_shipBad}) — 적용 안 함. 이 항차(${voyage.info.vsl}) 자료가 맞는지 확인하세요.`);
+          // 4.55-02: «다른 선박 EDI» 판정 한 벌(utils.ediShipVerdict) — 항차 콜사인이 비어 있으면 선박 사전 콜사인으로
+          //   같은 배를 확정하고, 선박명은 앞 5글자 + 한 글자 오타까지 같은 배로 본다(NSDC2611S «STASRHIP DRACO»가 막혔던 건).
+          _shipV = ediShipVerdict(voyage.info, shipIdentityOf(voyage.info), r);
+          if (_shipV.bad) {
+            results.push(`⛔ ${file.name}: 다른 선박 EDI (${_shipV.bad}) — 적용 안 함. 이 항차(${voyage.info.vsl}) 자료가 맞는지 확인하세요.`);
             continue;
           }
           let _podPtk = 0, _polPtk = 0;
@@ -3954,7 +3950,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             const _ediImo = String(r.imo || '').replace(/\D/g, '');
             const _imoSame = !!(_voyImo && _ediImo && _voyImo === _ediImo);
             const _idBasis = _csComparable ? `같은 배 (콜사인 ${voyage.info.callsign})`
+              : _shipV.basis === 'callsign' ? `같은 배 (콜사인 ${r.callsign} — 선박 사전)`
               : _imoSame ? `같은 배 (IMO ${_ediImo})`
+              : _shipV.basis === 'nameTypo' ? `선박명 한 글자 차이로 같은 배로 봄 (EDI ${r.vsl} ↔ 등록 ${voyage.info.vslFull})`
               : (_voyNm && _ediNm) ? `선박명 대조 통과 (${r.vsl})`
               : `⚠ 선박 식별자 비교 불가 — EDI 선박 '${r.vsl || '미상'}'이 이 배가 맞는지 직접 확인하세요`;
             if (_ptkLeg > 0) {
@@ -4006,6 +4004,10 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }
         }
         // ===== 가드 끝 =====
+        //  4.55-02: 막히지 않고 여기까지 온 EDI 만 알린다(항차 번호 확인에서 거절된 EDI 에 «적용합니다» 가 찍히지 않게).
+        if (_shipV.note) results.push(`ℹ️ ${file.name}: ${_shipV.note}`);
+        //  한 글자 오타로 받았으면 저장하는 선박명은 등록된 이름(keepName) — EDI 의 오타 이름이 선박 보관소·선박 사전에 들어가지 않게.
+        const _storeVsl = (_shipV.keepName && voyage.info.vslFull) ? voyage.info.vslFull : r.vsl;
 
         // 선박 정보 추출 (첫 파일에서). M7.20: ASC도 처리 — 기존엔 BAPLIE만 추출해
         //   ASC로 올린 작업이 ships(선박 라이브러리/통계)에 누락되던 버그.
@@ -4021,6 +4023,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           } else {
             shipInfo = extractShipInfo(text);
           }
+          if (shipInfo && _shipV.keepName && voyage.info.vslFull) shipInfo = { ...shipInfo, name: voyage.info.vslFull };   // 4.55-02: 오타 이름을 선박 보관소(ships/)·학습 줄에 쓰지 않는다
           if (shipInfo) {
             try {
               prevStruct = await fbGetShipStructure(resolveShipKey(shipInfo.imo));   // V8.43: 별칭 → 정식 키
@@ -4117,14 +4120,14 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               if (code && code.length >= 2 && code.length <= 8) {
                 const okReg = await fbSaveShipBayDict(code, {
                   code,
-                  name: r.vsl,
+                  name: _storeVsl,
                   callsign: r.callsign || '',
                   source: 'edi-auto',
                   _inspector: inspector || '',
                 });
                 // 3.8-01 감사: 반환값을 버리고 «자동 등록»을 무조건 찍던 것 — 휴지통·권한으로 막혔으면 그렇게 말한다.
                 results.push(okReg
-                  ? `☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign || '(콜사인없음)'} · ${r.vsl})`
+                  ? `☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign || '(콜사인없음)'} · ${_storeVsl})`
                   : `⚠ ${file.name}: 베이사전 자동 등록 안 됨 (${code} — 휴지통에 있거나 권한이 없습니다)`);
               }
             } catch (e) {

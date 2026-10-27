@@ -1200,6 +1200,10 @@ if npx esbuild tools/smoke_bundledoc455.jsx --bundle --loader:.jsx=jsx --loader:
 else
   echo "✗ 4.55 빈 FR 묶음 서류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_B5"; exit 1
 fi
+#  4.55-02: **EDI 올리기 «다른 선박 EDI» 판정 한 벌** — 실사례 NSDC2611SKRPTK SI.edi(선박명 STASRHIP DRACO ≠ 등록 STARSHIP DRACO)가 «다른 선박 EDI» 로 막혔던 건.
+#    실소스 utils.ediShipVerdict(순수 함수 — 파서 실소스로 실파일 TDT 줄을 읽음) + 실제 선박 사전 61척 1,830쌍 대조(한 글자 허용이 다른 배를 새로 같게 보는 쌍 0) + 올리기 문지기 배선·매뉴얼·판 표시. 실 Firebase 는 건드리지 않는다.
+#    검수사 2026-10-27 18:19 «⛔ NSDC2611SKRPTK SI.edi: 다른 선박 EDI (선박명 STARSHIP DRACO ≠ EDI STASRHIP DRACO) — 적용 안 함.»
+node tools/smoke_edishipcheck4552.cjs || { echo "✗ 4.55-02 EDI 선박 확인 연막검사 실패 — 배포 금지"; exit 1; }
 #  4.49: **실번호 판정 한 벌** — ML Seal 주실 · 보조실 · 다른 자료 실(하나만 맞으면 맞음) · 큰 실은 세관 값 · 신고 끝자리 빠짐은 실오류 —
 #    MAMP 641N 선사·세관 리스트 실파일 사본(파서) · 실 firebase.js(메모리 DB) 추가 병합 · 보관 항차 정답지 10대 · RZOR R117E EDI 실 · 마감텔리·미르·인계·컨 상세가 같은 답.
 #    검수사 2026-10-24 12:50 «다 보이고 하나만 맞으면 맞음» · «큰 글씨 실은 세관 값» · «MLPH 끝자리 빠짐은 실오류로 센다».
