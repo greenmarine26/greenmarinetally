@@ -1602,6 +1602,7 @@ fi
     node tools/smoke_mirshippick.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 배 고르기 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_mirbusy438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 중 사담 미루기 연막검사 실패 — 배포 금지"; exit 1; }   # 4.38
     node tools/smoke_workanalysis438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 분석 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-01
+    node tools/smoke_dischargeacc456.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 양하 정확도 연막검사 실패 — 배포 금지"; exit 1; }   # 4.56
     node tools/smoke_mir43902.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.39-02(예상 실오류·장 바꾸기·집에 몇 시) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-02
     node tools/smoke_mir440.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40(베이로 옮기기 [이동]·[취소]) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.40 — 화면은 회귀 기준표 R44
     #  4.40-01: «몇 시에 끝나» 두 앱 같은 답 — 끝나는 시각을 묻는 말은 via eta 강한 답(모델로 안 감) · 도선 갈래·속도 표가 안 가로챔 · 배 작업 아닌 것은 종전대로. 같은 번들.

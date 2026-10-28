@@ -40,6 +40,7 @@ import {
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
   ediWaitingOnlyLeft,   // 4.55-01: 양하는 끝 · 남은 선적이 EDI 대기뿐 — 미르는 입력할 게 없다고 본다
   inspectorAllDone,   // 4.55-01: «검수 완료» 판정 한 벌(홈·수석 보드·보관 보고·홀드 잔여 공용)
+  dischargeAccuracyOf, isPctcVoyage,   // 4.56: 미르 «양하 정확도» — 출발항별 EDI 계획 대비 실제 양하 순서 일치율
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
 } from './utils.js';
 import {
@@ -925,6 +926,27 @@ export function workTimeLinesOf(E, gangsHyp = 0) {
   const why = gangsHyp > 0 ? '' : (!E.gangsKnown ? ' · 갱 수 미등록이라 2갱으로 셈' : '');
   L.push(`· 갱당 시간당 ${E.rate}무브(트윈 ${Math.round(E.twinShare * 100)}%라 ${E.rate === 30 ? '트윈이 있는 작업' : '싱글이 많은 작업'}) · ${g}갱이면 ${t}${t1}${why}`);
   return L;
+}
+//  4.56: «양하 정확도» — 출발항(POL)별로 EDI 계획 칸과 실제 내려온 순서가 같은 비율. 검수사 2026-10-29 «쉽게 포트별 정확도를 보여주시면 됩니다» · «간단하게 미르에게 양하 정확도를 물어 보면 퍼센트 값을 말하게만».
+//   PCTC = 검수사 PDA 입력 순서라 믿을 수 있다 · 동방 = 터미널 시각 순서라 차량 기사 순서에 따라 바뀔 수 있어 참고값. 리퍼·특수화물 순서와 장비 기사 습성이 섞여 EDI 오류율만은 아니다.
+const DISCHARGE_ACC_RE = /(?:양하|포트|항구|출발항)\s*(?:별\s*)?(?:정확도|정확률|신빙성|신뢰도)/i;
+export function answerDischargeAccuracy(voyage, ship, rows) {
+  const A = dischargeAccuracyOf(voyage, rows);
+  const info = (voyage && voyage.info) || {};
+  const pctc = isPctcVoyage(info);
+  const pct = (a, b) => (b ? (Math.round((a / b) * 1000) / 10).toFixed(1) + '%' : '-');
+  const head = `📐 ${ship || '이 배'} 양하 정확도 — ${pctc ? '검수사 PDA 입력 순서 기준' : '터미널(동방) 시각 순서 기준 참고값 — 차량 기사 순서에 따라 바뀔 수 있어 확정이 아닙니다'}`;
+  if (A.n < 20) return `${head}\n· 같은 열에서 순서를 비교할 수 있는 완료 컨이 ${A.n}대뿐이라 아직 말하기 이릅니다. (완료 ${A.done}대)`;
+  const L = [head, `· 전체 ${pct(A.same, A.n)} — 비교 가능 ${A.n}대 중 ${A.diff}대가 EDI 계획과 다른 칸에서 나옴(${A.stacks}개 열) · 완료 ${A.done}대`];
+  const big = A.byPol.filter((x) => x.n >= 5).sort((a, b) => (a.diff / a.n) - (b.diff / b.n) || b.n - a.n).reverse();
+  const rest = A.byPol.filter((x) => x.n < 5);
+  if (big.length >= 2 || (big.length === 1 && rest.length)) {
+    L.push('· 출발항별');
+    for (const x of big) L.push(`   ${x.pol} ${pct(x.n - x.diff, x.n)} (${x.n}대 중 ${x.diff}대 다름)`);
+    if (rest.length) { const rn = rest.reduce((t, x) => t + x.n, 0); const rd = rest.reduce((t, x) => t + x.diff, 0); L.push(`   그 밖 ${rest.length}개 항구 ${pct(rn - rd, rn)} (${rn}대 중 ${rd}대 다름)`); }
+  }
+  L.push('· 같은 단 안의 바뀜은 시각으로 못 가려 실제는 이보다 낮거나 같습니다. 리퍼·특수화물 순서와 장비 기사 습성이 섞여 있어 EDI 오류율만은 아닙니다.');
+  return L.join('\n');
 }
 /** «작업 분석» 답 — 그 배 평택분 규격·특수화물·트윈 무브·예상 시간·주의.
  *  대수·규격·무브·시간은 E(expectedWorkTimeOf — 화면 «예상 작업 시간» 줄과 같은 집합·같은 수) 하나로, 특수화물은 그 집합(E.cns)에 든 행만 센다(감사 B1 — 숫자끼리 맞게).
@@ -2530,6 +2552,8 @@ export function answerOneRaw(query, ctx) {
     //  4.39-01: «작업 분석(해줘)» · 시작 전 «예상 작업시간» · «2갱으로 하면 몇 시간» — 화면 «예상 작업 시간» 줄과 같은 계산(검수사 2026-10-19 22:02).
     //    «작업 분선해줘» 는 실제 입력 오타(21:47). «2갱으로» 는 계산 가정일 뿐 갱 수를 적지 않는다(gangSet 아님).
     const _notAsk = /하지\s*마|어제|그제|지난|틀렸|틀려|이상해|없애|지워|안\s*맞/.test(Q);   // 감사 M4 — 하지 말라는 말·지난 날·틀렸다는 말은 계산을 내지 않는다(«2갱 말고 3갱» 의 «말고»·«왜 이렇게 길어» 의 «왜» 는 막지 않는다 — 재감사)
+    const isAccQ = DISCHARGE_ACC_RE.test(Q) && !p.howToQuery && !_notAsk && !/높이|올리|설명|방법|설정|보는\s*법|어떻게|왜|뜻/.test(Q);   // 조건 검사는 안 한다 — «양하» 낱말이 모드 조건으로 잡힌다   // 4.56: «양하 정확도» — 출발항별 일치율
+    if (isAccQ && !v) return _via('shipAsk'), '어느 배 말씀인지 배 이름을 붙여 주시면 바로 답합니다. (예: "DPRT 양하 정확도")';
     const isAnalysisQ = WORK_ANALYSIS_RE.test(Q) && !p.howToQuery && !hasAnyCondition(p) && !_notAsk;
     const _ghs = [...Q.matchAll(/([1-4])\s*갱\s*(?:으로|이면|기준|일\s*때|이라면|짜리|씩)/g)];   // «2갱 말고 3갱으로» 는 뒤 숫자
     const gangsHyp = _ghs.length ? Number(_ghs[_ghs.length - 1][1]) : 0;
@@ -2560,6 +2584,13 @@ export function answerOneRaw(query, ctx) {
         return o;
         } catch (e) { console.warn('[미르] 콘앱 항차 사본 만들기 실패 — 원본으로 셉니다:', e); return _voy; }
       })();
+      if (isAccQ) {
+        try {
+          let _rowsA = _mvGiven || [];
+          if (!_mvGiven || hasAnyEdi(_voy)) { try { _rowsA = flattenVoyages({ [c.voyageKey || '_']: _voy }); } catch (e) { _rowsA = c.voyageKey ? cs.filter((x) => !x || !x.voyageKey || x.voyageKey === c.voyageKey) : cs; } }
+          return _via('dischargeAcc'), answerDischargeAccuracy(_voy, ship, _rowsA);
+        } catch (e) { console.warn('[미르] 양하 정확도 계산 실패:', e); }
+      }
       try {
         if (isAnalysisQ || isExpectQ) {
           const _E = movesOfVoyage(_voy, c.voyageKey || '', _mvGiven);   // 화면 «예상 작업 시간» 줄과 같은 계산 한 벌
@@ -3035,7 +3066,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
-  if (via === 'workAnalysis' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
+  if (via === 'workAnalysis' || via === 'dischargeAcc' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
   if (via === 'workStop' && trace && trace.pauseSure) return false; // 4.42-02 (2차 시뮬 6 — 멈춤을 분명히 알린 말의 답만): 작업 멈춤 알림 — 말 파서가 사유 낱말·«작업 중단» 으로 멈춤이라 확신한(sure) 말의 자료 답이다. «아무래도 … 인듯 하네» 같은 군말이 남았다고 모델로 보내면 «열린 항차 정보가 없어요» 를 지어냈다(검수사 2026-10-21 13:25)
   if (via === 'eta') return false;      // 4.40-01: 끝나는 시각을 물은 말의 끝나는 시각 답(완료 기록·본선현황으로 잰 것) — 사전에 없는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보낸다. 보내면 앱마다 다른 답(검수사 2026-10-20 20:07)
   if (via === 'rzorLearn') return false;   // 4.44-01: 수집기 2.45 채점 요약은 자료 답 — «학습»·«현황»·«채점» 이 사전에 없어도 모델로 보내지 않는다
