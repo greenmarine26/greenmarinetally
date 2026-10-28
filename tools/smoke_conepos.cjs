@@ -96,7 +96,7 @@ ok(LINES.some(l => isCode(l) && /(^|[^/])\bctApplySwap\(\);/.test(l)), 'ctApplyS
 ok(/CT\.recRaw = \{discharge:rD, loading:rL\}/.test(SRC), '받은 records 는 덧칠 전 원본(CT.recRaw)으로 둔다');
 const ENTRY = fs.readFileSync(path.join(ROOT, 'src/coneCargoPlan.entry.jsx'), 'utf8');
 const coneParse = (ENTRY.match(/window\.ConeParse\s*=\s*\{[^}]*\}/) || [''])[0];
-ok(/applyCatosPos/.test(coneParse) && /applyAutoSwap/.test(coneParse), '번들의 window.ConeParse 가 두 함수를 내보낸다(import 줄만 있는 것은 안 된다)');
+ok(/applyCatosPos/.test(coneParse) && /inferDischargePos/.test(coneParse) && /applyAutoSwap/.test(coneParse), '번들의 window.ConeParse 가 세 함수(터미널 자리·내린 순서 추정·맞교환)를 내보낸다(import 줄만 있는 것은 안 된다)');
 
 // ── 꺼낸 함수를 돌릴 자리
 const CT = { rec: {}, tw: {} };
@@ -170,7 +170,7 @@ ok(anyDiff > 0, `픽스처가 실제 어긋남을 담고 있다 (옛 판정 어�
   const tag = 'STSE_2669E|loading', mode = 'loading', sec = LIVE[tag];
   const CT2 = { rec: {}, tw: {}, comp: {}, recRaw: {} };
   const PLAN2 = { loading: Object.values(sec.ediContainers) };
-  global.window.ConeParse = { applyCatosPos: U.applyCatosPos, applyAutoSwap: U.applyAutoSwap };
+  global.window.ConeParse = { applyCatosPos: U.applyCatosPos, inferDischargePos: U.inferDischargePos, applyAutoSwap: U.applyAutoSwap };
   const ctApplySwap = new Function('CT', 'ctPlanRows', 'window',
     grab('ctApplySwap') + '; return ctApplySwap;')(CT2, (m) => PLAN2[m] || [], global.window);
 
@@ -357,10 +357,10 @@ console.log('\n  ■ 조용히 실패하지 않는가');
   mkSwap(null)();
   ok(CT3.swapOk === false, '번들이 없으면 «못 했다»를 남긴다');
   CT3.swapOk = undefined;
-  mkSwap({ applyCatosPos: (v) => v, applyAutoSwap: () => { throw new Error('일부러'); } })();
+  mkSwap({ applyCatosPos: (v) => v, inferDischargePos: (v) => v, applyAutoSwap: () => { throw new Error('일부러'); } })();
   ok(CT3.swapOk === false, '맞교환이 던져도 «못 했다»를 남긴다 — 조용히 넘어가지 않는다');
   CT3.swapOk = undefined;
-  mkSwap({ applyCatosPos: (v) => v, applyAutoSwap: (v) => v })();
+  mkSwap({ applyCatosPos: (v) => v, inferDischargePos: (v) => v, applyAutoSwap: (v) => v })();
   ok(CT3.swapOk === true, '제대로 돌면 «했다»가 된다');
   ok(LINES.some(l => isCode(l) && /CT\.swapOk\s*===\s*false/.test(l)), '화면이 그 «못 했다»를 읽어 검수원에게 보인다');
 }

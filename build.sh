@@ -348,6 +348,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   NODE_PATH="$PWD/node_modules" node tools/smoke_bayfirst.cjs || { echo "✗ 베이 먼저 연막검사 실패 — 배포 금지"; exit 1; }
   NODE_PATH="$PWD/node_modules" node tools/smoke_baysplit442.cjs || { echo "✗ 자동 가이드 23번·(24)25번 나눠 고르기 연막검사 실패 — 배포 금지"; exit 1; }   # 4.42
   NODE_PATH="$PWD/node_modules" node tools/smoke_dischargeswap442.cjs || { echo "✗ 양하 실제 내린 자리 맞바꿈 연막검사 실패 — 배포 금지"; exit 1; }   # 4.42-04
+  NODE_PATH="$PWD/node_modules" node tools/smoke_dischargeinfer455.cjs || { echo "✗ 양하 내린 순서 칸 추정 연막검사 실패 — 배포 금지"; exit 1; }   # 4.55-03
   NODE_PATH="$PWD/node_modules" node tools/smoke_personallock443.cjs || { echo "✗ 개인 비밀번호 잠금 연막검사 실패 — 배포 금지"; exit 1; }   # 4.43
   # 4.00: 메뉴 구조 — 독(양하·선적/작업 시작/베이/출력/업로드/더보기)·출력 단일 경로(출력 센터)·업로드 올리기 전용·매뉴얼 옛 낱말 잔재(▶ 작업 시작·인쇄 ▾·카고 플랜 V2·헤더 ⋯)를 소스에서 잰다.
   node tools/smoke_menu400.cjs || { echo "✗ 4.00 메뉴 구조 연막검사 실패 — 배포 금지"; exit 1; }
