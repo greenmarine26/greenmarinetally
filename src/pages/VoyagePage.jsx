@@ -1298,7 +1298,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const merged = Array.from(new Set([...cur, ...found]));
     if (merged.length === cur.length) { lugPromoRef.current = voyageKey; return; }   // 이미 다 있음
     lugPromoRef.current = voyageKey;
-    fbUpdateVoyageInfo(voyageKey, { 'forecast/luggageCns': merged }).catch(() => {});
+    fbUpdateVoyageInfo(voyageKey, { 'forecast/luggageCns': merged }).catch((e) => console.warn('[러기지 컨 저장] 못 했어요(무해):', e && e.message));
   }, [voyageKey, voyage]);
 
   const dmgPromoRef = useRef('');
@@ -3711,7 +3711,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     let alive = true;
     fbGetEdiRaw(voyageKey, mode).then(d => {
       if (alive) setRawMeta(d);
-    }).catch(() => {});
+    }).catch((e) => console.warn('[EDI 원본 정보 읽기] 못 했어요(무해):', e && e.message));
     return () => { alive = false; };
   }, [voyageKey, mode]);
 

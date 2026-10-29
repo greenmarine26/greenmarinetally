@@ -1,4 +1,4 @@
-// 4.56 조용한 실패 눈금 시험 — 소스에서 «주석도 없는 빈 catch» · «빈 .catch(()=>{})» · «signal 없는 fetch» 를 파일별로 세어, 기준선(tools/silentfail_baseline.json)보다 늘면 막는다. 줄어들면 기준선을 낮추라고 알린다.
+// 4.56 조용한 실패 눈금 시험 — 소스에서 «주석도 없는 빈 catch» · «빈 .catch(()=>{}) 와 .catch(()=>null)» · «signal 없는 fetch» 를 파일별로 세어, 기준선(tools/silentfail_baseline.json)보다 늘면 막는다. 줄어도 막는다(기준선을 --write 로 낮춰 둔다).
 //   왜 — 절대 12-6 «조용한 실패 금지». 지금 있는 것을 한꺼번에 고치면 고장 안 난 코드를 건드리게 되니, 새로 늘지 않게만 기계가 지킨다. 깊은 검사는 tools/semgrep/silent-fail.yml (semgrep --test tools/semgrep).
 const fs = require('fs'); const path = require('path'); const babel = require('@babel/core');
 const ROOT = path.join(__dirname, '..'); let fail = 0; const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
@@ -11,6 +11,7 @@ const scan = (file) => {
     if (!n || typeof n.type !== 'string') return;
     if (n.type === 'CatchClause' && n.body.body.length === 0 && !(n.body.innerComments && n.body.innerComments.length)) c.bareCatch++;
     if (n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && n.callee.property && n.callee.property.name === 'catch' && n.arguments[0] && /Function/.test(n.arguments[0].type) && n.arguments[0].body && n.arguments[0].body.type === 'BlockStatement' && n.arguments[0].body.body.length === 0 && !(n.arguments[0].body.innerComments && n.arguments[0].body.innerComments.length)) c.emptyPromiseCatch++;
+    else if (n.type === 'CallExpression' && n.callee.type === 'MemberExpression' && n.callee.property && n.callee.property.name === 'catch' && n.arguments[0] && n.arguments[0].type === 'ArrowFunctionExpression' && n.arguments[0].params.length === 0 && ['NullLiteral', 'BooleanLiteral', 'NumericLiteral', 'StringLiteral', 'ArrayExpression', 'ObjectExpression'].includes(n.arguments[0].body.type)) c.emptyPromiseCatch++;   // .catch(() => null) 처럼 오류를 값 하나로 덮는 것도 같은 종류
     if (n.type === 'CallExpression' && n.callee.type === 'Identifier' && n.callee.name === 'fetch') {
       const o = n.arguments[1]; const hasSignal = o && o.type === 'ObjectExpression' && o.properties.some((p) => p.key && (p.key.name === 'signal' || p.key.value === 'signal'));
       const cond = o && o.type === 'ConditionalExpression';   // firebase.js: ctl ? { signal } : undefined — 타임아웃을 다는 갈래가 있다

@@ -145,7 +145,7 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
       signal: ac ? ac.signal : undefined,
     });
     status = res.status;
-    const j = await res.json().catch(() => null);
+    const j = await res.json().catch((e) => { console.warn('[AI 응답 읽기] JSON 이 아니에요:', e && e.message); return null; });
     if (!res.ok) { const e = new Error((j && j.error && j.error.message) || ('HTTP ' + res.status)); e.status = res.status; throw e; }
     tok.tokIn = (j && j.usage && j.usage.input_tokens) || 0; tok.tokOut = (j && j.usage && j.usage.output_tokens) || 0;
     const out = claudeVisionToGemini(j);

@@ -51,7 +51,7 @@ export default function GeminiKeyModal({ onClose }) {
     }
     const tail = k.slice(-6);
     _storage.set(SK.geminiKey, k);
-    getMirConfig(true).catch(() => {});   // 3.43: 개인 키가 캐시(10분)에 박혀 있지 않게 바로 다시 읽는다(감사 지적)
+    getMirConfig(true).catch((e) => console.warn('[공용 키 다시 읽기] 못 했어요(무해):', e && e.message));   // 3.43: 개인 키가 캐시(10분)에 박혀 있지 않게 바로 다시 읽는다(감사 지적)
     _storage.set(SK.geminiKeyLast6, tail);
     setLast6(tail);
     setUsingDefault(false);
@@ -64,7 +64,7 @@ export default function GeminiKeyModal({ onClose }) {
     if (!confirm('저장된 API 키를 삭제하시겠습니까?\n삭제 후엔 공용 키(검수사 부담)로 돕니다.')) return;
     _storage.set(SK.geminiKey, '');
     _storage.set(SK.geminiKeyLast6, '');
-    getMirConfig(true).catch(() => {});   // 3.43: 지운 개인 키가 캐시(10분)에 남아 계속 불리지 않게(감사 지적)
+    getMirConfig(true).catch((e) => console.warn('[공용 키 다시 읽기] 못 했어요(무해):', e && e.message));   // 3.43: 지운 개인 키가 캐시(10분)에 남아 계속 불리지 않게(감사 지적)
     setLast6('');
     setUsingDefault(true);
   };

@@ -4096,7 +4096,7 @@ export function fbSubscribeMatrixEditors(callback) {
   const r = ref(db, MATRIX_EDITORS_NODE);
   const handler = onValue(r, snap => {
     if (!snap.exists()) {
-      set(r, MATRIX_EDITORS_SEED).catch(() => {});
+      set(r, MATRIX_EDITORS_SEED).catch((e) => console.warn('[베이매트릭스 편집자 씨앗] 못 했어요(무해):', e && e.message));
       callback([...MATRIX_EDITORS_SEED]);
       return;
     }

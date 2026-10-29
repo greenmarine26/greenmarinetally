@@ -130,7 +130,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //   일관성이 없음"(검수사 2026-08-04). 루트를 **한 번만** 지정받아 IndexedDB에 두면
   //   그 뒤로는 안 묻는다. 마감 텔리·실선적 EDI·ASC 가 모두 이 핸들을 쓴다.
   const [boxRoot, setBoxRoot] = useState(null);
-  React.useEffect(() => { readyRoot().then(setBoxRoot).catch(() => {}); }, []);
+  React.useEffect(() => { readyRoot().then(setBoxRoot).catch((e) => console.warn('[박스 루트 준비] 못 했어요(무해):', e && e.message)); }, []);
   const onPickBox = React.useCallback(async () => {
     const h = await pickTallyboxRoot();            // 사용자 클릭 안에서만 열린다
     setBoxRoot(h);

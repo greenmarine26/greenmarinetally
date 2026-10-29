@@ -521,14 +521,14 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const _suppressBay = !!(bayView && bayView.suppressBayActivity);   // 3.48 따라가기 — 터미널에서 받은 베이를 «사람이 고른 자리»로 올리지 않는다(수석 보드 live 되먹임 방지)
   useEffect(() => {
     if (guideMode || !inspector) return;  // 가이드는 GuidedWorkPanel이 따로 기록
-    if (manualBay == null || !manualTier || _suppressBay) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch(() => {}); return; }
+    if (manualBay == null || !manualTier || _suppressBay) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch((e) => console.warn('[작업 활동 기록] 못 했어요(무해):', e && e.message)); return; }
     const g = manualGroups.find(x => x.center === manualBay);
     const bays = g ? [...g.bays].sort((a, b) => a - b) : [manualBay];
     const _nb = !!g?.noBay || manualBay < 0;   // 4.26-02: «자리 없음» 묶음(center -1)이 다 배치돼 목록에서 빠져도 -1 을 베이 번호로 보내지 않는다(수석 보드가 «-1» 의 숫자를 B1 로 읽었다)
     const bayLabel = _nb ? '미지정' : (bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0'));
     const remain = _nb ? (g?.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
     // TallyOne 1.55: 갱(호기)을 같이 보낸다 — 종전엔 빈 문자열이라 수석 화면에서 어느 갱인지 알 수 없었다.
-    fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: equipNo || '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
+    fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: equipNo || '', bayLabel, tier: manualTier, remain, auto: false }).catch((e) => console.warn('[작업 활동 기록] 못 했어요(무해):', e && e.message));
   }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo, _suppressBay]);
   //  ★ 3.48 베이뷰 — 덮개가 준 초기값(베이·단·자동·트윈)을 **위 리셋 효과 뒤에** 얹는다. 리셋 효과([workFilter])는 마운트 때도 한 번 돌아
   //    먼저 넣은 값을 지우므로, 효과 순서상 그 뒤에 두어야 남는다(감사 실측). 베이는 raw 번호를 받아 여기 `manualGroupCenterOf` 한 벌로 묶음 center 로 바꾼다.

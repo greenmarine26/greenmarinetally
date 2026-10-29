@@ -3087,7 +3087,7 @@ async function _fetchJson(url, opts = {}, ms = 8000) {
   const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms);
   try {
     const res = await fetch(url, { ...opts, signal: ctrl.signal });
-    const j = await res.json().catch(() => null);
+    const j = await res.json().catch((e) => { console.warn('[미르 모델 응답 읽기] JSON 이 아니에요:', e && e.message); return null; });
     return { ok: res.ok, status: res.status, j };
   } finally { clearTimeout(t); }
 }

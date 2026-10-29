@@ -301,7 +301,7 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    fbGetAdminGuard().then(g => { if (alive) setAdminGuard(g); }).catch(() => {});
+    fbGetAdminGuard().then(g => { if (alive) setAdminGuard(g); }).catch((e) => console.warn('[관리자 가드 읽기] 못 했어요(무해):', e && e.message));
     return () => { alive = false; };
   }, [inspector]);
   const isAdmin = isAdminName(adminGuard, inspector);
@@ -366,7 +366,7 @@ export default function App() {
     const tick = () => {
       const voyageKey = route.name === 'voyage' ? route.voyageKey : null;
       const mode = route.name === 'voyage' ? (route.mode || null) : null;
-      fbSetInspectorActivity(inspector, voyageKey, mode).catch(() => {});
+      fbSetInspectorActivity(inspector, voyageKey, mode).catch((e) => console.warn('[작업 활동 기록] 못 했어요(무해):', e && e.message));
     };
     tick();
     const id = setInterval(tick, 30000);
@@ -416,7 +416,7 @@ export default function App() {
       // TallyOne 1.3: 자동 로그아웃 기록 — 사용자 이름이 지워지기 전에 남긴다(fire-and-forget)
       logActivity('logout', { via: 'idle' });
       setActivityUser('');
-      fbLogoutInspector(inspector).catch(() => {});
+      fbLogoutInspector(inspector).catch((e) => console.warn('[로그아웃 표시] 못 했어요(무해):', e && e.message));
       clearLoginTime();
       _storage.set(SK.activeInspector, '');
       setInspector('');
@@ -534,7 +534,7 @@ export default function App() {
     if (!inspector) return;
     // TallyOne 1.3: 수동 로그아웃 기록 — Header ConfirmModal 확인을 거쳐 여기 도달한 시점이 확정
     logActivity('logout', { via: 'manual' });
-    fbLogoutInspector(inspector).catch(() => {});   // V7.94-14: 서버에 로그아웃 즉시 마킹
+    fbLogoutInspector(inspector).catch((e) => console.warn('[로그아웃 표시] 못 했어요(무해):', e && e.message));   // V7.94-14: 서버에 로그아웃 즉시 마킹
     const loginTime = getLoginTime();
     const workDuration = loginTime ? (Date.now() - loginTime) : 0;
     // 최신 날씨 다시 조회
