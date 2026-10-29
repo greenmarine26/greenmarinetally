@@ -57,7 +57,7 @@ export function isSentenceQuery(v) {
 // (앞 판) 'TallyOne 4.56'   // 4.56 미르 «양하 정확도» (앞 판 주석은 아래 줄에 그대로)
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
-export const APP_VERSION = 'TallyOne 4.56-02'   // 4.56-02 **남은 «말없이 넘기는 오류» 정리 — 빈 `.catch(()=>{})` 12곳과 `.catch(()=>null)` 2곳이 이제 경고 로그를 남긴다**(관리자 가드·작업 활동 기록·로그아웃 표시·공용 키 다시 읽기·베이매트릭스 씨앗·박스 루트·러기지 컨 저장·EDI 원본 정보·AI·미르 응답 읽기) — 검수사 2026-10-29 «남은 것이 생기면 안된다 … 청소완료가 아닌거죠». 동작 불변(로그만 추가). 눈금 `smoke_silentfail456` 기준선 0/0/0, `.catch(()=>null)` 도 센다.
+export const APP_VERSION = 'TallyOne 4.56-03'   // 4.56-03 **선적에서 터미널이 준 칸이 계획에 없거나 사람 칸과 겹치면, 위치를 맞바꿔 빈칸이 안 생기게 한다** — 검수사 2026-10-29 NSDC 2611S 30번 베이 «하나를 잘못찍건 위치를 제대로 바꾸었다면 빈자리는 생기지 않을것입니다». 뿌리 — 자동 맞교환(applyAutoSwap)은 «안 실린 밀려난 컨»만 봐서, 실린 4대가 한 칸씩 밀리고 끝 한 대(TEMU6518190)가 계획에 없는 14-02-86 에 적히면 30-10-84 가 빈칸으로 남고 한 칸씩 움직이는 검은 칸으로 보였다(맞교환 0건). 수리 — applyAutoSwap 이 그 컨(터미널 값 · 사람이 안 찍음 · 규격 같음)을 사슬이 닫히는 빈 계획 칸으로 메모리에서만 옮기고 원래 칸은 `_swap_orig` 에 남긴다(stripCatosPos 가 되돌림). 같은 칸에 사람 자리와 터미널 자리가 겹친 13-06-82 도 같은 규칙으로 풀린다. 실측 NSDC 2610N — 바뀐 컨 정확히 2대(8190→30-10-84 · 6120→13-04-82) · 한 칸 두 대 0 · 30번 베이 빈 계획 칸 0 · 연막검사 tools/smoke_orphanswap456.cjs. // 4.56-02 **남은 «말없이 넘기는 오류» 정리 — 빈 `.catch(()=>{})` 12곳과 `.catch(()=>null)` 2곳이 이제 경고 로그를 남긴다**(관리자 가드·작업 활동 기록·로그아웃 표시·공용 키 다시 읽기·베이매트릭스 씨앗·박스 루트·러기지 컨 저장·EDI 원본 정보·AI·미르 응답 읽기) — 검수사 2026-10-29 «남은 것이 생기면 안된다 … 청소완료가 아닌거죠». 동작 불변(로그만 추가). 눈금 `smoke_silentfail456` 기준선 0/0/0, `.catch(()=>null)` 도 센다.
 // (앞 판) // 4.55-03 **양하에서 먼저 나온 컨의 실제 칸을 «내린 순서»로 추정 — 위 단 컨을 계속 기다리지 않는다** — 검수사 2026-10-28 NSFR 2620N 16번 베이 «5128자리에 다른것이 있으면 5128은 그 다른컨의 자리로 가야합니다. 안가고 있으니 계속 5128을 찾는것입니다» · «5128 자리에서 4927이 나왔다면 그다음 대상이 5128이 아니고 그다음 컨테이너 8757이다». 뿌리 — 양하 완료는 수집기가 올리고(src:'term') 칸이 없다(카토스 cellPosition 은 EDI 계획 칸 그대로 · 수집기도 양하 칸은 버린다) → 4.42-04 맞바꿈은 앱 [완료] 길에서만 돌아 NSFR 6건 12대가 계획 칸에 그대로 남고 큐가 밀린 컨을 기다렸다. 수리 — utils.inferDischargePos: 같은 베이·열·데크/홀드 묶음에서 n 번째로 완료된 컨은 n 번째로 높은 칸에서 나왔다(쌓는 규칙) → 계획과 다르면 그 칸을 메모리에만 `_pos_src:'infer'` 로 적고 기존 applyAutoSwap 이 밀린 컨을 비운 칸으로 보낸다(구독 applyCatosPos→inferDischargePos→applyAutoSwap · 콘앱 같은 차례). 사람이 찍은 칸은 안 덮고 완료 시각이 같으면 순서를 지어내지 않으며 DB 에 안 쓴다(stripCatosPos 가 벗긴다). 실측 — NSFR 2620N 6건 정확히 12대(4972↔5128 등) · TNJP 26371E 150대 0건 · 연막검사 tools/smoke_dischargeinfer455.cjs. 같은 단 안의 바꿈은 증거가 없어 못 잡는다
 // (앞 판) 'TallyOne 4.55-02'   // 4.55-02 **EDI 올리기 «다른 선박 EDI» 판정 한 벌(utils.ediShipVerdict) — 선박 사전 콜사인으로 같은 배 확정 · 선박명 한 글자 오타 허용(NSDC2611S «STASRHIP DRACO»)**. 앞 판 4.55-01 **홈 분류와 «✓ 수석 완료 저장» 단추의 판정을 화면 사이에 한 벌로 맞춤 — «선적 EDI 가 없다» 는 «선적이 없다» 가 아니다(EDI 대기)** — 검수사 2026-10-27 06:22 «DXQD는 아직 작업중인데 분류를 따로 한 이유와 수석완료확인 버튼을 활성화 시킨이유는? ATPR은 작업중 선박으로 놓고?» · 06:33 «선적EDI가 없다고 선적이 없는건 아닙니다. EDI 대기 상태인거죠 EDI만 오면 바로 선적시작할것이라는 이야기 입니다.» 실측(실 DB 읽기) — DXQD 2642E(계획 10-26 19:00 ~ 10-28 08:00 · 터미널 planned · 양하 208 끝 · 선적은 2642W LOADLIST 371대만 와 있고 EDI 대기)가 ① 폰 홈에서 «그 밖의 배» 접힘 안에 있었다(컴 홈은 «어제» 묶음 · 로그인 현황판은 «오늘» 줄 — 세 화면이 달랐다. 4.51 이 «작업 배정이 뒤로 밀린 배» 판정을 홈 정렬·채움에만 넣고 펼침 판정과 날짜 묶음에는 안 넣은 누락) ② 수석 대시보드 진행 줄에 «✓ 수석 완료 저장» 이 켜져 있었다(선적 평택 대수를 EDI 에서만 세어 «선적 0대 = 선적 없음» 으로 읽음 — 홈은 같은 배를 «선적 0/371» 로 보고 수석 대기를 안 띄웠다. 같은 판정이 홈·수석 보드·17시 보관 보고·홀드 잔여·미르 다섯 곳에 복제돼 각자 달랐다). 수리 — utils.planDelayedLive(시작은 어제 이전 · 계획 끝 안 지남 · 안 떠남) 한 벌을 로그인·홈 펼침·홈 날짜 묶음이 같이 쓴다(DXQD 는 폰·컴 모두 «오늘» 묶음) · utils.hasLoadingSide·inspectorAllDone 한 벌 — 선적 구역에 자료가 한 가지라도 있거나 선적 계획 수량(planLod)이 있으면 EDI 대기도 «선적 있음» 이라 양하 완료만으로는 수석 완료 저장이 안 열린다(다섯 곳이 같은 함수) · 수석 보드 선적 대수는 EDI 가 없으면 리스트 대수(371). 선적 자료도 계획 수량도 없는 배는 종전대로(V8.92 확인창 안전망 그대로) · DB 쓰기 없음
 // (앞 판) 'TallyOne 4.51'   // 4.51 **«지난 배» 판정과 «같은 시작이면 누가 위냐» 를 홈 목록과 로그인 작업자 선택 현황판이 한 벌로 쓴다** — 검수사 2026-10-26 06:47 «틀린 배정 순서 왜 일까요? 같은 앱인데 틀린 배정 화면?» · 07:33 «지난 배로 빠집니다 지난배가 아니고 작업배정이 뒤로 밀린것입니다.» · 07:34 «배정목록을 확실히 보지 않아서 생기는 문제 입니다.» 재현 — 실 항차 15척(RTDB GET)에서 SWBT 2616N 이 홈은 맨 위 «어제 시작» 줄, 로그인 현황판은 «지난 배»로 빠져 두 화면이 달랐다. 1차 원인은 데이터 — 수집기가 배정목록 표의 «입항일시»(10-25)를 계획 시작으로 써서 실제 작업 배정(10-28 01:00, 카토스·배정 차트)과 달랐다(MailPilot 2.47-12·2.47-13 에서 차트 «접안(예정)시간» 을 쓰고 표를 4일 전부터 조회해 고침 · 앱 계획이 10-28 01:00 ~ 17:00 로 바뀜). 앱 쪽 2차 원인 — 두 화면이 지난 배를 다른 잣대로 쟀다. 홈은 끝(없으면 시작) 기준, 로그인은 시작 기준이라 시작은 지났어도 끝이 안 지난 배(작업이 뒤로 밀린 배)를 로그인만 버렸고, 동률 규칙(1.77-01 «먼저 끝나는 배가 위»)은 홈에만 있어 같은 시작이면 홈은 TNJP→TMPZ, 로그인은 TMPZ→TNJP 였다. 수리 — utils.planIsPast · planIsLive · planEndCompare 한 벌을 두고 홈 정렬·접힘 채움·날짜 묶음과 로그인 현황판 순서가 같이 쓴다(로그인의 채움·남은 일감은 종전 «시작 < 지금» 판정 그대로). 로그인은 시작은 지났어도 끝이 안 지난 배를 «오늘» 줄에 «어제 08:00» 처럼 날짜와 함께 올리고 같은 시작이면 먼저 끝나는 배가 위다. 끝 시각을 모르는 배는 «밀렸다» 고 단정하지 않고 종전 그대로. 실데이터 순서 비교 연막 smoke_planorder451. 데이터·판정(작업중·자료 대기) 변화 없음.
@@ -159,7 +159,7 @@ export const APP_VERSION = 'TallyOne 4.56-02'   // 4.56-02 **남은 «말없이 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.56-02 오류가 나도 말없이 넘기지 않고 기록을 남깁니다.'
+export const APP_NOTE = '4.56-03 선적 칸이 서로 어긋나도 위치를 맞바꿔 빈칸이 생기지 않게 했습니다.'
 // (앞 판 APP_NOTE) '4.55-01 선적 EDI 를 기다리는 배가 그 밖의 배로 접히거나 수석 완료 저장이 열리던 것을 고쳤습니다. 선적 자료나 계획이 있으면 EDI 가 아직이어도 선적은 대기로 봅니다.'
 // (앞 판 APP_NOTE) '4.51 작업자 선택 화면에서 같은 시작이면 먼저 끝나는 배가 위로 갑니다. 시작은 지났어도 아직 안 끝난 배는 지난 배로 빠지지 않고 어제 시각과 함께 보입니다.'
 // (앞 판 APP_NOTE) '4.49-02 실번호가 자료마다 다르면 다른 자료 실로 보이고 세관 신고 실의 앞자리 0 이 빠졌으면 실오류로 셉니다. RF CONTAINER LIST 의 실번호는 쓰지 않고 본 리스트 실을 씁니다.'
@@ -10906,12 +10906,48 @@ export function applyAutoSwap(voyage) {
       if (ba == null || ba === '' || String(ba).startsWith('__') || !r.row_actual || !r.tier_actual) continue;
       actual[cn] = key(ba, r.row_actual, r.tier_actual);
     }
+    const isHuman = (r) => !!(r && (r.actual_by || (Array.isArray(r.moves) && r.moves.length)));   // 터미널 기록은 actual_by 가 비고 moves 가 없다(수집기가 올린 값에는 _pos_src 도 없다)
     const occupied = {};                   // 자리 키 → 실린 cn
-    for (const [cn, k] of Object.entries(actual)) occupied[k] = cn;
+    for (const [cn, k] of Object.entries(actual)) if (!isHuman(recs[cn])) occupied[k] = cn;
+    for (const [cn, k] of Object.entries(actual)) if (isHuman(recs[cn])) occupied[k] = cn;     // 한 칸에 둘이면 사람이 찍은 쪽이 이긴다(키 순서에 안 흔들린다 — 감사 4.56-03)
+    const takenOrphan = new Set(); let hitO = 0;
+    //  ★ 4.56-03 — **이미 실린 컨이 계획에 없는 칸으로 나가 있으면, 사슬이 닫히는 빈 계획 칸으로 돌려놓는다**(메모리에만 · 터미널이 준 자리일 때만).
+    //    검수사 2026-10-29 NSDC 2611S 30번 베이 «하나를 잘못찍건 위치를 제대로 바꾸었다면 빈자리는 생기지 않을것입니다» · «이 방법은 이미 진행되고 있을것입니다. 그게 안되고 있는 버그».
+    //    뿌리 — 위 맞교환은 «안 실린 밀려난 컨»만 본다. 동방은 실린 4대가 한 칸씩 밀려 앉고(05→07→09→10-84 칸 주인) 끝의 한 대(TEMU6518190)가 계획에 없는 14-86-02 로 적혀,
+    //    사슬 끝 10-84 가 영영 빈칸이 됐다(밀려난 «안 실린» 컨이 없어 위 맞교환이 0건). 동방 선내위치는 차량 적재 때 미리 붙인 값이라 틀릴 수 있다 — 틀린 값 하나가 빈칸과 한 칸 밀림을 만든다.
+    //    규칙 — ①사람이 찍은 자리가 아니고(actual_by·moves 없음) ②그 칸이 EDI 어느 컨의 계획 칸도 아니며 ③제 계획 칸에서 시작해 «앉은 컨의 계획 칸»을 따라가 빈 계획 칸에 닿고 ④그 칸 주인과 규격·풀엠티·항구가 같으면
+    //    그 칸으로 옮긴다. 원래 값은 `_swap_orig` 에 남긴다(stripCatosPos 가 되돌린다 · DB 에 안 쓴다).
+    const humanKeys = new Set();           // 사람이 찍은 칸 — 터미널 값이 여기에 겹치면(한 칸 두 대) 사람 쪽이 이긴다
+    for (const [cn, k] of Object.entries(actual)) if (isHuman(recs[cn])) humanKeys.add(k);
+    for (const [X, rX] of (mode === 'loading' ? Object.entries({ ...recs }) : [])) {       // 선적만 — 양하는 4.55-03 추정이 따로 맡는다
+      const kX = actual[X]; const eX = edi[X];
+      if (!kX || !eX || !plan[X] || !(comp[X] && comp[X].at)) continue;
+      if (planAt[kX] && !humanKeys.has(kX)) continue;                                                     // 계획 칸이고 사람과 안 겹치면 손대지 않는다
+      if (isHuman(rX) || rX._swap_orig) continue;                                                         // 사람이 찍은 자리·이미 손댄 자리는 그대로
+      let target = null; let A = occupied[plan[X]]; const seenX = new Set([X]);
+      if (!A) {                                                                                          // 사슬 없이 제 계획 칸이 비었을 때는 같은 베이·같은 데크/홀드 안에서만 돌아간다(다른 베이·단 구분이 다르면 짐작하지 않는다)
+        const [pb, , pt] = plan[X].split('_');
+        if (parseInt(pb, 10) !== parseInt(kX.split('_')[0], 10) || (parseInt(pt, 10) >= 80) !== (parseInt(kX.split('_')[2], 10) >= 80)) continue;
+        target = plan[X];
+      }
+      for (let i = 0; i < 64 && A && !seenX.has(A) && !target; i++) {
+        seenX.add(A);
+        const pA = plan[A]; if (!pA) break;
+        if (!occupied[pA] && !takenOrphan.has(pA)) { target = pA; break; }
+        A = occupied[pA];
+      }
+      if (!target || occupied[target] || takenOrphan.has(target)) continue;
+      const Z = planAt[target]; if (Z && edi[Z] && !sameAttr(edi[Z], eX)) continue;                       // 속성이 다르면 앱이 짐작하지 않는다
+      const [tb, tr, tt] = target.split('_');
+      takenOrphan.add(target);
+      recs[X] = { ...rX, bay_actual: String(parseInt(tb, 10)), row_actual: tr, tier_actual: tt,
+                  _swap_orig: { bay: rX.bay_actual, row: rX.row_actual, tier: rX.tier_actual }, _swap_src: 'orphan' };
+      if (occupied[kX] === X) delete occupied[kX]; occupied[target] = X; actual[X] = target; hitO++;
+    }
     const isLoaded = (cn) => !!actual[cn] || !!(comp[cn] && comp[cn].at);
     //  밀려난 컨 — 계획 자리를 남이 차지했고 자기는 아직 안 실림
     const displaced = Object.keys(plan).filter((cn) => !isLoaded(cn) && occupied[plan[cn]] && occupied[plan[cn]] !== cn);
-    if (!displaced.length) continue;
+    if (!displaced.length) { if (hitO) { out[mode] = { ...sec, records: recs }; touched = true; } continue; }
     //  비운 자리 — 실린 컨의 계획 자리인데 아무도 안 앉음(실적 기준)
     const takenBySwap = new Set();
     const isFree = (k) => k && !occupied[k] && !takenBySwap.has(k);
@@ -10944,7 +10980,7 @@ export function applyAutoSwap(voyage) {
       //  빈 자리를 못 찾으면(초과 컨이 앉았거나 사슬이 끊김) 그대로 둔다 — 제 계획 칸에 ⊕ 로 겹쳐 남는다.
       //  숨기지 않는다: 검수사 «이유는 화면상에서 남은 컨 넘버를 확인 할수가 있어야 해서 입니다».
     }
-    if (hit) { out[mode] = { ...sec, records: recs }; touched = true; }
+    if (hit || hitO) { out[mode] = { ...sec, records: recs }; touched = true; }
   }
   return touched ? out : voyage;
 }
@@ -10975,6 +11011,11 @@ export function stripCatosPos(voyage) {
       if (r && r._assign_src === 'autoswap') {
         const { bay_assign: _g1, row_assign: _g2, tier_assign: _g3, assign_by: _g4, assign_at: _g5, _assign_src: _g6, _assign_from: _g7, _assign_byCn: _g8, _assign_warn: _g9, ...rest } = r;
         r = rest; changed = true;
+      }
+      //  4.56-03: 계획에 없는 칸에서 사슬 칸으로 옮겨 둔 값(`_swap_orig`)은 터미널이 준 원래 칸으로 되돌린다 — 메모리 덧칠이 DB 에 굳지 않게.
+      if (r && r._swap_orig) {
+        const { _swap_orig: _o, _swap_src: _os, ...rest } = r;
+        r = { ...rest, bay_actual: _o.bay, row_actual: _o.row, tier_actual: _o.tier }; changed = true;
       }
       //  3.20: 표식이 있으면 원천을 안 가리고 벗긴다 — 3.16-01 이 'pnct' 를 더했는데 여기가 'catos' 만 보고 있었다.
       //    안 벗기면 동방 자리가 보관본에 굳고, 되살린 뒤 사람이 그 컨 자리를 고치면 표식이 남아 시프팅이 그것을 터미널 것으로 오인한다.
