@@ -1,0 +1,25 @@
+rules:
+  - id: empty-catch
+    languages: [javascript]
+    severity: WARNING
+    message: 빈 catch — 조용한 실패 금지(절대 12-6). 최소한 console.warn 으로 무엇을 시도하다 실패했는지 남긴다.
+    pattern: |
+      try { ... } catch ($E) {}
+  - id: empty-promise-catch
+    languages: [javascript]
+    severity: WARNING
+    message: 빈 .catch(() => {}) — 조용한 실패 금지(절대 12-6).
+    pattern-either:
+      - pattern: $P.catch(() => {})
+      - pattern: $P.catch(function () {})
+      - pattern: $P.catch(($E) => {})
+  - id: fetch-without-timeout
+    languages: [javascript]
+    severity: WARNING
+    message: 타임아웃 없는 외부 호출 — fetch 에 signal(AbortSignal.timeout)을 단다(절대 12-6).
+    patterns:
+      - pattern-either:
+          - pattern: fetch($U)
+          - pattern: fetch($U, $O)
+      - pattern-not: |
+          fetch($U, { ..., signal: $S, ... })
