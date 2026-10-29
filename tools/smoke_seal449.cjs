@@ -346,7 +346,7 @@ const bundle = process.argv[3];
   for (const f of ['src/components/ReportTab.jsx', 'src/components/CSVExport.jsx', 'src/loloReport.js', 'src/tallyReport.js', 'src/mir.js']) ok(/sealCheckOf/.test(src(f)) && !/sl_orig\s*!==?\s*c\.sl|c\.sl\s*!==?\s*slOrig/.test(src(f)), `${f.split('/').pop()} — 실오류 판정 한 벌(sealCheckOf)`);
   const help = JSON.stringify(T.HELP_DATA);
   ok(/실번호가 자료마다 다를 때 — 다른 자료 실 · 하나만 맞으면 맞음 \(4\.49~\)/.test(help) && /ML Seal 칸이 주실/.test(help) && /끝자리가 빠진 값/.test(help), '매뉴얼 — 4.49 절(다른 자료 실 · ML Seal · 끝자리 빠짐)');
-  ok(/^TallyOne 4\.(49|5[0-9])/.test(T.APP_VERSION) && /선적 칸이 서로 어긋나도|오류가 나도 말없이|느린 망에서도 화면이|미르에게 양하 정확도를 물으면|양하에서 아래 단 컨이 먼저 나오면|선박명에 오타가 있어도 콜사인이 같으면|실번호|본선 잔류 지시 컨이 선적 EDI 에 다른 자리로 실려 오면|터미널이 한 묶음으로 세는 빈 FR 묶음|터미널이 보낸 빈 FR 묶음 목록 서류|오픈탑 컨은 20OT와 40OT 한 가지로 보이고|작업자 선택 화면에서 같은 시작이면 먼저 끝나는 배가 위로|X-RAY 탭 맨 위에 내 몫과 파트너 몫 두 단계 카드|선적 EDI 를 기다리는 배가 그 밖의 배로/.test(T.APP_NOTE), `버전 ${T.APP_VERSION} · APP_NOTE 실번호`, T.APP_NOTE);
+  ok(/^TallyOne 4\.(49|5[0-9])/.test(T.APP_VERSION) && /선적 칸이 서로 어긋나도|미르로 호기 검수원을 등록하면|오류가 나도 말없이|느린 망에서도 화면이|미르에게 양하 정확도를 물으면|양하에서 아래 단 컨이 먼저 나오면|선박명에 오타가 있어도 콜사인이 같으면|실번호|본선 잔류 지시 컨이 선적 EDI 에 다른 자리로 실려 오면|터미널이 한 묶음으로 세는 빈 FR 묶음|터미널이 보낸 빈 FR 묶음 목록 서류|오픈탑 컨은 20OT와 40OT 한 가지로 보이고|작업자 선택 화면에서 같은 시작이면 먼저 끝나는 배가 위로|X-RAY 탭 맨 위에 내 몫과 파트너 몫 두 단계 카드|선적 EDI 를 기다리는 배가 그 밖의 배로/.test(T.APP_NOTE), `버전 ${T.APP_VERSION} · APP_NOTE 실번호`, T.APP_NOTE);
 
   console.log('⑫ 4.49-02 앞자리 0 · RF CONTAINER LIST — 신고(세관) 값의 앞 0 이 빠졌으면 실오류 · RF 리스트 실은 실 자료로 안 친다(검수사 2026-10-25 «검수리스트 위주» · «실번호는 본리스트»)');
   {

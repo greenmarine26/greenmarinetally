@@ -14,6 +14,7 @@ import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, cur
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
+import { crewShiftKey, getEquipNumber, setEquipNumber, _storage, SK } from './utils.js';   // 4.56-04: 조 등록에 내 이름이 있으면 기기 호기도 따라간다
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
@@ -311,6 +312,17 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
   const patch = {};
   list.forEach((c) => { patch[`craneCrew/${shiftKey}/${c.no}호기`] = { name: String(c.name).trim(), at: now }; });
   await update(ref(db, `voyages/${voyageKey}/info`), patch);
+  //  4.56-04 (검수사 2026-10-30 «04:00정도에 미르에게 1호기 2호기로 바뀌었답니다 이야기 했는데 4호기로 계속작업됨»)
+  //    조 등록은 명단만 적고 기기의 작업 호기(gm_equip_no)는 안 바꿔서, 완료가 옛 호기로 계속 찍혔다.
+  //    지금 조 등록에 내 이름이 정확히 한 호기에만 있으면 헤더·완료·보고가 쓰는 그 호기로 맞춘다(같은 이름이 둘이면 건드리지 않는다).
+  try {
+    const me = String(_storage.get(SK.activeInspector) || '').trim();
+    const mine = me ? list.filter((c) => String(c.name).trim() === me) : [];
+    if (mine.length === 1 && shiftKey === crewShiftKey(undefined, now, 0).key) {
+      const n = `${mine[0].no}호기`;
+      if (getEquipNumber() !== n) { setEquipNumber(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); }
+    }
+  } catch (e) { console.warn('[4.56-04] 조 등록 뒤 기기 호기 맞춤 실패', e); }
   return list.map((c) => `${c.no}호기 ${String(c.name).trim()}`).join(' · ');
 }
 
