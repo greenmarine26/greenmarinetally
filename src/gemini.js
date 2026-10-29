@@ -124,9 +124,9 @@ function _visionMediaOk(body) {
   }
   return true;
 }
-async function _tryClaudeVision(kind, body, timeoutMs) {
+async function _tryClaudeVision(kind, body, timeoutMs, retry = false) {
   const tier = CLAUDE_VISION_KINDS[kind];
-  if (!tier || Date.now() < _visionClaudeOffUntil) return null;
+  if (!tier || (!retry && Date.now() < _visionClaudeOffUntil)) return null;
   let cfg = null;
   try { cfg = await getMirConfig(); } catch (e) { return null; }
   if (!cfg || !cfg.claudeKey || cfg.visionProvider === 'gemini') return null;
@@ -150,7 +150,9 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
     tok.tokIn = (j && j.usage && j.usage.input_tokens) || 0; tok.tokOut = (j && j.usage && j.usage.output_tokens) || 0;
     const out = claudeVisionToGemini(j);
     if (!out.candidates[0].content.parts[0].text) { const e = new Error('클로드 빈 답'); e.status = 0; throw e; }
-    return new Response(JSON.stringify(out), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const okRes = new Response(JSON.stringify(out), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    okRes._model = model;   // 4.56-05: 어느 AI가 읽었는지 부르는 쪽이 알게 한다(리퍼 사진 — 제미나이로 넘어간 장을 표시)
+    return okRes;
   } catch (e) {
     const st = (e && e.status) || (e && e.name === 'AbortError' ? -1 : -2);
     status = status || st;
@@ -166,8 +168,11 @@ async function _tryClaudeVision(kind, body, timeoutMs) {
   }
 }
 export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MODEL, key = '' } = {}) {
-  const cv = await _tryClaudeVision(kind, body, timeoutMs);   // 4.36: 사진 읽기 클로드 우선(오퍼스·소네트) — 안 되면 아래 제미나이 길
-  if (cv) return cv;
+  let cv = await _tryClaudeVision(kind, body, timeoutMs);   // 4.36: 사진 읽기 클로드 우선(오퍼스·소네트) — 안 되면 아래 제미나이 길
+  //  4.56-05: 리퍼 온도 사진은 클로드가 시간 초과·과부하로 한 번 놓쳐도 **한 번 더** 클로드로 읽는다(한도·키 문제로 30분 쉬는 경우는 제외).
+  //  제미나이는 손글씨 숫자(-19.0 ↔ -2.5)를 더 자주 틀린다 — 오늘 아침 STMJ 판독 4건 중 2건이 시간 초과 뒤 제미나이로 읽혔다(ai_call_log 실측).
+  if (!cv && kind === 'reeferPhoto' && _visionClaudeOffUntil - Date.now() <= 125000) cv = await _tryClaudeVision(kind, body, timeoutMs, true);
+  if (cv) { _visionClaudeOffUntil = 0; return cv; }
   const k = key || await resolveAiKey();
   if (!k) throw new Error(NO_KEY_MSG);
   const ac = (typeof AbortController === 'function') ? new AbortController() : null;
@@ -180,6 +185,7 @@ export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MOD
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify(body), signal: ac ? ac.signal : undefined,
     });
     status = res.status;
+    res._model = model;   // 4.56-05
     return res;
   } catch (e) {
     status = (e && e.name === 'AbortError') ? -1 : -2;

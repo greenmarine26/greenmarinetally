@@ -15,7 +15,7 @@
 //   텔리 RF condition report 의 Setting(F열) · Actual(G열) 이 이 값을 읽는다.
 import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
-import { fbSetReeferTempBulk } from '../firebase.js';
+import { fbSetReeferTempBulk, fbSaveReeferOcrLog } from '../firebase.js';
 import { isReeferContainer, reeferTempExempt } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.70-01: 온도 제외 한 벌
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
@@ -109,8 +109,8 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
       실측값(rfSrc:'list')이 세팅 칸만 손대도 «잰 값»으로 세탁됐다(감사 지적 2026-09-07).
       ⇒ **실측 칸(act)을 실제로 손댔을 때만** 손입력으로 올린다. */
   const setField = (cn, k, v) => {
-    //  3.32: 그 줄의 세팅온도를 고치면 그 줄의 판독 경고를 지운다 — 고쳤는데 붉은 글씨가 남으면 안 된다.
-    if (k === 'set') setBadSet((b) => (b[cn] ? (({ [cn]: _drop, ...rest }) => rest)(b) : b));
+    //  3.32: 그 줄의 세팅온도(4.56-05: 실측도)를 고치면 그 줄의 판독 경고를 지운다 — 고쳤는데 붉은 글씨가 남으면 안 된다.
+    if (k === 'set' || k === 'act') setBadSet((b) => (b[cn] ? (({ [cn]: _drop, ...rest }) => rest)(b) : b));
     setVals((o) => ({
       ...o, [cn]: { ...o[cn], [k]: v, src: k === 'act' ? 'manual' : (o[cn]?.src || '') },
     }));
@@ -154,10 +154,23 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     const { resolveAiKey } = await import('../gemini.js');
     const key = await resolveAiKey();   // 3.43: 공용 키(검수사 부담) → 개인 키
     const all = new Map(); const errs = [];
+    const weak = []; const susp = []; const farAll = []; const logJobs = []; let logFail = 0;   // 4.56-05: 제미나이로 읽은 장 · 범위 밖 값 · 기록 못 남긴 장
+    //  줄 찾기용 참고 — 이 항차 리퍼 번호와 자료의 세팅온도(값은 종이에서 읽게 하고 베끼지 못하게 프롬프트가 막는다)
+    const expect = list.map((c) => ({ cn: c.cn, set: tempStr(c.tmp) }));
     for (let i = 0; i < files.length; i += 1) {
       if (files.length > 1) setNote(`사진 ${i + 1}/${files.length} 읽는 중…`);
       try {
-        const { items } = await ocrReeferTemps(files[i], key);
+        const r = await ocrReeferTemps(files[i], key, expect);
+        const { items } = r;
+        if (r.model && !/^claude-/.test(r.model)) weak.push(files.length > 1 ? `${i + 1}장` : '이 사진');
+        if (r.suspects && r.suspects.length) susp.push(...r.suspects);
+        if (r.far && r.far.length) farAll.push(...r.far);
+        //  사진·AI 원문 답을 남긴다(저장 여부와 무관) — 실패는 알린다. 판독 흐름은 막지 않는다.
+        //  기다리지 않고 시작만 한다(사진을 올리는 동안 다음 장 판독이 멈추지 않게) — 결과는 끝에서 한 번에 센다. 서버 확인이 없으면 15초 뒤 실패로 센다.
+        logJobs.push(Promise.race([
+          fbSaveReeferOcrLog(voyageKey, mode, r, inspector),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('15초 안에 서버 확인을 못 받았습니다')), 15000)),
+        ]).then((ok) => { if (!ok) logFail += 1; }, (le) => { logFail += 1; console.warn('[리퍼 판독 기록] 못 남겼어요:', le && le.message); }));
         //  장마다 **칸 단위로** 누적한다 — 같은 컨이 두 장에 나와도 **빈 칸이 채워진 칸을 지우지 않는다**.
         //  ⚠ 종전엔 항목을 통째로 갈아 끼워, 뒤 장에 그 컨이 빈 실측으로 나오면 앞 장에서 읽은 실측이
         //    사라졌다(감사 실측 — 사진 순서가 값을 정했다).
@@ -174,6 +187,9 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
       setBusy(''); setStep('edit'); return;
     }
     const { bad, cmp } = ocrSetMismatch(list, all);
+    const nSetBad = Object.keys(bad).length;   // 세팅이 자료와 다른 줄 수(문구·과반 판정은 이것만 센다)
+    //  실측이 그 줄 세팅과 3도 이상 벌어진 줄도 표시한다(이웃 줄 값을 읽었을 수 있다) — 세팅 불일치와 같은 경고 줄·저장 확인을 쓴다
+    for (const f of farAll) { const cn = f.split(' ')[0]; if (!bad[cn]) bad[cn] = f.slice(cn.length + 1); }
     setBadSet(bad);
     //  ⚠ 세는 것은 업데이터 **밖**에서 한다 — 안에서 세면 업데이터가 렌더 때 불려서
     //    안내 문구가 늘 «0대 채움»으로 나갔다(감사 실측 · 3.25 부터 있던 결함).
@@ -193,15 +209,19 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
       return nx;
     });
     const extra = [...all.keys()].filter((cn) => !list.some((c) => c.cn === cn)).length;
-    const nBad = Object.keys(bad).length;
+    await Promise.all(logJobs);   // 기록 쓰기 결과(최대 15초)
     setNote([
       `사진 ${files.length}장에서 ${all.size}대 읽어 이 항차 리퍼 ${hit}대 채웠습니다`,
       miss.length ? `못 찾은 ${miss.length}대는 직접 확인하세요` : '',
       extra ? `이 항차에 없는 ${extra}대는 무시` : '',
-      nBad ? (cmp && nBad > cmp / 2
-        ? `⛔ ${nBad}대의 세팅온도가 자료와 다릅니다 — 판독기가 다른 칸(꽂을 때 온도·자리 번호)을 읽은 것 같습니다. 넣기 전에 꼭 확인하십시오`
-        : `⚠ ${nBad}대는 세팅온도가 자료와 다릅니다 — 줄에 표시했습니다`) : '',
+      nSetBad ? (cmp && nSetBad > cmp / 2
+        ? `⛔ ${nSetBad}대의 세팅온도가 자료와 다릅니다 — 판독기가 다른 칸(꽂을 때 온도·자리 번호)을 읽은 것 같습니다. 넣기 전에 꼭 확인하십시오`
+        : `⚠ ${nSetBad}대는 세팅온도가 자료와 다릅니다 — 줄에 표시했습니다`) : '',
       errs.length ? `못 읽은 사진: ${[...new Set(errs)].join(' · ')}` : '',
+      weak.length ? `⚠ ${weak.join('·')}은 클로드가 못 읽어 제미나이로 읽었습니다 — 손글씨 숫자를 더 자주 틀립니다. 값을 꼭 확인하십시오` : '',
+      farAll.length ? `⚠ 실측이 세팅과 3도 이상 벌어진 ${farAll.length}대는 이웃 줄 값을 읽었을 수 있습니다 — 줄에 표시했습니다` : '',
+      susp.length ? `⚠ 온도 범위(-40~40) 밖으로 읽혀 비워 둔 값이 있습니다(${susp.slice(0, 4).join(', ')}${susp.length > 4 ? ' …' : ''}) — 직접 넣으십시오` : '',
+      logFail ? `판독 기록을 ${logFail}장 못 남겼습니다` : '',
     ].filter(Boolean).join(' · '));
     setBusy('');
     setStep('edit');   // 1.84: 판독 결과 확인 화면으로(실패해도 note 를 보며 수기로 잇는다)
@@ -215,10 +235,10 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     const nBad = Object.keys(badSet).length;
     if (nBad) {
       const ask = (typeof window !== 'undefined' && typeof window.confirm === 'function')
-        ? window.confirm(`세팅온도가 자료와 다른 ${nBad}대가 그대로 있습니다.\n판독기가 다른 칸을 읽었을 수 있습니다 — 이대로 저장할까요?`)
+        ? window.confirm(`판독 경고가 남은 ${nBad}대가 그대로 있습니다(세팅온도가 자료와 다르거나 실측이 세팅과 3도 이상 벌어짐).\n판독기가 다른 칸·다른 줄을 읽었을 수 있습니다 — 이대로 저장할까요?`)
         : null;
-      if (ask === false) { setNote(`저장하지 않았습니다 — 세팅온도가 자료와 다른 ${nBad}대를 먼저 고치십시오.`); return; }
-      if (ask === null) setNote(`⚠ 세팅온도가 자료와 다른 ${nBad}대를 그대로 저장합니다(확인 창을 띄울 수 없었습니다).`);
+      if (ask === false) { setNote(`저장하지 않았습니다 — 판독 경고가 남은 ${nBad}대를 먼저 확인하십시오.`); return; }
+      if (ask === null) setNote(`⚠ 판독 경고가 남은 ${nBad}대를 그대로 저장합니다(확인 창을 띄울 수 없었습니다).`);
     }
     setBusy('save');
     try {

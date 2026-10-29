@@ -693,6 +693,23 @@ export async function fbSetReeferTempBulk(voyageKey, mode, rows, by) {
   return rows.length;
 }
 
+//  4.56-05 — 리퍼 온도 사진 판독 기록. 사진(1600px JPEG)·AI 원문 답·읽은 값·어느 AI가 읽었는지를 **항차 밖** `reefer_ocr_log/{항차}/{ts}` 에 남긴다.
+//    왜 — STMJ 2667E «-19.0 / -2.5 를 하나로 읽는다» 때 사진도 AI 답도 남아 있지 않아 원인을 확정할 수 없었다(검수사 2026-10-30).
+//    항차 노드·photos 노드 밖에 두는 이유 — 홈이 voyages 를 통째로 구독하고, 보고서·휴지통이 photos/{항차} 를 통째로 돌린다.
+//    판독 결과를 저장하지 않아도(틀려서 버려도) 남는다. 실패해도 판독 흐름을 막지 않고 호출부가 알린다.
+export async function fbSaveReeferOcrLog(voyageKey, mode, entry, by) {
+  if (!voyageKey || !entry) return false;
+  const ts = Date.now();
+  await set(ref(db, `reefer_ocr_log/${voyageKey}/${ts}`), {
+    ts, mode: mode || '', by: by || '', model: entry.model || '',
+    raw: String(entry.raw || '').slice(0, 20000),
+    items: Array.isArray(entry.items) ? entry.items.slice(0, 200) : [],
+    suspects: Array.isArray(entry.suspects) ? entry.suspects : [],
+    image: (entry.imageData && entry.imageData.length < 1200000) ? `data:image/jpeg;base64,${entry.imageData}` : '',   // 너무 크면 사진은 빼고 원문 답만
+  });
+  return true;
+}
+
 export async function fbUpdateRecordSeal(voyageKey, mode, cn, newSl, by) {
   assertCanWork('실번호 수정');
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);

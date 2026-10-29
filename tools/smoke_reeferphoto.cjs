@@ -84,9 +84,9 @@ ok(R[7].cmp === 2 && Object.keys(R[7].bad).length === 0, '자료가 숫자(numbe
 ok(R[8][0] === -18 && R[8][1] === 0 && R[8][2] === -18 && R[8][5] === -2.5,
   'tempNum — ℃·0·숫자·유니코드 음수부호를 읽는다');
 ok(R[8][3] === null && R[8][4] === null, 'tempNum — 빈칸·글자는 null(모르는 것을 틀렸다고 하지 않는다)');
-ok(/⛔ \$\{nBad\}대의 세팅온도가 자료와 다릅니다/.test(mod),
+ok(/⛔ \$\{nSetBad\}대의 세팅온도가 자료와 다릅니다/.test(mod),
   '절반 넘게 어긋나면 «다른 칸을 읽은 것 같습니다» 로 크게 알린다');
-ok(/⚠ \$\{nBad\}대는 세팅온도가 자료와 다릅니다/.test(mod), '몇 대만 어긋나면 줄에 표시하고 알린다');
+ok(/⚠ \$\{nSetBad\}대는 세팅온도가 자료와 다릅니다/.test(mod), '몇 대만 어긋나면 줄에 표시하고 알린다');
 ok(/badSet\[c\.cn\] &&/.test(mod), '어긋난 줄에 그 값을 붙여 보여 준다');
 
 //  ⑤ 3.25 회귀 가드 — 실측 칸을 지어내지 않는다
@@ -97,14 +97,14 @@ ok(/n\[c\.cn\] = \{ \.\.\.o\[c\.cn\], set: edi, src: 'list' \}/.test(applyAllBod
 const initLine = (mod.match(/o\[c\.cn\] = \{ set:[^\n]*\n/) || [''])[0];
 ok(/act: tempStr\(c\.rfAct\), src:/.test(initLine) && !/act: tempStr\(c\.rfAct\)\s*\|\|/.test(initLine),
   '열 때 실측 칸에 폴백이 안 붙어 있다(3.25 — 안 잰 값이 «잰 값»으로 굳던 사고)');
-ok(/window\.confirm\(`세팅온도가 자료와 다른/.test(mod),
+ok(/window\.confirm\(`판독 경고가 남은/.test(mod),
   '어긋난 줄이 남아 있으면 저장 전에 한 번 더 묻는다 — 경고가 문구뿐이면 그대로 찍힌다');
 ok(/typeof window\.confirm === 'function'/.test(mod) && /확인 창을 띄울 수 없었습니다/.test(mod),
   '대화상자가 막힌 환경에서도 저장이 조용히 죽지 않는다 — 무엇을 저장했는지 밝힌다');
 ok(/const cur = nx\[c\.cn\] \|\| \{ set: '', act: '', src: '' \}/.test(mod),
   '모달을 연 뒤 리퍼로 승격된 컨을 빈 칸으로 읽어 와도 화면이 안 죽는다');
 ok(/setBadSet\(\{\}\);\s*\/\/ 다시 찍으면/.test(mod), '다시 찍으면 옛 경고를 지운다');
-ok(/if \(k === 'set'\) setBadSet/.test(mod), '그 줄을 고치면 그 줄 경고가 지워진다');
+ok(/if \(k === .set. \|\| k === .act.\) setBadSet/.test(mod), '그 줄을 고치면 그 줄 경고가 지워진다');
 ok(/const hit = list\.filter/.test(mod) && /const miss = list\.filter/.test(mod),
   '채운 대수·못 찾은 대수를 업데이터 밖에서 센다 — 안에서 세면 안내가 늘 «0대»로 나갔다');
 ok(/it\.set \|\| prev\.set/.test(mod) && /it\.act \|\| prev\.act/.test(mod),

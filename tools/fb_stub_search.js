@@ -15,13 +15,8 @@ export const fbAddShipVoyage = async () => true;
 export const fbAddStaff = async () => true;
 export const fbAddSwapFix = async () => true;
 export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };
-export const fbApplyTermWork = async () => true;
 export const fbApplyTermSnapshot = async (vk, mode, by) => { window.__calls.push({ fn: 'applySnap', vk, mode, by }); return { ok: true, applied: window.__applyN || 0, basis: window.__applyBasis || '' }; };   // 4.11
-export const fbGetAiCost = async (keys, by) => { window.__calls.push({ fn: 'getAiCost', keys, by }); if (window.__aiErr) throw new Error(window.__aiErr); const W = window.__aiDays || {}; return { days: keys.filter((k) => W[k]).map((k) => ({ day: k, ...W[k] })), cfg: window.__aiCfg || {}, console: window.__aiConsole || null }; };   // 4.37: AI 비용 — 시험이 window.__aiDays 에 날짜별 기록을 넣는다
-export const fbSaveAiConsole = async (patch, by) => { window.__calls.push({ fn: 'saveAiConsole', patch, by }); window.__aiConsole = { ...(window.__aiConsole || {}), ...patch, at: Date.now(), by }; return window.__aiConsole; };   // 4.37
-export const fbGetTermSnapshot = async (by) => { window.__getBy = by; return (window.__snap || {}); };   // 4.11: 교대 시각 터미널 스냅샷 — 시험이 window.__snap 에 넣는다
-export const fbRequestTermSnapshot = async (by) => { window.__calls.push({ fn: 'reqSnap', by }); return true; };   // 4.11
-export const fbSetTermLive = async (pier, on, by) => { window.__calls.push({ fn: 'setLive', pier, on, by }); return true; };   // 4.28
+export const fbApplyTermWork = async () => true;
 export const fbArchiveVoyageBeforeDelete = async () => true;
 export const fbAssignDeckSlot = async () => true;
 export const fbBackupAll = async () => true;
@@ -38,6 +33,7 @@ export const fbClearAllReports = async () => true;
 export const fbClearAllReportsAllVoyages = async () => true;
 export const fbClearBroadcast = async () => true;
 export const fbClearFeedback = async () => true;
+export const fbClearKeepOnboard = async () => true;   // 4.48
 export const fbClearPickIso = async () => true;
 export const fbClearPickPod = async () => true;
 export const fbCommentFoodSpot = async () => true;
@@ -50,6 +46,7 @@ export const fbDeleteFeedback = async () => true;
 export const fbDeleteFoodSpot = async () => true;
 export const fbDeleteISO403Photo = async () => true;
 export const fbDeleteInspector = async () => true;
+export const fbDeleteMyWorkReport = async () => true;   // 4.46
 export const fbDeletePendingDamage = async () => true;
 export const fbDeletePushToken = async () => true;
 export const fbDeleteReport = async () => true;
@@ -59,20 +56,21 @@ export const fbDeleteStaff = async () => true;
 export const fbDeleteVoyage = async () => true;
 export const fbDeleteWorkReport = async () => true;
 export const fbEditWorkReport = async () => true;   // 4.46
-export const fbDeleteMyWorkReport = async () => true;   // 4.46
-export const fbSyncActiveWorkSlot = async () => true;   // 4.46
 export const fbFetchVoyageBoxCounts = async () => ({});   // 4.08-01: 선택 화면 «N대» — 빈 결과(항차마다 못 셌음)로 둔다
 export const fbFoodListen = async () => true;
 export const fbGetActivityDays = async () => true;
 export const fbGetAdminGuard = async () => (typeof window !== 'undefined' && window.__guardStub) || true;   // 4.43: 로그인 화면 검사가 «검수사 신뢰 기기» 상태를 넣을 수 있다
+export const fbGetAiCost = async (keys, by) => { window.__calls.push({ fn: 'getAiCost', keys, by }); if (window.__aiErr) throw new Error(window.__aiErr); const W = window.__aiDays || {}; return { days: keys.filter((k) => W[k]).map((k) => ({ day: k, ...W[k] })), cfg: window.__aiCfg || {}, console: window.__aiConsole || null }; };   // 4.37: AI 비용 — 시험이 window.__aiDays 에 날짜별 기록을 넣는다
 export const fbGetArchiveVoyage = async () => true;
 export const fbGetClaudeMemos = async () => true;
 export const fbGetDamagePhoto = async () => true;
 export const fbGetEdiRaw = async () => true;
+export const fbGetKeepOnboard = async () => null;   // 4.48
 export const fbGetPendingDamage = async () => true;
 export const fbGetShipIntro = async () => true;
 export const fbGetShipStructure = async () => true;
 export const fbGetSimple = async () => null;
+export const fbGetTermSnapshot = async (by) => { window.__getBy = by; return (window.__snap || {}); };   // 4.11: 교대 시각 터미널 스냅샷 — 시험이 window.__snap 에 넣는다
 export const fbHoldContainers = async () => true;
 export const fbIsOnline = async () => true;
 export const fbIsTrashedShipBayDict = async () => true;
@@ -82,11 +80,9 @@ export const fbLogMirMiss = async () => true;
 export const fbLogoutInspector = async () => true;
 export const fbMarkBroadcastRead = async () => true;
 export const fbMarkDeletedStaff = async () => true;
+export const fbPeekCompleted = async () => false;
 export const fbPickIso = async () => true;
 export const fbPickPod = async () => true;
-export const fbSetKeepOnboard = async () => ({});   // 4.48: 선사 지시 본선 잔류
-export const fbClearKeepOnboard = async () => true;   // 4.48
-export const fbGetKeepOnboard = async () => null;   // 4.48
 export const fbPromotePendingDamage = async () => true;
 export const fbRateFoodSpot = async () => true;
 export const fbReassignContainerPosition = async (vk, mode, cn, b, r, t, by, opts) => { window.__calls.push({ fn: 'reassign', cn, to: `${b}-${r}-${t}`, opts: opts || null }); return { ok: true }; };
@@ -97,11 +93,13 @@ export const fbRemoveExtraContainer = async () => true;
 export const fbRemoveSwapFix = async () => true;
 export const fbReplacePortMisBatch = async () => true;
 export const fbReportWrongAnswer = async () => true;
-export const fbRequestProcessNow = async () => true;
 export const fbRequestEmptyMake = async () => 'stub__empty';   // 3.73: 머스크 엠티 찾기 명령
+export const fbRequestProcessNow = async () => true;
+export const fbRequestTermSnapshot = async (by) => { window.__calls.push({ fn: 'reqSnap', by }); return true; };   // 4.11
 export const fbResolveFeedback = async () => true;
 export const fbRestorePlanFromEdi = async () => true;
 export const fbRestoreVoyageFromArchive = async () => true;
+export const fbSaveAiConsole = async (patch, by) => { window.__calls.push({ fn: 'saveAiConsole', patch, by }); window.__aiConsole = { ...(window.__aiConsole || {}), ...patch, at: Date.now(), by }; return window.__aiConsole; };   // 4.37
 export const fbSaveEdiContainers = async () => true;
 export const fbSaveEdiRaw = async () => true;
 export const fbSaveISO403Photo = async () => true;
@@ -111,6 +109,7 @@ export const fbSavePierCoord = async () => true;
 export const fbSavePlanDraft = async () => true;
 export const fbSavePortMisBatch = async () => true;
 export const fbSavePushToken = async () => true;
+export const fbSaveReeferOcrLog = async () => true;
 export const fbSaveSectionData = async () => true;
 export const fbSaveShipBayDict = async () => true;
 export const fbSaveShipIntro = async () => true;
@@ -118,21 +117,23 @@ export const fbSaveShipStructure = async () => true;
 export const fbSaveXrayList = async () => true;
 export const fbSeedFoodSpotsOnce = async () => true;
 export const fbSetActualPosition = async () => true;
-export const fbPeekCompleted = async () => false;
 export const fbSetBroadcast = async () => true;
 export const fbSetDevAccess = async () => true;
 export const fbSetEmptySeal = async () => true;
 export const fbSetInspector = async () => true;
 export const fbSetInspectorActivity = async (name, vk, mode, detail) => { window.__calls.push({ fn: 'activity', name, vk, mode, detail: detail || null }); return true; };
 export const fbSetInspectorChoice = async (name, choice) => { window.__calls.push({ fn: 'choice', name, choice }); return true; };
+export const fbSetKeepOnboard = async () => ({});   // 4.48: 선사 지시 본선 잔류
 export const fbSetLuggConfirm = async () => true;
 export const fbSetMatrixEditors = async () => true;
 export const fbSetReeferTempBulk = async () => true;
 export const fbSetShipBayDictNote = async (code, note, by) => { window.__calls.push({ fn: 'note', code, note, by }); return true; };
 export const fbSetShipBayDictSpare = async (code, on, by) => { window.__calls.push({ fn: 'spare', code, on, by }); return true; };
 export const fbSetSimple = async () => true;
+export const fbSetStaffOff = async () => true;
 export const fbSetStaffRole = async () => true;
 export const fbSetStowagePlan = async () => true;
+export const fbSetTermLive = async (pier, on, by) => { window.__calls.push({ fn: 'setLive', pier, on, by }); return true; };   // 4.28
 export const fbSetVoyageCraneCrew = async () => true;
 export const fbSetVoyageGangs = async () => true;
 export const fbSetVoyageSeqMode = async () => true;
@@ -161,8 +162,14 @@ export const fbSubscribeProcessDone = async () => true;
 export const fbSubscribeShipBayDict = async () => true;
 export const fbSubscribeShipLibrary = async () => true;
 export const fbSubscribeStaffList = async () => true;
+export const fbSubscribeStaffOff = async () => true;
+export const fbSubscribeVoyageBody = async () => true;
+export const fbSubscribeVoyageInfos = async () => true;
+export const fbSubscribeVoyagePhotos = async () => true;
 export const fbSubscribeVoyages = async () => true;
 export const fbSubscribeWorkReports = async () => true;
+export const fbSubscribeYardStatus = async () => true;
+export const fbSyncActiveWorkSlot = async () => true;   // 4.46
 export const fbToggleXray = async () => true;
 export const fbTrashShipBayDict = async (code, by) => { window.__calls.push({ fn: 'trash', code, by }); return true; };
 export const fbUnassignContainer = async () => true;
@@ -192,7 +199,7 @@ function tallyVoyagesByShip(voyages) {
     //   중복 카드(CNYNT)가 생기던 문제. 항만코드 그룹은 표시에서 제외(데이터는 보존).
     if (isPortCode(vsl)) continue;
     if (!byShip[vsl]) byShip[vsl] = { vsl, discharge: 0, loading: 0, voyageKeys: [] };
-    byShip[vsl].discharge += _ptkCountOfSection(v.discharge, 'discharge');
+    byShip[vsl].discharge += _ptkCountOfSection(v.discharge, 'discharge', { ...v, key });   // 4.20 감사: 항차째로(시프팅 뺌)
     byShip[vsl].loading += _ptkCountOfSection(v.loading, 'loading');
     byShip[vsl].voyageKeys.push(key);
   }

@@ -327,11 +327,33 @@ export async function compressForReport(blob, maxDim = 1600) {
   return out || blob;
 }
 
-export async function ocrReeferTemps(file, geminiApiKey = '') {
+/** 4.56-05: 세로로 찍힌 사진이면 반시계 90도 돌려 가로 양식 글자가 가로로 읽히게 한다. 가로 사진·이미지 로드 실패는 그대로 돌려준다. */
+export async function uprightLandscapeForm(blob) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (!(img.height > img.width * 1.1)) { resolve(blob); return; }
+      const c = document.createElement('canvas');
+      c.width = img.height; c.height = img.width;
+      const x = c.getContext('2d');
+      x.translate(0, c.height); x.rotate(-Math.PI / 2); x.drawImage(img, 0, 0);
+      c.toBlob((b) => resolve(b || blob), 'image/jpeg', 0.9);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+    img.src = url;
+  });
+}
+
+export async function ocrReeferTemps(file, geminiApiKey = '', expect = []) {
   const aiKey = geminiApiKey || await resolveAiKey();   // 3.43: 공용 키 → 개인 키
   if (!aiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
   let imageBlob;
   try { imageBlob = await compressImage(file, 1600); } catch { imageBlob = file; }
+  //  4.56-05 — 이 양식은 가로 종이라 폰을 세워 찍으면 글자가 옆으로 눕는다(STMJ 2667E 실물 3장 전부). 누운 사진은 줄 높이를 한 줄씩 밀어 읽는다
+  //  (시험 — 누운 채 36대 중 34대 · 세워서 36대 · 옛 문구로 누운 채 19대). 세로 사진이면 반시계 90도 돌려 글자를 가로로 세운다.
+  try { imageBlob = await uprightLandscapeForm(imageBlob); } catch { /* 돌리지 못하면 그대로 — 프롬프트도 방향을 바로잡아 읽으라고 이른다 */ }
   const base64 = await blobToBase64(imageBlob);
 
   //  ★ 3.32 — **양식을 못 박지 않는다.** 배마다 표가 다르다(검수사 실물 2026-09-08 SWBT 2614N).
@@ -359,8 +381,13 @@ export async function ocrReeferTemps(file, geminiApiKey = '') {
 ⛔ REMARK · 비고 · LOCATION · SLOT 열의 숫자(자리 번호 «180184» 같은 여섯 자리)는 온도가 아닙니다. 버리십시오.
 ⛔ 격자가 통째로 비어 있으면 act 는 빈 문자열입니다. **set 을 복사해 넣지 마십시오.**
 
+⛔ **사진이 옆으로 누워 있을 수 있습니다.** 이 양식은 가로로 인쇄된 종이라 폰을 세워 찍으면 글자가 위→아래로 읽히게 돌아가 있습니다. 먼저 글자 방향을 바로잡아 읽으십시오.
+⛔ **줄은 맨 앞 NO. 열(1, 2, 3 …)이 정합니다.** 컨테이너마다 그 줄의 NO. 를 "no" 항목으로 함께 돌려주십시오. 같은 NO. 줄의 컨테이너 번호 · 설정온도 · 격자 값은 **같은 가로 높이**에 있습니다.
+⛔ **이웃 줄의 값을 가져오지 않습니다.** 격자의 줄 구분선이 흐리거나 없을 수 있고 글자 크기가 줄마다 다릅니다. 위·아래 줄의 숫자가 눈에 들어와도 그 줄 컨테이너의 값이 아닙니다.
+   한 컨테이너의 실제온도(act)는 그 줄의 설정온도(set)와 보통 2도 안쪽으로 가깝습니다. 고른 값이 설정온도와 3도 이상 벌어지면 이웃 줄 값을 읽은 것이니 같은 높이의 칸을 다시 보십시오.
+
 다음 JSON 형식으로만 응답하세요. 다른 설명 없이 JSON만:
-{"items":[{"cn":"컨테이너번호","set":"설정온도","act":"실제온도"}]}
+{"items":[{"no":"줄 번호","cn":"컨테이너번호","set":"설정온도","act":"실제온도"}]}
 
 규칙
 - cn 은 영문 4자 + 숫자 7자. 표에 "HALU 8503321" 처럼 **띄어 적혀 있어도 붙여서** 읽습니다.
@@ -374,6 +401,8 @@ export async function ocrReeferTemps(file, geminiApiKey = '') {
   옆 칸(꽂을 때 온도·자리 번호)의 손글씨를 끌어오지 마십시오.
 - 값이 안 보이거나 흐리면 그 항목만 빈 문자열. **지어내지 않습니다.**`;
 
+  //  4.56-05 — expect(이 항차 리퍼 번호 · 자료의 세팅온도)는 **프롬프트에 싣지 않는다**(싣지 않고도 36/36 — 시험 C·E). 읽은 뒤 검산에만 쓴다.
+  const expectBy = new Map((Array.isArray(expect) ? expect : []).filter((x) => x && x.cn).map((x) => [String(x.cn).toUpperCase(), Number.parseFloat(String(x.set ?? '').replace(/[−–—]/g, '-'))]));
   //  3.43: 공용 키 · 60초 타임아웃 · ai_call_log — aiCall 한 벌
   const response = await aiCall('reeferPhoto', {
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
@@ -401,13 +430,21 @@ export async function ocrReeferTemps(file, geminiApiKey = '') {
     const m = s.match(/^-?\d+(?:\.\d+)?$/);
     return m ? m[0] : '';
   };
-  const items = [];
+  //  4.56-05 — 리퍼 온도는 -40 ~ +40 안이다. 밖이면 «합쳐 읽었다»(-192.5 따위)는 뜻이므로 빈칸으로 두고 알린다(조용히 통과시키지 않는다).
+  const inRange = (v) => v === '' || (Number(v) >= -40 && Number(v) <= 40);
+  const items = []; const suspects = []; const far = [];
   for (const it of (json.items || [])) {
     const cn = String(it?.cn || '').toUpperCase().replace(/\s/g, '');
     if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
-    items.push({ cn, set: num(it.set), act: num(it.act) });
+    let set = num(it.set); let act = num(it.act);
+    if (!inRange(set)) { suspects.push(`${cn} 세팅 ${set}`); set = ''; }
+    if (!inRange(act)) { suspects.push(`${cn} 실측 ${act}`); act = ''; }
+    items.push({ cn, set, act });
+    //  이웃 줄 값을 읽으면 실측이 그 줄 세팅과 크게 벌어진다(옛 판 STMJ 실물 — 19대가 한 줄씩 밀렸다). 비우지 않고 알린다.
+    const es = expectBy.get(cn); const an = act === '' ? NaN : Number(act);
+    if (Number.isFinite(es) && Number.isFinite(an) && Math.abs(an - es) >= 3) far.push(`${cn} 실측 ${act} · 세팅 ${es}`);
   }
-  return { items, note: `사진에서 ${items.length}대 읽음` };
+  return { items, note: `사진에서 ${items.length}대 읽음`, suspects, far, model: response._model || '', raw: text, imageData: base64 };
 }
 
 export async function ocrImageContainers(file, geminiApiKey = '') {
