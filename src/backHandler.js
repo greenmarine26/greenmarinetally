@@ -72,7 +72,7 @@ export function closeHomeSheetIfOpen() {
 export function exitApp() {
   try {
     window.close();
-  } catch (e) {}
+  } catch (e) { /* 창을 못 닫으면 다음 처리로 넘어간다 */ }
   // window.close가 안 되면 빈 페이지로 이동
   setTimeout(() => {
     document.body.innerHTML = `

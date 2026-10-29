@@ -294,7 +294,7 @@ export function saveLoginTime(name) {
   try {
     localStorage.setItem('gm_login_time', String(Date.now()));
     localStorage.setItem('gm_login_inspector', name);
-  } catch (e) {}
+  } catch (e) { /* 로그인 시각을 기기에 못 남겨도 로그인은 그대로 */ }
 }
 
 export function getLoginTime() {
@@ -308,5 +308,5 @@ export function clearLoginTime() {
   try {
     localStorage.removeItem('gm_login_time');
     localStorage.removeItem('gm_login_inspector');
-  } catch (e) {}
+  } catch (e) { /* 기기 저장소를 못 지워도 로그아웃은 그대로 */ }
 }

@@ -1485,7 +1485,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     r.onend = () => setIsListening(false);
     r.onerror = (e) => { setIsListening(false); if (e.error === 'not-allowed') speak('마이크 권한 필요'); };
     recognitionRef.current = r;
-    return () => { try { r.abort(); } catch(_) {} };
+    return () => { try { r.abort(); } catch(_) { /* 음성 인식 중단 실패는 무해 */ } };
   }, []);
 
   /* ★ 3.42 (판 B) — **약한 답일 때만 모델.** 종전 V7.80 «음성 질문 자동 복원»(fixQuestionWithAI, 음성만·개인 키·문장 교정만)을

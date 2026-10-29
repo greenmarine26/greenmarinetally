@@ -164,7 +164,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   useEffect(() => {
     let off = null;
     try { off = fbSubscribeShipBayDict((d) => setBayDictAll(d || {})); } catch (e) { /* 없어도 선사만 빈다 */ }
-    return () => { try { off && off(); } catch (e) {} };
+    return () => { try { off && off(); } catch (e) { /* 구독 해제 실패는 무해 */ } };
   }, []);
   const readiness = useMemo(() => buildReadiness(voyages, bayDictAll), [voyages, bayDictAll]);
   const [showPier, setShowPier] = useState(false);   // 3.54: 부두 좌표 등록(홈에서 옮겨 옴)

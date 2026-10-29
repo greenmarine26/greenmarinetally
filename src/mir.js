@@ -72,6 +72,7 @@ export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycou
 import { diffEdiList, explainEdiGap } from './ediGap.js';
 import { aiCostUsd, AI_PRICE } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
+import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
 //    · mirEyes ← guidedQueue: 순서는 화면이 쓰는 그 벌을 그대로 쓴다
 //    · mirEyes ← nlSearch: 트윈 무게 한계는 화면이 쓰는 그 상수를 그대로   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
@@ -3126,7 +3127,7 @@ async function _todayCount() {
 function _logCall(entry) {
   const day = _dayKey();
   _dayCount = { day, n: (_dayCount.day === day ? _dayCount.n : 0) + 1, at: _dayCount.at || Date.now() };
-  try { fetch(`${FB}/mir_model_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), ...entry }) }).catch((e) => console.warn('[미르 모델] 호출 기록 실패:', e && e.message)); }
+  try { fetch(`${FB}/mir_model_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: tmoSignal(15000), body: JSON.stringify({ at: Date.now(), ...entry }) }).catch((e) => console.warn('[미르 모델] 호출 기록 실패:', e && e.message)); }
   catch (e) { console.warn('[미르 모델] 호출 기록 실패:', e && e.message); }
 }
 /** «엉뚱하게 알아들은 말»·못 알아들은 말을 mir_misses 에 남긴다 — 검수앱은 App 의 gm-mir-miss 리스너(fbLogMirMiss)로, 리스너가 없는 콘앱은 REST 로. */
@@ -3137,7 +3138,7 @@ function _logMiss(q, meta) {
       window.dispatchEvent(new CustomEvent('gm-mir-miss', { detail: { q, key, at: Date.now(), ...meta } }));
       return;
     }
-    fetch(`${FB}/mir_misses/${_dayKey()}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q, key, at: Date.now(), ...meta }) }).catch((e) => console.warn('[미르 모델] 못 알아들은 말 기록 실패:', e && e.message));
+    fetch(`${FB}/mir_misses/${_dayKey()}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: tmoSignal(15000), body: JSON.stringify({ q, key, at: Date.now(), ...meta }) }).catch((e) => console.warn('[미르 모델] 못 알아들은 말 기록 실패:', e && e.message));
   } catch (e) { console.warn('[미르 모델] 못 알아들은 말 기록 실패:', e && e.message); }
 }
 
@@ -3422,7 +3423,7 @@ function _learn(q, canonical, who, window_) {
     const hasHand = typeof window !== 'undefined' && typeof window.__mirLexiconWrite === 'function';
     if (!hasHand) {
       const entry = (typeof window !== 'undefined' && window.__mirLexicon && window.__mirLexicon[key]) || null;
-      if (entry) fetch(`${FB}/mir_lexicon/${encodeURIComponent(key.replace(/[.#$/\[\]]/g, '_'))}.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => console.warn('[미르 모델] 사전 보관소 쓰기 실패:', e && e.message));
+      if (entry) fetch(`${FB}/mir_lexicon/${encodeURIComponent(key.replace(/[.#$/\[\]]/g, '_'))}.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal: tmoSignal(15000), body: JSON.stringify(entry) }).catch((e) => console.warn('[미르 모델] 사전 보관소 쓰기 실패:', e && e.message));
     }
   } catch (e) { console.warn('[미르 모델] 사전 등록 실패:', e && e.message); }
 }

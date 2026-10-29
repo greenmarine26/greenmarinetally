@@ -25,7 +25,7 @@ export default function PortMisCaptureModal({ onClose }) {
   useEffect(() => {
     if (step !== 'view') return;
     const unsub = fbSubscribePortMis(setCurrentData);
-    return () => { try { unsub(); } catch (e) {} };
+    return () => { try { unsub(); } catch (e) { /* 구독 해제 실패는 화면을 닫는 중이라 무해 */ } };
   }, [step]);
 
   // M5.84: 단일 키 삭제

@@ -738,7 +738,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                    헤더 장비 모달과 같은 일을 한다(`Header.handleSelectEquip`) — 그래서 같은 알림(`equipChanged`)을 낸다. */}
               <div className="grid grid-cols-2 gap-2">
                 {equipNumbers.map(n => (
-                  <button key={n} onClick={() => { setSelectedEquip(n); setEquipNumber(n); try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); } catch (e) {} }}
+                  <button key={n} onClick={() => { setSelectedEquip(n); setEquipNumber(n); try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); } catch (e) { /* 호기 변경 알림은 화면 갱신용 보조 — 못 보내도 선택은 이미 저장됨 */ } }}
                     className={`py-3 rounded-pill font-bold ${selectedEquip === n ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-ink-800 text-dim-200'}`}>
                     🏗 {n}
                   </button>

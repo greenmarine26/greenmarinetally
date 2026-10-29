@@ -32,5 +32,5 @@ for (const k of Object.keys(names)) {
   ok(!worse.length, `${names[k]} — 지금 ${sum(cur, k)}건 (기준선 ${sum(base, k)}건)${worse.length ? ' · 늘어난 곳 ' + worse.join(', ') + ' — 없애거나 이유를 주석으로 남긴다(console.warn 또는 /* 이유 */)' : ''}`);
   if (sum(cur, k) < sum(base, k)) lowered++;
 }
-if (lowered) console.log('  · 기준선보다 줄었다 — node tools/smoke_silentfail456.cjs --write 로 기준선을 낮춘다(줄어든 만큼 지켜진다)');
+if (lowered) ok(false, '기준선보다 줄었다 — node tools/smoke_silentfail456.cjs --write 로 기준선을 낮춘다(줄어든 만큼 다시 늘지 않게 지킨다)');
 console.log(fail ? `\n✗ 조용한 실패 눈금 ${fail}건 실패` : '\n✔ 조용한 실패 눈금 통과'); process.exit(fail ? 1 : 0);

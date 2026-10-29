@@ -41,7 +41,7 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   try {
     window.speechSynthesis.onvoiceschanged = () => { _koVoiceReady = false; ensureKoVoice(); };
     ensureKoVoice();
-  } catch {}
+  } catch { /* 음성 합성을 못 쓰는 기기 — 소리 없이 진행 */ }
 }
 
 const NUM_KO = ['공', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
@@ -243,7 +243,7 @@ export function speakContainer(c, opts = {}) {
     u.rate = opts.rate || 1.2;
     u.pitch = 1.0;
     window.speechSynthesis.speak(u);
-  } catch (e) {}
+  } catch (e) { /* 음성 합성 실패는 무해(소리만 안 난다) */ }
 }
 
 // 검수 완료 — 짧고 빠르게

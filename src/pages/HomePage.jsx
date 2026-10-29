@@ -176,7 +176,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         try {
           // Firebase 좌표를 localStorage에도 즉시 미러링 (detectPierByGps가 localStorage 봄)
           localStorage.setItem('master_pier_coords_v1', JSON.stringify(coords));
-        } catch {}
+        } catch { /* 좌표를 기기에 못 남기면 다음에 다시 받는다 */ }
       }
     });
     return () => { if (typeof unsub === 'function') unsub(); };
@@ -200,7 +200,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             return;
           }
         }
-      } catch (e) {}
+      } catch (e) { /* 캐시를 못 읽으면 아래에서 GPS 를 새로 잰다 */ }
     }
     setGpsState('loading');
     navigator.geolocation.getCurrentPosition(
@@ -213,7 +213,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         setGpsState(pier ? 'ok' : 'far');
         try {
           localStorage.setItem('gm_current_pier', JSON.stringify({ pier, coord, timestamp: Date.now() }));
-        } catch (e) {}
+        } catch (e) { /* 위치 캐시를 못 남겨도 화면은 그대로 */ }
       },
       err => {
         console.warn('[HomePage] GPS 실패:', err.message);

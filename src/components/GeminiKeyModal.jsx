@@ -15,6 +15,7 @@ import { X, Key, AlertTriangle, CheckCircle2, ExternalLink, Eye, EyeOff } from '
 import { _storage, SK } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
 import { getMirConfig } from '../mir.js';   // 3.43: 공용 키(검수사 부담)가 있는지 — 있으면 «차단됨» 빨간 상자를 띄우지 않는다
+import { tmoSignal } from '../fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 export default function GeminiKeyModal({ onClose }) {
   const [keyInput, setKeyInput] = useState('');
@@ -88,6 +89,7 @@ export default function GeminiKeyModal({ onClose }) {
           contents: [{ parts: [{ text: 'Reply with just the word "ok".' }] }],
           generationConfig: { maxOutputTokens: 10, temperature: 0 },
         }),
+        signal: tmoSignal(20000),
       });
       if (r.ok) {
         const data = await r.json();
@@ -104,7 +106,7 @@ export default function GeminiKeyModal({ onClose }) {
         }
       }
     } catch (e) {
-      setTestResult({ ok: false, msg: `네트워크 오류: ${e.message}` });
+      setTestResult({ ok: false, msg: e && e.name === 'AbortError' ? '20초 안에 응답이 없어요 — 망 상태를 확인하고 다시 눌러 주세요.' : `네트워크 오류: ${e.message}` });
     }
     setTesting(false);
   };

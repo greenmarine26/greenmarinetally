@@ -18,6 +18,7 @@ import { isChief } from './staffList.js';                          // 3.53: 같�
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
+import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -50,7 +51,7 @@ export async function fbUploadStowagePdf(shipCode, file) {
     const list = await listAll(folderRef);
     const oldFiles = list.items.filter(item => item.name.startsWith(`${shipCode}_`));
     for (const oldFile of oldFiles) {
-      try { await deleteObject(oldFile); } catch (_) {}
+      try { await deleteObject(oldFile); } catch (e) { console.warn('[옛 파일 삭제] 못 지웠어요(무해, 다음에 정리):', oldFile && oldFile.name, e && e.message); }
     }
   } catch (e) {
     console.warn('[M6.40] 기존 PDF 정리 실패 (무시):', e);
@@ -2313,7 +2314,7 @@ export async function fbClearBroadcast() {
 }
 export async function fbMarkBroadcastRead(id, inspector) {
   if (!id || !inspector) return;
-  try { await set(ref(db, `broadcast/reads/${id}/${inspector}`), Date.now()); } catch (e) {}
+  try { await set(ref(db, `broadcast/reads/${id}/${inspector}`), Date.now()); } catch (e) { console.warn('[방송 읽음] 못 남겼어요(다음에 다시 뜰 수 있음):', id, e && e.message); }
 }
 export function fbSubscribeBroadcastReads(id, callback) {
   if (!id) { callback({}); return () => {}; }
@@ -2758,7 +2759,7 @@ export async function fbRestoreVoyageFromArchive(voyageKey) {
 //   REST 실패 시 기존 전체 읽기로 폴백 + console.warn.
 export async function fbListArchive() {
   try {
-    const res = await fetch(`${firebaseConfig.databaseURL}/archive.json?shallow=true`);
+    const res = await fetch(`${firebaseConfig.databaseURL}/archive.json?shallow=true`, { signal: tmoSignal(30000) });
     if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
     const keys = Object.keys((await res.json()) || {});
     const out = await Promise.all(keys.map(async (key) => {
@@ -2838,7 +2839,7 @@ export async function fbListTallyPending() {
 //   완료된 항차는 감사 자료로 1년 보관 후 자동 삭제. 앱 시작 시 1회 호출 권장.
 export async function fbCleanupArchive(maxAgeDays = 365) {
   //  3.60-19 (진단 M40): 종전엔 `archive` 전체(실측 247MB)를 통째로 읽어 날짜만 봤다 — 키는 shallow 로, 날짜는 키마다 `_archivedAt` 만 읽는다. shallow 가 안 되면 던진다(통째 읽기 폴백 없음).
-  const res = await fetch(`${firebaseConfig.databaseURL}/archive.json?shallow=true`);
+  const res = await fetch(`${firebaseConfig.databaseURL}/archive.json?shallow=true`, { signal: tmoSignal(30000) });
   if (!res.ok) throw new Error(`보관소 목록을 못 읽었어요(HTTP ${res.status}) — 정리를 하지 않았습니다.`);
   const keys = Object.keys((await res.json()) || {});
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
@@ -4517,7 +4518,7 @@ export async function fbGetActivityDays(days = 7) {
 //   소유자 화면(활동 로그 섹션) 진입 시 1회 호출. 실패 무해 — console.warn 1줄만 남긴다.
 export async function fbCleanupActivityLog(keepDays = 30) {
   try {
-    const res = await fetch(`${firebaseConfig.databaseURL}/activity_log.json?shallow=true`);
+    const res = await fetch(`${firebaseConfig.databaseURL}/activity_log.json?shallow=true`, { signal: tmoSignal(30000) });
     if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
     const keys = Object.keys((await res.json()) || {});
     const expired = pickExpiredActivityBuckets(keys, keepDays, Date.now());

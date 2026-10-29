@@ -389,7 +389,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       if (e.error === 'not-allowed') speak('마이크 권한이 필요합니다.');
     };
     recognitionRef.current = r;
-    return () => { try { r.abort(); } catch(_) {} };
+    return () => { try { r.abort(); } catch(_) { /* 음성 인식 중단 실패는 무해 */ } };
   }, []);
 
   // 1.68: 음성은 «타자가 멈춘 뒤 한 번만» — 검수사 신고: "글 칠 때마다 전체없음을 외칩니다."
@@ -498,7 +498,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     try { recognitionRef.current.start(); } catch (e) { setIsListening(false); }
   };
   const stopListening = () => {
-    try { recognitionRef.current?.stop(); } catch (e) {}
+    try { recognitionRef.current?.stop(); } catch (e) { /* 음성 인식 중단 실패는 무해 */ }
     setIsListening(false);
   };
 

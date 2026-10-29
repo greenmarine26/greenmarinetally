@@ -25,6 +25,7 @@ import { isTermOtL, isLen45Iso } from './utils.js';   // 4.25-01: L 표기 45피
 import { fmtPos, normalizeBay, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
 import { lookupUN } from './dgUnDict.js';
 import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
+import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 // V9.57(G11): 하드코딩 폴백 키 삭제 — GitHub public repo 노출로 이미 차단된 키였고,
 //   소스에 실키를 두는 것 자체가 보안 위반. export 이름은 소비처 6곳(GeminiKeyModal·VoyagePage·
@@ -79,7 +80,7 @@ function _aiLogLine(kind, status, ms, model, tok) {   // 4.36-02: tok = {tokIn, 
   const d = new Date();
   const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   try {
-    fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Date.now(), kind, who, status, ms, model, ...(tok ? { tokIn: tok.tokIn || 0, tokOut: tok.tokOut || 0 } : {}) }) })
+    fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: tmoSignal(15000), body: JSON.stringify({ at: Date.now(), kind, who, status, ms, model, ...(tok ? { tokIn: tok.tokIn || 0, tokOut: tok.tokOut || 0 } : {}) }) })
       .catch((e) => console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message));
   } catch (e) { console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message); }
 }
@@ -192,7 +193,7 @@ export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MOD
     const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
     try {
       //  keepalive 를 안 단다 — keepalive + JSON 프리플라이트를 거부하는 브라우저가 있어 기록이 조용히 빠진다(감사 지적). mirModel._logCall 과 같은 모양.
-      fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      fetch(`${FB_URL}/ai_call_log/${day}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: tmoSignal(15000),
         body: JSON.stringify({ at: Date.now(), kind, who, status, ms: Date.now() - t0, model }) })
         .catch((e) => console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message));
     } catch (e) { console.warn('[AI 호출 기록] 못 남겼어요:', e && e.message); }

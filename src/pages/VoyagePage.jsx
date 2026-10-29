@@ -177,7 +177,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     try { stopSpeak(); } catch (e) { /* 3.41-01: 플랜을 열 때 쌓인 발화(되묻는 말)를 끊는다 — 검수사 «화면을 연 후에 한참 있다가 말을 함» */ }
     try {
       if (bay != null) window.__mirGoBay = bay;   // 4.00: __mirOpenCargo 신호는 걷었다 — 카고플랜은 아래 _planOverlay 가 직접 띄운다(받는 쪽이 없어 다음 베이 탭에서 혼자 뜨던 자리)
-    } catch (e) {}
+    } catch (e) { /* 전역 신호 설정 실패는 무해 */ }
     setPlanOv({ what, bay: bay == null ? null : bay });
   }, []);
   useEffect(() => {
@@ -196,7 +196,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //  3.41-01: 여기서는 발화를 끊지 않는다 — 떠 있는 미르가 «열었어요» 를 말한 직후 이 effect 가 돌아, 끊으면 그 말이 지워진다(감사 jsdom 실측).
     try {
       if (mirPlan.bay != null) window.__mirGoBay = mirPlan.bay;
-    } catch (e) {}
+    } catch (e) { /* 전역 신호 설정 실패는 무해 */ }
     setPlanOv({ what: mirPlan.what, bay: mirPlan.bay == null ? null : mirPlan.bay });
   }, [mirPlan]);
   /* 닫기 — 홈에서 물었으면 **홈으로** 돌려주고(이 화면째 걷힌다), 항차 화면에서 물었으면

@@ -156,7 +156,7 @@ function ClaudeReplyView({ inspector, isOwner = false, onBack }) {
   useEffect(() => {
     let unsub = null;
     try { unsub = fbSubscribeFeedback(setFb); } catch (_) { /* 오프라인이면 빈 목록 */ }
-    return () => { try { unsub && unsub(); } catch (_) {} };
+    return () => { try { unsub && unsub(); } catch (_) { /* 구독 해제 실패는 무해 */ } };
   }, []);
   const rows = useMemo(() => {
     const arr = Object.entries(fb || {}).map(([k, v]) => ({ ...(v || {}), _key: k }));
@@ -350,8 +350,8 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
   const [fbAll, setFbAll] = useState({});
   useEffect(() => {
     let unsub = null;
-    try { unsub = fbSubscribeFeedback(setFbAll); } catch (_) {}
-    return () => { try { unsub && unsub(); } catch (_) {} };
+    try { unsub = fbSubscribeFeedback(setFbAll); } catch (_) { /* 오프라인이면 빈 목록 */ }
+    return () => { try { unsub && unsub(); } catch (_) { /* 구독 해제 실패는 무해 */ } };
   }, []);
   const { replyBadge, waitingBadge } = useMemo(() => {
     const arr = Object.values(fbAll || {}).filter(v => v && (isOwner || !inspector || v.inspector === inspector));

@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { stashForUpdate } from '../updateResume.js';   // 3.7-04: 업데이트 새로고침에 로그인·화면을 잃지 않게
 import { RefreshCw, X, Download } from 'lucide-react';
 import { APP_VERSION } from '../utils.js';   // 1.23: 지금 돌고 있는 판 — 배너 판정 기준
+import { tmoSignal } from '../fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 /** 서비스워커에게 버전을 물어본다. 못 받으면 '' — 조용히 실패하지 않게 콘솔에 남긴다. */
 function askVersion(sw, timeoutMs = 1500) {
@@ -109,7 +110,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
       const CHECK_MS = 3 * 60 * 1000;
       const serverVersion = async () => {
         try {
-          const t = await fetch(swUrl + '?v=' + Date.now(), { cache: 'no-store' }).then(r => r.text());
+          const t = await fetch(swUrl + '?v=' + Date.now(), { cache: 'no-store', signal: tmoSignal(15000) }).then(r => r.text());
           return (t.match(/VERSION\s*=\s*'([^']+)'/) || [])[1] || '';
         } catch (e) { console.warn('[sw] 서버 판 확인 실패', e); return ''; }
       };

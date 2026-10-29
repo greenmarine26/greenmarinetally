@@ -4,119 +4,29 @@
   "emptyPromiseCatch": 4,
   "fetchNoSignal": 0
  },
- "src/backHandler.js": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/components/BroadcastMarquee.jsx": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/components/ErrorBoundary.jsx": {
-  "bareCatch": 0,
-  "emptyPromiseCatch": 1,
-  "fetchNoSignal": 1
- },
  "src/components/GeminiKeyModal.jsx": {
   "bareCatch": 0,
   "emptyPromiseCatch": 2,
-  "fetchNoSignal": 1
- },
- "src/components/PortMisCaptureModal.jsx": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/components/PrintableBayDetail.jsx": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
   "fetchNoSignal": 0
  },
  "src/components/SearchPanel.jsx": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 2,
-  "fetchNoSignal": 0
- },
- "src/components/UpdatePrompt.jsx": {
   "bareCatch": 0,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 1
- },
- "src/components/WorkReportModal.jsx": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/coneCargoPlan.entry.jsx": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
+  "emptyPromiseCatch": 2,
   "fetchNoSignal": 0
  },
  "src/firebase.js": {
-  "bareCatch": 2,
+  "bareCatch": 0,
   "emptyPromiseCatch": 1,
-  "fetchNoSignal": 3
- },
- "src/gemini.js": {
-  "bareCatch": 0,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 2
- },
- "src/greeting.js": {
-  "bareCatch": 2,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/mir.js": {
-  "bareCatch": 0,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 3
- },
- "src/pages/AuxPage.jsx": {
-  "bareCatch": 3,
-  "emptyPromiseCatch": 0,
   "fetchNoSignal": 0
  },
  "src/pages/ChiefDashboard.jsx": {
-  "bareCatch": 1,
+  "bareCatch": 0,
   "emptyPromiseCatch": 1,
   "fetchNoSignal": 0
  },
- "src/pages/GlobalSearchPage.jsx": {
-  "bareCatch": 2,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/pages/HomePage.jsx": {
-  "bareCatch": 3,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
  "src/pages/VoyagePage.jsx": {
-  "bareCatch": 2,
-  "emptyPromiseCatch": 2,
-  "fetchNoSignal": 0
- },
- "src/printHelper.js": {
-  "bareCatch": 1,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/tallyExcel.js": {
   "bareCatch": 0,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 1
- },
- "src/utils.js": {
-  "bareCatch": 2,
-  "emptyPromiseCatch": 0,
-  "fetchNoSignal": 0
- },
- "src/voice.js": {
-  "bareCatch": 2,
-  "emptyPromiseCatch": 0,
+  "emptyPromiseCatch": 2,
   "fetchNoSignal": 0
  }
 }

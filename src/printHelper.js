@@ -74,7 +74,7 @@ export function openPrintWindow(html, title = '출력') {
   w.document.close();
   setTimeout(() => {
     injectPrintToolbar(w);
-    try { w.focus(); } catch (e) {}
+    try { w.focus(); } catch (e) { /* 인쇄 창 포커스 실패는 무해 */ }
   }, 200);
   return w;
 }

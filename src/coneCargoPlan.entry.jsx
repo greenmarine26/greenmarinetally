@@ -21,7 +21,7 @@ let _root = null;
 let _host = null;
 
 function close(opts) {
-  try { if (_root) _root.unmount(); } catch (e) {}
+  try { if (_root) _root.unmount(); } catch (e) { /* 이미 내려간 화면의 해제 실패는 무해 */ }
   if (_host && _host.parentNode) _host.parentNode.removeChild(_host);
   _root = null; _host = null;
   unlockOrientation();   // ConeOne 2.60: 첫 화면(양하|선적)이 걸어 둔 가로 잠금은 닫을 때 반드시 푼다 — 콘 계산기는 세로

@@ -16,7 +16,7 @@ export default function BroadcastMarquee({ inspector }) {
   if (readId === msg.id) return null;
 
   const onConfirm = () => {
-    try { localStorage.setItem('gm_broadcast_read', msg.id); } catch (e) {}
+    try { localStorage.setItem('gm_broadcast_read', msg.id); } catch (e) { /* 읽음 표시를 기기에 못 남겨도 화면은 그대로 */ }
     setReadId(msg.id);
     fbMarkBroadcastRead(msg.id, inspector);
   };

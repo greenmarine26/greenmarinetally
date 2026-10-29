@@ -171,7 +171,7 @@ export function formatCellParts(c, cellW, pt, legacy = false) {
     else if (carrierRaw) carrier = carrierRaw.slice(0, 3);
     const fe = c.fe || (String(c.iso || '').endsWith('0') ? 'E' : 'F');
     let wt = '0.0';
-    try { const n = parseFloat(c.wt); if (Number.isFinite(n)) wt = (n / 1000).toFixed(1); } catch (_) {}
+    try { const n = parseFloat(c.wt); if (Number.isFinite(n)) wt = (n / 1000).toFixed(1); } catch (_) { /* 중량이 숫자가 아니면 0.0 으로 둔다 */ }
     const fewt = `${fe}${wt}`;
     const type = String(isoToPdfLabel(c.iso) || '');
     const _tmp = String(c.tmp ?? '').trim();

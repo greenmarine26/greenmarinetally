@@ -360,6 +360,7 @@ function sheetShifting(wb, D) {
 //   합계·헤더(DISCH (n))는 원본이 수식이지만, 모바일 뷰어가 재계산을 안 하는 경우를
 //   위해 검증된 계산값으로 덮어쓴다. 템플릿 없는 배(TMPZ·DXQD·OBWH 등)는 드로잉 폴백.
 import TEMPLATE_MAP from './data/tallyTemplateMap.js';
+import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
 
@@ -374,7 +375,7 @@ async function fillTemplate(D, ExcelJS) {
   const base = (typeof document !== 'undefined' ? './' : 'public/');
   let ab;
   if (typeof document !== 'undefined') {
-    const res = await fetch(`${base}tally_templates/${tplCode}.xlsx`, { cache: 'no-store' });
+    const res = await fetch(`${base}tally_templates/${tplCode}.xlsx`, { cache: 'no-store', signal: tmoSignal(30000) });
     if (!res.ok) return null;
     ab = await res.arrayBuffer();
   } else {
