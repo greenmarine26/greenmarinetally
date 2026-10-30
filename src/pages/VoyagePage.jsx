@@ -55,6 +55,7 @@ import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';   // 4.46: 보고 고치기·지우기(보낸 사람만)
+import { isReeferTarget } from '../reeferList.js';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf, keepConfirmedOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
@@ -1141,11 +1142,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   대상 = **풀 리퍼만**(검수사 확정 2026-08-04). 공 리퍼는 전원을 안 꽂아 잴 것이 없다.
   //   ReeferMemoModal.isReefer 와 **같은 식**이어야 한다 — 버튼 숫자와 모달 줄 수가 어긋나면 안 된다.
   const reefers = useMemo(
-    () => (containers || []).filter((c) => {
-      const rf = isReeferContainer(c);   // 3.60-10 (진단 M6): ReeferMemoModal 과 같은 한 벌(버튼 숫자 = 모달 줄 수)
-      if (!rf || reeferTempExempt(c)) return false;   // 3.70-01: 리퍼드라이·제작컨·수화물 — 판정 한 벌
-      return c.fe === 'F' || !c.fe;
-    }),
+    () => (containers || []).filter(isReeferTarget),   // 4.57: 판정 한 벌 — reeferList.isReeferTarget (3.60-10 풀 리퍼만 · 3.70-01 리퍼드라이·제작컨·수화물 제외)
     [containers]);
   const rfUnchecked = useMemo(() => reefers.filter(c => !c.rfCheckedAt).length, [reefers]);
   const [showReefer, setShowReefer] = useState(false);
@@ -1796,7 +1793,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {/* ⚠ 모달은 이 버튼 바로 옆(VoyagePage 트리 안)에 둔다. 1.8 첫 배포에서 파일 아래쪽
           DataTab(업로드 탭) 안에 넣는 바람에 상태는 켜지는데 그릴 곳이 없어 아무 일도 안 났다. */}
       {showReefer && (
-        <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
+        <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector} voyageInfo={voyage?.info}
           onClose={() => setShowReefer(false)}/>
       )}
 

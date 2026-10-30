@@ -16,7 +16,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk, fbSaveReeferOcrLog } from '../firebase.js';
-import { isReeferContainer, reeferTempExempt } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.70-01: 온도 제외 한 벌
+import { isReeferTarget, tempNum, reeferListRows, openReeferListPrint } from '../reeferList.js';   // 4.57: 리퍼 판정·온도 읽기 한 벌 + 수석 리스트 출력
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
 //   공 리퍼는 전원을 안 꽂아 잴 것이 없다. 텔리 RF 시트(`fe !== 'E'` — 실물 관례 "양하 F 리퍼만
@@ -24,12 +24,7 @@ import { isReeferContainer, reeferTempExempt } from '../utils.js';   // 3.60-10:
 //   ⚠ 1.8 첫 판은 F/E 를 안 갈라 공 리퍼까지 점검 목록에 올렸다 — 메모엔 뜨는데 텔리엔 안 실리는
 //     컨이 생긴다(STMJ 2643E 는 24대가 전부 풀이라 드러나지 않았다).
 //   리퍼드라이(rfdry, 넌플러그)·제작컨(mkcon)도 제외 — 지침서 5-5 "온도 경고 제외" 규칙과 같다.
-const isReefer = (c) => {
-  const rf = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌 — 옛 `^45[38]` 은 4583·4584(플랫랙)를 온도 점검에 올렸다
-  if (!rf) return false;
-  if (reeferTempExempt(c)) return false;   // 3.70-01: 리퍼드라이·제작컨·수화물
-  return c.fe === 'F' || !c.fe;     // fe 미상은 남긴다 — 조용히 빠뜨리지 않는다
-};
+const isReefer = isReeferTarget;   // 4.57: 판정 한 벌은 reeferList.js (버튼 숫자 · 이 모달 줄 수 · 출력 리스트 줄 수)
 
 /** 화면에 보일 온도 문자열 — 값이 없으면 빈 문자열(0으로 착각하게 두지 않는다) */
 const tempStr = (v) => (v == null || String(v).trim() === '' ? '' : String(v).trim());
@@ -40,11 +35,7 @@ const tempStr = (v) => (v == null || String(v).trim() === '' ? '' : String(v).tr
  *    17개 항차·모드는 대조 가능한 것이 **전량** 그 꼴이다(감사 실측 2026-09-08).
  *    `Number('-18.0℃')` 는 NaN 이라 그대로 견주면 **잘 읽은 판독에도 전량 경보**가 뜬다.
  *  숫자로 못 읽으면 null — 그때는 아예 판정하지 않는다(모르는 것을 틀렸다고 하지 않는다). */
-export function tempNum(v) {
-  const t = String(v ?? '').replace(/[℃°CcＣ도\s]/g, '').replace(/[−–—]/g, '-').trim();
-  const m = t.match(/^-?\d+(?:\.\d+)?$/);
-  return m ? Number(m[0]) : null;
-}
+export { tempNum };   // 4.57: reeferList.js 로 옮겼다(출력 리스트와 같은 읽기) — 이름은 그대로 내보낸다
 
 /** 3.32: **판독 검산** — 읽어 온 «설정온도»가 이 항차 자료(EDI 온도)와 같은가.
  *
@@ -71,7 +62,7 @@ export function ocrSetMismatch(list, byCn) {
   return { bad, cmp };
 }
 
-export default function ReeferMemoModal({ containers, voyageKey, mode, inspector, onClose }) {
+export default function ReeferMemoModal({ containers, voyageKey, mode, inspector, onClose, voyageInfo = null }) {
   const list = useMemo(
     () => (containers || []).filter(isReefer).sort((a, b) => String(a.cn).localeCompare(String(b.cn))),
     [containers]);
@@ -227,6 +218,17 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     setStep('edit');   // 1.84: 판독 결과 확인 화면으로(실패해도 note 를 보며 수기로 잇는다)
   };
 
+  //  4.57 — 수석 리퍼 리스트 인쇄 창. 값은 저장된 것(containers)이고 확인자·시각은 창에서 체크했을 때만 나간다.
+  const printList = () => {
+    const kst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    openReeferListPrint(reeferListRows(containers), {
+      name: voyageInfo?.vslName || voyageInfo?.vsl || String(voyageKey || '').split('_')[0],
+      voy: voyageInfo?.voy || String(voyageKey || '').split('_').slice(1).join('_'),
+      modeLabel: mode === 'loading' ? '선적' : '양하',
+      date: kst,
+    });
+  };
+
   const save = async () => {
     //  3.32: 판독 검산에 걸린 줄이 남아 있으면 **한 번 더 묻는다** — 종전엔 경고가 문구뿐이라
     //    어긋난 값 위에 그대로 `rfCheckedAt` 이 찍혔다(감사 지적 §4-3).
@@ -262,6 +264,9 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             <span className="font-bold text-cyan-200 text-sm">리퍼 온도 확인</span>
             <span className="text-xxs text-dim-400">{list.length}대</span>
           </div>
+          {/*  4.57 — 수석 인계용 리스트(리스트·셋팅·실제 세 온도). 지금 DB 에 저장된 값을 찍는다 — 고치는 중인 값은 저장 뒤에 나온다. */}
+          <button type="button" data-testid="reefer-list-print" onClick={printList} disabled={!list.length}
+            className="ml-auto mr-1 px-3 rounded-pill text-xs2 bg-amber-500 text-ink-950 font-bold disabled:opacity-40" style={{ minHeight: 36 }}>📄 리스트 출력</button>
           <button onClick={() => onClose?.(false)} className="text-dim-400 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
         </div>
 

@@ -41,7 +41,7 @@ try {
   walk(path.join(ROOT, 'src'));
   ok('src 에 자체 리퍼 판정(`[2] === \'R\'`·`^45[38]`·`R[EFHT]`·라벨 `R[FH]$`·`slice(2, 3)`) 0곳(utils 밖)', hits.length === 0, hits.join(' · '));
   const VP = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8'), RM = fs.readFileSync(path.join(ROOT, 'src/components/ReeferMemoModal.jsx'), 'utf8');
-  ok('리퍼 버튼 숫자(VoyagePage)와 리퍼 메모 줄(ReeferMemoModal)이 같은 한 벌', /const rf = isReeferContainer\(c\);/.test(VP) && /const rf = isReeferContainer\(c\);/.test(RM) && /isReeferIso, isReeferContainer/.test(VP) && /import \{ isReeferContainer(, reeferTempExempt)? \} from '\.\.\/utils\.js'/.test(RM));
+  ok('리퍼 버튼 숫자(VoyagePage)와 리퍼 메모 줄(ReeferMemoModal)이 같은 한 벌', /filter\(isReeferTarget\)/.test(VP) && /const rf = isReeferContainer\(c\);/.test(fs.readFileSync(path.join(ROOT, 'src/reeferList.js'), 'utf8')) && /const isReefer = isReeferTarget;/.test(RM) && /isReeferIso, isReeferContainer/.test(VP) && /import \{ isReeferContainer(, reeferTempExempt(, effectivePos)?)? \} from '\.\/utils\.js'/.test(fs.readFileSync(path.join(ROOT, 'src/reeferList.js'), 'utf8')));   // 4.57: 모달이 판정을 reeferList.js 한 벌에서 가져온다
 } catch (ex) {
   bad += 1; console.log('  ✘ 검사 중 오류 — ' + (ex && ex.stack || ex));
 }

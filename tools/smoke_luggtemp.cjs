@@ -137,8 +137,8 @@ execSync(`npx esbuild src/mir.js --bundle --platform=node --format=cjs --log-lev
   console.log('■ ⑨ 배선 — 화면·배너·메모·셀 표시가 같은 한 벌을 부른다');
   const src = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
   const vp = src('src/pages/VoyagePage.jsx');
-  ok('VoyagePage — 리퍼 메모 버튼 수·출항 임박 배너가 reeferTempExempt', /if \(!rf \|\| reeferTempExempt\(c\)\) return false;/.test(vp) && /isReeferContainer\(c\) && !reeferTempExempt\(c\) &&/.test(vp));
-  ok('ReeferMemoModal·BayPlan 셀·검색 답도 reeferTempExempt', /if \(reeferTempExempt\(c\)\) return false;/.test(src('src/components/ReeferMemoModal.jsx')) && /isFullReefer && !reeferTempExempt\(c\)/.test(src('src/components/BayPlan.jsx')) && /reeferTempExempt\(c\)/.test(src('src/nlSearch.js')));
+  ok('VoyagePage — 리퍼 메모 버튼 수·출항 임박 배너가 reeferTempExempt', /filter\(isReeferTarget\)/.test(vp) && /isReeferContainer\(c\) && !reeferTempExempt\(c\) &&/.test(vp));
+  ok('ReeferMemoModal(4.57 부터 reeferList.js 한 벌을 가져다 쓴다)·BayPlan 셀·검색 답도 reeferTempExempt', /if \(reeferTempExempt\(c\)\) return false;/.test(src('src/reeferList.js')) && /const isReefer = isReeferTarget;/.test(src('src/components/ReeferMemoModal.jsx')) && /isFullReefer && !reeferTempExempt\(c\)/.test(src('src/components/BayPlan.jsx')) && /reeferTempExempt\(c\)/.test(src('src/nlSearch.js')));
   ok('현황 요약·마감 점검은 applySpecialMarks 를 지난다(수화물이 찍히는 입구)', /applySpecialMarks\(voyage, containersRaw\)/.test(src('src/components/VoyageSummaryCard.jsx')) && /applySpecialMarks\(voyage, containersRaw\)/.test(src('src/components/WorkClosingChecklist.jsx')));
   console.error = _ce;
   ok('콘솔 오류 없음', errs.filter((e) => !/not wrapped in act|Warning:/i.test(e)).length === 0, errs.slice(0, 2).join(' | '));

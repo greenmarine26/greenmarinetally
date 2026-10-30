@@ -6,6 +6,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
+import { reeferListRows, openReeferListPrint } from '../reeferList.js';   // 4.57: 수석 리퍼 온도 리스트
 import { canOpenChief } from '../staffList.js';   // 4.31: VGM·작업 보고서·특수화물 별첨은 수석 자료 — 수석 대시보드를 여는 사람(수석·소유자·개발 열람)과 같은 판정 한 벌
 import { isOwnerName } from '../adminGuard.js';
 import { isAdminUser } from '../workChoice.js';
@@ -529,6 +530,32 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
                     <div className="font-black text-dim-100">X-RAY 리스트</div>
                     <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
                       세관 X-RAY 대상 · 봉인번호·봉인자 · 제출용/인계용 (양하)
+                    </div>
+                  </div>
+                  <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+                </button>
+              )}
+
+              {/* 4.57: 리퍼 온도 리스트 — 리스트(EDI)·셋팅·실제 세 온도, A4 세로 한 장 · 인쇄/PDF + 엑셀 · 수석 인계용(검수사 2026-10-30) */}
+              {chiefView && (
+                <button
+                  onClick={() => {
+                    const rows = reeferListRows(allContainers)   // 리퍼 메모 모달과 같은 대상(전체 컨);
+                    if (!rows.length) { alert('이 항차에 풀 리퍼가 없습니다'); return; }
+                    openReeferListPrint(rows, {
+                      name: voyageInfo.vslName || voyageInfo.vsl || String(voyageKey || '').split('_')[0],
+                      voy: voyageInfo.voy || String(voyageKey || '').split('_').slice(1).join('_'),
+                      modeLabel: mode === 'loading' ? '선적' : '양하',
+                      date: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
+                    });
+                  }}
+                  className="print-tile" data-testid="hub-reefer"
+                >
+                  <span className="print-ico" style={{ background: 'linear-gradient(180deg, #06b6d4, #0e7490)' }}>❄</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-black text-dim-100">리퍼 온도 리스트</div>
+                    <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                      리스트·셋팅·실제 온도 세 가지 · 수석 인계용 · 인쇄/PDF · 엑셀
                     </div>
                   </div>
                   <Printer className="w-5 h-5 text-dim-400 shrink-0" />

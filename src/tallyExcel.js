@@ -361,6 +361,7 @@ function sheetShifting(wb, D) {
 //   위해 검증된 계산값으로 덮어쓴다. 템플릿 없는 배(TMPZ·DXQD·OBWH 등)는 드로잉 폴백.
 import TEMPLATE_MAP from './data/tallyTemplateMap.js';
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
+import { tempNum, temp1, reeferRowFlags, fmtAt } from './reeferList.js';   // 4.57: 리퍼 온도 리스트 엑셀
 
 const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
 
@@ -1334,6 +1335,64 @@ export async function generateXrayExcel(rows, head = {}, opts = {}) {
   });
 
   const fname = `XRAY리스트_${(head.name || '').replace(/\s+/g, '')}_${head.voy || ''}_`
+              + new Date().toISOString().slice(0, 10) + '.xlsx';
+  const buf = await wb.xlsx.writeBuffer();
+  if (opts.download !== false) _download(buf, fname);
+  return { fname, buf };
+}
+
+/* ══════════════════════════════════════════════════════════
+   ★ 4.57 — 리퍼 온도 리스트 엑셀(수석 인계용). 인쇄물(reeferList.generateReeferListPages)과 같은 열이다.
+     순번 · 컨테이너 · 규격 · 위치 · 리스트(EDI) 온도 · 셋팅온도 · 실제온도 [· 확인자] [· 확인 시각]
+   · 온도는 **숫자 칸 + 표시형식 0.0**(소수점 한 자리) — 합계·정렬이 되고 화면과 같게 보인다. 숫자로 못 읽는 값은 글자 그대로.
+   · 확인자·확인 시각은 opts.by · opts.at 가 켜졌을 때만 열이 생긴다(자료에는 늘 남아 있다).
+   · 어긋난 줄(리스트≠셋팅 · 실제−셋팅 3도 이상)은 opts.hi 일 때 붉은 바탕.
+   · 굴림체 10 · 가운데 · 가는 실선 — X-RAY 엑셀과 같은 기본 양식(검수사 2026-09-02).
+   ══════════════════════════════════════════════════════════ */
+export async function generateReeferExcel(rows, head = {}, opts = {}) {
+  const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'GREEN MARINE Tallyman Master';
+  const ws = wb.addWorksheet('리퍼온도');
+  const by = !!opts.by; const at = !!opts.at; const hi = opts.hi !== false;
+  const widths = [6, 15, 8, 11, 11, 11, 11];
+  const HD = ['순번', '컨테이너', '규격', '위치', '리스트(EDI) 온도', '셋팅온도', '실제온도'];
+  if (by) { HD.push('확인자'); widths.push(11); }
+  if (at) { HD.push('확인 시각'); widths.push(14); }
+  ws.columns = widths.map((width) => ({ width }));
+  const title = `리퍼 컨테이너 온도 확인표 · ${head.name || ''}${head.voy ? ' ' + head.voy : ''}${head.modeLabel ? ' ' + head.modeLabel : ''}`;
+  ws.getRow(1).getCell(1).value = title;
+  ws.getRow(1).getCell(1).font = { ...XRAY_FONT, bold: true };
+  ws.getRow(2).getCell(1).value = `${head.date || ''} 출력 · 온도 ℃ · 붉은 줄 = 리스트≠셋팅 또는 실제−셋팅 3℃ 이상`;
+  ws.getRow(2).getCell(1).font = XRAY_FONT;
+  const R0 = 4;
+  HD.forEach((v, i) => { const c = ws.getRow(R0).getCell(i + 1); c.value = v; _xrayStyle(c); c.font = { ...XRAY_FONT, bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE9EDF1' } }; });
+  const tcell = (cell, v, bad) => {
+    const n = tempNum(v);
+    if (n === null) cell.value = (v == null ? '' : String(v));
+    else { cell.value = Number(temp1(v)); cell.numFmt = '0.0'; }
+    if (bad) cell.font = { ...XRAY_FONT, bold: true, color: { argb: 'FFB42318' } };
+  };
+  (rows || []).forEach((r, i) => {
+    const f = hi ? reeferRowFlags(r) : { setBad: false, actBad: false };
+    const row = ws.getRow(R0 + 1 + i);
+    const vals = [i + 1, r.cn || '', r.iso || '', r.pos || ''];
+    vals.forEach((v, c) => { row.getCell(c + 1).value = v; });
+    tcell(row.getCell(5), r.tmp, false);
+    tcell(row.getCell(6), r.set, f.setBad);
+    tcell(row.getCell(7), r.act, f.actBad);
+    let col = 8;
+    if (by) { row.getCell(col).value = r.by || ''; col += 1; }
+    if (at) { row.getCell(col).value = fmtAt(r.at); }
+    for (let c = 1; c <= HD.length; c += 1) {
+      const cell = row.getCell(c);
+      const keep = cell.font && cell.font.bold ? cell.font : null;
+      _xrayStyle(cell);
+      if (keep) cell.font = keep;
+      if (f.setBad || f.actBad) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE8E6' } };
+    }
+  });
+  const fname = `리퍼온도리스트_${(head.name || '').replace(/\s+/g, '')}_${head.voy || ''}_`
               + new Date().toISOString().slice(0, 10) + '.xlsx';
   const buf = await wb.xlsx.writeBuffer();
   if (opts.download !== false) _download(buf, fname);
