@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X, Camera, Send, AlertOctagon, AlertTriangle } from 'lucide-react';
 import {
   shareWithPhoto,
+  normalizeReportPhoto,
   buildSealErrorMessage,
   buildDamageMessage,
   DAMAGE_TYPES,
@@ -37,6 +38,10 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   const [sealOrig, setSealOrig] = useState(() => { try { return (c && sealCheckOf(c).from) || c?.sl_orig || c?.sl || ''; } catch (e) { console.warn('[4.49 실번호] 사진 보고 기존실 판정 실패 — sl_orig·sl 로:', c && c.cn, e); return c?.sl_orig || c?.sl || ''; } });   // 4.49 감사(하-7): 기존 실 = 신고 실(판정 한 벌)
   const [sealNew, setSealNew] = useState('');
   const [sending, setSending] = useState(false);
+  const [reading, setReading] = useState(0);   // 4.57-01: 사진을 JPEG 로 바꾸는 중인 장 수
+  const pickSeq = React.useRef({ cn: 0, detail: 0 });
+  const urlRef = React.useRef({ cn: '', detail: '' });
+  React.useEffect(() => () => { try { URL.revokeObjectURL(urlRef.current.cn); URL.revokeObjectURL(urlRef.current.detail); } catch (e) { /* 이미 해제 */ } }, []);
   // M5.78: ref 불필요 — label 직접 클릭
 
   if (!open) return null;
@@ -58,18 +63,31 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   const voy = voyage?.info?.voy_l || voyage?.info?.voy || '';
   const cn = c?.cn || '';
 
-  const handleCnPhoto = (e) => {
+  //  4.57-01: 고른 사진은 그 자리에서 JPEG 로 바꿔 쥔다(앨범 사진이 공유에서 빠지던 것 — kakaoShare.normalizeReportPhoto).
+  //   읽는 동안(reading) 전송을 막고, 같은 칸에 연달아 고르면 마지막 것만 반영한다(pickSeq).
+  const pickPhoto = (slot, setBlob, setUrl) => async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    setCnPhotoBlob(file);
-    setCnPhotoUrl(URL.createObjectURL(file));
+    const mine = ++pickSeq.current[slot];
+    setReading((n) => n + 1);
+    try {
+      const jpg = await normalizeReportPhoto(file);
+      if (mine !== pickSeq.current[slot]) return;   // 그 사이 다른 사진을 골랐다
+      const url = URL.createObjectURL(jpg);
+      if (urlRef.current[slot]) URL.revokeObjectURL(urlRef.current[slot]);
+      urlRef.current[slot] = url;
+      setBlob(jpg);
+      setUrl(url);
+    } catch (err) {
+      console.error('[PhotoReport] 사진 읽기 실패:', file.type, file.size, err);
+      alert('⚠️ 이 사진을 읽지 못했습니다. 다른 사진을 고르거나 직접 촬영해 주세요.\n(' + (err?.message || err) + ')');
+    } finally {
+      setReading((n) => n - 1);
+    }
   };
-  const handleDetailPhoto = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setDetailPhotoBlob(file);
-    setDetailPhotoUrl(URL.createObjectURL(file));
-  };
+  const handleCnPhoto = pickPhoto('cn', setCnPhotoBlob, setCnPhotoUrl);
+  const handleDetailPhoto = pickPhoto('detail', setDetailPhotoBlob, setDetailPhotoUrl);
 
   const togglePart = (code) => setDamageParts(p => p.includes(code) ? p.filter(x => x !== code) : [...p, code]);
   const toggleType = (code) => setDamageTypes(t => t.includes(code) ? t.filter(x => x !== code) : [...t, code]);
@@ -112,6 +130,7 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
       // M5.77: 사진 2장 전송 (컨번호 + 상세)
       const result = await shareWithPhoto(message, [cnPhotoBlob, detailPhotoBlob], type === 'seal_error' ? '실오류' : '데미지');
       console.log('[PhotoReport] 카톡 공유 결과', result);
+      if (result?.blocked) { setSending(false); return; }   // 4.57-01: 공유창이 안 열렸다 — 저장·닫기 없이 다시 누르게 한다(중복 저장 방지)
 
       // 2단계: Firebase 저장 (백그라운드, 실패해도 카톡은 이미 보냄)
       try {
@@ -371,11 +390,11 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
               </div>
             );
           })()}
-          <button onClick={handleSend} disabled={sending}
+          <button onClick={handleSend} disabled={sending || reading > 0}
             className={`w-full py-3 rounded-pill font-bold text-white flex items-center justify-center gap-2 ${
               isError ? 'bg-red-700 hover:bg-red-600 active:bg-red-800' : 'bg-amber-700 hover:bg-amber-600 active:bg-amber-800'
             } disabled:opacity-50`}>
-            <Send className="w-5 h-5"/> {sending ? '전송 중...' : '카톡으로 전송'}
+            <Send className="w-5 h-5"/> {sending ? '전송 중...' : (reading > 0 ? '사진 읽는 중...' : '카톡으로 전송')}
           </button>
           <div className="text-2xs text-dim-400 text-center mt-1">
             💡 사진 위에 정보가 합성되어 한 장으로 카톡 발송

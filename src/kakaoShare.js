@@ -22,6 +22,48 @@ export async function shareText(message, title = '검수 보고') {
   }
 }
 
+
+// 4.57-01 — 앨범에서 고른 사진도 카메라 사진처럼 한 모양(JPEG, 긴 변 1600px 이하)으로 바로 만든다.
+//   검수사 2026-10-30 «카메라로 직접 촬영한것은 사진과 함께 내용이 보고가 되는데 사진 첨부는 내용만 보고가 되어서 따로 사진을 카톡에 다시 올려야 합니다»
+//   앨범 파일은 형식 글자가 비었거나(image/heic·webp 등) 구글 포토 같은 클라우드 파일이라 나중에 못 읽히기도 해서,
+//   공유 직전 navigator.canShare 가 거절하면 사진은 빠지고 글만 나갔다(그 사실도 알리지 않았다).
+//   → 고르는 순간 읽어서 메모리 안의 JPEG 로 만든다. 못 읽으면 그 자리에서 알린다(나중에 조용히 빠지지 않게).
+export async function normalizeReportPhoto(file, maxSide = 1600) {
+  if (!file) throw new Error('파일 없음');
+  let bmp = null; let url = '';
+  let w = 0; let h = 0; let src = null;
+  try {
+    if (typeof window.createImageBitmap === 'function') {
+      bmp = await window.createImageBitmap(file);   // EXIF 회전은 브라우저가 적용한다
+      w = bmp.width; h = bmp.height; src = bmp;
+    }
+  } catch (e) { bmp = null; }
+  if (!src) {
+    url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('이미지 로드 실패')); i.src = url; });
+      w = img.naturalWidth || img.width; h = img.naturalHeight || img.height; src = img;
+    } catch (e) { URL.revokeObjectURL(url); throw new Error(`사진을 읽지 못했습니다 (형식 ${file.type || '알 수 없음'} · ${file.size || 0}B)`); }
+  }
+  try {
+    if (!w || !h) throw new Error('사진 크기를 알 수 없습니다');
+    const ratio = Math.max(w, h) > maxSide ? maxSide / Math.max(w, h) : 1;
+    const cw = Math.max(1, Math.round(w * ratio)); const ch = Math.max(1, Math.round(h * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = cw; canvas.height = ch;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas 를 열지 못했습니다');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cw, ch);   // 투명 PNG 의 바탕
+    ctx.drawImage(src, 0, 0, cw, ch);
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
+    if (!blob || !blob.size) throw new Error('JPEG 변환 실패');
+    return new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  } finally {
+    if (bmp && bmp.close) { try { bmp.close(); } catch (e) { /* 이미 닫힘 */ } }
+    if (url) URL.revokeObjectURL(url);
+  }
+}
+
 // M3.5.6-fix: 사진 위에 정보 자막 합성 후 공유
 //
 // TallyOne 1.8-08 — **카톡에서 사진이 깨지던 원인** (검수사 신고 2026-08-04, 갤럭시)
@@ -64,6 +106,9 @@ export async function shareWithPhoto(message, photos, title = '검수 보고') {
     return shareText(message, title);
   }
 
+  //  ⚠ 경고창(alert)은 navigator.share 보다 **먼저** 띄우지 않는다 — share 는 «방금 누른 손길»(약 5초) 안에서만 열리는데,
+  //     사람이 경고를 읽고 확인을 누르는 동안 그 시간이 흘러 NotAllowedError 로 공유가 통째로 막힌다(4.57-01 감사 상-1).
+  //     그래서 경고는 share 가 끝난 **뒤에** 띄운다.
   try {
     if (files.length && navigator.canShare) {
       // 자막을 사진에 이미 넣었으므로 text 는 넣지 않는다 — 카톡이 텍스트를 우선 처리하면
@@ -76,19 +121,37 @@ export async function shareWithPhoto(message, photos, title = '검수 보고') {
         console.log('[shareWithPhoto] 파일 공유 성공');
         return { method: 'share-with-file', success: true, files: files.length };
       }
+      // 4.57-01: 한 장 때문에 전부 거절되면 되는 장만이라도 보낸다 — 글만 나가고 사진이 조용히 빠지던 것을 막는다.
+      const okFiles = files.filter((f) => { try { return navigator.canShare({ title, files: [f] }); } catch (e) { return false; } });
+      if (okFiles.length) {
+        //  낱장은 되는데 묶음만 거절이면(크기 합계 한도 등) 같은 묶음을 또 보내도 거절된다 — 첫 장만이라도 보낸다.
+        const pick = okFiles.length < files.length ? okFiles : okFiles.slice(0, 1);
+        await navigator.share({ title, files: pick });
+        alert(`⚠️ 사진 ${files.length}장 중 ${pick.length}장만 첨부됐습니다.\n빠진 사진은 카톡에 따로 올려 주세요.`);
+        return { method: 'share-with-file', success: true, files: pick.length, dropped: files.length - pick.length };
+      }
     }
-    // 파일 공유 안 되면 텍스트만이라도
-    console.log('[shareWithPhoto] 파일 공유 불가 - 텍스트만 공유');
-    try { await navigator.clipboard.writeText(message); } catch { /* 무시 */ }
+    // 파일 공유 안 되면 텍스트만이라도 — 사진이 빠진다는 것을 반드시 알린다(조용한 실패 금지)
+    console.error('[shareWithPhoto] 파일 공유 불가 - 텍스트만 공유', files.map((f) => `${f.name} ${f.size}B ${f.type}`));
     await navigator.share({ title, text: message });
-    return { method: 'share-text-only', success: true };
+    try { await navigator.clipboard.writeText(message); } catch { /* 무시 */ }
+    alert('⚠️ 이 기기에서 사진을 첨부하지 못해 글만 공유됐습니다.\n사진은 카톡에 따로 올려 주세요.');
+    return { method: 'share-text-only', success: true, filesDropped: files.length };
   } catch (e) {
     if (e.name === 'AbortError') {
       console.log('[shareWithPhoto] 사용자 취소');
       return { method: 'share', cancelled: true };
     }
+    if (e.name === 'NotAllowedError') {
+      // 공유창을 열 «손길» 시간이 지났다 — 글만 다시 보내는 것도 같은 이유로 막히니 하지 않고, 다시 누르게 한다(모달은 그대로 둔다).
+      console.error('[shareWithPhoto] 공유 시간 초과(NotAllowedError):', e);
+      alert('⚠️ 공유 창이 열리지 못했습니다(시간이 지났습니다).\n사진은 그대로 있습니다 — 「카톡으로 전송」을 한 번 더 눌러 주세요.');
+      return { method: 'share', cancelled: true, blocked: true };
+    }
     console.error('[shareWithPhoto] 공유 오류:', e);
-    return shareText(message, title);
+    const r = await shareText(message, title);
+    if (files.length) alert('⚠️ 사진 공유에 실패해 글만 공유됐습니다.\n사진은 카톡에 따로 올려 주세요.');
+    return { ...r, filesDropped: files.length };
   }
 }
 
