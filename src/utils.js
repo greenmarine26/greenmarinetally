@@ -57,7 +57,8 @@ export function isSentenceQuery(v) {
 // (앞 판) 'TallyOne 4.56'   // 4.56 미르 «양하 정확도» (앞 판 주석은 아래 줄에 그대로)
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
-export const APP_VERSION = 'TallyOne 4.57-01'   // 4.57-01 **앨범에서 고른 사진도 카톡 보고에 함께 나간다** — 검수사 2026-10-30 «카메라로 직접 촬영한것은 사진과 함께 내용이 보고가 되는데 사진 첨부는 내용만 보고가 되어서 따로 사진을 카톡에 다시 올려야 합니다». 앨범 사진은 형식 글자가 비었거나 클라우드 파일이라 공유 직전 canShare 가 거절하면 사진이 조용히 빠지고 글만 나갔다. kakaoShare.normalizeReportPhoto 로 고르는 순간 JPEG(긴 변 1600px)로 만들고, 못 읽으면 그 자리에서 알리며, 공유 때 한 장이라도 빠지면 경고를 띄운다. (앞 판) 4.57 **수석 리퍼 온도 리스트 — 리스트(EDI)·셋팅·실제 세 온도를 A4 세로 한 장(좌우 두 줄)으로 인쇄하고 엑셀로 받는다** — 검수사 2026-10-30 «마감을 짓기전에 인계용 자료가 필요한데 그것이 부족합니다» · «리스트 온도와 자료받은 것의 셋팅온도 실제온도 3가지가 적힌 리스트가 필요 합니다» · «저장한 사람은 자료에 남기는건 상관없는데 출력이나 엑셀 자료에는 체크 하면 넣고 체크 안하면 넣지않게» · «굳이 가로로 할 필요가 없습니다 세로 한장» · «온도 자릿수도 소수점 한자리로» · «사인 자리는 수기 사인 이름 없는 빈자리 갯수와 상관없이 항상 고정». src/reeferList.js(출력 창·엑셀 열 한 벌) · tallyExcel.generateReeferExcel · 출력 센터 «리퍼 온도 리스트»(수석) · 리퍼 온도 확인 창 «리스트 출력». 값은 저장된 것이고 확인자·시각은 창에서 체크했을 때만 나간다. 판정(풀 리퍼만)·온도 읽기는 reeferList.js 한 벌을 ReeferMemoModal 이 가져다 쓴다.
+export const APP_VERSION = 'TallyOne 4.58'   // 4.58 **호기 교체 — 상황판은 새 호기만 보이고 옛 호기 작업대수는 «N대 포함»으로 단다** — 검수사 2026-10-31 «3호기 4호기 이용하다 1호기 2호기로 대체한다고 하면 상황판에는 1호기 2호기만 보여야 한다» · «이종부 3호기로 몇개하다가 1호기로 바꿔서 몇개 했슴을 표기하고 장비는 1호기 2호기를 보여주고 1호기(3호기 작업대수 : XXX대 포함)». 원인 — 상황판 호기 줄(utils.craneBoardOf)이 «이 항차에 한 번이라도 기록이 찍힌 호기» 를 전부 줄로 세워, 교체된 3호기가 멈춘 줄로 남았다. 수리 — utils.craneSwapsOf 한 벌: 같은 조 안에서 같은 사람이 다른 호기로 다시 등록되면 교체(짝은 이름이 잇는다 · 교체 시각 = 새 호기 등록 시각 · 옛 호기를 교체 뒤에 다시 등록하면 접지 않는다 · 조가 다르면 교체 아님). craneBoardOf 가 옛 호기 줄을 접고 새 호기에 대수를 더해 fold 로 «(3호기 작업대수 N대 포함)» 을 달고(ChiefDashboard), 기록은 지우지 않는다. 실측 STMJ 2667E — 이종부 3→1 · 김성일 4→2 (연막 smoke_craneswap). 하지 않은 것 — 카토스만 보고 앱이 스스로 교체를 알아채는 갈래 · 콘앱 호기 줄(ConeOne 다음 판).   //
+// (앞 판) 'TallyOne 4.57-01'   // 4.57-01 **앨범에서 고른 사진도 카톡 보고에 함께 나간다** — 검수사 2026-10-30 «카메라로 직접 촬영한것은 사진과 함께 내용이 보고가 되는데 사진 첨부는 내용만 보고가 되어서 따로 사진을 카톡에 다시 올려야 합니다». 앨범 사진은 형식 글자가 비었거나 클라우드 파일이라 공유 직전 canShare 가 거절하면 사진이 조용히 빠지고 글만 나갔다. kakaoShare.normalizeReportPhoto 로 고르는 순간 JPEG(긴 변 1600px)로 만들고, 못 읽으면 그 자리에서 알리며, 공유 때 한 장이라도 빠지면 경고를 띄운다. (앞 판) 4.57 **수석 리퍼 온도 리스트 — 리스트(EDI)·셋팅·실제 세 온도를 A4 세로 한 장(좌우 두 줄)으로 인쇄하고 엑셀로 받는다** — 검수사 2026-10-30 «마감을 짓기전에 인계용 자료가 필요한데 그것이 부족합니다» · «리스트 온도와 자료받은 것의 셋팅온도 실제온도 3가지가 적힌 리스트가 필요 합니다» · «저장한 사람은 자료에 남기는건 상관없는데 출력이나 엑셀 자료에는 체크 하면 넣고 체크 안하면 넣지않게» · «굳이 가로로 할 필요가 없습니다 세로 한장» · «온도 자릿수도 소수점 한자리로» · «사인 자리는 수기 사인 이름 없는 빈자리 갯수와 상관없이 항상 고정». src/reeferList.js(출력 창·엑셀 열 한 벌) · tallyExcel.generateReeferExcel · 출력 센터 «리퍼 온도 리스트»(수석) · 리퍼 온도 확인 창 «리스트 출력». 값은 저장된 것이고 확인자·시각은 창에서 체크했을 때만 나간다. 판정(풀 리퍼만)·온도 읽기는 reeferList.js 한 벌을 ReeferMemoModal 이 가져다 쓴다.
 // (앞 판) 'TallyOne 4.56-05'   // 4.56-05 **리퍼 온도 사진 판독 — 한 줄씩 밀려 읽던 것을 고쳤다(옆 줄의 세팅·실측을 가져옴)** — 검수사 2026-10-30 07:21 «-19.0 밑에 -2.5가 있는 줄이 있습니다. 그런데 그걸 하나로 읽습니다» · «첫장은 완벽하게 판독했는데 두번째장은 줄 구분이 없었고 텍스트 크기로 들쑥날쑥» (STMJ 2667E 양하, 수석 성창모). ⚠ 처음엔 «한 칸 안의 위아래 두 값»으로 잘못 읽었다 — 사진을 받아 보니 -19.0 은 51번 SKRU9401610 줄, -2.5 는 52번 TLLU7008801 줄로 **서로 이웃한 두 컨테이너**였다. 뿌리 — 실물 3장은 가로 종이를 세워 찍어 글자가 옆으로 누웠고, 옛 프롬프트에는 줄을 맞추는 규칙이 없어 모델이 세팅·실측을 한 줄씩 어긋나게 읽었다(앱 화면 ⚠ «-19 ≠ 자료 -2.6» 등). 실측 시험(같은 사진 · 소네트 · 자료의 세팅이 정답) — 옛 문구 2장 36대 중 세팅 19대 일치·실측 12대가 세팅과 3도 이상 벌어짐 / 새 문구 34대 / 새 문구+세워서 36대 전부 · 1장 29대·3장 13대도 전부 일치. 수리 — ① 프롬프트: 누운 사진 방향 바로잡기 · 맨 앞 NO. 줄 번호를 같이 읽기 · 이웃 줄 값 금지 · 실측은 세팅과 보통 2도 안 ② 세로 사진이면 반시계 90도 돌려서 보냄 ③ 실측이 자료 세팅과 3도 이상 벌어진 줄은 비우지 않고 경고 ④ -40~40도 밖 값은 비우고 알림 ⑤ 리퍼 사진만 클로드를 한 번 더 시도(한도·키 문제 제외)하고 제미나이로 읽으면 화면에 표시(그날 아침 4건 중 2건이 시간 초과 뒤 제미나이) ⑥ 사진·AI 원문 답을 항차 밖 `reefer_ocr_log/{항차}/{ts}` 에 남김(저장 여부 무관). 연막검사 tools/smoke_reeferocr456.cjs. // (앞 판) 'TallyOne 4.56-04'   // 4.56-04 **미르로 조 등록(«1호기 이종부 2호기 김성일»)을 하면 내 이름이 있는 호기로 기기 호기도 바뀐다** — 검수사 «04:00정도에 미르에게 1호기 2호기로 바뀌었답니다 이야기 했는데 4호기로 계속작업됨». 조 등록은 명단만 적고 gm_equip_no 를 안 바꿔 완료·보고가 옛 호기로 찍혔다(firebase.fbSetVoyageCraneCrew 한 곳에서 맞춘다 · 같은 이름이 두 호기면 건드리지 않음 · 지금 조일 때만). (앞 판) 'TallyOne 4.56-03'   // 4.56-03 **선적에서 터미널이 준 칸이 계획에 없거나 사람 칸과 겹치면, 위치를 맞바꿔 빈칸이 안 생기게 한다** — 검수사 2026-10-29 NSDC 2611S 30번 베이 «하나를 잘못찍건 위치를 제대로 바꾸었다면 빈자리는 생기지 않을것입니다». 뿌리 — 자동 맞교환(applyAutoSwap)은 «안 실린 밀려난 컨»만 봐서, 실린 4대가 한 칸씩 밀리고 끝 한 대(TEMU6518190)가 계획에 없는 14-02-86 에 적히면 30-10-84 가 빈칸으로 남고 한 칸씩 움직이는 검은 칸으로 보였다(맞교환 0건). 수리 — applyAutoSwap 이 그 컨(터미널 값 · 사람이 안 찍음 · 규격 같음)을 사슬이 닫히는 빈 계획 칸으로 메모리에서만 옮기고 원래 칸은 `_swap_orig` 에 남긴다(stripCatosPos 가 되돌림). 같은 칸에 사람 자리와 터미널 자리가 겹친 13-06-82 도 같은 규칙으로 풀린다. 실측 NSDC 2610N — 바뀐 컨 정확히 2대(8190→30-10-84 · 6120→13-04-82) · 한 칸 두 대 0 · 30번 베이 빈 계획 칸 0 · 연막검사 tools/smoke_orphanswap456.cjs. // 4.56-02 **남은 «말없이 넘기는 오류» 정리 — 빈 `.catch(()=>{})` 12곳과 `.catch(()=>null)` 2곳이 이제 경고 로그를 남긴다**(관리자 가드·작업 활동 기록·로그아웃 표시·공용 키 다시 읽기·베이매트릭스 씨앗·박스 루트·러기지 컨 저장·EDI 원본 정보·AI·미르 응답 읽기) — 검수사 2026-10-29 «남은 것이 생기면 안된다 … 청소완료가 아닌거죠». 동작 불변(로그만 추가). 눈금 `smoke_silentfail456` 기준선 0/0/0, `.catch(()=>null)` 도 센다.
 // (앞 판) // 4.55-03 **양하에서 먼저 나온 컨의 실제 칸을 «내린 순서»로 추정 — 위 단 컨을 계속 기다리지 않는다** — 검수사 2026-10-28 NSFR 2620N 16번 베이 «5128자리에 다른것이 있으면 5128은 그 다른컨의 자리로 가야합니다. 안가고 있으니 계속 5128을 찾는것입니다» · «5128 자리에서 4927이 나왔다면 그다음 대상이 5128이 아니고 그다음 컨테이너 8757이다». 뿌리 — 양하 완료는 수집기가 올리고(src:'term') 칸이 없다(카토스 cellPosition 은 EDI 계획 칸 그대로 · 수집기도 양하 칸은 버린다) → 4.42-04 맞바꿈은 앱 [완료] 길에서만 돌아 NSFR 6건 12대가 계획 칸에 그대로 남고 큐가 밀린 컨을 기다렸다. 수리 — utils.inferDischargePos: 같은 베이·열·데크/홀드 묶음에서 n 번째로 완료된 컨은 n 번째로 높은 칸에서 나왔다(쌓는 규칙) → 계획과 다르면 그 칸을 메모리에만 `_pos_src:'infer'` 로 적고 기존 applyAutoSwap 이 밀린 컨을 비운 칸으로 보낸다(구독 applyCatosPos→inferDischargePos→applyAutoSwap · 콘앱 같은 차례). 사람이 찍은 칸은 안 덮고 완료 시각이 같으면 순서를 지어내지 않으며 DB 에 안 쓴다(stripCatosPos 가 벗긴다). 실측 — NSFR 2620N 6건 정확히 12대(4972↔5128 등) · TNJP 26371E 150대 0건 · 연막검사 tools/smoke_dischargeinfer455.cjs. 같은 단 안의 바꿈은 증거가 없어 못 잡는다
 // (앞 판) 'TallyOne 4.55-02'   // 4.55-02 **EDI 올리기 «다른 선박 EDI» 판정 한 벌(utils.ediShipVerdict) — 선박 사전 콜사인으로 같은 배 확정 · 선박명 한 글자 오타 허용(NSDC2611S «STASRHIP DRACO»)**. 앞 판 4.55-01 **홈 분류와 «✓ 수석 완료 저장» 단추의 판정을 화면 사이에 한 벌로 맞춤 — «선적 EDI 가 없다» 는 «선적이 없다» 가 아니다(EDI 대기)** — 검수사 2026-10-27 06:22 «DXQD는 아직 작업중인데 분류를 따로 한 이유와 수석완료확인 버튼을 활성화 시킨이유는? ATPR은 작업중 선박으로 놓고?» · 06:33 «선적EDI가 없다고 선적이 없는건 아닙니다. EDI 대기 상태인거죠 EDI만 오면 바로 선적시작할것이라는 이야기 입니다.» 실측(실 DB 읽기) — DXQD 2642E(계획 10-26 19:00 ~ 10-28 08:00 · 터미널 planned · 양하 208 끝 · 선적은 2642W LOADLIST 371대만 와 있고 EDI 대기)가 ① 폰 홈에서 «그 밖의 배» 접힘 안에 있었다(컴 홈은 «어제» 묶음 · 로그인 현황판은 «오늘» 줄 — 세 화면이 달랐다. 4.51 이 «작업 배정이 뒤로 밀린 배» 판정을 홈 정렬·채움에만 넣고 펼침 판정과 날짜 묶음에는 안 넣은 누락) ② 수석 대시보드 진행 줄에 «✓ 수석 완료 저장» 이 켜져 있었다(선적 평택 대수를 EDI 에서만 세어 «선적 0대 = 선적 없음» 으로 읽음 — 홈은 같은 배를 «선적 0/371» 로 보고 수석 대기를 안 띄웠다. 같은 판정이 홈·수석 보드·17시 보관 보고·홀드 잔여·미르 다섯 곳에 복제돼 각자 달랐다). 수리 — utils.planDelayedLive(시작은 어제 이전 · 계획 끝 안 지남 · 안 떠남) 한 벌을 로그인·홈 펼침·홈 날짜 묶음이 같이 쓴다(DXQD 는 폰·컴 모두 «오늘» 묶음) · utils.hasLoadingSide·inspectorAllDone 한 벌 — 선적 구역에 자료가 한 가지라도 있거나 선적 계획 수량(planLod)이 있으면 EDI 대기도 «선적 있음» 이라 양하 완료만으로는 수석 완료 저장이 안 열린다(다섯 곳이 같은 함수) · 수석 보드 선적 대수는 EDI 가 없으면 리스트 대수(371). 선적 자료도 계획 수량도 없는 배는 종전대로(V8.92 확인창 안전망 그대로) · DB 쓰기 없음
@@ -160,7 +161,7 @@ export const APP_VERSION = 'TallyOne 4.57-01'   // 4.57-01 **앨범에서 고른
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.57-01 앨범에서 고른 사진도 카톡 보고에 함께 나갑니다. 사진이 빠지면 경고가 뜹니다.'
+export const APP_NOTE = '4.58 미르로 호기를 바꿔 등록하면 상황판에 새 호기만 보이고 옛 호기 대수는 포함으로 표시됩니다.'
 // (앞 판 APP_NOTE) '4.56-05 리퍼 온도 사진을 읽을 때 줄이 밀리던 것을 고쳤습니다. 사진과 읽은 값은 기록으로 남습니다.'
 // (앞 판 APP_NOTE) '4.56-04 미르로 호기 검수원을 등록하면 내 호기도 따라 바뀝니다.'
 // (앞 판 APP_NOTE) '4.55-01 선적 EDI 를 기다리는 배가 그 밖의 배로 접히거나 수석 완료 저장이 열리던 것을 고쳤습니다. 선적 자료나 계획이 있으면 EDI 가 아직이어도 선적은 대기로 봅니다.'
@@ -7705,12 +7706,58 @@ export function completedPosOf(sec, cn, recs = null) {
   };
 }
 
+//  ★ 4.58 (검수사 2026-10-31 «3호기 4호기 이용하다 1호기 2호기로 대체한다고 하면 상황판에는 1호기 2호기만 보여야 한다» · «이종부 3호기로 몇개하다가 1호기로 바꿔서 몇개 했슴을 표기하고 장비는 1호기 2호기를 보여주고 1호기(3호기 작업대수 : XXX대 포함)»):
+//    **호기 교체 판정 한 벌.** 같은 조 안에서 **같은 사람이 다른 호기로 다시 등록**되면 교체다(이종부 3호기 → 이종부 1호기). 짝은 사람 이름이 잇는다.
+//    저장은 그대로 `info.craneCrew/{조}/{N호기} = {name, at}` — 교체를 위해 새로 쓰는 값은 없다(기록은 지우지 않는다). 교체 시각 = 새 호기를 등록한 `at`.
+//    ⚠ 조가 다르면(주간 → 야간 돌려막기) 교체가 아니다. ⚠ 옛 호기가 교체 뒤에 **다시 등록**됐으면(다른 사람이 그 호기에 섰다) 접지 않는다.
+//    반환 [{ name, from, to, at }] · 시각 오름차순.
+export function craneSwapsOf(info) {
+  const cc = info && info.craneCrew;
+  if (!cc || typeof cc !== 'object') return [];
+  const out = [];
+  for (const key of Object.keys(cc)) {
+    if (!/^\d{2}-\d{2}\s*(주간|야간)$/.test(String(key).trim())) continue;   // 조 키 모양은 craneCrewOf·crewSegments 와 같은 것만(4.58 감사 하-5)
+    const ent = cc[key]; if (!ent || typeof ent !== 'object') continue;
+    const list = [];
+    for (const ck of Object.keys(ent)) {
+      const cm = /^(\d)\s*호기$/.exec(String(ck).trim()); const v = ent[ck]; if (!cm || !v) continue;
+      const name = typeof v === 'string' ? v.trim() : String(v.name || '').trim();
+      const at = Number(typeof v === 'object' && v.at) || 0;
+      if (name && at) list.push({ no: +cm[1], name, at });
+    }
+    const byName = {};
+    for (const e of list) (byName[e.name] = byName[e.name] || []).push(e);
+    for (const [name, es] of Object.entries(byName)) {
+      es.sort((x, y) => x.at - y.at);
+      for (let i = 1; i < es.length; i++) {
+        const f = es[i - 1], t = es[i];
+        //  같은 시각(한 번에 등록한 묶음)에 한 사람이 두 호기면 교체가 아니라 두 갱을 함께 보는 것이다 — 교체는 «뒤에 다시 등록» 한 것이다.
+        //  옛 호기를 교체 뒤에 다른 사람이 다시 등록하면 같은 조 안에서는 그 칸이 덮어써져 옛 짝이 사라지므로 교체로 안 보이고, 다른 조의 대수는 접을 때 조 창으로 가른다.
+        if (f.no === t.no || f.at === t.at) continue;
+        out.push({ name, from: f.no, to: t.no, at: t.at, key });
+      }
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+//  교체된 옛 호기 번호로 붙은 기기·접속 검수원은 새 호기로 읽는다(4.58 감사 중-2 — 교체 뒤에도 옛 번호를 쓰는 기기).
+//  ⚠ 지금 조에서 한 교체만 적용한다 — 교체 뒤 다른 조가 같은 번호 호기를 이어 쓰는 것은 정상이라 그 사람 기기를 새 호기로 읽으면 안 된다(4.58 감사 중-1).
+export function craneNoAfterSwap(info, no, nowMs = Date.now()) {
+  let n = Number(no) || 0;
+  //  지금 조 = 접기 창(crewSegments)과 같은 잣대로 — 교대 시각 부근에 기기 매핑과 접기가 어긋나지 않게(4.58 감사 하-3)
+  let curKey = '';
+  try { const sg = crewSegmentAt(crewSegments(info || {}), Number(nowMs) || 0); curKey = sg ? sg.key : ''; } catch (e) { return n; }
+  if (!curKey) return n;
+  for (const sw of craneSwapsOf(info)) if (sw.from === n && sw.key === curKey) n = sw.to;
+  return n;
+}
 export function craneBoardOf(voyage, workers = [], recordsByMode = null, nowMs = Date.now()) {
   const info = (voyage && voyage.info) || {};
   const rows = {};
   let termHasEquip = false;   // 감사: 터미널 피드에 컨별 호기가 있는가 — 없으면(동방) QC 합계가 호기별 정본(3.8 crewWorkStats 와 같은 갈림)
   //  4.22-03 감사(하 1): posAt — 지금 자리(bay·row·tier)를 준 기록의 시각. 자리는 «자리 있는 기록 중 가장 늦은 것»으로만 바꾼다(객체 반복 순서에 기대지 않는다). 내보내기 전에 지운다.
-  const row = (no) => rows[no] || (rows[no] = { no, name: '', nameAt: 0, posAt: 0, mode: '', bay: '', row: '', tier: '', cn: '', done: 0, dis: 0, lod: 0, lastAt: 0, src: '', qc: false });
+  const row = (no) => rows[no] || (rows[no] = { no, name: '', nameAt: 0, posAt: 0, mode: '', bay: '', row: '', tier: '', cn: '', done: 0, dis: 0, lod: 0, lastAt: 0, src: '', qc: false, ats: [] });
   for (const mode of ['discharge', 'loading']) {
     const sec = (voyage && voyage[mode]) || {};
     const seen = new Set();
@@ -7718,9 +7765,10 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null, nowMs =
       if (!r || !r.at) continue;
       const no = crewCraneNo(r.equip); if (!no) continue;
       termHasEquip = true;
-      const c = row(no); c.done++; c[mode === 'loading' ? 'lod' : 'dis']++; seen.add(cn);
+      const c = row(no); c.done++; c[mode === 'loading' ? 'lod' : 'dis']++; seen.add(cn); const _ent = { at: r.at, mode, cn, src: 'term', pos: null }; c.ats.push(_ent);
       if (r.at > c.lastAt) Object.assign(c, { lastAt: r.at, mode, cn, src: 'term' });
       const p = parseCatosPos(r.pos);
+      if (p) _ent.pos = { bay: p.bay, row: p.row, tier: p.tier };
       if (p && r.at > c.posAt) Object.assign(c, { posAt: r.at, bay: p.bay, row: p.row, tier: p.tier });
     }
     const recs = (recordsByMode && recordsByMode[mode]) || sec.records || {};
@@ -7731,18 +7779,19 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null, nowMs =
       const by = String(r.by || '').trim();
       if (by && !isTermApplied(r) && r.at >= c.nameAt) { c.name = by; c.nameAt = r.at; }   // 가장 늦게 찍은 사람(3.16: 터미널 반영은 사람이 아니다)
       if (seen.has(cn)) continue;
-      c.done++; c[mode === 'loading' ? 'lod' : 'dis']++;
+      c.done++; c[mode === 'loading' ? 'lod' : 'dis']++; const _ent = { at: r.at, mode, cn, src: 'app', pos: null }; c.ats.push(_ent);
       if (r.at > c.lastAt) Object.assign(c, { lastAt: r.at, mode, cn, src: 'app' });   // 시각·모드·컨은 가장 늦은 완료
       //  4.22-03: 자리는 boardBaysOf 와 같은 한 벌(completedPosOf — 실적 → 맞교환 → 계획 EDI). 셋 다 없으면(창고·자리 내줌 포함) 자리를 바꾸지 않는다 —
       //    남는 자리는 «자리 있는 기록 중 가장 늦은 것»(posAt)이다(감사 하 1 — MCAP 15:05 HASU4806161 자리 없음 → 키 순서에 따라 18 또는 22 가 남던 것).
       //    베이 모양은 이 줄의 다른 출처(parseCatosPos · bay_actual)와 같게 앞 0 없이 — EDI 는 '02' 로 온다.
       const p = completedPosOf(sec, cn, recs);
       const n = p.gone ? 0 : parseInt(p.bay, 10);
+      if (n > 0) _ent.pos = { bay: String(n), row: p.row, tier: p.tier };
       if (n > 0 && r.at > c.posAt) Object.assign(c, { posAt: r.at, bay: String(n), row: p.row, tier: p.tier });
     }
   }
   for (const w of workers || []) {
-    const no = crewCraneNo(w && w.equip); if (!no) continue;
+    const no = craneNoAfterSwap(info, crewCraneNo(w && w.equip), nowMs); if (!no) continue;
     const c = row(no);
     if (w.name) { c.name = w.name; c.nameAt = nowMs; }   // 앱에 붙어 있는 사람이 가장 확실하다(4.30-04: 지금 시각의 이름)
     if (w.bay) { c.bay = String(w.bay); c.row = ''; c.tier = w.tier != null ? String(w.tier) : ''; c.mode = w.mode || c.mode; c.src = 'live'; }   // 앱은 로우를 안 주므로 다른 컨의 로우가 남지 않게 비운다
@@ -7767,6 +7816,49 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null, nowMs =
       if (tb.why) console.warn('[3.38] 시각으로 호기·베이를 못 가렸다 —', tb.why, '· 버린 바구니', tb.skipped);
     } catch (e) { console.warn('[3.38] 시각으로 호기·베이 잇기 실패', e); }
   }
+  //  ★ 4.58: 호기 교체 — 옛 호기 줄은 접고 새 호기 줄에 «옛 호기 작업대수 N대 포함»을 단다(옛 호기 기록은 그대로 둔다).
+  //    접는 것은 **교체를 등록한 그 조 안에서 옛 호기로 찍힌 실적**뿐이다(감사 상-1 — 다른 조·다른 사람이 같은 번호 호기에서 한 일은 그 호기에 남는다).
+  //    새 호기에 아직 실적이 없어도 줄을 만들어 «1호기 2호기만 보인다»를 지킨다.
+  try {
+    const _segs = crewSegments(info);
+    //  줄의 «마지막 컨·모드·출처·자리»를 그 줄에 남은 실적에서 다시 잡는다 — 접은 몫의 자리가 접히지 않은 몫에 새지 않게(4.58 감사 중-2).
+    const _last = (c, ents) => {
+      if (c.src === 'live' || c.src === 'qcbay') return;   // 앱에 붙은 검수원의 지금 베이·시각 베이는 실적에서 다시 만들지 않는다(4.58 감사 중-1)
+      let best = null, bp = null;
+      for (const a of ents) { if (!best || a.at > best.at) best = a; if (a.pos && (!bp || a.at > bp.at)) bp = a; }
+      if (!best) return;
+      Object.assign(c, { lastAt: best.at, mode: best.mode, cn: best.cn, src: best.src });
+      if (bp) Object.assign(c, { posAt: bp.at, bay: bp.pos.bay, row: bp.pos.row, tier: bp.pos.tier }); else Object.assign(c, { posAt: 0, bay: '', row: '', tier: '' });
+    };
+    for (const sw of craneSwapsOf(info)) {
+      const f = rows[sw.from];
+      let sel = [], rest = [];
+      //  동방 QC 합계 줄(c.qc)은 대수가 QC 합계로 덮여 시각별 실적과 안 맞는다 — 그 호기 합계를 통째로 옮긴다(4.58 감사 상-1).
+      const qcAll = !!(f && f.done > 0 && (f.qc || !f.ats.length));
+      //  ⚠ 그 호기를 다른 조도 등록했으면(다음 조가 이어받음) QC 합계는 시각으로 못 나누므로 접지 않는다(감사 중-2).
+      if (qcAll && Object.keys(info.craneCrew || {}).some((k) => k !== sw.key && info.craneCrew[k] && typeof info.craneCrew[k] === 'object' && info.craneCrew[k][`${sw.from}호기`])) continue;
+      const t = row(sw.to);
+      if (f && !qcAll) for (const a of f.ats) { const sg = crewSegmentAt(_segs, a.at); (sg && sg.key === sw.key ? sel : rest).push(a); }
+      const n = qcAll ? f.done : sel.length;
+      const dN = qcAll ? f.dis : sel.filter((a) => a.mode !== 'loading').length;
+      const lN = qcAll ? f.lod : sel.filter((a) => a.mode === 'loading').length;
+      const tHadLast = t.lastAt;
+      t.done += n; t.dis += dN; t.lod += lN;
+      if (qcAll) { t.qc = true; /* 연쇄 교체에서 이 줄이 다시 옛 호기가 돼도 합계를 통째로 옮기게(감사 상-1) */ if (f.lastAt > t.lastAt && t.src !== 'live' && t.src !== 'qcbay') Object.assign(t, { lastAt: f.lastAt, mode: f.mode, cn: f.cn, src: f.src }); if (!t.bay && f.bay) Object.assign(t, { posAt: f.posAt, bay: f.bay, row: f.row, tier: f.tier }); }
+      else if (sel.length) {
+        for (const a of sel) t.ats.push(a);
+        const mx = Math.max(...sel.map((a) => a.at));
+        if (mx > tHadLast) _last(t, t.ats);
+        else if (!t.bay) { const ph = sel.filter((a) => a.pos).sort((x, y) => y.at - x.at)[0]; if (ph) Object.assign(t, { posAt: ph.at, bay: ph.pos.bay, row: ph.pos.row, tier: ph.pos.tier }); }
+      }
+      if (n > 0) (t.fold = t.fold || []).push({ from: sw.from, n, name: sw.name, at: sw.at });
+      if (f) {
+        if (rest.length && !qcAll) { f.done = rest.length; f.dis = rest.filter((a) => a.mode !== 'loading').length; f.lod = rest.filter((a) => a.mode === 'loading').length; f.ats = rest; _last(f, rest); }
+        else if (f.src === 'live') { f.done = 0; f.dis = 0; f.lod = 0; f.ats = []; }   // 그 번호에 지금 붙어 있는 접속 검수원의 줄은 남긴다(감사 중-1)
+        else delete rows[sw.from];
+      }
+    }
+  } catch (e) { console.warn('[4.58] 호기 교체 접기 실패', e); }
   const out = Object.values(rows).sort((a, b) => a.no - b.no);
   //  ★ 4.30-02 (검수사 2026-10-17 17:50 «아침에 퇴근했으면 클리어가 되어 있어야 하는데 남아 있다는건 잘못된것입니다»):
   //    호기 줄의 이름은 «그 호기 마지막 기록의 근무조»가 끝났으면(교대 06:30·17:30 이후) 지금 근무자가 아니다 — 비운다.
@@ -7781,7 +7873,7 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null, nowMs =
     const _prevShiftName = _shifted && c.src !== 'live' && c.name && c.nameAt && c.lastAt && currentShift(c.nameAt).startMs !== currentShift(c.lastAt).startMs;
     if (stale || _prevShiftName) c.name = crewNameAt(info, stale ? _nowMs : c.lastAt, `${c.no}호기`);
     else if (!c.name) c.name = crewNameAt(info, c.lastAt || Date.now(), `${c.no}호기`);
-    delete c.nameAt; delete c.posAt;
+    delete c.nameAt; delete c.posAt; delete c.ats;
   }
   return out;
 }
@@ -7966,7 +8058,7 @@ export function bayViewOverlayOf(sec) {
 //      줄은 있는데 숫자 베이가 없으면(동방 QC 합계만 있는 줄 · 자리를 못 읽은 완료만) «자리를 아직 모릅니다» — 터미널 대수가 있는데 «완료가 없다»고 말하지 않는다.
 //      그 줄 밖에 다른 호기 줄이 하나도 없으면(이 항차에서 일한 호기가 나뿐) 최근 완료가 다른 호기 것일 수 없으니 `boardBaysOf` 로 떨어진다(no 는 내 호기).
 //    반환 { bay, tier:'deck'|'hold'|null, mode, at, src, no, why, cranes:[{no,bay,tier,mode,at,src}] }
-export function bayViewFollowOf(voyage, equipNo, pages = null, screenMode = '') {
+export function bayViewFollowOf(voyage, equipNo, pages = null, screenMode = '', nowMs = Date.now()) {
   const cranes = [];
   const rows = craneBoardOf(voyage, []);
   for (const c of rows) {
@@ -7974,7 +8066,7 @@ export function bayViewFollowOf(voyage, equipNo, pages = null, screenMode = '') 
     const t = parseInt(c.tier, 10);
     cranes.push({ no: c.no, bay: parseInt(m[0], 10), tier: Number.isFinite(t) ? (t >= 80 ? 'deck' : 'hold') : null, mode: c.mode || '', at: c.lastAt || 0, src: c.src || '' });
   }
-  const no = crewCraneNo(equipNo);
+  const no = craneNoAfterSwap((voyage && voyage.info) || {}, crewCraneNo(equipNo), nowMs);
   const mine = no ? cranes.find((c) => c.no === no) : null;
   if (mine) {
     //  화면은 양하인데 내 호기는 선적 중(또는 반대) — 자리는 알려 주되 그 사실을 말한다(아래 칸은 화면 모드의 그림을 그린다).

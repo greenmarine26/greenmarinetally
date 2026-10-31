@@ -2572,6 +2572,8 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
                   <span className="text-sm font-black text-cyan-200">{c.no}호기</span>
                   <span className={`font-bold ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || '미등록'}</span>
                   <span className={c.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{c.mode === 'loading' ? '선적' : '양하'} {c.done}대</span>
+                  {/* 4.58: 호기 교체 — 옛 호기는 줄에서 빠지고 여기에 «옛 호기 작업대수 N대 포함»으로 남는다 */}
+                  {c.fold && c.fold.length > 0 && <span className="text-dim-400" data-crane-fold={c.no}>{c.fold.map((f) => `(${f.from}호기 작업대수 ${f.n}대 포함)`).join(' ')}</span>}
                   {/* 3.38: 동방도 시각으로 호기·베이를 갈랐으면 그 자리를 말한다 — 자리가 붙은 뒤에도 «자리 없음»이 남으면 화면이 거짓말을 한다 */}
                   {c.qc ? <span className="text-dim-400">양 {c.dis} · 선 {c.lod}{c.bay && /\d/.test(String(c.bay)) ? ` · 베이 ${c.bay}` : ' · 자리 없음(동방)'}</span> : (c.row || c.tier) ? <span className="text-dim-400">{c.bay ? `베이 ${c.bay}` : ''} {c.row || '--'}-{c.tier || '--'}</span> : null}
                   <span className={`ml-auto ${(Date.now() - (c.lastAt || 0)) < 10 * 60000 ? 'text-emerald-300' : 'text-amber-300'}`}>{c.src === 'live' ? '앱 접속' : fmtAgo(c.lastAt)}</span>

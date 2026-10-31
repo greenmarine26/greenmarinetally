@@ -898,6 +898,7 @@ if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:fir
   node tools/smoke_conepos.cjs "$SMOKE_CP" || { echo "✗ 콘앱 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # ConeOne 2.44: 콘앱 자리 = 검수앱 자리
   node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_craneboard.cjs "$SMOKE_CP" || { echo "✗ 작업 보드 호기별 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.10
+  node tools/smoke_craneswap.cjs "$SMOKE_CP" || { echo "✗ 호기 교체 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 4.58
   node tools/smoke_ptk.cjs "$SMOKE_CP" || { echo "✗ 평택 선적분 판정·규격 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.14
   node tools/smoke_rawvoy437.cjs "$SMOKE_CP" || { echo "✗ 다른 항차 EDI 걸러내기 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 4.37-02
   node tools/smoke_bookingfill.cjs "$SMOKE_CP" || { echo "✗ 부킹 자리·실번호 중복 계산 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 3.26

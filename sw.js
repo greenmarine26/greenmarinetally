@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.57-01';
-const NOTE = '4.57-01 앨범에서 고른 사진도 카톡 보고에 함께 나갑니다. 사진이 빠지면 경고가 뜹니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.58';
+const NOTE = '4.58 미르로 호기를 바꿔 등록하면 상황판에 새 호기만 보이고 옛 호기 대수는 포함으로 표시됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
