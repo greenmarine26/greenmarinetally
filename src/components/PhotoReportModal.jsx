@@ -60,7 +60,12 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
 
   const vsl = voyage?.info?.vsl || '';
   const dims = [dimW, dimH, dimD].map(x => String(x).trim()).filter(Boolean).join(' x ');
-  const voy = voyage?.info?.voy_l || voyage?.info?.voy || '';
+  //  4.59-02: 항차는 보고를 올리는 모드를 따른다 — 양하=voy_d·선적=voy_l(WorkReportModal·ReportEditRow 와 같은 규칙).
+  //  종전엔 늘 voy_l 이라 PCSZ(양하 2632E·선적 2633W)의 양하 데미지·실오류 문구가 전부 «2633W»(선적 항차)로 나갔다.
+  const _info = voyage?.info || {};
+  const voy = voyage?.mode === 'loading' ? (_info.voy_l || _info.voy || '')
+    : voyage?.mode === 'discharge' ? (_info.voy_d || _info.voy || '')
+    : (_info.voy_l || _info.voy || '');
   const cn = c?.cn || '';
 
   //  4.57-01: 고른 사진은 그 자리에서 JPEG 로 바꿔 쥔다(앨범 사진이 공유에서 빠지던 것 — kakaoShare.normalizeReportPhoto).

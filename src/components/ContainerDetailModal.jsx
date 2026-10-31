@@ -1630,7 +1630,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           type={photoMode}
           c={c}
           voyageKey={voyageKey}
-          voyage={{ info: voyageInfo }}
+          voyage={{ info: voyageInfo, mode }}
           equipNo={getEquipNumber()}
           inspector={inspector || ''}
           onClose={() => setPhotoMode(null)}
