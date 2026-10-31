@@ -9,8 +9,8 @@ const STUB = fs.readFileSync(path.join(__dirname, 'smoke_bayfirst.cjs'), 'utf8')
 const clone = (o) => JSON.parse(JSON.stringify(o));
 (async () => {
   const entry = [
-    "export { ptkDischargeUnitsOf, ptkDischargeJudgeOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, progressOf, mfnNote, mfnItemsOf, MFN_LABEL, mfnChinaWarn } from './src/utils.js';",
-    "export { mfnListRows, mfnTally, mfnCounts, mfnPackOf, generateMfnListHTML, mfnSumLine, generateMfnFieldHTML, mfnFieldLayout, mfnChiefView, openMfnList } from './src/mfnList.js';",
+    "export { ptkDischargeUnitsOf, ptkDischargeJudgeOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, progressOf, mfnNote, mfnItemsOf, mfnReloadItemsOf, MFN_RELOAD_COUNTS, MFN_LABEL, mfnChinaWarn } from './src/utils.js';",
+    "export { mfnListRows, mfnTally, mfnCounts, mfnPackOf, generateMfnListHTML, mfnSumLine, generateMfnFieldHTML, mfnFieldLayout, mfnChiefView, openMfnList, mfnOsLine } from './src/mfnList.js';",
     "export { STAFF_LIST } from './src/staffList.js';",
     "export { reconcileSources } from './src/sourceRecon.js';",
     "export { ptkContainers, buildOS } from './src/tallyReport.js';",
@@ -18,17 +18,27 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     "export { computeTallyData, buildSealList } from './src/tallyReport.js';",
     "export { runDiagnostics } from './src/diagnostics.js';",
   ].join('\n');
-  const code = (await esbuild.build({
-    stdin: { contents: entry, resolveDir: ROOT, loader: 'js' }, bundle: true, platform: 'node', format: 'cjs', write: false, logLevel: 'silent', loader: { '.js': 'jsx' }, jsx: 'automatic',
-    plugins: [{ name: 'fb', setup(b) { b.onResolve({ filter: /^firebase\// }, (a) => ({ path: a.path, namespace: 'fb' })); b.onLoad({ filter: /.*/, namespace: 'fb' }, () => ({ contents: STUB, loader: 'js' })); } }],
-  })).outputFiles[0].text;
+  const buildM = async (reloadCounts) => {   // MFN_RELOAD_COUNTS 상수를 true(기본) · false 로 갈라 번들을 두 벌 만든다 — 소비처 코드는 같고 상수만 다르다
+    const code = (await esbuild.build({
+      stdin: { contents: entry, resolveDir: ROOT, loader: 'js' }, bundle: true, platform: 'node', format: 'cjs', write: false, logLevel: 'silent', loader: { '.js': 'jsx' }, jsx: 'automatic',
+      plugins: [{ name: 'fb', setup(b) {
+        b.onResolve({ filter: /^firebase\// }, (a) => ({ path: a.path, namespace: 'fb' })); b.onLoad({ filter: /.*/, namespace: 'fb' }, () => ({ contents: STUB, loader: 'js' }));
+        if (!reloadCounts) b.onLoad({ filter: /src[\\/]utils\.js$/ }, (a) => { const t = fs.readFileSync(a.path, 'utf8'); const k = 'export const MFN_RELOAD_COUNTS = true;'; if (t.split(k).length !== 2) throw new Error('MFN_RELOAD_COUNTS 상수 줄을 못 찾았다'); return { contents: t.replace(k, 'export const MFN_RELOAD_COUNTS = false;'), loader: 'jsx' }; });
+      } }],
+    })).outputFiles[0].text;
+    const mm = { exports: {} }; new Function('module', 'exports', 'require', code)(mm, mm.exports, require);
+    return mm.exports;
+  };
   global.window = global.window || {}; global.document = global.document || { createElement: () => ({}) };
-  const m = { exports: {} }; new Function('module', 'exports', 'require', code)(m, m.exports, require);
-  const M = m.exports;
+  const M = await buildM(true), MX = await buildM(false);
+  ok(M.MFN_RELOAD_COUNTS === true && MX.MFN_RELOAD_COUNTS === false, '상수 MFN_RELOAD_COUNTS — 기본 true(센다) · 번들 한 벌은 false(뺀다)');
   const FX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/mfn458_mcsn642n.json'), 'utf8'));
   const VK = 'MCSN_642N';
   const withMfn = () => ({ key: VK, ...clone(FX) });
   const noMfn = () => { const v = withMfn(); delete v.discharge.mfnList; return v; };
+  //  4.59-01 — 실제 642N 픽스처(FX_REAL)는 SUDU7733400 이 재적재(reload)라 양하·MFN 에서 빠진다(MFN 43 · 278 이 아니라 277). 아래 ①~⑩ 은 «재적재 없는 MFN 44» 변형(FX)으로 옛 규칙·출력을 그대로 검사하고, ⑪ 이 실제 픽스처의 재적재 규칙을 검사한다.
+  const FX_REAL = clone(FX);
+  FX.discharge.mfnList.items.SUDU7733400.reload = false;
   const mfnCns = Object.keys(FX.discharge.mfnList.items);
 
   console.log('① 양하 유닛 — 278 = 리스트 234 + MFN 44');
@@ -38,8 +48,9 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   ok(U1.extra.size === U0.extra.size && U1.listSet.size === U0.listSet.size && [...U1.mfn].every((cn) => !U1.extra.has(cn) && !U1.listSet.has(cn)), '추가분(extra)·목록(listSet)은 그대로 — MFN 은 따로');
   ok(U1.basis === U0.basis && U1.basis === 'customs', '기준(basis)은 그대로 customs');
   const items = Object.values(FX.discharge.mfnList.items);
-  const china = items.filter((i) => /^CN/.test(i.dest)), ptk = items.filter((i) => i.dest === 'KRPTK'), reload = items.filter((i) => i.reload);
-  ok(china.length === 34 && ptk.length === 10 && reload.length === 1 && reload[0].cn === 'SUDU7733400', '픽스처 구성 — 중국행 34 · 평택행 10 · 재적재 1(SUDU7733400)', [china.length, ptk.length, reload.length].join());
+  const itemsReal = Object.values(FX_REAL.discharge.mfnList.items);
+  const china = items.filter((i) => /^CN/.test(i.dest)), ptk = items.filter((i) => i.dest === 'KRPTK'), reload = itemsReal.filter((i) => i.reload);
+  ok(china.length === 34 && ptk.length === 10 && reload.length === 1 && reload[0].cn === 'SUDU7733400' && items.filter((i) => i.reload).length === 0, '픽스처 구성 — 중국행 34 · 평택행 10 · 재적재 1(SUDU7733400, 변형 FX 는 재적재 없음)', [china.length, ptk.length, reload.length].join());
   //  제외 규칙 — 시프팅·평택 아닌 POD 선택·이미 목록에 있는 컨은 더하지 않는다
   const k = mfnCns[0], k2 = mfnCns[1], k3 = mfnCns[2];
   const vShift = withMfn();
@@ -89,12 +100,12 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   ok(mfnCns.every((cn) => !Ur.mfn.has(cn) && !M.markDischargeUnit({ cn }, Ur) ._mfn), '개정 뒤 컨 표식 — 44대 모두 _mfn 없음(상자 조건 거짓)');
 
   console.log('② 표식 — markDischargeUnit · dischargeUnitBareRow');
-  const china1 = items.find((i) => i.dest === 'CNDLC'), ptk1 = ptk[0], rel = reload[0];
+  const china1 = items.find((i) => i.dest === 'CNDLC'), ptk1 = ptk[0], rel = items.find((i) => i.cn === 'SUDU7733400');
   const mk = (cn) => M.markDischargeUnit({ ...M.dischargeUnitBareRow(withMfn(), cn), cn }, U1);
   const c1 = mk(china1.cn), c2 = mk(ptk1.cn), c3 = mk(rel.cn);
   ok(c1._mfn === true && c1._mfnChina === true && c1._mfnDest === 'CNDLC' && c1._mfnReload === false, '중국행(다롄) — _mfn · _mfnChina · _mfnDest', JSON.stringify(c1));
   ok(c2._mfn === true && !c2._mfnChina && c2._mfnDest === 'KRPTK', '평택행 — _mfn 만(_mfnChina 없음)');
-  ok(c3._mfn === true && c3._mfnChina === true && c3._mfnDest === 'CNTXG' && c3._mfnReload === true && c3._mfnHan === 'DIS', '재적재(톈진행) — _mfnReload · _mfnHan DIS');
+  ok(c3._mfn === true && c3._mfnChina === true && c3._mfnDest === 'CNTXG' && c3._mfnReload === false && c3._mfnHan === 'DIS', '톈진행(재적재 표시 없는 변형) — _mfnHan DIS');
   ok(c1.iso === china1.iso && c1.fe === china1.fe && c1.pol === china1.pol && c1.wt === china1.wt && !('op' in c1), '맨 행은 목록의 규격·F/E·출발지·중량만 싣는다(선사는 지어내지 않는다)');
   const normal = Object.keys(FX.discharge.records)[0];
   const cn0 = M.markDischargeUnit({ cn: normal, iso: '45G1' }, U1);
@@ -129,9 +140,8 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   console.log('④ 주의 박스 — 자료별 대조 MFN 그룹');
   const R0 = M.reconcileSources(noMfn(), 'discharge', { voyageKey: VK }), R1 = M.reconcileSources(withMfn(), 'discharge', { voyageKey: VK });
   ok(R0.mfn === null && R0.app === 234, 'mfnList 가 없으면 MFN 그룹 없음 · 앱 234');
-  ok(R1.mfn && R1.mfn.n === 44 && R1.mfn.china === 34 && R1.mfn.ptk === 10 && R1.mfn.reload === 1 && R1.mfn.listN === 234 && R1.app === 278, 'MFN 그룹 44 — 중국행 34 · 평택행 10 · 재적재 1 · 리스트 234 · 앱 278', JSON.stringify({ n: R1.mfn && R1.mfn.n, a: R1.app }));
+  ok(R1.mfn && R1.mfn.n === 44 && R1.mfn.china === 34 && R1.mfn.ptk === 10 && R1.mfn.reload === 0 && R1.mfn.reloadOut === 0 && R1.mfn.listN === 234 && R1.app === 278, 'MFN 그룹 44 — 중국행 34 · 평택행 10 · 리스트 234 · 앱 278', JSON.stringify({ n: R1.mfn && R1.mfn.n, a: R1.app }));
   ok(R1.mfn.items.length === 44 && R1.mfn.items.filter((x) => /주의 — 원래 목적지 (다롄|톈진)/.test(x.tag)).length === 34, '컨 줄 꼬리표 — 중국행 34 에 «주의 — 원래 목적지 다롄/톈진(통과화물이었음)»');
-  ok(R1.mfn.items.find((x) => x.cn === 'SUDU7733400').tag.includes('재적재'), '재적재 꼬리표');
   ok(R1.total === R0.total && R1.explained === R0.explained && R0.unknown === 44 && R1.unknown === 0, '어긋남 수·후보는 그대로 · 종전 «번호 없음 44» 는 MFN 합산으로 0 이 된다', JSON.stringify([R0.total, R1.total, R0.unknown, R1.unknown]));
   ok(R1.gap === R1.app - R1.term.n && R1.term.n === 278 && R1.gap === 0, '터미널 배정 278 = 앱 278(차이 0)', JSON.stringify([R1.term, R1.gap]));
   ok(R0.gap === -44, 'MFN 없이는 앱 234 − 터미널 278 = -44(종전의 «번호 없음 44» 흔들림이 이것)', R0.gap);
@@ -146,8 +156,8 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   const t = M.mfnTally(pack.rows);
   ok(t.total === 44 && t.f20 + t.e20 + t.f40 + t.e40 + t.unknown === 44, '규격별 집계 합 = 44', JSON.stringify(t));
   const cnt = M.mfnCounts(pack.rows);
-  ok(cnt.china === 34 && cnt.ptk === 10 && cnt.reload === 1, '중국행 34 · 평택행 10 · 재적재 1');
-  ok(pack.rows.find((r) => r.cn === 'SUDU7733400').remark === 'MFN / 톈진행(통과화물) 주의 / 재적재' && pack.rows.find((r) => r.cn === china1.cn).remark === 'MFN / 다롄행(통과화물) 주의' && pack.rows.find((r) => r.cn === ptk1.cn).remark === 'MFN', 'REMARK — 다롄행(통과화물) 주의 · 톈진행 + 재적재 · 평택행은 «MFN» 만');
+  ok(cnt.china === 34 && cnt.ptk === 10 && cnt.reload === 0, '중국행 34 · 평택행 10 · 재적재 0(변형)');
+  ok(pack.rows.find((r) => r.cn === 'SUDU7733400').remark === 'MFN / 톈진행(통과화물) 주의' && pack.rows.find((r) => r.cn === china1.cn).remark === 'MFN / 다롄행(통과화물) 주의' && pack.rows.find((r) => r.cn === ptk1.cn).remark === 'MFN', 'REMARK — 다롄행(통과화물) 주의 · 톈진행 · 평택행은 «MFN» 만');
   ok(M.mfnSumLine(pack.head, 44) === '터미널 278 = 리스트 234 + MFN 44', '합계 옆 한 줄');
   const html = M.generateMfnListHTML(pack.rows, pack.head);
   ok(!html.includes('`') && (html.match(/<tr/g) || []).length >= 44 + 1 + 4 && /GREEN MARINE CO\., LTD\./.test(html) && /MFN LIST/.test(html) && /CHIEF CHECKER/.test(html) && /CHIEF OFFICER/.test(html) && /window\.print/.test(html) && /__exportMfnXlsx/.test(html), 'HTML — 백틱 없음 · 머리·제목·서명줄 · PDF 저장/인쇄 · 엑셀 저장');
@@ -291,6 +301,95 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     const smp = ['MCSN_642N_MFN_LIST_sample.xlsx', 'MCSN_642N_MFN_LIST_field_sample.xlsx', 'MCSN_642N_TALLY_REPORT_sample.xlsx'].map((f) => '/mnt/user-data/outputs/' + f);
     ok(smp.every((f) => fs.existsSync(f) && fs.statSync(f).size > 3000), '샘플 파일 저장 확인 — 수석 · 일반 · 마감텔리', smp.map((f) => fs.existsSync(f) ? fs.statSync(f).size : 0).join('/'));
   } catch (e) { ok(false, '샘플 저장 실패', e.message); }
+  console.log('⑩ 추가분(4.20)이 MFN 과 같이 있을 때 문구 — «앱 279 = 리스트 234 + 추가분 1 + MFN 44» (4.59-01)');
+  const vEx = withMfn(); const TRHU = 'TRHU4332492';
+  vEx.discharge.ediContainers = Object.assign({}, vEx.discharge.ediContainers, { [TRHU]: { _mode: 'discharge', cn: TRHU, fe: 'E', iso: '22G1', iso_edi: '22G1', op: 'MAE', pod: 'KRPTK', pol: 'PHDVO', isBooking: false, pendingCn: false, st: '5', voy: '642N', wt: 2200 } });
+  const Ue = M.ptkDischargeUnitsOf(vEx);
+  ok(Ue.set.size === 279 && Ue.extra.size === 1 && Ue.extra.has(TRHU) && Ue.mfn.size === 44 && Ue.listSet.size === 234, '숫자는 그대로 — 총계 279 · 추가분 1(TRHU4332492) · MFN 44 · 리스트 234', [Ue.set.size, Ue.extra.size, Ue.mfn.size, Ue.listSet.size].join('/'));
+  ok(M.mfnNote(44, 279, 1) === '(리스트 234 + 추가분 1 + MFN 44)' && M.mfnNote(44, 278, 0) === '(리스트 234 + MFN 44)' && M.mfnNote(44, 278) === '(리스트 234 + MFN 44)', 'mfnNote — 추가분 있으면 세 토막 · 없으면 종전 문구 그대로');
+  const pe = M.progressOf(vEx.discharge, 'discharge', new Set(), null, vEx.keepOnboard);
+  ok(pe.ptk.total === 279 && pe.mfnN === 44 && pe.mfnExtraN === 1 && M.mfnNote(pe.mfnN, pe.ptk.total, pe.mfnExtraN) === '(리스트 234 + 추가분 1 + MFN 44)', '홈 카드·항차 칩 문구 — 279 (리스트 234 + 추가분 1 + MFN 44) · 235 라고 섞어 부르지 않는다', M.mfnNote(pe.mfnN, pe.ptk.total, pe.mfnExtraN));
+  const pe0 = M.progressOf(withMfn().discharge, 'discharge', new Set(), null, withMfn().keepOnboard);
+  ok(pe0.mfnExtraN === 0 && M.mfnNote(pe0.mfnN, pe0.ptk.total, pe0.mfnExtraN) === '(리스트 234 + MFN 44)', '추가분 0 항차 — 종전 문구 «(리스트 234 + MFN 44)» 그대로');
+  const Re = M.reconcileSources(vEx, 'discharge', { voyageKey: VK });
+  ok(Re.app === 279 && Re.mfn.n === 44 && Re.mfn.extraN === 1 && Re.mfn.listN === 234, '자료별 대조 — 앱 279 · 리스트 234 · 추가분 1 · MFN 44(listN 이 235 가 아니다)', Re.app + '/' + Re.mfn.listN + '/' + Re.mfn.extraN);
+  const De = M.runDiagnostics({ ediContainers: vEx.discharge.ediContainers, listRecords: vEx.discharge.records, mode: 'discharge', voyage: vEx, voyageKey: VK }) || [];
+  const ale = (Array.isArray(De) ? De : De.alerts || []).find((a) => a.code === 'source_recon');
+  ok(ale && /앱 279 = 리스트 234 \+ 추가분 1 \+ MFN 44/.test(ale.msg) && !/리스트 235/.test(ale.msg), '주의 박스 알림 문구 — «앱 279 = 리스트 234 + 추가분 1 + MFN 44»', ale && ale.msg);
+  const D0 = M.runDiagnostics({ ediContainers: withMfn().discharge.ediContainers, listRecords: withMfn().discharge.records, mode: 'discharge', voyage: withMfn(), voyageKey: VK }) || [];
+  const al0 = (Array.isArray(D0) ? D0 : D0.alerts || []).find((a) => a.code === 'source_recon');
+  ok(al0 && /앱 278 = 리스트 234 \+ MFN 44/.test(al0.msg) && !/추가분/.test(al0.msg), '추가분 0 항차 — 알림 문구 종전 그대로 «앱 278 = 리스트 234 + MFN 44»', al0 && al0.msg);
+  const packE = M.mfnPackOf(vEx.discharge.mfnList, VK, vEx.info, vEx);
+  ok(packE.rows.length === 44 && packE.head.ptk === 279 && packE.head.list === 234 && packE.head.extra === 1 && M.mfnSumLine(packE.head, 44) === '앱 279 = 리스트 234 + 추가분 1 + MFN 44' && M.mfnOsLine(packE.head, 44) === 'MANIFESTED 235 · DISCHARGED 279 · OVER 44', '출력 머리 — «앱 279 = 리스트 234 + 추가분 1 + MFN 44» · OS-IN 말 MANIFESTED 235(추가분은 OS-IN 에서 MANIFESTED) · DISCHARGED 279 · OVER 44', M.mfnSumLine(packE.head, 44));
+  const packN = M.mfnPackOf(withMfn().discharge.mfnList, VK, withMfn().info, withMfn());
+  ok(M.mfnSumLine(packN.head, 44) === '터미널 278 = 리스트 234 + MFN 44' && M.mfnOsLine(packN.head, 44) === 'MANIFESTED 234 · DISCHARGED 278 · OVER 44', '추가분 0 항차 — 출력 머리 종전 그대로');
+  const Te = M.ptkContainers(vEx, 'discharge');
+  const Be = M.buildOS(Te, vEx.discharge.completed || {}, 'discharge', { ops: [], ports: [], damage: null, shifting: true, performance: true, _unknown: true });
+  const se = Be.rows.reduce((a, r) => ({ man: a.man + r.manifested, over: a.over + (r.over || 0) }), { man: 0, over: 0 });
+  ok(se.man === 235 && se.over === 44 && se.man + se.over === 279, '마감텔리 OS-IN 도 같은 숫자 — MANIFESTED 235(리스트 234 + 추가분 1) · OVER 44 · 합 279', JSON.stringify(se));
+  const hdrHtml = M.generateMfnListHTML(packE.rows, packE.head);
+  ok(/앱 279 = 리스트 234 \+ 추가분 1 \+ MFN 44/.test(hdrHtml) && M.generateMfnFieldHTML(packE.rows, packE.head).includes('앱 279 = 리스트 234 + 추가분 1 + MFN 44'), '두 양식 HTML 머리가 같은 문구');
+
+  const REAL = () => ({ key: VK, ...clone(FX_REAL) });
+  const SUDU = 'SUDU7733400', TRHU2 = 'TRHU4332492';
+  const modalSrcR = fs.readFileSync(path.join(__dirname, '../src/components/ContainerDetailModal.jsx'), 'utf8');
+  const sect = async (Mx, EXCL) => {
+    const N = EXCL ? 43 : 44, CH = EXCL ? 33 : 34, SZ = EXCL ? 277 : 278, tag = EXCL ? '[상수 false · 뺀다]' : '[상수 true · 센다]';
+    console.log(`⑪ 재적재 규칙 ${tag} — 642N 실제 픽스처 SUDU7733400`);
+    const Ur1 = Mx.ptkDischargeUnitsOf(REAL());
+    ok(Ur1.set.size === SZ && Ur1.mfn.size === N && Ur1.mfn.has(SUDU) === !EXCL && Ur1.mfnItems.has(SUDU) === !EXCL && Ur1.extra.size === 0 && Ur1.listSet.size === 234, tag + ` 실제 642N — set ${SZ} = 리스트 234 + MFN ${N} · SUDU7733400 ` + (EXCL ? '없음' : '있음'), Ur1.set.size + '/' + Ur1.mfn.size);
+    ok(Object.keys(Mx.mfnItemsOf(REAL())).length === N && !!Mx.mfnItemsOf(REAL())[SUDU] === !EXCL && Object.keys(Mx.mfnReloadItemsOf(REAL())).length === (EXCL ? 1 : 0), tag + ` mfnItemsOf 한 곳에서 갈린다 — MFN ${N} · 뺀 재적재 ${EXCL ? 1 : 0}`);
+    const vRx = REAL(); vRx.discharge.ediContainers = Object.assign({}, vRx.discharge.ediContainers, { [TRHU2]: { _mode: 'discharge', cn: TRHU2, fe: 'E', iso: '22G1', iso_edi: '22G1', op: 'MAE', pod: 'KRPTK', pol: 'PHDVO', isBooking: false, pendingCn: false, st: '5', voy: '642N', wt: 2200 } });
+    const Ur2 = Mx.ptkDischargeUnitsOf(vRx);
+    ok(Ur2.set.size === SZ + 1 && Ur2.extra.size === 1 && Ur2.extra.has(TRHU2) && Ur2.mfn.size === N && Ur2.listSet.size === 234, tag + ` 추가분 TRHU4332492 를 넣으면 ${SZ + 1} = 리스트 234 + 추가분 1 + MFN ${N}`, [Ur2.set.size, Ur2.extra.size, Ur2.mfn.size].join('/'));
+    const pr1 = Mx.progressOf(vRx.discharge, 'discharge', new Set(), null, vRx.keepOnboard);
+    ok(pr1.ptk.total === SZ + 1 && pr1.mfnN === N && pr1.mfnExtraN === 1 && Mx.mfnNote(pr1.mfnN, pr1.ptk.total, pr1.mfnExtraN) === `(리스트 234 + 추가분 1 + MFN ${N})`, tag + ` 홈 카드 문구 — ${SZ + 1} (리스트 234 + 추가분 1 + MFN ${N})`, Mx.mfnNote(pr1.mfnN, pr1.ptk.total, pr1.mfnExtraN));
+    const pr0 = Mx.progressOf(REAL().discharge, 'discharge', new Set(), null, REAL().keepOnboard);
+    ok(pr0.ptk.total === SZ && Mx.mfnNote(pr0.mfnN, pr0.ptk.total, pr0.mfnExtraN) === `(리스트 234 + MFN ${N})`, tag + ` 추가분 0 — ${SZ} (리스트 234 + MFN ${N})`);
+    const Tr = Mx.ptkContainers(REAL(), 'discharge');
+    ok(Tr.length === SZ && Tr.filter((c) => c._mfn).length === N && Tr.some((c) => c.cn === SUDU) === !EXCL, tag + ` 마감텔리 모집단 ${SZ} · MFN ${N}`);
+    const osOf = (T) => Mx.buildOS(T, {}, 'discharge', { ops: [], ports: [], damage: null, shifting: true, performance: true, _unknown: true }).rows.reduce((a, r) => ({ man: a.man + r.manifested, over: a.over + (r.over || 0) }), { man: 0, over: 0 });
+    const sr = osOf(Tr), srx = osOf(Mx.ptkContainers(vRx, 'discharge'));
+    ok(sr.man === 234 && sr.over === N, tag + ` 실제 642N OS-IN — MANIFESTED 234 · OVER ${N}`, JSON.stringify(sr));
+    ok(srx.man === 235 && srx.over === N, tag + ` 추가분 포함 OS-IN — MANIFESTED 235 · OVER ${N}`, JSON.stringify(srx));
+    const Rr = Mx.reconcileSources(REAL(), 'discharge', { voyageKey: VK });
+    ok(Rr.mfn && Rr.mfn.n === N && Rr.mfn.china === CH && Rr.mfn.ptk === 10 && Rr.mfn.reload === (EXCL ? 0 : 1) && Rr.mfn.reloadOut === (EXCL ? 1 : 0) && Rr.mfn.items.some((x) => x.cn === SUDU) === !EXCL && Rr.app === SZ, tag + ` 자료별 대조 MFN 그룹 ${N}(중국행 ${CH} · 평택행 10)`, JSON.stringify({ n: Rr.mfn && Rr.mfn.n, r: Rr.mfn && Rr.mfn.reload, ro: Rr.mfn && Rr.mfn.reloadOut }));
+    if (!EXCL) ok(/재적재 예정 — 양하 확인 전/.test(Rr.mfn.items.find((x) => x.cn === SUDU).tag), tag + ' 대조 꼬리표 «재적재 예정 — 양하 확인 전»');
+    const Dr = Mx.runDiagnostics({ ediContainers: vRx.discharge.ediContainers, listRecords: vRx.discharge.records, mode: 'discharge', voyage: vRx, voyageKey: VK }) || [];
+    const alr = (Array.isArray(Dr) ? Dr : Dr.alerts || []).find((a) => a.code === 'source_recon');
+    ok(alr && new RegExp(`MFN ${N}대`).test(alr.msg) && new RegExp(`앱 ${SZ + 1} = 리스트 234 \\+ 추가분 1 \\+ MFN ${N}`).test(alr.msg) && (EXCL ? /재적재 1대는 양하에서 뺌/ : /재적재 예정 1대 포함\(양하 확인 전\)/).test(alr.msg) && (EXCL ? !/재적재 예정/.test(alr.msg) : !/양하에서 뺌/.test(alr.msg)), tag + ` 주의 박스 알림 — «앱 ${SZ + 1} = 리스트 234 + 추가분 1 + MFN ${N}» · ` + (EXCL ? '«재적재 1대는 양하에서 뺌»' : '«재적재 예정 1대 포함(양하 확인 전)»'), alr && alr.msg);
+    const packRx = Mx.mfnPackOf(vRx.discharge.mfnList, VK, vRx.info, vRx);
+    ok(packRx.rows.length === N && packRx.rows.some((r) => r.cn === SUDU) === !EXCL && packRx.head.ptk === SZ + 1 && packRx.head.list === 234 && packRx.head.extra === 1 && Mx.mfnSumLine(packRx.head, N) === `앱 ${SZ + 1} = 리스트 234 + 추가분 1 + MFN ${N}` && Mx.mfnOsLine(packRx.head, N) === `MANIFESTED 235 · DISCHARGED ${SZ + 1} · OVER ${N}`, tag + ` 출력 — 행 ${N} · 머리 «앱 ${SZ + 1} = 리스트 234 + 추가분 1 + MFN ${N}»`, Mx.mfnSumLine(packRx.head, N));
+    const packR0 = Mx.mfnPackOf(REAL().discharge.mfnList, VK, REAL().info, REAL());
+    const hc = Mx.generateMfnListHTML(packR0.rows, packR0.head), hf = Mx.generateMfnFieldHTML(packR0.rows, packR0.head);
+    ok(Mx.mfnSumLine(packR0.head, N) === `터미널 ${SZ} = 리스트 234 + MFN ${N}` && packR0.head.reloadIn === (EXCL ? 0 : 1) && packR0.head.reloadOut === (EXCL ? 1 : 0)
+      && (EXCL ? /재적재 1대는 양하에서 뺌/ : /재적재 예정 1대 포함\(양하 확인 전\)/).test(hc) && (EXCL ? /재적재 1대는 양하에서 뺌/ : /재적재 예정 1대 포함\(양하 확인 전\)/).test(hf) && hc.includes(SUDU) === !EXCL && hf.includes(SUDU) === !EXCL, tag + ' 추가분 0 — 머리 한 줄 참고 · 두 양식 ' + (EXCL ? 'SUDU 컨번호 없음' : 'SUDU 포함'));
+    if (!EXCL) ok(Mx.mfnListRows(REAL().discharge.mfnList).find((r) => r.cn === SUDU).remark === 'MFN / 톈진행(통과화물) 주의 / 재적재 예정 — 양하 확인 전' && /재적재 예정 — 양하 확인 전/.test(hf), tag + ' 출력 비고 — «MFN / 톈진행(통과화물) 주의 / 재적재 예정 — 양하 확인 전»');
+    const packNoVoy = Mx.mfnPackOf(FX_REAL.discharge.mfnList, VK, FX_REAL.info);
+    ok(packNoVoy.rows.length === N && packNoVoy.rows.some((r) => r.cn === SUDU) === !EXCL, tag + ` voyage 없이(스냅샷만)도 같다 — ${N}`);
+    const mk2 = Mx.markDischargeUnit({ ...Mx.dischargeUnitBareRow(REAL(), SUDU), cn: SUDU }, Ur1);
+    ok(!!mk2._mfn === !EXCL && (EXCL ? !Mx.dischargeUnitBareRow(REAL(), SUDU).iso : mk2._mfnReload === true), tag + (EXCL ? ' 재적재 컨은 MFN 표식·맨 행 없음' : ' 재적재 컨 표식 — _mfn · _mfnReload'));
+    const XR = await Mx.generateMfnExcel(packRx.rows, packRx.head, { download: false });
+    const wbR = new ExcelJS.Workbook(); await wbR.xlsx.load(XR.buf); const wsR = wbR.getWorksheet('MFN LIST'); let nR = 0, hasS = false, hasPend = false; wsR.eachRow((row) => { const v = String(row.getCell(2).value || ''); if (/^[A-Z]{4}\d{7}$/.test(v)) nR += 1; if (v === SUDU) { hasS = true; hasPend = /재적재 예정 — 양하 확인 전/.test(String(row.getCell(12).value || '')); } });
+    ok(nR === N && hasS === !EXCL && hasPend === !EXCL, tag + ` 수석 엑셀 — 컨 ${N}줄 · SUDU ` + (EXCL ? '없음' : '있음 + REMARKS «재적재 예정 — 양하 확인 전»'), nR);
+    const doc0 = global.document; delete global.document; const cwd1 = process.cwd(); process.chdir(ROOT);
+    let tallyReal; try { tallyReal = await Mx.generateTallyExcel(Mx.computeTallyData(REAL()), { download: false }); } finally { global.document = doc0; process.chdir(cwd1); }
+    const wbT = await readBook(tallyReal.buf); const sealT = wbT.worksheets.find((w) => /seal|act/i.test(w.name)); let sCnt = 0, sudu = 0; sealT.eachRow((row) => row.eachCell((c) => { const t = txt(c.value); if (/^MFN/.test(t)) sCnt += 1; if (t === SUDU) sudu += 1; }));
+    ok(sCnt === N && (EXCL ? sudu === 0 : sudu >= 1), tag + ` 마감텔리 Act. Cntr-Seal MFN 줄 ${N} · SUDU7733400 ` + (EXCL ? '줄 없음' : '줄 있음'), sCnt + '/' + sudu);
+    return { packR0, tallyReal };
+  };
+  ok(modalSrcR.includes('MFN_RELOAD_COUNTS') && modalSrcR.includes('MFN_RELOAD_PENDING') && /\{_mfnIt\.reload && <div data-mfn-reload="1">\{MFN_RELOAD_LABEL\} — \{MFN_RELOAD_PENDING\}<\/div>\}/.test(modalSrcR), '컨 상세 MFN 상자 — 재적재 항목에 «재적재 예정 — 양하 확인 전» 주석(배선)');
+  const sampleCounts = await sect(M, false);   // 기본(센다) — 샘플도 이쪽
+  await sect(MX, true);
+  const { packR0, tallyReal } = sampleCounts;
+  ok(M.ptkDischargeUnitsOf(noMfn()).set.size === 234 && M.ptkDischargeUnitsOf((() => { const v = REAL(); Object.values(v.discharge.mfnList.items).forEach((x) => { x.reload = false; }); return v; })()).mfn.size === 44 && MX.ptkDischargeUnitsOf((() => { const v = REAL(); Object.values(v.discharge.mfnList.items).forEach((x) => { x.reload = false; }); return v; })()).mfn.size === 44, 'reload 항목이 없는 항차는 상수와 무관하게 종전과 같다(mfnList 없음 234 · reload 없는 MFN 44)');
+  try {   // 샘플은 실제 642N(기본 — 재적재 예정 포함 44대) 로 다시 저장한다
+    const XRs = await M.generateMfnExcel(packR0.rows, packR0.head, { download: false }), XFs = await M.generateMfnFieldExcel(packR0.rows, packR0.head, { download: false });
+    fs.writeFileSync('/mnt/user-data/outputs/MCSN_642N_MFN_LIST_sample.xlsx', Buffer.from(XRs.buf)); fs.writeFileSync('/mnt/user-data/outputs/MCSN_642N_MFN_LIST_field_sample.xlsx', Buffer.from(XFs.buf)); fs.writeFileSync('/mnt/user-data/outputs/MCSN_642N_TALLY_REPORT_sample.xlsx', Buffer.from(tallyReal.buf));
+    fs.writeFileSync('/mnt/user-data/outputs/MCSN_642N_MFN_LIST_field_sample.html', M.generateMfnFieldHTML(packR0.rows, packR0.head)); fs.writeFileSync('/mnt/user-data/outputs/MCSN_642N_MFN_LIST_chief_sample.html', M.generateMfnListHTML(packR0.rows, packR0.head));
+    ok(true, '샘플 재저장(실제 642N · 기본 센다 · MFN 44)');
+  } catch (e) { ok(false, '샘플 재저장 실패', e.message); }
+
   console.log('⑦ 회귀 — mfnList 가 비어도 종전과 같다');
   const vEmpty = noMfn(); vEmpty.discharge.mfnList = { items: {}, n: 0 };
   ok(M.ptkDischargeUnitsOf(vEmpty).set.size === 234 && M.progressOf(vEmpty.discharge, 'discharge', new Set(), null).ptk.total === 234 && M.reconcileSources(vEmpty, 'discharge', { voyageKey: VK }).mfn === null, 'items 가 비면 234 · MFN 그룹 없음');

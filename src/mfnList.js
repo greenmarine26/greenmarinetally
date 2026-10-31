@@ -7,7 +7,7 @@
 //   앱은 읽기만 한다. 양하 유닛 한 벌(utils.ptkDischargeUnitsOf)이 같은 items 를 평택 양하분에 합친다(U.mfn) — 이 파일은 «출력» 만 맡는다.
 // 양식 — 마감텔리 SHIFTING 시트 머리·표(NO · CON'T NO · TYPE · F/E · W/T · OPR · POL · POD …)와 Act. Cntr-Seal 하단(규격별 집계 · 서명줄)을 따른다. 엑셀은 tallyExcel.generateMfnExcel.
 // ⚠ 이 파일의 HTML 은 템플릿 문자열이다 — 안에 백틱을 쓰지 않는다(reeferList.js 와 같다).
-import { ptkDischargeUnitsOf, mfnItemsOf, mfnDestKo, mfnIsChinaDest, MFN_LABEL, isoToLabel } from './utils.js';
+import { ptkDischargeUnitsOf, mfnItemsOf, mfnReloadItemsOf, MFN_RELOAD_COUNTS, MFN_RELOAD_PENDING, mfnDestKo, mfnIsChinaDest, MFN_LABEL, isoToLabel } from './utils.js';
 import { tallySizeCol } from './tallyReport.js';
 import { canOpenChief } from './staffList.js';
 import { isOwnerName } from './adminGuard.js';
@@ -44,7 +44,7 @@ export function mfnFieldLayout(rows) {
 export function mfnRemark(it) {
   const parts = ['MFN'];   // 4.58: OS-IN REMARKS 와 같은 말
   if (mfnIsChinaDest(it && it.dest)) parts.push(`${mfnDestKo(it.dest)}행(통과화물) 주의`);
-  if (it && it.reload) parts.push('재적재');
+  if (it && it.reload) parts.push(MFN_RELOAD_PENDING);   // 4.59-01: 세는 동안 재적재 항목은 «양하 확인 전» 주석
   return parts.join(' / ');
 }
 
@@ -53,7 +53,7 @@ export function mfnListRows(mfnList) {
   const it = mfnList && typeof mfnList === 'object' && mfnList.items && typeof mfnList.items === 'object' ? mfnList.items : {};
   const rows = [];
   for (const [k, x] of Object.entries(it)) {
-    if (!x) continue;
+    if (!x || (x.reload && !MFN_RELOAD_COUNTS)) continue;   // 4.59-01: MFN_RELOAD_COUNTS=false 면 재적재는 양하가 아니라 시프팅 — 목록에 안 넣는다
     const cn = String(x.cn || k || '').trim();
     if (!cn || cn.startsWith('_')) continue;
     const iso = String(x.iso || '').trim();
@@ -92,22 +92,26 @@ export function mfnCounts(rows) {
 export function mfnSumLine(head, n) {
   const ptk = Number(head && head.ptk) || 0;
   const list = Number(head && head.list) || 0;
+  const ex = Number(head && head.extra) || 0;
+  //  4.59-01 — 앱이 센 값에 EDI 전용 추가분이 같이 들면 «앱 279 = 리스트 234 + 추가분 1 + MFN 44»(터미널 수와 섞어 부르지 않는다). 추가분이 없으면 종전 «터미널 278 = 리스트 234 + MFN 44».
+  if (ptk > 0 && list > 0 && ex > 0) return `앱 ${ptk} = 리스트 ${list} + 추가분 ${ex} + MFN ${n}`;
   if (ptk > 0 && list > 0) return `터미널 ${ptk} = 리스트 ${list} + MFN ${n}`;
   return `MFN ${n}대`;
 }
 
 /** OS-IN(CARGO OVERAGE & SHORTAGE REPORT)과 같은 합계 말 — MANIFESTED 234 · DISCHARGED 278 · OVER 44. 리스트 수를 모르면 빈 글. */
 export function mfnOsLine(head, n) {
-  const list = Number(head && head.list) || 0;
+  const list = (Number(head && head.list) || 0) + (Number(head && head.extra) || 0);   // 4.59-01: 4.20 추가분은 마감텔리 OS-IN 에서 MANIFESTED 로 센다
   return list > 0 ? `MANIFESTED ${list} · DISCHARGED ${list + n} · OVER ${n}` : '';
 }
 
 /** 출력 한 벌의 재료 — 호출 세 곳(컨 상세·주의 박스·출력 센터)이 같은 머리를 만든다. voyageInfo 는 항차 info. */
 export function mfnPackOf(mfnList, voyageKey, voyageInfo, voyage) {
   //  머리의 «터미널 278 = 리스트 234 + MFN 44» 는 수집기가 올린 스냅샷(mfnList.ptk·list)이 아니라 앱이 지금 계산한 값(양하 유닛 한 벌)을 쓴다 — 화면(홈 카드·전체 칩)과 어긋나지 않게. voyage 가 없을 때만 스냅샷.
-  let appPtk = 0, appList = 0, keepSet = null;
+  let appPtk = 0, appList = 0, appExtra = 0, keepSet = null;
+  const reloadOut = MFN_RELOAD_COUNTS ? 0 : Object.values((mfnList && mfnList.items) || {}).filter((x) => x && x.reload).length;   // 4.59-01: 양하에서 뺀 재적재 대수(한 줄 참고)
   //  재감사 수리 — 출력도 «지금 앱이 계산한 U.mfn 에 든 컨만 MFN». 머스크 개정 리스트로 MFN 컨이 리스트에 들어가면 U.mfn 에서 빠지므로 행 0 · 머리에 MFN 말 없음. basis edi(리스트 없음)는 mfnList.items 그대로.
-  if (voyage) { try { const U = ptkDischargeUnitsOf(voyage); if (U.basis !== 'edi') { keepSet = U.mfn; appPtk = U.set.size; appList = U.set.size - U.mfn.size; } } catch (e) { console.warn('[MFN] 앱 양하 유닛 계산 실패 — 수집기 스냅샷 수로 대신한다', e); } }
+  if (voyage) { try { const U = ptkDischargeUnitsOf(voyage); if (U.basis !== 'edi') { keepSet = U.mfn; appPtk = U.set.size; appExtra = U.extra ? U.extra.size : 0; appList = U.set.size - U.mfn.size - appExtra; } } catch (e) { console.warn('[MFN] 앱 양하 유닛 계산 실패 — 수집기 스냅샷 수로 대신한다', e); } }
   const rows = mfnListRows(mfnList).filter((r) => !keepSet || keepSet.has(r.cn));
   const vk = String(voyageKey || '');
   const info = voyageInfo || {};
@@ -118,6 +122,7 @@ export function mfnPackOf(mfnList, voyageKey, voyageInfo, voyage) {
     date: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
     arr: String(info.ata || info.eta || info.planDate || '').slice(0, 10),   // 입항(양하)일 — 접안 계획 시작일. 세관 신고용 열
     vv: [info.vslFull || info.vslName || info.vsl || vk.split('_')[0] || '', info.voy_d || info.voy || vk.split('_').slice(1).join('_')].filter(Boolean).join(' '),
+    extra: keepSet ? appExtra : 0, reloadOut, reloadIn: rows.filter((x) => x.reload).length,
     ptk: keepSet ? appPtk : (Number(mfnList && mfnList.ptk) || 0), list: keepSet ? appList : (Number(mfnList && mfnList.list) || 0), src: (mfnList && mfnList.src) || '',
   };
   return { rows, head };
@@ -131,7 +136,7 @@ export function generateMfnListHTML(rows, head = {}, opts = {}) {
   const t = mfnTally(rows);
   const c = mfnCounts(rows);
   const body = (rows || []).map((r, i) => `<tr${r.china ? ' class="cn-warn"' : ''}><td>${i + 1}</td><td class="cn">${_esc(r.cn)}</td><td>${_esc(r.type)}</td><td>${_esc(r.fe)}</td><td class="n">${_esc(_fmtWt(r.wt))}</td><td>${_esc(r.pol)}</td><td>${_esc(head.vv || '')}</td><td>${_esc(head.arr || '')}</td><td>${_esc(r.pod)}</td><td>${_esc(r.dest)}</td><td>${r.reload ? 'Y' : ''}</td><td class="rm">${_esc(r.remark)}</td></tr>`).join('');
-  const sub = [c.china ? `중국행 ${c.china}대 주의` : '', c.ptk ? `평택행 ${c.ptk}대` : '', c.reload ? `재적재 ${c.reload}대` : ''].filter(Boolean).join(' · ');
+  const sub = [c.china ? `중국행 ${c.china}대 주의` : '', c.ptk ? `평택행 ${c.ptk}대` : '', ].filter(Boolean).join(' · ');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>MFN LIST</title>
 <style>
 @page { size: A4 landscape; margin: 10mm; }
@@ -178,7 +183,7 @@ td.rm { white-space: normal; }
     <tr><th>20FT</th><td>${t.f20 || ''}</td><td>${t.e20 || ''}</td></tr>
     <tr><th>40FT</th><td>${t.f40 || ''}</td><td>${t.e40 || ''}</td></tr>
     <tr><th>TOTAL</th><td colspan="2">${t.total}</td></tr></tbody></table>
-  <div class="sumline">${mfnOsLine(head, t.total) ? _esc(mfnOsLine(head, t.total)) + ' — ' : ''}${_esc(mfnSumLine(head, t.total))}${sub ? ' (' + _esc(sub) + ')' : ''}</div>
+  <div class="sumline">${mfnOsLine(head, t.total) ? _esc(mfnOsLine(head, t.total)) + ' — ' : ''}${_esc(mfnSumLine(head, t.total))}${sub ? ' (' + _esc(sub) + ')' : ''}${head.reloadOut ? ' · 재적재 ' + head.reloadOut + '대는 양하에서 뺌' : ''}${head.reloadIn ? ' · 재적재 예정 ' + head.reloadIn + '대 포함(양하 확인 전)' : ''}</div>
   <div class="note">${_esc(MFN_LABEL)}. 40FT 는 HC·45 를 포함합니다.${t.unknown ? ' 규격·F/E 를 모르는 ' + t.unknown + '대는 집계에서 빠집니다.' : ''} 중국행은 원래 목적지가 다롄·톈진(통과화물)이었던 컨으로, 확정되면 정상 양하로 돌립니다.</div>
   <div class="sign"><div class="ln l">CHIEF CHECKER</div><div class="ln r">CHIEF OFFICER</div></div>
 </div></body></html>`;
@@ -189,14 +194,14 @@ export function generateMfnFieldHTML(rows, head = {}, opts = {}) {
   const L = mfnFieldLayout(rows);
   const c = mfnCounts(rows);
   const ordered = [...L.china, ...L.ptk];
-  const tag = (r) => (r.china ? `${mfnDestKo(r.dest)}행 주의` : '') + (r.reload ? `${r.china ? ' · ' : ''}재적재` : '');
+  const tag = (r) => (r.china ? `${mfnDestKo(r.dest)}행 주의` : '') + (r.reload ? `${r.china ? ' · ' : ''}${MFN_RELOAD_PENDING}` : '');
   const grp = (txt, cls) => `<tr class="grp ${cls}"><td colspan="7">${_esc(txt)}</td></tr>`;
   let k = 0;
   const line = (r) => { k += 1; return `<tr class="${r.china ? 'cn-warn' : ''}"><td>${k}</td><td class="cn">${_esc(r.cn)}</td><td>${_esc(r.type)}</td><td>${_esc(r.fe)}</td><td>${_esc(r.pol)}</td><td>${_esc(r.dest)}</td><td class="rm">${_esc(tag(r))}</td></tr>`; };
   const body = (L.china.length ? grp(`중국행 주의 ${L.china.length}대 — 원래 목적지 다롄·톈진 (확정되면 정상 양하로 돌립니다)`, 'g-cn') + L.china.map(line).join('') : '')
     + (L.ptk.length ? grp(`평택행 ${L.ptk.length}대`, 'g-pt') + L.ptk.map(line).join('') : '');
   const strip = ordered.map((r) => `<tr><td class="s1">${_esc(r.cn)}</td><td class="s2">${_esc(r.type)}</td><td class="s3">${_esc(r.fe)}</td></tr>`).join('');
-  const sumTxt = `MFN ${c.n}대 (${mfnSumLine(head, c.n)})`;
+  const sumTxt = `MFN ${c.n}대 (${mfnSumLine(head, c.n)})` + (head.reloadOut ? ` · 재적재 ${head.reloadOut}대는 양하에서 뺌` : '') + (head.reloadIn ? ` · 재적재 예정 ${head.reloadIn}대 포함(양하 확인 전)` : '');
   const warn = L.stripFits ? '' : `<div class="warn no-print">경고 — MFN ${c.n}대는 띠를 최소 글자(${MFN_STRIP_MIN_PT}pt)로 줄여도 한 장에 다 들어가지 않습니다. 띠는 2열로 나누지 않으니 출력 전에 확인하세요.</div>`;
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>MFN 목록</title>
 <style>
@@ -244,7 +249,7 @@ ${warn}
     <div class="info"><span>${_esc(head.vv || head.name || '')}</span><span>입항(양하) ${_esc(head.arr || '')}</span><span>출력 ${_esc(head.date || '')}</span></div>
     <div class="sum">${_esc(sumTxt)}</div>
     <table class="m"><thead><tr><th class="w1">NO</th><th class="w2">컨번호</th><th class="w3">규격</th><th class="w4">F/E</th><th class="w5">출발지</th><th class="w6">원래 목적지</th><th class="w7">비고</th></tr></thead><tbody>${body}</tbody></table>
-    <div class="foot">${_esc(MFN_LABEL)}.${c.reload ? ' 재적재 ' + c.reload + '대.' : ''} 입력할 때는 이 표를 보고, 오른쪽 띠는 잘라 노트에 붙여 제출합니다.</div>
+    <div class="foot">${_esc(MFN_LABEL)}.${c.reload ? ' 재적재 예정 ' + c.reload + '대 포함(양하 확인 전).' : ''} 입력할 때는 이 표를 보고, 오른쪽 띠는 잘라 노트에 붙여 제출합니다.</div>
   </div>
   <div class="cutwrap" data-mfn-strip="1">
     <div class="cutlab">&#9986; ----- 오려서 노트에 붙이세요 -----</div>

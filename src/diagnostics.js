@@ -339,7 +339,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
       //  ★ 4.54 — 빈 FR 묶음: «터미널 배정 276(+6) = 앱 282 · 빈 FR 4대 한 묶음 2곳 — 터미널은 한 묶음을 1대로 세어 6대 적게 셈 (…)». 묶음만으로 차이가 설명되고 다른 어긋남·본선 잔류가 없으면 경고가 아니라 정보(경고 표시 없음 · 묶음 몫의 부분합으로 맞아떨어지는 차이만).
       const _bOnly = (_bOn || _mfnN > 0) && !gapOn && R.total === 0 && !_hasKeep && !_kcN && !(R.mfn && R.mfn.china);   // 4.58: MFN 만 있고 중국행이 없으면 정보
       //  ★ 4.58 — MFN 토막: «MFN 44대(중국행 34 · 평택행 10 · 재적재 1) — 앱 278 = 리스트 234 + MFN 44». 중국행이 있으면 경고(주의 대상 — 확정되면 정상 양하로), 없으면 정보.
-      const _mfnTxt = _mfnN ? `MFN ${_mfnN}대(화물은 있으나 양하 리스트에 없음${R.mfn.china ? ` · 중국행 ${R.mfn.china}대 주의` : ''}${R.mfn.reload ? ` · 재적재 ${R.mfn.reload}대` : ''}) — 앱 ${R.app} = 리스트 ${R.mfn.listN} + MFN ${_mfnN}` : '';
+      const _mfnTxt = _mfnN ? `MFN ${_mfnN}대(화물은 있으나 양하 리스트에 없음${R.mfn.china ? ` · 중국행 ${R.mfn.china}대 주의` : ''}${R.mfn.reloadOut ? ` · 재적재 ${R.mfn.reloadOut}대는 양하에서 뺌` : ''}${R.mfn.reload ? ` · 재적재 예정 ${R.mfn.reload}대 포함(양하 확인 전)` : ''}) — 앱 ${R.app} = 리스트 ${R.mfn.listN}${R.mfn.extraN > 0 ? ` + 추가분 ${R.mfn.extraN}` : ''} + MFN ${_mfnN}` : '';
       const _bTail = (_bOn ? ` · ${_bTxt}` : '') + (_mfnTxt ? ` · ${_mfnTxt}` : '');
       const _plainTxt = (_bOn || (_mfnN > 0 && !gapOn))
         ? (R.term.basis ? `${reconTermLabel(R.term.basis)} ${reconTermNum(R)}${gapOn ? ` · ${gapTxt}` : ` = 앱 ${R.app}`}` : `앱 ${R.app}`)

@@ -224,7 +224,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
         {gap != null && (
           <div className={gap === 0 ? 'text-dim-300' : 'text-amber-300'} data-recon-term>
             {gap === 0
-              ? `${tl} ${tnTxt} = 앱 ${d.app}대` + (d.mfn && d.mfn.n ? ` ${mfnNote(d.mfn.n, d.app)}` : '') + (_bx ? ` — 빈 FR 묶음 ${d.bundles.length}곳(아래)을 터미널은 1대로 셈` : '') + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
+              ? `${tl} ${tnTxt} = 앱 ${d.app}대` + (d.mfn && d.mfn.n ? ` ${mfnNote(d.mfn.n, d.app, d.mfn.extraN)}` : '') + (_bx ? ` — 빈 FR 묶음 ${d.bundles.length}곳(아래)을 터미널은 1대로 셈` : '') + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
               : `${tl} ${tnTxt} · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
                 + (_kcPre ? ` — 터미널은 아직 본선 잔류 확정 ${_kcN}대를 반영하지 않음(앱 ${d.app}대 + ${_kcN}대 = ${tn}대)` : _kDone ? ` — 터미널은 선사 메일 반영(본선 잔류 예정 ${_kRefN}대) · EDI·리스트 수정본 대기` : d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
                 + (unk ? ` — ${unk}` : '')}
@@ -257,7 +257,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
         {d.mfn && d.mfn.n > 0 && (
           <div data-recon-group="mfn">
             <div className="text-amber-300 font-bold" title={CUSTOMS_RESULT_CODES.MFN}>
-              {MFN_LABEL} {d.mfn.n}대{d.mfn.china ? ` · 중국행(통과화물이었음) ${d.mfn.china}대 주의` : ''}{d.mfn.ptk ? ` · 평택행 ${d.mfn.ptk}대` : ''}{d.mfn.reload ? ` · 재적재 ${d.mfn.reload}대` : ''} {mfnNote(d.mfn.n, d.app)}
+              {MFN_LABEL} {d.mfn.n}대{d.mfn.china ? ` · 중국행(통과화물이었음) ${d.mfn.china}대 주의` : ''}{d.mfn.ptk ? ` · 평택행 ${d.mfn.ptk}대` : ''}{d.mfn.reloadOut ? ` · 재적재 ${d.mfn.reloadOut}대는 양하에서 뺌` : ''}{d.mfn.reload ? ` · 재적재 예정 ${d.mfn.reload}대 포함(양하 확인 전)` : ''} {mfnNote(d.mfn.n, d.app, d.mfn.extraN)}
               <button type="button" data-mfn-print onClick={(e) => { e.stopPropagation(); onOpenMfnList?.(); }} className="ml-2 px-1.5 py-0.5 rounded border border-amber-600/60 text-amber-200 text-2xs font-bold active:bg-ink-700">MFN 목록 출력</button>
             </div>
             <div className="text-dim-300">터미널이 센 대수에는 들어 있고 메일 양하 리스트에는 없는 컨입니다. 앱은 이 컨도 양하 대수에 합쳐 셉니다. 중국행은 확정되면 정상 양하로 돌립니다.</div>

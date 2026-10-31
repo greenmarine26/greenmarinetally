@@ -4,7 +4,7 @@ import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
-import { ptkDischargeUnitsOf } from '../utils.js';   // 4.58: MFN 상자·배지는 앱이 지금 계산한 U.mfn 으로
+import { ptkDischargeUnitsOf, MFN_RELOAD_COUNTS, MFN_RELOAD_PENDING } from '../utils.js';   // 4.58: MFN 상자·배지는 앱이 지금 계산한 U.mfn 으로
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
 import { isoConflictOf, isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
@@ -82,7 +82,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   //  재감사 수리 — 머스크가 개정 리스트로 MFN 컨을 리스트에 넣으면 양하 유닛(U.mfn)에서 빠진다. 상자·배지도 «지금 앱이 계산한 U.mfn 에 든 컨만 MFN» 으로 본다(voyage 가 없거나 리스트 없는 항차 basis edi 일 때만 mfnList.items 그대로).
   const _mfnU = useMemo(() => { try { return mode === 'discharge' && mfnVoyage ? ptkDischargeUnitsOf(mfnVoyage) : null; } catch (e) { console.warn('[MFN] 양하 유닛 계산 실패 — 목록 항목 그대로 본다', e); return null; } }, [mfnVoyage, mode]);
   const _mfnItems = _mfnU && _mfnU.basis !== 'edi' ? _mfnU.mfnItems : null;
-  const _mfnRaw = mode === 'discharge' && c && c.cn && mfnList && mfnList.items ? (_mfnItems ? (_mfnU.mfn.has(c.cn) ? mfnList.items[c.cn] : null) : mfnList.items[c.cn]) : null;
+  const _mfnRaw = mode === 'discharge' && c && c.cn && mfnList && mfnList.items ? (_mfnItems ? (_mfnU.mfn.has(c.cn) ? mfnList.items[c.cn] : null) : (mfnList.items[c.cn] && (MFN_RELOAD_COUNTS || !mfnList.items[c.cn].reload) ? mfnList.items[c.cn] : null)) : null;   // 4.59-01: 재적재는 MFN 이 아니다
   const _mfnIt = _mfnRaw || (mode === 'discharge' && c && c._mfn && (!_mfnItems || _mfnU.mfn.has(c.cn)) ? { dest: c._mfnDest, reload: c._mfnReload, pol: c.pol, iso: c.iso, fe: c.fe } : null);
   const _mfnChina = !!(_mfnIt && mfnIsChinaDest(_mfnIt.dest));
   const [editingEseal, setEditingEseal] = useState(false);
@@ -660,7 +660,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 {mfnChinaWarn(_mfnIt.dest)}. 확정되면 정상 양하로 돌립니다.
               </div>
             )}
-            {_mfnIt.reload && <div data-mfn-reload="1">{MFN_RELOAD_LABEL}</div>}
+            {_mfnIt.reload && <div data-mfn-reload="1">{MFN_RELOAD_LABEL} — {MFN_RELOAD_PENDING}</div>}
             <div className="font-bold text-amber-100/90">
               {[_mfnIt.pol ? `출발지 ${_mfnIt.pol}` : '', _mfnIt.dest ? `원래 도착항 ${mfnDestKo(_mfnIt.dest)}(${_mfnIt.dest})` : '', _mfnIt.iso ? `규격 ${isoShown(_mfnIt.iso)}` : '', _mfnIt.fe ? (_mfnIt.fe === 'E' ? '엠티' : '풀') : ''].filter(Boolean).join(' · ')}
             </div>

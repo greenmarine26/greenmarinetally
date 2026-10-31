@@ -1915,7 +1915,7 @@ function formatStats(desc, results0, parsed = null) {
   if (_ex.length) lines.push(extraOfListNote(_ex.length, _ex[0]._extraBasis));
   //  ★ 4.58 — MFN(터미널엔 있고 메일 양하 리스트엔 없는 컨 · utils.ptkDischargeUnitsOf 가 찍은 _mfn) — 양하 총계 옆에 «(리스트 234 + MFN 44)» 한 토막.
   const _mf = results.filter((c) => c._mfn && c._mode === 'discharge');
-  if (_mf.length) lines.push(mfnNote(_mf.length, results.filter((c) => c._mode === 'discharge').length) + ' — MFN 은 화물은 있으나 양하 리스트(적하목록)에 없는 컨입니다.');
+  if (_mf.length) lines.push(mfnNote(_mf.length, results.filter((c) => c._mode === 'discharge').length, _ex.length) + ' — MFN 은 화물은 있으나 양하 리스트(적하목록)에 없는 컨입니다.');
   return lines.join('\n');
 }
 

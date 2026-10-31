@@ -2224,7 +2224,7 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
         <span className="text-3xl font-black text-dim-100 leading-none">{stats.done}</span>
         <span className="text-base font-bold text-dim-400">/ {stats.total}</span>
         <span className={`text-base font-black ${lod ? 'text-amber-300' : 'text-blue-300'}`}>{pct}%</span>
-        {!lod && stats.mfn > 0 && <span className="text-xs font-bold text-amber-300" data-mfn-note={stats.mfn}>{mfnNote(stats.mfn, stats.total)}</span>}{/* 4.58: 278 (리스트 234 + MFN 44) */}
+        {!lod && stats.mfn > 0 && <span className="text-xs font-bold text-amber-300" data-mfn-note={stats.mfn}>{mfnNote(stats.mfn, stats.total, stats.mfnExtra)}</span>}{/* 4.58: 278 (리스트 234 + MFN 44) */}
       </div>
       <div className="xp-bar mt-1.5"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim-300 mt-1.5">
@@ -2274,7 +2274,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   //  ★ 4.25 (4.24 감사 기록 7 — 수석 상황판 computeStats 와 같은 수리): 구역이 없을 때도 아래 끝 줄과 **같은 모양**을 돌려준다.
   //    종전엔 workTotal·workDone 등이 없어 한쪽 구역만 있는 항차에서 합산하는 쪽이 undefined 를 더할 수 있었다(4.24 수석 보드 «NaN /NaN» 의 같은 뿌리).
-  if (!section) return { total: 0, done: 0, workTotal: 0, workDone: 0, mfn: 0, ptk: 0, matched: 0, missing: 0, virtual: false, podIssueCns: [], virtualFromList: false, forecastEdi: false, listOnly: false, partialEdi: false, luggage: 0, recCount: 0, dummyE: 0, emptyConfirmed: 0, emptyConfirmedAdd: 0, planSlots: 0, planOnly: false, units: new Set() };
+  if (!section) return { total: 0, done: 0, workTotal: 0, workDone: 0, mfn: 0, mfnExtra: 0, ptk: 0, matched: 0, missing: 0, virtual: false, podIssueCns: [], virtualFromList: false, forecastEdi: false, listOnly: false, partialEdi: false, luggage: 0, recCount: 0, dummyE: 0, emptyConfirmed: 0, emptyConfirmedAdd: 0, planSlots: 0, planOnly: false, units: new Set() };
   const ediContainers = section.ediContainers || {};
   const records = section.records || {};
   const completed = section.completed || {};
@@ -2398,7 +2398,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
     }
   }
   //  4.25: units = 막대 분모 집합 그대로(progressOf 한 벌) — 상세 «베이별 진행» 칸이 이것을 베이로 나눈다(칸 합 = 이 total).
-  return { total, done, workTotal, workDone, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly, units: prog.set || new Set(), mfn: prog.mfnN || 0 };
+  return { total, done, workTotal, workDone, ptk: ptkCns.size, matched, missing, virtual, podIssueCns, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly, units: prog.set || new Set(), mfn: prog.mfnN || 0, mfnExtra: prog.mfnExtraN || 0 };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

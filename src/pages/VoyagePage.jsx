@@ -2639,7 +2639,8 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       lugDone: lg.filter(c => compMap[c.cn]).length,
       keep: containers.filter(c => c._keep).length,   // 4.48
       keepConf: containers.filter(c => c._keepConf).length,   // 4.53
-      mfn: mode === 'discharge' ? base.filter(c => c._mfn).length : 0,   // 4.58: MFN — 총계 안(자료대로 센다 · 278 = 리스트 234 + MFN 44)
+      mfn: mode === 'discharge' ? base.filter(c => c._mfn).length : 0,
+      mfnExtra: mode === 'discharge' ? base.filter(c => c._extraOfList && !c._mfn).length : 0,   // 4.59-01   // 4.58: MFN — 총계 안(자료대로 센다 · 278 = 리스트 234 + MFN 44)
     };
   }, [containers, compMap, xrayMap, mode, _shCnL]);
 
@@ -2736,7 +2737,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
 
       <div className="flex gap-2 flex-wrap">
         {[
-          { k: 'all', t: `전체 ${stats.total}${stats.mfn > 0 ? ' ' + mfnNote(stats.mfn, stats.total) : ''}` },
+          { k: 'all', t: `전체 ${stats.total}${stats.mfn > 0 ? ' ' + mfnNote(stats.mfn, stats.total, stats.mfnExtra) : ''}` },
           { k: 'undone', t: `미완 ${stats.total - stats.done}` },
           { k: 'done', t: `완료 ${stats.done}` },
           ...(mode === 'discharge' ? [{ k: 'xray', t: `🔍 X-RAY ${stats.xray}` }] : []),

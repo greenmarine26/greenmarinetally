@@ -15,7 +15,7 @@
 //    · 세관 검수 결과 코드(data/customsCodes.js 한 벌) 후보 — g3 «MFN» · g1 중 완료·실적 없는 컨 «MGN» · EDI 번호 대기 자리 «CNN». 후보일 뿐 확정 아님.
 //  앱 대수(app)는 4.20 평택 양하분 한 벌(utils.ptkDischargeUnitsOf)의 set — 홈 카드·마감텔리와 같은 수다. 선적은 진행 숫자 한 벌(progressOf)의 평택분.
 //  터미널 수량은 번호를 모른다 — 차이를 묶음(·참고)으로 설명 못 하는 만큼은 «번호 없음» 으로 센다(후보일 뿐 확정 아님).
-import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos, mfnIsChinaDest, mfnChinaWarn, mfnDestKo, MFN_RELOAD_LABEL } from './utils.js';
+import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, mfnReloadItemsOf, MFN_RELOAD_PENDING, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos, mfnIsChinaDest, mfnChinaWarn, mfnDestKo, MFN_RELOAD_LABEL } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import { frBundlesOf, bundleExplainOf, bundleDocNote, bundleDocExpect, bundleDocSrc } from './tallyReport.js';   // 4.54: 빈 FR 묶음 — 터미널은 한 묶음을 1대로 센다(마감텔리 묶음 판정 한 벌)
 
@@ -227,11 +227,11 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
     const items = [...mfnU.mfn].sort().map((cn) => {
       const m = mfnU.mfnItems.get(cn) || {};
       const china = mfnIsChinaDest(m.dest);
-      const tag = [china ? mfnChinaWarn(m.dest) : (m.dest ? `원래 도착항 ${mfnDestKo(m.dest)}` : ''), m.reload ? MFN_RELOAD_LABEL : ''].filter(Boolean).join(' · ');
+      const tag = [china ? mfnChinaWarn(m.dest) : (m.dest ? `원래 도착항 ${mfnDestKo(m.dest)}` : ''), m.reload ? MFN_RELOAD_PENDING : ''].filter(Boolean).join(' · ');
       return { cn, iso: m.iso || '', fe: m.fe || '', op: m.op || '', pol: m.pol || '', pod: m.dest || m.pod || '', bay: '', row: '', tier: '', tag, china, reload: !!m.reload,
                edi: 'none', customs: false, carrier: false, done: doneSet.has(cn), term: termSet.has(cn), pattern: '', inApp: true };
     });
-    mfn = { n: items.length, china: items.filter((x) => x.china).length, ptk: items.filter((x) => !x.china).length, reload: items.filter((x) => x.reload).length, listN: app - items.length, items };
+    mfn = { n: items.length, china: items.filter((x) => x.china).length, ptk: items.filter((x) => !x.china).length, reload: items.filter((x) => x.reload).length, reloadOut: Object.keys(mfnReloadItemsOf(voyage)).length, extraN: mfnU.extra ? mfnU.extra.size : 0, listN: app - items.length - (mfnU.extra ? mfnU.extra.size : 0), items };   // 4.59-01: 리스트 수에 EDI 전용 추가분을 섞지 않는다(app = 리스트 + 추가분 + MFN)
   }
   return { mode: mk, sources, carrierPartial, mfn, started, app, term: { basis: termBasis, n: termN }, gap, gapRest, explained, unknown, bundles, bundleDiff, bundleExplained, doc, groups: gl, ref, refConf, total };
 }

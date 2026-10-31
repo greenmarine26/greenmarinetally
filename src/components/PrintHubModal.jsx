@@ -7,7 +7,8 @@ import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
 import { reeferListRows, openReeferListPrint } from '../reeferList.js';
-import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력 타일   // 4.57: 수석 리퍼 온도 리스트
+import { openMfnList } from '../mfnList.js';
+import { mfnItemsOf } from '../utils.js';   // 4.58: MFN 목록 출력 타일   // 4.57: 수석 리퍼 온도 리스트
 import { canOpenChief } from '../staffList.js';   // 4.31: VGM·작업 보고서·특수화물 별첨은 수석 자료 — 수석 대시보드를 여는 사람(수석·소유자·개발 열람)과 같은 판정 한 벌
 import { isOwnerName } from '../adminGuard.js';
 import { isAdminUser } from '../workChoice.js';
@@ -564,7 +565,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               )}
 
               {/* 4.58: MFN 목록 — 터미널엔 있고 메일 양하 리스트엔 없는 컨. 수집기가 mfnList 를 올린 항차에만 보인다(검수사 2026-10-31 «MFN표기를 누르면 엑셀또는 PDF로 출력하거나 다운 받을수 있게 해주세요») */}
-              {mode === 'discharge' && voyage?.discharge?.mfnList?.items && Object.keys(voyage.discharge.mfnList.items).length > 0 && (
+              {mode === 'discharge' && Object.keys(mfnItemsOf(voyage)).length > 0 && (
                 <button
                   onClick={() => openMfnList(voyage.discharge.mfnList, voyageKey, voyageInfo, inspector, voyage)}
                   className="print-tile" data-testid="hub-mfn"
@@ -573,7 +574,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
                   <div className="flex-1 min-w-0">
                     <div className="font-black text-dim-100">MFN 목록</div>
                     <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
-                      화물은 있으나 양하 리스트에 없는 컨 {Object.keys(voyage.discharge.mfnList.items).length}대 · 중국행 주의 · 인쇄/PDF · 엑셀
+                      화물은 있으나 양하 리스트에 없는 컨 {Object.keys(mfnItemsOf(voyage)).length}대 · 중국행 주의 · 인쇄/PDF · 엑셀
                     </div>
                   </div>
                   <Printer className="w-5 h-5 text-dim-400 shrink-0" />

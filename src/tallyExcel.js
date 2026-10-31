@@ -1447,7 +1447,7 @@ export async function generateMfnExcel(rows, hdr = {}, opts = {}) {
   tt.getCell(2).value = 'TOTAL'; tt.getCell(3).value = list.length; ws.mergeCells(`C${tr + 3}:D${tr + 3}`);
   [2, 3, 4].forEach((c) => { const cell = tt.getCell(c); cell.font = HEAD_FONT; cell.border = BOX; cell.alignment = CTR; });
   const ptk = Number(hdr.ptk) || 0, lst = Number(hdr.list) || 0;
-  ws.getCell(`F${tr + 1}`).value = (lst > 0 ? `MANIFESTED ${lst} · DISCHARGED ${lst + list.length} · OVER ${list.length} — ` : '') + (ptk > 0 && lst > 0 ? `터미널 ${ptk} = 리스트 ${lst} + MFN ${list.length}` : `MFN ${list.length}대`);   // 4.58: OS-IN 과 같은 말
+  ws.getCell(`F${tr + 1}`).value = (lst > 0 ? `MANIFESTED ${lst + (Number(hdr.extra) || 0)} · DISCHARGED ${lst + (Number(hdr.extra) || 0) + list.length} · OVER ${list.length} — ` : '') + (ptk > 0 && lst > 0 ? ((hdr.extra > 0) ? `앱 ${ptk} = 리스트 ${lst} + 추가분 ${hdr.extra} + MFN ${list.length}` : `터미널 ${ptk} = 리스트 ${lst} + MFN ${list.length}`) : `MFN ${list.length}대`);   // 4.58: OS-IN 과 같은 말
   ws.getCell(`F${tr + 1}`).font = HEAD_FONT;
   ws.getCell(`F${tr + 2}`).value = `40FT 는 HC·45 포함.${cnt.unknown ? ` 규격·F/E 미상 ${cnt.unknown}대는 집계 밖.` : ''} 중국행(노란 줄)은 원래 목적지 다롄·톈진 통과화물 — 확정되면 정상 양하.`;
   ws.getCell(`F${tr + 2}`).font = BODY_FONT;
@@ -1472,7 +1472,7 @@ export async function generateMfnFieldExcel(rows, hdr = {}, opts = {}) {
   ws.getCell('A1').value = 'MFN 목록 (화물은 있으나 적하목록 없음)'; ws.getCell('A1').font = TITLE_FONT;
   ws.getCell('A2').value = `${hdr.vv || hdr.name || ''}   입항(양하) ${hdr.arr || ''}   출력 ${hdr.date || ''}`; ws.getCell('A2').font = HEAD_FONT;
   const lst = Number(hdr.list) || 0, tm = Number(hdr.ptk) || 0;
-  ws.getCell('A3').value = `MFN ${list.length}대 (` + (tm > 0 && lst > 0 ? `터미널 ${tm} = 리스트 ${lst} + MFN ${list.length}` : `MFN ${list.length}대`) + ')'; ws.getCell('A3').font = HEAD_FONT;
+  ws.getCell('A3').value = `MFN ${list.length}대 (` + (tm > 0 && lst > 0 ? ((hdr.extra > 0) ? `앱 ${tm} = 리스트 ${lst} + 추가분 ${hdr.extra} + MFN ${list.length}` : `터미널 ${tm} = 리스트 ${lst} + MFN ${list.length}`) : `MFN ${list.length}대`) + ')'; ws.getCell('A3').font = HEAD_FONT;
   ['NO', '컨번호', '규격', 'F/E', '출발지', '원래 목적지', '비고'].forEach((v, i) => { const c = ws.getRow(4).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
   list.forEach((x, i) => {
     const r = 5 + i;
