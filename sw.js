@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.61';
-const NOTE = '4.61 상황판에서 한 시간 넘게 작업이 없는 호기는 줄에서 빠지고 아래 한 줄로 대수만 남습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.61-01';
+const NOTE = '4.61-01 홈 카드 누락 칩과 자료 점검 상자에서 MFN 컨을 뺍니다. MFN 은 터미널 EDI 기준 278대입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

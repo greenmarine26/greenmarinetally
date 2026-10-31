@@ -90,11 +90,12 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   );
 }
 
-export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null, keepOnboard = null }) {   // 4.48-02: keepOnboard — 앱 예상 줄의 메일 근거
+export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null, keepOnboard = null, mfnCns = null }) {   // 4.59-04: mfnCns — MFN 컨(양하 리스트엔 없으나 터미널이 내리라는 지시가 있는 컨)   // 4.48-02: keepOnboard — 앱 예상 줄의 메일 근거
   const shiftCount = shiftingList.length;
   const shiftKeepCount = (shiftingList || []).filter((x) => x && x.keep).length;   // 4.48: 그중 선사 지시 본선 잔류 예보(확정 아님)
   const [shiftOpen, setShiftOpen] = useState(false);
   const _keepKey = Object.keys(keepOnboard || {}).sort().join(',');
+  const _mfnKey = (mfnCns || []).join(',');   // 4.59-04: 배열은 렌더마다 새로 온다 — 내용이 바뀔 때만
   const v = useMemo(() => {
     //  3.26: 부킹 자리(예상 EDI — `__BOOK_`·cn 없는 자리)는 실번호가 없어 리스트와 겹칠 수가 없다. «리스트에 없음»도
     //    «EDI에 없음»도 아니다 — 자리를 실번호가 **채우는** 관계다(SWBT 2614N: 316/316 이 양쪽 경고로 떴다).
@@ -124,7 +125,9 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     //   EDI의 엠티 예약자리(DUME·CASP 더미)는 '리스트에 없음(누락)' 대상이 아니고,
     //   리스트의 엠티 실번호(E확정)가 그 자리를 채우는 짝이므로 '추가(EDI밖)' 경고에서도 뺀다.
     const virtualInEdi = ptkInEdi.filter(c => isVirtualCn(c.cn));
-    const missingInList = ptkInEdi.filter(c => !isVirtualCn(c.cn) && !recCns.has(c.cn));
+    //  4.59-04 — MFN 은 «리스트에 없음» 이 아니라 이미 «MFN N» 으로 센 컨이다(검수사 2026-10-31 18:33 «MFN 44개가 전부 엠티라고 하지 않았나요? 알면서도 이런 메시지를?» — 642N 은 «리스트에 없음 44대» 로 MFN 43 이 섞여 섰다).
+    const _mfnSet = new Set(mode === 'discharge' ? (mfnCns || []).map((x) => String(x || '').toUpperCase()) : []);
+    const missingInList = ptkInEdi.filter(c => !isVirtualCn(c.cn) && !recCns.has(c.cn) && !_mfnSet.has(String(c.cn || '').toUpperCase()));
     // ── TallyOne 2.94: **통과화물을 평택 선적으로 세지 않는다.** (검수사 지적 2026-08-31) ──
     //   실측 MCSC 635S — 리스트 230 · EDI 213 이라 «리스트에 있는데 EDI에 없음 17대
     //   (해당 선사 EDI 추가 필요)» 가 떴다. 그 17대는 **전부 양하 EDI에 있고 POD 가 CNTXG(톈진)** 였다.
@@ -204,7 +207,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       virtualCount: virtualInEdi.length,   // V9.04-01: 가상E(실번호 미배정 자리)
       emptyConfirmed,                      // V9.04-01: 리스트 엠티 실번호(가상 자리 확정분)
     };
-  }, [ediContainers, records, mode, dischargeEdi, bookingFill, shiftingList, _keepKey]);   // 4.48-02: _keepKey — 지시 기록이 바뀔 때만(객체는 렌더마다 새로 온다)
+  }, [ediContainers, records, mode, dischargeEdi, bookingFill, shiftingList, _keepKey, _mfnKey]);   // 4.48-02: _keepKey — 지시 기록이 바뀔 때만(객체는 렌더마다 새로 온다)
 
   if (!v) return null;
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;

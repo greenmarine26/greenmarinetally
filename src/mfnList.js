@@ -112,7 +112,7 @@ export function mfnPackOf(mfnList, voyageKey, voyageInfo, voyage) {
   const reloadOut = MFN_RELOAD_COUNTS ? 0 : Object.values((mfnList && mfnList.items) || {}).filter((x) => x && x.reload).length;   // 4.59-01: 양하에서 뺀 재적재 대수(한 줄 참고)
   //  재감사 수리 — 출력도 «지금 앱이 계산한 U.mfn 에 든 컨만 MFN». 머스크 개정 리스트로 MFN 컨이 리스트에 들어가면 U.mfn 에서 빠지므로 행 0 · 머리에 MFN 말 없음. basis edi(리스트 없음)는 mfnList.items 그대로.
   if (voyage) { try { const U = ptkDischargeUnitsOf(voyage); if (U.basis !== 'edi') { keepSet = U.mfn; appPtk = U.set.size; appExtra = U.extra ? U.extra.size : 0; appList = U.set.size - U.mfn.size - appExtra; } } catch (e) { console.warn('[MFN] 앱 양하 유닛 계산 실패 — 수집기 스냅샷 수로 대신한다', e); } }
-  const rows = mfnListRows(mfnList).filter((r) => !keepSet || keepSet.has(r.cn));
+  const rows = mfnListRows(voyage ? { ...(mfnList || {}), items: mfnItemsOf(voyage) } : mfnList).filter((r) => !keepSet || keepSet.has(r.cn));   // 4.59-05: 출력 행도 mfnItemsOf 한 벌(터미널 EDI 에서 찾은 MFN 포함)
   const vk = String(voyageKey || '');
   const info = voyageInfo || {};
   const head = {

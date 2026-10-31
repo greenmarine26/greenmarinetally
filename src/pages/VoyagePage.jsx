@@ -58,7 +58,7 @@ import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';
 import { isReeferTarget } from '../reeferList.js';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf, keepConfirmedOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
-import { mfnNote } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
+import { mfnNote, mfnItemsOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
@@ -1860,6 +1860,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {!_sideCanc && tab === 'list' && (
         <ListTab
+          mfnCns={mode === 'discharge' ? Object.keys(mfnItemsOf(voyage)) : null}
           onOpenPlan={_mirOpenPlan}
           bowStern={_bowStern}   /* 3.21: «선수·선미» → 호기 유도(항차를 통째로 안 받는 탭이라 상위가 한 번 구해 내린다) */
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
@@ -2470,7 +2471,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null }) {   // 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
+export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null, mfnCns = null }) {   // 4.59-04: mfnCns — MFN 컨번호 목록 · 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2679,6 +2680,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
         voyageKey={voyageKey}
         dischargeEdi={dischargeEdi}   // 2.94: 통과화물 판정용(VoyagePage 에서 내려온 prop)
         keepOnboard={keepOnboard}   // 4.48-02: 앱 예상 줄의 메일 근거(메일 시각 · 메일 한 줄 · 양하항)
+        mfnCns={mfnCns}   // 4.59-04: MFN 은 «리스트에 없음» 이 아니다
       />
 
       {/* ★ 1.84-01 (검수사 확정 2026-08-19): **검색창은 통합검색 하나로.**

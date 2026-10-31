@@ -17,13 +17,16 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     "export { generateMfnExcel, generateMfnFieldExcel, generateTallyExcel } from './src/tallyExcel.js';",
     "export { computeTallyData, buildSealList } from './src/tallyReport.js';",
     "export { runDiagnostics } from './src/diagnostics.js';",
+    "export { computeStats } from './src/pages/HomePage.jsx';",
+    "export { default as ValidationBox } from './src/components/ValidationBox.jsx';",
+    "export { createElement } from 'react'; export { renderToStaticMarkup } from 'react-dom/server';",
   ].join('\n');
-  const buildM = async (reloadCounts) => {   // MFN_RELOAD_COUNTS 상수를 true(기본) · false 로 갈라 번들을 두 벌 만든다 — 소비처 코드는 같고 상수만 다르다
+  const buildM = async (reloadCounts) => {   // MFN_RELOAD_COUNTS 상수를 true · false 로 갈라 번들을 두 벌 만든다 — 소비처 코드는 같고 상수만 다르다
     const code = (await esbuild.build({
       stdin: { contents: entry, resolveDir: ROOT, loader: 'js' }, bundle: true, platform: 'node', format: 'cjs', write: false, logLevel: 'silent', loader: { '.js': 'jsx' }, jsx: 'automatic',
       plugins: [{ name: 'fb', setup(b) {
         b.onResolve({ filter: /^firebase\// }, (a) => ({ path: a.path, namespace: 'fb' })); b.onLoad({ filter: /.*/, namespace: 'fb' }, () => ({ contents: STUB, loader: 'js' }));
-        if (!reloadCounts) b.onLoad({ filter: /src[\\/]utils\.js$/ }, (a) => { const t = fs.readFileSync(a.path, 'utf8'); const k = 'export const MFN_RELOAD_COUNTS = true;'; if (t.split(k).length !== 2) throw new Error('MFN_RELOAD_COUNTS 상수 줄을 못 찾았다'); return { contents: t.replace(k, 'export const MFN_RELOAD_COUNTS = false;'), loader: 'jsx' }; });
+        b.onLoad({ filter: /src[\\/]utils\.js$/ }, (a) => { const t = fs.readFileSync(a.path, 'utf8'); const re = /export const MFN_RELOAD_COUNTS = (true|false);/; if (t.split('export const MFN_RELOAD_COUNTS =').length !== 2 || !re.test(t)) throw new Error('MFN_RELOAD_COUNTS 상수 줄을 못 찾았다'); return { contents: t.replace(re, 'export const MFN_RELOAD_COUNTS = ' + (reloadCounts ? 'true' : 'false') + ';'), loader: 'jsx' }; });   // 4.59-05: 기본값이 false 로 바뀌어 두 방향 다 덮어쓴다
       } }],
     })).outputFiles[0].text;
     const mm = { exports: {} }; new Function('module', 'exports', 'require', code)(mm, mm.exports, require);
@@ -72,7 +75,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   mfnCns.slice(10, 20).forEach((cn) => { vWork.discharge.completed[cn] = { at: 2, by: '검수' }; });
   const trueExtra = 'ZZZU9999990';   // 진짜 리스트에도 MFN 에도 없는 컨 — 4.20 추가분은 종전처럼 extra
   vWork.discharge.completed[trueExtra] = { at: 3, by: '검수' };
-  vWork.discharge.ediContainers = Object.assign({}, vWork.discharge.ediContainers || {}, { [trueExtra]: { cn: trueExtra, pod: 'KRPTK', iso: '45G1', fe: 'F' } });
+  //  4.59-05: 터미널 EDI 에 있고 리스트에 없는 컨은 이제 MFN 이다 — 진짜 추가분은 EDI 에 없이 완료 기록만 있는 컨
   const Uw = M.ptkDischargeUnitsOf(vWork);
   ok(Uw.mfn.size === 44 && mfnCns.slice(0, 20).every((cn) => Uw.mfn.has(cn) && !Uw.extra.has(cn)) && Uw.set.size === 279 && Uw.extra.size === 1 && Uw.extra.has(trueExtra), '실적 10 · 완료 10 이 생겨도 MFN 44 그대로 · 추가분(extra)은 진짜 추가분 1대만(총 279 = 278 + 추가분 1)', Uw.mfn.size + '/' + Uw.extra.size + '/' + Uw.set.size);
   const vWork2 = withMfn(); vWork2.discharge.termWork = vWork.discharge.termWork; vWork2.discharge.completed = Object.assign({}, FX.discharge.completed || {}); mfnCns.slice(10, 20).forEach((cn) => { vWork2.discharge.completed[cn] = { at: 2, by: '검수' }; });
@@ -155,17 +158,39 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   const EDIF = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/mfn459_edi642n.json'), 'utf8'));
   const mfnAll = new Set(Object.keys(withMfn().discharge.mfnList.items));
   const lsOf = (D) => (Array.isArray(D) ? D : D.alerts || []).find((a) => a.code === 'list_short');
-  const diagF = (v, mode = 'discharge') => M.runDiagnostics({ ediContainers: clone(EDIF), listRecords: v.discharge.records, mode, voyage: v, voyageKey: VK }) || [];
+  const withEdi = (v) => ({ ...v, discharge: { ...v.discharge, ediContainers: clone(EDIF) } });   // 4.59-05: 앱은 항차 EDI 로도 MFN 을 찾는다 — 실데이터와 같게 항차 EDI 도 실 EDI 로
+  const diagF = (v, mode = 'discharge') => M.runDiagnostics({ ediContainers: clone(EDIF), listRecords: v.discharge.records, mode, voyage: withEdi(v), voyageKey: VK }) || [];
   ok(Object.keys(EDIF).length === 278 && Object.keys(withMfn().discharge.records).length === 234 && mfnCns.filter((c) => EDIF[c]).length === 43, '실 EDI 278 · 리스트 234 · MFN 중 EDI 에 든 것 43(재적재 SUDU7733400 은 EDI 에 없음)');
   const lsNo = lsOf(diagF(noMfn()));
   ok(lsNo && lsNo.count === 44 && /44개 부족/.test(lsNo.msg), 'mfnList 가 없으면 종전대로 «44개 부족» 이 뜬다(검사가 실제로 무는지)', lsNo && lsNo.msg);
   const lsMf = lsOf(diagF(withMfn()));
-  ok(lsMf && lsMf.count === 1 && lsMf.details.missing.length === 1 && lsMf.details.missing[0].cn === 'TRHU4332492', 'mfnList 가 있으면 «부족» 은 EDI 에만 있는 한 대(TRHU4332492)뿐 — MFN 43대는 빠진다', lsMf && (lsMf.count + ' · ' + lsMf.msg));
-  ok(lsMf && lsMf.details.mfnExcluded === 43 && lsMf.details.missing.every((m) => !mfnAll.has(m.cn)), 'MFN 에서 뺀 수 43 을 details 에 남기고 «부족» 목록에 MFN 컨은 없다', lsMf && lsMf.details.mfnExcluded);
+  ok(!lsMf, 'mfnList 가 있으면 «부족» 경고가 없다 — MFN 43대는 mfnList 에서, EDI 에만 있는 TRHU4332492 는 4.59-05 규칙(터미널 EDI 에 있고 리스트에 없으면 MFN)으로 MFN', lsMf && (lsMf.count + ' · ' + lsMf.msg));
+  ok(M.mfnItemsOf(withEdi(withMfn())).TRHU4332492 && M.mfnItemsOf(withEdi(withMfn())).TRHU4332492.fromEdi === true && Object.keys(M.mfnItemsOf(withEdi(withMfn()))).length === 45, '4.59-05 — 실 EDI 를 항차에 넣으면 MFN 44(재적재 없는 변형) + TRHU4332492 = 45(fromEdi)');
   const lsMs = lsOf(diagF(withMfn(), 'loading'));
   ok(!lsMs || lsMs.details.mfnExcluded === 0, '선적 모드는 mfnList 를 보지 않는다(양하 노드)', lsMs && lsMs.details.mfnExcluded);
   const vAll = withMfn(); EDIF.TRHU4332492 && (vAll.discharge.records.TRHU4332492 = { cn: 'TRHU4332492', iso: EDIF.TRHU4332492.iso, fe: 'E', pod: 'KRPTK', _source: 'x.xls' });
   ok(!lsOf(diagF(vAll)), 'TRHU 까지 리스트에 들어오면 부족 경고가 사라진다(MFN 만 남으면 경고 없음)', JSON.stringify((lsOf(diagF(vAll)) || {}).msg));
+
+  //  4.59-04 — 홈 카드 «누락 N» = EDI 평택인데 리스트에 없는 컨 — MFN 은 «MFN N» 으로 이미 센 컨이라 누락이 아니다(검수사 2026-10-31 19:15 «누락 44개가 있씁니다. 여기서 누락의 의미는 뭔가요?»)
+  const stOf = (v, mode = 'discharge') => M.computeStats({ ...v.discharge, ediContainers: clone(EDIF) }, mode, v.info || {}, VK, new Set(), {});
+  const stNo = stOf(noMfn()), stMf = stOf(withMfn());
+  ok(stNo.ptk === 278 && stNo.matched === 234 && stNo.missing === 44, 'mfnList 가 없으면 종전대로 평택 278 · 매칭 234 · 누락 44', JSON.stringify([stNo.ptk, stNo.matched, stNo.missing]));
+  ok(stMf.ptk === 278 && stMf.matched === 234 && stMf.missing === 0, 'mfnList 가 있으면 누락 0 — MFN 43대도, EDI 에만 있는 TRHU4332492(4.59-05: MFN)도 누락이 아니다', JSON.stringify([stMf.ptk, stMf.matched, stMf.missing]));
+  const vAll2 = withMfn(); vAll2.discharge.records.TRHU4332492 = { cn: 'TRHU4332492', iso: EDIF.TRHU4332492.iso, fe: 'E', pod: 'KRPTK', _source: 'x.xls' };
+  ok(stOf(vAll2).missing === 0, 'TRHU 까지 리스트에 들어오면 누락 0(MFN 만 남으면 누락 없음)', stOf(vAll2).missing);
+  ok(stMf.mfn === 45 && stMf.total === 279, '총계·MFN 칩 — 279 · MFN 45(변형 FX 는 재적재 없음: 44 + TRHU)', JSON.stringify([stMf.total, stMf.mfn]));
+  ok(stOf(withMfn(), 'loading').missing === stOf(noMfn(), 'loading').missing, '선적은 mfnList 를 보지 않는다(누락 그대로)');
+
+  //  4.59-04 — 자료 점검 상자(ValidationBox)의 «EDI 평택 대상 → 리스트에 없음: N대 · 선사별 누락» 에도 MFN 이 섞이지 않는다 — 실제로 그려서 본다.
+  const React = { createElement: M.createElement }; const RS = { renderToStaticMarkup: M.renderToStaticMarkup };   // 번들 안의 react 한 벌(밖의 react 와 섞으면 hook 이 죽는다)
+  const vbHtml = (v, mfn) => RS.renderToStaticMarkup(React.createElement(M.ValidationBox, { ediContainers: Object.values(clone(EDIF)), records: Object.values(v.discharge.records), mode: 'discharge', voyageKey: VK, mfnCns: mfn }));
+  const vbNo = vbHtml(noMfn(), null), vbMf = vbHtml(withMfn(), Object.keys(M.mfnItemsOf(withEdi(withMfn()))));   // 앱(VoyagePage)처럼 mfnItemsOf 결과를 넘긴다
+  ok(/리스트에 없음: 44대/.test(vbNo), 'mfnList 를 안 넘기면 종전대로 «리스트에 없음: 44대»', (vbNo.match(/리스트에 없음[^<]*/) || [''])[0]);
+  ok(!/리스트에 없음/.test(vbMf), 'MFN 컨(TRHU4332492 포함)을 넘기면 «리스트에 없음» 상자가 없다', (vbMf.match(/리스트에 없음[^<]*/) || [''])[0]);
+  ok(/리스트에 없음: 1대/.test(vbHtml(withMfn(), Object.keys(withMfn().discharge.mfnList.items))) , 'mfnList 컨만 넘기면(TRHU 제외) «리스트에 없음: 1대» — 컨번호를 넘기는 쪽 책임');
+  const vAll3 = withMfn(); vAll3.discharge.records.TRHU4332492 = { cn: 'TRHU4332492', iso: EDIF.TRHU4332492.iso, fe: 'E', pod: 'KRPTK', _source: 'x.xls' };
+  ok(!/리스트에 없음/.test(vbHtml(vAll3, Object.keys(M.mfnItemsOf(withEdi(vAll3))))), 'TRHU 까지 리스트에 들어오면 «리스트에 없음» 상자가 없다');
+  ok(!/리스트에 없음: 1대/.test(RS.renderToStaticMarkup(React.createElement(M.ValidationBox, { ediContainers: Object.values(clone(EDIF)), records: Object.values(withMfn().discharge.records), mode: 'loading', voyageKey: VK, mfnCns: Object.keys(withMfn().discharge.mfnList.items) }))), '선적 모드는 mfnCns 를 쓰지 않는다');
 
   console.log('⑤ 목록 출력 — 행·집계·HTML');
   const pack = M.mfnPackOf(FX.discharge.mfnList, VK, Object.assign({ vsl: 'MCSN', vslFull: 'SPIL NIKEN', voy_d: '642N' }, { planDate: FX.info.planDate }));
@@ -320,7 +345,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   } catch (e) { ok(false, '샘플 저장 실패', e.message); }
   console.log('⑩ 추가분(4.20)이 MFN 과 같이 있을 때 문구 — «앱 279 = 리스트 234 + 추가분 1 + MFN 44» (4.59-01)');
   const vEx = withMfn(); const TRHU = 'TRHU4332492';
-  vEx.discharge.ediContainers = Object.assign({}, vEx.discharge.ediContainers, { [TRHU]: { _mode: 'discharge', cn: TRHU, fe: 'E', iso: '22G1', iso_edi: '22G1', op: 'MAE', pod: 'KRPTK', pol: 'PHDVO', isBooking: false, pendingCn: false, st: '5', voy: '642N', wt: 2200 } });
+  vEx.discharge.completed = Object.assign({}, vEx.discharge.completed || {}, { [TRHU]: { at: 3, by: '검수' } });   // 4.59-05: EDI 에 있는 컨은 MFN — 추가분은 완료 기록만 있는 컨(예: 자리표시 컨)
   const Ue = M.ptkDischargeUnitsOf(vEx);
   ok(Ue.set.size === 279 && Ue.extra.size === 1 && Ue.extra.has(TRHU) && Ue.mfn.size === 44 && Ue.listSet.size === 234, '숫자는 그대로 — 총계 279 · 추가분 1(TRHU4332492) · MFN 44 · 리스트 234', [Ue.set.size, Ue.extra.size, Ue.mfn.size, Ue.listSet.size].join('/'));
   ok(M.mfnNote(44, 279, 1) === '(리스트 234 + 추가분 1 + MFN 44)' && M.mfnNote(44, 278, 0) === '(리스트 234 + MFN 44)' && M.mfnNote(44, 278) === '(리스트 234 + MFN 44)', 'mfnNote — 추가분 있으면 세 토막 · 없으면 종전 문구 그대로');
@@ -356,7 +381,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     const Ur1 = Mx.ptkDischargeUnitsOf(REAL());
     ok(Ur1.set.size === SZ && Ur1.mfn.size === N && Ur1.mfn.has(SUDU) === !EXCL && Ur1.mfnItems.has(SUDU) === !EXCL && Ur1.extra.size === 0 && Ur1.listSet.size === 234, tag + ` 실제 642N — set ${SZ} = 리스트 234 + MFN ${N} · SUDU7733400 ` + (EXCL ? '없음' : '있음'), Ur1.set.size + '/' + Ur1.mfn.size);
     ok(Object.keys(Mx.mfnItemsOf(REAL())).length === N && !!Mx.mfnItemsOf(REAL())[SUDU] === !EXCL && Object.keys(Mx.mfnReloadItemsOf(REAL())).length === (EXCL ? 1 : 0), tag + ` mfnItemsOf 한 곳에서 갈린다 — MFN ${N} · 뺀 재적재 ${EXCL ? 1 : 0}`);
-    const vRx = REAL(); vRx.discharge.ediContainers = Object.assign({}, vRx.discharge.ediContainers, { [TRHU2]: { _mode: 'discharge', cn: TRHU2, fe: 'E', iso: '22G1', iso_edi: '22G1', op: 'MAE', pod: 'KRPTK', pol: 'PHDVO', isBooking: false, pendingCn: false, st: '5', voy: '642N', wt: 2200 } });
+    const vRx = REAL(); vRx.discharge.completed = Object.assign({}, vRx.discharge.completed || {}, { [TRHU2]: { at: 3, by: '검수' } });   // 4.59-05: 추가분 = 완료 기록만 있는 컨
     const Ur2 = Mx.ptkDischargeUnitsOf(vRx);
     ok(Ur2.set.size === SZ + 1 && Ur2.extra.size === 1 && Ur2.extra.has(TRHU2) && Ur2.mfn.size === N && Ur2.listSet.size === 234, tag + ` 추가분 TRHU4332492 를 넣으면 ${SZ + 1} = 리스트 234 + 추가분 1 + MFN ${N}`, [Ur2.set.size, Ur2.extra.size, Ur2.mfn.size].join('/'));
     const pr1 = Mx.progressOf(vRx.discharge, 'discharge', new Set(), null, vRx.keepOnboard);
@@ -398,6 +423,23 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   ok(modalSrcR.includes('MFN_RELOAD_COUNTS') && modalSrcR.includes('MFN_RELOAD_PENDING') && /\{_mfnIt\.reload && <div data-mfn-reload="1">\{MFN_RELOAD_LABEL\} — \{MFN_RELOAD_PENDING\}<\/div>\}/.test(modalSrcR), '컨 상세 MFN 상자 — 재적재 항목에 «재적재 예정 — 양하 확인 전» 주석(배선)');
   const sampleCounts = await sect(M, false);   // 기본(센다) — 샘플도 이쪽
   await sect(MX, true);
+  //  ⑫ 4.59-05 — 터미널 정보조회 화면(검수사 2026-10-31 19:57): TRHU4332492 는 양하 · 선적 칸 비어 있음 · 선내 44-08-86, SUDU7733400 은 터미널 정보 없음 — 실제 642N + 실 EDI(278)
+  console.log('⑫ 터미널 EDI 기준 MFN — 실제 642N 픽스처 + 실 EDI 278 (상수 false = 앱 기본)');
+  const vT = withEdi(REAL());
+  const UT = MX.ptkDischargeUnitsOf(vT), itT = MX.mfnItemsOf(vT);
+  ok(UT.set.size === 278 && UT.listSet.size === 234 && UT.mfn.size === 44 && UT.extra.size === 0, '양하 합계 278 = 리스트 234 + MFN 44 — 터미널 278 과 같다', [UT.set.size, UT.listSet.size, UT.mfn.size, UT.extra.size].join('/'));
+  ok(UT.mfn.has('TRHU4332492') && !UT.mfn.has('SUDU7733400') && itT.TRHU4332492.fromEdi === true && itT.TRHU4332492.pod === 'KRPTK' && itT.TRHU4332492.fe === 'E', 'TRHU4332492 는 MFN(EDI 에서 찾음) · SUDU7733400 은 양하에서 빠진다');
+  const stT = MX.computeStats({ ...vT.discharge }, 'discharge', vT.info || {}, VK, new Set(), {});
+  ok(stT.missing === 0 && stT.mfn === 44 && stT.total === 278, '홈 카드 누락 0 · MFN 44 · 합계 278', JSON.stringify([stT.missing, stT.mfn, stT.total]));
+  const dT = (MX.runDiagnostics({ ediContainers: clone(EDIF), listRecords: vT.discharge.records, mode: 'discharge', voyage: vT, voyageKey: VK }) || []);
+  ok(!lsOf(dT), '«EDI 실번호 278대 중 리스트 매칭 234대» 부족 경고 없음');
+  const packT = MX.mfnPackOf(vT.discharge.mfnList, VK, vT.info, vT);
+  ok(packT.rows.length === 44 && packT.rows.some((r) => r.cn === 'TRHU4332492') && !packT.rows.some((r) => r.cn === 'SUDU7733400') && MX.mfnSumLine(packT.head, 44) === '터미널 278 = 리스트 234 + MFN 44', '출력 — 행 44(TRHU 있음 · SUDU 없음) · 머리 «터미널 278 = 리스트 234 + MFN 44»', MX.mfnSumLine(packT.head, 44));
+  const vNoList = withEdi(REAL()); vNoList.discharge.records = {};
+  ok(!MX.mfnItemsOf(vNoList).TRHU4332492, '리스트가 없는 항차(records 없음)는 EDI 에서 MFN 을 찾지 않는다');
+  const vNoM = withEdi(REAL()); delete vNoM.discharge.mfnList;
+  ok(Object.keys(MX.mfnItemsOf(vNoM)).length === 0, 'mfnList 가 없는 항차는 종전과 같다(MFN 0)');
+  ok(Object.keys(MX.mfnItemsOf(withEdi(REAL()))).filter((c) => !MX.mfnItemsOf(REAL())[c]).join() === 'TRHU4332492', 'EDI 가 더하는 MFN 은 TRHU4332492 하나뿐');
   const { packR0, tallyReal } = sampleCounts;
   ok(M.ptkDischargeUnitsOf(noMfn()).set.size === 234 && M.ptkDischargeUnitsOf((() => { const v = REAL(); Object.values(v.discharge.mfnList.items).forEach((x) => { x.reload = false; }); return v; })()).mfn.size === 44 && MX.ptkDischargeUnitsOf((() => { const v = REAL(); Object.values(v.discharge.mfnList.items).forEach((x) => { x.reload = false; }); return v; })()).mfn.size === 44, 'reload 항목이 없는 항차는 상수와 무관하게 종전과 같다(mfnList 없음 234 · reload 없는 MFN 44)');
   try {   // 샘플은 실제 642N(기본 — 재적재 예정 포함 44대) 로 다시 저장한다

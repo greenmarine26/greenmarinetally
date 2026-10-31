@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { mfnNote } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
+import { mfnNote, mfnItemsOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
@@ -2317,7 +2317,11 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
   const dummyECount = mode === 'loading' ? [...ptkCns].filter(cn => isVirtualCn(cn)).length : 0;
   // V9.37-02: 플랜 슬롯(자리)은 컨번호가 배정될 대상이지 '누락'이 아니다. 컨번호는 NOLIST 담당.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__')).length;   // 3.26: 부킹 자리 `__BOOK_` 도 자리다(부분 리스트 때 «누락»이 아니다)
-  const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots);
+  //  4.59-04 — «누락» = EDI 평택인데 리스트에 없는 컨. MFN(터미널이 내리라는 지시는 있으나 메일 양하 리스트에 없는 컨)은 이미 «MFN N» 으로 센 컨이라 누락이 아니다.
+  //    검수사 2026-10-31 19:15 «누락 44개가 있씁니다. 여기서 누락의 의미는 뭔가요?» — 642N 은 누락 44 = MFN 43 + EDI 에만 있는 1 이었다(MFN 이 «누락» 으로 한 번 더 셌다).
+  const _mfnCns = mode === 'discharge' ? new Set(Object.keys(mfnItemsOf({ discharge: section }))) : null;
+  const _mfnNotListed = _mfnCns && _mfnCns.size ? [...ptkCns].filter((cn) => _mfnCns.has(cn) && !recordCns.has(cn)).length : 0;
+  const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots - _mfnNotListed);
   //  2.89-07 (검수사 «항차목록은 변치 않습니다 … 변하는건 작업내용이 실시간 카운트 될뿐») —
   //    작업량·완료는 progressOf 한 벌(작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브).
   //    recordCns(위)는 매칭·수화물 판정용으로 그대로 둔다 — 분모에는 안 쓴다.
