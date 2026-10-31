@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.59-03';
-const NOTE = '4.59-03 리스트 부족 경고가 MFN 컨을 부족으로 세지 않고 EDI에만 있는 컨만 알립니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.60';
+const NOTE = '4.60 배정표에 시프팅이 잡혔는데 컨을 아직 못 찾는 배는 «예상 N대 · 앞 기항지 작업이 끝나면 확정» 이유를 한 줄로 보여줍니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -517,7 +517,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //    터미널이 작업을 시작해 배정표 이적(berthShift)이 나오면 이 값이 바뀌어 화면이 저절로 «확정» 으로 고쳐진다 — 그래서 두 값이 의존성이다.
   const shiftEvid = useMemo(
     () => shiftEvidenceOf(voyageKey, voyage, shiftingMap),
-    [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus,
+    [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus, voyage?.info?.lane,
      voyage?.restowList?._meta?.mailAt, voyage?.restowList?._meta?.at,
      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes]
@@ -2841,8 +2841,10 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             ) : shiftInfo?.berthShift != null && (
               <span className={shiftInfo?.truthChk?.pending ? 'text-dim-300'
                 : (shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300')}>
-                · 배정표 이적 {shiftInfo.berthShift}모브
-                {shiftInfo?.truthChk?.pending ? ' (작업 전 — 대조 보류)'
+                {shiftInfo?.evid?.whyUnknown
+                  ? <>· 시프팅 예상 {Number(shiftInfo.berthShift) % 2 === 0 ? `${Number(shiftInfo.berthShift) / 2}대 ` : ''}(터미널 배정 {shiftInfo.berthShift}모브)</>   /* 4.60: 작업 전 — 컨은 아직 모르고 대수만 안다. 판정은 shiftEvidenceCore 한 벌(whyUnknown) */
+                  : <>· 배정표 이적 {shiftInfo.berthShift}모브</>}
+                {shiftInfo?.truthChk?.pending ? (shiftInfo?.evid?.whyUnknown ? '' : ' (작업 전 — 대조 보류)')
                   : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.confKeepIncl ? ` = ${_shPureN} + 본선 잔류 확정 ${_shConfKeepN} ✓ 일치` : shiftInfo.truthChk.keepMatch ? ` = 확정 ${_shPureN} + 예보◆${shiftInfo.truthChk.keepN} — 터미널은 선사 메일 반영 · 선사 시프팅 목록 수정본 대기` : shiftInfo.truthChk.ok ? ` ✓ 일치${shiftInfo.truthChk.confKeepN > 0 ? ` — 본선 잔류 확정 ${shiftInfo.truthChk.confKeepN}대는 터미널 반영 전` : ''}` : ' ⛔ 불일치'}` : '(정본)'}
               </span>
             )}

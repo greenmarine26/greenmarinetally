@@ -57,7 +57,7 @@ export function isSentenceQuery(v) {
 // (앞 판) 'TallyOne 4.56'   // 4.56 미르 «양하 정확도» (앞 판 주석은 아래 줄에 그대로)
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
-export const APP_VERSION = 'TallyOne 4.59-03'   // 4.59-03 **«EDI 실번호 278대 중 리스트 매칭 234대 (44개 부족)» 경고(diagnostics list_short)가 MFN 을 부족으로 세던 것 수리 — 검수사 2026-10-31 18:33 «MFN 44개가 전부 엠티라고 하지 않았나요? 알면서도 이런 메시지를?». 실측 MCSN_642N: EDI 278 = 리스트 234 + MFN 43(전부 엠티 E) + EDI 에만 있는 TRHU4332492 1 · 경고 컨 10대가 전부 mfnList 안. 4.59 가 양하 대수·대조줄·출력은 MFN 을 알게 했으나 옛 점검 list_short 는 mfnItemsOf 를 몰랐다(감사도 놓침 — 연막 픽스처의 EDI 가 234 = 리스트라 이 경고가 서지 않았다). 수리 = list_short 가 양하에서 mfnItemsOf 의 컨을 부족 수·목록에서 뺀다(details.mfnExcluded) · MFN 은 자료별 대조 줄이 따로 말한다 · 642N 은 «1개 부족 — TRHU4332492» 로 줄어든다. 연막 = 실 EDI 278 픽스처 tools/fixtures/mfn459_edi642n.json · | 앞 판 4.59-02 **데미지·실오류 보고 문구의 항차가 늘 선적 항차(voy_l)로 나가던 것 수리 — 검수사 2026-10-31 16:08 «현재 데미지가 왜 전부 선적항차로 찍히는지 PCSZ». 실측: PCSZ_2632E 사진 보고 6건 전부 «📍 PCSZ 2633W»(선적) · 컨은 양하(voy_d 2632E) · 사진 mode 도 전부 'unknown'. 원인 = PhotoReportModal 이 voy 를 늘 voy_l 로 잡고, ContainerDetailModal 이 mode 를 안 넘겼다. 수리 = 컨 상세가 mode 를 넘기고 모달이 양하=voy_d·선적=voy_l 로 고른다(WorkReportModal 과 같은 규칙) · 사진 mode 도 이제 discharge/loading 으로 저장. 이미 나간 6건은 그대로(카톡 문구). | 앞 판 4.59-01 **재적재(SUDU7733400)는 현장 확인 전까지 MFN·양하에 센다(검수사 2026-10-31 12:52 «그런데 왜 목적지가 평택이었을까요 환적입니까?» — 상수 MFN_RELOAD_COUNTS=true 가 기본, false 로 바꾸면 mfnItemsOf 한 곳에서 뺀다: MFN 43 · 278) + «재적재 예정 — 양하 확인 전» 주석 + MFN 문구에 추가분을 따로 적는다 — 642N 은 앱 279 = 리스트(records) 234 + EDI 에만 있는 추가분 1(TRHU4332492 · 검수사 확인 «목적지가 평택입니다») + MFN 44 인데 «리스트 235 + MFN 44» 로 불러 «리스트에 MFN 아닌 컨이 235대» 로 읽혔다. 숫자·합산 규칙은 그대로, 문구만 «앱 279 = 리스트 234 + 추가분 1 + MFN 44»(추가분 0 이면 종전 문구).
+export const APP_VERSION = 'TallyOne 4.60'   // 4.60 **터미널이 이적을 잡았는데 앱이 컨을 못 찾는 배(작업 전)에 «시프팅 예상 N대(터미널 배정 M모브) — 앞 기항지 작업이 끝나기 전이라 어느 베이에서 생기는지 아직 알 수 없습니다» 한 줄 — 검수사 2026-10-31 18:52~19:07 «XTPG 배정목록과 앱 내용이 틀립니다 … 설명이 빠져 있다» · «인천에서 작업이 안 끝나 어느 베이에서 발생되는지 알 수 없다» · «파이널 자료가 오면 확정하고 맞으면 설명은 지우면 된다». 실측 XTPG_546E — 양하 EDI 121대 전부 평택 양하(시프팅 컨 없음) · 선적 EDI 0 · 배정표 이적 16모브 · 작업 전. 판정은 shiftEvidenceCore 한 벌(검수앱·콘앱 같은 답). 선적 EDI·선사 시프팅 목록이 와 컨이 잡히거나 터미널이 작업을 시작해 확정되면 저절로 사라진다. | 앞 판 4.59-03 **«EDI 실번호 278대 중 리스트 매칭 234대 (44개 부족)» 경고(diagnostics list_short)가 MFN 을 부족으로 세던 것 수리 — 검수사 2026-10-31 18:33 «MFN 44개가 전부 엠티라고 하지 않았나요? 알면서도 이런 메시지를?». 실측 MCSN_642N: EDI 278 = 리스트 234 + MFN 43(전부 엠티 E) + EDI 에만 있는 TRHU4332492 1 · 경고 컨 10대가 전부 mfnList 안. 4.59 가 양하 대수·대조줄·출력은 MFN 을 알게 했으나 옛 점검 list_short 는 mfnItemsOf 를 몰랐다(감사도 놓침 — 연막 픽스처의 EDI 가 234 = 리스트라 이 경고가 서지 않았다). 수리 = list_short 가 양하에서 mfnItemsOf 의 컨을 부족 수·목록에서 뺀다(details.mfnExcluded) · MFN 은 자료별 대조 줄이 따로 말한다 · 642N 은 «1개 부족 — TRHU4332492» 로 줄어든다. 연막 = 실 EDI 278 픽스처 tools/fixtures/mfn459_edi642n.json · | 앞 판 4.59-02 **데미지·실오류 보고 문구의 항차가 늘 선적 항차(voy_l)로 나가던 것 수리 — 검수사 2026-10-31 16:08 «현재 데미지가 왜 전부 선적항차로 찍히는지 PCSZ». 실측: PCSZ_2632E 사진 보고 6건 전부 «📍 PCSZ 2633W»(선적) · 컨은 양하(voy_d 2632E) · 사진 mode 도 전부 'unknown'. 원인 = PhotoReportModal 이 voy 를 늘 voy_l 로 잡고, ContainerDetailModal 이 mode 를 안 넘겼다. 수리 = 컨 상세가 mode 를 넘기고 모달이 양하=voy_d·선적=voy_l 로 고른다(WorkReportModal 과 같은 규칙) · 사진 mode 도 이제 discharge/loading 으로 저장. 이미 나간 6건은 그대로(카톡 문구). | 앞 판 4.59-01 **재적재(SUDU7733400)는 현장 확인 전까지 MFN·양하에 센다(검수사 2026-10-31 12:52 «그런데 왜 목적지가 평택이었을까요 환적입니까?» — 상수 MFN_RELOAD_COUNTS=true 가 기본, false 로 바꾸면 mfnItemsOf 한 곳에서 뺀다: MFN 43 · 278) + «재적재 예정 — 양하 확인 전» 주석 + MFN 문구에 추가분을 따로 적는다 — 642N 은 앱 279 = 리스트(records) 234 + EDI 에만 있는 추가분 1(TRHU4332492 · 검수사 확인 «목적지가 평택입니다») + MFN 44 인데 «리스트 235 + MFN 44» 로 불러 «리스트에 MFN 아닌 컨이 235대» 로 읽혔다. 숫자·합산 규칙은 그대로, 문구만 «앱 279 = 리스트 234 + 추가분 1 + MFN 44»(추가분 0 이면 종전 문구). **데미지·실오류 보고 문구의 항차가 늘 선적 항차(voy_l)로 나가던 것 수리 — 검수사 2026-10-31 16:08 «현재 데미지가 왜 전부 선적항차로 찍히는지 PCSZ». 실측: PCSZ_2632E 사진 보고 6건 전부 «📍 PCSZ 2633W»(선적) · 컨은 양하(voy_d 2632E) · 사진 mode 도 전부 'unknown'. 원인 = PhotoReportModal 이 voy 를 늘 voy_l 로 잡고, ContainerDetailModal 이 mode 를 안 넘겼다. 수리 = 컨 상세가 mode 를 넘기고 모달이 양하=voy_d·선적=voy_l 로 고른다(WorkReportModal 과 같은 규칙) · 사진 mode 도 이제 discharge/loading 으로 저장. 이미 나간 6건은 그대로(카톡 문구). | 앞 판 4.59-01 **재적재(SUDU7733400)는 현장 확인 전까지 MFN·양하에 센다(검수사 2026-10-31 12:52 «그런데 왜 목적지가 평택이었을까요 환적입니까?» — 상수 MFN_RELOAD_COUNTS=true 가 기본, false 로 바꾸면 mfnItemsOf 한 곳에서 뺀다: MFN 43 · 278) + «재적재 예정 — 양하 확인 전» 주석 + MFN 문구에 추가분을 따로 적는다 — 642N 은 앱 279 = 리스트(records) 234 + EDI 에만 있는 추가분 1(TRHU4332492 · 검수사 확인 «목적지가 평택입니다») + MFN 44 인데 «리스트 235 + MFN 44» 로 불러 «리스트에 MFN 아닌 컨이 235대» 로 읽혔다. 숫자·합산 규칙은 그대로, 문구만 «앱 279 = 리스트 234 + 추가분 1 + MFN 44»(추가분 0 이면 종전 문구).
 // (앞 판) 'TallyOne 4.59'   // 4.59 **MFN 목록 — 터미널이 센 양하 278대 중 메일 양하 리스트(234)에 없는 44대(화물은 있으나 적하목록 없음)를 양하 대수에 «278 (리스트 234 + MFN 44)» 로 합쳐 적고, 컨 상세에 MFN 표기, 목록을 PDF·엑셀로 받는다** — 검수사 2026-10-31 07:18 «278대가 양하분 맞는거 같습니다. 다만 34대분은 주의 대상으로 다렌과 텐진이 목적지 였다는걸 표기 바랍니다. 나중에 확정이 되면 정상적으로 돌리는게 맞고요» · 07:23 «MFN리스트를 만들고 앱에 컨 상세카드에 그걸 표기하기 바랍니다.» · 07:29 «278로 표기 바랍니다 단 44대가 MFN대상이라는것도 278(234+MFN44)» · 07:31 «MFN표기를 누르면 엑셀또는 PDF로 출력하거나 다운 받을수 있게 해주세요» · 07:32 «목록 정리도 마감텔리를 찾아보고 같게 만들어 주시면 됩니다.». 실근거 — MCSN(SPIL NIKEN) 642N 양하: 앱은 메일 최종 양하 리스트 234대만 셌고 터미널(PCTC)은 278대로 셌다(터미널 이동지시 MOVINS 도착항 KRPTK 278 중 44대가 리스트에 없음 = 세관 코드 MFN). 44대 = 중국행(Baplie 도착항 CNDLC 22·CNTXG 12) 34 + 평택행 10, 그중 SUDU7733400 은 톈진행인데 출항 플랜에 다시 실려 있는 재적재. 수집기가 voyages/{키}/discharge/mfnList 로 올리면 utils.ptkDischargeUnitsOf 가 유닛(set)에 더하고 U.mfn 으로 따로 돌려준다(추가분 extra 와는 별개 · 시프팅·평택 아닌 POD 확정·이미 목록에 있는 컨은 더하지 않음 · mfnList 가 없으면 종전과 같음 · 목록 없는 배(basis edi)는 소비처가 U.set 을 안 봐 더하지 않음). 홈 카드·항차 화면 [전체] 칩·마감텔리·갱별·미르·콘앱(ConeOne 2.73)이 같은 278 · 컨 상세 노란 MFN 상자(중국행 «주의 — 원래 목적지 다롄(통과화물이었음)» · 재적재) · 주의 박스 자료별 대조 MFN 그룹(어긋남 수·번호 없음에는 안 섞임 — 종전 «번호 없음 44» 가 0) · src/mfnList.js + tallyExcel.generateMfnExcel(마감텔리 SHIFTING 머리·표 + Act. Cntr-Seal 하단 집계·서명줄) · 진입점 셋(컨 상세 · 주의 박스 · 출력 센터 MFN 목록 타일).
 // (앞 판) 'TallyOne 4.58'   // 4.58 **호기 교체 — 상황판은 새 호기만 보이고 옛 호기 작업대수는 «N대 포함»으로 단다** — 검수사 2026-10-31 «3호기 4호기 이용하다 1호기 2호기로 대체한다고 하면 상황판에는 1호기 2호기만 보여야 한다» · «이종부 3호기로 몇개하다가 1호기로 바꿔서 몇개 했슴을 표기하고 장비는 1호기 2호기를 보여주고 1호기(3호기 작업대수 : XXX대 포함)». 원인 — 상황판 호기 줄(utils.craneBoardOf)이 «이 항차에 한 번이라도 기록이 찍힌 호기» 를 전부 줄로 세워, 교체된 3호기가 멈춘 줄로 남았다. 수리 — utils.craneSwapsOf 한 벌: 같은 조 안에서 같은 사람이 다른 호기로 다시 등록되면 교체(짝은 이름이 잇는다 · 교체 시각 = 새 호기 등록 시각 · 옛 호기를 교체 뒤에 다시 등록하면 접지 않는다 · 조가 다르면 교체 아님). craneBoardOf 가 옛 호기 줄을 접고 새 호기에 대수를 더해 fold 로 «(3호기 작업대수 N대 포함)» 을 달고(ChiefDashboard), 기록은 지우지 않는다. 실측 STMJ 2667E — 이종부 3→1 · 김성일 4→2 (연막 smoke_craneswap). 하지 않은 것 — 카토스만 보고 앱이 스스로 교체를 알아채는 갈래 · 콘앱 호기 줄(ConeOne 다음 판).   //
 // (앞 판) 'TallyOne 4.57-01'   // 4.57-01 **앨범에서 고른 사진도 카톡 보고에 함께 나간다** — 검수사 2026-10-30 «카메라로 직접 촬영한것은 사진과 함께 내용이 보고가 되는데 사진 첨부는 내용만 보고가 되어서 따로 사진을 카톡에 다시 올려야 합니다». 앨범 사진은 형식 글자가 비었거나 클라우드 파일이라 공유 직전 canShare 가 거절하면 사진이 조용히 빠지고 글만 나갔다. kakaoShare.normalizeReportPhoto 로 고르는 순간 JPEG(긴 변 1600px)로 만들고, 못 읽으면 그 자리에서 알리며, 공유 때 한 장이라도 빠지면 경고를 띄운다. (앞 판) 4.57 **수석 리퍼 온도 리스트 — 리스트(EDI)·셋팅·실제 세 온도를 A4 세로 한 장(좌우 두 줄)으로 인쇄하고 엑셀로 받는다** — 검수사 2026-10-30 «마감을 짓기전에 인계용 자료가 필요한데 그것이 부족합니다» · «리스트 온도와 자료받은 것의 셋팅온도 실제온도 3가지가 적힌 리스트가 필요 합니다» · «저장한 사람은 자료에 남기는건 상관없는데 출력이나 엑셀 자료에는 체크 하면 넣고 체크 안하면 넣지않게» · «굳이 가로로 할 필요가 없습니다 세로 한장» · «온도 자릿수도 소수점 한자리로» · «사인 자리는 수기 사인 이름 없는 빈자리 갯수와 상관없이 항상 고정». src/reeferList.js(출력 창·엑셀 열 한 벌) · tallyExcel.generateReeferExcel · 출력 센터 «리퍼 온도 리스트»(수석) · 리퍼 온도 확인 창 «리스트 출력». 값은 저장된 것이고 확인자·시각은 창에서 체크했을 때만 나간다. 판정(풀 리퍼만)·온도 읽기는 reeferList.js 한 벌을 ReeferMemoModal 이 가져다 쓴다.
@@ -163,7 +163,7 @@ export const APP_VERSION = 'TallyOne 4.59-03'   // 4.59-03 **«EDI 실번호 278
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.59-03 리스트 부족 경고가 MFN 컨을 부족으로 세지 않고 EDI에만 있는 컨만 알립니다.'
+export const APP_NOTE = '4.60 배정표에 시프팅이 잡혔는데 컨을 아직 못 찾는 배는 «예상 N대 · 앞 기항지 작업이 끝나면 확정» 이유를 한 줄로 보여줍니다.'
 // (앞 판 APP_NOTE) '4.56-05 리퍼 온도 사진을 읽을 때 줄이 밀리던 것을 고쳤습니다. 사진과 읽은 값은 기록으로 남습니다.'
 // (앞 판 APP_NOTE) '4.56-04 미르로 호기 검수원을 등록하면 내 호기도 따라 바뀝니다.'
 // (앞 판 APP_NOTE) '4.55-01 선적 EDI 를 기다리는 배가 그 밖의 배로 접히거나 수석 완료 저장이 열리던 것을 고쳤습니다. 선적 자료나 계획이 있으면 EDI 가 아직이어도 선적은 대기로 봅니다.'
@@ -10266,7 +10266,16 @@ export function computeShiftingMapCached(voyageKey, voyage) {
     순수 함수라 콘앱(window.ConeParse)도 같이 부른다. dMap/lMap = { 컨번호: {bay,row,tier,...} }. */
 //  ★ 4.48-03 — keepN(선사 지시 본선 잔류 예보 대수, 노란 ◆ — 이 지도에는 안 든다). 배정표 이적이 «확정 + 예보» 와 같으면 터미널이 선사 메일을 먼저 반영한 것이다 —
 //    «불일치»(빨간 경고)가 아니라 «미확정»(선사 시프팅 목록 수정본 대기). 검수사 2026-10-24 20:06 «확정도 아닌데 빨간 경고 문구가 나온것 … 을 문제로 삼은것입니다».
-export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, terminalStatus, keepN = 0, keepConfN = 0 }) {
+//  4.60 — 항로 사전(laneRouteOf)의 기항 순서에서 평택 바로 앞 기항지. 모르면 ''(문구가 «앞 기항지»로만 말한다). KRINC → 인천, 그 밖은 코드 그대로.
+export function prevPortOfLane(lane) {
+  const r = laneRouteOf(lane)?.rotation;
+  if (!Array.isArray(r) || r.length < 2) return '';
+  const i = r.indexOf('KRPTK');
+  if (i < 0) return '';
+  const p = String(r[(i - 1 + r.length) % r.length] || '').toUpperCase();
+  return p === 'KRINC' ? '인천' : p;
+}
+export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, terminalStatus, keepN = 0, keepConfN = 0, prevPort = '' }) {
   const sm = shiftingMap || {};
   const keys = Object.keys(sm).filter((k) => k && !k.startsWith('_'));
   const count = keys.length;
@@ -10315,6 +10324,20 @@ export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, termina
   } else if (kind === 'predict') {
     parts.push(`앱 예측 ${count}대 — 선사 서류·선적 EDI 없음`);
   }
+  //  ★ 4.60 — 터미널이 이적을 잡았는데(작업 전) 앱이 컨을 하나도 못 찾는 배: «틀렸다»가 아니라 «자료가 아직 없다»고 말한다.
+  //    검수사 2026-10-31 19:05 «인천에서 작업이 끝나지 않아 어느 베이에서 발생되는지 알 수 없습니다. 시프팅 예상 8대 터미널 배정 표기를 하고 설명이 들어가야»
+  //    · 19:07 «인천에서 파이널 자료가 오면 확정을 하고 맞으면 보여줬던 설명은 지우면 되는 것입니다».
+  //    이 갈래는 kind==='none' · 작업 전(pending) · 선사 서류 없음일 때만 켜진다 — 선적 EDI·선사 서류가 와서 컨이 잡히거나 터미널이 작업을 시작해 숫자가 확정되면 저절로 꺼진다.
+  //    직항(rot==='direct')은 앞 기항지가 없으니 이 설명을 하지 않는다.
+  //    감사(4.60): 본선 잔류 확정·예보(◆)는 이 지도에서 빼므로 count 가 0 이어도 화면에는 그 컨이 보인다 — 그런 배는 «컨을 못 찾았다»고 말하지 않는다(keepN·keepConfN 이 0 일 때만). 터미널 상태가 비어 있는 배(옛 항차)도 말하지 않는다.
+  let whyUnknown = false;
+  if (kind === 'none' && !isDoc && !_kN && !_kcN && berth && berth.pending && berth.terminalStatus && berth.terminalStatus !== '미상' && Number(berth.moves) > 0 && meta.rot !== 'direct') {
+    whyUnknown = true;
+    const bm = Number(berth.moves);
+    parts.push(`시프팅 예상 ${bm % 2 === 0 ? `${bm / 2}대(터미널 배정 ${bm}모브)` : `터미널 배정 ${bm}모브`}`);
+    const pp = prevPort ? `앞 기항지(${prevPort})` : '앞 기항지';
+    parts.push(`${pp} 작업이 끝나기 전이라 어느 베이에서 생기는지 아직 알 수 없습니다 — ${pp}에서 선적하는 화물이 평택 양하·선적 자리에 걸려 생기는 몫입니다. 최종 자료가 오면 확정하고 이 설명은 사라집니다`);
+  }
   if (kind !== 'none') {
     if (!berth) parts.push('배정표 이적 아직 없음');
     else if (berth.pending) parts.push(`배정표 이적 ${berth.moves}모브(작업 시작 후 확정)`);
@@ -10324,7 +10347,7 @@ export function shiftEvidenceCore({ shiftingMap, dMap, lMap, berthShift, termina
   if (_kcN > 0) parts.push(`본선 잔류 확정 ${_kcN}대(선적 EDI 에 실린 선사 지시 컨)${ready && !keepConfIncl && berth.truth === count ? ' — 터미널 배정표 이적은 아직 반영 전' : ''}`);
   //  label = 화면·카고플랜 머리에 쓰는 말. 앱 예측뿐이고 배정표가 아직이면 «미확정»이 아니라 «예측»(자리도 추정이다).
   const label = (kind === 'predict' && status === '미확정') ? '예측' : status;
-  return { status, label, kind, count, keepMatch, keepN: _kN, keepConfN: _kcN, keepConfIncl, doc, per, line: parts.join(' · '),
+  return { status, label, kind, count, whyUnknown, keepMatch, keepN: _kN, keepConfN: _kcN, keepConfIncl, doc, per, line: parts.join(' · '),
            arv: { ok: arvOk, bad: arvBad, none: arvNone, badCns: arvBadCns, usable: arvUsable },
            dep: { ok: depOk, bad: depBad, none: depNone, badCns: depBadCns, usable: depUsable },
            berth: berth ? { moves: berth.moves, truth: berth.pending ? null : berth.truth, pending: !!berth.pending, terminalStatus: berth.terminalStatus || '' } : null };
@@ -10365,13 +10388,13 @@ export function shiftEvidenceOf(voyageKey, voyage, shiftingMap, opts) {
     voyage.restowList?._meta?.mailAt ?? '', voyage.restowList?._meta?.at ?? '', voyage.restowList?._meta?.file ?? '',
     d?.raw?.edi?.uploadedAt || 0, d?.raw?.edi?.sizeBytes || 0, l?.raw?.edi?.uploadedAt || 0, l?.raw?.edi?.sizeBytes || 0,
     Object.keys(d?.ediContainers || {}).length, Object.keys(l?.ediContainers || {}).length,
-    isDoc ? _restowSig(voyage.restowList) : '', _keepN, _keepConfN,
+    isDoc ? _restowSig(voyage.restowList) : '', _keepN, _keepConfN, prevPortOfLane(info.lane),
   ].join('|');
   const key = (voyageKey || 'unknown') + (light ? '|L' : '');
   const hit = _shiftEvidCache.get(key);
   if (hit && hit.sig === sig) return hit.res;
   const mapOf = (sec) => (isDoc && !light ? (ediMapFromRaw(sec) || sec?.ediContainers || null) : null);
-  const res = shiftEvidenceCore({ shiftingMap, dMap: mapOf(d), lMap: mapOf(l), berthShift: info.berthShift, terminalStatus: info.terminalStatus, keepN: _keepN, keepConfN: _keepConfN });
+  const res = shiftEvidenceCore({ shiftingMap, dMap: mapOf(d), lMap: mapOf(l), berthShift: info.berthShift, terminalStatus: info.terminalStatus, keepN: _keepN, keepConfN: _keepConfN, prevPort: prevPortOfLane(info.lane) });
   if (_shiftEvidCache.size > 60) _shiftEvidCache.clear();
   _shiftEvidCache.set(key, { sig, res });
   return res;

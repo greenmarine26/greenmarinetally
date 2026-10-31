@@ -226,7 +226,7 @@ const bundle = process.argv[3];
 
   console.log('⑪ 배선·문구 — 버전 · APP_NOTE · 매뉴얼 · 호출부');
   const U = src('src/utils.js');
-  ok(/export const APP_VERSION = 'TallyOne 4\.(53|5[4-9])(-\d\d)?'/.test(U) && (/APP_NOTE = '4\.53 [^']*본선 잔류 확정[^']*'/.test(U) || !/export const APP_VERSION = 'TallyOne 4\.53'/.test(U)), '버전 TallyOne 4.53+ · APP_NOTE «본선 잔류 확정»(4.53 판일 때 — 뒤 판은 자기 문구)');
+  ok(/export const APP_VERSION = 'TallyOne 4\.(53|5[4-9]|6[0-9])(-\d\d)?'/.test(U) && (/APP_NOTE = '4\.53 [^']*본선 잔류 확정[^']*'/.test(U) || !/export const APP_VERSION = 'TallyOne 4\.53'/.test(U)), '버전 TallyOne 4.53+ · APP_NOTE «본선 잔류 확정»(4.53 판일 때 — 뒤 판은 자기 문구)');
   const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
   ok(note.length < 120 && (note.match(/\./g) || []).length <= 3 && !/[\/']/.test(note), 'APP_NOTE — 두 문장 이내 · 120자 미만 · 작은따옴표·슬래시 없음', note);
   const help = src('src/data/helpData.js');
