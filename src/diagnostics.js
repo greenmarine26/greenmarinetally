@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoOtHeightConflict, sealFormatAnomalies, ediSealMapOf } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
+import { isoOtHeightConflict, sealFormatAnomalies, ediSealMapOf, mfnItemsOf } from './utils.js';   // 4.27-01: 40피트 오픈탑 높이 갈림 = 점검요망(검수사 2026-10-15 14:31)
 import { isoToLabel, isUnknownIso, isoConflictOf, isReeferContainer, isVirtualCn, isLuggageCn, isHoldTier, isPtkResolved, podConflictOf, isListOriginRecord } from './utils.js';   // 3.4: isHoldTier — 클래스 8 홀드 판정 한 벌
 import { reconcileSources, reconBundleText, reconTermNum, reconUnknownText, reconTermLabel } from './sourceRecon.js';   // 4.22: 자료별 대조 한 벌
 import { frBundlesOf, bundleDocOffText } from './tallyReport.js';   // 4.55: 터미널 묶음 목록(서류)과 앱 목록이 어긋나는 곳을 따로 알린다(양하·선적 모두)
@@ -380,8 +380,15 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
     const virtualEdiCount = ediPtk.filter(c => isVirtualCn(c.cn)).length;
     const realEdiCount = ediCount - virtualEdiCount;
 
+    //  4.59-03 — MFN(터미널이 내리라는 지시는 있으나 메일 양하 리스트에 없는 컨)는 «리스트 부족» 이 아니라 이미 아는 MFN 이다.
+    //    검수사 2026-10-31 18:33 «MFN 44개가 전부 엠티라고 하지 않았나요? 알면서도 이런 메시지를?» — 642N 은 EDI 278 − 매칭 234 = «44개 부족» 이 떴다(그 44대가 mfnList 와 같은 컨).
+    //    MFN 은 자료별 대조 줄(source_recon)이 따로 말한다. 여기서는 MFN 컨을 부족 수·목록에서 뺀다(양하만 — mfnList 는 양하 노드).
+    const _mfnCn = new Set(mode === 'discharge' ? Object.keys(mfnItemsOf(voyage)).map(normCn) : []);
+    const _mfnMiss = _mfnCn.size
+      ? ediPtk.filter((c) => !isVirtualCn(c.cn) && _mfnCn.has(normCn(c.cn)) && !validListCns.some((l) => normCn(l) === normCn(c.cn))).length
+      : 0;
     if (realListCount > 0) {
-      const diff = realEdiCount - matchedCount;
+      const diff = realEdiCount - matchedCount - _mfnMiss;
       const carrierStr = carrierLabel ? ` ${carrierLabel}` : '';
       if (diff > 0) {
         // M8.07: 어떤 컨번호가 부족한지 명시 — EDI 평택엔 있는데 리스트에 없는 컨.
@@ -389,7 +396,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
         const listCnSet = new Set(validListCns.map(cn => normCn(cn)));
         // V9.04-02: 가상 자리는 부족 목록에서 제외 (CASP0000001… 77대가 '부족'으로 뜨던 오탐)
         const missingCns = ediPtk
-          .filter(c => !isVirtualCn(c.cn) && !listCnSet.has(normCn(c.cn)))
+          .filter(c => !isVirtualCn(c.cn) && !listCnSet.has(normCn(c.cn)) && !_mfnCn.has(normCn(c.cn)))
           .map(c => ({ cn: c.cn, iso: c.iso || '', fe: c.fe || '', sl: c.sl || '' }));
         const missingPreview = missingCns.slice(0, 10).map(m => m.cn).join(', ');
         alerts.push({
@@ -398,7 +405,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
           msg: `EDI 실번호 ${realEdiCount}대 중 리스트 매칭 ${matchedCount}대 (${diff}개 부족)${missingPreview ? ` — ${missingPreview}` : ''}`,
           voice: `${carrierStr ? carrierStr + ' ' : ''}EDI 실번호 ${realEdiCount}개인데 리스트 매칭 ${matchedCount}개입니다. ${diff}개 부족합니다. 리스트 보완 필요`,
           count: diff,
-          details: { ediCount, realEdiCount, virtualEdiCount, listCount: realListCount, matchedCount, diff, missing: missingCns },
+          details: { ediCount, realEdiCount, virtualEdiCount, listCount: realListCount, matchedCount, diff, missing: missingCns, mfnExcluded: _mfnMiss },
         });
       }
       // 리스트에는 있는데 EDI 평택에 없는 컨 (통과화물이거나 다른 항차)

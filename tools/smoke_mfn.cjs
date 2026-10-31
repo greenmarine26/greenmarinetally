@@ -150,6 +150,23 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   ok(al && /MFN 44대/.test(al.msg) && /중국행 34대 주의/.test(al.msg) && /리스트 234 \+ MFN 44/.test(al.msg), '진단 알림 한 줄에 MFN 44 · 중국행 34 · 리스트 234 + MFN 44', al && al.msg);
   ok(al && al.level === 'warning' && al.count === 0, '중국행이 있어 경고 · 어긋남 개수(count)에는 안 섞임', al && (al.level + '/' + al.count));
 
+  //  4.59-03 — «EDI 실번호 278대 중 리스트 매칭 234대 (44개 부족)» 경고(list_short)가 MFN 을 부족으로 세던 것(검수사 2026-10-31 18:33 «MFN 44개가 전부 엠티라고 하지 않았나요? 알면서도 이런 메시지를?»)
+  //    ⚠ 위 픽스처(mfn458)의 ediContainers 는 234(= 리스트)라 이 경고가 서지 않는다 — 합성 가정이 실데이터와 같은 오류를 공유해 4.59 연막이 놓쳤다. 실제 EDI 278(라이브 GET 사본 · 리스트 234 + MFN 43 + TRHU4332492 1)을 따로 쓴다.
+  const EDIF = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/mfn459_edi642n.json'), 'utf8'));
+  const mfnAll = new Set(Object.keys(withMfn().discharge.mfnList.items));
+  const lsOf = (D) => (Array.isArray(D) ? D : D.alerts || []).find((a) => a.code === 'list_short');
+  const diagF = (v, mode = 'discharge') => M.runDiagnostics({ ediContainers: clone(EDIF), listRecords: v.discharge.records, mode, voyage: v, voyageKey: VK }) || [];
+  ok(Object.keys(EDIF).length === 278 && Object.keys(withMfn().discharge.records).length === 234 && mfnCns.filter((c) => EDIF[c]).length === 43, '실 EDI 278 · 리스트 234 · MFN 중 EDI 에 든 것 43(재적재 SUDU7733400 은 EDI 에 없음)');
+  const lsNo = lsOf(diagF(noMfn()));
+  ok(lsNo && lsNo.count === 44 && /44개 부족/.test(lsNo.msg), 'mfnList 가 없으면 종전대로 «44개 부족» 이 뜬다(검사가 실제로 무는지)', lsNo && lsNo.msg);
+  const lsMf = lsOf(diagF(withMfn()));
+  ok(lsMf && lsMf.count === 1 && lsMf.details.missing.length === 1 && lsMf.details.missing[0].cn === 'TRHU4332492', 'mfnList 가 있으면 «부족» 은 EDI 에만 있는 한 대(TRHU4332492)뿐 — MFN 43대는 빠진다', lsMf && (lsMf.count + ' · ' + lsMf.msg));
+  ok(lsMf && lsMf.details.mfnExcluded === 43 && lsMf.details.missing.every((m) => !mfnAll.has(m.cn)), 'MFN 에서 뺀 수 43 을 details 에 남기고 «부족» 목록에 MFN 컨은 없다', lsMf && lsMf.details.mfnExcluded);
+  const lsMs = lsOf(diagF(withMfn(), 'loading'));
+  ok(!lsMs || lsMs.details.mfnExcluded === 0, '선적 모드는 mfnList 를 보지 않는다(양하 노드)', lsMs && lsMs.details.mfnExcluded);
+  const vAll = withMfn(); EDIF.TRHU4332492 && (vAll.discharge.records.TRHU4332492 = { cn: 'TRHU4332492', iso: EDIF.TRHU4332492.iso, fe: 'E', pod: 'KRPTK', _source: 'x.xls' });
+  ok(!lsOf(diagF(vAll)), 'TRHU 까지 리스트에 들어오면 부족 경고가 사라진다(MFN 만 남으면 경고 없음)', JSON.stringify((lsOf(diagF(vAll)) || {}).msg));
+
   console.log('⑤ 목록 출력 — 행·집계·HTML');
   const pack = M.mfnPackOf(FX.discharge.mfnList, VK, Object.assign({ vsl: 'MCSN', vslFull: 'SPIL NIKEN', voy_d: '642N' }, { planDate: FX.info.planDate }));
   ok(pack.rows.length === 44 && pack.head.code === 'MCSN' && pack.head.voy === '642N' && pack.head.ptk === 278 && pack.head.list === 234, '행 44 · 머리(선박코드 MCSN · 항차 642N · 278 · 234)', JSON.stringify(pack.head));
