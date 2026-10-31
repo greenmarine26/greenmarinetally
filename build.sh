@@ -832,6 +832,7 @@ node tools/smoke_mfn.cjs "$PWD" || { echo "✗ MFN 목록 4.58 연막검사 실�
 node tools/smoke_photoshare4571.cjs "$PWD" || { echo "✗ 앨범 사진 카톡 공유 4.57-01 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_photovoy4592.cjs "$PWD" || { echo "✗ 보고 항차 4.59-02 연막검사 실패 — 배포 금지"; exit 1; }
 NODE_PATH="$PWD/node_modules" node tools/smoke_shiftwhy460.cjs || { echo "✗ 시프팅 설명 한 줄 4.60 연막검사 실패 — 배포 금지"; exit 1; }   # 4.60
+NODE_PATH="$PWD/node_modules" node tools/smoke_cranestop461.cjs || { echo "✗ 쉰 호기 줄 빼기 4.61 연막검사 실패 — 배포 금지"; exit 1; }   # 4.61
 # 2.41: 콘앱 베이뷰 — 컨번호 잘림·단추 겹침·진입 배율·항구 코드 한 벌
 node tools/smoke_conebayfit.cjs || { echo "✗ 콘앱 베이뷰 연막검사 실패 — 배포 금지"; exit 1; }
   # 2.43: 콘 트윈 — 트윈을 자료로 가리고 두 베이를 같이 적는가 · 전체 화면이 한 화면에 다 드는가(jsdom 실렌더)
