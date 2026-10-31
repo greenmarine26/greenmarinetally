@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { mfnNote, mfnItemsOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
+import { mfnNote, mfnItemsOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
@@ -1737,11 +1737,22 @@ export function ShipDetail({ voyage, activeInspectors = [], onOpen, onDelete, on
           //  TallyOne 1.13 «작업일자를 표기» — 날짜(MM-DD)는 배지 제목에(종전 «🗓 작업 MM-DD HH:MM ~» 줄과 같은 값).
           const _md = (ms) => { const d = new Date(ms); return `${_two(d.getMonth() + 1)}-${_two(d.getDate())} ${_hm2(ms)}`; };
           const _work = eta && etd ? `${_md(eta)} ~ ${_md(etd)}` : (eta ? _md(eta) : `~ ${_md(etd)}`);
+          //  4.62: 터미널 배정이 정한 작업예정이 일정과 30분 넘게 다르면 둘 다 보인다 — 도선은 «확정», 배정은 상태(예정·작업중·완료)를 붙인다.
+          const _alt = berthAltOf(voyage.info, eta);
+          const _pilotFirst = _pp[0] === 'pilot';
           return (
-            <span title={`작업 ${_work}${srcTip ? ' — ' + srcTip : ''}`} data-ship-plan="1"
-              className={`${TAG} ${past ? 'bg-ink-800 border-line-strong text-dim-300' : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
-              📅 {body}{srcMark ? ` ${srcMark}` : ''}
-            </span>
+            <>
+              <span title={`작업 ${_work}${srcTip ? ' — ' + srcTip : ''}`} data-ship-plan="1"
+                className={`${TAG} ${past ? 'bg-ink-800 border-line-strong text-dim-300' : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
+                📅 {body}{srcMark ? ` ${srcMark}` : ''}{_alt && _pilotFirst ? ' 확정' : ''}
+              </span>
+              {_alt && (
+                <span title={`터미널 선석배정이 정한 작업예정입니다(${voyage.info.planBerth}). 위 시각은 도선·메일 등에서 환산한 값이라 둘이 다릅니다.`} data-ship-berth={_alt.st}
+                  className={`${TAG} bg-violet-900/50 border-violet-700/50 text-violet-200`}>
+                  📋 배정 {dayLabel(_alt.at)} {_hm2(_alt.at)} {_alt.label}
+                </span>
+              )}
+            </>
           );
         })()}
         {/* 1.40-01: 🚢 신고도착 — PORT-MIS 세관 신고 항 도착시각. 도선(도선 시작)과 다른 사건이라 따로 세운다. 값은 신고 원본 그대로. */}

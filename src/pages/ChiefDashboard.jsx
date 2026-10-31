@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
-import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, craneBoardSplit, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, craneBoardSplit, berthAltOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -1752,7 +1752,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         termApplyD: computeTermApply(v.discharge?.termWork, v.discharge?.completed).length,
         termApplyL: computeTermApply(v.loading?.termWork, v.loading?.completed).length,
         // TallyOne 1.0(L3): 일정 정보 — 수집기가 채우는 planDate("ETA ~ ETD")·planSrc(출처 판단 결과)
-        planDate: info.planDate || '', planSrc: info.planSrc || '',
+        planDate: info.planDate || '', planSrc: info.planSrc || '', berthAlt: berthAltOf(info),
         // 1.40-01: PORT-MIS 항 도착(세관 신고) 원본 — 콜사인 매칭. 도선과 다른 사건이라 따로 표기한다.
         //  ★ 2.78: 콜사인 하나만 보던 것 → 베이매트릭스 신원(공용 매처 한 벌).
         //    수집기가 콜사인을 못 싣는 배(RZOR 등)는 여기서 늘 빈칸이었다.
@@ -2055,7 +2055,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         </div>
       )}
       {/* TallyOne 1.0(L3): 일정 정보 — 작업일자(출처 뱃지)·도선 입출항. 완료 저장 타이밍 판단 근거 */}
-      <ScheduleLine planDate={r.planDate} planSrc={r.planSrc} pmEta={r.pmEta}
+      <ScheduleLine planDate={r.planDate} planSrc={r.planSrc} berthAlt={r.berthAlt} pmEta={r.pmEta}
         pf={(pilotForecast || {})[(r.vsl || '').toUpperCase()]} />
       {/* TallyOne 1.0(L4): V8.93 도구 4종 — 10px 초소형 버튼을 줄 아래 40px 터치 타깃 행으로 재배치(기능 불변) */}
       {r.loading > 0 && (
@@ -2244,7 +2244,7 @@ function ShipArchiveSection({ shipLib }) {
 
 // TallyOne 1.0(L3): 진행 상황 줄 일정 표시 — planSrc 출처 뱃지는 HomePage 1026행 _MK와 같은 표기.
 //   자리별 출처('입항출처|출항출처')도 같은 규칙으로 풀며, 일정이 전혀 없으면 '자료 없음'을 명시.
-function ScheduleLine({ planDate, planSrc, pf, pmEta = '' }) {
+function ScheduleLine({ planDate, planSrc, pf, pmEta = '', berthAlt = null }) {
   const MK = { mail: '📧메일', pilot: '⚓도선', portmis: '🚢신고', plan: '📋배정' };
   const pp = String(planSrc || '').split('|');
   const srcIn = MK[pp[0]] || '';
@@ -2260,7 +2260,8 @@ function ScheduleLine({ planDate, planSrc, pf, pmEta = '' }) {
   if (!hasAny) return <div className="text-2xs text-dim-500 mt-0.5">📅 일정 자료 없음 (수집기 미수신)</div>;
   return (
     <div className="text-2xs text-dim-300 mt-0.5 flex items-center gap-1.5 flex-wrap">
-      {planDate && <span>📅 {planDate}{srcLabel ? ` (${srcLabel})` : ''}</span>}
+      {planDate && <span>📅 {planDate}{srcLabel ? ` (${srcLabel})` : ''}{berthAlt && pp[0] === 'pilot' ? ' 확정' : ''}</span>}
+      {berthAlt && <span className="text-violet-300" data-berth-alt={berthAlt.st} title="터미널 선석배정이 정한 작업예정입니다">📋 배정 작업예정 {(() => { const d = new Date(berthAlt.at); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })()} {berthAlt.label}</span>}
       {/* TallyOne 1.40-01: 🛠 작업예정 줄 삭제. planDate 앞자리가 **이미 작업시작**이라(수집기가 환산해
           넣는다) 여기서 부두 소요를 또 더해 2시간 초과 표시가 났다 — 위 📅 줄과 같은 값이므로 중복이기도 했다.
           도선 **입항 원본**은 아래 ⚓ 입항 줄이 그대로 보여준다. 1.22 주석의 오답 1786057401908은
