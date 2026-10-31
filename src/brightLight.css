@@ -292,6 +292,7 @@
 :root[data-bright="4"] .bg-yellow-600{background-color:rgb(250 204 21)}
 :root[data-bright="4"] .bg-yellow-700{background-color:rgb(253 224 71)}
 :root[data-bright="4"] .bg-yellow-700\/60{background-color:rgb(253 224 71 / 0.60)}
+:root[data-bright="4"] .bg-yellow-900\/50{background-color:rgb(254 249 195 / 0.50)}
 :root[data-bright="4"] .bg-yellow-950\/20{background-color:rgb(254 252 232 / 0.20)}
 :root[data-bright="4"] .bg-yellow-950\/30{background-color:rgb(254 252 232 / 0.30)}
 :root[data-bright="4"] .bg-yellow-950\/40{background-color:rgb(254 252 232 / 0.40)}
@@ -470,6 +471,7 @@
 :root[data-bright="4"] .border-yellow-500{border-color:rgb(234 179 8)}
 :root[data-bright="4"] .border-yellow-500\/40{border-color:rgb(234 179 8 / 0.40)}
 :root[data-bright="4"] .border-yellow-600{border-color:rgb(250 204 21)}
+:root[data-bright="4"] .border-yellow-600\/60{border-color:rgb(250 204 21 / 0.60)}
 :root[data-bright="4"] .border-yellow-700\/30{border-color:rgb(253 224 71 / 0.30)}
 :root[data-bright="4"] .border-yellow-700\/40{border-color:rgb(253 224 71 / 0.40)}
 :root[data-bright="4"] .border-yellow-700\/60{border-color:rgb(253 224 71 / 0.60)}

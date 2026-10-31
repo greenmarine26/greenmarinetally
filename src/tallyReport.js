@@ -4,7 +4,7 @@
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
 import { isTermOtL, isLen45Iso } from './utils.js';   // 4.25-01: L5U0(오픈탑)은 터미널 읽기로 40피트 하이큐브 — 크기 칸 한 벌
 import { sealCheckOf } from './utils.js';   // 4.49: Act. Cntr-Seal 실번호 상이 = 실오류 판정 한 벌
-import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, isMadeUnitCn, isListOriginRecord, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
+import { emptySealSpec, isoToLabel, isPyeongtaekPort, computeShiftingMapCached, shiftingListOf, fmtShiftPos, shiftCnSetOf, isShiftOffPtk, voyageKeyOf, effectivePos , applySpecialMarks, hatchReportTs, pickCarrierOp, pickDischargePol, isFullReefer, isEmptyReefer, normPortCode, isFlatRackIso, ediMapFromRaw, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, isMadeUnitCn, isListOriginRecord, splitJoinedSeals, MADE_UNIT_LABEL, mfnIsChinaDest, mfnDestKo } from './utils.js';   // 3.60-20: 엠티 플랫랙 번들   // 3.49: hatchReportTs — 자동 해치 기록의 사건 시각   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex, shipOpMapper, opParent, subIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -374,7 +374,7 @@ export function bundleKeyOf(c, mode, bdoc) {
   if (!(c && c.fe === 'E' && (c.fr || isFlatRackIso(c.iso)))) return '';
   const p = effectivePos(c);
   if (!(p && p.bay && p.row && p.tier)) return '';
-  const op = String(c.op || '').toUpperCase().trim() || '???';
+  const op = String(c.op || '').toUpperCase().trim() || (c._mfn ? 'MFN' : '???');
   const port = port3(mode === 'discharge' ? c.pol : c.pod) || '???';
   return [op, port, tallySizeCol(c), _bbay(p.bay), _bp2(p.row), _bp2(p.tier)].join('|');
 }
@@ -414,7 +414,7 @@ export function emptyFrBundlesOf(containers, mode, voyage) {
       //  ★ 4.55 — 서류 묶음. 선사·항구·규격·자리는 첫 컨 값(서류는 컨 번호만 준다) · 자리가 없으면 «자리 미상». mixed = 묶음 안에서 선사·항구·규격·자리가 갈리거나 엠티가 아닌 컨이 섞임(서류와 앱 자료가 어긋난 신호) ·
       //    missing = 서류에는 있는데 앱 목록에 없는 컨. src 'doc' = 서류 기준(화면이 «터미널 묶음 서류 기준» 으로 밝힌다).
       const dg = doc && doc.groups.find((x) => x.key === key);
-      const f = (c) => { const p = effectivePos(c) || {}; return { op: String(c.op || '').toUpperCase().trim() || '???', port: port3(mode === 'discharge' ? c.pol : c.pod) || '???', sz: tallySizeCol(c), pos: p.bay && p.row && p.tier ? `${_bp2(_bbay(p.bay))}-${_bp2(p.row)}-${_bp2(p.tier)}` : '' }; };
+      const f = (c) => { const p = effectivePos(c) || {}; return { op: String(c.op || '').toUpperCase().trim() || (c._mfn ? 'MFN' : '???'), port: port3(mode === 'discharge' ? c.pol : c.pod) || '???', sz: tallySizeCol(c), pos: p.bay && p.row && p.tier ? `${_bp2(_bbay(p.bay))}-${_bp2(p.row)}-${_bp2(p.tier)}` : '' }; };
       const a0 = f(arr[0]), sigs = new Set(arr.map((c) => { const x = f(c); return [x.op, x.port, x.sz].join('|'); }));   // 자리가 아직 없는 컨은 «자리가 다르다» 로 치지 않는다(자리 있는 컨끼리만 비교)
       const poss = new Set(arr.map(f).map((x) => x.pos).filter(Boolean));
       const posOf = arr.map(f).find((x) => x.pos);
@@ -481,7 +481,7 @@ export function bundleSummary(containers, mode) {
     if (!v || !v._bundleN) continue;
     const sz = tallySizeCol(v); const szL = sz === '20' ? "20'" : sz === '45' ? "45'" : sz === 'HC' ? 'HC' : "40'";
     (bySz[szL] ??= { cn: 0, bundles: 0 }); bySz[szL].cn += v._bundleN; bySz[szL].bundles += 1;
-    const op = String(v.op || '').toUpperCase().trim() || '???';
+    const op = String(v.op || '').toUpperCase().trim() || (v._mfn ? 'MFN' : '???');
     (byOp[op] ??= { cn: 0, bundles: 0 }); byOp[op].cn += v._bundleN; byOp[op].bundles += 1;
   }
   const lines = Object.entries(bySz).map(([szL, o]) => `* ${szL}FR E x ${o.cn} ( ${o.bundles} BUNDLE ) → ${szL}F x ${o.bundles} CALCULATION`);
@@ -490,7 +490,7 @@ export function bundleSummary(containers, mode) {
 export function buildMatrix(containers, mode) {
   const mat = {};
   for (const c of bundleFold(containers, mode)) {
-    const op = String(c.op || '').toUpperCase().trim() || '???';
+    const op = String(c.op || '').toUpperCase().trim() || (c._mfn ? 'MFN' : '???');
     const port = port3(mode === 'discharge' ? c.pol : c.pod) || '???';
     const fe = c.fe === 'E' ? 'E' : 'F';
     const sz = tallySizeCol(c);
@@ -554,8 +554,9 @@ export function buildOS(containers, compMap, mode, fmt) {
     const szLbl = sz === '20' ? "20'" : sz === '45' ? "45'" : sz === '40' ? "40'" : 'HC';
     const fe = c.fe === 'E' ? 'EMPTY' : 'FULL';
     const k = `${port}|${szLbl}|${fe}`;
-    g[k] ??= { port, size: szLbl, fe, manifested: 0, worked: 0, short: 0, rf: 0, rh: 0, dg: 0 };
-    g[k].manifested++;
+    g[k] ??= { port, size: szLbl, fe, manifested: 0, worked: 0, short: 0, over: 0, rf: 0, rh: 0, dg: 0 };
+    //  ★ 4.58 — MFN(화물은 있으나 적하목록 없음)은 MANIFESTED 에 안 들고 DISCHARGED 에만 든다 → OVER(실물 MCAT 630N OS-IN «MANIFESTED 3 · DISCHARGED 107 · OVER 104»). 추가분(_extraOfList)은 종전 그대로 — 한 컨은 한 번만.
+    if (c._mfn) g[k].over++; else g[k].manifested++;
     const comp = compMap ? compMap[c.cn] : null;
     const missing = comp && comp.flag === 'missing';
     if (comp && !missing) g[k].worked++;
@@ -581,7 +582,7 @@ export function buildOS(containers, compMap, mode, fmt) {
   // 선사별 규격 요약(REMARKS 줄) — "SKR : 20'F x 11 , 40'F x 58 ( RH x 2 )"
   const byOp = {};
   for (const c of containers) {
-    const op = String(c.op || '').toUpperCase().trim() || '???';
+    const op = String(c.op || '').toUpperCase().trim() || (c._mfn ? 'MFN' : '???');
     const sz = tallySizeCol(c);
     const fe = c.fe === 'E' ? 'E' : 'F';
     byOp[op] ??= {};
@@ -639,6 +640,20 @@ export function buildSealList(voyage, mode) {
         actualSeal: _k.error ? _sl(_k.actual || act) : '',
         reseal, remarks: _op(pickCarrierOp(r.op, _ediMap[r.cn] && _ediMap[r.cn].op, _vslS)),
         fe: r.fe === 'E' ? 'EMPTY' : 'FULL',
+      });
+    }
+  }
+  //  ★ 4.58 — MFN(화물은 있으나 적하목록 없음)도 이 시트에 한 줄씩 싣는다(검수사 2026-10-31 07:51 «수석 마감텔리 파일 작성때에도 반드시 적용»). 실물 MCAT 630N Actual_i 가 그렇게 적는다 —
+  //    MANIFEST 칸에 컨번호·규격 «40'»·비고 «MFN (화물 있으나 적하목록 없음)». 씰은 모르니 비운다. 중국행이면 «MFN·다롄행 주의». 틀 채우기·폴백 두 길이 이 목록을 같이 쓴다. mfnList 가 없으면 아무것도 안 붙는다.
+  if (mode === 'discharge') {
+    const U = ptkDischargeUnitsOf(voyage);
+    for (const cn of [...(U.mfn || [])].sort()) {
+      const it = U.mfnItems.get(cn) || {};
+      const col = it.iso ? tallySizeCol({ iso: it.iso, cn }) : '';
+      out.push({
+        cn, manifestSeal: '', size: col === '20' ? "20'" : col === '45' ? "45'" : "40'", actualSeal: '', reseal: '',
+        remarks: mfnIsChinaDest(it.dest) ? `MFN·${mfnDestKo(it.dest)}행 주의` : 'MFN (화물 있으나 적하목록 없음)',
+        fe: it.fe === 'E' ? 'EMPTY' : 'FULL', mfn: true,
       });
     }
   }
@@ -761,7 +776,7 @@ export function buildPerformance(disCs, loadCs, fmt) {
   const agg = (cs, mode) => {
     const m = {};
     for (const c of bundleFold(cs, mode)) {   // 3.60-20: Final Work 와 같은 목록(엠티 플랫랙 번들 = FULL 1대 — 실물 Performance 도 216)
-      const op = String(c.op || '').toUpperCase().trim() || '???';
+      const op = String(c.op || '').toUpperCase().trim() || (c._mfn ? 'MFN' : '???');
       const fe = c.fe === 'E' ? 'E' : 'F';
       ((m[op] ??= { F: {}, E: {} })[fe])[tallySizeCol(c)] = (m[op][fe][tallySizeCol(c)] || 0) + 1;
     }

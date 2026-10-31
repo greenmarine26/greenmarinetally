@@ -15,7 +15,7 @@
 //    · 세관 검수 결과 코드(data/customsCodes.js 한 벌) 후보 — g3 «MFN» · g1 중 완료·실적 없는 컨 «MGN» · EDI 번호 대기 자리 «CNN». 후보일 뿐 확정 아님.
 //  앱 대수(app)는 4.20 평택 양하분 한 벌(utils.ptkDischargeUnitsOf)의 set — 홈 카드·마감텔리와 같은 수다. 선적은 진행 숫자 한 벌(progressOf)의 평택분.
 //  터미널 수량은 번호를 모른다 — 차이를 묶음(·참고)으로 설명 못 하는 만큼은 «번호 없음» 으로 센다(후보일 뿐 확정 아님).
-import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos } from './utils.js';
+import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos, mfnIsChinaDest, mfnChinaWarn, mfnDestKo, MFN_RELOAD_LABEL } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import { frBundlesOf, bundleExplainOf, bundleDocNote, bundleDocExpect, bundleDocSrc } from './tallyReport.js';   // 4.54: 빈 FR 묶음 — 터미널은 한 묶음을 1대로 센다(마감텔리 묶음 판정 한 벌)
 
@@ -111,9 +111,10 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
   const carrierPartial = sources.customs.has && sources.carrier.has && sources.carrier.n * 2 < sources.customs.n;
 
   //  앱 대수 — 양하는 4.20 평택 양하분 한 벌, 선적은 진행 숫자 한 벌의 평택분(홈 카드 막대와 같은 수).
-  let app, inApp;
+  let app, inApp, mfnU = null;
   if (dis) {
     const U = ptkDischargeUnitsOf(voyage, ss);
+    mfnU = U;
     app = U.set.size; inApp = (cn) => U.set.has(cn);
   } else {
     const ptkCns = new Set([...ediRow].filter(([, x]) => x.st === 'ptk').map(([cn]) => cn));
@@ -219,5 +220,18 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
       unknown = Math.max(0, Math.abs(gapRest) - explained);
     }
   }
-  return { mode: mk, sources, carrierPartial, started, app, term: { basis: termBasis, n: termN }, gap, gapRest, explained, unknown, bundles, bundleDiff, bundleExplained, doc, groups: gl, ref, refConf, total };
+  //  ★ 4.58 — MFN(터미널 이동지시엔 있고 메일 양하 리스트엔 없는 컨 — 화물은 있으나 적하목록 없음). 앱 수(app)에 이미 들어 있다(278 = 리스트 234 + MFN 44) — 어긋남 묶음(groups)·어긋남 수(total)·«번호 없음»(unknown)·후보(explained)에는 섞지 않고
+  //    따로 싣는다(MOVINS 기준이라 g3 «EDI 평택인데 세관 밖» 과 모집단이 다르다). 중국행(원래 도착항 CNDLC·CNTXG·CNTAO — Baplie)은 꼬리표로 구분한다. 검수사 2026-10-31 «34대분은 주의 대상으로 다렌과 텐진이 목적지 였다는걸 표기 바랍니다».
+  let mfn = null;
+  if (dis && mfnU && mfnU.mfn && mfnU.mfn.size > 0) {
+    const items = [...mfnU.mfn].sort().map((cn) => {
+      const m = mfnU.mfnItems.get(cn) || {};
+      const china = mfnIsChinaDest(m.dest);
+      const tag = [china ? mfnChinaWarn(m.dest) : (m.dest ? `원래 도착항 ${mfnDestKo(m.dest)}` : ''), m.reload ? MFN_RELOAD_LABEL : ''].filter(Boolean).join(' · ');
+      return { cn, iso: m.iso || '', fe: m.fe || '', op: m.op || '', pol: m.pol || '', pod: m.dest || m.pod || '', bay: '', row: '', tier: '', tag, china, reload: !!m.reload,
+               edi: 'none', customs: false, carrier: false, done: doneSet.has(cn), term: termSet.has(cn), pattern: '', inApp: true };
+    });
+    mfn = { n: items.length, china: items.filter((x) => x.china).length, ptk: items.filter((x) => !x.china).length, reload: items.filter((x) => x.reload).length, listN: app - items.length, items };
+  }
+  return { mode: mk, sources, carrierPartial, mfn, started, app, term: { basis: termBasis, n: termN }, gap, gapRest, explained, unknown, bundles, bundleDiff, bundleExplained, doc, groups: gl, ref, refConf, total };
 }

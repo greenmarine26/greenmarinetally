@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote } from './utils.js';
+import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
@@ -1913,6 +1913,9 @@ function formatStats(desc, results0, parsed = null) {
   //  ★ 4.20 (검수사 2026-10-10 00:02 «그 추가분은 세관에 목록에 없지만 실제 양하된 컨테이너로 신고 대상입니다»): 양하 평택분 안의 추가분(utils.ptkDischargeUnitsOf 가 찍은 _extraOfList)을 한 토막 밝힌다.
   const _ex = results.filter((c) => c._extraOfList && c._mode === 'discharge');
   if (_ex.length) lines.push(extraOfListNote(_ex.length, _ex[0]._extraBasis));
+  //  ★ 4.58 — MFN(터미널엔 있고 메일 양하 리스트엔 없는 컨 · utils.ptkDischargeUnitsOf 가 찍은 _mfn) — 양하 총계 옆에 «(리스트 234 + MFN 44)» 한 토막.
+  const _mf = results.filter((c) => c._mfn && c._mode === 'discharge');
+  if (_mf.length) lines.push(mfnNote(_mf.length, results.filter((c) => c._mode === 'discharge').length) + ' — MFN 은 화물은 있으나 양하 리스트(적하목록)에 없는 컨입니다.');
   return lines.join('\n');
 }
 

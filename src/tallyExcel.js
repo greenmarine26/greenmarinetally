@@ -156,27 +156,28 @@ function sheetOS(wb, D, mode) {
     isIn ? 'DISCHARGED' : 'LOADED', 'OVER', 'SHORT', 'REMARKS'];
   hd.forEach((v, i) => { const c = ws.getRow(10).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = { horizontal: 'center' }; });
   let r = 12; let lastPort = '';
-  let manTotal = 0, workTotal = 0;
+  let manTotal = 0, workTotal = 0, overTotal = 0;
   for (const row of os.rows) {
     ws.getCell(`B${r}`).value = row.port === lastPort ? '-ditto-' : row.port.split('').join(' ');
     ws.getCell(`D${r}`).value = row.size; ws.getCell(`E${r}`).value = row.fe;
     ws.getCell(`F${r}`).value = "CONT'R"; ws.getCell(`G${r}`).value = 'VAN';
     ws.getCell(`H${r}`).value = row.manifested; manTotal += row.manifested;
-    ws.getCell(`J${r}`).value = row.manifested - row.short; workTotal += row.manifested - row.short;
-    ws.getCell(`K${r}`).value = 'NIL';
+    ws.getCell(`J${r}`).value = row.manifested - row.short + (row.over || 0); workTotal += row.manifested - row.short + (row.over || 0);   // 4.58: DISCHARGED = 적하목록 대비 + OVER(MFN)
+    ws.getCell(`K${r}`).value = row.over ? row.over : 'NIL'; overTotal += row.over || 0;
     ws.getCell(`L${r}`).value = row.short ? row.short : 'NIL';
     const tags = [];
     if (row.rf) tags.push(`RF x ${row.rf}`);
     if (row.rh) tags.push(`RH x ${row.rh}`);
     if (row.dg) tags.push(`DG x ${row.dg}`);
     if (row.frb) tags.push(`FR x ${row.frb} ( ${row.frbN} BUNDLE )`);   // 3.60-20
+    if (row.over) tags.push(`MFN x ${row.over}`);   // 4.58
     ws.getCell(`M${r}`).value = tags.join(' , ');
     for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     lastPort = row.port; r++;
   }
   ws.getCell(`D${r}`).value = 'T O T A L'; ws.getCell(`G${r}`).value = 'VAN';
   ws.getCell(`H${r}`).value = manTotal; ws.getCell(`J${r}`).value = workTotal;
-  ws.getCell(`K${r}`).value = 'NIL'; ws.getCell(`L${r}`).value = manTotal - workTotal ? manTotal - workTotal : 'NIL';
+  ws.getCell(`K${r}`).value = overTotal ? overTotal : 'NIL'; ws.getCell(`L${r}`).value = (manTotal + overTotal - workTotal) ? (manTotal + overTotal - workTotal) : 'NIL';   // 4.58: SHORT = MANIFESTED + OVER − DISCHARGED
   for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = HEAD_FONT; cell.border = BOX; cell.alignment = CTR; }
   if (os.extra) { r += 1; ws.getCell(`B${r}`).value = `OVERLANDED (초과) x ${os.extra} — 별도 신고`; ws.getCell(`B${r}`).font = HEAD_FONT; }
   r += 3;
@@ -362,6 +363,7 @@ function sheetShifting(wb, D) {
 import TEMPLATE_MAP from './data/tallyTemplateMap.js';
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 import { tempNum, temp1, reeferRowFlags, fmtAt } from './reeferList.js';   // 4.57: 리퍼 온도 리스트 엑셀
+import { mfnDestKo } from './utils.js';   // 4.58: MFN 목록 엑셀의 목적지 한글
 
 const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
 
@@ -380,7 +382,8 @@ async function fillTemplate(D, ExcelJS) {
     if (!res.ok) return null;
     ab = await res.arrayBuffer();
   } else {
-    const fs = await import('fs');
+    const _nodeFs = 'fs';   // 4.58: 변수로 불러 브라우저용 번들(esbuild·vite)이 node 내장 fs 를 풀려 하지 않게 한다(MFN 목록이 이 파일을 끌어와 생긴 번들 오류)
+    const fs = await import(/* @vite-ignore */ _nodeFs);
     ab = fs.readFileSync(`public/tally_templates/${tplCode}.xlsx`);
   }
   const wb = new ExcelJS.Workbook();
@@ -570,7 +573,7 @@ async function fillTemplate(D, ExcelJS) {
         for (let c = c1; c <= c2; c++) ws.getRow(r).getCell(c).style = saved[c - c1];
       }
     }
-    let last = ''; let man = 0, wk = 0;
+    let last = ''; let man = 0, wk = 0, ov = 0;
     for (let i = 0; i < Math.max(os.rows.length, cap); i++) {
       const r = ws.getRow(cfg.dataStart + i);
       const o = os.rows[i];
@@ -578,15 +581,16 @@ async function fillTemplate(D, ExcelJS) {
         r.getCell(2).value = o.port === last ? '-ditto-' : o.port.split('').join(' ');
         r.getCell(4).value = o.size; r.getCell(5).value = o.fe;
         r.getCell(6).value = "CONT'R"; r.getCell(7).value = 'VAN';
-        r.getCell(8).value = o.manifested; r.getCell(10).value = o.manifested - o.short;
-        r.getCell(11).value = 'NIL'; r.getCell(12).value = o.short ? o.short : 'NIL';
+        r.getCell(8).value = o.manifested; r.getCell(10).value = o.manifested - o.short + (o.over || 0);   // 4.58: DISCHARGED 에 MFN(OVER) 포함
+        r.getCell(11).value = o.over ? o.over : 'NIL'; r.getCell(12).value = o.short ? o.short : 'NIL';
         const tags = [];
         if (o.rf) tags.push(`RF x ${o.rf}`);
         if (o.rh) tags.push(`RH x ${o.rh}`);
         if (o.dg) tags.push(`DG x ${o.dg}`);
         if (o.frb) tags.push(`FR x ${o.frb} ( ${o.frbN} BUNDLE )`);   // 3.60-20
+        if (o.over) tags.push(`MFN x ${o.over}`);   // 4.58
         r.getCell(13).value = tags.join(' , ') || null;
-        man += o.manifested; wk += o.manifested - o.short;
+        man += o.manifested; wk += o.manifested - o.short + (o.over || 0); ov += o.over || 0;
         last = o.port;
       } else {
         for (const c of [1,2,3,4,5,6,7,8,9,10,11,12,13]) r.getCell(c).value = null;
@@ -594,7 +598,7 @@ async function fillTemplate(D, ExcelJS) {
     }
     const tr = ws.getRow(totalRow);
     tr.getCell(8).value = man; tr.getCell(10).value = wk;
-    tr.getCell(11).value = 'NIL'; tr.getCell(12).value = (man - wk) ? (man - wk) : 'NIL';
+    tr.getCell(11).value = ov ? ov : 'NIL'; tr.getCell(12).value = (man + ov - wk) ? (man + ov - wk) : 'NIL';   // 4.58
     if (cfg.remarksRow > 0) {
       //  ★ 3.29 — **REMARKS 창이 고정이라 넘친 줄이 아무 표시 없이 사라지던 것.**
       //    이 파일의 Final Work(위)·Seal·OS 본문은 넘치면 duplicateRow/insertRows 로 양식을 늘리는데
@@ -1394,6 +1398,106 @@ export async function generateReeferExcel(rows, head = {}, opts = {}) {
   });
   const fname = `리퍼온도리스트_${(head.name || '').replace(/\s+/g, '')}_${head.voy || ''}_`
               + new Date().toISOString().slice(0, 10) + '.xlsx';
+  const buf = await wb.xlsx.writeBuffer();
+  if (opts.download !== false) _download(buf, fname);
+  return { fname, buf };
+}
+
+/* ══════════════════════════════════════════════════════════
+   ★ 4.58 — MFN 목록 엑셀(화물은 있으나 적하목록 없음). 마감텔리 SHIFTING 시트 머리·표와 Act. Cntr-Seal 하단(규격별 집계·서명줄)을 따른다.
+     공통 서식 — Arial · 제목 14 굵게 · 머리글 10 굵게 · 본문 10 · 얇은 테두리 · 가운데 · 0 은 빈 칸. 가로 A4 한 쪽 폭.
+     열: NO · CON'T NO · TYPE · F/E · W/T · OPR · POL · POD(터미널) · 원래 POD(Baplie) · 재적재 · REMARK
+   ══════════════════════════════════════════════════════════ */
+export async function generateMfnExcel(rows, hdr = {}, opts = {}) {
+  if (opts.form === 'field') return generateMfnFieldExcel(rows, hdr, opts);
+  const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'GREEN MARINE Tallyman Master';
+  const ws = wb.addWorksheet('MFN LIST');
+  ws.columns = [{ width: 5 }, { width: 15 }, { width: 8 }, { width: 5 }, { width: 9 }, { width: 8 }, { width: 16 }, { width: 12 }, { width: 11 }, { width: 14 }, { width: 8 }, { width: 28 }];
+  ws.pageSetup = { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  head(ws);
+  ws.getCell('A3').value = 'MFN LIST (화물은 있으나 적하목록 없음)'; ws.getCell('A3').font = TITLE_FONT;
+  ws.getCell('A5').value = `M/V : ${hdr.name || ''}`; ws.getCell('H5').value = `VOY # : ${hdr.voy || ''}`; ws.getCell('K5').value = `입항(양하) : ${hdr.arr || ''}`; ws.getCell('K5').font = HEAD_FONT;
+  ws.getCell('A6').value = `DATE : ${hdr.date || ''}`; ws.getCell('H6').value = 'PORT : PYEONGTAEK';
+  for (const a of ['A5', 'H5', 'A6', 'H6']) ws.getCell(a).font = HEAD_FONT;
+  const hd = ['NO', "CON'T NO", 'TYPE', 'F/E', 'W/T', 'POL', '선명·항차', '입항(양하)일', 'POD(터미널)', '원래 POD(Baplie)', '재적재', 'REMARKS'];
+  hd.forEach((v, i) => { const c = ws.getRow(8).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
+  let r = 9;
+  const list = rows || [];
+  list.forEach((x, i) => {
+    [i + 1, x.cn, x.type, x.fe, x.wt || null, x.pol, hdr.vv || '', hdr.arr || '', x.pod, x.dest, x.reload ? 'Y' : null, x.remark].forEach((v, c) => { ws.getRow(r).getCell(c + 1).value = zv(v); });
+    ws.getRow(r).getCell(5).numFmt = '#,##0';
+    for (let c = 1; c <= 12; c += 1) {
+      const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR;
+      if (x.china) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6D6' } };
+    }
+    r += 1;
+  });
+  if (!list.length) { ws.getCell('A9').value = 'NIL'; ws.getCell('A9').font = BODY_FONT; r = 10; }
+  // 규격별 집계 — Act. Cntr-Seal 하단 꼴(20FT / 40FT × FULL / EMPTY · TOTAL). 40FT 는 HC·45 포함.
+  const cnt = { f20: 0, e20: 0, f40: 0, e40: 0, unknown: 0 };
+  for (const x of list) { if (!x.len || !x.fe) cnt.unknown += 1; else cnt[(x.fe === 'F' ? 'f' : 'e') + x.len] += 1; }
+  const tr = r + 2;
+  ['', 'FULL', 'EMPTY'].forEach((v, i) => { const c = ws.getRow(tr).getCell(2 + i); c.value = v || null; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
+  [['20FT', cnt.f20, cnt.e20], ['40FT', cnt.f40, cnt.e40]].forEach(([lb, f, e], k) => {
+    [lb, zv(f), zv(e)].forEach((v, i) => { const c = ws.getRow(tr + 1 + k).getCell(2 + i); c.value = v; c.font = i ? BODY_FONT : HEAD_FONT; c.border = BOX; c.alignment = CTR; });
+  });
+  const tt = ws.getRow(tr + 3);
+  tt.getCell(2).value = 'TOTAL'; tt.getCell(3).value = list.length; ws.mergeCells(`C${tr + 3}:D${tr + 3}`);
+  [2, 3, 4].forEach((c) => { const cell = tt.getCell(c); cell.font = HEAD_FONT; cell.border = BOX; cell.alignment = CTR; });
+  const ptk = Number(hdr.ptk) || 0, lst = Number(hdr.list) || 0;
+  ws.getCell(`F${tr + 1}`).value = (lst > 0 ? `MANIFESTED ${lst} · DISCHARGED ${lst + list.length} · OVER ${list.length} — ` : '') + (ptk > 0 && lst > 0 ? `터미널 ${ptk} = 리스트 ${lst} + MFN ${list.length}` : `MFN ${list.length}대`);   // 4.58: OS-IN 과 같은 말
+  ws.getCell(`F${tr + 1}`).font = HEAD_FONT;
+  ws.getCell(`F${tr + 2}`).value = `40FT 는 HC·45 포함.${cnt.unknown ? ` 규격·F/E 미상 ${cnt.unknown}대는 집계 밖.` : ''} 중국행(노란 줄)은 원래 목적지 다롄·톈진 통과화물 — 확정되면 정상 양하.`;
+  ws.getCell(`F${tr + 2}`).font = BODY_FONT;
+  sig(ws, tr + 6, 'CHIEF CHECKER', 'CHIEF OFFICER', 'I');
+  const fname = `${hdr.code || ''} ${hdr.voy || ''} PTK MFN LIST.xlsx`.trim().replace(/\s+/g, ' ');
+  const buf = await wb.xlsx.writeBuffer();
+  if (opts.download !== false) _download(buf, fname);
+  return { fname, buf };
+}
+
+/** 일반 검수사용 MFN 엑셀 — A4 세로 한 장(인쇄 영역 고정 · fitToPage 1×1). 왼쪽 MFN 단독 표(입력용) + 오른쪽 5cm 오려붙임 띠(I:K 열 너비 합 189px = 5.0cm). 서명줄·OS 용어 없음. */
+export async function generateMfnFieldExcel(rows, hdr = {}, opts = {}) {
+  const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'GREEN MARINE Tallyman Master';
+  const ws = wb.addWorksheet('MFN');
+  // 열 너비(문자 단위 → 픽셀 = 너비×7+5). 띠 I:K = 11.5·7·6.5 → 85+54+50 = 189px ≈ 5.0cm. 왼쪽 7열 합 약 480px — 전체 폭 190mm 안.
+  ws.columns = [{ width: 3.2 }, { width: 15.6 }, { width: 5.8 }, { width: 3.8 }, { width: 7.6 }, { width: 11 }, { width: 14 }, { width: 1.9 }, { width: 11.5 }, { width: 7 }, { width: 6.5 }];
+  const list = (rows || []).slice().sort((x, y) => (y.china ? 1 : 0) - (x.china ? 1 : 0) || x.cn.localeCompare(y.cn));
+  const last = 4 + list.length + 2;
+  ws.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }, printArea: `A1:K${Math.max(last, 8)}` };
+  ws.getCell('A1').value = 'MFN 목록 (화물은 있으나 적하목록 없음)'; ws.getCell('A1').font = TITLE_FONT;
+  ws.getCell('A2').value = `${hdr.vv || hdr.name || ''}   입항(양하) ${hdr.arr || ''}   출력 ${hdr.date || ''}`; ws.getCell('A2').font = HEAD_FONT;
+  const lst = Number(hdr.list) || 0, tm = Number(hdr.ptk) || 0;
+  ws.getCell('A3').value = `MFN ${list.length}대 (` + (tm > 0 && lst > 0 ? `터미널 ${tm} = 리스트 ${lst} + MFN ${list.length}` : `MFN ${list.length}대`) + ')'; ws.getCell('A3').font = HEAD_FONT;
+  ['NO', '컨번호', '규격', 'F/E', '출발지', '원래 목적지', '비고'].forEach((v, i) => { const c = ws.getRow(4).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
+  list.forEach((x, i) => {
+    const r = 5 + i;
+    const tag = (x.china ? `${mfnDestKo(x.dest)}행 주의` : '') + (x.reload ? `${x.china ? ' · ' : ''}재적재` : '');
+    [i + 1, x.cn, x.type, x.fe, x.pol, x.dest, tag].forEach((v, c) => {
+      const cell = ws.getRow(r).getCell(c + 1); cell.value = zv(v); cell.font = { name: 'Arial', size: c === 6 ? 8 : 9 }; cell.border = BOX; cell.alignment = CTR;
+      if (x.china) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6D6' } };
+    });
+  });
+  // 오려붙임 띠 — I:K, 점선 테두리, 6~7pt. 맨 위 두 줄(선명·항차·입항일 / MFN n대) 뒤에 컨번호·규격·F/E 한 줄씩.
+  const SF = { name: 'Arial', size: 7 }, SFB = { name: 'Arial', size: 7, bold: true };
+  const dash = { style: 'dashed', color: { argb: 'FF000000' } };
+  ws.getCell('I3').value = '✂ 오려서 노트에 붙이세요'; ws.getCell('I3').font = { name: 'Arial', size: 6 };
+  const top = [`${hdr.vv || hdr.name || ''} · ${hdr.arr || ''}`, `MFN ${list.length}대`];
+  const sRows = 2 + list.length;
+  for (let k = 0; k < sRows; k += 1) {
+    const r = 4 + k;
+    if (k < 2) { ws.mergeCells(`I${r}:K${r}`); const c = ws.getCell(`I${r}`); c.value = top[k]; c.font = SFB; c.alignment = { horizontal: 'left', vertical: 'middle' }; }
+    else { const x = list[k - 2]; [x.cn, x.type, x.fe].forEach((v, i) => { const c = ws.getRow(r).getCell(9 + i); c.value = zv(v); c.font = i === 0 ? SFB : SF; c.alignment = { horizontal: i === 2 ? 'center' : 'left', vertical: 'middle' }; }); }
+    for (let col = 9; col <= 11; col += 1) {
+      const c = ws.getRow(r).getCell(col);
+      c.border = { top: k === 0 ? dash : undefined, bottom: k === sRows - 1 ? dash : (k === 1 ? { style: 'thin' } : undefined), left: col === 9 ? dash : undefined, right: col === 11 ? dash : undefined };
+    }
+  }
+  const fname = `${hdr.code || ''} ${hdr.voy || ''} PTK MFN FIELD.xlsx`.trim().replace(/\s+/g, ' ');
   const buf = await wb.xlsx.writeBuffer();
   if (opts.download !== false) _download(buf, fname);
   return { fname, buf };

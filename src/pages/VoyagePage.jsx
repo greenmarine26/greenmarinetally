@@ -58,8 +58,10 @@ import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';
 import { isReeferTarget } from '../reeferList.js';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf, keepConfirmedOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { mfnNote } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
+import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
@@ -1561,6 +1563,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         mode={cMode}
         voyageKey={voyageKey}
         voyageInfo={voyage.info}
+        mfnList={voyage.discharge?.mfnList || null} mfnVoyage={voyage}   /* 4.58: MFN 컨이면 상자·출력 단추 */
         inspector={inspector}
         sealMode={sealTargets.byCn[detailC.cn] || null}
         onClose={() => setDetailC(null)}
@@ -1738,6 +1741,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               const c = (containers || []).find(x => x.cn === cn);
               if (c) setDetailC(c);
             }}
+            onOpenMfnList={() => openMfnList(voyage.discharge?.mfnList, voyageKey, voyage.info, inspector, voyage)}   /* 4.58: 주의 박스 MFN 그룹의 «MFN 목록 출력» */
           />
         </div>
       )}
@@ -2582,6 +2586,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     else if (filter === 'shift') arr = arr.filter(_isShiftRow);   // 1.76-05: 시프팅만 보기 · 4.16: 시프팅 리스트(내림·실음 완료는 여기서)
     else if (filter === 'lugg') arr = arr.filter(c => c._deckOnly || c.lugg);   // 2.06-04: 수화물(미정)만 보기
+    else if (filter === 'mfn') arr = arr.filter(c => c._mfn);   // 4.58: MFN 만 보기
     else if (filter === 'keep') arr = arr.filter(c => c._keep);   // 4.48: 선사 지시 본선 잔류만 보기
     else if (filter === 'keepconf') arr = arr.filter(c => c._keepConf);   // 4.53: 선적 EDI 가 확정한 본선 잔류만 보기
     /*  마감 점검 「리퍼」 항목 점프용 — 3.25: **판정 한 벌**(규범 §4-4).
@@ -2634,6 +2639,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       lugDone: lg.filter(c => compMap[c.cn]).length,
       keep: containers.filter(c => c._keep).length,   // 4.48
       keepConf: containers.filter(c => c._keepConf).length,   // 4.53
+      mfn: mode === 'discharge' ? base.filter(c => c._mfn).length : 0,   // 4.58: MFN — 총계 안(자료대로 센다 · 278 = 리스트 234 + MFN 44)
     };
   }, [containers, compMap, xrayMap, mode, _shCnL]);
 
@@ -2730,7 +2736,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
 
       <div className="flex gap-2 flex-wrap">
         {[
-          { k: 'all', t: `전체 ${stats.total}` },
+          { k: 'all', t: `전체 ${stats.total}${stats.mfn > 0 ? ' ' + mfnNote(stats.mfn, stats.total) : ''}` },
           { k: 'undone', t: `미완 ${stats.total - stats.done}` },
           { k: 'done', t: `완료 ${stats.done}` },
           ...(mode === 'discharge' ? [{ k: 'xray', t: `🔍 X-RAY ${stats.xray}` }] : []),
@@ -2740,6 +2746,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           // 2.06-04: 덱 전용 수화물 = 미정 칸 — 총계(확정분)에 안 섞는다 (검수사 «LUG는 미정으로 노면 됩니다»)
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
           //  4.48: 선사 지시 본선 잔류 — 평택에서 안 내림(총계 밖). 아래 평택 컨을 막으면 ◆ 시프팅 칩에도 예보로 든다.
+          ...(stats.mfn > 0 ? [{ k: 'mfn', t: `⚠ MFN ${stats.mfn}` }] : []),   // 4.58: 화물은 있으나 양하 리스트에 없는 컨(총계 안 몇 대) — 누르면 MFN 만 본다
           ...(stats.keep > 0 ? [{ k: 'keep', t: `🟡 본선 잔류 예정 ${stats.keep}` }] : []),
           //  4.53: 선적 EDI 에 실려 확정된 본선 잔류 — 양하 대수에서 빠지고 ◆ 시프팅으로 센다(위 «◆ 시프팅» 칩 안의 몇 대).
           ...(stats.keepConf > 0 ? [{ k: 'keepconf', t: `🔵 본선 잔류 확정 ${stats.keepConf}` }] : []),

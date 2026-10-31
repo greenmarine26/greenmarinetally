@@ -828,6 +828,7 @@ node tools/smoke_reeferphoto.cjs || { echo "✗ 리퍼 사진 판독 연막검�
 # 4.56-05: 리퍼 사진 — 칸 안 위아래 두 값 규칙·참고 목록·범위 검산·클로드 재시도(스텁 응답 — 프롬프트·후처리·배선을 잰다)
 node tools/smoke_reeferocr456.cjs "$PWD" || { echo "✗ 리퍼 사진 4.56-05 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_reeferlist457.cjs "$PWD" || { echo "✗ 리퍼 온도 리스트 4.57 연막검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_mfn.cjs "$PWD" || { echo "✗ MFN 목록 4.58 연막검사 실패 — 배포 금지"; exit 1; }   # 4.58: 양하 278 = 리스트 234 + MFN 44 · 표식 · 주의 박스 · 목록 출력 · 엑셀 (실스냅샷 MCSN 642N)
 node tools/smoke_photoshare4571.cjs "$PWD" || { echo "✗ 앨범 사진 카톡 공유 4.57-01 연막검사 실패 — 배포 금지"; exit 1; }
 # 2.41: 콘앱 베이뷰 — 컨번호 잘림·단추 겹침·진입 배율·항구 코드 한 벌
 node tools/smoke_conebayfit.cjs || { echo "✗ 콘앱 베이뷰 연막검사 실패 — 배포 금지"; exit 1; }

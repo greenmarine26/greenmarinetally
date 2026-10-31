@@ -57,7 +57,8 @@ export function isSentenceQuery(v) {
 // (앞 판) 'TallyOne 4.56'   // 4.56 미르 «양하 정확도» (앞 판 주석은 아래 줄에 그대로)
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
-export const APP_VERSION = 'TallyOne 4.58'   // 4.58 **호기 교체 — 상황판은 새 호기만 보이고 옛 호기 작업대수는 «N대 포함»으로 단다** — 검수사 2026-10-31 «3호기 4호기 이용하다 1호기 2호기로 대체한다고 하면 상황판에는 1호기 2호기만 보여야 한다» · «이종부 3호기로 몇개하다가 1호기로 바꿔서 몇개 했슴을 표기하고 장비는 1호기 2호기를 보여주고 1호기(3호기 작업대수 : XXX대 포함)». 원인 — 상황판 호기 줄(utils.craneBoardOf)이 «이 항차에 한 번이라도 기록이 찍힌 호기» 를 전부 줄로 세워, 교체된 3호기가 멈춘 줄로 남았다. 수리 — utils.craneSwapsOf 한 벌: 같은 조 안에서 같은 사람이 다른 호기로 다시 등록되면 교체(짝은 이름이 잇는다 · 교체 시각 = 새 호기 등록 시각 · 옛 호기를 교체 뒤에 다시 등록하면 접지 않는다 · 조가 다르면 교체 아님). craneBoardOf 가 옛 호기 줄을 접고 새 호기에 대수를 더해 fold 로 «(3호기 작업대수 N대 포함)» 을 달고(ChiefDashboard), 기록은 지우지 않는다. 실측 STMJ 2667E — 이종부 3→1 · 김성일 4→2 (연막 smoke_craneswap). 하지 않은 것 — 카토스만 보고 앱이 스스로 교체를 알아채는 갈래 · 콘앱 호기 줄(ConeOne 다음 판).   //
+export const APP_VERSION = 'TallyOne 4.59'   // 4.59 **MFN 목록 — 터미널이 센 양하 278대 중 메일 양하 리스트(234)에 없는 44대(화물은 있으나 적하목록 없음)를 양하 대수에 «278 (리스트 234 + MFN 44)» 로 합쳐 적고, 컨 상세에 MFN 표기, 목록을 PDF·엑셀로 받는다** — 검수사 2026-10-31 07:18 «278대가 양하분 맞는거 같습니다. 다만 34대분은 주의 대상으로 다렌과 텐진이 목적지 였다는걸 표기 바랍니다. 나중에 확정이 되면 정상적으로 돌리는게 맞고요» · 07:23 «MFN리스트를 만들고 앱에 컨 상세카드에 그걸 표기하기 바랍니다.» · 07:29 «278로 표기 바랍니다 단 44대가 MFN대상이라는것도 278(234+MFN44)» · 07:31 «MFN표기를 누르면 엑셀또는 PDF로 출력하거나 다운 받을수 있게 해주세요» · 07:32 «목록 정리도 마감텔리를 찾아보고 같게 만들어 주시면 됩니다.». 실근거 — MCSN(SPIL NIKEN) 642N 양하: 앱은 메일 최종 양하 리스트 234대만 셌고 터미널(PCTC)은 278대로 셌다(터미널 이동지시 MOVINS 도착항 KRPTK 278 중 44대가 리스트에 없음 = 세관 코드 MFN). 44대 = 중국행(Baplie 도착항 CNDLC 22·CNTXG 12) 34 + 평택행 10, 그중 SUDU7733400 은 톈진행인데 출항 플랜에 다시 실려 있는 재적재. 수집기가 voyages/{키}/discharge/mfnList 로 올리면 utils.ptkDischargeUnitsOf 가 유닛(set)에 더하고 U.mfn 으로 따로 돌려준다(추가분 extra 와는 별개 · 시프팅·평택 아닌 POD 확정·이미 목록에 있는 컨은 더하지 않음 · mfnList 가 없으면 종전과 같음 · 목록 없는 배(basis edi)는 소비처가 U.set 을 안 봐 더하지 않음). 홈 카드·항차 화면 [전체] 칩·마감텔리·갱별·미르·콘앱(ConeOne 2.73)이 같은 278 · 컨 상세 노란 MFN 상자(중국행 «주의 — 원래 목적지 다롄(통과화물이었음)» · 재적재) · 주의 박스 자료별 대조 MFN 그룹(어긋남 수·번호 없음에는 안 섞임 — 종전 «번호 없음 44» 가 0) · src/mfnList.js + tallyExcel.generateMfnExcel(마감텔리 SHIFTING 머리·표 + Act. Cntr-Seal 하단 집계·서명줄) · 진입점 셋(컨 상세 · 주의 박스 · 출력 센터 MFN 목록 타일).
+// (앞 판) 'TallyOne 4.58'   // 4.58 **호기 교체 — 상황판은 새 호기만 보이고 옛 호기 작업대수는 «N대 포함»으로 단다** — 검수사 2026-10-31 «3호기 4호기 이용하다 1호기 2호기로 대체한다고 하면 상황판에는 1호기 2호기만 보여야 한다» · «이종부 3호기로 몇개하다가 1호기로 바꿔서 몇개 했슴을 표기하고 장비는 1호기 2호기를 보여주고 1호기(3호기 작업대수 : XXX대 포함)». 원인 — 상황판 호기 줄(utils.craneBoardOf)이 «이 항차에 한 번이라도 기록이 찍힌 호기» 를 전부 줄로 세워, 교체된 3호기가 멈춘 줄로 남았다. 수리 — utils.craneSwapsOf 한 벌: 같은 조 안에서 같은 사람이 다른 호기로 다시 등록되면 교체(짝은 이름이 잇는다 · 교체 시각 = 새 호기 등록 시각 · 옛 호기를 교체 뒤에 다시 등록하면 접지 않는다 · 조가 다르면 교체 아님). craneBoardOf 가 옛 호기 줄을 접고 새 호기에 대수를 더해 fold 로 «(3호기 작업대수 N대 포함)» 을 달고(ChiefDashboard), 기록은 지우지 않는다. 실측 STMJ 2667E — 이종부 3→1 · 김성일 4→2 (연막 smoke_craneswap). 하지 않은 것 — 카토스만 보고 앱이 스스로 교체를 알아채는 갈래 · 콘앱 호기 줄(ConeOne 다음 판).   //
 // (앞 판) 'TallyOne 4.57-01'   // 4.57-01 **앨범에서 고른 사진도 카톡 보고에 함께 나간다** — 검수사 2026-10-30 «카메라로 직접 촬영한것은 사진과 함께 내용이 보고가 되는데 사진 첨부는 내용만 보고가 되어서 따로 사진을 카톡에 다시 올려야 합니다». 앨범 사진은 형식 글자가 비었거나 클라우드 파일이라 공유 직전 canShare 가 거절하면 사진이 조용히 빠지고 글만 나갔다. kakaoShare.normalizeReportPhoto 로 고르는 순간 JPEG(긴 변 1600px)로 만들고, 못 읽으면 그 자리에서 알리며, 공유 때 한 장이라도 빠지면 경고를 띄운다. (앞 판) 4.57 **수석 리퍼 온도 리스트 — 리스트(EDI)·셋팅·실제 세 온도를 A4 세로 한 장(좌우 두 줄)으로 인쇄하고 엑셀로 받는다** — 검수사 2026-10-30 «마감을 짓기전에 인계용 자료가 필요한데 그것이 부족합니다» · «리스트 온도와 자료받은 것의 셋팅온도 실제온도 3가지가 적힌 리스트가 필요 합니다» · «저장한 사람은 자료에 남기는건 상관없는데 출력이나 엑셀 자료에는 체크 하면 넣고 체크 안하면 넣지않게» · «굳이 가로로 할 필요가 없습니다 세로 한장» · «온도 자릿수도 소수점 한자리로» · «사인 자리는 수기 사인 이름 없는 빈자리 갯수와 상관없이 항상 고정». src/reeferList.js(출력 창·엑셀 열 한 벌) · tallyExcel.generateReeferExcel · 출력 센터 «리퍼 온도 리스트»(수석) · 리퍼 온도 확인 창 «리스트 출력». 값은 저장된 것이고 확인자·시각은 창에서 체크했을 때만 나간다. 판정(풀 리퍼만)·온도 읽기는 reeferList.js 한 벌을 ReeferMemoModal 이 가져다 쓴다.
 // (앞 판) 'TallyOne 4.56-05'   // 4.56-05 **리퍼 온도 사진 판독 — 한 줄씩 밀려 읽던 것을 고쳤다(옆 줄의 세팅·실측을 가져옴)** — 검수사 2026-10-30 07:21 «-19.0 밑에 -2.5가 있는 줄이 있습니다. 그런데 그걸 하나로 읽습니다» · «첫장은 완벽하게 판독했는데 두번째장은 줄 구분이 없었고 텍스트 크기로 들쑥날쑥» (STMJ 2667E 양하, 수석 성창모). ⚠ 처음엔 «한 칸 안의 위아래 두 값»으로 잘못 읽었다 — 사진을 받아 보니 -19.0 은 51번 SKRU9401610 줄, -2.5 는 52번 TLLU7008801 줄로 **서로 이웃한 두 컨테이너**였다. 뿌리 — 실물 3장은 가로 종이를 세워 찍어 글자가 옆으로 누웠고, 옛 프롬프트에는 줄을 맞추는 규칙이 없어 모델이 세팅·실측을 한 줄씩 어긋나게 읽었다(앱 화면 ⚠ «-19 ≠ 자료 -2.6» 등). 실측 시험(같은 사진 · 소네트 · 자료의 세팅이 정답) — 옛 문구 2장 36대 중 세팅 19대 일치·실측 12대가 세팅과 3도 이상 벌어짐 / 새 문구 34대 / 새 문구+세워서 36대 전부 · 1장 29대·3장 13대도 전부 일치. 수리 — ① 프롬프트: 누운 사진 방향 바로잡기 · 맨 앞 NO. 줄 번호를 같이 읽기 · 이웃 줄 값 금지 · 실측은 세팅과 보통 2도 안 ② 세로 사진이면 반시계 90도 돌려서 보냄 ③ 실측이 자료 세팅과 3도 이상 벌어진 줄은 비우지 않고 경고 ④ -40~40도 밖 값은 비우고 알림 ⑤ 리퍼 사진만 클로드를 한 번 더 시도(한도·키 문제 제외)하고 제미나이로 읽으면 화면에 표시(그날 아침 4건 중 2건이 시간 초과 뒤 제미나이) ⑥ 사진·AI 원문 답을 항차 밖 `reefer_ocr_log/{항차}/{ts}` 에 남김(저장 여부 무관). 연막검사 tools/smoke_reeferocr456.cjs. // (앞 판) 'TallyOne 4.56-04'   // 4.56-04 **미르로 조 등록(«1호기 이종부 2호기 김성일»)을 하면 내 이름이 있는 호기로 기기 호기도 바뀐다** — 검수사 «04:00정도에 미르에게 1호기 2호기로 바뀌었답니다 이야기 했는데 4호기로 계속작업됨». 조 등록은 명단만 적고 gm_equip_no 를 안 바꿔 완료·보고가 옛 호기로 찍혔다(firebase.fbSetVoyageCraneCrew 한 곳에서 맞춘다 · 같은 이름이 두 호기면 건드리지 않음 · 지금 조일 때만). (앞 판) 'TallyOne 4.56-03'   // 4.56-03 **선적에서 터미널이 준 칸이 계획에 없거나 사람 칸과 겹치면, 위치를 맞바꿔 빈칸이 안 생기게 한다** — 검수사 2026-10-29 NSDC 2611S 30번 베이 «하나를 잘못찍건 위치를 제대로 바꾸었다면 빈자리는 생기지 않을것입니다». 뿌리 — 자동 맞교환(applyAutoSwap)은 «안 실린 밀려난 컨»만 봐서, 실린 4대가 한 칸씩 밀리고 끝 한 대(TEMU6518190)가 계획에 없는 14-02-86 에 적히면 30-10-84 가 빈칸으로 남고 한 칸씩 움직이는 검은 칸으로 보였다(맞교환 0건). 수리 — applyAutoSwap 이 그 컨(터미널 값 · 사람이 안 찍음 · 규격 같음)을 사슬이 닫히는 빈 계획 칸으로 메모리에서만 옮기고 원래 칸은 `_swap_orig` 에 남긴다(stripCatosPos 가 되돌림). 같은 칸에 사람 자리와 터미널 자리가 겹친 13-06-82 도 같은 규칙으로 풀린다. 실측 NSDC 2610N — 바뀐 컨 정확히 2대(8190→30-10-84 · 6120→13-04-82) · 한 칸 두 대 0 · 30번 베이 빈 계획 칸 0 · 연막검사 tools/smoke_orphanswap456.cjs. // 4.56-02 **남은 «말없이 넘기는 오류» 정리 — 빈 `.catch(()=>{})` 12곳과 `.catch(()=>null)` 2곳이 이제 경고 로그를 남긴다**(관리자 가드·작업 활동 기록·로그아웃 표시·공용 키 다시 읽기·베이매트릭스 씨앗·박스 루트·러기지 컨 저장·EDI 원본 정보·AI·미르 응답 읽기) — 검수사 2026-10-29 «남은 것이 생기면 안된다 … 청소완료가 아닌거죠». 동작 불변(로그만 추가). 눈금 `smoke_silentfail456` 기준선 0/0/0, `.catch(()=>null)` 도 센다.
 // (앞 판) // 4.55-03 **양하에서 먼저 나온 컨의 실제 칸을 «내린 순서»로 추정 — 위 단 컨을 계속 기다리지 않는다** — 검수사 2026-10-28 NSFR 2620N 16번 베이 «5128자리에 다른것이 있으면 5128은 그 다른컨의 자리로 가야합니다. 안가고 있으니 계속 5128을 찾는것입니다» · «5128 자리에서 4927이 나왔다면 그다음 대상이 5128이 아니고 그다음 컨테이너 8757이다». 뿌리 — 양하 완료는 수집기가 올리고(src:'term') 칸이 없다(카토스 cellPosition 은 EDI 계획 칸 그대로 · 수집기도 양하 칸은 버린다) → 4.42-04 맞바꿈은 앱 [완료] 길에서만 돌아 NSFR 6건 12대가 계획 칸에 그대로 남고 큐가 밀린 컨을 기다렸다. 수리 — utils.inferDischargePos: 같은 베이·열·데크/홀드 묶음에서 n 번째로 완료된 컨은 n 번째로 높은 칸에서 나왔다(쌓는 규칙) → 계획과 다르면 그 칸을 메모리에만 `_pos_src:'infer'` 로 적고 기존 applyAutoSwap 이 밀린 컨을 비운 칸으로 보낸다(구독 applyCatosPos→inferDischargePos→applyAutoSwap · 콘앱 같은 차례). 사람이 찍은 칸은 안 덮고 완료 시각이 같으면 순서를 지어내지 않으며 DB 에 안 쓴다(stripCatosPos 가 벗긴다). 실측 — NSFR 2620N 6건 정확히 12대(4972↔5128 등) · TNJP 26371E 150대 0건 · 연막검사 tools/smoke_dischargeinfer455.cjs. 같은 단 안의 바꿈은 증거가 없어 못 잡는다
@@ -161,7 +162,7 @@ export const APP_VERSION = 'TallyOne 4.58'   // 4.58 **호기 교체 — 상황�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.58 미르로 호기를 바꿔 등록하면 상황판에 새 호기만 보이고 옛 호기 대수는 포함으로 표시됩니다.'
+export const APP_NOTE = '4.59 터미널이 센 양하 대수 중 양하 리스트에 없는 MFN 44대를 278 (리스트 234 + MFN 44) 로 표시하고, 목록을 엑셀·PDF로 받습니다.'
 // (앞 판 APP_NOTE) '4.56-05 리퍼 온도 사진을 읽을 때 줄이 밀리던 것을 고쳤습니다. 사진과 읽은 값은 기록으로 남습니다.'
 // (앞 판 APP_NOTE) '4.56-04 미르로 호기 검수원을 등록하면 내 호기도 따라 바뀝니다.'
 // (앞 판 APP_NOTE) '4.55-01 선적 EDI 를 기다리는 배가 그 밖의 배로 접히거나 수석 완료 저장이 열리던 것을 고쳤습니다. 선적 자료나 계획이 있으면 EDI 가 아직이어도 선적은 대기로 봅니다.'
@@ -9732,7 +9733,8 @@ export function progressOf(section, mode, shiftSet, ptkCns, keepOnboard) {
   //  4.25: set = 평택분 분모 집합 그대로(숫자는 안 바뀐다) — 홈 상세 «베이별 진행» 이 이 집합을 베이로 나눈다(칸 합 = ptk.total · 두 벌 금지).
   return { listTotal: listCns.size, base: baseSet.size, baseDone, shiftN: ss.size, moves, extra,
            total: baseSet.size + ss.size, done: baseDone + moves, usePtk,
-           ptk: { total: baseSet.size, done: baseDone }, shift: { total: ss.size, done: moves }, set: baseSet };
+           ptk: { total: baseSet.size, done: baseDone }, shift: { total: ss.size, done: moves }, set: baseSet,
+           mfnN: (_U && _U.basis !== 'edi' && _U.mfn) ? [..._U.mfn].filter((cn) => baseSet.has(cn)).length : 0 };   // 4.58: 총계 안의 MFN 대수 — 홈 카드 «(리스트 234 + MFN 44)»
 }
 
 //  ★ 4.16 — **시프팅 분리 문지기 한 벌.** 그 방향 평택분에서 이 컨을 빼는가.
@@ -9764,6 +9766,26 @@ export function extraOfListNote(n, basis) {
   if (!(n > 0)) return '';
   return basis === 'list' ? `(양하 리스트 밖 추가분 ${n}대)` : `(세관 목록 밖 추가분 ${n}대 — 신고 대상)`;
 }
+//  ★ 4.58 — MFN(화물은 있으나 적하목록 없음 · 세관 코드표 customsCodes.MFN) 문구 한 벌. 터미널(PCTC) 이동지시(MOVINS)의 평택 도착 278대 가운데 메일 양하 리스트(234)에 없는 44대.
+//    검수사 2026-10-31 «278로 표기 바랍니다 단 44대가 MFN대상이라는것도 278(234+MFN44)» · «34대분은 주의 대상으로 다렌과 텐진이 목적지 였다는걸 표기 바랍니다. 나중에 확정이 되면 정상적으로 돌리는게 맞고요».
+export const MFN_LABEL = 'MFN — 화물은 있으나 양하 리스트(적하목록)에 없음';
+export const MFN_DEST_KO = { CNDLC: '다롄', CNTXG: '톈진', CNTAO: '칭다오', KRPTK: '평택' };
+export const MFN_RELOAD_LABEL = '재적재(내렸다 다시 실음)';
+export const mfnIsChinaDest = (d) => d === 'CNDLC' || d === 'CNTXG' || d === 'CNTAO';
+export const mfnDestKo = (d) => MFN_DEST_KO[d] || d || '';
+//  중국행 주의 문구 — 예) «주의 — 원래 목적지 다롄(통과화물이었음)»
+export const mfnChinaWarn = (d) => `주의 — 원래 목적지 ${mfnDestKo(d)}(통과화물이었음)`;
+//  총계 옆에 붙는 한 토막 — extraOfListNote 와 같은 꼴. total 은 MFN 을 합친 총계(278), n 은 MFN 대수(44) → «(리스트 234 + MFN 44)». MFN 이 없으면 빈 글.
+export function mfnNote(n, total) {
+  if (!(n > 0)) return '';
+  return total > n ? `(리스트 ${total - n} + MFN ${n})` : `(MFN ${n}대)`;
+}
+//  voyage.discharge.mfnList.items → { cn: 항목 } (수집기가 올림 — 앱은 읽기만). 없으면 빈 객체.
+export function mfnItemsOf(voyage) {
+  const m = voyage && voyage.discharge && voyage.discharge.mfnList;
+  const it = m && typeof m === 'object' && m.items && typeof m.items === 'object' ? m.items : null;
+  return it || {};
+}
 const _unitKey = (k) => !!k && !String(k).startsWith('_');
 export function ptkDischargeUnitsOf(voyage, shiftSet) {
   const sec = (voyage && voyage.discharge) || {};
@@ -9788,13 +9810,14 @@ export function ptkDischargeUnitsOf(voyage, shiftSet) {
   //    20:08 «수정본이 오면 또 수정본 대로 맞아질것입니다. 자료가 맞춰서 올테니까요». 4.48 은 메일 한 통으로 317 → 315 를 만들었다(MAMP 641N). 이제 양하 EDI·리스트가 고쳐져 와야 수가 바뀐다.
   //    keepIn — 지시 컨 가운데 이 집합에 든 것(아직 안 내린 것). 세관 목록 밖이어도 «추가분(신고 대상)» 표식은 달지 않는다(메일이 설명한다) — 내렸으면(완료 기록) 종전대로 추가분.
   const keep = keepOnboardOf(voyage);
-  if (basis === 'edi') { const _ke = new Set([...ediPtk].filter((cn) => onPtk(cn) && keep[cn])); return { basis, set: new Set([...ediPtk].filter((cn) => onPtk(cn))), extra, listSet: new Set(), ediKeyOf, transit: new Set(), shiftSet: shSet, keepIn: _ke }; }
+  if (basis === 'edi') { const _ke = new Set([...ediPtk].filter((cn) => onPtk(cn) && keep[cn])); return { basis, set: new Set([...ediPtk].filter((cn) => onPtk(cn))), extra, listSet: new Set(), ediKeyOf, transit: new Set(), shiftSet: shSet, keepIn: _ke, mfn: new Set(), mfnItems: new Map() }; }   // 4.58: 목록 없는 배(basis 'edi')는 소비처가 U.set 을 안 보고 EDI POD 평택분을 직접 센다 — MFN 을 set 에 더하면 소비처마다 답이 갈려 더하지 않는다(MFN 목록 출력은 mfnList 를 직접 읽는다)
   const picked = (r) => !!(r.pod_pick && r.pod && !isPyeongtaekPort(r.pod));   // 3.53: 평택 아닌 POD 를 고른 행
   const listSet = new Set((basis === 'customs' ? cust : rows).filter(([cn, r]) => !picked(r)).map(([cn]) => cn));
   const keepIn = new Set();
+  const _mfnAll = new Set(Object.entries(mfnItemsOf(voyage)).map(([k, it]) => String((it && it.cn) || k || '').trim()));   // 4.58: MFN 컨은 완료·실적이 생겨도 MFN 이다(추가분보다 먼저) — 터미널은 278대를 모두 내리므로 작업이 진행돼도 MFN 표시·대수가 줄면 안 된다
   const _doneCn = (cn) => { const w = comp[cn]; return !!(w && !(typeof w === 'object' && w.flag === 'missing')) || !!tw[cn]; };
   const add = (cn) => {
-    if (!(_unitKey(cn) && !listSet.has(cn) && !(recs[cn] && picked(recs[cn])) && onPtk(cn))) return;
+    if (!(_unitKey(cn) && !listSet.has(cn) && !_mfnAll.has(cn) && !(recs[cn] && picked(recs[cn])) && onPtk(cn))) return;
     if (keep[cn] && !_doneCn(cn)) { keepIn.add(cn); return; }   // 4.48-03: 예정 — 세지만 추가분(신고 대상) 표식은 안 단다
     extra.add(cn);
   };
@@ -9803,7 +9826,15 @@ export function ptkDischargeUnitsOf(voyage, shiftSet) {
   for (const cn of Object.keys(tw)) add(cn);
   const transit = new Set([...listSet].filter((cn) => ediNotPtk.has(cn) && onPtk(cn)));
   for (const cn of listSet) if (keep[cn] && onPtk(cn)) keepIn.add(cn);
-  return { basis, set: new Set([...[...listSet].filter(onPtk), ...extra, ...keepIn]), extra, listSet, ediKeyOf, transit, shiftSet: shSet, keepIn };
+  //  ★ 4.58 — MFN(터미널 이동지시엔 있고 메일 양하 리스트엔 없는 컨 · 수집기가 voyages/{키}/discharge/mfnList 로 올림)을 유닛에 더한다. 추가분(extra — 신고 대상)과는 별개의 집합이다.
+  //    이미 목록·추가분·본선 잔류에 든 컨, 시프팅이라 평택분이 아닌 컨, 평택 아닌 POD 를 고른 컨은 더하지 않는다. mfnList 가 없으면 빈 집합 — 종전과 같다.
+  const mfn = new Set(), mfnItems = new Map();
+  for (const [cn0, it] of Object.entries(mfnItemsOf(voyage))) {
+    const cn = String((it && it.cn) || cn0 || '').trim();
+    if (!it || !_unitKey(cn) || listSet.has(cn) || extra.has(cn) || keepIn.has(cn) || !onPtk(cn) || (recs[cn] && picked(recs[cn]))) continue;
+    mfn.add(cn); mfnItems.set(cn, it);
+  }
+  return { basis, set: new Set([...[...listSet].filter(onPtk), ...extra, ...keepIn, ...mfn]), extra, listSet, ediKeyOf, transit, shiftSet: shSet, keepIn, mfn, mfnItems };
 }
 //  4.20 후속 (Fable 판정 ④-4 — 규범 §4-4): 미르 «양하 몇 대»·«총 무브수»·교대 브리핑·갱 배분이 같은 양하 수를 말하게 하는 한 벌.
 //    pred(c) — 그 양하 행(EDI 행 등 cn 이 있는 행)이 평택 양하분인가(시프팅이면 아님). 목록 없는 배(basis 'edi')는 pred 가 null — 부르는 쪽 종전 POD 판정.
@@ -9832,14 +9863,21 @@ export function ediByUnitCn(ediMap) {
 export function markDischargeUnit(c, U) {
   if (!c || !c.cn || !U || U.basis === 'edi') return c;
   const ex = U.extra.has(c.cn), tr = U.transit.has(c.cn);
-  if (!ex && !tr) return c;
-  return { ...c, ...(ex ? { _extraOfList: true, _extraBasis: U.basis } : {}), ...(tr ? { _ediTransit: true } : {}) };
+  const mf = !!(U.mfn && U.mfn.has(c.cn));
+  if (!ex && !tr && !mf) return c;
+  //  4.58: MFN 표식 — _mfn · 원래 도착항(_mfnDest · Baplie) · 중국행(_mfnChina) · 재적재(_mfnReload) · 이동지시 상태(_mfnHan DIS/LOA/RES)
+  const it = mf ? (U.mfnItems && U.mfnItems.get(c.cn)) || {} : null;
+  return { ...c, ...(ex ? { _extraOfList: true, _extraBasis: U.basis } : {}), ...(tr ? { _ediTransit: true } : {}),
+           ...(mf ? { _mfn: true, _mfnDest: it.dest || '', _mfnReload: !!it.reload, _mfnHan: it.han || '', ...(mfnIsChinaDest(it.dest) ? { _mfnChina: true } : {}) } : {}) };
 }
 
 //  4.20 — 행이 없는 유닛(세관 목록·EDI 어디에도 행이 없고 완료 기록·터미널 실적만 있는 컨)의 맨 행 — 터미널 실적의 F/E·선사만 싣는다(지어내지 않는다).
 export function dischargeUnitBareRow(voyage, cn) {
   const t = ((voyage && voyage.discharge && voyage.discharge.termWork) || {})[cn] || {};
-  return { cn, ...(t.fe ? { fe: t.fe } : {}), ...(t.op ? { op: t.op } : {}) };
+  //  4.58: MFN 유닛은 수집기가 올린 mfnList 항목의 규격·F/E·중량·출발지·도착항을 싣는다(없는 칸은 비운다 — 지어내지 않는다 · 선사는 MOVINS 에 없다).
+  const m = mfnItemsOf(voyage)[cn];
+  const mb = m ? { ...(m.iso ? { iso: m.iso } : {}), ...(m.fe ? { fe: m.fe } : {}), ...(m.wt != null && m.wt !== '' ? { wt: m.wt } : {}), ...(m.pol ? { pol: m.pol } : {}), ...(m.pod ? { pod: m.pod } : {}), ...(m.op ? { op: m.op } : {}), ...(m.tmp != null && m.tmp !== '' ? { tmp: m.tmp } : {}) } : {};
+  return { cn, ...mb, ...(t.fe ? { fe: t.fe } : {}), ...(t.op ? { op: t.op } : {}) };
 }
 //  4.20 — 미르 재료 행(양하·선적이 섞인 목록)에 평택 양하분 한 벌을 입힌다 — 콘앱 미르(cone.html mirAsk)·미르 _normalize(평택 표식이 없는 행)가 부른다.
 //    양하 행에 _ptk(유닛이면 true · 시프팅이면 false)·추가분·통과 표식을 찍고, 유닛인데 행이 없는 것(세관 목록에만 있는 컨 등)은 records 행(빈 칸 버림)으로 만들어 붙인다.

@@ -1197,7 +1197,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             workBay={dc.bay || dc.bay_orig || recMap[dc.cn]?.bay_orig || null}
             workTier={(() => { const t = parseInt(dc.tier || dc.tier_planned || recMap[dc.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
             comp={compMap[dc.cn]} isXray={boardDetail.mode === 'discharge' && !!(sec.xrayList?.[dc.cn])} xraySeal={sec.xraySeals?.[dc.cn] || null}
-            mode={boardDetail.mode} voyageKey={boardDetail.key} voyageInfo={vy?.info} inspector={inspector} sealMode={null}
+            mode={boardDetail.mode} voyageKey={boardDetail.key} voyageInfo={vy?.info} mfnList={vy?.discharge?.mfnList || null} mfnVoyage={vy || null} inspector={inspector} sealMode={null}
             onClose={() => setBoardDetail(null)} allContainers={all} records={recMap} shiftCns={null} />
         );
       })()}

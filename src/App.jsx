@@ -878,6 +878,7 @@ export default function App() {
             mode={globalDetail.mode}
             voyageKey={globalDetail.voyageKey}
             voyageInfo={v.info}
+            mfnList={v.discharge?.mfnList || null} mfnVoyage={v}   /* 4.58: MFN 컨이면 상자·출력 단추 */
             inspector={inspector}
             onClose={() => setGlobalDetail(null)}
             allContainers={allContainers}

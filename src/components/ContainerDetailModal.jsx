@@ -4,6 +4,7 @@ import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
+import { ptkDischargeUnitsOf } from '../utils.js';   // 4.58: MFN 상자·배지는 앱이 지금 계산한 U.mfn 으로
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
 import { isoConflictOf, isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
@@ -12,7 +13,8 @@ import { fmtShiftPos } from '../utils.js';   // 4.53: 본선 잔류 확정 상�
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
 import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석·검수사만 — 화면 게이트(진짜 문지기는 firebase 안)
-import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf, sealConflictOf } from '../utils.js';
+import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf, sealConflictOf, MFN_LABEL, MFN_RELOAD_LABEL, mfnChinaWarn, mfnDestKo, mfnIsChinaDest } from '../utils.js';
+import { openMfnList } from '../mfnList.js';   // 4.58: MFN 배지·상자의 «MFN 목록 출력»
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // 4.49: sealCheckOf — 실오류·큰 실 판정 한 벌   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
@@ -67,7 +69,7 @@ const ISO_OPTIONS = [
   { iso: '45T1', label: '40HC 탱크',                  flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null, records = null, shiftCns = null }) {   // 3.2-01: records·shiftCns — 통과분 문지기 재료(리스트 등재·시프팅은 작업분)
+export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null, records = null, shiftCns = null, mfnList = null, mfnVoyage = null }) {   // 3.2-01: records·shiftCns — 통과분 문지기 재료(리스트 등재·시프팅은 작업분)
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -76,6 +78,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   //    수화물 리퍼에 «자료에 설정온도 없음»·지정 단추가 보였다(감사 실측) — 받은 voyageInfo 의 forecast 로 여기서도 찍는다.
   const _luggC = useMemo(() => reeferTempExempt(((applySpecialMarks({ info: voyageInfo }, [c]) || [])[0]) || c) === 'lugg', [c, voyageInfo]);
   const [tmpVal, setTmpVal] = useState(c.tmp || '');
+  //  4.58 — MFN: 양하 모드에서 수집기가 올린 mfnList 항목에 이 컨이 있으면 MFN 컨이다(목록에서 열어도·통합검색에서 열어도 같다). 목록 항목이 없고 표식(_mfn)만 있으면 표식으로.
+  //  재감사 수리 — 머스크가 개정 리스트로 MFN 컨을 리스트에 넣으면 양하 유닛(U.mfn)에서 빠진다. 상자·배지도 «지금 앱이 계산한 U.mfn 에 든 컨만 MFN» 으로 본다(voyage 가 없거나 리스트 없는 항차 basis edi 일 때만 mfnList.items 그대로).
+  const _mfnU = useMemo(() => { try { return mode === 'discharge' && mfnVoyage ? ptkDischargeUnitsOf(mfnVoyage) : null; } catch (e) { console.warn('[MFN] 양하 유닛 계산 실패 — 목록 항목 그대로 본다', e); return null; } }, [mfnVoyage, mode]);
+  const _mfnItems = _mfnU && _mfnU.basis !== 'edi' ? _mfnU.mfnItems : null;
+  const _mfnRaw = mode === 'discharge' && c && c.cn && mfnList && mfnList.items ? (_mfnItems ? (_mfnU.mfn.has(c.cn) ? mfnList.items[c.cn] : null) : mfnList.items[c.cn]) : null;
+  const _mfnIt = _mfnRaw || (mode === 'discharge' && c && c._mfn && (!_mfnItems || _mfnU.mfn.has(c.cn)) ? { dest: c._mfnDest, reload: c._mfnReload, pol: c.pol, iso: c.iso, fe: c.fe } : null);
+  const _mfnChina = !!(_mfnIt && mfnIsChinaDest(_mfnIt.dest));
   const [editingEseal, setEditingEseal] = useState(false);
   // M4.9b-fix: 실오류 / 리씰 별도 입력 모드
   const [editingEsealWrong, setEditingEsealWrong] = useState(false);
@@ -545,6 +554,10 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             {isBookingSlot(c) && <Badge color="amber">📝 컨번호 대기</Badge>}
             {isDone && <Badge color="emerald">✓ 완료 [{completedByLabel(comp, voyageInfo)}]</Badge>}
             {isXray && <Badge color="purple">🔍 X-RAY</Badge>}
+            {_mfnIt && (
+              <button type="button" data-mfn-badge="1" onClick={() => openMfnList(mfnList, voyageKey, voyageInfo, inspector, mfnVoyage)} title="누르면 MFN 목록을 엑셀·PDF로 출력합니다"
+                className="bg-amber-700 text-amber-50 text-xxs px-2 py-0.5 rounded font-black active:bg-amber-600">MFN{_mfnChina ? ' · 중국행 주의' : ''} ▸ 목록</button>
+            )}
             {/* M5.79: DG 뱃지에 UN 화물명 짧게 — 길어서 다른 뱃지와 별도 줄 처리는 아래 박스에서 */}
             {isDG && (() => {
               const info = lookupUN(c.un);
@@ -635,6 +648,23 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         {c._extraOfList && (
           <div className="mx-4 my-2 bg-amber-950/40 border border-amber-700/60 rounded-pill px-3 py-2 text-xxs font-black text-amber-200" data-extra-of-list="1">
             ⚠ {EXTRA_OF_LIST_LABEL[c._extraBasis] || EXTRA_OF_LIST_LABEL.customs}
+          </div>
+        )}
+
+        {/* ★ 4.58 (검수사 2026-10-31 «MFN리스트를 만들고 앱에 컨 상세카드에 그걸 표기하기 바랍니다.» · «34대분은 주의 대상으로 다렌과 텐진이 목적지 였다는걸 표기 바랍니다»): MFN — 터미널엔 있고 메일 양하 리스트엔 없는 컨 */}
+        {_mfnIt && (
+          <div className="mx-4 my-2 bg-amber-950/40 border border-amber-700/60 rounded-pill px-3 py-2 text-xxs font-black text-amber-200 space-y-1" data-mfn-box="1">
+            <div>⚠ {MFN_LABEL}</div>
+            {_mfnChina && (
+              <div className="bg-yellow-900/50 border border-yellow-600/60 rounded px-2 py-1 text-yellow-200" data-mfn-china="1">
+                {mfnChinaWarn(_mfnIt.dest)}. 확정되면 정상 양하로 돌립니다.
+              </div>
+            )}
+            {_mfnIt.reload && <div data-mfn-reload="1">{MFN_RELOAD_LABEL}</div>}
+            <div className="font-bold text-amber-100/90">
+              {[_mfnIt.pol ? `출발지 ${_mfnIt.pol}` : '', _mfnIt.dest ? `원래 도착항 ${mfnDestKo(_mfnIt.dest)}(${_mfnIt.dest})` : '', _mfnIt.iso ? `규격 ${isoShown(_mfnIt.iso)}` : '', _mfnIt.fe ? (_mfnIt.fe === 'E' ? '엠티' : '풀') : ''].filter(Boolean).join(' · ')}
+            </div>
+            <button type="button" onClick={() => openMfnList(mfnList, voyageKey, voyageInfo, inspector, mfnVoyage)} className="px-2 py-1 rounded border border-amber-600/60 text-amber-100 active:bg-ink-700" data-mfn-print="1">MFN 목록 출력 (엑셀 · PDF)</button>
           </div>
         )}
 

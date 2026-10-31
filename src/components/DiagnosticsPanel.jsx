@@ -1,4 +1,4 @@
-import { fmtPos, isoShown, ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY } from '../utils';   // 4.21 · 4.25-01 ISO_CONFLICT_WHY · 4.27-01 ISO_OT_CHECK_WHY
+import { fmtPos, isoShown, ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, MFN_LABEL, mfnNote } from '../utils';   // 4.21 · 4.25-01 ISO_CONFLICT_WHY · 4.27-01 ISO_OT_CHECK_WHY
 // 자동 진단 경고 패널 (M3.5.4)
 //   - 자료 업로드 후 자동 호출
 //   - critical: 빨강 점멸 + 자동 음성
@@ -13,7 +13,7 @@ import { REF_POD_LABEL, reconTermLabel, reconUnknownText } from '../sourceRecon.
 import { bundleDocNote, bundleDocOffText } from '../tallyReport.js';   // 4.55: 빈 FR 묶음이 터미널 서류 기준이면 그 말(진단 한 줄 reconBundleText 와 같은 글)
 import { CUSTOMS_RESULT_CODES, customsCodeHint, customsCodeLabel } from '../data/customsCodes.js';   // 4.22: 세관 검수 결과 코드표 한 벌(검수사 원문)
 
-export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer, showOk = false, listRows = 0 }) {
+export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer, onOpenMfnList, showOk = false, listRows = 0 }) {
   const [expanded, setExpanded] = useState(false);
   const lastAlertSig = useRef('');
 
@@ -102,14 +102,14 @@ export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onD
 
       <div className="space-y-1.5">
         {alerts.map((a, i) => (
-          <AlertRow key={i} alert={a} forceOpen={expanded} onOpenContainer={onOpenContainer} reconShown={reconShown}/>
+          <AlertRow key={i} alert={a} forceOpen={expanded} onOpenContainer={onOpenContainer} onOpenMfnList={onOpenMfnList} reconShown={reconShown}/>
         ))}
       </div>
     </div>
   );
 }
 
-function AlertRow({ alert, forceOpen, onOpenContainer, reconShown }) {
+function AlertRow({ alert, forceOpen, onOpenContainer, onOpenMfnList, reconShown }) {
   const [open, setOpen] = useState(false);
   const isOpen = open || forceOpen;
   const colorClass = alert.level === 'critical'
@@ -130,7 +130,7 @@ function AlertRow({ alert, forceOpen, onOpenContainer, reconShown }) {
         )}
       </button>
       {isOpen && hasDetails && (
-        <AlertDetails alert={alert} onOpenContainer={onOpenContainer} reconShown={reconShown}/>
+        <AlertDetails alert={alert} onOpenContainer={onOpenContainer} onOpenMfnList={onOpenMfnList} reconShown={reconShown}/>
       )}
     </div>
   );
@@ -178,7 +178,7 @@ function ReconFold({ on, children }) {
 function ReconLine({ x, onOpenContainer }) {
   const pos = fmtPos(x);
   const route = (x.pol || x.pod) ? `${x.pol || '?'}→${x.pod || '?'}` : '';
-  const parts = [x.fe, x.op, route, pos, x.pattern, x.pick ? (x.keep || x.keepConf ? x.pick : `POD 확정 ${x.pick}`) : '', x.src].filter(Boolean);   // 4.48-01 재감사(하-3): 본선 잔류 줄은 «POD 확정» 앞말 없이(묶음 이름이 «선사 메일 수정 — 본선 잔류»)
+  const parts = [x.fe, x.op, route, pos, x.pattern, x.tag, x.pick ? (x.keep || x.keepConf ? x.pick : `POD 확정 ${x.pick}`) : '', x.src].filter(Boolean);   // 4.48-01 재감사(하-3): 본선 잔류 줄은 «POD 확정» 앞말 없이(묶음 이름이 «선사 메일 수정 — 본선 잔류»)
   return (
     <button type="button" data-recon-cn={x.cn}
       onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
@@ -188,7 +188,7 @@ function ReconLine({ x, onOpenContainer }) {
   );
 }
 
-function AlertDetails({ alert, onOpenContainer, reconShown }) {
+function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
   const d = alert.details;
 
   //  ★ 4.22 자료별 대조 — 머리줄(출처마다 대수 또는 «자료 없음» · 터미널 수량 둘) · 터미널 줄 · 번호 대기 줄 · 묶음마다 «라벨 N대 (세관 코드 후보)» + 컨 줄(10줄 넘으면 나머지 보기)
@@ -224,7 +224,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
         {gap != null && (
           <div className={gap === 0 ? 'text-dim-300' : 'text-amber-300'} data-recon-term>
             {gap === 0
-              ? `${tl} ${tnTxt} = 앱 ${d.app}대` + (_bx ? ` — 빈 FR 묶음 ${d.bundles.length}곳(아래)을 터미널은 1대로 셈` : '') + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
+              ? `${tl} ${tnTxt} = 앱 ${d.app}대` + (d.mfn && d.mfn.n ? ` ${mfnNote(d.mfn.n, d.app)}` : '') + (_bx ? ` — 빈 FR 묶음 ${d.bundles.length}곳(아래)을 터미널은 1대로 셈` : '') + (_kPre ? ` — 터미널은 아직 선사 메일 수정 전(본선 잔류 예정 ${_kRefN}대 · 앱 예상 ${_kApp}대)` : '')
               : `${tl} ${tnTxt} · 앱 ${d.app}대 (${gap > 0 ? '+' : ''}${gap})`
                 + (_kcPre ? ` — 터미널은 아직 본선 잔류 확정 ${_kcN}대를 반영하지 않음(앱 ${d.app}대 + ${_kcN}대 = ${tn}대)` : _kDone ? ` — 터미널은 선사 메일 반영(본선 잔류 예정 ${_kRefN}대) · EDI·리스트 수정본 대기` : d.explained ? ` — 아래 목록 중 ${d.explained}대가 후보` : '')
                 + (unk ? ` — ${unk}` : '')}
@@ -252,6 +252,16 @@ function AlertDetails({ alert, onOpenContainer, reconShown }) {
         {S.pending && S.pending.n > 0 && (
           <div className="text-amber-300" data-recon-pending title={CUSTOMS_RESULT_CODES.CNN}>
             번호 대기 {S.pending.n}자리 — EDI 평택 자리인데 컨번호가 없음 {customsCodeHint('CNN')}
+          </div>
+        )}
+        {d.mfn && d.mfn.n > 0 && (
+          <div data-recon-group="mfn">
+            <div className="text-amber-300 font-bold" title={CUSTOMS_RESULT_CODES.MFN}>
+              {MFN_LABEL} {d.mfn.n}대{d.mfn.china ? ` · 중국행(통과화물이었음) ${d.mfn.china}대 주의` : ''}{d.mfn.ptk ? ` · 평택행 ${d.mfn.ptk}대` : ''}{d.mfn.reload ? ` · 재적재 ${d.mfn.reload}대` : ''} {mfnNote(d.mfn.n, d.app)}
+              <button type="button" data-mfn-print onClick={(e) => { e.stopPropagation(); onOpenMfnList?.(); }} className="ml-2 px-1.5 py-0.5 rounded border border-amber-600/60 text-amber-200 text-2xs font-bold active:bg-ink-700">MFN 목록 출력</button>
+            </div>
+            <div className="text-dim-300">터미널이 센 대수에는 들어 있고 메일 양하 리스트에는 없는 컨입니다. 앱은 이 컨도 양하 대수에 합쳐 셉니다. 중국행은 확정되면 정상 양하로 돌립니다.</div>
+            <TruncList items={d.mfn.items} limit={10} unit="건" render={(x) => <ReconLine x={x} onOpenContainer={onOpenContainer}/>}/>
           </div>
         )}
         {(d.groups || []).map((g) => (

@@ -293,7 +293,8 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
     //  4.48-03 — 본선 잔류 지시는 예정이라 앱 수(R.app)는 자료대로(지시 컨 포함)다. 터미널과 차이가 없어도 지시가 있으면 자료별 대조 줄을 세운다(검수사 17:05 «세관리스트와 틀린거죠 그걸 명시해야 합니다»).
     const _hasKeep = (R.ref || []).some((x) => x && x.keep);
     const _kcN = (R.refConf || []).length;   // 4.53 — 선적 EDI 가 확정한 본선 잔류(평택 양하분에서 이미 빠짐 — 앱 수는 그만큼 터미널 배정표보다 적다)
-    if (R.total > 0 || gapOn || _hasKeep || _kcN > 0 || _bOn) {
+    const _mfnN = (R.mfn && R.mfn.n) || 0;   // 4.58: MFN(화물은 있으나 적하목록 없음) — 앱 수(R.app)에 이미 든 것. 어긋남 수·번호 없음에는 섞지 않고 한 토막으로만 알린다
+    if (R.total > 0 || gapOn || _hasKeep || _kcN > 0 || _bOn || _mfnN > 0) {
       const S = R.sources;
       const part = (label, x) => (x.has ? `${label} ${x.n}` : `${label} 자료 없음`);
       const carPart = R.carrierPartial ? `선사 리스트 일부 ${S.carrier.n}/${S.customs.n}` : part('선사 리스트', S.carrier);
@@ -336,10 +337,12 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
         ? ` · ${_kMail}${_oRefN ? ` · POD 확정 평택 아님 ${_oRefN}대` : ''}${_kcN ? ` · ${_kcMail}` : ''} 적용하면 앱 ${_kApp}${_kTerm}`
         : (_kcN ? ` · ${_kcMail}${_kcTerm || (gapTxt ? ` · ${gapTxt}` : '')}` : (gapTxt ? ` · ${gapTxt}` : ''));
       //  ★ 4.54 — 빈 FR 묶음: «터미널 배정 276(+6) = 앱 282 · 빈 FR 4대 한 묶음 2곳 — 터미널은 한 묶음을 1대로 세어 6대 적게 셈 (…)». 묶음만으로 차이가 설명되고 다른 어긋남·본선 잔류가 없으면 경고가 아니라 정보(경고 표시 없음 · 묶음 몫의 부분합으로 맞아떨어지는 차이만).
-      const _bOnly = _bOn && !gapOn && R.total === 0 && !_hasKeep && !_kcN;
-      const _bTail = _bOn ? ` · ${_bTxt}` : '';
-      const _plainTxt = _bOn
-        ? `${reconTermLabel(R.term.basis)} ${reconTermNum(R)}${gapOn ? ` · ${gapTxt}` : ` = 앱 ${R.app}`}`
+      const _bOnly = (_bOn || _mfnN > 0) && !gapOn && R.total === 0 && !_hasKeep && !_kcN && !(R.mfn && R.mfn.china);   // 4.58: MFN 만 있고 중국행이 없으면 정보
+      //  ★ 4.58 — MFN 토막: «MFN 44대(중국행 34 · 평택행 10 · 재적재 1) — 앱 278 = 리스트 234 + MFN 44». 중국행이 있으면 경고(주의 대상 — 확정되면 정상 양하로), 없으면 정보.
+      const _mfnTxt = _mfnN ? `MFN ${_mfnN}대(화물은 있으나 양하 리스트에 없음${R.mfn.china ? ` · 중국행 ${R.mfn.china}대 주의` : ''}${R.mfn.reload ? ` · 재적재 ${R.mfn.reload}대` : ''}) — 앱 ${R.app} = 리스트 ${R.mfn.listN} + MFN ${_mfnN}` : '';
+      const _bTail = (_bOn ? ` · ${_bTxt}` : '') + (_mfnTxt ? ` · ${_mfnTxt}` : '');
+      const _plainTxt = (_bOn || (_mfnN > 0 && !gapOn))
+        ? (R.term.basis ? `${reconTermLabel(R.term.basis)} ${reconTermNum(R)}${gapOn ? ` · ${gapTxt}` : ` = 앱 ${R.app}`}` : `앱 ${R.app}`)
         : `${reconTermLabel(R.term.basis)} ${R.term.n} · ${gapTxt}`;
       alerts.push({
         level: _bOnly ? 'info' : 'warning',
@@ -348,7 +351,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
           ? `자료별 대조 — ${[part('터미널 배정', S.plan), part('본선현황', S.qc), part('EDI', S.edi), part('세관', S.customs), carPart, `실적 ${S.term.n}`].join(' · ')} — 어긋남 ${R.total}대${_kTot}${_bTail}${unkTxt ? ` · ${unkTxt}` : ''}`
           : _kTxt ? `자료별 대조 — ${_kTxt}${_bTail}${unkTxt ? ` · ${unkTxt}` : ''}`
           : `${_plainTxt}${_bTail}${unkTxt ? ` · ${unkTxt}` : ''}`,
-        voice: _bOnly ? '' : [vTotal, _recon.vGap].filter(Boolean).join(', '),
+        voice: _bOnly ? '' : [vTotal, _recon.vGap, (R.mfn && R.mfn.china) ? `MFN 중국행 ${R.mfn.china}대 주의` : ''].filter(Boolean).join(', '),
         count: (R.total - g5n) + R.unknown,
         details: R,
       });
