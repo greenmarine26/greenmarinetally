@@ -30,20 +30,32 @@ export async function shareText(message, title = '검수 보고') {
 //   → 고르는 순간 읽어서 메모리 안의 JPEG 로 만든다. 못 읽으면 그 자리에서 알린다(나중에 조용히 빠지지 않게).
 export async function normalizeReportPhoto(file, maxSide = 1600) {
   if (!file) throw new Error('파일 없음');
+  //  4.62-02 — 폰 카메라 원본(5천만 화소급)을 통째로 풀다 메모리가 모자라 «이 사진을 읽지 못했습니다» 로 막히던 것(검수사 2026-11-01 데미지 보고 TCKU6959884).
+  //   읽는 길을 차례로 늘린다 — ① 원본 그대로 ② 풀 때부터 긴 변을 줄여 풀기(createImageBitmap resize) ③ <img> ④ 그래도 안 되면 원본 파일 그대로(10MB 이하).
+  //   어느 길에서 왜 막혔는지는 오류 글에 남긴다(검수사가 경고창 글자를 알려 주면 그 길을 바로 본다).
+  const tries = [];
   let bmp = null; let url = '';
   let w = 0; let h = 0; let src = null;
-  try {
-    if (typeof window.createImageBitmap === 'function') {
-      bmp = await window.createImageBitmap(file);   // EXIF 회전은 브라우저가 적용한다
-      w = bmp.width; h = bmp.height; src = bmp;
+  const hasBmp = typeof window.createImageBitmap === 'function';
+  if (hasBmp) {
+    try { bmp = await window.createImageBitmap(file); } catch (e) { bmp = null; tries.push('①' + (e && e.name || e)); }   // EXIF 회전은 브라우저가 적용한다
+    if (!bmp) {
+      for (const opt of [{ resizeWidth: maxSide, resizeQuality: 'medium' }, { resizeHeight: maxSide, resizeQuality: 'medium' }]) {
+        try { bmp = await window.createImageBitmap(file, opt); break; } catch (e) { bmp = null; tries.push('②' + (e && e.name || e)); }
+      }
     }
-  } catch (e) { bmp = null; }
+    if (bmp) { w = bmp.width; h = bmp.height; src = bmp; }
+  }
   if (!src) {
     url = URL.createObjectURL(file);
     try {
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('이미지 로드 실패')); i.src = url; });
       w = img.naturalWidth || img.width; h = img.naturalHeight || img.height; src = img;
-    } catch (e) { URL.revokeObjectURL(url); throw new Error(`사진을 읽지 못했습니다 (형식 ${file.type || '알 수 없음'} · ${file.size || 0}B)`); }
+    } catch (e) {
+      URL.revokeObjectURL(url); url = '';
+      tries.push('③' + (e && e.message || e));
+      return _reportPhotoAsIs(file, tries);
+    }
   }
   try {
     if (!w || !h) throw new Error('사진 크기를 알 수 없습니다');
@@ -58,10 +70,49 @@ export async function normalizeReportPhoto(file, maxSide = 1600) {
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
     if (!blob || !blob.size) throw new Error('JPEG 변환 실패');
     return new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  } catch (e) {
+    tries.push('④' + (e && e.message || e));
+    return _reportPhotoAsIs(file, tries);
   } finally {
     if (bmp && bmp.close) { try { bmp.close(); } catch (e) { /* 이미 닫힘 */ } }
     if (url) URL.revokeObjectURL(url);
   }
+}
+
+// 4.62-02 — 줄이지 못한 사진의 마지막 길. 머리를 열어 진짜 JPEG·PNG(크기 칸이 있는 사진)이고 10MB 이하면 원본 그대로 쥔다(보고가 막히는 것보다 낫다).
+//   머리가 사진이 아니면(깨진 파일·못 그리는 형식) 어느 길에서 왜 막혔는지 적어 던진다 — 깨진 사진이 조용히 지나가면 안 된다(4.57-01).
+async function _reportPhotoAsIs(file, tries) {
+  const dim = (file.size > 0 && file.size <= 10 * 1024 * 1024) ? await _imageDimsOf(file) : null;
+  if (dim) {
+    console.warn('[normalizeReportPhoto] 줄이지 못해 원본 그대로 씁니다:', file.type, file.size, dim, tries);
+    return new File([file], `photo-${Date.now()}.${dim.kind === 'png' ? 'png' : 'jpg'}`, { type: dim.kind === 'png' ? 'image/png' : 'image/jpeg' });   // 형식 글자가 틀려도 머리가 말하는 형식으로 바로잡는다
+  }
+  throw new Error(`사진을 읽지 못했습니다 (형식 ${file.type || '알 수 없음'} · ${file.size || 0}B · ${tries.join(' / ') || '원인 미상'})`);
+}
+
+// 파일 머리에서 JPEG(SOF 마커)·PNG(IHDR)의 가로세로를 읽는다 — 사진이 아니면 null. 그리기·디코딩은 하지 않으므로 메모리를 거의 쓰지 않는다.
+async function _imageDimsOf(file) {
+  try {
+    const buf = new Uint8Array(await file.slice(0, 512 * 1024).arrayBuffer());
+    if (buf.length > 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {   // PNG
+      const w = (buf[16] << 24 | buf[17] << 16 | buf[18] << 8 | buf[19]) >>> 0; const h = (buf[20] << 24 | buf[21] << 16 | buf[22] << 8 | buf[23]) >>> 0;
+      return w >= 16 && h >= 16 ? { w, h, kind: 'png' } : null;
+    }
+    if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;   // JPEG 시작 표시가 없다
+    let o = 2;
+    while (o + 9 < buf.length) {
+      if (buf[o] !== 0xff) { o += 1; continue; }
+      const m = buf[o + 1];
+      if (m === 0xff) { o += 1; continue; }
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {   // SOF 0~15(DHT·JPG·DAC 제외)
+        const h = buf[o + 5] << 8 | buf[o + 6]; const w = buf[o + 7] << 8 | buf[o + 8];
+        return w >= 16 && h >= 16 ? { w, h, kind: 'jpeg' } : null;
+      }
+      if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { o += 2; continue; }
+      o += 2 + (buf[o + 2] << 8 | buf[o + 3]);
+    }
+    return null;
+  } catch (e) { return null; }
 }
 
 // M3.5.6-fix: 사진 위에 정보 자막 합성 후 공유
