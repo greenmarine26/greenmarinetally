@@ -5,7 +5,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf, mfnInPtkOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
 import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, craneBoardSplit, termFinishedCranesOf, berthAltOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
@@ -2857,10 +2857,11 @@ export function computeStats(section, mode, shiftSet, keepOnboard) {   // 2.89-0
   //  ★ 4.53 — 선적 EDI 가 확정한 본선 잔류(시프팅 집합에 든 지시 컨)는 EDI 평택분에서 뺀다(홈 computeStats 와 같은 한 벌 — 안 빼면 보드에 «누락 2»).
   if (mode === 'discharge') for (const cn of keepInShiftOf(keepOnboard, shiftSet)) ptkCns.delete(cn);
   //  4.48-03: 선사 지시 본선 잔류는 예정 — 평택분 합계에서 빼지 않는다(홈 computeStats 와 같은 한 벌
-  const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
+  const _mfnPtk = mode === 'discharge' ? mfnInPtkOf(section, ptkCns) : new Set();   // 4.62-05: MFN 은 매칭도 누락도 아니다 — 홈 카드와 같은 함수 한 벌(검수사 2026-11-01 19:17 «44와 43» · 19:25 «매칭 234 → 235»)
+  const matched = [...ptkCns].filter(cn => recordCns.has(cn) && !_mfnPtk.has(cn)).length;
   // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당. 3.26: 부킹 자리 `__BOOK_` 도 자리다.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__')).length;
-  const missing = Math.max(0, ptkCns.size - matched - planSlots);
+  const missing = Math.max(0, ptkCns.size - matched - planSlots - _mfnPtk.size);
   //  2.89-07: 작업량·완료는 progressOf 한 벌(홈 카드·현황 요약과 같은 숫자) —
   //    작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브 · extra = 분모 밖 완료(V9.57 I4 유지).
   const prog = progressOf(section, mode, shiftSet, ptkCns, keepOnboard);   // 4.48: 본선 잔류(양하만 쓴다)

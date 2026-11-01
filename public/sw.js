@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.62-04';
-const NOTE = '4.62-04 작업을 중단했다면 작업 보고 첫 화면에 작업 재개 단추가 뜹니다. 장비 고장 같은 중단 뒤에도 눌러서 재개 보고를 합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.62-05';
+const NOTE = '4.62-05 수석 상황판의 누락과 매칭 수가 홈 카드와 같아졌습니다. MFN 컨은 누락도 매칭도 아닙니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -127,6 +127,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     const virtualInEdi = ptkInEdi.filter(c => isVirtualCn(c.cn));
     //  4.59-04 — MFN 은 «리스트에 없음» 이 아니라 이미 «MFN N» 으로 센 컨이다(검수사 2026-10-31 18:33 «MFN 44개가 전부 엠티라고 하지 않았나요? 알면서도 이런 메시지를?» — 642N 은 «리스트에 없음 44대» 로 MFN 43 이 섞여 섰다).
     const _mfnSet = new Set(mode === 'discharge' ? (mfnCns || []).map((x) => String(x || '').toUpperCase()) : []);
+    //  ★ 4.62-05 — MFN 컨에 리스트 출처 없는 기록이 생겨도(누가 «취소원복» 을 누르면 이동 이력용 기록이 새로 생긴다 — MRSU7029954) 리스트·매칭·총 작업에 세지 않는다. 검수사 2026-11-01 19:25~19:29 «왜 매칭이 234에서 235로» · 화면 «리스트 235 · 매칭 235».
+    const _mfnRecN = (records || []).filter((r) => r && _mfnSet.has(String(r.cn || '').toUpperCase())).length;
     const missingInList = ptkInEdi.filter(c => !isVirtualCn(c.cn) && !recCns.has(c.cn) && !_mfnSet.has(String(c.cn || '').toUpperCase()));
     // ── TallyOne 2.94: **통과화물을 평택 선적으로 세지 않는다.** (검수사 지적 2026-08-31) ──
     //   실측 MCSC 635S — 리스트 230 · EDI 213 이라 «리스트에 있는데 EDI에 없음 17대
@@ -186,8 +188,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     return {
       ediTotal: (ediContainers || []).length,
       ptkTotal: ptkInEdi.length + (fill ? fill.slots : 0),                                  // 3.26: 부킹 자리도 EDI 평택 대상이다(ptkInEdi 는 자리를 뺀 뒤라 두 번 안 센다)
-      listTotal: (records || []).length - thruInList.length - shiftInList.length,   // 4.48-02: 지금 자료 그대로(본선 잔류도 센다 — 확정 아님)   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
-      matched: ptkInEdi.filter(c => recCns.has(c.cn)).length + (fill ? Math.min(fill.real, fill.slots) : 0),   // 3.26: 자리를 채운 실번호 = 매칭
+      listTotal: (records || []).length - thruInList.length - shiftInList.length - _mfnRecN,   // 4.48-02: 지금 자료 그대로(본선 잔류도 센다 — 확정 아님)   // 2.94: 통과화물은 평택 선적 리스트가 아니다 · 4.34-03: 시프팅 대상이 리스트에 섞였으면 리스트 대수에서 뺀다(시프팅 쪽에서 센다)
+      matched: ptkInEdi.filter(c => recCns.has(c.cn) && !_mfnSet.has(String(c.cn || '').toUpperCase())).length + (fill ? Math.min(fill.real, fill.slots) : 0),   // 4.62-05: MFN 은 매칭이 아니다 — 기록이 생겨도(취소원복 등) 한 번 더 세지 않는다   // 3.26: 자리를 채운 실번호 = 매칭
       //  4.48-02 — 앱 예상(선사 메일 수정 적용): 본선 잔류 예보 컨을 EDI 평택·리스트·매칭에서 뺀 수
       keepPtkInEdi: ptkInEdi.filter(_isKeepC).length,
       keepMatched: ptkInEdi.filter(c => _isKeepC(c) && recCns.has(c.cn)).length,

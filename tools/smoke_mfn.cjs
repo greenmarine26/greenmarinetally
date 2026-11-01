@@ -13,6 +13,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     "export { mfnListRows, mfnTally, mfnCounts, mfnPackOf, generateMfnListHTML, mfnSumLine, generateMfnFieldHTML, mfnFieldLayout, mfnChiefView, openMfnList, mfnOsLine } from './src/mfnList.js';",
     "export { STAFF_LIST } from './src/staffList.js';",
     "export { reconcileSources } from './src/sourceRecon.js';",
+    "export { computeStats as chiefStats } from './src/pages/ChiefDashboard.jsx';",
     "export { ptkContainers, buildOS } from './src/tallyReport.js';",
     "export { generateMfnExcel, generateMfnFieldExcel, generateTallyExcel } from './src/tallyExcel.js';",
     "export { computeTallyData, buildSealList } from './src/tallyReport.js';",
@@ -25,7 +26,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     const code = (await esbuild.build({
       stdin: { contents: entry, resolveDir: ROOT, loader: 'js' }, bundle: true, platform: 'node', format: 'cjs', write: false, logLevel: 'silent', loader: { '.js': 'jsx' }, jsx: 'automatic',
       plugins: [{ name: 'fb', setup(b) {
-        b.onResolve({ filter: /^firebase\// }, (a) => ({ path: a.path, namespace: 'fb' })); b.onLoad({ filter: /.*/, namespace: 'fb' }, () => ({ contents: STUB, loader: 'js' }));
+        b.onResolve({ filter: /^(firebase|pdfjs-dist)\// }, (a) => ({ path: a.path, namespace: 'fb' })); b.onLoad({ filter: /.*/, namespace: 'fb' }, (a) => ({ contents: a.path.startsWith('pdfjs') ? 'module.exports={GlobalWorkerOptions:{},getDocument(){}}' : STUB, loader: 'js' }));
         b.onLoad({ filter: /src[\\/]utils\.js$/ }, (a) => { const t = fs.readFileSync(a.path, 'utf8'); const re = /export const MFN_RELOAD_COUNTS = (true|false);/; if (t.split('export const MFN_RELOAD_COUNTS =').length !== 2 || !re.test(t)) throw new Error('MFN_RELOAD_COUNTS 상수 줄을 못 찾았다'); return { contents: t.replace(re, 'export const MFN_RELOAD_COUNTS = ' + (reloadCounts ? 'true' : 'false') + ';'), loader: 'jsx' }; });   // 4.59-05: 기본값이 false 로 바뀌어 두 방향 다 덮어쓴다
       } }],
     })).outputFiles[0].text;
@@ -179,12 +180,24 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   const vAll2 = withMfn(); vAll2.discharge.records.TRHU4332492 = { cn: 'TRHU4332492', iso: EDIF.TRHU4332492.iso, fe: 'E', pod: 'KRPTK', _source: 'x.xls' };
   ok(stOf(vAll2).missing === 0, 'TRHU 까지 리스트에 들어오면 누락 0(MFN 만 남으면 누락 없음)', stOf(vAll2).missing);
   ok(stMf.mfn === 45 && stMf.total === 279, '총계·MFN 칩 — 279 · MFN 45(변형 FX 는 재적재 없음: 44 + TRHU)', JSON.stringify([stMf.total, stMf.mfn]));
+  //  4.62-05 — 수석 상황판(ChiefDashboard.computeStats)도 같은 답이어야 한다 — 검수사 2026-11-01 19:17 «왜 이런 표기 불일치가 자꾸 나오는거죠? 44와 43» (수석만 «누락 43»)
+  const chOf = (v) => M.chiefStats({ ...v.discharge, ediContainers: clone(EDIF) }, 'discharge', new Set(), {});
+  ok(chOf(withMfn()).missing === stMf.missing && stMf.missing === 0, '수석 상황판 누락 = 홈 카드 누락 = 0 (MFN 은 누락이 아니다)', JSON.stringify([chOf(withMfn()).missing, stMf.missing]));
+  //  4.62-05 — 매칭도 MFN 을 세지 않는다: 리스트 출처 없는 기록이 MFN 컨에 생겨도(취소원복 등 · MRSU7029954) 매칭은 234 그대로(검수사 19:25 «매칭이 234에서 235로»)
+  const vRec = withMfn(); const _mk = Object.keys(vRec.discharge.mfnList.items).find((k) => !vRec.discharge.mfnList.items[k].reload && EDIF[k]); vRec.discharge.records[_mk] = { cn: _mk, bay: '44', row: '01', tier: '86', moves: [{ by: '취소원복', why: 'cancel' }] };
+  ok(_mk && stOf(vRec).matched === 234 && stOf(vRec).missing === 0 && chOf(vRec).matched === 234 && chOf(vRec).missing === 0, 'MFN 컨에 리스트 출처 없는 기록이 생겨도 매칭 234 · 누락 0 (홈·수석 같은 답)', JSON.stringify([_mk, stOf(vRec).matched, stOf(vRec).missing, chOf(vRec).matched, chOf(vRec).missing]));
+  ok(chOf(noMfn()).missing === stNo.missing && stNo.missing === 44, 'mfnList 가 없으면 수석 상황판도 종전대로 누락 44', chOf(noMfn()).missing);
   ok(stOf(withMfn(), 'loading').missing === stOf(noMfn(), 'loading').missing, '선적은 mfnList 를 보지 않는다(누락 그대로)');
 
   //  4.59-04 — 자료 점검 상자(ValidationBox)의 «EDI 평택 대상 → 리스트에 없음: N대 · 선사별 누락» 에도 MFN 이 섞이지 않는다 — 실제로 그려서 본다.
   const React = { createElement: M.createElement }; const RS = { renderToStaticMarkup: M.renderToStaticMarkup };   // 번들 안의 react 한 벌(밖의 react 와 섞으면 hook 이 죽는다)
   const vbHtml = (v, mfn) => RS.renderToStaticMarkup(React.createElement(M.ValidationBox, { ediContainers: Object.values(clone(EDIF)), records: Object.values(v.discharge.records), mode: 'discharge', voyageKey: VK, mfnCns: mfn }));
   const vbNo = vbHtml(noMfn(), null), vbMf = vbHtml(withMfn(), Object.keys(M.mfnItemsOf(withEdi(withMfn()))));   // 앱(VoyagePage)처럼 mfnItemsOf 결과를 넘긴다
+  //  4.62-05 — 상자의 «리스트 · 매칭» 도 MFN 컨에 생긴 리스트 출처 없는 기록(취소원복)을 세지 않는다 — 화면 «리스트 235 · 매칭 235» (검수사 2026-11-01 19:29)
+  const _vbNums = (h) => { const m = h.match(/text-dim-100 font-black mono">(\d+)</); const k = h.match(/text-emerald-400 font-black mono">(\d+)</); return [m && +m[1], k && +k[1]]; };
+  const _vRec = withMfn(); { const _k = Object.keys(_vRec.discharge.mfnList.items).find((x) => !_vRec.discharge.mfnList.items[x].reload && EDIF[x]); _vRec.discharge.records[_k] = { cn: _k, bay: '44', row: '01', tier: '86', moves: [{ by: '취소원복', why: 'cancel' }] }; }
+  const _n0 = _vbNums(vbMf), _n1 = _vbNums(vbHtml(_vRec, Object.keys(M.mfnItemsOf(withEdi(_vRec)))));
+  ok(_n0[0] === 234 && _n1[0] === 234 && _n1[1] === _n0[1], '자료 점검 상자 — MFN 컨에 기록이 생겨도 리스트·매칭 그대로(234)', JSON.stringify([_n0, _n1]));
   ok(/리스트에 없음: 44대/.test(vbNo), 'mfnList 를 안 넘기면 종전대로 «리스트에 없음: 44대»', (vbNo.match(/리스트에 없음[^<]*/) || [''])[0]);
   ok(!/리스트에 없음/.test(vbMf), 'MFN 컨(TRHU4332492 포함)을 넘기면 «리스트에 없음» 상자가 없다', (vbMf.match(/리스트에 없음[^<]*/) || [''])[0]);
   ok(/리스트에 없음: 1대/.test(vbHtml(withMfn(), Object.keys(withMfn().discharge.mfnList.items))) , 'mfnList 컨만 넘기면(TRHU 제외) «리스트에 없음: 1대» — 컨번호를 넘기는 쪽 책임');

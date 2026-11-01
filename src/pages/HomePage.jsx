@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { mfnNote, mfnItemsOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
+import { mfnNote, mfnInPtkOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
@@ -2322,7 +2322,8 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
   if (mode === 'discharge') for (const cn of keepInShiftOf(keepOnboard, shiftSet)) ptkCns.delete(cn);
   //  ★ 4.48 감사(상 1) — 선사 지시 본선 잔류 컨은 평택에서 안 내린다. EDI 평택분(ptk — 홈 «완료 확인» 창의 평택분 작업량)에서도 뺀다(MAMP 641N 317 → 315).
   //  4.48-03: 선사 지시 본선 잔류는 예정 — 평택분 합계에서 빼지 않는다(자료대로 · 검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»).
-  const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
+  const _mfnPtk = mode === 'discharge' ? mfnInPtkOf(section, ptkCns) : new Set();   // 4.62-05: 수석 상황판과 같은 함수 한 벌 — MFN 은 매칭도 누락도 아니다
+  const matched = [...ptkCns].filter(cn => recordCns.has(cn) && !_mfnPtk.has(cn)).length;
   // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
   //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)
   const dummyECount = mode === 'loading' ? [...ptkCns].filter(cn => isVirtualCn(cn)).length : 0;
@@ -2330,9 +2331,7 @@ export function computeStats(section, mode, info, voyageKey, shiftSet, keepOnboa
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__')).length;   // 3.26: 부킹 자리 `__BOOK_` 도 자리다(부분 리스트 때 «누락»이 아니다)
   //  4.59-04 — «누락» = EDI 평택인데 리스트에 없는 컨. MFN(터미널이 내리라는 지시는 있으나 메일 양하 리스트에 없는 컨)은 이미 «MFN N» 으로 센 컨이라 누락이 아니다.
   //    검수사 2026-10-31 19:15 «누락 44개가 있씁니다. 여기서 누락의 의미는 뭔가요?» — 642N 은 누락 44 = MFN 43 + EDI 에만 있는 1 이었다(MFN 이 «누락» 으로 한 번 더 셌다).
-  const _mfnCns = mode === 'discharge' ? new Set(Object.keys(mfnItemsOf({ discharge: section }))) : null;
-  const _mfnNotListed = _mfnCns && _mfnCns.size ? [...ptkCns].filter((cn) => _mfnCns.has(cn) && !recordCns.has(cn)).length : 0;
-  const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots - _mfnNotListed);
+  const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots - _mfnPtk.size);
   //  2.89-07 (검수사 «항차목록은 변치 않습니다 … 변하는건 작업내용이 실시간 카운트 될뿐») —
   //    작업량·완료는 progressOf 한 벌(작업량 = 리스트+시프팅 · 완료 = 리스트완료+이 모드 모브).
   //    recordCns(위)는 매칭·수화물 판정용으로 그대로 둔다 — 분모에는 안 쓴다.
