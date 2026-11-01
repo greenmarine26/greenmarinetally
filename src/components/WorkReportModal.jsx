@@ -21,6 +21,7 @@ import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
 import { getShipBayDictData } from '../shipStructure.js';
+import { workPauseOf } from '../mir.js';   // 4.62-04: 중단 중이면 첫 화면에 «작업 재개» 단추(외부 요인 중단은 진행 표시가 없어 재개 메뉴가 안 떴다)
 import ReportEditRow from './ReportEditRow.jsx';   // 4.46: 내가 보낸 보고 고치기·지우기
 
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
@@ -49,6 +50,10 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const dnActiveShift = dnShift || reportShiftToShow(Date.now());
   //  3.66: 종전 배 전체 표 — 갱별 계산이 실패했을 때만 쓴다. 창이 닫혀 있으면 세지 않는다(2차 감사 — 항차 화면에 늘 붙어 있어 틱마다 돌았다).
   const dnOn = !!open && view === 'daynight';
+  //  ★ 4.62-04 — «작업 중단(장비고장·강풍·안개·기타)» 은 보고 글만 남기고 진행 중 표시를 안 만들어 재개 메뉴가 없었다(검수사 2026-11-01 18:47
+  //    «작업재개 메뉴가 없어서 수동보고로 양하재개로 보고 하였음» — MCSN 642N 16:46 장비 고장 중단 → 17:04 수동 재개). 마지막 작업 상태 보고가 중단이면
+  //    (workPauseOf — 미르·화남과 같은 판정 한 벌) 첫 화면에 재개 단추를 띄워 수동 재개 화면을 호기·작업 종류까지 채워 연다.
+  const pausedNow = useMemo(() => { if (!open || view !== 'main') return null; try { return workPauseOf(voyage); } catch (e) { console.warn('[4.62-04] 중단 중 판정 실패 — 재개 단추 없이 갑니다', e); return null; } }, [open, view, voyage]);
   const dnReportD = useMemo(() => (dnOn ? buildShiftReport(dnContainers.discharge, dnActiveShift, Date.now()) : null), [dnOn, dnContainers, dnActiveShift]);
   const dnReportL = useMemo(() => (dnOn ? buildShiftReport(dnContainers.loading, dnActiveShift, Date.now()) : null), [dnOn, dnContainers, dnActiveShift]);
   //  ★ 3.66 — **갱별로 나눈다.** 검수사 2026-09-28 12:34 «여기서 보면 갱호수별이 아니고 전체가 보입니다. 갱별로 나누어져 있어야 합니다.» · 관문 4 «갱별 + 배 전체 합계».
@@ -687,6 +692,12 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             )}
             {/* M5.79: 수동 보고 (시작 안 누른 작업) — 이어받기 / 한 갱 먼저 완료 케이스 */}
             {/* 4.47: 수동 보고의 작업 종류는 열 때 지금 화면의 작업(양하 화면이면 양하, 선적 화면이면 선적) — 종전엔 늘 «양하»로 켜져 선적 이어받기 중단·재개가 양하로 나갈 수 있었다 */}
+            {pausedNow && (
+              <button onClick={() => { setManualAction('resume'); setManualReason(''); setManualMode(pausedNow.mode === 'loading' || pausedNow.mode === 'discharge' ? pausedNow.mode : (pageMode === 'loading' ? 'loading' : 'discharge')); if (equipNumbers.includes(selectedEquip)) setManualEquip(selectedEquip); setView('manual'); }}
+                data-work-resume="1" className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-emerald-500">
+                <Play className="w-4 h-4"/> ▶ {pausedNow.ko} 재개 — 중단 중{pausedNow.reason ? ` (${pausedNow.reason})` : ''}
+              </button>
+            )}
             <button onClick={() => { setManualAction(''); setManualReason(''); if (pageMode === 'loading' || pageMode === 'discharge') setManualMode(pageMode); setView('manual'); }}
               className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-indigo-500">
               <RefreshCw className="w-4 h-4"/> 🔧 수동 보고 (시작 안 누른 작업)
