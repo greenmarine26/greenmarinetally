@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.62-02';
-const NOTE = '4.62-02 폰 사진을 고를 때 사진을 읽지 못한다며 막히던 데미지 보고가 풀렸습니다. 막히면 이유가 경고창에 적힙니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.62-03';
+const NOTE = '4.62-03 터미널이 일을 다 마쳤다고 한 호기는 상황판에서 접힙니다. 야간에 2호기가 철수하면 3호기 4호기만 보입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

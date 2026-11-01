@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
-import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, craneBoardSplit, berthAltOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, craneBoardSplit, termFinishedCranesOf, berthAltOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
@@ -1224,7 +1224,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                   lastReport={lastReportByVoyage[v.key]}
                   alerts={todayAlertsByVoyage[v.key]}
                   departed={v._departed}
-                  cranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || [])).stopped}
+                  cranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info)).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info)).stopped}
                   voyage={voyages?.[v.key]} rows={shown.length}
                   onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
                   focused={!!focusRow} canFocus={boardRows.length > 1} zoom={boardZoom}
@@ -1265,7 +1265,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               lastReport={lastReportByVoyage[sheetRow.key]}
               alerts={todayAlertsByVoyage[sheetRow.key]}
               departed={sheetRow._departed}
-              cranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || [])).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || [])).stopped}
+              cranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info)).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info)).stopped}
               voyage={voyages?.[sheetRow.key]} rows={1}
               onOpenContainer={(c, mode) => setBoardDetail({ key: sheetRow.key, mode, c })}
               focused={false} canFocus={false} zoom={1}
@@ -2740,7 +2740,7 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
       </div>
       </div>
       {cranePanel}
-      {stoppedCranes.length > 0 && <div className="text-[11px] text-dim-400 px-1 pb-1" data-crane-stopped={stoppedCranes.map((c) => c.no).join(',')}>{stoppedCranes.map((c) => `${c.no}호기 ${c.done}대 · 작업 없음 ${c.idleMin}분`).join(' / ')}</div>}
+      {stoppedCranes.length > 0 && <div className="text-[11px] text-dim-400 px-1 pb-1" data-crane-stopped={stoppedCranes.map((c) => c.no).join(',')}>{stoppedCranes.map((c) => c.finished ? `${c.no}호기 ${c.done}대 · 작업 끝 철수` : `${c.no}호기 ${c.done}대 · 작업 없음 ${c.idleMin}분`).join(' / ')}</div>}
     </div>
   );
 }
