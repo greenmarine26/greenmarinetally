@@ -100,6 +100,7 @@ function App() {
     allEdiContainers, xrayMap: {}, xraySeals: {}, shiftingMap: {}, preGoneInfo: null,
     onOpenContainer: (c) => { window.__calls.push({ fn: 'detail', cn: c && c.cn }); },
     onClose: () => { window.__calls.push({ fn: 'close' }); setOpen(false); },
+    onOpenReport: () => { window.__calls.push({ fn: 'report' }); },   // 4.63-02
     searchPanelProps: {},
   });
 }

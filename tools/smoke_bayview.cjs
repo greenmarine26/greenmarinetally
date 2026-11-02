@@ -179,6 +179,13 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   t = doc.querySelector('[data-bayview-top="1"]').textContent;
   if (!/15·16·17번 데크 작업 중/.test(t)) fail('수동 «작업 중» 줄이 없다: ' + t.slice(0, 300));
   if (!doc.querySelector('[data-bayview-top="1"] input')) fail('수동 끝4 조회창(input)이 없다');
+  // ⑧-R 4.63-02 — 위 줄 «📤 보고» 를 누르면 보고 창을 요청하고 베이뷰는 그대로 열려 있다(자동 가이드를 끄지 않는다)
+  const rb = doc.querySelector('[data-bayview-report="1"]');
+  if (!rb) fail('위 줄에 «📤 보고» 단추가 없다');
+  rb.click();
+  await wait(200);
+  if (!W.__calls.some((c) => c.fn === 'report')) fail('«📤 보고» 를 눌렀는데 onOpenReport 가 안 불렸다');
+  if (!doc.querySelector('[data-bayview="view"]') || doc.querySelector('[data-closed="1"]')) fail('«📤 보고» 를 눌렀더니 베이뷰가 닫혔다');
   // ⑨ ✕ 닫기
   byText(/^✕$/).click();
   await wait(300);

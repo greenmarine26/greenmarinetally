@@ -34,7 +34,7 @@ function hatchTitleOf(bay, pages) {
 }
 
 export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdiContainers, xrayMap, xraySeals, shiftingMap, preGoneInfo = null,
-  onOpenContainer, onClose, searchPanelProps = {} }) {
+  onOpenContainer, onClose, onOpenReport = null, searchPanelProps = {} }) {   // 4.63-02: onOpenReport — 베이뷰를 닫지 않고 작업 보고 창을 연다
   const sec = (voyage && voyage[mode]) || {};
   const info = (voyage && voyage.info) || {};
   const [step, setStep] = useState('pick');                    // 'pick' | 'view'
@@ -223,7 +223,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
             ⚠ {nConf > 0 ? `불일치 ${nConf}` : ''}{nConf > 0 && nNoTerm > 0 ? ' · ' : ''}{nNoTerm > 0 ? `터미널 미확인 ${nNoTerm}` : ''}
           </button>
         )}
-        <button onClick={onClose} className={`ml-auto ${chip('bg-ink-800 border border-line text-dim-200')}`}>✕</button>
+        {onOpenReport && <button onClick={onOpenReport} className={`ml-auto ${chip('bg-emerald-700 border border-emerald-400 text-white')}`} data-bayview-report="1" title="작업 보고 — 베이뷰를 닫지 않고 보고 창을 엽니다">📤 보고</button>}
+        <button onClick={onClose} className={`${onOpenReport ? '' : 'ml-auto '}${chip('bg-ink-800 border border-line text-dim-200')}`}>✕</button>
       </div>
       {showConf && (
         <div className="shrink-0 max-h-40 overflow-auto bg-red-950/60 border-b border-red-800 px-3 py-2 space-y-1 text-xxs" data-bayview-conflicts="1">

@@ -1913,6 +1913,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           allEdiContainers={allEdiContainers} xrayMap={xrayMap} xraySeals={xraySeals} shiftingMap={shiftingMap} preGoneInfo={preGoneInfo}
           onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}
           onClose={() => setWorkStyle('classic')}
+          onOpenReport={() => setShowWorkReport(true)}   /* 4.63-02: 베이뷰 안에서 작업 보고(자동 가이드를 끄지 않는다) */
           searchPanelProps={{
             rfSkip: rfSkipShip,
             esealBrief: esealInfo ? { n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges, poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length } : null,
