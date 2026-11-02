@@ -1297,6 +1297,22 @@ if npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:fir
 else
   echo "✗ 4.39 마감적용 없앰 firebase 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ER"; exit 1
 fi
+#  4.63: **소유자 메뉴를 관리앱 화면(#/owner)으로 분리** — 수석 대시보드에 없고, 헤더 단추·라우트가 소유자 문지기를 지나는가
+node tools/smoke_owner463.cjs "$(pwd)" || { echo "✗ 4.63 관리앱 분리 연막검사 실패 — 배포 금지"; exit 1; }
+#  4.63: 관리앱 화면을 실제로 그려 본다 — 소유자는 메뉴 전부, 비소유자는 «소유자 전용» 안내만(스텁은 활동 로그·보고 구독만 이 검사용으로 바꾼다)
+SMOKE_OW=$(mktemp /dev/shm/hometmp/_smokeow_XXXXXX.js)
+cp src/firebase.js "$SMOKE_OW.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+sed -i 's#^export const fbGetActivityDays = async () => true;#export const fbGetActivityDays = async () => [];#; s#^export const fbSubscribeAllReports = async () => true;#export const fbSubscribeAllReports = (cb) => { cb([{ ts: 1 }]); return () => {}; };#' src/firebase.js
+if npx esbuild tools/smoke_owner463_render.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_OW"; then
+  cp "$SMOKE_OW.fbbak" src/firebase.js && rm -f "$SMOKE_OW.fbbak"
+  node tools/smoke_owner463_render.cjs "$(pwd)" "$SMOKE_OW" || { echo "✗ 4.63 관리앱 렌더 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_OW"; exit 1; }
+  rm -f "$SMOKE_OW"
+else
+  cp "$SMOKE_OW.fbbak" src/firebase.js; rm -f "$SMOKE_OW.fbbak"
+  echo "✗ 4.63 관리앱 렌더 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_OW"; exit 1
+fi
 #  4.18-02: **45피트 규격(950E·9500·L5G1·L5GE)이 비지 않는가** — 실제 마감텔리 EDI·OBWH 2762W 실제 선적으로. 검수사 2026-10-09 22:10 «규격을 놓쳐서는 안된다».
 node tools/smoke_l5spec418.cjs "$(pwd)" || { echo "✗ 4.18-02 45피트 규격 연막검사 실패 — 배포 금지"; exit 1; }
 #  4.20-01: **풀·엠티 표식 코드(453E)가 화면에 그대로 나오지 않는가**(정본 규격 글자 45RE·45R1) — 검수사 2026-10-10.

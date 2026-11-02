@@ -24,11 +24,10 @@ const B = process.argv[3];
   ok(left.length === 0, `src ${srcFiles.length}개 파일 코드(주석 제외)에 마감적용 이름이 없다` + (left.length ? ' | ' + left.join(', ') : ''));
   const uiLeft = srcFiles.filter((f) => !/^src\/data\/helpData/.test(f) && /마감적용|마감 적용/.test(noCmt(read(f)).replace(/export const APP_NOTE = '[^']*'/, '')));   // 업데이트 배너 한 줄(APP_NOTE)은 판 알림이라 셈에서 뺀다(4.39 는 4.29-02 규칙대로 배너 문구를 안 바꿨다)
   ok(uiLeft.length === 0, '화면 글자(주석·매뉴얼 제외)에 «마감적용» 이 없다' + (uiLeft.length ? ' | ' + uiLeft.join(', ') : ''));
-  const CD = read('src/pages/ChiefDashboard.jsx');
-  const i0 = CD.indexOf("if (gid === 'owner' && owner) return ("), i1 = CD.indexOf('\n    return null;\n  };', i0);
-  const block = i0 > 0 && i1 > i0 ? CD.slice(i0, i1) : '';
+  //  4.63: 소유자 메뉴는 관리앱 화면(OwnerPage.jsx)으로 옮겼다 — 몸통은 그 파일의 data-owner-menu 블록
+  const block = read('src/pages/OwnerPage.jsx');
   ok(block.length > 0 && !/closingedi/.test(block) && /data-danger-zone="1"/.test(block) && /onClick=\{askClearAllDanger\}/.test(block) && /<ShiftSnapPanel/.test(block) && /<ActivityLogSection/.test(block) && /<AiCostPanel/.test(block) && /onOpenStaffManager/.test(block),
-    '소유자 메뉴 — 마감적용 접이 없음 · 교대 시각·활동 로그·AI 비용·인원 관리·위험 구역(모든 작업 보고 삭제)은 그대로');
+    '소유자 메뉴(관리앱) — 마감적용 접이 없음 · 교대 시각·활동 로그·AI 비용·인원 관리·위험 구역(모든 작업 보고 삭제)은 그대로');
   const FI = read('src/data/featureIndex.js');
   ok(!/l: '🏁 마감적용'/.test(FI) && !/마감적용/.test(FI), '기능 색인에 «🏁 마감적용» 항목·글자가 없다(미르가 없는 메뉴로 안내하지 않는다)');
   const HC = read('src/data/helpDataChief.js');

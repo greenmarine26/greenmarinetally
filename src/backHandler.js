@@ -19,6 +19,7 @@ export function parseHash(h) {
   if (s.startsWith('#/health')) return { name: 'health' };
   if (s.startsWith('#/food')) return { name: 'food' };
   if (s.startsWith('#/aux')) return { name: 'aux' };
+  if (s.startsWith('#/owner')) return { name: 'owner' };   // 4.63: 관리앱(소유자 전용)
   if (s.startsWith('#/data')) return { name: 'data' };   // 4.34: 자료 센터
   return { name: 'home' };
 }

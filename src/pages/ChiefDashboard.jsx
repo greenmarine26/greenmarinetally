@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { FitBox } from '../components/FitBox.jsx';   // 3.48: 한 벌 — 베이뷰 작업과 공용
 import { Users, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';   // 4.24: Anchor 는 옛 보드 머리와 함께 뺐다
-import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
+import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline } from '../firebase.js';   
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
@@ -38,8 +38,6 @@ import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보�
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
 import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
 import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
-import ShiftSnapPanel from '../components/ShiftSnapPanel.jsx';   // 4.11: 교대 시각(06:30·17:30) 터미널 기준 — 소유자 메뉴 안
-import AiCostPanel from '../components/AiCostPanel.jsx';   // 4.37: AI 비용 — 미르·사진 읽기 클로드 비용과 Console 숫자(소유자 메뉴 안)
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -100,7 +98,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
   collectorHb = null, pilotForecast = null, portMisData = null,   // 1.40-01: 🚢신고도착
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
-  onOpenStaffManager = null,   // 4.11: 소유자 메뉴 안 «인원 관리» — 헤더 ⋮ 메뉴와 같은 창(App 이 넘긴다)
 }) {
   //  ★ 4.24 — 수석 상황판(검수사 2026-10-12 «화면이 복잡하고 난해 합니다 … 간결하고 보기 좋게» · 불편 «한 화면에 항목이 너무 많다 · 글자가 작아 안 보인다 · 어디에 뭐가 있는지 찾기 어렵다»
   //    · «칩(수석)은 근무중 켜놀것이고 전 필요 할때만 컴과 폰으로 봅니다»). 위 9블록(제목·수집기 배너·BigStat·검색 폼·바로가기 20·접힘 17)을 상태 줄 한 줄과 탭 셋으로 옮겼다.
@@ -181,9 +178,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     if (group) setMgGroup(group);
     if (secId) jumpSec(secId);
   };
-  //  4.24: 위험 구역(모든 작업 보고 삭제)의 «한 번 더 묻기» — 기존 ConfirmModal 을 한 벌 더 둔다(D9 «수석은 한번 실수로 … 많은 자료를 잃을수가»).
-  //    이 창에서 [예] 를 눌러야 종전 삭제 확인창으로 넘어간다. [취소] 면 아무것도 안 쓴다. (4.39: 마감적용은 검수사 2026-10-19 지시로 기능째 없앴다)
-  const [dangerState, askDanger] = useConfirm();
   const [editKey, setEditKey] = useState(null); // V7.97: 베이상세 편집 대상 항차 (수석/관리자만)
   const [planKey, setPlanKey] = useState(null); // V9.07: 컨펌용 플랜편집 대상 항차
   const [shipLib, setShipLib] = useState({});
@@ -724,40 +718,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     { id: 'people', ico: '👷', name: '사람·알림', sub: '검수원 활동 · 공지 · 오답 · 통합 검색',
       badge: `${inspectorStats.length}명` },
     { id: 'edit', ico: '🖐', name: '편집 (주의)', sub: '베이상세 · 컨펌용 플랜', badge: '수석 전용', danger: true },
-    ...(owner ? [{ id: 'owner', ico: '👑', name: '소유자 메뉴', sub: '교대 시각 · 활동 로그 · AI 비용 · 인원 · 위험 구역', badge: '소유자만' }] : []),
   ];
   const curGroup = (() => {
     const ok = (g) => groups.some((x) => x.id === g);
     if (wideUI) return ok(mgGroup) ? mgGroup : 'data';   // 컴은 늘 하나가 펴져 있다(오른쪽 칸)
     return ok(mgGroup) ? mgGroup : null;                 // 폰은 평소엔 닫힘(A6)
   })();
-
-  //  (종전 «📤 최근 작업 보고» 머리의 [전체 삭제 (테스트용)] — 확인창 문구·처리기 한 글자도 그대로. 자리만 소유자 메뉴 › 위험 구역으로)
-  const askClearAllReports = () => {
-              askConfirm({
-                title: '⚠️ 모든 작업 보고 삭제',
-                message: '모든 항차의 작업 보고와 사진을 삭제합니다.\n테스트 데이터 정리용입니다.\n\n되돌릴 수 없습니다. 계속하시겠습니까?',
-                confirmLabel: '모두 삭제',
-                cancelLabel: '취소',
-                danger: true,
-                onConfirm: async () => {
-                  try {
-                    await fbClearAllReportsAllVoyages();
-                    await fbClearAllActiveWork();
-                    setRepNotice({ kind: 'ok', text: '✅ 모든 작업 보고가 삭제되었습니다' });  // TallyOne 1.0(L5)
-                  } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
-                },
-              });
-  };
-  //  4.24 위험 구역 «한 번 더 묻기» — 이 창 [다음] 뒤에 종전 확인창이 그대로 뜬다(두 번 다 [예]여야 지운다). [취소]면 아무것도 안 쓴다.
-  const askClearAllDanger = () => askDanger({
-    title: '⚠️ 위험 구역 — 모든 작업 보고 삭제',
-    message: '전 항차의 작업 보고와 사진을 지우는 테스트 정리용 단추입니다.\n현장 보고가 통째로 사라지고 되돌릴 수 없습니다.\n\n그래도 진행할까요? 다음 창에서 한 번 더 묻습니다.',
-    confirmLabel: '다음',
-    cancelLabel: '취소',
-    danger: true,
-    onConfirm: () => askClearAllReports(),
-  });
 
   const groupBody = (gid) => {
     if (gid === 'data') return (
@@ -1041,48 +1007,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </div>
       )}
       </>
-    );
-    if (gid === 'owner' && owner) return (
-      /* 4.11: 소유자 전용 메뉴는 여기 한 곳에 모은다 — 검수사 2026-10-07 22:08 «제가 쓰는 메뉴는 따로 모아주세요 분산시키지 말고요» · 22:09 «인원관리나 활동로그 마감적용 등».
-         새 소유자 전용 기능은 이 묶음 안에 넣는다(대시보드 곳곳에 흩지 않는다). 기본 접힘 — 열기 전에는 아무 자료도 읽지 않는다.
-         · TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회.
-         · 4.37: 💳 AI 비용 — 검수사 2026-10-19 «비용관리 보고는 소유자 관리 안에둡니다». 펼칠 때 한 번 읽기(구독 없음), 키 값은 안 그린다.
-         · 4.24: 되돌릴 수 없는 것(모든 작업 보고 삭제)은 아래 «위험 구역» 한 곳 — 빨간 테두리 · 누르면 한 번 더 묻는다(D9).
-         · 4.39: 🏁 마감적용은 메뉴째 없앴다 — 검수사 2026-10-19 21:25 «마감 적용기능은 없애주세요 앱을 사용하게 되면 필요 없어지는 기능입니다» · 21:26 «메뉴 자체도 없애주세요». */
-      <div className="space-y-2" data-owner-menu="1">
-        <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>
-          <ShiftSnapPanel voyages={voyages} by={inspector} />
-        </Fold>
-        <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
-          <ActivityLogSection voyages={voyages} />
-        </Fold>
-        <Fold id="aicost" title="💳 AI 비용 (클로드 · 제미나이)" open={!!openSecs.aicost} onToggle={() => toggleSec('aicost')}>
-          <AiCostPanel by={inspector} />
-        </Fold>
-        {onOpenStaffManager && (
-          <button onClick={onOpenStaffManager}
-            className="w-full flex items-center justify-between px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-left"
-            style={{ minHeight: 44 }}>
-            <span className="text-sm2 font-bold text-dim-100">👥 인원 관리</span>
-            <span className="text-dim-400 text-xs shrink-0 ml-2">창 열기 ▶</span>
-          </button>
-        )}
-        <div className="rounded-btn border-2 border-red-700/70 bg-red-950/20 p-2 space-y-2" data-danger-zone="1">
-          <div className="text-sm2 font-black text-red-200">⚠ 위험 구역 — 되돌릴 수 없습니다 · 누르면 한 번 더 묻습니다</div>
-          {recentReports.length > 0 ? (
-            <button type="button" onClick={askClearAllDanger} data-danger="clear-reports"
-              className="w-full flex items-center justify-between gap-2 px-3 rounded-btn border-2 border-red-700/70 bg-red-950/30 hover:bg-red-900/40 text-left"
-              style={{ minHeight: 44 }}>
-              <span className="text-sm2 font-bold text-red-200 flex items-center gap-1.5"><Trash2 className="w-4 h-4"/> 모든 작업 보고 삭제 (테스트용) — 위험</span>
-              <span className="text-xs text-red-300 shrink-0">전 항차 보고·사진</span>
-            </button>
-          ) : (
-            <div className="text-xs text-dim-400 px-1" data-danger="clear-reports-none">🗑 모든 작업 보고 삭제 (테스트용) — 지울 작업 보고가 없습니다(최근 보고 0건)</div>
-          )}
-          {/* TallyOne 1.0(L5): 삭제 결과 인라인 통지 */}
-          <InlineNotice notice={repNotice} onClose={() => setRepNotice(null)} />
-        </div>
-      </div>
     );
     return null;
   };
@@ -1405,7 +1329,6 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* M3.74: confirm() → ConfirmModal · 4.24: 위험 구역 «한 번 더 묻기» 창 */}
       <ConfirmModal {...confirmState} />
-      <ConfirmModal {...dangerState} />
     </div>
   );
 }
@@ -2275,7 +2198,7 @@ function ScheduleLine({ planDate, planSrc, pf, pmEta = '', berthAlt = null }) {
 }
 
 // TallyOne 1.0(L5): 결과 통지 인라인 알림 — alert() 대신 해당 섹션 안에서 보여준다. ✕로 닫음.
-function InlineNotice({ notice, onClose }) {
+export function InlineNotice({ notice, onClose }) {
   if (!notice) return null;
   const ok = notice.kind !== 'err';
   return (
@@ -3207,7 +3130,7 @@ export function EquipReportBoard({ board, capped = false }) {
 
 // ── V9.19-02: 접이식 항목 래퍼 — 대시보드 항목을 버튼으로 열고 닫는다 ─────────
 //   상단 바로가기(jumpSec)가 열림 상태를 켜고 스크롤한다. 헤더 44px 터치 타깃.
-function Fold({ id, title, open, onToggle, children }) {   // 4.39: 위험 구역 접이(danger — 빨간 테두리)를 쓰던 마감적용을 없애 그 인자도 뺐다
+export function Fold({ id, title, open, onToggle, children }) {   // 4.39: 위험 구역 접이(danger — 빨간 테두리)를 쓰던 마감적용을 없애 그 인자도 뺐다
   return (
     <div id={'sec-' + id} className="scroll-mt-16" data-fold={id}>
       <button onClick={onToggle} aria-expanded={!!open}
@@ -3321,187 +3244,3 @@ function PhoneShipCard({ v, workers = [], departed = false, lastAt = 0, onOpen }
     </button>
   );
 }
-
-// ── TallyOne 1.3: 활동 로그 뷰어 — 소유자 전용 ─────────────────────────────
-//   "검수원들이 로그인만 하고 뭘 보는지"를 시간순으로 보여준다(사용자 확정 2026-08-03).
-//   완료 건수는 archive까지 합산하면 무거워 현재 voyages의 completed만 센다(캡션에 명시).
-
-// 타임라인 한 줄 문구 — 순수 함수(노드 시뮬 검증 겸 단일 소스)
-const _ACT_ROUTE_KO = { home: '홈', chief: '수석 대시보드', search: '통합 검색', health: '항차 건강', food: '맛집', aux: '보조기능' };
-const _ACT_TAB_KO = { list: '검수', search: '작업 시작', bay: '베이', lolo: 'LOLO', stats: '통계', report: '결과', data: '자료' };   // 2.03-01: 자연어 → 실제 탭 이름
-export function formatActivityLine(r, voyages) {
-  if (!r) return '?';
-  if (r.type === 'login') return '로그인';
-  if (r.type === 'logout') return r.via === 'idle' ? '자동 로그아웃' : '로그아웃';
-  if (r.type === 'view') {
-    if (r.route === 'voyage') {
-      const info = voyages?.[r.voyageKey]?.info;
-      const vsl = info?.vsl || String(r.voyageKey || '').split('_')[0] || '';
-      const voy = (r.mode === 'loading' ? info?.voy_l : info?.voy_d) || info?.voy || '';
-      const modeKo = r.mode === 'loading' ? '선적' : r.mode === 'discharge' ? '양하' : '';
-      const head = [vsl, voy, modeKo].filter(Boolean).join(' ');
-      const tabKo = _ACT_TAB_KO[r.tab] ? `${_ACT_TAB_KO[r.tab]}탭 ` : '';
-      return `${head || '항차'} · ${tabKo}열람`;
-    }
-    return `${_ACT_ROUTE_KO[r.route] || r.route || '?'} 열람`;
-  }
-  if (r.type === 'lookup') return `조회 '${r.q || ''}'`;
-  if (r.type === 'nls') return `질문 '${r.q || ''}'`;
-  return r.type || '?';
-}
-
-const _actHHMM = (at) => {
-  const d = new Date(at || 0);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-const _actMD = (at) => {
-  const d = new Date(at || 0);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-};
-// 타입별 색 — 열람은 무채색, 조회·질문은 눈에 띄게(뭘 찾으러 왔는지가 핵심 데이터)
-const _ACT_COLOR = { login: 'text-emerald-300', logout: 'text-amber-300/80', view: 'text-dim-200', lookup: 'text-cyan-300', nls: 'text-purple-300' };
-
-function ActivityLogSection({ voyages }) {
-  const [period, setPeriod] = useState('today');   // today | yesterday | 7d
-  const [who, setWho] = useState('');              // '' = 전체
-  const [rows, setRows] = useState(null);          // null = 로딩 전·중
-  const [error, setError] = useState('');
-  const [limit, setLimit] = useState(300);
-
-  // 섹션을 펼칠 때(마운트) 1회 — 30일 지난 버킷 정리. 실패 무해(fb 함수가 warn 1줄).
-  useEffect(() => { fbCleanupActivityLog(30); }, []);
-
-  // 기간 변경 시 조회 — 오늘 1일 / 어제 2일 / 7일 버킷 병합
-  useEffect(() => {
-    let alive = true;
-    setRows(null); setError(''); setLimit(300);
-    const days = period === 'today' ? 1 : period === 'yesterday' ? 2 : 7;
-    fbGetActivityDays(days)
-      .then(list => { if (alive) setRows(list); })
-      .catch(e => { if (alive) { setRows([]); setError(String((e && e.message) || e)); } });
-    return () => { alive = false; };
-  }, [period]);
-
-  // 기간 경계(로컬 자정 기준) — 버킷은 일 단위지만 '어제'는 어제 하루만 잘라 보여준다
-  const range = useMemo(() => {
-    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
-    const t0 = d0.getTime();
-    if (period === 'today') return { from: t0, to: Infinity };
-    if (period === 'yesterday') return { from: t0 - 86400000, to: t0 };
-    return { from: t0 - 6 * 86400000, to: Infinity };
-  }, [period]);
-
-  const periodRows = useMemo(
-    () => (rows || []).filter(r => (r.at || 0) >= range.from && (r.at || 0) < range.to),
-    [rows, range]);
-  const names = useMemo(() => [...new Set(periodRows.map(r => r.who).filter(Boolean))], [periodRows]);
-  const view = useMemo(() => (who ? periodRows.filter(r => r.who === who) : periodRows), [periodRows, who]);
-
-  // 검수원별 요약 — 로그인·열람·조회(lookup+nls)·완료(현재 voyages의 completed by 합산)
-  const summary = useMemo(() => {
-    const m = {};
-    const ensure = (n) => (m[n] = m[n] || { login: 0, view: 0, lookup: 0, done: 0 });
-    periodRows.forEach(r => {
-      const s = ensure(r.who || '?');
-      if (r.type === 'login') s.login++;
-      else if (r.type === 'view') s.view++;
-      else if (r.type === 'lookup' || r.type === 'nls') s.lookup++;
-    });
-    Object.values(voyages || {}).forEach(v => {
-      ['discharge', 'loading'].forEach(md => {
-        Object.values((v && v[md] && v[md].completed) || {}).forEach(c => {
-          const _w = completedByLabel(c, (v && v.info) || null);   // 3.16: 터미널 반영분은 조 등록 근무자로
-          if (_w && (c.at || 0) >= range.from && (c.at || 0) < range.to) ensure(_w).done++;
-        });
-      });
-    });
-    return Object.entries(m).sort((a, b) => (b[1].view + b[1].lookup) - (a[1].view + a[1].lookup));
-  }, [periodRows, voyages, range]);
-
-  const shown = view.slice(0, limit);
-  return (
-    <div className="bg-ink-900 border border-fuchsia-800/40 rounded-btn p-3">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="text-sm font-bold text-dim-100">🕵️ 활동 로그</div>
-        <span className="text-2xs text-fuchsia-300/70">소유자 전용 — 열람 자체를 기록</span>
-      </div>
-      <div className="text-2xs text-dim-400 mb-2">
-        완료 건수는 현재 항차 기준(voyages의 completed만 합산 — 보관소로 넘어간 실적 제외)
-      </div>
-
-      {/* 기간 선택 + 검수원 필터 칩 */}
-      <div className="flex gap-1 mb-2">
-        {[['today', '오늘'], ['yesterday', '어제'], ['7d', '7일']].map(([k, t]) => (
-          <button key={k} onClick={() => setPeriod(k)}
-            className={`px-2.5 py-1 rounded text-xxs font-bold ${
-              period === k ? 'bg-fuchsia-700 text-fuchsia-100' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
-            {t}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1 flex-wrap mb-2">
-        <button onClick={() => setWho('')}
-          className={`px-2 py-0.5 rounded text-xxs font-bold ${
-            who === '' ? 'bg-amber-700 text-amber-100' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
-          전체
-        </button>
-        {names.map(n => (
-          <button key={n} onClick={() => setWho(n)}
-            className={`px-2 py-0.5 rounded text-xxs font-bold ${
-              who === n ? 'bg-amber-700 text-amber-100' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
-            {n}
-          </button>
-        ))}
-      </div>
-
-      {/* 검수원별 요약 줄 */}
-      {summary.length > 0 && (
-        <div className="space-y-1 mb-2">
-          {summary.map(([n, s]) => (
-            <div key={n} className="text-xxs text-dim-200 bg-ink-950/60 border border-line rounded px-2 py-1">
-              <b className="text-dim-100">{n}</b>
-              <span className="text-dim-400"> — </span>
-              로그인 {s.login}회 · 열람 {s.view}건 · 조회 {s.lookup}건 · <span className={s.done > 0 ? 'text-emerald-300' : 'text-dim-400'}>완료 {s.done}건</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 타임라인 — 최신순, 300건 + 더보기 */}
-      {rows === null ? (
-        <div className="text-xs text-dim-400 text-center py-4">불러오는 중…</div>
-      ) : error ? (
-        <div className="text-xs text-red-300 text-center py-3">활동 로그 조회 실패 — {error}</div>
-      ) : shown.length === 0 ? (
-        <div className="text-xs text-dim-400 text-center py-4">이 기간의 활동 기록이 없습니다</div>
-      ) : (
-        <div className="bg-ink-950 rounded border border-line divide-y divide-line/60 max-h-[50vh] overflow-y-auto">
-          {shown.map((r, i) => {
-            const prev = shown[i - 1];
-            const dayBreak = !prev || _actMD(prev.at) !== _actMD(r.at);
-            return (
-              <React.Fragment key={r.day + '_' + r.id}>
-                {dayBreak && period !== 'today' && (
-                  <div className="px-2 py-0.5 text-2xs font-bold text-dim-400 bg-ink-900/80">{_actMD(r.at)}</div>
-                )}
-                <div className="px-2 py-1 flex items-baseline gap-2 text-xxs">
-                  <span className="mono text-dim-400 shrink-0">{_actHHMM(r.at)}</span>
-                  <span className="font-bold text-dim-100 shrink-0">{r.who}</span>
-                  <span className={`min-w-0 break-all ${_ACT_COLOR[r.type] || 'text-dim-200'}`}>{formatActivityLine(r, voyages)}</span>
-                </div>
-              </React.Fragment>
-            );
-          })}
-        </div>
-      )}
-      {view.length > limit && (
-        <button onClick={() => setLimit(l => l + 300)}
-          className="mt-2 w-full py-1.5 rounded bg-ink-800 hover:bg-ink-750 text-xxs font-bold text-dim-200">
-          더보기 ({view.length - limit}건 남음)
-        </button>
-      )}
-    </div>
-  );
-}
-
-

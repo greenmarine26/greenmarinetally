@@ -23,7 +23,7 @@ import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 
 //  4.23 2차 — 머리띠 칸 재기(useLayoutEffect · 서버 그리기에서는 useEffect)
 const _useIsoLayout = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, workChoice = null, onChangeWork = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, onOpenOwner = null, workChoice = null, onChangeWork = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   // V8.10: 현재 항차 부두 기준 장비 목록. 항차 없으면 1~5 전체.
@@ -241,6 +241,12 @@ export default function Header({ version, inspector, online, route, voyages, onC
               aria-label="관리자 — 누르면 작업자로 전환"
               className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 bg-ink-800 text-amber-200 border border-amber-600 whitespace-nowrap`}>
               <span aria-hidden="true">🛠</span><span className="hidden sm:inline">관리자</span>
+            </button>
+          )}
+          {onOpenOwner && (   /* 4.63: 관리앱 입구 — 소유자에게만(App 이 소유자일 때만 넘긴다) · 어느 화면에서든 한 번 */
+            <button onClick={onOpenOwner} title="관리앱 — 소유자 메뉴" aria-label="관리앱 열기" data-hdr-owner="1"
+              className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 border whitespace-nowrap ${route.name === 'owner' ? 'bg-fuchsia-800 text-fuchsia-100 border-fuchsia-500' : 'bg-ink-800 text-fuchsia-200 border-fuchsia-700'}`}>
+              <span aria-hidden="true">👑</span><span className="hidden sm:inline">관리앱</span>
             </button>
           )}
           {(

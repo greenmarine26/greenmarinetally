@@ -1,5 +1,8 @@
 // 미르 «언제 끝나»·작업 계산이 터미널 본선현황(PCTC termStat · 동방 qcWork)으로 나가는지 재는 연막검사(3.74)
 //  실데이터 — 2026-10-03 라이브 보관소 DPRT_2611N(PCTC) · RZOR_R108E(동방) info. 검수사 2026-10-03 12:41 «미르는 언제끝나 라는 질문과 작업계산은 각 터미널 본선현황보고 계산».
+//  4.63: 시계를 2026-11-01 20:30 KST 로 못 박는다 — 이 검사는 «지금 시각» 에 따라 달라졌다(4.62-06 원본도 2026-11-02 10:26 에 4건 실패, 20:30 에 맞추면 0건). 판정 코드는 그대로고 검사만 결정적으로 만든다.
+{ const RD = Date, T0 = RD.parse('2026-11-01T20:30:00+09:00'), OFF = T0 - RD.now();
+  global.Date = class extends RD { constructor(...a) { if (a.length === 0) super(RD.now() + OFF); else super(...a); } static now() { return RD.now() + OFF; } }; }
 const fs = require('fs'), path = require('path');
 const OUT = process.argv[2], ROOT = process.argv[3] || process.cwd();
 if (!OUT) { console.error('✗ 번들 경로가 없다'); process.exit(1); }

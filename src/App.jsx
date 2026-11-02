@@ -21,6 +21,7 @@ import DataCenterPage from './pages/DataCenterPage.jsx';   // 4.34: 자료 센�
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
+import OwnerPage from './pages/OwnerPage.jsx';   // 4.63: 관리앱(소유자 전용 화면)
 import Ferry1700Alert from './components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 작업 중 검수원 폰
 import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
 import FoodPage from './pages/FoodPage.jsx';       // V8.60: 맛집 수첩+돌림판
@@ -564,6 +565,7 @@ export default function App() {
     else if (target === 'chief') window.location.hash = '#/chief';
     else if (target === 'health') window.location.hash = '#/health';  // V8.40
     else if (target === 'food') window.location.hash = '#/food';      // V8.60
+    else if (target === 'owner') window.location.hash = '#/owner';    // 4.63: 관리앱
     else if (target === 'aux') window.location.hash = '#/aux';        // TallyOne 1.0: 보조기능
     else if (target === 'data') window.location.hash = '#/data';      // 4.34: 자료 센터
     else if (target === 'login') window.location.hash = '#/login';    // TallyOne 1.0: 검수원 변경
@@ -653,6 +655,7 @@ export default function App() {
         onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}
         onGoHome={() => navigate('home')}
         onOpenAux={() => navigate('aux')}
+        onOpenOwner={isOwnerName(inspector) ? () => navigate('owner') : null}
         onLogout={handleLogout}
       />
 
@@ -735,11 +738,15 @@ export default function App() {
               onGoHome={() => navigate('home')}
               onMirPlan={(pl) => setMirPlan(pl)}   /* 2.87: 플랜은 덮개 — 수석 화면 그대로 둔다 */
               onOpenGlobalSearch={_askGlobal}   /* 2.03-01: 대시보드 검색창 질문을 들고 간다 */
-              onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}   /* 4.11: 소유자 메뉴 안 «인원 관리» — 헤더 ⋮ 메뉴와 같은 창 */
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>
           )
+        )}
+        {/* 4.63: 관리앱 (#/owner) — 소유자 전용. 수석·검수 화면과 분리(소유자 메뉴를 수석 대시보드에서 뺐다) */}
+        {route.name === 'owner' && (
+          <OwnerPage inspector={inspector} voyages={voyages} onGoHome={() => navigate('home')}
+            onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}/>
         )}
         {/* TallyOne 1.0: 보조기능 화면 (#/aux — 구현은 팀M AuxPage) */}
         {route.name === 'aux' && (

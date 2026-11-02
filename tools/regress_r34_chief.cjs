@@ -67,7 +67,6 @@ const OLD_DOORS = [
   ['바로가기 📚 자료 보관소 · 접힘 📚 선박별 자료 보관소', '진행·마감 › 📚 선박별 자료 보관소', 'archive'],
   ['바로가기 🏗 장비 보고 · 접힘 🏗 오늘 장비별 작업 보고(보고 있을 때만)', '진행·마감 › 🏗 오늘 장비별 작업 보고(없어도 문)', 'equip'],
   ['바로가기 📤 작업 보고 · 접힘 📤 최근 작업 보고 (30건) · 보고별 🗑', '진행·마감 › 📤 최근 작업 보고(보고별 🗑 그대로)', 'reports'],
-  ['📤 최근 작업 보고 머리 [전체 삭제 (테스트용)]', '관리 › 👑 소유자 메뉴 › ⚠ 위험 구역(한 번 더 묻기)', 'clearAll'],
   ['바로가기 📦 자료 현황/부족 N · 접힘 📦 자료 현황', '관리 › 자료 › 📦 자료 현황', 'ready'],
   ['바로가기 🧱 베이매트릭스(창)', '관리 › 자료 › 🧱 베이매트릭스(창)', 'baymatrix'],
   ['바로가기 📸 PORT-MIS 캡처(창)', '관리 › 자료 › 📸 PORT-MIS 캡처(창)', 'portmis'],
@@ -82,10 +81,6 @@ const OLD_DOORS = [
   ['카페리 17시 창(저절로) · 보고 보관 단추', '그대로 + 관리 › 사람·알림 «📋 17시 카페리 작업보고 — 보관한 보고 보기»', 'ferry'],
   ['바로가기 🧰 보조기능(화면 이동)', '관리 › 사람·알림 › 🧰 보조기능', 'aux'],
   ['바로가기 🖐 편집 · 접힘 🖐 베이상세 편집 · 📐 컨펌용 플랜편집(선박 단추 → 창)', '관리 › 편집 (주의)(빨간 테두리 · «작업 중인 배는 끝난 뒤에»)', 'edit'],
-  ['바로가기 👑 소유자 메뉴 · 접힘 👑 소유자 메뉴(소유자만)', '관리 › 👑 소유자 메뉴(소유자만)', 'ownerGroup'],
-  ['소유자 메뉴 › 🕰 교대 시각 터미널 기준', '관리 › 👑 소유자 메뉴 › 🕰', 'shiftsnap'],
-  ['소유자 메뉴 › 🕵️ 활동 로그', '관리 › 👑 소유자 메뉴 › 🕵️', 'actlog'],
-  ['소유자 메뉴 › 👥 인원 관리(창)', '관리 › 👑 소유자 메뉴 › 👥 인원 관리', 'staff'],
   //  ['소유자 메뉴 › 🏁 마감적용', …, 'closingedi'] — 4.39 에 메뉴째 없앴다(검수사 2026-10-19 «메뉴 자체도 없애주세요»). 없어진 것은 ⑤-1 이 잰다.
   ['보드 그림 칸 → 컨 상세 창', '그대로(보드 행 · 폰 시트)', 'cellDetail'],
 ];
@@ -458,47 +453,13 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
       const e2 = await fixedHas('컨펌용 플랜편집');
       st.edit = ed.caution && ed.red && ed.em === nAll && ed.vi === nPlan && e1 && e2;
     }
-    //  소유자 메뉴 — 소유자만 · 교대 시각 · 활동 로그 · 인원 관리
+    //  4.63: 소유자 메뉴는 관리앱 화면(#/owner, OwnerPage)으로 옮겼다 — 소유자로 들어와도 수석 대시보드에는 묶음·메뉴·위험 구역이 없다(연막 smoke_owner463 이 관리앱 쪽을 잰다)
     await fresh(); await tabTo('manage');
-    st.ownerGroup = !!(await pg.$('button[data-chief-group="owner"]'));
-    await groupTo('owner');
-    st.shiftsnap = await foldOpen('shiftsnap', '.');
-    st.actlog = await foldOpen('actlog', '.');
-    {
-      const sb = await pg.$$('[data-owner-menu] button');
-      for (const b of sb) if (/인원 관리/.test(await b.innerText())) { await b.click(); await sleep(200); break; }
-      st.staff = (await calls('staff')).length === 1;
-    }
+    const ownerGone = await pg.evaluate(() => ({ grp: !!document.querySelector('button[data-chief-group="owner"]'), menu: !!document.querySelector('[data-owner-menu]'), dz: !!document.querySelector('[data-danger-zone]'), txt: /소유자 메뉴|위험 구역/.test(document.body.innerText) }));
+    st.ownerGone = !ownerGone.grp && !ownerGone.menu && !ownerGone.dz && !ownerGone.txt;
+    ok('⑤ 소유자(김성일)로 들어와도 수석 대시보드에는 소유자 메뉴·위험 구역이 없다(4.63 — 관리앱으로 분리)', st.ownerGone, JSON.stringify(ownerGone));
     await mount({ w: 1440, h: 900, keys: KEYS4, inspector: '이현규', owner: false }); await tabTo('manage');
-    const nonOwner = !(await pg.$('button[data-chief-group="owner"]')) && !/위험 구역|마감적용/.test(await rootText());
-    st.ownerGroup = st.ownerGroup && nonOwner;
-
-    //  ⑤ 위험 구역 — 한 번 더 묻고, 취소하면 쓰기 0(메모리 RTDB 쓰기 기록으로 센다)
-    await fresh(); await tabTo('manage'); await groupTo('owner');
-    const writes = () => pg.evaluate(() => (window.__memlog || []).length);
-    const modal = () => pg.evaluate(() => { const ms = [...document.querySelectorAll('.fixed.inset-0')].filter((m) => /z-\[100\]/.test(m.className)); return ms.map((m) => m.innerText.split('\n')[0]); });
-    //  맨 위(마지막에 뜬) 확인창의 단추를 누른다 — 창이 겹쳐 있으면 위의 것만
-    const btnIn = async (re) => { const hit = await pg.evaluate((src) => { const ms = [...document.querySelectorAll('.fixed.inset-0')].filter((m) => /z-\[100\]/.test(m.className)); const top = ms[ms.length - 1]; if (!top) return false; const b = [...top.querySelectorAll('button')].find((x) => new RegExp(src).test((x.innerText || '').trim())); if (!b) return false; b.click(); return true; }, re); await sleep(400); return hit; };
-    //  4.39 — 🏁 마감적용은 메뉴째 없앴다(검수사 2026-10-19 21:25 «마감 적용기능은 없애주세요» · 21:26 «메뉴 자체도 없애주세요»). 접이·글자가 없고 위험 구역에는 «모든 작업 보고 삭제» 만 남는다.
-    const w0 = await writes();
-    const ceGone = await pg.evaluate(() => { const o = document.querySelector('[data-owner-menu]'); const dz = document.querySelector('[data-danger-zone]');
-      return { fold: !!document.querySelector('[data-fold="closingedi"]'), text: !!o && /마감적용/.test(o.innerText), dz: !!dz, clear: !!(dz && dz.querySelector('[data-danger^="clear-reports"]')), folds: dz ? dz.querySelectorAll('[data-fold]').length : -1 }; });
-    const w1 = await writes();
-    st.closingGone = !ceGone.fold && !ceGone.text && ceGone.dz && ceGone.clear && ceGone.folds === 0 && w1 === w0;
-    ok(`⑤-1 🏁 마감적용은 없다(4.39) — 소유자 메뉴에 접이·글자 없음 · 위험 구역은 «모든 작업 보고 삭제» 만(접이 ${ceGone.folds}개) · 쓰기 ${w1 - w0}건`,
-      st.closingGone, JSON.stringify(ceGone));
-    const w2 = await writes();
-    await click('[data-danger="clear-reports"]'); const d1 = await modal(); await btnIn('^취소$'); const w3 = await writes();
-    await click('[data-danger="clear-reports"]'); await btnIn('^다음$'); const d2 = await modal(); await btnIn('^취소$'); const w4 = await writes();
-    const d3m = await modal();
-    st.clearAll = /위험 구역 — 모든 작업 보고 삭제/.test(d1.join('|')) && /^⚠️ 모든 작업 보고 삭제/.test(d2.join('|')) && w3 === w2 && w4 === w2 && !d3m.length;
-    ok(`⑤-2 위험 구역 🗑 모든 작업 보고 삭제(테스트용) — 첫 창 «${d1.join('|') || '없음'}» [취소] 쓰기 ${w3 - w2}건 · [다음] → 종전 확인창 «${d2.join('|') || '없음'}» [취소] 쓰기 ${w4 - w2}건`,
-      st.clearAll, JSON.stringify({ d1, d2, w2, w3, w4, d3m }));
-    //  같은 길로 두 번 다 [예] 면 실제로 지운다(검사가 헛돌지 않게 — 메모리 RTDB 에서만)
-    await click('[data-danger="clear-reports"]'); await btnIn('^다음$'); await btnIn('^모두 삭제$'); await sleep(400);
-    const w5 = await writes();
-    const cleared = await pg.evaluate(() => Object.values((window.__memdb || {}).voyages || {}).every((v) => !v.reports));
-    ok(`⑤-3 두 번 다 [예] 면 종전 처리기 그대로 지운다(메모리 RTDB 쓰기 ${w5 - w4}건 · 보고 노드 전부 비움 · activeWork 비움) — 처리기 불변`, w5 > w4 && cleared, JSON.stringify({ w4, w5, cleared }));
+    ok('⑤-1 소유자가 아닌 수석에게도 없다', !(await pg.$('button[data-chief-group="owner"]')) && !/위험 구역|마감적용/.test(await rootText()));
 
     //  ③ 결과 — 옛 문 하나하나
     const badDoors = OLD_DOORS.filter(([, , k]) => !st[k]);
@@ -509,7 +470,6 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
       ['관리 › 자료(자료 현황·베이매트릭스·PORT-MIS·부두 좌표·머스크 엠티·엠티 실·LOLO·새로고침)', ['ready', 'baymatrix', 'portmis', 'pier', 'emptyfind', 'seal', 'lolo', 'refresh']],
       ['관리 › 사람·알림(검수원·공지·오답·17시 보고·통합 검색·보조기능)', ['inspectors', 'notice', 'feedback', 'ferry', 'search', 'search2', 'aux']],
       ['관리 › 편집 (주의)(빨간 테두리·한 줄 주의·🖐 창·📐 창)', ['edit']],
-      ['관리 › 👑 소유자 메뉴(소유자만 · 교대 시각 · 활동 로그 · 인원 관리 · 위험 구역 — 4.39 마감적용 없앰)', ['ownerGroup', 'shiftsnap', 'actlog', 'staff', 'clearAll']],
     ]) {
       const b = keys.filter((k) => !st[k]);
       ok(`③ 문 전수 — ${grp} : ${keys.length - b.length}/${keys.length} 새 자리에서 열림`, !b.length, b.map((k) => `${k} — ${(OLD_DOORS.find((d) => d[2] === k) || [])[0] || k}`).join(' | '));
@@ -532,15 +492,15 @@ module.exports = async function r34({ ROOT, TMP, ok, head, fx, stub, css = '', s
         await mount({ w, h, mode, keys: SETS[4] });
         await pg.click('button[data-chief-tab="progress"]'); await sleep(500); await shot(`tab_progress_${w}_${mode}`);
         await pg.click('button[data-chief-tab="manage"]'); await sleep(500);
-        if (w < 700) { await pg.click('button[data-chief-group="owner"]'); await sleep(400); }
+        if (w < 700) { await pg.click('button[data-chief-group="data"]'); await sleep(400); }
         await shot(`tab_manage_${w}_${mode}`);
-        if (w >= 700) { await pg.click('button[data-chief-group="owner"]'); await sleep(400); await shot(`tab_manage_owner_${w}_${mode}`); }
+        if (w >= 700) { await pg.click('button[data-chief-group="data"]'); await sleep(400); await shot(`tab_manage_owner_${w}_${mode}`); }
       }
       //  밝기 4(사무실 흰 바탕) — 상황판·관리 탭
       for (const [w, h] of [[1440, 900], [390, 844]]) {
         await mount({ w, h, keys: SETS[4] });
         await pg.evaluate(() => document.documentElement.setAttribute('data-bright', '4')); await sleep(400); await shot(`bright4_board_${w}`);
-        await pg.click('button[data-chief-tab="manage"]'); await sleep(400); await pg.click('button[data-chief-group="owner"]'); await sleep(400); await shot(`bright4_manage_${w}`);
+        await pg.click('button[data-chief-tab="manage"]'); await sleep(400); await pg.click('button[data-chief-group="data"]'); await sleep(400); await shot(`bright4_manage_${w}`);
         await pg.evaluate(() => document.documentElement.removeAttribute('data-bright'));
       }
     }

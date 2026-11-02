@@ -75,11 +75,11 @@ const FX = JSON.parse(fs.readFileSync(path.join(root, 'tools/fixtures/ai_cost_26
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
   const noCmt = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/[^\n]*/g, '$1');
   const CD = read('src/pages/ChiefDashboard.jsx'), FB = read('src/firebase.js'), P = read('src/components/AiCostPanel.jsx'), M = read('src/mir.js');
-  const i0 = CD.indexOf("if (gid === 'owner' && owner) return ("), i1 = CD.indexOf('\n    return null;\n  };', i0);
-  const block = i0 > 0 && i1 > i0 ? CD.slice(i0, i1) : '';
+  //  4.63: 소유자 메뉴는 관리앱 화면(OwnerPage.jsx)으로 옮겼다 — 패널은 그 화면 한 곳
+  const OP = read('src/pages/OwnerPage.jsx'); const block = OP;
   const dz = block.indexOf('data-danger-zone');
-  ok(block.includes('<AiCostPanel by={inspector} />') && block.indexOf('<AiCostPanel') < dz && (CD.match(/<AiCostPanel/g) || []).length === 1, '패널은 «👑 소유자 메뉴» 안 한 곳 · 위험 구역 위');
-  ok(/name: '소유자 메뉴', sub: '교대 시각 · 활동 로그 · AI 비용 · 인원 · 위험 구역'/.test(CD), '소유자 메뉴 묶음 설명에 «AI 비용»');
+  ok(block.includes('<AiCostPanel by={inspector} />') && block.indexOf('<AiCostPanel') < dz && (OP.match(/<AiCostPanel/g) || []).length === 1 && !/AiCostPanel/.test(CD), '패널은 «👑 관리앱» 안 한 곳 · 위험 구역 위 · 수석 대시보드에는 없다');
+  ok(/💳 AI 비용/.test(OP), '관리앱에 «AI 비용» 접이가 있다');
   ok(!/onValue|onChild|subscribe/i.test(noCmt(P)), '패널은 구독하지 않는다(펼칠 때 한 번 읽기)');
   ok(!/claudeKey|aiKey|sk-ant/.test(noCmt(P)), '패널 코드는 키 칸을 다루지 않는다');
   const fnBody = (name) => { const a = FB.indexOf('export async function ' + name); return FB.slice(a, FB.indexOf('\n}\n', a)); };
