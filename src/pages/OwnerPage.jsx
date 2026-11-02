@@ -11,7 +11,7 @@ import { Fold, InlineNotice } from './ChiefDashboard.jsx';
 
 const DANGER_MSG = '전 항차의 작업 보고와 사진을 지우는 테스트 정리용 단추입니다.\n현장 보고가 통째로 사라지고 되돌릴 수 없습니다.\n\n그래도 진행할까요? 다음 창에서 한 번 더 묻습니다.';
 
-export default function OwnerPage({ inspector, voyages, onGoHome, onOpenStaffManager = null }) {
+export default function OwnerPage({ inspector, voyages, onGoHome, onGoChief = null, onOpenStaffManager = null }) {
   const owner = isOwnerName(inspector);   // 소유자가 아니면 아무것도 읽지 않고 안내만 그린다
   const [openSecs, setOpenSecs] = useState({});
   const toggleSec = (id) => setOpenSecs(o => ({ ...o, [id]: !o[id] }));
@@ -65,7 +65,10 @@ export default function OwnerPage({ inspector, voyages, onGoHome, onOpenStaffMan
       <div className="flex items-center gap-2 px-1">
         <div className="text-base font-black text-dim-100">👑 관리앱</div>
         <span className="text-2xs text-fuchsia-300/70">소유자 전용 — 수석·검수 화면과 분리</span>
-        <button onClick={onGoHome} className="ml-auto px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-sm2 font-bold text-dim-100" style={{ minHeight: 44 }}>홈으로</button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button onClick={onGoHome} data-owner-go="inspect" className="px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-sm2 font-bold text-dim-100" style={{ minHeight: 44 }}>🚢 검수앱</button>
+          {onGoChief && <button onClick={onGoChief} data-owner-go="chief" className="px-3 rounded-btn border bg-ink-900 border-line hover:border-line-strong text-sm2 font-bold text-dim-100" style={{ minHeight: 44 }}>📊 수석앱</button>}
+        </div>
       </div>
       <div className="space-y-2" data-owner-menu="1">
         <Fold id="shiftsnap" title="🕰 교대 시각 터미널 기준 (06:30 · 17:30)" open={!!openSecs.shiftsnap} onToggle={() => toggleSec('shiftsnap')}>

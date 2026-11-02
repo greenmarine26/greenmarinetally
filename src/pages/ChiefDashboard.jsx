@@ -709,7 +709,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const goHealth = () => { window.location.hash = '#/health'; };
   const chipCls = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill px-1.5 hover:bg-ink-800';
   const sep = <span className="hidden min-[700px]:block w-px h-4 bg-line-strong shrink-0" aria-hidden="true" />;   // 폰은 줄이 접히므로 칸막이 대신 틈만
-  const TABS = [['board', '⚓', '상황판'], ['progress', '📋', '진행·마감'], ['manage', '🧰', '관리']];
+  const TABS = [['board', '⚓', '상황판'], ['progress', '📋', '진행·마감'], ['manage', '🧰', '도구']];
 
   //  ── 4.24 관리 묶음 — 자료(8) · 사람·알림(6) · 편집 (주의)(2) · 소유자 메뉴(소유자만). 안의 항목은 종전 접힘·창 그대로 ──
   const groups = [

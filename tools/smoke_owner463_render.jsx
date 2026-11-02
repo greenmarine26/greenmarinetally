@@ -3,4 +3,4 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import OwnerPage from '../src/pages/OwnerPage.jsx';
 const root = createRoot(document.getElementById('root'));
-window.__renderOwner = (p) => root.render(React.createElement(OwnerPage, { voyages: {}, onGoHome: () => { window.__home = (window.__home || 0) + 1; }, onOpenStaffManager: () => { window.__staff = (window.__staff || 0) + 1; }, ...p }));
+window.__renderOwner = (p) => root.render(React.createElement(OwnerPage, { voyages: {}, onGoHome: () => { window.__home = (window.__home || 0) + 1; }, onGoChief: () => { window.__chief = (window.__chief || 0) + 1; }, onOpenStaffManager: () => { window.__staff = (window.__staff || 0) + 1; }, ...p }));

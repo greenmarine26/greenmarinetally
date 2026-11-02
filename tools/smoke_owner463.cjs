@@ -11,5 +11,7 @@ ok(/isOwnerName\(inspector\)/.test(OP) && /data-owner-denied/.test(OP) && OP.ind
 ok(/\{ name: 'owner' \}/.test(BH) && /route\.name === 'owner'/.test(APP) && /isOwnerName\(inspector\) \? \(\) => navigate\('owner'\) : null/.test(APP), '주소 #/owner · 라우트 · 헤더 입구가 App 에 연결되어 있고 입구는 소유자일 때만 넘어간다');
 ok(/onOpenOwner = null/.test(HD) && /\{onOpenOwner && \(/.test(HD) && /data-hdr-owner="1"/.test(HD), '헤더 👑 단추는 onOpenOwner 가 있을 때만 그려진다(검수원·수석은 안 보임)');
 ok(/OwnerPage inspector=\{inspector\}/.test(APP) && /OwnerPage/.test(APP), '관리앱은 소유자 판정 뒤 화면을 그린다');
+ok(/data-owner-go="inspect"/.test(OP) && /data-owner-go="chief"/.test(OP) && /onGoChief && </.test(OP) && /onGoChief=\{canOpenChief\(inspector, isOwnerName\(inspector\)\)/.test(APP), '4.63-01 관리앱 상단에 [검수앱]·[수석앱] 이동 단추가 있고 수석앱은 수석 자격일 때만 넘어간다');
+ok(/\['manage', '🧰', '도구'\]/.test(CD) && !/\['manage', '🧰', '관리'\]/.test(CD), '4.63-01 수석 상황판 탭 이름이 «도구» 다(헤더 «관리앱» 과 겹치지 않음)');
 console.log(bad ? `✗ 4.63 관리앱 분리 연막검사 — 통과 ${n - bad} · 실패 ${bad}` : `✓ 4.63 관리앱 분리 연막검사 — 통과 ${n}`);
 process.exit(bad ? 1 : 0);

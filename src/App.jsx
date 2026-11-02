@@ -746,6 +746,7 @@ export default function App() {
         {/* 4.63: 관리앱 (#/owner) — 소유자 전용. 수석·검수 화면과 분리(소유자 메뉴를 수석 대시보드에서 뺐다) */}
         {route.name === 'owner' && (
           <OwnerPage inspector={inspector} voyages={voyages} onGoHome={() => navigate('home')}
+            onGoChief={canOpenChief(inspector, isOwnerName(inspector)) ? () => navigate('chief') : null}
             onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}/>
         )}
         {/* TallyOne 1.0: 보조기능 화면 (#/aux — 구현은 팀M AuxPage) */}
