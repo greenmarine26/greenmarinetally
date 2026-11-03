@@ -17,6 +17,7 @@
 //   알림이 두 번 뜬다(자동 1 + 우리 push 핸들러 1).
 import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
 import { app, fbSavePushToken, fbDeletePushToken } from './firebase.js';
+import { runPushRefresh } from './pushRefresh.js';
 
 // Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서 (공개 키라 번들에 박혀도 안전)
 export const VAPID_KEY = 'BIzvoa06xL90HYzpTaQ7huRVpxXra-Soxh6ja4xh5qL8BTUFHLycE9G42sXO90v6mM_2xpM8MEid6CmgPG_nKVA';
@@ -76,3 +77,28 @@ export async function disablePush(inspector) {
   return { ok: true };
 }
 
+/**
+ * 4.63-03 — 알림을 켜 둔 기기는 앱이 열릴 때(로그인 뒤 한 번) 토큰을 조용히 갱신해 다시 등록한다. 권한 창은 띄우지 않는다.
+ * 실패는 콘솔에 남긴다(조용한 실패 금지) — 화면에는 아무것도 띄우지 않는다.
+ */
+export async function refreshPushIfOn(inspector) {
+  try {
+    if (!(await pushSupported())) return { action: 'skip' };
+    let stored = '';
+    try { stored = localStorage.getItem(LS_KEY) || ''; } catch { /* 저장소를 못 읽으면 켠 적 없는 것으로 */ }
+    const r = await runPushRefresh({
+      name: inspector, perm: Notification.permission, stored,
+      getTok: async () => {
+        const reg = await navigator.serviceWorker.ready;
+        return getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+      },
+      save: fbSavePushToken, remove: fbDeletePushToken,
+      setStored: (t) => { try { localStorage.setItem(LS_KEY, t); } catch { /* 등록은 됐다 */ } },
+    });
+    if (r.action === 'fail') console.warn('[push] 토큰 갱신 못 했어요 —', r.why);
+    return r;
+  } catch (e) {
+    console.warn('[push] 토큰 갱신 오류', e);
+    return { action: 'fail', why: String((e && e.message) || e) };
+  }
+}

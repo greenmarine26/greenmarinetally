@@ -305,6 +305,11 @@ export default function App() {
     fbGetAdminGuard().then(g => { if (alive) setAdminGuard(g); }).catch((e) => console.warn('[관리자 가드 읽기] 못 했어요(무해):', e && e.message));
     return () => { alive = false; };
   }, [inspector]);
+  //  4.63-03 — 폰 알림을 켜 둔 기기는 로그인 뒤 토큰을 조용히 갱신한다(죽은 토큰을 사람이 되살리지 않게). 켠 적 없는 기기는 아무 일도 안 한다.
+  useEffect(() => {
+    if (!inspector) return;
+    import('./push.js').then((m) => m.refreshPushIfOn(inspector)).catch((e) => console.warn('[push] 갱신 모듈 못 불러왔어요:', e && e.message));
+  }, [inspector]);
   const isAdmin = isAdminName(adminGuard, inspector);
   // TallyOne 1.0 (K2): 라우트 게이트 — 수석(부수석 포함) 또는 소유자만 #/chief·#/search
   // 1.41: 판정을 canOpenChief 한 곳으로 모았다(종전엔 네 곳이 각자 했고 서로 달랐다).

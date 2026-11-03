@@ -1625,6 +1625,11 @@ fi
     npx esbuild tools/smoke_aikey_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AK" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_aikey.cjs "$SMOKE_AK" "$(pwd)" || { rm -f "$SMOKE_AK"; echo "✗ 공용 AI 키 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AK"
+    #  4.63-03: **폰 알림 토큰 자동 갱신** — 켜 둔 기기는 앱이 열릴 때 토큰을 스스로 다시 등록한다(죽은 토큰을 사람이 되살리지 않게)
+    SMOKE_PR=$(mktemp /dev/shm/hometmp/_smokepr_XXXXXX.cjs)
+    npx esbuild tools/smoke_pushrefresh463_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PR" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_pushrefresh463.cjs "$SMOKE_PR" "$(pwd)" || { rm -f "$SMOKE_PR"; echo "✗ 폰 알림 토큰 갱신 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_PR"
     #  3.43-01: **두 앱 같은 답** — 검수앱(항차 열린 떠 있는 미르)·콘앱(cone.html mirAsk 모양) ctx 로 같은 문장(끝나는 시각·진행·도선·속도·창구) → 같은 답인가. 실데이터 KBTR 2606E + 터미널 실적·배 속도·도선 예보. 콘앱이 재료를 빼먹으면 여기서 갈린다.
     SMOKE_MS=$(mktemp /dev/shm/hometmp/_smokems_XXXXXX.cjs)
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MS" --loader:.js=jsx --jsx=automatic --log-level=error \

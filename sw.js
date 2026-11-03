@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.63-02';
-const NOTE = '4.63-02 베이뷰 작업 화면 위 줄에 «📤 보고» 단추가 생겼습니다. 자동 가이드를 끄지 않고 바로 작업 보고를 보낼 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.63-03';
+const NOTE = '4.63-03 폰 알림을 켜 둔 기기는 앱을 열 때마다 알림 등록을 스스로 갱신합니다. 알림이 끊겨 «다시 켜기»를 누를 일이 줄어듭니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
