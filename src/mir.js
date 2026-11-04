@@ -4073,7 +4073,10 @@ const _WORK_ACT_RE = /(^|_)(start|pause|resume|done)$/;   // 4.06 감사: 카톡
  *  { mode, reason, equip, ts, ko } 를, 그 뒤에 시작·재개·완료 보고가 있으면 null. 12시간 넘은 옛 보고는 안 본다.
  *  3.69-01 — 검수사 2026-09-29 18:56 «앱에서 야드혼잡의 이유로 작업중단을 했습니다. DJCF PCSZ 앱에 기록이 안되나요 카톡보고를 했으면 앱은 알고 있을텐데»
  *  — 미르 화남(«완료 기록이 113분째 없어요» — 4.06 전엔 초조함)과 야드 답이 이 보고를 본다. */
-export function workPauseOf(v, now = Date.now()) {
+//  4.63-04 own = { inspector, equip } — «내 호기의 중단인가». 다른 호기가 계속 일하면 터미널 실적(src:'term')이 중단 뒤에도 찍혀
+//  종전엔 그것을 «재개»로 읽어 장비 고장 중단을 잊었다(검수사 2026-11-04 08:58 «장비고장으로 작업중단보고를 했는데 자꾸 해치커버를 열거냐고 물어보는데»
+//  — STSE 2685E: 2호기 고장 보고 22분 뒤에도 1호기 터미널 실적이 찍혀 재개로 읽힘). own 이 오면 내 완료(by·호기가 같은 것)만 재개로 본다.
+export function workPauseOf(v, now = Date.now(), own = null) {
   const reps = v && v.reports;
   if (!reps || typeof reps !== 'object') return null;
   let last = null;
@@ -4089,7 +4092,7 @@ export function workPauseOf(v, now = Date.now()) {
   }
   if (!last || !/pause$/.test(last.act)) return null;
   //  재개 보고 없이 일을 다시 시작하는 일이 흔하다 — 중단 뒤에 완료 기록이 찍혔으면 재개로 본다(재감사 2).
-  for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const c of Object.values(comp)) { const at = c && Number(c.at); if (at && at > last.ts && at <= now + 5 * MIN) return null; } }
+  for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const c of Object.values(comp)) { const at = c && Number(c.at); if (!(at && at > last.ts && at <= now + 5 * MIN)) continue; if (own && !((own.inspector && c.by === own.inspector) || (own.equip && c.equip === own.equip))) continue; return null; } }
   //  재개 예상 — 검수사 2026-09-29 19:28 «보통 17시에 야드 혼잡이유로 작업 중단을 하면 19시에 작업이 재개됩니다» · «중단한 시간이 … 야드 혼잡 + 석식 시간이었습니다.
   //    그 시간대엔 작업자도 작업중인 장비도 없는상태». 중단 뒤 3시간 안에 쉬는 시간(근무표 창 사이)이 끝나면 그 창의 시작이 재개 예상 시각이다.
   let resumeAt = 0, breakKo = '';

@@ -53,7 +53,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   //  ★ 4.62-04 — «작업 중단(장비고장·강풍·안개·기타)» 은 보고 글만 남기고 진행 중 표시를 안 만들어 재개 메뉴가 없었다(검수사 2026-11-01 18:47
   //    «작업재개 메뉴가 없어서 수동보고로 양하재개로 보고 하였음» — MCSN 642N 16:46 장비 고장 중단 → 17:04 수동 재개). 마지막 작업 상태 보고가 중단이면
   //    (workPauseOf — 미르·화남과 같은 판정 한 벌) 첫 화면에 재개 단추를 띄워 수동 재개 화면을 호기·작업 종류까지 채워 연다.
-  const pausedNow = useMemo(() => { if (!open || view !== 'main') return null; try { return workPauseOf(voyage); } catch (e) { console.warn('[4.62-04] 중단 중 판정 실패 — 재개 단추 없이 갑니다', e); return null; } }, [open, view, voyage]);
+  const pausedNow = useMemo(() => { if (!open || view !== 'main') return null; try { return workPauseOf(voyage, Date.now(), { inspector, equip: getEquipNumber() }); } /* 4.63-04: 내 호기 기준 — 다른 호기 터미널 실적이 중단을 지우지 않게 */ catch (e) { console.warn('[4.62-04] 중단 중 판정 실패 — 재개 단추 없이 갑니다', e); return null; } }, [open, view, voyage]);
   const dnReportD = useMemo(() => (dnOn ? buildShiftReport(dnContainers.discharge, dnActiveShift, Date.now()) : null), [dnOn, dnContainers, dnActiveShift]);
   const dnReportL = useMemo(() => (dnOn ? buildShiftReport(dnContainers.loading, dnActiveShift, Date.now()) : null), [dnOn, dnContainers, dnActiveShift]);
   //  ★ 3.66 — **갱별로 나눈다.** 검수사 2026-09-28 12:34 «여기서 보면 갱호수별이 아니고 전체가 보입니다. 갱별로 나누어져 있어야 합니다.» · 관문 4 «갱별 + 배 전체 합계».

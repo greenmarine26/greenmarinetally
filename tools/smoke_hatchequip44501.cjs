@@ -182,7 +182,7 @@ const KST = (s) => new Date(s + '+09:00').getTime();
     const W = fs.readFileSync(path.resolve(root, 'src/components/WorkReportModal.jsx'), 'utf8');
     const hp = G.slice(G.indexOf('const holdDonePrompt = useMemo('), G.indexOf('const holdDonePrompt = useMemo(') + 4000);
     ok(/lastHatchOf\(selectedGroup\)/.test(hp) && /holdAts/.test(hp), '선적 홀드 끝 판정이 보고 기록(lastHatchOf)과 홀드 첫 완료 시각을 본다');
-    ok(/hatchAuto, voyage\]\);/.test(hp), '보고가 바뀌면(voyage) 다시 판정한다');
+    ok(/hatchAuto, voyage(, ownPause)?\]\);/.test(hp), '보고가 바뀌면(voyage) 다시 판정한다');
     ok(!/Object\.keys\(activeByEquip\)\[0\]\) ===/.test(W) && (W.match(/defaultReportEquip/g) || []).length >= 5, '해치·콘박스 기본값은 defaultReportEquip(앱 호기 먼저) 한 벌');
     ok(/pageMode=\{mode\}/.test(fs.readFileSync(path.resolve(root, 'src/pages/VoyagePage.jsx'), 'utf8')), '항차 화면이 지금 모드(pageMode)를 작업 보고 창에 넘긴다');
   }

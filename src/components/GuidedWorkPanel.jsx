@@ -18,6 +18,7 @@ import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LAB
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
+import { workPauseOf } from '../mir.js';   // 4.63-04: 내 호기가 작업 중단 중이면 해치커버 물음을 하지 않는다
 import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
 import { isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -1270,9 +1271,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     } finally { setHatchBusy(false); }
   };
 
+  // 4.63-04: 내 호기(내 이름·내 호기의 완료만 재개로 본다)가 작업 중단 중이면 해치커버 열기·닫기 물음·음성을 쉰다 — 검수사 2026-11-04 08:58 «장비고장으로 작업중단보고를 했는데 자꾸 해치커버를 열거냐고 물어보는데».
+  const ownPause = useMemo(() => { try { return workPauseOf(voyage, Date.now(), { inspector, equip }); } catch (e) { console.warn('[4.63-04] 중단 판정 실패 — 물음을 그대로 합니다', e); return null; } }, [voyage, inspector, equip]);
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
     if (hatchAuto) return false;        // 3.49: 따라가기 — 커버는 터미널 실적으로 자동 판정·기록(SearchPanel)
+    if (ownPause) return false;         // 4.63-04: 작업 중단 중
     if (isHatchSkipShip) return false;  // V8.10: TMPZ·TNJP·RZOR·OBWH 해치 계산/보고 안 함
     if (modeFinished) return false;   // 1.8-18: 끝난 모드엔 권하지 않는다
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
@@ -1290,7 +1294,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //   «내린 것»이 없어 배너가 안 떴다. 그런데 홀드 버튼은 평택 잔여만 보고 바로 열려서,
     //   커버 안내를 한 번도 못 본 채 홀드로 들어갔다. 홀드에 평택 작업이 남았으면 커버는 열어야 한다.
     return deckRemain === 0 && holdRemain > 0;
-  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished, hatchAuto]);
+  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished, hatchAuto, ownPause]);
 
   // 1.76-05: 커버 위에서 **치워야 하는 것**만 고른다.
   //   ⚠ deckBlockers 는 베이 그룹 통째다. 커버는 그룹 하나가 아니라 `hatchCount` 장의 패널로 갈리므로
@@ -1327,15 +1331,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   판정은 shouldAskHatchClose()에 모아 두었다(순수 함수 — 시뮬 검증용).
   const holdWorkedD = useMemo(() => {
     if (isHatchSkipShip) return false;  // V8.10: 해치 클로즈 제안 안 함
+    if (ownPause) return false;         // 4.63-04: 작업 중단 중
     if (modeFinished) return false;   // 1.8-18
     if (mode !== 'discharge' || selectedGroup == null) return false;
     return shouldAskHatchClose(allContainers, selectedGroup, groupCenterOf);
-  }, [mode, selectedGroup, allContainers, bayPairs, modeFinished]);
+  }, [mode, selectedGroup, allContainers, bayPairs, modeFinished, ownPause]);
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
   const holdDonePrompt = useMemo(() => {
     if (hatchAuto) return false;        // 3.49: 따라가기 — 자동 판정
     if (isHatchSkipShip) return false;  // V8.10: 해치 닫기 제안 안 함
+    if (ownPause) return false;         // 4.63-04: 작업 중단 중
     if (modeFinished) return false;   // 1.8-18
     if (mode !== 'loading' || deckPromptDone || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
@@ -1357,7 +1363,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const lastH = lastHatchOf(selectedGroup);
     if (lastH && lastH.act === 'close' && holdAts.length && lastH.ts >= Math.min(...holdAts)) return false;
     return true;
-  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished, hatchAuto, voyage]);
+  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished, hatchAuto, voyage, ownPause]);
 
   // V8.09-15 (사용자 점검 2026-06-18): 해치커버/베이 선택 갈림길 음성 처리.
   //   ① 선택 배너가 떠 있는 동안에는 "다음 컨테이너" 음성을 막는다(어디로 갈지 미정인데 앞서 말하던 버그).
@@ -1368,9 +1374,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //   음성 안내도 같이 사라졌다. 홀드가 남아 있으면 커버 안내는 나와야 한다.
     if (deckDonePromptD) return 'deckD';
     if (holdDonePrompt && card) return 'holdL';
-    if (!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') && !card) return 'holdCloseD';   // 3.49: 따라가기면 자동 판정
+    if (!hatchAuto && !ownPause && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') && !card) return 'holdCloseD';   // 3.49: 따라가기면 자동 판정
     return null;
-  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card, hatchAuto]);
+  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card, hatchAuto, ownPause]);
 
   const CHOICE_VOICE = {
     deckD: '데크 양하 완료. 해치커버를 열까요, 다른 데크로 갈까요.',
@@ -2820,6 +2826,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {chipsEl}
       {orderEl}
       {heldEl}
+      {ownPause ? (
+        <div className="bg-red-950/40 border border-red-700/70 rounded-pill px-3 py-2 text-xs text-red-200" data-own-pause="1">⏸ 작업 중단 중{ownPause.reason ? ` — ${ownPause.reason}` : ''}. 해치커버 열기·닫기 물음은 재개한 뒤에 합니다.</div>
+      ) : null}
       {bayFirstEl}
       {forkEl}
       {/* 1.76-05: 종전 `deckDonePromptD && card` — 데크를 다 내린 **그 순간** 큐가 비어 card 가 null 이 되고

@@ -36,6 +36,6 @@ const mk = (o = {}) => { const log = { save: [], remove: [], stored: null }; ret
   T(/import\('\.\/push\.js'\)\.then\(\(m\) => m\.refreshPushIfOn\(inspector\)\)/.test(app), 'App.jsx 가 로그인 뒤 refreshPushIfOn 을 부른다');
   T(/export async function refreshPushIfOn/.test(push) && /runPushRefresh/.test(push), 'push.js 가 순수 논리를 쓴다');
   T(!/requestPermission/.test(push.slice(push.indexOf('refreshPushIfOn'))), '갱신 길에서 권한 창을 띄우지 않는다');
-  T(/4\.63-03/.test(M.APP_VERSION), '판 번호 4.63-03', M.APP_VERSION);
+  T(/4\.63-0[34]/.test(M.APP_VERSION), '판 번호 4.63-03 이후', M.APP_VERSION);
   console.log(`\n${n - bad}/${n} 통과`); process.exit(bad ? 1 : 0);
 })();
