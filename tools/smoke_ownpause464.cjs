@@ -25,6 +25,12 @@ console.log('② 내가 중단 뒤 완료를 찍으면 재개');
 const V2 = JSON.parse(JSON.stringify(V)); V2.discharge.completed.MINE = { at: pauseTs + 120000, by: '김성일', equip: '2호기', src: null };
 T(M.workPauseOf(V2, now + 200000, { inspector: '김성일', equip: '2호기' }) === null, '내 완료가 중단 뒤에 있으면 재개');
 console.log('③ 버전·배너');
-T(/4\.63-04/.test(M.APP_VERSION) && /4\.63-04/.test(M.APP_NOTE), '버전·APP_NOTE 4.63-04');
+T(/4\.63-0[45]/.test(M.APP_VERSION) && /4\.63-0[45]/.test(M.APP_NOTE), '버전·APP_NOTE 4.63-04 이후');
 T(M.APP_NOTE.length <= 160, 'APP_NOTE 두 문장 이내', String(M.APP_NOTE.length));
+console.log('④ 베이뷰 따라가기(hatchAuto)에서도 «데크 양하 완료 — 해치커버 열까요» 물음이 선다(4.63-05)');
+{ const src = fs.readFileSync(path.join(ROOT, 'src/components/GuidedWorkPanel.jsx'), 'utf8');
+  const i = src.indexOf('const deckDonePromptD = useMemo'); const j = src.indexOf('}, [', i); const body = src.slice(i, j);
+  T(i > 0 && !/hatchAuto/.test(body.replace(/\/\/[^\n]*/g, '')), 'deckDonePromptD 본문에 hatchAuto 게이트가 없다');
+  T(/isHatchDoneSaved\(selectedGroup, 'open'\)/.test(body), '이미 열렸다고 기록된 장은 계속 막는다(중복 보고 방지)');
+  T(/hatchAuto && /.test(src.slice(src.indexOf('const holdDonePrompt = useMemo')).slice(0, 400)) || /if \(hatchAuto\) return false;/.test(src.slice(src.indexOf('const holdDonePrompt = useMemo')).slice(0, 400)), '닫기 물음(holdDonePrompt)은 따라가기에서 종전대로 끈다'); }
 console.log(bad ? `✗ 연막 실패 ${bad}/${n}` : `✔ 연막 통과 ${n}/${n}`); process.exit(bad ? 1 : 0);

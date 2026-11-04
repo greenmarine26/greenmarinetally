@@ -1275,7 +1275,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const ownPause = useMemo(() => { try { return workPauseOf(voyage, Date.now(), { inspector, equip }); } catch (e) { console.warn('[4.63-04] 중단 판정 실패 — 물음을 그대로 합니다', e); return null; } }, [voyage, inspector, equip]);
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
-    if (hatchAuto) return false;        // 3.49: 따라가기 — 커버는 터미널 실적으로 자동 판정·기록(SearchPanel)
+    //  4.63-05: 따라가기(hatchAuto)여도 «데크 양하 완료 — 해치커버를 열까요» 는 묻는다 — 검수사 2026-11-04 19:39 «일반 자동가이드는 데크 작업이 다끝난 베이를 작업할려면 커버 열지를 물어 보는데 베이뷰 자동가이드는 묻질 않습니다. 그래서 일반 자동가이드로 옮긴후에 베이를 선택해야 작업보고 해치커버오픈 보고를 할수있습니다».
+    //  터미널이 이미 열었거나 자동 기록이 있으면 아래 isHatchDoneSaved 가 막아 물음이 사라진다(같은 장을 두 번 적지 않는다). 닫기 물음(holdL·holdCloseD)은 종전대로 자동 판정에 맡긴다.
     if (ownPause) return false;         // 4.63-04: 작업 중단 중
     if (isHatchSkipShip) return false;  // V8.10: TMPZ·TNJP·RZOR·OBWH 해치 계산/보고 안 함
     if (modeFinished) return false;   // 1.8-18: 끝난 모드엔 권하지 않는다
@@ -1294,7 +1295,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //   «내린 것»이 없어 배너가 안 떴다. 그런데 홀드 버튼은 평택 잔여만 보고 바로 열려서,
     //   커버 안내를 한 번도 못 본 채 홀드로 들어갔다. 홀드에 평택 작업이 남았으면 커버는 열어야 한다.
     return deckRemain === 0 && holdRemain > 0;
-  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished, hatchAuto, ownPause]);
+  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished, ownPause]);
 
   // 1.76-05: 커버 위에서 **치워야 하는 것**만 고른다.
   //   ⚠ deckBlockers 는 베이 그룹 통째다. 커버는 그룹 하나가 아니라 `hatchCount` 장의 패널로 갈리므로

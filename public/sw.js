@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.63-04';
-const NOTE = '4.63-04 작업 중단 보고를 한 호기는 재개할 때까지 해치커버 열기·닫기 물음을 하지 않습니다. 다른 호기가 일해도 중단이 풀리지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.63-05';
+const NOTE = '4.63-05 베이뷰 따라가기에서도 데크 양하가 끝난 베이는 «해치커버를 열까요» 를 묻습니다. 터미널이 이미 연 커버는 묻지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
