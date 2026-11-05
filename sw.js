@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.64';
-const NOTE = '4.64 카고플랜 인쇄 질문에 셋째 분 이름 칸을 더했습니다. 접근 차단 화면에는 차단 이유를 적었습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.64-01';
+const NOTE = '4.64-01 카고플랜 인쇄 질문의 셋째 이름이 예전 값으로 다시 채워지지 않게 고쳤습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

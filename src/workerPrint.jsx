@@ -31,16 +31,16 @@ export function partnerChoices(me) {
 //  인쇄 직전 질문 창 — 확인하면 onDone({ names:[나, 짝|''], solo }) . 이름이 비어 있어도 2장째는 나간다(빈칸 장).
 //  crew — 지금 근무 조에 등록된 호기별 근무자 이름(호기 순). 있으면 나를 뺀 앞의 두 분을 짝·셋째 칸에 미리 채운다(주야 교대마다 그 조 사람이 자동으로 들어온다).
 export function WorkerPrintDialog({ me, crew, onDone, onCancel }) {
-  const others = (Array.isArray(crew) ? crew : []).map((n) => String(n || '').trim()).filter((n) => n && n !== String(me || '').trim());
+  const others = (Array.isArray(crew) ? crew : []).map((n) => String(n || '').trim()).filter((n, i, a) => n && n !== String(me || '').trim() && a.indexOf(n) === i);   // 4.64-01: 같은 사람이 두 호기에 있어도 한 번만
   const [mine, setMine] = useState(String(me || ''));
   const [partner, setPartner] = useState(others[0] || getPartnerName());
-  const [partner2, setPartner2] = useState(others[1] || getPartnerName2());
+  const [partner2, setPartner2] = useState(others.length ? (others[1] || '') : getPartnerName2());   // 4.64-01: 조 등록이 있으면 그 조 사람만 — 예전에 적은 셋째가 다시 채워지지 않게
   const [solo, setSolo] = useState(false);
   const go = () => {
     const p = partner.trim();
     const p2 = partner2.trim();
     if (p) setPartnerName(p);
-    if (p2) setPartnerName2(p2);
+    if (p2) setPartnerName2(p2); else if (!solo) setPartnerName2('');   // 4.64-01: 셋째를 비웠으면 기억도 비운다
     //  셋째 이름이 있을 때만 세 번째 장을 낸다(둘이 하는 분은 종전과 같이 두 장).
     onDone({ names: solo ? [mine.trim()] : (p2 ? [mine.trim(), p, p2] : [mine.trim(), p]), solo });
   };
