@@ -1580,8 +1580,10 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sel
   const _isDep = !!(departBadge && departBadge.kind === 'depart');
   const _s0 = voyage._etaMs, _e0 = _isDep ? departBadge.at : voyage._etdMs;
   const _hmDay = (ms) => `${_dayShort(ms)} ${_hm2(ms)}`;
-  const schedTxt = (_s0 == null && _e0 == null) ? '일정 미상'
-    : `${_s0 != null ? _hmDay(_s0) : '시작 미정'} ~ ${_isDep ? '출항 ' : ''}${_e0 != null ? ((_s0 != null && _dayShort(_e0) === _dayShort(_s0)) ? _hm2(_e0) : _hmDay(_e0)) : '종료 미정'}`;
+  //  폰은 칸이 좁아 «시작»·«~ 종료» 를 각각 한 줄로 세운다(CSS .st-s·.st-e) — 한 줄로 이어 쓰면 두 줄 접힘에서 종료 시각이 잘렸다(4.64-05).
+  const sTxt = (_s0 == null && _e0 == null) ? '일정 미상' : (_s0 != null ? _hmDay(_s0) : '시작 미정');
+  const eTxt = (_s0 == null && _e0 == null) ? '' : `~ ${_isDep ? '출항 ' : ''}${_e0 != null ? ((_s0 != null && _dayShort(_e0) === _dayShort(_s0)) ? _hm2(_e0) : _hmDay(_e0)) : '종료 미정'}`;
+  const schedTxt = eTxt ? `${sTxt} ${eTxt}` : sTxt;
   let stLead = '', stCls = 'text-dim-300', stTitle = '';
   if (activeInspectors.length) { stLead = `● ${activeInspectors.map(a => a.name).join(', ')} 작업중`; stCls = 'text-emerald-300'; }
   else if (doneTxt) { stLead = doneTxt; stCls = 'text-amber-300'; }
@@ -1615,7 +1617,9 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sel
       </span>
       {/* 오른쪽 — 상태 한 줄 + (있으면) 알림 한 줄: 목적지 확인 · 사전에 없음 · 누락 · 예상(3.55 «누락은 접혀 있어도 보인다»). 줄 높이는 그대로(A4 «크기가 틀려 다음줄을 만들기도»). */}
       <span className="home-row-side min-w-0 flex flex-col items-end gap-0.5">
-        <span className={`home-row-st text-xs font-bold ${stCls}`} title={stTitle || st} data-row-status="1">{st}</span>
+        <span className={`home-row-st text-xs font-bold ${stCls}`} title={stTitle || st} data-row-status="1">
+          {stLead && <span className="st-lead">{stLead}{' · '}</span>}<span className="st-s">{sTxt}</span>{eTxt && <>{' '}<span className="st-e">{eTxt}</span></>}
+        </span>
         {/* 감싸개는 늘 그린다 — 비면 CSS(.home-row-al:empty)가 숨긴다. «사전에 없음» 딱지가 베이사전이 늦게 와도 그 자리에서 뜬다(딱지가 스스로 다시 그린다 · 4.25 2차 감사 기록). */}
         <span className="home-row-al" data-row-alerts="1">
           <PodIssueChip voyage={voyage} cns={podCns} onOpen={(m) => { if (onOpen) onOpen(m); }} />
