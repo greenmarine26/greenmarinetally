@@ -400,7 +400,7 @@ module.exports = async function r35({ ROOT, TMP, ok, head, fx, stub, css = '', s
         const tit = await pg.evaluate((k) => (document.querySelector(`[data-ship-detail="${k}"] [data-ship-plan]`) || {}).title || '', kP);
         const dep = String(H.pilot_forecast[VOY[kD].info.vsl].nextDep || '');
         const tD2 = await detOf(kD);
-        st.planTag = new RegExp(`📅 내일 ${p0.slice(11, 16)}`).test(tP) && tit.includes(`작업 ${p0.slice(5, 16)} ~ ${p1.slice(5, 16)}`) && !!VOY[kD].info.departBadgeAt && new RegExp(`🚢 출항 내일 ${dep.slice(11, 16)} ⚓도선`).test(tD2)
+        st.planTag = new RegExp(`📅 내일 ${p0.slice(11, 16)}`).test(tP) && tit.includes(`작업 ${p0.slice(5, 16)} ~ ${p1.slice(5, 16)}`) && !!VOY[kD].info.departBadgeAt && new RegExp(`🚢 [^🚢]*출항 내일 ${dep.slice(11, 16)} ⚓도선`).test(tD2)
           && new RegExp(p0.slice(11, 16)).test(await textOf(`[data-ship-row="${kP}"] [data-row-status]`));
         if (!st.planTag) st.planTagDbg = JSON.stringify({ kP, tP: tP.slice(0, 200), tit, dep, tD2: tD2.slice(0, 200) });
       }
@@ -535,10 +535,14 @@ module.exports = async function r35({ ROOT, TMP, ok, head, fx, stub, css = '', s
       const V4 = JSON.parse(JSON.stringify(VOY));
       const kS = 'KKAK_2610N';
       V4[kS].info.terminalStatus = 'departed'; V4[kS].info.planDate = '2026-10-10 08:00 ~ 2026-10-10 18:00'; delete V4[kS].info.departBadgeAt;
+      //  4.64-04: 시작 예정이 한참 남은 배는 출항 판정을 안 한다 — 이 검사는 «지난 배» 이므로 시계를 그 배 작업일(10-15) 뒤로 옮겨 잰다.
+      await pg.clock.setFixedTime(new Date(NOW + 5 * 86400000));
       await mount({ w: 390, h: 844, voyages: V4 });
       const hidden = await pg.evaluate((k) => { const r = document.querySelector(`[data-ship-row="${k}"]`); return !!r && !!r.closest('.hidden'); }, kS);
       const at = await pg.evaluate((k) => ((window.__memdb.voyages[k] || {}).info || {}).departBadgeAt, kS);
       st.sticky = hidden && typeof at === 'number';
+      await pg.clock.setFixedTime(new Date(NOW));
+      if (!st.sticky) st.stickyDbg = JSON.stringify({ hidden, at, row: await textOf(`[data-ship-row="${kS}"]`) });
       //  TOP — 폰 목록을 내리면 뜬다
       await pg.evaluate(() => { const b = document.querySelector('[data-home-fold="other"]'); if (b) b.click(); }); await sleep(200);   // 없으면 아래 st.other 가 ✘
       await pg.evaluate(() => { const b = document.querySelector('[data-home-fold="wait"]'); if (b) b.click(); }); await sleep(200);

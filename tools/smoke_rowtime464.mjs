@@ -1,0 +1,25 @@
+// 항차 목록 시간 표시·출항 배지 오판 연막검사 (TallyOne 4.64-04) — 시작이 한참 남은 배는 출항이 될 수 없고, 줄은 늘 시작~종료를 적는다.
+import fs from 'node:fs';
+import { decideBadge, notStartedYet } from '../src/badgeRule.js';
+let n = 0, bad = 0;
+const T = (c, name) => { n += 1; if (c) console.log(`  ✔ ${name}`); else { bad += 1; console.log(`  ✘ ${name}`); } };
+const H = 3600000, now = Date.now();
+console.log('① 시작 예정이 6시간 넘게 남은 배(PCSZ 2633E 사례 — 앞 기항 출항이 붙어 «출항 11/7 06:00»)');
+const early = { eta: now + 8 * H, etd: now + 34 * H, pfDep: now + 30 * H, remainLoad: 0, hasLoad: true };
+T(notStartedYet(now + 8 * H, now) && !notStartedYet(now + 5 * H, now) && !notStartedYet(null, now), 'notStartedYet 경계 6시간');
+T(decideBadge({ ...early, stickyAt: 1 }).kind === 'work', '옛 출항 유지값이 있어도 작업 일정으로');
+T(decideBadge({ ...early, terminalStatus: 'departed' }).kind === 'work', '터미널 DEPARTED 가 앞 기항 것이어도 작업 일정으로');
+T(decideBadge({ ...early }).kind === 'work', '잔여 0 이어도 시작 전이면 작업 일정으로');
+console.log('② 작업이 시작됐거나 곧 시작하는 배는 종전 그대로');
+const run = { eta: now - 10 * H, etd: now + 2 * H, pfDep: now + 2 * H, remainLoad: 5, hasLoad: true };
+T(decideBadge(run).kind === 'depart', '잔여 5 → 출항');
+T(decideBadge({ ...run, remainLoad: 300 }).kind === 'work', '잔여 300 → 작업 일정');
+T(decideBadge({ ...run, remainLoad: 300, terminalStatus: 'departed' }).kind === 'depart', '터미널 DEPARTED → 출항');
+T(decideBadge({ eta: now + 3 * H, etd: now + 20 * H, pfDep: now + 20 * H, remainLoad: 0, hasLoad: true }).kind === 'depart', '3시간 뒤 시작 배는 종전 판정');
+console.log('③ 줄 모양 — 상태가 무엇이든 시작 ~ 종료');
+const src = fs.readFileSync(new URL('../src/pages/HomePage.jsx', import.meta.url), 'utf8');
+T(/시작 미정/.test(src) && /종료 미정/.test(src) && /schedTxt/.test(src) && /\$\{_isDep \? '출항 ' : ''\}/.test(src), '줄 오른쪽에 시작 ~ 종료(없는 쪽 미정 · 출항이면 «출항»)');
+T(/stLead \? `\$\{stLead\} · \$\{schedTxt\}`/.test(src), '접속 검수원·본선 작업중도 시각을 함께 적는다');
+T(/🚢 \{voyage\._etaMs != null/.test(src), '상세 출항 배지도 시작 시각을 함께 적는다');
+console.log(`\n${n - bad}/${n} 통과`);
+process.exit(bad ? 1 : 0);

@@ -17,7 +17,7 @@ import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
-import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
+import { decideBadge, DEPART_REMAIN_MAX, inWindow, notStartedYet } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
 import { canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
@@ -1565,19 +1565,30 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sel
         .catch(e => console.warn('[배지] sticky 저장 실패', voyage.key, e));
     } catch (e) { console.warn('[배지] sticky 저장 실패', voyage.key, e); }
   }, [_isDepart, voyage.key, voyage.info?.departBadgeAt]);
+  //  4.64-04: 작업 시작이 한참 남은 배에 앞 기항 출항이 붙어 기록된 옛 «출항 유지» 값은 스스로 걷는다(콘앱도 이 값을 읽는다).
+  useEffect(() => {
+    if (!voyage.info?.departBadgeAt || !notStartedYet(voyage._etaMs)) return;
+    fbUpdateVoyageInfo(voyage.key, { departBadgeAt: 0 }).catch(e => console.warn('[배지] 옛 출항 유지값 걷기 실패', voyage.key, e));
+  }, [voyage.key, voyage.info?.departBadgeAt, voyage._etaMs]);
   const voyTxt = voyage.info.voy_d || voyage.info.voy_l || voyage.info.voy || '';
   const sub = [voyTxt, formatBerth(berth) || pier].filter(Boolean).join(' · ');
   //  상태 — 접속 검수원 > (작업자면) 검수 완료 표시 > 본선 작업중 > 일정(출항 배지면 출항 시각)
   const doneTxt = canComplete && (inspectorDone || modeDone?.d || modeDone?.l)
     ? (inspectorDone ? '검수 완료 · 수석 대기' : [modeDone?.d && '양하 완료 ✓', modeDone?.l && '선적 완료 ✓'].filter(Boolean).join(' · ')) : '';
-  let st = '', stCls = 'text-dim-300', stTitle = '';
-  if (activeInspectors.length) { st = `● ${activeInspectors.map(a => a.name).join(', ')} 작업중`; stCls = 'text-emerald-300'; }
-  else if (doneTxt) { st = doneTxt; stCls = 'text-amber-300'; }
-  else if (_termWorking) { st = '본선 작업중'; stCls = 'text-cyan-200'; stTitle = '터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.'; }
-  else if (departBadge && departBadge.kind === 'depart') { st = `출항 ${_dayShort(departBadge.at)} ${_hm2(departBadge.at)}`; stCls = 'text-amber-200'; }
-  else if (voyage._etaMs != null) st = `${_dayShort(voyage._etaMs)} ${_hm2(voyage._etaMs)}`;
-  else if (voyage._etdMs != null) st = `~ ${_dayShort(voyage._etdMs)} ${_hm2(voyage._etdMs)}`;
-  else { st = '일정 미상'; stCls = 'text-dim-500'; }
+  //  4.64-04 (검수사 2026-11-05 23:38 «시작예정·종료예정 시간이 없는 항차가 보이고 입항은 안 보이고 출항만 보이기도») —
+  //    상태가 무엇이든 줄 오른쪽에는 늘 «시작 ~ 종료» 두 시각을 적는다. 없는 쪽은 «미정», 출항 배지면 끝 시각을 «출항 …» 으로 바꾼다.
+  const _isDep = !!(departBadge && departBadge.kind === 'depart');
+  const _s0 = voyage._etaMs, _e0 = _isDep ? departBadge.at : voyage._etdMs;
+  const _hmDay = (ms) => `${_dayShort(ms)} ${_hm2(ms)}`;
+  const schedTxt = (_s0 == null && _e0 == null) ? '일정 미상'
+    : `${_s0 != null ? _hmDay(_s0) : '시작 미정'} ~ ${_isDep ? '출항 ' : ''}${_e0 != null ? ((_s0 != null && _dayShort(_e0) === _dayShort(_s0)) ? _hm2(_e0) : _hmDay(_e0)) : '종료 미정'}`;
+  let stLead = '', stCls = 'text-dim-300', stTitle = '';
+  if (activeInspectors.length) { stLead = `● ${activeInspectors.map(a => a.name).join(', ')} 작업중`; stCls = 'text-emerald-300'; }
+  else if (doneTxt) { stLead = doneTxt; stCls = 'text-amber-300'; }
+  else if (_termWorking) { stLead = '본선 작업중'; stCls = 'text-cyan-200'; stTitle = '터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.'; }
+  else if (_isDep) stCls = 'text-amber-200';
+  else if (_s0 == null && _e0 == null) stCls = 'text-dim-500';
+  const st = stLead ? `${stLead} · ${schedTxt}` : schedTxt;
   const podCns = disStats.podIssueCns || [];
   //  알림 줄 — 목적지 확인 · 사전에 없음 · 누락 · 예상(3.55 «누락은 접혀 있어도 보인다»). 없으면 줄을 안 만든다.
   const alertOf = (st0, lbl) => [
@@ -1707,7 +1718,7 @@ export function ShipDetail({ voyage, activeInspectors = [], onOpen, onDelete, on
             return (
               <span title={`출항 표시 이유: ${_why}`} data-ship-depart="1"
                 className={`${TAG} ${dep < Date.now() ? 'bg-ink-800 border-line-strong text-dim-300' : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
-                🚢 출항 {day} {_hm2(dep)} {src}
+                🚢 {voyage._etaMs != null ? `${dayLabel(voyage._etaMs)} ${_hm2(voyage._etaMs)} ~ ` : '시작 미정 ~ '}출항 {day} {_hm2(dep)} {src}
                 {late ? <span className="text-red-300 ml-1">· 지연</span> : ''}
               </span>
             );

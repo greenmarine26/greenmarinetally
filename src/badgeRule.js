@@ -20,6 +20,9 @@
 export const DEPART_REMAIN_MAX = 20;   // 잔여 이하이면 출항 배지. 갱당 시간당 20개 ≈ 1시간분.
 export const WINDOW_H = 12;            // 도선·PORT-MIS 자료의 항차 귀속 가드(시간)
 
+/** 작업 시작 예정이 6시간도 더 남았으면 이 항차는 아직 출항할 수 없다 — 앞 기항의 DEPARTED·도선 예보가 이번 항차에 붙는 것을 막는다(4.64-04). */
+export function notStartedYet(eta, now = Date.now()) { return eta != null && now < eta - 6 * 3600000; }
+
 /** 도선·PORT-MIS 값이 이 항차 것인가 — 자료가 선박코드로만 오므로 직전/다음 기항이 붙는 걸 막는다. */
 export function inWindow(t, eta, etd) {
   if (t == null || (eta == null && etd == null)) return false;
@@ -51,8 +54,11 @@ export function decideBadge(a) {
   const depSrc = pfDep != null ? 'pilot' : 'portmis';
   const late = false;   // 3.53-13: «지연» 표시는 외부 합계에서만 왔다 — 그 자료를 없앴으므로 표시하지 않는다
 
+  //  4.64-04: 작업 시작 예정이 한참 남은 배는 출항일 수 없다 — 앞 기항 출항(터미널 DEPARTED·도선 다음 출항)이 붙은 것이다.
+  const _early = notStartedYet(eta);
+
   // ③ 한 번 뜨면 유지 — 잔여가 다시 늘어도 되돌아가지 않는다
-  if (stickyAt && dep != null) {
+  if (stickyAt && dep != null && !_early) {
     return { kind: 'depart', at: dep, src: depSrc, delayed: late, reason: 'sticky' };
   }
 
@@ -60,18 +66,18 @@ export function decideBadge(a) {
   // V9.57: 수집기·터미널 값에 공백/대소문자가 섞여 와도 인식(.trim 추가), 'done' 별칭 허용.
   //   dep이 없어도 명세("터미널이 DEPARTED면 무조건")대로 etd, 그것도 없으면 지금 시각으로 전환.
   const _ts = String(terminalStatus || '').trim().toLowerCase();
-  if (_ts === 'departed' || _ts === 'done') {
+  if (!_early && (_ts === 'departed' || _ts === 'done')) {
     return { kind: 'depart', at: dep ?? etd ?? Date.now(), src: depSrc, delayed: false, reason: 'departed' };
   }
   // V9.57: 인식 못한 비어있지 않은 상태값은 조용히 무시하지 않고 경고(값당 1회 — 렌더 스팸 방지)
-  if (_ts && _ts !== 'working' && _ts !== 'planned' && !_warnedStatus.has(_ts)) {
+  if (_ts && _ts !== 'departed' && _ts !== 'done' && _ts !== 'working' && _ts !== 'planned' && !_warnedStatus.has(_ts)) {
     _warnedStatus.add(_ts);
     console.warn(`[badgeRule] 인식 못한 terminalStatus 값: "${terminalStatus}" — departed/done/working/planned 외 값은 출항 판정에 쓰이지 않습니다`);
   }
 
   // ② 남은 개수 — 선적 우선, 선적 없는 항차는 양하
   const remain = hasLoad ? remainLoad : remainDis;
-  if (remain != null && remain <= DEPART_REMAIN_MAX && dep != null) {
+  if (!_early && remain != null && remain <= DEPART_REMAIN_MAX && dep != null) {
     return { kind: 'depart', at: dep, src: depSrc, delayed: late, reason: `remain${remain}` };
   }
 

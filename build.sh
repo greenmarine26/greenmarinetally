@@ -344,6 +344,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   NODE_PATH="$PWD/node_modules" node tools/smoke_twinauto.cjs || { echo "✗ 수동 트윈 자동 짝꿍 연막검사 실패 — 배포 금지"; exit 1; }
   # 3.76: 인원 접근 온오프 — 실소스(staffList·firebase)를 메모리 DB 로 돌려 켜고 끄는 규칙(관리자만·소유자 불가·본인 불가·되돌리면 복원)을 잰다. 로그인·확정·실시간·화면은 배선 문자열 확인뿐(동작은 사람이 눌러 본다).
   NODE_PATH="$PWD/node_modules" node tools/smoke_staffoff.cjs || { echo "✗ 접근 온오프 연막검사 실패 — 배포 금지"; exit 1; }
+  node tools/smoke_rowtime464.mjs || { echo "✗ 항차 목록 시간·출항 배지 연막검사 실패 — 배포 금지"; exit 1; }   # 4.64-04
   # 3.77: 자동 가이드 «베이 먼저» — 실소스 buildGuidedQueue 로 DPRT 2611N 3호기 33·34·35번 베이 실제 순서를 재생(대조군 포함)하고 양하·선적 물리 종속을 잰다.
   NODE_PATH="$PWD/node_modules" node tools/smoke_bayfirst.cjs || { echo "✗ 베이 먼저 연막검사 실패 — 배포 금지"; exit 1; }
   NODE_PATH="$PWD/node_modules" node tools/smoke_baysplit442.cjs || { echo "✗ 자동 가이드 23번·(24)25번 나눠 고르기 연막검사 실패 — 배포 금지"; exit 1; }   # 4.42

@@ -30,7 +30,7 @@ T(/const _viewOnly = isViewOnlyNow\(\)/.test(H) && /const newMenu = !_viewOnly \
   //  4.25 — 배 줄(늘 보이는 자리)에 완료·전체 막대와 누락·예상·목적지 확인·사전에 없음 알림이 선다(3.55 «누락은 접혀 있어도 보인다»).
   const i = H.indexOf('export function ShipRow('), seg = i > 0 ? H.slice(i, H.indexOf('export function ShipOpenButtons')) : '';
   T(/<RowBar label="양하"/.test(seg) && /st0\.missing > 0 \? <span[^>]*text-red-300[^>]*>\{lbl\} 누락 \{st0\.missing\}/.test(seg) && /data-row-alerts/.test(seg) && /<PodIssueChip /.test(seg) && /<DictMissingChip /.test(seg), '배 줄에 완료·전체 막대와 누락·목적지 확인·사전에 없음이 보인다');
-  T(/_dayShort\(voyage\._etaMs\)/.test(seg) && /departBadge\.kind === 'depart'/.test(seg), '배 줄 오른쪽에 작업 시각(출항 배지면 출항 시각)이 보인다');
+  T(/_hmDay\(_s0\)/.test(seg) && /_s0 = voyage\._etaMs/.test(seg) && /departBadge\.kind === 'depart'/.test(seg), '배 줄 오른쪽에 작업 시각(출항 배지면 출항 시각)이 보인다');
   const j = H.indexOf('export function ShipDetail('), segD = j > 0 ? H.slice(j, H.indexOf('function MissingSideNote')) : '';
   T(/📅 \{body\}/.test(segD) && /data-pod-issue/.test(H.slice(H.indexOf('function PodIssueChip'), H.indexOf('function RowBar'))) && /<PodIssueChip voyage=\{voyage\} cns=\{disStats\.podIssueCns \|\| \[\]\} onOpen=\{onOpen\} big \/>/.test(segD), '상세에 작업일시(출처 표기 포함) 배지와 목적지 확인 칩');
 }
