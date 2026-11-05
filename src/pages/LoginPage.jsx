@@ -838,7 +838,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           disabled={!selected}
           className="w-full h-[60px] mt-3 rounded-[18px] font-black text-base flex items-center justify-center gap-2 transition-all active:scale-[0.99]
                      bg-gradient-to-r from-act-dn to-act-hi hover:brightness-110 shadow-[0_10px_24px_rgba(0,209,143,0.28)]
-                     disabled:bg-none disabled:bg-ink-800 disabled:text-dim-500 disabled:shadow-none text-act-on lg:h-auto lg:py-2.5 lg:rounded-btn lg:mt-2"
+                     disabled:bg-none disabled:bg-ink-800 disabled:text-dim-500 disabled:shadow-none text-act-on lg:h-auto lg:py-2.5 lg:rounded-btn lg:mt-2 lg:sticky lg:bottom-0 lg:z-10"
         >
           <LogIn className="w-5 h-5"/>{selected ? `${selected} 님으로 시작` : '작업자를 선택해주세요'}
         </button>
