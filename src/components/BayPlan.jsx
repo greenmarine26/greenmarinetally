@@ -1610,9 +1610,14 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
       //     실측: BAY(34)35 82단은 계획에 3~6자리뿐인데 11자리가 그려졌다. 없는 자리에 컨을 배정할 수 있게 된다.
       //   → 계획(`_row_planned`)이든 현재 위치든 **그 자리를 쓰는 컨이 하나라도 있었으면** 자리가 있는 것이다.
       //     8587이 떠난 BAY38 09-88 은 계획에 있으므로 빈 자리로 남고, BAY34 82단 10·09 는 어둡게 남는다.
+      //   TallyOne 4.64-02 정정: **계획 자리는 그 계획 베이가 이 쪽 베이일 때만 센다.** 다른 베이(예 22·30·38의 90단)에서 계획된
+      //     컨이 이 베이(예 10)에 실려 오면, 그 계획의 열·단(90단)이 이 베이의 칸으로 잘못 세어져 배에 없는 90단에 흰 칸이 생겼다.
+      //     검수사 지적 2026-11-05 16:42 «5단에 횐박스는 꼭 생겨요 하나요? 양하때에도 EDI대로 실리지 않은베이에도 생기던데».
+      const _pageBays = [page.evenBay, page.oddBay].filter(Boolean).map(b => parseInt(b, 10));
+      const _plannedHere = (x) => x._bay_planned === undefined || x._bay_planned === null || x._bay_planned === '' || _pageBays.includes(parseInt(x._bay_planned, 10));
       const slotExists = allContainers.some(x =>
         (x.row === row && x.tier === tier) ||
-        (x._row_planned === row && x._tier_planned === tier)
+        (x._row_planned === row && x._tier_planned === tier && _plannedHere(x))
       );
       if (slotExists) {
         return <div key={key} className="border border-line-strong flex-shrink-0 bg-slate-100"
