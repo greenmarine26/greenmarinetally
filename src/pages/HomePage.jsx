@@ -1618,7 +1618,7 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sel
       {/* 오른쪽 — 상태 한 줄 + (있으면) 알림 한 줄: 목적지 확인 · 사전에 없음 · 누락 · 예상(3.55 «누락은 접혀 있어도 보인다»). 줄 높이는 그대로(A4 «크기가 틀려 다음줄을 만들기도»). */}
       <span className="home-row-side min-w-0 flex flex-col items-end gap-0.5">
         <span className={`home-row-st text-xs font-bold ${stCls}`} title={stTitle || st} data-row-status="1">
-          {stLead && <span className="st-lead">{stLead}{' · '}</span>}<span className="st-s">{sTxt}</span>{eTxt && <>{' '}<span className="st-e">{eTxt}</span></>}
+          {stLead && <span className="st-lead">{stLead}</span>}<span className="st-s">{sTxt}</span>{eTxt && <>{' '}<span className="st-e">{eTxt}</span></>}
         </span>
         {/* 감싸개는 늘 그린다 — 비면 CSS(.home-row-al:empty)가 숨긴다. «사전에 없음» 딱지가 베이사전이 늦게 와도 그 자리에서 뜬다(딱지가 스스로 다시 그린다 · 4.25 2차 감사 기록). */}
         <span className="home-row-al" data-row-alerts="1">

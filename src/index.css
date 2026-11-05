@@ -576,7 +576,7 @@ select:-webkit-autofill {
 .home-row .home-row-al { max-width: 100%; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; }
 /*   폰 — 칸을 좁히고 상태 글은 두 줄까지 접는다(«● 최관식 / 작업중») — 막대 칸이 넓어진다. 열 너비가 줄마다 같아 막대가 한 줄로 선다(A2 «불규칙»). */
 @media (max-width: 699px) {
-  .home-row { grid-template-columns: 6px calc(var(--fs-lg) * 4.3) minmax(0, 1fr) calc(var(--fs-xs) * 5.6); gap: 6px; }
+  .home-row { grid-template-columns: 6px calc(var(--fs-lg) * 4.3) minmax(0, 1fr) calc(var(--fs-xs) * 6.4); gap: 6px; }   /* 4.64-06: 5.6→6.4 — «~ 내일 10:00» 이 한 줄에 서게 */
   .home-row .home-row-st { white-space: normal; word-break: keep-all; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
   .home-row .home-row-st .st-lead, .home-row .home-row-st .st-s, .home-row .home-row-st .st-e { display: block; }   /* 4.64-05: 시작·종료를 줄마다 한 줄씩 */
   .home-row .home-row-st .st-lead { white-space: normal; }
