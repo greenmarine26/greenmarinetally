@@ -45,7 +45,7 @@ ok(M.isStaffOff('최원형') && M.isStaffOff('이인철') && M.isStaffOff(' 최�
 ok(!M.isStaffOff('김판석') && !M.isStaffOff('') && !M.isStaffOff(null), '명단에 없는 이름·빈 값은 막지 않는다');
 M.setStaffOff({});
 ok(names.every(n => !M.isStaffOff(n)), `명단이 비면 ${names.length}명 전부 열려 있다`);
-ok(/접근이 허용되지 않았습니다/.test(M.ACCESS_DENIED_MSG) && /관리자에게 문의/.test(M.ACCESS_DENIED_MSG), '접근불허 메시지 문구');
+ok(/양하·선적 보고 업무를 하지 않아 접근을 차단/.test(M.ACCESS_DENIED_MSG) && /관리자에게 문의/.test(M.ACCESS_DENIED_MSG), '접근불허 메시지 문구');
 
 // ①-B 자물쇠 화면 — 그림 하나와 문구만, 눌러 쓸 것이 하나도 없다
 {

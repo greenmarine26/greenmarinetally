@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeepShift, keepOnboardOf } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import { crewSegments, crewSegmentAt, isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeepShift, keepOnboardOf } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { WorkerPrintDialog, WorkerHeadMark, installClonePrint } from '../workerPrint.jsx';   // 4.32: 머리줄 «# ___ , 이름» + 인쇄 직전 짝 이름 질문 + 한 장 더
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
@@ -1013,6 +1013,15 @@ export default function PrintableCargoPlanV2({
   const [wkDlg, setWkDlg] = useState(false);
   const [wkMe, setWkMe] = useState(String(inspector || ''));
   const wkNamesRef = useRef([]);
+  //  4.64 — 지금 근무 조(주간·야간)에 등록된 호기별 근무자 이름을 호기 순으로. 등록이 없거나 지금이 등록된 조 밖이면 빈 목록.
+  const wkCrewNow = (info) => {
+    try {
+      const segs = crewSegments(info || {});
+      const now = Date.now();
+      const sg = segs.find((s) => now >= s.startMs && now < s.endMs);
+      return sg ? Object.keys(sg.cranes).map(Number).sort((a, b) => a - b).map((k) => sg.cranes[k]) : [];
+    } catch (e) { console.warn('[4.64] 조 등록 근무자를 읽지 못했습니다', e); return []; }
+  };
   useEffect(() => installClonePrint(() => (pageRef.current ? pageRef.current.closest('.cpv2-zoom-wrap') : null), () => wkNamesRef.current), []);
   //  ★ 3.27 — 별첨은 **평상시 크기로 한 칸에 안 들어갈 때만** 빈 칸으로 나눈다.
   //    검수사 확정 2026-09-08 — *«최대한 한곳에 모으되 넘치거나 잘림 겹침이 생기면 빈곳을 이용해
@@ -1412,7 +1421,7 @@ export default function PrintableCargoPlanV2({
       <style>{CARGO_V2_CSS}</style>
       {closeBtn}
       {wkDlg && (
-        <WorkerPrintDialog me={wkMe} onCancel={() => setWkDlg(false)}
+        <WorkerPrintDialog me={wkMe} crew={wkCrewNow(voyageInfo)} onCancel={() => setWkDlg(false)}
           onDone={({ names }) => { wkNamesRef.current = names; setWkMe(names[0] || ''); setWkDlg(false); setTimeout(() => { window.print(); wkNamesRef.current = []; }, 80); }} />
       )}
       <div

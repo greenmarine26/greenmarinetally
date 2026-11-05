@@ -229,7 +229,7 @@ export function canOpenChief(name, isOwner = false) {
 //   노드 `staffOff/{이름}`. 판정은 여기 한 벌 — 로그인 화면·로그인 확정·실시간 차단이 전부 isStaffOff 를 부른다.
 //   ⚠ 소유자 보호는 호출부 몫이다(staffList 는 adminGuard 를 부르지 않는다 — 순환 방지). App 구독부와 fbSetStaffOff 가 막는다.
 let STAFF_OFF = {};
-export const ACCESS_DENIED_MSG = '접근이 허용되지 않았습니다.\n관리자에게 문의하세요.';
+export const ACCESS_DENIED_MSG = '다수의 검수사들이 일부 기능만 사용하고, 기본으로 해야 하는 양하·선적 보고 업무를 하지 않아 접근을 차단했습니다.\n관리자에게 문의하세요.';
 export function setStaffOff(map) {
   const out = {};
   for (const [k, v] of Object.entries(map || {})) {

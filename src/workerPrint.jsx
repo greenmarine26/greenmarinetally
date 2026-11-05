@@ -11,6 +11,14 @@ export function getPartnerName() {
 export function setPartnerName(v) {
   try { localStorage.setItem(KEY, String(v || '').trim()); } catch (e) { /* 저장 불가 환경 — 이번 화면에만 적용 */ }
 }
+//  4.64 — 3갱이면 셋째 분 이름도 이 기기에 한 칸 더 둔다(검수사 2026-11-05 06:53 «3갱인 경우 3명 이름이 출력이 되어야 하는데 2명만 되어있습니다»).
+const KEY2 = 'tally_partner_name2';
+export function getPartnerName2() {
+  try { return String(localStorage.getItem(KEY2) || '').trim(); } catch (e) { return ''; }
+}
+export function setPartnerName2(v) {
+  try { localStorage.setItem(KEY2, String(v || '').trim()); } catch (e) { /* 저장 불가 환경 — 이번 화면에만 적용 */ }
+}
 
 //  짝 후보 명단 — 숨은 계정(클로드)과 로그인한 본인은 뺀다.
 export function partnerChoices(me) {
@@ -21,14 +29,20 @@ export function partnerChoices(me) {
 }
 
 //  인쇄 직전 질문 창 — 확인하면 onDone({ names:[나, 짝|''], solo }) . 이름이 비어 있어도 2장째는 나간다(빈칸 장).
-export function WorkerPrintDialog({ me, onDone, onCancel }) {
+//  crew — 지금 근무 조에 등록된 호기별 근무자 이름(호기 순). 있으면 나를 뺀 앞의 두 분을 짝·셋째 칸에 미리 채운다(주야 교대마다 그 조 사람이 자동으로 들어온다).
+export function WorkerPrintDialog({ me, crew, onDone, onCancel }) {
+  const others = (Array.isArray(crew) ? crew : []).map((n) => String(n || '').trim()).filter((n) => n && n !== String(me || '').trim());
   const [mine, setMine] = useState(String(me || ''));
-  const [partner, setPartner] = useState(getPartnerName());
+  const [partner, setPartner] = useState(others[0] || getPartnerName());
+  const [partner2, setPartner2] = useState(others[1] || getPartnerName2());
   const [solo, setSolo] = useState(false);
   const go = () => {
     const p = partner.trim();
+    const p2 = partner2.trim();
     if (p) setPartnerName(p);
-    onDone({ names: solo ? [mine.trim()] : [mine.trim(), p], solo });
+    if (p2) setPartnerName2(p2);
+    //  셋째 이름이 있을 때만 세 번째 장을 낸다(둘이 하는 분은 종전과 같이 두 장).
+    onDone({ names: solo ? [mine.trim()] : (p2 ? [mine.trim(), p, p2] : [mine.trim(), p]), solo });
   };
   const box = { position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
   const card = { background: '#fff', color: '#111', borderRadius: 10, padding: 18, width: 'min(420px, 100%)', fontSize: 14 };
@@ -37,7 +51,7 @@ export function WorkerPrintDialog({ me, onDone, onCancel }) {
     <div className="cpv2-noprint" style={box} role="dialog" aria-label="작업자 이름" data-testid="worker-dialog">
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>같이 작업하는 분은 어느 분입니까?</div>
-        <div style={{ color: '#555', fontSize: 12, marginBottom: 10 }}>이름을 모르시면 입력하지 말고 그냥 <b>출력</b>을 눌러 주세요. 이름 자리가 비어 있는 카고플랜이 한 장 더 나옵니다.</div>
+        <div style={{ color: '#555', fontSize: 12, marginBottom: 10 }}>이름을 모르시면 입력하지 말고 그냥 <b>출력</b>을 눌러 주세요. 이름 자리가 비어 있는 카고플랜이 한 장 더 나옵니다. 3갱이면 셋째 분까지 적으면 세 장이 나옵니다.</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
           <label style={{ minWidth: 28, color: '#555' }}>나</label>
           <input data-testid="wk-me" value={mine} onChange={(e) => setMine(e.target.value)} style={inp} placeholder="내 이름" />
@@ -46,6 +60,10 @@ export function WorkerPrintDialog({ me, onDone, onCancel }) {
           <label style={{ minWidth: 28, color: '#555' }}>짝</label>
           <input data-testid="wk-partner" list="wk-staff" value={partner} disabled={solo} onChange={(e) => setPartner(e.target.value)} style={inp} placeholder="이름을 고르거나 입력" />
           <datalist id="wk-staff">{partnerChoices(mine).map((n) => <option key={n} value={n} />)}</datalist>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
+          <label style={{ minWidth: 28, color: '#555' }}>셋째</label>
+          <input data-testid="wk-partner2" list="wk-staff" value={partner2} disabled={solo} onChange={(e) => setPartner2(e.target.value)} style={inp} placeholder="3갱일 때만 — 없으면 비워 둠" />
         </div>
         <label style={{ display: 'block', margin: '8px 0 12px', fontSize: 13 }}>
           <input data-testid="wk-solo" type="checkbox" checked={solo} onChange={(e) => setSolo(e.target.checked)} /> 혼자 작업합니다 (1장만)

@@ -25,7 +25,7 @@
 //   ⛔ 앱 전반의 X-RAY 표시 판정은 건드리지 않았다(검수사 확정). 화물구분은 여기서만 쓴다.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
-import { getPartnerName, setPartnerName, partnerChoices } from '../workerPrint.jsx';   // 4.32: 짝 이름 한 벌(카고플랜 질문 창과 같은 값)
+import { getPartnerName, setPartnerName, getPartnerName2, setPartnerName2, partnerChoices } from '../workerPrint.jsx';   // 4.32: 짝 이름 한 벌(카고플랜 질문 창과 같은 값)
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
 import { isoShown } from '../utils.js';   // 4.20-01: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { fbSetXraySeal, fbUpdateVoyageInfo, fbSubscribeInspectCheck, fbSaveInspectCheck } from '../firebase.js';
@@ -61,7 +61,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   const [q, setQ] = useState('');
   //  2.39: 표에서 바로 고친다 — 사무실에서 미리 채워 인쇄해 나가려면 컨을 하나씩 열 수 없다.
   //  편집 상태는 한 벌만 둔다(같은 순간에 두 칸을 고치지 않는다).
-  const [partner, setPartner] = useState(() => getPartnerName());   // 4.32: 같이 작업하는 분 — 로그인하지 않아도 그 이름으로 봉인자 등록
+  const [partner, setPartner] = useState(() => getPartnerName());
+  const [partner2, setPartner2] = useState(() => getPartnerName2());   // 4.64: 3갱이면 셋째 분 — 파트너가 둘   // 4.32: 같이 작업하는 분 — 로그인하지 않아도 그 이름으로 봉인자 등록
   const [bulk, setBulk] = useState({ run: false, ask: false, msg: '' });   // 4.50: «남은 컨 전부 파트너 몫으로 등록» — 진행·확인·결과 한 벌
   const [edit, setEdit] = useState(null);      // { cn, field: 'seal' | 'sealer', val }
   const [busy, setBusy] = useState('');        // 저장 중인 컨 — 두 번 눌러 두 번 쓰는 것을 막는다
@@ -278,8 +279,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  컨 하나 저장이 15초 안에 안 끝나면(오프라인 등) 그 컨은 실패로 두고 다음으로 간다 — 응답을 끝없이 기다리며 표를 잠가 두지 않는다(규범 §4).
   //  쓰기는 연결이 돌아오면 SDK 가 마저 보낸다 — 다시 누르면 그 컨은 이미 봉인자가 있어 건너뛴다.
   const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} 응답이 ${ms / 1000}초 안에 오지 않았습니다`)), ms))]);
-  async function registerRest() {
-    const name = partner.trim();
+  async function registerRest(nameArg) {
+    const name = String(typeof nameArg === 'string' ? nameArg : (bulk.who || partner)).trim();
     if (!canBulk || !name || bulk.run || bulkBusy.current) return;
     if (myName && name === myName) {
       setBulk({ run: false, ask: false, msg: '파트너 이름이 내 이름과 같습니다. 파트너 이름을 다시 확인해 주십시오.' });
@@ -291,7 +292,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
     }
     bulkBusy.current = true;
     try {
-      setPartnerName(name);
+      if (name === partner.trim()) setPartnerName(name); else if (name === partner2.trim()) setPartnerName2(name);
       const targets = restRows.slice();   // 누른 순간의 남은 컨 — 저장 직전에 한 대씩 최신 줄로 다시 본다
       setBulk({ run: true, ask: false, msg: `등록 중 0/${targets.length}` });
       const fails = [], skipped = [];
@@ -323,11 +324,12 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   }
   //  내 몫이 한 대도 없는데 누르면 한 번 묻는다 — 내 컨까지 전부 파트너 이름으로 가는 실수를 막는다.
   //  확인 상자가 떠 있는 동안 이 단추는 잠겨 있고(아래 disabled), 여기서도 한 번 더 막는다 — 같은 단추를 또 눌러 상자를 건너뛰지 못하게.
-  const onRestClick = () => {
+  const onRestClick = (who) => {
+    const nm = String(typeof who === 'string' ? who : partner).trim();   // 단추가 이벤트를 넘겨도 첫 파트너로
     if (bulk.ask || bulk.run || bulkBusy.current) return;
-    if (!partner.trim() || !restRows.length) return;
-    if (mineCount === 0) { setBulk({ run: false, ask: true, msg: '' }); return; }
-    registerRest();
+    if (!nm || !restRows.length) return;
+    if (mineCount === 0) { setBulk({ run: false, ask: true, msg: '', who: nm }); return; }
+    registerRest(nm);
   };
 
   const shown = useMemo(() => {
@@ -453,11 +455,23 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           className="w-full min-h-10 px-4 py-2 rounded-pill bg-emerald-500 text-ink-950 font-bold disabled:opacity-40">
           {partner.trim() ? `남은 ${restRows.length}대를 ${partner.trim()} 몫으로 등록` : `남은 ${restRows.length}대 등록 (파트너 이름 먼저)`}
         </button>
+        {/* 4.64 — 3갱이면 셋째 분: 남은 컨을 두 파트너가 나눠 맡을 수 있게 같은 길을 한 번 더 둔다(번호를 넣은 컨 가운데 봉인자가 없는 것만, 먼저 등록된 칸은 건드리지 않는다). */}
+        <input value={partner2} list="xray-partner-list" aria-label="셋째 파트너 이름"
+          onChange={(e) => { setPartner2(e.target.value); if (bulk.ask || bulk.msg) setBulk({ run: false, ask: false, msg: '' }); }}
+          onBlur={() => setPartnerName2(partner2)} placeholder="3갱이면 셋째 파트너 이름 (없으면 비워 둠)"
+          className="w-full min-w-0 bg-ink-800 border border-line rounded-pill px-3 h-10 outline-none" data-testid="xray-partner2"/>
+        {partner2.trim() && (
+          <button type="button" data-testid="xray-rest-btn2" onClick={() => onRestClick(partner2)}
+            disabled={!canBulk || bulk.run || bulk.ask || !restRows.length}
+            className="w-full min-h-10 px-4 py-2 rounded-pill bg-emerald-500 text-ink-950 font-bold disabled:opacity-40">
+            {`남은 ${restRows.length}대를 ${partner2.trim()} 몫으로 등록`}
+          </button>
+        )}
         {bulk.ask && (
           <div className="rounded-btn border border-amber-500/40 bg-amber-500/10 text-amber-200 p-2 space-y-2" data-testid="xray-rest-ask">
-            <div>내 몫을 아직 등록하지 않았습니다. 그래도 남은 {restRows.length}대를 전부 {partner.trim()} 몫으로 등록할까요?</div>
+            <div>내 몫을 아직 등록하지 않았습니다. 그래도 남은 {restRows.length}대를 전부 {bulk.who || partner.trim()} 몫으로 등록할까요?</div>
             <div className="flex gap-2">
-              <button type="button" onClick={registerRest} className="px-3 h-9 rounded-pill border border-amber-400 font-bold">그래도 등록</button>
+              <button type="button" onClick={() => registerRest(bulk.who)} className="px-3 h-9 rounded-pill border border-amber-400 font-bold">그래도 등록</button>
               <button type="button" onClick={() => setBulk({ run: false, ask: false, msg: '' })} className="px-3 h-9 rounded-pill border border-line text-dim-300">취소</button>
             </div>
           </div>
@@ -585,6 +599,12 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                               title={!r.cSeal ? '봉인번호를 먼저 입력하십시오' : `${partner.trim()} 이름으로 봉인자 등록`}
                               onClick={() => saveXray(r.cn, r.cSeal, r.eseal, { sealer: partner.trim() })}
                               className="px-2 py-0.5 rounded-pill border border-emerald-500 text-emerald-300 text-xs2 disabled:opacity-30 whitespace-nowrap">{partner.trim()}</button>
+                          )}
+                          {partner2.trim() && (
+                            <button disabled={!canEdit || bulk.run || busy === r.cn || !r.cSeal}
+                              title={!r.cSeal ? '봉인번호를 먼저 입력하십시오' : `${partner2.trim()} 이름으로 봉인자 등록`}
+                              onClick={() => saveXray(r.cn, r.cSeal, r.eseal, { sealer: partner2.trim() })}
+                              className="px-2 py-0.5 rounded-pill border border-emerald-500 text-emerald-300 text-xs2 disabled:opacity-30 whitespace-nowrap">{partner2.trim()}</button>
                           )}
                         </>
                       )}
