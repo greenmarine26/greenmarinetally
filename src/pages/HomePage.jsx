@@ -351,6 +351,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const _pick = _live.length
           ? _live.sort((a, b) => b.p - a.p || (a.eta ?? a.etd) - (b.eta ?? b.etd))[0]
           : (_cands.sort((a, b) => (b.etd ?? b.eta ?? 0) - (a.etd ?? a.eta ?? 0))[0] || null);
+        //  4.64-07 (검수사 2026-11-05 23:38 «시작예정 시간이 없는 항차») — 선석배정의 작업 끝이 지나면 «아직 안 끝난 후보» 는 도선 출항뿐이라 시작(eta)이 비었다
+        //    (ATPR 2649E — 배정 11-05 00:00 ~ 11-06 03:00 · 도선 출항 07:00 → 줄이 «시작 미정»). 시작 예정은 지난 사실이므로 그 항차 자기 선석배정 값으로 채운다.
+        const _planEta = _pick && _pick.eta == null ? _pdEta : null;
         // TallyOne 1.12: **자료 완성율** — 홈 목록 1차 정렬키 (검수사 확정 2026-08-06).
         //   "자료가 완성된 걸 맨 위에 올리고 완성율을 기준으로. 금일 작업 선박이라도 자료가 없으면
         //    자료 있는 선박 밑에 놓고, 자료가 올라오면 작업순서 순으로 위로."
@@ -429,7 +432,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                    Number(v.discharge?.dataAt) || 0, Number(v.loading?.dataAt) || 0,
                    Number(v.discharge?.raw?.edi?.uploadedAt) || 0, Number(v.loading?.raw?.edi?.uploadedAt) || 0,
                  ),
-                 _etaMs: _pick ? _pick.eta : null,     // V9.01: 작업시간 근접 정렬용
+                 _etaMs: _pick ? (_pick.eta ?? _planEta) : null,     // V9.01: 작업시간 근접 정렬용 · 4.64-07: 도선 출항만 남은 배도 시작 예정은 선석배정 값으로 채운다
                  _etdMs: _pick ? _pick.etd : null,
                  _etaSrc: _pick ? _pick.src : '' };    // V9.35: 작업일시 배지 출처 표기용
       })

@@ -21,5 +21,6 @@ const src = fs.readFileSync(new URL('../src/pages/HomePage.jsx', import.meta.url
 T(/시작 미정/.test(src) && /종료 미정/.test(src) && /sTxt/.test(src) && /eTxt/.test(src) && /\$\{_isDep \? '출항 ' : ''\}/.test(src), '줄 오른쪽에 시작 ~ 종료(없는 쪽 미정 · 출항이면 «출항»)');
 T(/stLead && <span className="st-lead">/.test(src) && /st-s/.test(src) && /st-e/.test(src), '접속 검수원·본선 작업중도 시각을 함께 적는다');
 T(/🚢 \{voyage\._etaMs != null/.test(src), '상세 출항 배지도 시작 시각을 함께 적는다');
+T(/_planEta/.test(src) && /_pick\.eta \?\? _planEta/.test(src), '선택 후보에 시작이 없으면 자기 선석배정 시작으로 채운다(ATPR 4.64-07)');
 console.log(`\n${n - bad}/${n} 통과`);
 process.exit(bad ? 1 : 0);
