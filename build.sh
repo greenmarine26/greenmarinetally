@@ -1636,6 +1636,11 @@ fi
     npx esbuild tools/smoke_ownpause464_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_OP" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_ownpause464.cjs "$SMOKE_OP" "$(pwd)" || { rm -f "$SMOKE_OP"; echo "✗ 내 호기 작업 중단 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_OP"
+    #  4.69: **접속 기록** — 막힌 이름의 접속시도·콘앱 기기 수 요약, 소유자·클로드 제외, 소유자만 읽기·관리앱 접이·콘앱 하루 한 번
+    SMOKE_AX=$(mktemp /dev/shm/hometmp/_smokeax_XXXXXX.cjs)
+    npx esbuild tools/smoke_access469_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AX" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_access469.cjs "$SMOKE_AX" "$(pwd)" || { rm -f "$SMOKE_AX"; echo "✗ 접속 기록 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_AX"
     #  3.43-01: **두 앱 같은 답** — 검수앱(항차 열린 떠 있는 미르)·콘앱(cone.html mirAsk 모양) ctx 로 같은 문장(끝나는 시각·진행·도선·속도·창구) → 같은 답인가. 실데이터 KBTR 2606E + 터미널 실적·배 속도·도선 예보. 콘앱이 재료를 빼먹으면 여기서 갈린다.
     SMOKE_MS=$(mktemp /dev/shm/hometmp/_smokems_XXXXXX.cjs)
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MS" --loader:.js=jsx --jsx=automatic --log-level=error \

@@ -10,6 +10,7 @@ import {
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeStaffOff, fbSubscribeShipBayDict, fbSubscribeHeartbeat, fbSubscribeYardStatus,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
 , fbSubscribeLaneRoutes, fbSubscribeMirLexicon, fbWriteMirLexicon, fbLogMirMiss } from './firebase.js';   // 3.0: 미르 자체 학습 사전·결산 기록
+import { logDeniedAttempt, markSkipDevice } from './accessLog.js';   // 4.69: 막힌 이름의 접속시도를 센다
 import AccessLockScreen from './components/AccessLockScreen.jsx';   // 3.76: 접근 오프 자물쇠 화면
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief, setStaffOff, isStaffOff, lockedNameOf } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
@@ -454,7 +455,7 @@ export default function App() {
 
   const handleSelectInspector = useCallback(async (name, choice = null) => {
     //  3.76: 접근 오프 — 로그인 확정의 단일 입구에서 한 번 더 막는다(화면이 놓쳐도·업데이트 재개여도 여기서 걸린다).
-    if (isStaffOff(name) && !isOwnerName(name)) { setDeniedName(name); return; }   // 로그인을 시키지 않는다 — 자물쇠 화면만 뜬다
+    if (isStaffOff(name) && !isOwnerName(name)) { logDeniedAttempt(name); setDeniedName(name); return; }   // 로그인을 시키지 않는다 — 자물쇠 화면만 뜬다
     //  3.50: choice = { mode:'work', voyageKey, equip } | { mode:'view' } — LoginPage 선택 단계가 준다. 없으면(업데이트 재개 등) 오늘 기억한 것.
     const ch = choice ? saveWorkChoice({ ...choice, name }) : readWorkChoice(name);
     if (!ch) { setInspector(name); setWorkChoice(null); return; }   // 아직 안 골랐다 — 선택 화면이 선다(로그인 상태이지만 진입 전)
@@ -485,6 +486,7 @@ export default function App() {
     _storage.set(SK.activeInspector, name);
     // TallyOne 1.3: 로그인 기록 — 검수원 선택 성공이 유일한 로그인 경로(자동 로그인 없음)
     setActivityUser(name);
+    markSkipDevice(name);   // 4.69: 소유자·클로드 기기는 접속 기록 집계에서 뺀다
     logActivity('login', { via: 'select' });
     await fbSetInspector(name);
     // M3.6: 로그인 시각 저장

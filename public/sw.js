@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.68';
-const NOTE = '4.68 크레딧이 있는 동안은 제미나이를 쓰지 않고 클로드가 하루 3달러를 넘으면 그날만 제미나이로 답합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.69';
+const NOTE = '4.69 관리앱에 접속 기록이 생겨 막힌 뒤 접속시도와 콘앱 사용빈도를 볼 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

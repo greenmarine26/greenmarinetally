@@ -6,6 +6,7 @@ import { isOwnerName } from '../adminGuard.js';
 import { completedByLabel } from '../utils.js';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ShiftSnapPanel from '../components/ShiftSnapPanel.jsx';   // 교대 시각(06:30·17:30) 터미널 기준
+import AccessLogPanel from '../components/AccessLogPanel.jsx';   // 접속 기록 — 막힌 뒤 접속시도·콘앱 사용빈도(4.69)
 import AiCostPanel from '../components/AiCostPanel.jsx';   // AI 비용 — 미르·사진 읽기 클로드 비용과 Console 숫자
 import { Fold, InlineNotice } from './ChiefDashboard.jsx';
 
@@ -79,6 +80,9 @@ export default function OwnerPage({ inspector, voyages, onGoHome, onGoChief = nu
         </Fold>
         <Fold id="aicost" title="💳 AI 비용 (클로드 · 제미나이)" open={!!openSecs.aicost} onToggle={() => toggleSec('aicost')}>
           <AiCostPanel by={inspector} />
+        </Fold>
+        <Fold id="accesslog" title="🚪 접속 기록 (막힌 뒤 시도 · 콘앱 사용)" open={!!openSecs.accesslog} onToggle={() => toggleSec('accesslog')}>
+          <AccessLogPanel by={inspector} />
         </Fold>
         {onOpenStaffManager && (
           <button onClick={onOpenStaffManager}

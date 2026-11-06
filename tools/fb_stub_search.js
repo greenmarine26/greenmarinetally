@@ -25,6 +25,7 @@ export const fbBatchSaveShipBayDict = async () => true;
 export const fbBulkCancelComplete = async () => true;
 export const fbCancelComplete = async () => true;
 export const fbCancelLuggConfirm = async () => true;
+export const fbCleanupAccessLog = async () => true;
 export const fbCleanupActivityLog = async () => true;
 export const fbCleanupArchive = async () => true;
 export const fbClearActualPosition = async () => true;
@@ -58,6 +59,7 @@ export const fbDeleteWorkReport = async () => true;
 export const fbEditWorkReport = async () => true;   // 4.46
 export const fbFetchVoyageBoxCounts = async () => ({});   // 4.08-01: 선택 화면 «N대» — 빈 결과(항차마다 못 셌음)로 둔다
 export const fbFoodListen = async () => true;
+export const fbGetAccessLog = async () => true;
 export const fbGetActivityDays = async () => true;
 export const fbGetAdminGuard = async () => (typeof window !== 'undefined' && window.__guardStub) || true;   // 4.43: 로그인 화면 검사가 «검수사 신뢰 기기» 상태를 넣을 수 있다
 export const fbGetAiCost = async (keys, by) => { window.__calls.push({ fn: 'getAiCost', keys, by }); if (window.__aiErr) throw new Error(window.__aiErr); const W = window.__aiDays || {}; return { days: keys.filter((k) => W[k]).map((k) => ({ day: k, ...W[k] })), cfg: window.__aiCfg || {}, console: window.__aiConsole || null }; };   // 4.37: AI 비용 — 시험이 window.__aiDays 에 날짜별 기록을 넣는다

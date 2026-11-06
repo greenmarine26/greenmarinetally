@@ -88,7 +88,7 @@ DB['admin_guard'] = { admins: { [OWNER]: { pwHash: 'x' }, '이현규': { pwHash:
   const rd = (f) => fs.readFileSync(path.join(root, f), 'utf8');
   const app = rd('src/App.jsx'), lg = rd('src/pages/LoginPage.jsx'), md = rd('src/components/StaffManagerModal.jsx'), fb = rd('src/firebase.js');
   const hs = app.indexOf('const handleSelectInspector = useCallback');
-  ok(hs > 0 && /isStaffOff\(name\) && !isOwnerName\(name\)\) \{ setDeniedName\(name\)/.test(app.slice(hs, hs + 700)), '로그인 확정의 단일 입구(handleSelectInspector)가 오프면 로그인 대신 자물쇠로 보낸다');
+  ok(hs > 0 && /isStaffOff\(name\) && !isOwnerName\(name\)\) \{ (?:logDeniedAttempt\(name\); )?setDeniedName\(name\)/.test(app.slice(hs, hs + 700)), '로그인 확정의 단일 입구(handleSelectInspector)가 오프면 로그인 대신 자물쇠로 보낸다');
   ok((app.match(/staffOffMap\[inspector\]\) return;/g) || []).length >= 2, '덮인 동안 하트비트(작업중 기록)·열람 기록 효과가 쓰지 않는다');
   ok(/lockedNameOf\(staffOffMap, inspector, deniedName\)[\s\S]{0,200}return <AccessLockScreen \/>/.test(app) && app.indexOf('return <AccessLockScreen />') < app.indexOf("if (!inspector || route.name === 'login' || needChoice)"), '화면 그리기 맨 앞에서 오프면 자물쇠만 그리고(로그인 화면·메뉴보다 앞) 온이면 통과한다');
   ok(/fbSubscribeStaffOff\(\(m\) =>[\s\S]{0,300}!isOwnerName\(nm\)/.test(app), '구독부가 소유자를 명단에서 걸러 담는다');

@@ -4559,3 +4559,35 @@ export async function fbCleanupActivityLog(keepDays = 30) {
     return 0;
   }
 }
+
+// ─── 4.69: 접속 기록 — access_log/{YYMMDD}/{pushKey} (접근 오프 접속시도 · 콘앱 하루 첫 실행) ───
+//   쓰기는 누구나(막힌 사람은 로그인 전이라 이름이 없다) — 읽기·정리·ON 전환은 소유자 화면에서만 부른다.
+export async function fbPushAccess(dayKey, payload) {
+  const r = push(ref(db, `access_log/${dayKey}`));
+  await set(r, payload);
+  return r.key;
+}
+export async function fbGetAccessLog(dayKeys, by) {
+  assertOwner('접속 기록 보기', by);
+  const keys = [...new Set((Array.isArray(dayKeys) ? dayKeys : []).filter((k) => /^\d{6}$/.test(String(k))))].slice(0, 70);
+  const out = [];
+  const snaps = await Promise.all(keys.map((k) => get(ref(db, `access_log/${k}`))));
+  snaps.forEach((snap, i) => {
+    if (!snap.exists()) return;
+    for (const v of Object.values(snap.val() || {})) if (v && typeof v === 'object') out.push({ ...v, day: keys[i] });
+  });
+  return out;
+}
+export async function fbCleanupAccessLog(keepDays = 60) {
+  try {
+    const res = await fetch(`${firebaseConfig.databaseURL}/access_log.json?shallow=true`, { signal: tmoSignal(30000) });
+    if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
+    const keys = Object.keys((await res.json()) || {});
+    const expired = pickExpiredActivityBuckets(keys, keepDays, Date.now());
+    for (const k of expired) await remove(ref(db, `access_log/${k}`));
+    return expired.length;
+  } catch (e) {
+    console.warn('[fbCleanupAccessLog] 정리 실패(무해)', e);
+    return 0;
+  }
+}
