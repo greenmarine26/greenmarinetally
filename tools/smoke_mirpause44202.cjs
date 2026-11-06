@@ -30,7 +30,7 @@ const ask = (q, ctx) => { const t = {}; const a = M.answerOneRaw(q, Object.assig
 console.log('① 재료 — 13:25 미르 화남(검수사 화면과 같은 두 배)');
 {
   const r = M.angryReasons(V, HB, AT);
-  T(r.length === 2 && /^DJCF 터미널은 작업 중인데 앱 완료 기록이 실작업 7\d분째 없어요$/.test(r[0]) && /^STSE /.test(r[1]), `화남 이유 ${r.length}건`, JSON.stringify(r));
+  T(r.length === 2 && /^DJCF 앱 완료 기록이 실작업 7\d분째 없어요\. /.test(r[0]) && /^STSE /.test(r[1]), `화남 이유 ${r.length}건`, JSON.stringify(r));
   const tg = M.pauseTargetsOf(V, HB, AT);
   T(JSON.stringify(tg) === JSON.stringify([{ key: 'DJCF_0152N', vsl: 'DJCF' }, { key: 'STSE_2681E', vsl: 'STSE' }]), 'pauseTargetsOf = 화남 이유의 그 두 배(판정 한 벌)', JSON.stringify(tg));
 }
@@ -57,7 +57,7 @@ for (const q of ['장비 고장으로 멈췄어', '다들 쉬고 있어', '야�
   const r = askT('장비 고장으로 멈췄어', fab(V1, AT));
   T(r.via === 'workStop' && r.a.startsWith('⏸ DJCF — 장비 고장으로 작업이 멈춘 걸로 적을게요') && JSON.stringify(r.tg) === JSON.stringify(['DJCF_0152N']), '화난 배가 한 척이면 그 배에 «장비 고장으로»(조사 으로)', `${r.a} · tg=${JSON.stringify(r.tg)}`);
   const r2 = askT('작업 중단이야', fab(V1, AT));
-  T(r2.a.startsWith('⏸ DJCF — 쉬는 중으로 작업이 멈춘 걸로 적을게요') && !r2.weak && JSON.stringify(r2.tg) === JSON.stringify(['DJCF_0152N']), '한 척 · 사유 없이 «작업 중단» 을 분명히 말하면 «쉬는 중» 으로 적는다', `${r2.a} · tg=${JSON.stringify(r2.tg)}`);
+  T(r2.a.startsWith('⏸ DJCF — 작업이 멈춘 걸로 적을게요') && !r2.weak && JSON.stringify(r2.tg) === JSON.stringify(['DJCF_0152N']), '한 척 · 사유 없이 «작업 중단» 을 분명히 말하면 «쉬는 중» 으로 적는다', `${r2.a} · tg=${JSON.stringify(r2.tg)}`);
   //  2차 시뮬 1 — 잘못 잡았을 수 있는 말(작업 멈춤을 분명히 말하지 않음)은 한 척이어도 적지 않는다 · 종전처럼 약한 답(모델이 도움 답)
   for (const q of ['소리 멈춰', '미르 멈춰', '멈춰', '스캔 못 해', '로그인 못 해', '사진 못 해', '입력 못 해', '못하겠어', '잠깐 쉬고 올게', '화장실 가서 쉬고 올게', '미르도 쉬어', '푹 쉬어',
     '쉬는 시간이야', '나 오늘 쉬는 날이야', 'YT 대기', '게이트 대기', '출항 대기', '접안 대기', '도선 대기', '선석 대기']) {

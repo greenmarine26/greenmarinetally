@@ -21,7 +21,7 @@ const AT = Date.parse('2026-10-21T16:37:00+09:00');
 const HB = FX.heartbeat;
 const cp = () => JSON.parse(JSON.stringify(FX.voyages));
 const ang = (V, now = AT) => M.angryReasons(V, HB, now);
-const DXQD_ANGRY = /^DXQD 터미널은 작업 중인데 앱 완료 기록이 실작업 \d+분째 없어요$/;
+const DXQD_ANGRY = /^DXQD 앱 완료 기록이 실작업 \d+분째 없어요\. 작업이 중단된 것 같은데 /;
 
 console.log('① 검수사 16:34 사건 — DXQD 는 양하를 끝내고 선적 갱을 기다린다(동방 갱은 연태 OBWH 2 · 연운항 TNJP 1)');
 {

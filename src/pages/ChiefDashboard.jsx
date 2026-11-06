@@ -532,7 +532,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
       out[i.lastVoyage].push({
         name: i.name, mode: i.lastMode,
-        equip: i.workEquip || null, bay: i.workBay || null,
+        equip: i.workEquip || (i.assignVoyage && i.assignVoyage === i.lastVoyage ? (i.assignEquip || null) : null), bay: i.workBay || null,
         tier: i.workTier || null, remain: i.workRemain ?? null,
       });
     });

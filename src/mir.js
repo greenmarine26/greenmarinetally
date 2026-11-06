@@ -2377,7 +2377,7 @@ export function answerOneRaw(query, ctx) {
             const _nm = _tg.map((x) => x.vsl || String(x.key).split('_')[0]).join('·');
             if (_tg.length > 1 && !/^(?:강풍|안개|우천) 대기$/.test(R)) return `알겠어요, ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}멈춘 배가 ${_nm} 중 어느 배요? 🐱 배 이름을 붙여 말씀해 주시면 그 배에 적을게요.`;
             if (c._trace && typeof c._trace === 'object') c._trace.pauseTargets = _tg.map((x) => x.key);
-            return `⏸ ${_nm} — ${koJosa(R, '으로')} 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`;
+            return `⏸ ${_nm} — ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`;
           }
           const _pz = [];
           for (const [k0, v0] of Object.entries(c.voyages)) {
@@ -2387,14 +2387,14 @@ export function answerOneRaw(query, ctx) {
           }
           if (_pz.length) return `알겠어요 🐱 ${_pz.map((x) => `${x.vsl} ${_hm(x.w0.ts)} 중단(사유 ${x.w0.reason || R})`).join(' · ')} — 이미 앱에 적혀 있어요. 작업 신호가 없어도 기다릴게요.`;
         }
-        return `알겠어요, ${koJosa(R, '으로')} 쉬는 걸로 들었어요 🐱 다만 어느 배인지 몰라 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 MCAT ${R.replace(' ', '')}")`;
+        return `알겠어요, ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}쉬는 걸로 들었어요 🐱 다만 어느 배인지 몰라 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 MCAT ${R.replace(' ', '')}")`;
       }
-      if (app === 'cone') return `알겠어요, ${koJosa(R, '으로')} 쉬는 걸로 들었어요 🐱 중단 기록은 검수앱 작업 보고 → 작업 중단에서 남겨 주세요 — 콘앱은 적는 손이 없어요.`;
+      if (app === 'cone') return `알겠어요, ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}쉬는 걸로 들었어요 🐱 중단 기록은 검수앱 작업 보고 → 작업 중단에서 남겨 주세요 — 콘앱은 적는 손이 없어요.`;
       const wp0 = workPauseOf(v, c._now || Date.now());
       if (wp0 && (wp0.reason === R || !p.pauseSet.known)) return `알겠어요 🐱 앱에도 ${wp0.equip ? wp0.equip + ' ' : ''}${wp0.ko} ${_hm(wp0.ts)} 중단(사유 ${wp0.reason || R})으로 기록돼 있어요. 누가 왜 쉬냐고 물으면 그 사유를 알려 드릴게요.`;
       return p.pauseSet.known
         ? `⏸ ${koJosa(R, '으로')} 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`   // 4.42-02: koJosa — «장비 고장으로»(종전 «장비 고장로»)
-        : `⏸ 작업이 멈춘 걸로 적을게요 🐱 사유를 말씀 안 하셔서 «쉬는 중»으로 적어요 — 강풍대기·안개·우천처럼 말씀해 주시면 사유를 바꿔 둘게요. 작업 신호가 없어도 기다릴게요.`;
+        : `⏸ 작업이 멈춘 걸로 적을게요 🐱 사유는 쉬는 중으로 남겨 둘게요 — 야드·강풍·안개·우천·장비 고장처럼 말씀해 주시면 사유를 바꿔 둘게요. 작업 신호가 없어도 기다릴게요.`;
     }
     if (v && /왜|이유|어째서|어때서/.test(q) && /작업|일|양하|선적|하역|쉬|멈|중단/.test(q) && /안\s*해|안\s*하|안\s*돼|안\s*되|멈|쉬|중단|못|없|조용/.test(q) && !/느려|느린|늦|지연/.test(q)) {
       const wp1 = workPauseOf(v, c._now || Date.now());
@@ -4372,7 +4372,7 @@ export function anxiousReasons(voyages, heartbeat, now = Date.now()) {
  *  · 앱에 입력할 게 없는 배도 화내지 않는다 — «검수 완료»(inspectorDone·보유 모드 전부 dischargeDone/loadingDone) · 모든 호기가 끝 보고 · 앱에 올라온 컨을 완료가 다 채움(재감사).
  *  ⚠ 여기서 보는 완료는 검수원이 앱에서 누른 completed 뿐이다. 터미널 합계는 완료로 세지 않는다(터미널 완료 자동 반영 금지 — 검수사 2026-10-03). */
 export function angryReasons(voyages, heartbeat, now = Date.now()) {
-  return _angryList(voyages, heartbeat, now).map((x) => `${x.vsl} 터미널은 작업 중인데 앱 완료 기록이 실작업 ${x.wmin}분째 없어요`);
+  return _angryList(voyages, heartbeat, now).map((x) => `${x.vsl} 앱 완료 기록이 실작업 ${x.wmin}분째 없어요. 작업이 중단된 것 같은데 야드·강풍·안개·폭우·장비 고장 같은 이유가 있나요?`);   // 4.70: 작업 중이면 앱 기록이 있어야 한다 — 없으면 중단으로 본다(검수사 2026-11-06 19:30)
 }
 /** ★ 4.42-02 — 미르가 화난 그 배들 { key, vsl } — 이유 글(angryReasons)과 같은 판정 한 벌.
  *  검수사 2026-10-21 13:25 — 미르가 «DJCF·STSE 터미널은 작업 중인데 앱 완료 기록이 실작업 75분째 없어요» 로 화났을 때 홈 미르 칸에 «아무래도 강풍대기 인듯 하네» 라고 알려 줬는데
