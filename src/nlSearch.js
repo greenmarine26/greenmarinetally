@@ -412,7 +412,7 @@ export function parseNaturalQuery(text) {
   if (/몇\s*(단|층)|단수|층수|몇\s*(단|층)\s*까지/i.test(t)) result.tierStackQuery = true;
 
   // M3.3: 바닥/꼭대기
-  if (/바닥|맨\s*아래|제일\s*아래|최저\s*단|최저단/i.test(t)) result.bottomQuery = true;
+  if (/(?<!발)바닥|맨\s*아래|제일\s*아래|최저\s*단|최저단/i.test(t)) result.bottomQuery = true;   // 4.67: «발바닥»(족저근막염 파스)의 «바닥» 을 컨테이너 바닥 칸 조회로 읽어 298대를 답했다(검수사 2026-11-06 14:41 화면)
   if (/꼭대기|맨\s*위|제일\s*위|최상\s*단|최상단/i.test(t)) result.topQuery = true;
 
   // M3.3: 빈자리

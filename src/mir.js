@@ -3286,6 +3286,9 @@ JSON 한 줄로만 답한다: {"canonical":"...","window":"창구 이름","confi
   let j = null;
   const _parse = (t) => { const c = String(t || '').replace(/^```json|```$/g, '').trim(); try { return JSON.parse(c); } catch (e) { const a = c.indexOf('{'), b = c.lastIndexOf('}'); if (a >= 0 && b > a) { try { return JSON.parse(c.slice(a, b + 1)); } catch (e2) { return undefined; } } return undefined; } };
   j = _parse(r.text);
+  if (j === undefined && r.prov === 'claude') {   // 4.67: 오퍼스가 JSON 형식을 어기면(실측 5건 중 1건) 제미나이로 가기 전에 클로드를 한 번 더 부른다 — 제미나이 번역이 엉뚱한 매뉴얼 답을 냈다
+    try { const r1 = await _claude(cfg, prompt, 120, true); const j1 = _parse(r1.text); if (j1 !== undefined) { r = r1; j = j1; } } catch (e) { console.warn('[미르 모델] 클로드 번역 재시도 실패:', e && e.message); }
+  }
   if (j === undefined && r.prov === 'claude' && cfg.aiKey) {   // 4.35: 클로드가 JSON 형식을 어기면 제미나이로 한 번 더(감사 지적 — 종전엔 «번역 없음»으로 굳었다)
     try { r = await _gemRaw(cfg, prompt, 120, true); j = _parse(r.text); } catch (e) { console.warn('[미르 모델] 제미나이 재시도 실패:', e && e.message); }
   }

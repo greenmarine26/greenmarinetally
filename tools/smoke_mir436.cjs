@@ -160,6 +160,16 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
   const r5 = await B.askMirModel('외로워', { app: 'smoke', voyageKey: '', inspector: '시험' }, () => null, { who: '시험', weakText: null, weakVia: '' });
   T(claudeCalls().length >= 2 && !calls.some((c) => c.url.includes('generativelanguage')) && r5 && /함께/.test(r5.text || ''), '4.66: 클로드가 한 번 과부하여도 한 번 더 불러 보고 제미나이로 넘어가지 않는다', JSON.stringify(r5).slice(0, 100) + ' / 클로드 ' + claudeCalls().length);
   claudeMode = 'ok'; TOFF += 400000;
+  {   // 4.67: «발바닥» 의 «바닥» 을 컨테이너 바닥 칸 조회로 읽지 않는다(족저근막염 질문에 «바닥: 298대»), 진짜 바닥 질문은 그대로 — nlSearch 소스를 직접 불러 확인
+    const NL = await import(require('url').pathToFileURL(path.join(ROOT, 'src/nlSearch.js')).href);
+    T(!NL.parseNaturalQuery('족저근막염에 발바닥 파스를 붙이면 효과가 있어?').bottomQuery && NL.parseNaturalQuery('3번 베이 바닥').bottomQuery && NL.parseNaturalQuery('홀드 바닥 빈자리').bottomQuery, '4.67: 발바닥은 바닥 조회가 아니고 «3번 베이 바닥»·«홀드 바닥 빈자리» 는 그대로 바닥 조회');
+  }
+  { // 4.67: 번역에서 클로드가 JSON 형식을 어기면 제미나이로 가기 전에 클로드를 한 번 더 부른다
+    let nTr = 0; claudeText = (bb) => (JSON.stringify(bb).includes('번역기다') ? (++nTr === 1 ? '알겠습니다 그건 이렇습니다' : '{"canonical":"리퍼 몇 대","window":"대수","confidence":0.9}') : '안 불려야 한다');
+    calls.length = 0;
+    const tr = await B.askMirModel('얼려 둔 컨테이너 개수 알려줘', { app: 'smoke', voyageKey: '', inspector: '시험' }, (cq) => (cq === '리퍼 몇 대' ? '리퍼 12대예요' : null), { who: '시험', weakText: null, weakVia: '' });
+    T(tr.via === 'translate' && tr.text === '리퍼 12대예요' && !calls.some((c) => c.url.includes('generativelanguage')) && claudeCalls().length === 2, '4.67: 번역 형식 어김 → 클로드 한 번 더 → 제미나이 0', JSON.stringify(tr).slice(0, 100) + ' / 클로드 ' + claudeCalls().length);
+  }
   claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.4}' : '일반 대화예요');
   CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true }; await B.getMirConfig(true);
   WEBROWS = { a: { usd: 0.2 } };
