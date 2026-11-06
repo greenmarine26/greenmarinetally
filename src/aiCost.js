@@ -14,7 +14,7 @@ export const AI_PRICE = {
   'claude-opus-5': [5, 25],
 };
 export const AI_WEB_SEARCH_USD = 0.01;   // 웹 검색 1회(1,000회 10달러). 실패한 검색은 청구되지 않는다.
-export const AI_DEFAULT_CHAT_MODEL = 'claude-sonnet-5-5';   // mir_model_log 줄에는 모델 이름이 없다 — mir_config.claudeModel(없으면 이것)로 본다
+export const AI_DEFAULT_CHAT_MODEL = 'claude-opus-5-5';   // mir_model_log 줄에는 모델 이름이 없다 — mir_config.claudeModel(없으면 이것)로 본다
 
 /** 그 모델의 금액(달러). 단가표에 없는 모델이면 null — 부르는 쪽이 «단가 모름» 으로 드러낸다(0 으로 숨기지 않는다). */
 export function aiCostUsd(model, tokIn, tokOut, searches = 0) {
@@ -60,6 +60,7 @@ export function aiPeriodDays(period, now = Date.now()) {
 /** 호출 기록 한 줄 → {provider, kind, model, tokIn, tokOut, searches, who, app, at, status} 로 고른다.
  *  mir_model_log — 클로드 줄은 prov 'claude'·'claude-web'. 웹 검색이 «빈 답»으로 끝난 줄은 prov 가 없지만 토큰·검색이 청구됐다(mir.js 웹 검색 실패 기록) — 클로드로 센다.
  *  ai_call_log — model 이 claude- 로 시작하면 클로드 사진 읽기, 아니면 제미나이(토큰 기록 없음). */
+const CHAT_MODEL_OPUS_FROM = Date.parse('2026-11-06T09:00:00+09:00');   // 4.65
 function pickMirRow(v, chatModel) {
   if (!v || typeof v !== 'object') return null;
   const prov = String(v.prov || '');
@@ -67,7 +68,8 @@ function pickMirRow(v, chatModel) {
   const tokIn = Number(v.tokIn) || 0, tokOut = Number(v.tokOut) || 0, searches = Number(v.searches) || 0;
   const claude = prov.startsWith('claude') || (kind === 'web' && !prov && (tokIn > 0 || searches > 0));
   const base = { kind, who: String(v.who || ''), app: String(v.app || ''), at: Number(v.at) || 0 };
-  if (claude) return { ...base, provider: 'claude', model: chatModel, tokIn, tokOut, searches, status: 200 };
+  //  4.65: 대화는 오퍼스로 바뀌었다(2026-11-06 09:00 KST 배포). 그 전 줄은 소네트 단가로, 웹 검색 줄은 늘 소네트(WEB_MODEL)로 센다 — 줄에는 모델 이름이 없어 시각으로 가른다.
+  if (claude) return { ...base, provider: 'claude', model: (kind === 'web' || (base.at && base.at < CHAT_MODEL_OPUS_FROM)) ? 'claude-sonnet-5-5' : chatModel, tokIn, tokOut, searches, status: 200 };
   //  4.30 전 옛 기록은 prov 칸이 없다 — 그때는 제미나이뿐이었다(감사 4.37: 옛 줄을 «실패»로 세면 이번 달 화면에 헛경고가 뜬다)
   if (prov === 'gemini' || (!prov && v.ok !== false)) return { ...base, provider: 'gemini', model: '' };
   if (prov === 'web-cap') return { ...base, provider: 'cap' };            // 하루 한도에 닿아 검색 없이 «한도 다 썼어요» 로 답한 줄 — 호출·청구 없음

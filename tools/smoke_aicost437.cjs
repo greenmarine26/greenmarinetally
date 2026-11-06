@@ -86,7 +86,7 @@ const FX = JSON.parse(fs.readFileSync(path.join(root, 'tools/fixtures/ai_cost_26
   ok(/assertOwner\(/.test(fnBody('fbGetAiCost')) && /assertOwner\(/.test(fnBody('fbSaveAiConsole')), 'fbGetAiCost · fbSaveAiConsole 는 소유자만(assertOwner)');
   ok(!/claudeKey|aiKey|ref\(db, 'mir_config'\)/.test(fnBody('fbGetAiCost')) && /mir_config\/\$\{f\}/.test(fnBody('fbGetAiCost')), 'fbGetAiCost 는 mir_config 를 통째로 읽지 않고 키가 아닌 칸만 하나씩 읽는다');
   ok(/update\(ref\(db, 'ai_console'\), out\)/.test(fnBody('fbSaveAiConsole')) && !/\bset\(|remove\(/.test(fnBody('fbSaveAiConsole')), 'Console 숫자 적기는 ai_console 한 칸 PATCH 뿐');
-  ok(/AI_PRICE\[String\(cfg\.claudeModel \|\| DEFAULT_CLAUDE_MODEL\)\]\) \{/.test(M) && /isCone \? '오늘 검색에 쓸 수 있는 한도를 다 써서/.test(M), '단가표에 없는 모델이면 웹 검색 안 함 · 콘앱 한도 문구에 금액 없음');
+  ok(/AI_PRICE\[WEB_MODEL\]\) \{/.test(M) && /isCone \? '오늘 검색에 쓸 수 있는 한도를 다 써서/.test(M), '단가표에 없는 모델이면 웹 검색 안 함 · 콘앱 한도 문구에 금액 없음');
   const others = ['src/pages/ChiefDashboard.jsx', 'src/components/AiCostPanel.jsx', 'src/App.jsx', 'src/pages/HomePage.jsx'].map(read).map(noCmt).join('\n');
   ok(!/ai_console|mir_websearch\/|ai_call_log\//.test(others), '기록 노드 이름은 화면 코드에 없다(firebase.js 한 곳에서만 읽는다)');
   ok(/import \{ aiCostUsd, AI_PRICE \} from '\.\/aiCost\.js'/.test(M) && /const _webCost = \(tokIn, tokOut, searches, model\) => aiCostUsd\(/.test(M) && !/\* 3 \/ 1e6|\* 15 \/ 1e6/.test(noCmt(M)), '미르 웹 검색 비용은 aiCost.js 단가 한 벌(옛 3·15달러 식 없음)');

@@ -3013,11 +3013,11 @@ export function answerOne(query, ctx) {
 const FB = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
 const GEM = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5';   // 4.30: 미르는 클로드(소네트)를 먼저 부르고, 막히면 제미나이로 돌아간다
+const DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';   // 4.65: 대화는 오퍼스(검수사 2026-11-06 «미르 성능 높히는거» · 크레딧 100달러 만료 11-28). 웹 검색은 아래 WEB_MODEL 소네트 그대로.  4.30: 미르는 클로드(소네트)를 먼저 부르고, 막히면 제미나이로 돌아간다
 const DEFAULT_CAP = 300;
 const CFG_TTL = 10 * 60 * 1000;
 const TIMEOUT_MS = 10000;
-const CLAUDE_TIMEOUT_MS = 15000;   // 4.35: 첫 호출이 7초까지 걸린 실측(소네트) — 제미나이(10초)보다 넉넉히
+const CLAUDE_TIMEOUT_MS = 25000;   // 4.65: 오퍼스 대화(소네트 때 15000).    // 4.35: 첫 호출이 7초까지 걸린 실측(소네트) — 제미나이(10초)보다 넉넉히
 
 // ── 미르가 모르는 낱말 — 종전 SearchPanel 음성 교정의 KNOWN 표를 한 벌로 옮기고(거기 사본은 지웠다) **토큰 사전**으로 바꿨다.
 //   감사 실측(3.42 첫 판): 부분 문자열 정규식은 «시프팅»에서 «시»를 떼어 «프팅»을 모르는 낱말로 만들었고, 창구 예시 84개 중 22개가 «모르는 낱말 남음»이었다.
@@ -3152,7 +3152,7 @@ async function _claude(cfg, prompt, maxOut, json) {
   const r = await _fetchJson('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({ model: cfg.claudeModel || DEFAULT_CLAUDE_MODEL, max_tokens: Math.max(maxOut, 400), thinking: { type: 'between_tools' }, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model: cfg.claudeModel || DEFAULT_CLAUDE_MODEL, max_tokens: Math.max(maxOut, 400), ...(/opus/i.test(String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL)) ? {} : { thinking: { type: 'between_tools' } }), messages: [{ role: 'user', content: prompt }] }),   // 4.65: 오퍼스는 between_tools 를 400 으로 거부한다(4.36 실측)
   }, CLAUDE_TIMEOUT_MS);
   if (!r.ok) { const e = new Error((r.j && r.j.error && r.j.error.message) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
   const text = ((r.j && Array.isArray(r.j.content) ? r.j.content : []).filter((c) => c && c.type === 'text').map((c) => c.text || '').join(' ')).trim();
@@ -3163,7 +3163,8 @@ async function _claude(cfg, prompt, maxOut, json) {
 /* ★ 4.36-02 — 미르 웹 검색(클로드 웹 검색 도구). 검수사 2026-10-19 «1불로 제한 합니다» — 하루 합계 비용이 한도(mir_config.webSearchUsd, 처음 1달러)에 닿으면 그날은 검색을 멈춘다.
    비용 = 입력 토큰×2달러/100만 + 출력 토큰×10달러/100만 + 검색 1회 0.01달러(소네트 5.5 단가, 2026-10-19 가격표). 실제 응답의 usage 로 계산해 mir_websearch/{날짜} 에 한 줄씩 남기고, 읽을 때 합산한다.
    4.37: 종전 3·15달러(옛 소네트 단가)로 셈해 실제보다 39% 크게 적혔다 — 실측 261019 «가요차트 1위» 입력 16,505·출력 351·검색 1 → 장부 0.0648, 실제 0.0465. 그래서 1달러 한도가 실제 약 0.70달러에서 멈췄다. */
-const WEB_USD_DEFAULT = 1;
+const WEB_USD_DEFAULT = 3;   // 4.65: 하루 3달러(검수사 2026-11-06 «하루 3불로 해주세요»). mir_config.webSearchUsd 를 쓰면 배포 없이 바꾼다.
+const WEB_MODEL = 'claude-sonnet-5-5';   // 4.65: 대화가 오퍼스여도 웹 검색은 소네트(단가 반값 · 검색 도구가 검증된 모델)
 const WEB_EST_USD = 0.05;   // 한 번 부르기 전에 서버에 먼저 잡아 두는 예상 비용(실측 1회 0.0465달러, 4.37 이전 0.07) — 다른 폰도 이만큼 쓴 것으로 본다
 const MIR_REALTIME_RE = /(차트|순위|1위|뉴스|속보|주가|환율|시세|코스피|코스닥|나스닥|비트코인|경기\s*결과|스코어|박스오피스|실시간\s*(검색어|차트|순위|뉴스)|최근\s*(소식|뉴스)|요즘\s*(뜨는|인기))/;
 const _webCost = (tokIn, tokOut, searches, model) => aiCostUsd(AI_PRICE[model] ? model : DEFAULT_CLAUDE_MODEL, tokIn, tokOut, searches);   // 4.37: 단가는 aiCost.js 한 곳
@@ -3207,7 +3208,7 @@ async function _claudeSearch(cfg, prompt, maxOut) {
   const r = await _fetchJson('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': cfg.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({ model: cfg.claudeModel || DEFAULT_CLAUDE_MODEL, max_tokens: maxOut, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }], messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model: WEB_MODEL, max_tokens: maxOut, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }], messages: [{ role: 'user', content: prompt }] }),
   }, 60000);
   if (!r.ok) { const e = new Error((r.j && r.j.error && r.j.error.message) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
   const blocks = (r.j && Array.isArray(r.j.content)) ? r.j.content : [];
@@ -3356,7 +3357,7 @@ ${hist ? `지금까지 대화:\n${hist}\n` : ''}검수사: "${String(q).slice(0,
 미르:`;
   //  ★ 4.36-02 웹 검색 — 차트·순위·뉴스·주가 같은 실시간 질문만(일 낱말이 든 말은 제외). 하루 합계 비용이 한도에 닿으면 검색 없이 «한도 다 썼다»고 말한다.
   //    비용을 읽거나 적지 못하면 검색하지 않는다(한도가 풀리지 않게). 모델이 소네트가 아니면 단가를 모르므로 검색하지 않는다. 검색이 안 되면 종전 생활회화로 답한다.
-  if (cfg.claudeKey && MIR_REALTIME_RE.test(String(q)) && isChatCandidate(q, '') && !(cfg.webSearchUsd <= 0) && /sonnet/i.test(String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL)) && AI_PRICE[String(cfg.claudeModel || DEFAULT_CLAUDE_MODEL)]) {   // 4.37: 단가표(aiCost.js)에 없는 모델은 비용을 모르므로 검색하지 않는다(소유자 화면과 같은 판정)
+  if (cfg.claudeKey && MIR_REALTIME_RE.test(String(q)) && isChatCandidate(q, '') && !(cfg.webSearchUsd <= 0) && AI_PRICE[WEB_MODEL]) {   // 4.37: 단가표(aiCost.js)에 없는 모델은 비용을 모르므로 검색하지 않는다 · 4.65: 검색 모델은 WEB_MODEL 로 못 박았다(대화가 오퍼스여도 검색이 막히지 않게)
     const isCone = !!(ctx && ctx.app === 'cone');
     const limit = isCone ? Math.round(cfg.webSearchUsd * CONE_WEB_SHARE * 100) / 100 : cfg.webSearchUsd;   // 4.37: 콘앱은 절반에서 먼저 멈춘다(합계는 두 앱 공용)
     const spent = await _webSpentToday();
@@ -3368,7 +3369,7 @@ ${hist ? `지금까지 대화:\n${hist}\n` : ''}검수사: "${String(q).slice(0,
       try {
         const wprompt = prompt.replace('2. 실시간 정보(날씨·뉴스·주가·경기 결과)와 네가 확실히 모르는 것은 모른다고 말한다. 날씨는 «미르야 날씨 알려줘» 라고 하면 앱이 안내한다고 알려 준다.', '2. 이번 질문은 웹 검색 도구를 쓸 수 있다. 실시간 정보는 검색을 한 번만 하고 찾은 것만 말하며, 기준 날짜·시각을 함께 말하고 출처 주소는 쓰지 않는다. 검색해도 확실하지 않으면 그렇다고 말한다. 네가 지어내지 않는다.');
         const w = await _claudeSearch(cfg, wprompt, 700);
-        const usd = _webCost(w.tokIn, w.tokOut, w.searches, cfg.claudeModel);
+        const usd = _webCost(w.tokIn, w.tokOut, w.searches, WEB_MODEL);
         await _webSettle(slot, usd, { tokIn: w.tokIn, tokOut: w.tokOut, searches: w.searches, ms: w.ms, ok: !!w.text, stop: w.stop });
         let wt = String(w.text || '').trim().replace(/^미르\s*[:：]\s*/, '');
         if (wt && /[A-Z]{4}\d{7}/.test(wt)) wt = '';

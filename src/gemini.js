@@ -70,7 +70,7 @@ const FB_URL = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebaseda
    부르는 쪽 코드는 그대로다 — 요청 본문(제미나이 모양)을 여기서 클로드 요청으로 바꾸고, 응답을 제미나이 모양(candidates[0].content.parts[0].text · finishReason)으로 돌려준다.
    클로드가 안 되면(키 없음·한도·과부하·시간 초과·빈 답) 종전 제미나이 길로 간다 — 한도·키 문제(크레딧 소진 포함)는 30분, 과부하·시간 초과는 2분 쉬고, 사진 한 장이 거부된 400 은 쉬지 않는다.
    스위치 — mir_config/visionProvider 가 'gemini' 면 클로드를 건너뛴다(배포 없이 되돌리기). */
-const CLAUDE_VISION_KINDS = { esealPhoto: 'opus', sheetPhoto: 'opus', listPhoto: 'sonnet', reeferPhoto: 'sonnet', portMisCapture: 'sonnet', stowagePdf: 'sonnet' };
+const CLAUDE_VISION_KINDS = { esealPhoto: 'opus', sheetPhoto: 'opus', listPhoto: 'opus', reeferPhoto: 'opus', portMisCapture: 'opus', stowagePdf: 'sonnet' }   // 4.65: 사진은 전부 오퍼스(검수사 2026-11-06 — 크레딧 100달러 정확도에 씀) · PDF 베이는 3만 토큰 JSON 이라 시간 초과 때문에 소네트;
 const DEFAULT_OPUS_MODEL = 'claude-opus-5-5';
 const DEFAULT_SONNET_MODEL = 'claude-sonnet-5-5';
 let _visionClaudeOffUntil = 0;
@@ -131,7 +131,7 @@ async function _tryClaudeVision(kind, body, timeoutMs, retry = false) {
   try { cfg = await getMirConfig(); } catch (e) { return null; }
   if (!cfg || !cfg.claudeKey || cfg.visionProvider === 'gemini') return null;
   if (!_visionMediaOk(body)) return null;   // HEIC 등 클로드가 못 받는 형식은 쉬지 않고 이번만 제미나이로
-  const model = tier === 'opus' ? (cfg.claudeOpusModel || DEFAULT_OPUS_MODEL) : (cfg.claudeModel || DEFAULT_SONNET_MODEL);
+  const model = tier === 'opus' ? (cfg.claudeOpusModel || DEFAULT_OPUS_MODEL) : DEFAULT_SONNET_MODEL;   // 4.65: 소네트 길은 대화 모델(오퍼스 기본)을 따라가지 않는다
   const t0 = Date.now();
   const ac = (typeof AbortController === 'function') ? new AbortController() : null;
   const timer = ac ? setTimeout(() => ac.abort(), Math.round(timeoutMs * (kind === 'stowagePdf' ? 0.95 : 0.7))) : null;
