@@ -1641,6 +1641,8 @@ fi
     npx esbuild tools/smoke_access469_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AX" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_access469.cjs "$SMOKE_AX" "$(pwd)" || { rm -f "$SMOKE_AX"; echo "✗ 접속 기록 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AX"
+    #  4.71: 대기자(로그인·지정 호기)가 상황판 호기 칸 이름에서 빠지지 않는다
+    node tools/smoke_standby471.cjs || { echo "✗ 대기자 호기 이름 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.43-01: **두 앱 같은 답** — 검수앱(항차 열린 떠 있는 미르)·콘앱(cone.html mirAsk 모양) ctx 로 같은 문장(끝나는 시각·진행·도선·속도·창구) → 같은 답인가. 실데이터 KBTR 2606E + 터미널 실적·배 속도·도선 예보. 콘앱이 재료를 빼먹으면 여기서 갈린다.
     SMOKE_MS=$(mktemp /dev/shm/hometmp/_smokems_XXXXXX.cjs)
     npx esbuild src/mirCore.entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MS" --loader:.js=jsx --jsx=automatic --log-level=error \

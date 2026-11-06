@@ -539,6 +539,21 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return out;
   }, [inspectors, inspector]);
 
+  // 4.71: 대기 중인 검수원 — 로그인해 있고 이 항차 호기를 지정받았지만 90초 안에 조작이 없는 사람. 호기 칸 이름에만 올린다(작업 중 판정·베이 그림에는 쓰지 않는다).
+  //       검수사 2026-11-06 22:11 «작업 대기면 일을 안하는건가요?» — 로그인 중인 사람이 3호기에서 «미등록»으로 사라지던 것.
+  const crewOfVoyage = (key) => {
+    const act = activeByVoyage[key] || [];
+    const have = new Set(act.map((w) => w.name));
+    const wait = Object.values(inspectors || {}).filter((i) => i?.name && i.loggedIn === true && i.assignVoyage === key && i.assignEquip
+      && !(i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) && !have.has(i.name) && isVisibleStaff(i.name, isOwnerName(inspector)))
+      .sort((x, y) => (x.assignAt || 0) - (y.assignAt || 0))   // 같은 호기를 둘이 지정받았으면 나중에 지정한 사람이 이긴다(뒤에 오는 이름이 앞을 덮는다)
+      .map((i) => ({ name: i.name, mode: i.lastMode, equip: i.assignEquip, bay: null, tier: null, remain: null, standby: true }));
+    //  지금 그 호기에서 일하는 사람(90초 안)이 있으면 대기자 이름은 올리지 않는다 — 일하는 사람이 그 호기의 이름이다.
+    const busy = new Set(act.map((w) => String(w.equip || '')).filter(Boolean));
+    const wait2 = wait.filter((w) => !busy.has(String(w.equip)));
+    return wait2.length ? act.concat(wait2) : act;
+  };
+
   // V7.40: 항차별 마지막 작업 보고 1건
   const lastReportByVoyage = useMemo(() => {
     const out = {};
@@ -1148,7 +1163,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                   lastReport={lastReportByVoyage[v.key]}
                   alerts={todayAlertsByVoyage[v.key]}
                   departed={v._departed}
-                  cranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info)).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], activeByVoyage[v.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info)).stopped}
+                  cranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], crewOfVoyage(v.key)), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info)).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], crewOfVoyage(v.key)), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info)).stopped}
                   voyage={voyages?.[v.key]} rows={shown.length}
                   onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
                   focused={!!focusRow} canFocus={boardRows.length > 1} zoom={boardZoom}
@@ -1189,7 +1204,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               lastReport={lastReportByVoyage[sheetRow.key]}
               alerts={todayAlertsByVoyage[sheetRow.key]}
               departed={sheetRow._departed}
-              cranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info)).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], activeByVoyage[sheetRow.key] || []), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info)).stopped}
+              cranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], crewOfVoyage(sheetRow.key)), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info)).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], crewOfVoyage(sheetRow.key)), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info)).stopped}
               voyage={voyages?.[sheetRow.key]} rows={1}
               onOpenContainer={(c, mode) => setBoardDetail({ key: sheetRow.key, mode, c })}
               focused={false} canFocus={false} zoom={1}
