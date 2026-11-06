@@ -24,7 +24,7 @@
 import { isTermOtL, isLen45Iso } from './utils.js';   // 4.25-01: L 표기 45피트 판정 한 벌
 import { fmtPos, normalizeBay, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
 import { lookupUN } from './dgUnDict.js';
-import { getMirConfig } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
+import { getMirConfig, claudeOverDailyCap } from './mir.js';   // 3.43 판 C: 공용 키(검수사 부담) — 미르와 같은 mir_config 한 칸
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 // V9.57(G11): 하드코딩 폴백 키 삭제 — GitHub public repo 노출로 이미 차단된 키였고,
@@ -74,6 +74,7 @@ const CLAUDE_VISION_KINDS = { esealPhoto: 'opus', sheetPhoto: 'opus', listPhoto:
 const DEFAULT_OPUS_MODEL = 'claude-opus-5-5';
 const DEFAULT_SONNET_MODEL = 'claude-sonnet-5-5';
 let _visionClaudeOffUntil = 0;
+const VISION_TRANSIENT = { transient: true };   // 4.68: 클로드 시도가 «일시 오류(시간 초과·과부하)» 로 끝났다는 표식 — 그러면 제미나이로 가지 않고 다시 부른다(동시 호출끼리 섞이지 않게 반환값으로 전한다)
 function _aiLogLine(kind, status, ms, model, tok) {   // 4.36-02: tok = {tokIn, tokOut} — 사진·PDF 비용을 종류별로 정확히 세려고 남긴다
   let who = '';
   try { who = localStorage.getItem('master_active_inspector_v1') || ''; } catch (e) { who = ''; }
@@ -130,6 +131,7 @@ async function _tryClaudeVision(kind, body, timeoutMs, retry = false) {
   let cfg = null;
   try { cfg = await getMirConfig(); } catch (e) { return null; }
   if (!cfg || !cfg.claudeKey || cfg.visionProvider === 'gemini') return null;
+  if (await claudeOverDailyCap(cfg)) return null;   // 4.68: 오늘 클로드 합계가 하루 한도(기본 3달러)에 닿으면 그날은 제미나이
   if (!_visionMediaOk(body)) return null;   // HEIC 등 클로드가 못 받는 형식은 쉬지 않고 이번만 제미나이로
   const model = tier === 'opus' ? (cfg.claudeOpusModel || DEFAULT_OPUS_MODEL) : DEFAULT_SONNET_MODEL;   // 4.65: 소네트 길은 대화 모델(오퍼스 기본)을 따라가지 않는다
   const t0 = Date.now();
@@ -158,20 +160,22 @@ async function _tryClaudeVision(kind, body, timeoutMs, retry = false) {
     status = status || st;
     const msg = String((e && e.message) || '');
     const hard = st === 401 || st === 403 || (st === 400 && /credit|balance|billing|api key|authentic|permission|usage|limit/i.test(msg));
-    const rest = hard ? 30 : (st === 400 ? 0 : 2);
+    const transient = !hard && st !== 400 && st !== 404 && !(cfg && cfg.geminiFallback);   // 4.68: 일시 오류는 제미나이로 가지 않는다(geminiFallback 이면 종전대로)
+    const rest = hard ? 30 : (st === 400 ? 0 : ((cfg && cfg.geminiFallback) ? 2 : 0));
     if (rest) _visionClaudeOffUntil = Math.max(_visionClaudeOffUntil, Date.now() + rest * 60 * 1000);
-    console.warn(`[사진 읽기] 클로드(${model})가 안 돼서 제미나이로 갑니다:`, e && e.message);
-    return null;
+    console.warn(`[사진 읽기] 클로드(${model})가 안 돼요${transient ? '(다시 부릅니다)' : ' — 제미나이로 갑니다'}:`, e && e.message);
+    return transient ? VISION_TRANSIENT : null;
   } finally {
     if (timer) clearTimeout(timer);
     _aiLogLine(kind, status, Date.now() - t0, model, tok);
   }
 }
 export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MODEL, key = '' } = {}) {
-  let cv = await _tryClaudeVision(kind, body, timeoutMs);   // 4.36: 사진 읽기 클로드 우선(오퍼스·소네트) — 안 되면 아래 제미나이 길
-  //  4.56-05: 리퍼 온도 사진은 클로드가 시간 초과·과부하로 한 번 놓쳐도 **한 번 더** 클로드로 읽는다(한도·키 문제로 30분 쉬는 경우는 제외).
-  //  제미나이는 손글씨 숫자(-19.0 ↔ -2.5)를 더 자주 틀린다 — 오늘 아침 STMJ 판독 4건 중 2건이 시간 초과 뒤 제미나이로 읽혔다(ai_call_log 실측).
-  if (!cv && kind !== 'stowagePdf' && CLAUDE_VISION_KINDS[kind] && _visionClaudeOffUntil - Date.now() <= 125000) cv = await _tryClaudeVision(kind, body, timeoutMs, true);
+  let cv = await _tryClaudeVision(kind, body, timeoutMs);   // 4.36: 사진 읽기 클로드 우선(오퍼스·소네트)
+  //  4.68: 시간 초과·과부하는 클로드를 두 번 더 부른다(적재 PDF 는 길어서 다시 부르지 않는다). 그래도 안 되면 제미나이로 가지 않고 «다시 시도» 오류를 낸다 —
+  //  검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 제미나이를 사용하지 않는다». 제미나이로 가는 경우는 키·크레딧 문제·HEIC 같은 클로드 못 받는 형식·하루 한도 초과·geminiFallback 설정뿐.
+  for (let i = 0; cv === VISION_TRANSIENT && kind !== 'stowagePdf' && i < 2; i++) cv = await _tryClaudeVision(kind, body, timeoutMs, true);
+  if (cv === VISION_TRANSIENT) throw new Error('클로드가 응답하지 않아요(시간 초과·과부하) — 잠시 뒤 다시 시도해 주세요.');
   if (cv) { _visionClaudeOffUntil = 0; return cv; }
   const k = key || await resolveAiKey();
   if (!k) throw new Error(NO_KEY_MSG);

@@ -66,6 +66,7 @@ export default function AiCostPanel({ by }) {
 
   //  미르(mir.js getMirConfig)와 같은 읽기 — 없거나 숫자가 아니면 3달러(4.65 — 1달러에서 올림 · 감사 4.37: 글자가 들어가면 미르는 1달러, 화면은 0 으로 갈리던 것)
   const webLimit = cfg.webSearchUsd === undefined || cfg.webSearchUsd === null || cfg.webSearchUsd === '' || Number.isNaN(Number(cfg.webSearchUsd)) ? 3 : Math.max(0, Number(cfg.webSearchUsd));
+  const dayLimit = cfg.claudeDailyUsd === undefined || cfg.claudeDailyUsd === null || cfg.claudeDailyUsd === '' || Number.isNaN(Number(cfg.claudeDailyUsd)) ? 3 : Math.max(0, Number(cfg.claudeDailyUsd));   // 4.68 — 미르(mir.js getMirConfig)와 같은 읽기
   const coneLimit = Math.round(webLimit * 0.5 * 100) / 100;
   const periodName = (PERIODS.find(([k]) => k === period) || PERIODS[0])[1];
 
@@ -131,6 +132,12 @@ export default function AiCostPanel({ by }) {
                 agg.webFailN > 0 ? `검색 오류 ${num(agg.webFailN)}회(청구 없음)` : '',
                 agg.webMaybeN > 0 ? `검색 시간 초과 ${num(agg.webMaybeN)}회(청구됐을 수 있음 — 장부에 예상치로 남김)` : '',
               ].filter(Boolean).join(' · ')}</div>
+            )}
+            {period === 'today' && (
+              <div className={agg.total.usd >= dayLimit ? 'text-amber-200' : 'text-dim-300'} data-aicost-daylimit="1">
+                클로드 하루 한도 <b className="text-dim-100 tabular-nums">{usd(dayLimit, 2)}</b> — 오늘 <b className="text-dim-100 tabular-nums">{usd(agg.total.usd, 2)}</b>.
+                {agg.total.usd >= dayLimit ? ' 한도에 닿아 오늘은 제미나이로 답합니다.' : ' 넘기 전에는 시간 초과·과부하에도 제미나이로 가지 않고 클로드를 다시 부릅니다.'}
+              </div>
             )}
             <div className="text-dim-300">콘앱 웹 검색은 하루 합계가 <b className="text-dim-100 tabular-nums">{usd(coneLimit, 2)}</b> 에 닿으면 먼저 멈추고, 검수앱은 <b className="text-dim-100 tabular-nums">{usd(webLimit, 2)}</b> 까지 씁니다.</div>
           </div>

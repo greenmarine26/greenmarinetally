@@ -24,11 +24,12 @@ global.FileReader = class { readAsDataURL() { setTimeout(() => { this.result = '
 const calls = { claude: [], gemini: [] };
 let claudeQueue = [];      // 호출마다 꺼내 쓰는 상태 코드(200 이면 modelText)
 let modelText = '{"items":[]}';
+let OVERCAP = false;
 const resp = (status, json) => ({ ok: status >= 200 && status < 300, status, json: async () => json, text: async () => JSON.stringify(json) });
 global.fetch = (url, opts = {}) => {
   const u = String(url);
   if (u.includes('/mir_config.json')) return Promise.resolve(resp(200, { claudeKey: 'CK', aiKey: 'GK', dailyCap: 300, enabled: true }));
-  if (u.includes('/ai_call_log/')) return Promise.resolve(resp(200, { name: 'x' }));
+  if (u.includes('/ai_call_log/')) return Promise.resolve(resp(200, OVERCAP && (!opts.method || opts.method === 'GET') ? { a: { at: 1, kind: 'reeferPhoto', status: 200, model: 'claude-opus-5-5', tokIn: 1000000, tokOut: 0 } } : { name: 'x' }));   // 4.68: OVERCAP — 오늘 클로드 합계가 하루 한도(3달러)를 넘긴 날
   if (u.includes('api.anthropic.com')) {
     calls.claude.push(JSON.parse(opts.body || '{}'));
     const st = claudeQueue.length ? claudeQueue.shift() : 200;
@@ -96,9 +97,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   //  ④ 두 번 다 놓치면 제미나이 — 그리고 그렇다고 알려 준다
   calls.claude.length = 0; calls.gemini.length = 0;
-  claudeQueue = [529, 529];
-  const r4 = await M.ocrReeferTemps(blob, '', []);
-  check('두 번 다 실패 → 제미나이로 읽고 model 이 제미나이로 표시된다', calls.claude.length === 2 && calls.gemini.length === 1 && /^gemini/.test(r4.model) && r4.items.length === 1, JSON.stringify({ c: calls.claude.length, g: calls.gemini.length, m: r4.model }));
+  claudeQueue = [529, 529, 529];
+  let r4 = null, e4 = '';
+  try { r4 = await M.ocrReeferTemps(blob, '', []); } catch (e) { e4 = String(e && e.message || e); }
+  check('4.68: 세 번 다 실패해도 제미나이로 가지 않고 «다시 시도» 오류를 낸다(클로드 3회 · 제미나이 0)', calls.claude.length === 3 && calls.gemini.length === 0 && !r4 && /다시 시도/.test(e4), JSON.stringify({ c: calls.claude.length, g: calls.gemini.length, e: e4.slice(0, 40) }));
+  {  // 4.68: 오늘 클로드 합계가 하루 한도를 넘긴 날은 클로드를 부르지 않고 제미나이로 읽는다
+    calls.claude.length = 0; calls.gemini.length = 0; claudeQueue = []; OVERCAP = true;
+    const rn = Date.now; Date.now = () => rn() + 120000;   // 30초 비용 캐시를 건너뛴다
+    modelText = JSON.stringify({ items: [{ cn: 'TEMU1234567', set: '-19.0', act: '-19.0' }] });
+    let r6 = null; try { r6 = await M.ocrReeferTemps(blob, '', []); } catch (e) { r6 = { err: String(e && e.message) }; }
+    OVERCAP = false; Date.now = () => rn() + 400000;   // 한도 초과 캐시(30초)를 지나쳐 두고 이후 시험은 그 시계로 계속한다
+    check('4.68: 하루 한도(3달러)를 넘긴 날은 클로드 0 · 제미나이로 읽는다', calls.claude.length === 0 && calls.gemini.length === 1 && r6 && /^gemini/.test(r6.model || ''), JSON.stringify({ c: calls.claude.length, g: calls.gemini.length, r: r6 && (r6.model || r6.err) }));
+    claudeQueue = []; await sleep(2);
+  }
 
   //  ⑤ 다른 창구는 재시도하지 않는다(동작 불변)
   //  앞 시험이 남긴 쉬는 시각을 걷어 낸다(성공 한 번이면 0 으로 돌아온다) — 안 그러면 재시도가 어차피 건너뛰어져 이 단언이 늘 참이 된다(독립 감사 변이 시험)
@@ -108,7 +119,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   claudeQueue = [529, 529, 529];
   await sleep(1);
   let li = null; try { li = await M.ocrImageContainers(blob, ''); } catch (e) { li = { err: e.message }; }
-  check('4.66: 리스트 사진도 과부하면 클로드를 한 번 더 부른 뒤 제미나이로 간다(클로드 정확히 2회)', calls.claude.length === 2, String(calls.claude.length));
+  check('4.68: 리스트 사진도 과부하면 클로드를 세 번 부르고 제미나이로 가지 않는다(클로드 3회 · 제미나이 0)', calls.claude.length === 3 && calls.gemini.length === 0, String(calls.claude.length) + '/' + calls.gemini.length);
 
   //  ⑤-b 회전을 실제로 실행한다 — 세로 사진은 반시계 90도(캔버스 가로·세로 맞바꿈, 변환 순서), 가로 사진은 원본 그대로
   {

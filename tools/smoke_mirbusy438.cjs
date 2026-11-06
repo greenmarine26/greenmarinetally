@@ -23,6 +23,7 @@ const mk = (j) => Promise.resolve({ ok: true, status: 200, json: () => Promise.r
 global.fetch = (url, opts = {}) => {
   const u = String(url); const body = opts.body ? String(opts.body) : '';
   if (u.includes('/mir_config.json')) { calls.push({ kind: 'config' }); return mk({ claudeKey: 'K', enabled: true, dailyCap: 100000, webSearchUsd: 1 }); }   // 상한은 넉넉히 — 이 연막만으로 300회를 넘는다
+  if (u.includes('/ai_call_log/')) return mk({});   // 4.68: 하루 3달러 한도 계산이 읽는 장부 — 비어 있으면 한도 안
   if (u.includes('/mir_model_log/')) { calls.push({ kind: (!opts.method || opts.method === 'GET') ? 'count' : 'log' }); return mk({}); }
   if (/\/(mir_misses|mir_websearch|mir_lexicon)\//.test(u)) { let jj = {}; try { jj = JSON.parse(body); } catch (e) { /* */ } calls.push({ kind: 'ledger', how: jj.how || '', q: jj.q || '' }); return mk({}); }
   if (u.includes('api.anthropic.com') || u.includes('generativelanguage')) {

@@ -1209,7 +1209,7 @@ export async function fbGetTermSnapshot(by) {
 //   미르·사진 읽기 호출 기록 세 노드(mir_model_log · ai_call_log · mir_websearch)를 날짜마다 한 번 읽는다 — 구독하지 않는다(펼칠 때·새로 고침 때만).
 //   설정은 mir_config 에서 **키가 아닌 칸만** 하나씩 읽는다(claudeKey·aiKey 는 이 함수가 읽지도 돌려주지도 않는다).
 //   ai_console — Console 첫 화면 숫자(크레딧 잔액·이번 달 지출·한도·7일 토큰). 크레딧·한도는 어떤 API 로도 못 받아 소유자가 적는다.
-const AI_CFG_FIELDS = ['claudeModel', 'claudeOpusModel', 'visionProvider', 'dailyCap', 'webSearchUsd', 'enabled', 'model'];
+const AI_CFG_FIELDS = ['claudeModel', 'claudeOpusModel', 'visionProvider', 'dailyCap', 'webSearchUsd', 'claudeDailyUsd', 'enabled', 'model'];
 export async function fbGetAiCost(dayKeys, by) {
   assertOwner('AI 비용 보기', by);
   const keys = [...new Set((Array.isArray(dayKeys) ? dayKeys : []).filter((k) => /^\d{6}$/.test(String(k))))].slice(0, 40);

@@ -70,7 +70,7 @@ import { judgeMode, buildReadiness, describeReadiness, loadingCollecting } from 
 import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60-18: PORT-MIS 매칭 본체(베이사전 없이) — 콘앱 미르용 기본 매처
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
-import { aiCostUsd, AI_PRICE } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
+import { aiCostUsd, AI_PRICE, aggregateAiCost } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
@@ -3101,7 +3101,7 @@ export async function getMirConfig(force = false) {
       const j = (r.ok && r.j && typeof r.j === 'object') ? r.j : {};
       let key = String(j.aiKey || '').trim();
       if (!key) { try { key = localStorage.getItem('master_gemini_api_key_v1') || ''; } catch (e) { key = ''; } }   // 공용 키가 비어 있으면 개인 키(종전 길)
-      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), claudeOpusModel: String(j.claudeOpusModel || '').trim(), visionProvider: String(j.visionProvider || '').trim(), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim(), webSearchUsd: (j.webSearchUsd === undefined || j.webSearchUsd === null || j.webSearchUsd === '' || isNaN(Number(j.webSearchUsd))) ? WEB_USD_DEFAULT : Math.max(0, Number(j.webSearchUsd)) };
+      _cfg = { aiKey: key, claudeKey: String(j.claudeKey || '').trim(), claudeModel: String(j.claudeModel || DEFAULT_CLAUDE_MODEL), claudeOpusModel: String(j.claudeOpusModel || '').trim(), visionProvider: String(j.visionProvider || '').trim(), model: String(j.model || DEFAULT_MODEL), dailyCap: Number(j.dailyCap) > 0 ? Number(j.dailyCap) : DEFAULT_CAP, enabled: j.enabled !== false, sharedKey: !!String(j.aiKey || '').trim(), webSearchUsd: (j.webSearchUsd === undefined || j.webSearchUsd === null || j.webSearchUsd === '' || isNaN(Number(j.webSearchUsd))) ? WEB_USD_DEFAULT : Math.max(0, Number(j.webSearchUsd)), claudeDailyUsd: (j.claudeDailyUsd === undefined || j.claudeDailyUsd === null || j.claudeDailyUsd === '' || isNaN(Number(j.claudeDailyUsd))) ? CLAUDE_DAILY_USD_DEFAULT : Math.max(0, Number(j.claudeDailyUsd)), geminiFallback: j.geminiFallback === true };
       _cfgAt = Date.now();
     } catch (e) {
       console.warn('[미르 모델] mir_config 를 못 읽었어요 — 이번엔 모델 없이 갑니다:', e && e.message);
@@ -3147,6 +3147,26 @@ function _logMiss(q, meta) {
    한도(HTTP 400)·키 오류(401·403)·과부하(429·5xx)·시간 초과·빈 답이면 쉬었다가 다시 부른다(한도·키 문제는 30분, 그 밖은 2분) — 그동안은 제미나이가 받는다.
    소네트는 생각(thinking)을 끄지 않으면 토큰을 먼저 써서 답이 잘린다 → thinking:{type:'between_tools'}. temperature 는 이 모델이 받지 않는다. */
 let _claudeOffUntil = 0;
+//  4.68 — 오늘 클로드 합계(소유자 «💳 AI 비용» 화면과 같은 계산 aggregateAiCost). 30초 캐시. 못 읽으면 null(한도 판단을 못 하므로 클로드를 막지 않는다 — 경고만).
+let _claudeSpent = { day: '', usd: 0, at: 0 };
+async function _claudeSpentToday(cfg) {
+  const day = _dayKey();
+  if (_claudeSpent.day === day && Date.now() - _claudeSpent.at < 30 * 1000) return _claudeSpent.usd;
+  try {
+    const [a, b, c] = await Promise.all(['mir_model_log', 'ai_call_log', 'mir_websearch'].map((n) => _fetchJson(`${FB}/${n}/${day}.json`, {}, 6000)));
+    if (!a.ok || !b.ok || !c.ok) { console.warn('[미르 모델] 오늘 클로드 비용을 못 읽었어요 — 하루 한도 판단을 건너뜁니다'); return null; }
+    const usd = aggregateAiCost([{ day, mml: a.j || {}, acl: b.j || {}, mws: c.j || {} }], { chatModel: (cfg && cfg.claudeModel) || DEFAULT_CLAUDE_MODEL }).total.usd;
+    _claudeSpent = { day, usd, at: Date.now() };
+    return usd;
+  } catch (e) { console.warn('[미르 모델] 오늘 클로드 비용을 못 읽었어요 — 하루 한도 판단을 건너뜁니다:', e && e.message); return null; }
+}
+/** 4.68: 오늘 클로드 합계가 하루 한도(mir_config.claudeDailyUsd, 기본 3달러)에 닿았나 — 닿았으면 그날은 제미나이로 간다. 사진 읽기(gemini.js)도 같은 판정을 쓴다. */
+export async function claudeOverDailyCap(cfg) {
+  const lim = cfg && typeof cfg.claudeDailyUsd === 'number' ? cfg.claudeDailyUsd : CLAUDE_DAILY_USD_DEFAULT;
+  if (!(lim > 0)) return true;   // 0 이면 클로드를 끈다(배포 없이 제미나이로 되돌리는 스위치)
+  const sp = await _claudeSpentToday(cfg);
+  return sp !== null && sp >= lim;
+}
 async function _claude(cfg, prompt, maxOut, json) {
   const t0 = Date.now();
   const r = await _fetchJson('https://api.anthropic.com/v1/messages', {
@@ -3163,7 +3183,8 @@ async function _claude(cfg, prompt, maxOut, json) {
 /* ★ 4.36-02 — 미르 웹 검색(클로드 웹 검색 도구). 검수사 2026-10-19 «1불로 제한 합니다» — 하루 합계 비용이 한도(mir_config.webSearchUsd, 처음 1달러)에 닿으면 그날은 검색을 멈춘다.
    비용 = 입력 토큰×2달러/100만 + 출력 토큰×10달러/100만 + 검색 1회 0.01달러(소네트 5.5 단가, 2026-10-19 가격표). 실제 응답의 usage 로 계산해 mir_websearch/{날짜} 에 한 줄씩 남기고, 읽을 때 합산한다.
    4.37: 종전 3·15달러(옛 소네트 단가)로 셈해 실제보다 39% 크게 적혔다 — 실측 261019 «가요차트 1위» 입력 16,505·출력 351·검색 1 → 장부 0.0648, 실제 0.0465. 그래서 1달러 한도가 실제 약 0.70달러에서 멈췄다. */
-const WEB_USD_DEFAULT = 3;   // 4.65: 하루 3달러(검수사 2026-11-06 «하루 3불로 해주세요»). mir_config.webSearchUsd 를 쓰면 배포 없이 바꾼다.
+const WEB_USD_DEFAULT = 3;
+const CLAUDE_DAILY_USD_DEFAULT = 3;   // 4.68: 클로드 하루 합계(대화·번역·자료 답·사진·웹 검색) 한도 — 넘으면 그날은 제미나이. 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 제미나이를 사용하지 않는다. 하루 3불을 초과하면 사용하고»   // 4.65: 하루 3달러(검수사 2026-11-06 «하루 3불로 해주세요»). mir_config.webSearchUsd 를 쓰면 배포 없이 바꾼다.
 const WEB_MODEL = 'claude-sonnet-5-5';   // 4.65: 대화가 오퍼스여도 웹 검색은 소네트(단가 반값 · 검색 도구가 검증된 모델)
 const WEB_EST_USD = 0.05;   // 한 번 부르기 전에 서버에 먼저 잡아 두는 예상 비용(실측 1회 0.0465달러, 4.37 이전 0.07) — 다른 폰도 이만큼 쓴 것으로 본다
 const MIR_REALTIME_RE = /(차트|순위|1위|뉴스|속보|주가|환율|시세|코스피|코스닥|나스닥|비트코인|경기\s*결과|스코어|박스오피스|실시간\s*(검색어|차트|순위|뉴스)|최근\s*(소식|뉴스)|요즘\s*(뜨는|인기))/;
@@ -3218,9 +3239,11 @@ async function _claudeSearch(cfg, prompt, maxOut) {
   return { text, tokIn: u.input_tokens || 0, tokOut: u.output_tokens || 0, searches, stop: (r.j && r.j.stop_reason) || '', ms: Date.now() - t0, prov: 'claude-web' };
 }
 async function _gem(cfg, prompt, maxOut, json) {
-  if (cfg.claudeKey && Date.now() >= _claudeOffUntil) {
+  //  4.68: 클로드가 되는 동안(크레딧이 있고 오늘 하루 한도 안)은 제미나이를 쓰지 않는다. 시간 초과·과부하는 클로드를 세 번까지 부른다.
+  //  제미나이는 ① 키·크레딧 문제(400·401·403·404) ② 오늘 한도 초과 ③ 클로드 키 없음 ④ mir_config.geminiFallback=true 일 때만.
+  if (cfg.claudeKey && Date.now() >= _claudeOffUntil && !(await claudeOverDailyCap(cfg))) {
     let lastErr = null;
-    for (let tryNo = 0; tryNo < 2; tryNo++) {   // 4.66: 시간 초과·과부하·서버 오류는 클로드를 한 번 더 부른 뒤에야 제미나이로 간다(키·한도·형식 문제는 바로)
+    for (let tryNo = 0; tryNo < 3; tryNo++) {
       try { return await _claude(cfg, prompt, maxOut, json); }
       catch (e) {
         lastErr = e;
@@ -3228,13 +3251,13 @@ async function _gem(cfg, prompt, maxOut, json) {
         if (st0 === 400 || st0 === 401 || st0 === 403 || st0 === 404) break;
       }
     }
-    {
-      const e = lastErr;
-      const st = e && e.status;
-      _claudeOffUntil = Math.max(_claudeOffUntil, Date.now() + ((st === 400 || st === 401 || st === 403) ? 30 : 2) * 60 * 1000);   // 동시에 떠 있던 짧은 휴지가 긴 휴지를 지우지 않게(감사 지적)
-      console.warn('[미르 모델] 클로드가 안 돼서 제미나이로 갑니다:', e && e.message);
-      if (!cfg.aiKey) throw e;
-    }
+    const e = lastErr;
+    const st = e && e.status;
+    const hard = st === 400 || st === 401 || st === 403 || st === 404;
+    if (hard || cfg.geminiFallback) _claudeOffUntil = Math.max(_claudeOffUntil, Date.now() + (hard ? 30 : 2) * 60 * 1000);   // 동시에 떠 있던 짧은 휴지가 긴 휴지를 지우지 않게(감사 지적)
+    console.warn('[미르 모델] 클로드가 안 돼요:', e && e.message);
+    if (!hard && !cfg.geminiFallback) throw e;   // 일시 오류 — 제미나이로 가지 않는다(호출한 쪽이 «종전 길»로 답한다)
+    if (!cfg.aiKey) throw e;
   }
   if (!cfg.aiKey) throw new Error('AI 키가 없어요');
   return _gemRaw(cfg, prompt, maxOut, json);
@@ -3289,7 +3312,7 @@ JSON 한 줄로만 답한다: {"canonical":"...","window":"창구 이름","confi
   if (j === undefined && r.prov === 'claude') {   // 4.67: 오퍼스가 JSON 형식을 어기면(실측 5건 중 1건) 제미나이로 가기 전에 클로드를 한 번 더 부른다 — 제미나이 번역이 엉뚱한 매뉴얼 답을 냈다
     try { const r1 = await _claude(cfg, prompt, 120, true); const j1 = _parse(r1.text); if (j1 !== undefined) { r = r1; j = j1; } } catch (e) { console.warn('[미르 모델] 클로드 번역 재시도 실패:', e && e.message); }
   }
-  if (j === undefined && r.prov === 'claude' && cfg.aiKey) {   // 4.35: 클로드가 JSON 형식을 어기면 제미나이로 한 번 더(감사 지적 — 종전엔 «번역 없음»으로 굳었다)
+  if (j === undefined && r.prov === 'claude' && cfg.aiKey && cfg.geminiFallback) {   // 4.68: 제미나이 재시도는 geminiFallback 일 때만 · 4.35: 클로드가 JSON 형식을 어기면 제미나이로 한 번 더(감사 지적 — 종전엔 «번역 없음»으로 굳었다)
     try { r = await _gemRaw(cfg, prompt, 120, true); j = _parse(r.text); } catch (e) { console.warn('[미르 모델] 제미나이 재시도 실패:', e && e.message); }
   }
   if (j === undefined) { return { canonical: '', window: '', confidence: 0, tokIn: r.tokIn, tokOut: r.tokOut, ms: r.ms, prov: r.prov, bad: r.text.slice(0, 80) }; }

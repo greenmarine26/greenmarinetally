@@ -89,7 +89,7 @@ const FX = JSON.parse(fs.readFileSync(path.join(root, 'tools/fixtures/ai_cost_26
   ok(/AI_PRICE\[WEB_MODEL\]\) \{/.test(M) && /isCone \? '오늘 검색에 쓸 수 있는 한도를 다 써서/.test(M), '단가표에 없는 모델이면 웹 검색 안 함 · 콘앱 한도 문구에 금액 없음');
   const others = ['src/pages/ChiefDashboard.jsx', 'src/components/AiCostPanel.jsx', 'src/App.jsx', 'src/pages/HomePage.jsx'].map(read).map(noCmt).join('\n');
   ok(!/ai_console|mir_websearch\/|ai_call_log\//.test(others), '기록 노드 이름은 화면 코드에 없다(firebase.js 한 곳에서만 읽는다)');
-  ok(/import \{ aiCostUsd, AI_PRICE \} from '\.\/aiCost\.js'/.test(M) && /const _webCost = \(tokIn, tokOut, searches, model\) => aiCostUsd\(/.test(M) && !/\* 3 \/ 1e6|\* 15 \/ 1e6/.test(noCmt(M)), '미르 웹 검색 비용은 aiCost.js 단가 한 벌(옛 3·15달러 식 없음)');
+  ok(/import \{ aiCostUsd, AI_PRICE(?:, aggregateAiCost)? \} from '\.\/aiCost\.js'/.test(M) && /const _webCost = \(tokIn, tokOut, searches, model\) => aiCostUsd\(/.test(M) && !/\* 3 \/ 1e6|\* 15 \/ 1e6/.test(noCmt(M)), '미르 웹 검색 비용은 aiCost.js 단가 한 벌(옛 3·15달러 식 없음)');
   ok(/const WEB_EST_USD = 0\.05;/.test(M) && /const CONE_WEB_SHARE = 0\.5;/.test(M) && /isCone \? Math\.round\(cfg\.webSearchUsd \* CONE_WEB_SHARE \* 100\) \/ 100 : cfg\.webSearchUsd/.test(M), '예상 선금 0.05 · 콘앱은 한도 절반에서 먼저 멈춘다');
   const FI = read('src/data/featureIndex.js'), HC = read('src/data/helpDataChief.js');
   ok(/l: '💳 AI 비용 \(클로드 · 제미나이\)'.*r: 'o'/.test(FI) && /💳 AI 비용/.test(HC) && /안에 네 가지가 있고/.test(HC), '기능 색인(소유자 전용) · 수석 매뉴얼에 AI 비용');
