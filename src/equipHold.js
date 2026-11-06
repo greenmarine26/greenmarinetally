@@ -1,8 +1,17 @@
 // 로그아웃하지 않은 검수원이 쥔 호기를 찾는다 — 로그인 선택 화면이 같은 호기를 둘이 고르지 못하게 막는 데 쓴다
 //   검수사 2026-11-06 22:19~22:21 «최원형이 로그아웃을 안하면 3호기 작업중입니다. 다른 사람이 3호기 오등록을 하지 못하도록 보여주고 있어야» ·
 //   «회사 방침이 주야 각1인이 한크레인씩 담당합니다. 크레인 대체시에는 이동할수 있지만요»
-//   ⚠ 앱을 닫아 로그아웃이 안 된 채 남은 사람이 호기를 영원히 막지 않게, 마지막 활동이 STALE_MS 보다 오래되면 놓아준다.
-export const EQUIP_HOLD_STALE_MS = 4 * 3600 * 1000;
+//   검수사 2026-11-07 05:46 «야간 근무시간이 정해져 있습니다. 활동은 없지만 그 검수원이 3호기에서 작업하고 있는건 맞습니다»
+//   ⚠ 앱을 닫아 로그아웃이 안 된 채 남은 사람이 호기를 영원히 막지 않게, 마지막 활동이 속한 근무조(주간 08:00~17:30 · 야간 19:00~익일 06:30)가 끝나고 30분이 지나면 놓아준다.
+//   (4.75 — 앞 판은 마지막 활동 4시간 고정이라 입력 없이 지켜보는 야간 근무자가 한밤에 풀렸다)
+export function equipHoldUntil(at) {
+  const KST = 9 * 3600 * 1000, H = 3600 * 1000;
+  const k = new Date(at + KST);
+  const min = k.getUTCHours() * 60 + k.getUTCMinutes();
+  const base = Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate()) - KST;
+  const end = (min >= 390 && min < 1050) ? base + 17.5 * H : (min >= 1050 ? base + 24 * H + 6.5 * H : base + 6.5 * H);
+  return end + 0.5 * H;
+}
 const SKIP_HOLDERS = ['클로드'];
 
 export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.now()) {
@@ -15,7 +24,7 @@ export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.n
     if (curEq !== equip) continue;
     if (i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) continue;
     const at = Number(i.lastActive) || Number(i.assignAt) || 0;
-    if (!at || now - at > EQUIP_HOLD_STALE_MS) continue;
+    if (!at || now > equipHoldUntil(at)) continue;
     return i.name;
   }
   return '';
@@ -32,7 +41,7 @@ export function standbyNamesOf(inspectors, voyageKey, activeNames = [], visible 
     if (i.assignVoyage !== voyageKey) continue;
     if (i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) continue;
     const at = Number(i.lastActive) || Number(i.assignAt) || 0;
-    if (!at || now - at > EQUIP_HOLD_STALE_MS) continue;
+    if (!at || now > equipHoldUntil(at)) continue;
     if (!visible(i.name)) continue;
     out.push(i.name);
   }
