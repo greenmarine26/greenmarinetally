@@ -108,7 +108,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   claudeQueue = [529, 529, 529];
   await sleep(1);
   let li = null; try { li = await M.ocrImageContainers(blob, ''); } catch (e) { li = { err: e.message }; }
-  check('리스트 사진은 재시도하지 않는다 — 종전 그대로(클로드 정확히 1회 · 재시도 없음)', calls.claude.length === 1, String(calls.claude.length));
+  check('4.66: 리스트 사진도 과부하면 클로드를 한 번 더 부른 뒤 제미나이로 간다(클로드 정확히 2회)', calls.claude.length === 2, String(calls.claude.length));
 
   //  ⑤-b 회전을 실제로 실행한다 — 세로 사진은 반시계 90도(캔버스 가로·세로 맞바꿈, 변환 순서), 가로 사진은 원본 그대로
   {

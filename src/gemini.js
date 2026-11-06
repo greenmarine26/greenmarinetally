@@ -171,7 +171,7 @@ export async function aiCall(kind, body, { timeoutMs = 30000, model = GEMINI_MOD
   let cv = await _tryClaudeVision(kind, body, timeoutMs);   // 4.36: 사진 읽기 클로드 우선(오퍼스·소네트) — 안 되면 아래 제미나이 길
   //  4.56-05: 리퍼 온도 사진은 클로드가 시간 초과·과부하로 한 번 놓쳐도 **한 번 더** 클로드로 읽는다(한도·키 문제로 30분 쉬는 경우는 제외).
   //  제미나이는 손글씨 숫자(-19.0 ↔ -2.5)를 더 자주 틀린다 — 오늘 아침 STMJ 판독 4건 중 2건이 시간 초과 뒤 제미나이로 읽혔다(ai_call_log 실측).
-  if (!cv && kind === 'reeferPhoto' && _visionClaudeOffUntil - Date.now() <= 125000) cv = await _tryClaudeVision(kind, body, timeoutMs, true);
+  if (!cv && kind !== 'stowagePdf' && CLAUDE_VISION_KINDS[kind] && _visionClaudeOffUntil - Date.now() <= 125000) cv = await _tryClaudeVision(kind, body, timeoutMs, true);
   if (cv) { _visionClaudeOffUntil = 0; return cv; }
   const k = key || await resolveAiKey();
   if (!k) throw new Error(NO_KEY_MSG);

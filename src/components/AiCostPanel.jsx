@@ -1,7 +1,7 @@
 // 소유자 전용 — 미르·사진 읽기가 쓴 AI 비용(클로드·제미나이)을 날짜·종류별로 보고 Console 숫자와 맞대는 화면(수석 상황판 › 🧰 관리 › 👑 소유자 메뉴)
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fbGetAiCost, fbSaveAiConsole } from '../firebase.js';
-import { aggregateAiCost, aiPeriodDays, aiModelShort, aiKindLabel, aiConsoleGap, AI_DEFAULT_CHAT_MODEL } from '../aiCost.js';
+import { aggregateAiCost, aiPeriodDays, aiModelShort, aiKindLabel, aiConsoleGap, AI_DEFAULT_CHAT_MODEL, AI_CREDIT_EXPIRE, aiCreditDaysLeft } from '../aiCost.js';
 
 //  4.37 — 검수사 2026-10-19 «미르가 사용하는 토큰을 관리하고 분석» · «비용관리 보고는 소유자 관리 안에둡니다» · Console 화면을 보내며 «이것도 같이 넣어 주세요»
 //         · «사진읽기 상한은 일단 넣지 않습니다. 최대가 얼마나 되는지 알아야 하기때문입니다» → 종류별 1회 평균 · 1회 최대를 보인다.
@@ -64,8 +64,8 @@ export default function AiCostPanel({ by }) {
   const appAtCon = useMemo(() => (res && conFresh ? aggregateAiCost(pick(aiPeriodDays('month', con.at)), { chatModel, until: con.at }) : null), [res, conFresh, con, chatModel, pick]);
   const gap = appAtCon && con && con.monthSpend !== undefined && con.monthSpend !== null ? aiConsoleGap(con.monthSpend, appAtCon.total.usd) : null;
 
-  //  미르(mir.js getMirConfig)와 같은 읽기 — 없거나 숫자가 아니면 1달러(감사 4.37: 글자가 들어가면 미르는 1달러, 화면은 0 으로 갈리던 것)
-  const webLimit = cfg.webSearchUsd === undefined || cfg.webSearchUsd === null || cfg.webSearchUsd === '' || Number.isNaN(Number(cfg.webSearchUsd)) ? 1 : Math.max(0, Number(cfg.webSearchUsd));
+  //  미르(mir.js getMirConfig)와 같은 읽기 — 없거나 숫자가 아니면 3달러(4.65 — 1달러에서 올림 · 감사 4.37: 글자가 들어가면 미르는 1달러, 화면은 0 으로 갈리던 것)
+  const webLimit = cfg.webSearchUsd === undefined || cfg.webSearchUsd === null || cfg.webSearchUsd === '' || Number.isNaN(Number(cfg.webSearchUsd)) ? 3 : Math.max(0, Number(cfg.webSearchUsd));
   const coneLimit = Math.round(webLimit * 0.5 * 100) / 100;
   const periodName = (PERIODS.find(([k]) => k === period) || PERIODS[0])[1];
 
@@ -179,6 +179,7 @@ export default function AiCostPanel({ by }) {
       {res !== null && !err && (
         <div className="rounded-btn border border-line bg-ink-900 px-3 py-2 text-xs2 text-dim-200 space-y-1" data-aicost-console="1">
           <div className="font-bold text-dim-100">Console 숫자 (검수사가 적은 값)</div>
+          <div data-aicost-expire="1" className={aiCreditDaysLeft() <= 7 ? 'text-amber-200' : 'text-dim-300'}>크레딧 만료 {AI_CREDIT_EXPIRE} — {aiCreditDaysLeft() >= 0 ? `${aiCreditDaysLeft()}일 남음` : '지났음'} · 매달 1일에 이번 달 지출이 한도의 95% 를 넘지 않았는지 봅니다.</div>
           {con ? (
             <>
               <div>크레딧 잔액 <b className="text-dim-100 tabular-nums">{con.credit != null ? usd(con.credit, 2) : '—'}</b> · 이번 달 지출 <b className="text-dim-100 tabular-nums">{con.monthSpend != null ? usd(con.monthSpend, 2) : '—'}</b> / 한도 <b className="text-dim-100 tabular-nums">{con.monthLimit != null ? usd(con.monthLimit, 0) : '—'}</b>

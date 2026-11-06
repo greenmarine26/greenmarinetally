@@ -47,6 +47,7 @@ global.fetch = async (url, opts = {}) => {
   }
   if (url.includes('/ai_call_log/') || url.includes('/mir_misses/')) return resp(200, { name: 'x' });
   if (url.includes('api.anthropic.com')) {
+    if (claudeMode === 'flaky') { flakyN += 1; if (flakyN === 1) return resp(529, { error: { message: 'overloaded' } }); }   // 4.66: 첫 한 번만 과부하
     if (claudeMode === 'fail') return resp(529, { error: { message: 'overloaded' } });
     if (body && body.tools) return resp(200, { content: [{ type: 'server_tool_use', name: 'web_search', input: { query: 'x' } }, { type: 'text', text: '멜론 1위는 A2O LITE의 "NEON"' }, { type: 'text', text: '이고, 18일 기준이에요.' }], stop_reason: 'end_turn', usage: { input_tokens: 14913, output_tokens: 219, server_tool_use: { web_search_requests: 1 } } });
     return resp(200, { content: [{ type: 'text', text: typeof claudeText === 'function' ? claudeText(body) : claudeText }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } });
@@ -54,6 +55,7 @@ global.fetch = async (url, opts = {}) => {
   if (url.includes('generativelanguage.googleapis.com')) return resp(200, { candidates: [{ content: { parts: [{ text: '{"items":["제미나이"]}' }] }, finishReason: 'STOP' }] });
   return resp(404, {});
 };
+let flakyN = 0;
 const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'));
 
 (async () => {
@@ -154,6 +156,10 @@ const claudeCalls = () => calls.filter((c) => c.url.includes('api.anthropic.com'
   const realNow = Date.now; let TOFF = 3 * 60 * 1000;   // 앞 시험(클로드 과부하)이 건 2분 휴지와 30초 비용 캐시를 시계를 앞으로 돌려 건너뛴다
   Date.now = () => realNow() + TOFF;
   const noW = { who: '시험', weakText: null, weakVia: '' };
+  TOFF += 400000; claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.3}' : '함께 있어 드릴게요 😺'); claudeMode = 'flaky'; flakyN = 0; calls.length = 0;
+  const r5 = await B.askMirModel('외로워', { app: 'smoke', voyageKey: '', inspector: '시험' }, () => null, { who: '시험', weakText: null, weakVia: '' });
+  T(claudeCalls().length >= 2 && !calls.some((c) => c.url.includes('generativelanguage')) && r5 && /함께/.test(r5.text || ''), '4.66: 클로드가 한 번 과부하여도 한 번 더 불러 보고 제미나이로 넘어가지 않는다', JSON.stringify(r5).slice(0, 100) + ' / 클로드 ' + claudeCalls().length);
+  claudeMode = 'ok'; TOFF += 400000;
   claudeText = (b) => (JSON.stringify(b).includes('번역기다') ? '{"canonical":"","window":"","confidence":0.4}' : '일반 대화예요');
   CFG = { aiKey: 'g-key', claudeKey: 'c-key', dailyCap: 500, enabled: true }; await B.getMirConfig(true);
   WEBROWS = { a: { usd: 0.2 } };

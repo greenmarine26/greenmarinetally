@@ -3219,8 +3219,17 @@ async function _claudeSearch(cfg, prompt, maxOut) {
 }
 async function _gem(cfg, prompt, maxOut, json) {
   if (cfg.claudeKey && Date.now() >= _claudeOffUntil) {
-    try { return await _claude(cfg, prompt, maxOut, json); }
-    catch (e) {
+    let lastErr = null;
+    for (let tryNo = 0; tryNo < 2; tryNo++) {   // 4.66: 시간 초과·과부하·서버 오류는 클로드를 한 번 더 부른 뒤에야 제미나이로 간다(키·한도·형식 문제는 바로)
+      try { return await _claude(cfg, prompt, maxOut, json); }
+      catch (e) {
+        lastErr = e;
+        const st0 = e && e.status;
+        if (st0 === 400 || st0 === 401 || st0 === 403 || st0 === 404) break;
+      }
+    }
+    {
+      const e = lastErr;
       const st = e && e.status;
       _claudeOffUntil = Math.max(_claudeOffUntil, Date.now() + ((st === 400 || st === 401 || st === 403) ? 30 : 2) * 60 * 1000);   // 동시에 떠 있던 짧은 휴지가 긴 휴지를 지우지 않게(감사 지적)
       console.warn('[미르 모델] 클로드가 안 돼서 제미나이로 갑니다:', e && e.message);
@@ -3511,7 +3520,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     if (!(cfg.claudeKey || cfg.aiKey)) return false;
     try {
       const ca = await chatAnswer(q, ctx, cfg);
-      _logCall({ kind: ca.searches ? 'web' : 'chat', q: String(q).slice(0, 80), ok: !!ca.text, rejected: !!ca.rejected, tokIn: ca.tokIn, tokOut: ca.tokOut, ms: ca.ms, prov: ca.prov || '', ...(ca.searches ? { searches: ca.searches, usd: Math.round((ca.usd || 0) * 10000) / 10000 } : {}), who, app: ctx.app || '' });
+      _logCall({ kind: ca.searches ? 'web' : 'chat', q: String(q).slice(0, 80), a: String(ca.text || '').slice(0, 200), ok: !!ca.text, rejected: !!ca.rejected, tokIn: ca.tokIn, tokOut: ca.tokOut, ms: ca.ms, prov: ca.prov || '', ...(ca.searches ? { searches: ca.searches, usd: Math.round((ca.usd || 0) * 10000) / 10000 } : {}), who, app: ctx.app || '' });
       if (ca.text) { _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'chat' }); out.text = ca.text; out.via = 'chat'; out.reason = 'chat'; _deferDrop(q, (ctx && ctx._now) || Date.now(), who); return true; }   // 4.38: 답했으면 미룬 목록에서 지운다
     } catch (e) {
       console.warn('[미르 모델] 생활회화 답 실패:', e && e.message);
@@ -3530,7 +3539,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   if (!(cfg.aiKey || cfg.claudeKey)) { out.reason = 'nokey'; return weakByWordsOnly ? confirmed() : out; }
   try {
     const da = await dataAnswer(q, ctx, cfg);
-    _logCall({ kind: 'data', q: String(q).slice(0, 80), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, prov: da.prov || '', packChars: da.packChars, who, app: ctx.app || '' });
+    _logCall({ kind: 'data', q: String(q).slice(0, 80), a: String(da.text || '').slice(0, 200), ok: true, rejected: !!da.rejected, tokIn: da.tokIn, tokOut: da.tokOut, ms: da.ms, prov: da.prov || '', packChars: da.packChars, who, app: ctx.app || '' });
     const empty = !da.text || /자료에 없어요|자료에는 없|확실한 답을 못/.test(String(da.text));
     if (!weakByWordsOnly && !rec.canonical && !chatTried && !/[A-Za-z]{4}|\d{3,}/.test(String(q)) && /자료에(는)?\s*없|자료만\s*(볼|봐|보고)|확실한 답을 못/.test(String(da.text || '')) && (await tryChat())) return out;   // 배 이름·번호가 든 일 질문은 «자료에 없어요» 그대로(상식으로 바꾸지 않는다)   // 4.36-02: 일 낱말이 든 상식 질문 구제
     if (weakByWordsOnly && (da.rejected || empty)) return confirmed();

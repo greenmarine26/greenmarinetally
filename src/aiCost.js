@@ -161,3 +161,10 @@ export function aiConsoleGap(consoleMonthUsd, appMonthUsd) {
   const over = -gap > 0.1 && -gap > c * 0.1;
   return { gap, notable, over };
 }
+
+//  4.66 — 크레딧 100달러의 만료일(검수사 확정 2026-11-28)과 남은 날수(한국 날짜 기준). 만료가 바뀌면 이 한 줄만 고친다.
+export const AI_CREDIT_EXPIRE = '2026-11-28';
+export function aiCreditDaysLeft(now = Date.now()) {
+  const kst = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return Math.round((Date.parse(AI_CREDIT_EXPIRE + 'T00:00:00Z') - Date.parse(kst(now) + 'T00:00:00Z')) / 86400000);
+}
