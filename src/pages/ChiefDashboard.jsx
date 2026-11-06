@@ -20,6 +20,7 @@ import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.
 import PierRegisterModal from '../components/PierRegisterModal.jsx';   // 3.54: 부두 좌표 등록
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel, detectEdiVer } from '../loadingEdiExport.js';   // 1.88: 받은 판대로 생성
+import { standbyNamesOf } from '../equipHold.js';   // 4.73
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData, emptySealSpecTally } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
@@ -539,6 +540,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return out;
   }, [inspectors, inspector]);
 
+  const standbyOf = (key) => standbyNamesOf(inspectors, key, (activeByVoyage[key] || []).map((w) => w.name), (n) => isVisibleStaff(n, isOwnerName(inspector)));   // 4.73: 눈으로만 보는 사람 이름
   // 4.71: 대기 중인 검수원 — 로그인해 있고 이 항차 호기를 지정받았지만 90초 안에 조작이 없는 사람. 호기 칸 이름에만 올린다(작업 중 판정·베이 그림에는 쓰지 않는다).
   //       검수사 2026-11-06 22:11 «작업 대기면 일을 안하는건가요?» — 로그인 중인 사람이 3호기에서 «미등록»으로 사라지던 것.
   const crewOfVoyage = (key) => {
@@ -1159,7 +1161,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                     통계 칸은 넘치면 숨김(lsc-stat · 한 줄 요약이 줄어든다)이라 낮아져도 겹치지 않는다.
                     4.24 2차: 10rem → 9rem — 1366·1440×768(노트북) 4척이 한 화면(보드 약 587px ÷ 4). 한 줄 요약은 칸 안에서 스크롤된다. */}
                 <LiveShipCard v={v}
-                  workers={activeByVoyage[v.key] || []}
+                  workers={activeByVoyage[v.key] || []} standby={standbyOf(v.key)}
                   lastReport={lastReportByVoyage[v.key]}
                   alerts={todayAlertsByVoyage[v.key]}
                   departed={v._departed}
@@ -1183,7 +1185,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             작업 중 {boardRows.length}척{voyageStats.length > boardRows.length ? ` · 등록 ${voyageStats.length}척` : ''}{boardRows.length ? ' · 누르면 그 배만 전체화면' : ''}
           </div>
           {boardRows.length === 0 ? boardEmpty : boardRows.map((v) => (
-            <PhoneShipCard key={v.key} v={v} workers={activeByVoyage[v.key] || []} departed={v._departed}
+            <PhoneShipCard key={v.key} v={v} workers={activeByVoyage[v.key] || []} standby={standbyOf(v.key)} departed={v._departed}
               lastAt={lastCompletedAt(voyages?.[v.key])} onOpen={() => setPhoneSheet(v.key)} />
           ))}
         </div>
@@ -1200,7 +1202,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           {/* 640~699px 폰(가로 배치 카드)은 그릇 높이가 있어야 그림이 칸을 채운다 — 컴의 «그 배만 전체» 와 같은 그릇 */}
           <div className="p-1.5 pb-24" style={typeof window !== 'undefined' && window.innerWidth >= 640 ? { height: 'calc(100vh - 64px)' } : undefined}>
             <LiveShipCard v={sheetRow}
-              workers={activeByVoyage[sheetRow.key] || []}
+              workers={activeByVoyage[sheetRow.key] || []} standby={standbyOf(sheetRow.key)}
               lastReport={lastReportByVoyage[sheetRow.key]}
               alerts={todayAlertsByVoyage[sheetRow.key]}
               departed={sheetRow._departed}
@@ -2301,7 +2303,7 @@ function BoardBayCell({ px = 24, fit = {}, plan = {} }) {
 //    그 옛 베이 그림이 «지금 작업 중인 베이» 로 계속 남아 터미널 표는 영영 안 나왔다. 앱 입력이 이 시간 넘게 없고 접속 검수원도 없으면 그림 대신 터미널 표를 낸다.
 //    시간이 한 곳이라 바꿀 때는 이 줄만 고친다(30분 — 갱 하나가 베이 하나를 도는 시간보다 길고, 점심·교대 사이 쉼보다 짧다).
 export const BOARD_APP_STALE_MS = 30 * 60 * 1000;
-export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen, departed = false, cranes = [], stoppedCranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
+export function LiveShipCard({ zoom = 1, v, workers, standby = [], lastReport, alerts, onOpen, departed = false, cranes = [], stoppedCranes = [], focused = false, canFocus = false, onFocus = null, voyage = null, rows = 1, onOpenContainer = null }) {   // 3.11: voyage(그림·별첨 자료) · rows(보드에 몇 줄인가 — 칸 배율)   // 3.10: export — 렌더 연막검사(tools/smoke_liveboard)가 직접 그린다   // 3.10: cranes — utils.craneBoardOf 한 벌 · focused/onFocus — 그 배만 전체
   // V9.57(I4): 100% 클램프
   const pct = pctOf(v.totalDone, v.totalAll);   // 4.24: 막대 % 한 벌(pctOf — MiniBar·폰 카드와 같은 식)
   const repIcon = lastReport ? (
@@ -2662,9 +2664,14 @@ export function LiveShipCard({ zoom = 1, v, workers, lastReport, alerts, onOpen,
             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"/>
             {w.name}{w.mode === 'discharge' ? ' (양하)' : w.mode === 'loading' ? ' (선적)' : ''}
           </span>
-        )) : (
+        )) : standby.length === 0 ? (
           <span className="text-2xs text-dim-500">작업 중 검수원 없음</span>
-        )}
+        ) : null}
+        {standby.map((n) => (
+          <span key={n} data-standby={n} title="로그인해 있고 지정됐지만 지금 입력이 없습니다 — 눈으로 보는 중" className="inline-flex items-center gap-1 bg-ink-800 border border-line text-dim-300 text-2xs font-bold px-1.5 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 bg-dim-500 rounded-full"/>{n} (대기)
+          </span>
+        ))}
       </div>
       <div className="flex items-center gap-2 pt-1.5 border-t border-line text-2xs flex-wrap" data-board-foot="1">{/* 4.24: 보드 행 아래 합계(작업량 완료/전체) — 회귀 R34 ④ 가 «NaN» 을 여기서 잰다 */}
         <span className="text-emerald-300 font-black mono">{v.totalDone}</span>
@@ -3231,7 +3238,7 @@ function PhoneBar({ kind, stats }) {
   );
 }
 //  폰 상황판 카드 — 배 한 척. 누르면 그 배만 전체화면 시트(onOpen). 같은 재료(voyageStats 행 · activeByVoyage · lastCompletedAt).
-function PhoneShipCard({ v, workers = [], departed = false, lastAt = 0, onOpen }) {
+function PhoneShipCard({ v, workers = [], standby = [], departed = false, lastAt = 0, onOpen }) {
   const ago = (t) => { if (!t) return ''; const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 ${m % 60}분 전`; };
   const berth = String(v.info?.berth || '').trim();
   return (
@@ -3253,7 +3260,12 @@ function PhoneShipCard({ v, workers = [], departed = false, lastAt = 0, onOpen }
           <span key={w.name} className="inline-flex items-center gap-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 font-bold px-1.5 rounded-full">
             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" aria-hidden="true" />{w.name}
           </span>
-        )) : <span className="text-dim-400">작업 중 검수원 없음</span>}
+        )) : standby.length === 0 ? <span className="text-dim-400">작업 중 검수원 없음</span> : null}
+        {standby.map((n) => (
+          <span key={n} data-standby={n} title="로그인해 있고 지정됐지만 지금 입력이 없습니다 — 눈으로 보는 중" className="inline-flex items-center gap-1 bg-ink-800 border border-line text-dim-300 font-bold px-1.5 rounded-full">
+            <span className="w-1.5 h-1.5 bg-dim-500 rounded-full" aria-hidden="true" />{n} (대기)
+          </span>
+        ))}
         <span className="ml-auto text-dim-400 whitespace-nowrap">{lastAt ? `최근 완료 ${ago(lastAt)}` : '완료 기록 없음'}</span>
       </div>
     </button>

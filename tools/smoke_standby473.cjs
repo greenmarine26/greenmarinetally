@@ -1,0 +1,23 @@
+// 4.73 연막검사 — 입력이 없는 대기 작업자를 «○○ (대기)» 로 보인다(작업 중으로는 세지 않는다)
+const fs = require('fs');
+const eh = fs.readFileSync('src/equipHold.js', 'utf8').replace(/export /g, '');
+const { standbyNamesOf, EQUIP_HOLD_STALE_MS } = new Function(eh + '; return { standbyNamesOf, EQUIP_HOLD_STALE_MS };')();
+const chief = fs.readFileSync('src/pages/ChiefDashboard.jsx', 'utf8');
+const home = fs.readFileSync('src/pages/HomePage.jsx', 'utf8');
+let n = 0, bad = 0;
+const ok = (c, m) => { n++; console.log((c ? '  PASS ' : '  FAIL ') + m); if (!c) bad++; };
+const now = 1_000_000_000_000;
+const b = { name: '최원형', loggedIn: true, assignVoyage: 'V1', loginAt: now - 9000, lastActive: now - 600000 };
+const mk = (o) => ({ x: { ...b, ...o } });
+ok(standbyNamesOf(mk({}), 'V1', [], () => true, now).join() === '최원형', '로그인·지정·조작 없음 → 대기');
+ok(standbyNamesOf(mk({}), 'V1', ['최원형'], () => true, now).length === 0, '이미 작업 중이면 대기에 안 넣는다');
+ok(standbyNamesOf(mk({ loggedIn: false }), 'V1', [], () => true, now).length === 0, '로그아웃 → 없음');
+ok(standbyNamesOf(mk({ workMode: 'view' }), 'V1', [], () => true, now).length === 0, '조회만 → 없음');
+ok(standbyNamesOf(mk({}), 'V2', [], () => true, now).length === 0, '다른 항차 → 없음');
+ok(standbyNamesOf(mk({ lastActive: now - EQUIP_HOLD_STALE_MS - 1 }), 'V1', [], () => true, now).length === 0, '4시간 넘게 조작 없음 → 없음');
+ok(standbyNamesOf(mk({}), 'V1', [], () => false, now).length === 0, '안 보이는 계정은 뺀다');
+ok(/standby=\{standbyOf\(v\.key\)\}/.test(chief) && /standby=\{standbyOf\(sheetRow\.key\)\}/.test(chief), '상황판 카드 셋이 대기자를 받는다');
+ok((chief.match(/\(대기\)/g) || []).length >= 2 && /data-standby=/.test(chief), '상황판에 «(대기)» 칩');
+ok(/standbyNames=\{standbyNamesOf\(/.test(home) && /data-ship-standby="1"/.test(home), '홈 배 상세에 «대기 중 (입력 없음)»');
+console.log(`${n - bad}/${n}`);
+process.exit(bad ? 1 : 0);

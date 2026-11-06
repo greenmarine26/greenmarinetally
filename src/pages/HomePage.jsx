@@ -19,6 +19,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
 import { decideBadge, DEPART_REMAIN_MAX, inWindow, notStartedYet } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
+import { standbyNamesOf } from '../equipHold.js';   // 4.73
 import { canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
@@ -816,6 +817,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const detailOf = (v, showOpen) => (
     <ShipDetail key={v.key} voyage={v} inspector={inspector} pilotForecast={pilotForecast} showOpen={showOpen}
       activeInspectors={activeInspectors[v.key] || []}
+      standbyNames={standbyNamesOf(inspectors, v.key, (activeInspectors[v.key] || []).map((a) => a.name), (n) => isVisibleStaff(n, isOwnerName(inspector)))}
       onOpen={(m) => onOpenVoyage(v.key, m)}
       onDelete={_viewOnly ? null : () => handleDelete(v.key, v.info.vsl, v.info.voy)}
       onComplete={_viewOnly ? null : (mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
@@ -1668,7 +1670,7 @@ function bayProgressOf(section, units) {
 
 // ── ★ 4.25 고른 배 상세 — 종전 카드 한 장의 내용 전부(배지·항로·예보·대수 내역·상태·완료·지금 처리·삭제)를 한 판에 편다 + 베이별 진행 · 자료 대수 · 실 정책 한 줄. ──
 //   컴은 오른쪽 칸, 폰은 전체화면 시트 안. 처리기(onOpen·onDelete·onComplete·onUndoComplete·지금 처리)는 종전 카드에 넘기던 그대로다.
-export function ShipDetail({ voyage, activeInspectors = [], onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, zapSt = null, policy = null, onEditPolicy = null, showOpen = true }) {
+export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, inspector = '', laneRow = null, zapSt = null, policy = null, onEditPolicy = null, showOpen = true }) {
   // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 한 칸 · 한 줄 고정 · 폰 균등.
   //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
   //   4.25 2차(모의 확인 ①): 폰에서 단추가 줄지 않는다(flex 1 0 auto — 글자 너비 밑으로 안 줄고 남는 폭만 나눠 갖는다). 한 줄에 안 들어가면 다음 줄로 내려간다.
@@ -1944,6 +1946,11 @@ export function ShipDetail({ voyage, activeInspectors = [], onOpen, onDelete, on
             <Users className="ico-s text-emerald-400"/>
             <b className="text-emerald-300">● {activeInspectors.map(a => a.name).join(', ')} 작업중</b>
           </>
+        ) : standbyNames.length > 0 ? (
+          <span title="로그인해 있고 이 배 작업자로 지정됐지만 지금 입력이 없습니다 — 눈으로 보는 중">
+            {_termWorking && <><b className="text-cyan-200">본선 작업중</b> · </>}
+            <b className="text-dim-200" data-ship-standby="1">◌ {standbyNames.join(', ')} 대기 중 (입력 없음)</b>
+          </span>
         ) : _termWorking ? (
           <span title="터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.">
             <b className="text-cyan-200">본선 작업중</b> · 접속 검수원 없음

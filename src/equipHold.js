@@ -18,3 +18,21 @@ export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.n
   }
   return '';
 }
+
+// 로그인해 있고 이 항차에 작업자로 지정됐지만 지금(90초 안) 입력이 없는 «눈으로만 보는» 사람 이름들 — 화면이 «대기» 로 따로 보인다(작업 중으로 세지 않는다)
+//   검수사 2026-11-06 22:57 «작업자는 있습니다. 다만 입력이 없을뿐입니다. 눈으로만 보고 있다는 뜻이죠»
+export function standbyNamesOf(inspectors, voyageKey, activeNames = [], visible = () => true, now = Date.now()) {
+  if (!voyageKey) return [];
+  const have = new Set(activeNames);
+  const out = [];
+  for (const i of Object.values(inspectors || {})) {
+    if (!i || !i.name || have.has(i.name) || i.loggedIn !== true || i.workMode === 'view') continue;
+    if (i.assignVoyage !== voyageKey) continue;
+    if (i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) continue;
+    const at = Number(i.lastActive) || Number(i.assignAt) || 0;
+    if (!at || now - at > EQUIP_HOLD_STALE_MS) continue;
+    if (!visible(i.name)) continue;
+    out.push(i.name);
+  }
+  return out;
+}
