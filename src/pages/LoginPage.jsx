@@ -9,6 +9,7 @@ import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 //  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
 import logoUrl from '../assets/logo-tallyone.png';
+import { equipHolderOf } from '../equipHold.js';   // 4.72: 로그아웃 안 한 사람이 쥔 호기는 못 고르게
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
@@ -441,7 +442,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const rankLabel = (r, ms) => (r === 0 ? '작업중' : r === 1 ? ((dayDiff(ms) ?? 0) < 0 ? dayLabel(ms) : '오늘') : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
     const equips = choiceVoyage ? equipNumbersForPier(pierOf(choiceVoyage)) : [];
     const chosen = choiceVoyage ? infoOf(choiceVoyage) : null;
-    const start = () => { if (!choiceVoyage) return; onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip }); };
+    const heldBy = (n) => equipHolderOf(inspectors, choiceVoyage, n, choiceName);   // 4.72
+    const start = () => { if (!choiceVoyage) return; if (choiceEquip && heldBy(choiceEquip)) return; onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip }); };
     const back = () => { if (choiceFor && onCancelChoice) { onCancelChoice(); return; } setChoiceName(''); };
     //  ★ 3.52-02 — **이 판은 스스로 굴러야 한다.** (검수사 2026-09-16 «작업자를 선택하고 선박을 선택하고
     //    진입을 할려고 하는데 화면 스크롤이 안돼 진입 지점을 클릭하지 못합니다» · «폰은 되는듯 한데 컴이 안됨»)
@@ -505,10 +507,16 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 <div className="bg-ink-900 border border-amber-700 rounded-pill p-2" data-choice-equips="1">
                   <div className="text-xxs font-bold text-amber-300 mb-1">호기(장비) — {pierOf(choiceVoyage) || '부두 미상'} · 선택하지 않아도 들어갈 수 있습니다</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {equips.map((n) => (
+                    {equips.map((n) => {
+                      const held = heldBy(n);   // 4.72: 주야 각 1인이 한 크레인 — 다른 사람이 로그아웃 없이 쥔 호기
+                      return held ? (
+                        <button key={n} type="button" disabled data-choice-equip={n} data-choice-held={held}
+                          className="px-3 py-1.5 rounded-pill border text-xs font-bold bg-ink-900 border-line text-dim-500 opacity-70">🏗 {n} · {held} 작업 중</button>
+                      ) : (
                       <button key={n} onClick={() => setChoiceEquip(choiceEquip === n ? '' : n)} data-choice-equip={n}
                         className={`px-3 py-1.5 rounded-pill border text-xs font-bold ${choiceEquip === n ? 'bg-amber-600 border-amber-300 text-white' : 'bg-ink-800 border-line text-amber-200'}`}>🏗 {n}</button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

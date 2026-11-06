@@ -1,0 +1,24 @@
+// 4.72 연막검사 — 로그아웃 없이 쥔 호기는 다른 사람이 못 고른다
+const fs = require('fs');
+const src = fs.readFileSync('src/equipHold.js', 'utf8').replace(/export /g, '');
+const { equipHolderOf, EQUIP_HOLD_STALE_MS } = new Function(src + '; return { equipHolderOf, EQUIP_HOLD_STALE_MS };')();
+const login = fs.readFileSync('src/pages/LoginPage.jsx', 'utf8');
+let n = 0, bad = 0;
+const ok = (c, m) => { n++; console.log((c ? '  PASS ' : '  FAIL ') + m); if (!c) bad++; };
+const now = 1_000_000_000_000;
+const base = { name: '최원형', loggedIn: true, assignVoyage: 'V1', assignEquip: '3호기', loginAt: now - 5000, lastActive: now - 600000 };
+const mk = (o) => ({ x: { ...base, ...o } });
+ok(equipHolderOf(mk({}), 'V1', '3호기', '김철수', now) === '최원형', '로그인 중인 최원형이 3호기를 쥔다');
+ok(equipHolderOf(mk({}), 'V1', '3호기', '최원형', now) === '', '본인은 막지 않는다');
+ok(equipHolderOf(mk({}), 'V1', '2호기', '김철수', now) === '', '다른 호기는 비어 있다');
+ok(equipHolderOf(mk({}), 'V2', '3호기', '김철수', now) === '', '다른 항차는 상관없다');
+ok(equipHolderOf(mk({ loggedIn: false }), 'V1', '3호기', '김철수', now) === '', '로그아웃하면 풀린다');
+ok(equipHolderOf(mk({ loggedOutAt: now - 1000 }), 'V1', '3호기', '김철수', now) === '', '로그아웃 기록이 로그인보다 늦으면 풀린다');
+ok(equipHolderOf(mk({ lastActive: now - EQUIP_HOLD_STALE_MS - 1 }), 'V1', '3호기', '김철수', now) === '', '4시간 넘게 조작이 없으면 놓아준다');
+ok(equipHolderOf(mk({ workMode: 'view' }), 'V1', '3호기', '김철수', now) === '', '조회만은 쥐지 않는다');
+ok(equipHolderOf(mk({ name: '클로드' }), 'V1', '3호기', '김철수', now) === '', '클로드(테스터)는 호기를 막지 않는다');
+ok(equipHolderOf(mk({}), 'V1', '', '김철수', now) === '' && equipHolderOf(null, 'V1', '3호기', 'a', now) === '', '호기 없음·명단 없음은 빈 값');
+ok(/equipHolderOf\(inspectors, choiceVoyage, n, choiceName\)/.test(login) && /data-choice-held=/.test(login), '로그인 화면이 점유 호기를 회색으로 막는다');
+ok(/if \(choiceEquip && heldBy\(choiceEquip\)\) return;/.test(login), '시작 단추도 점유 호기는 통과시키지 않는다');
+console.log(`${n - bad}/${n}`);
+process.exit(bad ? 1 : 0);
