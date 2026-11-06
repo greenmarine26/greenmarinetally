@@ -6,6 +6,7 @@
 //     베이·단 게이트는 SearchPanel 것(bayView prop 으로 초기값만 넣고 보고만 받는다) · 그림은 BayPlan onlyBay(수석 보드와 같은 갈래) + FitBox.
 //   ⚠ 인스턴스 하나 — VoyagePage 가 «작업 시작» 탭 자리에 이 덮개를 **대신** 그린다(SearchPanel 이 두 벌 돌지 않게).
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { equipHolderOf } from '../equipHold.js';   // 4.74
 import SearchPanel from './SearchPanel.jsx';
 import BayPlan from './BayPlan.jsx';
 import { FitBox } from './FitBox.jsx';
@@ -33,7 +34,7 @@ function hatchTitleOf(bay, pages) {
   return `BAY ${pad2(b)}`;
 }
 
-export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdiContainers, xrayMap, xraySeals, shiftingMap, preGoneInfo = null,
+export default function BayViewWork({ voyage, voyageKey, inspector, inspectors = null, mode, allEdiContainers, xrayMap, xraySeals, shiftingMap, preGoneInfo = null,
   onOpenContainer, onClose, onOpenReport = null, searchPanelProps = {} }) {   // 4.63-02: onOpenReport — 베이뷰를 닫지 않고 작업 보고 창을 연다
   const sec = (voyage && voyage[mode]) || {};
   const info = (voyage && voyage.info) || {};
@@ -156,7 +157,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
     //  ★ 3.49-02 검수사 «따라가기나 장비번호가 작업중인 베이를 누르면 자동으로 호기가 지정 되어야 하는데 호기 지정 메뉴가 나옵니다»
     //    — 호기(장비)가 비어 있으면 GuidedWorkPanel 이 «작업 장비(호기)를 선택하세요»(equipStep)를 먼저 띄웠다. 호기 단추(«N호기 · BAY …»)를 눌렀으면 그 호기가 곧 내 호기다 —
     //    헤더·작업 보고와 한 벌(localStorage + equipChanged)로 지정하고 들어간다. 따라가기도 호기가 비었는데 지금 일하는 호기가 하나뿐이면 그 호기로 지정한다(둘이면 위 단추로 고른다).
-    const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };
+    const heldBy = (n) => equipHolderOf(inspectors, voyageKey, n, inspector);   // 4.74: 다른 검수원이 로그아웃 없이 쥔 호기는 내 호기로 못 가진다
+    const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n || heldBy(n)) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };
     const needEquip = !equip && cranes.length >= 2;   // 실적 0 이면 종전 안내(fol.why)대로 — 누를 호기 단추가 없다.
     return (
       <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 overflow-auto" data-bayview="pick">
@@ -170,17 +172,19 @@ export default function BayViewWork({ voyage, voyageKey, inspector, mode, allEdi
             <div className="text-sm font-black text-violet-200">터미널 기준 지금 작업 중인 장</div>
             {cranes.length === 0 && <div className="text-xxs text-dim-300">{fol.why || '터미널 실적이 아직 없습니다'}</div>}
             {cranes.map((c) => (
-              <button key={c.no} onClick={() => { assignEquip(c.no); enter({ follow: false, bay: c.bay, tier: c.tier || 'deck', guide: true }); }}
+              <button key={c.no} data-bv-held={heldBy(`${c.no}호기`) || undefined} disabled={!!heldBy(`${c.no}호기`)} onClick={() => { assignEquip(c.no); enter({ follow: false, bay: c.bay, tier: c.tier || 'deck', guide: true }); }}
                 className={`w-full text-left rounded-pill px-3 py-2 border ${fol.no === c.no ? 'bg-violet-700 border-violet-300 text-white' : 'bg-ink-900 border-line text-dim-100'}`}>
                 <div className="flex items-center justify-between"><span className="font-black text-base">{c.no}호기 · {hatchTitleOf(c.bay, pages)}</span><span className="text-xxs">{fmtT(c.at)}{c.mode && c.mode !== mode ? ` · ${c.mode === 'loading' ? '선적' : '양하'} 중` : ''}</span></div>
-                <div className="text-xxs">{c.tier === 'hold' ? '🟠 홀드' : c.tier === 'deck' ? '🔵 데크' : '단 미상'}{fol.no === c.no ? ' · 내 호기' : ` · 누르면 ${c.no}호기가 내 호기`} — 이 장으로(자동 가이드)</div>
+                <div className="text-xxs">{c.tier === 'hold' ? '🟠 홀드' : c.tier === 'deck' ? '🔵 데크' : '단 미상'}{heldBy(`${c.no}호기`) ? ` · ${heldBy(`${c.no}호기`)} 작업 중 — 내 호기로 못 가집니다` : fol.no === c.no ? ' · 내 호기' : ` · 누르면 ${c.no}호기가 내 호기`} — 이 장으로(자동 가이드)</div>
               </button>
             ))}
             {!equip ? (
               <div className="bg-ink-900 border border-amber-700 rounded-pill p-2">
                 <div className="text-xxs font-bold text-amber-300 mb-1">따라가려면 내 호기부터 — {pier || '부두 미상'}</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {equipList.map((n) => (
+                  {equipList.map((n) => heldBy(n) ? (
+                    <button key={n} type="button" disabled data-bv-held={heldBy(n)} className="px-3 py-1.5 rounded-pill bg-ink-900 border border-line text-dim-500 opacity-70 text-xs font-bold">{n} · {heldBy(n)} 작업 중</button>
+                  ) : (
                     <button key={n} onClick={() => { setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); }}
                       className="px-3 py-1.5 rounded-pill bg-ink-800 border border-line text-amber-200 text-xs font-bold">{n}</button>
                   ))}

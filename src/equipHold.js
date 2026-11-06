@@ -10,7 +10,9 @@ export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.n
   for (const i of Object.values(inspectors || {})) {
     if (!i || !i.name || i.name === myName || SKIP_HOLDERS.includes(i.name)) continue;
     if (i.loggedIn !== true || i.workMode === 'view') continue;
-    if (i.assignVoyage !== voyageKey || i.assignEquip !== equip) continue;
+    //  지금 쥔 호기 — 로그인 때 지정(assignEquip)과 작업 중 바꾼 호기(workEquip) 가운데 더 나중에 정한 쪽(4.74: 작업 중 바꾸는 길도 같은 판정)
+    const curEq = (i.lastVoyage === voyageKey && i.workEquip && (Number(i.workAt) || 0) > (Number(i.assignAt) || 0)) ? i.workEquip : (i.assignVoyage === voyageKey ? i.assignEquip : '');
+    if (curEq !== equip) continue;
     if (i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) continue;
     const at = Number(i.lastActive) || Number(i.assignAt) || 0;
     if (!at || now - at > EQUIP_HOLD_STALE_MS) continue;

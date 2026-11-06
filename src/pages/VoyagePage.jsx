@@ -1909,7 +1909,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {showSheetPhoto && <SheetPhotoModal voyage={voyage} voyageKey={voyageKey} inspector={inspector} onClose={() => setShowSheetPhoto(false)} />}
       {!_sideCanc && tab === 'search' && workStyle === 'bayview' && !isLoloShip && (
-        <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyageUi} voyageKey={voyageKey} inspector={inspector} mode={mode}
+        <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyageUi} voyageKey={voyageKey} inspector={inspector} inspectors={inspectors} mode={mode}
           allEdiContainers={allEdiContainers} xrayMap={xrayMap} xraySeals={xraySeals} shiftingMap={shiftingMap} preGoneInfo={preGoneInfo}
           onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}
           onClose={() => setWorkStyle('classic')}

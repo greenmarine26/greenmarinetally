@@ -1641,6 +1641,8 @@ fi
     npx esbuild tools/smoke_access469_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AX" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_access469.cjs "$SMOKE_AX" "$(pwd)" || { rm -f "$SMOKE_AX"; echo "✗ 접속 기록 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AX"
+    #  4.74: 베이뷰 호기 막기·배 목록 줄 대기 표시
+    node tools/smoke_hold474.cjs || { echo "✗ 베이뷰 호기 막기 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.73: 대기 작업자 표시
     node tools/smoke_standby473.cjs || { echo "✗ 대기 작업자 표시 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.72: 로그아웃 없이 쥔 호기는 다른 사람이 못 고른다

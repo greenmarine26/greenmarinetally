@@ -810,6 +810,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   });
   const rowOf = (v) => (
     <ShipRow key={v.key} voyage={v} pilotForecast={pilotForecast} activeInspectors={activeInspectors[v.key] || []}
+      standbyNames={standbyNamesOf(inspectors, v.key, (activeInspectors[v.key] || []).map((a) => a.name), (n) => isVisibleStaff(n, isOwnerName(inspector)))}
       selected={wide && v.key === curKey} canComplete={!_viewOnly} inspectorDone={isAllDone(v)} modeDone={modeDoneOf(v)}
       onOpen={(m) => onOpenVoyage(v.key, m)}
       onSelect={() => { if (wide) setSelKey(v.key); else setSheetKey(v.key); }} />
@@ -1559,7 +1560,7 @@ function RowBar({ label, mode, stats }) {
 
 // ── ★ 4.25 배 줄(설계 «한 줄 = 부두 띠·선박명·항차·선석·막대 둘·상태») — 누르면 컴은 오른쪽 상세, 폰은 전체화면 시트(onSelect). ──
 //   V9.57(H6) 출항 배지 «한 번 뜨면 유지»(departBadgeAt) 기록은 이 줄이 한다. 줄은 접힌 묶음 안에서도 언마운트하지 않는다(hidden) — 콘앱(cone.html)이 이 값으로 출항을 표시한다.
-export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], selected = false, onSelect, onOpen = null, canComplete = false, inspectorDone = false, modeDone = null }) {
+export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], standbyNames = [], selected = false, onSelect, onOpen = null, canComplete = false, inspectorDone = false, modeDone = null }) {
   const { dis, loa, disStats, loaStats, pier, berth, departBadge, _termWorking, _isToday } = shipViewOf(voyage, pilotForecast);
   // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — departBadgeAt이 이미 있으면 발화하지 않고, 실패는 console.warn으로 드러낸다.
   const _isDepart = !!(departBadge && departBadge.kind === 'depart');
@@ -1591,6 +1592,7 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sel
   const schedTxt = eTxt ? `${sTxt} ${eTxt}` : sTxt;
   let stLead = '', stCls = 'text-dim-300', stTitle = '';
   if (activeInspectors.length) { stLead = `● ${activeInspectors.map(a => a.name).join(', ')} 작업중`; stCls = 'text-emerald-300'; }
+  else if (standbyNames.length) { stLead = `${_termWorking ? '본선 작업중 · ' : ''}◌ ${standbyNames.join(', ')} 대기`; stCls = 'text-dim-200'; stTitle = '로그인해 있고 이 배 작업자로 지정됐지만 지금 입력이 없습니다 — 눈으로 보는 중'; }   // 4.74
   else if (doneTxt) { stLead = doneTxt; stCls = 'text-amber-300'; }
   else if (_termWorking) { stLead = '본선 작업중'; stCls = 'text-cyan-200'; stTitle = '터미널(동방·PCTC)이 이 배를 작업 중으로 알리고 있습니다. 앱에 접속한 검수원은 없습니다.'; }
   else if (_isDep) stCls = 'text-amber-200';
