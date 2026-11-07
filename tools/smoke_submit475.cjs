@@ -63,3 +63,4 @@ const help = fs.readFileSync('src/data/helpData.js', 'utf8');
 ok(/4\.75~ \*\*📋 검수 리스트 \(제출용\)\*\*/.test(help), '매뉴얼에 제출용 설명');
 console.log(`${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);
+// 4.75 재배포 — GitHub Pages 배포 시간 초과 복구용 한 줄, 동작 변경 없음.
