@@ -299,6 +299,12 @@ function renderRow(c, idx, opts) {
   if ((c._urgent || c.urgent) && !_noFlag) notes.push('<span style="color:#b91c1c;font-weight:bold">▲긴급</span>');
   if (c._lugg || c.lugg) notes.push('<span style="color:#6d28d9;font-weight:bold">수화물</span>');
   if (c._shift) notes.push('<span style="color:#1d4ed8;font-weight:bold">◆시프팅</span>');
+  //  ★ 4.75 — «제출용»에서만: 작업한 컨은 비고 맨 앞에 ✔호기 번호, 실오류·데미지가 있었으면 빨간 글자로(색 바탕은 쓰지 않는다 — 3.70-02). 작업용(mark 없음)은 한 글자도 안 바뀐다.
+  const _mk = opts && opts.mark;
+  if (_mk) {
+    const _fl = (_mk.flags || []).map((f) => `<span style="color:#b91c1c;font-weight:bold">${f}</span>`);
+    notes.unshift(`<span style="font-weight:bold">✔${_mk.no || ''}</span>`, ..._fl);
+  }
   const note = notes.join(' ');
   //  ★ 3.45 — 글자 수(태그 뺀 실제 길이)로 축소 등급. DG·XRAY·OOG 가 겹쳐도 둘 다 남는다.
   const _plain = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ');
@@ -455,7 +461,21 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
   //  3.29: 150 고정으로 자르지 않는다 — 비고가 긴 행이 자리를 더 먹으므로 «줄 수»로 채운다.
   //  3.62: «이어서»(종전 그대로) 외에 20/40·풀/엠티·포트별로 장을 나눈 판을 같이 만든다 — 조립은 아래 renderPageWithHdr 뒤.
-  const _rowsOf = (l) => { const no = inspNumber(l), ed = inspEdges(l); return l.map((c, i) => renderRow(c, no[i], { edge: ed[i] })); };
+  const _marks = opts.submit && opts.marks ? opts.marks : null;   // 4.75: 제출용 — 작업 표기 한 벌(utils.inspectionMarksOf)
+  const _rowsOf = (l) => { const no = inspNumber(l), ed = inspEdges(l); return l.map((c, i) => renderRow(c, no[i], { edge: ed[i], mark: _marks ? _marks.byCn[String(c.cn || '').toUpperCase()] || _marks.byCn[c.cn] : null })); };
+  //  4.75: 제출용 머리 아래 한 줄 — 누가 몇 호기에서 몇 대(숫자는 표 안 ✔ 옆 호기 번호). **그 장 묶음(이어서·20/40·풀/엠티·포트별 조각)의 컨만 센다** — 머리줄의 «20피트 102대» 와 같은 범위다.
+  //  장당 가용 높이에 19mm 여유가 있어 3mm 한 줄은 장수를 안 늘린다(ATPR 2646E 267대 실측 2장 그대로).
+  const _legendOf = (l) => {
+    if (!_marks) return '';
+    const tm = {};
+    for (const c of l) {
+      const m = _marks.byCn[String(c.cn || '').toUpperCase()] || _marks.byCn[c.cn];
+      if (m) (tm[`${m.no}|${m.name}`] = tm[`${m.no}|${m.name}`] || { no: m.no, name: m.name, count: 0 }).count++;
+    }
+    const teams = Object.values(tm).sort((x, y) => ((x.no || 99) - (y.no || 99)) || String(x.name).localeCompare(String(y.name), 'ko'));
+    if (!teams.length) return '';
+    return `<div class="plegend">✔ 검수 표기 · ${teams.map((t) => `${t.no ? t.no + '호기' : '호기 미상'}${t.name && t.no ? ' ' + _esc(t.name) : ''} ${t.count}대`).join(' · ')}${teams.some((t) => t.no) ? ' · ✔ 옆 숫자는 호기' : ''}</div>`;
+  };
 
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
   const special = list.filter(c => {
@@ -483,7 +503,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
 
   // M5.29: 각 페이지 상단 헤더 (좌: 선박명 / 중: 항차 / 우: 날짜+페이지) — cover page 제거
   // 페이지 헤더 렌더링을 위해 renderPage에 정보 전달 필요 → 메인 함수에서 직접 조립
-  const renderPageWithHdr = (pair, pageNum, totalPages, rowMm = ROW_MM, tag = '') => {
+  const renderPageWithHdr = (pair, pageNum, totalPages, rowMm = ROW_MM, tag = '', legend = '') => {
     const colsOf = Array.isArray(pair[0]) ? pair : [pair.slice(0, PER_COL), pair.slice(PER_COL, PER_COL * 2), pair.slice(PER_COL * 2)];
     const col = (rs) => `<table class="ilist">
       <colgroup><col style="width:7%"><col style="width:31%"><col style="width:25%"><col style="width:14%"><col style="width:5%"><col style="width:18%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th style="font-size:5.5pt">F/E</th><th>비고</th></tr></thead>
@@ -492,9 +512,9 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     return `<div class="ipage"${rowMm !== ROW_MM ? ` style="--rh:${rowMm}mm"` : ''}>
       <div class="phdr">
         <div class="phdr-l">${vsl}</div>
-        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span>${tag ? ` <b>${_esc(tag)}</b>` : ''}</div>
+        <div class="phdr-c">${voy} <span class="modetag">${modeKo}${opts.submit ? ' 제출용' : ''}</span>${tag ? ` <b>${_esc(tag)}</b>` : ''}</div>
         <div class="phdr-r">${dateStr} · ${pageNum}/${totalPages}</div>
-      </div>
+      </div>${legend}
       <div class="icols">
         ${colsOf.map((rs) => `<div class="icol">${col(rs)}</div>`).join('')}
       </div>
@@ -512,14 +532,14 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
       const rows = _rowsOf(l);
       const fit = how === 'cont' ? packFit(rows) : packBal(rows);
       if (how === 'port' && fit.pages.length >= 2) {
-        const sub = inspPieces(l, 'size', mode).map(([t, x]) => { const r = _rowsOf(x); return { tag: `${tag} ${t}`, n: x.length, fit: packBal(r) }; });
+        const sub = inspPieces(l, 'size', mode).map(([t, x]) => { const r = _rowsOf(x); return { tag: `${tag} ${t}`, n: x.length, fit: packBal(r), legend: _legendOf(x) }; });
         if (sub.length > 1 && sub.reduce((a, q) => a + q.fit.pages.length, 0) <= fit.pages.length) { packed.push(...sub); continue; }
       }
-      packed.push({ tag, n: l.length, fit });
+      packed.push({ tag, n: l.length, fit, legend: _legendOf(l) });
     }
     const total = packed.reduce((a, q) => a + q.fit.pages.length, 0);
     let pno = 0;
-    const html = packed.map((q) => q.fit.pages.map((rows) => renderPageWithHdr(rows, ++pno, total, q.fit.rowMm, q.tag ? `${q.tag} ${q.n}대` : '')).join('')).join('');
+    const html = packed.map((q) => q.fit.pages.map((rows) => renderPageWithHdr(rows, ++pno, total, q.fit.rowMm, q.tag ? `${q.tag} ${q.n}대` : '', q.legend)).join('')).join('');
     _variants[how] = { label, off, counts: packed.map((q) => q.fit.pages.length), html };
   }
   const sheet1Pages = _variants.cont.html;
@@ -580,7 +600,7 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .phdr-l { flex: 1; font-weight: bold; font-size: 10pt; text-align: left; }
 .phdr-c { flex: 1; font-weight: bold; font-size: 9pt; text-align: center; }
 .phdr-r { flex: 1; text-align: right; font-size: 8pt; color: #555; }
-.modetag { background: #fde68a; padding: 0px 5px; border-radius: 2px; font-size: 7.5pt; margin-left: 3px; }
+${opts.submit ? '.plegend { font-size: 7pt; padding: 0 2mm 0.6mm; color: #222; }   /* 4.75: 제출용 머리 아래 범례 */\n' : ''}.modetag { background: #fde68a; padding: 0px 5px; border-radius: 2px; font-size: 7.5pt; margin-left: 3px; }
 .ititle { font-weight: bold; text-align: center; padding: 4px 0; font-size: 10pt; page-break-before: always; }
 .ipage { page-break-after: always; }
 .ipage:last-child { page-break-after: auto; }
@@ -812,12 +832,12 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     : (voyageInfo?.voy_l || voyageInfo?.voy || voyageInfo?.voy_d)) || '';
   const modeKo = mode === 'discharge' ? '양하' : '선적';
   const dateStr = new Date().toISOString().slice(0, 10);
-  w.__inspectionData = { containers: sortedConts, vsl, voy, modeKo, dateStr };
+  w.__inspectionData = { containers: sortedConts, vsl, voy, modeKo, dateStr, marks: opts.submit && opts.marks ? opts.marks : null };   // 4.75: 제출용이면 CSV 에도 같은 표기
   w.__exportExcel = function() {
     const d = w.__inspectionData;
     // 엑셀 호환 양식 — CSV (UTF-8 BOM + 한글 헤더)
     let csv = '\uFEFF';
-    csv += '순번,컨테이너번호,실번호,규격,F/E,선사,비고\n';
+    csv += d.marks ? '순번,컨테이너번호,실번호,규격,F/E,선사,검수(호기 이름),비고\n' : '순번,컨테이너번호,실번호,규격,F/E,선사,비고\n';   // 4.75: 제출용은 «검수» 열이 하나 더
     const _no = inspNumber(d.containers);   // 3.60: 종이와 같은 묶음별 순번
     d.containers.forEach((c, i) => {
       const cn = (c.cn || '').replace(/,/g, '');
@@ -842,13 +862,19 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       const _shape = cat.type === 'fr' || c.fr || cat.type === 'ot' || c.ot;
       if (_shape) memo.push(_shapeNote(c));   // 3.60: 종이와 같은 오버/인게이지
       else if (_ov.length) memo.push('OOG ' + _ov.join(' ') + 'cm');   // TallyOne 2.00
+      if (d.marks) {   // 4.75: 제출용 — 종이와 같은 표기(검수 열 + 비고에 실오류·데미지)
+        const _m = d.marks.byCn[String(c.cn || '').toUpperCase()] || d.marks.byCn[c.cn];
+        if (_m) memo.unshift(..._m.flags);
+        const who = _m ? `${_m.no ? _m.no + '호기' : '호기 미상'}${_m.name ? ' ' + String(_m.name).replace(/,/g, '') : ''}` : '';
+        csv += `${_no[i]},${cn},${seal},${iso},${fe},${op},${_m ? '✔ ' + who : ''},${memo.join(' ')}\n`;
+      } else
       csv += `${_no[i]},${cn},${seal},${iso},${fe},${op},${memo.join(' ')}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = w.document.createElement('a');
     a.href = url;
-    a.download = `검수리스트_${d.vsl}_${d.voy}_${d.modeKo}_${d.dateStr}.csv`;
+    a.download = `검수리스트${d.marks ? '_제출용' : ''}_${d.vsl}_${d.voy}_${d.modeKo}_${d.dateStr}.csv`;
     w.document.body.appendChild(a);
     a.click();
     w.document.body.removeChild(a);

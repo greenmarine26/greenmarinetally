@@ -5,6 +5,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { X, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
+import { inspectionMarksOf } from '../utils.js';   // 4.75: 검수 리스트 제출용 — 작업 표기 한 벌
 import { openWorkingReportPrint } from '../workingReport.js';
 import { reeferListRows, openReeferListPrint } from '../reeferList.js';
 import { openMfnList } from '../mfnList.js';
@@ -320,7 +321,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const dischargeCount = ptkCountOf('discharge');
   const loadingCount = ptkCountOf('loading');
 
-  const handlePrintInspection = () => {
+  const handlePrintInspection = (submit = false) => {   // 4.75: submit — 제출용(작업한 컨 ✔ 표기 + 비고에 실오류·데미지)
     if (count === 0) {
       alert(`${modeKo} 컨테이너가 없습니다`);
       return;
@@ -331,6 +332,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     let _fc = {};
     try { _fc = keepShiftForecastOf(voyageKey, voyage, null, { confirmed: shiftingMap }) || {}; } catch (e) { console.warn('[4.48 출력 센터] 본선 잔류 예보 실패 — 별첨2 는 확정만 싣습니다:', e); _fc = {}; }
     const _shiftList = shiftingListOf({ ...shiftingMap, ..._fc }, fullEdiMap, voyage);
+    if (submit === true) {   // 4.75: 제출용 — 같은 리스트에 표기만 더한다(작업용은 그대로). 별첨·시프팅은 싣지 않는다
+      let _marks = null;
+      try { _marks = inspectionMarksOf(voyage, mode); } catch (e) { console.warn('[4.75 제출용] 작업 표기를 만들지 못했습니다 —', e); alert('작업 표기를 만들지 못해 제출용을 열지 못했습니다.'); return; }
+      openInspectionListPrint(ptkContainers, mode, voyageInfo, [], { appendix: false, submit: true, marks: _marks });
+      return;
+    }
     openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList, { appendix: chiefView });   // 4.31: 특수화물 별첨은 수석에게만
   };
 
@@ -488,12 +495,24 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               </p>
 
               {/* 1. 검수 리스트 */}
-              <button onClick={handlePrintInspection} className="print-tile">
+              <button onClick={() => handlePrintInspection()} className="print-tile">
                 <span className="print-ico" style={{ background: 'linear-gradient(180deg, #14b37d, #047857)' }}>📋</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-black text-dim-100">검수 리스트</div>
                   <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
                     A4 세로 세 단 · 인쇄 창 위 단추로 장 나누기(이어서·20/40·풀/엠티·포트별) · 시트1(전체) + 시트2(특수화물 별첨)
+                  </div>
+                </div>
+                <Printer className="w-5 h-5 text-dim-400 shrink-0" />
+              </button>
+
+              {/* 1-2. 검수 리스트 제출용 (4.75) — 같은 리스트에 작업한 컨 ✔ 표기 + 비고에 실오류·데미지. 작업용은 위 단추 그대로 */}
+              <button onClick={() => handlePrintInspection(true)} className="print-tile" data-print-submit="1">
+                <span className="print-ico" style={{ background: 'linear-gradient(180deg, #0ea5e9, #0369a1)' }}>✔</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-dim-100">검수 리스트 (제출용)</div>
+                  <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
+                    위 리스트와 같은 양식 · 작업한 컨에 ✔호기 표기 · 머리 아래에 누가 몇 호기에서 몇 대 · 비고에 실오류·데미지 기록
                   </div>
                 </div>
                 <Printer className="w-5 h-5 text-dim-400 shrink-0" />

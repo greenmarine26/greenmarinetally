@@ -1643,6 +1643,7 @@ fi
     rm -f "$SMOKE_AX"
     #  4.74: 베이뷰 호기 막기·배 목록 줄 대기 표시
     node tools/smoke_hold474.cjs || { echo "✗ 베이뷰 호기 막기 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_submit475.cjs || { echo "✗ 검수 리스트 제출용 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.73: 대기 작업자 표시
     node tools/smoke_standby473.cjs || { echo "✗ 대기 작업자 표시 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.72: 로그아웃 없이 쥔 호기는 다른 사람이 못 고른다
