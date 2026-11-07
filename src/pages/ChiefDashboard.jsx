@@ -546,8 +546,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const crewOfVoyage = (key) => {
     const act = activeByVoyage[key] || [];
     const have = new Set(act.map((w) => w.name));
-    const wait = Object.values(inspectors || {}).filter((i) => i?.name && i.loggedIn === true && i.assignVoyage === key && i.assignEquip
-      && !(i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) && !have.has(i.name) && isVisibleStaff(i.name, isOwnerName(inspector)))
+    const standNames = new Set(standbyOf(key));   // 4.74-02: 대기 이름도 근무조 끝+30분 기준(standbyNamesOf 한 벌) — 근무가 끝난 사람 이름이 교대 뒤에도 남던 것
+    const wait = Object.values(inspectors || {}).filter((i) => i?.name && i.assignEquip && standNames.has(i.name) && !have.has(i.name))
       .sort((x, y) => (x.assignAt || 0) - (y.assignAt || 0))   // 같은 호기를 둘이 지정받았으면 나중에 지정한 사람이 이긴다(뒤에 오는 이름이 앞을 덮는다)
       .map((i) => ({ name: i.name, mode: i.lastMode, equip: i.assignEquip, bay: null, tier: null, remain: null, standby: true }));
     //  지금 그 호기에서 일하는 사람(90초 안)이 있으면 대기자 이름은 올리지 않는다 — 일하는 사람이 그 호기의 이름이다.
