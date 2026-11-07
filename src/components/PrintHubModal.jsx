@@ -335,6 +335,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     if (submit === true) {   // 4.75: 제출용 — 같은 리스트에 표기만 더한다(작업용은 그대로). 별첨·시프팅은 싣지 않는다
       let _marks = null;
       try { _marks = inspectionMarksOf(voyage, mode); } catch (e) { console.warn('[4.75 제출용] 작업 표기를 만들지 못했습니다 —', e); alert('작업 표기를 만들지 못해 제출용을 열지 못했습니다.'); return; }
+      if (!_marks || !Object.keys(_marks.byCn).length) { alert('앱으로 직접 입력한 호기가 없어 체크할 컨이 없습니다. 제출용을 열지 않습니다.'); return; }
       openInspectionListPrint(ptkContainers, mode, voyageInfo, [], { appendix: false, submit: true, marks: _marks });
       return;
     }
