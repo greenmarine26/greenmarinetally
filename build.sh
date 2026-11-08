@@ -1651,6 +1651,21 @@ fi
     npx esbuild tools/smoke_crane477_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CR" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_crane477.cjs "$SMOKE_CR" "$(pwd)" || { rm -f "$SMOKE_CR"; echo "✗ 4.77(호기 이동·3호기 LOLO·해치 추정) 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_CR"
+    #  4.77-01: 미르 말투 «쌓여요» · 배 코드가 든 설명형 질문(DJCT·MCSC 장비 번호가 뭐야)이 생활회화로 안 샘 · 속도·갱 수 한 함수(paceNowOf)·같은 분 같은 수(KKLC 2610N)
+    SMOKE_FX=$(mktemp /dev/shm/hometmp/_smokefx_XXXXXX.cjs)
+    npx esbuild tools/smoke_fix47701_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_FX" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_fix47701.cjs "$SMOKE_FX" "$(pwd)" || { rm -f "$SMOKE_FX"; echo "✗ 4.77-01(말투·배 코드·속도 한 벌) 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_FX"
+    #  4.77-01: 작업 보고 첫 화면 «호기 이동» 단추가 실제로 그려지는가 · 수석 상황판 램프(105) 줄과 QC103 36대(RZOR R123E) — 실소스를 jsdom 으로 그린다
+    SMOKE_FU=$(mktemp /dev/shm/hometmp/_smokefu_XXXXXX.js)
+    if npx esbuild tools/smoke_fix47701_ui.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+         --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+         --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_FU"; then
+      node tools/smoke_fix47701_ui.cjs "$SMOKE_FU" || { echo "✗ 4.77-01 화면(호기 이동 단추·램프 줄) 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_FU"; exit 1; }
+      rm -f "$SMOKE_FU"
+    else
+      echo "✗ 4.77-01 화면 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_FU"; exit 1
+    fi
     #  4.74: 베이뷰 호기 막기·배 목록 줄 대기 표시
     node tools/smoke_hold474.cjs || { echo "✗ 베이뷰 호기 막기 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_submit475.cjs || { echo "✗ 검수 리스트 제출용 연막검사 실패 — 배포 금지"; exit 1; }

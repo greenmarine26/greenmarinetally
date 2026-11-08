@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isEdiApplied, isFullReefer, isEmptyReefer, emptySplitLabel, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
-import { paceFromRecords, withRecentPace, voyageDoneAts, voyageReportSpan, voyageFirstTermAt } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
+import { paceNowOf, voyageDoneAts } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
 export default function StatsTab({ containers, compMap, xrayMap, mode, voyage }) {
@@ -321,7 +321,7 @@ export function computeAllStats(containers, compMap, xrayMap, mode, voyage) {   
     //  3.53-12: 페이스는 완료 기록 한 벌 — 외부 합계 피드는 떼어 냈다(검수사 2026-09-15·09-21).
     {
       //  3.24: 검수 시작·완료(작업 보고)를 info 에 얹어 넘긴다 — 분모가 접안시각으로 잡히던 것(§4-4 한 벌).
-      const _P = withRecentPace(paceFromRecords(voyageDoneAts(voyage), { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) }), voyage);   // 4.76: 미르 «몇 시에 끝나»와 같은 값(지금 일하는 호기 수 × 최근 120 실작업분 갱당 속도)
+      const _P = paceNowOf(voyageDoneAts(voyage), info, voyage);   // 4.76: 미르 «몇 시에 끝나»와 같은 값(지금 일하는 호기 수 × 최근 120 실작업분 갱당 속도)
       if (_P.ok) { paceHour = Math.round(_P.perHour); paceSrc = _P.recent ? `최근 ${_P.recent.windowMin}분 · ${_P.recent.gangs}갱 기준` : (_P.basis === 'work' ? '완료 기록 · 작업시간 기준' : '완료 기록 · 찍힌 구간 기준'); }
       else if (_P.why === 'dirty') paceNote = '완료 시각이 고르지 않아 페이스 못 잼';
       //  'few'·'short' 는 «아직 안 쌓였다»일 뿐이라 제목에 아무 말도 안 붙인다(잔소리가 된다).

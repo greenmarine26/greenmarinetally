@@ -227,6 +227,9 @@ export function _mirReset() { _pending = null; _lastMissAt = {}; }
 const END = "(?=$|[\\s.!?,)\\]\u2026\u00bb\"'\\n])";
 const RULES = [
   [new RegExp('입니다만' + END, 'g'), '인데요'],
+  //  4.77-01: «이» 피동·사동 풀이말(쌓이다·섞이다·놓이다·묶이다·덮이다·보이다·쓰이다·붙이다)의 «…입니다» 는 이름씨+입니다 가 아니다 — «쌓입니다»→«쌓여요» (예전엔 «쌓이에요» 로 틀렸다).
+  [new RegExp('(쌓|섞|놓|묶|덮|움직)입니다' + END, 'g'), '$1여요'],   // 4.77-01: 매뉴얼 전수 점검에서 «움직입니다»→«움직이에요» 가 더 나왔다
+  [new RegExp('(?<![가-힣])(보|쓰|붙)입니다' + END, 'g'), '$1여요'],
   [new RegExp('있습니다' + END, 'g'), '있어요'],
   [new RegExp('없습니다' + END, 'g'), '없어요'],
   [new RegExp('했습니다' + END, 'g'), '했어요'],
@@ -2052,6 +2055,18 @@ function _collectingAnswer(ship, vc, askMode) {
 }
 //  ★ 4.17 (검수사 §7.8-⑧ «2») — 질문 속 없는 선박코드를 가장 가까운 코드로 고친다(utils.shipCodeFixOf → nearestShipCode 한 벌 — 대문자로 친 낱말만 거리 2·되묻기). 아는 코드 = 활성 항차·베이사전·선박 라이브러리 + 지금 열린 배.
 //    같은 거리에 둘 이상이면 { ambiguous } — 그때만 되묻는다. 고칠 것이 없으면 null.
+//  ★ 4.77-01 — 질문 속 영문 네 글자가 **앱이 아는 배 코드**(활성 항차·베이사전·열린 배)와 정확히 같은가.
+//    «DJCT 장비 번호가 뭐야» 는 일 낱말(MIR_WORKISH_RE)이 없어 생활회화로 갔고, 모델이 «터미널 이름 같아요»·«배 이름인지 확실히 모르겠어요» 라고 지어냈다.
+//    배 코드가 든 말은 일 질문이다 — 생활회화로 보내지 않는다(검수앱·콘앱 같은 판정: 이 함수 하나).
+function _hasKnownShipCode(q, ctx) {
+  try {
+    if (!/[A-Za-z]{4}/.test(String(q))) return false;
+    const x = ctx || {};
+    const own = [x.vsl, x.info && x.info.vsl, x.shipCtx && x.shipCtx.info && x.shipCtx.info.vsl, x.voyage && x.voyage.info && x.voyage.info.vsl].filter(Boolean).map((t) => String(t).toUpperCase());
+    const fx = shipCodeFixOf(q, knownShipCodes(x.voyages || null, x.shipLib || (x.manualCtx && x.manualCtx.shipLib) || null).concat(own, Array.isArray(x.shipCodes) ? x.shipCodes.map((t) => String(t || '').toUpperCase()) : []));   // shipCodes — 콘앱이 항차 목록의 배 코드를 실어 보낸다(검수앱은 voyages)
+    return fx.hits.some((h) => h.dist === 0);
+  } catch (e) { console.warn('[미르] 배 코드 판정 실패:', q, e && e.message); return false; }
+}
 function _shipCodeFix(q, ctx) {
   if (!/[A-Za-z]{4}/.test(String(q))) return null;
   const x = ctx || {};
@@ -3587,7 +3602,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     }
     return false;
   };
-  if (!weakByWordsOnly && !rec.canonical && isChatCandidate(q, rec.window)) {   // 4.36-01: 일 낱말이 없고 번역도 일 뜻으로 못 옮긴 말은 전부 클로드가 받는다(일반 상식 포함)
+  if (!weakByWordsOnly && !rec.canonical && isChatCandidate(q, rec.window) && !_hasKnownShipCode(q, ctx)) {   // 4.36-01: 일 낱말이 없고 번역도 일 뜻으로 못 옮긴 말은 전부 클로드가 받는다(일반 상식 포함)
     if (await tryChat()) return out;
   }
   //  생활회화로 못 받은 낱말 말(미르·인사·식사)은 자료 답으로 가지 않는다

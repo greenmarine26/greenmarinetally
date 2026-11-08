@@ -3444,7 +3444,7 @@ function formatPace(parsed, allContainers, ctx) {
   const ats = (Array.isArray(ctx && ctx.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
   if (!ats.length) return `아직 ${modeK} 완료 기록이 없어요. 몇 대 진행되면 시간당 몇 개인지 알려드릴게요.`;
   const info = _infoOf(ctx);
-  const P = withRecentPace(paceFromRecords(ats, info), ctx && ctx.voyage);   // 4.76: «시간당 몇 대»도 «몇 시에 끝나»와 같은 갱 수·속도(지금 일하는 호기 × 최근 120 실작업분)
+  const P = paceNowOf(ats, info, ctx && ctx.voyage);   // 4.76: «시간당 몇 대»도 «몇 시에 끝나»와 같은 갱 수·속도(지금 일하는 호기 × 최근 120 실작업분)
   const L = [];
   //  ⚠ 시간대는 **작업 순서대로** 세운다. 자정을 넘기는 야간 작업이라 «시» 문자열로 정렬하면
   //    01·02·20·21·22 처럼 뒤죽박죽이 된다 — 첫 완료를 기준으로 몇 시간째인지로 줄 세운다.
@@ -3596,7 +3596,7 @@ export function speedFromRecords(voyage, counts) {
   const info = voyage.info || {};
   //  3.60-18 (다수결 V5): 호출부가 분모(counts)를 주면 그 분모 안의 완료 시각(counts.doneAts)으로 잰다 — «시간당 몇 대»·«작업 속도»·«몇 시에 끝나» 가 같은 수.
   const _ats = (counts && Array.isArray(counts.doneAts) && counts.doneAts.length) ? counts.doneAts : voyageDoneAts(voyage);
-  const P = withRecentPace(paceFromRecords(_ats, { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) }), voyage);   // 4.76: 지금 일하는 호기 수·최근 속도
+  const P = paceNowOf(_ats, info, voyage);   // 4.76: 지금 일하는 호기 수·최근 속도
   //  완료 몇 건으로 잰 페이스는 잡음이다(감사 실측 — 3건·40분이면 갱당 2.25대, 2갱 몫이 19대로 나온다). 10건이 안 되면 «아직 못 잼»으로 두고 호출부가 계획·과거 평균으로 간다.
   if (!P || !P.ok || !(P.perGangHour > 0) || P.n < 10) return null;
   const plan = counts && Number(counts.total) > 0 ? Number(counts.total) : null;
@@ -3648,6 +3648,8 @@ export function gangEquipNo(raw) {
 }
 export function recentPaceOf(voyage, now = Date.now()) {
   if (!voyage) return null;
+  //  4.77-01: 같은 분(分) 안에서 부른 답은 **한 글자도 안 다르다** — 10분 칸을 «지금(ms)» 에 맞춰 자르면 몇 초 차이로 갱당 20.6 ↔ 20.4 가 흔들렸다(검수사 실측). 분 단위로 내린다.
+  now = Math.floor(Number(now) / 60000) * 60000;
   const info = voyage.info || {};
   const pier = normPier(info.pier, info.berth);
   const rows = [];
@@ -3737,11 +3739,17 @@ export function withRecentPace(P, voyage, now = Date.now()) {
   if (!R) return P;
   return { ...P, perGangHour: R.perGangHour, gangs: R.gangs, perHour: R.perGangHour * R.gangs, recent: R };
 }
-// 답에 붙일 근거 한 줄.
+// ★ 4.77-01 — 페이스 한 벌. «몇 시에 끝나»(formatEta)·«시간당 몇 대»(formatPace)·«작업 속도»(speedFromRecords)·통계탭(StatsTab)이 **이 함수 하나**로 잰다.
+//   종전엔 formatPace 만 info 에 작업 보고 구간(voyageReportSpan)·첫 터미널 완료(voyageFirstTermAt)를 안 얹어, 최근 속도를 못 잴 때(호기 기록 모자람) «시간당 몇 대» 와 «몇 시에 끝나» 의 분모가 갈렸다.
+export function paceNowOf(doneAts, info, voyage, now = Date.now()) {
+  const src = { ...(info || {}), ...(voyage ? { ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) } : null) };
+  return withRecentPace(paceFromRecords(doneAts, src), voyage, now);
+}
+// 답에 붙일 근거 한 줄. 창 길이(windowMin)는 10분 칸을 120 실작업분이 넘을 때까지 모은 값이라 120~129분이다(쉬는 시간 둘레의 8~9분 칸) — 실제로 잰 분을 그대로 적는다.
 export function recentPaceLine(R) {
   if (!R) return '';
   const eq = R.equips && R.equips.length ? `(${R.equips.join('·')})` : '';
-  return `최근 실작업 ${R.windowMin}분 기준 — 지금 ${R.gangs}갱${eq} · 갱당 시간당 ${R.perGangHour.toFixed(1)}대${R.inBreak ? ' · 지금은 쉬는 시간이라 쉬기 직전 속도' : ''}. 쉬는 시간 포함, 몇 분 차이날 수 있어요.`;
+  return `최근 실작업 ${R.windowMin}분(쉬는 시간 뺀 시간) 기준 — 지금 ${R.gangs}갱${eq} · 갱당 시간당 ${R.perGangHour.toFixed(1)}대${R.inBreak ? ' · 지금은 쉬는 시간이라 쉬기 직전 속도' : ''}. 끝나는 시각은 쉬는 시간을 넣어 센 것이라 몇 분 차이날 수 있어요.`;
 }
 
 /** ctx 에서 항차 info 를 복원한다 (3.6-01).
@@ -3823,8 +3831,8 @@ function formatEta(parsed, allContainers, ctx) {
   //  ⚠ 여기서 **키를 골라 리터럴을 짜지 마라.** 감사가 두 번 잡은 자리다 —
   //    고를 때마다 하나씩 빠뜨려 통계탭과 미르가 다른 답을 냈다(43.7 vs 17.8, 2.46배).
   //    항차 info 를 통째로 깔고 ctx 의 평평한 키로 덮는다. 그러면 새 키가 늘어도 저절로 따라온다.
-  const _info = { ..._infoOf(ctx), ...(ctx && ctx.voyage ? { ...voyageReportSpan(ctx.voyage), firstDoneAt: voyageFirstTermAt(ctx.voyage) } : null) };   // 3.53-12: 작업 속도(speedFromRecords)와 같은 분모
-  const _P = withRecentPace(paceFromRecords(_paceAts, _info), ctx && ctx.voyage);   // 3.6: 부두·선석·갱 수를 한 덩어리로 / 4.76: 지금 일하는 호기 수·최근 120 실작업분 속도로 덮는다
+  const _info = _infoOf(ctx);   // 3.53-12: 작업 속도(speedFromRecords)와 같은 분모 — 보고 구간·첫 터미널 완료는 paceNowOf 가 얹는다
+  const _P = paceNowOf(_paceAts, _info, ctx && ctx.voyage);   // 3.6: 부두·선석·갱 수를 한 덩어리로 / 4.76: 지금 일하는 호기 수·최근 120 실작업분 속도로 덮는다
   if (!_P.ok) {
     const why = _P.why === 'dirty'
       ? '완료 시각 기록이 고르지 않아 페이스를 못 재요.'
