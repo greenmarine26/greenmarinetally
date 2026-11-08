@@ -37,7 +37,7 @@ const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 순서를 묻는다
 //   2대면 층 순서상 우연히 붙은 것과 구분이 안 되고, 4대면 작은 베이에서 끝날 때까지 안 걸린다.
 const STREAM_STREAK = 3;
 // V8.50: 갈림 부류 라벨 (streamPref 키 → 표시·음성)
-const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '40피트', '20': '20피트' };
+const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '40피트', '20': '20피트', TW: '트윈', SG: '싱글' };   // 4.78: 트윈·싱글 추가
 
 // V9.12(2026-07-27): 양하 홀드까지 끝났을 때 "해치커버 닫을까요?"를 물을지 판정.
 //   사용자 확정 — 선적 여부를 확인해서 **선적이 없을 때만** 묻는다.
@@ -643,6 +643,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (cnt['40'] && cnt['20']) chips.push(['40', cnt['40']], ['20', cnt['20']]);
     return chips.length ? chips : null;
   }, [availCards, mode]);
+  //  ★ 4.78: «트윈부터 / 싱글부터» — 지금 내릴(실을) 수 있는 카드에 트윈과 짝 없는 20피트가 둘 다 있을 때만 뜬다. 판정은 guidedQueue.cardMatchesPref 한 벌.
+  //    forkChips(3대 연속 감지의 «혼재» 조건)와 따로 둔다 — 이 칩이 감지 조건을 바꾸지 않게.
+  const twinSingleChips = useMemo(() => {
+    const tw = availCards.filter((cd) => cardMatchesPref(cd, 'TW')).length;
+    const sg = availCards.filter((cd) => cardMatchesPref(cd, 'SG')).length;
+    return tw && sg ? [['TW', tw], ['SG', sg]] : null;
+  }, [availCards]);
 
   //  ★ 4.09: 부류 조건(orderKey)이 바뀌면 — 이 기기에서 눌렀든 다른 폰이 바꿨든 — 갈림 칩(일시 «○ 우선 중»)을 끈다.
   //    안 끄면 방금 정한 조건 위에 옛 흐름이 남아 첫 카드가 창의 «1. ○○부터» 와 어긋난다. 저장 응답이 아니라 값이 바뀐 때 끄므로 로컬 반영과 같이 움직인다.
@@ -688,6 +695,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const r = recentRef.current;
     if (r.length < STREAM_STREAK) return;
     if (!forkChips) return;                                   // ⓐ 혼재가 아니면 감지하지 않는다
+    if (streamPref === 'TW' || streamPref === 'SG') return;    // 4.78: 검수사가 누른 트윈부터·싱글부터는 3대 연속 감지로 바꾸지 않는다
     if (orderKey) return;                                     // 4.09: 검수사가 기사의 방법을 정해 두었으면 그 방법이 이긴다 — 3대 연속 감지로 바꾸지 않는다
     const sq = r.map(x => x.eseq);
     if (sq.every(v => v != null) && sq.every((v, i) => i === 0 || v > sq[i - 1])) return;   // ⓑ EDI 순번대로면 유지
@@ -874,7 +882,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const cns = holdGroupOf(h);
     setBusy(true);
     try {
-      await fbReleaseHold(voyageKey, mode, cns);
+      await fbReleaseHold(voyageKey, mode, cns, inspector, equip);   // 4.78: 해제 기록에 푼 사람·호기
       if (front) setResumeCns(cns.map((x) => String(x).toUpperCase()));   // 4.26-02: 다른 장 보류를 풀면 내 카드 «맨 앞» 을 건드리지 않는다(그 컨은 내 큐에 없다)
       setHoldList(false);
     } finally { setBusy(false); }
@@ -1805,7 +1813,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             );
           })}
         </div>
-        <div className="text-3xs text-dim-400 leading-snug mt-1">20↔40 · 풀↔엠티 · 일반↔리퍼 · 엠티↔일반·리퍼는 함께 못 겁니다(새로 누른 쪽으로 바뀝니다). 내릴 수 있는 칸에서만 앞당기고, 갈림 칩이 켜져 있으면 그것이 먼저입니다.</div>
+        <div className="text-3xs text-dim-400 leading-snug mt-1">20↔40 · 트윈↔싱글 · 풀↔엠티 · 일반↔리퍼 · 엠티↔일반·리퍼는 함께 못 겁니다(새로 누른 쪽으로 바뀝니다). 내릴 수 있는 칸에서만 앞당기고, 갈림 칩이 켜져 있으면 그것이 먼저입니다.</div>
       </div>
       <div className="flex items-center justify-between gap-2">
         <div className="text-xxs text-dim-400 min-w-0">
@@ -2339,12 +2347,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   </>);
   const forkEl = (<>
       {/* V8.50: 갈림 — 지금 내릴 수 있는 컨에 부류 혼재 시 선택 버튼 (기사 흐름 따라가기) */}
-      {card && (forkChips || streamPref) && (
+      {card && (forkChips || twinSingleChips || streamPref) && (
         <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-line rounded-pill px-2 py-1.5">
           <span className={`text-2xs font-bold mr-0.5 ${streamPref ? 'text-violet-300' : 'text-dim-400'}`}>
             {streamPref ? `${PREF_LABEL[streamPref]} 우선 중` : '갈림'}
           </span>
-          {(forkChips || []).map(([k, n]) => (
+          {[...(forkChips || []), ...(twinSingleChips || [])].map(([k, n]) => (
             <button key={k} onClick={() => setStreamPref(p => (p === k ? null : k))}
               className={`px-2 py-1 rounded text-xxs font-bold border ${streamPref === k
                 ? 'bg-violet-700 border-violet-500 text-white'
@@ -2357,6 +2365,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               className="px-2 py-1 rounded text-xxs font-bold border bg-ink-800 border-amber-700 text-amber-300 hover:bg-ink-750">
               순서대로
             </button>
+          )}
+          {twinSingleChips && (
+            <span data-twin-single-note className="basis-full text-3xs text-dim-400 leading-snug">트윈부터·싱글부터는 여기서 고르면 됩니다. 보류로 순서를 바꾸지 않아도 됩니다.</span>
           )}
         </div>
       )}

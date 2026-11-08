@@ -373,6 +373,10 @@ export function cardMatchesPref(card, pref) {
   if (pref === '20') return !cardIs40(card);
   // 1.57: 선적 20싱글 우선 — 물리 종속을 지키며 당기기 위해 내부 전용 키로 둔다.
   if (pref === '20SINGLE') return !card.twin && !cardIs40(card) && !card.bfSplit;   // 4.42: «베이 먼저» 로 쪼갠 짝은 20싱글이 아니다
+  //  4.78: 갈림 칩 «트윈부터»(TW)·«싱글부터»(SG) — 검수사 2026-11-07 KKLC 2610N 마지막 데크 «트윈으로 갈 방법이 없었습니다 … 보류 내용에 트윈모드라고 하고 보류 시키니 트윈모드가 켜졌습니다».
+  //    TW = 짝이 있는 카드(트윈) · SG = 위 20SINGLE 과 같은 판정 한 벌(짝 없는 20피트, 40피트·«베이 먼저» 로 쪼갠 짝은 제외).
+  if (pref === 'TW') return !!card.twin;
+  if (pref === 'SG') return cardMatchesPref(card, '20SINGLE');
   return true;
 }
 // 같은 수직 스택 판정 — 같은 로우 + (같은 베이거나 한쪽이 짝수베이 40(양쪽 20슬롯에 걸침)).

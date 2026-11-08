@@ -361,16 +361,44 @@ export async function fbHoldContainers(voyageKey, mode, cns, reason, by, equip =
     if (list.length > 1) rec.group = list.join(',');   //  트윈은 두 대가 한 몸 — 해제도 같이
     patch[`voyages/${voyageKey}/${mode}/held/${cn}`] = rec;
   }
+  _putHoldEvent(patch, voyageKey, mode, 'hold', list, { reason: String(reason || '').slice(0, 60), by, equip, at });   // 4.78: 보류 기록 보관 — 같은 쓰기에 실어 보낸다(보류만 되고 기록이 빠지는 일이 없게)
   await update(ref(db), patch);
 }
 
+//  ★ TallyOne 4.78 — **보류 기록 보관.** 보류 목록(held)은 항차를 보관할 때 비워져 나중에 «언제·왜·누가 보류했나» 를 알 수 없었다.
+//    보류·해제 때마다 항차 보고 노드에 type 'hold_event' 한 건을 남긴다 = { action:'hold'|'release', cns, reason, by, equip, mode, voyage, ts }.
+//    ⚠ type 을 'work_status' 나 action 을 '*_pause' 꼴로 짓지 않는다 — 미르·집계(workPauseOf·타임시트)가 작업 중단으로 읽는다(4.76 crane_move 와 같은 이유).
+//      보고 목록(고치기·지우기 · 최근 보고 · 마감 점검의 호기 근거)은 이 type 을 비켜 간다 — 기록은 고쳐 쓰지 않는다.
+let _lastHoldTs = 0;
+function _putHoldEvent(patch, voyageKey, mode, action, list, o = {}) {
+  const ts = Math.max(Date.now(), _lastReportTs + 1, _lastHoldTs + 1); _lastReportTs = ts; _lastHoldTs = ts;   // 같은 밀리초 보고와 키가 겹치지 않게 fbAddWorkReport 와 같은 시계를 쓴다
+  const by = String(o.by || getMeToday() || '').trim();
+  const mk = (mode === 'loading' ? '선적' : '양하');
+  const rec = {
+    type: 'hold_event', action, cns: list, reason: String(o.reason || ''), by, equip: String(o.equip || ''), mode, voyage: voyageKey,
+    ts, created_at: new Date(ts).toISOString(),
+    message: `${mk} 보류${action === 'hold' ? '' : ' 해제'} ${list.length}대 · ${list.join(', ')}${o.reason ? ` · 사유 «${o.reason}»` : ''}${by ? ` · ${by}` : ''}`,
+  };
+  if (action === 'release') { rec.heldAt = Number(o.heldAt) || 0; rec.heldBy = String(o.heldBy || ''); }
+  patch[`voyages/${voyageKey}/reports/${ts}`] = rec;
+}
+
 //  해제 — 검수사가 [해제]를 눌렀거나 되묻기에 «예»라고 답했을 때. 트윈은 짝까지 함께 푼다.
-export async function fbReleaseHold(voyageKey, mode, cns) {
+//    4.78: 해제 기록에는 풀리는 보류의 사유·건 사람·시각을 함께 적는다(held 노드를 지우기 전에 읽는다). 읽기가 실패해도 해제는 막지 않는다 — 경고만 남긴다.
+export async function fbReleaseHold(voyageKey, mode, cns, by = '', equip = '') {
   assertCanWork('보류 해제');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const patch = {};
   for (const cn of list) patch[`voyages/${voyageKey}/${mode}/held/${cn}`] = null;
+  let held = null;
+  try {
+    const snap = await _withTimeout(get(ref(db, `voyages/${voyageKey}/${mode}/held/${list[0]}`)), '보류 사유 읽기');
+    held = snap.exists() ? snap.val() : null;
+  } catch (e) {
+    console.warn('[보류 해제] 풀리는 보류의 사유를 읽지 못했습니다 — 해제는 계속합니다:', `${voyageKey}/${mode}/${list[0]}`, e);
+  }
+  _putHoldEvent(patch, voyageKey, mode, 'release', list, { reason: held && held.reason, by, equip: equip || (held && held.equip), heldAt: held && held.at, heldBy: held && held.by });
   await update(ref(db), patch);
 }
 

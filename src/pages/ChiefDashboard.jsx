@@ -225,7 +225,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
   // 최근 작업 보고 (시간순)
   const recentReports = useMemo(() => {
-    return (allReports || []).slice(0, 30);
+    return (allReports || []).filter((r) => r.type !== 'hold_event').slice(0, 30);   // 4.78: 보류 기록은 보관용 — 최근 작업 보고에서 비켜 간다(삭제 단추도 없다)
   }, [allReports]);
 
   // M3.5.5: 엠티 실 작업 중인 항차 (실시간 부착 현황)
@@ -561,7 +561,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const lastReportByVoyage = useMemo(() => {
     const out = {};
     (allReports || []).forEach(r => {
-      if (!r.voyageKey) return;
+      if (!r.voyageKey || r.type === 'hold_event') return;   // 4.78: 보류 기록은 «마지막 작업 보고» 가 아니다
       if (!out[r.voyageKey] || (r.ts || 0) > (out[r.voyageKey].ts || 0)) out[r.voyageKey] = r;
     });
     return out;

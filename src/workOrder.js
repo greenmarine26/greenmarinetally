@@ -7,12 +7,12 @@
 //  prefs 는 «먼저 고른 것이 우선» 인 순서 목록이다. 서로 어긋나는 조건은 한 번에 못 건다(togglePref).
 //  ⚠ 이 파일은 순수 함수만 둔다(firebase·utils 를 부르지 않는다) — guidedQueue·mir·firebase 어디서 불러도 순환이 안 생긴다.
 
-export const ORDER_PREF_KEYS = ['F', 'E', 'GEN', 'RF', '20', '40'];
-export const ORDER_PREF_LABEL = { F: '풀', E: '엠티', GEN: '일반', RF: '리퍼', '20': '20', '40': '40' };   // «○부터» 앞 글자
+export const ORDER_PREF_KEYS = ['F', 'E', 'GEN', 'RF', '20', '40', 'TW', 'SG'];   // 4.78: 트윈부터(TW)·싱글부터(SG) 추가
+export const ORDER_PREF_LABEL = { F: '풀', E: '엠티', GEN: '일반', RF: '리퍼', '20': '20', '40': '40', TW: '트윈', SG: '싱글' };   // «○부터» 앞 글자
 export const ALL_EQUIP_KEY = '전체';
 
-//  함께 걸 수 없는 조건 — 새로 누른 쪽이 이긴다. 엠티는 «풀 일반·풀 리퍼» 와 모순이고(1.57 «리퍼 엠티는 일반 엠티와 같다»), 20↔40·일반↔리퍼도 한 가지만.
-const CLASH = { F: ['E'], E: ['F', 'GEN', 'RF'], GEN: ['RF', 'E'], RF: ['GEN', 'E'], '20': ['40'], '40': ['20'] };
+//  함께 걸 수 없는 조건 — 새로 누른 쪽이 이긴다. 엠티는 «풀 일반·풀 리퍼» 와 모순이고(1.57 «리퍼 엠티는 일반 엠티와 같다»), 20↔40·일반↔리퍼·트윈↔싱글도 한 가지만.
+const CLASH = { F: ['E'], E: ['F', 'GEN', 'RF'], GEN: ['RF', 'E'], RF: ['GEN', 'E'], '20': ['40'], '40': ['20'], TW: ['SG'], SG: ['TW'] };
 
 export function normalizePrefs(v) {
   const list = Array.isArray(v) ? v : String(v == null ? '' : v).split(',');

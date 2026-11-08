@@ -93,6 +93,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     };
     const equipReports = new Map();                   // 갱 → 보고 건수
     Object.values(voyage?.reports || {}).forEach(r => {
+      if (r?.type === 'hold_event') return;           // 4.78: 보류 기록은 그 호기가 일했다는 근거가 아니다
       const eq = String(r?.equip || '').trim();
       if (!eq) return;
       const rm = _repMode(r);

@@ -840,7 +840,7 @@ export function buildShifting(voyage) {
  */
 export function buildTimeSheet(reports, opts = {}) {
   const rows = [];
-  const list = vals(reports || {}).filter((r) => r && r.ts).sort((a, b) => a.ts - b.ts);
+  const list = vals(reports || {}).filter((r) => r && r.ts && r.type !== 'hold_event').sort((a, b) => a.ts - b.ts);
   const t = (ms) => new Date(ms).toTimeString().slice(0, 5);
   const groupOf = typeof opts.groupOf === 'function' ? opts.groupOf : null;
   const doneModes = new Set(opts.doneModes || []);   // 'discharge' | 'loading'

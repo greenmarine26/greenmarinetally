@@ -163,6 +163,9 @@ module.exports = async function r43({ ROOT, TMP, ok, head, fx, stub, css = '' })
       const S2 = await open(384, 832, 'normal', 'loading', true);
       await guideTwin(S2, 'loading');
       const ml = await measure(S2.pg);
+      //  4.78: 갈림 칩 «트윈부터 N · 싱글부터 N» 이 아래 칸 맨 앞에 붙을 수 있다(트윈과 싱글이 함께 남은 때) — 변경 단추 순서를 잴 때는 칩을 뺀다.
+      const noChip = (arr) => arr.filter((t) => !/^(트윈|싱글)부터 \d+$/.test(t));
+      md.low1 = noChip(md.low1); ml.low1 = noChip(ml.low1);
       ok(`② 가이드 맨 위 한 줄 «${md.bar}» · «${ml.bar}» · 아래 칸 양하 [${md.low1.slice(0, 5).join('][')}] · 선적 [${ml.low1.slice(0, 6).join('][')}]`,
         /^양하 자동 05\(06\)07 🟠 홀드 남은 \d+대 ◀ 전 화면$/.test(md.bar) && /^선적 자동 09\(10\)11 🔵 데크 남은 \d+대 ◀ 전 화면$/.test(ml.bar)
           && JSON.stringify(md.low1.slice(0, 5)) === JSON.stringify(['앞만 다름', '뒤만 다름', '둘 다 다름', '싱글로 한 대씩', '⏸ 보류']) && !md.low1.includes('📍 위치 틀림')

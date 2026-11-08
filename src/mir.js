@@ -2064,7 +2064,8 @@ function _hasKnownShipCode(q, ctx) {
     const x = ctx || {};
     const own = [x.vsl, x.info && x.info.vsl, x.shipCtx && x.shipCtx.info && x.shipCtx.info.vsl, x.voyage && x.voyage.info && x.voyage.info.vsl].filter(Boolean).map((t) => String(t).toUpperCase());
     const fx = shipCodeFixOf(q, knownShipCodes(x.voyages || null, x.shipLib || (x.manualCtx && x.manualCtx.shipLib) || null).concat(own, Array.isArray(x.shipCodes) ? x.shipCodes.map((t) => String(t || '').toUpperCase()) : []));   // shipCodes — 콘앱이 항차 목록의 배 코드를 실어 보낸다(검수앱은 voyages)
-    return fx.hits.some((h) => h.dist === 0);
+    //  4.78: 입력 원문이 전부 대문자인 낱말만 배 코드로 인정한다 — 소문자 영어 낱말(play ball with me 의 ball = 베이사전 코드 BALL)이 일 질문으로 잡히던 것(4.77-01 독립 감사 권고).
+    return fx.hits.some((h) => h.dist === 0 && String(h.raw || '') !== '' && h.raw === String(h.raw).toUpperCase());
   } catch (e) { console.warn('[미르] 배 코드 판정 실패:', q, e && e.message); return false; }
 }
 function _shipCodeFix(q, ctx) {

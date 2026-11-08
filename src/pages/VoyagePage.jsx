@@ -5036,7 +5036,7 @@ function WorkReportHistory({ voyageKey, voyage = null, inspector = '' }) {
           {list.slice(0, 50).map(r => (
             <div key={r.k} className="text-xs2 bg-ink-800/60 rounded px-2.5 py-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-dim-100">{({work_status:'작업',crane_move:'호기 이동',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${String(r.equip).endsWith('호기') ? r.equip : `${r.equip}호기`}` : ''}</span>
+                <span className="font-bold text-dim-100">{({work_status:'작업',hold_event:'보류 기록',crane_move:'호기 이동',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${String(r.equip).endsWith('호기') ? r.equip : `${r.equip}호기`}` : ''}</span>
                 <span className="text-dim-400 mono">{(r.ts || r.at) ? new Date(r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
               </div>
               {(r.text || r.message || r.summary) && (

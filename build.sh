@@ -1646,6 +1646,18 @@ fi
     npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_move476.cjs "$SMOKE_MV" "$(pwd)" || { rm -f "$SMOKE_MV"; echo "✗ 4.76(최근 속도·호기 이동·닫는 장수) 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MV"
+    #  4.78: 갈림 칩 «트윈부터/싱글부터»(TW·SG) 판정·물리 종속(KKLC 2610N 마지막 데크 실자료) · 보류 기록 보관(hold_event — 실소스 firebase.js 메모리 RTDB) · 소비처가 hold_event 를 비켜 감 · 미르 배 코드는 대문자만
+    SMOKE_F8=$(mktemp /dev/shm/hometmp/_smokef8_XXXXXX.cjs)
+    SMOKE_F8B=$(mktemp /dev/shm/hometmp/_smokef8b_XXXXXX.cjs)
+    if npx esbuild tools/smoke_fix478_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_F8" --loader:.js=jsx --jsx=automatic --log-level=error \
+       && npx esbuild src/firebase.js --bundle --platform=node --format=cjs --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --outfile="$SMOKE_F8B" --log-level=error; then
+      node tools/smoke_fix478.cjs "$SMOKE_F8" "$(pwd)" "$SMOKE_F8B" || { rm -f "$SMOKE_F8" "$SMOKE_F8B"; echo "✗ 4.78(트윈부터·싱글부터·보류 기록·배 코드 대문자) 연막검사 실패 — 배포 금지"; exit 1; }
+      rm -f "$SMOKE_F8" "$SMOKE_F8B"
+    else
+      echo "✗ 4.78 연막검사 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_F8" "$SMOKE_F8B"; exit 1
+    fi
+    #  4.78: 갈림 줄에 «트윈부터 N · 싱글부터 N» 이 실제로 그려지고 누르면 보라색·첫 카드가 바뀌는가 — 실소스 VoyagePage → GuidedWorkPanel 을 jsdom 으로 그린다
+    node tools/smoke_fix478_ui.cjs "$(pwd)" || { echo "✗ 4.78 화면(트윈부터·싱글부터 칩) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.77: 호기 이동 단추 보고 · 동방 3호기 실 LOLO 몫(RZOR R123E 36대) · 철수 호기 상황판 · 해치 열림닫힘 화물 추정
     SMOKE_CR=$(mktemp /dev/shm/hometmp/_smokecr_XXXXXX.cjs)
     npx esbuild tools/smoke_crane477_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CR" --loader:.js=jsx --jsx=automatic --log-level=error \
