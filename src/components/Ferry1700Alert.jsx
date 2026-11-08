@@ -23,6 +23,8 @@ import { speak } from '../voice.js';
 const _key = (kind) => `gm_f1700_${kind}_${ymdKST()}`;
 //  마감 직후의 호기 표 — 적힌 보고가 없을 때 다시 세는 값을 마감 시각에 맞게. ① 적힌 보고의 호기 표(info.shiftReports/{열쇠}.qcWork)
 //    ② 이 기기가 마감 직후 굳힌 것 ③ 없으면 null(지금 값 + 섞인 대수 안내).
+//  4.77: 저장하는 호기 표(qcWork)가 3호기 실 LOLO 몫으로 보정한 파생값이면(termDisDone 이 붙음) 보고에 qcWorkFix:true 를 남겨 터미널 원값이 아님을 표시한다.
+const _qcFixed = (qw) => !!qw && typeof qw === 'object' && Object.values(qw).some((q) => q && q.termDisDone != null);
 const SNAP_WITHIN_MS = 3 * 60000;
 //  적는 때 — 마감 +3분 ~ +8분. 터미널 실적 시각은 분 단위로 내려 오고 그 분의 실적은 1분쯤 뒤에 들어온다 — 마감 직후에 적으면
 //    마지막 분이 빠진 값이 모든 기기에 굳는다(감사 실측 RZOR R104E 17:00:05 에 적으면 양하 99·77, 참값 102·74). 그 전에는 지금 자료로 센다.
@@ -57,7 +59,7 @@ function _qcSnapOf(key, v, now, cutMs, cutKey) {
     const raw = localStorage.getItem(k);
     if (raw) return JSON.parse(raw);
     const qw = v && v.info && v.info.qcWork;
-    if (qw && now >= cutMs && now - cutMs <= SNAP_WITHIN_MS) { const sn = { at: now, qcWork: qw }; localStorage.setItem(k, JSON.stringify(sn)); return sn; }
+    if (qw && now >= cutMs && now - cutMs <= SNAP_WITHIN_MS) { const sn = { at: now, qcWork: qw, ...(_qcFixed(qw) ? { qcWorkFix: true } : {}) }; localStorage.setItem(k, JSON.stringify(sn)); return sn; }
   } catch (e) { console.warn('[3.63] 호기 표 굳히기 실패 — 지금 값으로 냅니다', e); }
   return null;
 }
@@ -277,7 +279,7 @@ function Ferry1700AlertInner({ voyages, audience = 'inspector', voyageKey = '', 
       let rp = null;
       //  RTDB 에 못 들어가는 null·NaN 은 뺀다
       try { rp = JSON.parse(JSON.stringify(repOf(k, v, c).rep, (kk, vv) => (vv === null || (typeof vv === 'number' && !Number.isFinite(vv)) ? undefined : vv))); } catch (e) { console.warn('[3.64] 마감 보고 만들기 실패 — 적지 않습니다', k, c.key, e); continue; }
-      fbUpdateVoyageInfo(k, { [`shiftReports/${c.key}`]: { at: now, qcWork: qw, rep: rp } })
+      fbUpdateVoyageInfo(k, { [`shiftReports/${c.key}`]: { at: now, qcWork: qw, ...(_qcFixed(qw) ? { qcWorkFix: true } : {}), rep: rp } })
         .catch((e) => console.warn('[3.64] 마감 보고 적기 실패 — 다른 기기가 적거나 나중에 다시 셉니다', k, c.key, e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

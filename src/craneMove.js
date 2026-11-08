@@ -17,6 +17,15 @@ export function withdrawnCranesOf(voyage) {
   return [...last.entries()].filter(([, v]) => v.kind === 'left').map(([equip, v]) => ({ equip, ts: v.ts })).sort((a, b) => b.ts - a.ts);
 }
 
+/** 작업 보고 «호기 이동» 단추가 쓰는 한 벌 — 종류(withdraw·move·return)와 사유를 받아 crane_move 보고 하나를 만든다. 장비교체는 withdraw + 사유 «장비교체»(복귀 보고가 올 때까지 멈춤). */
+export function craneMoveReportOf({ kind, equip = '', to = '', reason = '', vsl = '', inspector = '' }) {
+  const ko = kind === 'withdraw' ? '철수' : kind === 'return' ? '복귀' : '이동';
+  const why = String(reason || '').trim() || ko;
+  const eq = gangEquipNo(equip) || ''; const dst = gangEquipNo(to) || '';
+  return { type: 'crane_move', kind, equip: eq, to: dst, reason: why, via: 'button', by: inspector || '',
+    message: `[호기 ${ko} 보고]\n선박: ${vsl}\n호기: ${eq}${dst ? ` → ${dst}` : ''}\n사유: ${why}` };
+}
+
 /** moveSet(parseNaturalQuery 결과) → 쓸 보고 목록. 철수 취소는 가장 최근 철수한 호기의 복귀로 바꾼다. 적을 게 없으면 [] . */
 export function craneMoveReportsOf(moveSet, voyage, inspector = '') {
   if (!moveSet) return [];

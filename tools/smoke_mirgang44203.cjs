@@ -76,7 +76,7 @@ console.log('④ 배선');
 {
   const src = fs.readFileSync(path.join(ROOT, 'src/mir.js'), 'utf8');
   T(/if \(workPauseOf\(v, now\)\) continue;[^\n]*\n\s*if \(_pnctGangWaiting\(vKey, v, voyages, now\)\) continue;/.test(src), '화남 판정(_angryList — angryReasons·pauseTargetsOf 한 벌)이 _pnctGangWaiting 을 본다');
-  T(/const rows = qcRowsOf\(v && v\.info && v\.info\.qcWork\);/.test(src), '동방 호기 표는 utils.qcRowsOf 한 벌로 읽는다');
+  T(/const rows = qcRowsOf\((?:v && v\.info && v\.info\.qcWork|_raw)\);/   /* 4.77: 3호기 LOLO 보정 전 원값(_raw)을 같은 qcRowsOf 로 읽는다 */.test(src), '동방 호기 표는 utils.qcRowsOf 한 벌로 읽는다');
 }
 console.log(`\n${bad ? '✘' : '✔'} 미르 4.42-03(동방 갱 기다리는 배에 화내지 않음) 연막검사 ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

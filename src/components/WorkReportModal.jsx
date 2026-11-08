@@ -22,6 +22,7 @@ import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
 import { getShipBayDictData } from '../shipStructure.js';
 import { workPauseOf } from '../mir.js';   // 4.62-04: 중단 중이면 첫 화면에 «작업 재개» 단추(외부 요인 중단은 진행 표시가 없어 재개 메뉴가 안 떴다)
+import { craneMoveReportOf, withdrawnCranesOf } from '../craneMove.js';   // 4.77: 호기 이동 단추(철수·장비교체·이동·복귀)
 import ReportEditRow from './ReportEditRow.jsx';   // 4.46: 내가 보낸 보고 고치기·지우기
 
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
@@ -88,6 +89,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [pauseReason, setPauseReason] = useState('');
   const [externalReason, setExternalReason] = useState('');
   const [externalDetail, setExternalDetail] = useState('');
+  // 4.77 호기 이동 — 종류·호기·도착 호기·사유
+  const [cmKind, setCmKind] = useState('');
+  const [cmEquip, setCmEquip] = useState('');
+  const [cmTo, setCmTo] = useState('');
+  const [cmReason, setCmReason] = useState('');
+  const [cmDetail, setCmDetail] = useState('');
+  const [cmBusy, setCmBusy] = useState(false);   // 저장 중 중복 눌림 방지
+  const [cmErr, setCmErr] = useState('');
   const [pauseTarget, setPauseTarget] = useState({ equip: '', mode: '' });
   // M5.79 수동 보고용
   const [manualEquip, setManualEquip] = useState(lastEquip || '1호기');
@@ -477,6 +486,29 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     onClose();
   };
 
+  // 4.77 호기 이동 보고 — 4.76 crane_move 한 벌(미르 말과 같은 기록). 철수·장비교체는 복귀 보고가 올 때까지 그 호기가 멈춘 것으로 본다.
+  const handleCraneMove = async () => {
+    if (cmBusy) return;   // 저장 중 다시 눌러도 두 번 적지 않는다
+    const reason = cmReason === '직접 입력' ? cmDetail.trim() : cmReason;
+    const kind = cmKind === 'return' ? 'return' : cmKind === 'move' ? 'move' : 'withdraw';
+    const r = craneMoveReportOf({ kind, equip: cmEquip, to: kind === 'move' ? cmTo : '', reason: cmKind === 'change' ? (reason || '장비교체') : reason, vsl, inspector });
+    if (!r.equip) return;
+    setCmBusy(true); setCmErr('');
+    try {
+      await fbAddWorkReport(voyageKey, { ...r, by: inspector || r.by || '' });
+    } catch (e) {
+      console.warn('[4.77] 호기 이동 보고 저장 실패 —', r.kind, r.equip, e);
+      setCmErr('호기 이동 보고를 저장하지 못했습니다. 연결을 확인하고 다시 눌러 주세요.');
+      setCmBusy(false);
+      return;
+    }
+    try { await shareText(r.message, '검수 보고'); } catch (e) { console.warn('[4.77] 호기 이동 카톡 공유 실패 — 보고는 저장됨', e); }
+    setCmBusy(false);
+    setCmKind(''); setCmEquip(''); setCmTo(''); setCmReason(''); setCmDetail('');
+    setView('main');
+    onClose();
+  };
+
   const handleResume = async (equipNo, modeArg) => {
     if (askSwitchIfBusy(equipNo, modeArg, 'resume')) return 'asked';   // 4.47 — 부르는 쪽(수동 보고)이 화면을 첫 화면으로 돌리지 않게 알린다
     const message = await resumeCore(equipNo, modeArg);
@@ -702,6 +734,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-indigo-500">
               <RefreshCw className="w-4 h-4"/> 🔧 수동 보고 (시작 안 누른 작업)
             </button>
+            {/* 4.77: 호기 이동 — 철수·장비교체·다른 호기로 이동·복귀(검수사 2026-11-08 «작업보고 안에 두면 됩니다. 사유도 넣어 주셨으면») */}
+            <button onClick={() => { setCmKind(''); setCmEquip(''); setCmTo(''); setCmReason(''); setCmDetail(''); setView('cranemove'); }}
+              data-crane-move="1" className="w-full py-3 bg-amber-800 hover:bg-amber-700 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-amber-600">
+              🏗 호기 이동 (철수 / 장비교체 / 이동 / 복귀)
+            </button>
             {/* M5.76: 외부 요인 작업 중단 (장비고장/강풍/안개/기타) */}
             <button onClick={() => setView('external')}
               className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-red-600">
@@ -837,6 +874,78 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             </button>
           </div>
         )}
+
+        {/* 4.77: 호기 이동 화면 */}
+        {view === 'cranemove' && (() => {
+          const nos = (equipNumbers || []).filter((x) => /^[1-4]호기$/.test(String(x)));   // 갱은 1~4호기만(5호기·105호기 램프 제외)
+          const away = withdrawnCranesOf(voyage).map((w) => String(w.equip));
+          const kinds = [['withdraw', '철수'], ['change', '장비교체'], ['move', '다른 호기로 이동'], ['return', '복귀']];
+          const reasons = ['장비고장', '장비교체', '작업 종료', '선적 전환', '야식 전', '직접 입력'];
+          const needTo = cmKind === 'move';
+          const pickList = cmKind === 'return' ? (away.length ? away : nos) : nos;
+          const okReason = cmKind === 'return' || (cmReason && (cmReason !== '직접 입력' || cmDetail.trim()));
+          const ready = cmKind && cmEquip && (!needTo || (cmTo && cmTo !== cmEquip)) && okReason;
+          return (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
+            <div className="bg-amber-950/40 border border-amber-700 rounded p-2">
+              <div className="font-bold text-amber-200 text-sm">🏗 호기 이동 보고</div>
+              <div className="text-xxs text-amber-300/80 mt-1">철수한 호기는 멈춘 호기로 보고 갱 수에서 빠집니다. 복귀하면 다시 일하는 호기로 셉니다.</div>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-dim-200 mb-1">종류</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {kinds.map(([k, ko]) => (
+                  <button key={k} type="button" onClick={() => { setCmKind(k); setCmEquip(''); setCmTo(''); if (k === 'change') setCmReason('장비교체'); else if (cmReason === '장비교체') setCmReason(''); }}
+                    className={`py-2.5 rounded text-xs font-bold border ${cmKind === k ? 'bg-amber-700 text-white border-amber-500' : 'bg-ink-800 text-dim-200 border-line'}`}>{ko}</button>
+                ))}
+              </div>
+            </div>
+            {cmKind && (
+              <div>
+                <div className="text-xs font-bold text-dim-200 mb-1">{cmKind === 'return' ? '복귀하는 호기' : '떠나는 호기'}</div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {pickList.map((n) => (
+                    <button key={n} type="button" onClick={() => setCmEquip(n)}
+                      className={`py-2.5 rounded text-xs font-bold border ${cmEquip === n ? 'bg-amber-700 text-white border-amber-500' : 'bg-ink-800 text-dim-200 border-line'}`}>{n}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {needTo && (
+              <div>
+                <div className="text-xs font-bold text-dim-200 mb-1">도착 호기</div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {nos.filter((n) => n !== cmEquip).map((n) => (
+                    <button key={n} type="button" onClick={() => setCmTo(n)}
+                      className={`py-2.5 rounded text-xs font-bold border ${cmTo === n ? 'bg-amber-700 text-white border-amber-500' : 'bg-ink-800 text-dim-200 border-line'}`}>{n}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {cmKind && cmKind !== 'return' && (
+              <div>
+                <div className="text-xs font-bold text-dim-200 mb-1">사유</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {reasons.map((r) => (
+                    <button key={r} type="button" onClick={() => setCmReason(r)}
+                      className={`py-2.5 rounded text-xs font-bold border ${cmReason === r ? 'bg-amber-700 text-white border-amber-500' : 'bg-ink-800 text-dim-200 border-line'}`}>{r}</button>
+                  ))}
+                </div>
+                {cmReason === '직접 입력' && (
+                  <input type="text" value={cmDetail} onChange={(e) => setCmDetail(e.target.value)} placeholder="사유 입력"
+                    className="w-full mt-2 bg-ink-800 border border-amber-600 rounded px-3 py-2 text-sm text-dim-100" autoFocus/>
+                )}
+              </div>
+            )}
+            {cmErr && <div className="text-xs text-red-300 bg-red-950/40 border border-red-700 rounded p-2" data-crane-move-err="1">{cmErr}</div>}
+            <button onClick={handleCraneMove} disabled={!ready || cmBusy} data-crane-move-save="1"
+              className="w-full py-3 bg-amber-700 hover:bg-amber-600 disabled:bg-ink-750 disabled:text-dim-400 text-white rounded-pill font-bold flex items-center justify-center gap-2">
+              {cmBusy ? '저장 중…' : '🏗 호기 이동 보고'}
+            </button>
+          </div>
+          );
+        })()}
 
         {/* M5.76: 외부 요인 작업 중단 화면 */}
         {view === 'external' && (

@@ -58,7 +58,8 @@ export function isSentenceQuery(v) {
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
 // (앞 판) 'TallyOne 4.68'   // 4.68 **크레딧이 있는 동안 제미나이를 쓰지 않는다 — 클로드 하루 합계 3달러를 넘으면 그날은 제미나이** — 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 사용하지 않는다. 하루 3불을 초과하면 사용하고» · 미르(대화·번역·자료 답)는 클로드 세 번, 사진 읽기는 세 번(적재 PDF 제외) 불러도 안 되면 제미나이로 가지 않고 «다시 시도» · 제미나이는 키·크레딧 문제·HEIC·하루 한도 초과·mir_config.geminiFallback=true 일 때만 · 한도는 mir_config.claudeDailyUsd(기본 3, 0 이면 클로드 끔).
-export const APP_VERSION = 'TallyOne 4.76'   // 4.76 **미르 «몇 시에 끝나»가 지금 일하는 호기 수와 최근 120 실작업분 속도로 계산 · 호기 이동 말(철수·이동·복귀) 기록 · 해치 닫는 장수 = 연 장수 합** — 검수사 2026-11-08 «1호기 철수 라고 했으며 원갱이라고 이야기 했는데 2갱기준으로 잡는듯» · «14번베이 커버를 수동으로 1장씩 텀을두고 열었는데 닫을때는 2장이 닫혀야 하는데 인지를 못한듯» · «장비교체 철수 같은것들을 앱에서 바꿀수 있어야 합니다». ① nlSearch.recentPaceOf — 갱 수 = 최근 15 실작업분에 완료가 찍힌(또는 시작·재개한) 호기, 갱당 속도 = 최근 120 실작업분(쉬는 시간·장비 고장 제외), RORO(105호기)·호기 모르는 기록은 안 센다 · formatEta·speedFromRecords(작업 속도·갱 계획)가 같은 값 · 근거 한 줄 + «몇 분 차이날 수 있어요». KKLC 2610N 재현 22:57 −161분 → +11분. ② craneMove.js·nlSearch.moveSet·mir.js — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소» → type 'crane_move' 보고(MirFab·SearchPanel). ③ utils.hatchOpenedNetOf — 닫는 보고의 장수는 연 보고 합 − 이미 닫은 합(KKLC 사전 14·18번 hatchCount 2). ④ mir.js 완료 «담당 미확인»(터미널 반영·담당 빈 값) · «야식 시간 몇 시야». 연막 smoke_move476.
+export const APP_VERSION = 'TallyOne 4.77'   // 4.77 **작업 보고 «호기 이동» 단추(철수·장비교체·다른 호기로 이동·복귀 + 사유) · 해치 열림·닫힘을 화물 순서로 채움 · 동방 3호기는 실 LOLO 몫만(105호기 RORO 램프는 갱 아님) · 철수 호기를 수석 대시보드·갱 수에 반영** — 검수사 2026-11-08 10:10 «작업보고 안에 두면 됩니다. 사유도 넣어 주셨으면 합니다 장비고장처럼» · «홀드를 양하 하였다면 커버를 연것이고 열려있는데 데크에 선적 하였다면 닫은것입니다» · «36대가 맞습니다 … 3호기는 실 LOLO 물량만 적용하면 됩니다» · «범위가 크다고 해서 오류를 놔둘수는 없습니다»
+// (앞 판) 'TallyOne 4.76'   // 4.76 **미르 «몇 시에 끝나»가 지금 일하는 호기 수와 최근 120 실작업분 속도로 계산 · 호기 이동 말(철수·이동·복귀) 기록 · 해치 닫는 장수 = 연 장수 합** — 검수사 2026-11-08 «1호기 철수 라고 했으며 원갱이라고 이야기 했는데 2갱기준으로 잡는듯» · «14번베이 커버를 수동으로 1장씩 텀을두고 열었는데 닫을때는 2장이 닫혀야 하는데 인지를 못한듯» · «장비교체 철수 같은것들을 앱에서 바꿀수 있어야 합니다». ① nlSearch.recentPaceOf — 갱 수 = 최근 15 실작업분에 완료가 찍힌(또는 시작·재개한) 호기, 갱당 속도 = 최근 120 실작업분(쉬는 시간·장비 고장 제외), RORO(105호기)·호기 모르는 기록은 안 센다 · formatEta·speedFromRecords(작업 속도·갱 계획)가 같은 값 · 근거 한 줄 + «몇 분 차이날 수 있어요». KKLC 2610N 재현 22:57 −161분 → +11분. ② craneMove.js·nlSearch.moveSet·mir.js — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소» → type 'crane_move' 보고(MirFab·SearchPanel). ③ utils.hatchOpenedNetOf — 닫는 보고의 장수는 연 보고 합 − 이미 닫은 합(KKLC 사전 14·18번 hatchCount 2). ④ mir.js 완료 «담당 미확인»(터미널 반영·담당 빈 값) · «야식 시간 몇 시야». 연막 smoke_move476.
 // (앞 판) 4.75-01 4.75-01 **제출용 체크는 앱으로 직접 입력한 호기(갱)의 컨에만 — 터미널 반영·마감 EDI 적용 컨과 입력 없이 명단에만 있는 호기는 체크 없음** — 검수사 2026-11-07 15:15·15:19 «검수를 직접한 장비(갱)것만 제출용 리스트가 출력되어야 합니다. 갱에 등록되어 있다고 해도 직접 입력을 안한다는건 검수리스트만으로 검수를 한다는것입니다». 실오류·데미지 보고는 직접 입력하는 호기의 것만 표기.
 // (앞 판) 4.75 **검수 리스트 «제출용» — 같은 리스트에 작업한 컨 ✔호기 + 비고에 실오류·데미지, 머리 아래에 누가 몇 호기 몇 대** — 검수사 2026-11-07 14:06~14:18 «검수리스트중에 검수사 누구가 몇호기에서 어떤 컨테이너들을 검수했는지 … 제출용 리스트» · «검수리스트 출력물이 2개 — 작업용과 제출용» · «이어서 20/40 풀/엠티 등 조건마다 맞게». 출력 센터에 단추 하나 추가(작업용은 그대로). utils.inspectionMarksOf 한 벌(완료 기록 + 실오류·데미지 보고, 보고한 호기·사람이 터미널 추정을 이긴다)을 종이·엑셀(CSV)·장 나누기 네 판이 같이 쓴다.
 // (앞 판) 4.74-02 **상황판 호기 칸 이름도 근무조가 끝나면 빠진다** — 검수사 2026-11-07 10:13 «근무 교대를 06:30에 했을텐데 아직도 최원형이 근무중인가여?». 4.71 crewOfVoyage 의 대기 이름 목록에 시간 기준이 빠져 있어 로그아웃 없이 앱만 닫은 최원형(마지막 입력 22:49)이 교대 뒤에도 3호기에 남았다 → standbyOf(standbyNamesOf, 근무조 끝+30분) 한 벌로 거른다.
@@ -182,7 +183,7 @@ export const APP_VERSION = 'TallyOne 4.76'   // 4.76 **미르 «몇 시에 끝�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.76 미르 몇 시에 끝나는 지금 일하는 호기 수와 최근 속도로 계산하고 1호기 철수 같은 말을 기록합니다'
+export const APP_NOTE = '4.77 작업 보고에 호기 이동 단추가 생겼습니다. 철수와 장비교체와 이동과 복귀를 사유와 함께 남깁니다'
 // (앞 판 APP_NOTE) '4.75-01 제출용 검수 리스트는 앱으로 직접 입력한 호기의 컨에만 체크가 붙고 종이로 검수한 호기와 터미널 반영분은 체크하지 않습니다'
 // (앞 판) APP_NOTE = '4.75 검수 리스트 제출용이 생겨 작업한 컨에 체크와 호기 그리고 실오류 데미지 기록이 표기됩니다.'
 // (앞 판) APP_NOTE = '4.74-02 근무가 끝난 검수원 이름은 교대 뒤 상황판 호기 칸에서 빠집니다.'
@@ -4540,9 +4541,18 @@ export function equipReportBoard(reports, voyages, sinceMs = 0) {
     if (!r || !r.ts || r.ts < sinceMs) return;
     const v = (voyages && r.voyageKey && voyages[r.voyageKey]) || null;
     const pier = voyagePierOf(v && v.info) || EQUIP_UNKNOWN_PIER;
-    const equip = r.equip || '미지정';
     const P = byPier[pier] || (byPier[pier] = {});
-    const s = P[equip] || (P[equip] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, externalPause: 0, latest: 0 });
+    //  4.77: 호기 이동 보고(crane_move) — 떠난 호기에 철수/이동/복귀, 도착 호기(to)에 «이동 도착» 으로 센다.
+    if (r.type === 'crane_move') {
+      const ends = [[r.equip || '미지정', String(r.kind || '')]]; if (r.to && (r.kind === 'withdraw' || r.kind === 'move')) ends.push([r.to, 'arrive']);
+      for (const [eqx, kd] of ends) {
+        const sx = P[eqx] || (P[eqx] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, externalPause: 0, craneMove: {}, latest: 0 });
+        sx.total++; sx.craneMove = sx.craneMove || {}; sx.craneMove[kd] = (sx.craneMove[kd] || 0) + 1; if (r.ts > sx.latest) sx.latest = r.ts;
+      }
+      total++; return;
+    }
+    const equip = r.equip || '미지정';
+    const s = P[equip] || (P[equip] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, externalPause: 0, craneMove: {}, latest: 0 });
     s.total++;
     if (r.type === 'work_status') s.status++;
     else if (r.type === 'hatch') s.hatch++;
@@ -4702,6 +4712,47 @@ function _qcCountReport(done, rest) {
   if (!rest) return { excluded: true, reason: '작업 완료 — 보고 제외', doneTotal: done, remainTotal: 0 };
   const basis = done <= rest ? '작업량' : '잔여';
   return { excluded: false, countsOnly: true, basis, total: { total: basis === '작업량' ? done : rest }, doneTotal: done, remainTotal: rest };
+}
+//  ★ 4.77 — **동방 3호기(QC103)는 실 LOLO 물량만.** 검수사 2026-11-08 «4.36대가 맞습니다. 실제적으로 불가능 합니다. 동방 자료는 임의적으로 갱에 분산을 시키는 경우가 있습니다. 고로 3호기는 실 LOLO.물량만 적용하면 됩니다».
+//  실측 RZOR R123E(동방 14번선석) — info.qcWork 는 QC103 양하 96 · QC105 양하 86 으로 나뉘지만 마감텔리 3호기 LOLO 양하는 36대다. 동방이 RORO(105호기=램프) 몫을 두 곳에 나눠 적었다.
+//  양하 EDI 의 `lolo:true` 컨이 정확히 36대다 → 3호기 양하 = LOLO 컨(완료 = 그중 완료 기록에 있는 것, 잔여 = 나머지), 105호기 = 동방 합계 − 3호기(합계는 그대로라 총량·진행·끝나는 시각 계산은 안 변한다).
+//  선적 EDI 에는 lolo 표식이 없다 — 동방 선적 수치(QC103 32대 = 마감텔리 LOLO 리퍼 엠티 32대)는 그대로 둔다.
+//  QC103 과 QC105 가 같이 있는 배만(= RORO 겸용선) · 양하 EDI 에 lolo 컨이 있을 때만. 순수 함수 — 콘앱(window.ConeParse)도 같이 부른다.
+export function qcWorkLoloSplit(qcWork, loloCns, compMap) {
+  if (!qcWork || typeof qcWork !== 'object' || !Array.isArray(loloCns) || !loloCns.length) return qcWork;
+  const keys = Object.keys(qcWork);
+  const k3 = keys.find((k) => /(?:^|\D)103$/.test(String((qcWork[k] && qcWork[k].qc) || k)));
+  const k5 = keys.find((k) => /(?:^|\D)105$/.test(String((qcWork[k] && qcWork[k].qc) || k)));
+  if (!k3 || !k5 || !qcWork[k3] || !qcWork[k5]) return qcWork;
+  const q3 = qcWork[k3], q5 = qcWork[k5];
+  const n = (x) => Math.max(0, Number(x) || 0);
+  const sumDone = n(q3.disDone) + n(q5.disDone), sumRest = n(q3.disRest) + n(q5.disRest);
+  const comp = compMap || {};
+  const L = loloCns.length;
+  //  터미널 3호기 양하 합계가 LOLO 총수보다 클 때만 분리한다(램프 물량이 3호기에 섞인 경우). 같거나 작으면 그대로 — 앱 완료(completed) 반영이 늦어도 흔들리지 않게
+  //  3호기 몫의 상한은 LOLO 총수 L, 완료분은 터미널 3호기 완료(없으면 앱 완료 하한) 로 잡는다.
+  if (n(q3.disDone) + n(q3.disRest) <= L) return qcWork;
+  const lb = Math.max(loloCns.filter((cn) => comp[cn]).length, L - sumRest);   // 적어도 이만큼은 끝났다
+  const d3 = Math.min(L, sumDone, Math.max(lb, n(q3.disDone)));
+  const r3 = Math.min(Math.max(0, L - d3), sumRest);
+  if (d3 === n(q3.disDone) && r3 === n(q3.disRest)) return qcWork;
+  return { ...qcWork,
+    [k3]: { ...q3, disDone: d3, disRest: r3, total: d3 + r3 + n(q3.lodDone) + n(q3.lodRest), termDisDone: n(q3.disDone), termDisRest: n(q3.disRest) },
+    [k5]: { ...q5, disDone: sumDone - d3, disRest: sumRest - r3, total: (sumDone - d3) + (sumRest - r3) + n(q5.lodDone) + n(q5.lodRest), termDisDone: n(q5.disDone), termDisRest: n(q5.disRest) } };
+}
+//  항차 한 벌에 위 분리를 입힌다(메모리 복사 — RTDB 는 그대로). 구독 손질(firebase._postVoyage)이 부른다 — 모든 화면이 같은 호기별 값을 본다.
+export function qcWorkLoloFix(v) {
+  const qw = v && v.info && v.info.qcWork;
+  if (!qw || typeof qw !== 'object') return v;
+  const edi = v.discharge && v.discharge.ediContainers;
+  if (!edi || typeof edi !== 'object') return v;
+  const lolo = [];
+  for (const c of Object.values(edi)) if (c && c.lolo === true && c.cn) lolo.push(String(c.cn).toUpperCase());
+  if (!lolo.length) return v;
+  const comp = {};
+  for (const [cn, r] of Object.entries(v.discharge.completed || {})) if (r) comp[String(cn).toUpperCase()] = r;
+  const next = qcWorkLoloSplit(qw, lolo, comp);
+  return next === qw ? v : { ...v, info: { ...v.info, qcWork: next } };
 }
 //  동방 호기 표 → [{no, qc, disDone, disRest, lodDone, lodRest}] 호기 번호 오름차순. qc 칸이 없으면 키(QC101)로 · 네 칸이 다 0 인 호기(쉬는 호기)는 뺀다.
 export function qcRowsOf(qcWork) {
@@ -7542,6 +7593,11 @@ export function crewSegments(info) {
 }
 //  호기 번호 — 앱 «4호기»·카토스 «GC104»·동방 «QC103» 전부 **끝자리 한 숫자**다(computeTermApply 의 GC10x→x호기 와 같은 뜻).
 export function crewCraneNo(e) { const m = /(\d)\s*(?:호기)?$/.exec(String(e || '').trim()); return m ? +m[1] : 0; }
+//  4.77: 크레인 호기(1~4)만 갱이다. 5호기 자리(QC105 = 105호기, RORO 램프)는 RAMP_NO — 상황판은 «램프(105)» 별도 줄로 그리고 갱 수·멈춘 호기·베이 짝짓기에는 넣지 않는다.
+//    (검수원이 램프에서 «5호기» 로 보고하는 17시·주야간 보고는 종전 그대로 5호기 갱으로 읽는다 — crewCraneNo 는 안 바꿨다.)
+export const RAMP_NO = 5;
+export const isCraneNo = (no) => no > 0 && no < RAMP_NO;
+export const isRampQcKey = (k, q) => /(?:^|\D)105$/.test(String((q && q.qc) || k || ''));   // 동방 호기 표 칸이 램프(QC105)인가
 //  첫 등록 조보다 이른 작업(등록 전에 시작한 것)은 첫 조에 — 그 뒤 창 밖은 «조 미상»(null)
 export function crewSegmentAt(segs, at) {
   return segs.find((s) => at >= s.startMs && at < s.endMs) || (segs.length && at < segs[0].startMs ? segs[0] : null);
@@ -7703,8 +7759,9 @@ export const craneDoneByNo = (voyage) => {
 
 export function craneBaysByTime(voyage, craneNos = null) {
   const out = { byBay: {}, byNo: {}, pairs: 0, skipped: 0, at: 0, why: '' };
-  const nos = (craneNos && craneNos.length ? craneNos.slice() : Object.values((voyage && voyage.info && voyage.info.qcWork) || {})
-    .map((q) => crewCraneNo(q && q.qc)).filter(Boolean)).sort((a, b) => a - b);
+  //  4.77: 램프(QC105 → 5호기 자리)는 베이를 옮겨 다니는 크레인이 아니라 호기 목록 [3,5] 에 넣지 않는다.
+  const nos = (craneNos && craneNos.length ? craneNos.filter(isCraneNo) : Object.entries((voyage && voyage.info && voyage.info.qcWork) || {})
+    .filter(([k, q]) => !isRampQcKey(k, q)).map(([, q]) => crewCraneNo(q && q.qc)).filter(isCraneNo)).sort((a, b) => a - b);
   if (nos.length < 2) { out.why = '호기가 하나뿐'; return out; }
   const at2bays = new Map();                             // 시각 → 베이 → { mode, cn, row, tier }
   const bayCount = {};                                   // 3.53-07: 베이별 실적 수(양·선 합, 같은 초 겹침도 그대로 센다 — hatchEventsOf 와 같은 셈)
@@ -7993,21 +8050,54 @@ export function craneBoardOf(voyage, workers = [], recordsByMode = null, nowMs =
 //    «PCSZ 1 2 호기 작업 중단 하고 다른 선박 작업을 했을텐데 아직도 PCSZ 상황판에 남아 있습니다» · «아니면 작업 중단 상태이거나»).
 //    ⚠ 앱에 붙은 검수원(src live)이 있는 호기는 일하는 호기다. 일하는 호기가 하나도 없으면(배 전체가 쉼) 종전대로 전부 보인다.
 export const CRANE_STOP_MIN = 60;
-export function craneBoardSplit(rows, nowMs = Date.now(), stopMin = CRANE_STOP_MIN, finishedNos = null) {
-  const all = Array.isArray(rows) ? rows : [];
+//  ★ 4.77 — **호기 이동 보고(type 'crane_move') 읽기 한 벌.** 호기 번호 → { state:'left'|'back', kind, ts } (마지막 보고). 철수·이동(떠남) = left · 복귀 · 철수/이동의 도착 호기(to) = back.
+//  미르의 말·작업 보고 «호기 이동» 단추가 같은 보고를 쓰고, 수석 상황판(멈춘 호기)·호기별 집계·갱 수 계산이 이것을 읽는다.
+export function craneMoveStateOf(voyage) {
+  const out = new Map();
+  //  항차가 마감됐으면(검수 완료·작업 끝) 철수는 의미가 없다 — 비워서 돌려준다.
+  const _inf = (voyage && voyage.info) || {};
+  if (_inf.workEndAt || _inf.inspectorDone) return out;
+  const put = (raw, ts, state, kind) => { if (/RORO|램프|(?:^|\D)105\s*(?:호기)?\s*$/i.test(String(raw || ''))) return; const no = crewCraneNo(raw); if (!isCraneNo(no)) return; const cur = out.get(no); if (!cur || ts >= cur.ts) out.set(no, { state, kind, ts }); };
+  for (const [k, r] of Object.entries((voyage && voyage.reports) || {})) {
+    if (!r || r.type !== 'crane_move') continue;
+    const ts = Number(r.ts) || Number(k) || 0; const kind = String(r.kind || '');
+    if (kind === 'withdraw' || kind === 'move') put(r.equip, ts, 'left', kind);
+    if (kind === 'return') put(r.equip, ts, 'back', kind);
+    if ((kind === 'withdraw' || kind === 'move') && r.to) put(r.to, ts + 1, 'back', 'arrive');
+  }
+  return out;
+}
+export const CRANE_MOVE_KO = { withdraw: '철수', move: '이동', return: '복귀', arrive: '이동 도착' };
+export function craneBoardSplit(rows, nowMs = Date.now(), stopMin = CRANE_STOP_MIN, finishedNos = null, moveState = null) {
+  //  4.77 — 램프(5호기 자리 = 105호기)는 갱이 아니다: 갱 수·멈춘 호기·active 계산에서 빼고 ramp 로 따로 돌려준다.
+  const ramp = (Array.isArray(rows) ? rows : []).filter((c) => Number(c.no) === RAMP_NO);
+  const all = (Array.isArray(rows) ? rows : []).filter((c) => Number(c.no) !== RAMP_NO);
   //  4.62-03 — 터미널 본선현황이 «이 호기는 일을 다 마쳤다(남음 0)» 고 하고 다른 호기는 아직 남았으면 그 호기는 철수한 것이다 —
-  //    야간에 2호기를 접고 3·4호기만 상황판에 남긴다(검수사 2026-11-01 18:40 «2호기 철수는 야간 작업떄 2호기 자료를 정리 하고 3호기 4호기만 상황판에서 보여줘야 합니다»).
-  //    입력 없이 터미널 값으로 판정한다(termFinishedCranesOf). 앱에 붙은 검수원(live)이 있는 호기는 철수가 아니다. 남는 호기가 없으면 건드리지 않는다.
+  //    야간에 2호기를 접고 3·4호기만 상황판에 남긴다(검수사 2026-11-01 18:40 «2호기 철수는 야간 작업떄 2호기 자료를 정리 하고 3호기 4호기만 상황�
+  //    입력 없이 터미널 값으로 판정한다(termFinishedCranesOf). 앱에 붙은 검수원(live)이 있는 호기는 철수가 아니다. 남는 호기가 없으면 건드리지 않는
+  //  4.77 — 사람이 «철수»를 알린 호기(crane_move)는 터미널 값 없이도 멈춘 호기다(복귀하면 해제 · 이동 도착 호기는 일하는 호기). moveState = craneMoveStateOf.
   const fin = finishedNos instanceof Set ? finishedNos : null;
+  const mv = moveState instanceof Map ? moveState : null;
+  //  철수는 (1) 복귀 보고 · (2) 철수 뒤 그 호기에 실적(lastAt)·앱에 붙은 검수원(live)이 생기면 · (3) 근무일이 바뀌면(다른 날 조) 풀린다 — isFin 의 live 예외와 같은 한 벌.
+  const _dayKey = (t) => { const d = new Date(currentShift(t).startMs); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+  const _sameDay = (t) => _dayKey(t) === _dayKey(nowMs);
+  const _leftNow = (no, c) => { const m = mv && mv.get(Number(no)); return !!(m && m.state === 'left' && _sameDay(m.ts) && !(c && (c.src === 'live' || (c.lastAt && c.lastAt > m.ts)))); };
+  const isOut = (c) => _leftNow(c.no, c);
+  const isIn = (c) => !!(mv && mv.get(Number(c.no)) && mv.get(Number(c.no)).state === 'back' && nowMs - mv.get(Number(c.no)).ts < stopMin * 60000);
   const isFin = (c) => !!(fin && fin.has(Number(c.no)) && c.src !== 'live');
-  const list = fin && all.some((c) => !isFin(c)) ? all.filter((c) => !isFin(c)) : all;
-  const finRows = list === all ? [] : all.filter(isFin).map((c) => ({ no: c.no, done: c.done, idleMin: 0, finished: true }));
+  const isGone = (c) => isOut(c) || isFin(c);
+  const list = all.some((c) => !isGone(c)) ? all.filter((c) => !isGone(c)) : all;
+  const goneRows = list === all ? [] : all.filter(isGone).map((c) => (isOut(c)
+    ? { no: c.no, done: c.done, idleMin: 0, withdrawn: true, moveKind: mv.get(Number(c.no)).kind }
+    : { no: c.no, done: c.done, idleMin: 0, finished: true }));
+  //  보고만 있고 완료 줄이 아직 없는 철수 호기도 멈춘 호기로 보인다.
+  if (list !== all && mv) for (const [no, m] of mv) if (_leftNow(no, null) && !all.some((c) => Number(c.no) === no)) goneRows.push({ no, done: 0, idleMin: 0, withdrawn: true, moveKind: m.kind });
   const idleMin = (c) => (c.src === 'live' ? 0 : c.lastAt ? Math.max(0, Math.round((nowMs - c.lastAt) / 60000)) : 0);
-  const working = (c) => c.src === 'live' || (c.lastAt && idleMin(c) < stopMin);
-  if (!list.some(working)) return { active: list, stopped: finRows };
+  const working = (c) => c.src === 'live' || isIn(c) || (c.lastAt && idleMin(c) < stopMin);
+  if (!list.some(working)) return { active: list, stopped: goneRows, ramp };
   const active = list.filter((c) => working(c) || !c.lastAt);
-  const stopped = finRows.concat(list.filter((c) => !active.includes(c)).map((c) => ({ no: c.no, done: c.done, idleMin: idleMin(c) })));
-  return { active, stopped };
+  const stopped = goneRows.concat(list.filter((c) => !active.includes(c)).map((c) => ({ no: c.no, done: c.done, idleMin: idleMin(c) })));
+  return { active, stopped, ramp };
 }
 
 //  ★ 4.62-03 — PCTC 본선현황 GC별 «다 마친 호기» 번호 집합. 남음(양하+선적)이 0이고 한 대라도 했으며(합계 > 0), 같은 표에 아직 남은 호기가 있고,
@@ -8298,7 +8388,7 @@ export function hatchEventsOf(voyage, pages = null, now = Date.now()) {
   if (!rows.length) return out;
   if (!rows.some((r) => r.crane)) {
     //  동방 — 바구니로 호기 붙이기(같은 분에 서로 다른 장 = 호기 수만큼이면 안벽 순서 × 접안 방향으로 — 3.53-09 pairCranesForGroups 한 벌)
-    const nos = Object.values((voyage && voyage.info && voyage.info.qcWork) || {}).map((q) => crewCraneNo(q && q.qc)).filter(Boolean).sort((a, b) => a - b);
+    const nos = Object.entries((voyage && voyage.info && voyage.info.qcWork) || {}).filter(([k, q]) => !isRampQcKey(k, q)).map(([, q]) => crewCraneNo(q && q.qc)).filter(Boolean).sort((a, b) => a - b);   // 4.77: 램프 제외
     if (nos.length >= 2) basketCranesOf(voyage, rows, nos);   // 3.63: 바구니 붙이기 한 벌(17시 갱별 보고와 같이 쓴다)
   }
   const GAP = HATCH_GAP_MIN * 60000;
@@ -8375,7 +8465,12 @@ export function hatchEventsOf(voyage, pages = null, now = Date.now()) {
         if (last.ga == null) { if (now - last.end >= GAP) push({ hatch: h, bays: baysOf(h), action: 'close', from: last.end, to: last.end + 5 * 60000, gapMin: 5, crane: last.crane, mode: last.mode, src: 'est' }); }
         else if (last.ga >= GAP) push({ hatch: h, bays: baysOf(h), action: 'close', from: last.end, to: last.end + last.ga, gapMin: Math.round(last.ga / 60000), crane: last.crane, mode: last.mode, src: 'term' });
         else if (dl && dl.gb != null && dl.gb >= GAP) push({ hatch: h, bays: baysOf(h), action: 'close', from: dl.start - dl.gb, to: dl.start, gapMin: Math.round(dl.gb / 60000), crane: dl.crane, mode: 'loading', src: 'term' });
+        //  4.77 — 짝을 못 이룬 닫힘도 화물로 안다: 열려 있는 장(홀드 작업이 있었다) 위 데크에 선적이 시작됐으면 닫은 것이다(검수사 2026-11-08 «열려있는데 데크에 선적 하였다면 닫은것입니다»).
+        //    공백이 없어도(바로 이어 싣기) 선적 데크 첫 실적 직전 5분을 추정 시각으로 쓴다.
+        else if (dl && !seen.has(`${h}|close`)) push({ hatch: h, bays: baysOf(h), action: 'close', from: Math.max(last.end, dl.start - 5 * 60000), to: dl.start, gapMin: Math.max(1, Math.round((dl.start - Math.max(last.end, dl.start - 5 * 60000)) / 60000)), crane: dl.crane, mode: 'loading', src: 'est' });
       }
+      //  4.77 — 열림도 화물로 안다: 그 장 홀드를 양하(또는 선적)했다면 커버는 열린 것이다. 공백이 없어 위 두 줄이 못 잡은 장만 홀드 첫 실적 직전 5분으로 채운다.
+      if (!seen.has(`${h}|open`)) push({ hatch: h, bays: baysOf(h), action: 'open', from: first.start - 5 * 60000, to: first.start, gapMin: 5, crane: first.crane, mode: first.mode, src: 'est' });
     }
   }
   //  호기를 못 붙인 행(동방 초반 등) — 장 단위 추정. 크레인 판정이 이미 낸 장은 건너뛴다(seen).
@@ -8444,15 +8539,20 @@ function _dictHatchSum(dictEntry, bays, groupCenterOf, withCenter = false) {
 export function hatchOpenedNetOf(voyage, bays) {
   const want = new Set((bays || []).map((b) => parseInt(b, 10)).filter((n) => n > 0));
   if (!want.size) return 0;
-  let opened = 0, closed = 0;
+  //  4.77 — 앱이 화물 순서로 «추정»해 적은 자동 보고(auto + src 'est')는 보조다: 같은 쪽(열림/닫힘)에 검수원 보고나 터미널 공백으로 잡은 보고(est 아닌 것)가 하나라도 있으면 추정은 합에서 뺀다 —
+  //    잘못 추정한 열림이 사람 보고와 겹쳐 닫는 장수를 부풀리지 않게. 추정뿐이면 추정 합을 쓴다.
+  const sums = { open: { real: 0, est: 0 }, close: { real: 0, est: 0 } };
   for (const r of Object.values((voyage && voyage.reports) || {})) {
     if (!r || r.type !== 'hatch') continue;
     const rb = (Array.isArray(r.bays) ? r.bays : []).map((b) => parseInt(b, 10));
     if (!rb.some((n) => want.has(n))) continue;
     const n = Number(r.panelCount) > 0 ? Number(r.panelCount) : 0;
     const act = String(r.action || '').toLowerCase();
-    if (act === 'open') opened += n; else if (act === 'close') closed += n;
+    if (act !== 'open' && act !== 'close') continue;
+    sums[act][r.auto && r.src === 'est' ? 'est' : 'real'] += n;
   }
+  const opened = sums.open.real > 0 ? sums.open.real : sums.open.est;
+  const closed = sums.close.real > 0 ? sums.close.real : sums.close.est;
   return Math.max(0, opened - closed);
 }
 export function hatchPanelDetailOf(voyage, mode, bays, dictEntry, groupCenterOf, action) {

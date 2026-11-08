@@ -1646,6 +1646,11 @@ fi
     npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_move476.cjs "$SMOKE_MV" "$(pwd)" || { rm -f "$SMOKE_MV"; echo "✗ 4.76(최근 속도·호기 이동·닫는 장수) 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MV"
+    #  4.77: 호기 이동 단추 보고 · 동방 3호기 실 LOLO 몫(RZOR R123E 36대) · 철수 호기 상황판 · 해치 열림닫힘 화물 추정
+    SMOKE_CR=$(mktemp /dev/shm/hometmp/_smokecr_XXXXXX.cjs)
+    npx esbuild tools/smoke_crane477_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CR" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_crane477.cjs "$SMOKE_CR" "$(pwd)" || { rm -f "$SMOKE_CR"; echo "✗ 4.77(호기 이동·3호기 LOLO·해치 추정) 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_CR"
     #  4.74: 베이뷰 호기 막기·배 목록 줄 대기 표시
     node tools/smoke_hold474.cjs || { echo "✗ 베이뷰 호기 막기 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_submit475.cjs || { echo "✗ 검수 리스트 제출용 연막검사 실패 — 배포 금지"; exit 1; }

@@ -3644,7 +3644,7 @@ export function gangEquipNo(raw) {
   const s = String(raw == null ? '' : raw).trim();
   if (!s || /RORO|램프|^105\s*호기$|^QC\s*105$/i.test(s)) return null;
   const m = s.match(/(\d)\s*호기/) || s.match(/^QC\s*10?(\d)$/i);
-  return m ? `${m[1]}호기` : null;
+  return m && +m[1] >= 1 && +m[1] <= 4 ? `${m[1]}호기` : null;   // 4.77: 평택 크레인은 1~4호기 — 5호기(램프 자리)·0·6~9 는 갱이 아니다(대시보드와 한 벌)
 }
 export function recentPaceOf(voyage, now = Date.now()) {
   if (!voyage) return null;

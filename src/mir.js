@@ -4419,7 +4419,10 @@ export function pauseTargetsOf(voyages, heartbeat, now = Date.now()) {
 //    동방 호기 표(info.qcWork — qcRowsOf 한 벌)에서 이 배에 «하는 중»인 호기(한 방향을 시작했고 아직 남음)가 하나도 없거나, 있어도 전부 같은 부두 다른 배에서도
 //    «하는 중»이면(어느 배에 있는지 가릴 수 없다) 이 배는 갱을 기다리는 중이다. 남은 일이 없거나 호기 표가 없으면 이 문은 닫혀 있다(종전 판정).
 function _qcBusyNos(v) {
-  const rows = qcRowsOf(v && v.info && v.info.qcWork);
+  //  4.77: 3호기 LOLO 몫 보정(termDisDone/termDisRest 를 남긴 칸)은 «누가 지금 일하나» 판정에 터미널 원값으로 되돌려 쓴다 — 보정이 안 들어가는 다른 배(콘앱)와 같은 입력이 되게.
+  const _qw = (v && v.info && v.info.qcWork) || null;
+  const _raw = _qw && typeof _qw === 'object' ? Object.fromEntries(Object.entries(_qw).map(([k, q]) => [k, (q && typeof q === 'object' && q.termDisDone != null) ? { ...q, disDone: q.termDisDone, disRest: q.termDisRest } : q])) : _qw;
+  const rows = qcRowsOf(_raw);
   if (!rows.length) return null;
   return { rest: rows.some((q) => q.disRest + q.lodRest > 0), busy: rows.filter((q) => (q.disDone > 0 && q.disRest > 0) || (q.lodDone > 0 && q.lodRest > 0)).map((q) => q.no) };
 }
