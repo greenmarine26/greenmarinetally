@@ -25,7 +25,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ok('② 보류 단추는 카드의 종전 ⏸ 보류(doHold) 그대로 — 새 보류 UI 없음', /exBtn\('hold', '⏸ 보류'/.test(gwp) && !/export function .*[Hh]old/.test(bm));
   ok('② SearchPanel 은 bayPick·onCardCns 를 GuidedWorkPanel 로 그대로 넘긴다', /bayPick=\{bayView \? bayView\.bayPick : null\}/.test(sp) && /onBayPickCns=\{bayView \? bayView\.onCardCns : null\}/.test(sp));
   ok('② 해제 = 따라가기·비율·배율·자동/수동·베이·단 복귀(saved) · 뒤로가기는 먼저 해제', /saved: \{ follow, ratio, zoom, ctx:/.test(bvw) && /bayModeRef\.current && releaseRef\.current\) releaseRef\.current\(\)/.test(bvw));
-  ok('② 데크가 남은 장의 홀드 컨은 홀드 단을 열지 않는다(V8.45 게이트와 같은 host.deck)', /const deckBlock = tg\.tier === 'hold' && host\.deck > 0/.test(gwp));
+  ok('② 데크가 남은 해치의 홀드 컨은 홀드 단을 열지 않는다(4.80-02 — 판정은 bayMode.bayModeDeckGateOf 한 벌, 이웃 장 데크까지)', /const gate = tg\.tier === 'hold' \? bayModeDeckGateOf\(remaining, tg\.center, groupCenterOf, \(a, b\) => sameBayGroup\(a, b, bayPairs\)\) : null/.test(gwp) && /const deckBlock = !!gate/.test(gwp) && /export function bayModeDeckGateOf/.test(bm));
   const fb = read('src/components/FitBox.jsx');
   ok('② 4.80-01 소스 — 작은 카드는 bayMini 한 갈래(SearchPanel→GuidedWorkPanel)이고 FitBox 가운데 상자는 베이모드에서만(center={!!bayMode})', /bayMini=\{!!\(bayView && bayView\.mini\)\}/.test(sp) && /mini: !!bayMode/.test(bvw) && /center=\{!!bayMode\}/.test(bvw) && /center \? \(/.test(fb));
   ok('② 4.80-01 소스 — 폰 베이모드도 세로 쌓기·가로 나란히 중 큰 쪽을 고른다(layoutPick 한 벌 재사용 — 판정을 새로 만들지 않는다)', /if \(!isWide && !bayMode\) \{ setLayoutPick\('col'\)/.test(bvw) && /onlyLayout=\{isWide \|\| bayMode \? layoutPick : 'col'\}/.test(bvw));
@@ -63,6 +63,18 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ok('① 그림 칸 표시 — 보라 테두리 키 37-07-84(pick) · 불일치 키는 빨강이 이긴다', cells.get('37-07-84') === 'pick' && cells.get('39-07-84') === 'conflict');
   ok('① 요청 번호는 같은 컨을 다시 눌러도 늘어난다', (() => { const a = U.bayPickRequest('seku1384558', 5), b = U.bayPickRequest('SEKU1384558', 5); return a.cn === 'SEKU1384558' && b.seq > a.seq; })());
   ok('① 베이모드는 양하만', U.bayModeOkFor('discharge') && !U.bayModeOkFor('loading'));
+  //  4.80-02 — 홀드 컨의 데크 게이트(같은 해치 이웃 장까지). 센터 계산은 실소스 규칙(짝수=자기 · 짝 없는 홀수=자기 · 짝 있는 홀수=사이 짝수).
+  {
+    const mk = (bay, tier) => ({ cn: `T${bay}${tier}`, bay: String(bay), tier: String(tier) });
+    const gcOf = (b) => { const n = parseInt(b, 10); return n; };   // 이 시험은 홀수도 자기 자신(= 짝 없는 홀수 베이)
+    const near = (a, b) => Math.abs(parseInt(a, 10) - parseInt(b, 10)) === 1;
+    const r1 = [mk(10, 84), mk(10, 82), mk(10, 4), mk(11, 4)];
+    const g10 = U.bayModeDeckGateOf(r1, 10, gcOf, near), g11 = U.bayModeDeckGateOf(r1, 11, gcOf, near);
+    ok('① 게이트 — 자기 장에 데크가 있으면 자기 장으로(own)', !!g10 && g10.center === 10 && g10.n === 2 && g10.own === true, JSON.stringify(g10));
+    ok('① 게이트 — 짝 없는 홀수 베이(11)도 이웃 짝수 베이(10)의 데크 2대가 남았으면 막고 10 으로 안내(own=false)', !!g11 && g11.center === 10 && g11.n === 2 && g11.own === false, JSON.stringify(g11));
+    ok('① 게이트 — 데크가 다 내려갔으면 통과(null)', U.bayModeDeckGateOf([mk(10, 4), mk(11, 4)], 11, gcOf, near) === null && U.bayModeDeckGateOf([mk(10, 4), mk(11, 4)], 10, gcOf, near) === null);
+    ok('① 게이트 — 이웃이 아닌 장(번호 차 2 이상)의 데크는 세지 않는다', U.bayModeDeckGateOf([mk(14, 84), mk(11, 4)], 11, gcOf, near) === null);
+  }
 
   //  ── ③ 화면 ──
   const ent = path.join(TMP, 'fx480ui.jsx'), out = path.join(TMP, 'fx480ui.js');
@@ -79,7 +91,9 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   execSync(`npx esbuild "${ent}" --bundle --loader:.jsx=jsx --loader:.js=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url ${aliasFb} --outfile="${out}" --log-level=error`, { cwd: ROOT, stdio: 'pipe' });
   const src = fs.readFileSync(out, 'utf8');
 
-  async function boot(viewOnly = false) {
+  async function boot(viewOnly = false, S = null) {
+    const V = S ? S.voyage : voyage, K = S ? S.vk : vk;   // S = 다른 항차 시나리오(F)
+
     const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
     const W = dom.window, errs = [];
     W.addEventListener('error', (ev) => errs.push(ev.message)); W.console.warn = () => {}; W.console.log = () => {};
@@ -87,19 +101,20 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     W.scrollTo = () => {}; W.scrollBy = () => {}; W.HTMLElement.prototype.scrollIntoView = function () {};
     W.global = W; W.speechSynthesis = { speak() {}, cancel() {}, getVoices() { return []; } };
     const alerts = []; W.alert = (m) => alerts.push(String(m));
+    const notices = []; W.addEventListener('writeNotice', (ev) => notices.push(String((ev.detail && ev.detail.message) || '')));
     W.localStorage.setItem('gm_equip_no', '1호기');
     W.localStorage.setItem('master_active_inspector_v1', '연막');
-    W.__memdb = { voyages: { [vk]: clone(voyage) }, ship_bay_dict_v3: { KKLC: clone(FX.shipDict) } };
-    W.__fbShipBayDict = { KKLC: clone(FX.shipDict) };
+    W.__memdb = { voyages: { [K]: clone(V) }, ship_bay_dict_v3: S ? {} : { KKLC: clone(FX.shipDict) } };
+    W.__fbShipBayDict = S ? {} : { KKLC: clone(FX.shipDict) };
     try {
       W.eval(src);
       if (viewOnly) W.__setActive({ name: '연막', ymd: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), mode: 'view', voyageKey: '', equip: '', at: Date.now() });   // 조회만 — 쓰기 문지기(isViewOnlyNow)가 본다
-      W.__go(JSON.stringify(voyage), vk);
+      W.__go(JSON.stringify(V), K);
     } catch (er) { errs.push('THROW ' + er.message); }
     await sleep(350);
     const d = W.document;
     const H = {
-      W, d, errs, alerts,
+      W, d, errs, alerts, notices,
       click: async (b, ms = 300) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } },
       txt: (b) => b.textContent.replace(/\s+/g, ' ').trim(),
     };
@@ -108,13 +123,20 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     H.cards = () => [...d.querySelectorAll('[data-gw-card]')].map((c) => ({ label: c.getAttribute('data-gw-card'), cn: c.getAttribute('data-gw-cn'), pos: c.getAttribute('data-gw-pos') }));
     H.bottom = () => d.querySelector('[data-bayview-bottom]');
     H.cell = (cn) => [...(H.bottom() || d).querySelectorAll('button')].find((b) => H.txt(b).includes(cn.slice(-4)) && b.className.includes('relative'));
-    H.sync = async () => { try { W.__upd(JSON.stringify(W.__memdb.voyages[vk]), vk); } catch (er) { errs.push('SYNC ' + er.message); } await sleep(500); };   // 실제 앱은 RTDB 구독이 새 항차를 내려준다 — 스텁에는 구독이 없어 쓴 결과를 다시 내려준다
-    H.done = () => Object.keys((W.__memdb.voyages[vk].discharge || {}).completed || {}).filter((c) => LAST.includes(c));
+    H.sync = async () => { try { W.__upd(JSON.stringify(W.__memdb.voyages[K]), K); } catch (er) { errs.push('SYNC ' + er.message); } await sleep(500); };   // 실제 앱은 RTDB 구독이 새 항차를 내려준다 — 스텁에는 구독이 없어 쓴 결과를 다시 내려준다
+    H.done = () => Object.keys((W.__memdb.voyages[K].discharge || {}).completed || {}).filter((c) => (S ? S.track : LAST).includes(c));
     //  베이뷰 → 자동 가이드 → B38 장 → 데크
     await H.click([...d.querySelectorAll('button[role="tab"]')].find((b) => /작업 시작/.test(b.textContent)), 350);
     await H.click(await H.until(() => H.btn(/^베이뷰 작업/)), 400);
     await H.click(await H.until(() => H.btn(/자동 가이드$/)), 450);
     await H.until(() => /작업할 베이를 선택하세요/.test(d.body.textContent));
+    if (S) {   // F — 다른 항차: 지정한 베이가 든 장 칩만 고르고 단은 고르지 않는다(베이모드 눌러 보며 가린다)
+      { const side = await H.until(() => H.btn(/우현 접안/), 3000); if (side) { await H.click(side, 500); const okb = await H.until(() => H.btn(/^맞습니다$/), 2000); if (okb) await H.click(okb, 500); } }
+      await H.until(() => /작업할 베이를 선택하세요/.test(d.body.textContent));
+      await H.click(await H.until(() => [...d.querySelectorAll('button')].find((b) => { const m = H.txt(b).match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).some((x) => S.bays.includes(x)) && /남은 컨/.test(H.txt(b)); })), 350);
+      const keep2 = H.btn(/그대로$/); if (keep2) await H.click(keep2, 300);
+      return H;
+    }
     await H.click(await H.until(() => [...d.querySelectorAll('button')].find((b) => { const m = H.txt(b).match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).some((x) => [37, 38, 39].includes(x)) && /남은 컨/.test(H.txt(b)); })), 350);
     const keep = H.btn(/그대로$/); if (keep) await H.click(keep, 300);
     await H.click(await H.until(() => [...d.querySelectorAll('button')].find((b) => /데크/.test(H.txt(b)) && /[1-9]/.test(H.txt(b)) && !/변경|◀|⇄/.test(H.txt(b)))), 450);
@@ -216,6 +238,38 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     ok('E1 조회만 — 카드는 보인다', c.length === 1 && c[0].cn === 'SEKU1370180', JSON.stringify(c));
     await H.click(H.btn(/양하확인$/), 600);
     ok('E2 조회만 — [양하확인] 은 기존 문지기가 막고(알림) 기록은 0건', H.alerts.some((a) => /조회만/.test(a)) && H.done().length === 0, JSON.stringify({ alerts: H.alerts, done: H.done() }));
+    close(H);
+  }
+  //  F. 4.80-02 — 데크가 남은 해치에서 홀드 컨 두 번 누르기(짝 없는 홀수 베이 11 + 사이 짝수 베이 10 = 같은 그림 «(10)11»).
+  //     자료 = tools/fixtures/boardbays_obwh.json(OBWH 보드 실측 — 10번 데크 16 · 홀드 18, 11번 홀드 4 · 데크 0). 종전엔 10 홀드는 막히고 11 홀드는 통과해 «앞뒤가 맞지 않았다».
+  {
+    const FB = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/boardbays_obwh.json'), 'utf8'));
+    const edi = {};
+    for (const [k, c] of Object.entries(FB.discharge.ediContainers)) {
+      if (!['10', '11'].includes(String(c.bay))) continue;
+      const odd = parseInt(c.bay, 10) % 2 === 1;
+      edi[k] = { ...c, cn: k, l4: k.slice(-4), iso: odd ? '2200' : '4500', tp: odd ? "20'GP" : "40'HC", pod: 'KRPTK', pol: 'HKHKG', fe: 'F', _mode: 'discharge', _ptk: true };
+    }
+    const vF = { key: 'OBWH_F', info: { ...clone(FB.info), berthSide: '우현' }, discharge: { ediContainers: edi, completed: {} }, loading: { ediContainers: {}, completed: {} } };
+    const deckCns = Object.values(edi).filter((c) => parseInt(c.tier, 10) >= 80).map((c) => c.cn);
+    const H10 = 'LYGU4031384', H11 = 'SPSU2025367', H11b = 'SPSU2022157';   // 10번 홀드 40 · 11번 홀드 20 · 11번 홀드 20
+    ok(`F0 자료 — 10번 데크 ${deckCns.length}대 · 10번 홀드 · 11번 홀드(짝 없는 홀수 베이)`, deckCns.length === 16 && edi[H10] && parseInt(edi[H10].tier, 10) < 80 && edi[H11] && edi[H11].bay === '11' && parseInt(edi[H11].tier, 10) < 80);
+    const H = await boot(false, { voyage: vF, vk: vF.key, bays: [10, 11], track: Object.keys(edi) });
+    await H.click(H.d.querySelector('[data-bayview-baymode-on]'), 600);
+    const press = async (cn) => { H.notices.length = 0; const c = await H.until(() => H.cell(cn), 3000); await H.click(c, 1300); return { cards: H.cards(), notices: H.notices.slice(), prompt: /해치커버를 열어야 합니다/.test(H.d.body.textContent) }; };
+    const deckCard = (r) => r.cards.length >= 1 && r.cards.every((x) => parseInt(String(x.pos).split('-')[2], 10) >= 80);
+    const r1 = await press(H10);
+    ok(`F1 데크가 남은 해치에서 10번 홀드 컨을 누르면 막힌다 — 알림 «${r1.notices[0] || ''}» · 카드는 데크 ${r1.cards.map((x) => x.pos).join()}`, r1.notices.length === 1 && /데크 16대가 남아 홀드 컨\(1384\)은 아직 못 내립니다/.test(r1.notices[0]) && deckCard(r1), JSON.stringify(r1));
+    const r2 = await press(H11);
+    ok(`F2 이어서 11번 홀드 20피트를 눌러도 똑같이 막힌다(종전엔 통과) — 알림 «${r2.notices[0] || ''}» · 카드는 데크 ${r2.cards.map((x) => x.pos).join()}`, r2.notices.length === 1 && /해치 데크 16대가 남아 홀드 컨\(5367\)은 아직 못 내립니다/.test(r2.notices[0]) && deckCard(r2) && !r2.prompt, JSON.stringify(r2));
+    const r3 = await press(H10);
+    ok('F3 다시 10번 홀드를 눌러도 같은 결과(앞뒤가 맞는다)', r3.notices.length === 1 && /이 장 데크 16대/.test(r3.notices[0]) && deckCard(r3), JSON.stringify(r3));
+    //  데크를 모두 내린다(완료 기록 — 스텁 메모리). 이제 11번 홀드는 통과해야 한다.
+    for (const cn of deckCns) vF.discharge.completed[cn] = { at: Date.now(), by: '연막' };
+    H.W.__memdb.voyages[vF.key].discharge.completed = clone(vF.discharge.completed);
+    await H.sync();
+    const r4 = await press(H11);
+    ok(`F4 데크를 다 내린 뒤 11번 홀드는 통과 — 막힘 알림 없음 · ${r4.cards.length ? '카드 ' + r4.cards.map((x) => x.cn).join() : '해치커버 열기 물음(11번 데크는 0대 — 홀드 접근 단계)'}`, r4.notices.length === 0 && (r4.cards.some((x) => x.cn === H11) || r4.prompt), JSON.stringify(r4));
     close(H);
   }
 

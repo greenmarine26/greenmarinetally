@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
-import { bayGroupCenter } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 그룹 계산 단일 소스
+import { bayGroupCenter, sameBayGroup } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 그룹 계산 단일 소스
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 4.42: «23번 / (24)25번» 나눠 고르기 — 베이사전 쪽(카고플랜·보드 그림과 같은 장)
 import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «몇 호기 화물인가» 안내 — 계산은 한 벌
@@ -19,7 +19,7 @@ import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회�
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { workPauseOf } from '../mir.js';   // 4.63-04: 내 호기가 작업 중단 중이면 해치커버 물음을 하지 않는다
-import { bayModeTargetOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
+import { bayModeTargetOf, bayModeDeckGateOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
 import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
 import { isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -1144,8 +1144,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       note(tg.state === 'held' ? `${String(p.cn).slice(-4)} 는 보류 중입니다 — 보류 목록에서 해제하면 카드로 올라옵니다.` : `${String(p.cn).slice(-4)} 는 남은 양하 컨이 아닙니다(이미 완료됐거나 평택 양하분이 아님).`);
       return finish();
     }
-    const host = groups.find((x) => x.center === tg.center);
-    if (!host) { note(`${String(p.cn).slice(-4)} 가 든 장을 찾지 못했습니다 — 장 칩에서 직접 고르세요.`); return finish(); }
+    const hostOwn = groups.find((x) => x.center === tg.center);
+    if (!hostOwn) { note(`${String(p.cn).slice(-4)} 가 든 장을 찾지 못했습니다 — 장 칩에서 직접 고르세요.`); return finish(); }
+    //  4.80-02 — 홀드 컨은 «같은 해치»의 데크가 다 내려간 뒤에만(짝 없는 홀수 베이는 사이 짝수 베이와 다른 장이라 장 단위로만 보면 한 번은 되고 한 번은 막혔다).
+    //    막히면 데크가 남은 장(자기 장에 데크가 있으면 자기 장, 아니면 이웃 장)의 데크로 안내한다. 통과는 종전처럼 누른 컨의 장·단.
+    const gate = tg.tier === 'hold' ? bayModeDeckGateOf(remaining, tg.center, groupCenterOf, (a, b) => sameBayGroup(a, b, bayPairs)) : null;
+    const host = (gate && groups.find((x) => x.center === gate.center)) || hostOwn;
     if (st.busy) return again();
     if (st.lastG !== selectedGroup || st.lastT !== selectedTier) { st.lastG = selectedGroup; st.lastT = selectedTier; return (++st.tries > 30) ? (note('장·단이 자리 잡지 않아 멈췄습니다 — 한 번 더 눌러 주세요.'), finish()) : again(); }
     if (selectedGroup !== host.center) {
@@ -1154,16 +1158,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       Promise.resolve(pickGroup(host)).catch((e) => console.warn('[베이모드] 장 고르기 실패:', e)).finally(() => { st.busy = false; _setPickTick((n) => n + 1); });
       return again();
     }
-    const deckBlock = tg.tier === 'hold' && host.deck > 0;
+    const deckBlock = !!gate;
     const want = deckBlock ? 'deck' : tg.tier;
     if (selectedTier !== want) { if (++st.tries > 30) { note('단을 옮기지 못했습니다 — 단 단추에서 직접 고르세요.'); return finish(); } setSelectedTier(want); return again(); }
-    if (deckBlock) { note(`이 장 데크 ${host.deck}대가 남아 홀드 컨(${String(p.cn).slice(-4)})은 아직 못 내립니다 — 데크를 먼저 내리세요. 데크 컨이 못 내리는 컨이면 ⏸ 보류.`); return finish(); }
+    if (deckBlock) { note(`${gate.own ? '이 장' : '이 해치'} 데크 ${gate.n}대가 남아 홀드 컨(${String(p.cn).slice(-4)})은 아직 못 내립니다 — 데크를 먼저 내리세요. 데크 컨이 못 내리는 컨이면 ⏸ 보류.`); return finish(); }
     const arr = [String(p.cn).toUpperCase()];
     setBayFirst(null); singleBaysRef.current = []; setStreamPref(null);
     closeFix(); setHoldOpen(false); setSingleMode(false); setPosPick(false);
     setResumeCns(arr); setPulled(arr); setPulledBay(true);
     return finish();
-  }, [bayPick && bayPick.seq, _pickTick, mode, groups, remaining, heldSet, selectedGroup, selectedTier]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bayPick && bayPick.seq, _pickTick, mode, groups, remaining, heldSet, selectedGroup, selectedTier, bayPairs]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   //  4.80: 지금 카드의 컨 번호를 베이뷰에 알린다 — 베이 그림이 그 칸에 보라 테두리를 칠한다(베이모드가 아니면 부모가 안 쓴다).
   const _cardCnsKey = card ? [card.main && card.main.cn, card.twin && card.twin.cn].filter(Boolean).join('|') : '';

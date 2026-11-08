@@ -30,6 +30,28 @@ export function bayModeTargetOf(remaining, heldSet, cn, groupCenterOf) {
   return { state: 'ok', c, center: groupCenterOf(c.bay), tier: parseInt(c.tier, 10) >= 80 ? 'deck' : 'hold' };
 }
 
+/**
+ * 홀드 컨을 내리기 전에 먼저 내려야 할 데크가 남은 장 — 같은 해치 기준(4.80-02).
+ *   종전엔 «누른 컨이 든 장(group) 자기 데크» 만 봤다. 짝이 없는 홀수 베이(11)는 사이 짝수 베이(10)와 다른 장이라 11 홀드는 통과하고 10 홀드는 막혀,
+ *   같은 그림(10 / 11)에서 한 번은 되고 한 번은 안 됐다(검수사 2026-11-09 «데크를 내리지 않은 상태에서 홀드를 지정하면 지정이 되고 … 20피트를 선택하니 또 데크 화물이 남아서 안된다고»).
+ *   데크는 사이 짝수 베이의 40피트가 양옆 홀수 베이 자리에 걸쳐 같은 커버 위에 얹힌다 — 그래서 옆 베이(번호 차 1, swapGrade.sameBayGroup 과 같은 이웃 규칙)의 데크도 센다.
+ *   반환 { center, n, own } = 데크 안내로 갈 장 center · 막는 데크 수 · 자기 장 데크인가. 막을 데크가 없으면 null.
+ *   nearBay(a, b) = 두 베이가 같은 해치 이웃인가(호출부가 sameBayGroup 을 넘긴다 — 여기서 새 규칙을 만들지 않는다).
+ */
+export function bayModeDeckGateOf(remaining, center, groupCenterOf, nearBay) {
+  const isDeck = (c) => parseInt(c.tier, 10) >= 80;
+  const mine = (remaining || []).filter((c) => groupCenterOf(c.bay) === center);
+  const own = mine.filter(isDeck).length;
+  if (own > 0) return { center, n: own, own: true };
+  const bays = [...new Set(mine.map((c) => parseInt(c.bay, 10)))];
+  const near = (remaining || []).filter((c) => isDeck(c) && groupCenterOf(c.bay) !== center && bays.some((b) => nearBay(b, c.bay)));
+  if (!near.length) return null;
+  const by = {};
+  for (const c of near) { const k = groupCenterOf(c.bay); by[k] = (by[k] || 0) + 1; }
+  const best = Object.keys(by).map(Number).sort((a, b) => (by[b] - by[a]) || (a - b))[0];
+  return { center: best, n: near.length, own: false };
+}
+
 const pad2 = (x) => String(x ?? '').padStart(2, '0');
 /** 그림에서 고른 카드의 칸 — BayPlan warnCells 와 같은 키('베이-열-단')로 'pick' 을 단다. base 는 불일치 표시 Map(있으면 그 위에 얹는다, 빨강이 이긴다). */
 export function bayModeCellsOf(cns, containers, base = null) {
