@@ -83,7 +83,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
 //  4.25-02 — «다른 갱» 물음을 이미 한 장(항차·모드·장·두 호기). 모듈에 두어 탭을 옮기거나 자동↔수동을 바꿔도 앱을 다시 열기 전까지는 다시 묻지 않는다(감사 기록 — 컴포넌트에 두면 다시 그려질 때마다 물었다).
 const _askedGang = new Set();
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null }) {   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null, bayMini = false }) {   // 4.80-01 bayMini — 베이모드 켠 동안 카드를 작게(머리·순서·다음 예측·수동 전환 줄을 접고 카드 줄을 한데 모아 단추까지 폰 화면에 든다)   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -2081,9 +2081,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const chip = 'gw-chip font-bold';
     return (
     <div data-gw-card={label} data-gw-cn={c.cn} data-gw-pos={_warn ? '' : _pos}
-      className={`rounded-pill border-2 ${_twinLab && !compact ? 'p-2.5' : 'p-3'} ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
+      className={`rounded-pill border-2 ${bayMini ? 'p-1.5' : _twinLab && !compact ? 'p-2.5' : 'p-3'} ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
       {/* ★ 4.27: 트윈 카드(앞·뒤)는 이름표를 컨번호 앞에 붙인다 — 한 줄을 줄여 카드 두 장과 [트윈 한 번에 …확인] 이 한 화면(검수사 2026-10-15 07:45 «자동이나 수동이나 한 화면에 나와야 합니다»). 단독·«자리 미정» 은 종전 줄. */}
-      {(!_twinLab || _warn || compact) && (
+      {!bayMini && (!_twinLab || _warn || compact) && (
       <div className="flex items-center justify-between text-2xs mb-1">
         <span className={`font-bold ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>{label}</span>
         {_warn && <span className="text-orange-300 mono font-bold">자리 미정</span>}
@@ -2109,24 +2109,27 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           </div>
         );
       })()}
-      <button onClick={() => onOpenContainer?.(c)} className="w-full text-left">
-        {_twinLab && !_warn && !compact && <span className={`mr-1 align-middle text-2xs font-black px-1.5 py-0.5 rounded ${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'}`}>{label}</span>}
-        <span className={`mono font-bold text-dim-100 ${compact ? 'text-xl' : 'gw-cn-a'}`}>{c.cn.slice(0, -4)}</span>
-        <span className={`mono font-black text-emerald-300 ${compact ? 'text-3xl' : 'gw-cn-b'}`}>{c.cn.slice(-4)}</span>
+      <div className={bayMini ? 'flex flex-wrap items-center gap-x-2' : undefined}>{/* 4.80-01: 베이모드 — 컨번호 · 자리 · 데크/홀드를 한 줄에 */}
+      <button onClick={() => onOpenContainer?.(c)} className={bayMini ? 'text-left' : 'w-full text-left'}>
+        {(bayMini || (_twinLab && !_warn && !compact)) && <span className={`mr-1 align-middle text-2xs font-black px-1.5 py-0.5 rounded ${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'}`}>{label}</span>}
+        <span className={`mono font-bold text-dim-100 ${bayMini ? 'text-sm' : compact ? 'text-xl' : 'gw-cn-a'}`}>{c.cn.slice(0, -4)}</span>
+        <span className={`mono font-black text-emerald-300 ${bayMini ? 'text-2xl' : compact ? 'text-3xl' : 'gw-cn-b'}`}>{c.cn.slice(-4)}</span>
       </button>
       {/* 4.26 자리 줄 — 자리 상자 · 데크/홀드 · 출발 → 도착(맞교환 «자리 미정» 이면 상자 없음 — 머리와 아래 경고가 말한다) */}
       {!_warn && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-          <span className={`mono font-black text-dim-100 bg-ink-800 border border-line-strong ${compact ? 'text-base px-1.5 rounded' : 'gw-pos'}`}>{_pos}</span>
+        <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${bayMini ? '' : 'mt-1'}`}>
+          <span className={`mono font-black text-dim-100 bg-ink-800 border border-line-strong ${bayMini ? 'text-sm px-1 rounded' : compact ? 'text-base px-1.5 rounded' : 'gw-pos'}`}>{_pos}</span>
           <span className={`font-bold ${_deck ? 'text-sky-300' : 'text-amber-300'} ${compact ? 'text-xs' : 'text-base'}`}>{_deck ? '데크' : '홀드'}</span>
-          {(c.pol || c.pod) && <span className={`mono font-bold text-teal-300 ${compact ? 'text-xs' : 'text-lg'}`}>{c.pol || '?'} → {c.pod || '?'}</span>}
+          {!bayMini && (c.pol || c.pod) && <span className={`mono font-bold text-teal-300 ${compact ? 'text-xs' : 'text-lg'}`}>{c.pol || '?'} → {c.pod || '?'}</span>}
         </div>
       )}
+      </div>
       {/* 4.26 칩 한 줄 — 규격 · 풀/엠티·무게 · 선사 · 특수 표시(수화물·긴급·X-RAY·풀 리퍼·제작컨·DG·FR·O/T·OOG·시프팅·추가분) */}
-      <div className="flex flex-wrap items-center gap-1 mt-1.5 mono">
+      <div className={`flex flex-wrap items-center gap-1 mono ${bayMini ? 'mt-1' : 'mt-1.5'}`}>
         <span className={`${chip} bg-ink-800 text-dim-100`}>{c.tp || isoToLabel(c.iso) || isoShown(c.iso)}</span>
         <span className={`${chip} bg-ink-800 ${_empty ? 'text-dim-300' : 'text-emerald-300'}`}>{_empty ? 'EMPTY' : 'FULL'}{c.wt ? ` ${formatWt(c.wt)}` : ''}</span>
         {c.op && <span className={`${chip} bg-ink-800 text-dim-200`}>{c.op}</span>}
+        {bayMini && (c.pol || c.pod) && <span className={`${chip} bg-ink-800 text-teal-300`}>{c.pol || '?'}→{c.pod || '?'}</span>}
         {m.lugg && <span className={`${chip} bg-violet-700 text-violet-50`}>🧳 수화물</span>}
         {m.urgent && <span className={`${chip} bg-rose-600 text-rose-50`}>▲ 긴급</span>}
         {c._xray && <span className={`${chip} bg-fuchsia-700 text-fuchsia-100`}>★ X-RAY</span>}
@@ -2141,7 +2144,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         {c._extraOfList && <span className={`${chip} bg-lime-800 text-lime-100`}>＋ 추가분</span>}
       </div>
       {/* 실번호 — 확인·수정. 4.26: 검수리스트와 같은 값(inspectionSealOf — 엠티는 엠티실). 엠티에 실이 없으면 경고가 아니라 «엠티 · 실 없음». 고치는 칸은 종전대로 sl. */}
-      <div className="mt-1.5 pt-1.5 border-t border-line">
+      <div className={`border-t border-line ${bayMini ? 'mt-1 pt-1' : 'mt-1.5 pt-1.5'}`}>
         {editSealCn === c.cn ? (
           <div className="flex gap-1.5">
             <input autoFocus value={sealVal} onChange={e => setSealVal(e.target.value)} {...NUM_INPUT_PROPS}
@@ -2429,16 +2432,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     pulled: (<>
           {/* 4.26 — «다음 예정» 줄을 눌러 올린 카드면 띠를 붙인다(잘못 눌렀으면 [원래 순서로]). */}
           {pulledOn && (
-            <div className="flex items-center justify-between gap-2 bg-violet-950/60 border border-violet-600 rounded-pill px-3 py-1.5" data-gw-pulled="1">
+            <div className={`flex items-center justify-between gap-2 bg-violet-950/60 border border-violet-600 rounded-pill px-3 ${bayMini ? 'py-0.5' : 'py-1.5'}`} data-gw-pulled="1">
               <span className="text-xs font-bold text-violet-200">{pulledBay ? '🎯 베이에서 고른 카드입니다' : '↑ 다음 예정에서 올린 카드입니다'}</span>
               <button onClick={() => { setResumeCns([]); setPulled(null); }} disabled={busy}
-                className="shrink-0 px-2.5 py-1 rounded-pill border border-violet-500 bg-ink-800 text-xs font-bold text-violet-200 disabled:opacity-50">원래 순서로</button>
+                className={`shrink-0 px-2.5 rounded-pill border border-violet-500 bg-ink-800 text-xs font-bold text-violet-200 disabled:opacity-50 ${bayMini ? 'py-0.5' : 'py-1'}`}>원래 순서로</button>
             </div>
           )}
           {/* 4.80 베이모드 — 고른 카드 위에 아직 안 내린 컨이 있으면(물리 종속 = 자동 가이드의 blockedByAbove 한 벌) 알린다. 막지는 않는다 — 실물을 보는 것은 검수원이다. 못 내리는 컨은 ⏸ 보류. */}
           {pulledOn && pulledBay && card && !availCards.includes(card) && (
-            <div className="rounded-pill px-3 py-1.5 text-xs font-bold bg-rose-950/60 border border-rose-700 text-rose-200" data-gw-baypick-blocked="1">
-              ⚠ 이 카드 위에 아직 내리지 않은 컨이 있습니다 — 위 컨부터 누르세요. 못 내리는 컨이면 그 컨을 ⏸ 보류.
+            <div className={`rounded-pill px-3 text-xs font-bold bg-rose-950/60 border border-rose-700 text-rose-200 ${bayMini ? 'py-0.5' : 'py-1.5'}`} data-gw-baypick-blocked="1">
+              {bayMini ? '⚠ 위에 안 내린 컨이 있음 — 위 컨부터, 못 내리면 ⏸' : '⚠ 이 카드 위에 아직 내리지 않은 컨이 있습니다 — 위 컨부터 누르세요. 못 내리는 컨이면 그 컨을 ⏸ 보류.'}
             </div>
           )}
     </>),
@@ -2883,11 +2886,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   );
 
   return (
-    <div className="space-y-2">
+    <div className={bayMini ? 'space-y-1 gw-mini' : 'space-y-2'} data-gw-mini={bayMini ? '1' : undefined}>
       {settingsEl}
-      {headEl}
+      {!bayMini && headEl}{/* 4.80-01: 베이모드는 베이를 고정했으니 베이 선택·진행 막대·순서 줄을 접는다(해제하면 그대로) */}
       {chipsEl}
-      {orderEl}
+      {!bayMini && orderEl}
       {heldEl}
       {ownPause ? (
         <div className="bg-red-950/40 border border-red-700/70 rounded-pill px-3 py-2 text-xs text-red-200" data-own-pause="1">⏸ 작업 중단 중{ownPause.reason ? ` — ${ownPause.reason}` : ''}. 해치커버 열기·닫기 물음은 재개한 뒤에 합니다.</div>
@@ -2977,12 +2980,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
       ) : (
         <>
-          {P.pred}{P.pulled}{P.cards}{P.sealDup}{P.wt}{P.holdDue}{P.eseal}{P.action}{P.ex}{posPickEl}{P.slotBtn}{P.holdPanel}{P.xrayOut}{P.slotMode}{P.fix}{P.slotSwitch}{P.consec}{P.next}
+          {!bayMini && P.pred}{P.pulled}{P.cards}{P.sealDup}{P.wt}{P.holdDue}{P.eseal}{P.action}{P.ex}{posPickEl}{P.slotBtn}{P.holdPanel}{P.xrayOut}{P.slotMode}{P.fix}{P.slotSwitch}{P.consec}{P.next}
         </>
       )}
 
       {unassignedEl}
-      {manualEl}
+      {!bayMini && manualEl}
       {modalsEl}
     </div>
   );

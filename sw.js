@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.80';
-const NOTE = '4.80 베이뷰 작업의 양하에 베이모드가 생겨 베이를 고정하고 컨을 누르면 작은 카드가 뜹니다. 별첨 리퍼 리스트에 실제 온도 빈칸이 생기고 두 손가락 확대가 안정됩니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.80-01';
+const NOTE = '4.80-01 베이모드의 카드를 작게 줄여 양하확인 단추까지 보이고 베이 그림이 데크와 홀드를 가운데에 맞춰 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

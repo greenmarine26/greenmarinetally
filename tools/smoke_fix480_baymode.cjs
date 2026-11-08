@@ -26,6 +26,9 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ok('② SearchPanel 은 bayPick·onCardCns 를 GuidedWorkPanel 로 그대로 넘긴다', /bayPick=\{bayView \? bayView\.bayPick : null\}/.test(sp) && /onBayPickCns=\{bayView \? bayView\.onCardCns : null\}/.test(sp));
   ok('② 해제 = 따라가기·비율·배율·자동/수동·베이·단 복귀(saved) · 뒤로가기는 먼저 해제', /saved: \{ follow, ratio, zoom, ctx:/.test(bvw) && /bayModeRef\.current && releaseRef\.current\) releaseRef\.current\(\)/.test(bvw));
   ok('② 데크가 남은 장의 홀드 컨은 홀드 단을 열지 않는다(V8.45 게이트와 같은 host.deck)', /const deckBlock = tg\.tier === 'hold' && host\.deck > 0/.test(gwp));
+  const fb = read('src/components/FitBox.jsx');
+  ok('② 4.80-01 소스 — 작은 카드는 bayMini 한 갈래(SearchPanel→GuidedWorkPanel)이고 FitBox 가운데 상자는 베이모드에서만(center={!!bayMode})', /bayMini=\{!!\(bayView && bayView\.mini\)\}/.test(sp) && /mini: !!bayMode/.test(bvw) && /center=\{!!bayMode\}/.test(bvw) && /center \? \(/.test(fb));
+  ok('② 4.80-01 소스 — 폰 베이모드도 세로 쌓기·가로 나란히 중 큰 쪽을 고른다(layoutPick 한 벌 재사용 — 판정을 새로 만들지 않는다)', /if \(!isWide && !bayMode\) \{ setLayoutPick\('col'\)/.test(bvw) && /onlyLayout=\{isWide \|\| bayMode \? layoutPick : 'col'\}/.test(bvw));
   ok('② 앞/뒤 베이 먼저 단추(data-gw-bayfirst)', /data-gw-bayfirst=\{i === 0 \? 'front' : 'back'\}/.test(gwp));
 
   const { JSDOM } = require(path.join(ROOT, 'node_modules/jsdom'));
@@ -131,6 +134,9 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     const topBefore = H.d.querySelector('[data-bayview-top]').style.flex;
     await H.click(H.d.querySelector('[data-bayview-baymode-on]'), 500);
     ok('A2 베이모드 켜짐 — 머리 칩 «🎯 베이모드» · 해제 단추 · 위 칸 비율 확대', !!H.d.querySelector('[data-bayview-baymode]') && !!H.d.querySelector('[data-bayview-baymode-off]') && H.d.querySelector('[data-bayview-top]').style.flex !== topBefore, H.d.querySelector('[data-bayview-top]').style.flex);
+    ok('A2c 4.80-01 베이모드 동안 카드 칸이 작은 카드판(data-gw-mini)이고 머리 줄(베이 선택·진행 막대)과 수동 전환 줄을 접었다', !!H.d.querySelector('[data-gw-mini]') && !H.d.querySelector('[data-gw-head]') && !/수동 모드로 전환/.test(H.d.body.textContent) && !/초과 컨 추가/.test(H.d.body.textContent));
+    ok('A2d 4.80-01 폰(위/아래) 베이모드 위 칸은 칸 비율이 아니라 내용 높이(flex 0 1 auto + maxHeight)', /^0 1 auto/.test(H.d.querySelector('[data-bayview-top]').style.flex) && !!H.d.querySelector('[data-bayview-top]').style.maxHeight && /^1 1/.test(H.bottom().style.flex), H.d.querySelector('[data-bayview-top]').getAttribute('style'));
+    ok('A2e 4.80-01 베이 그림 상자가 가운데 상자(data-fit-center)', !!H.bottom().querySelector('[data-fit-center]'));
     ok('A2b 베이 그림 칸에 핀치 한 벌이 걸렸다(touch-action: pan-x pan-y)', H.bottom().style.touchAction === 'pan-x pan-y', H.bottom().style.touchAction);
     save(H, 'pinned');
     //  ① 트윈 앞 베이 20ft 를 눌렀다 — 39-07-86 이 위에 남아 있다
@@ -164,6 +170,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     //  D. 해제 복귀
     await H.click(H.d.querySelector('[data-bayview-baymode-off]'), 600);
     ok('D1 [🎯 해제] → 베이모드 칩·해제 단추가 사라지고 원래 칸 비율로 돌아온다', !H.d.querySelector('[data-bayview-baymode]') && !H.d.querySelector('[data-bayview-baymode-off]') && H.d.querySelector('[data-bayview-top]').style.flex === topBefore, H.d.querySelector('[data-bayview-top]').style.flex + ' vs ' + topBefore);
+    ok('D1b 4.80-01 해제하면 작은 카드판이 풀리고 머리 줄(베이 선택)이 돌아온다', !H.d.querySelector('[data-gw-mini]') && !!H.d.querySelector('[data-gw-head]') && !H.bottom().querySelector('[data-fit-center]'));
     ok('D2 해제 뒤에도 베이뷰 자동 가이드가 그대로(카드 있음 · 오류 없음)', H.cards().length >= 1 && !H.errs.length, JSON.stringify({ c: H.cards(), e: H.errs.slice(0, 3) }));
     close(H);
   }
@@ -210,6 +217,81 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     await H.click(H.btn(/양하확인$/), 600);
     ok('E2 조회만 — [양하확인] 은 기존 문지기가 막고(알림) 기록은 0건', H.alerts.some((a) => /조회만/.test(a)) && H.done().length === 0, JSON.stringify({ alerts: H.alerts, done: H.done() }));
     close(H);
+  }
+
+  //  ── ⑤ 4.80-01 실제 레이아웃 — 크로뮴(playwright)에서 실소스 번들 + 빌드된 CSS 로 잰다. 못 재면 «건너뜀» 이 아니라 실패다(규범 §4-3).
+  //   자료 = 같은 KKLC 2610N 보관본. 데크·홀드가 함께 있는 해치(B13~15: 13 / (14)15)를 쓰려고 이 해치 홀드 컨만 미완료로 둔다(나머지는 보관본 그대로).
+  //   검사 = 폰 폭 390·360·412 에서 트윈 카드 두 장 + 단추가 위 칸 안(화면 안)에 든다 · 베이 칸 높이 · 두 베이 그룹의 데크 칸과 홀드 칸이 둘 다 그 칸 안에 보인다 ·
+  //   배율 0.7·1.0·2.2 에서 그림 좌우 여백 차이(쏠림) · 가로 스크롤 없음 · 해제하면 작은 카드판이 풀린다.
+  {
+    let pw = null; try { pw = require('playwright'); } catch (e) { /* 아래에서 실패로 센다 */ }
+    ok('⑤ playwright 가 있다(없으면 모양을 못 재므로 올리지 않는다)', !!pw);
+    const cssName = (() => { try { return fs.readdirSync(path.join(ROOT, 'assets')).find((f) => /^index-.*\.css$/.test(f)); } catch (e) { return ''; } })();
+    ok('⑤ 빌드된 CSS(assets/index-*.css)가 있다', !!cssName);
+    if (pw && cssName) {
+      const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-browsers/chromium/chrome-linux/chrome'].find((p) => { try { return fs.existsSync(p); } catch (e) { return false; } });
+      const css = fs.readFileSync(path.join(ROOT, 'assets', cssName), 'utf8');
+      const page0 = path.join(TMP, 'lay.html');
+      fs.writeFileSync(page0, '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>' + css + '</style></head><body><div id="root"></div></body></html>');
+      const holdCns = Object.entries(FX.discharge.ediContainers).filter(([k, v]) => ['13', '14', '15'].includes(v.bay) && parseInt(v.tier, 10) < 80).map(([k]) => k);
+      const compH = {}; for (const [cn, r] of Object.entries(FX.discharge.completed)) if (!holdCns.includes(cn)) compH[cn] = clone(r);
+      const voyH = { key: vk, info: clone(FX.info), discharge: { ediContainers: clone(FX.discharge.ediContainers), completed: compH }, loading: { ediContainers: {}, completed: {} } };
+      const br = await pw.chromium.launch(CHROME ? { executablePath: CHROME } : {});
+      const FIND = "(re,root)=>{root=root||document;return [...root.querySelectorAll('button')].find(b=>re.test(b.textContent.replace(/\\s+/g,' ').trim())&&!b.disabled)}";
+      const METR = `()=>{
+        const top=document.querySelector('[data-bayview-top]'), bot=document.querySelector('[data-bayview-bottom]'); const vh=innerHeight, vw=innerWidth;
+        const tr=top.getBoundingClientRect(), bt=bot.getBoundingClientRect();
+        const act=[...document.querySelectorAll('button')].find(b=>/양하확인$/.test(b.textContent.replace(/\\s+/g,' ').trim()));
+        const ar=act?act.getBoundingClientRect():null;
+        const cards=[...document.querySelectorAll('[data-gw-card]')].map(c=>Math.round(c.getBoundingClientRect().height));
+        const f=bot.querySelector('.fs-keep'); let fL=0,fR=0; if(f){const fr=f.getBoundingClientRect(); const sc=fr.width/f.offsetWidth; fL=fr.left; fR=fr.left+f.scrollWidth*sc;}
+        const cl=bt.left+4, cr=bt.right-4;
+        const inBot=(txt)=>{const b=[...bot.querySelectorAll('button')].find(b=>b.className.includes('relative')&&b.textContent.includes(txt)); if(!b) return null; const r=b.getBoundingClientRect(); return r.width>0&&r.top>=bt.top-1&&r.bottom<=bt.bottom+1&&r.left>=bt.left-1&&r.right<=bt.right+1;};
+        const lay=bot.querySelector('[data-only-layout]');
+        return {vh,vw,topBottom:Math.round(tr.bottom),botH:Math.round(bt.height),actBottom:ar?Math.round(ar.bottom):null,cards,leftM:Math.round(fL-cl),rightM:Math.round(cr-fR),pages:lay?lay.children.length:0,
+          hold:inBot('2264'),holdB:inBot('1375'),deck:inBot('6645'),docW:document.documentElement.scrollWidth};}`;
+      for (const [w, h] of [[390, 844], [360, 780], [412, 915]]) {
+        const ctx = await br.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+        const pg = await ctx.newPage(); const perr = []; pg.on('pageerror', (e) => perr.push(String(e))); pg.on('dialog', (d) => d.dismiss());
+        await pg.goto('file://' + page0);
+        await pg.evaluate(([k, v, d]) => { localStorage.setItem('gm_equip_no', '1호기'); localStorage.setItem('master_active_inspector_v1', '연막'); window.__memdb = { voyages: { [k]: v }, ship_bay_dict_v3: { KKLC: d } }; window.__fbShipBayDict = { KKLC: d }; window.global = window; }, [vk, voyH, FX.shipDict]);
+        await pg.addScriptTag({ content: src });
+        await pg.evaluate(([v, k]) => window.__go(JSON.stringify(v), k), [voyH, vk]); await pg.waitForTimeout(600);
+        const clickF = async (re, ms = 450) => { const r = await pg.evaluate(`(()=>{const F=${FIND};const b=F(${re});if(b){b.click();return true}return false})()`); await pg.waitForTimeout(ms); return r; };
+        await pg.evaluate(() => { const t = [...document.querySelectorAll('button[role=tab]')].find((b) => /작업 시작/.test(b.textContent)); if (t) t.click(); }); await pg.waitForTimeout(450);
+        await clickF('/^베이뷰 작업/'); await clickF('/자동 가이드$/', 600);
+        await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].find((b) => { const m = b.textContent.replace(/\s+/g, ' ').trim().match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).some((x) => [13, 14, 15].includes(x)) && /남은 컨/.test(b.textContent); }); if (b) b.click(); }); await pg.waitForTimeout(450);
+        await clickF('/그대로$/', 300);
+        await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].find((b) => { const t = b.textContent.replace(/\s+/g, ' ').trim(); return /홀드/.test(t) && /[1-9]/.test(t) && !/변경|◀|⇄/.test(t); }); if (b) b.click(); }); await pg.waitForTimeout(700);
+        await pg.evaluate(() => { const b = document.querySelector('[data-bayview-baymode-on]'); if (b) b.click(); }); await pg.waitForTimeout(700);
+        const topFlex0 = await pg.evaluate(() => document.querySelector('[data-bayview-top]').getAttribute('style'));
+        await pg.evaluate(() => { const bt = document.querySelector('[data-bayview-bottom]'); const b = [...bt.querySelectorAll('button')].find((b) => b.textContent.includes('2264') && b.className.includes('relative')); if (b) b.click(); }); await pg.waitForTimeout(900);
+        const tag = `${w}x${h}`;
+        const m = await pg.evaluate(`(${METR})()`);
+        ok(`⑤ ${tag} 트윈 카드 두 장이 각각 120px 이하(작은 카드) — ${m.cards.join('·')}px`, m.cards.length === 2 && m.cards.every((x) => x <= 120), JSON.stringify(m));
+        ok(`⑤ ${tag} [트윈 한 번에 양하확인] 바닥 ${m.actBottom}px 이 위 칸 바닥 ${m.topBottom}px 과 화면 ${m.vh}px 안`, m.actBottom != null && m.actBottom <= m.topBottom + 1 && m.actBottom <= m.vh, JSON.stringify(m));
+        ok(`⑤ ${tag} 베이 그림 칸 높이 ${m.botH}px ≥ 300`, m.botH >= 300, JSON.stringify(m));
+        ok(`⑤ ${tag} 두 베이 그룹(${m.pages}장)의 데크 칸·홀드 칸이 베이 칸 안에 같이 보인다(앞 13: 홀드 ${m.hold} · 뒤 15: 홀드 ${m.holdB} · 데크 ${m.deck})`, m.pages === 2 && m.hold === true && m.holdB === true && m.deck === true, JSON.stringify(m));
+        ok(`⑤ ${tag} 가로 쏠림 ${Math.abs(m.leftM - m.rightM)}px ≤ 3 (좌 ${m.leftM} · 우 ${m.rightM}) · 가로 스크롤 없음(문서 폭 ${m.docW} ≤ ${m.vw})`, Math.abs(m.leftM - m.rightM) <= 3 && m.docW <= m.vw, JSON.stringify(m));
+        for (const target of [0.7, 1.0, 2.2]) {
+          for (let i = 0; i < 30; i += 1) {
+            const cur = await pg.evaluate(() => { const bt = document.querySelector('[data-bayview-bottom]'); const sp = [...bt.querySelectorAll('span')].find((x) => /^\d+%$/.test(x.textContent)); return parseInt(sp.textContent, 10); });
+            if (Math.abs(cur - target * 100) <= 8) break;
+            await pg.evaluate((sign) => { const bt = document.querySelector('[data-bayview-bottom]'); const b = [...bt.querySelectorAll('button')].find((x) => x.textContent.trim() === sign); if (b) b.click(); }, cur < target * 100 ? '+' : '−');
+            await pg.waitForTimeout(120);
+          }
+          await pg.waitForTimeout(450);
+          const z = await pg.evaluate(`(${METR})()`);
+          ok(`⑤ ${tag} 배율 ${target} — 그림 좌우 여백 차이 ${Math.abs(z.leftM - z.rightM)}px ≤ 3 (좌 ${z.leftM} · 우 ${z.rightM}) · 가로 스크롤 없음`, Math.abs(z.leftM - z.rightM) <= 3 && z.docW <= z.vw, JSON.stringify(z));
+        }
+        await pg.evaluate(() => { const b = document.querySelector('[data-bayview-baymode-off]'); if (b) b.click(); }); await pg.waitForTimeout(700);
+        const rel = await pg.evaluate(() => ({ mini: !!document.querySelector('[data-gw-mini]'), head: !!document.querySelector('[data-gw-head]'), center: !!document.querySelector('[data-bayview-bottom] [data-fit-center]'), top: document.querySelector('[data-bayview-top]').getAttribute('style') }));
+        ok(`⑤ ${tag} 해제 — 작은 카드판·가운데 상자가 풀리고 위 칸이 칸 비율(flex)로 돌아온다`, !rel.mini && rel.head && !rel.center && /flex: [\d.]+ 1 0px/.test(rel.top) && topFlex0 !== rel.top, JSON.stringify({ rel, topFlex0 }));
+        allErrs.push(...perr);
+        await ctx.close();
+      }
+      await br.close();
+    }
   }
   ok('렌더 중 오류 없음(전 시나리오)', !allErrs.length, allErrs.slice(0, 3).join(' | '));
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (er) { /* 임시 */ }

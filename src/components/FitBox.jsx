@@ -12,9 +12,11 @@ import React, { useState, useEffect } from 'react';
 //    호기 칸마다 제 그림에 맞춰 배율을 따로 잡으니 **칸마다 그림 크기가 달랐다**(실화면 — 4호기만 크게 보였다).
 //    ⇒ 각 칸이 «나 혼자면 이 배율»을 알려 주고(`onFit`), 카드가 그중 **가장 작은 것**을 골라 전부에 되돌려 준다(`force`).
 //    그러면 한 배의 호기 칸들이 같은 크기로 선다.
-export function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null, boost = 1, onFit = null, force = null }) {
+//  ★ 4.80-01 — center: 베이모드 베이 그림. 검수사 «화면을 키우든 축소하든 베이는 중앙에서 항상 보여야 합니다». 그림 둘레에 그림 크기 그대로의 가운데 상자를 두어(스크롤 폭 = 그림 폭 — 종전엔 자연 폭이 스크롤 폭이라 줄여도 빈 쪽으로 밀렸다)
+//    줄이면 가운데에 놓이고, 키워 폭이 넘치면 가운데 기준으로 스크롤을 시작한다. 배율이 1 이하로 돌아오면 남은 스크롤도 0 으로 되돌린다(종전엔 1.05배에서 밀린 칸이 그대로 남아 한쪽으로 쏠렸다).
+export function FitBox({ children, className = '', maxH = null, fill = false, boundsRef = null, boost = 1, onFit = null, force = null, center = false }) {
   const boxRef = React.useRef(null); const innerRef = React.useRef(null);
-  const [fit, setFit] = useState({ s: 1, h: null, x: 0 });
+  const [fit, setFit] = useState({ s: 1, h: null, x: 0, w: null });
   useEffect(() => {
     const box = boxRef.current, inner = innerRef.current; if (!box || !inner) return undefined;
     const measure = () => {
@@ -41,19 +43,27 @@ export function FitBox({ children, className = '', maxH = null, fill = false, bo
       const s = base * z; const h = Math.ceil(ih * s);
       //  3.19: 확대해도 가운데 — 칸보다 좁으면 여백을 반씩, 넓으면 스크롤을 가운데로 민다.
       const x = Math.max(0, Math.floor((bw - iw * s) / 2));
-      setFit((f) => (Math.abs(f.s - s) < 0.005 && f.h === h && f.x === x) ? f : { s, h, x });
+      const w = Math.ceil(iw * s);
+      setFit((f) => (Math.abs(f.s - s) < 0.005 && f.h === h && f.x === x && f.w === w) ? f : { s, h, x, w });
       if (z > 1 && iw * s > bw) { try { box.scrollLeft = Math.floor((iw * s - bw) / 2); } catch (e) { /* 스크롤 못 옮겨도 그림은 보인다 */ } }
+      else if (center && box.scrollLeft !== 0) { try { box.scrollLeft = 0; } catch (e) { /* 못 옮겨도 그림은 보인다 */ } }
     };
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     if (ro) { ro.observe(box); ro.observe(inner); }
     window.addEventListener('resize', measure);
     return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [children, maxH, fill, boost, force]);
+  }, [children, maxH, fill, boost, force, center]);
   return (
     <div ref={boxRef} className={`${Number(boost) > 1 ? 'overflow-auto' : 'overflow-hidden'} w-full ${className}`} style={fit.h != null ? { height: fit.h } : undefined}>
       {/* 4.23 fs-keep — 그림 안 글자는 글자 모드(보통·크게)와 무관하게 4.22-04 그대로. 커지면 그림 자연 폭이 늘어 배율이 줄고 칸 안 컨번호가 작아진다. */}
+      {center ? (
+        <div data-fit-center="1" style={{ width: fit.w != null ? fit.w : undefined, height: fit.h != null ? fit.h : undefined, margin: '0 auto', overflow: 'hidden' }}>
+          <div ref={innerRef} className="fs-keep" style={{ transform: `scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
+        </div>
+      ) : (
       <div ref={innerRef} className="fs-keep" style={{ transform: `translateX(${fit.x || 0}px) scale(${fit.s})`, transformOrigin: 'top left', width: 'max-content' }}>{children}</div>
+      )}
     </div>
   );
 }

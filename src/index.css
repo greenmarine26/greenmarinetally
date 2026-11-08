@@ -615,6 +615,9 @@ button.home-big:active { transform: translateY(2px); }
 .gw-go   { min-height: 60px; font-size: var(--fs-xl); }
 .gw-ex   { min-height: var(--tap); font-size: var(--fs-btn-sm); }
 .gw-next { min-height: var(--tap); }
+/* 4.80-01 베이모드 작은 카드 — 단추를 낮춰 두 장이어도 [양하확인]·[트윈 한 번에 양하확인] 이 폰 화면 안에 든다(해제하면 종전 크기) */
+.gw-mini .gw-go { min-height: 46px; font-size: 16px; }
+.gw-mini .gw-ex { min-height: 34px; }
 :root[data-text="large"] .gw-cn-a { font-size: 31px; }
 :root[data-text="large"] .gw-cn-b { font-size: 40px; }
 :root[data-text="large"] .gw-pos  { font-size: 26px; }

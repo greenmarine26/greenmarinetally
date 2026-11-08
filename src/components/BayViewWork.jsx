@@ -23,7 +23,8 @@ const pad2 = (x) => String(x ?? '').padStart(2, '0');
 const fmtT = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 const RATIO_KEY = 'gm_bayview_ratio';
 const RATIO_DEF = 1 / 3;
-const BM_RATIO = 0.5;   // 4.80 베이모드 — 베이를 크게 고정해 두되 위 칸에 작은 카드(트윈은 두 장)가 들어갈 만큼
+const BM_RATIO = 0.5;   // 4.80 베이모드 — 넓은 화면(좌우 분할)에서 카드 칸 폭. 4.80-01: 폰(위/아래)은 이 비율 대신 «위 칸 = 카드 높이만큼, 나머지 = 베이 그림»(아래 bmTopMax)
+const BM_MIN_BOTTOM = 300;   // 4.80-01 폰 베이모드 — 베이 그림 칸이 최소 이만큼은 남는다(두 베이 그룹 데크+홀드가 한 화면). 화면이 크면 화면 높이의 38%
 const readRatio = () => { try { const v = parseFloat(localStorage.getItem(RATIO_KEY)); return (v >= 0.2 && v <= 0.7) ? v : RATIO_DEF; } catch (e) { return RATIO_DEF; } };
 const lastKey = (voyageKey, mode) => `gm_bayview_last:${voyageKey}:${mode}`;
 const readLast = (voyageKey, mode) => { try { const v = JSON.parse(localStorage.getItem(lastKey(voyageKey, mode)) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
@@ -55,6 +56,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   const [bayPick, setBayPick] = useState(null);
   const [cardCns, setCardCns] = useState([]);
   const onCardCns = useCallback((a) => setCardCns((o) => (o.length === a.length && o.every((x, i) => x === a[i])) ? o : a), []);
+  const [vh, setVh] = useState(() => (typeof window !== 'undefined' && window.innerHeight) || 800);
+  useEffect(() => { const h = () => setVh(window.innerHeight || 800); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);   // 4.80-01: 폰 베이모드 위 칸 높이 상한을 화면 높이로 계산
   const isWide = useIsWide();   // 3.49: 검수사 «폰화면은 수직 화면 이지만 컴은 수평화면으로 … 컴은 좌측에 컨테이너 자료가 우측에 베이»
   const [equip, setEquip] = useState(getEquipNumber());
   useEffect(() => {
@@ -165,7 +168,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   //    그래서 col→row 로 바꾼 뒤 정확한 폭으로 다시 재도 row 가 더 커질 뿐이라 왔다갔다 하지 않는다. 폰(좁은 화면)은 늘 col.
   const [layoutPick, setLayoutPick] = useState('col');
   useEffect(() => {
-    if (!isWide) { setLayoutPick('col'); return undefined; }
+    if (!isWide && !bayMode) { setLayoutPick('col'); return undefined; }   // 4.80-01: 폰 베이모드는 컴처럼 «세로 쌓기 vs 가로 나란히 중 더 크게 그려지는 쪽»(두 베이 그룹 데크·홀드 / 데크·홀드)
     const pane = bottomRef.current; if (!pane) return undefined;
     const calc = () => {
       const lay = pane.querySelector('[data-only-layout]'); if (!lay) return;
@@ -186,12 +189,15 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     if (ro) { ro.observe(pane); const lay = pane.querySelector('[data-only-layout]'); if (lay) ro.observe(lay); }
     return () => { if (ro) ro.disconnect(); };
     //  titles — BayPlan 이 사전을 읽어 장을 그린 뒤(onTitles) 다시 잰다. 첫 커밋엔 장이 아직 없어 calc 가 빈손으로 돌아온다(실렌더 2560 에서 col 에 머문 원인).
-  }, [isWide, gridBay, ratio, titles, gridContainers.length]);   // gridContainers.length — 자료가 늦게 와 «자료 없음» 뒤에 장이 생기는 갈래(감사)
+  }, [isWide, bayMode, gridBay, ratio, titles, gridContainers.length, bayMode ? vh : 0, bayMode ? cardKey : '']);   // gridContainers.length — 자료가 늦게 와 «자료 없음» 뒤에 장이 생기는 갈래(감사)
   const onHandleDown = (e) => { const box = boxRef.current; if (!box) return; const rc = box.getBoundingClientRect(); dragRef.current = isWide ? { left: rc.left, w: box.clientWidth } : { top: rc.top + 40, h: box.clientHeight - 40 }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { /* 캡처 못 해도 끌린다 */ } };
   const onHandleMove = (e) => { const d = dragRef.current; if (!d) return; const r = d.w > 0 ? (e.clientX - d.left) / d.w : (d.h > 0 ? (e.clientY - d.top) / d.h : null); if (r == null) return; setRatio(Math.min(0.7, Math.max(0.2, r))); };
   const onHandleUp = () => { if (!dragRef.current) return; dragRef.current = null; try { localStorage.setItem(RATIO_KEY, String(ratio)); } catch (e) { /* 저장 못 해도 화면은 그대로 */ } };
   const resetRatio = () => { setRatio(RATIO_DEF); try { localStorage.setItem(RATIO_KEY, String(RATIO_DEF)); } catch (e) { /* */ } };
 
+  //  4.80-01 폰 베이모드 — 위 칸은 카드 내용 높이만큼(단추까지 보이게), 아래 칸은 나머지(두 베이 그룹 데크+홀드). 위 칸 상한 = 화면 − 머리 줄 40 − 손잡이 14 − 베이 그림 최소 칸.
+  const bmPhone = !!bayMode && !isWide;
+  const bmTopMax = Math.max(200, vh - 40 - 14 - Math.max(BM_MIN_BOTTOM, Math.round(vh * 0.38)));
   const chip = (cls) => `px-2 py-0.5 rounded-pill text-xxs font-black ${cls}`;
 
   if (step === 'pick') {
@@ -255,7 +261,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     );
   }
 
-  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow, bayPick: bayMode ? bayPick : null, onCardCns };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
+  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow, bayPick: bayMode ? bayPick : null, onCardCns, mini: !!bayMode };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
   return (
     <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" data-bayview-wide={isWide ? '1' : '0'} style={{ height: '100dvh' }}>
       <div className="h-10 shrink-0 flex items-center gap-1.5 px-2 bg-ink-900 border-b border-line overflow-x-auto whitespace-nowrap">
@@ -292,17 +298,18 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
       )}
       {/* 3.49: 폰은 위(자료)/아래(베이), 넓은 화면은 좌(자료)/우(베이) — 한 트리, 방향만 바뀐다 */}
       <div className={`min-h-0 flex-1 flex ${isWide ? 'flex-row' : 'flex-col'}`}>
-      <div className="min-h-0 min-w-0 overflow-auto px-2 py-1.5" style={{ flex: `${ratio} 1 0px` }} data-bayview-top="1">
+      <div className="min-h-0 min-w-0 overflow-auto px-2 py-1.5" style={bmPhone ? { flex: '0 1 auto', maxHeight: bmTopMax } : { flex: `${ratio} 1 0px` }} data-bayview-top="1">
         <SearchPanel {...searchPanelProps} voyage={voyage} voyageKey={voyageKey} inspector={inspector} mode={mode} onOpenContainer={onOpenContainer} bayView={bayViewProps} />
       </div>
       <div onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp} onDoubleClick={resetRatio}
+        style={bmPhone ? { display: 'none' } : undefined}
         className={`shrink-0 flex items-center justify-center bg-ink-800 touch-none select-none ${isWide ? 'w-3.5 border-x border-line cursor-col-resize' : 'h-3.5 border-y border-line cursor-row-resize'}`} title="끌어서 칸 크기 조절 · 두 번 누르면 1/3">
         <div className={isWide ? 'h-12 w-1 rounded bg-dim-500' : 'w-12 h-1 rounded bg-dim-500'} />
       </div>
-      <div ref={bottomRef} className="min-h-0 min-w-0 overflow-auto p-1" style={{ flex: `${1 - ratio} 1 0px` }} data-bayview-bottom="1">
+      <div ref={bottomRef} className="min-h-0 min-w-0 overflow-auto p-1" style={bmPhone ? { flex: '1 1 0px' } : { flex: `${1 - ratio} 1 0px` }} data-bayview-bottom="1">
         <div className="flex items-center gap-1.5 px-1 text-2xs text-dim-400">
-          <span>{bayMode ? '🎯 베이모드 — 컨을 누르면 위 칸에 작은 카드 · 앞 베이 20ft 를 누르면 트윈 두 장(해제를 누르기 전까지 이 베이만)' : follow ? (fol.why || `터미널 ${fmtT(fol.at)} 기준`) : (live.bay != null ? '위 칸에서 고른 장' : (gridBay != null ? '터미널 기준 지금 자리 — 위 칸에서 베이를 고르면 바뀝니다' : '위 칸에서 베이를 고르세요'))}</span>
-          <span className="ml-auto">완료 = 앱 ∪ 터미널{overlay.termOnly ? ` (터미널만 ${overlay.termOnly})` : ''}</span>
+          <span>{bayMode ? '🎯 베이모드 — 컨을 누르면 작은 카드' : follow ? (fol.why || `터미널 ${fmtT(fol.at)} 기준`) : (live.bay != null ? '위 칸에서 고른 장' : (gridBay != null ? '터미널 기준 지금 자리 — 위 칸에서 베이를 고르면 바뀝니다' : '위 칸에서 베이를 고르세요'))}</span>
+          <span className="ml-auto">{bmPhone ? '' : `완료 = 앱 ∪ 터미널${overlay.termOnly ? ` (터미널만 ${overlay.termOnly})` : ''}`}</span>
           <button onClick={() => setZoom((z) => Math.max(0.7, +(z - 0.15).toFixed(2)))} className="px-1.5 rounded bg-ink-800 border border-line text-dim-200">−</button>
           <span>{Math.round(zoom * 100)}%</span>
           <button onClick={() => setZoom((z) => Math.min(2.2, +(z + 0.15).toFixed(2)))} className="px-1.5 rounded bg-ink-800 border border-line text-dim-200">+</button>
@@ -311,11 +318,11 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
           /* 3.49-01 검수사 «컴화면 좌우로 나뉘긴 했는데 베이 화면이 한눈에 안들어 옵니다. 베이가 통째로 들어 오게 하고 트윈일경우 두베이가 같이 보여야 합니다»
                — 원인은 FitBox 가 폭에만 맞춰(높이 상한 없음) 컴(넓은 칸)에서 2.5배까지 키워 밑이 잘린 것 하나다. 칸 바닥(bottomRef)까지의 높이에도 맞춘다(fill) — 그 장의 앞 20ft 베이·(40)뒤 20ft 베이가
                통째로 한눈에(트윈 = 두 베이 같이). 컴에서는 세로 쌓기와 가로 나란히 중 더 크게 그려지는 쪽(layoutPick)을 고른다. 폰은 세로. */
-          <FitBox boost={zoom} fill boundsRef={bottomRef}>
+          <FitBox boost={zoom} fill boundsRef={bottomRef} center={!!bayMode}>
             <BayPlan containers={gridContainers} compMap={overlay.compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
               preGoneInfo={preGoneInfo} onOpenContainer={bayMode ? onBayCellTap : onOpenContainer}
               shipImo={info.imo} shipName={info.vsl} voyageInfo={info} voyageKey={voyageKey} rfSkip={!!searchPanelProps.rfSkip}
-              onlyBay={String(gridBay)} onlyLayout={isWide ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={gridWarn} />
+              onlyBay={String(gridBay)} onlyLayout={isWide || bayMode ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={gridWarn} />
           </FitBox>
         ) : (
           <div className="text-xs text-dim-400 text-center py-6">아직 그릴 베이가 없습니다 — 위 칸에서 베이를 고르거나 ◀ 에서 따라가기를 켜세요.</div>

@@ -696,7 +696,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       </div>
       )}
       {/* V7.99-16 / V8.04: 양하 — 신고 리스트에 없는데 내려진 컨(초과) 기록 (모달) */}
-      {workFilter === 'discharge' && (
+      {workFilter === 'discharge' && !(bayView && bayView.mini) && (
         <button
           onClick={() => {
             if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
@@ -750,7 +750,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         <HatchAlertBanner events={hatchPending} voyageKey={voyageKey} vsl={_hatchShipName} voyOf={hatchVoyFor}
           equip={equipNo || ''} inspector={inspector} panelCountOf={hatchPanelCountFor} />
       )}
-      {workFilter !== 'completed' && !isLoloShip && (
+      {workFilter !== 'completed' && !isLoloShip && !(bayView && bayView.mini) && (
         <div className={`rounded-pill p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
           <button onClick={() => setGuideMode(true)}
             className={`flex-1 ${bayView && bayView.compact ? 'py-1 text-xs' : 'py-2.5 text-sm'} rounded font-bold flex items-center justify-center gap-1.5 ${
@@ -784,7 +784,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           onOpenContainer={onOpenContainer}
           compact={!!(bayView && bayView.compact)} suppressBayActivity={_suppressBay} hatchAuto={_hatchFollow}
           mirGoto={mirGoto}   /* 4.40: 미르 [이동] */
-          bayPick={bayView ? bayView.bayPick : null} onBayPickCns={bayView ? bayView.onCardCns : null}   /* 4.80: 베이모드 — 베이 그림에서 고른 컨을 카드로 · 지금 카드의 컨을 베이뷰에 */
+          bayPick={bayView ? bayView.bayPick : null} onBayPickCns={bayView ? bayView.onCardCns : null} bayMini={!!(bayView && bayView.mini)}   /* 4.80: 베이모드 — 베이 그림에서 고른 컨을 카드로 · 지금 카드의 컨을 베이뷰에 */
         />
       ) : (
       <>
