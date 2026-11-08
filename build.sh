@@ -1641,6 +1641,11 @@ fi
     npx esbuild tools/smoke_access469_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AX" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_access469.cjs "$SMOKE_AX" "$(pwd)" || { rm -f "$SMOKE_AX"; echo "✗ 접속 기록 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AX"
+    #  4.76: 미르 끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 갱당 속도(KKLC 2610N 재현) · 호기 이동 말(철수·이동·복귀) · 해치 닫는 장수 = 연 합
+    SMOKE_MV=$(mktemp /dev/shm/hometmp/_smokemv_XXXXXX.cjs)
+    npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_move476.cjs "$SMOKE_MV" "$(pwd)" || { rm -f "$SMOKE_MV"; echo "✗ 4.76(최근 속도·호기 이동·닫는 장수) 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_MV"
     #  4.74: 베이뷰 호기 막기·배 목록 줄 대기 표시
     node tools/smoke_hold474.cjs || { echo "✗ 베이뷰 호기 막기 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_submit475.cjs || { echo "✗ 검수 리스트 제출용 연막검사 실패 — 배포 금지"; exit 1; }

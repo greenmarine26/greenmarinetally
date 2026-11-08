@@ -524,7 +524,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     //   처음 값 — 검수사가 위 화면에서 장수 버튼을 직접 눌렀으면 그 값, 안 눌렀으면 앱이 센 값(못 셌으면 비워서 직접 고르게 한다 — 기본값 1 이 눈에 안 띄고 나가던 것).
     //   앱이 센 값과 다르게 고르면 창이 «앱이 센 장수는 N장» 을 알린다.
     const _md = equipModeOf(equip) === 'loading' ? 'loading' : 'discharge';
-    const countDetail = hatchPanelDetailOf(voyage, _md, bays, getShipBayDictData(voyage?.info?.imo || '', voyage?.info?.vsl || ''), (b) => bayGroupCenter(b, bayPairsForHatch));
+    const countDetail = hatchPanelDetailOf(voyage, _md, bays, getShipBayDictData(voyage?.info?.imo || '', voyage?.info?.vsl || ''), (b) => bayGroupCenter(b, bayPairsForHatch), hatchAction);
     const chosen = await askHatchCount({ action: hatchAction, bays, detail: countDetail, initial: hatchPanelsTouched ? hatchPanels : (countDetail.count > 0 ? countDetail.count : null) });
     if (chosen == null) return;
     setHatchPanels(chosen); setHatchPanelsTouched(false);   // 고른 값은 이번 보고에 쓰였다 — 다음 보고에서 «직접 누른 값» 으로 남겨 두지 않는다(이 창은 닫아도 상태가 남는다)

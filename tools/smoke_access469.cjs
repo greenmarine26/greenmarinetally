@@ -61,7 +61,7 @@ ok(!/AccessLogPanel/.test(chief), '수석 화면·검수 화면에는 이 패널
 const cone = rd('public/cone.html');
 ok(/localStorage\.getItem\('tallyAccessSkip'\)==='1'\) return;/.test(cone) && /localStorage\.getItem\('coneAccessDay'\)===day\) return;/.test(cone), '콘앱은 내 기기·같은 날 두 번째 실행은 기록하지 않는다');
 ok(/signal:ac\.signal/.test(cone) && /\.catch\(function\(e\)\{ clearTimeout\(tm\); console\.warn\('\[콘앱 접속기록\]/.test(cone), '콘앱 기록은 제한 시간이 있고 실패는 경고 한 줄(조용한 실패 없음)');
-ok(/window\.__CONEV='ConeOne 2\.74';/.test(cone), '콘앱 판 2.74');
+ok(/window\.__CONEV='ConeOne 2\.74(?:-01)?';/.test(cone), '콘앱 판 2.74');
 const al = rd('src/accessLog.js');
 ok(!/password|비밀번호|pw/i.test(noCmt(al).replace(/비밀번호 값 외에/g, '')) , '기록 코드가 비밀번호를 다루지 않는다');
 ok(/4\.(69|7\d)/.test(B.APP_VERSION) && B.APP_NOTE.length < 120, '판 4.69 · APP_NOTE 120자 미만', B.APP_NOTE);

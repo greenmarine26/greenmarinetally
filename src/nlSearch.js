@@ -159,6 +159,7 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume'|'text', dir:+1|-1, to:1..4|'off', ask:true } — 4.23 text: to 1 보통 · 2 크게
+    moveSet: null,     // 4.76: { kind, equip, to, raw } — «1호기 철수»·«2호기로 이동»·«1호기 복귀» 말로 알린 호기 이동(기록은 화면이 crane_move 보고로)
     pauseSet: null,    // 4.34-02: { reason, raw } — «미르야 강풍대기 상태야 쉬고 있어» 말로 알린 작업 멈춤(사유는 작업 보고 칩과 같은 이름). 기록은 화면(MirFab·SearchPanel)이 한다.
     startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
@@ -212,6 +213,45 @@ export function parseNaturalQuery(text) {
           && !/폰|화면|앱\s*(?:이\s*)?멈|사진|스캔|로그인|트럭|차량|차가/.test(t)
           && !/(?:오|불|내리|와|되|하)면(?![가-힣])|올게|올께|다녀올|갔다\s*올/.test(t);
         result.pauseSet = { reason: _name, raw: t, known: !!_wr, sure: _sure, called: !!result.mirCalled };
+      }
+    }
+  }
+
+  //  ★ 4.76 호기 이동 — «1호기 철수»·«2호기로 이동»·«1호기에서 2호기로 장비교체»·«1호기 복귀»·«철수 취소». 검수사 2026-11-08 «장비교체 철수 같은것들을 앱에서 바꿀수 있어야 합니다».
+  //  { kind: 'withdraw'|'move'|'return'|'cancel', equip, to, raw } — 기록은 화면(MirFab·SearchPanel)이 crane_move 보고로 적는다(craneMove.js 한 벌).
+  {
+    const _mt = String(t || '');
+    if (_mt.trim() && !/[?？]|왜|몇|언제|어디|누구|무슨/.test(_mt)) {
+      //  호기 번호는 앞 글자가 숫자가 아닌 1~9 한 자리만 — «105호기»·«15호기»가 5호기로 읽히지 않게(독립 감사). 105호기는 RORO 램프라 갱이 아니다(kind 'roro' — 기록하지 않고 미르가 그렇게 답한다).
+      const _NO = '(?<!\\d)(\\d{1,3})\\s*호기';
+      const _ok = (d) => /^[1-4]$/.test(d);   // 평택 크레인은 1~4호기 — 5~9호기는 기록하지 않고 미르가 «1~4호기만 압니다» 라고 답한다(kind 'range')
+      const _bad = (d) => /^[5-9]$/.test(d) || d === '105';
+      const _badSet = (d) => (d === '105' ? { kind: 'roro', equip: '105호기', to: '', raw: _mt } : { kind: 'range', equip: `${d}호기`, to: '', raw: _mt });
+      //  «철수 하지마»·«철수 안 해도 돼»·«철수할 예정»·«철수하라고 했어»·«이동한 거 아니야» 는 지금 일어난 일이 아니다 — 기록하지 않는다.
+      const _NOREC = /(?:철수|이동|복귀|교체)\s*(?:를\s*|은\s*|는\s*)?(?:하지\s*마|하지\s*말|안\s*해도|해도\s*돼|할\s*(?:예정|거야|거예요|겁니다|계획|까|게|래)|하라고|하래|하기로|한\s*(?:거|건|게)\s*아니|한\s*것\s*아니|했다고\s*안|안\s*(?:했|한|함))/;
+      const _N = (x) => `${x}호기`;
+      const _CANCEL = /철수\s*(?:를\s*|는\s*)?(?:취소|아니|안\s*(?:했|함|한)|하지\s*않|한\s*(?:거|건|게)\s*아니|한\s*거\s*아냐)|철수\s*(?:한|했)(?:거|건|게|것)\s*아니/;
+      let _m;
+      if (_CANCEL.test(_mt)) {
+        //  부정문·취소 — 철수가 아니다. «3호기 철수 취소» 처럼 호기를 말하면 그 호기만.
+        const _e = new RegExp(_NO).exec(_mt);
+        result.moveSet = { kind: 'cancel', equip: _e && _ok(_e[1]) ? _N(_e[1]) : '', to: '', raw: _mt };
+      } else if (_NOREC.test(_mt)) {
+        /* 일어난 일이 아니다 — 기록하지 않는다 */
+      } else if ((_m = new RegExp(`${_NO}\\s*(?:에서|는|가|를|가\\s*)?\\s*(?:장비\\s*)?(?:교체|이동|옮)\\S*\\s*${_NO}`).exec(_mt)) || (_m = new RegExp(`${_NO}\\s*에서\\s*${_NO}\\s*(?:로|으로)`).exec(_mt))) {
+        if (_ok(_m[1]) && _ok(_m[2])) result.moveSet = { kind: 'move', equip: _N(_m[1]), to: _N(_m[2]), raw: _mt };
+        else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]); else if (_bad(_m[2])) result.moveSet = _badSet(_m[2]);
+      } else if ((_m = new RegExp(`${_NO}\\s*(?:는|가|를|도)?\\s*철수`).exec(_mt))) {
+        if (_ok(_m[1])) {
+          const _to = new RegExp(`${_NO}\\s*(?:로|으로)\\s*(?:이동|옮|갔|가|넘어|바꿔)`).exec(_mt);
+          result.moveSet = { kind: 'withdraw', equip: _N(_m[1]), to: _to && _ok(_to[1]) ? _N(_to[1]) : '', raw: _mt };
+        } else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
+      } else if ((_m = new RegExp(`${_NO}\\s*(?:로|으로)\\s*(?:이동|옮겼|갔|넘어|바꿨|바꿔)`).exec(_mt))) {
+        if (_ok(_m[1])) result.moveSet = { kind: 'move', equip: '', to: _N(_m[1]), raw: _mt };
+        else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
+      } else if ((_m = new RegExp(`${_NO}\\s*(?:복귀|재투입|다시\\s*투입|다시\\s*들어)`).exec(_mt))) {
+        if (_ok(_m[1])) result.moveSet = { kind: 'return', equip: _N(_m[1]), to: '', raw: _mt };
+        else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
       }
     }
   }
@@ -3404,7 +3444,7 @@ function formatPace(parsed, allContainers, ctx) {
   const ats = (Array.isArray(ctx && ctx.voyageDoneAts) && ctx.voyageDoneAts.length) ? ctx.voyageDoneAts : doneAts;
   if (!ats.length) return `아직 ${modeK} 완료 기록이 없어요. 몇 대 진행되면 시간당 몇 개인지 알려드릴게요.`;
   const info = _infoOf(ctx);
-  const P = paceFromRecords(ats, info);
+  const P = withRecentPace(paceFromRecords(ats, info), ctx && ctx.voyage);   // 4.76: «시간당 몇 대»도 «몇 시에 끝나»와 같은 갱 수·속도(지금 일하는 호기 × 최근 120 실작업분)
   const L = [];
   //  ⚠ 시간대는 **작업 순서대로** 세운다. 자정을 넘기는 야간 작업이라 «시» 문자열로 정렬하면
   //    01·02·20·21·22 처럼 뒤죽박죽이 된다 — 첫 완료를 기준으로 몇 시간째인지로 줄 세운다.
@@ -3412,8 +3452,9 @@ function formatPace(parsed, allContainers, ctx) {
   if (P.ok) {
     const h = Math.floor(P.mins / 60), m = P.mins % 60;
     L.push(`⚡ 시간당 ${P.perHour.toFixed(1)}대 — 갱당 ${P.perGangHour.toFixed(1)}대 (갱 ${P.gangs}대 기준)`);
-    L.push(`   ${P.n}대를 ${h ? h + '시간 ' : ''}${m}분 동안 했어요${P.basis === 'work' ? '(쉬는 시간 뺀 실작업)' : '(완료 기록 구간)'}.`);
-    if (P.from) L.push(`   잰 구간: ${new Date(P.from).toTimeString().slice(0, 5)} ~ ${new Date(P.to || Date.now()).toTimeString().slice(0, 5)}`);
+    if (P.recent) L.push(`   ${recentPaceLine(P.recent)}`);
+    else L.push(`   ${P.n}대를 ${h ? h + '시간 ' : ''}${m}분 동안 했어요${P.basis === 'work' ? '(쉬는 시간 뺀 실작업)' : '(완료 기록 구간)'}.`);
+    if (P.from && !P.recent) L.push(`   잰 구간: ${new Date(P.from).toTimeString().slice(0, 5)} ~ ${new Date(P.to || Date.now()).toTimeString().slice(0, 5)}`);
   } else {
     L.push(P.why === 'few' ? `아직 ${ats.length}대라 시간당을 재기엔 이릅니다.`
       : P.why === 'short' ? '아직 잰 시간이 짧아 시간당이 흔들립니다.'
@@ -3555,13 +3596,13 @@ export function speedFromRecords(voyage, counts) {
   const info = voyage.info || {};
   //  3.60-18 (다수결 V5): 호출부가 분모(counts)를 주면 그 분모 안의 완료 시각(counts.doneAts)으로 잰다 — «시간당 몇 대»·«작업 속도»·«몇 시에 끝나» 가 같은 수.
   const _ats = (counts && Array.isArray(counts.doneAts) && counts.doneAts.length) ? counts.doneAts : voyageDoneAts(voyage);
-  const P = paceFromRecords(_ats, { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) });
+  const P = withRecentPace(paceFromRecords(_ats, { ...info, ...voyageReportSpan(voyage), firstDoneAt: voyageFirstTermAt(voyage) }), voyage);   // 4.76: 지금 일하는 호기 수·최근 속도
   //  완료 몇 건으로 잰 페이스는 잡음이다(감사 실측 — 3건·40분이면 갱당 2.25대, 2갱 몫이 19대로 나온다). 10건이 안 되면 «아직 못 잼»으로 두고 호출부가 계획·과거 평균으로 간다.
   if (!P || !P.ok || !(P.perGangHour > 0) || P.n < 10) return null;
   const plan = counts && Number(counts.total) > 0 ? Number(counts.total) : null;
   const done = counts && plan != null ? Number(counts.done) || 0 : P.n;
   return { done, plan, left: plan != null ? Math.max(0, plan - done) : null, workedMin: P.workedMin, perHour: P.perHour, perGangHour: P.perGangHour,
-    gangs: P.gangs, pier: P.pier || (String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC'), basis: P.basis, from: P.from, n: P.n };
+    gangs: P.gangs, pier: P.pier || (String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC'), basis: P.basis, from: P.from, n: P.n, recent: P.recent || null };
 }
 function _tsOf(v) {
   if (!v) return 0;
@@ -3590,6 +3631,117 @@ export function addWorkMinutes(startMs, workMin, pier) {
     }
   }
   return t;
+}
+
+// ── ★ 4.76 — 지금 일하는 호기 수와 갱당 속도 — «최근 120 실작업분» 한 벌.
+//  검수사 2026-11-08 «1호기 철수 라고 했으며 원갱이라고 이야기 했는데 2갱기준으로 잡는듯».
+//  KKLC 2610N(2026-11-07 밤) — 1호기 철수 뒤 한 갱뿐인데 앱은 info.gangs 기본 2 와 밤새 평균 속도로 22:57 에 01:43 쯤 끝난다 했다(실제 04:24, −161분).
+//  갱 수 = 최근 15 실작업분 안에 완료가 찍힌 호기(+ 시작·재개 보고가 있고 그 뒤 중단·종료 보고가 없는 호기).
+//  갱당 속도 = 최근 120 실작업분(쉬는 시간·장비 고장 구간 제외)의 완료 수 ÷ 갱·시간. 쉬는 시간이면 쉬기 직전 속도를 이어 쓴다.
+//  RORO(105호기)·호기를 모르는 기록(다른 수석 담당 3호기 LOLO)은 갱에 세지 않는다. 선석 번호로 호기를 막지 않는다.
+//  호기 기록이 모자라면 null — 부르는 쪽이 종전 계산으로 간다.
+export function gangEquipNo(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s || /RORO|램프|^105\s*호기$|^QC\s*105$/i.test(s)) return null;
+  const m = s.match(/(\d)\s*호기/) || s.match(/^QC\s*10?(\d)$/i);
+  return m ? `${m[1]}호기` : null;
+}
+export function recentPaceOf(voyage, now = Date.now()) {
+  if (!voyage) return null;
+  const info = voyage.info || {};
+  const pier = normPier(info.pier, info.berth);
+  const rows = [];
+  for (const m of ['discharge', 'loading']) {
+    const comp = (voyage[m] && voyage[m].completed) || null;
+    if (!comp || typeof comp !== 'object') continue;
+    for (const k of Object.keys(comp)) {
+      const c = comp[k]; const at = c && Number(c.at); const eq = c && gangEquipNo(c.equip);
+      if (at > 0 && at <= now + 60000 && eq) rows.push({ at, eq });
+    }
+  }
+  if (rows.length < 10) return null;
+  rows.sort((a, b) => a.at - b.at);
+  const reps = [];
+  const rp = voyage.reports;
+  if (rp && typeof rp === 'object') for (const k of Object.keys(rp)) {
+    const r = rp[k]; if (!r || typeof r !== 'object') continue;
+    const ts = Number(r.ts) || Number(k) || 0; if (!ts || ts > now + 60000) continue;
+    //  4.76 호기 이동 보고(type 'crane_move') — 철수 = 그 호기 멈춤 · 복귀·이동 도착 = 그 호기 시작. 배 전체 «작업 중단»이 아니라 호기 하나의 일이다.
+    if (r.type === 'crane_move') {
+      const kind = String(r.kind || ''); const eq = gangEquipNo(r.equip); const to = gangEquipNo(r.to);
+      if (kind === 'withdraw' && eq) reps.push({ ts, verb: 'pause', eq, allEq: false });
+      if ((kind === 'return') && eq) reps.push({ ts, verb: 'resume', eq, allEq: false });
+      if (kind === 'move' && eq) reps.push({ ts, verb: 'pause', eq, allEq: false });
+      if ((kind === 'move' || kind === 'withdraw') && to) reps.push({ ts: ts + 1, verb: 'start', eq: to, allEq: false });
+      continue;
+    }
+    const act = String(r.action || '');
+    const isExt = r.type === 'external_pause';
+    if (!(isExt || (r.type === 'work_status' && /(^|_)(start|pause|resume|done)$/.test(act)))) continue;
+    const eq = gangEquipNo(r.equip);
+    reps.push({ ts, verb: isExt ? 'pause' : act.replace(/^.*_/, ''), eq, allEq: isExt && !eq });
+  }
+  reps.sort((a, b) => a.ts - b.ts);
+  const downs = [];
+  for (const r of reps) {
+    if (!(r.allEq && r.verb === 'pause')) continue;
+    let hi = r.ts + 3 * 3600000;
+    const nx = reps.find((x) => x.ts > r.ts && (x.verb === 'start' || x.verb === 'resume'));
+    if (nx) hi = Math.min(hi, nx.ts);
+    const nd = rows.find((x) => x.at > r.ts); if (nd) hi = Math.min(hi, nd.at);
+    if (hi > r.ts) downs.push([r.ts, hi]);
+  }
+  const inDown = (t) => downs.some(([a, b]) => t >= a && t < b);
+  const wmin = (a, b) => workMinutesBetween(a, b, pier);
+  let ref = now;
+  for (let g = 0; g < 200 && (wmin(ref - 300000, ref) === 0 || inDown(ref - 60000)); g++) ref -= 300000;
+  const first = rows[0].at;
+  if (ref <= first) return null;
+  const activeAt = (t, win = 15) => {
+    const set = new Set(); const lastDone = {};
+    for (const r of rows) { if (r.at <= t) lastDone[r.eq] = r.at; }
+    for (const eq of Object.keys(lastDone)) {
+      const ld = lastDone[eq]; if (wmin(ld, t) > win) continue;
+      const stop = reps.find((x) => x.ts > ld && x.ts <= t && (x.verb === 'pause' || x.verb === 'done') && !x.allEq && x.eq === eq);
+      if (!stop) set.add(eq);
+    }
+    for (const r of reps) {
+      if (!r.eq || r.ts > t || !(r.verb === 'start' || r.verb === 'resume') || wmin(r.ts, t) > win) continue;
+      const stop = reps.find((x) => x.ts > r.ts && x.ts <= t && (x.verb === 'pause' || x.verb === 'done') && x.eq === r.eq);
+      if (!stop) set.add(r.eq);
+    }
+    return set;
+  };
+  //  쉬는 시간이면 쉬기 직전 일하던 호기를 센다 — 마지막 컨 뒤 해치커버를 닫느라 쉬기 전 마지막 완료가 15분 넘게 앞서는 일이 흔해 40 실작업분까지 본다(KKLC 23:11 마지막 완료 → 23:30 야식).
+  const gangsNow = activeAt(ref, ref !== now ? 40 : 15);
+  if (!gangsNow.size) return null;
+  const BIN = 600000; let wsum = 0, n = 0, gh = 0;
+  for (let hi = ref, bins = 0; hi > first && wsum < 120 && bins < 90; hi -= BIN, bins++) {
+    const lo = hi - BIN; const w = wmin(lo, hi);
+    if (w < 8 || inDown(lo + 60000)) continue;
+    const inBin = rows.filter((r) => r.at > lo && r.at <= hi);
+    const eqs = new Set(inBin.map((r) => r.eq)); activeAt(hi).forEach((e) => eqs.add(e));
+    if (!eqs.size) continue;
+    n += inBin.length; gh += (eqs.size * Math.min(w, 10)) / 60; wsum += Math.min(w, 10);
+  }
+  if (!(gh > 0) || n < 10) return null;
+  const perGangHour = n / gh;
+  if (!(perGangHour > 0.5)) return null;
+  return { gangs: gangsNow.size, equips: [...gangsNow].sort(), perGangHour, windowMin: Math.round(wsum), n, ref, inBreak: ref !== now, pier };
+}
+// 페이스에 «최근 120분·지금 일하는 호기 수»를 덧씌운다. 못 구하면 받은 페이스 그대로.
+export function withRecentPace(P, voyage, now = Date.now()) {
+  if (!P || !P.ok) return P;
+  let R = null;
+  try { R = recentPaceOf(voyage, now); } catch (e) { console.warn('[4.76] 최근 속도를 못 재 종전 계산으로 갑니다:', e); }
+  if (!R) return P;
+  return { ...P, perGangHour: R.perGangHour, gangs: R.gangs, perHour: R.perGangHour * R.gangs, recent: R };
+}
+// 답에 붙일 근거 한 줄.
+export function recentPaceLine(R) {
+  if (!R) return '';
+  const eq = R.equips && R.equips.length ? `(${R.equips.join('·')})` : '';
+  return `최근 실작업 ${R.windowMin}분 기준 — 지금 ${R.gangs}갱${eq} · 갱당 시간당 ${R.perGangHour.toFixed(1)}대${R.inBreak ? ' · 지금은 쉬는 시간이라 쉬기 직전 속도' : ''}. 쉬는 시간 포함, 몇 분 차이날 수 있어요.`;
 }
 
 /** ctx 에서 항차 info 를 복원한다 (3.6-01).
@@ -3672,7 +3824,7 @@ function formatEta(parsed, allContainers, ctx) {
   //    고를 때마다 하나씩 빠뜨려 통계탭과 미르가 다른 답을 냈다(43.7 vs 17.8, 2.46배).
   //    항차 info 를 통째로 깔고 ctx 의 평평한 키로 덮는다. 그러면 새 키가 늘어도 저절로 따라온다.
   const _info = { ..._infoOf(ctx), ...(ctx && ctx.voyage ? { ...voyageReportSpan(ctx.voyage), firstDoneAt: voyageFirstTermAt(ctx.voyage) } : null) };   // 3.53-12: 작업 속도(speedFromRecords)와 같은 분모
-  const _P = paceFromRecords(_paceAts, _info);   // 3.6: 부두·선석·갱 수를 한 덩어리로 — 하나씩 넘기면 빠뜨린다(재감사)
+  const _P = withRecentPace(paceFromRecords(_paceAts, _info), ctx && ctx.voyage);   // 3.6: 부두·선석·갱 수를 한 덩어리로 / 4.76: 지금 일하는 호기 수·최근 120 실작업분 속도로 덮는다
   if (!_P.ok) {
     const why = _P.why === 'dirty'
       ? '완료 시각 기록이 고르지 않아 페이스를 못 재요.'
@@ -3706,7 +3858,8 @@ function formatEta(parsed, allContainers, ctx) {
     `${remain}대 남았어요. 지금 페이스면 ${durKo}, ${etaShort}쯤 끝나겠네요.${cheer}\n` +
     `⏱ 예상 완료: ${etaStr}쯤\n` +
     `남은 작업: ${remain}대${_split ? ` (${_split})` : ''} · 완료 ${doneCount} / 전체 ${total}\n` +
-    `오늘 페이스: 시간당 약 ${rate}대 — ${_P.gangs}갱 기준 갱당 ${_P.perGangHour.toFixed(1)}대 (완료 기록 양하+선적 ${_P.n}대 ÷ ${_P.basis === 'work' ? '작업 시작부터의 ' : ''}실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 — 쉬는 시간 뺀 것${_P.basis === 'work' ? '' : ' · 작업 시각을 몰라 완료 기록 구간으로 쟀어요'})\n` +
+    (_P.recent ? `기준: ${recentPaceLine(_P.recent)}\n` : '') +
+    `오늘 페이스: 시간당 약 ${rate}대 — ${_P.gangs}갱 기준 갱당 ${_P.perGangHour.toFixed(1)}대 (${_P.recent ? `최근 실작업 ${_P.recent.windowMin}분의 완료 ${_P.recent.n}대 ÷ 갱·시간 ${(_P.recent.n / _P.recent.perGangHour).toFixed(1)} — 쉬는 시간 뺀 것` : `완료 기록 양하+선적 ${_P.n}대 ÷ ${_P.basis === 'work' ? '작업 시작부터의 ' : ''}실작업 ${Math.floor(_P.mins / 60)}시간 ${_P.mins % 60}분 — 쉬는 시간 뺀 것${_P.basis === 'work' ? '' : ' · 작업 시각을 몰라 완료 기록 구간으로 쟀어요'}`})\n` +
     `남은 시간: ${durKo}`
     + (_vc && _vc.term ? `\n📡 ${_vc.term} 본선현황 기준 — 양하 ${_vc.byMode.discharge.done}/${_vc.byMode.discharge.total} · 선적 ${_vc.byMode.loading.done}/${_vc.byMode.loading.total}` : '')
   );

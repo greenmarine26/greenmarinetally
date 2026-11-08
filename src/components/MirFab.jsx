@@ -18,6 +18,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
+import { craneMoveReportsOf } from '../craneMove.js';
 import { answerOneRaw, workPauseOf, mirDoneUpWhy } from '../mir.js';   // 4.42-02: mirDoneUpWhy — 기쁨 이유에 배 이름
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
@@ -135,6 +136,16 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           if (sideRef.current !== key) { sideRef.current = key; fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[미르] 시작 시각 저장 실패', e)); }
         }
       }
+      //  4.76 «1호기 철수»·«2호기로 이동»·«1호기 복귀» — 호기 이동 보고(crane_move)를 남긴다. 같은 말을 10분 안에 되풀이하면 다시 적지 않는다.
+      if (parsed.moveSet && voyageKey) {
+        const mkey = `move|${voyageKey}|${parsed.moveSet.kind}|${parsed.moveSet.equip}|${parsed.moveSet.to}|${Math.floor(Date.now() / 600000)}`;
+        if (sideRef.current !== mkey) {
+          sideRef.current = mkey;
+          const reps = craneMoveReportsOf(parsed.moveSet, voyage, inspector || '');
+          (async () => { for (const r of reps) await fbAddWorkReport(voyageKey, { ...r, by: inspector || r.by || '' }); })()
+            .catch((e) => { console.warn('[4.76] 호기 이동 기록 실패', e); sideRef.current = ''; setOut((o) => (o || '') + '\n⚠ 호기 이동 기록이 안 됐어요 — 조회만이거나 연결 문제예요. 다시 말씀해 주세요.'); });
+        }
+      }
       //  4.34-02 «미르야 강풍대기 상태야 쉬고 있어» — 작업 보고의 «작업 중단»과 같은 기록(external_pause)을 남긴다. 말로 알린 것이니 카톡 공유(shareText)는 하지 않는다.
       //    이미 같은 사유로 중단 중이면 다시 적지 않는다. 조회만이면 fbAddWorkReport 가 막는다 → 답 밑에 알린다.
       if (parsed.pauseSet) {   // 미르 칸에 치는 말은 부름말이 없어도 미르에게 하는 말이다
@@ -201,6 +212,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       if (parseNaturalQuery(t).weatherQuery) { try { weatherText = await fetchWeatherText(); } catch (e) { weatherText = null; } }
       const ctx = {
         work: mirWorkCtx(),   // 4.38: 작업 중 사담 미루기 · 쉬는 틈의 미룬 질문 단추
+        moveRecorder: true,   // 4.76: 호기 이동 말을 crane_move 보고로 적는 손이 있는 화면(MirFab·SearchPanel)
         mirBox: true,   // 4.34-02: 미르 칸에 치는 말은 «미르야» 없이도 미르에게 하는 말이다(멈춤 알림 판정)
         app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, weatherText, accepted: true,   // 3.60-18: 전송된 질문 — 못 알아들으면 miss 기록
         inspector, isChief, chiefData, heartbeat, portMisData, pilotForecast,

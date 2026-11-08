@@ -37,7 +37,7 @@ export default function HatchAlertBanner({ events, voyageKey, vsl, voyOf = null,
     const m = {};
     for (const e of list) {
       let n = 0;
-      if (panelCountOf) { try { n = panelCountOf(e.bays, e.mode) || 0; } catch (x) { n = 0; } }
+      if (panelCountOf) { try { n = panelCountOf(e.bays, e.mode, e.action) || 0; } catch (x) { n = 0; } }
       m[`${e.hatch}|${e.action}`] = n;
     }
     return m;

@@ -1238,7 +1238,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       }
       // 4.10 (검수사 2026-10-07 «보고 직전에 커버 장수를 맞는지 확인하고 보고 … 무심코 보고 했다가 6장 오픈을 보고 했으니까요»)
       //   보고 직전에 항상 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 고르게 한다. 취소하면 아무것도 저장·공유하지 않는다.
-      const countDetail = hatchPanelDetailOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf);
+      const countDetail = hatchPanelDetailOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf, action);
       const chosenCount = await askHatchCount({ action, bays, detail: countDetail, initial: countDetail.count });
       if (chosenCount == null) return false;
       const voy = mode === 'discharge'

@@ -20,6 +20,7 @@
 //   그래서 이 파일 맨 바깥(함수 밖)에서는 nlSearch 에서 가져온 것을 **쓰지 않는다** — 함수 안에서만 쓴다. 연막 smoke_mirfile 이 지킨다.
 // ⚠ 순수 함수만 — firebase SDK 를 직접 부르지 않는다(콘앱 번들 mir-core.js 에도 실린다). 보관소는 REST(fetch)와 window 손으로만.
 
+import { withdrawnCranesOf } from './craneMove.js';
 import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸» (rzorPlan 은 import 가 없다 — 콘앱 번들에 가볍게 실린다)
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
@@ -1394,7 +1395,7 @@ function attrLine(c, attr, ctx) {
       const lg = (sec.luggConfirm || {})[c.cn];
       const a = [];
       const comp = c._comp || c.comp;
-      a.push(comp ? `완료 ${hhmm(comp.at)}${S(comp.by) ? ' ' + comp.by : ''}${S(comp.equip) ? ' ' + (/호기$/.test(S(comp.equip)) ? comp.equip : comp.equip + '호기') : ''}` : '미완료');
+      a.push(comp ? `완료 ${hhmm(comp.at)}${S(comp.by) ? ' ' + comp.by : (comp.src === 'term' ? ' 담당 미확인' : '')}${S(comp.equip) ? ' ' + (/호기$/.test(S(comp.equip)) ? comp.equip : comp.equip + '호기') : ''}` : '미완료');
       if (h && S(h.reason) && !comp) a.push(`보류(${S(h.reason)}${S(h.by) ? ' ' + h.by : ''})`);   // 4.26-02: 종전 `!h.doneAt` — doneAt 은 «보류 당시 완료 대수»라 첫 완료 뒤 건 보류를 못 봤다(보류 한 벌 activeHeldOf 와 같은 기준)
       if (lg) a.push(`수화물 확인${S(lg.by) ? ' ' + lg.by : ''}`);
       if (c.lugg) a.push('수화물');
@@ -2356,6 +2357,38 @@ export function answerOneRaw(query, ctx) {
   //    ② «왜 작업 안 해?» → 앱 중단 보고가 있으면 그 사유·시각을 알려 준다. 보고가 없으면 건드리지 않는다(아래 옛 길이 답한다). 야드 갈래보다 먼저 본다(«야드 혼잡» 이 사유일 수 있다).
   {
     const _hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    //  ★ 4.76 «야식 시간 몇 시야» — 그 배 부두의 근무표(WORK_SHIFTS) 자정 걸친 쉬는 시간이다. 배 부두를 모르면 두 부두 다.
+    if (!p.pauseSet && !p.moveSet && /야식/.test(q) && /시간|언제|몇\s*시|타임/.test(q) && !/뭐|메뉴|추천|먹/.test(q) && !/끝나|끝날|끝나는|마치|마쳐|마무리|완료|걸려|걸리|남았|남은|ETA/i.test(q)) {   // 끝나는 시각을 물은 말(«야식 지나서 몇 시에 끝나?»)은 ETA 가 답한다
+      _via('workStop');
+      const _one = (pier) => {
+        const w = (WORK_SHIFTS[String(pier).toUpperCase()] || WORK_SHIFTS.PCTC).slice().sort((x, y) => x[0] - y[0]);
+        const e = w[w.length - 1][1], s0 = w[0][0] + 1440;
+        const f = (m) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+        return `${pier} 야식은 ${f(e)}~${f(s0)} (${s0 - e}분)`;
+      };
+      return (v ? [_one(pierOf(v))] : [_one('PNCT'), _one('PCTC')]).join(' · ') + '이에요 🐱 근무표 그대로예요.';
+    }
+    //  ★ 4.76 호기 이동 — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소». 기록은 화면(MirFab·SearchPanel)이 crane_move 보고로 적는다(craneMove.js).
+    //    검수사 2026-11-08 «1호기 철수라고 했을때 미르가 1호기 작업중단을 했어야 했고 제가 2호기로 이동한것을 인지 했어야 합니다».
+    if (p.moveSet && (p.mirCalled || c.mirBox)) {
+      _via('workStop');
+      if (!hasShip || !v) return '알겠어요 🐱 다만 어느 배인지 몰라 호기 이동을 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 KKLC 1호기 철수")';
+      const M = p.moveSet;
+      if (M.kind === 'roro') return '105호기는 램프(RORO)라 갱으로 안 셉니다 🐱 기록하지 않았어요. 크레인 호기(1~4호기)로 말씀해 주세요.';
+      if (M.kind === 'range') return `평택 크레인은 1~4호기만 압니다 🐱 ${M.equip}은 기록하지 않았어요. 1~4호기로 말씀해 주세요.`;
+      if (M.kind === 'cancel') {
+        const _ws = withdrawnCranesOf(v);
+        const _w = M.equip ? _ws.find((x) => x.equip === M.equip) : _ws[0];
+        if (!_w) return M.equip ? `${koJosa(M.equip, '은')} 철수로 적힌 기록이 없어요 🐱 취소할 게 없어서 아무것도 안 바꿨어요.` : '취소할 철수 기록이 없어요 🐱 아무것도 안 바꿨어요.';
+        if (app === 'cone' || !c.moveRecorder) return `알겠어요, ${_w.equip} 철수 취소라고 들었어요 🐱 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르(떠 있는 미르 칸)에서 해 주세요.`;
+        return `🏗 ${_w.equip} 철수 취소(복귀) — 적을게요 🐱 지금 일하는 호기 수가 바뀐 걸로 보고 끝나는 시각을 다시 계산해요.`;
+      }
+      const _txt = M.kind === 'withdraw' ? `${M.equip} 철수${M.to ? ` · ${M.to}로 이동` : ''}`
+        : M.kind === 'move' ? `${M.equip ? M.equip + '에서 ' : ''}${M.to}로 이동`
+        : `${M.equip} 복귀`;
+      if (app === 'cone' || !c.moveRecorder) return `알겠어요, ${_txt}라고 들었어요 🐱 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르(떠 있는 미르 칸)에서 해 주세요.`;
+      return `🏗 ${_txt} — 적을게요 🐱 지금 일하는 호기 수가 바뀐 걸로 보고 끝나는 시각을 다시 계산해요. (되돌리려면 "철수 취소"·"N호기 복귀")`;
+    }
     if (p.pauseSet && (p.mirCalled || c.mirBox)) {
       _via('workStop');
       const R = p.pauseSet.reason;

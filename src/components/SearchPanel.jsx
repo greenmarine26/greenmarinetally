@@ -44,6 +44,7 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 import { mirTone } from '../mir.js';
+import { craneMoveReportsOf } from '../craneMove.js';
 import { answerOneRaw, workPauseOf } from '../mir.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
@@ -620,7 +621,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const _hatchGroupCenterOf = (b) => bayGroupCenter(b, manualBayPairs);
   //  사건의 모드(양하/선적)로 항차번호·장수를 고른다 — 양하 탭에 뜬 선적 닫힘을 양하 항차로 적지 않게(감사 지적).
   //  4.10 재감사(중-1): 알림 배너가 이 함수로 «총 N장» 을 센다 — 글자 하나마다 SearchPanel 이 다시 그려지므로 함수 정체성을 자료가 바뀔 때만 바꿔(배너 useMemo 가 그때만 다시 센다) raw EDI 파싱 비용이 입력을 느리게 하지 않게 한다.
-  const hatchPanelCountFor = React.useCallback((bays, mode = workFilter) => hatchPanelCountOf(voyage, mode, bays, _hatchDict, (b) => bayGroupCenter(b, manualBayPairs)), [voyage, workFilter, _hatchDict, manualBayPairs]);
+  const hatchPanelCountFor = React.useCallback((bays, mode = workFilter, action) => hatchPanelCountOf(voyage, mode, bays, _hatchDict, (b) => bayGroupCenter(b, manualBayPairs), action), [voyage, workFilter, _hatchDict, manualBayPairs]);
   const hatchVoyFor = (mode = workFilter) => (mode === 'discharge' ? (voyage?.info?.voy_d || voyage?.info?.voy || '') : (voyage?.info?.voy_l || voyage?.info?.voy || ''));
   useEffect(() => {
     if (!_hatchFollow || !voyageKey || !hatchPending.length) return;
@@ -633,7 +634,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       for (const e of todo) {
         const k = `${voyageKey}|${e.hatch}|${e.action}`;
         try {
-          await recordHatchEvent(voyageKey, e, { vsl: _hatchShipName, voy: hatchVoyFor(e.mode), equip: equipNo || '', panelCount: hatchPanelCountFor(e.bays, e.mode), share: false, by: inspector || '' });
+          await recordHatchEvent(voyageKey, e, { vsl: _hatchShipName, voy: hatchVoyFor(e.mode), equip: equipNo || '', panelCount: hatchPanelCountFor(e.bays, e.mode, e.action), share: false, by: inspector || '' });
         } catch (x) { console.warn('[3.49] 따라가기 해치 자동 기록 실패 — 다음 갱신에 다시', x); _hatchInFlightAll.delete(k); }
       }
     })();
@@ -1280,7 +1281,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     if (onlyDigits) return null;
     traceRef.current = {};
     return answerOneRaw(query, {
-      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice, _trace: traceRef.current,
+      moveRecorder: true, app: 'tally', smallTalkLast: true, execDevice: false, modeChoice, _trace: traceRef.current,
       _utterAt: askedAt || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다(기록 뒤에도)
       voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
       containers: allContainersData || allContainers, photos: voyage?.photos || null,   // 4.48-03: 미르 대수는 자료대로(부모가 넘긴 유닛 기준 목록)
@@ -1295,7 +1296,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   }, [parsed, results, allContainers, allContainersData, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan, askedAt]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan · 3.68: askedAt(접수 표)
   //  3.42: 모델이 «미르 말»로 바꾼 문장을 같은 재료로 규칙에 다시 돌린다(위 _localAnswerRaw 와 같은 ctx — 두 벌이 되면 안 된다).
   const _rulesFor = (cq) => answerOneRaw(cq, {
-    app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
+    moveRecorder: true, app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
     voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
     containers: allContainersData || allContainers, photos: voyage?.photos || null,   // 4.48-03: 미르 대수는 자료대로(부모가 넘긴 유닛 기준 목록)
     shiftMap: shiftingMapForDisplay(voyageKey, voyage),
@@ -1386,6 +1387,18 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     fbAddWorkReport(voyageKey, { type: 'external_pause', reason: R, message: `[작업 중단 보고]\n선박: ${(voyage && voyage.info && voyage.info.vsl) || ''}\n사유: ${R}\n(미르에게 말로 알림${inspector ? ' — ' + inspector : ''})`, by: inspector || '', via: 'mir' })
       .catch((e) => { console.warn('[4.34-02] 중단 기록 실패', e); pauseSetRef.current = ''; });
   }, [parsed.pauseSet, parsed.mirCalled, voyageKey, inspector]);
+
+  //  ★ 4.76 «1호기 철수»·«2호기로 이동»·«1호기 복귀» — 호기 이동 보고(crane_move). MirFab 과 같은 규칙(미르를 불렀을 때만 · 같은 말 10분 안 되풀이는 안 적는다).
+  const moveSetRef = useRef('');
+  useEffect(() => {
+    if (!parsed.moveSet || !parsed.mirCalled || !voyageKey) return;
+    const key = `${voyageKey}|${parsed.moveSet.kind}|${parsed.moveSet.equip}|${parsed.moveSet.to}|${Math.floor(Date.now() / 600000)}`;
+    if (moveSetRef.current === key) return;
+    moveSetRef.current = key;
+    const reps = craneMoveReportsOf(parsed.moveSet, voyage, inspector || '');
+    (async () => { for (const r of reps) await fbAddWorkReport(voyageKey, { ...r, by: inspector || r.by || '' }); })()
+      .catch((e) => { console.warn('[4.76] 호기 이동 기록 실패', e); moveSetRef.current = ''; });
+  }, [parsed.moveSet, parsed.mirCalled, voyageKey, inspector]);
 
   const gangSetRef = useRef('');
   useEffect(() => {

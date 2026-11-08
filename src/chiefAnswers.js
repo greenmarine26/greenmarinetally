@@ -10,7 +10,7 @@
 import { ptkDischargeJudgeOf, isKeepShift } from './utils.js';   // 4.48: 본선 잔류 예보(노란 ◆) 판정 한 벌
 import { activeHeldOf } from './utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(자동 가이드 보류 줄 · 미르와 같은 목록)   // 4.20 후속: 평택 양하분 한 벌
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer, isFullReefer } from './utils.js';   // 2.65-01: 조 경계 한 벌
-import { addWorkMinutes, speedFromRecords, workMinutesBetween } from './nlSearch.js';
+import { addWorkMinutes, speedFromRecords, workMinutesBetween, recentPaceLine } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
@@ -921,6 +921,7 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null)
     L.push(`지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
     //  3.6-01: 갱 수를 2 로 못 박지 않는다 — speedFromTerminal 이 항차 갱 수로 나눈다(모르면 2).
     L.push(`**${T.gangs}갱 기준 갱당 시간당 ${T.perGangHour.toFixed(1)}대**${T.gangs === 2 ? ' (1갱이면 ×2 하시면 됩니다)' : ` · 이 배 시간당 ${T.perHour.toFixed(1)}대`}`);
+    if (T.recent) L.push(recentPaceLine(T.recent));   // 4.76: 근거 한 줄 — 지금 일하는 호기 수·최근 실작업분·«몇 분 차이날 수 있어요»
     if (counts && counts.collecting) {
       L.push('(선적 자료 수집중이라 남은 대수·끝나는 시각은 아직 세지 않아요.)');   // 4.17 (검수사 §7.8-⑫): 선적이 리스트뿐이고 아직 안 실은 배 — mir.js _vcOf 가 dataReadiness.loadingCollecting 으로 표시
     } else if (T.left == null) {

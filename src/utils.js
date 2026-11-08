@@ -58,7 +58,8 @@ export function isSentenceQuery(v) {
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
 // (앞 판) 'TallyOne 4.68'   // 4.68 **크레딧이 있는 동안 제미나이를 쓰지 않는다 — 클로드 하루 합계 3달러를 넘으면 그날은 제미나이** — 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 사용하지 않는다. 하루 3불을 초과하면 사용하고» · 미르(대화·번역·자료 답)는 클로드 세 번, 사진 읽기는 세 번(적재 PDF 제외) 불러도 안 되면 제미나이로 가지 않고 «다시 시도» · 제미나이는 키·크레딧 문제·HEIC·하루 한도 초과·mir_config.geminiFallback=true 일 때만 · 한도는 mir_config.claudeDailyUsd(기본 3, 0 이면 클로드 끔).
-export const APP_VERSION = 'TallyOne 4.75-01'   // 4.75-01 **제출용 체크는 앱으로 직접 입력한 호기(갱)의 컨에만 — 터미널 반영·마감 EDI 적용 컨과 입력 없이 명단에만 있는 호기는 체크 없음** — 검수사 2026-11-07 15:15·15:19 «검수를 직접한 장비(갱)것만 제출용 리스트가 출력되어야 합니다. 갱에 등록되어 있다고 해도 직접 입력을 안한다는건 검수리스트만으로 검수를 한다는것입니다». 실오류·데미지 보고는 직접 입력하는 호기의 것만 표기.
+export const APP_VERSION = 'TallyOne 4.76'   // 4.76 **미르 «몇 시에 끝나»가 지금 일하는 호기 수와 최근 120 실작업분 속도로 계산 · 호기 이동 말(철수·이동·복귀) 기록 · 해치 닫는 장수 = 연 장수 합** — 검수사 2026-11-08 «1호기 철수 라고 했으며 원갱이라고 이야기 했는데 2갱기준으로 잡는듯» · «14번베이 커버를 수동으로 1장씩 텀을두고 열었는데 닫을때는 2장이 닫혀야 하는데 인지를 못한듯» · «장비교체 철수 같은것들을 앱에서 바꿀수 있어야 합니다». ① nlSearch.recentPaceOf — 갱 수 = 최근 15 실작업분에 완료가 찍힌(또는 시작·재개한) 호기, 갱당 속도 = 최근 120 실작업분(쉬는 시간·장비 고장 제외), RORO(105호기)·호기 모르는 기록은 안 센다 · formatEta·speedFromRecords(작업 속도·갱 계획)가 같은 값 · 근거 한 줄 + «몇 분 차이날 수 있어요». KKLC 2610N 재현 22:57 −161분 → +11분. ② craneMove.js·nlSearch.moveSet·mir.js — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소» → type 'crane_move' 보고(MirFab·SearchPanel). ③ utils.hatchOpenedNetOf — 닫는 보고의 장수는 연 보고 합 − 이미 닫은 합(KKLC 사전 14·18번 hatchCount 2). ④ mir.js 완료 «담당 미확인»(터미널 반영·담당 빈 값) · «야식 시간 몇 시야». 연막 smoke_move476.
+// (앞 판) 4.75-01 4.75-01 **제출용 체크는 앱으로 직접 입력한 호기(갱)의 컨에만 — 터미널 반영·마감 EDI 적용 컨과 입력 없이 명단에만 있는 호기는 체크 없음** — 검수사 2026-11-07 15:15·15:19 «검수를 직접한 장비(갱)것만 제출용 리스트가 출력되어야 합니다. 갱에 등록되어 있다고 해도 직접 입력을 안한다는건 검수리스트만으로 검수를 한다는것입니다». 실오류·데미지 보고는 직접 입력하는 호기의 것만 표기.
 // (앞 판) 4.75 **검수 리스트 «제출용» — 같은 리스트에 작업한 컨 ✔호기 + 비고에 실오류·데미지, 머리 아래에 누가 몇 호기 몇 대** — 검수사 2026-11-07 14:06~14:18 «검수리스트중에 검수사 누구가 몇호기에서 어떤 컨테이너들을 검수했는지 … 제출용 리스트» · «검수리스트 출력물이 2개 — 작업용과 제출용» · «이어서 20/40 풀/엠티 등 조건마다 맞게». 출력 센터에 단추 하나 추가(작업용은 그대로). utils.inspectionMarksOf 한 벌(완료 기록 + 실오류·데미지 보고, 보고한 호기·사람이 터미널 추정을 이긴다)을 종이·엑셀(CSV)·장 나누기 네 판이 같이 쓴다.
 // (앞 판) 4.74-02 **상황판 호기 칸 이름도 근무조가 끝나면 빠진다** — 검수사 2026-11-07 10:13 «근무 교대를 06:30에 했을텐데 아직도 최원형이 근무중인가여?». 4.71 crewOfVoyage 의 대기 이름 목록에 시간 기준이 빠져 있어 로그아웃 없이 앱만 닫은 최원형(마지막 입력 22:49)이 교대 뒤에도 3호기에 남았다 → standbyOf(standbyNamesOf, 근무조 끝+30분) 한 벌로 거른다.
 // (앞 판) 4.74-01 **호기를 쥔 검수원은 입력이 없어도 그 근무조(주간 08:00~17:30·야간 19:00~익일 06:30)가 끝나고 30분이 지날 때까지 쥔 것으로 본다** — 검수사 2026-11-07 05:46 «야간 근무시간이 정해져 있습니다. 활동은 없지만 그 검수원이 3호기에서 작업하고 있는건 맞습니다». 앞 판의 «마지막 활동 4시간» 고정을 equipHoldUntil(근무조 끝+30분)로 바꿨다(로그인 호기 막기·베이뷰·대기 표시 한 벌).
@@ -181,7 +182,8 @@ export const APP_VERSION = 'TallyOne 4.75-01'   // 4.75-01 **제출용 체크는
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.75-01 제출용 검수 리스트는 앱으로 직접 입력한 호기의 컨에만 체크가 붙고 종이로 검수한 호기와 터미널 반영분은 체크하지 않습니다'
+export const APP_NOTE = '4.76 미르 몇 시에 끝나는 지금 일하는 호기 수와 최근 속도로 계산하고 1호기 철수 같은 말을 기록합니다'
+// (앞 판 APP_NOTE) '4.75-01 제출용 검수 리스트는 앱으로 직접 입력한 호기의 컨에만 체크가 붙고 종이로 검수한 호기와 터미널 반영분은 체크하지 않습니다'
 // (앞 판) APP_NOTE = '4.75 검수 리스트 제출용이 생겨 작업한 컨에 체크와 호기 그리고 실오류 데미지 기록이 표기됩니다.'
 // (앞 판) APP_NOTE = '4.74-02 근무가 끝난 검수원 이름은 교대 뒤 상황판 호기 칸에서 빠집니다.'
 // (앞 판) APP_NOTE = '4.74-01 호기를 쥔 검수원은 입력이 없어도 근무조가 끝날 때까지 쥔 것으로 보입니다.'
@@ -8436,8 +8438,30 @@ function _dictHatchSum(dictEntry, bays, groupCenterOf, withCenter = false) {
   });
   return { found, total: Object.values(byGroup).reduce((s, v) => s + v, 0) };
 }
-export function hatchPanelDetailOf(voyage, mode, bays, dictEntry, groupCenterOf) {
+//  ★ 4.76 — **닫을 때 장수 = 그 베이 커버를 연 보고의 합 − 이미 닫은 보고의 합.**
+//  검수사 2026-11-08 «14번베이 커버를 수동으로 1장씩 텀을두고 열었는데 닫을때는 2장이 닫혀야 하는데 인지를 못한듯» — KKLC 2610N 14번 홀드는 20:31 1장 + 20:48 1장으로 열렸는데(합 2),
+//  닫을 때 앱은 사전에 hatchCount 가 없어 기본 1장으로 안내했다. 연 합이 있으면 그것이 닫을 장수다(사전은 합이 없을 때만). 열린 보고가 없거나 다 닫혔으면 0.
+export function hatchOpenedNetOf(voyage, bays) {
+  const want = new Set((bays || []).map((b) => parseInt(b, 10)).filter((n) => n > 0));
+  if (!want.size) return 0;
+  let opened = 0, closed = 0;
+  for (const r of Object.values((voyage && voyage.reports) || {})) {
+    if (!r || r.type !== 'hatch') continue;
+    const rb = (Array.isArray(r.bays) ? r.bays : []).map((b) => parseInt(b, 10));
+    if (!rb.some((n) => want.has(n))) continue;
+    const n = Number(r.panelCount) > 0 ? Number(r.panelCount) : 0;
+    const act = String(r.action || '').toLowerCase();
+    if (act === 'open') opened += n; else if (act === 'close') closed += n;
+  }
+  return Math.max(0, opened - closed);
+}
+export function hatchPanelDetailOf(voyage, mode, bays, dictEntry, groupCenterOf, action) {
   const out = { count: 0, source: 'none', max: 0, groups: [] };
+  //  4.76: 닫는 보고는 «연 합 − 닫은 합» 이 먼저다. 사전·계산은 합이 없을 때만.
+  if (String(action || '').toLowerCase() === 'close') {
+    const _net = hatchOpenedNetOf(voyage, bays);
+    if (_net > 0) { out.count = _net; out.source = 'opened'; out.max = _net; return out; }
+  }
   let _byG = null;
   try {
     /* 2.98-12 (메모 «21 (22)23번베이 해치 커버 열면 6장?») — 트리오는 **같은 물리 커버**라
@@ -8482,8 +8506,8 @@ export function hatchPanelDetailOf(voyage, mode, bays, dictEntry, groupCenterOf)
 
 //  ★ 3.49 — **해치커버 장수 한 벌.** GuidedWorkPanel.hatchPanelsOf 본문을 그대로 옮겼다(자동 판정 기록·알림 배너가 같은 수를 쓴다). dictEntry = getShipBayDictData(imo, name), groupCenterOf = bayGroupCenter(bay, bayPairs).
 //   4.10: 계산 본문은 hatchPanelDetailOf 로 옮겼고 이 함수는 그 count 만 돌려준다(값은 4.09 와 같다 — 판정이 두 벌이 되지 않게).
-export function hatchPanelCountOf(voyage, mode, bays, dictEntry, groupCenterOf) {
-  return hatchPanelDetailOf(voyage, mode, bays, dictEntry, groupCenterOf).count;
+export function hatchPanelCountOf(voyage, mode, bays, dictEntry, groupCenterOf, action) {
+  return hatchPanelDetailOf(voyage, mode, bays, dictEntry, groupCenterOf, action).count;
 }
 
 //  ★ 4.10 — 보고 직전 «이 장수가 맞는가» 경고 한 벌. detail = hatchPanelDetailOf 결과, chosen = 보고하려는 장수(검수사가 고른 값, 아직 안 골랐으면 null).
@@ -8494,7 +8518,8 @@ export function hatchCountFlags(detail, chosen) {
   const n = Number.isFinite(Number(chosen)) && Number(chosen) > 0 ? Number(chosen) : null;
   if (d.source === 'none' || !(d.count > 0)) flags.push({ key: 'none', level: n == null ? 'block' : 'warn', text: '앱이 장수를 계산하지 못했습니다(베이사전·EDI 자료 없음). 현장에서 연 장수를 직접 고르십시오.' });
   else if (d.source === 'dict') flags.push({ key: 'dict', level: 'warn', text: `열어야 할 장을 자료로 세지 못해 베이사전 장수(${d.count}장)를 썼습니다. 맞는지 확인하십시오.` });
-  if (n != null && d.max > 0 && n > d.max) flags.push({ key: 'over', level: 'warn', text: `베이사전상 이 커버는 최대 ${d.max}장입니다. ${n}장은 사전보다 많습니다.` });
+  if (n != null && d.source === 'opened' && n > d.count) flags.push({ key: 'over', level: 'warn', text: `이 커버를 연 보고의 합은 ${d.count}장입니다. ${n}장은 연 장수보다 많습니다.` });
+  else if (n != null && d.max > 0 && n > d.max) flags.push({ key: 'over', level: 'warn', text: `베이사전상 이 커버는 최대 ${d.max}장입니다. ${n}장은 사전보다 많습니다.` });
   if (n != null && d.count > 0 && n !== d.count) flags.push({ key: 'changed', level: 'info', text: `앱이 센 장수는 ${d.count}장입니다. 직접 고친 값(${n}장)으로 보고합니다.` });
   return flags;
 }
