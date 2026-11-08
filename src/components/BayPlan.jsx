@@ -25,6 +25,7 @@ import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { formatDgShort } from '../dgUnDict.js';
+import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 핀치 확대 한 벌
 
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
@@ -524,15 +525,15 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   const fontSize = Math.max(8, Math.round(10 * zoom));
 
   // V8.25-01: 핀치 시작 시점의 줌을 읽기 위한 ref. (useEffect가 zoom마다 재실행되며
-  //   pinchStartDist를 0으로 리셋 → 두 번째 손가락 이동에서 ratio=Inf → 300% 고정되던 버그 수정)
+  //   시작 거리를 0으로 리셋 → 두 번째 손가락 이동에서 ratio=Inf → 300% 고정되던 버그 수정)
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
+  usePinchZoom(scrollRef, () => zoomRef.current, setZoom, { min: 0.15, max: 3 });   // 4.80: 핀치는 공용 한 벌 — 베이 그림 칸이 조건부 렌더라 요소가 생기면 그때 건다
   // 마우스/터치 드래그 + 휠 + 핀치 줌
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     let isDown = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
-    let pinchStartDist = 0, pinchStartZoom = 1;
 
     const onMouseDown = (e) => {
       if (e.target.closest('button')) return;
@@ -559,36 +560,17 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         e.preventDefault();
       }
     };
-    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const onTouchStart = (e) => {
-      if (e.touches.length === 2) {
-        pinchStartDist = dist(e.touches);
-        pinchStartZoom = zoomRef.current;
-      }
-    };
-    const onTouchMove = (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const newDist = dist(e.touches);
-        const ratio = newDist / pinchStartDist;
-        setZoom(Math.max(0.15, Math.min(3, pinchStartZoom * ratio)));
-      }
-    };
     el.style.cursor = 'grab';
     el.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('mousemove', onMouseMove);
     el.addEventListener('wheel', onWheel, { passive: false });
-    el.addEventListener('touchstart', onTouchStart, { passive: false });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
 
     return () => {
       el.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('mousemove', onMouseMove);
       el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
     };
   }, []);
 
@@ -1730,7 +1712,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
     const isSelected = selectionMode && selectedCns && selectedCns.has(c.cn);
     //  3.48 베이뷰 — 검수원 기록과 터미널 실적이 다른 칸(빨강) · 검수원이 찍었는데 터미널이 모르는 칸(회색). 판정은 utils.bayViewOverlayOf 한 벌.
     const _warn = warnCells && warnCells.get(`${parseInt(c.bay, 10)}-${row}-${tier}`);
-    const _warnCls = _warn === 'conflict' ? 'ring-4 ring-red-500 ring-inset' : _warn === 'noterm' ? 'ring-4 ring-slate-400 ring-inset' : '';
+    const _warnCls = _warn === 'conflict' ? 'ring-4 ring-red-500 ring-inset' : _warn === 'noterm' ? 'ring-4 ring-slate-400 ring-inset' : _warn === 'pick' ? 'ring-4 ring-violet-400 ring-inset' : '';   // 4.80 pick = 베이모드에서 고른 카드의 칸
     // ── TallyOne 2.98-02: **화면에도 OOG 방향을 낸다.** (검수사 지적 2026-08-31) ──
     //   원문 — *"화면은 안보여주나요 인쇄만?"*
     //   2.97/2.98 은 인쇄물(카고플랜·베이상세)에만 넣었다. 현장에서 먼저 보는 것은 화면이다.

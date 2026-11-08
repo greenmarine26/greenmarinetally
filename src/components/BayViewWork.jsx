@@ -15,12 +15,15 @@ import { bayViewOverlayOf, bayViewFollowOf, getEquipNumber, setEquipNumber, equi
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildBayPagesFromSummary, hatchEvenOf } from '../cargoPlanCore.js';
 import { useBackHandler } from '../backHandler.js';
+import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 베이 그림 칸 핀치 확대 — 베이플랜·베이 상세와 한 벌
+import { bayModeOkFor, bayPickRequest, bayModeCellsOf } from '../bayMode.js';   // 4.80: 베이모드 양하 — 판정 한 벌
 import useIsWide from '../useIsWide.js';   // 3.49: 넓은 화면(태블릿·컴)은 좌/우 분할 — 리스트 탭 2단과 같은 기준(1024px)
 
 const pad2 = (x) => String(x ?? '').padStart(2, '0');
 const fmtT = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 const RATIO_KEY = 'gm_bayview_ratio';
 const RATIO_DEF = 1 / 3;
+const BM_RATIO = 0.5;   // 4.80 베이모드 — 베이를 크게 고정해 두되 위 칸에 작은 카드(트윈은 두 장)가 들어갈 만큼
 const readRatio = () => { try { const v = parseFloat(localStorage.getItem(RATIO_KEY)); return (v >= 0.2 && v <= 0.7) ? v : RATIO_DEF; } catch (e) { return RATIO_DEF; } };
 const lastKey = (voyageKey, mode) => `gm_bayview_last:${voyageKey}:${mode}`;
 const readLast = (voyageKey, mode) => { try { const v = JSON.parse(localStorage.getItem(lastKey(voyageKey, mode)) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
@@ -47,6 +50,11 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   const [ratio, setRatio] = useState(readRatio);
   const [zoom, setZoom] = useState(1);
   const [showConf, setShowConf] = useState(false);
+  //  4.80 베이모드 양하 — {bay, saved}: 고정한 베이와 해제 때 되돌릴 원래 화면. bayPick = 자동 가이드에 보내는 «이 컨을 카드로» 요청. cardCns = 지금 카드의 컨(그림에 보라 테두리).
+  const [bayMode, setBayMode] = useState(null);
+  const [bayPick, setBayPick] = useState(null);
+  const [cardCns, setCardCns] = useState([]);
+  const onCardCns = useCallback((a) => setCardCns((o) => (o.length === a.length && o.every((x, i) => x === a[i])) ? o : a), []);
   const isWide = useIsWide();   // 3.49: 검수사 «폰화면은 수직 화면 이지만 컴은 수평화면으로 … 컴은 좌측에 컨테이너 자료가 우측에 베이»
   const [equip, setEquip] = useState(getEquipNumber());
   useEffect(() => {
@@ -59,7 +67,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   //    부모가 매 렌더 새 onClose 를 주면 30초 활동 tick 마다 가짜 항목이 쌓여 뒤로가기가 죽는다(감사 실측 재렌더 10회에 +10). 값은 ref 로 본다.
   const stepRef = useRef(step); stepRef.current = step;
   const closeRef = useRef(onClose); closeRef.current = onClose;
-  const onBack = useCallback(() => { if (stepRef.current === 'view') setStep('pick'); else if (closeRef.current) closeRef.current(); }, []);
+  const releaseRef = useRef(null); const bayModeRef = useRef(null);
+  const onBack = useCallback(() => { if (bayModeRef.current && releaseRef.current) releaseRef.current(); else if (stepRef.current === 'view') setStep('pick'); else if (closeRef.current) closeRef.current(); }, []);   // 4.80: 베이모드 중 뒤로가기 = 해제
   useBackHandler(onBack, true);
 
   //  장 목록 — 보드·BayPlan 과 같은 길(getShipBayDictData → buildBayPagesFromSummary)
@@ -104,11 +113,42 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   const equipList = equipNumbersForPier(pier);
 
   //  아래 칸이 그릴 베이 — 위 칸이 고른 묶음(center)이 먼저, 없으면 따라가기 자리(터미널)
-  const gridBay = live.bay != null && live.bay > 0 ? live.bay : (fol.bay != null ? fol.bay : null);
+  const gridBay = bayMode ? bayMode.bay : (live.bay != null && live.bay > 0 ? live.bay : (fol.bay != null ? fol.bay : null));   // 4.80: 베이모드는 고정한 베이만
   const bright = live.tier === 'deck' || live.tier === 'hold' ? live.tier : (fol.tier || null);
   const gridContainers = useMemo(() => allEdiContainers || [], [allEdiContainers]);
   const cnMap = useMemo(() => { const m = {}; for (const c of gridContainers) if (c && c.cn) m[c.cn] = c; return m; }, [gridContainers]);
   const modeLabel = mode === 'loading' ? '선적' : '양하';
+  //  4.80 베이모드 — 켜기: 지금 보는 베이를 고정하고 자동 가이드로(카드가 뜨는 자리) · 해제: 원래 화면(따라가기·칸 비율·배율·위 칸의 자동/수동·베이·단)으로.
+  bayModeRef.current = bayMode;
+  const enterBayMode = () => {
+    if (gridBay == null || bayMode || !bayModeOkFor(mode)) return;
+    setBayMode({ bay: gridBay, saved: { follow, ratio, zoom, ctx: { bay: live.bay, tier: live.tier, guide: live.guide, twin: live.twin } } });
+    setFollow(false); setRatio(BM_RATIO); setZoom(1); setShowConf(false); setBayPick(null); setCardCns([]);
+    setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: gridBay, tier: live.tier || undefined, guide: true, twin: null }));
+  };
+  const releaseBayMode = () => {
+    const b = bayModeRef.current; if (!b) return;
+    const sv = b.saved;
+    setBayMode(null); setBayPick(null); setCardCns([]);
+    setFollow(sv.follow); setRatio(sv.ratio); setZoom(sv.zoom);
+    setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: sv.ctx.bay == null ? null : sv.ctx.bay, tier: sv.ctx.tier || null, guide: !!sv.ctx.guide, twin: sv.ctx.twin == null ? null : !!sv.ctx.twin }));
+  };
+  releaseRef.current = releaseBayMode;
+  //  베이 그림에서 컨을 눌렀을 때 — 남은 양하 컨이면 상세 카드가 아니라 자동 가이드의 작은 카드로(요청만 보낸다, 판정·기록은 자동 가이드 것). 이미 완료된 컨은 종전대로 상세.
+  const onBayCellTap = (c) => {
+    if (!c) return;
+    if ((overlay.compMap && overlay.compMap[c.cn]) || !c.cn) { if (onOpenContainer) onOpenContainer(c); return; }
+    setBayPick(bayPickRequest(c.cn));
+  };
+  //  고른 카드가 위 칸 머리글(설정·갈림·다음 예측) 아래에 있어 잘려 보이므로, 카드가 바뀌면 위 칸을 그 카드 띠까지 민다(종전 compact 배치 그대로 — 스크롤만).
+  const cardKey = cardCns.join('|');
+  useEffect(() => {
+    if (!bayMode || !cardKey) return;
+    const top = boxRef.current && boxRef.current.querySelector('[data-bayview-top]'); if (!top) return;
+    const el = top.querySelector('[data-gw-pulled]') || top.querySelector('[data-gw-card]'); if (!el) return;
+    try { top.scrollTop += el.getBoundingClientRect().top - top.getBoundingClientRect().top - 4; } catch (e) { console.warn('[베이모드] 카드 위치로 못 밀었다:', e); }
+  }, [bayMode, cardKey, bayPick && bayPick.seq]);
+  const gridWarn = useMemo(() => (bayMode ? bayModeCellsOf(cardCns, gridContainers, overlay.warnCells) : overlay.warnCells), [bayMode, cardCns, gridContainers, overlay.warnCells]);
   useEffect(() => { if (gridBay == null) setTitles([]); }, [gridBay]);   // 그림이 내려가면 옛 제목도 내린다
   const bayLabel = titles.length ? titles.join(' ') : (gridBay != null ? hatchTitleOf(gridBay, pages) : '베이 미정');
   const nConf = overlay.conflicts.filter((c) => c.type !== 'noterm').length, nNoTerm = overlay.conflicts.length - nConf;
@@ -116,6 +156,9 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   //  칸 경계 끌기 — 폰에 기억. 두 번 두드리면 1/3 로.
   const boxRef = useRef(null); const dragRef = useRef(null);
   const bottomRef = useRef(null);   // 3.49-01: 아래(우) 칸 바닥 — FitBox 가 폭뿐 아니라 이 높이에도 맞춘다
+  //  4.80: 베이 그림 칸에서 두 손가락으로 키우고 줄인다 — 아래 −/＋ 단추와 같은 배율(0.7~2.2). 이 칸에는 종전에 핀치 처리가 없어 브라우저가 페이지째 확대했다(베이플랜·베이 상세와 같은 공용 한 벌).
+  const zoomNow = useRef(zoom); zoomNow.current = zoom;
+  usePinchZoom(bottomRef, () => zoomNow.current, setZoom, { min: 0.7, max: 2.2 });
   //  3.49-01 장 배치(세로 쌓기 col / 가로 나란히 row) — **더 크게 그려지는 쪽**을 고른다. 감사 실측: 1280×800 노트북은 col+높이 맞춤 0.72 vs row 0.60(밑 58% 빈칸),
   //    초광폭(2560×1080)이나 손잡이를 끌어 베이 칸을 넓히면 row 가 이긴다. 검수사가 여백을 두 번 지적한 자리(FitBox 머리말)라 자동으로 재서 정한다.
   //    장의 자연 크기(offsetWidth/Height — transform 무관)로 두 배치의 맞춤 배율을 계산한다. col 에선 장 폭이 min-w-full 로 늘어나 있어 row 폭은 «최대 폭 × 장 수»(상한)로 잡는다 —
@@ -212,17 +255,20 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     );
   }
 
-  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
+  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow, bayPick: bayMode ? bayPick : null, onCardCns };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
   return (
     <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" data-bayview-wide={isWide ? '1' : '0'} style={{ height: '100dvh' }}>
       <div className="h-10 shrink-0 flex items-center gap-1.5 px-2 bg-ink-900 border-b border-line overflow-x-auto whitespace-nowrap">
-        <button onClick={() => setStep('pick')} className={chip('bg-ink-800 border border-line text-dim-200')} title="선택 화면으로">◀</button>
+        <button onClick={() => { if (bayMode) releaseBayMode(); setStep('pick'); }} className={chip('bg-ink-800 border border-line text-dim-200')} title="선택 화면으로">◀</button>
         <span className={chip(mode === 'loading' ? 'bg-sky-800 text-sky-100' : 'bg-rose-800 text-rose-100')}>{modeLabel}</span>
-        {follow ? <span className={chip('bg-violet-700 text-white')} data-bayview-follow="1">따라가기{fol.no ? ` ${fol.no}호기` : ''}</span>
+        {bayMode ? <span className={chip('bg-fuchsia-700 text-white')} data-bayview-baymode="1">🎯 베이모드</span> : follow ? <span className={chip('bg-violet-700 text-white')} data-bayview-follow="1">따라가기{fol.no ? ` ${fol.no}호기` : ''}</span>
           : <span className={chip(live.guide ? 'bg-violet-700 text-white' : 'bg-amber-700 text-white')}>{live.guide ? '자동' : (live.twin ? '수동·트윈' : '수동·싱글')}</span>}
         <span className="mono font-black text-amber-300 text-sm" data-bayview-title="1">{bayLabel}</span>
         <button onClick={() => setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: undefined, tier: bright === 'deck' ? 'hold' : 'deck', guide: null, twin: null }))}
           className={chip(bright === 'hold' ? 'bg-amber-700 text-white' : 'bg-sky-700 text-white')} title="데크 ⇄ 홀드">{bright === 'hold' ? '🟠 홀드' : '🔵 데크'} ⇄</button>
+        {bayModeOkFor(mode) && (bayMode
+          ? <button onClick={releaseBayMode} className={chip('bg-red-700 border border-red-300 text-white')} data-bayview-baymode-off="1" title="베이모드 해제 — 원래 화면으로">🎯 해제</button>
+          : <button onClick={enterBayMode} disabled={gridBay == null} className={chip('bg-fuchsia-800 border border-fuchsia-400 text-white disabled:opacity-40')} data-bayview-baymode-on="1" title="이 베이를 확대·고정하고 컨을 누르면 작은 카드로 양하">🎯 베이모드</button>)}
         {(nConf > 0 || nNoTerm > 0) && (
           <button onClick={() => setShowConf((v) => !v)} className={chip(nConf > 0 ? 'bg-red-700 text-white' : 'bg-slate-600 text-white')} data-bayview-conf={String(nConf + nNoTerm)}>
             ⚠ {nConf > 0 ? `불일치 ${nConf}` : ''}{nConf > 0 && nNoTerm > 0 ? ' · ' : ''}{nNoTerm > 0 ? `터미널 미확인 ${nNoTerm}` : ''}
@@ -255,7 +301,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
       </div>
       <div ref={bottomRef} className="min-h-0 min-w-0 overflow-auto p-1" style={{ flex: `${1 - ratio} 1 0px` }} data-bayview-bottom="1">
         <div className="flex items-center gap-1.5 px-1 text-2xs text-dim-400">
-          <span>{follow ? (fol.why || `터미널 ${fmtT(fol.at)} 기준`) : (live.bay != null ? '위 칸에서 고른 장' : (gridBay != null ? '터미널 기준 지금 자리 — 위 칸에서 베이를 고르면 바뀝니다' : '위 칸에서 베이를 고르세요'))}</span>
+          <span>{bayMode ? '🎯 베이모드 — 컨을 누르면 위 칸에 작은 카드 · 앞 베이 20ft 를 누르면 트윈 두 장(해제를 누르기 전까지 이 베이만)' : follow ? (fol.why || `터미널 ${fmtT(fol.at)} 기준`) : (live.bay != null ? '위 칸에서 고른 장' : (gridBay != null ? '터미널 기준 지금 자리 — 위 칸에서 베이를 고르면 바뀝니다' : '위 칸에서 베이를 고르세요'))}</span>
           <span className="ml-auto">완료 = 앱 ∪ 터미널{overlay.termOnly ? ` (터미널만 ${overlay.termOnly})` : ''}</span>
           <button onClick={() => setZoom((z) => Math.max(0.7, +(z - 0.15).toFixed(2)))} className="px-1.5 rounded bg-ink-800 border border-line text-dim-200">−</button>
           <span>{Math.round(zoom * 100)}%</span>
@@ -267,9 +313,9 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
                통째로 한눈에(트윈 = 두 베이 같이). 컴에서는 세로 쌓기와 가로 나란히 중 더 크게 그려지는 쪽(layoutPick)을 고른다. 폰은 세로. */
           <FitBox boost={zoom} fill boundsRef={bottomRef}>
             <BayPlan containers={gridContainers} compMap={overlay.compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
-              preGoneInfo={preGoneInfo} onOpenContainer={onOpenContainer}
+              preGoneInfo={preGoneInfo} onOpenContainer={bayMode ? onBayCellTap : onOpenContainer}
               shipImo={info.imo} shipName={info.vsl} voyageInfo={info} voyageKey={voyageKey} rfSkip={!!searchPanelProps.rfSkip}
-              onlyBay={String(gridBay)} onlyLayout={isWide ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={overlay.warnCells} />
+              onlyBay={String(gridBay)} onlyLayout={isWide ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={gridWarn} />
           </FitBox>
         ) : (
           <div className="text-xs text-dim-400 text-center py-6">아직 그릴 베이가 없습니다 — 위 칸에서 베이를 고르거나 ◀ 에서 따라가기를 켜세요.</div>

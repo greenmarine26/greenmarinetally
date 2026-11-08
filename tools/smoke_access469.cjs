@@ -64,6 +64,6 @@ ok(/signal:ac\.signal/.test(cone) && /\.catch\(function\(e\)\{ clearTimeout\(tm\
 ok(/window\.__CONEV='ConeOne 2\.74(?:-0[123])?';/.test(cone), '콘앱 판 2.74');
 const al = rd('src/accessLog.js');
 ok(!/password|비밀번호|pw/i.test(noCmt(al).replace(/비밀번호 값 외에/g, '')) , '기록 코드가 비밀번호를 다루지 않는다');
-ok(/4\.(69|7\d)/.test(B.APP_VERSION) && B.APP_NOTE.length < 120, '판 4.69 · APP_NOTE 120자 미만', B.APP_NOTE);
+ok(/4\.(69|[78]\d)/.test(B.APP_VERSION) && B.APP_NOTE.length < 120, '판 4.69 · APP_NOTE 120자 미만', B.APP_NOTE);
 console.log(`\n4.69 접속 기록 연막검사 ${n - bad}/${n} 통과`);
 process.exit(bad ? 1 : 0);

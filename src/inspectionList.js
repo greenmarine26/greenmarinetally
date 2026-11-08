@@ -10,6 +10,7 @@
 import { shipOpMapper } from './data/tallyFormats.js';
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { reeferPosOf, reeferOrderKey, reeferSetOf, temp1 } from './reeferList.js';   // 4.80: 별첨 리퍼 구역 — 베이 순서·셋팅 온도는 리퍼 온도 리스트와 한 벌
 import { inspectionSealOf } from './utils.js';   // 4.25-02: 실번호 칸 한 벌 — 엠티는 엠티실(eseal)도 본다(종이·CSV)
 const COLOR = {
   //  ★ 3.45 — X-RAY 대상 줄은 노랗게(검수사 2026-09-14 «xray 실번호가 입력되면 검수리스트에 기입해주고
@@ -266,7 +267,7 @@ function renderRow(c, idx, opts) {
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
   let reeferTmp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim()
                 : (c.temp != null && String(c.temp).trim() !== '') ? String(c.temp).trim() : null;
-  if (type === 'reefer' && (reeferTmp != null || fe === 'F')) notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60-02: 엠티 리퍼는 온도가 없는 게 정상 — «리퍼는 풀일 때만 리퍼»(앱지침 §11)   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
+  if (type === 'reefer' && !(opts && opts.rf) && (reeferTmp != null || fe === 'F')) notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60-02: 엠티 리퍼는 온도가 없는 게 정상 — «리퍼는 풀일 때만 리퍼»(앱지침 §11)   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
   /* ★ 2.91 (검수사 «FR 폭 길이 높이 다 표기 해줘야 함») — FR 은 치수가 곧 작업 정보다.
        초과분(DIM)만 적던 것을 **폭·길이·높이 세 칸**으로 바꾼다. 없는 값은 «-» 로 자리를 남긴다
        (§2-0-D — 조용히 없애지 않는다). 치수가 하나도 없으면 «치수 미신고»라고 말한다(§0-Y-2). */
@@ -310,6 +311,20 @@ function renderRow(c, idx, opts) {
   const _plain = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ');
   const _memoCls = _memoFit(_plain).cls;
   const _edge = opts && opts.edge ? ` class="${opts.edge}"` : '';   // 3.62: 묶음 경계선(inspEdges) — style 뒤에 둔다(연막검사들이 «<tr style=» 로 행을 읽는다)
+  if (opts && opts.rf) {   // 4.80: 별첨 리퍼 구역 — 위치·셋팅 온도 칸과 손으로 적는 «실제 온도» 빈칸(온도는 비고에서 뺀다)
+    const _st = temp1(reeferSetOf(c));
+    return `<tr style="background:${bg}">
+    <td class="no">${idx}</td>
+    <td class="cn">${cn}</td>
+    <td class="sl${_slCls}">${_esc(sl)}</td>
+    <td>${_esc(spec)}</td>
+    <td>${fe}</td>
+    <td class="pos">${_esc(reeferPosOf(c))}</td>
+    <td class="set">${_st ? _esc(_st) : '-'}</td>
+    <td class="act"></td>
+    <td class="memo${_memoCls}">${note}</td>
+  </tr>`;
+  }
   return `<tr style="background:${bg}"${_edge}>
     <td class="no">${idx}</td>
     <td class="cn">${cn}</td>
@@ -331,10 +346,10 @@ const COLS_PER_PAGE = 3;
 //    처럼 길어져 7pt 로 세 줄이 된다(행 3.4mm → 7.4mm). 특수화물 별첨은 **전 행이 특수화물**이라
 //    75행이 평균 두 줄 = 가용의 1.57배였다(2026-09-08 실측).
 //  ⇒ 단을 «행 수»가 아니라 **«차지하는 줄 수»**로 채운다. 한 줄도 안 자르고, 넘치면 페이지가 늘어난다.
-const _noteWeight = (rowHtml, rowMm = ROW_MM) => {
+const _noteWeight = (rowHtml, rowMm = ROW_MM, noteIdx = 5) => {
   const tds = String(rowHtml).match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
   //  ★ 3.45 — F/E 가 한 칸이 되어 비고는 **6번째**다(tds[5]). 초판은 tds[6](선사)를 세고 있었다.
-  const note = tds[5] || '';
+  const note = tds[noteIdx] || '';
   const txt = note.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim();
   const f = _memoFit(txt);                                     // 축소 등급과 같은 자로 센다
   //  ★ 3.60-01 (검수사 2026-09-24 «160개 이하라면 한장으로 뽑을수도 있을텐데 2장으로 뽑히는것») — 줄 수가 아니라 **행이 실제로 늘어나는 높이**로 센다.
@@ -349,10 +364,10 @@ const _noteWeight = (rowHtml, rowMm = ROW_MM) => {
   const w = (Math.max(f.lines * lineMm, slMm) + 0.3) / rowMm;
   return edgeMm && w > 1 - edgeMm / rowMm ? Math.max(1, w + edgeMm / rowMm) : Math.max(1, w);
 };
-const packCols = (rows, perCol = PER_COL, rowMm = ROW_MM) => {
+const packCols = (rows, perCol = PER_COL, rowMm = ROW_MM, noteIdx = 5) => {
   const cols = []; let cur = [], w = 0;
   for (const r of rows) {
-    const L = _noteWeight(r, rowMm);
+    const L = _noteWeight(r, rowMm, noteIdx);
     if (w + L > perCol && cur.length) { cols.push(cur); cur = []; w = 0; }
     cur.push(r); w += L;
   }
@@ -415,6 +430,46 @@ function inspPieces(sorted, how, mode) {
   return [['', sorted]];
 }
 const INSP_SPLITS = [['cont', '이어서'], ['size', '20/40'], ['fe', '풀/엠티'], ['port', '포트별']];
+
+//  ★ 4.80 (검수사 2026-11-08 «검수 리스트 중에 맨뒤에 있는 리퍼리스트를 베이순으로 … 셋팅온도 옆에 실제 온도를 입력할수 있게 빈칸» · «별첨 특수화물에서 OT FR을 리퍼리스트를 위에 올리고 특수 화물은 리퍼 리스트 맨아래에 따로 표기»)
+//  별첨에 리퍼가 있을 때의 쪽 배치 — 리퍼 구역(두 단, 칸이 넓다)이 위, 그 밖의 특수화물 구역(세 단, 종전 줄 형식)이 아래.
+//  한 쪽 안에 두 구역이 같이 앉을 수 있다(높이를 mm 로 센다). 소제목 막대 뒤에는 최소 3줄(남은 줄이 그보다 적으면 그 줄 수)이 같이 앉아야 하고, 못 앉으면 새 쪽으로 넘긴다 — 소제목이 쪽 맨 아래 홀로 남지 않는다.
+//  구역의 마지막 덩어리는 단 길이를 고르게 맞춘다(반쪽만 차서 높이를 낭비하지 않게).
+const APX_PAGE_MM = 279;   // 쪽 머리줄을 뺀 사용 높이 — A4 289mm(여백 뺀 값) 중 머리줄 7mm·여유 3mm 를 뺀 값(크로뮴 실측)
+const APX_ROW_MM = 5.5;    // 실제 그려지는 행 높이 — 행 5.2mm + 괘선(크로뮴 실측 5.46mm). 높이 셈은 이 값으로 한다
+const APX_BAR_MM = 6;      // 구역 소제목 막대(위 여백 1mm 포함)
+const APX_TH_MM = 4;       // 표 머리줄(table.ilist th 높이)
+const APX_MIN_ROWS = 3;
+function packAppendix(rfRows, otRows) {
+  const pages = []; let cur = null; let left = 0;
+  const newPage = () => { cur = []; pages.push(cur); left = APX_PAGE_MM; };
+  const place = (kind, rows, ncol, noteIdx) => {
+    let i = 0; let first = true;
+    while (i < rows.length) {
+      const rest = rows.slice(i);
+      const need = APX_BAR_MM + APX_TH_MM + Math.min(APX_MIN_ROWS, rest.length) * APX_ROW_MM;
+      if (!cur || left < need) newPage();
+      const cap = Math.floor((left - APX_BAR_MM - APX_TH_MM) / APX_ROW_MM);
+      const total = rest.reduce((a, r) => a + _noteWeight(r, ROW_MM, noteIdx), 0);
+      let cols;
+      if (total <= cap * ncol) {   // 이 쪽에 남은 줄이 다 들어간다 — 단 길이를 고르게
+        let per = Math.max(1, Math.ceil(total / ncol));
+        while ((cols = packCols(rest, per, ROW_MM, noteIdx)).length > ncol) per += 0.5;
+        i = rows.length;
+      } else {
+        const all = packCols(rest, cap, ROW_MM, noteIdx);
+        cols = all.slice(0, ncol);
+        i += cols.reduce((a, c) => a + c.length, 0);
+      }
+      const used = Math.max(...cols.map((c) => c.reduce((a, r) => a + _noteWeight(r, ROW_MM, noteIdx), 0)));
+      cur.push({ kind, cols: Array.from({ length: ncol }, (_, k) => cols[k] || []), cont: !first });
+      left -= APX_BAR_MM + APX_TH_MM + used * APX_ROW_MM; first = false;
+    }
+  };
+  place('rf', rfRows, 2, 8);
+  if (otRows.length) place('ot', otRows, 3, 5);
+  return pages;
+}
 
 // 메인: 검수 리스트 HTML 생성
 
@@ -546,12 +601,37 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
 
   // 시트2 페이지도 헤더 포함 (전체 페이지 수는 시트1+시트2 합산하여 표기 가능하나, 별첨이라 별도 카운트)
   if (sheet2Html) {
+    //  4.80: 리퍼는 별첨 맨 위 «리퍼 리스트» 구역(베이 순서 · 셋팅 온도 옆 실제 온도 빈칸), 나머지 특수화물은 그 아래 따로. 리퍼가 없으면 종전 그대로.
+    const _isRfRow = (c) => getContainerCategory(c).type === 'reefer';
+    const _rfList = special.filter(_isRfRow).sort((a, b) => reeferOrderKey(reeferPosOf(a), a.cn).localeCompare(reeferOrderKey(reeferPosOf(b), b.cn)));
+    const _otList = special.filter((c) => !_isRfRow(c));
+    const _apxTitle = `[별첨] 특수화물 ${special.length}대`;
+    if (_rfList.length === 0) {
     //  3.29: 별첨은 **전 행이 특수화물**이라 비고가 길다 — 여기가 넘침이 가장 컸다.
     const _ed2 = inspEdges(special);   // 3.62: 별첨도 20 → 40 경계선
     const _fit2 = packFit(special.map((c, j) => renderRow(c, j + 1, { noFlag: true, edge: _ed2[j] })));
     const sheet2PagesList = _fit2.pages;   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
     //  3.60-01: 별첨 제목을 장 머리줄 안에 넣는다 — 장 밖 제목 줄(ititle)만큼 A4 를 넘어 마지막 한 줄이 빈 장으로 밀렸다(ATPR 2643W 실측).
-    sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, `[별첨] 특수화물 ${special.length}대`   /* 3.60-18: 2.92-01 부터 별첨은 특수만(X-RAY·긴급 제외)인데 제목 글자에 X-RAY 가 남아 있었다 */)).join('');
+    sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, _apxTitle   /* 3.60-18: 2.92-01 부터 별첨은 특수만(X-RAY·긴급 제외)인데 제목 글자에 X-RAY 가 남아 있었다 */)).join('');
+    } else {
+      const _rfRows = _rfList.map((c, j) => renderRow(c, j + 1, { noFlag: true, rf: true }));
+      const _edO = inspEdges(_otList);   // 아래 구역은 경계선을 새로 시작한다
+      const _otRows = _otList.map((c, j) => renderRow(c, j + 1, { noFlag: true, edge: _edO[j] }));
+      const apxPages = packAppendix(_rfRows, _otRows);
+      const _colTbl = (kind, rs) => kind === 'rf'
+        ? `<table class="ilist rflist"><colgroup><col style="width:4%"><col style="width:21%"><col style="width:15%"><col style="width:9%"><col style="width:4%"><col style="width:12%"><col style="width:10%"><col style="width:15%"><col style="width:10%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th style="font-size:5.5pt">F/E</th><th>위치</th><th style="font-size:6pt">셋팅온도</th><th style="font-size:6pt">실제온도</th><th>비고</th></tr></thead><tbody>${rs.join('')}</tbody></table>`
+        : `<table class="ilist"><colgroup><col style="width:7%"><col style="width:31%"><col style="width:25%"><col style="width:14%"><col style="width:5%"><col style="width:18%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th style="font-size:5.5pt">F/E</th><th>비고</th></tr></thead><tbody>${rs.join('')}</tbody></table>`;
+      sheet2Html = '<!--sheet2-->' + apxPages.map((blocks, pi) => `<div class="ipage">
+      <div class="phdr">
+        <div class="phdr-l">${vsl}</div>
+        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span> <b>${_esc(_apxTitle)}</b></div>
+        <div class="phdr-r">${dateStr} · ${pi + 1}/${apxPages.length}</div>
+      </div>${blocks.map((b) => `<div class="apxbar">${b.kind === 'rf'
+        ? `리퍼 리스트 ${_rfList.length}대${b.cont ? ' (이어서)' : ''} — 베이 순서 · 실제 온도는 손으로 적습니다`
+        : `그 밖의 특수화물 ${_otList.length}대${b.cont ? ' (이어서)' : ''} — FR·OT·탱크·위험물·규격초과`}</div>
+      <div class="icols">${b.cols.slice(0, b.kind === 'rf' ? 2 : 3).map((rs) => `<div class="icol">${_colTbl(b.kind, rs)}</div>`).join('')}</div>`).join('')}
+    </div>`).join('');
+    }
   }
 
   // [별첨2] 시프팅(재적부) — **평택 작업에 방해가 되어 옮기는 화물**, 양하·선적 공통.
@@ -613,6 +693,11 @@ table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-
 /* 3.62: 묶음 경계선 — 20↔40 은 두 줄, 풀→엠티·일반→특수는 굵은 줄(inspEdges) */
 table.ilist tr.gb1 td { border-top: 1.5pt solid #000; height: calc(var(--rh, 5.2mm) - 0.353mm); }   /* 두꺼워진 1pt 만큼 칸을 줄여 행 높이는 그대로 */
 table.ilist tr.gb2 td { border-top: 2.5pt double #000; height: calc(var(--rh, 5.2mm) - 0.706mm); }   /* 두꺼워진 2pt 만큼 */
+/* 4.80: 별첨 리퍼 구역 — 소제목 막대와 위치·셋팅·실제 온도 칸(실제 온도는 펜으로 적는 빈 박스) */
+.apxbar { height: 5mm; line-height: 5mm; margin-top: 1mm; font-size: 8.5pt; font-weight: bold; border-bottom: 0.5pt solid #333; overflow: hidden; white-space: nowrap; }
+table.rflist td.pos { font-family: monospace; font-size: 6.5pt; letter-spacing: -0.5px; white-space: nowrap; }
+table.rflist td.set { font-family: monospace; font-size: 8pt; letter-spacing: -0.3px; }
+table.rflist td.act { background: #fff; }
 table.ilist th { background: #ddd; font-size: 7pt; font-weight: bold; height: 4mm; white-space: nowrap; letter-spacing: -0.3px; }
 table.ilist td.no { font-size: 6.5pt; letter-spacing: -0.4px; }   /* 3.60: 순번이 세 자리(100~)가 되어도 칸 안에 */
 table.ilist td.cn { font-family: monospace; font-size: 9pt; letter-spacing: -0.7px; }   /* 3.69-03: 좌우 여백 7mm 로 칸이 3% 좁아져 11자가 오른쪽 괘선에 닿았다(2차 감사) — 자간만 0.2px 좁혀 옛 틈(약 2px)을 되찾는다 */

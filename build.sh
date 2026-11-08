@@ -1646,6 +1646,14 @@ fi
     npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_move476.cjs "$SMOKE_MV" "$(pwd)" || { rm -f "$SMOKE_MV"; echo "✗ 4.76(최근 속도·호기 이동·닫는 장수) 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MV"
+    #  4.80: 검수 리스트 별첨 리퍼 구역 — 베이 순서·셋팅온도 옆 실제 온도 빈칸·그 밖의 특수화물은 아래 따로·리퍼 없으면 종전 그대로(실소스 inspectionList·reeferList 번들)
+    SMOKE_RF=$(mktemp /dev/shm/hometmp/_smokerf_XXXXXX.cjs)
+    npx esbuild tools/smoke_fix480_reefer_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_RF" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_fix480_reefer.cjs "$SMOKE_RF" "$(pwd)" || { rm -f "$SMOKE_RF"; echo "✗ 4.80(별첨 리퍼 구역·실제 온도 빈칸) 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_RF"
+    #  4.80: 베이모드 양하(KKLC 2610N 마지막 데크 B37·B38·B39 실자료 — 선택→카드(단일/트윈)→일괄·싱글 변환→앞/뒤 베이부터→해제 복귀→조회만 차단) · 핀치 안정화(공용 훅·적용 화면 배선·실제 touch 이벤트)
+    node tools/smoke_fix480_baymode.cjs "$(pwd)" || { echo "✗ 4.80(베이모드 양하) 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_fix480_pinch.cjs "$(pwd)" || { echo "✗ 4.80(핀치 안정화) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.79: 주간조/야간조 선택 · 근무시간 밖 조회만 · 연태 OBWH·일조 RZOR 예외 · 관리자 예외 · 옛 로그인 한 번 묻기 · 같은 호기 주간·야간 각 1인(실소스 번들 — firebase 만 메모리 스텁)
     SMOKE_F9=$(mktemp /dev/shm/hometmp/_smokef9_XXXXXX.cjs)
     if npx esbuild tools/smoke_fix479_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_F9" --loader:.js=jsx --jsx=automatic --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --log-level=error; then

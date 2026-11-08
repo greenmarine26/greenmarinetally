@@ -43,7 +43,7 @@ export function temp1(v) {
 }
 
 //  위치 — 서류(tallyReport.buildRF)와 같은 한 벌: 실적(bay_actual) > 검수원이 정한 자리 > 계획. 덱플랜 좌표(RZOR deckPos)·pos 는 fmtPos 처럼 우선한다.
-const _pos = (c) => {
+export const reeferPosOf = (c) => {
   if (!c) return '';
   const p = effectivePos(c);
   if (p.inStorage) return '';
@@ -63,19 +63,23 @@ export function fmtAt(ms) {
   return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 
+//  4.80: 베이 순서 키·셋팅 온도 읽기를 검수 리스트 별첨(inspectionList)과 한 벌로 쓴다 — 위치 없는 컨은 맨 뒤, 같으면 컨번호순.
+export const reeferOrderKey = (pos, cn) => (pos || '￿') + (cn || '');
+export const reeferSetOf = (c) => ((c.rfSet != null && String(c.rfSet).trim() !== '') ? c.rfSet : c.tmp);
+
 /** 목록 한 벌 — 위치순(위치 없는 컨은 맨 뒤), 같으면 컨번호순. */
 export function reeferListRows(containers) {
   const rows = (containers || []).filter(isReeferTarget).map((c) => ({
     cn: c.cn || '',
     iso: c.tp || c.iso_carrier || c.iso || '',
-    pos: _pos(c),
+    pos: reeferPosOf(c),
     tmp: c.tmp,
-    set: (c.rfSet != null && String(c.rfSet).trim() !== '') ? c.rfSet : c.tmp,   // 서류·reeferTempOf 와 같이: 셋팅은 rfSet, 없으면 리스트 온도
+    set: reeferSetOf(c),   // 서류·reeferTempOf 와 같이: 셋팅은 rfSet, 없으면 리스트 온도
     act: c.rfSrc === 'list' ? '' : c.rfAct,   // 「전부 리스트대로」로 베낀 값은 잰 값이 아니다(2026-09-07 DXQD)
     by: c.rfCheckedBy || '',
     at: c.rfCheckedAt || 0,
   }));
-  rows.sort((a, b) => ((a.pos || '￿') + a.cn).localeCompare((b.pos || '￿') + b.cn));
+  rows.sort((a, b) => reeferOrderKey(a.pos, a.cn).localeCompare(reeferOrderKey(b.pos, b.cn)));
   return rows;
 }
 

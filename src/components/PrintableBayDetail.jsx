@@ -24,6 +24,7 @@ import { buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPla
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
+import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 핀치 확대 한 벌
 import { isUserOwnedBayDict, isPtk as _isPtkOne } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 
 //  3.7: 베이상세 칸 가로:세로 — 카스피 ATPR 2520E BAY 도면 실측(≈29mm × 16mm).
@@ -607,28 +608,10 @@ export default function PrintableBayDetail({
 
   // V7.01: 폰 화면용 확대/축소 (핀치 + 버튼). 인쇄에는 영향 없음(@media print에서 무시).
   const [zoom, setZoom] = useState(1);  // V8.26-02: 100% 시작
-  const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
-  const onTouchStart = (e) => {
-    if (e.touches && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      pinchRef.current = { active: true, startDist: Math.hypot(dx, dy), startZoom: zoom };
-    }
-  };
-  const onTouchMove = (e) => {
-    if (pinchRef.current.active && e.touches && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.hypot(dx, dy);
-      const ratio = dist / (pinchRef.current.startDist || 1);
-      const next = Math.min(3, Math.max(0.15, pinchRef.current.startZoom * ratio));
-      setZoom(next);
-      e.preventDefault();
-    }
-  };
-  const onTouchEnd = (e) => {
-    if (!e.touches || e.touches.length < 2) pinchRef.current.active = false;
-  };
+  //  4.80: 핀치는 공용 한 벌(usePinchZoom) — React onTouchMove 는 passive 라 preventDefault 가 안 먹어 페이지 확대와 겹쳤다.
+  const zoomNowRef = useRef(zoom); zoomNowRef.current = zoom;
+  const pinchElRef = useRef(null);
+  usePinchZoom(pinchElRef, () => zoomNowRef.current, setZoom, { min: 0.15, max: 3 });
 
   // M6.92.0: 공통 색 함수 — 양하=선사, 선적=POD (베이플랜/카고플랜과 동일)
   const colorMap = useMemo(() => buildContainerColorMap(containers || [], mode), [containers, mode]);
@@ -913,9 +896,9 @@ export default function PrintableBayDetail({
           ⚠ {dictData._substituted.fromCode} 베이정보가 없어 같은 계열 {dictData._substituted.usedName ? `${dictData._substituted.usedName}(${dictData._substituted.usedCode})` : dictData._substituted.usedCode}(으)로 대체했습니다. 구조가 미세하게 다를 수 있습니다.
         </div>
       )}
-      <div className="flex-1 overflow-auto bg-white bd-print-container"
+      <div ref={pinchElRef} className="flex-1 overflow-auto bg-white bd-print-container"
         onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }}
-        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        >
         <div className="bd-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: zoom !== 1 ? `${100 / zoom}%` : '100%' }}>
         {filteredPages.length === 0 ? (
           <div className="p-8 text-center text-slate-500">

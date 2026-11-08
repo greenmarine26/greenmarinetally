@@ -784,6 +784,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           onOpenContainer={onOpenContainer}
           compact={!!(bayView && bayView.compact)} suppressBayActivity={_suppressBay} hatchAuto={_hatchFollow}
           mirGoto={mirGoto}   /* 4.40: 미르 [이동] */
+          bayPick={bayView ? bayView.bayPick : null} onBayPickCns={bayView ? bayView.onCardCns : null}   /* 4.80: 베이모드 — 베이 그림에서 고른 컨을 카드로 · 지금 카드의 컨을 베이뷰에 */
         />
       ) : (
       <>

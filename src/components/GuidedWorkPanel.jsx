@@ -19,6 +19,7 @@ import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회�
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { workPauseOf } from '../mir.js';   // 4.63-04: 내 호기가 작업 중단 중이면 해치커버 물음을 하지 않는다
+import { bayModeTargetOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
 import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
 import { isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -82,7 +83,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
 //  4.25-02 — «다른 갱» 물음을 이미 한 장(항차·모드·장·두 호기). 모듈에 두어 탭을 옮기거나 자동↔수동을 바꿔도 앱을 다시 열기 전까지는 다시 묻지 않는다(감사 기록 — 컴포넌트에 두면 다시 그려질 때마다 물었다).
 const _askedGang = new Set();
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null }) {   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null }) {   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -171,6 +172,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [resumeCns, setResumeCns] = useState([]);   // 해제 직후 한 번 맨 앞으로 끌어올릴 컨
   const gwHeadRef = useRef(null);   // 4.26: 카드 화면 머리 줄 — 장·단을 고르면 카드가 화면 위로 오게 스크롤
   const gwChipsRef = useRef(null);  // 4.26: 장 칩 줄 — 지금 장 칩이 보이게 가로 스크롤
+  const [pulledBay, setPulledBay] = useState(false);   // 4.80: 띠 문구 — 베이 그림에서 고른 카드면 true(다음 예정에서 올린 카드와 같은 띠·같은 [원래 순서로])
   const [pulled, setPulled] = useState(null);   // 4.26: «다음 예정» 줄로 올릴 때 넣은 resumeCns 배열 그 자체(띠 표시용 — 해제·한 대씩 등 다른 길이 resumeCns 를 새로 정하면 같은 배열이 아니라 띠가 사라진다)
   const [holdOpen, setHoldOpen] = useState(false);  // 사유 고르는 칸 열림
   const [holdNote, setHoldNote] = useState('');     // 직접 입력 사유
@@ -1123,6 +1125,49 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     else note(`${bayName} 남은 컨은 보류 중이에요 — 장만 옮겼어요.`, true);
     return undefined;
   }, [mirGoto && mirGoto.seq, localGoto && localGoto.seq, _gotoTick, mode, groups, remaining, selectedGroup, selectedTier, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  //  ★ 4.80 — 베이모드 양하: 베이 그림에서 누른 컨을 «작은 카드»로. 검수사 «컨을 선택하면 자동가이드에서 보여준 작은 카드처럼 보였으면 합니다.»
+  //    장 칩을 누른 것과 같은 길(pickGroup — «다른 갱» 물음 그대로)로 그 컨이 든 장·단에 가서, 다음 예정 줄과 같은 resumeCns 로 그 컨이 든 카드를 맨 앞에 올린다 —
+  //    짝(트윈)이 있으면 큐가 이미 트윈 카드(앞·뒤 두 장 + 일괄 확인)로 묶어 두었다. 완료·싱글 변환·앞뒤 베이 먼저·보류는 이 파일의 종전 함수(handleConfirm·handleConfirmOne·bayFirst·doHold)다.
+  //    ⚠ 데크가 남은 장의 홀드 컨은 홀드 단을 열지 않는다(V8.45 게이트와 같다 — 커버 아래라 못 내린다) — 데크로 가서 까닭을 적는다. 끝남은 seq 로 한 번만.
+  const _pickRef = useRef({ seq: 0, tries: 0, busy: false, done: 0, lastG: undefined, lastT: undefined });
+  const [_pickTick, _setPickTick] = useState(0);
+  useEffect(() => {
+    const p = bayPick, st = _pickRef.current;
+    if (!p || !p.seq || st.done === p.seq || mode !== 'discharge') return undefined;
+    if (st.seq !== p.seq) { st.seq = p.seq; st.tries = 0; st.busy = false; st.lastG = undefined; st.lastT = undefined; }
+    const again = () => { const t = setTimeout(() => _setPickTick((n) => n + 1), 150); return () => clearTimeout(t); };
+    const note = (m) => { try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: m } })); } catch (e) { console.warn('[베이모드] 알릴 화면 없음:', m); } };
+    const finish = () => { st.done = p.seq; return undefined; };
+    const tg = bayModeTargetOf(remaining, heldSet, p.cn, groupCenterOf);
+    if (tg.state !== 'ok') {
+      note(tg.state === 'held' ? `${String(p.cn).slice(-4)} 는 보류 중입니다 — 보류 목록에서 해제하면 카드로 올라옵니다.` : `${String(p.cn).slice(-4)} 는 남은 양하 컨이 아닙니다(이미 완료됐거나 평택 양하분이 아님).`);
+      return finish();
+    }
+    const host = groups.find((x) => x.center === tg.center);
+    if (!host) { note(`${String(p.cn).slice(-4)} 가 든 장을 찾지 못했습니다 — 장 칩에서 직접 고르세요.`); return finish(); }
+    if (st.busy) return again();
+    if (st.lastG !== selectedGroup || st.lastT !== selectedTier) { st.lastG = selectedGroup; st.lastT = selectedTier; return (++st.tries > 30) ? (note('장·단이 자리 잡지 않아 멈췄습니다 — 한 번 더 눌러 주세요.'), finish()) : again(); }
+    if (selectedGroup !== host.center) {
+      if (++st.tries > 30) { note('장을 옮기지 못했습니다 — 장 칩에서 직접 고르세요.'); return finish(); }
+      st.busy = true;
+      Promise.resolve(pickGroup(host)).catch((e) => console.warn('[베이모드] 장 고르기 실패:', e)).finally(() => { st.busy = false; _setPickTick((n) => n + 1); });
+      return again();
+    }
+    const deckBlock = tg.tier === 'hold' && host.deck > 0;
+    const want = deckBlock ? 'deck' : tg.tier;
+    if (selectedTier !== want) { if (++st.tries > 30) { note('단을 옮기지 못했습니다 — 단 단추에서 직접 고르세요.'); return finish(); } setSelectedTier(want); return again(); }
+    if (deckBlock) { note(`이 장 데크 ${host.deck}대가 남아 홀드 컨(${String(p.cn).slice(-4)})은 아직 못 내립니다 — 데크를 먼저 내리세요. 데크 컨이 못 내리는 컨이면 ⏸ 보류.`); return finish(); }
+    const arr = [String(p.cn).toUpperCase()];
+    setBayFirst(null); singleBaysRef.current = []; setStreamPref(null);
+    closeFix(); setHoldOpen(false); setSingleMode(false); setPosPick(false);
+    setResumeCns(arr); setPulled(arr); setPulledBay(true);
+    return finish();
+  }, [bayPick && bayPick.seq, _pickTick, mode, groups, remaining, heldSet, selectedGroup, selectedTier]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  //  4.80: 지금 카드의 컨 번호를 베이뷰에 알린다 — 베이 그림이 그 칸에 보라 테두리를 칠한다(베이모드가 아니면 부모가 안 쓴다).
+  const _cardCnsKey = card ? [card.main && card.main.cn, card.twin && card.twin.cn].filter(Boolean).join('|') : '';
+  useEffect(() => { if (onBayPickCns) onBayPickCns(_cardCnsKey ? _cardCnsKey.split('|') : []); }, [_cardCnsKey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -2185,7 +2230,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   );
   //  다음 예정 줄을 누르면 그 컨이 든 카드를 맨 앞으로(2.75 해제·4.08-02 한 대씩과 같은 resumeCns — 순서 규칙은 안 건드리고 그 카드만 끌어올린다). 확인은 카드의 큰 단추로 한다(줄 한 번에 완료되지 않게).
   //  잘못 눌러 카드가 바뀐 줄 모르고 확인하는 일이 없게, 올린 카드에는 «다음 예정에서 올린 카드 — [원래 순서로]» 띠가 붙는다(pulled).
-  const bringFront = (q) => { if (!q || !q.main) return; const arr = [q.main.cn]; setResumeCns(arr); setPulled(arr); closeFix(); setHoldOpen(false); setSingleMode(false); };
+  const bringFront = (q) => { if (!q || !q.main) return; const arr = [q.main.cn]; setResumeCns(arr); setPulled(arr); setPulledBay(false); closeFix(); setHoldOpen(false); setSingleMode(false); };
   const pulledOn = !!(card && pulled && resumeCns === pulled && (card.main.cn === pulled[0] || card.twin?.cn === pulled[0]));
   //  되묻기(«⏸ 보류했던 컨테이너입니다 — 이제 됩니까?») 카드가 맨 앞이면 줄로 올리지 못한다(되묻기가 먼저) — 줄을 잠그고 까닭을 적는다(감사·2차 시뮬 중-1 — 눌러도 아무 일이 없었다).
   const dueOnCard = !!(holdDue && card && holdGroupOf(holdDue).some((x) => { const u = String(x).toUpperCase(); return String(card.main.cn).toUpperCase() === u || (card.twin && String(card.twin.cn).toUpperCase() === u); }));
@@ -2385,9 +2430,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {/* 4.26 — «다음 예정» 줄을 눌러 올린 카드면 띠를 붙인다(잘못 눌렀으면 [원래 순서로]). */}
           {pulledOn && (
             <div className="flex items-center justify-between gap-2 bg-violet-950/60 border border-violet-600 rounded-pill px-3 py-1.5" data-gw-pulled="1">
-              <span className="text-xs font-bold text-violet-200">↑ 다음 예정에서 올린 카드입니다</span>
+              <span className="text-xs font-bold text-violet-200">{pulledBay ? '🎯 베이에서 고른 카드입니다' : '↑ 다음 예정에서 올린 카드입니다'}</span>
               <button onClick={() => { setResumeCns([]); setPulled(null); }} disabled={busy}
                 className="shrink-0 px-2.5 py-1 rounded-pill border border-violet-500 bg-ink-800 text-xs font-bold text-violet-200 disabled:opacity-50">원래 순서로</button>
+            </div>
+          )}
+          {/* 4.80 베이모드 — 고른 카드 위에 아직 안 내린 컨이 있으면(물리 종속 = 자동 가이드의 blockedByAbove 한 벌) 알린다. 막지는 않는다 — 실물을 보는 것은 검수원이다. 못 내리는 컨은 ⏸ 보류. */}
+          {pulledOn && pulledBay && card && !availCards.includes(card) && (
+            <div className="rounded-pill px-3 py-1.5 text-xs font-bold bg-rose-950/60 border border-rose-700 text-rose-200" data-gw-baypick-blocked="1">
+              ⚠ 이 카드 위에 아직 내리지 않은 컨이 있습니다 — 위 컨부터 누르세요. 못 내리는 컨이면 그 컨을 ⏸ 보류.
             </div>
           )}
     </>),
@@ -2477,10 +2528,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               ))}
               {(
                 <div className="grid grid-cols-2 gap-2">
-                  {[card.main, card.twin].map((c) => (
-                    <button key={c.cn} onClick={() => { setBayFirst(parseInt(c.bay, 10)); setSingleMode(false); }} disabled={busy}
+                  {[card.main, card.twin].map((c, i) => (
+                    <button key={c.cn} data-gw-bayfirst={i === 0 ? 'front' : 'back'} onClick={() => { setBayFirst(parseInt(c.bay, 10)); setSingleMode(false); }} disabled={busy}
                       className="py-2 rounded-pill text-xxs font-bold bg-sky-800 hover:bg-sky-700 disabled:opacity-50 text-white">
-                      {parseInt(c.bay, 10)}번 베이 먼저 (남은 쌍 모두 한 대씩)
+                      {i === 0 ? '앞 ' : '뒤 '}{parseInt(c.bay, 10)}번 베이 먼저 (남은 쌍 모두 한 대씩)
                     </button>
                   ))}
                 </div>

@@ -126,7 +126,7 @@ const NORMAL = '최원형', NORMAL2 = '송제욱', NORMAL3 = '고현석';
   T(/myShiftNow\(\)/.test(BV), '베이뷰 호기 막기도 내 조를 넘긴다');
   T(/holderShiftOf/.test(CD) && /nowRank/.test(CD), '수석 대시보드 — 같은 호기 둘이면 지금 조가 이름');
   T(/4\.79~ 선박을 고르면 «주간조입니까 야간조입니까»를 묻는다/.test(HP) && !/인건비|급여/.test(HP + L + H + A + rd('src/components/ShiftPick.jsx') + rd('src/workShift.js')), '매뉴얼(helpData) 4.79 절 · 사용자 글에 금지어 없음');
-  T(/APP_VERSION = 'TallyOne 4\.79'/.test(U) && /APP_NOTE = '4\.79 [^']*'/.test(U), 'APP_VERSION 4.79 · APP_NOTE');
+  T(/APP_VERSION = 'TallyOne 4\.(79|[89]\d)/.test(U) && /APP_NOTE = '4\.(79|[89]\d)[^']*'/.test(U), 'APP_VERSION 4.79 이후 · APP_NOTE');
   const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || ''; T((note.match(/[.!?](\s|$)/g) || []).length <= 2 && !/[\/']/.test(note), 'APP_NOTE 두 문장 이내·작은따옴표 슬래시 없음');
   // 서버 한 곳에서만 조를 읽는다 — workShift 밖에서 06/18 경계를 따로 세지 않는다
   for (const f of ['src/workChoice.js', 'src/equipHold.js', 'src/pages/LoginPage.jsx', 'src/App.jsx']) T(!/getHours\(\)\s*[<>]=?\s*(6|18)\b/.test(rd(f)), `${f} 는 조 경계를 따로 세지 않는다`);

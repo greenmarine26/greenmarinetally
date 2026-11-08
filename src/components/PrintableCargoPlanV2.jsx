@@ -8,6 +8,7 @@
 // 미통합 (다음 패치 예정): 선사별 별첨, 화물 종류별 별첨, 선적 모드 POD 컬러 매핑
 // ============================================================
 import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
+import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 핀치 확대 한 벌
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
@@ -1339,24 +1340,10 @@ export default function PrintableCargoPlanV2({
       window.removeEventListener('orientationchange', apply);
     };
   }, []);
-  const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
-  const onTouchStart = (e) => {
-    if (e.touches && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      pinchRef.current = { active: true, startDist: Math.hypot(dx, dy), startZoom: zoom };
-    }
-  };
-  const onTouchMove = (e) => {
-    if (pinchRef.current.active && e.touches && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const ratio = Math.hypot(dx, dy) / (pinchRef.current.startDist || 1);
-      setZoom(Math.min(3, Math.max(0.15, pinchRef.current.startZoom * ratio)));
-      e.preventDefault();
-    }
-  };
-  const onTouchEnd = (e) => { if (!e.touches || e.touches.length < 2) pinchRef.current.active = false; };
+  //  4.80: 핀치는 공용 한 벌(usePinchZoom) — React onTouchMove 는 passive 라 preventDefault 가 안 먹어 페이지 확대와 겹쳤다.
+  const pinchZoomNow = useRef(zoom); pinchZoomNow.current = zoom;
+  const pinchElRef = useRef(null);
+  usePinchZoom(pinchElRef, () => pinchZoomNow.current, setZoom, { min: 0.15, max: 3 });
 
   // 2.13-01: 돌아가 있으면 버튼을 **아래 여백**으로 내린다 — 위에 두면 도면을 덮는다(검수사 실측).
   /* 4.02: 콘앱 «양하|선적» 두 쪽 보기(duo)에서는 자리를 따로 잡는다 — 콘앱 아래 줄에는 불편신고·새로고침(왼쪽)과
@@ -1417,7 +1404,7 @@ export default function PrintableCargoPlanV2({
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
   return createPortal(
-    <div className="cpv2-overlay" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <div ref={pinchElRef} className="cpv2-overlay" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} >
       <style>{CARGO_V2_CSS}</style>
       {closeBtn}
       {wkDlg && (
