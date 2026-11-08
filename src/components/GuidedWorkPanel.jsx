@@ -30,6 +30,7 @@ import { activeHeldOf, HOLD_REASONS, bayPageSplitOf } from '../utils.js';   // 4
 import { loadingSlotOf, guideTwinOf, effectivePos } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 기존 자동 한 화면 틀(맨 위 한 줄 · 위 칸 카드·확인 · 아래 칸 변경 단추)   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
+import { termOpenedCover } from '../gangState.js';   // 4.81: 터미널 반영 홀드 기록 = 커버 열림 증거(열까요 물음을 건너뛴다)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinDiffLimit, twinWtOf } from '../nlSearch.js';
 
@@ -1338,6 +1339,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (isHatchSkipShip) return false;  // V8.10: TMPZ·TNJP·RZOR·OBWH 해치 계산/보고 안 함
     if (modeFinished) return false;   // 1.8-18: 끝난 모드엔 권하지 않는다
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
+    //  4.81: 터미널 반영 기록에 이 장의 홀드가 이미 있으면 커버는 열린 것이다 — 묻지 않는다(커버를 세는 배만 — 해치 제외 배는 위에서 이미 나갔다). 보고·hatchDone 판정은 그대로, «증거가 있으면 묻지 않음» 만 더한다.
+    if (termOpenedCover(allContainers, 'discharge', selectedGroup, groupCenterOf, lastHatchOf(selectedGroup))) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
     // ⛔ 1.8-19 의 «화물이 얹힌 커버는 권하지 않는다» 게이트를 뗐다 (1.76-05).

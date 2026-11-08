@@ -1717,6 +1717,8 @@ fi
     node tools/smoke_dischargeacc456.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 양하 정확도 연막검사 실패 — 배포 금지"; exit 1; }   # 4.56
     node tools/smoke_mir43902.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.39-02(예상 실오류·장 바꾸기·집에 몇 시) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-02
     node tools/smoke_mir440.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40(베이로 옮기기 [이동]·[취소]) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.40 — 화면은 회귀 기준표 R44
+    #  4.81: 미르 «N번 베이 정리해줘» — 실항차 네 척(PCSZ 2630E·2628E·STMJ 2659E·OBWH 2743E)의 그 시각 자료로 장·호기·남은 수·터미널 몫·마지막 시각·선적 추정·두 앱 같은 답·말귀·읽기 전용 소스 검사·해치 커버 열까요 물음 증거. 같은 번들.
+    node tools/smoke_gang481.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.81(베이 정리 현황) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.40-01: «몇 시에 끝나» 두 앱 같은 답 — 끝나는 시각을 묻는 말은 via eta 강한 답(모델로 안 감) · 도선 갈래·속도 표가 안 가로챔 · 배 작업 아닌 것은 종전대로. 같은 번들.
     node tools/smoke_eta44001.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 4.40-01(몇 시에 끝나 두 앱 같은 답) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.42-02: 미르가 화났을 때 배 이름 없이 알린 멈춤(«아무래도 강풍대기 인듯 하네») → 화난 그 배들(pauseTargetsOf) · 강한 답 · 답 뒤 칩 없음 · 기쁨에 배 이름(mirDoneUpWhy). RTDB GET 사본. 같은 번들.

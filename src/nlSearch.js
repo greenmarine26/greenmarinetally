@@ -160,6 +160,7 @@ export function parseNaturalQuery(text) {
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume'|'text', dir:+1|-1, to:1..4|'off', ask:true } — 4.23 text: to 1 보통 · 2 크게
     moveSet: null,     // 4.76: { kind, equip, to, raw } — «1호기 철수»·«2호기로 이동»·«1호기 복귀» 말로 알린 호기 이동(기록은 화면이 crane_move 보고로)
+    bayTidy: null,     // 4.81: { bays:[번호…], mode, raw } — «12번 베이 정리해줘» 읽기 전용 현황 요청(쓰기 없음 — 미르가 두 자료를 읽어 답만 한다)
     pauseSet: null,    // 4.34-02: { reason, raw } — «미르야 강풍대기 상태야 쉬고 있어» 말로 알린 작업 멈춤(사유는 작업 보고 칩과 같은 이름). 기록은 화면(MirFab·SearchPanel)이 한다.
     startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
@@ -252,6 +253,20 @@ export function parseNaturalQuery(text) {
       } else if ((_m = new RegExp(`${_NO}\\s*(?:복귀|재투입|다시\\s*투입|다시\\s*들어)`).exec(_mt))) {
         if (_ok(_m[1])) result.moveSet = { kind: 'return', equip: _N(_m[1]), to: '', raw: _mt };
         else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
+      }
+    }
+  }
+
+  //  ★ 4.81 베이 정리 — «12번 베이 정리해줘»·«12번 정리»·«(14)15 정리해줘»·«12베이 정리». 검수사 2026-11-09 «일반 사용자가 몇번베이 정리해줘 하면 그때 두자료를 읽어서 작업 할수 있게 해주는 것».
+  //  { bays:['15','14'], mode:'discharge'|'loading'|null, raw } — 읽기 전용(미르가 앱 입력·터미널 반영 두 자료를 읽어 그 장의 현황만 답한다 · 기록·알림 없음).
+  //  베이 번호 바로 뒤에 «정리 + 요청 어미»가 와야 한다 — «정리했어»·«정리 방법»·«베이 정리가 뭐야»·«3호기 정리»(호기)·콘 말은 아니다.
+  {
+    const _bt = String(t || '');
+    if (_bt.trim() && !/콘|방법|어떻게|뭐야|뭔가|무슨|왜|기준|뜻|규칙|어디|하는\s*법|언제|몇|누구|맞아|가능|되나|할\s*수/.test(_bt)) {
+      const _m = /(?<![\d(])(?:베이\s*)?(?:\(\s*(\d{1,2})\s*\)\s*)?(\d{1,2})(?!\d)(?!\s*(?:번\s*)?호기)\s*(?:번\s*)?(?:베이|배(?=\s*(?:을|를|은|는|도)?\s*정리))?\s*(?:을|를|은|는|도)?\s*정리(?:\s*좀)?\s*(?:(?:해\s*(?:줘|주세요|주라|줄래|줄까|봐|볼래|보자|라|요)?|하자|하세요|부탁\S*)\S{0,2})?\s*[?？!.~]*\s*$/.exec(_bt);
+      if (_m) {
+        const _bays = [_m[2], _m[1]].filter(Boolean).map((x) => String(parseInt(x, 10)));
+        result.bayTidy = { bays: _bays, mode: /선적|싣|실어|적하/.test(_bt) ? 'loading' : /양하|내리|내려/.test(_bt) ? 'discharge' : null, raw: _bt };
       }
     }
   }

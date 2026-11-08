@@ -72,6 +72,7 @@ import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
 import { aiCostUsd, AI_PRICE, aggregateAiCost } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
+import { tidyBayAnswer, withRecordPositions } from './gangState.js';   // 4.81: «N번 베이 정리해줘» — 앱 입력 + 터미널 반영 두 자료를 읽는 현황 한 벌(읽기 전용)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
@@ -2280,6 +2281,25 @@ export function answerOneRaw(query, ctx) {
     }
   }
 
+  //  ★ 4.81 «N번 베이 정리해줘» — 검수사 2026-11-09 «일반 사용자가 몇번베이 정리해줘 하면 그때 두자료를 읽어서 작업 할수 있게 해주는 것» · «30분전 데이터로도 2갱중에 1갱이 앱사용자가 아니면 앱은 그갱이 어디 작업중인지 알수 있습니다.
+  //    그때 실사용자가 그베이를 지정하면 미르가 알아서 정리해주는것입니다». **읽기 전용** — 기록·알림·Firebase 쓰기 없음(조회만 사용자도 답을 듣는다). 콘 지식(① 베이 말을 가로챈다)보다 앞에서 받아 두 앱이 같은 답을 낸다.
+  //    재료는 컨 행(검수앱 allContainers·flattenVoyages / 콘앱 ctx.containers — 모두 _mode·_ptk·_comp·bay 를 싣는다) 하나라 판정은 src/gangState.js 한 벌이다.
+  if (p.bayTidy && !/콘/.test(q)) {
+    _via('bayTidy');
+    if (!hasShip || !v) return '어느 배 말씀인지 몰라 베이를 정리하지 못했습니다. 배 이름을 붙여 주세요. 예를 들면 "미르야 KKLC 12번 베이 정리해줘" 처럼 말씀해 주세요.';
+    const _vkT = c.voyageKey || null;
+    let _rowsT = cs.filter((x) => x && x.cn && (!_vkT || !x.voyageKey || x.voyageKey === _vkT));
+    if (!_rowsT.length && _vkT) { try { _rowsT = flattenVoyages({ [_vkT]: v }).filter((x) => x && x.cn); } catch (e) { console.warn('[미르 4.81] 항차 펴기 실패:', e); _rowsT = []; } }
+    _rowsT = withRecordPositions(_rowsT, v);   // 콘앱 행은 EDI 계획 자리 — 실적·맞교환 자리를 검수앱 행과 같은 차례로 얹는다(이미 얹힌 행은 그대로)
+    const _vslT = S(info.vsl || c.vsl);
+    if (!_rowsT.length) return `${_vslT ? _vslT + ' ' : ''}이 배는 컨 자료가 아직 없어 베이를 정리해 드릴 수 없습니다.`;
+    const _lolo = (c.isLoloShip === true) || isLoloShipByPolicy(_vslT, {}, [info.voy, info.voyage, info.callsign].filter(Boolean));
+    if (_lolo) return `${_vslT ? _vslT + ' ' : ''}이 배는 덱플랜 배라 베이 단위로 정리해 드릴 수 없습니다.`;
+    const tr = tidyBayAnswer(_rowsT, { info, mode: p.bayTidy.mode || (c.mode === 'loading' ? 'loading' : 'discharge'), now: c._now || Date.now(), bays: p.bayTidy.bays, workers: Array.isArray(c.workers) ? c.workers : null });
+    if (c._trace && typeof c._trace === 'object') c._trace.tidy = tr.rep;
+    return `${_vslT ? _vslT + ' ' : ''}${tr.text}`;
+  }
+
   //  ① 콘 이야기 — 콘앱이면 콘 지식이 먼저. 단 검수 속성(끝네자리·온도·실번호·엑스레이…)을 물으면 검수 답이 우선이다
   //    (2.48 — 종전엔 콘앱에서 «베이»만 들어가면 콘 답이 전부 가로챘다. 관문 2 실측).
   //  ★ 3.43-01 — «진행» 을 묻는 말(«실제 진행 상황»·«얼마나 했어»)은 콘앱에서도 ⑥ 진행 두 갈래로 간다. 종전엔 nlSearch 가 «상황» 을
@@ -3119,6 +3139,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'workAnalysis' || via === 'dischargeAcc' || via === 'expectEta' || via === 'sealAudit' || via === 'guideGoto') return false;   // 4.40: guideGoto — «N번 베이로 옮겨 드릴까요?» 는 자료 답(모델로 덮지 않는다)   // 4.39-02: sealAudit — «실오류 있지?» 의 «있지»·«…왜 안알려줬어» 가 사전에 없어도 실번호 점검 자료 답을 모델로 덮지 않는다   // 4.39-01: «작업 분석» · «예상 작업시간(2갱으로)» 은 화면 계산 한 벌로 낸 자료 답 — «분석해줘»·«2갱으로» 가 사전에 없어도 모델로 보내지 않는다(21:48 «갱 2개» 로 옮겨져 갱 분배 답이 나갔다)
   if (via === 'workStop' && trace && trace.pauseSure) return false; // 4.42-02 (2차 시뮬 6 — 멈춤을 분명히 알린 말의 답만): 작업 멈춤 알림 — 말 파서가 사유 낱말·«작업 중단» 으로 멈춤이라 확신한(sure) 말의 자료 답이다. «아무래도 … 인듯 하네» 같은 군말이 남았다고 모델로 보내면 «열린 항차 정보가 없어요» 를 지어냈다(검수사 2026-10-21 13:25)
   if (via === 'eta') return false;      // 4.40-01: 끝나는 시각을 물은 말의 끝나는 시각 답(완료 기록·본선현황으로 잰 것) — 사전에 없는 낱말(«시쯤»·«끝날까»·«같아»)이 붙어도 모델로 안 보낸다. 보내면 앱마다 다른 답(검수사 2026-10-20 20:07)
+  if (via === 'bayTidy') return false;   // 4.81: «N번 베이 정리해줘» 는 두 자료를 읽은 현황 답이다(모델로 안 보낸다)
   if (via === 'rzorLearn') return false;   // 4.44-01: 수집기 2.45 채점 요약은 자료 답 — «학습»·«현황»·«채점» 이 사전에 없어도 모델로 보내지 않는다
   if (via === 'yard') return false;     // 3.69: 야드 상황은 자료 답(«자료가 아직 안 왔어요» 도 답이다) — «야드»·«바빠» 가 사전에 없어도 모델로 보내지 않는다
   const q = (trace && trace.rq) ? trace.rq : q0;   // 3.68: 대화 층이 되쓴 말(«응»→«남은 대수»)은 되쓴 말로 잰다 — 원문의 «아니»·«번째»·«아까» 가 모르는 낱말로 남아 모델로 새던 것(감사 3)
@@ -3331,6 +3352,7 @@ export const MIR_CATALOG = `
 [항차 사실] 예: "마감텔리 수치" "해치커버 열었어" "접안 현측" "작업 몇 시에 시작했어" "양하 언제 끝났어" "커트씰 기록" "전자봉인 몇 대" "실번호 의심" "양하 대수가 안 맞아"
 [진행·속도] 예: "브리핑" "얼마나 남았어" "몇 시쯤에 끝나" "시간당 몇 개 했어" "작업 속도" "몇 개 했어" "진행 상황"
 [배·시각·날씨] 예: "KBTR 브리핑" "콜사인" "IMO" "선박 소개" "입항 몇 시" "출항 몇 시" "도선 몇 시" "날씨" "지금 몇 시" "선속" "다음 항"
+[베이 정리(읽기만)] 예: "12번 베이 정리해줘" "(14)15 정리해줘" "선적 24번 정리"
 [호기·갱·근무자(말하기와 적기)] 예: "1호기 누구야" "갱 몇 개" "1호기 이인철 2호기 최관식" "2호기 23:15 시작했어" "갱 3개"
 [뜻·사용법·현장 대처] 예: "시프팅이 뭐야" "FR이 뜻" "트윈 어떻게 해" "해치커버 어떻게 열어" "씰 잘렸을 때 어떻게 해" "천정 구멍 어떻게 처리해" "리퍼 전원 꺼졌어 어떻게"
 [화면 열기] 예: "카고플랜 보여줘" "베이플랜 보여줘" "선적 플랜 보여줘" "KBTR 카고플랜 보여줘"
@@ -4053,6 +4075,7 @@ export function mirThreadCommit(q0, text, via, ctx, now = ((ctx && ctx._now) || 
   const _gact = via === 'guideGoto' ? mirGotoActOf(text) : null;
   if (_gact) follow = { line: '', chips: ['이동', '취소'], act: _gact };
   else if (via === 'guideGoto') follow = null;   // 옮길 수 없다는 답(다 끝남·자료에 없음·셀 좌표 없음) 뒤에는 단추를 달지 않는다
+  else if (via === 'bayTidy') follow = null;   // 4.81: 베이 정리 현황 뒤에는 다른 제안 단추를 달지 않는다(읽기 전용 답)
   else if (via === 'workStop') follow = null;   // 4.42-02: «⏸ 강풍 대기로 멈춘 걸로 적을게요» 뒤에 «이 속도면 몇 시에 끝나는지도 볼까요?» 를 붙이지 않는다 — 멈춘 배에 속도·남은 시각 제안은 맞지 않는다(검수사 2026-10-21 13:25 화면)
   //  4.38: 쉬는 틈(바쁘지 않음을 잴 수 있을 때만)에 미뤄 둔 사담이 있으면 그 말을 단추로 먼저 띄운다 — 누르면 그 말 그대로 묻는다(그때 클로드가 답한다).
   if (!_gact && via !== 'defer' && ctx && (ctx.work || ctx.app === 'cone') && !MIR_NEVER_DEFER_RE.test(String(q0 || '')) && !MIR_NEVER_DEFER_RE.test(String(rq || ''))) {   // 위기·안전·몸·마음 말 답 뒤에는 미룬 사담 단추를 붙이지 않는다(마지막 감사 C1 — «죽고 싶어» 뒤 «농담 나눌까요?» · 이어 한 «응» 이 농담으로 갔다)
