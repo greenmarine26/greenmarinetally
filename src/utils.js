@@ -58,7 +58,8 @@ export function isSentenceQuery(v) {
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
 // (앞 판) 'TallyOne 4.68'   // 4.68 **크레딧이 있는 동안 제미나이를 쓰지 않는다 — 클로드 하루 합계 3달러를 넘으면 그날은 제미나이** — 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 사용하지 않는다. 하루 3불을 초과하면 사용하고» · 미르(대화·번역·자료 답)는 클로드 세 번, 사진 읽기는 세 번(적재 PDF 제외) 불러도 안 되면 제미나이로 가지 않고 «다시 시도» · 제미나이는 키·크레딧 문제·HEIC·하루 한도 초과·mir_config.geminiFallback=true 일 때만 · 한도는 mir_config.claudeDailyUsd(기본 3, 0 이면 클로드 끔).
-export const APP_VERSION = 'TallyOne 4.78'   // 4.78 **자동 가이드 갈림 칩에 «트윈부터 / 싱글부터» · 보류 기록 보관 · 미르 배 코드 판정은 대문자만** — 검수사 2026-11-07 KKLC 2610N 마지막 데크 «트윈으로 내려야 하는데 트윈으로 갈 방법이 없었습니다. 그래서 보류 내용에 트윈모드라고 하고 보류 시키니 트윈모드가 켜졌습니다. 반대로 싱글모드로 갈때도 그렇게 한거 같습니다.» guidedQueue.cardMatchesPref 에 TW(짝 있는 카드)·SG(짝 없는 20피트 — 20SINGLE 판정 재사용) · 갈림 칩은 지금 할 수 있는 카드에 둘이 다 있을 때만 · 양하 순서 창(workOrder ORDER_PREF_KEYS)에도 호기별 기억 · 트윈↔싱글은 함께 못 건다. 보류·해제마다 항차 reports 에 type hold_event 한 건(컨 목록·사유·건 사람·호기·시각)을 같은 쓰기에 남겨 항차를 보관해도 사라지지 않는다 — 고치기·지우기·마감 점검·타임시트·수석 최근 보고·호기 보고 판은 이 type 을 비켜 간다. 미르 _hasKnownShipCode 는 원문이 전부 대문자인 낱말만 배 코드로 인정(play ball with me 의 ball ≠ BALL, 4.77-01 독립 감사 권고).
+export const APP_VERSION = 'TallyOne 4.79'   // 4.79 **로그인 뒤 선박을 고르면 «주간조입니까 야간조입니까» 를 묻고, 근무시간 밖에 접속하면 조회만 — 호기를 쥐는 키는 항차+호기+조 (연태 OBWH·일조 RZOR 는 주야 구분 없음)** — 검수사 2026-11-08 «방법은 로그인 하고 선박을 선택하면 야간조 입니까 주간조 입니까를 물어 선택하게 해야 겠습니다.» · «만약 야간조인데 지금 접속해 있다면 그인원은 보기만 하러 온것입니다» · «반대로 주간조인데 야간에 접속해있어도 조회만 하는 인원입니다» · «연태obwh 일조 rzor». 새 src/workShift.js(순수 — 서버 시각 .info/serverTimeOffset 기준 주간 06:00~18:00·야간 18:00~06:00 · isNoShiftShip · 호기 보유 키 조 비교), workChoice(saveWorkChoice 가 shift·offShift 를 들고, 근무시간 밖 조회만은 고른 선박을 보며, resolveShift·shiftRequiredFor·needsShiftAsk), equipHolderOf 가 내 조와 같은 조의 보유만 막고, 로그인 선택 화면에 ShiftPick, 헤더 [작업자로 전환]은 확인 한 번, 조 값 없는 옛 로그인은 한 번 묻는다. 검수사·수석·테스터·클로드·클로드2 는 조를 묻지 않고 시간 제한도 없다.
+// (앞 판) 'TallyOne 4.78'   // 4.78 **자동 가이드 갈림 칩에 «트윈부터 / 싱글부터» · 보류 기록 보관 · 미르 배 코드 판정은 대문자만** — 검수사 2026-11-07 KKLC 2610N 마지막 데크 «트윈으로 내려야 하는데 트윈으로 갈 방법이 없었습니다. 그래서 보류 내용에 트윈모드라고 하고 보류 시키니 트윈모드가 켜졌습니다. 반대로 싱글모드로 갈때도 그렇게 한거 같습니다.» guidedQueue.cardMatchesPref 에 TW(짝 있는 카드)·SG(짝 없는 20피트 — 20SINGLE 판정 재사용) · 갈림 칩은 지금 할 수 있는 카드에 둘이 다 있을 때만 · 양하 순서 창(workOrder ORDER_PREF_KEYS)에도 호기별 기억 · 트윈↔싱글은 함께 못 건다. 보류·해제마다 항차 reports 에 type hold_event 한 건(컨 목록·사유·건 사람·호기·시각)을 같은 쓰기에 남겨 항차를 보관해도 사라지지 않는다 — 고치기·지우기·마감 점검·타임시트·수석 최근 보고·호기 보고 판은 이 type 을 비켜 간다. 미르 _hasKnownShipCode 는 원문이 전부 대문자인 낱말만 배 코드로 인정(play ball with me 의 ball ≠ BALL, 4.77-01 독립 감사 권고).
 // (앞 판) 'TallyOne 4.77-01'   // 4.77-01 **미르 말투 «쌓이에요»→«쌓여요» · 배 코드(DJCT·MCSC)가 든 «장비 번호가 뭐야» 가 생활회화로 새지 않게 · «몇 시에 끝나»·«시간당 몇 대»·«작업 속도»·통계탭이 속도·갱 수를 한 함수(paceNowOf)로, 같은 분 안에서는 한 글자도 안 다르게 · 근거 줄 «최근 실작업 N분(쉬는 시간 뺀 시간)»** — 검수사 2026-11-08 «쌓이에요» 오타 · «DJCT 터미널 이름 같아요» · «128분 기준 / 120분 기준 · 갱당 20.6 / 20.4»
 // (앞 판) 'TallyOne 4.77'   // 4.77 **작업 보고 «호기 이동» 단추(철수·장비교체·다른 호기로 이동·복귀 + 사유) · 해치 열림·닫힘을 화물 순서로 채움 · 동방 3호기는 실 LOLO 몫만(105호기 RORO 램프는 갱 아님) · 철수 호기를 수석 대시보드·갱 수에 반영** — 검수사 2026-11-08 10:10 «작업보고 안에 두면 됩니다. 사유도 넣어 주셨으면 합니다 장비고장처럼» · «홀드를 양하 하였다면 커버를 연것이고 열려있는데 데크에 선적 하였다면 닫은것입니다» · «36대가 맞습니다 … 3호기는 실 LOLO 물량만 적용하면 됩니다» · «범위가 크다고 해서 오류를 놔둘수는 없습니다»
 // (앞 판) 'TallyOne 4.76'   // 4.76 **미르 «몇 시에 끝나»가 지금 일하는 호기 수와 최근 120 실작업분 속도로 계산 · 호기 이동 말(철수·이동·복귀) 기록 · 해치 닫는 장수 = 연 장수 합** — 검수사 2026-11-08 «1호기 철수 라고 했으며 원갱이라고 이야기 했는데 2갱기준으로 잡는듯» · «14번베이 커버를 수동으로 1장씩 텀을두고 열었는데 닫을때는 2장이 닫혀야 하는데 인지를 못한듯» · «장비교체 철수 같은것들을 앱에서 바꿀수 있어야 합니다». ① nlSearch.recentPaceOf — 갱 수 = 최근 15 실작업분에 완료가 찍힌(또는 시작·재개한) 호기, 갱당 속도 = 최근 120 실작업분(쉬는 시간·장비 고장 제외), RORO(105호기)·호기 모르는 기록은 안 센다 · formatEta·speedFromRecords(작업 속도·갱 계획)가 같은 값 · 근거 한 줄 + «몇 분 차이날 수 있어요». KKLC 2610N 재현 22:57 −161분 → +11분. ② craneMove.js·nlSearch.moveSet·mir.js — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소» → type 'crane_move' 보고(MirFab·SearchPanel). ③ utils.hatchOpenedNetOf — 닫는 보고의 장수는 연 보고 합 − 이미 닫은 합(KKLC 사전 14·18번 hatchCount 2). ④ mir.js 완료 «담당 미확인»(터미널 반영·담당 빈 값) · «야식 시간 몇 시야». 연막 smoke_move476.
@@ -185,7 +186,8 @@ export const APP_VERSION = 'TallyOne 4.78'   // 4.78 **자동 가이드 갈림 �
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.78 자동 가이드에 트윈부터와 싱글부터 단추가 생겼습니다. 보류한 기록은 항차를 보관한 뒤에도 남습니다'
+export const APP_NOTE = '4.79 로그인 뒤 선박을 고르면 주간조인지 야간조인지 묻습니다. 근무시간 밖에 접속하면 조회만이 되고 작업자로 전환할 수 있습니다'
+// (앞 판) APP_NOTE = '4.78 자동 가이드에 트윈부터와 싱글부터 단추가 생겼습니다. 보류한 기록은 항차를 보관한 뒤에도 남습니다'
 // (앞 판) APP_NOTE = '4.77-01 미르 말투 오타를 고치고 배 코드가 든 질문과 속도 숫자를 두 앱이 같게 맞췄습니다'
 // (앞 판) APP_NOTE = '4.77 작업 보고에 호기 이동 단추가 생겼습니다. 철수와 장비교체와 이동과 복귀를 사유와 함께 남깁니다'
 // (앞 판 APP_NOTE) '4.75-01 제출용 검수 리스트는 앱으로 직접 입력한 호기의 컨에만 체크가 붙고 종이로 검수한 호기와 터미널 반영분은 체크하지 않습니다'
@@ -4705,6 +4707,7 @@ export function shiftReportContainers(voyage, m) {
 //    붙인 값이 QC 합계와 10% 넘게 다른 배는 **갱별 규격표를 내지 않는다** — 갱별 대수(QC 합계 그대로)만 낸다. 지어내지 않는다.
 //    베이사전이 없는 배도 규격표를 내지 않는다(홀수 베이가 다른 장으로 쪼개져 바구니가 틀린다 — hatchEventsOf 와 같은 보수, 2차 시뮬 실측 72~79%).
 //    접안 방향을 뒤집어 붙인 쪽이 QC 합계에 더 맞으면 방향 자료를 의심하고 규격표를 내지 않는다(2차 시뮬 — 반대 방향이 합계 문지기를 절반 통과).
+export { isNoShiftShip } from './workShift.js';   // 4.79: 주야 구분 없는 배(연태 OBWH·일조 RZOR·SMYA) 판정 한 벌 — 구현은 순수 모듈 workShift.js(NO_SHIFT_SHIPS 목록도 거기 한 곳)
 export const FERRY_1700_SHIPS = ['TNJP', 'OBWH', 'RZOR'];
 export function isFerry1700Ship(info, key = '') {
   const v = String((info && info.vsl) || String(key || '').split('_')[0] || '').trim().toUpperCase();
@@ -9070,8 +9073,9 @@ export function gangKeyFromWords(dayOff, shiftName, nowMs = Date.now()) {
 //  ★ 2.99-03 (검수사 2026-09-02): *«OBWH와 RZOR은 주야 구분이 없습니다. 브리핑 자료에 참고 바랍니다.»*
 //    카페리 두 척(연태훼리 OCEAN BLUE WHALE · 일조국제물류 RZOR)은 한 조가 계획 시간 끝까지 한다 —
 //    브리핑의 «주간조 앱 미사용» 조 이름을 안 붙이고, 갱 배분의 조 창도 17:30 에서 끊지 않고 계획 작업 시간 전체로 잡는다.
-export const NO_SHIFT_SHIPS = ['OBWH', 'RZOR', 'SMYA'];   // 3.0-01: SMC YANTAI(SMYA) — RZOR 대체 카페리(검수사 2026-09-02), 항로 RZPT·선사 RZF
-export function shipHasShifts(code) { return !NO_SHIFT_SHIPS.includes(String(code || '').trim().toUpperCase()); }
+export { NO_SHIFT_SHIPS } from './workShift.js';   // 4.79: 목록은 workShift.js 한 곳(3.0-01: SMC YANTAI(SMYA) — RZOR 대체 카페리(검수사 2026-09-02), 항로 RZPT·선사 RZF) — 앞 판은 여기 정의
+import { NO_SHIFT_SHIPS as _NO_SHIFT_LIST } from './workShift.js';
+export function shipHasShifts(code) { return !_NO_SHIFT_LIST.includes(String(code || '').trim().toUpperCase()); }
 
 //  «지금 일하고 있는(또는 방금 끝낸) 조» 이름 — 교대 사이면 직전 조를 가리킨다.
 //    검수사 확정 2026-08-27: 두 숫자 차이 표기는 «주간조 앱 미사용» 처럼 **조 이름을 붙인다**.

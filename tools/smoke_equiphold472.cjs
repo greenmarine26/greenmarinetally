@@ -1,6 +1,6 @@
 // 4.72 연막검사 — 로그아웃 없이 쥔 호기는 다른 사람이 못 고른다
 const fs = require('fs');
-const src = fs.readFileSync('src/equipHold.js', 'utf8').replace(/export /g, '');
+const src = require('./loadEquipHold.cjs')('.');
 const { equipHolderOf, equipHoldUntil } = new Function(src + '; return { equipHolderOf, equipHoldUntil };')();
 const login = fs.readFileSync('src/pages/LoginPage.jsx', 'utf8');
 let n = 0, bad = 0;
@@ -23,7 +23,7 @@ ok(equipHolderOf(mk({ lastActive: K(2026, 11, 7, 9, 0) }), 'V1', '3호기', '김
 ok(equipHolderOf(mk({ workMode: 'view' }), 'V1', '3호기', '김철수', now) === '', '조회만은 쥐지 않는다');
 ok(equipHolderOf(mk({ name: '클로드' }), 'V1', '3호기', '김철수', now) === '', '클로드(테스터)는 호기를 막지 않는다');
 ok(equipHolderOf(mk({}), 'V1', '', '김철수', now) === '' && equipHolderOf(null, 'V1', '3호기', 'a', now) === '', '호기 없음·명단 없음은 빈 값');
-ok(/equipHolderOf\(inspectors, choiceVoyage, n, choiceName\)/.test(login) && /data-choice-held=/.test(login), '로그인 화면이 점유 호기를 회색으로 막는다');
+ok(/equipHolderOf\(inspectors, choiceVoyage, n, choiceName(, undefined, rs.shift)?\)/.test(login) && /data-choice-held=/.test(login), '로그인 화면이 점유 호기를 회색으로 막는다');
 ok(/if \(choiceEquip && heldBy\(choiceEquip\)\) return;/.test(login), '시작 단추도 점유 호기는 통과시키지 않는다');
 console.log(`${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

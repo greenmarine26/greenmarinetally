@@ -4,6 +4,7 @@
 //   검수사 2026-11-07 05:46 «야간 근무시간이 정해져 있습니다. 활동은 없지만 그 검수원이 3호기에서 작업하고 있는건 맞습니다»
 //   ⚠ 앱을 닫아 로그아웃이 안 된 채 남은 사람이 호기를 영원히 막지 않게, 마지막 활동이 속한 근무조(주간 08:00~17:30 · 야간 19:00~익일 06:30)가 끝나고 30분이 지나면 놓아준다.
 //   (4.75 — 앞 판은 마지막 활동 4시간 고정이라 입력 없이 지켜보는 야간 근무자가 한밤에 풀렸다)
+import { holderShiftOf, sameHoldShift, shiftAt } from './workShift.js';   // 4.79: 호기 보유 키 = 항차+호기+조
 export function equipHoldUntil(at) {
   const KST = 9 * 3600 * 1000, H = 3600 * 1000;
   const k = new Date(at + KST);
@@ -14,14 +15,17 @@ export function equipHoldUntil(at) {
 }
 const SKIP_HOLDERS = ['클로드'];
 
-export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.now()) {
+//  4.79 — 호기를 쥔 사람의 키는 항차+호기+조다(검수사 «주야 각1인이 한크레인씩»). myShift = 내가 고른 조('day'|'night'), 비면 지금 시각의 조. 연태 OBWH·일조 RZOR 는 조를 보지 않는다(workShift.holdKeyShiftOf).
+export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.now(), myShift = '') {
   if (!voyageKey || !equip) return '';
+  const mine = myShift || shiftAt(now);
   for (const i of Object.values(inspectors || {})) {
     if (!i || !i.name || i.name === myName || SKIP_HOLDERS.includes(i.name)) continue;
     if (i.loggedIn !== true || i.workMode === 'view') continue;
     //  지금 쥔 호기 — 로그인 때 지정(assignEquip)과 작업 중 바꾼 호기(workEquip) 가운데 더 나중에 정한 쪽(4.74: 작업 중 바꾸는 길도 같은 판정)
     const curEq = (i.lastVoyage === voyageKey && i.workEquip && (Number(i.workAt) || 0) > (Number(i.assignAt) || 0)) ? i.workEquip : (i.assignVoyage === voyageKey ? i.assignEquip : '');
     if (curEq !== equip) continue;
+    if (!sameHoldShift(voyageKey, holderShiftOf(i), mine)) continue;   // 4.79: 다른 조가 쥔 같은 호기는 막지 않는다
     if (i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) continue;
     const at = Number(i.lastActive) || Number(i.assignAt) || 0;
     if (!at || now > equipHoldUntil(at)) continue;

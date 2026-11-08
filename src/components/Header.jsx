@@ -23,7 +23,7 @@ import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 
 //  4.23 2차 — 머리띠 칸 재기(useLayoutEffect · 서버 그리기에서는 useEffect)
 const _useIsoLayout = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, onOpenOwner = null, workChoice = null, onChangeWork = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, onOpenOwner = null, workChoice = null, onChangeWork = null, onSwitchWorker = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   // V8.10: 현재 항차 부두 기준 장비 목록. 항차 없으면 1~5 전체.
@@ -234,6 +234,17 @@ export default function Header({ version, inspector, online, route, voyages, onC
               aria-label="조회만 — 누르면 작업자로 전환"
               className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 bg-ink-800 text-sky-200 border border-sky-700 whitespace-nowrap`}>
               <span aria-hidden="true">🔍</span><span className="sm:hidden max-[359px]:hidden" data-hdr-viewlabel="1">조회</span><span className="hidden sm:inline">조회만</span>
+            </button>
+          )}
+          {workChoice && workChoice.mode === 'view' && workChoice.offShift && onSwitchWorker && (
+            <button onClick={() => askConfirm({
+              title: '작업자로 전환',
+              message: `지금은 ${workChoice.shift === 'day' ? '야간' : '주간'}조 근무시간입니다. 고른 ${workChoice.shift === 'day' ? '주간조' : '야간조'}의 근무시간 밖에 접속해 조회만으로 들어와 있습니다.\n\n그래도 작업자로 전환하겠습니까?`,
+              confirmLabel: '작업자로 전환', cancelLabel: '조회만 유지',
+              onConfirm: () => { onSwitchWorker(); },
+            })} title="근무시간 밖이라 조회만입니다 — 누르면 확인 뒤 작업자로 전환" data-shift-switch="1"
+              className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 bg-amber-700 text-white border border-amber-400 whitespace-nowrap`}>
+              <span className="sm:hidden" aria-hidden="true">작업</span><span className="hidden sm:inline">작업자로 전환</span>
             </button>
           )}
           {workChoice && workChoice.mode === 'admin' && (

@@ -16,6 +16,7 @@
 import { canOpenChief, isHiddenStaff } from './staffList.js';
 import { isOwnerName } from './adminGuard.js';
 import { getMeToday, ymdKST } from './meToday.js';
+import { isNoShiftShip, shiftAt, serverNow } from './workShift.js';   // 4.79: 주야 근무조 한 벌(순수 모듈)
 import { getEquipNumber } from './utils.js';   // 4.38: mirWorkCtx — 내 호기(utils 는 workChoice 를 부르지 않아 순환 없음)
 
 export const WORK_CHOICE_KEY = 'tallyone_work_choice';
@@ -27,6 +28,12 @@ let _active;
 export function setActiveWorkChoice(choice) { _active = choice || null; }
 /** 4.46 — 지금 이 화면 세션의 로그인 이름(App 이 세운 workChoice.name). App 이 아직 안 세웠으면 ''(로그인 화면·연막검사). 보고 고치기 문지기가 «넘겨받은 이름»만 믿지 않게 대조한다. */
 export function activeChoiceName() { return (_active && _active.name) ? String(_active.name).trim() : ''; }
+
+/** 이 선택이 «내 선박» 으로 들고 있는 항차 키 — 작업자의 선박, 또는 근무시간 밖 조회만(4.79)이 고른 선박. 일반 검수원은 이 배 하나만 본다. 없으면 ''. */
+export function ownVoyageOf(choice) {
+  if (!choice || !choice.voyageKey) return '';
+  return (choice.mode === 'work' || (choice.mode === 'view' && choice.offShift)) ? String(choice.voyageKey) : '';
+}
 
 /** 모든 선박을 자유로 보는 사람인가 — 수석·부수석·테스터·소유자·개발 열람. */
 export function isFreeRoamer(name) {
@@ -44,13 +51,17 @@ export function readWorkChoice(name) {
     if (!v || v.name !== n || v.ymd !== ymdKST()) return null;
     if (v.mode !== 'work' && v.mode !== 'view' && v.mode !== 'admin') return null;   // 4.30-03: 'admin' = 관리자(제약 없이 수정·자료 등록, 작업량·호기에는 안 잡힌다)
     if (v.mode === 'work' && !v.voyageKey) return null;
+    if (v.mode === 'view' && v.offShift && !v.voyageKey) return null;   // 4.79: 근무시간 밖 조회만은 고른 선박을 들고 있다
     return v;
   } catch (e) { return null; }
 }
 
 export function saveWorkChoice(choice) {
   if (!choice || !choice.name) return null;
-  const v = { name: String(choice.name), ymd: ymdKST(), mode: (choice.mode === 'view' || choice.mode === 'admin') ? choice.mode : 'work', voyageKey: (choice.mode === 'view' || choice.mode === 'admin') ? '' : String(choice.voyageKey || ''), equip: (choice.mode === 'view' || choice.mode === 'admin') ? '' : String(choice.equip || ''), at: Date.now() };
+  //  4.79: 근무시간 밖 조회만(offShift)은 고른 선박·호기·조를 들고 있다 — 그 배만 보고(일반 검수원), «작업자로 전환» 때 그대로 쓴다. 그 밖의 조회만·관리자는 종전처럼 비운다.
+  const off = choice.mode === 'view' && !!choice.offShift && !!choice.voyageKey;
+  const bare = (choice.mode === 'view' || choice.mode === 'admin') && !off;
+  const v = { name: String(choice.name), ymd: ymdKST(), mode: (choice.mode === 'view' || choice.mode === 'admin') ? choice.mode : 'work', voyageKey: bare ? '' : String(choice.voyageKey || ''), equip: bare ? '' : String(choice.equip || ''), shift: (choice.shift === 'day' || choice.shift === 'night') ? choice.shift : '', offShift: off, at: Date.now() };
   try { localStorage.setItem(WORK_CHOICE_KEY, JSON.stringify(v)); } catch (e) { /* 저장 못 해도 이번 세션은 App state 로 돈다 */ }
   return v;
 }
@@ -109,20 +120,23 @@ export function voyagesScopeOf(name, choice, wide, onLoginRoute = false) {
   //  ★ 4.08-01 — 로그인해 있는 일반 검수원이 헤더 «검수원 변경»(#/login)을 열면 그 화면은 다른 사람이 «아무 선박이나» 고르는 로그인 화면이다.
   //    4.08 은 이때도 고른 선박 하나(body:키)만 받아 다른 사람의 선택 목록에 그 배 한 척만 떴다. 로그인 화면은 이름이 없을 때와 같은 범위로 되돌린다.
   if (onLoginRoute) return wide ? 'all' : 'light';
-  return (choice && choice.mode === 'work' && choice.voyageKey) ? 'body:' + String(choice.voyageKey) : 'light';
+  const own = ownVoyageOf(choice);
+  return own ? 'body:' + own : 'light';
 }
 
 /** 이 사람이 볼 수 있는 항차만 — 자유 열람이면 전부, 작업자면 고른 선박 하나. 선택이 없으면(로그인 직후) 빈 것. */
 export function visibleVoyagesOf(choice, name, voyages) {
   const all = voyages || {};
   if (isFreeRoamer(name)) return all;
-  if (!choice || choice.mode !== 'work' || !choice.voyageKey) return {};
-  return all[choice.voyageKey] ? { [choice.voyageKey]: all[choice.voyageKey] } : {};
+  const own = ownVoyageOf(choice);
+  if (!own) return {};
+  return all[own] ? { [own]: all[own] } : {};
 }
 
 export function canSeeVoyage(choice, name, voyageKey) {
   if (isFreeRoamer(name)) return true;
-  return !!(choice && choice.mode === 'work' && choice.voyageKey && choice.voyageKey === voyageKey);
+  const own = ownVoyageOf(choice);
+  return !!own && own === voyageKey;
 }
 
 /** 호기 없이 완료를 누를 때 보이는 문구(3.51: 조회만도 호기를 쓰므로 이 문구는 «호기 없음» 한 뜻뿐이다). */
@@ -141,3 +155,41 @@ export function canWorkNow() { return !isViewOnlyNow(); }
 export function workGateText(what) {
   return `🔍 조회만으로 들어와 있습니다 — 보기만 됩니다.\n\n«${what || '작업'}» 은 기록되지 않습니다. 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.`;
 }
+
+//  ★ 4.79 (검수사 2026-11-08) — 선박을 고르면 주간조·야간조를 묻고, 근무시간 밖에 접속하면 조회만이다.
+//    «만약 야간조인데 지금 접속해 있다면 그인원은 보기만 하러 온것입니다» · «반대로 주간조인데 야간에 접속해있어도 조회만 하는 인원입니다» · «연태obwh 일조 rzor» 는 주야 구분이 없다.
+//    «클로드»·«클로드2»(동시 테스트)와 검수사·수석·테스터는 시간 제한 없이 고른 대로 일한다 — 조는 묻지 않고 지금 서버 시각의 조로 자동 기록한다(호기 보유 키가 조를 쓰기 때문).
+/** 조를 묻지 않고 시간 제한도 두지 않는 사람 — 자유 열람(수석·부수석·테스터·소유자·개발 열람)과 관리자(소유자·클로드·클로드2). */
+export function isShiftExempt(name) { return isFreeRoamer(name) || isAdminUser(name); }
+/** 이 사람이 이 항차에서 «주간조/야간조» 를 골라야 하는가 — 예외 인원·주야 구분 없는 배(OBWH·RZOR)는 아니다. */
+export function shiftRequiredFor(name, voyageKey) { return !!voyageKey && !isShiftExempt(name) && !isNoShiftShip(null, voyageKey); }
+/** 고른 조(picked)와 서버 시각으로 최종 모드를 가른다. 예외 인원·주야 없는 배는 시간 제한이 없다. { shift, offShift } — offShift 면 조회만으로 들어간다. */
+export function resolveShift(name, voyageKey, picked, now = serverNow()) {
+  if (!voyageKey) return { shift: '', offShift: false };
+  if (isNoShiftShip(null, voyageKey)) return { shift: '', offShift: false };
+  if (isShiftExempt(name)) return { shift: shiftAt(now), offShift: false };
+  const sh = picked === 'day' || picked === 'night' ? picked : '';
+  return { shift: sh, offShift: !!sh && sh !== shiftAt(now) };
+}
+
+/** 4.79-01: 오늘 기억해 둔 선택을 «지금 서버 시각의 조» 로 다시 판정한다 — 같은 날 재로그인·새로고침이 시간 판정을 건너뛰지 않게(감사 지적).
+ *  낮에 고른 주간조가 밤에 다시 들어오면 조회만, 낮에 조회만이던 야간조가 저녁에 다시 들어오면 작업자. 조를 안 고른 것·조 없는 배·면제 인원은 그대로. */
+export function reshiftChoice(ch, now = serverNow()) {
+  if (!ch || !ch.voyageKey || (ch.shift !== 'day' && ch.shift !== 'night')) return ch;
+  if (ch.mode !== 'work' && !(ch.mode === 'view' && ch.offShift)) return ch;
+  const r = resolveShift(ch.name, ch.voyageKey, ch.shift, now);
+  if (ch.mode === 'work' && r.offShift) return { ...ch, mode: 'view', offShift: true };
+  if (ch.mode === 'view' && ch.offShift && !r.offShift) return { ...ch, mode: 'work', offShift: false };
+  return ch;
+}
+/** 지금 이 기기의 본인이 쥔 조('day'|'night') — 조가 없는 선택·주야 없는 배는 ''. 호기 보유 판정(equipHolderOf)이 «내 조» 로 쓴다. */
+export function myShiftNow() {
+  const c = (_active !== undefined) ? _active : readWorkChoice(getMeToday());
+  return (c && c.shift) ? String(c.shift) : '';
+}
+/** 4.79 이전에 로그인해 조 값이 없는 작업자인가 — 한 번만 묻는다. */
+export function needsShiftAsk(choice, name) {
+  return !!(choice && choice.mode === 'work' && choice.voyageKey && !choice.shift && shiftRequiredFor(name, choice.voyageKey));
+}
+/** 근무시간 밖이라 조회만으로 들어와 있는가 — 헤더에 «작업자로 전환» 이 선다. */
+export function isOffShiftView(choice) { return !!(choice && choice.mode === 'view' && choice.offShift && choice.voyageKey); }

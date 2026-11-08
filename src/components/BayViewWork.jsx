@@ -7,6 +7,7 @@
 //   ⚠ 인스턴스 하나 — VoyagePage 가 «작업 시작» 탭 자리에 이 덮개를 **대신** 그린다(SearchPanel 이 두 벌 돌지 않게).
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { equipHolderOf } from '../equipHold.js';   // 4.74
+import { myShiftNow } from '../workChoice.js';   // 4.79: 호기 보유 키 = 항차+호기+조 — 내 조
 import SearchPanel from './SearchPanel.jsx';
 import BayPlan from './BayPlan.jsx';
 import { FitBox } from './FitBox.jsx';
@@ -157,7 +158,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     //  ★ 3.49-02 검수사 «따라가기나 장비번호가 작업중인 베이를 누르면 자동으로 호기가 지정 되어야 하는데 호기 지정 메뉴가 나옵니다»
     //    — 호기(장비)가 비어 있으면 GuidedWorkPanel 이 «작업 장비(호기)를 선택하세요»(equipStep)를 먼저 띄웠다. 호기 단추(«N호기 · BAY …»)를 눌렀으면 그 호기가 곧 내 호기다 —
     //    헤더·작업 보고와 한 벌(localStorage + equipChanged)로 지정하고 들어간다. 따라가기도 호기가 비었는데 지금 일하는 호기가 하나뿐이면 그 호기로 지정한다(둘이면 위 단추로 고른다).
-    const heldBy = (n) => equipHolderOf(inspectors, voyageKey, n, inspector);   // 4.74: 다른 검수원이 로그아웃 없이 쥔 호기는 내 호기로 못 가진다
+    const heldBy = (n) => equipHolderOf(inspectors, voyageKey, n, inspector, undefined, myShiftNow());   // 4.74: 다른 검수원이 로그아웃 없이 쥔 호기는 내 호기로 못 가진다
     const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n || heldBy(n)) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };
     const needEquip = !equip && cranes.length >= 2;   // 실적 0 이면 종전 안내(fol.why)대로 — 누를 호기 단추가 없다.
     return (

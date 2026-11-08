@@ -62,6 +62,19 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   const stmj = doc.querySelector('[data-choice-voyage="STMJ_2652E"]');
   if (!stmj) fail('STMJ_2652E 단추가 없다');
   stmj.click(); await wait(120);
+  //  ★ 4.79 — 선박을 고르면 «주간조 / 야간조» 를 묻는다. 조를 고르기 전에는 호기 칩·시작이 없고, 근무시간 밖의 조를 고르면 조회만으로 들어간다.
+  if (!doc.querySelector('[data-choice-shift-box="1"]')) fail('4.79 선박을 골랐는데 주간조/야간조 묻기가 없다');
+  if (doc.querySelector('[data-choice-equips="1"]')) fail('4.79 조를 고르기 전인데 호기 칩이 떠 있다');
+  if (!doc.querySelector('[data-choice-start="1"]').disabled) fail('4.79 조를 고르기 전인데 시작 단추가 눌린다');
+  const kh = new Date(Date.now() + 9 * 3600000).getUTCHours(); const nowSh = (kh >= 6 && kh < 18) ? 'day' : 'night'; const otherSh = nowSh === 'day' ? 'night' : 'day';
+  doc.querySelector(`[data-choice-shift="${otherSh}"]`).click(); await wait(100);
+  if (!doc.querySelector('[data-choice-offshift="1"]') || doc.querySelector('[data-choice-equips="1"]')) fail('4.79 근무시간 밖 조를 골랐는데 조회만 안내가 없거나 호기 칩이 떠 있다');
+  if (!/조회만으로 들어가기/.test(doc.querySelector('[data-choice-start="1"]').textContent)) fail('4.79 근무시간 밖 시작 단추가 «조회만으로 들어가기» 가 아니다');
+  doc.querySelector('[data-choice-start="1"]').click(); await wait(100);
+  let so = lastSel();
+  if (!so || so.name !== '박진우' || so.choice.mode !== 'view' || so.choice.offShift !== true || so.choice.voyageKey !== 'STMJ_2652E' || so.choice.shift !== otherSh) fail('4.79 근무시간 밖 선택 결과가 틀리다: ' + JSON.stringify(so));
+  doc.querySelector(`[data-choice-shift="${nowSh}"]`).click(); await wait(100);
+  if (doc.querySelector('[data-choice-offshift="1"]')) fail('4.79 근무시간 안 조인데 조회만 안내가 남아 있다');
   const chips = [...doc.querySelectorAll('[data-choice-equip]')].map((b) => b.getAttribute('data-choice-equip'));
   if (chips.join(',') !== '1호기,2호기,3호기,4호기') fail('PCTC 호기 칩이 1~4호기가 아니다: ' + chips.join(','));
   start = doc.querySelector('[data-choice-start="1"]');
@@ -72,7 +85,7 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!/1호기/.test(start.textContent)) fail('호기를 골랐는데 시작 단추에 안 붙는다: ' + start.textContent);
   start.click(); await wait(120);
   let s = lastSel();
-  if (!s || s.name !== '박진우' || !s.choice || s.choice.mode !== 'work' || s.choice.voyageKey !== 'STMJ_2652E' || s.choice.equip !== '1호기') fail('일반 검수원 선택 결과가 틀리다: ' + JSON.stringify(s));
+  if (!s || s.name !== '박진우' || !s.choice || s.choice.mode !== 'work' || s.choice.voyageKey !== 'STMJ_2652E' || s.choice.equip !== '1호기' || s.choice.shift !== nowSh) fail('일반 검수원 선택 결과가 틀리다: ' + JSON.stringify(s));
   console.log(`  ① 박진우 — 선박 ${NV}척(첫 줄 ${first}) → STMJ_2652E · 1호기 → ${JSON.stringify(s.choice)} ✔`);
 
   // ── ② 자유 열람 김성일 (choiceFor — 헤더 [변경] 경로와 같다) ──
@@ -97,6 +110,7 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!notice2 || !/모든 선박을 볼 수 있습니다/.test(notice2.textContent)) fail('자유 열람 문구(모든 선박을 볼 수 있습니다)가 아니다: ' + (notice2 && notice2.textContent));
   if (doc.querySelectorAll('[data-choice-voyage]').length !== NV) fail('자유 열람 선박 목록이 15척이 아니다');
   doc.querySelector('[data-choice-voyage="TMPZ_2027E"]').click(); await wait(120);
+  if (doc.querySelector('[data-choice-shift-box="1"]')) fail('4.79 자유 열람(검수사·수석·테스터)에게 조를 묻는다 — 시간 제한 없이 고른 대로여야 한다');
   const chips2 = [...doc.querySelectorAll('[data-choice-equip]')].map((b) => b.getAttribute('data-choice-equip'));
   if (chips2.length !== 5) fail('PNCT 호기 칩이 5개가 아니다: ' + chips2.join(','));
   doc.querySelector('[data-choice-start="1"]').click(); await wait(120);

@@ -7,8 +7,9 @@ const m = src.match(/const crewOfVoyage = \(key\) => \{[\s\S]*?\n  \};/);
 ok(!!m, 'crewOfVoyage 있음');
 const body = m ? m[0] : '';
 ok(/standbyOf\(key\)/.test(body) && /assignEquip/.test(body), '대기 이름은 standbyOf(근무조 끝 기준 한 벌)에서 가져온다(4.74-02)');
-const eh = fs.readFileSync('src/equipHold.js', 'utf8').replace(/export /g, '');
-const { standbyNamesOf } = new Function(eh + '; return { standbyNamesOf };')();
+const eh = require('./loadEquipHold.cjs')('.');
+const { standbyNamesOf, holdKeyShiftOf, holderShiftOf, nowShift } = new Function(eh + '; return { standbyNamesOf, holdKeyShiftOf, holderShiftOf, nowShift };')();
+const SH = { holdKeyShiftOf, holderShiftOf, nowShift };
 const NOW = Date.UTC(2026, 10, 7, 1, 13);   // 2026-11-07 10:13 KST
 ok(/standby: true/.test(body) && /bay: null/.test(body), '대기자는 베이 없이 표시만');
 ok((src.match(/craneBoardOf\(voyages\?\.\[(?:v|sheetRow)\.key\], crewOfVoyage\(/g) || []).length === 4, '상황판 호기 칸 네 곳이 crewOfVoyage 를 쓴다');
@@ -16,7 +17,7 @@ ok(/Date\.now\(\) - i\.lastActive > 90000/.test(src), '작업 중 판정 90초�
 // 동작 — 본문을 실제로 돌린다
 if (m) {
   const isVisibleStaff = () => true, isOwnerName = () => false;
-  const mk = (inspectors0, activeByVoyage) => { const inspectors = {}; for (const [k, v] of Object.entries(inspectors0)) inspectors[k] = { lastActive: NOW - 600000, ...v }; const standbyOf = (key) => standbyNamesOf(inspectors, key, (activeByVoyage[key] || []).map((w) => w.name), isVisibleStaff, NOW); return new Function('inspectors', 'activeByVoyage', 'isVisibleStaff', 'isOwnerName', 'inspector', 'standbyOf', body + '; return crewOfVoyage;')(inspectors, activeByVoyage, isVisibleStaff, isOwnerName, 'x', standbyOf); };
+  const mk = (inspectors0, activeByVoyage) => { const inspectors = {}; for (const [k, v] of Object.entries(inspectors0)) inspectors[k] = { lastActive: NOW - 600000, ...v }; const standbyOf = (key) => standbyNamesOf(inspectors, key, (activeByVoyage[key] || []).map((w) => w.name), isVisibleStaff, NOW); return new Function('inspectors', 'activeByVoyage', 'isVisibleStaff', 'isOwnerName', 'inspector', 'standbyOf', 'holdKeyShiftOf', 'holderShiftOf', 'nowShift', body + '; return crewOfVoyage;')(inspectors, activeByVoyage, isVisibleStaff, isOwnerName, 'x', standbyOf, SH.holdKeyShiftOf, SH.holderShiftOf, SH.nowShift); };   // 4.79: 같은 호기 주간·야간 각 1인 — 대기 이름 정렬이 조를 본다
   const I = { a: { name: '최원형', loggedIn: true, assignVoyage: 'V1', assignEquip: '3호기', loginAt: 5, loggedOutAt: 1 }, b: { name: '나간', loggedIn: true, assignVoyage: 'V1', assignEquip: '2호기', loginAt: 1, loggedOutAt: 5 }, c: { name: '딴배', loggedIn: true, assignVoyage: 'V2', assignEquip: '1호기' }, d: { name: '호기없음', loggedIn: true, assignVoyage: 'V1' } };
   const r = mk(I, {})('V1');
   ok(r.length === 1 && r[0].name === '최원형' && r[0].equip === '3호기', '대기자 최원형 3호기만 올라온다');

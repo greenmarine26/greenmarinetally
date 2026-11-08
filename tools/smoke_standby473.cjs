@@ -1,6 +1,6 @@
 // 4.73 연막검사 — 입력이 없는 대기 작업자를 «○○ (대기)» 로 보인다(작업 중으로는 세지 않는다)
 const fs = require('fs');
-const eh = fs.readFileSync('src/equipHold.js', 'utf8').replace(/export /g, '');
+const eh = require('./loadEquipHold.cjs')('.');
 const { standbyNamesOf, equipHoldUntil } = new Function(eh + '; return { standbyNamesOf, equipHoldUntil };')();
 const chief = fs.readFileSync('src/pages/ChiefDashboard.jsx', 'utf8');
 const home = fs.readFileSync('src/pages/HomePage.jsx', 'utf8');

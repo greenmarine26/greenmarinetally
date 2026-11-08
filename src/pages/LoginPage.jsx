@@ -9,12 +9,15 @@ import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 //  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
 import logoUrl from '../assets/logo-tallyone.png';
-import { equipHolderOf } from '../equipHold.js';   // 4.72: 로그아웃 안 한 사람이 쥔 호기는 못 고르게
+import { equipHolderOf } from '../equipHold.js';
+import ShiftPick from '../components/ShiftPick.jsx';   // 4.79: 주간조/야간조 고르기
+import { shiftRequiredFor, resolveShift } from '../workChoice.js';
+import { shiftLabel, shiftWindowText, nowShift } from '../workShift.js';   // 4.72: 로그아웃 안 한 사람이 쥔 호기는 못 고르게
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff, isStaffOff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
 import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, planIsLive, planEndCompare, planDelayedLive, isWorkingNow, isoFeet, isFullReefer, isEmptyReefer, emptySplitLabel, sideCancelled, voyagePierOf, equipNumbersForPier, APP_VERSION } from '../utils.js';   // 4.16: 머리 판 이름(크게)   // 3.50: 작업 선박 선택 — 부두별 호기
-import { isFreeRoamer, readWorkChoice, isAdminUser } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
+import { isFreeRoamer, readWorkChoice, isAdminUser, reshiftChoice } from '../workChoice.js';   // 3.50: 로그인 뒤 «작업자 / 조회만» 선택   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -81,8 +84,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   const [choiceStage, setChoiceStage] = useState(() => (choiceFor && isFreeRoamer(choiceFor) ? 'role' : 'vessel'));   // 'role'(조회만/작업자) | 'vessel'(선박·호기)
   const [choiceVoyage, setChoiceVoyage] = useState('');
   const [choiceEquip, setChoiceEquip] = useState('');
+  const [choiceShift, setChoiceShift] = useState('');   // 4.79: 'day' | 'night' — 선박을 고르면 묻는다(예외 인원·연태 OBWH·일조 RZOR 는 안 묻는다)
   const [roleDecided, setRoleDecided] = useState(false);   // 3.50-01: 자유 열람이 [작업자]를 눌러 선박 단계로 온 것(직책이 늦게 와도 역할 단계로 되돌리지 않는다)
-  const openChoice = useCallback((name) => { setChoiceName(name); setChoiceStage(isFreeRoamer(name) ? 'role' : 'vessel'); setChoiceVoyage(''); setChoiceEquip(''); setRoleDecided(false); }, []);
+  const openChoice = useCallback((name) => { setChoiceName(name); setChoiceStage(isFreeRoamer(name) ? 'role' : 'vessel'); setChoiceVoyage(''); setChoiceEquip(''); setChoiceShift(''); setRoleDecided(false); }, []);
   useEffect(() => { if (choiceFor) openChoice(choiceFor); }, [choiceFor, openChoice]);
   //  ★ 3.50-01 (라이브 실측 2026-09-15 18:1x — 업데이트 뒤 «클로드»(서버 직책 테스터)가 역할 단계 없이 선박 단계로 떨어졌다) —
   //    테스터·서버에서 준 직책은 staffList 구독(setServerRoles)이 온 뒤에야 isFreeRoamer 가 참이다. 업데이트 재개·첫 진입은 그보다 먼저 그리므로
@@ -109,7 +113,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   const commitSelect = (name) => {
     rememberMe(name);
     const prev = readWorkChoice(name);
-    if (prev) { onSelect(name, prev); return; }
+    if (prev) { onSelect(name, reshiftChoice(prev)); return; }
     if (isAdminUser(name)) { onSelect(name, { mode: 'admin' }); return; }   // 4.30-03: 검수사·클로드는 선택 없이 곧바로 관리자 — 작업자로 갈 때만 헤더에서 고른다
     openChoice(name);
   };
@@ -442,8 +446,17 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const rankLabel = (r, ms) => (r === 0 ? '작업중' : r === 1 ? ((dayDiff(ms) ?? 0) < 0 ? dayLabel(ms) : '오늘') : r === 2 ? '내일' : r === 3 ? '모레' : '예정');
     const equips = choiceVoyage ? equipNumbersForPier(pierOf(choiceVoyage)) : [];
     const chosen = choiceVoyage ? infoOf(choiceVoyage) : null;
-    const heldBy = (n) => equipHolderOf(inspectors, choiceVoyage, n, choiceName);   // 4.72
-    const start = () => { if (!choiceVoyage) return; if (choiceEquip && heldBy(choiceEquip)) return; onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip }); };
+    //  4.79 — 호기 보유 키는 항차+호기+조. 조는 고른 값(예외 인원은 지금 서버 시각의 조, 연태·일조 배는 조 없음). 근무시간 밖이면 조회만이라 호기를 쥐지 않는다.
+    const needShift = shiftRequiredFor(choiceName, choiceVoyage);
+    const rs = resolveShift(choiceName, choiceVoyage, choiceShift);
+    const heldBy = (n) => (rs.offShift ? '' : equipHolderOf(inspectors, choiceVoyage, n, choiceName, undefined, rs.shift));   // 4.72
+    const shiftReady = !needShift || !!choiceShift;
+    const start = () => {
+      if (!choiceVoyage || !shiftReady) return;
+      if (rs.offShift) { onSelect(choiceName, { mode: 'view', offShift: true, voyageKey: choiceVoyage, equip: '', shift: rs.shift }); return; }
+      if (choiceEquip && heldBy(choiceEquip)) return;
+      onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip, shift: rs.shift });
+    };
     const back = () => { if (choiceFor && onCancelChoice) { onCancelChoice(); return; } setChoiceName(''); };
     //  ★ 3.52-02 — **이 판은 스스로 굴러야 한다.** (검수사 2026-09-16 «작업자를 선택하고 선박을 선택하고
     //    진입을 할려고 하는데 화면 스크롤이 안돼 진입 지점을 클릭하지 못합니다» · «폰은 되는듯 한데 컴이 안됨»)
@@ -503,7 +516,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   );
                 })}
               </div>
-              {choiceVoyage && (
+              {choiceVoyage && needShift && <ShiftPick value={choiceShift} onPick={(sh) => { setChoiceShift(sh); setChoiceEquip(''); }} />}
+              {choiceVoyage && needShift && rs.offShift && (
+                <div className="bg-sky-950/60 border-2 border-sky-600 rounded-pill p-3 text-xs text-sky-100 leading-relaxed" data-choice-offshift="1">
+                  <div className="font-black text-sm text-sky-200">🔍 지금은 {shiftLabel(nowShift())} 시간({shiftWindowText(nowShift())})입니다.</div>
+                  {shiftLabel(choiceShift)}이 지금 접속하면 보기만 하러 온 것으로 보고 <b>조회만</b>으로 들어갑니다 — 호기를 쥐지 않고 작업중·대기로 세지 않습니다. 들어간 뒤 헤더의 [작업자로 전환]으로 바꿀 수 있습니다.
+                </div>
+              )}
+              {choiceVoyage && shiftReady && !rs.offShift && (
                 <div className="bg-ink-900 border border-amber-700 rounded-pill p-2" data-choice-equips="1">
                   <div className="text-xxs font-bold text-amber-300 mb-1">호기(장비) — {pierOf(choiceVoyage) || '부두 미상'} · 선택하지 않아도 들어갈 수 있습니다</div>
                   <div className="flex flex-wrap gap-1.5">
@@ -520,9 +540,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   </div>
                 </div>
               )}
-              <button onClick={start} disabled={!choiceVoyage} data-choice-start="1"
+              <button onClick={start} disabled={!choiceVoyage || !shiftReady} data-choice-start="1"
                 className="w-full py-3.5 rounded-pill bg-violet-600 disabled:bg-ink-800 disabled:text-dim-500 text-white font-black text-base">
-                {choiceVoyage ? `${(chosen && chosen.vsl) || choiceVoyage}${choiceEquip ? ` · ${choiceEquip}` : ''} 작업 시작` : '선박을 고르면 시작할 수 있습니다'}
+                {!choiceVoyage ? '선박을 고르면 시작할 수 있습니다' : !shiftReady ? '주간조·야간조를 고르세요' : rs.offShift ? `${(chosen && chosen.vsl) || choiceVoyage} 조회만으로 들어가기` : `${(chosen && chosen.vsl) || choiceVoyage}${choiceEquip ? ` · ${choiceEquip}` : ''} 작업 시작`}
               </button>
             </div>
           )}

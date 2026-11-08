@@ -1,6 +1,6 @@
 // 4.74 연막검사 — 베이뷰 호기 고르기 막기 · 현재 호기 판정(로그인 지정 vs 작업 중 바꾼 호기) · 배 목록 줄 대기 표시
 const fs = require('fs');
-const eh = fs.readFileSync('src/equipHold.js', 'utf8').replace(/export /g, '');
+const eh = require('./loadEquipHold.cjs')('.');
 const { equipHolderOf } = new Function(eh + '; return { equipHolderOf };')();
 const bv = fs.readFileSync('src/components/BayViewWork.jsx', 'utf8');
 const vp = fs.readFileSync('src/pages/VoyagePage.jsx', 'utf8');
@@ -13,7 +13,7 @@ const h = (o, eq, me = '김철수') => equipHolderOf({ x: { ...A, ...o } }, 'V1'
 ok(h({}, '3호기') === '최원형', '로그인 지정 3호기를 쥔다');
 ok(h({ workEquip: '4호기', workAt: 200 }, '3호기') === '' && h({ workEquip: '4호기', workAt: 200 }, '4호기') === '최원형', '작업 중 4호기로 옮겼으면 3호기는 풀리고 4호기를 쥔다');
 ok(h({ workEquip: '4호기', workAt: 50 }, '3호기') === '최원형', '옛 workEquip 이 로그인 지정보다 오래됐으면 지정이 이긴다');
-ok(/equipHolderOf\(inspectors, voyageKey, n, inspector\)/.test(bv) && /heldBy\(n\)\) return;/.test(bv.replace(/\s+/g, ' ')) || /heldBy\(n\)\) return/.test(bv), '베이뷰 assignEquip 이 점유 호기를 거른다');
+ok(/equipHolderOf\(inspectors, voyageKey, n, inspector(, undefined, myShiftNow\(\))?\)/.test(bv) && /heldBy\(n\)\) return;/.test(bv.replace(/\s+/g, ' ')) || /heldBy\(n\)\) return/.test(bv), '베이뷰 assignEquip 이 점유 호기를 거른다');
 ok((bv.match(/data-bv-held=/g) || []).length >= 2 && /disabled=\{!!heldBy\(/.test(bv), '베이뷰 호기 단추 둘이 회색·비활성');
 ok(/inspectors=\{inspectors\}/.test(vp), 'VoyagePage 가 베이뷰에 명단을 넘긴다');
 ok(/standbyNames=\{standbyNamesOf\(/.test(home) && /stLead = `\$\{_termWorking/.test(home), '배 목록 줄에 «◌ ○○ 대기»');

@@ -1646,6 +1646,14 @@ fi
     npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_move476.cjs "$SMOKE_MV" "$(pwd)" || { rm -f "$SMOKE_MV"; echo "✗ 4.76(최근 속도·호기 이동·닫는 장수) 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_MV"
+    #  4.79: 주간조/야간조 선택 · 근무시간 밖 조회만 · 연태 OBWH·일조 RZOR 예외 · 관리자 예외 · 옛 로그인 한 번 묻기 · 같은 호기 주간·야간 각 1인(실소스 번들 — firebase 만 메모리 스텁)
+    SMOKE_F9=$(mktemp /dev/shm/hometmp/_smokef9_XXXXXX.cjs)
+    if npx esbuild tools/smoke_fix479_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_F9" --loader:.js=jsx --jsx=automatic --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --log-level=error; then
+      node tools/smoke_fix479.cjs "$SMOKE_F9" "$(pwd)" || { rm -f "$SMOKE_F9"; echo "✗ 4.79(주간조·야간조 선택·근무시간 밖 조회만·호기 보유 키) 연막검사 실패 — 배포 금지"; exit 1; }
+      rm -f "$SMOKE_F9"
+    else
+      echo "✗ 4.79 연막검사 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_F9"; exit 1
+    fi
     #  4.78: 갈림 칩 «트윈부터/싱글부터»(TW·SG) 판정·물리 종속(KKLC 2610N 마지막 데크 실자료) · 보류 기록 보관(hold_event — 실소스 firebase.js 메모리 RTDB) · 소비처가 hold_event 를 비켜 감 · 미르 배 코드는 대문자만
     SMOKE_F8=$(mktemp /dev/shm/hometmp/_smokef8_XXXXXX.cjs)
     SMOKE_F8B=$(mktemp /dev/shm/hometmp/_smokef8b_XXXXXX.cjs)

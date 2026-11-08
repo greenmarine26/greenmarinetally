@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { parseViewCommand, pickVoyageKey } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber } from './utils.js';   // 3.50: 로그인 선택의 호기를 앱 호기로
-import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage, voyagesScopeOf } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
+import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage, voyagesScopeOf, ownVoyageOf, needsShiftAsk, resolveShift, reshiftChoice, isOffShiftView } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
 import {
-  fbSubscribeVoyages, fbSubscribeVoyageBody, fbSubscribeVoyageInfos, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice,   // 3.50: 작업자/조회만 선택을 명단에 적는다
+  fbSubscribeVoyages, fbSubscribeVoyageBody, fbSubscribeVoyageInfos, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice, fbWatchServerOffset,   // 3.50: 작업자/조회만 선택을 명단에 적는다
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeStaffOff, fbSubscribeShipBayDict, fbSubscribeHeartbeat, fbSubscribeYardStatus,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
@@ -38,6 +38,7 @@ import GreetingModal from './components/GreetingModal.jsx';
 import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 import UpdatePrompt from './components/UpdatePrompt.jsx';
+import ShiftPick from './components/ShiftPick.jsx';   // 4.79: 옛 로그인(조 값 없음)에게 한 번 묻는 창
 import { MIR_GOTO_EVENT } from './guideGoto.js';   // 4.40: 미르 [이동] — 다른 화면에서 눌렀으면 그 항차 작업 화면으로
 
 // TallyOne 1.0 (K2): 수석 전용 라우트(#/chief·#/search) 접근 차단 안내 화면
@@ -186,6 +187,7 @@ export default function App() {
     });
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
+    const u3s = fbWatchServerOffset();   // 4.79: 서버 시각 차이 — 주야 근무조 판정이 기기 시계를 믿지 않는다
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
     const u4b = fbSubscribePilotForecast(setPilotForecast);  // V9.33: 도선 예보
     const u4d = fbSubscribeLaneRoutes(setLaneRoutes);       // 1.45: 항로 사전(utils 모듈 캐시)
@@ -260,7 +262,7 @@ export default function App() {
       //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
       //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
-    return () => { u2(); u3(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); unsubOff(); };
+    return () => { u2(); u3(); u3s(); u4(); u4b(); u5(); u6(); u6y(); u7(); u8(); window.removeEventListener('gm-mir-miss', _onMiss); unsub2(); unsub3(); unsubDev(); unsubOff(); };
   }, []);
 
   //  ★ 4.08 — 이 사람이 서버에서 받을 범위(workChoice.voyagesScopeOf): 자유 열람(수석·부수석·테스터·소유자·개발 열람)은 뿌리 전체, 일반 검수원은 고른 선박 본문 하나, 선택 전에는 항차마다 info 만.
@@ -457,7 +459,7 @@ export default function App() {
     //  3.76: 접근 오프 — 로그인 확정의 단일 입구에서 한 번 더 막는다(화면이 놓쳐도·업데이트 재개여도 여기서 걸린다).
     if (isStaffOff(name) && !isOwnerName(name)) { logDeniedAttempt(name); setDeniedName(name); return; }   // 로그인을 시키지 않는다 — 자물쇠 화면만 뜬다
     //  3.50: choice = { mode:'work', voyageKey, equip } | { mode:'view' } — LoginPage 선택 단계가 준다. 없으면(업데이트 재개 등) 오늘 기억한 것.
-    const ch = choice ? saveWorkChoice({ ...choice, name }) : readWorkChoice(name);
+    const ch = choice ? saveWorkChoice({ ...choice, name }) : (() => { const r = readWorkChoice(name); const q = reshiftChoice(r); return (q && q !== r) ? saveWorkChoice(q) : r; })();   // 4.79-01: 기억한 선택도 지금 조로 다시 판정
     if (!ch) { setInspector(name); setWorkChoice(null); return; }   // 아직 안 골랐다 — 선택 화면이 선다(로그인 상태이지만 진입 전)
     const rechoice = !!choice && rechoiceRef.current === name;   // 헤더 [변경]/«선박 변경» 으로 같은 사람이 다시 고른 것 — 로그인이 아니다
     rechoiceRef.current = '';
@@ -472,7 +474,7 @@ export default function App() {
     if (rechoice) {
       //  로그인 기록·로그인 시각·인사·#/chief 이동을 다시 하지 않는다. 일반 검수원이 다른 선박을 골랐으면 그 선박으로, 그 밖은 보던 자리 그대로.
       const cur = parseHash(window.location.hash);   // 선택 화면이 떠 있는 동안 주소는 그대로다
-      if (!isFreeRoamer(name) && ch.mode === 'work' && ch.voyageKey && !(cur.name === 'voyage' && cur.voyageKey === ch.voyageKey)) {
+      if (!isFreeRoamer(name) && ownVoyageOf(ch) && !(cur.name === 'voyage' && cur.voyageKey === ch.voyageKey)) {
         const target = `#/voyage/${encodeURIComponent(ch.voyageKey)}`;
         window.history.replaceState(null, '', target);
         setRoute(parseHash(target));
@@ -503,9 +505,9 @@ export default function App() {
       else if (r.name === 'chief' && !roleGate) target = '';   // 1.69-01: #/search는 검수원도 연다(홈 검색 진입 복원)
     }
     //  3.50: 일반 검수원(자유 열람 아님)은 고른 선박으로 곧장 — 홈·다른 항차 딥링크는 그 선박으로 바꾼다.
-    if (!isFreeRoamer(name) && ch.mode === 'work' && ch.voyageKey) {
+    if (!isFreeRoamer(name) && ownVoyageOf(ch)) {
       const r = target ? parseHash(target) : null;
-      if (!(r && r.name === 'voyage' && r.voyageKey === ch.voyageKey)) target = `#/voyage/${encodeURIComponent(ch.voyageKey)}`;
+      if (!(r && r.name === 'voyage' && r.voyageKey === ch.voyageKey)) target = `#/voyage/${encodeURIComponent(ownVoyageOf(ch))}`;
     }
     if (!target) target = roleGate ? '#/chief' : '#/';
     window.history.replaceState(null, '', target);
@@ -600,6 +602,29 @@ export default function App() {
   //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).
   //  3.50: 로그인은 됐는데 «작업자/조회만» 을 아직 안 골랐으면(workChoice null) 선택 화면이 선다 — 진입 전이다. 헤더 [변경] 도 이 길로 온다.
   const needChoice = !!inspector && !workChoice;
+  //  ★ 4.79 — 근무시간 밖(조회만)으로 들어온 일반 검수원이 «작업자로 전환» 을 확인하면 같은 선박·같은 조로 작업자가 된다(시간 제한 없이 그 사람이 선택한 대로).
+  //    호기는 비워 둔다(근무시간 밖이라 쥔 적이 없다) — 헤더 호기 단추로 고른다. 전환은 활동 문지기 캐시를 렌더보다 먼저 세우고 명단에 workMode 'work' 로 적는다.
+  const handleSwitchToWorker = () => {
+    const cur = workChoice;
+    if (!inspector || !isOffShiftView(cur)) return;
+    const ch = saveWorkChoice({ name: inspector, mode: 'work', voyageKey: cur.voyageKey, equip: '', shift: cur.shift });
+    if (!ch) return;
+    setActiveWorkChoice(ch); setWorkChoice(ch);
+    fbSetInspectorChoice(inspector, { ...ch, offShift: true }).catch((e) => console.warn('[4.79] 작업자 전환 기록 실패', e));   // offShift true = 근무시간 밖에 전환했다는 표지(수석이 읽는다)
+  };
+  //  ★ 4.79 — 4.79 이전에 로그인해 조 값이 없는 작업자는 한 번만 묻는다(그 조로 호기 보유 키가 선다). 근무시간 밖이면 조회만으로 바뀐다.
+  const askShift = needsShiftAsk(workChoice, inspector);
+  const handleAnswerShift = (picked) => {
+    const cur = workChoice;
+    if (!inspector || !cur) return;
+    const rs = resolveShift(inspector, cur.voyageKey, picked);
+    const ch = saveWorkChoice(rs.offShift
+      ? { name: inspector, mode: 'view', offShift: true, voyageKey: cur.voyageKey, equip: '', shift: rs.shift }
+      : { name: inspector, mode: 'work', voyageKey: cur.voyageKey, equip: cur.equip, shift: rs.shift });
+    if (!ch) return;
+    setActiveWorkChoice(ch); setWorkChoice(ch);
+    fbSetInspectorChoice(inspector, ch).catch((e) => console.warn('[4.79] 조 선택 기록 실패', e));
+  };
   //  ★ 3.76: 접근 오프 — 자물쇠 그림 하나만 전체를 덮는다(메뉴 없음). 온이 되면 이 줄이 통과돼 화면이 그대로 돌아온다.
   const lockedName = lockedNameOf(staffOffMap, inspector, deniedName);
   if (lockedName && !isOwnerName(lockedName)) return <AccessLockScreen />;
@@ -650,6 +675,15 @@ export default function App() {
         </div>
       )}
       <UpdatePrompt inspector={inspector}/>
+      {askShift && (
+        <div className="fixed inset-0 z-[110] bg-black/85 flex items-center justify-center p-4" data-shift-ask="1">
+          <div className="bg-ink-900 border border-line rounded-card w-full max-w-md p-3 space-y-2">
+            <div className="font-black text-base text-dim-100">근무조를 한 번만 알려 주세요.</div>
+            <div className="text-xs text-dim-300 leading-relaxed">호기는 주간조 한 명·야간조 한 명이 각각 한 크레인을 맡습니다. 어느 조입니까? 근무시간 밖에 접속했다면 조회만으로 바뀝니다.</div>
+            <ShiftPick value="" onPick={handleAnswerShift} />
+          </div>
+        </div>
+      )}
       <Header
         version={APP_VERSION}
         inspector={inspector}
@@ -657,6 +691,7 @@ export default function App() {
         route={route}
         voyages={voyagesAll}   /* 4.08: 헤더는 info 만 읽는다 */
         workChoice={workChoice}
+        onSwitchWorker={isOffShiftView(workChoice) ? handleSwitchToWorker : null}   /* 4.79: 근무시간 밖 조회만 → 작업자로 전환(확인 한 번은 헤더가 묻는다) */
         onChangeWork={() => { prevChoiceRef.current = workChoice; rechoiceRef.current = inspector; setWorkChoice(null); }}   /* 3.50: 선박·호기 다시 고르기(조회만 ↔ 작업자 전환도 여기서) */
         onChangeInspector={() => { setAutoLogoutNotice(''); navigate('login'); }}
         onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}

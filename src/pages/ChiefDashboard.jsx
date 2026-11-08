@@ -22,6 +22,7 @@ import PierRegisterModal from '../components/PierRegisterModal.jsx';   // 3.54: 
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel, detectEdiVer } from '../loadingEdiExport.js';   // 1.88: 받은 판대로 생성
 import { standbyNamesOf } from '../equipHold.js';   // 4.73
+import { holdKeyShiftOf, holderShiftOf, nowShift } from '../workShift.js';   // 4.79: 같은 호기 주간·야간 각 1인
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData, emptySealSpecTally } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
@@ -547,9 +548,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const crewOfVoyage = (key) => {
     const act = activeByVoyage[key] || [];
     const have = new Set(act.map((w) => w.name));
+    const nowRank = (i) => (holdKeyShiftOf(key, holderShiftOf(i)) && holderShiftOf(i) === nowShift()) ? 1 : 0;   // 4.79
     const standNames = new Set(standbyOf(key));   // 4.74-02: 대기 이름도 근무조 끝+30분 기준(standbyNamesOf 한 벌) — 근무가 끝난 사람 이름이 교대 뒤에도 남던 것
     const wait = Object.values(inspectors || {}).filter((i) => i?.name && i.assignEquip && standNames.has(i.name) && !have.has(i.name))
-      .sort((x, y) => (x.assignAt || 0) - (y.assignAt || 0))   // 같은 호기를 둘이 지정받았으면 나중에 지정한 사람이 이긴다(뒤에 오는 이름이 앞을 덮는다)
+      //  4.79: 같은 호기를 주간조·야간조가 각각 쥘 수 있다 — 같은 호기를 둘이 지정받았으면 지금 서버 시각의 조인 사람이 이긴다(연태 OBWH·일조 RZOR 는 조를 보지 않는다). 같은 조끼리는 종전대로 나중에 지정한 사람이 이긴다.
+      .sort((x, y) => (nowRank(x) - nowRank(y)) || ((x.assignAt || 0) - (y.assignAt || 0)))   // 같은 호기를 둘이 지정받았으면 나중에 지정한 사람이 이긴다(뒤에 오는 이름이 앞을 덮는다)
       .map((i) => ({ name: i.name, mode: i.lastMode, equip: i.assignEquip, bay: null, tier: null, remain: null, standby: true }));
     //  지금 그 호기에서 일하는 사람(90초 안)이 있으면 대기자 이름은 올리지 않는다 — 일하는 사람이 그 호기의 이름이다.
     const busy = new Set(act.map((w) => String(w.equip || '')).filter(Boolean));

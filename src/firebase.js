@@ -19,6 +19,7 @@ import { isChief } from './staffList.js';                          // 3.53: 같�
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
+import { setServerOffset } from './workShift.js';   // 4.79: 주야 근무조 판정은 서버 시각 기준
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
 const firebaseConfig = {
@@ -2339,8 +2340,17 @@ export async function fbSetInspectorChoice(name, choice) {
     assignVoyage: view ? '' : String(choice.voyageKey || ''),
     assignEquip: view ? '' : String(choice.equip || ''),
     assignAt: Date.now(),
+    //  4.79: 고른 조('day'|'night'; 주야 없는 배·조를 안 고른 옛 로그인은 null) — 호기 보유 키(항차+호기+조)가 읽는다. 근무시간 밖 조회만도 고른 조는 남긴다.
+    workShift: (choice.shift === 'day' || choice.shift === 'night') ? choice.shift : null,
+    offShift: !!choice.offShift,
     ...(view ? { lastVoyage: null, lastMode: null, workEquip: null, workBay: null, workTier: null, workRemain: null, workAuto: null } : {}),
   });
+}
+//  4.79: 서버 시각 − 기기 시각을 받아 둔다(Firebase 가 주는 .info/serverTimeOffset — 읽기 전용). 주야 근무조 판정이 기기 시계를 믿지 않게 한다. 반환 = 해제 함수.
+export function fbWatchServerOffset() {
+  try {
+    return onValue(ref(db, '.info/serverTimeOffset'), (snap) => { setServerOffset(Number(snap.val()) || 0); }, (e) => { console.warn('[4.79] 서버 시각 차이 못 받음 — 기기 시계로 판정합니다:', e && e.message); });
+  } catch (e) { console.warn('[4.79] 서버 시각 구독 실패 — 기기 시계로 판정합니다:', e && e.message); return () => {}; }
 }
 // V7.94-14: 로그아웃 마킹 — 다른 기기 화면에서 즉시 '작업중' 배지 제거
 export async function fbLogoutInspector(name) {
