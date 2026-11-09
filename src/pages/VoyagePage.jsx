@@ -35,6 +35,7 @@ import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStruct
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
 import ContainerList from '../components/ContainerList.jsx';
+import ShiftAddBox from '../components/ShiftAddBox.jsx';   // 4.83: 선적 화면 «＋ 시프팅 추가»
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
 import BayViewWork from '../components/BayViewWork.jsx';
@@ -58,7 +59,7 @@ import ReportEditRow, { DeletedReports } from '../components/ReportEditRow.jsx';
 import { isReeferTarget } from '../reeferList.js';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf, keepConfirmedOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
-import { mfnNote, mfnItemsOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
+import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
@@ -446,6 +447,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
       voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
       voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix, voyage?.keepOnboard, voyage?.shiftManual]);   // 4.82: 수동 시프팅 표기도 다시 · 4.53: 선사 지시 본선 잔류가 바뀌면(넣음·풀음) 선적 EDI 확정 판정도 다시
+
+  //  ★ 4.83: 양하 EDI 에는 있고 양하 리스트에 없는 컨 중 아직 시프팅·MFN·본선 잔류가 아닌 것 — 선적 화면 «＋ 시프팅 추가» 가 후보로 안내한다.
+  const shiftCands = useMemo(() => shiftCandidatesOf(voyageKey, voyage),
+    [shiftingConfirmed, voyage?.discharge?.ediContainers, voyage?.discharge?.records, voyageKey, voyage?.shiftManual]);
 
   //  3.65: 목록 행 만들기는 utils.shiftingListOf 한 벌(연막검사가 같은 함수를 잰다) — 실제 칸(실은 자리·시각)이 붙었다.
   const shiftingList = useMemo(() => shiftingListOf(shiftingMap, fullEdiMap, voyage),
@@ -1870,6 +1875,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
           inspector={inspector}
           dischargeEdi={voyage?.discharge?.ediContainers || null}   /* 2.94: 통과화물 판정용 — ListTab 은 voyage 를 안 받는다(1.98 교훈) */
+          loadingEdi={voyage?.loading?.ediContainers || null} shiftCands={shiftCands}   /* 4.83: 선적 화면 «＋ 시프팅 추가» 재료 */
           voyageInfo={voyage?.info || null}   /* 3.9: X-RAY 봉인자 = 조 등록 근무자 */
           bookingFill={bookingFillOfSec(sec, mode)}   /* 3.26: 부킹 자리 ↔ 실번호 채움 상태 — 검증박스가 «채움»으로 말한다 */
           onOpenContainer={(c) => setDetailC(c)}
@@ -2473,7 +2479,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null, mfnCns = null }) {   // 4.59-04: mfnCns — MFN 컨번호 목록 · 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
+export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null, mfnCns = null, loadingEdi = null, shiftCands = [] }) {   // 4.83: loadingEdi·shiftCands — 선적 화면 시프팅 추가 · 4.59-04: mfnCns — MFN 컨번호 목록 · 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2781,6 +2787,9 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
         </div>
       )}
+
+      {/* ★ 4.83: 선적 화면 «＋ 시프팅 추가» — 양하하고 바로 같은 배에 실은 컨을 쉬프팅(재적부) 목록에 넣는다(수석·검수사). 양하 모드 컨 상세의 표기와 같은 저장. */}
+      <ShiftAddBox voyageKey={voyageKey} inspector={inspector} mode={mode} dischargeEdi={dischargeEdi} loadingEdi={loadingEdi} cands={shiftCands} />
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
       {(shiftingList.length > 0 || (shiftInfo?.restowExtra || []).length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
