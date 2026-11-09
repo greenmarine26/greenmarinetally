@@ -359,6 +359,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   수동 해치 보고(WorkReportModal)가 같은 그룹 키를 찍어야 자동 유도가 그걸 알아본다.
   //   두 곳이 각자 계산하면 반드시 갈라진다.
   const groupCenterOf = (bayStr) => bayGroupCenter(bayStr, bayPairs);
+  //  4.81-01 — 홀드를 내리기 전 먼저 내려야 할 데크가 남은 장(같은 해치 이웃 장 포함). 베이모드(bayPick)와 자동 가이드 홀드 단추가 이 한 함수를 부른다(판정 한 벌 — bayMode.bayModeDeckGateOf).
+  const holdDeckGateOf = (center) => bayModeDeckGateOf(remaining, center, groupCenterOf, (a, b) => sameBayGroup(a, b, bayPairs));
 
   // V7.99-9 (메모10): 해치 처리 영속 상태 — voyage.info.hatchDone["{mode}_{center}"] = 'open'|'close'
   //   모드 전환으로 재마운트돼도 voyage prop은 유지되므로 프롬프트가 다시 안 뜬다.
@@ -1088,7 +1090,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (g.mode && g.mode !== mode) return (++st.tries > 30) ? giveUp() : again();   // 모드가 따라오는 중
     const kr = mode === 'loading' ? '선적' : '양하';
     //  그 베이가 든 장 — 그 베이가 끝났으면 같은 장(묶음 가운데가 같은 것 — «24번 베이부터» 처럼 장으로 부른 말)
-    const host = groups.find((x) => x.bays && x.bays.has(bay)) || groups.find((x) => x.center === groupCenterOf(String(bay)));
+    const hostOwn = groups.find((x) => x.bays && x.bays.has(bay)) || groups.find((x) => x.center === groupCenterOf(String(bay)));
+    //  4.81-01 — 양하: 이 장에 데크가 없어도 같은 해치 이웃 장에 데크가 남았으면 홀드로 가지 않고 그 데크 장으로 간다(단 고르기 화면의 홀드 잠금과 같은 한 함수 holdDeckGateOf — 우회 길을 두지 않는다). 작업 중 칩(단 지정)은 종전대로.
+    const _gtGo = (mode === 'discharge' && hostOwn && !(g.local && g.tier)) ? holdDeckGateOf(hostOwn.center) : null;
+    const _gtHost = _gtGo ? groups.find((x) => x.center === _gtGo.center) : null;
+    //  게이트가 가리킨 데크 장을 장 목록에서 못 찾으면 홀드로 보내지 않는다(잠금 우회 금지) — 데크 안내만 하고 단을 열지 않는다.
+    if (_gtGo && !_gtHost) { mirGotoFinish(g.seq); note(`${bayName}는 같은 해치 데크 ${_gtGo.n}대가 남아 홀드로 갈 수 없어요 — 데크를 먼저 내리세요. 장 칩에서 그 데크 장을 골라 주세요.`, true); return undefined; }
+    const host = _gtHost || hostOwn;
     if (!host) { mirGotoFinish(g.seq); note(`${bay}번 베이는 ${kr} 남은 작업이 없어요.`, true); return undefined; }
     if (st.busy) return again();                         // «다른 갱» 물음 중 — 답을 기다린다
     //  장·단이 방금 바뀌었으면 한 박자 기다린다 — 같은 커밋의 «장 변경 → 단 지움»(위 효과)이 아직 반영 전이라 옛 단(앞 장의 홀드)을 보고 끝냈다(화면 실측 — B9·10·11 홀드에서 옮기면 단 고르기 화면으로 남음).
@@ -1099,7 +1107,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       Promise.resolve(pickGroup(host)).catch((e) => console.warn('[미르 이동] 장 고르기 실패:', e)).finally(() => { st.busy = false; _setGotoTick((n) => n + 1); });
       return again();
     }
-    const bayLeft = remaining.filter((c) => bays.includes(parseInt(c.bay, 10)) && groupCenterOf(c.bay) === host.center);
+    const bayLeft = remaining.filter((c) => bays.includes(parseInt(c.bay, 10)) && groupCenterOf(c.bay) === hostOwn.center);
     const bHold = bayLeft.filter((c) => parseInt(c.tier, 10) < 80).length;
     const want = (g.local && g.tier) ? g.tier   // 4.42: 작업 중 칩 — 지금 단 그대로
       : mode === 'discharge' ? (host.deck > 0 ? 'deck' : 'hold')
@@ -1122,7 +1130,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       note(fb ? `${who}${kr} ${lbl} ${tierKo}${went} — ${bayName} 카드부터.`
         : `${who}${kr} ${lbl} ${tierKo}${went} — ${bayName} 카드를 앞으로 당겼지만 ${fp} 가 먼저예요(${mode === 'loading' ? '아래 칸부터 싣습니다' : '위 칸부터 내립니다'}).`, !fb);
     } else if (!bayLeft.length) note(`${who}${kr} ${lbl} ${tierKo}${went} — ${bayName}는 남은 컨이 없어 이 장 순서대로예요.`, false);
-    else if (mode === 'discharge' && want === 'deck' && !bayLeft.some((c) => parseInt(c.tier, 10) >= 80)) note(`${bayName}는 홀드만 남았어요 — 이 장 데크 ${host.deck}대를 먼저 내려야 해서(커버 아래) 데크로 왔어요.`, true);
+    else if (mode === 'discharge' && want === 'deck' && !bayLeft.some((c) => parseInt(c.tier, 10) >= 80)) note(`${bayName}는 홀드만 남았어요 — ${host.center === hostOwn.center ? '이 장' : '같은 해치'} 데크 ${host.deck}대를 먼저 내려야 해서(커버 아래) 데크로 왔어요.`, true);
     else note(`${bayName} 남은 컨은 보류 중이에요 — 장만 옮겼어요.`, true);
     return undefined;
   }, [mirGoto && mirGoto.seq, localGoto && localGoto.seq, _gotoTick, mode, groups, remaining, selectedGroup, selectedTier, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -1149,7 +1157,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (!hostOwn) { note(`${String(p.cn).slice(-4)} 가 든 장을 찾지 못했습니다 — 장 칩에서 직접 고르세요.`); return finish(); }
     //  4.80-02 — 홀드 컨은 «같은 해치»의 데크가 다 내려간 뒤에만(짝 없는 홀수 베이는 사이 짝수 베이와 다른 장이라 장 단위로만 보면 한 번은 되고 한 번은 막혔다).
     //    막히면 데크가 남은 장(자기 장에 데크가 있으면 자기 장, 아니면 이웃 장)의 데크로 안내한다. 통과는 종전처럼 누른 컨의 장·단.
-    const gate = tg.tier === 'hold' ? bayModeDeckGateOf(remaining, tg.center, groupCenterOf, (a, b) => sameBayGroup(a, b, bayPairs)) : null;
+    const gate = tg.tier === 'hold' ? holdDeckGateOf(tg.center) : null;
     const host = (gate && groups.find((x) => x.center === gate.center)) || hostOwn;
     if (st.busy) return again();
     if (st.lastG !== selectedGroup || st.lastT !== selectedTier) { st.lastG = selectedGroup; st.lastT = selectedTier; return (++st.tries > 30) ? (note('장·단이 자리 잡지 않아 멈췄습니다 — 한 번 더 눌러 주세요.'), finish()) : again(); }
@@ -2019,7 +2027,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const bayLbl = `B${groupLbl(selectedGroup, g)}`;   // 4.26-02: 묶음 이름 한 벌(전체 작업분)
     // #5 (V8.45): 자동 양하는 정상 작업(데크→홀드) 전제. 그 베이 데크가 남았으면 홀드 비활성 —
     //   커버 위 데크를 다 내려야 그 아래 홀드에 접근하기 때문. 커버 부분개방 등 예외 상황은 수동 몫(자동은 대처 못 함).
-    const deckFirstBlock = mode === 'discharge' && !!g && g.deck > 0;
+    //  4.81-01: 장 단위(g.deck)가 아니라 베이모드와 같은 해치 기준 — 자기 장에 데크가 없어도 같은 해치 이웃 장에 데크가 남았으면 홀드를 막는다.
+    const deckGate = mode === 'discharge' && !!g ? holdDeckGateOf(g.center) : null;
+    const deckFirstBlock = !!deckGate;
     return (
       <div className="space-y-2">
         {!compact && <SettingsBar/>}
@@ -2045,7 +2055,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <span className="font-bold text-base">🟠 홀드 {g ? g.hold : 0}개</span>
                 <span className="text-xs mono text-amber-300">20FT:{g ? g.hold20 : 0} / 40FT:{g ? g.hold40 : 0}</span>
               </div>
-              {deckFirstBlock && g.hold > 0 && <div className="text-2xs text-rose-300 font-bold mt-1">데크 {g.deck}개 먼저 양하 — 커버 아래 (자동)</div>}
+              {deckFirstBlock && g.hold > 0 && <div className="text-2xs text-rose-300 font-bold mt-1">{deckGate.own ? '' : `같은 해치 B${groupLbl(deckGate.center, groups.find((x) => x.center === deckGate.center))} `}데크 {deckGate.n}개 먼저 양하 — 커버 아래 (자동)</div>}
             </button>
           </div>
         </div>

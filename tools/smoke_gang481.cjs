@@ -225,6 +225,78 @@ console.log('⑦ 해치 커버 «열까요?» 물음 — 터미널 반영 홀드
   T(/lastHatchOf\(selectedGroup\)/.test(body) && /import \{ termOpenedCover \} from '\.\.\/gangState\.js'/.test(gp), '화면이 마지막 해치 보고(lastHatchOf)를 넘기고 같은 함수를 부른다');
 }
 
+console.log('⑧ 4.81-01 앱 입력 호기 번호와 터미널 호기 번호가 달라도 — 실사용자 몫을 먼저 빼고 남는 터미널 호기를 앱 밖으로 산정');
+{ //  실데이터 사례 — STMJ 2659E 09-30 11:19~11:35: 앱 입력은 «3호기»(bay 14 데크 4대) 인데 터미널은 같은 14번 장에서 «1호기» 가 일했다(3호기 터미널 기록은 이 배에 없다)
+  const key = 'STMJ_2659E', mis = (at) => { const t = kst(at), v = voyAt(key, t); return { t, v, x: ask('14번 베이 정리해줘', tallyCtx(key, v, t)) }; };
+  { const sec = fx(key).discharge; const appRows = Object.entries(sec.completed).filter(([cn, r]) => r.by && r.equip === '3호기');
+    const termNos = new Set(Object.values(sec.completed).filter((r) => r.src === 'term').map((r) => String(r.equip)));
+    T(appRows.length === 4 && !termNos.has('3호기'), '원자료 — 앱 입력 3호기 4대(11:19~11:35) · 터미널 기록에는 3호기가 없다(번호가 어긋난 실사례)', JSON.stringify([appRows.length, [...termNos]]));
+    const both = Object.keys(sec.completed).filter((cn) => sec.completed[cn].by && sec.completed[cn].src === 'term');
+    T(both.length === 0, '원자료 — 한 컨의 완료 기록은 앱 것 아니면 터미널 것 하나뿐(컨 번호로는 앱·터미널 행을 못 맞춘다 → 장·시간대로 맞춘다)', both.length); }
+  const a = mis('2026-09-30 11:36'), r = a.x.tr.tidy || {};
+  T(a.x.tr.via === 'bayTidy' && r.ok && JSON.stringify(r.usedW) === '[1]' && JSON.stringify(r.unusedW) === '[]' && JSON.stringify(r.sameGang) === '[{"app":3,"term":1}]', '11:36 — 앱 3호기·터미널 1호기: 1호기는 앱 사용 호기로 본다(종전엔 «앱 입력 없는 호기» 로 오판)', JSON.stringify([r.usedW, r.unusedW, r.sameGang]));
+  T(a.x.a.includes('14번 장은 1호기가 하고 있고 앱으로 입력 중인 호기입니다.') && a.x.a.includes('앱에는 3호기로 입력돼 있어 터미널의 1호기와 번호는 다르지만, 같은 장에서 같은 시간에 입력해 같은 갱으로 봅니다.') && !/앱 입력이 없는 호기/.test(a.x.a), '11:36 — 답 문구(사실만 · 번호 다름을 밝힌다)', a.x.a);
+  T(endsOk(a.x.a) && !/카토스|동방/.test(a.x.a), '11:36 — 문장 끝 · 업체 이름 없음', a.x.a);
+  const b = mis('2026-09-30 12:10'), rb = b.x.tr.tidy || {};
+  T(JSON.stringify(rb.unusedW) === '[1]' && JSON.stringify(rb.usedW) === '[]' && JSON.stringify(rb.sameGang) === '[]' && /최근 30분 앱 입력이 없는 호기입니다/.test(b.x.a), '12:10 — 마지막 앱 입력(11:35)이 30분을 넘으면 다시 «최근 30분 앱 입력이 없는 호기»', JSON.stringify([rb.unusedW, rb.usedW, rb.sameGang]));
+  { //  대조 — 같은 시각에 앱 행을 걷어내면(앱 사용자가 없던 것으로) 1호기는 앱 밖
+    const t = a.t, v = clone(a.v); for (const [cn, rec] of Object.entries(v.discharge.completed)) if (rec.by) delete v.discharge.completed[cn];
+    const c = ask('14번 베이 정리해줘', tallyCtx(key, v, t)).tr.tidy;
+    T(JSON.stringify(c.unusedW) === '[1]' && JSON.stringify(c.sameGang) === '[]', '대조 — 앱 입력을 걷어내면 1호기는 앱 밖(unused [1])', JSON.stringify([c.unusedW, c.sameGang])); }
+  { //  번호가 맞는 사례(STMJ 21:30 13번)에서 앱 행의 호기를 다른 번호로 바꿔도 같은 갱을 알아본다
+    const t = kst('2026-09-30 21:30'), v0 = voyAt(key, t), v = clone(v0);
+    for (const rec of Object.values(v.discharge.completed)) if (rec.by) rec.equip = '4호기';
+    const o = ask('13번 베이 정리해줘', tallyCtx(key, v0, t)).tr.tidy, m = ask('13번 베이 정리해줘', tallyCtx(key, v, t)).tr.tidy;
+    T(JSON.stringify(o.usedW) === '[1]' && JSON.stringify(o.sameGang) === '[]' && JSON.stringify(m.usedW) === '[4]' && JSON.stringify(m.unusedW) === '[1]' && JSON.stringify(m.sameGang) === '[]', '번호 맞음(1=1)이면 짝짓기 없이 그대로 · 앱 호기를 4호기로 바꾸면 1호기가 앱 입력 구간 내내 같은 장에 터미널 기록이 있어 따로 일한 갱으로 본다(감사 H1 — 합치지 않고 앱 밖 1호기)', JSON.stringify([o.usedW, o.sameGang, m.usedW, m.unusedW, m.sameGang])); }
+  { //  2갱 대조(4.81-01 감사 H1) — 같은 시각에 터미널 1호기 완료를 앱 입력 구간(11:19~11:35) 안인 11:21·11:25·11:30·11:34 로 14번 장에 4건 주입(사본) → 1호기는 따로 일한 갱이라 앱 밖에 남고, 3호기만 앱 사용
+    const v = clone(a.v), sec = v.discharge;
+    const free4 = Object.values(sec.ediContainers).filter((e) => !sec.completed[e.cn] && e.pod === 'KRPTK' && [13, 14, 15].includes(parseInt(e.bay, 10)) && (parseInt(e.tier, 10) || 0) >= 80).slice(0, 4);
+    ['11:21', '11:25', '11:30', '11:34'].forEach((hm2, i) => { sec.completed[free4[i].cn] = { at: kst('2026-09-30 ' + hm2), equip: '1호기', src: 'term' }; });
+    const x = ask('14번 베이 정리해줘', tallyCtx(key, v, a.t)), r2 = x.tr.tidy || {};
+    T(free4.length === 4 && JSON.stringify(r2.unusedW) === '[1]' && JSON.stringify(r2.usedW) === '[3]' && JSON.stringify(r2.sameGang) === '[]', '2갱 — 앱 입력 구간 안에 같은 장 터미널 기록이 있는 1호기는 흡수하지 않고 앱 밖(unused [1]) · 앱 3호기는 앱 사용(used [3])', JSON.stringify([free4.length, r2.unusedW, r2.usedW, r2.sameGang]));
+    T(x.a.includes('1호기(최근 앱 입력 없음)와 3호기(앱 사용)가 함께 하고 있습니다.') && !/같은 갱으로/.test(x.a) && endsOk(x.a), '2갱 — «같은 갱으로» 문구가 나오지 않고 두 호기가 함께 하고 있다고 말한다', x.a);
+    //  구간 밖(11:36 이후 기록)은 흡수를 막지 않는다 — 11:50 시점의 실데이터(1호기 11:47 기록)에서도 앱 구간 11:19~11:35 밖이라 같은 갱
+    const t50 = kst('2026-09-30 11:50'), r50 = ask('14번 베이 정리해줘', tallyCtx(key, voyAt(key, t50), t50)).tr.tidy;
+    T(JSON.stringify(r50.sameGang) === '[{"app":3,"term":1}]' && JSON.stringify(r50.unusedW) === '[]', '구간 밖 기록(11:47)은 흡수를 막지 않는다 — 실데이터 11:50 은 그대로 같은 갱', JSON.stringify([r50.sameGang, r50.unusedW])); }
+  { const A = ask('14번 베이 정리해줘', tallyCtx(key, a.v, a.t)), B = ask('14번 베이 정리해줘', coneCtx(key, a.v, a.t));
+    T(A.a === B.a, '번호 어긋남 사례도 검수앱과 콘앱이 한 글자도 다르지 않다', `검수앱: ${A.a}\n콘앱: ${B.a}`); }
+  { const o = ask('10번 베이 정리해줘', tallyCtx('OBWH_2743E', voyAt('OBWH_2743E', kst('2026-09-18 13:00')), kst('2026-09-18 13:00')));
+    T(!/\d\s*호기|호기가 하고/.test(o.a) && !/같은 갱으로/.test(o.a), '동방 — 호기 단정 없음 그대로(짝짓기 문구도 없다)', o.a); }
+  { const g = rd('src/gangState.js').replace(/\/\/.*$/gm, ''); T(!/fbAdd|fbUpdate|fbSet|fetch\(|localStorage|\b_req\b/.test(g), '새 짝짓기도 읽기 전용 — 쓰기·저장소·_req 없음'); }
+}
+
+console.log('⑨ 4.81-01 배 이름 없는 «N번 베이 정리해줘» — 일하는 배 한 척이면 그 배 · 여럿이면 고르기 · 없으면 없다고(콘앱은 고른 배 기준 그대로)');
+{ const t = kst('2026-09-30 06:00');
+  //  실항차 두 척의 사본 — 작업 중으로 만들려면 터미널 상태 working + 시작 시각을 과거로, 아니면 departed(떠남). 시계는 pickShipCtx 안의 Date.now() 라 시작 시각을 과거로 둔다.
+  const mk = (key, working) => { const v = voyAt(key, t); v.info = { ...v.info, terminalStatus: working ? 'working' : 'departed', workStartAt: '2020-01-01 00:00', workEndAt: '' }; return v; };
+  const voy = (a, b) => ({ PCSZ_2630E: mk('PCSZ_2630E', a), STMJ_2659E: mk('STMJ_2659E', b) });
+  const free = (voyages, q = '24번 베이 정리해줘') => { const tr = {}; M._mirThreadReset(); const a = M.answerOneRaw(q, { app: 'tally', mode: 'discharge', voyages, containers: M.flattenVoyages(voyages), _trace: tr, _now: t }); return { a: String(a == null ? '' : a), tr }; };
+  T(M.isBayTidyAsk('24번 베이 정리해줘') && M.isBayTidyAsk('(14)15 정리해줘') && !M.isBayTidyAsk('12번 베이 정리했어') && !M.isBayTidyAsk('베이 정리 방법') && !M.isBayTidyAsk('12번 베이 몇 대 남았어') && !M.isBayTidyAsk('3호기 정리해줘'), 'isBayTidyAsk — 정리 요청만 참 · 정리했어·방법·몇 대·호기 정리는 거짓');
+  { const one = voy(true, false), sc = M.pickShipCtx('24번 베이 정리해줘', one, null);
+    T(sc && sc.key === 'PCSZ_2630E', '일하는 배 1척 — pickShipCtx 가 그 배를 고른다', JSON.stringify(sc && sc.key));
+    const r = free(one);
+    T(r.tr.via === 'bayTidy' && r.tr.tidy && r.tr.tidy.ok && /^PCSZ /.test(r.a) && !/어느 배/.test(r.a) && endsOk(r.a), '일하는 배 1척 — 배 이름 없이도 그 배의 베이 정리 답', r.a);
+    T(M.pickShipCtx('12번 베이 정리했어', one, null) === null && M.pickShipCtx('베이 정리 방법', one, null) === null, '기존 질문 오탐 없음 — «정리했어»·«정리 방법» 은 일하는 배를 고르지 않는다');
+    T(M.pickShipCtx('안녕', one, null) === null && M.pickShipCtx('오늘 날씨', one, null) === null && M.pickShipCtx('몇 시에 끝나', one, null) && M.pickShipCtx('몇 시에 끝나', one, null).key === 'PCSZ_2630E', '기존 질문 오탐 없음 — 무관한 말은 null · 종전 4.35-01 말(«몇 시에 끝나»)은 종전 그대로 일하는 배'); }
+  { const two = voy(true, true), sc = M.pickShipCtx('24번 베이 정리해줘', two, null), w = M.workingShipCtx(two);
+    T(sc === null && w && w.ambiguous && w.ambiguous.length === 2, '일하는 배 2척 — 고르지 않고 모호(ambiguous 2)', JSON.stringify(w));
+    const r = free(two);
+    T(/지금 작업 중인 배가 2척이에요\. PCSZ · STMJ|지금 작업 중인 배가 2척이에요\. STMJ · PCSZ/.test(r.a) && /어느 배인지 이름을 붙여 주세요\.$/.test(r.a) && M.isShipAskText(r.a) && endsOk(r.a), '일하는 배 2척 — «어느 배인지 이름을 붙여 주세요.» (고르기 단추가 붙는 되묻는 답)', r.a);
+    const ch = M.shipPickChips(r.a, '24번 베이 정리해줘', two); T(ch.length === 2 && ch.every((c) => /^(PCSZ|STMJ) 24번 베이 정리해줘$/.test(c)), '고르기 단추 — «PCSZ 24번 베이 정리해줘» 꼴(누르면 그 배로 정리 답)', JSON.stringify(ch));
+    const pick = free(two, 'PCSZ 24번 베이 정리해줘'); T(pick.tr.via === 'bayTidy' && /^PCSZ /.test(pick.a) && pick.tr.tidy && pick.tr.tidy.ok, '단추를 누르면(배 이름을 붙인 말) 그 배의 정리 답', pick.a); }
+  { const none = voy(false, false), sc = M.pickShipCtx('24번 베이 정리해줘', none, null);
+    T(sc === null, '일하는 배 0척 — 고르지 않는다');
+    const r = free(none);
+    T(r.a === '지금 작업 중인 배가 없어요. 배 이름을 붙여 주세요.' && M.isShipAskText(r.a) && endsOk(r.a) && r.tr.via === 'bayTidy', '일하는 배 0척 — «지금 작업 중인 배가 없어요. 배 이름을 붙여 주세요.»', r.a); }
+  { const r = ask('미르야 12번 베이 정리해줘', { app: 'tally', mode: 'discharge', containers: [], voyages: {}, _now: t });
+    T(/어느 배 말씀인지/.test(r.a) && /배 이름을 붙여/.test(r.a), '항차 목록 자체가 없으면 종전 되묻기 그대로(⑤와 같음)', r.a); }
+  { const one = voy(true, false), v = one.PCSZ_2630E;
+    const c = ask('24번 베이 정리해줘', { ...coneCtx('PCSZ_2630E', v, t), voyages: one }); T(c.tr.via === 'bayTidy' && /^PCSZ /.test(c.a) && !/작업 중인 배/.test(c.a), '콘앱 ctx — 고른 배(열린 항차) 기준 그대로(일하는 배 규칙은 검수앱 전용 · 콘앱은 배가 늘 골라져 있다)', c.a); }
+  { const m = rd('src/mir.js'), f = rd('src/components/MirFab.jsx'), n = rd('src/nlSearch.js');
+    T(/\|\| isBayTidyAsk\(query\)\) \{ const w = workingShipCtx\(voyages\)/.test(m) && /\(WORKING_SHIP_RE\.test\(t\) \|\| isBayTidyAsk\(t\)\)/.test(f) && /export function isBayTidyAsk/.test(n), '배선 — pickShipCtx fallback · MirFab 조건 · nlSearch 내보내기 한 벌(판정을 두 번 만들지 않는다)');
+    T(/^\/\/ [가-힣]|^\/\*/.test(rd('src/gangState.js')), '(참고) gangState 첫 줄 한국어 주석 유지'); }
+}
+
 console.log(`\n${bad ? '✘' : '✔'} 4.81 베이 정리 연막검사 ${n - bad}/${n}`);
 if (fetchN) { console.log(`✘ 네트워크 호출 ${fetchN}번 — 읽기 전용 답이 밖으로 나갔다`); process.exit(1); }
 process.exit(bad ? 1 : 0);

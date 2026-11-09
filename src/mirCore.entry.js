@@ -65,7 +65,7 @@ export { askMir, askMirModel, getMirConfig, isWeakAnswer, mirLeftover, MIR_CATAL
 export { mirBusyNow, mirDeferredPending, mirIsDeferred, _mirDeferReset, MIR_DEFER_TEXT, MIR_BUSY_FREE_PER_HOUR } from './mir.js';   // 4.38: 작업 중 사담 미루기 — 콘앱도 같은 판정(연막검사도 이 번들로 잰다)
 export { flattenVoyages, isChatCandidate, expectedWorkTimeOf, answerDischargeAccuracy } from './mir.js';   // 4.39-01: «작업 분석» 연막검사가 화면과 같은 병합 행·같은 예상 시간 계산으로 잰다
 export { mirThreadResolve, mirThreadCommit, mirThreadAlive, _mirThreadReset } from './mir.js';   // 3.68 / 2.57 [mirThread]: 답 뒤 한 마디·응/아니/끝맺음 — 콘앱도 같은 대화 층
-export { shipPickChips, shipPickCodes, isShipAskText, pickShipCtx } from './mir.js';   // 4.35-02: 배 이름을 못 떠올릴 때 일하는 배·곧 시작할 배 단추 · 4.37-01: pickShipCtx(엔진이 이미 부르는 배 고르기 — 연막검사가 같은 판정을 본다)
+export { shipPickChips, shipPickCodes, isShipAskText, pickShipCtx, workingShipCtx } from './mir.js';   // 4.35-02: 배 이름을 못 떠올릴 때 일하는 배·곧 시작할 배 단추 · 4.37-01: pickShipCtx(엔진이 이미 부르는 배 고르기 — 연막검사가 같은 판정을 본다)
 export { answerYard, setMirYard, readMirYard, YARD_SPEAK, workPauseOf, anxiousReasons, angryReasons, isUpcomingWork, pauseTargetsOf, mirDoneUpWhy } from './mir.js';   // 4.42-02: pauseTargetsOf·mirDoneUpWhy — 화난 배들에 멈춤 알림 · 기쁨 이유에 배 이름(연막검사가 같은 함수를 잰다)   // 3.69-01: 중단 보고 한 벌(연막·콘앱)   // 3.69 / 2.58 [mirYard]: 야드 상황 — 콘앱은 mirAsk 가 yard_status 를 GET 해 ctx.yard 로 넣는다
 
 // 콘앱이 부르는 이름
@@ -80,7 +80,7 @@ export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn, shiftSetForUnit
 export { shipCodeInQuery, knownShipCodes } from './utils.js';   // 4.18-01 / ConeOne 2.69: 질문 속 다른 배(정확·오타·옛 코드)를 콘앱이 검수앱과 같은 판정으로 가린다(cone.html mirShipFirst)
 export { isWorkingNow, isPyeongtaekPort } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52   // 4.39-01: isPyeongtaekPort — 작업 분석 연막이 콘앱 평택분(EDI POD·POL)을 cone.html 처럼 가린다
 export { sealFormatAnomalies, ediSealMapOf } from './utils.js';
-export { sealPredictOf } from './nlSearch.js';   // 4.39-02: 미르가 말하는 예상 실오류(자릿수 부족·컨번호 같은 씰) — 연막검사가 같은 함수를 잰다   // 4.39-02: 예상 실오류 판정(주의 박스·미르 한 벌) — 연막검사가 같은 함수를 잰다
+export { sealPredictOf, isBayTidyAsk } from './nlSearch.js';   // 4.39-02: 미르가 말하는 예상 실오류(자릿수 부족·컨번호 같은 씰) — 연막검사가 같은 함수를 잰다   // 4.39-02: 예상 실오류 판정(주의 박스·미르 한 벌) — 연막검사가 같은 함수를 잰다
 export { mirPhotoHtml, mirHeroHtml, mirHeroSrc, mirPoseNo, mirPhotoKey, ensureMirPhotoCss, MIR_PHOTO_KEYS, MIR_POSES, MIR_PHOTO_CSS } from './components/mirPhotoArt.js';   // 4.07 / 2.63: 실사 미르 한 벌(얼굴 스프라이트·전신 자세·몸짓 CSS — React·이미지 파일을 import 하지 않는 순수 문자열). 3.57~4.06 의 그림 인형(mirFaceArt)은 걷었다 — 콘앱 얼굴도 같은 규칙으로 움직인다
 export { gangStateOf, bayReportOf, bayTidyText, tidyBayAnswer, termHoldOpenAt, termOpenedCover, withRecordPositions } from './gangState.js';   // 4.81: 미르 «N번 베이 정리해줘» 판정 한 벌 — 연막검사가 같은 함수를 잰다(콘앱은 answerOne 이 안에서 부른다)
 export { termBoardOf, termBoardHtml, ensureTermBoardCss } from './termBoard.js';   // 4.03 / 2.61: 터미널 본선 현황 표 — 수석 실시간 보드와 콘앱 실시간 화면이 같은 값·같은 모양(검수사 2026-10-04)

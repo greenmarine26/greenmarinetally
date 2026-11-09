@@ -104,10 +104,10 @@ export function gangStateOf(rows, o = {}) {
     termAll++;
     const no = crewCraneNo(r.equip);
     if (!no) { termNoEquip++; continue; }
-    const e = (perCrane[no] ||= { no, n: 0, deck: 0, hold: 0, lastAt: 0, lastCenters: [] });
+    const e = (perCrane[no] ||= { no, n: 0, deck: 0, hold: 0, lastAt: 0, lastCenters: [], lastBay: 0 });
     e.n++; if (isDeckTier(c)) e.deck++; else e.hold++;
     const ce = gc(c.bay), at = Number(r.at) || 0;
-    if (at > e.lastAt) { e.lastAt = at; e.lastCenters = ce == null ? [] : [ce]; }
+    if (at > e.lastAt) { e.lastAt = at; e.lastCenters = ce == null ? [] : [ce]; e.lastBay = parseInt(c.bay, 10) || 0; }
     else if (at === e.lastAt && ce != null && !e.lastCenters.includes(ce)) e.lastCenters.push(ce);
   }
   const pier = String(info.pier || '').toUpperCase();
@@ -133,42 +133,60 @@ export function bayReportOf(st, bayCands) {
   const bays = [...new Set(inGroup.map((c) => parseInt(c.bay, 10)).filter(Number.isFinite))].sort((a, b) => a - b);
   const g = st.groups[C] || { deck: 0, hold: 0 };
   let termDeck = 0, termHold = 0, appDeck = 0, appHold = 0, lastAt = 0, lastAppAt = 0, termNoEquip = 0, holdTermStarted = false;
-  const termByNo = {}, appByNo = {};
+  const termByNo = {}, appByNo = {}, termAtC = {};   // termAtC = 호기별 이 장 터미널 기록 시각들(4.81-01 — 앱 입력 구간 안에 기록이 있는 호기는 따로 일한 갱이다)
   const recent = { n: 0, deck: 0, hold: 0, lastAt: 0, appToo: false };
   const winMs = FALLBACK_WINDOW_MIN * 60e3;
+  const winMs30 = APP_ACTIVE_MIN * 60e3;
   for (const c of st.rows) {
     const r = compOf(c); if (!r || !c.bay || st.gc(c.bay) !== C) continue;
     const at = Number(r.at) || 0, deck = isDeckTier(c);
     if (isTermApplied(r)) {
       const no = crewCraneNo(r.equip);
-      if (no) { const t = (termByNo[no] ||= { n: 0, lastAt: 0 }); t.n++; t.lastAt = Math.max(t.lastAt, at); } else termNoEquip++;
+      if (no) { const t = (termByNo[no] ||= { n: 0, lastAt: 0 }); t.n++; t.lastAt = Math.max(t.lastAt, at); (termAtC[no] ||= []).push(at); } else termNoEquip++;
       if (deck) termDeck++; else { termHold++; holdTermStarted = true; }
       if (at > lastAt) lastAt = at;
       if (st.now - at <= winMs) { recent.n++; if (deck) recent.deck++; else recent.hold++; if (at > recent.lastAt) recent.lastAt = at; }
     } else if (isApp(r)) {
       if (deck) appDeck++; else appHold++;
       if (at > lastAppAt) lastAppAt = at;
-      const no = crewCraneNo(r.equip); if (no) { appByNo[no] = appByNo[no] || { n: 0, lastAt: 0 }; appByNo[no].n++; appByNo[no].lastAt = Math.max(appByNo[no].lastAt, at); }
+      const no = crewCraneNo(r.equip);
+      if (no) { const ap = (appByNo[no] ||= { n: 0, lastAt: 0, lastBay: 0, firstAt: 0 }); ap.n++; if (at >= ap.lastAt) { ap.lastAt = at; ap.lastBay = parseInt(c.bay, 10) || 0; } if (st.now - at <= winMs30 && (!ap.firstAt || at < ap.firstAt)) ap.firstAt = at; }
       if (st.now - at <= winMs) recent.appToo = true;
     }
   }
   //  지금(APP_ACTIVE_MIN 분 안) 이 장에서 일하는 호기 — 터미널 호기는 «마지막 작업이 이 장», 앱 호기는 «이 장에 앱 입력이 최근에 있음»
   const winApp = APP_ACTIVE_MIN * 60e3;
-  const unusedW = [], usedW = [];
+  const unusedW = [], usedW = [], sameGang = [];
   if (st.byCrane) {
+    //  ① 번호가 맞는 것 먼저 — 이 장에서 최근 일한 터미널 호기 중 앱 사용 호기와 번호가 같으면 앱 사용
+    const left = [];
     for (const e of Object.values(st.perCrane)) {
-      const used = st.appActive.includes(e.no);
       const here = e.lastCenters.includes(C) && st.now - e.lastAt <= winApp;
-      if (here && !used) unusedW.push(e.no);
-      else if (here && used) usedW.push(e.no);
+      if (!here) continue;
+      if (st.appActive.includes(e.no)) usedW.push(e.no); else left.push(e);
     }
-    for (const [no, a] of Object.entries(appByNo)) if (st.now - a.lastAt <= winApp && !usedW.includes(+no) && st.appActive.includes(+no)) usedW.push(+no);
+    //  ② 번호가 안 맞는 앱 입력 — 이 장에서 최근 앱 입력이 있는데 같은 번호의 터미널 호기가 이 장에 없으면(앱에는 3호기·터미널에는 1호기로 적힌 경우),
+    //     실사용자 몫을 먼저 뺀다 — 같은 장·같은 30분 창의 앱 입력이 설명하는 터미널 호기 하나(마지막 작업 베이가 가장 가까운 쪽)를 앱 사용으로 본다. 컨 번호로는 못 맞춘다(한 컨의 완료 기록은 앱 것 아니면 터미널 것 하나뿐).
+    const mis = Object.entries(appByNo).map(([no, a]) => ({ no: +no, ...a }))
+      .filter((a) => st.now - a.lastAt <= winApp && !usedW.includes(a.no) && !left.some((e) => e.no === a.no))
+      .sort((x, y) => y.lastAt - x.lastAt);
+    //  단 앱 입력 구간(30분 창 안 첫 입력~마지막 입력) 동안 이 장에 터미널 기록이 있는 호기는 앱 사용자가 아니라 따로 일한 갱이다(진짜 2갱을 한 갱으로 합치지 않는다) — 흡수하지 않고 앱 밖에 둔다.
+    for (const a of mis) {
+      const lo = a.firstAt || a.lastAt, hi = a.lastAt;
+      const cand = left.filter((e) => !(termAtC[e.no] || []).some((x) => x >= lo && x <= hi));
+      if (!cand.length) { usedW.push(a.no); continue; }   // 짝지을 터미널 호기가 없으면 앱 번호 그대로 앱 사용 호기
+      cand.sort((x, y) => (Math.abs(x.lastBay - a.lastBay) - Math.abs(y.lastBay - a.lastBay)) || (y.lastAt - x.lastAt) || (x.no - y.no));
+      const hit = cand[0];
+      left.splice(left.indexOf(hit), 1);
+      usedW.push(hit.no); sameGang.push({ app: a.no, term: hit.no });
+    }
+    for (const e of left) unusedW.push(e.no);
   }
   unusedW.sort((a, b) => a - b); usedW.sort((a, b) => a - b);
   return {
     ok: true, mode: st.mode, bay, center: C, bays, remDeck: g.deck, remHold: g.hold,
     termDeck, termHold, appDeck, appHold, lastAt, lastAppAt, termByNo, appByNo, termNoEquip,
-    unusedW, usedW, appNone: !st.appEver, byCrane: st.byCrane, pnct: String(st.info.pier || '').toUpperCase() === 'PNCT', hatchSkip: st.hatchSkip,
+    unusedW, usedW, sameGang, appNone: !st.appEver, byCrane: st.byCrane, pnct: String(st.info.pier || '').toUpperCase() === 'PNCT', hatchSkip: st.hatchSkip,
     holdTermStarted, recent, estimated: st.mode === 'loading', termAll: termDeck + termHold,
   };
 }
@@ -200,6 +218,7 @@ export function bayTidyText(rep) {
     else if (!us.length) out.push(`${koJosa(head, '은')} ${who(un)} 하고 있고 최근 ${APP_ACTIVE_MIN}분 앱 입력이 없는 호기입니다.`);
     else if (!un.length) out.push(`${koJosa(head, '은')} ${who(us)} 하고 있고 앱으로 입력 중인 호기입니다.`);
     else out.push(`${koJosa(head, '은')} ${joinKo(hoList(un))}(최근 앱 입력 없음)와 ${joinKo(hoList(us))}(앱 사용)가 함께 하고 있습니다.`);
+    for (const m of rep.sameGang || []) out.push(`앱에는 ${m.app}호기로 입력돼 있어 터미널의 ${m.term}호기와 번호는 다르지만, 같은 장에서 같은 시간에 입력해 같은 갱으로 봅니다.`);
   } else {
     const r = rep.recent;
     if (r.n > 0) out.push(`${head}에서 최근 ${FALLBACK_WINDOW_MIN}분에 앱 밖 작업이 ${r.n}대(${countWords(r.deck, r.hold)}) 있었고 마지막은 ${hm(r.lastAt)} 입니다.`);

@@ -54,6 +54,7 @@ import {
   termProgressOf, termDoneAts,   // 3.74: 터미널 본선현황으로 센다
   briefCountsOf, ptkRowOf,   // 4.39-01: «작업 분석» 이 브리핑과 같은 판정으로 센다
   sealPredictOf,   // 4.39-02: 예상 실오류(주의 박스와 같은 판정) — 실번호 점검·브리핑·작업 분석
+  isBayTidyAsk,   // 4.81-01: 배 이름 없는 «N번 베이 정리해줘» 도 일하는 배 규칙을 탄다
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
@@ -1166,7 +1167,7 @@ export function pickShipCtx(query, voyages, ctxVoyageKey = null) {
     //  이름도 열린 항차도 없는데 «작업중인 배» 라고 불렀으면 지금 일하는 배(3.41-01). 여럿이면 여기서는 고르지 않는다 —
     //  떠 있는 미르가 workingShipCtx 로 «어느 배?» 하고 되묻는다.
     //  4.35-01: 배 이름 없이 «몇 시에 끝나»·«얼마나 남았어»·«브리핑» 을 물었고 지금 일하는 배가 **한 척뿐**이면 그 배로 답한다(여럿이면 종전대로 되묻는다).
-    if (WORKING_SHIP_RE.test(String(query || '')) || WORKING_SHIP_ASK_RE.test(String(query || ''))) { const w = workingShipCtx(voyages); return (w && w.key) ? w : null; }
+    if (WORKING_SHIP_RE.test(String(query || '')) || WORKING_SHIP_ASK_RE.test(String(query || '')) || isBayTidyAsk(query)) { const w = workingShipCtx(voyages); return (w && w.key) ? w : null; }
     return null;
   };
   if (Q.length < 3) return _fallback();
@@ -2286,7 +2287,16 @@ export function answerOneRaw(query, ctx) {
   //    재료는 컨 행(검수앱 allContainers·flattenVoyages / 콘앱 ctx.containers — 모두 _mode·_ptk·_comp·bay 를 싣는다) 하나라 판정은 src/gangState.js 한 벌이다.
   if (p.bayTidy && !/콘/.test(q)) {
     _via('bayTidy');
-    if (!hasShip || !v) return '어느 배 말씀인지 몰라 베이를 정리하지 못했습니다. 배 이름을 붙여 주세요. 예를 들면 "미르야 KKLC 12번 베이 정리해줘" 처럼 말씀해 주세요.';
+    if (!hasShip || !v) {
+      //  4.81-01 — 배 이름이 없고 열린 항차도 없을 때: 항차 목록이 있으면(콘앱 제외) 일하는 배로 답을 갈랐다 — 한 척은 위 pickShipCtx 가 이미 골랐고, 여기 온 것은 여럿(고르기 단추)이거나 없음이다.
+      const _vs = (ctx && ctx.voyages && typeof ctx.voyages === 'object' && ctx.app !== 'cone') ? ctx.voyages : null;
+      if (_vs && Object.keys(_vs).length) {
+        const _w = workingShipCtx(_vs);
+        if (_w && _w.ambiguous && _w.ambiguous.length > 1) return `지금 작업 중인 배가 ${_w.ambiguous.length}척이에요. ${_w.ambiguous.join(' · ')}. 어느 배인지 이름을 붙여 주세요.`;
+        if (!_w) return '지금 작업 중인 배가 없어요. 배 이름을 붙여 주세요.';
+      }
+      return '어느 배 말씀인지 몰라 베이를 정리하지 못했습니다. 배 이름을 붙여 주세요. 예를 들면 "미르야 KKLC 12번 베이 정리해줘" 처럼 말씀해 주세요.';
+    }
     const _vkT = c.voyageKey || null;
     let _rowsT = cs.filter((x) => x && x.cn && (!_vkT || !x.voyageKey || x.voyageKey === _vkT));
     if (!_rowsT.length && _vkT) { try { _rowsT = flattenVoyages({ [_vkT]: v }).filter((x) => x && x.cn); } catch (e) { console.warn('[미르 4.81] 항차 펴기 실패:', e); _rowsT = []; } }

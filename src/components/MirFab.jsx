@@ -27,6 +27,7 @@ import { mirThreadCommit, mirThreadAlive, mirThreadResolve } from '../mir.js';  
 import { parseNaturalQuery } from '../nlSearch.js';
 import { parseViewCommand } from '../planCommand.js';
 import { flattenVoyages, readMirCtx, subscribeMirCtx, pickShipCtx, workingShipCtx, WORKING_SHIP_RE, shipPickChips } from '../mir.js';
+import { isBayTidyAsk } from '../nlSearch.js';   // 4.81-01: «N번 베이 정리해줘» 도 일하는 배 규칙
 import { computeTallyData } from '../tallyReport.js';
 import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
@@ -179,7 +180,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       let tq = t; try { const r0 = mirThreadResolve(t, { voyageKey: (lv && lv.voyageKey) || '', vsl: (lv && lv.info && lv.info.vsl) || '', inspector }); if (r0 && r0.q) tq = r0.q; } catch (e) { tq = t; }   // vsl — 열린 항차와 대화의 배가 다르면 되쓴 말에 배 코드가 붙는다(재감사 C)
       const sc = pickShipCtx(tq, voyages, lv && lv.voyageKey ? lv.voyageKey : null);
       //  3.41-01: «작업중인 배» 라고 불렀는데 지금 일하는 배가 여럿이면 고르지 않고 되묻는다
-      if (!sc && !(lv && lv.voyageKey) && WORKING_SHIP_RE.test(t)) {
+      if (!sc && !(lv && lv.voyageKey) && (WORKING_SHIP_RE.test(t) || isBayTidyAsk(t))) {
         const w = workingShipCtx(voyages);
         if (w && w.ambiguous && w.ambiguous.length > 1) {
           const a = `지금 작업 중인 배가 ${w.ambiguous.length}척이에요 — ${w.ambiguous.join(' · ')}. 어느 배인지 이름을 붙여 주세요 🐱`;

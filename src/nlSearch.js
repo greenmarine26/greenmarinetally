@@ -117,6 +117,11 @@ export function isOtherMeaningEat(text) { return _OTHER_EAT.test(String(text || 
 /** 지난 끼니를 묻거나 말하는 말인가(세 꼴 중 하나) — mir.js 의 끼니 그물이 부른다. */
 export function isPastMealMention(text) { const d = String(text || ''); return _ATE_MEAL.test(d) || _ATE_YOU.test(d) || _ATE_BARE.test(d); }
 
+/** 4.81-01 — «12번 베이 정리해줘» 꼴인가. 배 이름이 없는 말에서도 «일하는 배 한 척이면 그 배» 규칙(mir.pickShipCtx·MirFab)을 타게 하는 문지기. */
+export function isBayTidyAsk(text) {
+  try { return !!parseNaturalQuery(String(text == null ? '' : text)).bayTidy; } catch (e) { console.warn('[4.81-01] 베이 정리 말 판정 실패:', e); return false; }
+}
+
 export function parseNaturalQuery(text) {
   //  2.70-02: 마지막 질문을 남긴다 — 크래시 신고(ErrorBoundary)에 «무엇을 물었을 때» 가 실린다.
   try { if (typeof window !== 'undefined') window.__lastQuery = String(text || ''); } catch (e) { /* 무시 */ }
