@@ -10,7 +10,7 @@ import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
 import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES, isCustomsSrc, sealLegacyOf, isRfListSrc } from './utils.js';   // 4.49-02: isRfListSrc — RF CONTAINER LIST 는 실 출처가 안 됨   // 4.49 재감사: 옛 꼴 판정 한 벌(sealLegacyOf)   // 4.49: isCustomsSrc — 세관 출처 판정 한 벌   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, inferDischargePos, qcWorkLoloFix, stripCatosPos, applyAutoSwap, dropStaleRawEdi, restoreStaleRawEdi, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
+import { dropOtherVoyagePlan, isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, inferDischargePos, qcWorkLoloFix, stripCatosPos, applyAutoSwap, dropStaleRawEdi, restoreStaleRawEdi, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
@@ -2154,6 +2154,7 @@ function _postVoyage(k, v) {
   //    텔리·검색이 같이 따라온다(카고플랜은 `_edi_*` 복원이 있어 계획 그대로다).
   //    자세한 이유는 utils.applyCatosPos 머리말 — 검수사 «실제 입력된 데이터로 고치라».
   try { v = dropStaleRawEdi(v); } catch (e) { console.warn('[다른 항차 EDI] 걸러내기 실패 —', k, e); }   // 4.37-02: 지난 항차 EDI 원문이 이번 항차에 합쳐지지 않게(문지기는 들어오는 자리)
+  try { v = dropOtherVoyagePlan(v); } catch (e) { console.warn('[다른 항차 덱플랜] 걸러내기 실패 —', k, e); }   // 4.84-01: 양하 덱플랜이 선적에 잘못 올라와 있어도 선적 화면에는 그리지 않는다
   try { v = applyCatosPos(v); } catch (e) { console.warn('[터미널 자리] 반영 실패 —', k, e); }
   try { v = inferDischargePos(v); } catch (e) { console.warn('[양하 내린 칸 추정] 반영 실패 —', k, e); }   // 4.55-03: 양하 완료 순서로 먼저 나온 컨의 실제 칸 추정(메모리만) — 다음 줄 맞교환이 밀려난 컨을 보낸다
   try { v = applyAutoSwap(v); } catch (e) { console.warn('[자동 맞교환] 반영 실패 —', k, e); }   // 3.13: 밀려난 계획 컨 → 비운 자리
@@ -2871,7 +2872,7 @@ export async function fbGetArchiveVoyage(voyageKey) {
     if (k.startsWith('_')) continue;
     out[k] = v;
   }
-  return dropStaleRawEdi(_fillRecordCn(out));   // 3.58-05: 보관 항차도 같은 한 벌 · 4.37-02: 다른 항차 EDI 원문은 여기서도 걸러(마감텔리가 읽는다)
+  return dropOtherVoyagePlan(dropStaleRawEdi(_fillRecordCn(out)));   // 4.84-01: 항차가 다른 덱플랜도 여기서 가린다 · 3.58-05: 보관 항차도 같은 한 벌 · 4.37-02: 다른 항차 EDI 원문은 여기서도 걸러(마감텔리가 읽는다)
 }
 
 // ── TallyOne 1.6: 마감 텔리 생성 시각 기록 ──

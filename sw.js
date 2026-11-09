@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.84';
-const NOTE = '4.84 상황판 호기 줄이 갱을 바꾼 뒤에도 터미널 베이를 보고 맞춰집니다 입력한 호기와 다르면 줄에 건수를 표시합니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.84-01';
+const NOTE = '4.84-01 항차가 다른 덱플랜은 그 쪽 화면에 올리지 않습니다 선적 화면에 양하 덱플랜이 보이던 것을 고쳤습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
