@@ -71,7 +71,7 @@ console.warn = () => {};
   ok('ShiftAddBox — 조회만이면 그리지 않는다(canWorkNow) · 저장 뒤에도 남은 후보 안내를 가리지 않는다', /!canWorkNow\(\)\) return null/.test(box) && /\{cands\.length > 0 && \(/.test(box));
   ok('ShiftAddBox — 실패를 화면에 말한다(빈 catch 없음)', /setErr\(`저장하지 못했습니다/.test(box) && !/catch\s*(\([^)]*\))?\s*\{\s*\}/.test(box));
   ok('VoyagePage — 후보 계산(shiftCandidatesOf)·ListTab 에 loadingEdi·shiftCands 전달·ListTab 이 ShiftAddBox 를 쉬프팅 카드 위에 둔다', /shiftCandidatesOf\(voyageKey, voyage\)/.test(vp) && /loadingEdi=\{voyage\?\.loading\?\.ediContainers \|\| null\} shiftCands=\{shiftCands\}/.test(vp) && /<ShiftAddBox voyageKey=\{voyageKey\}[^>]*cands=\{shiftCands\}/.test(vp));
-  ok("APP_VERSION 4.83 · APP_NOTE 120자 이하 · 낫표·빗금 없음", /export const APP_VERSION = 'TallyOne 4\.83/.test(ut) && (() => { const m = /export const APP_NOTE = '([^']*)'/.exec(ut); return m && m[1].length <= 120 && !/[\/'"]/.test(m[1]); })());
+  ok("APP_VERSION 4.83 · APP_NOTE 120자 이하 · 낫표·빗금 없음", /export const APP_VERSION = 'TallyOne 4\.8[34]/.test(ut) && (() => { const m = /export const APP_NOTE = '([^']*)'/.exec(ut); return m && m[1].length <= 120 && !/[\/'"]/.test(m[1]); })());
   ok('매뉴얼(helpData) — 선적 화면 시프팅 추가 안내가 들어 있다', /선적 목록 화면 → «＋ 시프팅 추가/.test(help) && /4\.83 — 선적 화면에서도 됩니다/.test(help));
 
   console.log(`\n연막검사 4.83 — ${n - bad}/${n} 통과`);

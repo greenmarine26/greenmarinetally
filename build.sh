@@ -1656,6 +1656,8 @@ fi
     #  4.81-01: 일반 자동 가이드 홀드 단추도 베이모드와 같은 해치 규칙(bayModeDeckGateOf 한 벌) — OBWH 보드 실측 10·11번 베이(이웃 장 데크 16) 양하 잠금·자기 장 잠금·데크 다 내린 뒤 열림·선적 미적용
     #  4.82: 시프팅 수동 표기(voyages/{항차}/shiftManual) — 실 OBWH 2787E SPSU6017307 보관본 위에 표기를 더해 지도·시프팅 분리·평택 양하 254→253·진행 불변·진단/ediGap 소거·선적 EDI 도착 전후 L0~L3·덮지 않음·콘앱 같은 답·문지기/memo 배선
     #  4.83: 선적 화면 «＋ 시프팅 추가»(ShiftAddBox)·시프팅 후보 안내(shiftCandidatesOf) — 실 OBWH 2787E 보관본 위 후보 1대(SPSU6017307)·표기하면 0대·리스트 없으면 0대·상자 재료·소스 배선
+    #  4.84: 호기 보정(craneRelabelOf) — 실 OBWH 2787E 보관본(2788W 선적) 위 박진우 31건→2호기·김성일 공유 베이 5건·이형출 28건 입력 유지·호기 줄 relab
+    node tools/smoke_crane484.cjs "$(pwd)" || { echo "✗ 4.84(호기 보정) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }

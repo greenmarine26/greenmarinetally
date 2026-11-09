@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.83';
-const NOTE = '4.83 선적 화면에 시프팅 추가 단추를 넣었습니다 양하하자마자 실은 컨을 번호와 자리로 넣으면 시프팅 목록에 올라옵니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.84';
+const NOTE = '4.84 상황판 호기 줄이 갱을 바꾼 뒤에도 터미널 베이를 보고 맞춰집니다 입력한 호기와 다르면 줄에 건수를 표시합니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
