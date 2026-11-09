@@ -19,7 +19,48 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Tallyman" />
-    <script type="module" crossorigin src="./assets/index-CMz_kuFv.js"></script>
+    <script>
+    // 4.82-02 부팅 감시 — 12초가 지나도 화면이 안 그려지면(검수사 2026-11-09 «폰에 평택검수만 뜨고 전부 흰바탕에서 멈춤 껐다 켜면 작동») 스스로 한 번 다시 불러오고,
+    //   또 안 되면 «다시 불러오기» 단추(저장된 파일·워커를 비우고 새로 받음)를 보인다. 뒤늦게라도 화면이 그려지면 이 안내는 걷힌다. 앱 데이터(로그인·기록)는 건드리지 않는다.
+    (function () {
+      var KEY = 'tally_boot_retry';
+      var T0 = Date.now();
+      function rootEmpty() { var r = document.getElementById('root'); return !r || r.childElementCount === 0; }
+      function check() {
+        if (!rootEmpty()) return;
+        var last = 0;
+        try { last = parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0; } catch (e) { last = 0; }
+        if (Date.now() - last > 120000) {
+          var saved = true;
+          try { sessionStorage.setItem(KEY, String(Date.now())); } catch (e) { saved = false; console.warn('[부팅 감시] 기록 못 함 — 자동 재시도 없이 안내 단추로', e); }
+          if (saved) { location.reload(); return; }   // 기록을 못 남기면 재시도 루프가 날 수 있어 단추 안내로 간다
+        }
+        if (document.querySelector('[data-boot-guard]')) return;
+        var box = document.createElement('div');
+        box.setAttribute('data-boot-guard', '1');
+        box.style.cssText = 'position:fixed;left:16px;right:16px;top:30%;padding:18px;border-radius:14px;background:#0f172a;color:#e2e8f0;font:15px/1.5 sans-serif;text-align:center;box-shadow:0 0 0 1px #334155';
+        box.innerHTML = '<div style="font-weight:700;margin-bottom:8px">화면을 불러오지 못했습니다</div><div style="font-size:13px;opacity:.8;margin-bottom:12px">신호가 약하거나 앱 파일이 갱신된 직후일 수 있습니다.</div>';
+        var b = document.createElement('button');
+        b.textContent = '다시 불러오기';
+        b.style.cssText = 'padding:10px 18px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-size:15px;font-weight:700';
+        b.onclick = function () {
+          b.textContent = '불러오는 중…';
+          var jobs = [];
+          if (navigator.onLine === false) { location.reload(); return; }   // 신호가 없으면 저장본을 지우지 않는다
+          try { if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })); } catch (e) { console.warn('[부팅 감시] 워커 해제 실패', e); }
+          try { if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) { console.warn('[부팅 감시] 캐시 비우기 실패', e); }
+          Promise.all(jobs).catch(function (e) { console.warn('[부팅 감시] 정리 실패', e); }).then(function () { location.reload(); });
+        };
+        box.appendChild(b);
+        document.body.appendChild(box);
+        var t = setInterval(function () { if (!rootEmpty()) { clearInterval(t); if (box.parentNode) box.parentNode.removeChild(box); } }, 1000);
+      }
+      setTimeout(check, 12000);
+      //  앱을 닫았다 다시 열 때(백그라운드에서 돌아올 때) 흰 화면이면 4초 뒤 같은 점검(검수사 «사용할때는 문제없음 다시 접속할때 생김»)
+      document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && Date.now() - T0 > 12000) setTimeout(check, 4000); });
+    })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-D3yRKrWU.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DCXLA6PH.css">
   </head>
   <body>

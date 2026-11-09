@@ -1657,6 +1657,7 @@ fi
     #  4.82: 시프팅 수동 표기(voyages/{항차}/shiftManual) — 실 OBWH 2787E SPSU6017307 보관본 위에 표기를 더해 지도·시프팅 분리·평택 양하 254→253·진행 불변·진단/ediGap 소거·선적 EDI 도착 전후 L0~L3·덮지 않음·콘앱 같은 답·문지기/memo 배선
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_boot4822.cjs "$(pwd)" || { echo "✗ 4.82-02(부팅 대책) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_hold481.cjs "$(pwd)" || { echo "✗ 4.81-01(일반 자동 가이드 홀드 해치 규칙) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_fix480_pinch.cjs "$(pwd)" || { echo "✗ 4.80(핀치 안정화) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.79: 주간조/야간조 선택 · 근무시간 밖 조회만 · 연태 OBWH·일조 RZOR 예외 · 관리자 예외 · 옛 로그인 한 번 묻기 · 같은 호기 주간·야간 각 1인(실소스 번들 — firebase 만 메모리 스텁)

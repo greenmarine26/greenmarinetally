@@ -1,8 +1,10 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.82-01';
-const NOTE = '4.82-01 위에 보류한 컨이 얹혀 있으면 그 아래 컨은 자동 가이드와 베이모드에서 권하지 않고 못 내린다고 알립니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.82-02';
+const NOTE = '4.82-02 폰에서 시작 화면 뒤가 흰 바탕으로 멈추면 스스로 다시 불러오고 안 되면 다시 불러오기 단추를 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
+const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
+const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
 
 self.addEventListener('install', (e) => {
   // 3.60-18 (진단 M35): 콘앱 카고플랜 번들 프리캐시(V7.60)는 뗐다 — 3.60-03 부터 콘앱은 제 워커(cone-sw.js, cone.html 스코프)가 받고
@@ -60,8 +62,7 @@ self.addEventListener('fetch', (e) => {
   let sameOrigin = false;
   try { sameOrigin = new URL(e.request.url).origin === self.location.origin; } catch {}
   if (!sameOrigin) return;  // Firebase 등 외부 요청은 관여하지 않음
-  e.respondWith(
-    fetch(e.request)
+  const viaNet = fetch(e.request)
       .then((res) => {
         //  3.60-06 (진단 M34): 배포 직후 열려 있던 탭이 옛 해시 청크를 부르면 서버는 404 다 — 캐시에 있으면 그것을 준다.
         //    판 번호 확인용 요청(?v= · ?_ck=)은 캐시에 쌓지 않는다(3분마다 한 장씩 자라던 것).
@@ -72,12 +73,14 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() =>
-        caches.match(e.request).then((m) =>
-          m || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)
-        )
-      )
-  );
+      .catch(() => cachedOf(e.request));
+  //  4.82-02: 화면 뼈대(첫 문서·스크립트·스타일)는 네트워크가 NET_WAIT_MS 안에 안 답하면 저장해 둔 마지막 성공본으로 연다 —
+  //    신호가 약한 곳에서 응답 없는 요청을 무기한 기다려 «평택검수» 시작 화면 뒤가 흰 바탕으로 멈추던 것(검수사 2026-11-09). 저장본이 없으면 종전처럼 네트워크를 계속 기다린다.
+  const core = e.request.mode === 'navigate' || /\/assets\/[^?]*\.(?:js|css)(?:$|\?)/.test(e.request.url);
+  if (!core) { e.respondWith(viaNet); return; }
+  const waitMs = (typeof self.__NET_WAIT_MS === 'number') ? self.__NET_WAIT_MS : NET_WAIT_MS;
+  const timer = new Promise((resolve) => setTimeout(() => resolve(cachedOf(e.request)), waitMs));
+  e.respondWith(Promise.race([viaNet, timer]).then((r) => r || viaNet));
 });
 
 // ─── TallyOne 1.20: 푸시 알림 ────────────────────────────────────────────────────────
