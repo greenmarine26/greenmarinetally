@@ -1,0 +1,34 @@
+// 4.82-01 연막검사 — 위에 보류 컨이 얹힌 아래 컨은 못 내린다(OBWH 2787E 15번 베이 15-03-04 보류 · 15-03-02 단독 오답 실사례). 실행 — node tools/smoke_underheld4821.cjs [저장소 루트]
+'use strict';
+const path = require('path'), fs = require('fs'), os = require('os');
+const ROOT = path.resolve(process.argv[2] || process.cwd());
+const esbuild = require(path.join(ROOT, 'node_modules', 'esbuild'));
+let n = 0, bad = 0;
+const ok = (name, cond) => { n += 1; if (cond) console.log(`  ✔ ${name}`); else { bad += 1; console.log(`  ✘ ${name}`); } };
+const out = path.join(os.tmpdir(), `bm4821_${process.pid}.cjs`);
+esbuild.buildSync({ entryPoints: [path.join(ROOT, 'src/bayMode.js')], bundle: true, format: 'cjs', platform: 'node', outfile: out, logLevel: 'silent' });
+const { underHeldOf, bayModeTargetOf } = require(out);
+const c = (cn, bay, row, tier) => ({ cn, bay, row, tier });
+// 실사례 — OBWH 2787E 15번 베이 03열: 04단 SPSU2041959(보류) 아래 02단 SPSU2022558, 그 열 옆 05열은 무관
+const rem = [c('SPSU2041959', '15', '03', '04'), c('SPSU2022558', '15', '03', '02'), c('SPSU2080', '15', '05', '02'), c('SPSU9999', '15', '03', '84'), c('SPSU1111', '13', '03', '02')];
+const held = new Set(['SPSU2041959']);
+const m = underHeldOf(rem, held);
+ok('보류 컨 바로 아래(같은 베이·열·홀드)는 막힌다 — 2022558', m.get('SPSU2022558') === 'SPSU2041959');
+ok('보류 컨 자신은 막힘 목록에 없다', !m.has('SPSU2041959'));
+ok('다른 열(05)은 안 막힌다', !m.has('SPSU2080'));
+ok('데크 쪽(84단)은 홀드 보류와 무관하다', !m.has('SPSU9999'));
+ok('다른 베이(13)는 안 막힌다', !m.has('SPSU1111'));
+ok('보류가 없으면 막힘 없음', underHeldOf(rem, new Set()).size === 0);
+ok('보류 컨이 위가 아니라 아래에 있으면 위 컨은 안 막힌다', underHeldOf([c('A', '15', '03', '02'), c('B', '15', '03', '04')], new Set(['A'])).size === 0);
+const gc = (b) => parseInt(b, 10);
+ok('베이모드에서 누르면 state under + by', (() => { const t = bayModeTargetOf(rem, held, 'SPSU2022558', gc); return t.state === 'under' && t.by === 'SPSU2041959'; })());
+ok('보류 컨을 누르면 종전대로 held', bayModeTargetOf(rem, held, 'SPSU2041959', gc).state === 'held');
+ok('막히지 않은 컨은 ok', bayModeTargetOf(rem, held, 'SPSU2080', gc).state === 'ok');
+const gwp = fs.readFileSync(path.join(ROOT, 'src/components/GuidedWorkPanel.jsx'), 'utf8');
+ok('소스 배선 — 큐 필터와 베이모드 안내와 남은 수 말에 모두 쓴다', /underHeldOf\(remaining, heldSet\)/.test(gwp) && /tg\.state === 'under'/.test(gwp) && /보류 아래/.test(gwp));
+ok('양하 전용 — 큐·남은 수 모두 mode === discharge 가드(선적은 아래 칸부터 싣는다)', (gwp.match(/mode === 'discharge' \? underHeldOf\(remaining, heldSet\) : new Map\(\)/g) || []).length === 2);
+const mir = fs.readFileSync(path.join(ROOT, 'src/mir.js'), 'utf8');
+ok('미르 순서 큐도 같은 함수(양하만)로 거른다 — 화면과 한 벌', /mode === 'discharge'[\s\S]{0,260}underHeldOf\(remaining, _hs\)/.test(mir) && /containers: _qPool/.test(mir));
+fs.unlinkSync(out);
+console.log(`\n보류 아래 연막검사: ${n - bad}/${n}`);
+process.exit(bad ? 1 : 0);

@@ -20,6 +20,7 @@
 //   그래서 이 파일 맨 바깥(함수 밖)에서는 nlSearch 에서 가져온 것을 **쓰지 않는다** — 함수 안에서만 쓴다. 연막 smoke_mirfile 이 지킨다.
 // ⚠ 순수 함수만 — firebase SDK 를 직접 부르지 않는다(콘앱 번들 mir-core.js 에도 실린다). 보관소는 REST(fetch)와 window 손으로만.
 
+import { underHeldOf } from './bayMode.js';   // 4.82-01: 위에 보류한 컨이 얹힌 아래 컨 — 화면 자동 가이드와 한 벌
 import { withdrawnCranesOf } from './craneMove.js';
 import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸» (rzorPlan 은 import 가 없다 — 콘앱 번들에 가볍게 실린다)
 import {
@@ -1887,9 +1888,18 @@ export function mirSee(q, ctx) {
   //  4.09: 이 기기의 호기로 읽는다 — 호기 칸 → 전체 칸 → 옛 항차 seqRowFrom (화면 GuidedWorkPanel 과 같은 workOrderOf 한 벌)
   let myEquip = ''; try { myEquip = String(getEquipNumber() || '').trim(); } catch (e) { myEquip = ''; }
   const wo = workOrderOf(info, myEquip);
+  //  4.82-01: 화면 자동 가이드와 같은 한 벌 — 위에 보류한 컨이 얹힌 아래 컨(양하만)은 순서에서 뺀다(bayMode.underHeldOf).
+  let _qPool = pool;
+  if (mode === 'discharge') {
+    try {
+      const _hs = new Set(activeHeldOf(ctx && ctx.voyage, 'discharge').map((x) => String(x.cn || '').toUpperCase()));
+      const _ub = underHeldOf(remaining, _hs);
+      if (_ub.size) _qPool = pool.filter((c) => !_ub.has(String(c.cn || '').toUpperCase()));
+    } catch (e) { console.warn('[미르] 보류 아래 컨 거르기 실패 — 거르지 않고 이어감:', e); }
+  }
   try {
     queue = buildGuidedQueue({
-      containers: pool, mode,
+      containers: _qPool, mode,
       evenRowsSeaSide: side === 'starboard',    // 우현 접안 = 짝수 로우가 해상쪽
       findTwin: guideTwinOf((t, arr, used) => findTwinCandidate(t, arr, used, info.imo || '', info.vsl || '')),   // 4.23-01 3차: 화면 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함)
       streamPref: null,

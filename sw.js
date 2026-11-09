@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.82';
-const NOTE = '4.82 리스트에 없는 시프팅 컨을 컨 상세에서 시프팅 표기로 적으면 시프팅으로 세고 선적에도 올라갑니다. 평택 양하 대수는 그만큼 줄어듭니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.82-01';
+const NOTE = '4.82-01 위에 보류한 컨이 얹혀 있으면 그 아래 컨은 자동 가이드와 베이모드에서 권하지 않고 못 내린다고 알립니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {

@@ -19,7 +19,7 @@ import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회�
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { workPauseOf } from '../mir.js';   // 4.63-04: 내 호기가 작업 중단 중이면 해치커버 물음을 하지 않는다
-import { bayModeTargetOf, bayModeDeckGateOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
+import { bayModeTargetOf, bayModeDeckGateOf, underHeldOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
 import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
 import { isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -601,6 +601,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       const cn = String(c.cn || '').toUpperCase();
       return !heldSet.has(cn) || dueCns.includes(cn);
     });
+    //  ★ 4.82-01: 위에 보류 컨이 얹힌 컨은 큐에서 뺀다 — 보류를 풀거나 끝낼 때까지 못 내린다(OBWH 15번 베이 15-03-04 보류 → 15-03-02 단독 오답).
+    const _ub = mode === 'discharge' ? underHeldOf(remaining, heldSet) : new Map();   // 양하만 — 선적은 아래 칸부터 싣는다
+    if (_ub.size) targets = targets.filter(c => !_ub.has(String(c.cn || '').toUpperCase()));
     const dueHere = dueCns.filter((cn) => targets.some((c) => String(c.cn || '').toUpperCase() === cn));
     return buildGuidedQueue({
       containers: targets, mode,
@@ -768,9 +771,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (selectedGroup == null) return { n: 0, held: 0, other: 0 };
     const rest = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const held = rest.filter(c => heldSet.has(String(c.cn || '').toUpperCase())).length;
-    const other = rest.length - held;
-    return { n: rest.length, held, other };
-  }, [remaining, selectedGroup, heldSet, bayPairs]);
+    const _ub = mode === 'discharge' ? underHeldOf(remaining, heldSet) : new Map();
+    const under = rest.filter(c => _ub.has(String(c.cn || '').toUpperCase())).length;   // 4.82-01
+    const other = rest.length - held - under;
+    return { n: rest.length, held, under, other };
+  }, [remaining, selectedGroup, heldSet, bayPairs, mode]);
 
   // V7.99-8 (메모6): 현재 작업 위치(호기·베이·홀드/데크·잔여 컨번호 리스트)를 inspector 활동에 기록 →
   //   수석이 베이상세에서 "N호기 · 20번 홀드 · 남은 N개"를 보고 그 화면을 연다.
@@ -1150,7 +1155,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const finish = () => { st.done = p.seq; return undefined; };
     const tg = bayModeTargetOf(remaining, heldSet, p.cn, groupCenterOf);
     if (tg.state !== 'ok') {
-      note(tg.state === 'held' ? `${String(p.cn).slice(-4)} 는 보류 중입니다 — 보류 목록에서 해제하면 카드로 올라옵니다.` : `${String(p.cn).slice(-4)} 는 남은 양하 컨이 아닙니다(이미 완료됐거나 평택 양하분이 아님).`);
+      note(tg.state === 'held' ? `${String(p.cn).slice(-4)} 는 보류 중입니다 — 보류 목록에서 해제하면 카드로 올라옵니다.` : tg.state === 'under' ? `${String(p.cn).slice(-4)} 는 위에 보류한 ${String(tg.by).slice(-4)} 가 얹혀 있어 못 내립니다 — 그 컨의 보류를 풀거나 먼저 내리세요.` : `${String(p.cn).slice(-4)} 는 남은 양하 컨이 아닙니다(이미 완료됐거나 평택 양하분이 아님).`);
       return finish();
     }
     const hostOwn = groups.find((x) => x.center === tg.center);
@@ -2978,7 +2983,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           ) : (
             <div data-group-left="1">
               <div className="font-bold text-amber-300">{selectedTier === 'deck' ? '데크' : selectedTier === 'hold' ? '홀드' : '이 단'}에서 지금 할 컨이 없습니다</div>
-              <div className="text-xxs text-dim-300 mt-1">이 베이 그룹에 남은 {groupLeft.n}대{groupLeft.held ? ` · 보류 ${groupLeft.held}대` : ''}{groupLeft.other ? ` · ${selectedTier ? '다른 단' : '큐 밖'} ${groupLeft.other}대` : ''}</div>
+              <div className="text-xxs text-dim-300 mt-1">이 베이 그룹에 남은 {groupLeft.n}대{groupLeft.held ? ` · 보류 ${groupLeft.held}대` : ''}{groupLeft.under ? ` · 보류 아래 ${groupLeft.under}대` : ''}{groupLeft.under ? ' — 위의 보류 컨을 풀거나 먼저 내리면 풀립니다' : ''}{groupLeft.other ? ` · ${selectedTier ? '다른 단' : '큐 밖'} ${groupLeft.other}대` : ''}</div>
             </div>
           )}
           {!hatchAuto && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (   // 3.49: 따라가기면 자동 판정이 적는다 — 버튼까지 숨겨 이중 보고를 막는다(감사 지적)

@@ -18,7 +18,7 @@ export function bayPickRequest(cn, now = Date.now()) {
 
 /**
  * 누른 컨이 지금 카드가 될 수 있나 — remaining = 자동 가이드가 쓰는 «남은 평택 양하분»(완료 제외), heldSet = 보류 중인 컨 번호(대문자).
- * 반환 { state:'ok'|'done'|'held', c, center, tier } — 'ok' 일 때만 장·단으로 간다.
+ * 반환 { state:'ok'|'done'|'held'|'under', c, center, tier } — 'ok' 일 때만 장·단으로 간다. under = 위에 보류 컨이 있어 못 내림(by = 그 보류 컨 번호).
  *   done = 남은 목록에 없다(이미 완료됐거나 평택 양하분이 아님) → 호출부가 종전대로 컨 상세를 연다.
  *   held = 보류 중 → 해제는 보류 목록에서(보류 UI 를 새로 만들지 않는다).
  */
@@ -27,6 +27,8 @@ export function bayModeTargetOf(remaining, heldSet, cn, groupCenterOf) {
   const c = (remaining || []).find((x) => String(x.cn || '').toUpperCase() === u);
   if (!c) return { state: 'done', c: null, center: null, tier: null };
   if (heldSet && heldSet.has(u)) return { state: 'held', c, center: groupCenterOf(c.bay), tier: parseInt(c.tier, 10) >= 80 ? 'deck' : 'hold' };
+  const _by = underHeldOf(remaining, heldSet).get(u);   // 4.82-01 — 같은 칸 위에 보류 컨이 얹혀 있으면 못 내린다
+  if (_by) return { state: 'under', by: _by, c, center: groupCenterOf(c.bay), tier: parseInt(c.tier, 10) >= 80 ? 'deck' : 'hold' };
   return { state: 'ok', c, center: groupCenterOf(c.bay), tier: parseInt(c.tier, 10) >= 80 ? 'deck' : 'hold' };
 }
 
@@ -64,4 +66,31 @@ export function bayModeCellsOf(cns, containers, base = null) {
     if (!m.has(k)) m.set(k, 'pick');
   }
   return m;
+}
+
+/**
+ * 4.82-01 — 보류한 컨이 위에 얹혀 있어 아래 컨을 못 내리는 경우. 같은 베이·같은 열·같은 쪽(데크끼리·홀드끼리)에서 단이 더 높은 보류 컨이 아직 남아 있으면 그 아래 컨은 막힌다.
+ *   검수사 2026-11-09 14:36 화면(OBWH 2787E 15번 베이) — 15-03-04 SPSU2041959 를 «트윈 무게 초과» 로 보류했는데 바로 아래 15-03-02 SPSU2022558 이 «단독» 으로 올라왔다.
+ *   반환 Map(막힌 컨 번호 대문자 → 위의 보류 컨 번호). 보류 컨 자신은 넣지 않는다.
+ */
+export function underHeldOf(remaining, heldSet) {
+  const out = new Map();
+  if (!heldSet || !heldSet.size) return out;
+  const side = (c) => (parseInt(c.tier, 10) >= 80 ? 'D' : 'H');
+  const key = (c) => `${parseInt(c.bay, 10)}-${parseInt(c.row, 10)}-${side(c)}`;
+  const top = new Map();   // 칸 열별 보류 컨 중 가장 높은 단
+  for (const h of remaining || []) {
+    const u = String(h.cn || '').toUpperCase();
+    if (!heldSet.has(u)) continue;
+    const k = key(h), t = parseInt(h.tier, 10);
+    if (!top.has(k) || t > top.get(k).t) top.set(k, { t, cn: u });
+  }
+  if (!top.size) return out;
+  for (const c of remaining || []) {
+    const u = String(c.cn || '').toUpperCase();
+    if (heldSet.has(u)) continue;
+    const g = top.get(key(c));
+    if (g && g.t > parseInt(c.tier, 10)) out.set(u, g.cn);
+  }
+  return out;
 }
