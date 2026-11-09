@@ -37,6 +37,7 @@ export const fbClearFeedback = async () => true;
 export const fbClearKeepOnboard = async () => true;   // 4.48
 export const fbClearPickIso = async () => true;
 export const fbClearPickPod = async () => true;
+export const fbClearShiftManual = async () => true;
 export const fbCommentFoodSpot = async () => true;
 export const fbCommitPlan = async () => true;
 export const fbCompleteContainer = async (vk, mode, cn, by, flag, note, equip) => { window.__calls.push({ fn: 'complete', vk, mode, cn, by, equip }); return true; };
@@ -129,6 +130,7 @@ export const fbSetKeepOnboard = async () => ({});   // 4.48: 선사 지시 본�
 export const fbSetLuggConfirm = async () => true;
 export const fbSetMatrixEditors = async () => true;
 export const fbSetReeferTempBulk = async () => true;
+export const fbSetShiftManual = async () => true;
 export const fbSetShipBayDictNote = async (code, note, by) => { window.__calls.push({ fn: 'note', code, note, by }); return true; };
 export const fbSetShipBayDictSpare = async (code, on, by) => { window.__calls.push({ fn: 'spare', code, on, by }); return true; };
 export const fbSetSimple = async () => true;
@@ -180,6 +182,7 @@ export const fbUpdateAdminGuard = async () => true;
 export const fbUpdateRecordField = async () => true;
 export const fbUpdateRecordSeal = async () => true;
 export const fbUpdateVoyageInfo = async (vk, patch) => { window.__calls.push({ fn: 'updateInfo', vk, patch }); return true; };
+export const fbWatchServerOffset = async () => true;
 export const fbWriteMirLexicon = async () => true;
 function resolveSeqMode(info) {
   if (!info) return null;

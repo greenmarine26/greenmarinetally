@@ -2569,7 +2569,7 @@ export function answerOneRaw(query, ctx) {
       const _mode = /선적|LOLO|로딩/i.test(Q) ? 'loading' : 'discharge';
       const _sec = v[_mode];
       const _raw = (v[_mode] && v[_mode].raw && v[_mode].raw.edi && v[_mode].raw.edi.text) || (v.raw && v.raw.edi && v.raw.edi.text) || '';
-      const _d = diffEdiList(_sec, _raw);
+      const _d = diffEdiList(_sec, _raw, _mode === 'discharge' ? shiftSetOfVoyage(v, c.voyageKey || '', null) : undefined);   // 4.82: 시프팅 확정(수동 표기 포함)으로 평택 양하분에서 빠진 컨은 «EDI 만 있음» 이 아니다
       if (_d) return explainEdiGap(_d, c.vsl);
       if (_sec && _sec.ediContainers && _sec.records) return `${c.vsl} ${_mode === 'loading' ? '선적' : '양하'} — EDI와 리스트가 딱 맞아요. 어긋나는 컨이 없어요 😺`;
     } catch (e) { /* 아래로 */ }

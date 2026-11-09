@@ -58,7 +58,8 @@ export function isSentenceQuery(v) {
 // (앞 판 전문)  // 4.56 **미르 «양하 정확도» — 출발항(포트)별로 EDI 계획 칸과 실제 내려온 순서가 얼마나 같은지 퍼센트로 말한다** — 검수사 2026-10-29 «간단하게 미르에게 양하 정확도를 물어 보면 좀전에 대답한 퍼센트 값을 말하게만 해주세요» · «쉽게 포트별 정확도를 보여주시면 됩니다». 같은 열 완료 순서로 추정한 칸(inferDischargePos)이 계획과 다른 컨을 센다(utils.dischargeAccuracyOf · mir.answerDischargeAccuracy — 검수앱·콘앱 한 벌). PCTC 는 검수사 PDA 입력 순서 기준, 그 밖(동방)은 터미널 시각 순서라 참고값으로 밝힌다. 같은 단 안의 바뀜은 못 가려 실제는 이보다 낮거나 같다. 저장·화면 변경 없음(미르 답만).
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
 // (앞 판) 'TallyOne 4.68'   // 4.68 **크레딧이 있는 동안 제미나이를 쓰지 않는다 — 클로드 하루 합계 3달러를 넘으면 그날은 제미나이** — 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 사용하지 않는다. 하루 3불을 초과하면 사용하고» · 미르(대화·번역·자료 답)는 클로드 세 번, 사진 읽기는 세 번(적재 PDF 제외) 불러도 안 되면 제미나이로 가지 않고 «다시 시도» · 제미나이는 키·크레딧 문제·HEIC·하루 한도 초과·mir_config.geminiFallback=true 일 때만 · 한도는 mir_config.claudeDailyUsd(기본 3, 0 이면 클로드 끔).
-export const APP_VERSION = 'TallyOne 4.81-01'   // 4.81-01 **일반 자동 가이드 홀드 단추도 베이모드와 같은 해치 규칙(같은 해치 이웃 장에 데크가 남았으면 잠금 — 판정 한 함수 bayMode.bayModeDeckGateOf) · 미르 «N번 베이 정리해줘» 가 앱 입력 호기와 터미널 호기 번호가 달라도 같은 장 같은 30분 입력으로 같은 갱으로 봄(실사용자 몫을 먼저 빼고 남는 터미널 호기를 앱 밖으로) · 미르 이동(mirGoto)도 같은 홀드 잠금 · 배 이름 없는 «N번 베이 정리해줘» 도 일하는 배 한 척이면 그 배(여럿이면 고르기 단추 · 없으면 «지금 작업 중인 배가 없어요»)** — 검수사 2026-11-09 «적용» · «적용, 실사용자 데이터의 나머지를 갖고 산정». 콘앱 ConeOne 2.75-01(mir-core 번들만).
+export const APP_VERSION = 'TallyOne 4.82'   // 4.82 **시프팅 수동 표기 — 리스트에 없는 시프팅 컨을 검수사가 컨 상세에서 «＋ 시프팅 표기» 로 적는다(voyages/{항차}/shiftManual/{컨} = 지금 자리 → 옮겨 갈 자리)** — 검수사 2026-11-09 «OBWH 리스트에 없는 컨 10-07-82는 시프팅 대상임» · «10번베이 육상 1단 선적된 컨 2번베이 0104로 이동예정» · «시프팅 표기 바랍니다» · «선적 edi나오면 그곳에도 추가바랍니다». 재현 OBWH 2787E SPSU6017307(양하 EDI 10-07-82 · 2번 베이 01열 04단). 표기하면 확정 시프팅 지도에 한 지점(computeShiftingMapCached → 순수 함수 applyShiftManualToMap)에서 덧입혀져 평택 양하 254 → 253 · 시프팅 내림 1/1 · 선적 쪽 «싣는다» 카드 1(자리 = 표기 자리, 선적 EDI 가 오면 EDI 자리가 이기고 다르면 «표기 / 선적 EDI» 두 자리를 같이 밝힘, 도착했는데 그 컨이 없으면 «선적 EDI 에 아직 없음»). 서류(RESTOW)·EDI 대조·본선 잔류 확정이 이미 든 컨은 덮지 않는다. 진단(source_recon·list_short)·ediGap 은 표기 컨을 평택 EDI 입력에서 뺀다. 쓰기는 수석·검수사만(fbSetShiftManual — 되읽기 검증). 평택 양하 총계·홈 카드·수석 보드·마감텔리가 1대 줄어든다(작업 분모 254 는 그대로). 콘앱 ConeOne 2.76 이 같은 순수 함수로 같은 지도를 만든다(읽기만).
+// (앞 판) 'TallyOne 4.81-01'   // 4.81-01 **일반 자동 가이드 홀드 단추도 베이모드와 같은 해치 규칙(같은 해치 이웃 장에 데크가 남았으면 잠금 — 판정 한 함수 bayMode.bayModeDeckGateOf) · 미르 «N번 베이 정리해줘» 가 앱 입력 호기와 터미널 호기 번호가 달라도 같은 장 같은 30분 입력으로 같은 갱으로 봄(실사용자 몫을 먼저 빼고 남는 터미널 호기를 앱 밖으로) · 미르 이동(mirGoto)도 같은 홀드 잠금 · 배 이름 없는 «N번 베이 정리해줘» 도 일하는 배 한 척이면 그 배(여럿이면 고르기 단추 · 없으면 «지금 작업 중인 배가 없어요»)** — 검수사 2026-11-09 «적용» · «적용, 실사용자 데이터의 나머지를 갖고 산정». 콘앱 ConeOne 2.75-01(mir-core 번들만).
 // (앞 판) 'TallyOne 4.81'   // 4.81 **미르 «N번 베이 정리해줘» — 앱 입력과 터미널 반영 두 자료를 읽어 그 장의 현황(어느 호기가 하는지·앱 사용 여부·남은 데크/홀드·터미널 몫·마지막 시각)을 답한다. 읽기 전용(쓰기·알림 없음), 콘앱 미르도 같은 함수(gangState.js)** — 검수사 2026-11-09 «일반 사용자가 몇번베이 정리해줘 하면 그때 두자료를 읽어서 작업 할수 있게 해주는 것» · «30분전 데이터로도 2갱중에 1갱이 앱사용자가 아니면 앱은 그갱이 어디 작업중인지 알수 있습니다. 그때 실사용자가 그베이를 지정하면 미르가 알아서 정리해주는것입니다» · «어느것이 좋은지는 클로드들이 검토해서 완벽한 방향으로 맞춰주세요» · «커버를 카운트하는 선박과 카운트하지 않는 선박으로 나누는 것입니다. 이유는 모든 선박엔 커버가 있기때문입니다.» (해치 제외 배 = HATCH_SKIP_RE: TMPZ·TNJP·RZOR·OBWH·ATPR — 이 배들에는 커버 말을 쓰지 않는다). 앱 사용 호기 = 그 호기의 마지막 앱 입력이 30분 안(조 등록은 쓰지 않는다). 동방(터미널 행에 호기 없음)은 호기 없이 «앱 밖 작업 N대». 선적은 «계획 자리 기준 추정». 양하 해치커버 «열까요?» 물음은 이 장의 홀드를 터미널이 이미 시작했으면 묻지 않는다(커버를 세는 배만). 콘앱 ConeOne 2.75. 터미널 호기 이름(카토스·동방)은 사용자 문구에 넣지 않는다(앱 말은 «터미널»).
 // (앞 판) 'TallyOne 4.80-02'   // 4.80-02 **베이모드 홀드 게이트 — 데크가 남은 해치에서는 짝수 베이든 사이에 낀(짝 없는) 홀수 베이든 홀드 컨을 눌러도 카드가 되지 않고 데크로 안내한다(종전엔 장 단위라 10번 홀드는 막히고 11번 홀드는 통과했다)** — 검수사 2026-11-09 «버그가 있네요 데크를 내리지 않은상태에서 홀드를 지정하면 지정이 되고 컨넘버를 불러줍니다. 거기에서 20피트를 선택하니 또 데크 화물을 남아서 안된다고 데크 컨 넘버를 불러 줍니다 앞뒤가 맞지 않습니다» · «만약에 데크에 남아 있어서 안된다면 홀드지정이 되어선 안되고 또한 커버문제도 발생이 됩니다». 일반 자동 가이드의 홀드 단추(V8.45 deckFirstBlock)는 검수사 결정 대기로 그대로.
 // (앞 판) 'TallyOne 4.80-01'   // 4.80-01 **베이모드 화면 배치 — 작은 카드를 한 줄로 더 줄이고 위 칸을 카드 높이만큼만 써서 [양하확인]·[트윈 한 번에 양하확인]이 폰 화면 안에 들고, 베이 그림은 두 베이 그룹의 데크·홀드를 한 화면에 가운데로 놓는다(확대·축소해도 가운데 — 1.05배에서 밀린 칸이 남아 한쪽으로 쏠리던 것도 고침)** — 검수사 2026-11-09 «베이모드에서 보면 카드밑에 베이가 한쪽으로 치우침이 있습니다. 카드두장이 폰 절반을 차지하여 양하확인버튼도 보이지 않고 배이도 데크와 홀드가 둘다 보여야 하는데 그렇치 못합니다. 데크 홀드 / 데크 홀드 두베이씩 보여야 합니다 17 / (18)19 처럼요» · «화면을 키우든 축소하든 베이는 중앙에서 항상 보여야 합니다». 베이모드를 켠 동안에만 적용 — 완료 기록 경로·조회만 문지기·보류·일반 베이뷰 작업은 그대로.
@@ -191,7 +192,8 @@ export const APP_VERSION = 'TallyOne 4.81-01'   // 4.81-01 **일반 자동 가�
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.81-01 자동 가이드에서도 같은 해치에 데크가 남았으면 홀드를 막고 미르 이동도 데크로 보냅니다. 베이 정리는 번호가 달라도 같은 장에서 같은 시간에 일한 호기를 한 갱으로 보되 따로 일하면 앱 밖으로 셉니다'
+export const APP_NOTE = '4.82 리스트에 없는 시프팅 컨을 컨 상세에서 시프팅 표기로 적으면 시프팅으로 세고 선적에도 올라갑니다. 평택 양하 대수는 그만큼 줄어듭니다'
+// (앞 판) APP_NOTE = '4.81-01 자동 가이드에서도 같은 해치에 데크가 남았으면 홀드를 막고 미르 이동도 데크로 보냅니다. 베이 정리는 번호가 달라도 같은 장에서 같은 시간에 일한 호기를 한 갱으로 보되 따로 일하면 앱 밖으로 셉니다'
 // (앞 판) APP_NOTE = '4.81-01 자동 가이드에서도 같은 해치에 데크가 남았으면 홀드를 막고 미르 이동도 데크로 보냅니다. 미르 베이 정리는 배 이름이 없어도 일하는 배로 답합니다'
 // (앞 판) APP_NOTE = '4.81-01 자동 가이드에서도 같은 해치에 데크가 남았으면 홀드를 막고 데크로 안내합니다. 미르 베이 정리는 앱과 터미널의 호기 번호가 달라도 같은 갱으로 봅니다'
 // (앞 판) APP_NOTE = '4.81 미르에게 몇 번 베이 정리해줘 하면 그 장의 터미널 반영 현황과 앱 밖 호기의 작업 위치를 알려 줍니다'
@@ -10517,6 +10519,83 @@ function _recPosSig(rec) {
   return out.sort().join(',');
 }
 
+//  ★ 4.82 — **수동 시프팅 표기.** 검수사 2026-11-09 «OBWH 리스트에 없는 컨 10-07-82는 시프팅 대상임» · «10번베이 육상 1단 선적된 컨 2번베이 0104로 이동예정» · «시프팅 표기 바랍니다» · «선적 edi나오면 그곳에도 추가바랍니다».
+//    voyages/{항차}/shiftManual/{컨번호} = { cn, from:'0100782'(7자리), to:'0020104', by, at, note?, cleared?, clearedBy?, clearedAt? } (4.48 keepOnboard 와 같은 모양).
+//    서류(RESTOW)·EDI 대조에 잡히지 않은 시프팅을 검수사가 손으로 적는다. 지도에는 computeShiftingMapCached 안 한 지점에서만 덧입힌다.
+export function shiftManualOf(voyage) {
+  const src = voyage && voyage.shiftManual;
+  const out = {};
+  if (!src || typeof src !== 'object') return out;
+  for (const [k, e] of Object.entries(src)) {
+    if (!e || typeof e !== 'object' || String(k).startsWith('_') || e.cleared) continue;
+    const cn = String(e.cn || k || '').trim().toUpperCase();
+    if (!/^[A-Z]{4}\d{7}$/.test(cn) || !/^\d{7}$/.test(String(e.from || '')) || !/^\d{7}$/.test(String(e.to || ''))) continue;
+    out[cn] = { ...e, cn };
+  }
+  return out;
+}
+function _shiftManualSig(voyage) {
+  const m = shiftManualOf(voyage);
+  return Object.keys(m).sort().map((cn) => cn + ':' + m[cn].from + '>' + m[cn].to).join(',');
+}
+//  순수 한 벌(검수앱 computeShiftingMapCached · 콘앱 ConeParse 가 같이 부른다). manual = shiftManualOf 결과 { 컨번호: {from,to,by,at} }.
+//    dMap = 양하 EDI 지도, lMap = 선적 EDI 지도({컨번호:{bay,row,tier,...}} — 맞교환·검수원 자리 반영이 끝난 것). 없으면 null.
+//    · 이미 지도에 있는 컨(서류 RESTOW · 자동 EDI 대조 · 본선 잔류 확정)은 덮지 않는다 — 자료가 이긴다.
+//    · from = 양하 EDI 자리 우선, 없으면 표기값 · to = 평택 출항본 선적 EDI 에 그 컨이 있으면 EDI 자리 우선, 없으면 표기값.
+//    · 자리가 다르면 _toConflict(표기값) · 출항본 EDI 가 왔는데 그 컨이 없으면 _toUnconfirmed. 표식 _manual · _manualBy · _manualAt.
+export function applyShiftManualToMap(map, manual, dMap, lMap) {
+  const ks = Object.keys(manual || {});
+  if (!map || !ks.length) return map;
+  const dep = !!lMap && loadEdiIsDeparture(lMap);
+  for (const cn of ks) {
+    if (map[cn]) continue;
+    const m = manual[cn];
+    const dFrom = dMap && dMap[cn] ? _shiftEdiPos7(dMap[cn]) : '';
+    const lTo = dep && lMap[cn] ? _shiftEdiPos7(lMap[cn]) : '';
+    const e = { from: dFrom || m.from, to: lTo || m.to, _manual: true, _manualBy: m.by || '', _manualAt: m.at || 0 };
+    if (m.note) e._manualNote = m.note;
+    if (lTo && lTo !== m.to) e._toConflict = m.to;
+    if (dFrom && dFrom !== m.from) e._fromConflict = m.from;
+    if (dep && !lTo) e._toUnconfirmed = true;
+    map[cn] = e;
+  }
+  return map;
+}
+//  4.82 — 컨 상세 «시프팅 표기» 폼 재료. 지금 자리 = 그 컨의 양하 EDI 자리(7자리, 없으면 ''). 옮겨 갈 자리를 이미 차지한 다른 컨 = 양하·선적 EDI 에서 찾아 경고 재료로 준다(저장은 막지 않는다).
+export function shiftManualFromOf(voyage, cn) {
+  try {
+    const d = voyage && voyage.discharge;
+    if (!d) return '';
+    const m = ediMapFromRaw(d) || d.ediContainers || {};
+    return _shiftEdiPos7(m[cn]) || _shiftEdiPos7((d.ediContainers || {})[cn]) || '';
+  } catch (e) { console.warn('[4.82 수동 시프팅] 양하 EDI 자리 읽기 실패:', e); return ''; }
+}
+export function shiftTargetOccupiedBy(voyage, to7, selfCn) {
+  const out = [];
+  if (!voyage || !/^\d{7}$/.test(String(to7 || ''))) return out;
+  for (const [sec, label] of [['discharge', '양하 EDI'], ['loading', '선적 EDI']]) {
+    try {
+      const s = voyage[sec];
+      if (!s) continue;
+      const m = ediMapFromRaw(s) || s.ediContainers || {};
+      for (const [k, c] of Object.entries(m)) if (k !== selfCn && _shiftEdiPos7(c) === to7) out.push({ cn: k, where: label });
+    } catch (e) { console.warn('[4.82 수동 시프팅] 목적지 자리 점검 실패(' + sec + '):', e); }
+  }
+  return out;
+}
+function _applyShiftManual(map, voyage) {
+  const man = shiftManualOf(voyage);
+  if (!Object.keys(man).length) return;
+  const sw = swapFixList(voyage);
+  let dM = null, lM = null;
+  try {
+    const mapOf = (sec) => applySwapFix(_mergeRecPos(ediMapFromRaw(sec) || sec?.ediContainers || null, sec?.records || null), sw);
+    dM = voyage.discharge ? mapOf(voyage.discharge) : null;
+    lM = voyage.loading ? mapOf(voyage.loading) : null;
+  } catch (e) { console.warn('[4.82 수동 시프팅] EDI 자리 읽기 실패 — 표기값 그대로 씁니다:', e); }
+  applyShiftManualToMap(map, man, dM, lM);
+}
+
 export function computeShiftingMapCached(voyageKey, voyage) {
   if (!voyage) return {};
   const d = voyage?.discharge, l = voyage?.loading;
@@ -10534,6 +10613,8 @@ export function computeShiftingMapCached(voyageKey, voyage) {
     _restowSig(voyage?.restowList),
     //  4.53: 선사 지시 본선 잔류 기록이 바뀌면(넣음·풀음) 다시 계산한다 — 선적 EDI 로 확정한 지시 컨이 지도에 들기 때문.
     Object.keys(_keepRawOf(voyage)).sort().join(','),
+    //  4.82: 수동 시프팅 표기가 바뀌면(넣음·풀음·자리 고침) 다시 계산한다.
+    _shiftManualSig(voyage),
   ].join('|');
   const key = voyageKey || 'unknown';
   const hit = _shiftMapCache.get(key);
@@ -10566,6 +10647,8 @@ export function computeShiftingMapCached(voyageKey, voyage) {
     const _kc = keepConfirmedOf(voyage);
     for (const cn of Object.keys(_kc)) if (!map[cn]) map[cn] = _kc[cn];
   } catch (e) { console.warn('[4.53 본선 잔류 확정] 확정 지도에 넣기 실패 — 예정으로 남깁니다:', e); }
+  //  ★ 4.82 — 검수사 수동 시프팅 표기를 덧입힌다(위 지도에 이미 든 컨은 덮지 않는다).
+  try { _applyShiftManual(map, voyage); } catch (e) { console.warn('[4.82 수동 시프팅] 덧입히기 실패 — 표기 없이 셉니다:', e); }
   if (_shiftMapCache.size > 60) _shiftMapCache.clear();   // 폭주 방지(항차 수보다 넉넉)
   _shiftMapCache.set(key, { sig, map });
   return map;

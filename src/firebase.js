@@ -3214,6 +3214,42 @@ export async function fbClearKeepOnboard(voyageKey, cn, by) {
   const back = (await _withTimeout(get(ref(db, path)), '본선 잔류 풀기 되읽기')).val();
   if (!back || !back.cleared) { const e = new Error('풀었는데 되읽은 값이 다릅니다 — 다시 눌러 주십시오.'); e.unverified = true; throw e; }
 }
+//  ★ 4.82 — 검수사 수동 시프팅 표기 쓰기 — `voyages/{항차}/shiftManual/{컨}` = { cn, from:'0100782', to:'0020104', by, at, note? }.
+//    검수사 2026-11-09 «OBWH 리스트에 없는 컨 10-07-82는 시프팅 대상임» · «시프팅 표기 바랍니다». 문지기는 쓰는 자리(수석·검수사만 · 조회만 차단).
+//    하위 경로 한 건만 쓴다(리스트·EDI 노드는 건드리지 않는다). 쓰고 되읽어 맞는지 본다 — RTDB 규칙이 이 경로를 막았으면 되읽기가 실패해 던진다(조용히 넘기지 않는다).
+export async function fbSetShiftManual(voyageKey, cn, opts = {}, by) {
+  assertCanWork('수동 시프팅 표기');
+  assertChief('수동 시프팅 표기', by);
+  const c = String(cn || '').trim().toUpperCase();
+  const from = String((opts && opts.from) || '').trim(), to = String((opts && opts.to) || '').trim();
+  if (!voyageKey || !/^[A-Z]{4}\d{7}$/.test(c)) throw new Error(`컨번호가 이상합니다(${cn || '빈칸'}) — 저장하지 않았습니다.`);
+  if (!/^\d{7}$/.test(from)) throw new Error('지금 자리(양하 EDI 자리)를 읽지 못했습니다 — 저장하지 않았습니다.');
+  if (!/^\d{7}$/.test(to)) throw new Error('옮겨 갈 자리(베이·열·단)를 숫자로 모두 적어 주세요 — 저장하지 않았습니다.');
+  if (from === to) throw new Error('지금 자리와 옮겨 갈 자리가 같습니다 — 저장하지 않았습니다.');
+  const path = `voyages/${voyageKey}/shiftManual/${c}`;
+  const val = { cn: c, from, to, by: String(by || '').trim(), at: Date.now() };
+  const note = String((opts && opts.note) || '').trim().slice(0, 300);
+  if (note) val.note = note;
+  await _withTimeout(set(ref(db, path), val), '수동 시프팅 저장');
+  const back = (await _withTimeout(get(ref(db, path)), '수동 시프팅 되읽기')).val();
+  if (!back || back.to !== to || back.from !== from || back.cleared) { const e = new Error('저장했는데 되읽은 값이 다릅니다 — 다시 눌러 주십시오.'); e.unverified = true; throw e; }
+  return val;
+}
+export async function fbGetShiftManual(voyageKey, cn) {
+  const c = String(cn || '').trim().toUpperCase();
+  if (!voyageKey || !/^[A-Z]{4}\d{7}$/.test(c)) return null;
+  return (await _withTimeout(get(ref(db, `voyages/${voyageKey}/shiftManual/${c}`)), '수동 시프팅 읽기')).val() || null;
+}
+export async function fbClearShiftManual(voyageKey, cn, by) {
+  assertCanWork('수동 시프팅 표기 풀기');
+  assertChief('수동 시프팅 표기 풀기', by);
+  const c = String(cn || '').trim().toUpperCase();
+  if (!voyageKey || !/^[A-Z]{4}\d{7}$/.test(c)) throw new Error(`컨번호가 이상합니다(${cn || '빈칸'}).`);
+  const path = `voyages/${voyageKey}/shiftManual/${c}`;
+  await _withTimeout(update(ref(db, path), { cleared: true, clearedBy: String(by || '').trim(), clearedAt: Date.now() }), '수동 시프팅 풀기');
+  const back = (await _withTimeout(get(ref(db, path)), '수동 시프팅 풀기 되읽기')).val();
+  if (!back || !back.cleared) { const e = new Error('풀었는데 되읽은 값이 다릅니다 — 다시 눌러 주십시오.'); e.unverified = true; throw e; }
+}
 export async function fbEditWorkReport(voyageKey, ts, next, me) {
   assertCanWork('보고 고치기');
   const path = `voyages/${voyageKey}/reports/${ts}`;

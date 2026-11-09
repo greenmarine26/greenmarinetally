@@ -29,7 +29,8 @@ export function ediLegOf(rawText) {
  * @returns {null | {gap, onlyList[], onlyEdi[], ediPtk, listTotal, bySize, tsHint}}
  *   둘 중 하나라도 비어 있으면 null(대조 자체가 성립 안 함 — 미도착 안내는 기존 경로 몫).
  */
-export function diffEdiList(sec, rawText) {
+//  4.82 — skipCns(선택, Set) : 시프팅 확정으로 평택 양하분에서 빠진 컨(수동 표기 포함)은 «EDI 만 있음» 으로 세지 않는다. 안 넘기면 종전과 같다.
+export function diffEdiList(sec, rawText, skipCns) {
   const edi = sec?.ediContainers, list = sec?.records;
   if (!edi || !list) return null;
   const eKeys = Object.keys(edi), lKeys = Object.keys(list);
@@ -38,7 +39,7 @@ export function diffEdiList(sec, rawText) {
   // 평택분만 — 통과화물이 섞이면 숫자가 통째로 틀어진다(지침서 9.2-② 패턴)
   const ePtk = {};
   //  3.53: 확정(pod_pick)을 반영한다 — 미르도 같은 수를 말해야 한다(utils 한 벌).
-  for (const k of eKeys) if (isPtkResolved(edi[k], list[k] || null, 'discharge')) ePtk[k] = edi[k];
+  for (const k of eKeys) if (!(skipCns && skipCns.has && skipCns.has(k)) && isPtkResolved(edi[k], list[k] || null, 'discharge')) ePtk[k] = edi[k];
   const lPtk = {};
   for (const k of lKeys) if (!list[k]?.pod || isPyeongtaekPort(list[k].pod)) lPtk[k] = list[k];
 

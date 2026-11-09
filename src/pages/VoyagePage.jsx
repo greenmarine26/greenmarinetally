@@ -365,7 +365,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
-     voyage?.info?.lane, dictTick, voyage?.keepOnboard,   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도 · 4.48: 본선 잔류 예보
+     voyage?.info?.lane, dictTick, voyage?.keepOnboard, voyage?.shiftManual,   // 4.82: 수동 시프팅 표기 · 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도 · 4.48: 본선 잔류 예보
      //  ★ 3.53-02(감사 지적 [중대]) — 배정표 이적·작업 상태가 되돌림 판정을 바꾼다. 이 둘이 의존성에
      //    없으면, 수집기가 berthShift 를 넣거나 planned→working 이 되는 **바로 그 순간** 베이플랜은
      //    되돌린 그림을 그리는데 시프팅 패널만 옛 값에 머문다(한 화면에서 두 판정이 갈린다).
@@ -445,7 +445,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { return {}; }
   }, [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
       voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix, voyage?.keepOnboard]);   // 4.53: 선사 지시 본선 잔류가 바뀌면(넣음·풀음) 선적 EDI 확정 판정도 다시
+      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix, voyage?.keepOnboard, voyage?.shiftManual]);   // 4.82: 수동 시프팅 표기도 다시 · 4.53: 선사 지시 본선 잔류가 바뀌면(넣음·풀음) 선적 EDI 확정 판정도 다시
 
   //  3.65: 목록 행 만들기는 utils.shiftingListOf 한 벌(연막검사가 같은 함수를 잰다) — 실제 칸(실은 자리·시각)이 붙었다.
   const shiftingList = useMemo(() => shiftingListOf(shiftingMap, fullEdiMap, voyage),
@@ -458,9 +458,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const shiftConfSet = useMemo(() => new Set(Object.keys(shiftingConfirmed || {}).filter((k) => k && !k.startsWith('_'))), [shiftingConfirmed]);
   //  ★ 4.20 (Fable 판정 ④ · 검수사 2026-10-10 00:02 «기본은 세관 … 추가분만 더하면 됩니다»): 양하 평택분 한 벌(세관 목록 + 추가분). 목록 없는 배(basis 'edi')는 종전 판정.
   //    4.20 감사: 시프팅은 이 화면의 확정 지도(shiftConfSet)로 뺀다 — 그래서 그 아래에 둔다(isPtk·목록 머지는 이 뒤에서만 불린다).
-  const dischUnits = useMemo(() => (mode === 'discharge' ? ptkDischargeUnitsOf(voyage, shiftConfSet) : null), [mode, voyage?.discharge, shiftConfSet, voyage?.keepOnboard]);   // 4.48: 본선 잔류가 바뀌면 평택 양하분도 다시
+  const dischUnits = useMemo(() => (mode === 'discharge' ? ptkDischargeUnitsOf(voyage, shiftConfSet) : null), [mode, voyage?.discharge, shiftConfSet, voyage?.keepOnboard, voyage?.shiftManual]);   // 4.48: 본선 잔류가 바뀌면 평택 양하분도 다시
   const shiftSplit = useMemo(() => shiftSplitOf(voyageKey, voyage),
-    [shiftingConfirmed, voyageKey, voyage?.discharge?.completed, voyage?.loading?.completed, voyage?.keepOnboard]);
+    [shiftingConfirmed, voyageKey, voyage?.discharge?.completed, voyage?.loading?.completed, voyage?.keepOnboard, voyage?.shiftManual]);
   //  3.65: 카토스가 시프팅이라고 한 컨 중 목록에 없는 것 — 목록은 안 바꾸고 아래에 따로 적는다.
   const restowExtra = useMemo(() => restowActualExtra(voyage, shiftCnSet), [voyage?.restowActual, shiftCnSet]);
 
@@ -1054,7 +1054,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl, dischUnits, voyage?.keepOnboard]);   // 4.20: dischUnits · 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
+  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix, voyage?.info?.vsl, dischUnits, voyage?.keepOnboard, voyage?.shiftManual]);   // 4.20: dischUnits · 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다 · 3.31: 배가 바뀌면 선사 별칭도 다시
 
   // ★ 3.67 — RZOR 선적 자동 덱플랜. 검수사 «선적 순번대로 자리가 정해지는것만 확실하다면» —
   //   마감텔리 STOWAGE PLAN 을 아직 안 올린 선적 항차는 동방 실적(termWork) 순번과 규칙표(36항차 실물)로
@@ -1445,6 +1445,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       const isPtkC = isPtk(c);   // V9.29: TS 화물 포함 — 판정 단일 소스
       if (!isPtkC) return;
       if (c.cn && _keepDiag[c.cn]) return;
+      if (c.cn && shiftingConfirmed && shiftingConfirmed[c.cn] && shiftingConfirmed[c.cn]._manual) return;   // 4.82: 검수사가 수동 표기한 시프팅 컨은 평택 EDI 입력에서 뺀다(양하·선적 같은 줄) — 리스트에 없다고 «EDI 만 있음» 경고를 만들지 않는다
       // M8.07: 진단용 보강 — EDI에 온도/F/E가 없으면 검수 리스트(records) 값으로 채움.
       //   RIZHAO 등 IFCSUM은 EDI에 온도 필드가 없고 검수 엑셀에만 있음.
       //   EDI에 값이 있으면 보존(EDI 우선). 진단 입력만 보강, 원본 ediMap 불변.

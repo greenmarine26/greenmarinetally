@@ -9,6 +9,7 @@ import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문�
 import { isoConflictOf, isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
 import { podConflictOf } from '../utils.js';   // ★ 3.53: POD 가 자료마다 다를 때 — 판정 한 벌
 import { isoShown, hcOpenTopOf, isoShownOf } from '../utils.js';   // 4.21: 내부 풀·엠티 표식(453E)을 정본 규격 글자(45RE)로 보여 준다 · 4.52: 하이큐 오픈탑 표기
+import { computeShiftingMapCached, shiftManualFromOf, shiftTargetOccupiedBy } from '../utils.js';   // 4.82: 수동 시프팅 표기 상자(지도 항목·지금 자리·목적지 점검)
 import { fmtShiftPos } from '../utils.js';   // 4.53: 본선 잔류 확정 상자의 «양하 자리 → 선적 자리» 글자(시프팅 줄과 같은 글자)
 import { loadingSlotOf } from '../utils.js';   // ★ 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(가이드 카드·큰 카드·리스트와 같은 자리·같은 낱말)
 import { isChief } from '../staffList.js';
@@ -16,6 +17,7 @@ import { isOwnerName } from '../adminGuard.js';   // 3.53: POD 확정은 수석�
 import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf, sealConflictOf, MFN_LABEL, MFN_RELOAD_LABEL, mfnChinaWarn, mfnDestKo, mfnIsChinaDest } from '../utils.js';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 배지·상자의 «MFN 목록 출력»
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // 4.49: sealCheckOf — 실오류·큰 실 판정 한 벌   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
+import { fbSetShiftManual, fbClearShiftManual } from '../firebase.js';   // 4.82: 수동 시프팅 표기 쓰기(문지기는 쓰기 함수 안)
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
@@ -458,6 +460,44 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
     try { await fbClearKeepOnboard(voyageKey, cn0, inspector); if (_keepCnRef.current === cn0) setKeepLocal(null); }
     catch (e) { if (_keepCnRef.current === cn0) setKeepErr(`풀지 못했습니다 — ${(e && e.message) || e}`); else alert(`${cn0} 선사 지시 풀기 실패 — ${(e && e.message) || e}`); }
     finally { setKeepBusy(false); }
+  };
+  //  ★ 4.82 — 검수사 수동 시프팅 표기. 검수사 2026-11-09 «OBWH 리스트에 없는 컨 10-07-82는 시프팅 대상임» · «10번베이 육상 1단 선적된 컨 2번베이 0104로 이동예정» · «시프팅 표기 바랍니다».
+  //    쓰기 문지기는 firebase.fbSetShiftManual(수석·검수사만 · 조회만 차단) — 화면 게이트(podCan)는 보조. 표기는 확정 시프팅 지도에 한 지점에서 덧입혀진다(utils.applyShiftManualToMap).
+  const [smOpen, setSmOpen] = useState(false);
+  const [smBusy, setSmBusy] = useState(false);
+  const [smBay, setSmBay] = useState('');
+  const [smRow, setSmRow] = useState('');
+  const [smTier, setSmTier] = useState('');
+  const [smNote, setSmNote] = useState('');
+  const [smErr, setSmErr] = useState('');
+  const _smCnRef = useRef(c && c.cn);
+  _smCnRef.current = c && c.cn;
+  useEffect(() => { setSmOpen(false); setSmErr(''); setSmBay(''); setSmRow(''); setSmTier(''); setSmNote(''); }, [c && c.cn]);
+  const smEntry = useMemo(() => {
+    if (mode !== 'discharge' || !mfnVoyage || !c || !c.cn || String(c.cn).startsWith('_')) return null;
+    try { return (computeShiftingMapCached(voyageKey, mfnVoyage) || {})[c.cn] || null; }
+    catch (e) { console.warn('[4.82 수동 시프팅] 시프팅 지도 읽기 실패 — 표기 상자를 숨깁니다:', e); return null; }
+  }, [mode, voyageKey, mfnVoyage, c && c.cn]);
+  const smFrom = useMemo(() => (smOpen && mfnVoyage && c ? shiftManualFromOf(mfnVoyage, c.cn) : ''), [smOpen, mfnVoyage, c && c.cn]);
+  const _smDig = (v, n, min = 0) => { const d = String(v || '').replace(/\D/g, ''); if (!d) return ''; const k = parseInt(d, 10); return (k < min || String(k).length > n) ? '' : String(k).padStart(n, '0'); };   // 4.82 감사: 범위 밖(베이 0·단 0·자릿수 초과)은 빈값 → 저장 단추 막힘
+  const smTo = (_smDig(smBay, 3, 1) && _smDig(smRow, 2) && _smDig(smTier, 2, 1)) ? `${_smDig(smBay, 3, 1)}${_smDig(smRow, 2)}${_smDig(smTier, 2, 1)}` : '';
+  const smOcc = useMemo(() => (smOpen && smTo && mfnVoyage && c ? shiftTargetOccupiedBy(mfnVoyage, smTo, c.cn) : []), [smOpen, smTo, mfnVoyage, c && c.cn]);
+  const saveSm = async () => {
+    if (smBusy) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const cn0 = c.cn;
+    setSmBusy(true); setSmErr('');
+    try { await fbSetShiftManual(voyageKey, cn0, { from: smFrom, to: smTo, note: smNote }, inspector); if (_smCnRef.current === cn0) setSmOpen(false); }
+    catch (e) { if (_smCnRef.current === cn0) setSmErr(`저장하지 못했습니다 — ${(e && e.message) || e}`); else alert(`${cn0} 시프팅 표기 저장 실패 — ${(e && e.message) || e}`); }   // §4-3 조용히 실패 금지
+    finally { setSmBusy(false); }
+  };
+  const clearSm = async () => {
+    if (smBusy) return;
+    const cn0 = c.cn;
+    setSmBusy(true); setSmErr('');
+    try { await fbClearShiftManual(voyageKey, cn0, inspector); }
+    catch (e) { if (_smCnRef.current === cn0) setSmErr(`풀지 못했습니다 — ${(e && e.message) || e}`); else alert(`${cn0} 시프팅 표기 풀기 실패 — ${(e && e.message) || e}`); }
+    finally { setSmBusy(false); }
   };
   const pickPod = async (src) => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
@@ -1411,6 +1451,68 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     className="px-2 py-1 rounded bg-ink-800 border border-line text-2xs text-dim-300 disabled:opacity-50">취소</button>
                 </div>
                 {keepErr && <div className="text-3xs text-rose-300 mt-1">{keepErr}</div>}
+              </div>
+            );
+          })()}
+          {/*  ★ 4.82 — 검수사 수동 시프팅 표기 — 양하에서만. 표기된 컨은 근거 한 줄과 풀기 단추, 아직 시프팅이 아닌 컨은 수석·검수사에게 «＋ 시프팅 표기» 단추. */}
+          {mode === 'discharge' && c.cn && !String(c.cn).startsWith('_') && mfnVoyage && (() => {
+            const fmtAt = (ms) => { if (!ms) return ''; const d = new Date(ms); const z = (n) => String(n).padStart(2, '0'); return `${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+            if (smEntry && smEntry._manual) return (
+              <div className="mt-2 px-3 py-2 bg-blue-950/40 border border-blue-600 rounded-pill" data-shift-manual="1">
+                <div className="text-xs font-black text-blue-200">🔵 시프팅 대상 — 검수사 수기 표기 ({smEntry._manualBy || '?'}{smEntry._manualAt ? ` · ${fmtAt(smEntry._manualAt)}` : ''})</div>
+                <div className="text-xxs text-blue-100/90 mt-0.5 leading-snug" data-shift-manual-pos={`${smEntry.from}>${smEntry.to}`}>
+                  자리 {fmtShiftPos(smEntry.from)} → {fmtShiftPos(smEntry.to)}
+                </div>
+                {smEntry._manualNote && <div className="text-3xs text-blue-100/70 mt-0.5 break-words">«{smEntry._manualNote}»</div>}
+                {smEntry._toConflict && (
+                  <div className="text-xxs text-amber-200 mt-0.5 leading-snug" data-shift-manual-conflict="1">표기 {fmtShiftPos(smEntry._toConflict)} / 선적 EDI {fmtShiftPos(smEntry.to)} — 선적 EDI 자리를 따릅니다.</div>
+                )}
+                {smEntry._toUnconfirmed && (
+                  <div className="text-xxs text-amber-200 mt-0.5 leading-snug" data-shift-manual-unconf="1">선적 EDI 에 아직 없음 — 표기한 자리로 셉니다.</div>
+                )}
+                <div className="text-3xs text-blue-200/80 mt-0.5 leading-snug">평택 양하 대수에서 빠지고 시프팅(내림·실음)으로 셉니다. 선적 EDI 가 오면 그 자리가 이깁니다. 선사 서류가 오면 서류가 이깁니다.</div>
+                {podCan && (
+                  <button onClick={clearSm} disabled={smBusy} data-shift-manual-clear="1"
+                    className="mt-1 px-2 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">{smBusy ? '푸는 중…' : '표기 풀기'}</button>
+                )}
+                {smErr && <div className="text-3xs text-rose-300 mt-0.5">{smErr}</div>}
+              </div>
+            );
+            if (smEntry || c._shift || c._keep || keepLocal) return null;   // 이미 시프팅(서류·EDI 대조·본선 잔류)이거나 선사 지시가 있는 컨은 표기 대상이 아니다
+            if (!podCan) return null;
+            if (!smOpen) return (
+              <div className="mt-2">
+                <button onClick={() => { setSmOpen(true); setSmErr(''); }} data-shift-manual-open="1"
+                  className="px-2 py-1 rounded bg-ink-800 border border-line text-2xs font-bold text-dim-300">＋ 시프팅 표기 (리스트에 없는 시프팅 컨)</button>
+                {smErr && <div className="text-3xs text-rose-300 mt-0.5">{smErr}</div>}
+              </div>
+            );
+            return (
+              <div className="mt-2 px-3 py-2 bg-ink-900 border border-blue-700/60 rounded-pill" data-shift-manual-form="1">
+                <div className="text-xs font-black text-blue-200">🔵 시프팅 표기 — 평택에서 내리지 않고 본선 안에서 옮기는 컨</div>
+                <div className="text-3xs text-dim-300 mt-0.5 leading-snug">지금 자리는 양하 EDI 자리입니다. 옮겨 갈 베이·열·단을 적으면 평택 양하 대수에서 빠지고 시프팅으로 셉니다. 선적 EDI 가 오면 그 자리와 맞춰 봅니다.</div>
+                <div className="text-xxs text-dim-100 mt-1" data-shift-manual-from={smFrom}>지금 자리 {smFrom ? fmtShiftPos(smFrom) : '읽지 못함'}</div>
+                <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+                  <input value={smBay} onChange={(e) => setSmBay(e.target.value)} placeholder="베이 (예 2)" inputMode="numeric" data-shift-manual-bay="1"
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-xs mono text-dim-100"/>
+                  <input value={smRow} onChange={(e) => setSmRow(e.target.value)} placeholder="열 (예 01)" inputMode="numeric" data-shift-manual-row="1"
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-xs mono text-dim-100"/>
+                  <input value={smTier} onChange={(e) => setSmTier(e.target.value)} placeholder="단 (예 04)" inputMode="numeric" data-shift-manual-tier="1"
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-xs mono text-dim-100"/>
+                  <input value={smNote} onChange={(e) => setSmNote(e.target.value)} placeholder="메모(선택)" data-shift-manual-note="1"
+                    className="col-span-3 px-2 py-1 rounded bg-ink-800 border border-line text-xs text-dim-100"/>
+                </div>
+                {smTo && <div className="text-xxs text-blue-100/90 mt-1" data-shift-manual-to={smTo}>옮겨 갈 자리 {fmtShiftPos(smTo)}</div>}
+                {smOcc.length > 0 && (
+                  <div className="text-xxs text-amber-200 mt-0.5 leading-snug" data-shift-manual-occ="1">⚠ 그 자리에 이미 {smOcc.slice(0, 3).map((x) => `${x.cn}(${x.where})`).join(' · ')}{smOcc.length > 3 ? ` 외 ${smOcc.length - 3}대` : ''} 가 있습니다. 맞는 자리인지 확인하십시오.</div>
+                )}
+                <div className="flex gap-1.5 mt-1.5">
+                  <button onClick={saveSm} disabled={smBusy || !smTo || !smFrom} data-shift-manual-save="1"
+                    className="flex-1 px-2 py-1 rounded bg-blue-700 text-ink-950 text-2xs font-black disabled:opacity-50">{smBusy ? '저장 중…' : '저장'}</button>
+                  <button onClick={() => { setSmOpen(false); setSmErr(''); }} disabled={smBusy}
+                    className="px-2 py-1 rounded bg-ink-800 border border-line text-2xs text-dim-300 disabled:opacity-50">취소</button>
+                </div>
+                {smErr && <div className="text-3xs text-rose-300 mt-1">{smErr}</div>}
               </div>
             );
           })()}
