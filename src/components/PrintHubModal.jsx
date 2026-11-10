@@ -501,7 +501,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
                 <div className="flex-1 min-w-0">
                   <div className="font-black text-dim-100">검수 리스트</div>
                   <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
-                    A4 세로 세 단 · 인쇄 창 위 단추로 장 나누기(이어서·20/40·풀/엠티·포트별) · 시트1(전체) + 시트2(특수화물 별첨)
+                    A4 세로 세 단 · 인쇄 창 위 단추로 장 나누기(이어서·20/40·풀/엠티·선사별·포트별) · 시트1(전체) + 시트2(특수화물 별첨)
                   </div>
                 </div>
                 <Printer className="w-5 h-5 text-dim-400 shrink-0" />
