@@ -115,7 +115,7 @@ function getContainerCategory(c) {
 //  ★ 3.60: 검수 리스트 정렬·순번 한 벌 — 종이·CSV 가 같은 순서를 쓴다.
 //    검수사 2026-09-24 «선사를 없애고 규격 f/e 일반/특수알파벳순» · «넘버링은 20풀 따로 20엠티 따로 특수화물 따로 40도 마찬가지»
 //    묶음 = 4.86 단계(20 / 20HC / 40 / 40HC / 45HC) × [일반 풀 · 일반 엠티 · 특수]. 묶음 안에서는 규격 → F/E → 컨번호 알파벳순. 순번은 묶음마다 1부터.
-//  특수 = 별첨(시트2)과 같은 판정(리퍼·FR·OT·탱크·위험물·규격초과).
+//  특수 묶음 = 리퍼·FR·OT·탱크(4.86-01: 위험물·규격초과는 특수 묶음이 아니다 — _isSpecialGroup). 별첨(시트2)의 특수 판정은 _isSpecialCargo(위험물·규격초과 포함).
 function _isSpecialCargo(c) {
   const { type } = getContainerCategory(c);
   //  ★ 3.60-04 (검수사 2026-09-24 «엠티는 엠티이다, 그래도 따로 구분은 한다»): 엠티 리퍼는 엠티 묶음으로 세고 별첨(특수)에 넣지 않는다.
@@ -124,9 +124,17 @@ function _isSpecialCargo(c) {
   if (type === 'reefer' && String(c.fe || '').toUpperCase() === 'E' && !(c.dg || c.oog || c.fr || c.ot || c.tk)) return false;
   return type !== 'normal' || !!(c.dg || c.oog || c.fr || c.ot || c.tk);
 }
+//  ★ 4.86-01 (검수사 2026-11-10 «D/G를 분리했는데 분리할필요가 없습니다. 특수컨이 아니기때문입니다» · «일반에 알파벳순서에 맞추고 DG표기만 해주면 됩니다» · «특수컨은 T/K OT FR RF등 일반컨테이너가 아닌것») —
+//    특수 묶음 = 컨테이너 종류가 일반이 아닌 것(리퍼·FR·OT·탱크)만이다. 위험물(DG)·규격초과(OOG)는 화물 표식이라 특수 묶음으로 빼지 않고 일반 풀·엠티 묶음의 컨번호 순서에 넣는다
+//    (비고의 붉은 «클래스/UN»·OOG 표기는 그대로). 별첨(시트2)의 특수 판정은 위 _isSpecialCargo(위험물·규격초과 포함) 그대로라 별첨에는 남는다.
+function _isSpecialGroup(c) {
+  const { type } = getContainerCategory(c);
+  if (type === 'reefer' && String(c.fe || '').toUpperCase() === 'E' && !(c.fr || c.ot || c.tk)) return false;   // 엠티 리퍼는 엠티 묶음(3.60-04)
+  return type !== 'normal' || !!(c.fr || c.ot || c.tk);
+}
 function _inspGroup(c) {
   const { fe, ti } = getContainerCategory(c);
-  const k = _isSpecialCargo(c) ? 2 : (fe === 'F' ? 0 : 1);
+  const k = _isSpecialGroup(c) ? 2 : (fe === 'F' ? 0 : 1);
   //  ★ 4.85 (검수사 2026-11-10 «45HC(L5)를 리스트 마지막에 위치하도록 20-40-45순입니다») — 45피트는 40 묶음에서 떼어 맨 끝 묶음으로(순번도 따로, 20↔40 처럼 두 줄 경계).
   //  ★ 4.86 — 20 → 20HC → 40 → 40HC → 45HC 다섯 단계(ti). 묶음 = 단계 × [일반 풀 · 일반 엠티 · 특수] (단계 십의 자리 · 종류 일의 자리).
   return ti * 10 + k;
@@ -153,6 +161,22 @@ function inspEdges(sorted) {
     const k = _inspGroup(c); const e = g === null || k === g ? '' : (Math.floor(k / 10) !== Math.floor(g / 10) ? 'gb2' : 'gb1');
     g = k; return e;
   });
+}
+//  ★ 4.86-01 — 별첨(시트2)의 정렬·경계는 **종전 판정 그대로**다(검수사 «위험물은 특수화물엔 포함되지만…» — 별첨은 바꾸지 않는다).
+//    별첨은 전 행이 특수화물이라 묶음은 단계(ti)뿐이다. 본문의 새 묶음(_inspGroup)으로 줄을 그으면 별첨 안에 «위험물 일반 컨 → 탱크·FR·OT» 굵은 줄이
+//    새로 생긴다(독립 감사, PCSZ 2622W 실측) — 그래서 별첨 전용 정렬·경계를 따로 둔다. 단계 안은 inspSortCmp 와 같이 규격 → F/E → 컨번호.
+function _apxCmp(a, b) {
+  const ta = getContainerCategory(a).ti, tb = getContainerCategory(b).ti;
+  if (ta !== tb) return ta - tb;
+  const sa = _specOf(a), sb = _specOf(b);
+  if (sa !== sb) return sa < sb ? -1 : 1;
+  const fa = String(a.fe || '').toUpperCase() === 'F' ? 0 : 1, fb = String(b.fe || '').toUpperCase() === 'F' ? 0 : 1;
+  if (fa !== fb) return fa - fb;
+  return String(a.cn || '').localeCompare(String(b.cn || ''));
+}
+function _apxEdges(sorted) {
+  let t = null;
+  return sorted.map(c => { const ti = getContainerCategory(c).ti; const e = t === null || ti === t ? '' : 'gb2'; t = ti; return e; });
 }
 
 
@@ -559,7 +583,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
          둘 다 성질이 아니다 — 각자 제 서류(X-RAY 확인서·긴급 안내)가 따로 있다.
        ⚠ 본문(시트1) 표기는 그대로 둔다 — 거기서는 알아야 할 정보다. */
     return _isSpecialCargo(c);
-  });
+  }).sort(_apxCmp);   // 4.86-01: 별첨은 종전 순서(단계 → 규격 → F/E → 컨번호) — 본문의 새 묶음 순서와 무관
 
   let sheet2Html = (special.length > 0 && opts.appendix !== false) ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
 
@@ -627,14 +651,14 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     const _apxTitle = `[별첨] 특수화물 ${special.length}대`;
     if (_rfList.length === 0) {
     //  3.29: 별첨은 **전 행이 특수화물**이라 비고가 길다 — 여기가 넘침이 가장 컸다.
-    const _ed2 = inspEdges(special);   // 3.62: 별첨도 20 → 40 경계선
+    const _ed2 = _apxEdges(special);   // 3.62: 별첨도 20 → 40 경계선 (4.86-01: 별첨 전용 경계 — 단계가 바뀔 때만)
     const _fit2 = packFit(special.map((c, j) => renderRow(c, j + 1, { noFlag: true, edge: _ed2[j] })));
     const sheet2PagesList = _fit2.pages;   // 2.92-01: 별첨엔 X-RAY·긴급 안 적는다(검수사 «특수 화물이 아닙니다»)
     //  3.60-01: 별첨 제목을 장 머리줄 안에 넣는다 — 장 밖 제목 줄(ititle)만큼 A4 를 넘어 마지막 한 줄이 빈 장으로 밀렸다(ATPR 2643W 실측).
     sheet2Html = '<!--sheet2-->' + sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length, _fit2.rowMm, _apxTitle   /* 3.60-18: 2.92-01 부터 별첨은 특수만(X-RAY·긴급 제외)인데 제목 글자에 X-RAY 가 남아 있었다 */)).join('');
     } else {
       const _rfRows = _rfList.map((c, j) => renderRow(c, j + 1, { noFlag: true, rf: true }));
-      const _edO = inspEdges(_otList);   // 아래 구역은 경계선을 새로 시작한다
+      const _edO = _apxEdges(_otList);   // 아래 구역은 경계선을 새로 시작한다 (4.86-01: 별첨 전용 경계)
       const _otRows = _otList.map((c, j) => renderRow(c, j + 1, { noFlag: true, edge: _edO[j] }));
       const apxPages = packAppendix(_rfRows, _otRows);
       const _colTbl = (kind, rs) => kind === 'rf'

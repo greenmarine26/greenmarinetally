@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.86';
-const NOTE = '4.86 검수 리스트의 묶음이 20 20HC 40 40HC 45HC 다섯 단계로 나뉩니다 실제 화물이 있는 단계만 줄이 생깁니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.86-01';
+const NOTE = '4.86-01 검수 리스트에서 위험물은 일반 컨번호 순서에 들어가고 비고에 위험물 표기만 남습니다 리퍼 FR OT 탱크만 특수 묶음입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
