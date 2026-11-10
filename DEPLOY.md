@@ -152,6 +152,7 @@ curl -s "https://api.github.com/repos/greenmarine26/greenmarinetally/actions/run
 | «클로드 전용» 크롬 프로필로 라이브 확인(`switch_browser`) | 2026-10-23 검수사 — 클로드 내장 브라우저로 |
 | «옛 해시 assets는 누적 무해» | 2026-08-06 1GB 사고 |
 | 실패한 deploy 잡 Re-run | 2026-08-07 #1085 — 새 커밋 또는 workflow_dispatch |
+| Pages 배포 10분 타임아웃(«Timeout reached, aborting!») 직후 바로 새 커밋 밀기 | 2026-11-11 Actions 2036·2037 — 앞 배포가 GitHub 안에서 아직 진행 중이라 «Deployment request failed … due to in progress deployment» 400 으로 떨어진다. 20분쯤 기다린 뒤 새 커밋을 민다(라이브 sw.js 가 그 사이 올라오면 밀 필요 없다) |
 | 임시 payload·bat·로그 «그대로 둬도 된다» | 2026-08-09·08-10 — 그 자리에서 치운다 |
 | 인계함에 남은 일 넘기기 | 2026-09-17 검수사 — 업데이트 내용만 |
 
