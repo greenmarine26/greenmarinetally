@@ -149,6 +149,18 @@ function inspSortCmp(a, b) {
   return String(a.cn || '').localeCompare(String(b.cn || ''));
 }
 //  정렬된 목록에 묶음별 순번을 매긴다.
+//  ★ 4.87 (검수사 2026-11-10 «출력물에서 조건을 하나 더 추가 합니다. 선사별을 추가 합니다. 포트별 앞에 선사별을 넣어주시고 방식은 이어서 방식입니다») —
+//    선사별 정렬 한 벌. 선사 = c.op(withShipOp 가 채운다) · 대수 많은 선사부터(같으면 이름순) · 선사 미상은 맨 뒤. 선사 안에서는 inspSortCmp(단계 → 풀/엠티/특수 → 규격 → 컨번호) 그대로.
+const _carOf = (c) => (c && c._opGuess ? '' : String((c && c.op) || '').trim()) || '선사 미상';   // 컨번호로 짐작한 값은 선사가 아니다
+function inspCarrierOrder(list) {
+  const m = new Map(); for (const c of list) { const k = _carOf(c); m.set(k, (m.get(k) || 0) + 1); }
+  const unk = (k) => (k === '선사 미상' ? 1 : 0);
+  return [...m.entries()].sort((a, b) => (unk(a[0]) - unk(b[0])) || (b[1] - a[1]) || (a[0] < b[0] ? -1 : 1)).map((x) => x[0]);
+}
+function inspCarrierSort(list) {
+  const ix = new Map(inspCarrierOrder(list).map((k, i) => [k, i]));
+  return [...list].sort((a, b) => (ix.get(_carOf(a)) - ix.get(_carOf(b))) || inspSortCmp(a, b));
+}
 function inspNumber(sorted) {
   let g = null, n = 0;
   return sorted.map(c => { const k = _inspGroup(c); if (k !== g) { g = k; n = 0; } return ++n; });
@@ -288,7 +300,7 @@ function renderRow(c, idx, opts) {
   //    (ATPR 2642E — 실번호 SINOKOR011526 이 종이에 «SINOKOR011» 로 나갔다). M5.52 가 선사 칸 공간을 위해 10자로 잘랐는데
   //    검수는 실번호로 실물을 맞추는 일이라 뒷자리를 잃으면 종이가 거짓이 된다. 칸을 넓히고(실번호 16→18%, 컨번호 19→17%) 10자 넘으면 6pt 로 줄인다 — 줄바꿈은 장당 줄수를 깨므로 안 쓴다.
   const sl = (c._madeUnit || isMadeUnitCn(c.cn)) ? splitJoinedSeals(inspectionSealOf(c) || c.sl).join(' ') : inspectionSealOf(c);   // 4.49 재감사(중-2): 제작컨도 큰 실(세관이 20자 컷이면 이어 붙은 긴 값)에서 가른다   // 4.20: 제작컨은 세관 셀에 붙어 온 씰을 전부 갈라 적는다(일반 컨 씰은 그대로)
-  const _slCls = sl.length > 13 ? ' s3' : sl.length > 10 ? ' s2' : sl.length > 8 ? ' s1' : '';   // 3.60: 9~10자 7.5pt · 11자부터 6pt   // 3.60: 세 단 — 9자부터 6pt(10자 실번호가 8pt 로 칸을 넘었다, 크로뮴 실측)
+  const _slCls = _sealCls(sl);   // 3.60: 9~10자 7.5pt · 11자부터 6pt   // 3.60: 세 단 — 9자부터 6pt(10자 실번호가 8pt 로 칸을 넘었다, 크로뮴 실측)
   // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
   const isBooking = c.isBooking === true || c.pendingCn === true ||
                     (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_'));
@@ -389,7 +401,26 @@ const COLS_PER_PAGE = 3;
 //    처럼 길어져 7pt 로 세 줄이 된다(행 3.4mm → 7.4mm). 특수화물 별첨은 **전 행이 특수화물**이라
 //    75행이 평균 두 줄 = 가용의 1.57배였다(2026-09-08 실측).
 //  ⇒ 단을 «행 수»가 아니라 **«차지하는 줄 수»**로 채운다. 한 줄도 안 자르고, 넘치면 페이지가 늘어난다.
-const _noteWeight = (rowHtml, rowMm = ROW_MM, noteIdx = 5) => {
+//  ★ 4.87 (검수사 2026-11-10 20:07 «컨번호 , 실번호가 짤리는 일은 없어야 합니다» · 20:08 «다른 출력물은 동적으로 출력이 될것입니다. 12자리 13자리 지금은 짤릴듯합니다»)
+//    실번호 글자 크기를 **글자 수가 아니라 실제 폭**으로 고른다. 종전엔 11~13자를 무조건 6pt 한 줄로 찍어, W·M 처럼 넓은 글자가 많은 12~13자
+//    (WWWW88888888 — 크로뮴 실측 61px, 칸 60px)는 괘선을 넘었다. 글자 폭은 Arial 계열 폭표(em)로 세고, 6pt 한 줄에도 안 들어가면 14자 이상처럼 두 줄(s3)로 찍는다.
+//    글자 수 단계(9자 7.5pt · 11자 6pt · 14자 두 줄)는 그대로 최소 단계다 — 지금 맞게 나가는 실번호의 모양은 바뀌지 않는다.
+const _SL_EM = { A: 0.667, B: 0.667, C: 0.722, D: 0.722, E: 0.667, F: 0.611, G: 0.778, H: 0.722, I: 0.278, J: 0.5, K: 0.667, L: 0.556, M: 0.833, N: 0.722, O: 0.778, P: 0.667, Q: 0.778, R: 0.722, S: 0.667, T: 0.611, U: 0.722, V: 0.667, W: 0.944, X: 0.667, Y: 0.667, Z: 0.611, ' ': 0.278 };
+const _SL_CELL_PX = 59;   // 세 단 실번호 칸 60px(196mm 폭 · 25%) — 왼쪽 여백 1px 을 남긴다
+const _SL_STEPS = [['', 12, -0.2], [' s1', 10, -0.4], [' s2', 8, -0.4]];   // [클래스, 글자 px(9·7.5·6pt), 자간 px] — CSS td.sl 과 같은 값
+export function _sealWidthPx(sl, px, ls) {
+  let em = 0; for (const ch of String(sl || '')) em += /[0-9]/.test(ch) ? 0.556 : (_SL_EM[ch.toUpperCase()] || 0.6);
+  return em * px + String(sl || '').length * ls;
+}
+export function _sealCls(sl) {
+  const t = String(sl || ''), n = t.length;
+  const byLen = n > 13 ? 3 : n > 10 ? 2 : n > 8 ? 1 : 0;
+  let byFit = _SL_STEPS.findIndex(([, px, ls]) => _sealWidthPx(t, px, ls) <= _SL_CELL_PX);
+  if (byFit < 0) byFit = 3;
+  const k = Math.max(byLen, byFit);
+  return k >= 3 ? ' s3' : _SL_STEPS[k][0];
+}
+const _noteWeight = (rowHtml, rowMm = ROW_MM, noteIdx = 5, tight = false) => {
   const tds = String(rowHtml).match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];
   //  ★ 3.45 — F/E 가 한 칸이 되어 비고는 **6번째**다(tds[5]). 초판은 tds[6](선사)를 세고 있었다.
   const note = tds[noteIdx] || '';
@@ -398,13 +429,15 @@ const _noteWeight = (rowHtml, rowMm = ROW_MM, noteIdx = 5) => {
   //  ★ 3.60-01 (검수사 2026-09-24 «160개 이하라면 한장으로 뽑을수도 있을텐데 2장으로 뽑히는것») — 줄 수가 아니라 **행이 실제로 늘어나는 높이**로 센다.
   //    세 단은 행 높이 5.2mm 라 7pt 두 줄(4.9mm)·6pt 두 줄(4.2mm)은 행 안에 들어가 행이 안 늘어난다. 종전엔 두 줄 비고를 두 행으로 쳐서
   //    한 단이 25줄에서 끊기고 끝 8줄이 한 장을 따로 먹었다(ATPR 2643W 선적 403대 실측 5장). 비고 줄 높이 = 글자 pt × 0.3528mm(line-height 1.0).
+  //  4.87: tight — 선사별 단 높이 맞춤 전용. 여러 줄 셈을 6pt 한 줄 폭(MEMO_FIT[1])으로 세어 실제 줄 수에 가깝게 본다(상한 확인은 늘 보수 셈).
+  const lines = tight && f.cls ? Math.max(1, Math.ceil(_memoW(txt) / MEMO_FIT[1])) : f.lines;
   const lineMm = (f.cls ? 6 : 7) * 0.3528;
   //  감사 지적 — 14자↑ 실번호(s3)는 6pt 두 줄로 접힌다. 60줄(4.33mm)부터는 행보다 커지므로(66줄 3.94mm 에서 4.23mm) 그 높이도 같이 센다.
   const slMm = /class="sl s3"/.test(String(rowHtml)) ? 2 * 6 * 0.3528 : 0;
   //  ★ 3.62 (감사·2차 시뮬 지적): 묶음 경계선은 두꺼워진 만큼 그 줄 칸 높이를 CSS 에서 줄여(tr.gb1·gb2 height calc) 행 높이가 안 는다 —
   //    그래서 한 줄짜리 행은 무게 1 그대로다(종전 배치와 같다 · 무게를 더하면 180대가 두 장이 됐다). 글이 길어 행이 늘어나는 줄만 경계선 두께가 위에 얹히므로 그만큼 센다.
   const edgeMm = /class="gb2"/.test(String(rowHtml)) ? 0.706 : (/class="gb1"/.test(String(rowHtml)) ? 0.353 : 0);
-  const w = (Math.max(f.lines * lineMm, slMm) + 0.3) / rowMm;
+  const w = (Math.max(lines * lineMm, slMm) + 0.3) / rowMm;
   return edgeMm && w > 1 - edgeMm / rowMm ? Math.max(1, w + edgeMm / rowMm) : Math.max(1, w);
 };
 const packCols = (rows, perCol = PER_COL, rowMm = ROW_MM, noteIdx = 5) => {
@@ -451,6 +484,73 @@ const packBal = (rows) => {
   return f;
 };
 
+//  ★ 4.87 — 선사별 배치(검수사 2026-11-10 «SKR만 우측에 따로 놓고 좌측하단을 채우겠습니다») —
+//    선사마다 **새 단에서 시작**해 선사 경계가 단 경계에 놓이고, 한 선사의 단들은 같은 높이로 채운다(앞 선사 끝 단에 다음 선사가 끼지 않는다). 쪽은 세 단씩 끊는다.
+//    행 높이 줄임(50→66줄)은 packFit 과 같은 규칙 — 쪽 수가 가장 적은 줄 수 중 가장 작은 것. 행·막대에 data-car(선사명 URL 부호화)를 달아 쪽 머리줄에 선사를 적는다.
+const _carKey = (r) => { const m = /data-car="([^"]*)"/.exec(String(r)); return m ? decodeURIComponent(m[1]) : null; };
+const _carTag = (name) => ` data-car="${encodeURIComponent(name)}"`;
+const _carBarHtml = (name, cnt) => cnt == null
+  ? `<tr class="carbar cont"${_carTag(name)}><td colspan="6">${_esc(name)} · 계속</td></tr>`
+  : `<tr class="carbar"${_carTag(name)}><td colspan="4">${_esc(name)}</td><td colspan="2">${cnt}대</td></tr>`;
+//  한 선사(맨 앞이 막대)를 단 상한 p 로 가득 채워 자른 자리 [[시작,끝),…]. 이어지는 단은 머리에 «계속» 막대 한 줄을 먹는다.
+const _carGreedy = (R, p, rowMm, tight = false) => {
+  const cuts = []; let a = 0, w = 0;
+  for (let i = 0; i < R.length; i++) {
+    const L = _noteWeight(R[i], rowMm, 5, tight);
+    if (i > a && w + L > p) { cuts.push([a, i]); a = i; w = 1; }
+    w += L;
+  }
+  cuts.push([a, R.length]); return cuts;
+};
+//  ★ 4.87 — 선사별 단 채우기. 검수사 2026-11-10 15:43 «SKR만 우측에 따로 놓고 좌측하단을 채우겠습니다» · 19:39 «첫장 … 65줄로 가고 두번째장 3단중 1째단은 앞장과 같이 …
+//    2번째단은 적으면 적은대로 하고 3단은 다른선사이므로 그대로» — 한 선사의 단은 위에서부터 가득 채우고 그 선사의 마지막 단만 짧다. 다음 선사는 새 단에서 시작한다.
+//    다만 작은 선사가 여럿인 배(검수사 2026-11-10 20:39 «선사가 많은 선박은 XTPG입니다» — 실 XTPG 548E 양하 118대·선적 157대, 선사 10곳)에서 종이가 흩어지지 않게,
+//    **작은 선사(반 단 이하)는 앞 단에 남은 자리에 통째로 들어가면 그 단에 이어 붙인다**(선사 막대가 경계다). 반 단을 넘는 선사는 늘 새 단에서 시작한다 —
+//    DXQD 2644E 양하(DWS 234 · SKR 40)·TMPZ 2038E 양하(TJM 306 · EAS 49)는 검수사가 본 모습 그대로다. XTPG 548E 선적은 이어서 판과 같은 한 장(59줄)이 된다.
+//    ★ 선사가 여럿이고 **한 장에 다 들어갈 때**는 큰 선사 셋을 세 단 맨 위에 하나씩 놓고, 나머지 작은 선사를 가장 짧은 단 아래에 차례로 붙여 세 단 높이를 맞춘다
+//      (검수사 2026-11-10 20:44 «빈공간 활용도가 떨어집니다. 저같으면 많은곳 3곳을 1 2 3 윗쪽에 놓고 적은 선사들로 비율을 맞출듯합니다» — XTPG 548E 선적 157대 선사 10곳).
+//      한 선사가 한 단을 넘거나 한 장에 안 들어가면 아래의 차례대로 채우기(검수사가 본 DXQD·TMPZ 모습)로 간다.
+const _carBalanced = (blocks, p, rowMm) => {
+  const wOf = (rows) => rows.reduce((a, r) => a + _noteWeight(r, rowMm, 5, true), 0);
+  const ws = blocks.map((b) => wOf(b.rows));
+  if (blocks.length < 2 || ws.some((x) => x > p) || ws.reduce((a, x) => a + x, 0) > p * COLS_PER_PAGE) return null;
+  const cols = Array.from({ length: Math.min(COLS_PER_PAGE, blocks.length) }, () => []), h = cols.map(() => 0);
+  blocks.forEach((b, i) => {
+    let k = i < cols.length ? i : -1;   // 큰 선사부터 단 머리에 하나씩
+    if (k < 0) { for (let j = 0; j < cols.length; j++) if (h[j] + ws[i] <= p && (k < 0 || h[j] < h[k])) k = j; }   // 그다음은 들어가는 단 가운데 가장 짧은 단
+    if (k < 0) { h[0] = Infinity; return; }
+    cols[k].push(...b.rows); h[k] += ws[i];
+  });
+  return h.some((x) => x === Infinity) ? null : cols;
+};
+const _carCols = (blocks, p, rowMm) => {
+  const bal = _carBalanced(blocks, p, rowMm);
+  if (bal) { bal.balanced = true; return bal; }
+  const cols = []; let w = 0;   // w = 마지막 단에 찬 높이(줄 수 셈)
+  const wOf = (rows) => rows.reduce((a, r) => a + _noteWeight(r, rowMm, 5, true), 0);
+  for (const b of blocks) {
+    const all = wOf(b.rows), isSmall = all <= p / 2;
+    if (cols.length && isSmall && w + all <= p) { cols[cols.length - 1].push(...b.rows); w += all; continue; }
+    for (const [a, c] of _carGreedy(b.rows, p, rowMm, true)) {
+      const col = b.rows.slice(a, c); if (a > 0) col.unshift(_carBarHtml(b.name, null));
+      cols.push(col); w = wOf(col);
+    }
+  }
+  return cols;
+};
+const packCarrier = (blocks) => {
+  let best = null;
+  for (let p = PER_COL; p <= PER_COL_MAX; p++) {
+    const rowMm = +(PER_COL * ROW_MM / p).toFixed(3);
+    const cols = _carCols(blocks, p, rowMm), pages = Math.ceil(cols.length / COLS_PER_PAGE), bal = cols.balanced ? 1 : 0;
+    //  쪽 수가 가장 적은 것 → 같으면 세 단 높이를 맞춘 배치 → 같으면 줄을 덜 좁힌 것(작은 p). 쪽 수가 같을 때 차례대로 채우기가 두세 줄짜리 단을 남기는 것을 피한다(2차 독립 감사 — 37·50·2줄).
+    if (!best || pages < best.pages || (pages === best.pages && bal > best.bal)) best = { p, rowMm, pages, cols, bal };
+  }
+  const cols = best.cols;
+  const pages = []; for (let i = 0; i < cols.length; i += COLS_PER_PAGE) pages.push(Array.from({ length: COLS_PER_PAGE }, (_, k) => cols[i + k] || []));
+  return { pages, rowMm: best.rowMm };
+};
+
 //  ★ 3.62 — 검수 리스트 장 나누기(검수사 2026-09-27 «버튼 선택이 좋을꺼 같습니다. 20/40 풀/엠티 포트별 TMPZ처럼 포트가 2개일때» ·
 //    «1. 20/40 풀먼저 엠티뒤에 2.풀엠티 20먼저 40뒤에 3포트별 지금과 같은데 포트별로 나눔» · «20/40 적용이 좋을듯 합니다»(포트가 두 장일 때) ·
 //    «최대한 기본 크기에서 보기좋게 한장으로 만들되 장수가 추가 되면 지금 처러 자동분리»).
@@ -470,9 +570,10 @@ function inspPieces(sorted, how, mode) {
     const unk = (k) => (k === '포트 미상' ? 1 : 0);
     return [...g.entries()].sort((a, b) => (unk(a[0]) - unk(b[0])) || (b[1].length - a[1].length) || (a[0] < b[0] ? -1 : 1));
   }
+  if (how === 'carrier') return [['', inspCarrierSort(sorted)]];   // 4.87: 선사별 — 선사가 바뀌어도 새 장을 시작하지 않고 이어진다(선사는 새 단에서 시작)
   return [['', sorted]];
 }
-const INSP_SPLITS = [['cont', '이어서'], ['size', '20/40'], ['fe', '풀/엠티'], ['port', '포트별']];
+const INSP_SPLITS = [['cont', '이어서'], ['size', '20/40'], ['fe', '풀/엠티'], ['carrier', '선사별'], ['port', '포트별']];
 
 //  ★ 4.80 (검수사 2026-11-08 «검수 리스트 중에 맨뒤에 있는 리퍼리스트를 베이순으로 … 셋팅온도 옆에 실제 온도를 입력할수 있게 빈칸» · «별첨 특수화물에서 OT FR을 리퍼리스트를 위에 올리고 특수 화물은 리퍼 리스트 맨아래에 따로 표기»)
 //  별첨에 리퍼가 있을 때의 쪽 배치 — 리퍼 구역(두 단, 칸이 넓다)이 위, 그 밖의 특수화물 구역(세 단, 종전 줄 형식)이 아래.
@@ -525,6 +626,10 @@ function withShipOp(containers, voyageInfo) {
   const sp = shipOpMapper(String(voyageInfo?.vsl || '').toUpperCase(), list.map((c) => c && c.op));
   return list.map((c) => {
     const op = sp(normalizeCarrier(c));
+    //  ★ 4.87 — 자료에 선사가 없어 컨번호 앞 세 글자로 채운 값(normalizeCarrier 마지막 갈래 · PHRU → «PHR»)은 선사가 아니라 컨 소유자 부호다.
+    //    선사별 장 나누기는 그것을 선사로 치지 않는다(_opGuess → «선사 미상»). 실 TMPZ 2030W 선적 — 선사 칸이 빈 240대가 부호 23개로 갈려 «선사 24곳» 이 됐다.
+    const _guess = !String((c && c.op) || '').trim() && !(c && c.bl && c.bl.length >= 4 && CARRIER_MAP[String(c.bl).slice(0, 4).toUpperCase()]);
+    if (_guess) return { ...c, ...(op && op !== '?' ? { op } : {}), _opGuess: true };
     return (op && op !== '?' && op !== c.op) ? { ...c, op } : c;
   });
 }
@@ -560,6 +665,20 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   //  3.29: 150 고정으로 자르지 않는다 — 비고가 긴 행이 자리를 더 먹으므로 «줄 수»로 채운다.
   //  3.62: «이어서»(종전 그대로) 외에 20/40·풀/엠티·포트별로 장을 나눈 판을 같이 만든다 — 조립은 아래 renderPageWithHdr 뒤.
   const _marks = opts.submit && opts.marks ? opts.marks : null;   // 4.75: 제출용 — 작업 표기 한 벌(utils.inspectionMarksOf)
+  //  4.87: 선사별 — 선사마다 {name, rows:[선사 막대(선사명·대수), …행]}. 순번·경계는 선사 안에서 묶음마다 1부터(막대가 경계 역할이라 선사 첫 줄에는 선을 따로 긋지 않는다).
+  const _blocksCar = (l) => {
+    const blocks = [], cnt = {}; for (const c of l) cnt[_carOf(c)] = (cnt[_carOf(c)] || 0) + 1;
+    let b = null, g = null, n = 0;
+    for (const c of l) {
+      const k = _carOf(c), gg = _inspGroup(c); let edge = '';
+      if (!b || b.name !== k) { b = { name: k, rows: [_carBarHtml(k, cnt[k])] }; blocks.push(b); g = null; n = 0; }
+      else if (gg !== g) edge = Math.floor(gg / 10) !== Math.floor(g / 10) ? 'gb2' : 'gb1';
+      if (gg !== g) { g = gg; n = 0; }
+      n += 1;
+      b.rows.push(renderRow(c, n, { edge, mark: _marks ? _marks.byCn[String(c.cn || '').toUpperCase()] || _marks.byCn[c.cn] : null }).replace(/^<tr /, `<tr${_carTag(k)} `));
+    }
+    return blocks;
+  };
   const _rowsOf = (l) => { const no = inspNumber(l), ed = inspEdges(l); return l.map((c, i) => renderRow(c, no[i], { edge: ed[i], mark: _marks ? _marks.byCn[String(c.cn || '').toUpperCase()] || _marks.byCn[c.cn] : null })); };
   //  4.75: 제출용 머리 아래 한 줄 — 누가 몇 호기에서 몇 대(숫자는 표 안 ✔ 옆 호기 번호). **그 장 묶음(이어서·20/40·풀/엠티·포트별 조각)의 컨만 센다** — 머리줄의 «20피트 102대» 와 같은 범위다.
   //  장당 가용 높이에 19mm 여유가 있어 3mm 한 줄은 장수를 안 늘린다(ATPR 2646E 267대 실측 2장 그대로).
@@ -611,7 +730,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
       <div class="phdr">
         <div class="phdr-l">${vsl}</div>
         <div class="phdr-c">${voy} <span class="modetag">${modeKo}${opts.submit ? ' 제출용' : ''}</span>${tag ? ` <b>${_esc(tag)}</b>` : ''}</div>
-        <div class="phdr-r">${dateStr} · ${pageNum}/${totalPages}</div>
+        <div class="phdr-r">${dateStr} <b class="ppage">${pageNum} / ${totalPages} 쪽</b></div>
       </div>${legend}
       <div class="icols">
         ${colsOf.map((rs) => `<div class="icol">${col(rs)}</div>`).join('')}
@@ -624,9 +743,10 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   const _variants = {};
   for (const [how, label] of INSP_SPLITS) {
     const pieces = inspPieces(list, how, mode);
-    const off = how !== 'cont' && pieces.length < 2;   // 엠티가 없거나 포트가 하나면 누를 수 없다
+    const off = how === 'carrier' ? inspCarrierOrder(list).length < 2 : how !== 'cont' && pieces.length < 2;   // 엠티가 없거나 포트가 하나면 누를 수 없다 · 선사가 하나여도 누를 수 없다
     const packed = [];
     for (const [tag, l] of pieces) {
+      if (how === 'carrier') { packed.push({ tag: '', n: l.length, fit: packCarrier(_blocksCar(l)), legend: _legendOf(l), car: l }); continue; }
       const rows = _rowsOf(l);
       const fit = how === 'cont' ? packFit(rows) : packBal(rows);
       if (how === 'port' && fit.pages.length >= 2) {
@@ -637,7 +757,15 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     }
     const total = packed.reduce((a, q) => a + q.fit.pages.length, 0);
     let pno = 0;
-    const html = packed.map((q) => q.fit.pages.map((rows) => renderPageWithHdr(rows, ++pno, total, q.fit.rowMm, q.tag ? `${q.tag} ${q.n}대` : '', q.legend)).join('')).join('');
+    //  4.87: 선사별은 쪽 머리줄에 그 쪽에 실린 선사와 선사 전체 대수(«DWS 234대 · SKR 40대»)
+    const _carTagOf = (q, pg) => {
+      const tot = {}; for (const c of q.car) tot[_carOf(c)] = (tot[_carOf(c)] || 0) + 1;
+      const seen = []; for (const col of pg) for (const r of col) { const k = /class="carbar/.test(r) ? null : _carKey(r); if (k !== null && !seen.includes(k)) seen.push(k); }
+      //  선사가 셋 이상이면 대수 많은 두 곳만 적고 «외 N곳»(셋을 다 적어도 글자 폭에 따라 두 줄로 접혔다 — 2차 독립 감사 «DWS 100대 · SKR 50대 · TJM 7대») — 쪽 머리줄이 한 줄을 넘으면 그만큼 본문이 밀려 종이를 넘는다(실 XTPG 548E 선적 선사 10곳 — 머리줄이 세 줄이 되어 끝 줄이 다음 장으로 넘어갔다). 선사마다의 대수는 단 안의 선사 막대에 있다.
+      if (seen.length > 2) return `${[...seen].sort((x, y) => tot[y] - tot[x] || (x < y ? -1 : 1)).slice(0, 2).map((k) => `${k} ${tot[k]}대`).join(' · ')} 외 ${seen.length - 2}곳`;   // 대수 많은 두 곳
+      return seen.map((k) => `${k} ${tot[k]}대`).join(' · ');
+    };
+    const html = packed.map((q) => q.fit.pages.map((rows) => renderPageWithHdr(rows, ++pno, total, q.fit.rowMm, q.car ? _carTagOf(q, rows) : (q.tag ? `${q.tag} ${q.n}대` : ''), q.legend)).join('')).join('');
     _variants[how] = { label, off, counts: packed.map((q) => q.fit.pages.length), html };
   }
   const sheet1Pages = _variants.cont.html;
@@ -668,7 +796,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
       <div class="phdr">
         <div class="phdr-l">${vsl}</div>
         <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span> <b>${_esc(_apxTitle)}</b></div>
-        <div class="phdr-r">${dateStr} · ${pi + 1}/${apxPages.length}</div>
+        <div class="phdr-r">${dateStr} <b class="ppage">${pi + 1} / ${apxPages.length} 쪽</b></div>
       </div>${blocks.map((b) => `<div class="apxbar">${b.kind === 'rf'
         ? `리퍼 리스트 ${_rfList.length}대${b.cont ? ' (이어서)' : ''} — 베이 순서 · 실제 온도는 손으로 적습니다`
         : `그 밖의 특수화물 ${_otList.length}대${b.cont ? ' (이어서)' : ''} — FR·OT·탱크·위험물·규격초과`}</div>
@@ -723,6 +851,7 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .phdr-l { flex: 1; font-weight: bold; font-size: 10pt; text-align: left; }
 .phdr-c { flex: 1; font-weight: bold; font-size: 9pt; text-align: center; }
 .phdr-r { flex: 1; text-align: right; font-size: 8pt; color: #555; }
+.phdr-r .ppage { color: #000; font-size: 9pt; line-height: 1; margin-left: 2mm; }   /* 4.87: 쪽수는 날짜와 떼어 검게 — «그냥 날짜로 보였습니다»(검수사 2026-11-10) */
 ${opts.submit ? '.plegend { font-size: 7pt; padding: 0 2mm 0.6mm; color: #222; }   /* 4.75: 제출용 머리 아래 범례 */\n' : ''}.modetag { background: #fde68a; padding: 0px 5px; border-radius: 2px; font-size: 7.5pt; margin-left: 3px; }
 .ititle { font-weight: bold; text-align: center; padding: 4px 0; font-size: 10pt; page-break-before: always; }
 .ipage { page-break-after: always; }
@@ -734,6 +863,10 @@ ${opts.submit ? '.plegend { font-size: 7pt; padding: 0 2mm 0.6mm; color: #222; }
 table.ilist { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
 table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: var(--rh, 5.2mm); }
 /* 3.62: 묶음 경계선 — 단계(20·20HC·40·40HC·45HC)가 바뀌면 두 줄, 풀→엠티·일반→특수는 굵은 줄(inspEdges) */
+/* 4.87: 선사별 — 선사가 시작하는 단 머리의 막대(선사명 왼쪽 · 대수 오른쪽)와 이어지는 단 머리의 «계속» 막대. 위아래 굵은 줄로 경계를 분명히 하고, 칸 높이는 행 높이와 같다 */
+table.ilist tr.carbar td { background: #cfcfcf; font-weight: bold; font-size: 9pt; text-align: left; padding: 0 2mm; border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000; height: calc(var(--rh, 5.2mm) - 0.7mm); }
+table.ilist tr.carbar td + td { text-align: right; }
+table.ilist tr.carbar.cont td { background: #ececec; font-weight: normal; font-size: 8pt; }
 table.ilist tr.gb1 td { border-top: 1.5pt solid #000; height: calc(var(--rh, 5.2mm) - 0.353mm); }   /* 두꺼워진 1pt 만큼 칸을 줄여 행 높이는 그대로 */
 table.ilist tr.gb2 td { border-top: 2.5pt double #000; height: calc(var(--rh, 5.2mm) - 0.706mm); }   /* 두꺼워진 2pt 만큼 */
 /* 4.80: 별첨 리퍼 구역 — 소제목 막대와 위치·셋팅·실제 온도 칸(실제 온도는 펜으로 적는 빈 박스) */
@@ -1012,4 +1145,4 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
   // 자동 인쇄 시 사용자가 당황할 수 있어 자동 호출 X. 직접 Ctrl+P
 }
 const inspTierOf = (c) => getContainerCategory(c).tier;   // 4.86: 단계 글자(20·20HC·40·40HC·45HC) — 연막검사가 직접 본다
-export { inspSortCmp, inspNumber, inspEdges, inspTierOf };   // 4.85: 연막검사가 정렬·순번·경계를 직접 본다
+export { inspSortCmp, inspNumber, inspEdges, inspTierOf, inspCarrierOrder, inspCarrierSort };   // 4.85: 연막검사가 정렬·순번·경계를 직접 본다

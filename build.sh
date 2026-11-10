@@ -1665,7 +1665,8 @@ fi
     node tools/smoke_insp486.cjs "$(pwd)" || { echo "✗ 4.86(검수 리스트 다섯 단계) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_insp48601.cjs "$(pwd)" || { echo "✗ 4.86-01(검수 리스트 위험물 특수 묶음 제외) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.86-02: 정밀 검토 일괄 수리 — 완료 기록 보호·교대·해치 한 칸·약한 신호(8초) / 규격·부두·선박 목록 한 벌 / 미르 날짜 키·별칭 거름
-    node tools/smoke_fix48602.cjs "$(pwd)" || { echo "✗ 4.86-02(완료 기록 보호) 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_insp487.cjs "$(pwd)" || { echo "✗ 4.87(검수 리스트 선사별·쪽수·실번호 폭·알파벳 빠진 실) 연막검사 실패 — 배포 금지"; exit 1; }
+        node tools/smoke_fix48602.cjs "$(pwd)" || { echo "✗ 4.86-02(완료 기록 보호) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_onebook487.cjs "$(pwd)" || { echo "✗ 4.86-02(판정 한 벌) 연막검사 실패 — 배포 금지"; exit 1; }
     TZ=America/Los_Angeles node tools/smoke_mirfix487.cjs "$(pwd)" || { echo "✗ 4.86-02(미르 날짜 키·별칭 거름) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }

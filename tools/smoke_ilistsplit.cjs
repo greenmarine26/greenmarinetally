@@ -24,8 +24,8 @@ const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/ilist_spli
 //  종이 한 판(html 조각)을 장·단·줄로 읽는다.
 const pagesOf = (html) => html.split(/(?=<div class="ipage")/).filter((x) => x.startsWith('<div class="ipage"')).map((pg) => ({
   tag: ((pg.match(/<span class="modetag">[^<]*<\/span>\s*<b>([^<]*)<\/b>/) || [])[1]) || '',
-  no: (pg.match(/· (\d+)\/(\d+)<\/div>/) || []).slice(1).map(Number),
-  cols: (pg.match(/<tbody>[\s\S]*?<\/tbody>/g) || []).map((tb) => [...tb.matchAll(/<tr style="background:[^"]+"( class="(gb[12])")?>\s*<td class="no">(\d+)<\/td>\s*<td class="cn">([^<]*)<\/td>/g)].map((m) => ({ edge: m[2] || '', no: +m[3], cn: m[4] }))),
+  no: (pg.match(/<b class="ppage">(\d+) \/ (\d+) 쪽<\/b>/) || []).slice(1).map(Number),   // 4.87: 쪽수는 «k / n 쪽»
+  cols: (pg.match(/<tbody>[\s\S]*?<\/tbody>/g) || []).map((tb) => [...tb.matchAll(/<tr(?: data-car="[^"]*")? style="background:[^"]+"( class="(gb[12])")?>\s*<td class="no">(\d+)<\/td>\s*<td class="cn">([^<]*)<\/td>/g)].map((m) => ({ edge: m[2] || '', no: +m[3], cn: m[4] }))),
 }));
 const buttonsOf = (html) => Object.fromEntries([...html.matchAll(/<button type="button" class="btn-split[^"]*" data-k="(\w+)"[^>]*?( disabled)?>([^<]*)<small>([^<]*)<\/small>/g)].map((m) => [m[1], { off: !!m[2], label: m[3], sub: m[4] }]));
 
@@ -52,13 +52,14 @@ try {
       ok(`TMPZ ${k} — 274대가 한 번씩(빠짐·겹침 0)`, cns.length === 274 && new Set(cns).size === 274 && list.every((c) => cns.includes(c.cn)), `${cns.length}/${new Set(cns).size}`);
       ok(`TMPZ ${k} — 쪽 번호가 1부터 끝까지 이어진다`, P.every((p, i) => p.no[0] === i + 1 && p.no[1] === P.length), P.map((p) => p.no.join('/')).join(' '));
       //  경계선 — 순번이 1로 돌아가는 줄(묶음 첫 줄)마다 경계선, 경계선 있는 줄은 순번 1. 조각 첫 줄은 경계선 없음.
-      let prevTag = null, badEdge = [];
+      let prevTag = null, badEdge = [], carFirst = 0;
       for (const p of P) for (const col of p.cols) for (const r of col) {
         const first = p.tag !== prevTag; prevTag = p.tag;
         if (first) { if (r.edge) badEdge.push('조각 첫 줄 ' + r.cn); continue; }
+        if (k === 'carrier' && r.no === 1 && !r.edge) { carFirst += 1; continue; }   // 4.87: 선사별 — 선사 막대 바로 아래 첫 줄은 막대가 경계다(경계선 없음)
         if ((r.no === 1) !== !!r.edge) badEdge.push(`${r.cn} 순번 ${r.no} 경계 ${r.edge || '없음'}`);
       }
-      ok(`TMPZ ${k} — 묶음이 바뀌는 줄마다 경계선, 그 밖에는 없음`, !badEdge.length, badEdge.slice(0, 4).join(' · '));
+      ok(`TMPZ ${k} — 묶음이 바뀌는 줄마다 경계선, 그 밖에는 없음`, !badEdge.length && (k !== 'carrier' || carFirst <= (String(h).match(/<tr class="carbar" /g) || []).length), badEdge.slice(0, 4).join(' · ') + ' 선사 첫 줄 ' + carFirst);
     }
     const cont = pagesOf(V.cont).flatMap((p) => p.cols.flat());
     ok('TMPZ 이어서 — 20풀→20엠티 굵은 줄 · 20→40 두 줄 · 40풀→40엠티 굵은 줄', cont.filter((r) => r.edge === 'gb1').length === 2 && cont.filter((r) => r.edge === 'gb2').length === 1,

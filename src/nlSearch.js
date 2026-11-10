@@ -2032,7 +2032,7 @@ export function sealIssuesOf(containers) {
   for (const c of containers || []) {
     if (_isCustomsSrc(c._source) || _isCustomsSrc(c.sl_src)) hasCustoms = true;   // 2.06-11: 채택 씰 출처(sl_src)도 근거 — 세관 올린 뒤 선사 리스트가 _source 를 덮어도 유지
     const hist = sealConflictOf(c);   // 4.49-02: RF CONTAINER LIST 실은 뺀다(검수사 «실번호는 본리스트»)
-    if (hist.some((h) => _isCustomsSrc(h.src))) hasCustoms = true;
+    if (hist.some((h) => _isCustomsSrc(h.src) || (Array.isArray(h.alsoSrc) && h.alsoSrc.some(_isCustomsSrc)))) hasCustoms = true;
     //  4.49: 실오류는 한 벌(utils.sealCheckOf) — 검수원이 고친 기록이 있고 실물이 알려진 실 어느 것과도 다를 때(하나만 맞으면 맞음) · 신고 끝자리 잘림(안 고쳐도 실오류).
     const _sk = sealCheckOf(c);
     if (_sk.error) { errs.push({ cn: c.cn, from: _sk.from, to: _sk.actual, trunc: _sk.trunc }); continue; }
@@ -2042,8 +2042,7 @@ export function sealIssuesOf(containers) {
       const v = String(h.sl || '').trim().toUpperCase();
       if (!v) continue;
       if (!seen.has(v)) seen.set(v, []);
-      const src = String(h.src || '').trim();
-      if (src && !seen.get(v).includes(src)) seen.get(v).push(src);
+      for (const src of [h.src, ...(Array.isArray(h.alsoSrc) ? h.alsoSrc : [])].map((x) => String(x || '').trim())) if (src && !seen.get(v).includes(src)) seen.get(v).push(src);   // 4.87: 알파벳만 빠진 짝의 출처(alsoSrc)도 이 실의 근거
     }
     if (seen.size < 2) continue;
     const entries = [...seen.entries()].map(([v, srcs]) => ({ v, srcs,
@@ -2114,7 +2113,7 @@ export function generateSealAuditAnswer(containers0, modeLabel, recordsList = nu
   const lines = [_listed ? `🔍 ${modeLabel} 실번호 주의 ${_listed}건 (점검 ${audit.checked}건 중)` : `🔍 ${modeLabel} 실번호 점검 — 확정할 실오류 없음 (점검 ${audit.checked}건 중)`];
   for (const e of errs) lines.push(`• ${e.cn} — ⚠ 실오류: 리스트 「${e.from}」 → 실물 「${e.to}」 (세관 신고 사안)`);
   for (const x of pre) lines.push(`• ${x.cn} — 🔎 예상 실오류: 리스트 「${x.seal}」 — ${x.why} · 실물 확인`);
-  const _l4 = (arr) => `${arr.slice(0, 3).map((f) => String(f.cn || '').slice(-4)).join('·')}${arr.length > 3 ? ' 등' : ''}`;
+  const _l4 = (arr) => arr.map((f) => String(f.cn || '').slice(-4)).join('·');   // 4.87: 대수를 말했으면 그 컨을 전부 적는다(검수사 2026-11-10 20:25 «17개가 형식이 틀리다고 하면서 17개를 보여주지 않는 것도 문제») — 한 줄에 끝 4자리만
   const _inPre = (f) => pre.some((x) => x.cn === f.cn);   // 예상 실오류로 이미 한 대씩 말한 컨은 한마디 줄에 또 세지 않는다(4.49-04 감사)
   const _sus = confs.filter((f) => f.grade === 'suspect' && !_inPre(f)), _pen = confs.filter((f) => f.grade !== 'suspect' && !_inPre(f));
   if (_sus.length) lines.push(`🔎 리스트 실이 세관 실과 모양이 다른 컨 ${_sus.length}대(${_l4(_sus)}) — 실 패턴이 달라 보이니 유의하세요 · 실물 확인`);
@@ -2387,7 +2386,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const _cs2 = _si.confs.filter(f => f.grade === 'suspect'), _cp = _si.confs.filter(f => f.grade === 'pending');
     const parts = [];
     if (_si.errs.length) parts.push(`실오류(현장 수정) ${_si.errs.length}건(${_si.errs.slice(0, 3).map(e => e.cn?.slice(-4)).join(', ')})`);
-    if (_cs2.length) parts.push(`🔴 실오류 의심(세관리스트와 다름) ${_cs2.length}건(${_cs2.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')})`);
+    if (_cs2.length) parts.push(`🔴 실오류 의심(세관리스트와 다름) ${_cs2.length}건(${_cs2.map(f => f.cn?.slice(-4)).join(', ')})`);
     if (_cp.length) parts.push(`선사 리스트끼리 다름 ${_cp.length}건(${_cp.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')}) — 세관리스트 도착 시 판정`);
     warns.push({ k: `실번호 ${_si.errs.length + _si.confs.length}건`, line: `⚠ ${parts.join(' · ')} — "실번호 점검"으로 출처까지 상세 확인` });
   }

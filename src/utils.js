@@ -61,7 +61,7 @@ export function isSentenceQuery(v) {
 // (앞 판) 'TallyOne 4.56-01'   // 4.56-01 외부 요청 12곳 제한 시간(`src/fetchTimeout.js`) · 빈 catch 27곳 이유 주석(2곳 경고)
 // (앞 판) 'TallyOne 4.68'   // 4.68 **크레딧이 있는 동안 제미나이를 쓰지 않는다 — 클로드 하루 합계 3달러를 넘으면 그날은 제미나이** — 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 사용하지 않는다. 하루 3불을 초과하면 사용하고» · 미르(대화·번역·자료 답)는 클로드 세 번, 사진 읽기는 세 번(적재 PDF 제외) 불러도 안 되면 제미나이로 가지 않고 «다시 시도» · 제미나이는 키·크레딧 문제·HEIC·하루 한도 초과·mir_config.geminiFallback=true 일 때만 · 한도는 mir_config.claudeDailyUsd(기본 3, 0 이면 클로드 끔).
 // (앞 판) 'TallyOne 4.82-02'   // 4.82 **시프팅 수동 표기 — 리스트에 없는 시프팅 컨을 검수사가 컨 상세에서 «＋ 시프팅 표기» 로 적는다(voyages/{항차}/shiftManual/{컨} = 지금 자리 → 옮겨 갈 자리)** — 검수사 2026-11-09 «OBWH 리스트에 없는 컨 10-07-82는 시프팅 대상임» · «10번베이 육상 1단 선적된 컨 2번베이 0104로 이동예정» · «시프팅 표기 바랍니다» · «선적 edi나오면 그곳에도 추가바랍니다». 재현 OBWH 2787E SPSU6017307(양하 EDI 10-07-82 · 2번 베이 01열 04단). 표기하면 확정 시프팅 지도에 한 지점(computeShiftingMapCached → 순수 함수 applyShiftManualToMap)에서 덧입혀져 평택 양하 254 → 253 · 시프팅 내림 1/1 · 선적 쪽 «싣는다» 카드 1(자리 = 표기 자리, 선적 EDI 가 오면 EDI 자리가 이기고 다르면 «표기 / 선적 EDI» 두 자리를 같이 밝힘, 도착했는데 그 컨이 없으면 «선적 EDI 에 아직 없음»). 서류(RESTOW)·EDI 대조·본선 잔류 확정이 이미 든 컨은 덮지 않는다. 진단(source_recon·list_short)·ediGap 은 표기 컨을 평택 EDI 입력에서 뺀다. 쓰기는 수석·검수사만(fbSetShiftManual — 되읽기 검증). 평택 양하 총계·홈 카드·수석 보드·마감텔리가 1대 줄어든다(작업 분모 254 는 그대로). 콘앱 ConeOne 2.76 이 같은 순수 함수로 같은 지도를 만든다(읽기만).
-export const APP_VERSION = 'TallyOne 4.86-02'   // 4.86-02 **정밀 검토(2026-11-10) 일괄 수리** — 검수사 «방금나온 문제점을 전면 수정합니다»(검수 리스트 출력물 제외). 완료 기록 보호(묶음 완료도 사람 완료를 안 덮음 · 여러 대는 한 번에 · 취소 반쪽 알림 · 교대 덮어쓰기 방지 · 해치 표시 한 칸 · 약한 신호에 완료 단추 안 잠김) · 마감텔리 시프팅 실패 알림 · 규격 길이(sizeLenOf)·부두(voyagePierOf)·선박 목록(SHIP_FLAGS) 한 벌 · 카페리 휴게 없음을 끝나는 시각에 · 미르 날짜 키 KST·자동 별칭 거름. 상세는 기록부. 연막 smoke_fix48602 · smoke_onebook487 · smoke_mirfix487.
+export const APP_VERSION = 'TallyOne 4.87'   // 4.87 **검수 리스트 «선사별» 장 나누기 · 쪽수 «2 / 2 쪽» · 실번호는 실제 폭으로 · 알파벳만 빠진 실은 같은 실** — 검수사 2026-11-10 15:26 «포트별 앞에 선사별을 넣어주시고 방식은 이어서 방식» · 19:39 «첫장 … 1째단은 앞장과 같이 … 2번째단은 적으면 적은대로 하고 3단은 다른선사이므로 그대로» · 20:03 «그냥 날짜로 보였습니다» · 20:08 «12자리 13자리 지금은 짤릴듯합니다» · 20:24 «알파벳이 없으면 실오류 판정을 안합니다» · 20:25 «17개를 보여주지 않는 것도 문제». inspectionList(packCarrier·_sealCls·ppage) · utils.sealSameLoose·sealConflictOf · nlSearch 실번호 점검 줄. 상세는 기록부. 연막 smoke_insp487. // (앞 판) 'TallyOne 4.86-02'   // 4.86-02 **정밀 검토(2026-11-10) 일괄 수리** — 검수사 «방금나온 문제점을 전면 수정합니다»(검수 리스트 출력물 제외). 완료 기록 보호(묶음 완료도 사람 완료를 안 덮음 · 여러 대는 한 번에 · 취소 반쪽 알림 · 교대 덮어쓰기 방지 · 해치 표시 한 칸 · 약한 신호에 완료 단추 안 잠김) · 마감텔리 시프팅 실패 알림 · 규격 길이(sizeLenOf)·부두(voyagePierOf)·선박 목록(SHIP_FLAGS) 한 벌 · 카페리 휴게 없음을 끝나는 시각에 · 미르 날짜 키 KST·자동 별칭 거름. 상세는 기록부. 연막 smoke_fix48602 · smoke_onebook487 · smoke_mirfix487.
 // (앞 판) 'TallyOne 4.86-01'   // 4.86-01 **검수 리스트의 «특수» 묶음은 컨 종류(리퍼·FR·OT·탱크)만 — 위험물·규격초과는 일반 풀·엠티의 컨번호 순서에 두고 비고에 표기만 남긴다** — 검수사 2026-11-10 15:45 «D/G를 분리했는데 분리할필요가 없습니다. 특수컨이 아니기때문입니다» · «일반에 알파벳순서에 맞추고 DG표기만 해주면 됩니다» · 15:50 «특수컨은 T/K OT FR RF등 일반컨테이너가 아닌것» · 15:52 «위험물은 특수화물엔 포함되지만 탱크같은것이 아니라 일반컨에 실린다면 특수컨으로 보지 않습니다» — 묶음 판정은 _isSpecialGroup(inspectionList.js) 한 함수, 별첨(특수화물)은 종전 _isSpecialCargo 그대로(위험물·규격초과 포함)
 // (앞 판) 'TallyOne 4.86'   // 4.86 **검수 리스트 묶음을 20 · 20HC · 40 · 40HC · 45HC 다섯 단계로 — 실제 화물이 있는 단계만 줄이 생긴다** — 검수사 2026-11-10 14:07 «검수리스트는 20 20HC 40 40HC 45HC 단계로 합니다 다만 실제 화물이 있을때만 적용합니다 일반적인건 20 40HC 45HC 이고 가끔 40 이나 20HC가 들어 갈수 있씁니다». 실대조 — 보관 항차 56개(112 구간 · 평택분 27,740대)에 단계를 씌워 셌다: 20 9,758 · 20HC 8(OBWH 만 — 228E 4·2600 4) · 40 62(9척) · 40HC 17,810 · 45HC 102(OBWH 100·DXQD 1·RZOR 1). 단계는 마감텔리 칸(tallySizeCol 20·40·HC·45)에서 나오고 20' 칸만 하이큐(20HC)를 한 번 더 가른다 — 20HC = 규격 라벨 20HC(2280·228E·2600·22HC 류) 또는 ISO 25xx(둘째 자리 5 = 9'6" 하이큐, 라벨은 20DC fallback). 그래서 단계 → 칸이 하나로만 간다(20·20HC → 20 / 40 → 40 / 40HC → HC / 45HC → 45 — 실자료 1,077대 전부 tallySizeCol 과 일치). inspectionList.getContainerCategory 가 ti(0~4)·tier 를 내고 _inspGroup = ti*10 + (풀0·엠티1·특수2) — 순번은 묶음마다 1부터, 단계가 바뀌는 줄은 두 줄 경계(gb2)·단계 안 종류가 바뀌는 줄은 굵은 줄(gb1)이라 inspNumber·inspEdges·인쇄·CSV 는 고칠 데가 없었다. 장 나누기 «20/40» 의 20피트 장(_is20)은 20·20HC. 연막 smoke_insp486(실 OBWH 2679E·2685E·PCSZ 2622W 평택분 1,077대). // (앞 판) 'TallyOne 4.85-02'   // 4.85-02 **검수 리스트 규격 묶음은 수석이 메일로 보낸 마감텔리의 규격 칸을 따른다 · 세관 45VH·45HQ 는 45피트로 읽는다** — 검수사 2026-11-10 11:31 «검수리스트는 반드시 마감텔리에서 선박별로 만들어진 리스트 규격으로 적용해주시기 바랍니다» · 11:33 «30여척의 마감텔리를 수집후 규격리스트를 만드시고 그걸 적용해주시면 됩니다» · 11:34 «앱의 마감텔리가 아니고 반드시 메일에 수석이 만든 마감 텔리여야 합니다». 실대조 — 수석 마감텔리(MAILBOX 14개 선박 · 파일 27개 · Final Work 의 양하·선적 F/E × 20·40·HC·45 칸 수)를 보관 항차 22개의 컨에 tallySizeCol 을 씌운 칸 수와 칸마다 견주었다. 양하·선적 26구간이 전 칸 일치(1건은 다른 항차 대수가 우연히 같아 제외), ISO 42종이 칸 하나로만 갔다(45GP·4500·45G1·L2G1 → HC · 22xx → 20 · 4360 → 40 · 950E → 45). 그래서 검수 리스트 묶음(길이·45 맨 끝)은 inspectionList.getContainerCategory 가 tallySizeCol 한 벌을 쓴다(4.85-01 의 세관 우선 묶음은 거둠 — 세관 규격 글자와 규격불일치 표시는 그대로). 세관 코드표(프리즘 147종)·PCTC 코드조회(91종)로는 45VH·45HQ(ISO 9xxx = 45피트)를 앞 두 자리 45 로 40피트 하이큐브로 읽던 것을 utils._SPEC_ALIAS 로 L5G1 에 묶음(보관 429항차엔 나온 적 없음). 연막 smoke_insp48501 기대값 갱신. // (앞 판) 'TallyOne 4.85-01'   // 4.85 **교대 처리 — 완료 입력 때 터미널이 그 베이에 준 호기와 내 호기가 다르면 한 번 묻고, 헤더 호기 창에 «교대» 단추(같은 조에서 호기를 쥔 사람 중 한 명을 골라 크레인을 이어받는다)** — 검수사 2026-11-10 «입력 시점에 한 번 묻기» · «교대 단추도 좋은 방법입니다. 3명이 근무중이면 두명중에 한명을 선택하고 교대할수 있으니 정확한 방법입니다» (옛 4.72 «교대 메뉴는 만들지 않는다» 를 검수사가 뒤집음). 판정 utils.craneAskOf(표시 보정 craneRelabelOf 와 같은 앵커 craneAnchorsOf 한 벌) · 중계 craneAsk.js · 창 CraneAskHost · 교대 쓰기 firebase.fbRelieveCrane(조 등록 덮기+상대 교대 받음 표시+내 호기, 멀티 경로 한 번) · 상대 기기는 App 이 표시를 보고 호기를 놓는다. 연막 smoke_crane485. 같은 판 — 검수 리스트 순서 20-40-45(검수사 2026-11-10 «45HC(L5)를 리스트 마지막에 위치하도록 20-40-45순입니다») inspectionList._inspGroup 45 묶음 신설 · 연막 smoke_insp485.
 // (앞 판) 'TallyOne 4.84-01'   // 4.84-01 **항차가 다른 덱플랜은 그 쪽 화면에 올리지 않는다(들어오는 자리의 문지기)** — 검수사 2026-11-10 «왜 양하 덱플랜이 선적에서도 그대로 보이는지» · 실데이터 RZOR_R124E 선적 stowagePlan 의 voy 가 R124E(양하 항차) — 수집기가 컨 1대 겹침으로 방향을 잘못 정했다(MailPilot 2.50-06 이 덱플랜 항차 VOY. NO 로 먼저 정하게 고침). firebase._postVoyage 가 dropOtherVoyagePlan 을 부른다. 덱플랜 항차가 그 쪽 항차와 다르고 반대 쪽과 같을 때만 가리며 보관 때는 restoreStaleRawEdi 가 되돌린다.   // 4.84 **상황판 호기 줄이 갱을 바꾼 뒤에도 터미널 베이를 보고 맞춰진다(표시 전용)** — 검수사 2026-11-09 «금일 작업순서 1호기 이형출 2호기 김성일로 시작» · «박진우가 이형출을 교대해주고 이형출이 절 교대» · «제가 갱을바꿔가면서 했으니» · «갱을 바꿔도 … 1호기 이형출입니다» · «같은 시간대입니다 2호기가 10번베이에 갈시간이 안됩니다». 사람이 앱에서 고른 호기는 갱을 바꿔도 그대로라(OBWH 박진우 1호기 표기 31건은 터미널 2호기 14·18베이 작업) 호기 줄의 이름이 틀어졌다. utils.craneRelabelOf 가 같은 베이(±2)·30분 안 가장 가까운 터미널 실적의 호기로 읽고(두 호기·호기 빈 실적이 섞인 공유 베이는 입력 유지) craneBoardOf 가 이름·자리를 그 호기 줄에 붙이며 «입력 호기와 다름 N건»을 단다. 저장값·대수 집계 변화 없음.
@@ -199,7 +199,8 @@ export const APP_VERSION = 'TallyOne 4.86-02'   // 4.86-02 **정밀 검토(2026-
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.86-02 트윈 완료가 이미 완료된 컨을 덮지 않습니다. 약한 신호에도 완료 단추가 잠기지 않습니다'
+export const APP_NOTE = '4.87 검수 리스트 장 나누기에 선사별이 생겼습니다. 알파벳만 빠진 실번호는 불일치로 보지 않습니다'
+// (앞 판) export const APP_NOTE = '4.86-02 트윈 완료가 이미 완료된 컨을 덮지 않습니다. 약한 신호에도 완료 단추가 잠기지 않습니다'
 // (앞 판) export const APP_NOTE = '4.86-01 검수 리스트에서 위험물은 일반 컨번호 순서에 들어가고 비고에 위험물 표기만 남습니다 리퍼 FR OT 탱크만 특수 묶음입니다'
 // (앞 판) export const APP_NOTE = '4.86 검수 리스트의 묶음이 20 20HC 40 40HC 45HC 다섯 단계로 나뉩니다 실제 화물이 있는 단계만 줄이 생깁니다'
 // (앞 판) export const APP_NOTE = '4.85-02 검수 리스트의 묶음은 수석 마감텔리의 규격 칸을 따릅니다 세관 규격과 갈리면 비고에 규격불일치가 뜹니다'
@@ -10450,9 +10451,28 @@ export function isRfListSrc(src) {
   return /RF\s*CONTAINER\s*LIST|REEFER\s*CONTAINER\s*LIST/i.test(String(src || ''));
 }
 //  «실번호 불일치»(한 컨에 서류마다 다른 실 — sl_conflict) 한 벌 — RF CONTAINER LIST 출처는 뺀다(배지·컨 상세 카드·미르 점검·브리핑이 같은 목록을 쓴다).
+//  ★ 4.87 (검수사 2026-11-10 20:24 «실오류에서 보면 알파벳이 없으면 실오류 판정을 안합니다. 다만 알파벳이 틀리면 실오류 입니다. 앞자리 01234567인데 1234567이면 실오류 입니다.»)
+//    **알파벳이 빠졌을 뿐인 실은 같은 실이다.** 한쪽이 숫자뿐이고 다른 쪽이 «영문 + 똑같은 숫자»(ES02273964 ↔ 02273964)면 같은 실로 본다 — 숫자는 앞자리 0 까지 글자 그대로 같아야 한다
+//    (01234567 ↔ 1234567 은 다른 실 · 영문끼리 다르면 ES… ↔ EA… 다른 실). TMPZ 2038E 양하 EAS 17대가 선사 리스트 «ES02273964» · 세관 «02273964» 인데 카드는 «실번호 불일치»,
+//    미르는 «세관 실과 모양이 다른 컨 17대» 라고 했다. 한 벌(sealSameLoose)을 sealConflictOf 가 써서 카드·컨 상세·미르·브리핑이 같이 조용해진다.
+export function sealSameLoose(a, b) {
+  const x = normSeal(a), y = normSeal(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const d = /^\d+$/.test(x) ? x : /^\d+$/.test(y) ? y : '', l = d === x ? y : x;
+  if (!d) return false;
+  const m = /^([A-Z]+)(\d+)$/.exec(l);
+  return !!m && m[2] === d;
+}
 export function sealConflictOf(c) {
-  const h = Array.isArray(c && c.sl_conflict) ? c.sl_conflict : [];
-  return h.filter((x) => x && !isRfListSrc(x.src));
+  const h = (Array.isArray(c && c.sl_conflict) ? c.sl_conflict : []).filter((x) => x && !isRfListSrc(x.src));
+  //  숫자뿐인 값은 «영문 + 같은 숫자» 짝이 있으면 뺀다(영문이 붙은 쪽이 온전한 실 — 그 한 줄만 남는다). 짝이 없으면 그대로.
+  //    뺀 값의 출처는 짝에 alsoSrc 로 넘긴다 — 세관이 숫자뿐인 값으로 적었으면 그 실은 세관도 말한 실이다(독립 감사 중 — 세 값일 때 세관 근거가 사라져 «세관리스트 도착 시 판정» 이라고 했다).
+  const _digits = (x) => /^\d+$/.test(normSeal(x.sl));
+  const _twinOf = (x) => (_digits(x) ? h.find((k) => k !== x && !_digits(k) && sealSameLoose(k.sl, x.sl)) || null : null);
+  const also = new Map();
+  for (const x of h) { const k = _twinOf(x); if (k && x.src) also.set(k, [...(also.get(k) || []), String(x.src)]); }
+  return h.filter((x) => !_twinOf(x)).map((x) => (also.has(x) ? { ...x, alsoSrc: also.get(x) } : x));
 }
 function _sealEdited(c) { return !!(c && Array.isArray(c.sl_history) && c.sl_history.length); }
 function _sealLegacy(c) { return !!(c && !_sealEdited(c) && c.sl_orig && c.sl && normSeal(c.sl_orig) !== normSeal(c.sl)); }   // 옛 병합 흔적(고친 기록 없이 sl ≠ sl_orig — sl_src 는 sl_orig 쪽 출처)
@@ -10513,7 +10533,7 @@ export function sealCheckOf(c, ediSl) {
   const toks = new Set();
   for (const k of known) { toks.add(k.n); const parts = splitJoinedSeals(k.v); if (parts.length > 1) for (const p of parts) toks.add(normSeal(p)); }
   const an = normSeal(actual);
-  const error = trunc ? (edited ? !!(an && an !== decl.n) : true) : zero ? (edited ? !!(an && an !== cust.n) : true) : !!(edited && an && known.length && !toks.has(an));
+  const error = trunc ? (edited ? !!(an && an !== decl.n) : true) : zero ? (edited ? !!(an && an !== cust.n) : true) : !!(edited && an && known.length && !toks.has(an) && ![...toks].some((t) => sealSameLoose(t, an)));   // 4.87: 알파벳만 빠진 실물 값은 같은 실
   //  재감사(중-2) — 세관 값이 이어 붙은 씰의 20자 컷이면(RZOR SAWTBP «LF102335LF102350LF10» ↔ «LF102335LF102350LF102345LF102336») 같은 씰이다 — 큰 실은 긴 값(4.20 «잘린 앞부분이면 같은 씰 · 씰 전부 적는다»).
   const _joinedOf = (x) => (x ? known.find((k) => k !== x && k.n.length > x.n.length && k.n.startsWith(x.n) && splitJoinedSeals(k.v).length > 1) || null : null);
   const _cJ = _joinedOf(cust);
