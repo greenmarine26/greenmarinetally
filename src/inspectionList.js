@@ -8,8 +8,9 @@
 //   - 시트1=전체, 시트2=특수화물 별첨
 
 import { shipOpMapper } from './data/tallyFormats.js';
+import { tallySizeCol } from './tallyReport.js';   // 4.85-02: 마감텔리 규격 칸 한 벌
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
-import { isoShown, isoConflictOf, isoTriad } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown, isoConflictOf } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { reeferPosOf, reeferOrderKey, reeferSetOf, temp1 } from './reeferList.js';   // 4.80: 별첨 리퍼 구역 — 베이 순서·셋팅 온도는 리퍼 온도 리스트와 한 벌
 import { inspectionSealOf } from './utils.js';   // 4.25-02: 실번호 칸 한 벌 — 엠티는 엠티실(eseal)도 본다(종이·CSV)
 const COLOR = {
@@ -60,13 +61,6 @@ function normalizeCarrier(c) {
 
 //  isoToLabel 이 내는 라벨 끝 두 자 → 종류. VH(통풍컨)는 터미널이 DC 로 다룬다(utils 주석).
 const _LABEL_TYPE = { DC: 'normal', HC: 'normal', VH: 'normal', RF: 'reefer', RH: 'reefer', FR: 'fr', OT: 'ot', TK: 'tk' };
-//  세관 원문 규격의 길이 라벨('20'|'40'|'45'), 세관 자료가 없거나 못 읽으면 ''.
-function _customsLen(c) {
-  if (!c || !String(c.iso_customs || '').trim()) return '';
-  const t = isoTriad('', c).find((x) => x.k === 'customs');   // 앱 한 벌(isoConflictOf 와 같은 읽기 — 세관 45HC 는 L5 로 읽는다)
-  const l = t ? String(t.label || '').slice(0, 2) : '';
-  return (l === '20' || l === '40' || l === '45') ? l : '';
-}
 //  ★ 4.85-01 — 앱이 이미 아는 «규격이 자료마다 다릅니다»(utils.isoConflictOf — 컨 상세·작업카드·진단과 같은 한 벌)를 비고에 «규격불일치» 로 단다.
 //    검수사 2026-11-10 «앱에서 그걸 알고 있습니다» — 리스트용 판정을 따로 만들지 않는다.
 function _specMismatch(c) {
@@ -74,7 +68,6 @@ function _specMismatch(c) {
 }
 function getContainerCategory(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
-  const first = iso[0] || '';
   const third = iso[2] || '';
 
   // 길이: 규격 라벨(isoToLabel 한 벌)이 먼저다 — 45피트는 40 묶음(3.60 «45 는 40»).
@@ -83,13 +76,12 @@ function getContainerCategory(c) {
   //    라벨도 첫 자리도 모르면(빈 ISO) 20 으로 둔다 — 규격 칸도 같은 값(«20»)을 적어 종이 안에서 어긋나지 않는다.
   //  ★ 4.85-01 — 세관 신고가 우선이다(검수사 2026-11-10 «세관리스트가 우선 해야 합니다. 그러므로 42HQ뒤에 45GP로 놓고 문제가 있음을 알려야 합니다. 규격불일치»).
   //    세관 원문(iso_customs)의 길이로 묶음을 정한다. 세관과 EDI/선사의 길이가 갈리면 비고에 «규격불일치»(_specMismatch).
-  const _labIso = String(isoToLabel(iso) || '').slice(0, 2);
-  const _labCus = _customsLen(c);
-  const _labLen = _labCus || _labIso;
-  let len = 20;
-  if (_labLen === '40' || _labLen === '45') len = 40;
-  else if (_labLen === '20') len = 20;
-  else if (first === '4' || first === '9' || first === 'L' || first === 'M' || first === 'P') len = 40;
+  //  ★ 4.85-02 — **마감텔리와 같은 규격 칸**(tallySizeCol — 20·40·HC·45)으로 묶는다. 검수사 2026-11-10 11:31 «검수리스트는 반드시 마감텔리에서 선박별로 만들어진 리스트 규격으로 적용»
+  //    · 11:33 «30여척의 마감텔리를 수집후 규격리스트를 만드시고 그걸 적용». 마감텔리 칸 규칙은 정본 마감텔리 대조(3.31 · 233건)로 굳은 한 벌이라 여기서 새로 만들지 않는다.
+  //    세관 원문과 길이가 갈리면 묶음은 마감텔리를 따르고 비고에 «규격불일치»(_specMismatch)만 단다(4.85-01 의 세관 우선 묶음은 이 판에서 거둔다).
+  const _col = tallySizeCol(c);
+  const _labLen = _col === '45' ? '45' : _col === '20' ? '20' : '40';
+  const len = _labLen === '20' ? 20 : 40;
 
   //  ★ 3.45 — 종류도 **규격 칸과 같은 해석기**(isoToLabel)를 쓴다.
   //    ⚠ 종전엔 ISO 셋째 글자만 봐서 숫자 ISO 를 못 읽었다 — 4530·453E(40피트 HC 리퍼)와
