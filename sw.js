@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.87-01';
-const NOTE = '4.87-01 검수 리스트 장 나누기에 선사별이 생겼습니다. 알파벳만 빠진 실번호는 불일치로 보지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.87-02';
+const NOTE = '4.87-02 같은 계열 실 가운데 한두 대만 자릿수가 다르거나 앞자리 0 이 없으면 예상 실오류로 알립니다. 미르가 실번호 점검 뒤에 그 컨을 보여 달라고 하면 한 대씩 보여줍니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

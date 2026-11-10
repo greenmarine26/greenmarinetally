@@ -663,7 +663,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
       alerts.push({
         level: 'warning',
         code: 'seal_format',
-        msg: `예상 실오류 ${saErr.length}건 — ` + [saShort.length ? `자릿수 부족 ${saShort.length}` : '', saCn.length ? `컨번호와 같은 씰 ${saCn.length}` : ''].filter(Boolean).join(' · '),
+        msg: `예상 실오류 ${saErr.length}건 — ` + [[['자릿수 부족', (x) => !/자릿수 많음|앞자리 0 없음/.test(x.why || '')], ['자릿수 많음', (x) => /자릿수 많음/.test(x.why || '')], ['앞자리 0 없음', (x) => /앞자리 0 없음/.test(x.why || '')]].map(([w, f]) => { const k = saShort.filter(f).length; return k ? `${w} ${k}` : ''; }).filter(Boolean).join(' · '), saCn.length ? `컨번호와 같은 씰 ${saCn.length}` : ''].filter(Boolean).join(' · '),
         voice: '',
         count: saErr.length,
         details: saErr,

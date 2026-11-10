@@ -4,14 +4,14 @@
 //   «방법은 로그인 하고 선박을 선택하면 야간조 입니까 주간조 입니까를 물어 선택하게 해야 겠습니다.»
 //   «만약 야간조인데 지금 접속해 있다면 그인원은 보기만 하러 온것입니다» · «반대로 주간조인데 야간에 접속해있어도 조회만 하는 인원입니다»
 //   «연태obwh 일조 rzor» (연태 OBWH · 일조 RZOR 는 주야간이 따로 없다 — 조를 묻지 않고 시간 제한도 두지 않는다)
-//  기본 근무 시각(검수사가 따로 답하지 않은 기본값) — 주간 06:00~18:00 · 야간 18:00~익일 06:00, 한국 시각, 서버 시각 기준(기기 시계는 믿지 않는다).
+//  근무 시각(검수사 2026-11-11 «근무시간은 이미 몇번씩 이야기 했습니다» — 주간 08:00~17:30 · 야간 19:00~익일 06:30, utils.currentShift 와 같은 경계 한 벌). 교대 사이(06:30~08:00 · 17:30~19:00)는 다가오는 조로 본다. 한국 시각, 서버 시각 기준(기기 시계는 믿지 않는다).
 
 //  주야 구분 없는 배 코드 한 곳 — 연태(OBWH)·일조(RZOR) + 일조 대체 카페리 SMYA(앞 판 utils.NO_SHIFT_SHIPS 3.0-01 그대로 옮김, 브리핑·갱 배분의 shipHasShifts 와 같은 목록).
 //  항차 키는 OBWH_2690W 꼴이라 앞 코드로 읽는다(utils.isFerry1700Ship 과 같은 읽기).
 import { shipCodesWith } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 목록은 선박 성질표(SHIP_FLAGS.noShift)에서 만든다 — shipPolicyCore 는 import 가 없는 순수 모듈이다
 export const NO_SHIFT_SHIPS = shipCodesWith('noShift');   // OBWH · RZOR · SMYA
-export const DAY_START_H = 6;
-export const DAY_END_H = 18;
+export const DAY_FROM_MIN = 390;   // 06:30 — 야간조 끝(이때부터 다가오는 주간조)
+export const DAY_TO_MIN = 1050;    // 17:30 — 주간조 끝(이때부터 다가오는 야간조)
 
 /** 항차 키(OBWH_2690W) 또는 info.vsl 로 읽은 배 코드(대문자). */
 export function shipCodeOfKey(key, info) {
@@ -28,14 +28,15 @@ export function serverOffset() { return _offset; }
 /** 서버 기준 지금(ms). */
 export function serverNow() { return Date.now() + _offset; }
 
-/** 그 시각(ms)의 근무조 — 'day'(06:00~18:00) | 'night'. */
+/** 그 시각(ms)의 근무조 — 'day'(주간 08:00~17:30, 교대 사이 06:30~08:00 포함) | 'night'(야간 19:00~익일 06:30, 교대 사이 17:30~19:00 포함). */
 export function shiftAt(ms) {
-  const h = new Date((Number(ms) || 0) + 9 * 3600 * 1000).getUTCHours();
-  return (h >= DAY_START_H && h < DAY_END_H) ? 'day' : 'night';
+  const d = new Date((Number(ms) || 0) + 9 * 3600 * 1000);
+  const mm = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return (mm >= DAY_FROM_MIN && mm < DAY_TO_MIN) ? 'day' : 'night';
 }
 export function nowShift() { return shiftAt(serverNow()); }   // utils.currentShift(08:00~17:30·19:00~06:30 객체)와 이름·뜻이 다르다 — 이쪽은 로그인 조 선택용 두 갈래 문자열
 export function shiftLabel(s) { return s === 'day' ? '주간조' : s === 'night' ? '야간조' : ''; }
-export function shiftWindowText(s) { return s === 'day' ? '06:00~18:00' : s === 'night' ? '18:00~익일 06:00' : ''; }
+export function shiftWindowText(s) { return s === 'day' ? '08:00~17:30' : s === 'night' ? '19:00~익일 06:30' : ''; }
 
 /** 명단 한 줄(inspectors/이름)의 근무조 — 적힌 workShift, 없으면(4.79 이전 로그인) 지정한 시각의 조로 본다. */
 export function holderShiftOf(i) {

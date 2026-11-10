@@ -2106,7 +2106,10 @@ export function generateSealAuditAnswer(containers0, modeLabel, recordsList = nu
   //  4.39-02: 예상 실오류 — auditSeals 가 이미 올린 컨(컨번호 혼입 등)은 겹쳐 세지 않는다
   const pre = sealPredictOf(containers, recordsList, ediList).filter((x) => !audit.items.some((it) => String(it.cn || '').includes(x.cn.slice(-4))));
   if (!audit.checked && !errs.length && !confs.length && !pre.length) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
-  if (!audit.items.length && !errs.length && !confs.length && !pre.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)`;
+  //  4.87-02 (검수사 2026-11-11 04:36 «형식이 다른 17개를 보여 달라고 했을때도 같은 대답을 했습니다»): 알파벳만 빠져 같은 실로 본 컨도 숨기지 않고 한 줄로 적는다(실오류는 아니다).
+  const _drop = sealAlphaDropOf(containers).filter((d) => !errs.some((e) => e.cn === d.cn));
+  const _dropLine = _drop.length ? `ℹ 알파벳만 빠진 실 ${_drop.length}대(${_drop.map((d) => String(d.cn || '').slice(-4)).join('·')}) — 같은 실로 봅니다 (예 「${_drop[0].full}」 ↔ 「${_drop[0].short}」)` : '';
+  if (!audit.items.length && !errs.length && !confs.length && !pre.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)` + (_dropLine ? `\n${_dropLine}` : '');
   //  4.49-04 (검수사 2026-10-25 12:49 «자릿수 하나 부족한건 실오류가 맞는데 의심대상은 너무 많습니다. 그런건 한마디면 족합니다. 실 패턴이 틀리니 유의해야한다고 건건마다 불러주면 보기도 힘들고 듣기도 힘듭니다»):
   //    실오류·예상 실오류(자릿수 부족)·형식 점검은 한 대씩, «세관 실과 모양이 다른 의심»·«선사 리스트끼리 다름» 은 한마디로(MAMP 641N 머스크 Shipper Seal 18대가 한 대씩 18줄로 나오던 것).
   const _listed = audit.items.length + errs.length + pre.length;
@@ -2120,7 +2123,41 @@ export function generateSealAuditAnswer(containers0, modeLabel, recordsList = nu
   if (_pen.length) lines.push(`🔎 선사 리스트끼리 실이 다른 컨 ${_pen.length}대(${_l4(_pen)}) — 세관리스트가 오면 판정합니다`);
   if (!hasCustoms && confs.length) lines.push('📋 이 항차 자료에 세관리스트가 없습니다 — **세관리스트를 첨부해 주세요.** 실오류 판정은 세관리스트 기준입니다.');
   for (const it of audit.items) lines.push(`• ${it.cn} 「${it.seal}」 — ${it.reason}`);
+  if (_dropLine) lines.push(_dropLine);
   return lines.join('\n');
+}
+
+//  ★ 4.87-02 — 알파벳만 통째로 빠져 같은 실로 본 컨(utils.sealConflictOf 가 숫자뿐인 짝을 흡수하며 alsoSrc 를 남긴 것). 실오류가 아니라 알림용이다.
+export function sealAlphaDropOf(containers) {
+  const out = [];
+  for (const c of containers || []) {
+    const h = sealConflictOf(c).find((x) => Array.isArray(x.alsoSrc) && x.alsoSrc.length);
+    if (!h) continue;
+    const full = String(h.sl || '').trim().toUpperCase();
+    out.push({ cn: c.cn, full, short: full.replace(/^[A-Z]+/, '') });
+  }
+  return out;
+}
+
+//  ★ 4.87-02 — 실번호 점검 답 뒤의 후속 물음(«형식이 다른 17개 보여줘»·«그 3대 뭐야»)에 내는 상세 — 점검 답이 한마디로 줄인 것까지 한 대씩 두 값을 적는다.
+//    검수사 2026-11-11 04:37 «문제를 찾아서 알려는 주는데 후속 질문에 답을 못한다는것입니다». 판정은 점검 답과 같은 함수(sealIssuesOf·sealPredictOf·auditSeals) 한 벌이다.
+export function generateSealDetailAnswer(containers0, modeLabel, recordsList = null, ediList = null) {
+  const containers = _withRecordSeals(containers0, recordsList);
+  const audit = auditSeals(containers || []);
+  const { errs, confs } = sealIssuesOf(containers);
+  const pre = sealPredictOf(containers, recordsList, ediList).filter((x) => !audit.items.some((it) => String(it.cn || '').includes(x.cn.slice(-4))));
+  const drop = sealAlphaDropOf(containers).filter((d) => !errs.some((e) => e.cn === d.cn));
+  const lines = [];
+  for (const e of errs) lines.push(`• ${e.cn} — ⚠ 실오류: 리스트 「${e.from}」 → 실물 「${e.to}」`);
+  for (const x of pre) lines.push(`• ${x.cn} — 🔎 예상 실오류: 리스트 「${x.seal}」 — ${x.why}`);
+  for (const f of confs) {
+    if (pre.some((x) => x.cn === f.cn)) continue;
+    lines.push(`• ${f.cn} — ${f.grade === 'suspect' ? '세관 실과 모양이 다름' : '선사 리스트끼리 다름'}: ${f.entries.map((e) => `「${e.v}」(${e.customs ? '세관' : '선사'})`).join(' ↔ ')}`);
+  }
+  for (const d of drop) lines.push(`• ${d.cn} — 알파벳만 빠짐(같은 실): 「${d.full}」 ↔ 「${d.short}」`);
+  for (const it of audit.items) lines.push(`• ${it.cn} 「${it.seal}」 — ${it.reason}`);
+  if (!lines.length) return `✅ ${modeLabel} — 따로 보여드릴 실번호가 없습니다 (실오류·불일치·형식 다름 0대)`;
+  return [`📋 ${modeLabel} 실번호 상세 ${lines.length}대`, ...lines].join('\n');
 }
 
 // V7.90-05: 실번호(씰) 오류 사전 점검 (사용자 요청 — 리스트 단계에서 미리 잡기)

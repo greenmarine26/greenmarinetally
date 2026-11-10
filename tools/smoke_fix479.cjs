@@ -21,7 +21,7 @@ const NORMAL = '최원형', NORMAL2 = '송제욱', NORMAL3 = '고현석';
 
 (async () => {
   // ① 시각 판정 — 경계와 서버 시각
-  T(M.shiftAt(K(2026, 11, 9, 6, 0)) === 'day' && M.shiftAt(K(2026, 11, 9, 5, 59)) === 'night' && M.shiftAt(K(2026, 11, 9, 17, 59)) === 'day' && M.shiftAt(K(2026, 11, 9, 18, 0)) === 'night', '주간 06:00~18:00 · 야간 18:00~06:00 경계');
+  T(M.shiftAt(K(2026, 11, 9, 6, 30)) === 'day' && M.shiftAt(K(2026, 11, 9, 6, 29)) === 'night' && M.shiftAt(K(2026, 11, 9, 17, 29)) === 'day' && M.shiftAt(K(2026, 11, 9, 17, 30)) === 'night' && M.shiftAt(K(2026, 11, 9, 8, 0)) === 'day' && M.shiftAt(K(2026, 11, 9, 19, 0)) === 'night' && M.shiftAt(K(2026, 11, 9, 0, 30)) === 'night', '주간 08:00~17:30 · 야간 19:00~06:30 경계(교대 사이는 다가오는 조 — currentShift 한 벌)');
   M.setServerOffset(5 * 3600000);   // 기기 시계가 서버보다 5시간 느리다
   T(Math.abs(M.serverNow() - (Date.now() + 5 * 3600000)) < 50, '서버 시각 = 기기 시각 + 서버 차이(기기 시계를 믿지 않는다)');
   M.setServerOffset(0);

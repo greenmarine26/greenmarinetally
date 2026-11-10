@@ -49,7 +49,7 @@ import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
   generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert,
   generateHowToAnswer, featureHelpExact, featureHelpLoose, formatAppTallyAnswer, needsModeChoice, generateContactAnswer,
-  answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
+  answerCraneCrew, crewSetText, answerHowCore, generateSealAuditAnswer, generateSealDetailAnswer, formatCarriers, describeQuery, hasAnyCondition, voyageDoneAts,
   voyageReportSpan, WORK_SHIFTS, workMinutesBetween,   // 3.56 [mirMood] 식사 창은 근무표 그대로 · 3.69-01 완료 공백은 실작업 분으로 잰다
   isPastEatOnly, isPastMealMention, isOtherMeaningEat,   // 3.61-04 끼니 말의 «때» 판정 한 벌 — 상수를 가져오면 순환 초기화로 죽는다(함수만 부른다)
   termProgressOf, termDoneAts,   // 3.74: 터미널 본선현황으로 센다
@@ -2772,10 +2772,12 @@ export function answerOneRaw(query, ctx) {
     return '어느 배 말씀인지 배 이름을 붙여 주시면 바로 답합니다. (예: "KBTR 3426 온도" · "NSFR 접안 현측")';
   }
 
+  //  4.87-02: 실번호 점검 답 뒤 10분 안의 «그 17대 뭐야»·«17개 뭐야» — 뜻풀이 길로 새기 전에 여기서 상세로 답한다(다른 주제어가 섞였으면 아니다 — _sealFollowRest).
+  if (hasShip && _sealAuditAt > 0 && (Number(c._now) || Date.now()) - _sealAuditAt < 10 * 60000 && /\d+\s*(?:개|대|건)\s*(?:이|가|은|는)?\s*(?:뭐|뭔|무엇|무슨)/.test(Q) && _sealFollowRest(Q) === '') { _via('sealAudit'); return generateSealDetailAnswer(cs.filter((x) => x._mode === mode), modeKr, (v && v[mode] && v[mode].records) || null, (v && v[mode] && v[mode].ediContainers) || null); }
   //  ⑩ 브리핑 속 «N건» 후속 — 직전 주제가 실 점검·브리핑이면 그 상세(1.69-01).
   if (hasShip && /(?:\d+\s*건|그게|그거|저거|아까\s*(?:그|말한)\s*거?)\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(Q)) {
     const topic = p.sealAuditQuery ? 'seal' : c.lastTopic;
-    if (topic === 'seal' || (topic === 'briefing' && /건/.test(Q))) return generateSealAuditAnswer(cs.filter((x) => x._mode === mode), modeKr, (v && v[mode] && v[mode].records) || null, (v && v[mode] && v[mode].ediContainers) || null);
+    if (topic === 'seal' || (topic === 'briefing' && /건/.test(Q))) return (topic === 'seal' ? generateSealDetailAnswer : generateSealAuditAnswer)(cs.filter((x) => x._mode === mode), modeKr, (v && v[mode] && v[mode].records) || null, (v && v[mode] && v[mode].ediContainers) || null);
   }
 
   //  ⑪ 뜻·방법 — 본체 한 벌(2.57-02·2.59-01). 홈은 조회 폴백이 없으니 못 찾으면 고백한다.
@@ -2927,7 +2929,19 @@ export function answerOneRaw(query, ctx) {
     try { const ov = answerShipOverview(v, ship, c.matchPortMis(c.portMisData || {}, info), c.ediPattern || null); if (ov) return ov; } catch (e) { /* */ }
   }
   //  4.39-02: 리스트(records)를 같이 넘겨 예상 실오류를 주의 박스와 같은 표본으로 센다 · 실번호 점검은 자료 답(강) — «실오류 있지?»·«…왜 안알려줬어?» 가 모델로 가서 덮이지 않게
-  if (hasShip && (p.sealAuditQuery || /[실씰]\s*(?:번호\s*)?의심|실\s*점검|씰\s*점검/.test(Q))) { _via('sealAudit'); return generateSealAuditAnswer(cs.filter((x) => c.mode ? x._mode === mode : true), c.mode ? modeKr : '양하·선적', c.mode ? (v && v[mode] && v[mode].records) || null : [v && v.discharge && v.discharge.records, v && v.loading && v.loading.records], c.mode ? (v && v[mode] && v[mode].ediContainers) || null : [v && v.discharge && v.discharge.ediContainers, v && v.loading && v.loading.ediContainers]); }
+  //  4.87-02 (검수사 2026-11-11 04:36~04:37 «형식이 다른 17개를 보여 달라고 했을때도 같은 대답을 했습니다» · «문제를 찾아서 알려는 주는데 후속 질문에 답을 못한다는것입니다»):
+  //    실번호 점검 답 뒤 10분 안의 후속 물음(«형식이 다른 17개 보여줘»·«그 3대 뭐야»·«어떤 컨이야»)과 «실 형식 다른 거 보여줘» 는 점검 답을 되풀이하지 않고 한 대씩 두 값을 적은 상세로 답한다.
+  { const _nowS = Number(c._now) || Date.now();
+    const _fmtQ = /(형식|모양|패턴|타입|알파벳)[^?]{0,10}(다른|다르|다름|틀린|틀리|빠진|없는|이상)/.test(Q);
+    const _afterAudit = _sealAuditAt > 0 && _nowS - _sealAuditAt < 10 * 60000;
+    //  감사 지적(4.87-02): 물음에 다른 주제어(피트·리퍼·X-RAY·위험물·호기·끝 4자리 …)가 있으면 실번호 후속이 아니다 — «40피트 12개 보여줘»·«X-RAY 5대 어떤 거야» 를 가로채지 않는다.
+    const _otherSubj = /피트|ft\b|리퍼|냉동|위험물|\bDG\b|X\s*-?\s*RAY|엑스레이|\bFR\b|\bOT\b|오픈탑|플랫|탱크|호기|크레인|갱|베이|홀드|데크|갑판|엠티|공컨|풀컨|톤|무게|선사|포트|시프팅|트윈|해치|\d{4}/i.test(Q);
+    //  재감사 지적(4.87-02): 주제어를 하나씩 막는 식은 샌다(«양하 10대 보여줘»·«특수화물 5개 보여줘»). 거꾸로 — «N개 보여줘»·«어떤 컨이야» 처럼 가리키는 말·대수·보여 달라는 말만 남는 물음일 때만 후속으로 본다.
+    const _itHit = /\d+\s*(?:개|대|건)[^?]{0,8}(보여|알려|뭐|뭔|어떤|어느|목록|리스트|상세|자세)/.test(Q) || /(?:그거|그것|그\s*컨|그\s*실|어떤\s*컨|어느\s*컨|컨\s*번호)[^?]{0,8}(보여|알려|뭐|뭔|야|줘)/.test(Q);
+    const _itRest = _sealFollowRest(Q);
+    const _itQ = _itHit && _itRest === '';
+    if (hasShip && ((_fmtQ && /[실씰]/.test(Q)) || (_afterAudit && !_otherSubj && (_fmtQ || _itQ)))) { _via('sealAudit'); return generateSealDetailAnswer(cs.filter((x) => c.mode ? x._mode === mode : true), c.mode ? modeKr : '양하·선적', c.mode ? (v && v[mode] && v[mode].records) || null : [v && v.discharge && v.discharge.records, v && v.loading && v.loading.records], c.mode ? (v && v[mode] && v[mode].ediContainers) || null : [v && v.discharge && v.discharge.ediContainers, v && v.loading && v.loading.ediContainers]); } }
+  if (hasShip && (p.sealAuditQuery || /[실씰]\s*(?:번호\s*)?의심|실\s*점검|씰\s*점검/.test(Q))) { _via('sealAudit'); _sealAuditAt = Number(c._now) || Date.now(); return generateSealAuditAnswer(cs.filter((x) => c.mode ? x._mode === mode : true), c.mode ? modeKr : '양하·선적', c.mode ? (v && v[mode] && v[mode].records) || null : [v && v.discharge && v.discharge.records, v && v.loading && v.loading.records], c.mode ? (v && v[mode] && v[mode].ediContainers) || null : [v && v.discharge && v.discharge.ediContainers, v && v.loading && v.loading.ediContainers]); }
 
   //  ⑰ 홈(배 없음) — 실오류 선박 현황 · «우리 배?» · 오늘/내일 작업 선박 · 배 없는 브리핑.
   if (Array.isArray(c.flat) && /[실씰]\s*오류|실번호\s*(불일치|오류)/.test(Q)) {
@@ -3793,7 +3807,12 @@ function _thOf(c, now) {
 /** 지금 이 검수원과 대화 중인가 — 화면의 1글자 문지기(«응»)가 이것으로 연다. */
 export function mirThreadAlive(ctx, now = Date.now()) { return !!_thOf(ctx || {}, now); }
 /** 시험용 — 대화 기억 초기화 */
-export function _mirThreadReset() { for (const k of Object.keys(_threads)) delete _threads[k]; _threadClosed = null; }
+//  4.87-02: 실번호 점검 답 뒤의 후속 물음에서 가리키는 말·대수·보여 달라는 말을 걷어 낸 나머지 — 빈 글이면 다른 주제가 없는 후속이다(«17개 보여줘»·«그 17대 뭐야»·«어떤 컨이야»).
+function _sealFollowRest(Q) {
+  return String(Q || '').replace(/\d+\s*(?:개|대|건)/g, '').replace(/보여\S*|알려\S*|뭐\S*|뭔\S*|무엇\S*|어떤|어느|목록|리스트|상세\S*|자세\S*|그거|그것|컨테이너|컨|번호|실|씰|미르야?|아까|방금|전부|모두|주세요|[그이저것거좀다만줘야요를을은는가]|[\s?!.,~]/g, '');
+}
+let _sealAuditAt = 0;   // 4.87-02: 마지막 실번호 점검 답 시각 — 후속 물음(«그 17개 보여줘»)을 알아보는 데 쓴다
+export function _mirThreadReset() { for (const k of Object.keys(_threads)) delete _threads[k]; _threadClosed = null; _sealAuditAt = 0; }
 
 /** 풀기(순수) — 대화 중의 짧은 말을 직전 답에 이어 푼다. 기억은 바꾸지 않는다.
     돌려주는 값 { q(엔진에 넘길 말), direct(대화 층이 직접 낸 답이면 문자열), kind('close'|'confirmYes'|'confirmNo'|'prompt'|'pick'|'redirect'|'ref'|'pass'), how } */

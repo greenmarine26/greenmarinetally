@@ -1669,6 +1669,8 @@ fi
         node tools/smoke_fix48602.cjs "$(pwd)" || { echo "✗ 4.86-02(완료 기록 보호) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_onebook487.cjs "$(pwd)" || { echo "✗ 4.86-02(판정 한 벌) 연막검사 실패 — 배포 금지"; exit 1; }
     TZ=America/Los_Angeles node tools/smoke_mirfix487.cjs "$(pwd)" || { echo "✗ 4.86-02(미르 날짜 키·별칭 거름) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.87-02: 미르 실번호 점검 후속 물음 — 실 TMPZ 2038E 기록으로 «형식이 다른 17개 보여줘» 가 점검 답을 되풀이하지 않고 17대를 한 대씩 적는지
+    node tools/smoke_sealfollow48702.cjs "$(pwd)" || { echo "✗ 4.87-02(미르 실번호 점검 후속 물음) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }
