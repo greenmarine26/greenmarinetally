@@ -39,6 +39,34 @@ export const DEFAULT_SHIP_POLICIES = {
   },
 };
 
+// ★ 일괄수리(2026-11-10) — **선박 코드별 성질표 한 곳.** 흩어져 있던 목록(workShift NO_SHIFT_SHIPS · utils FERRY_1700_SHIPS·HATCH_SKIP_RE·SHIP_LUGGAGE ·
+//   autoRegApi VIRTUAL_LOAD_SHIPS·PLAN_VIRTUAL_SHIPS · esealVoice ATPR 이름 · tallyExcel OBWH 바우처형)은 이 표에서 만들어 낸다 — 목록 내용은 옮기기 전과 같다.
+//   noShift 주야 구분 없음 · ferry1700 17시 기준 보고 · hatchSkip 해치커버 계산·보고 안 함 · luggage 상시 LUGGAGE 대수 · virtualLoad 리스트로 가상 선적 EDI ·
+//   planVirtual 플랜 격자로 가상 선적 EDI · voucherTally 마감텔리 바우처형(표준 서식 폴백 안 함) · sealAttachNames 위해행 엠티 실 부착 기능이 알아보는 선박명 ·
+//   noRest 휴게 없음(검수사 확정 2026-09-07 «OWBH RZOR은 휴게 타임이 없습니다» — 콘앱 CT_NO_REST 와 같은 두 척. 끝나는 시각·실작업 분 계산이 쉬는 창을 빼지 않는다).
+//   ⚠ SMYA 는 noShift 에만 있다(옮기기 전 그대로). 배가 늘면 여기 한 줄만 고친다.
+export const SHIP_FLAGS = {
+  OBWH: { noShift: true, ferry1700: true, hatchSkip: true, virtualLoad: true, voucherTally: true, noRest: true },
+  RZOR: { noShift: true, ferry1700: true, hatchSkip: true, luggage: 1, virtualLoad: true, noRest: true },
+  SMYA: { noShift: true },
+  TNJP: { ferry1700: true, hatchSkip: true },
+  TMPZ: { hatchSkip: true, planVirtual: true },
+  ATPR: { hatchSkip: true, sealAttachNames: ['ATPR', 'ATRP', 'ATLANTIC PIONEER'] },
+};
+const _NO_FLAGS = Object.freeze({});
+/** 선박 코드의 성질 — 코드(대문자·공백 제거)가 표에 있으면 그 줄, 없으면 name 을 코드로 다시 읽는다. 둘 다 없으면 빈 객체(모든 성질 거짓). */
+export function shipFlag(code, name) {
+  for (const v of [code, name]) {
+    const k = String(v || '').trim().toUpperCase();
+    if (k && Object.prototype.hasOwnProperty.call(SHIP_FLAGS, k)) return SHIP_FLAGS[k];
+  }
+  return _NO_FLAGS;
+}
+/** 그 성질이 켜진 선박 코드 목록(표에 적힌 차례). */
+export function shipCodesWith(flag) {
+  return Object.keys(SHIP_FLAGS).filter((k) => !!SHIP_FLAGS[k][flag]);
+}
+
 // 선박명/코드 정규화 (대소문자/공백 무시)
 export function normalizeVslName(vsl) {
   return String(vsl || '').toUpperCase().trim().replace(/\s+/g, ' ');

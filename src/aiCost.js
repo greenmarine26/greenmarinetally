@@ -43,17 +43,17 @@ export const AI_PHOTO_KINDS = ['esealPhoto', 'sheetPhoto', 'reeferPhoto', 'listP
 export const aiKindLabel = (k) => AI_KIND_LABEL[k] || String(k || '?');
 export const aiModelShort = (m) => (/opus/i.test(m) ? '오퍼스' : /sonnet/i.test(m) ? '소네트' : /haiku/i.test(m) ? '하이쿠' : /fable/i.test(m) ? '페이블' : String(m || '?'));
 
-/** 기기 시각 기준 날짜 키 YYMMDD — mir.js _dayKey · gemini.js 기록과 같은 모양. */
+/** 한국 시각(KST, UTC+9 고정) 기준 날짜 키 YYMMDD — mir.js _dayKey · gemini.js 기록과 같은 한 벌. 기기 시간대가 달라도 하루 한도의 날이 갈리지 않는다. */
 export function aiDayKey(ms) {
-  const d = new Date(ms);
-  return `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const d = new Date(ms + 9 * 3600 * 1000);
+  return `${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 /** 화면 기간 칩 → 날짜 키 목록(오늘부터 거꾸로). month 는 이번 달 1일부터 오늘까지. */
 export function aiPeriodDays(period, now = Date.now()) {
-  const d0 = new Date(now);
+  const d0 = new Date(now + 9 * 3600 * 1000);   // KST — 날짜 키(aiDayKey)와 같은 날을 센다
   if (period === 'yesterday') return [aiDayKey(now - 86400000)];
   if (period === '7d') return Array.from({ length: 7 }, (_, i) => aiDayKey(now - i * 86400000));
-  if (period === 'month') return Array.from({ length: d0.getDate() }, (_, i) => aiDayKey(now - i * 86400000));
+  if (period === 'month') return Array.from({ length: d0.getUTCDate() }, (_, i) => aiDayKey(now - i * 86400000));
   return [aiDayKey(now)];
 }
 

@@ -91,6 +91,7 @@ export const fbRateFoodSpot = async () => true;
 export const fbReassignContainerPosition = async (vk, mode, cn, b, r, t, by, opts) => { window.__calls.push({ fn: 'reassign', cn, to: `${b}-${r}-${t}`, opts: opts || null }); return { ok: true }; };
 export const fbReconnect = async () => true;
 export const fbReleaseHold = async () => true;
+export const fbRelieveCrane = async () => true;
 export const fbRemoveAdminDevice = async () => true;
 export const fbRemoveExtraContainer = async () => true;
 export const fbRemoveSwapFix = async () => true;

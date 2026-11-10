@@ -1,4 +1,4 @@
-// 주간조·야간조 한 벌(4.79) — 서버 시각 기준 근무조 판정, 주야 구분 없는 배(OBWH·RZOR), 호기 보유 키(항차+호기+조)가 쓰는 조 비교를 여기서만 한다(순수 모듈 — 다른 파일을 부르지 않는다).
+// 주간조·야간조 한 벌(4.79) — 서버 시각 기준 근무조 판정, 주야 구분 없는 배(OBWH·RZOR), 호기 보유 키(항차+호기+조)가 쓰는 조 비교를 여기서만 한다(순수 모듈 — 선박 성질표 shipPolicyCore.js 말고는 다른 파일을 부르지 않는다).
 //
 //  검수사 2026-11-08 —
 //   «방법은 로그인 하고 선박을 선택하면 야간조 입니까 주간조 입니까를 물어 선택하게 해야 겠습니다.»
@@ -8,7 +8,8 @@
 
 //  주야 구분 없는 배 코드 한 곳 — 연태(OBWH)·일조(RZOR) + 일조 대체 카페리 SMYA(앞 판 utils.NO_SHIFT_SHIPS 3.0-01 그대로 옮김, 브리핑·갱 배분의 shipHasShifts 와 같은 목록).
 //  항차 키는 OBWH_2690W 꼴이라 앞 코드로 읽는다(utils.isFerry1700Ship 과 같은 읽기).
-export const NO_SHIFT_SHIPS = ['OBWH', 'RZOR', 'SMYA'];
+import { shipCodesWith } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 목록은 선박 성질표(SHIP_FLAGS.noShift)에서 만든다 — shipPolicyCore 는 import 가 없는 순수 모듈이다
+export const NO_SHIFT_SHIPS = shipCodesWith('noShift');   // OBWH · RZOR · SMYA
 export const DAY_START_H = 6;
 export const DAY_END_H = 18;
 

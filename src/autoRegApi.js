@@ -7,6 +7,7 @@ import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, isOpposite
 import { APP_VERSION, CONTAINER_WT_MAX_KG } from './utils.js';   // 4.08-02: 컨 하나 40톤 상한
 import { isRfListSrc } from './utils.js';   // 4.49-02: RF CONTAINER LIST 판별 한 벌(실번호 판정과 같은 함수)
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 파일 이름이 선사
+import { shipCodesWith } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 코드 목록 한 곳
 import { listRevisionDrops } from './listRevision.js';   // 3.61-02: 같은 기본이름 리스트는 새 판만(선적 합본과 같은 판정 한 벌)
 
 // V9.57(G5): 파일 분류기 단일화 — mergeApi.classify와 이 _kind가 서로 달라(cdl 허용·.txt 지원·
@@ -59,12 +60,12 @@ async function _asU8(f) {
 //   병합하지 않아 중복·규격 불일치를 만들었다. 정식 파서가 둘 다 처리한다.
 
 // 가상 선적 EDI 대상 — 선적 EDI가 늦거나(OBWH) 안 오는(RZOR) 선박. 리스트로 선적 카운트를 채운다(사용자 확정 2026-07-04).
-const VIRTUAL_LOAD_SHIPS = new Set(['RZOR', 'OBWH']);
+const VIRTUAL_LOAD_SHIPS = new Set(shipCodesWith('virtualLoad'));   // ★ 일괄수리(2026-11-10): 선박 성질표 한 곳에서 — RZOR · OBWH
 
 // V8.84-02: 플랜(프리스토우 격자 엑셀) 가상 선적 EDI 대상 — 선적 EDI가 안 오고 두우 표준 배치 플랜만 오는 선박.
 //   자리(베이/로우/단)만 계획 슬롯으로 등록하고 컨번호는 배정하지 않는다(사용자 확정 2026-07-11 — 임의 배정 금지).
 //   컨번호는 NOLIST 리스트(records)가 담당. 마커: e=20MT · E=40HQ MT · 2=20F · 4=40HQ F.
-const PLAN_VIRTUAL_SHIPS = new Set(['TMPZ']);
+const PLAN_VIRTUAL_SHIPS = new Set(shipCodesWith('planVirtual'));   // ★ 일괄수리(2026-11-10): 선박 성질표 한 곳에서 — TMPZ
 // 플랜 시트명 → POD (평택 선적분 시트 = 목적항별, 사용자 확정 2026-07-11)
 const PLAN_POD_SHEETS = { SHANGHAI: 'CNSHA', SHA: 'CNSHA', BUSAN: 'KRPUS', PUSAN: 'KRPUS', NINGBO: 'CNNGB', NGB: 'CNNGB' };
 

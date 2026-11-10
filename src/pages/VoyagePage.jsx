@@ -4,7 +4,7 @@ import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는
 import { mirThreadCommit, mirThreadAlive } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어» — 탭 카드도 같은 대화 층
 import { mirGotoRequest, mirGotoTake, mirGotoState, mirGotoFinish, MIR_GOTO_EVENT } from '../guideGoto.js';   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로(요청을 꺼내 가는 자리)
 import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
-import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
+import { computeTallyData, sizeLenOf } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
@@ -3571,9 +3571,8 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
     const acc = { '20': 0, '40': 0, '45': 0 };
     base.filter(c => compMap[c.cn]).forEach(c => {
       const lbl = isoToLabel(c.iso) || '';
-      if (lbl.startsWith('20')) acc['20']++;
-      else if (lbl.startsWith('45')) acc['45']++;
-      else acc['40']++;
+      const _len = /^(20|40|45)/.test(lbl) ? sizeLenOf(c) : '40';   // 4.86-02: 규격 길이 한 벌(마감텔리 칸) — 못 읽는 규격은 종전대로 40
+      acc[_len]++;
     });
     return acc;
   }, [base, compMap]);

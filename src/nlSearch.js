@@ -5,9 +5,12 @@
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
+import { voyagePierOf } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
+import { shipFlag } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 성질표 — 휴게 없는 배(noRest)
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
+import { sizeLenOf } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌(마감텔리 칸을 20·40·45 로 접은 것)
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -2257,7 +2260,7 @@ export function briefingVoiceLines(txt) {
 export function briefCountsOf(cs) {
   const szOf = (c) => {
     const lbl = isoToLabel(c.iso) || '';
-    if (/^45/.test(lbl)) return '45'; if (/^40/.test(lbl)) return '40'; if (/^20/.test(lbl)) return '20';
+    if (/^(20|40|45)/.test(lbl)) return sizeLenOf(c);   // 4.86-02: 규격 길이 한 벌(마감텔리 칸) — 읽히는 규격만, 못 읽는 것은 아래 종전 판정
     const f = (c.iso || '')[0];
     return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
   };
@@ -2465,13 +2468,12 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
 function formatBayDist(desc, results, parsed = {}) {
   if (results.length === 0) return `📭 ${desc} 없음`;
   const byBay = {};
+  //  ★ 일괄수리(2026-11-10): 규격 길이 한 벌(tallyReport.sizeLenOf — 마감텔리 칸을 20·40·45 로 접은 것). 알아보는 규격(라벨 20·40·45 또는 첫 자리 2·4·L·9 — 종전과 같은 범위)만 세고 그 밖은 «?» 그대로.
   const sizeOf = (c) => {
     const lbl = isoToLabel(c.iso) || '';
-    if (/^45/.test(lbl)) return '45';
-    if (/^40/.test(lbl)) return '40';
-    if (/^20/.test(lbl)) return '20';
     const f = (c.iso || '')[0];
-    return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
+    if (!/^(20|40|45)/.test(lbl) && !(f === '2' || f === '4' || f === 'L' || f === '9')) return '?';
+    return sizeLenOf(c);
   };
   for (const c of results) {
     const b = parseInt(c.bay, 10);
@@ -3290,6 +3292,10 @@ export function formatAppTallyAnswer(ship, containers, info = null, counts = nul
 //   "오전 근무는 08:00~17:30 중간에 12:00-13:00 중식" · 야간(PCTC) 19~24시·야식·01~03:30·티타임·04~06:30
 //   PNCT 주간 08~11:30·중식~13·13~17:30 / 야간 19~23:30·야식~01·01~05:30.
 //   자정 기준 분(minute) 창 목록 — ETA 계산은 이 창 안의 시간만 센다(중식·야식·티타임·조간 공백 제외).
+//  ★ 일괄수리(2026-11-10): 휴게 없는 배인가 — 선박 성질표(shipPolicyCore.SHIP_FLAGS.noRest) 한 곳에서 읽는다. info 는 항차 info(vsl = 선박 코드).
+export function isNoRestShip(info) {
+  return !!shipFlag(info && info.vsl).noRest;
+}
 export const WORK_SHIFTS = {
   PCTC: [[60, 210], [240, 390], [480, 720], [780, 1050], [1140, 1440]],
   PNCT: [[60, 330], [480, 690], [780, 1050], [1140, 1410]],
@@ -3300,9 +3306,11 @@ export const WORK_SHIFTS = {
 //  그것이 없어서 `chiefAnswers.js:243` 이 «addWorkMinutes 역산 대신 … 근사» 로 때우고 있었다.
 //  ⚠ 쉬는 시간은 지어내지 않는다 — 바로 위 `WORK_SHIFTS`(검수사 확정 2026-08-13, 학습서 2-F′)를 그대로 쓴다.
 //    검수사 메모의 «04시부터 06시30 08시부터» 가 바로 PCTC 의 `[240,390]`·`[480,720]` 이다.
-export function workMinutesBetween(aMs, bMs, pier) {
+//  ★ 일괄수리(2026-11-10): opts.noRest 가 참이면 쉬는 창을 빼지 않는다(벽시계 분) — 카페리 OBWH·RZOR 는 휴게 없이 작업한다(검수사 확정 2026-09-07, 콘앱 CT_NO_REST 와 같은 두 척 · isNoRestShip). 안 넘기면 종전 그대로.
+export function workMinutesBetween(aMs, bMs, pier, opts) {
   const a = Number(aMs), b = Number(bMs);
   if (!(b > a)) return 0;
+  if (opts && opts.noRest) return Math.round((b - a) / 60000);
   const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
   let total = 0;
   const day = new Date(a); day.setHours(0, 0, 0, 0);
@@ -3348,11 +3356,7 @@ export const MAX_BOXES_PER_CRANE_HOUR = 90;   // 45무브 × 트윈 2대
 //    ★ 재감사 지적 — `info.pier` 가 비고 `berth` 만 있는 상태가 실제로 만들어진다(VoyagePage 가 그렇게 저장한다).
 //      그 폴백을 화면마다 따로 붙이면 또 갈린다 ⇒ **문지기 안에서 선석까지 본다.**
 export function normPier(pier, berth) {
-  const p = String(pier || '').toUpperCase();
-  if (p.includes('PNCT')) return 'PNCT';
-  if (p.includes('PCTC')) return 'PCTC';
-  const b = String(getPierFromBerth(berth || '') || '').toUpperCase();
-  return b.includes('PNCT') ? 'PNCT' : b.includes('PCTC') ? 'PCTC' : '';
+  return voyagePierOf({ pier, berth });   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌(utils.voyagePierOf — pier → 선석 → '') · 결과는 종전과 같다
 }
 /** 항차의 «일한 구간»을 뽑는다. [시작ms, 끝ms] · 못 구하면 [0,0].
  *
@@ -3548,14 +3552,15 @@ export function paceFromRecords(doneAts, src, gangs) {
   //  ⚠ 끝은 «이안»까지다 — 이안 뒤에 몰아 찍은 기록으로 분모를 늘리면 사람마다 값이 갈린다
   //    (실측 NSDC: 이종부의 마지막 입력이 이안 04:40 보다 16분 늦어 327분 vs 310분으로 어긋났다).
   const to = ws ? we : last;
-  let mins = workMinutesBetween(from, to, pierN);
+  const _nr = { noRest: isNoRestShip(info) };   // ★ 일괄수리(2026-11-10): 휴게 없는 배(OBWH·RZOR)는 쉬는 창을 빼지 않는다 — 끝나는 시각(addWorkMinutes)과 같은 잣대
+  let mins = workMinutesBetween(from, to, pierN, _nr);
   //  쉬는 시간 안에만 든 짧은 구간은 실작업 0분이 된다 — 그때만 벽시계로 잰다.
   if (!(mins > 0)) mins = (to - from) / 60000;
   if (!(mins > 0)) return { ok: false, why: 'short', n: ats.length, mins: 0, basis, pier: pierN };
   const perHour = ats.length / (mins / 60);
   //  갱당 시간당 = 처리 대수 ÷ 갱·시간. 잰 구간이 조를 넘나들면 조마다 그 조의 갱 수를 곱해 더한다 — 그래야 «야간 3갱으로 잰 페이스»를 «주간 2갱»에 옮겨 쓸 수 있다.
   let gangMin = 0;
-  for (let a = from, guard = 0; a < to && guard < 100; guard++) { const sh = currentShift(a); const b = Math.min(to, Math.max(a + 60000, sh.endMs || to)); gangMin += Math.max(0, workMinutesBetween(a, b, pierN)) * _gOf(a); a = b; }
+  for (let a = from, guard = 0; a < to && guard < 100; guard++) { const sh = currentShift(a); const b = Math.min(to, Math.max(a + 60000, sh.endMs || to)); gangMin += Math.max(0, workMinutesBetween(a, b, pierN, _nr)) * _gOf(a); a = b; }
   if (!(gangMin > 0)) gangMin = mins * g;
   const perGangHour = ats.length / (gangMin / 60);
   //  ⚠ 3.6 의 «몰아 입력이라 못 잼»은 없앴다 — 검수사 정정. 분모가 작업 시간이면 몰아 찍어도 안 튄다.
@@ -3622,7 +3627,7 @@ export function speedFromRecords(voyage, counts) {
   const plan = counts && Number(counts.total) > 0 ? Number(counts.total) : null;
   const done = counts && plan != null ? Number(counts.done) || 0 : P.n;
   return { done, plan, left: plan != null ? Math.max(0, plan - done) : null, workedMin: P.workedMin, perHour: P.perHour, perGangHour: P.perGangHour,
-    gangs: P.gangs, pier: P.pier || (String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC'), basis: P.basis, from: P.from, n: P.n, recent: P.recent || null };
+    gangs: P.gangs, pier: P.pier || voyagePierOf(info) || 'PCTC', basis: P.basis, from: P.from, n: P.n, recent: P.recent || null };   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌(모르면 PCTC 는 그대로)
 }
 function _tsOf(v) {
   if (!v) return 0;
@@ -3635,7 +3640,9 @@ function _tsOf(v) {
 }
 
 // startMs 시점부터 workMin(작업분)을 근무 창만 세며 전진해 끝나는 시각을 돌려준다.
-export function addWorkMinutes(startMs, workMin, pier) {
+//  ★ 일괄수리(2026-11-10): opts.noRest 가 참이면 쉬는 창을 건너뛰지 않고 그대로 더한다(휴게 없는 카페리 OBWH·RZOR — isNoRestShip). 안 넘기면 종전 그대로.
+export function addWorkMinutes(startMs, workMin, pier, opts) {
+  if (opts && opts.noRest) return new Date(new Date(startMs).getTime() + Math.max(0, Number(workMin) || 0) * 60000);
   const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
   let t = new Date(startMs); let left = workMin; let guard = 0;
   while (left > 0 && guard++ < 20000) {
@@ -3714,7 +3721,7 @@ export function recentPaceOf(voyage, now = Date.now()) {
     if (hi > r.ts) downs.push([r.ts, hi]);
   }
   const inDown = (t) => downs.some(([a, b]) => t >= a && t < b);
-  const wmin = (a, b) => workMinutesBetween(a, b, pier);
+  const wmin = (a, b) => workMinutesBetween(a, b, pier, { noRest: isNoRestShip(info) });   // ★ 일괄수리(2026-11-10): 휴게 없는 배는 쉬는 창을 빼지 않는다
   let ref = now;
   for (let g = 0; g < 200 && (wmin(ref - 300000, ref) === 0 || inDown(ref - 60000)); g++) ref -= 300000;
   const first = rows[0].at;
@@ -3811,8 +3818,7 @@ function formatEta(parsed, allContainers, ctx) {
   const _speedGuess = (label) => {
     const sp = ctx?.shipSpeed; const vsl = String(ctx?.vsl || '').toUpperCase();
     if (!sp || !vsl || !remain) return null;
-    const pier = String(ctx?.pier || '').toUpperCase().includes('PCTC') ? 'PCTC'
-      : String(ctx?.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : null;
+    const pier = voyagePierOf({ pier: ctx?.pier || ctx?.info?.pier, berth: ctx?.berth || ctx?.info?.berth }) || null;   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌 — pier 가 비고 선석만 있는 항차도 알아본다
     let rec = (pier && sp[`${vsl}_${pier}`]) || sp[`${vsl}_PNCT`] || sp[`${vsl}_PCTC`] || null;
     let src_ = rec ? `${rec.vsl}(${rec.pier}) 평균` : '';
     if (!rec) {
@@ -3864,7 +3870,7 @@ function formatEta(parsed, allContainers, ctx) {
 
   const remainMin = Math.round((remain / perHour) * 60);
   // 1.68: 중식·야식·티타임·조 사이 공백을 건너뛰어 계산한다(터미널별 근무시간표 — 검수사 확정).
-  const eta = addWorkMinutes(Date.now(), remainMin, _P.pier || ctx?.pier);   // 3.6: 잰 부두와 그리는 부두를 같게(재감사 P2-1)
+  const eta = addWorkMinutes(Date.now(), remainMin, _P.pier || ctx?.pier, { noRest: isNoRestShip(_info) });   // ★ 일괄수리(2026-11-10): 휴게 없는 배(OBWH·RZOR)는 쉬는 창을 건너뛰지 않는다   // 3.6: 잰 부두와 그리는 부두를 같게(재감사 P2-1)
   const hh = eta.getHours(), mm = eta.getMinutes();
   const ampm = hh < 12 ? '오전' : '오후';
   const h12 = hh % 12 === 0 ? 12 : hh % 12;

@@ -10,6 +10,7 @@ import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
 import { resolvedPod, ptkDischargeUnitsOf, canEditReport, REPORT_PHOTO_TYPES, isCustomsSrc, sealLegacyOf, isRfListSrc } from './utils.js';   // 4.49-02: isRfListSrc — RF CONTAINER LIST 는 실 출처가 안 됨   // 4.49 재감사: 옛 꼴 판정 한 벌(sealLegacyOf)   // 4.49: isCustomsSrc — 세관 출처 판정 한 벌   // 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
+import { aiDayKey } from './aiCost.js';   // 4.86-02: 하루 키 한 벌(한국 시각)
 import { dropOtherVoyagePlan, isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply, snapApplyEntries, applyCatosPos, inferDischargePos, qcWorkLoloFix, stripCatosPos, applyAutoSwap, dropStaleRawEdi, restoreStaleRawEdi, isReeferIso, isFlatRackIso, isOpenTopIso, isTankIso, isAutoDone } from './utils.js';   // 3.47: 규격 확정 시 특수화물 표시도 utils 한 벌로
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
@@ -196,7 +197,7 @@ export async function fbUpdateVoyageInfo(voyageKey, patch) {
   //  ★ 3.51 — 이 함수는 자료 업로드·항차 관리도 쓴다. 그래서 **작업 설정 칸이 들어올 때만** 막는다(검수사 «조회만으로는 아무 작업을 할수 없습니다»).
   //    berthSide·seqRowFrom 은 그 배 검수원의 작업 순서를 통째로 바꾸고, hatchDone·gangs·craneCrew·status 는 작업 기록이다.
   if (patch && typeof patch === 'object'
-      && ['berthSide', 'berthSidePick', 'seqRowFrom', 'hatchDone', 'gangs', 'gangsBy', 'craneCrew', 'workStart', 'status', 'startedAt', 'endedAt'].some((k) => k in patch)) {
+      && ['berthSide', 'berthSidePick', 'seqRowFrom', 'hatchDone', 'gangs', 'gangsBy', 'craneCrew', 'workStart', 'status', 'startedAt', 'endedAt'].some((k) => Object.keys(patch).some((pk) => pk === k || pk.startsWith(k + '/')))) {   // 4.86-02: «hatchDone/18» 같은 한 칸 경로도 같은 문지기
     assertCanWork('작업 설정 변경');
   }
   await update(ref(db, `voyages/${voyageKey}/info`), patch);
@@ -338,6 +339,11 @@ export async function fbRelieveCrane(voyageKey, shiftKey, equipNo, from, me) {
   if (!voyageKey || !shiftKey || !(no >= 1 && no <= 9) || !from || !me || from === me) throw new Error('교대 정보가 맞지 않습니다.');
   const now = Date.now();
   const eq = `${no}호기`;
+  //  ★ 4.86-02 (정밀 검토 2026-11-10): 덮기 전에 지금 그 호기를 쥔 사람을 본다 — 화면이 연 뒤 다른 사람이 먼저 이어받았으면 덮지 않는다(종전엔 마지막에 쓴 사람이 이겼다).
+  //    못 읽으면(1.5초·통신) 종전대로 진행한다 — 교대를 막지 않는다.
+  const _cur = await _peekVal(ref(db, `voyages/${voyageKey}/info/craneCrew/${shiftKey}/${eq}`));
+  const _curName = String((_cur && _cur.name) || '').trim();
+  if (_curName && _curName !== from && _curName !== me) throw new Error(`${eq}는 방금 ${_curName} 님이 이어받았습니다. 화면을 다시 열어 확인해 주세요.`);
   const patch = {};
   patch[`voyages/${voyageKey}/info/craneCrew/${shiftKey}/${eq}`] = { name: me, at: now };
   patch[`inspectors/${from}/relievedAt`] = now;
@@ -1146,10 +1152,22 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
     _writeNotice(`${String(cn || '').slice(-4)} 는 이미 완료돼 있어요${prev.by ? ` — ${prev.by}${prev.at ? ' ' + _hhmm(prev.at) : ''}` : ''} (덮지 않았어요)`);
     return { ok: false, already: true, prev };
   }
-  await set(r, rec);
+  await _ackOrQueue(set(r, rec), '완료');
   _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 실린 자리 확정 + 경로 마지막 점
   _tallyInspector(voyageKey, mode, by);   // V9.16: 개인 누적 실적 (비차단 — 실패해도 완료 처리는 무관)
   return { ok: true };
+}
+//  ★ 4.86-02 (정밀 검토 2026-11-10): 완료·보고 쓰기의 서버 확인을 끝없이 기다리지 않는다.
+//    SDK 의 set·update 약속은 서버가 받아 줘야 끝난다 — 신호가 약하면 화면의 «처리 중»(busy)이 안 풀려 다음 컨 확인이 막힌다.
+//    쓰기 자체는 SDK 가 화면에 바로 반영하고 연결되면 보낸다(종전과 같음). 여기서는 8초 뒤 «기다림»만 놓아 주고, 나중에 실패하면 띠로 알린다.
+const WRITE_ACK_WAIT_MS = 8000;
+function _ackOrQueue(p, what) {
+  let t = null, waited = false;
+  p.catch((e) => { if (waited) _writeNotice(`${what} 저장이 서버에서 거절됐어요 — 다시 확인해 주세요 (${String((e && e.message) || e).slice(0, 60)})`); });
+  return Promise.race([
+    p,
+    new Promise((res) => { t = setTimeout(() => { waited = true; _writeNotice(`${what} — 신호가 약해요. 화면에는 반영했고 연결되면 저장됩니다(그때까지 앱을 닫지 마세요)`); res(undefined); }, WRITE_ACK_WAIT_MS); }),
+  ]).finally(() => { if (t) clearTimeout(t); });
 }
 //  3.60-09: 지금 값을 «막지 않고» 본다 — 구독 캐시면 즉시, 아니면 1.5초까지만 기다리고 모르면 null(쓰는 쪽은 종전대로 진행).
 async function _peekVal(r, ms = 1500) {
@@ -1209,14 +1227,23 @@ export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip
   equip = await askCraneBeforeComplete(voyageKey, mode, String(equip || '').trim(), cns);   // 4.85: 같은 이유 — 한 번 묻는다
   const patch = {};
   const at = Date.now();
-  const list = cns.filter(Boolean);
+  const all = cns.filter(Boolean);
   const eq = String(equip || '').trim();
+  //  ★ 4.86-02 (정밀 검토 2026-11-10): 묶음 완료도 한 대 완료(fbCompleteContainer · 3.60-09)와 같은 보호를 한다 — **사람이 이미 완료한 컨은 덮지 않는다.**
+  //    종전엔 이 검사가 없어 다른 기기가 먼저 완료한 트윈을 다시 누르면 by·equip(인건비 근거)이 바뀌고 개인 실적이 두 번 셌다.
+  //    읽기는 _peekVal 한 벌(구독 캐시면 즉시 · 1.5초 안에 못 읽으면 종전대로 쓴다 — 완료를 막지 않는다).
+  const prevs = await Promise.all(all.map((cn) => _peekVal(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`))));
+  const already = all.filter((cn, i) => prevs[i] && !isAutoDone(prevs[i]));
+  const list = all.filter((cn) => !already.includes(cn));
+  if (already.length) _writeNotice(`${already.map((cn) => String(cn || '').slice(-4)).join('·')} 는 이미 완료돼 있어요 (덮지 않았어요)`);
+  if (!list.length) return { ok: false, already: true, done: [], skipped: already };
   for (const cn of list) {
     patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = eq ? { by, at, equip: eq } : { by, at };
   }
-  await update(ref(db), patch);
+  await _ackOrQueue(update(ref(db), patch), '완료');
   for (const cn of list) _markLoadedPos(voyageKey, mode, cn, by, list);   // 1.50: 트윈 둘 다 경로 남김 · 4.23-01: 같이 실은 컨은 맞교환 계산에서 둘 다 «누르기 직전» 상태로
   for (const _ of list) _tallyInspector(voyageKey, mode, by);   // V9.16: 트윈도 대수만큼 누적
+  return { ok: true, done: list, skipped: already };
 }
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
@@ -1393,6 +1420,7 @@ export async function fbCancelComplete(voyageKey, mode, cn, opts = {}) {
   assertCanWork('완료 취소');
   const reason = opts.reason === 'wrongSlot' ? 'wrongSlot' : 'notLoaded';
   const by = opts.by || (reason === 'wrongSlot' ? '자리취소' : '취소원복');
+  let _removed = false;   // 4.86-02: 완료 삭제까지는 됐는지 — 그 뒤 자리 원복에서 끊기면 «반쯤 취소»를 호출부에 알린다
   try {
     const recSnap = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const rec = recSnap.val();
@@ -1415,6 +1443,7 @@ export async function fbCancelComplete(voyageKey, mode, cn, opts = {}) {
     }
 
     await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
+    _removed = true;
     // V8.80: 취소 = 위치도 원계획(bay_orig)으로 원복 (사용자 확정 2026-07-08 — 원복돼야 수정 여부를 알 수 있다).
     //   원자리에 다른 컨이 있으면 미배정으로 두고 알림용 정보 반환.
     if (!rec || rec.bay_orig === undefined) { await logInPlace('cancel'); return { ok: true, reason, restored: false, noOrig: true }; }
@@ -1448,7 +1477,9 @@ export async function fbCancelComplete(voyageKey, mode, cn, opts = {}) {
     return { ok: true, reason, restored: true, orig: { bay: ob, row: orow, tier: ot } };
   } catch (e) {
     // 실패는 실패로 답한다 — 호출부가 검수사에게 "취소됐다"고 잘못 알리면 그 컨은 영영 안 고쳐진다.
-    return { ok: false, reason, error: String(e && e.message ? e.message : e) };
+    //  ★ 4.86-02: 완료는 이미 지워졌는데 자리 원복에서 끊긴 경우 — «취소 실패»라고만 하면 화면과 자료가 어긋난다. 어디까지 됐는지 함께 답한다.
+    if (_removed) _writeNotice(`${String(cn || '').slice(-4)} 완료는 취소됐지만 자리 원복을 못 했어요 — 자리를 확인해 주세요`);
+    return { ok: false, reason, completedRemoved: _removed, error: (_removed ? '완료는 취소됐지만 자리 원복 실패 — ' : '') + String(e && e.message ? e.message : e) };
   }
 }
 
@@ -3172,12 +3203,12 @@ export async function fbAddWorkReport(voyageKey, report) {
   //  ★ 4.46 — **모든 보고에 보낸 사람 이름을 남긴다**(보고 고치기는 보낸 사람만 — utils.canEditReport). 화면이 넘긴 이름(by)이 먼저, 없으면 이 기기의 오늘 이름.
   //    종전엔 작업 보고 창·가이드 해치·사진 보고가 이름을 안 남겨 보관 446건 중 14건에만 이름이 있었다.
   const by = String((report && report.by) || getMeToday() || '').trim();
-  await set(r, {
+  await _ackOrQueue(set(r, {
     ...report,
     ...(by ? { by } : {}),
     ts,
     created_at: new Date(ts).toISOString(),
-  });
+  }), '작업 보고');
   return ts;
 }
 
@@ -4591,8 +4622,7 @@ export async function fbWriteMirLexicon(key, entry) {
 }
 export async function fbLogMirMiss(rec) {
   if (!rec || !rec.q) return false;
-  const d = new Date(rec.at || Date.now());
-  const day = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const day = aiDayKey(rec.at || Date.now());   // 4.86-02: 한국 시각 날짜 키 한 벌(aiCost.aiDayKey) — mir.js 가 같은 노드를 이 키로 쓴다
   const r = push(ref(db, `mir_misses/${day}`));
   const payload = {};
   for (const [k, v] of Object.entries(rec)) { if (v !== undefined && v !== null && v !== '') payload[k] = v; }

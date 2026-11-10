@@ -91,6 +91,13 @@ export default class ErrorBoundary extends React.Component {
                 </button>
               )}
             </div>
+            {/* ★ 4.86-02 (정밀 검토 2026-11-10): 한 화면에서 난 오류가 «다시 시도»·새로고침 뒤에도 같은 주소라 또 나면 빠져나갈 길이 없었다 — 홈으로 나가는 단추. */}
+            {this.props.reloadButton && typeof window !== 'undefined' && String(window.location.hash || '').replace(/^#\/?/, '') !== '' && (
+              <button data-eb-home="1" onClick={() => { window.location.hash = '#/'; this.reset(); }}
+                className="w-full mt-2 py-2.5 bg-ink-750 hover:bg-ink-700 text-white font-bold rounded">
+                홈으로 나가기
+              </button>
+            )}
           </div>
         </div>
       );

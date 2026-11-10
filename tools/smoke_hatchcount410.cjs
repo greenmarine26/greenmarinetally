@@ -183,7 +183,7 @@ const bundle = process.argv[3];
   const reps = calls().filter((c) => c.fn === 'report');
   ok(reps.length === 1 && reps[0].report.type === 'hatch' && reps[0].report.action === 'open' && reps[0].report.panelCount === 2, `보고가 한 번 쓰였고 type hatch·open·panelCount 2 다 (${reps.length}건)`);
   ok(reps[0] && /총 2장/.test(reps[0].report.message || ''), '카톡 문구에도 «총 2장»');
-  ok(calls().some((c) => c.fn === 'updateInfo' && c.patch && c.patch.hatchDone && Object.values(c.patch.hatchDone).includes('open')), '보고가 나간 뒤에야 hatchDone(open) 표시를 저장한다');
+  ok(calls().some((c) => c.fn === 'updateInfo' && c.patch && ((c.patch.hatchDone && Object.values(c.patch.hatchDone).includes('open')) || Object.keys(c.patch).some((k) => /^hatchDone\//.test(k) && c.patch[k] === 'open'))), '보고가 나간 뒤에야 hatchDone(open) 표시를 저장한다');   // 4.86-02: 한 칸 경로(hatchDone/<해치>)로 쓴다
   await wait(300);
   ok(!/🔓 해치커버 오픈 → 홀드 진행/.test(txt()), '보고 뒤에는 오픈 배너가 사라진다');
 

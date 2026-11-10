@@ -16,8 +16,9 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { crewSegments, isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeepShift, keepOnboardOf } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { WorkerPrintDialog, WorkerHeadMark, installClonePrint } from '../workerPrint.jsx';   // 4.32: 머리줄 «# ___ , 이름» + 인쇄 직전 짝 이름 질문 + 한 장 더
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
+import { sizeLenOf } from '../tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌
 import { fitLegendBoxes } from '../fitLegend.js';   // 3.7-05: 별첨이 넘치면 브라우저가 재서 글자를 줄인다
-import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode, legendCargoCatOf, isEmptyReefer, emptySplitLabel, isAlphaOpenTopIso } from '../utils.js';   // 4.15-01: 별첨 화물 종류·엠티 구분 한 벌 · 2.98-14: 커버 막대 경계
+import { podBgOf, podCodeLen, isReeferContainer, isFlatRackContainer, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, hatchSegCols, legendItemsOf, normPortCode, legendCargoCatOf, isEmptyReefer, emptySplitLabel, isAlphaOpenTopIso } from '../utils.js';   // 4.15-01: 별첨 화물 종류·엠티 구분 한 벌 · 2.98-14: 커버 막대 경계
 import {
   autoPairBays,
   generatePdfBays,
@@ -1054,13 +1055,8 @@ export default function PrintableCargoPlanV2({
   // M6.91.2: isoToLabel로 정규화 후 사이즈 결정.
   //   양하/선적이 다른 ISO 표기로 들어와도 (45GP vs L5G1 vs 4500) 일관 분류.
   //   isoToLabel: 45GP/45HC/45R1 → 40HC/40RF, L5G1 → 45HC, 22GP → 20DC 등 ISO 6346 표준 적용.
-  const sizeOfC = (c) => {
-    const lbl = isoToLabel(c.iso) || '';
-    if (lbl.startsWith('45')) return '45';
-    if (lbl.startsWith('40')) return '40';
-    if (lbl.startsWith('20')) return '20';
-    return '20';
-  };
+  // ★ 일괄수리(2026-11-10): 규격 길이 한 벌(tallyReport.sizeLenOf — 마감텔리 칸을 20·40·45 로 접은 것). 종전엔 라벨 앞 두 자리로 따로 갈라 L2G1·SKHU 600번대 22GP 가 마감텔리와 다른 칸에 섰다.
+  const sizeOfC = sizeLenOf;
   // M6.86.8.7: 양하 별첨/카운트는 평택분(PTK)만 강제 (사용자 약속).
   //   양하 mode → POD가 PTK 포함된 것만
   //   선적 mode → POL이 PTK 포함된 것만

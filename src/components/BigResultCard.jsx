@@ -6,7 +6,7 @@ import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath,
 import { inspectionSealOf, formatWt, isoShown, sealCheckOf } from '../utils.js';
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 한 줄   // 4.49: sealCheckOf — 실오류 판정 한 벌   // ★ 4.27 한 화면 카드(look='work') — 자동 가이드 카드와 같은 실번호 값·무게·규격 글자   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
-import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCompleteContainersAtomic, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -238,7 +238,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
           if (_bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_bad.map(o => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
           if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
           if (!getEquipNumber()) { alert(equipGateText()); return; }   // ★ 4.27 감사 하-4: 📍 위치 틀림으로 확인할 때도 호기 없이 완료 금지(카드 [확인] 과 같은 문지기)
-          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());
+          if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, c._mode, cns, inspector, getEquipNumber()); else for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
           if (onAfterComplete) setTimeout(() => onAfterComplete(c), 600);

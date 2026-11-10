@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';   // PC 우측 패널(조상에 transform 이 있으면 fixed 가 잘린다) 밖, body 직속으로 그린다
 import { effectivePos, getEquipNumber, canCompleteContainer, isoToLabel, fmtPos } from '../utils.js';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';
-import { fbCompleteContainer, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCompleteContainersAtomic, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import PositionEditModal from './PositionEditModal.jsx';
@@ -84,7 +84,7 @@ export default function SlotLookupModal({ open, base, voyageKey, voyageInfo = nu
           if (bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${bad.map((o) => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
           if (!canWorkNow()) { alert(workGateText('완료')); return; }
           if (!getEquipNumber()) { alert(equipGateText()); return; }
-          for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());
+          if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, getEquipNumber()); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
           setQ(''); setPicked(null); onDone?.(); onClose?.();
         }}

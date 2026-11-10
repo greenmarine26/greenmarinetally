@@ -47,7 +47,7 @@ const src = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
     const F = src('src/firebase.js');
     const body = F.split('export async function fbCompleteContainer(')[1].split('\nexport ')[0];
     const gate = body.indexOf('if (prev && !isAutoDone(prev))');
-    ok('개인 실적·실린 자리 확정은 실제로 쓴 뒤에만(이미 완료면 부르지 않는다)', gate > 0 && body.indexOf('_tallyInspector(') > gate && body.indexOf('_markLoadedPos(') > gate && body.indexOf('await set(r, rec);') > gate);
+    ok('개인 실적·실린 자리 확정은 실제로 쓴 뒤에만(이미 완료면 부르지 않는다)', gate > 0 && body.indexOf('_tallyInspector(') > gate && body.indexOf('_markLoadedPos(') > gate && body.indexOf("await _ackOrQueue(set(r, rec), '완료');") > gate   /* 4.86-02: 서버 확인은 8초까지만 기다린다(_ackOrQueue) — 쓰기 자리는 그대로 */);
     ok('완료 쓰기에 transaction 을 쓰지 않는다(전송 뒤 끊기면 버림 — 감사 실측)', !/runTransaction/.test(F));
 
     console.log('■ T10 — 초과 컨이 정상 완료를 덮지 않는다');

@@ -32,6 +32,14 @@ export function tallySizeCol(c) {
   if ((base === '20' || base === '40') && _skhuHc(c)) return 'HC';
   return base;
 }
+/** ★ 일괄수리(2026-11-10) — **규격 길이 한 벌**: 마감텔리 칸(tallySizeCol)을 '20' | '40' | '45' 세 길이로 접는다(HC → 40).
+ *  수석 보드 별첨(utils.legendLiveOf) · 카고플랜 별첨(PrintableCargoPlanV2) · 미르 베이 분포(nlSearch) · LOLO 집계(loloReport) · 미르 카드(mir feetOf)가
+ *  규격 라벨 앞 두 자리로 따로 가르던 것을 이 함수로 모았다 — L2G1(라벨 45HC · 마감텔리 HC 칸)·장금 SKHU 600번대 22GP(마감텔리 HC 칸)가 화면과 마감텔리에서 같은 길이로 선다.
+ *  c 는 { iso, cn, _sizeFill } 을 본다(tallySizeCol 과 같다). */
+export function sizeLenOf(c) {
+  const col = tallySizeCol(c || {});
+  return col === 'HC' ? '40' : col;
+}
 function _sizeColBase(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   //  4.15 (§7.8-⑥): 규격이 빈 행을 베이플랜 자리로 채운 값(_isoBlankFilled 의 _sizeFill — 홀수 베이 20' · 짝수 베이 40'). 높이는 아래 SKHU 규칙만 본다.
@@ -797,7 +805,10 @@ export function buildPerformance(disCs, loadCs, fmt) {
  *  NEW POSN 은 실제로 다시 실은 자리(3.65 실제 칸 — 검수원·터미널)가 있으면 그것, 없으면 계획 자리(서류·선적 EDI), 제자리 재적재면 같은 자리. */
 export function buildShifting(voyage) {
   let map = {};
-  try { map = computeShiftingMapCached(voyageKeyOf(voyage) || 'k', voyage) || {}; } catch { /* 계산 실패 시 빈 목록 */ }
+  //  ★ 4.86-02 (정밀 검토 2026-11-10): 계산 실패를 삼키지 않는다 — 종전엔 빈 목록만 돌려줘 마감텔리 시프팅 칸이 경고 없이 0 으로 나갔다.
+  //    빈 목록에 _failed 표시를 달아 computeTallyData → 엑셀 안내 문구(tallyExcel)까지 올린다.
+  try { map = computeShiftingMapCached(voyageKeyOf(voyage) || 'k', voyage) || {}; }
+  catch (e) { console.warn('[마감텔리] 시프팅 계산 실패 — 시프팅 칸이 비어 나갑니다', voyageKeyOf(voyage), e); const _none = []; _none._failed = String((e && e.message) || e); return _none; }
   if (!Object.keys(map).length) return [];
   const dE = _rawEdiMapOf(sect(voyage, 'discharge')) || sect(voyage, 'discharge').ediContainers || {};
   const lE = _rawEdiMapOf(sect(voyage, 'loading')) || sect(voyage, 'loading').ediContainers || {};
@@ -1073,6 +1084,7 @@ export function computeTallyData(voyage) {
     damage: buildDamage(voyage, disCs, loadCs),   // TallyOne 1.10: photos → DM-IN/DM-OUT·DAMAGE 시트
     perf: buildPerformance(disCs, loadCs, fmt),
     shifting: shiftRows,
+    _shiftFail: shiftRows._failed || '',   // 4.86-02: 시프팅 계산 실패 사실(엑셀 안내 문구로 간다)
     // 1.8-16: 완료 처리된 모드에서 **닫았는데 보고가 없는 커버**를 시각 없이 채운다.
     //   베이 짝 사전은 양하·선적 컨을 다 넣어야 온전하다(한쪽만 보면 홀수 짝을 못 찾는다).
     timeSheet: buildTimeSheet(voyage?.reports, {

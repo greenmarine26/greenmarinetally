@@ -4,6 +4,7 @@
 //   ② LOADING LIST — 처리분 전체. NO·컨번호·실번호·규격·F/E·ACT(변경 시).
 //   기존 records(실번호 수정/리씰/실오류) + completed(처리)를 병합해 생성.
 
+import { sizeLenOf } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌
 import { isoToLabel, completedByLabel, sealCheckOf } from './utils.js';   // 4.49: sealCheckOf — 실오류 판정 한 벌   // 3.16: 완료자 표기 한 벌
 
 // 모드 구역(discharge/loading)에서 처리된(=completed) 컨 목록을 만든다.
@@ -55,7 +56,7 @@ export function buildLoloRows(sec) {
 function tally(rows) {
   const t = { '20': { F: 0, E: 0 }, '40': { F: 0, E: 0 }, '45': { F: 0, E: 0 } };
   rows.forEach(r => {
-    const g = r.sizeLabel.startsWith('20') ? '20' : r.sizeLabel.startsWith('45') ? '45' : '40';
+    const g = /^(20|40|45)/.test(r.sizeLabel || '') ? sizeLenOf(r) : '40';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌(tallyReport.sizeLenOf — 마감텔리 칸). 규격이 빈 행은 종전대로 40 줄
     t[g][r.fe === 'E' ? 'E' : 'F']++;
   });
   return t;

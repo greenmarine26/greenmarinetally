@@ -26,7 +26,7 @@ import { deckCoordMap } from './rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «�
 import {
   _storage, SK, isPyeongtaekPort, isPtk, sideCancelled, isWorkingNow, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, isoToLabel, effectivePos, reeferTempOf, reeferTempExempt, applySpecialMarks, isReeferCheckSkipped,
   berthSideOf, overDims, getEquipNumber, formatWt, runDeviceCmd, resolveShipKey, shiftingMapForDisplay, shiftEvidenceOf, dropFilledBookingSlots, legendItemsOf,
-  resolveCrewSides, getPierFromBerth, voyagePlanMs, voyagePlanEndMs, _dtMs, koJosa, qcRowsOf,   // 4.42-03: qcRowsOf — 동방 호기 표 한 벌(갱 기다리는 배) · 4.42-02: koJosa — «강풍 대기로·장비 고장으로»   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
+  resolveCrewSides, voyagePierOf, voyagePlanMs, voyagePlanEndMs, _dtMs, koJosa, qcRowsOf,   // 4.42-03: qcRowsOf — 동방 호기 표 한 벌(갱 기다리는 배) · 4.42-02: koJosa — «강풍 대기로·장비 고장으로»   // 3.56 [mirMood] · 4.06 재감사: _dtMs = isWorkingNow 와 같은 workEndAt 읽기
   isReeferContainer, isReeferIso, isFullReefer, isEmptyReefer, emptySplitLabel,   // 4.15-01: 엠티 구분 한 벌 · 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf, shiftSplitOf, isShiftOffPtk,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합) · 4.16: 시프팅 분리 한 벌
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
@@ -56,6 +56,7 @@ import {
   briefCountsOf, ptkRowOf,   // 4.39-01: «작업 분석» 이 브리핑과 같은 판정으로 센다
   sealPredictOf,   // 4.39-02: 예상 실오류(주의 박스와 같은 판정) — 실번호 점검·브리핑·작업 분석
   isBayTidyAsk,   // 4.81-01: 배 이름 없는 «N번 베이 정리해줘» 도 일하는 배 규칙을 탄다
+  isNoRestShip,   // 4.86-02: 카페리 휴게 없음 한 벌
 } from './nlSearch.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import {
@@ -73,8 +74,9 @@ import { judgeMode, buildReadiness, describeReadiness, loadingCollecting } from 
 import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60-18: PORT-MIS 매칭 본체(베이사전 없이) — 콘앱 미르용 기본 매처
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
-import { aiCostUsd, AI_PRICE, aggregateAiCost } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
+import { aiCostUsd, AI_PRICE, aggregateAiCost, aiDayKey } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
 import { tidyBayAnswer, withRecordPositions } from './gangState.js';   // 4.81: «N번 베이 정리해줘» — 앱 입력 + 터미널 반영 두 자료를 읽는 현황 한 벌(읽기 전용)
+import { sizeLenOf } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — utils 가 이미 tallyReport 를 부르므로 번들에 베이사전 같은 큰 것이 새로 딸려 오지 않는다(mir-core +1.5KB 실측)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
@@ -198,8 +200,18 @@ export function mirObserve(q, missed, meta = {}) {
   const overlap = toks.filter((t) => p.toks.has(t)).length;
   const need = Math.max(1, Math.ceil(p.toks.size * 0.5));
   if (overlap < need) return '';
-  mirLearnAlias(p.q, text, meta.who || '');
+  if (!mirLearnAlias(p.q, text, meta.who || '')) return '';   // 4.86-02: 거름에 걸리면 배우지 않았으니 «배웠어요» 도 말하지 않는다
   return `(«${p.q}»는 «${text}» 뜻으로 배웠어요 — 다음엔 바로 답할게요)`;
+}
+/** 4.86-02: 자동으로 배우면 안 되는 별칭이면 이유(문장)를, 괜찮으면 '' 를 돌려준다. 순수 판정 — 부수 효과 없음.
+    ① 슬롯({ship}·{cn}·{n})을 뺀 글자가 2자 미만인 키 — 2026-10-15 «{ship}» 만 남는 키가 배 이름만 친 말을 전부 한 인텐트로 보냈다.
+    ② 시각을 묻는 말(몇 시·언제)이 원문과 번역 한쪽에만 있다 — 2026-10-16·17 시각을 묻는 말이 남은 대수 답으로 가는 별칭이 생겼다. */
+const TIME_ASK_RE = /몇\s*시|언제/;
+export function mirAutoAliasReject(from, to) {
+  const rest = mirKey(from).replace(/\{(?:ship|cn|n)\}/g, '').replace(/\s+/g, '');
+  if (rest.length < 2) return '슬롯을 뺀 글자가 2자 미만인 키';
+  if (TIME_ASK_RE.test(String(from)) !== TIME_ASK_RE.test(String(to))) return '시각을 묻는 말이 한쪽에만 있는 짝';
+  return '';
 }
 /** ★ 3.42 — 별칭 한 벌: «from(못 알아들은 말)» 을 «to(미르가 아는 말)» 로 사전에 적는다. 즉석 학습(위)과 모델 번역(mirModel)이 같은 모양으로 쓴다.
     이 폰 메모리(window.__mirLexicon)에 바로 넣고, 쓰기 손(window.__mirLexiconWrite — App 이 fbWriteMirLexicon 을 건다)이 있으면 보관소에도 적는다.
@@ -207,6 +219,8 @@ export function mirObserve(q, missed, meta = {}) {
 export function mirLearnAlias(from, to, by = '', extra = {}) {
   const key = mirKey(from);
   if (!key || !to) return null;
+  const bad = mirAutoAliasReject(from, to);   // 4.86-02: 모델·즉석으로 배우는 별칭(auto)의 거름 — 슬롯만 있는 키 · 시각을 묻는 말과 다른 뜻
+  if (bad) { console.warn('[미르 학습] 별칭 거절 — ' + bad + ' «' + String(from).slice(0, 40) + '» → «' + String(to).slice(0, 40) + '»'); return null; }
   const now = Date.now();
   const entry = { kind: 'alias', from: String(from), to: mirTokens(to).map(mirSlot).join(' '), ok: String(to), by: by || '', at: now, auto: true, hits: 0, ...extra };
   try { if (typeof window !== 'undefined') { if (!window.__mirLexicon) window.__mirLexicon = {}; window.__mirLexicon[key] = entry; } } catch (e) { /* 창 없음(시험) */ }   // 제자리 갱신 — 구독이 오기 전에도 이 폰은 바로 안다
@@ -1690,7 +1704,14 @@ function readBayWish(text) {
 
 const eyePosOf = (c) => c?.deckPos ? String(c.deckPos) : (c?.bay && c?.row && c?.tier) ? `${c.bay}-${c.row}-${c.tier}` : '';   // 4.04-02: RZOR 덱플랜 좌표 먼저
 const l4 = (c) => c?.l4 || String(c?.cn || '').slice(-4);
-const feetOf = (iso) => { const h = String(iso || '')[0]; return h === '2' ? '20피트' : (h === '4' || h === 'L' || h === '9') ? '40피트' : ''; };
+//  ★ 일괄수리(2026-11-10): 규격 길이 한 벌(tallyReport.sizeLenOf — 마감텔리 칸을 20·40·45 로 접은 것). 규격 글자(iso)나 컨 행을 받는다. 알아보는 규격(첫 자리 2·4·L·9 또는 라벨 20·40·45)만 말하고 그 밖은 종전대로 빈 말.
+//    종전엔 첫 자리만 보아 L·9 를 전부 «40피트» 라 했다 — 이제 진짜 45피트(L5G1·9500 류)는 «45피트», L2G1 은 마감텔리대로 «40피트».
+const feetOf = (x) => {
+  const c = (x && typeof x === 'object') ? x : { iso: x };
+  const iso = String(c.iso || '').toUpperCase().trim();
+  if (!/^[24L9]/.test(iso) && !/^(20|40|45)/.test(isoToLabel(iso) || '')) return '';
+  return `${sizeLenOf({ ...c, iso })}피트`;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ★ 2.52-02 — **미르가 못 드는 트윈을 «두 대 한 번에» 라고 부르고 있었다.**
@@ -1735,7 +1756,7 @@ function sayCard(card, n, pier) {
     const _emp = String(x.fe || '').toUpperCase() === 'E';
     bits.push(sl ? `${!String(x.sl || '').trim() ? '엠티실' : '실번호'} ${sl}` : (_emp ? '엠티 · 실 없음' : '실번호 없음'));
     if (eyePosOf(x)) bits.push(eyePosOf(x));
-    const ft = feetOf(x.iso); if (ft) bits.push(ft);
+    const ft = feetOf(x); if (ft) bits.push(ft);
     if (x.rf && String(x.tmp ?? '').trim() !== '') bits.push(`리퍼 ${x.tmp}°C`);
     if (x._xray || x.isXray) bits.push('🔍 X-RAY');
     return bits.join(' · ');
@@ -3202,7 +3223,8 @@ export async function getMirConfig(force = false) {
   })();
   return _cfgP;
 }
-const _dayKey = () => { const d = new Date(); return `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
+//  4.86-02: 하루 키는 한국 시각 날짜 — 기기 시간대와 무관(aiCost.js 한 벌). 아래 줄에 한글을 섞지 않는다(smoke_datewords [9])
+const _dayKey = () => aiDayKey(Date.now());
 let _dayCount = { day: '', n: 0, at: 0 };
 async function _todayCount() {
   const day = _dayKey();
@@ -3339,6 +3361,7 @@ async function _gem(cfg, prompt, maxOut, json) {
         lastErr = e;
         const st0 = e && e.status;
         if (st0 === 400 || st0 === 401 || st0 === 403 || st0 === 404) break;
+        if (tryNo < 2) await new Promise((res) => setTimeout(res, 600 * (tryNo + 1)));   // 4.86-02: 일시 오류는 0.6초·1.2초 쉬고 다시 부른다(바로 연달아 부르면 같은 과부하에 또 걸린다)
       }
     }
     const e = lastErr;
@@ -4193,7 +4216,7 @@ function _mmHHMM(m) { const x = ((m % 1440) + 1440) % 1440; return `${String(Mat
 
 function pierOf(voyage) {
   const info = (voyage && voyage.info) || {};
-  return getPierFromBerth(info.berth || info.berthNo || '') || String(info.pier || '').toUpperCase() || 'PCTC';
+  return voyagePierOf(info) || 'PCTC';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌(utils.voyagePierOf — pier → 선석). 모를 때 PCTC 는 종전 그대로
 }
 
 const _WORK_ACT_RE = /(^|_)(start|pause|resume|done)$/;   // 4.06 감사: 카톡 이관 보고는 «pause»·«resume» 접두어가 없다(kakaoWorkLog) — workPauseOf 와 화남이 한 벌로 본다
@@ -4518,7 +4541,7 @@ function _angryList(voyages, heartbeat, now) {
     if (marks.allClosedAt && marks.allClosedAt >= last) continue;   // 4.06 감사: 모든 호기의 마지막 보고가 «작업 끝» 이고 그 뒤에 완료가 더 안 찍혔으면 입력할 게 없다(끝 보고 뒤에 또 입력했으면 다시 본다)
     if (marks.restartAt > last) last = marks.restartAt;   // 4.06 감사: 중단 뒤 재개 보고가 있으면 재개 시각부터 잰다(중단 시간이 그대로 세지 않게)
     //  3.69-01: 쉬는 시간(석식·중식·야식·티타임)은 세지 않는다 — 검수사 «그 시간대엔 작업자도 작업중인 장비도 없는상태이기 때문에 작업 대기시간도 아닙니다». 근무표(WORK_SHIFTS) 한 벌.
-    let wmin = 0; try { wmin = workMinutesBetween(last, now, pierOf(v)); } catch (e) { wmin = Math.round((now - last) / MIN); }
+    let wmin = 0; try { wmin = workMinutesBetween(last, now, pierOf(v), { noRest: isNoRestShip(v.info) }); } catch (e) { wmin = Math.round((now - last) / MIN); }
     if (!(any && wmin * MIN > MOOD_NO_DONE_MS)) continue;
     if (_appAllDone(v, vKey)) continue;   // 4.06 감사: 앱에 올라온 컨을 완료가 다 채웠으면 입력할 게 없다 — 센 값은 비싸서(항차 펼치기) 60분이 넘었을 때만 본다
     r.push({ key: vKey, vsl, wmin });

@@ -18,7 +18,7 @@ import { completedByLabel, EXTRA_OF_LIST_LABEL, sealCheckOf, sealConflictOf, MFN
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 배지·상자의 «MFN 목록 출력»
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // 4.49: sealCheckOf — 실오류·큰 실 판정 한 벌   // 4.20: 추가분 표식 글 · ★ 3.16: 완료자 표기 한 벌 — 업체 글자를 화면에 내지 않는다
 import { fbSetShiftManual, fbClearShiftManual } from '../firebase.js';   // 4.82: 수동 시프팅 표기 쓰기(문지기는 쓰기 함수 안)
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCompleteContainersAtomic, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbPickIso, fbClearPickIso, fbPickPod, fbClearPickPod, fbSetKeepOnboard, fbClearKeepOnboard, fbGetKeepOnboard, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -1779,7 +1779,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         onCompleteBoth={async (cns) => {
           // 1.55: 트윈 둘 다 같은 갱(호기)으로 남긴다 — 한 번에 든 것이니 같은 갱이다.
           if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
-          for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());
+          if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, getEquipNumber()); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
           // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
         }}

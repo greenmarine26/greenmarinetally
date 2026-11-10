@@ -2303,7 +2303,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     const done = [c1, c2].filter(c => c._comp);
     // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
     if (done.length && !(await askYN('이미 선적확인된 컨입니다',
-      `${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n계속할까요?`))) return;
+      `${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다(그 기록은 그대로 둡니다).\n나머지만 진행할까요?`))) return;
     {   //  3.2-01: 통과분 문지기 — 쓰는 자리 앞에서 한 번 더
       const _tr = [c1, c2].filter(c => !canCompleteContainer(c, 'loading'));
       if (_tr.length) { alert(`평택 선적 대상이 아닙니다 — 통과화물 ${_tr.map(c => `${c.cn?.slice(-4)}(${c.pol || '?'})`).join(', ')}은 선적확인할 수 없습니다.`); return; }
@@ -2311,8 +2311,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     setBusy(true);
     try {
       // TallyOne 1.55: 마지막 인자 = 갱(호기). 갱이 안 남으면 갱별 대수를 되살릴 수 없다(인건비가 걸린 값).
-      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);
-      speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
+      const _r = await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);
+      ((_r && _r.done) || []).forEach((cn, i) => setTimeout(() => speakDone({ cn }), i * 900));   // 4.86-02: 실제로 완료된 컨만 읽는다(이미 완료된 컨은 덮지 않는다)
       resetAll();
     } catch (e) {
       alert(`처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n${e?.message || e}`);

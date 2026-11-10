@@ -4,6 +4,7 @@
    ⚠ 이 파일은 읽기만 한다. 저장은 EsealVoiceBar 가 기존 fbSetEmptySeal(컨 상세·기록지 사진과 같은 길)로 한다.
    ⚠ 대상은 ATPR(정책 code ATRP) 의 «엠티 + POD 위해(CNWEI·CNWEH)» 뿐이다 — 다른 선박·다른 POD 엠티는 이 기능이 건드리지 않는다. */
 import { matchShipPolicy, applyPolicyToContainer, normalizeVslName } from './shipPolicies.js';
+import { SHIP_FLAGS } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 코드 목록 한 곳
 import { spokenDigitsRaw } from './voice.js';
 import { expandSeal } from './esealPhoto.js';
 
@@ -11,7 +12,7 @@ import { expandSeal } from './esealPhoto.js';
 export function isAtprWeiEmpty(vsl, c) {
   if (!c) return false;
   //  선박명은 정확히 ATPR·ATRP·ATLANTIC PIONEER 일 때만 — matchShipPolicy 의 부분 일치가 다른 배를 ATPR 로 잘못 보지 않게(감사 권고, «다른 선박은 절대 안 한다»)
-  if (!['ATPR', 'ATRP', 'ATLANTIC PIONEER'].includes(normalizeVslName(vsl))) return false;
+  if (!SHIP_FLAGS.ATPR.sealAttachNames.includes(normalizeVslName(vsl))) return false;   // ★ 일괄수리(2026-11-10): 이름 목록은 선박 성질표 한 곳(ATPR·ATRP·ATLANTIC PIONEER 그대로)
   const p = matchShipPolicy(vsl, {}, []);   // 기본 정책만 — 검수사가 다른 배에 붙인 정책은 이 기능과 무관
   return !!(p && p.code === 'ATRP' && applyPolicyToContainer(p, c) === 'attach');
 }

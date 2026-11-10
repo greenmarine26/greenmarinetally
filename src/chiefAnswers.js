@@ -8,9 +8,10 @@
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { ptkDischargeJudgeOf, isKeepShift } from './utils.js';   // 4.48: 본선 잔류 예보(노란 ◆) 판정 한 벌
+import { voyagePierOf } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
 import { activeHeldOf } from './utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(자동 가이드 보류 줄 · 미르와 같은 목록)   // 4.20 후속: 평택 양하분 한 벌
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer, isFullReefer } from './utils.js';   // 2.65-01: 조 경계 한 벌
-import { addWorkMinutes, speedFromRecords, workMinutesBetween, recentPaceLine } from './nlSearch.js';
+import { addWorkMinutes, speedFromRecords, workMinutesBetween, recentPaceLine, isNoRestShip } from './nlSearch.js';   // ★ 일괄수리(2026-11-10): isNoRestShip — 휴게 없는 배(OBWH·RZOR)
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
@@ -237,7 +238,7 @@ export function answerXrayShifts(voyage, bayDef, opts = {}) {
     const zoneN = _isDeck(c) ? g.disDeck : g.disHold;
     const idx = zoneStart + Math.min(zoneN, Math.max(1, Math.round(zoneN / 2)));   // 블록 중간으로 본다
     const minutes = Math.round((idx / pace) * 60);
-    const eta = addWorkMinutes(startMs, minutes, pier);
+    const eta = addWorkMinutes(startMs, minutes, pier, { noRest: isNoRestShip(voyage?.info) });   // ★ 일괄수리(2026-11-10): 휴게 없는 배(OBWH·RZOR)는 쉬는 창을 빼지 않는다
     const mm = eta.getHours() * 60 + eta.getMinutes();
     const shift = (mm >= 480 && mm < 1050) ? '주간' : '야간';
     rows.push({ cn, c, gang: seg.name, shift, eta });
@@ -390,7 +391,8 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
     if (m) fromMs = Math.max(fromMs, new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime());
   }
-  let availH = Math.max(0, workMinutesBetween(fromMs, shift.endMs, pier)) / 60;
+  const _nr = { noRest: isNoRestShip(voyage?.info) };   // ★ 일괄수리(2026-11-10): 휴게 없는 배(OBWH·RZOR)는 쉬는 창을 빼지 않는다
+  let availH = Math.max(0, workMinutesBetween(fromMs, shift.endMs, pier, _nr)) / 60;
   //  ★ 2.62-01: 작업 시작이 이번 조 뒤면(낮에 야간 배를 물으면) 창이 0 — 다가오는 조로 굴려서
   //    «출근 전 미리 보기»가 되게 한다. 최대 3조까지(그 너머는 자료가 더 확실해진 뒤 볼 일).
   let rolled = 0;
@@ -408,7 +410,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     }
     shift.upcoming = true;
     const f2 = Math.max(fromMs, shift.startMs || 0);
-    availH = Math.max(0, workMinutesBetween(f2, shift.endMs, pier)) / 60;
+    availH = Math.max(0, workMinutesBetween(f2, shift.endMs, pier, _nr)) / 60;
     rolled++;
   }
   if (availH <= 0.01) return null;
@@ -456,7 +458,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     if (eq == null) return availH;
     const f = Math.max(fromMs, _craneAt[eq]);
     if (f >= shift.endMs) return 0;
-    return Math.max(0, workMinutesBetween(f, shift.endMs, pier)) / 60;
+    return Math.max(0, workMinutesBetween(f, shift.endMs, pier, _nr)) / 60;
   };
   const gangs = split.segs.map((seg, gi) => {
     const availH = _availOf(gi);   //  ⚠ 이 갱의 창 — 바깥 availH 를 가린다(의도).
@@ -645,7 +647,7 @@ export function answerShiftBriefing(voyage, bayDef, opts = {}) {
       let mins = 0; let probe = startMs;
       // addWorkMinutes 역산 대신 1분씩 세지 않고 근사: 전환까지 반복 60분 단위 전진
       while (probe < hand.getTime() && mins < 3000) {
-        const nx = addWorkMinutes(probe, 30, pier).getTime();
+        const nx = addWorkMinutes(probe, 30, pier, { noRest: isNoRestShip(voyage?.info) }).getTime();   // ★ 일괄수리(2026-11-10): 휴게 없는 배(OBWH·RZOR)는 쉬는 창을 빼지 않는다
         if (nx > hand.getTime()) break;
         mins += 30; probe = nx;
       }
@@ -928,7 +930,7 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null)
       L.push('(남은 대수를 셀 자료가 없어 끝나는 시각은 말씀 못 드려요.)');
     } else if (T.left > 0) {
       const remainMin = Math.round((T.left / (T.perGangHour * T.gangs)) * 60);   // 3.53-12: 총 잔여 ÷ (갱당 시간당 × 갱 수)
-      const eta = addWorkMinutes(Date.now(), remainMin, T.pier);
+      const eta = addWorkMinutes(Date.now(), remainMin, T.pier, { noRest: isNoRestShip(info) });   // ★ 일괄수리(2026-11-10): 휴게 없는 배는 쉬는 창을 건너뛰지 않는다(잰 속도와 같은 잣대)
       const rh = Math.floor(remainMin / 60), rm = remainMin % 60;
       const p = (n) => String(n).padStart(2, '0');
       L.push(`남은 ${T.left}대 — **약 ${rh ? rh + '시간 ' : ''}${rm}분** 뒤, `
@@ -942,8 +944,7 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', counts = null)
 
   //  ② 오늘 기록으로 아직 못 잴 때만 옛 방식(텔리 리포트 평균)으로 간다 — 그 사실을 밝힌다.
   if (!shipSpeed) return '작업 속도 자료를 아직 못 불러왔어요 — 잠시 후 다시 물어봐 주세요.';
-  const pier = String(info.pier || '').toUpperCase().includes('PCTC') ? 'PCTC'
-    : String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : null;
+  const pier = voyagePierOf(info) || null;   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌(utils.voyagePierOf) — pier 가 비고 선석만 있는 항차도 알아본다
   let rec = (pier && shipSpeed[`${vsl}_${pier}`]) || shipSpeed[`${vsl}_PNCT`] || shipSpeed[`${vsl}_PCTC`] || null;
   const L = [`작업 속도${shipName ? ' — ' + shipName : ''}`,
     '⚠ 오늘 완료 기록이 아직 모자라 **과거 평균**으로 말씀드립니다 — 실제와 다를 수 있어요.'];

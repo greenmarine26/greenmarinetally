@@ -418,9 +418,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const markHatchDone = async (center, action) => {
     if (!canWorkNow()) { alert(workGateText('해치 완료 표시')); return; }   // 3.51: 조회만은 보기만 — 남의 작업 큐를 바꾸지 않는다
     if (center == null) return;
-    const prev = voyage?.info?.hatchDone || {};
     // V9.57(I8): 빈 catch로 조용히 실패하던 것 — 저장 안 되면 모드 전환 때 프롬프트가 또 뜬다. 알린다.
-    try { await fbUpdateVoyageInfo(voyageKey, { hatchDone: { ...prev, [hatchKeyOf(center)]: action } }); }
+    try { await fbUpdateVoyageInfo(voyageKey, { [`hatchDone/${hatchKeyOf(center)}`]: action }); }   // 4.86-02: 그 해치 한 칸만 쓴다 — 종전엔 화면이 쥔 hatchDone 전체를 덮어, 두 기기가 다른 해치를 동시에 표시하면 한쪽이 사라졌다
     catch (e) {
       console.warn('[V9.57] 해치 처리 상태 저장 실패', e);
       alert('해치 처리 상태 저장에 실패했습니다.\n(저장 안 되면 모드 전환 시 해치 안내가 다시 뜰 수 있습니다.)');
@@ -1367,6 +1366,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     // ⛔ deckDone > 0 도 뗐다 (1.76-05) — 그 그룹 **평택 데크분이 애초에 0**(데크가 전부 통과화물)이면
     //   «내린 것»이 없어 배너가 안 떴다. 그런데 홀드 버튼은 평택 잔여만 보고 바로 열려서,
     //   커버 안내를 한 번도 못 본 채 홀드로 들어갔다. 홀드에 평택 작업이 남았으면 커버는 열어야 한다.
+    //  ★ 4.86-02 (정밀 검토 2026-11-10): 같은 해치 이웃 장에 데크가 남았으면 «커버를 열까요» 를 묻지 않는다 — 홀드 단추(holdDeckGateOf · 4.81-01)와 같은 판정 한 벌.
+    //    종전엔 이 장 데크만 봐서, 이웃 장 데크가 같은 커버 위에 남아 있는데도 여는 물음이 먼저 뜰 수 있었다(누르면 열림 보고가 나간다).
+    if (deckRemain === 0 && holdRemain > 0 && holdDeckGateOf(selectedGroup)) return false;
     return deckRemain === 0 && holdRemain > 0;
   }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished, ownPause]);
 
@@ -1450,7 +1452,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (holdDonePrompt && card) return 'holdL';
     if (!hatchAuto && !ownPause && mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') && !card) return 'holdCloseD';   // 3.49: 따라가기면 자동 판정
     return null;
-  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card, hatchAuto, ownPause]);
+  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card, hatchAuto, ownPause, voyage]);   // 4.86-02: isHatchDoneSaved 가 voyage(보고·hatchDone)를 읽는다 — 빠져 있어 다른 기기의 닫음 보고 뒤에도 «닫을까요» 음성이 남았다
 
   const CHOICE_VOICE = {
     deckD: '데크 양하 완료. 해치커버를 열까요, 다른 데크로 갈까요.',
@@ -2880,7 +2882,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}
           onCompleteBoth={async (cns) => {
             if (!canWorkNow()) { alert(workGateText('완료')); return; }
-            for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', equip);
+            if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, equip); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', equip);   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
             noteWorked(posFor);
             setResumeCns(cns.length === 1 && posMateCn ? [posMateCn] : []); setSingleMode(false); setConsecFix(0); setFixOpen(false); setFixQuery('');   // 4.27: 트윈 중 한 대만 고쳐 실었으면 남은 짝이 다음 카드
             setPosTwin(null); setPosMateCn(null);

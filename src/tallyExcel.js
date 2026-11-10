@@ -363,6 +363,7 @@ function sheetShifting(wb, D) {
 import TEMPLATE_MAP from './data/tallyTemplateMap.js';
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 import { tempNum, temp1, reeferRowFlags, fmtAt } from './reeferList.js';   // 4.57: 리퍼 온도 리스트 엑셀
+import { SHIP_FLAGS } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 코드 목록 한 곳
 import { mfnDestKo } from './utils.js';   // 4.58: MFN 목록 엑셀의 목적지 한글
 
 const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
@@ -373,13 +374,13 @@ async function fillTemplate(D, ExcelJS) {
   //   TallyOne 1.4: OBWH 전용 템플릿·좌표를 넣었으므로 이 예외는 이제 타지 않는다(안전망으로 유지).
   let tplCode = D.code;
   let M = TEMPLATE_MAP[D.code];
-  if (!M && D.code !== 'OBWH') { M = TEMPLATE_MAP.STANDARD; tplCode = 'STANDARD'; D._stdNote = '이 배 전용 템플릿 없음 — 표준 GM 서식으로 생성'; }
+  if (!M && !(SHIP_FLAGS[D.code] || {}).voucherTally) { M = TEMPLATE_MAP.STANDARD; tplCode = 'STANDARD'; D._stdNote = '이 배 전용 템플릿 없음 — 표준 GM 서식으로 생성'; }   // ★ 일괄수리(2026-11-10): OBWH(바우처형) 표식은 선박 성질표 한 곳(종전 D.code !== 'OBWH')
   if (!M || !M.sheets || !M.sheets.finalWork) return null;
   const base = (typeof document !== 'undefined' ? './' : 'public/');
   let ab;
   if (typeof document !== 'undefined') {
     const res = await fetch(`${base}tally_templates/${tplCode}.xlsx`, { cache: 'no-store', signal: tmoSignal(30000) });
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`서식 파일을 받지 못함(${tplCode} · HTTP ${res.status})`);   // 4.86-02: 종전엔 null 이라 통신 실패도 «이 배는 템플릿 미보유»로 안내됐다 — 호출부 catch 가 «템플릿 실패(이유)»로 적는다
     ab = await res.arrayBuffer();
   } else {
     const _nodeFs = 'fs';   // 4.58: 변수로 불러 브라우저용 번들(esbuild·vite)이 node 내장 fs 를 풀려 하지 않게 한다(MFN 목록이 이 파일을 끌어와 생긴 번들 오류)
@@ -1232,10 +1233,11 @@ export async function generateTallyExcel(D, opts = {}) {
     const fname0 = `${D.code} ${voy0} PTK TALLY REPORT.xlsx`;
     const buf0 = await tplWb.xlsx.writeBuffer();
     if (_wantDownload) _download(buf0, fname0);
-    const notes = [note, D._stdNote, D._overflow ? `⚠ 자리 부족으로 못 실은 선사·포트 ${D._overflow}건 — 확인 필요` : ''].filter(Boolean);
+    const notes = [note, D._stdNote, D._overflow ? `⚠ 자리 부족으로 못 실은 선사·포트 ${D._overflow}건 — 확인 필요` : '', D._shiftFail ? '⚠ 시프팅 계산 실패 — 시프팅 칸이 비어 있습니다(확인 필요)' : ''].filter(Boolean);   // 4.86-02: 시프팅 계산 실패도 알린다
     return { fname: fname0, buf: buf0, note: notes.join(' · ') || '실물 서식(템플릿) 기반' };
   }
   if (!note) note = '이 배는 템플릿 미보유 — 표준 서식으로 생성(배치가 실물과 다를 수 있음)';
+  if (D._shiftFail) note += ' · ⚠ 시프팅 계산 실패 — 시프팅 칸이 비어 있습니다(확인 필요)';   // 4.86-02
   const wb = new ExcelJS.Workbook();
   wb.creator = 'GREEN MARINE Tallyman Master';
   sheetFinalWork(wb, D);
