@@ -66,6 +66,7 @@ import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
+import CraneAskHost from '../components/CraneAskHost.jsx';   // 4.85
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import ExpectedTimeLine from '../components/ExpectedTimeLine.jsx';   // 4.01: 작업 시작 화면 맨 위 «예상 작업 시간»
@@ -2474,6 +2475,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         }}
       />
       <ScrollTopButton />   {/* 2.82-02: 스크롤이 긴 화면엔 TOP (검수사 지시 2026-08-29) */}
+      <CraneAskHost voyageKey={voyageKey} voyage={voyage} />   {/* 4.85: 완료 직전 호기 한 번 묻기 */}
     </div>
   );
 }

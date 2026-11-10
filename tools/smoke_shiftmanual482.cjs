@@ -167,9 +167,9 @@ console.warn = () => {};
   ok('컨 상세 — «＋ 시프팅 표기» 단추·폼·표기 상자(수기 표기 · 표기/선적 EDI · 아직 없음)·풀기, 화면 문지기 podCan', /data-shift-manual-open/.test(cm) && /data-shift-manual-form/.test(cm) && /검수사 수기 표기/.test(cm) && /표기 \{fmtShiftPos\(smEntry\._toConflict\)\} \/ 선적 EDI/.test(cm) && /선적 EDI 에 아직 없음/.test(cm) && /data-shift-manual-clear/.test(cm) && /if \(!podCan\) return null;/.test(cm) && /fbSetShiftManual\(voyageKey, cn0/.test(cm));
   const hp = read('src/data/helpData.js');
   ok('매뉴얼(helpData)에 시프팅 수동 표기 절이 있고 254 → 253 영향을 적었다', /시프팅 수동 표기/.test(hp) && /평택 양하 총계가 1대 줄어듭니다/.test(hp) && /＋ 시프팅 표기/.test(hp));
-  const ver = /APP_VERSION = 'TallyOne 4\.8[234](-\d\d)?'/.test(ut);
+  const ver = /APP_VERSION = 'TallyOne 4\.8[2345](-\d\d)?'/.test(ut);
   const note = (ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '';
-  ok('버전 TallyOne 4.82 · APP_NOTE 두 문장·120자 미만·작은따옴표/슬래시 없음', ver && note.length < 120 && (/^4\.82 /.test(note) ? (note.match(/[.!?]/g) || []).length === 2 : /^4\.8[234](-\d\d)? /.test(note)) && !/[\/']/.test(note), note);
+  ok('버전 TallyOne 4.82 · APP_NOTE 두 문장·120자 미만·작은따옴표/슬래시 없음', ver && note.length < 120 && (/^4\.82 /.test(note) ? (note.match(/[.!?]/g) || []).length === 2 : /^4\.8[2345](-\d\d)? /.test(note)) && !/[\/']/.test(note), note);
   const hanText = [fSet, fClr].join('\n');
   ok('사용자 문구에 «카토스»·«동방» 이 없다(새로 쓴 곳)', !/카토스|동방/.test(hanText + cm.slice(cm.indexOf('4.82 — 검수사 수동 시프팅 표기'), cm.indexOf('const pickPod = async')) + cm.slice(cm.indexOf('★ 4.82 — 검수사 수동 시프팅 표기 — 양하에서만'), cm.indexOf('M8.07: 품명'))));
 

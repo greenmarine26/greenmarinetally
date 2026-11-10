@@ -2,7 +2,7 @@
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { parseViewCommand, pickVoyageKey } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
-import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber } from './utils.js';   // 3.50: 로그인 선택의 호기를 앱 호기로
+import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber, getEquipNumber } from './utils.js';   // 3.50: 로그인 선택의 호기를 앱 호기로
 import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage, voyagesScopeOf, ownVoyageOf, needsShiftAsk, resolveShift, reshiftChoice, isOffShiftView } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
 import {
   fbSubscribeVoyages, fbSubscribeVoyageBody, fbSubscribeVoyageInfos, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice, fbWatchServerOffset,   // 3.50: 작업자/조회만 선택을 명단에 적는다
@@ -77,6 +77,7 @@ export default function App() {
   // V9.13: 무조작 자동 로그아웃 — 마지막 화면 조작 시각(ref: 리렌더 없이 갱신) + 안내 문구
   const lastInputRef = React.useRef(Date.now());
   const [autoLogoutNotice, setAutoLogoutNotice] = useState('');
+  const relievedSeenRef = React.useRef(0);   // 4.85: 교대 받음 표시를 이 화면에서 이미 처리한 시각
   //  ★ 3.51 — 조회만인데 쓰는 일을 눌렀을 때 «조용히 아무 일도 안 일어나는» 것을 막는 띠 한 벌.
   //    문지기(firebase.assertCanWork)가 던지기 직전에 이벤트를 쏘고, 호출부가 catch 를 안 하거나 «저장 실패» 로만 말해도 여기서 이유가 보인다.
   const [viewOnlyMsg, setViewOnlyMsg] = useState('');
@@ -370,6 +371,23 @@ export default function App() {
   //  ★ 3.50 — «조회만» 문지기(isViewOnlyNow)는 App 이 들고 있는 workChoice 를 1순위로 본다(모듈 캐시).
   //    localStorage 만 보면 KST 자정·[검수원 변경] 뒤 meToday 가 남으로 바뀐 경우·저장 실패에서 조회만이 작업자로 둔갑한다(3.50 감사 지적).
   useEffect(() => { setActiveWorkChoice(workChoice); }, [workChoice]);
+  //  ★ 4.85 교대 받음 — 내 명단 줄에 다른 사람이 남긴 relievedAt 이 새것이고 내 기기 호기가 그 호기면 호기를 놓고 다시 고르라고 알린다.
+  //    본 표시는 기기에 기억한다(같은 표시를 두 번 처리하지 않는다). 20분 넘은 표시는 낡은 것으로 보고 무시한다.
+  useEffect(() => {
+    const me = inspector && inspectors ? inspectors[inspector] : null;
+    const at = Number(me && me.relievedAt) || 0;
+    if (!at || Date.now() - at > 20 * 60000) return;
+    if (me.relievedVoyage && workChoice && workChoice.voyageKey && me.relievedVoyage !== workChoice.voyageKey) return;   // 다른 항차에서 고른 호기는 건드리지 않는다
+    let seen = relievedSeenRef.current;   // 저장소를 못 써도 이 화면이 열려 있는 동안은 같은 표시를 두 번 처리하지 않는다
+    try { seen = Math.max(seen, Number(localStorage.getItem(`gm_relieved_seen_${inspector}`)) || 0); } catch (e) { console.warn('[4.85] 교대 표시 기억 읽기 실패', e); }
+    if (at <= seen) return;
+    relievedSeenRef.current = at;
+    try { localStorage.setItem(`gm_relieved_seen_${inspector}`, String(at)); } catch (e) { console.warn('[4.85] 교대 표시 기억 쓰기 실패', e); }
+    if (getEquipNumber() !== me.relievedEquip) return;   // 이미 다른 호기를 골랐다 — 건드리지 않는다
+    setEquipNumber('');
+    try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: '' })); } catch (e) { console.warn('[4.85] 호기 바뀜 알림 실패', e); }
+    setViewOnlyMsg(`${me.relievedBy || '다른 검수원'} 님이 ${me.relievedEquip} 를 이어받았습니다. 호기를 다시 골라 주세요.`);
+  }, [inspectors, inspector, workChoice]);
   useEffect(() => {
     if (!inspector || !workChoice || staffOffMap[inspector]) return;   // 3.76: 접근 오프(자물쇠로 덮인 동안)는 «작업중» 으로 쓰지 않는다 — 온이 되면 이 효과가 다시 돌아 바로 적는다 // 3.50: 아직 작업자/조회만을 안 고른 사람(선택 화면)은 활동을 안 적는다 — 적으면 «작업중» 으로 센다
     const tick = () => {
@@ -691,6 +709,7 @@ export default function App() {
         route={route}
         voyages={voyagesAll}   /* 4.08: 헤더는 info 만 읽는다 */
         workChoice={workChoice}
+        inspectors={inspectors}   /* 4.85: 교대 단추가 같은 조에서 호기를 쥔 사람을 찾는다 */
         onSwitchWorker={isOffShiftView(workChoice) ? handleSwitchToWorker : null}   /* 4.79: 근무시간 밖 조회만 → 작업자로 전환(확인 한 번은 헤더가 묻는다) */
         onChangeWork={() => { prevChoiceRef.current = workChoice; rechoiceRef.current = inspector; setWorkChoice(null); }}   /* 3.50: 선박·호기 다시 고르기(조회만 ↔ 작업자 전환도 여기서) */
         onChangeInspector={() => { setAutoLogoutNotice(''); navigate('login'); }}

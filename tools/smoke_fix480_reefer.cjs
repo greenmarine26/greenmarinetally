@@ -84,7 +84,7 @@ const SRC = fs.readFileSync(path.join(ROOT, 'src/inspectionList.js'), 'utf8'), R
 T(/reeferOrderKey/.test(SRC) && /reeferSetOf/.test(SRC) && /reeferPosOf/.test(SRC), '검수 리스트가 reeferList 의 위치·셋팅 읽기를 가져다 쓴다');
 T(/reeferOrderKey\(a\.pos, a\.cn\)/.test(RL) && /set: reeferSetOf\(c\)/.test(RL), 'reeferListRows 도 같은 함수를 쓴다');
 const U = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
-T(/APP_VERSION = 'TallyOne 4\.(80|81|82|83|84)(-\d\d)?'/.test(U) && /APP_NOTE = '4\.(80|81|82|83|84)(-\d\d)? [^']*'/.test(U), 'APP_VERSION 4.80~4.81(-NN) · APP_NOTE');
+T(/APP_VERSION = 'TallyOne 4\.(80|81|82|83|84|85)(-\d\d)?'/.test(U) && /APP_NOTE = '4\.(80|81|82|83|84|85)(-\d\d)? [^']*'/.test(U), 'APP_VERSION 4.80~4.81(-NN) · APP_NOTE');
 const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || ''; T((note.match(/[.!?](\s|$)/g) || []).length <= 2 && !/[\/']/.test(note), 'APP_NOTE 두 문장 이내·작은따옴표 슬래시 없음');
 const HELP = fs.readFileSync(path.join(ROOT, 'src/data/helpData.js'), 'utf8');
 T(/4\.80~? ?별첨 리퍼|\*\*4\.80~ 검수 리스트 별첨/.test(HELP) && !/인건비|급여/.test(note), '매뉴얼에 4.80 별첨 리퍼 절');

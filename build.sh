@@ -1659,6 +1659,8 @@ fi
     #  4.83: 선적 화면 «＋ 시프팅 추가»(ShiftAddBox)·시프팅 후보 안내(shiftCandidatesOf) — 실 OBWH 2787E 보관본 위 후보 1대(SPSU6017307)·표기하면 0대·리스트 없으면 0대·상자 재료·소스 배선
     #  4.84: 호기 보정(craneRelabelOf) — 실 OBWH 2787E 보관본(2788W 선적) 위 박진우 31건→2호기·김성일 공유 베이 5건·이형출 28건 입력 유지·호기 줄 relab
     node tools/smoke_crane484.cjs "$(pwd)" || { echo "✗ 4.84(호기 보정) 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_crane485.cjs "$(pwd)" || { echo "✗ 4.85(교대 처리) 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_insp485.cjs "$(pwd)" || { echo "✗ 4.85(검수 리스트 20-40-45 순서) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }

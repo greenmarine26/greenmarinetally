@@ -17,13 +17,17 @@ import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로�
 import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: 데미지 예약(자료 도착 전 사전 등록)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
+import { crewShiftKey } from '../utils.js';   // 4.85: 교대 — 내 조의 조 등록 칸
+import { equipHoldersOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
+import { fbRelieveCrane } from '../firebase.js';   // 4.85: 교대 기록
+import { canWorkNow } from '../workChoice.js';
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
 import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 
 //  4.23 2차 — 머리띠 칸 재기(useLayoutEffect · 서버 그리기에서는 useEffect)
 const _useIsoLayout = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, onOpenOwner = null, workChoice = null, onChangeWork = null, onSwitchWorker = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux, onOpenOwner = null, workChoice = null, onChangeWork = null, onSwitchWorker = null, inspectors = null }) {   // 3.50 workChoice — 로그인 뒤 고른 «작업자(선박·호기) / 조회만» · onChangeWork — 다시 고르기
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   // V8.10: 현재 항차 부두 기준 장비 목록. 항차 없으면 1~5 전체.
@@ -75,6 +79,27 @@ export default function Header({ version, inspector, online, route, voyages, onC
     window.addEventListener('equipChanged', onEq);
     return () => window.removeEventListener('equipChanged', onEq);
   }, []);
+
+  //  ★ 4.85 교대 — 같은 항차·같은 조에서 다른 호기를 쥔 사람들 가운데 한 명을 골라 그 크레인을 이어받는다(3명이면 둘 중 하나).
+  const relieveList = (route.name === 'voyage' && inspector && inspectors && canWorkNow())
+    ? equipHoldersOf(inspectors, route.voyageKey, inspector, Date.now(), workChoice?.shift || '')
+    : [];
+  const handleRelieve = (h) => {
+    const word = workChoice?.shift === 'night' ? '야간' : workChoice?.shift === 'day' ? '주간' : undefined;
+    const sk = crewShiftKey(word, Date.now(), 0).key;
+    setEquipOpen(false);
+    askConfirm({
+      title: '교대',
+      message: `${h.name} 님의 ${h.equip}를 이어받을까요?\n\n내 호기가 ${h.equip}로 바뀌고, ${h.name} 님은 호기를 다시 고르게 됩니다.`,
+      confirmLabel: '교대',
+      cancelLabel: '취소',
+      onConfirm: () => {
+        fbRelieveCrane(route.voyageKey, sk, h.equip, h.name, inspector)
+          .then((eq) => { setEquipNoState(eq); })
+          .catch((e) => { console.warn('[4.85] 교대 실패', h, e); try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: `교대를 못 했습니다 — ${e && e.message ? e.message : '다시 눌러 주세요.'}` } })); } catch (x) { /* 알릴 화면 없음 */ } });
+      },
+    });
+  };
 
   const handleSelectEquip = (num) => {
     setEquipNumber(num);
@@ -419,6 +444,19 @@ export default function Header({ version, inspector, online, route, voyages, onC
                 </button>
               ))}
             </div>
+            {relieveList.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-line" data-relieve-box="1">
+                <div className="text-xxs text-dim-300 mb-2">교대 — 같은 조의 다른 검수원에게서 크레인을 이어받습니다.</div>
+                <div className="grid grid-cols-1 gap-2">
+                  {relieveList.map((h) => (
+                    <button key={h.name} onClick={() => handleRelieve(h)} data-relieve-btn={h.name}
+                      className="py-3 rounded-btn font-bold text-sm bg-ink-800 text-dim-100 hover:bg-ink-750 border border-line">
+                      {h.name} 님과 교대 ({h.equip})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {equipNo && (
               <button onClick={() => handleSelectEquip('')}
                 className="w-full mt-2 py-2 bg-ink-750 hover:bg-ink-700 text-dim-200 rounded-pill text-xs">

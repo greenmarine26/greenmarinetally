@@ -93,7 +93,7 @@ function getContainerCategory(c) {
   if (c.reefer === true || (c.rf === true && !c.iso_pick) || hasTmpVal || isReeferIso(iso)) type = 'reefer';   // 3.60-11: 한 벌이 리퍼라 하는 규격(L5R1 등 — 라벨은 45HC)도 리퍼(3.60-10 감사)   // 3.60-04: 검수사가 규격을 고른 컨(iso_pick)은 그 규격이 말한다   // 3.60-04: 파서가 쓰는 표식은 `rf` 다(감사 지적 — `reefer` 만 보면 규격이 드라이로 적힌 리퍼를 놓친다)
 
   const fe = String(c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
-  return { len, type, fe };
+  return { len, type, fe, is45: _labLen === '45' };   // 4.85: 45피트 표시 — 목록 맨 끝 묶음(20-40-45순)
 }
 
 //  ★ 3.60: 검수 리스트 정렬·순번 한 벌 — 종이·CSV 가 같은 순서를 쓴다.
@@ -109,9 +109,10 @@ function _isSpecialCargo(c) {
   return type !== 'normal' || !!(c.dg || c.oog || c.fr || c.ot || c.tk);
 }
 function _inspGroup(c) {
-  const { len, fe } = getContainerCategory(c);
+  const { len, fe, is45 } = getContainerCategory(c);
   const k = _isSpecialCargo(c) ? 2 : (fe === 'F' ? 0 : 1);
-  return (len === 20 ? 0 : 10) + k;
+  //  ★ 4.85 (검수사 2026-11-10 «45HC(L5)를 리스트 마지막에 위치하도록 20-40-45순입니다») — 45피트는 40 묶음에서 떼어 맨 끝 묶음으로(순번도 따로, 20↔40 처럼 두 줄 경계).
+  return (is45 ? 20 : len === 20 ? 0 : 10) + k;
 }
 function inspSortCmp(a, b) {
   const ga = _inspGroup(a), gb = _inspGroup(b);
@@ -967,3 +968,4 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
   };
   // 자동 인쇄 시 사용자가 당황할 수 있어 자동 호출 X. 직접 Ctrl+P
 }
+export { inspSortCmp, inspNumber, inspEdges };   // 4.85: 연막검사가 정렬·순번·경계를 직접 본다

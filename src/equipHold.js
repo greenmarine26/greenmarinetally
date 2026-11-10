@@ -16,22 +16,28 @@ export function equipHoldUntil(at) {
 const SKIP_HOLDERS = ['클로드'];
 
 //  4.79 — 호기를 쥔 사람의 키는 항차+호기+조다(검수사 «주야 각1인이 한크레인씩»). myShift = 내가 고른 조('day'|'night'), 비면 지금 시각의 조. 연태 OBWH·일조 RZOR 는 조를 보지 않는다(workShift.holdKeyShiftOf).
-export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.now(), myShift = '') {
-  if (!voyageKey || !equip) return '';
+export function equipHoldersOf(inspectors, voyageKey, myName, now = Date.now(), myShift = '') {   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들 [{name, equip}] — 교대 단추와 equipHolderOf 가 한 벌로 쓴다
+  const out = [];
+  if (!voyageKey) return out;
   const mine = myShift || shiftAt(now);
   for (const i of Object.values(inspectors || {})) {
     if (!i || !i.name || i.name === myName || SKIP_HOLDERS.includes(i.name)) continue;
     if (i.loggedIn !== true || i.workMode === 'view') continue;
     //  지금 쥔 호기 — 로그인 때 지정(assignEquip)과 작업 중 바꾼 호기(workEquip) 가운데 더 나중에 정한 쪽(4.74: 작업 중 바꾸는 길도 같은 판정)
     const curEq = (i.lastVoyage === voyageKey && i.workEquip && (Number(i.workAt) || 0) > (Number(i.assignAt) || 0)) ? i.workEquip : (i.assignVoyage === voyageKey ? i.assignEquip : '');
-    if (curEq !== equip) continue;
+    if (!curEq) continue;
     if (!sameHoldShift(voyageKey, holderShiftOf(i), mine)) continue;   // 4.79: 다른 조가 쥔 같은 호기는 막지 않는다
     if (i.loggedOutAt && i.loginAt && i.loggedOutAt > i.loginAt) continue;
     const at = Number(i.lastActive) || Number(i.assignAt) || 0;
     if (!at || now > equipHoldUntil(at)) continue;
-    return i.name;
+    out.push({ name: i.name, equip: curEq });
   }
-  return '';
+  return out;
+}
+export function equipHolderOf(inspectors, voyageKey, equip, myName, now = Date.now(), myShift = '') {
+  if (!voyageKey || !equip) return '';
+  const h = equipHoldersOf(inspectors, voyageKey, myName, now, myShift).find((x) => x.equip === equip);
+  return h ? h.name : '';
 }
 
 // 로그인해 있고 이 항차에 작업자로 지정됐지만 지금(90초 안) 입력이 없는 «눈으로만 보는» 사람 이름들 — 화면이 «대기» 로 따로 보인다(작업 중으로 세지 않는다)

@@ -14,7 +14,8 @@ import { dropOtherVoyagePlan, isPyeongtaekPort, isPortCode, resolveShipKey, isPy
 import { isSlotRelaxed } from './swapGrade.js';   // 2.95: 완화 판정 한 벌 — 엠티·시프팅만   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName, isOwnerName } from './adminGuard.js';   // 3.53: POD 확정은 소유자·수석만
-import { crewShiftKey, getEquipNumber, setEquipNumber, _storage, SK } from './utils.js';   // 4.56-04: 조 등록에 내 이름이 있으면 기기 호기도 따라간다
+import { crewShiftKey, getEquipNumber, setEquipNumber, _storage, SK } from './utils.js';
+import { askCraneBeforeComplete } from './craneAsk.js';   // 4.85: 완료 직전 호기 한 번 묻기   // 4.56-04: 조 등록에 내 이름이 있으면 기기 호기도 따라간다
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
@@ -325,6 +326,32 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
     }
   } catch (e) { console.warn('[4.56-04] 조 등록 뒤 기기 호기 맞춤 실패', e); }
   return list.map((c) => `${c.no}호기 ${String(c.name).trim()}`).join(' · ');
+}
+
+//  ★ 4.85 교대 — 검수사 2026-11-10 «교대 단추도 좋은 방법입니다. 3명이 근무중이면 두명중에 한명을 선택하고 교대할수 있으니 정확한 방법입니다»
+//    내가 «from» 의 크레인을 이어받는다 = 조 등록(info.craneCrew/{조}/{N호기})을 내 이름으로 덮고, 내 기기 호기를 그 호기로 바꾼다.
+//    from 의 명단 줄에는 «교대 받음» 표시(relievedAt·relievedBy·relievedVoyage·relievedEquip)를 남기고 그 사람의 호기를 비운다 —
+//    그 사람 기기는 표시를 보고 호기를 놓은 뒤 다시 고르게 한다(App). 한 번에(멀티 경로) 써서 반쪽만 남지 않는다. 옛 4.72 «교대 메뉴는 만들지 않는다» 는 이 지시로 뒤집혔다.
+export async function fbRelieveCrane(voyageKey, shiftKey, equipNo, from, me) {
+  assertCanWork('교대');
+  const no = parseInt(String(equipNo).replace(/\D/g, ''), 10);
+  if (!voyageKey || !shiftKey || !(no >= 1 && no <= 9) || !from || !me || from === me) throw new Error('교대 정보가 맞지 않습니다.');
+  const now = Date.now();
+  const eq = `${no}호기`;
+  const patch = {};
+  patch[`voyages/${voyageKey}/info/craneCrew/${shiftKey}/${eq}`] = { name: me, at: now };
+  patch[`inspectors/${from}/relievedAt`] = now;
+  patch[`inspectors/${from}/relievedBy`] = me;
+  patch[`inspectors/${from}/relievedVoyage`] = voyageKey;
+  patch[`inspectors/${from}/relievedEquip`] = eq;
+  patch[`inspectors/${from}/workEquip`] = null;
+  patch[`inspectors/${from}/assignEquip`] = '';
+  patch[`inspectors/${me}/assignVoyage`] = voyageKey;
+  patch[`inspectors/${me}/assignEquip`] = eq;
+  patch[`inspectors/${me}/assignAt`] = now;
+  await update(ref(db), patch);
+  if (getEquipNumber() !== eq) { setEquipNumber(eq); try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: eq })); } catch (e) { console.warn('[4.85] 호기 바뀜 알림 실패', e); } }
+  return eq;
 }
 
 //  ★ 4.09 (검수사 2026-10-07 «양하 방법을 해상 부터 육상부터 20부터 40부터 리퍼부터 이런조건들을 다 적용할수 있게 해주세요» · «장비 기사의 작업 방법이 틀려서 입니다»):
@@ -1101,6 +1128,7 @@ function _markLoadedPos(voyageKey, mode, cn, by, cns = null) {
 //   ⚠ `equip` 은 **맨 뒤 선택 인자**다 — 기존 호출부는 안 넘겨도 종전과 똑같이 동작한다.
 export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '', equip = '') {
   assertCanWork('완료');
+  if (!flag || flag === 'normal') equip = await askCraneBeforeComplete(voyageKey, mode, String(equip || '').trim(), cn);   // 4.85: 내 호기가 터미널이 그 베이에 준 호기와 다르면 한 번 묻는다
   const rec = { by, at: Date.now() };
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   const eq = String(equip || '').trim();
@@ -1178,6 +1206,7 @@ function _tallyInspector(voyageKey, mode, by) {
 //   ⚠ `equip` 은 맨 뒤 선택 인자다 — 기존 호출부 4곳은 안 넘겨도 그대로 동작한다.
 export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip = '') {
   assertCanWork('완료');
+  equip = await askCraneBeforeComplete(voyageKey, mode, String(equip || '').trim(), cns);   // 4.85: 같은 이유 — 한 번 묻는다
   const patch = {};
   const at = Date.now();
   const list = cns.filter(Boolean);

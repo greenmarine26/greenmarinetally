@@ -66,7 +66,7 @@ try {
     return m ? parseInt(m[1], 10) : null;
   };
   const count = (cn) => html.split(cn).length - 1;
-  ok('45피트(L5G1)는 40풀 묶음 셋째(42GP 둘 다음)', numOf('KKFU5000000') === 3, `번호 ${numOf('KKFU5000000')}`);
+  ok('45피트(L5G1)는 40 묶음에서 떼어 맨 끝 묶음 — 번호 1 (4.85 검수사 2026-11-10 «20-40-45순»)', numOf('KKFU5000000') === 1, `번호 ${numOf('KKFU5000000')}`);
   ok('40풀 42GP 둘은 1·2', numOf('AAAU1000001') === 1 && numOf('AAAU1000002') === 2, `${numOf('AAAU1000001')}·${numOf('AAAU1000002')}`);
   ok('20풀 22GP 는 1', numOf('BBBU2000001') === 1, `번호 ${numOf('BBBU2000001')}`);
   ok('엠티 리퍼(22R1·E)는 20엠티 묶음 — 22GP 엠티 다음 2번', numOf('CCCU3000002') === 1 && numOf('CCCU3000001') === 2, `${numOf('CCCU3000002')}·${numOf('CCCU3000001')}`);
