@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.85';
-const NOTE = '4.85 호기가 터미널 기록과 다르면 완료 때 한 번 묻습니다 호기 창에 교대 단추가 생겼습니다 검수 리스트는 45피트가 맨 끝입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.85-01';
+const NOTE = '4.85-01 검수 리스트는 세관 규격을 따릅니다 세관과 선사 규격의 길이가 다르면 비고에 규격불일치가 뜹니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

@@ -9,7 +9,7 @@
 
 import { shipOpMapper } from './data/tallyFormats.js';
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
-import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { isoShown, isoConflictOf, isoTriad } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { reeferPosOf, reeferOrderKey, reeferSetOf, temp1 } from './reeferList.js';   // 4.80: 별첨 리퍼 구역 — 베이 순서·셋팅 온도는 리퍼 온도 리스트와 한 벌
 import { inspectionSealOf } from './utils.js';   // 4.25-02: 실번호 칸 한 벌 — 엠티는 엠티실(eseal)도 본다(종이·CSV)
 const COLOR = {
@@ -60,6 +60,18 @@ function normalizeCarrier(c) {
 
 //  isoToLabel 이 내는 라벨 끝 두 자 → 종류. VH(통풍컨)는 터미널이 DC 로 다룬다(utils 주석).
 const _LABEL_TYPE = { DC: 'normal', HC: 'normal', VH: 'normal', RF: 'reefer', RH: 'reefer', FR: 'fr', OT: 'ot', TK: 'tk' };
+//  세관 원문 규격의 길이 라벨('20'|'40'|'45'), 세관 자료가 없거나 못 읽으면 ''.
+function _customsLen(c) {
+  if (!c || !String(c.iso_customs || '').trim()) return '';
+  const t = isoTriad('', c).find((x) => x.k === 'customs');   // 앱 한 벌(isoConflictOf 와 같은 읽기 — 세관 45HC 는 L5 로 읽는다)
+  const l = t ? String(t.label || '').slice(0, 2) : '';
+  return (l === '20' || l === '40' || l === '45') ? l : '';
+}
+//  ★ 4.85-01 — 앱이 이미 아는 «규격이 자료마다 다릅니다»(utils.isoConflictOf — 컨 상세·작업카드·진단과 같은 한 벌)를 비고에 «규격불일치» 로 단다.
+//    검수사 2026-11-10 «앱에서 그걸 알고 있습니다» — 리스트용 판정을 따로 만들지 않는다.
+function _specMismatch(c) {
+  return !!(c && isoConflictOf(c.iso_edi || '', c));
+}
 function getContainerCategory(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   const first = iso[0] || '';
@@ -69,7 +81,11 @@ function getContainerCategory(c) {
   //  ★ 3.60-04 (진단 M4): 종전엔 첫 자리가 4·9·1·2 가 아니면(L5G1·DCHC·빈 ISO) **컨번호 체크디짓**(cn[10])으로 20/40 을 골라
   //    같은 45피트가 20풀·40풀로 갈렸다(OBWH 2731E 45피트 30대 중 14대가 20피트 묶음 — 감사 실측). 체크디짓은 크기와 무관하다.
   //    라벨도 첫 자리도 모르면(빈 ISO) 20 으로 둔다 — 규격 칸도 같은 값(«20»)을 적어 종이 안에서 어긋나지 않는다.
-  const _labLen = String(isoToLabel(iso) || '').slice(0, 2);
+  //  ★ 4.85-01 — 세관 신고가 우선이다(검수사 2026-11-10 «세관리스트가 우선 해야 합니다. 그러므로 42HQ뒤에 45GP로 놓고 문제가 있음을 알려야 합니다. 규격불일치»).
+  //    세관 원문(iso_customs)의 길이로 묶음을 정한다. 세관과 EDI/선사의 길이가 갈리면 비고에 «규격불일치»(_specMismatch).
+  const _labIso = String(isoToLabel(iso) || '').slice(0, 2);
+  const _labCus = _customsLen(c);
+  const _labLen = _labCus || _labIso;
   let len = 20;
   if (_labLen === '40' || _labLen === '45') len = 40;
   else if (_labLen === '20') len = 20;
@@ -263,6 +279,7 @@ function renderRow(c, idx, opts) {
     const _xs = _esc(String(c._xraySealNo || '').trim());
     notes.push(`<span style="color:#dc2626;font-weight:bold">★XRAY${_xs ? ' ' + _xs : ''}</span>`);
   }
+  if (_specMismatch(c)) notes.push(`<span style="color:#c2410c;font-weight:bold">규격불일치</span>`);   // 4.85-01: 세관 규격 우선 · 선사/EDI 규격과 길이가 다름
   // M6.94.18: 온도 필드는 c.tmp (CSVExport·diagnostics와 동일). 기존 c.temp는 비어서 표기 안 됐음.
   //   XRAY 대상이 리퍼면 ★XRAY + 온도 둘 다 비고에 표기 (선상 체크용).
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
@@ -940,6 +957,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       if (cat.type === 'reefer' && ((_t != null && String(_t).trim() !== '') || fe === 'F')) memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
       //  ★ 3.45 — 인쇄물과 같은 표기를 CSV 에도(한쪽만 고치면 종이와 엑셀이 갈린다).
       if (c._xray) memo.push('XRAY' + (String(c._xraySealNo || '').trim() ? ' ' + String(c._xraySealNo).trim().replace(/,/g, '') : ''));
+      if (_specMismatch(c)) memo.push('규격불일치');   // 4.85-01: 종이와 같은 표기
       const _ov = [];
       if (c.ovh) _ov.push('H+' + c.ovh);
       if (c.ovw) _ov.push('W+' + c.ovw);
