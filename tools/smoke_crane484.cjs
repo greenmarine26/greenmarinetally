@@ -59,7 +59,7 @@ console.warn = () => {};
   ok('ConeOne 2.77', /window\.__CONEV='ConeOne 2\.77'/.test(coneH));
   const ut = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
   const note = (ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '';
-  ok('버전 TallyOne 4.84 · APP_NOTE 두 문장 이하·120자 미만·작은따옴표/슬래시 없음', /APP_VERSION = 'TallyOne 4\.8[45](-\d\d)?'/.test(ut) && /^4\.8[45](-\d\d)? /.test(note) && note.length < 120 && !/[\/']/.test(note), note);
+  ok('버전 TallyOne 4.84 · APP_NOTE 두 문장 이하·120자 미만·작은따옴표/슬래시 없음', /APP_VERSION = 'TallyOne 4\.8[456](-\d\d)?'/.test(ut) && /^4\.8[456](-\d\d)? /.test(note) && note.length < 120 && !/[\/']/.test(note), note);
   console.log(`\n4.84 호기 보정 연막검사 — ${n - bad}/${n} 통과`);
   process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('4.84 연막검사 예외', e); process.exit(1); });

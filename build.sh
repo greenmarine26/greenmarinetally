@@ -1662,6 +1662,7 @@ fi
     node tools/smoke_crane485.cjs "$(pwd)" || { echo "✗ 4.85(교대 처리) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_insp485.cjs "$(pwd)" || { echo "✗ 4.85(검수 리스트 20-40-45 순서) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_insp48501.cjs "$(pwd)" || { echo "✗ 4.85-01(검수 리스트 규격불일치) 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_insp486.cjs "$(pwd)" || { echo "✗ 4.86(검수 리스트 다섯 단계) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }

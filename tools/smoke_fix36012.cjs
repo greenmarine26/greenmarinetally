@@ -40,7 +40,8 @@ try {
     { cn: 'BBBU2000001', iso: '22G1', fe: 'F', pol: 'KRPTK' },
   ], 'loading', { vsl: 'TEST', voy: '1W' }) || '');
   const numOf = (cn) => { const i = html.indexOf(cn); if (i < 0) return null; const trS = html.lastIndexOf('<tr', i); const m = html.slice(trS, i).match(/<td[^>]*>\s*(\d+)\s*<\/td>/); return m ? parseInt(m[1], 10) : null; };
-  ok('DCHC 는 40풀 묶음 둘째(42GP 다음) · 22GP 는 20풀 첫째', numOf('KBTU1000002') === 2 && numOf('BBBU2000001') === 1, `DCHC ${numOf('KBTU1000002')} · 22GP ${numOf('BBBU2000001')}`);
+  //  4.86: 40 과 40HC 는 다른 단계 — 22GP(20) → 42GP(40) → DCHC(40HC) 순서, 단계마다 순번 1부터(DCHC 는 20 묶음에 들지 않는다)
+  ok('DCHC 는 40HC 단계 첫째(42GP 는 40 단계 첫째와 두 줄 경계) · 22GP 는 20풀 첫째', numOf('KBTU1000002') === 1 && numOf('AAAU1000001') === 1 && numOf('BBBU2000001') === 1 && html.indexOf('BBBU2000001') < html.indexOf('AAAU1000001') && html.indexOf('AAAU1000001') < html.indexOf('KBTU1000002') && (html.match(/class="gb2"/g) || []).length === 2, `DCHC ${numOf('KBTU1000002')} · 42GP ${numOf('AAAU1000001')} · 22GP ${numOf('BBBU2000001')} · gb2 ${(html.match(/class="gb2"/g) || []).length}`);
   const GQ = fs.readFileSync(path.join(ROOT, 'src/guidedQueue.js'), 'utf8'), PE = fs.readFileSync(path.join(ROOT, 'src/components/PositionEditModal.jsx'), 'utf8'), SP = fs.readFileSync(path.join(ROOT, 'src/components/SearchPanel.jsx'), 'utf8');
   ok('20피트 가르기(자동 가이드·위치 수정·자리 선택)가 라벨도 본다 — DC20', /const is20ft = [^\n]*isoToLabel\(c\.iso\)[^\n]*startsWith\('20'\)/.test(GQ) && /const is20 = [^\n]*isoToLabel\(c\?\.iso\)/.test(PE) && /const is20 = [^\n]*isoToLabel\(c\.iso\)/.test(SP));
 } catch (ex) {

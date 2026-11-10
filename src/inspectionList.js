@@ -3,7 +3,7 @@
 //   - A4 세로, 여백 상하좌우 0.4cm
 //   - 좌우 2단, 페이지당 140대 (단당 70줄)
 //   - 컬럼: 순번/컨번호/실번호/규격/F/E/비고
-//   - 정렬: 20풀 → 20엠티 → 20특수 → 40풀 → 40엠티 → 40특수
+//   - 정렬: 단계 20 → 20HC → 40 → 40HC → 45HC, 각 단계 안에서 풀 → 엠티 → 특수 (4.86)
 //   - 색상: 흰 바탕 한 벌(3.70-02 규격색 없음 — 검수사 «바탕색은 없애 주세요») · X-RAY 대상 줄만 노랑(#ffe066)
 //   - 시트1=전체, 시트2=특수화물 별첨
 
@@ -82,6 +82,14 @@ function getContainerCategory(c) {
   const _col = tallySizeCol(c);
   const _labLen = _col === '45' ? '45' : _col === '20' ? '20' : '40';
   const len = _labLen === '20' ? 20 : 40;
+  //  ★ 4.86 (검수사 2026-11-10 14:07 «검수리스트는 20 20HC 40 40HC 45HC 단계로 합니다 다만 실제 화물이 있을때만 적용합니다 일반적인건 20 40HC 45HC 이고 가끔 40 이나 20HC가 들어 갈수 있씁니다»):
+  //    묶음은 다섯 단계(tier) — 20 · 20HC · 40 · 40HC · 45HC. 마감텔리 칸(20·40·HC·45)은 그대로 쓰고, 20' 칸만 하이큐(20HC)를 한 번 더 가른다.
+  //    20HC = 규격 라벨이 20HC(2280·228E·2600·20HC·22HC 류)이거나 ISO 25xx(둘째 자리 5 = 9'6" 하이큐 — 라벨은 20DC fallback 이라 따로 본다). 마감텔리는 20HC 를 20' 칸에 세므로 단계는 칸 하나로만 간다.
+  //    화물이 있는 단계만 줄이 생긴다(없는 단계는 빈 묶음도 경계선도 없다 — inspNumber·inspEdges 가 묶음이 바뀔 때만 본다).
+  const _lab20 = String(isoToLabel(iso) || '');
+  const is20HC = _col === '20' && (/^20.*HC$/.test(_lab20) || /^25[A-Z0-9]{2}$/.test(iso.replace(/\s+/g, '')));
+  const ti = _col === '45' ? 4 : _col === '20' ? (is20HC ? 1 : 0) : _col === '40' ? 2 : 3;
+  const tier = ['20', '20HC', '40', '40HC', '45HC'][ti];
 
   //  ★ 3.45 — 종류도 **규격 칸과 같은 해석기**(isoToLabel)를 쓴다.
   //    ⚠ 종전엔 ISO 셋째 글자만 봐서 숫자 ISO 를 못 읽었다 — 4530·453E(40피트 HC 리퍼)와
@@ -101,12 +109,12 @@ function getContainerCategory(c) {
   if (c.reefer === true || (c.rf === true && !c.iso_pick) || hasTmpVal || isReeferIso(iso)) type = 'reefer';   // 3.60-11: 한 벌이 리퍼라 하는 규격(L5R1 등 — 라벨은 45HC)도 리퍼(3.60-10 감사)   // 3.60-04: 검수사가 규격을 고른 컨(iso_pick)은 그 규격이 말한다   // 3.60-04: 파서가 쓰는 표식은 `rf` 다(감사 지적 — `reefer` 만 보면 규격이 드라이로 적힌 리퍼를 놓친다)
 
   const fe = String(c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
-  return { len, type, fe, is45: _labLen === '45' };   // 4.85: 45피트 표시 — 목록 맨 끝 묶음(20-40-45순)
+  return { len, type, fe, ti, tier };   // 4.86: 단계(ti 0~4 · tier 20/20HC/40/40HC/45HC) — 묶음 순서
 }
 
 //  ★ 3.60: 검수 리스트 정렬·순번 한 벌 — 종이·CSV 가 같은 순서를 쓴다.
 //    검수사 2026-09-24 «선사를 없애고 규격 f/e 일반/특수알파벳순» · «넘버링은 20풀 따로 20엠티 따로 특수화물 따로 40도 마찬가지»
-//    묶음 = 길이(20 / 40 — 45 는 40) × [일반 풀 · 일반 엠티 · 특수]. 묶음 안에서는 규격 → F/E → 컨번호 알파벳순. 순번은 묶음마다 1부터.
+//    묶음 = 4.86 단계(20 / 20HC / 40 / 40HC / 45HC) × [일반 풀 · 일반 엠티 · 특수]. 묶음 안에서는 규격 → F/E → 컨번호 알파벳순. 순번은 묶음마다 1부터.
 //  특수 = 별첨(시트2)과 같은 판정(리퍼·FR·OT·탱크·위험물·규격초과).
 function _isSpecialCargo(c) {
   const { type } = getContainerCategory(c);
@@ -117,10 +125,11 @@ function _isSpecialCargo(c) {
   return type !== 'normal' || !!(c.dg || c.oog || c.fr || c.ot || c.tk);
 }
 function _inspGroup(c) {
-  const { len, fe, is45 } = getContainerCategory(c);
+  const { fe, ti } = getContainerCategory(c);
   const k = _isSpecialCargo(c) ? 2 : (fe === 'F' ? 0 : 1);
   //  ★ 4.85 (검수사 2026-11-10 «45HC(L5)를 리스트 마지막에 위치하도록 20-40-45순입니다») — 45피트는 40 묶음에서 떼어 맨 끝 묶음으로(순번도 따로, 20↔40 처럼 두 줄 경계).
-  return (is45 ? 20 : len === 20 ? 0 : 10) + k;
+  //  ★ 4.86 — 20 → 20HC → 40 → 40HC → 45HC 다섯 단계(ti). 묶음 = 단계 × [일반 풀 · 일반 엠티 · 특수] (단계 십의 자리 · 종류 일의 자리).
+  return ti * 10 + k;
 }
 function inspSortCmp(a, b) {
   const ga = _inspGroup(a), gb = _inspGroup(b);
@@ -137,7 +146,7 @@ function inspNumber(sorted) {
   return sorted.map(c => { const k = _inspGroup(c); if (k !== g) { g = k; n = 0; } return ++n; });
 }
 //  ★ 3.62 (검수사 2026-09-27 «경계선을 만들어 주셔야 합니다. 20풀에서 20엠티로 바뀔때 20에서 40으로 넘어갈때 일반에서 특수로 넘어 갈때 두줄 경계선이라든지 굵은선 처리»)
-//    정렬된 목록에서 묶음이 바뀌는 첫 줄에 표식을 단다 — 20↔40 은 두 줄(gb2), 같은 길이 안의 풀→엠티·일반→특수는 굵은 줄(gb1). 목록 첫 줄은 표식 없음.
+//    정렬된 목록에서 묶음이 바뀌는 첫 줄에 표식을 단다 — 단계(20·20HC·40·40HC·45HC)가 바뀌면 두 줄(gb2), 같은 단계 안의 풀→엠티·일반→특수는 굵은 줄(gb1). 목록 첫 줄은 표식 없음.
 function inspEdges(sorted) {
   let g = null;
   return sorted.map(c => {
@@ -423,7 +432,7 @@ const packBal = (rows) => {
 //    «최대한 기본 크기에서 보기좋게 한장으로 만들되 장수가 추가 되면 지금 처러 자동분리»).
 //    조각(piece)마다 새 장에서 시작한다. 조각 안 순서·순번은 inspSortCmp·inspNumber 한 벌 그대로(20/40 은 풀→엠티→특수, 풀/엠티 는 20→40).
 //    포트 = 선적 POD · 양하 POL. 한 포트가 두 장 이상이면 그 포트를 20피트·40피트로 한 번 더 나눈다 — 단 장 수가 늘면 나누지 않는다.
-const _is20 = (c) => _inspGroup(c) < 10;
+const _is20 = (c) => _inspGroup(c) < 20;   // 4.86: 20·20HC 는 20피트 장
 const _isFullRow = (c) => getContainerCategory(c).fe === 'F';   // 종이 F/E 칸·묶음과 같은 한 벌(F 가 아니면 E)
 const _portOfRow = (c, mode) => normPortCode(mode === 'loading' ? c.pod : c.pol);
 function inspPieces(sorted, how, mode) {
@@ -700,7 +709,7 @@ ${opts.submit ? '.plegend { font-size: 7pt; padding: 0 2mm 0.6mm; color: #222; }
 /* M5.30: 행 컴팩트 — 75행/단 보장 (이전 7.5pt + 1px padding으로 72행만 들어감) */
 table.ilist { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }   /* 3.45: fixed 라야 colgroup 폭이 실제로 먹는다 */
 table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: var(--rh, 5.2mm); }
-/* 3.62: 묶음 경계선 — 20↔40 은 두 줄, 풀→엠티·일반→특수는 굵은 줄(inspEdges) */
+/* 3.62: 묶음 경계선 — 단계(20·20HC·40·40HC·45HC)가 바뀌면 두 줄, 풀→엠티·일반→특수는 굵은 줄(inspEdges) */
 table.ilist tr.gb1 td { border-top: 1.5pt solid #000; height: calc(var(--rh, 5.2mm) - 0.353mm); }   /* 두꺼워진 1pt 만큼 칸을 줄여 행 높이는 그대로 */
 table.ilist tr.gb2 td { border-top: 2.5pt double #000; height: calc(var(--rh, 5.2mm) - 0.706mm); }   /* 두꺼워진 2pt 만큼 */
 /* 4.80: 별첨 리퍼 구역 — 소제목 막대와 위치·셋팅·실제 온도 칸(실제 온도는 펜으로 적는 빈 박스) */
@@ -978,4 +987,5 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
   };
   // 자동 인쇄 시 사용자가 당황할 수 있어 자동 호출 X. 직접 Ctrl+P
 }
-export { inspSortCmp, inspNumber, inspEdges };   // 4.85: 연막검사가 정렬·순번·경계를 직접 본다
+const inspTierOf = (c) => getContainerCategory(c).tier;   // 4.86: 단계 글자(20·20HC·40·40HC·45HC) — 연막검사가 직접 본다
+export { inspSortCmp, inspNumber, inspEdges, inspTierOf };   // 4.85: 연막검사가 정렬·순번·경계를 직접 본다
