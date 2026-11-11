@@ -7,6 +7,8 @@ import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLol
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { resolvedPod, ptkDischargeUnitsOf, keepInShiftOf, mfnInPtkOf } from '../utils.js';   // 4.53: keepInShiftOf — 선적 EDI 가 확정한 본선 잔류를 EDI 평택분에서 뺀다 · 3.53: POD 확정 반영 한 벌 · 4.20 감사: 양하 평택분 한 벌
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: inspectionSealOf — 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { crewCraneNo } from '../utils.js';   // 4.87-07: 호기 이름 명단(로그인한 사람만)
+import { inspectorStatus } from '../inspectorStatus.js';   // 4.87-07: 로그인 판정 한 벌(로그인 현황판과 같은 잣대)
 import { ferryReportCuts } from '../utils.js';   // 4.24 2차: 상황판 상태 줄 «📋 보고 보관 N» — 카페리 창(Ferry1700Alert audience chief)과 같은 한 벌
 import { craneMoveStateOf, CRANE_MOVE_KO } from '../utils.js';   // 4.77: 호기 이동 보고(철수·이동·복귀)를 멈춘 호기·호기별 집계에 반영
 import { isPyeongtaekPort, ownDirCns, inspectorAllDone, isBookingSlot, bookingFillOfSec, emptySealSpec, equipReportBoard, parsePortMisDateTime, computeTermApply , shiftSplitOf, isShiftOffPtk, progressOf, isWorkingNow, craneBoardOf, craneBoardSplit, termFinishedCranesOf, berthAltOf, boardBaysOf, legendLiveOf, bayDoneSplitOf, bayDoneTextOf, emptySplitLabel, completedByLabel, fullEdiMapOf, applySwapFix, swapFixList, pickCarrierOp, pickDischargePol } from '../utils.js';   // 3.10: 작업 보드는 «작업 중»만 · 3.11: 보이는 베이 + 별첨 실시간   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
@@ -513,7 +515,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     Object.values(inspectors || {}).forEach(i => {
       if (!i?.name) return;
       if (!stats[i.name]) stats[i.name] = { name: i.name, total: 0, today: 0, lastAt: 0, dis: 0, loa: 0 };
-      stats[i.name].active = i.lastActive && (Date.now() - i.lastActive) < 90000 && i.workMode !== 'view';   // 3.50: 조회만은 작업중이 아니다
+      stats[i.name].active = i.lastActive && (Date.now() - i.lastActive) < 90000 && i.workMode !== 'view' && i.loggedIn !== false;   // 4.87-07: 로그아웃하면 그 즉시 작업중이 아니다   // 3.50: 조회만은 작업중이 아니다
       stats[i.name].viewOnly = i.workMode === 'view';   // 3.50: 표에 «조회» 로 보인다
       stats[i.name].lastVoyage = i.lastVoyage;
       stats[i.name].lastMode = i.lastMode;
@@ -531,6 +533,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     Object.values(inspectors || {}).forEach(i => {
       if (!i?.name || !i.lastVoyage || !i.lastActive) return;
       if (Date.now() - i.lastActive > 90000) return;
+      if (i.loggedIn === false) return;   // 4.87-07: 로그아웃하면 그 즉시 명단에서 빠진다(홈 카드 V7.94-14 와 같은 잣대) — 로그아웃 뒤 90초 동안 이름이 남던 것
       if (!isVisibleStaff(i.name, isOwnerName(inspector))) return;   // 1.73
       if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
       out[i.lastVoyage].push({
@@ -545,6 +548,16 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const standbyOf = (key) => standbyNamesOf(inspectors, key, (activeByVoyage[key] || []).map((w) => w.name), (n) => isVisibleStaff(n, isOwnerName(inspector)));   // 4.73: 눈으로만 보는 사람 이름
   // 4.71: 대기 중인 검수원 — 로그인해 있고 이 항차 호기를 지정받았지만 90초 안에 조작이 없는 사람. 호기 칸 이름에만 올린다(작업 중 판정·베이 그림에는 쓰지 않는다).
   //       검수사 2026-11-06 22:11 «작업 대기면 일을 안하는건가요?» — 로그인 중인 사람이 3호기에서 «미등록»으로 사라지던 것.
+  //  4.87-07: 호기 이름 명단 — 지금 로그인해 있고 이 항차에 붙은 사람과 그 사람이 등록한 호기(utils.craneBoardOf 의 opt.roster)
+  const rosterOfVoyage = (key) => {
+    const out = {};
+    Object.values(inspectors || {}).forEach((i) => {
+      if (!i?.name) return;
+      const here = i.assignVoyage ? i.assignVoyage === key : i.lastVoyage === key;
+      out[i.name] = { loggedIn: !!inspectorStatus(i), here, no: (i.assignVoyage === key ? crewCraneNo(i.assignEquip) : 0) || 0 };
+    });
+    return out;
+  };
   const crewOfVoyage = (key) => {
     const act = activeByVoyage[key] || [];
     const have = new Set(act.map((w) => w.name));
@@ -1169,7 +1182,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                   lastReport={lastReportByVoyage[v.key]}
                   alerts={todayAlertsByVoyage[v.key]}
                   departed={v._departed}
-                  cranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], crewOfVoyage(v.key)), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info), craneMoveStateOf(voyages?.[v.key])).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], crewOfVoyage(v.key)), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info), craneMoveStateOf(voyages?.[v.key])).stopped} rampCranes={((k) => craneBoardSplit(craneBoardOf(voyages?.[k], crewOfVoyage(k)), undefined, undefined, termFinishedCranesOf(voyages?.[k]?.info), craneMoveStateOf(voyages?.[k])).ramp)(v.key)}
+                  cranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], crewOfVoyage(v.key), null, Date.now(), { roster: rosterOfVoyage(v.key) }), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info), craneMoveStateOf(voyages?.[v.key])).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[v.key], crewOfVoyage(v.key), null, Date.now(), { roster: rosterOfVoyage(v.key) }), undefined, undefined, termFinishedCranesOf(voyages?.[v.key]?.info), craneMoveStateOf(voyages?.[v.key])).stopped} rampCranes={((k) => craneBoardSplit(craneBoardOf(voyages?.[k], crewOfVoyage(k)), undefined, undefined, termFinishedCranesOf(voyages?.[k]?.info), craneMoveStateOf(voyages?.[k])).ramp)(v.key)}
                   voyage={voyages?.[v.key]} rows={shown.length}
                   onOpenContainer={(c, mode) => setBoardDetail({ key: v.key, mode, c })}
                   focused={!!focusRow} canFocus={boardRows.length > 1} zoom={boardZoom}
@@ -1210,7 +1223,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               lastReport={lastReportByVoyage[sheetRow.key]}
               alerts={todayAlertsByVoyage[sheetRow.key]}
               departed={sheetRow._departed}
-              cranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], crewOfVoyage(sheetRow.key)), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info), craneMoveStateOf(voyages?.[sheetRow.key])).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], crewOfVoyage(sheetRow.key)), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info), craneMoveStateOf(voyages?.[sheetRow.key])).stopped} rampCranes={((k) => craneBoardSplit(craneBoardOf(voyages?.[k], crewOfVoyage(k)), undefined, undefined, termFinishedCranesOf(voyages?.[k]?.info), craneMoveStateOf(voyages?.[k])).ramp)(sheetRow.key)}
+              cranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], crewOfVoyage(sheetRow.key), null, Date.now(), { roster: rosterOfVoyage(sheetRow.key) }), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info), craneMoveStateOf(voyages?.[sheetRow.key])).active} stoppedCranes={craneBoardSplit(craneBoardOf(voyages?.[sheetRow.key], crewOfVoyage(sheetRow.key), null, Date.now(), { roster: rosterOfVoyage(sheetRow.key) }), undefined, undefined, termFinishedCranesOf(voyages?.[sheetRow.key]?.info), craneMoveStateOf(voyages?.[sheetRow.key])).stopped} rampCranes={((k) => craneBoardSplit(craneBoardOf(voyages?.[k], crewOfVoyage(k)), undefined, undefined, termFinishedCranesOf(voyages?.[k]?.info), craneMoveStateOf(voyages?.[k])).ramp)(sheetRow.key)}
               voyage={voyages?.[sheetRow.key]} rows={1}
               onOpenContainer={(c, mode) => setBoardDetail({ key: sheetRow.key, mode, c })}
               focused={false} canFocus={false} zoom={1}
@@ -2515,7 +2528,7 @@ export function LiveShipCard({ zoom = 1, v, workers, standby = [], lastReport, a
               <div key={c.no} className="flex flex-col gap-0 bg-ink-900/60 border border-line rounded-btn px-0.5 py-0.5 min-w-0 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-baseline gap-1.5 mono text-2xs flex-wrap">
                   <span className="text-sm font-black text-cyan-200">{c.no}호기</span>
-                  <span className={`font-bold ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || '미등록'}</span>
+                  <span className={`font-bold ${c.name ? 'text-emerald-200' : 'text-dim-500'}`}>{c.name || (c.nameGone ? '검수원 없음' : '미등록')}</span>
                   <span className={c.mode === 'loading' ? 'text-amber-200' : 'text-blue-200'}>{c.mode === 'loading' ? '선적' : '양하'} {c.done}대</span>
                   {/* 4.58: 호기 교체 — 옛 호기는 줄에서 빠지고 여기에 «옛 호기 작업대수 N대 포함»으로 남는다 */}
                   {c.fold && c.fold.length > 0 && <span className="text-dim-400" data-crane-fold={c.no}>{c.fold.map((f) => `(${f.from}호기 작업대수 ${f.n}대 포함)`).join(' ')}</span>}
