@@ -129,25 +129,38 @@ async function _imageDimsOf(file) {
 //
 // ⚠ 합성 실패 시 원본을 `image/jpeg` 로 **타입 위조하지 않는다**(3금지 3번 — 조용히 실패 금지).
 //   원본 타입 그대로 보내고 무엇이 실패했는지 로그에 남긴다.
+let _sharePrep = null;   // 4.87-06: 공유 창이 못 열렸을 때 다시 쓰려고 쥐고 있는 합성 사진 { key, files, composeFail }
 export async function shareWithPhoto(message, photos, title = '검수 보고') {
   const list = (Array.isArray(photos) ? photos : [photos]).filter(Boolean);
   console.log('[shareWithPhoto] 시작', { title, count: list.length, sizes: list.map(b => b?.size) });
 
+  //  ★ 4.87-06 (검수사 2026-11-11 16:52 데미지 보고 «공유 창이 열리지 못했습니다(시간이 지났습니다)» · 18:45 «오늘 이런 경우가 서너번 있었는데 이유가 뭔지?»):
+  //    공유 창은 단추를 누른 뒤 약 5초 안에만 열린다. 그 사이에 사진마다 보고 글을 합성하는데, 한 번 늦어 막히면 «한 번 더» 눌러도 처음부터 다시 합성해 또 늦었다.
+  //    → 합성한 사진을 쥐고 있다가 같은 사진·같은 내용으로 다시 누르면 합성 없이 곧바로 공유 창을 연다(시각 줄만 바뀐 것은 같은 내용으로 본다). 공유가 끝나면 버린다.
+  const t0 = Date.now();
+  const prepKey = String(message || '').replace(/^시각:.*$/m, '') + '|' + title + '|' + list.map((b) => `${b?.name || ''}:${b?.size}:${b?.lastModified || ''}`).join(',');
   const files = [];
   let composeFail = 0;
-  for (let i = 0; i < list.length; i++) {
-    let b = list[i];
-    try {
-      b = await composePhotoWithCaption(list[i], message);
-    } catch (e) {
-      composeFail += 1;
-      console.error(`[shareWithPhoto] ${i + 1}번째 사진 합성 실패 — 원본 사용:`, e);
-      b = list[i];
+  if (_sharePrep && _sharePrep.key === prepKey) {
+    files.push(..._sharePrep.files); composeFail = _sharePrep.composeFail;
+    console.log('[shareWithPhoto] 앞서 합성해 둔 사진을 그대로 쓴다');
+  } else {
+    for (let i = 0; i < list.length; i++) {
+      let b = list[i];
+      try {
+        b = await composePhotoWithCaption(list[i], message);
+      } catch (e) {
+        composeFail += 1;
+        console.error(`[shareWithPhoto] ${i + 1}번째 사진 합성 실패 — 원본 사용:`, e);
+        b = list[i];
+      }
+      const ext = (b?.type === 'image/png') ? 'png' : 'jpg';
+      files.push(new File([b], `report${list.length > 1 ? i + 1 : ''}.${ext}`,
+        { type: b?.type || 'image/jpeg' }));
     }
-    const ext = (b?.type === 'image/png') ? 'png' : 'jpg';
-    files.push(new File([b], `report${list.length > 1 ? i + 1 : ''}.${ext}`,
-      { type: b?.type || 'image/jpeg' }));
+    _sharePrep = { key: prepKey, files: files.slice(), composeFail };
   }
+  const prepSec = ((Date.now() - t0) / 1000).toFixed(1);
   console.log('[shareWithPhoto] 파일 준비:', files.map(f => `${f.name} ${f.size}B ${f.type}`),
     composeFail ? `(합성 실패 ${composeFail}장)` : '');
 
@@ -170,6 +183,7 @@ export async function shareWithPhoto(message, photos, title = '검수 보고') {
       if (canShareFile) {
         await navigator.share(shareData);
         console.log('[shareWithPhoto] 파일 공유 성공');
+        _sharePrep = null;
         return { method: 'share-with-file', success: true, files: files.length };
       }
       // 4.57-01: 한 장 때문에 전부 거절되면 되는 장만이라도 보낸다 — 글만 나가고 사진이 조용히 빠지던 것을 막는다.
@@ -178,6 +192,7 @@ export async function shareWithPhoto(message, photos, title = '검수 보고') {
         //  낱장은 되는데 묶음만 거절이면(크기 합계 한도 등) 같은 묶음을 또 보내도 거절된다 — 첫 장만이라도 보낸다.
         const pick = okFiles.length < files.length ? okFiles : okFiles.slice(0, 1);
         await navigator.share({ title, files: pick });
+        _sharePrep = null;
         alert(`⚠️ 사진 ${files.length}장 중 ${pick.length}장만 첨부됐습니다.\n빠진 사진은 카톡에 따로 올려 주세요.`);
         return { method: 'share-with-file', success: true, files: pick.length, dropped: files.length - pick.length };
       }
@@ -195,8 +210,8 @@ export async function shareWithPhoto(message, photos, title = '검수 보고') {
     }
     if (e.name === 'NotAllowedError') {
       // 공유창을 열 «손길» 시간이 지났다 — 글만 다시 보내는 것도 같은 이유로 막히니 하지 않고, 다시 누르게 한다(모달은 그대로 둔다).
-      console.error('[shareWithPhoto] 공유 시간 초과(NotAllowedError):', e);
-      alert('⚠️ 공유 창이 열리지 못했습니다(시간이 지났습니다).\n사진은 그대로 있습니다 — 「카톡으로 전송」을 한 번 더 눌러 주세요.');
+      console.error(`[shareWithPhoto] 공유 시간 초과(NotAllowedError) — 사진 준비 ${prepSec}초:`, e);
+      alert(`⚠️ 공유 창이 열리지 못했습니다(시간이 지났습니다 · 사진 준비 ${prepSec}초).\n사진은 준비해 두었습니다 — 「카톡으로 전송」을 한 번 더 누르면 바로 열립니다.`);
       return { method: 'share', cancelled: true, blocked: true };
     }
     console.error('[shareWithPhoto] 공유 오류:', e);
@@ -208,9 +223,16 @@ export async function shareWithPhoto(message, photos, title = '검수 보고') {
 
 // Canvas로 사진 위에 자막 합성 (M3.5.6-fix2: 모바일 안정성 강화)
 async function composePhotoWithCaption(photoBlob, message) {
+  //  4.87-06: 고를 때 줄이지 못해 원본 그대로 쥔 큰 사진(3MB 넘음 — 4.62-02 의 마지막 길)은 풀 때부터 너비 1080 으로 줄여 푼다.
+  //    5천만 화소 원본 두 장을 통째로 풀면 몇 초씩 걸려 공유 창을 여는 5초를 넘겼다. 안 되면 종전처럼 <img> 로 푼다.
+  let pre = null;
+  if (photoBlob && photoBlob.size > 3e6 && typeof window !== 'undefined' && typeof window.createImageBitmap === 'function') {
+    //  방향(EXIF)은 <img> 길과 같게 사진에 적힌 대로 푼다(imageOrientation) — 이 값을 모르는 옛 브라우저는 예외를 내고 아래 <img> 길로 간다.
+    try { pre = await window.createImageBitmap(photoBlob, { resizeWidth: 1080, resizeQuality: 'medium', imageOrientation: 'from-image' }); } catch (e) { pre = null; console.warn('[composePhoto] 줄여 풀기 실패 — <img> 로 푼다:', e && e.name || e); }
+  }
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(photoBlob);
-    const img = new Image();
+    const objectUrl = pre ? '' : URL.createObjectURL(photoBlob);
+    const img = pre || new Image();
     img.onload = () => {
       try {
         // 모바일 메모리 보호 - 최대 1080px (큰 사진은 자동 축소)
@@ -286,7 +308,7 @@ async function composePhotoWithCaption(photoBlob, message) {
       console.error('[composePhoto] 이미지 로드 실패', e);
       reject(new Error('이미지 로드 실패'));
     };
-    img.src = objectUrl;
+    if (pre) { try { img.onload(); } finally { if (pre.close) { try { pre.close(); } catch (e) { /* 이미 닫힘 */ } } } } else img.src = objectUrl;
   });
 }
 

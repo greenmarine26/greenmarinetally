@@ -836,6 +836,7 @@ NODE_PATH="$PWD/node_modules" node tools/smoke_shiftwhy460.cjs || { echo "✗ �
 NODE_PATH="$PWD/node_modules" node tools/smoke_cranestop461.cjs || { echo "✗ 쉰 호기 줄 빼기 4.61 연막검사 실패 — 배포 금지"; exit 1; }   # 4.61
 NODE_PATH="$PWD/node_modules" node tools/smoke_berthalt462.cjs || { echo "✗ 배정 작업예정 병기 4.62 연막검사 실패 — 배포 금지"; exit 1; }   # 4.62
 NODE_PATH="$PWD/node_modules" node tools/smoke_photonorm46202.cjs || { echo "✗ 사진 읽기 막힘 4.62-02 연막검사 실패 — 배포 금지"; exit 1; }   # 4.62-02
+NODE_PATH="$PWD/node_modules" node tools/smoke_sharecache48706.cjs || { echo "✗ 4.87-06(카톡 공유 창 시간 초과 뒤 다시 누르기) 연막검사 실패 — 배포 금지"; exit 1; }   # 4.87-06
 NODE_PATH="$PWD/node_modules" node tools/smoke_cranefin46203.cjs || { echo "✗ 철수한 호기 접기 4.62-03 연막검사 실패 — 배포 금지"; exit 1; }   # 4.62-03
 NODE_PATH="$PWD/node_modules" node tools/smoke_workresume46204.cjs || { echo "✗ 작업 재개 단추 4.62-04 연막검사 실패 — 배포 금지"; exit 1; }   # 4.62-04
 NODE_PATH="$PWD/node_modules" node tools/smoke_coverlink46206.cjs || { echo "✗ 함께 열리는 커버 4.62-06 연막검사 실패 — 배포 금지"; exit 1; }   # 4.62-06
