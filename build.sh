@@ -1678,6 +1678,8 @@ fi
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.87-08: «미르야?» 물음표 호출 — 인사로 받는지
+    node tools/smoke_mirhello48708.cjs "$(pwd)" || { echo "✗ 4.87-08(미르 물음표 호출) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.87-05: 선적 엠티 가상 자리 트윈 — 실 ATPR 2651W 9·11번 베이 자료로 짝 없는 엠티끼리 묶이는지
     node tools/smoke_twinvirtual48705.cjs "$(pwd)" || { echo "✗ 4.87-05(가상 자리 트윈) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_boot4822.cjs "$(pwd)" || { echo "✗ 4.82-02(부팅 대책) 연막검사 실패 — 배포 금지"; exit 1; }

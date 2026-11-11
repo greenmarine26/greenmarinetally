@@ -193,7 +193,7 @@ export function parseNaturalQuery(text) {
     if (_mir.test(t)) {
       result.mirCalled = true;
       t = t.replace(_mir, '');
-      if (!t.trim()) result.mirHello = true;
+      if (!t.replace(/[?？!.~,\s]/g, '')) result.mirHello = true;   // 4.87-08: «미르야?»·«미르?» 처럼 물음표만 붙여 불러도 인사(종전엔 물음표가 남아 못 알아들었다)
     }
     //  ★ 4.34-02 — 검수사 2026-10-18 14:49 «미르가 작업신호가 없으면 불안해 합니다. 그래서 쉬고 있으라고 알려준것이고. 다른 사용자가 왜 작업또는 일 안해 하고 물으면 중단사유를 알려줘야 합니다.»
     //    사유 낱말 + 멈춤 낱말이 있고 묻는 말이 아니면 «작업이 멈췄다는 알림»이다.
