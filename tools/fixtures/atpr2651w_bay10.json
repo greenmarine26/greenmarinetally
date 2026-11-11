@@ -1,0 +1,848 @@
+[
+{
+"cn": "SKLU2103798",
+"bay": "11",
+"row": "01",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2539271",
+"bay": "11",
+"row": "01",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2544386",
+"bay": "11",
+"row": "01",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2419549",
+"bay": "11",
+"row": "01",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2416684",
+"bay": "11",
+"row": "01",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1825646",
+"bay": "11",
+"row": "01",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1542760",
+"bay": "11",
+"row": "01",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1100768",
+"bay": "11",
+"row": "02",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1609673",
+"bay": "11",
+"row": "02",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2534310",
+"bay": "11",
+"row": "02",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2322115",
+"bay": "11",
+"row": "02",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "DFSU1455760",
+"bay": "11",
+"row": "02",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "FBIU0073026",
+"bay": "11",
+"row": "02",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2059349",
+"bay": "11",
+"row": "02",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2443499",
+"bay": "11",
+"row": "03",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1513083",
+"bay": "11",
+"row": "03",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1559510",
+"bay": "11",
+"row": "03",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1659904",
+"bay": "11",
+"row": "03",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1668779",
+"bay": "11",
+"row": "03",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2100890",
+"bay": "11",
+"row": "03",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2120877",
+"bay": "11",
+"row": "03",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1902505",
+"bay": "11",
+"row": "04",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1008733",
+"bay": "11",
+"row": "04",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2055811",
+"bay": "11",
+"row": "04",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "WFHU1442135",
+"bay": "11",
+"row": "04",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2069902",
+"bay": "11",
+"row": "04",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "TGCU2396414",
+"bay": "11",
+"row": "04",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1995637",
+"bay": "11",
+"row": "04",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2325114",
+"bay": "11",
+"row": "05",
+"tier": "02",
+"iso": "2200",
+"fe": "F",
+"done": true
+},
+{
+"cn": "TGCU2381100",
+"bay": "11",
+"row": "05",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1608002",
+"bay": "11",
+"row": "05",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0537630",
+"bay": "11",
+"row": "05",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1515954",
+"bay": "11",
+"row": "05",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1118371",
+"bay": "11",
+"row": "05",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1972457",
+"bay": "11",
+"row": "05",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2327225",
+"bay": "11",
+"row": "06",
+"tier": "02",
+"iso": "2200",
+"fe": "F",
+"done": true
+},
+{
+"cn": "SKLU0737129",
+"bay": "11",
+"row": "06",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1912890",
+"bay": "11",
+"row": "06",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1640128",
+"bay": "11",
+"row": "06",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1548557",
+"bay": "11",
+"row": "06",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2501430",
+"bay": "11",
+"row": "06",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1315508",
+"bay": "11",
+"row": "06",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2474720",
+"bay": "11",
+"row": "07",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2412688",
+"bay": "11",
+"row": "07",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1640540",
+"bay": "11",
+"row": "07",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2415100",
+"bay": "11",
+"row": "08",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1307550",
+"bay": "11",
+"row": "08",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU0504298",
+"bay": "11",
+"row": "08",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "TCKU2749431",
+"bay": "9",
+"row": "01",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0552676",
+"bay": "9",
+"row": "01",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0577988",
+"bay": "9",
+"row": "01",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1326020",
+"bay": "9",
+"row": "01",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2334203",
+"bay": "9",
+"row": "01",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1945620",
+"bay": "9",
+"row": "01",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1414429",
+"bay": "9",
+"row": "01",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2309937",
+"bay": "9",
+"row": "02",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0535010",
+"bay": "9",
+"row": "02",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2331689",
+"bay": "9",
+"row": "02",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "BEAU2994965",
+"bay": "9",
+"row": "02",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "TGCU2415767",
+"bay": "9",
+"row": "02",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "TRHU1717443",
+"bay": "9",
+"row": "02",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1412832",
+"bay": "9",
+"row": "02",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1320295",
+"bay": "9",
+"row": "03",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2078251",
+"bay": "9",
+"row": "03",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU2361220",
+"bay": "9",
+"row": "03",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1535098",
+"bay": "9",
+"row": "03",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2409473",
+"bay": "9",
+"row": "03",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2051712",
+"bay": "9",
+"row": "03",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "TGCU2383232",
+"bay": "9",
+"row": "03",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2588996",
+"bay": "9",
+"row": "04",
+"tier": "02",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1301171",
+"bay": "9",
+"row": "04",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "TRHU3363077",
+"bay": "9",
+"row": "04",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1969577",
+"bay": "9",
+"row": "04",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0738423",
+"bay": "9",
+"row": "04",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2067405",
+"bay": "9",
+"row": "04",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2461912",
+"bay": "9",
+"row": "04",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0507471",
+"bay": "9",
+"row": "05",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2021127",
+"bay": "9",
+"row": "05",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "GLDU2297809",
+"bay": "9",
+"row": "05",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1204844",
+"bay": "9",
+"row": "05",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2543327",
+"bay": "9",
+"row": "05",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1956672",
+"bay": "9",
+"row": "05",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0713831",
+"bay": "9",
+"row": "06",
+"tier": "04",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2358930",
+"bay": "9",
+"row": "06",
+"tier": "06",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "HALU2330002",
+"bay": "9",
+"row": "06",
+"tier": "08",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1518207",
+"bay": "9",
+"row": "06",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1321244",
+"bay": "9",
+"row": "06",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1002062",
+"bay": "9",
+"row": "06",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0586022",
+"bay": "9",
+"row": "07",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "HALU2100308",
+"bay": "9",
+"row": "07",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU0578710",
+"bay": "9",
+"row": "07",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1825013",
+"bay": "9",
+"row": "08",
+"tier": "82",
+"iso": "220E",
+"fe": "E",
+"done": true
+},
+{
+"cn": "SKLU1803436",
+"bay": "9",
+"row": "08",
+"tier": "84",
+"iso": "220E",
+"fe": "E",
+"done": false
+},
+{
+"cn": "SKLU1337929",
+"bay": "9",
+"row": "08",
+"tier": "86",
+"iso": "220E",
+"fe": "E",
+"done": true
+}
+]

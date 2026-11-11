@@ -608,7 +608,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
       //  4.23-01 3차(재감사 중-2): 맞교환 자리 컨은 칸으로 짝을 짐작하지 않는다 — 트윈 조회(SearchPanel autoMate)와 같은 규칙(utils.guideTwinOf)
-      findTwin: guideTwinOf((t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName)),
+      findTwin: guideTwinOf((t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName, remaining)),   // 4.87-05: 칸이 찼는지는 큐에서 뺀 보류·다른 장까지 포함한 남은 컨으로(다른 화면과 같은 짝)
       streamPref,                                           // V8.50: 갈림 선택 부류
       //  4.26 (감사·2차 시뮬 중-1): 되묻기 컨이 **이 큐에 있을 때만** 그것이 맨 앞을 차지한다. 종전엔 다른 장·다른 호기의 콘 잠김 보류가 되묻기 차례가 되면
       //    (이 큐엔 없어 아무것도 안 올리면서) 해제·한 대씩 남은 짝(4.08-02)·한 대만 남은 컨(4.25-02)·다음 예정 줄의 «맨 앞» 을 전부 지웠다.

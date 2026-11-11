@@ -1676,6 +1676,8 @@ fi
     node tools/smoke_shiftadd483.cjs "$(pwd)" || { echo "✗ 4.83(선적 화면 시프팅 추가) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_shiftmanual482.cjs "$(pwd)" || { echo "✗ 4.82(시프팅 수동 표기) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_underheld4821.cjs "$(pwd)" || { echo "✗ 4.82-01(보류 아래 컨) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.87-05: 선적 엠티 가상 자리 트윈 — 실 ATPR 2651W 9·11번 베이 자료로 짝 없는 엠티끼리 묶이는지
+    node tools/smoke_twinvirtual48705.cjs "$(pwd)" || { echo "✗ 4.87-05(가상 자리 트윈) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_boot4822.cjs "$(pwd)" || { echo "✗ 4.82-02(부팅 대책) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_hold481.cjs "$(pwd)" || { echo "✗ 4.81-01(일반 자동 가이드 홀드 해치 규칙) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_fix480_pinch.cjs "$(pwd)" || { echo "✗ 4.80(핀치 안정화) 연막검사 실패 — 배포 금지"; exit 1; }

@@ -89,7 +89,7 @@ function buildBayPairs(allContainers, shipImo = '', shipName = '') {
 //   allContainers: 전체 컨테이너
 //   excludeCns: 이미 페어링된 컨번호 set (제외)
 // M6.22: shipImo/shipName 추가 — 베이사전 활용으로 매칭 정확도 향상
-export function findTwinCandidate(target, allContainers, excludeCns = new Set(), shipImo = '', shipName = '') {
+export function findTwinCandidate(target, allContainers, excludeCns = new Set(), shipImo = '', shipName = '', occupancy = null) {
   if (!target?.bay || !target?.row || !target?.tier) return null;
 
   const targetBay = parseInt(target.bay);
@@ -111,7 +111,37 @@ export function findTwinCandidate(target, allContainers, excludeCns = new Set(),
       c.tier === target.tier &&
       c._mode === target._mode;
   });
-  return found || null;
+  if (found) return found;
+  return orphanTwinMate(target, allContainers, excludeCns, pairBayStr, targetBayStr, occupancy);
+}
+
+//  ★ 4.87-04 (검수사 2026-11-11 09:09~09:16 ATPR 2651W 10번 베이 데크 «트윈모드가 안되는 이유는?» · «가상자리임을 망각한것» · «짝도 가상임을 알아야함»):
+//    선적 엠티의 자리는 정해 둔 실제 칸이 아니라 예약해 둔 **가상 자리**다 — 짝 칸에 있던 컨이 다른 컨 자리로 먼저 실려 나가면 칸 짝이 비어 남은 컨이 싱글로 남는다
+//    (9-01-84 SKLU1945620 · 11-06-82 SKLU1548557 — 9번·11번 남은 엠티가 11대씩인데 둘만 짝이 안 잡혔다).
+//    그래서 **칸 짝이 없을 때만**, 두 베이에서 칸 짝 없이 남은 같은 쪽(데크/홀드)·같은 규격 엠티를 줄·단 순서로 늘어놓고 **앞에서부터 1:1** 로 묶는다(어느 쪽에서 물어도 같은 짝).
+//    칸 짝이 있는 컨은 종전 그대로(위 find)이고, 양하·풀·다른 규격·이미 완료한 컨은 건드리지 않는다. 판정은 이 한 곳 — 자동 가이드·수동 조회·미르가 같이 쓴다.
+const _isDeckTier = (t) => parseInt(t, 10) >= 80;
+const _bayN = (c) => (c && c.bay ? parseInt(c.bay, 10) : NaN);
+const _is20 = (c) => /^2/.test(String(c?.iso || ''));
+function orphanTwinMate(target, all, excludeCns, pairBayStr, targetBayStr, occupancy) {
+  if (target._mode !== 'loading' || String(target.fe || '').toUpperCase() !== 'E' || !_is20(target) || target._comp) return null;
+  const rowN = (c) => parseInt(c.row, 10) || 0, tierN = (c) => parseInt(c.tier, 10) || 0;
+  const deck = _isDeckTier(target.tier);
+  //  occupancy = 호출부가 «칸이 찼는지»를 볼 때 쓰라고 따로 넘기는 전체 남은 컨(자동 가이드 큐는 보류·다른 장을 뺀 목록을 짝 후보로 넘기므로 — 그대로 세면 호출부마다 순번이 밀려 짝이 갈린다).
+  //  짝 후보(mate)는 넘겨받은 all 안에서만 고른다 — 큐에서 뺀 보류 컨과는 묶지 않는다.
+  const base0 = occupancy && occupancy.length ? occupancy : all;
+  const pool = base0.some((x) => x.cn === target.cn) ? base0 : base0.concat([target]);   // 호출부가 자기 자신을 빼고 넘겨도 같은 답
+  const cell = new Set();   // 두 베이에 아직 안 실린 컨이 있는 줄·단 — 이미 실린(완료) 칸은 비었다고 본다(호출부가 완료를 넘기든 빼든 같은 답)
+  for (const x of pool) if (!x._comp && x._mode === 'loading' && x.row && x.tier && (String(_bayN(x)) === pairBayStr || String(_bayN(x)) === targetBayStr)) cell.add(String(_bayN(x)) + '|' + x.row + '|' + x.tier);
+  const orphansOf = (bay, other) => pool.filter((x) => x._mode === 'loading' && String(_bayN(x)) === bay && x.row && x.tier && !x._comp
+    && String(x.fe || '').toUpperCase() === 'E' && _is20(x) && _isDeckTier(x.tier) === deck && !cell.has(other + '|' + x.row + '|' + x.tier))
+    .sort((a, b) => rowN(a) - rowN(b) || tierN(a) - tierN(b) || String(a.cn).localeCompare(String(b.cn)));
+  const mine = orphansOf(targetBayStr, pairBayStr), theirs = orphansOf(pairBayStr, targetBayStr);
+  const k = mine.findIndex((x) => x.cn === target.cn);
+  if (k < 0 || k >= theirs.length) return null;
+  const mate = theirs[k];
+  if (excludeCns.has(mate.cn) || (base0 !== all && !all.some((x) => x.cn === mate.cn))) return null;
+  return mate;   // 줄·단 순서로 1:1 — 두 베이 남은 컨을 같은 순서로 대응시켜 서로 같은 짝을 가리킨다(어느 쪽에서 물어도 같은 답)
 }
 
 // 베이 짝꿍 맵 가져오기 (UI에서 표시용)
