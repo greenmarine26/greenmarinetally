@@ -1,9 +1,9 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.87-03';
-const NOTE = '4.87-03 미르가 실번호 문제를 알린 뒤 어떻게 해결해 하면 해결 방법을, 해결됐어 하면 다시 점검한 결과를 답합니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.87-04';
+const NOTE = '4.87-04 신호가 약한 곳에서도 앱이 저장된 화면으로 바로 열립니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
-const NET_WAIT_MS = 8000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다
+const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
 
 self.addEventListener('install', (e) => {
@@ -62,7 +62,11 @@ self.addEventListener('fetch', (e) => {
   let sameOrigin = false;
   try { sameOrigin = new URL(e.request.url).origin === self.location.origin; } catch {}
   if (!sameOrigin) return;  // Firebase 등 외부 요청은 관여하지 않음
-  const viaNet = fetch(e.request)
+  //  ★ 4.87-04 (검수사 2026-11-11 13:14 «평택검수» 띠 아래 흰 화면 · 13:22 «지금은 되네요»): 이름에 판 고유 글자가 붙은 본체 파일(assets/이름-해시.js·css)은 내용이 바뀔 수 없다 —
+  //    저장본이 있으면 통신망을 기다리지 않고 바로 준다. 종전에는 열 때마다 6MB 본체를 통신망에서 먼저 받으려 했고, 서버가 답을 **시작**하기만 하면 아래 «N초 뒤 저장본» 장치가 풀려
+  //    신호가 약한 곳에서 본체가 다 내려올 때까지 흰 화면이었다. 새 판 알림은 sw.js VERSION 으로 따로 확인하므로 업데이트는 늦어지지 않는다. 저장본이 없으면 종전 그대로 통신망.
+  const hashedAsset = /\/assets\/[^?]*-[A-Za-z0-9_-]{8,}\.(?:js|css)$/.test(e.request.url);
+  const net = () => fetch(e.request)
       .then((res) => {
         //  3.60-06 (진단 M34): 배포 직후 열려 있던 탭이 옛 해시 청크를 부르면 서버는 404 다 — 캐시에 있으면 그것을 준다.
         //    판 번호 확인용 요청(?v= · ?_ck=)은 캐시에 쌓지 않는다(3분마다 한 장씩 자라던 것).
@@ -74,6 +78,8 @@ self.addEventListener('fetch', (e) => {
         return res;
       })
       .catch(() => cachedOf(e.request));
+  if (hashedAsset) { e.respondWith(caches.match(e.request).then((m) => m || net())); return; }
+  const viaNet = net();
   //  4.82-02: 화면 뼈대(첫 문서·스크립트·스타일)는 네트워크가 NET_WAIT_MS 안에 안 답하면 저장해 둔 마지막 성공본으로 연다 —
   //    신호가 약한 곳에서 응답 없는 요청을 무기한 기다려 «평택검수» 시작 화면 뒤가 흰 바탕으로 멈추던 것(검수사 2026-11-09). 저장본이 없으면 종전처럼 네트워크를 계속 기다린다.
   const core = e.request.mode === 'navigate' || /\/assets\/[^?]*\.(?:js|css)(?:$|\?)/.test(e.request.url);
