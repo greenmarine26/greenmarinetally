@@ -17,7 +17,10 @@ import { shipCodeFixOf, knownShipCodes } from './utils.js';   // 4.17 (§7.8-⑧
  *   검수사 «양하자리에 있으면 양하 베이플랜 카고플랜을 열게 하면 되고 선적자리에서 말하면 선적꺼».
  */
 export function parseViewCommand(query) {
-  const t = String(query || '').trim();
+  /* ★ 4.87-09 (검수사 2026-11-11 «스테이지 : 카고플랜 , 스토우플랜을 말함»)
+       «스테이지»는 «플랜»과 같은 말이다 — 양하면 카고플랜, 선적이면 스토우플랜(= 선적 카고플랜). 한 벌로 여기서 바꿔 읽는다. */
+  const _stage = /스테이지/.test(String(query || ''));   // 4.87-09 감사 — 스테이지는 남는 낱말이 없을 때만 «열어라»(«스테이지 몇 개 보여줘» 는 조회)
+  const t = String(query || '').trim().replace(/스테이지/g, '플랜').replace(/스토우\s*플([랜렌])/g, '선적 카고플$1');
   if (!t) return null;
   /* ★ 2.87-03 (검수사 2026-08-29 «MCSC LOADING 카고플랜 보여줘 미르가 영어를 몰라요»)
        현장 서류는 전부 영어다 — LOADING PLAN · CARGO PLAN · DISCHARGE. 종이에 적힌 말로 물었는데
@@ -40,8 +43,10 @@ export function parseViewCommand(query) {
     .replace(/\bB?\d{1,2}\s*번?/g, ' ')            // 베이 번호 «5번»·«22»·«B22» (bay 는 아래서 따로 읽는다)
     .replace(/\b[A-Z]{3,8}\b/g, ' ')                // 선박 약자·이름 토큰
     .replace(/미르야?|좀|의|을|를|은|는|[\s?？.!'"]/g, '');
+  const bareCmd0 = /카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b|(?<![가-힣])플[랜렌](?![가-힣])/.test(T);
   const bareCmd = _bare === '' && /카고\s*플[랜렌]|베이\s*플[랜렌]|\bCARGO\s*PLAN\b|\bBAY\s*PLAN\b|(?<![가-힣])플[랜렌](?![가-힣])/.test(T);
-  const isCmd = bareCmd
+  const _stageOpen = _bare.replace(/보여\s*줘?요?|보여\s*주세요|열어\s*줘?요?|띄워\s*줘?요?|펼쳐\s*줘?요?|보자|주세요|줘/g, '') === '' && bareCmd0;
+  const isCmd = _stage ? _stageOpen : bareCmd
     || /보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)
     || /\b(SHOW|OPEN|VIEW|DISPLAY)\b/.test(T)
     || /\bPLANS?\b/.test(T);
