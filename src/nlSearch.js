@@ -2160,6 +2160,71 @@ export function generateSealDetailAnswer(containers0, modeLabel, recordsList = n
   return [`📋 ${modeLabel} 실번호 상세 ${lines.length}대`, ...lines].join('\n');
 }
 
+//  ★ 4.87-03 — 문제를 알렸으면 «해결 방법»과 «해결됐나»까지 답한다(검수사 2026-11-11 06:32 «문제를 알리고는 후속 질문에 답하는게 아직도 부족합니다» · 04:37 «문제 알림 문제상세보기 해결방법제시 해결 결과 유무등 문제를 제시 했으면 해결까지 미르는 답을 할줄 알아야 합니다»).
+//    판정은 점검 답·상세 답과 같은 함수(sealIssuesOf·sealPredictOf·auditSeals·sealAlphaDropOf) 한 벌 — 여기는 그 결과를 {cn, kind} 목록으로 줄여 «처음»과 «지금»을 견준다.
+//    kind — err 실오류(trunc 는 신고 끝자리 잘림) · pre 예상 실오류 · sus 세관 실과 모양 다름 · pen 선사 리스트끼리 다름 · audit 중복·혼입·형식 · drop 알파벳만 빠짐(실오류 아님 — 견주지 않는다).
+export function sealProblemListOf(containers0, recordsList = null, ediList = null) {
+  const containers = _withRecordSeals(containers0, recordsList);
+  const audit = auditSeals(containers || []);
+  const { errs, confs } = sealIssuesOf(containers);
+  const pre = sealPredictOf(containers, recordsList, ediList).filter((x) => !audit.items.some((it) => String(it.cn || '').includes(x.cn.slice(-4))));
+  const drop = sealAlphaDropOf(containers).filter((d) => !errs.some((e) => e.cn === d.cn));
+  const out = [];
+  for (const e of errs) out.push({ cn: String(e.cn || ''), kind: 'err', trunc: !!e.trunc });
+  for (const x of pre) out.push({ cn: String(x.cn || ''), kind: 'pre' });
+  for (const f of confs) { if (pre.some((x) => x.cn === f.cn)) continue; out.push({ cn: String(f.cn || ''), kind: f.grade === 'suspect' ? 'sus' : 'pen' }); }
+  for (const it of audit.items) out.push({ cn: String(it.cn || ''), kind: 'audit' });
+  for (const d of drop) out.push({ cn: String(d.cn || ''), kind: 'drop' });
+  return out;
+}
+const _SEAL_KIND_KR = { err: '실오류', pre: '예상 실오류', sus: '세관 실과 모양 다름', pen: '선사 리스트끼리 다름', audit: '중복·혼입·형식' };
+//  끝 4자리로 줄이되, 점검 답이 이미 «1234·5678»(중복 쌍)·«외 N대» 로 적은 이름표는 그대로 둔다
+const _l4s = (arr) => arr.map((x) => { const c = String(x.cn || ''); return /[·\s외]/.test(c) ? c : c.slice(-4); }).join('·');
+/** «어떻게 해결해» — 점검에 걸린 종류마다 할 일을 적는다(앱 매뉴얼의 「실번호 넣기·고치기」 그대로 — 새 절차를 지어내지 않는다). */
+export function generateSealRemedyAnswer(list, modeLabel) {
+  const by = (k) => (list || []).filter((x) => x.kind === k);
+  const lines = [];
+  const e = by('err'), p = by('pre'), s = by('sus'), n = by('pen'), a = by('audit'), d = by('drop');
+  const eTr = e.filter((x) => x.trunc), eFix = e.filter((x) => !x.trunc);
+  if (eFix.length) lines.push(`⚠ 실오류 ${eFix.length}대(${_l4s(eFix)}) — 실물 번호로 이미 고친 건입니다. 세관 신고 사안이라 세관리스트·실물과 한 번 더 맞춰 보고, 컨 상세의 「수정 이력」에 남았는지 확인하세요.`);
+  if (eTr.length) lines.push(`⚠ 신고 끝자리가 잘린 실오류 ${eTr.length}대(${_l4s(eTr)}) — 신고본 실이 실물보다 짧습니다. 안 고쳐도 실오류로 남으니 실물 번호를 확인해 컨 상세 「실번호」에 맞는 번호를 넣고, 세관 신고를 바로잡을 사안인지 수석과 확인하세요.`);
+  if (p.length) lines.push(`🔎 예상 실오류 ${p.length}대(${_l4s(p)}) — 같은 계열 실과 자릿수가 다르거나 앞자리 0 이 없습니다(엑셀에서 0 이 잘린 경우가 많습니다). 실물 실번호를 눈으로 보고 맞으면 그대로 두고, 다르면 컨 카드 실번호 칸이나 컨 상세 「실번호」에서 고치세요. 고친 이력은 남습니다.`);
+  if (s.length) lines.push(`🔎 세관 실과 모양이 다른 컨 ${s.length}대(${_l4s(s)}) — 실물을 보고 맞는 번호로 컨 상세 「실번호」를 고치세요. 모양이 달라 보일 뿐 실물이 리스트와 같으면 그대로 둡니다.`);
+  if (n.length) lines.push(`🔎 선사 리스트끼리 실이 다른 컨 ${n.length}대(${_l4s(n)}) — 세관리스트가 오면 앱이 판정합니다. 세관리스트가 아직 없으면 첨부하고, 급하면 실물 번호로 고치세요.`);
+  if (a.length) lines.push(`🔒 중복·혼입·형식 ${a.length}건(${_l4s(a)}) — 같은 실번호가 두 컨에 있으면 서로 바뀐 것일 수 있으니 양쪽 모두 실물을 보세요. 실이 모자라 같은 번호를 써야 하면 0000 으로 넣으면 중복에서 빠집니다.`);
+  if (d.length) lines.push(`ℹ 알파벳만 빠진 실 ${d.length}대(${_l4s(d)}) — 같은 실로 보므로 실오류가 아니고 고칠 것도 없습니다(선사 리스트에 알파벳이 없을 뿐). 풀림 여부도 세지 않습니다.`);
+  if (!e.length && !p.length && !s.length && !n.length && !a.length) return d.length ? `✅ ${modeLabel} — 풀어야 할 실번호 문제는 없습니다.\n${lines[0]}` : `✅ ${modeLabel} — 지금은 풀어야 할 실번호 문제가 없습니다.`;
+  return [`🛠 ${modeLabel} 실번호 해결 방법`, ...lines, '고친 뒤에 «해결됐어?» 하고 물으시면 다시 점검해서 처음과 견주어 드려요.'].join('\n');
+}
+/** «해결됐어?» — 처음 알린 목록(before)과 지금 다시 센 목록(now)을 견준다. 알파벳 빠진 실(drop)은 실오류가 아니라 세지 않는다.
+ *  실물 확인은 앱이 알 수 없어, 판정이 사라진 것만 «풀림»으로 센다. 짝은 컨 이름표로 맞춘다(세관리스트가 들어와 종류만 바뀐 컨은 «남은 것»). */
+export function generateSealResultAnswer(before, now, modeLabel) {
+  const real = (arr) => { const seen = new Set(); return (arr || []).filter((x) => x.kind !== 'drop' && !seen.has(x.cn) && seen.add(x.cn)); };   // 같은 컨이 두 종류로 걸려도 한 건으로 센다
+  const nowR = real(now);
+  const dropN = (now || []).filter((x) => x.kind === 'drop').length;
+  const dropLine = dropN ? `ℹ 알파벳만 빠진 실 ${dropN}대는 실오류가 아니라 풀림 여부를 세지 않습니다.` : '';
+  const withDrop = (lines) => (dropLine ? [...lines, dropLine] : lines).join('\n');
+  if (!Array.isArray(before)) {
+    if (!nowR.length) return withDrop([`✅ ${modeLabel} — 지금 다시 점검했더니 실번호 문제가 없습니다. (처음 알린 목록은 기억에 없습니다)`]);
+    return withDrop([`🔍 ${modeLabel} — 처음 알린 목록은 기억에 없어 지금 상태만 말씀드려요. 실번호 주의 ${nowR.length}건(${_l4s(nowR)})이 남아 있습니다.`]);
+  }
+  const bef = real(before);
+  const nowKeys = new Set(nowR.map((x) => x.cn));
+  const befKeys = new Set(bef.map((x) => x.cn));
+  const solved = bef.filter((x) => !nowKeys.has(x.cn));
+  const left = nowR.filter((x) => befKeys.has(x.cn));
+  const fresh = nowR.filter((x) => !befKeys.has(x.cn));
+  if (!bef.length && !fresh.length) return withDrop([`✅ ${modeLabel} — 처음에도 지금도 실번호 문제가 없습니다.`]);
+  const kinds = (arr) => [...new Set(arr.map((x) => _SEAL_KIND_KR[x.kind]))].join('·');
+  const lines = [`🔍 ${modeLabel} 실번호 다시 점검 — 처음 ${bef.length}건 → 지금 ${nowR.length}건`];
+  if (solved.length) lines.push(`✅ 풀린 것 ${solved.length}건(${_l4s(solved)})`);
+  if (left.length) lines.push(`⏳ 아직 남은 것 ${left.length}건(${_l4s(left)}) — ${kinds(left)}`);
+  if (fresh.length) lines.push(`🆕 새로 걸린 것 ${fresh.length}건(${_l4s(fresh)}) — ${kinds(fresh)}`);
+  if (left.length || fresh.length) lines.push('실물을 보고 맞다고 확인만 하셨다면 앱은 그것을 알 수 없어 «남은 것»으로 셉니다. 번호를 고치거나 세관리스트가 들어와 판정이 사라져야 «풀린 것»이 됩니다.');
+  else lines.push('모두 풀렸습니다.');
+  return withDrop(lines);
+}
+
 // V7.90-05: 실번호(씰) 오류 사전 점검 (사용자 요청 — 리스트 단계에서 미리 잡기)
 //   ① 중복: 다른 컨테이너인데 같은 실번호  ② 혼입: 실번호 칸에 컨테이너 번호
 //   ③ 형식 특이: 특수문자·비정상 짧음  ④ 자리수 부족: 같은 접두 그룹의 다수 길이보다 짧음(엑셀 0 잘림 등)

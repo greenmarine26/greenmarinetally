@@ -47,8 +47,8 @@ const ok = (c, m, d = '') => { n++; console.log((c ? '  PASS ' : '  FAIL ') + m 
   ok(!/실번호 상세/.test(cold.a), '점검 답이 앞에 없으면 «17개 보여줘» 를 실번호 상세로 끌어가지 않는다', `${cold.tr.via} | ${cold.a.slice(0, 120)}`);
   M._mirThreadReset();
   ask('실 점검해줘');
-  const late = ask('17개 보여줘', { _now: NOW + 11 * 60000 });
-  ok(!/실번호 상세/.test(late.a), '점검 답 뒤 10분이 지나면 후속으로 보지 않는다', `${late.tr.via} | ${late.a.slice(0, 120)}`);
+  const late = ask('17개 보여줘', { _now: NOW + 61 * 60000 });
+  ok(!/실번호 상세/.test(late.a), '점검 답 뒤 60분이 지나면 후속으로 보지 않는다', `${late.tr.via} | ${late.a.slice(0, 120)}`);
   M._mirThreadReset();
   ask('실 점검해줘');
   const other = ask('20피트 몇 대야');
@@ -66,8 +66,8 @@ const ok = (c, m, d = '') => { n++; console.log((c ? '  PASS ' : '  FAIL ') + m 
   M._mirThreadReset();
   ask('실 점검해줘');
   ask('40피트 12개 보여줘');
-  const stale = ask('17개 보여줘', { _now: NOW + 11 * 60000 });
-  ok(!/실번호 상세/.test(stale.a), '다른 물음이 끼어도 10분 창은 늘어나지 않는다', stale.a.slice(0, 120));
+  const stale = ask('17개 보여줘', { _now: NOW + 61 * 60000 });
+  ok(!/실번호 상세/.test(stale.a), '다른 물음이 끼어도 60분 창은 늘어나지 않는다', stale.a.slice(0, 120));
 
   console.log('[3] 상세 — 실오류·모양 다름도 한 대씩');
   const diffA = { cn: 'TEST1234561', _mode: 'discharge', sl: '02273964', sl_src: 'Excel_20261110123652.xls', sl_conflict: [{ sl: 'EA02273964', src: 'list.xlsx' }, { sl: 'ES02273964', src: 'Excel_20261110123652.xls' }] };
