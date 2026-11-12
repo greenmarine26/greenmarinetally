@@ -146,7 +146,7 @@ class DuoBoundary extends React.Component {
   componentDidCatch(err, info) {
     console.error('[콘앱 2.60] 카고플랜 첫 화면 렌더 오류 — 닫고 콘 계산기로 돌아갑니다:', err, info && info.componentStack);
     const msg = String((err && err.message) || err || '');
-    setTimeout(() => { try { this.props.onClose(); } catch (e) { console.error('[콘앱 2.60] 오류 뒤 닫기 실패:', e); } try { alert('카고플랜을 그리다 오류가 났습니다. 콘 계산기로 돌아갑니다.\n' + msg); } catch (e) { console.debug('[콘앱 2.60] 알림창을 못 띄웠습니다(오류는 위 콘솔에 남김):', e && e.message); } }, 0);
+    setTimeout(() => { try { this.props.onClose(); } catch (e) { console.error('[콘앱 2.60] 오류 뒤 닫기 실패:', e); } try { alert('양하/선적 PLAN을 그리다 오류가 났습니다. 콘 계산기로 돌아갑니다.\n' + msg); } catch (e) { console.debug('[콘앱 2.60] 알림창을 못 띄웠습니다(오류는 위 콘솔에 남김):', e && e.message); } }, 0);
   }
   render() { return this.state.dead ? null : this.props.children; }
 }

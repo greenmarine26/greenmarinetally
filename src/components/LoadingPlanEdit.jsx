@@ -116,7 +116,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
     if (!changes.length) { alert('변경 내용이 없습니다.'); return; }
     if (!window.confirm(
       `확정하면 이 위치가 검수앱의 선적 플랜이 됩니다.\n\n변경 ${changes.length}건\n\n`
-      + '· 검수사 화면·베이플랜·카고플랜에 즉시 반영됩니다\n'
+      + '· 검수사 화면·베이플랜·양하/선적 PLAN에 즉시 반영됩니다\n'
       + '· 실선적 기록(실체 위치)은 바뀌지 않습니다\n'
       + '· EDI 원본은 자동 백업되어 [원본 복원]으로 되돌릴 수 있습니다\n\n확정할까요?')) return;
     setSaving(true);
@@ -168,7 +168,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
   // 헤더는 핵심 2개만 — 부가 기능은 옆 패널로 (버튼이 많으면 헤더가 가로로 넘쳐 클릭이 막힌다)
   const headerExtra = (
     <>
-      <button className="bge-btn p" onClick={() => setPlanOpen(true)}>🗺 카고플랜</button>
+      <button className="bge-btn p" onClick={() => setPlanOpen(true)}>🗺 선적(STOWAGE)PLAN</button>
       <button className="bge-btn" style={{ background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' }} onClick={commit} disabled={saving}>✅ 확정</button>
     </>
   );

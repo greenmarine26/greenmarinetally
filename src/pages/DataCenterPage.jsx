@@ -11,7 +11,7 @@ import { matchShipPolicy } from '../shipPolicies.js';
 export const DC_ACTS = [
   { k: 'reg',        t: '📥 등록',        s: 'EDI · 세관 리스트 · X-RAY 올리기', m: ['d', 'l'], write: true },
   { k: 'inspection', t: '📋 검수 리스트',  s: '인쇄 창이 바로 열림',               m: ['d', 'l'] },
-  { k: 'cargo',      t: '📐 카고플랜',     s: '컬러 / 흑백',                       m: ['d', 'l'] },
+  { k: 'cargo',      t: '📐 양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN',     s: '컬러 / 흑백',                       m: ['d', 'l'] },
   { k: 'detail',     t: '🚢 베이 상세',    s: '평택분 / 전체 / 베이',              m: ['d', 'l'] },
   { k: 'eseal',      t: '🔖 엠티실 리스트', s: '엠티실 부착 선박만 · 선적',          m: ['l'], only: 'attach' },
   { k: 'xray',       t: '🔍 X-RAY 리스트', s: '선박명 + X-RAY 리스트 (양하만)',      m: ['d'] },

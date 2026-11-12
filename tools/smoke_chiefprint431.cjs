@@ -29,8 +29,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // 공허 통과 막기 — 두 화면 다 열렸고 선적 모드다
   ok(/검수 자료 출력/.test(insp.textContent) && /검수 자료 출력/.test(chief.textContent), '검수원·수석 두 화면이 다 열린다');
-  ok(has(insp, '검수 리스트') && has(insp, '카고플랜') && has(insp, '베이 상세'), '검수원도 검수 리스트·카고플랜·베이 상세는 뽑는다');
-  ok(has(chief, '검수 리스트') && has(chief, '카고플랜') && has(chief, '베이 상세'), '수석도 같은 세 가지를 뽑는다');
+  ok(has(insp, '검수 리스트') && has(insp, ')PLAN') && has(insp, '베이 상세'), '검수원도 검수 리스트·카고플랜·베이 상세는 뽑는다');
+  ok(has(chief, '검수 리스트') && has(chief, ')PLAN') && has(chief, '베이 상세'), '수석도 같은 세 가지를 뽑는다');
 
   // 수석 전용
   ok(has(chief, 'VGM') && has(chief, '결제용') && has(chief, '작업용'), '수석(소유자)에게는 VGM·결제용·작업용이 있다');

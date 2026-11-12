@@ -92,7 +92,7 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
         <div className="border-t border-line/40 p-2.5 space-y-2">
           <div className="text-2xs text-dim-300 leading-relaxed">
             💡 EDI는 송신측 항차(예: 인천 선적)를 포함할 수 있어 신뢰하지 않습니다.<br/>
-            여기에 입력한 양하/선적 항차가 카고플랜·베이상세·작업 보고에 정확히 표시됩니다.
+            여기에 입력한 양하/선적 항차가 양하/선적 PLAN·베이상세·작업 보고에 정확히 표시됩니다.
           </div>
 
           {/* 양하 voy */}

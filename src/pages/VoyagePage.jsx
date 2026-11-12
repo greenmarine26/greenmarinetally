@@ -1777,7 +1777,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           </button>
         ))}
         {/* 출력 센터 — 탭이 아니라 «문»이다(창을 연다). 늘 호박색으로 보여 눈에 띈다. */}
-        <button role="tab" aria-selected={false} className="hud-tab hud-door" title="출력 센터 — 검수 리스트 · 카고플랜 · 베이 상세 · VGM · 작업 보고서"
+        <button role="tab" aria-selected={false} className="hud-tab hud-door" title="출력 센터 — 검수 리스트 · 양하/선적 PLAN · 베이 상세 · VGM · 작업 보고서"
           onClick={() => { setShowPrintHub(true); setMoreTabs(false); }}>
           <span className="hud-ico" aria-hidden="true">🖨️</span>출력
         </button>
@@ -3256,8 +3256,8 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
       const _pc = onOpenPlan ? parseViewCommand(q || '') : null;
       if (_pc) {
         const _md = _pc.mode || mode;
-        const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
-        rawRef.current = `🗺 ${vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+        const _what = _pc.what === 'cargo' ? (_md === 'loading' ? '선적(STOWAGE)PLAN' : '양하(DISCHARGING)PLAN') : `${_md === 'loading' ? '선적' : '양하'} ${_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜'}`;   // 4.88-01 카스피 이름
+        rawRef.current = `🗺 ${vsl || ''} ${_what}을 열었어요.`;
         return rawRef.current;
       }
       //  ★ 2.50-01 — **여기가 검수사가 실제로 쓰는 검색줄이다.**
@@ -4761,7 +4761,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       <div className="px-1">
         <div className="text-lg font-black flex items-center gap-2">📤 자료 올리기</div>
         <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
-          EDI · 세관 리스트 · 선사 리스트 · X-RAY 리스트를 넣는 곳입니다. 다 올렸으면 위 메뉴의 <b className="text-amber-300">🖨️ 출력</b>에서 검수 리스트·카고플랜을 뽑습니다.
+          EDI · 세관 리스트 · 선사 리스트 · X-RAY 리스트를 넣는 곳입니다. 다 올렸으면 위 메뉴의 <b className="text-amber-300">🖨️ 출력</b>에서 검수 리스트·양하/선적 PLAN을 뽑습니다.
         </div>
       </div>
       {showTestLab && inspector === '김성일' && (

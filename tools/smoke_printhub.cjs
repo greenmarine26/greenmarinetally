@@ -140,7 +140,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ── 같은 화면의 나머지 출구도 눌러 본다 — 하나라도 죽으면 이 화면 전체가 못 쓴다
   {
-    for (const [label, key] of [['카고플랜', '카고플랜'], ['베이 상세', '베이 상세']]) {
+    for (const [label, key] of [['양하(DISCHARGING)PLAN·선적(STOWAGE)PLAN', ')PLAN'], ['베이 상세', '베이 상세']]) {   // 4.88-01: 타일 이름이 카스피 이름(양하(DISCHARGING)PLAN)으로 바뀌었다
       const b = find(key);
       ok(!!b, `${label} 단추가 있다`);
       if (b) {

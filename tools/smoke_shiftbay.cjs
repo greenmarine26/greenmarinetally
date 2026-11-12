@@ -16,7 +16,7 @@ function render(which) {
     if (which === 'direct') { setTimeout(() => res({ dom, errs, d: dom.window.document, w: dom.window }), 5000); return; }
     setTimeout(() => {
       const d = dom.window.document;
-      const tile = [...d.querySelectorAll('button.print-tile')].find((b) => /카고플랜/.test(b.textContent));
+      const tile = [...d.querySelectorAll('button.print-tile')].find((b) => /\(DISCHARGING\)PLAN|\(STOWAGE\)PLAN/.test(b.textContent));   // 4.88-01: 타일 이름이 카스피 이름
       if (!tile) { res({ dom, errs: errs.concat('카고플랜 단추를 못 찾음'), d, w: dom.window }); return; }
       tile.click();
       setTimeout(() => res({ dom, errs, d, w: dom.window }), 5000);

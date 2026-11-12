@@ -1254,7 +1254,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                     <span className="text-dim-200">⚓ 해치커버 — 해치마다 한 번만 넣습니다</span>
                     {coversDictKnown
                       ? <span className="px-1.5 py-0.5 bg-emerald-900/50 text-emerald-300 rounded">사전에 있는 선박 · 자동으로 채웠습니다</span>
-                      : <span className="px-1.5 py-0.5 bg-amber-900/50 text-amber-300 rounded">사전에 없는 선박입니다 — 카고플랜의 해치선 조각 수를 넣어 주세요</span>}
+                      : <span className="px-1.5 py-0.5 bg-amber-900/50 text-amber-300 rounded">사전에 없는 선박입니다 — 양하/선적 PLAN의 해치선 조각 수를 넣어 주세요</span>}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {hatchGroups.map(g => {
@@ -1485,7 +1485,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                                 {nBlk > 0 && <span className="ml-2 px-1.5 py-0.5 bg-red-900/60 text-red-300 rounded text-2xs">{nBlk}곳</span>}
                               </div>
                               <div className="text-2xs text-dim-500 mb-2">
-                                예: 80티어에 로우가 부분만 있는 베이 — 없는 자리를 ✕ 지정하면 베이플랜·카고플랜·콘앱 그림에서 빈 자리로 빠집니다.
+                                예: 80티어에 로우가 부분만 있는 베이 — 없는 자리를 ✕ 지정하면 베이플랜·양하/선적 PLAN·콘앱 그림에서 빈 자리로 빠집니다.
                               </div>
                               {grid.deckRows.some(r => !r.invisible) && (
                                 <div className="mb-1">
@@ -1606,7 +1606,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           {done && (
             <div className="text-center py-12">
               <div className="text-2xl mb-3">{savingMsg}</div>
-              <div className="text-sm text-dim-400">이제 카고플랜에서 이 선박이 정상 표시됩니다.</div>
+              <div className="text-sm text-dim-400">이제 양하/선적 PLAN에서 이 선박이 정상 표시됩니다.</div>
             </div>
           )}
         </div>

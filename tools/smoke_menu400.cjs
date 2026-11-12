@@ -56,7 +56,7 @@ ok(dt.length > 2000, '업로드 탭(DataTab) 본문을 찾았다');
 ok(/📤 자료 올리기/.test(dt) && /quest-card/.test(dt), '업로드 탭 — 「📤 자료 올리기」 머리와 카드');
 ok(/EDI 파일 고르기/.test(dt) && /리스트 파일 고르기/.test(dt) && /X-RAY 파일 고르기/.test(dt), '업로드 탭 — EDI · 리스트 · X-RAY 올리기 카드');
 ok(!/<PrintHubModal/.test(dt) && !/setShowPrintHub/.test(code(dt)), '업로드 탭에 출력 센터 카드·단추가 없다');
-ok(!/📋 검수 리스트|📐 카고플랜|🚢 베이 상세/.test(code(dt)), '업로드 탭에 검수 리스트·카고플랜·베이 상세 출력이 없다');
+ok(!/📋 검수 리스트|📐 카고플랜|📐 양하\(DISCHARGING\)PLAN|🚢 베이 상세/.test(code(dt)), '업로드 탭에 검수 리스트·카고플랜·베이 상세 출력이 없다');
 
 // ── 4. 매뉴얼·색인·미르 — 옛 낱말 잔재(주석 제외)
 const docs = ['src/data/helpData.js', 'src/data/helpDataChief.js', 'src/data/featureIndex.js', 'src/nlSearch.js', 'src/mir.js'];

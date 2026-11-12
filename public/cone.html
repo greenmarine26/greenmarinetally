@@ -565,7 +565,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.78</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.78-01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1040,8 +1040,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 4.88';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.78';   // ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
+window.__APPV='TallyOne 4.88-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 2.78-01';   // ★ 2.78-01 (TallyOne 4.88-01) — 카고플랜을 카스피 이름으로(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN, 출력 머리 CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION) — 검수앱과 같은 말. // (앞 판) ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
 // (앞 판) 'ConeOne 2.76'
 // ★ 2.76   // ★ 2.76 (TallyOne 4.82) — 검수사 수동 시프팅 표기(voyages/{키}/shiftManual)를 읽어 검수앱과 같은 순수 함수(applyShiftManualToMap)로 시프팅 지도에 덧입힘(읽기만 · 양하 평택분에서 빠지고 시프팅으로 셈). (앞 판) ★ 2.75-01 (TallyOne 4.81-01) — mir-core 번들만 바뀜(미르 «N번 베이 정리해줘» 가 앱·터미널 호기 번호가 달라도 같은 장 같은 30분 앱 입력으로 같은 갱을 알아봄 · 콘앱 화면 코드 변경 없음 · 배 이름 없는 베이 정리는 일하는 배 규칙을 검수앱에서만 탄다 — 콘앱은 고른 배 기준).   // (앞 판) ★ 2.75 (TallyOne 4.81) — 미르 «N번 베이 정리해줘»(읽기 전용 현황 · mir-core 번들 gangState 한 벌 — 검수앱과 같은 답) · 이 말에도 베이사전을 먼저 받아 장 묶음이 검수앱과 같게(질문 정규식에 «정리» 추가). 쓰기 없음.   // (앞 판) ★ 2.74-03 (TallyOne 4.77-01) — mir-core 번들(말투 «쌓여요» · 배 코드가 든 설명형 질문은 생활회화로 안 감 · 속도·갱 수 한 함수 paceNowOf · 같은 분 안 같은 수)과 미르 ctx 에 항차 목록의 배 코드(shipCodes) 추가.   // (앞 판) ★ 2.74-02 (TallyOne 4.77) — 동방 qcWork 3호기·105호기 몫을 실 LOLO 컨 기준으로 바로잡음(ConeParse.qcWorkLoloSplit · 합계는 그대로 · 호기별 값만 정정).   // (앞 판) ★ 2.74-01 (TallyOne 4.76) — mir-core 번들만 바뀜(끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 · 호기 이동 말 · 해치 닫는 장수 · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73-01 (TallyOne 4.59-01) — mir-core 번들만 바뀜(MFN 재적재 항목 판정 한 곳 mfnItemsOf · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73 (TallyOne 4.58) — 양하 대수에 MFN(터미널엔 있고 메일 양하 리스트엔 없는 컨 · voyages/{키}/discharge/mfnList)을 합쳐 미르 답이 검수앱과 같게(278 = 리스트 234 + MFN 44). 화면 개조 없음.   // (앞 판) ★ 2.72-05 (TallyOne 4.56-03) — 선적 칸 맞바꿈(applyAutoSwap 번들만 바뀜 · 콘앱 화면 코드 변경 없음).   // ★ 2.72-02 (TallyOne 4.56) — 미르 «양하 정확도»(mir-core 번들만 바뀜 · 콘앱 화면 코드 변경 없음). // ★ 2.72-01 (TallyOne 4.55-03) — 양하 완료 순서로 먼저 나온 컨의 칸을 추정해 검수앱과 같은 칸에 그린다(applyAutoSwap 앞에 inferDischargePos). · 2.72 (TallyOne 4.53) — 선적 EDI(출항본)에 실린 선사 지시 본선 잔류 컨은 «예정» 이 아니라 «확정» — 확정 시프팅 지도(ctShiftMap)에 파란 ◆ 로 들고 평택 양하분에서 빠진다(미르 «양하 315 · 시프팅 64» — 검수앱과 같은 답, 판정은 번들 keepConfirmedFromMaps 한 벌). · (앞 판) 2.71-03 (TallyOne 4.52) — 20HT·40HT·25OT·연태 V코드(22V7·42V1)를 오픈탑으로 읽는다(coneAlphaOt — 검수앱 한 벌) · 2.71-02 (TallyOne 4.48-04) — 미르 «양하 몇 대» 가 선사 지시 본선 잔류 두 대를 시프팅 예보로 보고 평택 양하분에서 빼 315 로 답하던 것(검수앱 317)을 고쳤다 — 시프팅 집합은 검수앱 한 벌 ConeMir.shiftSetForUnitsOf(예보 제외). ← (앞 판) ★ 2.71-01 (TallyOne 4.48-03) — 선사 지시 본선 잔류는 «예정» — 평택 양하 대수는 자료(EDI·리스트)대로 센다(검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»). 노란 ◆ 예보는 그대로.
 // (앞 판) 'ConeOne 2.71'   // ★ 2.71 — 선사 지시 «본선 잔류»(voyages/{키}/keepOnboard — 검수앱 4.48 컨 상세·수집기)를 같은 판정으로 — 평택 양하분에서 빼고(미르 «양하 몇 대» 315), 아래 평택 컨을 막으면 카고플랜에 시프팅 예보 노란 ◆(검수사 2026-10-24 «메일 적용은 한다면 노란 다이아 몬드로»). · (앞 판) ★ 2.70-04 — 선종(컨테이너선·복합선)은 배마다 한 번 — 보관소 coneShipTypes/{배 코드} 에 두고 모든 폰이 같이 쓴다(검수사 2026-10-21 13:05 «컨테이너선으로 지정 해놨는데 건건 마다 다시 물어 봅니다»). · (앞 판) ★ 2.70-03 — 실시간 화면(⚡·콘 타이밍 카드·위 띠)이 실시간 수집이 호기를 적어 넣은 터미널 실적도 그 호기로 그린다(검수사 2026-10-20 «2호기 4호기가 보여야 하는데 한호기 밖에») · 미르 «몇 시에 끝나» 류가 검수앱과 같은 규칙 답(TallyOne 4.40-01 mir-core)
@@ -3403,7 +3403,7 @@ function render(){
     <div class="hint">베이플랜은 위의 <b>베이 번호</b>를 누르면 그 베이로 바로 갑니다. <b>⛶ 전체화면</b>으로 크게 보고, 닫을 때는 ✕ 하나입니다.<br>
       칸의 <b>★는 평택분</b>, <b>※는 시프팅</b>(내렸다 다시 싣는 것)입니다.</div>
     <div class="hint"><b>🔩 콘 타이밍</b> — 작업을 고르면 위 고정 띠와 «콘 타이밍» 카드에 크레인별 지금 베이·단과 신호가 30초마다 갱신됩니다.
-      <b>⤢</b> 를 누르면 <b>그 호기가 지금 하는 카고플랜 한 칸</b>(예: 21 (22)23)이 화면 가득 뜹니다 — 갑판·선창을 다 그리고 지금 콘을 빼는(꽂는) 칸이 반짝입니다.
+      <b>⤢</b> 를 누르면 <b>그 호기가 지금 하는 양하/선적 PLAN 한 칸</b>(예: 21 (22)23)이 화면 가득 뜹니다 — 갑판·선창을 다 그리고 지금 콘을 빼는(꽂는) 칸이 반짝입니다.
       <b>좌우로 밀면</b> 다음 호기, <b>✕</b> 로 닫습니다. 트윈이면 두 베이가 함께 보이고 두 칸이 같이 반짝입니다.
       상태 카드의 양하·선적은 <b>«완료/전체»</b>입니다(2.27) — 30초마다 갱신되고 밑에 «남은 N대 · N%»가 붙습니다.
       작업이 다 끝나면(수석 완료 처리 전이라도) <b>«✅ 작업 완료된 선박입니다»</b> 화면으로 바뀌고 «N분째 기록 없음»은 안 뜹니다.
@@ -3548,7 +3548,7 @@ function render(){
     <button class="btn-primary" id="calcBtn" ${((state.stow||state.disch)&&state.shipType)?'':'disabled'}>
       ③ 콘 계산하기
     </button>
-    ${(state.disch||state.stow)?'<button class="btn-up" id="cargoViewBtn" style="margin-top:10px;flex:none;width:100%">📊 카고플랜 보기 (전체 화물 비교)</button>':''}
+    ${(state.disch||state.stow)?'<button class="btn-up" id="cargoViewBtn" style="margin-top:10px;flex:none;width:100%">📊 양하/선적 PLAN 보기 (전체 화물 비교)</button>':''}
     ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이플랜 보기 (양하·선적 비교)</button>':''}
     ${((state.stow||state.disch)&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
     ${!(state.stow||state.disch)?'<div class="hint">먼저 왼쪽에서 작업(선박)을 고르세요.</div>':''}
@@ -3653,7 +3653,7 @@ function planToGroups(plan, ctx){
 // V7.41: 결과 탭바 (작업표/카고플랜/베이플랜 전환) — 결과 화면 공통 상단
 function resultTabsHtml(active){
   const t=(id,icon,label)=>`<button class="${active===id?'on':''}" data-rtab="${id}">${icon} ${label}</button>`;
-  return `<div class="result-tabs">${t('calc','📋','콘 작업표')}${t('cargo','📊','카고플랜')}${t('bay','🗺️','베이플랜')}</div>`;
+  return `<div class="result-tabs">${t('calc','📋','콘 작업표')}${t('cargo','📊','PLAN')}${t('bay','🗺️','베이플랜')}</div>`;
 }
 /* 2.15: 앱이 뜨면 바로 미르를 세운다 — 결과 화면을 기다리지 않는다. */
 function bindMirAlways(){
@@ -4252,7 +4252,7 @@ async function mirTryOpen(q){
     const cmd=window.ConeMir.parseViewCommand(q);
     if(!cmd) return null;
     await mirEnsureShip(q);   /* 2.22: 질문에 배 이름이 있으면 그 배로 옮겨 놓는다 */
-    if(!state.voyageKey) return '어느 배인지 먼저 골라 주세요 — 배 이름을 같이 말해 주셔도 돼요. 예: «MCSC 선적 카고플랜 보여줘»'.replace(/«|»/g,'"');
+    if(!state.voyageKey) return '어느 배인지 먼저 골라 주세요 — 배 이름을 같이 말해 주셔도 돼요. 예: «MCSC 선적(STOWAGE)PLAN 보여줘»'.replace(/«|»/g,'"');
     const pre=await mirEnsureCalc('브리핑');       // 두 플랜 다 작업표가 있어야 그려진다
     if(pre) return pre;
     const side=cmd.mode==='loading'?'선적':(cmd.mode==='discharge'?'양하':null);
@@ -4264,8 +4264,8 @@ async function mirTryOpen(q){
       const want=cmd.mode==='loading'?'cpL':(cmd.mode==='discharge'?'cpD':null);
       const btn=want?document.getElementById(want):null;
       if(btn){ btn.click(); await new Promise(r=>setTimeout(r,3000));
-        return (side||'')+' 카고플랜 열었어요. 한 장이 화면에 맞게 나와요 — 손가락으로 키우고 줄일 수 있어요.'; }
-      return '카고플랜 열었어요. 양하·선적 중에 골라 주세요.';
+        return (cmd.mode==='loading'?'선적(STOWAGE)PLAN':'양하(DISCHARGING)PLAN')+' 열었어요. 한 장이 화면에 맞게 나와요 — 손가락으로 키우고 줄일 수 있어요.'; }   /* 4.88-01 카스피 이름 — 검수앱 미르와 같은 말 */
+      return '양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN 화면을 열었어요. 양하·선적 중에 골라 주세요.';
     }
 
     /* 베이플랜 — 전체화면으로 준다. ⚠ 순서가 중요하다: 전체화면으로 바꾸면 좌표가 다시 잡히므로
@@ -4481,7 +4481,7 @@ setTimeout(function preloadMasterParser(){
 // V7.45: 본체 카고플랜 V2를 그대로 사용 — cone-cargoplan.js(React 번들) 동적 로드
 async function loadCargoPlanV2(){
   if(window.ConeCargoPlan) return;
-  showLoading('카고플랜 모듈 불러오는 중...');
+  showLoading('PLAN 모듈 불러오는 중...');
   // V7.60: 약신호(배 안)에서 1.6MB 번들 로드가 실패하면 1회 자동 재시도.
   //   onload 후에도 window.ConeCargoPlan이 없으면(파싱 실패 — 너무 오래된 브라우저) 구분 안내.
   //  ★ ConeOne 2.3 — **여기에도 타임아웃이 없었다.**
@@ -4511,7 +4511,7 @@ async function loadCargoPlanV2(){
     const ld=document.getElementById('loadingBox'); if(ld) ld.remove();
   }
   if(!window.ConeCargoPlan){
-    throw new Error('이 폰의 브라우저가 오래되어 카고플랜을 열 수 없습니다 — 크롬(Chrome) 최신 버전으로 열어 주세요');
+    throw new Error('이 폰의 브라우저가 오래되어 양하/선적 PLAN을 열 수 없습니다 — 크롬(Chrome) 최신 버전으로 열어 주세요');
   }
 }
 // parseEDI row → 본체 컨테이너 형식
@@ -4671,14 +4671,14 @@ async function openCargoPlanV2(mode){
     window.ConeCargoPlan.open(props);
   }catch(err){
     cpClearModuleSpinner();   // 4.02 감사: 모듈을 처음 받다 실패해도 «카고플랜 모듈 불러오는 중…» 이 결과 영역에 남지 않게
-    alert('카고플랜을 열지 못했습니다.\n'+err.message);
+    alert('양하/선적 PLAN을 열지 못했습니다.\n'+err.message);
   }
 }
 //  ★ 2.60 — 콘앱 첫 화면: 배를 지정하면 양하·선적 카고플랜을 한 화면에서 좌우로 넘겨 본다(가로). 닫으면 콘 계산기.
 //    검수사 2026-10-04 «카고플랜 (양하, 선적)화면은 반드시 가로모드 상태로 보여줘야 합니다». 둘 다 자료가 없으면 열지 않는다(false).
 //  «카고플랜 모듈 불러오는 중…» 표시를 치운다(성공해서 도면이 뜰 때도, 못 받아서 실패할 때도).
 function cpClearModuleSpinner(){
-  try{ const _ra=document.getElementById('resultArea'); if(_ra && _ra.querySelector('.loading') && /카고플랜 모듈 불러오는 중/.test(_ra.textContent)) _ra.innerHTML=''; }catch(e){ console.warn('[콘앱 2.60] 불러오는 중 표시 치우기 실패:', e); }
+  try{ const _ra=document.getElementById('resultArea'); if(_ra && _ra.querySelector('.loading') && /(?:카고플랜|PLAN) 모듈 불러오는 중/.test(_ra.textContent)) _ra.innerHTML=''; }catch(e){ console.warn('[콘앱 2.60] 불러오는 중 표시 치우기 실패:', e); }
 }
 async function openCargoPlanDuo(key0){
   const key = key0 || state.voyageKey;
@@ -4711,11 +4711,11 @@ function openCargoPlanV2Auto(){
   const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
   if(hasD&&hasL){
     const ra=document.getElementById('resultArea');
-    ra.innerHTML=resultTabsHtml('cargo')+`<div class="card"><div class="share-head"><div class="sh-title">카고플랜 (검수앱과 동일)</div>
-      <div class="sh-sub">어느 작업의 카고플랜을 볼까요?</div></div>
+    ra.innerHTML=resultTabsHtml('cargo')+`<div class="card"><div class="share-head"><div class="sh-title">양하·선적 PLAN (검수앱과 동일)</div>
+      <div class="sh-sub">어느 쪽을 볼까요?</div></div>
       <div class="row" style="margin-top:10px">
-        <button class="btn-share" id="cpD">📥 양하 카고플랜</button>
-        <button class="btn-share" id="cpL">📤 선적 카고플랜</button>
+        <button class="btn-share" id="cpD">📥 양하(DISCHARGING)PLAN</button>
+        <button class="btn-share" id="cpL">📤 선적(STOWAGE)PLAN</button>
       </div></div>`;
     bindResultTabs();
     document.getElementById('cpD').onclick=()=>openCargoPlanV2('discharge');

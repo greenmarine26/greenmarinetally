@@ -841,7 +841,7 @@ export function parseNaturalQuery(text) {
     const RE_TX_ANY = /(작게|줄여|보통|원래대로|기본|크게|키워|확대|더\s*크|잘\s*안\s*보|안\s*보|작아|작다|작네)/g;
     const RE_TX_DNW = /^(작게|줄여|보통|원래대로|기본)$/;
     const RE_TX_Q   = /(뭐야|뭐지|뭔가|뭐예요|뭐에요|뭡니까|무엇|무슨|인가요|인가\s*[?？]|몇|어떻게|어디|얼마)/;
-    const RE_TX_PRINT = /(인쇄|출력|프린트|덱\s*플랜|카고\s*플랜|종이|pdf|엑셀)/i;
+    const RE_TX_PRINT = /(인쇄|출력|프린트|덱\s*플랜|카고\s*플랜|디스차(?:징|지)\s*플랜|스토우지?\s*플랜|DISCHARGING\s*PLAN|STOWAGE\s*(?:PLAN|INSTRUCTION)|종이|pdf|엑셀)/i;   // 4.88-01 카스피 말도
     const RE_TX_REAL  = /(컨\s*번호|컨번|번호판|마킹|도색|페인트|레터링|라벨|스티커)/;
     let txCmd = null;
     let tDev = t;   // 밝기·소리 판정에 쓸 말 — 글자 마디를 뗀 것
@@ -1314,7 +1314,7 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
       '하루 작업 순서 10단계와 기능 사전, 검수 용어·회화가 들어 있습니다.',
       '',
       '찾는 기능 이름을 같이 넣어 물으시면 그 자리를 바로 알려 드립니다.',
-      '  예) 카고플랜 어디서 뽑아 · 리퍼 온도 어디에 넣어 · 해치커버 어떻게 보고해',
+      '  예) 양하/선적 PLAN 어디서 뽑아 · 리퍼 온도 어디에 넣어 · 해치커버 어떻게 보고해',
     ].join('\n');
   }
 

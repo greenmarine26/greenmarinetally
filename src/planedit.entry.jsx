@@ -775,7 +775,7 @@ function App() {
         </label>
         {shipPicker}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          <button className="pe-btn p" onClick={() => setPlanOpen(true)}>🗺 카고플랜 보기</button>
+          <button className="pe-btn p" onClick={() => setPlanOpen(true)}>🗺 선적(STOWAGE)PLAN 보기</button>
           <button className="pe-btn" onClick={() => window.print()}>🖨 베이플랜 인쇄</button>
           <button className="pe-btn g" onClick={expBaplie}>선적 EDI</button>
           <button className="pe-btn" onClick={expJson} disabled={!changes.length}>JSON</button>

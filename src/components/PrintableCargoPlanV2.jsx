@@ -1399,7 +1399,16 @@ export default function PrintableCargoPlanV2({
   const title =
     mode === 'discharge'
       ? `${(effShipName || '').toUpperCase()} CARGO DISCHARGING PLAN`
-      : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
+      : `${(effShipName || '').toUpperCase()} STOWAGE INSTRUCTION`;   // 4.88-01: 카스피(CASP) 선적 출력물 머리와 같은 말(검수사 2026-11-12 «출력물은 영어로»)
+  //  4.88-01: 인쇄 창에서 PDF 로 저장할 때 파일 이름 — 배 약자_항차_카스피 이름(예 PCSZ_2634E_CARGO_DISCHARGING_PLAN). 인쇄가 끝나면 원래 제목으로 돌린다.
+  const printFileTitle = [String(voyageInfo?.code || voyageInfo?.vsl || '').toUpperCase(), String(effVoyNo || '').replace(/[^A-Za-z0-9]/g, ''), mode === 'discharge' ? 'CARGO_DISCHARGING_PLAN' : 'STOWAGE_INSTRUCTION'].filter(Boolean).join('_');
+  const printWithFileName = () => {
+    const prev = document.title;
+    document.title = printFileTitle;
+    const back = () => { document.title = prev; window.removeEventListener('afterprint', back); };
+    window.addEventListener('afterprint', back);
+    try { window.print(); } finally { setTimeout(back, 1500); }
+  };
 
   return createPortal(
     <div ref={pinchElRef} className="cpv2-overlay" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} >
@@ -1407,7 +1416,7 @@ export default function PrintableCargoPlanV2({
       {closeBtn}
       {wkDlg && (
         <WorkerPrintDialog me={wkMe} crew={wkCrewNow(voyageInfo)} onCancel={() => setWkDlg(false)}
-          onDone={({ names }) => { wkNamesRef.current = names; setWkMe(names[0] || ''); setWkDlg(false); setTimeout(() => { window.print(); wkNamesRef.current = []; }, 80); }} />
+          onDone={({ names }) => { wkNamesRef.current = names; setWkMe(names[0] || ''); setWkDlg(false); setTimeout(() => { printWithFileName(); wkNamesRef.current = []; }, 80); }} />
       )}
       <div
         className="cpv2-zoom-wrap"

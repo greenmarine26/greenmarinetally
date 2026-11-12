@@ -216,7 +216,7 @@ const FX = require('./fixtures/dup4_nsdc.json');
   const pcall = dom.window.__calls.find(c => c.fn === 'plan');
   if (!pcall || pcall.what !== 'cargo') fail('[플랜 배선] 작업창 «카고플랜 보여줘» 가 플랜을 안 연다(SingleSearch 에 onOpenPlan 이 안 닿는다): ' + JSON.stringify(dom.window.__calls));
   const pt = P().textContent || '';
-  if (!/카고플랜을 열었어요/.test(pt)) fail('[플랜 배선] «열었어요» 답이 없다: ' + pt.slice(0, 200));
+  if (!/(DISCHARGING\)|STOWAGE\))PLAN을 열었어요/.test(pt)) fail('[플랜 배선] «열었어요» 답이 없다: ' + pt.slice(0, 200));
   if ([...P().querySelectorAll('button')].some(b => /^⬇ 양하$/.test((b.textContent || '').trim()))) fail('[플랜 배선] 플랜 명령에 양하/선적 되묻기 단추가 떴다(검수사 «양하 선적 선택화면»)');
   if (/양하인가요, 선적인가요/.test(pt)) fail('[플랜 배선] 플랜 명령에 «양하인가요, 선적인가요» 가 나왔다');
   console.log(`✓ 끝4자리 중복 연막검사 통과 (0320: 완료 카드 FFAU 1개 · SEGU 통과 표시 · 완료 뒤 승격 0 · 대조군 ${solo.cn.slice(-4)} 큰 카드 · 9526 통과 조회 · 트윈 뒤 칸 차단 · 상세창 옆길 차단 · 선적 위치지정 통과짝 차단·평택짝 확인 · 리스트 전용 0877 카드 · 작업분끼리 겹침 7075 큰카드 0·자리 표시·완료 뒤 승격 0 · 오류 0 · 3.41-01 작업창 플랜 명령 배선)`);

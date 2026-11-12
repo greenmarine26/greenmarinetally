@@ -2243,7 +2243,7 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
         {stats.shiftCount > 0 && (
           <>
             <span className="text-dim-500">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 4.16~ 막대와 대수는 평택분만이고 시프팅은 이 줄에서 따로 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount}{stats.shiftState ? ` ${stats.shiftState}` : ''} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 4.16~ 막대와 대수는 평택분만이고 시프팅은 이 줄에서 따로 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). 양하/선적 PLAN의 파란 ◆.">쉬프팅 {stats.shiftCount}{stats.shiftState ? ` ${stats.shiftState}` : ''} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
           </>
         )}
         {stats.virtualFromList && (

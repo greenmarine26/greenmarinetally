@@ -192,8 +192,9 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         const vk = (sc && sc.key) || (lv && lv.voyageKey) || null;
         if (vk) {
           const md = cmd.mode || (lv && lv.mode) || 'discharge';
-          const what = cmd.what === 'cargo' ? '카고플랜' : (cmd.bay != null ? `${cmd.bay}번 베이플랜` : '베이플랜');
-          const a = `🗺 ${(voyages[vk] && voyages[vk].info && voyages[vk].info.vsl) || ''} ${md === 'loading' ? '선적' : '양하'} ${what}을 열었어요.`;
+          //  4.88-01: 카고플랜은 카스피 이름으로 답한다(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN) — 알아듣기는 옛 말 그대로(planCommand)
+          const what = cmd.what === 'cargo' ? (md === 'loading' ? '선적(STOWAGE)PLAN' : '양하(DISCHARGING)PLAN') : `${md === 'loading' ? '선적' : '양하'} ${cmd.bay != null ? `${cmd.bay}번 베이플랜` : '베이플랜'}`;
+          const a = `🗺 ${(voyages[vk] && voyages[vk].info && voyages[vk].info.vsl) || ''} ${what}을 열었어요.`;
           //  3.41-01: 말부터 하고 연다 — 플랜 화면이 올리는 다른 발화 뒤에 줄 서지 않게. 시트는 내린다(플랜 위에 남아 있었다).
           lastRef.current = a; setOut(a); try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
           onOpenPlan({ voyageKey: vk, mode: md, what: cmd.what, bay: cmd.bay });
@@ -201,7 +202,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           logQuerySettled('nls', t, { voyageKey: vk, via: 'mir' });
           return;
         }
-        const a = '어느 배의 플랜인지 못 찾았어요 😿 «KBTR 카고플랜» 처럼 배 이름을 붙여 주세요.';
+        const a = '어느 배의 플랜인지 못 찾았어요 😿 «KBTR 양하(DISCHARGING)PLAN» 처럼 배 이름을 붙여 주세요.';
         lastRef.current = a; setOut(a); { const _pc = shipPickChips(a, t, voyages); if (_pc.length) setFollow({ line: '배 이름이 생각 안 나시면 아래에서 골라 주세요.', chips: _pc, confirm: '' }); }   try { speak(a.replace(CLEAN_RE, ' '), { conversational: true }); } catch (e) { /* */ }
         return;
       }

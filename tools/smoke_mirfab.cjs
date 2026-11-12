@@ -86,7 +86,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   o = await ask('KBTR 카고플랜 보여줘');
   const pl = W.__calls.find((c) => c.fn === 'plan');
   if (!pl || pl.voyageKey !== 'KBTR_2606E' || pl.what !== 'cargo') fail('«KBTR 카고플랜 보여줘» 가 플랜 덮개를 안 연다: ' + JSON.stringify(W.__calls));
-  const iSpeak = W.__calls.findIndex((c) => c.fn === 'speak' && /카고플랜을 열었어요/.test(c.text)), iPlan = W.__calls.findIndex((c) => c.fn === 'plan');
+  const iSpeak = W.__calls.findIndex((c) => c.fn === 'speak' && /(양하\(DISCHARGING\)|선적\(STOWAGE\))PLAN을 열었어요/.test(c.text)   /* 4.88-01: 답은 카스피 이름 */), iPlan = W.__calls.findIndex((c) => c.fn === 'plan');
   if (iSpeak < 0 || iSpeak > iPlan) fail('플랜 명령은 «열었어요» 를 말한 뒤 덮개를 열어야 한다(발화가 화면 뒤에 줄 서지 않게): ' + JSON.stringify(W.__calls.map((c) => c.fn)));
   if (!W.__calls.some((c) => c.fn === 'cancel')) fail('묻기 시작에 쌓인 발화를 끊지(cancel) 않는다');
   if (W.__calls.slice(iPlan + 1).some((c) => c.fn === 'cancel')) fail('덮개를 연 뒤에 발화를 끊으면 방금 말한 «열었어요» 가 지워진다(감사 실측)');

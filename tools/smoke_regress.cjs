@@ -667,7 +667,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const paper = async (which) => {
       const R = domOpen(which);
       await sleep(1500);
-      const tile = [...R.d.querySelectorAll('button.print-tile')].find((b) => /카고플랜/.test(b.textContent));
+      const tile = [...R.d.querySelectorAll('button.print-tile')].find((b) => /\(DISCHARGING\)PLAN|\(STOWAGE\)PLAN/.test(b.textContent));   // 4.88-01: 타일 이름이 카스피 이름
       if (tile) tile.click(); else R.errs.push('카고플랜 단추를 못 찾음');
       await sleep(5000);
       const d = R.d;

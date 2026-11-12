@@ -400,7 +400,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       );
     }
     return (
-      <ErrorBoundary name="카고플랜" onClose={closeSub}>
+      <ErrorBoundary name="양하/선적 PLAN" onClose={closeSub}>
         <PrintableCargoPlanV2
           containers={printContainers}
           legendContainers={ptkAll}
@@ -454,7 +454,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               <span className="print-ico" style={{ width: 44, height: 44, fontSize: 24, background: 'linear-gradient(180deg, #f59e0b, #b45309)' }}>🖨️</span>
               <span className="min-w-0">
                 <span className="block leading-tight">검수 자료 출력</span>
-                <span className="block text-xs2 font-bold text-dim-300 leading-tight mt-0.5">양하·선적 × 검수 리스트 · 카고플랜 · 베이 상세 · VGM · 작업 보고서</span>
+                <span className="block text-xs2 font-bold text-dim-300 leading-tight mt-0.5">양하·선적 × 검수 리스트 · 양하/선적 PLAN · 베이 상세 · VGM · 작업 보고서</span>
               </span>
             </h2>
             <button onClick={onClose} className="p-2 rounded-pill border-2 border-ink-700 bg-ink-850 hover:bg-ink-750 shrink-0" aria-label="닫기">
@@ -523,7 +523,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               <button onClick={() => setPrintSub('cargo-v2')} className="print-tile">
                 <span className="print-ico" style={{ background: 'linear-gradient(180deg, #4f8ff7, #1d4ed8)' }}>📐</span>
                 <div className="flex-1 min-w-0">
-                  <div className="font-black text-dim-100">카고플랜</div>
+                  {/* 4.88-01: 카스피 이름 — 고른 쪽(양하·선적)대로. 폰 360px 에서 넘치지 않게 한글 위·영어 아래 두 줄 */}
+                  <div className="font-black text-dim-100 leading-tight">{mode === 'loading' ? '선적' : '양하'}<span className="block text-xs2 font-bold text-dim-300">{mode === 'loading' ? '(STOWAGE)PLAN' : '(DISCHARGING)PLAN'}</span></div>
                   <div className="text-xs2 text-dim-300 mt-0.5 leading-snug">
                     표준 도면 양식 그대로 · 베이별 단면 · 별첨(선사별·특수화물)
                   </div>
@@ -687,7 +688,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
 
         {/* 하단 안내 */}
         <div className="p-4 border-t-2 border-ink-700 text-xs text-dim-400 leading-relaxed">
-          출력을 누르면 미리보기가 뜹니다 — 검수 리스트{chiefView ? '·VGM·작업 보고서' : ''}는 새 창, 카고플랜·베이 상세는 이 화면 위. 미리보기에서 인쇄하거나 PDF로 저장하세요(단추가 없는 창은 Ctrl+P).<br />
+          출력을 누르면 미리보기가 뜹니다 — 검수 리스트{chiefView ? '·VGM·작업 보고서' : ''}는 새 창, 양하/선적 PLAN·베이 상세는 이 화면 위. 미리보기에서 인쇄하거나 PDF로 저장하세요(단추가 없는 창은 Ctrl+P).<br />
           💡 컬러 인쇄 권장 (특수화물 색상 구분)
         </div>
       </div>

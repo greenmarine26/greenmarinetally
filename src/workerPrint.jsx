@@ -51,7 +51,7 @@ export function WorkerPrintDialog({ me, crew, onDone, onCancel }) {
     <div className="cpv2-noprint" style={box} role="dialog" aria-label="작업자 이름" data-testid="worker-dialog">
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>같이 작업하는 분은 어느 분입니까?</div>
-        <div style={{ color: '#555', fontSize: 12, marginBottom: 10 }}>이름을 모르시면 입력하지 말고 그냥 <b>출력</b>을 눌러 주세요. 이름 자리가 비어 있는 카고플랜이 한 장 더 나옵니다. 3갱이면 셋째 분까지 적으면 세 장이 나옵니다.</div>
+        <div style={{ color: '#555', fontSize: 12, marginBottom: 10 }}>이름을 모르시면 입력하지 말고 그냥 <b>출력</b>을 눌러 주세요. 이름 자리가 비어 있는 양하/선적 PLAN이 한 장 더 나옵니다. 3갱이면 셋째 분까지 적으면 세 장이 나옵니다.</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
           <label style={{ minWidth: 28, color: '#555' }}>나</label>
           <input data-testid="wk-me" value={mine} onChange={(e) => setMine(e.target.value)} style={inp} placeholder="내 이름" />

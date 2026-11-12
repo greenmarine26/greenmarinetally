@@ -1270,8 +1270,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       const _pc = onOpenPlan ? parseViewCommand(query) : null;
       if (_pc) {
         const _md = _pc.mode || workFilter;
-        const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
-        return `🗺 ${voyage?.info?.vsl || ''} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+        const _what = _pc.what === 'cargo' ? (_md === 'loading' ? '선적(STOWAGE)PLAN' : '양하(DISCHARGING)PLAN') : `${_md === 'loading' ? '선적' : '양하'} ${_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜'}`;   // 4.88-01 카스피 이름
+        return `🗺 ${voyage?.info?.vsl || ''} ${_what}을 열었어요.`;
       }
     }
     /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOne` **한 벌**이다(검수사 «미르를 하나로»). 종전 이 자리의 200여 줄(경고문·연락처·

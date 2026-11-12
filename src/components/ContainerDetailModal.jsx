@@ -1427,7 +1427,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   POD 변경 {(_k.pod_orig || c.pod || '?')} → {_k.pod}{_k.mailAt ? ` · 선사 메일 ${_k.mailAt}` : ''}{_k.src === 'mail' ? ' · 수집기(메일)' : _k.by ? ` · ${_k.by}` : ''}
                 </div>
                 {_k.note && <div className="text-3xs text-yellow-100/70 mt-0.5 break-words">«{_k.note}»</div>}
-                <div className="text-3xs text-yellow-200/80 mt-0.5 leading-snug">예정입니다 — 평택 양하 대수는 자료(EDI·리스트)대로 셉니다. 양하 EDI·리스트 수정본이 오면 그 자료대로 바뀝니다. 이 컨 아래 평택 컨을 내리려면 들어냈다 다시 실어야 하면 카고플랜·베이뷰에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 시프팅으로 확정하면 파란 ◆ 로 바뀝니다.</div>
+                <div className="text-3xs text-yellow-200/80 mt-0.5 leading-snug">예정입니다 — 평택 양하 대수는 자료(EDI·리스트)대로 셉니다. 양하 EDI·리스트 수정본이 오면 그 자료대로 바뀝니다. 이 컨 아래 평택 컨을 내리려면 들어냈다 다시 실어야 하면 양하/선적 PLAN·베이뷰에 노란 ◆(시프팅 예보)로 보입니다. 플래너가 시프팅으로 확정하면 파란 ◆ 로 바뀝니다.</div>
                 {podCan && (
                   <button onClick={clearKeep} disabled={keepBusy} data-keep-clear="1"
                     className="mt-1 px-2 py-0.5 rounded bg-ink-800 border border-line text-3xs text-dim-300 disabled:opacity-50">{keepBusy ? '푸는 중…' : '지시 풀기'}</button>

@@ -20,7 +20,19 @@ export function parseViewCommand(query) {
   /* ★ 4.87-09 (검수사 2026-11-11 «스테이지 : 카고플랜 , 스토우플랜을 말함»)
        «스테이지»는 «플랜»과 같은 말이다 — 양하면 카고플랜, 선적이면 스토우플랜(= 선적 카고플랜). 한 벌로 여기서 바꿔 읽는다. */
   const _stage = /스테이지/.test(String(query || ''));   // 4.87-09 감사 — 스테이지는 남는 낱말이 없을 때만 «열어라»(«스테이지 몇 개 보여줘» 는 조회)
-  const t = String(query || '').trim().replace(/스테이지/g, '플랜').replace(/스토우\s*플([랜렌])/g, '선적 카고플$1');
+  /* ★ 4.88-01 (검수사 2026-11-12 «검수앱의 카고플랜 용어를 전부 없애고 공통용어를 사용하게» · «미르는 전부 알아 들어야 합니다 카고플랜 까지도»)
+       카스피 말(CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION)과 새 단추 이름(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN)을
+       옛 말(양하/선적 카고플랜)로 바꿔 읽는다 — 판정은 종전 한 벌 그대로. 양하플랜·선적플랜도 같은 말이다. */
+  const _q48801 = String(query || '')
+    .replace(/양하\s*\(\s*(?:CARGO\s*)?DISCHARG(?:ING|E)\s*\)\s*(?:PLAN|플[랜렌])/gi, '양하 카고플랜')
+    .replace(/선적\s*\(\s*STOWAGE\s*\)\s*(?:PLAN|플[랜렌])/gi, '선적 카고플랜')
+    .replace(/(?:CARGO\s*)?DISCHARGING\s*PLAN/gi, '양하 카고플랜')
+    .replace(/STOWAGE\s*(?:INSTRUCTION|PLAN)/gi, '선적 카고플랜')
+    .replace(/(?:카고\s*)?디스차(?:징|지)\s*플[랜렌]/g, '양하 카고플랜')
+    .replace(/스토우지\s*(?:플[랜렌]|인스트럭션)/g, '선적 카고플랜')
+    .replace(/(양하|선적)\s*플([랜렌])/g, '$1 카고플$2')
+    .replace(/(양하|선적)\s+\1/g, '$1');   // «양하 양하 카고플랜» 겹침 정리
+  const t = _q48801.trim().replace(/스테이지/g, '플랜').replace(/스토우\s*플([랜렌])/g, '선적 카고플$1');
   if (!t) return null;
   /* ★ 2.87-03 (검수사 2026-08-29 «MCSC LOADING 카고플랜 보여줘 미르가 영어를 몰라요»)
        현장 서류는 전부 영어다 — LOADING PLAN · CARGO PLAN · DISCHARGE. 종이에 적힌 말로 물었는데
@@ -49,7 +61,8 @@ export function parseViewCommand(query) {
   const isCmd = _stage ? _stageOpen : bareCmd
     || /보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)
     || /\b(SHOW|OPEN|VIEW|DISPLAY)\b/.test(T)
-    || /\bPLANS?\b/.test(T);
+    || /\bPLANS?\b/.test(T)
+    || /\bPLANS?\b/i.test(String(query || '').replace(/[()]/g, ' '));   // 4.88-01 감사 — 영어 PLAN(«선적(STOWAGE)PLAN 출력해줘»·«STOWAGE PLAN 5번 베이»)은 바꿔 읽기 전 글자로도 «열어라»(2.87-03)
   if (!isCmd) return null;
 
   const mode = (/선적|싣|적하|로딩/.test(t) || /\b(LOADING|LOAD|LDG|LOA)\b/.test(T)) ? 'loading'

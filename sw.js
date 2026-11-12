@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.88';
-const NOTE = '4.88 X-RAY 실번호는 중복과 앞 세 자리가 다른 것만 알려 드립니다. 야간에 뽑는 출력물 날짜가 한국 날짜로 찍힙니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.88-01';
+const NOTE = '4.88-01 카고플랜을 공통 이름으로 바꿨습니다. 양하(DISCHARGING)PLAN 과 선적(STOWAGE)PLAN 입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

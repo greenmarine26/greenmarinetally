@@ -745,7 +745,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         {onOpenPrint && (
           <button onClick={() => onOpenPrint()}
             className="pop-btn pop-amber" style={{ minHeight: 36, padding: '0 12px', borderRadius: 14, fontSize: 12, boxShadow: '0 3px 0 rgb(0 0 0 / .34)' }}
-            title="출력 센터 — 검수 리스트 · 카고플랜 · 베이 상세 · VGM · 작업 보고서">
+            title="출력 센터 — 검수 리스트 · 양하/선적 PLAN · 베이 상세 · VGM · 작업 보고서">
             🖨️ 출력
           </button>
         )}

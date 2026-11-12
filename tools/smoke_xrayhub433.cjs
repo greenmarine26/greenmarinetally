@@ -27,9 +27,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const click = (el) => el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
 
   ok(/검수 자료 출력/.test(dis.textContent) && /검수 자료 출력/.test(lod.textContent), '양하·선적 두 허브가 다 열린다');
-  ok(has(dis, '검수 리스트') && has(dis, '카고플랜') && has(dis, '베이 상세'), '양하 허브에 검수 리스트·카고플랜·베이 상세가 있다');
+  ok(has(dis, '검수 리스트') && has(dis, ')PLAN') && has(dis, '베이 상세'), '양하 허브에 검수 리스트·카고플랜·베이 상세가 있다');
   ok(has(dis, 'X-RAY 리스트'), '양하 허브에는 X-RAY 리스트가 있다');
-  ok(has(lod, '검수 리스트') && has(lod, '카고플랜') && has(lod, '베이 상세'), '선적 허브에도 검수 리스트·카고플랜·베이 상세가 있다');
+  ok(has(lod, '검수 리스트') && has(lod, ')PLAN') && has(lod, '베이 상세'), '선적 허브에도 검수 리스트·카고플랜·베이 상세가 있다');
   ok(!has(lod, 'X-RAY 리스트'), '선적 허브에는 X-RAY 리스트가 없다');
   //  양하 허브에서 선적으로 바꾸면 사라지고, 다시 양하로 오면 나온다
   const seg = (r, s) => btns(r).find((b) => (b.textContent || '').includes(s) && /\(\d+\)/.test(b.textContent));

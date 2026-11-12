@@ -30,8 +30,8 @@ const USAGE_CATS = [
   { id: 'bay',     label: '베이 그림',   icon: LayoutGrid,    accent: 'lime',    desc: '보기 · 자리 옮기기 · 기호 읽기' },
   { id: 'report',  label: '보고 · 사진', icon: Camera,        accent: 'pink',    desc: '작업 보고 · 해치 · 사진 · 마감 점검' },
   { id: 'data',    label: '자료 업로드', icon: Upload,        accent: 'orange',  desc: 'EDI → 리스트 → X-RAY 순서' },
-  { id: 'print',   label: '출력',        icon: Printer,       accent: 'blue',    desc: '검수 리스트 · 카고플랜 · 워킹 리포트' },
-  { id: 'cone',    label: '콘앱',        icon: Truck,         accent: 'cyan',    desc: '콘 계산 · 카고플랜 · 베이플랜 (다른 앱)' },
+  { id: 'print',   label: '출력',        icon: Printer,       accent: 'blue',    desc: '검수 리스트 · 양하/선적 PLAN · 워킹 리포트' },
+  { id: 'cone',    label: '콘앱',        icon: Truck,         accent: 'cyan',    desc: '콘 계산 · 양하/선적 PLAN · 베이플랜 (다른 앱)' },
   { id: 'trouble', label: '안 될 때',    icon: Wrench,        accent: 'red',     desc: '막히는 조건과 푸는 법' },
 ];
 

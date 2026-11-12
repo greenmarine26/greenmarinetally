@@ -191,12 +191,12 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       const _pc = onOpenPlan ? parseViewCommand(Q) : null;   // 여는 손(onOpenPlan)이 없는 자리에선 «열었어요»라 말하지 않는다
       if (_pc) {
         const _md = _pc.mode || 'discharge';
-        const _what = _pc.what === 'cargo' ? '카고플랜' : (_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜');
+        const _what = _pc.what === 'cargo' ? (_md === 'loading' ? '선적(STOWAGE)PLAN' : '양하(DISCHARGING)PLAN') : `${_md === 'loading' ? '선적' : '양하'} ${_pc.bay != null ? `${_pc.bay}번 베이플랜` : '베이플랜'}`;   // 4.88-01 카스피 이름
         if (shipCtx && shipCtx.key) {
           const _voy = (_md === 'loading' ? shipCtx.info?.voy_l : shipCtx.info?.voy_d) || shipCtx.info?.voy || '';
-          return `🗺 ${shipCtx.info?.vsl || ''} ${_voy} ${_md === 'loading' ? '선적' : '양하'} ${_what}을 열었어요.`;
+          return `🗺 ${shipCtx.info?.vsl || ''} ${_voy} ${_what}을 열었어요.`;
         }
-        return `어느 배의 ${_what}인지 못 찾았어요 😿 «MCSC 카고플랜» 처럼 배 이름을 붙여 주세요.`;
+        return `어느 배의 ${_what}인지 못 찾았어요 😿 «MCSC 양하(DISCHARGING)PLAN» 처럼 배 이름을 붙여 주세요.`;
       }
     }
     /* ★ 3.41 — 답 고르기는 `mirAnswer.answerOneRaw` **한 벌**(검수사 «미르를 하나로»). 종전 이 자리의 450여 줄(EDI 차이·인사·연락처·
