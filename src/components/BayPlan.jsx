@@ -668,8 +668,9 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           ⚓ 전항 양하 예정 {preGoneCns.size}대를 화면에서 숨겼습니다 — {preGoneInfo?.origin || '출항지'} 출항본의 {(preGoneInfo?.list || []).join('·')} 양하분(평택 도착 전 하선). 인쇄물에는 그대로 나옵니다.
         </div>
       )}
+      {/* 4.87-10: 이동·맞교환 안내 띠 sticky top-0 → 도구줄과 같은 식(머리띠 + 공지 띠 + 독 + 4px) — top-0 이면 머리띠 뒤로 숨었다 */}
       {pendingMove && (
-        <div className="bg-amber-500 text-ink-950 rounded-pill p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-amber-300">
+        <div className="bg-amber-500 text-ink-950 rounded-pill p-3 flex items-center gap-3 sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px)_+_var(--dock-h,68px)_+_4px)] z-30 shadow-lg border-2 border-amber-300">
           <span className="text-xl">📦</span>
           <div className="flex-1">
             <div className="text-sm font-black mono">{pendingMove.cn}</div>
@@ -687,7 +688,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
       {/* TallyOne 2.89: 컨 맞교환 — 상대 고르기 배너. 같은 출발지·도착지·사이즈·풀/엠티만 허용(게이트는 utils.swapFixGate 한 벌) */}
       {pendingSwap && (
-        <div className="bg-violet-600 text-white rounded-pill p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-violet-300">
+        <div className="bg-violet-600 text-white rounded-pill p-3 flex items-center gap-3 sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px)_+_var(--dock-h,68px)_+_4px)] z-30 shadow-lg border-2 border-violet-300">
           <span className="text-xl">⇄</span>
           <div className="flex-1">
             <div className="text-sm font-black mono">{pendingSwap.cn}</div>
@@ -707,7 +708,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           이 부분은 고정되어야 한다"). sticky 는 걸려 있었지만 `top-0` 이라 앱 헤더(52px)와
           항차 탭 네비(`sticky top-[52px]`, 높이 ≈38px) 뒤로 숨어 안 보였다. 그 아래로 내린다. */}
       {/* 4.23 2차: 고정 124px(폰)·118px(컴) → 머리띠 실제 높이 + 독 높이 + 4px — 글자 «크게»에서 머리띠·독이 커져 독 밑에 5px 깔리던 것 */}
-      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[calc(var(--hdr-h,52px)_+_var(--dock-h,68px)_+_4px)] z-10 shadow-lg shadow-slate-950/60">
+      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px)_+_var(--dock-h,68px)_+_4px)] z-10 shadow-lg shadow-slate-950/60">
         {/* V8.25-06: PC(터치없음)만 +/− 버튼 표시. 폰은 핀치, PC는 버튼+Ctrl휠 */}
         {!IS_TOUCH_DEVICE && (
           <div className="flex items-center bg-ink-800 rounded-pill overflow-hidden">

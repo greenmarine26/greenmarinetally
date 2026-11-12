@@ -227,11 +227,14 @@ fi
 # 1.61-02: 파일이 있어도 **번들이 찾는 경로**가 틀리면 소용없다(그래서 한 번 놓쳤다).
 #   base:'./' 라 `workerSrc="./pdf.worker.min.mjs"` 가 박히면 브라우저가 assets/ 안을 찾아 404 다.
 #   문서 기준 절대 URL(new URL(...,document.baseURI))이 박혔는지 번들에서 직접 본다.
-_WJS=$(ls assets/index-*.js 2>/dev/null | head -1)
-if [ -n "$_WJS" ] && grep -q 'workerSrc="\./pdf\.worker\.min\.mjs"' "$_WJS"; then
-  echo "⛔ 번들에 상대 경로 workerSrc 가 박혔습니다 — assets/ 안을 찾아 404 가 납니다(2026-08-13 사고)."
-  exit 1
-fi
+#  4.87-10: PDF 해석기가 본체에서 떨어진 동적 청크가 됐다 — 본체 한 파일이 아니라 assets/*.js 전부를 본다.
+for _WJS in assets/*.js; do
+  [ -f "$_WJS" ] || continue
+  if grep -q 'workerSrc="\./pdf\.worker\.min\.mjs"' "$_WJS"; then
+    echo "⛔ 번들($_WJS)에 상대 경로 workerSrc 가 박혔습니다 — assets/ 안을 찾아 404 가 납니다(2026-08-13 사고)."
+    exit 1
+  fi
+done
 
 echo "[6/6] 검증..."
 JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)
@@ -265,6 +268,17 @@ if [ ! -f "$REFCSS" ]; then
   exit 1
 fi
 echo "✓ 루트 참조 파일 존재 확인: $REFJS, $REFCSS"
+#  ★ 4.87-10: 청크 고정(vite manualChunks) — index.html 이 본체 말고도 vendor·baydict 를 modulepreload 로 부른다.
+#    본체·CSS 하나만 확인하면 vendor 가 빠져도 통과한다 — index.html 이 부르는 assets 전부가 실재하는지 본다.
+_NREF=0
+for _f in $(grep -oE '<(script|link)[^>]*(src|href)="\./assets/[A-Za-z0-9_.-]+\.(js|css)"' index.html | grep -oE 'assets/[A-Za-z0-9_.-]+\.(js|css)'); do
+  [ -f "$_f" ] || { echo "✗ index.html 이 부르는 $_f 가 실제 파일 없음"; exit 1; }
+  _NREF=$((_NREF+1))
+done
+for _c in vendor baydict; do
+  grep -qE "\./assets/$_c-[A-Za-z0-9_-]+\.js" index.html || { echo "✗ index.html 이 $_c 청크를 안 부른다 — vite.config.js manualChunks 확인"; exit 1; }
+done
+echo "✓ index.html 이 부르는 assets ${_NREF}개 전부 실재 (본체·vendor·baydict·css)"
 
 # V9.23-06: 렌더 연막검사 — 실제로 한 번 그려 본다.
 #   빌드 성공·번들 grep 통과에도 앱이 죽은 사고(hidden→issues TDZ)를 겪었다.
@@ -1685,6 +1699,8 @@ fi
     #  4.87-05: 선적 엠티 가상 자리 트윈 — 실 ATPR 2651W 9·11번 베이 자료로 짝 없는 엠티끼리 묶이는지
     node tools/smoke_twinvirtual48705.cjs "$(pwd)" || { echo "✗ 4.87-05(가상 자리 트윈) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_boot4822.cjs "$(pwd)" || { echo "✗ 4.82-02(부팅 대책) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.87-10: 업데이트 미리받기(sw 설치)·청크 고정(vendor·baydict·PDF 동적)·토스트 위로·아이폰 안전 영역·베이 안내 띠 자리·공지 띠 높이(--bc-h)
+    node tools/smoke_tidy48710.cjs "$(pwd)" || { echo "✗ 4.87-10(미리받기·청크 고정·화면 가림) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_hold481.cjs "$(pwd)" || { echo "✗ 4.81-01(일반 자동 가이드 홀드 해치 규칙) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_fix480_pinch.cjs "$(pwd)" || { echo "✗ 4.80(핀치 안정화) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.79: 주간조/야간조 선택 · 근무시간 밖 조회만 · 연태 OBWH·일조 RZOR 예외 · 관리자 예외 · 옛 로그인 한 번 묻기 · 같은 호기 주간·야간 각 1인(실소스 번들 — firebase 만 메모리 스텁)

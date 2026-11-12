@@ -211,14 +211,7 @@ export async function fbUpdateVoyageInfo(voyageKey, patch) {
 //   ⛔ info 는 PATCH 원칙이다 — 통째 교체 금지(수집기가 채운 필드가 증발한다).
 //   값이 없으면 4.26-03 부터 **전체 시퀀스**로 본다(fbReassignContainerPosition — 검수사 2026-10-14 «기본은 전체 시퀀스로 갑니다»).
 //   읽기는 따로 두지 않는다 — 화면은 이미 항차 구독으로 `info` 를 통째로 받는다.
-export async function fbSetSeqFull(voyageKey, v, by) {
-  if (!voyageKey) return;
-  await update(ref(db, `voyages/${voyageKey}/info`), {
-    seqFull: !!v,
-    seqFullAt: Date.now(),
-    seqFullBy: by || '',
-  });
-}
+//  4.87-10: 쓰기 함수 fbSetSeqFull 삭제 — 저장소 전체 호출 0건(1.55 부터 seqMode 로 쓴다). 읽기 쪽 info.seqFull 하위호환·needConfirm:'seqFull' 분기는 그대로 산다.
 
 // ── TallyOne 1.55: **작업 모드는 두 갈래가 아니라 세 갈래다.** ──────────────
 //   1.54 의 `seqFull` 은 참/거짓 둘뿐이라 *"풀만 시퀀스"* 와 *"풀·엠티 둘 다 시퀀스"* 를 구분 못 했다.

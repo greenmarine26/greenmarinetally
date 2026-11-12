@@ -301,14 +301,14 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       <button type="button" aria-label="미르에게 묻기" data-mood={mood.key} title={mood.key !== 'basic' ? `지금 ${mood.label}${mood.why ? ' — ' + mood.why : ''}` : ''}
         onClick={() => { setOpen((o) => { if (!o) noteMirOpen(); return !o; }); }}
         className={`fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95 overflow-visible p-0 mir-mood mir-mood-${mood.key}`}
-        style={{ bottom: 76, background: '#f7f8fa' }}>
+        style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))', background: '#f7f8fa' }}>{/* 4.87-10: TOP(아래 20 + 높이 48 = 68) 과 16px 띄움(종전 76 — 8px) + 아이폰 아래 막대 */}
         <MirFace mood={busy ? 'think' : mood.key} size={44} style={{ borderRadius: '50%', overflow: 'hidden' }} />   {/* 4.07: 실사 얼굴 — 답을 만드는 중에는 턱 괴고 생각하는 얼굴 */}
         {mood.badge && <span className="mir-mood-badge" aria-hidden="true">{mood.badge}</span>}
       </button>
       {open && (
         <div className="fixed left-0 right-0 bottom-0 z-[10002]" data-mir-sheet="1">
           <MirHero mood={busy ? 'think' : mood.key} seed={heroSeed} />
-          <div className="bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <div className="bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: pb-4 + 아이폰 아래 막대 — 입력줄·답이 막대에 가리지 않게 */}
           <div className="flex items-center gap-2 mb-2">
             <MirFace mood={busy ? 'think' : mood.key} size={32} className="flex-none" style={{ borderRadius: '50%', overflow: 'hidden' }} />
             <div className="flex-1 min-w-0">

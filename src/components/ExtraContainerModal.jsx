@@ -144,7 +144,7 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
           </div>
         </div>
 
-        <div className="p-3 border-t border-line bg-ink-950 sticky bottom-0">
+        <div className="p-3 border-t border-line bg-ink-950 sticky bottom-0" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: 아이폰 아래 막대에 단추가 가리지 않게(p-3 에 더한다) */}
           <button onClick={handleSave} disabled={!canSave}
             className={`w-full py-3 rounded-btn font-black text-sm ${
               canSave ? 'bg-amber-500 text-ink-950 hover:bg-amber-400' : 'bg-ink-800 text-dim-500 cursor-not-allowed'

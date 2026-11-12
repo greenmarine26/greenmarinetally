@@ -178,11 +178,20 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
     }, 4000);
   };
 
+  //  4.87-10: 깜빡임은 배너가 뜬 처음 5초만 — 계속 깜빡이면 글을 읽기 어렵다.
+  const [pulse, setPulse] = useState(true);
+  useEffect(() => {
+    if (!waiting || hidden) return undefined;
+    setPulse(true);
+    const t = setTimeout(() => setPulse(false), 5000);
+    return () => clearTimeout(t);
+  }, [waiting, hidden]);
+
   if (!waiting || hidden) return null;
 
   return (
-    <div className="fixed top-12 left-2 right-2 z-50 max-w-md mx-auto">
-      <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 border-2 border-emerald-400 rounded-pill shadow-card p-3 flex items-center gap-3 animate-pulse">
+    <div className="fixed left-2 right-2 z-50 max-w-md mx-auto" style={{ top: 'var(--hdr-h, 48px)' }} data-update-banner="1">{/* 4.87-10: top-12(48px 고정) → 머리띠 실제 높이(아이폰 윗막대 포함) */}
+      <div className={`bg-gradient-to-r from-emerald-700 to-emerald-600 border-2 border-emerald-400 rounded-pill shadow-card p-3 flex items-center gap-3${pulse ? ' animate-pulse' : ''}`}>
         <div className="bg-emerald-900 p-2 rounded-pill flex-shrink-0">
           <Download className="w-5 h-5 text-emerald-200"/>
         </div>
@@ -194,7 +203,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
           className="bg-emerald-100 text-emerald-900 px-3 py-2 rounded font-black text-xs flex items-center gap-1 active:scale-95 transition">
           <RefreshCw className="w-3.5 h-3.5"/>업데이트
         </button>
-        <button onClick={() => { dismissedRef.current = waiting; setHidden(true); }} className="text-emerald-200 hover:text-white p-1">
+        <button onClick={() => { dismissedRef.current = waiting; setHidden(true); }} aria-label="닫기" className="text-emerald-200 hover:text-white min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center flex-shrink-0">{/* 4.87-10: 닫기 터치 영역 44×44 */}
           <X className="w-4 h-4"/>
         </button>
       </div>

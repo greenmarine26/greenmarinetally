@@ -211,8 +211,8 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     const assignEquip = (no) => { const n = `${no}호기`; if (!no || equip === n || heldBy(n)) return; setEquipNumber(n); setEquip(n); window.dispatchEvent(new CustomEvent('equipChanged', { detail: n })); };
     const needEquip = !equip && cranes.length >= 2;   // 실적 0 이면 종전 안내(fol.why)대로 — 누를 호기 단추가 없다.
     return (
-      <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 overflow-auto" data-bayview="pick">
-        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line">
+      <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 overflow-auto" data-bayview="pick" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>{/* 4.87-10: 아이폰 아래 막대 — 윗막대는 붙박이 머리줄이 받는다 */}
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}>{/* 4.87-10: 아이폰 윗막대(py-2 = 0.5rem 에 더한다) */}
           <button onClick={onClose} className="px-2 py-1 rounded-pill bg-ink-800 border border-line text-dim-200 text-xs font-bold">✕ 기존 방식으로</button>
           <span className="text-sm font-black text-violet-200">베이뷰 작업 · {modeLabel}</span>
           <span className="ml-auto text-xxs text-dim-400">{info.vsl || ''} {mode === 'loading' ? (info.voy_l || '') : (info.voy_d || '')}</span>
@@ -263,7 +263,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
 
   const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow, bayPick: bayMode ? bayPick : null, onCardCns, mini: !!bayMode };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
   return (
-    <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" data-bayview-wide={isWide ? '1' : '0'} style={{ height: '100dvh' }}>
+    <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" data-bayview-wide={isWide ? '1' : '0'} style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>{/* 4.87-10: 아이폰 위·아래 막대 */}
       <div className="h-10 shrink-0 flex items-center gap-1.5 px-2 bg-ink-900 border-b border-line overflow-x-auto whitespace-nowrap">
         <button onClick={() => { if (bayMode) releaseBayMode(); setStep('pick'); }} className={chip('bg-ink-800 border border-line text-dim-200')} title="선택 화면으로">◀</button>
         <span className={chip(mode === 'loading' ? 'bg-sky-800 text-sky-100' : 'bg-rose-800 text-rose-100')}>{modeLabel}</span>

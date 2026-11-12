@@ -816,13 +816,14 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
                 className="py-3 rounded-pill bg-ink-800 hover:bg-amber-800 border border-line text-dim-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
                 <div className="text-2xs text-dim-300">
-                  {g.count > 0 ? `빈 칸 ${g.count} · ` : ''}남은 컨 {g.contLeft || 0}대
+                  {/* 4.87-10: 숫자와 단위가 줄에서 갈라지지 않게 — 구절 단위로만 줄을 바꾼다 */}
+                  {g.count > 0 ? <><span className="whitespace-nowrap">빈 칸 {g.count}</span>{' · '}</> : null}<span className="whitespace-nowrap">남은 컨 {g.contLeft || 0}대</span>
                 </div>
                 {/* 2.88-01: 계획 칸이 없는 베이(시프팅으로 다시 싣는 자리 등)는 «남은 컨» 축으로 보여준다 */}
                 <div className="flex items-center justify-center gap-1.5 mt-0.5 text-2xs font-bold">
-                  {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && <span className="text-sky-300">데크 {g.count > 0 ? g.deck : g.contDeck}</span>}
+                  {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && <span className="text-sky-300 whitespace-nowrap">데크 {g.count > 0 ? g.deck : g.contDeck}</span>}
                   {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && (g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-dim-500">·</span>}
-                  {(g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-amber-300">홀드 {g.count > 0 ? g.hold : g.contHold}</span>}
+                  {(g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-amber-300 whitespace-nowrap">홀드 {g.count > 0 ? g.hold : g.contHold}</span>}
                 </div>
                 {g.count === 0 && <div className="text-2xs text-amber-400 mt-0.5">계획 칸 없음 — 실체 자리로 배치</div>}
               </button>

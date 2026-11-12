@@ -219,7 +219,7 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
         </div>
 
         {/* 하단 버튼 */}
-        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3 flex gap-2">
+        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3 flex gap-2" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: 아이폰 아래 막대에 단추가 가리지 않게(p-3 에 더한다) */}
           {hasExisting && !isReplacing && (
             <button onClick={handleDelete} disabled={saving}
               className="px-3 py-3 bg-red-900 hover:bg-red-800 text-red-100 rounded-pill font-bold flex items-center gap-1 disabled:opacity-50">

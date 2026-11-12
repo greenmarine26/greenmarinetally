@@ -1998,12 +1998,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <div className="font-bold text-base">B{groupLbl(g.center, g)}</div>
                 {/* 1.95: 빈 칸(수동 기준·정본)을 앞에, 컨 머릿수를 뒤에 — 계산은 SearchPanel manualGroups 한 벌 */}
                 <div className="text-2xs text-dim-300">
-                  {(() => { const s = slotGroups && slotGroups.find(x => x.center === g.center); return s ? `빈 칸 ${s.count} · ` : ''; })()}남은 컨 {g.count}대
+                  {/* 4.87-10: 숫자와 단위가 줄에서 갈라지지 않게(«남은 컨 18» / «대») — 구절 단위로만 줄을 바꾼다 */}
+                  {(() => { const s = slotGroups && slotGroups.find(x => x.center === g.center); return s ? <><span className="whitespace-nowrap">빈 칸 {s.count}</span>{' · '}</> : null; })()}<span className="whitespace-nowrap">남은 컨 {g.count}대</span>
                 </div>
                 <div className="flex items-center justify-center gap-1.5 mt-0.5 text-2xs font-bold">
-                  {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
+                  {g.deck > 0 && <span className="text-sky-300 whitespace-nowrap">데크 {g.deck}</span>}
                   {g.deck > 0 && g.hold > 0 && <span className="text-dim-500">·</span>}
-                  {g.hold > 0 && <span className="text-amber-300">홀드 {g.hold}</span>}
+                  {g.hold > 0 && <span className="text-amber-300 whitespace-nowrap">홀드 {g.hold}</span>}
                 </div>
               </button>
               {/* ★ 4.42 «23번 / (24)25번» — 이 장을 베이사전 쪽으로 나눠 바로 고른다(그 베이 컨이 한 대씩 먼저) */}

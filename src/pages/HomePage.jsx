@@ -7,6 +7,7 @@ import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { mfnNote, mfnInPtkOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
+import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
@@ -105,10 +106,7 @@ async function shrinkToBase64(file) {
   }
 }
 
-const _voyCore = (x) => {
-  const n = String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
-  return n.replace(/[EWNS]+$/, '').replace(/^0+/, '') || n;
-};
+//  4.87-10: 지역 _voyCore 삭제 — utils voyCore 와 식이 글자 그대로 같았다(아래 import 한 벌을 쓴다).
 
 // V9.57: 죽은 prop onOpenGlobalSearch 제거 — 이 컴포넌트 안에서 쓰는 곳이 없었다(App쪽 전달부 정리는 판2).
 // TallyOne 1.0 (K5): 맛집(onOpenFood)·건강점검(onOpenHealth) 개별 진입 → 보조기능(onOpenAux, #/aux) 하나로 교체
@@ -1118,7 +1116,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         //   순서 — ① 항차번호 정확·핵심 일치 ② 선박코드 일치 ③ 선박코드 + planDate 날짜 일치.
         //   ③은 같은 배가 여러 항차로 떠 있을 때 그날 것을 고르기 위한 것이다.
         const match = fc ? (voyagesWithPier.find(v =>
-          vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => x && _voyCore(x) === _voyCore(vv)))
+          vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => x && voyCore(x) === voyCore(vv)))
           || (fc.vsl ? (
                // 같은 배가 둘 이상이면 예보 일자와 작업일이 같은 것을 먼저 본다
                (fc.date ? voyagesWithPier.find(v =>

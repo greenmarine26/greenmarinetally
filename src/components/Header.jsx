@@ -202,7 +202,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   }, []);
 
   return (
-    <header ref={hdrRef} className="bg-ink-900 border-b border-line sticky top-0 z-40" data-app-header="1">
+    <header ref={hdrRef} className="bg-ink-900 border-b border-line sticky top-0 z-40" data-app-header="1" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>{/* 4.87-10: 아이폰 윗막대(viewport-fit=cover) 만큼 내린다 — 위 --hdr-h 측정이 이 여백까지 잰다 */}
       <div className="max-w-6xl mx-auto px-2 py-1.5 sm:px-3 sm:py-2 flex items-center gap-1 min-[400px]:gap-1.5 sm:gap-2" data-hdr-row="1">
         {/* 2.29-01: 로고를 **왼쪽 큰 자리**로 올린다 — 검수사 «너무 작아서 안보여요»
             → «로고를 홈화면 버튼으로 사용해주셔도 됩니다»(승인).

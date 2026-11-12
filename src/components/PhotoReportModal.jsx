@@ -374,7 +374,7 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3">
+        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: 아이폰 아래 막대에 단추가 가리지 않게(p-3 에 더한다) */}
           {/* 검증 상태 표시 */}
           {(() => {
             const missing = [];

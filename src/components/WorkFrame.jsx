@@ -49,7 +49,7 @@ export default function WorkFrame({ bar, top, action, bottom, onBack, backLabel 
     return () => window.removeEventListener('popstate', h);
   }, [back]);
   return (
-    <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" style={{ height: '100dvh', margin: 0 }} data-workframe={name || '1'}>{/* margin 0 — 부모의 space-y 가 고정 틀을 12px 밀어 내렸다(실측) */}
+    <div className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" style={{ height: '100dvh', margin: 0, paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} data-workframe={name || '1'}>{/* 4.87-10: 아이폰 위·아래 막대만큼 안쪽으로 */}{/* margin 0 — 부모의 space-y 가 고정 틀을 12px 밀어 내렸다(실측) */}
       <div className="h-10 shrink-0 flex items-center gap-1.5 px-2 bg-ink-900 border-b border-line whitespace-nowrap" data-wf-bar="1">
         <div className="min-w-0 flex-1 flex items-center gap-1.5 overflow-hidden">{bar}</div>{' '}
         <button onClick={back} className="shrink-0 px-2.5 py-1 rounded-pill text-xs font-black bg-ink-800 border border-line text-dim-100" data-wf-back="1">{backLabel}</button>

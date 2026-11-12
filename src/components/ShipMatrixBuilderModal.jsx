@@ -22,7 +22,7 @@ import {
   augmentMatrixFromDef,
 } from '../shipMatrixBuilder.js';
 import { findSimilarShips, verifyMatrixFit, detectBlockedCells } from '../shipMatchFinder.js';
-import { parsePdfStowage } from '../pdfBayParser.js';
+//  4.87-10: pdfBayParser(pdfjs-dist)는 PDF 를 올릴 때만 동적 import — 첫 화면 본체에서 뺀다(handlePdfUpload).
 import { parseDefSections } from '../defSectionParser.js';
 import { addToUserBayDict, lookupUserBayDict, loadUserBayDict, removeFromUserBayDict } from '../data/userBayDict.js';
 import {
@@ -259,6 +259,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     if (!file) return;
     setPdfStatus('parsing'); setPdfError('');
     try {
+      const { parsePdfStowage } = await import('../pdfBayParser.js');   // 4.87-10: 누를 때만 받는다(실패는 아래 catch 가 화면에 알린다)
       const result = await parsePdfStowage(file);
       if (result.shipName && !shipMeta.name) {
         setShipMeta(m => ({ ...m, name: result.shipName }));

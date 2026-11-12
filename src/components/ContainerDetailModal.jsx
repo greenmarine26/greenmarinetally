@@ -1699,7 +1699,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         )}
 
         {/* 액션 */}
-        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3 flex gap-2">
+        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3 flex gap-2" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: 아이폰 아래 막대에 단추가 가리지 않게(p-3 에 더한다) */}
           {/*  3.53: 통과화물에는 X-RAY 추가를 안 보인다. 종전엔 `_mode:'transit'` 컨이 빈 섹션을 봐서
                이 단추가 아예 안 떴는데, `cMode` 를 바로잡자 진짜 통과화물에도 보이게 됐다(재감사 지적 경5).
                누르면 통과화물이 `xrayList` 에 들어간다 — 되돌릴 수 있지만 애초에 안 보이는 것이 맞다. */}

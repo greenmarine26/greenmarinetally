@@ -61,6 +61,7 @@ import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTe
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
+import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
@@ -1760,7 +1761,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               업로드 탭은 **올리기만**, 베이 탭 도구줄의 「출력」 단추도 같은 문을 연다(경로가 하나라 종이가 갈리지 않는다).
             · 업로드는 더보기에서 꺼냈다 — 통계·결과·X-RAY 만 «더보기 ⋯» 에 남는다.
           ⚠ tab state·점프 경로(jumpTo 8곳)는 불변 — 표시만 바뀌었다. 키: list·search·bay|lolo·data·stats·report·xray. */}
-      <nav className="hud-dock mb-3 sticky top-[var(--hdr-h,52px)] z-20" role="tablist" aria-label="항차 메뉴">{/* 4.23 2차: 머리띠 실제 높이(--hdr-h, Header 가 잰다 — 보통 53 · 크게 57 · 컴 61) 바로 밑 */}
+      <nav className="hud-dock mb-3 sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px))] z-20" role="tablist" aria-label="항차 메뉴">{/* 4.87-10: 수석 공지 띠가 떠 있으면 그 높이(--bc-h, BroadcastMarquee 가 잰다)만큼 더 내린다 */}{/* 4.23 2차: 머리띠 실제 높이(--hdr-h, Header 가 잰다 — 보통 53 · 크게 57 · 컴 61) 바로 밑 */}
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', e: '📋' },
           { k: 'search', t: '작업 시작', e: '🚀' },
@@ -2431,8 +2432,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             )}
             {/* M5.83: 매칭 진단 정보 (작은 글씨로 카드 아래) */}
             <div className="text-2xs text-dim-400 mt-1 font-mono flex gap-3 flex-wrap">
-              <span>매칭: <span className="text-cyan-400">{matchedBy}</span></span>
-              <span>키: <span className="text-amber-400">{matchedKey || '?'}</span></span>
+              {/* 4.87-10: «매칭 방식 · 키» 는 개발자용 진단이다 — 관리자(소유자·숨은 시험 계정)에게만. 선박명·저장 시각·옛 데이터 삭제는 종전대로 모두에게 */}
+              {(() => { try { return isAdminUser(inspector); } catch (e) { console.warn('[PORT-MIS 칸] 관리자 판정 실패 — 진단 줄을 숨긴다', e); return false; } })() && (<>
+              <span data-pm-diag="1">매칭: <span className="text-cyan-400">{matchedBy}</span></span>
+              <span data-pm-diag="1">키: <span className="text-amber-400">{matchedKey || '?'}</span></span>
+              </>)}
               <span>선박명: <span className="text-emerald-400">{pm.vesselName || '?'}</span></span>
               <span>저장: <span className="text-purple-400">{pm.updatedAt ? new Date(pm.updatedAt).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?'}</span></span>
               {!pm.berth && !fallbackInfo?.isFallback && (
@@ -3951,8 +3955,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           // V8.28: 항차 비교를 '번호 기준'으로 — E/W/N/S 방향·앞0 무시. 인천 출발 선박은 선사가 왕복을
           //   한 항차(예 0529W)로 표기해 평택 양하분도 그 번호로 온다. leg는 위에서 내용(POD/POL)으로 이미
           //   확정했으니 같은 번호면 통과(0529==0529), 번호가 다르면(0530 vs 0529) 그대로 차단.
-          const _voyCore = (x) => _norm(x).replace(/[EWNS]+$/, '').replace(/^0+/, '') || _norm(x);
-          if (_regVoy && r.voy && _voyCore(r.voy) !== _voyCore(_regVoy)) {
+          if (_regVoy && r.voy && voyCore(r.voy) !== voyCore(_regVoy)) {   // 4.87-10: 지역 클로저 대신 utils voyCore(식이 글자 그대로 같다)
             const _leg = _ediKind === 'discharge' ? '양하' : '선적';
             const _ptkLeg = _ediKind === 'discharge' ? _podPtk : _polPtk;
             // V8.29: 인천발 선박은 평택 항차가 한 항차 낮게·방향이 바뀔 수 있다(사용자 확정).

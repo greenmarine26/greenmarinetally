@@ -359,7 +359,8 @@ function Ferry1700AlertInner({ voyages, audience = 'inspector', voyageKey = '', 
   if (!cutsByKey.length) return null;
   return (
     <button onClick={() => setArchiveOpen(true)} data-f1700-chip="1"
-      className="fixed left-3 bottom-5 z-40 px-3 py-2 rounded-full text-xs font-bold bg-amber-600 text-black border border-amber-300 shadow-lg shadow-black/40">
+      className="fixed left-3 bottom-5 z-40 px-3 py-2 rounded-full text-xs font-bold bg-amber-600 text-black border border-amber-300 shadow-lg shadow-black/40"
+      style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: bottom-5 + 아이폰 아래 막대 */}
       📋 보고 보관 {cutsByKey.length}
     </button>
   );

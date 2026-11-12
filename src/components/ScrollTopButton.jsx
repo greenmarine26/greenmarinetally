@@ -23,6 +23,7 @@ export default function ScrollTopButton() {
   return (
     <button onClick={() => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); } }}
       className="fixed bottom-5 right-4 z-40 w-12 h-12 rounded-full bg-purple-700/90 hover:bg-purple-600 active:scale-95 border border-purple-500/60 shadow-lg shadow-black/40 text-white font-black text-xxs leading-tight"
+      style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}   /* 4.87-10: bottom-5(1.25rem) + 아이폰 아래 막대 */
       title="맨 위로">
       ▲<br/>TOP
     </button>

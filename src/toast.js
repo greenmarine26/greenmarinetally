@@ -16,7 +16,7 @@ function getContainer() {
   containerEl = document.createElement('div');
   containerEl.setAttribute('data-toast-root', '1');
   containerEl.style.cssText = [
-    'position:fixed', 'left:50%', 'bottom:24px', 'transform:translateX(-50%)',
+    'position:fixed', 'left:50%', 'top:calc(var(--hdr-h, 56px) + 8px)', 'transform:translateX(-50%)',   // 4.87-10: 아래 가운데 → 머리띠 바로 밑(--hdr-h 는 아이폰 윗막대만큼 커진 머리띠 높이를 담는다)
     'z-index:2147483647', 'display:flex', 'flex-direction:column',
     'gap:8px', 'align-items:center', 'pointer-events:none',
     'max-width:92vw', 'width:max-content'
@@ -42,7 +42,7 @@ export function showToast(message, opts = {}) {
     'color:#fff',
     'box-shadow:0 6px 20px rgba(0,0,0,0.28)',
     'background:' + (err ? '#dc2626' : '#16a34a'),
-    'opacity:0', 'transform:translateY(8px)',
+    'opacity:0', 'transform:translateY(-8px)',   // 4.87-10: 위에서 내려온다
     'transition:opacity .18s ease, transform .18s ease',
     'cursor:pointer',
   ].join(';');
@@ -50,7 +50,7 @@ export function showToast(message, opts = {}) {
   // 탭하면 즉시 닫힘
   const remove = () => {
     el.style.opacity = '0';
-    el.style.transform = 'translateY(8px)';
+    el.style.transform = 'translateY(-8px)';   // 4.87-10
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
   };
   el.addEventListener('click', remove);

@@ -1,12 +1,37 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.87-09';
-const NOTE = '4.87-09 미르가 스테이지를 플랜과 같은 말로 알아듣습니다. 스토우플랜은 선적 카고플랜을 엽니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.87-10';
+const NOTE = '4.87-10 새 판으로 바꿀 때 기다림 없이 바로 열립니다. 알림이 화면 위쪽에 뜨고 아이폰 아래 막대에 단추가 가리지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
 
+//  ★ 4.87-10: 설치 단계에서 새 판의 화면 뼈대(index.html)와 그 안의 본체 파일(assets/*.js·*.css)을 미리 받아 둔다.
+//    업데이트 직후 «3초 뒤 저장본» 길에서 새 해시 본체가 저장본에 없어 흰 화면이 나던 길(4.87-04)을 막는다.
+//    받다가 실패해도 설치는 계속한다(종전 동작) — 다만 사유를 콘솔에 남긴다(조용한 실패 금지).
+const precacheShell = () => caches.open(CACHE_NAME).then((cache) =>
+  fetch('./index.html', { cache: 'no-store' }).then((res) => {
+    if (!res || !res.ok) throw new Error('index.html 응답 ' + (res ? res.status : '없음'));
+    return res.clone().text().then((html) => {
+      const urls = [];
+      const re = /(?:src|href)="\.\/(assets\/[^"?#]+\.(?:js|css))"/g;
+      let m;
+      while ((m = re.exec(html))) { if (!urls.includes('./' + m[1])) urls.push('./' + m[1]); }
+      if (!urls.length) throw new Error('index.html 에서 본체 파일을 못 찾음');
+      return cache.addAll(urls).then(() => cache.put('./index.html', res)).then(() => urls.length);
+    });
+  })
+).then((n) => { console.info('[sw 4.87-10] 새 판 미리받기 완료 — 본체 파일 ' + n + '개'); })
+ .catch((err) => { console.warn('[sw 4.87-10] 새 판 미리받기 실패 — 설치는 계속(열 때 통신망에서 받음):', err && err.message ? err.message : err); });
+
+// 4.87-10: 미리받기는 20초 안에 끝나지 않으면 접고 설치를 마친다(타임아웃 없는 외부 호출 금지 — 규범 절대 12-6).
+const precacheWithLimit = () => Promise.race([
+  precacheShell(),
+  new Promise((ok) => setTimeout(() => { console.warn('[sw 4.87-10] 새 판 미리받기 20초 초과 — 접고 설치 완료(열 때 통신망에서 받음)'); ok(); }, 20000)),
+]);
+
 self.addEventListener('install', (e) => {
+  e.waitUntil(precacheWithLimit());   // 4.87-10: 미리받기가 끝난 뒤 설치 완료(실패해도 설치는 끝난다 — 위 catch)
   // 3.60-18 (진단 M35): 콘앱 카고플랜 번들 프리캐시(V7.60)는 뗐다 — 3.60-03 부터 콘앱은 제 워커(cone-sw.js, cone.html 스코프)가 받고
   //   콘앱은 그 파일을 `?v=` 붙여 부르므로 이 키(cone-cargoplan.js)는 맞은 적이 없다. 검수앱 설치마다 1.87MB 를 헛다운로드하던 죽은 코드.
   // TallyOne 1.30: **여기서 즉시 활성화하지 않는다.** 검수사 확정 2026-08-09 —
