@@ -565,7 +565,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.77</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.78</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -668,6 +668,16 @@ function extractEdiDocDate(text){
      온도 칸만 있어도 리퍼라 했다 — 검수앱 isReeferIso 는 둘 다 리퍼가 아니다(3.6-02 · 3.60-10). 그래서 콘앱 미르 «리퍼 몇 대» 가 검수앱과 갈릴 수 있었다.
      ⇒ mir-core(ConeMir.isReeferContainer — rf 표식 또는 리퍼 규격)를 부르고, 행에는 원래 rf 표식(rf)을 같이 싣는다 — 미르 재료(toMirContainers)는 그 rf 와 규격으로
      검수앱과 같은 판정을 한다. 본체가 아직 안 왔으면(첫 화면·약신호) rf 표식만 보고, ❄ 표시는 그릴 때 다시 물어 본체가 오면 바로 맞춰진다. 정규식 사본은 두지 않는다. */
+/* ★ ConeOne 2.78 (TallyOne 4.88) — **규격 길이(20·40) 한 벌**(검수앱 tallyReport.sizeLenOf · 번들 ConeParse·ConeMir). 검수사 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 한다».
+     종전 콘앱은 첫 글자 2 만 20 으로 봐(iso[0]==='2') 선사 약식 «DC20»(ediContainers 144건 · 예 BEAU2347758)을 40 으로 셌다 — 검수앱은 20.
+     45피트는 콘 자리로는 40 칸이라 '40' 으로 접는다. 규격이 비면 '' (부르는 쪽이 종전 기본값을 쓴다). 번들이 아직 안 왔으면(첫 화면·약신호) 종전 규칙. */
+function coneSize(iso, tp){
+  const s=String(iso||'').toUpperCase().trim(), t=String(tp||'');
+  if(!s && !t) return '';
+  const f=(typeof window!=='undefined')&&((window.ConeParse&&window.ConeParse.sizeLenKnown)||(window.ConeMir&&window.ConeMir.sizeLenKnown));
+  if(f){ const k=f({ iso:s, tp:t }); return k==='20' ? '20' : '40'; }   // 감사 «가»: 못 읽는 규격(«모름»)은 종전 기본 40
+  return (t.startsWith('20')||s[0]==='2') ? '20' : '40';
+}
 function coneIsReefer(c){
   const f=(typeof window!=='undefined'&&window.ConeMir&&window.ConeMir.isReeferContainer);
   return f ? !!f(c) : !!(c&&c.rf);
@@ -692,7 +702,7 @@ function coneRecMark(r, rec){
   if(rec.iso_pick && rec.iso){
     const iso=String(rec.iso).toUpperCase();
     const pO=(typeof window!=='undefined'&&window.ConeMir&&window.ConeMir.isoPickOog);
-    o.iso=iso; o.size=(iso[0]==='2')?'20':'40'; o.iso_pick=rec.iso_pick;
+    o.iso=iso; o.size=coneSize(iso)||'40'; o.iso_pick=rec.iso_pick;   // 2.78: 규격 길이 한 벌
     o.rf=!!rec.rf; o.fr=!!rec.fr; o.tk=!!rec.tk;
     if(pO) o.oog=!!pO(rec, r.oog);
     o.ot=!!(rec.ot||o.oog);
@@ -732,7 +742,7 @@ function parseEDI(text){
       // 마스터 M3.72와 동일: 일부 선사는 status 없이 ISO 끝자리 E로만 엠티 표시 (예: 45RE, 22RE)
       if(!fe && iso.length>=4 && /[A-Z][A-Z][A-Z]E$/.test(iso)) fe='E';
     }
-    const size=(iso&&iso[0]==='2')?'20':'40';
+    const size=coneSize(iso)||'40';   // 2.78: 규격 길이 한 벌
     // POL/POD: 코드만(영숫자)
     const polm=s.match(/LOC\+9\+([A-Za-z0-9]+)/), podm=s.match(/LOC\+11\+([A-Za-z0-9]+)/);
     if(!fe && /\bEMPTY\b/i.test(s)) fe='E';
@@ -843,7 +853,7 @@ function masterRowsAdapter(res, text){
   const asc=isASC(text);
   const rowsAll=(res.containers||[]).map(c=>{
     const iso=String(c.iso||'').toUpperCase();
-    const size=(String(c.tp||'').startsWith('20')||iso[0]==='2')?'20':'40';
+    const size=coneSize(iso, c.tp)||'40';   // 2.78: 규격 길이 한 벌(규격이 비면 tp)
     const t3=iso.slice(2);
     const temp=(c.tmp==null||c.tmp==='')?null:c.tmp;
     const isReefer=coneIsReefer({rf:!!c.rf, iso});   // 2.67: 검수앱 리퍼 판정 한 벌(정규식 사본 없음)
@@ -1030,8 +1040,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 4.87-10';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.77';   // ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
+window.__APPV='TallyOne 4.88';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 2.78';   // ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
 // (앞 판) 'ConeOne 2.76'
 // ★ 2.76   // ★ 2.76 (TallyOne 4.82) — 검수사 수동 시프팅 표기(voyages/{키}/shiftManual)를 읽어 검수앱과 같은 순수 함수(applyShiftManualToMap)로 시프팅 지도에 덧입힘(읽기만 · 양하 평택분에서 빠지고 시프팅으로 셈). (앞 판) ★ 2.75-01 (TallyOne 4.81-01) — mir-core 번들만 바뀜(미르 «N번 베이 정리해줘» 가 앱·터미널 호기 번호가 달라도 같은 장 같은 30분 앱 입력으로 같은 갱을 알아봄 · 콘앱 화면 코드 변경 없음 · 배 이름 없는 베이 정리는 일하는 배 규칙을 검수앱에서만 탄다 — 콘앱은 고른 배 기준).   // (앞 판) ★ 2.75 (TallyOne 4.81) — 미르 «N번 베이 정리해줘»(읽기 전용 현황 · mir-core 번들 gangState 한 벌 — 검수앱과 같은 답) · 이 말에도 베이사전을 먼저 받아 장 묶음이 검수앱과 같게(질문 정규식에 «정리» 추가). 쓰기 없음.   // (앞 판) ★ 2.74-03 (TallyOne 4.77-01) — mir-core 번들(말투 «쌓여요» · 배 코드가 든 설명형 질문은 생활회화로 안 감 · 속도·갱 수 한 함수 paceNowOf · 같은 분 안 같은 수)과 미르 ctx 에 항차 목록의 배 코드(shipCodes) 추가.   // (앞 판) ★ 2.74-02 (TallyOne 4.77) — 동방 qcWork 3호기·105호기 몫을 실 LOLO 컨 기준으로 바로잡음(ConeParse.qcWorkLoloSplit · 합계는 그대로 · 호기별 값만 정정).   // (앞 판) ★ 2.74-01 (TallyOne 4.76) — mir-core 번들만 바뀜(끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 · 호기 이동 말 · 해치 닫는 장수 · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73-01 (TallyOne 4.59-01) — mir-core 번들만 바뀜(MFN 재적재 항목 판정 한 곳 mfnItemsOf · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73 (TallyOne 4.58) — 양하 대수에 MFN(터미널엔 있고 메일 양하 리스트엔 없는 컨 · voyages/{키}/discharge/mfnList)을 합쳐 미르 답이 검수앱과 같게(278 = 리스트 234 + MFN 44). 화면 개조 없음.   // (앞 판) ★ 2.72-05 (TallyOne 4.56-03) — 선적 칸 맞바꿈(applyAutoSwap 번들만 바뀜 · 콘앱 화면 코드 변경 없음).   // ★ 2.72-02 (TallyOne 4.56) — 미르 «양하 정확도»(mir-core 번들만 바뀜 · 콘앱 화면 코드 변경 없음). // ★ 2.72-01 (TallyOne 4.55-03) — 양하 완료 순서로 먼저 나온 컨의 칸을 추정해 검수앱과 같은 칸에 그린다(applyAutoSwap 앞에 inferDischargePos). · 2.72 (TallyOne 4.53) — 선적 EDI(출항본)에 실린 선사 지시 본선 잔류 컨은 «예정» 이 아니라 «확정» — 확정 시프팅 지도(ctShiftMap)에 파란 ◆ 로 들고 평택 양하분에서 빠진다(미르 «양하 315 · 시프팅 64» — 검수앱과 같은 답, 판정은 번들 keepConfirmedFromMaps 한 벌). · (앞 판) 2.71-03 (TallyOne 4.52) — 20HT·40HT·25OT·연태 V코드(22V7·42V1)를 오픈탑으로 읽는다(coneAlphaOt — 검수앱 한 벌) · 2.71-02 (TallyOne 4.48-04) — 미르 «양하 몇 대» 가 선사 지시 본선 잔류 두 대를 시프팅 예보로 보고 평택 양하분에서 빼 315 로 답하던 것(검수앱 317)을 고쳤다 — 시프팅 집합은 검수앱 한 벌 ConeMir.shiftSetForUnitsOf(예보 제외). ← (앞 판) ★ 2.71-01 (TallyOne 4.48-03) — 선사 지시 본선 잔류는 «예정» — 평택 양하 대수는 자료(EDI·리스트)대로 센다(검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»). 노란 ◆ 예보는 그대로.
 // (앞 판) 'ConeOne 2.71'   // ★ 2.71 — 선사 지시 «본선 잔류»(voyages/{키}/keepOnboard — 검수앱 4.48 컨 상세·수집기)를 같은 판정으로 — 평택 양하분에서 빼고(미르 «양하 몇 대» 315), 아래 평택 컨을 막으면 카고플랜에 시프팅 예보 노란 ◆(검수사 2026-10-24 «메일 적용은 한다면 노란 다이아 몬드로»). · (앞 판) ★ 2.70-04 — 선종(컨테이너선·복합선)은 배마다 한 번 — 보관소 coneShipTypes/{배 코드} 에 두고 모든 폰이 같이 쓴다(검수사 2026-10-21 13:05 «컨테이너선으로 지정 해놨는데 건건 마다 다시 물어 봅니다»). · (앞 판) ★ 2.70-03 — 실시간 화면(⚡·콘 타이밍 카드·위 띠)이 실시간 수집이 호기를 적어 넣은 터미널 실적도 그 호기로 그린다(검수사 2026-10-20 «2호기 4호기가 보여야 하는데 한호기 밖에») · 미르 «몇 시에 끝나» 류가 검수앱과 같은 규칙 답(TallyOne 4.40-01 mir-core)
@@ -1213,7 +1223,7 @@ function _pfShort(v){ if(!v) return ''; const p=String(v).split(' '); return ((p
 /* ConeOne 2.47: ediContainers 한 건 → 콘앱 행. 자리 칸은 있으면 넣고 없으면 비워 둔다(가상 리스트 행은 자리가 없다). */
 function _ediRowOf(c){
   const iso=String(c.iso||c.tp||'');
-  const size = c.size ? String(c.size) : (iso && iso[0]==='2' ? '20' : '40');
+  const size = c.size ? String(c.size) : (coneSize(iso)||'40');   // 2.78: 규격 길이 한 벌
   const isReefer = coneIsReefer({ rf: !!c.rf, iso: c.iso || '' });   // 2.67: 검수앱 리퍼 판정 한 벌(ConeMir.isReeferContainer — EDI 규격으로 · 정규식 사본 없음)
   /* ★ 2.49-03 — FR 판정은 검수앱 한 벌(utils.isFlatRackContainer · 번들 ConeParse). 검수사 2026-09-11 «SWTD 카고플랜에서 FR을 OT로 오류 표기 수정바람».
      ASC 로 들어온 FR(42PF·22PF · tp FR40·FR20)은 보관소에 `fr` 없이 `oog` 만 있어, 종전 `fr:!!c.fr` 이면 베이뷰·카고플랜이 OT 로 그렸다.
@@ -2601,7 +2611,7 @@ function ctDrawRows(mode){
     const p = ctPosOf('loading', cn, null); if(!p || p.src!=='actual') continue;   // 자리는 ctPosOf 한 벌 — 검수원이 정한 실제 자리가 있는 것만
     const t = ((CT.tw||{}).discharge||{})[cn] || ((CT.tw||{}).loading||{})[cn];
     const iso = String((t && t.iso) || (rec[cn]||{}).iso || '');
-    extra.push({ cn, bay:String(p.bay).padStart(2,'0'), row:p.row, tier:String(p.tier).padStart(2,'0'), size: iso ? (iso[0]==='2' ? '20' : '40') : '', _extra:true });
+    extra.push({ cn, bay:String(p.bay).padStart(2,'0'), row:p.row, tier:String(p.tier).padStart(2,'0'), size: coneSize(iso), _extra:true });   // 2.78: 규격 길이 한 벌
   }
   return extra.length ? base.concat(extra) : base;
 }
@@ -2736,7 +2746,7 @@ function ctAppPos(mode, cn){ return ctPosOf(mode, cn); }
 /* ★ 2.26: 컨 크기('20'/'40') — 계획 rows 에서. 모르면 ''. 홀드콘 개수는 콘 계산과 같은 규칙(holdConeCount — 컨테이너선 20ft 1·40ft 0, 복합선 곳당 N). */
 function ctSize(mode, cn){
   const p = ctDrawRows(mode).find(x=>x.cn===cn); if(p) return String(p.size||'');   // 2.54: 계획 밖 선적 컨도 규격을 안다
-  const t = (CT.tw[mode]||{})[cn]; const iso = t && String(t.iso||''); return iso ? (iso[0]==='2' ? '20' : '40') : '';   // 감사: 계획에 없는 초과 컨은 카토스 iso 로
+  const t = (CT.tw[mode]||{})[cn]; const iso = t && String(t.iso||''); return coneSize(iso);   // 2.78: 규격 길이 한 벌   // 감사: 계획에 없는 초과 컨은 카토스 iso 로
 }
 function ctHoldCone(size){ return holdConeCount(size==='40'?'40':'20', state.shipType||'container', state.multiCount); }
 /* 감사(2.26): **받침이 있을 때만 콘이다** — 콘 계산(ediToBayGroups hasBelow, V7.59·V7.65 검수사 확정)과 같은 규칙.

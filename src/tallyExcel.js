@@ -361,6 +361,7 @@ function sheetShifting(wb, D) {
 //   합계·헤더(DISCH (n))는 원본이 수식이지만, 모바일 뷰어가 재계산을 안 하는 경우를
 //   위해 검증된 계산값으로 덮어쓴다. 템플릿 없는 배(TMPZ·DXQD·OBWH 등)는 드로잉 폴백.
 import TEMPLATE_MAP from './data/tallyTemplateMap.js';
+import { ymdKST } from './meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 import { tempNum, temp1, reeferRowFlags, fmtAt } from './reeferList.js';   // 4.57: 리퍼 온도 리스트 엑셀
 import { SHIP_FLAGS } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 코드 목록 한 곳
@@ -1341,7 +1342,7 @@ export async function generateXrayExcel(rows, head = {}, opts = {}) {
   });
 
   const fname = `XRAY리스트_${(head.name || '').replace(/\s+/g, '')}_${head.voy || ''}_`
-              + new Date().toISOString().slice(0, 10) + '.xlsx';
+              + ymdKST() + '.xlsx';   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   const buf = await wb.xlsx.writeBuffer();
   if (opts.download !== false) _download(buf, fname);
   return { fname, buf };
@@ -1399,7 +1400,7 @@ export async function generateReeferExcel(rows, head = {}, opts = {}) {
     }
   });
   const fname = `리퍼온도리스트_${(head.name || '').replace(/\s+/g, '')}_${head.voy || ''}_`
-              + new Date().toISOString().slice(0, 10) + '.xlsx';
+              + ymdKST() + '.xlsx';   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   const buf = await wb.xlsx.writeBuffer();
   if (opts.download !== false) _download(buf, fname);
   return { fname, buf };

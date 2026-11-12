@@ -11,6 +11,9 @@ let bad = 0; const T = (ok, why) => { console.log((ok ? '  ✓ ' : '  ✗ ') + w
 
 // 소스에서 꺼내기 — holdConeCount + CT 블록(const CT … ctCountLine 끝)
 const hcc = html.match(/function holdConeCount\(size, shipType, multiCount\)\{[\s\S]*?\n\}\n/);
+//  4.88 / ConeOne 2.78: ctSize 가 규격 길이 한 벌(coneSize)을 부른다 — CT 블록 밖에 있어 같이 꺼내 올린다(번들이 없으면 종전 규칙으로 물러선다).
+const _cs488 = html.match(/function coneSize\(iso, tp\)\{[\s\S]*?\n\}\n/);
+if (hcc && _cs488) hcc[0] = _cs488[0] + hcc[0];
 const ct = html.match(/const CT = \{[\s\S]*?\nfunction ctCountLine\([\s\S]*?\n\}\n/);
 T(!!hcc && !!ct, 'holdConeCount · CT 블록을 소스에서 꺼냈다');
 if (!hcc || !ct) { console.log('✗ 콘 타이밍 연막검사 실패'); process.exit(1); }

@@ -7,6 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
+import { ymdKST } from './meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { formatBerth, isPyeongtaekPort, isReeferIso, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, dischargeUnitBareRow } from './utils.js';   // 4.20 감사: 양하 대수는 평택 양하분 한 벌
 import { shipOpMapper } from './data/tallyFormats.js';
 import { tallySizeCol } from './tallyReport.js';   // 3.60-12 (진단 M5): 규격 칸 가르기 한 벌 — 마감텔리와 같은 함수
@@ -329,7 +330,7 @@ function generateVoucherHTML(voyage, mode = 'settlement', overrides = {}) {
   else if (dVoy) voyNo = dVoy;
   else if (lVoy) voyNo = lVoy;
   else voyNo = overrides.voy || info.voy || info.voyNo || '';
-  const date = overrides.date || info.date || new Date().toISOString().slice(0, 10);
+  const date = overrides.date || info.date || ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   // M5.82: PORT-MIS의 berth → PIER 자동 판별
   //   info.berth가 "동부두 7번선석" 형식이면 7번 → PCTC 자동
   //   info.pier가 명시되어 있으면 그것 우선

@@ -4,7 +4,7 @@
 // 이 엔트리는 그 수집기 로직을 그대로 두고 **파서만 앱 최신**(utils.js parseListExcel 등)을 물린다.
 //   → 연운항(LYG) SZ·REMARK 온도가 자동 수집 합본에 반영된다. 로직 변경점은 합본 열 Temp·EmptySeal 추가뿐.
 // 재생성: 앱 저장소에서  npx vite build --config vite.merge.config.js  → dist_merge/gm_merge.js → HTML 래핑.
-import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, normalizeCarrierCode, APP_VERSION } from './src/utils.js';
+import { parseBAPLIE, parseAscFile, loadSheetJS, parseListExcel, parseXrayList, normalizeCarrierCode, APP_VERSION, isPyeongtaekPort } from './src/utils.js';   // 4.88: isPyeongtaekPort — 평택 판정 한 벌
 import { opFromListFileName } from './src/data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(합본이 op 를 비워 마감텔리가 CSC/DSL 을 못 갈랐다)
 import { listRevRank, listRevisionDrops, listPartialRevisionDrops } from './src/listRevision.js';   // 3.61-02: 개정판 판정 한 벌(양하 자동 등록과 같이 쓴다)
 
@@ -37,11 +37,9 @@ import { listRevRank, listRevisionDrops, listPartialRevisionDrops } from './src/
     }
   }
   var isBook = (cn) => String(cn || "").toUpperCase().startsWith("__BOOK_");
-  function isPtkPort(code) {
-    const t = String(code || "").toUpperCase().trim();
-    if (!t) return false;
-    return /(PTK|PYT|PYOTM|PYO)$/.test(t);
-  }
+  //  ★ 4.88 — 평택 판정 한 벌(utils.isPyeongtaekPort). 종전 이 파일만의 사본은 끝 글자 접미만 봐서 «PTK02»(부두 번호)·«PYONGTAEK,KOREA»·«KRPTK1» 같은
+  //    리스트 표기를 평택이 아니라고 셌다 — 합본의 평택분 대수(ptk·_ptkPol·_ptkPod)가 앱 화면과 갈렸다. 앱과 같은 함수를 부른다.
+  const isPtkPort = (code) => isPyeongtaekPort(code);   // 4.88
   var carrierOf = (c) => normalizeCarrierCode(c.op) || normalizeCarrierCode(c.bl) || (c.cn && !isBook(c.cn) ? String(c.cn).slice(0, 3).toUpperCase() : "?") || "?";
   async function mergeFolder(files, opts = {}) {
     const XLSX = await loadSheetJS();

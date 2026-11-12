@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>Bulk Tally</title>
 <!-- 버전 라벨: build.sh가 src/utils.js APP_VERSION에서 자동 동기화. 손으로 고치지 말 것. -->
-<meta name="app-version" content="(주)그린마린 · TallyOne 4.87-10">
+<meta name="app-version" content="(주)그린마린 · TallyOne 4.88">
 
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0e14'/%3E%3Cpath d='M50 18a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 18v46M28 50H18a32 32 0 0 0 64 0H72' stroke='%2306b6d4' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230a0e14'/%3E%3Cpath d='M50 18a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 18v46M28 50H18a32 32 0 0 0 64 0H72' stroke='%2306b6d4' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -2641,7 +2641,7 @@ function ScanTab({ onSelect }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const ts = (/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace(/[-:T]/g, "");
+    const ts = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 16).replace(/[-:T]/g, "");   // 4.88: 파일 이름 시각을 한국(KST)으로 — 한 파일 앱이라 import 를 못 해 meToday.ymdKST 와 같은 식
     a.download = `tally_${settings.checker || "X"}_${ts}.csv`;
     document.body.appendChild(a);
     a.click();

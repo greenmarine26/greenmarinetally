@@ -1684,6 +1684,8 @@ fi
     node tools/smoke_insp487.cjs "$(pwd)" || { echo "✗ 4.87(검수 리스트 선사별·쪽수·실번호 폭·알파벳 빠진 실) 연막검사 실패 — 배포 금지"; exit 1; }
         node tools/smoke_fix48602.cjs "$(pwd)" || { echo "✗ 4.86-02(완료 기록 보호) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_onebook487.cjs "$(pwd)" || { echo "✗ 4.86-02(판정 한 벌) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.88: 판정 한 벌 — 베이사전 이름 짐작 문지기·규격 길이·KST 날짜·업로드 충돌 실번호·수집기 평택 판정·X-RAY 실 점검(실 RTDB·보관 X-RAY 실 픽스처)
+    node tools/smoke_onebook488.cjs "$(pwd)" || { echo "✗ 4.88(판정 한 벌) 연막검사 실패 — 배포 금지"; exit 1; }
     TZ=America/Los_Angeles node tools/smoke_mirfix487.cjs "$(pwd)" || { echo "✗ 4.86-02(미르 날짜 키·별칭 거름) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.87-02: 미르 실번호 점검 후속 물음 — 실 TMPZ 2038E 기록으로 «형식이 다른 17개 보여줘» 가 점검 답을 되풀이하지 않고 17대를 한 대씩 적는지
     #  4.87-03: 미르 문제 알림 뒤 «해결 방법»·«해결됐나» — 실 TMPZ 2038E 기록(17대)으로 처음→지금 견줌

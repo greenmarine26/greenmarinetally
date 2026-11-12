@@ -3,7 +3,7 @@ import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   //
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
-import { xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌
+import { xraySealerOf, xraySealCheckOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌 · 4.88: X-RAY 실 점검 한 벌
 import { ptkDischargeUnitsOf, MFN_RELOAD_COUNTS, MFN_RELOAD_PENDING } from '../utils.js';   // 4.58: MFN 상자·배지는 앱이 지금 계산한 U.mfn 으로
 import { canCompleteContainer } from '../utils.js';   // 3.2-01: 통과분 문지기 한 벌
 import { isoConflictOf, isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // ★ 3.47: 규격 3자 대조 한 벌(작업카드·진단과 같은 답)
@@ -71,7 +71,7 @@ const ISO_OPTIONS = [
   { iso: '45T1', label: '40HC 탱크',                  flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null, records = null, shiftCns = null, mfnList = null, mfnVoyage = null }) {   // 3.2-01: records·shiftCns — 통과분 문지기 재료(리스트 등재·시프팅은 작업분)
+export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, xraySeals = null, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null, records = null, shiftCns = null, mfnList = null, mfnVoyage = null }) {   // 3.2-01: records·shiftCns — 통과분 문지기 재료(리스트 등재·시프팅은 작업분)
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -217,9 +217,15 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   const _sealK = sealCheckOf(c);
   const slOrig = _sealK.from;
   const sealError = _sealK.error;
-  const xSealOrig = xraySeal?.seal_orig != null ? xraySeal.seal_orig : xraySeal?.seal || '';
   const xSeal = xraySeal?.seal || '';
-  const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
+  //  ★ 4.88 — X-RAY 실은 한 벌(utils.xraySealCheckOf)만 본다 — 같은 항차 X-RAY 실 전부(xraySeals)에서 중복·앞 세 자리(다수와 다름)·자릿수(6자리 아님).
+  //    종전엔 처음 적은 값(seal_orig)과 글자 그대로 달라도 «실오류(세관 신고 대상)» 였다. 항차 실 목록을 못 받은 창구는 이 컨 하나로(자릿수만 잡힌다).
+  const xSealCk = useMemo(() => {
+    if (!xSeal) return null;
+    const all = xraySeals && typeof xraySeals === 'object' ? { ...xraySeals, [c.cn]: xraySeal } : { [c.cn]: xraySeal };
+    return xraySealCheckOf(all).byCn[c.cn] || null;
+  }, [xraySeals, xraySeal, xSeal, c.cn]);
+  const xSealError = !!(xSealCk && xSealCk.text);
   const slHistory = c.sl_history || [];
   const xHistory = xraySeal?.history || [];
 
@@ -585,9 +591,14 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             ) : c.cn}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {(sealError || xSealError) && (
+            {sealError && (
               <span className="bg-red-700 text-red-50 text-xxs px-2 py-0.5 rounded font-black flex items-center gap-1">
                 <AlertOctagon className="w-3 h-3"/>실오류 (세관 신고 대상)
+              </span>
+            )}
+            {xSealError && (
+              <span className="bg-rose-700 text-rose-50 text-xxs px-2 py-0.5 rounded font-black flex items-center gap-1">
+                <AlertOctagon className="w-3 h-3"/>X-RAY 실 확인
               </span>
             )}
             {/* M5.79: 부킹 슬롯 (평택 적재 컨번호 미입력) */}
@@ -1604,12 +1615,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           <div className={`px-4 py-3 border-b border-line ${xSealError ? 'bg-red-950/30' : 'bg-purple-950/20'}`}>
             <div className="text-2xs text-purple-400 font-bold uppercase mb-1 flex items-center justify-between">
               <span>X-RAY 봉인 (세관 + 전자)</span>
-              {xSealError && <span className="text-red-400 font-black">⚠ 실오류</span>}
+              {xSealError && <span className="text-red-400 font-black">⚠ 확인</span>}
             </div>
             {xSealError && (
               <div className="bg-red-950/50 border border-red-700/50 rounded p-2 mb-2 text-xxs">
-                <div className="text-red-300 font-bold mb-0.5">세관 신고 양식:</div>
-                <div className="mono text-red-100">원봉인 <span className="font-black">{xSealOrig}</span> → 실제 <span className="font-black">{xSeal}</span></div>
+                <div className="text-red-300 font-bold mb-0.5">X-RAY 실 확인 (중복 · 앞 세 자리 · 자릿수만 알립니다):</div>
+                <div className="mono text-red-100">{xSealCk.text}</div>
               </div>
             )}
             {editingXSeal ? (

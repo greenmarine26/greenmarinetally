@@ -9,6 +9,8 @@
 //   loadSheetJSStyled·buildSealReportSheet는 내부 사용만 남기고 export 제거,
 //   generateEmptySealEditReport·EmptySealReportButton(참조 0)은 삭제. React/lucide/loadSheetJS 임포트도 함께 정리.
 import { isoToLabel, isTermOtL, looksLikeIsoType } from '../utils.js';   // 4.25-02: 엠티실 칸 거름은 utils 한 벌(검수리스트 실번호 칸과 같은 판정)
+import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
+import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 
 // V7.42: 셀 스타일(음영·테두리·볼드)을 지원하는 SheetJS 호환 라이브러리 로더.
 //   기존 loadSheetJS(xlsx@0.18.5)는 스타일 미지원 → 보고서 출력 전용으로 xlsx-js-style 사용.
@@ -46,8 +48,8 @@ function sizeLabelWithRaw(iso) {
 // 정렬: 20ft 먼저 → 40ft → 기타, 각 규격 안에서 컨번호순 (사용자 확정)
 function sortBySizeThenCn(list) {
   const rank = (c) => {
-    const f = String(c.iso || '')[0];
-    return f === '2' ? 0 : (f === '4' || isTermOtL(c.iso)) ? 1 : f === 'L' || f === '9' ? 2 : 3;   // 4.25-01: L5U0(오픈탑)은 40피트
+    const k = sizeLenKnown(c);   // 4.88: 규격 길이 한 벌 — 종전 첫 글자(4.25-01 L5U0 예외 포함)를 따로 갈랐다
+    return k === '20' ? 0 : k === '40' ? 1 : k === '45' ? 2 : 3;
   };
   return [...list].sort((a, b) => rank(a) - rank(b) || String(a.cn || '').localeCompare(String(b.cn || '')));
 }
@@ -208,7 +210,7 @@ export async function generateEmptySealReport({ voyage, sealTargets, sealMode })
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '엠티실 보고서');
 
-  const filename = `엠티실_${vsl.replace(/\s+/g, '')}_${voy}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const filename = `엠티실_${vsl.replace(/\s+/g, '')}_${voy}_${ymdKST()}.xlsx`;   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   XLSX.writeFile(wb, filename);
   return { filename, rowCount: targets.length };
 }

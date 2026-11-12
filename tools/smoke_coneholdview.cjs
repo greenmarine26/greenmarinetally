@@ -13,7 +13,8 @@ const tn  = html.match(/function ctTierName\(tier, ?t1\)\{[\s\S]*?\n\}\n/);
 const pr  = html.match(/^function ctPair\(b\)\{[^\n]*\n/m);
 const pos = html.match(/function ctPosOf\(mode, cn, p\)\{[\s\S]*?\n\}\n/);   // 2.44: 자리 판정 한 벌 — 그림 블록이 이것을 부른다
 const stg = html.match(/function ctInStg\(mode, cn\)\{[\s\S]*?\n\}\n/);
-const drw = html.match(/function ctDrawRows\(mode\)\{[\s\S]*?\n\}\n/);   // 2.54: 그림 블록은 계획 + 계획 밖 실제 자리 기록(ctDrawRows)으로 그린다   // 2.45: 임시창고 판정 한 벌 — ctPosOf 가 이것을 부른다
+const drw = html.match(/function ctDrawRows\(mode\)\{[\s\S]*?\n\}\n/);
+if (drw) drw[0] = (html.match(/function coneSize\(iso, tp\)\{[\s\S]*?\n\}\n/) || [''])[0] + drw[0];   // 4.88 / ConeOne 2.78: 행 크기는 coneSize(규격 길이 한 벌) — 같이 꺼낸다   // 2.54: 그림 블록은 계획 + 계획 밖 실제 자리 기록(ctDrawRows)으로 그린다   // 2.45: 임시창고 판정 한 벌 — ctPosOf 가 이것을 부른다
 const skel = html.match(/function bvRowPositions\(cellCount, hasZero\)\{[\s\S]*?\n\}\n/);
 const bay = html.match(/function bvBaySkeleton\(bs\)\{[\s\S]*?\n\}\n/);
 T(!!blk && !!skel && !!bay && !!tn && !!pr && !!pos && !!stg && !!drw, '그림 블록·골격·단이름·짝·자리·창고 함수를 소스에서 그대로 꺼냈다(베껴 적지 않는다)');

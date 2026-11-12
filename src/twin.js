@@ -11,6 +11,7 @@
 //   - 21번 짝꿍 = 23 정상 매칭
 
 import { getShipBayDictData } from './shipStructure.js';
+import { sizeLenKnown } from './tallyReport.js';   // 4.88: 규격 길이 한 벌
 
 // M6.22: cache 구조 변경 — (allContainers, shipKey) 조합으로 캐싱
 const cache = new WeakMap();
@@ -122,7 +123,7 @@ export function findTwinCandidate(target, allContainers, excludeCns = new Set(),
 //    칸 짝이 있는 컨은 종전 그대로(위 find)이고, 양하·풀·다른 규격·이미 완료한 컨은 건드리지 않는다. 판정은 이 한 곳 — 자동 가이드·수동 조회·미르가 같이 쓴다.
 const _isDeckTier = (t) => parseInt(t, 10) >= 80;
 const _bayN = (c) => (c && c.bay ? parseInt(c.bay, 10) : NaN);
-const _is20 = (c) => /^2/.test(String(c?.iso || ''));
+const _is20 = (c) => sizeLenKnown({ iso: c?.iso }) === '20';   // 4.88: 규격 길이 한 벌(자리 판정 — 규격만). 종전 첫 글자 2 만 봐 «DC20» 엠티를 짝에서 뺐다
 function orphanTwinMate(target, all, excludeCns, pairBayStr, targetBayStr, occupancy) {
   if (target._mode !== 'loading' || String(target.fe || '').toUpperCase() !== 'E' || !_is20(target) || target._comp) return null;
   const rowN = (c) => parseInt(c.row, 10) || 0, tierN = (c) => parseInt(c.tier, 10) || 0;

@@ -40,10 +40,31 @@ export function sizeLenOf(c) {
   const col = tallySizeCol(c || {});
   return col === 'HC' ? '40' : col;
 }
+/** ★ 4.88 — 규격 길이 한 벌의 «모름» 갈래. 규격이 비고 채움값(_sizeFill)·리스트 tp 도 없거나, 규격 글자를 아무도 못 읽으면(라벨이 20·40·45 가 아니고
+ *  첫 글자가 2·4·L·9·M·N 도 아님) '' 를 낸다 — 그 밖엔 sizeLenOf 와 같다. 길잡이 대기열·미르 분포처럼 «모름» 을 따로 두던 곳이 부른다. */
+export function sizeLenKnown(c) {
+  if (!c) return '';
+  const iso = String(c.iso || '').toUpperCase().trim();
+  if (!iso) {
+    if (c._sizeFill) return sizeLenOf(c);
+    const t = String(c.tp || '').toUpperCase().replace(/['\s]/g, '');
+    return /^(20|40|45)[A-Z]{2}$/.test(t) ? sizeLenOf(c) : '';
+  }
+  if (/^(20|40|45)/.test(String(isoToLabel(iso) || '')) || /^[24L9MN]/.test(iso)) return sizeLenOf(c);
+  return '';
+}
 function _sizeColBase(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   //  4.15 (§7.8-⑥): 규격이 빈 행을 베이플랜 자리로 채운 값(_isoBlankFilled 의 _sizeFill — 홀수 베이 20' · 짝수 베이 40'). 높이는 아래 SKHU 규칙만 본다.
   if (!iso && c._sizeFill) return c._sizeFill;
+  //  ★ 4.88 — 규격 길이 한 벌: 규격(iso)이 비고 채움값도 없으면 리스트 규격 글자(tp — «40'HC»·«20'GP»)를 읽는다. 종전 길잡이·수동 선적 묶음은 tp 를 봤고
+  //    이 함수는 20 으로 떨어져 같은 컨이 화면마다 갈렸다. 길이 먼저 표기(20·40·45 + 영문 두 글자)만 받는다.
+  if (!iso && c.tp) {
+    const t = String(c.tp).toUpperCase().replace(/['\s]/g, '');
+    if (/^(20|40|45)[A-Z]{2}$/.test(t)) return _sizeColBase({ iso: t });   // 4.88
+  }
+  //  ★ 4.88 — ISO 크기 첫 글자 M·N(48·49피트)은 40피트보다 긴 칸(45)으로 — 종전 isoFeet 와 EDI 내보내기(normalizeCntrType)가 그렇게 읽었고 이 함수만 20 으로 떨어졌다. 실자료 0건.
+  if (/^[MN]\d/.test(iso)) return '45';   // 4.88
   const l = isoToLabel(iso) || '';
   //  ★ 3.31 — **규격은 `isoToLabel` 이 낸 라벨로만 가른다.** 원본 iso 를 정규식으로 재는 것을 그만둔다.
   //    왜 (정본 대조 2026-09-08, STSE 2653E 양하): 자료에 코드 계열이 둘이다 —

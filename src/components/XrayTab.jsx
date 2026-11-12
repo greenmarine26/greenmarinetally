@@ -26,7 +26,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { getPartnerName, setPartnerName, getPartnerName2, setPartnerName2, partnerChoices } from '../workerPrint.jsx';   // 4.32: 짝 이름 한 벌(카고플랜 질문 창과 같은 값)
-import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
+import { sortByDischargePlan, xraySealerOf, xraySealCheckOf } from '../utils.js';   // 4.88: X-RAY 실 점검 한 벌 · 2.39: 봉인자 판정은 공용 한 벌
 import { isoShown } from '../utils.js';   // 4.20-01: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { fbSetXraySeal, fbUpdateVoyageInfo, fbSubscribeInspectCheck, fbSaveInspectCheck } from '../firebase.js';
 import { parseInspectCheckRows, matchInspectCheck, inspectStatusText } from '../inspectCheck.js';
@@ -254,6 +254,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   }, [rows]);
   //  2.39: 봉인자가 기록된 대수 — 전부 차야 «사무실 제출본»이다.
   const sealedCount = useMemo(() => rows.filter((r) => r.sealer).length, [rows]);
+  //  ★ 4.88 — X-RAY 실 점검 한 벌(utils.xraySealCheckOf) — 검수사 확정 2026-11-12 «중복과 앞자리 세자리가 틀릴때만». 뒤 세 자리가 다른 것은 정상이라 알리지 않는다.
+  const xCk = useMemo(() => xraySealCheckOf(rows.map((r) => ({ cn: r.cn, seal: r.cSeal }))), [rows]);
 
   //  ★ 4.50 — 두 단계 등록. ① 내 몫(체크칸) → ② 번호는 있는데 봉인자가 아직 없는 컨 전부를 파트너 이름으로.
   //    검수사 2026-10-26 05:52 «실번호를 등록후 일단 실번호 등록자 본인것을 다 등록후 파트너가 할 부분을 등록할수 있게 해주셔야 합니다.»
@@ -527,6 +529,12 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
               봉인 {sealedCount}/{rows.length}{sealedCount === rows.length ? ' 완료 · 사무실 제출 가능' : ' · 인계용'}
             </span>
           )}
+          {/*  4.88: X-RAY 실 점검 — 중복·앞 세 자리(다수와 다름)·자릿수(6자리 아님)만. 문제가 없으면 줄이 없다. */}
+          {!!xCk.issues && (
+            <div data-xray-seal-check="1" className="mt-1 text-2xs text-rose-300 font-bold">
+              X-RAY 실 확인 {xCk.issues}대 — {[xCk.dup.length ? `중복 ${xCk.dup.length}건` : '', xCk.prefix.length ? `앞 세 자리 다름 ${xCk.prefix.length}대` : '', xCk.digits.length ? `자릿수 확인 ${xCk.digits.length}대` : ''].filter(Boolean).join(' · ')}{xCk.major ? ` (이 배 X-RAY 실 다수 ${xCk.major}…)` : ''}
+            </div>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs2">
@@ -564,8 +572,9 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                       <button disabled={!canEdit || bulk.run} onClick={() => setEdit({ cn: r.cn, field: 'seal', val: r.cSeal })}
                         className="text-left disabled:cursor-default">
                         {r.cSeal
-                          ? <span className="text-purple-200">{r.cSeal}</span>
+                          ? <span className={xCk.byCn[r.cn] ? 'text-rose-300 font-bold' : 'text-purple-200'}>{r.cSeal}</span>
                           : <span className="text-dim-500 italic">{canEdit ? '입력 ✏' : '미입력'}</span>}
+                        {r.cSeal && xCk.byCn[r.cn] && <div className="text-2xs text-rose-300">{xCk.byCn[r.cn].text}</div>}
                       </button>
                     )}
                   </td>

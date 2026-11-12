@@ -1,5 +1,6 @@
 // CSV 내보내기 — 결재용 + 세관 신고용
 import { reeferTempOf, isoToLabel, fmtPos, completedByLabel, sealCheckOf } from '../utils.js';   // 4.49: sealCheckOf — 실오류 판정 한 벌   // 3.16: 완료자 표기 한 벌
+import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 
 export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals, voyageInfo = null) {   // 3.16: info 는 조 등록 근무자를 찾는 데 쓴다
   const headers = [
@@ -128,5 +129,5 @@ function download(rows, filename) {
 }
 
 function dateStr() {
-  return new Date().toISOString().slice(0, 10);
+  return ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
 }

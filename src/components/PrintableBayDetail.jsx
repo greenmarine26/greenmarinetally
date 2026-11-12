@@ -15,6 +15,7 @@
 //   * 베이 지정 (single): 1개 베이 선택
 
 import React, { useMemo, useState, useRef } from 'react';
+import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.90-05: 선박 풀네임 정본 한 벌(X-RAY 머리와 같은 벌)
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
@@ -824,7 +825,7 @@ export default function PrintableBayDetail({
                   const ws = window.XLSX.utils.table_to_sheet(t);
                   window.XLSX.utils.book_append_sheet(wb, ws, 'Sheet' + (i+1));
                 });
-                const d = new Date().toISOString().slice(0,10);
+                const d = ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
                 window.XLSX.writeFile(wb, document.title + '_' + d + '.xlsx');
               } catch (e) { alert('엑셀 실패: ' + e.message); }
             }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded whitespace-nowrap">📊 엑셀</button>

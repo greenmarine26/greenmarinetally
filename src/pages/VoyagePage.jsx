@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
 import { mirThreadCommit, mirThreadAlive } from '../mir.js';   // 3.68 [mirThread]: 답 뒤 한 마디·«응/아니/됐어» — 탭 카드도 같은 대화 층
@@ -60,7 +61,7 @@ import { isReeferTarget } from '../reeferList.js';
 import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTempSummary, reeferTempOf, reeferTempExempt, isReeferCheckSkipped, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, plausibleListWtKg, ediWtField, isKmtcShip, crewShiftKey, resolveCrewSides, craneBowSternOf, koJosa, isTransitByEdi, dropFilledBookingSlots, bookingFillOfSec, pickCarrierOp, pickDischargePol, listTypoTwins, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, keepOnboardOf, keepConfirmedOf} from '../utils.js';   // 3.4: isKmtcShip — 고려해운 게이트 한 벌   // 1.23: plausibleListWtKg — 리스트 무게 톤 표기 보정(단일 소스)
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
-import { withAssignOf } from '../utils.js';   // 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
+import { withAssignOf, sealSameLoose } from '../utils.js';   // 4.88: sealSameLoose — 업로드 충돌 창 실번호 비교 한 벌 · 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
@@ -1263,7 +1264,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     for (const c of targets) {
       const b = parseInt(c.bay, 10);
       const k = Number.isFinite(b) ? b : '?';
-      const sz = (String(c.iso || '')[0] === '2' || String(isoToLabel(c.iso) || '').startsWith('20')) ? '20' : '40';   // 3.60-12: 장비코드 DC20 도 20
+      const sz = sizeLenKnown(c) === '20' ? '20' : '40';   // 4.88: 규격 길이 한 벌(tallyReport.sizeLenKnown) · 3.60-12: 장비코드 DC20 도 20
       const v = byBay[k] = byBay[k] || { n: 0, s20: 0, s40: 0 };
       v.n++; v[sz === '20' ? 's20' : 's40']++;
     }
@@ -1568,6 +1569,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         comp={cSec.completed?.[detailC.cn]}
         isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
         xraySeal={cSec.xraySeals?.[detailC.cn] || null}
+        xraySeals={cSec.xraySeals || null}   // 4.88: X-RAY 실 점검 — 항차 실 전부
         mode={cMode}
         voyageKey={voyageKey}
         voyageInfo={voyage.info}
@@ -4615,7 +4617,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       // 실번호 불일치 (EDI에 sl 있고 리스트에도 있는데 다름)
       const ediSl = String(ediC.sl || '').trim();
       const lrSl = String(r.sl || '').trim();
-      if (ediSl && lrSl && ediSl !== lrSl) {
+      //  ★ 4.88 — 실번호 비교 한 벌(utils.sealSameLoose — 4.87 «알파벳만 빠진 실은 같은 실»). 글자 그대로(!==) 견주어 TMPZ 2038E EAS 17대(ES02273964 ↔ 02273964)가 충돌 창에 떴다.
+      if (ediSl && lrSl && !sealSameLoose(ediSl, lrSl)) {   // 4.88
         sealDiffs.push({ cn: r.cn, ediSl, listSl: lrSl });
       }
     });

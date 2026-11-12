@@ -8,7 +8,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
-import { completedByLabel, isSealError, sealCheckOf, sealConflictOf } from '../utils.js';   // 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
+import { completedByLabel, isSealError, sealCheckOf, sealConflictOf, xraySealCheckOf } from '../utils.js';   // 4.88: xraySealCheckOf — X-RAY 실 점검 한 벌 · 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // ★ 3.16: 완료자 표기 한 벌
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk, withAssignOf, loadingSlotOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
@@ -74,6 +74,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
     if (lbl === '45RF') return '45RF';
     return null;   // FR/OT/TK/기타는 기존 특수 칩으로
   };
+  //  ★ 4.88 — X-RAY 실 점검 한 벌(utils.xraySealCheckOf) — 칩·필터·카드가 같은 답. 양하 X-RAY 실만(xraySeals 는 양하 노드).
+  const xSealCk = useMemo(() => xraySealCheckOf(mode === 'discharge' ? (xraySeals || {}) : {}), [xraySeals, mode]);
   const feChips = useMemo(() => {
     const g = { F: new Map(), E: new Map() };
     for (const c of list) {
@@ -146,12 +148,10 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
 
       // 실오류 — 4.49: 판정 한 벌(utils.isSealError — 고친 기록이 있고 알려진 실 어느 것과도 다름 · 신고 끝자리 잘림). 종전엔 칩·필터가 고친 기록 없이 sl ≠ sl_orig 로 셌다(카드 배지와 갈렸다).
       if (isSealError(c)) k.sealerr++;
-      const xs = xraySeals?.[c.cn];
-      const xSealOrig = xs?.seal_orig != null ? xs.seal_orig : xs?.seal;
-      if (xs?.seal && xSealOrig && xs.seal !== xSealOrig) k.sealerr++;
+      if (xSealCk.byCn[c.cn]) k.sealerr++;   // 4.88: X-RAY 실 점검 한 벌(중복·앞 세 자리·자릿수)
     });
     return k;
-  }, [list, compMap, xrayMap, xraySeals]);
+  }, [list, compMap, xrayMap, xraySeals, xSealCk]);
 
   // 검수업체 목록
   const ops = useMemo(() => {
@@ -221,10 +221,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'oog' && !(c.oog || c.fr)) return false;
       if (f === 'xray' && !xrayMap[c.cn]) return false;
       if (f === 'sealerr') {
-        const xs = xraySeals?.[c.cn];
-        const xSealOrig = xs?.seal_orig != null ? xs.seal_orig : xs?.seal;
         const slErr = isSealError(c);   // 4.49: 칩과 같은 판정
-        const xErr = xs?.seal && xSealOrig && xs.seal !== xSealOrig;
+        const xErr = !!xSealCk.byCn[c.cn];   // 4.88: X-RAY 실 점검 한 벌
         if (!slErr && !xErr) return false;
       }
       // 검수업체 필터
@@ -233,7 +231,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (podFilter !== 'all' && c.pod !== podFilter) return false;
       return true;
     });
-  }, [list, cargoFilter, opFilter, podFilter, compMap, xrayMap, xraySeals]);
+  }, [list, cargoFilter, opFilter, podFilter, compMap, xrayMap, xraySeals, xSealCk]);   // 4.88: xSealCk
 
   if (!list || list.length === 0) {
     return (
@@ -359,6 +357,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
             comp={compMap[c.cn]}
             isXray={mode === 'discharge' && !!xrayMap[c.cn]}
             xraySeal={xraySeals?.[c.cn] || null}
+            xSealCk={xSealCk.byCn[c.cn] || null}   // 4.88: X-RAY 실 점검(중복·앞 세 자리·자릿수)
             mode={mode}
             voyageKey={voyageKey}
             inspector={inspector}
@@ -371,7 +370,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   );
 }
 
-function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer, dupSeals = null, voyageInfo = null }) {   // 3.9
+function ContainerCard({ c, comp, isXray, xraySeal, xSealCk = null, mode, voyageKey, inspector, onOpenContainer, dupSeals = null, voyageInfo = null }) {   // 3.9
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
@@ -417,9 +416,9 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   //   ⛔ sealError·sealConflict 와 달리 게이트를 걸지 않는다. 세 배지는 서로 다른 사고이므로
   //     같이 떠야 한다(sealConflict 가 sealError 뒤에 가려지는 기존 문제와 같은 실수를 반복하지 않는다).
   const dupPartners = dupSealPartners(c, dupSeals);
-  const xSealOrig = xraySeal?.seal_orig != null ? xraySeal.seal_orig : xraySeal?.seal || '';
   const xSeal = xraySeal?.seal || '';
-  const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
+  //  ★ 4.88 — X-RAY 실은 한 벌(utils.xraySealCheckOf)만 본다 — 중복·앞 세 자리(다수와 다름)·자릿수(6자리 아님). 종전엔 처음 적은 값과 글자 그대로 달라도 «실오류»였다.
+  const xSealError = !!(xSealCk && xSealCk.text);
 
   // 좌측 색깔 띠 (V37 typeBar)
   let typeBar = 'bg-ink-750';
@@ -537,9 +536,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                   <span className="text-xs2 sm:text-xxs text-dim-300 mono truncate">{c.cn}</span>
                 </>
               )}
-              {(sealError || xSealError) && (
+              {sealError && (
                 <span className="bg-red-700/80 text-red-50 bdg font-black">
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
+                </span>
+              )}
+              {xSealError && (
+                <span className="bg-rose-700/80 text-rose-50 bdg font-black" title={xSealCk.text}>
+                  <AlertOctagon className="w-2.5 h-2.5"/>X-RAY 실 확인
                 </span>
               )}
               {/* 1.76-05: 시프팅 — 이 컨은 «양하 처리»가 되는 작업 항목이다(표시 전용이 아니다).
@@ -698,9 +702,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                   <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(xRegisterInit); xRegTouched.current = false; }} className="flex items-center gap-1 text-xxs mono">
                     {xSealError ? (
                       <>
-                        <span className="text-dim-400 line-through">{xSealOrig}</span>
-                        <span className="text-red-400 mx-0.5">→</span>
                         <span className="text-red-300 font-black">{xSeal}</span>
+                        <span className="text-red-400 ml-1">{xSealCk.text}</span>
                       </>
                     ) : (
                       <span className={xSeal ? 'text-purple-200 font-bold' : 'text-dim-500 italic'}>

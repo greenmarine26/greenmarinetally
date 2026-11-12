@@ -39,7 +39,7 @@ window.__doExport = function() {
       const ws = XLSX.utils.table_to_sheet(table);
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
     });
-    const date = new Date().toISOString().slice(0, 10);
+    const date = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);   // 4.88: 새 창에 넣는 글 코드라 import 를 못 한다 — meToday.ymdKST 와 같은 식(KST)
     const title = (document.title || '출력물').replace(/[^가-힣a-zA-Z0-9_]/g, '_').slice(0, 30);
     XLSX.writeFile(wb, title + '_' + date + '.xlsx');
   } catch (e) {

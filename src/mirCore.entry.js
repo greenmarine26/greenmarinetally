@@ -80,6 +80,7 @@ export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn, shiftSetForUnit
 export { shipCodeInQuery, knownShipCodes } from './utils.js';   // 4.18-01 / ConeOne 2.69: 질문 속 다른 배(정확·오타·옛 코드)를 콘앱이 검수앱과 같은 판정으로 가린다(cone.html mirShipFirst)
 export { isWorkingNow, isPyeongtaekPort } from './utils.js';   // 4.06 / 2.62: 콘앱이 «일하는 배» 를 검수앱과 같은 판정으로 골라 화남 자료를 받는다(utils 에서 이름 하나만 — 엑셀 라이브러리는 딸려오지 않는다)   // 3.56 / 2.52   // 4.39-01: isPyeongtaekPort — 작업 분석 연막이 콘앱 평택분(EDI POD·POL)을 cone.html 처럼 가린다
 export { sealFormatAnomalies, ediSealMapOf } from './utils.js';
+export { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // 4.88 / ConeOne 2.78: 규격 길이 한 벌 — 콘앱 행의 20·40(cone.html coneSize)이 검수앱과 같은 판정
 export { sealPredictOf, isBayTidyAsk } from './nlSearch.js';   // 4.39-02: 미르가 말하는 예상 실오류(자릿수 부족·컨번호 같은 씰) — 연막검사가 같은 함수를 잰다   // 4.39-02: 예상 실오류 판정(주의 박스·미르 한 벌) — 연막검사가 같은 함수를 잰다
 export { mirPhotoHtml, mirHeroHtml, mirHeroSrc, mirPoseNo, mirPhotoKey, ensureMirPhotoCss, MIR_PHOTO_KEYS, MIR_POSES, MIR_PHOTO_CSS } from './components/mirPhotoArt.js';   // 4.07 / 2.63: 실사 미르 한 벌(얼굴 스프라이트·전신 자세·몸짓 CSS — React·이미지 파일을 import 하지 않는 순수 문자열). 3.57~4.06 의 그림 인형(mirFaceArt)은 걷었다 — 콘앱 얼굴도 같은 규칙으로 움직인다
 export { gangStateOf, bayReportOf, bayTidyText, tidyBayAnswer, termHoldOpenAt, termOpenedCover, withRecordPositions } from './gangState.js';   // 4.81: 미르 «N번 베이 정리해줘» 판정 한 벌 — 연막검사가 같은 함수를 잰다(콘앱은 answerOne 이 안에서 부른다)

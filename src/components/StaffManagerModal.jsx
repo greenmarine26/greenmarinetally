@@ -1,6 +1,7 @@
 // M5.73: 인원 관리 전용 모달 (김성일만 진입)
 //   InspectorModal과 분리 — 선택과 관리를 명확히 구분
 import React, { useState } from 'react';
+import { ymdKST, kstIsoOf } from '../meToday.js';   // 4.88: 화면·파일 이름 날짜·시각은 KST 한 벌
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff, isChief, isTester, splitRole } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
@@ -196,7 +197,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const ts = kstIsoOf().slice(0, 19).replace(/[:T]/g, '-');   // 4.88: 백업 파일 이름 시각도 KST
       a.href = url;
       a.download = `tallyman_backup_${ts}.json`;
       a.click();
@@ -422,7 +423,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
             <div key={devId} className="flex items-center justify-between mt-1 text-xxs text-dim-200">
               <span>
                 {d?.label || devId}{devId === getAdminDeviceId() && <span className="text-emerald-400"> (현재 기기)</span>}
-                {d?.addedAt ? <span className="text-dim-400"> · {new Date(d.addedAt).toISOString().slice(0, 10)}</span> : null}
+                {d?.addedAt ? <span className="text-dim-400"> · {ymdKST(d.addedAt)}</span> : null}
               </span>
               <button onClick={() => handleRemoveDevice(devId, d?.label)} className="text-red-400 hover:text-red-300 px-1.5">해제</button>
             </div>

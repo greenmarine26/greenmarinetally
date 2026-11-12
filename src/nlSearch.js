@@ -10,7 +10,7 @@ import { shipFlag } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
-import { sizeLenOf } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌(마감텔리 칸을 20·40·45 로 접은 것)
+import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌(마감텔리 칸을 20·40·45 로 접은 것)
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -1013,7 +1013,7 @@ export function parseNaturalQuery(text) {
       [/엠티\s*실|엠티실|e\s*-?\s*seal|이씰/i, 'eseal'],
       [/특수\s*제작|제작\s*컨|마크\s*콘|32\s*ft|34\s*ft|32\s*피트|34\s*피트/i, 'mkcon'],
       [/임시\s*창고|창고/, 'storage'],
-      [/커트\s*씰|커트씰|컷\s*씰|봉인자/, 'cutSeal'],
+      [/커트\s*씰|커트씰|컷\s*씰|봉인자|(?:x\s*-?\s*ray|엑스\s*레이)\s*(?:실|씰)\s*(?:점검|확인|중복|문제|이상|번호|목록|기록)/i, 'cutSeal'],   // 4.88: «X-RAY 실 점검·중복» 도 커트씰 창구(xraySealCheckOf 한 벌)
       [/보류/, 'held'],
       [/수화물\s*(?:확인|확정|체크)/, 'lugg'],
       [/환적|다음\s*(?:양하)?항|최종\s*목적/, 'transship'],
@@ -2360,10 +2360,7 @@ export function briefingVoiceLines(txt) {
 //  ★ 4.39-01: 브리핑과 미르 «작업 분석» 이 같은 판정으로 센다(규범 §4-4 한 벌) — 규격·풀/엠티·갑판/홀드·리퍼(풀만)·위험물·X-RAY·FR·OT·탱크·OOG.
 export function briefCountsOf(cs) {
   const szOf = (c) => {
-    const lbl = isoToLabel(c.iso) || '';
-    if (/^(20|40|45)/.test(lbl)) return sizeLenOf(c);   // 4.86-02: 규격 길이 한 벌(마감텔리 칸) — 읽히는 규격만, 못 읽는 것은 아래 종전 판정
-    const f = (c.iso || '')[0];
-    return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
+    return sizeLenKnown(c) || '?';   // 4.88: 규격 길이 한 벌(모르면 ?) — 종전 라벨이 못 읽는 것만 첫 글자로 따로 갈랐다(L2G1 이 45)
   };
   const sz = {}; let F = 0, E = 0, ERf = 0, deck = 0, hold = 0;   // 4.15-01: ERf — 엠티 중 리퍼 엠티(엠티 구분 표기)
   const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], oog = [], noTmp = [];
@@ -2571,10 +2568,7 @@ function formatBayDist(desc, results, parsed = {}) {
   const byBay = {};
   //  ★ 일괄수리(2026-11-10): 규격 길이 한 벌(tallyReport.sizeLenOf — 마감텔리 칸을 20·40·45 로 접은 것). 알아보는 규격(라벨 20·40·45 또는 첫 자리 2·4·L·9 — 종전과 같은 범위)만 세고 그 밖은 «?» 그대로.
   const sizeOf = (c) => {
-    const lbl = isoToLabel(c.iso) || '';
-    const f = (c.iso || '')[0];
-    if (!/^(20|40|45)/.test(lbl) && !(f === '2' || f === '4' || f === 'L' || f === '9')) return '?';
-    return sizeLenOf(c);
+    return sizeLenKnown(c) || '?';   // 4.88: 규격 길이 한 벌(모르면 ?)
   };
   for (const c of results) {
     const b = parseInt(c.bay, 10);
@@ -4355,7 +4349,7 @@ export function twinDiffLimit(pier) {
 }
 
 function is20ft(c) {
-  return /^2/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('20');
+  return sizeLenKnown({ iso: c.iso }) === '20';   // 4.88: 규격 길이 한 벌(자리 판정 — 규격만)
 }
 
 // 20ft 컨테이너들을 트윈 쌍으로 묶기 — 홀수 베이 + pairsMap 짝꿍 베이 + 같은 row/tier/모드

@@ -6,14 +6,13 @@
 //   ⚠ 진단만 한다 — 숫자를 고치거나 자료를 만들지 않는다. 리스트가 정본이라는 판단도 하지 않는다.
 import { isPyeongtaekPort, isPtkResolved } from './utils.js';   // 3.53: POD 확정 반영 한 벌
 import { isoShown } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { sizeLenKnown } from './tallyReport.js';   // 4.88: 규격 길이 한 벌(모르면 «기타»)
 
 const S = (x) => String(x || '').trim().toUpperCase();
-// 40ft 계열(4·L·9 시작) / 20ft(2 시작) — utils.isoToLabel 과 같은 앞자리 규칙
+// ★ 4.88 — 규격 길이 한 벌(tallyReport.sizeLenOf). 20 이면 20ft, 40·45 는 40ft 계열. 종전 첫 글자 규칙은 «DC20»·«DCHC» 같은 선사 약식을 «기타» 로 뺐다.
 export function sizeOf(iso) {
-  const c = S(iso).slice(0, 1);
-  if (c === '4' || c === 'L' || c === '9') return '40ft';
-  if (c === '2') return '20ft';
-  return '기타';
+  const k = sizeLenKnown({ iso: S(iso) });   // 4.88 감사 «가»: 못 읽는 규격은 종전처럼 «기타»
+  return !k ? '기타' : k === '20' ? '20ft' : '40ft';   // 4.88
 }
 
 /** EDI 원문 헤더에서 다음 기항(LOC+61)과 출발항(LOC+5)을 읽는다. 없으면 null. */

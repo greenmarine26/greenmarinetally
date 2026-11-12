@@ -519,7 +519,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const html = src('public/cone.html');
         const fnSrc = (name) => (html.match(new RegExp(`function ${name}\\(c\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
         const vctx = { console, window: { ConeMir: { isReeferContainer: B.isReeferContainer }, ConeParse: { isFlatRackContainer: B.isFlatRackContainer } } };
-        require('vm').createContext(vctx); require('vm').runInContext(fnSrc('coneIsReefer') + (html.match(/function coneAlphaOt\(iso\)\{[\s\S]*?\n\}\n/) || [''])[0] + fnSrc('_ediRowOf') + '\nthis.__rowOf = typeof _ediRowOf === "function" ? _ediRowOf : null;', vctx);
+        require('vm').createContext(vctx); require('vm').runInContext((html.match(/function coneSize\(iso, tp\)\{[\s\S]*?\n\}\n/) || [''])[0] + fnSrc('coneIsReefer') + (html.match(/function coneAlphaOt\(iso\)\{[\s\S]*?\n\}\n/) || [''])[0] + fnSrc('_ediRowOf') + '\nthis.__rowOf = typeof _ediRowOf === "function" ? _ediRowOf : null;', vctx);
         const both = [['STSE_2669E', { info: vs.info, loading: sec, discharge: fx('conepos_live.json')['STSE_2669E|discharge'] }], ['OBWH_2749E', fx('ferry1700.json').voyages.OBWH_2749E]].map(([kk, vo]) => {
           const ptkM = (m, e) => isPtkCode(m === 'discharge' ? e.pod : e.pol);
           const ed = (m) => Object.values((vo[m] || {}).ediContainers || {}).filter((e) => e.bay && e.tier && ptkM(m, e));
@@ -542,7 +542,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             const vc2 = { console, window: { ConeMir: { isReeferContainer: B.isReeferContainer, isoPickOog: B.isoPickOog }, ConeParse: { isFlatRackContainer: B.isFlatRackContainer } } };
             const fnSrc2 = (name) => (html.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
             require('vm').createContext(vc2);
-            require('vm').runInContext(['coneIsReefer', 'coneAlphaOt', 'coneRecMark', 'coneRecRows', '_ediRowOf'].map(fnSrc2).join('') + '\nthis.__rowOf = _ediRowOf; this.__recRows = typeof coneRecRows === "function" ? coneRecRows : null;', vc2);
+            require('vm').runInContext(['coneSize', 'coneIsReefer', 'coneAlphaOt', 'coneRecMark', 'coneRecRows', '_ediRowOf'].map(fnSrc2).join('') + '\nthis.__rowOf = _ediRowOf; this.__recRows = typeof coneRecRows === "function" ? coneRecRows : null;', vc2);
             const kR = 'RZOR_R098E', vR = { info: { vsl: 'RZOR', voy: 'R098E', voy_d: 'R098E' }, discharge: { ediContainers: mk.edi, records: mk.rec } };
             const dR2 = Object.values(mk.edi).filter((e) => isPtkCode(e.pod)).map(vc2.__rowOf);
             const marked = vc2.__recRows ? vc2.__recRows(dR2, mk.rec) : dR2;
@@ -865,7 +865,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       {
         const html = src('public/cone.html');
         const fnOf = (name) => (html.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)) || [''])[0];
-        const names = ['mirAsk', 'mirShipFirst', 'mirEnsureShip', 'mirTryOpen', 'mirEnsureCalc', 'coneQaRowsNow', 'coneRecRows', 'coneRecMark', 'coneIsReefer'];
+        const names = ['mirAsk', 'mirShipFirst', 'mirEnsureShip', 'mirTryOpen', 'mirEnsureCalc', 'coneQaRowsNow', 'coneRecRows', 'coneRecMark', 'coneIsReefer', 'coneSize'];
         const code = names.map(fnOf);
         const list = Object.entries(voyages).map(([k, vv]) => ({ key: k, vsl: vv.info.vsl, _info: vv.info, noEdi: !((vv.discharge && (vv.discharge.ediContainers || vv.discharge.raw)) || (vv.loading && (vv.loading.ediContainers || vv.loading.raw))) }));
         const state = { voyages: list, voyageKey: '', disch: null, stow: null };

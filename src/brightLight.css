@@ -224,6 +224,7 @@
 :root[data-bright="4"] .bg-rose-500\/15{background-color:rgb(244 63 94 / 0.15)}
 :root[data-bright="4"] .bg-rose-600{background-color:rgb(251 113 133)}
 :root[data-bright="4"] .bg-rose-700{background-color:rgb(253 164 175)}
+:root[data-bright="4"] .bg-rose-700\/80{background-color:rgb(253 164 175 / 0.80)}
 :root[data-bright="4"] .bg-rose-700\/90{background-color:rgb(253 164 175 / 0.90)}
 :root[data-bright="4"] .bg-rose-800{background-color:rgb(254 205 211)}
 :root[data-bright="4"] .bg-rose-800\/70{background-color:rgb(254 205 211 / 0.70)}

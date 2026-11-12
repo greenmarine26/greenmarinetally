@@ -7,6 +7,7 @@ const FX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'conedone
 let bad = 0; const T = (ok, why) => { console.log((ok ? '  ✓ ' : '  ✗ ') + why); if (!ok) bad++; };
 const hcc = html.match(/function holdConeCount\(size, shipType, multiCount\)\{[\s\S]*?\n\}\n/);
 const ct = html.match(/const CT = \{[\s\S]*?\nfunction ctCountLine\([\s\S]*?\n\}\n/);
+if (ct) ct[0] = (html.match(/function coneSize\(iso, tp\)\{[\s\S]*?\n\}\n/) || [''])[0] + ct[0];   // 4.88 / ConeOne 2.78: 행 크기는 coneSize(규격 길이 한 벌) — 같이 꺼낸다
 T(!!hcc && !!ct, 'holdConeCount · CT 블록(const CT ~ ctCountLine)을 소스에서 꺼냈다');
 if (!hcc || !ct) { console.log('✗ 콘앱 완료 화면 연막검사 실패'); process.exit(1); }
 function run(opts) {
@@ -118,7 +119,7 @@ T(RN('PCTC', new Date(2026, 8, 6, 12, 30).getTime()).rest === true, '부두를 �
   T(!!rowOf, '_ediRowOf(ediContainers 한 건 → 콘앱 행)를 소스에서 꺼냈다');
   const isRfSrc = (html.match(/function coneIsReefer\(c\)\{[\s\S]*?\n\}\n/) || [''])[0];   // ConeOne 2.67: _ediRowOf 가 부르는 리퍼 판정 한 벌
   const isAotSrc = (html.match(/function coneAlphaOt\(iso\)\{[\s\S]*?\n\}\n/) || [''])[0];   // ConeOne 2.71-03: _ediRowOf 가 부르는 오픈탑 알파 표기 한 벌
-  const vmr = { console }; vm.createContext(vmr); vm.runInContext(isRfSrc + isAotSrc + rowOf[0] + '\nthis.__rowOf = _ediRowOf;', vmr);
+  const vmr = { console }; vm.createContext(vmr); vm.runInContext((html.match(/function coneSize\(iso, tp\)\{[\s\S]*?\n\}\n/) || [''])[0] + isRfSrc + isAotSrc + rowOf[0] + '\nthis.__rowOf = _ediRowOf;', vmr);
   const listL = Object.values(OB.loading_ediContainers).map(vmr.__rowOf);
   const rowsD = Object.values(OB.discharge_ediContainers).map(vmr.__rowOf).filter(r => r.bay && r.tier);
   T(listL.length === 230 && listL.every(r => !r.bay && !r.tier), `선적 리스트 ${listL.length}대 — 자리 있는 행 0(가상 EDI)`);

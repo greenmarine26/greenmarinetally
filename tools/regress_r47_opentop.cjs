@@ -142,7 +142,7 @@ module.exports = async function r47({ ROOT, TMP, ok, head, fx }) {
   {
     const cone = src('public/cone.html');
     const fnOf = (name) => { const m = cone.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}\\n`)); return m ? m[0] : ''; };
-    const names = ['coneIsReefer', 'coneAlphaOt', '_ediRowOf', 'masterRowsAdapter', 'isASC', 'isPtkPort'];
+    const names = ['coneSize', 'coneIsReefer', 'coneAlphaOt', '_ediRowOf', 'masterRowsAdapter', 'isASC', 'isPtkPort'];
     const parts = names.map(fnOf);
     ok(`⑩-0 cone.html 에서 함수 ${names.length}개 본문을 꺼냈다`, parts.every(Boolean), names.filter((n, i) => !parts[i]).join(','));
     const mk = (win) => new Function('window', 'extractEdiDocDate', `${parts.join('\n')}; return { coneAlphaOt, _ediRowOf, masterRowsAdapter };`)(win, () => '');

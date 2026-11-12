@@ -16,7 +16,12 @@ const KEY = 'tallyone_me_today';
 
 /** 평택(KST) 기준 오늘 YYYY-MM-DD. */
 export function ymdKST(ts = Date.now()) {
-  return new Date(ts + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return kstIsoOf(ts).slice(0, 10);
+}
+/** ★ 4.88 — 평택(KST) 기준 «YYYY-MM-DDTHH:MM:SS.sss» (끝에 Z 없음 · 시각 표시·파일 이름용). 날짜를 UTC 로 자르는 곳이 이것을 부른다. */
+export function kstIsoOf(ts = Date.now()) {
+  const n = typeof ts === 'number' ? ts : new Date(ts).getTime();
+  return new Date((Number.isFinite(n) ? n : Date.now()) + 9 * 3600 * 1000).toISOString().replace(/Z$/, '');
 }
 
 /** 로그인 확정 시 호출 — 오늘 날짜와 함께 이름을 기억한다. */

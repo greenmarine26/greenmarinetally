@@ -2,6 +2,7 @@
 //   - bay/row/tier 직접 입력 + 충돌 검사 + 풀/엠티 차별 확인
 //   - 빈 입력 = 미배정 (선적대상으로 분류)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { X, AlertTriangle, MapPin } from 'lucide-react';
 import { bayParityError, seqFullConfirmText, buildSlotUniverse, buildOccupancy, effectivePos, isoToLabel } from '../utils.js';   // 2.95: 충돌은 실물이 실린 칸 하나뿐   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌) · 1.55: 칸·점유는 utils 한 벌
 import { isoShown } from '../utils.js';
@@ -110,7 +111,7 @@ export default function PositionEditModal({
 
   // V7.94-11: 베이 먼저 선택 → 그 베이 자리만 표시 (전체 노출은 오선적 유발 — 사용자 지적)
   //   완료된 자리도 보여주되 선택 불가(비활성) — 베이 전체 그림 파악용
-  const is20 = (c) => String(c?.tp || '').startsWith('20') || String(c?.iso || '')[0] === '2' || String(isoToLabel(c?.iso) || '').startsWith('20');   // 3.60-12: 장비코드 DC20 도
+  const is20 = (c) => sizeLenKnown({ iso: c?.iso, tp: c?.tp }) === '20';   // 4.88: 규격 길이 한 벌(자리 판정 — 규격·tp 만) · 종전   // 3.60-12: 장비코드 DC20 도
   const [pickBay, setPickBay] = useState(null);
 
   // ── TallyOne 1.55: **칸과 점유는 utils.js 한 벌로 낸다.** ────────────────

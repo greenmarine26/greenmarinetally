@@ -67,7 +67,9 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     ok(!/from"\.\//.test(B.slice(0, 400)), 'baydict 는 아무 청크도 import 하지 않는다(사전만 — 해시가 사전이 바뀔 때만 바뀐다)');
     ok(/react/.test(V) && /firebase/i.test(V), 'vendor 에 react·firebase 가 들어 있다');
     ok(!/4\.10\.38/.test(M) && !/4\.10\.38/.test(V), 'pdfjs-dist(4.10.38) 가 본체·vendor 에 없다(동적 청크 — 본체의 GlobalWorkerOptions 는 mixerUpload 의 CDN 3.11 경로)');
-    ok(/4\.87-10/.test(M), '본체에 이번 판 문자열(4.87-10)');
+    //  4.88: «이번 판» 은 판이 오를 때마다 바뀐다 — utils.APP_VERSION 을 읽어 그 글자가 본체에 있는지 본다(4.87-10 을 박아 두면 다음 판에서 거짓 실패).
+    const _ver = (fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8').match(/^export const APP_VERSION = '([^']+)'/m) || [])[1] || '4.87-10';
+    ok(M.includes(_ver), `본체에 이번 판 문자열(${_ver})`);
     ok(M.length < 5 * 1024 * 1024, `본체가 5MB 아래(${(M.length / 1048576).toFixed(2)}MB — 4.87-09 는 5.79MB)`);
   }
   // 4.87-10: assets 에는 직전 판 묶음이 한 판 더 남아 있다(build.sh 3.60-06) — 이번 판 본체·tallyExcel 이 실제로 부르는 exceljs 를 고른다.

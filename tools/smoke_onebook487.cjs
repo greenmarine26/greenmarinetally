@@ -70,7 +70,7 @@ const sameSet = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b
   ok('수석 보드 별첨 — L2G1·SKHU 600번대는 40 줄 · L5G1 은 45 줄 · 22G1 은 20 줄', L.n === 4 && L.fe['40'].F.n === 2 && L.fe['45'].F.n === 1 && L.fe['20'].E.n === 1, JSON.stringify(L.fe));
   const srcOf = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ok('카고플랜 별첨 · 미르 베이 분포 · LOLO 집계 · 미르 카드가 sizeLenOf 를 부른다',
-    /const sizeOfC = sizeLenOf;/.test(srcOf('src/components/PrintableCargoPlanV2.jsx')) && /return sizeLenOf\(c\);/.test(srcOf('src/nlSearch.js'))
+    /const sizeOfC = sizeLenOf;/.test(srcOf('src/components/PrintableCargoPlanV2.jsx')) && /return sizeLenKnown\(c\) \|\| '\?';/.test(srcOf('src/nlSearch.js'))
     && /sizeLenOf\(r\)/.test(srcOf('src/loloReport.js')) && /sizeLenOf\(\{ \.\.\.c, iso \}\)/.test(srcOf('src/mir.js')));
 
   //  ② 부두 판정 한 벌 — pier → 선석 → ''

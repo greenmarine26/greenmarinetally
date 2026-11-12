@@ -268,7 +268,7 @@ console.log('\n  ■ 그리는 자리 — 정해 준 자리가 그림에 나오�
   //  ── 트윈 전체화면
   setup('loading');
   //  2.54 — 트윈은 ctDrawRows(계획 + 계획 밖 실제 자리 기록)로 그린다. 그 함수도 실소스 그대로 넣는다.
-  const ctDrawRows = new Function('CT', 'ctPlanRows', 'ctPosOf', grab('ctDrawRows') + '; return ctDrawRows;')(CT, ctPlanRows, ctPosOf);
+  const ctDrawRows = new Function('CT', 'ctPlanRows', 'ctPosOf', grab('coneSize') + '\n' + grab('ctDrawRows') + '; return ctDrawRows;')(CT, ctPlanRows, ctPosOf);
   const twCells = new Function('CT', 'ctPlanRows', 'ctPosOf', 'ctDrawRows', grab('twCells') + '; return twCells;')(CT, ctPlanRows, ctPosOf, ctDrawRows);
   const cells = twCells('loading', new Set([19, 21, 23]), new Set());
   ok(!!(cells['84'] && cells['84']['06'] && cells['84']['06'].cn === 'ABCU1234567'), '트윈 전체화면 — 정해 준 자리(19-06-84)에 그린다');
@@ -399,7 +399,7 @@ console.log('\n  ■ 콘 줄 그림(호기 카드) — 실제로 돌려 본다')
     ctPosOf, ctInStg, ctPos,
   };
   const ctx = vm.createContext(sb);
-  vm.runInContext(hcc + '\n' + ctb + '\n;globalThis.__c = ctCompute; globalThis.__CT = CT;', ctx);
+  vm.runInContext(grab('coneSize') + '\n' + hcc + '\n' + ctb + '\n;globalThis.__c = ctCompute; globalThis.__CT = CT;', ctx);
   const CTv = ctx.__CT;
   CTv.rec = { loading: appRec, discharge: {} };
   CTv.tw = { loading: {}, discharge: {} };

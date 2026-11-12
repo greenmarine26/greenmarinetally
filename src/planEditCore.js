@@ -7,6 +7,7 @@
 //   - 이동 가능 = 평택 선적분 + 쉬프팅(재적부). 통과 고정분은 잠금.
 //   - 실선적 데이터(records/bay_actual)는 이 모듈이 절대 만지지 않는다.
 import { isPyeongtaekPort, isoToLabel, under40Support } from './utils.js';
+import { sizeLenOf } from './tallyReport.js';   // 4.88: 규격 길이 한 벌
 
 export const STG = '__STG__';
 
@@ -24,12 +25,9 @@ export const padBay = (v) => {
   return String(n).padStart(2, '0');   // padStart는 절단하지 않음 — 100은 '100' 그대로
 };
 
-// 컨 사이즈 라벨 → '20' | '40' | '45'
+// 컨 사이즈 → '20' | '40' | '45' — ★ 4.88 규격 길이 한 벌(tallyReport.sizeLenOf · 규격이 비면 리스트 tp). 종전 라벨 앞 두 자리라 L2G1 이 45(마감텔리는 HC 칸)였다.
 export function sizeOf(c) {
-  const lbl = String(isoToLabel(c?.iso) || c?.tp || '');
-  if (/^45/.test(lbl)) return '45';
-  if (/^40/.test(lbl)) return '40';
-  return '20';
+  return sizeLenOf(c || {});   // 4.88
 }
 
 // ── 이동 권한 판정 ──

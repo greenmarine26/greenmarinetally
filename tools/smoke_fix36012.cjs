@@ -43,7 +43,8 @@ try {
   //  4.86: 40 과 40HC 는 다른 단계 — 22GP(20) → 42GP(40) → DCHC(40HC) 순서, 단계마다 순번 1부터(DCHC 는 20 묶음에 들지 않는다)
   ok('DCHC 는 40HC 단계 첫째(42GP 는 40 단계 첫째와 두 줄 경계) · 22GP 는 20풀 첫째', numOf('KBTU1000002') === 1 && numOf('AAAU1000001') === 1 && numOf('BBBU2000001') === 1 && html.indexOf('BBBU2000001') < html.indexOf('AAAU1000001') && html.indexOf('AAAU1000001') < html.indexOf('KBTU1000002') && (html.match(/class="gb2"/g) || []).length === 2, `DCHC ${numOf('KBTU1000002')} · 42GP ${numOf('AAAU1000001')} · 22GP ${numOf('BBBU2000001')} · gb2 ${(html.match(/class="gb2"/g) || []).length}`);
   const GQ = fs.readFileSync(path.join(ROOT, 'src/guidedQueue.js'), 'utf8'), PE = fs.readFileSync(path.join(ROOT, 'src/components/PositionEditModal.jsx'), 'utf8'), SP = fs.readFileSync(path.join(ROOT, 'src/components/SearchPanel.jsx'), 'utf8');
-  ok('20피트 가르기(자동 가이드·위치 수정·자리 선택)가 라벨도 본다 — DC20', /const is20ft = [^\n]*isoToLabel\(c\.iso\)[^\n]*startsWith\('20'\)/.test(GQ) && /const is20 = [^\n]*isoToLabel\(c\?\.iso\)/.test(PE) && /const is20 = [^\n]*isoToLabel\(c\.iso\)/.test(SP));
+  //  4.88: 세 곳이 규격 길이 한 벌(tallyReport.sizeLenKnown — 안에서 isoToLabel 라벨을 본다)을 부른다. DC20 → 20 은 smoke_onebook488 이 실컨으로 잰다.
+  ok('20피트 가르기(자동 가이드·위치 수정·자리 선택)가 라벨도 본다 — DC20 (4.88: sizeLenKnown 한 벌)', /const is20ft = \(c\) => sizeLenKnown\(c\) === '20';/.test(GQ) && /const is20 = \(c\) => sizeLenKnown\(\{ iso: c\?\.iso, tp: c\?\.tp \}\) === '20';/.test(PE) && /const is20 = \(c\) => sizeLenKnown\(\{ iso: c\.iso, tp: c\.tp \}\) === '20';/.test(SP));
 } catch (ex) {
   bad += 1; console.log('  ✘ 검사 중 오류 — ' + (ex && ex.stack || ex));
 }

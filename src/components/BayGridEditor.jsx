@@ -13,6 +13,7 @@
 //   · 드래그 하이라이트는 DOM 클래스 직접 처리 (리렌더 0) + 항상 한 칸만
 //   · 상태 클래스는 크기에 영향 주는 속성 금지 (padding/border 변경 → 행 재배분)
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { createPortal } from 'react-dom';
 import { X, Save, Undo2 } from 'lucide-react';
 import { getShipBayDictData } from '../shipStructure.js';
@@ -701,7 +702,7 @@ export default function BayGridEditor({
       return;
     }
     //  크기가 다르면 자리가 물리적으로 안 맞을 수 있다 — 막지는 않되 알린다(최종 판단은 placeAt).
-    const szOf = (cn) => String(state.byCn.get(cn)?.iso || '')[0];
+    const szOf = (cn) => sizeLenKnown({ iso: state.byCn.get(cn)?.iso });   // 4.88: 규격 길이 한 벌(종전 첫 글자 비교 — 45G1 과 L5G1 을 같다고 봤다)
     const warn = (szOf(a) !== szOf(b)) ? ' ⚠ 규격이 다릅니다 — 자리가 맞는지 확인하세요' : '';
     const res = P.placeAt(state, a, pb.bay, pb.row, pb.tier);
     if (!res.ok) { setMsg(`맞바꾸기 불가: ${res.reason}`); return; }

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.87-10';
-const NOTE = '4.87-10 새 판으로 바꿀 때 기다림 없이 바로 열립니다. 알림이 화면 위쪽에 뜨고 아이폰 아래 막대에 단추가 가리지 않습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.88';
+const NOTE = '4.88 X-RAY 실번호는 중복과 앞 세 자리가 다른 것만 알려 드립니다. 야간에 뽑는 출력물 날짜가 한국 날짜로 찍힙니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

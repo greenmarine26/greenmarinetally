@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { FitBox } from '../components/FitBox.jsx';   // 3.48: 한 벌 — 베이뷰 작업과 공용
 import { Users, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';   // 4.24: Anchor 는 옛 보드 머리와 함께 뺐다
 import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline } from '../firebase.js';   
@@ -446,7 +447,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
     a.href = url; a.download = `오답리포트_${stamp}.txt`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
@@ -1154,7 +1155,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <ContainerDetailModal variant="modal" c={dc}
             workBay={dc.bay || dc.bay_orig || recMap[dc.cn]?.bay_orig || null}
             workTier={(() => { const t = parseInt(dc.tier || dc.tier_planned || recMap[dc.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
-            comp={compMap[dc.cn]} isXray={boardDetail.mode === 'discharge' && !!(sec.xrayList?.[dc.cn])} xraySeal={sec.xraySeals?.[dc.cn] || null}
+            comp={compMap[dc.cn]} isXray={boardDetail.mode === 'discharge' && !!(sec.xrayList?.[dc.cn])} xraySeal={sec.xraySeals?.[dc.cn] || null} xraySeals={sec.xraySeals || null}
             mode={boardDetail.mode} voyageKey={boardDetail.key} voyageInfo={vy?.info} mfnList={vy?.discharge?.mfnList || null} mfnVoyage={vy || null} inspector={inspector} sealMode={null}
             onClose={() => setBoardDetail(null)} allContainers={all} records={recMap} shiftCns={null} />
         );

@@ -8,6 +8,8 @@
 // 미통합 (다음 패치 예정): 선사별 별첨, 화물 종류별 별첨, 선적 모드 POD 컬러 매핑
 // ============================================================
 import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
+import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
+import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 핀치 확대 한 벌
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
@@ -48,7 +50,7 @@ import {
 // V8.88: 20피트 판정 — iso 앞자리(2x=20ft), 없으면 베이 홀수 폴백. 2.38부터 엠티 e/E 분기용.
 function _is20ft(c) {
   const iso = String(c.iso || '').trim();
-  if (iso) return /^2/.test(iso);
+  if (iso) return sizeLenKnown({ iso }) === '20';   // 4.88: 규격 길이 한 벌(종전 첫 글자 2 — «DC20» 을 40 으로)
   const b = parseInt(c.bay, 10);
   return Number.isFinite(b) ? (b % 2 === 1) : false;
 }
@@ -1393,7 +1395,7 @@ export default function PrintableCargoPlanV2({
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   const title =
     mode === 'discharge'
       ? `${(effShipName || '').toUpperCase()} CARGO DISCHARGING PLAN`

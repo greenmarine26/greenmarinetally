@@ -584,7 +584,10 @@ export function getShipBayDictData(imo, code, opts) {
   const _isUserOwned = isUserOwnedBayDict({ source: result.source, bayDef });
   if (result.source === 'firebase' && !_isUserOwned) {
     try {
-      const v2Backup = lookupBayDictV2Enhanced(imo, code);
+      //  ★ 4.88 — **이름 짐작(name-fuzzy) 결과는 백업 union 에 섞지 않는다.** TallyOne 1.14 가 본 조회(위 2c)에서 폐지한 fuzzy 가
+      //    이 백업 자리에는 남아 있어 남의 배 구조가 정본 위에 섞였다(감사 실측 — HAB → KKLC · ANAS → MCAP). 정확 매칭(code·IMO·콜사인)만 쓴다.
+      const _v2Raw = lookupBayDictV2Enhanced(imo, code);
+      const v2Backup = (_v2Raw && !String(_v2Raw.matchedBy || '').startsWith('name-fuzzy')) ? _v2Raw : null;   // 4.88 문지기
       const v2HasData = v2Backup?.entry?.bayDef?.baysSummary && v2Backup.entry.bayDef.baysSummary.length > 0;
       const v3HasData = finalBayDef.baysSummary && finalBayDef.baysSummary.length > 0;
       if (v2HasData && !v3HasData) {

@@ -29,6 +29,7 @@ T(/\.ct-old > summary\{[^}]*min-height:\s*44px/.test(html), '접기 손잡이가
 
 // ── 2. ctRender 를 실제로 돌린다 ──────────────────────────────────────
 const ct = html.match(/const CT = \{[\s\S]*?\nfunction ctCountLine\([\s\S]*?\n\}\n/);
+if (ct) ct[0] = (html.match(/function coneSize\(iso, tp\)\{[\s\S]*?\n\}\n/) || [''])[0] + ct[0];   // 4.88 / ConeOne 2.78: 행 크기는 coneSize(규격 길이 한 벌) — 같이 꺼낸다
 const rnd = html.match(/\nfunction ctCard\(\)[\s\S]*?\n  el\.innerHTML = html;[\s\S]*?\n\}\n/);
 T(!!ct && !!rnd, 'CT 블록과 ctRender 를 소스에서 꺼냈다(베껴 적지 않는다)');
 if (!ct || !rnd) { console.log('✗ 띠·접기 연막검사 실패'); process.exit(1); }

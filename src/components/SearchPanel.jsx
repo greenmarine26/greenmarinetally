@@ -4,6 +4,8 @@
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { sizeLenKnown, sizeLenOf } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
+import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { equipGateText, canWorkNow, workGateText, mirWorkCtx } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트 · 4.38: mirWorkCtx — 작업 중 사담 미루기
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
@@ -365,7 +367,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   };
   const manualGroups = useMemo(() => {
     if (workFilter === 'completed') return [];
-    const is40 = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
+    const is40 = (c) => { const k = sizeLenKnown(c); return k === '40' || k === '45'; };   // 4.88: 규격 길이 한 벌(tallyReport.sizeLenKnown) — 종전 첫 글자 규칙은 «DC40»·«45HC» 를 못 읽었다
     const map = {};
     // V9.23-08: 좌표 없는 컨을 버리지 않는다 — 버리면 "대기 N대"인데 고를 베이가 없어진다.
     //   (2658W 실측: 남은 14대가 전부 좌표 없는 엠티라 화면이 "남은 작업 없음"으로 보였다)
@@ -719,7 +721,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
               const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
-              a.href = url; a.download = `초과분리스트_${new Date().toISOString().slice(0, 10)}.csv`;
+              a.href = url; a.download = `초과분리스트_${ymdKST()}.csv`;   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
               document.body.appendChild(a); a.click(); document.body.removeChild(a);
               URL.revokeObjectURL(url);
             }}
@@ -2184,7 +2186,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading' && canCompleteContainer(c, 'loading')), [allContainers]);
   const equipNo = useEquipNo();   // TallyOne 1.55: 완료 기록에 갱(호기)을 남긴다
   // V8.83: 자리 선택 그리드 — 20ft 계획 자리(완료=회색 선택불가). 위치수정 창과 같은 방식(사용자 확정).
-  const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2' || String(isoToLabel(c.iso) || '').startsWith('20');   // 3.60-12: 장비코드 DC20 도
+  const is20 = (c) => sizeLenKnown({ iso: c.iso, tp: c.tp }) === '20';   // 4.88: 규격 길이 한 벌(자리 판정이라 규격·tp 만 — 컨번호 규칙 없음)   // 3.60-12: 장비코드 DC20 도
   // ── TallyOne 1.55: **칸은 컨이 아니다.** ──────────────────────────────
   //   검수사 확정 2026-08-12 — *"컨테이너가 빠져야 하는데 자리가 빠진 이유
   //   (손님이 나가야 하는데 방이 나가버린 상황). 카고플랜은 변함이 없어야 한다."*
@@ -2801,7 +2803,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     const src = slotSource || allContainers || [];
     return src.find((y) => y && y.cn === x.cn && y._mode === x._mode) || null;
   };
-  const is20 = (x) => !!x && (String(x.tp || '').startsWith('20') || String(x.iso || '')[0] === '2' || String(isoToLabel(x.iso) || '').startsWith('20'));
+  const is20 = (x) => !!x && sizeLenKnown({ iso: x.iso, tp: x.tp }) === '20';   // 4.88: 규격 길이 한 벌(자리 판정)
 
   // 증상3 수정: 옛 c1/c2 객체의 _comp는 갱신되지 않으므로,
   //   최신 allContainers에서 두 컨의 완료 여부를 다시 조회해 판단한다.

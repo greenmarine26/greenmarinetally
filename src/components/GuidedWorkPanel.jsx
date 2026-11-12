@@ -3,6 +3,7 @@
 // 설정 칩(장비·접안·베이)은 항상 표시 — 탭하면 해당 단계로 돌아가 변경 (접안 변경은 재확인)
 // 수정 3연속 = 플랜대로 진행되지 않음 → 4.26-02 부터는 말없이 수동으로 넘기지 않고 묻는다(자동 그대로 · 순서 바꾸기 · 수동)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
@@ -429,7 +430,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // 그룹 목록 (남은 작업이 있는 그룹만) — V7.94-23: 홀드/데크 잔여 구분
   // V7.99-8 (메모6): 단(홀드/데크) 선택 버튼에 규격별(20FT/40FT) 내역 표시용 집계 추가.
   const groups = useMemo(() => {
-    const is40 = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
+    const is40 = (c) => { const k = sizeLenKnown(c); return k === '40' || k === '45'; };   // 4.88: 규격 길이 한 벌(tallyReport.sizeLenKnown) — 종전 첫 글자 규칙은 «DC40»·«45HC» 를 못 읽었다
     const map = {};
     for (const c of remaining) {
       const center = groupCenterOf(c.bay);

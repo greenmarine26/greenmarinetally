@@ -5,6 +5,7 @@
 // 사용자 원칙: 현장 자급자족, Gemini 무료 한계 무시, 폰에서 즉시 처리
 
 import { extractPdfText } from './mixerUpload.js';
+import { ymdKST } from './meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 
 // PDF에서 핵심 정보 자동 추출
 export async function parseStowagePdfAuto(file) {
@@ -115,7 +116,7 @@ export function buildBayDictEntryFromParsed(code, parsed, fileName = '') {
     code,
     name: parsed.shipName || code,
     bayDef: {
-      sourceFile: fileName || `${code}-auto-${new Date().toISOString().slice(0, 10)}.pdf`,
+      sourceFile: fileName || `${code}-auto-${ymdKST()}.pdf`,   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
       parsedAt: new Date().toISOString(),
       parserVersion: 'M6.70-app-auto-parser',
       methodology: 'STOWAGE_PDF_APP_AUTO_PARSER',

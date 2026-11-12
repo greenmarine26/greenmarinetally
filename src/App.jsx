@@ -943,6 +943,7 @@ export default function App() {
             comp={compMap[globalDetail.cn]}
             isXray={globalDetail.mode === 'discharge' && !!xrayMap[globalDetail.cn]}
             xraySeal={xraySeals[globalDetail.cn] || ''}
+            xraySeals={xraySeals}   // 4.88: X-RAY 실 점검(중복·앞 세 자리)은 항차 실 전부로
             records={recMap}   /* 3.2-01: 통과분 문지기 재료 — 리스트 등재분은 작업분(재감사 P2-A) */
             mode={globalDetail.mode}
             voyageKey={globalDetail.voyageKey}

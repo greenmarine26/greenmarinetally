@@ -8,6 +8,7 @@
 //   - 시트1=전체, 시트2=특수화물 별첨
 
 import { shipOpMapper } from './data/tallyFormats.js';
+import { ymdKST } from './meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { tallySizeCol } from './tallyReport.js';   // 4.85-02: 마감텔리 규격 칸 한 벌
 import { isoToLabel, isoToCustomsSpec, isFlatRackContainer, overDims, isReeferIso, normPortCode, fmtShiftPos, fmtShiftTime, fmtShiftAct, isMadeUnitCn, splitJoinedSeals, MADE_UNIT_LABEL } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 import { isoShown, isoConflictOf } from './utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
@@ -923,7 +924,7 @@ ${shiftHtml}
 export function generateVgmListHTML(containers, voyageInfo) {
   const vsl = String(voyageInfo?.vsl || '').toUpperCase();
   const voy = voyageInfo?.voy_l || voyageInfo?.voy || '';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   const rows = [...containers].sort((a, b) => String(a.cn).localeCompare(String(b.cn)));
   let total = 0, missing = 0;
   const trs = rows.map((c, i) => {
@@ -1092,7 +1093,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     ? (voyageInfo?.voy_d || voyageInfo?.voy || voyageInfo?.voy_l)
     : (voyageInfo?.voy_l || voyageInfo?.voy || voyageInfo?.voy_d)) || '';
   const modeKo = mode === 'discharge' ? '양하' : '선적';
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = ymdKST();   // 4.88: 한국(KST) 날짜 — UTC 로 자르면 KST 00:00~08:59 에 어제 날짜가 찍혔다
   w.__inspectionData = { containers: sortedConts, vsl, voy, modeKo, dateStr, marks: opts.submit && opts.marks ? opts.marks : null };   // 4.75: 제출용이면 CSV 에도 같은 표기
   w.__exportExcel = function() {
     const d = w.__inspectionData;

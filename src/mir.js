@@ -36,6 +36,7 @@ import {
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
   shipCodeFixOf, knownShipCodes,   // 4.17 (§7.8-⑧): 없는 선박코드 → 가장 가까운 코드 한 벌
   ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, applyDischargeUnits, shiftSetForUnitsOf,   // 4.20 (Fable 판정 ④): 평택 양하분 한 벌(세관 목록 + 추가분)
+  xraySealCheckOf, xraySealCheckLines,   // 4.88: X-RAY 실 점검 한 벌(중복·앞 세 자리·자릿수)
   xraySealerOf,   // 4.50: 봉인자 이름은 화면·인쇄·엑셀과 같은 한 벌로 읽는다(미리 등록한 이름이 아니라 마지막 봉인자)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
   isSealError, sealCheckOf, sealConflictOf, isRfListSrc,   // 4.49: 실번호 판정 한 벌 · 4.49-02: 실번호 불일치(RF CONTAINER LIST 뺌) · RF 리스트 출처 표기
@@ -76,7 +77,7 @@ export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycou
 import { diffEdiList, explainEdiGap } from './ediGap.js';
 import { aiCostUsd, AI_PRICE, aggregateAiCost, aiDayKey } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
 import { tidyBayAnswer, withRecordPositions } from './gangState.js';   // 4.81: «N번 베이 정리해줘» — 앱 입력 + 터미널 반영 두 자료를 읽는 현황 한 벌(읽기 전용)
-import { sizeLenOf } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — utils 가 이미 tallyReport 를 부르므로 번들에 베이사전 같은 큰 것이 새로 딸려 오지 않는다(mir-core +1.5KB 실측)
+import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — utils 가 이미 tallyReport 를 부르므로 번들에 베이사전 같은 큰 것이 새로 딸려 오지 않는다(mir-core +1.5KB 실측)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
@@ -848,7 +849,7 @@ function shiftSetOfVoyage(voyage, key, given) {
 export function twinSplitOf(voyage, cnsByMode, given = null) {
   const info = (voyage && voyage.info) || {};
   const out = { n20: 0, n40: 0, posPairs: 0, ok: 0, over: 0, diff: 0, noWt: 0, unres20: 0, maybe: 0, byMode: { discharge: 0, loading: 0 } };
-  const is20 = (iso) => /^2/.test(String(iso || ''));
+  const is20 = (iso) => sizeLenKnown({ iso }) === '20';   // 4.88: 규격 길이 한 벌(자리·중량 짝 — 규격만). 종전 첫 글자 2 만 봤다
   for (const m of ['discharge', 'loading']) {
     //  4.02 (검수사 2026-10-04 «검수앱과 콘앱에 공통되는 질문이라면 답은 같아야 합니다»): 콘앱 voyage 에는 ediContainers 가 없다 — 그 앱이 넘긴 컨(자리·중량 있음)으로 읽는다.
     const ed = edOfMode(voyage, m, given);
@@ -991,7 +992,7 @@ export function answerWorkAnalysis(voyage, ship, rows, E, opts = {}) {
     const _rec = (voyage && voyage[m] && voyage[m].records) || {};
     for (const cn of want) if (!seen.has(cn) && _rec[cn] && typeof _rec[cn] === 'object') { seen.add(cn); arr.push({ ..._rec[cn], cn, _mode: m, ...(_xl[cn] ? { _xray: true } : {}) }); }
     const B = briefCountsOf(arr);
-    for (const c of B.rf) { if (/^2/.test(String(c.iso || ''))) K.rf20 += 1; else K.rf40 += 1; }
+    for (const c of B.rf) { if (sizeLenOf(c) === '20') K.rf20 += 1; else K.rf40 += 1; }   // 4.88: 규격 길이 한 벌
     K.dg += B.dg.length; K.fr += B.fr.length; K.ot += B.ot.length; K.tk += B.tk.length; K.oog += B.oog.length;
     if (m === 'discharge') K.xr += B.xr.length;
     for (const x of sealPredictOf(arr, (voyage && voyage[m] && voyage[m].records) || null, (voyage && voyage[m] && voyage[m].ediContainers) || null)) SP.push(x);
@@ -1539,7 +1540,11 @@ export function answerVoyageFacts(parsed, ctx) {
       if (!keys.length) keys = cs.filter((c) => c._xray || c.isXray).map((c) => c.cn);
       if (!keys.length) return `${ship} X-RAY 대상이 없어 커트씰도 없어요.`;
       const n = keys.filter((cn) => xs[cn] && S(xs[cn].seal)).length;
-      return `${ship} X-RAY 대상 ${keys.length}대 · 커트씰 기록 ${n}대\n` + keys.map((cn) => {
+      //  ★ 4.88 — X-RAY 실 점검 한 벌(utils.xraySealCheckOf — 검수사 확정 2026-11-12 «중복과 앞자리 세자리가 틀릴때만»). 화면(X-RAY 탭·컨 목록·컨 상세)과 같은 답 · 콘앱도 이 함수.
+      const _ck = xraySealCheckOf(keys.map((cn) => { const c = cs.find((x) => x.cn === cn); const s = xs[cn] || (c && (c._xraySeal || c.xraySeal)) || null; return { cn, seal: s && s.seal }; }));
+      const _ckL = xraySealCheckLines(_ck);
+      const _ckHead = _ck.n ? (_ckL.length ? `X-RAY 실 확인 ${_ck.issues}대 — 중복·앞 세 자리·자릿수만 봤어요.\n${_ckL.join('\n')}\n` : 'X-RAY 실 점검 — 중복·앞 세 자리 다른 것 없음.\n') : '';
+      return `${ship} X-RAY 대상 ${keys.length}대 · 커트씰 기록 ${n}대\n` + _ckHead + keys.map((cn) => {
         const c = cs.find((x) => x.cn === cn);
         const s = xs[cn] || (c && (c._xraySeal || c.xraySeal)) || null;
         const _sn = s && S(s.seal) ? sealerNameOf(ctx, cn, s, c) : '';   // 4.50: 봉인자 = 화면과 같은 판정
