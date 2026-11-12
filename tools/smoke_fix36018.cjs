@@ -137,17 +137,17 @@ const norm = (s) => String(s == null ? '(null)' : s).replace(/\s+/g, ' ').trim()
       const i1 = hp.indexOf('if (isViewOnlyNow()) { setAutoCleanDone(true); return; }'), i2 = hp.indexOf('const expired = entries.filter');
       ok('홈 자동 정리 — 조회만 가드가 항차 훑기 앞에 있다', i1 > 0 && i2 > i1);
       const sw = src('sw.js'), swp = src('public/sw.js');
-      ok('sw.js 에 cone-cargoplan.js 프리캐시(c.add) 가 없다', !/c\.add\('cone-cargoplan\.js'\)/.test(sw) && sw === swp);
+      ok('sw.js 에 cone-cargoplan.js 프리캐시(c.add) 가 없다', !/c\.add\('cone-cargoplan\.js'\)/.test(sw) && sw.replace(/^const PRECACHE_EXTRA = \[[^\]]*\];/m, 'const PRECACHE_EXTRA = [];') === swp);   // 4.89: 루트 sw.js 는 빌드가 조각 목록 한 줄만 채운다
       const csw = src('cone-sw.js');
       ok('cone-sw.js — ok·같은 오리진(+보관소)·_ck/u 제외 조건이 있고 public 사본과 같다', /res\.ok/.test(csw) && /self\.location\.origin/.test(csw) && /firebasedatabase/.test(csw) && /_ck\|u/.test(csw) && csw === src('public/cone-sw.js'));
       ok('떠 있는 미르·콘앱 ctx 에 accepted 표식', /accepted: true/.test(src('src/components/MirFab.jsx')) && /accepted:true/.test(src('public/cone.html')));
       ok('cone.html 이 port_mis_data 를 받아 ctx.portMisData 로 넘긴다', /g\('port_mis_data\.json'\)/.test(src('public/cone.html')) && /portMisData: \(mc&&mc\.portMisData\)/.test(src('public/cone.html')));
-      ok('콘앱 버전 2.58~2.65 계열', /window\.__CONEV='ConeOne 2\.(58|59|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76|77|78)(-\d\d)?'/.test(src('public/cone.html')));
+      ok('콘앱 버전 2.58~2.65 계열', /window\.__CONEV='ConeOne 2\.(58|59|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76|77|78|79)(-\d\d)?'/.test(src('public/cone.html')));
       ok('콘앱 미르 voyage 에 restowList(선사 시프팅 목록)가 실린다', /restowList:\(state\.restowList/.test(src('public/cone.html')));
       ok('씰체결 엑셀 시트명 — 같은 길이 안 순번(_sameLenBefore)', /_sameLenBefore \? ' ' \+ \(_sameLenBefore \+ 1\)/.test(src('src/components/EmptySealReport.jsx')));
       ok('검수리스트 별첨 제목에 X-RAY 글자 없음', /\[별첨\] 특수화물 \$\{special\.length\}대/.test(src('src/inspectionList.js')) && !/특수화물·X-RAY/.test(src('src/inspectionList.js')));
       ok('오프라인 띠 문구 — 닫거나 새로고침하지 말 것', /새로고침하지 마세요\(저장이 사라집니다\)/.test(src('src/components/Header.jsx')));
-      ok('APP_VERSION 이 3.60-18 이상(판 주석에 3.60-18 절이 있다)', /APP_VERSION = 'TallyOne 3\.60-18'|\s3.60-18 \*\*/.test(src('src/utils.js')));
+      ok('APP_VERSION 이 3.60-18 이상(판 주석에 3.60-18 절이 있다)', /APP_VERSION = 'TallyOne 3\.60-18'|\s3.60-18 \*\*/.test(src('src/utils.js') + '\n' + src('docs/APP_HISTORY.md')));   // 4.89: 판 이력 주석은 docs/APP_HISTORY.md 로 옮겼다
     }
 
     console.log(`\n3.60-18 연막검사: ${n - bad}/${n}`);

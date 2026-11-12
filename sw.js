@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 4.88-01';
-const NOTE = '4.88-01 카고플랜을 공통 이름으로 바꿨습니다. 양하(DISCHARGING)PLAN 과 선적(STOWAGE)PLAN 입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 4.89';
+const NOTE = '4.89 «미르야» 없이 말하면 작업 검색이고 «미르야» 하고 부르면 미르 비서가 나옵니다. 말로 고른 양하·선적 PLAN 이 그대로 열리고 출력 머리에 선박명이 찍힙니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
@@ -24,9 +24,19 @@ const precacheShell = () => caches.open(CACHE_NAME).then((cache) =>
 ).then((n) => { console.info('[sw 4.87-10] 새 판 미리받기 완료 — 본체 파일 ' + n + '개'); })
  .catch((err) => { console.warn('[sw 4.87-10] 새 판 미리받기 실패 — 설치는 계속(열 때 통신망에서 받음):', err && err.message ? err.message : err); });
 
-// 4.87-10: 미리받기는 20초 안에 끝나지 않으면 접고 설치를 마친다(타임아웃 없는 외부 호출 금지 — 규범 절대 12-6).
+//  ★ 4.89: 처음 열 때 받는 화면 조각(수석 상황판·관리앱·맛집·보조·건강·자료센터·통합검색·출력 센터 등)도 설치 때 미리 받는다 —
+//    오프라인에서 수석 화면이 «받지 못했습니다» 로 막히지 않게. 목록은 build.sh 가 빌드 때 dist/assets 의 js·css 전부로 채운다(아래 한 줄 형식 그대로 둔다).
+const PRECACHE_EXTRA = ['./assets/AuxPage-DZ8G1-AY.js', './assets/ChiefDashboard-3iYNapcP.js', './assets/DataCenterPage-CtdEbk_5.js', './assets/FoodPage-CCx3HaHE.js', './assets/GlobalSearchPage-Uw4yDkil.js', './assets/HealthPage-DU0Qowdh.js', './assets/OwnerPage-Dk094Mk0.js', './assets/PrintHubModal-D1z4Vl1Q.js', './assets/StaffManagerModal-_6A5JzCR.js', './assets/baydict-DBqSydwE.js', './assets/exceljs.min-DWW_nOQP.js', './assets/index-CnGEKBL4.css', './assets/index-DaoVn97_.js', './assets/pdfBayParser-Ck0QjMwj.js', './assets/push-CwifqAQD.js', './assets/tallyExcel-k2wlocau.js', './assets/vendor-DCIpp23w.js', './assets/xlsx-CkFp8p6R.js'];   // build.sh 4.89 가 채운다
+//    판마다 이름이 안 바뀌는 조각(vendor·baydict·엑셀·PDF)은 옛 판 저장본에서 옮겨 담는다(다시 안 받는다).
+//    뼈대(index.html·본체)를 먼저 받고 나서 하나씩 받는다 — 하나가 실패해도 나머지는 받는다(addAll 은 하나만 틀려도 통째로 실패). 실패 수는 콘솔에 남긴다.
+const precacheExtra = () => caches.open(CACHE_NAME).then((cache) => Promise.all(PRECACHE_EXTRA.map((u) =>
+  caches.match(u).then((hit) => (hit ? cache.put(u, hit.clone()).then(() => 'have') : cache.add(u).then(() => 'got'))).catch((err) => { console.warn('[sw 4.89] 조각 미리받기 실패:', u, err && err.message ? err.message : err); return 'fail'; })
+))).then((rs) => { console.info('[sw 4.89] 화면 조각 미리받기 — 받음 ' + rs.filter((r) => r === 'got').length + ' · 이미 있음 ' + rs.filter((r) => r === 'have').length + ' · 실패 ' + rs.filter((r) => r === 'fail').length); })
+  .catch((err) => { console.warn('[sw 4.89] 화면 조각 미리받기 실패 — 설치는 계속:', err && err.message ? err.message : err); });
+
+// 4.87-10: 미리받기는 20초 안에 끝나지 않으면 접고 설치를 마친다(타임아웃 없는 외부 호출 금지 — 규범 절대 12-6). 4.89: 조각 미리받기도 같은 20초 안이다.
 const precacheWithLimit = () => Promise.race([
-  precacheShell(),
+  precacheShell().then(precacheExtra),
   new Promise((ok) => setTimeout(() => { console.warn('[sw 4.87-10] 새 판 미리받기 20초 초과 — 접고 설치 완료(열 때 통신망에서 받음)'); ok(); }, 20000)),
 ]);
 

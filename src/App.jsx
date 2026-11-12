@@ -18,28 +18,29 @@ import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13:
 import { parseHash, exitApp, closeHomeSheetIfOpen, setPendingDo } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6) · 4.25: 폰 홈 시트가 열려 있으면 뒤로가기는 시트만 닫는다
 import { setActivityUser, logActivity, logView, activityUserName } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
 import HomePage from './pages/HomePage.jsx';
-import DataCenterPage from './pages/DataCenterPage.jsx';   // 4.34: 자료 센터
 import VoyagePage from './pages/VoyagePage.jsx';
-import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
-import ChiefDashboard from './pages/ChiefDashboard.jsx';
-import OwnerPage from './pages/OwnerPage.jsx';   // 4.63: 관리앱(소유자 전용 화면)
 import Ferry1700Alert from './components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 작업 중 검수원 폰
-import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
-import FoodPage from './pages/FoodPage.jsx';       // V8.60: 맛집 수첩+돌림판
-import AuxPage from './pages/AuxPage.jsx';         // TallyOne 1.0: 보조기능 화면(#/aux — 팀M 구현)
 import { consumeUpdateResume } from './updateResume.js';   // 3.7-04: 업데이트 새로고침이면 로그인·화면을 되살린다
 import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
 import MirFab from './components/MirFab.jsx';   // 3.41: 떠 있는 미르 — 어느 화면에서든 모든 질문(검수사 2026-09-10)
 import { mirMoodEvent, setMirYard } from './mir.js';   // 3.56: 작업 선박을 새로 고르면 미르가 기뻐한다(확정 자리에서 알린다) · 3.69: 야드 상황 재료
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
-import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
 import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 import UpdatePrompt from './components/UpdatePrompt.jsx';
 import ShiftPick from './components/ShiftPick.jsx';   // 4.79: 옛 로그인(조 값 없음)에게 한 번 묻는 창
 import { MIR_GOTO_EVENT } from './guideGoto.js';   // 4.40: 미르 [이동] — 다른 화면에서 눌렀으면 그 항차 작업 화면으로
+import { lazyScreen, LazyLoading } from './lazyScreen.jsx';   // 4.89 판 C: 화면별 지연 받기
+const DataCenterPage = lazyScreen('자료 센터', () => import('./pages/DataCenterPage.jsx'));   // 4.34: 자료 센터 · 4.89: 처음 열 때 받는다
+const GlobalSearchPage = lazyScreen('통합검색', () => import('./pages/GlobalSearchPage.jsx'));   // 4.89: 처음 열 때 받는다
+const ChiefDashboard = lazyScreen('수석 상황판', () => import('./pages/ChiefDashboard.jsx'));   // 4.89: 처음 열 때 받는다(베이매트릭스·선박 매트릭스 만들기 창도 이 조각에)
+const OwnerPage = lazyScreen('관리앱', () => import('./pages/OwnerPage.jsx'));   // 4.63: 관리앱(소유자 전용 화면) · 4.89: 처음 열 때 받는다
+const HealthPage = lazyScreen('건강 점검', () => import('./pages/HealthPage.jsx'));  // V8.40: 항차 건강 점검 · 4.89: 처음 열 때 받는다
+const FoodPage = lazyScreen('맛집', () => import('./pages/FoodPage.jsx'));       // V8.60: 맛집 수첩+돌림판 · 4.89: 처음 열 때 받는다
+const AuxPage = lazyScreen('보조기능', () => import('./pages/AuxPage.jsx'));         // TallyOne 1.0: 보조기능 화면(#/aux — 팀M 구현) · 4.89: 처음 열 때 받는다
+const StaffManagerModal = lazyScreen('인원 관리', () => import('./components/StaffManagerModal.jsx'));   // 4.89: 처음 열 때 받는다
 
 // TallyOne 1.0 (K2): 수석 전용 라우트(#/chief·#/search) 접근 차단 안내 화면
 function DeniedChiefOnly({ onGoHome }) {
@@ -726,6 +727,7 @@ export default function App() {
           1.60-01: 그 자리에 잠깐 있던 「이 기기 사본을 올렸습니다」 통지도 없앴다.
           자동 업로드가 지운 허상 72건을 되살린 사고(2026-08-13) 뒤 장치 자체를 폐기했다. */}
       <main className="pb-20" data-app-main="1">{/* 4.24: 수석 상황판(컴)이 화면 한 장일 때 아래 여백을 접는 표식(index.css data-chief-fill) */}
+        <React.Suspense fallback={<LazyLoading />}>{/* 4.89: 지연 받는 화면(수석·관리앱·맛집·보조·건강·자료센터·통합검색)을 받는 동안 */}
         {/* 4.08: 범위가 바뀐 직후(폰에서 수석이 로그인해 뿌리 전체를 받는 중 등)에는 빈 홈·빈 대시보드 대신 «불러오는 중» — «오늘 항차가 없다» 로 읽히지 않게 */}
         {!voyagesLoaded && ['home', 'chief', 'data'].includes(route.name) && (
           <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400" data-voyages-loading="1">
@@ -860,6 +862,7 @@ export default function App() {
             <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400">항차 불러오는 중…</div>
           )
         )}
+        </React.Suspense>
       </main>
 
       {/* ★ 2.87 — 미르가 부른 플랜. 있던 화면은 **뒤에 그대로 살아 있다.**
@@ -888,7 +891,7 @@ export default function App() {
       {/* ★ 3.41 — 떠 있는 미르. 어느 화면에서든 오른쪽 아래 얼굴을 누르면 시트가 올라온다(검수사 «앱 어디에든 항상 띄워서»).
            답은 mirAnswer.answerOne 한 벌(작업창·양하선적 탭·홈·콘앱과 같은 함수). 플랜 명령은 위 mirPlan 덮개를 연다. */}
       <MirFab voyages={visibleVoyages} inspector={inspector} isChief={chiefOrOwner} portMisData={portMisData}
-        pilotForecast={pilotForecast} heartbeat={heartbeat} onOpenPlan={(p) => setMirPlan(p)} />
+        pilotForecast={pilotForecast} heartbeat={heartbeat} onOpenPlan={(p) => setMirPlan(p)} soloButton={false} />{/* 4.89: 얼굴 단추 없음 — 검색줄 🎤·⌨ 로 «미르야» 하면 시트가 올라온다(faceDock.summonMirIfCalled) */}
 
       {/* ★ 3.63 — 카페리(TNJP·OBWH·RZOR) 17:00 주간 작업보고. 작업자로 들어와 그 배를 고른 폰에만(조회만은 안 뜬다) — 어느 화면에서든.
            수석 대시보드를 보고 있으면 그쪽 창(모아 보기)이 뜨므로 여기서는 비킨다(두 창이 겹치지 않게). */}
@@ -901,7 +904,7 @@ export default function App() {
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다
       </footer>
 
-      {showStaffManager && (
+      {showStaffManager && (<React.Suspense fallback={null}>{/* 4.89: 인원 관리 창은 처음 열 때 받는다 */}
         <StaffManagerModal
           current={inspector}
           inspectors={inspectors}
@@ -909,7 +912,7 @@ export default function App() {
           deletedStaff={deletedStaff}
           onClose={() => setShowStaffManager(false)}
         />
-      )}
+      </React.Suspense>)}
 
       {/* M3.68: 로그인/로그아웃 인사 모달 + 근무 시간대 예보 */}
       {greeting && (

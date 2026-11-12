@@ -110,7 +110,7 @@ try { Object.defineProperty(global, 'navigator', { value: { userAgent: 'node', l
       const c1 = R.rows.filter((r) => r.fe === 'F' && r.load && r.load['20']).map((r) => `${r.op}${r.subOp ? '(' + r.subOp + ')' : ''}=${r.load['20']}`).join(' ');
       ok(`Final Work 선적 — DWS (CSC) 1 · (DSL) 2 · SIT 1  실측: ${c1}`, /CSC\)=1/.test(c1) && /DSL\)=2/.test(c1) && /SIT=1/.test(c1), JSON.stringify(R.rows.filter((r) => r.load && r.load['20']).map((r) => [r.op, r.subOp, r.fe, r.load])));
     }
-    ok('APP_VERSION 이 3.60-20 이상', /APP_VERSION = 'TallyOne 3\.60-2[0-9]'|\s3\.60-20 \*\*/.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8')));
+    ok('APP_VERSION 이 3.60-20 이상', /APP_VERSION = 'TallyOne 3\.60-2[0-9]'|\s3\.60-20 \*\*/.test(fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'docs/APP_HISTORY.md'), 'utf8')));   // 4.89: 판 이력 주석은 docs/APP_HISTORY.md 로
 
     console.log(`\n3.60-20 연막검사: ${n - bad}/${n}`);
     process.exit(bad ? 1 : 0);

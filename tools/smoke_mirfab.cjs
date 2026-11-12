@@ -1,5 +1,5 @@
 // 떠 있는 미르(3.41) — jsdom 으로 실제 그리고 눌러 본다. 실패하면 빌드를 세운다.
-//   ① 오른쪽 아래 얼굴이 뜬다 ② 누르면 시트(입력·🎤·🔊·질문)가 올라온다 ③ 홈에서 «KBTR 3426 온도» → 그 항차 자료로 답 ④ 항차 화면이 재료를 놓으면(publishMirCtx) 배 이름 없이 «3426 온도» 도 답
+//   ① 얼굴 단추가 있다(4.89 — 떠 있지 않다) ② 누르면 시트(입력·🎤·🔊·질문)가 올라온다 ③ 홈에서 «KBTR 3426 온도» → 그 항차 자료로 답 ④ 항차 화면이 재료를 놓으면(publishMirCtx) 배 이름 없이 «3426 온도» 도 답
 //   ⑤ «KBTR 카고플랜 보여줘» → 플랜 덮개(onOpenPlan) 호출 ⑥ 모르는 말은 «못 배웠어요» 고백 ⑦ 렌더 오류 0
 //   3.41-01 — ⑧ 묻고 나면 칸이 비고 물은 말이 답 위에 남는다 ⑨ 플랜 명령은 말부터 하고(발화 → 덮개 순) 시트를 내린다 ⑩ «작업중인 선박 언제 끝나» 는 지금 일하는 배로 답하고 여럿이면 «어느 배?»
 const { JSDOM } = require('jsdom');
@@ -20,8 +20,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const uniq = [...new Set(errs)];
   if (uniq.length) { console.log('✗ 렌더 중 오류 ' + uniq.length + '건'); uniq.slice(0, 3).forEach((e) => console.log('   ' + e)); process.exit(1); }
   const fab = doc.querySelector('button[aria-label="미르에게 묻기"]');
-  if (!fab) fail('오른쪽 아래 미르 얼굴(버튼)이 없다');
-  if (!/fixed/.test(fab.className) || !/right-4/.test(fab.className)) fail('얼굴이 fixed·오른쪽에 붙어 있지 않다: ' + fab.className);
+  if (!fab) fail('미르 얼굴(버튼)이 없다');
+  //  4.89: 얼굴은 더 이상 떠 있지 않다(머리띠·틀 윗줄 MirDockButton — 단독 렌더는 제자리 solo). fixed·right-4 면 옛 떠 있는 얼굴이 돌아온 것이다.
+  if (/\bfixed\b/.test(fab.className) || /right-4/.test(fab.className)) fail('얼굴이 아직 떠 있다(fixed·right-4): ' + fab.className);
+  if (fab.getAttribute('data-mir-dock') !== 'solo') fail('단독 렌더 얼굴은 data-mir-dock=solo 여야 한다: ' + fab.getAttribute('data-mir-dock'));
   //  4.07: 얼굴은 실사 미르 한 칸(span.mirp > span.mirp-img.mirp-m-<기분>)이다. 칸 좌표·움직임 CSS 는 문서에 들어간 <style id=mirPhotoCss> 가 준다.
   const face = fab.querySelector('span.mirp');
   if (!face) fail('얼굴 버튼 안에 실사 미르(span.mirp)가 없다');
@@ -43,8 +45,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const css = fs.readFileSync(path.resolve(__dirname, '../src/index.css'), 'utf8').replace(/@tailwind[^;]*;|@apply[^;]*;/g, '');
     const st = doc.createElement('style'); st.textContent = '.fixed{position:fixed}\n' + css; doc.head.appendChild(st);
     const pos = dom.window.getComputedStyle(fab).position;
-    if (pos !== 'fixed') fail('얼굴 버튼의 계산된 position 이 fixed 가 아니다: ' + pos + ' (mir-mood 가 덮었는가)');
-  } catch (e) { if (/fixed 가 아니다/.test(String(e && e.message))) throw e; console.log('  (계산 스타일 검사 생략 — ' + (e && e.message) + ')'); }
+    if (pos === 'fixed') fail('얼굴 버튼의 계산된 position 이 fixed 다 — 4.89 부터 떠 있으면 안 된다(mir-mood 가 덮었는가)');
+  } catch (e) { if (/떠 있으면 안 된다/.test(String(e && e.message))) throw e; console.log('  (계산 스타일 검사 생략 — ' + (e && e.message) + ')'); }
   fab.click(); await wait(100);
   const inp = doc.getElementById('mirFabIn');
   if (!inp) fail('얼굴을 눌렀는데 시트(입력칸)가 안 올라온다');

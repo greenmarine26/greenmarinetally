@@ -15,6 +15,7 @@ import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { buildGangShift} from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
@@ -52,7 +53,7 @@ import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 �
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
-import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(작은 정지 아바타)
+// 4.89: 작업용 검색줄에는 미르 얼굴을 그리지 않는다(검수사 2026-11-12 19:41 «미르를 부르지 않고 … 미르는 모습을 보이지 않습니다») — MirFace import 를 뺐다
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 import { runDeviceCmd, deviceCmdWaitsForSubmit } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌 · 4.23 2차: 글자는 전송 때만
 
@@ -1171,6 +1172,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   //   재제출이면 lastSpokenRef를 풀어 다시 말하고, 답 박스에 «다시 확인했습니다» 한 줄로 갱신을 보여준다.
   const submitDraft = () => {
     const v = draft.trim(); if (!v) return;
+    if (summonMirIfCalled(v, parseNaturalQuery(v), 'search-type')) { setDraft(''); return; }   // 4.89: 글로 «미르야» 도 미르 시트로
     setReasked(v === lastAskRef.current);
     lastSpokenRef.current = null;
     setAskedAt(Date.now());
@@ -1285,7 +1287,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     if (onlyDigits) return null;
     traceRef.current = {};
     return answerOneRaw(query, {
-      moveRecorder: true, app: 'tally', smallTalkLast: true, execDevice: false, modeChoice, _trace: traceRef.current,
+      moveRecorder: true, app: 'tally', smallTalkLast: true, workOnly: true,   /* 4.89: 검색줄은 작업용 — 잡담·생활회화는 «미르야» 안내 한 줄 */ execDevice: false, modeChoice, _trace: traceRef.current,
       _utterAt: askedAt || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다(기록 뒤에도)
       voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
       containers: allContainersData || allContainers, photos: voyage?.photos || null,   // 4.48-03: 미르 대수는 자료대로(부모가 넘긴 유닛 기준 목록)
@@ -1300,7 +1302,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   }, [parsed, results, allContainers, allContainersData, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, carrierContacts, modeChoice, shipSpeed, shipContacts, onOpenPlan, askedAt]);   // 2.41: 선박 연락처 · 3.2-01: onOpenPlan · 3.68: askedAt(접수 표)
   //  3.42: 모델이 «미르 말»로 바꾼 문장을 같은 재료로 규칙에 다시 돌린다(위 _localAnswerRaw 와 같은 ctx — 두 벌이 되면 안 된다).
   const _rulesFor = (cq) => answerOneRaw(cq, {
-    moveRecorder: true, app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
+    moveRecorder: true, app: 'tally', smallTalkLast: true, workOnly: true,   /* 4.89: 검색줄은 작업용 — 잡담·생활회화는 «미르야» 안내 한 줄 */ execDevice: false, modeChoice: modeChoice === null ? 'both' : modeChoice,
     voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter,
     containers: allContainersData || allContainers, photos: voyage?.photos || null,   // 4.48-03: 미르 대수는 자료대로(부모가 넘긴 유닛 기준 목록)
     shiftMap: shiftingMapForDisplay(voyageKey, voyage),
@@ -1491,6 +1493,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
+        if (summonMirIfCalled(t, parseNaturalQuery(t), 'search-mic')) { setTranscript(''); return; }   // 4.89: «미르야 …» — 미르 시트로
         if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled('nls', t, { voyageKey }); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다
         else {
           const digits = parseSpokenDigits(text);
@@ -1518,7 +1521,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
     let alive = true;
     setModelState({ q, pending: true, text: null, via: null });
-    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainersData || allContainers, inspector, work: mirWorkCtx() };   // 4.48-03: 모델 재료도 자료대로   // 4.38: work — 작업 중 사담 미루기
+    const ctx = { app: 'tally', voyageKey, voyage, info: (manualCtx && manualCtx.info) || voyage?.info || null, mode: workFilter, containers: allContainersData || allContainers, inspector, work: mirWorkCtx(), workOnly: !(parsed && parsed.mirCalled) };   /* 4.89 감사 막음 2: 부름말 없는 검색줄은 모델 길도 작업용 */   // 4.48-03: 모델 재료도 자료대로   // 4.38: work — 작업 중 사담 미루기
     askMirModel(_dq || q, ctx, (cq) => _rulesFor(cq), { who: inspector || '', weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
       .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey, via: m.via }); })
       .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
@@ -1682,7 +1685,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-2xs text-dim-400 font-bold">
-            <MirFace mood="basic" size={20} still className="inline-block align-middle mr-1" />미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {(allContainersData || allContainers).filter(c => c._ptk).length}대{/* 4.48-03 재감사(하-2): 대수는 자료대로 */}
+            미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {(allContainersData || allContainers).filter(c => c._ptk).length}대{/* 4.48-03 재감사(하-2): 대수는 자료대로 */}
           </div>
           <button onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-2xs font-bold border border-amber-700/40 whitespace-nowrap shrink-0">
@@ -1908,7 +1911,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-300"/>
-              <div className="text-xxs text-emerald-300 font-bold flex items-center gap-1.5"><MirFace mood="basic" size={20} still />미르 즉답</div>
+              <div className="text-xxs text-emerald-300 font-bold flex items-center gap-1.5">미르 즉답</div>
             </div>
             <button onClick={() => {
               setWrongPayload({ query, answerType: 'local', answerText: localAnswer, parsed });

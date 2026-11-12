@@ -219,6 +219,15 @@ for f in public/*; do
   _pub=$((_pub+1))
 done
 echo "  ✓ public 루트 파일 ${_pub}개 복사 (pdf.worker.min.mjs 포함)"
+# ★ 4.89 판 C: 처음 열 때 받는 화면 조각도 서비스워커 설치 때 미리 받게 — dist/assets 의 js·css 전부를 sw.js PRECACHE_EXTRA 한 줄에 박는다.
+#   (public/sw.js 는 빈 목록 그대로 — 위 복사 뒤에 dist/sw.js·루트 sw.js 만 채운다. 목록이 비면 오프라인에서 수석 화면이 막히므로 빌드를 세운다.)
+_PRE=$(cd dist && ls assets/*.js assets/*.css 2>/dev/null | sed 's|^|./|' | awk 'BEGIN{ORS=""} {printf "%s\x27%s\x27", (NR>1?", ":""), $0}')
+if [ -z "$_PRE" ]; then echo "⛔ 4.89 sw 미리받기 목록이 비었습니다 — dist/assets 를 확인하십시오."; exit 1; fi
+for _SW in dist/sw.js sw.js; do
+  LC_ALL=C sed -i "s|^const PRECACHE_EXTRA = \[\];.*|const PRECACHE_EXTRA = [$_PRE];   // build.sh 4.89 가 채운다|" "$_SW"
+  LC_ALL=C grep -q "^const PRECACHE_EXTRA = \['\./assets/" "$_SW" || { echo "⛔ 4.89 $_SW 미리받기 목록 채우기 실패 — 배포 금지"; exit 1; }
+done
+echo "  ✓ 4.89 sw 미리받기 목록 — 조각 $(echo "$_PRE" | tr ',' '\n' | wc -l)개 (dist/sw.js · 루트 sw.js)"
 # 워커는 PDF 파싱의 필수 자산이라 없으면 빌드를 세운다 — 조용히 나가면 현장에서 막힌다.
 if [ ! -f ./pdf.worker.min.mjs ]; then
   echo "⛔ pdf.worker.min.mjs 가 루트에 없습니다 — CASP 플랜 PDF 읽기가 통째로 막힙니다."
@@ -1426,7 +1435,7 @@ fi
          --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_LB"; then
       cp "$SMOKE_LB.fbbak" src/firebase.js && rm -f "$SMOKE_LB.fbbak"
       node tools/smoke_liveboard.cjs "$SMOKE_LB" || { echo "✗ 실시간 작업 보드 카드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
-      #  3.41: **떠 있는 미르** — 실데이터(KBTR·NSFR)로 MirFab 을 그려 얼굴→시트→질문→답·항차 재료·플랜 덮개·고백·닫기를 실제로 눌러 본다.
+      #  3.41: **미르 시트(MirFab)** — 4.89 부터 앱에는 얼굴 단추가 없고 검색줄에서 «미르야» 로 부른다(이 검사는 혼자 그린 제자리 단추로 연다). 실데이터(KBTR·NSFR)로 MirFab 을 그려 얼굴→시트→질문→답·항차 재료·플랜 덮개·고백·닫기를 실제로 눌러 본다.
       SMOKE_MF=$(mktemp /dev/shm/hometmp/_smokemf_XXXXXX.js)
       cp src/firebase.js "$SMOKE_MF.fbbak" && cp tools/fb_stub_search.js src/firebase.js
       if npx esbuild tools/smoke_mirfab.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
@@ -1434,11 +1443,11 @@ fi
            --external:fs --external:path --external:url \
            --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_MF"; then
         cp "$SMOKE_MF.fbbak" src/firebase.js && rm -f "$SMOKE_MF.fbbak"
-        node tools/smoke_mirfab.cjs "$SMOKE_MF" || { echo "✗ 떠 있는 미르 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MF"; exit 1; }
+        node tools/smoke_mirfab.cjs "$SMOKE_MF" || { echo "✗ 미르 시트(MirFab) 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MF"; exit 1; }
         rm -f "$SMOKE_MF"
       else
         cp "$SMOKE_MF.fbbak" src/firebase.js; rm -f "$SMOKE_MF.fbbak"
-        echo "✗ 떠 있는 미르 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MF"; exit 1
+        echo "✗ 미르 시트(MirFab) 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MF"; exit 1
       fi
       # 3.35: BayPlan 훅 순서 — 자료가 «없다 ↔ 있다» 로 바뀌어도 화면이 안 죽는가(두 방향)
       for _HK in smoke_bphooks smoke_bphooks_rev; do
@@ -1705,6 +1714,32 @@ fi
     node tools/smoke_boot4822.cjs "$(pwd)" || { echo "✗ 4.82-02(부팅 대책) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.87-10: 업데이트 미리받기(sw 설치)·청크 고정(vendor·baydict·PDF 동적)·토스트 위로·아이폰 안전 영역·베이 안내 띠 자리·공지 띠 높이(--bc-h)
     node tools/smoke_tidy48710.cjs "$(pwd)" || { echo "✗ 4.87-10(미리받기·청크 고정·화면 가림) 연막검사 실패 — 배포 금지"; exit 1; }
+    #  4.89: 미르 얼굴은 머리띠·작업 틀 윗줄에(떠 있는 얼굴 없음) · 시트 바깥 닫힘 · 화면별 지연 조각 · sw 미리받기 목록
+    mkdir -p /dev/shm/hometmp
+    SMOKE_MH=$(mktemp /dev/shm/hometmp/_smokemh_XXXXXX.js)
+    cp src/firebase.js "$SMOKE_MH.fbbak" && cp tools/fb_stub_search.js src/firebase.js
+    if npx esbuild tools/smoke_mirhdr489.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic \
+         --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' \
+         --external:fs --external:path --external:url \
+         --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --outfile="$SMOKE_MH"; then
+      cp "$SMOKE_MH.fbbak" src/firebase.js && rm -f "$SMOKE_MH.fbbak"
+      node tools/smoke_mirhdr489.cjs "$(pwd)" "$SMOKE_MH" || { echo "✗ 4.89(미르 머리띠·지연 조각) 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MH"; exit 1; }
+      rm -f "$SMOKE_MH"
+    else
+      cp "$SMOKE_MH.fbbak" src/firebase.js; rm -f "$SMOKE_MH.fbbak"
+      echo "✗ 4.89 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MH"; exit 1
+    fi
+    #  4.89: 말로 고른 양하/선적 플랜(4.88-01 라이브 확인 PCSZ 2634E) — 항차 화면 실소스(메모리 DB)에 검색줄로 치고 Enter · 출력 머리 선박명
+    SMOKE_PM=$(mktemp /dev/shm/hometmp/_smokepm_XXXXXX.js)
+    if npx esbuild tools/smoke_planmode489.jsx --bundle --loader:.jsx=jsx --loader:.js=jsx --loader:.png=dataurl --loader:.jpg=dataurl --loader:.webp=dataurl --loader:.json=json --jsx=automatic \
+         --external:fs --external:path --external:url \
+         --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+         --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_PM"; then
+      node tools/smoke_planmode489.cjs "$(pwd)" "$SMOKE_PM" || { echo "✗ 4.89(양하/선적 플랜 · 출력 머리 선박명) 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_PM"; exit 1; }
+      rm -f "$SMOKE_PM"
+    else
+      echo "✗ 4.89 양하/선적 플랜 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_PM"; exit 1
+    fi
     node tools/smoke_hold481.cjs "$(pwd)" || { echo "✗ 4.81-01(일반 자동 가이드 홀드 해치 규칙) 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_fix480_pinch.cjs "$(pwd)" || { echo "✗ 4.80(핀치 안정화) 연막검사 실패 — 배포 금지"; exit 1; }
     #  4.79: 주간조/야간조 선택 · 근무시간 밖 조회만 · 연태 OBWH·일조 RZOR 예외 · 관리자 예외 · 옛 로그인 한 번 묻기 · 같은 호기 주간·야간 각 1인(실소스 번들 — firebase 만 메모리 스텁)
@@ -1931,6 +1966,8 @@ if npx vite build --config vite.helper.config.js >/dev/null 2>&1 && [ -f dist_he
     grep -q "$_k" dist_helper/gm_helper.js || { echo "  ✗ 헬퍼 번들에 계약 «$_k» 이 없다 — 배포 금지"; exit 1; }
   done
   echo "  ✓ dist_helper/gm_helper.js ($_HV) · 계약 GMautoPayload·ptkCount·iso_edi 확인"
+  #  4.89: 옛 만화 미르(팔이 조끼에 갇힌 그림 — 검수사 2026-11-12 20:30 «이사진은 사용하시면 안됩니다») 가 헬퍼 산출물에도 없어야 한다
+  if grep -qF "UklGRi7UAwBXRUJQVlA4WAoAAAAEAAAA7wQAzwYAVlA4IIbSAwAQuwmdASrwBNAGPhkMhUIhBEJjCQQAYSzgGr5l59/s259+f5tfYnqH+j/i/Vn/odd/Y/mG" dist_helper/intro.html 2>/dev/null; then echo "  ✗ dist_helper/intro.html 에 옛 만화 미르 그림이 남았다 — 배포 금지"; exit 1; fi
   echo "  ⚠ 이 판을 배포하면 **헬퍼도 기기에 올려야 한다** —"
   echo "     HTML 래핑 → C:\\TALLYTEST\\TallymanMailCollector_v*\\collector\\autoreg_helper.html (백업 먼저)."
   echo "     안 올리면 수집기는 옛 파서로 돈다. 수집기 재가동은 불요(사이클마다 헬퍼를 새로 연다)."

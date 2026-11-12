@@ -67,7 +67,10 @@ module.exports = async function r44({ ROOT, TMP, ok, head, fx, stub }) {
     const setInput = (inp, val) => { const set = Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value').set; set.call(inp, val); inp.dispatchEvent(new W.Event('input', { bubbles: true })); };
     const sheet = () => d.querySelector('[data-mir-sheet]');
     const mirAsk = async (q) => {
-      if (!sheet()) await click(d.querySelector('button[aria-label="미르에게 묻기"]'), 300);
+      //  4.89: 얼굴 단추가 여러 자리(작업 틀 윗줄·제자리)에 선다 — 작업 틀은 카드가 바뀔 때 다시 그려져 누르는 순간 떨어진 단추를 잡을 수 있으므로 늘 있는 제자리 단추를 먼저 잡는다(같은 여닫이)
+      if (!sheet()) await click(d.querySelector('button[data-mir-dock="solo"]') || d.querySelector('button[aria-label="미르에게 묻기"]'), 300);
+      //  4.89: 빌드 부하에서 시트가 늦게 그려지는 때가 있다 — 입력칸이 설 때까지 기다리고, 안 서면 한 번 더 누른다(누른 횟수를 바꾸는 것이 아니라 그려질 때까지 기다리는 것)
+      if (!(await until(() => d.getElementById('mirFabIn'), 3000))) { await click(d.querySelector('button[data-mir-dock="solo"]') || d.querySelector('button[aria-label="미르에게 묻기"]'), 300); await until(() => d.getElementById('mirFabIn'), 3000); }
       setInput(d.getElementById('mirFabIn'), q); await sleep(80);
       await click(btn(/^질문$/), 900);
       const sh = sheet();

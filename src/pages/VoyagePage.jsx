@@ -8,6 +8,7 @@ import { answerOneRaw } from '../mir.js';   // 3.41: 답 고르기 한 벌
 import { computeTallyData, sizeLenOf } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong, stopSpeak } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, answerCraneCrew } from '../nlSearch.js';   // 3.8: answerCraneCrew — 호기별 검수원·작업량   // 2.65: briefingVoiceLines
+import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)   // 4.55-02: shipIdentityOf — EDI 올리기가 선박 사전 콜사인을 같이 본다
@@ -89,7 +90,8 @@ import { db } from '../firebase.js';
 import { fbGetPendingDamage, fbPromotePendingDamage } from '../firebase.js';   // 2.03: 데미지 예약 승격
 import { fbSubscribeVoyagePhotos } from '../firebase.js';   // 3.61: 사진 본체는 photos/{항차} 에서 따로
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
-import PrintHubModal from '../components/PrintHubModal.jsx';
+import { lazyScreen } from '../lazyScreen.jsx';   // 4.89 판 C: 출력 센터는 처음 열 때 받는다
+const PrintHubModal = lazyScreen('출력 센터', () => import('../components/PrintHubModal.jsx'));   // 4.89: 출력 센터(베이 상세 인쇄 포함)는 처음 열 때 받는다
 import { takePendingDo } from '../backHandler.js';
 import { splitDroppedFiles, describeSplit } from '../dropRoute.js';   // 4.34: 등록 한 칸 — 놓은 파일을 세 칸으로 나눔   // 4.34: 자료 센터가 넘긴 «바로 할 일»
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
@@ -179,13 +181,23 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
        그 화면의 자동 팝업이 끼어들었고 ② 닫으면 있던 자리가 아니라 베이 탭에 남았다.
        ⇒ 이제 **아무 데도 안 간다.** 있던 화면 위에 플랜만 덮는다. 닫으면 그 자리 그대로다. */
   const [planOv, setPlanOv] = useState(null);   // {what:'bay'|'cargo', bay:number|null} | null
-  const _mirOpenPlan = React.useCallback(({ what, bay }) => {
+  /* ★ 4.89 (4.88-01 라이브 확인 — PCSZ 2634E 양하 화면에서 «선적(STOWAGE)PLAN» 을 쳤는데 양하 PLAN 이 열리고 답은 «선적 … 열었어요») —
+       부르는 쪽(SearchPanel·InlineAnswerCard·GlobalSearchPage·MirFab)은 말에서 고른 mode 를 넘기는데 여기서 버렸다.
+       ⛔ 화면 mode(setMode)는 건드리지 않는다(4.89 감사 막음 1) — 바꾸면 App 이 users/{이름}/lastMode 를 쓰고(수석판·홈이 반대 작업으로 표시),
+          SearchPanel 이 수동 베이·단을 지우고 활동을 다시 쓰며, 맞교환 대기도 지워진다.
+       ⇒ 말한 쪽이 지금과 다르면 덮개만 그 mode 로 — 홈에서 부를 때(App mirPlan)와 같은 길로 이 항차를 그 mode 로 한 번 더 그려 플랜만 띄운다(planOv.mode).
+          닫으면 덮개만 걷히고 이 화면의 상태는 하나도 바뀌지 않는다. 말에 양하/선적이 없으면(카고플랜·스테이지) 지금 화면 쪽. */
+  const modeNowRef = useRef(mode); modeNowRef.current = mode;
+  const _mirOpenPlan = React.useCallback(({ what, bay, mode: want }) => {
     /* BayPlan 은 마운트하며 이 신호를 읽는다 — 오버레이를 켜기 **직전**에 세운다(같은 tick). */
     try { stopSpeak(); } catch (e) { /* 3.41-01: 플랜을 열 때 쌓인 발화(되묻는 말)를 끊는다 — 검수사 «화면을 연 후에 한참 있다가 말을 함» */ }
     try {
       if (bay != null) window.__mirGoBay = bay;   // 4.00: __mirOpenCargo 신호는 걷었다 — 카고플랜은 아래 _planOverlay 가 직접 띄운다(받는 쪽이 없어 다음 베이 탭에서 혼자 뜨던 자리)
     } catch (e) { /* 전역 신호 설정 실패는 무해 */ }
-    setPlanOv({ what, bay: bay == null ? null : bay });
+    const cur = modeNowRef.current;
+    const m = (want === 'loading' || want === 'discharge') ? want : null;
+    if (m && m !== cur) setPlanOv({ what, bay: bay == null ? null : bay, mode: m });   // 4.89: 다른 쪽은 덮개만 그 mode 로(화면 mode 그대로)
+    else setPlanOv({ what, bay: bay == null ? null : bay });
   }, []);
   useEffect(() => {
     const d = takePendingDo(voyageKey);
@@ -245,8 +257,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // TallyOne 1.3: 열람 기록 — 항차 진입·탭 전환·모드 전환마다 1건.
   //   같은 대상(voyageKey+mode+tab) 30초 안 중복은 activityLog가 생략한다.
   useEffect(() => {
+    if (mirPlan) return;   // 4.89 재감사: PLAN 덮개로 한 번 더 그린 화면은 열람이 아니다 — activity_log 에 반대 쪽 «열람»을 남기지 않는다
     logView({ route: 'voyage', voyageKey, mode, tab });
-  }, [voyageKey, mode, tab]);
+  }, [voyageKey, mode, tab]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // M3.0: 항차 IMO로 선박 라이브러리 로드 (AI에게 이전 항차 패턴 컨텍스트 제공)
   // 1.26: **IMO 가 없으면 콜사인으로 찾는다.** 항차 info 에 imo·callsign 이 아예 없는 배가 있다
@@ -1588,7 +1601,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   /* ★ 2.87-01 — 플랜 덮개를 한 군데서 만든다.
        ⚠ 홈에서 물었을 때(mirPlan) 본문까지 그리면, App 쪽 덮개가 다시 카고플랜(포털·z-50)을
          가린다 — 2.87 이 그렇게 깨졌다. 그래서 그때는 **플랜만** 돌려준다. 홈 화면은 뒤에 그대로 산다. */
-  const _planOverlay = planOv && (planOv.what === 'cargo' ? (
+  const _planOverlay = planOv && (planOv.mode && planOv.mode !== mode ? (
+        /* 4.89: 다른 mode 의 플랜 — 이 항차를 그 mode 로 한 번 더 그려 플랜만(App 홈 경로 mirPlan 과 같은 길). 화면 mode·상태는 그대로. */
+        <VoyagePage
+          key={'mirplan-in-' + voyageKey + '-' + planOv.mode}
+          mirPlan={{ voyageKey, mode: planOv.mode, what: planOv.what, bay: planOv.bay }}
+          onMirPlanClose={_closePlanOv}
+          initModeOverride={planOv.mode}
+          voyageKey={voyageKey}
+          voyage={voyage}
+          inspector={inspector}
+          inspectors={inspectors}
+          portMisData={portMisData}
+          pilotForecast={pilotForecast}
+          onGoHome={_closePlanOv}
+        />
+      ) : planOv.what === 'cargo' ? (
         /* 카고플랜은 제 힘으로 화면을 덮는다(createPortal → body 직속, z-50).
            ⛔ 그래서 덮개 «안»에 두면 안 된다 — 2.87 이 그렇게 해서 덮개(z-70)가 카고플랜을 가렸다.
               제목만 「카고플랜」이고 화면은 베이플랜이었다(검수사 «카고플랜과 베이플랜 구분 못함?»).
@@ -1814,12 +1842,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {/* ★ 4.00 — 출력 센터. 독의 「출력」 단추와 베이 탭 도구줄의 「출력」 단추가 **이 한 곳**을 연다.
           종전엔 ① 업로드 탭 맨 위 카드 ② 베이 탭 [인쇄 ▾] 드롭다운(카고플랜·베이 상세만, 계획/실적 기준이 다른 둘째 경로)
           두 곳이었다. 지금 보고 있는 모드(양하/선적)로 열린다. */}
-      {showPrintHub && (
+      {showPrintHub && (<React.Suspense fallback={<div className="fixed inset-0 z-50 bg-ink-950/70 flex items-center justify-center text-dim-200 text-sm" data-lazy-loading="1">출력 센터 불러오는 중…</div>}>{/* 4.89 */}
         <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode} isLolo={isLoloShip} inspector={inspector || ''} viewDeckPlan={_deckPlanEff}
           onXrayPrint={() => setXrayPrintNow(true)} xrayPrintOk={mode === 'discharge'}
           autoAction={hubAuto}
           onClose={() => { setShowPrintHub(false); setHubAuto(null); _backToCenter(); }} />
-      )}
+      </React.Suspense>)}
       {/* 4.33 — 출력센터 «X-RAY 리스트» 의 실체: X-RAY 탭을 보이지 않게 올려 [출력] 을 한 번 누르고 내린다(제출용·인계용 머리·봉인자 판정을 둘째 벌로 만들지 않는다). */}
       {xrayPrintNow && mode === 'discharge' && (
         <div style={{ display: 'none' }} aria-hidden="true">
@@ -2569,6 +2597,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
       const last = e.results[e.results.length - 1];
       const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
       const t = pickSpeechAlternative(alts).trim();
+      if (summonMirIfCalled(t, parseNaturalQuery(t), 'voyage-mic')) return;   // 4.89: «미르야 …» — 미르 시트로
       const digits = parseSpokenDigits(t);
       if (digits && digits.length >= 2) setSearch(digits);          // 숫자 = 즉시 조회(종전 규칙)
       else if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) setAsk({ q: t, stack: [], at: Date.now() });   // 3.68: 대화 중 «응» 은 한 글자여도 · at = 접수 표   // 1.85-05: 문장 = 이 화면에서 바로 답
@@ -2720,7 +2749,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             }}
             onKeyDown={e => {
               if (e.key === 'Enter' && (search.trim().length >= 2 || mirThreadAlive({ voyageKey, inspector })) && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌 · 3.68: 대화 중 «응»
-                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [], at: Date.now() });   // 1.85-05 · 3.68: at = 접수 표
+                e.preventDefault(); const q = search.trim(); setSearch(''); if (summonMirIfCalled(q, parseNaturalQuery(q), 'voyage-type')) return; setAsk({ q, stack: [], at: Date.now() });   // 4.89: 글로 «미르야» 도 미르 시트로   // 1.85-05 · 3.68: at = 접수 표
               }
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
@@ -3273,7 +3302,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
            답이 없으면 종전대로 null → «▶ 작업 시작 탭» 릴레이. */
       const _cs = (briefCtx && briefCtx.comp) ? containers.map((c) => (briefCtx.comp[c.cn] ? { ...c, _comp: briefCtx.comp[c.cn] } : c)) : containers;
       const _raw = answerOneRaw(q, {
-        app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', _trace: traceRef.current,
+        app: 'tally', smallTalkLast: true, workOnly: true,   /* 4.89: 검색줄은 작업용 — 잡담·생활회화는 «미르야» 안내 한 줄 */ execDevice: false, modeChoice: 'both', _trace: traceRef.current,
         _utterAt: (ask && ask.at) || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다
         limited: true,   // 이 카드가 못 싣는 재료(연락처·날씨·인계 메모)가 필요한 갈래는 null → 종전대로 «▶ 작업 시작 탭» 릴레이
         isChief: !!(briefCtx && briefCtx.isChief),   // 수석 통계 게이트(«마감 텔리 안 나간 거»)를 카드도 지난다
@@ -3509,6 +3538,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
       const last = e.results[e.results.length - 1];
       const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
       const t = pickSpeechAlternative(alts).trim();
+      if (summonMirIfCalled(t, parseNaturalQuery(t), 'voyage-mic')) return;   // 4.89: «미르야 …» — 미르 시트로
       const digits = parseSpokenDigits(t);
       if (digits && digits.length >= 2) setSearch(digits);
       else if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) setAsk({ q: t, stack: [], at: Date.now() });   // 3.68: 대화 중 «응» 은 한 글자여도 · at = 접수 표   // 1.85-05: 문장 = 이 화면에서 바로 답
@@ -3610,7 +3640,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
             }}
             onKeyDown={e => {
               if (e.key === 'Enter' && (search.trim().length >= 2 || mirThreadAlive({ voyageKey, inspector })) && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌 · 3.68: 대화 중 «응»
-                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [], at: Date.now() });   // 1.85-05 · 3.68: at = 접수 표
+                e.preventDefault(); const q = search.trim(); setSearch(''); if (summonMirIfCalled(q, parseNaturalQuery(q), 'voyage-type')) return; setAsk({ q, stack: [], at: Date.now() });   // 4.89: 글로 «미르야» 도 미르 시트로   // 1.85-05 · 3.68: at = 접수 표
               }
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}

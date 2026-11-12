@@ -10,7 +10,8 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   // ── ① 서비스워커 설치 단계 미리받기 ─────────────────────────────────────────
   console.log('[1] sw.js — 설치 단계에서 새 index.html 과 본체 파일을 미리 받는다');
   const swSrc = rd('public/sw.js');
-  ok(fs.existsSync(path.join(ROOT, 'sw.js')) && rd('sw.js') === swSrc, '루트 sw.js 와 public/sw.js 가 같은 파일이다(빌드가 복사)');
+  const _swNorm = (t) => t.replace(/^const PRECACHE_EXTRA = \[[^\]]*\];/m, 'const PRECACHE_EXTRA = [];');   // 4.89: 빌드가 루트 sw.js 의 조각 목록 한 줄만 채운다
+  ok(fs.existsSync(path.join(ROOT, 'sw.js')) && _swNorm(rd('sw.js')) === swSrc, '루트 sw.js 와 public/sw.js 가 같은 파일이다(빌드가 복사 — 4.89 조각 목록 한 줄만 다르다)');
   const runInstall = async ({ fetchImpl, addAllImpl }) => {
     const handlers = {}; const log = { addAll: [], put: [], warn: [], info: [] };
     const cache = { addAll: async (u) => { log.addAll.push(u); if (addAllImpl) await addAllImpl(u); }, put: async (k) => { log.put.push(k); } };
@@ -125,7 +126,7 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ok(/data-mir-sheet="1"[\s\S]{0,400}paddingBottom: 'calc\(1rem \+ env\(safe-area-inset-bottom, 0px\)\)'/.test(mf), '미르 시트 입력줄·답 아래에 아래 막대');
   const mirB = +((mf.match(/bottom: 'calc\((\d+)px \+ env\(safe-area-inset-bottom, 0px\)\)'/) || [])[1] || 0);
   const topB = /fixed bottom-5 right-4 z-40 w-12 h-12/.test(stb) && /bottom: 'calc\(1\.25rem \+ env\(safe-area-inset-bottom, 0px\)\)'/.test(stb) ? 20 : -1;
-  ok(topB === 20 && mirB > 0 && mirB - (topB + 48) >= 16, `미르 얼굴과 TOP 간격 ${mirB - (topB + 48)}px(≥16) · 둘 다 아래 막대만큼 올라간다`);
+  ok(topB === 20 && mirB === 0 && !/fixed right-4/.test(mf), 'TOP 은 아래 막대만큼 올라가고 미르 얼굴은 아래에 떠 있지 않다(4.89 — 머리띠로 옮겨 TOP 과 겹칠 일이 없다)');   // 4.89: 종전 «미르 얼굴과 TOP 16px 띄움»
   ok(/data-f1700-chip="1"[\s\S]{0,300}bottom: 'calc\(1\.25rem \+ env\(safe-area-inset-bottom, 0px\)\)'/.test(fa), '보고 보관 칩도 아래 막대만큼');
   const allJs = A.filter((f) => /\.js$/.test(f)).map((f) => fs.readFileSync(path.join(ROOT, 'assets', f), 'utf8')).join('\n');
   ok(/safe-area-inset-top/.test(allJs) && /safe-area-inset-bottom/.test(allJs), '빌드본에 safe-area-inset 이 실렸다');

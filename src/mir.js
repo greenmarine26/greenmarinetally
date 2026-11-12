@@ -2,7 +2,7 @@
 //
 // 검수사 2026-09-10 «미르를 하나로 만들고 싶습니다» · 2026-09-11 «미르 하나로 통합 했는데 답이 다르면 통합이 안되었다는 이야기»
 // 종전 일곱 파일(mirLearn·mirChat·mirCtx·mirFacts·mirEyes·mirAnswer·mirModel)을 본문 그대로 절로 옮겼다 — 답은 한 글자도 바뀌지 않는다.
-//   화면은 components/MirFab.jsx(떠 있는 미르), 콘앱 포장은 mirCore.entry.js, 파서는 nlSearch.js(앱 공용), 용어 자료는 data/mirKnowledge.js.
+//   화면은 components/MirFab.jsx(미르 시트 — 4.89 부터 검색줄에서 «미르야» 로 부른다), 콘앱 포장은 mirCore.entry.js, 파서는 nlSearch.js(앱 공용), 용어 자료는 data/mirKnowledge.js.
 //
 // 절 차례
 //   1. [mirLearn] 사전 — 못 알아들은 말을 배우고 되쓴다
@@ -2251,6 +2251,8 @@ export function answerOneRaw(query, ctx) {
   }
   const c = _normalize(ctx);
   const _via = (v) => { if (c._trace && typeof c._trace === 'object') c._trace.via = v; };   // 3.42: 잡아채는 길 표시(판 B 문지기 재료)
+  //  ★ 4.89 감사 막음 2 — 작업용 검색줄(ctx.workOnly — 부름말 없음)의 일반 대화(인사·안부·재미 청하기)는 답하지 않고 부르는 법 한 줄. 모델도 부르지 않는다(isWeakAnswer 가 workHint 를 답으로 본다). 두 앱 같은 판정.
+  if (c.workOnly && mirWorkChatOf(query)) { _via('workHint'); return MIR_CALL_HINT; }
   const app = c.app || 'tally';
   const cs = c.containers || [];
   //  3.53-12: 항차 전체 평택분(양하+선적) 대수·완료 — «몇 시에 끝나»·«작업 속도»·«얼마나 남았어» 가 같은 총 잔여를 말하게 한다. 한 번 세면 기억한다.
@@ -2284,7 +2286,7 @@ export function answerOneRaw(query, ctx) {
   const modeKr = mode === 'loading' ? '선적' : '양하';
 
   //  ⓪ 잡담(콘앱 기준은 앞) — 검수앱은 뒤에서 본다(smallTalkLast). mirSmallTalk 은 업무 낱말 게이트가 있다.
-  if (!c.smallTalkLast) { try { const st = mirSmallTalk(q); if (st) return st; } catch (e) { /* 잡담이 막혀도 일 이야기는 계속 */ } }
+  if (!c.smallTalkLast) { try { const st = mirSmallTalk(q); if (st) { if (c.workOnly) { _via('workHint'); return MIR_CALL_HINT; } return st; } } catch (e) { /* 잡담이 막혀도 일 이야기는 계속 */ } }   // 4.89: 작업용 검색줄(workOnly)은 잡담 대신 부르는 법 한 줄
 
   let p = null;
   try { p = parseNaturalQuery(q); } catch (e) { p = null; }
@@ -2462,13 +2464,13 @@ export function answerOneRaw(query, ctx) {
         const _ws = withdrawnCranesOf(v);
         const _w = M.equip ? _ws.find((x) => x.equip === M.equip) : _ws[0];
         if (!_w) return M.equip ? `${koJosa(M.equip, '은')} 철수로 적힌 기록이 없어요 🐱 취소할 게 없어서 아무것도 안 바꿨어요.` : '취소할 철수 기록이 없어요 🐱 아무것도 안 바꿨어요.';
-        if (app === 'cone' || !c.moveRecorder) return `알겠어요, ${_w.equip} 철수 취소라고 들었어요 🐱 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르(떠 있는 미르 칸)에서 해 주세요.`;
+        if (app === 'cone' || !c.moveRecorder) return `알겠어요, ${_w.equip} 철수 취소라고 들었어요 🐱 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르(검색줄 마이크를 누르고 "미르야" 하면 나오는 미르 칸)에서 해 주세요.`;
         return `🏗 ${_w.equip} 철수 취소(복귀) — 적을게요 🐱 지금 일하는 호기 수가 바뀐 걸로 보고 끝나는 시각을 다시 계산해요.`;
       }
       const _txt = M.kind === 'withdraw' ? `${M.equip} 철수${M.to ? ` · ${M.to}로 이동` : ''}`
         : M.kind === 'move' ? `${M.equip ? M.equip + '에서 ' : ''}${M.to}로 이동`
         : `${M.equip} 복귀`;
-      if (app === 'cone' || !c.moveRecorder) return `알겠어요, ${_txt}라고 들었어요 🐱 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르(떠 있는 미르 칸)에서 해 주세요.`;
+      if (app === 'cone' || !c.moveRecorder) return `알겠어요, ${_txt}라고 들었어요 🐱 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르(검색줄 마이크를 누르고 "미르야" 하면 나오는 미르 칸)에서 해 주세요.`;
       return `🏗 ${_txt} — 적을게요 🐱 지금 일하는 호기 수가 바뀐 걸로 보고 끝나는 시각을 다시 계산해요. (되돌리려면 "철수 취소"·"N호기 복귀")`;
     }
     if (p.pauseSet && (p.mirCalled || c.mirBox)) {
@@ -2917,7 +2919,7 @@ export function answerOneRaw(query, ctx) {
   if (p.weatherQuery) {
     if (c.weatherText) return c.weatherText;
     if (c.limited) return null;   // 탭 카드 — 날씨를 안 받는 자리, 작업 시작 탭으로 릴레이
-    return c.weatherPending ? '🌤 평택항 날씨 조회 중…' : '날씨는 항차 화면 [🚀 작업 시작] 탭이나 떠 있는 미르에게 물어 주세요.';
+    return c.weatherPending ? '🌤 평택항 날씨 조회 중…' : '날씨는 항차 화면 [🚀 작업 시작] 탭이나 검색줄 마이크를 누르고 "미르야" 하고 미르에게 물어 주세요.';
   }
 
   //  ⑮ 트윈 무게 점검 · 속도 · 계획 전망 · 자료 도착.
@@ -3114,7 +3116,7 @@ export function answerOneRaw(query, ctx) {
   }
 
   //  ㉑ 잡담(검수앱은 여기서) → 용어·실무지식 → 콘앱 안내.
-  if (c.smallTalkLast) { try { const st = mirSmallTalk(q); if (st) return st; } catch (e) { /* */ } }
+  if (c.smallTalkLast) { try { const st = mirSmallTalk(q); if (st) { if (c.workOnly) { _via('workHint'); return MIR_CALL_HINT; } return st; } } catch (e) { /* 잡담 판정이 깨져도 아래 용어·실무지식 답은 계속한다(잡담 답만 빠진다) */ } }   // 4.89: 작업용 검색줄(workOnly)은 잡담 대신 부르는 법 한 줄
   if (!p.asking) {
     try {
       let k = mirKnowledge(q);
@@ -3206,6 +3208,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (answer == null || answer === '') return true;
   const via = trace && trace.via;
   if (via === 'modeChoice') return false;
+  if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
@@ -3621,6 +3624,9 @@ const _memoKey = (q, ctx) => `${ctx && ctx.app || ''}|${ctx && ctx.voyageKey || 
 
 /** 규칙이 약할 때만 모델을 부른다. rules(q) 는 «미르 말»로 바꾼 문장을 규칙에 다시 돌리는 함수(문자열 또는 null).
     돌려주는 값: { text, via:'translate'|'confirmed'|'model'|null, canonical, reason } — text 가 null 이면 모델도 못 받은 것(규칙 답으로 돌아간다). */
+//  4.89: 작업용 검색줄에 일반 대화가 들어왔을 때 내는 한 줄(두 앱 같은 글자 — 콘앱은 mir-core 로 같은 값을 받는다)
+export const MIR_CALL_HINT = '"미르야" 하고 부르시면 미르가 답합니다.';
+
 export async function askMirModel(q, ctx, rules, opts = {}) {
   const key = _memoKey(q, ctx);
   if (!_norm(q) || _norm(q).length < 2) return { text: null, via: null, reason: 'short' };
@@ -3687,6 +3693,9 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   let chatTried = false;
   const tryChat = async () => {
     chatTried = true;
+    //  ★ 4.89 (검수사 2026-11-12 19:41 «미르를 부르지 않고 글로 치거나 마이크로 이야기 하면 … 작업용으로 봅니다. 미르를 … 부르면 일반 대화용이나 … 비서 역활») —
+    //    작업용 검색줄(ctx.workOnly)은 생활회화·웹 검색을 부르지 않고 부르는 법 한 줄만 낸다. 미루기(사담 큐)도 하지 않는다.
+    if (ctx && ctx.workOnly && mirWorkChatOf(q)) {   /* 4.89 재감사: 규칙 길(2255)과 같은 판정 한 벌 */ out.text = MIR_CALL_HINT; out.via = 'workHint'; out.reason = 'workOnly'; return true; }
     //  4.38: 작업 중 사담 미루기 — 미루는 자리는 여기 하나다(두 앱 같은 판정). 번역이 일 뜻으로 옮긴 말은 여기까지 오지 않고,
     //    여기 온 말도 일 낱말·앱 말이 있으면(«화장실 어디 있어»·«사진 올리는 법»·«콘 빠졌어») 미루지 않는다(감사 B2·B3·B4). 미루면 생활회화·웹 검색을 부르지 않는다.
     if (_isGeneralTalk(q)) { const _t = (ctx && ctx._now) || Date.now(); const bz = mirBusyNow(ctx, _t); if (bz.busy) { _deferPush(q, _t, who); if (!fromMemo) _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical || '', how: 'defer', why: bz.why }); out.text = MIR_DEFER_TEXT; out.via = 'defer'; out.reason = bz.why; return true; } }   // 미룬 말은 mir_misses(how defer)에 — 잘못 미룬 말을 결산에서 찾는다(mir_model_log 는 하루 상한·비용 집계라 쓰지 않는다)
@@ -4423,6 +4432,17 @@ const MIR_CHAT_EXACT_RE = [
   /^(?:너|넌|미르)?\s*(?:오늘|요즘|지금)?\s*(?:기분\s*(?:어때|어떠니|어때요|좋아|좋니)|심심해|심심하다|심심하네|놀아\s*줘|놀자)$/,
 ];
 const _chatNorm = (q) => String(q || '').trim().replace(/^미르\s*(?:야|아|님)?(?![가-힣])[\s,!~.]*/, '').replace(/[\s?？!！.~…ㅋㅎ^]+$/g, '').replace(/\s+/g, ' ');
+//  ★ 4.89 감사 막음 2 — 작업용 검색줄에서 «일반 대화» 로 볼 말 한 벌: 생활회화 미루기 판정(_isGeneralTalk — 재미 청하기·안부)에 짧은 인사·고마움을 더한다.
+//    일 낱말이 든 말(isChatCandidate 거짓)·앱 말·위기 말은 일반 대화가 아니다(검색이 답한다).
+const MIR_GREET_RE = /^(?:안녕|안녕하세요|안녕하십니까|반가워|반가워요|반갑다|고마워|고마워요|고맙다|고맙습니다|감사해|감사합니다|땡큐|수고|수고했어|수고해|수고하셨습니다|사랑해|귀여워|귀엽다|잘\s*자|잘\s*있어|좋은\s*아침|굿모닝|하이|헬로|ㅎㅇ)$/;
+export function mirWorkChatOf(q) {
+  const t = String(q || '');
+  if (!t.trim() || !isChatCandidate(t, '') || MIR_NEVER_DEFER_RE.test(t)) return false;
+  const n = _chatNorm(t);
+  if (MIR_GREET_RE.test(n)) return true;
+  if (MIR_APPISH_RE.test(t)) return false;
+  return MIR_CHAT_EXACT_RE.some((r) => r.test(n));
+}
 function _isGeneralTalk(q) { const t = String(q || ''); const n = _chatNorm(t); return isChatCandidate(t, '') && !MIR_APPISH_RE.test(t) && !MIR_NEVER_DEFER_RE.test(t) && MIR_CHAT_EXACT_RE.some((r) => r.test(n)); }
 
 /** 앱 작업 보고(workPauseOf 와 같은 12시간 안의 work_status)에서 ① «시작·재개» 중 가장 늦은 시각(restartAt) ② 모든 «모드·호기» 의 가장 늦은 보고가 «끝(…_done)» 이면 그 가운데 가장 늦은 끝 시각(allClosedAt, 아니면 0).

@@ -820,7 +820,6 @@ export default function PrintableCargoPlanV2({
   else if (mode === 'loading') _voyByMode = _voyL || _voyGeneric;
   else _voyByMode = (_voyD && _voyL && _voyD !== _voyL) ? `양하 ${_voyD} / 선적 ${_voyL}` : (_voyD || _voyL || _voyGeneric);
   const effVoyNo = voyNo || _voyByMode || '-';
-  const effShipName = shipName || voyageInfo?.shipName || '';
   const shiftCount = Object.keys(shiftingMap || {}).length;   // V8.98
   //  ★ 4.16 (§7.8-② · Fable 판정 ⑥): 예측(확정 아님) 칸 수 — 머리 «쉬프팅 ◆N ◇M» · 바닥글 «◇ 예측(확정 아님)». 판정은 cargoPlanCore.isPredShift 한 벌.
   const shiftPredCount = Object.values(shiftingMap || {}).filter(isPredShift).length;
@@ -868,6 +867,10 @@ export default function PrintableCargoPlanV2({
     const bayDefWithSource = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser };
     return { ...baseDict, bayDef: bayDefWithSource, _userOwned: _isUser };
   }, [shipImo, shipName, structCont, voyageInfo]);
+  /* ★ 4.89 (4.88-01 라이브 확인 — 출력 머리가 «PCSZ CARGO DISCHARGING PLAN» 처럼 선박코드로 찍혔다. 검수사가 정한 꼴은 «<선박명> CARGO DISCHARGING PLAN»)
+       전체 선박명 — 항차 정보의 EDI 풀네임(info.vslFull) → 베이사전 항목 이름 → 넘겨받은 이름(대개 코드) 순. 자료에 있는 이름을 그대로 쓴다(선박명 임의 수정 금지).
+       PDF 파일 이름은 이 값을 쓰지 않는다(코드 그대로). */
+  const effShipName = String(voyageInfo?.vslFull || '').trim() || String((dictData && (dictData.name || (dictData.bayDef && dictData.bayDef.name))) || '').trim() || shipName || voyageInfo?.shipName || '';
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];

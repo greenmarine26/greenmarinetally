@@ -5,6 +5,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, Arro
 import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer, inspectionSealOf } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';   // 1.89·1.92·1.97 (2.03 데미지 색인은 DamageHistoryCard 가 읽는다)
 import DamageHistoryCard, { damageHistoryQueryOf } from '../components/DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(떠 있는 미르와 공용)
@@ -18,7 +19,7 @@ import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 �
 import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
-import MirFace from '../components/MirFace.jsx';   // 4.07: 실사 미르 얼굴(작은 정지 아바타) — 2.33 부터 쓰던 그림 아바타를 바꿨다
+// 4.89: 작업용 검색줄에는 미르 얼굴을 그리지 않는다(검수사 2026-11-12 19:41) — MirFace import 를 뺐다
 import { fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.06: 무응답 자동 신고 (2.03 데미지 사진 단건은 DamageHistoryCard 로 갔다)
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -204,7 +205,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
          전부 그리로 옮겼다. 여기 남는 것은 재료(ctx)를 싣는 일뿐이다 — 판정을 여기서 다시 세우지 않는다(§4-4). */
     traceRef.current = {};
     return answerOneRaw(Q, {
-      app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both', _trace: traceRef.current,
+      app: 'tally', smallTalkLast: true, workOnly: true,   /* 4.89: 검색줄은 작업용 — 잡담·생활회화는 «미르야» 안내 한 줄 */ execDevice: false, modeChoice: 'both', _trace: traceRef.current,
       _utterAt: askedAt || 0,   // 3.68 [mirThread]: 접수 표 — 같은 접수를 다시 그려도 «응» 이 같은 제안으로 풀린다
       voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, carrierContacts, shipSpeed, ediPattern, shipContacts,
       bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
@@ -215,7 +216,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   /* ★ 3.42 (판 B) — 약한 답일 때만 모델. 접수된 질문(askedAt)만, 같은 문장은 한 번. 번역문은 같은 재료로 규칙을 다시 돌린다(두 벌 금지). */
   const [modelState, setModelState] = useState({ q: '', pending: false, text: null, via: null });
   const _rulesFor = (cq) => answerOneRaw(cq, {
-    app: 'tally', smallTalkLast: true, execDevice: false, modeChoice: 'both',
+    app: 'tally', smallTalkLast: true, workOnly: true,   /* 4.89: 검색줄은 작업용 — 잡담·생활회화는 «미르야» 안내 한 줄 */ execDevice: false, modeChoice: 'both',
     voyages, flat, shipCtx: shipCtx || null, isChief, chiefData, heartbeat, portMisData, carrierContacts, shipSpeed, ediPattern, shipContacts,
     bayPairs: (shipCtx && shipCtx.v) ? (() => { try { return getBayPairs(flat.filter((c) => c.voyageKey === shipCtx.key), String(shipCtx.info?.imo || ''), String(shipCtx.info?.vsl || '')); } catch (e) { return null; } })() : null,
     computeTallyData, matchPortMis,
@@ -230,7 +231,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     setModelState({ q, pending: true, text: null, via: null });
     const _who = _storage.get(SK.activeInspector) || '';   // 이 화면은 inspector prop 이 없다 — 저장된 검수원 이름(App 과 같은 키)
     const ctx = { app: 'tally', voyages, voyageKey: shipCtx && shipCtx.key, voyage: shipCtx && shipCtx.v, info: (shipCtx && shipCtx.info) || null,
-      containers: (shipCtx && shipCtx.key) ? flat.filter((c) => c.voyageKey === shipCtx.key) : flat, inspector: _who, work: mirWorkCtx() };   // 4.38: 작업 중 사담 미루기
+      containers: (shipCtx && shipCtx.key) ? flat.filter((c) => c.voyageKey === shipCtx.key) : flat, inspector: _who, work: mirWorkCtx(), workOnly: !(parsed && parsed.mirCalled) };   /* 4.89 감사 막음 2: 부름말 없는 검색줄은 모델 길도 작업용 */   // 4.38: 작업 중 사담 미루기
     askMirModel(_dq || q, ctx, (cq) => _rulesFor(cq), { who: _who, weakText: _localAnswerRaw, weakVia: traceRef.current && traceRef.current.via })
       .then((m) => { if (!alive) return; setModelState({ q, pending: false, text: (m && m.text) ? m.text : null, via: (m && m.via) || null }); if (m && m.text) logQuerySettled('nls', q, { voyageKey: (shipCtx && shipCtx.key) || '', via: m.via }); })
       .catch((e) => { console.warn('[미르 모델] 실패:', e && e.message); if (alive) setModelState({ q, pending: false, text: null, via: null }); });
@@ -405,6 +406,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   //   답 박스에 «다시 확인했습니다 (HH:MM 기준)» 한 줄로 갱신이 보이게 한다.
   const submitNow = (raw) => {
     const t = String(raw ?? '').trim();
+    if (summonMirIfCalled(t, parseNaturalQuery(t), 'global')) { setQuery(''); return; }   // 4.89: 말·글 «미르야 …» — 미르 시트로(통합검색 마이크·Enter 모두 여기를 지난다)
     if (!t || (t.length < 2 && !mirThreadAlive(_thCtx()))) return;   // 3.68: 한 글자(«응»)는 대화 중일 때만
     setReasked(t === lastAskRef.current);
     lastSpokenRef.current = null;
@@ -513,7 +515,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
             title="검색을 마치고 들어온 화면으로 돌아갑니다">
             ← 나가기
           </button>}
-          <span className="min-w-0 flex items-center gap-1.5 break-keep leading-tight"><MirFace mood="basic" size={20} still className="inline-block shrink-0" />미르 통합 검색 — 모든 항차·양/선적</span>{/* 4.23 2차: «…» 로 자르지 않고 좁으면 두 줄 */}
+          <span className="min-w-0 flex items-center gap-1.5 break-keep leading-tight">미르 통합 검색 — 모든 항차·양/선적</span>{/* 4.23 2차: «…» 로 자르지 않고 좁으면 두 줄 */}
           <span className="text-dim-300 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">
@@ -583,7 +585,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       {/* 2.06: 미르가 모르는 질문 — 솔직하게 + 자동으로 개발에 전달됐음을 알림 (검수사 확정 문구 그대로) */}
       {_mirDontKnow && (
         <div className="bg-ink-900 border-2 border-line-strong rounded-btn p-4 mb-3">
-          <div className="text-xxs text-dim-300 font-bold uppercase mb-1 flex items-center gap-1.5"><MirFace mood="basic" size={20} still />미르</div>
+          <div className="text-xxs text-dim-300 font-bold uppercase mb-1 flex items-center gap-1.5">미르</div>
           <div className="text-sm text-dim-100 leading-relaxed">
             아직은 미르가 그 기능을 할 수 없어요 😿 열심히 배워서 꼭 알려드릴게요!
             {askedAt ? <span className="block text-xxs text-dim-300 mt-1">이 질문은 개발자에게 자동 전달됐습니다.</span>
@@ -594,7 +596,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       {/* V9.14: 즉답/안내 카드 */}
       {localAnswer && (
         <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-btn p-4 mb-3">
-          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1.5"><MirFace mood="basic" size={20} still />미르 즉답</div>
+          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1.5">미르 즉답</div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
           {/* 3.68 [mirThread]: 답 뒤 한 마디 — 얼버무린 답이면 확인 질문, 강한 답이면 다음 제안 + 칩(누르면 그 말을 그대로 접수). 끝은 검수사가. */}

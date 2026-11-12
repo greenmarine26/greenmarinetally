@@ -132,6 +132,7 @@
            border-radius:50%; border:2px solid var(--accent); padding:0; cursor:pointer;
            background:#f7f8fa center/cover no-repeat; box-shadow:0 4px 14px rgba(0,0,0,.45); display:none;}
   .mir-fab:active{transform:scale(.94);}
+  .mir-back{position:fixed; inset:0; z-index:10002; background:rgba(0,0,0,.45); display:none;}   /* 2.79: 미르 시트 바깥 — 누르면 닫힌다 */
   /* ★ 2.52 — 미르 기분 배지·이유 줄. 2.63 부터 얼굴은 실사 미르 사진 한 칸이고 그 CSS 는 mir-core(ConeMir.ensureMirPhotoCss)가 <style id="mirPhotoCss"> 로 넣는다 — 검수앱과 한 벌, 여기 다시 적지 않는다. */
   .mir-mood-badge{ position:absolute; top:-6px; left:-6px; min-width:18px; height:18px; padding:0 3px; border-radius:9px;
     background:#1a1206; border:1px solid var(--accent); color:#fde68a; font-size:11px; line-height:16px; text-align:center; pointer-events:none; z-index:1; }
@@ -565,7 +566,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.78-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.79</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1040,8 +1041,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 4.88-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.78-01';   // ★ 2.78-01 (TallyOne 4.88-01) — 카고플랜을 카스피 이름으로(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN, 출력 머리 CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION) — 검수앱과 같은 말. // (앞 판) ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
+window.__APPV='TallyOne 4.89';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 2.79';   // ★ 2.79 (TallyOne 4.89) — «미르야» 없이 말하면 콘 검색이고 «미르야» 하고 부르면 미르 비서가 나옵니다. 아무 말이 없으면 20초 뒤 들어갑니다. // (앞 판) ★ 2.78-01 (TallyOne 4.88-01) — 카고플랜을 카스피 이름으로(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN, 출력 머리 CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION) — 검수앱과 같은 말. // (앞 판) ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
 // (앞 판) 'ConeOne 2.76'
 // ★ 2.76   // ★ 2.76 (TallyOne 4.82) — 검수사 수동 시프팅 표기(voyages/{키}/shiftManual)를 읽어 검수앱과 같은 순수 함수(applyShiftManualToMap)로 시프팅 지도에 덧입힘(읽기만 · 양하 평택분에서 빠지고 시프팅으로 셈). (앞 판) ★ 2.75-01 (TallyOne 4.81-01) — mir-core 번들만 바뀜(미르 «N번 베이 정리해줘» 가 앱·터미널 호기 번호가 달라도 같은 장 같은 30분 앱 입력으로 같은 갱을 알아봄 · 콘앱 화면 코드 변경 없음 · 배 이름 없는 베이 정리는 일하는 배 규칙을 검수앱에서만 탄다 — 콘앱은 고른 배 기준).   // (앞 판) ★ 2.75 (TallyOne 4.81) — 미르 «N번 베이 정리해줘»(읽기 전용 현황 · mir-core 번들 gangState 한 벌 — 검수앱과 같은 답) · 이 말에도 베이사전을 먼저 받아 장 묶음이 검수앱과 같게(질문 정규식에 «정리» 추가). 쓰기 없음.   // (앞 판) ★ 2.74-03 (TallyOne 4.77-01) — mir-core 번들(말투 «쌓여요» · 배 코드가 든 설명형 질문은 생활회화로 안 감 · 속도·갱 수 한 함수 paceNowOf · 같은 분 안 같은 수)과 미르 ctx 에 항차 목록의 배 코드(shipCodes) 추가.   // (앞 판) ★ 2.74-02 (TallyOne 4.77) — 동방 qcWork 3호기·105호기 몫을 실 LOLO 컨 기준으로 바로잡음(ConeParse.qcWorkLoloSplit · 합계는 그대로 · 호기별 값만 정정).   // (앞 판) ★ 2.74-01 (TallyOne 4.76) — mir-core 번들만 바뀜(끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 · 호기 이동 말 · 해치 닫는 장수 · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73-01 (TallyOne 4.59-01) — mir-core 번들만 바뀜(MFN 재적재 항목 판정 한 곳 mfnItemsOf · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73 (TallyOne 4.58) — 양하 대수에 MFN(터미널엔 있고 메일 양하 리스트엔 없는 컨 · voyages/{키}/discharge/mfnList)을 합쳐 미르 답이 검수앱과 같게(278 = 리스트 234 + MFN 44). 화면 개조 없음.   // (앞 판) ★ 2.72-05 (TallyOne 4.56-03) — 선적 칸 맞바꿈(applyAutoSwap 번들만 바뀜 · 콘앱 화면 코드 변경 없음).   // ★ 2.72-02 (TallyOne 4.56) — 미르 «양하 정확도»(mir-core 번들만 바뀜 · 콘앱 화면 코드 변경 없음). // ★ 2.72-01 (TallyOne 4.55-03) — 양하 완료 순서로 먼저 나온 컨의 칸을 추정해 검수앱과 같은 칸에 그린다(applyAutoSwap 앞에 inferDischargePos). · 2.72 (TallyOne 4.53) — 선적 EDI(출항본)에 실린 선사 지시 본선 잔류 컨은 «예정» 이 아니라 «확정» — 확정 시프팅 지도(ctShiftMap)에 파란 ◆ 로 들고 평택 양하분에서 빠진다(미르 «양하 315 · 시프팅 64» — 검수앱과 같은 답, 판정은 번들 keepConfirmedFromMaps 한 벌). · (앞 판) 2.71-03 (TallyOne 4.52) — 20HT·40HT·25OT·연태 V코드(22V7·42V1)를 오픈탑으로 읽는다(coneAlphaOt — 검수앱 한 벌) · 2.71-02 (TallyOne 4.48-04) — 미르 «양하 몇 대» 가 선사 지시 본선 잔류 두 대를 시프팅 예보로 보고 평택 양하분에서 빼 315 로 답하던 것(검수앱 317)을 고쳤다 — 시프팅 집합은 검수앱 한 벌 ConeMir.shiftSetForUnitsOf(예보 제외). ← (앞 판) ★ 2.71-01 (TallyOne 4.48-03) — 선사 지시 본선 잔류는 «예정» — 평택 양하 대수는 자료(EDI·리스트)대로 센다(검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»). 노란 ◆ 예보는 그대로.
 // (앞 판) 'ConeOne 2.71'   // ★ 2.71 — 선사 지시 «본선 잔류»(voyages/{키}/keepOnboard — 검수앱 4.48 컨 상세·수집기)를 같은 판정으로 — 평택 양하분에서 빼고(미르 «양하 몇 대» 315), 아래 평택 컨을 막으면 카고플랜에 시프팅 예보 노란 ◆(검수사 2026-10-24 «메일 적용은 한다면 노란 다이아 몬드로»). · (앞 판) ★ 2.70-04 — 선종(컨테이너선·복합선)은 배마다 한 번 — 보관소 coneShipTypes/{배 코드} 에 두고 모든 폰이 같이 쓴다(검수사 2026-10-21 13:05 «컨테이너선으로 지정 해놨는데 건건 마다 다시 물어 봅니다»). · (앞 판) ★ 2.70-03 — 실시간 화면(⚡·콘 타이밍 카드·위 띠)이 실시간 수집이 호기를 적어 넣은 터미널 실적도 그 호기로 그린다(검수사 2026-10-20 «2호기 4호기가 보여야 하는데 한호기 밖에») · 미르 «몇 시에 끝나» 류가 검수앱과 같은 규칙 답(TallyOne 4.40-01 mir-core)
@@ -1161,6 +1162,7 @@ async function fbFetchVoyages(){
     out.push({
       key,
       vsl: info.vsl||key.split('_')[0]||'(선박명 미상)',
+      vslFull: info.vslFull||'',   // 2.79: 출력 머리 «<선박명> CARGO DISCHARGING PLAN» 의 전체 선박명(검수앱 info.vslFull 그대로)
       imo: info.imo||'',
       voy: info.voy_l||info.voy_d||info.voy||'',
       planDate: info.planDate||'',            // C7.69: 터미널 작업현황 항차 매칭용(작업창)
@@ -4338,7 +4340,7 @@ async function coneYardStatus(){
   try{ if(window.ConeMir&&window.ConeMir.setMirYard) window.ConeMir.setMirYard(_yardSt); }catch(e){}   // 엔진 캐시에도 넣는다 — 대화 층이 «응»을 «야드 추이»로 되쓴 뒤에도 같은 자료를 본다(감사 1)
   return _yardSt;
 }
-async function mirAsk(q){
+async function mirAsk(q, opt){   // 2.79: opt.workOnly — 콘 질문바(작업용)는 잡담·생활회화 대신 «미르야» 안내 한 줄(검수앱 검색줄과 같은 판정)
   _mirLastFollow=null; window.__mirYardSlow=false;   // 2.58-01: 새 질문마다 초기화(재감사 3)
   let _yard=null;   // 2.58: 야드 질문이거나 대화가 살아 있을 때(«응»이 야드 칩으로 풀릴 수 있다) 읽는다 — 판정은 파서 한 벌(2차 시뮬 2 · 감사 1)
   try{ const CM=window.ConeMir; if(CM&&CM.parseNaturalQuery&&(CM.parseNaturalQuery(q).yardQuery||(CM.mirThreadAlive&&CM.mirThreadAlive({voyageKey:state.voyageKey||'', inspector:(function(){ try{ return localStorage.getItem('master_active_inspector_v1')||''; }catch(_){ return ''; } })()})))) _yard=await coneYardStatus(); }catch(e){ _yard=null; }
@@ -4420,7 +4422,7 @@ async function mirAsk(q){
       /* ★ 2.49 (판 B) — 규칙이 못 받거나 약하게 받은 말은 ConeMir.askMir 가 공용 키(검수사 부담)로 모델을 부른다(번역 → 규칙 재실행 → 자료 답).
            키·모델·하루 상한은 보관소 mir_config 한 칸 — 이 파일에 박혀 있던 키(2.13~2.48)는 지웠다. */
       const ctx={
-        app:'cone', containers:cs, cone, accepted:true,   /* 2.55-01 — 전송된 질문: 못 알아들으면 miss 기록(mir-core) */
+        app:'cone', containers:cs, cone, accepted:true, workOnly: !!(opt && opt.workOnly),   /* 2.79 */   /* 2.55-01 — 전송된 질문: 못 알아들으면 miss 기록(mir-core) */
         execDevice:true,   // 콘앱은 미르가 밝기를 바로 바꿔도 된다(화면이 한 번만 부른다)
         shiftN: (state._shiftAdded && state._shiftAdded.n) || 0,   // 2.16: 브리핑에 시프팅 대수
         mode:'discharge', modeLabel:'양하',
@@ -4537,7 +4539,7 @@ async function cargoPlanPropsV2(mode){
     // V8.45-01: 선박 신원(imo)·항차(voy_d/voy_l)·코드(Firebase 키 앞부분)를 넘겨 VOY 표시 + user 사전 코드매칭 활성화.
     const _v=(state.voyages||[]).find(x=>x.key===state.voyageKey)||{};
     const voyageInfo={ voy_d:_v.voy_d||'', voy_l:_v.voy_l||'', voy:_v.voy||'',
-      code:(state.voyageKey||'').split('_')[0]||'', vsl:state.shipName||_v.vsl||'', imo:_v.imo||'' };
+      code:(state.voyageKey||'').split('_')[0]||'', vsl:state.shipName||_v.vsl||'', imo:_v.imo||'', vslFull:_v.vslFull||'' };   // 2.79: vslFull — 출력 머리 선박명(PrintableCargoPlanV2 effShipName)
     // V8.87: 별첨은 리스트(검수 대상) 기준 — 검수앱과 동일. records를 가져와 별첨 전용 목록으로 전달.
     //   (기존: EDI만 넘겨 컨번호 없는 자리 항차(TMPZ류)에서 별첨이 0 또는 자리 수로 잘못 집계)
     //   records가 없으면(옛 항차) 안 넘김 → 기존 동작(containers 집계) 유지.
@@ -5670,6 +5672,8 @@ function bindMirFab(){
     const bd=document.createElement('span'); bd.className='mir-mood-badge'; bd.id='mirMoodBadge'; bd.setAttribute('aria-hidden','true'); bd.style.display='none'; fab.appendChild(bd);
     document.body.appendChild(fab);
   }
+  let back=document.getElementById('mirBack');
+  if(!back){ back=document.createElement('div'); back.id='mirBack'; back.className='mir-back'; back.setAttribute('aria-hidden','true'); document.body.appendChild(back); }   // 2.79: 시트 바깥(어두운 곳) — 누르면 닫힌다
   if(!sheet){
     sheet=document.createElement('div');
     sheet.id='mirSheet'; sheet.className='mir-sheet';
@@ -5716,11 +5720,12 @@ function bindMirFab(){
   try{ coneMoodStart(); }catch(e){ console.warn('[콘앱] 미르 기분 시작 실패:', e); }
   sheet.querySelector('#mirX').onclick=()=>{
     try{ window.ConeMir && window.ConeMir.stopSpeak && window.ConeMir.stopSpeak(); }catch(e){}
-    sheet.style.display='none'; show('');
+    sheet.style.display='none'; back.style.display='none'; show('');
     try{ const h=document.getElementById('mirHero'); if(h) h.innerHTML=''; }catch(e){}   // 2.63: 닫으면 전신 사진은 치운다(다시 열 때 새로 받는다)
   };
   const spk=sheet.querySelector('#mirSpk');
   if(spk) spk.onclick=()=>{ if(lastAnswer) say(lastAnswer); };
+  back.onclick=()=>{ sheet.querySelector('#mirX').click(); };   // 2.79: 바깥을 누르면 ✕ 와 같다
   sheet.querySelector('#mirGo').onclick=ask;
   inp.onkeydown=(e)=>{ if(e.key==='Enter') ask(); };
   const mic=sheet.querySelector('#mirMic');
@@ -5739,7 +5744,32 @@ function bindMirFab(){
   /* ★ 2.15 — 미르를 가두지 않는다. 검수사 *«미르가 갇혀 있어서 그런듯 합니다.
        선박을 선택 해야만 미르가 나옵니다»* — 종전엔 결과 화면이 그려진 뒤에만 떴다.
      용어·조회·잡담은 선박을 안 골라도 답할 수 있으니 **첫 화면부터** 있는다. */
-  fab.style.display='block';
+  //  ★ 2.79 (TallyOne 4.89 · 검수사 2026-11-12 19:36 «미르를 숨기는것은 어떻습니까? 미르를 호출하면 나오는것으로 바꾸는것입니다» · 19:38 «검색줄 마이크를 이용합니다. 새로 만드는거 부피만 커집니다»)
+  //    떠 있는 얼굴은 보이지 않는다(fab 은 만들어 두되 display none — 여닫이 함수만 쓴다). 미르는 콘 질문바 🎤·글로 «미르야» 하면 시트가 올라온다(window.__coneMirSummon).
+  fab.style.display='none';
+  let _idleT=null, _lastAct=Date.now();
+  const _touch=()=>{ _lastAct=Date.now(); };
+  const _idleStop=()=>{ if(_idleT){ clearInterval(_idleT); _idleT=null; } };
+  //  사라지기 — 답을 다 말한 뒤 20초 아무 입력이 없으면 닫는다(답을 만드는 중·말하는 중에는 시계를 되감는다). 검수앱 MirFab 과 같은 규칙.
+  const _idleStart=()=>{ _idleStop(); _touch(); _idleT=setInterval(()=>{
+    if(sheet.style.display!=='block'){ _idleStop(); return; }
+    let sp=false; try{ sp=!!(window.speechSynthesis && window.speechSynthesis.speaking); }catch(e){ sp=false; }
+    if(_mirThink || sp || mic.textContent==='●'){ _touch(); return; }
+    if(Date.now()-_lastAct>20000){ _idleStop(); sheet.querySelector('#mirX').click(); }
+  },1000); };
+  inp.addEventListener('input', _touch);
+  //  호출어 판정은 검수앱과 한 벌(ConeMir.parseNaturalQuery 의 mirCalled·mirHello). 미르 본체가 아직 없으면 false — 부른 쪽은 종전 질문 길로 간다.
+  window.__coneMirSummon=function(q){
+    const t=String(q||'').trim();
+    let p=null; try{ p=(window.ConeMir && window.ConeMir.parseNaturalQuery) ? window.ConeMir.parseNaturalQuery(t) : null; }catch(e){ console.warn('[콘 2.79] 호출어 판정 실패:', e); p=null; }
+    if(!t || !p || !p.mirCalled) return false;
+    if(sheet.style.display!=='block') fab.onclick();
+    back.style.display='block';
+    _idleStart();
+    if(p.mirHello){ inp.value=''; show('무엇을 도와드릴까요?'); setTimeout(()=>{ if(mic.textContent!=='●'){ try{ mic.onclick(); }catch(e){ console.warn('[콘 2.79] 다시 듣기 실패:', e); } } },1600); }
+    else { inp.value=t; ask(); }
+    return true;
+  };
 }
 
 function bindTopButton(){
@@ -5914,7 +5944,7 @@ function bindConeQa(){
        ⛔ 창구가 둘인데 **하나만** 새 미르에 이어 놓았다(아이콘 시트만). 검수사가 늘 쓰던 이 자리는 옛 함수를 불러
          용어·조회를 못 했다. **같은 질문에 자리마다 다른 답** — 판정 두 벌이 화면 쪽에서 되살아난 꼴이다.
        → 두 창구가 같은 `mirAsk` 를 부른다. */
-  const run=async ()=>{ const q=inp.value; show('…'); show(await mirAsk(q) || ''); };
+  const run=async ()=>{ const q=inp.value; if(window.__coneMirSummon && window.__coneMirSummon(q)){ inp.value=''; return; } show('…'); show(await mirAsk(q, {workOnly:true}) || ''); };   // 2.79: «미르야 …» 면 미르 시트로
   btn.onclick=run;
   inp.onkeydown=(e)=>{ if(e.key==='Enter') run(); };
   if(mic){
@@ -5930,7 +5960,8 @@ function bindConeQa(){
           inp.value=conePickAlt(alts);
           //  2.49: 음성도 타이핑과 같은 길 — 못 알아들으면 mirAsk 안(askMir)이 모델로 번역·답한다.
           const q=inp.value.trim();
-          show('…'); show(await mirAsk(q) || '');
+          if(window.__coneMirSummon && window.__coneMirSummon(q)){ inp.value=''; return; }   // 2.79: «미르야 …» 면 미르 시트로
+          show('…'); show(await mirAsk(q, {workOnly:true}) || '');
         };
         r.onend=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
         r.onerror=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };

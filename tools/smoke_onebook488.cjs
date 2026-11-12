@@ -97,7 +97,7 @@ console.log('② 규격 길이 한 벌');
     `${U.isoFeet('XXXX')}/${U.isoFeet('RH40')}/${U.ediGapSizeOf('XXXX')}/${U.ediGapSizeOf('RH40')}/${UNK.map((c) => coneSize(c.iso, c.tp)).join(',')}`);
   const coneCode = cone.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
   ok('콘앱 본문에 첫 글자 규격 사본(iso[0]===\'2\')이 남아 있지 않다', !/iso\)?\[0\]\s*===\s*'2'/.test(coneCode.replace(/return \(t\.startsWith\('20'\)\|\|s\[0\]==='2'\)/, '')));
-  ok('콘앱 판 ConeOne 2.78 · 번들 두 곳(ConeParse·ConeMir)이 sizeLenOf 를 내보낸다', /window\.__CONEV='ConeOne 2\.78(-\d\d)?'/.test(cone) && /window\.ConeParse = \{ sizeLenOf, sizeLenKnown,/.test(src('src/coneCargoPlan.entry.jsx')) && /export \{ sizeLenOf, sizeLenKnown \} from '\.\/tallyReport\.js';/.test(src('src/mirCore.entry.js')));
+  ok('콘앱 판 ConeOne 2.78 · 번들 두 곳(ConeParse·ConeMir)이 sizeLenOf 를 내보낸다', /window\.__CONEV='ConeOne 2\.7[89](-\d\d)?'/.test(cone) && /window\.ConeParse = \{ sizeLenOf, sizeLenKnown,/.test(src('src/coneCargoPlan.entry.jsx')) && /export \{ sizeLenOf, sizeLenKnown \} from '\.\/tallyReport\.js';/.test(src('src/mirCore.entry.js')));
 }
 
 console.log('③ KST 날짜 — KST 00:00~08:59 에 UTC 로 자르면 어제가 찍힌다');
@@ -183,8 +183,8 @@ console.log('⑦ 판 표시');
   const u = src('src/utils.js');
   const v = (u.match(/^export const APP_VERSION = '([^']+)'/m) || [])[1];
   const note = (u.match(/^export const APP_NOTE = '([^']*)'/m) || [])[1] || '';
-  ok('APP_VERSION TallyOne 4.88', /^TallyOne 4\.88(-\d\d)?$/.test(v || ''), v);   // 4.88-01: 수리판(-NN)도 4.88 판
-  ok('APP_NOTE «4.88 …» 두 문장 이내 · 물음표 없음', !!note && !/[?？]/.test(note) && note.replace(/^\d+\.\d+(-\d+)?\s*/, '').split(/[.。]\s*/).filter(Boolean).length <= 2 && /^4\.88(-\d\d)? /.test(note), note);
+  ok('APP_VERSION TallyOne 4.88', /^TallyOne 4\.(88|89)(-\d\d)?$/.test(v || ''), v);   // 4.88-01: 수리판(-NN)도 4.88 판
+  ok('APP_NOTE «4.88 …» 두 문장 이내 · 물음표 없음', !!note && !/[?？]/.test(note) && note.replace(/^\d+\.\d+(-\d+)?\s*/, '').split(/[.。]\s*/).filter(Boolean).length <= 2 && /^4\.(88|89)(-\d\d)? /.test(note), note);
 }
 
 console.log(`\n${bad ? '✘' : '✔'} 4.88 판정 한 벌 연막검사 ${n - bad}/${n}`);

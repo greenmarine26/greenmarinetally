@@ -14,7 +14,7 @@
    ★ 3.56 (검수사 2026-09-22 «미르에게 에니메이션을 추가») — 얼굴이 기분을 보인다. 판정은 `mir.js` [mirMood] 절 한 벌(콘앱과 같은 규칙)이고
      여기는 ①20초마다·재료가 바뀔 때 다시 재고 ②질문(noteMirAsk)·열람(noteMirOpen)·못 답함(missed)·완료 대수 증가(workDone)·
      작업 선박 선택(workPick)을 그 벌에 알리고 ③얼굴 버튼에 `mir-mood-<key>` 클래스와 작은 표시를 얹을 뿐이다. 그림은 검수사 그림 그대로다. */
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
@@ -39,7 +39,9 @@ import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTi
 import { mirWorkCtx } from '../workChoice.js';   // 4.38: 작업 중 사담 미루기 — 내 작업 표지(작업자·작업 선박·호기)
 import { mirGotoRequest } from '../guideGoto.js';   // 4.40: 미르 [이동] — 자동 가이드를 그 베이로
 import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';
-import DamageHistoryCard, { damageHistoryQueryOf } from './DamageHistoryCard.jsx';   // 4.22-04: 데미지 이력 카드·판정 한 벌(통합검색 화면과 공용)
+import DamageHistoryCard, { damageHistoryQueryOf } from './DamageHistoryCard.jsx';
+import MirDockButton from './MirDockButton.jsx';   // 4.89: 화면에는 얼굴 단추가 없다(검색줄 «미르야» 로 부른다) — 이 단추는 혼자 그리는 연막 렌더(soloButton)에서만 제자리에 선다
+import { setMirDock, setMirOpener, setMirSummoner } from '../faceDock.js';   // 4.89: 기분·생각 중·열림을 단추에 나눠 준다   // 4.22-04: 데미지 이력 카드·판정 한 벌(통합검색 화면과 공용)
 
 //  ★ 4.07 — 시트 위쪽 가장자리에 두 발로 서 있는 미르(전신 사진). 장식이라 파일을 못 받으면 조용히 안 보일 뿐이다.
 //  기분이 바뀌면 자세가 바뀌고(key=src 로 새로 그려 통통 나타남), 여러 자세가 있는 기분은 시트를 열 때마다 하나를 고른다(seed).
@@ -53,9 +55,12 @@ function MirHero({ mood, seed }) {
   );
 }
 
+//  4.89: 답을 다 말한 뒤 이만큼 아무 입력이 없으면 시트가 닫힌다(검수사 «미르를 숨기는것»)
+export const MIR_IDLE_CLOSE_MS = 20000;
+
 const CLEAN_RE = /[📋📌⚠↩·❄🔁📊📦📖🐱🐟😺😻🎵📍⏳⏱🗺🚢✅📝🧳🌤📈]/g;
 
-export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null }) {
+export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null, soloButton = true }) {   // 4.89: soloButton=false — 앱에는 단추가 없다(검색줄 «미르야»)
   const [open, setOpen] = useState(false);
   const [mood, setMood] = useState(() => ({ ...MIR_MOODS.basic, why: '' }));   // 3.56: 지금 기분(표시용 사본 — 판정은 mir.js [mirMood])
   const [q, setQ] = useState('');
@@ -70,6 +75,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   const [listening, setListening] = useState(false);
   const [live, setLive] = useState(() => readMirCtx());
   const lastRef = useRef('');
+  const lastActRef = useRef(Date.now());   // 4.89: 마지막 입력 시각 — 20초 무입력이면 시트를 닫는다
   const reportedRef = useRef(new Set());
   const sideRef = useRef('');
   const chiefRef = useRef({});
@@ -167,6 +173,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     const t = String(text || '').trim();
     //  3.68: 한 글자(«응»)는 대화 중일 때만 받는다 — 문지기는 데이터가 들어오는 자리(§4-4)
     if (!t || (t.length < 2 && !mirThreadAlive({ voyageKey: (readMirCtx() || {}).voyageKey || '', inspector }))) return;
+    lastActRef.current = Date.now();   // 4.89: 사라지기 시계
     setBusy(true); setOut('…'); setAsked(t); setQ(''); setFollow(null);   // 3.41-01: 칸은 비우고 물은 말은 위에 남긴다
     const dq = damageHistoryQueryOf(t, parseNaturalQuery(t));   // 4.22-04: 통합검색 화면과 같은 판정 한 벌
     setDmg((d) => ({ q: dq, n: d.n + 1 }));
@@ -295,18 +302,59 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     } catch (e) { setListening(false); setOut('마이크를 켜지 못했어요 — 브라우저 마이크 권한을 확인해 주세요.'); }
   }, [listening, ask]);
 
+  //  ★ 4.89 — 얼굴 단추가 머리띠·틀 윗줄로 갔다. 여닫이를 맡기고(열 때 noteMirOpen — 종전 얼굴 단추와 같다), 기분·생각 중·열림을 단추에 놓는다.
+  useEffect(() => {
+    setMirOpener(() => { setOpen((o) => { if (!o) noteMirOpen(); else { try { stopSpeak(); } catch (e) { console.warn('[4.89 미르] 말 끊기 실패:', e); } } return !o; }); });
+    return () => setMirOpener(null);
+  }, []);
+  useLayoutEffect(() => { setMirDock({ ready: !!inspector, open, busy, mood }); }, [inspector, open, busy, mood]);   // 4.89: 그리기 직후 바로(단추가 같은 박자로 바뀐다)
+  useEffect(() => () => setMirDock({ ready: false, open: false, busy: false }), []);
+  const closeSheet = useCallback(() => { setOpen(false); try { stopSpeak(); } catch (e) { console.warn('[4.89 미르] 말 끊기 실패:', e); } }, []);
+  //  ★ 4.89 (검수사 2026-11-12 19:36 «미르를 숨기는것은 어떻습니까? … 마이크를 누르고 미르야 하면 알라딘에 요술램프 지니 처럼 무엇을 도와드릴까요 하며 나타나는것입니다»)
+  //    얼굴 단추는 화면에 없다. 검색줄(🎤·⌨)이 호출어를 받으면 faceDock.summonMirIfCalled 가 여기를 부른다.
+  //    호출어만 → 시트를 올리고 «무엇을 도와드릴까요?» 말한 뒤 바로 다시 듣는다 · 호출어 + 물음 → 인사 없이 바로 답한다(엔진이 호출어를 벗긴다 — 판정 한 벌).
+  const askRef = useRef(null); askRef.current = ask;
+  const micRef = useRef(null); micRef.current = mic;
+  const listenRef = useRef(false); listenRef.current = listening;
+  const inspRef = useRef(inspector); inspRef.current = inspector;   // 4.89 감사 권장 5: 로그인 전에는 부름을 받지 않는다(검색줄 입력을 먹지 않게)
+  const helloTimerRef = useRef(null);   // 4.89 감사 권장 4: 인사 뒤 다시 듣기 시계 — 언마운트 때 정리
+  useEffect(() => {
+    setMirSummoner(({ text, hello }) => {
+      if (!inspRef.current) return false;   // 로그인 전 — 부른 쪽은 종전 검색 길로 간다
+      lastActRef.current = Date.now();
+      setOpen((o) => { if (!o) noteMirOpen(); return true; });
+      if (hello) {
+        const g = '무엇을 도와드릴까요?';
+        setAsked(''); setFollow(null); setDmg((d) => ({ q: null, n: d.n })); setOut(g); lastRef.current = g;
+        try { stopSpeak(); speak(g, { conversational: true }); } catch (e) { console.warn('[4.89 미르] 인사 말하기 실패:', e); }
+        if (helloTimerRef.current) clearTimeout(helloTimerRef.current);
+        helloTimerRef.current = setTimeout(() => { helloTimerRef.current = null; if (!listenRef.current && micRef.current) micRef.current(); }, 1600);   // 인사 뒤 바로 다시 듣는다
+      } else if (askRef.current) askRef.current(text);
+    });
+    return () => { setMirSummoner(null); if (helloTimerRef.current) { clearTimeout(helloTimerRef.current); helloTimerRef.current = null; } };
+  }, []);
+  //  사라지기 — 답을 다 말한 뒤 20초 아무 입력이 없으면 닫는다. 답을 만드는 중·듣는 중·말하는 중에는 닫지 않는다(시계를 되감는다).
+  useEffect(() => {
+    if (!open) return undefined;
+    lastActRef.current = Date.now();
+    const t = setInterval(() => {
+      let speaking = false;
+      try { speaking = !!(typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking); } catch (e) { speaking = false; }
+      if (busy || listenRef.current || speaking) { lastActRef.current = Date.now(); return; }
+      if (Date.now() - lastActRef.current > MIR_IDLE_CLOSE_MS) closeSheet();
+    }, 1000);
+    return () => clearInterval(t);
+  }, [open, busy, closeSheet]);
   if (!inspector) return null;   // 로그인 전에는 안 띄운다
   const ctxLabel = live && live.voyageKey ? `${(live.info && live.info.vsl) || live.voyageKey} · ${live.mode === 'loading' ? '선적' : '양하'} 자료로 답해요` : '배 이름을 붙이면 그 항차로 답해요';
   return (
     <>
-      <button type="button" aria-label="미르에게 묻기" data-mood={mood.key} title={mood.key !== 'basic' ? `지금 ${mood.label}${mood.why ? ' — ' + mood.why : ''}` : ''}
-        onClick={() => { setOpen((o) => { if (!o) noteMirOpen(); return !o; }); }}
-        className={`fixed right-4 z-[10001] w-12 h-12 rounded-full border-2 border-amber-500 shadow-lg shadow-black/50 active:scale-95 overflow-visible p-0 mir-mood mir-mood-${mood.key}`}
-        style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))', background: '#f7f8fa' }}>{/* 4.87-10: TOP(아래 20 + 높이 48 = 68) 과 16px 띄움(종전 76 — 8px) + 아이폰 아래 막대 */}
-        <MirFace mood={busy ? 'think' : mood.key} size={44} style={{ borderRadius: '50%', overflow: 'hidden' }} />   {/* 4.07: 실사 얼굴 — 답을 만드는 중에는 턱 괴고 생각하는 얼굴 */}
-        {mood.badge && <span className="mir-mood-badge" aria-hidden="true">{mood.badge}</span>}
-      </button>
+      {/* 4.89: 떠 있는 얼굴(오른쪽 아래 fixed z 10001)은 없앴다 — 미르는 숨어 있다가 검색줄 🎤·⌨ 로 «미르야» 하면 나타난다(setMirSummoner). 단독 연막 렌더(soloButton)만 제자리 단추를 둔다(앱은 soloButton={false}). */}
+      {soloButton && <MirDockButton where="solo" />}
       {open && (
+        <>
+        {/* 4.89: 시트 바깥(어두운 곳)을 누르면 닫힌다 — ✕ 와 같다(말도 끊는다) */}
+        <div className="fixed inset-0 z-[10002] bg-black/50" data-mir-backdrop="1" aria-hidden="true" onClick={closeSheet} />
         <div className="fixed left-0 right-0 bottom-0 z-[10002]" data-mir-sheet="1">
           <MirHero mood={busy ? 'think' : mood.key} seed={heroSeed} />
           <div className="bg-ink-900 border-t-2 border-amber-500 rounded-t-2xl px-3 pt-3 pb-4 shadow-[0_-6px_24px_rgba(0,0,0,.5)]" style={{ maxHeight: '70vh', overflowY: 'auto', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>{/* 4.87-10: pb-4 + 아이폰 아래 막대 — 입력줄·답이 막대에 가리지 않게 */}
@@ -317,10 +365,10 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
               {mood.why ? <div className="text-2xs text-amber-200 truncate">{mood.why}</div> : null}
               <div className="text-2xs text-dim-300 truncate">{ctxLabel} · "3426 온도" · "브리핑" · "접안 현측" · "마감텔리 수치"</div>
             </div>
-            <button type="button" onClick={() => { setOpen(false); try { stopSpeak(); } catch (e) { /* */ } }} className="w-9 h-9 rounded bg-ink-800 border border-line text-dim-100">✕</button>
+            <button type="button" onClick={closeSheet} aria-label="미르 닫기" className="w-9 h-9 rounded bg-ink-800 border border-line text-dim-100">✕</button>
           </div>
           <div className="flex gap-1.5">
-            <input id="mirFabIn" type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(q); }}
+            <input id="mirFabIn" type="text" value={q} onChange={(e) => { setQ(e.target.value); lastActRef.current = Date.now(); }} onKeyDown={(e) => { if (e.key === 'Enter') ask(q); }}
               placeholder="예: 0230 실번호 · 엠티실 몇 대 남았어" className="flex-1 min-w-0 bg-ink-950 border border-line rounded px-2 py-2 text-sm text-dim-100" />
             <button type="button" onClick={mic} className={`w-11 rounded border border-line ${listening ? 'bg-red-700 text-white' : 'bg-ink-800 text-dim-100'}`} aria-label="말로 묻기">🎤</button>
             <button type="button" onClick={() => { try { stopSpeak(); const plain = String(lastRef.current || out || '').replace(CLEAN_RE, ' '); if (plain) speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* */ } }} className="w-11 rounded border border-line bg-ink-800 text-dim-100" aria-label="다시 읽어 주기">🔊</button>
@@ -348,6 +396,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           )}
           </div>
         </div>
+        </>
       )}
     </>
   );

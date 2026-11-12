@@ -132,7 +132,7 @@ exports.onValue = () => () => {}; exports.off = () => {}; exports.goOffline = ()
       ok('미르 자동 별칭 임계 0.9', /rec\.confidence >= 0\.9\) _learn\(/.test(src('src/mir.js')) && !/rec\.confidence >= 0\.7\) _learn\(/.test(src('src/mir.js')));
       const vp2 = src('src/pages/VoyagePage.jsx');
       ok('업로드 핸들러(EDI·X-RAY)가 try/catch 로 «처리 중…» 을 남기지 않는다 · 덱플랜 catch 가 viewOnly 를 삼키지 않는다 · 섹션 추가는 섹션을 먼저', /const handleEdiUpload = async \(files\) => \{ try \{ await _handleEdiUploadCore/.test(vp2) && /const handleXrayUpload = async \(files\) => \{ try \{ await _handleXrayUploadCore/.test(vp2) && /if \(e0 && e0\.viewOnly\) throw e0;/.test(vp2) && vp2.indexOf('try { await fbSaveSectionData(voyageKey, otherMode') < vp2.indexOf('await fbUpdateVoyageInfo(voyageKey, patch);\n              setOtherVoyInput'));
-      ok('APP_VERSION 이 3.60-19 이상(판 주석에 3.60-19 절이 있다)', /APP_VERSION = 'TallyOne 3\.60-19'|\s3.60-19 \*\*/.test(src('src/utils.js')));
+      ok('APP_VERSION 이 3.60-19 이상(판 주석에 3.60-19 절이 있다)', /APP_VERSION = 'TallyOne 3\.60-19'|\s3.60-19 \*\*/.test(src('src/utils.js') + '\n' + src('docs/APP_HISTORY.md')));   // 4.89: 판 이력 주석은 docs/APP_HISTORY.md 로
     }
 
     console.log(`\n3.60-19 연막검사: ${n - bad}/${n}`);
