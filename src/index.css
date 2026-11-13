@@ -897,3 +897,25 @@ button.home-big:active { transform: translateY(2px); }
   :root[data-skin] :is(button, [role="tab"])::after { content: none; }
   :root[data-skin] body { zoom: 1; }
 }
+
+/* ★ 5.02 움직이는 그림 — 색은 건드리지 않고 움직임만(글자색·바탕은 Tailwind 클래스). «움직임 줄이기» 설정이면 아래에서 전부 끈다. */
+@keyframes mo-grow { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes mo-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes mo-beat { 0%, 100% { opacity: 0; } 50% { opacity: .55; } }
+@keyframes mo-ping { from { transform: scale(.5); opacity: .9; } to { transform: scale(1.6); opacity: 0; } }
+@keyframes mo-shine { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+.mo-grow { animation: mo-grow .9s cubic-bezier(.2, .8, .2, 1) both; }
+.mo-up { animation: mo-up .5s ease both; }
+.mo-open-bay { position: relative; overflow: hidden; }
+.mo-open-bay::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px currentColor; pointer-events: none; animation: mo-beat 2s ease-in-out infinite; }
+.mo-dot { position: relative; display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: currentColor; flex: none; }
+.mo-dot::after { content: ""; position: absolute; inset: -5px; border-radius: 999px; border: 2px solid currentColor; animation: mo-ping 1.8s ease-out infinite; }
+.mo-shine { background-image: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .28) 50%, transparent 65%); background-size: 220% 100%; animation: mo-shine 2.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mo-grow, .mo-up, .mo-shine { animation: none; }
+  .mo-open-bay::after, .mo-dot::after { animation: none; opacity: 0; }
+}
+
+/* 5.02 별첨 고리 — 완료 비율이 부드럽게 차오른다(움직임 줄이기 설정이면 바로) */
+.mo-ring { transition: stroke-dashoffset .9s cubic-bezier(.3, 1, .4, 1); }
+@media (prefers-reduced-motion: reduce) { .mo-ring { transition: none; } }

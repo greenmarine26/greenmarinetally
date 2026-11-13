@@ -395,6 +395,12 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 4.02: 콘앱·검수앱 미르 답 일치 + 콘 첫 화면 배선 — 실항차 SWMM 2609N(양하 223·선적 191·X-RAY 1)·ATPR·DJCT 로 콘앱 모양 ctx(항차에 EDI 묶음 없이 컨 행만)와 검수앱 모양 ctx 에 같은 질문(총 무브수·X-RAY 조별·갱 분배·최초 양하·교대 브리핑)을 던져 답이 한 글자도 안 갈리는지 실소스 mir.js 로 잰다. 콘 첫 화면(카고플랜 양하|선적)·실시간 화면 안내 문구·콘 타이밍 빈 문구·미르 사전 받기 배선은 소스에서 잰다.
   # 5.01: «나 오늘» — 오늘 보관소로 넘어간 배까지 합치고 배별 양하·선적으로 나눈다. 실데이터(2026-11-13 PCSZ 2634E 96 · STMJ 2671E 39 · 합 135)로 잰다(검수사 2026-11-13 21:09).
   SMOKE_MT=$(mktemp /dev/shm/hometmp/_smokemt_XXXXXX.cjs)
+  #  5.02 모션(베이 묶음·트윈 싱글·별첨 결론) 연막검사
+  SMOKE_MO="$(mktemp -t smoke_motion502.XXXXXX.cjs)"
+  if npx esbuild tools/smoke_motion502_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_MO" --loader:.js=jsx --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --log-level=error; then
+    NODE_PATH="$PWD/node_modules" node tools/smoke_motion502.cjs "$SMOKE_MO" "$PWD" || { echo "✗ 5.02 모션 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MO"; exit 1; }
+  else echo "✗ 5.02 모션 연막검사 번들 실패"; rm -f "$SMOKE_MO"; exit 1; fi
+  rm -f "$SMOKE_MO"
   if npx esbuild tools/smoke_mytoday501_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_MT" --loader:.js=jsx --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --log-level=error; then
     NODE_PATH="$PWD/node_modules" node tools/smoke_mytoday501.cjs "$SMOKE_MT" "$PWD" || { echo "✗ 5.01 나 오늘 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_MT"; exit 1; }
     rm -f "$SMOKE_MT"

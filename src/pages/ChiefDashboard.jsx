@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { LegendHero, LegendRows, LegendCompactRow } from '../components/LegendMotion.jsx';   // 5.02: 별첨1·2 모션 그림 + 4척 한 줄 요약
 import ChiefMirBar from '../components/ChiefMirBar.jsx';   // 5.00-02: 탭 줄 안 넷째 칸 [미르](검수사 «이안에 넣으세요»)
 import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { FitBox } from '../components/FitBox.jsx';   // 3.48: 한 벌 — 베이뷰 작업과 공용
@@ -2641,7 +2642,7 @@ export function LiveShipCard({ zoom = 1, v, workers, standby = [], lastReport, a
               const L = legendLiveOf(boardContainers[m], m, voyage[m]?.completed);
               if (!L.n) return null;
               const line = compactLegendLine(L);
-              return <div key={m} className="w-full shrink-0 truncate text-dim-200" title={line}><b className={m === 'loading' ? 'text-amber-300' : 'text-blue-300'}>{m === 'loading' ? '선적' : '양하'}</b> {line}</div>;
+              return <LegendCompactRow key={m} L={L} mode={m} line={`${m === 'loading' ? '선적' : '양하'} ${line}`} />;
             })}
           </div>
           <div className={`lsc-tables fs-keep flex-1 min-h-0 overflow-auto space-y-1 leading-tight ${has45All ? 'text-sm2' : 'text-base'}`}>{/* 4.24: 별첨 표는 그림처럼 4.22-04 글자(fs-keep) — «크게»에서 18px 로 키우면 25% 칸·폰 시트에서 «106/106» 이 칸을 넘었다(R34 실측). 머리·막대·요약·검수원·합계는 글자 모드를 따른다 */}
@@ -2663,8 +2664,15 @@ export function LiveShipCard({ zoom = 1, v, workers, standby = [], lastReport, a
               const modeK = m === 'loading' ? '선적' : '양하';
               return (
                 <div key={m} className="space-y-1">
-                  {mk(`별첨1 · 선사별 (${modeK}) ${L.done}/${L.n}`, L.carriers.concat([['합계', tot(L.carriers)]]))}
-                  {mk(`별첨2 · 화물 종류별 (${modeK})`, L.cargos.concat([['합계', tot(L.cargos)]]))}
+                  {/* 5.02 (검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로») : 별첨1·2 는 그림(고리·남음·안 끝난 줄만 펼침)이 먼저, 옛 표는 «표로 보기» 안에 그대로 둔다(숫자는 같은 L 한 벌). */}
+                  <LegendHero L={L} rows={L.carriers} mode={m} />
+                  <LegendRows title={`별첨1 · 선사별 (${modeK}) ${L.done}/${L.n}`} rows={L.carriers} mode={m} />
+                  <LegendRows title={`별첨2 · 화물 종류별 (${modeK})`} rows={L.cargos} mode={m} />
+                  <details data-legend-oldtables={m} className="px-1">
+                    <summary className="text-xs text-dim-400 cursor-pointer select-none" style={{ minHeight: 'var(--tap-chip-pc)' }}>표로 보기 (별첨1·2)</summary>
+                    {mk(`별첨1 · 선사별 (${modeK}) ${L.done}/${L.n}`, L.carriers.concat([['합계', tot(L.carriers)]]))}
+                    {mk(`별첨2 · 화물 종류별 (${modeK})`, L.cargos.concat([['합계', tot(L.cargos)]]))}
+                  </details>
                   <div>
                     <div className="font-bold text-dim-300 px-1">{`별첨3 · 규격별 F/E (${modeK})`}</div>
                     <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>

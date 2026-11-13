@@ -12,6 +12,8 @@ import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → �
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
+import { CountUp } from '../components/MotionBits.jsx';   // 5.02: 숫자가 올라가는 큰 숫자
+import { workBaysOf, bayGroupsOf, twinSingleOf, twinSingleText } from '../workBays.js';   // 5.02: 지금 작업중인 베이(호기별 — craneBoardOf 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt, myTodayByShip } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -2030,20 +2032,82 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
                 </span>
               )}
             </div>
-            <div className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))]">
-              {cells.map((c) => {
-                const p = c.n > 0 ? Math.round((c.done / c.n) * 100) : 0, full = c.done >= c.n;
-                return (
-                  <div key={c.bay} className="rounded-pill border border-line bg-ink-850 px-2 py-1" data-bay-cell={c.bay} data-done={c.done} data-total={c.n}>
-                    <div className="flex items-baseline justify-between gap-1 mono text-xs">
-                      <b className="text-dim-100">{c.bay >= 0 ? `B${_two(c.bay)}` : '자리 없음'}</b>
-                      <span className={full ? 'text-emerald-300' : 'text-dim-300'}>{c.done}/{c.n}</span>
+            {(() => {
+              //  ★ 5.02 (검수사 2026-11-14 «지금은 세밀히 봐야 어딘지 알 수 있습니다» · 07:01 «베이는 기본적으로 1 (2) 3 … 2번베이는 완료라고 … 혼동») —
+              //    베이를 «1 (2) 3» 묶음(카고플랜 표기 · bayGroupsOf)으로 세고, 남은 묶음만 큰 카드로 번호 순서대로 펴고, 끝난 묶음은 ✓ 칩으로 접는다.
+              //    묶음 안 베이는 작은 글로 그대로 보인다(data-bay-cell — 칸 합 = 위 대수, 칸을 줄이지 않는다). 지금 일하는 호기는 홀드/데크와 함께(workBaysOf = 수석 작업 보드와 같은 답).
+              const wk = workBaysOf(voyage, bayMode);
+              const groups = bayGroupsOf(cells), noPos = cells.filter((c) => c.bay < 0);
+              const tsMap = twinSingleOf(bayMode === 'discharge' ? dis : loa, st.units, groups);
+              const open = groups.filter((g) => g.done < g.n), fin = groups.filter((g) => g.done >= g.n);
+              const nm = (c) => (c.bay >= 0 ? `B${_two(c.bay)}` : '자리 없음');
+              const TR = ({ t }) => (t ? <span className={`shrink-0 rounded px-1 text-xs leading-[17px] font-black border border-current ${t === '데크' ? 'text-sky-300' : 'text-purple-300'}`}>{t}</span> : null);
+              const nosOf = (l) => `${l.map((x) => x.no).join('·')}호기`;
+              const lOf = (g) => g.members.flatMap((m) => (wk.now.get(m.bay) || []).map((x) => ({ ...x, bay: m.bay })));
+              const Mem = ({ c }) => (
+                <span className={`mono ${c.done >= c.n ? 'text-emerald-300' : 'text-dim-100'}`} data-bay-cell={c.bay} data-done={c.done} data-total={c.n}>
+                  {c.bay % 2 === 1 ? _two(c.bay) : `(${_two(c.bay)})`} {c.done >= c.n ? '✓' : `${c.done}/${c.n}`}
+                </span>
+              );
+              return (
+                <>
+                  {wk.now.size > 0 ? (
+                    <div className="flex flex-wrap gap-2 text-sm" data-bay-working="1">
+                      {[...wk.now.entries()].sort((x, y) => x[0] - y[0]).map(([bay, l]) => (
+                        <span key={bay} className="inline-flex items-center gap-1.5 rounded-pill border border-current text-emerald-300 px-3 py-0.5 font-bold" data-bay-working-at={bay}>
+                          <span className="mo-dot"/>{nosOf(l)} · B{_two(bay)}<TR t={l[0].tier}/><span className="text-dim-300 font-medium">{Math.min(...l.map((x) => x.ago))}분 전</span>
+                        </span>
+                      ))}
                     </div>
-                    <div className="xp-bar xp-sm mt-1"><div className={`xp-fill ${full ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${p}%` }}/></div>
-                  </div>
-                );
-              })}
-            </div>
+                  ) : wk.last ? (
+                    <div className="text-sm text-dim-300" data-bay-working="0">지금 쉬는 중 · 마지막 작업 <b className="text-dim-100">B{_two(wk.last.bay)}</b> <TR t={wk.last.tier}/> · {wk.last.ago}분 전</div>
+                  ) : null}
+                  {(open.length > 0 || noPos.some((c) => c.done < c.n)) && (
+                    <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))]" data-bay-open="1">
+                      {open.map((g, i) => {
+                        const p = g.n > 0 ? Math.round((g.done / g.n) * 100) : 0, rem = g.n - g.done, l = lOf(g);
+                        return (
+                          <div key={g.key} className={`mo-up mo-open-bay rounded-xl border-2 border-current px-2.5 py-2 bg-ink-850 ${l.length ? 'text-emerald-300' : 'text-amber-300'}`} style={{ animationDelay: `${Math.min(i, 8) * 80}ms` }} data-bay-group={g.label} data-done={g.done} data-total={g.n}>
+                            <div className="flex items-baseline justify-between gap-1 mono">
+                              <b className="text-base text-dim-100 whitespace-nowrap">{g.label}</b>
+                              <span className="text-xs text-dim-300">{g.done}/{g.n}</span>
+                            </div>
+                            <div className="mono leading-none mt-1 text-amber-300"><b className="text-2xl">{rem}</b><span className="text-xs text-dim-300 ml-1">대 남음</span></div>
+                            {(() => { const tx = twinSingleText(tsMap.get(g.key)); return tx ? <div className="mt-1 text-xs font-bold text-dim-100 whitespace-nowrap overflow-hidden text-ellipsis" data-bay-twin={tx} title="트윈 = 앞뒤 홀수 베이 같은 줄·단에 둘 다 남은 쌍(쌍 수) · 싱글 앞 = 번호 작은 쪽(선수) · 뒤 = 큰 쪽(선미)">{tx}</div> : null; })()}
+                            <div className="xp-bar xp-sm mt-1.5"><div className={`xp-fill mo-grow ${lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${p}%` }}/></div>
+                            {g.members.length > 1 && <div className="flex flex-wrap gap-x-2 text-xs mt-1">{g.members.map((m) => <Mem key={m.bay} c={m}/>)}</div>}
+                            <div className="flex items-center gap-1.5 mt-1 min-h-[20px] text-xs font-bold whitespace-nowrap overflow-hidden" data-bay-crane={l.length ? l[0].no : ''}>
+                              {l.length > 0 && <><span className="mo-dot text-emerald-300"/><span className="text-emerald-300">{nosOf(l)}</span><TR t={l[0].tier}/><span className="text-dim-300 font-medium">{Math.min(...l.map((x) => x.ago))}분</span></>}
+                            </div>
+                            {g.members.length === 1 && <span className="sr-only"><Mem c={g.members[0]}/></span>}
+                          </div>
+                        );
+                      })}
+                      {noPos.filter((c) => c.done < c.n).map((c) => (
+                        <div key="nopos" className="rounded-xl border-2 border-current text-amber-300 px-2.5 py-2 bg-ink-850" data-bay-cell={c.bay} data-done={c.done} data-total={c.n}>
+                          <b className="text-base text-dim-100">자리 없음</b> <span className="text-xs text-dim-300 mono">{c.done}/{c.n}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(fin.length > 0 || noPos.some((c) => c.done >= c.n)) && (
+                    <div className="flex flex-wrap gap-1.5 items-center" data-bay-done-chips="1">
+                      <span className="text-xs text-dim-400">끝난 베이 {fin.length}곳</span>
+                      {fin.map((g, i) => {
+                        const l = lOf(g);
+                        return (
+                          <span key={g.key} className={`mo-up inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs font-bold mono ${l.length ? 'border-current text-emerald-300 bg-emerald-900/30' : 'border-line text-emerald-300 bg-ink-850'}`} style={{ animationDelay: `${(open.length * 80) + Math.min(i, 24) * 30}ms` }} data-bay-group={g.label} data-done={g.done} data-total={g.n}>
+                            ✓ {g.label}{l.length > 0 && <><span className="mo-dot"/>{nosOf(l)}<TR t={l[0].tier}/></>}
+                            <span className="sr-only">{g.members.map((m) => <Mem key={m.bay} c={m}/>)}</span>
+                          </span>
+                        );
+                      })}
+                      {noPos.filter((c) => c.done >= c.n).map((c) => <span key="nopos" className="text-xs mono text-emerald-300" data-bay-cell={c.bay} data-done={c.done} data-total={c.n}>✓ 자리 없음</span>)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         );
       })()}
@@ -2301,14 +2365,14 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
         )}
       </div>
       <div className="flex items-baseline gap-2 mono mt-1.5">
-        <span className="text-3xl font-black text-dim-100 leading-none">{stats.done}</span>
+        <CountUp value={stats.done} className="text-3xl font-black text-dim-100 leading-none"/>
         <span className="text-base font-bold text-dim-400">/ {stats.total}</span>
         <span className={`text-base font-black ${lod ? 'text-amber-300' : 'text-blue-300'}`}>{pct}%</span>
         {!lod && stats.mfn > 0 && <span className="text-xs font-bold text-amber-300" data-mfn-note={stats.mfn}>{mfnNote(stats.mfn, stats.total, stats.mfnExtra)}</span>}{/* 4.58: 278 (리스트 234 + MFN 44) */}
       </div>
-      <div className="xp-bar mt-1.5"><div className={`xp-fill ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></div>
+      <div className="xp-bar mt-1.5"><div className={`xp-fill mo-grow ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim-300 mt-1.5">
-        {rem != null && <span>남음 <b className="text-dim-100">{rem}</b></span>}
+        {rem != null && <span className={`font-bold text-sm ${rem > 0 ? 'text-amber-300' : 'text-emerald-300'}`} data-side-rem={rem}>남음 <b className="text-base"><CountUp value={rem}/></b></span>}
         {/*  ★ 4.05-01 (검수사 «진행상황을 안보임 · 터미널별 본선작업현황에 있는 갯수라도 표기»): 터미널(동방 QC 합계·PCTC 본선작업현황)이 말하는 완료/전체.
             참고 숫자 — 앱 완료·남음·작업중 판정에 섞지 않는다(컨 단위 터미널 완료는 안 받는다 — 검수사 2026-10-03). 4.25: 같은 숫자를 한 자리에만(설계 ⑥). */}
         {term && (() => {
