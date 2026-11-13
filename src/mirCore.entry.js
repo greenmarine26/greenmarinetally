@@ -74,6 +74,7 @@ export { parseViewCommand, pickVoyageKey };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };
+export { getSkin, applySkin, SKINS } from './skin.js';   // 5.00 / ConeOne 3.00: 화면 고르기 — 미르 밝기 명령(runDeviceCmd)이 콘앱에서도 같은 안으로 간다
 export { mirMoodNow, currentMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, subscribeMirMood, MIR_MOODS } from './mir.js';
 export { isReeferContainer, isFullReefer, isEmptyReefer, isoPickOog } from './utils.js';   // 4.15-01 / ConeOne 2.67: 콘앱 행의 리퍼 판정도 검수앱 utils 한 벌(cone.html coneIsReefer — 정규식 사본 없음)
 export { ptkDischargeUnitsOf, applyDischargeUnits, isMadeUnitCn, shiftSetForUnitsOf } from './utils.js';   // 4.48-04: shiftSetForUnitsOf — 평택 양하분에서 빼는 시프팅 집합(본선 잔류 예보 제외) 한 벌   // 4.20 / ConeOne 2.70: 평택 양하분 한 벌(세관 목록 + 추가분)·제작컨 판정 — 콘앱 미르 «양하 몇 대» 가 검수앱과 같은 집합(cone.html mirAsk)

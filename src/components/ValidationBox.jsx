@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ShieldCheck, AlertTriangle, Printer, FileDown, X } from 'lucide-react';
 import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn, isSlotEntry, isPtkResolved, fmtShiftPos, fmtShiftTime, fmtShiftAct } from '../utils.js';   // 3.53: POD 확정 반영 한 벌
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 // V8.98-08: 쉬프팅(재적부) 목록 모달 — 검증 카드의 ◆ 칸 클릭 시. 인쇄/PDF/엑셀 저장(청구 근거용).
 //  3.65: 자리 글자는 utils.fmtShiftPos 한 벌(0180786 → 18-07-86) — 종전 자르기는 예측 꼴(«6-02-82»)을 «6-0-2-82» 로 깼다.
@@ -74,7 +75,7 @@ function ShiftingModal({ list, voyageKey, onClose }) {
           {list.map((s, i) => (
             <div key={s.cn} className="px-3 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs2">
               <span className="text-dim-500 w-5 text-right">{i + 1}</span>
-              <span className="mono font-bold text-dim-100">{s.cn}</span>
+              <span className="mono font-bold text-dim-100"><CnText cn={s.cn} /></span>
               <span className="text-dim-400">{isoShown(s.iso)}</span>
               {s.pod && <span className="text-dim-400">{s.pod}</span>}
               {s.keep

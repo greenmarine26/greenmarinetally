@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { reeferTempSummary, isoToLabel, fmtPos, completedByLabel, isEdiApplied, isFullReefer, isEmptyReefer, emptySplitLabel, isFlatRackContainer, isOpenTopIso } from '../utils.js';   // 3.60-07: 특수화물 판정 한 벌   // 3.16: 완료자 표기 한 벌
 import { paceNowOf, voyageDoneAts } from '../nlSearch.js';   // 3.24: 검수 시작(작업 보고)이 페이스 분모의 시작   // 3.6-01: 페이스 한 벌 — 터미널 실적 우선
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 export default function StatsTab({ containers, compMap, xrayMap, mode, voyage }) {
   const stats = useMemo(() => computeAllStats(containers, compMap, xrayMap, mode, voyage), [containers, compMap, xrayMap, mode, voyage]);
@@ -217,7 +218,7 @@ function SpecialRow({ type, stats, containers }) {
           {containers.slice(0, 5).map(c => (
             <div key={c.cn} className="text-dim-300">
               • <span className="text-amber-300">{fmtPos(c)}</span>
-              <span className="text-dim-400 ml-1">{c.cn}</span>
+              <span className="text-dim-400 ml-1"><CnText cn={c.cn} /></span>
               {c.tmp && <span className="text-cyan-300 ml-1">{c.tmp}°C</span>}
               {c.un && <span className="text-red-300 ml-1">UN{c.un}</span>}
             </div>

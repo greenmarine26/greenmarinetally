@@ -220,13 +220,13 @@ const bundle = process.argv[3];
   ok(!!cfN && JSON.stringify(nKeys(cfN).sort()) === JSON.stringify(nKeys(cN).sort()), '콘앱 지도의 컨 목록 = 검수앱 확정 시프팅 지도(64대 한 벌)');
   ok(!!evCN && evCN.status === '확정' && evCN.count === 62 && evCN.keepConfN === 2 && evCN.line === evN.line && !!evCB && evCB.status === '확정' && !evCB.keepConfN && evCB.line === evB.line, '콘앱 시프팅 근거(ctShiftEvid) — 검수앱 shiftEvidenceOf 와 같은 줄(지금 «… 본선 잔류 확정 2대 … 아직 반영 전» · 10-25 종전)', JSON.stringify([evCN && evCN.line, evN && evN.line]));
   const sSrc = src('public/cone.html');
-  ok(/window\.__CONEV='ConeOne 2\.7[23456789](-0[1-9])?'/.test(sSrc) && /ConeOne 2\.7[23456789](-0[1-9])?<\/span>/.test(sSrc) && /const _kc=ctKeepConf\(_kd,_kl\);\s*\n?\s*for\(const _k2 of Object\.keys\(_kc\)\) if\(!_conf\[_k2\]\) _conf\[_k2\]=_kc\[_k2\];/.test(sSrc.replace(/\r/g, '')) && /Object\.keys\(_kc\)\.length\) shiftMap=Object\.assign\(\{\}, _conf, _fc\|\|\{\}\)/.test(sSrc),
+  ok(/window\.__CONEV='ConeOne (?:2\.7[23456789]|3\.\d\d)(-0[1-9])?'/.test(sSrc) && /ConeOne (?:2\.7[23456789]|3\.\d\d)(-0[1-9])?<\/span>/.test(sSrc) && /const _kc=ctKeepConf\(_kd,_kl\);\s*\n?\s*for\(const _k2 of Object\.keys\(_kc\)\) if\(!_conf\[_k2\]\) _conf\[_k2\]=_kc\[_k2\];/.test(sSrc.replace(/\r/g, '')) && /Object\.keys\(_kc\)\.length\) shiftMap=Object\.assign\(\{\}, _conf, _fc\|\|\{\}\)/.test(sSrc),
     '배선 — 콘앱 2.72 · 미르 갈래가 확정 두 대를 시프팅 지도에 얹고(서류가 이미 든 컨은 덮지 않는다) 예보와 같이 합친다');
   ok(/keepConfirmedFromMaps/.test(src('src/coneCargoPlan.entry.jsx')) && /window\.ConeParse = \{[^}]*keepConfirmedFromMaps/.test(src('src/coneCargoPlan.entry.jsx')), '배선 — 콘앱 번들이 판정 본체(keepConfirmedFromMaps)를 내보낸다(검수앱과 같은 한 벌)');
 
   console.log('⑪ 배선·문구 — 버전 · APP_NOTE · 매뉴얼 · 호출부');
   const U = src('src/utils.js');
-  ok(/export const APP_VERSION = 'TallyOne 4\.(53|5[4-9]|[678][0-9])(-\d\d)?'/.test(U) && (/APP_NOTE = '4\.53 [^']*본선 잔류 확정[^']*'/.test(U) || !/export const APP_VERSION = 'TallyOne 4\.53'/.test(U)), '버전 TallyOne 4.53+ · APP_NOTE «본선 잔류 확정»(4.53 판일 때 — 뒤 판은 자기 문구)');
+  ok(/export const APP_VERSION = 'TallyOne (?:4\.(53|5[4-9]|[678][0-9])|5\.\d\d)(-\d\d)?'/.test(U) && (/APP_NOTE = '4\.53 [^']*본선 잔류 확정[^']*'/.test(U) || !/export const APP_VERSION = 'TallyOne 4\.53'/.test(U)), '버전 TallyOne 4.53+ · APP_NOTE «본선 잔류 확정»(4.53 판일 때 — 뒤 판은 자기 문구)');
   const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
   ok(note.length < 120 && (note.match(/\./g) || []).length <= 3 && !/[\/']/.test(note), 'APP_NOTE — 두 문장 이내 · 120자 미만 · 작은따옴표·슬래시 없음', note);
   const help = src('src/data/helpData.js');

@@ -1,4 +1,4 @@
-// 화면 밝기·소리 크기·글자 크기를 그 기기에서만 바꾸는 설정 모달 (TallyOne 2.40 · 4.23 글자 두 모드)
+// 화면 고르기(세 안)·밝기·소리 크기·글자 크기를 그 기기에서만 바꾸는 설정 모달 (TallyOne 2.40 · 4.23 글자 두 모드 · 5.00 화면 고르기)
 //
 //   검수사 확정 2026-08-25 —
 //     «앱을 다른 사무실 컴에서 사용해보니 앱이 너무 어둡고 캄캄합니다.»
@@ -16,17 +16,22 @@ import {
   getBrightness, applyBrightness, getVolumeStep, setVolumeStep, getTextSize, applyTextSize,
 } from '../utils.js';
 import { speak } from '../voice.js';
+import { SKINS, getSkin, applySkin } from '../skin.js';   // 5.00 화면 고르기
+import { markSkinChosen } from './SkinIntro.jsx';
 
 export default function DisplaySettingsModal({ open, onClose }) {
   const [bright, setBright] = useState(getBrightness);
   const [vol, setVol] = useState(getVolumeStep);
   const [txt, setTxt] = useState(getTextSize);
+  const [skin, setSkin] = useState(getSkin);
   if (!open) return null;
 
   //  누르는 즉시 화면이 바뀐다 — 「적용」 버튼을 따로 두지 않는다.
   //  되돌리기가 그 자리에서 되는 조작이라 확인을 붙이면 잔소리가 된다(작업표준 2-0-B 4번).
-  const pickBright = (n) => { setBright(applyBrightness(n)); };
-  const pickText = (n) => { setTxt(applyTextSize(n)); };   // 4.23: 누르는 즉시 글자가 바뀐다(밝기와 같다)
+  //  5.00 — 화면 고르기. 밝기·글자는 그 안 위에 다시 건다(2안은 흰 바탕 고정, 3안은 큰 글자 고정이라 그 줄을 감춘다).
+  const pickSkin = (n) => { setSkin(applySkin(n)); markSkinChosen(); };
+  const pickBright = (n) => { setBright(applyBrightness(n)); applySkin(skin); };
+  const pickText = (n) => { setTxt(applyTextSize(n)); applySkin(skin); };   // 4.23: 누르는 즉시 글자가 바뀐다(밝기와 같다)
   const pickVol = (n) => {
     setVol(setVolumeStep(n));
     //  소리는 귀로 확인해야 정해진다. 고른 즉시 그 크기로 한 마디 들려준다.
@@ -36,19 +41,38 @@ export default function DisplaySettingsModal({ open, onClose }) {
   return (
     <>
       <div className="fixed inset-0 z-[60] bg-black/60" onClick={onClose}/>
-      <div className="fixed inset-x-3 top-16 z-[61] mx-auto max-w-md bg-ink-850 border border-line-strong rounded-card shadow-card overflow-hidden">
+      <div className="fixed inset-x-3 top-16 z-[61] mx-auto max-w-md bg-ink-850 border border-line-strong rounded-card shadow-lg overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 5rem)' }}>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
           <Sun className="w-5 h-5 text-st-lodHi"/>
-          <span className="text-sm2 text-dim-100 font-bold">화면 · 소리 · 글자</span>
+          <span className="text-sm2 text-dim-100 font-bold">화면 고르기 · 소리 · 글자</span>
           <button onClick={onClose} aria-label="닫기" className="ml-auto p-1 -mr-1">
             <X className="w-5 h-5 text-dim-300"/>
           </button>
         </div>
 
-        <div className="px-4 py-3">
-          <div className="text-2xs text-dim-300 mb-2">화면 밝기 — 이 기기에서만 바뀝니다</div>
-          <div className="grid grid-cols-2 gap-2">
-            {BRIGHT_STEPS.map((s) => (
+        {/* 5.00 화면 고르기 — 세 안. 이 기기에서만 바뀐다(밝기·글자와 같다). */}
+        <div className="px-4 py-3" data-skin-row="1">
+          <div className="text-2xs text-dim-300 mb-2">화면 고르기 — 이 기기에서만 바뀝니다</div>
+          <div className="grid grid-cols-1 gap-2">
+            {SKINS.map((s) => (
+              <button key={s.n} onClick={() => pickSkin(s.n)} aria-pressed={skin === s.n} data-skin-step={s.n}
+                className={`rounded-btn border px-3 py-2.5 text-left flex items-center gap-3 ${
+                  skin === s.n ? 'border-act bg-act/10' : 'border-line-strong bg-ink-800'}`} style={{ minHeight: 'var(--tap)' }}>
+                <span className="flex gap-1 shrink-0" aria-hidden="true">{s.sw.map((c, i) => <span key={i} className="inline-block w-4 h-4 rounded-full border border-line-strong" style={{ background: c }}/>)}</span>
+                <span className="min-w-0">
+                  <span className={`block text-sm2 font-bold ${skin === s.n ? 'text-act' : 'text-dim-100'}`}>{s.label}{skin === s.n ? ' ✓' : ''}</span>
+                  <span className="block text-3xs text-dim-400 mt-0.5">{s.hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {skin === 1 && (
+        <div className="px-4 py-3 border-t border-line">
+          <div className="text-2xs text-dim-300 mb-2">화면 밝기 — 이 기기에서만 바뀝니다 (흰 바탕은 2안)</div>
+          <div className="grid grid-cols-3 gap-2">
+            {BRIGHT_STEPS.filter((s) => s.n <= 3).map((s) => (
               <button key={s.n} onClick={() => pickBright(s.n)}
                 className={`rounded-btn border px-3 py-2.5 text-left ${
                   bright === s.n ? 'border-act bg-act/10' : 'border-line-faint bg-ink-800'}`}>
@@ -58,8 +82,12 @@ export default function DisplaySettingsModal({ open, onClose }) {
             ))}
           </div>
         </div>
+        )}
 
         {/* 4.23 글자 두 모드 — 보통(기본 크기) / 크게(글자 +2 · 단추 48). 이 기기에서만. */}
+        {skin === 3 ? (
+        <div className="px-4 pb-3 pt-3 border-t border-line text-2xs text-dim-300" data-text-size-row="1">3안은 글자가 «크게»보다 한 단계 더 큽니다.</div>
+        ) : (
         <div className="px-4 pb-3 pt-1 border-t border-line" data-text-size-row="1">
           <div className="text-2xs text-dim-300 mb-2 mt-2 flex items-center gap-1.5">
             <Type className="w-3.5 h-3.5"/>글자 크기 — 이 기기에서만 바뀝니다
@@ -75,6 +103,7 @@ export default function DisplaySettingsModal({ open, onClose }) {
             ))}
           </div>
         </div>
+        )}
 
         <div className="px-4 pb-4 pt-1 border-t border-line">
           <div className="text-2xs text-dim-300 mb-2 mt-2 flex items-center gap-1.5">

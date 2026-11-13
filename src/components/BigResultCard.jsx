@@ -1,4 +1,5 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
+import CnText from './CnText.jsx';
 import React, { useState, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
@@ -286,8 +287,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
         )}
         <button onClick={onOpen} className="w-full text-left">
           {label && <span className={`mr-1 align-middle text-2xs font-black px-1.5 py-0.5 rounded ${labelMap[labelColor] || labelMap.amber}`}>{label}</span>}
-          <span className="mono font-bold text-dim-100 gw-cn-a">{String(c.cn || '').slice(0, -4)}</span>
-          <span className="mono font-black text-emerald-300 gw-cn-b">{String(c.cn || '').slice(-4)}</span>
+          <CnText cn={c.cn} where="guide" />
           {isDone && <span className="ml-1.5 align-middle bg-emerald-700 text-emerald-100 text-2xs px-1.5 py-0.5 rounded font-black">✓완료</span>}
         </button>
         {(c.deckPos || _pos || _warn) && (
@@ -371,8 +371,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
         </div>
         {/* M3.86: 컨번호 한 줄 별도, 크게 표시 (끝4 + 전체 컨번호) */}
         <div className="flex items-baseline gap-2 mb-3 px-1">
-          <span className="text-3xl font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-          <span className="text-lg sm:text-xl font-bold mono text-dim-100 truncate flex-1">{c.cn}</span>
+          <CnText cn={c.cn} where="head" className="flex-1 min-w-0" />
         </div>
 
         {/* 1순위: 실번호 거대 + 반짝임 */}
@@ -559,7 +558,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
             <>
               <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-700 rounded px-2 py-2">
                 <div>
-                  <div className="mono text-sm font-bold text-cyan-200">{cnFixPick.cn}</div>
+                  <div className="mono text-sm font-bold text-cyan-200"><CnText cn={cnFixPick.cn} /></div>
                   <div className="text-2xs mono text-dim-300">
                     계획 {cnFixPick.bay ? `${parseInt(cnFixPick.bay, 10)}-${cnFixPick.row}-${cnFixPick.tier}` : '자리 없음'} · {cnFixPick.pod || '-'} · {cnFixPick.fe === 'E' ? '엠티' : '풀'}
                   </div>
@@ -610,7 +609,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
                     });
                   }}
                   className="w-full flex justify-between items-center bg-ink-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
-                  <span className="mono font-bold text-dim-100">{x.cn}</span>
+                  <span className="mono font-bold text-dim-100"><CnText cn={x.cn} /></span>
                   <span className="mono text-dim-300">
                     {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '자리 없음'} · {x.pod || '-'}

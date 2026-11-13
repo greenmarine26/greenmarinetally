@@ -38,12 +38,12 @@ export function isSentenceQuery(v) {
 }
 
 // 판 이력(4.88-01 까지의 APP_VERSION 꼬리 주석·앞 판 주석·앞 판 APP_NOTE)은 docs/APP_HISTORY.md 로 옮겼다(4.89). 앞 판: 'TallyOne 4.88-01' — 카고플랜을 카스피 공통 용어로.
-export const APP_VERSION = 'TallyOne 4.89'   // 4.89 미르는 숨어 있다가 검색줄 🎤·⌨ 로 «미르야» 하면 시트가 올라온다(인사 «무엇을 도와드릴까요?» 뒤 다시 듣기 · 물음이 붙으면 바로 답 · 바깥·✕·20초 무입력이면 들어감 · 얼굴 단추 없음 · 콘앱 2.79 도 콘 질문바로) · «미르야» 없는 검색줄은 작업용(얼굴·시트 없음 · 잡담·생활회화는 «미르야» 안내 한 줄 — mir.js workOnly) — 검수사 2026-11-12 19:36 «미르를 숨기는것은 어떻습니까» · 19:38 «검색줄 마이크를 이용합니다» · 19:41 «미르를 부르지 않고 … 작업용으로 봅니다». 인사쇼(intro.html) 미르를 실사 p14 로(20:26 «두팔이 옷에 갇혀 있습니다» · 20:30 «이사진은 사용하시면 안됩니다»). 말로 고른 양하/선적 PLAN 을 그 화면으로 열고 닫으면 원래 화면으로(VoyagePage _mirOpenPlan mode) · 출력 머리는 선박명(info.vslFull — 4.88-01 라이브 확인 PCSZ). 화면별 지연 받기(수석·관리앱·맛집·보조·건강·자료센터·통합검색·인원 관리·출력 센터) · sw 설치 때 조각 미리받기 · 판 이력 주석을 docs/APP_HISTORY.md 로. 연막 smoke_mirhdr489 · smoke_planmode489.
+export const APP_VERSION = 'TallyOne 5.00'   // 5.00 **화면 고르기 1안·2안·3안 · 컨 번호 한 벌 · 글자 바닥 12px · 누르는 자리 44px** — 검수사 2026-11-12 20:33 «화면 디자인은 심플했으면 좋겠습니다. 시인성이 뛰어나야 하고 보기도 좋아야 합니다 … 화면마다 조금씩 이질감이 들어서 입니다» · 20:40 «컨테이너 번호도 4자리만 강조하다보니 앞자리는 눈에 들어 오지 않습니다 … 화면을 고르는것도 1안 2안 3안이 있다면 다 넣었으면 합니다» · 20:43 «그중 원하는 화면으로 셋팅해서 사용하라고 하겠습니다» · 20:44 «버전은 5.00으로 갑니다» · 20:45 «최상품을 만들어 주세요». <html data-skin> 하나로 index.css 변수만 갈린다(화면 코드 한 벌 — skin.js applySkin 한 곳 · 기기마다 localStorage master_skin_v1). 1안 어두운 고대비(기본 · 종전 밝기 4 기기는 2안) · 2안 밝은 간결(밝기 4 팔레트 + 그림자 없음) · 3안 큰 글자 현장(검정 바탕 · 크게보다 한 단계 더 · 누르는 자리 52). 세 안 공통 — 작은 글자 셋 10·11 → 12 · tabular-nums · 단추 ::after 로 손가락 자리 44(그림 칸 제외) · 모서리 두 가지 · 화면 안 그림자 없앰. 컨 번호 CnText 한 벌(«CICU 300 6502» 같은 크기 · 세 덩어리 띄움 · 끝 4자리 초록) 41곳. 설정 창 «화면 고르기» · 새 판 첫 안내(하루 한 번 · SkinIntro). 단추 순서·이름·동작·판정·숫자는 그대로. 연막 smoke_skin500.
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '4.89 «미르야» 없이 말하면 작업 검색이고 «미르야» 하고 부르면 미르 비서가 나옵니다. 말로 고른 양하·선적 PLAN 이 그대로 열리고 출력 머리에 선박명이 찍힙니다';
+export const APP_NOTE = '5.00 메뉴의 화면 고르기에서 세 가지 화면 중 하나를 고릅니다. 컨테이너 번호를 같은 크기로 띄워 써서 앞자리까지 한눈에 읽힙니다'
 // (앞 판) APP_NOTE — docs/APP_HISTORY.md 4·5·6절
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
@@ -11977,6 +11977,10 @@ function _textModesHere() {
 //  4.23 2차: 인쇄물 글자(«인쇄 글자 작아» · «덱플랜 글자 크게»)는 모드와 무관하다 — 바꾸지 않고 그렇다고 말한다(콘앱도 같은 말).
 function _runTextSizeCmd(cmd) {
   if (cmd.print) return '인쇄물은 글자 모드와 무관합니다. 출력 센터의 종이(검수 리스트·양하/선적 PLAN·덱플랜)는 정해진 규격 그대로 나가요. 화면 글자를 키우려면 «글자 크게» 하세요.';
+  //  5.00: 3안(큰 글자 현장)은 글자 크기가 정해진 안이다 — 밝기 명령과 같은 길(검수앱·콘앱 같은 답 · getSkin 은 같은 기기 저장값을 읽는다)
+  if (getSkin() === 3) return cmd.to === 1
+    ? '지금은 «3안 큰 글자 현장» 화면이라 글자가 가장 큰 안이에요. 글자를 줄이려면 메뉴(⋮) › 화면 · 소리 · 글자 › 화면 고르기에서 «1안»이나 «2안»을 고르세요.'
+    : '지금은 «3안 큰 글자 현장» 화면이라 글자가 이미 가장 커요.';
   if (!_textModesHere()) return '여기서는 글자 크기를 아직 못 바꿔요. 검수앱은 메뉴(⋮) › 화면 · 소리 · 글자에서 «크게»를 고르면 됩니다.';
   const cur = getTextSize();
   const next = cmd.to === 1 ? 1 : 2;
@@ -11998,13 +12002,18 @@ export function deviceCmdWaitsForSubmit(cmd) {
     통합검색·항차검색 두 화면이 이것을 부른다. 각자 계산하면 답이 갈린다.
     검수사 확정 — 미르가 만지는 것은 «화면 밝기와 볼륨 정도만». 둘 다 그 자리에서 되돌릴 수 있다. (4.23: 글자 보통·크게도 같은 성격이라 더했다.)
     ⚠ 되돌릴 수 없는 것(삭제·완료·업로드)은 절대 여기에 넣지 마라. */
+import { getSkin, applySkin } from './skin.js';   // 5.00 화면 고르기 — 미르 밝기 명령이 같은 길로(순환 import 이지만 부르는 때에만 쓴다)
 export function runDeviceCmd(cmd) {
   if (!cmd) return null;
   //  4.23 2차: «화면 밝게 하고 글자 크게» — 밝기·소리와 글자를 같이 시키면 차례로 하고 답을 잇는다(nlSearch 가 multi 로 준다)
   if (cmd.kind === 'multi') return (Array.isArray(cmd.cmds) ? cmd.cmds : []).filter((c) => c && c.kind !== 'multi').map((c) => runDeviceCmd(c)).filter(Boolean).join(' ') || null;
   if (cmd.kind === 'text') return _runTextSizeCmd(cmd);   // 4.23 글자 두 모드
   if (cmd.kind === 'bright') {
-    const cur = getBrightness();
+    //  5.00 화면 고르기 — 흰 바탕(밝기 4 «사무실»)은 2안이 맡는다. 미르도 같은 길로 간다: 4로 올리면 2안, 2안에서 내리면 1안의 그 단계.
+    //    3안(큰 글자 현장)은 밝기가 정해진 안이라 바꾸지 않고 어디서 고르는지 말한다(되돌릴 수 있는 기기 설정 범위 그대로).
+    const _sk = getSkin();
+    if (_sk === 3 && !cmd.ask) return '지금은 «3안 큰 글자 현장»이라 밝기가 정해져 있어요. 흰 바탕이 필요하면 메뉴(⋮) › 화면 · 소리 · 글자에서 «2안 밝은 간결»을 고르세요.';
+    const cur = _sk === 2 ? 4 : Math.min(3, getBrightness());
     if (cmd.ask) {
       const now = BRIGHT_STEPS.find((s) => s.n === cur);
       return `지금 «${now ? now.label : cur}»이에요. 밝게 할까요, 어둡게 할까요?`;
@@ -12017,7 +12026,9 @@ export function runDeviceCmd(cmd) {
            : `이미 «${st ? st.label : next}»이에요.`;
     }
     applyBrightness(next);
-    return `화면을 «${st ? st.label : next}»으로 바꿨어요.${next === 4 ? ' 엑셀이랑 비슷한 밝기예요.' : ''}`;
+    applySkin(next === 4 ? 2 : 1);   // 5.00: 4 = 2안(흰 바탕) · 1~3 = 1안의 그 단계
+    return next === 4 ? '화면을 «사무실»(2안 밝은 간결 — 흰 바탕)으로 바꿨어요. 엑셀이랑 비슷한 밝기예요.'
+      : `화면을 «${st ? st.label : next}»으로 바꿨어요.${_sk === 2 ? ' (1안 어두운 고대비)' : ''}`;
   }
   if (cmd.kind === 'volume') {
     const cur = getVolumeStep();

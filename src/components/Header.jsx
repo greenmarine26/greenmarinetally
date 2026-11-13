@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 // TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
 // TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
-import { CloudOff, Home, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera, Sun } from 'lucide-react';
+import { CloudOff, Home, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, Sun } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import { isChief , isTester} from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
@@ -359,13 +359,11 @@ export default function Header({ version, inspector, online, route, voyages, onC
                   {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청을 claude_inbox로 보낸다 (전 화면 접근) */}
                   <button onClick={() => { setMenuOpen(false); setMemoOpen(true); }}
                     className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
-                    <NotebookPen className="w-5 h-5 text-violet-300 shrink-0"/>
                     <span className="text-sm text-dim-100 font-bold">📝 개발 요청 · 미르에게 원함</span>
                   </button>
                   {/* TallyOne 2.03: 데미지 예약 — 자료 도착 전 컨번호로 사전 등록 (전 화면 접근) */}
                   <button onClick={() => { setMenuOpen(false); setDmgResvOpen(true); }}
                     className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
-                    <Camera className="w-5 h-5 text-st-lod shrink-0"/>
                     <span className="text-sm text-dim-100 font-bold">📷 데미지 예약</span>
                   </button>
                   {/* TallyOne 1.0 (K4): 보조기능(#/aux) 진입 — 건강 점검·맛집 수첩 등 */}

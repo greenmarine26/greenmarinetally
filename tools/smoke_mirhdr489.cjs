@@ -148,7 +148,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     ok((C.match(/if\(window\.__coneMirSummon && window\.__coneMirSummon\(q\)\)\{ inp\.value=''; return; \}/g) || []).length === 2, '콘 질문바 🎤·⌨(질문 단추·Enter) 두 길 모두 호출어면 미르 시트로');
     ok(/back\.onclick=\(\)=>\{ sheet\.querySelector\('#mirX'\)\.click\(\); \}/.test(C) && /sheet\.style\.display='none'; back\.style\.display='none';/.test(C), '콘앱 시트 바깥을 누르면 닫힌다');
     ok(/Date\.now\(\)-_lastAct>20000/.test(C) && /if\(_mirThink \|\| sp \|\| mic\.textContent==='●'\)\{ _touch\(\); return; \}/.test(C), '콘앱 20초 무입력 닫힘(말하는 중·생각 중·듣는 중 제외)');
-    ok(/window\.__CONEV='ConeOne 2\.79'/.test(C), '콘앱 판 ConeOne 2.79');
+    ok(/window\.__CONEV='ConeOne (?:2\.79|3\.\d\d)(-\d\d)?'/.test(C), '콘앱 판 ConeOne 2.79 이후');
     ok((C.match(/mirAsk\(q, \{workOnly:true\}\)/g) || []).length === 2 && /workOnly: !!\(opt && opt\.workOnly\)/.test(C), '콘 질문바(작업용)는 workOnly — 시트(비서용)는 아님');
   }
 

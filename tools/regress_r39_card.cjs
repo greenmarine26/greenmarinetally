@@ -97,7 +97,7 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     const cn = card ? card.getAttribute('data-gw-cn') : '';
     const c = E[cn] || {};
     const box = card ? [...card.querySelectorAll('span')].find((s) => /gw-pos/.test(s.className)) : null;
-    const last4 = card ? [...card.querySelectorAll('span')].find((s) => /gw-cn-b/.test(s.className)) : null;
+    const last4 = card ? [...card.querySelectorAll('span')].find((s) => /\bcn-l\b/.test(s.className)) : null;
     const chips = card ? [...card.querySelectorAll('span.gw-chip')].map((s) => S.txt(s)) : [];
     const route = card ? S.txt(card).includes(`${c.pol} → ${c.pod}`) : false;
     const wantReefer = (c.rf || /^.{2}R/.test(String(c.iso || ''))) && c.fe !== 'E';

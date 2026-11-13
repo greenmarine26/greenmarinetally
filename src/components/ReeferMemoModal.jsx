@@ -17,6 +17,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk, fbSaveReeferOcrLog } from '../firebase.js';
 import { isReeferTarget, tempNum, reeferListRows, openReeferListPrint } from '../reeferList.js';   // 4.57: 리퍼 판정·온도 읽기 한 벌 + 수석 리스트 출력
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
 //   공 리퍼는 전원을 안 꽂아 잴 것이 없다. 텔리 RF 시트(`fe !== 'E'` — 실물 관례 "양하 F 리퍼만
@@ -338,7 +339,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             return (
               <div key={c.cn} className="grid grid-cols-[1fr_58px_72px_72px] gap-1 items-center py-1 border-b border-line-soft">
                 <div className="min-w-0">
-                  <div className="text-xs2 mono text-dim-100 truncate">{c.cn}</div>
+                  <div className="text-xs2 mono text-dim-100 truncate"><CnText cn={c.cn} /></div>
                   <div className="text-2xs text-dim-500">
                     {[c.bay, c.row, c.tier].filter(Boolean).join('/')}
                     {v.src === 'photo' && <span className="text-violet-400 ml-1">📷</span>}

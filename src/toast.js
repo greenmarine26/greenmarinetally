@@ -31,6 +31,7 @@ export function showToast(message, opts = {}) {
 
   const el = document.createElement('div');
   el.textContent = String(message);
+  el.setAttribute('data-toast', err ? 'err' : 'ok');   // 5.00: 화면 고르기 3안(큰 글자)이 글자를 키울 자리
   el.style.cssText = [
     'pointer-events:auto',
     'white-space:pre-line',          // 기존 alert의 \n 줄바꿈 유지
@@ -41,7 +42,7 @@ export function showToast(message, opts = {}) {
     'font-size:15px', 'line-height:1.45', 'font-weight:600',
     'color:#fff',
     'box-shadow:0 6px 20px rgba(0,0,0,0.28)',
-    'background:' + (err ? '#dc2626' : '#16a34a'),
+    'background:' + (err ? '#b91c1c' : '#047857'),   // 5.00: 흰 글자 대비 AA — 빨강 4.8→6.5 · 초록 3.3→5.5(종전 #16a34a 는 15px 흰 글자에 3.3:1)
     'opacity:0', 'transform:translateY(-8px)',   // 4.87-10: 위에서 내려온다
     'transition:opacity .18s ease, transform .18s ease',
     'cursor:pointer',

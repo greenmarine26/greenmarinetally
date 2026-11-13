@@ -18,7 +18,7 @@ import { mirTone } from '../mir.js';   // ★ 2.57: 말투 출구 겹 — 세 �
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import { Thermometer,
   ArrowDown, ArrowUp, Search as SearchIcon, ListChecks, MapPin,
-  FileSpreadsheet, FileText, X, Download, Camera,
+  FileSpreadsheet, FileText, X, Download,
   Package as PackageIcon
 } from 'lucide-react';
 import {
@@ -2984,7 +2984,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                     · {x.cn} <b>{x.pos}</b> {isoShown(x.iso)} — EDI {x.ediPod} · 리스트 {x.recPod}
                   </div>
                 ))}
-                {cf.length > 6 && <div className="text-2xs opacity-70">… 외 {cf.length - 6}대</div>}
+                {cf.length > 6 && <div className="text-2xs">… 외 {cf.length - 6}대</div>}
               </div>
             );
           })()}
@@ -4910,7 +4910,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             className="pop-btn pop-violet flex-shrink-0" style={{ minHeight: 64, padding: '0 14px', flexDirection: 'column', gap: 2, fontSize: 'var(--fs-xs)' }}
             title="카메라로 종이 리스트 촬영"
           >
-            <Camera className="w-5 h-5"/>📷 촬영
+            📷 촬영
           </button>
           <input ref={cameraRef} type="file" accept="image/*" capture="environment"
             onChange={e => { handleListUpload(e.target.files); if (cameraRef.current) cameraRef.current.value = ''; }}

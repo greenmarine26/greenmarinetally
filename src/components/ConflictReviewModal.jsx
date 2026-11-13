@@ -11,6 +11,7 @@
 //   - "모두 추가/무시" 일괄 처리
 import React, { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 export default function ConflictReviewModal({ open, onClose, conflicts, onResolve }) {
   // conflicts 형식:
@@ -119,7 +120,7 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
                 {unmatched.map((c) => (
                   <div key={c.cn} className="bg-ink-800 border border-line rounded p-2">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="font-bold text-amber-200 mono text-xs">{c.cn}</div>
+                      <div className="font-bold text-amber-200 mono text-xs"><CnText cn={c.cn} /></div>
                       <div className="text-2xs text-dim-300">
                         {c.sl && <span>실: {c.sl}</span>}
                         {c.wt > 0 && <span className="ml-2">{(c.wt/1000).toFixed(1)}t</span>}
@@ -173,7 +174,7 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
               <div className="space-y-1.5">
                 {weightDiffs.map((c) => (
                   <div key={c.cn} className="bg-ink-800 border border-line rounded p-2">
-                    <div className="font-bold text-orange-200 mono text-xs mb-1.5">{c.cn}</div>
+                    <div className="font-bold text-orange-200 mono text-xs mb-1.5"><CnText cn={c.cn} /></div>
                     <div className="grid grid-cols-2 gap-1">
                       <button onClick={() => setDecision('weight:' + c.cn, 'edi')}
                         className={`py-1.5 text-xs font-bold rounded border ${
@@ -220,7 +221,7 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
               <div className="space-y-1.5">
                 {sealDiffs.map((c) => (
                   <div key={c.cn} className="bg-ink-800 border border-line rounded p-2">
-                    <div className="font-bold text-purple-200 mono text-xs mb-1.5">{c.cn}</div>
+                    <div className="font-bold text-purple-200 mono text-xs mb-1.5"><CnText cn={c.cn} /></div>
                     <div className="grid grid-cols-2 gap-1">
                       <button onClick={() => setDecision('seal:' + c.cn, 'edi')}
                         className={`py-1.5 text-xs font-bold rounded border text-left px-2 ${

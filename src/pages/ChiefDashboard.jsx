@@ -44,6 +44,7 @@ import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보�
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
 import Ferry1700Alert from '../components/Ferry1700Alert.jsx';   // 3.63: 카페리 17시 갱별 주간 작업보고 — 수석은 작업 중인 배 모아 보기
 import TermBoardPanel, { hasTermBoard } from '../components/TermBoardPanel.jsx';   // 4.03: 검수원이 호기를 안 찍어 그림이 안 그려질 때 터미널 본선 현황(PCTC·동방)을 보인다
+import CnText from '../components/CnText.jsx';   // 5.00 컨 번호 한 벌
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -1407,7 +1408,7 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
             {item.rows.slice(0, 50).map((c, i) => (
               <tr key={i} className={`border-t border-line ${c.done ? '' : 'opacity-50'}`}>
                 <td className="px-1.5 py-1 text-dim-400 mono">{i + 1}</td>
-                <td className="px-1.5 py-1 mono text-dim-100">{c.cn}</td>
+                <td className="px-1.5 py-1 mono text-dim-100"><CnText cn={c.cn} /></td>
                 <td className="px-1.5 py-1 mono text-dim-300">{isoShown(c.iso)}</td>
                 <td className="px-1.5 py-1 mono">
                   {c.fe === 'E'
@@ -2705,8 +2706,8 @@ export function LiveShipCard({ zoom = 1, v, workers, standby = [], lastReport, a
       </div>
       </div>
       {cranePanel}
-      {rampCranes.length > 0 && <div className="text-[11px] text-dim-400 px-1 pb-1" data-crane-ramp="1">{rampCranes.map((c) => `램프(105) ${c.done}대${c.name ? ' · ' + c.name : ''}`).join(' / ')}</div>}
-      {stoppedCranes.length > 0 && <div className="text-[11px] text-dim-400 px-1 pb-1" data-crane-stopped={stoppedCranes.map((c) => c.no).join(',')}>{stoppedCranes.map((c) => c.withdrawn ? `${c.no}호기 ${c.done}대 · ${CRANE_MOVE_KO[c.moveKind] || '철수'}` : c.finished ? `${c.no}호기 ${c.done}대 · 작업 끝 철수` : `${c.no}호기 ${c.done}대 · 작업 없음 ${c.idleMin}분`).join(' / ')}</div>}
+      {rampCranes.length > 0 && <div className="text-xxs text-dim-400 px-1 pb-1" data-crane-ramp="1">{rampCranes.map((c) => `램프(105) ${c.done}대${c.name ? ' · ' + c.name : ''}`).join(' / ')}</div>}
+      {stoppedCranes.length > 0 && <div className="text-xxs text-dim-400 px-1 pb-1" data-crane-stopped={stoppedCranes.map((c) => c.no).join(',')}>{stoppedCranes.map((c) => c.withdrawn ? `${c.no}호기 ${c.done}대 · ${CRANE_MOVE_KO[c.moveKind] || '철수'}` : c.finished ? `${c.no}호기 ${c.done}대 · 작업 끝 철수` : `${c.no}호기 ${c.done}대 · 작업 없음 ${c.idleMin}분`).join(' / ')}</div>}
     </div>
   );
 }

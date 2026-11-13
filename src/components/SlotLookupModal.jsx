@@ -9,6 +9,7 @@ import { fbCompleteContainer, fbCompleteContainersAtomic, fbReassignContainerPos
 import { speakDone } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import PositionEditModal from './PositionEditModal.jsx';
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 export default function SlotLookupModal({ open, base, voyageKey, voyageInfo = null, inspector, allContainers = [], mode = 'loading', records = null, shiftCns = null, onClose, onDone }) {   // records·shiftCns — 통과분 문지기 재료(컨 상세 창과 같은 판정)
   const [q, setQ] = useState('');
@@ -50,7 +51,7 @@ export default function SlotLookupModal({ open, base, voyageKey, voyageInfo = nu
                     return (
                       <button key={h.cn} disabled={!ok} onClick={() => { if (!canWorkNow()) { alert(workGateText('선적 완료')); return; } if (!getEquipNumber()) { alert(equipGateText()); return; } setPicked(h); }}
                         className={`text-left px-3 py-2 rounded border text-xs ${ok ? 'bg-ink-800 border-line hover:bg-ink-700' : 'bg-ink-950 border-line opacity-40'}`}>
-                        <span className="mono font-black text-white">{h.cn}</span>
+                        <span className="mono font-black text-white"><CnText cn={h.cn} /></span>
                         <span className="text-dim-200 ml-2">{isoToLabel(h.iso || '') || h.iso || ''} {h.fe || ''}</span>
                         <span className="text-dim-300 ml-2">{p ? fmtPos(p) : '자리 없음'}</span>
                         {h._comp ? <span className="ml-2 text-amber-300 font-black">⚠ 이미 선적확인됨</span> : null}

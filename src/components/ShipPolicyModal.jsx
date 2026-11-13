@@ -1,7 +1,7 @@
 // 새 선박 엠티 실 정책 등록 모달 (M3.5.5)
 // EDI 업로드 후 매칭 안되는 새 선박이면 자동 트리거
 import React, { useState } from 'react';
-import { X, Ship, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Ship, Lock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { fbSaveShipPolicy } from '../shipPolicies.js';
 import { db } from '../firebase.js';
 
@@ -265,7 +265,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
           </button>
 
           <div className="bg-blue-950/30 border border-blue-700/40 rounded p-2 text-2xs text-blue-200 flex items-start gap-1.5">
-            <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5"/>
+            <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5"/>
             <span>저장하면 다음부터 같은 선박이 EDI에 들어올 때 자동 적용됩니다. 홈 화면 아래 「선박 실 정책」 판에서 언제든 바꿀 수 있습니다.</span>
           </div>
 

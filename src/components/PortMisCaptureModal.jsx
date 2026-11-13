@@ -3,7 +3,7 @@
 // M5.82 hotfix: [평택 전체 교체] 옵션 추가 — 옛 데이터 자동 삭제
 // M5.84: 현재 Firebase에 저장된 PORT-MIS 데이터 직접 보기 + 일괄 정리 + 개별 삭제
 import React, { useState, useEffect } from 'react';
-import { X, Camera, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { X, Camera, Loader2, CheckCircle2, AlertTriangle, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { ocrPortMisCapture } from '../mixerUpload.js';
 import { fbSavePortMisBatch, fbReplacePortMisBatch, fbSubscribePortMis, db } from '../firebase.js';
 import { ref, remove } from 'firebase/database';
@@ -150,7 +150,7 @@ export default function PortMisCaptureModal({ onClose }) {
               </p>
               {error && (
                 <div className="bg-red-950/50 border border-red-700 rounded p-3 mb-3 text-red-300 text-sm flex gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   <div>{error}</div>
                 </div>
               )}

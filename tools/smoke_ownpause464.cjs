@@ -25,7 +25,7 @@ console.log('② 내가 중단 뒤 완료를 찍으면 재개');
 const V2 = JSON.parse(JSON.stringify(V)); V2.discharge.completed.MINE = { at: pauseTs + 120000, by: '김성일', equip: '2호기', src: null };
 T(M.workPauseOf(V2, now + 200000, { inspector: '김성일', equip: '2호기' }) === null, '내 완료가 중단 뒤에 있으면 재개');
 console.log('③ 버전·배너');
-T(/4\.(63-0[45]|6[456789]|[78]\d)/.test(M.APP_VERSION) && /4\.(63-0[45]|6[456789]|[78]\d)/.test(M.APP_NOTE), '버전·APP_NOTE 4.63-04 이후');
+T(/(?:4\.(63-0[45]|6[456789]|[78]\d)|5\.\d\d)/.test(M.APP_VERSION) && /(?:4\.(63-0[45]|6[456789]|[78]\d)|5\.\d\d)/.test(M.APP_NOTE), '버전·APP_NOTE 4.63-04 이후');
 T(M.APP_NOTE.length <= 160, 'APP_NOTE 두 문장 이내', String(M.APP_NOTE.length));
 console.log('④ 베이뷰 따라가기(hatchAuto)에서도 «데크 양하 완료 — 해치커버 열까요» 물음이 선다(4.63-05)');
 { const src = fs.readFileSync(path.join(ROOT, 'src/components/GuidedWorkPanel.jsx'), 'utf8');

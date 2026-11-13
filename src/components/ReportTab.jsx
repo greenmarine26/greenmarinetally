@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { completedByLabel, sealCheckOf } from '../utils.js';   // 4.49: sealCheckOf — 실오류 판정 한 벌   // ★ 3.16: 완료자 표기 한 벌
 import { CheckCircle2, Clock, Download, ArrowDown, ArrowUp, AlertOctagon, FileWarning, Copy } from 'lucide-react';
 import { exportSectionToCSV, exportSealErrorsToCSV } from './CSVExport.jsx';
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 export default function ReportTab({ voyageKey, mode, voyageInfo, containers, compMap, xrayMap, xraySeals }) {
   const [groupBy, setGroupBy] = useState('time');
@@ -246,8 +247,7 @@ function SealErrorReport({ errors, voyageInfo, voy, mode, onExport, onCopy }) { 
                 <span className={`text-3xs font-black px-1.5 py-0.5 rounded ${
                   e.errType === '실번호' ? 'bg-amber-700/60 text-amber-100' : 'bg-purple-700/60 text-purple-100'
                 }`}>{e.errType}</span>
-                <span className="text-amber-300 font-black mono">{e.cn?.slice(-4)}</span>
-                <span className="text-dim-300 mono text-2xs">{e.cn}</span>
+                <CnText cn={e.cn} where="row" />
                 {e.bay && <span className="text-amber-400 mono text-2xs">{e.bay}-{e.row}-{e.tier}</span>}
               </div>
               <div className="font-mono text-xs2 ml-4">
@@ -290,8 +290,7 @@ function ReportGroup({ title, items, groupBy, voyageInfo = null }) {   // 3.16: 
           {items.map(r => (
             <div key={r.cn} className="bg-ink-950/50 rounded px-2 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">{/* 4.23: 컨번호는 자르지 않는다 — 폭이 모자라면(글자 한 단계·«크게») 자리·시각이 다음 줄로 */}
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0"/>
-              <span className="font-black text-amber-300 mono text-sm">{r.l4 || r.cn?.slice(-4)}</span>
-              <span className="text-xxs mono text-dim-300 whitespace-nowrap flex-1 shrink-0">{r.cn}</span>
+              <span className="text-sm mono text-dim-100 whitespace-nowrap flex-1 shrink-0"><CnText cn={r.cn} where="line" /></span>
               {r.bay && <span className="text-2xs mono text-amber-400">{r.bay}-{r.row}-{r.tier}</span>}
               {groupBy === 'time' && completedByLabel(r, voyageInfo) && <span className="text-2xs text-emerald-400 font-bold">[{completedByLabel(r, voyageInfo)}]</span>}
               {r.completedAt && (
@@ -325,7 +324,7 @@ function UndoneSection({ containers, compMap }) {
         <div className="px-3 pb-3 max-h-72 overflow-y-auto space-y-1">
           {undone.map(c => (
             <div key={c.cn} className="flex items-center justify-between text-xs2 bg-ink-900/70 rounded px-2 py-1.5">
-              <span className="mono text-dim-100 font-bold">{c.cn}</span>
+              <span className="mono text-dim-100 font-bold"><CnText cn={c.cn} /></span>
               <span className="mono text-dim-300">{[c.bay, c.row, c.tier].filter(Boolean).join('-') || '-'}</span>
             </div>
           ))}

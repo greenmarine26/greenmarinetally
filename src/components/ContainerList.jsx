@@ -14,6 +14,7 @@ import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookin
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 // 필터 정의 (V37 cargoFilter 그대로 + 다크 매핑)
 const FILTERS = [
@@ -532,8 +533,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, xSealCk = null, mode, voyage
                 </>
               ) : (
                 <>
-                  <span className="font-black text-base sm:text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-                  <span className="text-xs2 sm:text-xxs text-dim-300 mono truncate">{c.cn}</span>
+                  <CnText cn={c.cn} where="row" />
                 </>
               )}
               {sealError && (

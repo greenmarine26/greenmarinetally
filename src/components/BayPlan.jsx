@@ -26,6 +26,7 @@ import UnassignedListModal from './UnassignedListModal.jsx';
 import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { formatDgShort } from '../dgUnDict.js';
 import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 핀치 확대 한 벌
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
@@ -673,7 +674,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         <div className="bg-amber-500 text-ink-950 rounded-pill p-3 flex items-center gap-3 sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px)_+_var(--dock-h,68px)_+_4px)] z-30 shadow-lg border-2 border-amber-300">
           <span className="text-xl">📦</span>
           <div className="flex-1">
-            <div className="text-sm font-black mono">{pendingMove.cn}</div>
+            <div className="text-sm font-black mono"><CnText cn={pendingMove.cn} /></div>
             <div className="text-xxs font-bold leading-tight">
               본위치 {pendingMove.fromBay}/{pendingMove.fromRow}/{pendingMove.fromTier} →
               <span className="ml-1 underline">베이그리드에서 빈 셀(점선/X)을 누르세요</span>
@@ -691,7 +692,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         <div className="bg-violet-600 text-white rounded-pill p-3 flex items-center gap-3 sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px)_+_var(--dock-h,68px)_+_4px)] z-30 shadow-lg border-2 border-violet-300">
           <span className="text-xl">⇄</span>
           <div className="flex-1">
-            <div className="text-sm font-black mono">{pendingSwap.cn}</div>
+            <div className="text-sm font-black mono"><CnText cn={pendingSwap.cn} /></div>
             <div className="text-xxs font-bold leading-tight">맞바꿀 상대 컨의 셀을 누르세요 — 같은 출발지·도착지·사이즈·풀/엠티만 됩니다</div>
           </div>
           <button onClick={() => onCancelSwap && onCancelSwap()}
@@ -850,7 +851,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                     className="px-2 py-1.5 bg-ink-800 hover:bg-blue-900 active:bg-blue-800 border border-line hover:border-blue-600 rounded text-left flex items-center gap-2">
                     <span className="text-blue-400 text-base">📷</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-black mono text-dim-100 truncate">{c.cn}</div>
+                      <div className="text-xs font-black mono text-dim-100 truncate"><CnText cn={c.cn} /></div>
                       <div className="text-2xs text-dim-300 mono">
                         {isoShown(c.iso) || '-'} · {c.bay || '-'}/{c.row || '-'}/{c.tier || '-'}
                       </div>

@@ -309,7 +309,7 @@ const sizeOf = (card) => (card.twin ? '20' : (is20(card.main) ? '20' : '40'));
       ok('매뉴얼의 옛 «칩 [⇄ 해상부터]를 켜면» 문구가 남아 있지 않다', !/위 칩 \[⇄ 해상부터\]를 켜면/.test(help) && !/위쪽 칩 \[⇄ 육상부터\]를 눌러 \[⇄ 해상부터\]로 바꾼다\(3\.3\)/.test(help));
       ok('기능 색인: 리퍼부터·20부터·40부터·양하 순서 검색어', ['리퍼부터', '20부터', '40부터', '엠티부터', '일반부터', '풀부터', '양하 순서', '기사 작업 방법'].every((k) => fi.includes(`'${k}'`)));
       const ver = (ut.match(/APP_VERSION = 'TallyOne ([^']+)'/) || [])[1] || '';
-      ok(`APP_VERSION 이 4.09 이상 (${ver})`, /^4\.(09|[1-9]\d)/.test(ver));
+      ok(`APP_VERSION 이 4.09 이상 (${ver})`, /^(?:4\.(09|[1-9]\d)|5\.\d\d)/.test(ver));
       const note = (ut.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
       ok('APP_NOTE — 작은따옴표·슬래시 없음 · 마침표 3개 이하 · 120자 미만', note && !/[\\/']/.test(note) && (note.match(/\./g) || []).length <= 3 && note.length < 120, note);
     }

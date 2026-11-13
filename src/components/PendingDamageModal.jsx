@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Camera, Send, Trash2, CalendarClock } from 'lucide-react';
 import { DAMAGE_TYPES, DAMAGE_PARTS } from '../kakaoShare.js';
 import { fbAddPendingDamage, fbGetPendingDamage, fbDeletePendingDamage } from '../firebase.js';
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 const CN_RE = /^[A-Z]{4}\d{7}$/;
 
@@ -156,7 +157,7 @@ export default function PendingDamageModal({ inspector = '', onClose }) {
                 <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-ink-800/60 border border-line rounded-pill px-2 py-1.5">
                   {e.data ? <img src={e.data} alt="" className="w-10 h-10 object-cover rounded" /> : null}
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs2 mono font-bold text-dim-100">{e.cn}</div>
+                    <div className="text-xs2 mono font-bold text-dim-100"><CnText cn={e.cn} /></div>
                     <div className="text-2xs text-dim-300 truncate">{(e.damageTypes || []).join(' ')} {(e.damageParts || []).join(' ')}</div>
                     <div className={`text-2xs font-bold ${e.status === 'promoted' ? 'text-emerald-300' : 'text-amber-300'}`}>
                       {e.status === 'promoted' ? `✅ 반영됨 — ${e.promotedTo || ''}` : '⏳ 자료 대기 중'}

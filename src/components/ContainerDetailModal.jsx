@@ -1,4 +1,5 @@
 import React, { useState , useMemo, useRef, useEffect } from 'react';
+import CnText from './CnText.jsx';
 import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
@@ -574,7 +575,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           mode === 'discharge' ? 'bg-blue-950' : 'bg-amber-950'
         }`}>
           <div className="flex items-center gap-2">
-            <span className="text-3xl font-black mono text-amber-300 tracking-wider">{c.l4 || c.cn?.slice(-4)}</span>
+            <CnText cn={c.cn} where="head" />
             <button onClick={() => speakContainer(c, { xray: isXray })} className="p-2 bg-ink-800/50 rounded-pill hover:bg-ink-750">
               <Volume2 className="w-4 h-4 text-amber-300"/>
             </button>
@@ -585,11 +586,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         </div>
 
         <div className="px-4 py-3 border-b border-line">
+          {/* 5.00: 컨 번호는 맨 위 머리(CnText head)에 열한 자 모두 크게 — 여기서 두 번 쓰지 않는다. 컨번호 입력대기만 남긴다. */}
+          {isBookingSlot(c) && (
           <div className="text-base mono text-dim-100 font-bold mb-2">
-            {isBookingSlot(c) ? (
               <span className="text-amber-300">📝 컨번호 입력대기 <span className="text-xxs text-dim-300 ml-1">({c.cn})</span></span>
-            ) : c.cn}
           </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {sealError && (
               <span className="bg-red-700 text-red-50 text-xxs px-2 py-0.5 rounded font-black flex items-center gap-1">
@@ -659,7 +661,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   </div>
                   <button onClick={() => setIso403PhotoOpen(true)}
                     className="mt-2 w-full py-2.5 bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white rounded font-bold text-sm flex items-center justify-center gap-1.5">
-                    <Camera className="w-4 h-4"/>📷 풀 리퍼 사진 촬영
+                    📷 풀 리퍼 사진 촬영
                   </button>
                 </div>
               </div>

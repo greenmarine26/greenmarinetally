@@ -752,6 +752,10 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 글자 두 모드 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_TM"; exit 1
   fi
+  # 5.00: 화면 고르기 세 안(1 어두운 고대비 · 2 밝은 간결 · 3 큰 글자 현장) — 컴·폰 주요 화면을 크로뮴에 그려 오류 0 · 12px 아래 글자 0 · 대비 AA(컨 번호 AAA) · 누르는 자리 44 · 크게 모드 · 단추 순서 불변을 잰다.
+  #   검수사 2026-11-12 «시인성이 뛰어나야 하고 보기도 좋아야 합니다» · «1안 2안 3안이 있다면 다 넣었으면 합니다» · «최상품을 만들어 주세요».
+  NODE_PATH="$PWD/node_modules" node tools/smoke_skin500.cjs "$BUILT_CSS" || { echo "✗ 화면 고르기 세 안 연막검사 실패 — 배포 금지"; exit 1; }
+  node tools/smoke_coneskin300.cjs || { echo "✗ 콘앱 3.00 화면 고르기 연막검사 실패 — 배포 금지"; exit 1; }   # ConeOne 3.00: 콘앱 머리 코드 = 검수앱 skin.js 같은 답
   # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
   #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.

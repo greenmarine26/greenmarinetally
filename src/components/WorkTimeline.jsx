@@ -54,7 +54,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
           </React.Fragment>
         ))}
         <div className="absolute top-0 bottom-0 border-l-2 border-red-500 z-10" style={{ left: tlPos(now, day0) + '%' }}>
-          <span className="absolute top-0 left-0.5 text-[9px] text-red-400 font-bold whitespace-nowrap">NOW {fmt(now)}</span>
+          <span className="absolute top-0 left-0.5 text-3xs text-red-400 font-bold whitespace-nowrap">NOW {fmt(now)}</span>
         </div>
         {rows.map((sp, i) => {
           const y = 12 + i * ROW_H;
@@ -68,7 +68,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
               {pilot != null && start != null && pilot < start && (
                 <div className="absolute h-px bg-sky-500/60" style={{ top: y + 9, left: pilot + '%', width: (start - pilot) + '%' }} />)}
               {pilot != null && (
-                <span className="absolute text-[9.5px] text-sky-300 whitespace-nowrap" style={{ top: y, left: pilot + '%' }} title={`도선 ${fmt(pilotMs)}`}>⚓{fmt(pilotMs)}</span>)}
+                <span className="absolute text-3xs text-sky-300 whitespace-nowrap" style={{ top: y, left: pilot + '%' }} title={`도선 ${fmt(pilotMs)}`}>⚓{fmt(pilotMs)}</span>)}
               {/*  ★ 2.67 (검수사 «표시 부분과 배의 작업시간이 안맞습니다. 13:00~23:00 에 걸쳐야 하는데
                    표시선만 보면 이미 끝난것처럼 보입니다»): 시작점만 찍지 말고 **작업 구간**을 막대로 깐다.
                    배정 planDate 의 «시작 ~ 끝» 그대로 — 지어낸 소요시간이 아니다. */}
@@ -78,7 +78,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
                   style={{ top: y + 2, height: ROW_H - 6, left: start + '%', width: Math.max(0.4, span - start) + '%' }}
                   title={`${sp.vsl} 작업 ${fmtD(sp.ms)} ~ ${fmt(sp.msEnd)}`} />)}
               {start != null && (
-                <span className={`absolute text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap border ${working
+                <span className={`absolute text-3xs font-bold rounded px-1.5 py-0.5 whitespace-nowrap border ${working
                   ? 'bg-emerald-600/80 text-white border-emerald-400/50'
                   : (sp.ms - day0 < 24 * H ? 'bg-sky-700/80 text-sky-50 border-sky-500/50' : 'bg-amber-800/70 text-amber-100 border-amber-600/50')}`}
                   style={{ top: y, left: `min(${start}%, 93%)` }}
@@ -88,7 +88,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
             </React.Fragment>
           );
         })}
-        <div className="absolute bottom-0 left-0 right-0 flex text-[9px] text-dim-400 border-t border-line bg-ink-950/70">
+        <div className="absolute bottom-0 left-0 right-0 flex text-3xs text-dim-400 border-t border-line bg-ink-950/70">
           {['오늘 00', '04', '08', '12', '16', '20', '내일 00', '04', '08', '12', '16', '20'].map((t, i) => (
             <span key={i} className={`flex-1 px-1 ${i === 6 ? 'border-l border-line' : ''}`}>{t}</span>))}
         </div>

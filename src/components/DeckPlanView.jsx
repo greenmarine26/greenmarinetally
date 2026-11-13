@@ -11,6 +11,7 @@ import { rzorSlotCandidates } from '../rzorDeckPredict.js';   // 3.70: 빈자리
 import { buildPrintModel, deckKeyOf } from '../rzorPrintModel.js';   // 4.04: 화면 그림도 출력과 같은 모델 한 벌
 import { PageView, DP_BASE_CSS, deckPlanDate } from './PrintableDeckPlan.jsx';
 import { SPECIAL_FILL } from './PrintableCargoPlanV2.jsx';
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 const FRESH_MS = 10 * 60 * 1000;   // 3.72: 완료 10분 안 = «방금» — ✓ 배지가 깜박이고 «최근 양하» 줄 칩이 밝은 초록이다
 //  폰 시계와 터미널 시각이 어긋나도(느리거나 앞서도) «방금» 판정이 한쪽으로 치우치지 않게 차이의 절댓값으로 잰다.
@@ -320,7 +321,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                     <button key={h.cn} disabled={pbusy || h.locked} onClick={() => choosePick(h)}
                       className={`text-left px-2 py-1.5 rounded border ${h.locked ? 'bg-ink-900 border-line text-dim-500 opacity-60' : h.done ? 'bg-ink-800/60 border-line text-dim-300' : 'bg-sky-950/60 border-sky-700 text-dim-100'}`}>
                       <div className="flex items-baseline gap-2">
-                        <span className="mono text-sm">{h.cn.slice(0, -4)}<b className="text-amber-200">{h.cn.slice(-4)}</b></span>
+                        <span className="mono text-sm"><CnText cn={h.cn} /></span>
                         <span className="text-2xs">{h.sz ? `${h.sz}피트` : ''}{h.rf ? ' 리퍼' : ''} {h.fe}{wt ? ` · ${wt}` : ''}{pod ? ` · ${pod}` : ''}</span>
                       </div>
                       <div className="text-2xs text-dim-400">

@@ -1,0 +1,226 @@
+/*  5.00 화면 고르기 — 세 안 글자색 대비 보정(기계 생성본 · 손으로 고치지 않는다).
+    다시 만들기 — node tools/gen_skin_text.cjs --write   (소스에 쓰인 text-{색}-{칸}[/알파] 중 4.5:1 미달만 · 연막 smoke_skin500 이 화면에서 다시 잰다) */
+@media screen {   /* 인쇄는 종전 그대로(5.00 재감사) */
+/*  그라데이션 → 원래 계열색 한 가지(세 안) */
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-amber-400:not(:disabled) { background-image: linear-gradient(rgb(251 191 36), rgb(251 191 36)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-amber-400:not(:disabled) { background-image: linear-gradient(rgb(217 119 6), rgb(217 119 6)); background-color: transparent; }
+:root[data-skin] [class*="bg-gradient-to-"].from-amber-400:not(:disabled).text-white, :root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-amber-400:not(:disabled).text-white { background-image: linear-gradient(rgb(180 83 9), rgb(180 83 9)); color: #fff; }   /* 흰 글자 꽉 찬 색 → amber-700 */
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-amber-900\/40:not(:disabled) { background-image: linear-gradient(rgb(120 53 15 / 0.4), rgb(120 53 15 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-amber-900\/40:not(:disabled) { background-image: linear-gradient(rgb(254 243 199 / 0.4), rgb(254 243 199 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-amber-900\/50:not(:disabled) { background-image: linear-gradient(rgb(120 53 15 / 0.5), rgb(120 53 15 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-amber-900\/50:not(:disabled) { background-image: linear-gradient(rgb(254 243 199 / 0.5), rgb(254 243 199 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-blue-900\/40:not(:disabled) { background-image: linear-gradient(rgb(30 58 138 / 0.4), rgb(30 58 138 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-blue-900\/40:not(:disabled) { background-image: linear-gradient(rgb(219 234 254 / 0.4), rgb(219 234 254 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-blue-900\/50:not(:disabled) { background-image: linear-gradient(rgb(30 58 138 / 0.5), rgb(30 58 138 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-blue-900\/50:not(:disabled) { background-image: linear-gradient(rgb(219 234 254 / 0.5), rgb(219 234 254 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-cyan-900\/40:not(:disabled) { background-image: linear-gradient(rgb(22 78 99 / 0.4), rgb(22 78 99 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-cyan-900\/40:not(:disabled) { background-image: linear-gradient(rgb(207 250 254 / 0.4), rgb(207 250 254 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-cyan-950:not(:disabled) { background-image: linear-gradient(rgb(8 51 68), rgb(8 51 68)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-cyan-950:not(:disabled) { background-image: linear-gradient(rgb(236 254 255), rgb(236 254 255)); background-color: transparent; }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-emerald-700:not(:disabled) { background-image: linear-gradient(rgb(4 120 87), rgb(4 120 87)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-emerald-700:not(:disabled) { background-image: linear-gradient(rgb(110 231 183), rgb(110 231 183)); background-color: transparent; }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-emerald-900:not(:disabled) { background-image: linear-gradient(rgb(6 78 59), rgb(6 78 59)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-emerald-900:not(:disabled) { background-image: linear-gradient(rgb(209 250 229), rgb(209 250 229)); background-color: transparent; }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-emerald-900\/40:not(:disabled) { background-image: linear-gradient(rgb(6 78 59 / 0.4), rgb(6 78 59 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-emerald-900\/40:not(:disabled) { background-image: linear-gradient(rgb(209 250 229 / 0.4), rgb(209 250 229 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-emerald-900\/50:not(:disabled) { background-image: linear-gradient(rgb(6 78 59 / 0.5), rgb(6 78 59 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-emerald-900\/50:not(:disabled) { background-image: linear-gradient(rgb(209 250 229 / 0.5), rgb(209 250 229 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-emerald-950:not(:disabled) { background-image: linear-gradient(rgb(2 44 34), rgb(2 44 34)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-emerald-950:not(:disabled) { background-image: linear-gradient(rgb(236 253 245), rgb(236 253 245)); background-color: transparent; }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-orange-900\/40:not(:disabled) { background-image: linear-gradient(rgb(124 45 18 / 0.4), rgb(124 45 18 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-orange-900\/40:not(:disabled) { background-image: linear-gradient(rgb(255 237 213 / 0.4), rgb(255 237 213 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-purple-700:not(:disabled) { background-image: linear-gradient(rgb(126 34 206), rgb(126 34 206)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-purple-700:not(:disabled) { background-image: linear-gradient(rgb(216 180 254), rgb(216 180 254)); background-color: transparent; }
+:root[data-skin] [class*="bg-gradient-to-"].from-purple-700:not(:disabled).text-white, :root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-purple-700:not(:disabled).text-white { background-image: linear-gradient(rgb(126 34 206), rgb(126 34 206)); color: #fff; }   /* 흰 글자 꽉 찬 색 → purple-700 */
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-purple-900:not(:disabled) { background-image: linear-gradient(rgb(88 28 135), rgb(88 28 135)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-purple-900:not(:disabled) { background-image: linear-gradient(rgb(243 232 255), rgb(243 232 255)); background-color: transparent; }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-purple-950:not(:disabled) { background-image: linear-gradient(rgb(59 7 100), rgb(59 7 100)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-purple-950:not(:disabled) { background-image: linear-gradient(rgb(250 245 255), rgb(250 245 255)); background-color: transparent; }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-rose-900\/40:not(:disabled) { background-image: linear-gradient(rgb(136 19 55 / 0.4), rgb(136 19 55 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-rose-900\/40:not(:disabled) { background-image: linear-gradient(rgb(255 228 230 / 0.4), rgb(255 228 230 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-sky-900\/40:not(:disabled) { background-image: linear-gradient(rgb(12 74 110 / 0.4), rgb(12 74 110 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-sky-900\/40:not(:disabled) { background-image: linear-gradient(rgb(224 242 254 / 0.4), rgb(224 242 254 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-sky-900\/50:not(:disabled) { background-image: linear-gradient(rgb(12 74 110 / 0.5), rgb(12 74 110 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-sky-900\/50:not(:disabled) { background-image: linear-gradient(rgb(224 242 254 / 0.5), rgb(224 242 254 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-teal-900\/40:not(:disabled) { background-image: linear-gradient(rgb(19 78 74 / 0.4), rgb(19 78 74 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-teal-900\/40:not(:disabled) { background-image: linear-gradient(rgb(204 251 241 / 0.4), rgb(204 251 241 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-violet-400:not(:disabled) { background-image: linear-gradient(rgb(167 139 250), rgb(167 139 250)); background-color: transparent; }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-violet-400:not(:disabled) { background-image: linear-gradient(rgb(124 58 237), rgb(124 58 237)); background-color: transparent; }
+:root[data-skin] [class*="bg-gradient-to-"].from-violet-400:not(:disabled).text-white, :root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-violet-400:not(:disabled).text-white { background-image: linear-gradient(rgb(124 58 237), rgb(124 58 237)); color: #fff; }   /* 흰 글자 꽉 찬 색 → violet-600 */
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-violet-900\/40:not(:disabled) { background-image: linear-gradient(rgb(76 29 149 / 0.4), rgb(76 29 149 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-violet-900\/40:not(:disabled) { background-image: linear-gradient(rgb(237 233 254 / 0.4), rgb(237 233 254 / 0.4)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-violet-900\/50:not(:disabled) { background-image: linear-gradient(rgb(76 29 149 / 0.5), rgb(76 29 149 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-violet-900\/50:not(:disabled) { background-image: linear-gradient(rgb(237 233 254 / 0.5), rgb(237 233 254 / 0.5)); background-color: rgb(var(--ink-900)); }
+:root[data-skin]:not([data-bright="4"]) [class*="bg-gradient-to-"].from-violet-950\/60:not(:disabled) { background-image: linear-gradient(rgb(46 16 101 / 0.6), rgb(46 16 101 / 0.6)); background-color: rgb(var(--ink-900)); }
+:root[data-skin="2"][data-bright="4"] [class*="bg-gradient-to-"].from-violet-950\/60:not(:disabled) { background-image: linear-gradient(rgb(245 243 255 / 0.6), rgb(245 243 255 / 0.6)); background-color: rgb(var(--ink-900)); }
+:root[data-skin] [class*="bg-gradient-to-"].from-act-dn:not(:disabled) { background-image: none; background-color: rgb(var(--act)); }
+/*  2안 밝은 간결 */
+:root[data-skin="2"][data-bright="4"] .text-amber-200\/70 { color: rgb(146 64 14); }   /* 3.32 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-200\/80 { color: rgb(146 64 14); }   /* 4.06 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-300 { color: rgb(146 64 14); }   /* 4.27 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-300\/70 { color: rgb(146 64 14); }   /* 2.70 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-300\/80 { color: rgb(146 64 14); }   /* 3.15 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-300\/90 { color: rgb(146 64 14); }   /* 3.68 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-400 { color: rgb(146 64 14); }   /* 2.71 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-400\/70 { color: rgb(146 64 14); }   /* 2.02 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-400\/80 { color: rgb(146 64 14); }   /* 2.23 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-400\/90 { color: rgb(146 64 14); }   /* 2.46 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-amber-500 { color: rgb(146 64 14); }   /* 1.82 → amber-800 */
+:root[data-skin="2"][data-bright="4"] .text-blue-100\/70 { color: rgb(29 78 216); }   /* 4.13 → blue-700 */
+:root[data-skin="2"][data-bright="4"] .text-blue-300\/70 { color: rgb(29 78 216); }   /* 3.26 → blue-700 */
+:root[data-skin="2"][data-bright="4"] .text-blue-300\/80 { color: rgb(29 78 216); }   /* 3.94 → blue-700 */
+:root[data-skin="2"][data-bright="4"] .text-blue-400 { color: rgb(29 78 216); }   /* 4.39 → blue-700 */
+:root[data-skin="2"][data-bright="4"] .text-blue-400\/60 { color: rgb(29 78 216); }   /* 2.35 → blue-700 */
+:root[data-skin="2"][data-bright="4"] .text-blue-400\/70 { color: rgb(29 78 216); }   /* 2.75 → blue-700 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-200\/80 { color: rgb(21 94 117); }   /* 4.04 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-300 { color: rgb(21 94 117); }   /* 4.55 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-300\/70 { color: rgb(21 94 117); }   /* 2.76 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-300\/80 { color: rgb(21 94 117); }   /* 3.26 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-400 { color: rgb(21 94 117); }   /* 3.13 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-400\/70 { color: rgb(21 94 117); }   /* 2.21 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-400\/80 { color: rgb(21 94 117); }   /* 2.49 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-cyan-500 { color: rgb(21 94 117); }   /* 2.06 → cyan-800 */
+:root[data-skin="2"][data-bright="4"] .text-emerald-300\/70 { color: rgb(4 120 87); }   /* 2.82 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .text-emerald-300\/80 { color: rgb(4 120 87); }   /* 3.33 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .text-emerald-400 { color: rgb(4 120 87); }   /* 3.20 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .text-emerald-400\/70 { color: rgb(4 120 87); }   /* 2.25 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .text-emerald-400\/80 { color: rgb(4 120 87); }   /* 2.54 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .text-emerald-500 { color: rgb(4 120 87); }   /* 2.15 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .text-fuchsia-300\/70 { color: rgb(162 28 175); }   /* 3.37 → fuchsia-700 */
+:root[data-skin="2"][data-bright="4"] .text-fuchsia-400 { color: rgb(162 28 175); }   /* 4.00 → fuchsia-700 */
+:root[data-skin="2"][data-bright="4"] .text-green-400 { color: rgb(22 101 52); }   /* 2.80 → green-800 */
+:root[data-skin="2"][data-bright="4"] .text-indigo-300\/80 { color: rgb(79 70 229); }   /* 4.45 → indigo-600 */
+:root[data-skin="2"][data-bright="4"] .text-lime-300 { color: rgb(63 98 18); }   /* 4.24 → lime-800 */
+:root[data-skin="2"][data-bright="4"] .text-orange-300 { color: rgb(154 52 18); }   /* 4.40 → orange-800 */
+:root[data-skin="2"][data-bright="4"] .text-orange-300\/70 { color: rgb(154 52 18); }   /* 2.85 → orange-800 */
+:root[data-skin="2"][data-bright="4"] .text-orange-300\/80 { color: rgb(154 52 18); }   /* 3.33 → orange-800 */
+:root[data-skin="2"][data-bright="4"] .text-orange-400 { color: rgb(154 52 18); }   /* 3.02 → orange-800 */
+:root[data-skin="2"][data-bright="4"] .text-orange-400\/60 { color: rgb(154 52 18); }   /* 2.01 → orange-800 */
+:root[data-skin="2"][data-bright="4"] .text-purple-300\/70 { color: rgb(126 34 206); }   /* 3.51 → purple-700 */
+:root[data-skin="2"][data-bright="4"] .text-purple-400 { color: rgb(126 34 206); }   /* 4.57 → purple-700 */
+:root[data-skin="2"][data-bright="4"] .text-red-300\/70 { color: rgb(185 28 28); }   /* 3.52 → red-700 */
+:root[data-skin="2"][data-bright="4"] .text-red-300\/80 { color: rgb(185 28 28); }   /* 4.18 → red-700 */
+:root[data-skin="2"][data-bright="4"] .text-red-400 { color: rgb(185 28 28); }   /* 4.10 → red-700 */
+:root[data-skin="2"][data-bright="4"] .text-red-400\/60 { color: rgb(185 28 28); }   /* 2.53 → red-700 */
+:root[data-skin="2"][data-bright="4"] .text-red-400\/70 { color: rgb(185 28 28); }   /* 2.94 → red-700 */
+:root[data-skin="2"][data-bright="4"] .text-red-500 { color: rgb(185 28 28); }   /* 3.20 → red-700 */
+:root[data-skin="2"][data-bright="4"] .text-rose-400 { color: rgb(190 18 60); }   /* 3.99 → rose-700 */
+:root[data-skin="2"][data-bright="4"] .text-sky-300\/70 { color: rgb(3 105 161); }   /* 2.97 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .text-sky-300\/80 { color: rgb(3 105 161); }   /* 3.54 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .text-sky-400 { color: rgb(3 105 161); }   /* 3.48 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .text-sky-400\/70 { color: rgb(3 105 161); }   /* 2.38 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .text-slate-500 { color: rgb(71 85 105); }   /* 4.04 → slate-600 */
+:root[data-skin="2"][data-bright="4"] .text-teal-300\/90 { color: rgb(15 118 110); }   /* 3.92 → teal-700 */
+:root[data-skin="2"][data-bright="4"] .text-teal-400 { color: rgb(15 118 110); }   /* 3.18 → teal-700 */
+:root[data-skin="2"][data-bright="4"] .text-teal-400\/80 { color: rgb(15 118 110); }   /* 2.51 → teal-700 */
+:root[data-skin="2"][data-bright="4"] .text-violet-300\/70 { color: rgb(124 58 237); }   /* 3.50 → violet-600 */
+:root[data-skin="2"][data-bright="4"] .text-violet-300\/80 { color: rgb(124 58 237); }   /* 4.25 → violet-600 */
+:root[data-skin="2"][data-bright="4"] .text-yellow-100\/70 { color: rgb(133 77 14); }   /* 3.67 → yellow-800 */
+:root[data-skin="2"][data-bright="4"] .text-yellow-200\/80 { color: rgb(133 77 14); }   /* 3.88 → yellow-800 */
+:root[data-skin="2"][data-bright="4"] .text-yellow-300 { color: rgb(133 77 14); }   /* 4.18 → yellow-800 */
+:root[data-skin="2"][data-bright="4"] .text-yellow-300\/90 { color: rgb(133 77 14); }   /* 3.57 → yellow-800 */
+:root[data-skin="2"][data-bright="4"] .text-yellow-400 { color: rgb(133 77 14); }   /* 2.50 → yellow-800 */
+:root[data-skin="2"][data-bright="4"] .text-yellow-500 { color: rgb(133 77 14); }   /* 1.63 → yellow-800 */
+/*  2안 주 단추(꽉 찬 색 + 흰 글자) */
+:root[data-skin="2"][data-bright="4"] .bg-amber-500.text-white { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-amber-600.text-amber-100 { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-amber-600.text-amber-50 { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-amber-600.text-white { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-amber-700.text-amber-100 { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-amber-700.text-amber-50 { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-amber-700.text-white { background-color: rgb(180 83 9); color: #fff; }   /* 주 단추 → amber-700 */
+:root[data-skin="2"][data-bright="4"] .bg-blue-600.text-white { background-color: rgb(37 99 235); color: #fff; }   /* 주 단추 → blue-600 */
+:root[data-skin="2"][data-bright="4"] .bg-blue-700.text-white { background-color: rgb(37 99 235); color: #fff; }   /* 주 단추 → blue-600 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-500.text-white { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-600.text-cyan-50 { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-600.text-white { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-700.text-amber-50 { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-700.text-cyan-100 { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-700.text-cyan-50 { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-cyan-700.text-white { background-color: rgb(14 116 144); color: #fff; }   /* 주 단추 → cyan-700 */
+:root[data-skin="2"][data-bright="4"] .bg-emerald-600.text-emerald-50 { background-color: rgb(4 120 87); color: #fff; }   /* 주 단추 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .bg-emerald-600.text-white { background-color: rgb(4 120 87); color: #fff; }   /* 주 단추 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .bg-emerald-700.text-emerald-100 { background-color: rgb(4 120 87); color: #fff; }   /* 주 단추 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .bg-emerald-700.text-emerald-50 { background-color: rgb(4 120 87); color: #fff; }   /* 주 단추 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .bg-emerald-700.text-white { background-color: rgb(4 120 87); color: #fff; }   /* 주 단추 → emerald-700 */
+:root[data-skin="2"][data-bright="4"] .bg-fuchsia-600.text-fuchsia-50 { background-color: rgb(192 38 211); color: #fff; }   /* 주 단추 → fuchsia-600 */
+:root[data-skin="2"][data-bright="4"] .bg-fuchsia-700.text-fuchsia-100 { background-color: rgb(192 38 211); color: #fff; }   /* 주 단추 → fuchsia-600 */
+:root[data-skin="2"][data-bright="4"] .bg-fuchsia-700.text-fuchsia-50 { background-color: rgb(192 38 211); color: #fff; }   /* 주 단추 → fuchsia-600 */
+:root[data-skin="2"][data-bright="4"] .bg-fuchsia-700.text-white { background-color: rgb(192 38 211); color: #fff; }   /* 주 단추 → fuchsia-600 */
+:root[data-skin="2"][data-bright="4"] .bg-indigo-700.text-indigo-100 { background-color: rgb(79 70 229); color: #fff; }   /* 주 단추 → indigo-600 */
+:root[data-skin="2"][data-bright="4"] .bg-indigo-700.text-indigo-50 { background-color: rgb(79 70 229); color: #fff; }   /* 주 단추 → indigo-600 */
+:root[data-skin="2"][data-bright="4"] .bg-indigo-700.text-white { background-color: rgb(79 70 229); color: #fff; }   /* 주 단추 → indigo-600 */
+:root[data-skin="2"][data-bright="4"] .bg-lime-700.text-lime-50 { background-color: rgb(77 124 15); color: #fff; }   /* 주 단추 → lime-700 */
+:root[data-skin="2"][data-bright="4"] .bg-orange-600.text-orange-50 { background-color: rgb(194 65 12); color: #fff; }   /* 주 단추 → orange-700 */
+:root[data-skin="2"][data-bright="4"] .bg-orange-600.text-white { background-color: rgb(194 65 12); color: #fff; }   /* 주 단추 → orange-700 */
+:root[data-skin="2"][data-bright="4"] .bg-orange-700.text-orange-100 { background-color: rgb(194 65 12); color: #fff; }   /* 주 단추 → orange-700 */
+:root[data-skin="2"][data-bright="4"] .bg-orange-700.text-orange-50 { background-color: rgb(194 65 12); color: #fff; }   /* 주 단추 → orange-700 */
+:root[data-skin="2"][data-bright="4"] .bg-orange-700.text-white { background-color: rgb(194 65 12); color: #fff; }   /* 주 단추 → orange-700 */
+:root[data-skin="2"][data-bright="4"] .bg-pink-600.text-pink-50 { background-color: rgb(190 24 93); color: #fff; }   /* 주 단추 → pink-700 */
+:root[data-skin="2"][data-bright="4"] .bg-pink-700.text-pink-100 { background-color: rgb(190 24 93); color: #fff; }   /* 주 단추 → pink-700 */
+:root[data-skin="2"][data-bright="4"] .bg-purple-700.text-purple-100 { background-color: rgb(147 51 234); color: #fff; }   /* 주 단추 → purple-600 */
+:root[data-skin="2"][data-bright="4"] .bg-purple-700.text-white { background-color: rgb(147 51 234); color: #fff; }   /* 주 단추 → purple-600 */
+:root[data-skin="2"][data-bright="4"] .bg-red-500.text-white { background-color: rgb(220 38 38); color: #fff; }   /* 주 단추 → red-600 */
+:root[data-skin="2"][data-bright="4"] .bg-red-600.text-red-50 { background-color: rgb(220 38 38); color: #fff; }   /* 주 단추 → red-600 */
+:root[data-skin="2"][data-bright="4"] .bg-red-600.text-white { background-color: rgb(220 38 38); color: #fff; }   /* 주 단추 → red-600 */
+:root[data-skin="2"][data-bright="4"] .bg-red-700.text-red-100 { background-color: rgb(220 38 38); color: #fff; }   /* 주 단추 → red-600 */
+:root[data-skin="2"][data-bright="4"] .bg-red-700.text-red-50 { background-color: rgb(220 38 38); color: #fff; }   /* 주 단추 → red-600 */
+:root[data-skin="2"][data-bright="4"] .bg-red-700.text-white { background-color: rgb(220 38 38); color: #fff; }   /* 주 단추 → red-600 */
+:root[data-skin="2"][data-bright="4"] .bg-rose-600.text-rose-50 { background-color: rgb(225 29 72); color: #fff; }   /* 주 단추 → rose-600 */
+:root[data-skin="2"][data-bright="4"] .bg-rose-600.text-white { background-color: rgb(225 29 72); color: #fff; }   /* 주 단추 → rose-600 */
+:root[data-skin="2"][data-bright="4"] .bg-rose-700.text-rose-100 { background-color: rgb(225 29 72); color: #fff; }   /* 주 단추 → rose-600 */
+:root[data-skin="2"][data-bright="4"] .bg-rose-700.text-rose-50 { background-color: rgb(225 29 72); color: #fff; }   /* 주 단추 → rose-600 */
+:root[data-skin="2"][data-bright="4"] .bg-rose-700.text-white { background-color: rgb(225 29 72); color: #fff; }   /* 주 단추 → rose-600 */
+:root[data-skin="2"][data-bright="4"] .bg-sky-600.text-white { background-color: rgb(3 105 161); color: #fff; }   /* 주 단추 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .bg-sky-700.text-sky-100 { background-color: rgb(3 105 161); color: #fff; }   /* 주 단추 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .bg-sky-700.text-sky-50 { background-color: rgb(3 105 161); color: #fff; }   /* 주 단추 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .bg-sky-700.text-white { background-color: rgb(3 105 161); color: #fff; }   /* 주 단추 → sky-700 */
+:root[data-skin="2"][data-bright="4"] .bg-slate-600.text-slate-100 { background-color: rgb(71 85 105); color: #fff; }   /* 주 단추 → slate-600 */
+:root[data-skin="2"][data-bright="4"] .bg-slate-600.text-white { background-color: rgb(71 85 105); color: #fff; }   /* 주 단추 → slate-600 */
+:root[data-skin="2"][data-bright="4"] .bg-slate-700.text-white { background-color: rgb(71 85 105); color: #fff; }   /* 주 단추 → slate-600 */
+:root[data-skin="2"][data-bright="4"] .bg-teal-600.text-white { background-color: rgb(15 118 110); color: #fff; }   /* 주 단추 → teal-700 */
+:root[data-skin="2"][data-bright="4"] .bg-teal-700.text-white { background-color: rgb(15 118 110); color: #fff; }   /* 주 단추 → teal-700 */
+:root[data-skin="2"][data-bright="4"] .bg-violet-600.text-white { background-color: rgb(124 58 237); color: #fff; }   /* 주 단추 → violet-600 */
+:root[data-skin="2"][data-bright="4"] .bg-violet-700.text-violet-50 { background-color: rgb(124 58 237); color: #fff; }   /* 주 단추 → violet-600 */
+:root[data-skin="2"][data-bright="4"] .bg-violet-700.text-white { background-color: rgb(124 58 237); color: #fff; }   /* 주 단추 → violet-600 */
+:root[data-skin="2"][data-bright="4"] .bg-yellow-600.text-yellow-50 { background-color: rgb(161 98 7); color: #fff; }   /* 주 단추 → yellow-700 */
+:root[data-skin="2"][data-bright="4"] .bg-yellow-700.text-yellow-100 { background-color: rgb(161 98 7); color: #fff; }   /* 주 단추 → yellow-700 */
+/*  1안 어두운 고대비 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-blue-300\/70 { color: rgb(96 165 250); }   /* 4.46 → blue-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-blue-400\/60 { color: rgb(96 165 250); }   /* 2.86 → blue-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-blue-400\/70 { color: rgb(96 165 250); }   /* 3.36 → blue-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-cyan-400\/70 { color: rgb(34 211 238); }   /* 4.41 → cyan-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-cyan-600 { color: rgb(34 211 238); }   /* 3.62 → cyan-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-emerald-400\/70 { color: rgb(52 211 153); }   /* 4.18 → emerald-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-fuchsia-300\/70 { color: rgb(232 121 249); }   /* 4.52 → fuchsia-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-indigo-400 { color: rgb(165 180 252); }   /* 4.46 → indigo-300 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-orange-400\/60 { color: rgb(251 146 60); }   /* 3.01 → orange-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-purple-300\/70 { color: rgb(192 132 252); }   /* 4.52 → purple-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-red-300\/70 { color: rgb(248 113 113); }   /* 4.22 → red-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-red-400\/60 { color: rgb(248 113 113); }   /* 2.59 → red-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-red-400\/70 { color: rgb(248 113 113); }   /* 3.05 → red-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-red-500 { color: rgb(248 113 113); }   /* 3.54 → red-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-red-600 { color: rgb(248 113 113); }   /* 2.76 → red-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-sky-400\/70 { color: rgb(56 189 248); }   /* 3.85 → sky-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-slate-500 { color: rgb(148 163 184); }   /* 2.80 → slate-400 */
+:root[data-skin="1"]:not([data-bright="4"]) .text-violet-300\/70 { color: rgb(167 139 250); }   /* 4.36 → violet-400 */
+/*  3안 큰 글자 현장 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-blue-300\/70 { color: rgb(96 165 250); }   /* 4.43 → blue-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-blue-400\/60 { color: rgb(96 165 250); }   /* 2.84 → blue-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-blue-400\/70 { color: rgb(96 165 250); }   /* 3.33 → blue-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-cyan-400\/70 { color: rgb(34 211 238); }   /* 4.37 → cyan-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-cyan-600 { color: rgb(34 211 238); }   /* 3.59 → cyan-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-emerald-400\/70 { color: rgb(52 211 153); }   /* 4.15 → emerald-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-fuchsia-300\/70 { color: rgb(232 121 249); }   /* 4.50 → fuchsia-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-indigo-400 { color: rgb(165 180 252); }   /* 4.43 → indigo-300 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-orange-400\/60 { color: rgb(251 146 60); }   /* 3.03 → orange-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-purple-300\/70 { color: rgb(192 132 252); }   /* 4.49 → purple-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-red-300\/70 { color: rgb(248 113 113); }   /* 4.21 → red-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-red-400\/60 { color: rgb(248 113 113); }   /* 2.60 → red-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-red-400\/70 { color: rgb(248 113 113); }   /* 3.05 → red-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-red-500 { color: rgb(248 113 113); }   /* 3.51 → red-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-red-600 { color: rgb(248 113 113); }   /* 2.73 → red-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-sky-400\/70 { color: rgb(56 189 248); }   /* 3.81 → sky-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-slate-500 { color: rgb(148 163 184); }   /* 2.77 → slate-400 */
+:root[data-skin="3"]:not([data-bright="4"]) .text-violet-300\/70 { color: rgb(167 139 250); }   /* 4.34 → violet-400 */
+}

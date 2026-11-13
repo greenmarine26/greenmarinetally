@@ -3401,6 +3401,7 @@ function ManualTwinPicker({ allContainers, c1, onPick, note = '' }) {   // 4.23-
   );
 }
 
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌(이 파일 맨 위 import 줄과 떨어뜨려 둔다 — 4.89 와 겹치지 않게)
 function SmallResultCard({ c, onOpen, showPos = false }) {
   const isDone = !!c._comp;
   const isReefer = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌
@@ -3417,13 +3418,13 @@ function SmallResultCard({ c, onOpen, showPos = false }) {
         : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
         : 'bg-ink-750 text-dim-200'
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
-      <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+      <CnText cn={c.cn} where="line" className="text-sm font-black" />
       {/* 3.2-01: 통과분(평택 작업 아님) — 끝4자리가 겹칠 때 어느 것이 평택분인지 한눈에. POD(양하)·POL(선적)·자리 */}
       {!canCompleteContainer(c, c._mode) &&
         <span className="px-1 rounded text-3xs font-black bg-ink-750 text-dim-300 whitespace-nowrap">통과 {c._mode === 'loading' ? (c.pol || '') : (c.pod || '')}{c.bay ? ` ${c.bay}-${c.row || ''}-${c.tier || ''}` : ''}</span>}
       {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&
         <span className="px-1 rounded text-3xs font-black bg-indigo-900 text-indigo-200">수정</span>}
-      <span className="text-2xs text-dim-300 mono truncate flex-1">{c.cn}</span>
+      <span className="flex-1" />
       {/* 3.3-01: 끝4가 겹칠 때는 **자리**가 고르는 근거다 — 번호만 보여 주면 못 고른다(검수사 지적 2026-09-03) */}
       {showPos && <span className={`text-3xs mono font-black px-1 rounded ${c._comp ? 'bg-emerald-900 text-emerald-200' : 'bg-rose-900 text-rose-200'}`}>{c.deckPos || (c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음')}</span>}
       <span className="text-3xs mono text-dim-300">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>

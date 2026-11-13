@@ -134,7 +134,7 @@ const SHIPS = ["ARTOTINA", "AS PIA", "ATLANTIC PIONEER", "BEROLINA C", "DONGJIN 
   ok(/_shipV\.basis === 'callsign' \? `같은 배 \(콜사인 \$\{r\.callsign\} — 선박 사전\)`/.test(vp), '항차 번호 흡수 창의 식별 근거 줄이 «콜사인 — 선박 사전» 을 말한다');
   ok((ut.match(/export function ediShipVerdict\(/g) || []).length === 1, '공용 함수는 utils.js 에 한 벌');
   ok((hd.match(/4\.55-02~/g) || []).length === 2, '매뉴얼 두 곳에 새 규칙(4.55-02~)이 적혀 있다');
-  ok(/^TallyOne 4\.(55-(0[2-9]|[1-9]\d)|5[6-9]|[6-9]\d)/.test((ut.match(/APP_VERSION = '([^']*)'/) || [])[1] || ''), '버전 TallyOne 4.55-02 이상');
+  ok(/^TallyOne (?:4\.(55-(0[2-9]|[1-9]\d)|5[6-9]|[6-9]\d)|5\.\d\d)/.test((ut.match(/APP_VERSION = '([^']*)'/) || [])[1] || ''), '버전 TallyOne 4.55-02 이상');
   const note = (ut.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
   ok(note.length < 120 && (note.match(/\./g) || []).length <= 3 && !/[\\/']/.test(note), 'APP_NOTE — 두 문장 이내 · 120자 미만 · 작은따옴표·슬래시 없음', note);
   ok(/APP_NOTE = '4\.55-02 [^']*오타[^']*'/.test(ut) || !/APP_VERSION = 'TallyOne 4\.55-02'/.test(ut), 'APP_NOTE «오타»(4.55-02 판일 때 — 뒤 판은 자기 문구)');

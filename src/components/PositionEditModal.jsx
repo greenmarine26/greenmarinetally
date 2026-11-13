@@ -10,6 +10,7 @@ import { unknownSlotAskOf, bayDefOfShipCode } from '../utils.js';   // 4.26-02: 
 import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter, isSlotRelaxed } from '../swapGrade.js';   // 2.95: 완화는 엠티·시프팅만   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 export default function PositionEditModal({
   open,
@@ -552,8 +553,7 @@ export default function PositionEditModal({
         </div>
 
         <div className="p-4 border-b border-line">
-          <div className="text-2xl font-black mono text-amber-300">{container.l4 || container.cn?.slice(-4)}</div>
-          <div className="text-base font-bold mono text-dim-100 mb-2">{container.cn}</div>
+          <div className="text-base font-bold mono text-dim-100 mb-2"><CnText cn={container.cn} where="head" /></div>
           <div className="flex items-center gap-2 text-xs flex-wrap">
             <span className={`px-2 py-1 rounded font-black ${isFull ? 'bg-rose-700 text-rose-50' : 'bg-ink-750 text-dim-200'}`}>
               {isFull ? '풀 (F)' : container.fe === 'E' ? '엠티 (E)' : '미정'}
@@ -687,7 +687,7 @@ export default function PositionEditModal({
                   {/* 1.55: F/E 잣대는 이 파일 한 벌 — `fe === 'F'` 만 풀이다(firebase.js `isFullCn` 과 같다).
                       빈 값(`fe:''`)은 **풀이 아닐 뿐 엠티도 아니다** — 위 머리글(423행)처럼 '미정'이라 말한다.
                       종전엔 여기서만 빈 값을 '엠티'라 단정해, 같은 화면이 같은 컨을 다르게 불렀다. */}
-                  <span className="mono font-black">{conflict.cn}</span> ({conflict.fe === 'F' ? '풀' : conflict.fe === 'E' ? '엠티' : '미정'})이 거기 있습니다.
+                  <span className="mono font-black"><CnText cn={conflict.cn} /></span> ({conflict.fe === 'F' ? '풀' : conflict.fe === 'E' ? '엠티' : '미정'})이 거기 있습니다.
                 </div>
                 {/* TallyOne 1.55: **사실대로 고친다.** 종전 문구 *"미배정 (선적대상으로 분류)"* 는 거짓이다 —
                     1.54 부터 밀려나는 컨은 미배정이 아니라 **창고**로 간다(`bay_actual='__STG__'`,
@@ -813,7 +813,7 @@ export default function PositionEditModal({
                   {twinOn && (partnerPick ? (
                     <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-700 rounded px-2 py-2">
                       <div>
-                        <div className="mono text-sm font-bold text-cyan-200">{partnerPick.cn}</div>
+                        <div className="mono text-sm font-bold text-cyan-200"><CnText cn={partnerPick.cn} /></div>
                         <div className="text-2xs mono text-dim-300">
                           계획 {partnerPick.bay ? `${parseInt(partnerPick.bay, 10)}-${partnerPick.row}-${partnerPick.tier}` : '자리 없음'} · {partnerPick.pod || '-'}
                           {partnerPick.bay && String(parseInt(partnerPick.bay, 10)) !== pairSlot.bay &&
@@ -843,7 +843,7 @@ export default function PositionEditModal({
                             setPartnerPick(x);
                           }}
                           className="w-full flex justify-between items-center bg-ink-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
-                          <span className="mono font-bold text-dim-100">{x.cn}</span>
+                          <span className="mono font-bold text-dim-100"><CnText cn={x.cn} /></span>
                           <span className="mono text-dim-300">
                             {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                             {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '자리 없음'} · {x.pod || '-'}

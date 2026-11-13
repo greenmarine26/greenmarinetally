@@ -669,6 +669,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
   );
 }
 
+import CnText from '../components/CnText.jsx';   // 5.00 컨 번호 한 벌(이 파일 맨 위 import 줄과 떨어뜨려 둔다 — 4.89 와 겹치지 않게)
 function GlobalResultCard({ c, onOpen }) {
   const isDone = !!c.comp;
   const isReefer = isReeferContainer(c);   // 3.60-10 (진단 M6): 리퍼 한 벌
@@ -688,8 +689,7 @@ function GlobalResultCard({ c, onOpen }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-black text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-          <span className="text-xxs text-dim-300 mono truncate">{c.cn}</span>
+          <CnText cn={c.cn} where="row" />
           <span className={`text-3xs mono px-1 rounded font-bold ${
             c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :
             c.fe === 'E' ? 'bg-ink-750 text-dim-200' :

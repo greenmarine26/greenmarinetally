@@ -18,6 +18,7 @@ import { useBackHandler } from '../backHandler.js';
 import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 베이 그림 칸 핀치 확대 — 베이플랜·베이 상세와 한 벌
 import { bayModeOkFor, bayPickRequest, bayModeCellsOf } from '../bayMode.js';   // 4.80: 베이모드 양하 — 판정 한 벌
 import useIsWide from '../useIsWide.js';   // 3.49: 넓은 화면(태블릿·컴)은 좌/우 분할 — 리스트 탭 2단과 같은 기준(1024px)
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 const pad2 = (x) => String(x ?? '').padStart(2, '0');
 const fmtT = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
@@ -289,9 +290,9 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
           {overlay.conflicts.map((c) => (
             <button key={`${c.type}|${c.cn}|${c.key}`} onClick={() => { const x = cnMap[c.cn] || cnMap[c.term]; if (x && onOpenContainer) onOpenContainer(x); }}
               className="block w-full text-left px-2 py-1 rounded bg-ink-900/70 border border-line">
-              {c.type === 'pos' && <span><span className="mono text-amber-200">{c.cn}</span> — 앱 <span className="mono">{c.app}</span> · 터미널 <span className="mono">{c.term}</span> (같은 컨, 자리 다름)</span>}
+              {c.type === 'pos' && <span><span className="mono text-amber-200"><CnText cn={c.cn} /></span> — 앱 <span className="mono">{c.app}</span> · 터미널 <span className="mono">{c.term}</span> (같은 컨, 자리 다름)</span>}
               {c.type === 'cell' && <span>자리 <span className="mono">{c.key}</span> — 앱 <span className="mono text-amber-200">{c.app}</span> · 터미널 <span className="mono text-amber-200">{c.term}</span> (같은 자리, 컨 다름)</span>}
-              {c.type === 'noterm' && <span><span className="mono text-amber-200">{c.cn}</span> — 검수원이 찍었는데 터미널 실적에 10분 넘게 없음 (끝4 오타인지 실물 확인)</span>}
+              {c.type === 'noterm' && <span><span className="mono text-amber-200"><CnText cn={c.cn} /></span> — 검수원이 찍었는데 터미널 실적에 10분 넘게 없음 (끝4 오타인지 실물 확인)</span>}
             </button>
           ))}
         </div>

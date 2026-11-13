@@ -2,6 +2,21 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<script>
+/* ★ ConeOne 3.00 — 검수앱 5.00 «화면 고르기»(src/skin.js getSkin·applySkin)와 **같은 규칙**으로 그리기 전에 안을 건다.
+     콘앱은 검수앱과 같은 주소(같은 기기 저장소)라 검수앱에서 고른 안이 그대로 온다. 미르 본체(mir-core)는 늦게 실려 여기서 부를 수 없다 —
+     규칙이 갈리지 않게 연막 smoke_coneskin300 이 두 곳(키·기본값·2안=밝기4·3안=크게)을 맞대어 본다.
+     저장값 없음 → 종전 밝기 4(사무실)였으면 2안, 아니면 1안 · 2안 = 흰 바탕(data-bright 4) · 1안 = 저장 밝기 2·3 그대로(4면 1단계) · 3안 = 검정 바탕 큰 글자. */
+(function(){ try{
+  var de=document.documentElement, b=parseInt(localStorage.getItem('master_brightness_v1'),10), k=parseInt(localStorage.getItem('master_skin_v1'),10);
+  if(!(b>=1&&b<=4)){ try{ b=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?4:1; }catch(_){ b=1; } }   // 검수앱 utils._defaultBright 와 같은 첫 값
+  if(!(k>=1&&k<=3)) k=(b===4)?2:1;
+  de.setAttribute('data-skin',String(k));
+  if(k===2) de.setAttribute('data-bright','4');
+  else if(k===1&&b>=2&&b<=3) de.setAttribute('data-bright',String(b));
+  else de.removeAttribute('data-bright');
+}catch(e){ console.warn('[콘앱] 화면 고르기 값을 못 읽었습니다 — 1안으로 그립니다.', e); } })();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <!-- 캐시 방지: 새 버전 배포 시 옛 코드가 캐시에서 뜨는 것 차단 -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -561,12 +576,27 @@ body.tw-on{overflow:hidden;}
 .tw-empty.tw-has-tb{justify-content:flex-start;overflow-y:auto;padding-top:16px;touch-action:pan-y;}   /* 2.61: 터미널 현황 표가 붙으면 위에서부터 쌓고 넘치면 민다 */
 .tw-empty .tbx{width:min(100%,460px);margin-top:14px;color:#CBD5E1;flex:none;}
 .tw-why b{color:#CBD5E1;font-size:14px;}
+  /* ★ ConeOne 3.00 — 검수앱 5.00 화면 고르기 세 안(콘앱 토큰 8개만 바꾼다 — 셀렉터 187개가 따라온다).
+       1안 어두운 고대비 — 흐린 글자(--dim)를 4.5:1 위로 · 2안 밝은 간결 — 밝기 4 토큰 + 그림자 없음 · 3안 큰 글자 현장 — 검정 바탕 · 화면 전체 1.12배. */
+  :root[data-skin="1"]:not([data-bright]){ --dim:#A9B6CA; }
+  :root[data-skin="2"]{ --shadow:none; --dim:#3F4D66; }
+  :root[data-skin="3"]{ --bg:#000000; --panel:#11141B; --panel2:#171B24; --line:#343C4E; --ink:#FFFFFF; --dim:#C6CEDB; --tap:#171B24; --shadow:none; }
+  :root[data-skin="3"] header{ background:#000000; }
+  :root[data-skin="3"] body{ zoom:1.12; }
+  /* 컨 번호 한 벌(검수앱 CnText 와 같은 모양) — 열한 자 같은 크기 · 접두 4자 / 앞 숫자 3자 / 끝 4자리 띄움 · 끝 4자리만 색 */
+  .cn{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:800; }
+  .cn .cn-m, .cn .cn-l{ margin-left:.26em; }
+  .cn .cn-l{ color:#7CF1C2; }
+  :root[data-bright="4"] .cn .cn-l{ color:#065F46; }
+  /* 베이 그림 칸(8px) — 띄우면 칸을 넘쳐 끝 4자리가 잘리므로 띄우지 않고, 앞 7자 흐림만 없앤다(같은 굵기 · 끝 4자리 색) */
+  :root[data-skin] .bvc-cnh{ opacity:1; }
+  :root[data-skin="2"] .bvc-cn4{ color:#92400E; }
 </style>
 </head>
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.79</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.00</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1041,8 +1071,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 4.89';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.79';   // ★ 2.79 (TallyOne 4.89) — «미르야» 없이 말하면 콘 검색이고 «미르야» 하고 부르면 미르 비서가 나옵니다. 아무 말이 없으면 20초 뒤 들어갑니다. // (앞 판) ★ 2.78-01 (TallyOne 4.88-01) — 카고플랜을 카스피 이름으로(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN, 출력 머리 CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION) — 검수앱과 같은 말. // (앞 판) ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
+window.__APPV='TallyOne 5.00';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.00';   // ★ 3.00 (TallyOne 5.00) — 검수앱 «화면 고르기» 1안·2안·3안을 같은 기기 저장값(master_skin_v1)으로 따른다 · 컨 번호를 «CICU 300 6502»(같은 크기 · 세 덩어리 · 끝 4자리 색)로 검수앱과 같은 모양.
+// (앞 판) window.__CONEV='ConeOne 2.79';   // ★ 2.79 (TallyOne 4.89) — «미르야» 없이 말하면 콘 검색이고 «미르야» 하고 부르면 미르 비서가 나옵니다. 아무 말이 없으면 20초 뒤 들어갑니다. // (앞 판) ★ 2.78-01 (TallyOne 4.88-01) — 카고플랜을 카스피 이름으로(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN, 출력 머리 CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION) — 검수앱과 같은 말. // (앞 판) ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
 // (앞 판) 'ConeOne 2.76'
 // ★ 2.76   // ★ 2.76 (TallyOne 4.82) — 검수사 수동 시프팅 표기(voyages/{키}/shiftManual)를 읽어 검수앱과 같은 순수 함수(applyShiftManualToMap)로 시프팅 지도에 덧입힘(읽기만 · 양하 평택분에서 빠지고 시프팅으로 셈). (앞 판) ★ 2.75-01 (TallyOne 4.81-01) — mir-core 번들만 바뀜(미르 «N번 베이 정리해줘» 가 앱·터미널 호기 번호가 달라도 같은 장 같은 30분 앱 입력으로 같은 갱을 알아봄 · 콘앱 화면 코드 변경 없음 · 배 이름 없는 베이 정리는 일하는 배 규칙을 검수앱에서만 탄다 — 콘앱은 고른 배 기준).   // (앞 판) ★ 2.75 (TallyOne 4.81) — 미르 «N번 베이 정리해줘»(읽기 전용 현황 · mir-core 번들 gangState 한 벌 — 검수앱과 같은 답) · 이 말에도 베이사전을 먼저 받아 장 묶음이 검수앱과 같게(질문 정규식에 «정리» 추가). 쓰기 없음.   // (앞 판) ★ 2.74-03 (TallyOne 4.77-01) — mir-core 번들(말투 «쌓여요» · 배 코드가 든 설명형 질문은 생활회화로 안 감 · 속도·갱 수 한 함수 paceNowOf · 같은 분 안 같은 수)과 미르 ctx 에 항차 목록의 배 코드(shipCodes) 추가.   // (앞 판) ★ 2.74-02 (TallyOne 4.77) — 동방 qcWork 3호기·105호기 몫을 실 LOLO 컨 기준으로 바로잡음(ConeParse.qcWorkLoloSplit · 합계는 그대로 · 호기별 값만 정정).   // (앞 판) ★ 2.74-01 (TallyOne 4.76) — mir-core 번들만 바뀜(끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 · 호기 이동 말 · 해치 닫는 장수 · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73-01 (TallyOne 4.59-01) — mir-core 번들만 바뀜(MFN 재적재 항목 판정 한 곳 mfnItemsOf · 콘앱 화면 코드 변경 없음).   // (앞 판) ★ 2.73 (TallyOne 4.58) — 양하 대수에 MFN(터미널엔 있고 메일 양하 리스트엔 없는 컨 · voyages/{키}/discharge/mfnList)을 합쳐 미르 답이 검수앱과 같게(278 = 리스트 234 + MFN 44). 화면 개조 없음.   // (앞 판) ★ 2.72-05 (TallyOne 4.56-03) — 선적 칸 맞바꿈(applyAutoSwap 번들만 바뀜 · 콘앱 화면 코드 변경 없음).   // ★ 2.72-02 (TallyOne 4.56) — 미르 «양하 정확도»(mir-core 번들만 바뀜 · 콘앱 화면 코드 변경 없음). // ★ 2.72-01 (TallyOne 4.55-03) — 양하 완료 순서로 먼저 나온 컨의 칸을 추정해 검수앱과 같은 칸에 그린다(applyAutoSwap 앞에 inferDischargePos). · 2.72 (TallyOne 4.53) — 선적 EDI(출항본)에 실린 선사 지시 본선 잔류 컨은 «예정» 이 아니라 «확정» — 확정 시프팅 지도(ctShiftMap)에 파란 ◆ 로 들고 평택 양하분에서 빠진다(미르 «양하 315 · 시프팅 64» — 검수앱과 같은 답, 판정은 번들 keepConfirmedFromMaps 한 벌). · (앞 판) 2.71-03 (TallyOne 4.52) — 20HT·40HT·25OT·연태 V코드(22V7·42V1)를 오픈탑으로 읽는다(coneAlphaOt — 검수앱 한 벌) · 2.71-02 (TallyOne 4.48-04) — 미르 «양하 몇 대» 가 선사 지시 본선 잔류 두 대를 시프팅 예보로 보고 평택 양하분에서 빼 315 로 답하던 것(검수앱 317)을 고쳤다 — 시프팅 집합은 검수앱 한 벌 ConeMir.shiftSetForUnitsOf(예보 제외). ← (앞 판) ★ 2.71-01 (TallyOne 4.48-03) — 선사 지시 본선 잔류는 «예정» — 평택 양하 대수는 자료(EDI·리스트)대로 센다(검수사 2026-10-24 20:07 «예정으로만 남겨도 되는걸 실제처럼 수정해서 그렇습니다»). 노란 ◆ 예보는 그대로.
 // (앞 판) 'ConeOne 2.71'   // ★ 2.71 — 선사 지시 «본선 잔류»(voyages/{키}/keepOnboard — 검수앱 4.48 컨 상세·수집기)를 같은 판정으로 — 평택 양하분에서 빼고(미르 «양하 몇 대» 315), 아래 평택 컨을 막으면 카고플랜에 시프팅 예보 노란 ◆(검수사 2026-10-24 «메일 적용은 한다면 노란 다이아 몬드로»). · (앞 판) ★ 2.70-04 — 선종(컨테이너선·복합선)은 배마다 한 번 — 보관소 coneShipTypes/{배 코드} 에 두고 모든 폰이 같이 쓴다(검수사 2026-10-21 13:05 «컨테이너선으로 지정 해놨는데 건건 마다 다시 물어 봅니다»). · (앞 판) ★ 2.70-03 — 실시간 화면(⚡·콘 타이밍 카드·위 띠)이 실시간 수집이 호기를 적어 넣은 터미널 실적도 그 호기로 그린다(검수사 2026-10-20 «2호기 4호기가 보여야 하는데 한호기 밖에») · 미르 «몇 시에 끝나» 류가 검수앱과 같은 규칙 답(TallyOne 4.40-01 mir-core)
@@ -2923,6 +2954,12 @@ function ctCompute(){
   return {cranes:out, noPos, inStg, n:rows.length, lastAt, count, done, total, have: modesWith, finished, needReload};
 }
 /* ★ 2.26 작업량 한 줄 — «양하 172/251 · 1호기 81 · 2호기 91 — 데크콘 빼기 97 · 1단 콘 없음 47 · 홀드콘 빼기 9(콘 9개) · 40ft 홀드 19». 계획이 없으면 분모 생략. */
+/* ★ ConeOne 3.00 — 컨 번호 한 벌(검수앱 src/components/CnText.jsx 와 같은 모양). 열한 자가 아니면 그대로 쓴다.   — 호기 칸 코드 묶음(CT~ctCountLine) 안에 둔다(연막 smoke_conestrip 이 이 묶음을 떼어 돌린다). */
+function coneCnHtml(cn){
+  const s=String(cn||'');
+  if(!/^[A-Z]{4}\d{7}$/.test(s)) return ctEsc(s);
+  return '<span class="cn" aria-label="'+s+'"><span class="cn-p">'+s.slice(0,4)+'</span><span class="cn-m">'+s.slice(4,7)+'</span><span class="cn-l">'+s.slice(7)+'</span></span>';
+}
 function ctCountLine(mode, k){
   if(!k || (!k.n && !k.term)) return '';
   const total = ctPlanTotal(mode); const verb = mode==='loading' ? '꽂기' : '빼기';   // 2.47: 분모 한 벌
@@ -3166,7 +3203,7 @@ function ctRender(){
           + (c.trio ? ` <button type="button" class="ct-big" data-tw="${ctEsc(c.eq)}" aria-label="크게 보기">⤢</button>` : '')
           + `</div>`
           + `<div class="ct-l2">${ctEsc(c.sig)}</div>`
-          + `<div class="ct-l3">${ctEsc(c.sub)} · 이 호기 ${c.n}대 · 마지막 ${hh(c.at)} ${ctEsc(c.cn||'')}${c.src==='app'?' (검수앱)':''}</div>`
+          + `<div class="ct-l3">${ctEsc(c.sub)} · 이 호기 ${c.n}대 · 마지막 ${hh(c.at)} ${coneCnHtml(c.cn)}${c.src==='app'?' (검수앱)':''}</div>`
           + stripRow
           + `</div>`;
     if(_fold.has(c)) foldHtml += _one; else liveHtml += _one;
@@ -5704,6 +5741,7 @@ function bindMirFab(){
     }catch(e){ console.warn('[콘앱] 미르 목소리 실패:', e); }
   };
   let lastAnswer='';
+  let _mirHelloAt=0;   // ★ 3.00: «미르야» 인사를 띄운 때 — 바로 뒤 다시 듣기 오류가 인사를 덮지 않게
   const show=(t,quiet)=>{
     out.textContent=t||''; out.style.display=t?'block':'none';
     if(t && t!=='…'){ lastAnswer=t; mirFollowRender(out, _mirLastFollow, (ch)=>{ inp.value=ch; ask(); }); if(!quiet){ say(t); mirSpeakMore(); } }   // 2.57 [mirThread]: 한 마디 + 칩 · 이어 읽기(append)
@@ -5737,7 +5775,7 @@ function bindMirFab(){
       mic.textContent='●';
       r.onresult=(e)=>{ inp.value=(e.results[0][0].transcript||'').trim(); ask(); };
       r.onend=()=>{ mic.textContent='🎤'; };
-      r.onerror=()=>{ mic.textContent='🎤'; show('못 알아들었습니다. 다시 말씀하시거나 글로 적어 주세요.'); };
+      r.onerror=(ev)=>{ mic.textContent='🎤'; if(Date.now()-_mirHelloAt<8000 && ev && (ev.error==='no-speech' || ev.error==='aborted')) return; show('못 알아들었습니다. 다시 말씀하시거나 글로 적어 주세요.'); };   // ★ 3.00: «미르야» 인사 뒤 다시 듣기가 조용히 끝나면(말 없음·끊김) 인사를 덮지 않는다 — 검수앱 MirFab 과 같은 첫마디(«무엇을 도와드릴까요?»)
       r.start();
     }catch(e){ mic.textContent='🎤'; console.warn('[콘앱] 음성 인식 실패:', e); }
   };
@@ -5766,7 +5804,7 @@ function bindMirFab(){
     if(sheet.style.display!=='block') fab.onclick();
     back.style.display='block';
     _idleStart();
-    if(p.mirHello){ inp.value=''; show('무엇을 도와드릴까요?'); setTimeout(()=>{ if(mic.textContent!=='●'){ try{ mic.onclick(); }catch(e){ console.warn('[콘 2.79] 다시 듣기 실패:', e); } } },1600); }
+    if(p.mirHello){ inp.value=''; show('무엇을 도와드릴까요?'); _mirHelloAt=Date.now(); setTimeout(()=>{ if(mic.textContent!=='●'){ try{ mic.onclick(); }catch(e){ console.warn('[콘 2.79] 다시 듣기 실패:', e); } } },1600); }
     else { inp.value=t; ask(); }
     return true;
   };

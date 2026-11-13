@@ -621,3 +621,267 @@ button.home-big:active { transform: translateY(2px); }
 :root[data-text="large"] .gw-cn-a { font-size: 31px; }
 :root[data-text="large"] .gw-cn-b { font-size: 40px; }
 :root[data-text="large"] .gw-pos  { font-size: 26px; }
+
+/*  5.00 재감사 — 화면 고르기의 모든 규칙(색·글자·단추·그라데이션 걷기·낱말 줄바꿈·배치)은 화면에만 건다. 인쇄(@media print)는 종전 그대로 나간다. */
+@media screen {
+/* ══════════════════════════════════════════════════════════
+   ★ TallyOne 5.00 — 화면 고르기 세 안 (검수사 2026-11-12 20:33~20:45)
+     «화면 디자인은 심플했으면 좋겠습니다. 시인성이 뛰어나야 하고 보기도 좋아야 합니다 … 화면마다 조금씩 이질감이 들어서 입니다.»
+     «화면을 고르는것도 1안 2안 3안이 있다면 다 넣었으면 합니다. 사용자가 원하는 화면을 사용할수 있게요.»
+     «5.00으로 가는대신에 정말 최선을 다해주시기 바랍니다. 최상품을 만들어 주세요»
+
+   ⚠ 밝기(2.40)·글자(4.23)와 같은 수법 — `<html data-skin="1|2|3">` 하나로 아래 변수만 갈린다. 화면 코드는 한 벌이다.
+     켜는 곳은 src/skin.js applySkin 한 곳(기기마다 localStorage). 1안이 기본(지금 화면과 가장 가까운 안).
+   · 세 안 공통 — 글자 바닥 12px(작은 셋 10·11 → 12) · 숫자 자리 맞춤(tabular-nums) · 누르는 자리 최소 44px(보이는 크기는 그대로, 손가락 닿는 자리만 넓힘)
+                 · 카드·단추 모서리 두 가지(카드 14 · 단추 12, 동그라미는 그대로) · 그림자는 창(모달)만.
+   · 1안 어두운 고대비 — 종전 1단계 바탕 그대로, 흐린 글자 셋(dim-300·400·500)을 AA(4.5:1) 위로 올렸다. 밝기 2·3단계도 그대로 고른다.
+   · 2안 밝은 간결   — 흰 바탕(밝기 4 «사무실» 팔레트 + 팔레트 뒤집기 brightLight.css) · 그림자 없음 · 테두리 한 가지.
+   · 3안 큰 글자 현장 — 검정 바탕 · 글자 «크게»보다 한 단계 더(본문 17 · 보조 15 · 작은 글자 14) · 누르는 자리 52.
+   ⚠ 그림(베이 격자·FitBox 안 — `.fs-keep`)과 인쇄는 종전 값 그대로다(그림 배율·종이 규격).
+   ══════════════════════════════════════════════════════════ */
+:root[data-skin] {
+  --fs-3xs: 12px;  --fs-2xs: 12px;  --fs-xxs: 12px;
+  --fs-bdg: 12px;  --fs-bdg-pc: 12px;  --fs-tab: 12px;  --fs-mood: 12px;  --fs-chip-pc: 13px;
+  --hit: 44px;
+}
+:root[data-skin][data-text="large"] {
+  --fs-3xs: 13px;  --fs-2xs: 13px;  --fs-xxs: 14px;
+  --fs-bdg: 13px;  --fs-bdg-pc: 13px;  --fs-tab: 13px;  --fs-mood: 13px;
+  --hit: 48px;
+}
+:root[data-skin] body { font-variant-numeric: tabular-nums; }
+/*  누르는 자리 — 보이는 단추는 그대로 두고 손가락 닿는 자리만 44px(크게 48 · 3안 52)까지 넓힌다. 그림 칸(.fs-keep 베이 격자)은 칸이 촘촘해 넓히지 않는다. */
+/*  ⚠ 진짜 단추(button)와 탭만 — role="button" 인 div(카드 전체가 눌리는 칸)는 넓히지 않는다. 그 칸을 relative 로 올리면 칸 안 머리줄의 작은 단추(«⤢ 크게» 등)를 덮는다(5.00 2차 실측 — 수석 보드). */
+/*  5.00 감사 — 세기 0 으로(:where) 건다. 반응형·위치 클래스(sm:absolute · md:static …)와 인라인 위치가 늘 이긴다. */
+:where(:root[data-skin]) :where(button, [role="tab"]):where(:not(.absolute, .fixed, .sticky)) { position: relative; }
+/*  입력칸도 문서 순서대로 칠해지게(세기 0) — 앞쪽 단추의 넓힌 자리(오른쪽·아래)가 뒤에 오는 입력칸 가장자리를 먹지 않는다. */
+:where(:root[data-skin]) :where(input, textarea, select):where(:not(.absolute, .fixed, .sticky)) { position: relative; }
+:root[data-skin] :is(button, [role="tab"])::after {
+  content: ""; position: absolute; pointer-events: auto;
+  top: min(0px, calc((100% - var(--hit)) / 2)); bottom: min(0px, calc((100% - var(--hit)) / 2));
+  left: min(0px, calc((100% - var(--hit)) / 2)); right: min(0px, calc((100% - var(--hit)) / 2));
+}
+:root[data-skin] .fs-keep button::after { content: none; }
+/*  5.00 감사 — 넓힌 자리가 앞쪽 이웃을 덮지 않게: 넓힘은 **오른쪽·아래로만** 한다. 화면은 문서 순서대로 칠해지므로 오른쪽·아래의 이웃 단추(나중 것)가
+      내 넓힌 자리 위에 칠해져 그 단추가 이긴다 — 앞쪽(왼쪽·위) 단추는 내 자리가 아예 닿지 않는다. 보이는 단추 크기는 그대로다. */
+:root[data-skin] :is(button, [role="tab"])::after { top: 0; left: 0; right: min(0px, calc(100% - var(--hit))); bottom: min(0px, calc(100% - var(--hit))); }
+/*  모서리 두 가지 — 카드 14 · 단추·칩 12. 동그라미(rounded-full)·바닥 시트(rounded-sheet)는 그대로. */
+:root[data-skin] .rounded-card, :root[data-skin] .rounded-2xl, :root[data-skin] .rounded-xl { border-radius: 14px; }
+:root[data-skin] .rounded-btn, :root[data-skin] .rounded-pill, :root[data-skin] .rounded-lg { border-radius: 12px; }
+/*  그림자 — 창(모달·시트)만. 화면 안 카드는 테두리 한 줄로 나눈다. */
+:root[data-skin] .shadow-card, :root[data-skin] .shadow, :root[data-skin] .shadow-md { box-shadow: none; }
+
+/*  1안 어두운 고대비 — 바탕(ink)은 종전 그대로, 흐린 글자만 올린다(ink-850 위 4.5:1 이상). 밝기 2·3단계는 그 단계 값 그대로. */
+:root[data-skin="1"]:not([data-bright]) {
+  --dim-200: 182 195 215;  --dim-300: 172 186 208;  --dim-400: 158 172 197;  --dim-500: 142 156 182;
+  --st-chief: 167 139 250;
+  --line-a: 0.09; --line-a-soft: 0.06; --line-a-strong: 0.16;
+}
+/*  2안 밝은 간결 — 밝기 4 팔레트 위에서 흐린 글자 둘을 AA 위로, 테두리 한 가지. */
+:root[data-skin="2"] {
+  --ink-950: 241 244 248;
+  --dim-400: 78 92 117;  --dim-500: 84 97 120;
+  --line-a: 0.13; --line-a-soft: 0.09; --line-a-strong: 0.20;
+  /*  «밝은 쪽» 상태색(…Hi · act-hi)은 어두운 바탕용이다 — 흰 바탕에서는 한 칸 더 진하게(옅은 물든 칩 위에서도 4.5:1). */
+  --st-disHi: 30 58 138;  --st-lodHi: 120 53 15;  --st-badHi: 127 29 29;  --act-hi: 6 95 70;
+}
+/*  밝은 칩(…-500 바탕) 위 «진한 글자»(text-ink-950) — 흰 바탕 안에서 ink 가 밝게 뒤집혀 글자가 사라지던 것을 진한 글자로 둔다. */
+:root[data-skin="2"][data-bright="4"] [class*="-500"].text-ink-950, :root[data-skin="2"][data-bright="4"] [class*="-400"].text-ink-950 { color: rgb(11 18 32); }
+:root[data-skin="2"] .shadow-lg, :root[data-skin="2"] .shadow-xl { box-shadow: 0 6px 24px rgba(15, 23, 42, .14); }
+/*  3안 큰 글자 현장 — 검정 바탕 · 밝은 글자 · 굵은 테두리 · 글자와 누르는 자리 한 단계 더. */
+:root[data-skin="3"], :root[data-skin="3"][data-text="large"] {   /* 5.00 감사: [data-text=large](0,3,0)에 덮이지 않게 같은 세기로 뒤에 둔다 */
+  --ink-950: 0 0 0;        --ink-900: 12 14 19;    --ink-850: 17 20 27;
+  --ink-800: 23 27 36;     --ink-750: 31 36 47;    --ink-700: 42 48 62;
+  --dim-100: 255 255 255;  --dim-200: 226 231 239; --dim-300: 212 219 230;
+  --dim-400: 198 206 219;  --dim-500: 178 188 204;
+  --line-rgb: 255 255 255; --line-a: 0.20; --line-a-soft: 0.14; --line-a-strong: 0.32;
+  --line-faint: 52 60 78;
+  --act: 0 224 154;   --act-hi: 40 240 175;  --act-dn: 0 196 134;  --act-soft: 140 247 205;
+  --st-dis: 96 165 250;   --st-disHi: 147 197 253;
+  --st-lod: 251 191 36;   --st-lodHi: 253 224 71;
+  --st-bad: 248 113 113;  --st-badHi: 254 202 202;
+  --st-chief: 167 139 250;
+  --fs-3xs: 14px;  --fs-2xs: 14px;  --fs-xxs: 15px;  --fs-xs2: 15px;  --fs-sm2: 16px;
+  --fs-xs: 15px;   --fs-sm: 17px;   --fs-base: 19px;  --fs-lg: 21px;  --fs-xl: 23px;
+  --fs-2xl: 27px;  --fs-3xl: 33px;  --fs-4xl: 39px;
+  --fs-bdg: 14px;  --fs-bdg-pc: 14px;  --fs-tab: 13px;  --fs-tab-pc: 17px;  --fs-chip: 16px;  --fs-chip-pc: 15px;
+  --fs-btn: 18px;  --fs-btn-sm: 16px;  --fs-seg: 19px;  --fs-seg-pc: 18px;  --fs-pill: 15px;  --fs-count: 17px;  --fs-eta: 20px;
+  --fs-drop: 18px; --fs-step: 21px;   --fs-mood: 14px;
+  --tap: 52px;     --tap-chip: 48px;  --tap-chip-pc: 44px;  --tap-pop-sm: 48px;
+  --hit: 52px;
+}
+:root[data-skin="3"] .gw-cn-a { font-size: 32px; }
+:root[data-skin="3"] .gw-cn-b { font-size: 42px; }
+:root[data-skin="3"] .gw-pos  { font-size: 28px; }
+:root[data-skin="3"] .gw-go   { min-height: 64px; }
+
+/* ══════════════════════════════════════════════════════════
+   ★ 5.00 컨테이너 번호 한 벌(CnText) — 검수사 2026-11-12 20:40 «컨테이너 번호도 4자리만 강조하다보니 앞자리는 눈에 들어 오지 않습니다.»
+     표기 — 열한 자를 **같은 크기 · 같은 굵기**로 쓰고, 접두 4자 · 앞 숫자 3자 · 끝 4자리 사이를 조금 띄운다. 끝 4자리는 색만 다르다(초록 — 밝은 안은 진한 초록).
+     읽는 순서가 «CICU 300 6502» 세 덩어리로 끊겨 앞자리를 따라 읽기 쉽고, 끝 4자리는 색으로 바로 찾는다(색만으로 뜻을 전하지 않는다 — 띄움이 같은 경계를 말한다).
+   ══════════════════════════════════════════════════════════ */
+.cn { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: 0; }
+.cn-m, .cn-l { margin-left: .26em; }
+.cn-l { color: rgb(var(--act-soft)); }
+:root[data-bright="4"] .cn-l { color: rgb(var(--act-dn)); }
+.cn-guide   { font-size: 32px; line-height: 1.12; font-weight: 800; color: rgb(var(--dim-100)); }
+.cn-guideSm { font-size: 24px; line-height: 1.15; font-weight: 800; color: rgb(var(--dim-100)); }
+.cn-guideXs { font-size: 18px; line-height: 1.2;  font-weight: 800; color: rgb(var(--dim-100)); }
+.cn-head    { font-size: 26px; line-height: 1.15; font-weight: 800; color: rgb(var(--dim-100)); }
+.cn-row     { font-size: var(--fs-base); line-height: 1.3; font-weight: 800; color: rgb(var(--dim-100)); }
+.cn-line    { font-weight: 700; }
+:root[data-text="large"] .cn-guide { font-size: 35px; }
+:root[data-text="large"] .cn-head  { font-size: 28px; }
+:root[data-skin="3"] .cn-guide   { font-size: 38px; }
+:root[data-skin="3"] .cn-guideSm { font-size: 27px; }
+:root[data-skin="3"] .cn-head    { font-size: 31px; }
+@media (max-width: 359px) { .cn-guide { font-size: 28px; } :root[data-skin="3"] .cn-guide { font-size: 32px; } }
+
+/* ══════════════════════════════════════════════════════════
+   ★ 5.00 배치 손질 — 검수사 2026-11-12 20:40 «쓸데없는 공간이 있는가 하면 조그만 공간에 많은 자료가 들어 있는것도 있씁니다.»
+     단추의 순서·이름은 그대로 두고 칸의 폭·나눔만 바꾼다(세 안 공통).
+   ══════════════════════════════════════════════════════════ */
+/*  ① 작업 화면 한 화면 틀(WorkFrame) — 컴에서 카드가 1,400px 로 늘어나 글자는 왼쪽 끝, 오른쪽은 텅 빈 것을 가운데 880px 로 모은다. */
+@media (min-width: 1024px) {
+  :root[data-skin] [data-wf-bar], :root[data-skin] [data-wf-top], :root[data-skin] [data-wf-action], :root[data-skin] [data-wf-bottom] {
+    padding-left: max(.5rem, calc((100vw - 880px) / 2)); padding-right: max(.5rem, calc((100vw - 880px) / 2));
+  }
+}
+/*  ② 베이뷰 작업 고르기 — 컴에서 512px 한 줄이라 양옆이 비던 것을 두 칸(터미널 따라가기 | 손으로 고르기)으로. */
+@media (min-width: 1024px) {
+  :root[data-skin] [data-bayview="pick"] > .max-w-lg { max-width: 1040px; display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; align-items: start; }
+  :root[data-skin] [data-bayview="pick"] > .max-w-lg > * { margin-top: 0 !important; }
+  :root[data-skin] [data-bayview="pick"] > .max-w-lg > :nth-child(n+3) { grid-column: 1 / -1; }
+}
+
+/*  어두운 안(1·3) — Tailwind 기본 팔레트 중 어두운 바탕에서 4.5:1 이 안 되는 글자색 다섯과, 흰 글자를 얹으면 4.5:1 이 안 되는 바탕 여덟을 한 단계 옮긴다.
+    (5.00 실측 — 소스에 실제로 쓰인 조합만. 밝은 안(2)은 brightLight.css 의 팔레트 뒤집기가 맡는다.) */
+:root[data-skin]:not([data-bright="4"]) .text-cyan-600   { color: rgb(34 211 238); }
+:root[data-skin]:not([data-bright="4"]) .text-indigo-400 { color: rgb(165 180 252); }
+:root[data-skin]:not([data-bright="4"]) .text-red-500,
+:root[data-skin]:not([data-bright="4"]) .text-red-600    { color: rgb(248 113 113); }
+:root[data-skin]:not([data-bright="4"]) .text-slate-500  { color: rgb(148 163 184); }
+:root[data-skin]:not([data-bright="4"]) .bg-amber-600.text-white   { background-color: rgb(180 83 9); }
+:root[data-skin]:not([data-bright="4"]) :is(.bg-cyan-500, .bg-cyan-600).text-white { background-color: rgb(14 116 144); }
+:root[data-skin]:not([data-bright="4"]) .bg-emerald-600.text-white { background-color: rgb(4 120 87); }
+:root[data-skin]:not([data-bright="4"]) .bg-orange-600.text-white  { background-color: rgb(194 65 12); }
+:root[data-skin]:not([data-bright="4"]) .bg-red-500.text-white     { background-color: rgb(220 38 38); }
+:root[data-skin]:not([data-bright="4"]) .bg-sky-600.text-white     { background-color: rgb(3 105 161); }
+:root[data-skin]:not([data-bright="4"]) .bg-teal-600.text-white    { background-color: rgb(15 118 110); }
+/*  ③ 홈 배 줄(폰) — 오른쪽 상태 칸(약 77px)에 «본선 작업중 / 오늘 08:00 / ~ 출항 내일 / 07:00 / 사전에 없음» 다섯 줄이 몰리고 막대는 25px 로 눌렸다.
+      상태·알림을 막대 아래 한 줄로 내린다(선박명은 두 줄에 걸쳐 선다) — 막대가 줄 너비를 다 쓰고 상태는 한두 줄로 읽힌다. 순서·숫자는 그대로. */
+@media (max-width: 699px) {
+  :root[data-skin] .home-row { grid-template-columns: 6px calc(var(--fs-lg) * 4.3) minmax(0, 1fr); row-gap: 4px; }
+  :root[data-skin] .home-row .home-rail, :root[data-skin] .home-row .home-row-name { grid-row: span 2; }
+  :root[data-skin] .home-row .home-row-side { grid-column: 3; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; align-items: center; column-gap: 6px; }
+  :root[data-skin] .home-row .home-row-st { display: block; -webkit-line-clamp: unset; text-align: right; white-space: normal; }
+  :root[data-skin] .home-row .home-row-st .st-lead, :root[data-skin] .home-row .home-row-st .st-s, :root[data-skin] .home-row .home-row-st .st-e { display: inline; }
+  :root[data-skin] .home-row .home-row-st .st-lead::after { content: " · "; }
+}
+/*  알림 띠(toast.js — 인라인 스타일이라 !important) — 3안은 글자를 키운다. */
+:root[data-skin="3"] [data-toast] { font-size: 18px !important; padding: 15px 20px !important; }
+/*  터미널 본선 현황 판(termBoard.js — 콘앱과 같은 CSS 문자열을 끼운다) — 검수앱 세 안에서만 작은 글자 셋을 12px · 흐림 없이(콘앱은 그대로). */
+:root[data-skin] .tbx-tag, :root[data-skin] .tbx-meta, :root[data-skin] .tbx-note, :root[data-skin] .tbx-barline { font-size: 12px; opacity: 1; }
+:root[data-skin="3"] .tbx { font-size: 14px; }
+:root[data-skin="3"] .tbx-tag, :root[data-skin="3"] .tbx-meta, :root[data-skin="3"] .tbx-note, :root[data-skin="3"] .tbx-barline, :root[data-skin="3"] .tbx table { font-size: 14px; }
+
+/* ══════════════════════════════════════════════════════════
+   ★ 5.00 2차 — 단추·모서리·그림자 한 벌 (세 안 공통)
+     지금 화면에 입체 그라데이션 단추(pop-btn · 켜진 탭 · 양하/선적 전환 · 출력 칸)와 평면 단추가 섞여 있었다.
+     ⇒ 세 안 모두 **평면 세 종류**로 그린다. 단추 이름·자리·동작은 그대로이고 모양만 바뀐다.
+        · 주 단추   — 꽉 찬 단색(초록 act · 양하 파랑 · 선적 호박 · 보라) · 흰 글자 · 테두리 없음
+        · 보조 단추 — 카드색 바탕 + 테두리 한 줄(line-strong) · 본문 글자
+        · 위험 단추 — 빨강(st-bad) 테두리 + 빨강 글자(지우기 등) — 이미 테두리형이라 모양 규칙만 따른다
+     모서리 세 가지 — 6(작은 칩·배지) · 12(단추·카드·창) · 동그라미(rounded-full 알약). 그림자 두 가지 — 없음(화면 안 전부) · 창 그림자(fixed 창만) + 고른 줄 테두리 고리.
+   ══════════════════════════════════════════════════════════ */
+:root[data-skin] { --r-sm: 6px; --r: 12px; --sh-pop: 0 10px 30px rgb(0 0 0 / .32); }
+:root[data-skin="2"] { --sh-pop: 0 8px 28px rgb(15 23 42 / .16); }
+/*  모서리 */
+:root[data-skin] :is(.rounded-sm, .rounded, .rounded-md) { border-radius: var(--r-sm); }
+:root[data-skin] :is(.rounded-card, .rounded-btn, .rounded-pill, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-sheet) { border-radius: var(--r); }
+:root[data-skin] :is([class*="rounded-[1"], [class*="rounded-[2"]) { border-radius: var(--r); }
+:root[data-skin] :is([class*="rounded-[3px"], [class*="rounded-[4px"], [class*="rounded-[5px"], [class*="rounded-[6px"], [class*="rounded-[8px"]) { border-radius: var(--r-sm); }
+:root[data-skin] :is(.hud-tab, .pop-btn, .seg-btn, .print-tile, .drop-zone, .home-row, .home-big, .home-detail, .card-v2, .gw-pos) { border-radius: var(--r); }
+:root[data-skin] :is(.gw-chip, .gw-pos) { border-radius: var(--r-sm); }
+/*  그림자 — 화면 안은 없음, 창(fixed)만 한 가지 */
+:root[data-skin] [class*="shadow"]:not(.fixed):not(.absolute) { box-shadow: none; }
+:root[data-skin] :is(.fixed, .absolute)[class*="shadow"], :root[data-skin] .fixed > [class*="shadow"] { box-shadow: var(--sh-pop); }
+:root[data-skin] :is(.card-v2, .card-v2.ship-card, .print-tile, .home-row, .home-big, .xp-bar) { box-shadow: none; }
+:root[data-skin] .card-v2 { border: 1px solid rgb(var(--line-rgb) / var(--line-a-strong)); }
+:root[data-skin] .card-v2.ship-card { box-shadow: inset 6px 0 0 var(--rail, transparent); }
+:root[data-skin] .home-row.is-on { box-shadow: 0 0 0 2px rgb(var(--act) / .45); }
+:root[data-skin] .card-v2.ship-card.is-today { box-shadow: inset 6px 0 0 var(--rail, transparent); }
+/*  누르면 내려앉던 입체 동작 → 살짝 어두워지기만(장갑 손가락에도 «눌렸다»가 보인다) */
+:root[data-skin] :is(.pop-btn, .hud-tab, .seg-btn, .print-tile, .home-row, button.home-big):active { transform: none; filter: brightness(.9); }
+/*  주 단추(pop-btn) — 단색 · 테두리 없음 · 글자 그림자 없음 */
+:root[data-skin] .pop-btn { border: 0; box-shadow: none; text-shadow: none; font-weight: 800; }
+:root[data-skin] .pop-btn.pop-sm { box-shadow: none; border-radius: 999px; }
+:root[data-skin] .pop-green  { background: rgb(4 120 87); }
+:root[data-skin] .pop-amber  { background: rgb(180 83 9); }
+:root[data-skin] .pop-blue   { background: rgb(29 78 216); }
+:root[data-skin] .pop-violet { background: rgb(91 33 182); }
+/*  보조 단추(pop-slate) — 카드색 + 테두리 한 줄 */
+:root[data-skin] .pop-slate  { background: rgb(var(--ink-800)); color: rgb(var(--dim-100)); border: 1px solid rgb(var(--line-rgb) / var(--line-a-strong)); box-shadow: none; }
+/*  탭(hud-tab) — 켜진 탭은 꽉 찬 초록 단색(그라데이션·빛 번짐 없음), 꺼진 탭은 글자만 */
+:root[data-skin] .hud-tab[aria-selected="true"] { background: rgb(var(--act)); border-color: rgb(var(--act)); box-shadow: none; }
+:root[data-skin] .hud-tab[aria-selected="true"] .hud-ico { transform: none; }
+:root[data-skin] .hud-tab.hud-door .hud-ico { filter: none; }
+/*  양하/선적 전환(seg-btn) — 켜진 쪽은 모드 색 단색 */
+:root[data-skin] .seg-btn.on-dis { background: rgb(29 78 216); border-color: rgb(29 78 216); box-shadow: none; text-shadow: none; }
+:root[data-skin] .seg-btn.on-lod { background: rgb(180 83 9); border-color: rgb(180 83 9); box-shadow: none; text-shadow: none; }
+/*  출력 칸·파일 칸 — 보조 단추와 같은 카드 + 테두리 */
+:root[data-skin] .print-tile { border-width: 1px; }
+/*  2안 — 단색 주 단추는 흰 바탕에서도 진한 색 그대로(뒤집기 대상 아님) · 켜진 탭 글자는 흰색 */
+:root[data-skin="2"] .hud-tab[aria-selected="true"] { color: #fff; background: rgb(4 120 87); border-color: rgb(4 120 87); }
+/*  ④ 자료 센터(컴) — 768px 상자 하나에 작은 칸 여섯이 위 5분의 1만 쓰던 것을, 다른 컴 화면과 같은 1,100px 폭 · 손가락 한 칸 반 높이 칸으로. 순서·이름 그대로. */
+@media (min-width: 1024px) {
+  :root[data-skin] [data-data-center] { max-width: 1100px; padding-top: 1.25rem; }
+  :root[data-skin] [data-data-center] .grid > button { min-height: 104px; padding: 16px 18px; }
+  :root[data-skin] [data-data-center] .grid > button > div:first-child { font-size: var(--fs-lg); }
+  :root[data-skin] [data-data-center] .grid > button > div + div { font-size: var(--fs-sm); margin-top: 4px; }
+}
+
+/*  5.00 감사 — 3안 폰: 낱자 줄바꿈 대신 낱말 단위 · 넘치면 칸이 늘어난다(잘림 «자동·위치끄…» · «관/리앱» · 위 띠 «남은 24대»). */
+:root[data-skin] body { word-break: keep-all; overflow-wrap: break-word; }
+@media (max-width: 699px) {
+  :root[data-skin="3"] button.truncate, :root[data-skin="3"] button .truncate { white-space: normal; overflow: visible; text-overflow: clip; }
+  :root[data-skin="3"] [data-wf-bar] { height: auto; min-height: 2.5rem; white-space: normal; padding-top: 4px; padding-bottom: 4px; }
+  :root[data-skin="3"] [data-wf-bar] > div:first-child { flex-wrap: wrap; overflow: visible; row-gap: 4px; }
+}
+/*  5.00 감사 — 그라데이션 없앰(세 안 공통). 그라데이션 바탕은 정지색 가운데 가장 나쁜 곳에서 글자가 묻힌다(연막 smoke_skin500 이 정지색마다 잰다).
+      한 가지 색으로 칠한다 — 모드 색(양하 파랑·선적 호박)·켜진 칩·사람 동그라미·작은 띠 그림까지. */
+:root[data-skin] .hud-dock { background: rgb(var(--ink-850)); }
+:root[data-skin] :is(.hero-dis, .hero-lod) { background: rgb(var(--ink-900)); }
+:root[data-skin] .home-stage { background: none; }
+:root[data-skin] .lbl-dis { background: rgb(29 78 216); box-shadow: none; }
+:root[data-skin] .lbl-lod { background: rgb(180 83 9); box-shadow: none; }
+:root[data-skin] .chip-v2.is-on { background: rgb(180 83 9); box-shadow: none; text-shadow: none; }
+:root[data-skin] .chip-v2.is-on.is-cyan { background: rgb(14 116 144); }
+:root[data-skin] .chip-v2.is-on.is-blue { background: rgb(29 78 216); }
+:root[data-skin] .chip-v2.is-on.is-violet { background: rgb(91 33 182); }
+:root[data-skin] :is(.xp-dis, .xp-done, .xp-lod) { box-shadow: none; }
+:root[data-skin] .xp-dis  { background: rgb(var(--st-dis)); }
+:root[data-skin] .xp-lod  { background: rgb(var(--st-lod)); }
+:root[data-skin] .xp-done { background: rgb(var(--act)); }
+:root[data-skin] .ship-ico { background: rgb(var(--ink-750)); box-shadow: none; }
+:root[data-skin] .pier-pctc .ship-ico { background: rgb(29 78 216); }
+:root[data-skin] .pier-pnct .ship-ico { background: rgb(91 33 182); }
+/*  Tailwind 그라데이션(bg-gradient-to-*)은 원래 계열색(from-*) 한 가지로 칠한다 — 색마다 규칙은 src/skinText.css(생성기 tools/gen_skin_text.cjs).
+      일률적으로 한 색(ink)으로 덮지 않는다(5.00 재감사 막음 — 로그인 [시작] 단추·새 버전 띠·수석/일반 동그라미 색이 사라졌다). */
+/*  5.00 재감사 — 3안 폰 자료 센터: 두 칸이면 «(STOWAGE)PLAN» 같은 긴 낱말이 낱자 사이로 꺾인다 → 한 칸씩. */
+@media (max-width: 699px) { :root[data-skin="3"] [data-data-center] .grid { grid-template-columns: 1fr; } }
+}
+/*  5.00 감사 — 인쇄는 세 안과 무관하게 종전 글자(4.22-04 값). 화면 고르기의 글자 바닥·크기 규칙이 종이에 번지지 않게 같은 세기 이상으로 되돌린다. */
+@media print {
+  :root[data-skin], :root[data-skin][data-text="large"], :root[data-skin="3"], :root[data-skin="3"][data-text="large"] {
+    --fs-3xs: 9px;   --fs-2xs: 10px;  --fs-xxs: 11px;  --fs-xs2: 12px;  --fs-sm2: 13px;
+    --fs-xs: .75rem; --fs-sm: .875rem; --fs-base: 1rem; --fs-lg: 1.125rem; --fs-xl: 1.25rem;
+    --fs-2xl: 1.5rem; --fs-3xl: 1.875rem; --fs-4xl: 2.25rem;
+    --fs-bdg: 11px;  --fs-bdg-pc: 10px;  --fs-tab: 11px;  --fs-tab-pc: 14px;  --fs-chip: 13px;  --fs-chip-pc: 12px;
+    --fs-btn: 15px;  --fs-btn-sm: 13px;  --fs-seg: 16px;  --fs-seg-pc: 15px;  --fs-pill: 12px;  --fs-count: 14px;  --fs-eta: 17px;
+    --fs-drop: 15px; --fs-step: 18px;   --fs-mood: 11px;
+    --tap: 44px;     --tap-chip: 40px;  --tap-chip-pc: 36px;  --tap-pop-sm: 38px;  --hit: 0px;
+  }
+  :root[data-skin] :is(button, [role="tab"])::after { content: none; }
+  :root[data-skin] body { zoom: 1; }
+}

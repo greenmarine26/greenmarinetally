@@ -4,6 +4,7 @@
 import React, { useMemo } from 'react';
 import { X, Truck, MapPin } from 'lucide-react';
 import { isoShown, inspectionSealOf } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 export default function UnassignedListModal({
   open,
@@ -39,8 +40,7 @@ export default function UnassignedListModal({
                 return (
                   <div key={c.cn} className="bg-ink-800 border border-line rounded-pill p-3">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="text-2xl font-black mono text-amber-300">{c.l4 || c.cn?.slice(-4)}</span>
-                      <span className="text-sm font-bold mono text-dim-100 flex-1 truncate">{c.cn}</span>
+                      <CnText cn={c.cn} where="row" className="flex-1" />
                     </div>
                     <div className="flex items-center gap-2 text-2xs flex-wrap mb-2">
                       <span className={`px-1.5 py-0.5 rounded font-black ${isFull ? 'bg-rose-700 text-rose-50' : 'bg-ink-750 text-dim-200'}`}>

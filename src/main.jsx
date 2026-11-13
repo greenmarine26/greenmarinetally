@@ -5,7 +5,10 @@ import App from './App.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import './index.css';
 import './brightLight.css';   // 2.40: «4 사무실»(흰 바탕)에서 Tailwind 기본 팔레트 스톱 뒤집기 — 기계 생성본
+import './skinText.css';   // 5.00: 화면 고르기 세 안 글자색 대비 보정 — 기계 생성본(tools/gen_skin_text.cjs) · brightLight 뒤에 둔다
 import { getBrightness, applyBrightness, getTextSize, applyTextSize } from './utils.js';
+import { getSkin, applySkin } from './skin.js';   // 5.00 화면 고르기
+import { mountSkinIntro } from './components/SkinIntro.jsx';   // 5.00 새 판 첫 안내(하루 한 번)
 import './mergeApi.js'; // V8.20: 수집기 연동 입구 — window.GMmerge(files) 전역 등록
 import './autoRegApi.js'; // V8.32: 수집기 자동 항차 등록 입구 — window.GMautoPayload 전역 등록
 import { installToastAlert, showToast } from './toast.js';
@@ -14,6 +17,8 @@ import { installToastAlert, showToast } from './toast.js';
 applyBrightness(getBrightness());
 //  4.23: 글자 두 모드(보통·크게)도 같은 자리에서 — 그린 뒤에 걸면 작은 글자가 한 번 보였다가 커진다.
 applyTextSize(getTextSize());
+//  5.00: 화면 고르기(1안·2안·3안) — 밝기·글자 뒤에 건다(2안은 흰 바탕, 3안은 큰 글자를 화면에만 덮는다). 그리기 전이라 번쩍임이 없다.
+applySkin(getSkin());
 
 // V9.14: alert() 254곳 → 논블로킹 토스트로 일괄 전환 (toast.js는 M-대 완성돼 있었으나 연결 0회였다).
 //   confirm/prompt는 그대로 — 사용자의 결정이 필요한 창은 막지 않는다.
@@ -42,3 +47,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </ErrorBoundary>
 );
+
+//  5.00: 새 판 첫 안내 «화면 고르기» — 하루 한 번만, 앱이 먼저 그려진 뒤에 짧게 띄운다(고르면 다시 안 뜬다).
+setTimeout(() => { try { mountSkinIntro(); } catch (e) { console.warn('[화면 고르기] 안내를 띄우지 못했습니다.', e); } }, 1500);

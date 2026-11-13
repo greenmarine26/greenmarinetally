@@ -5,7 +5,7 @@
 //   앱 시작은 항상 이 화면(자동 로그인 없음). 로그인 성공 시 App이 역할별 해시로 보낸다.
 import React, { useState, useEffect, useCallback } from 'react';
 import WorkTimeline from '../components/WorkTimeline.jsx';   // 2.64: PC 로그인 하단 작업 타임라인(검수사 확정 자리)
-import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
+import { UserPlus, LogIn, ChevronLeft } from 'lucide-react';
 //  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
 import logoUrl from '../assets/logo-tallyone.png';
@@ -471,7 +471,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       <div className="min-h-screen bg-ink-950 text-dim-100 px-3 py-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto" data-login-choice={choiceStage}>
         <div className="max-w-lg mx-auto space-y-3">
           <div className="flex items-center gap-2">
-            <button onClick={back} className="px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-dim-200 text-xs font-bold flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5"/>{choiceFor && onCancelChoice ? '그대로 두기' : '이름 다시 고르기'}</button>
+            <button onClick={back} className="px-2 py-1.5 rounded-pill bg-ink-800 border border-line text-dim-200 text-xs font-bold flex items-center gap-1"><ChevronLeft className="w-3.5 h-3.5"/>{choiceFor && onCancelChoice ? '그대로 두기' : '이름 다시 고르기'}</button>
             <div className="min-w-0">
               <div className="text-sm font-black text-dim-100 truncate">{choiceName} 님 · {getStaffRole(choiceName) || ''}</div>
               <div className="text-xxs text-dim-400">{choiceStage === 'role' ? '어떻게 들어오시겠습니까?' : '작업 선박 선택'}</div>
@@ -792,7 +792,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                       )}
                       {inspectorStatus(i) === 'working' && (
                         <span className="h-5 px-1.5 rounded-full text-2xs font-bold flex items-center flex-shrink-0"
-                              style={{ background: 'rgba(0,209,143,.14)', border: '1px solid rgba(0,209,143,.28)', color: '#7CF1C2' }}>작업중</span>
+                              style={{ background: 'rgb(var(--act) / .14)', border: '1px solid rgb(var(--act) / .28)', color: 'rgb(var(--act-soft))' }}>작업중</span>
                       )}
                       {inspectorStatus(i) === 'online' && (
                         <span className="h-5 px-1.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-2xs font-bold flex items-center flex-shrink-0">로그인</span>
@@ -874,7 +874,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         {/* 검수원 변경으로 들어온 경우(이미 로그인됨) — 돌아가기 */}
         {current && onCancel && (
           <button onClick={onCancel} className="mt-3 w-full py-2 text-sm text-dim-300 hover:text-dim-100 flex items-center justify-center gap-1.5">
-            <ArrowLeft className="w-4 h-4"/>{current} 그대로 돌아가기
+            <ChevronLeft className="w-4 h-4"/>{current} 그대로 돌아가기
           </button>
         )}
         <div className="lg:hidden mt-2 text-center text-2xs text-dim-500 font-medium">🔒 표시는 비밀번호를 한 번 확인합니다</div>
