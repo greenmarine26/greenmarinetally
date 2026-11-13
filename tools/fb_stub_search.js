@@ -157,6 +157,7 @@ export const fbSubscribeHeartbeat = async () => true;
 export const fbSubscribeInspectCheck = async () => true;
 export const fbSubscribeInspectors = async () => true;
 export const fbSubscribeLaneInfo = async () => true;
+export const fbGetMyArchivedToday = async () => ({ voyages: {}, failed: [], at: 0 });   // 5.01: 홈 «나 오늘» 보관소 읽기 — 연막검사 스텁은 빈 결과
 export const fbSubscribeLaneRoutes = async () => true;
 export const fbSubscribeMatrixEditors = async () => true;
 export const fbSubscribeMirLexicon = async () => true;

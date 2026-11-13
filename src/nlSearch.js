@@ -3618,6 +3618,31 @@ export function voyageDoneAts(voyage) {
   return out.sort((a, b) => a - b);
 }
 
+//  ★ 5.01 — 홈 «나 오늘» 배별 세분화. 이 검수원 이름(by)으로 찍은 완료만, t0(오늘 자정) 이후 것만 배·양하/선적으로 센다.
+//    왜 있는가 — 검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 (PCSZ 96 · STMJ 39)».
+//    진행 중 항차(voyages)와 오늘 보관소로 넘어간 항차(archive 줄임본)를 같은 모양으로 받는다 — 판정은 한 벌.
+//    총합은 호출부(computeMyToday)의 count 와 항상 같아야 한다(smoke_mytoday501 이 잰다).
+export function myTodayByShip(voyages, inspector, t0, now = Date.now()) {
+  const ships = [];
+  if (!inspector) return ships;
+  for (const [key, v] of Object.entries(voyages || {})) {
+    const info = (v && v.info) || {};
+    const o = { key, vsl: String(info.vsl || String(key).split('_')[0] || ''), voy: String(info.voy_d || info.voy || ''), dis: 0, lod: 0, equips: [], firstAt: 0, lastAt: 0 };
+    for (const m of ['discharge', 'loading']) {
+      const comp = (v && v[m] && v[m].completed) || {};
+      for (const r of Object.values(comp)) {
+        if (!(r && r.by === inspector && typeof r.at === 'number' && r.at >= t0 && r.at <= now)) continue;
+        if (m === 'discharge') o.dis += 1; else o.lod += 1;
+        if (r.equip && !o.equips.includes(String(r.equip))) o.equips.push(String(r.equip));
+        if (!o.firstAt || r.at < o.firstAt) o.firstAt = r.at;
+        if (r.at > o.lastAt) o.lastAt = r.at;
+      }
+    }
+    if (o.dis + o.lod > 0) ships.push(o);
+  }
+  return ships.sort((a, b) => a.firstAt - b.firstAt);   // 오늘 먼저 한 배부터
+}
+
 //  ★ 재감사 지적 — 두 번째 인자는 **항차 info 를 통째로** 받는다(문자열도 받는다).
 //    부두·선석·갱 수를 화면마다 따로 뽑아 넘기게 두면 반드시 하나를 빠뜨린다 — 실제로 그랬다
 //    (통계탭·미르는 선석 폴백이 없어 +18.5%, 「질문 답변」 패널은 갱 수가 안 닿아 몰아 입력이 통과했다).

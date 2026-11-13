@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.00-02';
-const NOTE = '5.00-02 수석 상황판 탭 줄 끝에 미르 칸을 넣었습니다. 누르면 미르가 올라와 말이나 글로 바로 물을 수 있습니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.01';
+const NOTE = '5.01 홈의 나 오늘 대수가 오늘 끝낸 배까지 모두 합쳐집니다. 누르면 배마다 양하 선적 대수가 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

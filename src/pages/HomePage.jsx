@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, CheckCircle } from 'lucide-react';
-import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
+import { fbGetMyArchivedToday, fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
@@ -13,7 +13,7 @@ import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베�
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
-import { paceFromRecords, voyageDoneAts, voyageFirstTermAt } from '../nlSearch.js';
+import { paceFromRecords, voyageDoneAts, voyageFirstTermAt, myTodayByShip } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -832,7 +832,27 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const polRef = useRef(null);
   //  컴 — 접힘 둘은 목록 칸 맨 아래에 붙어 있다(목록이 길어도 첫 화면). 펴면 그 내용이 목록 끝에 서고 그 자리로 굴러간다.
   const reveal = (ref) => { if (!wide) return; try { requestAnimationFrame(() => { if (ref.current) ref.current.scrollIntoView({ block: 'nearest' }); }); } catch (e) { console.warn('[홈] 펼친 자리로 못 굴렀다', e); } };
-  const _me = computeMyToday(voyages, inspector, Date.now());
+  //  ★ 5.01 — «나 오늘» 은 진행 중 항차뿐 아니라 **오늘 보관소로 넘어간 항차**의 내 기록도 센다.
+  //    검수사 2026-11-13 21:03 «나 오늘 39대 뭔가 이상하지 않나요» — PCSZ 2634E(96대)가 14:31 보관소로 넘어가며 헤더에서 빠졌다.
+  //    진행 중 항차가 같은 키면 진행 중 것이 이긴다(복원된 항차). 못 읽은 항차는 failed 로 화면에 밝힌다.
+  const [archMe, setArchMe] = useState({ voyages: {}, failed: [], at: 0 });
+  const _liveSig = Object.keys(voyages || {}).sort().join('|');
+  useEffect(() => {
+    if (!inspector) return undefined;
+    let alive = true;
+    const run = async () => {
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const r = await fbGetMyArchivedToday(t0.getTime(), Object.keys(voyages || {}));
+      //  ⚠ 읽기가 일부라도 실패하면 앞서 잘 읽은 항차를 지우지 않는다 — 5분 갱신 한 번 실패로 헤더가 39대로 되돌아가지 않게(감사 2026-11-13).
+      if (alive) setArchMe((prev) => ((r.failed && r.failed.length) ? { ...r, voyages: { ...(prev.voyages || {}), ...(r.voyages || {}) } } : r));
+    };
+    run();
+    const id = setInterval(run, 5 * 60 * 1000);
+    return () => { alive = false; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspector, _liveSig]);
+  const _meVoyages = useMemo(() => ({ ...(archMe.voyages || {}), ...(voyages || {}) }), [archMe, voyages]);
+  const _me = computeMyToday(_meVoyages, inspector, Date.now());
   const _hbText = hbView.state === 'ok' ? `수집기 ${hbView.ageMin}분 전`
     : hbView.state === 'down' ? `수집기 끊김 ${hbView.ageMin}분 — 숫자 갱신 정지` : '수집기 자료 없음';
   const _hbTitle = hbView.state === 'none' ? '수집기 상태 자료 없음 — 하트비트 미수신 · 누르면 보조기능(항차 건강 점검 · 맛집 수첩 …)'
@@ -865,23 +885,46 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   ) : null;
   //  V9.16: 오늘의 나 — 내 완료 기록이 있을 때만. 칩을 누르면 종전 줄(오늘 N대 · 시간당 · 마지막 완료)이 띠 아래에 펴진다.
   const meChip = _me && _me.count > 0 ? (
-    <button type="button" onClick={() => setMeOpen((o) => !o)} aria-expanded={meOpen} data-home-chip="me" title="오늘 내 처리량 — 누르면 시간당·마지막 완료"
+    <button type="button" onClick={() => setMeOpen((o) => !o)} aria-expanded={meOpen} data-home-chip="me" title={(archMe.failed && archMe.failed.length > 0 ? `보관소로 넘어간 배 ${archMe.failed.length}건을 못 읽어 빠졌을 수 있음 · ` : '') + '오늘 내 처리량 — 누르면 배별 양하·선적 · 시간당 · 마지막 완료'}
       className="inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2 border-2 border-emerald-800/60 bg-ink-900 text-dim-200 text-sm2 font-bold" style={{ minHeight: 'var(--tap-chip)' }}>
       🙋 나 오늘 <b className="text-emerald-300 mono">{_me.count}</b>대
+      {archMe.failed && archMe.failed.length > 0 && <span className="text-amber-300" data-home-me-chipwarn="1" aria-label="보관소를 못 읽어 빠졌을 수 있음">⚠</span>}
     </button>
   ) : null;
   const meLine = meOpen && _me && _me.count > 0 ? (() => {
     const me = _me;
     const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
+    const ships = me.ships || [];
+    const sumDis = ships.reduce((a, o) => a + o.dis, 0);
+    const sumLod = ships.reduce((a, o) => a + o.lod, 0);
     return (
-      <div className="flex items-center gap-3 bg-ink-900 border border-emerald-800/50 rounded-pill px-3 py-2 mb-2" data-home-me="1">
-        <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-ink-950 text-xs font-black shrink-0">{inspector[0]}</span>
-        <div className="flex items-baseline gap-3 flex-wrap text-xs">
-          <span className="text-dim-200">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
-          {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대<span className="text-dim-500"> (내 몫)</span></span>}
-          {me.perHour == null && me.paceNote && <span className="text-dim-400">페이스 못 잼 · {me.paceNote}</span>}
-          {ago != null && <span className="text-dim-400">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
+      <div className="bg-ink-900 border border-emerald-800/50 rounded-card px-3 py-2 mb-2" data-home-me="1">
+        <div className="flex items-center gap-3">
+          <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-ink-950 text-xs font-black shrink-0">{inspector[0]}</span>
+          <div className="flex items-baseline gap-3 flex-wrap text-xs">
+            <span className="text-dim-200">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
+            {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대<span className="text-dim-500"> (내 몫)</span></span>}
+            {me.perHour == null && me.paceNote && <span className="text-dim-400">페이스 못 잼 · {me.paceNote}</span>}
+            {ago != null && <span className="text-dim-400">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
+          </div>
         </div>
+        {/* 5.01: 배별 세분화 — 검수사 «누르면 세분화 해서 양하 선적을 다 보여줘야» */}
+        <ul className="mt-2 space-y-1 text-xs" data-home-me-ships="1">
+          {ships.map((o) => (
+            <li key={o.key} className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap" data-home-me-ship={o.key}>
+              <b className="text-dim-100">{o.vsl} {o.voy}</b>
+              {o.equips.length > 0 && <span className="text-dim-400">{o.equips.join('·')}</span>}
+              <span className="text-dim-300">양하 <b className="text-emerald-300 mono">{o.dis}</b> · 선적 <b className="text-emerald-300 mono">{o.lod}</b></span>
+              <span className="text-dim-400">= <b className="mono">{o.dis + o.lod}</b>대</span>
+            </li>
+          ))}
+          {ships.length > 1 && (
+            <li className="text-dim-400 border-t border-line-strong pt-1">합계 양하 <b className="mono">{sumDis}</b> · 선적 <b className="mono">{sumLod}</b> = <b className="mono">{me.count}</b>대</li>
+          )}
+        </ul>
+        {archMe.failed && archMe.failed.length > 0 && (
+          <div className="mt-1 text-xs text-amber-300" data-home-me-warn="1">⚠ 보관소로 넘어간 배 {archMe.failed.length}건을 못 읽어 빠졌을 수 있습니다</div>
+        )}
       </div>
     );
   })() : null;
@@ -2519,7 +2562,7 @@ export function computeMyToday(voyages, inspector, now = Date.now()) {
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   const t0 = dayStart.getTime();
   const mine = [];
-  const hits = {}; const infoOf = {};
+  const hits = {}; const infoOf = {}; const minePer = {};
   Object.values(voyages || {}).forEach(v => {
     const key = String(v?.info?.vsl || '') + '_' + String(v?.info?.voy || '');
     ['discharge', 'loading'].forEach(m => {
@@ -2527,6 +2570,7 @@ export function computeMyToday(voyages, inspector, now = Date.now()) {
       Object.values(comp).forEach(r => {
         if (!(r && r.by === inspector && r.at >= t0 && r.at <= now)) return;
         mine.push(r.at);
+        (minePer[key] = minePer[key] || []).push(r.at);
         hits[key] = (hits[key] || 0) + 1;
         //  3.6-01: 분모는 «그 배가 일한 시간»이다 — 부두·선석뿐 아니라 접안·이안 시각까지 넘긴다.
         //  ⚠ 분자는 **오늘 것만** 세므로 분모도 오늘 자정부터로 자른다(paceFrom) —
@@ -2544,7 +2588,8 @@ export function computeMyToday(voyages, inspector, now = Date.now()) {
   const count = mine.length;
   //  갱 수 1 — 한 사람은 크레인 한 대에 붙는다(다른 두 화면은 항차 갱 수를 쓴다).
   //  3.53-12: 외부 합계 시작 시각은 분모에 쓰지 않는다(피드를 떼어 냈다) — 검수 시작 보고·접안·작업 시작 순.
-  const _P = paceFromRecords(mine, infoOf[topKey] || {}, 1);
+  //  5.01: 분자도 그 배 기록만 — 분모(그 배 작업 구간)와 같은 배여야 두 배를 뛴 날 시간당이 부풀지 않는다(감사 2026-11-13).
+  const _P = paceFromRecords((minePer[topKey] || []).slice().sort((a, b) => a - b), infoOf[topKey] || {}, 1);
   //  ⚠ 개인 몫은 **배가 일한 시간을 알 때만** 낸다(감사 P1-A).
   //    작업 구간을 모르면 분모가 «내가 찍은 구간»이 되어, 몰아 찍은 사람이 시간당 77대로 나온다.
   //    그때는 «오늘 N대»만 보여준다 — 숫자를 지어내지 않는다.
@@ -2552,5 +2597,7 @@ export function computeMyToday(voyages, inspector, now = Date.now()) {
   //  못 잰 이유가 «기록이 오해를 부르는 것»이면 밝힌다. «아직 안 쌓였다»(few·short)면 조용히 둔다.
   const paceNote = _P.why === 'dirty' ? '기록 고르지 않음' : '';
   const lastAt = count ? mine[mine.length - 1] : null;
-  return { count, perHour, paceNote, lastAt };
+  //  5.01: 배별 양하/선적(진행 중 + 오늘 보관소로 넘어간 항차) — 합은 count 와 같다.
+  const ships = myTodayByShip(voyages, inspector, t0, now);
+  return { count, perHour, paceNote, lastAt, ships };
 }

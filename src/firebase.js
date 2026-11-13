@@ -2957,6 +2957,47 @@ export async function fbListTallyPending() {
   return out.sort((a, b) => b.archivedAt - a.archivedAt);
 }
 
+// ── TallyOne 5.01: 홈 «나 오늘» — 오늘 보관소로 넘어간 항차의 완료 기록 읽기 ──
+//   왜 있는가 — 검수사 2026-11-13 «나 오늘 39대» — PCSZ 2634E 가 14:31 에 보관소로 넘어가며 진행 중 항차(voyages)에서 사라져
+//   아침 96대가 헤더 집계에서 빠졌다. 보관소는 «오늘 넘어간 항차만, 완료 기록만» 읽는다(목록 색인 tally_pending 노드 하나 + 항차당 get 셋).
+//   ⚠ fbListArchive 처럼 보관소 전체를 훑지 않는다(1.6·G3 사고). 보관된 항차는 안 바뀌므로 한 번 읽은 것은 기억한다.
+//   ⚠ 실패는 삼키지 않고 failed 로 돌려준다 — 화면이 «일부 못 읽음» 을 밝힌다.
+const _archTodayCache = new Map();   // `${key}@${archivedAt}` → 줄임본(info·discharge.completed·loading.completed)
+export async function fbGetMyArchivedToday(sinceMs, skipKeys = []) {
+  const out = { voyages: {}, failed: [], at: Date.now() };
+  let pend = {};
+  try {
+    const res = await fetch(`${firebaseConfig.databaseURL}/tally_pending.json`, { signal: tmoSignal(15000) });
+    if (!res.ok) throw new Error(`tally_pending HTTP ${res.status}`);
+    pend = (await res.json()) || {};
+  } catch (e) {
+    console.warn('[나 오늘] 보관소 색인(tally_pending)을 못 읽었다 — 보관소로 넘어간 항차는 빠진다:', e);
+    out.failed.push('tally_pending');
+    return out;
+  }
+  const skip = new Set(skipKeys || []);
+  const keys = Object.keys(pend).filter((k) => pend[k] && Number(pend[k].archivedAt) >= sinceMs && !skip.has(k));
+  await Promise.all(keys.map(async (key) => {
+    const ck = `${key}@${pend[key].archivedAt}`;
+    if (_archTodayCache.has(ck)) { out.voyages[key] = _archTodayCache.get(ck); return; }
+    try {
+      const rd = async (sub) => {
+        const r = await fetch(`${firebaseConfig.databaseURL}/archive/${encodeURIComponent(key)}/${sub}.json`, { signal: tmoSignal(20000) });
+        if (!r.ok) throw new Error(`${sub} HTTP ${r.status}`);
+        return (await r.json()) || null;
+      };
+      const [info, dis, lod] = await Promise.all([rd('info'), rd('discharge/completed'), rd('loading/completed')]);
+      const lite = { info: info || {}, discharge: { completed: dis || {} }, loading: { completed: lod || {} }, _fromArchive: true };
+      _archTodayCache.set(ck, lite);
+      out.voyages[key] = lite;
+    } catch (e) {
+      console.warn(`[나 오늘] 보관소 항차 ${key} 를 못 읽었다 — 그 배 대수가 빠진다:`, e);
+      out.failed.push(key);
+    }
+  }));
+  return out;
+}
+
 // ── M7.18b: 1년 경과 archive 자동 정리 ──
 //   완료된 항차는 감사 자료로 1년 보관 후 자동 삭제. 앱 시작 시 1회 호출 권장.
 export async function fbCleanupArchive(maxAgeDays = 365) {
