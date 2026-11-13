@@ -8,7 +8,9 @@ import React, { useSyncExternalStore } from 'react';
 import MirFace from './MirFace.jsx';
 import { getMirDock, subscribeMirDock, toggleMirSheet } from '../faceDock.js';
 
-export default function ChiefMirBar() {
+/* ★ 5.01-01 — 베이뷰·베이모드 위 줄에도 같은 미르 문(chip). 검수사 2026-11-14 01:09 «양하에서 베이모드에서는 미르를 부르지 못합니다».
+   베이뷰(BayViewWork)는 항차 화면을 덮는 전체 화면(fixed z-45)이라 아래 검색줄(🎤·⌨ «미르야»)이 가려지고, 자동·베이모드에는 SingleSearch 도 없다. */
+export default function ChiefMirBar({ chip = false, where = 'chief-bar' }) {
   const st = useSyncExternalStore(subscribeMirDock, getMirDock, getMirDock);
   if (!st.ready) return null;
   const mood = st.mood || { key: 'basic' };
@@ -16,10 +18,11 @@ export default function ChiefMirBar() {
   return (
     <button type="button" data-chief-mir="1" data-mood={mood.key} aria-label="미르에게 묻기" aria-expanded={st.open ? 'true' : 'false'}
       title={mood.key !== 'basic' ? `미르에게 묻기 — 지금 ${mood.label}${mood.why ? ' · ' + mood.why : ''}` : '미르에게 묻기 — 🎤 말·⌨ 글'}
-      onClick={(e) => { e.stopPropagation(); toggleMirSheet('chief-bar'); }}
-      className="hud-tab hud-door min-[700px]:flex-none min-[700px]:px-4">
-      <span className="hud-ico rounded-full overflow-hidden inline-flex items-center justify-center" aria-hidden="true" style={{ width: 24, height: 24, background: '#f7f8fa' }}>
-        <MirFace mood={face} size={24} style={{ borderRadius: '50%', overflow: 'hidden' }} />
+      data-mir-where={where}
+      onClick={(e) => { e.stopPropagation(); toggleMirSheet(where); }}
+      className={chip ? 'shrink-0 inline-flex items-center gap-1 min-h-[32px] pl-0.5 pr-2.5 rounded-pill bg-amber-700 border border-amber-300 text-white text-xxs font-black' : 'hud-tab hud-door min-[700px]:flex-none min-[700px]:px-4'}>
+      <span className={chip ? 'rounded-full overflow-hidden inline-flex items-center justify-center' : 'hud-ico rounded-full overflow-hidden inline-flex items-center justify-center'} aria-hidden="true" style={{ width: chip ? 26 : 24, height: chip ? 26 : 24, background: '#f7f8fa' }}>
+        <MirFace mood={face} size={chip ? 26 : 24} style={{ borderRadius: '50%', overflow: 'hidden' }} />
       </span>미르
     </button>
   );

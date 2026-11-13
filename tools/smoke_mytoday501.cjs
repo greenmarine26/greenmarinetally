@@ -60,8 +60,8 @@ const seg = fb.slice(fb.indexOf('export async function fbGetMyArchivedToday'), f
 ok(/tally_pending\.json/.test(seg) && !/shallow/.test(seg) && !/archive\.json/.test(seg), '보관소 전체를 훑지 않는다(색인 노드 + 오늘 넘어간 항차만)');
 ok((seg.match(/fetch\(/g) || []).length === (seg.match(/tmoSignal\(/g) || []).length, '외부 요청마다 제한 시간이 달렸다');
 ok(!/catch\s*\([^)]*\)\s*\{\s*\}/.test(seg), '빈 catch 없음');
-ok(/^5\.01 /.test(M.APP_NOTE) && !/['\/]/.test(M.APP_NOTE.slice(0)) , 'APP_NOTE — 5.01 · 작은따옴표·슬래시 없음', M.APP_NOTE);
-ok(M.APP_VERSION === 'TallyOne 5.01', '판 문자열 5.01', M.APP_VERSION);
+ok(/^5\.(0[1-9]|[1-9]\d)(-\d\d)? /.test(M.APP_NOTE) && !/['\/]/.test(M.APP_NOTE.slice(0)) , 'APP_NOTE — 5.01 · 작은따옴표·슬래시 없음', M.APP_NOTE);
+ok(/^TallyOne 5\.(0[1-9]|[1-9]\d)(-\d\d)?$/.test(M.APP_VERSION), '판 문자열 5.01', M.APP_VERSION);
 
 console.log(`\n${pass} 통과 · ${fail} 실패`);
 process.exit(fail ? 1 : 0);

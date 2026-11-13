@@ -6,6 +6,7 @@
 //     베이·단 게이트는 SearchPanel 것(bayView prop 으로 초기값만 넣고 보고만 받는다) · 그림은 BayPlan onlyBay(수석 보드와 같은 갈래) + FitBox.
 //   ⚠ 인스턴스 하나 — VoyagePage 가 «작업 시작» 탭 자리에 이 덮개를 **대신** 그린다(SearchPanel 이 두 벌 돌지 않게).
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import ChiefMirBar from './ChiefMirBar.jsx';   // 5.01-01: 베이뷰·베이모드 위 줄 미르 문(검수사 «양하에서 베이모드에서는 미르를 부르지 못합니다»)
 import { equipHolderOf } from '../equipHold.js';   // 4.74
 import { myShiftNow } from '../workChoice.js';   // 4.79: 호기 보유 키 = 항차+호기+조 — 내 조
 import SearchPanel from './SearchPanel.jsx';
@@ -217,6 +218,7 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
           <button onClick={onClose} className="px-2 py-1 rounded-pill bg-ink-800 border border-line text-dim-200 text-xs font-bold">✕ 기존 방식으로</button>
           <span className="text-sm font-black text-violet-200">베이뷰 작업 · {modeLabel}</span>
           <span className="ml-auto text-xxs text-dim-400">{info.vsl || ''} {mode === 'loading' ? (info.voy_l || '') : (info.voy_d || '')}</span>
+          <ChiefMirBar chip where="bayview-pick" />
         </div>
         <div className="p-3 space-y-3 max-w-lg mx-auto">
           <div className="bg-violet-950/60 border-2 border-violet-600 rounded-pill p-3 space-y-2">
@@ -281,8 +283,11 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
             ⚠ {nConf > 0 ? `불일치 ${nConf}` : ''}{nConf > 0 && nNoTerm > 0 ? ' · ' : ''}{nNoTerm > 0 ? `터미널 미확인 ${nNoTerm}` : ''}
           </button>
         )}
-        {onOpenReport && <button onClick={onOpenReport} className={`ml-auto ${chip('bg-emerald-700 border border-emerald-400 text-white')}`} data-bayview-report="1" title="작업 보고 — 베이뷰를 닫지 않고 보고 창을 엽니다">📤 보고</button>}
-        <button onClick={onClose} className={`${onOpenReport ? '' : 'ml-auto '}${chip('bg-ink-800 border border-line text-dim-200')}`}>✕</button>
+        {/* 5.01-01: 미르 문 — 전체 화면 베이뷰는 아래 검색줄을 가린다. 오른쪽 무리(미르·작업 보고·✕)의 첫 칸이 오른쪽으로 민다 */}
+        <span className="ml-auto" aria-hidden="true" />
+        <ChiefMirBar chip where={bayMode ? 'bayview-baymode' : 'bayview'} />
+        {onOpenReport && <button onClick={onOpenReport} className={`${chip('bg-emerald-700 border border-emerald-400 text-white')}`} data-bayview-report="1" title="작업 보고 — 베이뷰를 닫지 않고 보고 창을 엽니다">📤 보고</button>}
+        <button onClick={onClose} className={chip('bg-ink-800 border border-line text-dim-200')}>✕</button>
       </div>
       {showConf && (
         <div className="shrink-0 max-h-40 overflow-auto bg-red-950/60 border-b border-red-800 px-3 py-2 space-y-1 text-xxs" data-bayview-conflicts="1">

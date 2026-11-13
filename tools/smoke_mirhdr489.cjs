@@ -20,9 +20,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(/clearTimeout\(helloTimerRef\.current\)/.test(fab) && /return \(\) => \{ setMirSummoner\(null\); if \(helloTimerRef\.current\)/.test(fab), '감사 권장 4 — 인사 뒤 다시 듣기 시계는 언마운트 때 정리한다');
   ok(/mood\.badge\} \{mood\.label\}/.test(fab) && /mood\.why \?/.test(fab), '얼굴로만 보이던 기분 배지·이유는 시트 머리에 남는다');
   const fd = rd('src/faceDock.js');
+  { const bv = rd('src/components/BayViewWork.jsx'), cb = rd('src/components/ChiefMirBar.jsx');
+    ok(/<ChiefMirBar chip where="bayview-pick" \/>/.test(bv) && /<ChiefMirBar chip where=\{bayMode \? 'bayview-baymode' : 'bayview'\} \/>/.test(bv), '5.01-01 베이뷰 두 머리줄(고르기·작업/베이모드)에 미르 문 — 검수사 «양하에서 베이모드에서는 미르를 부르지 못합니다»');
+    ok(/toggleMirSheet\(where\)/.test(cb) && /chip = false, where = 'chief-bar'/.test(cb), '미르 문은 한 벌(ChiefMirBar) — 수석 탭 칸·베이뷰 칩이 같은 시트를 연다'); }
   { const cd = rd('src/pages/ChiefDashboard.jsx'), cb = rd('src/components/ChiefMirBar.jsx');
     ok(/<ChiefMirBar \/>\s*\n\s*<\/nav>/.test(cd) && /<nav className="hud-dock[^\n]*data-chief-tabs="1">/.test(cd), '5.00-02 수석 상황판 — 탭 줄(상황판·진행·마감·도구) 안 넷째 칸에 미르(ChiefMirBar · 검수사 «이안에 넣으세요»)');
-    ok(/toggleMirSheet\('chief-bar'\)/.test(cb) && /if \(!st\.ready\) return null;/.test(cb) && !/answerOne|nlSearch/.test(cb) && /className="hud-tab hud-door/.test(cb) && !/role="tab"/.test(cb), '미르 칸은 MirFab 시트 한 벌을 연다(따로 답하지 않는다) · 탭이 아니라 문(hud-door) · 로그인 전에는 없다'); }
+    ok(/toggleMirSheet\(where\)/.test(cb) && /where = 'chief-bar'/.test(cb) && /if \(!st\.ready\) return null;/.test(cb) && !/answerOne|nlSearch/.test(cb) && /'hud-tab hud-door/.test(cb) && !/role="tab"/.test(cb), '미르 칸은 MirFab 시트 한 벌을 연다(따로 답하지 않는다) · 탭이 아니라 문(hud-door) · 로그인 전에는 없다'); }
   ok(/if \(!t \|\| !parsed \|\| !parsed\.mirCalled\) return false;/.test(fd), '호출어 판정은 nlSearch parsed.mirCalled 한 벌(호출어 없는 말은 검색 그대로)');
   const vp = rd('src/pages/VoyagePage.jsx'), sp = rd('src/components/SearchPanel.jsx'), gs = rd('src/pages/GlobalSearchPage.jsx');
   ok((vp.match(/summonMirIfCalled\(t, parseNaturalQuery\(t\), 'voyage-mic'\)\) return;/g) || []).length === 2 && (vp.match(/summonMirIfCalled\(q, parseNaturalQuery\(q\), 'voyage-type'\)\) return;/g) || []).length === 2, '항차 화면 검색줄 🎤 두 곳·⌨ Enter 두 곳이 호출어면 미르를 부른다');
