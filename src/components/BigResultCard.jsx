@@ -186,7 +186,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
             <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-pill border border-line-strong" />
           ))}
           <div className="fixed-white text-xs2 font-bold text-center">
-            {c.cn} — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
+            <CnText cn={c.cn}/> — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
             <br/>화면을 누르면 닫힙니다
           </div>
         </div>

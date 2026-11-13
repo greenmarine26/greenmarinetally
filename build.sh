@@ -386,6 +386,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   SMOKE_ET=$(mktemp /dev/shm/hometmp/_smoket_XXXXXX.cjs)
   if npx esbuild tools/smoke_eta401_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_ET" --loader:.js=jsx --jsx=automatic --log-level=error; then
     node tools/smoke_eta401.cjs "$SMOKE_ET" "$PWD" || { echo "✗ 4.01 예상 작업 시간 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ET"; exit 1; }
+    # 5.00-01: 갱 수 한 벌 — 이 조에 등록된 호기 수(craneCrew)가 갱 수 · 말로 정한 수(gangsShift)가 이김 · 근거 «호기 등록 N대 → N갱»(검수사 2026-11-13 13:49 STMJ 2671E)
+    node tools/smoke_gangs50001.cjs "$SMOKE_ET" "$PWD" || { echo "✗ 5.00-01 갱 수 한 벌 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_ET"; exit 1; }
     rm -f "$SMOKE_ET"
   else
     echo "✗ 4.01 예상 작업 시간 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_ET"; exit 1

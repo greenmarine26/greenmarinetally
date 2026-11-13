@@ -21,9 +21,10 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 T(/export async function fbSetVoyageGangs/.test(rd('src/firebase.js')), '갱 수 저장 함수가 없다');
 T(/gangs: g, gangsAt: Date\.now\(\), gangsBy/.test(rd('src/firebase.js')), '누가·언제 정했는지 안 남긴다');
 //  2.74: 우선순위에 «이 조에 붙은 호기 수»가 끼었다 — 말한 수·기억한 수가 여전히 앞이다.
-T(/const _gn = opts\.nGangs \|\| _gShift \|\| _gBase \|\| \(_crThisShift\.length >= 2 \? _crThisShift\.length : 0\) \|\| 0;/.test(rd('src/chiefAnswers.js')),
+//  5.00-01: 이 조 → 이 조 호기 등록 수 → 이 항차 는 gangsOfShift 한 벌(smoke_gangs50001 이 값을 잰다) — 말한 수가 앞, 호기 시작 시각 수가 뒤인 것은 그대로.
+T(/const _G = gangsOfShift\(voyage\?\.info, shift\);/.test(rd('src/chiefAnswers.js')) && /const _gn = opts\.nGangs \|\| _gSet \|\| \(_crThisShift\.length >= 2 \? _crThisShift\.length : 0\) \|\| 0;/.test(rd('src/chiefAnswers.js')),
   '계산이 «말한 수 → 이 조 → 이 항차 → 이 조 호기 수» 순서를 안 본다 — 기억시켜도 안 쓰인다');
-T(/fixed: !opts\.nGangs && \(_gShift > 0 \|\| _gBase > 0\)/.test(rd('src/chiefAnswers.js')), '정해 둔 값인지 표시가 없다');
+T(/fixed: !opts\.nGangs && _G\.n > 0/.test(rd('src/chiefAnswers.js')), '정해 둔 값인지 표시가 없다');
 T(/이 항차는 \$\{gs\.nGangs\}갱으로 정해 두셨어요/.test(rd('src/chiefAnswers.js')), '어디서 온 수인지 안 밝힌다');
 //  세 화면이 같은 한 벌 — 작업 시작 탭·양하 탭·LOLO 탭
 const vp = rd('src/pages/VoyagePage.jsx');
@@ -43,7 +44,7 @@ T(U.gangKeyFromWords(null, null) === '', '조를 안 대면 항차 기본값이�
 T(P('내일 주간 2갱으로 기억해').gangSet?.shift === '주간' && P('내일 주간 2갱으로 기억해').gangSet?.dayOff === 1,
   '«내일 주간 2갱으로 기억해» 에서 조를 못 읽는다');
 T(/gangsShift\/\$\{shiftKey\}/.test(rd('src/firebase.js')), '조별 저장 경로가 없다');
-T(/Number\(voyage\?\.info\?\.gangsShift\?\.\[_gKey\]\)/.test(rd('src/chiefAnswers.js')), '계산이 조별 지정을 안 본다');
+T(/const _G = gangsOfShift\(voyage\?\.info, shift\);/.test(rd('src/chiefAnswers.js')) && /const said = Number\(I\.gangsShift && I\.gangsShift\[key\]\)/.test(rd('src/utils.js')), '계산이 조별 지정을 안 본다');   // 5.00-01: 조별 지정은 utils.gangsOfShift 한 벌이 읽는다
 
 //  ── 2.69-01 (검수사 «갱지정을 안하면 되묻고, 지정을 해서 물어 보면 계산된 답») ──
 T(P('내 작업량').gangQuery, '«내 작업량» 을 갱 질문으로 안 본다');

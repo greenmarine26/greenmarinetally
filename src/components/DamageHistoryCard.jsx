@@ -5,6 +5,7 @@
      범위는 종전 그대로 — damageIndex 전체(항차·보관 무관, 수석 게이트 없음 — 종전 작업 시작 탭 창도 검수원에게 이 범위를 보였다).
      읽기 — 색인은 이 카드가 처음 그려질 때 한 번 GET(useDamageIndex · fbGetDamageIndex = get, 구독 아님)하고 세션 동안 기억한다.
        떠 있는 미르는 데미지 이력 질문이 들어왔을 때만 이 카드를 그리므로 그 전에는 읽지 않는다. */
+import CnText from './CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import React, { useState, useMemo } from 'react';
 import { useDamageIndex } from '../useCarrierContacts.js';   // 2.03: 데미지 색인(메타만)
 import { fbGetDamagePhoto } from '../firebase.js';   // 2.03: 데미지 사진 단건
@@ -81,7 +82,7 @@ export default function DamageHistoryCard({ dmgQ }) {
                 return (
                   <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-ink-900/60 border border-line rounded-pill px-3 py-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm2 mono font-bold text-dim-100">{e.cn} <span className="text-dim-300 font-normal">{when} · {e.voyageKey}</span></div>
+                      <div className="text-sm2 mono font-bold text-dim-100"><CnText className="text-dim-100" cn={e.cn}/> <span className="text-dim-300 font-normal">{when} · {e.voyageKey}</span></div>
                       <div className="text-xxs text-dim-200 truncate">
                         {(e.damageParts || []).join(' & ')} {(e.damageTypes || []).join(' & ')}{e.points ? ` ${e.points}P` : ''}{e.dims ? ` (${e.dims})` : ''}{e.note ? ` — ${e.note}` : ''}
                       </div>
@@ -101,7 +102,7 @@ export default function DamageHistoryCard({ dmgQ }) {
           {(dmgPhotoView.imgs || []).map((src, i) => (
             <img key={i} src={src} alt="" className="max-h-[45vh] max-w-full rounded-pill border border-line-strong" />
           ))}
-          {dmgPhotoView.imgs && <div className="fixed-white opacity-80 text-xs2 font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
+          {dmgPhotoView.imgs && <div className="fixed-white opacity-80 text-xs2 font-bold"><CnText cn={dmgPhotoView.cn}/> — 화면을 누르면 닫힙니다</div>}
         </div>
       )}
     </>

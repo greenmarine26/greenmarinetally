@@ -901,8 +901,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     return (
       <div className="relative min-w-0" data-home-menu="pier">
         <button onClick={() => setTopMenu(m => (m === 'pier' ? '' : 'pier'))} aria-haspopup="menu" aria-expanded={topMenu === 'pier'}
-          className={`chip-v2 is-on ${_tone} max-w-full w-full justify-center ${wide ? '' : '!h-[var(--tap)]'}`}>
-          <span className="truncate">📍 {_cur} ▾</span>
+          className={`chip-v2 is-on ${_tone} max-w-full w-full justify-center ${wide ? '' : '!h-auto !min-h-[var(--tap)] py-1'}`}>
+          {/* 5.00-01: 폰에서는 «📍 자동·위치꺼짐 ▾»가 잘리지 않게 낱말 단위로 두 줄까지 — 컴은 한 줄 그대로 */}
+          <span className={wide ? 'truncate' : 'whitespace-normal break-keep leading-tight text-center'}>📍 {_cur} ▾</span>
         </button>
         {topMenu === 'pier' && (
           <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[150px] bg-ink-900 border border-line rounded-btn shadow-lg p-1">
@@ -1047,7 +1048,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             <span className="flex-1" />
             {chiefBtn}
           </div>
-          <div className={`grid ${newMenu ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto]'} gap-2 pb-2 items-stretch`} data-home-ctrl="1">
+          <div className={`grid ${newMenu ? 'grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto]'} gap-2 pb-2 items-stretch`} data-home-ctrl="1">
             {pierMenu}
             {newMenu}
             {refreshBtn}

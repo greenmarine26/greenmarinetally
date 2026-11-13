@@ -480,6 +480,19 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
   const _smCnRef = useRef(c && c.cn);
   _smCnRef.current = c && c.cn;
   useEffect(() => { setSmOpen(false); setSmErr(''); setSmBay(''); setSmRow(''); setSmTier(''); setSmNote(''); }, [c && c.cn]);
+  //  5.00-01: Esc 로 닫기 — 창(variant 'modal')이 맨 위일 때만(위에 사진 창 등 다른 덮개가 떠 있으면 그 창 몫).
+  const _cdmRoot = useRef(null);
+  useEffect(() => {
+    if (variant !== 'modal' || typeof window === 'undefined') return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !_cdmRoot.current) return;
+      const covers = [...document.querySelectorAll('.fixed.inset-0')].filter((el) => el.getBoundingClientRect().height > 0);
+      if (covers[covers.length - 1] !== _cdmRoot.current) return;
+      e.preventDefault(); onClose?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [variant, onClose]);
   const smEntry = useMemo(() => {
     if (mode !== 'discharge' || !mfnVoyage || !c || !c.cn || String(c.cn).startsWith('_')) return null;
     try { return (computeShiftingMapCached(voyageKey, mfnVoyage) || {})[c.cn] || null; }
@@ -561,14 +574,14 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
        ⚠ 폰 시트를 92vh → 70vh 로 낮췄다. 시안 «바텀시트 60%» 의 요지는 높이가 아니라
          **뒤에 목록이 남아 다음 컨으로 바로 넘어가는 것**이라, 배경 흐림도 걷고 어둡기만 낮췄다.
          60% 로 자르면 상세 항목이 너무 잘려서 70% 로 뒀다. */
-    <div className={variant === 'panel'
+    <div ref={_cdmRoot} className={variant === 'panel'
       ? 'h-full'
       : 'fixed inset-0 z-50 bg-ink-950/70 flex items-end sm:items-center justify-center p-0 sm:p-4'}>
       <div className={variant === 'panel'
         ? 'card-v2 bg-ink-850 w-full max-h-[calc(100vh-7rem)] overflow-y-auto'
         : 'bg-ink-850 border border-line rounded-t-2xl sm:rounded-card w-full max-w-md max-h-[70vh] sm:max-h-[92vh] overflow-y-auto'}>
         {/* 헤더 */}
-        <div className={`sticky top-0 px-4 py-3 border-b border-line flex items-center justify-between ${
+        <div className={`sticky top-0 z-10 px-4 py-3 border-b border-line flex items-center justify-between ${
           sealError || xSealError ? 'bg-red-950' :
           isDone ? 'bg-emerald-950' :
           isXray ? 'bg-purple-950' :

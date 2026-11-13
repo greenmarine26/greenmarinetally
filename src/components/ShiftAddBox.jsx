@@ -1,4 +1,5 @@
 // 선적 화면의 «＋ 시프팅 추가» — 양하 직후 같은 배에 다시 실은 컨을 번호와 도착 자리로 시프팅 리스트에 넣는다(양하 모드 컨 상세의 표기와 같은 저장)
+import CnText from './CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import React, { useMemo, useState } from 'react';
 import { fmtShiftPos, shiftManualFromOf, shiftTargetOccupiedBy } from '../utils.js';
 import { fbSetShiftManual } from '../firebase.js';
@@ -64,7 +65,7 @@ export default function ShiftAddBox({ voyageKey, inspector, mode, dischargeEdi, 
           <div className="flex gap-1.5 flex-wrap mt-1">
             {cands.slice(0, 6).map((x) => (
               <button key={x.cn} type="button" onClick={() => pick(x.cn)} data-shift-cand-pick={x.cn}
-                className="px-2 py-0.5 rounded bg-ink-800 border border-amber-700/60 text-2xs mono text-amber-100">{x.cn}{x.from ? ` · ${fmtShiftPos(x.from)}` : ''}</button>
+                className="px-2 py-0.5 rounded bg-ink-800 border border-amber-700/60 text-2xs mono text-amber-100"><CnText className="text-dim-100" cn={x.cn}/>{x.from ? ` · ${fmtShiftPos(x.from)}` : ''}</button>
             ))}
           </div>
         </div>
@@ -90,7 +91,7 @@ export default function ShiftAddBox({ voyageKey, inspector, mode, dischargeEdi, 
           {!cn && q.trim().length >= 3 && found.length === 0 && <div className="text-xxs text-amber-200 mt-1">양하 EDI 에 그 번호가 없습니다.</div>}
           {cn && (
             <>
-              <div className="text-xxs text-dim-100 mt-1.5" data-shift-add-from={from}>{cn} · 지금 자리 {from ? fmtShiftPos(from) : '읽지 못함'}</div>
+              <div className="text-xxs text-dim-100 mt-1.5" data-shift-add-from={from}><CnText className="text-dim-100" cn={cn}/> · 지금 자리 {from ? fmtShiftPos(from) : '읽지 못함'}</div>
               <div className="grid grid-cols-3 gap-1.5 mt-1.5">
                 <input value={bay} onChange={(e) => setBay(e.target.value)} placeholder="베이 (예 2)" inputMode="numeric" data-shift-add-bay="1"
                   className="px-2 py-1 rounded bg-ink-800 border border-line text-xs mono text-dim-100"/>

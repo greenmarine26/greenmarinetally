@@ -30,7 +30,7 @@ import {
   isReeferContainer, isReeferIso, isFullReefer, isEmptyReefer, emptySplitLabel,   // 4.15-01: 엠티 구분 한 벌 · 3.60-10: 리퍼 판정 한 벌 · 4.15: «리퍼 몇 대» = 풀 리퍼 한 벌
   ownDirCns, isListOriginRecord, shiftCnSetOf, shiftSplitOf, isShiftOffPtk,   // 3.60-18: 미르 잔여 분모 = 리스트 + 시프팅(progressOf·홈 카드와 같은 집합) · 4.16: 시프팅 분리 한 벌
   EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog,   // 3.60-13: EDI 칸이 비었을 때만 리스트가 채운다(수정안 A) · 4.15: 고른 규격이면 규격초과 표식도
-  currentShift, shiftGangKey,   // 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
+  currentShift, shiftGangKey, gangsOfShift,   // 5.00-01 갱 수 한 벌 · 4.01: 예상 작업 시간 — 갱 수는 조마다(info.gangsShift) 읽는다
   plausibleListWtKg, ediWtField,   // 4.08-02: 컨 하나 40톤 초과는 무게 없음 · EDI 총중량 wtEdi (병합 경로 한 벌)
   dateWordOf,   // 4.12-02: 날짜 말(어제·내일·낼모레…) 해석 한 벌
   dayShiftKeys, doneOnShiftKeys,   // 4.17 (§7.8-③): 지난 날 완료 기록 — 조 키는 근무일 기준 한 벌
@@ -903,7 +903,8 @@ export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now(), gi
   const tw = twinSplitOf(voyage, vc.cns, g);
   const moves = vc.total - tw.ok;           // 확정된 트윈만 빼고 나머지는 한 대씩 — 최대 무브
   const movesMin = moves - tw.maybe;        // 못 정한 20피트가 트윈이 되면 — 최소 무브
-  const set = Number((info.gangsShift && info.gangsShift[shiftGangKey(currentShift(now))]) || info.gangs);
+  const _G = gangsOfShift(info, now);   // 5.00-01: 갱 수 한 벌 — 말로 정한 수 → 이 조에 등록된 호기 수 → 항차 기본
+  const set = _G.n;
   const gangsKnown = set > 0;
   const gangs = Math.min(4, Math.max(1, gangsKnown ? set : 2));
   //  가장 오래 걸리는 쪽 = 확정된 트윈만 인정(movesMax) · 가장 빠른 쪽 = 못 정한 20피트도 트윈이 됐을 때(movesMin). 속도는 각각 그 트윈 비율로 25/30을 고른다.
@@ -916,7 +917,7 @@ export function expectedWorkTimeOf(voyage, shiftSet = null, now = Date.now(), gi
     dis: vc.byMode.discharge.total, lod: vc.byMode.loading.total,
     disMoves: vc.byMode.discharge.total - tw.byMode.discharge, lodMoves: vc.byMode.loading.total - tw.byMode.loading, done: vc.done,
     shiftN: (vc.shift && vc.shift.n) || 0, shiftMoves: (vc.shift && vc.shift.moves.total) || 0,   // 4.16: 시프팅 대당 2무브(트윈으로 안 든다)
-    gangs, gangsKnown, rate, rateMin, twinShare: vc.total ? (2 * tw.ok) / vc.total : 0, minutes: mins(moves, gangs, rate), minutesMin: mins(movesMin, gangs, rateMin), minutes1: mins(moves, 1, rate), planTotal,
+    gangs, gangsKnown, gangsSrc: _G.src, gangsCrew: _G.crew, rate, rateMin, twinShare: vc.total ? (2 * tw.ok) / vc.total : 0, minutes: mins(moves, gangs, rate), minutesMin: mins(movesMin, gangs, rateMin), minutes1: mins(moves, 1, rate), planTotal,
     planGap: planTotal - vc.total > Math.max(20, vc.total * 0.1),
     cns: vc.cns };   // 4.39-01: 센 컨 번호(모드별) — «작업 분석» 이 같은 집합으로 특수화물을 센다(감사 B1)
 }
@@ -946,7 +947,7 @@ export function workTimeLinesOf(E, gangsHyp = 0) {
   if (!E.exact) L.push(`  ⚠ 20피트 ${E.unres20}대는 자리나 무게가 없어 트윈을 못 정했어요 — 트윈이 되면 ${E.movesMin}무브까지 줄어요`);
   const t = E.exact ? `약 ${_hmK(mins(E.moves, g, E.rate))}` : `약 ${_hmK(mins(E.movesMin, g, E.rateMin))} ~ ${_hmK(mins(E.moves, g, E.rate))}`;
   const t1 = g > 1 ? ` (1갱이면 ${_hmK(mins(E.moves, 1, E.rate))})` : '';
-  const why = gangsHyp > 0 ? '' : (!E.gangsKnown ? ' · 갱 수 미등록이라 2갱으로 셈' : '');
+  const why = gangsHyp > 0 ? '' : (!E.gangsKnown ? ' · 갱 수 미등록이라 2갱으로 셈' : E.gangsSrc === 'crew' ? ` · 호기 등록 ${E.gangsCrew}대 → ${E.gangs}갱` : '');   // 5.00-01: 호기 등록으로 셌으면 그 근거를 보인다
   L.push(`· 갱당 시간당 ${E.rate}무브(트윈 ${Math.round(E.twinShare * 100)}%라 ${E.rate === 30 ? '트윈이 있는 작업' : '싱글이 많은 작업'}) · ${g}갱이면 ${t}${t1}${why}`);
   return L;
 }

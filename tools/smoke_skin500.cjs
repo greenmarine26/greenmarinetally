@@ -62,6 +62,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ['컨 상세', 'card', { voyKey: W.key, mode: 'discharge', cn: cardCn }, []],
     ['전역 검색', 'search', { q: cardCn.slice(-4) }, []],
     ['수석 상황판', 'chief', {}, []],
+    //  5.00-01 — 수석 상황판 배 카드를 크게(컴 ⤢ 크게 · 폰 ▸ 펼침) — 미니 막대 이름표가 «양/하»로 꺾이지 않는다
+    ['수석 상황판 크게', 'chief', {}, ['^⤢ ?크게$|^DXQD2640E / 2640W ·']],
+    //  5.00-01 — 경고 띠 «예상 실오류» 펼침 — 안의 컨 번호도 CnText 한 벌(대비 AAA 는 ③ 이 잰다)
+    ['경고 띠 펼침', 'voyage', { voyKey: W.key, mode: 'discharge' }, ['^나중에$', '예상 실오류']],
     ['보조기능', 'aux', {}, []],
     ['화면 고르기 창', 'display', {}, []],
     ['새 판 첫 안내', 'intro', {}, []],
@@ -98,7 +102,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const bgsOf = (el) => { const st = []; let grad = null; let e = el; while (e) { const s = getComputedStyle(e); if (!grad && s.backgroundImage && /gradient/.test(s.backgroundImage)) { grad = (s.backgroundImage.match(/rgba?\([^)]*\)/g) || []).map(parse).filter(Boolean); if (grad.length) { st.push({ grad }); break; } } const c = parse(s.backgroundColor); if (c && c.a > 0) { st.push(c); if (c.a >= 0.99) break; } e = e.parentElement; } let base = parse(getComputedStyle(document.body).backgroundColor) || { r: 255, g: 255, b: 255, a: 1 }; if (base.a < 1) base = mix(base, { r: 255, g: 255, b: 255, a: 1 }); let outs = [base]; for (let i = st.length - 1; i >= 0; i--) { const L = st[i]; outs = L.grad ? outs.flatMap((b) => L.grad.map((g) => mix(g, b))) : outs.map((b) => mix(L, b)); } return outs; };
     const opac = (el) => { let o = 1, e = el; while (e) { o *= parseFloat(getComputedStyle(e).opacity); e = e.parentElement; } return o; };
     const all = [...document.querySelectorAll('body *')].filter((el) => !/^(SCRIPT|STYLE|LINK)$/.test(el.tagName) && vis(el));
-    const tiny = [], low = [], cnLow = [], small = [], btns = [];
+    const tiny = [], low = [], cnLow = [], small = [], btns = [], wrap = [];
     for (const el of all) {
       const s = getComputedStyle(el);
       const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
@@ -108,6 +112,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       if (own && !dr) {
         const f = parseFloat(s.fontSize);
         if (f < 11.95) tiny.push(`${f}px «${own.slice(0, 14)}»`);
+        //  5.00-01: 두 글자 낱말(양하·선적)이 좁은 칸에서 «양/하»로 꺾이면 안 된다
+        if (/^(양하|선적)$/.test(own)) { const tops = new Set(); for (const tn of el.childNodes) { if (tn.nodeType !== 3 || !tn.textContent.trim()) continue; const rg = document.createRange(); rg.selectNodeContents(tn); for (const q of rg.getClientRects()) if (q.width > 0) tops.add(Math.round(q.top)); } if (tops.size > 1) wrap.push(`«${own}» ${Math.round(el.getBoundingClientRect().width)}px 칸에서 ${tops.size}줄`); }   // 글자(텍스트 노드) 줄 수로 잰다 — 칸 높이·아이콘 줄은 안 센다
         const dis = !!el.closest('[disabled], [aria-disabled="true"]') || opac(el) < 0.95;
         const fg = parse(s.color); const bgs = bgsOf(el);
         if (fg && fg.a > 0.05 && bgs.length && !dis && !pictOnly) {
@@ -154,7 +160,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       if (!hit || !(hit === el || el.contains(hit))) miss.push(`${el.tagName}«${(el.textContent || el.placeholder || '').replace(/\s+/g, ' ').trim().slice(0, 12)}»→${hit ? hit.tagName + '«' + (hit.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 10) + '»' : '없음'}`);
     }
     const gradN = document.querySelectorAll('[class*="bg-gradient-to-"]').length;
-    return { gradN, miss, nodes: all.length, tiny, low, cnLow, small, btns, cnN: document.querySelectorAll('.cn .cn-l').length, fsSm: getComputedStyle(document.documentElement).getPropertyValue('--fs-sm').trim() };
+    return { gradN, miss, wrap, nodes: all.length, tiny, low, cnLow, small, btns, cnN: document.querySelectorAll('.cn .cn-l').length, fsSm: getComputedStyle(document.documentElement).getPropertyValue('--fs-sm').trim() };
   };
 
   const browser = await pw.chromium.launch({ executablePath: CHROME });
@@ -182,7 +188,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     return { ...m, errs };
   };
 
-  const fails = { err: [], tiny: [], low: [], cn: [], small: [], order: [], miss: [] };
+  const fails = { err: [], tiny: [], low: [], cn: [], small: [], order: [], miss: [], wrap: [] };
   const base0 = {}, baseMiss = {}; let gradSeen = 0;
   for (const [w, h, tag] of [[1440, 900, '컴'], [390, 844, '폰']]) {
     for (const [nm, scr, extra, acts] of SCREENS.filter((x) => !process.env.SKIN500_ONLY || process.env.SKIN500_ONLY.split(',').includes(x[0]))) {   // 단독 확인용 — 화면 몇 개만
@@ -196,6 +202,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const errs = scr === 'crash' ? m.errs.filter((x) => !/일부러 낸 오류/.test(x)) : m.errs;   // 오류 화면은 일부러 낸 오류만 빼고 본다
         if (errs.length) fails.err.push(`${k}: ${errs[0]}`);
         if (m.tiny.length) fails.tiny.push(`${k}: ${m.tiny.length}개 ${m.tiny.slice(0, 3).join(' ')}`);
+        if (m.wrap && m.wrap.length) fails.wrap.push(`${k}: ${m.wrap.slice(0, 3).join(' ')}`);
         if (m.low.length) fails.low.push(`${k}: ${m.low.length}개 ${m.low.slice(0, 3).join(' ')}`);
         if (m.cnLow.length) fails.cn.push(`${k}: ${m.cnLow.slice(0, 2).join(' ')}`);
         if (m.small.length) fails.small.push(`${k}: ${m.small.length}개 ${m.small.slice(0, 3).join(' ')}`);
@@ -208,8 +215,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       }
     }
   }
-  ok('① 세 안 × 컴·폰 × 화면 29 — 그린 화면 오류 0', !fails.err.length, fails.err.slice(0, 4).join(' | '));
+  ok('① 세 안 × 컴·폰 × 화면 31 — 그린 화면 오류 0', !fails.err.length, fails.err.slice(0, 4).join(' | '));
   ok('② 12px 아래 글자 0(그림 칸 제외)', !fails.tiny.length, fails.tiny.slice(0, 4).join(' | '));
+  ok('② 두 글자 낱말(양하·선적)이 «양/하»로 꺾인 칸 0 — 수석 상황판 크게 포함(5.00-01)', !fails.wrap.length, fails.wrap.slice(0, 4).join(' | '));
   ok(`③ 글자 대비 AA(4.5 · 큰 글자 3) 미달 0 — 그라데이션 클래스가 붙은 요소 ${gradSeen}곳(로그인 시작 단추·새 버전 띠·인사 창·보조기능·매뉴얼·검색 포함)도 정지색마다 잼`, !fails.low.length && gradSeen > 0, fails.low.slice(0, 4).join(' | '));
   ok('③ 컨 번호 대비 AAA(7) 미달 0', !fails.cn.length, fails.cn.slice(0, 4).join(' | '));
   ok('④ 누르는 자리 — 높이 44px · 너비 24px(WCAG 2.5.8) 미달 0(그림 칸 제외 · 실제로 넓힌 자리로 잰다)', !fails.small.length, fails.small.slice(0, 4).join(' | '));

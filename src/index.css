@@ -869,7 +869,16 @@ button.home-big:active { transform: translateY(2px); }
 /*  Tailwind 그라데이션(bg-gradient-to-*)은 원래 계열색(from-*) 한 가지로 칠한다 — 색마다 규칙은 src/skinText.css(생성기 tools/gen_skin_text.cjs).
       일률적으로 한 색(ink)으로 덮지 않는다(5.00 재감사 막음 — 로그인 [시작] 단추·새 버전 띠·수석/일반 동그라미 색이 사라졌다). */
 /*  5.00 재감사 — 3안 폰 자료 센터: 두 칸이면 «(STOWAGE)PLAN» 같은 긴 낱말이 낱자 사이로 꺾인다 → 한 칸씩. */
+/* 5.00-01: 5.00 부터 단추가 position:relative(손가락 자리 넓힘)라, z 없는 sticky 머리 위로 스크롤된 단추가 그려져 머리의 ✕ 를 덮었다(컨 상세 창).
+   z 를 따로 안 준 sticky 는 같은 쌓임 안에서 본문 단추보다 위에 둔다. */
+.sticky:not([class*="z-"]) { z-index: 5; }
 @media (max-width: 699px) { :root[data-skin="3"] [data-data-center] .grid { grid-template-columns: 1fr; } }
+/* 5.00-01: 3안 폰 항차 검색줄 — 글자가 커서 칸이 120px 로 좁아 안내가 «🎤 / .»까지만 보였다. 검색칸은 한 줄 전부, 단추 넷은 다음 줄 오른쪽으로(순서 그대로). */
+@media (max-width: 639px) {
+  :root[data-skin="3"] [data-vsearch] { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+  :root[data-skin="3"] [data-vsearch] > .relative { flex: 1 1 100%; }
+  :root[data-skin="3"] [data-vsearch] input::placeholder { letter-spacing: 0; font-size: 16px; }
+}
 }
 /*  5.00 감사 — 인쇄는 세 안과 무관하게 종전 글자(4.22-04 값). 화면 고르기의 글자 바닥·크기 규칙이 종이에 번지지 않게 같은 세기 이상으로 되돌린다. */
 @media print {

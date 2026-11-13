@@ -2767,7 +2767,7 @@ function MiniBar({ label, color, stats }) {
   };
   return (
     <div className="flex items-center gap-2">
-      <span className={`${map[color].tag} px-1.5 rounded text-3xs font-black w-9 text-center`}>{label}</span>
+      <span className={`${map[color].tag} px-1.5 rounded text-3xs font-black min-w-9 shrink-0 whitespace-nowrap text-center`}>{label}</span>{/* 5.00-01: w-9 고정이라 «크게»에서 «양/하»로 꺾였다 — 낱말은 한 줄, 칸은 글자만큼 */}
       <div className="flex-1 bg-ink-900 rounded-full h-1.5 overflow-hidden">
         <div className={`${map[color].bar} h-full`} style={{ width: `${pct}%` }}/>
       </div>

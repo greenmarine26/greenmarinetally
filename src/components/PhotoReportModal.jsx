@@ -1,4 +1,5 @@
 // 사진 보고 모달 (M3.5.6) - 실오류/데미지
+import CnText from './CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import React, { useState } from 'react';
 import { X, Camera, Send, AlertOctagon, AlertTriangle } from 'lucide-react';
 import {
@@ -224,7 +225,7 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           {/* 컨번호 */}
           <div className="bg-ink-800 rounded-pill p-2">
             <div className="text-2xs text-dim-300 font-bold uppercase">컨번호</div>
-            <div className="text-base font-bold mono text-dim-100">{cn}</div>
+            <div className="text-base font-bold mono text-dim-100"><CnText className="text-dim-100" cn={cn}/></div>
           </div>
 
           {/* M5.78: label 직접 클릭 — PWA에서 button+ref.click()보다 안정적 */}

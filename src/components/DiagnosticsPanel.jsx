@@ -5,6 +5,7 @@ import { fmtPos, isoShown, ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, MFN_LABEL, mfnNot
 //   - warning: 주황 + 자동 음성
 //   - info: 파랑 + 화면만 (음성 X)
 //   - 음성 ON/OFF 토글, 닫기 버튼
+import CnText from './CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, AlertCircle, Info, Volume2, VolumeX, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { speak, stopSpeak } from '../voice.js';
@@ -183,7 +184,7 @@ function ReconLine({ x, onOpenContainer }) {
     <button type="button" data-recon-cn={x.cn}
       onClick={(e) => { e.stopPropagation(); onOpenContainer?.(x.cn); }}
       className="mono block w-full text-left px-1.5 py-0.5 rounded hover:bg-ink-750/50 active:bg-ink-700">
-      • <span className="font-bold">{x.cn}</span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-words break-keep">{parts.join(' · ')}</span>{/* 4.48-04: + break-keep(한글 낱말 «선사»·«10-24» 가 폰 폭에서 중간에 끊겼다 — 띄어쓰기 자리에서만) · 4.48-03: break-all → break-words(319px 에서 «PHDVO» 같은 낱말이 중간에서 갈렸다 — 긴 파일 이름만 갈린다) · 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
+      • <span className="font-bold"><CnText className="text-dim-100" cn={x.cn}/></span>{x.iso ? ` (${isoShown(x.iso)})` : ''} <span className="text-dim-300 break-words break-keep">{parts.join(' · ')}</span>{/* 4.48-04: + break-keep(한글 낱말 «선사»·«10-24» 가 폰 폭에서 중간에 끊겼다 — 띄어쓰기 자리에서만) · 4.48-03: break-all → break-words(319px 에서 «PHDVO» 같은 낱말이 중간에서 갈렸다 — 긴 파일 이름만 갈린다) · 4.48-02: 긴 파일 이름이 폰 화면을 가로로 밀지 않게(라이브 확인 — 319px 화면이 541px 로 늘어남) */}
     </button>
   );
 }
@@ -243,7 +244,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
                 <span className="text-dim-200 font-bold">{b.pos.replace(/-/g, '/')}</span>
                 <span className="text-dim-300">{b.sz === '20' ? "20'" : b.sz === '45' ? "45'" : b.sz === 'HC' ? 'HC' : "40'"} FR {b.n}대 → 터미널 1대</span>
                 {b.cns.map((cn) => (
-                  <button key={cn} type="button" onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }} className="font-bold underline decoration-dotted">{cn}</button>
+                  <button key={cn} type="button" onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }} className="font-bold underline decoration-dotted"><CnText className="text-dim-100" cn={cn}/></button>
                 ))}
               </div>
             )}/>
@@ -304,7 +305,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
-            <span className="font-bold">{c.cn}</span>
+            <span className="font-bold"><CnText className="text-dim-100" cn={c.cn}/></span>
             <span className="text-dim-300 text-3xs">{isoShown(c.iso)} · POD {c.pod} · @{fmtPos(c) || '?-?-?'}</span>
             <span className={`text-3xs ${isAttach ? 'text-red-400' : 'text-cyan-400'}`}>🔒 입력</span>
           </button>
@@ -322,7 +323,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
-            <span className="font-bold">{c.cn}</span>
+            <span className="font-bold"><CnText className="text-dim-100" cn={c.cn}/></span>
             <span className="text-dim-300">ISO: {isoShown(c.iso)} @ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-3xs">✏️ 수정</span>
           </button>
@@ -339,7 +340,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
-            <span className="font-bold">{c.cn}</span>
+            <span className="font-bold"><CnText className="text-dim-100" cn={c.cn}/></span>
             <span className="text-dim-300">@ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-3xs">✏️ 수정</span>
           </button>
@@ -357,7 +358,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
           <div className="mt-1">
             <div className="text-amber-400 mb-0.5">리스트에 없는 컨번호 (부족):</div>
             <TruncList items={d.missing} limit={10} unit="건" render={(m) => (   // 4.22: «외 N건» 을 펼칠 수 있게
-              <div className="mono">• {m.cn} {m.iso ? `(${isoShown(m.iso)})` : ''} {m.fe || ''}</div>
+              <div className="mono">• <CnText className="text-dim-100" cn={m.cn}/> {m.iso ? `(${isoShown(m.iso)})` : ''} {m.fe || ''}</div>
             )}/>
           </div>
           </ReconFold>
@@ -365,7 +366,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
         {d.cancelCns && d.cancelCns.length > 0 && (
           <div className="mt-1">
             <div className="text-dim-300 mb-0.5">선사 취소 요청분(리스트에 남음):</div>
-            <TruncList items={d.cancelCns} limit={10} unit="건" render={(cn) => <div className="mono">• {cn}</div>}/>
+            <TruncList items={d.cancelCns} limit={10} unit="건" render={(cn) => <div className="mono">• <CnText className="text-dim-100" cn={cn}/></div>}/>
           </div>
         )}
         {d.extraCns && d.extraCns.length > 0 && (
@@ -380,8 +381,8 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
               const ask = (d.podAskCns || []).includes(cn);
               return onOpenContainer
                 ? <button onClick={(e) => { e.stopPropagation(); onOpenContainer(cn); }} data-extra-cn={cn} data-pod-ask={ask ? '1' : undefined}
-                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• {cn}{ask ? ' ⚠' : ''}</button>
-                : <div className="mono">• {cn}</div>;
+                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• <CnText className="text-dim-100" cn={cn}/>{ask ? ' ⚠' : ''}</button>
+                : <div className="mono">• <CnText className="text-dim-100" cn={cn}/></div>;
             }}/>
           </div>
           </ReconFold>
@@ -409,7 +410,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(w.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between gap-2"
           >
-            <span className="font-bold">{w.cn}</span>
+            <span className="font-bold"><CnText className="text-dim-100" cn={w.cn}/></span>
             <span className="text-dim-300">
               {w.ediFe && w.lrFe ? `EDI ${w.ediFe} / 리스트 ${w.lrFe}` : ''}
               {(alert.code === 'iso_conflict' || alert.code === 'iso_ot_check') ? isoConflictText(w) : ''}
@@ -433,7 +434,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700"
           >
             <div className="font-bold flex items-center justify-between">
-              <span>{s.cn}</span>
+              <span><CnText className="text-dim-100" cn={s.cn}/></span>
               <span className="text-amber-400 text-3xs">✏️</span>
             </div>
             <div className="text-dim-300 ml-2">EDI: {s.ediSl} | 리스트: {s.lrSl}</div>
@@ -452,7 +453,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
           <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(t.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700" data-seal-format-line
-          >• {t.cn} · 씰 {t.seal} · {t.why}</button>
+          >• <CnText className="text-dim-100" cn={t.cn}/> · 씰 {t.seal} · {t.why}</button>
         )}/>
       </div>
     );
@@ -482,7 +483,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
               <button key={j}
                 onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }}
                 className="mono ml-2 hover:text-amber-300"
-              >• {cn} ✏️</button>
+              >• <CnText className="text-dim-100" cn={cn}/> ✏️</button>
             ))}
           </div>
         )}/>
@@ -500,7 +501,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(v.cn); }}
             className="w-full flex items-center justify-between gap-2 hover:text-amber-300"
           >
-            <span className="mono font-bold">{v.cn} ✏️</span>
+            <span className="mono font-bold"><CnText className="text-dim-100" cn={v.cn}/> ✏️</span>
             <span className="mono text-rose-300 font-bold">{v.bay ? `${parseInt(v.bay, 10)}-${v.row}-${v.tier}` : '자리 없음'}</span>
             <span className="text-dim-300">Class {v.dgc || '8'}{v.un ? ` UN${v.un}` : ''}{v.pod ? ` · ${v.pod}` : ''}</span>
           </button>
@@ -517,7 +518,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700 flex items-center justify-between"
           >
-            <span>• {cn}</span>
+            <span>• <CnText className="text-dim-100" cn={cn}/></span>
             <span className="text-amber-400 text-3xs">✏️</span>
           </button>
         )}/>

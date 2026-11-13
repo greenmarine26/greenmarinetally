@@ -11,6 +11,7 @@
 //
 //   ⚠ 그림은 «닮게» 그리는 것이지 «똑같이»가 아니다. 검수원이 **어느 버튼인지 알아보면** 된 것이다.
 //     실제와 다르게 그리면 안 되지만, 없는 기능을 그려 넣는 것이 훨씬 나쁘다 — 지어내지 않는다.
+import CnText from './CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import React from 'react';
 
 const C = {
@@ -66,7 +67,7 @@ function Row({ r }) {
       <div className="rounded-pill border border-line bg-ink-900 px-2.5 py-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm2 font-black text-amber-300">{r.big}</span>
-          <span className="text-2xs mono text-dim-300">{r.cn}</span>
+          <span className="text-2xs mono text-dim-300"><CnText className="text-dim-100" cn={r.cn}/></span>
           {(r.tags || []).map((t, i) => (
             <span key={i} className={`px-1.5 py-0.5 rounded border text-3xs font-bold ${tone(t.c)}`}>{t.t}</span>
           ))}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import CnText from '../components/CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { publishMirCtx, flattenVoyages } from '../mir.js';   // 3.41: 떠 있는 미르가 읽을 «지금 열린 항차» 재료
@@ -2732,7 +2733,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
           *"작업전 선박화면에서 앞사진을 빼고 두번째 통합검색으로 바꾸자는 이야기. 마이크 스피커 키보드 csv 네개가 우측에."*
           숫자·컨번호·베이 = 종전 라이브 필터 그대로(기능 불변). 문장은 Enter/음성으로 「작업 시작」 탭에 릴레이.
           폰 자판은 **숫자판이 기본**(작업용), ⌨ 를 누르면 문자 키보드(질문용) — 검수사 확정. */}
-      <div className="bg-ink-850 border border-line rounded-card p-2 flex items-center gap-1.5">
+      <div className="bg-ink-850 border border-line rounded-card p-2 flex items-center gap-1.5" data-vsearch="1">
         <div className="relative flex-1">
           <SearchIcon className="ico absolute left-2.5 top-1/2 -translate-y-1/2 text-dim-200"/>
           <input
@@ -2754,7 +2755,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
             autoComplete="off"
-            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-pill pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-amber-500"
+            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-pill pl-9 pr-9 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-amber-500"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-dim-400"><X className="w-4 h-4"/></button>}
         </div>
@@ -2931,7 +2932,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> — 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다. 작업 대수에서는 뺐습니다.</div>
               {(shiftInfo.meta.suspects || []).slice(0, 6).map(sp => (
                 <div key={sp.cn} className="mono text-2xs text-amber-300">
-                  · {sp.cn} <b>{sp.pos || `${parseInt(sp.bay, 10)}-${sp.row}-${sp.tier}`}</b>
+                  · <CnText className="text-dim-100" cn={sp.cn}/> <b>{sp.pos || `${parseInt(sp.bay, 10)}-${sp.row}-${sp.tier}`}</b>
                   {sp.pod ? ` POD ${sp.pod}` : ''}{sp.why ? ` — ${sp.why}` : ''}
                 </div>
               ))}
@@ -2981,7 +2982,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 )}
                 {cf.slice(0, 6).map(x => (
                   <div key={x.cn} className="mono text-2xs opacity-80">
-                    · {x.cn} <b>{x.pos}</b> {isoShown(x.iso)} — EDI {x.ediPod} · 리스트 {x.recPod}
+                    · <CnText className="text-dim-100" cn={x.cn}/> <b>{x.pos}</b> {isoShown(x.iso)} — EDI {x.ediPod} · 리스트 {x.recPod}
                   </div>
                 ))}
                 {cf.length > 6 && <div className="text-2xs">… 외 {cf.length - 6}대</div>}
@@ -3060,7 +3061,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             {shiftingList.map(sc => (
               <div key={sc.cn} data-shift-cn={sc.cn} className="px-3 py-1.5 grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-1 items-start text-xs2">
                 <span className="min-w-0">
-                  <span className="mono font-bold text-dim-100 block truncate">{sc.cn}</span>
+                  <span className="mono font-bold text-dim-100 block truncate"><CnText className="text-dim-100" cn={sc.cn}/></span>
                   <span className="text-2xs text-dim-400">{[isoShown(sc.iso), sc.pod].filter(Boolean).join(' · ')}</span>
                 </span>
                 <span className="min-w-0">
@@ -3094,7 +3095,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                 <div className="font-bold">⚠ 터미널 시프팅 실적에만 있는 컨 {shiftInfo.restowExtra.length}대 — 목록에 없습니다</div>
                 {shiftInfo.restowExtra.map((x) => (
                   <div key={x.cn} className="mono">
-                    {x.cn} · 양하 {fmtShiftPos(x.from) || '?'} → 실제 {fmtShiftPos(x.to)}
+                    <CnText className="text-dim-100" cn={x.cn}/> · 양하 {fmtShiftPos(x.from) || '?'} → 실제 {fmtShiftPos(x.to)}
                     {x.at ? ` ${fmtShiftTime(x.at)}` : ''}
                   </div>
                 ))}
@@ -3427,7 +3428,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
             {[photoView.data, photoView.detailPhoto].filter(Boolean).map((src, i) => (
               <img key={i} src={src} alt="" className="max-h-[70vh] max-w-full rounded-pill border border-line-strong" />
             ))}
-            <div className="fixed-white text-xs2 font-bold text-center">{photoView.cn} — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
+            <div className="fixed-white text-xs2 font-bold text-center"><CnText cn={photoView.cn}/> — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
           </div>
         )}
         </>
@@ -3623,7 +3624,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
         </div>
       </div>
 
-      <div className="bg-ink-850 border border-line rounded-card p-2 flex items-center gap-1.5">
+      <div className="bg-ink-850 border border-line rounded-card p-2 flex items-center gap-1.5" data-vsearch="1">
         <div className="relative flex-1">
           <SearchIcon className="ico absolute left-2.5 top-1/2 -translate-y-1/2 text-dim-200"/>
           <input
@@ -3645,7 +3646,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
             autoComplete="off"
-            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-pill pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-cyan-500"
+            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-pill pl-9 pr-9 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-cyan-500"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-dim-400"><X className="w-4 h-4"/></button>}
         </div>

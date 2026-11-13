@@ -696,7 +696,7 @@ export default function PositionEditModal({
                     자리를 뺏는 것이 아니라 **이름을 빌려주고 몸은 창고에 그대로** 있는 것이다. */}
                 <div className="mt-1 text-2xs text-orange-300 leading-relaxed">
                   {vacating
-                    ? <>→ 확인하면 그 컨은 <b className="text-emerald-300">{vacating}</b> 로 갑니다 — {container?.cn}이(가) 비우는 자리입니다.</>
+                    ? <>→ 확인하면 그 컨은 <b className="text-emerald-300">{vacating}</b> 로 갑니다 — <CnText className="text-dim-100" cn={container?.cn}/>이(가) 비우는 자리입니다.</>
                     : <>→ 확인하면 그 컨은 <b>계획 자리를 내줍니다</b> — 실을 자리를 정해 주세요.</>}
                   <br/>(이미 선적확인된 컨이면 완료는 그대로 두고 자리만 옮깁니다.)
                 </div>
@@ -868,8 +868,8 @@ export default function PositionEditModal({
                   {/* 2.93/2.94-05: 확인창과 **같은 문장**을 쓴다. 종전엔 이 줄이 "실물은 창고에",
                       확인창이 "원래 자리로 옮겨집니다" 라 서로 달랐다(검수사 지적 2026-08-31). */}
                   {vacating
-                    ? <>⚠ {conflict.cn} → <b className="text-emerald-300">{vacating}</b> 로 갑니다 ({container?.cn}이 비우는 자리)</>
-                    : <>⚠ {conflict.cn} → 계획 자리를 내줍니다 (실을 자리를 정해 주세요)</>}
+                    ? <>⚠ <CnText className="text-dim-100" cn={conflict.cn}/> → <b className="text-emerald-300">{vacating}</b> 로 갑니다 ({container?.cn}이 비우는 자리)</>
+                    : <>⚠ <CnText className="text-dim-100" cn={conflict.cn}/> → 계획 자리를 내줍니다 (실을 자리를 정해 주세요)</>}
                 </div>
               )}
             </div>

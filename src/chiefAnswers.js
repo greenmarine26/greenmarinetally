@@ -9,6 +9,7 @@
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { ptkDischargeJudgeOf, isKeepShift } from './utils.js';   // 4.48: 본선 잔류 예보(노란 ◆) 판정 한 벌
 import { voyagePierOf } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
+import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
 import { activeHeldOf } from './utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(자동 가이드 보류 줄 · 미르와 같은 목록)   // 4.20 후속: 평택 양하분 한 벌
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled, shipHasShifts, voyagePlanMs, voyagePlanEndMs , hatchReportTs, isReeferContainer, isFullReefer } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromRecords, workMinutesBetween, recentPaceLine, isNoRestShip } from './nlSearch.js';   // ★ 일괄수리(2026-11-10): isNoRestShip — 휴게 없는 배(OBWH·RZOR)
@@ -418,15 +419,16 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //    갱 수는 **조마다** 정해진다. ①물을 때 말한 수(«2갱이면») ②이 조에 기억시킨 수(info.gangsShift['08-28 주간'])
   //    ③이 항차 기본(info.gangs) ④2갱 — 이 순서로 고른다.
   const _gKey = shiftGangKey(shift);
-  const _gShift = Number(voyage?.info?.gangsShift?.[_gKey]) || 0;
-  const _gBase = Number(voyage?.info?.gangs) || 0;
+  //  5.00-01: 갱 수 한 벌(gangsOfShift) — ② 말로 정한 수 → 그 조에 등록된 호기 수(craneCrew) → ③ 항차 기본. 순서는 위 주석 그대로, 호기 등록이 사이에 든다.
+  const _G = gangsOfShift(voyage?.info, shift);
+  const _gSet = _G.n;
   //  ★ 2.69-01 (검수사 «갱 배분이나 내 작업량이라고 물어 보면 갱 갯수를 되묻게 하고,
   //    2갱인데 내 작업량 또는 2갱 갱배분 이라고 하면 대답을 맞게»): **모르면 지어내지 않는다.**
   //    말한 수도 없고 이 조에 기억시킨 수도 없으면 계산하지 말고 되묻는다.
   //  ★ 2.74: 호기를 셋 대면 그것이 곧 «3갱» 이다 — 대 놓고 다시 몇 갱이냐고 묻지 않는다.
   //    ⚠ 그 호기들이 **이 조**에 시작한 것일 때만(어젯밤 호기 시각이 오늘 주간을 정하지 않게).
   const _crThisShift = _craneNos.filter((n) => _craneAt[n] >= (shift.startMs || 0) && _craneAt[n] <= shift.endMs);
-  const _gn = opts.nGangs || _gShift || _gBase || (_crThisShift.length >= 2 ? _crThisShift.length : 0) || 0;
+  const _gn = opts.nGangs || _gSet || (_crThisShift.length >= 2 ? _crThisShift.length : 0) || 0;
   const _askGangs = !_gn;
   const nGangs = Math.min(4, Math.max(1, _gn || 2));
   //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
@@ -543,7 +545,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     for (const r of Object.keys(byR)) heldLines.push(`⏸ 보류 ${byR[r].length}대 — ${r} (${byR[r].slice(0, 3).join('·')}${byR[r].length > 3 ? ' 외' : ''})`);
   }
   return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, heldLines, cranes: (_craneNos.length === nGangs ? _craneNos.slice() : []),
-    shiftKey: _gKey, fixed: !opts.nGangs && (_gShift > 0 || _gBase > 0), fixedShift: !opts.nGangs && _gShift > 0 };
+    shiftKey: _gKey, fixed: !opts.nGangs && _G.n > 0, fixedShift: !opts.nGangs && (_G.src === 'said' || _G.src === 'crew'), gangsSrc: opts.nGangs ? 'asked' : _G.src };   // 5.00-01: 호기 등록으로 센 것도 그 조의 수
 }
 
 //  ★ 2.74: 갱을 부르는 이름 한 벌 — 호기를 알면 호기로 부른다.
@@ -604,6 +606,7 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
   });
   //  2.68: 이 항차에 정해 둔 갱 수가 있으면 그 사실을 밝힌다 — 어디서 온 수인지 알아야 믿는다.
   L.push(gs.cranes && gs.cranes.length ? `${gs.cranes.map((n) => n + '호기').join('·')} 시작을 알려 주셔서 ${gs.nGangs}갱으로 계산했어요 — 호기가 바뀌면 다시 알려 주세요.`
+    : gs.fixedShift && gs.gangsSrc === 'crew' ? `${gs.shiftKey} 조는 호기 등록 ${gs.nGangs}대라 ${gs.nGangs}갱으로 셉니다 — 다르면 «${gs.shiftKey.slice(-2)} 2갱으로 기억해» 처럼 말씀하세요.`   // 5.00-01
     : gs.fixedShift ? `${gs.shiftKey} 조는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «${gs.shiftKey.slice(-2)} 2갱으로 기억해» 처럼 말씀하세요.`
     : gs.fixed ? `이 항차는 ${gs.nGangs}갱으로 정해 두셨어요 — 조마다 다르면 «내일 주간 2갱으로 기억해» 처럼 조를 붙여 말씀하세요.`
     : (gs.nGangs === 2 ? '«3갱 갱 배분» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요. «3갱으로 기억해» 하시면 이 항차는 계속 3갱으로 냅니다.'

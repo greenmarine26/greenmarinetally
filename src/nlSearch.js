@@ -6,6 +6,7 @@
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
 import { voyagePierOf } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
+import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
 import { shipFlag } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 성질표 — 휴게 없는 배(noRest)
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
@@ -3634,7 +3635,7 @@ export function paceFromRecords(doneAts, src, gangs) {
   const pierN = normPier(info.pier, info.berth);
   //  ★ 3.53-12 — 갱 수는 **조마다** 다를 수 있다(2.69 `info.gangsShift['MM-DD 주간|야간']` → 항차 기본 `info.gangs` → 2). 갱 배분(chiefAnswers)과 같은 순서다.
   //    `gangs` 를 호출부가 못 박아 주면(홈 「오늘의 나」= 1) 그것을 쓴다.
-  const _gOf = (ms) => Math.min(4, Math.max(1, Number(gangs != null ? gangs : ((info.gangsShift && info.gangsShift[shiftGangKey(currentShift(ms))]) || info.gangs)) || 2));
+  const _gOf = (ms) => Math.min(4, Math.max(1, Number(gangs != null ? gangs : gangsOfShift(info, ms).n) || 2));   // 5.00-01: 갱 수 한 벌(말한 수 → 이 조 호기 등록 수 → 항차 기본)
   const g = _gOf(Date.now());   // 지금 조의 갱 수 — 남은 시간을 나눌 때 쓴다
   //  ★ 3.6-01 — 분모는 **배가 일한 시간**이다. 검수원이 앱을 누른 구간이 아니다.
   //    작업 구간을 알면 그것으로, 모르면 그때만 완료 기록 구간으로 잰다(그 사실을 `basis` 로 알린다).

@@ -38,7 +38,7 @@ export function isSentenceQuery(v) {
 }
 
 // 판 이력(4.88-01 까지의 APP_VERSION 꼬리 주석·앞 판 주석·앞 판 APP_NOTE)은 docs/APP_HISTORY.md 로 옮겼다(4.89). 앞 판: 'TallyOne 4.88-01' — 카고플랜을 카스피 공통 용어로.
-export const APP_VERSION = 'TallyOne 5.00'   // 5.00 **화면 고르기 1안·2안·3안 · 컨 번호 한 벌 · 글자 바닥 12px · 누르는 자리 44px** — 검수사 2026-11-12 20:33 «화면 디자인은 심플했으면 좋겠습니다. 시인성이 뛰어나야 하고 보기도 좋아야 합니다 … 화면마다 조금씩 이질감이 들어서 입니다» · 20:40 «컨테이너 번호도 4자리만 강조하다보니 앞자리는 눈에 들어 오지 않습니다 … 화면을 고르는것도 1안 2안 3안이 있다면 다 넣었으면 합니다» · 20:43 «그중 원하는 화면으로 셋팅해서 사용하라고 하겠습니다» · 20:44 «버전은 5.00으로 갑니다» · 20:45 «최상품을 만들어 주세요». <html data-skin> 하나로 index.css 변수만 갈린다(화면 코드 한 벌 — skin.js applySkin 한 곳 · 기기마다 localStorage master_skin_v1). 1안 어두운 고대비(기본 · 종전 밝기 4 기기는 2안) · 2안 밝은 간결(밝기 4 팔레트 + 그림자 없음) · 3안 큰 글자 현장(검정 바탕 · 크게보다 한 단계 더 · 누르는 자리 52). 세 안 공통 — 작은 글자 셋 10·11 → 12 · tabular-nums · 단추 ::after 로 손가락 자리 44(그림 칸 제외) · 모서리 두 가지 · 화면 안 그림자 없앰. 컨 번호 CnText 한 벌(«CICU 300 6502» 같은 크기 · 세 덩어리 띄움 · 끝 4자리 초록) 41곳. 설정 창 «화면 고르기» · 새 판 첫 안내(하루 한 번 · SkinIntro). 단추 순서·이름·동작·판정·숫자는 그대로. 연막 smoke_skin500.
+export const APP_VERSION = 'TallyOne 5.00-01'   // 5.00-01 **5.00 라이브 확인 작은 결함 수리**(개발자용 — APP_NOTE·배너는 5.00 그대로) — 폰 부두 단추 «자동·위치꺼짐» 안 잘림 · 3안 폰 항차 검색줄 한 줄 전부 · 수석 상황판 «양/하» 꺾임 · 경고 띠·검색·카드의 붙은 컨 번호를 CnText 한 벌로 · 컨 상세 ✕ 를 스크롤된 단추가 덮던 것(z 없는 sticky)과 Esc 닫기 · 갱 수 한 벌 gangsOfShift(이 조에 등록된 호기 수가 갱 수 — 검수사 2026-11-13 13:49 «갱수를 이미 알렸는데 모른다는 이유는?») · ConeOne 3.00-01 콘앱 바닥 띠·완료 대수 한 벌·목록 읽기 동시 8개
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
@@ -8971,6 +8971,26 @@ export function crewWorkStats(voyage) {
 //  ★ 2.69 (검수사 «야간은 3갱인데 내일 주간은 2갱이면 나머지를 2갱으로 계산해 주나요?»):
 //    조 하나를 가리키는 **키** — 「MM-DD 주간」·「MM-DD 야간」. 야간조는 **시작한 날**로 센다
 //    (자정을 넘겨도 8/27 야간조는 계속 8/27 야간). 갱 수를 조별로 기억할 때 이 키를 쓴다.
+//  ★ 5.00-01 — **갱 수 한 벌.** 검수사 2026-11-13 13:49 «갱수를 이미 알렸는데 모른다는 이유는?» (STMJ 2671E — info.craneCrew['11-13 주간'] 에 1호기 류청호 · 2호기 김성일 이
+//    등록돼 있는데 gangsShift 가 없어 «갱 수 미등록이라 2갱으로 셈» 이 떴다). 호기–검수원 등록(fbSetCraneCrew · 3.8)은 갱 수를 따로 안 적는다 — 등록된 호기 수가 곧 그 조의 갱 수다.
+//    순서 ① info.gangsShift[그 조](말로 정한 갱 수) ② info.craneCrew[그 조]에 등록된 호기 수(1~4) ③ info.gangs(항차 기본) ④ 없음(n 0).
+//    조 키는 shiftGangKey(=crewShiftKey 와 같은 「MM-DD 주간|야간」). shiftOrMs — 시각(ms)이면 그 시각의 조(currentShift), 조 객체면 그 조.
+//    예상 작업 시간(mir.expectedWorkTimeOf · 화면 ExpectedTimeLine) · 남은 시간(nlSearch) · 갱 배분(chiefAnswers)이 이것만 부른다. 콘앱은 mir-core 번들로 같은 함수를 쓴다.
+export function gangsOfShift(info, shiftOrMs = Date.now()) {
+  const I = info || {};
+  const sh = (shiftOrMs && typeof shiftOrMs === 'object') ? shiftOrMs : currentShift(Number(shiftOrMs) || Date.now());
+  const key = shiftGangKey(sh);
+  const said = Number(I.gangsShift && I.gangsShift[key]) || 0;
+  if (said > 0) return { n: Math.min(4, said), src: 'said', key, crew: 0 };
+  const cc = (I.craneCrew && key && I.craneCrew[key]) || null;
+  const crew = cc && typeof cc === 'object'
+    ? Object.keys(cc).filter((k) => /^\d+호기$/.test(k) && cc[k] && (typeof cc[k] !== 'object' || String(cc[k].name || '').trim())).length : 0;
+  if (crew > 0) return { n: Math.min(4, crew), src: 'crew', key, crew };
+  const base = Number(I.gangs) || 0;
+  if (base > 0) return { n: Math.min(4, base), src: 'voyage', key, crew: 0 };
+  return { n: 0, src: null, key, crew: 0 };
+}
+
 export function shiftGangKey(shift) {
   if (!shift) return '';
   const ms = shift.startMs || (shift.name === '야간조' ? (shift.endMs - 86400000) : shift.endMs);

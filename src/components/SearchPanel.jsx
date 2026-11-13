@@ -733,7 +733,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
           <div className="space-y-1">
             {extraList.map(c => (
               <div key={c.cn} className="flex items-center gap-2 text-xxs bg-ink-900/60 rounded px-2 py-1">
-                <span className="mono font-bold text-amber-300 flex-1 truncate">{c.cn}</span>
+                <span className="mono font-bold text-amber-300 flex-1 truncate"><CnText className="text-dim-100" cn={c.cn}/></span>
                 <span className="text-dim-300">{c._extraSize} · {c.fe} · {c._extraType}</span>
                 {c.tmp && <span className="text-cyan-300">❄{c.tmp}°</span>}
                 {c._extraDamage && c._extraDamage !== '없음' && <span className="text-orange-400" title={c._extraDamage}>⚠</span>}
@@ -986,7 +986,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             return allContainers.filter(c => c._mode === workFilter && !c._comp && (_nb.has(c.cn) || !c.bay || c.bay_actual === '__STG__' || c.planTaken)).map(c => (
             <div key={c.cn} className="flex items-center gap-1.5">
               <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-ink-800 rounded px-2 py-1.5 text-xs mono font-bold text-dim-100">
-                {c.cn} <span className="text-2xs text-dim-300 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
+                <CnText className="text-dim-100" cn={c.cn}/> <span className="text-2xs text-dim-300 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
                 {(c.planTaken || c.bay_actual === '__STG__' || (c.bay && _nb.has(c.cn)))
                   ? (() => {
                       const from = c.planTaken?.from
@@ -2449,7 +2449,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       {cSel ? (
         <div className="mt-2 flex items-center justify-between bg-ink-800 rounded px-2 py-1.5">
           <div>
-            <span className="mono text-sm font-bold text-dim-100">{cSel.cn}</span>
+            <span className="mono text-sm font-bold text-dim-100"><CnText className="text-dim-100" cn={cSel.cn}/></span>
             <span className="ml-2 text-2xs mono text-dim-300">기존 위치 {cSel.bay ? fmtPos(cSel) : '자리 없음'}{isSwapSlot(cSel) ? ` (${loadingSlotOf(cSel).kind === 'swap' ? '맞교환 자리' : '자리 미정 — 규격·풀엠티·항구가 다른 맞교환'} · 계획 ${loadingSlotOf(cSel).plan})` : ''}</span>
             {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-2xs font-bold">⚠ 완료기록</span>}
           </div>
@@ -2463,7 +2463,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
               {rr.map(c => (
                 <button key={c.cn} onClick={() => setCSel(c)}
                   className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-dim-100">
-                  {c.cn}{c._comp ? ' ⚠완료' : ''}
+                  <CnText className="text-dim-100" cn={c.cn}/>{c._comp ? ' ⚠완료' : ''}
                 </button>
               ))}
             </div>
@@ -3140,14 +3140,14 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
         <div className="flex flex-wrap gap-1 mt-1 justify-center">
           {list.slice(0, 8).map((x) => (
             <button key={x.cn} onClick={() => pick(x)} className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
-              {x.cn}<span className="ml-1 text-3xs text-rose-300 font-black">{posTxt(x)}</span>
+              <CnText className="text-dim-100" cn={x.cn}/><span className="ml-1 text-3xs text-rose-300 font-black">{posTxt(x)}</span>
             </button>
           ))}
         </div>
       </div>
     );
     const okLine = (x) => x && (
-      <div className="mt-2 text-xs text-emerald-300 font-bold text-center" data-twin-ok={x.cn}>✓ <span className="mono">{x.cn}</span> · 계획 <span className="mono">{posTxt(x)}</span> · {x.tp || isoToLabel(x.iso) || ''} {String(x.fe || '').toUpperCase() === 'E' ? 'EMPTY' : 'FULL'}</div>
+      <div className="mt-2 text-xs text-emerald-300 font-bold text-center" data-twin-ok={x.cn}>✓ <span className="mono"><CnText className="text-dim-100" cn={x.cn}/></span> · 계획 <span className="mono">{posTxt(x)}</span> · {x.tp || isoToLabel(x.iso) || ''} {String(x.fe || '').toUpperCase() === 'E' ? 'EMPTY' : 'FULL'}</div>
     );
     const box = (lab, tone, val, setVal, onClear, extra, disabled = false) => (
       <div className={`bg-ink-900 border ${tone === 'amber' ? 'border-amber-700/40' : 'border-cyan-700/40'} rounded-pill p-3`} data-twin-box={lab}>
@@ -3250,7 +3250,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
               {r1.slice(0, 8).map(c => (
                 <button key={c.cn} onClick={() => { setC1(c); setC2(autoMate(c)); }}
                   className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
-                  {c.cn}{/* 3.3-01: 자리까지 보여야 고른다 */}
+                  <CnText className="text-dim-100" cn={c.cn}/>{/* 3.3-01: 자리까지 보여야 고른다 */}
                   <span className="ml-1 text-3xs text-rose-300 font-black">{c.deckPos || (c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음')}</span>
                 </button>
               ))}
@@ -3389,7 +3389,7 @@ function ManualTwinPicker({ allContainers, c1, onPick, note = '' }) {   // 4.23-
           {matches.map(c => (
             <button key={c.cn} onClick={() => onPick(c)}
               className="bg-ink-800 hover:bg-ink-750 px-2 py-1 rounded text-xxs mono text-cyan-300">
-              {c.cn}
+              <CnText className="text-dim-100" cn={c.cn}/>
             </button>
           ))}
         </div>

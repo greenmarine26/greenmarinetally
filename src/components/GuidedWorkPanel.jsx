@@ -2368,7 +2368,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         const row = (h, other) => (
           <div key={h.cn} className={`flex items-center justify-between gap-2 rounded-pill px-3 py-2 ${other ? 'bg-ink-900/60' : 'bg-ink-900'}`} data-held-row={other ? 'other' : 'mine'}>
             <div className="min-w-0">
-              <div className="mono text-sm text-dim-100 truncate">{h.cn}{h._pos ? <span className="text-xxs text-dim-400"> {h._pos}</span> : null}</div>
+              <div className="mono text-sm text-dim-100 truncate"><CnText className="text-dim-100" cn={h.cn}/>{h._pos ? <span className="text-xxs text-dim-400"> {h._pos}</span> : null}</div>
               <div className="text-xxs text-amber-300">{h.reason} · {Math.max(1, Math.round((Date.now() - (h.at || 0)) / 60000))}분째{h.equip ? ` · ${h.equip}` : ''}{h.by ? ` ${h.by}` : ''}</div>
             </div>
             {other ? (
