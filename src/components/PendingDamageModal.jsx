@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Camera, Send, Trash2, CalendarClock } from 'lucide-react';
 import { DAMAGE_TYPES, DAMAGE_PARTS } from '../kakaoShare.js';
 import { fbAddPendingDamage, fbGetPendingDamage, fbDeletePendingDamage } from '../firebase.js';
-import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
+import CnText, { CnInline } from './CnText.jsx';   // 5.00-02: 문장 속 컨 번호도 한 벌 —   // 5.00 컨 번호 한 벌
 
 const CN_RE = /^[A-Z]{4}\d{7}$/;
 
@@ -142,7 +142,7 @@ export default function PendingDamageModal({ inspector = '', onClose }) {
             className="w-full bg-ink-800 border border-line rounded-btn px-3 py-2 text-sm text-dim-100 placeholder-dim-400 resize-y" />
 
           {notice && (
-            <div className={`text-xxs rounded-pill px-3 py-2 font-bold ${notice.tone === 'ok' ? 'bg-emerald-900/40 text-emerald-200' : 'bg-red-900/40 text-red-200'}`}>{notice.msg}</div>
+            <div className={`text-xxs rounded-pill px-3 py-2 font-bold ${notice.tone === 'ok' ? 'bg-emerald-900/40 text-emerald-200' : 'bg-red-900/40 text-red-200'}`}><CnInline text={notice.msg} /></div>
           )}
 
           <button onClick={handleSave} disabled={sending}

@@ -488,6 +488,9 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       if (e.key !== 'Escape' || e.defaultPrevented || !_cdmRoot.current) return;
       const covers = [...document.querySelectorAll('.fixed.inset-0')].filter((el) => el.getBoundingClientRect().height > 0);
       if (covers[covers.length - 1] !== _cdmRoot.current) return;
+      //  5.00-02(감사 권장): 입력칸·고르기 칸에 글을 쓰던 중이면 Esc 는 그 입력에서 빠져나오는 데만 쓴다 — 창 전체를 닫지 않는다.
+      const ae = document.activeElement;
+      if (ae && _cdmRoot.current.contains(ae) && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) { e.preventDefault(); try { ae.blur(); } catch (er) { /* 빠져나오기만 */ } return; }
       e.preventDefault(); onClose?.();
     };
     window.addEventListener('keydown', onKey);

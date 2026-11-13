@@ -868,7 +868,7 @@ export default function PositionEditModal({
                   {/* 2.93/2.94-05: 확인창과 **같은 문장**을 쓴다. 종전엔 이 줄이 "실물은 창고에",
                       확인창이 "원래 자리로 옮겨집니다" 라 서로 달랐다(검수사 지적 2026-08-31). */}
                   {vacating
-                    ? <>⚠ <CnText className="text-dim-100" cn={conflict.cn}/> → <b className="text-emerald-300">{vacating}</b> 로 갑니다 ({container?.cn}이 비우는 자리)</>
+                    ? <>⚠ <CnText className="text-dim-100" cn={conflict.cn}/> → <b className="text-emerald-300">{vacating}</b> 로 갑니다 (<CnText className="text-dim-100" cn={container?.cn}/>이(가) 비우는 자리)</>
                     : <>⚠ <CnText className="text-dim-100" cn={conflict.cn}/> → 계획 자리를 내줍니다 (실을 자리를 정해 주세요)</>}
                 </div>
               )}

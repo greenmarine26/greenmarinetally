@@ -202,7 +202,7 @@ T(RN('PCTC', new Date(2026, 8, 6, 12, 30).getTime()).rest === true, '부두를 �
       T(f3.length === 0 && !ctxP.__state.stow.virtual && ctxP.__state.stow.ediRows.length === 50 && ctxP.__CT.planNew.includes('loading'), '완성본(실 EDI)이 오면 가상 조립을 멈추고 그것을 쓰며 띠에 새로고침을 말한다');
       //  ctFetch 가 실패 모드의 기준 시각을 되돌리는 줄이 소스에 있다
       T(html.includes('CT.dataAt[m] = _daPrev[m];'), '다시 못 읽은 모드는 dataAt 기준을 이전 값으로 되돌린다(다음 사이클에 또 읽는다)');
-      T(/if\(!res\.ok\) return null;/.test(html.slice(html.indexOf('async function fbFetchEdiContainers'), html.indexOf('async function fbFetchEdiContainers') + 800)), 'ediContainers 를 못 받으면 null(실패) — 빈 리스트와 갈라 돌려준다');
+      T(/if\(!res\.ok\)(?: return null;|\{ _ediReadFail\[mode\]=true; return null; \})/.test(html.slice(html.indexOf('async function fbFetchEdiContainers'), html.indexOf('async function fbFetchEdiContainers') + 800)), 'ediContainers 를 못 받으면 null(실패) — 빈 리스트와 갈라 돌려준다');
       //  ⑨ 감사 지적 — «③ 콘 계산하기» 는 가상 EDI 로 콘 작업표를 내지 않는다(부분 수가 계획 콘 수로 나가지 않게)
       {
         const pg = html.match(/function planToGroups\(plan, ctx\)\{[\s\S]*?\n\}\n/);

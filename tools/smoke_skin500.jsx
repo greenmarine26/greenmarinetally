@@ -17,6 +17,7 @@ import HelpModal from '../src/components/HelpModal.jsx';
 import ConfirmModal from '../src/components/ConfirmModal.jsx';
 import { APP_VERSION } from '../src/utils.js';
 import ErrorBoundary from '../src/components/ErrorBoundary.jsx';
+import { setMirDock, setMirOpener } from '../src/faceDock.js';   // 5.00-02: 수석 상황판 미르 줄 — 시트가 있는 것처럼(ready) 세우고 여닫이 부름을 센다
 import UpdatePrompt from '../src/components/UpdatePrompt.jsx';
 import GreetingModal from '../src/components/GreetingModal.jsx';
 import { showToast } from '../src/toast.js';
@@ -41,6 +42,7 @@ window.__H = {
     if (name === 'login') el = React.createElement('div', { className: 'min-h-screen bg-ink-950 text-dim-100' }, React.createElement(LoginPage, { inspectors: p.inspectors, voyages, onSelect: noop, extraStaff: {}, deletedStaff: {} }));
     else if (name === 'home') el = shell('home', voyages, insp, wc, React.createElement(HomePage, { voyages, inspectors: p.inspectors, inspector: insp, portMisData: p.pm, pilotForecast: p.pf, heartbeat: p.hb, onRefreshData: noop, refreshing: false, refreshedAt: 0, onOpenVoyage: noop, onOpenChiefDashboard: noop, onOpenAux: noop }));
     else if (name === 'voyage') { const v = voyages[p.voyKey]; el = shell('voyage', voyages, insp, wc, React.createElement(VoyagePage, { voyageKey: p.voyKey, voyage: v, inspector: insp, inspectors: [], portMisData: {}, pilotForecast: {}, onGoHome: noop, onModeChange: noop, initModeOverride: p.mode })); }
+    else if (name === 'chief' && (setMirOpener((from) => { window.__mirOpened = (window.__mirOpened || []).concat(from); }), setMirDock({ ready: true }), false)) el = null;
     else if (name === 'chief') el = shell('chief', voyages, insp, wc, React.createElement(ChiefDashboard, { voyages, inspectors: p.inspectors, inspector: insp, collectorHb: p.hb, pilotForecast: {}, portMisData: {}, onRefreshData: noop, refreshing: false, refreshedAt: 0, onOpenVoyage: noop, onGoHome: noop, onMirPlan: noop, onOpenGlobalSearch: noop, onOpenStaffManager: null }));
     else if (name === 'search') el = shell('search', voyages, insp, wc, React.createElement(GlobalSearchPage, { voyages, onOpenContainer: noop, portMisData: {}, heartbeat: p.hb, isChief: true, initialQuery: p.q || '' }));
     else if (name === 'owner') el = shell('owner', voyages, insp, wc, React.createElement(OwnerPage, { inspector: insp, voyages, onGoHome: noop, onGoChief: noop, onOpenStaffManager: noop }));

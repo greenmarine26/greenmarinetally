@@ -815,7 +815,7 @@ export function voyageCountsOf(voyage, fallbackContainers = null, shiftSet = nul
 //      그래서 무브 = 대수 − 트윈으로 들 수 있는 쌍 수. 트윈 쌍은 화면·미르가 쓰는 그 판정 한 벌(nlSearch buildTwinPairs·analyzeTwinPairs —
 //      앞뒤 베이 같은 row/tier의 20피트 두 대, 합계 55t 이하, 무게차 부두별 한계 PNCT 14t·PCTC 20t)을 **센 컨에만** 건다.
 //      무게를 모르는 쌍은 트윈으로 치지 않는다(보수적으로 한 대씩) — 그 쌍 수(noWt)를 같이 돌려줘 화면이 밝힌다.
-//    대수는 항차 총 대수(voyageCountsOf 한 벌 — 홈 카드 분모와 같은 수)이고, 갱 수 = 지금 조의 `info.gangsShift` → 항차 기본 `info.gangs`.
+//    대수는 항차 총 대수(voyageCountsOf 한 벌 — 홈 카드 분모와 같은 수)이고, 갱 수 = utils.gangsOfShift(5.00-01) — 지금 조의 `info.gangsShift`(말로 정한 수) → 그 조에 등록된 호기 수(`info.craneCrew`) → 항차 기본 `info.gangs`.
 //    둘 다 없으면 2갱으로 센다(지어낸 값이 아니라 «2갱 기준, 1갱이면 ×2» 앱 원칙) — 그 사실(gangsKnown:false)과 1갱 값을 같이 돌려준다.
 //    ⚠ 배정목록 수량(info.planDis/planLod)은 카운트 기준으로 쓰지 않는다(예정치가 섞인다) — 앱 대수가 배정보다 훨씬 적을 때 «자료가 덜 들어옴» 근거로만 돌려준다.
 export const MOVES_PER_GANG_HOUR = 30;      // 트윈이 어느 정도 있는 작업의 갱당 시간당 무브

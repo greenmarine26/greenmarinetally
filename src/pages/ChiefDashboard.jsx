@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import ChiefMirBar from '../components/ChiefMirBar.jsx';   // 5.00-02: 탭 줄 안 넷째 칸 [미르](검수사 «이안에 넣으세요»)
 import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { FitBox } from '../components/FitBox.jsx';   // 3.48: 한 벌 — 베이뷰 작업과 공용
 import { Users, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';   // 4.24: Anchor 는 옛 보드 머리와 함께 뺐다
@@ -1112,6 +1113,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               <span className="hud-ico" aria-hidden="true">{ico}</span>{label}
             </button>
           ))}
+          {/* ★ 5.00-02 — 미르는 탭 줄 안 넷째 칸(검수사 2026-11-13 17:55 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» · 18:19 탭 줄 사진 «이안에 넣으세요»).
+               4.89 에 얼굴 단추를 없앤 뒤로 검색줄이 없는 이 화면에서는 미르를 부를 길이 없었다. 탭이 아니라 창을 여는 문(hud-door) — 누르면 다른 화면의 «미르야» 와 같은 미르 시트. */}
+          <ChiefMirBar />
         </nav>
       </div>
 

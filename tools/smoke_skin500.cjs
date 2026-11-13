@@ -30,6 +30,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(`html data-skin 을 거는 곳은 skin.js 한 곳(${setters.join(', ')})`, setters.length === 1 && setters[0] === 'src/skin.js');
   ok('기본값 — 저장 없으면 1안(종전 밝기 4 기기는 2안)', /return getBrightness\(\) === 4 \? 2 : 1;/.test(skinJs));
   const pairSrc = execSync(`grep -rnE "cn\\??\\.slice\\(0, *-4\\)\\}|>\\{[A-Za-z_.?]*\\.l4 \\|\\| [A-Za-z_.?]*\\.cn\\?\\.slice\\(-4\\)\\}<" src --include=*.jsx || true`, { cwd: ROOT }).toString().trim();
+  ok('경고 띠 문장 속 컨 번호도 한 벌 — DiagnosticsPanel 이 alert.msg 를 CnInline 으로 그린다(5.00-02 · OBWH 2791E «… CICU3004578, CICU3006863»)', /<CnInline text=\{alert\.msg\}/.test(fs.readFileSync(path.join(ROOT, 'src/components/DiagnosticsPanel.jsx'), 'utf8')) && /export function CnInline/.test(fs.readFileSync(path.join(ROOT, 'src/components/CnText.jsx'), 'utf8')));
   ok('끝 4자리만 크게·앞 7자리 작게 그리던 자리 0(CnText 한 벌로)', !pairSrc, pairSrc.split('\n').slice(0, 4).join(' | '));
 
   let genOk = true; try { execSync('node tools/gen_skin_text.cjs', { cwd: ROOT, stdio: 'pipe' }); } catch (e) { genOk = false; }
@@ -166,8 +167,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const browser = await pw.chromium.launch({ executablePath: CHROME });
   const net = [];
   const render = async (w, h, attrs, scr, extra, acts) => {
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, timezoneId: 'Asia/Seoul', locale: 'ko-KR' });
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, timezoneId: 'Asia/Seoul', locale: 'ko-KR', reducedMotion: 'reduce' });   /* 5.00-02: 깜빡임(animate-pulse) 도중의 투명도를 대비로 재지 않게 — 새 버전 띠가 4.24↔통과로 흔들렸다 */
     await ctx.route(/^https?:/, (rt) => { const rq = rt.request(); if (rq.method() !== 'GET' && !(scr === 'crash' && /claude_inbox/.test(rq.url()))) net.push(rq.method() + ' ' + rq.url().slice(0, 80)); return rt.abort(); });   // 바깥 요청은 전부 막는다(읽기도 닿지 않는다) · 쓰기 시도는 하나도 없어야 한다
+    await ctx.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '*,*::before,*::after{animation:none!important;transition:none!important}'; document.head.appendChild(st); }); });   /* 5.00-02: animate-pulse 깜빡임 중간 투명도를 대비로 재지 않게(새 버전 띠 4.24↔통과로 흔들림) — 색 판정은 그대로 */
     const pg = await ctx.newPage(); const errs = [];   // 오류 화면(crash)은 ErrorBoundary 가 크래시 보고(claude_inbox POST)를 시도한다 — 본디 동작이라 ⑧ 에서 빼고, 막혀서 닿지 않는다
     pg.on('pageerror', (er) => errs.push(String(er).slice(0, 160)));
     pg.on('dialog', (d) => d.dismiss().catch(() => {}));
@@ -184,12 +186,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await sleep(450);
     }
     const m = await pg.evaluate(MEASURE);
+    //  5.00-02 수석 상황판 미르 줄 — 탭 앞 빈 칸에 서 있고(높이 44 이상 · 오른쪽 끝이 화면 안) 누르면 미르 시트 여닫이를 부른다
+    let mirBar = null;
+    if (scr === 'chief') mirBar = await pg.evaluate(async () => { const b = document.querySelector('button[data-chief-mir="1"]'); const t = document.querySelector('[data-chief-tabs="1"]'); if (!b) return { found: false }; const r = b.getBoundingClientRect(), tr = t ? t.getBoundingClientRect() : null; b.click(); await new Promise((z) => setTimeout(z, 50)); return { found: true, h: Math.round(r.height), w: Math.round(r.width), right: Math.round(r.right), vw: innerWidth, beforeTabs: !!t && t.contains(b) && r.top >= tr.top - 1 && r.bottom <= tr.bottom + 1, opened: (window.__mirOpened || []).join(',') }; });
     await ctx.close();
-    return { ...m, errs };
+    return { ...m, errs, mirBar };
   };
 
   const fails = { err: [], tiny: [], low: [], cn: [], small: [], order: [], miss: [], wrap: [] };
-  const base0 = {}, baseMiss = {}; let gradSeen = 0;
+  const base0 = {}, baseMiss = {}; let gradSeen = 0; let mirSeen = 0;
   for (const [w, h, tag] of [[1440, 900, '컴'], [390, 844, '폰']]) {
     for (const [nm, scr, extra, acts] of SCREENS.filter((x) => !process.env.SKIN500_ONLY || process.env.SKIN500_ONLY.split(',').includes(x[0]))) {   // 단독 확인용 — 화면 몇 개만
       //  안 고르기 전(종전 화면)의 단추 순서 — 기준
@@ -212,6 +217,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         if (b0 && JSON.stringify(b0) !== JSON.stringify(m.btns)) fails.order.push(`${k}: 기준 ${b0.length}개 · 이 안 ${m.btns.length}개`);
         if (scr === 'voyage' && /작업 카드/.test(nm)) ok(`⑦ ${k} — 작업 카드 컨 번호가 한 벌 표기(.cn · 끝 4자리 .cn-l ${m.cnN}개)`, m.cnN >= 1);
         if (scr === 'card') ok(`⑦ ${k} — 컨 상세 머리가 열한 자 한 벌 표기`, m.cnN >= 1);
+        if (scr === 'chief' && m.mirBar) { const b = m.mirBar; if (!(b.found && b.h >= 44 && b.right <= b.vw && b.beforeTabs && b.opened === 'chief-bar' && b.w >= 24)) fails.mir = (fails.mir || []).concat(`${k}: ${JSON.stringify(b)}`); else mirSeen = (mirSeen || 0) + 1; }
       }
     }
   }
@@ -219,6 +225,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok('② 12px 아래 글자 0(그림 칸 제외)', !fails.tiny.length, fails.tiny.slice(0, 4).join(' | '));
   ok('② 두 글자 낱말(양하·선적)이 «양/하»로 꺾인 칸 0 — 수석 상황판 크게 포함(5.00-01)', !fails.wrap.length, fails.wrap.slice(0, 4).join(' | '));
   ok(`③ 글자 대비 AA(4.5 · 큰 글자 3) 미달 0 — 그라데이션 클래스가 붙은 요소 ${gradSeen}곳(로그인 시작 단추·새 버전 띠·인사 창·보조기능·매뉴얼·검색 포함)도 정지색마다 잼`, !fails.low.length && gradSeen > 0, fails.low.slice(0, 4).join(' | '));
+  ok(`⑩ 수석 상황판 미르 칸(5.00-02 «이안에 넣으세요») — 세 안 × 컴·폰 ${mirSeen}곳 모두 탭 줄 안 넷째 칸에 서고(높이 44 이상·화면 안) 누르면 미르 시트를 부른다`, !(fails.mir || []).length && mirSeen >= 6, (fails.mir || []).slice(0, 3).join(' | '));
   ok('③ 컨 번호 대비 AAA(7) 미달 0', !fails.cn.length, fails.cn.slice(0, 4).join(' | '));
   ok('④ 누르는 자리 — 높이 44px · 너비 24px(WCAG 2.5.8) 미달 0(그림 칸 제외 · 실제로 넓힌 자리로 잰다)', !fails.small.length, fails.small.slice(0, 4).join(' | '));
   ok('⑥ 단추 순서·이름 — 세 안 모두 안 고르기 전과 같다', !fails.order.length, fails.order.slice(0, 4).join(' | '));

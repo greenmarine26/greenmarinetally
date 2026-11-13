@@ -872,6 +872,9 @@ button.home-big:active { transform: translateY(2px); }
 /* 5.00-01: 5.00 부터 단추가 position:relative(손가락 자리 넓힘)라, z 없는 sticky 머리 위로 스크롤된 단추가 그려져 머리의 ✕ 를 덮었다(컨 상세 창).
    z 를 따로 안 준 sticky 는 같은 쌓임 안에서 본문 단추보다 위에 둔다. */
 .sticky:not([class*="z-"]) { z-index: 5; }
+/* 5.00-02: 3안 STMJ 화면이 375px 폰에서 376px 로 1px 가로로 넘쳤다(5.00-01 라이브 확인). 같은 STMJ 실데이터(GET)로 하네스 열 탭을 재었으나 넘치는 요소를 못 찾았다 —
+   폰 화면은 가로로 밀리지 않게 문서 바깥을 잘라 둔다(clip 은 hidden 과 달리 sticky 머리를 깨지 않는다). */
+@media (max-width: 699px) { html, body { overflow-x: clip; } }
 @media (max-width: 699px) { :root[data-skin="3"] [data-data-center] .grid { grid-template-columns: 1fr; } }
 /* 5.00-01: 3안 폰 항차 검색줄 — 글자가 커서 칸이 120px 로 좁아 안내가 «🎤 / .»까지만 보였다. 검색칸은 한 줄 전부, 단추 넷은 다음 줄 오른쪽으로(순서 그대로). */
 @media (max-width: 639px) {

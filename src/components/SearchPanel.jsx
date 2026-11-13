@@ -650,7 +650,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib,
     noBayCns: new Set((manualGroups.find(x => x.noBay)?.cns) || []),   // 4.23-01: «자리 없음» 묶음 명단 — 머리 수·🅿 목록과 같은 한 벌
     pier: voyage?.info?.pier || '',   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
-    gangs: voyage?.info?.gangs,
+    //  5.00-02(감사 권장): 죽은 값 gangs(voyage.info.gangs)를 뺐다 — 아무도 안 읽었고, 갱 수는 utils.gangsOfShift 한 벌이 info 에서 읽는다.
     //  3.6-01: 페이스 분모는 «접안~이안 실작업 시간»이다 — 그 시각과 항차 전체 완료를 같이 내린다.
     //  ⚠ 하나씩 고르지 말고 **항차 info 를 통째로** 싣는다 — 고르면 반드시 빠뜨린다(감사 두 번).
     //  ★ 3.24 — 거기에 **검수 시작·완료(작업 보고)** 두 칸을 얹는다. 검수사 «작업 시작 시간은 검수 시작이 시작입니다».

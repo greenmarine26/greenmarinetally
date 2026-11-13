@@ -197,7 +197,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-black text-sm text-emerald-50">🆕 새 버전 출시{note.v ? ` — ${String(note.v).replace(/^TallyOne\s*/, '')}` : ''}</div>
-          <div className="text-xxs text-emerald-100/90">{note.note || '탭 한 번으로 최신 버전 적용'}</div>
+          <div className="text-xxs text-emerald-50">{/* 5.00-02: 100/90 은 에메랄드 600 바탕에서 대비 4.24(AA 4.5 미달) — 움직임을 끈 연막에서 늘 드러났다 */}{note.note || '탭 한 번으로 최신 버전 적용'}</div>
         </div>
         <button onClick={handleUpdate}
           className="bg-emerald-100 text-emerald-900 px-3 py-2 rounded font-black text-xs flex items-center gap-1 active:scale-95 transition">

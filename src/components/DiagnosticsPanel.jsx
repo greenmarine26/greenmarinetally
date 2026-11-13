@@ -5,7 +5,7 @@ import { fmtPos, isoShown, ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, MFN_LABEL, mfnNot
 //   - warning: 주황 + 자동 음성
 //   - info: 파랑 + 화면만 (음성 X)
 //   - 음성 ON/OFF 토글, 닫기 버튼
-import CnText from './CnText';   // 5.00-01: 컨 번호 한 벌 표기
+import CnText, { CnInline } from './CnText';   // 5.00-01: 컨 번호 한 벌 표기 · 5.00-02 문장 속 컨 번호(CnInline)
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, AlertCircle, Info, Volume2, VolumeX, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { speak, stopSpeak } from '../voice.js';
@@ -125,7 +125,7 @@ function AlertRow({ alert, forceOpen, onOpenContainer, onOpenMfnList, reconShown
     <div className={`border rounded-pill p-2 ${colorClass}`}>
       <button onClick={() => setOpen(v => !v)} className="w-full flex items-start gap-2 text-left">
         <Icon className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>
-        <div className="text-xs flex-1 leading-relaxed font-bold break-words break-keep">{alert.msg}</div>{/* 4.49-01: 알림 한 줄(«자료별 대조 — … 적용하면 315 …»)도 한글은 띄어쓰기 자리에서만 — 4.49 라이브 확인 320px «적⏎용하면» «수⏎정 전» */}
+        <div className="text-xs flex-1 leading-relaxed font-bold break-words break-keep"><CnInline text={alert.msg} cnClassName="text-dim-100" /></div>{/* 4.49-01: 알림 한 줄(«자료별 대조 — … 적용하면 315 …»)도 한글은 띄어쓰기 자리에서만 — 4.49 라이브 확인 320px «적⏎용하면» «수⏎정 전» */}
         {hasDetails && (
           <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}/>
         )}
@@ -378,10 +378,10 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
                  눌러도 고를 것이 없다(재감사 지적). 갈리는 컨은 목록 맨 앞으로 올려 둔다. */}
             <div className="text-dim-300 mb-0.5">EDI에 없는 컨번호{(d.podAskCns || []).length ? ` (⚠ 목적지 확인 ${(d.podAskCns || []).length}대 — 눌러서 POD 확정)` : ''}:</div>
             <TruncList items={d.extraCns} limit={10} unit="건" render={(cn) => {   // 4.22: «외 N건» 을 펼칠 수 있게
-              const ask = (d.podAskCns || []).includes(cn);
+              const ask = (d.podAskCns || []).includes(cn);   // 5.00-02(감사 권장): 확인 요망 컨만 강조색(amber·굵게) — CnText 에 강조 클래스를 넘긴다
               return onOpenContainer
                 ? <button onClick={(e) => { e.stopPropagation(); onOpenContainer(cn); }} data-extra-cn={cn} data-pod-ask={ask ? '1' : undefined}
-                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• <CnText className="text-dim-100" cn={cn}/>{ask ? ' ⚠' : ''}</button>
+                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• <CnText className={ask ? 'text-amber-200 font-bold' : 'text-dim-100'} cn={cn}/>{ask ? ' ⚠' : ''}</button>
                 : <div className="mono">• <CnText className="text-dim-100" cn={cn}/></div>;
             }}/>
           </div>
@@ -453,7 +453,7 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
           <button
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(t.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-ink-750/50 active:bg-ink-700" data-seal-format-line
-          >• <CnText className="text-dim-100" cn={t.cn}/> · 씰 {t.seal} · {t.why}</button>
+          >• <CnText className="text-dim-100" cn={t.cn}/> · 씰 {t.seal} · <CnInline text={t.why} cnClassName="text-dim-100" /></button>
         )}/>
       </div>
     );

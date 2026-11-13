@@ -35,7 +35,7 @@ import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PO
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
 import { openXrayListPrint } from '../inspectionList.js';        // 2.26-02: 인쇄는 검수리스트·VGM 과 같은 벌(별도 문서)
 import { deckCoordMap } from '../rzorPlan.js';                   // 4.04-01: RZOR 선내위치 = 덱플랜 좌표 «덱_줄_칸»
-import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
+import CnText, { CnInline } from './CnText.jsx';   // 5.00-02: 문장 속 컨 번호도 한 벌 —   // 5.00 컨 번호 한 벌
 
 //  세관 파일의 화물구분 4종 — 실측 64개 358행(X-RAY 252 · Sea & Air 84 · 반입후검사 14 · 즉시검사 8).
 //  ⚠ 시안에는 «즉시검사»가 빠져 있었다. 실물에 있으므로 넣는다.
@@ -480,7 +480,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           </div>
         )}
         {viewOnly && <div className="text-2xs text-dim-400" data-testid="xray-rest-viewonly">조회만으로 들어와 있어 등록할 수 없습니다. 작업자로 다시 들어오십시오.</div>}
-        {bulk.msg && <div className="text-2xs text-emerald-300" data-testid="xray-rest-msg">{bulk.msg}</div>}
+        {bulk.msg && <div className="text-2xs text-emerald-300" data-testid="xray-rest-msg"><CnInline text={bulk.msg} /></div>}
         {noNumCount > 0 && <div className="text-2xs text-dim-400">봉인번호가 아직 없는 {noNumCount}대는 번호를 넣은 뒤 등록됩니다.</div>}
       </div>
       <div className="flex items-center gap-2">
