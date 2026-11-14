@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { LegendHero, LegendRows, LegendCompactRow } from '../components/LegendMotion.jsx';   // 5.02: 별첨1·2 모션 그림 + 4척 한 줄 요약
+import { LegendHero, LegendRows, LegendFE, LegendCompactRow } from '../components/LegendMotion.jsx';   // 5.02: 별첨1·2 모션 그림 + 4척 한 줄 요약
 import ChiefMirBar from '../components/ChiefMirBar.jsx';   // 5.00-02: 탭 줄 안 넷째 칸 [미르](검수사 «이안에 넣으세요»)
 import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { FitBox } from '../components/FitBox.jsx';   // 3.48: 한 벌 — 베이뷰 작업과 공용
@@ -2668,22 +2668,25 @@ export function LiveShipCard({ zoom = 1, v, workers, standby = [], lastReport, a
                   <LegendHero L={L} rows={L.carriers} mode={m} />
                   <LegendRows title={`별첨1 · 선사별 (${modeK}) ${L.done}/${L.n}`} rows={L.carriers} mode={m} />
                   <LegendRows title={`별첨2 · 화물 종류별 (${modeK})`} rows={L.cargos} mode={m} />
+                  <LegendFE title={`별첨3 · 규격별 F/E (${modeK})`} fe={L.fe} mode={m}
+                    emptyLine={L.emptyRf.n > 0 ? emptySplitLabel(L.fe['20'].E.n + L.fe['40'].E.n + L.fe['45'].E.n, L.emptyRf.n) : ''} />
+                  {/* 3.12: 선적은 표 넷 — 검수사 «선적은 표4개가 필요합니다 양하처럼 + 포트별». 5.02-04: 별첨3·4 도 그림으로, 옛 표는 «표로 보기» 안에 그대로(숫자는 같은 L 한 벌). */}
+                  {m === 'loading' && L.pods.length > 0 && <LegendRows title={`별첨4 · 목적지별 (${modeK})`} rows={L.pods} mode={m} />}
                   <details data-legend-oldtables={m} className="px-1">
-                    <summary className="text-xs text-dim-400 cursor-pointer select-none" style={{ minHeight: 'var(--tap-chip-pc)' }}>표로 보기 (별첨1·2)</summary>
+                    <summary className="text-xs text-dim-400 cursor-pointer select-none" style={{ minHeight: 'var(--tap-chip-pc)' }}>표로 보기 (별첨1~4)</summary>
                     {mk(`별첨1 · 선사별 (${modeK}) ${L.done}/${L.n}`, L.carriers.concat([['합계', tot(L.carriers)]]))}
                     {mk(`별첨2 · 화물 종류별 (${modeK})`, L.cargos.concat([['합계', tot(L.cargos)]]))}
+                    <div>
+                      <div className="font-bold text-dim-300 px-1">{`별첨3 · 규격별 F/E (${modeK})`}</div>
+                      <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+                        {colgroup}{head(has45All ? ['Full', 'Empty', '', '계'] : ['Full', 'Empty', '계'])}
+                        <tbody>{feRows.map(([k, cells]) => <tr key={k} className="border-t border-line/60"><td className="px-1 text-dim-200">{k}</td>{cells.map((e, i) => <LegendCell key={i} e={e}/>)}</tr>)}</tbody>
+                      </table>
+                      {/* 4.15-01 (검수사 2026-10-09 15:37): 리퍼 엠티가 있으면 «엠티 N(일반 · 리퍼 엠티)» — 인쇄 별첨3 과 같은 한 줄(utils.emptySplitLabel) */}
+                      {L.emptyRf.n > 0 && <div className="px-1 text-dim-300">{emptySplitLabel(L.fe['20'].E.n + L.fe['40'].E.n + L.fe['45'].E.n, L.emptyRf.n)}</div>}
+                    </div>
+                    {m === 'loading' && L.pods.length > 0 && mk(`별첨4 · 목적지별 (${modeK})`, L.pods.concat([['합계', tot(L.pods)]]))}
                   </details>
-                  <div>
-                    <div className="font-bold text-dim-300 px-1">{`별첨3 · 규격별 F/E (${modeK})`}</div>
-                    <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-                      {colgroup}{head(has45All ? ['Full', 'Empty', '', '계'] : ['Full', 'Empty', '계'])}
-                      <tbody>{feRows.map(([k, cells]) => <tr key={k} className="border-t border-line/60"><td className="px-1 text-dim-200">{k}</td>{cells.map((e, i) => <LegendCell key={i} e={e}/>)}</tr>)}</tbody>
-                    </table>
-                    {/* 4.15-01 (검수사 2026-10-09 15:37): 리퍼 엠티가 있으면 «엠티 N(일반 · 리퍼 엠티)» — 인쇄 별첨3 과 같은 한 줄(utils.emptySplitLabel) */}
-                    {L.emptyRf.n > 0 && <div className="px-1 text-dim-300">{emptySplitLabel(L.fe['20'].E.n + L.fe['40'].E.n + L.fe['45'].E.n, L.emptyRf.n)}</div>}
-                  </div>
-                  {/* 3.12: 선적은 표 넷 — 검수사 «선적은 표4개가 필요합니다 양하처럼 + 포트별» */}
-                  {m === 'loading' && L.pods.length > 0 && mk(`별첨4 · 목적지별 (${modeK})`, L.pods.concat([['합계', tot(L.pods)]]))}
                 </div>
               );
             })}

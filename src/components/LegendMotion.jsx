@@ -1,4 +1,4 @@
-// 역할: 수석 상황판 별첨1·2 «움직이는 그림» — 고리 + 큰 «남은 N대» + 한 줄 결론 · 안 끝난 줄만 펼침(20'/40' 막대) · 끝난 줄은 ✓ 칩 · 4척 한 줄 요약(5.02).
+// 역할: 수석 상황판 별첨1·2·3·4 «움직이는 그림» — 고리 + 큰 «남은 N대» + 한 줄 결론 · 안 끝난 줄만 펼침(20'/40' 막대) · 끝난 줄은 ✓ 칩 · 4척 한 줄 요약(5.02).
 import React from 'react';
 import { CountUp } from './MotionBits.jsx';
 
@@ -110,6 +110,57 @@ export function LegendRows({ title, rows, mode }) {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+//  막대 한 줄(Full · Empty) — 이름 칸이 넓은 SzBar. 같은 xp-bar 부품.
+function FeBar({ label, e, lod }) {
+  if (!e || !e.n) return null;
+  const p = Math.round((e.done / e.n) * 100);
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="w-11 shrink-0 text-xs text-dim-400">{label}</span>
+      <div className="xp-bar xp-sm flex-1 min-w-0"><div className={`xp-fill mo-grow ${lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${p}%` }} /></div>
+      <span className={`shrink-0 text-xs mono ${e.done === e.n ? 'text-emerald-300 font-bold' : 'text-dim-200'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>{e.done}/{e.n}</span>
+    </div>
+  );
+}
+
+//  별첨3 규격별 F/E — 규격(20/40/45) 카드 안에 Full · Empty 막대 둘. 안 끝난 규격만 펼치고 끝난 규격은 ✓ 칩. 엠티 줄(일반 · 리퍼 엠티)은 카드 아래 한 줄.
+//  fe = L.fe = { '20': { F:{n,done}, E:{n,done} }, '40': ..., '45': ... } — 별첨 L 한 벌에서만 읽는다(새 계산 없음).
+export function LegendFE({ title, fe, mode, emptyLine }) {
+  const lod = mode === 'loading';
+  const rows = SZ.map((s) => {
+    const F = (fe && fe[s] && fe[s].F) || { n: 0, done: 0 }, E = (fe && fe[s] && fe[s].E) || { n: 0, done: 0 };
+    return { s, F, E, n: F.n + E.n, done: F.done + E.done };
+  }).filter((r) => r.n > 0);
+  if (!rows.length) return null;
+  const open = rows.filter((r) => r.n - r.done > 0), shut = rows.filter((r) => r.n - r.done <= 0);
+  return (
+    <div data-legend-block="별첨3">
+      <div className="font-bold text-dim-300 px-1 text-sm2">{title}</div>
+      <div className="space-y-1.5 px-1">
+        {open.map((r) => (
+          <div key={r.s} className="rounded-btn border border-line bg-ink-850 px-2 py-1.5 mo-up" data-legend-open={r.s + "'"}>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-dim-100 min-w-0 flex-1">{r.s}'</span>
+              <span className="shrink-0 rounded-pill border border-current text-amber-300 text-xs font-black px-2 py-px whitespace-nowrap">남음 {r.n - r.done}</span>
+              <span className="shrink-0 text-xs text-dim-400 mono">{r.done}/{r.n}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              <FeBar label="Full" e={r.F} lod={lod} />
+              <FeBar label="Empty" e={r.E} lod={lod} />
+            </div>
+          </div>
+        ))}
+        {shut.length > 0 && (
+          <div className="flex flex-wrap gap-1" data-legend-done-chips>
+            {shut.map((r) => <span key={r.s} className="rounded-pill border border-current text-emerald-300 text-xs font-bold px-2 py-px whitespace-nowrap" data-legend-done={r.s + "'"}>✓ {r.s}' {r.n}</span>)}
+          </div>
+        )}
+        {emptyLine ? <div className="text-xs text-dim-300 break-keep" data-legend-emptyline>{emptyLine}</div> : null}
       </div>
     </div>
   );
