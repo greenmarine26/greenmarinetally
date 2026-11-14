@@ -773,6 +773,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   NODE_PATH="$PWD/node_modules" node tools/smoke_skin500.cjs "$BUILT_CSS" || { echo "✗ 화면 고르기 세 안 연막검사 실패 — 배포 금지"; exit 1; }
   node tools/smoke_coneskin300.cjs || { echo "✗ 콘앱 3.00 화면 고르기 연막검사 실패 — 배포 금지"; exit 1; }   # ConeOne 3.00: 콘앱 머리 코드 = 검수앱 skin.js 같은 답
   node tools/smoke_conevoy30002.cjs || { echo "✗ 콘앱 3.00-02 항차 목록(양하·선적 번호 다른 배) 연막검사 실패 — 배포 금지"; exit 1; }   # ConeOne 3.00-02: STMJ 2671E/2672W 꼴 · 못 읽은 것과 없는 것을 가른다
+  node tools/smoke_conemir30003.cjs || { echo "✗ 콘앱 3.00-03 미르 단추 연막검사 실패 — 배포 금지"; exit 1; }   # ConeOne 3.00-03: 아래 줄 오른쪽 끝 «🐱 미르»
   # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
   #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.

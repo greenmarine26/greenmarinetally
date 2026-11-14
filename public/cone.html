@@ -169,7 +169,7 @@
        다 위에 뜨는데 TOP 만 묻혔다. 스크롤 긴 화면에 TOP 을 두라는 것이 2.9 의 요구였으니 띄운다.
      ⚠ 2.41 은 이 값을 **위쪽에 따로 덮어썼다가 라이브에서 되잡혔다** — 같은 힘이면 **뒤 규칙이 이긴다**.
        덮어쓰기를 걷고 기본 규칙 자체를 고쳤다. */
-  .bv-top{position:fixed; right:74px; bottom:18px; z-index:9998; width:48px; height:48px;
+  .bv-top{position:fixed; right:92px; bottom:18px; z-index:9998; width:48px; height:48px;
           border-radius:50%; border:1px solid var(--line); background:var(--panel2);
           color:#e2e8f0; font-size:11px; font-weight:800; cursor:pointer; display:none;
           box-shadow:0 4px 14px rgba(0,0,0,.45);}
@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.00-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.00-03</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.02-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.00-02';   // ★ 3.00-02 (TallyOne 5.00-02) — 양하·선적 항차 번호가 다른 배(STMJ 2671E / 2672W)를 목록이 둘 다 보이고 양하·선적 둘 다 잡는다 · 목록 읽기가 끊긴 모드는 «없음»이 아니라 고를 때 다시 읽는다 · 못 받은 것은 «못 받았습니다»로 알린다
+window.__APPV='TallyOne 5.02-03';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.00-03';   // ★ 3.00-03 (TallyOne 5.02-03) — 콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추(떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 부를 곳이 없었다)
+// (앞 판) window.__CONEV='ConeOne 3.00-02';   // ★ 3.00-02 (TallyOne 5.00-02) — 양하·선적 항차 번호가 다른 배(STMJ 2671E / 2672W)를 목록이 둘 다 보이고 양하·선적 둘 다 잡는다 · 목록 읽기가 끊긴 모드는 «없음»이 아니라 고를 때 다시 읽는다 · 못 받은 것은 «못 받았습니다»로 알린다
 // (앞 판) window.__CONEV='ConeOne 3.00-01';   // ★ 3.00-01 (TallyOne 5.00-01) — 바닥 띠로 띄움 단추가 «목록 새로고침»·카드 글자에 겹쳐 보이지 않게 · 선적·양하 완료 대수를 검수앱 progressOf 와 같은 셈(완료 ∩ 작업 계획)으로, 자료 받기 전에는 «0/N» 을 쓰지 않음 · 항차 목록 읽기 동시 8개(ERR_FAILED 수십 건)
 // (앞 판) window.__CONEV='ConeOne 3.00';   // ★ 3.00 (TallyOne 5.00) — 검수앱 «화면 고르기» 1안·2안·3안을 같은 기기 저장값(master_skin_v1)으로 따른다 · 컨 번호를 «CICU 300 6502»(같은 크기 · 세 덩어리 · 끝 4자리 색)로 검수앱과 같은 모양.
 // (앞 판) window.__CONEV='ConeOne 2.79';   // ★ 2.79 (TallyOne 4.89) — «미르야» 없이 말하면 콘 검색이고 «미르야» 하고 부르면 미르 비서가 나옵니다. 아무 말이 없으면 20초 뒤 들어갑니다. // (앞 판) ★ 2.78-01 (TallyOne 4.88-01) — 카고플랜을 카스피 이름으로(양하(DISCHARGING)PLAN · 선적(STOWAGE)PLAN, 출력 머리 CARGO DISCHARGING PLAN · STOWAGE INSTRUCTION) — 검수앱과 같은 말. // (앞 판) ★ 2.78 (TallyOne 4.88) — 컨 규격 20·40 을 검수앱과 같은 함수로 셉니다(DC20 같은 선사 약식도 20) · X-RAY 실 점검도 같은 규칙. // (앞 판) ★ 2.77 (TallyOne 4.84) — 호기 카드가 사람이 고른 호기를 터미널 베이로 읽는다(utils.craneRelabelOf 한 벌 — 검수앱 상황판과 같은 답). 저장값 그대로.
@@ -5839,6 +5840,17 @@ function bindMirFab(){
     else { inp.value=t; ask(); }
     return true;
   };
+  //  ★ ConeOne 3.00-03 (검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 불편신고·새로고침 줄)
+  //    2.79 가 떠 있는 얼굴을 숨긴 뒤 부르는 길이 질문바 🎤·글 «미르야» 뿐이라, 작업표를 만들기 전 화면에는 입구가 없었다.
+  //    같은 줄 오른쪽 끝에 «미르» 단추를 둔다. 누르면 시트가 올라오고 20초 입력이 없으면 닫힌다(호출어와 같은 길).
+  let mc=document.getElementById('mirCall');
+  if(!mc){
+    mc=document.createElement('button'); mc.id='mirCall'; mc.type='button'; mc.textContent='🐱 미르';
+    mc.setAttribute('aria-label','미르 부르기');
+    mc.setAttribute('style','position:fixed;right:10px;bottom:10px;z-index:9999;background:#334155;color:#e2e8f0;border:1px solid var(--accent,#f59e0b);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;opacity:.95');
+    document.body.appendChild(mc);
+  }
+  mc.onclick=()=>{ if(sheet.style.display!=='block') fab.onclick(); back.style.display='block'; _idleStart(); };
 }
 
 function bindTopButton(){
