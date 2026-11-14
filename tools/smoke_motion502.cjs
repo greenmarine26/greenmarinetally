@@ -48,4 +48,5 @@ ok(!/\.sort\(/.test(src), '별첨 모션은 앱 순서를 다시 정렬하지 �
 ok(!/text-\[\d+px\]/.test(src), '임의 글자 크기 없음');
 const hp = fs.readFileSync(path.join(ROOT, 'src/pages/HomePage.jsx'), 'utf8');
 ok(/_loaFirst = !!\(dis && loa && disStats\.total > 0 && disStats\.done >= disStats\.total && loaStats\.total > 0 && loaStats\.done < loaStats\.total/.test(hp) && /order2=\{_loaFirst\}/.test(hp), '양하 끝 · 선적 남음이면 선적 상자가 먼저(5.02-01)');
+ok(/const _bayDefault = bayModes\.includes\('discharge'\) && bayModes\.includes\('loading'\) && disStats\.done >= disStats\.total \? 'loading'/.test(hp), '양하 끝 · 선적 있음이면 베이별 진행 기본이 선적(5.02-02)');
 console.log(`5.02 모션 연막검사: ${pass} 통과 / ${fail} 실패`); process.exit(fail ? 1 : 0);

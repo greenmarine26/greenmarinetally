@@ -1729,7 +1729,8 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
   const TAG = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-pill border-2 text-xs font-bold whitespace-nowrap';
   //  베이별 진행 — 지금 하는 쪽이 먼저(양하가 다 끝났고 선적이 있으면 선적). 둘 다 있으면 [양하][선적] 으로 바꿔 본다.
   const bayModes = ['discharge', 'loading'].filter((m) => (m === 'discharge' ? dis : loa) && !sideCancelled(voyage.info, m) && (m === 'discharge' ? disStats : loaStats).total > 0);
-  const _bayDefault = bayModes.includes('discharge') && !(disStats.done >= disStats.total && bayModes.includes('loading')) ? 'discharge' : (bayModes[0] || '');
+  //  5.02-02: 양하가 다 끝났고 선적이 있으면 «선적» — 종전 식은 그 경우에도 bayModes[0](= 양하)를 골라 끝난 양하가 떴다(라이브 확인 2026-11-14 STMJ 2671E).
+  const _bayDefault = bayModes.includes('discharge') && bayModes.includes('loading') && disStats.done >= disStats.total ? 'loading' : (bayModes.includes('discharge') ? 'discharge' : (bayModes[0] || ''));
   const [bayPick, setBayPick] = useState('');
   const bayMode = bayModes.includes(bayPick) ? bayPick : _bayDefault;
   //  양하가 다 끝났고 선적이 남아 있으면 «지금 하는 쪽» 은 선적이다 — 위 두 상자도 선적이 먼저(5.02-02).

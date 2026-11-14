@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.02-01';
-const NOTE = '5.02-01 수석 상황판 별첨이 움직이는 그림으로 바뀌었습니다. 홈 상세는 양하가 끝났으면 선적을 먼저 보여 주고 트윈 싱글 줄이 잘리지 않고 다 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.02-02';
+const NOTE = '5.02-02 수석 상황판 별첨이 움직이는 그림으로 바뀌었습니다. 홈 상세와 베이별 진행은 양하가 끝났으면 선적을 먼저 보여 주고 트윈 싱글 줄이 잘리지 않고 다 보입니다';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
