@@ -13,7 +13,7 @@ import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베�
 import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { CountUp } from '../components/MotionBits.jsx';   // 5.02: 숫자가 올라가는 큰 숫자
-import { workBaysOf, bayGroupsOf, twinSingleOf, twinSingleText } from '../workBays.js';   // 5.02: 지금 작업중인 베이(호기별 — craneBoardOf 한 벌)
+import { workBaysOf, bayGroupsOf, twinSingleOf, twinSingleText, twinSingleParts } from '../workBays.js';   // 5.02: 지금 작업중인 베이(호기별 — craneBoardOf 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
 import { paceFromRecords, voyageDoneAts, voyageFirstTermAt, myTodayByShip } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
@@ -1732,6 +1732,8 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
   const _bayDefault = bayModes.includes('discharge') && !(disStats.done >= disStats.total && bayModes.includes('loading')) ? 'discharge' : (bayModes[0] || '');
   const [bayPick, setBayPick] = useState('');
   const bayMode = bayModes.includes(bayPick) ? bayPick : _bayDefault;
+  //  양하가 다 끝났고 선적이 남아 있으면 «지금 하는 쪽» 은 선적이다 — 위 두 상자도 선적이 먼저(5.02-02).
+  const _loaFirst = !!(dis && loa && disStats.total > 0 && disStats.done >= disStats.total && loaStats.total > 0 && loaStats.done < loaStats.total && !sideCancelled(voyage.info, 'loading'));
   const voyPair = (() => {
     // M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W)
     const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
@@ -1967,13 +1969,15 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
       })()}
 
       {/* 양하·선적 — 큰 숫자 + 막대 한 벌(설계 ⑥ «진행률은 상세의 큰 숫자+막대 하나, 본선·남음은 그 아래 작은 글»). 누르면 그 작업으로 들어간다(V8.81). */}
-      <div className="grid gap-2.5 min-[700px]:grid-cols-2" data-side-boxes="1">
+      {/* 5.02-02 (검수사 2026-11-14 09:13 «양하는 끝났고 선적만 남았는데 우측에 끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») : 양하가 다 끝났고 선적이 남았으면 선적 상자를 먼저(왼쪽·위) 둔다. 상자와 data-side-box 는 그대로 — 순서만 바꾼다. */}
+      <div className="grid gap-2.5 min-[700px]:grid-cols-2" data-side-boxes="1" data-side-first={_loaFirst ? 'loading' : 'discharge'}>
         {/*  ★ 2.67-01 (검수사): 캔슬이면 숫자를 지우고 캔슬 한 줄만 — 누르기 **전에** 알아야 한다. */}
         {dis && (sideCancelled(voyage.info, 'discharge')
-          ? <div className="home-big is-dis" data-side-box="discharge" data-cancelled="1"><CancelledSide label="양하"/></div>
-          : <SideBox label="양하" mode="discharge" stats={disStats} rem={remD} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(dis)} onOpen={onOpen}/>)}
+          ? <div className={`home-big is-dis ${_loaFirst ? 'order-2' : ''}`} data-side-box="discharge" data-cancelled="1"><CancelledSide label="양하"/></div>
+          : <SideBox order2={_loaFirst} label="양하" mode="discharge" stats={disStats} rem={remD} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(dis)} onOpen={onOpen}/>)}
         {loa && (sideCancelled(voyage.info, 'loading')
           ? <div className="home-big is-lod" data-side-box="loading" data-cancelled="1"><CancelledSide label="선적"/></div>
+
           : <SideBox label="선적" mode="loading" stats={loaStats} rem={remL} term={_tpLod} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(loa)} onOpen={onOpen}/>)}
         {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건). */}
         {(dis || loa) && !dis && <div className="home-big is-none"><MissingSideNote label="양하" qty={voyage.info?.planDis}/></div>}
@@ -2073,7 +2077,7 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
                               <span className="text-xs text-dim-300">{g.done}/{g.n}</span>
                             </div>
                             <div className="mono leading-none mt-1 text-amber-300"><b className="text-2xl">{rem}</b><span className="text-xs text-dim-300 ml-1">대 남음</span></div>
-                            {(() => { const tx = twinSingleText(tsMap.get(g.key)); return tx ? <div className="mt-1 text-xs font-bold text-dim-100 whitespace-nowrap overflow-hidden text-ellipsis" data-bay-twin={tx} title="트윈 = 앞뒤 홀수 베이 같은 줄·단에 둘 다 남은 쌍(쌍 수) · 싱글 앞 = 번호 작은 쪽(선수) · 뒤 = 큰 쪽(선미)">{tx}</div> : null; })()}
+                            {(() => { const ps = twinSingleParts(tsMap.get(g.key)); return ps.length ? <div className="mt-1 flex flex-wrap gap-x-1.5 text-xs font-bold text-dim-100" data-bay-twin={ps.join(' · ')} title="트윈 = 앞뒤 홀수 베이 같은 줄·단에 둘 다 남은 쌍(쌍 수) · 싱글 앞 = 번호 작은 쪽(선수) · 뒤 = 큰 쪽(선미)">{ps.map((x) => <span key={x} className="whitespace-nowrap">{x}</span>)}</div> : null; })()}
                             <div className="xp-bar xp-sm mt-1.5"><div className={`xp-fill mo-grow ${lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${p}%` }}/></div>
                             {g.members.length > 1 && <div className="flex flex-wrap gap-x-2 text-xs mt-1">{g.members.map((m) => <Mem key={m.bay} c={m}/>)}</div>}
                             <div className="flex items-center gap-1.5 mt-1 min-h-[20px] text-xs font-bold whitespace-nowrap overflow-hidden" data-bay-crane={l.length ? l[0].no : ''}>
@@ -2273,12 +2277,12 @@ function CancelledSide({ label }) {
 //   머리 줄 = 대수 내역(평택·매칭·LUG·예상 EDI·부분 EDI·리스트만·컨펌전·실/가상E/E확정·쉬프팅·가상/리스트·누락 — 종전 식 그대로)
 //   큰 숫자 + 막대 = 완료/전체(평택분 · computeStats 한 벌 — 목록 줄·수석 상황판 보드와 같은 값)
 //   아래 작은 글 = 남음 · 본선 n/전체(터미널 호기 합계 · 참고) · 배정(터미널 배정목록 · 대조용 참고치) · 마지막 완료. 누르면 그 작업으로 들어간다.
-function SideBox({ label, mode, stats, rem = null, term = null, termOver = false, lastAt = 0, onOpen }) {
+function SideBox({ label, mode, stats, rem = null, term = null, termOver = false, lastAt = 0, onOpen, order2 = false }) {
   const lod = mode === 'loading';
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
   return (
     <button type="button" onClick={() => onOpen(mode)} title={`눌러서 ${label} 열기`}
-      className={`home-big ${lod ? 'is-lod' : 'is-dis'} text-left w-full`} data-side-box={mode} data-done={stats.done} data-total={stats.total}>
+      className={`home-big ${lod ? 'is-lod' : 'is-dis'} text-left w-full ${order2 ? 'order-2' : ''}`} data-side-box={mode} data-done={stats.done} data-total={stats.total}>
       <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs">
         <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} px-2 py-0.5 font-black text-sm leading-none`}>{label}</span>
         {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) — 매칭 0이면 예상(프리스토우)본. */}

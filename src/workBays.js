@@ -109,9 +109,9 @@ export function twinSingleOf(sec, units, groups) {
   return out;
 }
 
-//  묶음 한 줄 글 — «트윈 4 · 싱글 앞 1 / 뒤 5» (0 인 것은 뺀다 · 40피트가 있으면 덧붙인다)
-export function twinSingleText(r) {
-  if (!r) return '';
+//  묶음 한 줄 글 조각 — «트윈 4» · «싱글 앞 1 / 뒤 5» · «40피트 N» (0 인 것은 뺀다). 화면은 조각마다 줄바꿈 없이 그려 칸이 좁으면 조각 단위로 다음 줄로 간다(5.02-01 — 끝이 «…» 로 잘리던 것).
+export function twinSingleParts(r) {
+  if (!r) return [];
   const a = [];
   if (r.twin > 0) a.push(`트윈 ${r.twin}`);
   if (r.front > 0 && r.rear > 0) a.push(`싱글 앞 ${r.front} / 뒤 ${r.rear}`);
@@ -119,5 +119,6 @@ export function twinSingleText(r) {
   else if (r.rear > 0) a.push(`싱글 뒤 ${r.rear}`);
   if (r.single > 0) a.push(`싱글 ${r.single}`);
   if (r.f40 > 0) a.push(`40피트 ${r.f40}`);
-  return a.join(' · ');
+  return a;
 }
+export function twinSingleText(r) { return twinSingleParts(r).join(' · '); }
