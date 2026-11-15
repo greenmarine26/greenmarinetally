@@ -2358,6 +2358,19 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       )}
       {mode === 'discharge' && orderOpen && orderSheet()}
   </>);
+  //  ★ 5.03 건9 — 베이모드(bayMini)도 «육상부터/해상부터» 를 바로 고른다. 한 줄 칩 둘 + ⚙(부류 조건은 orderSheet 재사용). 선택값은 pickRow → 호기별 workOrder.rowFrom → buildGuidedQueue 의 rowFrom 으로 큐 정렬에 반영된다.
+  const miniOrderEl = (<>
+      {mode === 'discharge' && (
+        <div className="flex items-center gap-1" data-gw-mini-order="1">
+          {[['land', '육상부터'], ['sea', '해상부터']].map(([k, l]) => (
+            <button key={k} onClick={() => pickRow(k)}
+              className={`flex-1 py-0.5 rounded-pill border text-2xs font-bold ${rowFrom === k ? 'bg-teal-700 border-teal-500 text-white' : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>{l}</button>
+          ))}
+          <button onClick={() => setOrderOpen((v) => !v)} className="shrink-0 px-2 py-0.5 rounded-pill border border-line bg-ink-800 text-2xs text-dim-300">{wo.prefs.length ? `+${wo.prefs.length} ` : ''}⚙</button>
+        </div>
+      )}
+      {mode === 'discharge' && orderOpen && orderSheet()}
+  </>);
   const heldEl = (<>
       {/* ★ 2.75 — ⏸ 보류 줄. 검수사가 먼저 풀렸으면 되묻기를 기다릴 것 없이 여기서 [해제] 하면
           그 컨이 바로 앞 순서로 온다(검수사 확정 «해제 탭만 있으면 될듯»). */}
@@ -2916,7 +2929,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {settingsEl}
       {!bayMini && headEl}{/* 4.80-01: 베이모드는 베이를 고정했으니 베이 선택·진행 막대·순서 줄을 접는다(해제하면 그대로) */}
       {chipsEl}
-      {!bayMini && orderEl}
+      {bayMini ? miniOrderEl : orderEl}{/* 5.03 건9: 베이모드는 한 줄 칩 */}
       {heldEl}
       {ownPause ? (
         <div className="bg-red-950/40 border border-red-700/70 rounded-pill px-3 py-2 text-xs text-red-200" data-own-pause="1">⏸ 작업 중단 중{ownPause.reason ? ` — ${ownPause.reason}` : ''}. 해치커버 열기·닫기 물음은 재개한 뒤에 합니다.</div>

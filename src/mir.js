@@ -40,6 +40,7 @@ import {
   xraySealerOf,   // 4.50: 봉인자 이름은 화면·인쇄·엑셀과 같은 한 벌로 읽는다(미리 등록한 이름이 아니라 마지막 봉인자)
   activeHeldOf, inspectionSealOf,   // 4.26-02 · inspectionSealOf: 실번호 = 검수리스트·작업 카드와 같은 값(엠티는 엠티실): 지금 걸린 보류 한 벌(실린 컨은 뺀다 · doneAt 은 완료가 아니라 되묻기 기준점)
   isSealError, sealCheckOf, sealConflictOf, isRfListSrc,   // 4.49: 실번호 판정 한 벌 · 4.49-02: 실번호 불일치(RF CONTAINER LIST 뺌) · RF 리스트 출처 표기
+  normSeal,   // 5.03: 실번호 원문 비교는 대소문자·공백·하이픈을 걷은 한 벌로
   isKeepShift,   // 4.48 감사(중-C): 콘앱 «총 무브수» 끝줄 — 넘겨받은 시프팅 지도의 본선 잔류 예보(노란 ◆) 수
   ediWaitingOnlyLeft,   // 4.55-01: 양하는 끝 · 남은 선적이 EDI 대기뿐 — 미르는 입력할 게 없다고 본다
   inspectorAllDone,   // 4.55-01: «검수 완료» 판정 한 벌(홈·수석 보드·보관 보고·홀드 잔여 공용)
@@ -76,6 +77,7 @@ import { matchPortMisById, shipIdentityLite } from './portMisCore.js';   // 3.60
 export { progressOf } from './utils.js';   // 3.60-18: 연막검사(smoke_voycounts)가 «미르 분모 = 홈 카드 분모» 를 같은 번들에서 대조한다
 import { diffEdiList, explainEdiGap } from './ediGap.js';
 import { aiCostUsd, AI_PRICE, aggregateAiCost, aiDayKey } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
+import { aiDayLimit, aiDayUsages, AI_DAILY_USD_DEFAULT, aiCarryKeys } from './aiCost.js';   // 5.03 건8: 하루 한도 이월 한 함수
 import { tidyBayAnswer, withRecordPositions } from './gangState.js';   // 4.81: «N번 베이 정리해줘» — 앱 입력 + 터미널 반영 두 자료를 읽는 현황 한 벌(읽기 전용)
 import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — utils 가 이미 tallyReport 를 부르므로 번들에 베이사전 같은 큰 것이 새로 딸려 오지 않는다(mir-core +1.5KB 실측)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
@@ -1352,7 +1354,7 @@ function attrLine(c, attr, ctx) {
         const _rec = c && c.cn ? (_sec.records || {})[c.cn] : null;
         if (_rec) { let o = null; for (const k of ['sl', 'sl_orig', 'sl_history', 'sl_src', 'sl_conflict', '_source', 'sl_alt']) if ((c[k] === undefined || c[k] === null) && _rec[k] !== undefined && _rec[k] !== null) (o || (o = { ...c }))[k] = _rec[k]; if (o) c = o; }
         const _e = c && c.cn && !S(c.slEdi) ? (_sec.ediContainers || {})[c.cn] : null;
-        if (_e && S(_e.sl) && S(_e.sl) !== S(c.sl)) c = { ...c, slEdi: _e.sl };
+        if (_e && S(_e.sl) && normSeal(_e.sl) !== normSeal(c.sl)) c = { ...c, slEdi: _e.sl };
       }
       const parts = [];
       if (S(c.sl) || S(c.slEdi)) {
@@ -1362,7 +1364,7 @@ function attrLine(c, attr, ctx) {
         //  재감사(중-3) — 괄호 출처는 큰 실의 출처(sl 의 출처가 아니다 — 세관 값에 선사 파일 이름이 붙던 것). 고쳤으면 «검수원 실물».
         const src = _k.edited ? '검수원 실물' : ((_k.bigK && _k.bigK.srcs && _k.bigK.srcs[0]) || (_k.bigK && _k.bigK.kind === 'edi' ? 'EDI' : ''));
         const _others = _k.known.filter((x) => x.n !== String(_big || '').toUpperCase().replace(/[\s\-]/g, ''));
-        parts.push(`실번호 ${_big}${src ? '(' + src + ')' : ''}${_k.error ? ` · 실오류(신고 ${_k.from} → 실물 ${_k.actual || c.sl})` : (_k.edited && S(c.sl_orig) && S(c.sl_orig) !== S(c.sl) ? ' · 리스트 원래값 ' + c.sl_orig : '')}`);
+        parts.push(`실번호 ${_big}${src ? '(' + src + ')' : ''}${_k.error ? ` · 실오류(신고 ${_k.from} → 실물 ${_k.actual || c.sl})` : (_k.edited && S(c.sl_orig) && normSeal(c.sl_orig) !== normSeal(c.sl) ? ' · 리스트 원래값 ' + c.sl_orig : '')}`);
         if (_others.length) parts.push(`다른 자료 실 ${_others.map((x) => x.v + '(' + (x.customs ? '세관' : x.kind === 'edi' || (x.srcs || []).includes('EDI') ? 'EDI' : x.kind === 'alt' ? '보조실' : x.kind === 'orig' ? '처음 리스트' : (x.srcs || []).length && x.srcs.every((sv) => isRfListSrc(sv)) ? 'RF 리스트' : '선사 리스트') + ')').join(' · ')}${(_k.trunc || _k.zero) && _k.error ? '' : ' — 실물이 하나면 맞음'}`);
         if (_k.trunc && _k.error && _k.decl) parts.push(`⚠ 신고 실 ${_k.decl.v} 은 ${_k.truncLong} 의 끝자리가 빠진 값 — 실오류(신고 정정 대상)`);   // 감사(중-4): 긴 짝은 decl 의 짝 · 실오류일 때만
         if (_k.zero && _k.error && _k.decl) parts.push(`⚠ 신고 실 ${_k.decl.v} 은 ${_k.zeroLong} 의 앞자리 0 이 빠진 값 — 실오류(신고 정정 대상)`);   // 4.49-02
@@ -3310,12 +3312,39 @@ async function _claudeSpentToday(cfg) {
     return usd;
   } catch (e) { console.warn('[미르 모델] 오늘 클로드 비용을 못 읽었어요 — 하루 한도 판단을 건너뜁니다:', e && e.message); return null; }
 }
-/** 4.68: 오늘 클로드 합계가 하루 한도(mir_config.claudeDailyUsd, 기본 3달러)에 닿았나 — 닿았으면 그날은 제미나이로 간다. 사진 읽기(gemini.js)도 같은 판정을 쓴다. */
+//  5.03 건8 — 하루 한도 이월: 지난 7일 날마다 클로드 사용액을 하루 한 번(메모리) 읽어 aiDayLimit 한 함수로 오늘 한도를 낸다. 읽기 실패면 null(이월 없이 기본값 · 막지 않음) — 실패는 5분 뒤 다시 읽는다.
+let _dayRowsCache = { day: '', rows: null, at: 0 };
+async function _pastDayRows(cfg) {
+  const day = _dayKey();
+  if (_dayRowsCache.day === day && (_dayRowsCache.rows || Date.now() - _dayRowsCache.at < 5 * 60 * 1000)) return _dayRowsCache.rows;
+  try {
+    const keys = aiCarryKeys();
+    const days = await Promise.all(keys.map(async (k) => {
+      const [a, b, c] = await Promise.all(['mir_model_log', 'ai_call_log', 'mir_websearch'].map((n) => _fetchJson(`${FB}/${n}/${k}.json`, {}, 6000)));
+      if (!a.ok || !b.ok || !c.ok) throw new Error('지난 날 기록 읽기 실패 ' + k);
+      return { day: k, mml: a.j || {}, acl: b.j || {}, mws: c.j || {} };
+    }));
+    const rows = aiDayUsages(days, (cfg && cfg.claudeModel) || DEFAULT_CLAUDE_MODEL);
+    _dayRowsCache = { day, rows, at: Date.now() };
+    return rows;
+  } catch (e) {
+    console.warn('[미르 모델] 지난 7일 클로드 비용을 못 읽었어요 — 이월 없이 기본 한도로 갑니다:', e && e.message);
+    _dayRowsCache = { day, rows: null, at: Date.now() };
+    return null;
+  }
+}
+/** 오늘 한도(이월 포함) — 문지기도 소유자 화면도 aiDayLimit 한 함수의 값이다. {limit, base, carry, capped, text} */
+export async function claudeDayLimitNow(cfg) {
+  return aiDayLimit(cfg, await _pastDayRows(cfg));
+}
+/** 4.68: 오늘 클로드 합계가 하루 한도(기본 3달러 + 5.03 이월)에 닿았나 — 닿았으면 그날은 제미나이로 간다. 사진 읽기(gemini.js)도 같은 판정을 쓴다. */
 export async function claudeOverDailyCap(cfg) {
-  const lim = cfg && typeof cfg.claudeDailyUsd === 'number' ? cfg.claudeDailyUsd : CLAUDE_DAILY_USD_DEFAULT;
-  if (!(lim > 0)) return true;   // 0 이면 클로드를 끈다(배포 없이 제미나이로 되돌리는 스위치)
+  const base = aiDayLimit(cfg, null);
+  if (!(base.base > 0)) return true;   // 0 이면 클로드를 끈다(배포 없이 제미나이로 되돌리는 스위치)
   const sp = await _claudeSpentToday(cfg);
-  return sp !== null && sp >= lim;
+  if (sp === null) return false;
+  const lim = (await claudeDayLimitNow(cfg)).limit;
+  return sp >= lim;
 }
 async function _claude(cfg, prompt, maxOut, json) {
   const t0 = Date.now();
@@ -3334,7 +3363,7 @@ async function _claude(cfg, prompt, maxOut, json) {
    비용 = 입력 토큰×2달러/100만 + 출력 토큰×10달러/100만 + 검색 1회 0.01달러(소네트 5.5 단가, 2026-10-19 가격표). 실제 응답의 usage 로 계산해 mir_websearch/{날짜} 에 한 줄씩 남기고, 읽을 때 합산한다.
    4.37: 종전 3·15달러(옛 소네트 단가)로 셈해 실제보다 39% 크게 적혔다 — 실측 261019 «가요차트 1위» 입력 16,505·출력 351·검색 1 → 장부 0.0648, 실제 0.0465. 그래서 1달러 한도가 실제 약 0.70달러에서 멈췄다. */
 const WEB_USD_DEFAULT = 3;
-const CLAUDE_DAILY_USD_DEFAULT = 3;   // 4.68: 클로드 하루 합계(대화·번역·자료 답·사진·웹 검색) 한도 — 넘으면 그날은 제미나이. 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 제미나이를 사용하지 않는다. 하루 3불을 초과하면 사용하고»   // 4.65: 하루 3달러(검수사 2026-11-06 «하루 3불로 해주세요»). mir_config.webSearchUsd 를 쓰면 배포 없이 바꾼다.
+const CLAUDE_DAILY_USD_DEFAULT = AI_DAILY_USD_DEFAULT;   // 5.03: 기본값은 aiCost.js 한 곳 · 4.68: 클로드 하루 합계(대화·번역·자료 답·사진·웹 검색) 한도 — 넘으면 그날은 제미나이. 검수사 2026-11-06 17:00 «크레딧 소모가 끝날때까지 제미나이를 사용하지 않는다. 하루 3불을 초과하면 사용하고»   // 4.65: 하루 3달러(검수사 2026-11-06 «하루 3불로 해주세요»). mir_config.webSearchUsd 를 쓰면 배포 없이 바꾼다.
 const WEB_MODEL = 'claude-sonnet-5-5';   // 4.65: 대화가 오퍼스여도 웹 검색은 소네트(단가 반값 · 검색 도구가 검증된 모델)
 const WEB_EST_USD = 0.05;   // 한 번 부르기 전에 서버에 먼저 잡아 두는 예상 비용(실측 1회 0.0465달러, 4.37 이전 0.07) — 다른 폰도 이만큼 쓴 것으로 본다
 const MIR_REALTIME_RE = /(차트|순위|1위|뉴스|속보|주가|환율|시세|코스피|코스닥|나스닥|비트코인|경기\s*결과|스코어|박스오피스|실시간\s*(검색어|차트|순위|뉴스)|최근\s*(소식|뉴스)|요즘\s*(뜨는|인기))/;
@@ -3482,6 +3511,23 @@ const _isDone = (c) => !!(c._comp || c.comp);
 const _doneAt = (c) => { const k = c._comp || c.comp; return k ? Number(k.at || k.time || 0) : 0; };
 const _tm = (ms) => { if (!ms) return ''; try { const d = new Date(ms); return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; } catch (e) { return ''; } };
 const _modeKo = (c) => ((c._mode || c.mode) === 'loading' ? '선적' : '양하');
+//  5.03 건4 — 질문에 배 이름(영문 네 글자 코드)이 있으면 그 배의 호기·장비 자료(info.qcWork)를 자료 팩에 싣는다. 종전엔 팩에 호기 자료가 없어 «DJCT 장비 번호가 뭐야» 에 «자료에 없어요, 배 이름을 붙여 달라» 로 답했다.
+//  검수앱·콘앱이 같은 buildDataPack 한 벌을 쓴다(mir-core 번들) — 여기서만 고친다.
+function _namedVoyageInfo(q, ctx) {
+  const Q = String(q || '').toUpperCase();
+  const cands = [];
+  if (ctx && ctx.voyages && typeof ctx.voyages === 'object') for (const v of Object.values(ctx.voyages)) if (v && v.info) cands.push(v.info);
+  if (ctx && ctx.info) cands.push(ctx.info);
+  for (const inf of cands) {
+    const code = String(inf.vsl || '').toUpperCase();
+    if (code && new RegExp(`(^|[^A-Z0-9])${code}(?![A-Z0-9])`).test(Q)) return inf;
+  }
+  return null;
+}
+function _craneLinesOf(inf) {
+  const rows = qcRowsOf(inf && inf.qcWork);
+  return rows.map((r) => `${r.no}호기(${r.qc}) 양하 완료 ${r.disDone}·잔여 ${r.disRest} / 선적 완료 ${r.lodDone}·잔여 ${r.lodRest}`);
+}
 export function buildDataPack(q, ctx) {
   //  평택분만(감사 실측: 통과화물이 섞이면 NSFR «양하 423»이 팩에 들어가 문지기를 통과한다). _ptk 가 없는 컨(콘앱 등)은 그대로 둔다.
   const cs = (Array.isArray(ctx.containers) ? ctx.containers : []).filter((c) => c && c._ptk !== false);
@@ -3517,6 +3563,13 @@ export function buildDataPack(q, ctx) {
   const ports = [...new Set(cs.flatMap((c) => [c.pod, c.pol]).filter(Boolean))]; ports.forEach((pc) => { if (Q.includes(String(pc).toUpperCase())) kw.push((c) => c.pod === pc || c.pol === pc); });
   const rel = kw.length ? cs.filter((c) => !hit.includes(c) && kw.some((f) => f(c))).slice(0, 30) : [];
   const cols = '컨번호|양하선적|규격|풀엠티|POL|POD|자리(베이-로우-티어)|중량kg|리퍼온도|위험물|UN|실번호|전자봉인|엑스레이|완료|규격초과';
+  //  5.03 건4 — 배 이름이 든 질문 또는 호기·장비를 묻는 질문이면 호기별 작업 자료를 싣는다(없으면 «없음» 을 분명히 적어 모델이 배 이름을 되묻지 않게)
+  const _named = _namedVoyageInfo(q, ctx);
+  if (_named || /호기|장비|크레인|QC|갱/i.test(String(q))) {
+    const _inf = _named || info;
+    const _lines = _craneLinesOf(_inf);
+    derived.호기별작업 = _lines.length ? { 배: String(_inf.vsl || ''), 호기: _lines } : { 배: String(_inf.vsl || ''), 호기: [], 안내: '터미널 호기 집계(qcWork)가 아직 없음' };
+  }
   return { summary, 계산해둔것: derived, 컨목록_열: cols, 질문에맞는컨: [...hit, ...rel].map(line) };
 }
 /* ★ 4.36 생활회화 층 — 검수사 2026-10-19 «생활회화는 클로드 SONNET 버전이라 더 많은 것을 할 수 있을 것입니다. 기존에 하던 말들이 아닌 일반 생활회화를 할 수 있어야 할 것입니다.»

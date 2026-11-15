@@ -776,6 +776,22 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
 // ------------------------------------------------------------
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
+//  5.03: 맞춤 배율 순수 계산 — 보이는 영역(visualViewport 우선, 브라우저 핀치 배율은 되돌려 레이아웃 크기로)과 도면 자연 크기만으로 정한다.
+//   상한 1(넓은 화면에서 키우지 않음) · 폰 세로면 90도 돌려 맞춘다(2.11-01). 시험은 tools/smoke_b50300.cjs.
+export function cpv2ViewSize(win) {
+  const W = win || (typeof window !== 'undefined' ? window : null);
+  if (!W) return { w: 1280, h: 800 };
+  const vv = W.visualViewport;
+  if (vv && vv.width > 0 && vv.height > 0) { const sc = vv.scale || 1; return { w: vv.width * sc, h: vv.height * sc }; }
+  return { w: W.innerWidth, h: W.innerHeight };
+}
+export function cpv2FitScale(w, h, view, barH) {
+  const availW = view.w - 16, availH = view.h - barH - 12;
+  const rot = (view.h > view.w) && (w > h);
+  const fit = rot ? Math.min(availH / w, availW / h) : Math.min(availW / w, availH / h);
+  return { rot, fit: Math.max(0.15, Math.min(1, +fit.toFixed(3))) };
+}
+
 export default function PrintableCargoPlanV2({
   /*  ★ 3.33 — **콘앱 카고플랜은 줄을 통째로 거울에 비춘다 — 선수가 왼쪽으로 간다.**
       검수사 확정 2026-09-08 — «콘앱의 카고플랜을 뒤집어 주세요» · «검수앱의 카고플랜과 역방향으로» ·
@@ -1289,7 +1305,7 @@ export default function PrintableCargoPlanV2({
   const [natH, setNatH] = useState(737);
   const [natW, setNatW] = useState(1200);   // 2.13-01: 회전 후 «세로 길이» = 자연 폭. 가운데 정렬에 쓴다
   //  화면이 세로인데 문서가 가로면 돌린다. 둘 다 세로거나 둘 다 가로면 그대로가 크다.
-  const shouldRotate = (w, h) => (window.innerHeight > window.innerWidth) && (w > h);
+  const shouldRotate = (w, h) => cpv2FitScale(w, h, cpv2ViewSize(), 0).rot;
   const calcFit = () => {
     try {
       const pg = document.querySelector('.cpv2-overlay .cpv2-page');
@@ -1299,12 +1315,8 @@ export default function PrintableCargoPlanV2({
       if (!(w > 0 && h > 0)) return null;
       const bar = document.querySelector('.cpv2-overlay .cpv2-noprint');
       const barH = bar ? bar.getBoundingClientRect().height + 12 : 44;
-      const availW = window.innerWidth - 16, availH = window.innerHeight - barH - 12;
-      const rot = shouldRotate(w, h);
-      // 돌리면 축이 바뀐다 — 문서의 «폭»이 화면 «높이»로 온다.
-      const fit = rot ? Math.min(availH / w, availW / h)
-                      : Math.min(availW / w, availH / h);
-      return Math.max(0.15, Math.min(1, +fit.toFixed(3)));   // 넓은 화면에서 100% 를 넘겨 키우지는 않는다
+      //  5.03: 화면 크기는 visualViewport 기준(주소창·키보드로 줄어든 실제 보이는 영역) — 순수 계산은 cpv2FitScale 한 벌.
+      return cpv2FitScale(w, h, cpv2ViewSize(), barH).fit;
     } catch (e) {
       console.warn('[카고플랜] 맞춤 배율 계산 실패 — 배율을 그대로 둡니다:', e);   // 조용히 죽지 않는다
       return null;
@@ -1317,7 +1329,12 @@ export default function PrintableCargoPlanV2({
      ⚠ 사람이 폰을 눕히면(가로 화면) 돌리지 않는다 — 그때는 안 돌리는 쪽이 크다. */
   const fitRef = useRef(calcFit);
   fitRef.current = calcFit;
+  //  5.03: 도면이 실제로 그려진 뒤에만 맞출 수 있다. 사전·매트릭스가 늦게 오면 처음엔 «없음» 화면이라 .cpv2-page 가 없어
+  //   마운트 때 한 번 돌린 맞춤이 헛돌고 100% 로 남았다(폰에서 가로 일부만 보임) — 준비 여부를 의존성으로 걸어 도면이 생기면 다시 맞춘다.
+  const planReady = !!dictData && matrixBays.length > 0;
   useEffect(() => {
+    if (!planReady) return undefined;
+    let raf2 = 0;
     const apply = () => {
       try {
         const pg = document.querySelector('.cpv2-overlay .cpv2-page');
@@ -1331,16 +1348,31 @@ export default function PrintableCargoPlanV2({
       } catch (e) { console.warn('[카고플랜] 회전 판정 실패 — 돌리지 않습니다:', e); }
       const f = fitRef.current(); if (f) setZoom(f);
     };
+    const later = () => { cancelAnimationFrame(raf2); raf2 = requestAnimationFrame(apply); };   // 연달아 오는 크기 변화는 한 번으로
     const raf = requestAnimationFrame(apply);          // 첫 그림이 끝난 뒤 재야 크기가 나온다
     const t = setTimeout(apply, 250);                  // 글꼴·줄바꿈이 자리잡은 뒤 한 번 더
-    window.addEventListener('resize', apply);
-    window.addEventListener('orientationchange', apply);
+    const t2 = setTimeout(apply, 900);                 // 느린 폰: 글꼴·자료가 더 늦게 자리잡는 경우
+    window.addEventListener('resize', later);
+    window.addEventListener('orientationchange', later);
+    const vv = window.visualViewport;
+    if (vv && vv.addEventListener) vv.addEventListener('resize', later);
+    let ro = null;
+    try {
+      if (typeof ResizeObserver === 'function') {
+        ro = new ResizeObserver(later);               // 배치 크기(transform 은 안 잰다)가 바뀔 때만 — 배율을 바꿔도 되돌아 울리지 않는다
+        const ov = document.querySelector('.cpv2-overlay'); const pg = document.querySelector('.cpv2-overlay .cpv2-page');
+        if (ov) ro.observe(ov);
+        if (pg) ro.observe(pg);
+      }
+    } catch (e) { console.warn('[카고플랜] 크기 관찰을 못 켭니다 — 창 크기 변화만 따라갑니다:', e); }
     return () => {
-      cancelAnimationFrame(raf); clearTimeout(t);
-      window.removeEventListener('resize', apply);
-      window.removeEventListener('orientationchange', apply);
+      cancelAnimationFrame(raf); cancelAnimationFrame(raf2); clearTimeout(t); clearTimeout(t2);
+      window.removeEventListener('resize', later);
+      window.removeEventListener('orientationchange', later);
+      if (vv && vv.removeEventListener) vv.removeEventListener('resize', later);
+      if (ro) ro.disconnect();
     };
-  }, []);
+  }, [planReady]);
   //  4.80: 핀치는 공용 한 벌(usePinchZoom) — React onTouchMove 는 passive 라 preventDefault 가 안 먹어 페이지 확대와 겹쳤다.
   const pinchZoomNow = useRef(zoom); pinchZoomNow.current = zoom;
   const pinchElRef = useRef(null);
@@ -1430,7 +1462,7 @@ export default function PrintableCargoPlanV2({
                회전하면 도면 세로 길이 = 자연 «폭»(1200) × 배율. 폰 세로 812 에서 584 라 **220px 이 남는다.**
                도면 비율(1200:737)이 화면보다 덜 길쭉해서 그 여백은 못 채운다 — 대신 **가운데로 놓는다.**
                그러면 위아래로 갈라져 버튼과도 안 겹친다. */
-          ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (window.innerHeight - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
+          ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (cpv2ViewSize().h - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
       <div ref={pageRef} className={`cpv2-page${podLen > 0 ? ' cpv2-podsplit' : ''}${bw ? ' cpv2-bw' : ''}`} style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>

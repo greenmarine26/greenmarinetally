@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.00-03</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.02-04';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.00-03';   // ★ 3.00-03 (TallyOne 5.02-03) — 콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추(떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 부를 곳이 없었다)
+window.__APPV='TallyOne 5.03';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.01';   // ★ 3.01 (TallyOne 5.03) — 플랜 화면이 열자마자 폭에 맞고 회전·자료 도착 때 다시 맞춤 · 미르가 배 이름 있는 호기 물음에 답함
+// (앞 판) window.__CONEV='ConeOne 3.00-03';   // ★ 3.00-03 (TallyOne 5.02-03) — 콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추(떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 부를 곳이 없었다)
 // (앞 판) window.__CONEV='ConeOne 3.00-02';   // ★ 3.00-02 (TallyOne 5.00-02) — 양하·선적 항차 번호가 다른 배(STMJ 2671E / 2672W)를 목록이 둘 다 보이고 양하·선적 둘 다 잡는다 · 목록 읽기가 끊긴 모드는 «없음»이 아니라 고를 때 다시 읽는다 · 못 받은 것은 «못 받았습니다»로 알린다
 // (앞 판) window.__CONEV='ConeOne 3.00-01';   // ★ 3.00-01 (TallyOne 5.00-01) — 바닥 띠로 띄움 단추가 «목록 새로고침»·카드 글자에 겹쳐 보이지 않게 · 선적·양하 완료 대수를 검수앱 progressOf 와 같은 셈(완료 ∩ 작업 계획)으로, 자료 받기 전에는 «0/N» 을 쓰지 않음 · 항차 목록 읽기 동시 8개(ERR_FAILED 수십 건)
 // (앞 판) window.__CONEV='ConeOne 3.00';   // ★ 3.00 (TallyOne 5.00) — 검수앱 «화면 고르기» 1안·2안·3안을 같은 기기 저장값(master_skin_v1)으로 따른다 · 컨 번호를 «CICU 300 6502»(같은 크기 · 세 덩어리 · 끝 4자리 색)로 검수앱과 같은 모양.
@@ -5401,8 +5402,11 @@ async function renderBayView(){
       const wt=Math.round(zWrap.getBoundingClientRect().top - ra.getBoundingClientRect().top);
       const tabs=document.querySelector('.result-tabs');
       const head=tabs?((parseInt(getComputedStyle(tabs).top)||58)+Math.round(tabs.getBoundingClientRect().height)):106;
-      const availH=Math.max(80, window.innerHeight-head-Math.max(0,Math.min(wt,240))-10);
-      const availW=Math.max(80, window.innerWidth-12);
+      /* 5.03: 보이는 영역(visualViewport) 기준 — 주소창·키보드가 줄인 높이, 브라우저 핀치 배율은 되돌린 레이아웃 크기. */
+      const _vv=window.visualViewport, _vs=(_vv&&_vv.scale)||1;
+      const viewW=(_vv&&_vv.width>0)?_vv.width*_vs:window.innerWidth, viewH=(_vv&&_vv.height>0)?_vv.height*_vs:window.innerHeight;
+      const availH=Math.max(80, viewH-head-Math.max(0,Math.min(wt,240))-10);
+      const availW=Math.max(80, viewW-12);
 
       const s = bvRotated ? Math.min(availH/bw, availW/bh)      // 회전 — 축이 교차한다
                           : Math.min(availW/bw, availH/bh);
@@ -5412,14 +5416,16 @@ async function renderBayView(){
       return null;
     }
   };
+  let userZoomed=false;   // 5.03: 손으로 확대·축소했으면 화면이 바뀌어도(주소창 접힘 등) 그 배율을 지킨다. «기본»·가로모드·첫 화면은 다시 맞춘다.
   const applyFit=()=>{
     const v=fitZoom();
     if(v==null) return;
+    userZoomed=false;
     zRange.value=v; applyView();
   };
-  const applyZoom=(v)=>{ zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
+  const applyZoom=(v)=>{ userZoomed=true; zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
   if(zRange){
-    zRange.oninput=()=>applyView();
+    zRange.oninput=()=>{ userZoomed=true; applyView(); };
     document.getElementById('bvZoomOut').onclick=()=>applyZoom(parseInt(zRange.value,10)-10);
     document.getElementById('bvZoomIn').onclick=()=>applyZoom(parseInt(zRange.value,10)+10);
     if(zRotate){
@@ -5516,6 +5522,19 @@ async function renderBayView(){
          ⛶ 단추·가로모드·전체화면은 이미 `applyFit()` 을 부르는데 **첫 화면만 빠져 있었다.**
          못 재면 `applyFit` 이 조용히 물러나므로 그때는 종전대로 100% 다. */
     zRange.value=100; applyFit(); applyView();
+    /* ★ 5.03 — 폰을 돌리거나 창 크기가 바뀌거나 글꼴·자료가 늦게 자리잡아도 «가로 전체가 맞게» 다시 맞춘다(손으로 조절하기 전, 전체화면 아닐 때만).
+         이 함수는 베이플랜을 열 때마다 다시 돌므로 창 리스너는 한 번만 달고 최신 refit 만 갈아 끼운다. */
+    const refitIfAuto=()=>{ if(!document.body.contains(zRange)) return; if(userZoomed||fsOn) return; applyFit(); };
+    window.__bvRefit=refitIfAuto;
+    if(!window.__bvRefitBound){
+      window.__bvRefitBound=true;
+      let _tm=0;
+      const _later=()=>{ clearTimeout(_tm); _tm=setTimeout(()=>{ try{ if(window.__bvRefit) window.__bvRefit(); }catch(e){ console.warn('[콘앱] 베이플랜 다시 맞춤 실패:', e); } },120); };
+      window.addEventListener('resize',_later);
+      window.addEventListener('orientationchange',_later);
+      if(window.visualViewport) window.visualViewport.addEventListener('resize',_later);
+    }
+    requestAnimationFrame(refitIfAuto); setTimeout(refitIfAuto,350);   // 첫 그림 직후·글꼴 뒤 한 번씩 더
   }
   /* ★ ConeOne 2.9 — 베이 칩·TOP 배선. **렌더가 끝난 DOM 을 훑어 만든다.**
        ⚠ 정상 격자(ref.title)와 간이 격자("06-07")가 라벨을 각자 만들므로, 라벨을 새로 짓지 않고

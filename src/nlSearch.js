@@ -3618,21 +3618,32 @@ export function voyageDoneAts(voyage) {
   return out.sort((a, b) => a - b);
 }
 
+//  ★ 5.03 건7 — «나 오늘» 집계 창의 시작. 종전엔 오늘 0시로 잘라 야간조가 자정에 한 배를 둘로 쪼갰다
+//    (전날 19:00~24:00 기록이 빠져 배 하나가 반토막). 이제 «오늘 0시» 와 «지금 조의 시작» 중 이른 쪽부터 센다.
+//    주간조(08:00~)는 0시가 더 이르므로 종전과 같고, 야간조 새벽(00:00~06:30)에는 전날 19:00 부터다.
+export function myTodayWindowStart(now = Date.now()) {
+  const d = new Date(now); d.setHours(0, 0, 0, 0);
+  let sh = 0;
+  try { sh = Number(currentShift(now).startMs) || 0; } catch (e) { console.warn('[나 오늘] 조 시작을 못 구했다 — 오늘 0시로 센다', e); }
+  return sh > 0 ? Math.min(d.getTime(), sh) : d.getTime();
+}
+
 //  ★ 5.01 — 홈 «나 오늘» 배별 세분화. 이 검수원 이름(by)으로 찍은 완료만, t0(오늘 자정) 이후 것만 배·양하/선적으로 센다.
 //    왜 있는가 — 검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 (PCSZ 96 · STMJ 39)».
 //    진행 중 항차(voyages)와 오늘 보관소로 넘어간 항차(archive 줄임본)를 같은 모양으로 받는다 — 판정은 한 벌.
-//    총합은 호출부(computeMyToday)의 count 와 항상 같아야 한다(smoke_mytoday501 이 잰다).
+//    5.03: 총합 count 는 이 배별 합 **하나**다(computeMyToday 가 ships 합으로 낸다) — 날짜로 따로 세지 않는다(smoke_mytoday501 이 잰다).
 export function myTodayByShip(voyages, inspector, t0, now = Date.now()) {
   const ships = [];
   if (!inspector) return ships;
   for (const [key, v] of Object.entries(voyages || {})) {
     const info = (v && v.info) || {};
-    const o = { key, vsl: String(info.vsl || String(key).split('_')[0] || ''), voy: String(info.voy_d || info.voy || ''), dis: 0, lod: 0, equips: [], firstAt: 0, lastAt: 0 };
+    const o = { key, vsl: String(info.vsl || String(key).split('_')[0] || ''), voy: String(info.voy_d || info.voy || ''), dis: 0, lod: 0, equips: [], firstAt: 0, lastAt: 0, ats: [] };
     for (const m of ['discharge', 'loading']) {
       const comp = (v && v[m] && v[m].completed) || {};
       for (const r of Object.values(comp)) {
         if (!(r && r.by === inspector && typeof r.at === 'number' && r.at >= t0 && r.at <= now)) continue;
         if (m === 'discharge') o.dis += 1; else o.lod += 1;
+        o.ats.push(r.at);   // 5.03: 시간당 계산용 — 총합은 배별 합 하나로 통일
         if (r.equip && !o.equips.includes(String(r.equip))) o.equips.push(String(r.equip));
         if (!o.firstAt || r.at < o.firstAt) o.firstAt = r.at;
         if (r.at > o.lastAt) o.lastAt = r.at;

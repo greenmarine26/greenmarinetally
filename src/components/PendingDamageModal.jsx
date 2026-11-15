@@ -6,7 +6,7 @@
 //   사진은 갤러리 첨부 가능(카톡에서 저장한 사진) — 촬영 전용이 아니다. 보관용은 1600px 축소.
 import React, { useState, useEffect } from 'react';
 import { X, Camera, Send, Trash2, CalendarClock } from 'lucide-react';
-import { DAMAGE_TYPES, DAMAGE_PARTS } from '../kakaoShare.js';
+import { DAMAGE_TYPES, DAMAGE_PARTS, normalizeReportPhoto } from '../kakaoShare.js';
 import { fbAddPendingDamage, fbGetPendingDamage, fbDeletePendingDamage } from '../firebase.js';
 import CnText, { CnInline } from './CnText.jsx';   // 5.00-02: 문장 속 컨 번호도 한 벌 —   // 5.00 컨 번호 한 벌
 
@@ -36,11 +36,18 @@ export default function PendingDamageModal({ inspector = '', onClose }) {
   };
   useEffect(() => { refresh(); }, []);
 
-  const pick = (setter) => (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    setter({ blob: f, url: URL.createObjectURL(f) });
+  //  5.03: 고른 사진은 그 자리에서 JPEG(긴 변 1600px)로 바꾼다 — 폰 카메라 앱 원본·HEIC·형식 글자 빈 앨범 사진도 읽히게. 못 읽으면 한 줄로 알린다.
+  const pick = (setter) => async (e) => {
+    const f0 = e.target.files && e.target.files[0];
     e.target.value = '';
+    if (!f0) return;
+    try {
+      const f = await normalizeReportPhoto(f0);
+      setter({ blob: f, url: URL.createObjectURL(f) });
+    } catch (err) {
+      console.error('[PendingDamage] 사진 읽기 실패:', f0.type, f0.size, err);
+      alert('⚠️ 이 사진을 읽지 못했습니다. 다른 사진을 고르거나 직접 촬영해 주세요.\n(' + (err?.message || err) + ')');
+    }
   };
   const toggle = (arr, setArr, code) => setArr(arr.includes(code) ? arr.filter((x) => x !== code) : [...arr, code]);
 

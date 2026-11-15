@@ -168,3 +168,46 @@ export function aiCreditDaysLeft(now = Date.now()) {
   const kst = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
   return Math.round((Date.parse(AI_CREDIT_EXPIRE + 'T00:00:00Z') - Date.parse(kst(now) + 'T00:00:00Z')) / 86400000);
 }
+
+//  5.03 건8 — 클로드 하루 한도 이월(검수사 확정). 오늘 한도 = 기본 + Σ(지난 7일 각 max(0, 기본 − 그날 클로드 사용액)).
+//  한도를 읽는 자리(미르 문지기 · 사진 읽기 · 소유자 «💳 AI 비용» 화면)는 전부 이 한 함수만 쓴다.
+export const AI_DAILY_USD_DEFAULT = 3;          // 기본 하루 한도(mir_config.claudeDailyUsd 가 없을 때)
+export const AI_CREDIT_TOTAL = 100;              // 크레딧 총액(달러)
+export const AI_CREDIT_CAP_RATIO = 0.95;         // 크레딧의 95% 까지만 쓴다(소유자 화면 안내와 같은 기준)
+export const AI_CARRY_DAYS = 7;                  // 이월을 거슬러 보는 날수
+const _kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
+/** 이월을 셀 지난 7일의 날짜 키(어제부터 거꾸로). 미르 문지기와 소유자 화면이 같은 날들을 읽는다. */
+export const aiCarryKeys = (now = Date.now()) => Array.from({ length: AI_CARRY_DAYS }, (_, i) => aiDayKey(now - (i + 1) * 86400000));
+/** 날짜별 기록([{day, mml, acl, mws}]) → 날마다 클로드 사용액 [{day, usd}]. 소유자 화면과 미르 문지기가 같은 계산(aggregateAiCost)을 거친다. */
+export function aiDayUsages(days, chatModel) {
+  return (Array.isArray(days) ? days : []).filter((d) => d && /^\d{6}$/.test(String(d.day))).map((d) => ({ day: String(d.day), usd: aggregateAiCost([d], { chatModel }).total.usd }));
+}
+/** 오늘 한도. cfg.claudeDailyUsd(없거나 숫자 아니면 3) 기본 + 이월.
+ *  dayRows — [{day:'YYMMDD', usd}] 지난 날 클로드 사용액. null 이면(읽기 실패) 이월 없이 기본값. 목록에 없는 날은 이월하지 않는다(모르는 날을 0 으로 치지 않는다).
+ *  opts.now — 시각(ms) · opts.creditUsedUsd — 오늘 전까지 이번 크레딧 누적 사용액(없으면 dayRows 합).
+ *  돌려주는 것 {limit, base, carry, capped, text} — text 는 화면 문구 «클로드 오늘 한도 $X (기본 3 + 이월 $Y)». 오늘 쓴 금액은 부르는 쪽이 « — 오늘 $Z» 로 붙인다. */
+export function aiDayLimit(cfg, dayRows, opts = {}) {
+  const raw = cfg ? cfg.claudeDailyUsd : undefined;
+  const base = (raw === undefined || raw === null || raw === '' || Number.isNaN(Number(raw))) ? AI_DAILY_USD_DEFAULT : Math.max(0, Number(raw));
+  const now = Number(opts.now) || Date.now();
+  let carry = 0, used = 0, capped = false;
+  if (Array.isArray(dayRows) && _kstDate(now) <= AI_CREDIT_EXPIRE && base > 0) {
+    const want = new Set(aiCarryKeys(now));
+    for (const r of dayRows) {
+      if (!r || !want.has(String(r.day))) continue;
+      const u = Math.max(0, Number(r.usd) || 0);
+      carry += Math.max(0, base - u);
+    }
+  }
+  if (Array.isArray(dayRows)) used = dayRows.reduce((s, r) => s + Math.max(0, Number(r && r.usd) || 0), 0);
+  if (Number.isFinite(Number(opts.creditUsedUsd)) && opts.creditUsedUsd !== null && opts.creditUsedUsd !== '') used = Math.max(0, Number(opts.creditUsedUsd));
+  let limit = base + carry;
+  if (Array.isArray(dayRows) && _kstDate(now) <= AI_CREDIT_EXPIRE) {
+    const room = Math.max(0, AI_CREDIT_TOTAL * AI_CREDIT_CAP_RATIO - used);
+    if (room < limit) { limit = room; capped = true; }
+  }
+  const r2 = (v) => Math.round(v * 100) / 100;
+  limit = r2(limit);
+  const carryShown = r2(Math.max(0, limit - base));
+  return { limit, base, carry: carryShown, capped, text: `클로드 오늘 한도 $${limit.toFixed(2)} (기본 ${base} + 이월 $${carryShown.toFixed(2)})` };
+}

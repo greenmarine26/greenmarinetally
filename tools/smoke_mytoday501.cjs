@@ -52,6 +52,8 @@ console.log('소스 — 화면·읽기 연결');
 const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const home = rd('src/pages/HomePage.jsx'), fb = rd('src/firebase.js');
 ok(/fbGetMyArchivedToday\(/.test(home) && /_meVoyages/.test(home) && /computeMyToday\(_meVoyages/.test(home), '홈이 보관소 읽기를 합쳐 부른다');
+ok(/data-home-me-chipships/.test(home) && /myTodayWindowStart/.test(home), '5.03 칩에 배마다 «양 N · 선 N» · 창은 조 시작까지(건7)');
+ok(me.count === (me.ships || []).reduce((a, o) => a + o.dis + o.lod, 0), '5.03 총 대수는 배별 합 하나로 낸다');
 ok(/data-home-me-ships/.test(home) && /양하 <b/.test(home) && /선적 <b/.test(home), '세분화 줄(양하·선적)이 그려진다');
 ok(/data-home-me-warn/.test(home), '못 읽으면 화면에 밝힌다(조용한 실패 금지)');
 ok(/data-home-me-chipwarn/.test(home), '접힌 칩에도 ⚠ 가 붙는다(펴야만 보이면 조용한 실패)');

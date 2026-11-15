@@ -1732,6 +1732,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         inspectorDoneAt: info.inspectorDoneAt || Math.max(info.dischargeDoneAt || 0, info.loadingDoneAt || 0),
         dDone: !!(info.inspectorDone || info.dischargeDone), dDoneAt: info.dischargeDoneAt || 0,
         lDone: !!(info.inspectorDone || info.loadingDone), lDoneAt: info.loadingDoneAt || 0,
+        autoDone: !!((info.dischargeDone && info.dischargeDoneAuto) || (info.loadingDone && info.loadingDoneAuto)),   // 5.03 건1: 앱이 스스로 쓴 완료 표식 — 수석 단추는 안전망으로 그대로 둔다
       });
     }
     return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -1968,7 +1969,8 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         ) : (
           <span
             className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
-            title="검수사가 항차 화면에서 '검수 완료'를 눌러야 수석이 최종 저장할 수 있습니다"
+            title="양하·선적이 모두 끝나면 앱이 스스로 검수 완료로 표시합니다. 그 전에 끝내야 하면 검수원이 항차 화면에서 직접 눌러도 됩니다."
+            data-chief-progress="1"
           >검수 진행 중</span>
         )}
       </div>
@@ -1976,7 +1978,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
         <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loadingShow ?? r.loading}</b>{(r.loadingShow ?? r.loading) > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
         {r.inspectorDone && (
-          <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
+          <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold" data-chief-autodone={r.autoDone ? '1' : undefined}>{r.autoDone ? '자동 완료됨' : '검수 완료'} · 수석 확인 대기</span>
         )}
         {(r.voyD || r.voyL) && (
           <span className="text-dim-400 text-2xs ml-auto">

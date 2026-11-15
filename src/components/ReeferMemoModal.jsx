@@ -17,6 +17,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk, fbSaveReeferOcrLog } from '../firebase.js';
 import { isReeferTarget, tempNum, reeferListRows, openReeferListPrint } from '../reeferList.js';   // 4.57: 리퍼 판정·온도 읽기 한 벌 + 수석 리스트 출력
+import { normalizeReportPhoto } from '../kakaoShare.js';   // 5.03: 앨범·카메라 앱 사진을 JPEG 로 한 벌
 import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 // 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
@@ -152,7 +153,8 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     for (let i = 0; i < files.length; i += 1) {
       if (files.length > 1) setNote(`사진 ${i + 1}/${files.length} 읽는 중…`);
       try {
-        const r = await ocrReeferTemps(files[i], key, expect);
+        const jpg = await normalizeReportPhoto(files[i], 2000);   // 5.03: HEIC·형식 빈 사진·큰 원본도 읽히게(실패는 아래 errs → 화면 글로 알린다)
+        const r = await ocrReeferTemps(jpg, key, expect);
         const { items } = r;
         if (r.model && !/^claude-/.test(r.model)) weak.push(files.length > 1 ? `${i + 1}장` : '이 사진');
         if (r.suspects && r.suspects.length) susp.push(...r.suspects);

@@ -8,6 +8,7 @@
    실측(2026-09-22 20:27 사진 · 30칸) — 칸 30/30 · 자동 맞음 29 · 틀림 0 · 확인 필요 1(14-02-06, AI 가 숫자 6자리만 읽음).
    ⚠ 이 파일은 읽기만 한다. RTDB 쓰기는 SheetPhotoModal 이 기존 저장 함수(fbUpdateRecordField·fbSetActualPosition·fbCompleteContainer)로 한다. */
 import { aiCall } from './gemini.js';
+import { normalizeReportPhoto } from './kakaoShare.js';   // 5.03: 앨범·카메라 앱 사진(HEIC·형식 빈 것·큰 원본)을 먼저 JPEG 로
 import { bayDictSlotOk } from './utils.js';   // 4.26-02: 베이사전 칸 판정 한 벌(본문은 utils)
 
 export const SHEET_PROMPT = `이 사진은 컨테이너선 베이플랜 인쇄물에 검수원이 손으로 표시한 선적 기록지입니다.
@@ -167,7 +168,8 @@ export function matchSheetRuns(runs, candidates, slotOk) {
   for (const r of b) if (!aSlots.has(r.slot)) out.push({ ...r, cn: null, why: aCns.has(r.best) ? `이 컨이 다른 칸에도 읽혔어요 — 확인해 주세요` : '한 번만 읽힌 칸이에요 — 확인해 주세요' });
   return out;
 }
-function _toJpegBase64(file, maxSide) {
+async function _toJpegBase64(file0, maxSide) {
+  const file = await normalizeReportPhoto(file0, maxSide);   // 실패하면 «사진을 읽지 못했습니다 …» 로 던져 모달이 화면에 알린다
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file); const img = new Image();
     img.onload = () => {

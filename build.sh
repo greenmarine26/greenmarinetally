@@ -407,6 +407,15 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 5.01 나 오늘 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_MT"; exit 1
   fi
+  SMOKE_A5=$(mktemp /dev/shm/hometmp/_smokea5_XXXXXX.cjs)
+  if npx esbuild tools/smoke_a50300_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_A5" --loader:.js=jsx --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --log-level=error; then
+    NODE_PATH="$PWD/node_modules" node tools/smoke_a50300.cjs "$SMOKE_A5" "$PWD" || { echo "✗ 5.03 자동 완료·나 오늘 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_A5"; exit 1; }
+  else echo "✗ 5.03 연막 번들 실패 — 배포 금지"; rm -f "$SMOKE_A5"; exit 1; fi
+  rm -f "$SMOKE_A5"
+  node tools/smoke_a50300_baymini.cjs "$PWD" || { echo "✗ 5.03 베이모드 칩 연막검사 실패 — 배포 금지"; exit 1; }
+  node tools/smoke_b50300.cjs "$PWD" || { echo "✗ 5.03 사진·플랜 맞춤 연막검사 실패 — 배포 금지"; exit 1; }
+  node tools/smoke_c50300.cjs "$PWD" || { echo "✗ 5.03 한도 이월 연막검사 실패 — 배포 금지"; exit 1; }
+  node tools/smoke_d50300.cjs /nonexistent_tnjp.json || { echo "✗ 5.03 갱 규격표·실번호 연막검사 실패 — 배포 금지"; exit 1; }
   SMOKE_C4=$(mktemp /dev/shm/hometmp/_smokec4_XXXXXX.cjs)
   if npx esbuild tools/smoke_cone402_entry.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_C4" --loader:.js=jsx --jsx=automatic --log-level=error; then
     node tools/smoke_cone402.cjs "$SMOKE_C4" "$PWD" || { echo "✗ 4.02 콘앱 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_C4"; exit 1; }

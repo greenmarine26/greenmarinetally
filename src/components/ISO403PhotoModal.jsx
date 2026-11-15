@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Camera, Save, Trash2, Loader, Check } from 'lucide-react';
 import { fbSaveISO403Photo, fbDeleteISO403Photo, fbGetDamagePhoto } from '../firebase.js';   // 3.61: 사진 읽기는 새 자리→옛 자리 한 벌
 import { isoShown } from '../utils.js';   // 4.20-01: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
+import { normalizeReportPhoto } from '../kakaoShare.js';   // 5.03: 앨범·카메라 앱 사진을 JPEG 로 한 벌
 import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
 // 사진 압축 (1024px JPEG quality 0.7) — RTDB 10MB 제한 안전 마진
@@ -72,10 +73,12 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
   if (!open || !c) return null;
 
   const handlePick = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file0 = e.target.files?.[0];
+    e.target.value = '';
+    if (!file0) return;
     setError('');
     try {
+      const file = await normalizeReportPhoto(file0);   // 5.03: HEIC·형식 빈 사진·큰 원본도 읽히게
       const compressed = await compressPhoto(file);
       setPhotoBlob(file);
       setPhotoPreview(compressed);

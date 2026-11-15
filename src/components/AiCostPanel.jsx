@@ -1,7 +1,7 @@
 // 소유자 전용 — 미르·사진 읽기가 쓴 AI 비용(클로드·제미나이)을 날짜·종류별로 보고 Console 숫자와 맞대는 화면(수석 상황판 › 🧰 관리 › 👑 소유자 메뉴)
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fbGetAiCost, fbSaveAiConsole } from '../firebase.js';
-import { aggregateAiCost, aiPeriodDays, aiModelShort, aiKindLabel, aiConsoleGap, AI_DEFAULT_CHAT_MODEL, AI_CREDIT_EXPIRE, aiCreditDaysLeft } from '../aiCost.js';
+import { aggregateAiCost, aiPeriodDays, aiModelShort, aiKindLabel, aiConsoleGap, aiDayLimit, aiDayUsages, aiCarryKeys, AI_DEFAULT_CHAT_MODEL, AI_CREDIT_EXPIRE, aiCreditDaysLeft } from '../aiCost.js';
 
 //  4.37 — 검수사 2026-10-19 «미르가 사용하는 토큰을 관리하고 분석» · «비용관리 보고는 소유자 관리 안에둡니다» · Console 화면을 보내며 «이것도 같이 넣어 주세요»
 //         · «사진읽기 상한은 일단 넣지 않습니다. 최대가 얼마나 되는지 알아야 하기때문입니다» → 종류별 1회 평균 · 1회 최대를 보인다.
@@ -41,7 +41,7 @@ export default function AiCostPanel({ by }) {
   const load = useCallback(async () => {
     setRes(null); setErr('');
     try {
-      const keys = [...new Set([...aiPeriodDays('month'), ...aiPeriodDays('7d')])];
+      const keys = [...new Set([...aiPeriodDays('month'), ...aiPeriodDays('7d'), ...aiCarryKeys()])];
       setRes(await fbGetAiCost(keys, by));
     } catch (e) {
       setErr((e && e.message) || String(e));
@@ -66,7 +66,12 @@ export default function AiCostPanel({ by }) {
 
   //  미르(mir.js getMirConfig)와 같은 읽기 — 없거나 숫자가 아니면 3달러(4.65 — 1달러에서 올림 · 감사 4.37: 글자가 들어가면 미르는 1달러, 화면은 0 으로 갈리던 것)
   const webLimit = cfg.webSearchUsd === undefined || cfg.webSearchUsd === null || cfg.webSearchUsd === '' || Number.isNaN(Number(cfg.webSearchUsd)) ? 3 : Math.max(0, Number(cfg.webSearchUsd));
-  const dayLimit = cfg.claudeDailyUsd === undefined || cfg.claudeDailyUsd === null || cfg.claudeDailyUsd === '' || Number.isNaN(Number(cfg.claudeDailyUsd)) ? 3 : Math.max(0, Number(cfg.claudeDailyUsd));   // 4.68 — 미르(mir.js getMirConfig)와 같은 읽기
+  //  5.03 건8 — 문지기(mir.js claudeOverDailyCap)와 같은 aiDayLimit 한 함수. 지난 7일은 이미 읽은 날짜 기록에서 센다(읽은 날이 7일 안 되면 모자란 날은 이월하지 않는다).
+  const dayLim = useMemo(() => {
+    const past = res ? pick(aiCarryKeys()) : [];
+    return aiDayLimit(cfg, past.length === aiCarryKeys().length ? aiDayUsages(past, chatModel) : null);
+  }, [res, cfg, chatModel, pick]);
+  const dayLimit = dayLim.limit;
   const coneLimit = Math.round(webLimit * 0.5 * 100) / 100;
   const periodName = (PERIODS.find(([k]) => k === period) || PERIODS[0])[1];
 
@@ -135,7 +140,7 @@ export default function AiCostPanel({ by }) {
             )}
             {period === 'today' && (
               <div className={agg.total.usd >= dayLimit ? 'text-amber-200' : 'text-dim-300'} data-aicost-daylimit="1">
-                클로드 하루 한도 <b className="text-dim-100 tabular-nums">{usd(dayLimit, 2)}</b> — 오늘 <b className="text-dim-100 tabular-nums">{usd(agg.total.usd, 2)}</b>.
+                {dayLim.text} — 오늘 <b className="text-dim-100 tabular-nums">{usd(agg.total.usd, 2)}</b>.
                 {agg.total.usd >= dayLimit ? ' 한도에 닿아 오늘은 제미나이로 답합니다.' : ' 넘기 전에는 시간 초과·과부하에도 제미나이로 가지 않고 클로드를 다시 부릅니다.'}
               </div>
             )}

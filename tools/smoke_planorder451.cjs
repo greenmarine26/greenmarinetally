@@ -67,7 +67,7 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (c) pass++
   ok(/if \(planIsLive\(eta, etd, now\)\) return \[0, eta\];/.test(home), '홈: 정렬 ⓪등급 = planIsLive');
   ok(/planEndCompare\(a\._etdMs, b\._etdMs\)/.test(home) && !/if \(\(a\._etdMs == null\) !== \(b\._etdMs == null\)\)/.test(home), '홈: 같은 시작 동률 = planEndCompare(옛 인라인 비교는 없다)');
   ok(/const _isPastVoy = \(v, now\) => planIsPast\(v\?\._etaMs, v\?\._etdMs, now\);/.test(home), '홈: 지난 배 = planIsPast');
-  ok(/planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone\}/.test(home) && /const isAllDone = \(v\) => inspectorAllDone\(v\);/.test(home), '홈: planDelayedLive·inspectorAllDone 을 utils 에서 가져온다 · isAllDone 은 한 벌 함수(4.55-01)');
+  ok(/planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone(?:, hasLoadingSide)?\}/.test(home) && /const isAllDone = \(v\) => inspectorAllDone\(v\);/.test(home), '홈: planDelayedLive·inspectorAllDone 을 utils 에서 가져온다 · isAllDone 은 한 벌 함수(4.55-01)');
   //  «검수 완료» 판정 복사본 여섯(홈 · 수석 보드 · 마감 텔리 목록 · 카페리 유지 · 홀드 잔여 · 미르 홈 카드)이 utils 한 벌을 부른다 — 손으로 다시 쓴 비교식이 되살아나면 DXQD 모양(선적 리스트만 있는 배)이 화면마다 다시 갈린다.
   const chief = fs.readFileSync(path.join(ROOT, 'src/pages/ChiefDashboard.jsx'), 'utf8');
   const mirSrc = fs.readFileSync(path.join(ROOT, 'src/mir.js'), 'utf8');

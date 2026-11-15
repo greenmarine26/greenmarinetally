@@ -6,6 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { readEsealPhoto, matchEsealRuns } from '../esealPhoto.js';
 import { fbSetEmptySeal } from '../firebase.js';
 import { canWorkNow, workGateText } from '../workChoice.js';
+import { normalizeReportPhoto } from '../kakaoShare.js';   // 5.03: 앨범·카메라 앱 사진을 JPEG 로 한 벌
 
 export default function EsealPhotoModal({ voyageKey, info, inspector, onClose }) {
   const [busy, setBusy] = useState('');
@@ -28,7 +29,8 @@ export default function EsealPhotoModal({ voyageKey, info, inspector, onClose })
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     setErr(''); setNote(''); setDone(null); setBusy('엠티실 기록지를 읽는 중이에요 (30초~1분)…');
     try {
-      const runs = await readEsealPhoto(f);
+      const jpg = await normalizeReportPhoto(f, 2000);   // 5.03: HEIC·형식 빈 사진·큰 원본도 읽히게(실패하면 아래 catch 가 화면에 알린다)
+      const runs = await readEsealPhoto(jpg);
       if (runs.length < 2) setNote('한 번만 읽혔어요 — 두 번 대조를 못 했으니 자동 체크된 줄도 한 번 더 봐 주세요.');
       else if (runs.some((r) => r && r._fallbackModel)) setNote('프리뷰 판독 모델이 내려가 기본 모델로 읽었어요 — 자동 체크된 줄도 한 번 더 봐 주세요.');   // 3.60-19 (V8)
       const m = matchEsealRuns(runs, targets, pool, used).map((r) => ({ ...r, use: runs.length >= 2 && !!r.ok }));   // 3.60-06 (진단 M29): 한 번만 읽혔으면 자동 체크하지 않는다

@@ -10,12 +10,12 @@ import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone, hasLoadingSide} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { CountUp } from '../components/MotionBits.jsx';   // 5.02: 숫자가 올라가는 큰 숫자
 import { workBaysOf, bayGroupsOf, twinSingleOf, twinSingleText, twinSingleParts } from '../workBays.js';   // 5.02: 지금 작업중인 베이(호기별 — craneBoardOf 한 벌)
 import { termAggOf } from '../termBoard.js';   // 4.05: 항차 카드에 터미널 본선 집계(완료·잔여)를 참고 숫자로 — 숫자는 termBoardOf 한 벌
-import { paceFromRecords, voyageDoneAts, voyageFirstTermAt, myTodayByShip } from '../nlSearch.js';
+import { paceFromRecords, voyageDoneAts, voyageFirstTermAt, myTodayByShip, myTodayWindowStart, termProgressOf } from '../nlSearch.js';
 import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 쓰는 버튼을 아예 안 그린다   // 3.6-01: 페이스 한 벌 — 분모는 배가 일한 시간
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -23,7 +23,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 import { decideBadge, DEPART_REMAIN_MAX, inWindow, notStartedYet } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
 import { standbyNamesOf } from '../equipHold.js';   // 4.73
-import { canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
+import { canOpenChief, isVisibleStaff, isTester, HIDDEN_STAFF } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 import { setHomeSheetClose } from '../backHandler.js';   // 4.25 2차: 폰 시트가 열려 있으면 뒤로가기(App 홈 가드)가 시트만 닫는다
@@ -95,7 +95,8 @@ function lastWorkAt(v) {
 async function shrinkToBase64(file) {
   try {
     const { compressForReport } = await import('../mixerUpload.js');
-    const small = await compressForReport(file, 1400);
+    const { normalizeReportPhoto } = await import('../kakaoShare.js');   // 5.03: 폰 카메라앱 사진(HEIC·MIME 빔)도 JPEG 로 먼저 정리
+    const small = await compressForReport(await normalizeReportPhoto(file), 1400);
     return await new Promise((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(String(r.result || ''));
@@ -643,7 +644,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       await fbDeleteSection(key, 'discharge');
       const hasL = !!(v?.loading && Object.keys(v.loading).length > 0);
       await fbUpdateVoyageInfo(key, {
-        voy_d: null, dischargeDone: null, dischargeDoneAt: null,
+        voy_d: null, dischargeDone: null, dischargeDoneAt: null, dischargeDoneAuto: null, dischargeDoneCancelled: null,
         voy: v?.info?.voy_l || null,
         mode: hasL ? 'loading' : null,
       });
@@ -651,7 +652,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       await fbDeleteSection(key, 'loading');
       const hasD = !!(v?.discharge && Object.keys(v.discharge).length > 0);
       await fbUpdateVoyageInfo(key, {
-        voy_l: null, loadingDone: null, loadingDoneAt: null,
+        voy_l: null, loadingDone: null, loadingDoneAt: null, loadingDoneAuto: null, loadingDoneCancelled: null,
         voy: v?.info?.voy_d || null,
         mode: hasD ? 'discharge' : null,
       });
@@ -678,10 +679,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     if (!completeTarget) return;
     const { key, mode } = completeTarget;
     try {
-      const f = mode === 'discharge'
-        ? { dischargeDone: true, dischargeDoneAt: Date.now() }
-        : { loadingDone: true, loadingDoneAt: Date.now() };
-      await fbUpdateVoyageInfo(key, f);
+      await fbUpdateVoyageInfo(key, completeFieldsOf(mode, Date.now(), false));   // 5.03 건1: 자동 완료와 같은 함수 한 벌
     } catch (e) {
       console.error('[검수완료 표시] 실패:', key, e);
       alert('검수 완료 표시 중 오류가 발생했습니다.');
@@ -691,9 +689,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // 검수사가 누른 모드별 완료를 수석 확인 전 되돌리기
   const undoInspectorDone = async (key, mode) => {
     try {
+      //  5.03 건1: 사람이 취소한 항차는 앱이 다시 자동 완료로 되쓰지 않는다 — «…DoneCancelled» 표식을 남긴다.
       const f = mode === 'discharge'
-        ? { dischargeDone: false, dischargeDoneAt: null }
-        : { loadingDone: false, loadingDoneAt: null };
+        ? { dischargeDone: false, dischargeDoneAt: null, dischargeDoneCancelled: true }
+        : { loadingDone: false, loadingDoneAt: null, loadingDoneCancelled: true };
       await fbUpdateVoyageInfo(key, f);
     } catch (e) { console.error('[검수완료 취소] 실패:', key, e); }
   };
@@ -812,6 +811,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     <ShipRow key={v.key} voyage={v} pilotForecast={pilotForecast} activeInspectors={activeInspectors[v.key] || []}
       standbyNames={standbyNamesOf(inspectors, v.key, (activeInspectors[v.key] || []).map((a) => a.name), (n) => isVisibleStaff(n, isOwnerName(inspector)))}
       selected={wide && v.key === curKey} canComplete={!_viewOnly} inspectorDone={isAllDone(v)} modeDone={modeDoneOf(v)}
+      autoDone={!!inspector && !_viewOnly && !HIDDEN_STAFF.includes(inspector) && !isTester(inspector)}
       onOpen={(m) => onOpenVoyage(v.key, m)}
       onSelect={() => { if (wide) setSelKey(v.key); else setSheetKey(v.key); }} />
   );
@@ -843,8 +843,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     if (!inspector) return undefined;
     let alive = true;
     const run = async () => {
-      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-      const r = await fbGetMyArchivedToday(t0.getTime(), Object.keys(voyages || {}));
+      const r = await fbGetMyArchivedToday(myTodayWindowStart(Date.now()), Object.keys(voyages || {}));   // 5.03: 오늘 0시 또는 지금 조 시작 중 이른 쪽부터 — 야간조 자정 컷 없음
       //  ⚠ 읽기가 일부라도 실패하면 앞서 잘 읽은 항차를 지우지 않는다 — 5분 갱신 한 번 실패로 헤더가 39대로 되돌아가지 않게(감사 2026-11-13).
       if (alive) setArchMe((prev) => ((r.failed && r.failed.length) ? { ...r, voyages: { ...(prev.voyages || {}), ...(r.voyages || {}) } } : r));
     };
@@ -888,8 +887,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   //  V9.16: 오늘의 나 — 내 완료 기록이 있을 때만. 칩을 누르면 종전 줄(오늘 N대 · 시간당 · 마지막 완료)이 띠 아래에 펴진다.
   const meChip = _me && _me.count > 0 ? (
     <button type="button" onClick={() => setMeOpen((o) => !o)} aria-expanded={meOpen} data-home-chip="me" title={(archMe.failed && archMe.failed.length > 0 ? `보관소로 넘어간 배 ${archMe.failed.length}건을 못 읽어 빠졌을 수 있음 · ` : '') + '오늘 내 처리량 — 누르면 배별 양하·선적 · 시간당 · 마지막 완료'}
-      className="inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2 border-2 border-emerald-800/60 bg-ink-900 text-dim-200 text-sm2 font-bold" style={{ minHeight: 'var(--tap-chip)' }}>
+      className="inline-flex flex-wrap items-center gap-x-1 max-w-full rounded-pill px-2 border-2 border-emerald-800/60 bg-ink-900 text-dim-200 text-sm2 font-bold" style={{ minHeight: 'var(--tap-chip)' }}>
       🙋 나 오늘 <b className="text-emerald-300 mono">{_me.count}</b>대
+      {/* 5.03 건7: 배마다 «배이름 양 N · 선 N» — 합은 count 와 같다 */}
+      {(_me.ships || []).length > 0 && (
+        <span className="inline-flex flex-wrap items-center gap-x-2 text-xs font-normal text-dim-300" data-home-me-chipships="1">
+          {_me.ships.map((o) => (<span key={o.key} className="whitespace-nowrap" data-home-me-chipship={o.key}>{o.vsl} 양 <b className="mono text-emerald-300">{o.dis}</b> · 선 <b className="mono text-emerald-300">{o.lod}</b></span>))}
+        </span>
+      )}
       {archMe.failed && archMe.failed.length > 0 && <span className="text-amber-300" data-home-me-chipwarn="1" aria-label="보관소를 못 읽어 빠졌을 수 있음">⚠</span>}
     </button>
   ) : null;
@@ -1602,10 +1607,53 @@ function RowBar({ label, mode, stats }) {
   );
 }
 
+// ── ★ 5.03 건1 — 양하·선적이 다 끝나면 앱이 스스로 «검수 완료» 표식을 쓴다. ──
+//   근거 — 실측 archive/TNJP_26376E: 마지막 선적 17:16·출항 17:30 인데 완료 표식은 18:21 사람이 일괄로 눌러서야 생겼다(사람 손만 있었다).
+//   기록하는 함수는 수동(performComplete)과 한 벌이다 — 자동이면 «…DoneAuto» 표식만 더한다.
+export function completeFieldsOf(mode, at = Date.now(), auto = false) {
+  const f = mode === 'discharge'
+    ? { dischargeDone: true, dischargeDoneAt: at }
+    : { loadingDone: true, loadingDoneAt: at };
+  if (auto) f[mode === 'discharge' ? 'dischargeDoneAuto' : 'loadingDoneAuto'] = true;
+  return f;
+}
+//  자동으로 쓸 모드 목록 [{ mode, fields }] — 순수 함수(시험이 부른다). canWrite=false(조회만·테스터 계정)면 빈 목록.
+//  ① 모드별 termProgressOf done>=total 이거나 remD/remL===0(앱 자신의 완료 기록이 전부)
+//  ② 사람이 취소한 항차(…DoneCancelled)·이미 자동으로 쓴 적 있는데 지금 표식이 없는 항차(수석 일괄 취소)는 되쓰지 않는다
+//  ③ 선적 EDI 대기 배(선적 방향은 있는데 선적 자료가 없다 — hasLoadingSide)는 양하·선적 모두 쓰지 않는다. 캔슬된 쪽은 없는 일이다.
+export function autoCompleteTargets(voyage, { remD = null, remL = null, canWrite = false, now = Date.now() } = {}) {
+  if (!canWrite || !voyage) return [];
+  const info = voyage.info || {};
+  if (info.inspectorDone) return [];
+  const has = (sec) => !!(sec && typeof sec === 'object' && Object.keys(sec).length);
+  const hasD = has(voyage.discharge), hasL = has(voyage.loading);
+  if (!hasD && !hasL) return [];
+  if (hasLoadingSide(voyage) && !hasL) return [];   // 선적 EDI 대기 — 끝났다고 보지 않는다
+  const T = termProgressOf(info, now);
+  const out = [];
+  for (const mode of ['discharge', 'loading']) {
+    const pre = mode === 'discharge' ? 'discharge' : 'loading';
+    if (!(mode === 'discharge' ? hasD : hasL)) continue;
+    if (sideCancelled(info, mode)) continue;
+    if (info[pre + 'Done']) continue;
+    if (info[pre + 'DoneCancelled'] || info[pre + 'DoneAuto']) continue;
+    const rem = mode === 'discharge' ? remD : remL;
+    const tm = T && T.byMode && T.byMode[mode];
+    const byTerm = !!(tm && tm.total > 0 && tm.done >= tm.total);
+    if (!(rem === 0 || byTerm)) continue;
+    //  완료 시각 — 그 모드 마지막 완료 기록(없으면 지금). 늦게 열린 화면이 쓰더라도 실제 끝난 때로 남는다.
+    const last = Math.max(0, ...Object.values((voyage[mode] && voyage[mode].completed) || {}).map((r) => (r && typeof r === 'object' ? Number(r.at) || 0 : 0)));
+    //  5.03 감사 수리: 마지막 완료 기록이 36시간 넘은 옛 항차는 자동으로 쓰지 않는다(배포 직후 옛 항차 일괄 기록 방지 — 수동 단추는 그대로).
+    if (!(last > 0 && now - last <= 36 * 3600 * 1000)) continue;
+    out.push({ mode, fields: completeFieldsOf(mode, last <= now ? last : now, true) });
+  }
+  return out;
+}
+
 // ── ★ 4.25 배 줄(설계 «한 줄 = 부두 띠·선박명·항차·선석·막대 둘·상태») — 누르면 컴은 오른쪽 상세, 폰은 전체화면 시트(onSelect). ──
 //   V9.57(H6) 출항 배지 «한 번 뜨면 유지»(departBadgeAt) 기록은 이 줄이 한다. 줄은 접힌 묶음 안에서도 언마운트하지 않는다(hidden) — 콘앱(cone.html)이 이 값으로 출항을 표시한다.
-export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], standbyNames = [], selected = false, onSelect, onOpen = null, canComplete = false, inspectorDone = false, modeDone = null }) {
-  const { dis, loa, disStats, loaStats, pier, berth, departBadge, _termWorking, _isToday } = shipViewOf(voyage, pilotForecast);
+export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], standbyNames = [], selected = false, onSelect, onOpen = null, canComplete = false, inspectorDone = false, modeDone = null, autoDone = false }) {
+  const { dis, loa, disStats, loaStats, pier, berth, departBadge, _termWorking, _isToday, remD: _aRemD, remL: _aRemL } = shipViewOf(voyage, pilotForecast);
   // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — departBadgeAt이 이미 있으면 발화하지 않고, 실패는 console.warn으로 드러낸다.
   const _isDepart = !!(departBadge && departBadge.kind === 'depart');
   useEffect(() => {
@@ -1615,6 +1663,20 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sta
         .catch(e => console.warn('[배지] sticky 저장 실패', voyage.key, e));
     } catch (e) { console.warn('[배지] sticky 저장 실패', voyage.key, e); }
   }, [_isDepart, voyage.key, voyage.info?.departBadgeAt]);
+  //  ★ 5.03 건1: 양하·선적이 다 끝나면 앱이 스스로 완료 표식을 쓴다(departBadgeAt 과 같은 방식 — 줄은 접힌 묶음에서도 언마운트하지 않는다).
+  //    조회만·테스터 계정은 autoDone=false 라 쓰지 않는다. 수동 단추는 안전망으로 그대로 둔다. 실패는 console.warn 으로 드러낸다.
+  const _autoSig = autoDone ? autoCompleteTargets(voyage, { remD: _aRemD, remL: _aRemL, canWrite: true }).map((t) => t.mode).join('|') : '';
+  useEffect(() => {
+    if (!_autoSig) return;
+    const targets = autoCompleteTargets(voyage, { remD: _aRemD, remL: _aRemL, canWrite: true });
+    for (const t of targets) {
+      try {
+        fbUpdateVoyageInfo(voyage.key, t.fields)
+          .catch(e => console.warn('[자동 완료] 저장 실패', voyage.key, t.mode, e));
+      } catch (e) { console.warn('[자동 완료] 저장 실패', voyage.key, t.mode, e); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_autoSig, voyage.key]);
   //  4.64-04: 작업 시작이 한참 남은 배에 앞 기항 출항이 붙어 기록된 옛 «출항 유지» 값은 스스로 걷는다(콘앱도 이 값을 읽는다).
   useEffect(() => {
     if (!voyage.info?.departBadgeAt || !notStartedYet(voyage._etaMs)) return;
@@ -2628,45 +2690,30 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
 //     검수사 정정 — «1초에 몰아 찍건 실시간으로 입력하든 총 걸린 작업시간은 같습니다».
 export function computeMyToday(voyages, inspector, now = Date.now()) {
   if (!inspector) return null;
-  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  const t0 = dayStart.getTime();
+  //  ★ 5.03 건7 — 창 시작은 «오늘 0시» 와 «지금 조 시작» 중 이른 쪽(야간조가 자정에 한 배를 둘로 쪼개지 않는다).
+  //    count 는 **배별 합 하나**다 — 날짜로 따로 세던 종전 count 와 배별 합이 어긋날 길이 없다.
+  const t0 = myTodayWindowStart(now);
+  const ships = myTodayByShip(voyages, inspector, t0, now);
+  const count = ships.reduce((a, o) => a + o.dis + o.lod, 0);
   const mine = [];
-  const hits = {}; const infoOf = {}; const minePer = {};
-  Object.values(voyages || {}).forEach(v => {
-    const key = String(v?.info?.vsl || '') + '_' + String(v?.info?.voy || '');
-    ['discharge', 'loading'].forEach(m => {
-      const comp = v?.[m]?.completed || {};
-      Object.values(comp).forEach(r => {
-        if (!(r && r.by === inspector && r.at >= t0 && r.at <= now)) return;
-        mine.push(r.at);
-        (minePer[key] = minePer[key] || []).push(r.at);
-        hits[key] = (hits[key] || 0) + 1;
-        //  3.6-01: 분모는 «그 배가 일한 시간»이다 — 부두·선석뿐 아니라 접안·이안 시각까지 넘긴다.
-        //  ⚠ 분자는 **오늘 것만** 세므로 분모도 오늘 자정부터로 자른다(paceFrom) —
-        //    안 자르면 어제 접안부터 나눠 통계탭·미르보다 25% 낮게 나온다(감사 P1-B 실측).
-        //  분모의 끝은 «그 배의 마지막 완료»다 — 내 마지막으로 자르면 사람마다 분모가 갈린다(감사 실측).
-        if (!infoOf[key]) infoOf[key] = { ...(v?.info || {}), paceFrom: t0, paceTo: 0 };
-        const vAll = voyageDoneAts(v);
-        if (vAll.length) { infoOf[key].paceTo = vAll[vAll.length - 1]; infoOf[key].firstDoneAt = voyageFirstTermAt(v); }   // 3.53-12: 작업 시작의 대역 — 그 항차 첫 완료(외부 합계 startAt 을 뗀 자리)
-      });
-    });
-  });
+  ships.forEach((o) => o.ats.forEach((t) => mine.push(t)));
   mine.sort((a, b) => a - b);
   //  오늘 내 기록이 가장 많은 항차의 작업 구간으로 잰다(두 배를 뛴 날은 그 배 기준 — 인계함에 적어 둔다).
-  const topKey = Object.keys(hits).sort((a, b) => hits[b] - hits[a])[0] || '';
-  const count = mine.length;
-  //  갱 수 1 — 한 사람은 크레인 한 대에 붙는다(다른 두 화면은 항차 갱 수를 쓴다).
-  //  3.53-12: 외부 합계 시작 시각은 분모에 쓰지 않는다(피드를 떼어 냈다) — 검수 시작 보고·접안·작업 시작 순.
-  //  5.01: 분자도 그 배 기록만 — 분모(그 배 작업 구간)와 같은 배여야 두 배를 뛴 날 시간당이 부풀지 않는다(감사 2026-11-13).
-  const _P = paceFromRecords((minePer[topKey] || []).slice().sort((a, b) => a - b), infoOf[topKey] || {}, 1);
-  //  ⚠ 개인 몫은 **배가 일한 시간을 알 때만** 낸다(감사 P1-A).
-  //    작업 구간을 모르면 분모가 «내가 찍은 구간»이 되어, 몰아 찍은 사람이 시간당 77대로 나온다.
-  //    그때는 «오늘 N대»만 보여준다 — 숫자를 지어내지 않는다.
+  const top = ships.slice().sort((a, b) => (b.dis + b.lod) - (a.dis + a.lod))[0] || null;
+  //  3.6-01: 분모는 «그 배가 일한 시간»(접안~이안, 쉬는 시간 뺀 것) — 분자는 창(t0) 안 기록뿐이라 분모도 창 시작부터 자른다(paceFrom, 감사 P1-B).
+  //  분모의 끝은 «그 배의 마지막 완료»다 — 내 마지막으로 자르면 사람마다 분모가 갈린다(감사 실측).
+  let topInfo = {};
+  if (top) {
+    const v = (voyages || {})[top.key];
+    topInfo = { ...((v && v.info) || {}), paceFrom: t0, paceTo: 0 };
+    const vAll = voyageDoneAts(v);
+    if (vAll.length) { topInfo.paceTo = vAll[vAll.length - 1]; topInfo.firstDoneAt = voyageFirstTermAt(v); }   // 3.53-12
+  }
+  //  갱 수 1 — 한 사람은 크레인 한 대에 붙는다. 5.01: 분자도 그 배 기록만.
+  const _P = paceFromRecords(top ? top.ats.slice().sort((a, b) => a - b) : [], topInfo, 1);
+  //  ⚠ 개인 몫은 **배가 일한 시간을 알 때만** 낸다(감사 P1-A) — 모르면 «오늘 N대»만.
   const perHour = (_P.ok && _P.basis === 'work') ? Math.round(_P.perHour) : null;
-  //  못 잰 이유가 «기록이 오해를 부르는 것»이면 밝힌다. «아직 안 쌓였다»(few·short)면 조용히 둔다.
   const paceNote = _P.why === 'dirty' ? '기록 고르지 않음' : '';
   const lastAt = count ? mine[mine.length - 1] : null;
-  //  5.01: 배별 양하/선적(진행 중 + 오늘 보관소로 넘어간 항차) — 합은 count 와 같다.
-  const ships = myTodayByShip(voyages, inspector, t0, now);
   return { count, perHour, paceNote, lastAt, ships };
 }

@@ -4,7 +4,7 @@
 //   XRAY 처리: parseXrayList 실제 반환이 { containers:[...] } 이므로 그에 맞춤(연동안내 6-1 확정).
 // V9.57(G5): 자체 classify 삭제 — autoRegApi.classifyTallyFile 단일 분류기를 임포트.
 //   달라진 점: cdl 허용(V8.89와 정합), .txt EDI/ASC/숫자코드 지원, 합본(loadlist.xlsx) 지원.
-import { parseListExcel, parseBAPLIE, parseAscFile, parseXrayList, loadSheetJS, plausibleListWtKg } from './utils.js';
+import { normSeal, parseListExcel, parseBAPLIE, parseAscFile, parseXrayList, loadSheetJS, plausibleListWtKg } from './utils.js';
 import { classifyTallyFile } from './autoRegApi.js';
 import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 선사별 리스트는 파일 이름이 선사(CLL (CSC) · CSC-DWS · CLL_WDF_…)
 
@@ -12,7 +12,7 @@ import { opFromListFileName } from './data/tallyFormats.js';   // 3.60-21: 선�
 function mergeWithEdi(edi,list,xray){const merged={...edi},conflicts=[],unmatched={};
   Object.values(list||{}).forEach(c=>{if(!c.cn)return;const cn=c.cn.toUpperCase();
     if(merged[cn]){const e=merged[cn]={...merged[cn]};
-      if(c.sl){if(!e.sl)e.sl=c.sl;else if(e.sl!==c.sl)conflicts.push({cn,field:'sl',ediVal:e.sl,otherVal:c.sl,source:c._source||'list'});}
+      if(c.sl){if(!e.sl)e.sl=c.sl;else if(normSeal(e.sl)!==normSeal(c.sl))conflicts.push({cn,field:'sl',ediVal:e.sl,otherVal:c.sl,source:c._source||'list'});}
       if(c.eseal){if(!e.eseal)e.eseal=c.eseal;else if(e.eseal!==c.eseal)conflicts.push({cn,field:'eseal',ediVal:e.eseal,otherVal:c.eseal,source:c._source||'list'});}
       if(c.wt&&c.wt>0){const w=parseInt(e.wt,10)||0;if(w===0)e.wt=c.wt;else if(Math.abs(w-c.wt)>1000)conflicts.push({cn,field:'wt',ediVal:w,otherVal:c.wt,source:c._source||'list'});}
     } else unmatched[cn]=c;});

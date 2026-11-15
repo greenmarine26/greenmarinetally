@@ -29,7 +29,7 @@ const resp = (status, json) => ({ ok: status >= 200 && status < 300, status, jso
 global.fetch = (url, opts = {}) => {
   const u = String(url);
   if (u.includes('/mir_config.json')) return Promise.resolve(resp(200, { claudeKey: 'CK', aiKey: 'GK', dailyCap: 300, enabled: true }));
-  if (u.includes('/ai_call_log/')) return Promise.resolve(resp(200, OVERCAP && (!opts.method || opts.method === 'GET') ? { a: { at: 1, kind: 'reeferPhoto', status: 200, model: 'claude-opus-5-5', tokIn: 1000000, tokOut: 0 } } : { name: 'x' }));   // 4.68: OVERCAP — 오늘 클로드 합계가 하루 한도(3달러)를 넘긴 날
+  if (u.includes('/ai_call_log/')) return Promise.resolve(resp(200, OVERCAP && (!opts.method || opts.method === 'GET') ? { a: { at: 1, kind: 'reeferPhoto', status: 200, model: 'claude-opus-5-5', tokIn: 10000000, tokOut: 0 } } : { name: 'x' }));   // 4.68: OVERCAP — 오늘 클로드 합계가 하루 한도(3달러)를 넘긴 날
   if (u.includes('api.anthropic.com')) {
     calls.claude.push(JSON.parse(opts.body || '{}'));
     const st = claudeQueue.length ? claudeQueue.shift() : 200;
@@ -107,7 +107,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     modelText = JSON.stringify({ items: [{ cn: 'TEMU1234567', set: '-19.0', act: '-19.0' }] });
     let r6 = null; try { r6 = await M.ocrReeferTemps(blob, '', []); } catch (e) { r6 = { err: String(e && e.message) }; }
     OVERCAP = false; Date.now = () => rn() + 400000;   // 한도 초과 캐시(30초)를 지나쳐 두고 이후 시험은 그 시계로 계속한다
-    check('4.68: 하루 한도(3달러)를 넘긴 날은 클로드 0 · 제미나이로 읽는다', calls.claude.length === 0 && calls.gemini.length === 1 && r6 && /^gemini/.test(r6.model || ''), JSON.stringify({ c: calls.claude.length, g: calls.gemini.length, r: r6 && (r6.model || r6.err) }));
+    check('4.68(5.03 이월 반영 — 기본 3 + 이월 최대 21 을 넘긴 날): 하루 한도를 넘긴 날은 클로드 0 · 제미나이로 읽는다', calls.claude.length === 0 && calls.gemini.length === 1 && r6 && /^gemini/.test(r6.model || ''), JSON.stringify({ c: calls.claude.length, g: calls.gemini.length, r: r6 && (r6.model || r6.err) }));
     claudeQueue = []; await sleep(2);
   }
 
