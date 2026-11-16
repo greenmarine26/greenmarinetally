@@ -1,7 +1,9 @@
 // 접근 오프로 막힌 이름의 접속시도와 콘앱 하루 첫 실행을 세는 기록 — 소유자 «🚪 접속 기록» 화면이 읽는다
 //   검수사 2026-11-06 18:06 «접속시도가 많으면 사용하고픈 마음이 있다고 보고 열어줄지 말지 결정하는데 이용할려고 합니다.
 //   콘앱도 사용빈도를 몰라 지속여부를 결정할려고 하는것입니다» · 18:07 «로그관리는 제 개인 메뉴에 넣어 주시기 바랍니다».
-//   저장 구조 — access_log/{YYMMDD}/{pushKey} = { t:'denied'|'cone', n?:이름(denied 만), d:기기 구분 값, at, v?:판 }
+//   저장 구조 — access_log/{YYMMDD}/{pushKey} = { t:'denied'|'cone'|'coneVoy', n?:이름(denied 만), d:기기 구분 값, at, v?:판, k?:항차키·vsl?:선박명·pier?:'PNCT'|'PCTC'|''(coneVoy 만) }
+//   5.07 — coneVoy = 콘앱이 «그 날 그 배» 를 연 한 번(기기마다 하루 한 번). 검수사 2026-11-16 «어떤선박에 콘앱 사용자가 몇명이었는지 동방과 PCTC구분» · «기존사용자를 카운트하고 신규도 따로».
+//   기존/신규는 기록에 적지 않고 여기서 가른다 — 그 기기가 기록에 처음 나타난 날이 보는 날과 같으면 신규, 아니면 기존(기록에서 가장 이른 날부터 보이던 기기는 그 전부터 쓰던 것으로 보고 기존).
 //   원칙 — fire-and-forget(기록이 안 돼도 화면·로그인 흐름을 막지 않는다) · 이름·비밀번호 값 외에 개인 정보를 적지 않는다.
 //   접근 차단 방식(isStaffOff·자물쇠 화면)은 건드리지 않는다. 이 파일은 «센다»만 한다.
 import { activityDayKey } from './activityLog.js';
@@ -70,6 +72,9 @@ export function summarizeAccess(rows) {
   const denied = {};
   const coneDays = {};
   const coneDev = {};
+  const firstDay = {};      // 5.07: 기기 → 기록에 처음 나타난 날(cone·coneVoy 줄)
+  const voyDays = {};       // 5.07: 날 → 항차키 → { key, vsl, pier, devs:Set }
+  let baseDay = '';         // 5.07: 콘앱 기록이 있는 가장 이른 날 — 이 날 처음 보인 기기는 «그 전부터 쓰던 기기»로 본다
   rows = Array.isArray(rows) ? rows : [];   // 못 읽었거나 모양이 다르면 빈 기록으로 본다
   const skipDev = new Set(rows.filter((r) => r && r.t === 'skip' && r.d).map((r) => r.d));   // 소유자·클로드 기기
   for (const r of rows) {
@@ -88,20 +93,53 @@ export function summarizeAccess(rows) {
       const day = r.day || '';
       (coneDays[day] || (coneDays[day] = new Set())).add(r.d);
       (coneDev[r.d] || (coneDev[r.d] = new Set())).add(day);
+      if (day && (!baseDay || day < baseDay)) baseDay = day;
+    }
+    if ((r.t === 'cone' || r.t === 'coneVoy') && r.d && r.day && (!firstDay[r.d] || r.day < firstDay[r.d])) firstDay[r.d] = r.day;
+    if (r.t === 'coneVoy' && r.d && r.k && r.day) {
+      const dv = voyDays[r.day] || (voyDays[r.day] = {});
+      const o = dv[r.k] || (dv[r.k] = { key: String(r.k), vsl: '', pier: '', devs: new Set() });
+      if (r.vsl && !o.vsl) o.vsl = String(r.vsl);
+      if (r.pier && !o.pier) o.pier = String(r.pier);
+      o.devs.add(r.d);
     }
   }
+  // 5.07 — 그 날 그 기기가 신규인가. 처음 나타난 날이 그 날이고, 그 날이 기록 첫날이 아닐 때만 신규.
+  const isNewDev = (d, day) => !!baseDay && day > baseDay && firstDay[d] === day;
   const deniedList = Object.values(denied)
     .map((o) => ({ name: o.name, total: o.total, dayCount: o.days.size, devCount: o.devs.size, first: o.first, last: o.last }))
     .sort((a, b) => b.total - a.total || b.last - a.last);
-  const coneByDay = Object.keys(coneDays).sort().map((day) => ({ day, devices: coneDays[day].size }));
+  const coneByDay = Object.keys(coneDays).sort().map((day) => {
+    const fresh = [...coneDays[day]].filter((d) => isNewDev(d, day)).length;
+    return { day, devices: coneDays[day].size, fresh, back: coneDays[day].size - fresh };   // fresh=신규 · back=기존
+  });
+  // 5.07 — 날마다 «동방 · PCTC · 구분 불가» 로 나눈 선박별 기기 수(기존·신규 따로). 부두 칸 합은 기기를 한 번씩만 센다(두 부두의 배를 다 연 기기는 양쪽에 한 번씩).
+  const pierOrder = { PNCT: 0, PCTC: 1 };
+  const voyByDay = Object.keys(voyDays).sort().reverse().map((day) => {
+    const ships = Object.values(voyDays[day]).map((o) => {
+      const fresh = [...o.devs].filter((d) => isNewDev(d, day)).length;
+      return { key: o.key, vsl: o.vsl || o.key.split('_')[0], pier: o.pier === 'PNCT' || o.pier === 'PCTC' ? o.pier : '', devices: o.devs.size, fresh, back: o.devs.size - fresh };
+    }).sort((a, b) => (pierOrder[a.pier] ?? 2) - (pierOrder[b.pier] ?? 2) || b.devices - a.devices || a.key.localeCompare(b.key));
+    const piers = ['PNCT', 'PCTC', ''].map((pier) => {
+      const set = new Set();
+      for (const o of Object.values(voyDays[day])) if ((o.pier === 'PNCT' || o.pier === 'PCTC' ? o.pier : '') === pier) o.devs.forEach((d) => set.add(d));
+      const fresh = [...set].filter((d) => isNewDev(d, day)).length;
+      return { pier, devices: set.size, fresh, back: set.size - fresh, ships: ships.filter((x) => x.pier === pier) };
+    }).filter((g) => g.devices > 0);
+    return { day, piers };
+  });
   const useDays = Object.values(coneDev).map((s) => s.size);
   return {
     denied: deniedList,
     deniedTotal: deniedList.reduce((a, o) => a + o.total, 0),
     coneByDay,
+    voyByDay,
     coneDevices: useDays.length,
     coneOnce: useDays.filter((n) => n === 1).length,
     coneFew: useDays.filter((n) => n >= 2 && n <= 3).length,
     coneMany: useDays.filter((n) => n >= 4).length,
   };
 }
+
+// 5.07 — 부두 칸 이름. 콘앱이 목록을 그릴 때 정한 값(PNCT=동방 · PCTC)을 그대로 말로 바꾼다.
+export const conePierLabel = (p) => (p === 'PNCT' ? '동방' : p === 'PCTC' ? 'PCTC' : '부두 구분 불가');

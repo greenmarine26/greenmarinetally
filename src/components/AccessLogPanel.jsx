@@ -1,7 +1,7 @@
 // 소유자 전용 — 막힌 사람의 접속시도와 콘앱 사용빈도를 보고 열어줄지·계속할지 정하는 화면(관리앱 «🚪 접속 기록»)
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fbGetAccessLog, fbCleanupAccessLog, fbSetStaffOff, fbSubscribeStaffOff } from '../firebase.js';
-import { summarizeAccess } from '../accessLog.js';
+import { summarizeAccess, conePierLabel } from '../accessLog.js';
 import { activityDayKey } from '../activityLog.js';
 
 //  4.69 — 검수사 2026-11-06 18:06 «접속시도가 많으면 사용하고픈 마음이 있다고 보고 열어줄지 말지 결정하는데 이용» ·
@@ -89,11 +89,31 @@ export default function AccessLogPanel({ by }) {
                     <div key={d.day} className="flex items-center gap-2 text-xs2 text-dim-200">
                       <span className="w-10 shrink-0 text-dim-400">{fmtDay(d.day)}</span>
                       <span className="h-2 rounded bg-sky-700" style={{ width: `${Math.max(6, Math.round((d.devices / maxDev) * 70))}%` }} />
-                      <span>{d.devices}대</span>
+                      <span>{d.devices}대 <span className="text-dim-400">(기존 {d.back} · 신규 {d.fresh})</span></span>
                     </div>
                   ))}
+                  <div className="text-xxs text-dim-400">신규 = 그 기기가 기록에 처음 나타난 날. 기록 첫날에 보인 기기는 그 전부터 쓰던 기존 기기로 셉니다.</div>
                 </>
               )}
+          </div>
+          <div className="rounded-btn border border-line bg-ink-900 px-3 py-2 space-y-2" data-accesslog-voy="1">
+            <div className="text-sm2 font-bold text-dim-100">🚢 콘앱 선박별 사용 — 동방 · PCTC</div>
+            {sum.voyByDay.length === 0
+              ? <div className="text-xs2 text-dim-300">아직 기록이 없습니다. 콘앱 3.04 부터 배를 열 때마다 기기·배·부두를 하루 한 번 남깁니다.</div>
+              : sum.voyByDay.slice(0, 7).map((d) => (
+                <div key={d.day} className="space-y-1 border-t border-line pt-1" data-accesslog-voyday={d.day}>
+                  <div className="text-xs2 font-bold text-dim-100">{fmtDay(d.day)}</div>
+                  {d.piers.map((g) => (
+                    <div key={g.pier || 'none'} className="text-xs2 text-dim-200" data-accesslog-pier={g.pier || 'none'}>
+                      <div><b className="text-dim-100">{conePierLabel(g.pier)}</b> · 기기 {g.devices}대 <span className="text-dim-400">(기존 {g.back} · 신규 {g.fresh})</span></div>
+                      {g.ships.map((x) => (
+                        <div key={x.key} className="pl-3 text-dim-300">{x.vsl} · {x.devices}대 <span className="text-dim-400">(기존 {x.back} · 신규 {x.fresh})</span></div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            <div className="text-xxs text-dim-400">기기마다 «그 날 그 배» 한 번만 셉니다. 한 기기가 두 부두의 배를 열었으면 양쪽에 한 번씩 들어갑니다. 최근 7일까지 보입니다.</div>
           </div>
         </>
       )}

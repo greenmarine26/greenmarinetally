@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.03</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.04</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.06-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.03';   // ★ 3.03 사용 안내에 «PLAN 읽는 법(콘 개수·빼기·꽂기)» 설명서 링크
+window.__APPV='TallyOne 5.07';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.04';   // ★ 3.04 (TallyOne 5.07) 선박을 열면 «기기·선박·부두(동방/PCTC)» 한 줄을 하루 한 번만 접속 기록에 남김
+// (앞 판) window.__CONEV='ConeOne 3.03';   // ★ 3.03 사용 안내에 «PLAN 읽는 법(콘 개수·빼기·꽂기)» 설명서 링크
 // (앞 판) window.__CONEV='ConeOne 3.02';   // ★ 3.01 (TallyOne 5.03) — 플랜 화면이 열자마자 폭에 맞고 회전·자료 도착 때 다시 맞춤 · 미르가 배 이름 있는 호기 물음에 답함
 // (앞 판) window.__CONEV='ConeOne 3.00-03';   // ★ 3.00-03 (TallyOne 5.02-03) — 콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추(떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 부를 곳이 없었다)
 // (앞 판) window.__CONEV='ConeOne 3.00-02';   // ★ 3.00-02 (TallyOne 5.00-02) — 양하·선적 항차 번호가 다른 배(STMJ 2671E / 2672W)를 목록이 둘 다 보이고 양하·선적 둘 다 잡는다 · 목록 읽기가 끊긴 모드는 «없음»이 아니라 고를 때 다시 읽는다 · 못 받은 것은 «못 받았습니다»로 알린다
@@ -1111,6 +1112,28 @@ const FB_BASE='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedat
       .catch(function(e){ clearTimeout(tm); console.warn('[콘앱 접속기록] 기록 실패(무해)',e); });
   }catch(e){ console.warn('[콘앱 접속기록] 기록 실패(무해)',e); }
 })();
+
+// ── ★ ConeOne 3.04 (TallyOne 5.07) — 어느 배를 열었는지 센다 (검수사 2026-11-16 «어떤선박에 콘앱 사용자가 몇명이었는지 동방과 PCTC구분 해서 기록» · «기존사용자를 카운트하고 신규도 따로»).
+//  기기마다 «그 날 그 배» 한 번만 access_log/{YYMMDD} 에 {t:'coneVoy', d:기기, k:항차키, vsl:선박명, pier:'PNCT'|'PCTC'|'', at, v:판} 을 남긴다.
+//  부두는 목록을 그릴 때 이미 정한 값(v.pier = ctPierOf)을 그대로 쓴다 — 새 판정을 만들지 않는다. 기존/신규는 소유자 화면이 기기 첫 등장일로 가른다(여기서 적지 않는다).
+//  내 기기(tallyAccessSkip)는 남기지 않는다. 실패해도 화면에는 영향 없고 console.warn 한 줄. 같은 날 같은 배는 두 번 남기지 않는다(저장소 coneVoyDay).
+function coneLogVoyage(v){
+  try{
+    if(!v || !v.key) return;
+    if(localStorage.getItem('tallyAccessSkip')==='1') return;
+    var p2=function(n){ return String(n).padStart(2,'0'); }, nw=new Date();
+    var day=p2(nw.getFullYear()%100)+p2(nw.getMonth()+1)+p2(nw.getDate());
+    var st=null; try{ st=JSON.parse(localStorage.getItem('coneVoyDay')||'null'); }catch(_){ st=null; }
+    if(!st || st.day!==day || !Array.isArray(st.keys)) st={day:day, keys:[]};
+    if(st.keys.indexOf(v.key)>=0) return;
+    var dev=localStorage.getItem('tallyAccessDev');
+    if(!dev){ dev=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); localStorage.setItem('tallyAccessDev',dev); }
+    var ac=new AbortController(), tm=setTimeout(function(){ ac.abort(); },8000);
+    fetch(FB_BASE+'/access_log/'+day+'.json',{method:'POST',signal:ac.signal,body:JSON.stringify({t:'coneVoy',d:dev,k:String(v.key),vsl:String(v.vsl||''),pier:String(v.pier||''),at:Date.now(),v:window.__CONEV||''})})
+      .then(function(r){ clearTimeout(tm); if(r.ok){ st.keys.push(v.key); localStorage.setItem('coneVoyDay',JSON.stringify(st)); } else console.warn('[콘앱 선박 기록] 기록 실패(무해) HTTP '+r.status); })
+      .catch(function(e){ clearTimeout(tm); console.warn('[콘앱 선박 기록] 기록 실패(무해)',e); });
+  }catch(e){ console.warn('[콘앱 선박 기록] 기록 실패(무해)',e); }
+}
 
 // ── ★ ConeOne 2.3 — **약신호에서 화면이 영영 멈추던 것** ─────────────────────
 //  검수사 2026-08-26 — *«콘앱이 나는 되는데 다른 사람은 화면이 멈춰서 작동을 안함»*.
@@ -1651,6 +1674,7 @@ async function selectVoyage(voyageKey){
   state.voyageKey=voyageKey;
   //  감사(R2): 도면(양하|선적)이 떠 있는 채로 다른 배가 골라질 수 있다(미르 고양이는 도면 위에 뜬다) — 앞 배 도면과 가로 잠금이 남지 않게 닫는다.
   try{ if(window.ConeCargoPlan && window.ConeCargoPlan.isOpen && window.ConeCargoPlan.isOpen()) window.ConeCargoPlan.close(); }catch(e){ console.warn('[콘앱 2.60] 앞 배 카고플랜 닫기 실패:', e); }
+  coneLogVoyage(v);   // ★ 3.04: 어느 배를 열었는지(부두 포함) 하루 한 번만 접속 기록 — 실패해도 이어 간다
   try{ coneMoodEvent('workPick', v.vsl+' 작업 시작이에요!'); }catch(e){}   // ★ 2.52: 검수사가 작업(배)을 골랐다 = 기쁨
   state._dischDoneAt=v.dischargeDoneAt||0;  // V7.90: 검수앱 양하 완료 기록 — 분리작업 자동 판정 근거
   state.stow=null; state.disch=null; state.shipType=null; state.shipName=''; state.detected=false; state.swapFix=null; state.restowList=null; state.keepOnboard=null; state.shiftManual=null; state.mfnList=null;
