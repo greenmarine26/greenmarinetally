@@ -82,12 +82,40 @@ export async function normalizeReportPhoto(file, maxSide = 1600) {
 // 4.62-02 — 줄이지 못한 사진의 마지막 길. 머리를 열어 진짜 JPEG·PNG(크기 칸이 있는 사진)이고 10MB 이하면 원본 그대로 쥔다(보고가 막히는 것보다 낫다).
 //   머리가 사진이 아니면(깨진 파일·못 그리는 형식) 어느 길에서 왜 막혔는지 적어 던진다 — 깨진 사진이 조용히 지나가면 안 된다(4.57-01).
 async function _reportPhotoAsIs(file, tries) {
+  //  5.04: HEIC 는 이 기기가 못 풀어도 앱이 스스로 푼다(libheif — 처음 쓸 때만 내려받는 별도 조각). 못 풀면 아래 오류로 이유를 밝힌다.
+  if ((await _sniffImageKind(file)) === 'heic') {
+    try {
+      const { heicToJpegFile } = await import('./heicDecode.js');
+      return await heicToJpegFile(file, 1600);
+    } catch (e) {
+      console.warn('[normalizeReportPhoto] HEIC 앱 안 변환 실패', e);
+      tries.push('⑤HEIC변환 ' + (e && e.message || e));
+    }
+  }
   const dim = (file.size > 0 && file.size <= 10 * 1024 * 1024) ? await _imageDimsOf(file) : null;
   if (dim) {
     console.warn('[normalizeReportPhoto] 줄이지 못해 원본 그대로 씁니다:', file.type, file.size, dim, tries);
     return new File([file], `photo-${Date.now()}.${dim.kind === 'png' ? 'png' : 'jpg'}`, { type: dim.kind === 'png' ? 'image/png' : 'image/jpeg' });   // 형식 글자가 틀려도 머리가 말하는 형식으로 바로잡는다
   }
-  throw new Error(`사진을 읽지 못했습니다 (형식 ${file.type || '알 수 없음'} · ${file.size || 0}B · ${tries.join(' / ') || '원인 미상'})`);
+  //  5.03-01: 머리를 열어 진짜 형식을 알린다 — 컴퓨터 크롬은 HEIC·AVIF 를 못 풀어 «형식 알 수 없음» 으로만 막혀 원인을 못 알렸다(검수사 2026-11-16 07:51 데미지 보고 캡처 1016682B).
+  const kind = await _sniffImageKind(file);
+  const hint = kind === 'heic' ? ' — 폰 카메라의 HEIC(고효율) 사진은 이 기기에서 못 풉니다. 폰에서 열거나 카메라 설정을 JPEG 로 바꿔 주세요'
+    : kind === 'avif' ? ' — AVIF 사진은 이 기기에서 못 풉니다' : kind ? ` — ${kind} 파일입니다` : '';
+  throw new Error(`사진을 읽지 못했습니다 (형식 ${file.type || '알 수 없음'}${kind ? '·' + kind : ''} · ${file.size || 0}B · ${tries.join(' / ') || '원인 미상'})${hint}`);
+}
+
+// 파일 머리 12바이트로 형식 이름을 알아낸다(heic·avif·webp·gif·pdf·bmp) — 못 알아내면 ''. 풀거나 그리지는 않는다.
+async function _sniffImageKind(file) {
+  try {
+    const b = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const t = (i, n) => String.fromCharCode(...b.slice(i, i + n));
+    if (t(4, 4) === 'ftyp') { const br = t(8, 4); return /^(heic|heix|hevc|hevx|mif1|msf1)$/.test(br) ? 'heic' : /^avi[fs]$/.test(br) ? 'avif' : 'ftyp-' + br.trim(); }
+    if (t(0, 4) === 'RIFF' && t(8, 4) === 'WEBP') return 'webp';
+    if (t(0, 3) === 'GIF') return 'gif';
+    if (t(0, 4) === '%PDF') return 'pdf';
+    if (t(0, 2) === 'BM') return 'bmp';
+    return '';
+  } catch (e) { console.warn('[normalizeReportPhoto] 형식 확인 실패', e); return ''; }
 }
 
 // 파일 머리에서 JPEG(SOF 마커)·PNG(IHDR)의 가로세로를 읽는다 — 사진이 아니면 null. 그리기·디코딩은 하지 않으므로 메모리를 거의 쓰지 않는다.
