@@ -143,3 +143,32 @@ export function summarizeAccess(rows) {
 
 // 5.07 — 부두 칸 이름. 콘앱이 목록을 그릴 때 정한 값(PNCT=동방 · PCTC)을 그대로 말로 바꾼다.
 export const conePierLabel = (p) => (p === 'PNCT' ? '동방' : p === 'PCTC' ? 'PCTC' : '부두 구분 불가');
+
+// 5.08 — 다운로드 사용량 요약. rows 는 fbGetAccessLog 가 돌려준 줄 중 t:'usage' 만 쓴다(소유자·«클로드» 도 빼지 않고 따로 보인다).
+//   kind: collector(수집기 — 그날 합계를 수집기가 직접 올림) · cone(콘앱 기기) · owner · claude · tally(그 밖의 검수원·로그인 전)
+export function summarizeUsage(rows) {
+  const days = {};
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r || r.t !== 'usage' || !r.day) continue;
+    const b = Number(r.b) || 0;
+    if (b <= 0) continue;
+    const kind = r.k === 'collector' ? 'collector' : r.k === 'cone' ? 'cone'
+      : (r.n === OWNER_NAME ? 'owner' : r.n === '클로드' ? 'claude' : 'tally');
+    const who = kind === 'collector' ? '수집기' : kind === 'cone' ? `콘앱 기기 ${String(r.d || '').slice(0, 4)}` : (r.n || '로그인 전(이름 없음)');
+    const d = days[r.day] || (days[r.day] = { day: r.day, total: 0, kinds: {}, who: {} });
+    d.total += b;
+    const k = d.kinds[kind] || (d.kinds[kind] = { bytes: 0, devs: new Set() });
+    k.bytes += b; if (r.d) k.devs.add(r.d);
+    const w = d.who[who] || (d.who[who] = { who, kind, bytes: 0, devs: new Set() });
+    w.bytes += b; if (r.d) w.devs.add(r.d);
+  }
+  const order = ['collector', 'tally', 'owner', 'claude', 'cone'];
+  return Object.values(days).sort((a, b) => (a.day < b.day ? 1 : -1)).map((d) => ({
+    day: d.day,
+    total: d.total,
+    kinds: order.filter((k) => d.kinds[k]).map((k) => ({ kind: k, bytes: d.kinds[k].bytes, devices: d.kinds[k].devs.size })),
+    top: Object.values(d.who).sort((a, b) => b.bytes - a.bytes).slice(0, 10).map((w) => ({ who: w.who, kind: w.kind, bytes: w.bytes, devices: w.devs.size })),
+  }));
+}
+export const usageKindLabel = (k) => ({ collector: '수집기', tally: '검수원(검수앱)', owner: '소유자', claude: '«클로드»', cone: '콘앱' }[k] || k);
+export const fmtBytes = (b) => (b >= 1073741824 ? `${(b / 1073741824).toFixed(2)} GB` : `${(b / 1048576).toFixed(1)} MB`);

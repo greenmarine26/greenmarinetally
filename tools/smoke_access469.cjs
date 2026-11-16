@@ -72,6 +72,23 @@ const V0 = B.summarizeAccess([{ t: 'coneVoy', d: 'z', k: 'A_1', pier: 'PCTC', at
 ok(V0.voyByDay[0].piers[0].fresh === 0, '콘앱 기록 첫날이 없으면 신규로 단정하지 않는다');
 ok(B.conePierLabel('PNCT') === '동방' && B.conePierLabel('PCTC') === 'PCTC' && B.conePierLabel('') === '부두 구분 불가', '부두 이름');
 
+console.log('[2c] 5.08 — 다운로드 사용량');
+const U = B.summarizeUsage([
+  { t: 'usage', k: 'collector', d: 'c1', n: '수집기', b: 3000000000, day: '261116' },
+  { t: 'usage', k: 'tally', d: 'p1', n: '김성일', b: 1000, day: '261116' },
+  { t: 'usage', k: 'tally', d: 'p2', n: '클로드', b: 2000, day: '261116' },
+  { t: 'usage', k: 'tally', d: 'p3', n: '이검수', b: 5000, day: '261116' },
+  { t: 'usage', k: 'tally', d: 'p4', n: '이검수', b: 7000, day: '261116' },
+  { t: 'cone', d: 'x', day: '261116' }, { t: 'usage', k: 'tally', d: 'p9', n: 'z', b: 0, day: '261116' },
+]);
+ok(U.length === 1 && U[0].total === 3000015000, `하루 합계 — ${U[0] && U[0].total}`);
+ok(U[0].kinds.map((k) => k.kind).join() === 'collector,tally,owner,claude', '종류 순서 — 수집기·검수원·소유자·클로드');
+ok(U[0].kinds.find((k) => k.kind === 'tally').devices === 2 && U[0].top[0].who === '수집기' && U[0].top[1].who === '이검수' && U[0].top[1].bytes === 12000, '검수원 이름별 합산 · 많이 받은 순');
+ok(B.summarizeUsage(null).length === 0 && B.summarizeUsage([{ t: 'denied' }]).length === 0, '빈 기록도 던지지 않는다');
+ok(B.utf8Len('abc') === 3 && B.utf8Len('한글') === 6 && B.utf8Len('😀') === 4, '바이트 수 셈 — 한글 3바이트');
+ok(B.fmtBytes(1073741824) === '1.00 GB' && B.fmtBytes(5242880) === '5.0 MB', '단위 표기');
+ok(B.summarizeAccess([{ t: 'usage', k: 'collector', b: 5, day: '261116' }]).coneDevices === 0, '사용량 줄은 접속 요약에 섞이지 않는다');
+
 console.log('[3] 연결 구조');
 const app = noCmt(rd('src/App.jsx'));
 ok(/if \(isStaffOff\(name\) && !isOwnerName\(name\)\) \{ logDeniedAttempt\(name\); setDeniedName\(name\); return; \}/.test(app) && (app.match(/logDeniedAttempt\(/g) || []).length === 1, '막힌 이름 시도는 handleSelectInspector 한 곳에서만 센다(차단 동작은 그대로)');

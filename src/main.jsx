@@ -12,8 +12,11 @@ import { mountSkinIntro } from './components/SkinIntro.jsx';   // 5.00 새 판 �
 import './mergeApi.js'; // V8.20: 수집기 연동 입구 — window.GMmerge(files) 전역 등록
 import './autoRegApi.js'; // V8.32: 수집기 자동 항차 등록 입구 — window.GMautoPayload 전역 등록
 import { installToastAlert, showToast } from './toast.js';
+import { installUsageMeter } from './usageMeter.js';   // 5.08: 누가 얼마를 받았는지 센다(관찰만)
+import { APP_VERSION } from './utils.js';
 
 //  2.40: 화면을 그리기 **전에** 밝기를 건다. 나중에 걸면 어두운 화면이 한 번 번쩍인다.
+installUsageMeter(APP_VERSION);   // 5.08: 화면·데이터 연결보다 먼저 건다 — 첫 연결부터 센다
 applyBrightness(getBrightness());
 //  4.23: 글자 두 모드(보통·크게)도 같은 자리에서 — 그린 뒤에 걸면 작은 글자가 한 번 보였다가 커진다.
 applyTextSize(getTextSize());

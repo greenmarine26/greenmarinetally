@@ -1,7 +1,7 @@
 // 소유자 전용 — 막힌 사람의 접속시도와 콘앱 사용빈도를 보고 열어줄지·계속할지 정하는 화면(관리앱 «🚪 접속 기록»)
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fbGetAccessLog, fbCleanupAccessLog, fbSetStaffOff, fbSubscribeStaffOff } from '../firebase.js';
-import { summarizeAccess, conePierLabel } from '../accessLog.js';
+import { summarizeAccess, conePierLabel, summarizeUsage, usageKindLabel, fmtBytes } from '../accessLog.js';
 import { activityDayKey } from '../activityLog.js';
 
 //  4.69 — 검수사 2026-11-06 18:06 «접속시도가 많으면 사용하고픈 마음이 있다고 보고 열어줄지 말지 결정하는데 이용» ·
@@ -40,6 +40,7 @@ export default function AccessLogPanel({ by }) {
   useEffect(() => { load(); }, [load]);
 
   const sum = useMemo(() => summarizeAccess(rows || []), [rows]);
+  const usage = useMemo(() => summarizeUsage(rows || []), [rows]);
 
   const turnOn = async (name) => {
     if (!window.confirm(`${name} 님의 접근을 켭니다(온).\n\n· 바로 로그인해서 쓸 수 있게 됩니다.\n· 다시 막으려면 인원 관리에서 끄면 됩니다.`)) return;
@@ -95,6 +96,26 @@ export default function AccessLogPanel({ by }) {
                   <div className="text-xxs text-dim-400">신규 = 그 기기가 기록에 처음 나타난 날. 기록 첫날에 보인 기기는 그 전부터 쓰던 기존 기기로 셉니다.</div>
                 </>
               )}
+          </div>
+          <div className="rounded-btn border border-line bg-ink-900 px-3 py-2 space-y-2" data-accesslog-usage="1">
+            <div className="text-sm2 font-bold text-dim-100">📡 다운로드 사용량 — 누가 얼마나</div>
+            {usage.length === 0
+              ? <div className="text-xs2 text-dim-300">아직 기록이 없습니다. 5.08 을 받은 기기와 수집기가 받은 양을 5분마다 올립니다.</div>
+              : usage.slice(0, 7).map((d) => (
+                <div key={d.day} className="space-y-1 border-t border-line pt-1" data-accesslog-usageday={d.day}>
+                  <div className="text-xs2 font-bold text-dim-100">{fmtDay(d.day)} · 합계 {fmtBytes(d.total)}</div>
+                  {d.kinds.map((k) => (
+                    <div key={k.kind} className="text-xs2 text-dim-200" data-accesslog-usagekind={k.kind}>
+                      <b className="text-dim-100">{usageKindLabel(k.kind)}</b> · {fmtBytes(k.bytes)}{k.kind === 'collector' ? '' : ` · 기기 ${k.devices}대`}
+                    </div>
+                  ))}
+                  <div className="text-xxs text-dim-400">많이 받은 순</div>
+                  {d.top.map((w) => (
+                    <div key={w.who + w.kind} className="pl-3 text-xs2 text-dim-300">{w.who} · {fmtBytes(w.bytes)}{w.kind === 'collector' ? '' : ` · 기기 ${w.devices}대`}</div>
+                  ))}
+                </div>
+              ))}
+            <div className="text-xxs text-dim-400">받은 본문 바이트를 센 값이라 구글 청구서보다 조금 적습니다. 어느 쪽이 큰지 가리는 용도입니다. 기록은 5.08 을 받은 기기부터 쌓이고 수집기는 합계만 올립니다.</div>
           </div>
           <div className="rounded-btn border border-line bg-ink-900 px-3 py-2 space-y-2" data-accesslog-voy="1">
             <div className="text-sm2 font-bold text-dim-100">🚢 콘앱 선박별 사용 — 동방 · PCTC</div>
