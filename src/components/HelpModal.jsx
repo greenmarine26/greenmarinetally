@@ -3,7 +3,7 @@
 //   구성 ① 하루 작업 순서 코스(HELP_COURSE) — 처음 온 검수사가 따라만 하면 되는 10단계
 //        ② 기능 사전(HELP_DATA.usage) — 궁금할 때 찾아보는 기능별 상세 13갈래
 //        ③ 검수 용어·회화(HELP_DATA.terms + ContainerPhrasebook) — V8.02부터 유지
-//   블록 스키마: { title, step?, where?, lead?, shot?{cap,rows[]}, dos?[], says?[{in,out}], warns?[] }
+//   블록 스키마: { title, step?, where?, lead?, shot?{cap,rows[]}, link?{href,label}, dos?[], says?[{in,out}], warns?[] }
 //     화면 위치(📍)와 실제 입력→답변 예시를 항상 같이 보여준다.
 import React, { useState } from 'react';
 import HelpShot from './HelpShot.jsx';   // 2.27: 기능마다 화면 그림
@@ -77,6 +77,13 @@ function HelpBlock({ b }) {
         <div className="text-xxs sm:text-xs text-sky-300 bg-sky-950/40 border border-sky-800/50 rounded-pill px-2 py-1.5 mb-2 leading-relaxed">
           📍 {b.where}
         </div>
+      )}
+
+      {b.link && (
+        <a href={b.link.href} target="_blank" rel="noopener noreferrer"
+           className="inline-block text-xs sm:text-sm font-black text-ink-950 bg-amber-400 rounded-pill px-3 py-1.5 mb-2 no-underline">
+          ▶ {b.link.label}
+        </a>
       )}
 
       {b.lead && (

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DXQD 양하 PLAN 읽기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 배치 - 왼쪽 단계 목록, 오른쪽 움직이는 도면 + 설명. 모바일에서는 단계 목록이 위 가로 줄로 바뀐다 */
+:root{
+  --paper:#f2f5f8; --card:#ffffff; --ink:#13222f; --muted:#566877; --line:#cdd7e0;
+  --steel:#1c4f7c; --steel-soft:#dbe8f3; --port:#c3372c; --stbd:#1c8a57; --amber:#e3a300; --amber-soft:#fbe9a8;
+  --hold:#e9eff4; --shift:#f08a24; --done:#bfe8cf; --gray:#9aa7b2; --empty:#eef2f5;
+  --f-body:"Noto Sans KR","Malgun Gothic",sans-serif; --f-mono:"IBM Plex Mono","Consolas",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f1a24; --card:#16242f; --ink:#e6eef5; --muted:#9bb0c0; --line:#2b3d4c;
+    --steel:#6fb0e8; --steel-soft:#1f3b52; --port:#ff7a6e; --stbd:#4cd08b; --amber:#f2b705; --amber-soft:#5a4a10;
+    --hold:#1b2f3e; --shift:#ff9d45; --done:#245c3e; --gray:#6d7f8d; --empty:#1d2d3a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f1a24; --card:#16242f; --ink:#e6eef5; --muted:#9bb0c0; --line:#2b3d4c;
+  --steel:#6fb0e8; --steel-soft:#1f3b52; --port:#ff7a6e; --stbd:#4cd08b; --amber:#f2b705; --amber-soft:#5a4a10;
+  --hold:#1b2f3e; --shift:#ff9d45; --done:#245c3e; --gray:#6d7f8d; --empty:#1d2d3a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);line-height:1.6;font-size:16px}
+button{font:inherit;color:inherit}
+header.top{padding:20px 16px 8px;max-width:1120px;margin:0 auto}
+header.top h1{margin:0;font-size:clamp(22px,4vw,32px);font-weight:900;letter-spacing:-.01em;text-wrap:balance}
+header.top p{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.appsw{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.appsw button{border:2px solid var(--line);background:var(--card);border-radius:10px;padding:10px 18px;cursor:pointer;font-weight:900;font-size:16px}
+.appsw button[aria-pressed="true"]{background:var(--steel);border-color:var(--steel);color:var(--card)}
+.appsw button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.phone{width:min(100%,330px);margin:0 auto;border:3px solid var(--ink);border-radius:22px;padding:10px;background:var(--paper)}
+.phone .tabs{display:flex;gap:4px;margin-bottom:8px}
+.phone .tabs span{flex:1;text-align:center;padding:7px 2px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:700}
+.phone .tabs span.on{background:var(--steel);color:var(--card);border-color:var(--steel)}
+.phone .scr{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;min-height:180px;font-size:13.5px}
+.lg{display:inline-block;padding:3px 9px;border-radius:6px;font-weight:700;font-size:13px;margin:2px}
+.app{max-width:1120px;margin:0 auto;padding:12px 16px 40px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px}
+nav.steps{display:flex;flex-direction:column;gap:6px;align-self:start;position:sticky;top:12px}
+nav.steps button{display:flex;gap:10px;align-items:center;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer;color:var(--muted)}
+nav.steps button .n{flex:none;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font:600 13px var(--f-mono)}
+nav.steps button[aria-current="step"]{background:var(--card);border-color:var(--line);color:var(--ink);font-weight:700}
+nav.steps button[aria-current="step"] .n{background:var(--steel);border-color:var(--steel);color:var(--card)}
+nav.steps button.seen .n{border-color:var(--stbd);color:var(--stbd)}
+nav.steps button:focus-visible,.ctl button:focus-visible,.opt:focus-visible,.seg button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+main{min-width:0}
+.stage{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px}
+.stage svg{display:block;width:100%;height:auto;max-height:520px}
+.stage .cap{margin:2px 6px 6px;font-weight:700;color:var(--steel);min-height:1.6em}
+.copy{margin-top:16px}
+.copy h2{margin:0 0 4px;font-size:22px;font-weight:900;text-wrap:balance}
+.copy .lead{margin:0 0 10px;font-size:17px;max-width:66ch}
+.pts{margin:0;padding:0;list-style:none;display:grid;gap:8px;max-width:70ch}
+.pts li{padding:8px 12px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--steel);border-radius:6px}
+.pts li b{font-weight:700}
+.pts li.warn{border-left-color:var(--shift)}
+.ctl{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;align-items:center}
+.ctl button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:700}
+.ctl button.primary{background:var(--steel);border-color:var(--steel);color:var(--card)}
+.ctl .pg{margin-left:auto;color:var(--muted);font:600 13px var(--f-mono)}
+code,.mono{font-family:var(--f-mono)}
+.seg{display:flex;gap:6px;margin:6px 6px 8px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 14px;cursor:pointer;font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--steel);border-color:var(--steel);color:var(--card)}
+.cpv2-page{background:#fff;color:#000;font-family:Helvetica,Arial,sans-serif;padding:4mm;box-sizing:border-box;display:flex;flex-direction:column;width:880px;transform-origin:left top}.cpv2-page-header{border-bottom:1px solid #000;padding-bottom:4px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline;font-size:10px}.cpv2-page-header .title-center{font-size:14px;font-weight:bold;flex:1 1 auto;text-align:center;white-space:nowrap}.cpv2-page-header .col{padding:0 8px;font-size:9px;min-width:0}.cpv2-page-footer{margin-top:3px;padding-top:2px;border-top:.5px solid #999;font-size:7.5px;line-height:1.25;color:#555;text-align:center}.cpv2-page-row{display:flex;flex-direction:row;gap:3px;height:352px}.cpv2-bay-box{flex:1 1 0;min-width:95px;border:1px solid #000;display:flex;flex-direction:column;background:#fff;overflow:hidden}.cpv2-single-box .cpv2-single-half{flex:1 1 0;display:flex;flex-direction:column}.cpv2-single-box .cpv2-empty-half{flex:1 1 0}.cpv2-bay-section{flex:1 1 0;display:flex;flex-direction:column;padding:2px;min-height:0;position:relative}.cpv2-trio-divider{border-top:.5px solid #999}.cpv2-bay-title-row{position:relative;width:100%;text-align:center;font-weight:bold;font-size:12px;padding:0 4px;margin-bottom:1px;box-sizing:border-box;flex-shrink:0}.cpv2-bay-title{display:inline-block}.cpv2-bay-count{position:absolute;right:4px;top:1px;color:#555;font-size:9px;font-weight:normal;white-space:nowrap}.cpv2-bay-content{display:flex;flex-direction:column;flex:1 1 0;min-height:0;width:100%;justify-content:center}.cpv2-deck-area,.cpv2-hold-area{flex:4 1 0;display:flex;flex-direction:column;width:100%;min-height:0;max-height:calc(var(--cph,999px)*4)}.cpv2-grid-row-wrap{display:flex;flex-direction:row;align-items:stretch;gap:2px;flex:1 1 0;min-height:0}.cpv2-grid{display:flex;flex-direction:column;align-items:stretch;gap:0;flex:1 1 0;min-width:0}.cpv2-tier-row{display:flex;gap:0;flex:1 1 0;min-height:0;max-height:var(--cph,999px);justify-content:center;--mk:calc(var(--mf,9.6px)*1.05)}.cpv2-tier-row .cpv2-cell{flex:0 0 var(--cpw,auto);width:var(--cpw,auto);min-width:0;min-height:0;border:.5px solid #555;box-sizing:border-box;background:#fff;font-size:var(--mf,9.6px);display:flex;align-items:center;justify-content:center;line-height:1;font-weight:bold;color:#000;position:relative;overflow:hidden}.cpv2-tier-row .cpv2-cell-empty{flex:0 0 var(--cpw,auto);width:var(--cpw,auto);visibility:hidden}.cpv2-row-labels{display:flex;flex:0 0 auto;justify-content:center;font-size:calc(var(--mf,9.6px)*1.05);color:#444;margin:1px 0;margin-right:16px}.cpv2-row-labels>span{flex:0 0 var(--cpw,auto);width:var(--cpw,auto);text-align:center;line-height:1.2}.cpv2-cell.cpv2-xray::after{content:'★';position:absolute;bottom:0;right:0;line-height:1;font-size:var(--mk);color:#dc2626;font-weight:bold;text-shadow:0 0 1px #fff,0 0 1px #fff}.cpv2-cell.cpv2-mark-X{color:#000}.cpv2-cell.cpv2-mark-F{color:#1b5e20}.cpv2-cell.cpv2-mark-DG{color:#b71c1c}.cpv2-hatch-break{display:flex;gap:4px;width:calc(100% - 18px);height:0;margin:3px 0;flex-shrink:0}.cpv2-hatch-seg{flex:1 1 0;border-top:1.5px solid #000;height:0}.cpv2-tier-labels{display:flex;flex-direction:column;align-items:flex-start;font-size:9px;color:#444;width:16px}.cpv2-tier-labels>span{flex:1 1 0;min-height:0;max-height:var(--cph,999px);display:flex;align-items:center;line-height:1}.cpv2-legend-box{border:1px solid #000;background:#fff;padding:4px;display:flex;flex-direction:column;overflow:hidden;flex:1 1 0;min-width:95px}.cpv2-legend{width:100%;flex:0 1 auto;display:flex;flex-direction:column}.cpv2-legend-title{font-size:calc(var(--lgf,8px)*1.12);font-weight:bold;text-align:center;padding:2px 0;border-bottom:.5px solid #888;margin-bottom:2px;color:#333}.cpv2-legend-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:var(--lgf,8px)}.cpv2-legend-table th,.cpv2-legend-table td{padding:calc(var(--lgf,8px)*.12) calc(var(--lgf,8px)*.3);border:.3px solid #aaa;overflow:hidden;white-space:nowrap}.cpv2-legend-table th{background:#f5f5f5;font-size:calc(var(--lgf,8px)*.88);font-weight:bold}.cpv2-legend-mark{text-align:center;font-weight:bold;padding-left:0;padding-right:0}.cpv2-legend-mark2{font-size:calc(var(--lgf,8px)*.72)}.cpv2-legend-nm{font-weight:bold;text-align:center}.cpv2-legend-ct{font-size:calc(var(--lgf,8px)*.94);text-align:center}.cpv2-legend-total{background:#f0f0f0}
+.hl{outline:4px solid #e3a300 !important;outline-offset:-3px;position:relative;z-index:5;background-color:rgba(227,163,0,.18)}
+.cpv2-cell.hl{background:#ffe08a !important}
+.planwrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#e8edf2;padding:8px}
+.zbar{display:flex;gap:8px;align-items:center;margin:0 6px 8px;color:var(--muted);font-size:13px}
+.zbar button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 12px;cursor:pointer;font-weight:700}
+/* 도면 공통 */
+.t{font-family:var(--f-mono);font-size:13px;fill:var(--ink)}
+.tm{font-size:12px;fill:var(--muted);font-family:var(--f-body)}
+.cellr{fill:var(--card);stroke:var(--line);stroke-width:1.2}
+.hold .cellr{fill:var(--hold)}
+.fade{animation:fadeIn .6s both}
+@keyframes fadeIn{from{opacity:.2}to{opacity:1}}
+@keyframes bandIn{from{opacity:0}to{opacity:.2}}
+.band{opacity:.2;animation:bandIn .6s both}
+.sel{stroke:var(--steel);stroke-width:3}
+.cellr.hit{fill:var(--steel-soft)}
+.pulse{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+/* 칸 안 5줄 */
+.zoomcell{display:grid;grid-template-columns:minmax(200px,260px) 1fr;gap:20px;align-items:center;padding:18px}
+.big{background:var(--card);border:3px solid var(--ink);border-radius:4px;padding:14px 10px;font-family:var(--f-mono);font-weight:600;font-size:clamp(15px,3.6vw,19px)}
+.big div{padding:3px 8px;border-radius:4px;border-left:4px solid transparent;transition:background .3s,border-color .3s;white-space:pre}
+.big div.on{background:var(--amber-soft);border-left-color:var(--amber)}
+.opts{display:grid;gap:6px}
+.opt{display:flex;gap:10px;text-align:left;border:1px solid var(--line);background:var(--card);padding:8px 10px;border-radius:8px;cursor:pointer}
+.opt .k{flex:none;font:700 13px var(--f-mono);color:var(--steel);width:44px}
+.opt.on{border-color:var(--amber);background:var(--amber-soft)}
+.opt small{color:var(--muted);display:block}
+/* 색 표시 */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;padding:14px}
+.sw{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--card);animation:fadeIn .5s both}
+.sw .m{flex:none;width:74px;height:46px;border:1.5px solid var(--ink);border-radius:3px;display:grid;place-items:center;font:600 11px var(--f-mono);position:relative;background:#fff;color:#1a3fa0}
+.sw b{display:block;font-size:14px}.sw span.d{font-size:12.5px;color:var(--muted);line-height:1.35;display:block}
+/* 확인 문제 */
+.quiz{padding:16px;display:grid;gap:14px}
+.q h3{margin:0 0 6px;font-size:16px}
+.q .ch{display:flex;gap:8px;flex-wrap:wrap}
+.q .ch button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:500}
+.q .ch button.ok{background:var(--done);border-color:var(--stbd)}
+.q .ch button.no{background:var(--amber-soft);border-color:var(--shift)}
+.q p{margin:6px 0 0;color:var(--muted);font-size:14.5px}
+.score{font-weight:900;color:var(--steel)}
+.foot{max-width:1120px;margin:0 auto;padding:0 16px 40px;color:var(--muted);font-size:13px}
+@media (max-width:820px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  nav.steps{flex-direction:row;overflow-x:auto;position:static;padding-bottom:6px}
+  nav.steps button{flex:none;white-space:nowrap}
+  .zoomcell{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important}
+  .band{opacity:.2}
+}
+/* 설명서 추가 CSS */
+.plbox{display:flex;gap:4px;height:400px;background:#fff;padding:6px;border-radius:8px;border:1px solid var(--line);--cpw:30px;--mf:11px;--cph:34px;overflow:auto;align-items:stretch}
+.plbox .cpv2-bay-box{flex:0 0 280px;min-width:280px}
+.plbox .cpv2-single-box{flex:0 0 280px}
+.pl{display:grid;grid-template-columns:minmax(0,auto) minmax(220px,1fr);gap:12px;align-items:start}
+.plbox{max-width:100%}
+.plside{display:flex;flex-direction:column;gap:8px;min-width:0}
+.say{background:var(--steel-soft);border-radius:10px;padding:10px 12px;font-size:15px;line-height:1.55;min-height:3em}
+.code{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.5}
+.code .big{font-family:var(--f-mono);font-size:28px;font-weight:900;color:var(--steel);margin:4px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 6px 8px}
+.chips button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font-weight:700;font-size:13px}
+.chips button[aria-pressed="true"]{background:var(--steel);color:#fff;border-color:var(--steel)}
+.hlh{border-top:4px solid #e3a300 !important;box-shadow:0 0 0 3px rgba(227,163,0,.45)}
+.hl.cpv2-bay-title,.cpv2-bay-title.hl,.cpv2-bay-count.hl,.cpv2-row-labels span.hl,.cpv2-tier-labels span.hl{background:#ffe08a;outline:3px solid #e3a300;outline-offset:1px}
+.cpv2-deck-area.hl,.cpv2-hold-area.hl{background:rgba(227,163,0,.16);outline:3px solid #e3a300;outline-offset:-2px}
+.cpv2-cell.pick{outline:3px solid #c3372c !important;outline-offset:-2px;z-index:6}
+.cpv2-cell.tw{outline:3px solid #7c3aed !important;outline-offset:-2px;background:#ddd0ff !important}
+.cpv2-cell.sg{outline:3px solid #ea8a00 !important;outline-offset:-2px;background:#ffd699 !important}
+.cpv2-cell.k40{outline:3px solid #15803d !important;outline-offset:-2px;background:#bbf7d0 !important}
+.cpv2-cell.cn{outline:3px solid #c3372c !important;outline-offset:-2px;background:#fecaca !important}
+.cn-badge{position:absolute;top:0;left:1px;font-style:normal;font-size:9px;color:#991b1b;font-weight:900}
+.pmap{background:#fff;color:#000;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:Helvetica,Arial,sans-serif}
+.pm-head{display:flex;gap:10px;justify-content:space-between;align-items:baseline;border-bottom:1px solid #000;padding:2px 4px 6px;font-size:13px;flex-wrap:wrap}
+.pm-head .sm{font-size:11px;color:#555}
+.pm-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+.pm-card{border:1px solid #000;border-radius:3px;padding:14px 6px;text-align:center;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.pm-card span{font-size:11px;color:#555}
+.pm-card.leg{background:#fff7e0}
+.pm-foot{border-top:.5px solid #999;font-size:11px;color:#555;padding:4px;line-height:1.4}
+.pm-head.hl,.pm-card.hl,.pm-foot.hl{outline:4px solid #e3a300;outline-offset:-2px;background:#fff1c2}
+.other{margin:10px 6px 0;font-size:14px}.other ul{margin:4px 0 0;padding-left:20px}
+.lgrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lg{background:#fff;color:#000;border:1px solid var(--line);border-radius:8px;padding:6px;font-size:13px}
+.lg-t{font-weight:900;margin-bottom:4px}.lg-t.hl{background:#ffe08a}
+.lg table{width:100%;border-collapse:collapse}.lg th,.lg td{border:1px solid #bbb;padding:3px 4px;text-align:right}.lg td.nm,.lg th:first-child{text-align:left}
+.lg tr.hl td{background:#ffe08a}.lg .tot td{font-weight:900;background:#eef}
+.sw1{display:inline-block;min-width:22px;text-align:center;border:1px solid #555;font-size:10px;margin-right:4px}
+@media(max-width:760px){.lgrow{grid-template-columns:1fr}.pl{grid-template-columns:1fr}.pm-grid{grid-template-columns:repeat(2,1fr)}}
+.chk{display:grid;gap:6px;margin:0 6px 8px}
+.chk-r{display:grid;grid-template-columns:1.1fr 2fr 1.4fr auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--card);opacity:.25;transition:opacity .4s}
+.chk-r.on{opacity:1;border-color:var(--stbd)}.chk-r .ok{color:var(--stbd);font-weight:900}
+.chk-r .a{font-weight:800}.chk-r .b,.chk-r .c{font-size:14px}
+@media(max-width:700px){.chk-r{grid-template-columns:1fr 1fr}}
+.path{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 6px 8px}
+.pth{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 12px;font-weight:700;font-size:14px}
+.pth .n{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--steel);color:#fff;text-align:center;line-height:22px;margin-right:6px;font-size:12px}
+.pth.hl{outline:4px solid #e3a300;background:var(--amber-soft)}.arw{color:var(--muted);font-weight:900}
+.vbar{display:flex;gap:8px;flex-wrap:wrap;margin:6px}.vb{border:1px solid var(--line);background:var(--card);padding:5px 12px;border-radius:8px;font-weight:700}.vb.hl{outline:4px solid #e3a300}
+.tabs3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 6px 8px}
+.tb{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px}.tb b{display:block}.tb span{font-size:13px;color:var(--muted)}.tb.hl{outline:4px solid #e3a300;background:var(--amber-soft)}
+@media(max-width:700px){.tabs3{grid-template-columns:1fr}}
+.legc{display:flex;flex-wrap:wrap;gap:6px;margin:0 6px 8px}.lc{padding:3px 10px;border-radius:6px;font-size:13px;font-weight:700;background:var(--card);border:1px solid var(--line)}
+.lc.a{background:#dbeafe}.lc.b{background:#dcfce7}.lc.c{background:#ccfbf1}.lc.d{background:#fee2e2}.lc.hl{outline:3px solid #e3a300}
+.bcard{margin:0 6px 8px;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;min-height:2.6em}
+.sumbox{margin:0 6px 8px;background:#fff1c2;border:1px solid #e3a300;border-radius:10px;padding:10px 12px;color:#3a2c00}.sumbox.hl{outline:4px solid #e3a300}
+.cones{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 6px 8px}
+.cc{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px;font-size:13px}.cc small{color:var(--muted)}.cc.hl{outline:4px solid #e3a300;background:var(--amber-soft)}
+.dots{display:flex;gap:4px;min-height:18px;flex-wrap:wrap}.none{color:var(--muted)}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%}.dot.d{background:#e0832b}.dot.e{background:#7c3aed}.dot.h{background:#0e7490}
+.legd{margin:0 6px 8px;font-size:13px;color:var(--muted)}
+@media(max-width:700px){.cones{grid-template-columns:1fr 1fr}}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 6px 8px}.four>div{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px;display:flex;flex-direction:column}.four b{font-size:22px}.four span,.four small{font-size:12px;color:var(--muted)}.four.hl{outline:4px solid #e3a300}
+.ct{width:calc(100% - 12px);margin:0 6px;border-collapse:collapse;background:var(--card);font-size:14px}.ct th,.ct td{border:1px solid var(--line);padding:6px 8px;text-align:center}.ct .red{color:#c3372c;font-weight:900}.ct tr.hl td{background:#ffe08a;color:#000}
+.legend3{margin:8px 6px;font-size:13px;color:var(--muted)}.legend3.hl{outline:3px solid #e3a300}.gr{color:#15803d;font-weight:800}.rd{color:#c3372c;font-weight:800}.gy{color:#666;font-weight:800}
+.pts{margin:6px 0 0;padding-left:20px}.pts li{margin:3px 0}
+.quiz .q{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;margin:0 6px 8px}.quiz h3{margin:0 0 6px;font-size:16px}
+.quiz .ch{display:flex;flex-wrap:wrap;gap:6px}.quiz button{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:700}
+.quiz button.ok{background:#bbf7d0;color:#064e1f;border-color:#15803d}.quiz button.no{background:#fecaca;color:#7f1d1d;border-color:#c3372c}
+.quiz p{margin:6px 0 0;font-size:14px}.score{margin:8px 6px;font-weight:900;font-size:17px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>DXQD 2645E 양하 PLAN 읽기</h1>
+  <p>실제로 뽑은 양하 PLAN 한 장을 그대로 놓고 설명합니다. 쓰는 앱을 먼저 고르세요. 같은 도면이라도 검수앱은 컨테이너 중심으로, 콘앱은 콘 중심으로 읽습니다.</p>
+  <div class="appsw" role="group" aria-label="앱 선택"><button data-app="T" aria-pressed="true">검수앱 (TallyOne)</button><button data-app="C" aria-pressed="false">콘앱 (ConeOne)</button></div>
+</header>
+<div class="app">
+  <nav class="steps" id="nav" aria-label="단계"></nav>
+  <main>
+    <div class="stage" id="stageBox"><div id="stage"></div><div class="cap" id="cap" aria-live="polite"></div></div>
+    <section class="copy" id="copy"></section>
+    <div class="ctl">
+      <button id="prev">이전</button>
+      <button id="replay">다시 재생</button>
+      <button id="next" class="primary">다음</button>
+      <span class="pg" id="pg"></span>
+    </div>
+  </main>
+</div>
+<div class="foot">도면은 2026-11-16 검수앱 5.03에서 실제로 연 DXQD 2645E 양하(DISCHARGING)PLAN입니다. 한 장 전체(베이 상자 13개 구역과 별첨 세 표)를 같은 칸 배열 그대로 옮겼습니다. 콘앱 수치는 콘앱 3.01 콘 작업표와 같습니다. 이 항차는 선적 자료가 없어 선적 도면은 양하의 거꾸로 순서로만 설명합니다.</div>
+<script>
+/* 실제 도면 데이터 - DXQD 2645E 양하(DISCHARGING)PLAN, 검수앱 5.03·콘앱 3.01에서 2026-11-16 추출. '-'=그리지 않는 자리, ''=빈 칸 */
+var DATA = [
+{t:"BAY 01",c:"3",hs:1,dl:"06 04 02 01 03 05",hl:"04 02 01 03 05",d:["88:,,,,,","86:,,,,,","84:,,,,,","82:,,DG,DG,DG,"],h:["08:,,,,","06:-,,,,-","04:-,-,,-,-","02:-,-,,-,-"]},
+{t:"BAY 03",c:"13",hs:1,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:,X,X,X,X,X,X,"],h:["08:,,,,,,","06:-,F,F,F,F,F,-","04:-,F,F,F,F,F,-","02:-,-,F,F,F,-,-"]},
+{t:"BAY (04)05",c:"19 / 6 / 0",hs:3,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["86:,,,,,,,","84:,,,,,,,","82:,RF,RF,RF,RF,RF,RF,"],h:["08:,,,,,,","06:F,F,F,F,F,F,F","04:F,F,F,F,F,F,F","02:-,F,F,F,F,F,-"]},
+{t:"BAY 07",c:"15",hs:1,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:F,X,X,X,X,X,X,X"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY (08)09",c:"14 / 7 / 0",hs:3,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:,F,RF,RF,RF,RF,F,F"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY 11",c:"15",hs:1,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:,F,X,X,X,X,X,X"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F*,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY (12)13",c:"15 / 6 / 0",hs:3,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:,F,RF,RF,RF,RF*,F,F"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F*,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY 15",c:"14",hs:1,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:X,X,X,X,X,X,X,X"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY (16)17",c:"14 / 8 / 0",hs:3,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:RF,RF,RF,RF,RF,RF,RF,RF"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY 19",c:"14",hs:1,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:,X,X,X,X,X,X,"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY (20)21",c:"14 / 6 / 0",hs:3,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,,,,,","82:,RF,RF,RF,RF,RF,RF,"],h:["08:,,,,,,","06:,,,,,,","04:F,F,F,F,F,F,F","02:F,F,F,F,F,F,F"]},
+{t:"BAY 23",c:"15",hs:1,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,X,X,X,,","82:X,X,X,X,X,X,X,X"],h:["08:,,,,,,","06:F,X,X,F,X,X,F","04:F,F,F,F,F,F,F","02:-,F,F,F,F,F,-"]},
+{t:"BAY (24)25",c:"13 / 15 / 0",hs:3,dl:"08 06 04 02 01 03 05 07",hl:"06 04 02 01 03 05 07",d:["88:,,,,,,,","86:,,,,,,,","84:,,,F,F,F,,","82:F,F,RF,RF,RF,RF,F,F"],h:["08:,,,,,,","06:F,F,F,F,F,F,F","04:-,F,F,F,F,F,-","02:-,F,F,F,F,F,-"]}
+];
+/* 트리오(홀수 베이 상자 + 짝수·홀수 한 쌍 상자)의 DATA 위치 */
+var TRIOS = [[1,2,"03-05"],[3,4,"07-09"],[5,6,"11-13"],[7,8,"15-17"],[9,10,"19-21"],[11,12,"23-25"]];
+function parseRows(a){ return a.map(function(s){ var i = s.indexOf(":"); return { tier: s.slice(0, i), cells: s.slice(i + 1).split(",") }; }); }
+function secHtml(o, opt){
+  opt = opt || {};
+  var dl = o.dl.split(" "), hl = o.hl.split(" ");
+  var dr = parseRows(o.d), hr = parseRows(o.h);
+  function cell(x, tier, col, area){
+    if (x === "-") return '<span class="cpv2-cell-empty"></span>';
+    var xr = x.indexOf("*") >= 0; var k = x.replace("*", "");
+    var cls = "cpv2-cell", st = "";
+    if (k === "F") { cls += " cpv2-mark-F"; st = "background:#7dd3fc;color:#000"; }
+    else if (k === "X") { cls += " cpv2-mark-X"; st = "color:#000"; }
+    else if (k === "RF") { cls += " cpv2-mark-RF cpv2-mark2"; st = "background:#75dbe8;color:#000"; }
+    else if (k === "DG") { cls += " cpv2-mark-DG cpv2-mark2"; st = "background:#ffa1aa;color:#000"; }
+    if (xr && opt.star) cls += " cpv2-xray";
+    return '<span class="' + cls + '" style="' + st + '" data-k="' + k + '" data-t="' + tier + '" data-c="' + col + '" data-a="' + area + '">' + k + "</span>";
+  }
+  function grid(rows, labs, area){
+    var pad = (8 - labs.length) / 2;
+    var h = '<div class="cpv2-grid" style="padding-left:calc(var(--cpw)*' + pad + ');padding-right:calc(var(--cpw)*' + pad + ')">';
+    rows.forEach(function(r){ h += '<div class="cpv2-tier-row" data-t="' + r.tier + '">' + r.cells.map(function(x, i){ return cell(x, r.tier, labs[i], area); }).join("") + "</div>"; });
+    return h + "</div>";
+  }
+  function rl(labs){ var pad = (8 - labs.length) / 2; return '<div class="cpv2-row-labels" style="padding-left:calc(var(--cpw)*' + pad + ');padding-right:calc(var(--cpw)*' + pad + ')">' + labs.map(function(x){ return "<span>" + x + "</span>"; }).join("") + "</div>"; }
+  function tl(rows){ return '<div class="cpv2-tier-labels">' + rows.map(function(r){ return "<span>" + r.tier + "</span>"; }).join("") + "</div>"; }
+  var segs = ""; for (var i = 0; i < o.hs; i++) segs += '<div class="cpv2-hatch-seg"></div>';
+  return '<div class="cpv2-bay-section" data-bay="' + o.t + '"><div class="cpv2-bay-title-row"><span class="cpv2-bay-title">' + o.t + '</span><span class="cpv2-bay-count">' + o.c + '</span></div><div class="cpv2-bay-content">' +
+    '<div class="cpv2-deck-area">' + rl(dl) + '<div class="cpv2-grid-row-wrap">' + grid(dr, dl, "deck") + tl(dr) + "</div></div>" +
+    '<div class="cpv2-hatch-break">' + segs + "</div>" +
+    '<div class="cpv2-hold-area"><div class="cpv2-grid-row-wrap">' + grid(hr, hl, "hold") + tl(hr) + "</div>" + rl(hl) + "</div></div></div>";
+}
+function trioHtml(k, opt){ var t = TRIOS[k]; return '<div class="cpv2-bay-box cpv2-trio-box">' + secHtml(DATA[t[0]], opt) + '<div class="cpv2-trio-divider"></div>' + secHtml(DATA[t[1]], opt) + "</div>"; }
+function singleHtml(opt){ return '<div class="cpv2-bay-box cpv2-single-box"><div class="cpv2-single-half">' + secHtml(DATA[0], opt) + '</div><div class="cpv2-empty-half"></div></div>'; }
+/* 칸 계산 - 같은 줄·단의 윗상자(홀수 베이)와 아랫상자(짝수+홀수 베이) 비교 */
+function grids(k){
+  var t = TRIOS[k], r = {};
+  ["top", "pair"].forEach(function(w, wi){
+    var o = DATA[t[wi]]; var dl = o.dl.split(" "), hl = o.hl.split(" ");
+    r[w] = { deck: {}, hold: {} };
+    parseRows(o.d).forEach(function(row){ row.cells.forEach(function(x, i){ r[w].deck[row.tier + "_" + dl[i]] = x.replace("*", ""); }); });
+    parseRows(o.h).forEach(function(row){ row.cells.forEach(function(x, i){ r[w].hold[row.tier + "_" + hl[i]] = x.replace("*", ""); }); });
+  });
+  return r;
+}
+/* 홀드콘 - 한 단 아래에 컨이 있는 홀드 20ft 칸마다 1개(컨테이너선) */
+function holdCones(secIdx){
+  var o = DATA[secIdx], hl = o.hl.split(" "), rows = parseRows(o.h), n = 0, list = [];
+  var top = (o.t.indexOf("(") >= 0 && secIdx > 0) ? DATA[secIdx - 1] : null, topX = {};
+  if (top) { var tl = top.hl.split(" "); parseRows(top.h).forEach(function(r){ r.cells.forEach(function(x, i){ if (x.replace("*", "") === "X") topX[r.tier + "_" + tl[i]] = 1; }); }); }
+  for (var ri = 0; ri < rows.length - 1; ri++) rows[ri].cells.forEach(function(x, ci){
+    if (topX[rows[ri].tier + "_" + hl[ci]]) return;
+    if (x.replace("*", "") === "F" && rows[ri + 1].cells[ci].replace("*", "") === "F") { n++; list.push(rows[ri].tier + "_" + hl[ci]); }
+  });
+  return { n: n, list: list };
+}
+
+/* 설명서 본체 - 실제 도면(DXQD 2645E 양하 PLAN) 위에서 짚어 가며 브리핑 */
+var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var $ = function(s){ return document.querySelector(s); };
+var $$ = function(s, r){ return [].slice.call((r || document).querySelectorAll(s)); };
+var timers = [];
+function later(fn, ms){ if (RM) { fn(); return; } timers.push(setTimeout(fn, ms)); }
+function every(fn, ms){ if (RM) return; timers.push(setInterval(fn, ms)); }
+function clearT(){ timers.forEach(function(t){ clearTimeout(t); clearInterval(t); }); timers = []; }
+function setCap(t){ $("#cap").textContent = t || ""; }
+function clr(){ $$(".hl,.hlh,.tw,.sg,.k40,.cn").forEach(function(e){ e.classList.remove("hl", "hlh", "tw", "sg", "k40", "cn"); }); $$(".cn-badge").forEach(function(e){ e.remove(); }); }
+/* 순서대로 짚기 - 각 항목 {sel, cls, cap, say} */
+function seq(list, gap){
+  gap = gap || 3200;
+  list.forEach(function(it, i){
+    later(function(){
+      clr();
+      if (it.sel) $$(it.sel).forEach(function(e){ e.classList.add(it.cls || "hl"); });
+      if (it.cap) setCap(it.cap);
+      if (it.say && $("#say")) $("#say").innerHTML = it.say;
+      if (it.fn) it.fn();
+    }, RM ? 0 : i * gap);
+  });
+}
+function chips(arr, cur, id){ return '<div class="chips" id="' + id + '">' + arr.map(function(a, i){ return '<button data-i="' + i + '" aria-pressed="' + (i === cur) + '">' + a + "</button>"; }).join("") + "</div>"; }
+function pad2(n){ return (n < 10 ? "0" : "") + n; }
+var STAR = true;
+var curTrio = 2;
+function plBox(inner){ return '<div class="plbox">' + inner + "</div>"; }
+
+/* ===================== 검수앱 ===================== */
+function stageT1(){
+  var cards = [
+    ["BAY 11 · (12)13", "15 · 15 / 6 / 0"], ["BAY 07 · (08)09", "15 · 14 / 7 / 0"], ["BAY 03 · (04)05", "13 · 19 / 6 / 0"], ["BAY 01", "3"],
+    ["별첨 1 · 2 · 3", "선사별 · 화물 종류별 · 규격별 F/E"], ["BAY 23 · (24)25", "15 · 13 / 15 / 0"], ["BAY 19 · (20)21", "14 · 14 / 6 / 0"], ["BAY 15 · (16)17", "14 · 14 / 8 / 0"]
+  ];
+  var h = '<div class="pmap"><div class="pm-head" id="pmh"><span>VOY NO : 2645E</span><b>XIN QUN DAO CARGO DISCHARGING PLAN</b><span>양하 226</span><span class="sm">사전:DXQD·firebase·2026-08-13</span><span>DATE : 2026-11-16</span></div><div class="pm-grid">';
+  cards.forEach(function(c, i){ h += '<div class="pm-card' + (i === 4 ? " leg" : "") + '" id="pm' + i + '"><b>' + c[0] + "</b><span>" + c[1] + "</span></div>"; });
+  h += '</div><div class="pm-foot" id="pmf">칠한 칸=풀(하늘색=일반, 특수화물은 제 색·별첨2) · 안 칠한 칸=엠티 · 별첨1 ■ 색=선사 · 가운데 글자=종류(F 풀 · e 20ft엠티 · E 40ft엠티 · RF RE DG FR OT TK) · X=옆 40ft가 차지 · 회색=통과</div></div>';
+  return h + '<div class="say" id="say"></div>';
+}
+function afterT1(){
+  seq([
+    { sel: "#pmh", cap: "맨 위 띠", say: "<b>맨 위 띠</b> — 항차 <b>2645E</b>, 제목 <b>CARGO DISCHARGING PLAN</b>(양하 계획), <b>양하 226</b>대, 사전(도면 모양에 쓴 베이사전의 출처·날짜), 도면을 뽑은 날짜입니다. 선적 도면이면 제목이 STOWAGE 로 바뀝니다." },
+    { sel: "#pm0,#pm1,#pm2,#pm5,#pm6,#pm7", cap: "베이 상자 일곱 개", say: "<b>상자 하나</b> = 홀수 베이 하나(위) + 짝수·홀수 한 쌍(아래)입니다. 이 배는 BAY 03 · 07 · 11 · 15 · 19 · 23 쌍 여섯 개가 있습니다. 오른쪽 위 숫자는 그 상자의 컨 대수입니다." },
+    { sel: "#pm3", cap: "BAY 01 은 혼자", say: "<b>BAY 01</b> 은 짝이 없는 베이라 상자가 한 칸입니다. 평택 양하 3대(전부 DG)." },
+    { sel: "#pm4", cap: "별첨 세 표", say: "<b>별첨 1·2·3</b> 은 이 배 전체를 선사별 · 화물 종류별 · 규격별로 센 표입니다. 상자 한 칸 크기의 자리를 차지합니다." },
+    { sel: "#pmf", cap: "맨 아래 띠 = 범례", say: "<b>맨 아래 띠</b>가 범례입니다. 처음 보는 표시가 있으면 여기부터 읽으세요. 칠한 칸은 풀, 칸 가운데 글자는 종류, X는 옆 40ft 가 차지한 자리입니다." }
+  ], 3600);
+}
+
+function trioStage(k, extra){
+  curTrio = k;
+  return chips(TRIOS.map(function(t){ return t[2]; }), k, "tch") + '<div class="pl">' + plBox(trioHtml(k, { star: STAR }) + (extra || "")) + '<div class="plside"><div class="say" id="say"></div><div class="code" id="code">칸을 눌러 보세요.</div></div></div>';
+}
+function bindChips(rebuild){
+  $$("#tch button").forEach(function(b){ b.addEventListener("click", function(){ clearT(); clr(); curTrio = +b.getAttribute("data-i"); rebuild(); }); });
+}
+function bindCells(){
+  $$(".plbox .cpv2-cell").forEach(function(c){
+    c.addEventListener("click", function(){
+      $$(".plbox .cpv2-cell.pick").forEach(function(x){ x.classList.remove("pick"); });
+      c.classList.add("pick");
+      var sec = c.closest(".cpv2-bay-section"), title = sec.getAttribute("data-bay"), k = c.getAttribute("data-k"), t = c.getAttribute("data-t"), col = c.getAttribute("data-c");
+      var kind = { F: "풀 컨테이너(일반)", X: "옆 40ft 가 차지한 자리", RF: "리퍼(냉동) 컨테이너", DG: "위험물(DG) 컨테이너", "": "칠하지 않은 칸 — 이 항차 평택 양하 컨이 없는 자리" }[k];
+      var star = c.classList.contains("cpv2-xray") ? " · 빨간 ★ = X-RAY 대상" : "";
+      var parts = title.indexOf("(") < 0;
+      var h = "<b>" + title + " · 줄 " + col + " · " + t + "단</b><br>" + (+t >= 80 ? "데크(갑판 위)" : "홀드(선창 안)") + " · " + (col === "00" ? "중앙" : (+col % 2 === 0 ? "좌현 쪽(짝수 줄)" : "우현 쪽(홀수 줄)")) + "<br>" + kind + star;
+      if (parts) h += '<div class="big">' + pad2(parseInt(title.replace("BAY ", ""), 10)) + col + t + '</div><small>자리 번호 = 베이 ' + pad2(parseInt(title.replace("BAY ", ""), 10)) + " + 줄 " + col + " + 단 " + t + "</small>";
+      else h += "<br><small>아래 상자는 짝수 베이(40ft 자리)와 뒤 홀수 베이(20ft 자리)를 한 상자에 같이 그립니다. 그래서 자리 번호는 어느 베이 칸인지 먼저 가립니다.</small>";
+      $("#code").innerHTML = h;
+    });
+  });
+}
+function stageT2(){ return trioStage(curTrio); }
+function afterT2(){
+  bindChips(function(){ $("#stage").innerHTML = stageT2(); afterT2(); });
+  bindCells();
+  var t = TRIOS[curTrio], a = DATA[t[0]], b = DATA[t[1]];
+  seq([
+    { sel: ".cpv2-bay-section:nth-of-type(1) .cpv2-bay-title", cap: "상자 제목", say: "<b>" + a.t + "</b> — 이름이 홀수 한 개이면 <b>20ft 자리</b> 베이입니다. 오른쪽 위 숫자 <b>" + a.c + "</b> 은 이 베이에 내릴 컨 수입니다." },
+    { sel: ".cpv2-bay-section:nth-of-type(2) .cpv2-bay-title", cap: "짝 상자 제목", say: "<b>" + b.t + "</b> — 괄호 안 짝수는 <b>40ft 자리</b> 베이이고 그 뒤 홀수가 같이 묶입니다. 짝수 베이 하나가 앞뒤 홀수 베이 두 자리를 덮습니다." },
+    { sel: ".cpv2-bay-section:nth-of-type(2) .cpv2-bay-count", cap: "숫자 세 개", say: "<b>" + b.c + "</b> 은 <b>20ft / 40ft / 45ft</b> 대수입니다. 이 상자는 20ft " + b.c.split("/")[0].trim() + "대, 40ft " + b.c.split("/")[1].trim() + "대, 45ft 0대." },
+    { sel: ".cpv2-bay-section:nth-of-type(1) .cpv2-row-labels span", cap: "줄 번호(가로)", say: "칸 위 숫자는 <b>줄(row)</b> 번호입니다. 가운데 <b>01 · 02</b> 에서 바깥으로 갈수록 커집니다. <b>짝수 줄은 왼쪽(좌현), 홀수 줄은 오른쪽(우현)</b>." },
+    { sel: ".cpv2-bay-section:nth-of-type(1) .cpv2-tier-labels span", cap: "단 번호(세로)", say: "칸 옆 숫자는 <b>단(tier)</b> 번호입니다. 데크는 <b>82 · 84 · 86 · 88</b>, 홀드는 <b>02 · 04 · 06 · 08</b>. 위로 올라갈수록 커집니다." },
+    { sel: ".plbox .cpv2-xray", cap: "빨간 ★", say: "칸 오른쪽 아래의 <b>빨간 ★</b> 는 <b>X-RAY 대상</b>입니다. 눌러 보면 자리 번호가 나옵니다." }
+  ], 3600);
+}
+
+function stageT3(){
+  return trioStage(2, singleHtml({ star: STAR }));
+}
+function afterT3(){
+  bindChips(function(){ $("#stage").innerHTML = trioStage(curTrio, singleHtml({ star: STAR })); afterT3(); });
+  bindCells();
+  seq([
+    { sel: ".cpv2-hatch-break", cls: "hlh", cap: "가운데 가로선 = 해치(커버)", say: "각 베이 가운데의 <b>굵은 가로선이 해치커버</b>입니다. 이 선을 경계로 <b>위가 데크, 아래가 홀드</b>입니다." },
+    { sel: ".cpv2-deck-area", cap: "선 위 = 데크", say: "선 위는 <b>데크(갑판 위)</b>이고 단 번호가 <b>80번대</b>입니다. 맨 아래 데크 단(82)이 해치선에 붙어 있습니다. 이것이 그 베이의 <b>1단</b>입니다." },
+    { sel: ".cpv2-hold-area", cap: "선 아래 = 홀드", say: "선 아래는 <b>홀드(선창 안)</b>, 단 번호 <b>02~08</b>입니다. 맨 위 홀드 단이 해치선에 붙습니다." },
+    { sel: ".cpv2-hatch-break", cls: "hlh", cap: "선이 몇 조각인가", say: "선이 <b>한 줄</b>이면 해치가 하나, 아래 짝 상자처럼 <b>세 조각</b>으로 끊기면 해치커버가 나뉘어 있다는 뜻입니다(최대 3조각). 해치가 없는 데크 전용 베이는 선을 그리지 않습니다." },
+    { sel: ".cpv2-bay-section[data-bay=\"BAY 11\"] .cpv2-deck-area .cpv2-tier-row[data-t=\"82\"],.cpv2-bay-section[data-bay=\"BAY 01\"] .cpv2-deck-area .cpv2-tier-row[data-t=\"82\"]", cap: "1단 — 해치 바로 위", say: "<b>1단</b> = 그 베이 도면의 가장 낮은 데크 단입니다. 이 배는 대부분 베이가 데크 <b>82단 하나</b>뿐입니다. 양하는 <b>위(데크)에서 아래로</b>, 해치선을 지나 홀드로 내려갑니다." },
+    { sel: ".plbox .cpv2-hatch-break", cls: "hlh", cap: "모든 베이의 선이 같은 높이", say: "옆 상자(BAY 01)와 선 높이가 맞는 것을 보세요. 도면에서는 <b>모든 베이의 해치선이 같은 수평선</b>에 오도록 그립니다." }
+  ], 3800);
+}
+
+var MARKS = [
+  { k: "F", sel: '.plbox .cpv2-cell[data-k="F"]', t: "F — 풀(일반)", d: "하늘색으로 칠한 칸은 <b>풀 컨테이너(일반 화물)</b>입니다. 칸 가운데 글자는 종류(F=풀)입니다." },
+  { k: "X", sel: '.plbox .cpv2-cell[data-k="X"]', t: "X — 옆 40ft 가 차지", d: "<b>X</b> 는 그 자리를 <b>옆 짝수 베이의 40ft 컨테이너가 차지</b>했다는 표시입니다. 실제 컨은 아래 상자에 40ft 로 그려져 있습니다." },
+  { k: "RF", sel: '.plbox .cpv2-cell[data-k="RF"]', t: "RF — 리퍼(냉동)", d: "청록색 <b>RF</b> 는 리퍼 컨테이너입니다. 별첨2 의 <b>Reefer</b> 와 같은 색이고, 이 배는 전부 40ft 입니다." },
+  { k: "DG", sel: '.plbox .cpv2-cell[data-k="DG"]', t: "DG — 위험물", d: "분홍색 <b>DG</b> 는 위험물입니다. 이 배는 BAY 01 데크 82단 <b>줄 02 · 01 · 03</b> 세 칸뿐이고 별첨2 DG 3대와 같습니다." },
+  { k: "S", sel: ".plbox .cpv2-xray", t: "★ — X-RAY 대상", d: "빨간 <b>★</b> 는 <b>X-RAY 대상</b> 컨입니다(X-RAY 리스트와 연결). 칸 모서리에 붙습니다." },
+  { k: "E", sel: '.plbox .cpv2-cell[data-k=""]', t: "칠하지 않은 칸", d: "범례는 <b>안 칠한 칸 = 엠티</b>라고 적습니다. 이 배는 별첨3 의 Empty 가 0 이므로 이 도면의 빈 칸에는 평택 양하 컨이 없습니다." }
+];
+var OTHER = [
+  ["e · E", "20ft 엠티 · 40ft 엠티 — 칸 가운데 글자"], ["RE · FR · OT · TK", "리퍼 엠티 · 플랫랙 · 오픈탑 · 탱크. 엠티면 뒤에 E(FRE, OTE…)"],
+  ["◆ 파랑", "시프팅(내렸다 다시 싣는 것). ◇ 는 예측"], ["◆ 노랑", "선사 지시로 본선에 남기는 컨(예보)"], ["보라 테두리", "수화물이 들어 있는 컨"]
+];
+function stageT4(){
+  var h = '<div class="chips" id="mch">' + MARKS.map(function(m, i){ return '<button data-i="' + i + '" aria-pressed="false">' + m.t + "</button>"; }).join("") + "</div>";
+  h += '<div class="pl">' + plBox(singleHtml({ star: STAR }) + trioHtml(2, { star: STAR })) + '<div class="plside"><div class="say" id="say"></div></div></div>';
+  h += '<div class="other"><b>이 항차 도면에는 없지만 다른 배에서 나오는 표시</b><ul>' + OTHER.map(function(o){ return "<li><b>" + o[0] + "</b> " + o[1] + "</li>"; }).join("") + "</ul></div>";
+  return h;
+}
+function afterT4(){
+  function pickM(i){ clr(); var m = MARKS[i]; $$(m.sel).forEach(function(e){ e.classList.add("hl"); }); $("#say").innerHTML = m.d; setCap(m.t); $$("#mch button").forEach(function(b, j){ b.setAttribute("aria-pressed", String(j === i)); }); }
+  $$("#mch button").forEach(function(b){ b.addEventListener("click", function(){ clearT(); pickM(+b.getAttribute("data-i")); }); });
+  MARKS.forEach(function(m, i){ later(function(){ pickM(i); }, RM ? 0 : i * 3600); });
+}
+
+function classify(k){
+  var g = grids(k), out = { tw: [], sg: [], k40: [] };
+  ["deck", "hold"].forEach(function(area){
+    var keys = {}; Object.keys(g.top[area]).concat(Object.keys(g.pair[area])).forEach(function(x){ keys[x] = 1; });
+    Object.keys(keys).forEach(function(key){
+      var a = g.top[area][key], b = g.pair[area][key], p = key.split("_");
+      var fa = a && a !== "X" && a !== "-", fb = b && b !== "X" && b !== "-";
+      if (a === "X") out.k40.push([area, p[0], p[1], "both"]);
+      else if (fa && fb) out.tw.push([area, p[0], p[1], "both"]);
+      else if (fa) out.sg.push([area, p[0], p[1], "top"]);
+      else if (fb) out.sg.push([area, p[0], p[1], "pair"]);
+    });
+  });
+  return out;
+}
+function markCells(list, cls){
+  list.forEach(function(x){
+    $$('.plbox .cpv2-cell[data-a="' + x[0] + '"][data-t="' + x[1] + '"][data-c="' + x[2] + '"]').forEach(function(c){
+      var isTop = c.closest(".cpv2-bay-section").getAttribute("data-bay").indexOf("(") < 0;
+      if (x[3] === "both" || (x[3] === "top" && isTop) || (x[3] === "pair" && !isTop)) c.classList.add(cls);
+    });
+  });
+}
+function stageT5(){
+  var h = chips(TRIOS.slice(0, 5).map(function(t){ return t[2]; }), Math.min(curTrio, 4), "tch");
+  h += '<div class="chips" id="mdch"><button data-m="all" aria-pressed="true">전체</button><button data-m="tw" aria-pressed="false">트윈</button><button data-m="sg" aria-pressed="false">싱글</button><button data-m="k40" aria-pressed="false">40ft</button></div>';
+  h += '<div class="pl">' + plBox(trioHtml(Math.min(curTrio, 4), { star: false })) + '<div class="plside"><div class="say" id="say"></div><div class="code" id="code"></div></div></div>';
+  return h;
+}
+function afterT5(){
+  var k = Math.min(curTrio, 4), c = classify(k), t = TRIOS[k], a = DATA[t[0]], b = DATA[t[1]];
+  var n20 = +a.c + +b.c.split("/")[0], n40 = +b.c.split("/")[1];
+  $("#code").innerHTML = "<b>" + a.t + " · " + b.t + "</b><br>트윈 <b>" + c.tw.length + "</b>쌍(20ft " + c.tw.length * 2 + "대) · 싱글 <b>" + c.sg.length + "</b>대 · 40ft <b>" + c.k40.length + "</b>대<br><small>20ft 합 " + c.tw.length * 2 + " + " + c.sg.length + " = " + (c.tw.length * 2 + c.sg.length) + " = 상자 숫자 " + a.c + " + " + b.c.split("/")[0].trim() + " = " + n20 + (c.tw.length * 2 + c.sg.length === n20 ? " ✓" : "") + "<br>40ft " + c.k40.length + " = 상자 숫자 " + n40 + (c.k40.length === n40 ? " ✓" : "") + "</small>";
+  var modes = {
+    all: { say: "<b>트윈 · 싱글 · 40ft</b> 를 색으로 가려 봅니다. 위 상자와 아래 상자의 <b>같은 줄·같은 단</b>을 비교하면 됩니다.", f: function(){ markCells(c.tw, "tw"); markCells(c.sg, "sg"); markCells(c.k40, "k40"); } },
+    tw: { say: "<b>트윈</b> — 위 상자(앞 홀수 베이)와 아래 상자(뒤 홀수 베이)의 <b>같은 줄·같은 단에 둘 다 20ft 가 있는</b> 자리입니다. 20ft 두 대가 한 40ft 자리에 나란히 선 것입니다. 보라 테두리.", f: function(){ markCells(c.tw, "tw"); } },
+    sg: { say: "<b>싱글</b> — 둘 중 <b>한쪽 베이에만 20ft 가 있는</b> 자리입니다. 짝이 비어 있어 20ft 한 대뿐입니다. 주황 칸. 숫자 차이(예: BAY 03 의 13 과 (04)05 의 19)가 곧 싱글입니다.", f: function(){ markCells(c.sg, "sg"); } },
+    k40: { say: "<b>40ft</b> — 위 상자가 <b>X</b>이면 같은 자리에 아래 상자의 40ft 가 걸쳐 있습니다. 초록 테두리. X 개수 = 40ft 대수.", f: function(){ markCells(c.k40, "k40"); } }
+  };
+  function pickMode(m){ clr(); $("#say").innerHTML = modes[m].say; modes[m].f(); $$("#mdch button").forEach(function(b){ b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === m)); }); }
+  bindChips(function(){ $("#stage").innerHTML = stageT5(); afterT5(); });
+  $$("#mdch button").forEach(function(b){ b.addEventListener("click", function(){ clearT(); pickMode(b.getAttribute("data-m")); }); });
+  ["all", "tw", "sg", "k40"].forEach(function(m, i){ later(function(){ pickMode(m); setCap(["", "트윈", "싱글", "40ft"][i]); }, RM ? 0 : i * 4200); });
+}
+
+function legendTable(id, title, head, rows, total){
+  var h = '<div class="lg" id="' + id + '"><div class="lg-t">' + title + '</div><table><thead><tr>' + head.map(function(x){ return "<th>" + x + "</th>"; }).join("") + "</tr></thead><tbody>";
+  rows.forEach(function(r, i){ h += '<tr id="' + id + "r" + i + '">' + r.map(function(x, j){ return "<td" + (j === 0 && id !== "lg3" ? ' class="nm"' : "") + ">" + x + "</td>"; }).join("") + "</tr>"; });
+  h += '<tr class="tot" id="' + id + 'tot">' + total.map(function(x){ return "<td>" + x + "</td>"; }).join("") + "</tr></tbody></table></div>";
+  return h;
+}
+function stageT6(){
+  return '<div class="lgrow">' +
+    legendTable("lg1", "별첨1 · 선사별 (양하)", ["선사", "20'", "40'", "합계"], [["DWS", 127, 48, "<b>175</b>"], ['<span class="sq" style="color:#dc2626">■</span> SKR', 51, 0, "<b>51</b>"]], ["합계", "<b>178</b>", "<b>48</b>", "<b>226</b>"]) +
+    legendTable("lg2", "별첨2 · 화물 종류별 (양하)", ["종류", "20'", "40'", "합계"], [['<span class="sw1" style="background:#7dd3fc">o</span> 일반', 175, 16, "<b>191</b>"], ['<span class="sw1" style="background:#75dbe8">RF</span> Reefer', 0, 32, "<b>32</b>"], ['<span class="sw1" style="background:#ffa1aa">DG</span> DG', 3, 0, "<b>3</b>"]], ["합계", "<b>178</b>", "<b>48</b>", "<b>226</b>"]) +
+    legendTable("lg3", "별첨3 · 규격별 F/E", ["규격", "Full", "Empty", "계"], [["20'", 178, 0, "<b>178</b>"], ["40'", 48, 0, "<b>48</b>"], ["45'", 0, 0, "<b>0</b>"]], ["합계", "<b>226</b>", "<b>0</b>", "<b>226</b>"]) +
+    '</div><div class="say" id="say"></div>';
+}
+function afterT6(){
+  seq([
+    { sel: "#lg1 .lg-t", cap: "별첨1 — 선사별", say: "<b>별첨1</b>은 <b>양하 도면이면 선사별</b>, 선적 도면이면 <b>도착항(POD)별</b>로 셉니다. 20ft·40ft 대수와 합계가 나옵니다." },
+    { sel: "#lg1r0,#lg1r1", cap: "DWS 175 · SKR 51", say: "이 배는 <b>DWS 175대</b>(20ft 127 + 40ft 48), <b>SKR 51대</b>(전부 20ft)입니다. 선사 이름 앞의 <b>■ 색</b>은 칸을 선사 색으로 칠해야 할 때 쓰는 표시입니다." },
+    { sel: "#lg1tot", cap: "합계 226", say: "합계 <b>178 + 48 = 226</b>. 이 합계는 <b>평택 양하분만</b> 센 것입니다. 제목의 양하 226 과 같습니다." },
+    { sel: "#lg2 .lg-t", cap: "별첨2 — 화물 종류별", say: "<b>별첨2</b>는 일반 · Reefer · DG 처럼 <b>종류별</b>로 셉니다. 특수화물(FR · OT · TK 등)이 있으면 줄이 더 붙습니다. 왼쪽 색 칸이 <b>도면 칸 색과 같습니다</b>." },
+    { sel: "#lg2r0,#lg2r1,#lg2r2", cap: "일반 191 · Reefer 32 · DG 3", say: "<b>일반 191</b>(20ft 175 + 40ft 16), <b>Reefer 32</b>(전부 40ft), <b>DG 3</b>(전부 20ft). 리퍼 32대와 위험물 3대는 별도로 챙겨야 하는 화물입니다." },
+    { sel: "#lg3 .lg-t", cap: "별첨3 — 규격별 F/E", say: "<b>별첨3</b>은 규격(20 · 40 · 45ft)별로 <b>Full(풀) / Empty(엠티)</b>를 셉니다. 이 배는 Empty 가 0 입니다." },
+    { sel: "#lg3tot", cap: "세 표의 합계가 같다", say: "세 표의 합계가 모두 <b>226</b>이어야 정상입니다. 하나라도 다르면 자료가 어긋난 것이니 확인합니다." }
+  ], 3800);
+}
+
+function stageT7(){
+  var s20 = 0, s40 = 0, f = 0, rf = 0, dg = 0, l20 = [], l40 = [];
+  DATA.forEach(function(o){ var n = o.c.split("/").map(function(x){ return +x; }); s20 += n[0]; l20.push(n[0]); if (n.length > 1) { s40 += n[1]; l40.push(n[1]); }
+    o.d.concat(o.h).forEach(function(s){ s.slice(s.indexOf(":") + 1).split(",").forEach(function(c){ c = c.replace("*", ""); if (c === "F") f++; else if (c === "RF") rf++; else if (c === "DG") dg++; }); }); });
+  var rows = [
+    ["상자 숫자 20ft 합", l20.join(" + ") + " = <b>" + s20 + "</b>", "별첨 20' 합계 178", s20 === 178],
+    ["상자 숫자 40ft 합", l40.join(" + ") + " = <b>" + s40 + "</b>", "별첨 40' 합계 48", s40 === 48],
+    ["칠한 RF 칸 수", "도면 전체 RF 칸 <b>" + rf + "</b>", "별첨2 Reefer 32", rf === 32],
+    ["칠한 DG 칸 수", "도면 전체 DG 칸 <b>" + dg + "</b>", "별첨2 DG 3", dg === 3],
+    ["F 칸 수", "도면 전체 F 칸 <b>" + f + "</b>", "별첨2 일반 191", f === 191],
+    ["전체", s20 + " + " + s40 + " = <b>" + (s20 + s40) + "</b>", "제목 양하 226", s20 + s40 === 226]
+  ];
+  var h = '<div class="chk">'; rows.forEach(function(r, i){ h += '<div class="chk-r" id="ck' + i + '"><div class="a">' + r[0] + '</div><div class="b">' + r[1] + '</div><div class="c">' + r[2] + '</div><div class="ok">' + (r[3] ? "✓ 일치" : "✗ 불일치") + "</div></div>"; });
+  return h + '</div><div class="say" id="say"><b>도면의 숫자는 서로 맞아야 합니다.</b> 아래는 이 도면의 칸을 실제로 세어 별첨과 맞춰 본 결과입니다. 한 줄씩 켜집니다.</div>';
+}
+function afterT7(){
+  $$(".chk-r").forEach(function(r){ r.classList.remove("on"); });
+  $$(".chk-r").forEach(function(r, i){ later(function(){ r.classList.add("on"); setCap(["상자 숫자로 20ft 합산", "상자 숫자로 40ft 합산", "RF 칸을 세어 보면", "DG 칸을 세어 보면", "F 칸을 세어 보면", "전체 대수"][i]); }, RM ? 0 : i * 1400); });
+}
+
+function stageT8(){
+  var path = ["홈에서 작업 선박 선택", "양하 · 선적 탭", "출력", "양하(DISCHARGING)PLAN / 선적(STOWAGE)PLAN"];
+  var h = '<div class="path">' + path.map(function(p, i){ return '<div class="pth" id="ph' + i + '"><span class="n">' + (i + 1) + "</span>" + p + "</div>"; }).join('<div class="arw">→</div>') + "</div>";
+  h += '<div class="vbar"><span class="vb" id="vb0">− +</span><span class="vb" id="vb1">맞춤</span><span class="vb" id="vb2">● 컬러 / 흑백</span><span class="vb" id="vb3">🖨 인쇄</span><span class="vb" id="vb4">✕ 닫기</span></div>';
+  h += '<div class="say" id="say"></div>';
+  return h;
+}
+function afterT8(){
+  seq([
+    { sel: "#ph0", cap: "① 작업 선박 선택", say: "상황판이나 홈에서 <b>작업하는 선박(DXQD)</b>을 열고 양하 · 선적 탭을 고릅니다." },
+    { sel: "#ph1", cap: "② 양하 · 선적 탭", say: "<b>양하 탭</b>에서는 양하 도면이, <b>선적 탭</b>에서는 선적 도면이 나옵니다. 양하 탭의 출력 목록은 검수 리스트, 양하(DISCHARGING)PLAN, 베이 상세, X-RAY 리스트입니다." },
+    { sel: "#ph2", cap: "③ 출력", say: "아래 가운데 줄의 <b>출력</b> 탭입니다." },
+    { sel: "#ph3", cap: "④ PLAN 미리보기", say: "<b>양하(DISCHARGING)PLAN</b>을 누르면 이 설명서의 도면이 열립니다. 앱 글자에는 카고플랜이라는 말을 쓰지 않습니다." },
+    { sel: "#vb0,#vb1", cap: "크게 · 작게 · 맞춤", say: "<b>− +</b> 로 키우고 줄이고, <b>맞춤</b>은 화면에 맞춥니다. 휴대폰에서는 도면이 가로로 누워 보입니다." },
+    { sel: "#vb2,#vb3,#vb4", cap: "컬러 · 인쇄 · 닫기", say: "<b>컬러/흑백</b>을 바꾸고, <b>인쇄</b>는 A4 가로 한 장으로 나옵니다. 흑백에서는 선사 표가 흑백으로 바뀝니다. 다 보면 <b>닫기</b>." }
+  ], 3600);
+}
+
+/* ===================== 콘앱 ===================== */
+function stageC1(){
+  var h = '<div class="tabs3"><div class="tb" id="tb0"><b>📋 콘 작업표</b><span>③ 콘 계산하기를 누르면 나오는 표 — 베이별 콘 가감, 총 작업량</span></div><div class="tb" id="tb1"><b>📊 PLAN</b><span>양하/선적 PLAN 전체 화물 비교 — 검수앱과 같은 도면</span></div><div class="tb" id="tb2"><b>🗺️ 베이플랜</b><span>양하 · 선적 비교, 컨 번호와 자리까지, 베이별 콘 개수</span></div></div>';
+  h += '<div class="path">' + ["① 작업(선박) 선택", "② 선종 확인(컨테이너선)", "③ 콘 계산하기"].map(function(p, i){ return '<div class="pth" id="ph' + i + '"><span class="n">' + (i + 1) + "</span>" + p + "</div>"; }).join('<div class="arw">→</div>') + "</div>";
+  return h + '<div class="say" id="say"></div>';
+}
+function afterC1(){
+  seq([
+    { sel: "#ph0", cap: "① 작업 선택", say: "<b>작업 선택</b> 목록에서 선박(DXQD)을 누릅니다. 검수앱에 올라온 EDI 를 그대로 읽어 옵니다. 파일을 올릴 필요가 없습니다." },
+    { sel: "#ph1", cap: "② 선종", say: "<b>선종</b>(컨테이너선 / 복합선)을 확인합니다. 홀드콘 개수가 선종에 따라 달라집니다." },
+    { sel: "#ph2,#tb0", cap: "③ 콘 계산하기 → 콘 작업표", say: "<b>콘 작업표</b>가 나옵니다. 현장에서 가장 많이 보는 화면입니다." },
+    { sel: "#tb1", cap: "PLAN", say: "<b>PLAN</b> 탭은 검수앱과 <b>같은 도면</b>입니다. 이 설명서의 베이 상자 읽는 법이 그대로 적용됩니다." },
+    { sel: "#tb2", cap: "베이플랜", say: "<b>베이플랜</b>은 칸마다 컨 번호까지 보이고 베이별 콘 개수가 적힌 화면입니다." }
+  ], 3400);
+}
+
+var BAYCHIPS = ["01", "03", "(04)05", "07", "(08)09", "11", "(12)13", "15", "(16)17", "19", "(20)21", "23", "(24)25"];
+function bayCard(i){
+  var o = DATA[i], n = o.c.split("/").map(function(x){ return +x; }), tot = n.reduce(function(a, b){ return a + b; }, 0), hc = holdCones(i);
+  var cone = "";
+  if (i === 0) cone = "콘 없음(데크 1단·홀드 비어 있음)";
+  else if (i >= 11) cone = i === 11 ? "(24)25 와 함께 계산 — 데크콘이 나오는 베이" : "데크콘 3곳 × 4 = 12개 + 홀드콘(작업표 23-25)";
+  else cone = "홀드콘 " + hc.n + "개";
+  return '<b>BAY ' + o.t.replace("BAY ", "") + "</b> · 양하 " + tot + "대 · " + cone;
+}
+function stageC2(){
+  var h = '<div class="legc"><span class="lc a">양하 평택</span><span class="lc b">선적 평택</span><span class="lc c">❄ 리퍼</span><span class="lc d">⚠ 위험물</span><span class="lc e">★ 평택분</span><span class="lc f">※ 시프팅</span><span class="lc g">통과분은 그리지 않음</span></div>';
+  h += '<div class="chips" id="bch">' + BAYCHIPS.map(function(b, i){ return '<button data-i="' + i + '" aria-pressed="false">' + b + "</button>"; }).join("") + "</div>";
+  h += '<div class="bcard" id="bcard">베이 번호를 눌러 보세요.</div>';
+  h += '<div class="sumbox" id="sumbox"><b>양하 총콘</b><br>데크콘 총 <b>12개</b> (3곳 ×4)<br>홀드콘 총 <b>90개</b></div><div class="say" id="say"></div>';
+  return h;
+}
+function afterC2(){
+  function pick(i){ $$("#bch button").forEach(function(b, j){ b.setAttribute("aria-pressed", String(j === i)); }); var card = bayCard(i); if (i === 11 || i === 12) card = "<b>BAY " + (i === 11 ? "23" : "(24)25") + "</b> · 양하 " + DATA[i].c.split("/").map(Number).reduce(function(a, b){ return a + b; }) + "대 · 데크콘 3곳이 나오는 베이(23-25 합쳐 데크콘 12개, 홀드콘 14개)"; $("#bcard").innerHTML = card; }
+  $$("#bch button").forEach(function(b){ b.addEventListener("click", function(){ clearT(); pick(+b.getAttribute("data-i")); }); });
+  seq([
+    { sel: ".legc .a,.legc .b", cap: "양하 평택 / 선적 평택", say: "위 <b>색 표</b>에서 <b>양하 평택</b>과 <b>선적 평택</b>이 따로 있습니다. 이 베이에 어느 쪽 작업이 있는지 색으로 구분됩니다. 이 배는 선적 자료가 없어 양하만 나옵니다." },
+    { sel: "#bch button", cap: "베이 번호 줄 = 작업 대상 베이", say: "아래 번호 줄에는 <b>이 작업에 평택분이 있는 베이만</b> 나옵니다. 누르면 그 베이로 바로 갑니다. 번호가 없는 베이는 작업이 없습니다." },
+    { sel: "#bch button:nth-child(2),#bch button:nth-child(3)", cap: "베이 카드 머리", fn: function(){ pick(1); }, say: "베이를 누르면 <b>BAY 03 · 양하 13대 · 홀드콘 8개</b> 같은 머리글이 나옵니다. <b>양하 N대</b>가 그 베이의 작업량, <b>홀드콘 N개</b>가 그 베이에서 뺄 콘입니다." },
+    { sel: "#sumbox", cap: "양하 총콘", say: "맨 위 <b>양하 총콘</b>이 이 작업 전체의 콘입니다. <b>데크콘 12개(3곳 ×4)</b>, <b>홀드콘 90개</b>. 선적이 있으면 <b>선적 총콘</b>도 같이 나옵니다." },
+    { sel: ".legc .e,.legc .f,.legc .g", cap: "★ 평택분 · ※ 시프팅 · 통과분", say: "칸의 <b>★</b> 는 평택분, <b>※</b> 는 시프팅(내렸다 다시 싣는 것)입니다. <b>통과분은 그리지 않습니다.</b> 평택에서 안 내리는 컨은 콘 작업 대상이 아니기 때문입니다." }
+  ], 3800);
+}
+
+function stageC3(){
+  curTrio = Math.min(curTrio, 4);
+  return chips(TRIOS.slice(0, 5).map(function(t){ return t[2]; }), curTrio, "tch") + '<div class="pl">' + plBox(trioHtml(curTrio, { star: false })) + '<div class="plside"><div class="say" id="say"></div><div class="code" id="code"></div></div></div>';
+}
+function afterC3(){
+  var k = curTrio, t = TRIOS[k], a = holdCones(t[0]), b = holdCones(t[1]);
+  function mark(list, secSel, cls){ list.forEach(function(key){ var p = key.split("_"); $$(secSel + ' .cpv2-hold-area .cpv2-cell[data-t="' + p[0] + '"][data-c="' + p[1] + '"]').forEach(function(c){ c.classList.add(cls); if (cls === "cn") { var s = document.createElement("i"); s.className = "cn-badge"; s.textContent = "+1"; c.appendChild(s); } }); }); }
+  var secs = $$(".plbox .cpv2-bay-section");
+  var s0 = '.cpv2-bay-section[data-bay="' + DATA[t[0]].t + '"]', s1 = '.cpv2-bay-section[data-bay="' + DATA[t[1]].t + '"]';
+  var rule = [
+    { cap: "규칙 1 — 바로 아래에 컨이 있어야 콘", say: "콘은 <b>컨 바로 아래 칸에도 컨이 있을 때</b>만 필요합니다(컨 위에 컨을 얹는 이음새). <b>맨 아래 단(02)</b>은 받침이 없어 <b>콘이 없습니다</b>." },
+    { cap: DATA[t[0]].t + " 홀드콘 " + a.n + "개", fn: function(){ clr(); mark(a.list, s0, "cn"); }, say: "<b>" + DATA[t[0]].t + "</b> 홀드에서 아래 칸에 컨이 있는 칸마다 콘 1개 — 합계 <b>" + a.n + "개</b>. (홀드콘은 컨테이너선 20ft 만, 40ft 는 0개)" },
+    { cap: DATA[t[1]].t + " 홀드콘 " + b.n + "개", fn: function(){ clr(); mark(b.list, s1, "cn"); }, say: "<b>" + DATA[t[1]].t + "</b> 도 같은 방식으로 <b>" + b.n + "개</b>." },
+    { cap: "합계 = 콘 작업표", fn: function(){ clr(); mark(a.list, s0, "cn"); mark(b.list, s1, "cn"); }, say: "<b>" + a.n + " + " + b.n + " = " + (a.n + b.n) + "</b>. 콘 작업표의 <b>" + TRIOS[k][2] + "</b> 줄 홀드콘 <b>−" + (a.n + b.n) + "</b> 과 같습니다(양하는 빼는 것이라 마이너스)." }
+  ];
+  bindChips(function(){ $("#stage").innerHTML = stageC3(); afterC3(); });
+  $("#code").innerHTML = "<b>" + TRIOS[k][2] + "</b><br>콘 +1 이 붙은 칸 = 홀드콘 1개<br>회색 = 바로 아래에 컨이 없어 콘 없음";
+  rule.forEach(function(r, i){ later(function(){ if (r.fn) r.fn(); else clr(); setCap(r.cap); $("#say").innerHTML = r.say; }, RM ? 0 : i * 3600); });
+}
+
+function conesDots(d, e, h){
+  var s = ""; for (var i = 0; i < d; i++) s += '<i class="dot d"></i>'; for (i = 0; i < e; i++) s += '<i class="dot e"></i>'; for (i = 0; i < h; i++) s += '<i class="dot h"></i>'; return s;
+}
+function stageC4(){
+  var cases = [
+    ["데크 · 20ft 트윈", "짝 베이 같은 줄·단에도 20ft", 2, 2, 0, "칸마다 데크콘 2 + 코끼리콘 2 (두 칸 합쳐 4 + 4)"],
+    ["데크 · 20ft 싱글", "짝 베이 칸이 비어 있음(일반 베이)", 2, 2, 0, "데크콘 2 + 코끼리콘 2"],
+    ["데크 · 20ft 전용 데크", "홀드가 없고 이웃 베이도 없는 베이", 4, 0, 0, "데크콘 4"],
+    ["데크 · 40ft", "짝수 베이 한 칸이 두 베이를 덮음", 4, 0, 0, "데크콘 4 (코끼리콘 없음)"],
+    ["홀드 · 20ft (컨테이너선)", "홀드 안", 0, 0, 1, "홀드콘 1"],
+    ["홀드 · 40ft (컨테이너선)", "홀드 안", 0, 0, 0, "홀드콘 0 (복합선은 20·40 구분 없이 곳당 2 또는 4)"]
+  ];
+  var h = '<div class="cones">';
+  cases.forEach(function(c, i){ h += '<div class="cc" id="cc' + i + '"><b>' + c[0] + '</b><small>' + c[1] + '</small><div class="dots">' + (conesDots(c[2], c[3], c[4]) || '<span class="none">콘 없음</span>') + "</div><span>" + c[5] + "</span></div>"; });
+  h += '</div><div class="legd"><i class="dot d"></i> 데크콘 · <i class="dot e"></i> 코끼리콘 · <i class="dot h"></i> 홀드콘 &nbsp; (모든 경우 <b>바로 한 단 아래에 컨이 있을 때만</b>)</div>';
+  h += '<div class="pl">' + plBox(trioHtml(5, { star: false }).replace("BAY 11", "BAY 11")) + '<div class="plside"><div class="say" id="say"></div></div></div>';
+  return h;
+}
+function afterC4(){
+  var T = TRIOS[5];
+  seq([
+    { sel: "#cc0,#cc1", cap: "20ft 데크 — 데크콘 2 + 코끼리콘 2", say: "<b>20ft 데크 칸</b>은 트윈이든 싱글이든 <b>칸마다 데크콘 2개 + 코끼리콘 2개</b>입니다. 트윈 한 쌍이면 합쳐 데크콘 4 + 코끼리콘 4 입니다." },
+    { sel: "#cc2", cap: "전용 데크 — 데크콘 4", say: "<b>홀드가 없고 이웃 베이도 이어지지 않는 20ft 데크</b>(전용 데크)는 데크콘 4개입니다. 코끼리콘은 없습니다." },
+    { sel: "#cc3", cap: "40ft 데크 — 데크콘 4", say: "<b>40ft 데크 칸</b>은 데크콘 4개입니다. 코끼리콘은 20ft 데크 칸에만 붙습니다." },
+    { sel: "#cc4,#cc5", cap: "홀드 — 홀드콘", say: "<b>홀드콘</b>은 컨테이너선에서 <b>20ft 만 1개</b>, 40ft 는 0개입니다. 복합선은 20·40 구분 없이 곳당 2개 또는 4개입니다." },
+    { sel: ".plbox .cpv2-hold-area .cpv2-tier-row[data-t=\"04\"] .cpv2-cell", cap: "이 배 홀드 04단 = 홀드콘", say: "이 도면 홀드는 <b>20ft 풀</b>뿐이라 홀드콘만 나옵니다. 04단 칸 아래(02단)에 컨이 있어 칸마다 홀드콘 1개." },
+    { sel: ".plbox .cpv2-deck-area .cpv2-tier-row[data-t=\"82\"] .cpv2-cell", cap: "이 베이 데크 = 1단 → 콘 없음", say: "이 베이의 데크는 <b>82단 하나(1단)</b>뿐입니다. 1단 아래는 해치라 컨이 없으니 <b>데크콘 · 코끼리콘 없음</b>." },
+    { fn: function(){ var s = $$(".plbox"); }, cap: "데크콘은 BAY 23-25 에서만", say: "이 배에서 <b>데크콘이 나오는 곳은 BAY 23-25 하나</b>입니다. 그곳만 데크가 <b>2단(84)</b>까지 있고, 84단 <b>40ft 세 칸</b>(줄 02 · 01 · 03)이 아래 40ft 위에 얹혔기 때문입니다. <b>3곳 × 4 = 12개</b>." }
+  ], 3800);
+}
+
+function stageC5(){
+  var h = '<div class="chips" id="mdch"><button data-m="d" aria-pressed="true">양하 — 콘 빼기</button><button data-m="s" aria-pressed="false">선적 — 콘 꽂기</button></div>';
+  h += '<div class="pl">' + plBox(trioHtml(2, { star: false })) + '<div class="plside"><div class="say" id="say"></div><div class="code" id="code"></div></div></div>';
+  return h;
+}
+function afterC5(){
+  var secT = '.cpv2-bay-section[data-bay="BAY 11"]';
+  function tierRow(area, t){ return secT + " ." + (area === "deck" ? "cpv2-deck-area" : "cpv2-hold-area") + ' .cpv2-tier-row[data-t="' + t + '"] .cpv2-cell'; }
+  var D = [
+    { sel: tierRow("deck", "82"), cls: "sg", cap: "1단(82) — 콘 없음", say: "<b>1단(82)</b> 내리는 중 — <b>콘 없음</b>. 데크 맨 아래 단은 받침(아래 컨)이 없습니다. (2단 이상이면 <b>데크콘 빼기</b>가 먼저)" },
+    { sel: tierRow("hold", "04"), cls: "cn", cap: "홀드 04단 — 홀드콘 빼기", say: "해치를 지나 홀드로 내려가면 <b>홀드콘 빼기</b>입니다. 04단 컨을 들 때마다 그 아래 콘을 뺍니다." },
+    { sel: tierRow("hold", "02"), cls: "sg", cap: "홀드 바닥(02) — 콘 없음", say: "<b>홀드 바닥(02)</b> — 콘 없음. 맨 아래라 받침이 없습니다." }
+  ];
+  var S = [
+    { sel: tierRow("hold", "02"), cls: "sg", cap: "홀드 바닥(02) — 콘 없음", say: "선적은 <b>양하의 거꾸로</b>입니다. 아래부터 싣습니다. 홀드 바닥(02)은 <b>콘 없음</b>." },
+    { sel: tierRow("hold", "04"), cls: "cn", cap: "홀드 04단 — 홀드콘 꽂기", say: "그 위 04단을 싣기 전에 <b>홀드콘 꽂기</b>." },
+    { sel: tierRow("deck", "82"), cls: "sg", cap: "1단(82) — 콘 없음, 곧 2단", say: "데크 <b>1단(82)</b>은 <b>콘 없음</b>. 앱이 <b>곧 2단 — 데크콘 준비</b>로 알립니다(남은 칸이 2 이하일 때). <b>2단부터 데크콘 꽂기</b>." }
+  ];
+  var cur = "d";
+  function play(m){ cur = m; clearT(); clr(); $$("#mdch button").forEach(function(b){ b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === m)); });
+    $("#code").innerHTML = m === "d" ? "<b>양하 순서</b><br>데크콘 빼기(2단부터) → 1단 콘 없음 → 홀드콘 빼기" : "<b>선적 순서</b><br>홀드콘 꽂기 → 1단 콘 없음 → 곧 2단 → 데크콘 꽂기";
+    (m === "d" ? D : S).forEach(function(s, i){ later(function(){ clr(); $$(s.sel).forEach(function(e){ e.classList.add(s.cls); if (s.cls === "cn") { var b = document.createElement("i"); b.className = "cn-badge"; b.textContent = m === "d" ? "−1" : "+1"; e.appendChild(b); } }); setCap(s.cap); $("#say").innerHTML = s.say; }, RM ? 0 : i * 3600); });
+  }
+  $$("#mdch button").forEach(function(b){ b.addEventListener("click", function(){ play(b.getAttribute("data-m")); }); });
+  play("d");
+}
+
+function stageC6(){
+  var rows = [["03-05", "·", "·", "−20", 20], ["07-09", "·", "·", "−14", 14], ["11-13", "·", "·", "−14", 14], ["15-17", "·", "·", "−14", 14], ["19-21", "·", "·", "−14", 14], ["23-25", "−3 (총 −12개)", "·", "−14", 26]];
+  var h = '<div class="four"><div class="f1"><span>콘박스에서</span><b>0개</b><small>실어 와야 할 콘</small></div><div class="f2"><span>콘박스로</span><b id="n102">102개</b><small>돌려보낼 콘</small></div><div class="f3"><span>베이끼리</span><b>0개</b><small>옮기는 콘</small></div><div class="f4"><span>총 작업량</span><b>102개</b><small>오늘 만질 콘</small></div></div>';
+  h += '<table class="ct"><thead><tr><th>베이</th><th>데크콘<br><small>4곳·곳당</small></th><th>코끼리콘<br><small>중간·곳당</small></th><th>홀드콘<br><small>중간</small></th></tr></thead><tbody>';
+  rows.forEach(function(r, i){ h += '<tr id="cr' + i + '"><td class="nm">' + r[0] + '</td><td class="' + (r[1] !== "·" ? "red" : "") + '">' + r[1] + '</td><td>' + r[2] + '</td><td class="red">' + r[3] + "</td></tr>"; });
+  h += '</tbody></table><div class="legend3"><span class="gr">초록 +추가</span> <span class="rd">빨강 −반납</span> <span class="gy">회색 그대로</span> · 큰 숫자 = 곳당 가감 · 회수 = 양하에서 나옴 · 필요 = 선적에 듦</div><div class="say" id="say"></div>';
+  return h;
+}
+function afterC6(){
+  seq([
+    { sel: ".four", cap: "맨 위 네 칸", say: "<b>콘박스에서 0</b>(가져올 콘 없음) · <b>콘박스로 102</b>(양하에서 빼서 돌려보낼 콘) · <b>베이끼리 0</b>(배 안에서 옮길 콘 없음) · <b>총 작업량 102</b>. 이 배는 선적 자료가 없어 양하로 뺀 콘 전부가 콘박스로 갑니다." },
+    { sel: "#cr0,#cr1,#cr2,#cr3,#cr4", cap: "홀드콘 −20 −14 −14 −14 −14", say: "각 줄은 <b>베이 묶음</b>입니다(03-05 는 03 + 05 두 베이). 홀드콘 열의 <b>−20, −14, −14, −14, −14</b> 는 앞 단계에서 직접 세어 본 숫자와 같습니다. 빨강 <b>−</b> 는 양하로 빼는 콘입니다." },
+    { sel: "#cr5", cap: "23-25 만 데크콘이 있다", say: "<b>23-25</b> 줄에만 데크콘 <b>−3</b>(총 <b>−12개</b> = 3곳 × 4)이 있습니다. 홀드콘은 −14." },
+    { sel: "#cr0,#cr1,#cr2,#cr3,#cr4,#cr5", cap: "합계 102", say: "홀드콘 <b>20 + 14 + 14 + 14 + 14 + 14 = 90</b>, 데크콘 <b>12</b>. <b>90 + 12 = 102</b> = 총 작업량. 베이플랜 머리의 <b>데크콘 총 12개 · 홀드콘 총 90개</b>와도 같습니다." },
+    { sel: ".legend3", cap: "회수 → 필요", say: "각 칸의 <b>회수20→필요0</b> 은 <b>양하에서 20개가 나오고 선적에 필요한 것은 0개</b>라는 뜻입니다. 선적이 있으면 필요가 채워지고 모자란 만큼만 콘박스에서 가져옵니다." }
+  ], 3800);
+}
+
+/* ===================== 확인 문제 ===================== */
+var QS_T = [
+  { q: "BAY 01 의 DG 세 칸은 어느 줄에 있나요?", c: ["02 · 01 · 03", "04 · 02 · 01", "01 · 03 · 05"], a: 0, e: "BAY 01 데크 82단의 DG 가 줄 02, 01, 03 에 있고, 별첨2 DG 3대와 같습니다." },
+  { q: "BAY 11 의 빨간 ★ 칸(홀드 04단, 줄 05)의 자리 번호는?", c: ["110504", "110405", "051104"], a: 0, e: "자리 번호는 베이 11 + 줄 05 + 단 04 = 110504 입니다." },
+  { q: "BAY (12)13 상자 위의 숫자 15 / 6 / 0 은 무슨 뜻인가요?", c: ["20ft 15대 · 40ft 6대 · 45ft 0대", "15 개 줄 · 6 개 단", "풀 15 · 엠티 6"], a: 0, e: "아래 상자 숫자는 20ft / 40ft / 45ft 대수입니다." },
+  { q: "BAY 03 상자의 13 과 BAY (04)05 의 19(20ft)가 다릅니다. 차이 6 은 무엇인가요?", c: ["싱글 6대 — BAY 05 쪽에만 20ft", "40ft 6대", "엠티 6대"], a: 0, e: "같은 자리에 두 베이 다 20ft 가 있으면 트윈, 한쪽만 있으면 싱글입니다. BAY 03 홀드는 5칸 · 5칸 · 3칸, BAY 05 는 7칸 · 7칸 · 5칸이라 6칸이 싱글입니다." },
+  { q: "BAY 11 데크 82단의 X 여섯 칸은 무엇인가요?", c: ["옆 40ft 가 차지한 자리", "엠티 칸", "빠진 컨"], a: 0, e: "X 는 짝수 베이 40ft 가 걸친 자리입니다. 아래 상자 (12)13 의 40ft 6대(RF 4 + F 2)와 겹칩니다." },
+  { q: "별첨2 에서 Reefer 20' 는 몇 대인가요?", c: ["0대(전부 40ft 32대)", "32대", "16대"], a: 0, e: "별첨2: Reefer 20' 0, 40' 32. 도면의 RF 칸 32개와 같습니다." },
+  { q: "해치선(가운데 굵은 가로선) 위는 무엇인가요?", c: ["데크(80번대 단)", "홀드(02~08단)", "별첨"], a: 0, e: "선 위가 데크, 아래가 홀드입니다." }
+];
+var QS_C = [
+  { q: "BAY 03 의 홀드콘은 몇 개인가요?", c: ["8개", "13개", "20개"], a: 0, e: "홀드 06단 5칸, 04단 3칸(아래 02단에 컨이 있는 칸)만 콘이 붙어 5 + 3 = 8 입니다. 03-05 합계 −20 의 한 몫입니다." },
+  { q: "이 배에서 데크콘이 나오는 베이는?", c: ["BAY 23-25 하나 — 3곳 × 4 = 12개", "모든 베이", "BAY 01"], a: 0, e: "다른 베이는 데크가 1단뿐이라 콘이 없고, 23-25 의 84단 40ft 세 칸만 데크콘 4개씩입니다." },
+  { q: "선적할 때 콘 순서는?", c: ["홀드콘 꽂기 → 1단 콘 없음 → 곧 2단 → 데크콘 꽂기", "데크콘 꽂기 → 홀드콘 꽂기", "1단부터 콘 꽂기"], a: 0, e: "선적은 양하의 거꾸로입니다." },
+  { q: "20ft 데크 싱글 칸 하나에 필요한 콘은?", c: ["데크콘 2 + 코끼리콘 2", "데크콘 4", "홀드콘 1"], a: 0, e: "20ft 데크 칸은 트윈이든 싱글이든 데크콘 2 + 코끼리콘 2 입니다(전용 데크는 데크콘 4)." },
+  { q: "40ft 데크 칸 하나의 콘은?", c: ["데크콘 4", "데크콘 2 + 코끼리콘 2", "홀드콘 1"], a: 0, e: "40ft 는 데크콘 4개, 코끼리콘은 없습니다." },
+  { q: "홀드 바닥(02단)에는 콘이 있나요?", c: ["없다 — 아래 받침이 없다", "홀드콘 1개", "코끼리콘 2개"], a: 0, e: "콘은 컨 바로 아래에 컨이 있을 때만 필요합니다." },
+  { q: "총 작업량 102개는 무엇인가요?", c: ["홀드콘 90 + 데크콘 12", "데크콘 90 + 홀드콘 12", "양하 226 − 선적"], a: 0, e: "홀드콘 20+14+14+14+14+14 = 90, 데크콘 3곳 × 4 = 12, 합 102." }
+];
+var QS = QS_T, score = 0, answered = 0;
+function stageQ(){
+  score = 0; answered = 0; QS = APP === "C" ? QS_C : QS_T;
+  var h = '<div class="quiz">';
+  QS.forEach(function(q, qi){ h += '<div class="q" data-qi="' + qi + '"><h3>' + (qi + 1) + ". " + q.q + '</h3><div class="ch">'; q.c.forEach(function(c, ci){ h += '<button data-ci="' + ci + '">' + c + "</button>"; }); h += "</div><p hidden></p></div>"; });
+  return h + '<div class="score" id="score" aria-live="polite"></div></div>';
+}
+function afterQ(){
+  setCap("");
+  $$(".q").forEach(function(box){
+    var qi = +box.getAttribute("data-qi");
+    $$("button", box).forEach(function(b){ b.addEventListener("click", function(){
+      if (box.getAttribute("data-done")) return; box.setAttribute("data-done", "1"); answered++;
+      var ci = +b.getAttribute("data-ci"), ok = ci === QS[qi].a; if (ok) score++;
+      b.classList.add(ok ? "ok" : "no"); if (!ok) $$("button", box)[QS[qi].a].classList.add("ok");
+      var p = $("p", box); p.hidden = false; p.textContent = (ok ? "맞습니다. " : "아닙니다. ") + QS[qi].e;
+      if (answered === QS.length) $("#score").textContent = "결과 " + score + " / " + QS.length + (score === QS.length ? " — 모두 맞혔습니다. 이제 실제 플랜을 열어 보세요." : " — 틀린 문제의 단계를 다시 재생해 보세요.");
+    }); });
+  });
+}
+
+/* ===================== 단계 목록 ===================== */
+var STEPS_T = [
+  { nav: "한 장 전체", title: "먼저 한 장 전체를 봅니다", lead: "이 도면은 DXQD 2645E 양하(DISCHARGING)PLAN 한 장입니다. 칸 하나하나를 보기 전에 한 장이 어떻게 짜여 있는지 압니다.", pts: ["맨 위 띠: 항차 · 제목 · 대수 · 날짜", "상자 일곱 개: 베이 쌍 여섯 + BAY 01", "별첨 1 · 2 · 3: 전체를 세 가지로 센 표", "맨 아래 띠: 범례"], stage: stageT1, after: afterT1 },
+  { nav: "베이 상자", title: "상자 하나 읽기 — 베이 · 줄 · 단", lead: "BAY 11 상자를 짚어 갑니다. 칸을 직접 눌러 자리 번호를 확인할 수 있습니다. 위의 번호를 눌러 다른 베이도 봅니다.", pts: ["위 상자는 홀수 베이(20ft), 아래 상자는 짝수 + 홀수 한 쌍", "줄: 짝수는 좌현, 홀수는 우현 / 단: 데크 82~88, 홀드 02~08", "자리 번호 = 베이 + 줄 + 단 (예: 110504)"], stage: stageT2, after: afterT2 },
+  { nav: "해치(커버)", title: "해치커버 선 읽기", lead: "상자 가운데의 굵은 가로선이 해치커버입니다. 위는 데크, 아래는 홀드입니다.", pts: ["선 위 = 데크(80번대), 선 아래 = 홀드(02~08)", "맨 아래 데크 단이 1단", "선이 끊긴 조각 수 = 해치커버 조각 수(최대 3)", "양하는 위에서 아래로, 해치선을 지나 홀드로"], stage: stageT3, after: afterT3 },
+  { nav: "칸 표시", title: "칸의 색과 글자", lead: "도면 맨 아래 범례의 표시를 이 항차 도면 위에서 하나씩 짚습니다. 위 단추를 누르면 그 표시가 도면에서 반짝입니다.", pts: ["F 풀 · X 옆 40ft 차지 · RF 리퍼 · DG 위험물 · ★ X-RAY", "안 칠한 칸 = 엠티(범례) — 이 배는 Empty 0", "이 항차에는 없는 표시(e · E · FR · OT · TK · ◆ · 보라 테두리)도 같이 알아 둡니다"], stage: stageT4, after: afterT4 },
+  { nav: "싱글·트윈", title: "싱글 · 트윈 · 40ft 구분", lead: "같은 줄·같은 단을 위 상자와 아래 상자에서 비교합니다. 숫자는 상자 위 숫자와 맞춰 봅니다.", pts: ["트윈: 20ft 두 대가 한 40ft 자리에 나란히", "싱글: 20ft 한 대만(짝 베이 칸이 비어 있음)", "40ft: 위 상자 X + 아래 상자 칸"], stage: stageT5, after: afterT5 },
+  { nav: "별첨 1·2·3", title: "별첨 세 표", lead: "별첨은 이 배 전체를 선사별(선적은 POD별), 화물 종류별, 규격별로 센 표입니다. 평택분만 셉니다.", pts: ["별첨1 선사별: DWS 175 · SKR 51", "별첨2 종류별: 일반 191 · Reefer 32 · DG 3(특수화물이 있으면 줄이 붙음)", "별첨3 규격별 F/E: 20' 178 · 40' 48 · Empty 0", "세 표의 합계는 모두 같아야 한다"], stage: stageT6, after: afterT6 },
+  { nav: "숫자 검산", title: "도면의 숫자가 맞는지 확인", lead: "도면은 숫자가 서로 맞아야 합니다. 상자 숫자 · 칠한 칸 · 별첨 · 제목의 대수를 맞춰 봅니다.", pts: ["상자 숫자 합 = 별첨 합계", "RF · DG · F 칸 수 = 별첨2", "합계 = 제목의 양하 226"], stage: stageT7, after: afterT7 },
+  { nav: "앱에서 열기", title: "검수앱에서 도면 여는 길", lead: "출력 탭에서 양하(DISCHARGING)PLAN 을 눌러 이 도면을 엽니다.", pts: ["홈 → 작업 선박 → 양하/선적 탭 → 출력", "크게/작게/맞춤, 컬러/흑백, 인쇄, 닫기"], stage: stageT8, after: afterT8 },
+  { nav: "확인 문제", title: "확인 문제", lead: "이 도면에서 바로 답할 수 있는 문제입니다.", pts: [], stage: stageQ, after: afterQ }
+];
+var STEPS_C = [
+  { nav: "콘앱 화면", title: "콘앱에서 도면 여는 길", lead: "콘앱은 같은 도면을 콘 기준으로 읽습니다. 먼저 화면 순서를 봅니다.", pts: ["① 작업 선택 → ② 선종 → ③ 콘 계산하기", "탭: 콘 작업표 · PLAN · 베이플랜"], stage: stageC1, after: afterC1 },
+  { nav: "대상 베이", title: "어떤 베이가 양하(선적) 대상인가", lead: "베이플랜 위 번호 줄이 이 작업의 대상 베이입니다. 베이를 누르면 대수와 콘 개수가 나옵니다.", pts: ["번호가 있는 베이만 작업 대상", "머리글: 양하 N대 · 홀드콘 N개", "양하 평택 / 선적 평택 색 구분, 통과분은 그리지 않음"], stage: stageC2, after: afterC2 },
+  { nav: "콘이 붙는 칸", title: "콘은 어느 칸에 붙나", lead: "홀드 칸에서 직접 세어 봅니다. 규칙은 하나입니다 — 컨 바로 아래에 컨이 있을 때만 콘.", pts: ["맨 아래 단은 콘 없음", "홀드콘 = 컨테이너선 20ft 1개, 40ft 0개", "베이 묶음 합계 = 콘 작업표의 줄"], stage: stageC3, after: afterC3 },
+  { nav: "싱글·트윈 콘", title: "싱글 · 트윈 칸마다 콘 몇 개", lead: "데크콘 · 코끼리콘 · 홀드콘이 언제 어디에 쓰이는지 칸 종류별로 정리합니다.", pts: ["20ft 데크(트윈·싱글): 데크 2 + 코끼리 2", "20ft 전용 데크: 데크 4 / 40ft 데크: 데크 4", "홀드: 20ft 1개(컨테이너선)", "데크콘 4개 = 1곳, 코끼리콘 2개 = 1곳"], stage: stageC4, after: afterC4 },
+  { nav: "빼기·꽂기", title: "양하는 빼기, 선적은 꽂기", lead: "같은 베이를 양하와 선적으로 따라가며 콘 순서를 봅니다.", pts: ["양하: 데크콘 빼기(2단부터) → 1단 콘 없음 → 홀드콘 빼기", "선적: 홀드콘 꽂기 → 1단 콘 없음 → 곧 2단 → 데크콘 꽂기"], stage: stageC5, after: afterC5 },
+  { nav: "콘 작업표", title: "콘 작업표와 총콘 읽기", lead: "DXQD 의 실제 콘 작업표입니다. 베이 묶음 줄 · 곳당 가감 · 총 작업량.", pts: ["빨강 − = 양하로 빼는 콘, 초록 + = 선적에 더 필요한 콘", "회수 = 양하에서 나옴, 필요 = 선적에 듦", "총 작업량 = 콘박스에서 + 콘박스로 + 베이끼리"], stage: stageC6, after: afterC6 },
+  { nav: "확인 문제", title: "확인 문제", lead: "이 배의 실제 숫자로 답하는 문제입니다.", pts: [], stage: stageQ, after: afterQ }
+];
+var STEPS = STEPS_T, APP = "T";
+var cur = 0, seenSet = {};
+function buildNav(){
+  var h = ""; STEPS.forEach(function(s, i){ h += '<button data-i="' + i + '"><span class="n">' + (i + 1) + "</span><span>" + s.nav + "</span></button>"; });
+  $("#nav").innerHTML = h;
+  $$("#nav button").forEach(function(b){ b.addEventListener("click", function(){ show(+b.getAttribute("data-i")); }); });
+}
+function show(i){
+  clearT(); cur = i; seenSet[i] = true;
+  if (APP === "T" && i === 4 && !seenSet.t5) { curTrio = 0; seenSet.t5 = true; }
+  var st = STEPS[i];
+  $("#stage").innerHTML = st.stage(); setCap("");
+  var c = "<h2>" + st.title + '</h2><p class="lead">' + st.lead + "</p>";
+  if (st.pts.length) c += '<ul class="pts">' + st.pts.map(function(p){ return "<li>" + p + "</li>"; }).join("") + "</ul>";
+  $("#copy").innerHTML = c;
+  $$("#nav button").forEach(function(b, k){ if (k === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current"); b.classList.toggle("seen", !!seenSet[k] && k !== i); });
+  $("#pg").textContent = (i + 1) + " / " + STEPS.length;
+  $("#prev").disabled = i === 0; $("#next").disabled = i === STEPS.length - 1;
+  $("#prev").style.opacity = i === 0 ? ".4" : "1"; $("#next").style.opacity = i === STEPS.length - 1 ? ".4" : "1";
+  if (st.after) st.after();
+  try { history.replaceState(null, "", "#" + APP + (i + 1)); } catch (e) {}
+}
+$("#prev").addEventListener("click", function(){ if (cur > 0) show(cur - 1); });
+$("#next").addEventListener("click", function(){ if (cur < STEPS.length - 1) show(cur + 1); });
+$("#replay").addEventListener("click", function(){ show(cur); });
+$$(".appsw button").forEach(function(b){
+  b.addEventListener("click", function(){
+    APP = b.getAttribute("data-app"); STEPS = APP === "C" ? STEPS_C : STEPS_T; seenSet = {};
+    $$(".appsw button").forEach(function(x){ x.setAttribute("aria-pressed", String(x === b)); });
+    buildNav(); show(0);
+  });
+});
+buildNav();
+var hm = (location.hash || "").match(/^#([TC])(\d+)$/);
+if (hm) { APP = hm[1]; STEPS = APP === "C" ? STEPS_C : STEPS_T; $$(".appsw button").forEach(function(x){ x.setAttribute("aria-pressed", String(x.getAttribute("data-app") === APP)); }); buildNav(); }
+show(hm && +hm[2] >= 1 && +hm[2] <= STEPS.length ? +hm[2] - 1 : 0);
+
+</script>
+</body>
+</html>
