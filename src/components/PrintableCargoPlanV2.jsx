@@ -1296,13 +1296,18 @@ export default function PrintableCargoPlanV2({
        → 잴 때마다 «지금 돌아 있는가»를 보고 되돌려서 읽는다. */
   const rotRef = useRef(false);
   rotRef.current = rotated;
+  //  5.05: 자연 크기는 offsetWidth/offsetHeight — 배치 크기라서 회전·배율(transform)에 영향을 안 받는다. 옛 셈(getBoundingClientRect ÷ 배율)은
+  //   재는 순간의 배율·회전 상태가 어긋나면 값이 틀려(폰에서 도면이 오른쪽으로 밀려 잘림 — 검수사 2026-11-16 09:30) 이 값을 쓰는 이동 거리가 틀어졌다.
   const natSize = (pg, z) => {                 // 언제 재도 «안 돌아간 상태»의 크기를 준다
-    const r = pg.getBoundingClientRect();
+    if (pg.offsetWidth > 0 && pg.offsetHeight > 0) return { w: pg.offsetWidth, h: pg.offsetHeight };
+    const r = pg.getBoundingClientRect();      // 배치 크기를 못 얻는 드문 경우만 종전 셈
     const rot = rotRef.current;
     return { w: (rot ? r.height : r.width) / z, h: (rot ? r.width : r.height) / z };
   };
   //  돌릴 때 밀어 줄 거리 = 문서의 «자연 높이». 상수로 박으면 CSS(.cpv2-page height)가 바뀔 때 어긋난다.
   const [natH, setNatH] = useState(737);
+  //  5.05: 돌린 도면의 «실제 왼쪽 자리»를 눈으로 되재서 바로잡는 보정(px). 계산 이동거리가 어떤 이유로 어긋나도 도면이 왼쪽 8px(또는 가운데)에 서게 한다.
+  const [dx, setDx] = useState(0);
   const [natW, setNatW] = useState(1200);   // 2.13-01: 회전 후 «세로 길이» = 자연 폭. 가운데 정렬에 쓴다
   //  화면이 세로인데 문서가 가로면 돌린다. 둘 다 세로거나 둘 다 가로면 그대로가 크다.
   const shouldRotate = (w, h) => cpv2FitScale(w, h, cpv2ViewSize(), 0).rot;
@@ -1373,6 +1378,20 @@ export default function PrintableCargoPlanV2({
       if (ro) ro.disconnect();
     };
   }, [planReady]);
+  //  5.05: 회전·배율·크기가 바뀔 때마다 도면의 실제 왼쪽 위치를 재서 보정한다(스크롤로 옮긴 만큼은 되돌려 셈 — 사람이 민 것과 싸우지 않는다).
+  useLayoutEffect(() => {
+    if (!rotated) { if (dx !== 0) setDx(0); return; }
+    try {
+      const ov = document.querySelector('.cpv2-overlay'); const pg = document.querySelector('.cpv2-overlay .cpv2-page');
+      if (!ov || !pg) return;
+      const or = ov.getBoundingClientRect(); const r = pg.getBoundingClientRect();
+      if (!(r.width > 0)) return;
+      const contentLeft = r.left - or.left + ov.scrollLeft;
+      const want = Math.max(8, (ov.clientWidth - r.width) / 2);
+      const diff = want - contentLeft;
+      if (Math.abs(diff) > 1.5) setDx((v) => Math.round((v + diff) * 10) / 10);
+    } catch (e) { console.warn('[카고플랜] 왼쪽 자리 보정 실패 — 보정 없이 둡니다:', e); }
+  }, [rotated, zoom, natH, natW, dx, planReady]);
   //  4.80: 핀치는 공용 한 벌(usePinchZoom) — React onTouchMove 는 passive 라 preventDefault 가 안 먹어 페이지 확대와 겹쳤다.
   const pinchZoomNow = useRef(zoom); pinchZoomNow.current = zoom;
   const pinchElRef = useRef(null);
@@ -1462,7 +1481,7 @@ export default function PrintableCargoPlanV2({
                회전하면 도면 세로 길이 = 자연 «폭»(1200) × 배율. 폰 세로 812 에서 584 라 **220px 이 남는다.**
                도면 비율(1200:737)이 화면보다 덜 길쭉해서 그 여백은 못 채운다 — 대신 **가운데로 놓는다.**
                그러면 위아래로 갈라져 버튼과도 안 겹친다. */
-          ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (cpv2ViewSize().h - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
+          ? { transform: `translate(${natH * zoom + dx}px, ${Math.max(0, (cpv2ViewSize().h - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
       <div ref={pageRef} className={`cpv2-page${podLen > 0 ? ' cpv2-podsplit' : ''}${bw ? ' cpv2-bw' : ''}`} style={{ '--mf': `${markFont}px`, '--cpw': `${cpMetrics.cellFix}px`, '--cph': `${cpMetrics.cellH}px` }}>
