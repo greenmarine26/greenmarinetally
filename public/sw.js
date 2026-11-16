@@ -1,6 +1,6 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.06';
+const VERSION = 'TallyOne 5.06-01';
 const NOTE = '5.06 사용 매뉴얼에 PLAN 읽는 법 설명서가 붙었습니다. 출력 항목과 콘앱 사용 안내에서 엽니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)

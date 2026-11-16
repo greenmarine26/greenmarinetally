@@ -38,7 +38,7 @@ export function isSentenceQuery(v) {
 }
 
 // 판 이력(4.88-01 까지의 APP_VERSION 꼬리 주석·앞 판 주석·앞 판 APP_NOTE)은 docs/APP_HISTORY.md 로 옮겼다(4.89). 앞 판: 'TallyOne 4.88-01' — 카고플랜을 카스피 공통 용어로.
-export const APP_VERSION = 'TallyOne 5.06'   // 5.06 **사용 매뉴얼(출력)에 «양하·선적 PLAN 읽는 법» 움직이는 설명서 연결**(검수사 2026-11-16 «앱별로 사용메뉴얼에 첨부 바랍니다» — public/plan-guide.html 검수앱 편 #T · 콘앱 편 #C, 콘앱 사용 안내에도 링크 · ConeOne 3.03) (앞 판) 5.05 **콘앱 PLAN 맞춤 — 폰에서 도면이 오른쪽으로 밀려 잘림 수리**(검수사 2026-11-16 09:30 «콘앱 플랜 맞춤은 안되었습니다» — 자연 크기를 배치 크기로 · 실제 왼쪽 자리를 되재서 보정) (앞 판) 5.04   // 5.04 **폰 카메라 HEIC 사진을 앱이 스스로 JPEG 로 풀어 읽음**(검수사 2026-11-16 07:51~07:57 데미지 보고 «앱이 스스로 처리해야 합니다 · 개인 폰을 이미지 방식을 강요할수 없습니다» — 1016682B 실파일 ftypheic 확인 · libheif-js 별도 조각 · 못 풀면 형식 이름을 알림) (앞 판) 5.03-01 사진을 못 읽을 때 진짜 형식(HEIC·AVIF 등)을 알림(검수사 2026-11-16 07:51 데미지 보고 «이 사진을 읽지 못했습니다 · 형식 알 수 없음 · 1016682B») (앞 판) 5.03 **한 판 수정 열한 건**(검수사 2026-11-14~15 기록 — 양하·선적 끝나면 앱이 스스로 완료 · 나 오늘 배별 · 베이모드 육상/해상부터 · 갱별 규격표 · 사진 앨범 형식 · 콘앱 플랜 맞춤 · 한도 이월 · 미르 호기 답 · 실번호 대소문자) (앞 판) 5.02-04 5.02-04 **수석 상황판 별첨3 규격별 F/E · 별첨4 목적지별 · 엠티 줄도 움직이는 그림으로**(검수사 2026-11-14 «수석 상황판 좌측을 모션 그래픽으로 바꿨는데 안바뀐 부분이 있네여» — 5.02 가 별첨1·2만 바꿔 3·4가 표로 남았다 · LegendFE + LegendRows 재사용, 숫자는 같은 L 한 벌, 옛 표는 «표로 보기 (별첨1~4)») (앞 판) 5.02-03 **콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추**(검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 4.89·2.79 가 떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 입구가 없었다 · ConeOne 3.00-03) (앞 판) 5.02-02 **양하가 끝난 배의 베이별 진행이 끝난 양하로 뜨던 것**(5.02-01 라이브 확인 — bayModes[0] 이 양하라 선적 대신 양하가 기본) · 5.02-01 **양하가 끝나고 선적만 남은 배는 홈 상세 위 두 상자에서 선적이 먼저**(검수사 2026-11-14 09:13 «끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») + **홈 베이 카드 트윈·싱글 줄이 잘리지 않게 조각 단위 줄바꿈**(라이브 확인 — 폰 156px 칸에 «트윈 26 · 싱글 앞 2 · 40피트 9» 끝이 «…») · 5.02 **상황판 별첨·홈 상세를 움직이는 그림으로**(검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로» · «전체수량 양하·선적과 작업중인 베이도» · «베이는 1 (2) 3 이 기본» · «트윈 4 · 싱글 앞 1 / 뒤 5 — 남은 베이마다 표기») — 별첨1·2 고리·남은 N대·안 끝난 줄만 펼침·끝난 줄 ✓ 칩(앱 순서 그대로) · 4척 한 줄 요약 · 홈 양하·선적 큰 숫자(CountUp) · 작업중 호기 줄 · 베이 묶음 «01 (02) 03» 카드 + 트윈·싱글 앞/뒤 (앞 판) 5.01-01 **베이뷰·베이모드 위 띠에 미르 문**(검수사 2026-11-14 01:09 «아깜박있었는데 양하에서 베이모드에서는 미르를 부르지 못합니다» — 베이뷰는 전체 화면 덮개라 검색줄이 가려진다 → BayViewWork 두 머리줄에 ChiefMirBar chip, MirFab 시트 한 벌) · 5.01 **홈 «나 오늘» 이 오늘 보관소로 넘어간 배까지 합치고, 누르면 배별 양하·선적을 보인다**(검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 · PCSZ 96 STMJ 39» — PCSZ 2634E 가 14:31 보관소로 넘어가며 헤더 39대로 굳었다. nlSearch.myTodayByShip · firebase.fbGetMyArchivedToday · HomePage meLine) (앞 판) 5.00-02 **수석 상황판 미르 줄**(검수사 2026-11-13 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» — · 18:19 «이안에 넣으세요» — 탭 줄 넷째 칸 ChiefMirBar, 누르면 MirFab 시트) + **5.00-01 라이브 확인·감사 수리** — 경고 띠 문장 속 컨 번호도 CnText(CnInline) · 3안 폰 가로 1px 넘침 막음 · 도착항 확인 요망 강조색 · 자리 수정 창 컨 번호 · 컨 상세 입력 중 Esc 는 입력만 빠져나옴 · ConeOne 3.00-02 양하·선적 항차 번호가 다른 배(STMJ 2671E/2672W)를 양하·선적 둘 다 잡음
+export const APP_VERSION = 'TallyOne 5.06-01'   // 5.06-01 **양하 칸 추정 — 한 층이 다 내려왔는데 열별 추정이 빈 칸·겹친 칸을 남기면 베이 한 층을 통째로 다시 맞춤**(NSFR 2621N 20번 데크 빈 칸 4) → 5.06   // 5.06 **사용 매뉴얼(출력)에 «양하·선적 PLAN 읽는 법» 움직이는 설명서 연결**(검수사 2026-11-16 «앱별로 사용메뉴얼에 첨부 바랍니다» — public/plan-guide.html 검수앱 편 #T · 콘앱 편 #C, 콘앱 사용 안내에도 링크 · ConeOne 3.03) (앞 판) 5.05 **콘앱 PLAN 맞춤 — 폰에서 도면이 오른쪽으로 밀려 잘림 수리**(검수사 2026-11-16 09:30 «콘앱 플랜 맞춤은 안되었습니다» — 자연 크기를 배치 크기로 · 실제 왼쪽 자리를 되재서 보정) (앞 판) 5.04   // 5.04 **폰 카메라 HEIC 사진을 앱이 스스로 JPEG 로 풀어 읽음**(검수사 2026-11-16 07:51~07:57 데미지 보고 «앱이 스스로 처리해야 합니다 · 개인 폰을 이미지 방식을 강요할수 없습니다» — 1016682B 실파일 ftypheic 확인 · libheif-js 별도 조각 · 못 풀면 형식 이름을 알림) (앞 판) 5.03-01 사진을 못 읽을 때 진짜 형식(HEIC·AVIF 등)을 알림(검수사 2026-11-16 07:51 데미지 보고 «이 사진을 읽지 못했습니다 · 형식 알 수 없음 · 1016682B») (앞 판) 5.03 **한 판 수정 열한 건**(검수사 2026-11-14~15 기록 — 양하·선적 끝나면 앱이 스스로 완료 · 나 오늘 배별 · 베이모드 육상/해상부터 · 갱별 규격표 · 사진 앨범 형식 · 콘앱 플랜 맞춤 · 한도 이월 · 미르 호기 답 · 실번호 대소문자) (앞 판) 5.02-04 5.02-04 **수석 상황판 별첨3 규격별 F/E · 별첨4 목적지별 · 엠티 줄도 움직이는 그림으로**(검수사 2026-11-14 «수석 상황판 좌측을 모션 그래픽으로 바꿨는데 안바뀐 부분이 있네여» — 5.02 가 별첨1·2만 바꿔 3·4가 표로 남았다 · LegendFE + LegendRows 재사용, 숫자는 같은 L 한 벌, 옛 표는 «표로 보기 (별첨1~4)») (앞 판) 5.02-03 **콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추**(검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 4.89·2.79 가 떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 입구가 없었다 · ConeOne 3.00-03) (앞 판) 5.02-02 **양하가 끝난 배의 베이별 진행이 끝난 양하로 뜨던 것**(5.02-01 라이브 확인 — bayModes[0] 이 양하라 선적 대신 양하가 기본) · 5.02-01 **양하가 끝나고 선적만 남은 배는 홈 상세 위 두 상자에서 선적이 먼저**(검수사 2026-11-14 09:13 «끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») + **홈 베이 카드 트윈·싱글 줄이 잘리지 않게 조각 단위 줄바꿈**(라이브 확인 — 폰 156px 칸에 «트윈 26 · 싱글 앞 2 · 40피트 9» 끝이 «…») · 5.02 **상황판 별첨·홈 상세를 움직이는 그림으로**(검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로» · «전체수량 양하·선적과 작업중인 베이도» · «베이는 1 (2) 3 이 기본» · «트윈 4 · 싱글 앞 1 / 뒤 5 — 남은 베이마다 표기») — 별첨1·2 고리·남은 N대·안 끝난 줄만 펼침·끝난 줄 ✓ 칩(앱 순서 그대로) · 4척 한 줄 요약 · 홈 양하·선적 큰 숫자(CountUp) · 작업중 호기 줄 · 베이 묶음 «01 (02) 03» 카드 + 트윈·싱글 앞/뒤 (앞 판) 5.01-01 **베이뷰·베이모드 위 띠에 미르 문**(검수사 2026-11-14 01:09 «아깜박있었는데 양하에서 베이모드에서는 미르를 부르지 못합니다» — 베이뷰는 전체 화면 덮개라 검색줄이 가려진다 → BayViewWork 두 머리줄에 ChiefMirBar chip, MirFab 시트 한 벌) · 5.01 **홈 «나 오늘» 이 오늘 보관소로 넘어간 배까지 합치고, 누르면 배별 양하·선적을 보인다**(검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 · PCSZ 96 STMJ 39» — PCSZ 2634E 가 14:31 보관소로 넘어가며 헤더 39대로 굳었다. nlSearch.myTodayByShip · firebase.fbGetMyArchivedToday · HomePage meLine) (앞 판) 5.00-02 **수석 상황판 미르 줄**(검수사 2026-11-13 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» — · 18:19 «이안에 넣으세요» — 탭 줄 넷째 칸 ChiefMirBar, 누르면 MirFab 시트) + **5.00-01 라이브 확인·감사 수리** — 경고 띠 문장 속 컨 번호도 CnText(CnInline) · 3안 폰 가로 1px 넘침 막음 · 도착항 확인 요망 강조색 · 자리 수정 창 컨 번호 · 컨 상세 입력 중 Esc 는 입력만 빠져나옴 · ConeOne 3.00-02 양하·선적 항차 번호가 다른 배(STMJ 2671E/2672W)를 양하·선적 둘 다 잡음
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
@@ -11406,6 +11406,52 @@ export function inferDischargePos(voyage) {
       const r = recs[m.cn] || {};
       recs[m.cn] = { ...r, cn: m.cn, bay_actual: String(s.bay), row_actual: s.row, tier_actual: pad2(s.tier), _pos_src: 'infer', actual_at: m.at, actual_by: r.actual_by || '' };
     });
+  }
+  //  ★ 5.06 — **데크·홀드 한 층 전체가 다 내려왔는데 위 열별 추정이 빈 계획 칸·겹친 칸을 남기면, 베이 한 층을 통째로 다시 맞춘다**(메모리에만).
+  //    검수사 2026-11-16 NSFR 2621N 20번 베이 데크 «모든컨은 그베이에 있었습니다. 다만 선적순서와 위치가 플랜대로 되어 있지 않았습니다 … 앱이 그걸 하지 못했고 흰자리 4군데를 남기고 데크 양하를 완료».
+    //    뿌리 — 위는 같은 열 안 높이 순서만 본다. 이 베이는 컨이 열을 건너 앉아(07→08, 05→02, 03→06, 09→03) 빈 칸 4·겹친 칸 4가 남았다.
+    //    규칙 — 사람이 찍은 칸은 그대로 두고, 나머지는 완료 시각 순서로 «지금 맨 위가 열려 있는 칸» 중 가장 높은 층에 앉힌다. 같은 층 안에서는 그 층 컨이 내려온 열 순서(훑는 순서)를 따른다.
+    //    실측 — 39대 전부 배정·빈 칸 0·겹침 0, 사람이 찍은 7대 중 사람 칸을 가리고도 6대 일치.
+  const cur = (cn) => { const r = (recs || recs0)[cn]; return (r && r.bay_actual != null && r.bay_actual !== '') ? `${parseInt(r.bay_actual, 10)}_${pad2(r.row_actual)}_${parseInt(r.tier_actual, 10)}` : null; };
+  const layers = {};
+  for (const [cn, e] of Object.entries(edi)) {
+    if (!e || e.isBooking || e.bay == null || e.bay === '' || e.row == null || e.row === '' || e.tier == null || e.tier === '') continue;
+    const tier = parseInt(e.tier, 10); const bay = parseInt(e.bay, 10);
+    if (!Number.isFinite(tier) || !Number.isFinite(bay)) continue;
+    const lk = `${bay}_${tier >= 80 ? 'D' : 'H'}`;
+    (layers[lk] = layers[lk] || []).push({ cn, bay, row: pad2(e.row), tier, at: (comp[cn] && comp[cn].at) || 0 });
+  }
+  for (const mem of Object.values(layers)) {
+    if (mem.length < 2 || mem.some((m) => !m.at)) continue;               // 한 층이 다 내려온 뒤에만
+    const planKey = (m) => `${m.bay}_${m.row}_${m.tier}`;
+    const use = {};
+    for (const m of mem) { const k = cur(m.cn) || planKey(m); (use[k] = use[k] || []).push(m.cn); }
+    const slotKeys = mem.map(planKey);
+    const broken = slotKeys.some((k) => !use[k]) || Object.values(use).some((v) => v.length > 1);
+    if (!broken) continue;
+    const byAt = [...mem].sort((a, b) => (a.at - b.at) || (b.tier - a.tier));
+    const topT = Math.max(...mem.map((m) => m.tier));
+    const sweep = byAt.filter((m) => m.tier === topT).map((m) => m.row);
+    const sw = (r) => { const i = sweep.indexOf(r); return i < 0 ? 99 + parseInt(r, 10) : i; };
+    const free = new Set(slotKeys); const place = {};
+    for (const m of byAt) if (known(m.cn)) { const r = recs0[m.cn]; const k = cur(m.cn); place[m.cn] = k; free.delete(k); }
+    for (const m of byAt) {
+      if (place[m.cn]) continue;
+      const slots = [...free].map((k) => { const [b, r, t] = k.split('_'); return { k, row: r, tier: parseInt(t, 10) }; });
+      const tops = slots.filter((x) => !slots.some((y) => y.row === x.row && y.tier > x.tier));
+      if (!tops.length) { place[m.cn] = null; continue; }
+      const mt = Math.max(...tops.map((x) => x.tier));
+      const pick = tops.filter((x) => x.tier === mt).sort((a, b) => sw(a.row) - sw(b.row))[0];
+      place[m.cn] = pick.k; free.delete(pick.k);
+    }
+    for (const m of byAt) {
+      const k = place[m.cn]; if (!k || known(m.cn)) continue;
+      const [b, r, t] = k.split('_');
+      if (k === planKey(m)) { if (recs && recs[m.cn] && recs[m.cn]._pos_src === 'infer') { delete recs[m.cn]; } continue; }
+      recs = recs || { ...recs0 };
+      const rr = recs[m.cn] || {};
+      recs[m.cn] = { ...rr, cn: m.cn, bay_actual: String(m.bay), row_actual: r, tier_actual: pad2(t), _pos_src: 'infer', actual_at: m.at, actual_by: rr.actual_by || '' };
+    }
   }
   return recs ? { ...voyage, discharge: { ...sec, records: recs } } : voyage;
 }

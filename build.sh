@@ -961,6 +961,7 @@ fi
 # 3.7-08: 터미널 앱(CATOS) 실제 자리가 실적으로 얹히는가 · 3.9: X-RAY 봉인자(터미널 표기 금지·조 등록 근무자·없으면 빈칸)
 SMOKE_CP=$(mktemp /dev/shm/hometmp/_cp_XXXXXX.cjs)
 if npx esbuild src/utils.js --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --outfile="$SMOKE_CP" --log-level=error; then
+  node tools/smoke_deckrelayer.cjs "$SMOKE_CP" || { echo "✗ 양하 한 층 통째 맞춤 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # 5.06-01
   node tools/smoke_catospos.cjs "$SMOKE_CP" || { echo "✗ CATOS 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
   node tools/smoke_conepos.cjs "$SMOKE_CP" || { echo "✗ 콘앱 자리 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }   # ConeOne 2.44: 콘앱 자리 = 검수앱 자리
   node tools/smoke_xraysealer.cjs "$SMOKE_CP" || { echo "✗ X-RAY 봉인자 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_CP"; exit 1; }
