@@ -104,7 +104,7 @@ const ok = (c, m, d = '') => { n++; console.log((c ? '  PASS ' : '  FAIL ') + m 
 
   console.log('⑥ 판·APP_NOTE·매뉴얼');
   const ut = rd('src/utils.js');
-  const note = (ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '';
+  const note = ((ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '').replace(/^\[수석\] /, '');
   ok(/export const APP_VERSION = 'TallyOne 4\.88-01'/.test(ut) || !/export const APP_VERSION = 'TallyOne 4\.88'/.test(ut), 'APP_VERSION TallyOne 4.88-01(뒤 판은 자기 판)');
   ok(!/^4\.88-01 /.test(note) || (note === '4.88-01 카고플랜을 공통 이름으로 바꿨습니다. 양하(DISCHARGING)PLAN 과 선적(STOWAGE)PLAN 입니다' && !/[?\/']/.test(note) && note.length < 120), 'APP_NOTE 문구·두 문장·? / 작은따옴표 없음', note);
   ok(/window\.__CONEV='ConeOne 2\.78-01'/.test(cone) || !/window\.__CONEV='ConeOne 2\.78'/.test(cone), '콘앱 ConeOne 2.78-01');

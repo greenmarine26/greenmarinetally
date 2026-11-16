@@ -227,7 +227,7 @@ const bundle = process.argv[3];
   console.log('⑪ 배선·문구 — 버전 · APP_NOTE · 매뉴얼 · 호출부');
   const U = src('src/utils.js');
   ok(/export const APP_VERSION = 'TallyOne (?:4\.(53|5[4-9]|[678][0-9])|5\.\d\d)(-\d\d)?'/.test(U) && (/APP_NOTE = '4\.53 [^']*본선 잔류 확정[^']*'/.test(U) || !/export const APP_VERSION = 'TallyOne 4\.53'/.test(U)), '버전 TallyOne 4.53+ · APP_NOTE «본선 잔류 확정»(4.53 판일 때 — 뒤 판은 자기 문구)');
-  const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
+  const note = ((U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '').replace(/^\[수석\] /, '');
   ok(note.length < 120 && (note.match(/\./g) || []).length <= 3 && !/[\/']/.test(note), 'APP_NOTE — 두 문장 이내 · 120자 미만 · 작은따옴표·슬래시 없음', note);
   const help = src('src/data/helpData.js');
   ok(/선사 지시 본선 잔류 — 평택에서 안 내리는 컨 \(4\.48 · 4\.53 확정\)/.test(help) && /4\.53 — \*\*선적 EDI 가 확정 자료입니다\*\*/.test(help) && /🔵 본선 잔류 확정 N/.test(help) && /같은 자리에 실려 있으면 «예정» 그대로/.test(help), '매뉴얼 — «선사 지시 본선 잔류» 절에 4.53 확정(선적 EDI)·칩·같은 자리는 예정 설명');

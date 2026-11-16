@@ -72,7 +72,7 @@ const H = rd('src/data/helpData.js') + rd('src/data/featureIndex.js');
 ok(/예상 작업 시간/.test(H) && /자료 대기/.test(H) && /트윈 쌍/.test(H) && /무브는 대수가 아니다/.test(H), '매뉴얼·색인이 예상 작업 시간·자료 대기·무브 ≠ 대수를 말한다');
 const U = rd('src/utils.js');
 ok(/APP_VERSION = 'TallyOne (?:4\.(0[123456789]|1[0123456789]|[2345678][0123456789])|5\.\d\d)(-\d\d)?'/.test(U), '버전 4.01~4.13 계열(-NN 포함)');
-const note = (U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '';
+const note = ((U.match(/APP_NOTE = '([^']*)'/) || [])[1] || '').replace(/^\[수석\] /, '');
 ok(/^(?:4\.(0[123456789]|1[0123456789]|[2345678][0123456789])|5\.\d\d)/.test(note) && !/[\/']/.test(note) && (note.match(/[.]/g) || []).length <= 3, 'APP_NOTE 는 4.01~4.13 · 작은따옴표와 슬래시가 없다 · 두 문장 안쪽', note);
 
 console.log('⑤ 미르 «총 무브수» — 화면과 같은 무브로 답한다(대수를 무브라 부르지 않는다)');

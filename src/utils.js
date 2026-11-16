@@ -1,6 +1,7 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
 import { getTallyFormat, opParent } from './data/tallyFormats.js';   // 3.52: 자식 선사 판정 한 벌(tallyFormats 는 utils 를 import 하지 않아 순환 없음)
 import { allStaffNames } from './staffList.js';
+import { inspectorStatus } from './inspectorStatus.js';   // 5.09: 수석 접속 판정(presentChiefsOf)은 홈·상황판과 같은 한 벌
 import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — tallyReport 도 utils 를 부르지만(순환) 서로 함수 안에서만 쓴다(모듈을 읽는 시점에 상대 값을 쓰는 곳 없음 — smoke_onebook487 이 두 순서로 읽어 본다)
 import { SHIP_FLAGS, shipCodesWith } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 코드 목록 한 곳(shipPolicyCore 는 import 가 없어 순환 없음)
 import { hatchEvenOf, buildEmptyBayRenderData, buildBayPagesFromSummary, buildBayGrid, isKeepShift as _isKeepShift, isPredShift as _isPredShift } from './cargoPlanCore.js';   // ★ 3.15: 보드가 세는 해치 = 그림이 그리는 장(판정 한 벌)   // ★ 3.8: 호기–검수원 등록 — 이름은 명단(코드+서버)에 있는 것만 받는다
@@ -38,12 +39,13 @@ export function isSentenceQuery(v) {
 }
 
 // 판 이력(4.88-01 까지의 APP_VERSION 꼬리 주석·앞 판 주석·앞 판 APP_NOTE)은 docs/APP_HISTORY.md 로 옮겼다(4.89). 앞 판: 'TallyOne 4.88-01' — 카고플랜을 카스피 공통 용어로.
-export const APP_VERSION = 'TallyOne 5.08'   // 5.08 **관리앱 접속 기록에 «📡 다운로드 사용량 — 누가 얼마나»**(검수사 2026-11-16 18:18 «누가 얼마를 사용했는지 수집기 클로드 와 검수원들 각각 나눠서» — 앱이 받은 바이트를 이름별로 세어 5분마다 올림, 수집기는 합계) ← 5.07 **관리앱 접속 기록에 콘앱 선박별 사용 기기(동방·PCTC 구분, 기존·신규 따로)** ← 5.06-01 **양하 칸 추정 — 한 층이 다 내려왔는데 열별 추정이 빈 칸·겹친 칸을 남기면 베이 한 층을 통째로 다시 맞춤**(NSFR 2621N 20번 데크 빈 칸 4) → 5.06   // 5.06 **사용 매뉴얼(출력)에 «양하·선적 PLAN 읽는 법» 움직이는 설명서 연결**(검수사 2026-11-16 «앱별로 사용메뉴얼에 첨부 바랍니다» — public/plan-guide.html 검수앱 편 #T · 콘앱 편 #C, 콘앱 사용 안내에도 링크 · ConeOne 3.03) (앞 판) 5.05 **콘앱 PLAN 맞춤 — 폰에서 도면이 오른쪽으로 밀려 잘림 수리**(검수사 2026-11-16 09:30 «콘앱 플랜 맞춤은 안되었습니다» — 자연 크기를 배치 크기로 · 실제 왼쪽 자리를 되재서 보정) (앞 판) 5.04   // 5.04 **폰 카메라 HEIC 사진을 앱이 스스로 JPEG 로 풀어 읽음**(검수사 2026-11-16 07:51~07:57 데미지 보고 «앱이 스스로 처리해야 합니다 · 개인 폰을 이미지 방식을 강요할수 없습니다» — 1016682B 실파일 ftypheic 확인 · libheif-js 별도 조각 · 못 풀면 형식 이름을 알림) (앞 판) 5.03-01 사진을 못 읽을 때 진짜 형식(HEIC·AVIF 등)을 알림(검수사 2026-11-16 07:51 데미지 보고 «이 사진을 읽지 못했습니다 · 형식 알 수 없음 · 1016682B») (앞 판) 5.03 **한 판 수정 열한 건**(검수사 2026-11-14~15 기록 — 양하·선적 끝나면 앱이 스스로 완료 · 나 오늘 배별 · 베이모드 육상/해상부터 · 갱별 규격표 · 사진 앨범 형식 · 콘앱 플랜 맞춤 · 한도 이월 · 미르 호기 답 · 실번호 대소문자) (앞 판) 5.02-04 5.02-04 **수석 상황판 별첨3 규격별 F/E · 별첨4 목적지별 · 엠티 줄도 움직이는 그림으로**(검수사 2026-11-14 «수석 상황판 좌측을 모션 그래픽으로 바꿨는데 안바뀐 부분이 있네여» — 5.02 가 별첨1·2만 바꿔 3·4가 표로 남았다 · LegendFE + LegendRows 재사용, 숫자는 같은 L 한 벌, 옛 표는 «표로 보기 (별첨1~4)») (앞 판) 5.02-03 **콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추**(검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 4.89·2.79 가 떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 입구가 없었다 · ConeOne 3.00-03) (앞 판) 5.02-02 **양하가 끝난 배의 베이별 진행이 끝난 양하로 뜨던 것**(5.02-01 라이브 확인 — bayModes[0] 이 양하라 선적 대신 양하가 기본) · 5.02-01 **양하가 끝나고 선적만 남은 배는 홈 상세 위 두 상자에서 선적이 먼저**(검수사 2026-11-14 09:13 «끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») + **홈 베이 카드 트윈·싱글 줄이 잘리지 않게 조각 단위 줄바꿈**(라이브 확인 — 폰 156px 칸에 «트윈 26 · 싱글 앞 2 · 40피트 9» 끝이 «…») · 5.02 **상황판 별첨·홈 상세를 움직이는 그림으로**(검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로» · «전체수량 양하·선적과 작업중인 베이도» · «베이는 1 (2) 3 이 기본» · «트윈 4 · 싱글 앞 1 / 뒤 5 — 남은 베이마다 표기») — 별첨1·2 고리·남은 N대·안 끝난 줄만 펼침·끝난 줄 ✓ 칩(앱 순서 그대로) · 4척 한 줄 요약 · 홈 양하·선적 큰 숫자(CountUp) · 작업중 호기 줄 · 베이 묶음 «01 (02) 03» 카드 + 트윈·싱글 앞/뒤 (앞 판) 5.01-01 **베이뷰·베이모드 위 띠에 미르 문**(검수사 2026-11-14 01:09 «아깜박있었는데 양하에서 베이모드에서는 미르를 부르지 못합니다» — 베이뷰는 전체 화면 덮개라 검색줄이 가려진다 → BayViewWork 두 머리줄에 ChiefMirBar chip, MirFab 시트 한 벌) · 5.01 **홈 «나 오늘» 이 오늘 보관소로 넘어간 배까지 합치고, 누르면 배별 양하·선적을 보인다**(검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 · PCSZ 96 STMJ 39» — PCSZ 2634E 가 14:31 보관소로 넘어가며 헤더 39대로 굳었다. nlSearch.myTodayByShip · firebase.fbGetMyArchivedToday · HomePage meLine) (앞 판) 5.00-02 **수석 상황판 미르 줄**(검수사 2026-11-13 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» — · 18:19 «이안에 넣으세요» — 탭 줄 넷째 칸 ChiefMirBar, 누르면 MirFab 시트) + **5.00-01 라이브 확인·감사 수리** — 경고 띠 문장 속 컨 번호도 CnText(CnInline) · 3안 폰 가로 1px 넘침 막음 · 도착항 확인 요망 강조색 · 자리 수정 창 컨 번호 · 컨 상세 입력 중 Esc 는 입력만 빠져나옴 · ConeOne 3.00-02 양하·선적 항차 번호가 다른 배(STMJ 2671E/2672W)를 양하·선적 둘 다 잡음
+export const APP_VERSION = 'TallyOne 5.09'   // 5.09 **작업을 마친 배를 수석이 없으면 끝난 즉시, 수석이 있으면 끝난 때·수석의 마지막 화면 조작 중 늦은 쪽에서 30분 뒤 앱이 스스로 «완료 저장»(보관소로 옮기고 화면에서 지움)** + **수석 자료 수정 판의 업데이트 알림은 부수석 이상에게만**(검수사 2026-11-16 21:53 «작업완료시 앱이 스스로 완료처리하고 수석이 앱을 사용하지 않을시 30분이 지나면 앱스스로 완료마감처리합니다» · 21:59 «전 수석이 아닙니다. 다만 수석 역활을 했을뿐입니다. 그러므로 제가 로그인 했다고 일을 하고 있다고 보류처리 말고 순서대로 시행되게» · 22:02 «수석자료 수정시는 업데이트 알림을 부수석이상에게만 보이게 하세요» — utils.autoCloseTimingOf/autoCloseDecision 한 벌 · src/autoClose.js · firebase.fbAutoCloseVoyage/fbStampChiefInput · updateAudience.js) ← 5.08 **관리앱 접속 기록에 «📡 다운로드 사용량 — 누가 얼마나»**(검수사 2026-11-16 18:18 «누가 얼마를 사용했는지 수집기 클로드 와 검수원들 각각 나눠서» — 앱이 받은 바이트를 이름별로 세어 5분마다 올림, 수집기는 합계) ← 5.07 **관리앱 접속 기록에 콘앱 선박별 사용 기기(동방·PCTC 구분, 기존·신규 따로)** ← 5.06-01 **양하 칸 추정 — 한 층이 다 내려왔는데 열별 추정이 빈 칸·겹친 칸을 남기면 베이 한 층을 통째로 다시 맞춤**(NSFR 2621N 20번 데크 빈 칸 4) → 5.06   // 5.06 **사용 매뉴얼(출력)에 «양하·선적 PLAN 읽는 법» 움직이는 설명서 연결**(검수사 2026-11-16 «앱별로 사용메뉴얼에 첨부 바랍니다» — public/plan-guide.html 검수앱 편 #T · 콘앱 편 #C, 콘앱 사용 안내에도 링크 · ConeOne 3.03) (앞 판) 5.05 **콘앱 PLAN 맞춤 — 폰에서 도면이 오른쪽으로 밀려 잘림 수리**(검수사 2026-11-16 09:30 «콘앱 플랜 맞춤은 안되었습니다» — 자연 크기를 배치 크기로 · 실제 왼쪽 자리를 되재서 보정) (앞 판) 5.04   // 5.04 **폰 카메라 HEIC 사진을 앱이 스스로 JPEG 로 풀어 읽음**(검수사 2026-11-16 07:51~07:57 데미지 보고 «앱이 스스로 처리해야 합니다 · 개인 폰을 이미지 방식을 강요할수 없습니다» — 1016682B 실파일 ftypheic 확인 · libheif-js 별도 조각 · 못 풀면 형식 이름을 알림) (앞 판) 5.03-01 사진을 못 읽을 때 진짜 형식(HEIC·AVIF 등)을 알림(검수사 2026-11-16 07:51 데미지 보고 «이 사진을 읽지 못했습니다 · 형식 알 수 없음 · 1016682B») (앞 판) 5.03 **한 판 수정 열한 건**(검수사 2026-11-14~15 기록 — 양하·선적 끝나면 앱이 스스로 완료 · 나 오늘 배별 · 베이모드 육상/해상부터 · 갱별 규격표 · 사진 앨범 형식 · 콘앱 플랜 맞춤 · 한도 이월 · 미르 호기 답 · 실번호 대소문자) (앞 판) 5.02-04 5.02-04 **수석 상황판 별첨3 규격별 F/E · 별첨4 목적지별 · 엠티 줄도 움직이는 그림으로**(검수사 2026-11-14 «수석 상황판 좌측을 모션 그래픽으로 바꿨는데 안바뀐 부분이 있네여» — 5.02 가 별첨1·2만 바꿔 3·4가 표로 남았다 · LegendFE + LegendRows 재사용, 숫자는 같은 L 한 벌, 옛 표는 «표로 보기 (별첨1~4)») (앞 판) 5.02-03 **콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추**(검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 4.89·2.79 가 떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 입구가 없었다 · ConeOne 3.00-03) (앞 판) 5.02-02 **양하가 끝난 배의 베이별 진행이 끝난 양하로 뜨던 것**(5.02-01 라이브 확인 — bayModes[0] 이 양하라 선적 대신 양하가 기본) · 5.02-01 **양하가 끝나고 선적만 남은 배는 홈 상세 위 두 상자에서 선적이 먼저**(검수사 2026-11-14 09:13 «끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») + **홈 베이 카드 트윈·싱글 줄이 잘리지 않게 조각 단위 줄바꿈**(라이브 확인 — 폰 156px 칸에 «트윈 26 · 싱글 앞 2 · 40피트 9» 끝이 «…») · 5.02 **상황판 별첨·홈 상세를 움직이는 그림으로**(검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로» · «전체수량 양하·선적과 작업중인 베이도» · «베이는 1 (2) 3 이 기본» · «트윈 4 · 싱글 앞 1 / 뒤 5 — 남은 베이마다 표기») — 별첨1·2 고리·남은 N대·안 끝난 줄만 펼침·끝난 줄 ✓ 칩(앱 순서 그대로) · 4척 한 줄 요약 · 홈 양하·선적 큰 숫자(CountUp) · 작업중 호기 줄 · 베이 묶음 «01 (02) 03» 카드 + 트윈·싱글 앞/뒤 (앞 판) 5.01-01 **베이뷰·베이모드 위 띠에 미르 문**(검수사 2026-11-14 01:09 «아깜박있었는데 양하에서 베이모드에서는 미르를 부르지 못합니다» — 베이뷰는 전체 화면 덮개라 검색줄이 가려진다 → BayViewWork 두 머리줄에 ChiefMirBar chip, MirFab 시트 한 벌) · 5.01 **홈 «나 오늘» 이 오늘 보관소로 넘어간 배까지 합치고, 누르면 배별 양하·선적을 보인다**(검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 · PCSZ 96 STMJ 39» — PCSZ 2634E 가 14:31 보관소로 넘어가며 헤더 39대로 굳었다. nlSearch.myTodayByShip · firebase.fbGetMyArchivedToday · HomePage meLine) (앞 판) 5.00-02 **수석 상황판 미르 줄**(검수사 2026-11-13 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» — · 18:19 «이안에 넣으세요» — 탭 줄 넷째 칸 ChiefMirBar, 누르면 MirFab 시트) + **5.00-01 라이브 확인·감사 수리** — 경고 띠 문장 속 컨 번호도 CnText(CnInline) · 3안 폰 가로 1px 넘침 막음 · 도착항 확인 요망 강조색 · 자리 수정 창 컨 번호 · 컨 상세 입력 중 Esc 는 입력만 빠져나옴 · ConeOne 3.00-02 양하·선적 항차 번호가 다른 배(STMJ 2671E/2672W)를 양하·선적 둘 다 잡음
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '5.08 관리앱 접속 기록에서 수집기, 클로드, 검수원별로 데이터를 얼마나 받았는지 볼 수 있습니다.'
+export const APP_NOTE = '[수석] 5.09 작업을 마친 배를 수석이 없거나 30분 쓰지 않으면 앱이 스스로 완료 저장합니다.'
+// (앞 판) APP_NOTE 5.08 — 관리앱 접속 기록에서 수집기, 클로드, 검수원별로 데이터를 얼마나 받았는지 볼 수 있습니다.
 // (앞 판) APP_NOTE — docs/APP_HISTORY.md 4·5·6절
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
@@ -6954,6 +6956,43 @@ export function inspectorAllDone(voyage) {
   const hasL = hasLoadingSide(voyage);
   if (!hasD && !hasL) return false;
   return (!hasD || !!info.dischargeDone) && (!hasL || !!info.loadingDone);
+}
+
+// ── ★ 5.09 — 수석이 없거나 쓰지 않으면 앱이 스스로 «완료 저장»(보관소로 옮기고 화면에서 지움) 한다. 판정은 여기 한 벌이다. ──
+//   검수사 2026-11-16 21:53 «작업완료시 앱이 스스로 완료처리하고 수석이 앱을 사용하지 않을시 30분이 지나면 앱스스로 완료마감처리합니다»
+//   · 21:59 «전 수석이 아닙니다. 다만 수석 역활을 했을뿐입니다. 그러므로 제가 로그인 했다고 일을 하고 있다고 보류처리 말고 순서대로 시행되게»
+//   규칙 — 양하·선적이 둘 다 끝났고(inspectorAllDone) ① 접속해 있는 수석이 아무도 없으면 끝난 즉시 ② 있으면 «끝난 때 · 수석의 마지막 화면 조작» 중 늦은 쪽에서 30분 뒤.
+//   수석 = 호출부가 넘긴 판정(수석검수·부수석, 소유자·테스터·숨김 계정 제외). 접속 = inspectorStatus(로그인 + 30분 안 신호).
+export const AUTO_CLOSE_IDLE_MS = 30 * 60 * 1000;
+export const AUTO_CLOSE_FRESH_MS = 36 * 3600 * 1000;   // 끝난 지 36시간 넘은 옛 항차는 건드리지 않는다(배포 직후 일괄 정리 방지 — 수동 단추는 그대로)
+/** 접속해 있는 수석 목록 [{ name, lastInputAt }]. lastInputAt 이 아직 없는 옛 판 기기는 로그인 시각으로 본다. */
+export function presentChiefsOf(inspectors, isRealChief, now = Date.now()) {
+  const out = [];
+  for (const i of Object.values(inspectors || {})) {
+    if (!i || !i.name || !isRealChief(i.name)) continue;
+    if (!inspectorStatus(i, now)) continue;
+    out.push({ name: i.name, lastInputAt: Math.max(Number(i.lastInputAt) || 0, Number(i.loginAt) || 0) });
+  }
+  return out;
+}
+/** 시간·안전 조건만 본다(info 한 칸이면 된다) — 일반 검수원 기기는 항차 본문이 없어 info 로 후보를 거른 뒤 서버에서 본문을 새로 읽어 autoCloseDecision 으로 다시 판정한다. */
+export function autoCloseTimingOf(info, { chiefs = [], now = Date.now() } = {}) {
+  const inf = info || {};
+  if (!(inf.inspectorDone || inf.dischargeDone || inf.loadingDone)) return { close: false, why: 'notDone' };
+  const doneAt = Math.max(Number(inf.inspectorDoneAt) || 0, Number(inf.dischargeDoneAt) || 0, Number(inf.loadingDoneAt) || 0);
+  if (!(doneAt > 0)) return { close: false, why: 'noDoneAt' };                                  // 끝난 시각을 모르면 닫지 않는다
+  if (now - doneAt > AUTO_CLOSE_FRESH_MS) return { close: false, why: 'old', doneAt };
+  if (Number(inf.restoredAt) >= doneAt) return { close: false, why: 'restored', doneAt };      // 사람이 보관소에서 되살린 항차는 되살린 뒤 새로 끝나기 전까지 둔다
+  if (inf.voy_l && !inf.loadingDone && !inf.inspectorDone) return { close: false, why: 'loadingVoyNotDone', doneAt };   // RZOR R074E 사건 — 수석 완료 저장의 확인창과 같은 기준
+  let dueAt = doneAt;
+  if (chiefs && chiefs.length) dueAt = Math.max(doneAt, ...chiefs.map((c) => Number(c.lastInputAt) || 0)) + AUTO_CLOSE_IDLE_MS;
+  return { close: now >= dueAt, why: now >= dueAt ? 'due' : 'wait', doneAt, dueAt };
+}
+/** 항차 본문 전체를 놓고 하는 최종 판정 — 서버에서 새로 읽은 항차로만 부른다. */
+export function autoCloseDecision(voyage, opts = {}) {
+  if (!voyage) return { close: false, why: 'none' };
+  if (!inspectorAllDone(voyage)) return { close: false, why: 'notAllDone' };
+  return autoCloseTimingOf(voyage.info, opts);
 }
 /** ★ 4.55-01 — 양하(자료가 있는 방향)는 다 끝났고, 남은 선적은 **자료 없이 계획 수량만 있는 EDI 대기**뿐인가 — 검수원이 지금 입력할 것이 없다.
  *  «검수 완료»(inspectorAllDone)는 이 배를 «선적 대기» 로 읽지만, 미르의 «화남·다음 작업» 은 «입력할 게 남았나» 만 본다 — 이 한 칸이 둘을 가른다(미르는 종전 4.55 와 같은 답, 콘앱도 같다). */

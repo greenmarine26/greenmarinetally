@@ -30,6 +30,7 @@ import GreetingModal from './components/GreetingModal.jsx';
 import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 import UpdatePrompt from './components/UpdatePrompt.jsx';
+import { useAutoCloseVoyages, useChiefInputStamp } from './autoClose.js';   // 5.09: 수석 부재 즉시·수석 접속 시 30분 뒤 앱이 스스로 완료 저장
 import ShiftPick from './components/ShiftPick.jsx';   // 4.79: 옛 로그인(조 값 없음)에게 한 번 묻는 창
 import { MIR_GOTO_EVENT } from './guideGoto.js';   // 4.40: 미르 [이동] — 다른 화면에서 눌렀으면 그 항차 작업 화면으로
 import { lazyScreen, LazyLoading } from './lazyScreen.jsx';   // 4.89 판 C: 화면별 지연 받기
@@ -400,6 +401,10 @@ export default function App() {
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
   }, [inspector, workChoice, route, staffOffMap]);
+
+  //  ★ 5.09: 수석 화면 조작 시각 기록 · 마친 항차 자동 완료 저장 — 판정은 utils.autoCloseTimingOf/autoCloseDecision 한 벌, 실행은 src/autoClose.js.
+  useChiefInputStamp(inspector);
+  useAutoCloseVoyages({ voyagesAll, inspectors, inspector });
 
   // TallyOne 1.3: 화면 열람 기록 — 라우트 변경마다 1건(30초 중복 생략은 activityLog가 처리).
   //   voyage는 VoyagePage가 탭·모드까지 붙여 기록하므로 여기서 빼고(이중 기록 방지), login도 제외.

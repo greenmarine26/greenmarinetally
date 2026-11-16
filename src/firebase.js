@@ -2420,6 +2420,39 @@ export function fbSubscribeInspectors(callback) {
   return unsub;
 }
 
+//  ★ 5.09 — 수석의 «마지막 화면 조작 시각». 하트비트(lastActive)는 화면을 켜 두기만 해도 30초마다 올라 «쓰고 있나» 를 모른다.
+//    수석 기기가 터치·클릭·키·스크롤을 할 때 1분에 한 번 이 칸만 갱신한다(다른 칸은 건드리지 않는다). 읽는 곳 — utils.presentChiefsOf.
+export async function fbStampChiefInput(name) {
+  if (!name) return;
+  await update(ref(db, `inspectors/${name}`), { lastInputAt: Date.now() });
+}
+//  ★ 5.09 — 앱이 스스로 하는 «완료 저장». 수석 단추(ChiefDashboard.doComplete)와 같은 길이다 — 보관소 백업 + 되읽기가 확인될 때만 항차를 지운다.
+//    일반 검수원 기기는 항차 본문 없이 info 만 쥐고 있어 그 사본을 보관하면 자료가 잘린다 → 여기서 서버의 항차를 새로 통째로 읽고,
+//    decide(fresh) 가 {close:true} 를 줄 때만 보관·삭제한다. 60초 안에 백업이 안 끝나면 지우지 않는다.
+export async function fbAutoCloseVoyage(voyageKey, decide) {
+  assertCanWork('완료 저장');
+  const snap = await Promise.race([
+    get(ref(db, `voyages/${voyageKey}`)),
+    new Promise((res) => setTimeout(() => res(null), 30000)),
+  ]);
+  if (!snap) return { closed: false, why: 'readTimeout' };
+  if (!snap.exists()) return { closed: false, why: 'gone' };
+  const fresh = snap.val();
+  const d = decide(fresh);
+  if (!d || !d.close) return { closed: false, why: (d && d.why) || 'no' };
+  const ok = await Promise.race([
+    fbArchiveVoyageBeforeDelete(fresh.info && fresh.info.imo, voyageKey, fresh),
+    new Promise((res) => setTimeout(() => res('timeout'), 60000)),
+  ]);
+  if (ok !== true) return { closed: false, why: ok === 'timeout' ? 'archiveTimeout' : 'archiveFail' };
+  const del = await Promise.race([
+    fbDeleteVoyage(voyageKey, { archived: true }).then(() => 'done'),
+    new Promise((res) => setTimeout(() => res('timeout'), 30000)),
+  ]);
+  if (del !== 'done') console.warn('[5.09 자동 완료 저장] 삭제 응답 지연 — 보관은 끝났고 다음 확인 때 다시 본다', voyageKey);
+  return { closed: del === 'done', why: del === 'done' ? undefined : 'deleteTimeout' };
+}
+
 // ===== 수석 공지(흐르는 띠) — V8.27 =====
 //   broadcast/current = { id, text, by, ts }  ·  broadcast/reads/{id}/{검수원} = ts
 export function fbSubscribeBroadcast(callback) {

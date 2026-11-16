@@ -168,7 +168,7 @@ console.warn = () => {};
   const hp = read('src/data/helpData.js');
   ok('매뉴얼(helpData)에 시프팅 수동 표기 절이 있고 254 → 253 영향을 적었다', /시프팅 수동 표기/.test(hp) && /평택 양하 총계가 1대 줄어듭니다/.test(hp) && /＋ 시프팅 표기/.test(hp));
   const ver = /APP_VERSION = 'TallyOne (?:4\.8[23456789]|5\.\d\d)(-\d\d)?'/.test(ut);
-  const note = (ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '';
+  const note = ((ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '').replace(/^\[수석\] /, '');
   ok('버전 TallyOne 4.82 · APP_NOTE 두 문장·120자 미만·작은따옴표/슬래시 없음', ver && note.length < 120 && (/^4\.82 /.test(note) ? (note.match(/[.!?]/g) || []).length === 2 : /^(?:4\.8[23456789]|5\.\d\d)(-\d\d)? /.test(note)) && !/[\/']/.test(note), note);
   const hanText = [fSet, fClr].join('\n');
   ok('사용자 문구에 «카토스»·«동방» 이 없다(새로 쓴 곳)', !/카토스|동방/.test(hanText + cm.slice(cm.indexOf('4.82 — 검수사 수동 시프팅 표기'), cm.indexOf('const pickPod = async')) + cm.slice(cm.indexOf('★ 4.82 — 검수사 수동 시프팅 표기 — 양하에서만'), cm.indexOf('M8.07: 품명'))));

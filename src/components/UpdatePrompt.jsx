@@ -6,6 +6,9 @@ import { stashForUpdate } from '../updateResume.js';   // 3.7-04: 업데이트 �
 import { RefreshCw, X, Download } from 'lucide-react';
 import { APP_VERSION } from '../utils.js';   // 1.23: 지금 돌고 있는 판 — 배너 판정 기준
 import { tmoSignal } from '../fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
+import { splitNoteAudience, canSeeUpdateNote } from '../updateAudience.js';   // 5.09: «[수석]» 표지가 붙은 판 설명은 부수석 이상에게만 알린다
+import { isChief } from '../staffList.js';
+import { isOwnerName } from '../adminGuard.js';
 
 /** 서비스워커에게 버전을 물어본다. 못 받으면 '' — 조용히 실패하지 않게 콘솔에 남긴다. */
 function askVersion(sw, timeoutMs = 1500) {
@@ -188,6 +191,9 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
   }, [waiting, hidden]);
 
   if (!waiting || hidden) return null;
+  //  5.09: 수석 자료를 고친 판은 부수석 이상에게만 배너를 보인다(일반 검수원은 알림 없이 다음 접속 때 새 판을 받는다).
+  if (!canSeeUpdateNote(note.note, { isChief: isChief(inspector), isOwner: isOwnerName(inspector) })) return null;
+  const _noteText = splitNoteAudience(note.note).text;
 
   return (
     <div className="fixed left-2 right-2 z-50 max-w-md mx-auto" style={{ top: 'var(--hdr-h, 48px)' }} data-update-banner="1">{/* 4.87-10: top-12(48px 고정) → 머리띠 실제 높이(아이폰 윗막대 포함) */}
@@ -197,7 +203,7 @@ export default function UpdatePrompt({ inspector = '' }) {   // 3.7-04: 누가 �
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-black text-sm text-emerald-50">🆕 새 버전 출시{note.v ? ` — ${String(note.v).replace(/^TallyOne\s*/, '')}` : ''}</div>
-          <div className="text-xxs text-emerald-50">{/* 5.00-02: 100/90 은 에메랄드 600 바탕에서 대비 4.24(AA 4.5 미달) — 움직임을 끈 연막에서 늘 드러났다 */}{note.note || '탭 한 번으로 최신 버전 적용'}</div>
+          <div className="text-xxs text-emerald-50">{/* 5.00-02: 100/90 은 에메랄드 600 바탕에서 대비 4.24(AA 4.5 미달) — 움직임을 끈 연막에서 늘 드러났다 */}{_noteText || '탭 한 번으로 최신 버전 적용'}</div>
         </div>
         <button onClick={handleUpdate}
           className="bg-emerald-100 text-emerald-900 px-3 py-2 rounded font-black text-xs flex items-center gap-1 active:scale-95 transition">

@@ -69,6 +69,7 @@ export const fbGetClaudeMemos = async () => true;
 export const fbGetDamagePhoto = async () => true;
 export const fbGetEdiRaw = async () => true;
 export const fbGetKeepOnboard = async () => null;   // 4.48
+export const fbGetMyArchivedToday = async () => ({ voyages: {}, failed: [], at: 0 });   // 5.01: 홈 «나 오늘» 보관소 읽기 — 연막검사 스텁은 빈 결과
 export const fbGetPendingDamage = async () => true;
 export const fbGetShipIntro = async () => true;
 export const fbGetShipStructure = async () => true;
@@ -157,7 +158,6 @@ export const fbSubscribeHeartbeat = async () => true;
 export const fbSubscribeInspectCheck = async () => true;
 export const fbSubscribeInspectors = async () => true;
 export const fbSubscribeLaneInfo = async () => true;
-export const fbGetMyArchivedToday = async () => ({ voyages: {}, failed: [], at: 0 });   // 5.01: 홈 «나 오늘» 보관소 읽기 — 연막검사 스텁은 빈 결과
 export const fbSubscribeLaneRoutes = async () => true;
 export const fbSubscribeMatrixEditors = async () => true;
 export const fbSubscribeMirLexicon = async () => true;

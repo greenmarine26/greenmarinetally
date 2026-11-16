@@ -182,7 +182,7 @@ console.log('⑦ 판 표시');
 {
   const u = src('src/utils.js');
   const v = (u.match(/^export const APP_VERSION = '([^']+)'/m) || [])[1];
-  const note = (u.match(/^export const APP_NOTE = '([^']*)'/m) || [])[1] || '';
+  const note = ((u.match(/^export const APP_NOTE = '([^']*)'/m) || [])[1] || '').replace(/^\[수석\] /, '');
   ok('APP_VERSION TallyOne 4.88', /^TallyOne (?:4\.(88|89)|5\.\d\d)(-\d\d)?$/.test(v || ''), v);   // 4.88-01: 수리판(-NN)도 4.88 판
   ok('APP_NOTE «4.88 …» 두 문장 이내 · 물음표 없음', !!note && !/[?？]/.test(note) && note.replace(/^\d+\.\d+(-\d+)?\s*/, '').split(/[.。]\s*/).filter(Boolean).length <= 2 && /^(?:4\.(88|89)|5\.\d\d)(-\d\d)? /.test(note), note);
 }

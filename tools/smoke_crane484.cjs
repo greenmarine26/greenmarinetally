@@ -58,7 +58,7 @@ console.warn = () => {};
   ok('콘앱 호기 카드가 ConeParse.craneRelabelOf 로 호기를 읽고 번들이 그 함수를 내보낸다', /ConeParse\.craneRelabelOf/.test(coneH) && /_rlMap\[mode\+'\|'\+cn\]/.test(coneH) && /window\.ConeParse = \{[^}]*craneRelabelOf/.test(coneE));
   ok('ConeOne 2.77 이상(4.88: 2.78 판정 한 벌)', /window\.__CONEV='ConeOne (?:2\.7[789]|3\.\d\d)(-\d\d)?'/.test(coneH));
   const ut = fs.readFileSync(path.join(ROOT, 'src/utils.js'), 'utf8');
-  const note = (ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '';
+  const note = ((ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '').replace(/^\[수석\] /, '');
   ok('버전 TallyOne 4.84 · APP_NOTE 두 문장 이하·120자 미만·작은따옴표/슬래시 없음', /APP_VERSION = 'TallyOne (?:4\.8[456789]|5\.\d\d)(-\d\d)?'/.test(ut) && /^(?:4\.8[456789]|5\.\d\d)(-\d\d)? /.test(note) && note.length < 120 && !/[\/']/.test(note), note);
   console.log(`\n4.84 호기 보정 연막검사 — ${n - bad}/${n} 통과`);
   process.exit(bad ? 1 : 0);

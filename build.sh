@@ -1700,6 +1700,12 @@ fi
     npx esbuild tools/smoke_access469_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AX" --loader:.js=jsx --jsx=automatic --log-level=error \
       && node tools/smoke_access469.cjs "$SMOKE_AX" "$(pwd)" || { rm -f "$SMOKE_AX"; echo "✗ 접속 기록 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AX"
+    #  5.09: **앱이 스스로 완료 저장** — 수석 없으면 끝난 즉시·접속 수석은 마지막 조작 30분·RZOR 가드·소유자는 수석 아님·[수석] 알림 대상·보관소 이동(실소스 번들+메모리 스텁)
+    SMOKE_AC=$(mktemp /dev/shm/hometmp/_smokeac_XXXXXX.cjs)
+    npx esbuild tools/smoke_autoclose509_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_AC" --loader:.js=jsx --jsx=automatic --log-level=error \
+        --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --alias:pdfjs-dist/build/pdf="$(pwd)/tools/stub_pdfjs.js" \
+      && node tools/smoke_autoclose509.cjs "$SMOKE_AC" || { rm -f "$SMOKE_AC"; echo "✗ 5.09(자동 완료 저장) 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_AC"
     #  4.76: 미르 끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 갱당 속도(KKLC 2610N 재현) · 호기 이동 말(철수·이동·복귀) · 해치 닫는 장수 = 연 합
     SMOKE_MV=$(mktemp /dev/shm/hometmp/_smokemv_XXXXXX.cjs)
     npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \

@@ -107,7 +107,7 @@ console.warn = () => {};
   ok('완료 두 길(fbCompleteContainer·fbCompleteContainersAtomic)이 묻기를 부른다', (rd('src/firebase.js').match(/askCraneBeforeComplete\(voyageKey, mode/g) || []).length === 2);
   ok('헤더 호기 창에 교대 단추 · App 이 교대 받은 기기의 호기를 놓는다', /data-relieve-btn/.test(rd('src/components/Header.jsx')) && /gm_relieved_seen/.test(rd('src/App.jsx')) && /inspectors=\{inspectors\}/.test(rd('src/App.jsx')));
   const ut = rd('src/utils.js');
-  const note = (ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '';
+  const note = ((ut.match(/export const APP_NOTE = '([^']*)'/) || [])[1] || '').replace(/^\[수석\] /, '');
   ok('버전 TallyOne 4.85 · APP_NOTE 두 문장 이하·120자 미만·작은따옴표/슬래시 없음', /APP_VERSION = 'TallyOne (?:4\.8[56789]|5\.\d\d)(-\d\d)?'/.test(ut) && /^(?:4\.8[56789]|5\.\d\d)(-\d\d)? /.test(note) && note.length < 120 && !/\//.test(note), note);
   console.log(`\n4.85 교대 처리 연막검사 — ${n - bad}/${n} 통과`);
   process.exit(bad ? 1 : 0);
