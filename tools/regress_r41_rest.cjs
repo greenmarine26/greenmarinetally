@@ -424,6 +424,9 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     await S6.startGuide();
     await S6.pick(6, /^🔵 데크 [1-9]/);
     const c6 = (S6.cards()[0] || { getAttribute: () => '' }).getAttribute('data-gw-cn');
+    //  5.10: 엠티 카드여도 자리 확인 칸은 스스로 열리지 않는다 — 검수원이 [📍 자리 확인 방식으로] 를 눌러야 열린다
+    const slotAuto6 = !!S6.d.querySelector('input[placeholder="끝 4자리"]');
+    await S6.click(S6.btn(/^📍 자리 확인 방식으로/), 450);
     const slotIn = S6.d.querySelector('input[placeholder="끝 4자리"]');
     const full6 = fulls6.find((x) => x.cn !== c6);
     if (slotIn && full6) {
@@ -435,7 +438,7 @@ module.exports = async function r41({ ROOT, TMP, ok, head, fx, stub }) {
     await S6.click(dd6 ? S6.btn(/^취소$/, dd6) : null, 400);
     const L6 = S6.mem().loading, w6 = Object.keys(L6.records || {}).length + Object.keys(L6.completed || {}).length;
     ok(`⑤-6 엠티 카드 ${c6}(${(L[c6] || {}).fe}) «자리 확인» 에 풀 ${full6 ? full6.cn : '-'} → 맞바꾸지 않고 «시퀀스 자리입니다» ${t6 ? '뜸' : '안 뜸'}(«⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티» ${/⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(t6)}) → [취소] → 쓰기 ${w6}`,
-      (L[c6] || {}).fe === 'E' && !!slotIn && !!full6 && /⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(t6) && t6.includes(`주인 ${c6.slice(-4)}(엠티)`) && w6 === 0 && !S6.errs.length,
+      (L[c6] || {}).fe === 'E' && !slotAuto6 && !!slotIn && !!full6 && /⚠ 풀과 엠티는 서로 바뀌지 않습니다 — 이 컨 풀 · 그 칸 주인 엠티/.test(t6) && t6.includes(`주인 ${c6.slice(-4)}(엠티)`) && w6 === 0 && !S6.errs.length,
       JSON.stringify({ c6, full6: full6 && full6.cn, slotIn: !!slotIn, t6: t6.slice(0, 200), w6, errs: S6.errs.slice(0, 3) }));
     //  ⑤-6b 같은 길에서 [그래도 넣는다] — 풀이 그 칸에 들어가 선적확인 · 이동 사유는 «actual»(실제 실린 자리 — 2차 시뮬 하-1, 종전 맞바꿈과 같은 사유) · 계획 엠티는 맞바꿈 없이 «자리 없음»
     const slotIn2 = S6.d.querySelector('input[placeholder="끝 4자리"]');

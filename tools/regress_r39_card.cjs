@@ -289,6 +289,13 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     const cn = card ? card.getAttribute('data-gw-cn') : '';
     const seal = card ? card.querySelector('[data-gw-seal]') : null;
     const lbl = seal ? S.txt(seal) : '';
+    //  5.10: 엠티 카드여도 처음엔 계획대로 [선적확인] 카드 — 자리 확인 칸은 스스로 열리지 않는다(검수사 2026-11-18 «맞게 오는데 수정칸이 열리면 오류를 유발시키는 것입니다»)
+    const exPre = S.exBtns();
+    const slotBoxPre = /이 자리에 실제로 실은 컨테이너/.test(S.d.body.textContent);
+    const togglePre = !!S.btn(/^📍 자리 확인 방식으로/);
+    ok(`⑥-0 선적 엠티 단독 카드 ${cn} — 처음엔 자리 확인 칸 ${slotBoxPre ? '열림(✘)' : '닫힘'} · 예외 줄 [${exPre.join('][')}] · [📍 자리 확인 방식으로] ${togglePre ? '있음' : '없음'}`,
+      !slotBoxPre && JSON.stringify(exPre) === JSON.stringify(['다른 컨', '⏸ 보류', '📍 위치 틀림']) && togglePre && !S.errs.length, JSON.stringify({ exPre, slotBoxPre, togglePre }));
+    await S.click(S.btn(/^📍 자리 확인 방식으로/), 450);   // 검수원이 직접 누른다 — 이 아래는 종전(2.80~) 자리 확인 카드 시험 그대로
     const ex = S.exBtns();
     const slotBox = /이 자리에 실제로 실은 컨테이너/.test(S.d.body.textContent);
     const slotBtn = !!S.d.querySelector('[data-gw-ex="slot"]');

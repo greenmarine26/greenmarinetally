@@ -64,11 +64,13 @@ const both = (over = {}) => ({ info: { vsl: 'OBWH', voy_d: '2793E', voy_l: '2794
   insp.성창모 = { name: '성창모', loggedIn: false, lastActive: now - 10000 };
   ok(M.presentChiefsOf(insp, M.isRealChief, now).length === 0, '로그아웃한 수석은 접속이 아님');
   console.log('5. 업데이트 알림 대상');
-  ok(/^\[수석\] 5\.09 /.test(M.APP_NOTE) && !/['|&]/.test(M.APP_NOTE), 'APP_NOTE 는 «[수석]» 표지로 시작하고 sed 를 깨는 글자가 없음');
-  const s = M.splitNoteAudience(M.APP_NOTE);
+  //  5.10: 지금 APP_NOTE 는 5.10(일반 판)이라 «[수석]» 표지 판정은 5.09 때의 글을 견본으로 둔다(판별 함수 시험이 목적)
+  const NOTE509 = '[수석] 5.09 작업을 마친 배를 수석이 없거나 30분 쓰지 않으면 앱이 스스로 완료 저장합니다.';
+  ok(/^\[수석\] 5\.09 /.test(NOTE509) && !/['|&]/.test(NOTE509) && !/['|&]/.test(M.APP_NOTE), 'APP_NOTE 는 sed 를 깨는 글자가 없고 «[수석]» 표지 견본이 시작에서 판별됨');
+  const s = M.splitNoteAudience(NOTE509);
   ok(s.chiefOnly === true && !s.text.includes('[수석]') && s.text.startsWith('5.09'), '표지는 화면 글에서 떼어짐');
-  ok(M.canSeeUpdateNote(M.APP_NOTE, { isChief: false, isOwner: false }) === false, '일반 검수원에게는 안 보임');
-  ok(M.canSeeUpdateNote(M.APP_NOTE, { isChief: true }) === true && M.canSeeUpdateNote(M.APP_NOTE, { isOwner: true }) === true, '수석·부수석·소유자에게는 보임');
+  ok(M.canSeeUpdateNote(NOTE509, { isChief: false, isOwner: false }) === false, '일반 검수원에게는 안 보임');
+  ok(M.canSeeUpdateNote(NOTE509, { isChief: true }) === true && M.canSeeUpdateNote(NOTE509, { isOwner: true }) === true, '수석·부수석·소유자에게는 보임');
   ok(M.canSeeUpdateNote('5.08 관리앱 접속 기록', { isChief: false }) === true, '표지 없는 일반 판은 모두에게 보임');
   console.log('6. 보관소로 옮기는 쓰기 (메모리 스텁)');
   global.__memdb = { voyages: { OBWH_2793E: both(), OBWH_2795E: { info: { vsl: 'OBWH', voy_d: '2795E' } } } };

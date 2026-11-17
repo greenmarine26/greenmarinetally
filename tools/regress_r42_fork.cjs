@@ -183,6 +183,50 @@ module.exports = async function r42({ ROOT, TMP, ok, head, fx, stub }) {
       crane.every((cn) => done.includes(cn)) && done.length === 6 && pref === '일반 우선 중' && !S.errs.length, JSON.stringify({ steps, done, pref, errs: S.errs.slice(0, 3) }));
     S.close();
   }
+  //  ⑦ (5.10) 검수사가 누른 칩이 우선한다 — 검수사 2026-11-18 01:08 «검수사가 누른게 우선합니다» (ATPR 2652W 선적 중 «20피트 우선» 이 40피트로 간 건)
+  //     ⑦-1 [풀부터] 를 눌러 두고 풀 트윈 3쌍을 연달아 확인 — ⑥ 은 눌러 둔 칩이 없어 «일반 우선 중» 으로 앱이 바꿨다. 눌러 둔 칩은 «풀 우선 중» 그대로(3대 연속 감지·부류 소진 해제 둘 다 건너뜀)
+  {
+    const S = await open(voyAt('03:58:00'));
+    await S.enter(18);
+    await S.click(S.btn(/^풀부터 \d+$/), 450);
+    const steps = [];
+    for (let i = 0; i < 3; i++) {
+      const front = S.firstCard();
+      await S.click(await S.until(() => S.btn(/^트윈 한 번에 선적확인$|^선적확인$/)), 450);
+      const yes = S.btn(/^(예|확인|그래도 넣는다)$/); if (yes) await S.click(yes, 350);
+      await S.refresh();
+      steps.push(`${front && front.cn}→${Object.keys(S.W.__memdb.voyages[vk].loading.completed || {}).length}`);
+    }
+    const pref = [...S.d.querySelectorAll('span')].map(S.txt).find((x) => /우선 중$/.test(x));
+    const done = Object.keys(S.W.__memdb.voyages[vk].loading.completed || {});
+    const fDone = done.filter((cn) => E[cn] && E[cn].fe === 'F' && !(CA[cn] && CA[cn].at <= KST('03:58:00'))).length;
+    ok(`⑦-1 [풀부터] 를 눌러 둔 채 풀 3대 연속 확인(${steps.join(' · ')}) → 칩 줄 «${pref || '없음'}»(눌러 둔 칩은 앱이 «일반 우선 중» 등으로 바꾸지 않는다) · 새로 완료한 풀 ${fDone}대`,
+      pref === '풀 우선 중' && fDone >= 3 && !S.errs.length, JSON.stringify({ steps, pref, fDone, errs: S.errs.slice(0, 3) }));
+    S.close();
+  }
+  //  ⑦-2 [풀부터] 를 누르고 다른 베이 묶음으로 옮겨도 «풀 우선 중» 이 이어진다(종전 — 묶음을 바꾸면 칩이 풀렸다)
+  {
+    const S = await open(voyAt('06:21:00'));
+    await S.enter(26);
+    await S.click(S.btn(/^풀부터 \d+$/), 450);
+    const p1 = [...S.d.querySelectorAll('span')].map(S.txt).find((x) => /우선 중$/.test(x));
+    //  아래 묶음 전환 줄에서 다른 묶음을 차례로 눌러 카드가 서는 묶음까지 간다
+    let sw = false;
+    const here = (S.d.body.textContent.match(/\n?B([\d·]+)\s*변경/) || [])[1];
+    for (const b of [...S.d.querySelectorAll('button')].filter((x) => /^B[\d·]+\s*\d*$/.test(S.txt(x)) && !/남은 컨/.test(S.txt(x)))) {
+      if (S.txt(b).replace(/\s*\d+$/, '') === `B${here}`) continue;
+      await S.click(b, 450);
+      const tb = S.btn(/^(🟠 홀드|🔵 데크) [1-9]/); if (tb) await S.click(tb, 450);
+      if (S.firstCard()) { sw = true; break; }
+      const bk = S.d.querySelector('[data-wf-back]'); if (bk) await S.click(bk, 300);
+    }
+    await S.until(() => S.firstCard());
+    const p2 = [...S.d.querySelectorAll('span')].map(S.txt).find((x) => /우선 중$/.test(x));
+    const grp = (S.d.body.textContent.match(/\d+(\(\d+\))?\d*\s*🟠 홀드/) || [''])[0];
+    ok(`⑦-2 26홀드에서 [풀부터] «${p1 || '없음'}» → 다른 베이 묶음(${sw ? '옮김' : '못 옮김'})으로 가도 칩 줄 «${p2 || '없음'}»`,
+      p1 === '풀 우선 중' && sw && p2 === '풀 우선 중' && !S.errs.length, JSON.stringify({ p1, p2, sw, here, grp, chipsNow: S.chips(), first: S.firstCard(), spans: [...S.d.querySelectorAll('span')].map(S.txt).filter((x) => /갈림|우선/.test(x)), errs: S.errs.slice(0, 3) }));
+    S.close();
+  }
 };
 
 //  단독 실행 — node tools/regress_r42_fork.cjs <저장소 루트>

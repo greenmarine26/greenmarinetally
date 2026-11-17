@@ -298,7 +298,7 @@ const sizeOf = (card) => (card.twin ? '20' : (is20(card.main) ? '20' : '40'));
       const gw = rd('src/components/GuidedWorkPanel.jsx'), mir = rd('src/mir.js'), gq = rd('src/guidedQueue.js'), fb = rd('src/firebase.js');
       ok('화면: workOrderOf 로 읽고 buildGuidedQueue 에 orderPrefs 를 넘긴다', /workOrderOf\(voyage\??\.info,\s*equip\)/.test(gw) && /orderPrefs,\s*\/\/ 4\.09/.test(gw));
       ok('화면: 저장은 fbSetWorkOrder 만(옛 seqRowFrom 을 더 이상 쓰지 않는다)', /fbSetWorkOrder\(voyageKey, equip, next, inspector\)/.test(gw) && !/seqRowFrom:\s*(rowFrom|'sea'|next)/.test(gw));
-      ok('화면: 부류 조건이 바뀌면(저장 응답이 아니라 값이 바뀔 때) 갈림 칩을 끈다', /useEffect\(\(\) => \{ setStreamPref\(null\); \}, \[orderKey\]\)/.test(gw));
+      ok('화면: 부류 조건이 바뀌면(저장 응답이 아니라 값이 바뀔 때) 갈림 칩을 끈다', /useEffect\(\(\) => \{ (?:prefPinRef\.current = false; )?setStreamPref\(null\); \}, \[orderKey\]\)/.test(gw));
       ok('화면: 조건을 걸어 둔 호기는 3대 연속 자동 감지를 하지 않는다', /if \(orderKey\) return;/.test(gw));
       ok('화면: 조건이 바뀌면 큐를 다시 만든다(의존성에 orderKey)', /rowFrom, orderKey, bayFirst\]\)/.test(gw));
       ok('미르: 화면과 같은 workOrderOf 로 읽고 같은 orderPrefs 를 넘긴다', /workOrderOf\(info, myEquip\)/.test(mir) && /orderPrefs:\s*mode === 'discharge' \? wo\.prefs : null/.test(mir) && /rowFrom:\s*wo\.rowFrom/.test(mir));

@@ -136,6 +136,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const setSelectedTier = workCtx ? workCtx.setTier : _setLocTier;
   // V8.50: 갈림 선택 — 검수사(또는 무언 적응)가 고른 부류 스트림. null = 기본 층 순서.
   const [streamPref, setStreamPref] = useState(null);
+  //  5.10: 검수사가 칩을 눌러 정한 우선순위(true) — 3대 연속 감지·베이 묶음/단 이동으로 풀지 않는다(검수사 2026-11-18 01:08 «검수사가 누른게 우선합니다»). 풀리는 길은 같은 칩·[순서대로]·조건창 변경·베이모드 한 대 올리기·모드나 배 바꿈뿐.
+  const prefPinRef = useRef(false);
   //  ★ 3.77 — 양하 «베이 먼저»: 트윈이 무게로 싱글이 될 때 한쪽 베이(33 또는 35)를 먼저 몰아 내리는 흐름. null = 짝 번갈아(기본).
   const [bayFirst, setBayFirst] = useState(null);
   //  4.42: bayFirst 는 베이 하나(3.77·미르 [이동]) 또는 베이사전 한 쪽의 베이들 [24, 25](«(24)25번» 단추 — 그 쪽의 40피트와 20피트를 같이 먼저)
@@ -152,7 +154,6 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //      앱은 거기에 규격·F/E 맞는 후보를 띄워 주므로 손이 더 적다.
   //    끄고 켤 수 있다 — 풀 선적은 계획대로 들어가므로(실측 89대 중 0대 어긋남) 종전 방식이 낫다.
   const [slotMode, setSlotMode] = useState(false);
-  const [slotUserSet, setSlotUserSet] = useState(false);   // 검수사가 직접 끄고 켠 뒤에는 자동 판단을 멈춘다
   const [fixQuery, setFixQuery] = useState('');
   // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
   const [fixQuery2, setFixQuery2] = useState('');
@@ -626,13 +627,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  4.25-02 (2차 시뮬 하): XRAY 입력칸은 그 카드에서만 — 카드가 넘어가면 닫는다(카드 밖 수정 컨의 칸이 다음 카드 아래에 남아 있었다).
   useEffect(() => { setEditXCn(null); setXVal(''); setXEVal(''); }, [card?.main?.cn, card?.twin?.cn]);
 
-  //  2.80: 선적 + 지금 카드가 엠티면 «자리 확인» 모드를 스스로 켠다(검수사가 직접 만진 뒤에는 그 뜻을 지킨다).
-  //    풀로 넘어가면 도로 끈다 — 풀은 계획대로 들어간다(실측).
-  useEffect(() => {
-    if (slotUserSet || mode !== 'loading' || !card?.main) return;
-    const isEmpty = String(card.main.fe || '').toUpperCase() === 'E';
-    setSlotMode(isEmpty);
-  }, [card, mode, slotUserSet]);
+  //  5.10: «자리 확인» 칸은 검수사가 [📍 자리 확인 방식으로] 를 눌렀을 때만 열린다(2.80 의 «엠티면 스스로 켬» 을 뺐다 —
+  //    검수사 2026-11-18 01:08 «수정은 검수사가 눌러서 해야 오류가 없습니다. 맞게 오는데 수정칸이 열리면 오류를 유발시키는 것입니다»).
+  //    누른 카드 한 장에서만 열려 있고 카드(컨 번호)가 바뀌면 도로 닫는다 — 다음 카드가 맞게 오면 그냥 [선적확인] 이다. 카드 개체만 새로 만들어진 것(실시간 갱신)은 컨 번호가 같아 닫지 않는다.
+  useEffect(() => { setSlotMode(false); }, [card?.main?.cn, card?.twin?.cn, mode]);
 
   // V8.50: 갈림 감지 — 지금 바로 내릴 수 있는 카드들에 부류가 섞여 있으면 선택 버튼 제시 (양하만).
   //   1.57: 선적에도 건다. 종전엔 양하 전용이라 선적은 고정 순서(20싱글→트윈→40)밖에 안 나왔다.
@@ -662,11 +660,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   //  ★ 4.09: 부류 조건(orderKey)이 바뀌면 — 이 기기에서 눌렀든 다른 폰이 바꿨든 — 갈림 칩(일시 «○ 우선 중»)을 끈다.
   //    안 끄면 방금 정한 조건 위에 옛 흐름이 남아 첫 카드가 창의 «1. ○○부터» 와 어긋난다. 저장 응답이 아니라 값이 바뀐 때 끄므로 로컬 반영과 같이 움직인다.
-  useEffect(() => { setStreamPref(null); }, [orderKey]);
+  useEffect(() => { prefPinRef.current = false; setStreamPref(null); }, [orderKey]);
+  //  5.10 (독립 감사 상-1): 눌러 둔 칩은 그 배·그 모드 안에서만 — 모드(양하↔선적)나 배가 바뀌면 푼다(패널은 다시 만들어지지 않아 ref 가 새 컨텍스트로 샌다).
+  useEffect(() => { prefPinRef.current = false; setStreamPref(null); }, [mode, voyageKey]);
 
   // V8.50: 선택 부류가 소진되면 자동 해제 — 기본 층 순서로 복귀.
   useEffect(() => {
     if (!streamPref) return;
+    if (prefPinRef.current) return;                           // 5.10: 검수사가 누른 칩은 이 묶음에 그 부류가 없어도 둔다(다음 묶음·단에서 이어진다)
     if (!queue.some(cd => cardMatchesPref(cd, streamPref))) setStreamPref(null);
   }, [queue, streamPref]);
 
@@ -704,6 +705,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const r = recentRef.current;
     if (r.length < STREAM_STREAK) return;
     if (!forkChips) return;                                   // ⓐ 혼재가 아니면 감지하지 않는다
+    if (prefPinRef.current && streamPref) return;             // 5.10: 검수사가 누른 칩(20·40·FR·엠티·리퍼·일반·트윈·싱글)은 3대 연속 감지로 바꾸지 않는다
     if (streamPref === 'TW' || streamPref === 'SG') return;    // 4.78: 검수사가 누른 트윈부터·싱글부터는 3대 연속 감지로 바꾸지 않는다
     if (orderKey) return;                                     // 4.09: 검수사가 기사의 방법을 정해 두었으면 그 방법이 이긴다 — 3대 연속 감지로 바꾸지 않는다
     const sq = r.map(x => x.eseq);
@@ -1032,10 +1034,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     _prevGroupRef.current = selectedGroup;
     const byPreset = !!workCtx && (workCtx.presetSeq || 0) !== _prevPresetRef.current;
     _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0;
-    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); if (!byPreset) setSelectedTier(null); setStreamPref(null); setBayFirst(null); singleBaysRef.current = []; recentRef.current = [];
+    setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); if (!byPreset) setSelectedTier(null); if (!prefPinRef.current) setStreamPref(null); setBayFirst(null); singleBaysRef.current = []; recentRef.current = [];
   }, [selectedGroup]);
   useEffect(() => { _prevPresetRef.current = workCtx ? (workCtx.presetSeq || 0) : 0; }, [workCtx ? workCtx.presetSeq : 0]);   // 3.48: 단만 바뀐 프리셋도 기준을 맞춰 둔다(다음 «진짜» 그룹 변경이 프리셋으로 오해되지 않게)
-  useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);
+  useEffect(() => { if (!prefPinRef.current) setStreamPref(null); recentRef.current = []; }, [selectedTier]);
   //  4.26 (감사 하): «다음 예정» 줄로 올린 카드는 그 장·단에서만 — 장·단·모드를 바꾸면 내린다(돌아왔을 때 예전에 올린 카드가 다시 맨 앞에 서지 않게). 해제·한 대씩이 정한 맨 앞(다른 배열)은 그대로 둔다.
   useEffect(() => { if (!pulled) return; setResumeCns((r) => (r === pulled ? [] : r)); setPulled(null); }, [selectedGroup, selectedTier, mode]);   // eslint-disable-line react-hooks/exhaustive-deps
   //  4.26 — 장·단을 고르면(탭을 옮겨 돌아온 때 포함) 카드 머리를 화면 위로(설계 §0 «스크롤 없이 확인까지» — 항차 화면 위쪽 칸들 때문에 확인 단추가 화면 아래 1,300px 쯤이었다).
@@ -1178,7 +1180,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (selectedTier !== want) { if (++st.tries > 30) { note('단을 옮기지 못했습니다 — 단 단추에서 직접 고르세요.'); return finish(); } setSelectedTier(want); return again(); }
     if (deckBlock) { note(`${gate.own ? '이 장' : '이 해치'} 데크 ${gate.n}대가 남아 홀드 컨(${String(p.cn).slice(-4)})은 아직 못 내립니다 — 데크를 먼저 내리세요. 데크 컨이 못 내리는 컨이면 ⏸ 보류.`); return finish(); }
     const arr = [String(p.cn).toUpperCase()];
-    setBayFirst(null); singleBaysRef.current = []; setStreamPref(null);
+    setBayFirst(null); singleBaysRef.current = []; prefPinRef.current = false; setStreamPref(null);
     closeFix(); setHoldOpen(false); setSingleMode(false); setPosPick(false);
     setResumeCns(arr); setPulled(arr); setPulledBay(true);
     return finish();
@@ -2440,7 +2442,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             {streamPref ? `${PREF_LABEL[streamPref]} 우선 중` : '갈림'}
           </span>
           {[...(forkChips || []), ...(twinSingleChips || [])].map(([k, n]) => (
-            <button key={k} onClick={() => setStreamPref(p => (p === k ? null : k))}
+            <button key={k} onClick={() => { const nx = streamPref === k ? null : k; prefPinRef.current = !!nx; setStreamPref(nx); }}
               className={`px-2 py-1 rounded text-xxs font-bold border ${streamPref === k
                 ? 'bg-violet-700 border-violet-500 text-white'
                 : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'}`}>
@@ -2448,7 +2450,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </button>
           ))}
           {streamPref && (
-            <button onClick={() => setStreamPref(null)}
+            <button onClick={() => { prefPinRef.current = false; setStreamPref(null); }}
               className="px-2 py-1 rounded text-xxs font-bold border bg-ink-800 border-amber-700 text-amber-300 hover:bg-ink-750">
               순서대로
             </button>
@@ -2701,7 +2703,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               {fixQuery.length >= 3 && fixMatches.length === 0 && (
                 <div className="text-xxs text-dim-400 text-center py-1">남은 작업분에 그 번호가 없습니다</div>
               )}
-              <button onClick={() => { setSlotMode(false); setSlotUserSet(true); setFixQuery(''); }}
+              <button onClick={() => { setSlotMode(false); setFixQuery(''); }}
                 className="w-full text-2xs text-dim-400 py-1">계획대로 확인하는 방식으로 돌아가기</button>
             </div>
           )}
@@ -2805,7 +2807,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     slotSwitch: (<>
           {/* 2.80: 껐다가 다시 켜는 길 — 없으면 검수사가 한 번 끄고 영영 못 돌아온다(2-0-D). 4.26: 예외 줄 아래 작은 줄로(수정 칸이 단추 바로 밑에 열리게). */}
           {mode === 'loading' && !slotMode && !card.twin && (
-            <button onClick={() => { setSlotMode(true); setSlotUserSet(true); closeFix(); }}
+            <button onClick={() => { setSlotMode(true); closeFix(); }}
               className="w-full py-2 rounded-pill font-bold text-xxs bg-ink-800 hover:bg-sky-900 text-sky-300">
               📍 자리 확인 방식으로 — 이 자리에 실은 번호만 넣기
             </button>
