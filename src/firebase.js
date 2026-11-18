@@ -19,7 +19,7 @@ import { crewShiftKey, getEquipNumber, setEquipNumber, _storage, SK } from './ut
 import { askCraneBeforeComplete } from './craneAsk.js';   // 4.85: 완료 직전 호기 한 번 묻기   // 4.56-04: 조 등록에 내 이름이 있으면 기기 호기도 따라간다
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
-import { isViewOnlyNow, isNotWorkerNow, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
+import { isViewOnlyNow, isNotWorkerNow, isAdminNow, adminWorkGateText, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 import { setServerOffset } from './workShift.js';   // 4.79: 주야 근무조 판정은 서버 시각 기준
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
@@ -178,6 +178,18 @@ function assertCanWork(what) {
   throw e;
 }
 
+//  ★ 5.12 문지기 — **관리자는 검수 작업 기록을 남기지 않는다**(검수사 2026-11-18 «관리자로 들어 가서 앱 상태를 점검 하려고 작업시작을 누르고 장비를 선택했을떄 제이름과 제가 작업한걸로 기록되지 않아야 합니다»).
+//    조회만은 assertCanWork 가 먼저 막는다(같은 띠 알림). 관리자의 수정·자료 등록(업로드·자리 수정·완료 취소·보고 고치기…)은 이 문지기를 부르지 않아 그대로 열려 있다.
+function assertCanRecordWork(what) {
+  assertCanWork(what);
+  if (!isAdminNow()) return;
+  const e = new Error(adminWorkGateText(what));
+  e.viewOnly = true;   // 호출부가 조회만과 같은 길(e.viewOnly → 문구 그대로)로 사람에게 말한다
+  e.adminOnly = true;
+  try { window.dispatchEvent(new CustomEvent('viewOnlyBlocked', { detail: { what: what || '작업', message: e.message } })); } catch (x) { /* 브라우저 밖(연막·노드)에서는 알릴 화면이 없다 */ }
+  throw e;
+}
+
 //  ★ 3.53 문지기 — **POD 확정은 검수사·수석만 한다.** (검수사 2026-09-16 «일반 검수사가 아니고 저랑 수석만 가능하게»)
 //    ⚠ 진짜 문지기는 **쓰는 자리**인 여기다. 화면에서 단추를 감추는 것은 보조다 — 3.51 에서
 //      화면만 막았더니 옆길(모달 안쪽·누락 완료)로 들어온 것이 실측됐다(규범 §4-4 «입구에 문지기»).
@@ -327,7 +339,7 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
 //    from 의 명단 줄에는 «교대 받음» 표시(relievedAt·relievedBy·relievedVoyage·relievedEquip)를 남기고 그 사람의 호기를 비운다 —
 //    그 사람 기기는 표시를 보고 호기를 놓은 뒤 다시 고르게 한다(App). 한 번에(멀티 경로) 써서 반쪽만 남지 않는다. 옛 4.72 «교대 메뉴는 만들지 않는다» 는 이 지시로 뒤집혔다.
 export async function fbRelieveCrane(voyageKey, shiftKey, equipNo, from, me) {
-  assertCanWork('교대');
+  assertCanRecordWork('교대');
   const no = parseInt(String(equipNo).replace(/\D/g, ''), 10);
   if (!voyageKey || !shiftKey || !(no >= 1 && no <= 9) || !from || !me || from === me) throw new Error('교대 정보가 맞지 않습니다.');
   const now = Date.now();
@@ -377,7 +389,7 @@ export async function fbSetWorkOrder(voyageKey, equip, order, by) {
 //    ⚠ 조·검수사가 바뀌어도 남아야 한다 — 화면 state 가 아니라 항차에 적는다.
 //    `doneAt` = 보류 당시 그 모드의 완료 대수. «몇 대 지났나»를 이것으로 센다(새로고침해도 유지).
 export async function fbHoldContainers(voyageKey, mode, cns, reason, by, equip = '', doneAt = 0) {
-  assertCanWork('보류');
+  assertCanRecordWork('보류');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const at = Date.now();
@@ -413,7 +425,7 @@ function _putHoldEvent(patch, voyageKey, mode, action, list, o = {}) {
 //  해제 — 검수사가 [해제]를 눌렀거나 되묻기에 «예»라고 답했을 때. 트윈은 짝까지 함께 푼다.
 //    4.78: 해제 기록에는 풀리는 보류의 사유·건 사람·시각을 함께 적는다(held 노드를 지우기 전에 읽는다). 읽기가 실패해도 해제는 막지 않는다 — 경고만 남긴다.
 export async function fbReleaseHold(voyageKey, mode, cns, by = '', equip = '') {
-  assertCanWork('보류 해제');
+  assertCanRecordWork('보류 해제');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const patch = {};
@@ -431,7 +443,7 @@ export async function fbReleaseHold(voyageKey, mode, cns, by = '', equip = '') {
 
 //  «아직» — 되묻기를 뒤로 민다. 지금 완료 대수를 기준점으로 다시 잡아 그만큼 더 지나야 또 묻는다.
 export async function fbSnoozeHold(voyageKey, mode, cns, doneAt) {
-  assertCanWork('보류 미루기');
+  assertCanRecordWork('보류 미루기');
   const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
   if (!voyageKey || !list.length) return;
   const patch = {};
@@ -971,6 +983,7 @@ export async function fbClearPickPod(voyageKey, mode, cn, by) {
 //     한 번 고치면 사라졌다. 그래서 sealer/sealerAt 을 명시적으로 실어 보존한다.
 export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by, sealerOpt) {
   assertCanWork('X-RAY 봉인 입력');
+  if (sealerOpt && sealerOpt.register === true) assertCanRecordWork('X-RAY 봉인자 등록');   // 5.12: 관리자 이름이 봉인자로 들어가지 않게(손으로 이름 정정 {sealer} 은 열어 둔다)
   const r = ref(db, `voyages/${voyageKey}/discharge/xraySeals/${cn}`);
   const snap = await get(r);
   const cur = snap.val() || {};
@@ -1126,7 +1139,7 @@ function _markLoadedPos(voyageKey, mode, cn, by, cns = null) {
 //   `completed/{cn}` = `{ at, by, equip }`. 빈 값이면 키를 아예 안 넣는다(옛 기록과 모양을 같게 둔다).
 //   ⚠ `equip` 은 **맨 뒤 선택 인자**다 — 기존 호출부는 안 넘겨도 종전과 똑같이 동작한다.
 export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '', equip = '') {
-  assertCanWork('완료');
+  assertCanRecordWork('완료');
   if (!flag || flag === 'normal') equip = await askCraneBeforeComplete(voyageKey, mode, String(equip || '').trim(), cn);   // 4.85: 내 호기가 터미널이 그 베이에 준 호기와 다르면 한 번 묻는다
   const rec = { by, at: Date.now() };
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
@@ -1216,7 +1229,7 @@ function _tallyInspector(voyageKey, mode, by) {
 //   이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
 //   ⚠ `equip` 은 맨 뒤 선택 인자다 — 기존 호출부 4곳은 안 넘겨도 그대로 동작한다.
 export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip = '') {
-  assertCanWork('완료');
+  assertCanRecordWork('완료');
   equip = await askCraneBeforeComplete(voyageKey, mode, String(equip || '').trim(), cns);   // 4.85: 같은 이유 — 한 번 묻는다
   const patch = {};
   const at = Date.now();
@@ -1357,7 +1370,7 @@ export async function fbApplyTermSnapshot(voyageKey, mode, by) {
 //   그 판이 이미 남긴 완료 기록 `{by:'', src:'edi'}` 는 지난 항차 기록이라 읽는 쪽(utils.isEdiApplied · isAutoDone · completedByLabel)은 그대로 둔다.
 
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {
-  assertCanWork('초과 컨 추가');
+  assertCanRecordWork('초과 컨 추가');
   const at = Date.now();
   const eq = String(equip || '').trim();
   const rec = {
@@ -1385,7 +1398,7 @@ export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, eq
 //   덱 전용 수화물(EDI·리스트에 없음)의 양하 확정 플래그. records 가 아니라 앱 자체 노드에 두는 이유 —
 //   수집기 리스트 병합이 records 를 다시 쓸 때 수동 확정이 증발하지 않게(통째 PUT 보존 원칙).
 export async function fbSetLuggConfirm(voyageKey, mode, cn, by) {
-  assertCanWork('수화물 확인');
+  assertCanWork('수화물 확인');   // 5.12 감사 중3: 카톡 통보를 받아 총계에 넣는 자료 확정 — 관리자에게 열어 둔다(취소와 짝)
   await set(ref(db, `voyages/${voyageKey}/${mode}/luggConfirm/${cn}`), { by: by || '', at: Date.now() });
 }
 export async function fbCancelLuggConfirm(voyageKey, mode, cn) {
@@ -3264,7 +3277,7 @@ export async function fbAddReportsAt(base, items) {
 
 let _lastReportTs = 0;   // 3.49: 같은 밀리초에 두 보고가 오면 경로 키가 겹쳐 앞 것이 덮였다(감사 실측: 자동 기록 9건 → 경로 2개). 키는 늘 앞 것보다 크게.
 export async function fbAddWorkReport(voyageKey, report) {
-  assertCanWork('작업 보고');
+  if (report && (report.type === 'crane_move' || report.type === 'external_pause')) assertCanWork('작업 보고'); else assertCanRecordWork('작업 보고');   // 5.12: 호기 이동·외부 중단 보고는 관리 기록(3.51-01 조 등록과 같은 성격) — 관리자에게 열어 둔다
   const ts = Math.max(Date.now(), _lastReportTs + 1); _lastReportTs = ts;
   const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);
   //  ★ 4.46 — **모든 보고에 보낸 사람 이름을 남긴다**(보고 고치기는 보낸 사람만 — utils.canEditReport). 화면이 넘긴 이름(by)이 먼저, 없으면 이 기기의 오늘 이름.
@@ -3496,7 +3509,7 @@ async function _deletePhotos(voyageKey, ts) {
 // 사진 데이터 저장 (Firebase Realtime DB - base64, 작은 사진만)
 //   대용량은 별도 Storage 권장이지만 일단 RTDB로
 export async function fbAddPhotoReport(voyageKey, photoData, meta) {
-  assertCanWork('사진 보고');
+  assertCanRecordWork('사진 보고');
   const ts = Date.now();
   await _writePhoto(voyageKey, ts, {   // 3.61: photos/{항차}/{ts} + voyages/{항차}/photoIndex/{ts}
     ts,

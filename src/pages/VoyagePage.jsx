@@ -64,6 +64,7 @@ import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTe
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf, sealSameLoose } from '../utils.js';   // 4.88: sealSameLoose — 업로드 충돌 창 실번호 비교 한 벌 · 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
+import { forecastLegendOf } from '../utils.js';   // 5.12: 예보 카드를 플랜 별첨3·별첨2 모양으로
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
@@ -5115,52 +5116,75 @@ function ForecastCard({ voyage, mode }) {
   const sec = voyage?.[mode];
   if (sec && Object.keys(sec.ediContainers || {}).length) return null;
 
-  const rows = [];
-  const push = (label, obj, cls) => {
-    for (const [size, n] of Object.entries(obj || {})) rows.push({ label, size, n, cls });
-  };
-  push('FULL', f.full, 'text-emerald-300');
-  push('EMPTY', f.empty, 'text-sky-300');
-  push('수화물', f.luggage, 'text-violet-300');
-  if (!rows.length && !f.image) return null;
-
-  const vans = (f.vans || {});
-  const totVan = (vans.full || 0) + (vans.empty || 0) + (vans.luggage || 0);
-  const totTeu = (f.teu && f.teu.total)
-    || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
+  //  ★ 5.12 (검수사 2026-11-18 «저렇게 보면 한눈에 들어 오지 않습니다. 플랜에 별첨3처럼 보여주고 옆에 별첨2처럼 화물종류별로 보여줘야합니다»):
+  //    종전 «구분·규격·대수» 아홉 줄 목록을 플랜 별첨과 같은 두 표로 — 왼쪽 별첨3(규격별 F/E), 오른쪽 별첨2(화물 종류별). 접기는 utils.forecastLegendOf 한 벌(홈 «예상 N대» 와 같은 수).
+  const lg = forecastLegendOf(voyage, mode);
+  if (!lg && !f.image) return null;
+  const sizes = ['20', '40', '45'];
+  const th = 'py-1 px-1.5 font-bold text-dim-300 border border-line text-center';
+  const td = 'py-1 px-1.5 border border-line text-center mono';
+  const sz = (k) => `${k}'`;
+  const feT = lg ? sizes.reduce((a, k) => ({ F: a.F + lg.fe[k].F, E: a.E + lg.fe[k].E }), { F: 0, E: 0 }) : null;
+  const catT = lg ? sizes.reduce((a, k) => ({ ...a, [k]: lg.cargos.reduce((t, [, r]) => t + r[k], 0) }), {}) : null;
 
   return (
-    <div className="bg-ink-900 border border-dashed border-orange-600/60 rounded-pill p-3 mb-3">
+    <div className="bg-ink-900 border border-dashed border-orange-600/60 rounded-pill p-3 mb-3" data-forecast-card={mode}>
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span className="text-sm font-black text-orange-300">
           📋 {mode === 'loading' ? '선적' : '양하'} 예보{f.voy ? ` · ${f.voy}` : ''}
         </span>
-        <span className="text-xxs font-bold text-orange-200">{totVan}대 · {totTeu}TEU</span>
+        {lg && <span className="text-sm2 font-black text-orange-200" data-forecast-n={lg.n}>예상 {lg.n}대{lg.teu ? ` · ${lg.teu}TEU` : ''}</span>}
         <span className="text-2xs text-dim-400 ml-auto">
           리스트(EDI)가 오면 이 카드는 사라지고 실자료로 바뀝니다
         </span>
       </div>
 
-      {rows.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs2">
-            <thead>
-              <tr className="text-dim-400 text-2xs border-b border-line">
-                <th className="text-left py-1 pr-2 font-bold">구분</th>
-                <th className="text-left py-1 pr-2 font-bold">규격</th>
-                <th className="text-right py-1 pr-2 font-bold">대수</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i} className="border-b border-line/70">
-                  <td className={`py-1 pr-2 font-bold ${r.cls}`}>{r.label}</td>
-                  <td className="py-1 pr-2 text-dim-100 font-mono">{r.size}</td>
-                  <td className="py-1 pr-2 text-right text-dim-100 font-bold">{r.n}</td>
+      {lg && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div data-forecast-fe="1">
+            <div className="text-xs2 font-black text-dim-200 text-center mb-1">별첨3 · 규격별 F/E</div>
+            <table className="w-full text-xs2 border-collapse">
+              <thead><tr><th className={th}>규격</th><th className={th}>Full</th><th className={th}>Empty</th><th className={th}>계</th></tr></thead>
+              <tbody>
+                {sizes.map((k) => (
+                  <tr key={k}>
+                    <td className={`${td} font-bold text-dim-200`}>{sz(k)}</td>
+                    <td className={`${td} text-emerald-300`}>{lg.fe[k].F}</td>
+                    <td className={`${td} text-sky-300`}>{lg.fe[k].E}</td>
+                    <td className={`${td} font-bold text-dim-100`}>{lg.fe[k].F + lg.fe[k].E}</td>
+                  </tr>
+                ))}
+                <tr className="bg-ink-800/70">
+                  <td className={`${td} font-black text-dim-100`}>합계</td>
+                  <td className={`${td} font-black text-emerald-300`}>{feT.F}</td>
+                  <td className={`${td} font-black text-sky-300`}>{feT.E}</td>
+                  <td className={`${td} font-black text-orange-200`}>{lg.n}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+            {lg.emptyRf > 0 && <div className="text-2xs text-dim-400 mt-1" data-forecast-emptyrf={lg.emptyRf}>엠티 {feT.E}(일반 {feT.E - lg.emptyRf} · 리퍼 엠티 {lg.emptyRf})</div>}
+          </div>
+          <div data-forecast-cargo="1">
+            <div className="text-xs2 font-black text-dim-200 text-center mb-1">별첨2 · 화물 종류별</div>
+            <table className="w-full text-xs2 border-collapse">
+              <thead><tr><th className={th}>종류</th>{sizes.map((k) => <th key={k} className={th}>{sz(k)}</th>)}<th className={th}>합계</th></tr></thead>
+              <tbody>
+                {lg.cargos.map(([cat, r]) => (
+                  <tr key={cat}>
+                    <td className={`${td} font-bold text-dim-200`}>{cat}</td>
+                    {sizes.map((k) => <td key={k} className={`${td} text-dim-100`}>{r[k]}</td>)}
+                    <td className={`${td} font-bold text-dim-100`}>{r.total}</td>
+                  </tr>
+                ))}
+                <tr className="bg-ink-800/70">
+                  <td className={`${td} font-black text-dim-100`}>합계</td>
+                  {sizes.map((k) => <td key={k} className={`${td} font-black text-dim-100`}>{catT[k]}</td>)}
+                  <td className={`${td} font-black text-orange-200`}>{lg.n}</td>
+                </tr>
+              </tbody>
+            </table>
+            {lg.lug > 0 && <div className="text-2xs text-violet-300 mt-1">수화물 {lg.lug}대는 따로 — 대수에 넣지 않았습니다.</div>}
+          </div>
         </div>
       )}
 

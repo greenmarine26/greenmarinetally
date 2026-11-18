@@ -6,7 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { readSheetPhoto, matchSheetRuns, sheetCandidates, isoOk, sheetSlotOk } from '../sheetPhoto.js';
 import { fbSetActualPosition, fbCompleteContainer } from '../firebase.js';
 import { getEquipNumber } from '../utils.js';
-import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';
+import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';
 
 export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose }) {
   const [busy, setBusy] = useState('');
@@ -27,7 +27,7 @@ export default function SheetPhotoModal({ voyage, voyageKey, inspector, onClose 
     if (!f) return;
     //  3.58-06: 다시 찍으면 손으로 고친 표가 사라진다 — 아직 기록하지 않은 줄이 있으면 먼저 묻는다
     if (rows && rows.some((r) => !r.saved) && !window.confirm('아직 기록하지 않은 줄이 있어요. 새 사진으로 바꾸면 지금 표(손으로 고친 것 포함)가 사라집니다. 바꿀까요?')) return;
-    if (!canWorkNow()) { alert(workGateText('선적 자리 기록')); return; }   // 조회만은 보기만 — AI 를 부르기 전에 막는다
+    if (!canRecordWorkNow()) { alert(recordGateText('선적 자리 기록')); return; }   // 조회만은 보기만 — AI 를 부르기 전에 막는다
     if (!getEquipNumber()) { alert(equipGateText()); return; }
     setErr(''); setNote(''); setDone(null); setBusy('기록지를 읽는 중이에요 (30초쯤)…');
     try {

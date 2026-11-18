@@ -1,7 +1,7 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
 import CnText from './CnText.jsx';
 import React, { useState, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
+import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf } from '../utils.js';
 import { inspectionSealOf, formatWt, isoShown, sealCheckOf } from '../utils.js';
@@ -116,7 +116,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
       confirmLabel: '누락 완료',
       cancelLabel: '취소',
       onConfirm: async () => {
-        if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+        if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
         await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'missing', '선박에 없음', getEquipNumber());
         speak(`${(c.cn || '').slice(-4)} 누락 처리`, { conversational: true });
         if (onAfterComplete) setTimeout(() => onAfterComplete(c), 500);
@@ -163,7 +163,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
       }
       // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 그 갱 인원의 인건비 근거가 없다(검수사 확정).
       //   가이드 화면만 갱을 강제하고 나머지 경로는 조용히 통과하던 것을 막는다(독립 재검증).
-      if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+      if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       //  3.2-01: 통과분은 완료할 수 없다 — 카드가 어느 길로 왔든 여기서 한 번 더(감사 P1-2).
       if (!canCompleteContainer(c, c._mode)) { alert(`평택 ${isDischarge ? '양하' : '선적'} 대상이 아닙니다 (${isDischarge ? 'POD ' + (c.pod || '?') : 'POL ' + (c.pol || '?')}) — 통과화물은 ${verb}할 수 없습니다.`); return; }
@@ -237,7 +237,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
           const _src = slotSource || allContainers || [];
           const _bad = cns.map(cn => _src.find(x => x && x.cn === cn)).filter(o => o && !canCompleteContainer(o, c._mode));
           if (_bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${_bad.map(o => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
-          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+          if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
           if (!getEquipNumber()) { alert(equipGateText()); return; }   // ★ 4.27 감사 하-4: 📍 위치 틀림으로 확인할 때도 호기 없이 완료 금지(카드 [확인] 과 같은 문지기)
           if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, c._mode, cns, inspector, getEquipNumber()); else for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
@@ -253,7 +253,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
     missing: () => handleMissing(_noEvt),
     //  위치 틀림은 칸을 고르면 곧 확인까지 간다 — 자리를 쓰기 전에 문지기(조회만·호기)를 먼저 본다(2차 시뮬 하-1: 창 안의 확인 단계에서 막으면 자리만 옮겨지고 완료는 안 찍힌 채 남는다).
     openPos: ({ twin = true } = {}) => {
-      if (!canWorkNow()) { alert(workGateText('완료')); return; }
+      if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       setPosNoTwin(!twin); setPosDone(true); setPosTarget(c);
     },

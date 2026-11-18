@@ -3,7 +3,7 @@
 //   판정은 utils.hatchEventsOf, 기록은 hatchReport.recordHatchEvent 한 벌. 새 사건이 뜨면 한 번 소리로 알린다(현장은 화면을 안 본다).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { recordHatchEvent, fmtHm } from '../hatchReport.js';
-import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
+import { canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
 import { speak } from '../voice.js';
 import { formatHatchBays } from '../utils.js';
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';
@@ -47,7 +47,7 @@ export default function HatchAlertBanner({ events, voyageKey, vsl, voyOf = null,
   if (!list.length) return <>{hatchCountEl}</>;   // 창이 떠 있는 동안 사건이 사라져도(다른 검수원 보고) 창은 남아 물음이 끝까지 풀리게
   const doRecord = async (e, share) => {
     const k = `${e.hatch}|${e.action}`;
-    if (!canWorkNow()) { alert(workGateText('해치커버 보고')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow()) { alert(recordGateText('해치커버 보고')); return; }   // 3.51: 조회만은 보기만
     setBusy(k);
     try {
       let pc = counts[k] || 0;

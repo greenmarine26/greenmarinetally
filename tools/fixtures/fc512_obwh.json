@@ -1,0 +1,79 @@
+{
+ "OBWH_2795E": {
+  "info": {
+   "forecast": {
+    "at": 1794973971322,
+    "by": "김성일",
+    "calc": {
+     "empty": 376,
+     "full": 81,
+     "luggage": 0
+    },
+    "empty": {
+     "20GP": 111,
+     "20RF": 1,
+     "40HQ": 95,
+     "40RH": 22,
+     "45HQ": 15
+    },
+    "full": {
+     "20GP": 7,
+     "40HQ": 31,
+     "40RH": 5,
+     "45HQ": 1
+    },
+    "luggageCns": [
+     "SPSU2042317"
+    ],
+    "luggageSeals": {
+     "SPSU2042317": "BHGJ3019473"
+    },
+    "mode": "loading",
+    "raw": "\n[이다희] [12:22] FULL 20GPX7 + 40HQX31 + 45HQX1 + 40RHX5\n40RHX4 (-18'C / CLOSE)\n40RHX1 (PALLET / 온도 x)\n\nEMPTY 20GPX111 + 20RFX1 + 40HQX95 + 45HQX15 + 40RHX22\n\n재전달드립니다~\n",
+    "summary": "",
+    "ulAt": 1794974232431,
+    "ulBy": "수집기(CLL메일)",
+    "urgentCns": [
+     "CICU3004984",
+     "CICU8416794",
+     "CICU8420900",
+     "CICU9808059",
+     "CXDU2235089",
+     "DSYU0061058",
+     "DSYU0061171",
+     "DSYU0064838",
+     "DSYU0066743",
+     "HHXU3074993",
+     "LYGU4027867",
+     "LYGU4029772",
+     "LYGU4030433",
+     "LYGU4031173",
+     "LYGU4033129",
+     "LYGU4033480",
+     "LYGU4034439",
+     "LYGU4034594",
+     "LYGU4035522",
+     "SEGU5860410",
+     "SPSU2041727",
+     "SPSU2042111",
+     "SPSU6018983",
+     "SPSU6019260",
+     "TCNU1132645",
+     "TLLU6838342",
+     "ZXJU0130421"
+    ],
+    "vans": {
+     "empty": 244,
+     "full": 44,
+     "luggage": 0
+    },
+    "voy": ""
+   },
+   "voy": "2795E",
+   "voy_l": "2796W"
+  },
+  "loading": {
+   "_created": true
+  }
+ }
+}

@@ -20,7 +20,7 @@ import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNu
 import { crewShiftKey } from '../utils.js';   // 4.85: 교대 — 내 조의 조 등록 칸
 import { equipHoldersOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
 import { fbRelieveCrane } from '../firebase.js';   // 4.85: 교대 기록
-import { canWorkNow } from '../workChoice.js';
+import { canWorkNow, canRecordWorkNow, isAdminNow } from '../workChoice.js';
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
 import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 
@@ -81,7 +81,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   }, []);
 
   //  ★ 4.85 교대 — 같은 항차·같은 조에서 다른 호기를 쥔 사람들 가운데 한 명을 골라 그 크레인을 이어받는다(3명이면 둘 중 하나).
-  const relieveList = (route.name === 'voyage' && inspector && inspectors && canWorkNow())
+  const relieveList = (route.name === 'voyage' && inspector && inspectors && canRecordWorkNow())   /* 5.12: 관리자는 교대 목록을 안 본다(작업으로 기록되지 않게) */
     ? equipHoldersOf(inspectors, route.voyageKey, inspector, Date.now(), workChoice?.shift || '')
     : [];
   const handleRelieve = (h) => {

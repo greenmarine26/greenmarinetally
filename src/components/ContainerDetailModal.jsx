@@ -1,6 +1,6 @@
 import React, { useState , useMemo, useRef, useEffect } from 'react';
 import CnText from './CnText.jsx';
-import { equipGateText, canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
+import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
@@ -275,7 +275,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
       // TallyOne 1.55: 마지막 인자는 **갱(호기)** — 인건비 근거다(검수사 확정 2026-08-12).
       //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다(헤더와 같은 값).
       // 1.56: 갱 없이 완료 금지 — 조용한 미기록이 인건비 사고의 뿌리다.
-      if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+      if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
       { const _np = loadingNoPosAsk(c, mode); if (_np && !window.confirm(_np)) return; }   // 3.58-05: 자리 없는 선적 완료
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
@@ -1807,7 +1807,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
         onCompleteBoth={async (cns) => {
           // 1.55: 트윈 둘 다 같은 갱(호기)으로 남긴다 — 한 번에 든 것이니 같은 갱이다.
-          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+          if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
           if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, getEquipNumber()); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
           // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));

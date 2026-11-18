@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { fbAssignDeckSlot, fbCompleteContainer } from '../firebase.js';
 import { getEquipNumber, fmtShiftTime } from '../utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.67-01: 호기(인건비 근거) · 3.72: 완료 시각(KST HH:MM)
-import { canWorkNow, workGateText, equipGateText } from '../workChoice.js';   // 3.67-01: 조회만은 보기만 · 호기 없이 완료 금지(컨 상세와 같은 문지기)
+import { canWorkNow, workGateText, equipGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.67-01: 조회만은 보기만 · 호기 없이 완료 금지(컨 상세와 같은 문지기)
 import { speakDone } from '../voice.js';
 import { rzorSlotCandidates } from '../rzorDeckPredict.js';   // 3.70: 빈자리 조회 후보 한 벌
 import { buildPrintModel, deckKeyOf } from '../rzorPrintModel.js';   // 4.04: 화면 그림도 출력과 같은 모델 한 벌
@@ -91,7 +91,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
   //   사람이 먼저 찍으면 사람 기록이 남고(터미널은 추가만), 터미널이 먼저면 사람이 찍을 때 사람 기록으로 바뀐다(3.60-09).
   const loadHere = async (slotKey, cn) => {
     if (!voyageKey || !cn) return false;
-    if (!canWorkNow()) { alert(workGateText('선적 완료')); return false; }
+    if (!canRecordWorkNow()) { alert(recordGateText('선적 완료')); return false; }
     if (!getEquipNumber()) { alert(equipGateText()); return false; }
     await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector || '', at: Date.now() });
     let r;

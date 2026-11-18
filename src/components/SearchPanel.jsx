@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sizeLenKnown, sizeLenOf } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
-import { equipGateText, canWorkNow, workGateText, mirWorkCtx } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트 · 4.38: mirWorkCtx — 작업 중 사담 미루기
+import { equipGateText, canWorkNow, workGateText, mirWorkCtx, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트 · 4.38: mirWorkCtx — 작업 중 사담 미루기
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
@@ -628,7 +628,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const hatchVoyFor = (mode = workFilter) => (mode === 'discharge' ? (voyage?.info?.voy_d || voyage?.info?.voy || '') : (voyage?.info?.voy_l || voyage?.info?.voy || ''));
   useEffect(() => {
     if (!_hatchFollow || !voyageKey || !hatchPending.length) return;
-    if (!canWorkNow()) return;   // 3.51: 조회만은 보기만 — 자동 기록도 돌지 않는다(사람이 누른 것이 아니라 알릴 자리도 없다)
+    if (!canRecordWorkNow()) return;   // 5.12: 관리자도 해치 자동 보고를 내 이름으로 남기지 않는다 · 3.51: 조회만은 보기만 — 자동 기록도 돌지 않는다(사람이 누른 것이 아니라 알릴 자리도 없다)
     const todo = hatchPending.filter((e) => !_hatchInFlightAll.has(`${voyageKey}|${e.hatch}|${e.action}`));
     if (!todo.length) return;
     for (const e of todo) _hatchInFlightAll.add(`${voyageKey}|${e.hatch}|${e.action}`);
@@ -1050,7 +1050,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         onClose={() => setExtraModalOpen(false)}
         onSave={async ({ cn, info }) => {
           // 1.56: 초과 컨도 완료 기록이다 — 갱 없이 기록 금지 + equip 동봉(유일하게 빠져 있던 쓰기 경로).
-          if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+          if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
           await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info, getEquipNumber());
         }}
@@ -2304,7 +2304,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (busy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
-    if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!equipNo) { alert(equipGateText()); return; }
     const done = [c1, c2].filter(c => c._comp);
     // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
@@ -2373,7 +2373,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 인건비 근거가 없다(검수사 확정).
-    if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
     if (!equipNo) { alert(equipGateText() + '\n갱이 없는 완료는 그 갱의 작업 기록이 남지 않습니다 — 아주 중요한 값입니다.'); return; }
     setBusy(true);
     try {
@@ -2831,7 +2831,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     if (!c1 || !c2 || twinBusy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
-    if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
       if (!equipNo) { alert(equipGateText()); return; }
     //  ★ 4.27 감사 중-2: 한 화면 틀은 지금 목록 값으로 본다(컨 상세에서 넣은 XRAY 실번호 · 이미 확인한 한 대).
     const _pair = full ? [c1, c2].map((x) => ({ ...x, ...(liveOf(x) || {}) })) : [c1, c2];
@@ -2971,7 +2971,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     //  ⏸ 보류 — 자동 가이드 doHold 와 같은 저장(fbHoldContainers · 트윈은 두 대가 한 몸 · doneN = 그 모드 평택분 완료 수).
     const doHoldManual = async (reason) => {
       if (!reason || !L1) return;
-      if (!canWorkNow()) { alert(workGateText('보류')); return; }
+      if (!canRecordWorkNow()) { alert(recordGateText('보류')); return; }
       const cns = [L1, L2].filter((x) => x && !x._comp).map((x) => x.cn);
       if (!cns.length) return;
       const doneN = (slotSource || allContainers).filter((x) => x._mode === workFilter && x._ptk && x._comp).length;

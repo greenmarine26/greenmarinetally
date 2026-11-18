@@ -11,7 +11,7 @@ import {
   DAMAGE_PARTS,
 } from '../kakaoShare.js';
 import { fbAddWorkReport, fbAddPhotoReport } from '../firebase.js';
-import { canWorkNow } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
+import { canWorkNow, canRecordWorkNow, isAdminNow } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
 import { sealCheckOf } from '../utils.js';   // 4.49: 기존 실 = 신고 실(판정 한 벌)
 
 // 서류 표기 — tallyReport.js 의 DMG_PART_LABEL 과 같은 값(미리보기용 사본)
@@ -47,12 +47,12 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
 
   if (!open) return null;
   //  ★ 3.51: 조회만은 보고를 쓰지 않는다 — 열어서 채우다 저장이 막히면 «보냈다»고 오해한다. 들어올 때 말한다(검수사 «조회만으로는 아무 작업을 할수 없습니다. 보기만 할뿐»).
-  if (!canWorkNow()) {
+  if (!canRecordWorkNow()) {   // 5.12: 관리자도 보고를 내 이름으로 남기지 않는다(검수사 2026-11-18)
     return (
       <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4" onClick={onClose} data-view-only-report="1">
         <div className="bg-ink-900 border-2 border-sky-700 rounded-card p-5 max-w-sm w-full space-y-3 text-center" onClick={(e) => e.stopPropagation()}>
-          <div className="text-base font-black text-sky-200">🔍 조회만으로 들어와 있습니다</div>
-          <div className="text-xs text-dim-300 leading-relaxed">보고는 기록되지 않습니다. 화면과 호기는 그대로 보실 수 있고, 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.</div>
+          <div className="text-base font-black text-sky-200">{isAdminNow() ? '🛠 관리자로 들어와 있습니다' : '🔍 조회만으로 들어와 있습니다'}</div>
+          <div className="text-xs text-dim-300 leading-relaxed">{isAdminNow() ? '앱 점검용이라 보고는 이름·호기로 남지 않습니다. 작업하려면 헤더의 [🛠 관리자]를 눌러 작업자(선박·호기)로 바꾸세요.' : <>보고는 기록되지 않습니다. 화면과 호기는 그대로 보실 수 있고, 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.</>}</div>
           <button onClick={onClose} className="w-full py-3 rounded-pill bg-ink-800 border border-line text-dim-100 font-bold">닫기</button>
         </div>
       </div>

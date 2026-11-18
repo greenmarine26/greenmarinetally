@@ -150,6 +150,17 @@ export function equipGateText() {
 //      완료·완료취소·초과 등록·위치 수정·작업 보고. 문지기는 화면이 아니라 **쓰는 자리**(firebase)에 세운다(옆길을 막는다).
 /** 지금 «작업»(현장 기록에 쓰는 일)을 할 수 있는가 — 조회만이면 false. */
 export function canWorkNow() { return !isViewOnlyNow(); }
+//  ★ 5.12 (검수사 2026-11-18 12:42 «관리자로 들어 가서 앱 상태를 점검 하려고 작업시작을 누르고 장비를 선택했을떄 제이름과 제가 작업한걸로 기록되지 않아야 합니다»):
+//    관리자는 고치고 올리는 일(수정·자료 등록)은 전부 되지만 **검수 작업 기록**(완료·보류·초과 컨·작업 보고·사진 보고·교대·해치 자동 보고·X-RAY 봉인자 등록 — 호기 이동·외부 중단 보고와 수화물 확정은 관리 기록이라 열어 둔다)은 남기지 않는다.
+//    작업자로 갈 때는 헤더 [🛠 관리자] 를 눌러 작업자(선박·호기)로 바꾼다(4.30-03 «제가 작업자로 갈 때는 모드를 선택하게 하면 됩니다»).
+/** 지금 이 기기에서 검수 작업 기록(완료·보고·해치…)을 내 이름으로 남겨도 되는가 — 조회만·관리자는 아니다. */
+export function canRecordWorkNow() { return !isNotWorkerNow(); }
+/** 작업 기록이 막혔을 때의 문구 — 관리자면 관리자 문구, 조회만이면 조회만 문구(화면 미리 막기가 부른다). */
+export function recordGateText(what) { return isAdminNow() ? adminWorkGateText(what) : workGateText(what); }
+/** 관리자라서 작업 기록이 막혔을 때 사람에게 보이는 문구 한 벌. */
+export function adminWorkGateText(what) {
+  return `🛠 관리자로 들어와 있습니다 — 앱 점검용이라 작업으로 기록하지 않습니다.\n\n«${what || '작업'}» 은 이름·호기로 남지 않습니다. 작업하려면 헤더의 [🛠 관리자]를 눌러 작업자(선박·호기)로 바꾸세요.`;
+}
 
 /** 조회만이라 막혔을 때 사람에게 보이는 문구 한 벌. what 을 주면 무엇이 막혔는지 앞에 붙는다. */
 export function workGateText(what) {

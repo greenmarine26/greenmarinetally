@@ -7,6 +7,7 @@ import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { mfnNote, mfnInPtkOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
+import { forecastLegendOf } from '../utils.js';   // 5.12: 자료 오기 전 «예상 N대»(예보 카드 별첨과 같은 수)
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
@@ -1595,14 +1596,16 @@ function PodIssueChip({ voyage, cns, onOpen, big = false }) {
 }
 
 //  줄 안 작은 막대 — 이름표 · 막대 · 완료/전체(상세 큰 숫자와 같은 computeStats 값).
-function RowBar({ label, mode, stats }) {
+function RowBar({ label, mode, stats, fc = null }) {
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
   const lod = mode === 'loading';
   return (
     <span className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5" data-row-bar={mode} data-done={stats.done} data-total={stats.total}>
       <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} !border !rounded-md px-1.5 text-xs font-black leading-4`}>{label}</span>
       <span className="xp-bar xp-sm block"><span className={`xp-fill block ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></span>
-      <span className="mono text-xs font-black text-dim-100 whitespace-nowrap">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>
+      {stats.total === 0 && fc
+        ? <span className="text-xs font-black text-orange-200 whitespace-nowrap" data-row-forecast={fc.n}>예상 {fc.n}대</span>   /* 5.12: 자료 전 카톡 예보 대수(감사 중4 — 목록 줄에도) */
+        : <span className="mono text-xs font-black text-dim-100 whitespace-nowrap">{stats.done}<span className="text-dim-400">/{stats.total}</span></span>}
     </span>
   );
 }
@@ -1722,11 +1725,13 @@ export function ShipRow({ voyage, pilotForecast = {}, activeInspectors = [], sta
       <span className="home-row-bars min-w-0 flex flex-col gap-1">
         {dis && (sideCancelled(voyage.info, 'discharge')
           ? <span className="text-xs font-black text-st-badHi" data-row-bar="discharge" data-cancelled="1">양하 ⛔ 전량 캔슬</span>
-          : <RowBar label="양하" mode="discharge" stats={disStats} />)}
+          : <RowBar label="양하" mode="discharge" stats={disStats} fc={forecastLegendOf(voyage, 'discharge')} />)}
         {loa && (sideCancelled(voyage.info, 'loading')
           ? <span className="text-xs font-black text-st-badHi" data-row-bar="loading" data-cancelled="1">선적 ⛔ 전량 캔슬</span>
-          : <RowBar label="선적" mode="loading" stats={loaStats} />)}
-        {!dis && !loa && <span className="text-xs text-dim-400">자료 대기</span>}
+          : <RowBar label="선적" mode="loading" stats={loaStats} fc={forecastLegendOf(voyage, 'loading')} />)}
+        {!dis && !loa && (forecastLegendOf(voyage, 'loading') || forecastLegendOf(voyage, 'discharge')
+          ? <span className="text-xs font-black text-orange-200" data-row-forecast="1">{['discharge', 'loading'].map((m) => { const g = forecastLegendOf(voyage, m); return g ? `${m === 'loading' ? '선적' : '양하'} 예상 ${g.n}대` : ''; }).filter(Boolean).join(' · ')}</span>
+          : <span className="text-xs text-dim-400">자료 대기</span>)}
       </span>
       {/* 오른쪽 — 상태 한 줄 + (있으면) 알림 한 줄: 목적지 확인 · 사전에 없음 · 누락 · 예상(3.55 «누락은 접혀 있어도 보인다»). 줄 높이는 그대로(A4 «크기가 틀려 다음줄을 만들기도»). */}
       <span className="home-row-side min-w-0 flex flex-col items-end gap-0.5">
@@ -2037,14 +2042,14 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
         {/*  ★ 2.67-01 (검수사): 캔슬이면 숫자를 지우고 캔슬 한 줄만 — 누르기 **전에** 알아야 한다. */}
         {dis && (sideCancelled(voyage.info, 'discharge')
           ? <div className={`home-big is-dis ${_loaFirst ? 'order-2' : ''}`} data-side-box="discharge" data-cancelled="1"><CancelledSide label="양하"/></div>
-          : <SideBox order2={_loaFirst} label="양하" mode="discharge" stats={disStats} rem={remD} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(dis)} onOpen={onOpen}/>)}
+          : <SideBox order2={_loaFirst} label="양하" mode="discharge" fc={forecastLegendOf(voyage, 'discharge')} stats={disStats} rem={remD} term={_tpDis} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(dis)} onOpen={onOpen}/>)}
         {loa && (sideCancelled(voyage.info, 'loading')
           ? <div className="home-big is-lod" data-side-box="loading" data-cancelled="1"><CancelledSide label="선적"/></div>
 
-          : <SideBox label="선적" mode="loading" stats={loaStats} rem={remL} term={_tpLod} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(loa)} onOpen={onOpen}/>)}
+          : <SideBox label="선적" mode="loading" fc={forecastLegendOf(voyage, 'loading')} stats={loaStats} rem={remL} term={_tpLod} termOver={!!(_tp && _tp.overPlan)} lastAt={_lastDoneAt(loa)} onOpen={onOpen}/>)}
         {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건). */}
-        {(dis || loa) && !dis && <div className="home-big is-none"><MissingSideNote label="양하" qty={voyage.info?.planDis}/></div>}
-        {(dis || loa) && !loa && <div className="home-big is-none"><MissingSideNote label="선적" qty={voyage.info?.planLod}/></div>}
+        {(dis || loa) && !dis && <div className="home-big is-none"><MissingSideNote label="양하" qty={voyage.info?.planDis} fc={forecastLegendOf(voyage, 'discharge')}/></div>}
+        {(dis || loa) && !loa && <div className="home-big is-none"><MissingSideNote label="선적" qty={voyage.info?.planLod} fc={forecastLegendOf(voyage, 'loading')}/></div>}
         {!dis && !loa && (
           <div className="home-big is-none text-sm text-dim-300 min-[700px]:col-span-2" data-side-box="none">
             아직 자료가 없습니다 — EDI·리스트·카톡 물량 예보가 들어오면 여기에 대수가 나옵니다. 직접 올리려면 [항차 열기].
@@ -2298,7 +2303,15 @@ export function ShipDetail({ voyage, activeInspectors = [], standbyNames = [], o
 //   근거는 수집기 1.5-06 이 배정목록에서 실어 오는 info.planDis/planLod (PCTC 수량 열).
 //   ⚠ 이 수치는 근거 표시 전용 — 카운트 기준으로 쓰지 않는다(예정 수량이 섞인다, v2.17.26 교훈).
 //   ⚠ PNCT 배정표에는 수량 열이 없다(실측) — 판정 불가를 넘겨짚지 않고 «수량 미상»으로 말한다.
-function MissingSideNote({ label, qty }) {
+function MissingSideNote({ label, qty, fc = null }) {
+  //  ★ 5.12: 자료는 없어도 카톡 예보가 있으면 «예상 N대» 를 먼저 말한다(검수사 «예상댓수를 선적항차에 보여줘야 합니다»).
+  if (fc) {
+    return (
+      <div className="text-xs font-bold text-orange-200" data-side-forecast={fc.n} title={`${label} 자료(EDI·리스트)는 아직 없고 카톡 예보만 있습니다 — 예보 대수입니다.`}>
+        {label} 예상 <b className="text-lg">{fc.n}</b>대 <span className="text-dim-400 font-normal">· 카톡 예보 · 자료 대기</span>
+      </div>
+    );
+  }
   const has = qty != null;
   const n = Number(qty) || 0;
   if (has && n > 0) {
@@ -2340,7 +2353,7 @@ function CancelledSide({ label }) {
 //   머리 줄 = 대수 내역(평택·매칭·LUG·예상 EDI·부분 EDI·리스트만·컨펌전·실/가상E/E확정·쉬프팅·가상/리스트·누락 — 종전 식 그대로)
 //   큰 숫자 + 막대 = 완료/전체(평택분 · computeStats 한 벌 — 목록 줄·수석 상황판 보드와 같은 값)
 //   아래 작은 글 = 남음 · 본선 n/전체(터미널 호기 합계 · 참고) · 배정(터미널 배정목록 · 대조용 참고치) · 마지막 완료. 누르면 그 작업으로 들어간다.
-function SideBox({ label, mode, stats, rem = null, term = null, termOver = false, lastAt = 0, onOpen, order2 = false }) {
+function SideBox({ label, mode, stats, rem = null, term = null, termOver = false, lastAt = 0, onOpen, order2 = false, fc = null }) {
   const lod = mode === 'loading';
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
   return (
@@ -2431,12 +2444,22 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
           </>
         )}
       </div>
+      {/*  ★ 5.12 (검수사 2026-11-18 «예상댓수를 선적항차에 보여줘야 합니다. 예상 몇대»): 자료(EDI·리스트)가 아직 없어 0/0 인데 카톡 예보가 있으면 큰 숫자 자리에 «예상 N대». 수는 예보 카드와 같은 utils.forecastLegendOf. */}
+      {stats.total === 0 && fc ? (
+        <div className="flex items-baseline gap-2 mt-1.5" data-side-forecast={fc.n}>
+          <span className="text-base font-black text-orange-300">예상</span>
+          <span className="text-3xl font-black text-orange-200 leading-none mono">{fc.n}</span>
+          <span className="text-base font-bold text-orange-300">대</span>
+          <span className="text-xs text-dim-400">카톡 예보 · 풀 {fc.fe['20'].F + fc.fe['40'].F + fc.fe['45'].F} · 엠티 {fc.fe['20'].E + fc.fe['40'].E + fc.fe['45'].E}</span>
+        </div>
+      ) : (
       <div className="flex items-baseline gap-2 mono mt-1.5">
         <CountUp value={stats.done} className="text-3xl font-black text-dim-100 leading-none"/>
         <span className="text-base font-bold text-dim-400">/ {stats.total}</span>
         <span className={`text-base font-black ${lod ? 'text-amber-300' : 'text-blue-300'}`}>{pct}%</span>
         {!lod && stats.mfn > 0 && <span className="text-xs font-bold text-amber-300" data-mfn-note={stats.mfn}>{mfnNote(stats.mfn, stats.total, stats.mfnExtra)}</span>}{/* 4.58: 278 (리스트 234 + MFN 44) */}
       </div>
+      )}
       <div className="xp-bar mt-1.5"><div className={`xp-fill mo-grow ${pct >= 100 ? 'xp-done' : lod ? 'xp-lod' : 'xp-dis'}`} style={{ width: `${pct}%` }}/></div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-dim-300 mt-1.5">
         {rem != null && <span className={`font-bold text-sm ${rem > 0 ? 'text-amber-300' : 'text-emerald-300'}`} data-side-rem={rem}>남음 <b className="text-base"><CountUp value={rem}/></b></span>}

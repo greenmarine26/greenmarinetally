@@ -204,7 +204,7 @@ const deckN = (plan, d) => { const dk = plan.decks.find((x) => x.deck === d); re
     const i1 = dv.indexOf('const loadHere = async (slotKey, cn) =>'); if (i1 < 0) return false;
     const body = dv.slice(i1, dv.indexOf('return true;', i1));
     const at = (t) => body.indexOf(t);
-    return at("if (!canWorkNow()) { alert(workGateText('선적 완료')); return false; }") > 0 && at('if (!getEquipNumber()) { alert(equipGateText()); return false; }') > at('canWorkNow()') &&
+    return at("if (!canRecordWorkNow()) { alert(recordGateText('선적 완료')); return false; }") > 0 && at('if (!getEquipNumber()) { alert(equipGateText()); return false; }') > at('canRecordWorkNow()') &&   /* 5.12: 관리자도 작업 기록은 안 남긴다 */
       at('await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector') > at('getEquipNumber())') &&
       at("await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber())") > at('await fbAssignDeckSlot');
   })());

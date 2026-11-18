@@ -130,7 +130,7 @@ const sig = (q) => q.map((c) => c.main.cn + (c.twin ? '+' + c.twin.cn : '')).joi
     console.log('■ ② 트윈 무게 — 50톤부터 싱글 권유 · 27톤 이상 깜박임');
     {
       const P = rd('src/components/GuidedWorkPanel.jsx');
-      ok('50~55톤 문구 «싱글 작업을 권합니다. 기사 능력이면 55톤까지 트윈 가능합니다»', /\(50톤 넘음\) — 싱글 작업을 권합니다\. 기사 능력이면 55톤까지 트윈 가능합니다\./.test(P));
+      ok('50~55톤 문구 «싱글 권유 · 55톤까지 트윈 가능합니다»', /\(50톤 넘음\) — 싱글 권유 · 55톤까지 트윈 가능/.test(P));
       ok('50톤 넘으면 [싱글로 한 대씩] 단추가 켜진다(heavy 도 skyhint)', /\(twinWtWarn\?\.over \|\| twinWtWarn\?\.heavy\) && !singleMode \? 'skyhint' : 'sky'/.test(P));
       ok('27톤 깜박임 — 트윈 카드·싱글 아님·카드의 두 컨·twinWtOf ≥ 27000', /const HEAVY_BLINK_KG = 27000;/.test(P) && /card\.twin && !singleMode && \(String\(c\.cn\) === String\(card\.main\.cn\) \|\| String\(c\.cn\) === String\(card\.twin\.cn\)\) && twinWtOf\(c\) >= HEAVY_BLINK_KG/.test(P) && /animate-pulse/.test(P));
       //  실데이터 — 지금 작업 중 두 배의 트윈 쌍에서 27톤 이상 컨 수(깜박일 컨)
@@ -145,9 +145,9 @@ const sig = (q) => q.map((c) => c.main.cn + (c.twin ? '+' + c.twin.cn : '')).joi
       console.log(`    (참고) 지금 작업 중 두 배 양하 트윈 ${nPair}쌍 · 27톤 이상 컨 ${n27}대`);
       ok('트윈 쌍을 실제로 만든다(무게 칩 시험 대상이 있다)', nPair > 0);
       const M = rd('src/mir.js');
-      ok('미르 머리말이 무게대로 갈린다 — 50~55톤은 «합계가 50톤을 넘어», 55톤 초과만 «합계가 55톤을 넘어»(감사 지적)', /w\.includes\('55톤 초과'\) \? `\$\{head\} — \*\*트윈 자리입니다\. 합계가 55톤을 넘어/.test(M) && /: w\.includes\('50톤 넘음'\) \? `\$\{head\} — \*\*트윈 자리입니다\. 합계가 50톤을 넘어 싱글을 권합니다\(기사 능력이면 55톤까지 트윈\)/.test(M));
+      ok('미르 머리말이 무게대로 갈린다 — 50~55톤은 «합계가 50톤을 넘어», 55톤 초과만 «합계가 55톤을 넘어»(감사 지적)', /w\.includes\('55톤 초과'\) \? `\$\{head\} — \*\*트윈 자리입니다\. 합계가 55톤을 넘어/.test(M) && /: w\.includes\('50톤 넘음'\) \? `\$\{head\} — \*\*트윈 자리입니다\. 합계가 50톤을 넘어 싱글을 권합니다\(55톤까지 트윈 가능\)/.test(M));
       ok('미르 단독 카드 — 오버하이 OT 를 FR 이라 하지 않는다', /c\.fr \? '\\n  ⚠ FR\(플랫랙\)입니다/.test(M) && /오픈탑\(높이 초과\)입니다/.test(M));
-      ok('미르도 50~55톤을 «싱글 권유 — 기사 능력이면 55톤까지 트윈 가능» 으로 말한다', /\*\*싱글 권유\*\* — 총중량\(EDI\) 합계 \$\{formatWt\(total\)\} \(50톤 넘음\)\. 기사 능력이면 55톤까지 트윈 가능합니다\./.test(M));
+      ok('미르도 50~55톤을 «싱글 권유 — 55톤까지 트윈 가능» 으로 말한다', /\*\*싱글 권유\*\* — 총중량\(EDI\) 합계 \$\{formatWt\(total\)\} \(50톤 넘음\)\. 55톤까지 트윈 가능\./.test(M));
     }
 
     console.log('■ ⑤ 해치 — 양하 중 선적 플랜이 있으면 선적 대상 장을 넣고 알린다');
@@ -203,7 +203,10 @@ const sig = (q) => q.map((c) => c.main.cn + (c.twin ? '+' + c.twin.cn : '')).joi
     {
       const Hd = rd('src/data/helpData.js'), U = rd('src/utils.js');
       ok('매뉴얼 — 보류 되묻지 않음 · 50톤 · 27톤 · 앞/뒤 먼저 · 그 베이 이어 감 · 선적 대상 장 · 오버하이 OT', /보류는 앱이 되묻지 않는다/.test(Hd) && /장비 기준은 50톤이다/.test(Hd) && /27톤 이상이면 그 컨의 무게 칩이 붉게 깜박인다/.test(Hd) && /\[앞 N번 먼저\] \[뒤 N번 먼저\]/.test(Hd) && /탭한 쪽 베이를 한 대씩 이어 간다/.test(Hd) && /선적 대상 장도 열 장에 넣는다/.test(Hd) && /높이가 넘는 OT\(오버하이\)도 FR처럼 먼저/.test(Hd));
-      ok('APP_VERSION 5.11 · APP_NOTE 두 문장 이내·120자 미만', /APP_VERSION = 'TallyOne 5\.11'/.test(U) && /APP_NOTE = '5\.11 [^']{10,115}'/.test(U));
+      ok('APP_VERSION 5.11(·-NN) · APP_NOTE 두 문장 이내·120자 미만', /APP_VERSION = 'TallyOne 5\.(1[1-9]|[2-9]\d)(-\d\d)?'/.test(U) && /APP_NOTE = '5\.\d\d(-\d\d)? [^']{10,115}'/.test(U));
+      //  ★ 5.11-01 — 화면·미르·매뉴얼 문구에 사람 능력을 따지는 말을 넣지 않는다(검수사 2026-11-18 12:32 «만약에 클로드 능력에 따라 이런게 붙는다면 클로드는 좋게 보일까요?»)
+      const _says = ['src/components/GuidedWorkPanel.jsx', 'src/mir.js', 'src/nlSearch.js', 'src/data/helpData.js'].map(rd).join('\n');
+      ok('«기사 능력» 이라는 말이 화면·미르·매뉴얼 어디에도 없다', !/기사 능력/.test(_says));
     }
   } catch (e) {
     bad += 1; console.log('  ✘ 예외', e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e);

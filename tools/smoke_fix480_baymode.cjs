@@ -21,7 +21,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   ok('② 카드 완료는 종전 함수 — 베이모드 파일(bayMode.js)에는 firebase 기록 함수가 없다', !/fbComplete|fbHold|fbRelease|from '\.\/firebase/.test(bm));
   ok('② BayViewWork 도 기록 함수를 부르지 않는다(요청만 보낸다)', !/fbComplete|fbHold|fbRelease|from '\.\.\/firebase/.test(bvw));
   ok('② 일괄 확인은 handleConfirm → fbCompleteContainersAtomic · 싱글은 handleConfirmOne → fbCompleteContainer 그대로', /fbCompleteContainersAtomic\(voyageKey, mode, \[card\.main\.cn, card\.twin\.cn\]/.test(gwp) && /const handleConfirmOne = async/.test(gwp));
-  ok('② 조회만 문지기 — handleConfirm·handleConfirmOne 은 canWorkNow, 보류는 firebase.assertCanWork 가 막는다', (gwp.match(/if \(!canWorkNow\(\)\) \{ alert\(workGateText\('완료'\)\)/g) || []).length >= 2 && /assertCanWork\('보류'\)/.test(read('src/firebase.js')));
+  ok('② 조회만·관리자 문지기 — handleConfirm·handleConfirmOne 은 canRecordWorkNow(5.12), 보류는 firebase.assertCanRecordWork 가 막는다', (gwp.match(/if \(!canRecordWorkNow\(\)\) \{ alert\(recordGateText\('완료'\)\)/g) || []).length >= 2 && /assertCanRecordWork\('보류'\)/.test(read('src/firebase.js')));
   ok('② 보류 단추는 카드의 종전 ⏸ 보류(doHold) 그대로 — 새 보류 UI 없음', /exBtn\('hold', '⏸ 보류'/.test(gwp) && !/export function .*[Hh]old/.test(bm));
   ok('② SearchPanel 은 bayPick·onCardCns 를 GuidedWorkPanel 로 그대로 넘긴다', /bayPick=\{bayView \? bayView\.bayPick : null\}/.test(sp) && /onBayPickCns=\{bayView \? bayView\.onCardCns : null\}/.test(sp));
   ok('② 해제 = 따라가기·비율·배율·자동/수동·베이·단 복귀(saved) · 뒤로가기는 먼저 해제', /saved: \{ follow, ratio, zoom, ctx:/.test(bvw) && /bayModeRef\.current && releaseRef\.current\) releaseRef\.current\(\)/.test(bvw));
