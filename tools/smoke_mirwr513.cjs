@@ -22,7 +22,8 @@ const _cw = console.warn; console.warn = (...a) => { if (/베이사전/.test(Str
       `export { parseMirWorkReport, sameRtdbVal } from "${ROOT}/src/workReportParse.js";`,
       `export { planMirWorkReport, crewNameForEquip } from "${ROOT}/src/workReportPlan.js";`,
       `export { parseNaturalQuery } from "${ROOT}/src/nlSearch.js";`,
-      `export { canEditReport, crewShiftKey } from "${ROOT}/src/utils.js";`,
+      `export { canEditReport, crewShiftKey, degText } from "${ROOT}/src/utils.js";`,
+      `export { answerOneRaw, isWeakAnswer } from "${ROOT}/src/mir.js";`,
     ].join('\n'));
     execSync(`npx esbuild "${e}" --bundle --platform=node --format=cjs --external:firebase --external:firebase/* --loader:.png=dataurl --log-level=error --outfile="${o}"`, { cwd: ROOT, stdio: 'pipe' });
     const B = require(o);
@@ -123,6 +124,15 @@ const _cw = console.warn; console.warn = (...a) => { if (/베이사전/.test(Str
     ok('⑥ 떠 있는 미르·검색줄이 같은 계획·같은 쓰기를 부른다', [mf, sp].every((s) => /planMirWorkReport\(wr, \{ voyageKey, voyage, activeWork: cx\.activeWork, inspectors: cx\.inspectors, relayBy: inspector \|\| ''/.test(s) && /fbApplyMirWorkWrites\(voyageKey, plan\.writes/.test(s)));
     ok('⑥ 엔진 답 — 콘앱·적는 손 없는 화면은 적지 않는다고 말한다', /p\.workRep && \(p\.mirCalled \|\| c\.mirBox\)/.test(mi) && /이 화면에서는 작업보고가 적히지 않아요/.test(mi));
     ok('⑥ 매뉴얼에 미르 작업보고', /미르 작업보고/.test(rd('src/data/helpData.js')) && /검수원2/.test(rd('src/data/helpData.js')));
+    // ⑦ 5.13-01 — 라이브 확인 지적 셋
+    ok('⑦ 되묻기 앞에 «적고 있어요»가 뜨지 않는다(확인할게요)', !/'[^'\n]*적고 있어요/.test(mi) && /작업보고 확인할게요/.test(mi));
+    const cz = ['취소', '미르야 취소', '취소해줘', '취소 해줘', '취소해주세요', '취소?', '미르 취소', '취소요'].map((q) => String(B.answerOneRaw(q) || ''));
+    ok('⑦ 맨말 «취소» → 아무것도 바꾸지 않았다고 되묻는다', cz.every((a) => /무엇을 취소할까요/.test(a) && /아무것도 바꾸지 않았어요/.test(a)), cz.join(' / '));
+    ok('⑦ 맨말 «취소» 답은 약한 답이 아니다(모델·번역으로 안 보낸다)', ['취소', '미르야 취소', '취소해줘'].every((q) => B.isWeakAnswer(q, B.answerOneRaw(q), { via: 'cancelBare' }) === false));
+    ok('⑦ «취소 리스트»·«선적 취소»·«취소된 컨 몇 대» 는 가로채지 않는다', ['취소 리스트', '선적 취소', '취소된 컨 몇 대'].every((q) => !/무엇을 취소할까요/.test(String(B.answerOneRaw(q) || ''))));
+    ok('⑦ «보고 취소»는 그대로 작업보고 취소로 읽는다', P('보고 취소') && P('보고 취소').kind === 'cancel');
+    ok('⑦ 리퍼 온도 단위 한 번 — degText', B.degText('-23.0℃') === '-23.0°C' && B.degText('-18') === '-18°C' && B.degText(' 5 °C') === '5°C' && B.degText('-18°') === '-18°C' && B.degText('+5c') === '+5°C' && B.degText(0) === '0°C' && B.degText('') === '' && B.degText(null) === '');
+    ok('⑦ 화면 여섯 곳·검색 엔진이 degText 한 벌을 쓴다(°C 덧붙이기 없음)', ['src/components/ContainerList.jsx', 'src/pages/GlobalSearchPage.jsx', 'src/components/ContainerDetailModal.jsx', 'src/components/StatsTab.jsx', 'src/components/BigResultCard.jsx', 'src/components/SearchPanel.jsx', 'src/components/SlotPickerModal.jsx', 'src/nlSearch.js', 'src/mir.js'].every((f) => /degText\(/.test(rd(f))));
   } catch (err) { bad += 1; console.log('  ✘ 실행 오류 — ' + (err && err.stack || err)); }
   console.log(`\n5.13 미르 작업보고 전달 연막검사 — ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);

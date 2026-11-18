@@ -2,7 +2,7 @@ import React, { useState , useMemo, useRef, useEffect } from 'react';
 import CnText from './CnText.jsx';
 import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, reeferTempExempt, applySpecialMarks, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath, loadingNoPosAsk, degText } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
 import { xraySealerOf, xraySealCheckOf } from '../utils.js';   // 2.39: 봉인자 판정 공용 한 벌 · 4.88: X-RAY 실 점검 한 벌
 import { ptkDischargeUnitsOf, MFN_RELOAD_COUNTS, MFN_RELOAD_PENDING } from '../utils.js';   // 4.58: MFN 상자·배지는 앱이 지금 계산한 U.mfn 으로
@@ -638,7 +638,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 </Badge>
               );
             })()}
-            {isReefer && <Badge color="cyan"><Snowflake className="w-3 h-3"/>RF{c.tmp ? ` ${c.tmp}°C` : ''}</Badge>}
+            {isReefer && <Badge color="cyan"><Snowflake className="w-3 h-3"/>RF{c.tmp ? ` ${degText(c.tmp)}` : ''}</Badge>}
             {c.fr && <Badge color="orange">Flat Rack</Badge>}
             {c.ot && <Badge color="yellow">Open Top</Badge>}
             {c.tk && <Badge color="pink">Tank</Badge>}
@@ -1080,7 +1080,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     /* 3.70-01: 수화물 — 온도 대상이 아니다(검수사 2026-09-30, 판정은 utils.reeferTempExempt 한 벌) */
                     <span className="text-sm font-bold text-violet-300">🧳 수화물 (온도 대상 아님)</span>
                   ) : c.tmp && !c.tmp_missing ? (
-                    <span className="text-base font-bold mono text-cyan-200">{c.tmp}°C</span>
+                    <span className="text-base font-bold mono text-cyan-200">{degText(c.tmp)}</span>
                   ) : c.fe === 'E' ? (
                     /* M3.75: 엠티 리퍼는 온도 없는 게 정상 */
                     <span className="text-sm font-bold text-cyan-400/80">엠티 리퍼 (온도 표시 정상)</span>

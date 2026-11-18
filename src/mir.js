@@ -46,6 +46,7 @@ import {
   inspectorAllDone,   // 4.55-01: «검수 완료» 판정 한 벌(홈·수석 보드·보관 보고·홀드 잔여 공용)
   dischargeAccuracyOf, isPctcVoyage,   // 4.56: 미르 «양하 정확도» — 출발항별 EDI 계획 대비 실제 양하 순서 일치율
   guideTwinOf, swapWarnWordOf, hatchReportTs,   // 4.38: hatchReportTs — 해치 보고의 사건 시각 한 벌(자동 기록은 eventTs) · 4.23-01 3차: 자동 가이드와 같은 트윈 묶기(맞교환 자리는 짝 짐작 안 함) · 규격 다른 맞교환은 «자리 미정»(화면과 같은 말)
+  degText,   // 5.13-01: 리퍼 온도 단위 한 벌
 } from './utils.js';
 import {
   TWIN_MAX_TOTAL_KG, TWIN_CAUTION_TOTAL_KG, twinWtOf, twinDiffLimit, buildTwinPairs, analyzeTwinPairs, parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateIntroAnswer,
@@ -1765,7 +1766,7 @@ function sayCard(card, n, pier) {
     bits.push(sl ? `${!String(x.sl || '').trim() ? '엠티실' : '실번호'} ${sl}` : (_emp ? '엠티 · 실 없음' : '실번호 없음'));
     if (eyePosOf(x)) bits.push(eyePosOf(x));
     const ft = feetOf(x); if (ft) bits.push(ft);
-    if (x.rf && String(x.tmp ?? '').trim() !== '') bits.push(`리퍼 ${x.tmp}°C`);
+    if (x.rf && String(x.tmp ?? '').trim() !== '') bits.push(`리퍼 ${degText(x.tmp)}`);
     if (x._xray || x.isXray) bits.push('🔍 X-RAY');
     return bits.join(' · ');
   };
@@ -2461,13 +2462,19 @@ export function answerOneRaw(query, ctx) {
     }
     //  ★ 4.76 호기 이동 — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소». 기록은 화면(MirFab·SearchPanel)이 crane_move 보고로 적는다(craneMove.js).
     //    검수사 2026-11-08 «1호기 철수라고 했을때 미르가 1호기 작업중단을 했어야 했고 제가 2호기로 이동한것을 인지 했어야 합니다».
+    //  ★ 5.13-01 «취소» 한 마디 — 기다리는 일(4.40 [이동]·[취소] 단추)이 없으면 대화 층이 못 받아 잡담·모델로 가서 «취소 처리했어요!» 라고 했다(아무것도 안 했는데).
+    //    무엇을 취소할지 묻고 아무것도 바꾸지 않았다고 말한다. 기다리는 일이 있으면 대화 층(mirThreadResolve actNo)이 먼저 받아 여기까지 오지 않는다.
+    if (/^취소(?:\s*(?:해|하)?\s*(?:줘|주세요|줄래|요|할게요?|합니다|해요))?[\s.!~?？]*$/.test(String(q || '').replace(/^\s*미르(?:야|아)?[\s,]*/, '').trim())) {
+      _via('cancelBare');
+      return '무엇을 취소할까요? 🐱 아무것도 바꾸지 않았어요. 방금 미르가 적은 작업보고면 «보고 취소», 호기 철수를 거두려면 «철수 취소» 라고 말해 주세요.';
+    }
     //  ★ 5.13 작업보고 전달 — 적는 손은 화면(MirFab·통합검색)이다. 여기서는 받았다는 말만(실제 결과·되읽기·되묻기는 화면이 적은 뒤 붙인다).
     if (p.workRep && (p.mirCalled || c.mirBox)) {
       _via('workReport');
       if (p.workRep.kind === 'cancel') return app === 'cone' ? '콘앱 미르는 작업보고를 적지 않아요 🐱 검수앱 미르에서 해 주세요.' : '방금 미르가 적은 작업보고를 되돌릴게요 🐱';
       if (!hasShip || !v) return '어느 배 보고인지 몰라 적지 못했어요 🐱 배 이름을 붙여 주세요. (예: "미르야 KSKM 2호기 양하 완료")';
       if (app === 'cone' || !c.moveRecorder) return '알겠어요 🐱 다만 이 화면에서는 작업보고가 적히지 않아요 — 검수앱 미르(떠 있는 미르 칸이나 검색줄에서 "미르야")에서 말씀해 주세요.';
-      return '📝 작업보고 받았어요 — 적고 있어요 🐱';
+      return '📝 작업보고 확인할게요 🐱';   // 5.13-01: 옛 문구(적는 중이라는 말)는 되묻기(안 적음) 위에서도 적은 것처럼 읽혔다(라이브 확인)
     }
     if (p.moveSet && (p.mirCalled || c.mirBox)) {
       _via('workStop');
@@ -3223,6 +3230,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (answer == null || answer === '') return true;
   const via = trace && trace.via;
   if (via === 'modeChoice') return false;
+  if (via === 'cancelBare') return false;   // 5.13-01 감사 막음: 맨말 «취소» 되묻기는 답이다 — 모델·번역으로 보내면 «취소 처리했어요» 가 다시 난다
   if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)

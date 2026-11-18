@@ -3,7 +3,7 @@ import CnText from './CnText.jsx';
 import React, { useState, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf } from '../utils.js';
+import { isoToLabel, fmtPos, isReeferContainer, reeferTempExempt, buildMovePath, describeMovePath, effectivePos, getEquipNumber, canCompleteContainer, loadingNoPosAsk, loadingSlotOf, degText } from '../utils.js';
 import { inspectionSealOf, formatWt, isoShown, sealCheckOf } from '../utils.js';
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 한 줄   // 4.49: sealCheckOf — 실오류 판정 한 벌   // ★ 4.27 한 화면 카드(look='work') — 자동 가이드 카드와 같은 실번호 값·무게·규격 글자   // 3.2-01: 통과분 문지기   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
@@ -303,7 +303,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
           <span className={`${chip} bg-ink-800 ${_empty ? 'text-dim-300' : 'text-emerald-300'}`}>{_empty ? 'EMPTY' : 'FULL'}{c.wt ? ` ${formatWt(c.wt)}` : ''}</span>
           {c.op && <span className={`${chip} bg-ink-800 text-dim-200`}>{c.op}</span>}
           {c._xray && <span className={`${chip} bg-fuchsia-700 text-fuchsia-100`}>★ X-RAY</span>}
-          {showTmp && <span className={`${chip} bg-sky-700 text-sky-100`}><Snowflake className="w-3 h-3 inline"/> 리퍼 {c.tmp}°C</span>}
+          {showTmp && <span className={`${chip} bg-sky-700 text-sky-100`}><Snowflake className="w-3 h-3 inline"/> 리퍼 {degText(c.tmp)}</span>}
           {!showTmp && isReefer && c.fe !== 'E' && !c.rfdry && !reeferTempExempt(c) && <span className={`${chip} bg-red-700 text-white`}>리퍼 온도 미입력</span>}
           {c.mkcon && <span className={`${chip} bg-ink-700 text-dim-100`}>제작컨</span>}
           {c.dg && <span className={`${chip} bg-red-700 text-red-100`}>DG{c.un ? ` UN${c.un}` : ''}</span>}
@@ -444,7 +444,7 @@ const BigResultCard = forwardRef(function BigResultCard({ c, onOpen, onAfterComp
         {/* 3순위: 특수화물 */}
         {(isReefer || c.dg || c.fr || c.ot || c.tk) && (
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {showTmp && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {c.tmp}°C</span>}
+            {showTmp && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {degText(c.tmp)}</span>}
             {/* M3.75: 엠티 리퍼는 정상 - 경고 X */}
             {!showTmp && isReefer && c.fe === 'E' && (
               <span className="bg-cyan-800/60 text-cyan-200 px-2 py-1 rounded font-bold text-sm flex items-center gap-1">

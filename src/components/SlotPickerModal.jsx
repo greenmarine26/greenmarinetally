@@ -2,7 +2,7 @@
 // FR 4개 다중 적재 케이스 지원 - 베이플랜에서 ⊕N 셀 클릭 시 표시
 import React from 'react';
 import { X } from 'lucide-react';
-import { isoToLabel, isFlatRackContainer, isReeferContainer } from '../utils.js';
+import { isoToLabel, isFlatRackContainer, isReeferContainer, degText } from '../utils.js';
 
 export default function SlotPickerModal({ open, slot, containers, onPick, onClose }) {
   if (!open || !containers || containers.length === 0) return null;
@@ -77,7 +77,7 @@ export default function SlotPickerModal({ open, slot, containers, onPick, onClos
                   <span className="text-dim-200 font-bold">{label}</span>
                   {wt && <span className="text-dim-300">{wt}</span>}
                   {isDg && <span className="bg-red-700 text-red-100 px-1.5 py-0.5 rounded font-bold">DG{c.un ? ` UN${c.un}` : ''}</span>}
-                  {isReefer && <span className="bg-cyan-700 text-cyan-100 px-1.5 py-0.5 rounded font-bold">❄ {c.tmp || '미입력'}°C</span>}
+                  {isReefer && <span className="bg-cyan-700 text-cyan-100 px-1.5 py-0.5 rounded font-bold">❄ {degText(c.tmp) || '미입력'}</span>}
                   {isFr && <span className="bg-purple-700 text-purple-100 px-1.5 py-0.5 rounded font-bold">FR</span>}
                   {isOt && !isFr && <span className="bg-purple-700 text-purple-100 px-1.5 py-0.5 rounded font-bold">OT</span>}
                   {isTk && <span className="bg-orange-700 text-orange-100 px-1.5 py-0.5 rounded font-bold">TK</span>}

@@ -5,7 +5,7 @@
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
-import { voyagePierOf } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
+import { voyagePierOf, degText } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
 import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
 import { shipFlag } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 성질표 — 휴게 없는 배(noRest)
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
@@ -2611,7 +2611,7 @@ function formatBayDist(desc, results, parsed = {}) {
     if (v.deck + v.hold > 0) parts.push(`갑판 ${v.deck}/홀드 ${v.hold}`);
     const szs = fmtSz(v.sz); if (szs) parts.push(szs);
     const tk = Object.keys(v.temps);
-    if (tk.length) parts.push(tk.sort().map(tp => `${tp === '미입력' ? '온도미입력' : tp + '°C'}×${v.temps[tp]}`).join(' '));
+    if (tk.length) parts.push(tk.sort().map(tp => `${tp === '미입력' ? '온도미입력' : degText(tp)}×${v.temps[tp]}`).join(' '));
     const dk = Object.keys(v.dgc);
     if (dk.length) parts.push(dk.sort().map(cl => `cl.${cl}×${v.dgc[cl]}`).join(' '));
     if (v.l4.length && v.l4.length <= 6) parts.push(v.l4.join(', '));
@@ -2730,7 +2730,7 @@ function specialDetailLines(results, parsed) {
     const bits = [];
     //  3.70-01: 온도 대상이 아닌 리퍼(리퍼드라이·제작컨·수화물)는 «온도 미입력» 이 아니다 — 판정은 utils.reeferTempExempt 한 벌
     const _rx = c.rf ? reeferTempExempt(c) : '';
-    if (c.rf) bits.push(c.tmp != null && String(c.tmp).trim() !== '' ? `설정 ${c.tmp}°C` : _rx ? `${{ rfdry: '리퍼드라이', mkcon: '제작컨', lugg: '수화물' }[_rx]} (온도 대상 아님)` : '온도 미입력');
+    if (c.rf) bits.push(c.tmp != null && String(c.tmp).trim() !== '' ? `설정 ${degText(c.tmp)}` : _rx ? `${{ rfdry: '리퍼드라이', mkcon: '제작컨', lugg: '수화물' }[_rx]} (온도 대상 아님)` : '온도 미입력');
     if (c._xray) bits.push('X-RAY 대상');
     if (c.dg) bits.push(`cl.${c.dgc || '?'}${c.un ? ` UN${c.un}` : ' (UN 미기재)'}${c.pg ? ` PG ${c.pg}` : ''}`);
     if (c.cgL || c.cgW || c.cgH) {
@@ -2775,7 +2775,7 @@ function formatLocationList(desc, results, parsed = null) {
   list.forEach((c, i) => {
     const tag = [];
     if (c.fe) tag.push(c.fe);
-    if (c.rf && c.tmp) tag.push(`${c.tmp}°C`);
+    if (c.rf && c.tmp) tag.push(degText(c.tmp));
     if (c.dg) tag.push(`DG${c.dgc || ''}${c.un ? ' UN' + c.un : ''}`);
     if (c._xray) tag.push('X-RAY');
     if (c.lolo) tag.push('🏗갠트리');
@@ -3142,7 +3142,7 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
     shown.slice(0, 10).forEach((c, i) => {
       const tag = [];
       if (c.fe) tag.push(c.fe);
-      if (c.rf && c.tmp) tag.push(`${c.tmp}°C`);
+      if (c.rf && c.tmp) tag.push(degText(c.tmp));
       if (c.dg) tag.push(`DG${c.dgc || ''}`);
       lines.push(`  ${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${posWordOf(c) || '?'}${tag.length ? ' [' + tag.join(' ') + ']' : ''}`);
     });

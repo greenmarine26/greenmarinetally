@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer, inspectionSealOf } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
+import { fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer, inspectionSealOf, degText } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
@@ -695,7 +695,7 @@ function GlobalResultCard({ c, onOpen }) {
             c.fe === 'E' ? 'bg-ink-750 text-dim-200' :
             'bg-amber-900/60 text-amber-300'
           }`}>{c.fe || '?'}</span>
-          {isReefer && hasTmp && <span className="bg-cyan-700/60 text-cyan-100 text-3xs px-1 rounded font-bold flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>{c.tmp}°</span>}
+          {isReefer && hasTmp && <span className="bg-cyan-700/60 text-cyan-100 text-3xs px-1 rounded font-bold flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>{degText(c.tmp)}</span>}
           {c.isXray && <span className="bg-purple-700/60 text-purple-100 text-3xs px-1 rounded font-bold">🔍</span>}
           {c.dg && <span className="text-red-400 text-xs">🔥</span>}
           {isDone && <span className="bg-emerald-700/60 text-emerald-100 text-3xs px-1 rounded font-bold">✓</span>}

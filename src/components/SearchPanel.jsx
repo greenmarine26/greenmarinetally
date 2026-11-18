@@ -12,7 +12,7 @@ import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
-import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
+import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, degText } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
@@ -736,7 +736,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
               <div key={c.cn} className="flex items-center gap-2 text-xxs bg-ink-900/60 rounded px-2 py-1">
                 <span className="mono font-bold text-amber-300 flex-1 truncate"><CnText className="text-dim-100" cn={c.cn}/></span>
                 <span className="text-dim-300">{c._extraSize} · {c.fe} · {c._extraType}</span>
-                {c.tmp && <span className="text-cyan-300">❄{c.tmp}°</span>}
+                {c.tmp && <span className="text-cyan-300">❄{degText(c.tmp)}</span>}
                 {c._extraDamage && c._extraDamage !== '없음' && <span className="text-orange-400" title={c._extraDamage}>⚠</span>}
                 <button onClick={async () => {
                   if (!window.confirm(`초과 기록 삭제: ${c.cn}\n잘못 기록한 경우만 삭제하세요.`)) return;
@@ -3472,7 +3472,7 @@ function SmallResultCard({ c, onOpen, showPos = false }) {
         c.fe === 'E' ? 'bg-ink-750 text-dim-200' :
         'bg-amber-900/60 text-amber-300'
       }`}>{c.fe || '?'}</span>
-      {isReeferF && <span className="bg-cyan-700/60 text-cyan-100 text-3xs px-1 rounded font-bold">❄{c.tmp}°</span>}
+      {isReeferF && <span className="bg-cyan-700/60 text-cyan-100 text-3xs px-1 rounded font-bold">❄{degText(c.tmp)}</span>}
       {!isReeferF && isReefer && <span className="text-cyan-400 text-xs">❄</span>}
       {c.dg && <span className="text-red-400 text-xs">🔥</span>}
       {c._xray && <span className="text-purple-400 text-xs">🔍</span>}

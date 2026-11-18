@@ -8,7 +8,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
-import { completedByLabel, isSealError, sealCheckOf, sealConflictOf, xraySealCheckOf } from '../utils.js';   // 4.88: xraySealCheckOf — X-RAY 실 점검 한 벌 · 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
+import { completedByLabel, isSealError, sealCheckOf, sealConflictOf, xraySealCheckOf, degText } from '../utils.js';   // 4.88: xraySealCheckOf — X-RAY 실 점검 한 벌 · 4.49: 실오류 판정 한 벌(칩·필터·카드 같은 답)
 import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 · 세관 잘림 한 줄   // ★ 3.16: 완료자 표기 한 벌
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isFullReefer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf, loadingNoPosAsk, withAssignOf, loadingSlotOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
@@ -607,7 +607,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, xSealCk = null, mode, voyage
               {isReefer && (c.fe === 'E'
                 ? <span className="bg-ink-800 text-dim-400 bdg font-bold border border-line-strong"><Snowflake className="w-2.5 h-2.5"/>RF</span>
                 : hasTmp
-                  ? <span className="bg-cyan-600 text-cyan-50 text-2xs px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
+                  ? <span className="bg-cyan-600 text-cyan-50 text-2xs px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {degText(c.tmp)}</span>
                   : <span className="bg-cyan-900/70 text-cyan-300 bdg font-bold border border-cyan-700/50"><Snowflake className="w-2.5 h-2.5"/>RF</span>)}
               {c.fr && <span className="bg-orange-700/60 text-orange-100 bdg font-black">FR</span>}
               {c.ot && <span className="bg-yellow-700/60 text-yellow-100 bdg font-black">OT</span>}
