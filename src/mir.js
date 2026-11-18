@@ -2461,6 +2461,14 @@ export function answerOneRaw(query, ctx) {
     }
     //  ★ 4.76 호기 이동 — «1호기 철수»·«2호기로 이동»·«1호기 복귀»·«철수 취소». 기록은 화면(MirFab·SearchPanel)이 crane_move 보고로 적는다(craneMove.js).
     //    검수사 2026-11-08 «1호기 철수라고 했을때 미르가 1호기 작업중단을 했어야 했고 제가 2호기로 이동한것을 인지 했어야 합니다».
+    //  ★ 5.13 작업보고 전달 — 적는 손은 화면(MirFab·통합검색)이다. 여기서는 받았다는 말만(실제 결과·되읽기·되묻기는 화면이 적은 뒤 붙인다).
+    if (p.workRep && (p.mirCalled || c.mirBox)) {
+      _via('workReport');
+      if (p.workRep.kind === 'cancel') return app === 'cone' ? '콘앱 미르는 작업보고를 적지 않아요 🐱 검수앱 미르에서 해 주세요.' : '방금 미르가 적은 작업보고를 되돌릴게요 🐱';
+      if (!hasShip || !v) return '어느 배 보고인지 몰라 적지 못했어요 🐱 배 이름을 붙여 주세요. (예: "미르야 KSKM 2호기 양하 완료")';
+      if (app === 'cone' || !c.moveRecorder) return '알겠어요 🐱 다만 이 화면에서는 작업보고가 적히지 않아요 — 검수앱 미르(떠 있는 미르 칸이나 검색줄에서 "미르야")에서 말씀해 주세요.';
+      return '📝 작업보고 받았어요 — 적고 있어요 🐱';
+    }
     if (p.moveSet && (p.mirCalled || c.mirBox)) {
       _via('workStop');
       if (!hasShip || !v) return '알겠어요 🐱 다만 어느 배인지 몰라 호기 이동을 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 KKLC 1호기 철수")';
@@ -2659,7 +2667,7 @@ export function answerOneRaw(query, ctx) {
 
   //  ⑧ 사람·호기 등록·조회 — 배가 있어야 한다.
   if (p.crewSet || p.crewQuery) {
-    if (!v) return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 이인철 3호기 최관식» · «SWMM 김성일 몇 개 했어»';
+    if (!v) return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 홍길동 3호기 김철수» · «SWMM 홍길동 몇 개 했어»';
     if (p.crewSet && app === 'cone') return '호기 검수원은 검수앱에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 재감사: 콘앱엔 fbSetVoyageCraneCrew 가 없다
     if (p.crewSet) { try { return crewSetText(resolveCrewSides(p.crewSet, v), ship); } catch (e) { /* 본체로 */ } }
     if (p.crewQuery && c.crewAnswer) { try { const a = c.crewAnswer(p.crewQuery); if (a) return a; } catch (e) { /* 본체로 */ } }
@@ -3467,7 +3475,7 @@ export const MIR_CATALOG = `
 [진행·속도] 예: "브리핑" "얼마나 남았어" "몇 시쯤에 끝나" "시간당 몇 개 했어" "작업 속도" "몇 개 했어" "진행 상황"
 [배·시각·날씨] 예: "KBTR 브리핑" "콜사인" "IMO" "선박 소개" "입항 몇 시" "출항 몇 시" "도선 몇 시" "날씨" "지금 몇 시" "선속" "다음 항"
 [베이 정리(읽기만)] 예: "12번 베이 정리해줘" "(14)15 정리해줘" "선적 24번 정리"
-[호기·갱·근무자(말하기와 적기)] 예: "1호기 누구야" "갱 몇 개" "1호기 이인철 2호기 최관식" "2호기 23:15 시작했어" "갱 3개"
+[호기·갱·근무자(말하기와 적기)] 예: "1호기 누구야" "갱 몇 개" "1호기 홍길동 2호기 김철수" "2호기 23:15 시작했어" "갱 3개"
 [뜻·사용법·현장 대처] 예: "시프팅이 뭐야" "FR이 뜻" "트윈 어떻게 해" "해치커버 어떻게 열어" "씰 잘렸을 때 어떻게 해" "천정 구멍 어떻게 처리해" "리퍼 전원 꺼졌어 어떻게"
 [화면 열기] 예: "카고플랜 보여줘" "양하(DISCHARGING)PLAN 보여줘" "선적(STOWAGE)PLAN 보여줘" "CARGO DISCHARGING PLAN 보여줘" "STOWAGE INSTRUCTION 보여줘" "디스차징 플랜 보여줘" "스토우지 플랜 보여줘" "베이플랜 보여줘" "선적 플랜 보여줘" "KBTR 카고플랜 보여줘"
 [기기] 예: "화면 밝게" "화면 어둡게" "소리 꺼"

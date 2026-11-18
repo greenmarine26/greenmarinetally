@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.12';
-const NOTE = '5.12 예보를 플랜 별첨처럼 규격별·화물 종류별 두 표로 보이고 항차 카드에 예상 대수를 적습니다. 트윈 무게 경보 문구도 짧게 바꿨습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.13';
+const NOTE = '5.13 미르에게 작업보고를 말하면 작업 보고 창과 똑같이 적고 되읽어 줍니다. 매뉴얼과 미르 안내의 예시 이름은 홍길동으로 바꿨습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

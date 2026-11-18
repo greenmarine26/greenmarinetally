@@ -15,10 +15,12 @@ export const fbAddShipVoyage = async () => true;
 export const fbAddStaff = async () => true;
 export const fbAddSwapFix = async () => true;
 export const fbAddWorkReport = async (vk, report) => { const ts = Date.now(); window.__calls.push({ fn: 'report', vk, ts, report }); return ts; };
+export const fbApplyMirWorkWrites = async () => true;
 export const fbApplyTermSnapshot = async (vk, mode, by) => { window.__calls.push({ fn: 'applySnap', vk, mode, by }); return { ok: true, applied: window.__applyN || 0, basis: window.__applyBasis || '' }; };   // 4.11
 export const fbApplyTermWork = async () => true;
 export const fbArchiveVoyageBeforeDelete = async () => true;
 export const fbAssignDeckSlot = async () => true;
+export const fbAutoCloseVoyage = async () => true;
 export const fbBackupAll = async () => true;
 export const fbBatchMoveToStorage = async () => true;
 export const fbBatchSaveShipBayDict = async () => true;
@@ -85,6 +87,7 @@ export const fbLogoutInspector = async () => true;
 export const fbMarkBroadcastRead = async () => true;
 export const fbMarkDeletedStaff = async () => true;
 export const fbPeekCompleted = async () => false;
+export const fbPeekMirWorkCtx = async () => true;
 export const fbPickIso = async () => true;
 export const fbPickPod = async () => true;
 export const fbPromotePendingDamage = async () => true;
@@ -147,6 +150,7 @@ export const fbSetVoyageWorkStart = async () => true;
 export const fbSetWorkOrder = async (vk, equip, order, by) => { window.__calls.push({ fn: 'workOrder', vk, equip, order: order || null, by }); return order || null; };   // 4.09: 양하 순서 조건 저장 기록
 export const fbSetXraySeal = async (vk, cn, seal, eseal, by, opt) => { (window.__calls = window.__calls || []).push({ fn: 'xseal', vk, cn, seal, eseal, by, opt: opt === undefined ? null : opt }); if (typeof window.__onXseal === 'function') await window.__onXseal(cn, window.__calls.length); if ((window.__failSeal || []).includes(cn)) throw new Error('시뮬 저장 실패 ' + cn); return true; };   // 4.50: 파트너 몫 일괄 등록 시험이 호출 모양을 센다 — window.__failSeal 에 컨번호를 넣으면 그 컨만 실패 · window.__onXseal(cn, 번째) 는 저장 도중 다른 기기가 값을 바꾸는 상황을 흉내
 export const fbSnoozeHold = async () => true;
+export const fbStampChiefInput = async () => true;
 export const fbSubscribeAllReports = async () => true;
 export const fbSubscribeBroadcast = async () => true;
 export const fbSubscribeBroadcastReads = async () => true;
@@ -179,6 +183,7 @@ export const fbSyncActiveWorkSlot = async () => true;   // 4.46
 export const fbToggleXray = async () => true;
 export const fbTrashShipBayDict = async (code, by) => { window.__calls.push({ fn: 'trash', code, by }); return true; };
 export const fbUnassignContainer = async () => true;
+export const fbUndoMirWorkWrites = async () => true;
 export const fbUnmarkDeletedStaff = async () => true;
 export const fbUpdateAdminGuard = async () => true;
 export const fbUpdateRecordField = async () => true;

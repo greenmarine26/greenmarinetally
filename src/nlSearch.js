@@ -12,6 +12,7 @@ import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf,
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
 import { posWordOf } from './utils.js';   // 4.23-01 3차: 컨 자리 말 한 벌(규격 다른 맞교환은 «자리 미정(앱 짐작 …)») — 미르 머리줄과 같은 말
 import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌(마감텔리 칸을 20·40·45 로 접은 것)
+import { parseMirWorkReport } from './workReportParse.js';   // 5.13: 미르에게 말로 전한 작업보고(시작·완료·중단·재개·해치·콘박스·취소)
 import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 개 했어» — 질문 속 검수원 이름을 알아본다   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
@@ -170,6 +171,7 @@ export function parseNaturalQuery(text) {
     deviceCmd: null,   // { kind:'bright'|'volume'|'text', dir:+1|-1, to:1..4|'off', ask:true } — 4.23 text: to 1 보통 · 2 크게
     moveSet: null,     // 4.76: { kind, equip, to, raw } — «1호기 철수»·«2호기로 이동»·«1호기 복귀» 말로 알린 호기 이동(기록은 화면이 crane_move 보고로)
     bayTidy: null,     // 4.81: { bays:[번호…], mode, raw } — «12번 베이 정리해줘» 읽기 전용 현황 요청(쓰기 없음 — 미르가 두 자료를 읽어 답만 한다)
+    workRep: null,     // 5.13: { kind:'status'|'hatch'|'conbox'|'cancel', … } — 미르에게 말로 전한 작업보고(mirWorkParse). 기록은 화면(MirFab·SearchPanel)이 fbApplyMirWorkWrites 로 한다.
     pauseSet: null,    // 4.34-02: { reason, raw } — «미르야 강풍대기 상태야 쉬고 있어» 말로 알린 작업 멈춤(사유는 작업 보고 칩과 같은 이름). 기록은 화면(MirFab·SearchPanel)이 한다.
     startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
@@ -265,6 +267,15 @@ export function parseNaturalQuery(text) {
       }
     }
   }
+
+  //  ★ 5.13 작업보고 — «2호기 양하 완료»·«14번 베이 해치 열었어»·«1호기 콘박스 20자 3개»·«취소». 호기와 작업이 붙은 중단은 작업 보고 중단이다(외부 중단 pauseSet 이 아니다).
+  try {
+    const _wr = parseMirWorkReport(text);
+    if (_wr && !(result.moveSet && _wr.kind === 'cancel')) {
+      result.workRep = _wr;
+      if (_wr.kind === 'status' && _wr.verb === 'pause') result.pauseSet = null;
+    }
+  } catch (e) { console.warn('[5.13] 작업보고 말 읽기 실패', e); }
 
   //  ★ 4.81 베이 정리 — «12번 베이 정리해줘»·«12번 정리»·«(14)15 정리해줘»·«12베이 정리». 검수사 2026-11-09 «일반 사용자가 몇번베이 정리해줘 하면 그때 두자료를 읽어서 작업 할수 있게 해주는 것».
   //  { bays:['15','14'], mode:'discharge'|'loading'|null, raw } — 읽기 전용(미르가 앱 입력·터미널 반영 두 자료를 읽어 그 장의 현황만 답한다 · 기록·알림 없음).
@@ -1735,9 +1746,9 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   {
     const _canCrew = !!(ctx && typeof ctx.crewAnswer === 'function');
     //  ⚠ 저장은 화면 effect 가 한다 — crewAnswer 가 없는 자리(콘앱 mirCore·홈 폴백)는 저장 배선도 없으므로 «기억할게요» 라고 말하면 거짓이다(감사 실측 콘앱)
-    if (parsed.crewSet) return _canCrew ? crewSetText(resolveCrewSides(parsed.crewSet, ctx && (ctx.bowStern || ctx.voyage))   /* 3.21 감사: 항차를 통째로 못 싣는 화면(InlineAnswerCard)은 {bow,stern} 만 준다 — 화면 글과 저장부가 같은 재료를 봐야 한다 */, (ctx && (ctx.vslFull || ctx.vsl)) || '') : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 김판석 2호기 송제욱», 홈에서는 배 이름을 붙여서요.';
+    if (parsed.crewSet) return _canCrew ? crewSetText(resolveCrewSides(parsed.crewSet, ctx && (ctx.bowStern || ctx.voyage))   /* 3.21 감사: 항차를 통째로 못 싣는 화면(InlineAnswerCard)은 {bow,stern} 만 준다 — 화면 글과 저장부가 같은 재료를 봐야 한다 */, (ctx && (ctx.vslFull || ctx.vsl)) || '') : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 홍길동 2호기 김철수», 홈에서는 배 이름을 붙여서요.';
     if (parsed.crewQuery) {
-      if (parsed.crewQuery.kind === 'cancel') return '호기 검수원 지우기는 아직 없어요 — 다른 이름으로 다시 말하면 그 조·그 호기가 덮어써져요(«1호기 이인철»).';
+      if (parsed.crewQuery.kind === 'cancel') return '호기 검수원 지우기는 아직 없어요 — 다른 이름으로 다시 말하면 그 조·그 호기가 덮어써져요(«1호기 홍길동»).';
       if (_canCrew) { try { const _ca = ctx.crewAnswer(parsed.crewQuery); if (_ca) return _ca; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패:', e); } }
       return '호기별 검수원은 검수앱 항차 화면(양하·선적 탭)이나 홈에서 배 이름을 붙여 물어봐 주세요 — 예: «SWMM 1호기 누구야».';
     }
@@ -3188,7 +3199,7 @@ export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
   if (_need.length) {
     out += `\n⚠ ${_need.map((q) => `${q.side} ${q.name}`).join(' · ')} 은 **어느 호기인지 못 가려 아직 못 적었어요** — 작업 기록이 쌓이면 가려지고, 지금은 호기로 알려 주시면 됩니다.`;
   }
-  out += `\n(«김성일 몇 개 했어» · «1호기 누구야» · «누가 몇 개 했어» 로 물으시면 이 등록으로 답해요)`;
+  out += `\n(«홍길동 몇 개 했어» · «1호기 누구야» · «누가 몇 개 했어» 로 물으시면 이 등록으로 답해요)`;
   return out;
 }
 
@@ -3218,7 +3229,7 @@ export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   const st = crewWorkStats(voyage);
   const info = voyage.info || {};
   const ship = info.vslFull || info.vsl || '';
-  const hint = '\n(등록은 «주간 1호기 김판석 2호기 송제욱» 처럼 말해 주세요 — 조를 안 대면 지금 조예요)';
+  const hint = '\n(등록은 «주간 1호기 홍길동 2호기 김철수» 처럼 말해 주세요 — 조를 안 대면 지금 조예요)';
   //  4.12-02: **날짜 말을 댔을 때만** 그 날 조 기록으로 거른다(어제·그제·내일… 또는 «오늘 야간»). 날짜만 대면 그날 주간·야간 둘 다.
   //    날짜 말이 없는 «야간 1호기 누구야»·«오늘 몇 개 했어» 는 종전처럼 항차 전체로 답한다(앱 완료 기록은 조 표시가 없어 날 단위로 못 가른다 — 감사 실측).
   let keyOk = null, keyLbl = '';

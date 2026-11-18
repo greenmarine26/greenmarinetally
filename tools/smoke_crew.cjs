@@ -226,7 +226,7 @@ const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/crew_swmm.
     T(/crewSetText\(resolveCrewSides\(p\.crewSet, v\)/.test(_gs), '3.21: 홈 확인 글이 저장부와 같은 유도를 안 탄다');
   }
   T(/parsed\.crewSet \|\| parsed\.crewQuery/.test(rd('src/nlSearch.js')), 'hasAnyCondition 에 없어 미르가 «못 알아들었다»고 적는다');
-  T(/주간 1호기 김판석 2호기 송제욱/.test(rd('src/data/helpData.js')) && /김성일 몇 개 했어/.test(rd('src/data/helpData.js')), '매뉴얼(helpData)에 없다 — 만들어 두고 아무도 모르면 안 만든 것');
+  T(/주간 1호기 홍길동 2호기 김철수/.test(rd('src/data/helpData.js')) && /홍길동 몇 개 했어/.test(rd('src/data/helpData.js')) && !/김판석|송제욱|김성일 몇 개/.test(rd('src/data/helpData.js'))   /* 5.12-01: 예시 이름은 홍길동 — 실명 금지 */, '매뉴얼(helpData)에 없다 — 만들어 두고 아무도 모르면 안 만든 것');
   T(/allStaffNames/.test(rd('src/staffList.js')) && /import \{ allStaffNames \} from '\.\/staffList\.js'/.test(rd('src/utils.js')), '이름 목록 한 벌(allStaffNames)을 안 쓴다');
 }
 if (bad) { console.error(`✗ 호기–검수원 연막검사 실패 ${bad}건`); process.exit(1); }

@@ -34,7 +34,7 @@ import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록�
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 3.49: 장 묶기(hatchEvenOf 가 받는 목록)
 import { recordHatchEvent } from '../hatchReport.js';   // 3.49: 따라가기 자동 기록
 import HatchAlertBanner from './HatchAlertBanner.jsx';   // 3.49: 비따라가기 알림
-import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddWorkReport} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
+import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 수동 트윈 한 화면 틀(조회창 앞·뒤 → [확인] → 카드 두 장 · 아래 칸 변경 단추)
 import { fbHoldContainers } from '../firebase.js';   // ★ 4.27: 수동 한 화면 틀의 ⏸ 보류(자동 가이드와 같은 저장)
@@ -48,6 +48,7 @@ import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 �
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 import { mirTone } from '../mir.js';
 import { craneMoveReportsOf } from '../craneMove.js';
+import { planMirWorkReport } from '../workReportPlan.js';   // 5.13: 미르 작업보고 전달 계획 한 벌
 import { answerOneRaw, workPauseOf } from '../mir.js';   // 3.41: 답 고르기 한 벌 — 작업창·양하선적 탭·홈·콘앱·떠 있는 미르가 같은 함수
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌
 import { computeTallyData } from '../tallyReport.js';   // 3.41: 마감텔리 수치 창구 — 화면이 실어 준다(콘앱 번들 무게)
@@ -1394,6 +1395,43 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
       .catch((e) => { console.warn('[4.34-02] 중단 기록 실패', e); pauseSetRef.current = ''; });
   }, [parsed.pauseSet, parsed.mirCalled, voyageKey, inspector]);
 
+  //  ★ 5.13 «미르야 2호기 양하 완료» — 작업보고 전달. MirFab 과 같은 계획(planMirWorkReport)·같은 쓰기(fbApplyMirWorkWrites). 미르를 불렀을 때만. 결과(되읽기·되묻기)가 답 자리에 선다.
+  const [wrAnswer, setWrAnswer] = useState(null);
+  const wrKeyRef = useRef('');
+  const wrSameRef = useRef({ raw: '', at: 0 });
+  const wrUndoRef = useRef(null);
+  useEffect(() => {
+    const wr = parsed.workRep;
+    if (!wr || !parsed.mirCalled || !voyageKey) return;
+    const qk = `${askedAt || 0}|${String(query || '').trim()}`;
+    if (wrKeyRef.current === qk) return;
+    wrKeyRef.current = qk;
+    (async () => {
+      let msg = '';
+      try {
+        if (wr.kind === 'cancel') {
+          const u = wrUndoRef.current;
+          if (!u || Date.now() - u.at > 30 * 60000) msg = '↩ 되돌릴 미르 작업보고가 없어요(이 기기에서 30분 안에 적은 것만 되돌려요) 🐱';
+          else { const r = await fbUndoMirWorkWrites(u, inspector || ''); wrUndoRef.current = null; wrSameRef.current = { raw: '', at: 0 }; msg = `↩ 방금 적은 작업보고 ${r.n}건을 지웠어요 🐱` + (r.kept.length ? ` (${r.kept.join('·')} 진행 중 표시는 그 사이 바뀌어서 그대로 뒀어요)` : ''); }
+        } else {
+          //  MirFab 과 같은 규칙 — 같은 말 1분 안 되풀이는 다시 적지 않는다(다시 물어도 · 감사 하1)
+          const raw = `${voyageKey}|${wr.raw}`, now = Date.now();
+          if (wrSameRef.current.raw === raw && now - wrSameRef.current.at < 60000) msg = '같은 보고를 방금 적었어요 🐱 다시 적지 않았어요. 틀렸으면 «보고 취소» 라고 하세요.';
+          else {
+            wrSameRef.current = { raw, at: now };
+            const cx = await fbPeekMirWorkCtx(voyageKey);
+            const plan = planMirWorkReport(wr, { voyageKey, voyage, activeWork: cx.activeWork, inspectors: cx.inspectors, relayBy: inspector || '', nowMs: Date.now() });
+            if (plan.ask) { msg = plan.ask; wrSameRef.current = { raw: '', at: 0 }; }
+            else { wrUndoRef.current = null; wrUndoRef.current = await fbApplyMirWorkWrites(voyageKey, plan.writes, cx.activeWork, (voyage && voyage.info && voyage.info.hatchDone) || {}); msg = plan.readback; }
+          }
+        }
+      } catch (e) { console.warn('[5.13] 미르 작업보고 실패', wr, e); wrSameRef.current = { raw: '', at: 0 }; msg = `⚠ 작업보고를 적지 못했어요(아무것도 바뀌지 않았어요) — ${e && e.message ? String(e.message).split('\n')[0] : '연결을 확인하고 다시 말해 주세요'} 🐱`; }
+      setWrAnswer({ key: qk, msg });
+      try { speak(msg.replace(/^[📝⚠↩]\s*/u, '').split(' — ')[0], { conversational: true }); } catch { /* 소리 꺼짐 */ }
+    })();
+  }, [parsed.workRep, parsed.mirCalled, voyageKey, inspector, askedAt, query]);
+  useEffect(() => { if (!parsed.workRep) setWrAnswer(null); }, [parsed.workRep, query]);
+
   //  ★ 4.76 «1호기 철수»·«2호기로 이동»·«1호기 복귀» — 호기 이동 보고(crane_move). MirFab 과 같은 규칙(미르를 불렀을 때만 · 같은 말 10분 안 되풀이는 안 적는다).
   const moveSetRef = useRef('');
   useEffect(() => {
@@ -1434,9 +1472,10 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
   //  3.42: 모델이 받은 답(번역→규칙 / 자료 답)이 있으면 약한 규칙 답 대신 그것이다. 말투는 규칙 답과 같은 한 겹.
   const _modelAnswer = (modelState.q === query.trim() && modelState.text) ? mirTone(modelState.text) : null;
-  const localAnswer = _devMsg || _modelAnswer || _mirAnswer;
+  const _wrMsg = (wrAnswer && parsed.workRep) ? wrAnswer.msg : null;   // 5.13: 미르 작업보고 결과가 답이다
+  const localAnswer = _devMsg || _wrMsg || _modelAnswer || _mirAnswer;
   //  3.42: 렌더 시점에 «이 문장은 모델로 간다»를 미리 안다 — effect 가 pending 을 세우기 전 첫 커밋에 발화·신고가 먼저 나가던 것(감사 jsdom 실측)
-  const _willAskModel = !!(askedAt && query.trim().length >= 4 && !/^[0-9\s]+$/.test(query.trim()) && !(parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) && isWeakAnswer(query.trim(), _localAnswerRaw, traceRef.current));
+  const _willAskModel = !!(askedAt && query.trim().length >= 4 && !/^[0-9\s]+$/.test(query.trim()) && !(parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet || parsed.workRep) && isWeakAnswer(query.trim(), _localAnswerRaw, traceRef.current));
   const _modelWait = _willAskModel && !(modelState.q === query.trim() && !modelState.pending);
 
   /* ★ 2.85 (검수사 지시 2026-08-29) — *«미르야 베이플랜/카고플랜 보여줘»*

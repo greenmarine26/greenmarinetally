@@ -66,7 +66,7 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!doc.querySelector('[data-choice-shift-box="1"]')) fail('4.79 선박을 골랐는데 주간조/야간조 묻기가 없다');
   if (doc.querySelector('[data-choice-equips="1"]')) fail('4.79 조를 고르기 전인데 호기 칩이 떠 있다');
   if (!doc.querySelector('[data-choice-start="1"]').disabled) fail('4.79 조를 고르기 전인데 시작 단추가 눌린다');
-  const kh = new Date(Date.now() + 9 * 3600000).getUTCHours(); const nowSh = (kh >= 6 && kh < 18) ? 'day' : 'night'; const otherSh = nowSh === 'day' ? 'night' : 'day';
+  const _km = (() => { const d = new Date(Date.now() + 9 * 3600000); return d.getUTCHours() * 60 + d.getUTCMinutes(); })(); const _wsSrc = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'workShift.js'), 'utf8'); const _DF = +((/DAY_FROM_MIN\s*=\s*([^;]+);/.exec(_wsSrc) || [])[1] ? eval(/DAY_FROM_MIN\s*=\s*([^;]+);/.exec(_wsSrc)[1]) : 360); const _DT = +((/DAY_TO_MIN\s*=\s*([^;]+);/.exec(_wsSrc) || [])[1] ? eval(/DAY_TO_MIN\s*=\s*([^;]+);/.exec(_wsSrc)[1]) : 1080); const nowSh = (_km >= _DF && _km < _DT) ? 'day' : 'night';   /* 5.13: 앱 shiftAt 과 같은 경계(종전 6~18시 고정은 17:30~18:00 에 틀렸다) */ const otherSh = nowSh === 'day' ? 'night' : 'day';
   doc.querySelector(`[data-choice-shift="${otherSh}"]`).click(); await wait(100);
   if (!doc.querySelector('[data-choice-offshift="1"]') || doc.querySelector('[data-choice-equips="1"]')) fail('4.79 근무시간 밖 조를 골랐는데 조회만 안내가 없거나 호기 칩이 떠 있다');
   if (!/조회만으로 들어가기/.test(doc.querySelector('[data-choice-start="1"]').textContent)) fail('4.79 근무시간 밖 시작 단추가 «조회만으로 들어가기» 가 아니다');

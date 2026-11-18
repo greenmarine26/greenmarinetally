@@ -19,6 +19,7 @@ import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
 import { craneMoveReportsOf } from '../craneMove.js';
+import { planMirWorkReport } from '../workReportPlan.js';   // 5.13: 미르 작업보고 전달 계획 한 벌
 import { answerOneRaw, workPauseOf, mirDoneUpWhy } from '../mir.js';   // 4.42-02: mirDoneUpWhy — 기쁨 이유에 배 이름
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
 import { mirTone } from '../mir.js';
@@ -33,7 +34,7 @@ import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
 import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain } from '../voice.js';
 import { logQuerySettled } from '../activityLog.js';
-import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport } from '../firebase.js';
+import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
 import { mirWorkCtx } from '../workChoice.js';   // 4.38: 작업 중 사담 미루기 — 내 작업 표지(작업자·작업 선박·호기)
@@ -116,6 +117,36 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     return chiefRef.current;
   }, [isChief]);
 
+  //  ★ 5.13 — 미르 작업보고 한 건을 읽고·계획하고·쓴다. 돌려주는 말은 되읽기(적었으면)·되묻기(안 적었으면)·실패 안내. 같은 말 1분 안 되풀이는 안 적는다.
+  const wrUndoRef = useRef(null);
+  const wrKeyRef = useRef({ raw: '', at: 0 });
+  const runMirWorkReport = useCallback(async (wr, voyageKey, voyage) => {
+    try {
+      if (wr.kind === 'cancel') {
+        const u = wrUndoRef.current;
+        if (!u || Date.now() - u.at > 30 * 60000) return '↩ 되돌릴 미르 작업보고가 없어요(이 기기에서 30분 안에 적은 것만 되돌려요) 🐱';
+        const r = await fbUndoMirWorkWrites(u, inspector || '');
+        wrUndoRef.current = null; wrKeyRef.current = { raw: '', at: 0 };   // 지운 뒤에 비운다 — 취소가 실패하면 다시 취소할 수 있게
+        return `↩ 방금 적은 작업보고 ${r.n}건을 지웠어요 🐱` + (r.kept.length ? ` (${r.kept.join('·')} 진행 중 표시는 그 사이 바뀌어서 그대로 뒀어요)` : '');
+      }
+      if (!voyageKey || !voyage) return '';
+      //  같은 말 1분 안 되풀이는 다시 적지 않는다 — 읽기 전에 잠근다(빠른 두 번 전송이 둘 다 쓰지 않게 · 감사 하1)
+      const raw = `${voyageKey}|${wr.raw}`, now = Date.now();
+      if (wrKeyRef.current.raw === raw && now - wrKeyRef.current.at < 60000) return '같은 보고를 방금 적었어요 🐱 다시 적지 않았어요. 틀렸으면 «보고 취소» 라고 하세요.';
+      wrKeyRef.current = { raw, at: now };
+      const cx = await fbPeekMirWorkCtx(voyageKey);
+      const plan = planMirWorkReport(wr, { voyageKey, voyage, activeWork: cx.activeWork, inspectors: cx.inspectors, relayBy: inspector || '', nowMs: Date.now() });
+      if (plan.ask) { wrKeyRef.current = { raw: '', at: 0 }; return plan.ask; }
+      wrUndoRef.current = null;   // 쓰기 전에 비운다 — 실패하면 앞 보고의 되돌리기 정보가 남아 엉뚱한 것을 지우지 않게(감사 중1)
+      wrUndoRef.current = await fbApplyMirWorkWrites(voyageKey, plan.writes, cx.activeWork, (voyage.info && voyage.info.hatchDone) || {});
+      return plan.readback;
+    } catch (e) {
+      console.warn('[5.13] 미르 작업보고 실패', wr, e);
+      wrKeyRef.current = { raw: '', at: 0 };
+      return `⚠ 작업보고를 적지 못했어요(아무것도 바뀌지 않았어요) — ${e && e.message ? String(e.message).split('\n')[0] : '연결을 확인하고 다시 말해 주세요'} 🐱`;
+    }
+  }, [inspector]);
+
   //  «1호기 김판석 2호기 이종부»·«3갱으로 기억해»·«22시 시작» — 작업창과 같은 저장(말만 하고 안 적으면 거짓말이다).
   const applySideEffects = useCallback((parsed, voyageKey, voyage, text) => {
     if (!parsed || !voyageKey) return;
@@ -143,6 +174,8 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
           if (sideRef.current !== key) { sideRef.current = key; fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[미르] 시작 시각 저장 실패', e)); }
         }
       }
+      //  ★ 5.13 작업보고 전달 — «2호기 양하 완료»·«14번 베이 해치 열었어»·«1호기 콘박스 20자 3개»·«취소». 바로 적고 되읽는다(검수사 «바로 적고 되읽기만»).
+      if (parsed.workRep) runMirWorkReport(parsed.workRep, voyageKey, voyage).then((msg) => { if (msg) { setOut((o) => (o ? o + '\n' : '') + msg); try { speak(msg.replace(/^[📝⚠↩]\s*/u, '').split(' — ')[0], { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } } });
       //  4.76 «1호기 철수»·«2호기로 이동»·«1호기 복귀» — 호기 이동 보고(crane_move)를 남긴다. 같은 말을 10분 안에 되풀이하면 다시 적지 않는다.
       if (parsed.moveSet && voyageKey) {
         const mkey = `move|${voyageKey}|${parsed.moveSet.kind}|${parsed.moveSet.equip}|${parsed.moveSet.to}|${Math.floor(Date.now() / 600000)}`;

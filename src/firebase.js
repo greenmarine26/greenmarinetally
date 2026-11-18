@@ -20,7 +20,8 @@ import { askCraneBeforeComplete } from './craneAsk.js';   // 4.85: 완료 직전
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, isNotWorkerNow, isAdminNow, adminWorkGateText, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
-import { workOrderKey, normalizePrefs } from './workOrder.js';   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
+import { workOrderKey, normalizePrefs } from './workOrder.js';
+import { sameRtdbVal } from './workReportParse.js';   // 5.13: 미르 보고 취소 — 쓴 값 그대로인가(키 순서·null 칸 무시)   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 import { setServerOffset } from './workShift.js';   // 4.79: 주야 근무조 판정은 서버 시각 기준
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
@@ -3290,6 +3291,70 @@ export async function fbAddWorkReport(voyageKey, report) {
     created_at: new Date(ts).toISOString(),
   }), '작업 보고');
   return ts;
+}
+
+//  ★ 5.13 — **미르가 받은 작업보고를 앱에 적는다**(검수사 2026-11-18 «저는 작업보고 내용은 미르에게 전달하는 방식으로 하겠습니다. 그러니 관리자가 전달하는 내용은 미르가 앱에 정확히 적용시켜야 할것입니다»).
+//    계획은 mirWorkReport.planMirWorkReport(순수) — 여기는 읽기(진행 중 표시·명단)와 쓰기만 한다. 쓰는 모양은 작업 보고 창과 같다(activeWork 한 칸 + reports 한 건).
+//    전달 기록이다 — 보고 이름(by)은 그 호기 검수원(조 등록 → 로그인 작업자 → «검수원N»), 전한 사람은 relayBy 로 남는다. 그래서 관리자도 적는다(조회만은 막는다).
+//    못 읽으면 아무것도 쓰지 않고 던진다(조용한 실패 금지). 되돌리기(«취소»)용으로 바꾸기 전 값을 돌려준다.
+export async function fbPeekMirWorkCtx(voyageKey) {
+  if (!voyageKey) throw new Error('어느 배인지 몰라 적지 못했습니다.');
+  const [aw, insp] = await Promise.all([
+    _withTimeout(get(ref(db, `activeWork/${voyageKey}`)), '진행 중 작업 읽기'),
+    _withTimeout(get(ref(db, 'inspectors')), '검수원 명단 읽기'),
+  ]);
+  return { activeWork: aw.exists() ? (aw.val() || {}) : {}, inspectors: insp.exists() ? (insp.val() || {}) : {} };
+}
+export async function fbApplyMirWorkWrites(voyageKey, writes, activeWorkNow = {}, infoHatchDone = {}) {
+  assertCanWork('미르 작업보고');
+  if (!voyageKey || !Array.isArray(writes) || !writes.length) throw new Error('적을 보고가 없습니다.');
+  if (writes.some((w) => w.report && w.report.via !== 'mir')) throw new Error('미르 전달 보고가 아닙니다.');
+  //  감사 중1 — 진행 중 표시·보고·해치 표시를 **한 번에**(루트 update) 쓴다. 반쪽만 남지 않는다. 신호가 약하면 SDK 가 화면에 먼저 반영하고 연결되면 보낸다(_ackOrQueue — 작업 보고와 같은 규칙).
+  const undo = { voyageKey, reports: [], aw: [], hatch: [], at: Date.now() };
+  const patch = {};
+  for (const w of writes) {
+    if (w.aw) {
+      const { equip, mode, val } = w.aw;
+      const prev = ((activeWorkNow || {})[equip] || {})[mode];
+      patch[`activeWork/${voyageKey}/${equip}/${mode}`] = val;
+      undo.aw.push({ equip, mode, prev: prev === undefined ? null : prev, wrote: val === undefined ? null : val });
+    } else if (w.report) {
+      const ts = Math.max(Date.now(), _lastReportTs + 1); _lastReportTs = ts;
+      patch[`voyages/${voyageKey}/reports/${ts}`] = { ...w.report, ts, created_at: new Date(ts).toISOString() };
+      undo.reports.push(ts);
+    } else if (w.hatchDone) {
+      for (const [c, act] of Object.entries(w.hatchDone)) { patch[`voyages/${voyageKey}/info/hatchDone/${c}`] = act; undo.hatch.push({ c, prev: (infoHatchDone || {})[c] ?? null, wrote: act }); }
+    }
+  }
+  await _ackOrQueue(update(ref(db), patch), '미르 작업보고');
+  return undo;
+}
+//  «보고 취소» — 방금 이 기기에서 미르가 적은 것을 되돌린다. 보고는 지운 보고(reports_deleted)로 옮기고,
+//    진행 중 표시·해치 표시는 **지금 값이 미르가 쓴 값 그대로일 때만** 바꾸기 전 값으로 되돌린다(감사 중2 — 그 사이 검수원이 바꾼 것을 덮지 않는다).
+export async function fbUndoMirWorkWrites(undo, me) {
+  assertCanWork('미르 보고 취소');
+  if (!undo || !undo.voyageKey) throw new Error('취소할 미르 보고가 없습니다.');
+  const vk = undo.voyageKey; let n = 0; const kept = [];
+  const same = sameRtdbVal;
+  const patch = {};
+  for (const ts of undo.reports || []) {
+    const snap = await _withTimeout(get(ref(db, `voyages/${vk}/reports/${ts}`)), '보고 읽기');
+    if (!snap.exists()) continue;
+    patch[`voyages/${vk}/reports_deleted/${ts}`] = { ...snap.val(), _deletedAt: Date.now(), _deletedBy: String(me || ''), _deletedWhy: '미르 보고 취소' };
+    patch[`voyages/${vk}/reports/${ts}`] = null;
+    n++;
+  }
+  for (const a of undo.aw || []) {
+    const cur = await _withTimeout(get(ref(db, `activeWork/${vk}/${a.equip}/${a.mode}`)), '진행 중 작업 읽기');
+    if (same(cur.exists() ? cur.val() : null, a.wrote)) patch[`activeWork/${vk}/${a.equip}/${a.mode}`] = a.prev;
+    else kept.push(`${a.equip} ${a.mode === 'loading' ? '선적' : '양하'}`);
+  }
+  for (const h of undo.hatch || []) {
+    const cur = await _withTimeout(get(ref(db, `voyages/${vk}/info/hatchDone/${h.c}`)), '해치 표시 읽기');
+    if (same(cur.exists() ? cur.val() : null, h.wrote)) patch[`voyages/${vk}/info/hatchDone/${h.c}`] = h.prev;
+  }
+  if (Object.keys(patch).length) await _withTimeout(update(ref(db), patch), '미르 보고 취소');
+  return { n, kept };
 }
 
 //  ★ 4.46 — **보고 고치기·지우기.** 검수사 2026-10-24 08:46 «잘못된 보고 수정기능은 보고자만 수정또는 삭제 할수 있게».

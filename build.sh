@@ -1421,6 +1421,7 @@ fi
     #  5.11: 양하 순서 검토 다섯(보류 되묻지 않음 · 50톤·27톤 · 싱글 그 베이 이어 감 · 앞/뒤 먼저 · 오버하이 OT · 선적 대상 장) — 지금 작업 중 KSKM 2621N·YKTD 2617E 실데이터
     node tools/smoke_unload511.cjs "$(pwd)" || { echo "✗ 5.11 양하 순서 검토 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_fc512.cjs "$(pwd)" || { echo "✗ 5.12 예보 별첨·관리자 기록 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_mirwr513.cjs "$(pwd)" || { echo "✗ 5.13 미르 작업보고 전달 연막검사 실패 — 배포 금지"; exit 1; }
   else
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
