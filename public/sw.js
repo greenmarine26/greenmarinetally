@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.10';
-const NOTE = '5.10 선적 자동 가이드에서 눌러 둔 20·40 우선은 앱이 바꾸지 않고, 컨번호 수정칸은 직접 눌러야만 열립니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.11';
+const NOTE = '5.11 자동 가이드가 보류 해제를 묻지 않고, 싱글로 한 대 내리면 그 베이를 이어 가며, 트윈은 50톤부터 싱글을 권합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

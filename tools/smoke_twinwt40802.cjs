@@ -181,7 +181,8 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
       ok('«트윈 한 번에» 버튼은 busy 일 때만 잠긴다', /<button onClick=\{handleConfirm\} disabled=\{busy\}/.test(P));
       ok('버튼 글귀에 «잠김» 이 없다', !/무게 초과로 잠김/.test(P));
       ok('55톤 초과 경보는 «싱글 작업을 권합니다. 들 수 있으면 트윈으로 하십시오»', /싱글 작업을 권합니다\. 들 수 있으면 트윈으로 하십시오/.test(P));
-      ok('50~55톤 «한계 근처» 주의가 있다', /50톤 넘음\) — 한계 근처입니다/.test(P));
+      //  ★ 5.11 — 50톤이 장비 기준(검수사 2026-11-18 «기본적으로 장비들은 50톤을 기준으로 트윈과 싱글을 정합니다. 하지만 기사의 능력에 따라 55톤까지도»)
+      ok('50~55톤은 «싱글 작업을 권합니다. 기사 능력이면 55톤까지 트윈 가능» (5.11)', /50톤 넘음\) — 싱글 작업을 권합니다\. 기사 능력이면 55톤까지 트윈 가능합니다/.test(P));
       ok('판정은 twinWtOf(총중량) 한 벌', /twinWtOf\(card\.main\), wb = twinWtOf\(card\.twin\)/.test(P));
       ok('싱글 한 대 뒤 남은 짝을 다음 카드로 올린다', /setResumeCns\(mate && mate\.cn \? \[mate\.cn\] : \[\]\)/.test(P));
       const SP = rd('src/components/SearchPanel.jsx');

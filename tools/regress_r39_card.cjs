@@ -208,8 +208,9 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     const rows2 = S2.nextRows();
     const locked = rows2.length > 0 && rows2.every((r) => r.disabled);
     const hint = /보류했던 컨 물음\(이제 됩니까\?\)이 떠 있는 동안은 줄이 잠깁니다/.test(S2.d.body.textContent);
-    ok(`⑦-2 이 장 첫 카드 ${c0} 콘 잠김 보류 2시간 → 맨 앞 ${S2.firstCn()} · «보류했던 컨테이너입니다» ${ask} · 다음 예정 ${rows2.length}줄 잠김 ${locked} · «떠 있는 동안은 줄이 잠깁니다» ${hint}`,
-      S2.firstCn() === c0 && ask && locked && hint && !S2.errs.length, JSON.stringify({ c0, first: S2.firstCn(), ask, n: rows2.length, locked, hint }));
+    //  ★ 5.11 — 보류는 되묻지 않는다(검수사 2026-11-18 «검수사가 누르기 전까지 검수사를 재촉하는일이 없어야 합니다»). 2시간 지난 콘 잠김 보류도 맨 앞으로 올라오지 않고 물음 카드도 없다 · 줄은 잠기지 않는다.
+    ok(`⑦-2 이 장 첫 카드 ${c0} 콘 잠김 보류 2시간 → 맨 앞 ${S2.firstCn()}(보류 컨 아님) · «보류했던 컨테이너입니다» ${ask}(없어야) · 다음 예정 ${rows2.length}줄 잠김 ${locked}(아니어야) · 잠김 안내 ${hint}(없어야)`,
+      !!S2.firstCn() && S2.firstCn() !== c0 && !ask && !locked && !hint && !S2.errs.length, JSON.stringify({ c0, first: S2.firstCn(), ask, n: rows2.length, locked, hint }));
     S2.close();
   }
 
@@ -265,9 +266,12 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     const head = /싱글 — 한 대씩/.test(S.d.body.textContent);
     await S.click(ones.find((b) => S.txt(b).startsWith(back)) || null, 500);
     const add = S.done().filter((x) => !done0.includes(x));
-    await S.until(() => S.firstCn() === front);
-    ok(`④-3 [싱글로 한 대씩] → «이것부터» ${ones.length}개 · 안내 «싱글 — 한 대씩» ${head} · 뒤 ${back} 누름 → 완료 ${add.join(',')} · 다음 카드 맨 앞 ${S.firstCn()}(남은 짝 ${front})`,
-      ones.length === 2 && head && add.length === 1 && add[0] === back && S.firstCn() === front && !S.errs.length, JSON.stringify({ n: ones.length, add, first: S.firstCn() }));
+    //  ★ 5.11 — 싱글 «이것부터» 뒤에는 짝(앞)이 아니라 누른 쪽(뒤) 베이를 한 대씩 이어 간다(검수사 2026-11-18 설문 Q15). 종전 4.08-02 기대(남은 짝이 맨 앞)를 바꿨다.
+    const bBack = parseInt(E[back].bay, 10);
+    await S.until(() => S.firstCn() && S.firstCn() !== back);
+    const fst = S.firstCn();
+    ok(`④-3 [싱글로 한 대씩] → «이것부터» ${ones.length}개 · 안내 «싱글 — 한 대씩» ${head} · 뒤 ${back}(${bBack}번) 누름 → 완료 ${add.join(',')} · 다음 카드 맨 앞 ${fst}(${E[fst] ? parseInt(E[fst].bay, 10) : '?'}번 · 짝 ${front} 아님)`,
+      ones.length === 2 && head && add.length === 1 && add[0] === back && fst !== front && !!E[fst] && parseInt(E[fst].bay, 10) === bBack && !S.errs.length, JSON.stringify({ n: ones.length, add, first: fst, bay: E[fst] && E[fst].bay, bBack }));
     S.close();
   }
 

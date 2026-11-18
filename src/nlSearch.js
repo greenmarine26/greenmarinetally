@@ -4366,6 +4366,8 @@ export function generatePilotAnswer(info = {}, pf = null) {
 //     장비가 이미 트윈을 든 뒤에 잠겨 있으면 싱글 두 번으로 기록해야 하고, 완료 시각이 어긋나고 무브수·시간 계산도 틀어진다
 //     (STSE 2677E 실측 — 트윈 후보 79쌍 중 실제로 든 60쌍 가운데 32쌍이 15초 안에 «싱글 두 번»으로 기록됐다).
 //     경보 단계 — 50톤 이하 정상 · 50~55톤 «주의(한계 근처)» · 55톤 초과 «싱글 권유». 모두 경보뿐이다.
+//     ★ 5.11 (검수사 2026-11-18 «기본적으로 장비들은 50톤을 기준으로 트윈과 싱글을 정합니다. 하지만 기사의 능력에 따라 55톤까지도 처리 할수 있습니다»):
+//       50~55톤도 «싱글 권유(기사 능력이면 트윈 가능)» 로 말한다. 상수·이동수 셈(55톤 초과만 싱글 두 무브)은 그대로 — 기사가 들 수 있는 선이 55톤이다.
 export const TWIN_MAX_TOTAL_KG = 55000;
 export const TWIN_CAUTION_TOTAL_KG = 50000;   // 4.08-02: 이 수를 넘고 55톤 이하면 «주의» — 싱글 한 대 한도 근처
 //   ★ 4.08-02 — **트윈 판정에 쓰는 무게 한 벌.** 갱이 드는 것은 컨테이너 총중량(화물+자중)이다. EDI(BAPLIE MEA+WT)가 총중량이고,
@@ -4463,7 +4465,7 @@ export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '')
   if (r.ok.length) {
     const maxOk = Math.max(...r.ok.map(p => p.total));
     const nHeavy = r.ok.filter(p => p.heavy).length;
-    lines.push('', `✅ 가능 ${r.ok.length}쌍 (최대 합계 ${t1(maxOk)}톤)${nHeavy ? ` — 이 중 합계 50~55톤 ${nHeavy}쌍은 한계 근처입니다` : ''}`);
+    lines.push('', `✅ 가능 ${r.ok.length}쌍 (최대 합계 ${t1(maxOk)}톤)${nHeavy ? ` — 이 중 합계 50~55톤 ${nHeavy}쌍은 싱글 권유(기사 능력이면 트윈 가능)입니다` : ''}`);   // ★ 5.11 — 50톤이 장비 기준(검수사 2026-11-18)
   }
   return lines.join('\n');
 }

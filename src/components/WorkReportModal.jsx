@@ -182,9 +182,10 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   //  센 값이 있으면 장수 버튼을 그 값으로 맞춰 둔다 — 검수사가 다르게 보면 눌러서 바꾼다.
   useEffect(() => {
     if (!hatchHint) return;
-    const sum = hatchHint.reduce((a, x) => a + (x.needed ?? x.openable), 0);   // 3.2-01: 열어야 할 장
+    //  5.11: 선적 대상 장(neededDis 와 다른 몫)은 오픈 보고 미리 맞춤에만 넣는다 — 닫기는 양하 장만(확인 창이 마지막에 다시 보인다).
+    const sum = hatchHint.reduce((a, x) => a + ((hatchAction === 'open' ? x.needed : (x.neededDis ?? x.needed)) ?? x.openable), 0);   // 3.2-01: 열어야 할 장
     if (sum >= 1 && sum <= 3) { setHatchPanels(sum); setHatchPanelsTouched(false); }
-  }, [hatchHint]);
+  }, [hatchHint, hatchAction]);
 
   //  3.36: 이 창은 항차 화면에서 **조건 없이 마운트**되므로 위 초기값은 첫 마운트 때 한 번만 잡힌다.
   //    그 뒤 헤더에서 호기를 바꾸면 시작 화면은 옛 값을 그대로 들고 있었다 — 열 때마다 지금 앱 호기로 맞춘다.
@@ -556,7 +557,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     //   처음 값 — 검수사가 위 화면에서 장수 버튼을 직접 눌렀으면 그 값, 안 눌렀으면 앱이 센 값(못 셌으면 비워서 직접 고르게 한다 — 기본값 1 이 눈에 안 띄고 나가던 것).
     //   앱이 센 값과 다르게 고르면 창이 «앱이 센 장수는 N장» 을 알린다.
     const _md = equipModeOf(equip) === 'loading' ? 'loading' : 'discharge';
-    const countDetail = hatchPanelDetailOf(voyage, _md, bays, getShipBayDictData(voyage?.info?.imo || '', voyage?.info?.vsl || ''), (b) => bayGroupCenter(b, bayPairsForHatch), hatchAction);
+    const countDetail = hatchPanelDetailOf(voyage, _md, bays, getShipBayDictData(voyage?.info?.imo || '', voyage?.info?.vsl || ''), (b) => bayGroupCenter(b, bayPairsForHatch), hatchAction, { withLoad: true });   // 5.11: 확인 창 — 선적 대상 장(오픈일 때만)
     const chosen = await askHatchCount({ action: hatchAction, bays, detail: countDetail, initial: hatchPanelsTouched ? hatchPanels : (countDetail.count > 0 ? countDetail.count : null) });
     if (chosen == null) return;
     setHatchPanels(chosen); setHatchPanelsTouched(false);   // 고른 값은 이번 보고에 쓰였다 — 다음 보고에서 «직접 누른 값» 으로 남겨 두지 않는다(이 창은 닫아도 상태가 남는다)
@@ -1173,7 +1174,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 {hatchHint.map((h) => (
                   <div key={h.bay} className="text-xs2">
                     <span className="font-black text-cyan-200">{formatHatchBays(h.bays) || h.bay}번 — {h.total}장 중 </span>
-                    <span className="font-black text-amber-300">{h.needed ?? h.openable}장</span>
+                    <span className="font-black text-amber-300">{(hatchAction === 'open' ? h.needed : (h.neededDis ?? h.needed)) ?? h.openable}장</span>{hatchAction === 'open' && h.loadAdded > 0 ? <span className="text-sky-300"> (선적 대상 {h.loadAdded}장 포함)</span> : null}
                     <span className="text-dim-300"> 열면 됩니다</span>
                     {/* 3.2-01: 평택 홀드분이 있는 장만 센다 — 열 수 있는 장이 더 많으면 그 수도 같이 */}
                     {(h.needed != null && h.needed !== h.openable) && <span className="text-dim-400"> (열 수 있는 장 {h.openable})</span>}

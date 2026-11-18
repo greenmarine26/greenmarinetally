@@ -8,7 +8,7 @@
 //   트윈: 홀수베이 짝(findTwinCandidate) 한 카드로 묶음. 40ft는 일반 작업.
 //   싱글모드: 짝 없는 20ft — 양하는 맨 마지막, 선적은 맨 처음 (크레인 모드 전환 1회).
 //     단, 적재 종속 예외: 싱글 아래에 일반 작업분이 있으면(위에 얹힌 싱글) 층 순서 유지.
-//   FR(플랫랙) 특수화물: 우선 양하 / 마지막 선적 (사용자 확정 2026-06-12).
+//   FR(플랫랙) 특수화물: 우선 양하 / 마지막 선적 (사용자 확정 2026-06-12). 5.11 — 양하는 오버하이 OT 도 FR 처럼 먼저.
 //   V7.94-08 선적 추가 규칙 (사용자 메모 확정 2026-06-12):
 //     ① 선적 마지막 단계는 FR + OT (양하는 기존대로 FR만 우선).
 //     ② 혼재 베이 선적: 20ft 트윈을 같은 로우 스택 단위로 바닥부터 연속으로 쌓고(로우는 해상→육상),
@@ -47,9 +47,12 @@
 //     ⓔ EDI 순번(`eseq`)대로 연속 진행 중이면 흐름 전환을 하지 않는다 — GuidedWorkPanel 에서 판정.
 //        검수사 원문: "단 연속으로 EDI대로 선적할때는 그게 우선입니다."
 
-import { isReeferContainer, isoToLabel } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.60-12: 길이도 라벨로(장비코드 DC20·DCHC)
+import { isReeferContainer, isoToLabel, isOpenTopIso } from './utils.js';   // 3.60-10: 리퍼 판정 한 벌 · 3.60-12: 길이도 라벨로(장비코드 DC20·DCHC)
 import { sizeLenKnown } from './tallyReport.js';   // 4.88: 규격 길이 한 벌
 const isDeckTier = (t) => parseInt(t, 10) >= 80;
+//  ★ 5.11 — 오버하이 오픈탑(높이 초과 cm 가 있는 OT). 일반 높이 OT 는 일반 컨과 같은 순서다(포맨·기사가 정한다).
+//    OT 판정은 표식(c.ot) 또는 utils.isOpenTopIso 한 벌(EDI 만 있는 V코드·20HT 도), 높이 초과는 파서가 채우는 ovh(BAPLIE DIM · ASC 같은 뜻) 한 벌.
+const otHighOf = (c) => !!c && !c.fr && (!!c.ot || isOpenTopIso(c.iso)) && Number(c.ovh || 0) > 0;
 //  3.60-12 (진단 M5 감사): 장비코드(DC20·DCHC)는 첫 글자가 길이가 아니다 — 라벨(isoToLabel 이 이제 푼다)도 본다.
 //  ★ 4.88 — 규격 길이 한 벌(tallyReport.sizeLenKnown — 모르면 둘 다 아님). 종전 첫 글자·라벨·tp 를 따로 봐 «L2G1» 이 40(마감텔리 HC)인데 45 로, «45HC» 가 40 으로 읽혔다.
 const is20ft = (c) => sizeLenKnown(c) === '20';   // 4.88
@@ -189,7 +192,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     if (mode === 'loading' && bfSplitCns.has(c.cn)) card.bfSplit = true;
     const isSpecialLast = mode === 'loading'
       ? (c.fr || c.ot || c.oog || twin?.fr || twin?.ot || twin?.oog)   // 선적: FR+OT 마지막 (V7.94-15: oog 필드 누락 — SWRG 오픈탑 ISO 2261이 oog만 참)
-      : (c.fr || twin?.fr);                       // 양하: FR만 우선
+      : (c.fr || twin?.fr || otHighOf(c) || otHighOf(twin));   // 양하: FR 우선 · 5.11 OT 는 오버하이일 때만 FR 처럼 먼저(검수사 2026-11-18 «같은 OT라도 오버하이가 있으면 FR처럼 먼저 내립니다. 일반컨과 같은 높이라면 포맨이나 케빈의 생각이 적용됩니다»)
     if (isSpecialLast) { card.fr = true; frs.push(card); }
     else if (is20ft(c) && !twin && !isDeckTier(c.tier) && !card.bfSplit) { card.single = true; singles.push(card); }
     else if (card.bfSplit && is20ft(c) && !isDeckTier(c.tier)) { card.single = true; normal.push(card); }   // 4.42: 쪼갠 짝 — «싱글모드 구간» 표시는 종전대로, 자리는 트윈 자리(감사 권고 2026-10-21)

@@ -370,7 +370,8 @@ T(/export async function fbReleaseHold/.test(F), '해제 함수가 없다');
 T(/export async function fbSnoozeHold/.test(F), '«아직» 을 뒤로 미는 함수가 없다');
 T(!/completed/.test(F.split('fbHoldContainers')[1].split('export ')[0]), '보류가 완료 노드를 건드린다 — 보류는 완료가 아니다');
 T(/rec\.group = list\.join/.test(F), '트윈 두 대를 한 몸으로 안 묶는다 — 짝만 남으면 큐가 짝 없는 20ft 로 잘못 낸다');
-T(/const HOLD_ASK_AFTER = 3;/.test(P), '되묻기 기준이 3대가 아니다(검수사 확정 3~5대)');
+//  ★ 5.11 — 되묻기를 없앴다(검수사 2026-11-18 «보류는 한번 눌러노면 검수사가 누르기 전까지 검수사를 재촉하는일이 없어야 합니다»). 위 되묻기 기준표(판정식 시험)는 옛 규칙 기록으로 둔다.
+T(/const holdDue = null;/.test(P) && !/HOLD_ASK_AFTER/.test(P), '5.11 보류 되묻기가 남아 있다(holdDue 는 늘 null 이어야)');
 T(/const HOLD_LONG_MS = 60 \* 60000;/.test(P), '1시간 기준이 없다(검수사 확정 «길어야 1시간»)');
 //  ★ 4.27: 사유 목록은 utils.HOLD_REASONS 한 벌 — 가이드·수동 한 화면 틀이 import 한다(목록 글자는 검수사가 준 그대로).
 T(/export const HOLD_REASONS = \['콘 잠김', '트윈 무게 초과', '컨 홀 불량\(스프레더 안착 불가\)'\]/.test(rd('src/utils.js')) && /import \{[^}]*\bHOLD_REASONS\b[^}]*\} from '\.\.\/utils\.js'/.test(P) && !/const HOLD_REASONS =/.test(P), '사유 3택이 검수사가 준 그대로가 아니다(utils 한 벌을 가이드가 import)');
@@ -391,7 +392,7 @@ const H = rd('src/data/helpData.js');
 T(!/t: '건너뛰기'/.test(H), '매뉴얼에 없는 버튼 「건너뛰기」 목업이 아직 남아 있다');
 T(/⏸ 지금 양하 불가/.test(H), '매뉴얼에 양하 불가가 없다');
 T(/싱글로 한 대씩/.test(H), '매뉴얼에 싱글 전환이 없다');
-T(/3대 지난 뒤 앱이 먼저/.test(H), '매뉴얼에 되묻기가 없다');
+T(/보류는 앱이 되묻지 않는다/.test(H) && !/3대 지난 뒤 앱이 먼저/.test(H), '5.11 매뉴얼에 «보류는 앱이 되묻지 않는다» 가 없거나 옛 되묻기 문구가 남았다');
 
 if (bad > 0) { console.error(`✗ 자동 가이드 연막검사 실패 ${bad}건`); process.exit(1); }
 console.log('✓ 자동 가이드 연막검사 통과 — 큐 6 · 선적 도착항 묶음(ATPR 2644W 실데이터) · 되묻기 5 · 브리핑 4 · 배선 12 · 매뉴얼 4');

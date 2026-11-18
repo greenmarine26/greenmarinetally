@@ -213,7 +213,8 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     ok('B3 [이것부터](뒤 39-07-84) → 그 한 대만 완료', H.done().join() === 'BEAU2297940', H.done().join());
     await H.sync();
     const cm = H.cards();
-    ok(`B4 남은 짝(앞 37-07-84)이 바로 다음 카드(단독)`, cm.length === 1 && cm[0].cn === 'SEKU1384558', JSON.stringify(cm));
+    //  ★ 5.11 — 싱글 «이것부터» 뒤에는 짝이 아니라 그 쪽 베이(39)를 한 대씩 이어 간다(검수사 2026-11-18 설문 Q15 «앞베이 또는 뒷베이 부터가 적용되어야 하는데 앱은 바로 뒤 짝컨을 내리라고 합니다»). 종전 4.08-02 기대(짝 SEKU1384558 이 다음)는 바뀌었다.
+    ok(`B4 5.11 — 뒤(39) 한 대 뒤 다음 카드는 짝(37 SEKU1384558)이 아니라 39 베이 단독 — ${cm.map((x) => x.cn + '@' + x.pos).join(' ')}`, cm.length === 1 && cm[0].cn !== 'SEKU1384558' && /^39-/.test(cm[0].pos || ''), JSON.stringify(cm));
     close(H);
   }
   //  C. 싱글 변환 → 앞 베이 먼저(37 몰아서)

@@ -36,6 +36,12 @@ export default function HatchCountConfirm({ open, action, bays, detail, initial,
             <div className="text-xxs text-dim-400">베이</div>
             <div className="text-lg font-black text-amber-100 mono" data-hatch-bays>{formatHatchBays(bays) || (bays || []).join(', ') || '—'}</div>
           </div>
+          {/* ★ 5.11 — 선적 플랜이 들어와 선적 대상 장을 열 장에 더했으면 알린다(검수사 2026-11-18 «다만 알려줘야 합니다. 검수사는 양하만 보고 있을것이기 때문입니다»). */}
+          {isOpen && d.loadAdded > 0 && (
+            <div className="text-xs font-bold rounded px-2 py-1.5 border bg-sky-950/50 border-sky-700 text-sky-200" data-hatch-loadnote="1">
+              ℹ 선적 플랜에 홀드 선적이 있어 선적 대상 {d.loadAdded}장을 열 장에 넣었습니다. 양하만 볼 거면 장수를 줄여 고르십시오.
+            </div>
+          )}
           {d.groups && d.groups.length > 0 && (
             <div className="space-y-1.5">
               {d.groups.map((g) => (
@@ -44,11 +50,12 @@ export default function HatchCountConfirm({ open, action, bays, detail, initial,
                     <b className="mono">{formatHatchBays(g.bays.length ? g.bays : [g.group]) || (Number.isFinite(Number(g.group)) ? g.group : '?')}</b>
                     <span className="text-dim-400"> · 사전 해치 {g.total}장 · </span>
                     <span className="font-bold text-emerald-300">{isOpen ? '열' : '닫을'} 장 {g.needed}장</span>
+                    {isOpen && g.loadAdded > 0 && <span className="font-bold text-sky-300" data-hatch-loadadd={g.loadAdded}> · 선적 대상 {g.loadAdded}장 포함</span>}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {g.panels.map((p) => (
                       <span key={p.idx} className={`px-1.5 py-0.5 rounded text-2xs border ${p.nHold > 0 ? 'bg-emerald-950/60 border-emerald-700 text-emerald-200' : 'bg-ink-900 border-line text-dim-400'}`}>
-                        {ordinal(p.idx)} · {p.nHold > 0 ? `홀드 평택 ${p.nHold}대` : '홀드 평택 없음'}
+                        {ordinal(p.idx)} · {p.nHold > 0 ? `홀드 평택 ${p.nHold}대` : '홀드 평택 없음'}{isOpen && p.nLoad > 0 ? ` · 선적 ${p.nLoad}대` : ''}
                         {isOpen && p.blocked ? ` · 위 화물 ${p.nBlock}대` : ''}
                       </span>
                     ))}

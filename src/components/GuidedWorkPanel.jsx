@@ -15,7 +15,7 @@ import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «�
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해치 보고 직전 장수 확인
-import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbSetActualPosition, fbPeekCompleted, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
+import { fbHoldContainers, fbReleaseHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbSetActualPosition, fbPeekCompleted, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LABEL, ALL_EQUIP_KEY } from '../workOrder.js';   // 4.09: 양하 순서 조건 한 벌(호기별 기억)
 import { canWorkNow, workGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
@@ -558,7 +558,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    *«콘이 잠겨 있어서 다음 컨테이너를 양하 하다 보니 자동가이드 멈추고»* — 멈추면 수동으로 가야 했고
   //    수동으로 가면 순서 안내를 잃는다. ⇒ 못 하는 한 대만 빼고 큐는 계속 돈다.
   //    ⚠ 보류는 **완료가 아니다** — 대수·인건비 집계에 안 섞인다(별도 노드 `held`).
-  const HOLD_ASK_AFTER = 3;          // 검수사 확정: *«보통은 컨테이너 3-5개 다른거 작업하고 있으면 라싱인력이 옵니다»*
+  const HEAVY_BLINK_KG = 27000;   // ★ 5.11 — 트윈 카드 무게 칩 깜박임 기준(검수사 2026-11-18 «27톤이상인 컨에 깜박임 효과»)
   const HOLD_LONG_MS = 60 * 60000;   // 검수사 확정: *«콘 잠김은 길어야 1시간이내입니다»* — 넘으면 매 카드마다 묻는다
   //  ★ 4.27: 보류 사유 목록은 utils.HOLD_REASONS 한 벌(수동 한 화면 틀도 같은 목록)
   const held = useMemo(() => activeHeldOf(voyage, mode), [voyage, mode]);   // 4.26-02: 실린(완료된) 컨의 보류는 뺀다 — 종전엔 실어도 «보류 12대» 로 남았다(모의 작업 MCAP 3호기)
@@ -579,16 +579,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  이 모드의 완료 대수 — «몇 대 지났나»의 기준(새로고침해도 같은 수가 나온다).
   const doneN = useMemo(() => allContainers.filter((c) => c._mode === mode && c._ptk && c._comp).length,
     [allContainers, mode]);
-  //  되묻기 차례 — **콘 잠김만** 묻는다. 홀 불량·무게 초과는 기다린다고 풀리는 게 아니다.
-  const holdDue = useMemo(() => {
-    const now = Date.now();
-    for (const h of held) {
-      if (!/콘/.test(h.reason)) continue;
-      const need = (now - (h.at || now) > HOLD_LONG_MS) ? 0 : HOLD_ASK_AFTER;
-      if (doneN - (h.doneAt || 0) >= need) return h;
-    }
-    return null;
-  }, [held, doneN]);
+  //  ★ 5.11 — **보류는 되묻지 않는다.** 검수사 2026-11-18 «보류는 한번 눌러노면 검수사가 누르기 전까지 검수사를 재촉하는일이 없어야 합니다
+  //    보류된컨 때문에 계속 다른컨작업을 하는데 앱이 중간에 끼어 해제 여부를 물으면 실수를 유발 할수가 있습니다» · 설문 Q21 «묻지 않되, 화면 한쪽에 보류 목록만».
+  //    종전(2.75) «콘 잠김은 3대 지나면(1시간 넘으면 매 카드) 맨 앞으로 올려 이제 됩니까» 를 없앴다. 보류 줄(heldEl — 눌러야 펼침)의 [해제] 만 남는다.
+  //    보류 컨이 실제로 내려가면(누가 완료하든·터미널 반영이든) activeHeldOf 가 그 보류를 뺀다 — 그 시각에 스스로 풀린다(Q22).
+  const holdDue = null;
   const holdGroupOf = (h) => (h?.group ? String(h.group).split(',') : [h?.cn]).filter(Boolean);
 
   // 선택 그룹의 예측 큐 — V7.99-8 (메모6): 선택된 단(selectedTier)만 큐에 (홀드 작업=홀드만/데크 작업=데크만)
@@ -749,7 +744,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const limit = twinDiffLimit(voyage?.info?.pier);
     if (total > TWIN_MAX_TOTAL_KG) return { over: true, total, diff };
     if (diff > limit) return { imbal: true, total, diff, limit };
-    if (total > TWIN_CAUTION_TOTAL_KG) return { heavy: true, total, diff };   // 50~55톤 — 한계 근처 주의
+    if (total > TWIN_CAUTION_TOTAL_KG) return { heavy: true, total, diff };   // 50~55톤 — ★ 5.11 싱글 권유(기사 능력이면 트윈 가능) · 검수사 2026-11-18 «기본적으로 장비들은 50톤을 기준으로 트윈과 싱글을 정합니다. 하지만 기사의 능력에 따라 55톤까지도»
     return null;
   }, [card, voyage]);
 
@@ -829,6 +824,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   //  ★ 4.23-01 2차 — 카드 컨 중 규격·풀엠티·항구가 다른 맞교환(3.13 _assign_warn) 컨. 있으면 큰 확인 단추가 그 자리를 확인하지 않고 위치 지정을 연다.
   const [posFor, setPosFor] = useState(null);
+  const singlePosRef = useRef(false);   // ★ 5.11 — 위치 지정 창이 싱글 패널 «이것부터»(실린 칸 지정)에서 열렸나 — 실은 뒤 짝이 아니라 그 베이를 이어 간다
   const [posPick, setPosPick] = useState(false);     // ★ 4.27: 📍 위치 틀림 — 트윈이면 앞·뒤·둘 다 고르는 줄
   const [posTwin, setPosTwin] = useState(null);      // ★ 4.27: «둘 다» — 앞 칸을 고르면 뒤는 짝 칸(3.75 autoTwin)
   const [posMateCn, setPosMateCn] = useState(null);  // ★ 4.27: 한 대만 고쳐 실으면 남은 짝을 바로 다음 카드로
@@ -859,13 +855,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //  ★ 2.75 — **한 대만 내린다(싱글).** 검수사 실측: *«무게 때문에 싱글로 작업하니 자동가이드 사용불가»*.
   //    어느 쪽을 먼저 내릴지는 **캐빈이 정한다** — 검수사 확정 *«캐빈결정. 보통은 갱을 피해서 먼쪽부터»*.
   //    앱은 순서를 정하지 않고 두 대를 나란히 놓고 고르게 한다. 고른 한 대만 완료되고 나머지는 다음 카드로.
-  const handleConfirmOne = async (which) => {
+  const handleConfirmOne = async (which, opt = {}) => {
     if (!card?.twin || busy) return;
     if (!canWorkNow()) { alert(workGateText('완료')); return; }   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;
     const one = which === 'twin' ? card.twin : card.main;
     const mate = which === 'twin' ? card.main : card.twin;   // 4.08-02: 남은 짝
-    if (mode === 'loading' && loadingSlotOf(one).kind === 'swapWarn') { setPosFor(one); return; }   // 4.23-01 2차: 규격 다른 맞교환은 위치 지정으로
+    if (mode === 'loading' && loadingSlotOf(one).kind === 'swapWarn') { singlePosRef.current = !!opt.single; setPosFor(one); return; }   // 4.23-01 2차: 규격 다른 맞교환은 위치 지정으로 · 5.11 싱글 패널에서 왔는지 기억(실은 뒤 그 베이를 이어 감)
     setBusy(true);
     try {
       await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', equip);
@@ -873,7 +869,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       //  ★ 4.08-02 (검수사 2026-10-07 «하나 처리하면 하나가 사라져 베이에서 직접처리해야 하는 경우»): 짝이 남으면 짝 없는 홀드 20피트(싱글)가 되어 큐 맨 끝으로 밀렸다
       //    (STSE 2677E 실데이터 — 베이 11~13 홀드 6/10장 · 19~21 6/16장). 한 대만 내렸으면 남은 짝을 **바로 다음 카드**로 올린다(홀드·데크 모두).
       //    순서를 정하는 것이 아니라 «짝이 끝나기 전에 다른 카드로 넘어가지 않게» 앞에 두는 것뿐이다 — 다른 컨을 먼저 하려면 [수정]으로 가면 된다.
-      setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns(mate && mate.cn ? [mate.cn] : []);
+      //  ★ 5.11 — **싱글모드에서 한 대를 내렸으면 짝이 아니라 그 쪽 베이를 이어 간다.** 검수사 2026-11-18 설문 Q15 «트윈모드에서 싱글모드로 바꾸면 가끔 앞에 내리고 바로 짝컨을 내리려고 합니다.
+      //    그럴때에는 앞베이 또는 뒷베이 부터가 적용되어야 하는데 앱은 바로 뒤 짝컨을 내리라고 합니다 . 이떄 부터 검수사는 앱을 사용하지 않습니다.»
+      //    ⇒ 싱글 패널(«이것부터»)에서 누른 한 대의 베이를 «베이 먼저»(bayFirst — 3.77 앞/뒤 N번 베이 먼저와 같은 길)로 건다. 남은 짝은 그 베이가 끝난 뒤 순서대로 나온다.
+      //    싱글 패널 밖(4.08-02 «앞·뒤·둘 다» 고르기에서 한 대만)은 종전대로 남은 짝을 바로 다음 카드로.
+      const _bOne = parseInt(one.bay, 10);
+      if (opt.single && Number.isFinite(_bOne)) {
+        setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns([]); setBayFirst(_bOne);
+      } else {
+        setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns(mate && mate.cn ? [mate.cn] : []);
+      }
     } finally { setBusy(false); }
   };
 
@@ -912,12 +917,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (pick === 'cancel') doRelease(h, false);
   };
 
-  //  «아직» — 지금 완료 대수를 기준점으로 다시 잡는다(3대 더 지나야 또 묻는다).
-  const doSnooze = async (h) => {
-    if (!h || busy) return;
-    setBusy(true);
-    try { await fbSnoozeHold(voyageKey, mode, holdGroupOf(h), doneN); } finally { setBusy(false); }
-  };
+
 
   // 수정: 실제 나온 컨을 입력 → 그 컨을 완료 처리, 예측 컨은 큐에 남음
   // V8.70: 크로스베이 체인시프트 감안 — 그룹·단 제한을 "필터"에서 "정렬 우선순위"로 완화.
@@ -1312,7 +1312,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       }
       // 4.10 (검수사 2026-10-07 «보고 직전에 커버 장수를 맞는지 확인하고 보고 … 무심코 보고 했다가 6장 오픈을 보고 했으니까요»)
       //   보고 직전에 항상 베이·앱이 센 장수·장별 홀드 평택 대수를 보이고 고르게 한다. 취소하면 아무것도 저장·공유하지 않는다.
-      const countDetail = hatchPanelDetailOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf, action);
+      const countDetail = hatchPanelDetailOf(voyage, mode, bays, getShipBayDictData(shipImo, shipName), groupCenterOf, action, { withLoad: true });   // 5.11: 확인 창 — 선적 대상 장을 넣고 창이 알린다
       const chosenCount = await askHatchCount({ action, bays, detail: countDetail, initial: countDetail.count });
       if (chosenCount == null) return false;
       const voy = mode === 'discharge'
@@ -2155,7 +2155,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {/* 4.26 칩 한 줄 — 규격 · 풀/엠티·무게 · 선사 · 특수 표시(수화물·긴급·X-RAY·풀 리퍼·제작컨·DG·FR·O/T·OOG·시프팅·추가분) */}
       <div className={`flex flex-wrap items-center gap-1 mono ${bayMini ? 'mt-1' : 'mt-1.5'}`}>
         <span className={`${chip} bg-ink-800 text-dim-100`}>{c.tp || isoToLabel(c.iso) || isoShown(c.iso)}</span>
-        <span className={`${chip} bg-ink-800 ${_empty ? 'text-dim-300' : 'text-emerald-300'}`}>{_empty ? 'EMPTY' : 'FULL'}{c.wt ? ` ${formatWt(c.wt)}` : ''}</span>
+        {/* ★ 5.11 — 트윈 카드에서 한 대가 27톤 이상이면 무게 칩을 깜박인다(검수사 2026-11-18 설문 Q14 «트윈모드에서 일단 27톤이상인 컨에 깜박임 효과를 줍니다» — 짝과 합치면 50톤 기준을 넘을 수 있는 컨). 무게는 트윈 판정과 같은 twinWtOf(EDI 총중량 먼저). 싱글로 바꾸면 깜박이지 않는다. */}
+        {(() => { const _h27 = !!(card && card.twin && !singleMode && (String(c.cn) === String(card.main.cn) || String(c.cn) === String(card.twin.cn)) && twinWtOf(c) >= HEAVY_BLINK_KG); return (
+        <span data-heavy27={_h27 ? '1' : undefined} className={`${chip} ${_h27 ? 'bg-rose-800 text-rose-50 animate-pulse ring-2 ring-rose-400' : `bg-ink-800 ${_empty ? 'text-dim-300' : 'text-emerald-300'}`}`}>{_empty ? 'EMPTY' : 'FULL'}{c.wt ? ` ${formatWt(c.wt)}` : ''}{_h27 && twinWtOf(c) !== Number(c.wt) ? ` (총 ${formatWt(twinWtOf(c))})` : ''}</span>); })()}
         {c.op && <span className={`${chip} bg-ink-800 text-dim-200`}>{c.op}</span>}
         {bayMini && (c.pol || c.pod) && <span className={`${chip} bg-ink-800 text-teal-300`}>{c.pol || '?'}→{c.pod || '?'}</span>}
         {m.lugg && <span className={`${chip} bg-violet-700 text-violet-50`}>🧳 수화물</span>}
@@ -2528,31 +2530,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               ) : twinWtWarn.imbal ? (
                 <span>⚠️ 총중량(EDI) 무게차 {formatWt(twinWtWarn.diff)} (한계 {formatWt(twinWtWarn.limit)} 초과) — 수평 주의, 트윈 주의</span>
               ) : (
-                <span>⚠️ 총중량(EDI) 합계 {formatWt(twinWtWarn.total)} (50톤 넘음) — 한계 근처입니다. 확인하고 트윈 하십시오.</span>
+                <span data-twin-heavy="1">⚠️ 총중량(EDI) 합계 {formatWt(twinWtWarn.total)} (50톤 넘음) — 싱글 작업을 권합니다. 기사 능력이면 55톤까지 트윈 가능합니다.</span>
               )}
             </div>
           )}
     </>),
-    holdDue: (<>
-          {/* ★ 2.75 — **되묻기.** 검수사 확정: 콘은 «3-5개 다른거 작업하고 있으면 라싱인력이 온다».
-              그래서 검수사가 목록을 열 것 없이 앱이 먼저 꺼낸다. 1시간 넘으면 매 카드마다 묻는다. */}
-          {holdDue && (String(card.main.cn).toUpperCase() === String(holdDue.cn).toUpperCase()
-            || (card.twin && String(card.twin.cn).toUpperCase() === String(holdDue.cn).toUpperCase())) && (
-            <div className="bg-amber-950 border border-amber-600 rounded-xl p-2.5 space-y-2">
-              <div className="text-sm font-bold text-amber-200">
-                ⏸ 보류했던 컨테이너입니다 — {holdDue.reason}
-                {(Date.now() - (holdDue.at || 0) > HOLD_LONG_MS) && <span className="text-rose-300"> · ⏱ 1시간 넘음</span>}
-              </div>
-              <div className="text-xxs text-amber-300">{Math.max(1, Math.round((Date.now() - (holdDue.at || 0)) / 60000))}분째 · 그동안 {Math.max(0, doneN - (holdDue.doneAt || 0))}대 했습니다. 이제 됩니까?</div>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => doRelease(holdDue)} disabled={busy}
-                  className="py-2.5 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white">예, 지금 합니다</button>
-                <button onClick={() => doSnooze(holdDue)} disabled={busy}
-                  className="py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-ink-700 disabled:opacity-50 text-amber-300">아직 — 나중에 다시</button>
-              </div>
-            </div>
-          )}
-    </>),
+    holdDue: null,   // ★ 5.11: 보류 되묻기 카드를 없앴다(검수사 2026-11-18 «검수사를 재촉하는일이 없어야 합니다») — 보류 줄의 [해제] 만 남는다
     eseal: (<>
           {/* ★ 2.75 — 트윈을 한 대씩. ★ 4.08-02 — 55톤 초과여도 «트윈 한 번에» 는 잠그지 않는다(2.75 잠금을 풀었다 — 검수사 2026-10-07 «강제 싱글 전환은 안됩니다»). */}
           {/* ★ 3.71 — ATPR 위해행 엠티 선적: 컨번호를 부른 뒤 엠티실 뒷 세 자리를 듣는다(다른 배·다른 POD 는 그리지 않는다) */}
@@ -2563,7 +2546,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2">
               <div className="text-xxs text-sky-300 font-bold">싱글 — 한 대씩. 온 쪽을 누르면 그 한 대만 확인되고 남은 한 대는 다음 카드입니다 (보통 캐빈에서 먼 쪽부터, 갱을 피해서 — 어느 쪽인지는 캐빈이 정합니다)</div>
               {[['main', card.main], ['twin', card.twin]].map(([k, c]) => (
-                <button key={k} onClick={() => handleConfirmOne(k)} disabled={busy}
+                <button key={k} onClick={() => handleConfirmOne(k, { single: true })} disabled={busy}
                   className="w-full py-3 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white flex items-center justify-between px-4">
                   <span className="mono"><CnText cn={c.cn} /></span>
                   <span className="text-xxs opacity-80">{mode === 'loading' && loadingSlotOf(c).kind === 'swapWarn' ? '자리 미정' : `${c.bay}-${c.row}-${c.tier}`}{c.wt ? ` · ${formatWt(c.wt)}` : ' · 무게 미상'}</span>
@@ -2609,12 +2592,20 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 {exBtn('both', '둘 다 다름', () => openFix(null), fixOpen && fixSide == null)}
               </div>
               <div className="flex gap-1.5">
-                {exBtn('single', '싱글로 한 대씩', () => { if (singleMode) { setSingleMode(false); return; } closeFix(); setHoldOpen(false); setSingleMode(true); }, singleMode, twinWtWarn?.over && !singleMode ? 'skyhint' : 'sky')}
+                {exBtn('single', '싱글로 한 대씩', () => { if (singleMode) { setSingleMode(false); return; } closeFix(); setHoldOpen(false); setSingleMode(true); }, singleMode, (twinWtWarn?.over || twinWtWarn?.heavy) && !singleMode ? 'skyhint' : 'sky')}
                 {exBtn('hold', '⏸ 보류', () => { if (holdOpen) { setHoldOpen(false); setHoldNote(''); return; } closeFix(); setSingleMode(false); setHoldOpen(true); }, holdOpen, 'rose')}
                 {fs && mode === 'loading' && exBtn('pos', '📍 위치 틀림', openPosWrong, posPick, 'orange')}{/* ★ 4.27 검수사 08:43 «보류 뺴고 위치틀림을 넣어서 위치 수정가능하게» → 08:52 보류는 둔다 «베이를 눌러서 선적 하는 방법으로» */}
                 {xrayTargets.length > 0 && !(fs && mode === 'loading') && exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}
               </div>
               {fs && mode === 'loading' && xrayTargets.length > 0 && <div className="flex gap-1.5">{exBtn('xray', '★ XRAY', openCardXray, xrayTargets.some((x) => x.cn === editXCn), 'fuchsia')}</div>}
+              {/* ★ 5.11 — «앞쪽 먼저 · 뒤쪽 먼저» 를 트윈 카드마다(양하·선적, 일반·따라가기 모두). 검수사 2026-11-18 설문 Q16 «모든 모드에서 적용되어야 합니다».
+                   누르면 싱글 패널의 «앞/뒤 N번 베이 먼저» 와 같은 길(bayFirst — 그 베이를 한 대씩 먼저, 남은 쌍도 한 대씩). 다시 누르면 푼다. */}
+              {!singleMode && parseInt(card.main.bay, 10) !== parseInt(card.twin.bay, 10) && (
+                <div className="flex gap-1.5" data-gw-bayfirst-row="1">
+                  {[card.main, card.twin].map((c, i) => { const b = parseInt(c.bay, 10); const on = bfList.length === 1 && bfList[0] === b;
+                    return <React.Fragment key={'bf' + i}>{exBtn(i === 0 ? 'bfFront' : 'bfBack', `${i === 0 ? '앞' : '뒤'} ${b}번 먼저`, () => { if (on) { setBayFirst(null); singleBaysRef.current = []; return; } closeFix(); setHoldOpen(false); setResumeCns([]); setBayFirst(b); }, on, 'sky')}</React.Fragment>; })}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex gap-1.5" data-gw-exrow="single">
@@ -2894,14 +2885,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           defaultAlsoComplete
           defaultPartner={posTwin || null} autoTwin={!!posTwin}   /* ★ 4.27 위치 틀림 «둘 다» — 앞 칸을 고르면 뒤는 짝 칸으로(수동 트윈 앞 카드와 같은 3.75 길) */
           shipCode={voyage?.info?.vsl || String(voyageKey || '').split('_')[0]}   /* 4.26-02: «자료에 없는 자리» 물음이 베이매트릭스를 본다 */
-          onClose={() => { setPosFor(null); setPosTwin(null); setPosMateCn(null); }}
+          onClose={() => { singlePosRef.current = false; setPosFor(null); setPosTwin(null); setPosMateCn(null); }}
           onSave={async (b, r, t, opts) => fbReassignContainerPosition(voyageKey, mode, posFor.cn, b, r, t, inspector, { actualWork: true, ...(opts || {}) })}
           onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}
           onCompleteBoth={async (cns) => {
             if (!canWorkNow()) { alert(workGateText('완료')); return; }
             if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, equip); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', equip);   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
             noteWorked(posFor);
-            setResumeCns(cns.length === 1 && posMateCn ? [posMateCn] : []); setSingleMode(false); setConsecFix(0); setFixOpen(false); setFixQuery('');   // 4.27: 트윈 중 한 대만 고쳐 실었으면 남은 짝이 다음 카드
+            //  5.11 — 싱글 패널에서 온 한 대는 짝이 아니라 그 베이를 이어 간다(handleConfirmOne single 과 같은 길 · 검수사 2026-11-18 «모든 모드에서 적용되어야 합니다»).
+            const _sb = singlePosRef.current && cns.length === 1 ? parseInt(posFor && posFor.bay, 10) : NaN; singlePosRef.current = false;
+            if (Number.isFinite(_sb)) { setResumeCns([]); setBayFirst(_sb); } else
+            setResumeCns(cns.length === 1 && posMateCn ? [posMateCn] : []);
+            setSingleMode(false); setConsecFix(0); setFixOpen(false); setFixQuery('');   // 4.27: 트윈 중 한 대만 고쳐 실었으면 남은 짝이 다음 카드
             setPosTwin(null); setPosMateCn(null);
           }}
         />

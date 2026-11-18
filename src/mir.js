@@ -1749,7 +1749,7 @@ function twinWarn(card, pier) {
   }
   const limit = twinDiffLimit(pier);
   if (diff > limit) return `\n  ⚠ 총중량(EDI) 무게차 ${formatWt(diff)} (${pier || '부두 미상'} 한계 ${formatWt(limit)}) — 수평이 안 맞습니다.`;
-  if (total > TWIN_CAUTION_TOTAL_KG) return `\n  ⚠ 총중량(EDI) 합계 ${formatWt(total)} (50톤 넘음) — 한계 근처입니다. 확인하고 트윈 하십시오.`;
+  if (total > TWIN_CAUTION_TOTAL_KG) return `\n  ⚠ **싱글 권유** — 총중량(EDI) 합계 ${formatWt(total)} (50톤 넘음). 기사 능력이면 55톤까지 트윈 가능합니다.`;   // ★ 5.11 — 50톤이 장비 기준(검수사 2026-11-18)
   return '';
 }
 
@@ -1772,10 +1772,14 @@ function sayCard(card, n, pier) {
   if (t) {
     const w = twinWarn(card, pier);
     //  4.08-02: 55톤을 넘으면 «두 대 한 번에» 라고만 말하지 않는다 — 싱글을 권하되 들 수 있으면 트윈이다(검수사 2026-10-07).
-    const head2 = w.includes('싱글 권유') ? `${head} — **트윈 자리입니다. 합계가 55톤을 넘어 싱글을 권합니다.**` : `${head} — **트윈입니다. 두 대 한 번에.**`;
+    //  ★ 5.11 — 50~55톤도 «싱글 권유» 라 머리말을 무게대로 가른다(감사 — 52톤 쌍이 «55톤을 넘어» 로 나왔다).
+    const head2 = w.includes('55톤 초과') ? `${head} — **트윈 자리입니다. 합계가 55톤을 넘어 싱글을 권합니다.**`
+      : w.includes('50톤 넘음') ? `${head} — **트윈 자리입니다. 합계가 50톤을 넘어 싱글을 권합니다(기사 능력이면 55톤까지 트윈).**`
+      : `${head} — **트윈입니다. 두 대 한 번에.**`;
     return `${head2}\n  앞 ${one(c)}\n  뒤 ${one(t)}${w}`;
   }
-  return `${head} — ${one(c)}${card.fr ? '\n  ⚠ FR(플랫랙)입니다 — 치수·고정 확인' : ''}`;
+  //  5.11: 양하 오버하이 OT 도 card.fr(먼저 내리는 묶음)로 온다 — FR 인지 OT 인지 컨 표식으로 가른다(감사 참고).
+  return `${head} — ${one(c)}${card.fr ? (c.fr ? '\n  ⚠ FR(플랫랙)입니다 — 치수·고정 확인' : (c.ot || Number(c.ovh || 0) > 0) ? (Number(c.ovh || 0) > 0 ? '\n  ⚠ 오픈탑(높이 초과)입니다 — 치수·고정 확인' : '\n  ⚠ 오픈탑입니다 — 치수·고정 확인') : '\n  ⚠ 특수화물(OOG)입니다 — 치수·고정 확인') : ''}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
