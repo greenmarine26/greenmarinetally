@@ -109,6 +109,11 @@ const codeOf = (e) => { const c = e.cloneNode(true); for (const p of c.querySele
   ok(/\.cpv2-page-header\.cpv2-page-header > \.col:first-child \{ flex: 1 1 0; min-width: min-content; \}/.test(CSS) && /\.cpv2-page-header\.cpv2-page-header > \.title-center \{ flex: 0 0 auto; \}/.test(CSS) && /\.cpv2-head-right \{ flex: 1 1 0; min-width: max-content; padding-left: 16px;/.test(CSS) && /\.cpv2-head-right > \.col\.col \{ white-space: nowrap; flex: 0 0 auto; \}/.test(CSS)
      && r.d.querySelectorAll('.cpv2-page-header > *').length === 3 && !!r.d.querySelector('.cpv2-page-header > .cpv2-head-right'),
      `머리줄이 «왼쪽 | 제목 | 오른쪽» 세 칸이다 (${r.d.querySelectorAll('.cpv2-page-header > *').length}칸)`);
+  //  5.15-03 — 머리줄에 «사전:…» 표기가 없다(검수사 «저외에 다른 사용자들은 아무도 모르고 알필요 없는 표기»).
+  ok(!/사전:/.test((r.d.querySelector('.cpv2-page-header') || {}).textContent || ''), '머리줄에 «사전:…» 표기가 없다');
+  //  5.15-03 — 양하 PLAN 의 X 도 선적처럼 옅은 회색(검수사 «X표가 너무 진하고 굵습니다»). 통과 칸 X 는 칸에 직접 칠하던 #52525b 를 #9ca3af 로.
+  ok(/\.cpv2-tier-row \.cpv2-cell\.cpv2-mark-X \{ color: #9ca3af; font-weight: 700; \}/.test(CSS) && /\.cpv2-bw \.cpv2-cell\.cpv2-mark-X\.cpv2-mark-X \{ color: #888 !important; \}/.test(CSS)
+     && !/color: '#52525b'/.test(CSS), '양하 X 도 옅은 회색(#9ca3af · 흑백 #888) — 통과 칸의 진한 X(#52525b) 없음');
 
   // ── 바닥글이 그림과 같은 말을 하는가
   const foot = (r.d.querySelector('.cpv2-page-footer') || {}).textContent || '';

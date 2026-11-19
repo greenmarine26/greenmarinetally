@@ -454,6 +454,10 @@ export const CARGO_V2_CSS = `
 .cpv2-bw .cpv2-cell.cpv2-pc.cpv2-pe.cpv2-pe { background-color: #bdbdbd !important; color: #000 !important; }
 .cpv2-bw .cpv2-cell.cpv2-pc.cpv2-big.cpv2-big { background-image: linear-gradient(to top right, transparent calc(50% - 0.5px), rgba(0,0,0,0.5) calc(50% - 0.5px), rgba(0,0,0,0.5) calc(50% + 0.5px), transparent calc(50% + 0.5px)) !important; }
 .cpv2-bw .cpv2-cell.cpv2-px.cpv2-px { color: #888 !important; }
+/*  5.15-03 — 양하 PLAN 의 X(옆 40피트가 차지)도 선적처럼 옅은 회색. 검수사 2026-11-19 «양하 플랜을 보니 X표가 너무 진하고 굵습니다.
+    풀 엠티 표기보다 X가 눈에 뜁니다. 선적처럼 옅은 회색처리가 되어 있는지 알았습니다». 선적 .cpv2-px 와 같은 값(#9ca3af · 흑백 #888). */
+.cpv2-tier-row .cpv2-cell.cpv2-mark-X { color: #9ca3af; font-weight: 700; }
+.cpv2-bw .cpv2-cell.cpv2-mark-X.cpv2-mark-X { color: #888 !important; }
 .cpv2-bw .cpv2-legend-mark.cpv2-legend-podcode.cpv2-legend-podcode { background: #7a7a7a !important; color: #000 !important; }
 `;
 
@@ -633,7 +637,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       //    검수사 «표기가 틀리면 선적 오류를 유발 합니다». 양하는 종전 그대로 둔다.
                       style = podMode
                         ? { background: '#9aa0a6', color: '#18181b' }   // 명도 159 — 목적지 최하 190 보다 31 낮다
-                        : { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
+                        : { background: '#d4d4d8', color: '#9ca3af' };  // 통과화물 = 회색 · 5.15-03: X 글자도 선적처럼 옅은 회색(검수사 «X표가 너무 진하고 굵습니다»)
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
                       // 2.38-01 검수사 확정 — **칠은 «리스트가 풀이냐»로 정하고, 색은 특수화물이 우선이다.**
                       //   ㉠ «카고플랜에서 F만이 아니고 리스트에서 F여야만 합니다. 이유는 DG TK FR OT로
@@ -778,7 +782,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       //    검수사 «표기가 틀리면 선적 오류를 유발 합니다». 양하는 종전 그대로 둔다.
                       style = podMode
                         ? { background: '#9aa0a6', color: '#18181b' }   // 명도 159 — 목적지 최하 190 보다 31 낮다
-                        : { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
+                        : { background: '#d4d4d8', color: '#9ca3af' };  // 통과화물 = 회색 · 5.15-03: X 글자도 선적처럼 옅은 회색(검수사 «X표가 너무 진하고 굵습니다»)
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
                       // 2.38-01 검수사 확정 — **칠은 «리스트가 풀이냐»로 정하고, 색은 특수화물이 우선이다.**
                       //   ㉠ «카고플랜에서 F만이 아니고 리스트에서 F여야만 합니다. 이유는 DG TK FR OT로
@@ -1623,12 +1627,9 @@ export default function PrintableCargoPlanV2({
           </div>
           {urgentCount > 0 && <div className="col" style={{ fontSize: 9, color: '#dc2626', fontWeight: 'bold' }}>긴급 {urgentCount}</div>}
           {luggCount > 0 && <div className="col" style={{ fontSize: 9, color: '#7c3aed', fontWeight: 'bold' }}>수화물 {luggCount}</div>}
-          {/* V9.05: 어느 베이사전으로 그렸는지 표기 — 오매칭 즉시 식별 (2026-07-21 SWAT 사건 후속) */}
-          <div className="col" style={{ fontSize: 8, color: isUserOwnedBayDict(dictData) ? '#555' : '#dc2626', fontWeight: isUserOwnedBayDict(dictData) ? 'normal' : 'bold' }}>
-            {dictData
-              ? `사전:${dictData.code || '?'}·${dictData.source || '?'}${dictData.bayDef?.parsedAt ? '·' + String(dictData.bayDef.parsedAt).slice(0, 10) : ''}${isUserOwnedBayDict(dictData) ? '' : ' ⚠비정본'}`
-              : '사전:⚠미매칭(폴백 구조)'}
-          </div>
+          {/*  5.15-03 — «사전:…» 표기는 머리줄에서 뺐다(V9.05 의 정상·경고 둘 다). 검수사 2026-11-19 «이부분은 저외에 다른 사용자들은 아무도 모르고
+              알필요 없는 표기입니다. 이게 없다면 그공간을 사용하면 될듯합니다» · «베이사전이 잘못된다 하더라도 출력전에 알리게 되어 있을것입니다» —
+              앱 머리의 «사전에 없음»(DictMissingChip, 4.19 §7.8-⑬)과 베이사전 확인 위젯이 출력 전에 알린다(4.31 «베이사전은 수석용입니다»). */}
           <div className="col">DATE : {today}</div>
           </div>
         </div>
