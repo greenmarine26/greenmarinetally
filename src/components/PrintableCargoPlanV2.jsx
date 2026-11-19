@@ -161,6 +161,15 @@ export const CARGO_V2_CSS = `
 .cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 .cpv2-page { width: 285mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
+/*  5.15-02 — 제목을 **종이 정가운데**에. 검수사 2026-11-19 «양하와 선적을 표기 하는 문자가 중앙에 있지 않고 좌측으로 조금 기울었습니다».
+    종전 flex 는 양옆 글 길이(왼쪽 VOY NO 짧음 · 오른쪽 선적 대수·사전·DATE 김)의 남는 폭 가운데에 제목을 둬서 왼쪽으로 밀렸다.
+    양옆 칸을 같은 몫으로 출발시키면 제목이 가운데에 선다. */
+.cpv2-page-header.cpv2-page-header > .col:first-child { flex: 1 1 0; min-width: min-content; }
+.cpv2-page-header.cpv2-page-header > .title-center { flex: 0 0 auto; }
+.cpv2-page-header .cpv2-head-right { flex: 1 1 0; min-width: max-content; padding-left: 16px; display: flex; justify-content: flex-end; align-items: baseline; }
+.cpv2-page-header .cpv2-head-right > .col.col { white-space: nowrap; flex: 0 0 auto; }
+/*  ↑ 평소엔 양옆이 같은 몫(1 1 0)이라 제목이 종이 정가운데. 쉬프팅·긴급·수화물로 오른쪽 글이 길면 오른쪽은 한 줄 그대로(max-content)
+      자리를 더 가져가고 짧은 왼쪽 칸이 내준다(왼쪽도 제 글 폭 밑으로는 안 준다 — 줄어들면 제목에 닿았다 · 왼쪽 칸 좌우 여백 16px 만큼 오른쪽에도 16px) — 제목은 그만큼만 비켜서고 머리줄은 한 줄(3.7-03 «두줄 또는 세줄» 막음). 감사 실측으로 격자안 폐기. */
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1 1 auto; text-align: center; white-space: nowrap; }   /* 2.91-01: 검수사 «PLAN 4자가 밑줄로 내려와 한줄을 차지함» — 줄바꿈 금지 */
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; min-width: 0; }   /* 2.91-01: 제목이 먼저 자리를 잡게 옆 칸이 줄어든다 */
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
@@ -700,8 +709,16 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         {nHold === 0 && globalHatch && (<>
           {/*  해치선이 먹는 자리(높이 0 + 상하 여백 3px)도 같이 잡는다 — 안 그러면 3.1px 만큼 윗줄이 남는다. */}
           <div className="cpv2-hatch-break" aria-hidden="true" style={{ visibility: 'hidden' }}></div>
-          <div className="cpv2-hold-area" aria-hidden="true" data-share={holdShareEmpty}
-               style={{ flex: `${holdShareEmpty} 1 var(--rlb)`, maxHeight: `calc(var(--cph, 999px) * ${holdShareEmpty} + var(--rlb))` }}></div>
+          <div className="cpv2-hold-area cpv2-hold-empty" aria-hidden="true" data-share={holdShareEmpty}
+               style={{ flex: `${holdShareEmpty} 1 var(--rlb)`, maxHeight: `calc(var(--cph, 999px) * ${holdShareEmpty} + var(--rlb))`, justifyContent: 'flex-end' }}>
+            {/*  ★ 5.15-02 — 데크만 있는 베이도 **칸 바로 아래에 로우 번호**를 단다. 검수사 2026-11-19 «28번 베이는 하단에 로우열 표기가 없습니다.
+                만약 트윈 작업이 있을시 상세베이를 접을 경우 밑부분에 로우열이 없어서 실수 할수 있습니다» · «데크만 있는 베이는 홀드가 있는 베이랑 맞추기 힘듭니다».
+                18:59 «하단표기를 홀드가 있는 그열에 맞춰주시면 됩니다» — 빈 홀드 자리 **맨 아래**(flex-end)에 둔다. 빈 자리 높이가 해치 베이와 같으므로
+                옆 상자의 아래 로우 줄과 한 줄에 선다. 베이 상세(PrintableBayDetail)도 이 부품이라 같이 붙는다. */}
+            <div className="cpv2-row-labels cpv2-row-labels-under" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
+              {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
+            </div>
+          </div>
         </>)}
         {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
         {nHold > 0 && (<>
@@ -1582,6 +1599,7 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}<WorkerHeadMark name={wkMe} /></div>
           <div className="title-center">{title}</div>
+          <div className="cpv2-head-right">{/* 5.15-02: 오른쪽 글을 한 칸에 묶어 제목이 종이 정가운데에 서게 한다 */}
 
           {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.
               시프팅이 0이면 종전대로 대수만(없는 줄을 만들지 않는다). */}
@@ -1612,6 +1630,7 @@ export default function PrintableCargoPlanV2({
               : '사전:⚠미매칭(폴백 구조)'}
           </div>
           <div className="col">DATE : {today}</div>
+          </div>
         </div>
         {dictData && dictData._substituted && (
           <div style={{ background: '#fef3c7', border: '1px solid #d97706', color: '#92400e', padding: '6px 10px', margin: '0 0 6px', fontSize: 12, borderRadius: 4 }}>

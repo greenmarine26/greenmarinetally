@@ -1,4 +1,4 @@
-import{b5 as z,b4 as xs,a$ as e,aK as is,b as gs,c as ws,ag as ht}from"./vendor-6XvW6uU9.js";import{eR as ls,cu as Ss,em as os,e4 as $t,d0 as jt,aT as as,d$ as ds,e0 as cs,eD as Ns,d3 as Cs,dr as js,a5 as ks,aV as _s,ap as Ps,aZ as Lt,eP as Es,ak as Ms,b5 as Os,cD as Ts,d9 as Rs,b0 as As,aj as $s,C as Ls,dO as Ds,c$ as Fs,ai as ys,ao as zs,cK as vs,ec as Ks,B as Hs,cB as Bs,dj as Is,at as Gs,c_ as Vs,cW as Us,a4 as Ys,eB as Xs,cv as Ws,az as Zs,el as Js,ei as qs,aX as Qs,E as tn,aY as en,e2 as sn,dg as nn,dx as rn,eC as ln,aW as Ye,as as on,y as Xe,aM as an,m as At,q as dn,P as cn,e7 as pn,dT as hn,dD as We,dS as bn,dU as fn,d5 as Ze,d6 as mn,dl as un,ek as xn,cR as gn,dR as Je,b4 as wn,t as Sn}from"./index-Cs_dxPFl.js";import"./baydict-DBqSydwE.js";const Nn=`
+import{b5 as z,b4 as xs,a$ as e,aK as is,b as gs,c as ws,ag as ht}from"./vendor-6XvW6uU9.js";import{eR as ls,cu as Ss,em as os,e4 as $t,d0 as jt,aT as as,d$ as ds,e0 as cs,eD as Ns,d3 as Cs,dr as js,a5 as ks,aV as _s,ap as Ps,aZ as Lt,eP as Es,ak as Ms,b5 as Os,cD as Ts,d9 as Rs,b0 as As,aj as $s,C as Ls,dO as Ds,c$ as Fs,ai as ys,ao as zs,cK as vs,ec as Ks,B as Hs,cB as Bs,dj as Is,at as Gs,c_ as Vs,cW as Us,a4 as Ys,eB as Xs,cv as Ws,az as Zs,el as Js,ei as qs,aX as Qs,E as tn,aY as en,e2 as sn,dg as nn,dx as rn,eC as ln,aW as Ye,as as on,y as Xe,aM as an,m as At,q as dn,P as cn,e7 as pn,dT as hn,dD as We,dS as bn,dU as fn,d5 as Ze,d6 as mn,dl as un,ek as xn,cR as gn,dR as Je,b4 as wn,t as Sn}from"./index-CHpfnUDr.js";import"./baydict-DBqSydwE.js";const Nn=`
 <div id="print-toolbar" class="print-toolbar" style="position:fixed;top:0;left:0;right:0;background:#1e293b;color:#fff;padding:8pt 10pt;display:flex;gap:8pt;justify-content:center;z-index:1000;border-bottom:2pt solid #f59e0b;font-family:'Malgun Gothic','맑은 고딕',sans-serif;">
   <button onclick="window.print()" style="background:#059669;color:#fff;border:none;padding:6pt 14pt;font-size:11pt;border-radius:4pt;cursor:pointer;font-weight:bold;">🖨 프린터 인쇄</button>
   <button onclick="window.__savePDF()" style="background:#0284c7;color:#fff;border:none;padding:6pt 14pt;font-size:11pt;border-radius:4pt;cursor:pointer;font-weight:bold;">📄 PDF 저장</button>
@@ -167,13 +167,13 @@ ${d}${st?`<div class="too-tall">※ 선사 ${A.length}곳 · ${et}줄 — 읽을
         .bd-cargo-wrap .cpv2-row-labels, .bd-cargo-wrap .cpv2-tier-labels { color: #000; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell.bd-fill { padding: 0; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { padding: 0; box-sizing: border-box; }   /* 3.69-04: 여백은 덩어리 가운데 놓기가 만든다(카스피와 같은 계산) */
-        .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 16px; }
+        .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 12px; }   /* 5.15: 단 번호 칸 16→12px 과 짝 */
         .bd-cargo-wrap.bd-uniform .cpv2-row-labels > span {
           flex: 0 0 var(--bdc-w); min-width: var(--bdc-w); max-width: var(--bdc-w);
         }
         .bd-cargo-wrap.bd-uniform .cpv2-tier-labels > span { flex: 0 0 var(--bdc-h); }
         .bd-cargo-wrap.bd-uniform .cpv2-hatch-break {
-          width: calc(var(--bdc-w) * var(--bdc-gc) + 16px);
+          width: calc(var(--bdc-w) * var(--bdc-gc) + 12px);   /* 5.15: 단 번호 칸 12px */
           margin: 3px auto;
         }
         @media print {

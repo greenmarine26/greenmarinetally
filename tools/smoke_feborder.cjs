@@ -105,6 +105,10 @@ const codeOf = (e) => { const c = e.cloneNode(true); for (const p of c.querySele
   ok(/\.cpv2-cell \.cpv2-pt \{ display: block; line-height: 1; text-box: trim-both cap alphabetic; \}/.test(CSS) && cells.every((e) => e.querySelector(':scope > .cpv2-pt')),
      `칸 글자가 가운데 맞춤 상자(text-box cap) 안에 있다 (${cells.filter((e) => !e.querySelector(':scope > .cpv2-pt')).length}칸 밖)`);
   ok(/\.cpv2-cell\.cpv2-pc \{ background: var\(--pbg\); color: #000; font-weight: 500; \}/.test(CSS), '칸 글자 굵기 500');
+  //  5.15-02 — 머리줄 제목은 종이 정가운데(검수사 «좌측으로 조금 기울었습니다»): 양옆 같은 몫 + 오른쪽 글은 한 칸·한 줄.
+  ok(/\.cpv2-page-header\.cpv2-page-header > \.col:first-child \{ flex: 1 1 0; min-width: min-content; \}/.test(CSS) && /\.cpv2-page-header\.cpv2-page-header > \.title-center \{ flex: 0 0 auto; \}/.test(CSS) && /\.cpv2-head-right \{ flex: 1 1 0; min-width: max-content; padding-left: 16px;/.test(CSS) && /\.cpv2-head-right > \.col\.col \{ white-space: nowrap; flex: 0 0 auto; \}/.test(CSS)
+     && r.d.querySelectorAll('.cpv2-page-header > *').length === 3 && !!r.d.querySelector('.cpv2-page-header > .cpv2-head-right'),
+     `머리줄이 «왼쪽 | 제목 | 오른쪽» 세 칸이다 (${r.d.querySelectorAll('.cpv2-page-header > *').length}칸)`);
 
   // ── 바닥글이 그림과 같은 말을 하는가
   const foot = (r.d.querySelector('.cpv2-page-footer') || {}).textContent || '';

@@ -49,6 +49,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     if (!good) { allOk = false; console.log('    ✗', s.querySelector('.cpv2-bay-title').textContent, { rows, labs, dk, hd, want, refTotal }); }
   }
   ok(allOk, '데크만 있는 베이: 셀 줄 수 = 단 표기 수 · 데크 몫 = max(해치 기준, 제 단 수) · 데크+빈 홀드 몫 = 해치 베이 총 높이(윗줄 정렬 유지)');
+  //  5.15-02 — 데크만 있는 베이도 칸 바로 아래에 로우 번호(검수사 «28번 베이는 하단에 로우열 표기가 없습니다»).
+  const noUnder = dOnly.filter((s) => { const u = s.querySelector('.cpv2-hold-area[aria-hidden] > .cpv2-row-labels-under'); const t = s.querySelector('.cpv2-deck-area > .cpv2-row-labels');
+    return !u || !t || u.textContent !== t.textContent || u.textContent.trim() === ''; });
+  ok(noUnder.length === 0, `데크만 있는 베이 ${dOnly.length}개 모두 아래 로우 번호가 위 로우 번호와 같다 (빠진 베이 ${noUnder.map((s) => s.querySelector('.cpv2-bay-title').textContent).join(',') || '없음'})`);
+  //  18:59 «하단표기를 홀드가 있는 그열에 맞춰주시면 됩니다» — 빈 홀드 자리 맨 아래에 붙는다(해치 베이의 아래 로우 줄과 같은 자리).
+  ok(dOnly.every((s) => (s.querySelector('.cpv2-hold-area[aria-hidden]').getAttribute('style') || '').replace(/\s/g, '').includes('justify-content:flex-end')),
+     '데크만 있는 베이의 아래 로우 번호는 빈 홀드 자리 맨 아래(flex-end)에 선다');
   ok(tall >= 3, `단 수가 해치 기준보다 많은 데크만 베이가 실제로 있다 (${tall}개 — 이 수리가 일하는 자리)`);
   // 단 표기 칸은 셀 줄과 같은 몫·상한(글자 높이가 줄을 밀어내지 않는다) — 번들의 CSS 문자열을 잠근다.
   const css = require('fs').readFileSync(path.resolve(B), 'utf8');
