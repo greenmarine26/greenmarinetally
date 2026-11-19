@@ -18,7 +18,7 @@ import { allStaffNames } from './staffList.js';   // ★ 3.8: «김성일 몇 �
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
-import { mirRewrite, mirLearnedDef, mirObserve } from './mir.js';
+import { mirRewrite, mirLearnedDef, mirObserve, mirRewriteIsAuto, isWriteParse } from './mir.js';
 import { isoConflictText } from './diagnostics.js';   // ★ 3.47: 규격 불일치 문구 한 벌(진단 패널과 같은 말)
 import { mirSmallTalk } from './mir.js';   // ★ 3.7-06: 잡담이 받은 말은 «못 알아들은 말»이 아니다(판정 한 벌)
 export { _mirReset } from './mir.js';   // 연막검사용(기억 초기화)   // ★ 3.0: 미르 자체 학습 — 못 알아듣는 말만 사전으로 되쓰기·이어진 말에서 배우기   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
@@ -258,6 +258,12 @@ export function parseNaturalQuery(text) {
           const _to = new RegExp(`${_NO}\\s*(?:로|으로)\\s*(?:이동|옮|갔|가|넘어|바꿔)`).exec(_mt);
           result.moveSet = { kind: 'withdraw', equip: _N(_m[1]), to: _to && _ok(_to[1]) ? _N(_to[1]) : '', raw: _mt };
         } else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
+      } else if ((_m = new RegExp(`${_NO}\\s*(?:(\\d{1,2})\\s*(?::|시)\\s*(\\d{1,2}|반)?\\s*분?\\s*(?:에|부터|쯤)?\\s*)?([A-Za-z]{4})(?:\\s*\\d{3,5}[A-Za-z]?)?\\s*(?:으로|로|에)\\s*(?:이동\\s*(?:했|함|됐|됨|완료)|이동(?=\\s*(?:맞|$|[.!~])|\\s*$)|옮겼|넘어갔|갔(?:어|다|음|습니다|어요|네)?(?=\\s*(?:맞|$|[.!~]))|투입\\s*(?:했|됐|함|됨)|붙었)`).exec(_mt))) {
+        //  5.14 «2호기 04:00 KSKM으로 이동» — 호기가 다른 배로 옮김(검수사 2026-11-19 07:28). 판정·답·기록은 craneShipMove.js 한 벌.
+        //    지난 일·보고 꼴만 받는다(감사 상1) — «가야 돼»·«가지마»·«옮길게»·«이동해»·«넘어갈 거야»·«붙일까» 는 기록 말이 아니다.
+        const _neg = /안\s*맞|아니|틀려|틀렸|틀린/.test(_mt);
+        if (_ok(_m[1])) result.moveSet = { kind: 'ship', equip: _N(_m[1]), to: '', toShip: _m[4].toUpperCase(), hh: _m[2] == null ? '' : _m[2], mm: _m[3] == null ? '' : (_m[3] === '반' ? '30' : _m[3]), force: !_neg && /맞아|맞다|맞습니다|맞아요|확실/.test(_mt), raw: _mt };
+        else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
       } else if ((_m = new RegExp(`${_NO}\\s*(?:로|으로)\\s*(?:이동|옮겼|갔|넘어|바꿨|바꿔)`).exec(_mt))) {
         if (_ok(_m[1])) result.moveSet = { kind: 'move', equip: '', to: _N(_m[1]), raw: _mt };
         else if (_bad(_m[1])) result.moveSet = _badSet(_m[1]);
@@ -1038,7 +1044,9 @@ export function parseNaturalQuery(text) {
       _mirDepth = 1;
       let r2 = null;
       try { r2 = parseNaturalQuery(_rw); } finally { _mirDepth = 0; }
-      if (r2 && (r2.asking || r2.mirHello || r2.deviceCmd || hasAnyCondition(r2))) { r2._learnedFrom = String(text); r2._raw0 = String(text); return r2; }
+      //  ★ 5.14 — 모델이 스스로 배운 별칭(auto)으로 되쓴 말이 «기록을 남기는 말»이면 되쓰지 않는다(그 말은 사람이 그대로 말해야 적는다).
+      if (r2 && isWriteParse(r2) && mirRewriteIsAuto(text)) { /* 되쓰지 않음 */ }
+      else if (r2 && (r2.asking || r2.mirHello || r2.deviceCmd || hasAnyCondition(r2))) { r2._learnedFrom = String(text); r2._raw0 = String(text); return r2; }
     }
     const _def = mirLearnedDef(text);
     if (_def) { result.asking = 'def'; result._learnedDef = _def; }

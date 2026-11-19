@@ -86,6 +86,7 @@ export const fbLogMirMiss = async () => true;
 export const fbLogoutInspector = async () => true;
 export const fbMarkBroadcastRead = async () => true;
 export const fbMarkDeletedStaff = async () => true;
+export const fbMirCraneShipMove = async () => true;
 export const fbPeekCompleted = async () => false;
 export const fbPeekMirWorkCtx = async () => true;
 export const fbPickIso = async () => true;

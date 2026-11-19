@@ -19,6 +19,7 @@ import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
 import { craneMoveReportsOf } from '../craneMove.js';
+import { shipMovePlanOf, spokenTimeMs, shipMoveWritable } from '../craneShipMove.js';   // 5.14 호기가 다른 배로 옮김 — 엔진 답과 같은 판정
 import { planMirWorkReport } from '../workReportPlan.js';   // 5.13: 미르 작업보고 전달 계획 한 벌
 import { answerOneRaw, workPauseOf, mirDoneUpWhy } from '../mir.js';   // 4.42-02: mirDoneUpWhy — 기쁨 이유에 배 이름
 import { askMir } from '../mir.js';   // 3.42 판 B: 규칙 → (약하면) 모델 번역·자료 답 한 함수
@@ -34,6 +35,7 @@ import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
 import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain } from '../voice.js';
 import { logQuerySettled } from '../activityLog.js';
+import { fbMirCraneShipMove } from '../firebase.js';   // 5.14
 import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
@@ -148,7 +150,23 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
   }, [inspector]);
 
   //  «1호기 김판석 2호기 이종부»·«3갱으로 기억해»·«22시 시작» — 작업창과 같은 저장(말만 하고 안 적으면 거짓말이다).
+  const voyagesRef = useRef(voyages); voyagesRef.current = voyages;   // 5.14: 호기가 다른 배로 옮긴 말은 지금 화면 배와 상관없이 전 항차를 본다
   const applySideEffects = useCallback((parsed, voyageKey, voyage, text) => {
+    //  ★ 5.14 «2호기 04:00 KSKM으로 이동» — 엔진 답과 같은 판정(craneShipMove.shipMovePlanOf)으로 적는다. 시각이 앱 자료와 어긋나면 엔진이 왜 다른지 묻고 여기서는 안 적는다.
+    if (parsed && parsed.moveSet && parsed.moveSet.kind === 'ship') {
+      const M = parsed.moveSet; const vs = voyagesRef.current || {};
+      let tk = ''; try { const sc = pickShipCtx(M.toShip, vs, null); tk = (sc && sc.key) || ''; } catch (e) { console.warn('[미르] 옮긴 배 찾기 실패:', e); tk = ''; }
+      if (!tk) return;
+      const now = Date.now();
+      const pl = shipMovePlanOf(vs, tk, Number(String(M.equip).replace(/\D/g, '')) || 0, spokenTimeMs(M.hh, M.mm, now), now, M.toShip);
+      if (!shipMoveWritable(pl, M.force)) return;   // 엔진 답이 «적을게요» 가 아닐 때(어긋남·아직 안 온 시각·다른 배 이름·바꿀 것 없음)는 적지 않는다
+      const key = `ship|${tk}|${pl.no}|${pl.ms}`;
+      if (sideRef.current === key) return;
+      sideRef.current = key;
+      fbMirCraneShipMove(pl, inspector || '')
+        .catch((e) => { console.warn('[5.14] 호기 이동 기록 실패', e); sideRef.current = ''; setOut((o) => (o || '') + '\n⚠ 호기 이동 기록이 안 됐어요 — 연결 문제예요. 다시 말씀해 주세요.'); });
+      return;
+    }
     if (!parsed || !voyageKey) return;
     try {
       const cs = resolveCrewSides(parsed.crewSet, voyage);

@@ -80,7 +80,8 @@ import { diffEdiList, explainEdiGap } from './ediGap.js';
 import { aiCostUsd, AI_PRICE, aggregateAiCost, aiDayKey } from './aiCost.js';   // 4.37: AI 단가 한 벌 — 웹 검색 한도 계산과 소유자 «💳 AI 비용» 화면이 같은 표를 쓴다(aiCost 는 import 가 없다)
 import { aiDayLimit, aiDayUsages, AI_DAILY_USD_DEFAULT, aiCarryKeys } from './aiCost.js';   // 5.03 건8: 하루 한도 이월 한 함수
 import { tidyBayAnswer, withRecordPositions } from './gangState.js';   // 4.81: «N번 베이 정리해줘» — 앱 입력 + 터미널 반영 두 자료를 읽는 현황 한 벌(읽기 전용)
-import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — utils 가 이미 tallyReport 를 부르므로 번들에 베이사전 같은 큰 것이 새로 딸려 오지 않는다(mir-core +1.5KB 실측)
+import { sizeLenOf, sizeLenKnown } from './tallyReport.js';
+import { shipMovePlanOf, shipMoveAnswerOf, spokenTimeMs } from './craneShipMove.js';   // 5.14 호기가 다른 배로 옮김 — 판정·답 한 벌   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — utils 가 이미 tallyReport 를 부르므로 번들에 베이사전 같은 큰 것이 새로 딸려 오지 않는다(mir-core +1.5KB 실측)
 import { isLoloShipByPolicy } from './shipPolicyCore.js';   // 4.40: 덱플랜 배(RZOR)는 자동 가이드가 없다 — 화면(VoyagePage isLoloShip)과 같은 판정, 파이어베이스 없는 본체만
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 //  가져오는 것에 붙어 있던 말(종전 파일의 import 줄 주석)
@@ -153,6 +154,16 @@ export function mirRewrite(q) {
   let i = 0;
   const out = String(e.to).replace(/\{(ship|cn|n)\}/g, () => sl[i++] || '');
   return out.trim() || null;
+}
+/** 5.14 — 그 말의 별칭이 자동으로 배운 것(auto — 모델 번역 · 같은 폰의 이어진 말 즉석 학습)인가. 사람·클로드가 결산으로 적은 별칭은 auto 가 아니다. 기록을 남기는 말은 이런 별칭으로 되쓰지 않는다(nlSearch). */
+export function mirRewriteIsAuto(q) {
+  const k = mirKey(q);
+  const e = k ? _lex()[k] : null;
+  return !!(e && e.kind === 'alias' && (e.auto || e.src === 'model'));
+}
+/** 5.14 — 기록을 남기는 말인가(시작 시각·호기 검수원·갱 수·호기 이동·작업 중단·작업보고). 번역·자동 별칭으로는 이런 말을 적지 않는다. */
+export function isWriteParse(p) {
+  return !!(p && (p.startSet || p.crewSet || p.gangSet || p.moveSet || p.pauseSet || p.workRep));
 }
 /** 배운 뜻풀이가 있으면 돌려준다(«천정 뭐야» → term 키로). */
 export function mirLearnedDef(q) {
@@ -2245,7 +2256,9 @@ export function answerOneRaw(query, ctx) {
   //  ★ 4.17 (검수사 §7.8-⑧ «2») — 없는 선박코드(«OWBH»)는 가장 가까운 코드로 고쳐 바로 답하고 «OBWH 로 답했어요» 한 줄을 붙인다(되묻지 않는다).
   //    같은 거리에 둘 이상이면 그때만 «… 중 어느 배요?». 한 줄은 그 배로 답했을 때만 — 다른 배 항차가 열려 있으면(정확한 코드를 댔을 때처럼) 그 항차로 답한다.
   //    판정은 _shipCodeFix → utils.shipCodeFixOf 한 벌(질문 속 배 고르기 pickShipCtx·콘앱 배 옮기기 pickVoyageKey 와 같은 판정).
-  if (!(ctx && ctx._shipFixed)) {
+  //  5.14 재감사 상1 — 호기 이동 말(«2호기 KSKS으로 이동»)은 코드를 고쳐 짐작하지 않는다. 화면은 원말로 다시 읽어 적으므로, 고친 코드로 «적을게요» 하면 거짓 답이 된다.
+  let _shipMoveQ = false; try { const _pm = parseNaturalQuery(q); _shipMoveQ = !!(_pm && _pm.moveSet && _pm.moveSet.kind === 'ship'); } catch (e) { console.warn('[미르] 호기 이동 말 판정 실패:', e); _shipMoveQ = false; }
+  if (!(ctx && ctx._shipFixed) && !_shipMoveQ) {
     let fx = null;
     try { fx = _shipCodeFix(q, ctx); } catch (e) { console.warn('[미르] 선박코드 고치기 실패:', e); fx = null; }
     if (fx && fx.ambiguous) { if (ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.via = 'shipAsk'; return `${fx.ambiguous.join('·')} 중 어느 배요?`; }
@@ -2475,6 +2488,20 @@ export function answerOneRaw(query, ctx) {
       if (!hasShip || !v) return '어느 배 보고인지 몰라 적지 못했어요 🐱 배 이름을 붙여 주세요. (예: "미르야 KSKM 2호기 양하 완료")';
       if (app === 'cone' || !c.moveRecorder) return '알겠어요 🐱 다만 이 화면에서는 작업보고가 적히지 않아요 — 검수앱 미르(떠 있는 미르 칸이나 검색줄에서 "미르야")에서 말씀해 주세요.';
       return '📝 작업보고 확인할게요 🐱';   // 5.13-01: 옛 문구(적는 중이라는 말)는 되묻기(안 적음) 위에서도 적은 것처럼 읽혔다(라이브 확인)
+    }
+    if (p.moveSet && p.moveSet.kind === 'ship' && (p.mirCalled || c.mirBox)) {
+      //  5.14 «2호기 04:00 KSKM으로 이동» — 호기가 다른 배로 옮김. 앱 자료(그 조 등록·완료 기록)와 맞춰 보고, 시각이 어긋나면 왜 다른지 묻는다(craneShipMove.js 한 벌).
+      _via('shipMove');
+      const M = p.moveSet;
+      const _vs = (c.voyages && typeof c.voyages === 'object') ? c.voyages : null;
+      const _now = c._now || Date.now();
+      if (!_vs) return `알겠어요 🐱 이 화면은 다른 배 자료를 갖고 있지 않아 ${M.equip} 이동을 적지 못했어요. 떠 있는 미르(검색줄 «미르야»)에게 말씀해 주세요. 아무것도 바꾸지 않았어요.`;
+      let _tk = '';
+      try { const _sc = _vs ? pickShipCtx(M.toShip, _vs, null) : null; _tk = (_sc && _sc.key) || ''; } catch (e) { console.warn('[미르] 옮긴 배 찾기 실패:', e); _tk = ''; }
+      if (!_tk) return `알겠어요 🐱 다만 ${M.toShip} 배를 지금 작업 목록에서 못 찾아 ${M.equip} 이동을 적지 못했어요. 배 이름을 다시 말씀해 주세요.`;
+      const _pl = shipMovePlanOf(_vs, _tk, Number(String(M.equip).replace(/\D/g, '')) || 0, spokenTimeMs(M.hh, M.mm, _now), _now, M.toShip);
+      if (app === 'cone' || !c.moveRecorder) return `${shipMoveAnswerOf(_pl, M.force).replace('적을게요', '들었어요')} 이 화면에서는 기록이 안 남아요 — 기록은 검수앱 미르에서 해 주세요.`;
+      return shipMoveAnswerOf(_pl, M.force);
     }
     if (p.moveSet && (p.mirCalled || c.mirBox)) {
       _via('workStop');
@@ -3230,7 +3257,8 @@ export function isWeakAnswer(q0, answer, trace) {
   if (answer == null || answer === '') return true;
   const via = trace && trace.via;
   if (via === 'modeChoice') return false;
-  if (via === 'cancelBare') return false;   // 5.13-01 감사 막음: 맨말 «취소» 되묻기는 답이다 — 모델·번역으로 보내면 «취소 처리했어요» 가 다시 난다
+  if (via === 'cancelBare') return false;
+  if (via === 'shipMove') return false;   // 5.14: «2호기 04:00 KSKM으로 이동» 답(적음·묻기·못 적음)은 답이다 — 번역으로 보내면 «시작했어» 로 바뀌어 적힌다   // 5.13-01 감사 막음: 맨말 «취소» 되묻기는 답이다 — 모델·번역으로 보내면 «취소 처리했어요» 가 다시 난다
   if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
@@ -3745,6 +3773,15 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
     out.text = opts.weakText; out.via = 'confirmed'; out.reason = 'kept'; return out;
   }
   if (!identity) {
+    //  ★ 5.14 — 번역문이 «기록을 남기는 말»이면 그 답을 쓰지 않는다. 화면은 답 뒤에 다시 읽어 그대로 적는다 — 번역이 뜻을 바꾸면 틀린 것이 적힌다
+    //    (실측 2026-11-19 04:56 «2호기 04:00 KSKM으로 이동» → 번역 «2호기 04:00 KSKM 시작했어»(0.9) → 자동 별칭이 되어 KSKM 시작 시각이 적힘).
+    let _wr = false; try { _wr = isWriteParse(parseNaturalQuery(rec.canonical)); } catch (e) { console.warn('[미르 모델] 번역문 기록 말 판정 실패 — 막는 쪽으로:', e); _wr = true; }
+    if (_wr) {
+      if (!fromMemo) _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical, how: 'weak→translate(write-blocked)' });
+      out.text = `«${rec.canonical}» 로 알아들었어요 🐱 그런데 기록을 남기는 말은 짐작해서 적지 않아요 — 아무것도 바꾸지 않았어요. 그 뜻이 맞으면 그대로 말씀해 주세요.`;
+      out.via = 'translateWrite'; out.reason = 'writeBlocked';
+      return out;
+    }
     let a = null;
     try { a = rules(rec.canonical); } catch (e) { console.warn('[미르 모델] 번역문 규칙 실패:', e && e.message); a = null; }
     const sameCatch = !!(opts.weakText && a && String(a) === String(opts.weakText) && opts.weakVia && WEAK_VIA.has(opts.weakVia));
@@ -3829,7 +3866,9 @@ export async function askMir(q, ctx, rulesFn, opts = {}) {
   //  배운 별칭이 있으면 모델 없이 그것으로(nlSearch 의 되쓰기는 «못 알아들었을 때»만 도는데, 여기는 «약하게 알아들은 말»도 받는다)
   try {
     const rw = mirRewrite(q);
-    if (rw && _norm(rw) !== _norm(q)) { const t2 = {}; const a = rulesFn(rw, t2); if (a && !isWeakAnswer(rw, a, t2)) return { text: a, via: 'lexicon', weak, rulesText, trace, canonical: rw }; }
+    //  5.14 감사 상3 — 자동 별칭이 «기록 말»로 되쓰면 그 답을 쓰지 않는다(화면은 원말을 다시 읽어 적지 않으므로 «적을게요» 는 거짓 답이 된다).
+    let _rwWrite = false; try { _rwWrite = !!(rw && mirRewriteIsAuto(q) && isWriteParse(parseNaturalQuery(rw))); } catch (e) { console.warn('[미르] 별칭 기록 말 판정 실패:', e); _rwWrite = true; }
+    if (rw && _norm(rw) !== _norm(q) && !_rwWrite) { const t2 = {}; const a = rulesFn(rw, t2); if (a && !isWeakAnswer(rw, a, t2)) return { text: a, via: 'lexicon', weak, rulesText, trace, canonical: rw }; }
   } catch (e) { console.warn('[미르] 별칭 되쓰기 실패:', e && e.message); }
   const m = await askMirModel(q, ctx, (cq) => rulesFn(cq, {}), { who: opts.who || ctx.inspector || '', weakText: rulesText, weakVia: trace.via || '' });
   if (m && m.text) return { text: m.text, via: m.via, weak, rulesText, trace, canonical: m.canonical };

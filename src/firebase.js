@@ -304,6 +304,39 @@ export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
   return list.length ? list.map((c) => `${c.no}호기 ${fmt(c.ms).slice(11)}`).join(' · ') : fmt(ms);
 }
 
+//  ★ 5.14 — 말로 알린 «N호기 (시각) 배로 이동» 을 적는다(검수사 2026-11-19 «앱이 적어야 합니다»). 판정은 craneShipMove.shipMovePlanOf 한 벌.
+//    ①옮긴 배 info.craneStart/{N} = 그 시각 ②옮긴 배에 그 조 그 호기 등록이 없으면 떠난 배의 그 호기 검수원을 따라 적는다(src 'follow' · from)
+//    ③떠난 배가 아직 앱 작업 목록에 있으면 그 호기 등록에 leftAt·to 를 붙인다(갱 수에서 빠짐). 루트 update 한 번 — 반쪽 기록 없음.
+//    조 등록(fbSetVoyageCraneCrew)과 같은 관리 기록이라 문지기를 두지 않는다(3.51-01). workStartManual 은 건드리지 않는다(이미 시작한 배의 시작을 뒤로 밀지 않게).
+export async function fbMirCraneShipMove(plan, by) {
+  if (!plan || !plan.ok || !plan.targetKey || !plan.no) return null;
+  const p2 = (n) => String(n).padStart(2, '0');
+  const fmt = (x) => { const d = new Date(x); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+  const T = `voyages/${plan.targetKey}/info`;
+  const eq = `${plan.no}호기`;
+  const patch = {};
+  if (plan.ms) { patch[`${T}/craneStart/${plan.no}`] = fmt(plan.ms); patch[`${T}/craneStartBy`] = by || ''; }
+  if (plan.needCrew && plan.name) {
+    //  감사 하9 — 지금 서버 값을 확실히 읽고(시간 초과면 던진다) 비어 있을 때만 적는다. 그 사이 다른 기기가 직접 등록했으면 덮지 않는다.
+    const cur = await _withTimeout(get(ref(db, `${T}/craneCrew/${plan.shiftKey}/${eq}`)), '호기 등록 읽기');
+    if (!cur.exists()) patch[`${T}/craneCrew/${plan.shiftKey}/${eq}`] = { name: plan.name, at: plan.ms || Date.now(), by: by || '', src: 'follow', from: plan.originKey || '', ...(plan.lastAtOrigin ? { fromLastAt: plan.lastAtOrigin } : {}) };
+  }
+  if (plan.returning) {   // 감사 중7 — 떠났던 배로 돌아옴: 이 배 등록의 떠난 표시를 지운다
+    patch[`${T}/craneCrew/${plan.shiftKey}/${eq}/leftAt`] = null;
+    patch[`${T}/craneCrew/${plan.shiftKey}/${eq}/to`] = null;
+  }
+  if (plan.leftOrigin && plan.originKey) {
+    const O = `voyages/${plan.originKey}/info/craneCrew/${plan.shiftKey}/${eq}`;
+    const la = plan.leftAtOrigin || plan.ms || Date.now();
+    //  감사 하9 — 등록이 문자열(이름만)이면 하위 경로를 쓰면 이름이 사라진다 — 통째로 바꿔 이름을 남긴다
+    if (plan.originRegIsString) patch[O] = { name: plan.name, leftAt: la, to: plan.targetKey };
+    else { patch[`${O}/leftAt`] = la; patch[`${O}/to`] = plan.targetKey; }
+  }
+  if (!Object.keys(patch).length) return null;
+  await _ackOrQueue(update(ref(db), patch), '미르 호기 이동');
+  return patch;
+}
+
 //  ★ 3.8 (검수사 2026-09-05 «미르에게 “OWBH 1호기 이인철 3호기 최관식” 이렇게 불러주면 앱에 등록해주기»):
 //    **호기–검수원을 조 단위로 항차에 적는다.** `info.craneCrew/{MM-DD 주간|야간}/{N호기} = { name, at }`.
 //    조 키는 갱 수(`gangsShift`)와 같은 벌(utils.crewShiftKey). 같은 조·같은 호기를 다시 말하면 뒤엣것으로 덮는다(PATCH — 다른 호기·다른 조는 그대로).
