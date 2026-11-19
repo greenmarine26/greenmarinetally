@@ -428,12 +428,14 @@ export const CARGO_V2_CSS = `
 .cpv2-bw .cpv2-cell.cpv2-xray::after { color: #dc2626 !important; }
 .cpv2-bw .cpv2-legend-mark, .cpv2-bw .cpv2-legend-nm, .cpv2-bw .cpv2-legend-table th, .cpv2-bw .cpv2-legend-total { background: #fff !important; color: #000 !important; }
 /* ★ 5.15 선적 «간단히» 칸 — 큰 글자=포트 · 첨자=특수화물 · 풀 진한 칠 · 엠티 옅은 칠 · 40피트 사선(검수사 2026-11-19) */
-.cpv2-tier-row .cpv2-cell.cpv2-pc { background: var(--pbg); color: #000; font-weight: 800; }
+.cpv2-tier-row .cpv2-cell.cpv2-pc { background: var(--pbg); color: #000; font-weight: 500; }   /* 5.15-01: 800 → 500 (검수사 2026-11-19 «셀안에 폰트가 너무 두꺼운것 같습니다») */
 .cpv2-tier-row .cpv2-cell.cpv2-pc.cpv2-pf { color: #fff; }
 .cpv2-tier-row .cpv2-cell.cpv2-pcl-2 { font-size: calc(var(--mf, 9.6px) * 0.86); letter-spacing: -0.02em; }
 .cpv2-tier-row .cpv2-cell.cpv2-pcl-3 { font-size: calc(var(--mf, 9.6px) * 0.70); letter-spacing: -0.03em; }
 .cpv2-tier-row .cpv2-cell.cpv2-big { background-image: linear-gradient(to top right, transparent calc(50% - 0.5px), rgba(0,0,0,0.42) calc(50% - 0.5px), rgba(0,0,0,0.42) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
-.cpv2-tier-row .cpv2-cell .cpv2-psup { position: absolute; top: 0; right: 1px; font-size: 0.6em; line-height: 1; font-weight: 900; vertical-align: baseline; }
+.cpv2-tier-row .cpv2-cell .cpv2-pt { display: block; line-height: 1; text-box: trim-both cap alphabetic; }   /* 5.15-01: 글자 몸통(대문자 높이) 기준으로 칸 정가운데 — 줄 상자 가운데는 글꼴 위아래 여유 때문에 글자가 위로 떴다(검수사 «셀안에 글자가 위로 치우칩니다 · 정확히 중심에 있어야 첨자도 잘 보일것입니다») */
+@supports not (text-box: trim-both cap alphabetic) { .cpv2-tier-row .cpv2-cell .cpv2-pt { position: relative; top: 0.1em; } }   /* 옛 브라우저는 대략 내림 */
+.cpv2-tier-row .cpv2-cell .cpv2-psup { position: absolute; top: 0; right: 1px; font-size: 0.6em; line-height: 1; font-weight: 600; vertical-align: baseline; }
 .cpv2-tier-row .cpv2-cell .cpv2-psup-2 { font-size: 0.5em; right: 0.5px; letter-spacing: -0.04em; }
 .cpv2-tier-row .cpv2-cell.cpv2-px { color: #9ca3af; font-weight: 700; }
 .cpv2-tier-row .cpv2-cell.cpv2-pthru { background: #e5e7eb; }
@@ -465,7 +467,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
     if (cell.isThrough) return <span key={ci} className={`cpv2-cell cpv2-through cpv2-pthru${_corner}`}>{_um}</span>;
     if (cell.mark === 'X') {
       //  옆 짝수 40피트가 차지한 홀수 자리 — 내 칸이 아니므로 흐린 X
-      return <span key={ci} className={`cpv2-cell cpv2-mark-X cpv2-px${_corner}`}>X{_um}</span>;
+      return <span key={ci} className={`cpv2-cell cpv2-mark-X cpv2-px${_corner}`}><span className="cpv2-pt">X</span>{_um}</span>;
     }
     if (!cell.mark || !cell.colorKey) return null;
     const bg = podFillOf(podBgOf(cell.colorKey, 'loading'), !!cell.isFull);
@@ -475,7 +477,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
       <span key={ci}
         className={`cpv2-cell cpv2-pc ${cell.isFull ? 'cpv2-pf' : 'cpv2-pe'}${cell.isBig ? ' cpv2-big' : ''}${sup ? ' cpv2-hassup' : ''} cpv2-pcl-${code.length}${_corner}`}
         style={{ '--pbg': bg }}>
-        {code}
+        <span className="cpv2-pt">{code}</span>
         {sup && <sup className={`cpv2-psup cpv2-psup-${sup.length}`}>{sup}</sup>}
         {_um}
       </span>

@@ -101,6 +101,10 @@ const codeOf = (e) => { const c = e.cloneNode(true); for (const p of c.querySele
   ok(/\.cpv2-cell\.cpv2-lugg \{ box-shadow: inset 0 0 0 2px #7c3aed; \}/.test(CSS),
      '수화물 보라 테두리 규칙이 그대로 살아 있다');
   ok(/\.cpv2-cell\.cpv2-oog-W\s*\{ box-shadow:/.test(CSS), '규격초과 검은 변 규칙이 그대로 살아 있다');
+  //  5.15-01 — 칸 글자는 대문자 높이 기준으로 정가운데(검수사 «셀안에 글자가 위로 치우칩니다»), 굵기는 500(«폰트가 너무 두꺼운것 같습니다»).
+  ok(/\.cpv2-cell \.cpv2-pt \{ display: block; line-height: 1; text-box: trim-both cap alphabetic; \}/.test(CSS) && cells.every((e) => e.querySelector(':scope > .cpv2-pt')),
+     `칸 글자가 가운데 맞춤 상자(text-box cap) 안에 있다 (${cells.filter((e) => !e.querySelector(':scope > .cpv2-pt')).length}칸 밖)`);
+  ok(/\.cpv2-cell\.cpv2-pc \{ background: var\(--pbg\); color: #000; font-weight: 500; \}/.test(CSS), '칸 글자 굵기 500');
 
   // ── 바닥글이 그림과 같은 말을 하는가
   const foot = (r.d.querySelector('.cpv2-page-footer') || {}).textContent || '';

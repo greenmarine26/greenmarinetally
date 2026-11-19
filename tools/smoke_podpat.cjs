@@ -43,7 +43,9 @@ const bgs = (d, sel) => {
   //    검수사 2026-11-19 «특수화물은 포트에 첨자를 더합니다» · 리퍼 R 과 RIZHAO R 이 겹치지 않게 자리·크기를 가른다.
   const pcs = [...r.d.querySelectorAll('.cpv2-cell.cpv2-pc')];
   ok(pcs.length > 0, '목적지 칸(.cpv2-pc)이 한 칸도 없다');
-  const codeOf = (e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+  //  5.15-01 — 목적지 글자는 정가운데 맞춤용 span.cpv2-pt 안에 있다(첨자 sup·표식 i 는 그 밖).
+  const codeOf = (e) => ((e.querySelector(':scope > .cpv2-pt') || {}).textContent || '').trim();
+  ok([...r.d.querySelectorAll('.cpv2-cell.cpv2-pc')].every((e) => [...e.childNodes].every((n) => n.nodeType !== 3)), '목적지 글자가 칸에 맨글자로 남지 않고 가운데 맞춤 상자 안에 있다');
   const pbg = (e) => (e.style.getPropertyValue('--pbg') || '').trim();
   const codes = pcs.map(codeOf);
   const lens = [...new Set(codes.map((p) => p.length))];
