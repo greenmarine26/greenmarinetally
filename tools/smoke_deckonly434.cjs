@@ -28,8 +28,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const flexOf = (el) => (el ? Number(el.getAttribute('data-share')) : NaN);   // jsdom 은 «8 1 0» flex 줄임 표기를 버린다 — 몫은 data-share 로 읽는다
   // 해치 있는 베이의 몫(maxSide)을 기준으로 삼는다 — 25번 베이(데크 6 + 홀드 6).
   const ref = by('BAY 25');
+  //  5.15: 몫은 «홀드 있는 베이 중 젤 높은 데크(maxDeck) · 젤 깊은 홀드(maxHold)» 다(검수사 2026-11-19). 해치 베이 총 높이 = 둘의 합.
   const maxSide = ref ? flexOf(ref.querySelector('.cpv2-deck-area')) : NaN;
-  ok(maxSide >= 5, `기준 몫(해치 있는 베이의 한쪽 단 수)을 읽었다 (${maxSide})`);
+  const refHold = ref ? flexOf(ref.querySelector('.cpv2-hold-area:not([aria-hidden])')) : NaN;
+  const refTotal = maxSide + refHold;
+  ok(maxSide >= 5 && refHold >= 1, `기준 몫(해치 있는 베이의 데크·홀드 단 수)을 읽었다 (데크 ${maxSide} · 홀드 ${refHold})`);
   // 데크만 있는 베이 — 단 수가 maxSide 보다 많은 베이는 제 단 수만큼 몫을 받아야 셀이 안 눌린다.
   const dOnly = secs.filter((s) => !s.querySelector('.cpv2-hatch-break:not([aria-hidden])') && s.querySelectorAll('.cpv2-deck-area').length === 1 && (s.textContent || '').length > 0
     && s.querySelector('.cpv2-hold-area[aria-hidden]'));
@@ -42,8 +45,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const hd = flexOf(s.querySelector('.cpv2-hold-area[aria-hidden]'));
     const want = Math.max(maxSide, rows);
     if (rows > maxSide) tall++;
-    const good = rows === labs && dk === want && dk + hd === 2 * maxSide;
-    if (!good) { allOk = false; console.log('    ✗', s.querySelector('.cpv2-bay-title').textContent, { rows, labs, dk, hd, want }); }
+    const good = rows === labs && dk === want && dk + hd === Math.max(refTotal, dk);
+    if (!good) { allOk = false; console.log('    ✗', s.querySelector('.cpv2-bay-title').textContent, { rows, labs, dk, hd, want, refTotal }); }
   }
   ok(allOk, '데크만 있는 베이: 셀 줄 수 = 단 표기 수 · 데크 몫 = max(해치 기준, 제 단 수) · 데크+빈 홀드 몫 = 해치 베이 총 높이(윗줄 정렬 유지)');
   ok(tall >= 3, `단 수가 해치 기준보다 많은 데크만 베이가 실제로 있다 (${tall}개 — 이 수리가 일하는 자리)`);

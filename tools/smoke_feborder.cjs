@@ -1,4 +1,4 @@
-// 선적 카고플랜에서 «칠한 칸=풀 · 테두리만=엠티» 가 실제로 그려지는지 재는 연막검사 (TallyOne 3.39).
+// 선적 PLAN 에서 풀과 엠티가 같은 목적지 안에서 갈리는지 재는 연막검사 (TallyOne 3.39 → 5.15 진한 칠·옅은 칠).
 //
 //  왜 있는가 — 검수사 2026-09-09 *«출력물 관리하면서 한가지를 없앤것이 있습니다. **풀과 엠티 색상구분**입니다.
 //  **목적지 별로 색상을 추가하면서 그기능이 가라졌습니다. 표기자 이외 다른것으로 구분할 방법이 사라졌습니다.**»*
@@ -47,89 +47,76 @@ function render(ship, opt) {
   });
 }
 
-//  칸이 «엠티 테두리» 차림인가 — 안쪽 흰 사각형을 배경으로 얹었는가.
+//  칸이 «엠티 테두리» 차림인가 — 화면 베이플랜(BayPlan.jsx)은 아직 이 차림이다.
 const isRing = (el) => /linear-gradient/.test(el.style.backgroundImage || '')
                     && /calc\(/.test(el.style.backgroundSize || '');
-const bgOf = (el) => (el.style.backgroundColor || el.style.background || '').trim();
-const MT = new Set(['e', 'E', 'RE']);
+//  5.15 선적 PLAN 칸 — 풀=같은 색조 진한 칠(.cpv2-pf) · 엠티=같은 색조 옅은 칠(.cpv2-pe). 칠은 --pbg 하나.
+const pbg = (el) => (el.style.getPropertyValue('--pbg') || '').trim();
+const hsl = (v) => { const m = /hsl\(\s*([\d.]+),\s*([\d.]+)%,\s*([\d.]+)%/.exec(v || ''); return m ? [Number(m[1]), Number(m[2]) / 100, Number(m[3]) / 100] : null; };
+const hslLum = (v) => {
+  const c = hsl(v); if (!c) return NaN;
+  const [h, s, l] = c, k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => 255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))));
+  return 0.299 * f(0) + 0.587 * f(8) + 0.114 * f(4);
+};
+const codeOf = (e) => { const c = e.cloneNode(true); for (const p of c.querySelectorAll('sup,i')) p.remove(); return c.textContent.trim(); };
 
 (async () => {
-  console.log('선적 플랜 — 칠한 칸=풀 · 테두리만=엠티 (3.39)');
+  console.log('선적 플랜 — 진한 칠=풀 · 옅은 칠=엠티 (5.15, 3.39 의 목적 그대로)');
   const r = await render('ATPR');
   ok(r.errs.length === 0, `렌더 오류 0 (${r.errs.length}건)` + (r.errs[0] ? ' | ' + r.errs[0].slice(0, 110) : ''));
 
-  //  목적지 글자가 붙은 칸만 본다 — 통과·X·그림자는 제 회색이 뜻을 갖는 칸이라 이 판의 대상이 아니다.
-  const cells = [...r.d.querySelectorAll('.cpv2-cell')].filter((e) => e.querySelector('.cpv2-pod'));
-  //  ⚠ 칸 글자에는 **오른쪽 위 목적지 글자**(.cpv2-pod)가 붙어 있다 — 그 자릿수는 배마다 1~3자로 달라
-  //    글자 수로 잘라내면 틀린다(첫 판이 그렇게 짜서 엠티 361칸을 풀로 셌다). 그 span 을 떼고 읽는다.
-  const txt = (e) => {
-    const c = e.cloneNode(true);
-    for (const p of c.querySelectorAll('.cpv2-pod')) p.remove();
-    return c.textContent.replace(/[▲★◆]/g, '').trim();
-  };
-  const full = cells.filter((e) => !MT.has(txt(e)));
-  const mt = cells.filter((e) => MT.has(txt(e)));
+  const cells = [...r.d.querySelectorAll('.cpv2-cell.cpv2-pc')];
+  const full = cells.filter((e) => e.classList.contains('cpv2-pf'));
+  const mt = cells.filter((e) => e.classList.contains('cpv2-pe'));
   ok(cells.length > 0, `목적지 칸을 그렸다 (${cells.length}칸)`);
   ok(full.length > 0 && mt.length > 0, `그 안에 풀·엠티가 섞여 있다 — 이 판이 풀려는 그 상황 (풀 ${full.length} · 엠티 ${mt.length})`);
+  //  클래스가 맞는지 바깥 근거로 — ATPR 2640W 선적 실측(머리말) 366대 중 풀 5 · 엠티 361.
+  ok(full.length === 5 && mt.length === 361, `칠이 실제 리스트 F/E 와 맞다 — ATPR 풀 ${full.length}(실측 5) · 엠티 ${mt.length}(실측 361)`);
+  ok(full.length + mt.length === cells.length, `모든 목적지 칸이 풀이나 엠티 하나로 정해졌다 (${cells.length - full.length - mt.length}칸 미정)`);
+  ok(cells.every((e) => pbg(e)), `칸마다 칠 색이 있다 (${cells.filter((e) => !pbg(e)).length}칸 없음)`);
 
-  // ── 본론 — 두 차림이 실제로 갈리는가
-  ok(full.every((e) => !isRing(e)), `풀은 칸을 꽉 채운다 — 안쪽 흰 사각형이 없다 (${full.filter((e) => isRing(e)).length}칸 어긋남)`);
-  ok(mt.length > 0 && mt.every((e) => isRing(e)), `엠티는 테두리만 남는다 (${mt.filter((e) => !isRing(e)).length}칸 어긋남)`);
-
-  //  ★ 이 한 항이 검수사가 잃었던 바로 그것이다 — 같은 목적지 안에서 풀과 엠티의 차림이 달라야 한다.
+  //  ★ 검수사가 잃었던 바로 그것 — 같은 목적지 안에서 풀과 엠티가 갈려야 한다.
   const byPod = {};
-  for (const e of cells) {
-    const k = (e.querySelector('.cpv2-pod') || {}).textContent || '';
-    (byPod[k] = byPod[k] || []).push(e);
-  }
-  let mixed = 0, split = 0;
-  for (const [k, arr] of Object.entries(byPod)) {
-    const f = arr.filter((e) => !MT.has(txt(e))), m = arr.filter((e) => MT.has(txt(e)));
+  for (const e of cells) (byPod[codeOf(e)] = byPod[codeOf(e)] || []).push(e);
+  let mixed = 0, split = 0, sameHue = 0;
+  for (const [, arr] of Object.entries(byPod)) {
+    const f = arr.filter((e) => e.classList.contains('cpv2-pf')), m = arr.filter((e) => e.classList.contains('cpv2-pe'));
     if (!f.length || !m.length) continue;
     mixed++;
-    if (!isRing(f[0]) && isRing(m[0])) split++;
+    if (pbg(f[0]) !== pbg(m[0]) && hslLum(pbg(f[0])) < hslLum(pbg(m[0]))) split++;
+    const hf = hsl(pbg(f[0])), hm = hsl(pbg(m[0]));
+    if (hf && hm && hf[0] === hm[0]) sameHue++;
   }
-  ok(mixed > 0 && split === mixed, `★ 같은 목적지 안에서 풀과 엠티가 갈린다 (${split}/${mixed}개 목적지)`);
-  //  목적지 구분을 안 잃었는가 — 풀이든 엠티든 `backgroundColor` 는 그 목적지색 하나여야 한다.
-  //  (테두리는 목적지와 무관한 중립색이라 목적지 회색을 하나도 안 건드린다 — 종전 «흑백 같은 회색 짝» 검사가 그대로 산다.)
-  ok(mixed > 0 && Object.entries(byPod).every(([, arr]) => new Set(arr.map(bgOf)).size === 1),
-     '목적지 구분은 안 잃었다 — 풀이든 엠티든 칸 색은 그 목적지 색 하나다');
+  ok(mixed > 0 && split === mixed, `★ 같은 목적지 안에서 풀(진하게)과 엠티(옅게)가 갈린다 (${split}/${mixed}개 목적지)`);
+  ok(mixed > 0 && sameHue === mixed, `목적지 구분은 안 잃었다 — 풀·엠티가 같은 목적지 색조다 (${sameHue}/${mixed})`);
+  ok(Object.values(byPod).every((arr) => new Set(arr.filter((e) => e.classList.contains('cpv2-pf')).map(pbg)).size <= 1
+                                     && new Set(arr.filter((e) => e.classList.contains('cpv2-pe')).map(pbg)).size <= 1),
+     '한 목적지 안의 풀은 한 색, 엠티는 한 색이다');
 
-  // ── 함정 — box-shadow 를 쓰면 수화물·규격초과 표시를 덮어 지운다
-  const shadowed = cells.filter((e) => (e.style.boxShadow || '').trim() && !/oog|lugg/.test(e.className));
-  ok(shadowed.length === 0, `엠티 테두리를 box-shadow 로 그리지 않았다 — 수화물·OOG 표시를 안 덮는다 (${shadowed.length}칸)`);
+  // ── 함정 — box-shadow 를 인라인으로 쓰면 수화물·규격초과 표시를 덮어 지운다
+  const shadowed = cells.filter((e) => (e.style.boxShadow || '').trim());
+  ok(shadowed.length === 0, `칸 칠을 box-shadow 로 그리지 않았다 — 수화물·OOG 표시를 안 덮는다 (${shadowed.length}칸)`);
   const CSS = fs.readFileSync(path.join(ROOT, 'src/components/PrintableCargoPlanV2.jsx'), 'utf8');
   ok(/\.cpv2-cell\.cpv2-lugg \{ box-shadow: inset 0 0 0 2px #7c3aed; \}/.test(CSS),
      '수화물 보라 테두리 규칙이 그대로 살아 있다');
   ok(/\.cpv2-cell\.cpv2-oog-W\s*\{ box-shadow:/.test(CSS), '규격초과 검은 변 규칙이 그대로 살아 있다');
 
-  // ── 별첨·바닥글이 그림과 같은 말을 하는가
+  // ── 바닥글이 그림과 같은 말을 하는가
   const foot = (r.d.querySelector('.cpv2-page-footer') || {}).textContent || '';
-  ok(/칠한 칸=풀/.test(foot) && /테두리만=엠티/.test(foot), `바닥글이 새 규칙을 적는다 — «${foot.slice(0, 46)}…»`);
-  ok(!/바탕색=목적지\(별첨1\)/.test(foot), '옛 문구(«바탕색=목적지»)가 안 남았다');
+  ok(/진한 칠=풀/.test(foot) && /옅은 칠=엠티/.test(foot), `바닥글이 새 규칙을 적는다 — «${foot.slice(0, 46)}…»`);
+  ok(!/칠한 칸=풀/.test(foot) && !/테두리만=엠티/.test(foot), '옛 문구(«칠한 칸=풀 · 테두리만=엠티»)가 안 남았다');
 
-  // ── 흑백 인쇄 — 테두리가 실제로 보이는가 (감사 「부」 — 첫 판은 목적지색 그대로라 안 보였다)
-  //    앱 기준은 «흰 칸과 회색값 27 차이면 안 보인다»(2.38-01 검수사 실측). 목적지색으로는 못 넘는다 —
-  //    ATPR 의 CNDLC 는 차이 14.8 뿐이다. 그래서 테두리를 목적지와 무관한 어두운 색으로 그린다.
+  // ── 흑백에서도 갈리는가 — 앱 기준 «회색값 차이 27 미만은 안 보인다»(2.38-01 검수사 실측)
   {
-    const lum = (h) => { const n = parseInt(String(h).slice(1), 16); return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
-    const dk = r.w.__darkenTo;
-    ok(typeof dk === 'function', '테두리 색을 어둡게 하는 함수를 쓴다');
-    //  팔레트 전체가 앱 기준(흰 칸과 27 이상)을 넘는가 — 실제 그림에 쓰인 목적지색으로 잰다.
-    const podHex = [...new Set(full.map(bgOf))].map((v) => { const m = /(\d+),\s*(\d+),\s*(\d+)/.exec(v); return m ? '#' + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, '0')).join('') : '#ffffff'; });
-    ok(podHex.some((h) => 255 - lum(h) < 27),
-       `목적지색 그대로는 흑백에서 못 갈린다 — 그래서 어둡게 해야 한다 (가장 옅은 것 차이 ${Math.min(...podHex.map((h) => 255 - lum(h))).toFixed(1)})`);
-    ok(podHex.every((h) => 255 - lum(dk(h, 190)) >= 27),
-       `어둡게 한 테두리는 전부 27 을 넘는다 — 흑백에서 산다 (가장 옅은 것 ${Math.min(...podHex.map((h) => 255 - lum(dk(h, 190)))).toFixed(1)})`);
-    //  그림에 그 어두운 색이 실제로 들어갔는가.
-    const one = mt.find((e) => /linear-gradient/.test(e.style.backgroundImage || ''));
-    const img = ((one || { style: {} }).style.backgroundImage || '');
-    ok(/#fff|rgb\(\s*255,\s*255,\s*255\s*\)/.test(img), `엠티 안쪽은 흰색이다 — 검수사가 고른 그 모습 (${img.slice(0, 56)})`);
-    ok(!podHex.some((h) => img.includes(h)), '테두리에 목적지색 원본을 그대로 쓰지 않았다 — 어둡게 한 값이다');
-    //  ⚠ 그리고 **목적지 회색은 하나도 안 건드렸다** — 종전 검사(«흑백에서 같은 회색이 되는 짝»)가 그대로 산다.
-    //    여기를 어두운 값으로 바꿨다가 그 검사에 «W(190)↔D(190)» 으로 잡혔다.
-    ok(new Set(cells.map(bgOf)).size === new Set(full.map(bgOf)).size,
-       `엠티가 새 목적지색을 만들지 않았다 — 흑백 목적지 구분을 안 흔든다 (${new Set(cells.map(bgOf)).size}색)`);
+    const gap = Object.values(byPod).map((arr) => {
+      const f = arr.find((e) => e.classList.contains('cpv2-pf')), m = arr.find((e) => e.classList.contains('cpv2-pe'));
+      return f && m ? hslLum(pbg(m)) - hslLum(pbg(f)) : Infinity;
+    });
+    ok(gap.every((g) => g >= 27), `컬러 칠을 흑백으로 바꿔도 풀·엠티 회색값이 27 이상 차이 난다 (가장 작은 것 ${Math.min(...gap).toFixed(1)})`);
+    ok(/\.cpv2-bw \.cpv2-cell\.cpv2-pc\.cpv2-pf\.cpv2-pf \{[^}]*#7a7a7a/.test(CSS) && /\.cpv2-pe\.cpv2-pe \{[^}]*#bdbdbd/.test(CSS),
+       '흑백 보기는 풀 #7a7a7a · 엠티 #bdbdbd 로 따로 칠한다(차이 67)');
+    ok(mt.every((e) => !/linear-gradient/.test(e.style.backgroundImage || '')), '엠티에 옛 테두리 차림이 안 남았다');
   }
 
   // ── 목적지색이 **없는** 칸 — 사전에 없는 새 목적지가 뜨는 날의 가지(그림엔 안 나온다 · 감사 A6)
@@ -156,8 +143,8 @@ const MT = new Set(['e', 'E', 'RE']);
        `심은 표시가 실제로 그려졌다 — 수화물 ${lug.length} · 폭초과 ${oow.length} · 높이폭초과 ${ohw.length} · 긴급 ${urg.length}`);
     const stomp = [...lug, ...oow, ...ohw, ...urg].filter((e) => (e.style.boxShadow || '').trim());
     ok(stomp.length === 0, `그 칸들의 box-shadow 를 인라인으로 덮지 않았다 (${stomp.length}칸)`);
-    const lugMt = lug.filter((e) => MT.has(txt(e)));
-    ok(lugMt.length > 0 && lugMt.every((e) => isRing(e)), `수화물 엠티도 테두리 차림이 그대로 붙는다 (${lugMt.length}칸)`);
+    const lugMt = lug.filter((e) => e.classList.contains('cpv2-pe'));
+    ok(lugMt.length > 0 && lugMt.every((e) => e.classList.contains('cpv2-pc') && pbg(e)), `수화물 엠티도 옅은 칠이 그대로 붙는다 (${lugMt.length}칸)`);
   }
 
   // ── 화면 베이플랜도 눈으로 갈리는가 — 종전엔 소스 글자로만 셌다(감사 지적)

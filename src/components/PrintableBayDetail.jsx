@@ -763,7 +763,7 @@ export default function PrintableBayDetail({
       rowsMax = Math.max(rowsMax, dT + hT);
     }
     if (!gcMax) return null;   // 매트릭스 페이지 없음 → 폴백 경로만 (기존 동작)
-    // bd-page 291mm(≈1100px) − 페이지·랩 패딩·tier라벨(16px)·여유 ≈ 1046px 가용.
+    // bd-page 291mm(≈1100px) − 페이지·랩 패딩·tier라벨(12px · 5.15)·여유 ≈ 1046px 가용.
     const w = Math.max(78, Math.min(118, Math.floor(1046 / gcMax)));
     //  ★ 3.7 — 칸 세로를 **가로에 묶는다**(검수사 «가로폭이 줄면 세로폭도 줄어야 그림이 항상 같아 집니다»).
     //    종전엔 가로와 세로를 따로 잘라(min(118,…) × min(84,…)) 비율이 배마다 흔들렸다 —
@@ -1001,13 +1001,13 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-row-labels, .bd-cargo-wrap .cpv2-tier-labels { color: #000; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell.bd-fill { padding: 0; }
         .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { padding: 0; box-sizing: border-box; }   /* 3.69-04: 여백은 덩어리 가운데 놓기가 만든다(카스피와 같은 계산) */
-        .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 16px; }
+        .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 12px; }   /* 5.15: 단 번호 칸 16→12px 과 짝 */
         .bd-cargo-wrap.bd-uniform .cpv2-row-labels > span {
           flex: 0 0 var(--bdc-w); min-width: var(--bdc-w); max-width: var(--bdc-w);
         }
         .bd-cargo-wrap.bd-uniform .cpv2-tier-labels > span { flex: 0 0 var(--bdc-h); }
         .bd-cargo-wrap.bd-uniform .cpv2-hatch-break {
-          width: calc(var(--bdc-w) * var(--bdc-gc) + 16px);
+          width: calc(var(--bdc-w) * var(--bdc-gc) + 12px);   /* 5.15: 단 번호 칸 12px */
           margin: 3px auto;
         }
         @media print {

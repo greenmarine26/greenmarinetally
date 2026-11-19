@@ -39,38 +39,39 @@ const bgs = (d, sel) => {
   const seen = r.d.body.textContent.replace(/\.cpv2[^}]*}/g, '');
   ok(!/무늬/.test(seen), '⛔ 화면 글에 «무늬»가 남아 있다');
 
-  // ② 목적지 3자가 칸 오른쪽 위에 찍히는가
-  const pods = [...r.d.querySelectorAll('.cpv2-pod')].map((e) => e.textContent.trim());
-  ok(pods.length > 0, '목적지 3자(.cpv2-pod)가 한 칸도 없다');
-  //  3.7: 길이는 항차마다 다르다(1~3자). 한 플랜 안에서는 길이가 한 가지여야 하고,
-  //    그 길이로 목적지가 서로 갈려야 한다 — 갈리지 않으면 두 항구가 같은 글자로 보인다.
-  const lens = [...new Set(pods.map((p) => p.length))];
+  // ② ★ 5.15 «간단히» 칸 — 큰 글자=목적지 코드(한 플랜 한 길이) · 특수화물=첨자 · 풀/엠티=칠의 진하기
+  //    검수사 2026-11-19 «특수화물은 포트에 첨자를 더합니다» · 리퍼 R 과 RIZHAO R 이 겹치지 않게 자리·크기를 가른다.
+  const pcs = [...r.d.querySelectorAll('.cpv2-cell.cpv2-pc')];
+  ok(pcs.length > 0, '목적지 칸(.cpv2-pc)이 한 칸도 없다');
+  const codeOf = (e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+  const pbg = (e) => (e.style.getPropertyValue('--pbg') || '').trim();
+  const codes = pcs.map(codeOf);
+  const lens = [...new Set(codes.map((p) => p.length))];
   ok(lens.length === 1 && lens[0] >= 1 && lens[0] <= 3, `한 플랜에 코드 길이가 섞였다 — ${lens}`);
-  const uniq = [...new Set(pods)];
+  const uniq = [...new Set(codes)];
   ok(uniq.length >= 2, `목적지가 한 종류뿐이다 (${uniq})`);
-  //  같은 칸의 «색»이 몇 종인지와 «코드»가 몇 종인지가 같아야 한다(짧게 잘라 둘이 뭉치면 안 된다).
-  const bgN = new Set([...r.d.querySelectorAll('.cpv2-cell')].filter((e) => e.querySelector('.cpv2-pod')).map((e) => bgOf(e))).size;
-  ok(uniq.length === bgN, `⛔ 코드 ${uniq.length}종인데 색은 ${bgN}종 — 잘린 코드가 두 목적지를 뭉쳤다`);
-
-  // ③ 칸 바탕이 **사전에 적힌 그 색** 인가 — 색과 3자가 같은 칸에서 서로 맞는지
+  ok(!r.d.querySelector('.cpv2-cell .cpv2-pod'), '⛔ 선적 칸에 옛 구석 목적지 코드(.cpv2-pod)가 남았다 — 큰 글자와 두 번 적힌다');
+  //  ③ 같은 목적지·같은 풀/엠티는 한 색, 풀과 엠티는 서로 다른 색, 목적지끼리 풀 색이 갈린다.
+  const byKey = {};
+  for (const e of pcs) { const k = codeOf(e) + (e.classList.contains('cpv2-pf') ? '|F' : '|E'); (byKey[k] = byKey[k] || new Set()).add(pbg(e)); }
+  ok(Object.values(byKey).every((v) => v.size === 1 && [...v][0]), `⛔ 같은 목적지·같은 풀/엠티가 두 색이거나 색이 없다 — ${JSON.stringify(Object.fromEntries(Object.entries(byKey).map(([k, v]) => [k, [...v]])))}`);
+  const fulls = uniq.filter((c) => byKey[c + '|F']).map((c) => [...byKey[c + '|F']][0]);
+  ok(new Set(fulls).size === fulls.length, `⛔ 목적지 둘이 같은 풀 색으로 칠해졌다 (${fulls})`);
+  ok(uniq.every((c) => !(byKey[c + '|F'] && byKey[c + '|E']) || [...byKey[c + '|F']][0] !== [...byKey[c + '|E']][0]), '⛔ 풀과 엠티가 같은 칠이다');
+  //  칠의 색상(hue)은 사전 POD_BG 의 그 목적지 색상이어야 한다 — 어느 항차에서 보든 같은 목적지는 같은 색 계열.
   ok(Object.keys(POD_BG).length >= 20, `사전 POD_BG 를 못 읽었다 (${Object.keys(POD_BG).length}개)`);
+  const hueOfHex = (h) => { const n = parseInt(h.slice(1), 16), R = (n >> 16 & 255) / 255, G = (n >> 8 & 255) / 255, B = (n & 255) / 255, mx = Math.max(R, G, B), mn = Math.min(R, G, B), d = mx - mn; let x = mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4; return Math.round((x * 60 + 360) % 360); };
   let mism = 0, checked = 0;
-  const _full = (pre) => Object.keys(POD_BG).filter((k) => k.startsWith(pre));
-  for (const el of r.d.querySelectorAll('.cpv2-cell')) {
-    const p = el.querySelector('.cpv2-pod'); if (!p) continue;
-    const pre = p.textContent.trim(); const b = bgOf(el); checked++;
-    const cand = _full(pre);
-    if (cand.length === 1) { if (b !== hex2rgb(POD_BG[cand[0]])) mism++; }
-    else if (cand.length === 0 && b) mism++;               // 사전에 없는 목적지는 흰 칸이어야 한다
+  for (const e of pcs) {
+    const cand = Object.keys(POD_BG).filter((k) => k.startsWith(codeOf(e)));
+    const m = pbg(e).match(/hsl\((\d+)/); if (cand.length !== 1 || !m) continue;
+    checked++; if (Math.abs(Number(m[1]) - hueOfHex(POD_BG[cand[0]])) > 1) mism++;
   }
-  ok(checked > 0 && mism === 0, `칸 색이 사전과 어긋난다 — ${mism}/${checked}칸`);
-  //  ⚠ 대수 순으로 돌려 쓰면 안 된다 — 어느 항차에서 보든 같은 목적지는 같은 색이어야 한다.
-  const bgByPod = {};
-  for (const el of r.d.querySelectorAll('.cpv2-cell')) {
-    const p = el.querySelector('.cpv2-pod'); if (!p) continue;
-    const k = p.textContent.trim(); (bgByPod[k] = bgByPod[k] || new Set()).add(bgOf(el));
-  }
-  ok(Object.values(bgByPod).every((v) => v.size === 1), '⛔ 같은 목적지가 두 색으로 나온다');
+  ok(checked > 0 && mism === 0, `칸 색이 사전 색상과 어긋난다 — ${mism}/${checked}칸`);
+  //  첨자는 특수화물 글자만(R·DG·FR·OT·TK), 40피트는 사선 칸이 실제로 있다.
+  const sups = [...r.d.querySelectorAll('.cpv2-psup')].map((e) => e.textContent.trim());
+  ok(sups.every((t) => /^(R|DG|FR|OT|TK)$/.test(t)), `⛔ 첨자에 특수화물이 아닌 글자가 있다 (${[...new Set(sups)]})`);
+  ok(r.d.querySelectorAll('.cpv2-cell.cpv2-pc.cpv2-big').length > 0, '⛔ 40피트 사선 칸이 하나도 없다');
 
   // ④ 별첨 — 포트명 칸 자체에 색이 입혀졌는가(견본 칸을 따로 펼치지 않는다)
   const nm = [...r.d.querySelectorAll('.cpv2-legend-nm')].filter((e) => bgOf(e));
@@ -88,20 +89,26 @@ const bgs = (d, sel) => {
   //     MCSC 633N 은 --mf 5.0px 라 코드가 3.1px 로 떨어지고 가운데 표기자와 가로로 겹쳤다(3.7 감사 실측).
   const mf = parseFloat((r.d.querySelector('.cpv2-page')?.style?.getPropertyValue('--mf') || '0'));
   ok(mf > 0 && mf < 9, `MCSC --mf 가 ${mf}px — 좁은 칸 시험이 아니다`);
-  //  좁은 칸이라도 코드가 한 자면 들어간다 — 접혔으면 머리글이 그 사실을 밝혀야 한다.
-  const _mc = r.d.querySelectorAll('.cpv2-pod').length;
-  ok(_mc === 0 || /칸 오른쪽 위 \d자/.test(r.d.body.textContent), '⛔ 코드를 적었는데 머리글이 몇 자인지 안 밝힌다');
-  ok(Object.keys(bgs(r.d, '.cpv2-cell')).length >= 2, '⛔ 좁은 칸에서 목적지색까지 사라졌다 — 색은 남아야 한다');
-  ok(_mc > 0 || /칸이 좁아 목적지 글자를 안 적는다/.test(r.d.body.textContent), '⛔ 접었으면 머리글이 그 사실을 밝혀야 한다');
-  //  ⑤-3 특수화물 풀/엠티 — 선적에서 칠을 없앴으니 글자가 그것을 말해야 한다(검수사 확정 2.38-01 ㉠).
-  for (const sh of ['ATPR', 'MCSC']) {
-    const dd = await render('v2', sh, 'loading');
-    const m3 = [...dd.d.querySelectorAll('.cpv2-mark3')].map((e) => e.textContent.replace(/[▲★◆]/g, '').trim());
-    const bad = m3.map((t) => t.replace(/[A-Z]{2,3}$/, (x) => x)).filter((t) => !/^(DG|FR|OT|TK)[FE]/.test(t));
-    ok(bad.length === 0, `⛔ ${sh} 특수화물 표기에 풀/엠티가 없다 — ${[...new Set(bad)].slice(0, 4)}`);
-    //  양하는 종전 두 글자 그대로여야 한다.
-    const dv = await render('v2', sh, 'discharge');
-    ok(!dv.d.querySelector('.cpv2-mark3'), `⛔ ${sh} 양하에 세 글자 표기가 나왔다 — 양하는 안 바꾼다`);
+  //  5.15: 좁은 배도 목적지는 큰 글자로 적는다(구석 3자를 접던 3.7 규칙은 «간단히» 칸에서 쓸 일이 없다).
+  ok([...r.d.querySelectorAll('.cpv2-cell.cpv2-pc')].every((e) => codeOf(e).length > 0), '⛔ 좁은 칸에서 목적지 글자가 빠졌다');
+  ok(through.every((e) => !e.textContent.trim()), '⛔ 통과화물 칸에 글자가 있다 — 남의 짐을 말하고 있다');
+  ok(/큰 글자=목적지/.test((r.d.querySelector('.cpv2-page-footer') || {}).textContent || ''), '⛔ 바닥글이 새 표기(큰 글자=목적지)를 밝히지 않는다');
+  //  ⑤-3 ★ 5.15 — 선적 칸은 풀/엠티를 «칠의 진하기»로, 특수화물을 «첨자»로 말한다. 양하 칸은 그대로(새 칸이 새면 안 된다).
+  {
+    const dd = await render('v2', 'ATPR', 'loading');
+    ok(dd.d.querySelectorAll('.cpv2-pc.cpv2-pf').length > 0 && dd.d.querySelectorAll('.cpv2-pc.cpv2-pe').length > 0, '⛔ ATPR 선적에 진한 칠(풀)·옅은 칠(엠티)이 둘 다 있지 않다');
+    ok(dd.d.querySelectorAll('.cpv2-psup').length > 0, '⛔ ATPR 선적에 특수화물 첨자가 한 칸도 없다 — 공허 통과 방지');
+    ok(!dd.d.querySelector('.cpv2-pc .cpv2-pod') && !dd.d.querySelector('.cpv2-pc.cpv2-mark3'), '⛔ 새 칸에 옛 표기(구석 코드·세 글자)가 섞였다');
+    for (const sh of ['ATPR', 'MCSC']) {
+      const dv = await render('v2', sh, 'discharge');
+      ok(!dv.d.querySelector('.cpv2-pc, .cpv2-pthru, .cpv2-psup'), `⛔ ${sh} 양하 플랜에 선적 «간단히» 칸이 새었다 — 양하는 안 바꾼다`);
+      ok(!dv.d.querySelector('.cpv2-mark3'), `⛔ ${sh} 양하에 세 글자 표기가 나왔다 — 양하는 안 바꾼다`);
+    }
+    //  모서리 표식은 남의 짐·그림자 칸에도 남는다(감사 지적 — 재적부 컨은 대개 통과 칸).
+    const srcC = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    ok(/className=\{`cpv2-cell cpv2-shadow20 cpv2-pthru\$\{_corner\}`\}/.test(srcC) && /className=\{`cpv2-cell cpv2-through cpv2-pthru\$\{_corner\}`\}/.test(srcC),
+      '⛔ 남의 짐·그림자 칸에서 ★◆▲ 모서리 표식이 빠진다');
+    ok(/\.cpv2-podsplit \.cpv2-cell:not\(\.cpv2-mark3\)[^{]*:not\(\.cpv2-pc\):not\(\.cpv2-px\) \{ justify-content: flex-start/.test(srcC), '⛔ 새 칸이 좌우 가르기(podsplit) 규칙에 걸려 목적지 글자가 왼쪽으로 밀린다');
   }
 
   // ⑥ **양하에는 목적지색이 한 방울도 새면 안 된다** — 양하 색 열쇠는 «선사 3자»라
@@ -131,25 +138,22 @@ const bgs = (d, sel) => {
   // ⑧ 흑백 인쇄 — 한 플랜 안에서 «뜻이 다른 칠»끼리 회색 농도가 붙으면 안 된다.
   //    600dpi·106lpi = 33계조(한 계조 7.7) 이므로 8 미만이면 종이에서 같은 회색이다.
   const lum = (c) => { const m = String(c).match(/\d+/g); return m ? 0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2] : -1; };
-  for (const ship of ['ATPR', 'MCSC']) {
-    r = await render('v2', ship, 'loading');
-    const seen = new Map();                       // 칠 → 그 칸이 뜻하는 것
-    for (const el of r.d.querySelectorAll('.cpv2-cell')) {
-      const b = bgOf(el); if (!b) continue;
-      const p = el.querySelector('.cpv2-pod');
-      const what = p ? p.textContent.trim()
-        : el.classList.contains('cpv2-through') ? '통과'
-        : el.classList.contains('cpv2-shadow20') ? '그림자' : '목적지없음';
-      if (!seen.has(b)) seen.set(b, what);
-    }
-    const arr = [...seen].map(([b, w]) => ({ b, w, l: lum(b) })).filter((x) => x.l >= 0);
-    const near = [];
-    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
-      if (arr[i].w === arr[j].w) continue;
-      if (arr[i].w === '그림자' || arr[j].w === '그림자') continue;   // 글자가 아예 없는 빈 칸이라 헷갈리지 않는다
-      if (Math.abs(arr[i].l - arr[j].l) < 8) near.push(`${arr[i].w}(${arr[i].l.toFixed(0)})↔${arr[j].w}(${arr[j].l.toFixed(0)})`);
-    }
-    ok(near.length === 0, `⛔ ${ship} 흑백 인쇄에서 같은 회색이 되는 짝 — ${near.join(' · ')}`);
+  {
+    //  5.15: 선적 칸의 흑백 칠은 CSS 규칙이 정한다 — 풀(진한 회색) · 엠티(중간 회색) · 남의 짐(옅은 회색) · 빈 칸(흰색)이 서로 8 이상 떨어져야 한다.
+    const srcBw = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
+    const pick = (re) => { const m = srcBw.match(re); return m ? m[1] : null; };
+    const g = {
+      풀: pick(/\.cpv2-bw \.cpv2-cell\.cpv2-pc\.cpv2-pf\.cpv2-pf \{ background-color: (#[0-9a-f]{6})/),
+      엠티: pick(/\.cpv2-bw \.cpv2-cell\.cpv2-pc\.cpv2-pe\.cpv2-pe \{ background-color: (#[0-9a-f]{6})/),
+      남의짐: pick(/\.cpv2-tier-row \.cpv2-cell\.cpv2-pthru \{ background: (#[0-9a-f]{6})/),
+      빈칸: '#ffffff',
+    };
+    ok(Object.values(g).every(Boolean), `흑백 칠 규칙을 다 못 읽었다 (${JSON.stringify(g)})`);
+    const L = (h) => { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255); };
+    const ks = Object.keys(g).filter((k) => g[k]); const near = [];
+    for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++) if (Math.abs(L(g[ks[i]]) - L(g[ks[j]])) < 8) near.push(ks[i] + '↔' + ks[j]);
+    ok(near.length === 0, `⛔ 흑백 인쇄에서 같은 회색이 되는 짝 — ${near.join(' · ')}`);
+    ok(L(g.풀) < L(g.엠티) && L(g.엠티) < L(g.남의짐), '⛔ 진하기 순서가 풀 > 엠티 > 남의 짐 이 아니다 — 눈이 남의 짐으로 간다');
   }
 
   // ⑨ **인쇄 CSS 는 렌더로 못 잡는다** — jsdom 은 @media print 를 적용하지 않는다.
@@ -246,7 +250,7 @@ const bgs = (d, sel) => {
     const hdr = [...rr.d.querySelectorAll('.cpv2-page-header .col')].map((e) => e.textContent.trim());
     ok(!hdr.some((t) => t.length > 60), `⛔ ${tag} 머리글에 긴 설명이 남아 있다 — 두세 줄로 부푼다 (${hdr.find((t) => t.length > 60) || ''})`);
     const ft = rr.d.querySelector('.cpv2-page-footer');
-    ok(!!ft && /가운데 글자=종류/.test(ft.textContent), `⛔ ${tag} 바닥글에 설명이 없다`);
+    ok(!!ft && (mode === 'loading' ? /큰 글자=목적지/ : /가운데 글자=종류/).test(ft.textContent), `⛔ ${tag} 바닥글에 설명이 없다`);
     //  ② 베이 번호는 상자 정중앙 — 한쪽만 큰 안쪽 여백이면 글자가 밀린다.
     const src5 = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'components', 'PrintableCargoPlanV2.jsx'), 'utf8');
     const tr = (src5.match(/\.cpv2-bay-title-row \{[^}]*\}/) || [''])[0];

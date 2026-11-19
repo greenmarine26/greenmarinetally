@@ -195,7 +195,7 @@ export const CPV2_PAGE_W_MM = 285;
 export const CPV2_PAGE_W_PRINT = CPV2_PAGE_W_MM * 96 / 25.4;   // = 1077.17px @96dpi
 export const CPV2_PAGE_PAD = 4 * 96 / 25.4 * 2;   // padding 4mm 좌우 = 30.236px (2.90-01 교정 — 8px 은 mm→px 환산 누락이었다. 주석 실측 «MCSC 안쪽 8.89px»·«DXQD 28.5px» 가 이 값으로만 재현된다)
 export const CPV2_BOX_GAP = 3;              // 박스 사이 gap
-export const CPV2_BOX_CHROME = 24;          // 박스 테두리2 + 섹션패딩4 + gap2 + 단라벨16
+export const CPV2_BOX_CHROME = 20;          // 박스 테두리2 + 섹션패딩4 + gap2 + 단라벨12 (5.15: 16→12 — 줄인 폭을 칸에 준다)
 export const CPV2_MARK_FONT_MAX = 9.6;
 export const CPV2_MARK_FONT_MIN = 4.6;      // 2.90-03 — 여백을 준 뒤의 하한(12열 배가 4.8px). 종전 5.9 는 «꽉 참» 기준이었다
 // 2.90-01 검수사 확정 «2 잘 보이기만 하면 됩니다» — 여섯 마크(DG·RE·OT·RF·FR·TK) 전부 들어가는 하한
@@ -428,6 +428,8 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   //   ⚠ 자기 셀에만 단다 — 옆 짝수 40피트가 차지한 홀수 자리(X)는 그 자리 화물이 아니라
   //   40피트가 풀이어도 칠하지 않는다(«풀이라고 해도 홀수베이에는 셀색을 넣지 않습니다»).
   const fulls = new Map();
+  //  ★ 5.15 (검수사 2026-11-19 «간단히» 플랜) — 40피트 이상이면 칸에 사선을 긋는다(카스피 방식). 자기 칸에만 단다.
+  const bigs = new Map();
   // ── TallyOne 2.97: **OOG 는 방향만 그린다.** (검수사 확정 2026-08-31) ──
   //   원문 — *"플랜은 간단하게 높이 화물이며 좌우폭이 오버 여부만 보여 주면 됩니다.
   //           너무 깊이 안들어 가도 됩니다"* · *"치수도 플랜에 있어서는 안됩니다.
@@ -488,6 +490,13 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   const tagFull = (c, tier, rowLbl) => {
     if (c && String(c.fe || '').toUpperCase() !== 'E') ensureFullTier(tier).set(rowLbl, true);
   };
+  //  40피트 이상인가 — ISO 6346 정규화 라벨(45GP→40HC 등)로. 사선(tagBig)과 X 표시가 같이 쓴다.
+  const is40OrMoreOf = (c) => { const lbl = isoToLabel(c && c.iso) || ''; return lbl.startsWith('40') || lbl.startsWith('45'); };
+  const tagBig = (c, tier, rowLbl, bb) => {
+    if (!c) return;
+    //  40피트 판정은 아래 X(옆 자리 차지) 판정과 한 벌 — is40OrMoreOf. 규격이 비면 어느 쪽도 40피트로 보지 않는다.
+    if (is40OrMoreOf(c)) { if (!bigs.has(tier)) bigs.set(tier, new Map()); bigs.get(tier).set(rowLbl, true); }
+  };
   const tagColor = (c, tier, rowLbl) => {
     if (getColorKeyFn) {
       const k = getColorKeyFn(c);
@@ -523,6 +532,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
             tagUrgentLugg(c, tier, rowLbl);
             tagColor(c, tier, rowLbl);
             tagFull(c, tier, rowLbl);
+            tagBig(c, tier, rowLbl, b);
             tagThrough(c, tier, rowLbl);
           }
         }
@@ -541,6 +551,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           tagUrgentLugg(c, tier, rowLbl);
           tagColor(c, tier, rowLbl);
           tagFull(c, tier, rowLbl);
+          tagBig(c, tier, rowLbl, odd);
           tagThrough(c, tier, rowLbl);
         }
       }
@@ -564,8 +575,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
               // M6.91.2: ISO 6346 표준 사이즈 판정.
               //   isoToLabel로 정규화 (45GP → 40HC, L5G1 → 45HC, 45R1 → 40RF 등)
               //   → 양하/선적이 다른 표기로 들어와도 일관 분류.
-              const lbl = isoToLabel(c.iso) || '';
-              const is40OrMore = lbl.startsWith('40') || lbl.startsWith('45');
+              const is40OrMore = is40OrMoreOf(c);
               if (tierMap.has(rowLbl)) continue;
               if (is40OrMore) {
                 tierMap.set(rowLbl, 'X');
@@ -588,7 +598,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
       }
     }
   }
-  return { marks, xrays, shifts, urgents, luggs, colors, throughs, shadow20s, fulls, oogs };
+  return { marks, xrays, shifts, urgents, luggs, colors, throughs, shadow20s, fulls, oogs, bigs };
 }
 
 // ------------------------------------------------------------
@@ -895,6 +905,7 @@ export function assembleBayRows(spec, marksBundle) {
   const bayThroughs = _mb.throughs || new Map();
   const bayShadow20s = _mb.shadow20s || new Map();
   const bayFulls = _mb.fulls || new Map();
+  const bayBigs = _mb.bigs || new Map();   // 5.15: 40피트 사선
   const bayOogs = _mb.oogs || new Map();   // 2.97: OOG 방향(H/W)
   const { deckTiers, holdTiers, deckCells, holdCells, deckRowPos, holdRowPos, nDeckCols, nHoldCols } = spec;
   const _blkDeckC = spec.blkDeck || new Set();
@@ -915,6 +926,7 @@ export function assembleBayRows(spec, marksBundle) {
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const rowFulls = bayFulls.get(stdT) || new Map();
+      const rowBigs = bayBigs.get(stdT) || new Map();
       const rowOogs = bayOogs.get(stdT) || new Map();   // 2.97: OOG 방향
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
@@ -929,7 +941,7 @@ export function assembleBayRows(spec, marksBundle) {
         }
         if (inActive) {
           // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? (rowShifts.get(rowLbl) || false) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? (rowShifts.get(rowLbl) || false) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, isBig: rowLbl ? !!rowBigs.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -957,6 +969,7 @@ export function assembleBayRows(spec, marksBundle) {
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const rowFulls = bayFulls.get(stdT) || new Map();
+      const rowBigs = bayBigs.get(stdT) || new Map();
       const rowOogs = bayOogs.get(stdT) || new Map();   // 2.97: OOG 방향
       const cells = [];
       for (let c = 0; c < nHoldCols; c++) {
@@ -970,7 +983,7 @@ export function assembleBayRows(spec, marksBundle) {
             cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
             continue;
           }
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? (rowShifts.get(rowLbl) || false) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? (rowShifts.get(rowLbl) || false) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20, isFull: rowLbl ? !!rowFulls.get(rowLbl) : false, isBig: rowLbl ? !!rowBigs.get(rowLbl) : false, oog: rowLbl ? (rowOogs.get(rowLbl) || '') : '' });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }

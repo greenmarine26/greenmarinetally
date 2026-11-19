@@ -60,9 +60,11 @@ const cnt = (d, sel) => d.querySelectorAll(sel).length;
   // ④ 선적 — 플래그 있는 FR 7대는 종전대로 FR, 오픈탑 2251 은 OT
   const rl = await render('v2', 'loading');
   ok(rl.errs.length === 0, 'SWTD 선적 카고플랜 렌더 오류 0' + (rl.errs[0] ? ' — ' + rl.errs[0] : ''));
-  const lf = [...rl.d.querySelectorAll('.cpv2-cell.cpv2-mark-FR')].length, lo = [...rl.d.querySelectorAll('.cpv2-cell.cpv2-mark-OT')].length;
-  ok(lf === FR_L.length, `선적 카고플랜 FR 칸 ${lf}개(FR ${FR_L.length}대)`);
-  ok(lo === OT_L.length, `선적 카고플랜 OT 칸 ${lo}개(오픈탑 ${OT_L.length}대)`);
+  //  5.15 — 선적은 큰 글자가 목적지이고 특수화물은 오른쪽 위 첨자(.cpv2-psup)다. 첨자 글자로 센다.
+  const _sup = (t) => [...rl.d.querySelectorAll('.cpv2-cell.cpv2-pc > sup.cpv2-psup')].filter((e) => e.textContent.trim() === t).length;
+  const lf = _sup('FR'), lo = _sup('OT');
+  ok(lf === FR_L.length, `선적 카고플랜 FR 첨자 ${lf}개(FR ${FR_L.length}대)`);
+  ok(lo === OT_L.length, `선적 카고플랜 OT 첨자 ${lo}개(오픈탑 ${OT_L.length}대)`);
 
   // ⑤ 실시간 별첨(legendLiveOf) — 인쇄 별첨과 같은 FR 수
   if (r.w.__U && typeof r.w.__U.legendLiveOf === 'function') {
