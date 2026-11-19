@@ -251,6 +251,10 @@ const bgs = (d, sel) => {
     //  ① 매번 같은 설명은 바닥글에 — 머리글이 두세 줄로 부풀면 안 된다.
     const hdr = [...rr.d.querySelectorAll('.cpv2-page-header .col')].map((e) => e.textContent.trim());
     ok(!hdr.some((t) => t.length > 60), `⛔ ${tag} 머리글에 긴 설명이 남아 있다 — 두세 줄로 부푼다 (${hdr.find((t) => t.length > 60) || ''})`);
+    //  5.15-03 — X 칸 글자는 어느 갈래(목적지색·선사색·통과)든 인라인 검정이 없다(라이브 STSE 양하 306칸이 MARK_FG 검정이었다).
+    { const xs = [...rr.d.querySelectorAll('.cpv2-cell.cpv2-mark-X')];
+      const dark = xs.filter((e) => /^(#000|#000000|rgb\(0, 0, 0\)|#52525b|rgb\(82, 82, 91\))$/i.test((e.style.color || '').trim()));
+      ok(dark.length === 0, `⛔ ${tag} X 칸 ${dark.length}/${xs.length} 이 진한 글자다 — 옅은 회색이어야 한다`); }
     const ft = rr.d.querySelector('.cpv2-page-footer');
     ok(!!ft && (mode === 'loading' ? /큰 글자=목적지/ : /가운데 글자=종류/).test(ft.textContent), `⛔ ${tag} 바닥글에 설명이 없다`);
     //  ② 베이 번호는 상자 정중앙 — 한쪽만 큰 안쪽 여백이면 글자가 밀린다.

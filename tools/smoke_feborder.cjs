@@ -114,6 +114,8 @@ const codeOf = (e) => { const c = e.cloneNode(true); for (const p of c.querySele
   //  5.15-03 — 양하 PLAN 의 X 도 선적처럼 옅은 회색(검수사 «X표가 너무 진하고 굵습니다»). 통과 칸 X 는 칸에 직접 칠하던 #52525b 를 #9ca3af 로.
   ok(/\.cpv2-tier-row \.cpv2-cell\.cpv2-mark-X \{ color: #9ca3af; font-weight: 700; \}/.test(CSS) && /\.cpv2-bw \.cpv2-cell\.cpv2-mark-X\.cpv2-mark-X \{ color: #888 !important; \}/.test(CSS)
      && !/color: '#52525b'/.test(CSS), '양하 X 도 옅은 회색(#9ca3af · 흑백 #888) — 통과 칸의 진한 X(#52525b) 없음');
+  //  라이브 STSE 양하 306칸 — 목적지/선사 색 갈래가 X 칸에 인라인 검정(MARK_FG)을 박아 CSS 를 이겼다. 데크·홀드 두 갈래 모두 덮어쓰기가 있어야 한다.
+  ok((CSS.match(/if \(cell\.mark === 'X' && style\) style = \{ \.\.\.style, color: '#9ca3af' \};/g) || []).length === 2, 'X 칸 인라인 색 덮어쓰기가 데크·홀드 두 갈래에 있다');
 
   // ── 바닥글이 그림과 같은 말을 하는가
   const foot = (r.d.querySelector('.cpv2-page-footer') || {}).textContent || '';

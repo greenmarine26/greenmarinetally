@@ -666,6 +666,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                           ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
                           : { color: MARK_FG });
                     }
+                    //  5.15-03 — X(옆 40피트가 차지)는 칠·목적지와 상관없이 글자를 옅은 회색으로(검수사 «X표가 너무 진하고 굵습니다»).
+                    //    위 갈래들이 X 칸에 인라인 color(MARK_FG 검정 등)를 직접 박아 CSS 를 이겼다 — 라이브 STSE 양하 306칸 실측.
+                    if (cell.mark === 'X' && style) style = { ...style, color: '#9ca3af' };
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     //  3.7: DG·FR·OT·TK 는 종전에 «칠했나»로 풀/엠티를 말했는데 선적에서 그 칠을 없앴다.
                     //    검수사 «표기 크기를 조금 줄이면 안되나요?» — 세 글자(DGF·DGE…)로 적고 그 칸만 글자를 2/3 로 줄인다.
@@ -811,6 +814,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                           ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
                           : { color: MARK_FG });
                     }
+                    //  5.15-03 — X(옆 40피트가 차지)는 칠·목적지와 상관없이 글자를 옅은 회색으로(검수사 «X표가 너무 진하고 굵습니다»).
+                    //    위 갈래들이 X 칸에 인라인 color(MARK_FG 검정 등)를 직접 박아 CSS 를 이겼다 — 라이브 STSE 양하 306칸 실측.
+                    if (cell.mark === 'X' && style) style = { ...style, color: '#9ca3af' };
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     //  3.7: DG·FR·OT·TK 는 종전에 «칠했나»로 풀/엠티를 말했는데 선적에서 그 칠을 없앴다.
                     //    검수사 «표기 크기를 조금 줄이면 안되나요?» — 세 글자(DGF·DGE…)로 적고 그 칸만 글자를 2/3 로 줄인다.
