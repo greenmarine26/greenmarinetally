@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.14';
-const NOTE = '5.14 호기가 다른 배로 옮기면 그 호기 검수원을 새 배에 따라 적습니다. 미르에게 «2호기 04:00 KSKM으로 이동»처럼 말하면 앱 자료와 시각을 맞춰 보고 다르면 왜 다른지 묻습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.14-01';
+const NOTE = '5.14-01 호기 이동을 말할 때 시각이 지금 조가 아니거나 너무 이르면 미르가 묻고 적지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

@@ -105,6 +105,14 @@ const _cw = console.warn; console.warn = (...a) => { if (/베이사전/.test(Str
     const t1745 = B.spokenTimeMs('17', '45', T('06:00'));
     ok('③ 아침 06:00 에 «17:45» → 어제 17:45(지난 조)', new Date(t1745).getDate() === 18 && new Date(t1745).getHours() === 17);
     ok('③ 아직 안 온 시각은 «맞아» 로도 적지 않는다', !B.shipMoveWritable({ ...plF }, true));
+    //  5.14-01 라이브 확인 — 09:25 «2호기 23:59 KSKM으로 이동» 은 어젯밤(지난 조) 시각 · KSKM 2호기 첫 완료 04:25 보다 4시간 넘게 이름 → 묻고 안 적는다
+    const now925 = T('09:25');
+    const pl925 = B.shipMovePlanOf(V3, 'KSKM_2621N', 2, B.spokenTimeMs('23', '59', now925), now925, 'KSKM');
+    ok('③ 5.14-01 지난 조 시각(23:59 at 09:25) — 묻고 적지 않음', pl925.otherShift && !B.shipMoveWritable(pl925, false) && /지금 조가 아니라/.test(B.shipMoveAnswerOf(pl925)), B.shipMoveAnswerOf(pl925));
+    const e925 = String(B.answerOneRaw('2호기 23:59 KSKM으로 이동', ctx(V3, now925)) || '');
+    ok('③ 5.14-01 엔진 답에 «적을게요» 없음', !/적을게요/.test(e925), e925);
+    const plE = B.shipMovePlanOf(V3, 'KSKM_2621N', 2, B.spokenTimeMs('03', '00', now3), now3, 'KSKM');
+    ok('③ 5.14-01 새 배 첫 완료(04:25)보다 한 시간 넘게 이른 03:00 — 묻는다', plE.tooEarly && plE.conflict && !B.shipMoveWritable(plE, false));
     ok('③ 다른 배 자료 없는 화면 — 적지 못했다고 말한다', /적지 못했어요/.test(String(B.answerOneRaw('2호기 04:00 KSKM으로 이동', { app: 'tally', mirBox: true, moveRecorder: true }) || '')));
     // ④ 번역·자동 별칭은 기록 말을 만들지 않는다
     ok('④ «2호기 04:00 KSKM 시작했어» 는 기록 말(isWriteParse)', B.isWriteParse(B.parseNaturalQuery('2호기 04:00 KSKM 시작했어')));

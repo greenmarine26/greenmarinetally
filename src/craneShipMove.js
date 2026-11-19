@@ -4,6 +4,7 @@
 //   같은 터미널·같은 조의 호기는 검수원과 함께 배를 옮긴다. 자료만으로 옮김을 적는 것은 수집기(crewfollow.py)가 하고, 이 파일은 말로 알린 옮김을 앱 자료와 맞춰 본다.
 import { currentShift, shiftGangKey, isPctcVoyage } from './utils.js';
 
+const EARLY_MS = 60 * 60000;   // 5.14-01: 새 배 첫 완료보다 이만큼 넘게 이른 시각은 묻는다(옮기는 데 걸리는 시간은 넉넉히 한 시간)
 const SLACK_MS = 5 * 60000;   // 말한 시각과 완료 기록 사이 허용 오차 — 이보다 벌어지면 왜 다른지 묻는다
 
 const craneNoOf = (e) => { const m = /(\d)\s*(?:호기)?$/.exec(String(e || '').trim()); const n = m ? +m[1] : 0; return n >= 1 && n <= 4 ? n : 0; };
@@ -84,7 +85,10 @@ export function shipMovePlanOf(voyages, targetKey, no, ms, nowMs = Date.now(), t
   const name = (targetReg && targetReg.name) || (origin && origin.reg.name) || '';
   //  감사 중7 — 떠났던 배로 돌아옴(A→B→A): 새 배 등록에 leftAt 이 있으면 지우고 지금 있던 배에 떠난 표시
   const returning = !!(targetReg && targetReg.leftAt);
-  const conflict = future || !!(ms && ((lastAtOrigin && ms < lastAtOrigin - SLACK_MS) || (tSpan.first && ms > tSpan.first + SLACK_MS)));
+  //  5.14-01 (라이브 확인 09:25 «2호기 23:59 KSKM으로 이동» → 어젯밤 23:59 로 적힘): 지금 조가 아닌 시각은 묻는다 · 새 배 첫 완료보다 한 시간 넘게 이른 시각도 묻는다
+  const otherShift = !!(ms && shiftKey !== shiftGangKey(currentShift(nowMs)));
+  const tooEarly = !!(ms && tSpan.first && ms < tSpan.first - EARLY_MS);
+  const conflict = future || otherShift || tooEarly || !!(ms && ((lastAtOrigin && ms < lastAtOrigin - SLACK_MS) || (tSpan.first && ms > tSpan.first + SLACK_MS)));
   //  감사 중6 — «맞아» 로 넘겨 적을 때도 떠난 배에 표시한다. 떠난 시각은 말한 시각과 떠난 배 마지막 완료 중 늦은 것.
   const leftAtOrigin = Math.max(ms || nowMs, (origin && origin.last) || 0);
   const leftOrigin = !!(origin && !origin.reg.leftAt);
@@ -94,7 +98,7 @@ export function shipMovePlanOf(voyages, targetKey, no, ms, nowMs = Date.now(), t
   return {
     ok: true, targetKey, targetVsl, shiftKey, no, ms: ms || 0, name,
     originKey, originVsl, lastAtOrigin, firstAtTarget: tSpan.first,
-    conflict, future, shipMismatch, needCrew, leftOrigin, leftAtOrigin, returning, nothing,
+    conflict, future, otherShift, tooEarly, shipMismatch, needCrew, leftOrigin, leftAtOrigin, returning, nothing,
     originRegIsString: !!(origin && origin.reg && origin.reg._str),
     targetReg,
   };
@@ -111,6 +115,7 @@ export function shipMoveAnswerOf(plan, force = false) {
   const again = `«${eq}${plan.ms ? ' ' + hm(plan.ms) : ''} ${plan.targetVsl}으로 이동 맞아»`;
   if (plan.shipMismatch) return `🏗 말씀하신 배 이름을 작업 목록에서 못 찾았어요 🐱 ${plan.targetVsl} 말씀인가요? 아직 적지 않았어요. 맞으면 ${again} 라고 해 주세요.`;
   if (plan.future) return `🏗 ${hm(plan.ms)}은 아직 안 온 시각이에요 🐱 아직 적지 않았어요. 옮긴 뒤에 다시 말씀해 주세요.`;
+  if (plan.otherShift && !force) return `🏗 ${hm(plan.ms)}은 지금 조가 아니라 ${plan.shiftKey}조 시각이에요 🐱 아직 적지 않았어요. 그 조 이야기가 맞으면 ${again} 라고 해 주세요.`;
   if (plan.conflict && !force) {
     const bits = [];
     if (plan.lastAtOrigin) bits.push(`${plan.originVsl}에서 ${hm(plan.lastAtOrigin)}까지 완료 기록`);
