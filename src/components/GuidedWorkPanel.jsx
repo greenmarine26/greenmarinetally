@@ -21,7 +21,7 @@ import { canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../w
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { workPauseOf } from '../mir.js';   // 4.63-04: 내 호기가 작업 중단 중이면 해치커버 물음을 하지 않는다
-import { bayModeTargetOf, bayModeDeckGateOf, underHeldOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
+import { bayModeTargetOf, bayModeDeckGateOf, underHeldOf, bayModeBaysOf } from '../bayMode.js';   // 4.80: 베이모드 — 베이 그림에서 누른 컨을 카드로(판정 한 벌)
 import { mirGotoFinished, mirGotoFinish, mirGotoTouch } from '../guideGoto.js';   // 4.40: 미르 [이동] — 끝남은 요청 함 한 곳에(다시 그려져도 다시 안 돈다)
 import { isoOtHeightConflict, pickConfirmLineOf } from '../utils.js';   // 4.27-01: 오픈탑 높이 갈림 = 점검요망
 import { isoToLabel, hatchPanelDetailOf, hatchReportTs, isoConflictOf, getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, buildOccupancy, posKey, berthSideOf } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
@@ -86,7 +86,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
 //  4.25-02 — «다른 갱» 물음을 이미 한 장(항차·모드·장·두 호기). 모듈에 두어 탭을 옮기거나 자동↔수동을 바꿔도 앱을 다시 열기 전까지는 다시 묻지 않는다(감사 기록 — 컴포넌트에 두면 다시 그려질 때마다 물었다).
 const _askedGang = new Set();
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null, bayMini = false }) {   // 4.80-01 bayMini — 베이모드 켠 동안 카드를 작게(머리·순서·다음 예측·수동 전환 줄을 접고 카드 줄을 한데 모아 단추까지 폰 화면에 든다)   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null, bayMini = false, onBayModeBays = null }) {   // 4.80-01 bayMini — 베이모드 켠 동안 카드를 작게(머리·순서·다음 예측·수동 전환 줄을 접고 카드 줄을 한데 모아 단추까지 폰 화면에 든다)   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -1188,7 +1188,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   //  4.80: 지금 카드의 컨 번호를 베이뷰에 알린다 — 베이 그림이 그 칸에 보라 테두리를 칠한다(베이모드가 아니면 부모가 안 쓴다).
   const _cardCnsKey = card ? [card.main && card.main.cn, card.twin && card.twin.cn].filter(Boolean).join('|') : '';
-  useEffect(() => { if (onBayPickCns) onBayPickCns(_cardCnsKey ? _cardCnsKey.split('|') : []); }, [_cardCnsKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (onBayPickCns) onBayPickCns(_cardCnsKey ? _cardCnsKey.split('|') : []); }, [_cardCnsKey]);
+  //  5.17: 베이모드 베이 옮기기 — 남은 컨이 있는 장 목록(이 remaining·groupCenterOf 한 벌)을 베이뷰 위 띠에 알려 준다.
+  //    lock — 데크는 다 내렸어도 같은 해치 이웃 장 데크가 남아 홀드를 못 여는 장(4.80-02 게이트 holdDeckGateOf 한 벌, 감사 지적)
+  const _bmBaysKey = onBayModeBays ? bayModeBaysOf(remaining, groupCenterOf).map((g) => `${g.center}:${g.deck}:${g.hold}:${!g.deck && mode === 'discharge' && holdDeckGateOf(Number(g.center)) ? 1 : 0}`).join('|') : '';
+  useEffect(() => { if (onBayModeBays) onBayModeBays(_bmBaysKey ? _bmBaysKey.split('|').map((x) => { const [center, deck, hold, lock] = x.split(':'); return { center, deck: +deck, hold: +hold, lock: lock === '1' }; }) : []); }, [_bmBaysKey]);   // eslint-disable-line react-hooks/exhaustive-deps   // eslint-disable-line react-hooks/exhaustive-deps
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.

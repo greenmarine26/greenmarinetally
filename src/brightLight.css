@@ -369,10 +369,12 @@
 :root[data-bright="4"] .border-emerald-800\/40{border-color:rgb(167 243 208 / 0.40)}
 :root[data-bright="4"] .border-emerald-800\/50{border-color:rgb(167 243 208 / 0.50)}
 :root[data-bright="4"] .border-emerald-800\/60{border-color:rgb(167 243 208 / 0.60)}
+:root[data-bright="4"] .border-fuchsia-300{border-color:rgb(162 28 175)}
 :root[data-bright="4"] .border-fuchsia-400{border-color:rgb(192 38 211)}
 :root[data-bright="4"] .border-fuchsia-500{border-color:rgb(217 70 239)}
 :root[data-bright="4"] .border-fuchsia-600{border-color:rgb(232 121 249)}
 :root[data-bright="4"] .border-fuchsia-700{border-color:rgb(240 171 252)}
+:root[data-bright="4"] .border-fuchsia-800{border-color:rgb(245 208 254)}
 :root[data-bright="4"] .border-fuchsia-800\/40{border-color:rgb(245 208 254 / 0.40)}
 :root[data-bright="4"] .border-indigo-500{border-color:rgb(99 102 241)}
 :root[data-bright="4"] .border-indigo-600{border-color:rgb(129 140 248)}

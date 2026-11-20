@@ -94,3 +94,37 @@ export function underHeldOf(remaining, heldSet) {
   }
   return out;
 }
+
+//  ★ 5.17 — 베이모드에서 베이 옮기기. 검수사 2026-11-20 «검수앱 자동모드 베이모드에서 베이이동시 선택 방법은?» → «넣어 주세요».
+//    남은 양하 컨(자동 가이드의 remaining — 판정 한 벌)을 해치 그룹(groupCenterOf)으로 묶어 데크·홀드 남은 대수를 센다.
+//    베이모드 위 띠의 [◀][▶]·베이 목록이 이 줄을 쓴다(남은 컨이 있는 장만 — 다 내린 장은 건너뛴다).
+//    @returns [{ center, deck, hold }] — center 오름차순
+export function bayModeBaysOf(remaining, groupCenterOf) {
+  const m = new Map();
+  for (const c of remaining || []) {
+    if (!c || c.bay == null) continue;
+    const k = groupCenterOf(String(c.bay));
+    if (k == null || k === '') continue;
+    const g = m.get(String(k)) || { center: String(k), deck: 0, hold: 0 };
+    if (parseInt(c.tier, 10) >= 80) g.deck++; else g.hold++;
+    m.set(String(k), g);
+  }
+  return [...m.values()].sort((a, b) => (parseInt(a.center, 10) - parseInt(b.center, 10)) || String(a.center).localeCompare(String(b.center)));
+}
+
+//  지금 장(cur)에서 dir(-1 앞 · +1 뒤)으로 남은 컨이 있는 다음 장 — 없으면 null. cur 가 목록에 없으면(다 내린 장) 번호로 다음을 찾는다.
+export function bayModeStepOf(list, cur, dir) {
+  const L = list || [];
+  if (!L.length) return null;
+  const n = parseInt(cur, 10);
+  if (dir > 0) { const x = L.find((g) => parseInt(g.center, 10) > n); return x ? x.center : null; }
+  const xs = L.filter((g) => parseInt(g.center, 10) < n); return xs.length ? xs[xs.length - 1].center : null;
+}
+
+//  옮긴 장을 무슨 단으로 열까 — 데크가 남았으면 데크, 데크가 없고 홀드가 열려 있으면 홀드, 같은 해치 이웃 장 데크로 잠긴 장(lock)은 null(단 고르기 화면 — 거기서 데크 안내).
+export function bayModeTierOf(g) {
+  if (!g) return null;
+  if (g.deck > 0) return 'deck';
+  if (g.hold > 0 && !g.lock) return 'hold';
+  return null;
+}

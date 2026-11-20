@@ -17,7 +17,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildBayPagesFromSummary, hatchEvenOf } from '../cargoPlanCore.js';
 import { useBackHandler } from '../backHandler.js';
 import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 베이 그림 칸 핀치 확대 — 베이플랜·베이 상세와 한 벌
-import { bayModeOkFor, bayPickRequest, bayModeCellsOf } from '../bayMode.js';   // 4.80: 베이모드 양하 — 판정 한 벌
+import { bayModeOkFor, bayPickRequest, bayModeCellsOf, bayModeStepOf, bayModeTierOf } from '../bayMode.js';   // 4.80: 베이모드 양하 — 판정 한 벌
 import useIsWide from '../useIsWide.js';   // 3.49: 넓은 화면(태블릿·컴)은 좌/우 분할 — 리스트 탭 2단과 같은 기준(1024px)
 import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
@@ -58,6 +58,10 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   const [bayPick, setBayPick] = useState(null);
   const [cardCns, setCardCns] = useState([]);
   const onCardCns = useCallback((a) => setCardCns((o) => (o.length === a.length && o.every((x, i) => x === a[i])) ? o : a), []);
+  //  5.17 베이모드 베이 옮기기 — 남은 컨이 있는 장 목록(자동 가이드가 알려 줌) · 목록 펼침
+  const [bmBays, setBmBays] = useState([]);
+  const onBmBays = useCallback((a) => setBmBays((o) => (JSON.stringify(o) === JSON.stringify(a) ? o : a)), []);
+  const [bmList, setBmList] = useState(false);
   const [vh, setVh] = useState(() => (typeof window !== 'undefined' && window.innerHeight) || 800);
   useEffect(() => { const h = () => setVh(window.innerHeight || 800); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);   // 4.80-01: 폰 베이모드 위 칸 높이 상한을 화면 높이로 계산
   const isWide = useIsWide();   // 3.49: 검수사 «폰화면은 수직 화면 이지만 컴은 수평화면으로 … 컴은 좌측에 컨테이너 자료가 우측에 베이»
@@ -139,6 +143,15 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: sv.ctx.bay == null ? null : sv.ctx.bay, tier: sv.ctx.tier || null, guide: !!sv.ctx.guide, twin: sv.ctx.twin == null ? null : !!sv.ctx.twin }));
   };
   releaseRef.current = releaseBayMode;
+  //  5.17: 베이모드를 켠 채 다른 장으로 — 해제했다 다시 켜지 않는다. 고정 장만 바꾸고 해제 때 돌아갈 원래 화면(saved)은 그대로 둔다.
+  //    검수사 2026-11-20 «검수앱 자동모드 베이모드에서 베이이동시 선택 방법은?» → «넣어 주세요».
+  const moveBayMode = (center) => {
+    if (!bayModeRef.current || center == null || String(center) === String(bayModeRef.current.bay)) { setBmList(false); return; }
+    const g = bmBays.find((x) => String(x.center) === String(center));
+    setBayMode((b) => (b ? { ...b, bay: center } : b)); setBayPick(null); setCardCns([]); setBmList(false);
+    setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: center, tier: bayModeTierOf(g), guide: true, twin: null }));   // 데크 남음 → 데크 · 데크 0·홀드 열림 → 홀드 · 이웃 데크로 잠김 → 단 고르기 화면(거기서 «같은 해치 데크» 안내)
+  };
+  const bmPrev = bayMode ? bayModeStepOf(bmBays, bayMode.bay, -1) : null, bmNext = bayMode ? bayModeStepOf(bmBays, bayMode.bay, 1) : null;
   //  베이 그림에서 컨을 눌렀을 때 — 남은 양하 컨이면 상세 카드가 아니라 자동 가이드의 작은 카드로(요청만 보낸다, 판정·기록은 자동 가이드 것). 이미 완료된 컨은 종전대로 상세.
   const onBayCellTap = (c) => {
     if (!c) return;
@@ -264,15 +277,20 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
     );
   }
 
-  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow, bayPick: bayMode ? bayPick : null, onCardCns, mini: !!bayMode };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
+  const bayViewProps = { presetCtx: preset, onWorkCtxChange: onCtx, compact: true, suppressBayActivity: follow, follow, bayPick: bayMode ? bayPick : null, onCardCns, onBays: bayMode ? onBmBays : null, mini: !!bayMode };   // 3.49 follow — 해치커버 자동 판정을 «묻지 않고 적기»로
   return (
     <div ref={boxRef} className="fixed inset-0 z-[45] bg-ink-950 text-ink-100 flex flex-col" data-bayview="view" data-bayview-wide={isWide ? '1' : '0'} style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>{/* 4.87-10: 아이폰 위·아래 막대 */}
       <div className="h-10 shrink-0 flex items-center gap-1.5 px-2 bg-ink-900 border-b border-line overflow-x-auto whitespace-nowrap">
         <button onClick={() => { if (bayMode) releaseBayMode(); setStep('pick'); }} className={chip('bg-ink-800 border border-line text-dim-200')} title="선택 화면으로">◀</button>
-        <span className={chip(mode === 'loading' ? 'bg-sky-800 text-sky-100' : 'bg-rose-800 text-rose-100')}>{modeLabel}</span>
-        {bayMode ? <span className={chip('bg-fuchsia-700 text-white')} data-bayview-baymode="1">🎯 베이모드</span> : follow ? <span className={chip('bg-violet-700 text-white')} data-bayview-follow="1">따라가기{fol.no ? ` ${fol.no}호기` : ''}</span>
+        {!bayMode && <span className={chip(mode === 'loading' ? 'bg-sky-800 text-sky-100' : 'bg-rose-800 text-rose-100')}>{modeLabel}</span>}{/* 5.17: 베이모드는 양하뿐 — 위 띠 폭을 장 옮기기 단추에 준다 */}
+        {bayMode ? <span className={chip('bg-fuchsia-700 text-white')} data-bayview-baymode="1" title="베이모드(양하)">🎯</span> : follow ? <span className={chip('bg-violet-700 text-white')} data-bayview-follow="1">따라가기{fol.no ? ` ${fol.no}호기` : ''}</span>
           : <span className={chip(live.guide ? 'bg-violet-700 text-white' : 'bg-amber-700 text-white')}>{live.guide ? '자동' : (live.twin ? '수동·트윈' : '수동·싱글')}</span>}
-        <span className="mono font-black text-amber-300 text-sm" data-bayview-title="1">{bayLabel}</span>
+        {bayMode ? (<>
+          {/* 5.17: 베이모드 베이 옮기기 — [◀ 장] 앞 장 · 장 이름 눌러 목록 · [장 ▶] 뒷 장(남은 컨이 있는 장만) */}
+          <button onClick={() => moveBayMode(bmPrev)} disabled={bmPrev == null} className={chip('bg-ink-800 border border-fuchsia-400 text-fuchsia-100 disabled:opacity-30')} data-bayview-bm-prev="1" title="앞 장(남은 컨이 있는 장)">◀ 장</button>
+          <button onClick={() => setBmList((v) => !v)} className="mono font-black text-amber-300 text-sm underline decoration-dotted underline-offset-4" data-bayview-title="1" data-bayview-bm-list={bmList ? '1' : '0'} title="눌러서 옮길 장 고르기">{bayLabel} ▾</button>
+          <button onClick={() => moveBayMode(bmNext)} disabled={bmNext == null} className={chip('bg-ink-800 border border-fuchsia-400 text-fuchsia-100 disabled:opacity-30')} data-bayview-bm-next="1" title="뒷 장(남은 컨이 있는 장)">장 ▶</button>
+        </>) : <span className="mono font-black text-amber-300 text-sm" data-bayview-title="1">{bayLabel}</span>}
         <button onClick={() => setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: undefined, tier: bright === 'deck' ? 'hold' : 'deck', guide: null, twin: null }))}
           className={chip(bright === 'hold' ? 'bg-amber-700 text-white' : 'bg-sky-700 text-white')} title="데크 ⇄ 홀드">{bright === 'hold' ? '🟠 홀드' : '🔵 데크'} ⇄</button>
         {bayModeOkFor(mode) && (bayMode
@@ -289,6 +307,21 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
         {onOpenReport && <button onClick={onOpenReport} className={`${chip('bg-emerald-700 border border-emerald-400 text-white')}`} data-bayview-report="1" title="작업 보고 — 베이뷰를 닫지 않고 보고 창을 엽니다">📤 보고</button>}
         <button onClick={onClose} className={chip('bg-ink-800 border border-line text-dim-200')}>✕</button>
       </div>
+      {bayMode && bmList && (
+        <div className="shrink-0 max-h-40 overflow-auto bg-ink-900 border-b border-fuchsia-800 px-2 py-2 flex flex-wrap gap-1.5" data-bayview-bm-strip="1">
+          {bmBays.length === 0 && <span className="text-xxs text-dim-300">남은 양하 컨이 있는 장이 없습니다.</span>}
+          {bmBays.map((g) => {
+            const cur = String(g.center) === String(bayMode.bay);
+            return (
+              <button key={g.center} onClick={() => moveBayMode(g.center)} data-bayview-bm-bay={String(g.center)}
+                className={chip(cur ? 'bg-fuchsia-700 border border-fuchsia-300 text-white' : 'bg-ink-800 border border-line text-ink-100')}>
+                <span className="mono font-black">{hatchTitleOf(g.center, pages).replace(/^BAY /, '')}</span>
+                <span className="ml-1 text-xxs opacity-80">{g.deck ? `데크 ${g.deck}` : ''}{g.deck && g.hold ? ' · ' : ''}{g.hold ? `홀드 ${g.hold}` : ''}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {showConf && (
         <div className="shrink-0 max-h-40 overflow-auto bg-red-950/60 border-b border-red-800 px-3 py-2 space-y-1 text-xxs" data-bayview-conflicts="1">
           <div className="font-black text-red-200">검수원 기록과 터미널 실적이 다릅니다 — 실물을 보고 정리하세요(앱이 자동으로 고치지 않습니다). 누르면 컨 상세.</div>
