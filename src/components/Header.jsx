@@ -18,8 +18,8 @@ import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: �
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import { crewShiftKey } from '../utils.js';   // 4.85: 교대 — 내 조의 조 등록 칸
-import { equipHoldersOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
-import { fbRelieveCrane } from '../firebase.js';   // 4.85: 교대 기록
+import { equipHoldersOf, equipHolderOf, crewPoolNamesOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
+import { fbRelieveCrane, fbPoolTakeCrane } from '../firebase.js';   // 4.85: 교대 기록
 import { canWorkNow, canRecordWorkNow, isAdminNow } from '../workChoice.js';
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
 import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
@@ -101,11 +101,33 @@ export default function Header({ version, inspector, online, route, voyages, onC
     });
   };
 
+  //  5.16: 베이뷰 작업 화면이 보낸 «공동 담당 넘겨받기» 요청을 여기서 적는다(베이뷰는 기록 함수를 부르지 않는다 — 4.80).
+  useEffect(() => {
+    const onTake = (ev) => {
+      const d = (ev && ev.detail) || {};
+      if (!d.voyageKey || !d.equip || !d.me) return;
+      fbPoolTakeCrane(d.voyageKey, d.equip, d.me, d.from || '', d.names || []).catch((e) => {
+        console.warn('[5.16] 공동 담당 넘겨받기 기록 실패(베이뷰)', e);
+        try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: '호기 넘겨받기 기록을 못 했습니다. 통신을 확인해 주세요.' } })); } catch (e2) { console.warn(e2); }
+      });
+    };
+    window.addEventListener('poolTakeCrane', onTake);
+    return () => window.removeEventListener('poolTakeCrane', onTake);
+  }, []);
   const handleSelectEquip = (num) => {
     setEquipNumber(num);
     setEquipNoState(num);
     setEquipOpen(false);
     window.dispatchEvent(new CustomEvent('equipChanged', { detail: num }));
+    // 5.16: 호기 공동 담당이면 이 호기를 넘겨받았다고 적는다(바꾼 시각 · 앞사람에게 «교대 받음»).
+    const pn = crewPoolNamesOf(info);
+    if (route.name === 'voyage' && route.voyageKey && inspector && num && pn.includes(inspector) && canRecordWorkNow()) {
+      const from = equipHolderOf(inspectors || {}, route.voyageKey, num, inspector, Date.now(), workChoice?.shift || '');
+      fbPoolTakeCrane(route.voyageKey, num, inspector, from, pn).catch((e) => {
+        console.warn('[5.16] 공동 담당 넘겨받기 기록 실패', e);
+        try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: '호기 넘겨받기 기록을 못 했습니다. 통신을 확인해 주세요.' } })); } catch (e2) { console.warn(e2); }
+      });
+    }
   };
 
   //  ★ 4.23 머리띠 — 폰과 컴은 **배치가 다르다**(검수사 A1 «항목이 다른게 아니고 디자인 구성 배치가 달라야 합니다» · A4 «폰은 아이콘 크기를 맞추면 한줄이면 될껄»).

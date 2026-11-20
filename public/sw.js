@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.15-04';
-const NOTE = '5.15-04 선적 PLAN 이 한눈에 들어오게 바뀌었습니다. 양하 PLAN 의 X 도 옅은 회색으로 바뀌었습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.16';
+const NOTE = '5.16 호기 공동 담당 — «OBWH 공동 홍길동 김철수 박영희» 한 번이면 세 사람이 호기를 바로 넘겨받습니다. 실적은 바꾼 시각의 사람에게 붙습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

@@ -34,7 +34,7 @@ import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록�
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 3.49: 장 묶기(hatchEvenOf 가 받는 목록)
 import { recordHatchEvent } from '../hatchReport.js';   // 3.49: 따라가기 자동 기록
 import HatchAlertBanner from './HatchAlertBanner.jsx';   // 3.49: 비따라가기 알림
-import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
+import { fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetCrewPool, fbSetVoyageCraneCrew, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 수동 트윈 한 화면 틀(조회창 앞·뒤 → [확인] → 카드 두 장 · 아래 칸 변경 단추)
 import { fbHoldContainers } from '../firebase.js';   // ★ 4.27: 수동 한 화면 틀의 ⏸ 보류(자동 가이드와 같은 저장)
@@ -1460,6 +1460,14 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   const crewSetRef = useRef('');
   useEffect(() => {
     const cs = resolveCrewSides(parsed.crewSet, voyage);   // 3.21: «선미 김판석» → 이 배 실적으로 호기 번호를 가린다
+    if (cs && cs.pool && voyageKey) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
+      const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
+      if (crewSetRef.current === pk) return; crewSetRef.current = pk;
+      fbSetCrewPool(voyageKey, cs.pool)
+        .then((r) => { if (r == null) return; try { speak(cs.pool.clear ? '호기 공동 담당을 풀었어요' : `${''} 호기 공동 담당 ${r} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+        .catch((e) => { console.warn('[5.16] 공동 담당 저장 실패', e); crewSetRef.current = ''; try { speak('공동 담당 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (!cs || !voyageKey || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;

@@ -36,7 +36,7 @@ import { getBayPairs } from '../twin.js';
 import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain } from '../voice.js';
 import { logQuerySettled } from '../activityLog.js';
 import { fbMirCraneShipMove } from '../firebase.js';   // 5.14
-import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';
+import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetCrewPool, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
 import { mirWorkCtx } from '../workChoice.js';   // 4.38: 작업 중 사담 미루기 — 내 작업 표지(작업자·작업 선박·호기)
@@ -170,7 +170,15 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     if (!parsed || !voyageKey) return;
     try {
       const cs = resolveCrewSides(parsed.crewSet, voyage);
-      if (cs && Array.isArray(cs.crew) && cs.crew.length) {
+      if (cs && cs.pool) {   // 5.16: 호기 공동 담당 등록·해제
+        const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
+        if (sideRef.current !== pk) {
+          sideRef.current = pk;
+          fbSetCrewPool(voyageKey, cs.pool)
+            .then((r) => { if (r == null) return; try { speak(cs.pool.clear ? '호기 공동 담당을 풀었어요' : `호기 공동 담당 ${r} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+            .catch((e) => { console.warn('[미르] 공동 담당 저장 실패', e); sideRef.current = ''; setOut((o) => (o || '') + '\n⚠ 공동 담당 저장이 안 됐어요 — 다시 말해 주세요.'); });
+        }
+      } else if (cs && Array.isArray(cs.crew) && cs.crew.length) {
         const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
         const key = `crew|${voyageKey}|${sk.key}|${cs.crew.map((x) => x.no + ':' + x.name).join(',')}`;
         if (sideRef.current !== key) {

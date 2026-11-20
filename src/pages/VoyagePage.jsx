@@ -32,7 +32,7 @@ import {
   fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition   // 4.26-03: 시퀀스 질문 카드를 걷어내 fbSetVoyageSeqMode·resolveSeqMode·fbSetShipSeqPref·fbGetShipSeqPref 를 여기서 안 쓴다.
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbSetVoyageCraneCrew, fbSetCrewPool, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -2575,6 +2575,14 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     if (!q || !voyageKey) return;
     let cs = null;
     try { cs = resolveCrewSides(parseNaturalQuery(q).crewSet, bowStern); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌(상위가 구해 내린 값)
+    if (cs && cs.pool) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
+      const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
+      if (crewSetRef.current === pk) return; crewSetRef.current = pk;
+      fbSetCrewPool(voyageKey, cs.pool)
+        .then((r) => { if (r == null) return; try { speak(cs.pool.clear ? '호기 공동 담당을 풀었어요' : `${''} 호기 공동 담당 ${r} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+        .catch((e) => { console.warn('[5.16] 공동 담당 저장 실패', e); crewSetRef.current = ''; try { speak('공동 담당 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;
@@ -3516,6 +3524,14 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
     if (!q || !voyageKey) return;
     let cs = null;
     try { cs = resolveCrewSides(parseNaturalQuery(q).crewSet, bowStern); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌(상위가 구해 내린 값)
+    if (cs && cs.pool) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
+      const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
+      if (crewSetRef.current === pk) return; crewSetRef.current = pk;
+      fbSetCrewPool(voyageKey, cs.pool)
+        .then((r) => { if (r == null) return; try { speak(cs.pool.clear ? '호기 공동 담당을 풀었어요' : `${''} 호기 공동 담당 ${r} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+        .catch((e) => { console.warn('[5.16] 공동 담당 저장 실패', e); crewSetRef.current = ''; try { speak('공동 담당 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${voyageKey}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;

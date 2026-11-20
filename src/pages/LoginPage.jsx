@@ -9,7 +9,7 @@ import { UserPlus, LogIn, ChevronLeft } from 'lucide-react';
 //  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
 import logoUrl from '../assets/logo-tallyone.png';
-import { equipHolderOf } from '../equipHold.js';
+import { equipHolderOf, blockingHolderOf, crewPoolNamesOf } from '../equipHold.js';   // 5.16: 공동 담당끼리는 막지 않는다
 import ShiftPick from '../components/ShiftPick.jsx';   // 4.79: 주간조/야간조 고르기
 import { shiftRequiredFor, resolveShift } from '../workChoice.js';
 import { shiftLabel, shiftWindowText, nowShift } from '../workShift.js';   // 4.72: 로그아웃 안 한 사람이 쥔 호기는 못 고르게
@@ -27,7 +27,7 @@ import {
   hasRecoveryCode, verifyRecoveryCode,   // 2.53: 복구 코드 — 소유자가 잠겼을 때의 유일한 길
   recoveryMadeAtText,                   // 2.77: 복구 코드를 언제 만든 것인지 알려 준다
 } from '../adminGuard.js';
-import { fbGetAdminGuard, fbUpdateAdminGuard, fbFetchVoyageBoxCounts } from '../firebase.js';   // 4.08-01: 선택 화면 «N대» — 본문 없이 키만 센다
+import { fbGetAdminGuard, fbUpdateAdminGuard, fbFetchVoyageBoxCounts, fbPoolTakeCrane } from '../firebase.js';   // 4.08-01: 선택 화면 «N대» — 본문 없이 키만 센다
 import { useBackHandler } from '../backHandler.js';
 
 //  ★ 4.16 — 제목 줄 판 이름 «TallyOne 4.16»(이름은 제목색 · 번호는 강조색, 글자 전체 = APP_VERSION). 로그인 화면 두 머리(PC·폰)가 같이 쓴다.
@@ -450,12 +450,21 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const needShift = shiftRequiredFor(choiceName, choiceVoyage);
     const rs = resolveShift(choiceName, choiceVoyage, choiceShift);
     const heldBy = (n) => (rs.offShift ? '' : equipHolderOf(inspectors, choiceVoyage, n, choiceName, undefined, rs.shift));   // 4.72
+    //  ★ 5.16 호기 공동 담당 — 공동 담당끼리는 막지 않는다(그 호기를 고르면 넘겨받는다). 막는 사람만 단추를 끈다.
+    const poolNames = choiceVoyage ? crewPoolNamesOf(chosen) : [];
+    const blockBy = (n) => (rs.offShift ? '' : blockingHolderOf(inspectors, chosen, choiceVoyage, n, choiceName, undefined, rs.shift));
     const shiftReady = !needShift || !!choiceShift;
     const start = () => {
       if (!choiceVoyage || !shiftReady) return;
       if (rs.offShift) { onSelect(choiceName, { mode: 'view', offShift: true, voyageKey: choiceVoyage, equip: '', shift: rs.shift }); return; }
-      if (choiceEquip && heldBy(choiceEquip)) return;
+      if (choiceEquip && blockBy(choiceEquip)) return;
+      const _from = choiceEquip ? heldBy(choiceEquip) : '';
       onSelect(choiceName, { mode: 'work', voyageKey: choiceVoyage, equip: choiceEquip, shift: rs.shift });
+      //  5.16: 공동 담당이면 고른 호기를 넘겨받고 바뀐 시각을 남긴다(쥐고 있던 사람은 «교대 받음» 으로 호기를 놓는다).
+      if (choiceEquip && poolNames.includes(choiceName)) {
+        fbPoolTakeCrane(choiceVoyage, choiceEquip, choiceName, _from, poolNames)
+          .catch((e) => { console.warn('[5.16] 공동 담당 넘겨받기 실패', choiceVoyage, choiceEquip, e); try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: `${choiceEquip} 넘겨받기를 서버에 못 적었습니다 — 머리의 호기를 다시 눌러 주세요.` } })); } catch (x) { console.warn('[5.16] 알림 실패', x); } });
+      }
     };
     const back = () => { if (choiceFor && onCancelChoice) { onCancelChoice(); return; } setChoiceName(''); };
     //  ★ 3.52-02 — **이 판은 스스로 굴러야 한다.** (검수사 2026-09-16 «작업자를 선택하고 선박을 선택하고
@@ -528,13 +537,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   <div className="text-xxs font-bold text-amber-300 mb-1">호기(장비) — {pierOf(choiceVoyage) || '부두 미상'} · 선택하지 않아도 들어갈 수 있습니다</div>
                   <div className="flex flex-wrap gap-1.5">
                     {equips.map((n) => {
-                      const held = heldBy(n);   // 4.72: 주야 각 1인이 한 크레인 — 다른 사람이 로그아웃 없이 쥔 호기
+                      const held = blockBy(n);   // 4.72: 주야 각 1인이 한 크레인 — 다른 사람이 로그아웃 없이 쥔 호기(5.16: 공동 담당끼리는 안 막는다)
+                      const mate = held ? '' : heldBy(n);   // 5.16: 공동 담당이 쥔 호기 — 고르면 넘겨받는다
                       return held ? (
                         <button key={n} type="button" disabled data-choice-equip={n} data-choice-held={held}
                           className="px-3 py-1.5 rounded-pill border text-xs font-bold bg-ink-900 border-line text-dim-500 opacity-70">🏗 {n} · {held} 작업 중</button>
                       ) : (
                       <button key={n} onClick={() => setChoiceEquip(choiceEquip === n ? '' : n)} data-choice-equip={n}
-                        className={`px-3 py-1.5 rounded-pill border text-xs font-bold ${choiceEquip === n ? 'bg-amber-600 border-amber-300 text-white' : 'bg-ink-800 border-line text-amber-200'}`}>🏗 {n}</button>
+                        className={`px-3 py-1.5 rounded-pill border text-xs font-bold ${choiceEquip === n ? 'bg-amber-600 border-amber-300 text-white' : 'bg-ink-800 border-line text-amber-200'}`} data-choice-mate={mate || undefined}>🏗 {n}{mate ? ` · ${mate} → 넘겨받기` : ''}</button>
                       );
                     })}
                   </div>

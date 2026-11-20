@@ -24,6 +24,6 @@ ok(equipHolderOf(mk({ workMode: 'view' }), 'V1', '3호기', '김철수', now) ==
 ok(equipHolderOf(mk({ name: '클로드' }), 'V1', '3호기', '김철수', now) === '', '클로드(테스터)는 호기를 막지 않는다');
 ok(equipHolderOf(mk({}), 'V1', '', '김철수', now) === '' && equipHolderOf(null, 'V1', '3호기', 'a', now) === '', '호기 없음·명단 없음은 빈 값');
 ok(/equipHolderOf\(inspectors, choiceVoyage, n, choiceName(, undefined, rs.shift)?\)/.test(login) && /data-choice-held=/.test(login), '로그인 화면이 점유 호기를 회색으로 막는다');
-ok(/if \(choiceEquip && heldBy\(choiceEquip\)\) return;/.test(login), '시작 단추도 점유 호기는 통과시키지 않는다');
+ok(/if \(choiceEquip && (heldBy|blockBy)\(choiceEquip\)\) return;/.test(login), '시작 단추도 점유 호기는 통과시키지 않는다');
 console.log(`${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

@@ -4,9 +4,10 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
+import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCrewPool, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
 import { voyagePierOf, degText } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
 import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
+import { crewNameAt, crewPoolLogOf } from './utils.js';   // 5.16: 공동 담당 교대표
 import { shipFlag } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 성질표 — 휴게 없는 배(noRest)
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
@@ -587,11 +588,22 @@ export function parseNaturalQuery(text) {
   //    ⚠ «1호기 이인철 3호기 최관식» 의 숫자 1·3 이 끝 4자리(«13»)로 잡혀 컨 조회로 새던 것(실측 09-04 22:11 김성일 문장이
   //      miss 로도 안 남고 «끝네자리 13» 으로 흘렀다) — 여기서 digits 를 지운다.
   {
-    const _crew = result.startSet ? null : parseCraneCrew(t);   // «1호기 김성일 22시부터 시작했어» 는 시작 알림(2.74)이다
-    if (_crew) {
+    //  ★ 5.16 호기 공동 담당 — «OBWH 공동 김성일 이형출 고종웅» · «공동 해제». 호기 등록(crewSet) 통로에 pool 로 싣는다 —
+    //    미르가 «적는 말» 로 알아보는 판정(crewSet)은 그대로 쓰고, 저장하는 자리가 pool 이면 fbSetCrewPool 로 간다.
+    const _pool = result.startSet ? null : parseCrewPool(t);
+    const _crew = (result.startSet || _pool) ? null : parseCraneCrew(t);   // «1호기 김성일 22시부터 시작했어» 는 시작 알림(2.74)이다
+    if (_pool) {
+      result.crewSet = { raw: String(text), shift: null, dayOff: 0, dayWord: '', crew: [], unknown: [], needPos: [], pool: { names: _pool.names, unknown: _pool.unknown, clear: !!_pool.clear } };
+      result.digits = null; result.briefingQuery = false; result.posQuery = false;
+    } else if (_crew) {
       //  3.21: «선미 김판석 선수 이종부» 는 여기서 호기를 모른다 — needPos 로 실어 보내고 **저장하는 자리**가
       //    그 배의 실적으로 유도한다(utils.resolveCrewSides 한 벌). 검수사 «처음에 호기를 이야기 안한 이유입니다».
       result.crewSet = { raw: String(text), shift: _crew.shift, dayOff: _crew.dayOff || 0, dayWord: _crew.dayWord || '', crew: _crew.crew, unknown: _crew.unknown, needPos: _crew.needPos || [] };
+      result.digits = null; result.briefingQuery = false; result.posQuery = false;
+    } else if (!result.startSet && /교대\s*(?:표|순서표|시간표)|공동\s*(?:담당\s*)?교대/.test(t) && !/브리핑|인수|인계/.test(t)) {
+      //  5.16: «OBWH 교대표»·«다음 교대 언제» — 호기 공동 담당의 한 시간 순환을 시작 보고 시각부터 짠다(검수사 2026-11-20 «실제 시간표는 시작보고를 한후부터 이조건을 그래로 시간만 바꿔서 적용하면됩니다»).
+      //    공동 담당이 없는 배면 답이 null 을 내고 본체(조 교대 등)로 넘어간다.
+      result.crewQuery = { kind: 'poolPlan', next: /다음|언제|몇\s*시/.test(t) };   // «다음 교대 언제» 같은 예사말은 조 교대와 섞이므로 받지 않는다(감사)
       result.digits = null; result.briefingQuery = false; result.posQuery = false;
     } else if (!result.startSet && /호기/.test(t) && /취소|빼\s*줘|빼줘|빼라|지워|지우|삭제/.test(t) && (_staffInText(t) || /검수원|검수사|이름|등록/.test(t))) {
       result.crewQuery = { kind: 'cancel' };   // 지우기는 아직 없다 — 조용히 등록으로 삼키지 않고 말한다(«2호기 양하 취소» 같은 딴 말은 안 잡는다 — 이름·검수원이 있을 때만)
@@ -1758,7 +1770,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     if (parsed.crewQuery) {
       if (parsed.crewQuery.kind === 'cancel') return '호기 검수원 지우기는 아직 없어요 — 다른 이름으로 다시 말하면 그 조·그 호기가 덮어써져요(«1호기 홍길동»).';
       if (_canCrew) { try { const _ca = ctx.crewAnswer(parsed.crewQuery); if (_ca) return _ca; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패:', e); } }
-      return '호기별 검수원은 검수앱 항차 화면(양하·선적 탭)이나 홈에서 배 이름을 붙여 물어봐 주세요 — 예: «SWMM 1호기 누구야».';
+      if (parsed.crewQuery.kind !== 'poolPlan') return '호기별 검수원은 검수앱 항차 화면(양하·선적 탭)이나 홈에서 배 이름을 붙여 물어봐 주세요 — 예: «SWMM 1호기 누구야».';   // 5.16: 교대표 답이 없으면 아래 갈래로
     }
   }
   //  ★ 2.62: 갱 배분 — 조 단위 «내 작업량». ctx.gangShift 는 화면이 싣는 계산 함수(재료: 베이사전·완료·터미널).
@@ -3178,6 +3190,14 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 //  ★ 3.8: 등록 문장에 화면이 내는 확인 글 — 실제 쓰기는 화면(SearchPanel·VoyagePage·GlobalSearchPage)의 effect 가
 //    fbSetVoyageCraneCrew 로 하고, 성공하면 음성으로 «…로 기억했어요» 를 붙인다. 여기서는 **무엇을 어디에 적는지**만 말한다.
 export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
+  //  ★ 5.16 공동 담당 — 등록·해제 확인 글. 이름이 둘 미만이면 적지 않았다고 말한다(저장하는 자리도 둘 미만이면 안 적는다 — fbSetCrewPool).
+  if (cs && cs.pool) {
+    const P = cs.pool; const sl = shipLabel ? shipLabel + ' ' : '';
+    const unk = (Array.isArray(P.unknown) && P.unknown.length) ? `\n⚠ «${P.unknown.join('» · «')}» 은 검수원 명단에 없어 못 적었어요 — 명단에 있는 이름으로 다시 말해 주세요.` : '';
+    if (P.clear) return `📝 ${sl}호기 공동 담당을 풀었어요. 이제 다시 한 호기에 한 사람으로 적습니다(바꾼 시각 기록은 남겨 둡니다).`;
+    if (!Array.isArray(P.names) || P.names.length < 2) return `🤔 ${sl}공동 담당은 명단에 있는 이름이 두 사람 이상이어야 적어요.${unk}`;
+    return `📝 ${sl}호기 공동 담당 — ${P.names.join(' · ')} 로 기억할게요.\n이 분들끼리는 호기를 막지 않아요. 바꿔 주러 간 사람이 그 호기만 누르면 바로 넘어가고, 바꾼 시각을 남겨 터미널 실적도 그때 사람 이름으로 붙입니다.${P.names.length >= 3 ? '\n«교대표» 라고 물으시면 시작 보고 시각부터 한 시간마다 바꿀 순서를 짜 드려요.' : ''}${unk}`;
+  }
   //  3.21: «선수·선미» 로 말했는데 그 배 실적이 아직 없어 못 가린 경우 — **조용히 버리지 않고 되묻는다**(§4-3).
   //    유도는 저장하는 자리에서 `utils.resolveCrewSides` 가 한다(한 벌). 여기 needPos 가 남아 있으면 못 가린 것이다.
   const _need = (cs && Array.isArray(cs.needPos)) ? cs.needPos : [];
@@ -3232,8 +3252,73 @@ const _gcRefLine = (g, now, only = 0) => {
   return parts.length ? `\n(터미널 본선현황 GC 합계 ${_kstAt(g.at, now)} — ${parts.join(' · ')} · 앱 입력 대수와 다를 수 있어요)` : '';
 };
 const _posKo = (pos) => { const p = parseCatosPos(pos); return p ? `${p.bay}번 베이 ${p.row}열 ${p.tier}단` : ''; };
+/** ★ 5.16 — **호기 공동 담당 교대표.** 검수사 2026-11-20 규칙 —
+ *  «냉동을 체크하는 사람은 냉동을 보고나서 식사시간 까지 쉽니다. 그리고나서 2호기를 바꿔줍니다. 2호기에 있던 사람은 1시간안에 식사하고 쉬었자가 1호기 인원을 바꿔줍니다. 1호기에 있던 사람도 같은 시간안에 식사와 휴식을 하고 2호기를 다시 바꿔줍니다.»
+ *  «14시에 고종웅이 2호기를 교대해야 합니다»(13시 시작) · «실제 시간표는 시작보고를 한후부터 이조건을 그래로 시간만 바꿔서 적용하면됩니다».
+ *  ⇒ 시작(시작 보고 → 없으면 선석배정 접안 예정) + 1시간마다, 쉬던 사람이 **가장 오래 선 호기**를 바꾼다(처음엔 둘 다 같으니 번호 큰 호기 = 2호기).
+ *  시작 때 호기 사람은 바꾼 기록(crewPoolLog)·조 등록으로 읽는다. 끝은 선석배정 끝 시각(없으면 10시간).
+ *  @returns {{startMs, endMs, src, cranes:[no], rows:[{at, no, name, from}], rest0} | null} */
+export function poolRotationPlan(voyage, nowMs = Date.now()) {
+  const info = (voyage && voyage.info) || {};
+  const names = (info.crewPool && Array.isArray(info.crewPool.names)) ? info.crewPool.names.filter(Boolean) : [];
+  if (names.length < 3) return null;
+  const tsOf = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
+  const pb = String(info.planBerth || '');
+  const pbParts = pb.split('~');
+  let startMs = 0, src = '';
+  try { const sp = voyageReportSpan(voyage); if (sp && sp.reportStartAt > 0) { startMs = sp.reportStartAt; src = '시작 보고'; } } catch (e) { console.warn('[5.16] 시작 보고 읽기 실패', e); }
+  if (!startMs) { startMs = tsOf(pbParts[0]); if (startMs) src = '선석배정 예정'; }
+  if (!startMs) return null;
+  let endMs = tsOf(pbParts[1]);
+  if (!(endMs > startMs)) endMs = startMs + 10 * 3600000;
+  const log = crewPoolLogOf(info);
+  const at0 = startMs + 60000;
+  const cur = {};
+  const craneNos = new Set(log.map((e) => e.no));
+  Object.values(info.craneCrew || {}).forEach((sh) => { if (sh && typeof sh === 'object') Object.keys(sh).forEach((k) => { const n = parseInt(k, 10); if (n > 0) craneNos.add(n); }); });
+  for (const no of [...craneNos].sort((a, b) => a - b)) { const nm = crewNameAt(info, Math.max(at0, log.length ? Math.min(at0, log[0].at + 60000) : at0), `${no}호기`); if (nm && names.includes(nm)) cur[no] = nm; }
+  //  시작 때 기록이 아직 없으면 첫 두 기록(아침에 처음 고른 호기)으로 본다
+  if (Object.keys(cur).length < 2) for (const e of log) { if (Object.keys(cur).length >= 2) break; if (!cur[e.no] && !Object.values(cur).includes(e.name)) cur[e.no] = e.name; }
+  const cranes = Object.keys(cur).map(Number).sort((a, b) => a - b);
+  if (cranes.length !== 2) return null;
+  const rest = names.filter((n) => !Object.values(cur).includes(n));
+  if (rest.length !== 1) return null;
+  const since = {}; cranes.forEach((n) => { since[n] = startMs; });
+  let resting = rest[0];
+  const rows = [];
+  const rest0 = resting;
+  for (let t = startMs + 3600000; t < endMs && rows.length < 24; t += 3600000) {
+    const no = cranes.slice().sort((a, b) => (since[a] - since[b]) || (b - a))[0];
+    const from = cur[no];
+    rows.push({ at: t, no, name: resting, from });
+    cur[no] = resting; since[no] = t; resting = from;
+  }
+  return { startMs, endMs, src, cranes, rows, rest0, names };
+}
+
+export function poolPlanText(voyage, nowMs = Date.now(), nextOnly = false) {
+  const pl = poolRotationPlan(voyage, nowMs);
+  const info = (voyage && voyage.info) || {};
+  const ship = info.vslFull || info.vsl || '';
+  if (!pl) {
+    const _pn = (info.crewPool && Array.isArray(info.crewPool.names)) ? info.crewPool.names.filter(Boolean) : [];
+    return _pn.length >= 3 ? `🔁 ${ship} 교대표는 두 분이 호기를 고른 뒤에 짭니다 — 공동 담당 ${_pn.join(' · ')}.` : null;
+  }
+  const hm = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  if (nextOnly) {
+    const nx = pl.rows.find((r) => r.at > nowMs);
+    if (!nx) return `🔁 ${ship} 남은 교대가 없어요 — 끝 ${hm(pl.endMs)}(${pl.src} 기준).`;
+    return `🔁 ${ship} 다음 교대 ${hm(nx.at)} — ${nx.name} 님이 ${nx.no}호기를 ${nx.from} 님과 바꿉니다(${pl.src} ${hm(pl.startMs)} 기준, 한 시간마다).`;
+  }
+  const lines = pl.rows.map((r) => `${hm(r.at)} ${r.name} → ${r.no}호기 · ${r.from} 휴식`);
+  return `🔁 ${ship} 교대표 — ${pl.src} ${hm(pl.startMs)} 기준, 한 시간마다\n`
+    + `${hm(pl.startMs)} 시작 · ${pl.rest0} 휴식\n` + lines.join('\n') + `\n${hm(pl.endMs)} 끝`
+    + (pl.src === '시작 보고' ? '' : '\n(시작 보고를 하면 그 시각으로 다시 짭니다)');
+}
+
 export function answerCraneCrew(voyage, cq, nowMs = Date.now()) {
   if (!voyage || !cq) return null;
+  if (cq.kind === 'poolPlan') return poolPlanText(voyage, nowMs, !!cq.next);   // 5.16
   const st = crewWorkStats(voyage);
   const info = voyage.info || {};
   const ship = info.vslFull || info.vsl || '';

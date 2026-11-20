@@ -1,7 +1,7 @@
 // 미르가 받은 작업보고(workReportParse) → 앱에 쓸 것(진행 중 표시·보고·해치 표시)과 되읽기 말 — 순수 계획 한 벌. 쓰기는 firebase.fbApplyMirWorkReport 만 한다.
 //   검수사 2026-11-18 결정 — 받을 보고 «양하·선적 시작/완료/중단/재개 · 해치커버 열림/닫힘 · 콘박스» · 이름 «그 호기 검수원 이름» · «바로 적고 되읽기만»
 //   · «호기별 이름이 등록되지 않은 상태에서는 검수원 1 2 3 4로 기록 바랍니다». 기록은 작업 보고 창(WorkReportModal)과 같은 모양이다.
-import { crewShiftKey, hatchPanelDetailOf, otherRunningWork, switchReasonOf } from './utils.js';
+import { crewShiftKey, crewNameAt, hatchPanelDetailOf, otherRunningWork, switchReasonOf } from './utils.js';
 import { bayGroupCenter } from './swapGrade.js';
 import { getBayPairs } from './twin.js';
 import { getShipBayDictData } from './shipStructure.js';
@@ -16,6 +16,9 @@ const hasEdi = (v, m) => !!(v && v[m] && Object.keys(v[m].ediContainers || {}).l
 export function crewNameForEquip(voyageKey, info, inspectors, equip, nowMs = Date.now()) {
   const n = (/([1-9])/.exec(String(equip || '')) || [])[1] || '';
   try {
+    //  5.16: 공동 담당이 넘겨받았으면 바꾼 시각 기준 사람(구간 한 벌 — utils.crewNameAt). 조 등록 칸은 원래 등록자로 남아 있다.
+    const _at = crewNameAt(info || {}, nowMs, equip);
+    if (_at && info && info.crewPool && Array.isArray(info.crewPool.names) && info.crewPool.names.includes(_at)) return { name: _at, src: '공동 담당' };
     const sk = crewShiftKey(undefined, nowMs, 0).key;
     const cc = info && info.craneCrew && info.craneCrew[sk] && info.craneCrew[sk][equip];
     if (cc && String(cc.name || '').trim()) return { name: String(cc.name).trim(), src: '조 등록' };

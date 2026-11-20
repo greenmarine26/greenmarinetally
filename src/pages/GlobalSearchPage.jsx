@@ -20,7 +20,7 @@ import { getBayPairs } from '../twin.js';   // 3.41: 배 지정 트윈 짝
 import { mirKnowledge } from '../data/mirKnowledge.js';
 import { mirSee } from '../mir.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 // 4.89: 작업용 검색줄에는 미르 얼굴을 그리지 않는다(검수사 2026-11-12 19:41) — MirFace import 를 뺐다
-import { fbAddClaudeMemo, fbSetVoyageCraneCrew } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.06: 무응답 자동 신고 (2.03 데미지 사진 단건은 DamageHistoryCard 로 갔다)
+import { fbAddClaudeMemo, fbSetVoyageCraneCrew, fbSetCrewPool } from '../firebase.js';   // 3.8: 홈에서 «OBWH 1호기 이인철» 등록   // 2.06: 무응답 자동 신고 (2.03 데미지 사진 단건은 DamageHistoryCard 로 갔다)
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { runDeviceCmd, deviceCmdWaitsForSubmit } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌 · 4.23 2차: 글자는 전송 때만
@@ -152,6 +152,14 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     let cs = null;
     if (!shipCtx || !shipCtx.key) return;
     try { cs = resolveCrewSides(parseNaturalQuery(t).crewSet, shipCtx.v); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌
+    if (cs && cs.pool) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
+      const pk = `pool|${shipCtx.key}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
+      if (crewRanRef.current === pk) return; crewRanRef.current = pk;
+      fbSetCrewPool(shipCtx.key, cs.pool)
+        .then((r) => { if (r == null) return; try { speak(cs.pool.clear ? '호기 공동 담당을 풀었어요' : `${shipCtx.info?.vsl || ''} 호기 공동 담당 ${r} 기억했어요`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ } })
+        .catch((e) => { console.warn('[5.16] 공동 담당 저장 실패', e); crewRanRef.current = ''; try { speak('공동 담당 저장이 안 됐어요 — 다시 말해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (!cs || !Array.isArray(cs.crew) || !cs.crew.length) return;
     const sk = crewShiftKey(cs.shift, Date.now(), cs.dayOff || 0);
     const key = `${shipCtx.key}|${sk.key}|${cs.crew.map((c) => c.no + ':' + c.name).join(',')}`;

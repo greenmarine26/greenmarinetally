@@ -57,3 +57,21 @@ export function standbyNamesOf(inspectors, voyageKey, activeNames = [], visible 
   }
   return out;
 }
+
+//  ★ 5.16 호기 공동 담당 — `info.crewPool.names`(fbSetCrewPool). 공동 담당끼리는 서로의 호기를 막지 않는다(누르면 넘겨받는다 — fbPoolTakeCrane).
+//    검수사 2026-11-20 «OBWH는 2갱인데 3명이 교대로 작업 합니다» · «바꿔 주는 사람이 그 호기만 누르면 바로 넘어감».
+export function crewPoolNamesOf(info) {
+  const p = info && info.crewPool;
+  const a = p && p.names;
+  const list = Array.isArray(a) ? a : (a && typeof a === 'object' ? Object.values(a) : []);
+  return list.map((x) => String(x || '').trim()).filter(Boolean);
+}
+export function poolTakeable(info, me, holder) {
+  const ns = crewPoolNamesOf(info);
+  return !!(me && holder && me !== holder && ns.includes(me) && ns.includes(holder));
+}
+//  호기를 «막는» 사람 — 쥔 사람이 있어도 둘 다 공동 담당이면 막지 않는다(''). 로그인·베이뷰가 단추를 끌지 정할 때 쓴다.
+export function blockingHolderOf(inspectors, info, voyageKey, equip, myName, now = Date.now(), myShift = '') {
+  const h = equipHolderOf(inspectors, voyageKey, equip, myName, now, myShift);
+  return h && !poolTakeable(info, myName, h) ? h : '';
+}

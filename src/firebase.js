@@ -368,6 +368,54 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
   return list.map((c) => `${c.no}호기 ${String(c.name).trim()}`).join(' · ');
 }
 
+//  ★ 5.16 호기 공동 담당 등록·해제 — 검수사 2026-11-20 «OBWH는 2갱인데 3명이 교대로 작업 합니다» · «그런데 등록할 방법이 없습니다. 할떄마다 바꿔야 하는데».
+//    미르에게 «OBWH 공동 이종부 박진우 이형출» 한 번 → `info.crewPool = { names:[…], at }`. 배가 떠날 때까지 산다(조 구분 없음). «공동 해제» → 지운다.
+//    바뀐 시각 기록(crewPoolLog)은 해제해도 남긴다 — 그 동안의 터미널 반영분 이름이 그 기록으로 붙는다(utils.mergeCrewPoolLog).
+//    ⚠ 등록자는 적지 않는다(3.8 «등록자는 등록할 필요가 없습니다»). 관리 기록이라 조회만·관리자도 적는다(fbSetVoyageCraneCrew 와 같은 판단).
+export async function fbSetCrewPool(voyageKey, pool) {
+  if (!voyageKey || !pool) return null;
+  if (pool.clear) { await update(ref(db, `voyages/${voyageKey}/info`), { crewPool: null }); return ''; }
+  const names = [...new Set((Array.isArray(pool.names) ? pool.names : []).map((x) => String(x || '').trim()).filter(Boolean))];
+  if (names.length < 2) return null;
+  await update(ref(db, `voyages/${voyageKey}/info`), { crewPool: { names, at: Date.now() } });
+  return names.join(' · ');
+}
+//  ★ 5.16 공동 담당 넘겨받기 — 공동 담당끼리는 호기를 막지 않는다. 그 호기를 누르면 바로 내 것이 되고, 쥐고 있던 사람은 «교대 받음» 표시로 호기를 놓는다(4.85 와 같은 표시).
+//    검수사 확정 2026-11-20 «바꿔 주는 사람이 그 호기만 누르면 바로 넘어감 → 바뀐 시각 기록 → 터미널 반영분도 그 시각 사람 이름» · «이대로 확정».
+//    한 번에(멀티 경로) 쓴다 — 조 등록 칸(지금 상태 · pool:true 표식) + 바뀐 시각 한 줄(crewPoolLog) + 넘겨준 사람 표시 + 내 지정.
+//    names = 그 배 공동 담당 명단(부르는 화면이 info.crewPool 에서 넘긴다). 내가 명단 밖이면 아무것도 안 쓴다(null).
+export async function fbPoolTakeCrane(voyageKey, equip, me, holder = '', names = []) {
+  assertCanRecordWork('호기 넘겨받기');   // 5.16 감사: 관리자·조회만은 적지 않는다
+  const no = parseInt(String(equip || '').replace(/\D/g, ''), 10);
+  const pool = (Array.isArray(names) ? names : []).map((x) => String(x || '').trim());
+  if (!voyageKey || !me || !(no >= 1 && no <= 9) || !pool.includes(me)) return null;
+  const now = Date.now();
+  const eq = `${no}호기`;
+  const sk = crewShiftKey(undefined, now, 0).key;
+  const cur = (await _peekVal(ref(db, `voyages/${voyageKey}/info/craneCrew/${sk}`))) || {};
+  const prev = String(holder || (cur[eq] && cur[eq].name) || '').trim();
+  const patch = {};
+  //  ⚠ 조 등록 원본(pool 없음)은 덮지도 지우지도 않는다 — 넘겨받기 전 실적의 주인이 그 등록이다(5.16 감사 지적).
+  //    빈 칸이거나 공동 담당이 적은 칸만 바꾸고, 바꾼 시각은 crewPoolLog 가 맡는다(구간은 utils.mergeCrewPoolLog).
+  const isOrig = (v) => v && typeof v === 'object' ? !v.pool : !!String(v || '').trim();
+  if (!isOrig(cur[eq])) patch[`voyages/${voyageKey}/info/craneCrew/${sk}/${eq}`] = { name: me, at: now, pool: true };
+  for (const [k, v] of Object.entries(cur)) if (k !== eq && v && typeof v === 'object' && v.pool && String(v.name || '').trim() === me) patch[`voyages/${voyageKey}/info/craneCrew/${sk}/${k}`] = null;   // 공동 담당 칸만 — 옮겨 간 옛 칸 비움
+  if (prev !== me) patch[`voyages/${voyageKey}/info/crewPoolLog/${now}_${no}`] = { at: now, equip: eq, name: me, from: prev };
+  if (holder && holder !== me && pool.includes(holder)) {
+    patch[`inspectors/${holder}/relievedAt`] = now;
+    patch[`inspectors/${holder}/relievedBy`] = me;
+    patch[`inspectors/${holder}/relievedVoyage`] = voyageKey;
+    patch[`inspectors/${holder}/relievedEquip`] = eq;
+    patch[`inspectors/${holder}/workEquip`] = null;
+    patch[`inspectors/${holder}/assignEquip`] = '';
+  }
+  patch[`inspectors/${me}/assignVoyage`] = voyageKey;
+  patch[`inspectors/${me}/assignEquip`] = eq;
+  patch[`inspectors/${me}/assignAt`] = now;
+  await update(ref(db), patch);
+  return eq;
+}
+
 //  ★ 4.85 교대 — 검수사 2026-11-10 «교대 단추도 좋은 방법입니다. 3명이 근무중이면 두명중에 한명을 선택하고 교대할수 있으니 정확한 방법입니다»
 //    내가 «from» 의 크레인을 이어받는다 = 조 등록(info.craneCrew/{조}/{N호기})을 내 이름으로 덮고, 내 기기 호기를 그 호기로 바꾼다.
 //    from 의 명단 줄에는 «교대 받음» 표시(relievedAt·relievedBy·relievedVoyage·relievedEquip)를 남기고 그 사람의 호기를 비운다 —
