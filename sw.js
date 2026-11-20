@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.17';
-const NOTE = '5.17 베이모드에서 장 옮기기 — 위 띠 [◀ 장]·[장 ▶]이나 장 이름을 눌러 남은 장으로 바로 옮깁니다. 해제했다 다시 켤 필요가 없습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.17-01';
+const NOTE = '5.17-01 출항 임박 경고가 작업 시작 전 배에 뜨던 것을 고쳤습니다. 출항 시각은 도선 예보, 없으면 PORT-MIS 신고를 씁니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
@@ -26,7 +26,7 @@ const precacheShell = () => caches.open(CACHE_NAME).then((cache) =>
 
 //  ★ 4.89: 처음 열 때 받는 화면 조각(수석 상황판·관리앱·맛집·보조·건강·자료센터·통합검색·출력 센터 등)도 설치 때 미리 받는다 —
 //    오프라인에서 수석 화면이 «받지 못했습니다» 로 막히지 않게. 목록은 build.sh 가 빌드 때 dist/assets 의 js·css 전부로 채운다(아래 한 줄 형식 그대로 둔다).
-const PRECACHE_EXTRA = ['./assets/AuxPage-B1ASg1Z5.js', './assets/ChiefDashboard-BHZr6t5g.js', './assets/DataCenterPage-DN9yq67z.js', './assets/FoodPage-VLpi6E4V.js', './assets/GlobalSearchPage-B6Qd4sJ4.js', './assets/HealthPage-ND0vEmgs.js', './assets/OwnerPage-CdS3eHMI.js', './assets/PrintHubModal-D5SeqvO6.js', './assets/StaffManagerModal-CErh38nw.js', './assets/_commonjs-dynamic-modules-TDtrdbi3.js', './assets/baydict-DBqSydwE.js', './assets/exceljs.min-CZLpSzGG.js', './assets/heicDecode-B0yiQT09.js', './assets/index-BRfOOqLT.js', './assets/index-DEKX-ylu.css', './assets/pdfBayParser-Ck0QjMwj.js', './assets/push-CsBroMe9.js', './assets/tallyExcel-C_U4G0SW.js', './assets/vendor-6XvW6uU9.js', './assets/wasm-bundle-EQ6eWVjJ.js', './assets/xlsx-CkFp8p6R.js'];   // build.sh 4.89 가 채운다
+const PRECACHE_EXTRA = ['./assets/AuxPage-CT6Bk6U7.js', './assets/ChiefDashboard-CyvnC6fl.js', './assets/DataCenterPage-DgiHokGg.js', './assets/FoodPage-SaSeyl0N.js', './assets/GlobalSearchPage-DIftUASs.js', './assets/HealthPage-DNyZiXxG.js', './assets/OwnerPage-Dr_uC1lT.js', './assets/PrintHubModal-CkfHBbcI.js', './assets/StaffManagerModal-miBu4M94.js', './assets/_commonjs-dynamic-modules-TDtrdbi3.js', './assets/baydict-DBqSydwE.js', './assets/exceljs.min-CZLpSzGG.js', './assets/heicDecode-FCuUyxYK.js', './assets/index-DEKX-ylu.css', './assets/index-DZLRoLKJ.js', './assets/pdfBayParser-Ck0QjMwj.js', './assets/push-DG52B42A.js', './assets/tallyExcel-CPsOOWLY.js', './assets/vendor-6XvW6uU9.js', './assets/wasm-bundle-EQ6eWVjJ.js', './assets/xlsx-CkFp8p6R.js'];   // build.sh 4.89 가 채운다
 //    판마다 이름이 안 바뀌는 조각(vendor·baydict·엑셀·PDF)은 옛 판 저장본에서 옮겨 담는다(다시 안 받는다).
 //    뼈대(index.html·본체)를 먼저 받고 나서 하나씩 받는다 — 하나가 실패해도 나머지는 받는다(addAll 은 하나만 틀려도 통째로 실패). 실패 수는 콘솔에 남긴다.
 const precacheExtra = () => caches.open(CACHE_NAME).then((cache) => Promise.all(PRECACHE_EXTRA.map((u) =>

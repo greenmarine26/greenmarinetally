@@ -31,6 +31,25 @@ export function inWindow(t, eta, etd) {
   return t >= lo && t <= hi;
 }
 
+/** ★ 5.17-01 — 이 항차 출항으로 받아도 되는 시각인가. 작업창(±12h) 안이고 **작업 시작보다 뒤**여야 한다.
+ *  PCSZ 2635E(2026-11-21) — PORT-MIS 최초 신고 출항 11-21 08:00 이 그대로 남아, 선석배정 작업 시작 10:00 · 도선 입항 07:30 인 배에
+ *  «출항 59분 전 — 미완 449대» 가 떴다(검수사 «작업 시작도 안했는데 출항시간이 다 되었나요?»). 출항이 작업 시작보다 앞일 수는 없다. */
+export function departOk(t, eta, etd) {
+  return t != null && inWindow(t, eta, etd) && (eta == null || t > eta);
+}
+
+/** ★ 5.17-01 — 항차 출항 시각 한 벌(검수사 2026-09-21 «출항 시간은 포트미스 도선협회 두곳자료로 사용합니다»): 도선 예보 출항 → 없으면 PORT-MIS 신고 출항.
+ *  창은 선석배정(작업일시) 시작~끝, 없으면 도선 입항·PORT-MIS 입항. 값은 ms 로 받는다(이 파일은 import 가 없다).
+ *  @returns {{at:number, src:'pilot'|'portmis'}|null} */
+export function departAtOf({ planEta = null, planEtd = null, pfArr = null, pfDep = null, pmEta = null, pmEtd = null, pilotLeadMs = 0 } = {}) {
+  //  창 — 홈 카드 후보와 같게: 선석배정 → 도선(입항+작업시작 환산 ~ 출항) → PORT-MIS(입항~출항)
+  const eta = planEta ?? (pfArr != null ? pfArr + pilotLeadMs : null) ?? pmEta ?? null;
+  const etd = planEtd ?? pfDep ?? pmEtd ?? null;
+  if (departOk(pfDep, eta, etd)) return { at: pfDep, src: 'pilot' };
+  if (departOk(pmEtd, eta, etd)) return { at: pmEtd, src: 'portmis' };
+  return null;
+}
+
 // V9.57: 미인식 terminalStatus 경고 1회 기록용 (decideBadge는 카드마다 렌더마다 불린다)
 const _warnedStatus = new Set();
 

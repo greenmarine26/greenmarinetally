@@ -21,7 +21,7 @@ import { isViewOnlyNow } from '../workChoice.js';   // 3.55-01: 조회만이면 
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
-import { decideBadge, DEPART_REMAIN_MAX, inWindow, notStartedYet } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
+import { decideBadge, DEPART_REMAIN_MAX, notStartedYet, departOk } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
 import { standbyNamesOf } from '../equipHold.js';   // 4.73
 import { canOpenChief, isVisibleStaff, isTester, HIDDEN_STAFF } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
@@ -1532,10 +1532,10 @@ export function shipViewOf(voyage, pilotForecast = {}) {
     //   이 항차 출항이 예보에서 빠지면 다음 기항 출항이 이번 카드에 붙는다.
     const r = pilotForecast[(voyage.info?.vsl || '').toUpperCase()];
     const t = r ? parsePortMisDateTime(r.nextDep) : null;
-    return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null;
+    return departOk(t, voyage._etaMs, voyage._etdMs) ? t : null;   // 5.17-01: 작업 시작보다 앞선 출항은 받지 않는다(판정 한 벌)
   })();
   //  3.53-13 (검수사 «출항 시간은 포트미스 도선협회 두곳자료로 사용합니다») — 도선 예보가 없으면 PORT-MIS 신고 출항. 같은 작업창(±12h) 가드.
-  const pmDep = (() => { const t = voyage._pm && voyage._pm.etd ? parsePortMisDateTime(voyage._pm.etd) : null; return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null; })();
+  const pmDep = (() => { const t = voyage._pm && voyage._pm.etd ? parsePortMisDateTime(voyage._pm.etd) : null; return departOk(t, voyage._etaMs, voyage._etdMs) ? t : null; })();
   // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료).
   const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0 || loaStats.workTotal > 0));
   const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);

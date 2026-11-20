@@ -12,6 +12,7 @@ import { voyageDoneAts, parseNaturalQuery, applyNLFilter, briefingVoiceLines, an
 import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
+import { departAtOf } from '../badgeRule.js';   // 5.17-01: 출항 임박 배너 — 홈과 같은 출항 시각 한 벌
 import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)   // 4.55-02: shipIdentityOf — EDI 올리기가 선박 사전 콜사인을 같이 본다
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { mirSee } from '../mir.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
@@ -1698,10 +1699,23 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           const info = voyage?.info || {};
           //  ★ 2.78: 콜사인+IMO 손매칭 → 베이매트릭스 신원(공용 매처 한 벌).
           //    콜사인이 비면 여기도 조용히 null 이라 출항 임박 경고가 아예 안 떴다.
+          //  ★ 5.17-01: 출항 시각은 홈 카드와 같은 한 벌(badgeRule.departAtOf) — 도선 예보 출항 → PORT-MIS 신고, 작업창 안·작업 시작 뒤만.
+          //    PORT-MIS 만 보던 때는 최초 신고 출항(11-21 08:00)이 남아 작업 시작(10:00)도 전인 PCSZ 2635E 에 «출항 59분 전» 이 떴다.
           const pm = matchPortMis(portMisData, info);
-          if (!pm) return null;
-          const etd = parsePortMisDateTime(pm.etd);
-          if (!etd) return null;
+          const pf = (pilotForecast || {})[String(info.vsl || '').toUpperCase()] || null;
+          const _pd = String(info.planDate || '');
+          const _pEta = _pd ? parsePortMisDateTime(_pd.split('~')[0].trim()) : null;
+          const _pEtd = _pd.includes('~') ? parsePortMisDateTime(_pd.split('~')[1].trim()) : null;
+          //  선석배정(작업일시)이 없는 항차는 띄우지 않는다 — 같은 선박 다른 항차(미리 등록된 다음 항차)에 지금 기항의 도선·PORT-MIS 출항이 붙는다(감사 지적).
+          if (_pEta == null && _pEtd == null) return null;
+          const dp = departAtOf({
+            planEta: _pEta,
+            planEtd: _pEtd,
+            pfArr: pf ? parsePortMisDateTime(pf.nextArr) : null, pfDep: pf ? parsePortMisDateTime(pf.nextDep) : null,
+            pmEta: pm ? parsePortMisDateTime(pm.eta) : null, pmEtd: pm ? parsePortMisDateTime(pm.etd) : null,
+          });
+          if (!dp) return null;
+          const etd = dp.at;
           const left = etd - Date.now();
           if (left <= 0 || left > 2 * 3600000) return null;
           const undone = containers.filter(c => !compMap[c.cn]).length;
@@ -1723,7 +1737,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               <div className="text-xxs text-red-300/80 mt-0.5">탭하면 마감 점검이 열립니다</div>
             </button>
           );
-        } catch { return null; }
+        } catch (e) { console.warn('[출항 임박 배너] 계산 실패', e); return null; }
       })()}
 
       {/*  3.25: 리퍼 온도 — **큰 화면 대신 상단 한 줄.** 검수사 확정 2026-09-07

@@ -1,0 +1,30 @@
+// 5.17-01 연막검사 — 출항 시각 한 벌(badgeRule.departAtOf) · 작업 시작보다 앞선 출항은 받지 않는다
+//   검수사 2026-11-21 «시간계산이 맞나요? 작업 시작도 안했는데 출항시간이 다 되었나요?» (PCSZ 2635E — PORT-MIS 최초 신고 출항 08:00 · 선석배정 10:00~익일 09:00 · 도선 출항 익일 21:00)
+const { execFileSync } = require('child_process');
+const fs = require('fs'), path = require('path'), os = require('os');
+const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dp5171_')), 'b.cjs');
+execFileSync('npx', ['esbuild', 'src/badgeRule.js', '--bundle', '--platform=node', '--format=cjs', '--outfile=' + out, '--log-level=error'], { stdio: 'inherit' });
+const B = require(out);
+let n = 0, bad = 0;
+const ok = (c, m) => { n++; console.log((c ? '  PASS ' : '  FAIL ') + m); if (!c) bad++; };
+const K = (s) => { const m = s.match(/(\d+)-(\d+)-(\d+) (\d+):(\d+)/); return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 9, +m[5]); };
+const pcsz = { planEta: K('2026-11-21 10:00'), planEtd: K('2026-11-22 09:00'), pfArr: K('2026-11-21 07:30'), pfDep: K('2026-11-22 21:00'), pmEta: K('2026-11-20 12:30'), pmEtd: K('2026-11-21 08:00') };
+const r = B.departAtOf(pcsz);
+ok(r && r.src === 'pilot' && r.at === pcsz.pfDep, 'PCSZ 2635E — 도선 출항(익일 21:00)을 쓴다');
+const r2 = B.departAtOf({ ...pcsz, pfDep: null });
+ok(r2 == null, '도선 출항이 없어도 PORT-MIS 08:00 은 작업 시작(10:00)보다 앞이라 받지 않는다 — 배너 안 뜸');
+const r3 = B.departAtOf({ ...pcsz, pfDep: null, pmEtd: K('2026-11-22 08:30') });
+ok(r3 && r3.src === 'portmis', '도선이 없으면 작업창 안 PORT-MIS 신고 출항');
+ok(B.departAtOf({ ...pcsz, pfDep: K('2026-11-25 21:00') }) == null, '작업창 밖 도선 출항(다음 기항)은 받지 않는다 — PORT-MIS 08:00 도 작업 시작 앞이라 둘 다 없음');
+const rz = B.departAtOf({ planEta: K('2026-11-21 06:00'), planEtd: K('2026-11-21 15:00'), pfDep: K('2026-11-21 16:00'), pmEtd: K('2026-11-21 14:00') });
+ok(rz && rz.src === 'pilot' && rz.at === K('2026-11-21 16:00'), '도선·PORT-MIS 둘 다 창 안이면 도선(RZOR 꼴)');
+ok(B.departAtOf({ planEta: K('2026-11-21 16:00'), planEtd: K('2026-11-22 10:00'), pmEtd: K('2026-11-21 16:00') }) == null, '출항이 작업 시작과 같은 시각이면 받지 않는다(SWBT 2618N 최초 신고 꼴)');
+const nop = B.departAtOf({ ...pcsz, planEta: null, planEtd: null, pilotLeadMs: 90 * 60000 });
+ok(nop && nop.src === 'pilot' && nop.at === pcsz.pfDep, '선석배정이 없어도 도선 창(입항+90분 ~ 도선 출항)으로 도선 21:00 — 홈과 같은 답');
+ok(/if \(_pEta == null && _pEtd == null\) return null;/.test(fs.readFileSync('src/pages/VoyagePage.jsx', 'utf8')), '선석배정이 없는 항차는 출항 임박 배너를 띄우지 않는다(같은 선박 다른 항차 가드)');
+ok(B.departOk(K('2026-11-21 09:59'), pcsz.planEta, pcsz.planEtd) === false && B.departOk(K('2026-11-21 10:01'), pcsz.planEta, pcsz.planEtd) === true, '작업 시작 경계');
+const vp = fs.readFileSync('src/pages/VoyagePage.jsx', 'utf8'), hp = fs.readFileSync('src/pages/HomePage.jsx', 'utf8');
+ok(/const dp = departAtOf\(\{/.test(vp) && !/const etd = parsePortMisDateTime\(pm\.etd\);/.test(vp), '출항 임박 배너는 departAtOf 한 벌(PORT-MIS 단독 아님)');
+ok((hp.match(/departOk\(t, voyage\._etaMs, voyage\._etdMs\)/g) || []).length === 2, '홈 카드 도선·PORT-MIS 출항도 같은 판정');
+console.log(`${n - bad}/${n}`);
+process.exit(bad ? 1 : 0);
