@@ -1417,21 +1417,21 @@ export async function generateMfnExcel(rows, hdr = {}, opts = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'GREEN MARINE Tallyman Master';
   const ws = wb.addWorksheet('MFN LIST');
-  ws.columns = [{ width: 5 }, { width: 15 }, { width: 8 }, { width: 5 }, { width: 9 }, { width: 8 }, { width: 16 }, { width: 12 }, { width: 11 }, { width: 14 }, { width: 8 }, { width: 28 }];
+  ws.columns = [{ width: 5 }, { width: 15 }, { width: 10 }, { width: 8 }, { width: 5 }, { width: 9 }, { width: 8 }, { width: 16 }, { width: 12 }, { width: 11 }, { width: 14 }, { width: 8 }, { width: 28 }];   // 5.19: C 선내위치
   ws.pageSetup = { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   head(ws);
   ws.getCell('A3').value = 'MFN LIST (화물은 있으나 적하목록 없음)'; ws.getCell('A3').font = TITLE_FONT;
   ws.getCell('A5').value = `M/V : ${hdr.name || ''}`; ws.getCell('H5').value = `VOY # : ${hdr.voy || ''}`; ws.getCell('K5').value = `입항(양하) : ${hdr.arr || ''}`; ws.getCell('K5').font = HEAD_FONT;
   ws.getCell('A6').value = `DATE : ${hdr.date || ''}`; ws.getCell('H6').value = 'PORT : PYEONGTAEK';
   for (const a of ['A5', 'H5', 'A6', 'H6']) ws.getCell(a).font = HEAD_FONT;
-  const hd = ['NO', "CON'T NO", 'TYPE', 'F/E', 'W/T', 'POL', '선명·항차', '입항(양하)일', 'POD(터미널)', '원래 POD(Baplie)', '재적재', 'REMARKS'];
+  const hd = ['NO', "CON'T NO", '선내위치', 'TYPE', 'F/E', 'W/T', 'POL', '선명·항차', '입항(양하)일', 'POD(터미널)', '원래 POD(Baplie)', '재적재', 'REMARKS'];   // 5.19: 선내위치(검수사 2026-11-22 07:28)
   hd.forEach((v, i) => { const c = ws.getRow(8).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
   let r = 9;
   const list = rows || [];
   list.forEach((x, i) => {
-    [i + 1, x.cn, x.type, x.fe, x.wt || null, x.pol, hdr.vv || '', hdr.arr || '', x.pod, x.dest, x.reload ? 'Y' : null, x.remark].forEach((v, c) => { ws.getRow(r).getCell(c + 1).value = zv(v); });
-    ws.getRow(r).getCell(5).numFmt = '#,##0';
-    for (let c = 1; c <= 12; c += 1) {
+    [i + 1, x.cn, x.pos || null, x.type, x.fe, x.wt || null, x.pol, hdr.vv || '', hdr.arr || '', x.pod, x.dest, x.reload ? 'Y' : null, x.remark].forEach((v, c) => { ws.getRow(r).getCell(c + 1).value = zv(v); });
+    ws.getRow(r).getCell(6).numFmt = '#,##0';
+    for (let c = 1; c <= 13; c += 1) {
       const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR;
       if (x.china) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6D6' } };
     }
@@ -1467,37 +1467,37 @@ export async function generateMfnFieldExcel(rows, hdr = {}, opts = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'GREEN MARINE Tallyman Master';
   const ws = wb.addWorksheet('MFN');
-  // 열 너비(문자 단위 → 픽셀 = 너비×7+5). 띠 I:K = 11.5·7·6.5 → 85+54+50 = 189px ≈ 5.0cm. 왼쪽 7열 합 약 480px — 전체 폭 190mm 안.
-  ws.columns = [{ width: 3.2 }, { width: 15.6 }, { width: 5.8 }, { width: 3.8 }, { width: 7.6 }, { width: 11 }, { width: 14 }, { width: 1.9 }, { width: 11.5 }, { width: 7 }, { width: 6.5 }];
+  // 열 너비(문자 단위 → 픽셀 = 너비×7+5). 띠 J:L = 11.5·7·6.5 → 85+54+50 = 189px ≈ 5.0cm. 왼쪽 8열(5.19: C 선내위치) 합 약 482px — 전체 폭 190mm 안.
+  ws.columns = [{ width: 3.2 }, { width: 15.6 }, { width: 8.6 }, { width: 5.8 }, { width: 3.8 }, { width: 7.6 }, { width: 9.5 }, { width: 9.5 }, { width: 1.9 }, { width: 11.5 }, { width: 7 }, { width: 6.5 }];
   const list = (rows || []).slice().sort((x, y) => (y.china ? 1 : 0) - (x.china ? 1 : 0) || x.cn.localeCompare(y.cn));
   const last = 4 + list.length + 2;
-  ws.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }, printArea: `A1:K${Math.max(last, 8)}` };
+  ws.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }, printArea: `A1:L${Math.max(last, 8)}` };
   ws.getCell('A1').value = 'MFN 목록 (화물은 있으나 적하목록 없음)'; ws.getCell('A1').font = TITLE_FONT;
   ws.getCell('A2').value = `${hdr.vv || hdr.name || ''}   입항(양하) ${hdr.arr || ''}   출력 ${hdr.date || ''}`; ws.getCell('A2').font = HEAD_FONT;
   const lst = Number(hdr.list) || 0, tm = Number(hdr.ptk) || 0;
   ws.getCell('A3').value = `MFN ${list.length}대 (` + (tm > 0 && lst > 0 ? ((hdr.extra > 0) ? `앱 ${tm} = 리스트 ${lst} + 추가분 ${hdr.extra} + MFN ${list.length}` : `터미널 ${tm} = 리스트 ${lst} + MFN ${list.length}`) : `MFN ${list.length}대`) + ')'; ws.getCell('A3').font = HEAD_FONT;
-  ['NO', '컨번호', '규격', 'F/E', '출발지', '원래 목적지', '비고'].forEach((v, i) => { const c = ws.getRow(4).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
+  ['NO', '컨번호', '선내위치', '규격', 'F/E', '출발지', '원래 목적지', '비고'].forEach((v, i) => { const c = ws.getRow(4).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
   list.forEach((x, i) => {
     const r = 5 + i;
     const tag = (x.china ? `${mfnDestKo(x.dest)}행 주의` : '') + (x.reload ? `${x.china ? ' · ' : ''}재적재` : '');
-    [i + 1, x.cn, x.type, x.fe, x.pol, x.dest, tag].forEach((v, c) => {
-      const cell = ws.getRow(r).getCell(c + 1); cell.value = zv(v); cell.font = { name: 'Arial', size: c === 6 ? 8 : 9 }; cell.border = BOX; cell.alignment = CTR;
+    [i + 1, x.cn, x.pos || null, x.type, x.fe, x.pol, x.dest, tag].forEach((v, c) => {
+      const cell = ws.getRow(r).getCell(c + 1); cell.value = zv(v); cell.font = { name: 'Arial', size: c === 7 ? 8 : 9 }; cell.border = BOX; cell.alignment = CTR;
       if (x.china) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6D6' } };
     });
   });
-  // 오려붙임 띠 — I:K, 점선 테두리, 6~7pt. 맨 위 두 줄(선명·항차·입항일 / MFN n대) 뒤에 컨번호·규격·F/E 한 줄씩.
+  // 오려붙임 띠 — J:L(5.19 — 선내위치 열이 들어 한 칸 밀림), 점선 테두리, 6~7pt. 맨 위 두 줄(선명·항차·입항일 / MFN n대) 뒤에 컨번호·규격·F/E 한 줄씩.
   const SF = { name: 'Arial', size: 7 }, SFB = { name: 'Arial', size: 7, bold: true };
   const dash = { style: 'dashed', color: { argb: 'FF000000' } };
-  ws.getCell('I3').value = '✂ 오려서 노트에 붙이세요'; ws.getCell('I3').font = { name: 'Arial', size: 6 };
+  ws.getCell('J3').value = '✂ 오려서 노트에 붙이세요'; ws.getCell('J3').font = { name: 'Arial', size: 6 };
   const top = [`${hdr.vv || hdr.name || ''} · ${hdr.arr || ''}`, `MFN ${list.length}대`];
   const sRows = 2 + list.length;
   for (let k = 0; k < sRows; k += 1) {
     const r = 4 + k;
-    if (k < 2) { ws.mergeCells(`I${r}:K${r}`); const c = ws.getCell(`I${r}`); c.value = top[k]; c.font = SFB; c.alignment = { horizontal: 'left', vertical: 'middle' }; }
-    else { const x = list[k - 2]; [x.cn, x.type, x.fe].forEach((v, i) => { const c = ws.getRow(r).getCell(9 + i); c.value = zv(v); c.font = i === 0 ? SFB : SF; c.alignment = { horizontal: i === 2 ? 'center' : 'left', vertical: 'middle' }; }); }
-    for (let col = 9; col <= 11; col += 1) {
+    if (k < 2) { ws.mergeCells(`J${r}:L${r}`); const c = ws.getCell(`J${r}`); c.value = top[k]; c.font = SFB; c.alignment = { horizontal: 'left', vertical: 'middle' }; }
+    else { const x = list[k - 2]; [x.cn, x.type, x.fe].forEach((v, i) => { const c = ws.getRow(r).getCell(10 + i); c.value = zv(v); c.font = i === 0 ? SFB : SF; c.alignment = { horizontal: i === 2 ? 'center' : 'left', vertical: 'middle' }; }); }
+    for (let col = 10; col <= 12; col += 1) {
       const c = ws.getRow(r).getCell(col);
-      c.border = { top: k === 0 ? dash : undefined, bottom: k === sRows - 1 ? dash : (k === 1 ? { style: 'thin' } : undefined), left: col === 9 ? dash : undefined, right: col === 11 ? dash : undefined };
+      c.border = { top: k === 0 ? dash : undefined, bottom: k === sRows - 1 ? dash : (k === 1 ? { style: 'thin' } : undefined), left: col === 10 ? dash : undefined, right: col === 12 ? dash : undefined };
     }
   }
   const fname = `${hdr.code || ''} ${hdr.voy || ''} PTK MFN FIELD.xlsx`.trim().replace(/\s+/g, ' ');

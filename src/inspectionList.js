@@ -138,7 +138,9 @@ function _inspGroup(c) {
   const k = _isSpecialGroup(c) ? 2 : (fe === 'F' ? 0 : 1);
   //  ★ 4.85 (검수사 2026-11-10 «45HC(L5)를 리스트 마지막에 위치하도록 20-40-45순입니다») — 45피트는 40 묶음에서 떼어 맨 끝 묶음으로(순번도 따로, 20↔40 처럼 두 줄 경계).
   //  ★ 4.86 — 20 → 20HC → 40 → 40HC → 45HC 다섯 단계(ti). 묶음 = 단계 × [일반 풀 · 일반 엠티 · 특수] (단계 십의 자리 · 종류 일의 자리).
-  return ti * 10 + k;
+  //  ★ 5.19 (검수사 2026-11-22 07:21 «검수리스트를 만들떈 세관 신고 201개 뒤에 MFN 리스트를 이어서 만들어야 합니다») — MFN(_mfn · 화물은 있으나 적하목록 없음)은
+  //    세관 신고분 묶음을 다 지난 뒤 따로 묶는다(백의 자리 1). 순번은 MFN 묶음마다 1부터 · 경계는 두 줄 · 앞에 «MFN» 막대 줄(_rowsOf). 정렬·CSV·장 나누기가 이 한 벌을 쓴다.
+  return (c && c._mfn ? 100 : 0) + ti * 10 + k;
 }
 function inspSortCmp(a, b) {
   const ga = _inspGroup(a), gb = _inspGroup(b);
@@ -153,14 +155,17 @@ function inspSortCmp(a, b) {
 //  ★ 4.87 (검수사 2026-11-10 «출력물에서 조건을 하나 더 추가 합니다. 선사별을 추가 합니다. 포트별 앞에 선사별을 넣어주시고 방식은 이어서 방식입니다») —
 //    선사별 정렬 한 벌. 선사 = c.op(withShipOp 가 채운다) · 대수 많은 선사부터(같으면 이름순) · 선사 미상은 맨 뒤. 선사 안에서는 inspSortCmp(단계 → 풀/엠티/특수 → 규격 → 컨번호) 그대로.
 const _carOf = (c) => (c && c._opGuess ? '' : String((c && c.op) || '').trim()) || '선사 미상';   // 컨번호로 짐작한 값은 선사가 아니다
+//  5.19 — 선사별 판의 블록 키 한 벌: MFN 은 선사와 따로 «MFN — …» 한 블록(맨 뒤). 순서·대수·쪽 머리줄·블록이 모두 이것을 쓴다(감사 재판정).
+const _carBlockOf = (c) => (c && c._mfn ? MFN_BLOCK : _carOf(c));
 function inspCarrierOrder(list) {
-  const m = new Map(); for (const c of list) { const k = _carOf(c); m.set(k, (m.get(k) || 0) + 1); }
-  const unk = (k) => (k === '선사 미상' ? 1 : 0);
+  const m = new Map(); for (const c of list) { const k = _carBlockOf(c); m.set(k, (m.get(k) || 0) + 1); }
+  const unk = (k) => (k === MFN_BLOCK ? 2 : k === '선사 미상' ? 1 : 0);
   return [...m.entries()].sort((a, b) => (unk(a[0]) - unk(b[0])) || (b[1] - a[1]) || (a[0] < b[0] ? -1 : 1)).map((x) => x[0]);
 }
 function inspCarrierSort(list) {
   const ix = new Map(inspCarrierOrder(list).map((k, i) => [k, i]));
-  return [...list].sort((a, b) => (ix.get(_carOf(a)) - ix.get(_carOf(b))) || inspSortCmp(a, b));
+  //  5.19 감사(중1) — MFN 은 선사 블록 안에 섞지 않고 모든 선사 뒤 한 블록(«세관 신고분 뒤에 MFN»).
+  return [...list].sort((a, b) => (ix.get(_carBlockOf(a)) - ix.get(_carBlockOf(b))) || inspSortCmp(a, b));   // 5.19: MFN 블록은 순서표 맨 뒤
 }
 function inspNumber(sorted) {
   let g = null, n = 0;
@@ -317,6 +322,7 @@ function renderRow(c, idx, opts) {
     const _xs = _esc(String(c._xraySealNo || '').trim());
     notes.push(`<span style="color:#dc2626;font-weight:bold">★XRAY${_xs ? ' ' + _xs : ''}</span>`);
   }
+  if (c._mfn) notes.push('<span style="font-weight:bold">MFN</span>');   // 5.19: MFN 묶음 줄 — 장을 나눠 막대와 떨어져도 줄마다 보이게
   if (_specMismatch(c)) notes.push(`<span style="color:#c2410c;font-weight:bold">규격불일치</span>`);   // 4.85-01: 세관 규격 우선 · 선사/EDI 규격과 길이가 다름
   // M6.94.18: 온도 필드는 c.tmp (CSVExport·diagnostics와 동일). 기존 c.temp는 비어서 표기 안 됐음.
   //   XRAY 대상이 리퍼면 ★XRAY + 온도 둘 다 비고에 표기 (선상 체크용).
@@ -493,6 +499,9 @@ const _carTag = (name) => ` data-car="${encodeURIComponent(name)}"`;
 const _carBarHtml = (name, cnt) => cnt == null
   ? `<tr class="carbar cont"${_carTag(name)}><td colspan="6">${_esc(name)} · 계속</td></tr>`
   : `<tr class="carbar"${_carTag(name)}><td colspan="4">${_esc(name)}</td><td colspan="2">${cnt}대</td></tr>`;
+//  ★ 5.19 — MFN 막대(세관 신고분 뒤 · 선사 막대와 같은 모양). n = 이 조각의 MFN 대수 · before = 그 앞 세관 신고분 대수.
+const MFN_BLOCK = 'MFN — 화물 있으나 적하목록 없음';   // 5.19: 선사별 판의 MFN 블록 이름(선사 막대 자리에 선다)
+const _mfnBarHtml = (n, before) => `<tr class="carbar mfnbar"><td colspan="4">MFN — 화물 있으나 적하목록 없음${before ? ` (세관 신고 ${before}대 뒤)` : ''}</td><td colspan="2">${n}대</td></tr>`;
 //  한 선사(맨 앞이 막대)를 단 상한 p 로 가득 채워 자른 자리 [[시작,끝),…]. 이어지는 단은 머리에 «계속» 막대 한 줄을 먹는다.
 const _carGreedy = (R, p, rowMm, tight = false) => {
   const cuts = []; let a = 0, w = 0;
@@ -557,7 +566,7 @@ const packCarrier = (blocks) => {
 //    «최대한 기본 크기에서 보기좋게 한장으로 만들되 장수가 추가 되면 지금 처러 자동분리»).
 //    조각(piece)마다 새 장에서 시작한다. 조각 안 순서·순번은 inspSortCmp·inspNumber 한 벌 그대로(20/40 은 풀→엠티→특수, 풀/엠티 는 20→40).
 //    포트 = 선적 POD · 양하 POL. 한 포트가 두 장 이상이면 그 포트를 20피트·40피트로 한 번 더 나눈다 — 단 장 수가 늘면 나누지 않는다.
-const _is20 = (c) => _inspGroup(c) < 20;   // 4.86: 20·20HC 는 20피트 장
+const _is20 = (c) => getContainerCategory(c).ti < 2;   // 4.86: 20·20HC 는 20피트 장 · 5.19: MFN 묶음(백의 자리)과 무관하게 단계(ti)로
 const _isFullRow = (c) => getContainerCategory(c).fe === 'F';   // 종이 F/E 칸·묶음과 같은 한 벌(F 가 아니면 E)
 const _portOfRow = (c, mode) => normPortCode(mode === 'loading' ? c.pod : c.pol);
 function inspPieces(sorted, how, mode) {
@@ -668,10 +677,11 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   const _marks = opts.submit && opts.marks ? opts.marks : null;   // 4.75: 제출용 — 작업 표기 한 벌(utils.inspectionMarksOf)
   //  4.87: 선사별 — 선사마다 {name, rows:[선사 막대(선사명·대수), …행]}. 순번·경계는 선사 안에서 묶음마다 1부터(막대가 경계 역할이라 선사 첫 줄에는 선을 따로 긋지 않는다).
   const _blocksCar = (l) => {
-    const blocks = [], cnt = {}; for (const c of l) cnt[_carOf(c)] = (cnt[_carOf(c)] || 0) + 1;
+    const _bk = _carBlockOf;   // 5.19 감사(중1): MFN 은 선사와 따로 맨 뒤 한 블록
+    const blocks = [], cnt = {}; for (const c of l) cnt[_bk(c)] = (cnt[_bk(c)] || 0) + 1;
     let b = null, g = null, n = 0;
     for (const c of l) {
-      const k = _carOf(c), gg = _inspGroup(c); let edge = '';
+      const k = _bk(c), gg = _inspGroup(c); let edge = '';
       if (!b || b.name !== k) { b = { name: k, rows: [_carBarHtml(k, cnt[k])] }; blocks.push(b); g = null; n = 0; }
       else if (gg !== g) edge = Math.floor(gg / 10) !== Math.floor(g / 10) ? 'gb2' : 'gb1';
       if (gg !== g) { g = gg; n = 0; }
@@ -680,7 +690,14 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     }
     return blocks;
   };
-  const _rowsOf = (l) => { const no = inspNumber(l), ed = inspEdges(l); return l.map((c, i) => renderRow(c, no[i], { edge: ed[i], mark: _marks ? _marks.byCn[String(c.cn || '').toUpperCase()] || _marks.byCn[c.cn] : null })); };
+  const _rowsOf = (l) => {
+    const no = inspNumber(l), ed = inspEdges(l);
+    const rows = l.map((c, i) => renderRow(c, no[i], { edge: ed[i], mark: _marks ? _marks.byCn[String(c.cn || '').toUpperCase()] || _marks.byCn[c.cn] : null }));
+    //  ★ 5.19 — MFN 이 시작하는 줄 앞에 막대 한 줄(세관 신고분 N대 뒤에 MFN M대가 이어진다는 표시). 조각(20/40·풀/엠티·포트별)마다 그 조각의 MFN 대수.
+    const i0 = l.findIndex((c) => c && c._mfn);
+    if (i0 >= 0) rows.splice(i0, 0, _mfnBarHtml(l.length - i0, i0));
+    return rows;
+  };
   //  4.75: 제출용 머리 아래 한 줄 — 누가 몇 호기에서 몇 대(숫자는 표 안 ✔ 옆 호기 번호). **그 장 묶음(이어서·20/40·풀/엠티·포트별 조각)의 컨만 센다** — 머리줄의 «20피트 102대» 와 같은 범위다.
   //  장당 가용 높이에 19mm 여유가 있어 3mm 한 줄은 장수를 안 늘린다(ATPR 2646E 267대 실측 2장 그대로).
   const _legendOf = (l) => {
@@ -744,7 +761,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
   const _variants = {};
   for (const [how, label] of INSP_SPLITS) {
     const pieces = inspPieces(list, how, mode);
-    const off = how === 'carrier' ? inspCarrierOrder(list).length < 2 : how !== 'cont' && pieces.length < 2;   // 엠티가 없거나 포트가 하나면 누를 수 없다 · 선사가 하나여도 누를 수 없다
+    const off = how === 'carrier' ? inspCarrierOrder(list).filter((k) => k !== MFN_BLOCK).length < 2 : how !== 'cont' && pieces.length < 2;   // 엠티가 없거나 포트가 하나면 누를 수 없다 · 선사가 하나여도 누를 수 없다
     const packed = [];
     for (const [tag, l] of pieces) {
       if (how === 'carrier') { packed.push({ tag: '', n: l.length, fit: packCarrier(_blocksCar(l)), legend: _legendOf(l), car: l }); continue; }
@@ -760,7 +777,7 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
     let pno = 0;
     //  4.87: 선사별은 쪽 머리줄에 그 쪽에 실린 선사와 선사 전체 대수(«DWS 234대 · SKR 40대»)
     const _carTagOf = (q, pg) => {
-      const tot = {}; for (const c of q.car) tot[_carOf(c)] = (tot[_carOf(c)] || 0) + 1;
+      const tot = {}; for (const c of q.car) tot[_carBlockOf(c)] = (tot[_carBlockOf(c)] || 0) + 1;   // 5.19: MFN 블록 키 한 벌
       const seen = []; for (const col of pg) for (const r of col) { const k = /class="carbar/.test(r) ? null : _carKey(r); if (k !== null && !seen.includes(k)) seen.push(k); }
       //  선사가 셋 이상이면 대수 많은 두 곳만 적고 «외 N곳»(셋을 다 적어도 글자 폭에 따라 두 줄로 접혔다 — 2차 독립 감사 «DWS 100대 · SKR 50대 · TJM 7대») — 쪽 머리줄이 한 줄을 넘으면 그만큼 본문이 밀려 종이를 넘는다(실 XTPG 548E 선적 선사 10곳 — 머리줄이 세 줄이 되어 끝 줄이 다음 장으로 넘어갔다). 선사마다의 대수는 단 안의 선사 막대에 있다.
       if (seen.length > 2) return `${[...seen].sort((x, y) => tot[y] - tot[x] || (x < y ? -1 : 1)).slice(0, 2).map((k) => `${k} ${tot[k]}대`).join(' · ')} 외 ${seen.length - 2}곳`;   // 대수 많은 두 곳
@@ -1115,6 +1132,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
       if (cat.type === 'reefer' && ((_t != null && String(_t).trim() !== '') || fe === 'F')) memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
       //  ★ 3.45 — 인쇄물과 같은 표기를 CSV 에도(한쪽만 고치면 종이와 엑셀이 갈린다).
+      if (c._mfn) memo.push('MFN');   // 5.19 감사(경3): 엑셀(CSV) 비고도 종이와 같이
       if (c._xray) memo.push('XRAY' + (String(c._xraySealNo || '').trim() ? ' ' + String(c._xraySealNo).trim().replace(/,/g, '') : ''));
       if (_specMismatch(c)) memo.push('규격불일치');   // 4.85-01: 종이와 같은 표기
       const _ov = [];

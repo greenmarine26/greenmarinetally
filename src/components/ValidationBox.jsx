@@ -198,6 +198,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       keepCns: mode === 'discharge' ? [..._keepSet] : [],
       bookingFill: fill,
       missingCount: missingInList.length,
+      //  ★ 5.19 — MFN 은 «리스트에 없음» 이지만 이미 MFN 목록에 든 컨이다. 검수사 2026-11-22 07:28 «맨윗줄 한줄에 🚢 EDI 평택 대상 → 리스트에 없음: 57대(MFN 리스트 참조) 까지만 표기» — 선사별 누락·샘플 없이 한 줄.
+      mfnMissingCount: ptkInEdi.filter(c => !isVirtualCn(c.cn) && !recCns.has(c.cn) && _mfnSet.has(String(c.cn || '').toUpperCase())).length,
       missingByOp,
       missingDetails: missingInList.slice(0, 5),
       shiftInListCount: shiftInList.length,   // 4.34-03: 시프팅 대상이면서 양하 리스트에도 있는 컨 — 총 작업에서 한 번만 센다
@@ -318,6 +320,14 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
               <span className="ml-1 font-normal text-purple-300/70">(가상E = 실번호 없는 엠티 자리 — 누락 아님)</span>
             </>
           )}
+        </div>
+      )}
+
+      {v.mfnMissingCount > 0 && (
+        <div className="bg-red-950/40 border border-red-800/50 rounded p-2 mb-2" data-mfn-line="1">
+          <div className="text-xxs text-red-300 font-bold">
+            🚢 EDI 평택 대상 → 리스트에 없음: {v.mfnMissingCount}대(MFN 리스트 참조)
+          </div>
         </div>
       )}
 

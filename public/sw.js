@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.18';
-const NOTE = '5.18 확정전 플랜 — 사무실이 보낸 PRE PLAN 을 앱이 먼저 그리고 선적 화면에 «📝 확정전» 을 띄웁니다. 본선 컨펌 회신이나 터미널 확정 EDI 가 오면 사라집니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.19';
+const NOTE = '5.19 MFN — 터미널 양하 계획과 EDI 평택 대수가 같으면 리스트에 없는 컨을 MFN 으로 셉니다. 검수리스트는 세관 신고분 뒤에 MFN 을 잇고 MFN 목록에 선내위치를 적습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
