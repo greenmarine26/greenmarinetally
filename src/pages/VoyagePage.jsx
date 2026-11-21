@@ -1692,6 +1692,27 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         </div>
       )}
 
+      {/* ★ 5.18: 확정전 플랜 — 수집기(MailPilot 2.53)가 보낸메일함의 PRE PLAN 을 읽어 loading/prePlan 에 판정을 둔다.
+           검수사 2026-11-21 «컨펌중인 플랜을 먼저 적용해서 예상을 할수있게 하고 받은 메일함에 확정 플랜이 오면 확정을 마무리» · «확정전으로 표기 바랍니다».
+           pending = 사무실이 보낸 새 판을 지금 그린다(본선·터미널 확정 전) · pending_pdf = 고친 판이 PDF 뿐이라 플랜은 앞 판(재컨펌 요청 중) · confirmed = 표시 없음. */}
+      {mode === 'loading' && (() => {
+        const pp = voyage?.loading?.prePlan;
+        const stt = pp && pp.state;
+        if (stt !== 'pending' && stt !== 'pending_pdf') return null;
+        const d = pp.at ? new Date(pp.at) : null;
+        const when = d ? `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+        return (
+          <div className="w-full mb-2 px-3 py-2 rounded-pill border border-amber-500/70 bg-amber-950/40 text-left" data-preplan={stt}>
+            <div className="text-sm font-black text-amber-200">📝 확정전{stt === 'pending_pdf' ? ' — 재컨펌 요청 중' : ''}</div>
+            <div className="text-xxs text-amber-100/80 mt-0.5">
+              {stt === 'pending'
+                ? `사무실이 보낸 «${pp.subj || 'PRE PLAN'}»(${when}) 판으로 그립니다. 본선 C/O CONFIRM 이나 터미널 확정 EDI 가 오면 바뀝니다.`
+                : `«${pp.subj || 'PRE PLAN'}»(${when}) 고친 판이 PDF 라 지금 플랜은 앞 판입니다. 터미널 확정 EDI 가 오면 바뀝니다.`}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* V9.17: 출항 임박 마감 경고 — ETD 2시간 전인데 미완·X-RAY·리퍼 온도가 남아 있으면 붉은 배너.
           데이터(ETD·미완 판정)는 전부 있었는데 능동 경고가 0이었다(전면 점검 §6). */}
       {(() => {
