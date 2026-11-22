@@ -931,7 +931,7 @@ export default function App() {
       {/* ★ 3.63 — 카페리(TNJP·OBWH·RZOR) 17:00 주간 작업보고. 작업자로 들어와 그 배를 고른 폰에만(조회만은 안 뜬다) — 어느 화면에서든.
            수석 대시보드를 보고 있으면 그쪽 창(모아 보기)이 뜨므로 여기서는 비킨다(두 창이 겹치지 않게). */}
       {route.name !== 'chief' && workChoice && workChoice.mode === 'work' && workChoice.voyageKey && (
-        <Ferry1700Alert audience="inspector" voyages={voyages} voyageKey={workChoice.voyageKey} />
+        <Ferry1700Alert audience="inspector" voyages={voyages} voyageKey={workChoice.voyageKey} inspector={inspector} />
       )}
 
       {/* 4.23: 판 번호는 머리띠에 크게 한 번 — 바닥글에서는 뺐다(헤더·바닥글·⋮ 메뉴로 한 화면에 3~4번이었다). */}

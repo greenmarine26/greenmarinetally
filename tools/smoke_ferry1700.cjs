@@ -90,7 +90,7 @@ console.log('⑤ 문지기 — 자료가 못 가르면 갱별 표를 안 낸다'
 console.log('⑥ 카톡 글·음성 — 같은 값 한 벌');
 const msg1 = F.buildFerry1700Message({ vsl: 'OBWH', voy: '2749E/2750W', rep: r1, gangNos: [1] });
 const g1 = r1.gangs.find((g) => g.no === 1);
-ok(/^📍 OBWH 2749E\/2750W\n📋 주간 작업보고 \(17:00 마감\)\n🏗 1호기\n■ 양하 — 작업 완료\n■ 선적 — 잔여 \d+대/.test(msg1) && !/2호기/.test(msg1), '검수원 카톡 — 내 갱(1호기)만');
+ok(/^📍 OBWH 2749E\/2750W\n📋 주간 작업보고 \(17:00 마감\)\n🏗 1호기\n■ 선적 — 잔여 \d+대/.test(msg1) && !/2호기/.test(msg1) && !/양하 — 작업 완료/.test(msg1), '검수원 카톡 — 내 갱(1호기)만 · 끝난 양하는 적지 않는다(5.21)');
 ok(msg1.includes(`■ 선적 — 잔여 ${g1.loading.total.total}대 (완료 ${g1.loading.doneTotal} · 잔여 ${g1.loading.remainTotal})`) && msg1.includes(`  45ft  F ${g1.loading.tbl.s45.F} · E ${g1.loading.tbl.s45.E}`) && /시각: 09-26 17:00$/.test(msg1), '갱 줄·규격 줄·시각 줄');
 const msgZ = F.buildFerry1700Message({ vsl: 'RZOR', voy: 'R104E/R104W', rep: r3 });
 ok(msgZ.includes('🏗 3호기') && msgZ.includes('🏗 5호기') && msgZ.includes('▶ 배 전체') && msgZ.includes('  40ft  F '), 'RZOR 카톡 — 갱별 대수 + 배 전체 규격표');
@@ -258,7 +258,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   console.log('⑩ 배선 — 수석 대시보드·작업 검수원(조회만 제외)·주야간 화면이 같은 한 벌을 부른다');
   const src = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
-  ok(/<Ferry1700Alert audience="chief" voyages=\{voyages\} \/>/.test(src('src/pages/ChiefDashboard.jsx')), 'ChiefDashboard 에 수석 창');
+  ok(/<Ferry1700Alert audience="chief" voyages=\{voyages\}[^>]*\/>/.test(src('src/pages/ChiefDashboard.jsx')), 'ChiefDashboard 에 수석 창');
   ok(/route\.name !== 'chief' && workChoice && workChoice\.mode === 'work' && workChoice\.voyageKey && \(\s*<Ferry1700Alert audience="inspector"/.test(src('src/App.jsx')), 'App — 작업자(mode work)로 고른 배에만 · 수석 화면에선 비킨다');
   ok(/const buildMode = \(m\) => shiftReportContainers\(voyage, m\);/.test(src('src/components/WorkReportModal.jsx')), 'WorkReportModal 주야간 화면이 shiftReportContainers 한 벌을 쓴다');
   ok(/new CustomEvent\('ferry1700Open', \{ detail: \{ voyageKey \} \}\)/.test(src('src/components/WorkReportModal.jsx')) && /ferryReportCuts\(voyage, Date\.now\(\), voyageKey\)/.test(src('src/components/WorkReportModal.jsx')), 'WorkReportModal 주야간 화면 — «📋 갱별 보고 보관 N건» 단추가 같은 창을 연다');

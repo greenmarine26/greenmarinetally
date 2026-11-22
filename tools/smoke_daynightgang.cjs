@@ -63,14 +63,15 @@ const rowOf = (card, side, size) => {
   const c1 = cards[0], c2 = cards[1];
   ok(/내 갱/.test(txt(c1)) && !/내 갱/.test(txt(c2)), '1호기에 «내 갱»');
   ok(/작업량 기준 \(완료 25 · 잔여 232\)/.test(txt(c1)), `1호기 양하 «작업량 기준 (완료 25 · 잔여 232)» — 캡처의 25대가 1호기 몫 (${txt(c1).slice(0, 120)})`);
-  const r20 = rowOf(c1, '양하', '20ft'), r40 = rowOf(c1, '양하', '40ft'), r45 = rowOf(c1, '양하', '45ft'), rt = rowOf(c1, '양하', '풀엠티토탈');
-  ok(String(r20) === '0,1,1' && String(r40) === '15,0,15' && String(r45) === '9,0,9' && String(rt) === '24,1,25', `1호기 규격표 20ft ${r20} · 40ft ${r40} · 45ft ${r45} · 합 ${rt} (캡처와 같음)`);
-  ok(/작업 완료 — 보고 제외/.test(txt(c2)) && /양 6\/0/.test(txt(c2)), `2호기 — 6대 끝, 잔여 0 → «작업 완료 — 보고 제외» (${txt(c2).slice(0, 90)})`);
+  const r20 = rowOf(c1, '양하', '20'), r40 = rowOf(c1, '양하', '40'), r45 = rowOf(c1, '양하', '45'), rt = rowOf(c1, '양하', 'T');
+  //  5.21 — 20피트 한 대는 수화물(양하 EDI F · 세관 E). 검수사 2026-11-22 «내릴때는 풀이고 실을떄는 엠티입니다» → 양하 보고는 EDI 대로 풀(종전 0,1,1 · 합 24,1,25).
+  ok(String(r20) === '1,0,1' && String(r40) === '15,0,15' && String(r45) === '9,0,9' && String(rt) === '25,0,25', `1호기 규격표 20ft ${r20} · 40ft ${r40} · 45ft ${r45} · 합 ${rt} (캡처와 같음)`);
+  ok(/보고할 것 없음/.test(txt(c2)) && !c2.querySelector('table') && /양 6\/0/.test(txt(c2)), `2호기 — 6대 끝, 잔여 0 → 표 없이 «보고할 것 없음»(5.21 — 끝난 쪽은 그리지 않는다) (${txt(c2).slice(0, 90)})`);
   const ship = doc.querySelector('[data-dn-gang] [data-f1700-ship]');
   ok(!!ship && /배 전체 합계/.test(txt(ship)) && /작업량 기준 \(완료 31 · 잔여 232\)/.test(txt(ship)), `카드 아래 «배 전체 합계» 31 · 잔여 232 (${txt(ship).slice(0, 80)})`);
-  ok(String(rowOf(ship, '양하', '40ft')) === '19,0,19' && String(rowOf(ship, '양하', '45ft')) === '11,0,11', '배 전체 합계 40ft 19 · 45ft 11 = 1호기 + 2호기');
+  ok(String(rowOf(ship, '양하', '40')) === '19,0,19' && String(rowOf(ship, '양하', '45')) === '11,0,11', '배 전체 합계 40ft 19 · 45ft 11 = 1호기 + 2호기');
   ok(/우현 접안 기준 · 선수 1호기/.test(txt(root)), '«우현 접안 기준 · 선수 1호기» — 눈으로 잡게');
-  ok(/선적(은)? 작업 완료|작업 완료 — 보고 제외/.test(txt(ship)), '선적 없는 배 — 배 전체 선적은 작업 완료');
+  ok(!/선적/.test(txt(ship)) && ship.querySelectorAll('table').length === 1, '선적 없는 배 — 배 전체에 선적 칸을 그리지 않는다(5.21 — 양하 표 하나뿐)');
   ok(![...doc.querySelectorAll('button')].some((b) => /카톡 보고\(/.test(b.textContent)) && !root.querySelector('button.bg-yellow-400'), '이 화면의 갱 블록에는 카톡 단추를 새로 안 붙인다(보관 창 단추는 종전 그대로)');
   ok(!!doc.querySelector('[data-f1700-open]'), '«📋 갱별 보고 보관» 단추 그대로');
   ok([...doc.querySelectorAll('table')].filter((t) => !t.closest('[data-dn-gang]')).length === 0, '종전 배 전체 표(단독)는 갱별이 되면 안 그린다 — 합계는 블록 안에 한 번');
@@ -88,7 +89,7 @@ const rowOf = (card, side, size) => {
   ok(!!rootN && [...rootN.querySelectorAll('[data-gang]')].length === 2, '야간을 누르면 야간 마감(오늘 05:30) 기준으로 다시 센다 — 카드 둘 그대로');
   //  2차 감사 — 카드 수만 보면 야간 전환을 빼도 통과했다. 숫자로 잡는다(05:30 에는 이 배가 한 대도 안 끝냈다).
   const n1 = rootN.querySelector('[data-gang="1"]'), n2 = rootN.querySelector('[data-gang="2"]');
-  ok(/완료 0 · 잔여 257/.test(txt(n1)) && /완료 0 · 잔여 6/.test(txt(n2)) && /완료 0 · 잔여 263/.test(txt(rootN.querySelector('[data-f1700-ship]'))), `야간(05:30 마감) 숫자 — 1호기 0/257 · 2호기 0/6 · 배 0/263 (${[n1, n2].map((c) => txt(c).slice(0, 70)).join(' | ')})`);
+  ok(/보고할 것 없음/.test(txt(n1)) && /보고할 것 없음/.test(txt(n2)) && !rootN.querySelector('[data-gang] table') && !rootN.querySelector('[data-f1700-ship] table'), `야간(05:30 마감) — 한 대도 안 끝낸 근무는 표 없이 «보고할 것 없음»(5.21 — 시작 안 한 쪽은 그리지 않는다 · 종전 1호기 0/257 · 2호기 0/6 · 배 0/263 (${[n1, n2].map((c) => txt(c).slice(0, 70)).join(' | ')})`);
   ok(/09-27 야간 · 익일 05:30 마감/.test(txt(rootN)) && /다시 센 값/.test(txt(rootN)), '지난 근무(야간)는 마감 표시 · 적어 둔 보고가 없으니 «다시 센 값»이라고 밝힌다');
   const db2 = [...doc.querySelectorAll('button')].find((b) => /주간보고/.test(b.textContent));
   click(db2); await wait(120);
@@ -138,14 +139,14 @@ const rowOf = (card, side, size) => {
   await openDaynight('OBWH_2751E', JSON.parse(JSON.stringify(FO.OBWH_2751E)));
   const p6 = doc.querySelector('[data-dn-gang]');
   const c61 = p6 && p6.querySelector('[data-gang="1"]'), c62 = p6 && p6.querySelector('[data-gang="2"]');
-  const tot6 = (c) => { const box = c && [...c.querySelectorAll('div')].find((d) => d.querySelector('table')); const tr = box && [...box.querySelectorAll('tr')].find((t) => /풀엠티토탈/.test(txt(t))); return tr ? +txt(tr.lastElementChild) : -1; };
+  const tot6 = (c) => { const box = c && [...c.querySelectorAll('div')].find((d) => d.querySelector('table')); const tr = box && [...box.querySelectorAll('tr')].find((t) => txt(t.firstElementChild) === 'T'); return tr ? +txt(tr.lastElementChild) : -1; };
   ok(!!c61 && !!c62 && /잔여 기준/.test(txt(c61)) && /잔여 기준/.test(txt(c62)) && !/규격표 없음/.test(txt(c61) + txt(c62)),
     `두 갱 모두 «잔여 기준» 규격표 — «규격표 없음» 아님 (${txt(c61).slice(0, 60)} / ${txt(c62).slice(0, 60)})`);
   ok(tot6(c61) === 43 && tot6(c62) === 54, `갱별 잔여 = 터미널 호기별 잔여 43 · 54 (표 ${tot6(c61)} · ${tot6(c62)})`);
   ok(/잔여 기준 \(완료 96 · 잔여 43\)/.test(txt(c61)) && /잔여 기준 \(완료 70 · 잔여 54\)/.test(txt(c62)), '완료 대수는 터미널 값(96·70 — 위치로 붙인 85·81 이 아니다)');
   //  구성 — 규칙(남은 컨을 장별로: 02·06·10번 장 = 1호기, 14·18번 장 = 2호기)에서 따로 뽑은 값(감사 실측)
-  ok(JSON.stringify([rowOf(c61, '양하', '20ft'), rowOf(c61, '양하', '40ft'), rowOf(c62, '양하', '20ft'), rowOf(c62, '양하', '40ft')]) === '[[23,0,23],[20,0,20],[38,0,38],[16,0,16]]',
-    `규격 구성이 장별 규칙과 같다 — 1호기 20ft 23·40ft 20 · 2호기 20ft 38·40ft 16 (${JSON.stringify([rowOf(c61, '양하', '20ft'), rowOf(c61, '양하', '40ft'), rowOf(c62, '양하', '20ft'), rowOf(c62, '양하', '40ft')])})`);
+  ok(JSON.stringify([rowOf(c61, '양하', '20'), rowOf(c61, '양하', '40'), rowOf(c62, '양하', '20'), rowOf(c62, '양하', '40')]) === '[[23,0,23],[20,0,20],[38,0,38],[16,0,16]]',
+    `규격 구성이 장별 규칙과 같다 — 1호기 20ft 23·40ft 20 · 2호기 20ft 38·40ft 16 (${JSON.stringify([rowOf(c61, '양하', '20'), rowOf(c61, '양하', '40'), rowOf(c62, '양하', '20'), rowOf(c62, '양하', '40')])})`);
   ok(/터미널\(16:12\) QC101 양 96\/43/.test(txt(c61)) && /터미널\(16:12\) QC102 양 70\/54/.test(txt(c62)), `3.66-03 카드 머리 = 본문과 같은 호기 표·그 시각 (${(txt(c61).match(/터미널[^양]*양 [0-9/]+/) || [''])[0]})`);
   ok(/완료\(작업량\) 기준 갱은 대수만/.test(txt(p6)) && /잔여 기준 갱은 남은 컨을 선수 호기부터 터미널 호기별 잔여 비율로 나눈 규격표/.test(txt(p6)),
     '⚠ 붙인 완료를 못 믿는 이유와 잔여 표의 출처를 밝힌다');

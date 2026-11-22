@@ -3,6 +3,7 @@ import { getTallyFormat, opParent } from './data/tallyFormats.js';   // 3.52: �
 import { allStaffNames } from './staffList.js';
 import { inspectorStatus } from './inspectorStatus.js';   // 5.09: 수석 접속 판정(presentChiefsOf)은 홈·상황판과 같은 한 벌
 import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌 — tallyReport 도 utils 를 부르지만(순환) 서로 함수 안에서만 쓴다(모듈을 읽는 시점에 상대 값을 쓰는 곳 없음 — smoke_onebook487 이 두 순서로 읽어 본다)
+import { trackCranes } from './craneTrack.js';   // 5.21: 같은 시각 다른 호기 위치로 컨마다 호기를 따라가는 한 벌(순수 모듈 — utils 를 부르지 않는다)
 import { SHIP_FLAGS, shipCodesWith } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 코드 목록 한 곳(shipPolicyCore 는 import 가 없어 순환 없음)
 import { hatchEvenOf, buildEmptyBayRenderData, buildBayPagesFromSummary, buildBayGrid, isKeepShift as _isKeepShift, isPredShift as _isPredShift } from './cargoPlanCore.js';   // ★ 3.15: 보드가 세는 해치 = 그림이 그리는 장(판정 한 벌)   // ★ 3.8: 호기–검수원 등록 — 이름은 명단(코드+서버)에 있는 것만 받는다
 // ─── ★ 2.55-01 — «치는 중에 답을 낼 것인가» 를 정하는 판정. **저장소에 한 벌뿐이다.** ───
@@ -39,12 +40,12 @@ export function isSentenceQuery(v) {
 }
 
 // 판 이력(4.88-01 까지의 APP_VERSION 꼬리 주석·앞 판 주석·앞 판 APP_NOTE)은 docs/APP_HISTORY.md 로 옮겼다(4.89). 앞 판: 'TallyOne 4.88-01' — 카고플랜을 카스피 공통 용어로.
-export const APP_VERSION = 'TallyOne 5.20'   // 5.20 관리자 작업 선박 — 미르 호기 검수원 등록(craneCrew) 한 벌로 관리자 본인의 작업 선박·호기를 읽어 그 배 화면에서만 작업자이면서 관리자 · 다른 배는 관리자뿐 · 헤더 관리자 칩 없음(다른 검수원과 같음) · 보고 창 [N호기] 등록하고 시작 · 호기를 넣지 않은 관리자는 다른 검수원 명단에 안 보임(검수사 2026-11-22 14:58~15:11).   // 앞 판 5.19-01 5.19-01 머스크 리퍼 — 리퍼 체크 안 하는 배(isReeferCheckSkipped 한 벌 · 3.72-02)는 출력 센터에서도 검수리스트 별첨 리퍼 구역·«온도 미신고»·리퍼 온도 리스트 타일을 내지 않는다(검수사 2026-11-22 08:41).   // 앞 판 5.19 5.19 MFN(MOVINS 없는 배) — 수집기 2.54 가 터미널 양하 계획 = EDI 평택일 때 올린 mfnList 를 그대로 쓴다 · 검수리스트는 세관 신고분 뒤에 MFN 묶음(막대·순번 다시) · MFN 목록 출력 네 가지에 선내위치 · 자료 점검 상자는 MFN 이면 한 줄(검수사 2026-11-22 07:20·07:21·07:28).   // 앞 판 5.18 5.18 확정전 플랜 — 수집기(MailPilot 2.53)가 보낸메일함 PRE PLAN 을 읽어 판정한 loading/prePlan(pending·pending_pdf)을 선적 화면 위에 «📝 확정전» 으로 보인다. ← TallyOne 5.17-01   // 5.17-01 출항 임박 배너가 PORT-MIS 최초 신고만 보다 작업 시작 전 배(PCSZ 2635E)에 «출항 59분 전» — 홈과 같은 출항 한 벌(badgeRule.departAtOf: 도선 → PORT-MIS, 작업창 안·작업 시작 뒤). ← TallyOne 5.17   // 5.17 베이모드에서 장 옮기기 — 위 띠 [◀ 장]·[장 ▶]·장 이름 눌러 목록(남은 컨이 있는 장만, 자동 가이드 remaining 한 벌). 해제 없이 옮기고 해제하면 원래 화면. ← TallyOne 5.16   // 5.16 호기 공동 담당 — 2갱을 3명이 교대로(OBWH). 미르 «OBWH 공동 이름 이름 이름» 한 번 등록, 공동 담당끼리는 호기를 막지 않고 누르면 바로 넘겨받음, 바꾼 시각(crewPoolLog)으로 터미널 실적을 그때 사람에게 붙임. ← TallyOne 5.15-04   // 5.15-04 양하 PLAN X 칸에 선사색 갈래가 박던 인라인 검정(MARK_FG)을 옅은 회색으로 덮음 — 라이브 STSE 2659E 양하 306칸 실측(5.15-03 은 CSS 만 고쳐 인라인에 졌다). ← TallyOne 5.15-03'   // 5.15-03 PLAN 머리줄에서 «사전:…» 표기를 뺌(경고 포함 — 출력 전 «사전에 없음» 표지가 알림) · 양하 PLAN X 도 선적처럼 옅은 회색(21:06 «X표가 너무 진하고 굵습니다») — 검수사 2026-11-19 20:25 «저외에 다른 사용자들은 아무도 모르고 알필요 없는 표기». ← TallyOne 5.15-02'   // 5.15-02 데크만 있는 베이도 아래 로우 번호(홀드 베이 아래 줄에 맞춤, 검수사 2026-11-19 18:57·18:59) · PLAN 제목을 종이 정가운데에(19:02 «좌측으로 조금 기울었습니다»). ← TallyOne 5.15-01   // 5.15-01 선적 PLAN 칸 글자 굵기 800→500·첨자 900→600(검수사 2026-11-19 15:18 «셀안에 폰트가 너무 두꺼운것 같습니다») · 글자를 대문자 높이 기준으로 칸 정가운데에(15:23 «셀안에 글자가 위로 치우칩니다 · 정확히 중심에 있어야 첨자도 잘 보일것입니다»). ← 5.15 **선적 PLAN 을 카스피처럼 한눈에** — 큰 글자=목적지·특수화물은 첨자(Sᴿ)·풀 진한 칠/엠티 옅은 칠·40피트 사선, 단은 홀드 있는 베이 중 젤 높은 데크·젤 깊은 홀드 기준으로 맞추고 남는 높이·폭을 칸에(검수사 2026-11-19 «검수원들이 카스피 플랜보다 보기 힘들다» · «특수화물은 포트에 첨자를 더합니다» · «젤 높고 젤 깊은 베이를 기준으로 … 단을 맞추면 됩니다»). ← 5.14-01   // 5.14-01 «N호기 시각 배로 이동» 의 시각이 지금 조가 아니거나 새 배 첫 완료보다 한 시간 넘게 이르면 묻고 적지 않는다(라이브 확인 09:25 «2호기 23:59 KSKM으로 이동» 이 어젯밤 23:59 로 적힘 — 되돌림). · 5.14 **호기가 다른 배로 옮김** — 미르가 «2호기 04:00 KSKM으로 이동» 을 직접 읽고(craneShipMove.js 한 벌) 앱 자료(그 조 등록·완료 기록)와 시각을 맞춰 보며 어긋나면 왜 다른지 묻는다 · 번역·자동 별칭으로는 기록 말을 적지 않는다(isWriteParse) · 갱 수는 떠난 호기(leftAt)를 그 시각부터 뺀다 · 수집기 2.52 가 자료만으로 새 배에 검수원을 따라 적는다. 검수사 2026-11-19 07:28·07:36. · 앞 판 5.13-01 5.13-01 미르 작업보고 되묻기 앞에 «적고 있어요»가 먼저 뜨던 것을 «확인할게요»로 · 맨말 «취소»는 아무것도 바꾸지 않고 되묻는다 · 리퍼 온도 단위 두 번(℃°C) 찍히던 것을 degText 한 벌로. · 5.13 **미르에게 말로 전한 작업보고(양하·선적 시작/완료/중단/재개 · 해치커버 열림/닫힘 · 콘박스 · 취소)를 작업 보고 창과 같은 모양으로 적는다** — 이름은 그 호기 검수원(조 등록 → 로그인 작업자 → «검수원N»), 전한 사람은 relayBy · 바로 적고 되읽기(mirWorkParse·mirWorkReport·firebase.fbApplyMirWorkWrites) · (같은 판) 5.12-01 **매뉴얼·미르 안내·입력칸 예시에 쓰던 검수원 실명을 홍길동(둘째는 김철수)으로 바꿨다** — 검수사 2026-11-18 «검수앱에 보면 예제를 들면서 검수원 실명을 예제로 사용합니다. 그건 잘못일수도 있습니다» · «보통의 예를 들면 홍길동이 일반 예제명입니다» · (앞 판) 5.12 **예보 카드를 플랜 별첨3(규격별 F/E)·별첨2(화물 종류별) 두 표로, 홈 선적 칸에 «예상 N대», 관리자는 검수 작업 기록(완료·보류·보고·해치 자동 보고·교대·X-RAY 봉인자 등록)을 남기지 않는다** · (앞 판) 5.11-01 **트윈 50~55톤 경보 문구에서 사람 능력을 따지는 말을 뺐다** — «싱글 작업을 권합니다. 기사 능력이면 55톤까지 트윈 가능합니다» → «싱글 권유 · 55톤까지 트윈 가능»(검수사 2026-11-18 12:32 «클로드는 표현방식이 너무 AI적입니다 … 만약에 클로드 능력에 따라 이런게 붙는다면 클로드는 좋게 보일까요?» — 카드 경보·미르·트윈 점검 답·매뉴얼 한 벌) ← 5.11 **양하 순서 검토(검수사 2026-11-18 설문 Q1~Q22)에서 승인된 다섯** — ① 보류는 되묻지 않는다(보류 줄의 [해제]만 · 내려가면 저절로 빠짐) ② 트윈 50톤부터 싱글 권유(기사 능력이면 55톤까지 트윈) · 트윈 카드 27톤 이상 컨 무게 칩 깜박임 ③ 싱글 패널 «이것부터» 뒤에는 짝이 아니라 그 베이를 이어 감 · 트윈 카드마다 [앞 N번 먼저][뒤 N번 먼저] ④ 양하 오버하이 OT 는 FR 처럼 먼저 ⑤ 양하 중 선적 플랜이 있으면 해치 «장수 확인» 에 선적 대상 장을 넣고 알림 (GuidedWorkPanel · guidedQueue.otHighOf · utils.hatchOpenableFor · HatchCountConfirm · mir.twinWarn · nlSearch) ← 5.10 **선적 자동 가이드 — 검수사가 누른 갈림 칩(20·40·FR·엠티·리퍼·일반·트윈·싱글)은 3대 연속 감지·베이 묶음/단 이동으로 풀지 않고, «자리 확인» 칸은 [📍 자리 확인 방식으로] 를 눌러야만 열린다(엠티라고 스스로 열지 않고 카드가 바뀌면 닫는다)**(검수사 2026-11-18 01:08 «검수사가 누른게 우선합니다» · «수정은 검수사가 눌러서 해야 오류가 없습니다. 맞게 오는데 수정칸이 열리면 오류를 유발시키는 것입니다» — ATPR 2652W 선적 중 20피트 우선이 40피트로 가고 빈 컨마다 컨번호 칸이 먼저 떴다 · GuidedWorkPanel prefPinRef · slotMode) ← 5.09 **작업을 마친 배를 수석이 없으면 끝난 즉시, 수석이 있으면 끝난 때·수석의 마지막 화면 조작 중 늦은 쪽에서 30분 뒤 앱이 스스로 «완료 저장»(보관소로 옮기고 화면에서 지움)** + **수석 자료 수정 판의 업데이트 알림은 부수석 이상에게만**(검수사 2026-11-16 21:53 «작업완료시 앱이 스스로 완료처리하고 수석이 앱을 사용하지 않을시 30분이 지나면 앱스스로 완료마감처리합니다» · 21:59 «전 수석이 아닙니다. 다만 수석 역활을 했을뿐입니다. 그러므로 제가 로그인 했다고 일을 하고 있다고 보류처리 말고 순서대로 시행되게» · 22:02 «수석자료 수정시는 업데이트 알림을 부수석이상에게만 보이게 하세요» — utils.autoCloseTimingOf/autoCloseDecision 한 벌 · src/autoClose.js · firebase.fbAutoCloseVoyage/fbStampChiefInput · updateAudience.js) ← 5.08 **관리앱 접속 기록에 «📡 다운로드 사용량 — 누가 얼마나»**(검수사 2026-11-16 18:18 «누가 얼마를 사용했는지 수집기 클로드 와 검수원들 각각 나눠서» — 앱이 받은 바이트를 이름별로 세어 5분마다 올림, 수집기는 합계) ← 5.07 **관리앱 접속 기록에 콘앱 선박별 사용 기기(동방·PCTC 구분, 기존·신규 따로)** ← 5.06-01 **양하 칸 추정 — 한 층이 다 내려왔는데 열별 추정이 빈 칸·겹친 칸을 남기면 베이 한 층을 통째로 다시 맞춤**(NSFR 2621N 20번 데크 빈 칸 4) → 5.06   // 5.06 **사용 매뉴얼(출력)에 «양하·선적 PLAN 읽는 법» 움직이는 설명서 연결**(검수사 2026-11-16 «앱별로 사용메뉴얼에 첨부 바랍니다» — public/plan-guide.html 검수앱 편 #T · 콘앱 편 #C, 콘앱 사용 안내에도 링크 · ConeOne 3.03) (앞 판) 5.05 **콘앱 PLAN 맞춤 — 폰에서 도면이 오른쪽으로 밀려 잘림 수리**(검수사 2026-11-16 09:30 «콘앱 플랜 맞춤은 안되었습니다» — 자연 크기를 배치 크기로 · 실제 왼쪽 자리를 되재서 보정) (앞 판) 5.04   // 5.04 **폰 카메라 HEIC 사진을 앱이 스스로 JPEG 로 풀어 읽음**(검수사 2026-11-16 07:51~07:57 데미지 보고 «앱이 스스로 처리해야 합니다 · 개인 폰을 이미지 방식을 강요할수 없습니다» — 1016682B 실파일 ftypheic 확인 · libheif-js 별도 조각 · 못 풀면 형식 이름을 알림) (앞 판) 5.03-01 사진을 못 읽을 때 진짜 형식(HEIC·AVIF 등)을 알림(검수사 2026-11-16 07:51 데미지 보고 «이 사진을 읽지 못했습니다 · 형식 알 수 없음 · 1016682B») (앞 판) 5.03 **한 판 수정 열한 건**(검수사 2026-11-14~15 기록 — 양하·선적 끝나면 앱이 스스로 완료 · 나 오늘 배별 · 베이모드 육상/해상부터 · 갱별 규격표 · 사진 앨범 형식 · 콘앱 플랜 맞춤 · 한도 이월 · 미르 호기 답 · 실번호 대소문자) (앞 판) 5.02-04 5.02-04 **수석 상황판 별첨3 규격별 F/E · 별첨4 목적지별 · 엠티 줄도 움직이는 그림으로**(검수사 2026-11-14 «수석 상황판 좌측을 모션 그래픽으로 바꿨는데 안바뀐 부분이 있네여» — 5.02 가 별첨1·2만 바꿔 3·4가 표로 남았다 · LegendFE + LegendRows 재사용, 숫자는 같은 L 한 벌, 옛 표는 «표로 보기 (별첨1~4)») (앞 판) 5.02-03 **콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추**(검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 4.89·2.79 가 떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 입구가 없었다 · ConeOne 3.00-03) (앞 판) 5.02-02 **양하가 끝난 배의 베이별 진행이 끝난 양하로 뜨던 것**(5.02-01 라이브 확인 — bayModes[0] 이 양하라 선적 대신 양하가 기본) · 5.02-01 **양하가 끝나고 선적만 남은 배는 홈 상세 위 두 상자에서 선적이 먼저**(검수사 2026-11-14 09:13 «끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») + **홈 베이 카드 트윈·싱글 줄이 잘리지 않게 조각 단위 줄바꿈**(라이브 확인 — 폰 156px 칸에 «트윈 26 · 싱글 앞 2 · 40피트 9» 끝이 «…») · 5.02 **상황판 별첨·홈 상세를 움직이는 그림으로**(검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로» · «전체수량 양하·선적과 작업중인 베이도» · «베이는 1 (2) 3 이 기본» · «트윈 4 · 싱글 앞 1 / 뒤 5 — 남은 베이마다 표기») — 별첨1·2 고리·남은 N대·안 끝난 줄만 펼침·끝난 줄 ✓ 칩(앱 순서 그대로) · 4척 한 줄 요약 · 홈 양하·선적 큰 숫자(CountUp) · 작업중 호기 줄 · 베이 묶음 «01 (02) 03» 카드 + 트윈·싱글 앞/뒤 (앞 판) 5.01-01 **베이뷰·베이모드 위 띠에 미르 문**(검수사 2026-11-14 01:09 «아깜박있었는데 양하에서 베이모드에서는 미르를 부르지 못합니다» — 베이뷰는 전체 화면 덮개라 검색줄이 가려진다 → BayViewWork 두 머리줄에 ChiefMirBar chip, MirFab 시트 한 벌) · 5.01 **홈 «나 오늘» 이 오늘 보관소로 넘어간 배까지 합치고, 누르면 배별 양하·선적을 보인다**(검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 · PCSZ 96 STMJ 39» — PCSZ 2634E 가 14:31 보관소로 넘어가며 헤더 39대로 굳었다. nlSearch.myTodayByShip · firebase.fbGetMyArchivedToday · HomePage meLine) (앞 판) 5.00-02 **수석 상황판 미르 줄**(검수사 2026-11-13 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» — · 18:19 «이안에 넣으세요» — 탭 줄 넷째 칸 ChiefMirBar, 누르면 MirFab 시트) + **5.00-01 라이브 확인·감사 수리** — 경고 띠 문장 속 컨 번호도 CnText(CnInline) · 3안 폰 가로 1px 넘침 막음 · 도착항 확인 요망 강조색 · 자리 수정 창 컨 번호 · 컨 상세 입력 중 Esc 는 입력만 빠져나옴 · ConeOne 3.00-02 양하·선적 항차 번호가 다른 배(STMJ 2671E/2672W)를 양하·선적 둘 다 잡음
+export const APP_VERSION = 'TallyOne 5.21'   // 5.21 여객선 작업보고 — 마감 5분 전(16:55 · 05:25)부터 호기별 표를 실시간으로 보이다가 정각에 멈춤(ferryShiftDue) · 멈춘 뒤 [그대로 보고]·[수정 보고](칸 수정 · 합계 자동 · info.shiftReports/{열쇠}/edit · applyShiftEdit 한 벌) · 표는 검수사 양식(20·40·45·T × F·E·T) · 호기는 컨이 끝난 시각 + 선내위치로 «같은 시각 다른 호기 위치» 를 따라 붙임(craneTrack.trackCranes — 동방은 컨별 크레인을 주지 않는다, 보관 15건 중 12건이 대수만이던 것) · 야간 05:30 창 신설(검수사 2026-11-22 20:10~20:51).   // 앞 판 5.20 관리자 작업 선박 — 미르 호기 검수원 등록(craneCrew) 한 벌로 관리자 본인의 작업 선박·호기를 읽어 그 배 화면에서만 작업자이면서 관리자 · 다른 배는 관리자뿐 · 헤더 관리자 칩 없음(다른 검수원과 같음) · 보고 창 [N호기] 등록하고 시작 · 호기를 넣지 않은 관리자는 다른 검수원 명단에 안 보임(검수사 2026-11-22 14:58~15:11).   // 앞 판 5.19-01 5.19-01 머스크 리퍼 — 리퍼 체크 안 하는 배(isReeferCheckSkipped 한 벌 · 3.72-02)는 출력 센터에서도 검수리스트 별첨 리퍼 구역·«온도 미신고»·리퍼 온도 리스트 타일을 내지 않는다(검수사 2026-11-22 08:41).   // 앞 판 5.19 5.19 MFN(MOVINS 없는 배) — 수집기 2.54 가 터미널 양하 계획 = EDI 평택일 때 올린 mfnList 를 그대로 쓴다 · 검수리스트는 세관 신고분 뒤에 MFN 묶음(막대·순번 다시) · MFN 목록 출력 네 가지에 선내위치 · 자료 점검 상자는 MFN 이면 한 줄(검수사 2026-11-22 07:20·07:21·07:28).   // 앞 판 5.18 5.18 확정전 플랜 — 수집기(MailPilot 2.53)가 보낸메일함 PRE PLAN 을 읽어 판정한 loading/prePlan(pending·pending_pdf)을 선적 화면 위에 «📝 확정전» 으로 보인다. ← TallyOne 5.17-01   // 5.17-01 출항 임박 배너가 PORT-MIS 최초 신고만 보다 작업 시작 전 배(PCSZ 2635E)에 «출항 59분 전» — 홈과 같은 출항 한 벌(badgeRule.departAtOf: 도선 → PORT-MIS, 작업창 안·작업 시작 뒤). ← TallyOne 5.17   // 5.17 베이모드에서 장 옮기기 — 위 띠 [◀ 장]·[장 ▶]·장 이름 눌러 목록(남은 컨이 있는 장만, 자동 가이드 remaining 한 벌). 해제 없이 옮기고 해제하면 원래 화면. ← TallyOne 5.16   // 5.16 호기 공동 담당 — 2갱을 3명이 교대로(OBWH). 미르 «OBWH 공동 이름 이름 이름» 한 번 등록, 공동 담당끼리는 호기를 막지 않고 누르면 바로 넘겨받음, 바꾼 시각(crewPoolLog)으로 터미널 실적을 그때 사람에게 붙임. ← TallyOne 5.15-04   // 5.15-04 양하 PLAN X 칸에 선사색 갈래가 박던 인라인 검정(MARK_FG)을 옅은 회색으로 덮음 — 라이브 STSE 2659E 양하 306칸 실측(5.15-03 은 CSS 만 고쳐 인라인에 졌다). ← TallyOne 5.15-03'   // 5.15-03 PLAN 머리줄에서 «사전:…» 표기를 뺌(경고 포함 — 출력 전 «사전에 없음» 표지가 알림) · 양하 PLAN X 도 선적처럼 옅은 회색(21:06 «X표가 너무 진하고 굵습니다») — 검수사 2026-11-19 20:25 «저외에 다른 사용자들은 아무도 모르고 알필요 없는 표기». ← TallyOne 5.15-02'   // 5.15-02 데크만 있는 베이도 아래 로우 번호(홀드 베이 아래 줄에 맞춤, 검수사 2026-11-19 18:57·18:59) · PLAN 제목을 종이 정가운데에(19:02 «좌측으로 조금 기울었습니다»). ← TallyOne 5.15-01   // 5.15-01 선적 PLAN 칸 글자 굵기 800→500·첨자 900→600(검수사 2026-11-19 15:18 «셀안에 폰트가 너무 두꺼운것 같습니다») · 글자를 대문자 높이 기준으로 칸 정가운데에(15:23 «셀안에 글자가 위로 치우칩니다 · 정확히 중심에 있어야 첨자도 잘 보일것입니다»). ← 5.15 **선적 PLAN 을 카스피처럼 한눈에** — 큰 글자=목적지·특수화물은 첨자(Sᴿ)·풀 진한 칠/엠티 옅은 칠·40피트 사선, 단은 홀드 있는 베이 중 젤 높은 데크·젤 깊은 홀드 기준으로 맞추고 남는 높이·폭을 칸에(검수사 2026-11-19 «검수원들이 카스피 플랜보다 보기 힘들다» · «특수화물은 포트에 첨자를 더합니다» · «젤 높고 젤 깊은 베이를 기준으로 … 단을 맞추면 됩니다»). ← 5.14-01   // 5.14-01 «N호기 시각 배로 이동» 의 시각이 지금 조가 아니거나 새 배 첫 완료보다 한 시간 넘게 이르면 묻고 적지 않는다(라이브 확인 09:25 «2호기 23:59 KSKM으로 이동» 이 어젯밤 23:59 로 적힘 — 되돌림). · 5.14 **호기가 다른 배로 옮김** — 미르가 «2호기 04:00 KSKM으로 이동» 을 직접 읽고(craneShipMove.js 한 벌) 앱 자료(그 조 등록·완료 기록)와 시각을 맞춰 보며 어긋나면 왜 다른지 묻는다 · 번역·자동 별칭으로는 기록 말을 적지 않는다(isWriteParse) · 갱 수는 떠난 호기(leftAt)를 그 시각부터 뺀다 · 수집기 2.52 가 자료만으로 새 배에 검수원을 따라 적는다. 검수사 2026-11-19 07:28·07:36. · 앞 판 5.13-01 5.13-01 미르 작업보고 되묻기 앞에 «적고 있어요»가 먼저 뜨던 것을 «확인할게요»로 · 맨말 «취소»는 아무것도 바꾸지 않고 되묻는다 · 리퍼 온도 단위 두 번(℃°C) 찍히던 것을 degText 한 벌로. · 5.13 **미르에게 말로 전한 작업보고(양하·선적 시작/완료/중단/재개 · 해치커버 열림/닫힘 · 콘박스 · 취소)를 작업 보고 창과 같은 모양으로 적는다** — 이름은 그 호기 검수원(조 등록 → 로그인 작업자 → «검수원N»), 전한 사람은 relayBy · 바로 적고 되읽기(mirWorkParse·mirWorkReport·firebase.fbApplyMirWorkWrites) · (같은 판) 5.12-01 **매뉴얼·미르 안내·입력칸 예시에 쓰던 검수원 실명을 홍길동(둘째는 김철수)으로 바꿨다** — 검수사 2026-11-18 «검수앱에 보면 예제를 들면서 검수원 실명을 예제로 사용합니다. 그건 잘못일수도 있습니다» · «보통의 예를 들면 홍길동이 일반 예제명입니다» · (앞 판) 5.12 **예보 카드를 플랜 별첨3(규격별 F/E)·별첨2(화물 종류별) 두 표로, 홈 선적 칸에 «예상 N대», 관리자는 검수 작업 기록(완료·보류·보고·해치 자동 보고·교대·X-RAY 봉인자 등록)을 남기지 않는다** · (앞 판) 5.11-01 **트윈 50~55톤 경보 문구에서 사람 능력을 따지는 말을 뺐다** — «싱글 작업을 권합니다. 기사 능력이면 55톤까지 트윈 가능합니다» → «싱글 권유 · 55톤까지 트윈 가능»(검수사 2026-11-18 12:32 «클로드는 표현방식이 너무 AI적입니다 … 만약에 클로드 능력에 따라 이런게 붙는다면 클로드는 좋게 보일까요?» — 카드 경보·미르·트윈 점검 답·매뉴얼 한 벌) ← 5.11 **양하 순서 검토(검수사 2026-11-18 설문 Q1~Q22)에서 승인된 다섯** — ① 보류는 되묻지 않는다(보류 줄의 [해제]만 · 내려가면 저절로 빠짐) ② 트윈 50톤부터 싱글 권유(기사 능력이면 55톤까지 트윈) · 트윈 카드 27톤 이상 컨 무게 칩 깜박임 ③ 싱글 패널 «이것부터» 뒤에는 짝이 아니라 그 베이를 이어 감 · 트윈 카드마다 [앞 N번 먼저][뒤 N번 먼저] ④ 양하 오버하이 OT 는 FR 처럼 먼저 ⑤ 양하 중 선적 플랜이 있으면 해치 «장수 확인» 에 선적 대상 장을 넣고 알림 (GuidedWorkPanel · guidedQueue.otHighOf · utils.hatchOpenableFor · HatchCountConfirm · mir.twinWarn · nlSearch) ← 5.10 **선적 자동 가이드 — 검수사가 누른 갈림 칩(20·40·FR·엠티·리퍼·일반·트윈·싱글)은 3대 연속 감지·베이 묶음/단 이동으로 풀지 않고, «자리 확인» 칸은 [📍 자리 확인 방식으로] 를 눌러야만 열린다(엠티라고 스스로 열지 않고 카드가 바뀌면 닫는다)**(검수사 2026-11-18 01:08 «검수사가 누른게 우선합니다» · «수정은 검수사가 눌러서 해야 오류가 없습니다. 맞게 오는데 수정칸이 열리면 오류를 유발시키는 것입니다» — ATPR 2652W 선적 중 20피트 우선이 40피트로 가고 빈 컨마다 컨번호 칸이 먼저 떴다 · GuidedWorkPanel prefPinRef · slotMode) ← 5.09 **작업을 마친 배를 수석이 없으면 끝난 즉시, 수석이 있으면 끝난 때·수석의 마지막 화면 조작 중 늦은 쪽에서 30분 뒤 앱이 스스로 «완료 저장»(보관소로 옮기고 화면에서 지움)** + **수석 자료 수정 판의 업데이트 알림은 부수석 이상에게만**(검수사 2026-11-16 21:53 «작업완료시 앱이 스스로 완료처리하고 수석이 앱을 사용하지 않을시 30분이 지나면 앱스스로 완료마감처리합니다» · 21:59 «전 수석이 아닙니다. 다만 수석 역활을 했을뿐입니다. 그러므로 제가 로그인 했다고 일을 하고 있다고 보류처리 말고 순서대로 시행되게» · 22:02 «수석자료 수정시는 업데이트 알림을 부수석이상에게만 보이게 하세요» — utils.autoCloseTimingOf/autoCloseDecision 한 벌 · src/autoClose.js · firebase.fbAutoCloseVoyage/fbStampChiefInput · updateAudience.js) ← 5.08 **관리앱 접속 기록에 «📡 다운로드 사용량 — 누가 얼마나»**(검수사 2026-11-16 18:18 «누가 얼마를 사용했는지 수집기 클로드 와 검수원들 각각 나눠서» — 앱이 받은 바이트를 이름별로 세어 5분마다 올림, 수집기는 합계) ← 5.07 **관리앱 접속 기록에 콘앱 선박별 사용 기기(동방·PCTC 구분, 기존·신규 따로)** ← 5.06-01 **양하 칸 추정 — 한 층이 다 내려왔는데 열별 추정이 빈 칸·겹친 칸을 남기면 베이 한 층을 통째로 다시 맞춤**(NSFR 2621N 20번 데크 빈 칸 4) → 5.06   // 5.06 **사용 매뉴얼(출력)에 «양하·선적 PLAN 읽는 법» 움직이는 설명서 연결**(검수사 2026-11-16 «앱별로 사용메뉴얼에 첨부 바랍니다» — public/plan-guide.html 검수앱 편 #T · 콘앱 편 #C, 콘앱 사용 안내에도 링크 · ConeOne 3.03) (앞 판) 5.05 **콘앱 PLAN 맞춤 — 폰에서 도면이 오른쪽으로 밀려 잘림 수리**(검수사 2026-11-16 09:30 «콘앱 플랜 맞춤은 안되었습니다» — 자연 크기를 배치 크기로 · 실제 왼쪽 자리를 되재서 보정) (앞 판) 5.04   // 5.04 **폰 카메라 HEIC 사진을 앱이 스스로 JPEG 로 풀어 읽음**(검수사 2026-11-16 07:51~07:57 데미지 보고 «앱이 스스로 처리해야 합니다 · 개인 폰을 이미지 방식을 강요할수 없습니다» — 1016682B 실파일 ftypheic 확인 · libheif-js 별도 조각 · 못 풀면 형식 이름을 알림) (앞 판) 5.03-01 사진을 못 읽을 때 진짜 형식(HEIC·AVIF 등)을 알림(검수사 2026-11-16 07:51 데미지 보고 «이 사진을 읽지 못했습니다 · 형식 알 수 없음 · 1016682B») (앞 판) 5.03 **한 판 수정 열한 건**(검수사 2026-11-14~15 기록 — 양하·선적 끝나면 앱이 스스로 완료 · 나 오늘 배별 · 베이모드 육상/해상부터 · 갱별 규격표 · 사진 앨범 형식 · 콘앱 플랜 맞춤 · 한도 이월 · 미르 호기 답 · 실번호 대소문자) (앞 판) 5.02-04 5.02-04 **수석 상황판 별첨3 규격별 F/E · 별첨4 목적지별 · 엠티 줄도 움직이는 그림으로**(검수사 2026-11-14 «수석 상황판 좌측을 모션 그래픽으로 바꿨는데 안바뀐 부분이 있네여» — 5.02 가 별첨1·2만 바꿔 3·4가 표로 남았다 · LegendFE + LegendRows 재사용, 숫자는 같은 L 한 벌, 옛 표는 «표로 보기 (별첨1~4)») (앞 판) 5.02-03 **콘앱 불편신고·새로고침 줄 오른쪽 끝에 «🐱 미르» 단추**(검수사 2026-11-14 13:05 «콘앱에 미르를 부를곳이 없습니다» · 13:06 «이곳 오른쪽 끝부분이 좋을듯합니다» — 4.89·2.79 가 떠 있는 얼굴을 숨긴 뒤 작업표 전 화면에는 입구가 없었다 · ConeOne 3.00-03) (앞 판) 5.02-02 **양하가 끝난 배의 베이별 진행이 끝난 양하로 뜨던 것**(5.02-01 라이브 확인 — bayModes[0] 이 양하라 선적 대신 양하가 기본) · 5.02-01 **양하가 끝나고 선적만 남은 배는 홈 상세 위 두 상자에서 선적이 먼저**(검수사 2026-11-14 09:13 «끝난 양하 화면이 보입니다 — 작업중인 걸 보여 줬으면») + **홈 베이 카드 트윈·싱글 줄이 잘리지 않게 조각 단위 줄바꿈**(라이브 확인 — 폰 156px 칸에 «트윈 26 · 싱글 앞 2 · 40피트 9» 끝이 «…») · 5.02 **상황판 별첨·홈 상세를 움직이는 그림으로**(검수사 2026-11-14 «복잡해서 눈에 잘 들어오지 않습니다 — 모션그래픽으로» · «전체수량 양하·선적과 작업중인 베이도» · «베이는 1 (2) 3 이 기본» · «트윈 4 · 싱글 앞 1 / 뒤 5 — 남은 베이마다 표기») — 별첨1·2 고리·남은 N대·안 끝난 줄만 펼침·끝난 줄 ✓ 칩(앱 순서 그대로) · 4척 한 줄 요약 · 홈 양하·선적 큰 숫자(CountUp) · 작업중 호기 줄 · 베이 묶음 «01 (02) 03» 카드 + 트윈·싱글 앞/뒤 (앞 판) 5.01-01 **베이뷰·베이모드 위 띠에 미르 문**(검수사 2026-11-14 01:09 «아깜박있었는데 양하에서 베이모드에서는 미르를 부르지 못합니다» — 베이뷰는 전체 화면 덮개라 검색줄이 가려진다 → BayViewWork 두 머리줄에 ChiefMirBar chip, MirFab 시트 한 벌) · 5.01 **홈 «나 오늘» 이 오늘 보관소로 넘어간 배까지 합치고, 누르면 배별 양하·선적을 보인다**(검수사 2026-11-13 21:09 «총댓수만 보여주고 그곳을 누르면 세분화 해서 … 양하 선적을 다 보여줘야 합니다 · PCSZ 96 STMJ 39» — PCSZ 2634E 가 14:31 보관소로 넘어가며 헤더 39대로 굳었다. nlSearch.myTodayByShip · firebase.fbGetMyArchivedToday · HomePage meLine) (앞 판) 5.00-02 **수석 상황판 미르 줄**(검수사 2026-11-13 «수석관리창에 항상 빈곳이 있씁니다. 그안에 미르를 넣어 주세요» — · 18:19 «이안에 넣으세요» — 탭 줄 넷째 칸 ChiefMirBar, 누르면 MirFab 시트) + **5.00-01 라이브 확인·감사 수리** — 경고 띠 문장 속 컨 번호도 CnText(CnInline) · 3안 폰 가로 1px 넘침 막음 · 도착항 확인 요망 강조색 · 자리 수정 창 컨 번호 · 컨 상세 입력 중 Esc 는 입력만 빠져나옴 · ConeOne 3.00-02 양하·선적 항차 번호가 다른 배(STMJ 2671E/2672W)를 양하·선적 둘 다 잡음
 
 //  ★ 2.99-03 (검수사 «업데이트는 올라오는데 업데이트 내용을 모릅니다. 간략하게 내용을 포함해 주세요»):
 //    판마다 **한 줄 변경 내용**. build.sh 가 public/sw.js 의 NOTE 로 옮기고, 업데이트 배너가 새 워커에게 물어 그 줄을 보여 준다.
 //    ⚠ 작은따옴표·슬래시 금지(sed 가 깨진다). 검수사 표현으로 쓴다 — «플랜 수정» «해치커버 버그 해결» «브리핑 자료 수정» 처럼.
-export const APP_NOTE = '5.20 관리자 작업 — 관리자는 미르에게 N호기로 등록한 배에서만 작업자로 기록되고 다른 검수원에게 보입니다. 등록하지 않으면 다른 검수원 화면에 나타나지 않습니다.'
+export const APP_NOTE = '5.21 여객선 작업보고 — 마감 5분 전부터 호기별 표가 실시간으로 보이다가 정각에 멈춥니다. 멈춘 뒤 그대로 보고하거나 칸을 고쳐 수정 보고합니다.'
 // (앞 판) APP_NOTE 5.12-01 — 매뉴얼과 미르 안내의 예시 이름을 실명 대신 홍길동으로 바꿨습니다.
 // (앞 판) APP_NOTE 5.12 — 예보를 플랜 별첨처럼 규격별·화물 종류별 두 표로 보이고 항차 카드에 예상 대수를 적습니다. 트윈 무게 경보 문구도 짧게 바꿨습니다.'
 // (앞 판) APP_NOTE 5.11-01 — 트윈 무게 경보 문구를 «싱글 권유 · 55톤까지 트윈 가능» 으로 짧게 바꿨습니다.
@@ -4537,7 +4538,10 @@ export function shiftReportContainers(voyage, m) {
       const e = edi[U.ediKeyOf.get(cn)] || edi[cn] || {};
       const r = recs[cn] || {};
       //  3.63 — records 의 빈 칸은 EDI 를 덮지 않는다(아래 선적 갈래와 같은 규칙). pod 는 EDI 가 정본(고른 POD 는 resolvedPod 가 이미 반영) — 세관 «최종항» 이 보고서의 POD 를 바꾸지 않는다.
-      const rr = Object.fromEntries(Object.entries(r).filter(([k, vv]) => vv !== '' && vv != null && !(k === 'pod' && e.pod && !r.pod_pick)));
+      //  ★ 5.21 — 양하 작업보고의 풀·엠티도 EDI 가 정본이다(고른 값 fe_pick 은 그대로). 검수사 2026-11-22 22:37 «수화물입니다. 내릴때는 풀이고 실을떄는 엠티입니다».
+      //    실측 OBWH 14항차 — 양하 EDI F ↔ 세관 E 로 갈리는 컨은 항차마다 수화물 한 대뿐(SPSU2042317·SPSU2042322 · 3번 베이 05열, 선적 EDI 는 E).
+      //    세관 E 가 EDI F 를 덮어 2797E 11-20 주간보고가 1호기 «20 F1 · E1» 로 나갔다(카톡 실보고 «20자 2»).
+      const rr = Object.fromEntries(Object.entries(r).filter(([k, vv]) => vv !== '' && vv != null && !(k === 'pod' && e.pod && !r.pod_pick) && !(k === 'fe' && e.fe && !r.fe_pick)));
       out.push(markDischargeUnit({ ...e, ...rr, cn, _comp: comp[cn] || null }, U));
     }
     return out;
@@ -4630,6 +4634,31 @@ export function qcRowsOf(qcWork) {
     .filter((q) => q.no && (q.disDone + q.disRest + q.lodDone + q.lodRest) > 0)
     .sort((a, b) => a.no - b.no);
 }
+//  ★ 5.21 — 갱별 보고의 호기 추적 재료 만들기 + craneTrack 부르기. conts = {discharge, loading}(shiftReportContainers) · order = 선수 → 선미 호기 번호.
+//    반환 {discharge:{컨:호기}, loading:{컨:호기}} — 끝난 컨(자리·시각 아는 것)만. 20대가 안 되면 null(따라갈 것이 없다).
+const _trackMemo = new Map();
+function _trackGang(conts, order, pages, now) {
+  const rows = [], tag = [];
+  for (const m of ['discharge', 'loading']) for (const c of (conts[m] || [])) {
+    const at = c._comp && Number(c._comp.at); if (!at || at > now + 5 * 60000) continue;
+    const b = parseInt(normalizeBay(c.bay_actual || c.bay || ''), 10); if (!(b > 0)) continue;
+    const e = c._comp.by ? crewCraneNo(c._comp.equip) : 0;   // 사람이 고른 호기만 사실
+    const pin = e ? order.indexOf(e) : -1;
+    rows.push({ at, hatch: hatchEvenOf(b, pages) ?? b, pin: pin >= 0 ? pin : undefined }); tag.push([m, c.cn]);
+  }
+  if (rows.length < 20) return null;
+  //  감사 — 창·보관·자동 적기·주야간 화면이 같은 재료로 각각 부른다(호기 3대부터는 한 번에 수백 ms). 같은 재료면 앞 답을 쓴다.
+  let sig = `${order.join('.')}|${rows.length}`; { let h1 = 0, h2 = 0; for (const r of rows) { h1 = (h1 * 31 + (r.at % 1000003)) % 2147483647; h2 = (h2 * 33 + r.hatch * 7 + (r.pin == null ? 0 : r.pin + 1)) % 2147483647; } sig += `|${h1}|${h2}`; }
+  let a = _trackMemo.get(sig) || null;
+  if (!a) {
+    try { a = trackCranes(rows, order.length); } catch (e) { console.warn('[5.21] 호기 추적 실패 — 종전 방식으로 냅니다', e); return null; }
+    if (a) { if (_trackMemo.size > 12) _trackMemo.delete(_trackMemo.keys().next().value); _trackMemo.set(sig, a); }
+  }
+  if (!a) return null;
+  const out = { discharge: {}, loading: {} };
+  a.forEach((i, k) => { out[tag[k][0]][tag[k][1]] = order[i]; });
+  return out;
+}
 export const GANG_TABLE_MAX_ERR = 0.10;   // 붙인 완료 합계 ↔ QC 합계 차이가 이것을 넘으면 갱별 규격표를 내지 않는다
 //  opts.qcSnap = {at, qcWork} — 마감 직후 굳혀 둔 호기 표(대수만 내는 배의 숫자를 마감 시각에 맞춘다). 없으면 지금 값.
 //  ★ 3.64 — opts.shift('주간'|'야간')·opts.cutMs — 지난 마감(어제 17:00 · 오늘 05:30)의 보고를 나중에 다시 센다(검수사 «놓쳐서 작업 보고를 못했을떄
@@ -4657,6 +4686,7 @@ export function buildGangShiftReport(voyage, pages = null, now = Date.now(), opt
   };
   const _k = { discharge: 'dis', loading: 'lod' };
   let craneOf = null;   // mode → cn → 호기
+  let useTrk = false;   // 5.21: 같은 시각 다른 호기 위치 추적으로 붙였나
   if (nos.length === 1) {
     craneOf = { discharge: {}, loading: {} };
     for (const m of ['discharge', 'loading']) for (const c of conts[m]) craneOf[m][c.cn] = nos[0];
@@ -4709,9 +4739,30 @@ export function buildGangShiftReport(voyage, pages = null, now = Date.now(), opt
         }
       }
     }
+    //  ★ 5.21 — **같은 시각 다른 호기 위치로 컨마다 호기를 따라간다**(craneTrack.trackCranes). 검수사 2026-11-22 «동시간대 장비들 위치파악이 중요 합니다».
+    //    동방은 컨별 크레인을 주지 않고(적하목록·컨 조회 실측) 동방 배는 termWork 도 비어, 종전 바구니 붙이기는 보관 15건 중 12건을 «대수만» 으로 냈다.
+    //    재료는 완료 기록의 시각 + 선내위치(장). 검수원이 호기를 고르고 찍은 완료(by 있음)는 사실이라 그대로 고정한다 — 수집기가 찍은 호기(by 없음)는 추정이라 안 쓴다.
+    //    양하·선적을 한 시간줄에 같이 놓는다(크레인은 하나다). 문지기는 아래 ② 그대로 — 끝난 대수가 동방 호기 합계와 10% 넘게 다르면 완료 쪽은 대수만.
+    //  ⚠ 감사 — 터미널 실적에 진짜 호기(equip)가 있는 배(PCTC)는 추적하지 않는다. 합계가 조금 더 맞는다고 컨별 실호기를 추정으로 덮지 않는다.
+    const trk = rows.some((r) => r.crane) ? null : _trackGang(conts, order, pages, now);
+    let errTrk = null, errTrkRev = null;
+    if (trk) {
+      const revNo = {}; order.forEach((no, i) => { revNo[no] = order[order.length - 1 - i]; });
+      let e1 = 0, e2 = 0, tt = 0;
+      for (const q of qcs) for (const m of ['discharge', 'loading']) {
+        const want = q[_k[m] + 'Done']; let a = 0, b2 = 0;
+        for (const no of Object.values(trk[m])) { if (no === q.no) a++; if (revNo[no] === q.no) b2++; }
+        e1 += Math.abs(a - want); e2 += Math.abs(b2 - want); tt += want;
+      }
+      errTrk = tt ? e1 / tt : 0; errTrkRev = tt ? e2 / tt : 0;
+      if (tt >= 20 && errTrk > GANG_TABLE_MAX_ERR && errTrkRev <= GANG_TABLE_MAX_ERR) return qcOnly('접안 방향을 뒤집어 붙인 쪽이 호기 합계에 더 맞습니다 — 방향 자료를 확인할 때까지 갱별 규격표 없이 집계 대수만 냅니다');
+    }
     const known = Object.keys(first).map(Number).filter((h) => Number.isFinite(h));
-    if (!known.length) return qcOnly('두 호기가 같은 분에 서로 다른 장을 한 실적이 아직 없어 갱을 못 가립니다 — 터미널 호기 집계 대수만 냅니다');
-    const nearCrane = (h) => { if (first[h]) return first[h]; if (!Number.isFinite(h)) return 0; const k = known.reduce((a, b) => (Math.abs(b - h) < Math.abs(a - h) ? b : a)); return first[k] || 0; };
+    if (!known.length) {
+      if (!trk) return qcOnly('두 호기가 같은 분에 서로 다른 장을 한 실적이 아직 없어 갱을 못 가립니다 — 터미널 호기 집계 대수만 냅니다');
+      useTrk = true;
+    }
+    const nearCrane = (h) => { if (first[h]) return first[h]; if (!Number.isFinite(h) || !known.length) return 0; const k = known.reduce((a, b) => (Math.abs(b - h) < Math.abs(a - h) ? b : a)); return first[k] || 0; };
     rows.forEach((r) => { if (!r.crane) r.crane = (fbBy && fbBy[r.m][r.hatch]) || nearCrane(r.hatch); });
     //  ② 문지기 — 붙인 완료 합계가 QC 합계와 크게 다르면 규격표를 내지 않는다(조용히 틀리지 않는다). 방향을 뒤집은 쪽이 더 맞으면 방향 자료를 의심한다.
     const rev = {}; order.forEach((no, i) => { rev[no] = order[order.length - 1 - i]; });
@@ -4723,7 +4774,8 @@ export function buildGangShiftReport(voyage, pages = null, now = Date.now(), opt
       tot += want;
     }
     out.err = tot ? err / tot : 0;
-    if (tot >= 20 && errRev + 0.02 * tot < err) return qcOnly('접안 방향을 뒤집어 붙인 쪽이 호기 합계에 더 맞습니다 — 방향 자료를 확인할 때까지 갱별 규격표 없이 집계 대수만 냅니다');
+    if (trk && (useTrk || errTrk < out.err)) { useTrk = true; out.err = errTrk; out.track = true; }   // 5.21: 추적이 호기 합계에 더 맞으면 추적으로
+    if (!useTrk && tot >= 20 && errRev + 0.02 * tot < err) return qcOnly('접안 방향을 뒤집어 붙인 쪽이 호기 합계에 더 맞습니다 — 방향 자료를 확인할 때까지 갱별 규격표 없이 집계 대수만 냅니다');
     //  ★ 3.66-02 — **붙인 완료를 못 믿어도 «잔여» 표는 낸다**(검수사 2026-09-28 16:04 «규격표가 없으면 어떻게 주간보고를 할수있죠?» · 16:10 동방 «본선 작업 현황» 캡처 «이곳 참조는 하시나요?»).
     //    완료 쪽은 위치로 호기를 붙인 값이라 호기가 장을 옮겨 다니면 틀린다(실측 OBWH 2751E 16:12 — 12:30~12:50 14번 장 11대를 1호기가 했는데 2호기로 붙어 85/81 ↔ 터미널 96/70).
     //    남은 컨은 다르다 — 아래 ④가 선수 호기부터 **터미널 호기별 잔여 대수**로 작은 장부터 나눈다. 동방 베이별 잔여(bayWork)로 재 보면
@@ -4732,6 +4784,7 @@ export function buildGangShiftReport(voyage, pages = null, now = Date.now(), opt
     out.doneUnsure = tot >= 20 && out.err > GANG_TABLE_MAX_ERR;
     craneOf = { discharge: {}, loading: {} };
     for (const r of rows) craneOf[r.m][r.cn] = r.crane;
+    if (useTrk) for (const m of ['discharge', 'loading']) for (const [cn, no] of Object.entries(trk[m])) craneOf[m][cn] = no;   // 5.21
     //  ③ 앱으로 찍은 완료의 호기(사람이 고른 호기)는 그대로 쓴다 — 터미널 실적이 없는 컨만.
     for (const m of ['discharge', 'loading']) for (const c of conts[m]) {
       if (craneOf[m][c.cn]) continue;
@@ -4766,12 +4819,24 @@ export function buildGangShiftReport(voyage, pages = null, now = Date.now(), opt
       //  3.66-02 — 붙인 완료를 못 믿을 때: 기준은 터미널 호기 대수로 정한다(적은 쪽). 작업량 기준이면 대수만, 잔여 기준이면 잔여 규격표.
       //    ⚠ 호기 대수는 마감 직후 굳혀 둔 표(qcSnap)가 있으면 그것 — 대수만 내는 경로(qcOnly)와 같은 한 벌(감사 — 다시 셀 때 «지금» 대수로 17:00 잔여를 지웠다).
       //    ⚠ 잔여 표 합이 터미널 호기 잔여와 10%(최소 2대) 넘게 다르면 표를 믿지 않는다 — 대수만(감사 — 터미널 실적 반영 전 컨·자리 모르는 컨·마감 뒤 끝난 컨이 섞일 때).
+      //  ★ 5.21 (감사) — 추적으로 붙였을 때도 **잔여 표 합이 터미널 호기 잔여와 10%(최소 2대) 넘게 다르면 그 갱은 대수만**(남은 컨의 자리를 몰라 «호기 미상» 으로 빠지면
+      //    갱이 «작업 완료 — 보고 제외» 로 나갔다 — 3.66-02 문지기가 doneUnsure 갈래에만 있었다). 카드 머리 숫자도 굳힌 호기 표(3.66-03 과 같은 한 벌).
+      if (useTrk && !out.doneUnsure) {
+        const qq = (snap ? qcRowsOf(snap.qcWork) : qcs).find((x) => x.no === q.no) || q;
+        g.qcNow = qq;
+        const qd = qq[_k[m] + 'Done'], qr = qq[_k[m] + 'Rest'], r0 = g[m];
+        const rem0 = r0.none ? 0 : (r0.excluded ? 0 : (Number(r0.remainTotal) || 0));
+        if (qr > 0 && Math.abs(rem0 - qr) > Math.max(2, Math.round(qr * 0.1))) {
+          g[m] = _qcCountReport(qd, qr); out.remainOff = true;
+          if (list.length && !g[m].none && !g[m].excluded) { const e0 = buildShiftReport(list, shift, cutMs, g[m].basis); if (!e0.excluded) g[m].est = { tbl: e0.tbl, total: e0.total }; }
+        }
+      }
       if (out.doneUnsure) {
         const qq = (snap ? qcRowsOf(snap.qcWork) : qcs).find((x) => x.no === q.no) || q;
         g.qcNow = qq;   // 3.66-03: 카드 머리 숫자도 본문과 같은 호기 표(굳힌 표) — 감사 «머리 139/0 · 본문 완료 96 · 잔여 43»
         const qd = qq[_k[m] + 'Done'], qr = qq[_k[m] + 'Rest'];
         if (!qd && !qr) g[m] = { none: true };
-        else if (!qr || qd <= qr || !list.length) g[m] = _qcCountReport(qd, qr);
+        else if (!qr || qd <= qr || !list.length) { g[m] = _qcCountReport(qd, qr); if (list.length && !g[m].none && !g[m].excluded) { const e0 = buildShiftReport(list, shift, cutMs, g[m].basis); if (!e0.excluded) g[m].est = { tbl: e0.tbl, total: e0.total }; } }   // 5.21: 고쳐 보고할 밑값(붙인 값 — 믿지 못해 대수만 낸 갱)
         else {
           const f = buildShiftReport(list, shift, cutMs, '잔여');
           if (f.excluded || Math.abs(f.remainTotal - qr) > Math.max(2, Math.round(qr * 0.1))) { g[m] = _qcCountReport(qd, qr); out.remainOff = true; }
@@ -4781,6 +4846,10 @@ export function buildGangShiftReport(voyage, pages = null, now = Date.now(), opt
     }
     return g;
   });
+  if (!out.doneUnsure && out.remainOff) {   // 5.21: 추적 경로 — 잔여가 안 맞는 갱만 대수
+    out.why = '앱에 남은 컨이 터미널 호기 잔여와 맞지 않는 갱은 대수만 냅니다(남은 컨의 자리를 모르거나 자료가 아직 안 들어옴)';
+    out.shipTable = out.gangs.some((g) => ['discharge', 'loading'].some((m) => g[m] && g[m].countsOnly));
+  }
   if (out.doneUnsure) {
     out.why = `위치로 붙인 완료가 터미널 호기 집계와 ${Math.round(out.err * 100)}% 달라 완료(작업량) 기준 갱은 대수만 냅니다 — 잔여 기준 갱은 남은 컨을 선수 호기부터 터미널 호기별 잔여 비율로 나눈 규격표입니다`
       + (out.remainOff ? ' · 앱 잔여가 터미널 호기 잔여와 맞지 않는 갱도 대수만 냅니다' : '');
@@ -4829,6 +4898,70 @@ export function ferry1700Due(voyage, now = Date.now(), key = '') {
   const cut = shiftCutMs('주간', now);
   const d0 = new Date(now); d0.setHours(6, 0, 0, 0);
   return _ferryCutApplies(voyage, '주간', cut, d0.getTime() - 1);
+}
+
+//  ★ 5.21 — **마감 5분 전부터 보고 창을 띄운다.** 검수사 2026-11-22 «작업보고 5분전 부터 호기별로 보여줬으면 합니다» · «5분전부터 실시간으로 보여주다가 정각에 멈추면 됩니다».
+//    주간 16:55:00 ~ 17:29:59 · 야간 05:25:00 ~ 05:59:59. 마감 전(pre)에는 지금까지 끝난 것을 그대로 세고(실시간), 마감이 지나면 그 마감 값에서 멈춘다(buildShiftReport 가 마감 시각으로 가른다).
+//    그 근무에 한 대라도 끝냈고 아직 안 끝난 대상 배만(_ferryCutApplies 한 벌 — 17시 창·보관과 같은 판정). 반환 {shift, cutMs, key, pre} 또는 null.
+export const FERRY_PRE_MS = 5 * 60000;
+export function ferryShiftDue(voyage, now = Date.now(), key = '') {
+  const info = (voyage && voyage.info) || {};
+  if (!isFerry1700Ship(info, key)) return null;
+  const day = new Date(now); day.setHours(17, 0, 0, 0);
+  const night = new Date(now); night.setHours(5, 30, 0, 0);
+  let shift = '', cut = 0, winStart = 0;
+  if (now >= day.getTime() - FERRY_PRE_MS && now < day.getTime() + 30 * 60000) { shift = '주간'; cut = day.getTime(); const d0 = new Date(now); d0.setHours(6, 0, 0, 0); winStart = d0.getTime() - 1; }
+  else if (now >= night.getTime() - FERRY_PRE_MS && now < night.getTime() + 30 * 60000) { shift = '야간'; cut = night.getTime(); const p = new Date(now); p.setDate(p.getDate() - 1); p.setHours(17, 0, 0, 0); winStart = p.getTime(); }
+  else return null;
+  if (!_ferryCutApplies(voyage, shift, cut, winStart)) return null;
+  return { shift, cutMs: cut, key: shiftReportKey(shift, cut), pre: now < cut };
+}
+//  ★ 5.21 — **수정 보고.** 검수사 2026-11-22 «멈춘상태에서 그대로 보고 할건지 수정보고 할건지를 정하고 수정보고한다고 하면 각 셀에 수정기능을 넣어주면 됩니다 합산은 자동계산으로».
+//    고친 칸은 항차 정보 info.shiftReports/{열쇠}/edit = {by, at, sides:{g<호기>|ship:{discharge|loading:{s20,s40,s45 각 {F,E}}}}} 에 따로 둔다 — 앱이 센 보고(rep)는 그대로 남는다.
+//    화면·카톡·보관·주야간 화면은 applyShiftEdit 한 벌로 고친 값을 얹어 본다. 기준(작업량·잔여)은 앱이 정한 그대로(원규칙), 합계는 칸에서 다시 더한다.
+const _SZ_KEYS = ['s20', 's40', 's45'];
+const _cellN = (x) => { const n = Math.floor(Number(x)); return Number.isFinite(n) && n > 0 ? Math.min(n, 9999) : 0; };
+/** 한 쪽 보고의 칸 값(표가 있으면 표, 대수만이면 밑값(est), 없으면 0). */
+export function shiftSideCells(r) {
+  const t = (r && (r.tbl || (r.est && r.est.tbl))) || null;
+  const o = {};
+  for (const k of _SZ_KEYS) o[k] = { F: _cellN(t && t[k] && t[k].F), E: _cellN(t && t[k] && t[k].E) };
+  return o;
+}
+export function shiftCellsTotal(c) {
+  let F = 0, E = 0;
+  for (const k of _SZ_KEYS) { F += _cellN(c && c[k] && c[k].F); E += _cellN(c && c[k] && c[k].E); }
+  return { F, E, total: F + E };
+}
+const _sideLive = (r) => !!r && !r.none && !r.excluded;
+/** 그 쪽(양하·선적)을 보고에 보이나 — 끝난 쪽(보고 제외)과 아직 시작 안 한 쪽(기준 대수 0)은 보이지 않는다. 사람이 고친 표는 0 이어도 보인다. */
+export function shiftSideShown(r) {
+  if (!_sideLive(r)) return false;
+  if (r.edited) return true;
+  return ((r.total && Number(r.total.total)) || 0) > 0;
+}
+function _editedSide(r, cells, meta) {
+  const tbl = shiftSideCells({ tbl: cells });
+  return { excluded: false, basis: r.basis || '작업량', tbl, total: shiftCellsTotal(tbl), doneTotal: Number(r.doneTotal) || 0, remainTotal: Number(r.remainTotal) || 0,
+    edited: true, appTotal: (r.total && Number(r.total.total)) || 0, ...(r.countsOnly ? { appCountsOnly: true } : {}), editBy: meta.by, editAt: meta.at };
+}
+export function applyShiftEdit(rep, edit) {
+  if (!rep || !edit || typeof edit !== 'object' || !edit.sides || typeof edit.sides !== 'object') return rep;
+  const meta = { by: String(edit.by || ''), at: Number(edit.at) || 0 };
+  const _m = (e) => ({ by: String((e && e.by) || meta.by), at: Number(e && e.at) || meta.at });   // 쪽마다 고친 사람(두 사람이 각자 제 갱을 고쳐도 서로 지우지 않는다)
+  const out = { ...rep, edit: meta };
+  out.gangs = (rep.gangs || []).map((g) => {
+    const e = edit.sides['g' + g.no]; if (!e || typeof e !== 'object') return g;
+    const ng = { ...g };
+    for (const m of ['discharge', 'loading']) if (e[m] && _sideLive(g[m])) ng[m] = _editedSide(g[m], e[m], _m(e[m]));
+    return ng;
+  });
+  const es = edit.sides.ship;
+  if (es && typeof es === 'object' && rep.ship) {
+    out.ship = { ...rep.ship };
+    for (const m of ['discharge', 'loading']) if (es[m] && _sideLive(rep.ship[m])) out.ship[m] = _editedSide(rep.ship[m], es[m], _m(es[m]));
+  }
+  return out;
 }
 
 //  ★ 3.64 — 카페리 작업이 끝났나(보관한 17시·05시30분 보고가 같이 사라지는 때 — 검수사 «사라지는 시점은 작업 완료 되면 같이 사라지면 됩니다»).

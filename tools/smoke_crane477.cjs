@@ -87,7 +87,7 @@ console.log('⑤ 화면 연결 · 콘앱 연결 · 미르 입력 (소스 검사)
   const mir = rd('src/mir.js');
   check('미르 _qcBusyNos 가 보정 전 터미널 원값(termDisDone)으로 판정한다', /q\.termDisDone != null/.test(mir));
   const fe = rd('src/components/Ferry1700Alert.jsx');
-  check('17시 마감 보고에 보정값 표식(qcWorkFix)을 남긴다', (fe.match(/qcWorkFix: true/g) || []).length === 2); }
+  check('17시 마감 보고에 보정값 표식(qcWorkFix)을 남긴다', (fe.match(/qcWorkFix(?:`\])?: true/g) || []).length === 2); }
 
 console.log('⑥ 해치 추정 방어');
 { const NET = (reps, bays) => M.hatchOpenedNetOf({ reports: reps }, bays);

@@ -1,6 +1,6 @@
 // 작업 보고 카톡 공유 헬퍼 (M3.5.6-fix)
 // Web Share API + 사진 위에 자막 합성
-import { formatHatchBays } from './utils.js';   // 2.98-12: 해치 보고 베이 표기 «17 (18)19» 한 벌
+import { formatHatchBays, shiftSideShown } from './utils.js';   // 2.98-12: 해치 보고 베이 표기 «17 (18)19» 한 벌
 
 // 텍스트 메시지 공유
 export async function shareText(message, title = '검수 보고') {
@@ -462,8 +462,7 @@ export function buildFerry1700Message({ vsl, voy, rep, gangNos = null, recompute
   const _night = rep && rep.shift === '야간';   // 3.64: 보관한 야간(05:30 마감) 보고도 같은 글 모양
   const L = [`📍 ${vsl || ''} ${voy || ''}`.trim(), _night ? '📋 야간 작업보고 (05:30 마감)' : '📋 주간 작업보고 (17:00 마감)'];
   const side = (label, r, withTable = true) => {
-    if (!r || r.none) return;
-    if (r.excluded) { L.push(`■ ${label} — 작업 완료`); return; }
+    if (!shiftSideShown(r)) return;   // 5.21: 끝난 쪽·아직 시작 안 한 쪽(0대)은 적지 않는다(화면과 한 벌 — 검수사 2026-11-22 22:30)
     L.push(`■ ${label} — ${r.basis} ${r.total.total}대 (완료 ${r.doneTotal} · 잔여 ${r.remainTotal})`);
     if (!withTable || r.countsOnly || !r.tbl) return;
     for (const [nm, o] of [['20ft', r.tbl.s20], ['40ft', r.tbl.s40], ['45ft', r.tbl.s45]]) L.push(`  ${nm}  F ${o.F} · E ${o.E}`);
@@ -471,9 +470,10 @@ export function buildFerry1700Message({ vsl, voy, rep, gangNos = null, recompute
   };
   const all = (rep && rep.gangs) || [];
   const gangs = gangNos && gangNos.length ? all.filter((g) => gangNos.includes(g.no)) : all;
-  if (!gangs.length) { side('양하', rep && rep.ship && rep.ship.discharge); side('선적', rep && rep.ship && rep.ship.loading); }
+  if (!gangs.length) { side('양하', rep && rep.ship && rep.ship.discharge); side('선적', rep && rep.ship && rep.ship.loading); if (!(rep && rep.ship && (shiftSideShown(rep.ship.discharge) || shiftSideShown(rep.ship.loading)))) L.push('보고할 것 없음'); }
   else {
-    for (const g of gangs) { L.push(`🏗 ${g.no}호기`); side('양하', g.discharge); side('선적', g.loading); }
+    //  재감사 — 보일 쪽이 없는 갱은 한 줄로 밝힌다(통째로 빼면 내 갱만 보낼 때 본문 없는 글이 나갔다).
+    for (const g of gangs) { if (!shiftSideShown(g.discharge) && !shiftSideShown(g.loading)) { L.push(`🏗 ${g.no}호기 — 보고할 것 없음`); continue; } L.push(`🏗 ${g.no}호기`); side('양하', g.discharge); side('선적', g.loading); }
     if (!rep.perGang || rep.shipTable || (rep.doneUnsure && rep.postCut > 0)) {   // 3.66-02: 대수만 갱이 섞이면 배 전체 표 · 이유
       const q = new Date(rep.qcAt || Date.now());
       const _tail = rep.postCut > 0 ? ` — 터미널 호기 집계 대수 ${String(q.getHours()).padStart(2, '0')}:${String(q.getMinutes()).padStart(2, '0')} 값, ${_night ? '05:30' : '17:00'} 뒤 ${rep.postCut}대 포함` : ' — 터미널 호기 집계 대수';
@@ -482,11 +482,12 @@ export function buildFerry1700Message({ vsl, voy, rep, gangNos = null, recompute
       const _hasTbl = gangs.some((g) => [g.discharge, g.loading].some((r) => _live(r) && !r.countsOnly && r.tbl));
       const _hasCnt = gangs.some((g) => [g.discharge, g.loading].some((r) => _live(r) && r.countsOnly));
       const _t2 = _tail.replace(' — 터미널 호기 집계 대수', '');
-      const _paren = !rep.perGang || !_hasTbl ? `(갱별 규격표 없음${_tail})` : (_hasCnt ? `(대수만 나간 갱은 터미널 호기 집계 대수${_t2})` : (rep.postCut > 0 ? `(터미널 호기 집계${_t2})` : ''));
+      const _paren = !_hasTbl ? `(갱별 규격표 없음${_tail})` : (_hasCnt ? `(대수만 나간 갱은 터미널 호기 집계 대수${_t2})` : (rep.postCut > 0 ? `(터미널 호기 집계${_t2})` : ''));
       if (_paren) L.push(_paren);
-      L.push('▶ 배 전체'); side('양하', rep.ship.discharge); side('선적', rep.ship.loading);
+      if (shiftSideShown(rep.ship.discharge) || shiftSideShown(rep.ship.loading)) { L.push('▶ 배 전체'); side('양하', rep.ship.discharge); side('선적', rep.ship.loading); }
     }
   }
+  if (rep && rep.edit && gangs.concat([{ discharge: rep.ship && rep.ship.discharge, loading: rep.ship && rep.ship.loading }]).some((g) => [g.discharge, g.loading].some((r) => r && r.edited))) L.push(`(수정 보고${rep.edit.by ? ' — ' + rep.edit.by : ''})`);   // 5.21: 사람이 칸을 고쳐 보낸 보고
   if (recomputed) L.push('(마감 때 적어 둔 보고가 없어 지금 자료로 다시 센 값 — 갱 숫자는 조금 다를 수 있음)');   // 3.64: 화면 안내와 같은 말
   const d = new Date((rep && rep.cutMs) || Date.now());
   L.push(`시각: ${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${_night ? '05:30' : '17:00'}`);

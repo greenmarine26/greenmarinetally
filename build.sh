@@ -1711,6 +1711,12 @@ fi
         --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --alias:pdfjs-dist/build/pdf="$(pwd)/tools/stub_pdfjs.js" \
       && node tools/smoke_autoclose509.cjs "$SMOKE_AC" || { rm -f "$SMOKE_AC"; echo "✗ 5.09(자동 완료 저장) 연막검사 실패 — 배포 금지"; exit 1; }
     rm -f "$SMOKE_AC"
+    #  5.21: **여객선 작업보고** — 같은 시각 다른 호기 위치 추적(craneTrack) · 마감 5분 전 창(ferryShiftDue) · 수정 보고 얹기(applyShiftEdit · 합계 자동)
+    SMOKE_GT=$(mktemp /dev/shm/hometmp/_smokegt_XXXXXX.cjs)
+    npx esbuild tools/smoke_gangtrack521_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_GT" --loader:.js=jsx --jsx=automatic --log-level=error \
+        --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js --alias:pdfjs-dist/build/pdf="$(pwd)/tools/stub_pdfjs.js" \
+      && node tools/smoke_gangtrack521.cjs "$SMOKE_GT" || { rm -f "$SMOKE_GT"; echo "✗ 5.21(여객선 작업보고 추적·수정 보고) 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_GT"
     #  4.76: 미르 끝나는 시각 = 지금 일하는 호기 수 × 최근 120 실작업분 갱당 속도(KKLC 2610N 재현) · 호기 이동 말(철수·이동·복귀) · 해치 닫는 장수 = 연 합
     SMOKE_MV=$(mktemp /dev/shm/hometmp/_smokemv_XXXXXX.cjs)
     npx esbuild tools/smoke_move476_entry.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MV" --loader:.js=jsx --jsx=automatic --log-level=error \

@@ -1124,7 +1124,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
       {showPier && <PierRegisterModal inspector={inspector} onClose={() => setShowPier(false)} />}
       {/* ★ 3.63 — 카페리 17:00 주간 작업보고(갱별) — 그 시각 작업 중인 대상 카페리를 한 창에 모아(보기만) */}
-      <Ferry1700Alert audience="chief" voyages={voyages} />
+      <Ferry1700Alert audience="chief" voyages={voyages} inspector={inspector} />
       {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
       {showBayMatrix && (
         /* 3.5: «쓰이는 배»를 화면이 알 수 있게 — 부모가 이미 들고 있는 재료만 넘긴다(추가 요청 0).
