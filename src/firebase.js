@@ -19,7 +19,7 @@ import { crewShiftKey, getEquipNumber, setEquipNumber, _storage, SK } from './ut
 import { askCraneBeforeComplete } from './craneAsk.js';   // 4.85: 완료 직전 호기 한 번 묻기   // 4.56-04: 조 등록에 내 이름이 있으면 기기 호기도 따라간다
 import { isChief } from './staffList.js';                          // 3.53: 같은 이유. 순환 없음 — staffList 는 import 가 0개다
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
-import { isViewOnlyNow, isNotWorkerNow, isAdminNow, adminWorkGateText, myWorkVoyageNow, workGateText, activeChoiceName } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
+import { isViewOnlyNow, isNotWorkerNow, isAdminNow, adminWorkGateText, myWorkVoyageNow, workGateText, activeChoiceName, adminWorkRegNow } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';
 import { sameRtdbVal } from './workReportParse.js';   // 5.13: 미르 보고 취소 — 쓴 값 그대로인가(키 순서·null 칸 무시)   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 import { setServerOffset } from './workShift.js';   // 4.79: 주야 근무조 판정은 서버 시각 기준
@@ -2576,14 +2576,16 @@ export async function fbSetInspectorActivity(name, voyageKey, mode, detail = nul
   //   수석이 "몇 호기가 어느 베이의 홀드/데크를 작업 중·몇 개 남음"을 실시간으로 보게 함.
   //  ★ 3.50 문지기(데이터 들어오는 자리) — «조회만» 으로 들어온 사람은 항차·호기·베이를 안 적는다(검수사 «단순 조회로 접속을 하면 호기에 기록이 안되게»).
   //    lastActive 는 적어 «접속(online)» 은 보이되, workMode:'view' 로 «작업중» 에서 빠진다(inspectorStatus). 호출부(App 30초 틱·SearchPanel·GuidedWorkPanel)는 손대지 않는다.
-  const viewOnly = isNotWorkerNow();   // 4.30-03: 조회만·관리자 둘 다 작업자가 아니다(쓰기 문지기 assertCanWork 는 isViewOnlyNow 그대로 — 관리자는 쓴다)
+  //  5.20: 관리자가 이 조에 호기 등록한 배가 있으면 다른 배·홈 화면에서도 작업자다(workMode 'work' 유지 · 자리 기록은 그 배 화면일 때만 — 아래 myVoy).
+  const _aReg = adminWorkRegNow();
+  const viewOnly = isNotWorkerNow() && !_aReg;   // 4.30-03: 조회만·관리자 둘 다 작업자가 아니다(쓰기 문지기 assertCanWork 는 isViewOnlyNow 그대로 — 관리자는 쓴다)
   if (viewOnly) { voyageKey = null; mode = null; detail = null; }
   //  ★ 3.50-03 (검수사 2026-09-15 «클로드가 원인인 버그 작업중이지도 않는 선박 노출» · «클로드가 작업중으로 보임») —
   //    **자리 기록은 «내가 고른 작업 선박» 화면일 때만 적는다.** 자유 열람(수석·검수사·테스터)은 작업자로 골라도 모든 선박을 보므로,
   //    남의 배를 한 번 열면 그 배에 «작업 중 검수원» 으로 붙고 수석 보드 boardRows 가 그 한 줄로 그 배를 «작업 중» 으로 센다
   //    (실측 SWSP 2608N — isWorkingNow false·터미널 실적 0·완료 0 인데 보드에 «작업 중 3척»). 3.50 이 조회만 갈래만 막고 이쪽을 남겼다.
   //    ⇒ 다른 배를 보는 동안은 홈 화면에 있을 때와 같이 비운다(호출부는 종전대로 보고 있는 항차를 넘긴다). 내 배로 돌아오면 다음 틱에 되살아난다.
-  const myVoy = myWorkVoyageNow();
+  const myVoy = myWorkVoyageNow() || (_aReg ? String(_aReg.voyageKey) : '');
   if (!viewOnly && voyageKey && myVoy && voyageKey !== myVoy) { voyageKey = null; mode = null; detail = null; }
   const payload = {
     lastActive: Date.now(),

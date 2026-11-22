@@ -294,13 +294,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
               <span className="sm:hidden" aria-hidden="true">작업</span><span className="hidden sm:inline">작업자로 전환</span>
             </button>
           )}
-          {workChoice && workChoice.mode === 'admin' && (
-            <button onClick={() => onChangeWork && onChangeWork()} title="관리자 — 제약 없이 수정·자료 등록(작업량·호기에는 안 잡힙니다). 누르면 작업자(선박·호기)로 전환" data-work-mode="admin"
-              aria-label="관리자 — 누르면 작업자로 전환"
-              className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 bg-ink-800 text-amber-200 border border-amber-600 whitespace-nowrap`}>
-              <span aria-hidden="true">🛠</span><span className="hidden sm:inline">관리자</span>
-            </button>
-          )}
+          {/* 5.20: 관리자 칩은 뺐다 — 검수사 2026-11-22 15:06 «아 헤더에서 관리자는 뺴주세요» · «그냥 다른 검수원과 동일하게». 관리자의 작업은 그 배 호기 등록(미르·작업 보고 창)으로 시작한다. */}
           {onOpenOwner && (   /* 4.63: 관리앱 입구 — 소유자에게만(App 이 소유자일 때만 넘긴다) · 어느 화면에서든 한 번 */
             <button onClick={onOpenOwner} title="관리앱 — 소유자 메뉴" aria-label="관리앱 열기" data-hdr-owner="1"
               className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 border whitespace-nowrap ${route.name === 'owner' ? 'bg-fuchsia-800 text-fuchsia-100 border-fuchsia-500' : 'bg-ink-800 text-fuchsia-200 border-fuchsia-700'}`}>
@@ -325,7 +319,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             {equipNo ? <span>{equipNo}</span> : <span className="hidden sm:inline">장비?</span>}
           </button>
           )}
-          {workChoice && workChoice.mode === 'work' && onChangeWork && (
+          {workChoice && workChoice.mode === 'work' && onChangeWork && (   /* 5.20: 관리자 작업 선박도 다른 검수원과 같은 헤더(검수사 2026-11-22 15:06 «그냥 다른 검수원과 동일하게») */
             <button onClick={onChangeWork} title={`작업 선박 ${(voyages && voyages[workChoice.voyageKey] && voyages[workChoice.voyageKey].info && voyages[workChoice.voyageKey].info.vsl) || workChoice.voyageKey || ''} — 누르면 선박·호기를 다시 고릅니다`}
               data-work-change="1" className="h-[var(--tap-chip)] shrink-0 px-1.5 rounded-pill text-2xs font-bold bg-ink-800 text-dim-300 border border-line whitespace-nowrap">변경</button>
           )}

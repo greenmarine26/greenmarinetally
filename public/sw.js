@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.19-01';
-const NOTE = '5.19-01 머스크 리퍼 — 머스크 배는 검수리스트 별첨에 리퍼 리스트를 만들지 않고 리퍼 온도 리스트도 내지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.20';
+const NOTE = '5.20 관리자 작업 — 관리자는 미르에게 N호기로 등록한 배에서만 작업자로 기록되고 다른 검수원에게 보입니다. 등록하지 않으면 다른 검수원 화면에 나타나지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

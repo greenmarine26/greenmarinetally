@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { parseViewCommand, pickVoyageKey } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { APP_VERSION, _storage, SK , setLaneRoutes, setEquipNumber, getEquipNumber } from './utils.js';   // 3.50: 로그인 선택의 호기를 앱 호기로
-import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage, voyagesScopeOf, ownVoyageOf, needsShiftAsk, resolveShift, reshiftChoice, isOffShiftView } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
+import { readWorkChoice, saveWorkChoice, clearWorkChoice, setActiveWorkChoice, isFreeRoamer, visibleVoyagesOf, canSeeVoyage, voyagesScopeOf, ownVoyageOf, needsShiftAsk, resolveShift, reshiftChoice, isOffShiftView, adminWorkOf, effectiveWorkChoice, inspectorsSeenBy, setAdminWorkReg } from './workChoice.js';   // 3.50: «작업자 / 조회만» 한 벌
 import {
   fbSubscribeVoyages, fbSubscribeVoyageBody, fbSubscribeVoyageInfos, fbSubscribeInspectors, fbSetInspector, fbSetInspectorChoice, fbWatchServerOffset,   // 3.50: 작업자/조회만 선택을 명단에 적는다
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
@@ -372,7 +372,35 @@ export default function App() {
 
   //  ★ 3.50 — «조회만» 문지기(isViewOnlyNow)는 App 이 들고 있는 workChoice 를 1순위로 본다(모듈 캐시).
   //    localStorage 만 보면 KST 자정·[검수원 변경] 뒤 meToday 가 남으로 바뀐 경우·저장 실패에서 조회만이 작업자로 둔갑한다(3.50 감사 지적).
-  useEffect(() => { setActiveWorkChoice(workChoice); }, [workChoice]);
+  //  ★ 5.20 관리자 작업 선박 — 관리자 본인이 이 조에 호기 검수원으로 등록된 배(adminWorkOf · craneCrew 한 벌)를 보고 있으면 작업자이면서 관리자(effChoice mode 'work').
+  //    그 밖의 배는 관리자뿐. 문지기 캐시는 렌더 중에 바로 세운다 — 등록 직후 같은 렌더에서 보고 창이 막히지 않게(효과는 한 박자 늦다). 조가 바뀌는 것을 따라가려고 1분마다 다시 잰다.
+  const [awTick, setAwTick] = useState(0);
+  useEffect(() => { const id = setInterval(() => setAwTick((x) => x + 1), 60000); return () => clearInterval(id); }, []);
+  const adminWork = useMemo(() => (workChoice && workChoice.mode === 'admin' ? adminWorkOf(inspector, voyagesAll) : null), [workChoice, inspector, voyagesAll, awTick]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const viewingKey = route.name === 'voyage' ? route.voyageKey : '';
+  const effChoice = useMemo(() => effectiveWorkChoice(workChoice, adminWork, viewingKey), [workChoice, adminWork, viewingKey]);
+  setActiveWorkChoice(effChoice); setAdminWorkReg(adminWork);
+  useEffect(() => { setActiveWorkChoice(effChoice); setAdminWorkReg(adminWork); }, [effChoice, adminWork]);
+  const awEqSig = effChoice && effChoice.adminWork ? `${effChoice.voyageKey}|${effChoice.equip}` : '';
+  const adminRegSig = adminWork ? `${adminWork.voyageKey}|${adminWork.equip}|${adminWork.shift}` : '';
+  //  5.20: 작업 선박 화면에 들어오면 헤더·완료·보고가 쓰는 기기 호기를 등록된 호기로 맞춘다(다른 검수원이 호기를 고른 것과 같다).
+  useEffect(() => {
+    if (!effChoice || !effChoice.adminWork || !effChoice.equip) return;
+    if (getEquipNumber() === effChoice.equip) return;
+    setEquipNumber(effChoice.equip);
+    try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: effChoice.equip })); } catch (e) { console.warn('[5.20] 호기 바뀜 알림 실패', e); }
+  }, [awEqSig]);   // eslint-disable-line react-hooks/exhaustive-deps — 등록(배·호기)이 바뀔 때만 맞춘다. 남의 완료로 voyages 가 바뀔 때마다 헤더 호기 변경을 덮던 것(감사 5.20)
+  //  5.20: 수석 상황판·작업자 명단 — 관리자가 작업 선박을 가진 조 동안은 그 배·그 호기 작업자로, 없으면 종전대로 관리자(작업중 아님). 바뀔 때만 적는다.
+  const awSigRef = useRef('');
+  useEffect(() => {
+    if (!inspector || !workChoice || workChoice.mode !== 'admin') { awSigRef.current = ''; return; }
+    const sig = adminWork ? `${adminWork.voyageKey}|${adminWork.equip}|${adminWork.shift}` : '-';
+    if (awSigRef.current === sig) return;
+    const prev = awSigRef.current; awSigRef.current = sig;
+    if (!prev && sig === '-') return;   // 처음 들어와 작업 선박이 없으면 로그인 때 적은 관리자 그대로
+    fbSetInspectorChoice(inspector, adminWork ? { mode: 'work', voyageKey: adminWork.voyageKey, equip: adminWork.equip, shift: adminWork.shift } : { mode: 'admin' })
+      .catch((e) => { awSigRef.current = prev || '?'; console.warn('[5.20] 관리자 작업 선박 명단 기록 실패 — 1분 뒤 다시', e); });
+  }, [inspector, workChoice, adminWork, awTick]);   // awTick — 실패했으면 1분 뒤 다시 적는다
   //  ★ 4.85 교대 받음 — 내 명단 줄에 다른 사람이 남긴 relievedAt 이 새것이고 내 기기 호기가 그 호기면 호기를 놓고 다시 고르라고 알린다.
   //    본 표시는 기기에 기억한다(같은 표시를 두 번 처리하지 않는다). 20분 넘은 표시는 낡은 것으로 보고 무시한다.
   useEffect(() => {
@@ -400,11 +428,13 @@ export default function App() {
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
-  }, [inspector, workChoice, route, staffOffMap]);
+  }, [inspector, workChoice, route, staffOffMap, adminRegSig]);   // 5.20: 관리자 작업 선박 등록이 바뀌면 바로 다시 적는다
 
   //  ★ 5.09: 수석 화면 조작 시각 기록 · 마친 항차 자동 완료 저장 — 판정은 utils.autoCloseTimingOf/autoCloseDecision 한 벌, 실행은 src/autoClose.js.
   useChiefInputStamp(inspector);
   useAutoCloseVoyages({ voyagesAll, inspectors, inspector });
+  //  5.20 관리자 투명 — 다른 검수원 화면에는 호기를 넣지 않은 소유자 줄을 뺀 명단을 넘긴다(workChoice.inspectorsSeenBy 한 벌).
+  const inspectorsView = useMemo(() => inspectorsSeenBy(inspectors, inspector), [inspectors, inspector]);
 
   // TallyOne 1.3: 화면 열람 기록 — 라우트 변경마다 1건(30초 중복 생략은 activityLog가 처리).
   //   voyage는 VoyagePage가 탭·모드까지 붙여 기록하므로 여기서 빼고(이중 기록 방지), login도 제외.
@@ -662,7 +692,7 @@ export default function App() {
         <LoginPage
           pilotForecast={pilotForecast}   // 2.64: 로그인 타임라인 도선 마커
           current={inspector}
-          inspectors={inspectors}
+          inspectors={inspectorsView}
           voyages={voyagesAll}   /* 4.08: 선택 화면 목록은 info 만 있는 항차도 본다 */
           voyagesLoaded={voyagesLoaded}
           extraStaff={extraStaff}
@@ -714,8 +744,8 @@ export default function App() {
         online={online}
         route={route}
         voyages={voyagesAll}   /* 4.08: 헤더는 info 만 읽는다 */
-        workChoice={workChoice}
-        inspectors={inspectors}   /* 4.85: 교대 단추가 같은 조에서 호기를 쥔 사람을 찾는다 */
+        workChoice={effChoice}   /* 5.20: 관리자 작업 선박이면 작업자와 같은 헤더 */
+        inspectors={inspectorsView}   /* 4.85: 교대 단추가 같은 조에서 호기를 쥔 사람을 찾는다 */
         onSwitchWorker={isOffShiftView(workChoice) ? handleSwitchToWorker : null}   /* 4.79: 근무시간 밖 조회만 → 작업자로 전환(확인 한 번은 헤더가 묻는다) */
         onChangeWork={() => { prevChoiceRef.current = workChoice; rechoiceRef.current = inspector; setWorkChoice(null); }}   /* 3.50: 선박·호기 다시 고르기(조회만 ↔ 작업자 전환도 여기서) */
         onChangeInspector={() => { setAutoLogoutNotice(''); navigate('login'); }}
@@ -756,7 +786,7 @@ export default function App() {
         )}
         {route.name === 'home' && voyagesLoaded && (
           <HomePage
-            voyages={visibleVoyages} inspectors={inspectors} inspector={inspector}
+            voyages={visibleVoyages} inspectors={inspectorsView} inspector={inspector}
             portMisData={portMisData}
             pilotForecast={pilotForecast}
             onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
@@ -797,7 +827,7 @@ export default function App() {
         {route.name === 'chief' && voyagesLoaded && (
           chiefOrOwner ? (
             <ChiefDashboard
-              voyages={voyages} inspectors={inspectors} inspector={inspector}
+              voyages={voyages} inspectors={inspectorsView} inspector={inspector}
               collectorHb={heartbeat}
               pilotForecast={pilotForecast}
               portMisData={portMisData}
@@ -846,7 +876,7 @@ export default function App() {
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}
             inspector={inspector}
-            inspectors={inspectors}
+            inspectors={inspectorsView}
             portMisData={portMisData}
             pilotForecast={pilotForecast}
             onGoHome={() => navigate('home')}
@@ -886,7 +916,7 @@ export default function App() {
             voyageKey={mirPlan.voyageKey}
             voyage={voyages[mirPlan.voyageKey]}
             inspector={inspector}
-            inspectors={inspectors}
+            inspectors={inspectorsView}
             portMisData={portMisData}
             pilotForecast={pilotForecast}
             onGoHome={() => setMirPlan(null)}
@@ -912,7 +942,7 @@ export default function App() {
       {showStaffManager && (<React.Suspense fallback={null}>{/* 4.89: 인원 관리 창은 처음 열 때 받는다 */}
         <StaffManagerModal
           current={inspector}
-          inspectors={inspectors}
+          inspectors={inspectorsView}
           extraStaff={extraStaff}
           deletedStaff={deletedStaff}
           onClose={() => setShowStaffManager(false)}

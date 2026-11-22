@@ -12,12 +12,12 @@
 //     어느 쪽이든 모든 선박을 본다.
 //   · 그 밖(일반 검수원) = 작업자뿐. 작업 선박(+호기)을 고르지 않으면 들어갈 수 없고, 고른 선박 안에서만 앱이 돈다.
 //   · 기억은 기기·이름·오늘(KST) 단위 — meToday 와 같은 규칙. 로그아웃하면 지운다. 헤더 [변경] 으로 다시 고른다.
-//  ⚠ 이 파일은 localStorage 와 명단만 본다(utils·firebase 를 부르지 않는다) — utils.setEquipNumber·firebase.fbSetInspectorActivity 가 이 파일을 부르므로 순환을 만들면 안 된다.
+//  ⚠ 이 파일은 localStorage 와 명단만 본다(firebase 를 부르지 않는다 · utils 는 부르지만 utils 는 이 파일을 부르지 않는다) — firebase.fbSetInspectorActivity 가 이 파일을 부르므로 순환을 만들면 안 된다.
 import { canOpenChief, isHiddenStaff } from './staffList.js';
 import { isOwnerName } from './adminGuard.js';
 import { getMeToday, ymdKST } from './meToday.js';
 import { isNoShiftShip, shiftAt, serverNow } from './workShift.js';   // 4.79: 주야 근무조 한 벌(순수 모듈)
-import { getEquipNumber } from './utils.js';   // 4.38: mirWorkCtx — 내 호기(utils 는 workChoice 를 부르지 않아 순환 없음)
+import { getEquipNumber, craneCrewOf, crewShiftKey, shipHasShifts } from './utils.js';   // 5.20: 관리자 작업 선박 — 호기 검수원 등록(craneCrew) 한 벌로 읽는다(utils 는 workChoice 를 부르지 않아 순환 없음)   // 4.38: mirWorkCtx — 내 호기(utils 는 workChoice 를 부르지 않아 순환 없음)
 
 export const WORK_CHOICE_KEY = 'tallyone_work_choice';
 
@@ -92,6 +92,81 @@ export function isAdminNow() {
   const c = readWorkChoice(getMeToday());
   return !!(c && c.mode === 'admin');
 }
+//  ★ 5.20 관리자 작업 선박 — 검수사 2026-11-22 14:58 «관리자가 작업을 시작할려고 하거나 관리자 모드로 갈려고 할떄 쉽게 바꿀수 있게 해주세요 … 관리자 모드로 되어있어서 작업시작 셋팅을 다시 하는 경우가 다반사 입니다»
+//    · 15:01 «관리자가 작업 시작을 누르면 작업자이면서 관리자가 되어야 합니다. 그래야 동시에 문제점을 해결하면서 작업도 할수 있습니다» · 15:03 «다만 관리자가 작업할 선박이 아닌경우에는
+//    작업자가 아닌 관리자 모드여만 하고 관리자는 본인이 작업할 선박을 호기를 미르에게 통보합니다».
+//    ⇒ 관리자의 «작업 선박·호기» 는 미르 호기 검수원 등록(info.craneCrew/{지금 조}/{N호기} = 본인 이름) 한 벌로 읽는다 — 새 저장 자리를 만들지 않는다.
+//      그 배 화면에서만 작업자이면서 관리자(mode 'work' + adminWork) · 그 밖의 배는 관리자뿐(기록 없음). 다음 조가 되거나 그 호기에 다른 사람이 등록되면 저절로 관리자뿐.
+//      주야 구분 없는 배(연태·일조)는 가장 최근 등록 조를 36시간까지 본다(crewSegments 의 «다음 등록까지» 와 같은 뜻).
+const _NO_SHIFT_SPAN = 36 * 3600000;
+/** 관리자 본인이 지금 작업하기로 등록된 선박·호기. 관리자가 아니거나 등록이 없으면 null. { voyageKey, equip:'N호기', shiftKey, shift:'day'|'night'|'', at } */
+export function adminWorkOf(name, voyages, nowMs = serverNow()) {
+  const n = String(name || '').trim();
+  if (!isAdminUser(n) || !voyages || typeof voyages !== 'object') return null;
+  const curKey = crewShiftKey(undefined, nowMs, 0).key;
+  let best = null;
+  for (const vk of Object.keys(voyages)) {
+    const info = voyages[vk] && voyages[vk].info;
+    if (!info || !info.craneCrew) continue;
+    const segs = craneCrewOf(info);
+    if (!segs.length) continue;
+    let seg = null;
+    if (shipHasShifts(info.vsl)) seg = segs.find((s) => s.key === curKey) || null;
+    else {
+      //  주야 없는 배 — 이 조 키로 적은 등록은 시작 전이어도 든다(17:30~19:00·06:30~08:00 에 한 등록이 늦게 들던 것 · 감사 5.20).
+      const past = segs.filter((s) => s.key === curKey || s.startMs <= nowMs + 2 * 3600000);
+      seg = past.length ? past[past.length - 1] : null;
+      if (seg && nowMs - seg.startMs > _NO_SHIFT_SPAN) seg = null;
+    }
+    if (!seg) continue;
+    //  내 칸 가운데 가장 늦게 적은 칸 — 미르 등록은 옛 호기를 지우지 않아 «1호기 → 3호기» 로 바꾸면 두 칸에 남는다(감사 5.20).
+    //  배 사이 비교도 내 칸의 시각으로 한다(그 조 남의 등록 시각에 끌려가지 않게).
+    const raw = (info.craneCrew && info.craneCrew[seg.key]) || {};
+    const atOf = (no) => { const v = raw[`${no}호기`]; return Number(v && typeof v === 'object' && v.at) || 0; };
+    const nos = Object.keys(seg.cranes).filter((no) => String(seg.cranes[no]).trim() === n).map(Number).sort((a, b) => (atOf(b) - atOf(a)) || (a - b));
+    if (!nos.length) continue;
+    const cand = { voyageKey: vk, equip: `${nos[0]}호기`, shiftKey: seg.key, shift: /야간$/.test(seg.key) ? 'night' : (/주간$/.test(seg.key) ? 'day' : ''), at: atOf(nos[0]) || Number(seg.regAt) || 0 };
+    if (!shipHasShifts(info.vsl)) cand.shift = '';
+    if (!best || cand.at > best.at) best = cand;   // 두 배에 등록돼 있으면 나중에 등록한 배
+  }
+  return best;
+}
+/** 화면이 쓸 «지금 상태» — 관리자가 자기 작업 선박(viewingKey)을 보고 있으면 작업자이면서 관리자(mode 'work' · adminWork true), 아니면 고른 그대로. */
+export function effectiveWorkChoice(choice, adminWork, viewingKey) {
+  if (!choice || choice.mode !== 'admin' || !adminWork || !viewingKey || viewingKey !== adminWork.voyageKey) return choice;
+  return { ...choice, mode: 'work', voyageKey: adminWork.voyageKey, equip: adminWork.equip, shift: adminWork.shift, adminWork: true };
+}
+//  5.20: 관리자의 지금 조 작업 선박 등록(adminWorkOf 결과) — App 이 렌더 중에 세운다. 활동 기록(fbSetInspectorActivity)이
+//    다른 배·홈 화면에서도 workMode 'work' 를 지키게 한다(감사 5.20 — 30초 틱이 'view' 로 덮어 호기가 비어 보이던 것).
+let _adminReg = null;
+export function setAdminWorkReg(aw) { _adminReg = aw && aw.voyageKey ? aw : null; }
+export function adminWorkRegNow() { const c = (_active !== undefined) ? _active : null; return (c && (c.mode === 'admin' || c.adminWork)) ? _adminReg : null; }
+//  ★ 5.20 관리자 투명 — 검수사 2026-11-22 15:08 «관리자로 자료를 볼때는 다른 검수원들이 제가 접속한걸 몰랐으면 합니다 투명인간 처럼» ·
+//    15:10 «제가 접속하면 제가 몇호기 김성일 이라고 입력하지 않는한 보이면 안된다는겁니다».
+//    문지기는 명단이 들어오는 자리(App 의 inspectors 구독) 하나다 — 다른 사람 화면에 넘기기 전에 소유자 줄을 뺀다.
+//    «호기를 넣었다» = 명단 줄에 배정 항차·호기(assignVoyage·assignEquip)가 있다(로그인 때 작업 선택이든 미르 N호기 등록이든 fbSetInspectorChoice 한 벌이 적는다).
+//    소유자·클로드 화면은 그대로 다 보인다. 클로드 줄은 종전대로 화면마다 isVisibleStaff 가 늘 가린다(HIDDEN_STAFF).
+export function ownerShownToOthers(rec) {
+  return !!(rec && String(rec.assignVoyage || '').trim() && String(rec.assignEquip || '').trim());
+}
+export function inspectorsSeenBy(inspectors, viewer) {
+  if (!inspectors || typeof inspectors !== 'object') return inspectors || {};
+  if (viewer && (isOwnerName(viewer) || isHiddenStaff(viewer))) return inspectors;   // 15:11 «클로드나 저는 다 볼수 있지만 다른 사용자는 클로드와 저를 볼수 없는것입니다. 제가 작업자 모드일떄만 보이는거죠»
+  let out = null;
+  for (const [k, rec] of Object.entries(inspectors)) {
+    const nm = (rec && rec.name) || k;
+    if (!isOwnerName(nm) || ownerShownToOthers(rec)) continue;
+    if (!out) out = { ...inspectors };
+    delete out[k];
+  }
+  return out || inspectors;
+}
+/** 지금 관리자이면서 작업자인가(자기 작업 선박 화면). 보고 창 문구가 부른다. */
+export function isAdminWorkingNow() {
+  const c = (_active !== undefined) ? _active : null;
+  return !!(c && c.mode === 'work' && c.adminWork);
+}
+
 /** 작업자가 아닌가 — 조회만 또는 관리자. 호기·작업중·활동 기록 문지기가 부른다(쓰기 문지기 isViewOnlyNow 와 다르다). */
 export function isNotWorkerNow() { return isViewOnlyNow() || isAdminNow(); }
 
@@ -152,14 +227,15 @@ export function equipGateText() {
 export function canWorkNow() { return !isViewOnlyNow(); }
 //  ★ 5.12 (검수사 2026-11-18 12:42 «관리자로 들어 가서 앱 상태를 점검 하려고 작업시작을 누르고 장비를 선택했을떄 제이름과 제가 작업한걸로 기록되지 않아야 합니다»):
 //    관리자는 고치고 올리는 일(수정·자료 등록)은 전부 되지만 **검수 작업 기록**(완료·보류·초과 컨·작업 보고·사진 보고·교대·해치 자동 보고·X-RAY 봉인자 등록 — 호기 이동·외부 중단 보고와 수화물 확정은 관리 기록이라 열어 둔다)은 남기지 않는다.
-//    작업자로 갈 때는 헤더 [🛠 관리자] 를 눌러 작업자(선박·호기)로 바꾼다(4.30-03 «제가 작업자로 갈 때는 모드를 선택하게 하면 됩니다»).
+//    작업자로 갈 때는 미르 호기 등록(5.20 — 헤더 관리자 칩은 뺐다)으로 그 배에서만 작업자이면서 관리자가 된다(옛 4.30-03 «제가 작업자로 갈 때는 모드를 선택하게 하면 됩니다»).
 /** 지금 이 기기에서 검수 작업 기록(완료·보고·해치…)을 내 이름으로 남겨도 되는가 — 조회만·관리자는 아니다. */
 export function canRecordWorkNow() { return !isNotWorkerNow(); }
 /** 작업 기록이 막혔을 때의 문구 — 관리자면 관리자 문구, 조회만이면 조회만 문구(화면 미리 막기가 부른다). */
 export function recordGateText(what) { return isAdminNow() ? adminWorkGateText(what) : workGateText(what); }
 /** 관리자라서 작업 기록이 막혔을 때 사람에게 보이는 문구 한 벌. */
 export function adminWorkGateText(what) {
-  return `🛠 관리자로 들어와 있습니다 — 앱 점검용이라 작업으로 기록하지 않습니다.\n\n«${what || '작업'}» 은 이름·호기로 남지 않습니다. 작업하려면 헤더의 [🛠 관리자]를 눌러 작업자(선박·호기)로 바꾸세요.`;
+  //  5.20: 헤더의 관리자 칩은 뺐다(검수사 2026-11-22 15:06 «아 헤더에서 관리자는 뺴주세요») — 작업은 이 배 호기 등록으로 시작한다.
+  return `🛠 관리자로 들어와 있습니다 — 이 배는 작업자로 등록돼 있지 않아 작업으로 기록하지 않습니다.\n\n«${what || '작업'}» 은 이름·호기로 남지 않습니다. 이 배에서 작업하려면 작업 보고 창의 [이 배 N호기로 등록하고 시작]을 누르거나 미르에게 «N호기 이름» 으로 알리세요. 관리자 권한은 그대로입니다.`;
 }
 
 /** 조회만이라 막혔을 때 사람에게 보이는 문구 한 벌. what 을 주면 무엇이 막혔는지 앞에 붙는다. */

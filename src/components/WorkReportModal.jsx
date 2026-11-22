@@ -11,6 +11,7 @@ import {
 } from '../kakaoShare.js';
 import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
 import { canWorkNow, canRecordWorkNow, isAdminNow } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
+import AdminWorkStart from './AdminWorkStart.jsx';   // 5.20: 관리자 작업 선박 등록하고 시작
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
@@ -233,7 +234,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4" onClick={onClose} data-view-only-report="1">
         <div className="bg-ink-900 border-2 border-sky-700 rounded-card p-5 max-w-sm w-full space-y-3 text-center" onClick={(e) => e.stopPropagation()}>
           <div className="text-base font-black text-sky-200">{isAdminNow() ? '🛠 관리자로 들어와 있습니다' : '🔍 조회만으로 들어와 있습니다'}</div>
-          <div className="text-xs text-dim-300 leading-relaxed">{isAdminNow() ? '앱 점검용이라 보고는 이름·호기로 남지 않습니다. 작업하려면 헤더의 [🛠 관리자]를 눌러 작업자(선박·호기)로 바꾸세요.' : <>보고는 기록되지 않습니다. 화면과 호기는 그대로 보실 수 있고, 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.</>}</div>
+          <div className="text-xs text-dim-300 leading-relaxed">{isAdminNow() ? '이 배는 작업자로 등록돼 있지 않아 보고가 이름·호기로 남지 않습니다. 관리자 권한은 그대로입니다.' : <>보고는 기록되지 않습니다. 화면과 호기는 그대로 보실 수 있고, 작업하려면 헤더의 [🔍 조회만]을 눌러 작업자(선박·호기)로 바꾸세요.</>}</div>
+          {isAdminNow() && <AdminWorkStart voyageKey={voyageKey} voyage={voyage} name={inspector} />}   {/* 5.20: 관리자 — 이 배 N호기로 등록하고 시작 */}
           <button onClick={onClose} className="w-full py-3 rounded-pill bg-ink-800 border border-line text-dim-100 font-bold">닫기</button>
         </div>
       </div>

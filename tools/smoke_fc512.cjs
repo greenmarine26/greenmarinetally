@@ -62,7 +62,7 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     B.setActiveWorkChoice({ name: '김성일', mode: 'admin' });
     ok('⑥ 관리자 — 고치기·올리기는 된다(canWorkNow)', B.canWorkNow() === true);
     ok('⑥ 관리자 — 작업 기록은 안 된다(canRecordWorkNow)', B.canRecordWorkNow() === false);
-    ok('⑥ 관리자 안내 문구', /관리자로 들어와 있습니다/.test(B.recordGateText('완료')) && /\[🛠 관리자\]/.test(B.recordGateText('완료')));
+    ok('⑥ 관리자 안내 문구', /관리자로 들어와 있습니다/.test(B.recordGateText('완료')) && /N호기로 등록하고 시작/.test(B.recordGateText('완료')) /* 5.20: 헤더 관리자 칩을 뺐다 — 안내는 호기 등록 */);
     B.setActiveWorkChoice({ name: '김성일', mode: 'view' });
     ok('⑥ 조회만 — 종전 문구 그대로', B.canRecordWorkNow() === false && /조회만으로 들어와/.test(B.recordGateText('완료')));
     B.setActiveWorkChoice({ name: '최원형', mode: 'work', voyageKey: 'KSKM_2621N', equip: '2호기' });
