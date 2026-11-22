@@ -65,7 +65,7 @@ const src = fs.readFileSync('src/inspectionList.js', 'utf8');
 ok(/검수\(호기 이름\)/.test(src) && /검수리스트\$\{d\.marks \? '_제출용' : ''\}/.test(src), '엑셀(CSV)에도 «검수(호기 이름)» 열과 제출용 파일 이름');
 const hub = fs.readFileSync('src/components/PrintHubModal.jsx', 'utf8');
 ok(/handlePrintInspection\(true\)/.test(hub) && /검수 리스트 \(제출용\)/.test(hub) && /inspectionMarksOf\(voyage, mode\)/.test(hub), '출력 센터에 «검수 리스트 (제출용)» 단추');
-ok(/openInspectionListPrint\(ptkContainers, mode, voyageInfo, \[\], \{ appendix: false, submit: true, marks: _marks \}\)/.test(hub), '제출용은 별첨·시프팅 없이 같은 목록으로 연다');
+ok(/openInspectionListPrint\(ptkContainers, mode, voyageInfo, \[\], \{ appendix: false, submit: true, marks: _marks(?:, noReefer: rfSkip)? \}\)/.test(hub), '제출용은 별첨·시프팅 없이 같은 목록으로 연다');
 const help = fs.readFileSync('src/data/helpData.js', 'utf8');
 ok(/4\.75~ \*\*📋 검수 리스트 \(제출용\)\*\*/.test(help), '매뉴얼에 제출용 설명');
 console.log(`${n - bad}/${n}`);

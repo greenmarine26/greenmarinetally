@@ -23,7 +23,8 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 import { keepShiftForecastOf, _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
-export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false, autoAction = null }) {   // 4.34: autoAction = 자료 센터에서 고른 할 일('inspection'|'cargo'|'detail') — 허브 메뉴를 건너뛰고 바로 연다   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
+export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false, autoAction = null, rfSkip = false }) {   // 5.19-01: rfSkip — 리퍼 체크 안 하는 배(머스크 · VoyagePage rfSkipShip 한 벌)
+  //   // 4.34: autoAction = 자료 센터에서 고른 할 일('inspection'|'cargo'|'detail') — 허브 메뉴를 건너뛰고 바로 연다   // 4.00: initialMode — 지금 보던 모드(양하/선적)로 연다(생략하면 종전처럼 양하)
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
   const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
   const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
@@ -336,10 +337,10 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
       let _marks = null;
       try { _marks = inspectionMarksOf(voyage, mode); } catch (e) { console.warn('[4.75 제출용] 작업 표기를 만들지 못했습니다 —', e); alert('작업 표기를 만들지 못해 제출용을 열지 못했습니다.'); return; }
       if (!_marks || !Object.keys(_marks.byCn).length) { alert('앱으로 직접 입력한 호기가 없어 체크할 컨이 없습니다. 제출용을 열지 않습니다.'); return; }
-      openInspectionListPrint(ptkContainers, mode, voyageInfo, [], { appendix: false, submit: true, marks: _marks });
+      openInspectionListPrint(ptkContainers, mode, voyageInfo, [], { appendix: false, submit: true, marks: _marks, noReefer: rfSkip });
       return;
     }
-    openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList, { appendix: chiefView });   // 4.31: 특수화물 별첨은 수석에게만
+    openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList, { appendix: chiefView, noReefer: rfSkip });   // 4.31: 특수화물 별첨은 수석에게만
   };
 
   //  ★ 4.34 — 자료 센터에서 «검수 리스트» 를 고르면 허브 메뉴 없이 곧바로 인쇄 창을 열고 허브를 닫는다(한 번만).
@@ -560,7 +561,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
               )}
 
               {/* 4.57: 리퍼 온도 리스트 — 리스트(EDI)·셋팅·실제 세 온도, A4 세로 한 장 · 인쇄/PDF + 엑셀 · 수석 인계용(검수사 2026-10-30) */}
-              {chiefView && (
+              {chiefView && !rfSkip && (   /* 5.19-01: 머스크(리퍼 체크 안 하는 배)는 리퍼 온도 리스트를 만들지 않는다 — 검수사 2026-11-22 08:41 */
                 <button
                   onClick={() => {
                     const rows = reeferListRows(allContainers)   // 리퍼 메모 모달과 같은 대상(전체 컨);

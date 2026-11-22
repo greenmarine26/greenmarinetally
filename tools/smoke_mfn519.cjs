@@ -64,6 +64,20 @@ const heads = (carPart.match(/class="phead[^"]*"[^>]*>[\s\S]*?<\/div>/g) || []).
 ok('선사별 판 — 쪽 머리줄·막대에 undefined 없음 · MFN 블록 57대', !/undefined/.test(carPart) && /MFN — 화물 있으나 적하목록 없음[\s\S]{0,80}57대/.test(carPart));
 const docOne = U.buildInspectionListDoc(rows, 'discharge', fx.info, [], { appendix: false }) || {};
 ok('선사가 하나(MAE)뿐이면 선사별 단추는 꺼진 채(MFN 블록은 선사로 세지 않음)', docOne.splits && docOne.splits.carrier == null);
+//  5.19-01 — 머스크(리퍼 체크 안 하는 배): 별첨 리퍼 구역 없음 · «온도 미신고» 없음 (검수사 2026-11-22 08:41)
+const dRf = String((U.buildInspectionListDoc(rows, 'discharge', fx.info, [], { appendix: true }) || {}).html || '');
+const dNo = String((U.buildInspectionListDoc(rows, 'discharge', fx.info, [], { appendix: true, noReefer: true }) || {}).html || '');
+ok('종전(리퍼 체크하는 배) — 별첨에 리퍼 리스트 구역(rflist)이 있다', /class="ilist rflist"/.test(dRf));
+ok('머스크 — 별첨 리퍼 구역 없음 · «온도 미신고» 없음', !/class="ilist rflist"/.test(dNo) && !/>[^<]*온도 미신고/.test(dNo), (dNo.match(/\[별첨\][^<]*/) || [''])[0]);
+ok('머스크 — 본문 대수는 그대로(세관 201 + MFN 57)', (dNo.match(/[A-Z]{4}\d{7}/g) || []).length >= 258);
+//  감사 보강 — 합성 두 대: 풀 리퍼 온도 없음(«온도 미신고» 가르기) · 풀 리퍼 + 위험물(별첨에 남음)
+const synRf = { ...rows.find((c) => !c._mfn), cn: 'TSTU1000001', iso: '45R1', fe: 'F', rf: true, tmp: '', temp: '', dg: false };
+const synDg = { ...rows.find((c) => !c._mfn), cn: 'TSTU1000002', iso: '45R1', fe: 'F', rf: true, tmp: '-18', dg: true, dgc: '3', un: '1993' };
+const rowsS = [...rows, synRf, synDg];
+const sOld = String((U.buildInspectionListDoc(rowsS, 'discharge', fx.info, [], { appendix: true }) || {}).html || '');
+const sNew = String((U.buildInspectionListDoc(rowsS, 'discharge', fx.info, [], { appendix: true, noReefer: true }) || {}).html || '');
+ok('종전 — 온도 없는 풀 리퍼에 «온도 미신고»', /TSTU1000001[\s\S]{0,1500}?온도 미신고/.test(sOld));
+ok('머스크 — 같은 컨에 «온도 미신고» 없음 · 위험물 리퍼(TSTU1000002)는 별첨에 남고 온도 -18 은 표기', !/TSTU1000001[\s\S]{0,1500}?온도 미신고/.test(sNew) && /\[별첨\] 특수화물 1대/.test(sNew) && (sNew.match(/TSTU1000002/g) || []).length >= 2 && /-18/.test(sNew));
 const hC = U.generateMfnListHTML(pack.rows, pack.head), hF = U.generateMfnFieldHTML(pack.rows, pack.head);
 ok('수석·일반 양식 HTML 에 «선내위치» 열과 26-05-10', />선내위치</.test(hC) && />선내위치</.test(hF) && /26-05-10/.test(hC) && /26-05-10/.test(hF));
 console.log(`${n - bad}/${n}`);

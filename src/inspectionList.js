@@ -329,7 +329,7 @@ function renderRow(c, idx, opts) {
   //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
   let reeferTmp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim()
                 : (c.temp != null && String(c.temp).trim() !== '') ? String(c.temp).trim() : null;
-  if (type === 'reefer' && !(opts && opts.rf) && (reeferTmp != null || fe === 'F')) notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60-02: 엠티 리퍼는 온도가 없는 게 정상 — «리퍼는 풀일 때만 리퍼»(앱지침 §11)   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
+  if (type === 'reefer' && !(opts && opts.rf) && (reeferTmp != null || (fe === 'F' && !c._noRfCheck))) notes.push(reeferTmp != null ? _fmtTemp(reeferTmp) : '온도 미신고');   // 3.60-02: 엠티 리퍼는 온도가 없는 게 정상 — «리퍼는 풀일 때만 리퍼»(앱지침 §11)   // 3.60: 온도가 없으면 «치수 미신고» 처럼 없다고 적는다(감사 지적 — 빈칸이면 리퍼인지도 눈에 안 띈다)
   /* ★ 2.91 (검수사 «FR 폭 길이 높이 다 표기 해줘야 함») — FR 은 치수가 곧 작업 정보다.
        초과분(DIM)만 적던 것을 **폭·길이·높이 세 칸**으로 바꾼다. 없는 값은 «-» 로 자리를 남긴다
        (§2-0-D — 조용히 없애지 않는다). 치수가 하나도 없으면 «치수 미신고»라고 말한다(§0-Y-2). */
@@ -663,7 +663,9 @@ export function installInspectionSplit(w, splits) {
   };
 }
 export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingList = [], opts = {}) {   // 4.31: opts.appendix === false 면 특수화물 별첨(시트2)을 내지 않는다 — 별첨은 수석 자료(검수사 2026-10-17)
-  const list = withShipOp(containers, voyageInfo);
+  //  ★ 5.19-01 (검수사 2026-11-22 08:41 «머스크는 리퍼가 다수 입니다. 따로 리퍼 리스트를 만들 필요 없습니다. 리퍼 온도 체크도 하지 않습니다» — 3.72-02 규칙):
+  //    opts.noReefer(리퍼 체크 안 하는 배 — utils.isReeferCheckSkipped 한 벌)면 별첨에 리퍼 구역을 만들지 않고, 본문·CSV 비고에 «온도 미신고» 를 적지 않는다(신고된 셋팅 온도는 그대로 적는다).
+  const list = opts.noReefer ? withShipOp(containers, voyageInfo).map((c) => ({ ...c, _noRfCheck: true })) : withShipOp(containers, voyageInfo);
   if (list.length === 0) return { html: '<p>컨테이너 없음</p>', splits: null };
 
   //  ★ 3.60 (검수사 2026-09-24 «규격별로 알파벳순» → «선사를 없애고 규격 f/e 일반/특수알파벳순» → «넘버링은 20풀 따로 20엠티 따로 특수화물 따로 40도 마찬가지»)
@@ -719,6 +721,8 @@ export function buildInspectionListDoc(containers, mode, voyageInfo, shiftingLis
          (리퍼·FR·OT·탱크·위험물·규격초과). X-RAY 는 세관 검사 지정이고 긴급은 처리 순서라
          둘 다 성질이 아니다 — 각자 제 서류(X-RAY 확인서·긴급 안내)가 따로 있다.
        ⚠ 본문(시트1) 표기는 그대로 둔다 — 거기서는 알아야 할 정보다. */
+    //  5.19-01: 리퍼 체크 안 하는 배(머스크)는 리퍼만으로는 별첨에 넣지 않는다 — 위험물·FR·OT·탱크·규격초과 표식이 같이 있으면 그대로 특수.
+    if (opts.noReefer && getContainerCategory(c).type === 'reefer' && !(c.dg || c.oog || c.fr || c.ot || c.tk)) return false;
     return _isSpecialCargo(c);
   }).sort(_apxCmp);   // 4.86-01: 별첨은 종전 순서(단계 → 규격 → F/E → 컨번호) — 본문의 새 묶음 순서와 무관
 
@@ -1130,7 +1134,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       const memo = [];
       if (c.dg) memo.push(`${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00-03: «9/3480» 형식(클래스/UN만)
       const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
-      if (cat.type === 'reefer' && ((_t != null && String(_t).trim() !== '') || fe === 'F')) memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
+      if (cat.type === 'reefer' && ((_t != null && String(_t).trim() !== '') || (fe === 'F' && !opts.noReefer))) memo.push(_t != null && String(_t).trim() !== '' ? _fmtTemp(_t) : '온도 미신고');   // 3.60: 온도만(종이와 같은 표기)
       //  ★ 3.45 — 인쇄물과 같은 표기를 CSV 에도(한쪽만 고치면 종이와 엑셀이 갈린다).
       if (c._mfn) memo.push('MFN');   // 5.19 감사(경3): 엑셀(CSV) 비고도 종이와 같이
       if (c._xray) memo.push('XRAY' + (String(c._xraySealNo || '').trim() ? ' ' + String(c._xraySealNo).trim().replace(/,/g, '') : ''));

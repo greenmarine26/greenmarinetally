@@ -1882,7 +1882,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {showPrintHub && (<React.Suspense fallback={<div className="fixed inset-0 z-50 bg-ink-950/70 flex items-center justify-center text-dim-200 text-sm" data-lazy-loading="1">출력 센터 불러오는 중…</div>}>{/* 4.89 */}
         <PrintHubModal voyage={voyage} voyageKey={voyageKey} initialMode={mode} isLolo={isLoloShip} inspector={inspector || ''} viewDeckPlan={_deckPlanEff}
           onXrayPrint={() => setXrayPrintNow(true)} xrayPrintOk={mode === 'discharge'}
-          autoAction={hubAuto}
+          autoAction={hubAuto} rfSkip={rfSkipShip}   /* 5.19-01: 머스크는 리퍼 리스트·온도 체크 없음 */
           onClose={() => { setShowPrintHub(false); setHubAuto(null); _backToCenter(); }} />
       </React.Suspense>)}
       {/* 4.33 — 출력센터 «X-RAY 리스트» 의 실체: X-RAY 탭을 보이지 않게 올려 [출력] 을 한 번 누르고 내린다(제출용·인계용 머리·봉인자 판정을 둘째 벌로 만들지 않는다). */}

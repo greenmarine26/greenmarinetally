@@ -83,7 +83,7 @@ const done = () => { console.log(bad ? `\n✗ ${bad}/${n} 실패` : `\n리퍼 �
   //  ⑦ 배선 — 소스 확인
   const modal = fs.readFileSync(path.join(ROOT, 'src/components/ReeferMemoModal.jsx'), 'utf8');
   const hub = fs.readFileSync(path.join(ROOT, 'src/components/PrintHubModal.jsx'), 'utf8');
-  check('리퍼 확인 창에 «리스트 출력» 단추 · 출력 센터에 «리퍼 온도 리스트»(수석)', /data-testid="reefer-list-print"/.test(modal) && /openReeferListPrint\(reeferListRows\(containers\)/.test(modal) && /data-testid="hub-reefer"/.test(hub) && /chiefView && \(\s*<button[\s\S]{0,400}reeferListRows\(allContainers\)/.test(hub));
+  check('리퍼 확인 창에 «리스트 출력» 단추 · 출력 센터에 «리퍼 온도 리스트»(수석)', /data-testid="reefer-list-print"/.test(modal) && /openReeferListPrint\(reeferListRows\(containers\)/.test(modal) && /data-testid="hub-reefer"/.test(hub) && /chiefView && (?:!rfSkip && )?\(\s*(?:\/\*[\s\S]{0,200}?\*\/\s*)?<button[\s\S]{0,400}reeferListRows\(allContainers\)/.test(hub));
   check('풀 리퍼 판정은 한 벌 — 모달이 reeferList.js 의 판정을 가져다 쓴다', /const isReefer = isReeferTarget;/.test(modal) && !/const rf = isReeferContainer\(c\);\s*\n\s*if \(!rf\) return false;\s*\n\s*if \(reeferTempExempt/.test(modal));
 
   //  ⑧ 실제 A4 — 78대가 한 쪽 · 서명줄 위치는 대수와 무관(고정)
