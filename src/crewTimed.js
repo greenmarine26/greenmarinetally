@@ -87,6 +87,11 @@ export function timedCrewPlanOf(tc, nowMs = Date.now(), info = null) {
   if (badT) return { ok: false, why: 'badTime', at: badT };
   const early = items.find((x) => x.ms < 0);
   if (early) return { ok: false, why: 'otherShift', at: early, shiftKey: crewShiftKey(undefined, nowMs, 0).key };
+  //  5.22-01 (라이브 확인 16:41 «06:00 박진우 1호기 이형출과 교대» 가 내일 06:00 예정으로 적힘 — 되돌림): 앞으로의 교대는 지금 조(조 사이 빈 시간은 앞 조)
+  //    안에서만 받는다. 다음 조 교대는 그 조가 되면 말한다.
+  const nowKey = keyFor(nowMs).key;
+  const far = items.find((x) => x.ms > nowMs && keyFor(x.ms).key !== nowKey);
+  if (far) return { ok: false, why: 'nextShift', at: far, shiftKey: nowKey };
   items.sort((a, b) => a.ms - b.ms);   // 호기별로 따로 말해 순서가 섞여도 시각 순으로(감사 하)
   const sk = keyFor(items[0].ms);
   //  그 조 처음 상태 — ① 말한 처음 등록(base)은 조 시작부터로 적는다.
@@ -139,6 +144,7 @@ export function timedCrewText(tc, shipLabel = '', nowMs = Date.now(), info = nul
   if (!pl.ok) {
     const a = pl.at || {};
     const said = a.hh != null ? `${a.hh}:${String(a.mm || '00').padStart(2, '0')}` : '';
+    if (pl.why === 'nextShift') return `🤔 ${sl}${said} 교대는 지금 조(${pl.shiftKey}) 가 아니라 다음 조 시각이에요. 아직 적지 않았어요 — 지난 시각이면 날짜가 헷갈린 것이니 지금 조 시각으로, 다음 조 교대면 그 조가 되면 말씀해 주세요.${unk}`;
     if (pl.why === 'badTime') return `🤔 ${sl}«${said}» 은 시각으로 못 읽었어요. 아직 적지 않았어요.${unk}`;
     if (pl.why === 'otherShift') return `🤔 ${sl}${said} 교대는 지금 조(${pl.shiftKey}) 시작 전이거나 너무 먼 시각이에요. 아직 적지 않았어요 — 지금 조 이야기로 다시 말씀해 주세요.${unk}`;
     if (pl.why === 'noFrom') return `🤔 ${sl}${hm(a.ms)} 전에 ${a.no}호기는 누구였습니까? 앞사람을 몰라 아직 적지 않았어요 — «${hm(a.ms)} ${a.name} ${a.no}호기 홍길동과 교대» 처럼 앞사람까지 말씀해 주세요.${unk}${loose}`;

@@ -96,6 +96,10 @@ try {
   const plN2 = B.timedCrewPlanOf(P('1호기 18:00부터 김성일'), T('18:10'), inf2);
   ok('② 재감사 — 18:10 «1호기 18:00부터 김성일» 은 주간 등록·교대 기록으로 앞사람(박진우, 17:00 교대)을 안다(묻지 않음)', plN2.ok && plN2.items[0].from === '박진우' && plN2.shiftKey === '11-23 주간', JSON.stringify(plN2));
   ok('② 재감사 — 이미 그 사람이면(«1호기 18:00부터 박진우») 묻는다', !B.timedCrewPlanOf(P('1호기 18:00부터 박진우'), T('18:10'), inf2).ok);
+  //  5.22-01 라이브 확인 — 16:41 «06:00 박진우 1호기 이형출과 교대» 는 내일 06:00(다음 조) — 묻고 안 적음
+  const plL = B.timedCrewPlanOf(P('06:00 박진우 1호기 이형출과 교대'), T('16:41'), inf2);
+  ok('② 5.22-01 — 16:41 의 «06:00 …» 은 다음 조 시각이라 묻고 안 적음', !plL.ok && plL.why === 'nextShift' && /아직 적지 않았어요/.test(B.timedCrewText(P('06:00 박진우 1호기 이형출과 교대'), 'OBWH', T('16:41'), inf2)), JSON.stringify(plL));
+  ok('② 5.22-01 — 19:10 의 «05:30 …» 은 같은 야간 조라 받음 · 08:30 의 «18:30 …» 은 같은 주간(조 사이 포함)이라 받음', B.timedCrewPlanOf(P('05:30 박진우 1호기 이형출과 교대'), T('19:10'), null).ok && B.timedCrewPlanOf(P('18:30 박진우 1호기 이형출과 교대'), T('08:30'), null).ok);
   //  감사 하
   const tL = P('12시에 김성일 1호기 점심 교대해');
   ok('② 감사 하 — «점심» 은 앞사람·명단 경고가 아니다', tL && !tL.unknown.includes('점심') && tL.swaps[0].from === '');
