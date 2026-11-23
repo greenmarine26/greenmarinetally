@@ -66,7 +66,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
   const shiftingMapDraw = useMemo(
     () => { try { return shiftingMapForDisplay(voyageKey, voyage); } catch (e) { console.warn('[4.16 출력 센터] 예측 시프팅 지도 실패 — 확정만 그립니다:', e); return shiftingMap; } },
     [shiftingMap, voyageKey, voyage?.info?.berthShift, voyage?.info?.terminalStatus, voyage?.info?.lane,
-     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.keepOnboard]   // 4.48 감사(하 6): 본선 잔류를 넣고 풀면 다시 그린다
+     voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.keepOnboard, voyage?.catosPlan?.at]   // 5.23 감사(하3): 시프팅 예정이 들어오면 다시 그린다 · 4.48 감사(하 6): 본선 잔류를 넣고 풀면 다시 그린다
   );
   //  ★ 4.13 — 카고플랜 머리 «쉬프팅 5 미확정/확정/불일치». 판정은 항차 화면·콘앱과 같은 utils.shiftEvidenceOf 한 벌이다.
   //    터미널이 작업을 시작해 배정표 이적(berthShift)이 나오면 바뀌어야 하므로 berthShift·terminalStatus 가 의존성이다.

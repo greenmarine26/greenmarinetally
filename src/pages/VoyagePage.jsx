@@ -390,7 +390,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
      //  ★ 3.53-02(감사 지적 [중대]) — 배정표 이적·작업 상태가 되돌림 판정을 바꾼다. 이 둘이 의존성에
      //    없으면, 수집기가 berthShift 를 넣거나 planned→working 이 되는 **바로 그 순간** 베이플랜은
      //    되돌린 그림을 그리는데 시프팅 패널만 옛 값에 머문다(한 화면에서 두 판정이 갈린다).
-     voyage?.info?.berthShift, voyage?.info?.terminalStatus]
+     voyage?.info?.berthShift, voyage?.info?.terminalStatus,
+     voyage?.catosPlan?.at]   // 5.23: 시프팅 예정(터미널 계획)이 들어오거나 바뀌면 ◇ 도 다시
   );
 
   // 평택 대상 (양하=POD, 선적=POL)
@@ -1936,6 +1937,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {!_sideCanc && tab === 'list' && (
         <ListTab
+          planLoad={mode === 'loading' ? (voyage?.catosPlan?.load || null) : null}   /* 5.23: 터미널 선적 예정(이름은 «예정»만) — 리스트와 대조 */
           mfnCns={mode === 'discharge' ? Object.keys(mfnItemsOf(voyage)) : null}
           onOpenPlan={_mirOpenPlan}
           bowStern={_bowStern}   /* 3.21: «선수·선미» → 호기 유도(항차를 통째로 안 받는 탭이라 상위가 한 번 구해 내린다) */
@@ -2553,7 +2555,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null, mfnCns = null, loadingEdi = null, shiftCands = [] }) {   // 4.83: loadingEdi·shiftCands — 선적 화면 시프팅 추가 · 4.59-04: mfnCns — MFN 컨번호 목록 · 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
+export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null, dischargeEdi = null, voyageInfo = null, bookingFill = null, keepOnboard = null, mfnCns = null, loadingEdi = null, shiftCands = [], planLoad = null }) {   // 5.23: planLoad — 선적 예정 대조 · 4.83: loadingEdi·shiftCands — 선적 화면 시프팅 추가 · 4.59-04: mfnCns — MFN 컨번호 목록 · 4.48-02: keepOnboard — 선사 지시 본선 잔류(메일 근거) · 3.9: voyageInfo — X-RAY 봉인자를 조 등록으로(voyage 통째는 안 받는다, 1.98 교훈) · 3.26: bookingFill — 부킹 자리 채움
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2779,6 +2781,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
         dischargeEdi={dischargeEdi}   // 2.94: 통과화물 판정용(VoyagePage 에서 내려온 prop)
         keepOnboard={keepOnboard}   // 4.48-02: 앱 예상 줄의 메일 근거(메일 시각 · 메일 한 줄 · 양하항)
         mfnCns={mfnCns}   // 4.59-04: MFN 은 «리스트에 없음» 이 아니다
+        planLoad={planLoad}   // 5.23: 선적 예정 대 리스트
       />
 
       {/* ★ 1.84-01 (검수사 확정 2026-08-19): **검색창은 통합검색 하나로.**
@@ -2962,6 +2965,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
             <div data-shift-evid={shiftInfo.evid.label} className="px-3 py-1.5 text-xxs text-dim-100 bg-ink-950/60 border-b border-line">
               {shiftInfo.evid.label && (<><b className={shiftInfo.evid.label === '확정' ? 'text-emerald-300' : shiftInfo.evid.label === '불일치' ? 'text-rose-300' : 'text-amber-300'}>{shiftInfo.evid.label}</b>{' · '}</>)}
               {shiftInfo.evid.line}
+              {shiftInfo.evid.label === '예정' && (<span className="text-dim-300"> — 예정입니다(확정 아님). 양하·선적 플랜을 비교한 뒤 확정됩니다.</span>)}
               {(shiftInfo.evid.label === '미확정' || shiftInfo.evid.label === '예측') && (
                 <span className="text-dim-300">{shiftInfo.evid.keepMatch ? ' — 선사 시프팅 목록 수정본(또는 EDI 수정본)이 오면 저절로 확정으로 바뀝니다.' : ' — 터미널이 작업을 시작해 배정표 이적이 나오면 저절로 확정(또는 불일치)으로 바뀝니다.'}</span>
               )}

@@ -1243,6 +1243,17 @@ if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=
 else
   echo "✗ 4.48 본선 잔류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KP"; exit 1
 fi
+#  5.23: **시프팅 예정(◇에 더함) · 선적 예정 대 리스트 · 화면 글에 출처 이름 없음** — XTPG 550E 실자료(RTDB GET)로 실소스를 잰다.
+#    검수사 2026-11-23 21:45 «다만 예정입니다 확정이 아닙니다» · 22:07 «검수앱에선 카토스라는 문자가 노출되면 안됩니다. 그냥 예정으라고 해야 합니다».
+SMOKE_P523=$(mktemp /dev/shm/hometmp/_smokep523_XXXXXX.js)
+if npx esbuild tools/smoke_plan523.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_P523"; then
+  node tools/smoke_plan523.cjs "$(pwd)" "$SMOKE_P523" || { echo "✗ 5.23 시프팅·선적 예정 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_P523"; exit 1; }
+  rm -f "$SMOKE_P523"
+else
+  echo "✗ 5.23 시프팅·선적 예정 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_P523"; exit 1
+fi
 #  4.53: **선사 지시 «본선 잔류» 확정 — 출항 선적 EDI 에 다른 자리로 실려 오면 양하 315 · 시프팅 파란 ◆ 64** — MAMP 641N 실자료(10-25·10-26 두 시점 항차 사본 · 선적 EDI 원문)를
 #    실소스 판정(keepConfirmedOf)·홈 카드·수석 보드·항차 화면·진단·컨 상세·카고플랜·미르·콘앱 함수·실 firebase.js(메모리 DB)로 잰다.
 #    검수사 2026-10-26 14:50 «양하는 315 시프팅은 64개로 확정된듯합니다» · 15:02 «시프팅 예정건이 선적플랜 10번 데크에 존재하는걸 볼수있습니다. 이로서 확정합니다.»

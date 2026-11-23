@@ -91,10 +91,22 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   );
 }
 
-export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null, keepOnboard = null, mfnCns = null }) {   // 4.59-04: mfnCns — MFN 컨(양하 리스트엔 없으나 터미널이 내리라는 지시가 있는 컨)   // 4.48-02: keepOnboard — 앱 예상 줄의 메일 근거
+export default function ValidationBox({ ediContainers, records, mode, shiftingList = [], voyageKey = '', dischargeEdi = null, bookingFill = null, keepOnboard = null, mfnCns = null, planLoad = null }) {   // 4.59-04: mfnCns — MFN 컨(양하 리스트엔 없으나 터미널이 내리라는 지시가 있는 컨)   // 4.48-02: keepOnboard — 앱 예상 줄의 메일 근거
   const shiftCount = shiftingList.length;
   const shiftKeepCount = (shiftingList || []).filter((x) => x && x.keep).length;   // 4.48: 그중 선사 지시 본선 잔류 예보(확정 아님)
   const [shiftOpen, setShiftOpen] = useState(false);
+  //  ★ 5.23 — 선적 예정(터미널 계획 · 수집기 2.55 catosPlan.load) 대 선사 리스트. 검수사 2026-11-23 21:42 «선적 리스트는 164대인데 배정표 계획은 159대입니다 … 왜 모르죠?» · 22:07 «카토스라는 문자가 노출되면 안됩니다. 그냥 예정으라고».
+  //    어느 컨이 리스트에만·예정에만 있는지 번호로 보인다(확정 아님 — 판정·대수는 바꾸지 않는다).
+  const [planOpen, setPlanOpen] = useState(false);
+  const planCmp = useMemo(() => {
+    if (mode !== 'loading' || !planLoad || typeof planLoad !== 'object') return null;
+    const P = new Set(Object.keys(planLoad).map((k) => String(k).toUpperCase()).filter((k) => /^[A-Z]{4}\d{7}$/.test(k)));
+    if (!P.size) return null;
+    const R = new Set((records || []).map((r) => String((r && r.cn) || '').toUpperCase()).filter((k) => /^[A-Z]{4}\d{7}$/.test(k)));
+    const listOnly = [...R].filter((c) => !P.has(c)).sort();
+    const planOnly = [...P].filter((c) => !R.has(c)).sort();
+    return { planN: P.size, listN: R.size, listOnly, planOnly };
+  }, [mode, planLoad, records]);
   const _keepKey = Object.keys(keepOnboard || {}).sort().join(',');
   const _mfnKey = (mfnCns || []).join(',');   // 4.59-04: 배열은 렌더마다 새로 온다 — 내용이 바뀔 때만
   const v = useMemo(() => {
@@ -214,7 +226,21 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     };
   }, [ediContainers, records, mode, dischargeEdi, bookingFill, shiftingList, _keepKey, _mfnKey]);   // 4.48-02: _keepKey — 지시 기록이 바뀔 때만(객체는 렌더마다 새로 온다)
 
-  if (!v) return null;
+  //  5.23: 선적 예정 줄 — EDI 가 아직 없는 배(검증 상자가 비는 배)에도 보인다. 선적 EDI 가 없을 때가 이 줄이 가장 필요한 때다(XTPG 550E).
+  const planLine = planCmp ? (
+        <div className={`rounded p-2 mb-2 border ${planCmp.listOnly.length || planCmp.planOnly.length ? 'bg-amber-950/40 border-amber-700/50' : 'bg-emerald-950/30 border-emerald-800/40'}`} data-plan-load-line="1">
+          <button type="button" onClick={() => setPlanOpen((x) => !x)} className="text-xxs font-bold text-amber-200 text-left w-full">
+            📋 선적 예정 {planCmp.planN}대 · 리스트 {planCmp.listN}대{planCmp.listOnly.length || planCmp.planOnly.length ? ` — 리스트에만 ${planCmp.listOnly.length} · 예정에만 ${planCmp.planOnly.length}` : ' — 같음'} <span className="font-normal opacity-70">(확정 아님){planCmp.listOnly.length || planCmp.planOnly.length ? (planOpen ? ' ▲' : ' ▼') : ''}</span>
+          </button>
+          {planOpen && (planCmp.listOnly.length > 0 || planCmp.planOnly.length > 0) && (
+            <div className="mt-1 text-xxs text-dim-200 space-y-0.5" data-plan-load-detail="1">
+              {planCmp.listOnly.length > 0 && <div>리스트에만: <span className="mono">{planCmp.listOnly.join(' · ')}</span></div>}
+              {planCmp.planOnly.length > 0 && <div>예정에만: <span className="mono">{planCmp.planOnly.map((c) => { const p = planLoad[c] || {}; return `${c}${p.pod ? ' ' + p.pod : ''}${p.iso ? ' ' + p.iso : ''}${p.fe ? ' ' + p.fe : ''}`; }).join(' · ')}</span></div>}
+            </div>
+          )}
+        </div>
+  ) : null;
+  if (!v) return planLine;
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;
   //  4.48-02 — 지금 자료(확정 시프팅)와 앱 예상(선사 메일 수정 적용 — 본선 잔류 예보)을 가른다
   const shiftConf = shiftCount - shiftKeepCount;
@@ -322,6 +348,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           )}
         </div>
       )}
+
+      {planLine}
 
       {v.mfnMissingCount > 0 && (
         <div className="bg-red-950/40 border border-red-800/50 rounded p-2 mb-2" data-mfn-line="1">

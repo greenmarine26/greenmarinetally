@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.05-04</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.05-05</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.22-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.05-04';   // ★ 3.05 (TallyOne 5.15) PLAN 단을 홀드 있는 베이 중 젤 높은 데크·젤 깊은 홀드 기준으로 맞추고 남는 높이를 칸에(검수앱 PLAN 과 같은 한 벌)
+window.__APPV='TallyOne 5.23';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.05-05';   // ★ 3.05-05 (TallyOne 5.23) 시프팅 예정(터미널 계획)도 카고플랜 ◇ 에 — 검수앱과 같은 판정 한 벌(predictedShiftingForDisplay) · 재료에 catosPlan/shift.
+// (앞 판) window.__CONEV='ConeOne 3.05-04';   // ★ 3.05 (TallyOne 5.15) PLAN 단을 홀드 있는 베이 중 젤 높은 데크·젤 깊은 홀드 기준으로 맞추고 남는 높이를 칸에(검수앱 PLAN 과 같은 한 벌)
 // (앞 판) window.__CONEV='ConeOne 3.04';   // ★ 3.04 (TallyOne 5.07) 선박을 열면 «기기·선박·부두(동방/PCTC)» 한 줄을 하루 한 번만 접속 기록에 남김
 // (앞 판) window.__CONEV='ConeOne 3.03';   // ★ 3.03 사용 안내에 «PLAN 읽는 법(콘 개수·빼기·꽂기)» 설명서 링크
 // (앞 판) window.__CONEV='ConeOne 3.02';   // ★ 3.01 (TallyOne 5.03) — 플랜 화면이 열자마자 폭에 맞고 회전·자료 도착 때 다시 맞춤 · 미르가 배 이름 있는 호기 물음에 답함
@@ -1438,7 +1439,11 @@ async function _ctPredVoy(v, sh){
     catch(e){ console.warn('[콘앱 2.68] 양하 리스트를 못 받아 예측 시프팅을 그리지 않습니다:', e); return null; }
     const info = Object.assign({}, (v && v._info) || {}, { berthShift: sh ? sh.berthShift : null, terminalStatus: sh ? sh.terminalStatus : '' });
     if(!info.vsl) info.vsl = (state.voyageKey||'').split('_')[0]||'';
-    return { key: state.voyageKey, info, keepOnboard: state.keepOnboard || null, discharge: { raw: { edi: { text: state.disch.rawEdi } }, records: recD } };
+    //  ★ 3.05-05 (TallyOne 5.23) — 터미널 시프팅 예정(catosPlan)도 같은 재료로 — 검수앱 predictedShiftingForDisplay 가 ◇ 에 더한다(확정 아님). 못 받으면 예정 없이 그린다(로그).
+    let plan = null;
+    try{ const r = await fbFetch(`voyages/${encodeURIComponent(state.voyageKey)}/catosPlan/shift.json`); if(r && r.ok){ const j = await r.json(); if(j && typeof j==='object') plan = { shift: j }; } else console.warn('[콘앱 3.05-05] 시프팅 예정 응답 실패 — 앱 예측만 그립니다:', r && r.status); }
+    catch(e){ console.warn('[콘앱 3.05-05] 시프팅 예정을 못 받아 앱 예측만 그립니다:', e); }
+    return { key: state.voyageKey, info, keepOnboard: state.keepOnboard || null, catosPlan: plan, discharge: { raw: { edi: { text: state.disch.rawEdi } }, records: recD } };
   }catch(e){ console.warn('[콘앱 2.68] 예측 시프팅 재료를 못 모았습니다 — 그리지 않습니다:', e); return null; }
 }
 /*  ★ 2.72 (TallyOne 4.53 · 검수사 2026-10-26 15:02 «시프팅 예정건이 선적플랜 10번 데크에 존재하는걸 볼수있습니다. 이로서 확정합니다.») — 선적 EDI(출항본)에 실린 선사 지시 본선 잔류 컨.

@@ -269,7 +269,7 @@ export const CARGO_V2_CSS = `
     ⚠ 세 글자 표기(DGE 류)도 좌우로 **못 가른다** — 3자 × 0.667em 이 칸 폭을 거의 다 쓴다. 종전대로 가운데.  */
 .cpv2-page.cpv2-podsplit .cpv2-cell:not(.cpv2-mark3):not(.cpv2-shift):not(.cpv2-urgent):not(.cpv2-lugg):not(.cpv2-oog-W):not(.cpv2-oog-HW):not(.cpv2-pc):not(.cpv2-px) { justify-content: flex-start; }
 .cpv2-page.cpv2-podsplit .cpv2-cell.cpv2-mark2:not(.cpv2-shift):not(.cpv2-urgent):not(.cpv2-lugg):not(.cpv2-oog-W):not(.cpv2-oog-HW):not(.cpv2-pc):not(.cpv2-px) { font-size: calc(var(--mf, 9.6px) * 0.78); }
-.cpv2-cell.cpv2-shift.cpv2-shift-pred::before { content: '◇'; }
+.cpv2-cell.cpv2-shift.cpv2-shift-pred::before { content: '◇'; font-weight: 900; -webkit-text-stroke: 0.7px currentColor; }   /* 5.23: 예측·예정 ◇ 가 흐려 안 보였다(검수사 2026-11-23 21:00 «흐려서 잘 보이지 않아서») — 확정 ◆ 와 같은 크기·굵기, 속 빈 모양으로만 가른다 */
 .cpv2-cell.cpv2-shift.cpv2-shift-keep::before { color: #ca8a04; }   /* ★ 4.48: 선사 지시 본선 잔류의 시프팅 예보 — 노란 ◆(검수사 «메일 적용은 … 노란 다이아 몬드로») · 확정은 파란 ◆ */   /* ★ 4.16 (§7.8-②): 예측 시프팅(확정 아님) — 모양이 달라 흑백 인쇄에서도 갈린다 */
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: 0; left: 0; line-height: 1;   /* 2.91-02: 칸 안으로(잘림 방지) */ font-size: var(--mk);   /* 2.91-02: 표식 한 크기 */ color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
