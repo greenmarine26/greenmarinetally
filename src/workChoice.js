@@ -149,8 +149,12 @@ export function adminWorkRegNow() { const c = (_active !== undefined) ? _active 
 export function ownerShownToOthers(rec) {
   return !!(rec && String(rec.assignVoyage || '').trim() && String(rec.assignEquip || '').trim());
 }
-export function inspectorsSeenBy(inspectors, viewer) {
+//  ★ 5.22-02 — 검수사 2026-11-23 19:37 «제이름을 다른 검수원에게 보이지 말라고 했지 저까지 안보이게 하라고는 안했는데 제컴 제폰에서 이름이 안보입니다.
+//    사무실에 업무용 PC에서도 안보이고 매번 이름을 쳐서 들어가야 합니다.» — 로그인 화면은 보는 사람(viewer)을 모른다. 그래서 소유자 신뢰 기기
+//    (admin_guard 의 소유자 devices — 비밀번호로 한 번 확인한 검수사 기기)면 소유자가 보는 것으로 친다(ownerDevice). 남의 기기에는 종전대로 안 보인다.
+export function inspectorsSeenBy(inspectors, viewer, ownerDevice = false) {
   if (!inspectors || typeof inspectors !== 'object') return inspectors || {};
+  if (!viewer && ownerDevice) return inspectors;
   if (viewer && (isOwnerName(viewer) || isHiddenStaff(viewer))) return inspectors;   // 15:11 «클로드나 저는 다 볼수 있지만 다른 사용자는 클로드와 저를 볼수 없는것입니다. 제가 작업자 모드일떄만 보이는거죠»
   let out = null;
   for (const [k, rec] of Object.entries(inspectors)) {

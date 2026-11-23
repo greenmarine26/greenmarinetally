@@ -60,7 +60,7 @@ ok('로그인 전(보는 사람 모름) — 김성일 줄 없음', !('김성일'
 ok('김성일·클로드 화면 — 다 보임', ('김성일' in B.inspectorsSeenBy(INS, '김성일')) && ('김성일' in B.inspectorsSeenBy(INS, '클로드')));
 const INS2 = { ...INS, '김성일': { ...INS['김성일'], workMode: 'work', assignVoyage: 'PCSZ_2635E', assignEquip: '1호기' } };
 ok('김성일이 호기를 넣으면(작업자) 다른 검수원에게 보임', '김성일' in B.inspectorsSeenBy(INS2, '박진우'));
-ok('App — 화면마다 넘기는 명단은 inspectorsView(소유자 투명 문지기) · 날 명단 직접 전달 0', /inspectorsSeenBy\(inspectors, inspector\)/.test(rd('src/App.jsx')) && !/inspectors=\{inspectors\}/.test(rd('src/App.jsx')));
+ok('App — 화면마다 넘기는 명단은 inspectorsView(소유자 투명 문지기) · 날 명단 직접 전달 0', /inspectorsSeenBy\(inspectors, inspector(, ownerDevice)?\)/.test(rd('src/App.jsx')) && !/inspectors=\{inspectors\}/.test(rd('src/App.jsx')));
 //  소스 — 헤더·App·보고 창·명단
 const hd = rd('src/components/Header.jsx'), app = rd('src/App.jsx'), wr = rd('src/components/WorkReportModal.jsx'), pr = rd('src/components/PhotoReportModal.jsx'), aws = rd('src/components/AdminWorkStart.jsx');
 ok('헤더 — 관리자 칩 없음(data-work-mode="admin" 0) · 다른 검수원과 같은 [변경]', !/data-work-mode="admin"/.test(hd) && /workChoice && workChoice\.mode === 'work' && onChangeWork/.test(hd));

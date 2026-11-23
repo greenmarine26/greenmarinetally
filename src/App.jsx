@@ -12,7 +12,7 @@ import {
 , fbSubscribeLaneRoutes, fbSubscribeMirLexicon, fbWriteMirLexicon, fbLogMirMiss } from './firebase.js';   // 3.0: 미르 자체 학습 사전·결산 기록
 import { logDeniedAttempt, markSkipDevice } from './accessLog.js';   // 4.69: 막힌 이름의 접속시도를 센다
 import AccessLockScreen from './components/AccessLockScreen.jsx';   // 3.76: 접근 오프 자물쇠 화면
-import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
+import { isAdminName, isOwnerName, isTrustedDeviceFor, OWNER_NAME } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief, setStaffOff, isStaffOff, lockedNameOf } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
 import { parseHash, exitApp, closeHomeSheetIfOpen, setPendingDo } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6) · 4.25: 폰 홈 시트가 열려 있으면 뒤로가기는 시트만 닫는다
@@ -434,7 +434,8 @@ export default function App() {
   useChiefInputStamp(inspector);
   useAutoCloseVoyages({ voyagesAll, inspectors, inspector });
   //  5.20 관리자 투명 — 다른 검수원 화면에는 호기를 넣지 않은 소유자 줄을 뺀 명단을 넘긴다(workChoice.inspectorsSeenBy 한 벌).
-  const inspectorsView = useMemo(() => inspectorsSeenBy(inspectors, inspector), [inspectors, inspector]);
+  const ownerDevice = useMemo(() => { try { return isTrustedDeviceFor(adminGuard, OWNER_NAME); } catch (e) { console.warn('[5.22-02] 소유자 기기 판정 실패', e); return false; } }, [adminGuard]);   // 5.22-02: 검수사 기기면 로그인 화면에 검수사 이름이 보인다
+  const inspectorsView = useMemo(() => inspectorsSeenBy(inspectors, inspector, ownerDevice), [inspectors, inspector, ownerDevice]);
 
   // TallyOne 1.3: 화면 열람 기록 — 라우트 변경마다 1건(30초 중복 생략은 activityLog가 처리).
   //   voyage는 VoyagePage가 탭·모드까지 붙여 기록하므로 여기서 빼고(이중 기록 방지), login도 제외.

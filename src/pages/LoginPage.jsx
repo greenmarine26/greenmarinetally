@@ -256,8 +256,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     const arr = list.filter(i => !!inspectorStatus(i) || (meName && i.name === meName));
     // 명단(inspectors)에 아직 안 올라온 이름으로 들어왔던 경우에도 본인은 보여 준다.
     if (meName && !arr.some(i => i.name === meName)) arr.push({ name: meName });
+    //  5.22-02: 검수사 신뢰 기기(검수사 PC·폰·사무실 업무용 PC)면 오늘 처음이어도 검수사 이름을 보여 준다(남의 기기에는 안 보인다 — 5.20 관리자 투명 그대로). 다른 검수원이 로그인해 «검수원 변경»으로 온 화면(current 가 검수사 아님)에도 넣지 않는다(감사 지적).
+    let _ownDev = false; try { _ownDev = (!current || current === OWNER_NAME) && isTrustedDeviceFor(guard, OWNER_NAME); } catch (e) { console.warn('[5.22-02] 소유자 기기 판정 실패', e); }
+    if (_ownDev && !arr.some(i => i.name === OWNER_NAME)) arr.push({ name: OWNER_NAME });
+    const _top = meName || (_ownDev ? OWNER_NAME : '');
     // 본인을 맨 앞으로 — 매번 고르는 줄이다.
-    return arr.sort((a, b) => (a.name === meName ? -1 : b.name === meName ? 1 : 0));
+    return arr.sort((a, b) => (a.name === _top ? -1 : b.name === _top ? 1 : 0));
   })();
   //   ⚠ 로그인 0명이어도 **전체를 펴지 않는다** — 검수사 확정: *«로그인 안했던 사람은 저는 보이고
   //   본인이름은 **입력해야 나오니 입력칸이 보이면 맞습니다**.»* 즉 명단이 아니라 **입력칸**이 그 길이다.
