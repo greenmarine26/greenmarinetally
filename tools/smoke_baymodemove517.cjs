@@ -41,5 +41,17 @@ ok(/tier: bayModeTierOf\(g\)/.test(bv) && /holdDeckGateOf\(Number\(g\.center\)\)
 ok(/bayModeBaysOf\(remaining, groupCenterOf\)/.test(gw) && /onBayModeBays/.test(sp), '장 목록은 자동 가이드의 remaining·groupCenterOf 한 벌');
 ok(!/from '\.\.\/firebase\.js'/.test(bv), '베이뷰는 기록 함수를 부르지 않는다(4.80)');
 ok(/베이모드에서 장 옮기기/.test(read('src/data/helpData.js')), '매뉴얼');
+//  5.21-01 — TNJP 26378E 실측: 26 장(25·27)을 다 내리고 가이드 [다음 22 로 →] → 카드 CKFU9241231(22-05-06) 인데 그림은 26 이던 것
+ok(B.bayModeFollowOf('26', '22') === '22', '가이드가 22 로 옮기면 베이모드 그림도 22');
+{ //  5.21-01 감사 — TNJP: 21(짝 없음)·22 가 띠 목록엔 따로, 그림은 한 해치(22)
+  const LT = [{ center: '10', deck: 16, hold: 3 }, { center: '14', deck: 9, hold: 12 }, { center: '18', deck: 8, hold: 13 }, { center: '21', deck: 0, hold: 2 }, { center: '22', deck: 0, hold: 19 }];
+  const hOf = (b) => { const n = parseInt(b, 10); return n % 2 ? n + 1 : n; };
+  const HT = B.bayModeHatchesOf(LT, hOf);
+  ok(HT.length === 4 && HT[3].hatch === 22 && HT[3].hold === 21 && HT[3].centers.join() === '21,22', '해치로 합친 칩 — 21·22 → 한 칩(홀드 21)');
+  ok(B.bayModeStepOf(LT, '22', -1, hOf) === '18' && B.bayModeStepOf(LT, '21', -1, hOf) === '18' && B.bayModeStepOf(LT, '18', 1, hOf) === HT[3].center, '[◀ 장]·[장 ▶] 은 같은 그림 안의 장을 건너뛴다');
+  ok(B.bayModeStepOf(LT, '22', -1) === '21', '(해치 함수 없이 부르면 종전 그대로 — 호환)');
+}
+ok(B.bayModeFollowOf('26', null) == null && B.bayModeFollowOf('26', -1) == null && B.bayModeFollowOf('26', '0') == null && B.bayModeFollowOf('26', '26') == null && B.bayModeFollowOf(null, '22') == null, '목록 화면(장 비움)·베이 없음·같은 장·베이모드 아님은 그대로');
+ok(/const to = b \? bayModeFollowOf\(b\.bay, live\.bay\) : null;/.test(bv) && /\}, \[live\.bay\]\);/.test(bv), '베이뷰 — 가이드 장(live.bay)이 바뀔 때 고정 장을 따라 바꿈(saved 그대로)');
 console.log(`${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

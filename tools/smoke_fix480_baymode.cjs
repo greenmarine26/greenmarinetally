@@ -274,6 +274,42 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     close(H);
   }
 
+  //  G. 5.21-01 — 검수사 2026-11-23 09:21 «베이모드 베이를 바꿨는데 컨테이너 카드만 바뀌고 베이는 그대로임».
+  //     자료 = tools/fixtures/baymode5211_tnjp.json(TNJP 26378E 실측 GET — 26 장(25·27)에 CKFU9214004 한 대만 남김). 베이모드로 26 을 내린 뒤 가이드가 다음 장으로 넘어가면 띠·그림도 그 장이어야 한다.
+  {
+    const FT = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/baymode5211_tnjp.json'), 'utf8'));
+    const vG = { key: 'TNJP_G', info: clone(FT.info), discharge: { ediContainers: FT.discharge.ediContainers, completed: FT.discharge.completed }, loading: { ediContainers: {}, completed: {} } };
+    const H = await boot(false, { voyage: vG, vk: vG.key, bays: [25, 26, 27], track: Object.keys(FT.discharge.ediContainers) });
+    const tierB = H.btn(/홀드/); if (process.env.DBG) console.log('DBG start', [...H.d.querySelectorAll('button')].map((b) => H.txt(b)).slice(0, 70).join(' | '));
+    await H.click(H.d.querySelector('[data-bayview-baymode-on]'), 700);
+    const title = () => { const t = H.d.querySelector('[data-bayview-title]'); return t ? H.txt(t) : ''; };
+    const t0 = title();
+    if (process.env.DBG) console.log('DBG bm', t0, JSON.stringify(H.cards()), [...H.d.querySelectorAll('button')].map((b) => H.txt(b)).slice(0, 70).join(' | '));
+    await H.click(H.btn(/^🟠 홀드 1개/), 700);
+    if (process.env.DBG) console.log('DBG hold', title(), JSON.stringify(H.cards()));
+    await H.click(await H.until(() => H.btn(/양하확인$/), 2000), 900); await H.sync(); await sleep(800);
+    ok(`G0 TNJP 26 장 마지막 한 대(CKFU9214004)를 베이모드로 내림 — 띠 «${t0}»`, /26/.test(t0) && H.done().includes('CKFU9214004'), JSON.stringify({ t0, errs: H.errs }));
+    //  검수사가 한 그대로 — 가이드 [다른 베이 선택] → B22 장 칩 → 단 고르기(홀드) → 카드는 22 장
+    await H.click(await H.until(() => H.btn(/다른 베이 선택/), 2500), 600);
+    const chip = await H.until(() => [...H.d.querySelectorAll('button')].find((b) => { const m = H.txt(b).match(/^B([\d·]+)/); return m && m[1].split('·').map(Number).includes(22) && !b.disabled; }), 2500);
+    await H.click(chip, 700);
+    const hb = H.btn(/^🟠 홀드 \d+개/); if (hb) await H.click(hb, 700);
+    await H.until(() => /22/.test(title()), 2500);
+    const t1 = title(), c1 = H.cards();
+    const gridHas = (l4) => !!H.cell('XXXXXXX' + l4);
+    ok(`G1 가이드가 22 장으로 옮기면 베이모드 띠·그림도 22 — 띠 «${t1}» · 카드 ${c1.map((x) => x.cn + ' ' + x.pos).join()} · 그림에 1231 칸`, !!chip && /22/.test(t1) && !/26/.test(t1) && c1.some((x) => /^22-/.test(String(x.pos))) && gridHas('1231') && !!H.d.querySelector('[data-bayview-baymode]'), JSON.stringify({ t1, c1, errs: H.errs }));
+    //  띠 [장 ▶] 로 돌아가도(남은 장만 — 26 은 다 내려 건너뜀) 그림·카드가 같이 움직인다
+    //  TNJP 사전은 23 이 없어 21 은 짝 없는 장(묶음 중심 21) · 22 는 따로지만 그림은 한 해치 «BAY 21 BAY 22» — 띠 [◀ 장] 은 한 번에 다른 그림(18)으로 가야 한다(감사 5.21-01, 종전엔 첫 누름이 21 로 헛옮김)
+    const nx = H.d.querySelector('[data-bayview-bm-prev]');
+    await H.click(nx, 900);
+    const t2 = title(), c2 = H.cards();
+    ok(`G2 띠 [◀ 장] 한 번에 다른 그림(18)으로 · 카드도 같이 — 띠 «${t2}» · 카드 ${c2.map((x) => x.pos).join() || '(단 고르기)'}`, !!nx && t2 !== t1 && !/22/.test(t2) && /18/.test(t2) && c2.every((x) => !/^22-/.test(String(x.pos))), JSON.stringify({ t2, c2 }));
+    await H.click(H.d.querySelector('[data-bayview-title]'), 500);
+    const chipNames = [...H.d.querySelectorAll('[data-bayview-bm-bay]')].map((b) => H.txt(b).split(' ')[0]);
+    ok(`G3 장 목록 칩은 그림(해치)마다 하나 — ${chipNames.join(' · ')}`, chipNames.length > 0 && new Set(chipNames).size === chipNames.length && chipNames.filter((x) => /22/.test(x)).length === 1, JSON.stringify(chipNames));
+    close(H);
+  }
+
   //  ── ⑤ 4.80-01 실제 레이아웃 — 크로뮴(playwright)에서 실소스 번들 + 빌드된 CSS 로 잰다. 못 재면 «건너뜀» 이 아니라 실패다(규범 §4-3).
   //   자료 = 같은 KKLC 2610N 보관본. 데크·홀드가 함께 있는 해치(B13~15: 13 / (14)15)를 쓰려고 이 해치 홀드 컨만 미완료로 둔다(나머지는 보관본 그대로).
   //   검사 = 폰 폭 390·360·412 에서 트윈 카드 두 장 + 단추가 위 칸 안(화면 안)에 든다 · 베이 칸 높이 · 두 베이 그룹의 데크 칸과 홀드 칸이 둘 다 그 칸 안에 보인다 ·

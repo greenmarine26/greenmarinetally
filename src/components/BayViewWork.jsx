@@ -17,7 +17,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildBayPagesFromSummary, hatchEvenOf } from '../cargoPlanCore.js';
 import { useBackHandler } from '../backHandler.js';
 import { usePinchZoom } from '../usePinchZoom.js';   // 4.80: 베이 그림 칸 핀치 확대 — 베이플랜·베이 상세와 한 벌
-import { bayModeOkFor, bayPickRequest, bayModeCellsOf, bayModeStepOf, bayModeTierOf } from '../bayMode.js';   // 4.80: 베이모드 양하 — 판정 한 벌
+import { bayModeOkFor, bayPickRequest, bayModeCellsOf, bayModeStepOf, bayModeTierOf, bayModeFollowOf, bayModeHatchesOf } from '../bayMode.js';   // 4.80: 베이모드 양하 — 판정 한 벌
 import useIsWide from '../useIsWide.js';   // 3.49: 넓은 화면(태블릿·컴)은 좌/우 분할 — 리스트 탭 2단과 같은 기준(1024px)
 import CnText from './CnText.jsx';   // 5.00 컨 번호 한 벌
 
@@ -146,12 +146,24 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
   //  5.17: 베이모드를 켠 채 다른 장으로 — 해제했다 다시 켜지 않는다. 고정 장만 바꾸고 해제 때 돌아갈 원래 화면(saved)은 그대로 둔다.
   //    검수사 2026-11-20 «검수앱 자동모드 베이모드에서 베이이동시 선택 방법은?» → «넣어 주세요».
   const moveBayMode = (center) => {
-    if (!bayModeRef.current || center == null || String(center) === String(bayModeRef.current.bay)) { setBmList(false); return; }
-    const g = bmBays.find((x) => String(x.center) === String(center));
+    if (!bayModeRef.current || center == null || String(center) === String(bayModeRef.current.bay) || bmHatchOf(center) === bmHatchOf(bayModeRef.current.bay)) { setBmList(false); return; }   // 5.21-01: 같은 그림(해치)이면 옮기지 않는다
+    const g = bmHatches.find((x) => String(x.center) === String(center)) || bmBays.find((x) => String(x.center) === String(center));   // 5.21-01: 해치로 합친 칩의 대수
     setBayMode((b) => (b ? { ...b, bay: center } : b)); setBayPick(null); setCardCns([]); setBmList(false);
     setPreset((p) => ({ seq: ((p && p.seq) || 0) + 1, bay: center, tier: bayModeTierOf(g), guide: true, twin: null }));   // 데크 남음 → 데크 · 데크 0·홀드 열림 → 홀드 · 이웃 데크로 잠김 → 단 고르기 화면(거기서 «같은 해치 데크» 안내)
   };
-  const bmPrev = bayMode ? bayModeStepOf(bmBays, bayMode.bay, -1) : null, bmNext = bayMode ? bayModeStepOf(bmBays, bayMode.bay, 1) : null;
+  //  5.21-01: 베이모드에서 위 칸(자동 가이드)이 장을 바꾸면 아래 그림도 그 장으로 — 검수사 2026-11-23 09:21 «베이모드 베이를 바꿨는데 컨테이너 카드만 바뀌고 베이는 그대로임».
+  //    실근거 TNJP 26378E — 26 장(25·27) 을 다 내리고 가이드의 [다음 22 로 →] 를 누르니 카드는 CKFU9241231(22-05-06) 인데 그림·띠는 26 그대로였다.
+  //    가이드 안에서 고른 장(다음 장 단추·베이 목록·베이 변경)을 고정 장으로 받는다. 비우면(목록 화면) 그림은 그대로 둔다. 해제 때 돌아갈 원래 화면(saved)은 건드리지 않는다.
+  useEffect(() => {
+    const b = bayModeRef.current;
+    const to = b ? bayModeFollowOf(b.bay, live.bay) : null;
+    if (to == null) return;
+    setBayMode((o) => (o ? { ...o, bay: to } : o)); setBmList(false);   // bayPick 은 그대로 — 컨을 눌러 가이드가 이웃 장으로 옮긴 경우 그 요청(단 맞추기·카드·데크 먼저 알림)을 가이드가 끝내야 한다(감사 5.21-01)   // 카드(cardCns)는 가이드가 이미 새 장 카드를 올렸으니 지우지 않는다
+  }, [live.bay]);   // eslint-disable-line react-hooks/exhaustive-deps — 가이드가 장을 바꿀 때만. 띠의 [◀ 장]·[장 ▶]·목록은 moveBayMode 가 두 쪽을 같이 바꾼다.
+  //  5.21-01: 띠의 장 이동·목록은 그림(해치) 단위 — 같은 그림 안의 장으로는 옮기지 않는다(감사 — TNJP 21·22). 해치 판정은 cargoPlanCore.hatchEvenOf 한 벌.
+  const bmHatchOf = useCallback((b) => { const h = hatchEvenOf(parseInt(b, 10), pages); return h == null ? parseInt(b, 10) : h; }, [pages]);
+  const bmHatches = useMemo(() => bayModeHatchesOf(bmBays, bmHatchOf), [bmBays, bmHatchOf]);
+  const bmPrev = bayMode ? bayModeStepOf(bmBays, bayMode.bay, -1, bmHatchOf) : null, bmNext = bayMode ? bayModeStepOf(bmBays, bayMode.bay, 1, bmHatchOf) : null;
   //  베이 그림에서 컨을 눌렀을 때 — 남은 양하 컨이면 상세 카드가 아니라 자동 가이드의 작은 카드로(요청만 보낸다, 판정·기록은 자동 가이드 것). 이미 완료된 컨은 종전대로 상세.
   const onBayCellTap = (c) => {
     if (!c) return;
@@ -309,9 +321,9 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
       </div>
       {bayMode && bmList && (
         <div className="shrink-0 max-h-40 overflow-auto bg-ink-900 border-b border-fuchsia-800 px-2 py-2 flex flex-wrap gap-1.5" data-bayview-bm-strip="1">
-          {bmBays.length === 0 && <span className="text-xxs text-dim-300">남은 양하 컨이 있는 장이 없습니다.</span>}
-          {bmBays.map((g) => {
-            const cur = String(g.center) === String(bayMode.bay);
+          {bmHatches.length === 0 && <span className="text-xxs text-dim-300">남은 양하 컨이 있는 장이 없습니다.</span>}
+          {bmHatches.map((g) => {
+            const cur = g.hatch === bmHatchOf(bayMode.bay);   // 5.21-01: 같은 그림(해치)이면 지금 장
             return (
               <button key={g.center} onClick={() => moveBayMode(g.center)} data-bayview-bm-bay={String(g.center)}
                 className={chip(cur ? 'bg-fuchsia-700 border border-fuchsia-300 text-white' : 'bg-ink-800 border border-line text-ink-100')}>

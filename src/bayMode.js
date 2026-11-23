@@ -113,9 +113,18 @@ export function bayModeBaysOf(remaining, groupCenterOf) {
 }
 
 //  지금 장(cur)에서 dir(-1 앞 · +1 뒤)으로 남은 컨이 있는 다음 장 — 없으면 null. cur 가 목록에 없으면(다 내린 장) 번호로 다음을 찾는다.
-export function bayModeStepOf(list, cur, dir) {
-  const L = list || [];
-  if (!L.length) return null;
+//  5.21-01: hatchOf(장 → 그림 해치 번호)를 넘기면 같은 그림(해치) 안의 장은 건너뛴다 — 감사: TNJP 처럼 짝 없는 21 과 22 가 띠 목록에 따로 잡히는데
+//    그림은 한 장(«BAY 21 BAY 22»)이라 첫 [◀ 장] 이 같은 그림 안에서만 옮겨 «눌렀는데 그림이 안 바뀐다» 가 되던 것.
+export function bayModeStepOf(list, cur, dir, hatchOf = null) {
+  const L0 = list || [];
+  if (!L0.length) return null;
+  if (hatchOf) {
+    const H = bayModeHatchesOf(L0, hatchOf);
+    const h = parseInt(hatchOf(String(cur)), 10);
+    if (dir > 0) { const x = H.find((g) => g.hatch > h); return x ? x.center : null; }
+    const xs = H.filter((g) => g.hatch < h); return xs.length ? xs[xs.length - 1].center : null;
+  }
+  const L = L0;
   const n = parseInt(cur, 10);
   if (dir > 0) { const x = L.find((g) => parseInt(g.center, 10) > n); return x ? x.center : null; }
   const xs = L.filter((g) => parseInt(g.center, 10) < n); return xs.length ? xs[xs.length - 1].center : null;
@@ -127,4 +136,33 @@ export function bayModeTierOf(g) {
   if (g.deck > 0) return 'deck';
   if (g.hold > 0 && !g.lock) return 'hold';
   return null;
+}
+
+//  5.21-01: 베이모드 고정 장이 자동 가이드가 고른 장을 따라가야 하는가 — 따라갈 장(문자열) 또는 null(그대로).
+//    가이드가 장을 비우면(베이 목록 화면)·베이 없는 자리(-1·0)·같은 장이면 그대로 둔다. (검수사 2026-11-23 «베이모드 베이를 바꿨는데 컨테이너 카드만 바뀌고 베이는 그대로임»)
+export function bayModeFollowOf(fixedBay, guideBay) {
+  if (fixedBay == null || guideBay == null) return null;
+  const n = parseInt(guideBay, 10);
+  if (!(n > 0)) return null;
+  return String(guideBay) === String(fixedBay) ? null : String(guideBay);
+}
+
+//  5.21-01: 띠 목록을 그림(해치) 단위로 — 같은 해치의 장(예 TNJP 21·22)은 칩 하나로 합치고 데크·홀드 대수를 더한다.
+//    칩·[◀ 장]·[장 ▶] 이 옮겨 갈 장(center)은 그 해치에서 데크가 남은 장 먼저, 없으면 앞 장. 해치 안 다음 장은 가이드가 넘기고 그림은 bayModeFollowOf 로 따라온다.
+//    @returns [{ center, hatch, deck, hold, lock, centers }] — hatch 오름차순
+export function bayModeHatchesOf(list, hatchOf) {
+  const m = new Map();
+  for (const g of list || []) {
+    if (!g || g.center == null) continue;
+    const hv = hatchOf ? hatchOf(String(g.center)) : g.center;
+    const h = parseInt(hv == null ? g.center : hv, 10);
+    if (!Number.isFinite(h)) continue;
+    const x = m.get(h) || { hatch: h, deck: 0, hold: 0, centers: [], parts: [] };
+    x.deck += g.deck || 0; x.hold += g.hold || 0; x.centers.push(String(g.center)); x.parts.push(g);
+    m.set(h, x);
+  }
+  return [...m.values()].sort((a, b) => a.hatch - b.hatch).map((x) => {
+    const pick = x.parts.find((g) => g.deck > 0) || x.parts.find((g) => g.hold > 0 && !g.lock) || x.parts[0];
+    return { center: String(pick.center), hatch: x.hatch, deck: x.deck, hold: x.hold, lock: !!pick.lock, centers: x.centers };
+  });
 }
