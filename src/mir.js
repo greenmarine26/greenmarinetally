@@ -2703,7 +2703,7 @@ export function answerOneRaw(query, ctx) {
   if (p.crewSet || (p.crewQuery && !(p.crewQuery.kind === 'poolPlan' && !v))) {   // 5.16: 배 없는 «교대표» 는 아래 갈래로
     if (!v) return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: «OBWH 1호기 홍길동 3호기 김철수» · «SWMM 홍길동 몇 개 했어»';
     if (p.crewSet && app === 'cone') return '호기 검수원은 검수앱에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 재감사: 콘앱엔 fbSetVoyageCraneCrew 가 없다
-    if (p.crewSet) { try { return crewSetText(resolveCrewSides(p.crewSet, v), ship); } catch (e) { /* 본체로 */ } }
+    if (p.crewSet) { try { return crewSetText(resolveCrewSides(p.crewSet, v), ship, c._now || Date.now(), (v && v.info) || null); } catch (e) { /* 본체로 */ } }
     if (p.crewQuery && c.crewAnswer) { try { const a = c.crewAnswer(p.crewQuery); if (a) return a; } catch (e) { /* 본체로 */ } }
   }
 

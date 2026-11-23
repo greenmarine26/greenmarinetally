@@ -124,6 +124,7 @@ export const fbSaveSectionData = async () => true;
 export const fbSaveShipBayDict = async () => true;
 export const fbSaveShipIntro = async () => true;
 export const fbSaveShipStructure = async () => true;
+export const fbSaveTimedCrew = async () => true;
 export const fbSaveXrayList = async () => true;
 export const fbSeedFoodSpotsOnce = async () => true;
 export const fbSetActualPosition = async () => true;

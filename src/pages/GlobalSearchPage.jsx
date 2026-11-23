@@ -1,4 +1,5 @@
 // 모든 항차 + 양/선적 통합 검색 + 음성 입력 + AI 자연어 (M1.9)
+import { fbSaveTimedCrew } from '../firebase.js';   // 5.22 시각이 붙은 교대
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
@@ -152,6 +153,13 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     let cs = null;
     if (!shipCtx || !shipCtx.key) return;
     try { cs = resolveCrewSides(parseNaturalQuery(t).crewSet, shipCtx.v); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌
+    if (cs && cs.timed && shipCtx.key) {   // 5.22: «12:30 박진우 1호기 이형출과 교대» — 시각이 붙은 교대(crewTimed 판정 · crewPoolLog)
+      const tk = `timed|${shipCtx.key}|${cs.timed.swaps.map((x) => `${x.hh}${x.mm}${x.no}${x.name}`).join(',')}`;
+      if (crewRanRef.current === tk) return; crewRanRef.current = tk;
+      fbSaveTimedCrew(shipCtx.key, cs.timed)
+        .catch((e) => { console.warn('[5.22] 교대 기록 실패', e); crewRanRef.current = ''; try { speak('교대 기록이 안 됐어요 — 다시 말씀해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (cs && cs.pool) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
       const pk = `pool|${shipCtx.key}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
       if (crewRanRef.current === pk) return; crewRanRef.current = pk;

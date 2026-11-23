@@ -1840,6 +1840,7 @@ fi
     #  4.72: 로그아웃 없이 쥔 호기는 다른 사람이 못 고른다
     node tools/smoke_equiphold472.cjs || { echo "✗ 호기 점유 연막검사 실패 — 배포 금지"; exit 1; }
     NODE_PATH="$PWD/node_modules" node tools/smoke_crewpool516.cjs || { echo "✗ 호기 공동 담당 연막검사 실패 — 배포 금지"; exit 1; }   # 5.16
+    TZ=Asia/Seoul NODE_PATH="$PWD/node_modules" node tools/smoke_crewtimed522.cjs "$(pwd)" || { echo "✗ 5.22 시각이 붙은 교대 연막검사 실패 — 배포 금지"; exit 1; }
     node tools/smoke_baymodemove517.cjs || { echo "✗ 베이모드 장 옮기기 연막검사 실패 — 배포 금지"; exit 1; }   # 5.17
     node tools/smoke_depart5171.cjs || { echo "✗ 출항 시각 한 벌 연막검사 실패 — 배포 금지"; exit 1; }   # 5.17-01
     node tools/smoke_preplan518.cjs || { echo "✗ 확정전 플랜 연막검사 실패 — 배포 금지"; exit 1; }   # 5.18

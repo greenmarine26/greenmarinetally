@@ -35,7 +35,7 @@ import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
 import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain } from '../voice.js';
 import { logQuerySettled } from '../activityLog.js';
-import { fbMirCraneShipMove } from '../firebase.js';   // 5.14
+import { fbMirCraneShipMove, fbSaveTimedCrew } from '../firebase.js';   // 5.14 · 5.22
 import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetCrewPool, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';
 import { fetchWeatherText } from '../weatherText.js';   // 3.41: 날씨 문장 한 벌(작업창과 공용)
 import { resolveCrewSides, crewShiftKey, gangKeyFromWords, koJosa, parseSpokenTimeMs } from '../utils.js';
@@ -170,7 +170,14 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
     if (!parsed || !voyageKey) return;
     try {
       const cs = resolveCrewSides(parsed.crewSet, voyage);
-      if (cs && cs.pool) {   // 5.16: 호기 공동 담당 등록·해제
+      if (cs && cs.timed) {   // 5.22: «12:30 박진우 1호기 이형출과 교대» — 시각이 붙은 교대(crewTimed 판정 · crewPoolLog)
+        const tk = `timed|${voyageKey}|${cs.timed.swaps.map((x) => `${x.hh}${x.mm}${x.no}${x.name}`).join(',')}`;
+        if (sideRef.current !== tk) {
+          sideRef.current = tk;
+          fbSaveTimedCrew(voyageKey, cs.timed, inspector || '')
+            .catch((e) => { console.warn('[5.22] 교대 기록 실패', e); sideRef.current = ''; setOut((o) => (o || '') + '\n⚠ 교대 기록이 안 됐어요 — 다시 말해 주세요.'); });
+        }
+      } else if (cs && cs.pool) {   // 5.16: 호기 공동 담당 등록·해제
         const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
         if (sideRef.current !== pk) {
           sideRef.current = pk;

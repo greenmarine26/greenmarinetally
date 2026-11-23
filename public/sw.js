@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.21-01';
-const NOTE = '5.21-01 베이모드에서 장 옮기기 — 자동 가이드에서 다음 장으로 넘어가면 아래 베이 그림도 그 장으로 바뀝니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.22';
+const NOTE = '5.22 미르에게 시각이 붙은 교대를 말하면 그 시각부터 그 사람 이름으로 기록합니다. 앱에 들어오지 않은 사람도 «12:30 박진우 1호기 이형출과 교대»처럼 말하면 됩니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

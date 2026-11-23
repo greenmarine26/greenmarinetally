@@ -3,6 +3,7 @@
 // - 트윈: 자동 짝꿍 + 양쪽 동시 완료
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
+import { fbSaveTimedCrew } from '../firebase.js';   // 5.22 시각이 붙은 교대
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sizeLenKnown, sizeLenOf } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
@@ -1460,6 +1461,13 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
   const crewSetRef = useRef('');
   useEffect(() => {
     const cs = resolveCrewSides(parsed.crewSet, voyage);   // 3.21: «선미 김판석» → 이 배 실적으로 호기 번호를 가린다
+    if (cs && cs.timed && voyageKey) {   // 5.22: «12:30 박진우 1호기 이형출과 교대» — 시각이 붙은 교대(crewTimed 판정 · crewPoolLog)
+      const tk = `timed|${voyageKey}|${cs.timed.swaps.map((x) => `${x.hh}${x.mm}${x.no}${x.name}`).join(',')}`;
+      if (crewSetRef.current === tk) return; crewSetRef.current = tk;
+      fbSaveTimedCrew(voyageKey, cs.timed)
+        .catch((e) => { console.warn('[5.22] 교대 기록 실패', e); crewSetRef.current = ''; try { speak('교대 기록이 안 됐어요 — 다시 말씀해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (cs && cs.pool && voyageKey) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
       const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
       if (crewSetRef.current === pk) return; crewSetRef.current = pk;

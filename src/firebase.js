@@ -21,7 +21,8 @@ import { isChief } from './staffList.js';                          // 3.53: 같�
 import { getMeToday } from './meToday.js';                          // 3.53: 호출부가 이름을 안 넘겨도 이 기기의 오늘 이름으로 막는다   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 import { isViewOnlyNow, isNotWorkerNow, isAdminNow, adminWorkGateText, myWorkVoyageNow, workGateText, activeChoiceName, adminWorkRegNow } from './workChoice.js';   // 3.50: «조회만» 문지기 — 활동의 작업 자리를 안 적는다. 순환 없음 — workChoice 는 staffList·adminGuard·meToday 만 부른다
 import { workOrderKey, normalizePrefs } from './workOrder.js';
-import { sameRtdbVal } from './workReportParse.js';   // 5.13: 미르 보고 취소 — 쓴 값 그대로인가(키 순서·null 칸 무시)   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
+import { sameRtdbVal } from './workReportParse.js';
+import { timedCrewPlanOf } from './crewTimed.js';   // 5.22 시각이 붙은 교대   // 5.13: 미르 보고 취소 — 쓴 값 그대로인가(키 순서·null 칸 무시)   // 4.09: 양하 순서 조건 한 벌(순수 함수 — 순환 없음)
 import { setServerOffset } from './workShift.js';   // 4.79: 주야 근무조 판정은 서버 시각 기준
 import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 끊는다
 
@@ -366,6 +367,37 @@ export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
     }
   } catch (e) { console.warn('[4.56-04] 조 등록 뒤 기기 호기 맞춤 실패', e); }
   return list.map((c) => `${c.no}호기 ${String(c.name).trim()}`).join(' · ');
+}
+
+//  ★ 5.22 시각이 붙은 교대를 적는다 — 판정은 crewTimed.timedCrewPlanOf 한 벌(조 밖·거꾸로·너무 먼 시각이면 null, 아무것도 안 씀).
+//    ①처음 등록(base)은 그 조 시작 시각으로 적는다(«지금» 으로 적으면 뒤 교대 기록보다 늦어 교대를 덮는다 — utils.mergeCrewPoolLog eff)
+//    ②교대는 info.crewPoolLog/{ms}_{N} = { at, equip, name, from, by, src:'mir', plan? } — 5.16 공동 담당이 바꾼 시각과 같은 자리·같은 판정.
+//    앱에 로그인하지 않은 사람도 이름이 그 시각부터 붙는다(검수사 2026-11-23 «앱에 등록을 못하더라도 기록은 그렇게 될수있어야 합니다»).
+//    루트 update 한 번 — 반쪽 기록 없음. 조 등록과 같은 관리 기록이라 문지기를 두지 않는다(3.51-01).
+//  화면 다섯 곳이 같은 길로 적게 하는 입구 — 그 배 info(조 등록·교대 기록)를 서버에서 확실히 읽고(시간 초과면 던진다) 판정(timedCrewPlanOf)은 여기서 한 번.
+//    판정이 거절(앞사람 모름·조 밖·같은 사람)이면 아무것도 안 쓰고 null — 엔진 답도 같은 판정이라 «적을게요» 를 안 한다.
+export async function fbSaveTimedCrew(voyageKey, timed, by = null) {
+  if (!voyageKey || !timed) return null;
+  const who = by != null ? by : String(_storage.get(SK.activeInspector) || '').trim();
+  const snap = await _withTimeout(get(ref(db, `voyages/${voyageKey}/info`)), '교대 기록 전 배 정보 읽기');
+  return fbSetCrewTimed(voyageKey, timedCrewPlanOf(timed, Date.now(), snap.exists() ? snap.val() : {}), who);
+}
+//  ①그 조 처음 상태(start)와 다른 호기 등록(keep)을 모두 조 시작 시각으로 적는다 — 늦게 적힌 등록 시각에서 교대가 되돌아가지 않게(utils.craneCrewOf regAt · mergeCrewPoolLog eff)
+//  ②교대는 info.crewPoolLog/{ms}_{N} = { at, equip, name, from, by, src:'mir', plan? } — 5.16 공동 담당이 바꾼 시각과 같은 자리·같은 판정(utils.mergeCrewPoolLog).
+//  ③다시 말해 바뀐 그 호기의 옛 예정(plan)은 지운다(drop). 루트 update 한 번 — 반쪽 기록 없음.
+//    앱에 로그인하지 않은 사람도 이름이 그 시각부터 붙는다(검수사 2026-11-23 «앱에 등록을 못하더라도 기록은 그렇게 될수있어야 합니다»).
+//    조 등록과 같은 관리 기록이라 문지기를 두지 않는다(3.51-01).
+export async function fbSetCrewTimed(voyageKey, plan, by) {
+  if (!voyageKey || !plan || !plan.ok) return null;
+  const I = `voyages/${voyageKey}/info`;
+  const patch = {};
+  for (const [no, name] of Object.entries(plan.start || {})) if (name) patch[`${I}/craneCrew/${plan.shiftKey}/${no}호기`] = { name, at: plan.shiftStart, by: by || '', src: 'mir' };
+  for (const k of plan.keep || []) patch[`${I}/craneCrew/${plan.shiftKey}/${k.no}호기`] = { name: k.name, at: plan.shiftStart, by: by || '', src: 'mir' };   // 이름만 적힌(문자열) 등록도 이름을 잃지 않게 통째로
+  for (const x of plan.items || []) patch[`${I}/crewPoolLog/${x.ms}_${x.no}`] = { at: x.ms, equip: `${x.no}호기`, name: x.name, from: x.from || '', by: by || '', src: 'mir', ...(x.plan ? { plan: true } : {}) };
+  for (const k of plan.drop || []) patch[`${I}/crewPoolLog/${k}`] = null;
+  if (!Object.keys(patch).length) return null;
+  await _ackOrQueue(update(ref(db), patch), '미르 교대 기록');
+  return (plan.items || []).length;
 }
 
 //  ★ 5.16 호기 공동 담당 등록·해제 — 검수사 2026-11-20 «OBWH는 2갱인데 3명이 교대로 작업 합니다» · «그런데 등록할 방법이 없습니다. 할떄마다 바꿔야 하는데».

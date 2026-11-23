@@ -7,7 +7,8 @@
 import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCrewPool, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
 import { voyagePierOf, degText } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
 import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
-import { crewNameAt, crewPoolLogOf } from './utils.js';   // 5.16: 공동 담당 교대표
+import { crewNameAt, crewPoolLogOf } from './utils.js';
+import { parseTimedCrew, timedCrewText } from './crewTimed.js';   // 5.22 시각이 붙은 교대   // 5.16: 공동 담당 교대표
 import { shipFlag } from './shipPolicyCore.js';   // ★ 일괄수리(2026-11-10): 선박 성질표 — 휴게 없는 배(noRest)
 import { isoShown, sealFormatAnomalies, ediSealMapOf, isCustomsSrc, sealCheckOf, isSealError, sealConflictOf } from './utils.js';   // 4.49: 실번호 판정 한 벌(세관 출처 · 알려진 실 · 실오류)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { ISO_CONFLICT_WHY, ISO_OT_CHECK_WHY, isLen45Iso } from './utils.js';   // 4.27-01: ISO_OT_CHECK_WHY 오픈탑 높이 점검요망   // 4.25-01: 규격 갈림 설명 한 벌(진단 패널과 같은 말)
@@ -590,8 +591,16 @@ export function parseNaturalQuery(text) {
   {
     //  ★ 5.16 호기 공동 담당 — «OBWH 공동 김성일 이형출 고종웅» · «공동 해제». 호기 등록(crewSet) 통로에 pool 로 싣는다 —
     //    미르가 «적는 말» 로 알아보는 판정(crewSet)은 그대로 쓰고, 저장하는 자리가 pool 이면 fbSetCrewPool 로 간다.
-    const _pool = result.startSet ? null : parseCrewPool(t);
-    const _crew = (result.startSet || _pool) ? null : parseCraneCrew(t);   // «1호기 김성일 22시부터 시작했어» 는 시작 알림(2.74)이다
+    //  ★ 5.22 시각이 붙은 교대(«12:30 박진우 1호기 이형출과 교대» · «1호기 12:30부터 박진우») — crewTimed.js 한 벌. 기록 자리는 crewPoolLog.
+    //    «1호 12:30부터 박진우» 는 시작 알림(startSet)으로 먼저 잡히지만, «시작» 이라는 말 없이 명단 이름이 붙은 교대면 교대가 이긴다(실측 2026-11-23 14:16 다섯 번 실패).
+    let _timed = (result.startSet && /시작/.test(t)) ? null : parseTimedCrew(t);
+    if (_timed && result.startSet) result.startSet = null;
+    const _pool = (result.startSet || _timed) ? null : parseCrewPool(t);
+    const _crew = (result.startSet || _pool || _timed) ? null : parseCraneCrew(t);
+    if (_timed) {
+      result.crewSet = { raw: String(text), shift: null, dayOff: 0, dayWord: '', crew: [], unknown: [], needPos: [], timed: _timed };
+      result.digits = null; result.briefingQuery = false; result.posQuery = false;
+    } else   // «1호기 김성일 22시부터 시작했어» 는 시작 알림(2.74)이다
     if (_pool) {
       result.crewSet = { raw: String(text), shift: null, dayOff: 0, dayWord: '', crew: [], unknown: [], needPos: [], pool: { names: _pool.names, unknown: _pool.unknown, clear: !!_pool.clear } };
       result.digits = null; result.briefingQuery = false; result.posQuery = false;
@@ -1766,7 +1775,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   {
     const _canCrew = !!(ctx && typeof ctx.crewAnswer === 'function');
     //  ⚠ 저장은 화면 effect 가 한다 — crewAnswer 가 없는 자리(콘앱 mirCore·홈 폴백)는 저장 배선도 없으므로 «기억할게요» 라고 말하면 거짓이다(감사 실측 콘앱)
-    if (parsed.crewSet) return _canCrew ? crewSetText(resolveCrewSides(parsed.crewSet, ctx && (ctx.bowStern || ctx.voyage))   /* 3.21 감사: 항차를 통째로 못 싣는 화면(InlineAnswerCard)은 {bow,stern} 만 준다 — 화면 글과 저장부가 같은 재료를 봐야 한다 */, (ctx && (ctx.vslFull || ctx.vsl)) || '') : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 홍길동 2호기 김철수», 홈에서는 배 이름을 붙여서요.';
+    if (parsed.crewSet) return _canCrew ? crewSetText(resolveCrewSides(parsed.crewSet, ctx && (ctx.bowStern || ctx.voyage))   /* 3.21 감사: 항차를 통째로 못 싣는 화면(InlineAnswerCard)은 {bow,stern} 만 준다 — 화면 글과 저장부가 같은 재료를 봐야 한다 */, (ctx && (ctx.vslFull || ctx.vsl)) || '', Date.now(), (ctx && ((ctx.voyage && ctx.voyage.info) || ctx.info)) || null) : '호기별 검수원 등록은 검수앱에서 해 주세요 — 항차 화면(양하·선적 탭)에서 «주간 1호기 홍길동 2호기 김철수», 홈에서는 배 이름을 붙여서요.';
     if (parsed.crewQuery) {
       if (parsed.crewQuery.kind === 'cancel') return '호기 검수원 지우기는 아직 없어요 — 다른 이름으로 다시 말하면 그 조·그 호기가 덮어써져요(«1호기 홍길동»).';
       if (_canCrew) { try { const _ca = ctx.crewAnswer(parsed.crewQuery); if (_ca) return _ca; } catch (e) { console.warn('[3.8] 호기 검수원 답 실패:', e); } }
@@ -3189,7 +3198,8 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
 //   ⛔ 판정을 두 벌로 만들지 않는다 — 진행 답·앱 갈래·터미널 갈래·브리핑이 **전부 이 함수**를 부른다.
 //  ★ 3.8: 등록 문장에 화면이 내는 확인 글 — 실제 쓰기는 화면(SearchPanel·VoyagePage·GlobalSearchPage)의 effect 가
 //    fbSetVoyageCraneCrew 로 하고, 성공하면 음성으로 «…로 기억했어요» 를 붙인다. 여기서는 **무엇을 어디에 적는지**만 말한다.
-export function crewSetText(cs, shipLabel = '', nowMs = Date.now()) {
+export function crewSetText(cs, shipLabel = '', nowMs = Date.now(), info = null) {
+  if (cs && cs.timed) return timedCrewText(cs.timed, shipLabel, nowMs, info);   // 5.22 — 그 배 info(조 등록·교대 기록)를 같이 봐야 저장부와 같은 판정이 된다
   //  ★ 5.16 공동 담당 — 등록·해제 확인 글. 이름이 둘 미만이면 적지 않았다고 말한다(저장하는 자리도 둘 미만이면 안 적는다 — fbSetCrewPool).
   if (cs && cs.pool) {
     const P = cs.pool; const sl = shipLabel ? shipLabel + ' ' : '';

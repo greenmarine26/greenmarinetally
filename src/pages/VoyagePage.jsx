@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { fbSaveTimedCrew } from '../firebase.js';   // 5.22 시각이 붙은 교대
 import CnText from '../components/CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
@@ -2610,6 +2611,13 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     if (!q || !voyageKey) return;
     let cs = null;
     try { cs = resolveCrewSides(parseNaturalQuery(q).crewSet, bowStern); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌(상위가 구해 내린 값)
+    if (cs && cs.timed && voyageKey) {   // 5.22: «12:30 박진우 1호기 이형출과 교대» — 시각이 붙은 교대(crewTimed 판정 · crewPoolLog)
+      const tk = `timed|${voyageKey}|${cs.timed.swaps.map((x) => `${x.hh}${x.mm}${x.no}${x.name}`).join(',')}`;
+      if (crewSetRef.current === tk) return; crewSetRef.current = tk;
+      fbSaveTimedCrew(voyageKey, cs.timed)
+        .catch((e) => { console.warn('[5.22] 교대 기록 실패', e); crewSetRef.current = ''; try { speak('교대 기록이 안 됐어요 — 다시 말씀해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (cs && cs.pool) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
       const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
       if (crewSetRef.current === pk) return; crewSetRef.current = pk;
@@ -3559,6 +3567,13 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
     if (!q || !voyageKey) return;
     let cs = null;
     try { cs = resolveCrewSides(parseNaturalQuery(q).crewSet, bowStern); } catch (e) { cs = null; }   // 3.21: «선수·선미» 유도 한 벌(상위가 구해 내린 값)
+    if (cs && cs.timed && voyageKey) {   // 5.22: «12:30 박진우 1호기 이형출과 교대» — 시각이 붙은 교대(crewTimed 판정 · crewPoolLog)
+      const tk = `timed|${voyageKey}|${cs.timed.swaps.map((x) => `${x.hh}${x.mm}${x.no}${x.name}`).join(',')}`;
+      if (crewSetRef.current === tk) return; crewSetRef.current = tk;
+      fbSaveTimedCrew(voyageKey, cs.timed)
+        .catch((e) => { console.warn('[5.22] 교대 기록 실패', e); crewSetRef.current = ''; try { speak('교대 기록이 안 됐어요 — 다시 말씀해 주세요'); } catch (e2) { /* 소리 꺼짐 */ } });
+      return;
+    }
     if (cs && cs.pool) {   // 5.16: «OBWH 공동 이름 이름 이름» — 호기 공동 담당 등록·해제
       const pk = `pool|${voyageKey}|${cs.pool.clear ? 'clear' : cs.pool.names.join(',')}`;
       if (crewSetRef.current === pk) return; crewSetRef.current = pk;
