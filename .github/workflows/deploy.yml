@@ -21,11 +21,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  # 2026-11-24 TallyOne 5.23-02: split into build + deploy jobs (GitHub Pages starter layout).
+  # Why: since 2026-11-22 deploy-pages often lists the run's artifacts ~0.3 s after upload in the
+  # same job and finds 0 ("No artifacts named github-pages were found") - the artifact list is
+  # eventually consistent. Runs c41cc9b, ff2d6b5, bd5032a failed this way. A separate job starts
+  # after the upload job has finished, so the artifact is listed by then.
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,6 +37,13 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages (30 min timeout)
         id: deployment
         uses: actions/deploy-pages@v4
