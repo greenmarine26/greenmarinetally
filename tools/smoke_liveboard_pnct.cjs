@@ -59,7 +59,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   if (dupTitle.length) fail('같은 «BAY …» 머리가 두 번 그려졌다: ' + JSON.stringify(dupTitle));
   console.log('  ✓ 두 칸이 서로 다른 장을 그린다(머리 중복 0)');
   //  ⑤ 완료 초록 칸과 끝4자리 — 베이플랜이 제대로 그려졌다는 증거
-  if (!doc.querySelectorAll('.border-emerald-400, .border-emerald-500').length) fail('완료 컨 초록 칸이 하나도 없다');
+  if (!doc.querySelectorAll('.border-emerald-400, .border-emerald-500, .border-emerald-800').length) fail('완료 컨 초록 칸이 하나도 없다');
   const cells4 = [...doc.querySelectorAll('span,div')].filter((n) => n.childNodes.length === 1 && /^\d{4}$/.test(n.textContent.trim())).length;
   if (cells4 < 10) fail('칸 안 끝4자리가 안 보인다(' + cells4 + ')');
   console.log('  ✓ 완료 초록 칸 · 끝4자리 ' + cells4 + '칸');

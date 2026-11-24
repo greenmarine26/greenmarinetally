@@ -73,7 +73,7 @@ const fail = (m) => { console.log('✗ ' + m); process.exit(1); };
   if (!/자동 가이드/.test(topT) || !/수동/.test(topT)) fail('위 칸에 자동/수동 토글이 없다');
   if (!/다음 예측|이 자리에 실제로 실은|다음 —|끝 4자리|남은 (양하|선적) 작업이 없습니다/.test(topT)) fail('위 칸에 자동 가이드 카드가 없다: ' + topT.slice(0, 300));
   if (/다음 예정/.test(topT)) fail('압축인데 «다음 예정» 목록이 남아 있다');
-  const greens = bottom.querySelectorAll('.border-emerald-400, .border-emerald-500').length;
+  const greens = bottom.querySelectorAll('.border-emerald-400, .border-emerald-500, .border-emerald-800').length;
   if (greens < 50) fail('아래 칸 완료 초록 칸이 너무 적다: ' + greens);
   //  남은 흰 칸 — 실측 BAY (20)21 데크 84단 3대(1117·2104·7895)
   const cells4 = [...bottom.querySelectorAll('button')].filter((b) => /^\d{4}$/.test((b.textContent || '').trim()) || /\d{4}/.test(b.textContent || ''));

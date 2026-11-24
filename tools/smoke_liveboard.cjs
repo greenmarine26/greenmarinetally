@@ -46,7 +46,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
     const need = [String(E - 1).padStart(2, '0'), `(${String(E).padStart(2, '0')})${String(E + 1).padStart(2, '0')}`];
     for (const n of need) if (!titles.some(t => t === 'BAY ' + n)) fail(`호기 베이 ${b} 의 해치 장 «BAY ${n}» 이 없다(머리 ${JSON.stringify(titles)})`);
   }
-  const green = doc.querySelectorAll('.border-emerald-400, .border-emerald-500').length;
+  const green = doc.querySelectorAll('.border-emerald-400, .border-emerald-500, .border-emerald-800').length;
   if (!green) fail('완료 컨 초록 칸이 하나도 없다');
   const cells4 = [...doc.querySelectorAll('span,div')].filter(n => n.childNodes.length === 1 && /^\d{4}$/.test(n.textContent.trim())).length;
   if (cells4 < 10) fail('칸 안 끝4자리가 안 보인다(' + cells4 + ')');

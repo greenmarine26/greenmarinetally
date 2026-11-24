@@ -480,11 +480,14 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     // V8.25-06: 흰 배경 + 지정색 글자(B안). XRAY 보라 배경 제거(붉은 별로 대체).
     if (!c?.cn) return 'bg-white text-dim-300 border-slate-300';
     if (xrayMap && xrayMap[c.cn]) {
-      if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-500 ring-1 ring-emerald-400';   // V8.85: XRAY 완료도 초록 배경
+      if (compMap && compMap[c.cn]) return 'bg-emerald-500 text-ink-950 border-emerald-800 ring-1 ring-emerald-700';   // V8.85: XRAY 완료도 초록 배경 · 5.23-01 진한 초록(아래 완료와 한 벌)
       return 'bg-white text-ink-950 border-red-400';
     }
     if (c._assigned && !(compMap && compMap[c.cn])) return c._assign_warn ? 'bg-amber-100 text-ink-950 border-amber-500 ring-1 ring-amber-400' : 'bg-white text-ink-950 border-sky-400 ring-1 ring-sky-300';   // 3.13: 자동 맞교환으로 옮겨 온 자리(하늘) · 속성 다름(주황)
-    if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
+    //  ★ 5.23-01 (검수사 2026-11-24 10:59 «기본색과 선적완료색이 비슷하여 작은화면에서 구분하기 힘듬» — XTPG 550E 베이모드 사진):
+    //    완료 연초록(emerald-100 #d1fae5)이 선적 목적지 엷은 바탕(하이퐁 #d7f4c2 · 대련 #e7f9db · 태창 #c7f0aa · 램차방 #b7ec92)과 같은 명도·색조였다.
+    //    완료는 **진한 초록(emerald-500 #10b981)** — 목적지 바탕은 전부 명도 190 이상이라 명도 차이가 크다. 글자는 #111 그대로 읽힌다. 초록은 V8.85 검수사 확답 그대로.
+    if (compMap && compMap[c.cn]) return 'bg-emerald-500 text-ink-950 border-emerald-800';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
     /* ★ 2.84 (검수사 확정 2026-08-29) — **시프팅 칠하기는 정본(restowMap) 한 벌을 쓴다.**
          종전엔 이 화면이 «내 양하분 위에 얹힌 것»을 그 자리에서 세어 칠했다(shiftingMap.shiftCns).
          실측 MCSC 633N — 그렇게 세면 **50대**, 정본은 **95대**. 50 은 전부 95 안에 들어 있었고
@@ -871,7 +874,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           <span className="text-cyan-300 font-bold">흰 배경 · 글자색 = {mode === 'discharge' ? '선사(양하)' : 'POD(선적)'} 지정색</span>
           <span className="text-red-400 font-bold">★ 붉은별 = X-RAY</span>
           <Legend color="bg-orange-400" label="시프팅"/>
-          <Legend color="bg-emerald-200" label="✔ 완료"/>
+          <Legend color="bg-emerald-500" label="✔ 완료"/>
           {/* ★ 3.7 — 무늬 범례를 목적지 «색» 범례로. 견본을 따로 펼치지 않고 색 칸에 코드를 얹는다
               (검수사 «색별첨은 원래 별첨 포트명에 입혀 주시고 따로 지금처럼 펼쳐주지 않아도 됩니다»). */}
           {podKeys.length > 0 && podKeys.map((k) => (
@@ -1797,7 +1800,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
         {/* V8.85: 완료 = 중앙 ✔ 워터마크 — 야외에서 완료/미완료 한눈 구분(초록 배경과 세트, 사용자 확답 2026-07-12) */}
         {completedMap && completedMap[c.cn] && (
           <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
-               style={{ color: '#059669', opacity: 0.32, fontWeight: 900, fontSize: Math.max(12, Math.round(cellH * 0.6)), lineHeight: 1 }}>✔</div>
+               style={{ color: '#064e3b', opacity: 0.35, fontWeight: 900, fontSize: Math.max(12, Math.round(cellH * 0.6)), lineHeight: 1 }}>✔</div>
         )}
         {compactCell ? (
           <div className="w-full h-full flex items-center justify-center mono font-black leading-none" style={{ position: 'relative', fontFamily: 'Consolas, "Courier New", monospace', fontSize: compactFont, color: getOpColor && getOpColor(c) ? getOpColor(c) : '#111' }}>

@@ -107,7 +107,6 @@
 :root[data-bright="4"] .bg-cyan-950\/40{background-color:rgb(236 254 255 / 0.40)}
 :root[data-bright="4"] .bg-cyan-950\/50{background-color:rgb(236 254 255 / 0.50)}
 :root[data-bright="4"] .bg-emerald-100{background-color:rgb(6 78 59)}
-:root[data-bright="4"] .bg-emerald-200{background-color:rgb(6 95 70)}
 :root[data-bright="4"] .bg-emerald-300{background-color:rgb(4 120 87)}
 :root[data-bright="4"] .bg-emerald-400{background-color:rgb(5 150 105)}
 :root[data-bright="4"] .bg-emerald-500{background-color:rgb(16 185 129)}
@@ -509,7 +508,7 @@
 :root[data-bright="4"] .from-violet-950\/60{--tw-gradient-from:rgb(245 243 255 / 0.60) var(--tw-gradient-from-position);--tw-gradient-to:rgb(245 243 255 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}
 :root[data-bright="4"] .ring-amber-400{--tw-ring-color:rgb(217 119 6)}
 :root[data-bright="4"] .ring-cyan-500{--tw-ring-color:rgb(6 182 212)}
-:root[data-bright="4"] .ring-emerald-400{--tw-ring-color:rgb(5 150 105)}
+:root[data-bright="4"] .ring-emerald-700{--tw-ring-color:rgb(110 231 183)}
 :root[data-bright="4"] .ring-orange-400{--tw-ring-color:rgb(234 88 12)}
 :root[data-bright="4"] .ring-red-500{--tw-ring-color:rgb(239 68 68)}
 :root[data-bright="4"] .ring-rose-400{--tw-ring-color:rgb(225 29 72)}
