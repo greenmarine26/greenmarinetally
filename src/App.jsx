@@ -416,7 +416,11 @@ export default function App() {
     if (getEquipNumber() !== me.relievedEquip) return;   // 이미 다른 호기를 골랐다 — 건드리지 않는다
     setEquipNumber('');
     try { window.dispatchEvent(new CustomEvent('equipChanged', { detail: '' })); } catch (e) { console.warn('[4.85] 호기 바뀜 알림 실패', e); }
-    setViewOnlyMsg(`${me.relievedBy || '다른 검수원'} 님이 ${me.relievedEquip} 를 이어받았습니다. 호기를 다시 골라 주세요.`);
+    //  5.23-03 — 헤더에서 남이 쥔 호기를 골라 이유를 고르면 그 이유대로 알린다(검수사 2026-11-25 05:25 «교대인지 장비교체인지 아니면 2호기 사용자가 잘못누르고 사용하는건지»).
+    const _rb = me.relievedBy || '다른 검수원', _re = me.relievedEquip;
+    setViewOnlyMsg(me.relievedWhy === 'swap' ? `${_rb} 님이 ${_re} 로 왔습니다(장비 교체). 지금 쓰는 호기를 다시 골라 주세요.`
+      : me.relievedWhy === 'mistake' ? `${_rb} 님이 ${_re} 는 본인 호기라고 했습니다. 호기를 확인해 다시 골라 주세요.`
+      : `${_rb} 님이 ${_re} 를 이어받았습니다. 호기를 다시 골라 주세요.`);
   }, [inspectors, inspector, workChoice]);
   useEffect(() => {
     if (!inspector || !workChoice || staffOffMap[inspector]) return;   // 3.76: 접근 오프(자물쇠로 덮인 동안)는 «작업중» 으로 쓰지 않는다 — 온이 되면 이 효과가 다시 돌아 바로 적는다 // 3.50: 아직 작업자/조회만을 안 고른 사람(선택 화면)은 활동을 안 적는다 — 적으면 «작업중» 으로 센다

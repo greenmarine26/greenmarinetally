@@ -18,7 +18,7 @@ import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: �
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import { crewShiftKey } from '../utils.js';   // 4.85: 교대 — 내 조의 조 등록 칸
-import { equipHoldersOf, equipHolderOf, crewPoolNamesOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
+import { equipHoldersOf, equipHolderOf, crewPoolNamesOf, blockingHolderOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
 import { fbRelieveCrane, fbPoolTakeCrane } from '../firebase.js';   // 4.85: 교대 기록
 import { canWorkNow, canRecordWorkNow, isAdminNow } from '../workChoice.js';
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
@@ -114,7 +114,25 @@ export default function Header({ version, inspector, online, route, voyages, onC
     window.addEventListener('poolTakeCrane', onTake);
     return () => window.removeEventListener('poolTakeCrane', onTake);
   }, []);
+  //  ★ 5.23-03 호기 중복 — 같은 배·같은 조에서 남이 쥔 호기를 헤더에서 고르면 그대로 잡지 않고 묻는다(로그인·베이뷰는 이미 막는다 — 헤더만 검사가 없었다).
+  //    검수사 2026-11-25 05:25 «같은날 같은 시간대에 한호기로 2명이 작업을 할수가 없는데 둘다 2호기로 등록될수도 있습니다» · 선택지 넷(교대·장비 교체·상대가 잘못 누름·내가 잘못 누름).
+  const [dupAsk, setDupAsk] = useState(null);   // { num, holder }
+  //  쥔 사람(표시용 — 관리자 화면에도 이름은 보인다) · 묻는 것은 작업자만(holderOfNum — 관리자·조회만은 점유하지 않는다)
+  const shownHolderOf = (num) => (route.name === 'voyage' && route.voyageKey && inspector && num)
+    ? blockingHolderOf(inspectors || {}, info, route.voyageKey, num, inspector, Date.now(), workChoice?.shift || '') : '';
+  const holderOfNum = (num) => (canRecordWorkNow() ? shownHolderOf(num) : '');
+  const resolveDup = (why) => {
+    const d = dupAsk; setDupAsk(null);
+    if (!d || why === 'cancel') return;
+    const word = workChoice?.shift === 'night' ? '야간' : workChoice?.shift === 'day' ? '주간' : undefined;
+    const sk = crewShiftKey(word, Date.now(), 0).key;
+    fbRelieveCrane(route.voyageKey, sk, d.num, d.holder, inspector, why)
+      .then((eq) => { setEquipNoState(eq); })
+      .catch((e) => { console.warn('[5.23-03] 호기 중복 처리 실패', d, why, e); try { window.dispatchEvent(new CustomEvent('writeNotice', { detail: { message: `호기를 바꾸지 못했습니다 — ${e && e.message ? e.message : '다시 눌러 주세요.'}` } })); } catch (x) { console.warn(x); } });
+  };
   const handleSelectEquip = (num) => {
+    const _holder = holderOfNum(num);
+    if (_holder) { setEquipOpen(false); setDupAsk({ num, holder: _holder }); return; }
     setEquipNumber(num);
     setEquipNoState(num);
     setEquipOpen(false);
@@ -309,8 +327,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
             aria-label={equipNo ? `장비 ${equipNo}` : '장비 번호 고르기'}
             data-equip-btn="1"
             data-work-mode={workChoice && workChoice.mode === 'work' ? 'work' : ''}
+            data-equip-admin={workChoice && workChoice.mode === 'admin' && equipNo ? '1' : undefined}
             className={`${chipH} shrink-0 rounded-pill text-sm font-bold flex items-center justify-center gap-1 whitespace-nowrap ${
-              equipNo
+              /* 5.23-03 — 관리자(검수사·클로드) 모드면 호기는 바탕 없이 글자만, 작업자(관리자가 그 배 호기로 등록한 때 포함)는 종전 노란색.
+                 검수사 2026-11-25 05:17 «검수사들에게는 지금 사용하는 노란색이 익숙할테니 놔두고 클로드와 제 관리자 모드는 투명색에 호기만 보이게 하면 제가 관리자 모드인지 작업자 모드인지 구분 하기도 편할것입니다» */
+              equipNo && workChoice && workChoice.mode === 'admin'
+                ? 'px-2 bg-transparent text-dim-100 border border-transparent'
+              : equipNo
                 ? 'px-2 bg-st-lod text-ink-950 border border-st-lodHi'
                 : 'px-0 sm:px-2 bg-ink-800 text-st-lodHi border border-st-lod/70 animate-pulse'
             }`}
@@ -439,6 +462,20 @@ export default function Header({ version, inspector, online, route, voyages, onC
       {dmgResvOpen && <PendingDamageModal inspector={inspector} onClose={() => setDmgResvOpen(false)} />}
       {/* M5.0: ContainerPhrasebook은 HelpModal 안에서 호출됨 */}
 
+      {/* 5.23-03: 호기 중복 — 어떻게 된 일인지 묻는다 */}
+      {dupAsk && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" data-equip-dup="1">
+          <div className="bg-ink-900 border border-st-lod rounded-card shadow-card w-full max-w-sm p-4 space-y-2">
+            <div className="font-black text-base text-st-lodHi">{dupAsk.num}는 지금 {dupAsk.holder} 님이 쓰고 있습니다.</div>
+            <div className="text-sm text-dim-200 mb-1">어떻게 된 일입니까?</div>
+            <button data-equip-dup-why="relieve" onClick={() => resolveDup('relieve')} className="w-full py-3 rounded-btn font-bold text-sm bg-st-lod text-ink-950 border border-st-lodHi">교대 — {dupAsk.holder} 님 대신 내가 {dupAsk.num}</button>
+            <button data-equip-dup-why="swap" onClick={() => resolveDup('swap')} className="w-full py-3 rounded-btn font-bold text-sm bg-ink-800 text-dim-100 border border-line">장비 교체 — {dupAsk.holder} 님 갱이 다른 호기로 갔다</button>
+            <button data-equip-dup-why="mistake" onClick={() => resolveDup('mistake')} className="w-full py-3 rounded-btn font-bold text-sm bg-ink-800 text-dim-100 border border-line">{dupAsk.holder} 님이 잘못 누름 — {dupAsk.num}는 내 호기</button>
+            <button data-equip-dup-why="cancel" onClick={() => resolveDup('cancel')} className="w-full py-2 rounded-pill text-sm bg-ink-750 text-dim-200">내가 잘못 누름 — 그대로 둠</button>
+            <div className="text-2xs text-dim-400">앞의 셋은 내가 {dupAsk.num}를 받고, {dupAsk.holder} 님 폰에는 호기를 다시 고르라는 알림이 갑니다.</div>
+          </div>
+        </div>
+      )}
       {/* M3.5.6: 장비 번호 선택 모달 */}
       {equipOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setEquipOpen(false)}>
@@ -455,6 +492,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
                     equipNo === num ? 'bg-st-lod text-ink-950 border-2 border-st-lodHi' : 'bg-ink-800 text-dim-200 hover:bg-ink-750'
                   }`}>
                   {num}
+                  {shownHolderOf(num) && <div className="text-2xs font-bold opacity-80 truncate" data-equip-holder={shownHolderOf(num)}>{shownHolderOf(num)} 사용 중</div>}
                 </button>
               ))}
             </div>

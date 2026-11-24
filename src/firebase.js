@@ -438,6 +438,7 @@ export async function fbPoolTakeCrane(voyageKey, equip, me, holder = '', names =
     patch[`inspectors/${holder}/relievedBy`] = me;
     patch[`inspectors/${holder}/relievedVoyage`] = voyageKey;
     patch[`inspectors/${holder}/relievedEquip`] = eq;
+    patch[`inspectors/${holder}/relievedWhy`] = 'relieve';   // 5.23-03 감사: 지난 교대의 이유(장비 교체·잘못 누름)가 남아 넘겨받기 알림에 뜨지 않게
     patch[`inspectors/${holder}/workEquip`] = null;
     patch[`inspectors/${holder}/assignEquip`] = '';
   }
@@ -452,7 +453,7 @@ export async function fbPoolTakeCrane(voyageKey, equip, me, holder = '', names =
 //    내가 «from» 의 크레인을 이어받는다 = 조 등록(info.craneCrew/{조}/{N호기})을 내 이름으로 덮고, 내 기기 호기를 그 호기로 바꾼다.
 //    from 의 명단 줄에는 «교대 받음» 표시(relievedAt·relievedBy·relievedVoyage·relievedEquip)를 남기고 그 사람의 호기를 비운다 —
 //    그 사람 기기는 표시를 보고 호기를 놓은 뒤 다시 고르게 한다(App). 한 번에(멀티 경로) 써서 반쪽만 남지 않는다. 옛 4.72 «교대 메뉴는 만들지 않는다» 는 이 지시로 뒤집혔다.
-export async function fbRelieveCrane(voyageKey, shiftKey, equipNo, from, me) {
+export async function fbRelieveCrane(voyageKey, shiftKey, equipNo, from, me, why = 'relieve') {   // 5.23-03: why — 'relieve' 교대 · 'swap' 장비 교체 · 'mistake' 상대가 잘못 누름(그 사람 폰 문구가 갈린다)
   assertCanRecordWork('교대');
   const no = parseInt(String(equipNo).replace(/\D/g, ''), 10);
   if (!voyageKey || !shiftKey || !(no >= 1 && no <= 9) || !from || !me || from === me) throw new Error('교대 정보가 맞지 않습니다.');
@@ -469,6 +470,7 @@ export async function fbRelieveCrane(voyageKey, shiftKey, equipNo, from, me) {
   patch[`inspectors/${from}/relievedBy`] = me;
   patch[`inspectors/${from}/relievedVoyage`] = voyageKey;
   patch[`inspectors/${from}/relievedEquip`] = eq;
+  patch[`inspectors/${from}/relievedWhy`] = (why === 'swap' || why === 'mistake') ? why : 'relieve';
   patch[`inspectors/${from}/workEquip`] = null;
   patch[`inspectors/${from}/assignEquip`] = '';
   patch[`inspectors/${me}/assignVoyage`] = voyageKey;
