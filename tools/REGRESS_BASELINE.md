@@ -308,4 +308,4 @@
 
 - **세관 양하 목록에 EDI 선적분이 섞인 경우**(4.20 감사 · smoke_dischargepol 가정 사례 CCCU3333333 — 세관 행이 EDI 선적분과 같은 컨) — 지금은 `isOppositeDirRecord`(POL 만 평택이면 양하 목록에서 뺀다)만 본다. 세관 행이 POL·POD 를 안 적었거나 둘 다 평택이면 양하 평택분에 든다 — 실자료 0건, 검수사 결정 대기.
 - **4.20 추가분 표시 자리**(Fable 판정 2026-10-10) — 평택 양하분의 추가분(세관 목록 밖 실제 양하분 · 신고 대상)은 지금 컨 상세와 미르 대수 답에만 «추가분» 으로 보인다. 수석 보드·마감 종이(마감텔리)에 «추가분 N» 을 따로 적을지는 검수사 결정 대기.
-- 5.23-02 (2026-11-24) 검수사 작업자/관리자 선택 창 — 기억 키 조는 serverNow 한 벌(감사 지적 · AdminWorkStart·adminWorkOf 와 같은 시각). 단언 tools/smoke_ownerpick523.cjs.
+- 5.23-02 (2026-11-24) 검수사 작업자/관리자 선택 창 — 기억 키 조는 serverNow 한 벌(감사 지적 · AdminWorkStart·adminWorkOf 와 같은 시각). 단언 tools/smoke_ownerpick523.cjs. (Pages 배포 단계 일시 오류로 두 번 다시 밀었다 — 22:37·22:42)
