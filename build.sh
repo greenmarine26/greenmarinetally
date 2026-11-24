@@ -1860,6 +1860,7 @@ fi
     node tools/smoke_preplan518.cjs || { echo "✗ 확정전 플랜 연막검사 실패 — 배포 금지"; exit 1; }   # 5.18
     node tools/smoke_mfn519.cjs "$PWD" || { echo "✗ MFN(터미널 계획=EDI) · 검수리스트 MFN 뒤 · 선내위치 연막검사 실패 — 배포 금지"; exit 1; }   # 5.19
     node tools/smoke_adminwork520.cjs "$PWD" || { echo "✗ 관리자 작업 선박 연막검사 실패 — 배포 금지"; exit 1; }   # 5.20
+    node tools/smoke_ownerpick523.cjs || { echo "✗ 검수사 작업자/관리자 선택 연막검사 실패 — 배포 금지"; exit 1; }   # 5.23-02
     #  4.71: 대기자(로그인·지정 호기)가 상황판 호기 칸 이름에서 빠지지 않는다
     node tools/smoke_standby471.cjs || { echo "✗ 대기자 호기 이름 연막검사 실패 — 배포 금지"; exit 1; }
     #  3.43-01: **두 앱 같은 답** — 검수앱(항차 열린 떠 있는 미르)·콘앱(cone.html mirAsk 모양) ctx 로 같은 문장(끝나는 시각·진행·도선·속도·창구) → 같은 답인가. 실데이터 KBTR 2606E + 터미널 실적·배 속도·도선 예보. 콘앱이 재료를 빼먹으면 여기서 갈린다.

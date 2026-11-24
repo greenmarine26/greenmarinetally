@@ -44,7 +44,9 @@ import ShiftAddBox from '../components/ShiftAddBox.jsx';   // 4.83: 선적 화�
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
 import BayViewWork from '../components/BayViewWork.jsx';
-import { canWorkNow, isAdminUser } from '../workChoice.js';   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
+import { canWorkNow, isAdminUser, isAdminNow } from '../workChoice.js';
+import OwnerWorkPick from '../components/OwnerWorkPick.jsx';
+import { serverNow } from '../workShift.js';   // 5.23-02: 조 키는 서버 시각으로(감사 지적)   // 5.23-02: 검수사가 관리자로 «작업 시작»을 열면 작업자/관리자 선택   // 3.60: 조회만은 쓰는 단추를 안 그린다(3.55-01 규칙)
 import EsealPhotoModal from '../components/EsealPhotoModal.jsx';
 import { esealSheetHTML } from '../esealSheet.js';
 import { esealPoolOf } from '../esealVoice.js';   // 3.71: 엠티실 구간 → 여섯 자리 실 목록 한 벌(음성 입력과 공용)
@@ -136,6 +138,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           : (voyage?.info?.mode || 'discharge'));
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
+  //  ★ 5.23-02 — 검수사(소유자)만. 관리자로 이 배 «작업 시작» 탭을 열면 한 번 [작업자]/[관리자]를 묻는다(검수사 2026-11-24 20:55).
+  //    작업자로 등록되면(isAdminNow false) 창은 저절로 닫힌다. [관리자]를 고르면 이 배·이 조 동안 이 기기에서 다시 묻지 않는다.
+  const [ownerPick, setOwnerPick] = useState(false);
+  const _opKey = `gmOwnerPick|${voyageKey}|${crewShiftKey(undefined, serverNow(), 0).key}`;   // 등록(AdminWorkStart·adminWorkOf)과 같은 서버 시각 한 벌
+  useEffect(() => {
+    if (tab !== 'search' || !voyageKey) return;
+    let owner = false; try { owner = isOwnerName(inspector) && isAdminNow(); } catch (e) { console.warn('[5.23-02] 모드 판정 실패', e); }
+    if (!owner) return;
+    let seen = ''; try { seen = sessionStorage.getItem(_opKey) || ''; } catch (e) { console.warn('[5.23-02] 기억 읽기 실패 — 묻습니다', e); }
+    if (seen !== 'admin') setOwnerPick(true);
+  }, [tab, voyageKey, inspector, _opKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ownerPick && !isAdminNow()) setOwnerPick(false); });   // 작업자로 등록돼 관리자가 아니게 되면 닫는다
+  const closeOwnerPick = (how) => {
+    if (how === 'admin') { try { sessionStorage.setItem(_opKey, 'admin'); } catch (e) { console.warn('[5.23-02] 기억 저장 실패 — 다음에 다시 묻습니다', e); } }
+    setOwnerPick(false);
+  };
   //  ★ 3.48 «베이뷰 작업» — 작업 시작 방식. 검수사 «작업 시작시 기존모드로 할것인지 새로운 베이뷰 모드로 시작할건지 선택할수있게».
   //    'classic'(종전 그대로) | 'bayview'(전면 덮개). 폰에 기억하되 항차 화면을 열 때는 기존 방식으로 시작한다 — 덮개가 저절로 뜨면 화면을 가린다.
   const [workStyle, setWorkStyle] = useState('classic');
@@ -1830,6 +1848,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               업로드 탭은 **올리기만**, 베이 탭 도구줄의 「출력」 단추도 같은 문을 연다(경로가 하나라 종이가 갈리지 않는다).
             · 업로드는 더보기에서 꺼냈다 — 통계·결과·X-RAY 만 «더보기 ⋯» 에 남는다.
           ⚠ tab state·점프 경로(jumpTo 8곳)는 불변 — 표시만 바뀌었다. 키: list·search·bay|lolo·data·stats·report·xray. */}
+      {ownerPick && <OwnerWorkPick voyageKey={voyageKey} voyage={voyage} name={inspector}
+        shipLabel={`${(voyage && voyage.info && voyage.info.vsl) || ''} ${(voyage && voyage.info && voyage.info.voy) || ''}`.trim()} onClose={closeOwnerPick} />}
       <nav className="hud-dock mb-3 sticky top-[calc(var(--hdr-h,52px)_+_var(--bc-h,0px))] z-20" role="tablist" aria-label="항차 메뉴">{/* 4.87-10: 수석 공지 띠가 떠 있으면 그 높이(--bc-h, BroadcastMarquee 가 잰다)만큼 더 내린다 */}{/* 4.23 2차: 머리띠 실제 높이(--hdr-h, Header 가 잰다 — 보통 53 · 크게 57 · 컴 61) 바로 밑 */}
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', e: '📋' },
