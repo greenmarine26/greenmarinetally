@@ -33,7 +33,7 @@ const STUB = fs.readFileSync(path.join(__dirname, 'smoke_bayfirst.cjs'), 'utf8')
   ok(new Set(slots).size === slots.length, '③ 한 칸에 두 대 없음');
   // ④ 배선 — 화면 코드가 양하 완료 때 실제 내린 자리를 기록한다
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'GuidedWorkPanel.jsx'), 'utf8');
-  ok(/markDischargeSlot\(actual, slot\)/.test(src) && /markDischargeSlot\(pf, card\.main\)/.test(src) && /markDischargeSlot\(pb, card\.twin\)/.test(src) && /mode !== 'discharge'/.test(src), '④ GuidedWorkPanel 양하 완료 3길(단독·트윈 앞·뒤)이 자리를 기록한다');
+  ok(/if \(mode === 'discharge'\) return;/.test(src) && /5\.24-02 양하에서는 카드와 다른 컨을 확인해도 자리를 카드 칸으로 옮기지 않는다/.test(src), '④ 5.24-02 — 양하 완료는 카드 칸으로 자리를 옮기지 않는다(맞바꿈 규칙 ①~③ 은 사람이 자리를 고칠 때만)');
   if (fail) { console.log(`✗ ${fail}건 실패`); process.exit(1); }
   console.log('✓ 통과');
 })().catch(e => { console.error(e); process.exit(1); });

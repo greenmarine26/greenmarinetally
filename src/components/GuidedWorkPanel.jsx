@@ -1525,6 +1525,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    기록하면 3.13 자동 맞교환(applyAutoSwap — 양하·선적 공통)이 칸 주인이던 EDI 컨을 «온 컨이 비운 EDI 칸»으로 옮긴다(한 대 들어오면 한 대 나간다).
   //    실패해도 완료는 막지 않는다 — 자리 기록은 보조다. 조회만(viewOnly)은 위로 올려 보낸다.
   const markDischargeSlot = async (actual, slot) => {
+    //  ★ 5.24-02 양하에서는 카드와 다른 컨을 확인해도 자리를 카드 칸으로 옮기지 않는다 — 완료만 찍고 자리는 EDI 그대로.
+    //    사건 SWAL 2611N 26번 홀드 2026-11-25 20:12~20:39 — 4호기 10대가 모두 카드와 다른 컨이었고 매번 «카드 칸 = 실제 내린 자리»로 적혀
+    //    위는 남았는데 아래가 완료로 칠해졌다. 크레인은 카토스 순서대로 육상부터 단별로 내리는데 카드 예측 칸은 그 순서가 아니었다 —
+    //    카드 칸은 «그 컨이 나온 칸»의 근거가 못 된다. 검수사 20:32 «육상부터 티어별로 내리는데 그림처럼 찍히는 이유?» · 20:37 «장비는 순서대로 하고 있습니다» · 20:40 «네»(완료만 찍기).
+    //    양하 자리를 바꾸는 길은 사람이 컨 상세에서 자리를 직접 고치는 것(fbSetActualPosition 직접 호출)만 남는다.
+    if (mode === 'discharge') return;
     if (mode !== 'discharge' || !actual || !slot || actual.cn === slot.cn || !slot.bay || !slot.row || !slot.tier) return;
     if (slot._comp || await fbPeekCompleted(voyageKey, mode, slot.cn)) { console.info('[4.42-04] 칸 주인이 이미 완료 — 자리를 새로 적지 않습니다(한 칸 두 대 방지)', slot.cn, actual.cn); return; }
     const _ep = effectivePos(actual);
