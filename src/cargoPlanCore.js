@@ -1295,3 +1295,121 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
 
 // V9.57: buildBayGrid3D·fillBayGrid3D·resolveBayEntry 체인 삭제 — 저장소 전체 grep 참조 0
 //   (V7.95 3D 좌표 매핑 시도 잔재. 진실원 buildEmptyBayRenderData는 그대로 살아 있음).
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ★ 5.24 베이매트릭스 대조 문지기 — 판정 한 벌(베이 그림 · PLAN 출력 · 콘앱 · 사전 편집기 · 기록이 같이 쓴다).
+//    검수사 2026-11-25 14:11 «그럼 갯수가 맞지 않을텐데요» · 14:18 «그 문제를 수집기가 읽을수 있습니다. 그걸 어디다 기록을 합니다. 클로드가 보고 수정을 합니다»
+//    · 14:21 «저랑 클로드가 없을때 문제가 발생되면?» — 사건 SWAL 2611N 14번 베이: 리스트·진행률엔 있는데 그림에서만 사라짐(EDI 212대가 칸 밖, 조용히 버림).
+//  drawableKeysOf(def, posMap) — 베이 그림(buildBayPagesFromSummary 장 × buildBayGrid 칸)이 실제로 그리는 자리 «베이-단-열» 집합.
+//  offGridOf(def, containers)  — 그 집합 밖의 컨 목록 [{ c, why: '베이 없음'|'칸 없음' }]. 보관(__) 자리·좌표 없는 컨은 셈하지 않는다.
+//  widenBayDefForDrawing(def, containers) — 그림용 사본만 넓힌다(정본 ship_bay_dict_v3 는 그대로 · 검수사 «저 또는 제가 지정한 사람이외엔 만지지 못하게»).
+//    칸 없음 → 그 단 칸 수를 열 번호까지 · 없는 단은 끼워 넣음 · 00열이면 00 켬. 짝 장((06)07)은 그 장을 그리는 홀수 항목과 짝수 항목을 같이 넓힌다.
+//    베이 없음(장이 없는 베이)은 넓히지 않는다 — 남은 것은 offGrid 로 돌려준다. 넓힌 자리는 widened(«베이-단-열») — 그림이 점선으로 표시.
+// ════════════════════════════════════════════════════════════════════════════
+const _gk2 = (x) => String(parseInt(x, 10)).padStart(2, '0');
+const _gkPos = (c) => {
+  if (!c) return null;
+  const bay = parseInt(c.bay, 10), tier = parseInt(c.tier, 10);
+  if (!Number.isFinite(bay) || !Number.isFinite(tier) || bay <= 0) return null;
+  if (String(c.bay).startsWith('__')) return null;
+  const r = parseInt(c.row, 10);
+  if (!Number.isFinite(r) || r < 0) return null;
+  return { bay, tier, row: r, key: `${bay}-${_gk2(tier)}-${_gk2(r)}` };
+};
+export function drawableKeysOf(def, posMap = null) {
+  const keys = new Set(), bayPage = new Map();
+  let pages = null;
+  try { pages = buildBayPagesFromSummary(def) || []; } catch (e) { console.warn('[5.24] 장 목록 실패', e); return { keys, bayPage, ok: false }; }
+  const pm = posMap || new Map();
+  for (const pg of pages) {
+    let g = null;
+    try { g = buildBayGrid(def, pg.bayKey, { posMap: pm }); } catch (e) { console.warn('[5.24] 격자 실패', pg.bayKey, e); g = null; }
+    if (!g) continue;
+    const bays = [pg.even, pg.odd].filter((x) => x != null);
+    for (const b of bays) bayPage.set(b, pg);
+    //  사용불가 칸(blocked)은 격자에선 rowLbl 이 비지만 실컨이 있으면 베이 그림이 그린다(BayPlan «데이터 우선») — 자리 이름을 rowPos 로 되찾아 «그리는 칸»에 넣는다(감사 4).
+    for (const [rows, pos] of [[g.deckRows || [], g.deckRowPos || []], [g.holdRows || [], g.holdRowPos || []]]) {
+      for (const r of rows) {
+        (r.cells || []).forEach((cell, ci) => {
+          if (!cell) return;
+          const lbl = cell.active && cell.rowLbl ? cell.rowLbl : (cell.blocked ? pos[ci] : null);
+          if (!lbl) return;
+          for (const b of bays) keys.add(`${b}-${_gk2(r.tier)}-${lbl}`);
+        });
+      }
+    }
+  }
+  return { keys, bayPage, ok: true };
+}
+export function offGridOf(def, containers) {
+  if (!def || !Array.isArray(def.baysSummary) || !def.baysSummary.length) return { ok: false, off: [], total: 0 };
+  const list = Array.isArray(containers) ? containers : [];
+  const { keys, bayPage, ok } = drawableKeysOf(def, buildPosMap(list.filter((c) => _gkPos(c))));
+  if (!ok) return { ok: false, off: [], total: 0 };
+  const off = []; let total = 0;
+  for (const c of list) {
+    const p = _gkPos(c);
+    if (!p) continue;
+    total++;
+    if (keys.has(p.key)) continue;
+    off.push({ c, bay: p.bay, tier: p.tier, row: p.row, key: p.key, why: bayPage.has(p.bay) ? '칸 없음' : '베이 없음' });
+  }
+  return { ok: true, off, total };
+}
+function _gkWidenSec(e, deck, tier, row, bump = 0) {
+  const tk = deck ? 'deckTiers' : 'holdTiers', ck = deck ? 'deckCells' : 'holdCells', zk = deck ? 'deckHasZero' : 'holdHasZero';
+  //  단 목록은 그림과 같은 순서로 찾는다(summaryToMatrixBays — deckTiers 먼저, 없으면 deckTiersLocal · 감사 3). 넓힌 결과는 deckTiers 에 둔다.
+  const tl = deck ? 'deckTiersLocal' : 'holdTiersLocal';
+  const tsrc = (Array.isArray(e[tk]) && e[tk].length) ? e[tk] : ((Array.isArray(e[tl]) && e[tl].length) ? e[tl] : []);
+  const tiers = tsrc.map(Number);
+  const cells = (Array.isArray(e[ck]) ? e[ck] : []).slice(0, tiers.length).map(Number);
+  const cmax = cells.length ? Math.max(...cells) : (Number(e.rowCount) || 0);
+  while (cells.length < tiers.length) cells.push(cmax);   // 모자란 칸 수는 그 구역 최대로(computeBayGridSpec 의 채움과 같은 방향 · 감사 7)
+  let i = tiers.indexOf(tier);
+  if (i < 0) {   // 없는 단 — 높은 단이 앞(사전 순서와 같게)
+    i = tiers.findIndex((t) => t < tier);
+    if (i < 0) i = tiers.length;
+    tiers.splice(i, 0, tier); cells.splice(i, 0, 0);
+  }
+  //  칸 수(cells)는 00열을 포함한 그 단의 칸 개수이고 가운데 맞춤이다(getRowPositions · getActiveColsSymmetric) — 열 r 이 들어가려면 최소 r(+00) 칸.
+  //  모자라면 widenBayDefForDrawing 이 한 칸씩 더 넓혀 다시 잰다(최대 4번).
+  const zero = !!(e[zk] !== undefined && e[zk] !== null ? e[zk] : e.hasZero);
+  if (row === 0) { e[zk] = true; if (cells[i] < 1) cells[i] = 1; }
+  const need = row + (zero || row === 0 ? 1 : 0) + bump;
+  if (cells[i] < need) cells[i] = need;
+  e[tk] = tiers; e[ck] = cells;
+  if (deck) e.hasDeck = true; else e.hasHold = true;
+  if (row > (Number(e.rowCount) || 0)) e.rowCount = row;
+}
+export function widenBayDefForDrawing(def, containers) {
+  const first = offGridOf(def, containers);
+  if (!first.ok || !first.off.length) return { def, widened: new Set(), widenedCns: new Set(), off: first.off, total: first.total, before: first.off.length };
+  const nd = { ...def, baysSummary: def.baysSummary.map((e) => ({ ...e })) };
+  const no = (x) => parseInt(x && (x.bayNo != null ? x.bayNo : x.bay), 10);
+  const entOf = (n) => (n == null ? null : nd.baysSummary.find((x) => no(x) === n) || null);
+  let pages = [];
+  try { pages = buildBayPagesFromSummary(def) || []; } catch (e) { console.warn('[5.24] 장 목록 실패 — 넓히지 않음', e); pages = []; }
+  const pageOf = (b) => pages.find((p) => p.even === b || p.odd === b) || null;
+  let todo = first.off, after = first;
+  for (let pass = 0; pass < 4 && todo.length; pass++) {
+    for (const o of todo) {
+      if (o.why !== '칸 없음') continue;
+      const pg = pageOf(o.bay);
+      if (!pg) continue;
+      const deck = o.tier >= 80;
+      for (const e of [entOf(pg.odd), entOf(pg.even)]) if (e) _gkWidenSec(e, deck, o.tier, o.row, pass);
+    }
+    after = offGridOf(nd, containers);
+    todo = after.off;
+  }
+  //  안전장치(감사 2·7) — 넓혔더니 원래 그려지던 컨이 그림 밖으로 밀리면(홀드가 데크보다 넓어져 끝 열이 잘림 · 가운데 맞춤이 바뀜) 넓히지 않고 정본 그대로 그린다.
+  const firstOff = new Set(first.off.map((x) => x.key));
+  if (after.off.some((x) => !firstOff.has(x.key))) {
+    console.warn('[5.24] 넓히면 원래 그리던 컨이 밀려나 정본 그대로 그림', after.off.filter((x) => !firstOff.has(x.key)).map((x) => x.key).slice(0, 5));
+    return { def, widened: new Set(), widenedCns: new Set(), off: first.off, total: first.total, before: first.off.length };
+  }
+  const widened = new Set(), widenedCns = new Set();
+  const left = new Set(after.off.map((x) => x.key));
+  for (const o of first.off) if (!left.has(o.key)) { widened.add(o.key); if (o.c && o.c.cn) widenedCns.add(String(o.c.cn)); }
+  return { def: nd, widened, widenedCns, off: after.off, total: first.total, before: first.off.length };
+}

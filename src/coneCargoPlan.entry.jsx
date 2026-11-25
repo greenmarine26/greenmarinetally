@@ -13,7 +13,7 @@ import { sizeLenOf, sizeLenKnown } from './tallyReport.js';   // 4.88 / ConeOne 
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
 import { enrichBayDef } from './bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from './cargoPlanCore.js';   // ★ ConeOne 2.4: 격자·짝은 cargoPlanCore 한 벌
+import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, widenBayDefForDrawing } from './cargoPlanCore.js';   // ★ ConeOne 2.4: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from './shipMatrixBuilder.js';
 import { pickCarrierOp } from './utils.js';   // TallyOne 3.66-01 · ConeOne 2.55-02: 선사 고르기 한 벌
 import { shipOpMapper } from './data/tallyFormats.js';   // 같은 판: 그 배 마감텔리 코드로 읽기 한 벌
@@ -396,7 +396,7 @@ export function buildConeBayGrid(containers, shipInfo) {
   })();
 
   // BayPlan.jsx 268-287: dictBaysSummary — enrichBayDef 보강 (source='user'면 차단)
-  const dictBaysSummary = (() => {
+  const _dictBaysSummary0 = (() => {
     if (!dict || !dict.bayDef || !dict.bayDef.baysSummary) return {};
     const m = {};
     try {
@@ -413,8 +413,18 @@ export function buildConeBayGrid(containers, shipInfo) {
     try {
       const _isUser = isUserOwnedBayDict(dict);
       const enrichedEntry = enrichBayDef({ bayDef: dict.bayDef }, dict._v5Matrix, containers, _isUser ? 'user' : dict.source);
-      return { ...enrichedEntry.bayDef, source: dict.source, _userOwned: _isUser, code: dict.code || '' };
+      const _base = { ...enrichedEntry.bayDef, source: dict.source, _userOwned: _isUser, code: dict.code || '' };
+      //  ★ 5.24 매트릭스에 없는 칸의 EDI 컨은 그림용 사본만 넓혀 그린다(검수앱 베이 그림과 같은 widenBayDefForDrawing 한 벌 · 정본 그대로).
+      try { return widenBayDefForDrawing(_base, containers || []).def; }
+      catch (e2) { console.warn('[5.24] 콘앱 넓혀 그리기 실패 — 정본 그대로', e2); return _base; }
     } catch (e) { console.warn('[ConeOne 2.4] bayDef 구성 실패', e); return null; }
+  })();
+  //  5.24: 단·칸 수 요약도 넓힌 사본에서(격자와 갈리지 않게). 사본이 없으면 종전 요약.
+  const dictBaysSummary = (() => {
+    if (!dictBayDefObj || !Array.isArray(dictBayDefObj.baysSummary)) return _dictBaysSummary0;
+    const m = {};
+    for (const b of dictBayDefObj.baysSummary) m[parseInt(b.bayNo != null ? b.bayNo : b.bay, 10)] = b;
+    return m;
   })();
 
   // BayPlan.jsx 289-300: globalGridCols — 전 베이 최대 그리드 폭 (베이 간 정렬 기준)

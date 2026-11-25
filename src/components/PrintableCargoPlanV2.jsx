@@ -33,6 +33,7 @@ import {
   legendFontFor,       // 3.7-05: 별첨 글자 크기 — 표 줄 수로 정한다
   legendTwoCols,       // 3.7-05: 줄이 많으면 상자를 두 칸으로 — 높이 요구가 «합»이 아니라 «큰 쪽»이 된다
   CPV2_PAGE_W_PRINT,   // 3.7: 인쇄 폭 — 코드가 종이에서 몇 pt 로 찍히는지 재는 데 쓴다
+  widenBayDefForDrawing,   // 5.24 넓혀 그리기 한 벌
 } from '../cargoPlanCore.js';
 
 // ------------------------------------------------------------
@@ -997,7 +998,13 @@ export default function PrintableCargoPlanV2({
     //   Firebase 경유일 때 cargoPlanCore의 isUserSource까지 false로 만들었다(NSFR 2026-08-06 실측).
     const _isUser = isUserOwnedBayDict(baseDict);
     const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, structCont, _isUser ? 'user' : baseDict.source);
-    const bayDefWithSource = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser };
+    let bayDefWithSource = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser };
+    //  ★ 5.24 매트릭스에 없는 칸의 EDI 컨은 그림용 사본만 넓혀 그린다(베이 그림과 같은 widenBayDefForDrawing 한 벌 · 정본 그대로).
+    //    판정은 아래 computeBayRenderData 와 같은 코드(dictData.code)로 — 넓힌 사본에는 code 를 남기지 않는다(종전 꼴 그대로).
+    try {
+      const _w = widenBayDefForDrawing({ ...bayDefWithSource, code: baseDict.code || '' }, structCont || []);
+      if (_w && _w.def !== undefined && _w.widened.size > 0) { const { code: _c, ...rest } = _w.def; bayDefWithSource = rest; }
+    } catch (e) { console.warn('[5.24] PLAN 출력 넓혀 그리기 실패 — 정본 그대로', e); }
     return { ...baseDict, bayDef: bayDefWithSource, _userOwned: _isUser };
   }, [shipImo, shipName, structCont, voyageInfo]);
   /* ★ 4.89 (4.88-01 라이브 확인 — 출력 머리가 «PCSZ CARGO DISCHARGING PLAN» 처럼 선박코드로 찍혔다. 검수사가 정한 꼴은 «<선박명> CARGO DISCHARGING PLAN»)

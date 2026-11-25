@@ -19,7 +19,7 @@ import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { isUserOwnedBayDict, isPtk as _isPtkOne, isPredShift, isKeepShift } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
-import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
+import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf, widenBayDefForDrawing } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
@@ -321,28 +321,11 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
   // M6.94.0: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
-  const dictBaysSummary = useMemo(() => {
-    if (!shipImo && !shipName) return {};
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
-    if (!dict?.bayDef?.baysSummary) return {};
-    // source='user'면 보강 차단, AI 임시는 L4 EDI 보정
-    // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.
-    const enrichedEntry = enrichBayDef(
-      { bayDef: dict.bayDef },
-      dict._v5Matrix,
-      containers,
-      isUserOwnedBayDict(dict) ? 'user' : dict.source
-    );
-    const m = {};
-    enrichedEntry.bayDef.baysSummary.forEach(b => {
-      m[parseInt(b.bayNo, 10)] = b;
-    });
-    return m;
-  }, [shipImo, shipName, containers, _vslCode]);
+  // 5.24: dictBaysSummary 는 아래 넓힌 사본(dictBayDefObj)에서 만든다.
 
   // ★ 2.56: 격자 한 벌(buildBayGrid)·짝 한 벌(buildBayPagesFromSummary)에 넘길 전체 bayDef.
   //   source/_userOwned 를 카고플랜(PrintableCargoPlanV2 dictData)과 같은 방식으로 붙인다.
-  const dictBayDefObj = useMemo(() => {
+  const _dictBayDefBase = useMemo(() => {
     if (!shipImo && !shipName) return null;
     const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
     if (!dict?.bayDef?.baysSummary) return null;
@@ -350,6 +333,22 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     const enrichedEntry = enrichBayDef({ bayDef: dict.bayDef }, dict._v5Matrix, containers, _isUser ? 'user' : dict.source);
     return { ...enrichedEntry.bayDef, source: dict.source, _userOwned: _isUser, code: dict.code || '' };
   }, [shipImo, shipName, containers, _vslCode]);
+  //  ★ 5.24 매트릭스에 없는 칸에 EDI 컨이 있으면 그림용 사본만 넓혀 그린다(정본은 그대로 · 점선 표시).
+  //    검수사 2026-11-25 14:21 «저랑 클로드가 없을때 문제가 발생되면?» — SWAL 2611N 14번 베이가 그림에서 사라졌던 사건.
+  //    판정은 cargoPlanCore.widenBayDefForDrawing 한 벌(PLAN 출력·콘앱 플랜도 같은 함수).
+  const _gkWide = useMemo(() => {
+    if (!_dictBayDefBase) return null;
+    try { return widenBayDefForDrawing(_dictBayDefBase, viewContainers || []); }   // 화면 격자와 같은 숨김 적용본(감사 8)
+    catch (e) { console.warn('[5.24] 넓혀 그리기 실패 — 정본 그대로 그림', e); return null; }
+  }, [_dictBayDefBase, viewContainers]);
+  const dictBayDefObj = _gkWide ? _gkWide.def : _dictBayDefBase;
+  // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
+  //   5.24: 넓힌 사본(dictBayDefObj)에서 만든다 — 격자와 단·칸 수가 갈리지 않게(enrichBayDef 는 위에서 한 번).
+  const dictBaysSummary = useMemo(() => {
+    const m = {};
+    for (const b of ((dictBayDefObj && dictBayDefObj.baysSummary) || [])) m[parseInt(b.bayNo != null ? b.bayNo : b.bay, 10)] = b;
+    return m;
+  }, [dictBayDefObj]);
 
   // V7.52: 전 베이 최대 그리드 폭 — 베이 간 세로 정렬 기준 (사용자 확정).
   //   deck-only 베이(예: TMPZ BAY 01, 4칸)가 좌측 정렬돼 옆 베이(6칸)의 06 위치에
@@ -642,7 +641,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       <div className={`flex ${onlyLayout === 'row' ? 'flex-row items-start' : 'flex-col'}`} style={{ gap: onlyLayout === 'row' ? 48 : 4 }} data-only-layout={onlyLayout}>   {/* row 는 앞 장 오른쪽 단 라벨(장 밖 24px)과 뒷 장 왼쪽 라벨이 붙지 않게 48px */}
         {pgList.map((pg) => {
           const page = (
-            <BayPage key={pg.title} rfSkip={rfSkip} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
+            <BayPage key={pg.title} gkWideCns={_gkWide ? _gkWide.widenedCns : null} rfSkip={rfSkip} page={pg} bayGroups={bayGroups} completedMap={compMap} xrayList={xrayMap} dischargeCns={dischargeCns} shiftingMap={shiftingMap}
               isPtk={isPtk} podBg={podBg} onCellClick={(c) => onOpenContainer?.(c)} cellW={cw} cellH={ch} fontSize={Math.max(7, Math.round(10 * z))}
               isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
               globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
@@ -660,6 +659,18 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     <div className="space-y-2">
       {/* 4.19 (§7.8-⑬ «항차는 등록하기 사전에 없음 표기»): 베이플랜 머리 — 판정은 dictMissing.bayDictMissingOf 한 벌(항차 목록·헤더와 같은 딱지) */}
       <DictMissingChip info={voyageInfo || { vsl: shipName, imo: shipImo }} className="inline-block" />
+      {/* ★ 5.24 베이매트릭스 대조 문지기 — 매트릭스에 없는 칸의 컨을 버리지 않고 점선 칸으로 넓혀 그림(판정 cargoPlanCore.widenBayDefForDrawing 한 벌) */}
+      {_gkWide && (_gkWide.widened.size > 0 || _gkWide.off.length > 0) && (
+        <details data-gk-band="1" className="bg-amber-100 border border-amber-600 text-amber-900 rounded-pill p-2 text-xs">
+          <summary className="cursor-pointer font-bold">
+            ⚠ 베이매트릭스에 없는 칸 {_gkWide.before}대{_gkWide.widened.size > 0 ? ` — ${_gkWide.widened.size}대는 점선 칸으로 넓혀 그렸습니다` : ''}{_gkWide.off.length > 0 ? ` · 그림 밖 ${_gkWide.off.length}대` : ''} · 베이매트릭스 확인 필요
+          </summary>
+          <div className="mt-1 leading-5">
+            {[..._gkWide.widened].slice(0, 40).map((k) => <span key={k} className="inline-block mr-2">{k}</span>)}
+            {_gkWide.off.slice(0, 40).map((o) => <span key={'x' + o.key} className="inline-block mr-2 text-red-800">{o.key}({o.why}){o.c && o.c.cn ? ' ' + o.c.cn : ''}</span>)}
+          </div>
+        </details>
+      )}
       {/* V7.01: 계열 대체 안내 — 정확한 베이정보 없어 같은 계열 선박으로 대체 시 */}
       {bayDictSubstituted && (
         <div className="bg-amber-100 border border-amber-600 text-amber-900 rounded-pill p-2 text-xs">
@@ -932,7 +943,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           <div className="space-y-3">
             {pages.map((page, pIdx) => (
               <div key={pIdx} id={`bay-page-${pIdx}`}>
-                <BayPage
+                <BayPage gkWideCns={_gkWide ? _gkWide.widenedCns : null}
                   rfSkip={rfSkip}
                   page={page}
                   bayGroups={bayGroups}
@@ -978,7 +989,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           </div>
         ) : (
           // 단일 페이지 모드
-          <BayPage
+          <BayPage gkWideCns={_gkWide ? _gkWide.widenedCns : null}
             rfSkip={rfSkip}
             page={curPage}
             bayGroups={bayGroups}
@@ -1057,7 +1068,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null, compactCells = false,   // 3.11: 보드는 칸이 커도 끝4자리 꼴  // V9.57(I12): getCellBg 죽은 체인 제거
+function BayPage({ hideTitle = false, gkWideCns = null, page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, podBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null, compactCells = false,   // 3.11: 보드는 칸이 커도 끝4자리 꼴  // V9.57(I12): getCellBg 죽은 체인 제거
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1536,6 +1547,14 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
   };
 
   // 한 셀 렌더링 — V37 PDF 5줄 형식
+  //  ★ 5.24 넓혀 그린 칸(베이매트릭스에 없던 자리)의 컨은 점선 테두리 — 칸 내용은 renderCell 그대로.
+  const renderCellG = (row, tier) => {
+    const el = renderCell(row, tier);
+    if (!gkWideCns || !gkWideCns.size || !row || !tier || !React.isValidElement(el)) return el;
+    const cc = (getCellAll(row, tier) || [])[0];
+    if (!cc || !gkWideCns.has(String(cc.cn))) return el;
+    return React.cloneElement(el, { 'data-gk-wide': '1', style: { ...(el.props.style || {}), outline: '2px dashed #d97706', outlineOffset: '-2px' } });
+  };
   const renderCell = (row, tier) => {
     const key = `${row || '_'}-${tier || '_'}`;
     if (!row || !tier) {
@@ -1921,7 +1940,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
                       if (!(c.active || (c.blocked && pageCellCns.has(`${lbl}-${tier2}`)))) return null;
                       return (
                         <div key={`dc-${ti}-${lbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center', ..._dimStyle(tier2) }}>
-                          {renderCell(lbl, tier2)}
+                          {renderCellG(lbl, tier2)}
                         </div>
                       );
                     })}
@@ -1953,7 +1972,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
                       if (!(c.active || (c.blocked && pageCellCns.has(`${lbl}-${tier2}`)))) return null;
                       return (
                         <div key={`hc-${ti}-${lbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center', ..._dimStyle(tier2) }}>
-                          {renderCell(lbl, tier2)}
+                          {renderCellG(lbl, tier2)}
                         </div>
                       );
                     })}
@@ -1987,7 +2006,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
           <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center" style={tier ? _dimStyle(tier) : undefined}>
             <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {deckRowsArr.map((row, ri) => (
-              <React.Fragment key={`d-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
+              <React.Fragment key={`d-${ti}-${ri}`}>{renderCellG(row, tier)}</React.Fragment>
             ))}
             <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>
@@ -2029,7 +2048,7 @@ function BayPage({ hideTitle = false, page, bayGroups, completedMap, xrayList, d
           <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center" style={tier ? _dimStyle(tier) : undefined}>
             <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {holdRowsArr.map((row, ri) => (
-              <React.Fragment key={`h-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
+              <React.Fragment key={`h-${ti}-${ri}`}>{renderCellG(row, tier)}</React.Fragment>
             ))}
             <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>

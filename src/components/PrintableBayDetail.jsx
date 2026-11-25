@@ -21,7 +21,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, effectivePos, hatchSegCols } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다   // 2.98-14: 커버 막대 경계
 import { getShipBayDictData } from '../shipStructure.js';
-import { buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
+import { buildBayGrid, buildBayPagesFromSummary, buildPosMap, widenBayDefForDrawing } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -677,11 +677,17 @@ export default function PrintableBayDetail({
       containers,
       _isUser ? 'user' : baseDict.source
     );
+    let _bd = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser };
+    //  ★ 5.24 매트릭스에 없는 칸의 EDI 컨은 그림용 사본만 넓혀 그린다(베이 그림과 같은 widenBayDefForDrawing 한 벌 · 정본 그대로).
+    let _gk = null;
+    try { _gk = widenBayDefForDrawing(_bd, containers || []); _bd = _gk.def; }   // 이 화면 buildBayGrid 는 code 없이 그린다 — 판정도 같은 꼴로(감사 5)
+    catch (e) { console.warn('[5.24] 출력 넓혀 그리기 실패 — 정본 그대로', e); _gk = null; }
     return {
       ...baseDict,
       _userOwned: _isUser,
-      bayDef: { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser },
+      bayDef: _bd,
       _enrichMeta: enrichedEntry._enrichMeta || baseDict._enrichMeta,
+      _gkWide: _gk,
     };
   }, [shipImo, shipName, containers, voyageInfo]);
 
