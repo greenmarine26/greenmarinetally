@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCrewPool, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
+import { shiftWordOf, dateWordOf, isTermApplied, isEdiApplied, shiftGangKey, currentShift, isoToLabel, reeferTempOf, reeferTempExempt, reeferTempSummary, fmtPos, normalizeBay, formatWt, isReeferContainer, isFullReefer, isEmptyReefer, emptySplitLabel, isPyeongtaekPort, APP_VERSION, planWorkStart, getPierFromBerth, describeMovePath, dupSealMap, overDims, parseCraneStarts, isoCheckDigit, isoFixLastDigit, parseCrewPool, parseCraneCrew, resolveCrewSides, crewShiftKey, crewWorkStats, parseCatosPos, koJosa, completedByLabel, dropFilledBookingSlots, extraOfListNote, mfnNote } from './utils.js';
 import { voyagePierOf, degText } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
 import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
 import { crewNameAt, crewPoolLogOf } from './utils.js';
@@ -1701,7 +1701,7 @@ function formatShifting(ctx) {
   const _ev = ctx && ctx.shiftEvid && ctx.shiftEvid.count + _kcN === cns.length ? ctx.shiftEvid : null;
   //  4.13 감사: 배정표가 아직이거나 다르면 «배정목록 표기로는 N» 이 근거 줄(배정표 이적 0모브…)과 부딪친다 — 그때는 대수를 이적으로 환산한 값이라고 말한다.
   const _moveTail = (_ev && _ev.label && _ev.label !== '확정') ? `대수를 이적(모브)으로 환산하면 ${cns.length * 2} — 양하 1 + 재선적 1` : `배정목록 표기로는 ${(cns.length - _kcN) * 2}${_kcN ? ` + 본선 잔류 확정 ${_kcN * 2}` : ''} — 양하 1 + 재선적 1`;
-  const lines = [`🔄 시프팅 ${cns.length}대${_ev && _ev.label ? ` [${_ev.label}]` : ''} (${_moveTail})`];
+  const lines = [`🔄 시프팅 ${cns.length}대${_ev && shiftWordOf(_ev.label) ? ` [${shiftWordOf(_ev.label)}]` : ''} (${_moveTail})`];   // 5.23-05: 화면과 같은 말 한 벌(확정이면 말 없음 · 예정 · 불일치)
   const sorted = cns.slice().sort((a, b) => String(posOf(map[a])).localeCompare(String(posOf(map[b]))));
   for (const cn of sorted) {
     const v = map[cn] || {};

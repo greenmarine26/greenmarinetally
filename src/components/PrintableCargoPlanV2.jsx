@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { crewSegments, isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeepShift, keepOnboardOf } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import { shiftWordOf, crewSegments, isUserOwnedBayDict, podFeStyle, isPtk as _isPtkOne, isPredShift, isKeepShift, keepOnboardOf } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { WorkerPrintDialog, WorkerHeadMark, installClonePrint } from '../workerPrint.jsx';   // 4.32: 머리줄 «# ___ , 이름» + 인쇄 직전 짝 이름 질문 + 한 장 더
 import CargoDuoPills from './CargoDuoPills.jsx';   // 콘앱 첫 화면(양하|선적) 전환 단추 — duo 를 받을 때만 그린다
 import { sizeLenOf } from '../tallyReport.js';   // ★ 일괄수리(2026-11-10): 규격 길이 한 벌
@@ -1618,9 +1618,10 @@ export default function PrintableCargoPlanV2({
             {shiftCount > 0 && (
               <>
                 <span style={{ color: '#1d4ed8' }} data-shift-head={`${shiftConfCount}/${shiftPredCount}`}> · 쉬프팅 {shiftPredCount > 0 ? `${shiftConfCount > 0 ? `◆${shiftConfCount} ` : ''}◇${shiftPredCount}` : shiftCount - shiftKeepCount}</span>{shiftKeepCount > 0 && <span style={{ color: '#ca8a04' }} data-shift-keep={shiftKeepCount}> 예보◆{shiftKeepCount}</span>}
-                {shiftStatus && (
-                  <span data-shift-status={shiftStatus}
-                    style={{ color: shiftStatus === '확정' ? '#15803d' : shiftStatus === '불일치' ? '#dc2626' : '#b45309' }}> {shiftStatus}</span>
+                {/* ★ 5.23-05: 확정이면 대수만, 예정(미확정·예측)이면 «예정», 어긋나면 «불일치» — utils.shiftWordOf 한 벌(검수사 2026-11-25 08:00). */}
+                {shiftWordOf(shiftStatus) && (
+                  <span data-shift-status={shiftWordOf(shiftStatus)}
+                    style={{ color: shiftWordOf(shiftStatus) === '불일치' ? '#dc2626' : '#b45309' }}> {shiftWordOf(shiftStatus)}</span>
                 )}
                 {/* 2.83-01 (검수사 문구 확정): «합»이 아니라 «작업분» —
                     *«검수앱은 기존에다 시프팅만 따로 표기 해주면 됩니다.

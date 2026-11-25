@@ -194,9 +194,9 @@ const bundle = process.argv[3];
   const ctx = (v, disp, ev) => ({ shiftMap: disp, shiftEvid: ev, voyage: v });
   const ansN = String(T.generateLocalAnswer({ shiftingQuery: true }, [], Object.values(vN.discharge.ediContainers), ctx(vN, dN, evN)));
   const ansB = String(T.generateLocalAnswer({ shiftingQuery: true }, [], Object.values(vB.discharge.ediContainers), ctx(vB, dB, evB)));
-  ok(/시프팅 64대 \[확정\]/.test(ansN) && /9687\s+22-05-86 → 10-08-82\s+POD CNDAI — 🔵 본선 잔류 확정\(선적 EDI\)/.test(ansN) && /9872\s+22-07-86 → 10-07-82\s+POD CNDAI — 🔵 본선 잔류 확정\(선적 EDI\)/.test(ansN) && /🔵 본선 잔류 확정 2대는 선사 지시\(평택에서 안 내림\)로 선적 EDI 에 실려 있어 양하 대수에서 빼고 시프팅으로 셉니다\./.test(ansN) && !/🟡 시프팅 예보/.test(ansN),
-    '미르 «시프팅 몇 대» — 지금 «시프팅 64대 [확정]» · 두 대는 «🔵 본선 잔류 확정(선적 EDI)» 줄 · 꼬리 설명 · 노란 예보 문단 없음', ansN.split('\n').slice(0, 2).join(' / ') + ' …' + ansN.slice(-200));
-  ok(/시프팅 62대 \[확정\]/.test(ansB) && /🟡 시프팅 예보 2대/.test(ansB) && !/본선 잔류 확정/.test(ansB), '10-25 — 종전 «시프팅 62대 [확정]» + «🟡 시프팅 예보 2대» 그대로');
+  ok(/시프팅 64대 \(/.test(ansN) && !/\[확정\]/.test(ansN) && /9687\s+22-05-86 → 10-08-82\s+POD CNDAI — 🔵 본선 잔류 확정\(선적 EDI\)/.test(ansN) && /9872\s+22-07-86 → 10-07-82\s+POD CNDAI — 🔵 본선 잔류 확정\(선적 EDI\)/.test(ansN) && /🔵 본선 잔류 확정 2대는 선사 지시\(평택에서 안 내림\)로 선적 EDI 에 실려 있어 양하 대수에서 빼고 시프팅으로 셉니다\./.test(ansN) && !/🟡 시프팅 예보/.test(ansN),
+    '미르 «시프팅 몇 대» — 지금 «시프팅 64대»(5.23-05 확정이면 말 없음) · 두 대는 «🔵 본선 잔류 확정(선적 EDI)» 줄 · 꼬리 설명 · 노란 예보 문단 없음', ansN.split('\n').slice(0, 2).join(' / ') + ' …' + ansN.slice(-200));
+  ok(/시프팅 62대 \(/.test(ansB) && !/\[확정\]/.test(ansB) && /🟡 시프팅 예보 2대/.test(ansB) && !/본선 잔류 확정/.test(ansB), '10-25 — 종전 «시프팅 62대»(5.23-05 확정이면 말 없음) + «🟡 시프팅 예보 2대» 그대로');
 
   console.log('⑩ 콘앱 2.72 — 콘앱 함수를 떼어 실제로 돌린다(검수앱과 같은 답)');
   const cone = src('public/cone.html');

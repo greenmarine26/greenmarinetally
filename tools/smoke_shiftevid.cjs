@@ -113,9 +113,9 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
   show(mk({ terminalStatus: 'planned' })); await wait(120);
   let h = head();
   ok(!!h && /쉬프팅\(재적부\) 5/.test(h.textContent), `머리 «${h && h.textContent.replace(/\s+/g, ' ').slice(0, 60)}»`);
-  ok(!!doc.querySelector('#lt [data-shift-status="미확정"]'), '머리에 «미확정» 딱지');
+  ok(!!doc.querySelector('#lt [data-shift-status="예정"]'), '5.23-05 미확정이면 «예정» 딱지(검수사 2026-11-25 08:00 «예정일때만 예정 표기»)');
   const evRow = doc.querySelector('#lt [data-shift-evid]');
-  ok(!!evRow && /미확정/.test(evRow.textContent) && /메일 10-08 17:05/.test(evRow.textContent) && /RESTOW LIST 1Excel_\.xlsx/.test(evRow.textContent) && /작업 시작 후 확정/.test(evRow.textContent),
+  ok(!!evRow && /^예정/.test(evRow.textContent.trim()) && /메일 10-08 17:05/.test(evRow.textContent) && /RESTOW LIST 1Excel_\.xlsx/.test(evRow.textContent) && /작업 시작 후 확정/.test(evRow.textContent),
      `근거 한 줄에 메일 받은 시각·파일명·«작업 시작 후 확정» (${evRow && evRow.textContent.slice(0, 60)})`);
   ok(doc.querySelectorAll('#lt [data-shift-cn]').length === 5, '미확정이고 5대(10대 이하)라 목록이 처음부터 펼쳐져 위치가 보인다');
   const col = (r, c) => (r.querySelector(`[data-col="${c}"]`) || {}).textContent || '';
@@ -128,7 +128,7 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
 
   // 터미널이 확정하면 같은 화면이 «확정» 으로 바뀐다
   show(mk({ terminalStatus: 'working' })); await wait(120);
-  ok(!!doc.querySelector('#lt [data-shift-status="확정"]') && !doc.querySelector('#lt [data-shift-status="미확정"]'), '터미널 working → 딱지가 «확정» 으로 바뀐다');
+  ok(!doc.querySelector('#lt [data-shift-status]'), '5.23-05 터미널 working(확정)이면 딱지 없이 대수만');
   ok(/배정표 이적 10모브=5대/.test(doc.querySelector('#lt [data-shift-evid]').textContent) && !/작업 시작 후 확정/.test(doc.querySelector('#lt [data-shift-evid]').textContent), '근거 한 줄도 «배정표 이적 10모브=5대» 로 바뀐다');
   ok(doc.querySelectorAll('#lt [data-shift-cn]').length === 0, '확정이면 목록은 접혀 있다(2.92 — 눌러서 연다)');
   // 11대 이상은 미확정이어도 접어 둔다(2.92 — 큰 목록을 강제로 펼치지 않는다) — 사용자가 아직 안 눌렀을 때의 처음 모습
@@ -137,7 +137,7 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
   const ev20 = U.shiftEvidenceCore({ shiftingMap: map20, berthShift: 40, terminalStatus: 'planned' });
   dom.window.__setShift(U.shiftingListOf(map20, {}, { restowList: FX2.MCSN_637N.restowList, loading: {} }), { meta: map20._meta || null, berthShift: 40, lane: '', loadEdiPending: false, truthChk: null, hatchSolve: null, restowExtra: [], evid: ev20 });
   await wait(120);
-  ok(n20 >= 11 && ev20.label === '미확정' && doc.querySelectorAll('#lt [data-shift-cn]').length === 0 && !!doc.querySelector('#lt [data-shift-status="미확정"]'), `${n20}대 미확정 — 딱지는 보이고 목록은 접혀 있다`);
+  ok(n20 >= 11 && ev20.label === '미확정' && doc.querySelectorAll('#lt [data-shift-cn]').length === 0 && !!doc.querySelector('#lt [data-shift-status="예정"]'), `${n20}대 미확정 — «예정» 딱지 · 목록은 접혀 있다(5.23-05)`);
 
   show(mk({ terminalStatus: 'working' })); await wait(120);
   head().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); await wait(80);
@@ -151,7 +151,7 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
   head().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); await wait(80);
   ok(doc.querySelectorAll('#lt [data-shift-cn]').length === 0, '사용자가 접으면 접힌다');
   show(mk({ terminalStatus: 'planned' })); await wait(120);
-  ok(!!doc.querySelector('#lt [data-shift-status="미확정"]') && doc.querySelectorAll('#lt [data-shift-cn]').length === 0, '사용자가 접은 목록은 미확정(자동이면 펼침)으로 바뀌어도 접힌 채다 — 사용자의 뜻이 이긴다');
+  ok(!!doc.querySelector('#lt [data-shift-status="예정"]') && doc.querySelectorAll('#lt [data-shift-cn]').length === 0, '사용자가 접은 목록은 미확정(자동이면 펼침)으로 바뀌어도 접힌 채다 — 사용자의 뜻이 이긴다');
   head().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); await wait(80);
   ok(doc.querySelectorAll('#lt [data-shift-cn]').length === 5, '다시 누르면 열린다');
 
@@ -160,7 +160,8 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
   ok(/shiftEvidenceOf\(voyageKey, voyage, shiftingMap\)/.test(R('src/pages/VoyagePage.jsx')) && /shiftStatus=\{shiftEvid\.label\}/.test(R('src/pages/VoyagePage.jsx')), '항차 화면이 shiftEvidenceOf 를 부르고 카고플랜 머리에 상태를 넘긴다');
   //  4.16 (§7.8-②): 출력 센터 종이도 화면과 같은 지도(확정 ∨ 예측 — shiftingMapForDisplay)를 그리고 그 지도로 머리 상태를 낸다.
   ok(/shiftEvidenceOf\(voyageKey, voyage, shiftingMapDraw\)/.test(R('src/components/PrintHubModal.jsx')) && /shiftingMapDraw = useMemo\([\s\S]{0,80}shiftingMapForDisplay\(voyageKey, voyage\)/.test(R('src/components/PrintHubModal.jsx')) && /shiftStatus=\{shiftEvid\.label\}/.test(R('src/components/PrintHubModal.jsx')), '출력허브도 같은 판정으로 카고플랜 머리에 상태를 넘긴다(4.16 — 그리는 지도 = 화면과 같은 shiftingMapForDisplay)');
-  ok(/shiftStatus && \(/.test(R('src/components/PrintableCargoPlanV2.jsx')), '카고플랜 머리가 상태를 그린다');
+  ok(/shiftWordOf\(shiftStatus\) && \(/.test(R('src/components/PrintableCargoPlanV2.jsx')), '카고플랜 머리는 shiftWordOf 한 벌(확정이면 말 없음)(5.23-05)');
+  ok(U.shiftWordOf('확정') === '' && U.shiftWordOf('미확정') === '예정' && U.shiftWordOf('예측') === '예정' && U.shiftWordOf('예정') === '예정' && U.shiftWordOf('불일치') === '불일치' && U.shiftWordOf('') === '', '5.23-05 shiftWordOf — 확정 빈칸 · 예정 · 불일치');
   ok(/ConeParse = \{[^}]*shiftEvidenceCore/.test(R('src/coneCargoPlan.entry.jsx')) && /ctShiftEvid\(_v\)/.test(R('public/cone.html')) && !/\bshiftEvid\s*:/.test(R('public/cone.html')), '콘앱은 번들 shiftEvidenceCore 로 카고플랜 머리에만 상태를 내고 미르 답에는 근거를 싣지 않는다(검수사 2026-10-09 05:50 «근거는 검수앱에만»)');
   ok(/근거 — \$\{_ev\.line\}/.test(R('src/nlSearch.js')) && /c\.shiftEvid = shiftEvidenceOf/.test(R('src/mir.js')), '미르의 시프팅 답에 상태와 근거가 붙는다(검수앱 mir.js 만 — 콘앱은 싣지 않는다)');
   ok(/shiftEvidenceOf\(voyage\.key, voyage, _shiftMap, \{ light: true \}\)/.test(R('src/pages/HomePage.jsx')), '항차 목록 카드도 같은 판정(light)으로 상태를 낸다');
@@ -170,11 +171,11 @@ const evOf = (v) => U.shiftEvidenceOf(KEY, v, U.shiftingMapForDisplay(KEY, v));
   const cons = Object.values(U.ediMapFromRaw(FX.discharge)).map((c) => ({ ...c, _mode: 'discharge' }));
   const mctx = (v, extra) => ({ app: 'tally', voyageKey: KEY, voyage: v, info: v.info, containers: cons, mode: 'discharge', modeChoice: 'both', ...(extra || {}) });
   const q1 = answerOneRaw('시프팅 몇 대', mctx(mk({ terminalStatus: 'planned' })));
-  ok(/시프팅 5대 \[미확정\]/.test(q1) && /근거 — 선사 RESTOW LIST 메일 10-08 17:05\(RESTOW LIST 1Excel_\.xlsx\) 5대/.test(q1) && /아직 확정이 아닙니다/.test(q1) && !/로테이션 미확인/.test(q1), '미르 «시프팅 몇 대» (작업 전) — 미확정 + 메일 근거 + «아직 확정이 아닙니다»');
+  ok(/시프팅 5대 \[예정\]/.test(q1) && /근거 — 선사 RESTOW LIST 메일 10-08 17:05\(RESTOW LIST 1Excel_\.xlsx\) 5대/.test(q1) && /아직 확정이 아닙니다/.test(q1) && !/로테이션 미확인/.test(q1), '미르 «시프팅 몇 대» (작업 전) — [예정](5.23-05) + 메일 근거 + «아직 확정이 아닙니다»');
   ok(!/배정목록 표기로는/.test(q1) && /대수를 이적\(모브\)으로 환산하면 10/.test(q1), '미르 — 미확정이면 «배정목록 표기로는 10» 이라 말하지 않는다(배정표가 아직 0모브인 근거 줄과 부딪친다) — «환산하면 10»');
   const q2 = answerOneRaw('시프팅 몇 대', mctx(mk({ terminalStatus: 'working' })));
   ok(/배정목록 표기로는 10/.test(q2), '미르 — 확정이면 «배정목록 표기로는 10» 이라 말한다');
-  ok(/시프팅 5대 \[확정\]/.test(q2) && /배정표 이적 10모브=5대/.test(q2) && !/아직 확정이 아닙니다/.test(q2), '미르 — 터미널이 작업을 시작하면 «확정» 으로 답이 바뀐다');
+  ok(/시프팅 5대 \(/.test(q2) && !/\[확정\]/.test(q2) && /배정표 이적 10모브=5대/.test(q2) && !/아직 확정이 아닙니다/.test(q2), '미르 — 터미널이 작업을 시작하면 상태 말 없이 «시프팅 5대» (5.23-05 화면과 한 벌)');
   ok(/6161 {2}10-03-88 → 2-04-88/.test(q1) && /3985 {2}6-11-84 → 34-08-88/.test(q1), '미르 — 미확정이어도 위치(양하 → 선적)를 불러 준다');
   const dM = U.ediMapFromRaw(FX.discharge), lM = U.ediMapFromRaw(FX.loading);
   const vCone = { info: mk({}).info, restowList: mk({}).restowList };

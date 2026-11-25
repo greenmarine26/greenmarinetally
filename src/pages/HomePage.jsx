@@ -11,7 +11,7 @@ import { forecastLegendOf } from '../utils.js';   // 5.12: 자료 오기 전 «�
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone, hasLoadingSide} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { shiftWordOf, detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone, hasLoadingSide} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { CountUp } from '../components/MotionBits.jsx';   // 5.02: 숫자가 올라가는 큰 숫자
 import { workBaysOf, bayGroupsOf, twinSingleOf, twinSingleText, twinSingleParts } from '../workBays.js';   // 5.02: 지금 작업중인 베이(호기별 — craneBoardOf 한 벌)
@@ -1505,6 +1505,8 @@ export function shipViewOf(voyage, pilotForecast = {}) {
   loaStats.planQty = voyage.info?.planLod != null ? Number(voyage.info.planLod) : null;
   disStats.frBundle = frBundleOf(voyage, 'discharge', disStats);   // 4.54: «배정 276(+6)» — 빈 FR 묶음 설명(앱이 터미널보다 많을 때만 · 없으면 null)
   loaStats.frBundle = frBundleOf(voyage, 'loading', loaStats);
+  //  ★ 5.23-05: 선적 플랜이 선사·일항사(C/O) 확인 전(수집기 loading/prePlan pending·pending_pdf)이면 카드 이름을 «선적 예정» 으로(검수사 2026-11-25 07:54 «선적플랜엔 선사나 일항사의 확인 메시지가 올떄까지는 선적예정 이라고 표기»).
+  { const _pps = voyage.loading?.prePlan?.state; loaStats.prePlanPending = _pps === 'pending' || _pps === 'pending_pdf'; }
   // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
   const _shiftMap = computeShiftingMapCached(voyage.key, voyage) || {};
   const shiftCount = Object.keys(_shiftMap).length;
@@ -2353,6 +2355,7 @@ function CancelledSide({ label }) {
 //   머리 줄 = 대수 내역(평택·매칭·LUG·예상 EDI·부분 EDI·리스트만·컨펌전·실/가상E/E확정·쉬프팅·가상/리스트·누락 — 종전 식 그대로)
 //   큰 숫자 + 막대 = 완료/전체(평택분 · computeStats 한 벌 — 목록 줄·수석 상황판 보드와 같은 값)
 //   아래 작은 글 = 남음 · 본선 n/전체(터미널 호기 합계 · 참고) · 배정(터미널 배정목록 · 대조용 참고치) · 마지막 완료. 누르면 그 작업으로 들어간다.
+//  ★ 5.23-05: 시프팅 상태 말 — 확정이면 말 없이 대수만, 예정(미확정·예측 포함)이면 «예정», 어긋나면 «불일치»(검수사 2026-11-25 08:00 «확정이 결정되면 다른것처럼 기본 화면에 시프팅 갯수만» · «예정일때만 예정 표기»).
 function SideBox({ label, mode, stats, rem = null, term = null, termOver = false, lastAt = 0, onOpen, order2 = false, fc = null }) {
   const lod = mode === 'loading';
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
@@ -2360,7 +2363,7 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
     <button type="button" onClick={() => onOpen(mode)} title={`눌러서 ${label} 열기`}
       className={`home-big ${lod ? 'is-lod' : 'is-dis'} text-left w-full ${order2 ? 'order-2' : ''}`} data-side-box={mode} data-done={stats.done} data-total={stats.total}>
       <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs">
-        <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} px-2 py-0.5 font-black text-sm leading-none`}>{label}</span>
+        <span className={`${lod ? 'lbl-lod' : 'lbl-dis'} px-2 py-0.5 font-black text-sm leading-none`} data-side-label={lod && stats.prePlanPending ? 'pre' : ''}>{label}{lod && stats.prePlanPending ? ' 예정' : ''}</span>
         {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) — 매칭 0이면 예상(프리스토우)본. */}
         {stats.planOnly ? (
           /* V9.37-02: 프리스토우 플랜 자리(TMPZ) — 컨번호 없는 __SLOT_ 이라 매칭·누락이 성립하지 않는다. 사용자 확답 2026-07-11 ④. */
@@ -2431,7 +2434,7 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
         {stats.shiftCount > 0 && (
           <>
             <span className="text-dim-500">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 4.16~ 막대와 대수는 평택분만이고 시프팅은 이 줄에서 따로 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). 양하/선적 PLAN의 파란 ◆.">쉬프팅 {stats.shiftCount}{stats.shiftState ? ` ${stats.shiftState}` : ''} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount}` : `예정 ${stats.shiftCount}`})</span>
+            <span className="text-sky-300 font-bold" data-shift-state={stats.shiftState || ''} title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 양하 줄은 내림만, 선적 줄은 실음만 센다(내림 1 + 실음 1 = 2 TIME). 4.16~ 막대와 대수는 평택분만이고 시프팅은 이 줄에서 따로 센다(검수사 «양하리스트와 분리 시프팅 리스트 별도 관리»). 양하/선적 PLAN의 파란 ◆.">쉬프팅 {stats.shiftCount}{shiftWordOf(stats.shiftState) ? ` ${shiftWordOf(stats.shiftState)}` : ''}{(stats.shiftMoves || 0) > 0 ? ` (${stats.shiftMoveLabel || '모브'} ${stats.shiftMoves}/${stats.shiftCount})` : ''}</span>
           </>
         )}
         {stats.virtualFromList && (

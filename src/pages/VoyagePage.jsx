@@ -68,7 +68,8 @@ import { EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, getEquipNumber, reeferTe
 import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49: mergeUploadSeal — 올리기 병합의 실번호(세관 값이 큰 실 · 다른 자료 실 남김)   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
 import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf, sealSameLoose } from '../utils.js';   // 4.88: sealSameLoose — 업로드 충돌 창 실번호 비교 한 벌 · 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
-import { forecastLegendOf } from '../utils.js';   // 5.12: 예보 카드를 플랜 별첨3·별첨2 모양으로
+import { forecastLegendOf } from '../utils.js';
+import { shiftWordOf } from '../utils.js';   // 5.23-05: 시프팅 상태 말 한 벌(확정이면 대수만)   // 5.12: 예보 카드를 플랜 별첨3·별첨2 모양으로
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
@@ -1733,10 +1734,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         const when = d ? `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
         return (
           <div className="w-full mb-2 px-3 py-2 rounded-pill border border-amber-500/70 bg-amber-950/40 text-left" data-preplan={stt}>
-            <div className="text-sm font-black text-amber-200">📝 확정전{stt === 'pending_pdf' ? ' — 재컨펌 요청 중' : ''}</div>
+            <div className="text-sm font-black text-amber-200">📝 선적 예정{stt === 'pending_pdf' ? ' — 재컨펌 요청 중' : ''}</div>
             <div className="text-xxs text-amber-100/80 mt-0.5">
               {stt === 'pending'
-                ? `사무실이 보낸 «${pp.subj || 'PRE PLAN'}»(${when}) 판으로 그립니다. 본선 C/O CONFIRM 이나 터미널 확정 EDI 가 오면 바뀝니다.`
+                ? `사무실이 보낸 «${pp.subj || 'PRE PLAN'}»(${when}) 판으로 그립니다. 선사나 일항사(C/O)의 확인 메일이 오면 «선적 예정» 표기가 없어집니다.`
                 : `«${pp.subj || 'PRE PLAN'}»(${when}) 고친 판이 PDF 라 지금 플랜은 앞 판입니다. 터미널 확정 EDI 가 오면 바뀝니다.`}
             </div>
           </div>
@@ -2933,10 +2934,11 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
               <span className="text-blue-200" data-shift-split={`${shiftInfo.split.out}/${shiftInfo.split.in}/${shiftInfo.split.n}`}>· 내림 {shiftInfo.split.out}/{shiftInfo.split.n} · 실음 {shiftInfo.split.in}/{shiftInfo.split.n}</span>
             )}
             {/*  ★ 4.13 — 상태 딱지. 배정표 이적이 나오면(터미널 작업 시작) 미확정 → 확정 으로 저절로 바뀐다. */}
-            {shiftInfo?.evid?.label && (
-              <span data-shift-status={shiftInfo.evid.label}
-                className={`px-1.5 py-0.5 rounded-btn text-2xs font-black ${shiftInfo.evid.label === '확정' ? 'bg-emerald-900/60 text-emerald-200' : shiftInfo.evid.label === '불일치' ? 'bg-rose-900/60 text-rose-200' : 'bg-amber-900/60 text-amber-200'}`}>
-                {shiftInfo.evid.label}
+            {/*  ★ 5.23-05: 확정이면 딱지 없이 대수만, 예정(미확정·예측)이면 «예정», 어긋나면 «불일치» — utils.shiftWordOf 한 벌(검수사 2026-11-25 08:00 «예정일때만 예정 표기»). */}
+            {shiftWordOf(shiftInfo?.evid?.label) && (
+              <span data-shift-status={shiftWordOf(shiftInfo.evid.label)}
+                className={`px-1.5 py-0.5 rounded-btn text-2xs font-black ${shiftWordOf(shiftInfo.evid.label) === '불일치' ? 'bg-rose-900/60 text-rose-200' : 'bg-amber-900/60 text-amber-200'}`}>
+                {shiftWordOf(shiftInfo.evid.label)}
               </span>
             )}
             {/*  ★ 3.65 — 실제로 다시 실린 대수(검수사 «컨별 선적완료시 마다 추가»). 하나라도 실렸을 때만. */}
@@ -2993,9 +2995,10 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                선사 서류면 메일 받은 시각·파일명·대수, 양하/선적 EDI 자리 일치, 배정표 이적. 화면에 근거를 늘어놓지 않는다(2.76) — 한 줄이다. */}
           {shiftInfo?.evid?.line && (
             <div data-shift-evid={shiftInfo.evid.label} className="px-3 py-1.5 text-xxs text-dim-100 bg-ink-950/60 border-b border-line">
-              {shiftInfo.evid.label && (<><b className={shiftInfo.evid.label === '확정' ? 'text-emerald-300' : shiftInfo.evid.label === '불일치' ? 'text-rose-300' : 'text-amber-300'}>{shiftInfo.evid.label}</b>{' · '}</>)}
+              {shiftWordOf(shiftInfo.evid.label) && (<><b className={shiftWordOf(shiftInfo.evid.label) === '불일치' ? 'text-rose-300' : 'text-amber-300'}>{shiftWordOf(shiftInfo.evid.label)}</b>{' · '}</>)}
               {shiftInfo.evid.line}
-              {shiftInfo.evid.label === '예정' && (<span className="text-dim-300"> — 예정입니다(확정 아님). 양하·선적 플랜을 비교한 뒤 확정됩니다.</span>)}
+              {/*  예정일 때만 왜 예정인지 한 줄(확정이면 아무 말도 붙이지 않는다 — 5.23-05). */}
+              {shiftInfo.evid.label === '예정' && (<span className="text-dim-300"> — 양하·선적 플랜을 비교한 뒤 정해집니다.</span>)}
               {(shiftInfo.evid.label === '미확정' || shiftInfo.evid.label === '예측') && (
                 <span className="text-dim-300">{shiftInfo.evid.keepMatch ? ' — 선사 시프팅 목록 수정본(또는 EDI 수정본)이 오면 저절로 확정으로 바뀝니다.' : ' — 터미널이 작업을 시작해 배정표 이적이 나오면 저절로 확정(또는 불일치)으로 바뀝니다.'}</span>
               )}
