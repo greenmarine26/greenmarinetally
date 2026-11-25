@@ -1860,6 +1860,7 @@ fi
     node tools/smoke_baymodemove517.cjs || { echo "✗ 베이모드 장 옮기기 연막검사 실패 — 배포 금지"; exit 1; }   # 5.17
     node tools/smoke_depart5171.cjs || { echo "✗ 출항 시각 한 벌 연막검사 실패 — 배포 금지"; exit 1; }   # 5.17-01
     node tools/smoke_preplan518.cjs || { echo "✗ 확정전 플랜 연막검사 실패 — 배포 금지"; exit 1; }   # 5.18
+    node tools/smoke_livehold5236.cjs || { echo "✗ 5.23-06 터미널 반영 보류 연막검사 실패 — 배포 금지"; exit 1; }   # 5.23-06
     node tools/smoke_mfn519.cjs "$PWD" || { echo "✗ MFN(터미널 계획=EDI) · 검수리스트 MFN 뒤 · 선내위치 연막검사 실패 — 배포 금지"; exit 1; }   # 5.19
     node tools/smoke_adminwork520.cjs "$PWD" || { echo "✗ 관리자 작업 선박 연막검사 실패 — 배포 금지"; exit 1; }   # 5.20
     node tools/smoke_ownerpick523.cjs || { echo "✗ 검수사 작업자/관리자 선택 연막검사 실패 — 배포 금지"; exit 1; }   # 5.23-02

@@ -11,7 +11,7 @@ import { forecastLegendOf } from '../utils.js';   // 5.12: 자료 오기 전 «�
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
-import { shiftWordOf, detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone, hasLoadingSide} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { liveHoldOf, shiftWordOf, detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone, hasLoadingSide} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { frBundlesOf, bundleExplainOf, bundleDocExpect, bundleDocOffText, bundleDocSrc } from '../tallyReport.js';   // 4.54: 터미널은 빈 FR 묶음을 1대로 센다 — «배정 276(+6)» 설명(마감텔리와 같은 묶음 판정 한 벌)
 import { CountUp } from '../components/MotionBits.jsx';   // 5.02: 숫자가 올라가는 큰 숫자
 import { workBaysOf, bayGroupsOf, twinSingleOf, twinSingleText, twinSingleParts } from '../workBays.js';   // 5.02: 지금 작업중인 베이(호기별 — craneBoardOf 한 벌)
@@ -1507,6 +1507,7 @@ export function shipViewOf(voyage, pilotForecast = {}) {
   loaStats.frBundle = frBundleOf(voyage, 'loading', loaStats);
   //  ★ 5.23-05: 선적 플랜이 선사·일항사(C/O) 확인 전(수집기 loading/prePlan pending·pending_pdf)이면 카드 이름을 «선적 예정» 으로(검수사 2026-11-25 07:54 «선적플랜엔 선사나 일항사의 확인 메시지가 올떄까지는 선적예정 이라고 표기»).
   { const _pps = voyage.loading?.prePlan?.state; loaStats.prePlanPending = _pps === 'pending' || _pps === 'pending_pdf'; }
+  disStats.liveHold = liveHoldOf(voyage, 'discharge'); loaStats.liveHold = liveHoldOf(voyage, 'loading');   // 5.23-06: 터미널 반영 보류(수집기 2.55-02)
   // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
   const _shiftMap = computeShiftingMapCached(voyage.key, voyage) || {};
   const shiftCount = Object.keys(_shiftMap).length;
@@ -2477,6 +2478,13 @@ function SideBox({ label, mode, stats, rem = null, term = null, termOver = false
             </span>
           );
         })()}
+        {/*  ★ 5.23-06: 터미널 완료 중 앱에 못 쓴(보류한) 컨 — 수집기가 이 배 컨인지 확인 못 한 것. 기다리지 않고 그 자리에서 보인다. */}
+        {stats.liveHold && (
+          <span className="text-amber-300 font-bold basis-full" data-live-hold={stats.liveHold.n}
+            title={`${stats.liveHold.why}${stats.liveHold.cns.length ? ' — ' + stats.liveHold.cns.slice(0, 10).join(' ') : ''}`}>
+            ⚠ 터미널 {stats.liveHold.n}대 반영 보류{stats.liveHold.whole ? ' (터미널 자료 전체)' : ''}
+          </span>
+        )}
         {/* 1.82: 터미널 배정 수량 ↔ 앱 수집량 대조. 같으면 ✓, 어긋나면 호박색으로 차이를 적는다.
             4.25(설계 critique 7 «터미널 0 (+250)»): 배정이 0 이면 대조할 수가 없다(수량을 안 주는 배정표·아직 안 잡힌 배정) — 경고처럼 «+250» 을 붙이지 않고 «배정 0» 만 적는다. */}
         {stats.planQty != null && (() => {

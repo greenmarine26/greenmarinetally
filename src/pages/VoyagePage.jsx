@@ -69,7 +69,7 @@ import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49:
 import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf, sealSameLoose } from '../utils.js';   // 4.88: sealSameLoose — 업로드 충돌 창 실번호 비교 한 벌 · 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import { forecastLegendOf } from '../utils.js';
-import { shiftWordOf } from '../utils.js';   // 5.23-05: 시프팅 상태 말 한 벌(확정이면 대수만)   // 5.12: 예보 카드를 플랜 별첨3·별첨2 모양으로
+import { shiftWordOf, liveHoldOf } from '../utils.js';   // 5.23-05: 시프팅 상태 말 한 벌(확정이면 대수만)   // 5.12: 예보 카드를 플랜 별첨3·별첨2 모양으로
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import { openMfnList } from '../mfnList.js';   // 4.58: MFN 목록 출력
@@ -1722,6 +1722,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           </span>
         </div>
       )}
+
+      {/* ★ 5.23-06: 터미널 반영 보류 — 수집기(MailPilot 2.55-02)가 이 배 리스트·시프팅 목록·선박 EDI 어디에도 없는 컨을 완료에 쓰지 않고 남긴 것.
+           시프팅 대신 내려온 컨이면 MCAP 634N(2026-09-06)처럼 시프팅 목록에서 맞바꿈으로 정리한다(양하 리스트에 넣지 않는다 — 앱지침서 §5-1B). */}
+      {(() => {
+        const lh = liveHoldOf(voyage, mode);
+        if (!lh) return null;
+        return (
+          <div className="w-full mb-2 px-3 py-2 rounded-pill border border-amber-500/70 bg-amber-950/40 text-left" data-live-hold={lh.n}>
+            <div className="text-sm font-black text-amber-200">⚠ 터미널 완료 {lh.n}대 반영 보류{lh.whole ? ' — 터미널 자료 전체' : ''}</div>
+            <div className="text-xxs text-amber-100/80 mt-0.5">
+              {lh.whole
+                ? `터미널 ${lh.total}대 가운데 이 배 컨이 거의 없어 다른 기항 자료로 보고 쓰지 않았습니다. 수집기 쪽 기항 고르기를 확인해야 합니다.`
+                : `이 배 리스트·시프팅 목록·선박 EDI 어디에도 없는 컨이라 완료에 쓰지 않았습니다. 시프팅 대신 내려온 컨이면 시프팅 목록에서 맞바꿈으로 정리합니다(양하 리스트에는 넣지 않음).`}
+            </div>
+            {lh.cns.length > 0 && <div className="text-xxs text-amber-100 mt-0.5 font-mono break-all">{lh.cns.slice(0, 30).join(' ')}{lh.cns.length > 30 ? ` … 외 ${lh.cns.length - 30}대` : ''}</div>}
+          </div>
+        );
+      })()}
 
       {/* ★ 5.18: 확정전 플랜 — 수집기(MailPilot 2.53)가 보낸메일함의 PRE PLAN 을 읽어 loading/prePlan 에 판정을 둔다.
            검수사 2026-11-21 «컨펌중인 플랜을 먼저 적용해서 예상을 할수있게 하고 받은 메일함에 확정 플랜이 오면 확정을 마무리» · «확정전으로 표기 바랍니다».
