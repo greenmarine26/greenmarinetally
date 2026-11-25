@@ -583,6 +583,10 @@ function inspPieces(sorted, how, mode) {
   if (how === 'carrier') return [['', inspCarrierSort(sorted)]];   // 4.87: 선사별 — 선사가 바뀌어도 새 장을 시작하지 않고 이어진다(선사는 새 단에서 시작)
   return [['', sorted]];
 }
+//  5.23-04 — 출력 창 화면 맞춤. 창이 종이(A4) 폭보다 좁으면(폰·작은 팝업) 표 칸이 서로 겹쳐 컨번호·실번호를 못 읽었다(2026-11-25 실측 600px).
+//    화면에서만 종이 폭을 지키고 창 폭에 맞게 줄여 보인다 — 인쇄는 원래 크기(@media print zoom 1).
+const fitToWindowHtml = (sel, minW) => `<style>@media screen { ${sel} { min-width: ${minW}; } } @media print { ${sel} { zoom: 1 !important; } }</style>`
+  + `<script>(function(){function f(){try{var c=document.querySelector('${sel}');if(!c)return;c.style.zoom='';var bs=getComputedStyle(document.body),need=c.scrollWidth,have=document.documentElement.clientWidth-(parseFloat(bs.paddingLeft)||0)-(parseFloat(bs.paddingRight)||0);if(need>have+1)c.style.zoom=(have/need).toFixed(3);}catch(e){console.warn('[출력 창] 화면 맞춤 실패',e);}}window.addEventListener('resize',f);window.addEventListener('load',f);setTimeout(f,0);})();<\/script>`;
 const INSP_SPLITS = [['cont', '이어서'], ['size', '20/40'], ['fe', '풀/엠티'], ['carrier', '선사별'], ['port', '포트별']];
 
 //  ★ 4.80 (검수사 2026-11-08 «검수 리스트 중에 맨뒤에 있는 리퍼리스트를 베이순으로 … 셋팅온도 옆에 실제 온도를 입력할수 있게 빈칸» · «별첨 특수화물에서 OT FR을 리퍼리스트를 위에 올리고 특수 화물은 리퍼 리스트 맨아래에 따로 표기»)
@@ -922,7 +926,7 @@ table.ilist td.sl.s3 { font-size: 6pt; letter-spacing: -0.4px; white-space: norm
 <div class="actions no-print">
   <button class="btn-print" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
   <button class="btn-excel" onclick="window.__exportExcel()">📊 엑셀 다운로드</button>
-  <button class="btn-close" onclick="window.close()">✕ 닫기</button>
+  <button class="btn-close" onclick="window.close()">닫기</button>
   <div class="splitrow"><span class="lab">장 나누기</span>${INSP_SPLITS.map(([k]) => { const v = _variants[k]; return `<button type="button" class="btn-split${k === 'cont' ? ' on' : ''}" data-k="${k}" onclick="window.__pickSplit &amp;&amp; window.__pickSplit('${k}')"${v.off ? ' disabled' : ''}>${v.label}<small>${v.off ? '해당 없음' : v.counts.join('+') + '장'}</small></button>`; }).join('')}</div>
 </div>
 <div class="content">
@@ -932,6 +936,7 @@ ${sheet1Pages}
 ${sheet2Html}
 ${shiftHtml}
 </div>
+${fitToWindowHtml('.content', '200mm')}
 </body></html>`;
   //  «이어서» 는 이미 본문에 있으나 되돌아올 때 쓰려고 같이 둔다. 누를 수 없는 판은 null.
   return { html: _html, splits: Object.fromEntries(INSP_SPLITS.map(([k]) => [k, _variants[k].off ? null : _variants[k].html])) };
@@ -1063,7 +1068,7 @@ th { background:#eee; font-weight:700; }
   <button class="btn-print" onclick="window.print()">PDF 저장 / 인쇄</button>
   <button class="btn-excel" onclick="window.__exportXrayXlsx &amp;&amp; window.__exportXrayXlsx()">📊 엑셀 받기</button>
   <button class="btn-close" onclick="window.close()">닫기</button>
-</div>${body}</body></html>`;
+</div><div class="fitwrap">${body}</div>${fitToWindowHtml('.fitwrap', '261mm')}</body></html>`;
 }
 
 export function openXrayListPrint(rows, head, perPage = 20) {

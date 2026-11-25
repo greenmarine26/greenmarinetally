@@ -103,7 +103,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   o = await askChk('작업중인 선박 언제 끝나');
   if (/배 이름을 붙여|어느 배 말씀/.test(o) || !/KBTR|KOBE|남았|끝/.test(o)) fail('«작업중인 선박 언제 끝나» 가 지금 일하는 배로 답하지 않는다: ' + o.slice(0, 220));
   // ⑦ 닫기
-  [...doc.querySelectorAll('button')].find((b) => b.textContent.trim() === '✕').click(); await wait(50);
+  doc.querySelector('[data-mir-close="1"]').click(); await wait(50);   // 5.23-04: 닫기 단추는 선 그림(✕ 글자 아님)
   if (doc.getElementById('mirFabIn')) fail('✕ 를 눌렀는데 시트가 안 닫힌다');
   if (doc.querySelector('[data-mir-hero]')) fail('시트를 닫았는데 전신 미르가 남아 있다');
   const uniq2 = [...new Set(errs)];

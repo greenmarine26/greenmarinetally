@@ -7,7 +7,8 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { ptkDischargeJudgeOf, isKeepShift } from './utils.js';   // 4.48: 본선 잔류 예보(노란 ◆) 판정 한 벌
+import { ptkDischargeJudgeOf, isKeepShift, parsePortMisDateTime } from './utils.js';
+import { departAtOf } from './badgeRule.js';   // 5.23-04: 브리핑 출항 시각도 홈·항차 화면과 같은 한 벌(도선 → PORT-MIS)   // 4.48: 본선 잔류 예보(노란 ◆) 판정 한 벌
 import { voyagePierOf } from './utils.js';   // ★ 일괄수리(2026-11-10): 부두 판정 한 벌
 import { gangsOfShift } from './utils.js';   // 5.00-01: 갱 수 한 벌
 import { activeHeldOf } from './utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(자동 가이드 보류 줄 · 미르와 같은 목록)   // 4.20 후속: 평택 양하분 한 벌
@@ -843,7 +844,7 @@ export function answerOverlaps(voyages) {
 // 1.97 (검수사 확정 «자료가 없으면 첫화면(컨 나열)이 아니라 두번째 화면(홈 카드) 정보를 최대한 자세히» +
 //   «메일수집에서 보면 패턴이 있을것 — 보통 언제쯤에 edi가 도착하는지도 설명»):
 //   컨 자료 없는 배의 브리핑 — 항차 info·자료 상태·PORT-MIS·EDI 도착 패턴(ediPattern)으로 개요를 조립.
-export function answerShipOverview(voyage, shipName = '', pm = null, ediPattern = null) {
+export function answerShipOverview(voyage, shipName = '', pm = null, ediPattern = null, pf = null) {   // 5.23-04: pf — 도선 예보(그 배 줄)
   if (!voyage) return null;
   const info = voyage.info || {};
   const L = [`${shipName || info.vsl || ''} — 개요 브리핑`];
@@ -854,9 +855,23 @@ export function answerShipOverview(voyage, shipName = '', pm = null, ediPattern 
   if (info.planDate) L.push(`작업 예정: ${info.planDate}`);
   if (pm) {
     const f = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)} ${m[4]}:${m[5]}` : null; };
-    const t = [f(pm.eta) ? `입항 ${f(pm.eta)}` : null, f(pm.etd) ? `출항 ${f(pm.etd)}` : null].filter(Boolean).join(' · ');
+    const t = [f(pm.eta) ? `입항 ${f(pm.eta)}` : null].filter(Boolean).join(' · ');
     if (t) L.push(`PORT-MIS: ${t}`);
   }
+  //  ★ 5.23-04 — 출항은 홈 카드·출항 임박 배너와 같은 한 벌(badgeRule.departAtOf · 5.17-01): 도선 예보 출항 → PORT-MIS 신고, 작업창 안만.
+  //    종전엔 PORT-MIS 최초 신고 출항을 그대로 말해 홈(XTPG 출항 11-25 22:00 도선)과 미르(11/24 15:00)가 달랐다(2026-11-25 실측).
+  try {
+    const _pd = String(info.planDate || '');
+    const _pEta = _pd ? parsePortMisDateTime(_pd.split('~')[0].trim()) : null;
+    const _pEtd = _pd.includes('~') ? parsePortMisDateTime(_pd.split('~')[1].trim()) : null;
+    const dp = departAtOf({ planEta: _pEta, planEtd: _pEtd,
+      pfArr: pf ? parsePortMisDateTime(pf.nextArr) : null, pfDep: pf ? parsePortMisDateTime(pf.nextDep) : null,
+      pmEta: pm ? parsePortMisDateTime(pm.eta) : null, pmEtd: pm ? parsePortMisDateTime(pm.etd) : null });
+    if (dp && dp.at) {
+      const d = new Date(dp.at); const two = (n) => String(n).padStart(2, '0');
+      L.push(`출항: ${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())} ${dp.src === 'pilot' ? '도선' : '신고'}`);
+    }
+  } catch (e) { console.warn('[미르 브리핑] 출항 시각 판정 실패 — 출항 줄을 뺀다', e); }
   let ediWaiting = false;
   for (const [m, kr, planKey] of [['discharge', '양하', 'planDis'], ['loading', '선적', 'planLod']]) {
     const sec = voyage[m] || {};

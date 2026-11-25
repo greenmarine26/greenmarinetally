@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { fbSaveTimedCrew } from '../firebase.js';   // 5.22 시각이 붙은 교대
 import CnText from '../components/CnText';   // 5.00-01: 컨 번호 한 벌 표기
 import { sizeLenKnown } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
@@ -1575,7 +1575,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   넓은 화면(lg+) 이고 리스트 탭이면 → 우측 고정 칼럼(variant='panel').
   //   그 외(폰·다른 탭·검색 결과) → 종전대로 오버레이(폰에서는 바텀시트).
   //   ⚠ 두 자리에 각각 그리면 Firebase 구독과 입력 상태가 두 벌이 된다 — 그래서 조건은 JS 로 가른다.
-  const detailPanelHere = isWide && tab === 'list' && !!detailC && !detailC._mode;
+  //  ★ 5.23-04 — EDI 컨은 등록 때 _mode('discharge'·'loading')가 붙어 있어 «!_mode» 로는 목록 탭 컨이 늘 모달로 열렸다
+  //    (우측 칼럼은 «컨테이너를 고르면 여기 열립니다» 만 보이고 비어 있음 — 2026-11-25 XTPG 550E EDI 94대 전부 _mode 실측).
+  //    다른 모드(양하 화면에서 고른 선적 컨 등)에서 온 컨만 모달로 보낸다. transit 등은 cMode 가 지금 모드로 떨어지므로 칼럼에 연다.
+  const detailPanelHere = isWide && tab === 'list' && !!detailC
+    && !((detailC._mode === 'discharge' || detailC._mode === 'loading') && detailC._mode !== mode);
+  //  5.23-04 감사: 우측 칼럼에 연 상세는 탭·모드를 바꾸면 닫는다 — 그대로 두면 바뀐 화면에서 같은 컨이 가운데 창으로 튀어 떴다.
+  //    가운데 창(모달)으로 연 상세는 손대지 않는다(다른 탭에서 고르고 탭을 옮기는 흐름이 있다). 앞 렌더의 칼럼 여부는 아래 효과가 적는다.
+  //    그림을 그리기 전에 닫아(useLayoutEffect) 가운데 창이 한 번 깜박이지 않게 · 칼럼에 있던 그 컨일 때만 닫는다(같은 순간 새로 고른 컨은 연다).
+  const _panelWasRef = useRef(null);
+  useLayoutEffect(() => { if (_panelWasRef.current && _panelWasRef.current === detailC) setDetailC(null); }, [tab, mode]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { _panelWasRef.current = detailPanelHere ? detailC : null; });
   const renderDetail = (variant) => {
         // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
     //  ★ 3.53 — `_mode` 는 등록 때 붙는 값이라 **통과화물이면 `'transit'`** 이다. 그대로 쓰면
@@ -2856,7 +2866,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} xrayMap={xrayMap} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
 
       <div className="flex gap-2 flex-wrap">
         {[
@@ -3324,9 +3334,15 @@ function EsealRangeCard({ voyageKey, info, inspector, voyInfo }) {
 // 1.85-05 (검수사 확정 «양하화면에서 조회했는데 답은 작업시작 화면에서 나옴»): 질문한 탭에서 바로 답.
 //   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
 //   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
-function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPlan, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx
+function InlineAnswerCard({ ask, setAsk, containers: rawContainers, xrayMap = null, mode, onFallback, onOpenPlan, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx
   const carrierContacts = useCarrierContacts();   // 1.89: «관련 선사·담당자» 즉답용
   const shipSpeed = useShipSpeed();   // 1.93-01: 시작 전 «얼마나 걸릴까» 실측 예측
+  /* 5.23-04 — 검색줄 미르의 X-RAY 셈. 이 카드의 컨에는 X-RAY 표식(_xray)이 없어 «X-RAY 몇대» 가 0대로 답했다(XTPG 550E — 필터 칩은 xrayMap 으로 1대).
+       칩과 같은 xrayMap 한 벌로 양하 컨에만 표식을 붙인다(SearchPanel·flattenVoyages 와 같은 규칙). */
+  const containers = useMemo(() => {
+    if (mode !== 'discharge' || !xrayMap || !Object.keys(xrayMap).length) return rawContainers || [];
+    return (rawContainers || []).map((c) => (c && xrayMap[c.cn] && !c._xray ? { ...c, _xray: true } : c));
+  }, [rawContainers, xrayMap, mode]);
   const q = ask?.q || '';
   const parsed = useMemo(() => { try { return parseNaturalQuery(q); } catch (e) { return null; } }, [q]);
 
@@ -3756,7 +3772,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} xrayMap={xrayMap} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={{ ...(briefCtx || {}), bowStern }} />}   {/* 3.21: 선수·선미 유도 재료 */}
 
       <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[

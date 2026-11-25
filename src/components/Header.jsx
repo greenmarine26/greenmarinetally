@@ -38,6 +38,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const [dmgResvOpen, setDmgResvOpen] = useState(false); // TallyOne 2.03: 데미지 예약 모달
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
+  //  5.23-04: 장비 번호 선택 창 — Esc 로 닫는다
+  useEffect(() => {
+    if (!equipOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setEquipOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [equipOpen]);
   const [menuOpen, setMenuOpen] = useState(false);   // V9.15: 부가 버튼 4개(도움말·키·인원·종료)를 ⋯ 메뉴로 — 선박명 자리 확보
   const [dispOpen, setDispOpen] = useState(false);   // 2.40: 화면·소리 설정
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
@@ -515,6 +522,11 @@ export default function Header({ version, inspector, online, route, voyages, onC
                 장비 번호 해제
               </button>
             )}
+            {/* 5.23-04: 닫기 단추 — 종전엔 바깥을 눌러야만 닫혔다(Esc 도 안 먹음) */}
+            <button onClick={() => setEquipOpen(false)} data-equip-close="1"
+              className="w-full mt-2 py-2 bg-ink-800 hover:bg-ink-750 text-dim-200 rounded-pill text-xs border border-line">
+              닫기
+            </button>
           </div>
         </div>
       )}

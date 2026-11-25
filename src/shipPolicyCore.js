@@ -75,6 +75,29 @@ export function normalizeVslName(vsl) {
 // 선박명/코드/항차코드에서 정책 매칭 (DEFAULT + 추가된 정책)
 //   vsl: 선박명 (있으면 우선)
 //   extraHints: ['ATPR2621W', 'CMA' 등] - 파일명, carrier 등 추가 매칭 단서
+//  5.23-04 — 홈 «선박 실 정책» 판의 목록(보이기·척수 셈 한 벌). 저장본 키가 기본표 선박의 코드·별칭이면(TNJP ↔ TEN JUPITER)
+//    한 척으로 합친다 — 종전엔 키만 보고 합쳐 TNJP 가 «엠티실 확인» 에 두 번, 척수가 한 척 더 셌다(2026-11-25 실측 34척).
+//    저장본 값이 기본값을 덮고 이름은 기본표 이름을 둔다(열쇠는 저장본 열쇠). 정책 판정(matchShipPolicy)은 바꾸지 않는다.
+export function shipPolicyListOf(extraPolicies = {}) {
+  const out = { ...DEFAULT_SHIP_POLICIES };
+  const keyOf = (k) => {
+    const n = normalizeVslName(k);
+    if (!n) return k;
+    for (const [dk, d] of Object.entries(DEFAULT_SHIP_POLICIES)) {
+      const codes = [dk, d.name, d.code, ...(d.aliases || [])].filter(Boolean).map((x) => normalizeVslName(x));
+      if (codes.includes(n)) return dk;
+    }
+    return k;
+  };
+  for (const [k, p] of Object.entries(extraPolicies || {})) {
+    const dk = keyOf(k);
+    //  열쇠는 저장본 열쇠 그대로 — 판의 [수정] 이 그 열쇠로 다시 저장하게(기본표 열쇠로 새 저장본을 만들지 않는다)
+    if (dk !== k && DEFAULT_SHIP_POLICIES[dk]) { delete out[dk]; out[k] = { ...DEFAULT_SHIP_POLICIES[dk], ...(p || {}), name: DEFAULT_SHIP_POLICIES[dk].name, code: (p && p.code) || DEFAULT_SHIP_POLICIES[dk].code || '' }; }
+    else out[k] = p;
+  }
+  return out;
+}
+
 export function matchShipPolicy(vsl, extraPolicies = {}, extraHints = []) {
   const norm = normalizeVslName(vsl);
   const all = { ...DEFAULT_SHIP_POLICIES, ...extraPolicies };

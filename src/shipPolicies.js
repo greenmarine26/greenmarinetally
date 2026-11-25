@@ -14,8 +14,8 @@
 import { ref, set, onValue } from 'firebase/database';   // 3.60-03: off 는 더 안 쓴다(구독 해제는 unsub)
 
 //  ★ 4.40 — 기본 정책표·선박명 맞추기·LOLO 판정은 shipPolicyCore.js(파이어베이스 없음)로 옮겼다 — 미르 엔진이 콘앱 번들에 firebase 없이 같은 판정을 쓰게. 여기서 그대로 다시 내보낸다.
-import { DEFAULT_SHIP_POLICIES, normalizeVslName, matchShipPolicy, isLoloShipByPolicy } from './shipPolicyCore.js';
-export { DEFAULT_SHIP_POLICIES, normalizeVslName, matchShipPolicy, isLoloShipByPolicy };
+import { DEFAULT_SHIP_POLICIES, normalizeVslName, matchShipPolicy, isLoloShipByPolicy, shipPolicyListOf } from './shipPolicyCore.js';
+export { DEFAULT_SHIP_POLICIES, normalizeVslName, matchShipPolicy, isLoloShipByPolicy, shipPolicyListOf };
 
 // 컨테이너에 정책 적용 → sealMode 결정
 // 결과: 'attach' | 'verify' | null (해당 없음)

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, CheckCircle } from 'lucide-react';
 import { fbGetMyArchivedToday, fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
-import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
+import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES, matchShipPolicy, shipPolicyListOf } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판 · 4.25: 상세에 그 배 정책 한 줄(matchShipPolicy)
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { mfnNote, mfnInPtkOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
@@ -1009,7 +1009,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     </button>
   );
   const waitBar = waitList.length > 0 ? foldBar('wait', '⏳', `자료 대기 ${waitList.length}척`, _waitNames, waitOpen, () => { setWaitOpen(o => { if (!o) reveal(waitRef); return !o; }); }) : null;
-  const polBar = foldBar('policy', '🔒', '선박 실 정책', `${Object.keys({ ...DEFAULT_SHIP_POLICIES, ...shipPols }).length}척 등록 · 탭하면 수정`, polOpen, () => { setPolOpen(o => { if (!o) reveal(polRef); return !o; }); });
+  const polBar = foldBar('policy', '🔒', '선박 실 정책', `${Object.keys(shipPolicyListOf(shipPols)).length}척 등록 · 탭하면 수정`, polOpen, () => { setPolOpen(o => { if (!o) reveal(polRef); return !o; }); });
   const listBody = (
     <>
       {list.length === 0 && waitList.length === 0 && (
@@ -1039,7 +1039,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {/* ── 1.83: 선박 실 정책 판 — 조합(LOLO+실확인)이 한눈에. 탭하면 수정 모드. ── */}
       {!wide && polBar}
       {polOpen && (() => {
-        const all = { ...DEFAULT_SHIP_POLICIES, ...shipPols };
+        const all = shipPolicyListOf(shipPols);   // 5.23-04: 코드·별칭으로 한 척(TNJP 중복)
         const groups = {};
         Object.entries(all).forEach(([k, pol]) => {
           const lbl = policyComboLabel(pol) || '일반';
@@ -1056,7 +1056,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                   : g.startsWith('LOLO') ? 'bg-purple-900/60 text-purple-200' : 'bg-cyan-900/50 text-cyan-200'}`}>{g}</span>
                 <span className="flex flex-wrap gap-1">
                   {groups[g].map(({ k, pol }) => (
-                    <button key={k} onClick={() => setPolEdit({ vsl: pol.name || k, policy: pol })}
+                    <button key={k} onClick={() => setPolEdit({ vsl: (shipPols && shipPols[k]) ? k : (pol.name || k), policy: pol })}   /* 5.23-04: 저장본이 있으면 그 열쇠로 다시 저장 */
                       className="px-2 py-0.5 rounded bg-ink-800/80 hover:bg-ink-750 text-dim-100">
                       {pol.code || pol.name || k}
                     </button>

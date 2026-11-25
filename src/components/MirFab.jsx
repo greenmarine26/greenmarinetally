@@ -15,6 +15,7 @@
      여기는 ①20초마다·재료가 바뀔 때 다시 재고 ②질문(noteMirAsk)·열람(noteMirOpen)·못 답함(missed)·완료 대수 증가(workDone)·
      작업 선박 선택(workPick)을 그 벌에 알리고 ③얼굴 버튼에 `mir-mood-<key>` 클래스와 작은 표시를 얹을 뿐이다. 그림은 검수사 그림 그대로다. */
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { X } from 'lucide-react';   // 5.23-04: 닫기 단추 그림
 import { currentMirMood, subscribeMirMood, noteMirAsk, noteMirOpen, mirMoodEvent, MIR_MOODS, YARD_SPEAK } from '../mir.js';   // 3.56: 기분 한 벌([mirMood] 절)
 import MirFace from './MirFace.jsx';   // 4.07: 실사 미르 얼굴(기분별 사진 한 칸 + 몸짓)
 import { mirHeroSrc, mirPhotoKey, ensureMirPhotoCss } from './mirPhotoArt.js';   // 4.07: 시트 위에 서 있는 전신 미르
@@ -431,7 +432,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
               {mood.why ? <div className="text-2xs text-amber-200 truncate">{mood.why}</div> : null}
               <div className="text-2xs text-dim-300 truncate">{ctxLabel} · "3426 온도" · "브리핑" · "접안 현측" · "마감텔리 수치"</div>
             </div>
-            <button type="button" onClick={closeSheet} aria-label="미르 닫기" className="w-9 h-9 rounded bg-ink-800 border border-line text-dim-100">✕</button>
+            <button type="button" onClick={closeSheet} aria-label="미르 닫기" data-mir-close="1" className="w-9 h-9 rounded bg-ink-800 border border-line text-dim-100 flex items-center justify-center"><X className="w-5 h-5" strokeWidth={2.5} aria-hidden="true"/></button>   {/* 5.23-04: 글꼴에 없는 ✕ 대신 선 그림(다른 AI 진단 «빈 흰 사각형») */}
           </div>
           <div className="flex gap-1.5">
             <input id="mirFabIn" type="text" value={q} onChange={(e) => { setQ(e.target.value); lastActRef.current = Date.now(); }} onKeyDown={(e) => { if (e.key === 'Enter') ask(q); }}

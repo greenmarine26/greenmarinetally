@@ -1086,6 +1086,17 @@ export function shipPickCodes(voyages, now = Date.now()) {
   wait.sort((x, y) => x.st - y.st);
   return [...new Set(work.concat(wait.map((w) => w.code)))].slice(0, 6);
 }
+//  5.23-04 — 배와 상관없는 일반 물음(«리퍼 컨테이너 검수 주의사항» · «평택항 부두 안내»). 낱말(리퍼·평택)이 조건으로 잡혀도
+//    대수·위치·목록을 묻지 않으면 배 이름을 되묻지 않는다 — 아래 지식 답으로, 없으면 null(모델 문)로 간다.
+//    종전엔 «어느 배 말씀인지» 로 막고 추천 단추를 눌러도 다시 막혔다(2026-11-25 다른 AI 진단 · 실측 재현).
+const GENERAL_KNOW_RE = /주의\s*사항|주의할\s*점|유의\s*사항|안내|요령|방법|절차|규칙|뭐야|무엇|이란|란\s*뭐|설명해/;   // «알려줘» 는 넣지 않는다 — «리퍼 온도 알려줘» 같은 배 조회가 섞인다
+const COUNT_ASK_RE = /몇|개수|대수|어디|위치|목록|리스트|명단|남았|끝나|완료|진행|온도|세팅|설정|대상|양하|선적|플랜|베이|출항|입항/;   // 감사: «리퍼 온도 안내»·«X-RAY 대상 무엇»·«평택 양하 안내» 는 배 조회
+export function isGeneralKnowAsk(q) {
+  const t = String(q == null ? '' : q);
+  return GENERAL_KNOW_RE.test(t) && !COUNT_ASK_RE.test(t) && !/\d{4}/.test(t);
+}
+//  5.23-04: 그 배의 도선 예보 줄(브리핑 출항 시각 한 벌용) — 홈·항차 화면과 같이 선박 코드(info.vsl) 대문자로 찾는다.
+const _pfOf = (c, info) => { try { const k = String((info && info.vsl) || '').toUpperCase(); return (k && c && c.pilotForecast && c.pilotForecast[k]) || null; } catch (e) { return null; } };
 //  배를 되묻는 답인가 — 엔진 열두 곳·떠 있는 미르 두 곳의 «어느 배 말씀인지»·«배 이름을 붙여»·«… 중 어느 배요?»
 const SHIP_ASK_RE = /어느 배 말씀|어느 배요\?|어느 배인지|어느 배의 플랜|배 이름을 붙여\s*(?:주세요|주시면|보세요)|배 이름을 붙이면 그 배(?:만| 브리)|배 이름을 붙여(?:서)?\s*물어/;   // 4.37-01: 모델 답 «배 이름을 붙여서 물어봐 주세요»(생활회화·자료 답 프롬프트 문구)에도 고르기 단추
 export const isShipAskText = (t) => SHIP_ASK_RE.test(String(t == null ? '' : t));
@@ -1095,7 +1106,9 @@ export function shipPickChips(text, rq, voyages, now = Date.now()) {
   const am = String(text || '').match(/((?:[A-Z0-9]{2,8}·)*[A-Z0-9]{2,8}) 중 어느 배요/);
   const first = am ? am[1].split('·') : [];
   const all = [...new Set(first.concat(codes))].slice(0, 6);
-  const base = String(rq || '').replace(WORKING_SHIP_RE, ' ').replace(/\s+/g, ' ').trim() || '브리핑';
+  //  5.23-04: 질문에 이미 붙은 배 코드는 떼고 붙인다 — «XTPG 평택항 부두 안내» 를 다시 물으면 «XTPG XTPG …» 가 되던 것.
+  const _codes = new Set(all.concat(codes).map((x) => String(x).toUpperCase()));
+  const base = String(rq || '').replace(WORKING_SHIP_RE, ' ').split(/\s+/).filter((w) => w && !_codes.has(w.toUpperCase())).join(' ').trim() || '브리핑';
   return all.map((c) => `${c} ${base}`);
 }
 
@@ -2997,7 +3010,7 @@ export function answerOneRaw(query, ctx) {
       } catch (e) { console.warn('[미르] 브리핑 실패:', e); }
     }
     if (parts.length) return (c.mode ? '' : `${ship}\n`) + parts.join('\n\n');
-    try { const ov = answerShipOverview(v, ship, c.matchPortMis(c.portMisData || {}, info), c.ediPattern || null); if (ov) return ov; } catch (e) { /* */ }
+    try { const ov = answerShipOverview(v, ship, c.matchPortMis(c.portMisData || {}, info), c.ediPattern || null, _pfOf(c, info)); if (ov) return ov; } catch (e) { /* */ }
   }
   //  4.39-02: 리스트(records)를 같이 넘겨 예상 실오류를 주의 박스와 같은 표본으로 센다 · 실번호 점검은 자료 답(강) — «실오류 있지?»·«…왜 안알려줬어?» 가 모델로 가서 덮이지 않게
   //  4.87-02 (검수사 2026-11-11 04:36~04:37 «형식이 다른 17개를 보여 달라고 했을때도 같은 대답을 했습니다» · «문제를 찾아서 알려는 주는데 후속 질문에 답을 못한다는것입니다»):
@@ -3039,7 +3052,7 @@ export function answerOneRaw(query, ctx) {
     if (v) {
       try {
         const pmv = c.matchPortMis(c.portMisData || {}, info);
-        const ov = answerShipOverview(v, ship, pmv, c.ediPattern || null);
+        const ov = answerShipOverview(v, ship, pmv, c.ediPattern || null, _pfOf(c, v && v.info));
         const detail = /양하|선적|하역만|어느\s*쪽/.test(Q) ? '\n양하·선적 구분 같은 자세한 것은 수석검수사에게 확인해 주세요.' : '';
         if (info.lane) return `이번 항차는 ${info.lane}입니다. 저희 작업 대상 선박입니다.${detail}\n\n${ov || ''}`.trim();
         if (info.planDis != null || info.planLod != null) return `저희 작업 대상 선박입니다 — 선석배정목록에 잡혀 있습니다. (항로는 다음 배정 수집 때 표시됩니다)${detail}\n\n${ov || ''}`.trim();
@@ -3084,7 +3097,7 @@ export function answerOneRaw(query, ctx) {
       for (const { k, v: vv } of today) {
         const sh = vv?.info?.vslFull || vv?.info?.vsl || k;
         let blk = null;
-        try { blk = answerShipOverview(vv, sh, c.matchPortMis(c.portMisData || {}, vv?.info || {}), c.ediPattern || null); } catch (e) { /* 배 하나 실패해도 계속 */ }
+        try { blk = answerShipOverview(vv, sh, c.matchPortMis(c.portMisData || {}, vv?.info || {}), c.ediPattern || null, _pfOf(c, vv && vv.info)); } catch (e) { /* 배 하나 실패해도 계속 */ }
         if (!blk) continue;
         const lines = blk.split('\n').filter((l) => !l.startsWith('(컨테이너 상세'));
         try {
@@ -3160,7 +3173,7 @@ export function answerOneRaw(query, ctx) {
     if (!hits.length) return `끝네자리 ${d} — 지금 항차 어디에도 없어요.`;
     return hits.slice(0, 12).map((x) => `${x.vsl || ''} ${x.voy || ''} · ${entityHead(x)}${x._comp ? ' · 완료' : ''}`).join('\n') + (hits.length > 12 ? `\n… 외 ${hits.length - 12}대` : '');
   }
-  if (!hasShip && (p.briefingQuery || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery || p.paceQuery || p.customsReportQuery || p.schedQuery || p.pilotQuery || p.progressQuery || (c.countFallback && hasAnyCondition(p) && !p.asking))   /* 3.41-01: paceQuery — 조건이 되면서 홈이 컨 100대를 나열하던 것(감사) */) {
+  if (!hasShip && (p.briefingQuery || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery || p.paceQuery || p.customsReportQuery || p.schedQuery || p.pilotQuery || p.progressQuery || (c.countFallback && hasAnyCondition(p) && !p.asking && !isGeneralKnowAsk(q)))   /* 3.41-01: paceQuery — 조건이 되면서 홈이 컨 100대를 나열하던 것(감사) */) {
     return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시" · "KBTR 리퍼 몇 대")';
   }
 
