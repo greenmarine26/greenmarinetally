@@ -139,7 +139,7 @@ const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/crew_swmm.
   const st = M.crewWorkStats(v);
   T(st.byName['최관식'] && st.byName['최관식'].n === 2, `야간 등록 하나로 다음 날 낮·밤 작업까지 최관식 몫이 된다 (${st.byName['최관식'] && st.byName['최관식'].n})`);
   T(st.outside === 2 && st.rows.some((r) => r.key === '' && !r.name && r.n === 2), '등록된 조 밖 작업을 «조 미상»으로 남기지 않는다');
-  T(/조 미상/.test(M.answerCraneCrew(v, { kind: 'all' })) && /다음 조 등록이 없어요/.test(M.answerCraneCrew(v, { kind: 'all' })), '창 밖이 있는데 «다음 조 등록이 없어요» 를 안 밝힌다');
+  T(/조 미상/.test(M.answerCraneCrew(v, { kind: 'all' })) && /그 시각 조 등록이 없어요/.test(M.answerCraneCrew(v, { kind: 'all' })), '창 밖이 있는데 «다음 조 등록이 없어요» 를 안 밝힌다');
   //  by 우선 — 등록이 앱 기록을 덮으면 «앱 완료 기록도 없어요» 거짓말(NSDC 김성일 136대)
   const v2 = { info: { vsl: 'NSDC', pier: 'PNCT' }, discharge: { completed: { 'TESTU0000001': { at: T27(23, 0), by: '김성일', equip: '1호기' }, 'TESTU0000002': { at: T27(23, 5), by: '김성일', equip: '1호기' } } }, loading: {} };
   v2.info.craneCrew = { '08-27 야간': { '1호기': { name: '박진우', at: T27(22, 0) } } };
