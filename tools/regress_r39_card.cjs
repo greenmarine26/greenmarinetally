@@ -59,7 +59,7 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     try { W.eval(vSrc); W.__R39go(JSON.stringify(voy), vk, mode); } catch (er) { errs.push('THROW ' + er.message); }
     await sleep(350);
     const d = W.document;
-    const click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); /* 4.29-03: 다른 컨 후보를 누르면 «이 컨으로 처리합니까» 확인 창이 뜬다 — 확인 단추까지 눌러 종전과 같은 흐름으로 잇는다 */ const _md = [...W.document.querySelectorAll('div.fixed.inset-0')].filter((x) => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0]; const _cf = _md ? [..._md.querySelectorAll('button')].find((x) => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null; if (_cf) { _cf.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } } return !!b; };
+    const click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); /* 4.29-03: 다른 컨 후보를 누르면 «이 컨으로 처리합니까» 확인 창이 뜬다 — 확인 단추까지 눌러 종전과 같은 흐름으로 잇는다 */ const _md = [...W.document.querySelectorAll('div.fixed.inset-0')].filter((x) => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0]; const _cf = _md ? [..._md.querySelectorAll('button')].find((x) => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null; if (_cf) { _cf.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } else { /* 5.25: 물음창 대신 단독 카드 «고른 컨» 큰 확인 단추 */ const _pg = W.document.querySelector('[data-gw-pick="single"] [data-gw-pick-go="1"]'); if (_pg && !b.matches('[data-gw-pick-go],[data-gw-pick-cancel],[data-gw-pick-pos]')) { _pg.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } } } return !!b; };
     const txt = (b) => b.textContent.replace(/\s+/g, ' ').trim();
     const btn = (re) => [...d.querySelectorAll('button')].find((b) => re.test(txt(b)) && !b.disabled);
     const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };
@@ -244,7 +244,7 @@ module.exports = async function r39({ ROOT, TMP, ok, head, fx, stub }) {
     const one = ins();
     if (one[0]) await S.type(one[0], act.slice(-4));
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].find((x) => x.textContent.replace(/\s+/g, '').startsWith(act))), 300);
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const dlg = await S.until(() => S.dialog());
     const title = dlg ? (dlg.querySelector('.font-black') || {}).textContent : '';
     await S.click(dlg ? [...dlg.querySelectorAll('button')][0] : null, 400);   // ✕

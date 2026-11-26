@@ -58,7 +58,7 @@ const flat = M.flattenVoyages(allV);
 const fab = (q) => { M._mirThreadReset && M._mirThreadReset(); const a = M.answerOneRaw(q, { app: 'tally', voyages: allV, flat, containers: [], countFallback: true, accepted: false, modeChoice: 'both', _trace: {} }); return a == null ? null : String(a); };
 for (const q of ['평택항 부두 안내', '리퍼 컨테이너 검수 주의사항', '리퍼 검수 요령']) T(!M.isShipAskText(fab(q) || ''), `«${q}» 배를 안 되묻는다`, fab(q));
 for (const q of ['리퍼 몇 대', 'X-RAY 위치', '브리핑', '리퍼 온도 알려줘', '리퍼 온도 안내해줘', 'X-RAY 대상 무엇', '평택 양하 안내', '선적 리퍼 안내']) T(M.isShipAskText(fab(q) || '') || /브리핑/.test(fab(q) || ''), `«${q}» 는 종전대로(배를 묻거나 브리핑)`, fab(q));
-const chips = M.shipPickChips('어느 배 말씀인지', 'XTPG 리퍼 몇 대', allV, Date.now());
+const chips = M.shipPickChips('어느 배 말씀인지', 'XTPG 리퍼 몇 대', allV, Date.parse('2026-11-25T16:00:00+09:00'));   /* 5.25: 시험 시각을 자료의 작업 창(11-25 10:00~22:00) 안으로 고정 — 날짜가 지나면 깨지던 시험 */
 T(chips.length && chips.every((c) => !/XTPG XTPG/.test(c)) && chips.some((c) => c === 'XTPG 리퍼 몇 대'), `추천 단추에 배 코드 한 번 (${chips.join(' / ')})`);
 
 console.log('⑤ 브리핑 출항 시각');

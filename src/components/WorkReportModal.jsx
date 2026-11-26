@@ -15,6 +15,7 @@ import AdminWorkStart from './AdminWorkStart.jsx';   // 5.20: 관리자 작업 �
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
+import { myReportEquipOf } from '../utils.js';   // 5.24-03: 그 조 등록 호기를 «내 호기»로(판정 한 벌)
 import { cleanReportBays, canEditReport, otherRunningWork, switchReasonOf, pauseSwitchReasonsFor, getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, shiftReportContainers, isFerry1700Ship, ferryReportCuts, isHatchSkipShipInfo, hatchOpenableFor, hatchPanelDetailOf, formatHatchBays, getEquipNumber, setEquipNumber, buildGangShiftReport, crewCraneNo, shiftCutMs, shiftReportKey } from '../utils.js';   // 3.36: 시작보고 호기 = 앱 호기(한 벌)
 import { VoyageBlock, ferryPagesOf, ferryCutItem } from './Ferry1700Alert.jsx';   // 3.66: 주야간 작업보고도 17시 창과 같은 갱별 카드·계산 한 벌
 import { ref, set, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
@@ -34,6 +35,15 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual | daynight
   // V8.10: 현재 항차 부두 기준 장비 목록(PCTC 1~4 / PNCT 1~5). 항차 없으면 1~5 전체.
   const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
+  //  ★ 5.24-03 «내 호기» — 이 폰 머리 호기보다 **그 조에 내가 등록된 호기**가 먼저, 다음은 내가 마지막으로 시작·재개 보고한 호기, 마지막이 폰 머리 호기.
+  //    사건 SWAL 2611N 2026-11-25 21:45 — 김성일은 «11-25 야간» 4호기로 등록하고 4호기 해치를 보고했지만 4호기 양하 시작 보고가 없었고,
+  //    폰 머리 호기도 4호기가 아니어서 완료 보고 화면이 남(최원형)이 시작한 3호기를 기본으로 잡았다. 검수사 00:45 «분명 4호기로 작업보고를 했는데
+  //    양하완료 자동보고는 3호기로 지정되어 있었습니다. 그래서 수동보고로 처리하였습니다».
+  const [eqTick, setEqTick] = useState(0);   // 5.24-03: 앱 호기가 바뀌면(equipChanged) «내 호기»를 다시 잰다
+  const myEquip = useMemo(() => {
+    try { return myReportEquipOf(voyage, inspector, equipNumbers, getEquipNumber()); }
+    catch (e) { console.warn('[5.24-03] 내 호기 찾기 실패 — 폰 머리 호기로', e); return equipNumbers.includes(getEquipNumber()) ? getEquipNumber() : ''; }
+  }, [inspector, voyage?.info, voyage?.reports, equipNumbers.join(','), eqTick]);
   // V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업갯수를 작업보고로 기록한다.
   const isHatchSkipShip = isHatchSkipShipInfo(voyage?.info);   // 1.56-06: 단일 소스(utils) — ATPR 추가(자동 해치, 검수사 확정 2026-08-12)
   // V8.10: 주야간 보고 — 진입 시 시각 자동 판정(reportShiftToShow), 토글로 수동 전환.
@@ -100,7 +110,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [cmErr, setCmErr] = useState('');
   const [pauseTarget, setPauseTarget] = useState({ equip: '', mode: '' });
   // M5.79 수동 보고용
-  const [manualEquip, setManualEquip] = useState(lastEquip || '1호기');
+  const [manualEquip, setManualEquip] = useState(myEquip || lastEquip || '1호기');
+  useEffect(() => { if (open && myEquip) setManualEquip(myEquip); }, [open, myEquip]);   // 5.24-03: 수동 보고도 내 호기로 시작(고르면 바뀐다)
   const [manualMode, setManualMode] = useState('discharge');
   const [manualAction, setManualAction] = useState('');   // 'pause' | 'resume' | 'done'
   const [manualReason, setManualReason] = useState('');
@@ -202,7 +213,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
          다른 갱 몫을 대신 보고할 때는 눌러 바꾼다 — 그 값은 이번 열림에만 쓰인다(STMJ 2663E 10-15 05:43 3호기 작업 중 2호기 몫 닫힘, 정상).
          앱 호기가 없거나 이 부두에 없는 번호면 종전대로(해치·콘박스 = 진행 중 호기). */
     setHatchEquip(''); setConBoxEquip('');
-    if (equipNumbers.includes(now)) setManualEquip(now);
+    //  5.24-03(감사 중1): 열 때 앱 호기보다 그 조에 등록한 내 호기를 먼저 — 위 효과보다 뒤에 돌아 덮어쓰던 것을 막는다.
+    { const mine = myEquip || now; if (equipNumbers.includes(mine)) setManualEquip(mine); }
     /*   양하·선적도 지금 보고 있는 작업으로 맞춘다 — 호기의 진행 중 작업이 하나가 아니면(시작을 안 눌렀거나 양하·선적 둘 다) 보고 모드·항차를 이것으로 정한다(equipModeOf).
          종전엔 지난번 시작 화면에서 고른 값(처음엔 양하)이라, 선적 중 닫힘이 양하 항차로 나갔다(실측 STMJ 2663E 10-15 05:43 2호기 6번 CLOSE — 선적 중인데 mode discharge). */
     if (pageMode === 'loading' || pageMode === 'discharge') setSelectedMode(pageMode);
@@ -222,7 +234,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   equipNumbersRef.current = equipNumbers;
   useEffect(() => {
     //  4.45-01: 앱 호기가 바뀌면 해치·콘박스·수동 보고도 따라간다(위 열림 때와 같은 뜻).
-    const onEq = (e) => { const n = (e && e.detail) || getEquipNumber() || '1호기'; setSelectedEquip(n); setHatchEquip(''); setConBoxEquip(''); if (equipNumbersRef.current.includes(n)) setManualEquip(n); };
+    const onEq = (e) => { const n = (e && e.detail) || getEquipNumber() || '1호기'; setEqTick((t) => t + 1); setSelectedEquip(n); setHatchEquip(''); setConBoxEquip(''); if (equipNumbersRef.current.includes(n)) setManualEquip(n); };
     window.addEventListener('equipChanged', onEq);
     return () => window.removeEventListener('equipChanged', onEq);
   }, []);
@@ -271,7 +283,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     activeByEquip[w.equip].push(w);
   });
   //  4.45-01: 앱 호기(이 부두 번호일 때만) — 해치·콘박스 기본값의 첫째. 없을 때만 진행 중 호기 첫 번호(종전).
-  const myEquip = equipNumbers.includes(getEquipNumber()) ? getEquipNumber() : '';
+  //  5.24-03: myEquip 는 위(equipNumbers 다음)에서 — 그 조 등록 호기 → 내 마지막 시작 보고 호기 → 폰 머리 호기.
   const defaultReportEquip = myEquip || Object.keys(activeByEquip)[0] || '';
 
   /*  ★ 2.98-11 — **조용한 실패 금지** (3금지 ③).
@@ -651,6 +663,18 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               <div className="space-y-2">
                 <div className="text-xs font-bold text-dim-200">진행 중인 작업</div>
                 {/* 4.45-01: 내 호기 줄을 맨 위에 «내 호기» 로 — 옆 줄의 중단·완료를 잘못 누르지 않게(검수사 «클릭 미스나 무심코 보고를 누르면 잘못된 호기로 보고가 됩니다») */}
+                {/* ★ 5.24-03 내 호기에 시작 기록이 없는데 남의 호기 작업만 있으면, 남의 호기 단추를 누르기 전에 내 호기 완료 길을 먼저 보인다(SWAL 2611N 4호기 사건). */}
+                {myEquip && !activeByEquip[myEquip] && Object.keys(activeByEquip).length > 0 && (
+                  <div data-my-equip-nostart="1" className="bg-orange-950/40 border border-orange-700 rounded-pill p-2 space-y-2">
+                    <div className="text-xs font-bold text-orange-200">내 호기 {myEquip} — 시작 보고가 없습니다. 아래는 다른 호기 작업입니다.</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['discharge', 'loading'].map((m) => (
+                        <button key={m} onClick={() => { setManualEquip(myEquip); setManualMode(m); setManualAction('done'); setView('manual'); }}
+                          className="py-2.5 rounded-pill text-xs font-bold bg-orange-700 hover:bg-orange-600 text-white">{myEquip} {m === 'discharge' ? '양하완료' : '선적완료'}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {Object.entries(activeByEquip).sort(([a], [b]) => (b === myEquip) - (a === myEquip)).map(([equip, works]) => (
                   <div key={equip} className="bg-ink-800/40 border border-line rounded-pill p-2 space-y-2" data-my-equip={equip === myEquip ? '1' : undefined}>
                     <div className="flex items-center gap-2 mb-1">

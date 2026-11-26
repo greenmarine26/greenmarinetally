@@ -158,6 +158,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
   const [fixQuery2, setFixQuery2] = useState('');
   const [fixPickFront, setFixPickFront] = useState(null);
+  //  ★ 5.25 단독 카드에서 고른 «다른 컨» — 고르면 물음창 없이 이 칸에 보이고, 큰 확인 단추가 «선적확인 — ○○○○ 를 이 칸에»로 바뀐다(+ 📍 위치 수정).
+  //    검수사 2026-11-26 07:37 «다른컨 컨넘버 4자리 조회후 선택 다음에 선적확인을 누를수 있게 하면 될듯 합니다. 적용 한 순서만 빠지는 거죠»
+  //    · 07:39 «위치 수정 버튼도 같이 넣어 주시면 됩니다» · 07:57 «이대로 진행해주새요»(미리보기). 사건 — SWAL 2611N 트윈 수정에서 «적용»을 놓치고 «둘 다 확인»을 눌러 엉킴(00:41).
+  const [fixPick, setFixPick] = useState(null);
   const [fixPickBack, setFixPickBack] = useState(null);
   //  ★ 4.26 — 트윈 수정 칸에서 보일 쪽. 'front'(앞만 다름) · 'back'(뒤만 다름) · null(둘 다 다름 — 종전처럼 두 칸). 검수사 2026-10-14 10:33 «앞이 다름 뒤가 다름 그럼 둘다 다름은?»
   const [fixSide, setFixSide] = useState(null);
@@ -620,7 +624,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   const card = queue[0] || null;
   //  4.25-02 (2차 시뮬 하): XRAY 입력칸은 그 카드에서만 — 카드가 넘어가면 닫는다(카드 밖 수정 컨의 칸이 다음 카드 아래에 남아 있었다).
-  useEffect(() => { setEditXCn(null); setXVal(''); setXEVal(''); }, [card?.main?.cn, card?.twin?.cn]);
+  useEffect(() => { setEditXCn(null); setXVal(''); setXEVal(''); setFixPick(null); }, [card?.main?.cn, card?.twin?.cn]);   // 5.25: 고른 컨도 카드가 바뀌면 지운다
 
   //  5.10: «자리 확인» 칸은 검수사가 [📍 자리 확인 방식으로] 를 눌렀을 때만 열린다(2.80 의 «엠티면 스스로 켬» 을 뺐다 —
   //    검수사 2026-11-18 01:08 «수정은 검수사가 눌러서 해야 오류가 없습니다. 맞게 오는데 수정칸이 열리면 오류를 유발시키는 것입니다»).
@@ -1685,18 +1689,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       needXray(c.cn);   // 4.25-02: 그 컨의 입력칸을 연다(카드 밖 컨이면 카드 아래)
       return;
     }
-    //  4.30: 고르면 바로 처리하지 않는다 — 검수사 2026-10-17 «컨을 지정하면 바로 선적이나 양하 처리가 되어 수정이 어려움». 실번호·규격·자리를 보여 주고 한 번 확인한 뒤에만 처리한다.
-    {
-      const _sl = inspectionSealOf(c) || '미입력';
-      const _vb = mode === 'loading' ? '선적확인' : '양하확인';
-      const _fe = String(c.fe || '').toUpperCase() === 'E' ? '엠티' : (String(c.fe || '').toUpperCase() === 'F' ? '풀' : '풀/엠티 미상');
-      const okPick = await ask({
-        title: '이 컨으로 처리합니까',
-        message: `${c.cn}\n실번호 ${_sl} · ${isoShown(c.iso) || c.iso || '규격 미상'} · ${_fe} · POD ${c.pod || '-'}\n원래 자리 ${c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '자리 없음'}\n\n${card.pos} 자리로 ${_vb}합니다. 번호가 다르면 [취소] 하고 다시 고르세요.`,
-        confirmLabel: _vb, cancelLabel: '취소',
-      });
-      if (!okPick) return;
-    }
+    //  4.30: 고르면 바로 처리하지 않는다(검수사 2026-10-17 «컨을 지정하면 바로 선적이나 양하 처리가 되어 수정이 어려움»).
+    //  ★ 5.25: 물음창 대신 카드 칸에 고른 컨(실번호·규격·풀엠티·POD·원래 자리)을 보이고, 큰 확인 단추 한 번으로 끝낸다(applySinglePick).
+    setFixPick(c);
+  };
+  const applySinglePick = async () => {
+    const c = fixPick;
+    if (busy || !card || !c) return;
+    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }
+    if (xrayMissingByCn(c.cn)) { needXray(c.cn); return; }
     if (!(await askIfAway(c, card.main, card.pos))) return;   // 2.80-02 다른 베이·다른 양하항 안내(4.25-02 — 트윈 «이 한 대만» 과 한 벌)
     if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
     setBusy(true);
@@ -1710,6 +1711,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const _alone = (!!card.twin && (c.cn === card.main.cn || c.cn === card.twin.cn))
       || !!findTwinCandidate(c, remaining.filter(x => x.cn !== c.cn), new Set(), shipImo, shipName);
     noteWorked(c, _alone);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
+    setFixPick(null);
     afterFix();
   };
 
@@ -2250,7 +2252,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    같은 일을 하는 단추를 한 줄(44px · 크게 48px)로 모은다. 누르면 종전 그 칸이 아래에 열린다 — 하는 일은 한 줄도 안 바뀐다.
   //    트윈은 «앞만 다름 · 뒤만 다름 · 둘 다 다름»(검수사 2026-10-14 10:33 «앞이 다름 뒤가 다름 그럼 둘다 다름은?») + «싱글로 한 대씩 · 보류».
   const closeFix = () => {
-    setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixSide(null); setPosPick(false);   // 4.27: 위치 틀림 고르기 줄도 닫는다
+    setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); setFixPick(null); setFixSide(null); setPosPick(false);   // 4.27: 위치 틀림 고르기 줄도 닫는다
     //  4.26-02 (4.25-02 기록만): 수정 칸이 닫히면 카드 밖 컨(수정으로 고른 컨)의 XRAY 칸도 닫는다 — 다시 열면 치다 만 값이 남아 있었다. 카드 안 컨의 칸은 그대로.
     if (editXCn && editXCn !== card?.main?.cn && editXCn !== card?.twin?.cn) { setEditXCn(null); setXVal(''); setXEVal(''); }
   };
@@ -2578,6 +2580,39 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               )}
               <button onClick={() => setSingleMode(false)} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">트윈으로 돌아가기</button>
             </div>
+          ) : (card.twin && fixOpen && (fixPickFront || fixPickBack)) ? (
+            /* ★ 5.25 트윈 — 앞·뒤를 고르면 «트윈 한 번에 확인»(계획 두 대)이 사라지고 이 단추가 고른 컨으로 확인한다. 아래 «선택한 수정 적용» 단추는 없앴다
+                 (검수사 2026-11-26 00:41 «적용부분을 여러번 놓치고 바로 둘다확인 처리를 했습니다»). */
+            <div className="space-y-2" data-gw-pick="twin">
+              <button onClick={handleTwinFixApply} disabled={busy} data-gw-pick-go="1"
+                className="gw-go w-full rounded-pill font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex flex-col items-center justify-center">
+                <span className="flex items-center gap-2">{busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}고른 컨으로 {mode === 'discharge' ? '양하' : '선적'}확인</span>
+                <span className="mono text-sm">{fixPickFront ? `앞 ${String(fixPickFront.cn).slice(-4)}` : '앞은 계획대로 묻습니다'} · {fixPickBack ? `뒤 ${String(fixPickBack.cn).slice(-4)}` : '뒤는 계획대로 묻습니다'}</span>
+              </button>
+              <button onClick={() => { const a = fixPickFront || fixPickBack, b = fixPickFront && fixPickBack ? fixPickBack : null; closeFix(); setHoldOpen(false); setPosTwin(b); setPosMateCn(b ? null : (fixPickFront ? card.twin.cn : card.main.cn));   /* 감사 하3: 한쪽만 고쳤으면 남은 짝이 다음 카드(pickPosWrong 과 같다) */ setPosFor(a); }} disabled={busy} data-gw-pick-pos="1"
+                className="gw-ex w-full rounded-pill font-bold border bg-ink-800 border-sky-800 text-sky-300 hover:bg-sky-900 disabled:opacity-50">
+                📍 위치 수정 — 고른 컨을 다른 칸에
+              </button>
+            </div>
+          ) : (!card.twin && fixPick) ? (
+            /* ★ 5.25 단독 — 고른 다른 컨: 큰 확인 단추 하나 + 📍 위치 수정. 물음창·«적용» 단계 없음(검수사 2026-11-26 07:37·07:39·07:57). */
+            <div className="space-y-2" data-gw-pick="single">
+              <div className="bg-amber-950/50 border border-amber-700 rounded-pill p-2 text-xs space-y-1">
+                <div className="flex items-center justify-between"><span className="text-amber-300 font-bold">고른 컨</span>
+                  <button onClick={() => setFixPick(null)} disabled={busy} className="text-dim-300 px-1.5" data-gw-pick-cancel="1">✕ 고르기 취소</button></div>
+                <div className="mono text-lg font-black text-amber-200"><CnText cn={fixPick.cn} /></div>
+                <div className="text-dim-300">실번호 {inspectionSealOf(fixPick) || '미입력'} · {isoShown(fixPick.iso) || fixPick.iso || '규격 미상'} · {String(fixPick.fe || '').toUpperCase() === 'E' ? '엠티' : (String(fixPick.fe || '').toUpperCase() === 'F' ? '풀' : '풀/엠티 미상')} · POD {fixPick.pod || '-'} · 원래 자리 {fixPick.bay ? `${parseInt(fixPick.bay, 10)}-${fixPick.row}-${fixPick.tier}` : '자리 없음'}</div>
+              </div>
+              <button onClick={applySinglePick} disabled={busy} data-gw-pick-go="1"
+                className="gw-go w-full rounded-pill font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
+                {mode === 'discharge' ? '양하' : '선적'}확인 — {String(fixPick.cn).slice(-4)}{mode === 'discharge' ? '' : ` 를 ${card.pos} 에`}
+              </button>
+              <button onClick={() => { const c = fixPick; closeFix(); setHoldOpen(false); setPosFor(c); }} disabled={busy} data-gw-pick-pos="1"
+                className="gw-ex w-full rounded-pill font-bold border bg-ink-800 border-sky-800 text-sky-300 hover:bg-sky-900 disabled:opacity-50">
+                📍 위치 수정 — {String(fixPick.cn).slice(-4)} 를 다른 칸에
+              </button>
+            </div>
           ) : (
             warnOf(card) ? (
               <button onClick={handleConfirm} disabled={busy}
@@ -2707,7 +2742,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               {fixQuery.length >= 3 && fixMatches.length === 0 && (
                 <div className="text-xxs text-dim-400 text-center py-1">남은 작업분에 그 번호가 없습니다</div>
               )}
-              <button onClick={() => { setSlotMode(false); setFixQuery(''); }}
+              <button onClick={() => { setSlotMode(false); setFixQuery(''); setFixPick(null); }}
                 className="w-full text-2xs text-dim-400 py-1">계획대로 확인하는 방식으로 돌아가기</button>
             </div>
           )}
@@ -2755,7 +2790,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 </button>
               ))}
               {fixQuery.length >= 3 && fixMatches.length === 0 && <div className="text-xxs text-dim-400 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
-              <button onClick={() => { setFixOpen(false); setFixQuery(''); }} className="w-full text-xxs text-dim-300 py-1">닫기</button>
+              <button onClick={() => { setFixOpen(false); setFixQuery(''); setFixPick(null); }} className="w-full text-xxs text-dim-300 py-1">닫기</button>
             </div>
           ) : (
             <div className="bg-ink-900 border border-amber-700 rounded-pill p-2 space-y-2">
@@ -2799,11 +2834,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   )}
                 </div>
               ))}
-              <button onClick={handleTwinFixApply} disabled={busy || (!fixPickFront && !fixPickBack)}
-                className="w-full py-2.5 rounded-pill font-bold text-sm bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white flex items-center justify-center gap-2">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
-                선택한 수정 적용{fixPickFront && fixPickBack ? ' (두 대 확인)' : ' (다른 쪽은 묻습니다)'}
-              </button>
+              {/* 5.25: «선택한 수정 적용» 단추는 없앴다 — 고르면 위 큰 단추가 «고른 컨으로 확인»이 된다(data-gw-pick="twin"). */}
               <button onClick={closeFix} className="w-full text-xxs text-dim-300 py-1">닫기</button>
             </div>
           )}

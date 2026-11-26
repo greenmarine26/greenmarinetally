@@ -54,7 +54,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     try { W.eval(vSrc); W.__R37go(JSON.stringify(voy), vk, who); } catch (er) { errs.push('THROW ' + er.message); }
     await sleep(350);
     const d = W.document;
-    const click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); /* 4.29-03: 다른 컨 후보를 누르면 «이 컨으로 처리합니까» 확인 창이 뜬다 — 확인 단추까지 눌러 종전과 같은 흐름으로 잇는다 */ const _md = [...W.document.querySelectorAll('div.fixed.inset-0')].filter((x) => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0]; const _cf = _md ? [..._md.querySelectorAll('button')].find((x) => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null; if (_cf) { _cf.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } } return !!b; };
+    const click = async (b, ms = 250) => { if (b) { b.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); /* 4.29-03: 다른 컨 후보를 누르면 «이 컨으로 처리합니까» 확인 창이 뜬다 — 확인 단추까지 눌러 종전과 같은 흐름으로 잇는다 */ const _md = [...W.document.querySelectorAll('div.fixed.inset-0')].filter((x) => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0]; const _cf = _md ? [..._md.querySelectorAll('button')].find((x) => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null; if (_cf) { _cf.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } else { /* 5.25: 물음창 대신 단독 카드 «고른 컨» 큰 확인 단추 */ const _pg = W.document.querySelector('[data-gw-pick="single"] [data-gw-pick-go="1"]'); if (_pg && !b.matches('[data-gw-pick-go],[data-gw-pick-cancel],[data-gw-pick-pos]')) { _pg.dispatchEvent(new W.MouseEvent('click', { bubbles: true })); await sleep(ms); } } } return !!b; };
     const txt = (b) => b.textContent.replace(/\s+/g, ' ').trim();
     const btn = (re) => [...d.querySelectorAll('button')].find((b) => re.test(txt(b)) && !b.disabled);
     const until = async (fn, ms = 4000) => { const end = Date.now() + ms; let v = fn(); while (!v && Date.now() < end) { await sleep(60); v = fn(); } return v; };
@@ -204,7 +204,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const done0 = doneCns(S);
     await S.type(ins[1], act.slice(-4));   // 뒤 칸에 실제 온 컨
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(act))), 300);
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const dlg = await S.until(() => S.dialog());
     const bs = dlg ? [...dlg.querySelectorAll('button')] : [];
     const big = bs.find((b) => /bg-act/.test(b.className));
@@ -217,7 +217,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
       realPair && !!act && /^앞쪽 \d{4} 도 왔습니까$/.test(title || '') && !!big && S.txt(big) === '싱글 — 이 한 대만' && !!grey && S.txt(grey) === `${front.slice(-4)} 도 확인` && doneX.length === done0.length && !S.dialog() && !S.errs.length,
       JSON.stringify({ front, back, act, title, big: big && S.txt(big), grey: grey && S.txt(grey), done0: done0.length, doneX: doneX.length, errs: S.errs.slice(0, 3) }));
     //  [이 한 대만] — 고른 컨만 완료, 카드의 두 컨은 남고 앞(남은 짝)이 바로 다음 카드
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const dlg2 = await S.until(() => S.dialog());
     await S.click(dlg2 ? [...dlg2.querySelectorAll('button')].find((b) => /bg-act/.test(b.className)) : null, 500);
     const add = doneCns(S).filter((cn) => !done0.includes(cn));
@@ -241,7 +241,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const done0 = doneCns(S);
     await S.type(ins[1], act.slice(-4));
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(act))), 300);
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const dlg = await S.until(() => S.dialog());
     await S.click(dlg ? [...dlg.querySelectorAll('button')].find((b) => /bg-ink-750/.test(b.className)) : null, 500);
     const add = doneCns(S).filter((cn) => !done0.includes(cn)).sort();
@@ -256,7 +256,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const done0 = doneCns(S);
     await S.type(ins[1], front.slice(-4));
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].filter((b) => b.textContent.replace(/\s+/g, '').startsWith(front) && /\d+-\d+-\d+/.test(b.textContent)).slice(-1)[0]), 300);
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const dlg = await S.until(() => S.dialog());
     const title = dlg ? (dlg.querySelector('.font-black') || {}).textContent : '';
     const grey = dlg ? [...dlg.querySelectorAll('button')].find((b) => /bg-ink-750/.test(b.className)) : null;
@@ -280,7 +280,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const done0 = doneCns(S);
     await S.type(ins[1], away.slice(-4));
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(away))), 300);
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const d1 = await S.until(() => S.dialog());
     await S.click(d1 ? [...d1.querySelectorAll('button')].find((b) => /bg-act/.test(b.className)) : null, 400);
     const d2 = await S.until(() => { const x = S.dialog(); return x && /이 자리 화물이 아닙니다/.test(x.textContent) ? x : null; });
@@ -299,7 +299,7 @@ module.exports = async function r37({ ROOT, TMP, ok, head, fx, stub }) {
     const done0 = doneCns(S);
     await S.type(ins[1], away.slice(-4));
     await S.click(await S.until(() => [...S.d.querySelectorAll('button')].find((b) => b.textContent.replace(/\s+/g, '').startsWith(away))), 300);
-    await S.click(S.btn(/^선택한 수정 적용/), 400);
+    await S.click(S.btn(/^고른 컨으로/), 400);
     const d1 = await S.until(() => S.dialog());
     await S.click(d1 ? [...d1.querySelectorAll('button')].find((b) => /bg-ink-750/.test(b.className)) : null, 400);   // 회색 [○○○○ 도 확인]
     const d2 = await S.until(() => { const x = S.dialog(); return x && /이 자리 화물이 아닙니다/.test(x.textContent) ? x : null; });

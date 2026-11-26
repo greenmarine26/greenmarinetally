@@ -62,10 +62,13 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   cand.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   await wait(400);
   //  4.29-03: 후보를 누르면 «이 컨으로 처리합니까» 확인 창이 먼저 뜬다 — 확인 단추까지 눌러야 재배정이 불린다.
-  { const md = [...doc.querySelectorAll('div.fixed.inset-0')].filter(x => /이 컨으로 처리합니까/.test(x.textContent || '')).slice(-1)[0];
-    const cf = md ? [...md.querySelectorAll('button')].find(x => /^(선적확인|양하확인)$/.test(x.textContent.trim())) : null;
-    if (!cf) fail('후보를 눌렀는데 확인 창(이 컨으로 처리합니까)이 안 떴다');
-    cf.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); }
+  //  5.25: 물음창 대신 카드 칸에 «고른 컨» 이 보이고 큰 확인 단추(data-gw-pick-go)가 «선적확인 — 7719 를 …»로 바뀐다 — 그 단추를 눌러야 재배정이 불린다.
+  { const pg = doc.querySelector('[data-gw-pick="single"] [data-gw-pick-go="1"]');
+    if (!pg) fail('후보를 눌렀는데 «고른 컨» 확인 단추가 안 떴다');
+    if (!/7719/.test(pg.textContent || '')) fail('확인 단추에 고른 컨 번호가 없다: ' + pg.textContent);
+    if ([...doc.querySelectorAll('div.fixed.inset-0')].some(x => /이 컨으로 처리합니까/.test(x.textContent || ''))) fail('옛 물음창이 아직 뜬다');
+    if (!doc.querySelector('[data-gw-pick="single"] [data-gw-pick-pos="1"]')) fail('위치 수정 단추가 없다');
+    pg.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); }
   await wait(700);
   const calls = dom.window.__calls || [];
   const re = calls.find(c => c.fn === 'reassign');
