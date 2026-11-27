@@ -43,6 +43,9 @@ const PORT_KR_TO_CODE = {
   '롱비치': 'USLGB', '뉴욕': 'USNYC', '시애틀': 'USSEA', '오클랜드': 'USOAK',
   '함부르크': 'DEHAM', '로테르담': 'NLRTM', '안트워프': 'BEANR',
 };
+//  5.26: 코드 → 한국어 이름(미르 POD별 답) — 위 표 한 벌에서 뒤집는다(첫 이름이 이긴다).
+export const PORT_CODE_KR = Object.entries(PORT_KR_TO_CODE).reduce((o, [k, v]) => { if (/[가-힣]/.test(k) && !o[v]) o[v] = k; return o; }, {});
+
 const PORT_CODE_TO_KR = Object.fromEntries(
   Object.entries(PORT_KR_TO_CODE).map(([k, v]) => [v, k])
 );
