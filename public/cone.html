@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.05-06</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.06</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.27';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.05-06';   // ★ 3.05-06 (TallyOne 5.23-05) PLAN 머리 시프팅은 «쉬프팅 N» 대수만 — 확정·예정·미확정 말을 빼고 «불일치»만(검수앱과 같은 PrintableCargoPlanV2 한 벌, 검수사 2026-11-25 07:54).
+window.__APPV='TallyOne 5.28';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.06';   // ★ 3.06 (TallyOne 5.28) 미르 건의 1차 — loadMirCtx 가 EDI 받은·올린 시각(raw/edi uploadedAt·recvAt 값 넷)을 받아 📊 대수 답 «🗂 근거» 줄이 검수앱과 같다. 엔진은 mir-core 한 벌.
+//   // ★ 3.05-06 (TallyOne 5.23-05) PLAN 머리 시프팅은 «쉬프팅 N» 대수만 — 확정·예정·미확정 말을 빼고 «불일치»만(검수앱과 같은 PrintableCargoPlanV2 한 벌, 검수사 2026-11-25 07:54).
 // (앞 판) window.__CONEV='ConeOne 3.05-05';   // ★ 3.05-05 (TallyOne 5.23) 시프팅 예정(터미널 계획)도 카고플랜 ◇ 에 — 검수앱과 같은 판정 한 벌(predictedShiftingForDisplay) · 재료에 catosPlan/shift.
 // (앞 판) window.__CONEV='ConeOne 3.05-04';   // ★ 3.05 (TallyOne 5.15) PLAN 단을 홀드 있는 베이 중 젤 높은 데크·젤 깊은 홀드 기준으로 맞추고 남는 높이를 칸에(검수앱 PLAN 과 같은 한 벌)
 // (앞 판) window.__CONEV='ConeOne 3.04';   // ★ 3.04 (TallyOne 5.07) 선박을 열면 «기기·선박·부두(동방/PCTC)» 한 줄을 하루 한 번만 접속 기록에 남김
@@ -4172,14 +4173,20 @@ async function loadMirCtx(){
       g('port_mis_data.json'),
       /* ★ 2.70 — 양하 터미널 실적(termWork). 평택 양하분 한 벌(세관 목록 + 추가분)의 «실제로 내린 컨» 재료 — 검수앱 미르와 같은 집합을 세려고 받는다(작은 노드). */
       g('voyages/'+k+'/discharge/termWork.json'),
+      /* ★ 3.06 (TallyOne 5.28) — EDI 받은·올린 시각만(원문 글은 안 받는다 — 작은 값 넷). 미르 📊 대수 답의 «🗂 근거» 줄이 검수앱과 같게. */
+      g('voyages/'+k+'/discharge/raw/edi/uploadedAt.json'), g('voyages/'+k+'/discharge/raw/edi/recvAt.json'),
+      g('voyages/'+k+'/loading/raw/edi/uploadedAt.json'), g('voyages/'+k+'/loading/raw/edi/recvAt.json'),
     ]);
     info=r[0]; cd=r[1]&&r[1].v; cl=r[2]&&r[2].v; okD=!!(r[1]&&r[1].ok); okL=!!(r[2]&&r[2].ok); rd=r[3]; rl=r[4]; rep=r[5]; xl=r[6]; xs=r[7]; hd=r[8]; hl=r[9]; lg=r[10];
     var _code=String(k).split('_')[0];
     var _ss=r[11], _pf=r[12], _pm=r[13], _twD=r[14];
+    var _ediAt=function(u,v){ var o={}; if(u!=null) o.uploadedAt=String(u); if(v!=null) o.recvAt=String(v); return (o.uploadedAt||o.recvAt)? { edi:o } : null; };
+    var _rawD=_ediAt(r[15], r[16]), _rawL=_ediAt(r[17], r[18]);   /* 3.06 */
     _mirCtxKey=k; _mirCtxAt=Date.now();
     _mirCtxCache={ _ctxKey:k, _ctxFrom:_ctxFrom, info:((typeof CT!=='undefined' && CT && k===CT.key && typeof ctInfoFixQc==='function') ? ctInfoFixQc(info, CT.qc) : info)||null, compD:cd||{}, compL:cl||{}, compOk:{D:okD, L:okL}, recD:rd||{}, recL:rl||{},
       reports:rep||{}, xrayList:xl||{}, xraySeals:xs||{}, heldD:hd||{}, heldL:hl||{}, luggD:lg||{},
       twD:(_twD&&typeof _twD==='object')?_twD:{},   /* 2.70 */
+      rawD:_rawD, rawL:_rawL,   /* 3.06 */
       portMisData:(_pm&&typeof _pm==='object')?_pm:null,   /* 2.55-01 */
       shipSpeed:(_ss&&typeof _ss==='object')?_ss:null,
       pilotForecast:(_pf&&typeof _pf==='object')?(function(){ var o={}; o[_code]=_pf; return o; })():(state.pilotForecast||null) };
@@ -4525,8 +4532,8 @@ async function mirAsk(q, opt){   // 2.79: opt.workOnly — 콘 질문바(작업�
       }catch(e){ console.warn('[콘앱 2.70] 평택 양하분 입히기 실패 — 종전 판정으로 셉니다:', e); }
       /* 2.48 — 한 벌 미르(mirAnswer)가 항차 원본 모양으로 읽는다 — 창구 15건(커트씰·보류·수화물확인·해치·현측·작업 시각). */
       const voyage={ info:info, reports:(mc&&mc.reports)||{}, keepOnboard: state.keepOnboard || null, shiftManual: state.shiftManual || null, restowList:(state.restowList&&typeof state.restowList==='object')?state.restowList:null,   /* 2.55-01 — 선사 시프팅 목록도 미르 분모에(MCSN 637N 481 ↔ 521 실측) */
-        discharge:{ completed:(mc&&mc.compD)||{}, records:(mc&&mc.recD)||{}, termWork:(mc&&mc.twD)||{}, mfnList: state.mfnList || null, xrayList:xl, xraySeals:xs, held:(mc&&mc.heldD)||{}, luggConfirm:(mc&&mc.luggD)||{} },   /* 2.70: termWork — 평택 양하분 분모(검수앱 voyageCountsOf 와 같은 집합) */
-        loading:{ completed:(mc&&mc.compL)||{}, records:(mc&&mc.recL)||{}, held:(mc&&mc.heldL)||{} } };
+        discharge:{ completed:(mc&&mc.compD)||{}, records:(mc&&mc.recD)||{}, termWork:(mc&&mc.twD)||{}, mfnList: state.mfnList || null, xrayList:xl, xraySeals:xs, held:(mc&&mc.heldD)||{}, luggConfirm:(mc&&mc.luggD)||{}, raw:(mc&&mc.rawD)||undefined },   /* 2.70: termWork — 평택 양하분 분모(검수앱 voyageCountsOf 와 같은 집합) */
+        loading:{ completed:(mc&&mc.compL)||{}, records:(mc&&mc.recL)||{}, held:(mc&&mc.heldL)||{}, raw:(mc&&mc.rawL)||undefined } };
       /* ★ 2.49 (판 B) — 규칙이 못 받거나 약하게 받은 말은 ConeMir.askMir 가 공용 키(검수사 부담)로 모델을 부른다(번역 → 규칙 재실행 → 자료 답).
            키·모델·하루 상한은 보관소 mir_config 한 칸 — 이 파일에 박혀 있던 키(2.13~2.48)는 지웠다. */
       const ctx={

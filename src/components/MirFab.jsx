@@ -34,7 +34,7 @@ import { isBayTidyAsk } from '../nlSearch.js';   // 4.81-01: «N번 베이 정�
 import { computeTallyData } from '../tallyReport.js';
 import { matchPortMis } from '../portMisMatch.js';
 import { getBayPairs } from '../twin.js';
-import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain } from '../voice.js';
+import { speak, stopSpeak, speakLong, parseSpokenDigits, pickSpeechAlternative, fixSpeechDomain, spokenDigitsInText } from '../voice.js';
 import { logQuerySettled } from '../activityLog.js';
 import { fbMirCraneShipMove, fbSaveTimedCrew } from '../firebase.js';   // 5.14 · 5.22
 import { fbAddClaudeMemo, fbGetSimple, fbListArchive, fbSetVoyageCraneCrew, fbSetCrewPool, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddWorkReport, fbPeekMirWorkCtx, fbApplyMirWorkWrites, fbUndoMirWorkWrites } from '../firebase.js';
@@ -63,6 +63,8 @@ function MirHero({ mood, seed }) {
 export const MIR_IDLE_CLOSE_MS = 20000;
 
 const CLEAN_RE = /[📋📌⚠↩·❄🔁📊📦📖🐱🐟😺😻🎵📍⏳⏱🗺🚢✅📝🧳🌤📈]/g;
+//  5.28 — «🗂 근거»(EDI 시각·파일 이름)·«📣 보고 문장» 줄은 화면용이라 읽지 않는다(감사 2026-11-27).
+const _speakable = (x) => String(x || '').split('\n').filter((l) => !/^\s*(?:🗂|📣)/.test(l)).join('\n');
 
 export default function MirFab({ voyages, inspector, isChief = false, portMisData = {}, pilotForecast = {}, heartbeat = null, onOpenPlan = null, soloButton = true }) {   // 4.89: soloButton=false — 앱에는 단추가 없다(검색줄 «미르야»)
   const [open, setOpen] = useState(false);
@@ -337,7 +339,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
       logQuerySettled('nls', t, { voyageKey: vk || '', via: 'mir' });
       let _long = false;
       const _yardA = !!(r && r.via === 'rules' && r.trace && r.trace.via === 'yard');   // 3.69-01: 야드 답은 천천히(YARD_SPEAK 한 벌)
-      try { const plain = String(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) { _long = true; speakLong(plain); } else speak(plain.slice(0, 400), _yardA ? YARD_SPEAK : { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
+      try { const plain = _speakable(a).replace(CLEAN_RE, ' '); if (plain.length > 400 && speakLong) { _long = true; speakLong(plain); } else speak(plain.slice(0, 400), _yardA ? YARD_SPEAK : { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
       //  3.68: 한 마디는 답 뒤에 이어 읽는다(끊지 않고 append). 칩은 읽지 않는다. 긴 낭독(speakLong·브리핑)은 우선순위 보호가 있어 뒤에 붙이지 않는다(감사 6).
       try { const more = (_fo && !_long) ? (_fo.confirm || _fo.line) : ''; if (more) speak(String(more).replace(CLEAN_RE, ' ').replace(/[«»]/g, ' '), { conversational: true, append: true }); } catch (e) { /* 소리 꺼짐 */ }
       //  ★ 4.40: [이동] — 그 베이로 자동 가이드를 옮긴다(mirGoto 한 벌). 시트는 내려 가이드 첫 카드가 보이게 한다.
@@ -361,6 +363,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         try { text = fixSpeechDomain ? fixSpeechDomain(text) : text; } catch (er) { /* */ }
         text = String(text || '').trim();
         if (text.length < 2) { const d = parseSpokenDigits(alts[0] || ''); if (d && d.length >= 2) text = d; }
+        text = spokenDigitsInText(text);   // 5.28: «사칠이일 어디» → «4721 어디»
         if (text) { setQ(text); ask(text); }
       };
       r.onend = () => setListening(false);
@@ -438,7 +441,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
             <input id="mirFabIn" type="text" value={q} onChange={(e) => { setQ(e.target.value); lastActRef.current = Date.now(); }} onKeyDown={(e) => { if (e.key === 'Enter') ask(q); }}
               placeholder="예: 0230 실번호 · 엠티실 몇 대 남았어" className="flex-1 min-w-0 bg-ink-950 border border-line rounded px-2 py-2 text-sm text-dim-100" />
             <button type="button" onClick={mic} className={`w-11 rounded border border-line ${listening ? 'bg-red-700 text-white' : 'bg-ink-800 text-dim-100'}`} aria-label="말로 묻기">🎤</button>
-            <button type="button" onClick={() => { try { stopSpeak(); const plain = String(lastRef.current || out || '').replace(CLEAN_RE, ' '); if (plain) speak(plain.slice(0, 400), { conversational: true }); } catch (e) { /* */ } }} className="w-11 rounded border border-line bg-ink-800 text-dim-100" aria-label="다시 읽어 주기">🔊</button>
+            <button type="button" onClick={() => { try { stopSpeak(); const plain = _speakable(lastRef.current || out || '').replace(CLEAN_RE, ' '); if (plain) { if (plain.length > 400 && speakLong) speakLong(plain); else speak(plain, { conversational: true }); } } catch (e) { console.warn('[미르] 다시 읽기 실패:', e); } }} className="w-11 rounded border border-line bg-ink-800 text-dim-100" aria-label="다시 읽어 주기(답 전체)">🔊</button>
             <button type="button" onClick={() => ask(q)} disabled={busy} className="px-3 rounded bg-amber-500 text-[#1a1206] font-black text-sm disabled:opacity-60">질문</button>
           </div>
           {(out || dmg.q) && (

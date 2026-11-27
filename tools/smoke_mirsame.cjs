@@ -31,7 +31,7 @@ check('실데이터 — KBTR 2606E 컨 양하+선적', cs.length > 300 && cs.som
 const tallyCtx = () => ({ app: 'tally', smallTalkLast: true, execDevice: true, modeChoice: 'both', countFallback: true, inspector: '연막', isChief: true, chiefData: null, heartbeat: null, portMisData: {}, pilotForecast: pf, shipSpeed: ss, voyages: { [vk]: v }, flat: cs,
   voyageKey: vk, voyage: v, info, mode: 'discharge', containers: cs, compMap: comp, shiftMap: null, bayPairs: null, rfSkip: false, esealBrief: null, photos: null, diagAlerts: [], _trace: {} });
 //  콘앱 — cone.html mirAsk 그대로(shipSpeed·pilotForecast)
-const coneVoyage = { info, reports: v.reports || {}, discharge: { completed: D.completed || {}, records: D.records || {}, xrayList: D.xrayList || {}, xraySeals: D.xraySeals || {}, held: D.held || {}, luggConfirm: D.luggConfirm || {} }, loading: { completed: L.completed || {}, records: L.records || {}, held: L.held || {} } };
+const coneVoyage = { info, reports: v.reports || {}, discharge: { completed: D.completed || {}, records: D.records || {}, xrayList: D.xrayList || {}, xraySeals: D.xraySeals || {}, held: D.held || {}, luggConfirm: D.luggConfirm || {}, raw: (D.raw && D.raw.edi) ? { edi: { uploadedAt: D.raw.edi.uploadedAt, recvAt: D.raw.edi.recvAt } } : undefined }, loading: { completed: L.completed || {}, records: L.records || {}, held: L.held || {}, raw: (L.raw && L.raw.edi) ? { edi: { uploadedAt: L.raw.edi.uploadedAt, recvAt: L.raw.edi.recvAt } } : undefined } };
 const coneCtx = (extra) => Object.assign({ app: 'cone', containers: cs, cone: { rows: [], dischRows: [], stowRows: [] }, execDevice: true, shiftN: 0, mode: 'discharge', modeLabel: '양하', info, compMap: comp, shiftMap: null, voyage: coneVoyage, vsl: info.vsl || '', vslFull: info.vslFull || '', pier: info.pier || '',
   shipSpeed: ss, pilotForecast: pf, voyageKey: vk, records: { discharge: D.records || {}, loading: L.records || {} }, _trace: {} }, extra || {});
 
@@ -76,6 +76,8 @@ check('cone.html loadMirCtx 가 shipSpeed·pilot_forecast/{배} 를 받는다', 
     [`voyages/${vk}/discharge/xrayList.json`]: D.xrayList || {}, [`voyages/${vk}/discharge/xraySeals.json`]: D.xraySeals || {}, [`voyages/${vk}/discharge/held.json`]: D.held || {},
     [`voyages/${vk}/loading/held.json`]: L.held || {}, [`voyages/${vk}/discharge/luggConfirm.json`]: D.luggConfirm || {},
     'shipSpeed.json': ss, 'pilot_forecast/KBTR.json': pf.KBTR || null,
+    [`voyages/${vk}/discharge/raw/edi/uploadedAt.json`]: (D.raw && D.raw.edi && D.raw.edi.uploadedAt) || null, [`voyages/${vk}/discharge/raw/edi/recvAt.json`]: (D.raw && D.raw.edi && D.raw.edi.recvAt) || null,   // ConeOne 3.06: EDI 시각만
+    [`voyages/${vk}/loading/raw/edi/uploadedAt.json`]: (L.raw && L.raw.edi && L.raw.edi.uploadedAt) || null, [`voyages/${vk}/loading/raw/edi/recvAt.json`]: (L.raw && L.raw.edi && L.raw.edi.recvAt) || null,
     [`voyages/${vk}/discharge/termWork.json`]: D.termWork || {},   // ConeOne 2.70: 양하 터미널 실적 — 평택 양하분 한 벌(세관 목록 + 추가분)의 재료
   };
   const hits = [];
@@ -89,7 +91,7 @@ check('cone.html loadMirCtx 가 shipSpeed·pilot_forecast/{배} 를 받는다', 
   check('실제 loadMirCtx 가 돈다', !!mc && !err, err);
   check('재료가 JSON 으로 풀려 있다(Response 아님) — info.vsl·완료', !!(mc && mc.info && mc.info.vsl === 'KBTR' && Object.keys(mc.compD || {}).length > 50 && !(('terminal' + 'Work') in mc)), mc ? JSON.stringify({ vsl: mc.info && mc.info.vsl, compD: Object.keys(mc.compD || {}).length }).slice(0, 160) : '(없음)');
   check('shipSpeed·pilotForecast 도 받는다', !!(mc && mc.shipSpeed && typeof mc.shipSpeed === 'object' && mc.pilotForecast && typeof mc.pilotForecast === 'object'));
-  check('요청 15건(항차 12 + 재료 3: 배 속도·도선·PORT-MIS[2.55-01] · 2.70 양하 터미널 실적 termWork) — 터미널 합계 자료는 받지 않는다', hits.length === 15 && !hits.some((h) => h.includes('terminal' + '_work')) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json') && hits.includes('port_mis_data.json') && hits.includes(`voyages/${vk}/discharge/termWork.json`) && Object.keys((mc && mc.twD) || {}).length > 50, hits.join(','));
+  check('요청 19건(항차 12 + 재료 3: 배 속도·도선·PORT-MIS[2.55-01] · 2.70 양하 터미널 실적 termWork · 3.06 EDI 시각 넷) — 터미널 합계 자료는 받지 않는다', hits.length === 19 && hits.includes(`voyages/${vk}/loading/raw/edi/recvAt.json`) && !hits.some((h) => h.includes('terminal' + '_work')) && hits.includes('shipSpeed.json') && hits.includes('pilot_forecast/KBTR.json') && hits.includes('port_mis_data.json') && hits.includes(`voyages/${vk}/discharge/termWork.json`) && Object.keys((mc && mc.twD) || {}).length > 50, hits.join(','));
   if (mc) {
     //  mirAsk 3592~ 그대로 ctx 를 짠다(cs 는 위 paint 와 같은 한 벌)
     const comp2 = Object.assign({}, mc.compD || {}, mc.compL || {});

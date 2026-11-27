@@ -2247,6 +2247,17 @@ function _normalize(ctx) {
       mirModel.askMir 가 그때만 모델을 부른다(번역 → 규칙 재실행 → 자료 답). 그 밖의 답에는 모델이 끼지 않는다. */
 const TERM_ASK_RE = /(?:뭐|뭔|무엇)(?:야|예요|에요|죠|지|냐|니|가요|입니까)?\s*[?？!.~]*$|무슨\s*뜻|뜻이?\s*(?:뭐|무엇)|(?:이란|란)\s*[?？!.~]*$/;   // 4.35-02
 export function answerOneRaw(query, ctx) {
+  //  5.28 건의(질문 300 #98 · 건의 19·28·53) — 자료에 없는 배 이름을 대면 지금 배로 답하지 않는다.
+  if (!(ctx && (ctx._fieldSub || ctx._fhLoose))) {
+    try { const u = unknownShipAnswer(query, ctx); if (u) { if (ctx && ctx._trace && typeof ctx._trace === 'object') ctx._trace.via = 'unknownShip'; return u; } }
+    catch (e) { console.warn('[미르] 없는 배 판정 실패 — 종전 길로 갑니다:', e); }
+  }
+  const a = _answerOneRawCore(query, ctx);
+  if (ctx && (ctx._fieldSub || ctx._fhLoose)) return a;
+  try { return mirAfterAnswer(query, a, ctx); } catch (e) { console.warn('[미르] 근거·보고 줄 붙이기 실패 — 답만 냅니다:', e); return a; }
+}
+
+function _answerOneRawCore(query, ctx) {
   const q0 = S(query);
   //  3.68 [mirThread]: 대화 중의 «응·두 번째·아니 ○○·그거·됐어» 는 직전 답에 이어 푼다(순수 — 기억은 화면이 접수 시점에 mirThreadCommit 으로 바꾼다).
   //    대화 층이 직접 낸 답은 via='thread'(isWeakAnswer 가 강한 답으로 본다 — 모델·miss 로 안 간다).
@@ -2343,6 +2354,20 @@ export function answerOneRaw(query, ctx) {
         portName: (code) => PORT_CODE_KR[String(code || '').toUpperCase()] || '',
         //  다음 기항 — 배에 남는 화물(평택 출항 쪽 컨의 POD)로 — utils.nextPortAfterPtk 의 화물 판정과 같은 문턱(1.5배). 원문 EDI 는 콘앱에 없어서 두 앱이 같은 재료(펼친 컨 행)로 센다.
         nextPort: () => nextPortFromRows(cs, ship, (k) => PORT_CODE_KR[k] || ''),
+        //  5.28 건의 — 이 항차 원본(리스트·EDI 대조용) · 항차 표기 · 갱 배분(담당 베이) · 지난 항차(선박 통계 + 미르 비서가 받아 둔 보관 자료)
+        raw: v || null, voyLabel: S(info.voy_d || info.voy || ''), app: c.app || 'tally', rfSkip: !!c.rfSkip, isRf: (x) => { try { return isReeferContainer(x); } catch (e) { return !!(x && x.rf); } },
+        qcN: () => { const w = info.qcWork; return w && typeof w === 'object' ? Object.keys(w).length : 0; },
+        gang: (n) => { if (!v) return null; try { return buildGangShift(v, c._bayDef || null, { compMap: c.compMap || null, nGangs: n || null }); } catch (e) { console.warn('[미르] 갱 배분(담당 베이) 실패:', e); return null; } },
+        prev: () => {
+          const lib = c._prevCmp || null;
+          const voys = (lib && lib.voys) || (c.shipLib && c.shipLib.voyages) || null;
+          if (!voys || typeof voys !== 'object') return null;
+          const curK = S(c.voyageKey || '');
+          const list = prevVoyKeys(voys, curK).map((k) => ({ key: k, voy: S(voys[k].voy_d || k.split('_').slice(1).join('_') || k), dis: Number(voys[k].discharge_ptk) || 0, lod: Number(voys[k].loading_ptk) || 0 }));
+          let prevRows = null;
+          if (lib && lib.prevVoy && list[0] && lib.prevKey === list[0].key) { try { prevRows = flattenVoyages({ [lib.prevKey]: lib.prevVoy }); } catch (e) { console.warn('[미르] 지난 항차 펼치기 실패:', e); prevRows = null; } }
+          return { list, prevRows };
+        },
         //  트윈 — 예상 작업 시간·자동 가이드와 같은 판정(twinSplitOf · 평택분 컨번호를 모드별로)
         twin: () => { if (!v) return null; const by = { discharge: [], loading: [] }; cs.forEach((x) => { if (x && x.cn && x._ptk !== false && (!x.voyageKey || !c.voyageKey || x.voyageKey === c.voyageKey)) by[x._mode === 'loading' ? 'loading' : 'discharge'].push(x.cn); });
           try { return twinSplitOf(v, by); } catch (e) { console.warn('[미르] 트윈 세기 실패:', e); return null; } },
@@ -2967,7 +2992,7 @@ export function answerOneRaw(query, ctx) {
     if (!hasShip) return '어느 배 말씀인지 배 이름을 붙여 주시면 인계서를 정리합니다.';
     const ptk = cs.filter((x) => x._ptk !== false);
     const h = c.handover || {};
-    const body = generateHandover(ptk, { byInspector: c.inspector || '', shipName: ship, voyageLabel: S(info.voyNo) || S(info.voy), extraNote: h.finalized ? (h.note || '') : '', rfSkip: !!c.rfSkip,
+    const body = generateHandover(ptk, { byInspector: c.inspector || '', shipName: ship, voyageLabel: S(info.voyNo) || S(info.voy), damage: (() => { try { return Object.values({ ...((v && v.photoIndex) || {}), ...((v && v.photos) || {}) }).filter((x) => x && x.type === 'damage'); } catch (e) { console.warn('[미르] 인계 데미지 모으기 실패:', e); return []; } })(), extraNote: h.finalized ? (h.note || '') : '', rfSkip: !!c.rfSkip,
       loadCollecting: (() => { try { return !!(v && loadingCollecting(v, cs)); } catch (e) { return false; } })() });   // 4.17 (§7.8-⑫): 선적 잔여는 «자료 수집중»
     if (h.finalized) return `인계서 정리했어요. 다음 검수사에게 이 내용 전달하세요.\n\n${body}`;
     return `인계서 초안이에요. 특이사항이나 더 전달할 내용 있으면 아래에 적어 주세요. 없으면 그대로 두셔도 됩니다.\n\n${body}\n\n— 더 전달할 내용이 있으면 아래 칸에 적고 [인계 메모 추가]를 누르세요.`;
@@ -3306,7 +3331,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
-  if (via === 'fieldQA' || via === 'fieldSplit') return false;   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
+  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip') return false;   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
@@ -3897,8 +3922,47 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
 
 /** 규칙 → (약하면) 모델. 화면이 부르는 한 함수. rulesFn(q, trace) 는 그 화면의 answerOneRaw 호출(ctx 는 화면이 감싼다).
     돌려주는 값: { text, via:'rules'|'lexicon'|'translate'|'confirmed'|'model'|null, weak, rulesText, trace } */
+//  5.28 건의 — 지난 항차 견주기 재료: ships/{배}/voyages(평택 대수) + archive/{바로 앞 항차} 양하·선적(사진 빼고). REST·8초 타임아웃.
+async function _getJson(path, ms = 8000) {
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const tm = setTimeout(() => { try { ac && ac.abort(); } catch (e) { /* 이미 끝남 */ } }, ms);
+  try { const r = await fetch(`${FB}/${path}.json`, ac ? { signal: ac.signal } : {}); if (!r.ok) throw new Error(`HTTP ${r.status}`); return await r.json(); }
+  finally { clearTimeout(tm); }
+}
+const _prevCache = {};   // 항차 키 → { at, val } — 같은 항차는 10분 안에 다시 받지 않는다(다운로드 요금 · 검수사 2026-11-17)
+/** 앞 항차 키 — 이 항차보다 먼저 만든 것(createdAt · 없으면 완료·분석 시각) 중 최근 순. 키 글자 순서가 아니라 시각으로 고른다(감사: 코드 개명·자릿수). */
+export function prevVoyKeys(voys, curK) {
+  const t = (x) => Number(x && (x.createdAt || x.completed_at || x.analyzed_at)) || 0;
+  const cur = voys && voys[curK] ? t(voys[curK]) : 0;
+  return Object.keys(voys || {}).filter((k) => voys[k] && k !== curK && (!cur || !t(voys[k]) || t(voys[k]) < cur))
+    .sort((a, b) => (t(voys[b]) - t(voys[a])) || (a < b ? 1 : -1));
+}
+export async function fetchPrevCmp(ctx) {
+  const inf = (ctx && (ctx.info || (ctx.voyage && ctx.voyage.info) || (ctx.shipCtx && ctx.shipCtx.info))) || {};
+  const curK = S((ctx && (ctx.voyageKey || (ctx.shipCtx && ctx.shipCtx.key))) || '');
+  if (curK && _prevCache[curK] && Date.now() - _prevCache[curK].at < 10 * 60 * 1000) return _prevCache[curK].val;
+  //  선박 노드 키 — 항차 화면(VoyagePage)과 같은 순서: IMO → 콜사인 → 선박코드
+  const keys = [S(inf.imo), S(inf.callsign), S(inf.vsl).toUpperCase()].filter(Boolean);
+  if (!keys.length) { console.warn('[미르] 지난 항차 — 선박 키(IMO·콜사인·코드)가 없어 받지 않아요'); return null; }
+  let voys = null;
+  for (const k of keys) { const x = await _getJson(`ships/${encodeURIComponent(k)}/voyages`, 5000); if (x && typeof x === 'object' && Object.keys(x).length) { voys = x; break; } }
+  if (!voys) return null;
+  const prevKey = prevVoyKeys(voys, curK)[0] || null;
+  let prevVoy = null;
+  if (prevKey) {
+    //  보관 항차는 EDI 원문(raw)까지 들어 있어 크다 — 견주기에 쓰는 컨 행(ediContainers·records)만 받는다.
+    const P = (md, part) => _getJson(`archive/${encodeURIComponent(prevKey)}/${md}/${part}`, 8000).catch((e) => { console.warn('[미르] 지난 항차 보관 자료 받기 실패:', md, part, e); return null; });
+    const [de, dr, le, lr] = await Promise.all([P('discharge', 'ediContainers'), P('discharge', 'records'), P('loading', 'ediContainers'), P('loading', 'records')]);
+    if (de || dr || le || lr) prevVoy = { discharge: { ediContainers: de || {}, records: dr || {} }, loading: { ediContainers: le || {}, records: lr || {} }, info: { vsl: S(inf.vsl) } };
+  }
+  const val = { voys, prevKey, prevVoy };
+  if (curK) _prevCache[curK] = { at: Date.now(), val };
+  return val;
+}
+
 export async function askMir(q, ctx, rulesFn, opts = {}) {
   const trace = {};
+  if (ctx && !ctx._prevCmp && PREV_RE.test(S(q)) && PREV_CMP_RE.test(S(q))) { try { ctx._prevCmp = await fetchPrevCmp(ctx); } catch (e) { console.warn('[미르] 지난 항차 자료 받기 실패 — 대수만 견줍니다:', e); } }
   let rulesText = null;
   try { rulesText = rulesFn(q, trace); } catch (e) { console.warn('[미르] 규칙 답 실패:', e && e.message); rulesText = null; }
   const weak = isWeakAnswer(q, rulesText, trace);
@@ -5051,7 +5115,7 @@ export const FIELD_QA = [
   { id: 'safe_crane', p: /크레인\s*(?:밑|아래)|위험\s*구역|매달린|들고\s*있는/, a: '📖 크레인 밑 위험구역\n컨테이너가 매달려 지나가는 길 아래와 크레인 다리(레일) 사이 차선이 위험구역이에요. 들린 컨 아래로는 절대 지나가지 않고, 이동할 때는 크레인이 멈춰 있는지·기사가 나를 봤는지 확인한 뒤 정해진 보행 통로로 가요. 터미널 바닥의 보행 통로·안전 표시를 따르세요.' },
   { id: 'safe_yard', p: /스트래들|야드\s*트랙터|야드트랙터|샤시|셔틀|YT(?![A-Za-z]).{0,10}(?:다닐|걸어|어디로|안전)/, a: '📖 야드 장비 사이를 걸을 때\n야드 트랙터·스트래들캐리어는 사각지대가 커서 기사가 사람을 못 볼 수 있어요. 정해진 보행 통로로만 다니고, 장비 앞뒤를 바로 가로지르지 말고, 건널 때는 기사와 눈을 맞추거나 멈출 때까지 기다려요. 밤에는 반사 조끼·손전등이 필수예요.' },
   { id: 'safe_gangway', p: /갱웨이|사다리|승선|하선|배에\s*올라|오르내리/, a: '📖 갱웨이 오르내리기\n한 사람씩, 두 손으로 난간을 잡고 오르내려요. 짐은 메거나 손을 비워 두고, 비·서리로 미끄러우면 발판 한 칸씩 확인하며 천천히 가요. 갱웨이가 배와 안벽 사이에서 들뜨거나 그물(안전망)이 없으면 오르지 말고 본선·수석에게 알려요.' },
-  { id: 'safe_wind', p: /^(?!.*(?:대기|쉬고|중이야|멈췄|멈춤|중지\s*(?:했|됐|중)|세서\s*중지|으로\s*작업\s*중지)).*(?:바람|풍속|강풍).{0,30}(?:기준|몇\s*미터|몇\s*m|철수|어떻게|해요|하나요|돼요)/, a: '📖 강풍 작업 중지\n크레인 작업을 멈추는 풍속은 터미널·크레인마다 정해 둔 기준이 있어요(크레인 풍속계 경보가 울리면 기사가 멈춰요). 정확한 수치는 터미널 안전 규정을 따르고, 작업이 멈추면 검수원은 수석 지시에 따라 안전한 곳에서 대기하거나 철수해요. 앱에는 미르에게 «강풍 대기» 라고 알려 두면 작업 중단 사유로 남아요.' },
+  { id: 'safe_wind', p: /^(?!.*(?:대기|쉬고|중이야|멈췄|멈춤|중지\s*(?:했|됐|중)|세서\s*중지|으로\s*작업\s*중지)).*(?:바람|풍속|강풍).{0,30}(?:기준|몇\s*미터|몇\s*m|철수|어떻게|해요|하나요|돼요|멈춰|멈추나|멈춰요|중지해|세면)/, a: '📖 강풍 작업 중지\n초속 8m 이상이면 작업을 멈출 수도 있어요 — 권고라서 작업을 해도 지장은 없어요. 실제로 멈추는 건 초속 9m 이상이에요(검수사 확정). 작업이 멈추면 수석 지시에 따라 크레인에서 떨어진 안전한 곳에서 대기하거나 철수해요. 앱에는 미르에게 «강풍 대기» 라고 알려 두면 작업 중단 사유로 남아요.' },
   { id: 'safe_phone', p: /핸드폰|휴대폰|폰.{0,6}(?:보면서|보며)\s*(?:걸|다녀)/, a: '📖 걸으면서 폰 보기\n걸으면서 폰을 보면 안 돼요 — 장비·컨테이너 사이에서는 한 걸음이 위험해요. 멈춰 서서 안전한 자리(장비 길 밖)에서 보고, 이동할 때는 주머니에 넣어요. 손이 바쁠 땐 검색줄 마이크로 미르에게 말로 물으면 화면을 오래 안 봐도 돼요.' },
   { id: 'safe_newbie', p: /실수.{0,10}(?:뭐|많이|자주|조심)|조심하고\s*싶|신입.{0,10}(?:많이|자주)/, a: '📖 처음 몇 주 자주 하는 실수\n① 다른 컨을 확인 눌러 버림 — 누르기 전에 눈앞 번호와 카드 번호 끝 4자리를 한 번 더 봐요. ② 실번호 한 자리 잘못 적기 — 실은 끝까지 읽고 넣어요. ③ 트윈 앞·뒤 순서 바꿔 적기. ④ 데미지 사진 없이 넘어가기. ⑤ 교대 때 인계 안 남기기. 모르는 건 그 자리에서 수석·선배에게 묻는 게 제일 빨라요.' },
 
@@ -5131,7 +5195,7 @@ export const FIELD_QA = [
   { id: 'seal_diff', preferKnow: true, ask: false, p: new RegExp(SL + '.{0,20}(?:리스트랑|다르게|다르|틀려|틀린|안\\s*맞)|현장\\s*실', 'i'), a: '📖 실번호가 리스트와 다를 때\n① 실물 번호를 끝까지 다시 읽고(알파벳·앞자리 0 까지) ② 그래도 다르면 실물 번호를 넣고 컨 상세의 [📷 실오류 보고](컨번호 사진 + 실 사진)로 남겨요. ③ 수석에게 알리면 마감 때 세관 신고에 실오류로 올라가요. 판정 기준 — 알파벳만 빠진 것은 실오류가 아니고, 알파벳이 다르거나 앞자리 0 이 빠지면 실오류예요. 앱은 자료마다 실이 다르면 «다른 자료 실» 로 같이 보여 주고, 하나라도 맞으면 맞음으로 봐요.' },
 
   // ── 리퍼 ────────────────────────────────────────────────────────
-  { id: 'rf_plug_time', p: /리퍼.{0,24}(?:몇\s*분|시간\s*안|플러그\s*아웃|전원.{0,6}(?:연결|끊)|플러그.{0,6}(?:시간|기록))/, a: '📖 리퍼 전원\n리퍼 전원을 빼고 꽂는 일(플러그 인·아웃)은 터미널 리퍼 담당(냉동 블록 작업자)이 해요 — 양하 전 배에서 전원을 빼고, 내린 뒤 야드 리퍼 블록에서 다시 꽂아요. 몇 분 안에 꽂아야 하는지·플러그 아웃 시각 기록은 터미널·선사 규정이라 그 기준을 따르고, 검수원은 설정 온도와 표시 온도를 확인하고 풀 리퍼 사진을 남겨요. 앱은 온도를 막지는 않지만 의무예요.' },
+  { id: 'rf_plug_time', p: /리퍼.{0,24}(?:몇\s*분|시간\s*안|플러그\s*아웃|전원.{0,6}(?:연결|끊)|플러그.{0,6}(?:시간|기록))/, a: '📖 리퍼 전원\n검수원은 리퍼 전원(플러그 인·아웃)에 관여하지 않아요 — 빼고 꽂는 일은 터미널 리퍼 담당이 하고, 앱에도 플러그 시각을 적지 않아요. 선적 때는 빠른 시간 안에 전원을 넣으라고 선원에게 전달해요(검수사 확정).' },
   { id: 'rf_temp_diff', ask: false, p: /리퍼.{0,30}(?:온도|도).{0,20}(?:차이|다르|달라|틀려)|온도.{0,16}(?:리스트랑|표시창).{0,10}(?:다르|달라|차이)/, a: '📖 리퍼 온도가 리스트와 다를 때\n설정 온도(SET)와 표시 온도를 둘 다 봐요. 리스트 설정 온도와 기계 설정이 다르면 사진을 찍어 수석에게 보고해요 — 설정을 검수원이 바꾸지는 않아요. 양하 직후엔 표시 온도가 설정과 몇 도 차이 날 수 있어요(전원이 잠시 빠졌던 것) — 설정이 맞으면 표시 차이는 메모로 남기고, 차이가 크거나 알람이 뜨면 바로 보고해요.' },
   { id: 'rf_power_off', p: /리퍼.{0,24}(?:전원|꺼져|케이블).{0,24}(?:어디|적어|기록|손상)/, a: '📖 리퍼 전원 이상 기록\n전원이 꺼져 있었거나 케이블이 손상된 리퍼는 컨 상세의 [📷 데미지 보고]로 사진(온도 표시창·케이블)과 메모를 남기고 수석에게 바로 알려요. 케이블 손상은 데미지 부위로 고를 수 있어요. 온도가 많이 올라갔으면 표시 온도도 함께 적어요.' },
   { id: 'rf_who', p: /리퍼.{0,24}(?:검수사가\s*확인|꽂혀\s*있는지)/, a: '📖 리퍼 확인은 누가\n전원을 꽂고 빼는 일은 터미널 리퍼 담당이 하고, 검수원은 설정 온도와 표시 온도를 확인하고 풀 리퍼 사진을 남겨요. 온도가 리스트와 다르면 사진을 찍어 수석에게 보고해요(검수원이 설정을 바꾸지는 않아요).' },
@@ -5283,6 +5347,166 @@ function d4of(q) { const m = S(q).match(/(?<![\dA-Za-z-])(\d{4})(?![\d]|[EWNSewn
 const QUAL = /남은|남았|잔여|완료|했어|했나|끝난|끝낸/;
 const SPLIT_RE = /따로|나눠|나누어|각각|구분|별로|씩|이랑|하고|랑|그리고|,/;
 
+//  ── 5.28 건의 1차 — 없는 배 이름 · 대수 답 근거 줄 · 보고 대상 알림(answerOneRaw 감싸기가 부른다)
+function _knownShipText(ctx) {
+  const out = [];
+  const add = (x) => { const t = S(x).toUpperCase().replace(/[^A-Z0-9]/g, ''); if (t.length >= 3) out.push(t); };
+  const walk = (o, d) => { if (!o || typeof o !== 'object' || d > 3) return; for (const k of Object.keys(o)) { const x = o[k]; if (typeof x === 'string') { if (/vsl|ship|name|vessel/i.test(k)) add(x); } else if (x && typeof x === 'object') { if (d < 3 && /^[A-Z0-9]{3,8}(?:_|$)/.test(k)) add(k.split('_')[0]); walk(x, d + 1); } } };
+  try { walk(ctx && ctx.voyages, 0); walk(ctx && ctx.info, 2); walk(ctx && ctx.voyage && ctx.voyage.info, 2); walk(ctx && ctx.pilotForecast, 0); walk(ctx && ctx.portMisData, 0); walk(ctx && ctx.shipLib, 1); } catch (e) { console.warn('[미르] 배 이름 모으기 실패:', e); }
+  try { (knownShipCodes(ctx && ctx.voyages, ctx && ctx.shipLib) || []).forEach(add); } catch (e) { /* 코드 목록이 없으면 이름만 본다 */ }
+  return out;
+}
+/** 질문에 든 영문 배 이름(«MV HANA STAR» · «HANA STAR» — 3글자 넘는 낱말 둘 이상)이 앱 자료 어디에도 없으면 «자료 없음» 답. 아니면 null. */
+export function unknownShipAnswer(q0, ctx) {
+  const q = S(q0);
+  //  배를 가리킨 표기가 있을 때만 — «MV HANA STAR» · «M/V …» · «HANA STAR호». 영문 두 낱말만으로는 판정하지 않는다(선사·항구·품명·인사말을 가로챘다 — 감사 2026-11-27).
+  const m1 = q.match(/(?:^|\s)(?:MV|M\/V|M\.V\.)\s+([A-Za-z][A-Za-z0-9.\- ]{2,40}?)(?=\s*(?:[가-힣?？!,.]|$))/i) || q.match(/(?:^|\s)([A-Za-z][A-Za-z.\-]{2,}(?:\s+[A-Za-z][A-Za-z.\-]{1,}){0,3})\s*호(?=\s|$|[는가의을를에도])/);
+  let name = m1 ? m1[1].trim() : '';
+  if (!name) return null;
+  name = name.replace(/\s+\d{2,5}[A-Z]?$/i, '').trim();   // 뒤에 붙은 항차 번호(0247W)는 이름이 아니다
+  if (!name) return null;
+  const key = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (key.length < 5) return null;
+  const known = _knownShipText(ctx);
+  if (!known.length) return null;   // 비교할 자료가 없으면 판정하지 않는다(콘앱 미로그인 등)
+  if (known.some((k) => k === key || (k.length >= 5 && (k.includes(key) || key.includes(k))))) return null;
+  const inf = (ctx && (ctx.info || (ctx.voyage && ctx.voyage.info))) || null;
+  const cur = inf ? [S(inf.vsl), S(inf.vslFull), S(inf.voy_d || inf.voy)].filter(Boolean).join(' ') : '';
+  return `🚢 «${name.toUpperCase()}» 는 자료에 없는 배예요 — 항차 목록·선석배정·도선 예보에 이 이름이 없어요.`
+    + (cur ? `\n지금 열린 배는 ${cur} 예요 — 이 배를 물으신 거면 배 이름 없이 다시 물어 주세요.` : '\n오늘 배는 배 이름(코드)으로 다시 물어 주세요.');
+}
+const _kst = (ms) => { const n = Number(ms); if (!isFinite(n) || n <= 0) return ''; const d = new Date(n + 9 * 3600e3); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; };
+/** 대수 답 근거 한 줄 — 모드마다 EDI 받은(올린) 시각과 리스트 파일 이름(5.28 건의 19·18) */
+export function basisLineOf(v, modes = null) {
+  if (!v || typeof v !== 'object') return '';
+  const P = [];
+  for (const md of (modes && modes.length ? modes : ['discharge', 'loading'])) {
+    const d = v[md]; if (!d) continue;
+    const e = (d.raw && d.raw.edi) || null;
+    const at = e ? (e.recvAt ? `${_kst(e.recvAt)} 받음` : (e.uploadedAt ? `${_kst(e.uploadedAt)} 올림` : '')) : '';
+    const src = [...new Set(_vals(d.records).map((r) => S(r._source)).filter(Boolean))];
+    if (!at && !src.length) continue;
+    P.push(`${md === 'loading' ? '선적' : '양하'}${at ? ` EDI ${at}` : ''}${src.length ? ` · 리스트 ${src[0]}${src.length > 1 ? ` 외 ${src.length - 1}` : ''}` : ''}`);
+  }
+  return P.length ? `🗂 근거 — ${P.join(' / ')}` : '';
+}
+const SEAL_CUT_RE = /(?:실|씰|봉인)\s*(?:이|가|은|도)?\s*(?:끊|잘[렸려린라]|떨어져|파손)/;
+const DMG_RE = /데미지|파손|찌그러|구멍|찢어|깨[졌져]/;
+/** 답 뒤에 붙이는 것 — ① 📊 대수 답 근거 줄 ② 컨 한 대 답 + 실 끊김·데미지 말이면 수석 보고 알림과 보고 문장(검수사 확정 2026-11-27) */
+export function mirAfterAnswer(q0, a, ctx) {
+  if (typeof a !== 'string' || !a) return a;
+  const q = S(q0); const t = a.trim(); let out = a;
+  const v = ctx && (ctx.voyage || (ctx.shipCtx && ctx.shipCtx.v)) || null;   // 홈·떠 있는 미르가 질문 속 배를 고른 경로(shipCtx)도
+  if (v && /^📊/.test(t) && !/^📊[^\n]*:\s*0\s*대\s*$/.test(t.split('\n')[0]) && /\d+\s*대/.test(t) && !/🗂 근거/.test(t)) {
+    const h0 = t.split('\n')[0]; const ms = [/양하/.test(h0) ? 'discharge' : null, /선적|적하/.test(h0) ? 'loading' : null].filter(Boolean);   // 답이 한 모드면 그 모드 근거만
+    const b = basisLineOf(v, ms); if (b) out += `\n${b}`;
+  }
+  const cnAll = [...new Set(t.match(/\b[A-Z]{4}\d{7}\b/g) || [])];
+  const cn = cnAll.length === 1 ? cnAll[0] : '';   // 한 대로 좁혀졌을 때만(끝 4자리 겹침 두 대면 붙이지 않는다)
+  const REPORT_NOT = /있어\s*\??$|있나|있었|었나|적\s*있|하면|으면|기면|되면|어떻게|뭐|뜻|기준|목록|몇|\?\s*$|？/;   // 물음·가정·과거 확인은 보고가 아니다
+  if (cn && /(?<![0-9-])\d{4}(?![0-9])|[A-Z]{4}\s*\d{6}/i.test(q) && !REPORT_NOT.test(q) && !/📣/.test(out)) {
+    const pos = (t.match(/\b(\d{2}-\d{2}-\d{2})\b/) || [])[1] || '';
+    const md = /선적/.test(t.split('\n')[0]) ? '선적' : '양하';
+    const inf = (v && v.info) || (ctx && (ctx.info || (ctx.shipCtx && ctx.shipCtx.info))) || {};
+    const head = [S(inf.vsl), S(md === '선적' ? (inf.voy_l || inf.voy) : (inf.voy_d || inf.voy))].filter(Boolean).join(' ');
+    const where = `${head ? head + ' ' : ''}${md}, ${cn}${pos ? `, ${pos}` : ''}`;
+    if (SEAL_CUT_RE.test(q)) out += `\n📣 수석에게 보고할 일이에요 — 보고 문장: «${where}, 실 끊김 — 사진 3장(컨번호·끊긴 씰·리씰한 씰) 찍고 리씰 후 카톡 전송 보고»`;
+    else if (DMG_RE.test(q)) out += `\n📣 수석에게 보고할 일이에요 — 보고 문장: «${where}, 데미지 — 손상 부위 사진 찍고 📷 데미지 보고로 카톡 전송 보고»`;
+  }
+  return out;
+}
+
+//  ── 5.28 건의 1차 보조 — 체크디지트 계산 과정 한 줄(ISO 6346 — utils.isoCheckDigit 과 같은 값표·같은 나머지)
+export function cdCalcLine(cn0) {
+  const cn = S(cn0).toUpperCase().replace(/\s/g, '');
+  if (!/^[A-Z]{4}\d{7}$/.test(cn)) return '';
+  const V = {}; let n = 10;
+  for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') { if (n % 11 === 0) n++; V[ch] = n++; }
+  let sum = 0; const parts = [];
+  for (let i = 0; i < 10; i++) { const ch = cn[i]; const x = /\d/.test(ch) ? Number(ch) : V[ch]; sum += x * 2 ** i; parts.push(`${ch}=${x}×${2 ** i}`); }
+  const r = sum % 11;
+  return `🧮 계산 — ${parts.join(' + ')} = ${sum} → 11로 나눈 나머지 ${r}${r === 10 ? '(10이면 0)' : ''} → 끝자리 ${r % 10}`;
+}
+const _vals = (o) => (Array.isArray(o) ? o : Object.values(o || {})).filter(Boolean);
+//  평택분 규격·풀엠티·리퍼 나눔 — 지난 항차 견주기 한 벌(이번·지난 같은 펼치기 flattenVoyages 행)
+function _brk(rows) {
+  const o = {};
+  for (const md of ['discharge', 'loading']) {
+    const r = rows.filter((c) => c && c._ptk !== false && (c._mode || 'discharge') === md);
+    const s20 = r.filter((c) => /^2/.test(S(c.iso))), s40 = r.filter((c) => /^[4L]/.test(S(c.iso)));
+    o[md] = { n: r.length, f20: s20.filter((c) => c.fe === 'F').length, e20: s20.filter((c) => c.fe !== 'F').length, c40: s40.length, rf: r.filter((c) => c.rf && c.fe === 'F').length };
+  }
+  return o;
+}
+const PREV_RE = /(?:지난|앞|전|저번|이전)\s*(?:번\s*)?항차|지난번/;
+const PREV_CMP_RE = /비교|견주|견줘|대비|늘었|줄었|차이|비해|보다|많아|많았|적어|적었|많은지|적은지/;
+/** 5.28 건의 — 지난 항차 견주기 · 리퍼 온도 리스트↔EDI · 무게 차이 큰 컨. H.voy(이 항차 원본) · H.prev({voys, prevKey, prevVoy}) */
+export function fieldExtraAnswer(q, qm, cs, H) {
+  //  ① 지난 항차와 견주기 — 선박 통계(ships/{배}/voyages 평택 대수)와 보관 자료(앞 항차 펼치기)
+  if (PREV_RE.test(qm) && PREV_CMP_RE.test(qm) && typeof H.prev === 'function') {
+    const pv = H.prev();
+    if (pv && pv.list && pv.list.length) {
+      const cur = _brk(cs || []);
+      const d = (a, b) => { const k = a - b; return k > 0 ? `+${k}` : String(k); };
+      const L = [`📈 ${H.vsl || '이 배'} 지난 항차와 견주기(평택분)`];
+      const p0 = pv.list[0];
+      if (pv.prevRows && pv.prevRows.length) {
+        const pr = _brk(pv.prevRows);
+        for (const md of ['discharge', 'loading']) {
+          const x = cur[md], y = pr[md]; if (!x.n && !y.n) continue;
+          L.push(`${md === 'loading' ? '선적' : '양하'} 이번 ${H.voyLabel || ''} ${x.n}대 · 지난 ${p0.voy} ${y.n}대(${d(x.n, y.n)}) — 20풀 ${x.f20}/${y.f20} · 20엠티 ${x.e20}/${y.e20} · 40 ${x.c40}/${y.c40} · 리퍼 ${x.rf}/${y.rf}`);
+        }
+        L.push('(이번/지난 순서)');
+      } else {
+        for (const md of ['discharge', 'loading']) {
+          const x = cur[md]; const y = md === 'loading' ? p0.lod : p0.dis; if (!x.n && !y) continue;
+          L.push(`${md === 'loading' ? '선적' : '양하'} 이번 ${x.n}대 · 지난 ${p0.voy} ${y || 0}대(${d(x.n, y || 0)})`);
+        }
+        L.push('규격·리퍼로 나눈 견주기는 미르 비서(«미르야»)에게 물으면 보관 자료를 받아 보여 드려요.');
+      }
+      if (pv.list.length > 1) L.push('그 앞 항차 — ' + pv.list.slice(1, 4).map((x) => `${x.voy} 양하 ${x.dis}·선적 ${x.lod}`).join(' · '));
+      return { id: 'prevCmp', a: L.join('\n') };
+    }
+  }
+  //  ② 리퍼 설정온도 — 리스트와 EDI 가 다른 컨(1도 이상). 리퍼 판정은 utils 한 벌(isReeferContainer · 풀만) · 리퍼 체크 안 하는 배(rfSkip)는 말하지 않는다.
+  if (/리퍼|냉동/.test(qm) && /온도/.test(qm) && /리스트/.test(qm) && /EDI|이디아이/i.test(qm) && /다른|다르|달라|차이|불일치|안\s*맞/.test(qm)) {
+    const hasEdi = H.raw && ['discharge', 'loading'].some((md) => _vals(H.raw[md] && H.raw[md].ediContainers).length);
+    if (!hasEdi) return H.app === 'cone' ? { id: 'rfTempSrc', a: '❄ 리스트와 EDI 설정온도 대조는 검수앱 미르에서 해요 — 콘앱은 EDI 원본을 받지 않아요.' } : null;
+    if (H.rfSkip) return { id: 'rfTempSrc', a: '❄ 이 배는 리퍼 온도 체크를 하지 않는 배예요(검수사 확정) — 리스트·EDI 설정온도 대조를 하지 않아요.' };
+    const out = []; let nAll = 0;
+    for (const md of ['discharge', 'loading']) {
+      const E = {}; _vals(H.raw[md] && H.raw[md].ediContainers).forEach((c) => { if (c.cn && H.isRf(c) && S(c.fe).toUpperCase() !== 'E') E[c.cn] = c; });
+      nAll += Object.keys(E).length;
+      _vals(H.raw[md] && H.raw[md].records).forEach((r) => { const e = E[r.cn]; if (!e) return; const a1 = parseFloat(r.tmp), a2 = parseFloat(e.tmp); if (isFinite(a1) && isFinite(a2) && Math.abs(a1 - a2) >= 1) out.push(`${r.cn} (${md === 'loading' ? '선적' : '양하'}) 리스트 ${r.tmp}°C · EDI ${e.tmp}°C`); });
+    }
+    if (!nAll) return { id: 'rfTempSrc', a: '❄ 이 항차 EDI 에 풀 리퍼가 없어요 — 대조할 설정온도가 없어요.' };
+    return { id: 'rfTempSrc', a: out.length ? `❄ 리스트와 EDI 설정온도가 1도 넘게 다른 풀 리퍼 ${out.length}대\n` + out.slice(0, 30).join('\n') + '\n실물 설정을 사진으로 남기고 수석에게 보고해요.'
+      : `❄ 리스트와 EDI 설정온도가 다른 리퍼 없어요 — 풀 리퍼 ${nAll}대 대조(1도 이상 차이 기준).` };
+  }
+  //  ③ 무게 차이 큰 컨(물을 때만 — 1.23 의 경고 삭제는 그대로). 재료는 펼친 행 한 벌(flattenVoyages — 리스트 무게 wt 는 40톤 문지기 plausibleListWtKg, EDI 총중량 wtEdi)
+  //    · 리스트와 EDI 둘 다 있는 컨(_src both)만 · 평택분(_ptk). EDI 에는 컨 자체 무게가 들어가므로 규격마다 차이의 중앙값을 빼고 1톤 넘게 벗어난(그리고 실제 차이도 1톤 이상) 컨만.
+  if (/무게|중량|VGM/i.test(qm) && /차이|다른|다르|달라|안\s*맞|벗어/.test(qm) && /컨|목록|뽑|리스트|있어|몇|보여|알려/.test(qm) && !/(?<![0-9-])\d{4}(?![0-9])|[A-Z]{4}\s*\d{6}/i.test(q)) {
+    const rows = (cs || []).filter((c) => c && c._ptk !== false && c._src === 'both' && Number(c.wt) > 0 && Number(c.wtEdi) > 0);
+    if (!rows.length) return H.app === 'cone' ? { id: 'wtDiff', a: '⚖ 리스트·EDI 무게 대조는 검수앱 미르에서 해요 — 콘앱은 EDI 무게를 받지 않아요.' } : { id: 'wtDiff', a: '⚖ 리스트와 EDI 무게가 둘 다 있는 평택분 컨이 없어 대조할 수 없어요.' };
+    const L = []; let total = 0;
+    for (const md of ['discharge', 'loading']) {
+      const by = {};
+      rows.filter((c) => (c._mode || 'discharge') === md).forEach((c) => { const t1 = Number(c.wt) / 1000, t2 = Number(c.wtEdi) / 1000; const k = /^[4L]/.test(S(c.iso)) ? '40' : '20'; (by[k] = by[k] || []).push({ cn: c.cn, t1, t2, d: t2 - t1 }); });
+      for (const k of Object.keys(by)) {
+        const arr = by[k].map((x) => x.d).sort((x, y) => x - y); const med = arr.length % 2 ? arr[(arr.length - 1) / 2] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2;
+        const odd = by[k].filter((x) => Math.abs(x.d - med) >= 1 && Math.abs(x.d) >= 1);   // 리스트가 총중량을 적은 컨(차이 0)은 뺀다
+        if (!odd.length) continue;
+        total += odd.length;
+        L.push(`${md === 'loading' ? '선적' : '양하'} ${k}피트 — 자체 무게(차이 중앙값) ${med.toFixed(1)}t 를 빼고 1톤 넘게 벗어난 ${odd.length}대`);
+        odd.sort((x, y) => Math.abs(y.d - med) - Math.abs(x.d - med)).slice(0, 20).forEach((x) => L.push(`  ${x.cn} 리스트 ${x.t1.toFixed(1)}t · EDI ${x.t2.toFixed(1)}t`));
+      }
+    }
+    return { id: 'wtDiff', a: total ? `⚖ 무게 차이 큰 컨 ${total}대(물으실 때만 보여 드려요)\n` + L.join('\n') + '\n리스트가 화물 무게만 적는 선사가 있어 자체 무게만큼은 늘 차이 나요 — 그만큼을 빼고 남은 차이만 골랐어요.'
+      : '⚖ 리스트와 EDI(VGM) 무게가 자체 무게만큼 넘게 다른 컨은 없어요.' };
+  }
+  return null;
+}
+
 /** cs — 미르 컨 행(평택분 표식 _ptk·_mode), helpers = { ask(q)→답 글, isoCheckDigit, isoFixLastDigit, isoToLabel, portName(code) } */
 export function fieldSplitAnswer(q0, cs, H) {
   const q = S(q0).trim();
@@ -5421,8 +5645,25 @@ export function fieldSplitAnswer(q0, cs, H) {
   }
   //  ⓪-9 N호기 담당 베이 — 앱은 크레인 스플릿(호기별 담당 베이) 자료를 받지 않는다 — 호기별 한 대수로 답한다
   if (/\d\s*호(?:기)?\s*(?:크레인)?.{0,12}(?:담당|맡은).{0,12}베이/.test(qm)) {
+    //  5.28 건의(1·23·50) — 담당 베이는 갱 배분(chiefAnswers.buildGangShift) 구간으로 답한다. 호기 시작을 알려 준 조면 갱이 호기 이름을 갖는다.
+    const _eq = (qm.match(/(\d+)\s*호/) || [])[1];
+    let gs = typeof H.gang === 'function' ? H.gang() : null;
+    let _byQc = 0;
+    if (gs && gs.askGangs && typeof H.qcN === 'function' && H.qcN() > 0) { _byQc = H.qcN(); gs = H.gang(_byQc); }   // 갱 수를 모르면 터미널 호기 표의 호기 수로
+    const gl = gs && Array.isArray(gs.gangs) ? gs.gangs : [];
+    if (gl.length) {
+      const mine = _eq ? gl.find((g) => String(g.equip || '') === String(_eq)) : null;
+      const row = (g) => `${g.equip ? `${g.equip}호기` : `${g.no}번 갱`} — ${g.done || g.fromBay == null ? '맡은 구간 완료' : `베이 ${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')} · 구간 남은 ${g.restTotal != null ? g.restTotal : g.cnt}대 · 이 조 약 ${g.cnt}대`}`;
+      const L2 = [`🏗 ${H.vsl ? H.vsl + ' ' : ''}담당 베이 — 갱 배분 기준(${gs.nGangs}갱 · ${gs.shift && gs.shift.name ? gs.shift.name : '이번 조'})`];
+      if (mine) L2.push(row(mine)); else gl.forEach((g) => L2.push(row(g)));
+      if (_eq && !mine) L2.push(`${_eq}호기가 어느 갱인지는 아직 몰라요 — «${_eq}호기는 19:00 시작» 처럼 호기 시작을 알려 주시면 호기 이름으로 붙여요.`);
+      if (_byQc) L2.push(`갱 수는 터미널 호기 표의 호기 ${_byQc}대로 셌어요 — 다르면 «3갱 갱 배분» 처럼 말씀해 주세요.`);
+      L2.push('갱 배분은 앱이 계산한 구간이에요 — 최종 배분은 포맨 지시가 우선이에요.');
+      return { id: 'craneBay', a: L2.join('\n') };
+    }
     const a = ask('호기별 진행');
-    return { id: 'craneBay', a: (a ? a + '\n' : '') + '호기별 담당 베이(크레인 스플릿)는 앱에 자료가 오지 않아요 — 위는 호기마다 지금까지 한 대수예요. 담당 베이는 포맨·수석이 받은 작업 순서표로 확인해요.' };
+    return { id: 'craneBay', a: (a ? a + '\n' : '') + (H.app === 'cone' ? '담당 베이(갱 배분)는 검수앱 미르에서 답해요 — 콘앱은 베이사전을 싣지 않아요. 위는 호기마다 지금까지 한 대수예요.'
+      : '담당 베이는 갱 배분으로 계산해요 — 이 배는 베이사전이 없어 아직 못 나눠요. 위는 호기마다 지금까지 한 대수예요.') };
   }
   //  ⓪-10 해치커버 위(데크) 첫 단 리퍼
   if (/리퍼|냉동/.test(qm) && /해치\s*커버\s*위|데크|갑판/.test(qm) && /첫\s*단|1\s*단|위치|어디/.test(qm) && !/몇\s*대|몇대/.test(qm)) {
@@ -5452,12 +5693,17 @@ export function fieldSplitAnswer(q0, cs, H) {
   }
   //  ① 컨번호 11자리 검산 — «TCLU 123456 8 이거 번호가 맞는 번호인가요» · 앞 4글자 + 숫자 7(띄어 써도)
   {
-    const m = q.toUpperCase().match(/\b([A-Z]{4})\s*(\d{6})\s*(\d)\b/);
+    //  5.28 건의(신입 43·57) — 숫자 자리에 친 O·I·L 은 0·1 로 읽고 그 사실을 말한다 · 계산 과정을 한 줄로 보인다.
+    const m0 = q.toUpperCase().match(/\b([A-Z]{4})\s*([0-9OIL]{6})\s*([0-9OIL])\b/);
+    const _dg = (x) => x.replace(/O/g, '0').replace(/[IL]/g, '1');
+    const m = m0 && /\d/.test(m0[2] + m0[3]) ? [m0[0], m0[1], _dg(m0[2]), _dg(m0[3])] : null;
+    const _misread = m0 && (m0[2] + m0[3]) !== (m[2] + m[3]) ? `\n✍ 숫자 자리에 쓴 ${[...new Set((m0[2] + m0[3]).replace(/\d/g, '').split(''))].join('·')} 는 숫자로 읽었어요(O→0 · I·L→1) — ${m0[1]}${m0[2]}${m0[3]} → ${m[1]}${m[2]}${m[3]}` : '';
     if (m && /맞는|맞아|맞나|검산|체크\s*디지트|체크디짓|안\s*맞/.test(qm) && H.isoCheckDigit) {
       const cn = m[1] + m[2] + m[3];
+      const _calc = cdCalcLine(cn);
       const ok = H.isoCheckDigit(cn);
-      if (ok === true) return { id: 'cdOne', a: `✅ ${cn} — 검산(ISO 6346)이 맞는 번호예요. 체크디지트 ${m[3]} 가 맞아요.` };
-      if (ok === false) { const fx = H.isoFixLastDigit ? H.isoFixLastDigit(cn) : ''; return { id: 'cdOne', a: `⚠ ${cn} — 검산(ISO 6346)이 안 맞아요.${fx ? ` 앞 10자리가 맞다면 마지막 자리는 ${fx.slice(-1)} 이어야 해요 — ${fx}.` : ''} 실물 번호를 다시 읽어 보세요(한 글자 잘못 본 경우가 많아요).` }; }
+      if (ok === true) return { id: 'cdOne', a: `✅ ${cn} — 검산(ISO 6346)이 맞는 번호예요. 체크디지트 ${m[3]} 가 맞아요.${_misread}${_calc ? '\n' + _calc : ''}` };
+      if (ok === false) { const fx = H.isoFixLastDigit ? H.isoFixLastDigit(cn) : ''; return { id: 'cdOne', a: `⚠ ${cn} — 검산(ISO 6346)이 안 맞아요.${fx ? ` 앞 10자리가 맞다면 마지막 자리는 ${fx.slice(-1)} 이어야 해요 — ${fx}.` : ''} 실물 번호를 다시 읽어 보세요(한 글자 잘못 본 경우가 많아요).${_misread}${_calc ? '\n' + _calc : ''}` }; }
     }
   }
   //  ② 리스트 전체 검산 — «컨번호 체크디지트 틀린 거 리스트에 있나 검증해줘»
@@ -5549,12 +5795,18 @@ export function fieldSplitAnswer(q0, cs, H) {
     }
     if (out.length) return { id: 'deckHold', a: out.join('\n') };
   }
+  //  ⓪-14 지난 항차와 견주기 · 리퍼 온도 리스트↔EDI · 무게 차이 큰 컨(5.28 건의)
+  {
+    const r = fieldExtraAnswer(q, qm, cs, H);
+    if (r) return r;
+  }
   //  ⑨ 양하·선적 각각/합쳐 — «양하 선적 합쳐서 오늘 전체 물량» · «리퍼 양하 대수랑 선적 대수 각각» · «리퍼 양하 적하 합쳐서 플러그 몇 개»
   if (/양하/.test(qm) && /선적|적하/.test(qm) && /합쳐|합해|전체|각각|따로|이랑|랑|하고|대수랑/.test(qm) && /몇|대수|물량|알려/.test(qm) && !/베이/.test(qm) && !QUAL.test(qm)) {
     const kind = /리퍼|냉동/.test(qm) ? '리퍼 ' : /위험물|DG/i.test(qm) ? '위험물 ' : /엑스레이|X-?RAY/i.test(qm) ? 'X-RAY ' : /엠티/.test(qm) ? '엠티 ' : '';
     const d = _n(ask(`${kind}양하 몇 대`)), l = _n(ask(`${kind}선적 몇 대`));
     if (d != null || l != null) {
       let a = `📊 평택 ${kind.trim() || '전체'} — 양하 ${d || 0}대 · 선적 ${l || 0}대 · 합계 ${(d || 0) + (l || 0)}대`;
+      if (/시프팅|리스토|재선적/.test(qm)) { const sh = S(ask('시프팅 몇 대')).split('\n')[0]; if (sh) a += `\n${sh.replace(/^🔄\s*/, '🔄 ')} — 양하·선적 대수에 넣지 않고 따로 세요`; }
       if (kind === '리퍼 ' && /플러그|전원|콘센트/.test(qm)) a += `\n플러그는 풀 리퍼만 세면 돼요 — 양하 ${d || 0}대는 내린 뒤 야드에서, 선적 ${l || 0}대는 실은 뒤 배에서 꽂아요(엠티 리퍼는 전원이 필요 없어요). 같은 시각에 다 꽂혀 있지 않으니 실제 필요한 콘센트 수는 터미널 리퍼 담당이 정해요.`;
       return { id: 'modeSplit', a };
     }

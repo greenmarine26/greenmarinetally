@@ -84,6 +84,12 @@ export function spokenDigitsRaw(text) {
   if (!matches) return '';
   return matches.join('');
 }
+//  5.28 건의(보통 23 · 2차 60) — 말 속의 한글 숫자 낱말(«사칠이일 어디»)을 숫자로 바꾼다. 낱말 전체가 숫자 소리이고 4~11자일 때만(«이삼일» 같은 말은 그대로).
+const _KD = { 공: '0', 영: '0', 일: '1', 이: '2', 삼: '3', 사: '4', 오: '5', 육: '6', 륙: '6', 칠: '7', 팔: '8', 구: '9' };
+export function spokenDigitsInText(text) {
+  const KEEP = /^(?:사이사이|삼삼오오|일일이|오일오일|이삼일일)$/;   // 숫자 소리로만 된 우리말
+  return String(text || '').replace(/(^|[\s,.?!])([공영일이삼사오육륙칠팔구]{4,11})(?=$|[\s,.?!])/g, (m, p, w) => (KEEP.test(w) ? m : p + [...w].map((ch) => _KD[ch]).join('')));
+}
 export function parseSpokenDigits(text) {
   const allDigits = spokenDigitsRaw(text);
   if (allDigits.length >= 4) return allDigits.slice(-4);

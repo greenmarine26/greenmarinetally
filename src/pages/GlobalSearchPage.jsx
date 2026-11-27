@@ -3,7 +3,7 @@ import { fbSaveTimedCrew } from '../firebase.js';   // 5.22 시각이 붙은 교
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
-import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
+import { parseSpokenDigits, speak, stopSpeak, spellKo, spokenDigitsInText } from '../voice.js';
 import { fmtPos, isSentenceQuery, crewShiftKey, resolveCrewSides, koJosa, _storage, SK, isReeferContainer, inspectionSealOf, degText } from '../utils.js';   // 4.49: 큰 실(세관 값) 한 벌   // 3.42: _storage·SK — 모델 호출 기록에 검수원 이름   // 3.8: crewShiftKey·koJosa
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';   // 3.8: 호기–검수원   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
@@ -391,7 +391,7 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
       setTranscript(text);
       if (last.isFinal) {
         // 자연어 그대로 저장
-        const t = text.trim();
+        const t = spokenDigitsInText(text.trim());   // 5.28: 말 속 한글 숫자 낱말을 숫자로
         if (t.length >= 2 || mirThreadAlive(_thCtx())) submitNow(t);   // 3.68: 대화 중 «응» 은 한 글자여도 접수   // 1.69-05: 같은 질문을 다시 말해도 답한다(종전 setQuery는 같은 문자열이면 무반응)
         else {
           const digits = parseSpokenDigits(text);

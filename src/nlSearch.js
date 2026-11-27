@@ -4328,6 +4328,13 @@ export function generateHandover(allContainers, handoverInfo = {}) {
     }
   }
 
+  //  5.28 건의(11·37 · 2차 11) — 이 항차 데미지 보고를 인계에 싣는다(사진 보고 색인 photoIndex type damage — 다음 조가 선측 확인·사진을 이어서 챙긴다)
+  if (Array.isArray(handoverInfo.damage) && handoverInfo.damage.length) {
+    const dm = handoverInfo.damage.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    lines.push('', '━━ 데미지 보고 ━━');
+    lines.push(`📷 ${dm.length}건: ${dm.slice(0, 10).map((x) => `${String(x.cn || '').slice(-4) || '?'}${x.damageTypes && x.damageTypes.length ? `(${[].concat(x.damageTypes).join('·')})` : ''}`).join(', ')}${dm.length > 10 ? ' …' : ''}`);
+  }
+
   // 3) 특이사항 — 데이터로 잡히는 것 (리퍼 온도 미입력, 위험물, XRAY 미처리 등)
   const special = [];
   const reefers = cs.filter(c => isReeferContainer(c) && !c._comp);

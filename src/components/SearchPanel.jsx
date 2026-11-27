@@ -12,7 +12,7 @@ import { askRecordSwitch, switchedAt } from '../modeSwitch.js';   // 5.26: 관�
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
-import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
+import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone, spokenDigitsInText } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, degText } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
 import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
@@ -1548,7 +1548,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
         // V7.56: 후보 전체에서 항만 용어가 든 것을 채택 + 오인식 교정(양아→양하 등).
         //   "양하"를 6번 말해야 인식되던 문제 — STT가 일반어로 받아 적는 것을 사전으로 보정.
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
-        const t = pickSpeechAlternative(alts).trim();
+        const t = spokenDigitsInText(pickSpeechAlternative(alts).trim());   // 5.28: 말 속 한글 숫자 낱말을 숫자로
         setTranscript(t);
         if (summonMirIfCalled(t, parseNaturalQuery(t), 'search-mic')) { setTranscript(''); return; }   // 4.89: «미르야 …» — 미르 시트로
         if (t.length >= 2 || mirThreadAlive({ voyageKey, inspector })) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled('nls', t, { voyageKey }); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다

@@ -149,7 +149,7 @@ function coneOf(vk, v) {
   const xl = D.xrayList || {}, shAll = new Set([...sh.discharge, ...sh.loading]);
   let cs = paint(rows('discharge'), 'discharge').concat(paint(rows('loading'), 'loading')).map((c) => (!c || !c.cn || c._mode === 'loading' || !xl[c.cn]) ? c : { ...c, _xray: true });
   cs = M.applyDischargeUnits(cs, { discharge: { records: D.records || {}, completed: D.completed || {}, termWork: D.termWork || {} } }, shAll).rows;
-  const voyage = { info: v.info, reports: v.reports || {}, discharge: { completed: D.completed || {}, records: D.records || {}, termWork: D.termWork || {}, xrayList: xl, xraySeals: D.xraySeals || {}, held: D.held || {} }, loading: { completed: L.completed || {}, records: L.records || {}, held: L.held || {} } };
+  const voyage = { info: v.info, reports: v.reports || {}, discharge: { completed: D.completed || {}, records: D.records || {}, termWork: D.termWork || {}, xrayList: xl, xraySeals: D.xraySeals || {}, held: D.held || {}, raw: (D.raw && D.raw.edi) ? { edi: { uploadedAt: D.raw.edi.uploadedAt, recvAt: D.raw.edi.recvAt } } : undefined }, loading: { completed: L.completed || {}, records: L.records || {}, held: L.held || {}, raw: (L.raw && L.raw.edi) ? { edi: { uploadedAt: L.raw.edi.uploadedAt, recvAt: L.raw.edi.recvAt } } : undefined } };
   return { app: 'cone', containers: cs, cone: { rows: [], dischRows: [], stowRows: [] }, accepted: true, shiftN: shAll.size, mode: 'discharge', modeLabel: '양하', info: v.info, compMap: comp, shiftMap: null, voyage, vsl: v.info.vsl || '', vslFull: v.info.vslFull || '', pier: v.info.pier || '', voyageKey: vk, records: { discharge: D.records || {}, loading: L.records || {} }, inspector: '연막', _now: NOW };
 }
 let mixed = 0, shifted = 0;
