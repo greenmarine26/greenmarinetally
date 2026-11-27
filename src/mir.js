@@ -119,6 +119,7 @@ import { tmoSignal } from './fetchTimeout.js';   // 4.56-01: 응답 없으면 �
 // ⚠ 이 파일은 순수 함수만 — Firebase 를 직접 부르지 않는다(nlSearch 는 콘앱 번들에도 들어간다).
 //   쓰기는 window.__mirLexiconWrite (App.jsx 가 심음), 읽기는 window.__mirLexicon.
 const PARTICLE = /(이야|인가요|인지|인가|입니까|이죠|하나요|할까요|할까|나요|에서|으로|이|가|은|는|을|를|의|에|로|도|요|야|죠|네|까)$/;
+const BARE_COUNT_RE = /몇\s*(?:대|개|척|건)|대수|수량|물량|총\s*몇|합계|총계/;   // ★ 5.28-02 부름 + 대수 물음은 인사가 아니다
 const STOP = new Set(['보여줘', '보여', '알려줘', '알려', '해줘', '해', '줘', '주세요', '좀', '미르야', '미르', '봐줘', '봐', '좀요', '해봐', '해주세요']);
 const SLOT_RE = { ship: /^[A-Z]{4}$/, cn: /^[A-Z]{4}\d{7}$/, n: /^\d+$/ };
 
@@ -2659,7 +2660,8 @@ function _answerOneRawCore(query, ctx) {
   }
 
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.
-  const _bareCall = p.mirCalled && !RZOR_LEARN_RE.test(q) && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
+  //  ★ 5.28-02 — «미르야 TMPZ 몇 대야»·«미르야 몇 대야» 는 대수 물음이다(라이브 실측 2026-11-27 — 인사로 빠졌다). 부름을 떼면 «TMPZ 몇 대야» 와 같은 길로 간다.
+  const _bareCall = p.mirCalled && !BARE_COUNT_RE.test(q) && !RZOR_LEARN_RE.test(q) && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
   if (p.mirHello || _bareCall) {
     //  2차 시뮬 지적 — «미르 점심 먹었어?»·«미르 점심은?» 은 인사가 아니라 잡담(3.7-06)이다. 부름만 있어도 잡담 그물이 먼저 받는다.
     try { const st = mirSmallTalk(q); if (st) return st; } catch (e) { /* */ }
