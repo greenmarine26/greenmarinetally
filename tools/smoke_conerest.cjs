@@ -283,7 +283,8 @@ const sumAny = (R, part, side) => (R || []).reduce((a, r) => a + r[part].deck[si
   //  다른 말은 종전 그대로 — «콘 몇 개 남았어» 가 아닌 컨테이너 진행 질문은 콘 답이 가로채지 않는다
   { const { r } = await askM('2번 홀드 컨테이너 몇 대 남았어', FX.pcsz.restRows); ok(!/홀드콘 양하 빼기/.test((r && r.text) || ''), '«컨테이너 몇 대 남았어» 는 콘 남은 답으로 안 간다'); }
   ok(E.isWeakAnswer('2번 홀드 콘 몇개 남았어', '아무 답', { via: 'coneRest' }) === false, 'isWeakAnswer: via=coneRest 는 약하지 않다');
-  ok(E.isWeakAnswer('2번 홀드 콘 몇개 남았어', '아무 답', { via: 'x' }) === true, '(대조) via 표시가 없으면 «몇개» 가 모르는 낱말이라 약하다 — 이 표시가 없으면 새는 것을 보인다');
+  //  5.28-05: «몇개» 는 이제 아는 말(군말 사전) — 대조는 모르는 낱말 «얼추» 로 잰다.
+  ok(E.isWeakAnswer('2번 홀드 콘 얼추 남았어', '아무 답', { via: 'x' }) === true, '(대조) via 표시가 없으면 «얼추» 가 모르는 낱말이라 약하다 — 이 표시가 없으면 새는 것을 보인다');
   console.log(fail ? `\n✗ ${fail}건 실패` : '\n✓ 전부 통과');
   process.exit(fail ? 1 : 0);
 })();

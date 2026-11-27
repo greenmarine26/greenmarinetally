@@ -1884,6 +1884,11 @@ fi
     #  5.27: **미르 질문 300** — 현장 문답 원장·여러 갈래 묶음 대수(따로·나눠·별로·합쳐)·컨 한 대 속성·두 앱 같은 답. 실자료 TMPZ 2041E.
     node tools/smoke_field526.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 질문 300 연막검사 실패 — 배포 금지"; exit 1; }   # 5.27
     node tools/smoke_sugg528.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 건의 1차 연막검사 실패 — 배포 금지"; exit 1; }   # 5.28
+    #  5.28-05: 클로드2 실앱 시험 320문 오답 — 사전 학습(조건 잃는 짝·토씨 잘림·테스터) · 맞는 답 되묻기 · 중단 오인 · 없는 베이·번호 · 콘 셈 · 다음 기항. mir.js 직접 번들도 같이.
+    SMOKE_MB=$(mktemp /dev/shm/hometmp/_smokemb_XXXXXX.cjs)
+    npx esbuild src/mir.js --bundle --platform=node --format=cjs --outfile="$SMOKE_MB" --loader:.js=jsx --jsx=automatic --log-level=error \
+      && node tools/smoke_mir52805.cjs "$SMOKE_MS" "$(pwd)" "$SMOKE_MB" || { rm -f "$SMOKE_MS" "$SMOKE_MB"; echo "✗ 미르 5.28-05 오답 수리 연막검사 실패 — 배포 금지"; exit 1; }   # 5.28-05
+    rm -f "$SMOKE_MB"
     node tools/smoke_mirbusy438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 중 사담 미루기 연막검사 실패 — 배포 금지"; exit 1; }   # 4.38
     node tools/smoke_workanalysis438.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 작업 분석 연막검사 실패 — 배포 금지"; exit 1; }   # 4.39-01
     node tools/smoke_dischargeacc456.cjs "$SMOKE_MS" "$(pwd)" || { rm -f "$SMOKE_MS"; echo "✗ 미르 양하 정확도 연막검사 실패 — 배포 금지"; exit 1; }   # 4.56

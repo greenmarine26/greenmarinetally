@@ -105,7 +105,8 @@ const gemCalls = () => calls.fetch.filter((f) => f.url.includes('generativelangu
   // ⑤ 모르는 낱말인데 번역이 같은 답 → 확인된 것(규칙 답 그대로, 자료 답 안 감)
   const before = gemCalls();
   r = await M.askMir('0230 이거 몇 킬로 나가', K, rules(K), { who: '김성일' });
-  T(r.via === 'translate' && has(r.text, '18,000kg') && gemCalls() - before === 1, `«킬로» 는 번역 한 번으로 확인 — 자료 답으로 안 간다(호출 ${gemCalls() - before}회)`);
+  //  5.28-05 — 끝 번호로 컨을 찾아 무게까지 답한 자료 답은 군말(«킬로») 하나로 약하게 보지 않는다(모델 0회 — 클로드2 시험 320문 «맞게 알아들었나요?» 수리).
+  T(r.via === 'rules' && has(r.text, '18,000kg') && gemCalls() - before === 0, `«킬로» 가 남아도 끝 번호 무게 답은 규칙 답 그대로(호출 ${gemCalls() - before}회 · via=${r.via})`);
 
   // ⑤-2 (3.43-02) 원장(mirKnowledge)이 답했는데 낱말(«어쩌지»)만 몰라 약하게 봤고, 모델이 엉뚱하게(«실번호 의심») 번역해도 원장 답을 지킨다 — 검수사 «씰 잘림 대처법을 물었는데 씰번호 틀림을 알립니다»
   {
@@ -162,7 +163,8 @@ const gemCalls = () => calls.fetch.filter((f) => f.url.includes('generativelangu
   // ⑰ identity 번역(원문 그대로) + 모르는 낱말뿐이던 답 → 규칙 답 «확인», 자료 답 안 감
   const b17 = gemCalls();
   r = await M.askMir('리퍼 몇 대 탔어', K, rules(K), { who: '김성일' });
-  T(r.via === 'confirmed' && has(r.text, '리퍼') && gemCalls() - b17 === 1, `모르는 낱말뿐인 답은 번역이 같으면 «확인된 것» — via=${r.via} 호출 ${gemCalls() - b17}`);
+  //  5.28-05 — 조건(리퍼)을 읽은 자료 답은 군말(«탔어») 하나로 모델에 보내지 않는다.
+  T(r.via === 'rules' && has(r.text, '리퍼') && gemCalls() - b17 === 0, `조건을 읽은 자료 답은 군말이 남아도 규칙 답 — via=${r.via} 호출 ${gemCalls() - b17}`);
   // ⑱ 항차별 memo — 같은 문장이라도 다른 항차면 다시 돌린다(답 문장을 항차 없이 캐시하던 것)
   const N = ctxOf('NSFR_2617N'); dataText = '자료에 없어요.';
   const b18 = gemCalls();

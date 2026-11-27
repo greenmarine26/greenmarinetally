@@ -72,7 +72,8 @@ import { workOrderOf, workOrderText } from './workOrder.js';   // 4.09: 양하 �
 import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
 import { mirKnowledge, mirKnowledgeMulti } from './data/mirKnowledge.js';
-import { isoCheckDigit, isoFixLastDigit } from './utils.js';   // 5.27: 묶음 답의 컨번호 검산(nlSearch 가 쓰는 것과 같은 한 벌)
+import { isoCheckDigit, isoFixLastDigit } from './utils.js';
+import { isHiddenStaff, isTester } from './staffList.js';   // ★ 5.28-05: 테스터(«클로드»·«클로드2») 말은 사전에 익히지 않는다(검수사 2026-11-27 «테스터는 익히지 않음»)   // 5.27: 묶음 답의 컨번호 검산(nlSearch 가 쓰는 것과 같은 한 벌)
 import { PORT_CODE_KR } from './nlSearch.js';   // 5.27: POD별 답에 한국어 항구 이름
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 import { judgeMode, buildReadiness, describeReadiness, loadingCollecting } from './dataReadiness.js';   // 4.17 (§7.8-⑫): 리스트뿐·미선적 = «자료 수집중» 판정 한 벌
@@ -131,6 +132,27 @@ export function mirTokens(q) {
   return String(q || '').toUpperCase().replace(/[?？!.,~·…()\[\]"'«»#$/]/g, ' ').trim().split(/\s+/).filter(Boolean)
     .filter((t) => !STOP.has(t)).map((t) => (t.length > 1 ? (t.replace(PARTICLE, '') || t) : t));
 }
+/** ★ 5.28-05 — 토씨를 떼지 않은 낱말. 별칭의 «되쓸 말»(to)은 이것으로 적는다 — 토씨 떼기가 «베이»→«베» · «온도»→«온» · «엑스레이»→«엑스레» 로 잘라 되쓴 말이 엉뚱한 답으로 갔다(2026-11-27 클로드2 시험). */
+export function mirTokensRaw(q) {
+  return String(q || '').toUpperCase().replace(/[?？!.,~·…()\[\]"'«»#$/]/g, ' ').trim().split(/\s+/).filter(Boolean).filter((t) => !STOP.has(t));
+}
+/** ★ 5.28-05 — 말의 거르기 조건 도장(규격·적공·종류·베이·항구·갑판/홀드·위험물 등급·온도·무게·끝 번호·양하/선적). 별칭은 원문의 조건을 하나도 잃으면 안 된다. */
+const _COND_KEYS = ['digits', 'size', 'fe', 'type', 'bay', 'pol', 'pod', 'zone', 'dgClass', 'un', 'temp', 'weightMin', 'weightMax', 'mode'];
+let _sigDepth = 0;   // 조건 도장을 재는 동안에는 사전 되쓰기를 하지 않는다(parseNaturalQuery → mirRewrite → mirCondSig 돌림 막기)
+export function mirCondSig(q) {
+  let p = null; _sigDepth += 1; try { p = parseNaturalQuery(String(q || '')); } catch (e) { console.warn('[미르 학습] 조건 도장 읽기 실패 — 조건을 잃은 것으로 본다:', e); return null; } finally { _sigDepth -= 1; }
+  const o = {};
+  for (const k of _COND_KEYS) { const v = p && p[k]; if (v === null || v === undefined || v === '' || v === false) continue; o[k] = String(v); }
+  return o;
+}
+/** 원문 조건 중 되쓴 말에서 빠지거나 바뀐 것 — 없으면 빈 배열. */
+export function mirCondLost(from, to) {
+  const a = mirCondSig(from), b = mirCondSig(to);
+  if (!a || !b) return ['?'];   // 읽지 못하면 막는 쪽(감사 하 — 빈 도장이면 별칭이 그대로 통과했다)
+  //  컨 번호로 한 대를 가리킨 말은 번호만 지키면 된다(«끝자리 6627 리퍼 몇 도» → «6627 온도» — 리퍼·양하 같은 거르기는 그 한 대에 이미 들어 있다).
+  if (a.digits && b.digits && String(b.digits).slice(-4) === String(a.digits).slice(-4)) return [];
+  return Object.keys(a).filter((k) => b[k] !== a[k]);
+}
 export function mirSlot(t) {
   if (SLOT_RE.cn.test(t)) return '{cn}';
   if (SLOT_RE.ship.test(t)) return '{ship}';
@@ -149,14 +171,22 @@ function _lex() {
 }
 /** 배운 별칭이 있으면 되쓴 문장을 돌려준다(슬롯은 지금 말의 값으로 채움). 없으면 null. */
 export function mirRewrite(q) {
+  if (_sigDepth) return null;
   const k = mirKey(q);
   if (!k) return null;
   const e = _lex()[k];
   if (!e || e.kind !== 'alias' || !e.to) return null;
   const sl = _slotsOf(q);
+  //  ★ 5.28-05 — 되쓸 말은 토씨를 떼지 않은 원래 말(ok)로 만든다(예전 별칭의 to 는 «베»·«온» 처럼 잘려 있다). 슬롯 수가 다르면 예전 to 를 쓴다.
+  let tpl = String(e.to);
+  if (e.ok) { const t2 = mirTokensRaw(e.ok).map(mirSlot).join(' '); if ((t2.match(/\{(?:ship|cn|n)\}/g) || []).length === (tpl.match(/\{(?:ship|cn|n)\}/g) || []).length) tpl = t2; }
   let i = 0;
-  const out = String(e.to).replace(/\{(ship|cn|n)\}/g, () => sl[i++] || '');
-  return out.trim() || null;
+  const out = tpl.replace(/\{(ship|cn|n)\}/g, () => sl[i++] || '').trim();
+  if (!out) return null;
+  //  ★ 5.28-05 — 원문의 거르기 조건(40피트·영하 18도·14번 베이…)을 잃는 별칭은 쓰지 않는다(그대로 읽는 편이 맞다).
+  const lost = mirCondLost(q, out);
+  if (lost.length) { console.warn('[미르 학습] 조건을 잃는 별칭이라 안 씀 — ' + lost.join('·') + ' «' + String(q).slice(0, 40) + '» → «' + out.slice(0, 40) + '»'); return null; }
+  return out;
 }
 /** 5.14 — 그 말의 별칭이 자동으로 배운 것(auto — 모델 번역 · 같은 폰의 이어진 말 즉석 학습)인가. 사람·클로드가 결산으로 적은 별칭은 auto 가 아니다. 기록을 남기는 말은 이런 별칭으로 되쓰지 않는다(nlSearch). */
 export function mirRewriteIsAuto(q) {
@@ -229,6 +259,8 @@ export function mirAutoAliasReject(from, to) {
   const rest = mirKey(from).replace(/\{(?:ship|cn|n)\}/g, '').replace(/\s+/g, '');
   if (rest.length < 2) return '슬롯을 뺀 글자가 2자 미만인 키';
   if (TIME_ASK_RE.test(String(from)) !== TIME_ASK_RE.test(String(to))) return '시각을 묻는 말이 한쪽에만 있는 짝';
+  const lost = mirCondLost(from, to);   // ★ 5.28-05: «이번 배 40피트 양하 총 몇 대» → «양하 몇 대» 처럼 조건을 잃는 짝(40피트 135 대신 318)
+  if (lost.length) return '원문의 조건(' + lost.join('·') + ')을 잃는 짝';
   return '';
 }
 /** ★ 3.42 — 별칭 한 벌: «from(못 알아들은 말)» 을 «to(미르가 아는 말)» 로 사전에 적는다. 즉석 학습(위)과 모델 번역(mirModel)이 같은 모양으로 쓴다.
@@ -237,10 +269,11 @@ export function mirAutoAliasReject(from, to) {
 export function mirLearnAlias(from, to, by = '', extra = {}) {
   const key = mirKey(from);
   if (!key || !to) return null;
+  if (isHiddenStaff(by) || isTester(by)) { console.warn('[미르 학습] 테스터 말은 익히지 않음 — ' + by); return null; }   // ★ 5.28-05 검수사 «테스터는 익히지 않음»
   const bad = mirAutoAliasReject(from, to);   // 4.86-02: 모델·즉석으로 배우는 별칭(auto)의 거름 — 슬롯만 있는 키 · 시각을 묻는 말과 다른 뜻
   if (bad) { console.warn('[미르 학습] 별칭 거절 — ' + bad + ' «' + String(from).slice(0, 40) + '» → «' + String(to).slice(0, 40) + '»'); return null; }
   const now = Date.now();
-  const entry = { kind: 'alias', from: String(from), to: mirTokens(to).map(mirSlot).join(' '), ok: String(to), by: by || '', at: now, auto: true, hits: 0, ...extra };
+  const entry = { kind: 'alias', from: String(from), to: mirTokensRaw(to).map(mirSlot).join(' '), ok: String(to), by: by || '', at: now, auto: true, hits: 0, ...extra };
   try { if (typeof window !== 'undefined') { if (!window.__mirLexicon) window.__mirLexicon = {}; window.__mirLexicon[key] = entry; } } catch (e) { /* 창 없음(시험) */ }   // 제자리 갱신 — 구독이 오기 전에도 이 폰은 바로 안다
   try { if (typeof window !== 'undefined' && typeof window.__mirLexiconWrite === 'function') window.__mirLexiconWrite(key, entry); }
   catch (e) { console.warn('[미르 학습] 사전 쓰기 실패', e); }
@@ -1492,7 +1525,11 @@ export function answerVoyageFacts(parsed, ctx) {
       L.push(`양하 ${t.totals.dis.n}대 — ${s(t.totals.dis)}`);
       L.push(`선적 ${t.totals.load.n}대 — ${s(t.totals.load)}`);
       if (t.totals.shift && t.totals.shift.n) L.push(`시프팅 ${t.totals.shift.n}대`);
-      L.push(`OOG in ${((t.osIn || {}).rows || []).length} · out ${((t.osOut || {}).rows || []).length} / RF in ${(t.rfIn || []).length} · out ${(t.rfOut || []).length} / 데미지 in ${((t.damage || {}).dmIn || []).length} · out ${((t.damage || {}).dmOut || []).length}`);
+      //  ★ 5.28-05 — 종전 «OOG in N · out N» 은 OS 집계표(OS-IN·OS-OUT — 출발·도착 항 × 규격 × 풀/엠티 묶음) 줄 수였다. OOG 대수가 아니다(2026-11-27 클로드2 시험 — 규격초과 0대와 «OOG in 4 · out 8» 이 어긋나 보였다).
+      const _oogN = (m) => (ctx.containers || []).filter((x) => x && (m === 'loading') === (x._mode === 'loading') && (x.oog || x.fr || x.ot) && x._ptk !== false).length;
+      L.push(`규격초과(OOG·FR·OT) 양하 ${_oogN('discharge')}대 · 선적 ${_oogN('loading')}대`);
+      L.push(`OS 집계표 줄 수 — OS-IN ${((t.osIn || {}).rows || []).length}줄 · OS-OUT ${((t.osOut || {}).rows || []).length}줄 (항구 × 규격 × 풀/엠티 묶음)`);
+      L.push(`RF in ${(t.rfIn || []).length} · out ${(t.rfOut || []).length} / 데미지 in ${((t.damage || {}).dmIn || []).length} · out ${((t.damage || {}).dmOut || []).length}`);
       if (t.sealIn && t.sealIn.length) L.push(`실 목록 in ${t.sealIn.length}`);
       L.push('(마감텔리 파일 자체는 수석 보드에서 만듭니다)');
       return L.join('\n');
@@ -2340,6 +2377,26 @@ function _answerOneRawCore(query, ctx) {
   try { p = parseNaturalQuery(q); } catch (e) { p = null; }
   if (!p) return null;
 
+  //  ★ 5.28-05 — 이 항차 자료에 컨이 한 대도 없는 베이를 물으면 «0대»·«완료 0/0»·«단수 데이터 없음» 대신 그렇다고 말한다(2026-11-27 클로드2 시험 — 82·34·46베이).
+  //    40피트 짝수 베이는 앞뒤 홀수(33·35)도, 홀수 베이는 겹치는 짝수도 같은 자리로 본다. 기록을 남기는 말·뜻을 묻는 말·갈래 다시 부르기는 건드리지 않는다.
+  if (p.bay && hasShip && !(ctx && ctx._fieldSub) && !isWriteParse(p) && !/뜻|뭐야|뭔가요|어떻게|방법|정리|옮겨|옮기|이동|가자|가 줘|가줘|넘어가|열어|띄워|보여\s*줘\s*화면|바꿔|바꾸|바꿀|부터|먼저/.test(q)) {   // 베이 정리(4.81)·베이로 옮기기(4.40)는 제 답이 있다
+    try {
+      const _vk = c.voyageKey || '';
+      //  감사 중 3 — 위치(베이)가 있는 행만, 물은 모드가 있으면 그 모드만 본다. 위치가 아직 없는 자료(선적 리스트뿐)에서는 판정하지 않는다.
+      const _rows = cs.filter((x) => x && (!_vk || !x.voyageKey || x.voyageKey === _vk) && Number(x.bay) > 0 && (!p.mode || (p.mode === 'loading') === (x._mode === 'loading')));
+      const _b = Number(p.bay);
+      if (_rows.length && Number.isFinite(_b) && _b > 0) {
+        const _has = new Set(_rows.map((x) => Number(x.bay)).filter((n) => Number.isFinite(n) && n > 0));
+        const _near = _b % 2 === 0 ? [_b, _b - 1, _b + 1] : [_b, _b - 1, _b + 1].filter((n) => n === _b || n % 2 === 0);
+        if (!_near.some((n) => _has.has(n))) {
+          const _all = [..._has].sort((a1, b1) => a1 - b1);
+          _via('noBay');
+          return `📭 ${_b}번 베이 없음 — 이 항차 자료(EDI·리스트)에 그 베이 컨이 한 대도 없어요. 베이 번호를 다시 봐 주세요 — 컨이 있는 베이는 ${_all.map((n) => String(n).padStart(2, '0')).join('·')} 예요.`;   // «📭 N번 베이 없음» 머리는 대화 층(3.68)이 «없음 답»으로 읽는 꼴
+        }
+      }
+    } catch (e) { console.warn('[미르] 없는 베이 판정 실패:', e); }
+  }
+
   //  ★ 5.27 — 질문 300(검수사 2026-11-27 «지금 올려주는 자료로 미르가 충실히 답할수 있게» · «대략 질문의 의도를 파악하고»).
   //    ① 여러 갈래 대수(따로·나눠·별로·각각·합쳐 — 규격×풀엠티 · 갑판/홀드 · 양하/선적 · POD별 · TEU · 하이큐브 · 클래스별 · 리퍼 온도 조건 · X-RAY 그중 데크 …)는
   //       갈래마다 이 함수를 다시 불러 같은 단일 답의 수로 묶는다(판정 한 벌 — «양하 20피트 풀 몇 대» 와 같은 수).
@@ -2354,7 +2411,15 @@ function _answerOneRawCore(query, ctx) {
       const H = { ask: (s2) => answerOneRaw(s2, { ..._fctx, _fieldSub: true, accepted: false, modeChoice: 'both', _trace: {} }), isoCheckDigit, isoFixLastDigit, isoToLabel, vsl: _shipC,
         portName: (code) => PORT_CODE_KR[String(code || '').toUpperCase()] || '',
         //  다음 기항 — 배에 남는 화물(평택 출항 쪽 컨의 POD)로 — utils.nextPortAfterPtk 의 화물 판정과 같은 문턱(1.5배). 원문 EDI 는 콘앱에 없어서 두 앱이 같은 재료(펼친 컨 행)로 센다.
-        nextPort: () => nextPortFromRows(cs, ship, (k) => PORT_CODE_KR[k] || ''),
+        //  ★ 5.28-05 — PORT-MIS 차항지(출항 답의 «다음 항구» 와 같은 칸)가 있으면 그것이 답이다. 화물로 센 항은 참고로만(2026-11-27 클로드2 시험 — 출항 답은 NINGBO, 다음 기항 답은 상해).
+        nextPort: () => {
+          const _cargo = nextPortFromRows(cs, ship, (k) => PORT_CODE_KR[k] || '');
+          let pm = null; try { pm = typeof c.matchPortMis === 'function' ? c.matchPortMis(c.portMisData || {}, info) : null; } catch (e) { console.warn('[미르] 다음 기항 PORT-MIS 매칭 실패:', e); pm = null; }
+          const np = pm && S(pm.nextPortOut || pm.nextPort).trim();
+          if (!np) return _cargo;
+          const _c = S(_cargo).replace(/^🧭[^—]*—\s*/, '').trim();
+          return `🧭 ${ship || '이 배'} 평택 다음 기항 — ${np} (PORT-MIS 차항지)` + (_c && !/아직 없어요/.test(_c) ? `\n참고 — 배에 남는 화물로는 ${_c}` : '');
+        },
         //  5.28 건의 — 이 항차 원본(리스트·EDI 대조용) · 항차 표기 · 갱 배분(담당 베이) · 지난 항차(선박 통계 + 미르 비서가 받아 둔 보관 자료)
         shipCodes: (() => { try { return new Set([_shipC, ...(knownShipCodes(c.voyages || null) || [])].map((x) => S(x).toUpperCase()).filter(Boolean)); } catch (e) { console.warn('[미르] 배 코드 모으기 실패:', e); return new Set([_shipC].filter(Boolean)); } })(),
         raw: v || null, voyLabel: S(info.voy_d || info.voy || ''), app: c.app || 'tally', rfSkip: !!c.rfSkip, isRf: (x) => { try { return isReeferContainer(x); } catch (e) { return !!(x && x.rf); } },
@@ -3290,7 +3355,7 @@ const CLAUDE_TIMEOUT_MS = 25000;   // 4.65: 오퍼스 대화(소네트 때 15000
 //   감사 실측(3.42 첫 판): 부분 문자열 정규식은 «시프팅»에서 «시»를 떼어 «프팅»을 모르는 낱말로 만들었고, 창구 예시 84개 중 22개가 «모르는 낱말 남음»이었다.
 //   그래서 ① mirTokens(조사·문장부호 제거) 로 낱말을 자르고 ② 사전(아래 낱말 + 창구 예시의 낱말 전부)에 있으면 아는 말, ③ 사전 낱말이 앞머리로 붙은 것(«리퍼가»)·
 //   흔한 어미(했어·열었어·됐어…)를 뗀 것도 아는 말로 본다. 한 글자 낱말은 세지 않는다.
-const KNOWN_WORDS = `베이 리퍼 냉동 엠티 풀 위험물 디지 엑스레이 갑판 데크 홀드 선창 컨테이너 피트 온도 영하 영상 실번호 씰 봉인 잘림 잘린 파손 훼손 손상 대처 대처법 처리 조치 절차 무게 톤 위치 어디 몇 대 개 남은 남았 완료 진행 전체 전부 모두 몽땅 싹 죄다 도합 통틀어 합쳐 합치 수량 불러 뽑아 달라 다오 내렸 내린 누구 누가 소개 시야 시간 지금 오늘 내일 어제 날씨 기온 바람 입항 출항 입출항 접안 언제 며칠 요일 날짜 트윈 가능 불가 초과 불균형 수평 크레인 목록 리스트 양하 선적 쌓 빈자리 자리 평택 끝 끝나 끝났 페이스 속도 퇴근 점심 저녁 아침 걸려 걸리 예상 마치 종료 신고 세관 누락 바뀜 리씰 이상 인계 인수 교대 넘겨 특이사항 전달 있어 없어 있나 없나 찾아 알려 보여 보여줘 주세요 호기 갱 브리핑 마감 마감텔리 텔리 수치 해치 해치커버 커버 현측 우현 좌현 시작 커트 커트씰 봉인 전자봉인 전자 보류 수화물 환적 창고 임시창고 특수 특수제작 특수제작컨 규격 규격초과 치수 콜사인 호출부호 아이엠오 선속 도선 카고플랜 카고 플랜 디스차징 디스차지 스토우지 스토우 인스트럭션 DISCHARGING STOWAGE INSTRUCTION 베이플랜 밝게 어둡게 소리 순서 순서대로 다음 의심 클래스 오픈탑 하이큐브 플랫 탱크 무거운 가벼운 기록 적어 등록 담당 검수원 근무 주간 야간 뜻 어떻게 뭐야 뭔 무슨 미르 미르야 안녕 수고 고마워 힘들 먹 밥 배정 선박 배 작업 선수 선미 현황 상황 상태 대상 번호 열어 열었어 띄워 보자 이거 그거 저거 여기 거기 저기 아직 벌써 우리 이제 얼마 얼마나 언제쯤 몇시 시간당 시간별 제일 가장 화물 비엘 확인 확인된 선사 실오류 화면 하자 맞아 대수 우리배 우리 항 항구 정박 남아 남았어 걸린 걸렸어 들어와 나가 들어 나가는 몇시쯤 쯤 대략 마지막 처음 첫 완료된 완료했어 시작했어 끝났어 열렸어 붙었어 어때 어떤 뭐 무엇 몇번 오픈 클로즈 닫아 닫았어 닫혔어 조 근무자 사람 이름 담당자 현재 지금까지 중 안 못 잘 더 덜 것 거 건 개수 대수 척 척이야 갯수 모레 내일모레 낼모레 엊그제 그제 그저께 그끄저께 글피 어저께 점검 집에`.split(/\s+/).filter(Boolean);
+const KNOWN_WORDS = `베이 리퍼 냉동 엠티 풀 위험물 디지 엑스레이 갑판 데크 홀드 선창 컨테이너 피트 온도 영하 영상 실번호 씰 봉인 잘림 잘린 파손 훼손 손상 대처 대처법 처리 조치 절차 무게 톤 위치 어디 몇 대 개 남은 남았 완료 진행 전체 전부 모두 몽땅 싹 죄다 도합 통틀어 합쳐 합치 수량 불러 뽑아 달라 다오 내렸 내린 누구 누가 소개 시야 시간 지금 오늘 내일 어제 날씨 기온 바람 입항 출항 입출항 접안 언제 며칠 요일 날짜 트윈 가능 불가 초과 불균형 수평 크레인 목록 리스트 양하 선적 쌓 빈자리 자리 평택 끝 끝나 끝났 페이스 속도 퇴근 점심 저녁 아침 걸려 걸리 예상 마치 종료 신고 세관 누락 바뀜 리씰 이상 인계 인수 교대 넘겨 특이사항 전달 있어 없어 있나 없나 찾아 알려 보여 보여줘 주세요 호기 갱 브리핑 마감 마감텔리 텔리 수치 해치 해치커버 커버 현측 우현 좌현 시작 커트 커트씰 봉인 전자봉인 전자 보류 수화물 환적 창고 임시창고 특수 특수제작 특수제작컨 규격 규격초과 치수 콜사인 호출부호 아이엠오 선속 도선 카고플랜 카고 플랜 디스차징 디스차지 스토우지 스토우 인스트럭션 DISCHARGING STOWAGE INSTRUCTION 베이플랜 밝게 어둡게 소리 순서 순서대로 다음 의심 클래스 오픈탑 하이큐브 플랫 탱크 무거운 가벼운 기록 적어 등록 담당 검수원 근무 주간 야간 뜻 어떻게 뭐야 뭔 무슨 미르 미르야 안녕 수고 고마워 힘들 먹 밥 배정 선박 배 작업 선수 선미 현황 상황 상태 대상 번호 열어 열었어 띄워 보자 이거 그거 저거 여기 거기 저기 아직 벌써 우리 이제 얼마 얼마나 언제쯤 몇시 시간당 시간별 제일 가장 화물 비엘 확인 확인된 선사 실오류 화면 하자 맞아 대수 우리배 우리 항 항구 정박 남아 남았어 걸린 걸렸어 들어와 나가 들어 나가는 몇시쯤 쯤 대략 마지막 처음 첫 완료된 완료했어 시작했어 끝났어 열렸어 붙었어 어때 어떤 뭐 무엇 몇번 오픈 클로즈 닫아 닫았어 닫혔어 조 근무자 사람 이름 담당자 현재 지금까지 중 안 못 잘 더 덜 것 거 건 개수 대수 척 척이야 갯수 모레 내일모레 낼모레 엊그제 그제 그저께 그끄저께 글피 어저께 점검 집에 이번 따로 각각 나눠서 그중 중에 정확히 대충 그냥 바로 같이 둘다 해요 돼요 되요 되나요 하나요 맞나요 맞죠 맞지 맞는데 뭐가 뭔가요 뭐에요 에요 이고 인데 이랑 라고 거에요 같아요 있는 있는데 있으면 하는 하면 해야 나오는데 나와요 실린 실려 실려있어요 찍힌 몇대 몇개 대씩 설정 설정온도 숫자 총대수 컨이 컨이야 컨번호 끝자리 알수있나요 볼수 한거 지금까지 셌는지 셌어 판 판으로 자료로 자료 말해줘 말해`.split(/\s+/).filter(Boolean);   // ★ 5.28-05: 군말(이번·따로·같이·실려·몇대·설정…) — 하나만 남아도 맞는 자료 답을 «약한 답»으로 봐 «❓ 제가 맞게 알아들었나요?» 를 붙이고 모델 번역이 조건을 빼먹은 별칭을 익혔다(2026-11-27 클로드2 시험 320문)
 const _ENDINGS = /(했어요|했어|했나요|했니|했지|됐어|됐나요|됐니|났어|었어|였어|있어요|있어|있나요|있니|없어요|없어|없나요|없니|해줘|해요|하자|할까|할래|해봐|해|줘요|줘|인가요|인지|이야|이에요|예요|이지|지요|지|야|요|까|니|나요|는지|은지|던|던가|어요|어|아요|아|을까|을래|ㄹ까|세요|십시오|십시요|주십시오|주세요|주라|해주세요)$/;
 //  낱말 자르기 — mirLearn.mirTokens 는 조사(«로»)까지 떼어 «킬로»를 «킬»로 만든다. 여기서는 어미만 뗀다.
 const _STOP = new Set(['보여줘', '보여', '알려줘', '알려', '해줘', '해', '줘', '주세요', '좀', '미르야', '미르', '봐줘', '봐', '좀요', '해봐', '해주세요', '있어', '없어', '이야', '이거', '그거', '저거',
@@ -3334,7 +3399,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
-  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip') return false;   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
+  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip' || via === 'noBay') return false;   // 5.28-05: 없는 베이 답도 답이다   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
@@ -3350,7 +3415,21 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'progress' && PURE_PROGRESS.test(String(q))) return false;
   if (via && WEAK_VIA.has(via)) return true;
   if (WEAK_TEXT.test(String(answer))) return true;
-  return mirLeftover(q).length > 0;
+  if (/^(?:끝네자리 \d{4}|[A-Z]{4}\d{7}) — 이 항차(?: 자료\(EDI·리스트\))?에 없어요/.test(String(answer))) return false;   // ★ 5.28-05: 번호를 다 찾아본 «없어요» 는 답이다 — 모델이 번호를 바꿔 다른 컨을 답하게 두지 않는다(«맞게 알아들었나요?» 도 안 붙는다)
+  const _lo = mirLeftover(q);
+  if (!_lo.length) return false;
+  //  ★ 5.28-05 — 조건(규격·베이·종류·끝 번호…)을 읽고 자료로 답한 말은 군말 몇 개가 남아도 약한 답이 아니다(2026-11-27 클로드2 시험 — 맞는 답에 «❓ 제가 맞게 알아들었나요?» 가 붙었다).
+  //    남은 낱말에 조건 같은 말(위·아래·얹힌·경유·빼고·이상·바뀐·원래·차이·대조·최상단·첫)이 있으면 놓친 조건일 수 있어 종전대로 약하게 본다.
+  try {
+    const _dataAns = /^(?:📊|📍|📭|⏳|✅|⚖|🔩|[A-Z]{4}\d{7} · )/.test(String(answer).trim());
+    //  감사 상 2 — 부정·비교·범위 말은 질문 전체에서 본다(«40피트 빼고»·«리퍼 아닌»·«지난 항차»·«제일 차가운»·«짝수 로우만» — 남은 낱말만 보면 놓친다).
+    //    «지금까지 한 거 빼고»(남은 뜻)·«갑판 위에»(자리 이름)만 예외.
+    const _qn = String(q).replace(/지금까지\s*한\s*거\s*빼고(?:요)?/g, ' ').replace(/(?:갑판|데크|덱|해치\s*커버)\s*위(?:에|로)?/g, ' ');
+    const _hint = /아닌|아니|외에|뺀|빼고|빼면|나머지|말고|제외|안\s*\S+는|지난|전\s*항차|평균|비율|퍼센트|%|절반|제일|가장|최대|최소|옆|짝수|홀수|위쪽|아래쪽|위에|위로|아래|밑에|얹|경유|이상|이하|초과|미만|넘는|바뀐|바뀌|원래|차이|대조|비교|최상단|상단|하단|첫\s*단|맨|순서|정렬|동선|어느(?!\s*자료)|다르|달라|같은\s*(?:베이|줄|로우|칸|자리)|따로|각각|별로|나눠/.test(_qn)
+      || _lo.some((w) => /기준|맞아|맞나/.test(w));
+    if (_dataAns && !_hint && _lo.length <= 4 && Object.keys(mirCondSig(q) || {}).length) return false;
+  } catch (e) { console.warn('[미르] 약한 답 판정 보조 실패:', e); }
+  return true;
 }
 
 // ── 공용 키·설정(RTDB 한 칸) ────────────────────────────────────────────────
@@ -3836,7 +3915,7 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   const who = opts.who || '';
   const out = { text: null, via: null, canonical: rec.canonical || '', reason: '' };
   const weakByWordsOnly = !!(opts.weakText && !(opts.weakVia && WEAK_VIA.has(opts.weakVia)));   // 잡아채는 길이 아니라 «모르는 낱말» 때문에만 약했던 답
-  const identity = !rec.canonical || _norm(rec.canonical) === _norm(q);
+  let identity = !rec.canonical || _norm(rec.canonical) === _norm(q);
   //  ★ 3.43-02 — 규칙이 **현장 원장(mirKnowledge)** 으로 답했는데 낱말만 몰라 약하게 본 경우, 번역문의 규칙 답이 달라도 원장 답을 바꾸지 않는다.
   //    검수사 실측 2026-09-11 «씰 잘림 대처법» — 원장이 씰 절차를 답했는데 «잘림·대처법» 이 사전에 없어 모델이 «실번호 의심» 으로
   //    번역했고 그 규칙 답(씰번호 틀림)이 원래 답을 덮었다. 자료 답(«0230 몇 킬로 나가» → «0230 중량»)은 종전대로 번역이 이긴다.
@@ -3844,6 +3923,16 @@ async function _finish(q, ctx, rules, opts, rec, fromMemo, cfg = null) {
   if (!identity && weakByWordsOnly && opts.weakVia === 'knowledge') {
     if (!fromMemo) _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical, how: 'weak→translate(kept)' });
     out.text = opts.weakText; out.via = 'confirmed'; out.reason = 'kept'; return out;
+  }
+  //  ★ 5.28-05 — 번역문이 원문의 거르기 조건(40피트·영하 18도·14번 베이·끝 번호…)을 잃으면 번역을 버린다(2026-11-27 클로드2 시험 «이번 배 40피트 양하 총 몇 대» → «양하 몇 대» 318).
+  //    규칙 답이 있으면 그 답을, 없으면 번역 없이 아래(자료 답) 길로 간다.
+  if (!identity) {
+    let _lost = []; try { _lost = mirCondLost(q, rec.canonical); } catch (e) { console.warn('[미르 모델] 조건 비교 실패 — 번역을 쓰지 않는 쪽으로:', e); _lost = ['?']; }
+    if (_lost.length) {
+      if (!fromMemo) _logMiss(q, { who, mode: ctx.mode || '', voyageKey: ctx.voyageKey || '', canonical: rec.canonical, how: 'weak→translate(cond-lost ' + _lost.join('·') + ')' });
+      if (opts.weakText) { out.text = opts.weakText; out.via = 'confirmed'; out.reason = 'condLost'; return out; }
+      identity = true;   // 번역을 버린다(기억된 번역은 그대로 — 다음에도 같은 판정)
+    }
   }
   if (!identity) {
     //  ★ 5.14 — 번역문이 «기록을 남기는 말»이면 그 답을 쓰지 않는다. 화면은 답 뒤에 다시 읽어 그대로 적는다 — 번역이 뜻을 바꾸면 틀린 것이 적힌다
@@ -5198,7 +5287,7 @@ export const FIELD_QA = [
   { id: 'seal_diff', preferKnow: true, ask: false, p: new RegExp(SL + '.{0,20}(?:리스트랑|다르게|다르|틀려|틀린|안\\s*맞)|현장\\s*실', 'i'), a: '📖 실번호가 리스트와 다를 때\n① 실물 번호를 끝까지 다시 읽고(알파벳·앞자리 0 까지) ② 그래도 다르면 실물 번호를 넣고 컨 상세의 [📷 실오류 보고](컨번호 사진 + 실 사진)로 남겨요. ③ 수석에게 알리면 마감 때 세관 신고에 실오류로 올라가요. 판정 기준 — 알파벳만 빠진 것은 실오류가 아니고, 알파벳이 다르거나 앞자리 0 이 빠지면 실오류예요. 앱은 자료마다 실이 다르면 «다른 자료 실» 로 같이 보여 주고, 하나라도 맞으면 맞음으로 봐요.' },
 
   // ── 리퍼 ────────────────────────────────────────────────────────
-  { id: 'rf_plug_time', p: /리퍼.{0,24}(?:몇\s*분|시간\s*안|플러그\s*아웃|전원.{0,6}(?:연결|끊)|플러그.{0,6}(?:시간|기록))/, a: '📖 리퍼 전원\n검수원은 리퍼 전원(플러그 인·아웃)에 관여하지 않아요 — 빼고 꽂는 일은 터미널 리퍼 담당이 하고, 앱에도 플러그 시각을 적지 않아요. 선적 때는 빠른 시간 안에 전원을 넣으라고 선원에게 전달해요(검수사 확정).' },
+  { id: 'rf_plug_time', p: /리퍼.{0,24}(?:몇\s*분|시간\s*안|플러그\s*아웃|전원.{0,8}(?:연결|끊|꽂|들어|켜|확인)|플러그.{0,6}(?:시간|기록|꽂|확인))/, a: '📖 리퍼 전원\n검수원은 리퍼 전원(플러그 인·아웃)에 관여하지 않아요 — 빼고 꽂는 일은 터미널 리퍼 담당이 하고, 앱에도 플러그 시각을 적지 않아요. 선적 때는 빠른 시간 안에 전원을 넣으라고 선원에게 전달해요(검수사 확정).' },
   { id: 'rf_temp_diff', ask: false, p: /리퍼.{0,30}(?:온도|도).{0,20}(?:차이|다르|달라|틀려)|온도.{0,16}(?:리스트랑|표시창).{0,10}(?:다르|달라|차이)/, a: '📖 리퍼 온도가 리스트와 다를 때\n설정 온도(SET)와 표시 온도를 둘 다 봐요. 리스트 설정 온도와 기계 설정이 다르면 사진을 찍어 수석에게 보고해요 — 설정을 검수원이 바꾸지는 않아요. 양하 직후엔 표시 온도가 설정과 몇 도 차이 날 수 있어요(전원이 잠시 빠졌던 것) — 설정이 맞으면 표시 차이는 메모로 남기고, 차이가 크거나 알람이 뜨면 바로 보고해요.' },
   { id: 'rf_power_off', p: /리퍼.{0,24}(?:전원|꺼져|케이블).{0,24}(?:어디|적어|기록|손상)/, a: '📖 리퍼 전원 이상 기록\n전원이 꺼져 있었거나 케이블이 손상된 리퍼는 컨 상세의 [📷 데미지 보고]로 사진(온도 표시창·케이블)과 메모를 남기고 수석에게 바로 알려요. 케이블 손상은 데미지 부위로 고를 수 있어요. 온도가 많이 올라갔으면 표시 온도도 함께 적어요.' },
   { id: 'rf_who', p: /리퍼.{0,24}(?:검수사가\s*확인|꽂혀\s*있는지)/, a: '📖 리퍼 확인은 누가\n전원을 꽂고 빼는 일은 터미널 리퍼 담당이 하고, 검수원은 설정 온도와 표시 온도를 확인하고 풀 리퍼 사진을 남겨요. 온도가 리스트와 다르면 사진을 찍어 수석에게 보고해요(검수원이 설정을 바꾸지는 않아요).' },
@@ -5247,7 +5336,7 @@ export const FIELD_QA = [
   { id: 'after_close_fix', p: /마감\s*(?:하고|한)\s*(?:나서|뒤).{0,16}(?:틀린|고칠|수정)|완료\s*눌렀는데\s*수정/, a: '📖 완료·마감 뒤에 고치기\n한 대를 잘못 완료했으면 그 카드의 [양하확인 취소]/[선적확인 취소]로 되돌려요(왜 취소하는지 고르는 창이 떠요). 배 전체 [양하 완료]를 누른 뒤라도 자료는 지워지지 않고 수석이 최종 확인하니, 틀린 걸 찾으면 수석에게 알려 고쳐요. 수석 완료 저장 뒤 고칠 것도 수석이 해요.' },
 
   // ── 앱 사용 ─────────────────────────────────────────────────────
-  { id: 'app_login', p: /로그인.{0,16}(?:안\s*돼|안돼|아이디|누가)|아이디.{0,10}(?:누가|만들)/, a: '📖 로그인\n아이디·비밀번호가 따로 없어요. 앱을 열면 뜨는 «작업자 선택» 창에서 내 이름을 누르거나, 목록에 없으면 입력칸에 이름을 치고 [선택]을 눌러요 — 직원 명단에 있는 이름만 받아요. 명단에 없다고 나오면 수석에게 명단 등록을 부탁하세요.' },
+  { id: 'app_login', p: /로그인.{0,16}(?:안\s*돼|안돼|아이디|누가)|아이디.{0,10}(?:누가|만들)/, a: '📖 로그인\n아이디는 따로 없어요 — 앱을 열면 뜨는 «작업자 선택» 창에서 내 이름을 누르거나, 목록에 없으면 입력칸에 이름을 치고 [선택]을 눌러요. 직원 명단에 있는 이름만 받으니 명단에 없다고 나오면 수석에게 명단 등록을 부탁하세요.\n비밀번호는 내가 정해요 — 처음 이름을 고르면 본인 비밀번호(4자 이상)를 정하고, 그 폰이 신뢰 기기가 되어 다음부터는 묻지 않아요. 다른 폰에서는 비밀번호를 넣고 «기기 등록»을 체크해요(최대 4대). 잊었으면 검수사에게 초기화를 부탁하세요.' },   // ★ 5.28-05: «비밀번호 없음» 은 4.43 뒤로 틀렸다(helpData 4.43 — 일반 검수원도 본인 비밀번호)
   { id: 'app_ship', p: /(?:내\s*)?(?:선박|배).{0,10}(?:찾|바꾸|바꿔|선택|여러\s*개)/, a: '📖 내 배 찾기·바꾸기\n홈 화면 배 목록에서 내 배 줄을 누르면 상세가 열리고, [양하 열기]/[선적 열기]로 들어가요. 배는 작업 시작이 빠른 순, «⚓ 작업 중 → 📅 오늘 → 📅 내일» 묶음으로 보여요. 다른 배로 바꾸려면 홈으로 돌아가 그 배 줄을 누르면 돼요.' },
   { id: 'app_home_add', p: /홈\s*화면에?.{0,6}(?:추가|아이콘)|앱스토어|설치/, a: '📖 홈 화면에 추가(앱 설치)\n앱스토어 앱이 아니라 웹 앱이에요. 갤럭시는 크롬·삼성 인터넷, 아이폰은 사파리로 앱 주소를 열고 [앱 설치] 또는 [홈 화면에 추가]를 누르면 홈 화면에 아이콘이 생겨요(«바로가기» 말고 «설치» 여야 주소창 없는 전체 화면). 다른 사람 폰에 깔아 줄 땐 보조기능 → [설치 QR]. 카톡 안에서 연 화면에서는 설치가 안 되니 크롬으로 다시 열어요.' },
   { id: 'app_font', p: /글씨|글자/, a: '📖 글자 크게\n헤더 [⋮] → [화면 · 소리 · 글자] → «글자 크기» 에서 [크게]를 누르면 앱 전체 글자가 한 단계 커져요(되돌리려면 [보통]). 미르에게 «글자 크게» 라고 말해도 돼요. 기기마다 따로 기억해요. 베이 그림·인쇄물은 그대로예요.' },
@@ -5302,8 +5391,9 @@ export const maskShipCodes = (s) => S(s).replace(/(?<![A-Za-z0-9])[A-Za-z]{4}(?!
 export function fieldAnswer(q0, know, opts = null) {
   const q = S(q0).trim();
   if (q.length < 3) return null;
-  const isAsk = ASK.test(q);
-  const isData = DATA_ASK.test(q);
+  const _meanAsk = /뜻|의미|이란\b|란\s*(?:뭐|무엇)/.test(q);   // ★ 5.28-05: «베이 로우 티어 뜻을 그림이랑 같이 보여줘» — «보여줘» 가 있어도 뜻을 묻는 말이다(양하 318대 목록을 내놓았다)
+  const isAsk = ASK.test(q) || _meanAsk;
+  const isData = DATA_ASK.test(q) && !_meanAsk;
   //  컨 한 대를 가리킨 말(끝 4자리·11자리)은 조회다 — 원장이 가로채지 않는다(«6278 무게 VGM이랑 리스트 무게 같아» 는 그 컨의 무게).
   //  def — 뜻풀이 줄은 «있어?·위치·목록» 처럼 컨을 찾는 말에는 물러난다(«OOG 있어요?» 는 목록, «OOG 가 뭐예요» 는 뜻 — 감사 2026-11-27)
   const listAsk = /있어|있나|위치|어디\s*있|목록|몇\s*대/.test(q) && !/뭐|뜻|란\b|이란|같은\s*말|차이|약자|읽는|어떻게|왜|기준|맞나|맞아|맞죠/.test(q);
@@ -5323,6 +5413,13 @@ export function fieldAnswer(q0, know, opts = null) {
       let k = null; try { k = know ? know(r.kq) : null; } catch (e) { console.warn('[미르 현장 문답] 원장 부르기 실패:', e); k = null; }
       if (k) return { id: r.id, a: r.add ? k + '\n' + r.add : k };
       continue;
+    }
+    //  ★ 5.28-05 — 물음표로 두 가지를 이어 물은 말(«전원 꽂혀있는지는 검수사가 확인하는 건가요? 온도 다르면 어떻게 해요»)은 뒷말의 원장 답도 붙인다.
+    const _tail = (q.match(/[?？]\s*(\S.{2,})$/) || [])[1];
+    if (_tail && !(opts && opts._tailOnly)) {
+      const _subj = (q.slice(0, q.length - _tail.length).match(/리퍼|냉동|위험물|DG|씰|실번호|OOG|FR|OT|콘|트윈|X-?RAY|엑스레이/gi) || []).filter((w) => !_tail.includes(w)).slice(0, 2).join(' ');
+      let t2 = null; try { t2 = fieldAnswer((_subj ? _subj + ' ' : '') + _tail, know, { ...(opts || {}), _tailOnly: true }); } catch (e) { console.warn('[미르 현장 문답] 뒷말 답 실패:', e); t2 = null; }
+      if (t2 && t2.id !== r.id && t2.a) return { id: r.id + '+' + t2.id, a: r.a + '\n\n' + t2.a };
     }
     return { id: r.id, a: r.a };
   }
@@ -5538,6 +5635,8 @@ export function fieldSplitAnswer(q0, cs, H) {
     if (m4 && (wantPod || wantPol || wantOp || wantWt) && !/몇\s*대|몇대/.test(qm)) {
       const full = q.toUpperCase().match(/[A-Z]{4}\s*\d{6}\s*\d/);
       const hit = (cs || []).filter((c) => c && c.cn && (full ? String(c.cn).toUpperCase() === full[0].replace(/\s/g, '') : String(c.cn).slice(-4) === m4[1]));
+      //  ★ 5.28-05 — 없는 번호면 «부산행 끝네자리 8846 없음» 처럼 물은 낱말을 거르기 조건으로 붙이지 않고 번호만 없다고 한다(2026-11-27 클로드2 시험).
+      if (!hit.length && !/접두어|두\s*개|둘\s*다|여러/.test(qm)) return { id: 'cnAttrNone', a: `${full ? full[0].replace(/\s/g, '') : '끝네자리 ' + m4[1]} — 이 항차 자료(EDI·리스트)에 없어요. 번호를 다시 봐 주세요.` };
       if (hit.length) {
         const nm = (k) => { const c0 = S(k).toUpperCase(); return c0 ? `${c0}${H.portName && H.portName(c0) ? ' ' + H.portName(c0) : ''}` : '없음'; };
         const kg = (w) => (Number(w) > 0 ? Number(w).toLocaleString('en-US') + 'kg' : '');
@@ -5646,10 +5745,33 @@ export function fieldSplitAnswer(q0, cs, H) {
     const t = H.twin();
     if (t) return { id: 'twin', a: `🔗 트윈(20피트 두 대 한 번에) — 양하 ${t.byMode.discharge || 0}쌍 · 선적 ${t.byMode.loading || 0}쌍 가능\n자리 짝(홀수 베이 앞·뒤 같은 줄·단) ${t.posPairs}쌍 중 무게 합 초과로 싱글 권유 ${t.over}쌍 · 무게 차 커서 싱글 ${t.diff}쌍${t.noWt ? ` · 무게 몰라 미정 ${t.noWt}쌍` : ''}. 평택분 20피트 ${t.n20}대 기준이에요.` };
   }
+  //  ⓪-8c ★ 5.28-05 — 숫자를 준 콘 개수 물음은 원장 셈법(한 줄 N단 = 콘 (N−1)×4 · 데크 1단은 해치커버 소켓)으로 바로 센다(2026-11-27 클로드2 시험 — 같은 설명만 반복).
+  //    «20피트 갑판 3단이면 콘 몇 개» = 8개 · «선적 20피트 12대 갑판 2단 쌓으면» = 6줄 × 4 = 24개. 트윈 가운데 코끼리콘처럼 원장에 셈이 없는 것은 세지 않는다.
+  if (/콘/.test(qm) && /몇\s*개|몇개|얼마|개수/.test(qm) && !/트윈|코끼리|미들|엘리펀트|싱글/.test(qm)) {
+    const mt = qm.match(/(?<!\d)(\d)\s*단/);
+    const t = mt ? Number(mt[1]) : 0;
+    const mn = qm.match(/(\d{1,3})\s*대/);
+    const n = mn ? Number(mn[1]) : 0;
+    if (t >= 1 && t <= 9) {
+      const per = (t - 1) * 4;
+      const deck = !/홀드|선창/.test(qm);
+      if (n > 0) {
+        const st = Math.ceil(n / t);
+        return { id: 'coneCalc', a: `🔩 콘 셈 — ${n}대를 ${t}단으로 쌓으면 ${st}줄이에요. 한 줄 ${t}단 = 콘 (${t}−1)×4 = ${per}개 → ${st}줄 × ${per} = ${st * per}개${n % t ? ` (마지막 줄은 ${n % t}단이라 실제로는 ${(st - 1) * per + (n % t - 1) * 4}개)` : ''}.` + (deck ? '\n데크 1단은 콘이 아니라 해치커버 소켓에 앉아서 안 세요. 20피트 두 대가 40 자리에 앞뒤로 앉으면 가운데 코끼리콘이 따로 들어가요.' : '') + '\n실제 배·베이별 개수는 콘앱 콘 작업표가 세요.' };
+      }
+      return { id: 'coneCalc', a: `🔩 콘 셈 — 한 줄 ${t}단이면 콘 (${t}−1)×4 = ${per}개예요.` + (deck ? ' 데크 1단은 해치커버 소켓에 앉아서 안 세요.' : '') + '\n줄 수를 같이 말씀해 주시면(«12대 2단») 전체 개수로 세어 드려요. 실제 배·베이별 개수는 콘앱 콘 작업표가 세요.' };
+    }
+  }
   //  ⓪-9 N호기 담당 베이 — 앱은 크레인 스플릿(호기별 담당 베이) 자료를 받지 않는다 — 호기별 한 대수로 답한다
   if (/\d\s*호(?:기)?\s*(?:크레인)?.{0,12}(?:담당|맡은).{0,12}베이/.test(qm)) {
     //  5.28 건의(1·23·50) — 담당 베이는 갱 배분(chiefAnswers.buildGangShift) 구간으로 답한다. 호기 시작을 알려 준 조면 갱이 호기 이름을 갖는다.
     const _eq = (qm.match(/(\d+)\s*호/) || [])[1];
+    //  ★ 5.28-05 — 이 배에서 일하지 않는 호기를 물으면 그렇게 말한다(터미널 호기 표 QC10N → N호기 · 2026-11-27 «3호 크레인 담당 베이» — 이 배는 2·4호기).
+    try {
+      const _qw = H.raw && H.raw.info && H.raw.info.qcWork;
+      const _eqs = _qw && typeof _qw === 'object' ? Object.keys(_qw).map((k) => (String(k).match(/(\d)$/) || [])[1]).filter(Boolean) : [];
+      if (_eq && _eqs.length && !_eqs.includes(String(_eq))) return { id: 'craneBay', a: `${_eq}호기는 이 배(${H.vsl || '이 항차'}) 터미널 호기 표에 아직 없어요 — 지금 표에는 ${[...new Set(_eqs)].sort().join('·')}호기만 있어요. 그 호기로 다시 물어봐 주시거나, ${_eq}호기가 새로 붙었으면 «${_eq}호기 시작» 처럼 알려 주세요.` };
+    } catch (e) { console.warn('[미르] 일하는 호기 판정 실패:', e); }
     let gs = typeof H.gang === 'function' ? H.gang() : null;
     let _byQc = 0;
     if (gs && gs.askGangs && typeof H.qcN === 'function' && H.qcN() > 0) { _byQc = H.qcN(); gs = H.gang(_byQc); }   // 갱 수를 모르면 터미널 호기 표의 호기 수로
@@ -5691,6 +5813,24 @@ export function fieldSplitAnswer(q0, cs, H) {
   }
   //  ⓪-13 N번 베이 빈 칸 — «양하 끝나면 58베이 홀드 몇 칸 비어» · «14베이 홀드 03로우 빈칸 맞아»
   {
+    //  ★ 5.28-05 — 로우까지 붙인 말은 그 줄에 놓인 컨을 모드별로 보인다(«14베이 홀드 03로우 빈칸 맞아? 베이플랜엔 비어있는데»).
+    const mr = q.match(/(\d{1,2})\s*번?\s*베이.{0,12}?(\d{1,2})\s*로우.{0,20}(?:빈\s*칸|빈칸|칸\s*비|비어|빈자리|비었|있어|뭐)/);
+    if (mr) {
+      const bN = Number(mr[1]), rN = Number(mr[2]);
+      const zone = /홀드|선창|창내/.test(qm) ? 'hold' : /갑판|데크|덱/.test(qm) ? 'deck' : '';
+      const _isDeck = (x) => Number(x.tier) >= 80;
+      const near = bN % 2 === 0 ? [bN, bN - 1, bN + 1] : [bN, bN - 1, bN + 1].filter((n) => n === bN || n % 2 === 0);   // 감사 중 4 — 홀수 베이도 겹치는 40피트(짝수) 자리를 본다(noBay 와 같은 한 벌)
+      const rows = (cs || []).filter((x) => x && near.includes(Number(x.bay)) && Number(x.row) === rN && (!zone || (zone === 'deck') === _isDeck(x)));
+      const zk = zone === 'hold' ? ' 홀드' : zone === 'deck' ? ' 갑판' : '';
+      const lab = `${String(bN).padStart(2, '0')}베이${zk} ${String(rN).padStart(2, '0')}로우`;
+      if (!rows.length) return { id: 'bayRow', a: `📭 ${lab} — 이번 항차 자료(EDI·리스트)에 놓인 컨이 없어요 — 자료로는 빈칸이에요. 실물이 다르면 그 자리를 확인해 주세요.` };
+      const L = [`📍 ${lab} — 이번 항차 컨 ${rows.length}대`];
+      for (const m of ['discharge', 'loading']) {
+        const r = rows.filter((x) => (m === 'loading') === (x._mode === 'loading')).sort((a1, b1) => Number(a1.tier) - Number(b1.tier));
+        if (r.length) L.push(`${m === 'loading' ? '선적' : '양하'} ${r.length}대 — ` + r.map((x) => `${S(x.cn).slice(-4)} @ ${String(x.bay).padStart(2, '0')}-${String(x.row).padStart(2, '0')}-${String(x.tier).padStart(2, '0')}`).join(' · '));
+      }
+      return { id: 'bayRow', a: L.join('\n') };
+    }
     const m = q.match(/(\d{1,2})\s*번?\s*베이.{0,24}(?:빈\s*칸|빈칸|칸\s*비|몇\s*칸|비어|빈자리)/);
     if (m) { const a = ask(`${Number(m[1])}번 베이 빈 슬롯`); if (a) return { id: 'bayVacant', a: /현재 적재 0대 \/ 관측 슬롯 0개|관측 슬롯 0개/.test(S(a).replace(/\n/g, ' / ')) ? `${Number(m[1])}번 베이는 이 배 자료(EDI)에 없어요 — 베이 번호를 다시 봐 주세요.` : a }; }
   }
@@ -5701,7 +5841,10 @@ export function fieldSplitAnswer(q0, cs, H) {
     const _dg = (x) => x.replace(/O/g, '0').replace(/[IL]/g, '1');
     const m = m0 && /\d/.test(m0[2] + m0[3]) ? [m0[0], m0[1], _dg(m0[2]), _dg(m0[3])] : null;
     const _misread = m0 && (m0[2] + m0[3]) !== (m[2] + m[3]) ? `\n✍ 숫자 자리에 쓴 ${[...new Set((m0[2] + m0[3]).replace(/\d/g, '').split(''))].join('·')} 는 숫자로 읽었어요(O→0 · I·L→1) — ${m0[1]}${m0[2]}${m0[3]} → ${m[1]}${m[2]}${m[3]}` : '';
-    if (m && /맞는|맞아|맞나|검산|체크\s*디지트|체크디짓|안\s*맞/.test(qm) && H.isoCheckDigit) {
+    //  ★ 5.28-05 — 컨 속성(하이큐브·규격·무게·온도·위치·실·POD…)을 «맞아요?» 로 물은 말은 검산이 아니다(2026-11-27 «BOMU 8200071 이거 하이큐브 맞아요?» 에 검산만 답했다 — 40HC).
+    const _attrAsk = /하이\s*큐브|하이큐|\bHC\b|높이|규격|사이즈|피트|무게|중량|톤|온도|리퍼|위치|어디|실\s*번호|씰|봉인|POD|목적|양하항|선사|엠티|빈\s*컨|풀\b|X-?RAY|엑스레이|위험물|DG|오버|OOG|FR|OT/i.test(qm) && !/검산|체크\s*디지트|체크디짓|번호(?:가|는)?\s*(?:맞|틀|안\s*맞)|맞는\s*번호|틀린\s*번호/.test(qm);
+    const _inData = !!m && (cs || []).some((x) => x && S(x.cn).toUpperCase() === m[1] + m[2] + m[3]);   // 감사 중 6 — 자료에 없는 번호는 검산 답(끝자리 고침)이 먼저다
+    if (m && !(_attrAsk && _inData) && /맞는|맞아|맞나|검산|체크\s*디지트|체크디짓|안\s*맞|하이\s*큐브|규격|사이즈/.test(qm) && H.isoCheckDigit) {
       const cn = m[1] + m[2] + m[3];
       const _calc = cdCalcLine(cn);
       const ok = H.isoCheckDigit(cn);

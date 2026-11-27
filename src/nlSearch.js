@@ -217,6 +217,7 @@ export function parseNaturalQuery(text) {
       //    («구급차 와서 대기 중»·«아파트 앞 대기» 는 4.38 3·4차 감사대로 종전 멈춤 — smoke_mirbusy438).
       const _vehWait = !_wr && !/쉬고|쉬는|쉬어|멈|중단|스톱|스탑|작업\s*안|못\s*(?:해|하)/.test(t) && /트럭|차량|차가|리퍼|컨테이너|야드/.test(t);
       if (!_vehWait && /대기|쉬고|쉬는|쉬어|멈|중단|스톱|스탑|작업\s*안|못\s*(?:해|하)/.test(t) && !/[?？]|왜|몇|언제|얼마|어디|누구|이유|재개|다시\s*시작|시작했|끝났|풀렸|걷혔|그쳤|그만/.test(t)
+          && !/연습|퀴즈|문제\s*(?:내|좀|세|두|한)|공부|외우|(?:이니까|니까|이라서|이라|인데|는데).{0,30}(?:내|보여|가르쳐|읽어|들려|불러)\s*(?:줘|줄래|주세요|주실)/.test(t)   // ★ 5.28-05: «쉬는 시간이니까 베이 위치 읽기 연습 문제 세 개 내줘» 는 부탁이지 멈춤 알림이 아니다(2026-11-27 22:33 클로드2 시험 — TMPZ 에 중단 보고가 적혔다). «작업 중단해 줘»·«강풍대기 알려줘»·«기록해줘» 같은 보고는 그대로(감사 상 1)
           && !/해제|풀림|풀렸|풀려(?!야)|풀리(?!면|길|기)|종료|끝\s*(?:났|남|나|이|$)|(?<!안\s?)잦아|시작\s*해(?![서야])|시작하자|싶|어떻게|방법|어제|내일|모레|\d\s*호기\s*만|(?:다른|옆)\s*(?:배|선박|터미널|부두|선석)/.test(t)
           && !(!_wr && /숨|가슴|아파(?!트)|아프|어지러|다쳤|다치|다쳐|쓰러|구급|119|살려|죽(?:고|을|겠|어)/.test(t) && !/작업|중단|스톱|스탑|대기|멈|비\s*(?:와|오|온)|바람/.test(t))) {   // 4.38 재감사: 멈춤 낱말이 «쉬어·쉬고» 뿐인 몸·위기 말(«숨이 안 쉬어져»·«어지러워서 쉬는 중»)은 작업 멈춤 알림이 아니다 — 생활회화(위기 신호 규칙)로 간다. «사람 다쳐서 작업 멈췄어» 처럼 작업 멈춤을 분명히 말하거나 아는 사유(강풍·우천·점심…)가 있으면 종전대로 적는다(3·4차 감사)
         const _k = _wr ? _wr[0].replace(/\s+/g, '') : '';
@@ -705,7 +706,7 @@ export function parseNaturalQuery(text) {
       || /(?:들어\s*[오와][가-힣]*|입항|접안|도착)\s*(?:이|은|는|가|을|를)?\s*몇\s*시/i.test(t)) {
     result.schedQuery = true;
   }
-  if (!result.etaQuery && !result.wakeQuery && !result.pilotQuery && !result.schedQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|시간\s*좀|오늘\s*며칠|며칠이야|며칠인가|무슨\s*요일|오늘\s*날짜|날짜\s*알려|오늘\s*무슨\s*날/i.test(t)) result.timeQuery = true;   // TallyOne 1.18: 며칠인가·시간 좀 추가 · 1.69-05: schedQuery 게이트
+  if (!result.etaQuery && !result.wakeQuery && !result.pilotQuery && !result.schedQuery && !(/몇\s*시\s*(?:판|자료|기준|버전)|어느\s*자료/.test(t) && /몇\s*대|대수|셌|세었|센\b|리퍼|위험물|양하|선적|피트/.test(t)) && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|시간\s*좀|오늘\s*며칠|며칠이야|며칠인가|무슨\s*요일|오늘\s*날짜|날짜\s*알려|오늘\s*무슨\s*날/i.test(t)) result.timeQuery = true;   // TallyOne 1.18: 며칠인가·시간 좀 추가 · 1.69-05: schedQuery 게이트
   // V8.60: 맛집/식사 추천 — "점심 뭐 먹을까"·"저녁 먹으러 어디 가지"·"야식 추천" → 돌림판.
   //   ⚠ etaQuery("점심까지 끝나?")와 충돌 금지 — 끝/완료/까지 들어간 문장은 제외.
   // TallyOne 1.18: 출출·허기·요기·시켜먹 등 실제로 쓰는 말 추가 (검수사: 「출출한데 뭘 먹을까」 는 이미 됐다)
@@ -804,7 +805,7 @@ export function parseNaturalQuery(text) {
   //   끝 4자리는 컨번호 조회의 기준이라, 겹치는 것이 있으면 반드시 짚어야 조회를 믿을 수 있다.
   //   listQuery 판정보다 **먼저** 본다 — "중복인 거 알려줘"의 '알려줘'가 목록 질문으로 먹히기 때문.
   if (/중복|겹치|겹쳐|같은\s*(?:번호|끝자리|끝\s*자리)|duplicate|dup\b/i.test(t)) result.dupL4Query = true;
-  if (!result.howToQuery && /리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등 · 1.65: 기능 위치 질문("리스트 어디서 뽑아")은 제외
+  if (!result.howToQuery && /리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*(줘|줄|주)|(?:베이|갑판|홀드|데크|덱|로우|칸|자리).{0,12}뭐(가)?\s*(실려|실렸|들어\s*있|올라\s*가?\s*있)|list/i.test(t) && !(/뽑아\s*줄|뭐(가)?\s*(실려|실렸|들어)/.test(t) && (/몇\s*대|몇대/.test(t) || /[a-z]{4}\s*\d{6,7}/i.test(t)))) result.listQuery = true;   // 감사 하 — 컨번호·«몇 대» 가 있으면 넓힌 말로는 목록으로 안 바꾼다   // ★ 5.28-05: «베이 22 갑판 위에 뭐 실려 있어요?» · «뽑아줄래요» 는 목록(대수 요약만 하던 것)   // V7.91-02: 주세요·달라·불러줘 등 · 1.65: 기능 위치 질문("리스트 어디서 뽑아")은 제외
 
   // 전체 / 통계
   // V7.91-02: 일상 동의어 확장 — "전체"만 되고 "전부/다/모두"는 안 되던 것 (사용자 요청).
@@ -2927,9 +2928,12 @@ function formatVacant(parsed, allContainers) {
   if (parsed.bay) {
     const bayN = parseInt(parsed.bay, 10);
     const v = baySlot[bayN] || { cons: [], slots: new Set() };
-    const cap = v.slots.size, cur = v.cons.length, free = Math.max(0, cap - cur);
-    const lines = [`📊 ${bayN}번 베이 빈 슬롯: ${free}개`];
-    lines.push(`현재 적재 ${cur}대 / 관측 슬롯 ${cap}개`);
+    //  ★ 5.28-05 — 종전 «빈 슬롯 0개 / 현재 적재 60대 / 관측 슬롯 45개» 는 양하·선적을 한데 세어 모순이었다(2026-11-27 클로드2 시험 14베이).
+    //    «관측 슬롯» 은 이 항차 컨이 놓인 칸뿐이라 빈칸 수를 셀 수 없다 — 모드별로 차지한 칸 수만 말하고, 빈칸 전체는 베이 그림에서 보라고 한다.
+    const _occ = (m) => new Set(v.cons.filter((c) => (m === 'loading') === (c._mode === 'loading')).filter((c) => c.row && c.tier).map((c) => `${c.row}-${c.tier}`)).size;
+    const dOcc = _occ('discharge'), lOcc = _occ('loading');
+    const lines = [`📊 ${bayN}번 베이 — 양하 ${dOcc}칸 · 선적 ${lOcc}칸에 이번 항차 컨이 있어요(양하·선적 합쳐 ${v.slots.size}칸).`];
+    lines.push('빈칸 수는 그 베이 칸 전체(베이 그림)가 있어야 셀 수 있어요 — 특정 칸은 «14베이 홀드 03로우 비었어?» 처럼 로우를 붙여 물으면 그 줄을 보여 드려요.');
     return lines.join('\n');
   }
   // 바닥 빈자리 (zone+bottom 결합 시 row별 최저 tier가 비어있는 곳)
@@ -3129,6 +3133,12 @@ function formatProgress(parsed, results, allContainers, ctx = null) {
   const pendingCount = totalCount - doneCount;
   const pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
 
+  //  ★ 5.28-05 — 대상이 0대면 «완료 0대 / 전체 0대 (0%) / 남은 작업 0대» 대신 없다고 말한다(2026-11-27 클로드2 시험 «OOG 데크 최상단 아닌 데 들어간 거 있어»).
+  //    감사 중 5 — 모드 말고 다른 거르기 조건이 있고, 그 모드 자료는 있을 때만(자료 수집 전 배의 «선적 몇 대 남았어» 는 종전 답).
+  const _otherCond = !!(parsed.bay || parsed.size || parsed.fe || parsed.type || parsed.temp != null || parsed.zone || parsed.dgClass || parsed.un || parsed.pod || parsed.pol || parsed.portAny || parsed.digits || parsed.topQuery || parsed.bottomQuery || parsed.weightMin != null || parsed.weightMax != null);
+  const _modeRows = (Array.isArray(allContainers) ? allContainers : []).filter((c) => c && (!parsed.mode || (parsed.mode === 'loading') === (c._mode === 'loading')));
+  if (totalCount === 0 && _otherCond && _modeRows.length && parsed.bay && !_modeRows.some((c) => Number(c.bay) > 0)) return `📭 ${baseDesc} — 이 자료에는 아직 위치(베이)가 없어요. 위치가 들어오면 베이별로 셀 수 있어요.`;   // 감사 재판정 하 2
+  if (totalCount === 0 && _otherCond && _modeRows.length) return `📭 ${baseDesc} 없음 — 이 항차 자료(EDI·리스트)에 해당 컨이 없어요.`;
   const lines = [];
   //  3.53-12: 대수는 **완료 기록 한 숫자**로 답한다 — 외부 합계(«실제(터미널)» 줄)는 떼어 냈다(검수사 2026-09-15 «사용안하기로 했습니다» · 09-21).
   if (parsed.progressQuery === 'done') {
