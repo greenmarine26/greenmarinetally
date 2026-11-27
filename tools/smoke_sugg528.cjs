@@ -141,6 +141,15 @@ console.log('■ 5.28 미르 건의 1차 — TMPZ 2041E 실자료');
   const b = ask('2호기 담당 베이', coneReal);
   check('콘앱 담당 베이 → «콘앱은 베이사전을 싣지 않아요»', /콘앱은 베이사전을 싣지 않아요/.test(b.a), b.a.slice(-80));
 }
+//  ⑨-3 5.28-01 라이브 실측 — 배 코드를 붙여 물어도(«미르야 TMPZ …») 같은 답(배 코드를 컨 앞자리로 읽지 않는다)
+{
+  for (const [q, f] of [['TMPZ 무게 차이 큰 컨 뽑아줘', 'wtDiff'], ['TMPZ 리퍼 온도 리스트랑 EDI 다른 거 있어', 'rfTempSrc'], ['TMPZ 지난 항차랑 비교해줘', 'prevCmp'], ['TMPZ 2호기 담당 베이', 'craneBay']]) {
+    const x = ask(q, tally({ shipLib: { voyages: FX2.voys } }));
+    check(`«${q}» → ${f}(앞자리 찾기 아님)`, x.field === f && !/앞자리로 찾기/.test(x.a), `${x.field} · ${x.a.slice(0, 60)}`);
+  }
+  const pf = ask('BOMU 로 시작하는 거 찾아줘');
+  check('컨 앞자리 찾기는 그대로(BOMU…)', pf.field === 'prefix' && /BOMU… — \d+대/.test(pf.a), pf.a.slice(0, 60));
+}
 //  ⑩ 두 앱 같은 답
 {
   for (const q of ['양하 20피트 몇 대', 'BOMU22O6278 맞아?', '바람 세면 작업 멈춰?', 'MV HANA STAR 양하 몇 대']) {

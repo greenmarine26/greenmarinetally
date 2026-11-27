@@ -2355,6 +2355,7 @@ function _answerOneRawCore(query, ctx) {
         //  다음 기항 — 배에 남는 화물(평택 출항 쪽 컨의 POD)로 — utils.nextPortAfterPtk 의 화물 판정과 같은 문턱(1.5배). 원문 EDI 는 콘앱에 없어서 두 앱이 같은 재료(펼친 컨 행)로 센다.
         nextPort: () => nextPortFromRows(cs, ship, (k) => PORT_CODE_KR[k] || ''),
         //  5.28 건의 — 이 항차 원본(리스트·EDI 대조용) · 항차 표기 · 갱 배분(담당 베이) · 지난 항차(선박 통계 + 미르 비서가 받아 둔 보관 자료)
+        shipCodes: (() => { try { return new Set([_shipC, ...(knownShipCodes(c.voyages || null) || [])].map((x) => S(x).toUpperCase()).filter(Boolean)); } catch (e) { console.warn('[미르] 배 코드 모으기 실패:', e); return new Set([_shipC].filter(Boolean)); } })(),
         raw: v || null, voyLabel: S(info.voy_d || info.voy || ''), app: c.app || 'tally', rfSkip: !!c.rfSkip, isRf: (x) => { try { return isReeferContainer(x); } catch (e) { return !!(x && x.rf); } },
         qcN: () => { const w = info.qcWork; return w && typeof w === 'object' ? Object.keys(w).length : 0; },
         gang: (n) => { if (!v) return null; try { return buildGangShift(v, c._bayDef || null, { compMap: c.compMap || null, nGangs: n || null }); } catch (e) { console.warn('[미르] 갱 배분(담당 베이) 실패:', e); return null; } },
@@ -5714,7 +5715,7 @@ export function fieldSplitAnswer(q0, cs, H) {
   }
   //  ③ 앞머리로 찾기 — «HNSU 556 으로 시작하는 거» · «HLXU 라고 적었는데 HLBU 일수도 — 둘다»
   {
-    const pref = [...q.toUpperCase().matchAll(/\b([A-Z]{4})\s*(\d{0,6})\b/g)].map((m) => ({ a: m[1], d: m[2] || '' })).filter((x) => !/^(KRPT|TEU|ISO|EDI|BAPL|VGM)/.test(x.a));
+    const pref = [...q.toUpperCase().matchAll(/\b([A-Z]{4})\s*(\d{0,6})\b/g)].map((m) => ({ a: m[1], d: m[2] || '' })).filter((x) => !/^(KRPT|TEU|ISO|EDI|BAPL|VGM)/.test(x.a) && !(H.shipCodes && H.shipCodes.has(x.a)));   // 5.28: 배 코드(«TMPZ 무게 차이 큰 컨 뽑아줘»)는 컨 앞자리가 아니다(라이브 실측)
     if (pref.length && /시작|둘\s*다|둘다|일\s*수도|찾아|뽑아/.test(qm) && !/\d{7}/.test(q.replace(/\s/g, ''))) {
       const lines = [];
       for (const x of pref) {
