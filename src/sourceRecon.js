@@ -15,7 +15,7 @@
 //    · 세관 검수 결과 코드(data/customsCodes.js 한 벌) 후보 — g3 «MFN» · g1 중 완료·실적 없는 컨 «MGN» · EDI 번호 대기 자리 «CNN». 후보일 뿐 확정 아님.
 //  앱 대수(app)는 4.20 평택 양하분 한 벌(utils.ptkDischargeUnitsOf)의 set — 홈 카드·마감텔리와 같은 수다. 선적은 진행 숫자 한 벌(progressOf)의 평택분.
 //  터미널 수량은 번호를 모른다 — 차이를 묶음(·참고)으로 설명 못 하는 만큼은 «번호 없음» 으로 센다(후보일 뿐 확정 아님).
-import { isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, mfnReloadItemsOf, MFN_RELOAD_PENDING, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos, mfnIsChinaDest, mfnChinaWarn, mfnDestKo, MFN_RELOAD_LABEL } from './utils.js';
+import { isValidCn, isPyeongtaekPort, isListOriginRecord, isOppositeDirRecord, isShiftOffPtk, isVirtualCn, ptkDischargeUnitsOf, mfnReloadItemsOf, MFN_RELOAD_PENDING, shiftCnSetOf, voyageKeyOf, progressOf, qcRowsOf, keepOnboardOf, keepConfirmedOf, fmtShiftPos, mfnIsChinaDest, mfnChinaWarn, mfnDestKo, MFN_RELOAD_LABEL } from './utils.js';
 import { shipOpMapper } from './data/tallyFormats.js';
 import { frBundlesOf, bundleExplainOf, bundleDocNote, bundleDocExpect, bundleDocSrc } from './tallyReport.js';   // 4.54: 빈 FR 묶음 — 터미널은 한 묶음을 1대로 센다(마감텔리 묶음 판정 한 벌)
 
@@ -180,7 +180,14 @@ export function reconcileSources(voyage, mode = 'discharge', opts = {}) {
       const gg = { key, label: groupLabel(key, sources), items };
       //  세관 검수 결과 코드 후보 — 세관 목록이 있는 배만(코드표는 세관 적하목록 기준이다)
       if (sources.customs.has && key === 'g3') gg.code = 'MFN';
-      if (key === 'g1' && started) { const n = items.filter((x) => !x.done && !x.term).length; if (n) { gg.code = 'MGN'; gg.codeN = n; } }
+      //  5.28-04 — 선사 리스트에만 있는 컨(g2 — EDI·세관 둘 다 없음)도 작업이 시작됐는데 완료·실적이 없으면 MGN 신고 대상이다.
+      //    검수사 2026-11-28 00:58 «신고오류입니다.MGN 신고대상입니다» · 00:59 «목록엔 있으나 화물이 없음 신고대상입니다» (OBWH 2803E FBIU5781671 — RF 리스트에만)
+      //    g2 는 EDI 에 아예 없고(통과 컨 제외) 컨 번호 모양(isValidCn)인 것만 — RZOR 차량(XNX26330006 전기버스 등)은 컨이 아니다.
+      if ((key === 'g1' || key === 'g2') && started) {
+        const m = items.filter((x) => !x.done && !x.term && (key === 'g1' || (x.edi === 'none' && isValidCn(x.cn))));   // 감사 — EDI 통과(POD 외국) 컨은 화물이 있다
+        m.forEach((x) => { x.mgn = true; });
+        if (m.length) { gg.code = 'MGN'; gg.codeN = m.length; }
+      }
       return gg;
     });
 

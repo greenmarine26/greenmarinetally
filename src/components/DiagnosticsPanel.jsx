@@ -379,10 +379,12 @@ function AlertDetails({ alert, onOpenContainer, reconShown, onOpenMfnList }) {
             <div className="text-dim-300 mb-0.5">EDI에 없는 컨번호{(d.podAskCns || []).length ? ` (⚠ 목적지 확인 ${(d.podAskCns || []).length}대 — 눌러서 POD 확정)` : ''}:</div>
             <TruncList items={d.extraCns} limit={10} unit="건" render={(cn) => {   // 4.22: «외 N건» 을 펼칠 수 있게
               const ask = (d.podAskCns || []).includes(cn);   // 5.00-02(감사 권장): 확인 요망 컨만 강조색(amber·굵게) — CnText 에 강조 클래스를 넘긴다
+              //  5.28-04 — 자료별 대조와 같은 판정(작업 시작 뒤 완료·실적 없음)이면 MGN 신고 대상을 붙인다(검수사 2026-11-28 «MGN이라고 표기는 안하고»)
+              const mgn = (d.mgnCns || []).includes(cn) ? <span className="text-sky-300 font-bold" data-mgn={cn} title={CUSTOMS_RESULT_CODES.MGN}> · MGN 대상(목록엔 있으나 화물 없음)</span> : null;
               return onOpenContainer
                 ? <button onClick={(e) => { e.stopPropagation(); onOpenContainer(cn); }} data-extra-cn={cn} data-pod-ask={ask ? '1' : undefined}
-                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• <CnText className={ask ? 'text-amber-200 font-bold' : 'text-dim-100'} cn={cn}/>{ask ? ' ⚠' : ''}</button>
-                : <div className="mono">• <CnText className="text-dim-100" cn={cn}/></div>;
+                    className={`mono block text-left underline decoration-dotted ${ask ? 'text-amber-200 font-bold' : 'text-amber-300/70'}`}>• <CnText className={ask ? 'text-amber-200 font-bold' : 'text-dim-100'} cn={cn}/>{ask ? ' ⚠' : ''}{mgn}</button>
+                : <div className="mono">• <CnText className="text-dim-100" cn={cn}/>{mgn}</div>;
             }}/>
           </div>
           </ReconFold>

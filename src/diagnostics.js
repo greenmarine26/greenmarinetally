@@ -280,10 +280,12 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
   //    음성 — 같은 수를 리스트 부족·EDI 밖 경고가 이미 말하면 «어긋남 N대» 는 한 번만(그쪽)이다(맨 아래 정렬 앞에서 지운다).
   //    count 는 음성 서명(패널 code:count)용 — «완료·실적에만»(g5)은 작업이 진행되면 늘어나므로 뺀 수 + «번호 없음» 대수.
   let _recon = null;
+  const _mgnSet = new Set();   // 5.28-04 — 자료별 대조가 MGN(목록엔 있으나 화물 없음) 신고 대상으로 본 컨 — «EDI에 없는 컨번호» 목록에도 같은 표기
   let _docOffTxt = '';   // 4.55 — 서류 기준 «터미널은 앱 − 서류 묶음 몫 이어야 한다» 와 실제가 다르면 그 문장(차이 0 이라 자료별 대조 줄이 안 서도 아래 bundle_doc 이 쓴다)
   if (voyage && mode === 'discharge') {
     const R = reconcileSources(voyage, mode, { voyageKey, skip: (cn) => _isLug(cn) || _isThru(cn) || _isCanc(cn) || (mode === 'discharge' && _isShift(cn)) });
     _docOffTxt = (R.doc && R.doc.off) ? bundleDocOffText(R.doc, R.app, R.term.n) : '';
+    (R.groups || []).forEach((g) => { if (g && g.code === 'MGN') (g.items || []).forEach((x) => { if (x && x.mgn) _mgnSet.add(String(x.cn || '').toUpperCase()); }); });
     //  ★ 4.54 — 앱 − 터미널 차이에서 «빈 FR 묶음»(터미널은 1대로 센다)이 설명하는 만큼은 어긋남이 아니다. gapOn 은 묶음으로 설명하고 남은 차이(gapRest)가 있을 때만 켠다.
     //    검수사 2026-10-26 19:17 «검수리스트는 182개가 맞는거고 동방은 176(+6)으로 표기하고 FR묶음 설명을 붙이면 됩니다»(282·276 의 오타로 읽음).
     const _bTxt = reconBundleText(R);
@@ -507,6 +509,7 @@ export function runDiagnostics({ keepCns = [], ediContainers, listRecords, xrayL
           //    (4.22 — 20 자르기는 없앴다. 패널이 10줄 뒤를 «… 외 N건 — 나머지 보기» 로 펼친다.)
           details: { extraCns: [...extraCns].sort((a, b) => (_podAsk(b) ? 1 : 0) - (_podAsk(a) ? 1 : 0)),   // 4.22: 20 자르기 없앰 — 패널이 «나머지 보기» 로 펼친다
             podAskCns: extraCns.filter(_podAsk),   // 눌러서 고칠 수 있는 것만 따로 — 패널이 라벨을 가른다
+            mgnCns: extraCns.filter((cn) => _mgnSet.has(String(cn || '').toUpperCase())),   // 5.28-04 MGN 신고 대상(작업 시작 뒤 완료·실적 없음)
             ediCount, realEdiCount, listCount: realListCount, matchedCount },   // 3.50-02: 패널의 «EDI ?대 / 리스트 ?대» 가 이 셋을 읽는다
         });
       }

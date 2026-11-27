@@ -1,0 +1,34 @@
+// 5.28-04 연막검사 — 리스트에만 있는 컨(EDI·세관 없음)이 작업 시작 뒤 완료·실적이 없으면 MGN 신고 대상으로 표기하는가. 실자료 OBWH 2803E FBIU5781671 · RZOR R131E 차량 번호는 제외.
+const path = require('path'); const fs = require('fs'); const os = require('os'); const { execSync } = require('child_process');
+const ROOT = path.resolve(process.argv[2] || process.cwd());
+let pass = 0, fail = 0; const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
+const TMP = fs.mkdtempSync(path.join(process.env.SMOKE_TMP || os.tmpdir(), 'mgn528-'));
+const stub = path.join(ROOT, 'tools/stub_fb_sdk.js');
+fs.writeFileSync(path.join(TMP, 'e.js'), `export { reconcileSources } from '${path.join(ROOT, 'src/sourceRecon.js')}'; export { runDiagnostics } from '${path.join(ROOT, 'src/diagnostics.js')}';`);
+execSync(`npx esbuild "${path.join(TMP, 'e.js')}" --bundle --platform=node --format=cjs --log-level=error --alias:firebase/app="${stub}" --alias:firebase/database="${stub}" --alias:firebase/storage="${stub}" --alias:firebase/auth="${stub}" --outfile="${path.join(TMP, 'b.cjs')}"`, { cwd: ROOT, stdio: 'pipe' });
+global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+const M = require(path.join(TMP, 'b.cjs'));
+const FX = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/mgn52804.json'), 'utf8'));
+const ob = FX.OBWH_2803E;
+const R = M.reconcileSources(ob, 'discharge', { voyageKey: 'OBWH_2803E' });
+const g2 = (R.groups || []).find((g) => g.key === 'g2');
+ok(R.started === true, '작업 시작된 항차로 봄');
+ok(g2 && g2.code === 'MGN' && g2.codeN === 1 && g2.items[0].cn === 'FBIU5781671' && g2.items[0].mgn === true, `리스트에만 있는 FBIU5781671 = MGN 대상 (${g2 && g2.code})`);
+const A = M.runDiagnostics({ ediContainers: ob.discharge.ediContainers, listRecords: ob.discharge.records, mode: 'discharge', voyage: ob, voyageKey: 'OBWH_2803E' });
+const le = A.find((a) => a.code === 'list_extra');
+ok(le && (le.details.extraCns || []).includes('FBIU5781671') && JSON.stringify(le.details.mgnCns) === '["FBIU5781671"]', '«EDI에 없는 컨번호» 목록에도 MGN 표기 자료(mgnCns)');
+const rz = FX.RZOR_R131E;
+const R2 = M.reconcileSources(rz, 'discharge', { voyageKey: 'RZOR_R131E' });
+const g2b = (R2.groups || []).find((g) => g.key === 'g2');
+ok(g2b && !g2b.code && !g2b.items.some((x) => x.mgn), 'RZOR 차량 번호(XNX26330006 전기버스)는 MGN 으로 세지 않음');
+const not = { ...ob, info: { ...ob.info, workStartAt: '', terminalStatus: 'planned' }, discharge: { ...ob.discharge, completed: {}, termSeen: {} } };
+const R3 = M.reconcileSources(not, 'discharge', { voyageKey: 'OBWH_2803E' });
+ok(!(R3.groups || []).some((g) => g.code === 'MGN'), '작업 시작 전에는 MGN 을 말하지 않음');
+const thru = JSON.parse(JSON.stringify(ob)); thru.discharge.ediContainers.FBIU5781671 = { ...(Object.values(thru.discharge.ediContainers)[0] || {}), cn: 'FBIU5781671', pod: 'CNSHA' };
+const R4 = M.reconcileSources(thru, 'discharge', { voyageKey: 'OBWH_2803E' });
+ok(!(R4.groups || []).some((g) => (g.items || []).some((x) => x.cn === 'FBIU5781671' && x.mgn)), '감사 — EDI 통과(POD 외국) 컨은 MGN 아님');
+const P = fs.readFileSync(path.join(ROOT, 'src/components/DiagnosticsPanel.jsx'), 'utf8');
+ok(/data-mgn=\{cn\}/.test(P) && /MGN 대상\(목록엔 있으나 화물 없음\)/.test(P), '패널이 EDI 밖 목록 줄에 «MGN 대상» 을 붙임');
+console.log(`smoke_mgn52804 ${pass}/${pass + fail}`);
+try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { console.warn('임시 폴더 정리 실패', e); }
+process.exit(fail ? 1 : 0);
