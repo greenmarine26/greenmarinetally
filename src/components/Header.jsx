@@ -21,6 +21,8 @@ import { crewShiftKey } from '../utils.js';   // 4.85: 교대 — 내 조의 조
 import { equipHoldersOf, equipHolderOf, crewPoolNamesOf, blockingHolderOf } from '../equipHold.js';   // 4.85: 이 항차·내 조에서 호기를 쥔 사람들
 import { fbRelieveCrane, fbPoolTakeCrane } from '../firebase.js';   // 4.85: 교대 기록
 import { canWorkNow, canRecordWorkNow, isAdminNow } from '../workChoice.js';
+import { openModeSwitch } from '../modeSwitch.js';   // 5.26: 헤더 [🛠 관리자] → 그 자리 호기 창
+import { fbLeaveCraneAsAdmin } from '../firebase.js';   // 5.26: [🏗 작업자] → 관리자로 돌아가기(그 조 내 칸에 떠난 표시)
 import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
 import DictMissingChip from './DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 
@@ -324,6 +326,28 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <button onClick={onOpenOwner} title="관리앱 — 소유자 메뉴" aria-label="관리앱 열기" data-hdr-owner="1"
               className={`${chipH} shrink-0 px-1.5 sm:px-2.5 rounded-pill text-sm font-bold flex items-center justify-center gap-1 border whitespace-nowrap ${route.name === 'owner' ? 'bg-fuchsia-800 text-fuchsia-100 border-fuchsia-500' : 'bg-ink-800 text-fuchsia-200 border-fuchsia-700'}`}>
               <span aria-hidden="true">👑</span><span className="hidden sm:inline">관리앱</span>
+            </button>
+          )}
+          {/*  ★ 5.26 관리자 ⇄ 작업자 그 자리 바꾸기 — 검수사(소유자) 본인 · 배 화면에서만. 검수사 2026-11-27 07:45 «제가 적업을 관리자 모드에서 작업자 모드로 상황에 따라 그자리에서 아무문제없이 바꿀수 있게» · 07:51 «네 이대로 해주세요»(미리보기).
+               ⚠ 5.20 «헤더에서 관리자는 뺴주세요» 와 다르다 — 그때는 관리자를 늘 알리는 칩이었고, 이것은 검수사 본인에게만 보이는 바꾸기 단추다(다른 검수원 헤더는 그대로). */}
+          {isOwnerName(inspector) && route.name === 'voyage' && workChoice && workChoice.mode === 'admin' && (
+            <button onClick={() => { openModeSwitch('작업'); }} title="관리자 — 누르면 이 배 호기를 골라 작업자로" aria-label="관리자 — 누르면 작업자로" data-mode-chip="admin"
+              className={`${chipH} shrink-0 px-1.5 sm:px-2 rounded-pill text-sm font-bold flex items-center justify-center gap-1 border border-violet-300 text-violet-200 bg-transparent whitespace-nowrap`}>
+              <span aria-hidden="true">🛠</span><span className="hidden min-[400px]:inline">관리자</span>
+            </button>
+          )}
+          {isOwnerName(inspector) && route.name === 'voyage' && workChoice && workChoice.adminWork && workChoice.shiftKey && (
+            <button onClick={() => askConfirm({
+              title: '관리자로 돌아갈까요?',
+              message: `${(info && info.vsl) || ''} ${workChoice.equip || ''} 등록에 «떠남» 표시만 붙입니다.\n지금까지 한 완료·보고·봉인자 이름은 그대로 남고, ${workChoice.equip || '그 호기'}는 비어 다른 검수원이 등록할 수 있습니다.`,
+              confirmLabel: '🛠 관리자로', cancelLabel: '취소',
+              onConfirm: async () => {
+                try { const n = await fbLeaveCraneAsAdmin(workChoice.voyageKey, workChoice.shiftKey, inspector); if (!n) alert('이 조에 내 호기 등록이 보이지 않습니다 — 이미 관리자로 돌아갔을 수 있습니다.'); }
+                catch (e) { console.warn('[5.26] 관리자로 돌아가기 실패', e); alert(`관리자로 돌아가지 못했습니다 — ${(e && e.message) || e}`); }
+              },
+            })} title={`작업자(${workChoice.equip || ''}) — 누르면 관리자로`} aria-label="작업자 — 누르면 관리자로" data-mode-chip="work"
+              className={`${chipH} shrink-0 px-1.5 sm:px-2 rounded-pill text-sm font-bold flex items-center justify-center gap-1 border border-amber-400 text-amber-200 bg-transparent whitespace-nowrap`}>
+              <span aria-hidden="true">🏗</span><span className="hidden min-[400px]:inline">작업자</span>
             </button>
           )}
           {(

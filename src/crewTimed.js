@@ -75,7 +75,7 @@ function keyFor(ms) {
   const sk = crewShiftKey(undefined, ms, 0);
   return ms < sk.startMs ? crewShiftKey(undefined, sk.startMs - 6 * 3600000, 0) : sk;
 }
-const regOf = (info, sk, no) => { const e = info && info.craneCrew && info.craneCrew[sk] && info.craneCrew[sk][`${no}호기`]; if (!e) return null; const name = typeof e === 'string' ? e.trim() : String(e.name || '').trim(); return name ? { name, at: Number(e.at) || 0, pool: !!(e && e.pool) } : null; };
+const regOf = (info, sk, no) => { const e = info && info.craneCrew && info.craneCrew[sk] && info.craneCrew[sk][`${no}호기`]; if (!e) return null; if (typeof e === 'object' && e.leftAs === 'admin') return null;   /* 5.26 재감사 중C: 관리자로 돌아간 칸은 등록 없음(교대 말이 칸을 다시 써 김성일을 되살리던 것) */ const name = typeof e === 'string' ? e.trim() : String(e.name || '').trim(); return name ? { name, at: Number(e.at) || 0, pool: !!(e && e.pool) } : null; };
 
 /** 시각을 풀고 앞사람을 채운다. info(그 배 info)가 있으면 그 조 등록을 함께 본다.
  *  반환 { ok, why?, shiftKey, shiftStart, start:{no:name}, keep:[no], items:[{ms,no,name,from,plan}], drop:[logKey] }

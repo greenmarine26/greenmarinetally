@@ -51,7 +51,7 @@ B.setAdminWorkReg(null);
 const fbs = rd('src/firebase.js'), aws0 = rd('src/components/AdminWorkStart.jsx'), app0 = rd('src/App.jsx');
 ok('활동 기록 — 등록 있으면 조회로 덮지 않고 자리 기록은 등록 배에서만', /const viewOnly = isNotWorkerNow\(\) && !_aReg;/.test(fbs) && /myWorkVoyageNow\(\) \|\| \(_aReg \? String\(_aReg\.voyageKey\)/.test(fbs));
 ok('기기 호기 맞춤은 등록(배·호기)이 바뀔 때만', /\}, \[awEqSig\]\);/.test(app0));
-ok('보고 창 단추 — 남이 등록한 호기는 막음 · 서버 시각 조 키 · 성공 뒤 단추 풀고 안내', /disabled=\{!!busy \|\| other\}/.test(aws0) && /crewShiftKey\(undefined, serverNow\(\), 0\)/.test(aws0) && /setBusy\(0\); setDone\(/.test(aws0));
+ok('보고 창 단추 — 남이 등록한 호기는 막음 · 서버 시각 조 키 · 성공 뒤 단추 풀고 안내', /disabled=\{!!busy \|\| other( \|\| !!done)?\}/.test(aws0) && /crewShiftKey\(undefined, serverNow\(\), 0\)/.test(aws0) && /setBusy\(0\); setDone\(/.test(aws0));
 ok('보고 창 단추 — 그 배 화면이 아니면(수석 상황판·검색 컨 상세) 등록 단추 대신 배 화면 열기', /r\.name === 'voyage' && r\.voyageKey === voyageKey/.test(aws0) && /data-admin-work-offship/.test(aws0) && /이 배 화면 열기/.test(aws0));
 //  관리자 투명(15:08~15:11) — 호기를 넣지 않은 소유자는 다른 검수원 명단에서 빠지고, 소유자·클로드는 다 본다
 const INS = { '김성일': { name: '김성일', loggedIn: true, lastActive: 1, workMode: 'view', assignVoyage: '', assignEquip: '' }, '박진우': { name: '박진우', loggedIn: true, workMode: 'work', assignVoyage: 'PCSZ_2635E', assignEquip: '2호기' }, '클로드': { name: '클로드', loggedIn: true, workMode: 'view' } };
@@ -66,6 +66,6 @@ const hd = rd('src/components/Header.jsx'), app = rd('src/App.jsx'), wr = rd('sr
 ok('헤더 — 관리자 칩 없음(data-work-mode="admin" 0) · 다른 검수원과 같은 [변경]', !/data-work-mode="admin"/.test(hd) && /workChoice && workChoice\.mode === 'work' && onChangeWork/.test(hd));
 ok('App — 문지기 캐시를 렌더 중에 effChoice 로 세우고 헤더에 effChoice', /setActiveWorkChoice\(effChoice\); setAdminWorkReg\(adminWork\);\n/.test(app) && /workChoice=\{effChoice\}/.test(app) && /adminWorkOf\(inspector, voyagesAll\)/.test(app));
 ok('App — 명단은 작업 선박이 있으면 work(배·호기·조), 없어지면 admin', /fbSetInspectorChoice\(inspector, adminWork \? \{ mode: 'work', voyageKey: adminWork\.voyageKey, equip: adminWork\.equip, shift: adminWork\.shift \} : \{ mode: 'admin' \}\)/.test(app));
-ok('보고 두 창 — 관리자면 [N호기] 등록하고 시작(AdminWorkStart) · 미르 등록과 같은 저장', /isAdminNow\(\) && <AdminWorkStart/.test(wr) && /isAdminNow\(\) && <AdminWorkStart/.test(pr) && /fbSetVoyageCraneCrew\(voyageKey, sk, \[\{ no, name: me \}\]\)/.test(aws));
+ok('보고 두 창 — 관리자면 [N호기] 등록하고 시작(AdminWorkStart) · 미르 등록과 같은 저장', /isAdminNow\(\) && <AdminWorkStart/.test(wr) && /isAdminNow\(\) && <AdminWorkStart/.test(pr) && /fbClaimCraneAsAdmin\(voyageKey, sk, no, me, others\)/.test(aws)   /* 5.26: 같은 칸(craneCrew 조·호기)을 서버 확인 뒤 쓴다 */);
 console.log(`\n5.20 관리자 작업 선박 연막검사 — ${n - bad}/${n}`);
 process.exit(bad ? 1 : 0);

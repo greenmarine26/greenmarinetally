@@ -5,6 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';   // PC 우측 패널(조상에 transform 이 있으면 fixed 가 잘린다) 밖, body 직속으로 그린다
 import { effectivePos, getEquipNumber, canCompleteContainer, isoToLabel, fmtPos } from '../utils.js';
 import { equipGateText, canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';
+import { askRecordSwitch } from '../modeSwitch.js';   // 5.26: 관리자로 막힌 자리에서 그 자리 작업자 바꾸기(검수사 본인)
 import { fbCompleteContainer, fbCompleteContainersAtomic, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone } from '../voice.js';
 import { getBayPairs } from '../twin.js';
@@ -49,7 +50,7 @@ export default function SlotLookupModal({ open, base, voyageKey, voyageInfo = nu
                     const p = effectivePos(h);
                     const ok = canCompleteContainer(h, mode, records, shiftCns);
                     return (
-                      <button key={h.cn} disabled={!ok} onClick={() => { if (!canRecordWorkNow()) { alert(recordGateText('선적 완료')); return; } if (!getEquipNumber()) { alert(equipGateText()); return; } setPicked(h); }}
+                      <button key={h.cn} disabled={!ok} onClick={async () => { if (!canRecordWorkNow() && !(await askRecordSwitch('선적 완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */ if (!getEquipNumber()) { alert(equipGateText()); return; } setPicked(h); }}
                         className={`text-left px-3 py-2 rounded border text-xs ${ok ? 'bg-ink-800 border-line hover:bg-ink-700' : 'bg-ink-950 border-line opacity-40'}`}>
                         <span className="mono font-black text-white"><CnText cn={h.cn} /></span>
                         <span className="text-dim-200 ml-2">{isoToLabel(h.iso || '') || h.iso || ''} {h.fe || ''}</span>
@@ -83,7 +84,7 @@ export default function SlotLookupModal({ open, base, voyageKey, voyageInfo = nu
         onCompleteBoth={async (cns) => {
           const bad = cns.map((cn) => allContainers.find((x) => x && x.cn === cn)).filter((o) => o && !canCompleteContainer(o, mode, records, shiftCns));
           if (bad.length) { alert(`평택 작업 대상이 아닙니다 — 통과화물 ${bad.map((o) => o.cn?.slice(-4)).join(', ')}은 확인할 수 없습니다.`); return; }
-          if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }
+          if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */
           if (!getEquipNumber()) { alert(equipGateText()); return; }
           if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, getEquipNumber()); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));

@@ -23,6 +23,8 @@ import Ferry1700Alert from './components/Ferry1700Alert.jsx';   // 3.63: 카페�
 import { consumeUpdateResume } from './updateResume.js';   // 3.7-04: 업데이트 새로고침이면 로그인·화면을 되살린다
 import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
+import ModeSwitchSheet from './components/ModeSwitchSheet.jsx';   // 5.26: 관리자로 막힌 자리에서 그 자리 작업자 바꾸기(검수사 본인)
+import { canSwitchHere, openModeSwitch } from './modeSwitch.js';
 import MirFab from './components/MirFab.jsx';   // 3.41: 떠 있는 미르 — 어느 화면에서든 모든 질문(검수사 2026-09-10)
 import { mirMoodEvent, setMirYard } from './mir.js';   // 3.56: 작업 선박을 새로 고르면 미르가 기뻐한다(확정 자리에서 알린다) · 3.69: 야드 상황 재료
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
@@ -84,7 +86,11 @@ export default function App() {
   //    문지기(firebase.assertCanWork)가 던지기 직전에 이벤트를 쏘고, 호출부가 catch 를 안 하거나 «저장 실패» 로만 말해도 여기서 이유가 보인다.
   const [viewOnlyMsg, setViewOnlyMsg] = useState('');
   useEffect(() => {
-    const h = (e) => { setViewOnlyMsg((e && e.detail && e.detail.message) || '조회만으로 들어와 있습니다 — 보기만 됩니다.'); };
+    const h = (e) => {
+      //  5.26: 쓰는 자리 문지기가 «관리자라서» 막았고 검수사 본인이 배 화면에 있으면 띠 대신 그 자리 호기 창(바꾼 뒤 한 번 더 누른다 — 하던 일은 화면 쪽에서 이미 끝났다).
+      if (e && e.type === 'viewOnlyBlocked' && e.detail && e.detail.adminOnly && canSwitchHere()) { const w = e.detail.what || '작업'; Promise.resolve(openModeSwitch(w, { again: true })).then((ok) => { if (ok === true) setTimeout(() => setViewOnlyMsg(`🏗 작업자로 바꿨습니다 — «${w}» 은 아직 기록되지 않았습니다. 한 번 더 눌러 주세요.`), 50); else if (ok === null) setViewOnlyMsg(e.detail.message || ''); }); return; }
+      setViewOnlyMsg((e && e.detail && e.detail.message) || '조회만으로 들어와 있습니다 — 보기만 됩니다.');
+    };
     window.addEventListener('viewOnlyBlocked', h);
     window.addEventListener('writeNotice', h);   // 3.60-09: 쓰기 층 한 줄 알림(이미 완료된 컨 등)도 같은 띠
     return () => { window.removeEventListener('viewOnlyBlocked', h); window.removeEventListener('writeNotice', h); };
@@ -734,6 +740,7 @@ export default function App() {
         </div>
       )}
       <UpdatePrompt inspector={inspector}/>
+      <ModeSwitchSheet voyages={voyages} inspector={inspector} inspectors={inspectorsView}/>
       {askShift && (
         <div className="fixed inset-0 z-[110] bg-black/85 flex items-center justify-center p-4" data-shift-ask="1">
           <div className="bg-ink-900 border border-line rounded-card w-full max-w-md p-3 space-y-2">

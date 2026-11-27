@@ -2831,4 +2831,5 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log(`\n회귀 기준표 연막검사 ${n - bad}/${n}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* 임시 폴더 */ }
   if (bad) { console.log('✗ 실패 — 배포 금지'); process.exit(1); }
+  process.exit(0);   // 5.26: 관리자 장면에서 열린 그 자리 바꾸기 창(150ms 확인 타이머)이 노드를 붙잡지 않게 — 검사는 위에서 끝났다
 })().catch((e) => { console.error('✗ 검사 중 오류:', e && e.stack || e); try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (x) { /* */ } process.exit(1); });

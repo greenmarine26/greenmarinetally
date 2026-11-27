@@ -4,6 +4,8 @@ import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, onValue, push, set, update, remove, get, off, goOffline, goOnline
 } from 'firebase/database';
+import * as _fbdbNS from 'firebase/database';   // 5.26: runTransaction 은 이름으로 안 끌어온다 — 연막검사 가짜 SDK 들에 없는 이름이라 번들이 깨지지 않게(없으면 아래에서 막고 알린다)
+const runTransaction = (...a) => { const f = _fbdbNS.runTransaction; if (typeof f !== 'function') throw new Error('runTransaction 없음(시험용 SDK)'); return f(...a); };
 import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
 import {
@@ -188,7 +190,8 @@ function assertCanRecordWork(what) {
   const e = new Error(adminWorkGateText(what));
   e.viewOnly = true;   // 호출부가 조회만과 같은 길(e.viewOnly → 문구 그대로)로 사람에게 말한다
   e.adminOnly = true;
-  try { window.dispatchEvent(new CustomEvent('viewOnlyBlocked', { detail: { what: what || '작업', message: e.message } })); } catch (x) { /* 브라우저 밖(연막·노드)에서는 알릴 화면이 없다 */ }
+  //  5.26: detail.adminOnly — 검수사 관리자가 배 화면에 있으면 App 이 띠 대신 그 자리 호기 창
+  try { window.dispatchEvent(new CustomEvent('viewOnlyBlocked', { detail: { what: what || '작업', message: e.message, adminOnly: true } })); } catch (x) { /* 브라우저 밖(연막·노드)에서는 알릴 화면이 없다 */ }
   throw e;
 }
 
@@ -347,6 +350,55 @@ export async function fbMirCraneShipMove(plan, by) {
 //    이것은 «내가 하는 검수 작업» 이 아니라 **누가 어느 호기에 있는지·언제 시작했는지를 적는 관리 기록**이다.
 //    검수사·수석이 현장을 돌며 조회만으로 등록하는 바로 그 일이라, 막으면 관리가 멈춘다(실측 — 네 항차 craneCrew 전부 빈칸).
 //    조회만이 작업량에 안 섞이는 것은 완료·보고 쪽 문지기가 이미 지킨다.
+//  ★ 5.26 관리자로 돌아가기 — 검수사 2026-11-27 07:45 «관리자 모드에서 작업자 모드로 상황에 따라 그자리에서 아무문제없이 바꿀수 있게».
+//    그 조 내 등록 칸을 지우지 않고 떠난 표시(leftAt · admin)만 붙인다 — 그때까지 한 완료·보고·봉인자 이름은 그대로 남고(조 등록 이력),
+//    갱 수(leftAt 이후 뺌)·관리자 작업 선박 판정(adminWorkOf — leftAt 이면 작업자 아님)·호기 단추(빈 호기)는 떠난 것으로 읽는다. 다시 호기를 누르면 칸을 새로 써 떠난 표시가 지워진다.
+//  ★ 5.26 관리자로 돌아가기 — 검수사 2026-11-27 07:45 «관리자 모드에서 작업자 모드로 상황에 따라 그자리에서 아무문제없이 바꿀수 있게».
+//    그 조 내 등록 칸을 지우지 않고 떠난 표시(leftAt · leftAs 'admin')만 붙인다 — 그때까지 한 완료·보고·봉인자 이름은 그대로 남고,
+//    그 뒤는 crewSegmentAt 이 그 호기를 사람 없음으로 돌려주며(X-RAY 봉인자·조별 통계), 갱 수·관리자 작업 선박·호기 단추·배 이동 판정은 등록 없음으로 읽는다.
+//    감사 중3 — 칸마다 서버 값을 다시 읽어 이름이 아직 나일 때만 쓴다(그 사이 남이 등록한 칸에 떠난 표시를 붙이지 않게) · 시간 제한.
+export async function fbLeaveCraneAsAdmin(voyageKey, shiftKey, name) {
+  const me = String(name || '').trim();
+  if (!voyageKey || !shiftKey || !me) return 0;
+  const base = `voyages/${voyageKey}/info/craneCrew/${shiftKey}`;
+  const snap = await _withTimeout(get(ref(db, base)), '관리자로 돌아가기(호기 등록 읽기)');
+  const cc = (snap && snap.exists() && snap.val()) || {};
+  const now = Date.now(); let n = 0;
+  for (const k of Object.keys(cc)) {
+    const v = cc[k]; const nm = v && typeof v === 'object' ? String(v.name || '').trim() : String(v || '').trim();
+    if (nm !== me || (v && typeof v === 'object' && Number(v.leftAt) > 0)) continue;
+    const r = await _withTimeout(runTransaction(ref(db, `${base}/${k}`), (cur) => {
+      const cn = cur && typeof cur === 'object' ? String(cur.name || '').trim() : String(cur || '').trim();
+      if (cn !== me || (cur && typeof cur === 'object' && Number(cur.leftAt) > 0)) return undefined;   // 그 사이 바뀜 — 쓰지 않는다
+      return typeof cur === 'object' ? { ...cur, leftAt: now, leftAs: 'admin' } : { name: me, leftAt: now, leftAs: 'admin' };
+    }), '관리자로 돌아가기(떠난 표시)');
+    if (r && r.committed) n += 1;
+  }
+  return n;
+}
+//  ★ 5.26 그 자리에서 작업자로 — 호기 단추(AdminWorkStart)가 부른다. 감사 중2·중4:
+//    ① 쓰기 직전에 서버의 그 칸을 다시 읽어(트랜잭션) 남의 이름이 있으면 거절한다 — 빈 칸·내 칸·내가 관리자로 떠난 칸만 쓴다(남이 다른 배로 옮긴 칸은 그 사람 기록이라 덮지 않는다).
+//    ② 같은 조에 다른 배에 남은 내 등록에는 떠난 표시를 붙인다(두 배에 유령 등록이 남지 않게).
+//    기기 호기(gm_equip_no)도 이 호기로 맞춘다(4.56-04 와 같은 뜻).
+export async function fbClaimCraneAsAdmin(voyageKey, shiftKey, no, name, otherVoyageKeys = []) {
+  const me = String(name || '').trim(); const k = `${no}호기`;
+  if (!voyageKey || !shiftKey || !me || !(no >= 1 && no <= 9)) throw new Error('등록할 내용이 없습니다');
+  let other = '';
+  const r = await _withTimeout(runTransaction(ref(db, `voyages/${voyageKey}/info/craneCrew/${shiftKey}/${k}`), (cur) => {
+    const nm = cur && typeof cur === 'object' ? String(cur.name || '').trim() : String(cur || '').trim();
+    const adminLeft = cur && typeof cur === 'object' && cur.leftAs === 'admin';
+    if (nm && nm !== me && !adminLeft) { other = nm; return undefined; }
+    return { name: me, at: Date.now() };
+  }, { applyLocally: false }), '호기 등록');   // 5.26 재감사 중B: 서버가 받아들인 뒤에만 화면이 작업자로 바뀐다(먼저 바뀌어 하던 일이 기록된 뒤 되돌려지는 틈 없음)
+  if (!r || !r.committed) throw new Error(other ? `${k}는 이 조에 ${other} 님이 등록돼 있습니다` : '호기 등록이 서버에 반영되지 않았습니다');
+  try { if (getEquipNumber() !== k) { setEquipNumber(k); window.dispatchEvent(new CustomEvent('equipChanged', { detail: k })); } } catch (e) { console.warn('[5.26] 기기 호기 맞춤 실패', e); }   // 재감사 중B: 다른 배 정리보다 먼저
+  for (const ok of (otherVoyageKeys || [])) {
+    if (!ok || ok === voyageKey) continue;
+    try { await fbLeaveCraneAsAdmin(ok, shiftKey, me); } catch (e) { console.warn('[5.26] 다른 배 내 등록에 떠난 표시 실패', ok, e); }
+  }
+  return k;
+}
+
 export async function fbSetVoyageCraneCrew(voyageKey, shiftKey, crew) {
   if (!voyageKey || !shiftKey) return null;
   const list = (Array.isArray(crew) ? crew : []).filter((c) => c && c.no >= 1 && c.no <= 9 && String(c.name || '').trim());

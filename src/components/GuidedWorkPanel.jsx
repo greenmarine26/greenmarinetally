@@ -18,6 +18,7 @@ import { useHatchCountConfirm } from './HatchCountConfirm.jsx';   // 4.10: 해�
 import { fbHoldContainers, fbReleaseHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbSetActualPosition, fbPeekCompleted, fbAddWorkReport, fbSetInspectorActivity, fbPickIso, fbSetWorkOrder } from '../firebase.js';   // ★ 3.47: 규격 3자 확정
 import { workOrderOf, workOrderText, togglePref, ORDER_PREF_KEYS, ORDER_PREF_LABEL, ALL_EQUIP_KEY } from '../workOrder.js';   // 4.09: 양하 순서 조건 한 벌(호기별 기억)
 import { canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 조회만은 쓰지 않는다 — 보기만
+import { askRecordSwitch } from '../modeSwitch.js';   // 5.26: 관리자로 막힌 자리에서 그 자리 작업자 바꾸기(검수사 본인)
 import EsealVoiceBar from './EsealVoiceBar.jsx';   // 3.71: ATPR 위해행 엠티 선적 — 엠티실 뒷 세 자리를 음성으로
 import { speak, spellKo } from '../voice.js';
 import { workPauseOf } from '../mir.js';   // 4.63-04: 내 호기가 작업 중단 중이면 해치커버 물음을 하지 않는다
@@ -836,7 +837,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // 확인 (트윈은 둘 다 한 번에)
   const handleConfirm = async () => {
     if (!card || busy) return;
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;   // V8.09-06: XRAY 실번호 미입력 차단
     //  ★ 4.23-01 2차: 규격·풀엠티·항구가 다른 맞교환이면 앱이 자리를 정하지 않는다 — 확인 대신 위치 지정을 연다(배정 후 바로 선적확인 켬).
     const _w = warnOf(card);
@@ -847,8 +848,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       // TallyOne 1.55: **완료에 갱(호기)을 남긴다.** 검수사 원문 —
       //   *"장비를 바꿔서 해야 하는데 4호기로 다함. 이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
       //   이 화면이 갱을 아는 유일한 곳이다(헤더와 localStorage 한 벌 공유). 안 넘기면 기록에 갱이 없다.
-      if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector, equip);
-      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector, 'normal', '', equip);
+      if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector, (getEquipNumber() || equip));
+      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector, 'normal', '', (getEquipNumber() || equip));
       noteWorked(card.main);   // 1.57: 예측대로 친 것도 흐름 감지에 넣는다(감지 기준은 '실제로 무엇을 쳤나'다)
       setResumeCns([]); setSingleMode(false);   // 2.75: 한 장 넘겼으니 맨 앞 고정도 푼다
       setConsecFix(0);
@@ -861,14 +862,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    앱은 순서를 정하지 않고 두 대를 나란히 놓고 고르게 한다. 고른 한 대만 완료되고 나머지는 다음 카드로.
   const handleConfirmOne = async (which, opt = {}) => {
     if (!card?.twin || busy) return;
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
     if (blockIfXrayMissing()) return;
     const one = which === 'twin' ? card.twin : card.main;
     const mate = which === 'twin' ? card.main : card.twin;   // 4.08-02: 남은 짝
     if (mode === 'loading' && loadingSlotOf(one).kind === 'swapWarn') { singlePosRef.current = !!opt.single; setPosFor(one); return; }   // 4.23-01 2차: 규격 다른 맞교환은 위치 지정으로 · 5.11 싱글 패널에서 왔는지 기억(실은 뒤 그 베이를 이어 감)
     setBusy(true);
     try {
-      await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', equip);
+      await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', (getEquipNumber() || equip));
       noteWorked(one, true);
       //  ★ 4.08-02 (검수사 2026-10-07 «하나 처리하면 하나가 사라져 베이에서 직접처리해야 하는 경우»): 짝이 남으면 짝 없는 홀드 20피트(싱글)가 되어 큐 맨 끝으로 밀렸다
       //    (STSE 2677E 실데이터 — 베이 11~13 홀드 6/10장 · 19~21 6/16장). 한 대만 내렸으면 남은 짝을 **바로 다음 카드**로 올린다(홀드·데크 모두).
@@ -1547,7 +1548,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   const applyFixOne = async (actual, slot, opts = null) => {   // 4.25-02 opts.swap === false — 맞바꿈 안 함(트윈 한 대만에서 풀·엠티가 섞인 칸)
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return false; }   // 5.12 감사 중1: 관리자·조회만은 자리 맞바꿈부터 쓰지 않는다(완료 없이 자리만 바뀌는 반쪽 쓰기 방지)
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return false;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 5.12 감사 중1: 관리자·조회만은 자리 맞바꿈부터 쓰지 않는다(완료 없이 자리만 바뀌는 반쪽 쓰기 방지)
     if (mode === 'loading') {
       //  ★ 2.80-01 (검수사 실사용 보고 2026-08-28 21:0x) — **밀려난 계획 컨은 창고가 아니라 «온 컨의 옛 자리»로 간다.**
       //    실측 사고: 28-07-82(계획 SKHU6475028)에 4172 를 넣자 5028 이 `planTaken` 으로 **창고**로 갔다.
@@ -1567,8 +1568,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         canSwap ? { swapWith: slot.cn, actualWork: true } : (slotMode ? { actualWork: true } : undefined));   // 4.26-03(2차 시뮬 하-1): 자리 확인에서 풀·엠티가 달라 안 맞바꿔도 이동 사유는 «실제 실린 자리(actual)» 그대로
       if (!r) return false;
     }
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return false; }   // 3.51: 조회만은 보기만
-    const _cr = await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', equip);
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return false;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
+    const _cr = await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', (getEquipNumber() || equip));
     if (_cr && _cr.ok !== false) await markDischargeSlot(actual, slot);   // 4.42-04: 완료가 찍힌 뒤에만 자리를 적는다(이미 남이 완료했거나 실패했으면 유령 자리를 남기지 않는다)   // 1.55: 갱(호기)
     return true;
   };
@@ -1684,7 +1685,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // 단독 카드 수정: 실제 온 컨 1대
   const handleFixPick = async (c) => {
     if (busy || !card) return;
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 5.12 감사 중1: 관리자·조회만은 자리 맞바꿈부터 쓰지 않는다(완료 없이 자리만 바뀌는 반쪽 쓰기 방지)
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 5.12 감사 중1: 관리자·조회만은 자리 맞바꿈부터 쓰지 않는다(완료 없이 자리만 바뀌는 반쪽 쓰기 방지)
     if (xrayMissingByCn(c.cn)) {   // V8.09-06: 실제 컨이 XRAY 대상인데 실번호 미입력이면 차단
       needXray(c.cn);   // 4.25-02: 그 컨의 입력칸을 연다(카드 밖 컨이면 카드 아래)
       return;
@@ -1696,7 +1697,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const applySinglePick = async () => {
     const c = fixPick;
     if (busy || !card || !c) return;
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */
     if (xrayMissingByCn(c.cn)) { needXray(c.cn); return; }
     if (!(await askIfAway(c, card.main, card.pos))) return;   // 2.80-02 다른 베이·다른 양하항 안내(4.25-02 — 트윈 «이 한 대만» 과 한 벌)
     if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
@@ -1757,7 +1758,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // 트윈 카드 수정: 앞/뒤 동시 — 바뀐 슬롯은 재배정+완료, 안 바뀐 슬롯은 예측 컨 그대로 완료
   const handleTwinFixApply = async () => {
     if (busy || !card || !card.twin) return;
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 5.12 감사 중1: 관리자·조회만은 자리 맞바꿈부터 쓰지 않는다(완료 없이 자리만 바뀌는 반쪽 쓰기 방지)
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 5.12 감사 중1: 관리자·조회만은 자리 맞바꿈부터 쓰지 않는다(완료 없이 자리만 바뀌는 반쪽 쓰기 방지)
     if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
     //  4.25-02: 아래에서 «엇갈림» 이면 비운 쪽을 채우므로 상태 대신 이 두 값으로 끝까지 간다.
     let pf = fixPickFront, pb = fixPickBack;
@@ -1821,7 +1822,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         if (pb && !(await reassignAsk(pb.cn, card.twin.bay, card.twin.row, card.twin.tier, undefined, _half, _half))) { setBusy(false); return; }
       }
       await fbCompleteContainersAtomic(voyageKey, mode,
-        [frontCn, backCn], inspector, equip);   // 1.55: 갱(호기)
+        [frontCn, backCn], inspector, (getEquipNumber() || equip));   // 1.55: 갱(호기)
       if (pf) await markDischargeSlot(pf, card.main);   // 4.42-04: 완료가 찍힌 뒤에 적는다
       if (pb) await markDischargeSlot(pb, card.twin);
     } catch (e) {
@@ -2933,8 +2934,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           onSave={async (b, r, t, opts) => fbReassignContainerPosition(voyageKey, mode, posFor.cn, b, r, t, inspector, { actualWork: true, ...(opts || {}) })}
           onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}
           onCompleteBoth={async (cns) => {
-            if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }
-            if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, equip); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', equip);   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
+            if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */
+            if (cns.length > 1) await fbCompleteContainersAtomic(voyageKey, mode, cns, inspector, (getEquipNumber() || equip)); else for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', (getEquipNumber() || equip));   // 4.86-02: 여러 대는 한 번의 묶음 쓰기로(둘 다 되거나 둘 다 안 되거나 · 호기 물음도 한 번) — 한 대씩 쓰면 둘째가 실패할 때 트윈 한 대만 완료된다
             noteWorked(posFor);
             //  5.11 — 싱글 패널에서 온 한 대는 짝이 아니라 그 베이를 이어 간다(handleConfirmOne single 과 같은 길 · 검수사 2026-11-18 «모든 모드에서 적용되어야 합니다»).
             const _sb = singlePosRef.current && cns.length === 1 ? parseInt(posFor && posFor.bay, 10) : NaN; singlePosRef.current = false;

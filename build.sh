@@ -1259,6 +1259,7 @@ node tools/smoke_fix52304.cjs "$(pwd)" || { echo "✗ 5.23-04 진단 수리 연�
 node tools/smoke_offgrid524.cjs "$(pwd)" || { echo "✗ 5.24 베이매트릭스 문지기 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_crewearly52401.cjs "$(pwd)" || { echo "✗ 5.24-01 조 근무자 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_myequip52403.cjs "$(pwd)" || { echo "✗ 5.24-03 내 호기 연막검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_modeswitch526.cjs "$(pwd)" || { echo "✗ 5.26 관리자·작업자 그 자리 바꾸기 연막검사 실패 — 배포 금지"; exit 1; }
 #  4.53: **선사 지시 «본선 잔류» 확정 — 출항 선적 EDI 에 다른 자리로 실려 오면 양하 315 · 시프팅 파란 ◆ 64** — MAMP 641N 실자료(10-25·10-26 두 시점 항차 사본 · 선적 EDI 원문)를
 #    실소스 판정(keepConfirmedOf)·홈 카드·수석 보드·항차 화면·진단·컨 상세·카고플랜·미르·콘앱 함수·실 firebase.js(메모리 DB)로 잰다.
 #    검수사 2026-10-26 14:50 «양하는 315 시프팅은 64개로 확정된듯합니다» · 15:02 «시프팅 예정건이 선적플랜 10번 데크에 존재하는걸 볼수있습니다. 이로서 확정합니다.»

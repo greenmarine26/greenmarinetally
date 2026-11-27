@@ -78,7 +78,7 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     ok('⑥ X-RAY 봉인자 등록(register:true)만 관리자 문지기 · 이름 정정은 열림', /if \(sealerOpt && sealerOpt\.register === true\) assertCanRecordWork\('X-RAY 봉인자 등록'\)/.test(fnBody('fbSetXraySeal')));
     ok('⑥ 호기 이동·외부 중단 보고와 수화물 확정은 관리 기록 — 관리자에게 열림', /report\.type === 'crane_move' \|\| report\.type === 'external_pause'\)\) assertCanWork/.test(fnBody('fbAddWorkReport')) && !/assertCanRecordWork/.test(fnBody('fbSetLuggConfirm')));
     const gw = rd('src/components/GuidedWorkPanel.jsx');
-    ok('⑥ 자동 가이드 [수정] 길은 자리 맞바꿈 전에 막는다(감사 중1)', ['const handleFixPick = async', 'const handleTwinFixApply = async', 'const applyFixOne = async'].every((k) => { const i = gw.indexOf(k); return i > 0 && gw.slice(i, i + 400).includes('if (!canRecordWorkNow())'); }));
+    ok('⑥ 자동 가이드 [수정] 길은 자리 맞바꿈 전에 막는다(감사 중1)', ['const handleFixPick = async', 'const handleTwinFixApply = async', 'const applyFixOne = async'].every((k) => { const i = gw.indexOf(k); return i > 0 && gw.slice(i, i + 400).includes('if (!canRecordWorkNow()'); }));   /* 5.26: «&& !(await askRecordSwitch(…))» 가 붙어도 같은 문지기 */
     const open = ['fbSetVoyageCraneCrew', 'fbSetVoyageWorkStart'];
     const shut = open.filter((k) => /assertCanRecordWork\(/.test(fnBody(k)));
     ok('⑥ 관리 기록(조 등록·시작 시각)은 막지 않는다(3.51-01)', shut.length === 0, shut.join(','));

@@ -27,6 +27,8 @@ export const WORK_CHOICE_KEY = 'tallyone_work_choice';
 let _active;
 export function setActiveWorkChoice(choice) { _active = choice || null; }
 /** 4.46 — 지금 이 화면 세션의 로그인 이름(App 이 세운 workChoice.name). App 이 아직 안 세웠으면 ''(로그인 화면·연막검사). 보고 고치기 문지기가 «넘겨받은 이름»만 믿지 않게 대조한다. */
+/** 5.26 — 지금 화면 선택의 호기(작업자이면서 관리자면 그 조 등록 호기). */
+export function activeChoiceEquip() { return (_active && _active.equip) ? String(_active.equip).trim() : ''; }
 export function activeChoiceName() { return (_active && _active.name) ? String(_active.name).trim() : ''; }
 
 /** 이 선택이 «내 선박» 으로 들고 있는 항차 키 — 작업자의 선박, 또는 근무시간 밖 조회만(4.79)이 고른 선박. 일반 검수원은 이 배 하나만 본다. 없으면 ''. */
@@ -123,7 +125,8 @@ export function adminWorkOf(name, voyages, nowMs = serverNow()) {
     //  배 사이 비교도 내 칸의 시각으로 한다(그 조 남의 등록 시각에 끌려가지 않게).
     const raw = (info.craneCrew && info.craneCrew[seg.key]) || {};
     const atOf = (no) => { const v = raw[`${no}호기`]; return Number(v && typeof v === 'object' && v.at) || 0; };
-    const nos = Object.keys(seg.cranes).filter((no) => String(seg.cranes[no]).trim() === n).map(Number).sort((a, b) => (atOf(b) - atOf(a)) || (a - b));
+    const _left = (no) => { const v = raw[`${no}호기`]; return !!(v && typeof v === 'object' && Number(v.leftAt) > 0); };   // 5.26: 관리자로 돌아간(떠난) 칸은 작업 선박이 아니다
+    const nos = Object.keys(seg.cranes).filter((no) => String(seg.cranes[no]).trim() === n && !_left(no)).map(Number).sort((a, b) => (atOf(b) - atOf(a)) || (a - b));
     if (!nos.length) continue;
     const cand = { voyageKey: vk, equip: `${nos[0]}호기`, shiftKey: seg.key, shift: /야간$/.test(seg.key) ? 'night' : (/주간$/.test(seg.key) ? 'day' : ''), at: atOf(nos[0]) || Number(seg.regAt) || 0 };
     if (!shipHasShifts(info.vsl)) cand.shift = '';
@@ -134,7 +137,7 @@ export function adminWorkOf(name, voyages, nowMs = serverNow()) {
 /** 화면이 쓸 «지금 상태» — 관리자가 자기 작업 선박(viewingKey)을 보고 있으면 작업자이면서 관리자(mode 'work' · adminWork true), 아니면 고른 그대로. */
 export function effectiveWorkChoice(choice, adminWork, viewingKey) {
   if (!choice || choice.mode !== 'admin' || !adminWork || !viewingKey || viewingKey !== adminWork.voyageKey) return choice;
-  return { ...choice, mode: 'work', voyageKey: adminWork.voyageKey, equip: adminWork.equip, shift: adminWork.shift, adminWork: true };
+  return { ...choice, mode: 'work', voyageKey: adminWork.voyageKey, equip: adminWork.equip, shift: adminWork.shift, shiftKey: adminWork.shiftKey, adminWork: true };   // 5.26 shiftKey — 헤더 [관리자로] 가 그 조 칸에 떠난 표시
 }
 //  5.20: 관리자의 지금 조 작업 선박 등록(adminWorkOf 결과) — App 이 렌더 중에 세운다. 활동 기록(fbSetInspectorActivity)이
 //    다른 배·홈 화면에서도 workMode 'work' 를 지키게 한다(감사 5.20 — 30초 틱이 'view' 로 덮어 호기가 비어 보이던 것).

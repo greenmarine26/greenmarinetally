@@ -44,6 +44,7 @@ function craneSpanOf(voyage, no, shiftKey, afterMs = 0) {
 const regOf = (info, shiftKey, no) => {
   const e = info && info.craneCrew && info.craneCrew[shiftKey] && info.craneCrew[shiftKey][`${no}호기`];
   if (!e) return null;
+  if (typeof e === 'object' && e.leftAs === 'admin') return null;   // 5.26 감사 상3: 관리자로 돌아간 칸은 그 호기 등록이 아니다(배 이동이 «돌아옴» 으로 읽어 김성일을 되살리던 것)
   const name = typeof e === 'string' ? e.trim() : String(e.name || '').trim();
   return name ? { ...(typeof e === 'object' ? e : { _str: true }), name } : null;
 };

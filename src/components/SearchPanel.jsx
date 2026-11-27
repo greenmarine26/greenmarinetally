@@ -8,6 +8,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sizeLenKnown, sizeLenOf } from '../tallyReport.js';   // 4.88: 규격 길이 한 벌
 import { ymdKST } from '../meToday.js';   // 4.88: 화면·인쇄·파일 이름 날짜는 KST 한 벌
 import { equipGateText, canWorkNow, workGateText, mirWorkCtx, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 호기 없음 안내 + «조회만은 보기만» 게이트 · 4.38: mirWorkCtx — 작업 중 사담 미루기
+import { askRecordSwitch, switchedAt } from '../modeSwitch.js';   // 5.26: 관리자로 막힌 자리에서 그 자리 작업자 바꾸기(검수사 본인)
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { shipOpMapper } from '../data/tallyFormats.js';   // 3.51-02: 배별 선사 별칭 — 이 패널도 제 목록을 따로 병합하므로 같은 한 벌을 지나야 한다(§4-4)
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
@@ -631,7 +632,8 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   useEffect(() => {
     if (!_hatchFollow || !voyageKey || !hatchPending.length) return;
     if (!canRecordWorkNow()) return;   // 5.12: 관리자도 해치 자동 보고를 내 이름으로 남기지 않는다 · 3.51: 조회만은 보기만 — 자동 기록도 돌지 않는다(사람이 누른 것이 아니라 알릴 자리도 없다)
-    const todo = hatchPending.filter((e) => !_hatchInFlightAll.has(`${voyageKey}|${e.hatch}|${e.action}`));
+    const _sw = switchedAt();   // 5.26 감사 중6: 관리자에서 그 자리로 바뀐 뒤면 바뀌기 전 사건은 자동으로 내 이름에 적지 않는다(배너로 남는다)
+    const todo = hatchPending.filter((e) => !_hatchInFlightAll.has(`${voyageKey}|${e.hatch}|${e.action}`) && !(_sw && Number(e.from) < _sw));
     if (!todo.length) return;
     for (const e of todo) _hatchInFlightAll.add(`${voyageKey}|${e.hatch}|${e.action}`);
     //  차례로 적는다(await) — 한 루프에서 연달아 쏘면 reports 키(Date.now())가 겹쳐 덮어썼다(감사 실측: 9건 → 경로 2개).
@@ -1052,7 +1054,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         onClose={() => setExtraModalOpen(false)}
         onSave={async ({ cn, info }) => {
           // 1.56: 초과 컨도 완료 기록이다 — 갱 없이 기록 금지 + equip 동봉(유일하게 빠져 있던 쓰기 경로).
-          if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
+          if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
       if (!getEquipNumber()) { alert(equipGateText()); return; }
           await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info, getEquipNumber());
         }}
@@ -2359,8 +2361,9 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (busy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
-      if (!equipNo) { alert(equipGateText()); return; }
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
+    const _eqNow = getEquipNumber() || equipNo;   // 5.26 감사 상2: 그 자리에서 작업자로 바뀌면 새 호기
+      if (!_eqNow) { alert(equipGateText()); return; }
     const done = [c1, c2].filter(c => c._comp);
     // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
     if (done.length && !(await askYN('이미 선적확인된 컨입니다',
@@ -2372,7 +2375,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     setBusy(true);
     try {
       // TallyOne 1.55: 마지막 인자 = 갱(호기). 갱이 안 남으면 갱별 대수를 되살릴 수 없다(인건비가 걸린 값).
-      const _r = await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);
+      const _r = await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, _eqNow);
       ((_r && _r.done) || []).forEach((cn, i) => setTimeout(() => speakDone({ cn }), i * 900));   // 4.86-02: 실제로 완료된 컨만 읽는다(이미 완료된 컨은 덮지 않는다)
       resetAll();
     } catch (e) {
@@ -2428,8 +2431,9 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 인건비 근거가 없다(검수사 확정).
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
-    if (!equipNo) { alert(equipGateText() + '\n갱이 없는 완료는 그 갱의 작업 기록이 남지 않습니다 — 아주 중요한 값입니다.'); return; }
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
+    const _eqNow = getEquipNumber() || equipNo;   // 5.26 감사 상2: 그 자리에서 작업자로 바뀌면 새 호기
+    if (!_eqNow) { alert(equipGateText() + '\n갱이 없는 완료는 그 갱의 작업 기록이 남지 않습니다 — 아주 중요한 값입니다.'); return; }
     setBusy(true);
     try {
       // ── 1.56: **이 배 자료에 없는 자리 확인** (검수사 확정 — "들어갈 자리 자체가 없는데 선적이 된다는게
@@ -2485,7 +2489,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
         const _tr = [c1, c2].filter(c => !canCompleteContainer(c, 'loading'));
         if (_tr.length) { alert(`평택 선적 대상이 아닙니다 — 통과화물 ${_tr.map(c => `${c.cn?.slice(-4)}(${c.pol || '?'})`).join(', ')}은 선적확인할 수 없습니다.`); return; }
       }
-      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);   // 1.55: 갱(호기)
+      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, _eqNow);   // 1.55: 갱(호기)
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();
     } catch (e) { alert(`처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n${e?.message || e}`); }
@@ -2886,8 +2890,9 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     if (!c1 || !c2 || twinBusy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
-    if (!canRecordWorkNow()) { alert(recordGateText('완료')); return; }   // 3.51: 조회만은 보기만
-      if (!equipNo) { alert(equipGateText()); return; }
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
+    const _eqNow = getEquipNumber() || equipNo;   // 5.26 감사 상2: 그 자리에서 작업자로 바뀌면 새 호기
+      if (!_eqNow) { alert(equipGateText()); return; }
     //  ★ 4.27 감사 중-2: 한 화면 틀은 지금 목록 값으로 본다(컨 상세에서 넣은 XRAY 실번호 · 이미 확인한 한 대).
     const _pair = full ? [c1, c2].map((x) => ({ ...x, ...(liveOf(x) || {}) })) : [c1, c2];
     //  3.2-01: 통과분은 완료할 수 없다(감사 P1-2 — 뒤 칸에 통과분이 남는 길).
@@ -2909,7 +2914,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       //  ★ 4.27 한 화면 틀: 한 대를 먼저 확인했으면(싱글로 한 대씩·위치 틀림) 그 컨은 다시 찍지 않는다 — 카드의 c 는 옛 값이라 지금 목록으로 본다(완료분은 목록에서 빠진다).
       const _doneNow = (x) => (full ? (() => { const live = allContainers.find((y) => y.cn === x.cn); return !live || !!live._comp; })() : !!x._comp);
       const cns = [c1, c2].filter(c => !_doneNow(c)).map(c => c.cn);
-      if (cns.length) await fbCompleteContainersAtomic(voyageKey, c1._mode, cns, inspector, equipNo);   // 1.55: 갱(호기)
+      if (cns.length) await fbCompleteContainersAtomic(voyageKey, c1._mode, cns, inspector, _eqNow);   // 1.55: 갱(호기)
       //  ★ 4.27 감사 하-A: 한 화면 틀은 카드 단계 효과가 조회창으로 돌린다 — 여기 0.5초 타이머까지 두면, 서버 확인이 늦을 때 이미 넣기 시작한 다음 쌍 번호를 지운다.
       if (!full) setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }, 500);
     } catch (e) {
@@ -3026,13 +3031,13 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     //  ⏸ 보류 — 자동 가이드 doHold 와 같은 저장(fbHoldContainers · 트윈은 두 대가 한 몸 · doneN = 그 모드 평택분 완료 수).
     const doHoldManual = async (reason) => {
       if (!reason || !L1) return;
-      if (!canRecordWorkNow()) { alert(recordGateText('보류')); return; }
+      if (!canRecordWorkNow() && !(await askRecordSwitch('보류'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */
       const cns = [L1, L2].filter((x) => x && !x._comp).map((x) => x.cn);
       if (!cns.length) return;
       const doneN = (slotSource || allContainers).filter((x) => x._mode === workFilter && x._ptk && x._comp).length;
       setTwinBusy(true);
       try {
-        await fbHoldContainers(voyageKey, workFilter, cns, reason, inspector, equipNo, doneN);
+        await fbHoldContainers(voyageKey, workFilter, cns, reason, inspector, getEquipNumber() || equipNo, doneN);   // 5.26 감사 상2
         try { speak(`${reason}. 보류했습니다.`, { conversational: true }); } catch (e) { /* 소리 꺼짐 */ }
         resetAll();
       } catch (e) {

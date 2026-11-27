@@ -21,7 +21,7 @@ export function crewNameForEquip(voyageKey, info, inspectors, equip, nowMs = Dat
     if (_at && info && info.crewPool && Array.isArray(info.crewPool.names) && info.crewPool.names.includes(_at)) return { name: _at, src: '공동 담당' };
     const sk = crewShiftKey(undefined, nowMs, 0).key;
     const cc = info && info.craneCrew && info.craneCrew[sk] && info.craneCrew[sk][equip];
-    if (cc && String(cc.name || '').trim()) return { name: String(cc.name).trim(), src: '조 등록' };
+    if (cc && String(cc.name || '').trim() && cc.leftAs !== 'admin') return { name: String(cc.name).trim(), src: '조 등록' };   // 5.26 재감사 중C: 관리자로 돌아간 칸은 그 호기 검수원이 아니다
   } catch (e) { console.warn('[미르 작업보고] 조 등록 읽기 실패 — 로그인 작업자로 찾습니다', e); }
   const hit = equipHolderOf(inspectors || {}, voyageKey, equip, '', nowMs);
   if (hit) return { name: String(hit), src: '그 호기 작업자' };

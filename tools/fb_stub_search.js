@@ -27,6 +27,7 @@ export const fbBatchSaveShipBayDict = async () => true;
 export const fbBulkCancelComplete = async () => true;
 export const fbCancelComplete = async () => true;
 export const fbCancelLuggConfirm = async () => true;
+export const fbClaimCraneAsAdmin = async () => true;
 export const fbCleanupAccessLog = async () => true;
 export const fbCleanupActivityLog = async () => true;
 export const fbCleanupArchive = async () => true;
@@ -80,6 +81,7 @@ export const fbGetTermSnapshot = async (by) => { window.__getBy = by; return (wi
 export const fbHoldContainers = async () => true;
 export const fbIsOnline = async () => true;
 export const fbIsTrashedShipBayDict = async () => true;
+export const fbLeaveCraneAsAdmin = async () => true;
 export const fbListArchive = async () => true;
 export const fbListTallyPending = async () => true;
 export const fbLogMirMiss = async () => true;

@@ -4,6 +4,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { recordHatchEvent, fmtHm } from '../hatchReport.js';
 import { canWorkNow, workGateText, canRecordWorkNow, recordGateText } from '../workChoice.js';   // 3.51: 조회만은 보고를 쓰지 않는다
+import { askRecordSwitch } from '../modeSwitch.js';
+import { getEquipNumber } from '../utils.js';   // 5.26 감사 상2: 그 자리 바꾸기 뒤 새 호기   // 5.26: 관리자로 막힌 자리에서 그 자리 작업자 바꾸기(검수사 본인)
 import { speak } from '../voice.js';
 import { formatHatchBays } from '../utils.js';
 import { useHatchCountConfirm } from './HatchCountConfirm.jsx';
@@ -47,7 +49,7 @@ export default function HatchAlertBanner({ events, voyageKey, vsl, voyOf = null,
   if (!list.length) return <>{hatchCountEl}</>;   // 창이 떠 있는 동안 사건이 사라져도(다른 검수원 보고) 창은 남아 물음이 끝까지 풀리게
   const doRecord = async (e, share) => {
     const k = `${e.hatch}|${e.action}`;
-    if (!canRecordWorkNow()) { alert(recordGateText('해치커버 보고')); return; }   // 3.51: 조회만은 보기만
+    if (!canRecordWorkNow() && !(await askRecordSwitch('해치커버 보고'))) return;   /* 5.26: 검수사 관리자면 그 자리 호기 창 */   // 3.51: 조회만은 보기만
     setBusy(k);
     try {
       let pc = counts[k] || 0;
@@ -57,7 +59,7 @@ export default function HatchAlertBanner({ events, voyageKey, vsl, voyOf = null,
         //  창이 떠 있는 동안 다른 검수원의 보고가 들어와 이 사건이 사라졌으면 쓰지 않는다(같은 보고가 두 번 나가지 않게, 재감사 하-1).
         if (!listRef.current.some((x) => `${x.hatch}|${x.action}` === k)) { alert('그 사이 이 커버의 보고가 들어와 줄이 사라졌습니다. 같은 보고가 두 번 나가지 않게 이번에는 보고하지 않았습니다.'); return; }
       }
-      await recordHatchEvent(voyageKey, e, { vsl, voy: voyOf ? voyOf(e.mode) : '', equip, panelCount: pc, share, by: inspector || '' });
+      await recordHatchEvent(voyageKey, e, { vsl, voy: voyOf ? voyOf(e.mode) : '', equip: (getEquipNumber() || equip), panelCount: pc, share, by: inspector || '' });
       setDismissed((s) => new Set([...s, k]));
       if (onRecorded) onRecorded(e);
     } catch (x) {
