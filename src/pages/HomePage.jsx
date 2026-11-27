@@ -1278,7 +1278,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                       </span>
                     )}
                     {fc.date && <span className="text-2xs text-dim-400">{fc.date}</span>}
-                    <span className="font-bold text-orange-300">{totalTeu}TEU</span>
+                    <span className="font-bold text-orange-300" data-fc-total="1">{fc.vans.full + fc.vans.empty}대{fc.vans.luggage ? ` + 수화물 ${fc.vans.luggage}대` : ''} · {totalTeu}TEU</span>
+                    {fc.mixedVoy && fc.mixedVoy.length > 0 && <span className="text-rose-400 text-2xs font-bold" data-fc-mixed="1">⚠ 항차가 둘 이상 — {fc.voy} 만 읽고 {fc.mixedVoy.join('·')} 줄은 뺐습니다(따로 붙여넣으세요)</span>}   {/* 5.27-01: 대수 합계도 — 검수사 «지금 컨 합계가 몇개 입니까» */}
                     {fc.teu && (fc.teuOk
                       ? <span className="text-emerald-400 text-2xs font-bold">✓ TEU 검산 일치</span>
                       : <span className="text-rose-400 text-2xs font-bold">⚠ TEU 검산 불일치 (원문 확인)</span>)}

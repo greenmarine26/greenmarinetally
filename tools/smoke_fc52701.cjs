@@ -1,0 +1,31 @@
+// 5.28-03 연막검사 — 카톡 물량 예보 첫 줄에 배·항차가 붙어 와도 FULL 을 읽는가 · 연태 담당자 «동민». 실자료 OBWH 2803E 2026-11-27 18:45 예보 원문.
+const path = require('path'); const fs = require('fs'); const os = require('os'); const { execSync } = require('child_process');
+const ROOT = path.resolve(process.argv[2] || process.cwd());
+let pass = 0, fail = 0; const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
+const TMP = fs.mkdtempSync(path.join(process.env.SMOKE_TMP || os.tmpdir(), 'fc527-'));
+fs.writeFileSync(path.join(TMP, 'e.js'), `export { parseCargoForecast, forecastVslBySender } from '${path.join(ROOT, 'src/utils.js')}';`);
+execSync(`npx esbuild "${path.join(TMP, 'e.js')}" --bundle --platform=node --format=cjs --log-level=error --outfile="${path.join(TMP, 'b.cjs')}"`, { cwd: ROOT, stdio: 'pipe' });
+global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+const U = require(path.join(TMP, 'b.cjs'));
+const RAW = '[동민] [18:45]OBWH 2804W FULL 20GPX10 + 40HQX13 + 40RHX1\n40RHX1(PALLET선적 / 온도X)\n\nEMPTY 20GPX51 + 20RFX2 + 40HQX56 + 45HQX24 + 40RHX10\n\n금일 진행 물량입니다.\nEMPTY 20GPX1은 수화물 컨테이너입니다.\n긴급 선적분 수량 20GPX4, 40HQX7 입니다.\n';
+const r = U.parseCargoForecast(RAW);
+ok(r.vsl === 'OBWH' && r.voy === '2804W' && r.mode === 'loading', `배·항차 OBWH 2804W 선적 (${r.vsl} ${r.voy} ${r.mode})`);
+ok(r.vans.full === 24 && r.full['20GP'] === 10 && r.full['40HQ'] === 13 && r.full['40RH'] === 1, `FULL 24대 (${JSON.stringify(r.full)})`);
+ok(r.vans.empty === 143 && r.vans.luggage === 0, `EMPTY 143대 · 한글 안내 줄은 안 셈 (${JSON.stringify(r.vans)})`);
+ok(r.vans.full + r.vans.empty === 167 && r.calc.full + r.calc.empty === 271, '합계 167대 · 271TEU');
+const r2 = U.parseCargoForecast(RAW.replace('[18:45]OBWH 2804W FULL', '[18:45] FULL'));
+ok(r2.vsl === 'OBWH' && r2.guessedVsl === true && r2.vans.full === 24, '배·항차 없이 «[동민]» 만 와도 OBWH 로 추정 · FULL 24');
+ok(U.forecastVslBySender('[이다희] [10:38] FULL 20GPX6') === 'OBWH' && U.forecastVslBySender('[김지태] [09:00] x') === 'RZOR', '기존 담당자 그대로');
+const r3 = U.parseCargoForecast('[이다희] [10:38] FULL 20GPX6 + 40HQX11\nEMPTY 20GPX3');
+ok(r3.vans.full === 17 && r3.vans.empty === 3, '옛 꼴(머리말 뒤 바로 FULL) 그대로 17대');
+const hp = fs.readFileSync(path.join(ROOT, 'src/pages/HomePage.jsx'), 'utf8');
+ok(/data-fc-total="1">\{fc\.vans\.full \+ fc\.vans\.empty\}대\{fc\.vans\.luggage \? ` \+ 수화물 \$\{fc\.vans\.luggage\}대` : ''\} · \{totalTeu\}TEU/.test(hp) && /data-fc-mixed="1"/.test(hp), '예보 창 머리에 대수 합계(수화물 따로 · 홈 카드 «예상 N대» 와 같은 셈) · 항차 둘 경고');
+const r4 = U.parseCargoForecast('[동민] [18:45]OBWH 2803E EMPTY 20GPX3\n[동민] [18:46]OBWH 2804W FULL 20GPX10');
+ok(r4.voy === '2803E' && r4.vans.empty === 3 && r4.vans.full === 0 && JSON.stringify(r4.mixedVoy) === '["2804W"]', `감사 1 — 다른 항차 줄은 합치지 않고 알림 (${JSON.stringify({v: r4.voy, vans: r4.vans, m: r4.mixedVoy})})`);
+const r5 = U.parseCargoForecast('[동민] OBWH 2804W FULL 20GPX10 + 40HQX13\nEMPTY 20GPX5');
+ok(r5.voy === '2804W' && r5.vans.full === 23 && r5.vans.empty === 5, `감사 2 — 머리말이 [이름] 한 쌍이어도 FULL 을 읽는다 (${JSON.stringify(r5.vans)})`);
+const r6 = U.parseCargoForecast('FULL 2804W 20GPX10');
+ok(r6.vsl !== 'FULL' && r6.vans.full === 10, `감사 3 — FULL 을 배 코드로 잡지 않는다 (${r6.vsl} ${JSON.stringify(r6.vans)})`);
+console.log(`smoke_fc52701 ${pass}/${pass + fail}`);
+try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { console.warn('임시 폴더 정리 실패', e); }
+process.exit(fail ? 1 : 0);
