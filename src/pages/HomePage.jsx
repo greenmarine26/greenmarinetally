@@ -8,7 +8,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 �
 import { mfnNote, mfnInPtkOf, berthAltOf } from '../utils.js';   // 4.58: 홈 카드 총계 옆 «(리스트 234 + MFN 44)»
 import { resolvedPod, podConflictOf } from '../utils.js';   // 3.53: POD 확정 반영 · 자료 갈림 판정 한 벌
 import { forecastLegendOf } from '../utils.js';   // 5.12: 자료 오기 전 «예상 N대»(예보 카드 별첨과 같은 수)
-import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
+import { voyCore, forecastMatchOf } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌(지역 _voyCore 대체)
 import { setPodFocus } from '../podFocus.js';   // 3.53: 홈 카드 알림 → 그 컨 상세로
 import DictMissingChip from '../components/DictMissingChip.jsx';   // 4.19: 베이사전에 없는 배 «사전에 없음»(§7.8-⑬)
 import { liveHoldOf, shiftWordOf, detectPierByGps, getPierFromBerth, formatBerth, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, shiftEvidenceOf, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf, keepInShiftOf, progressOf, bookingFillOfSec, isShiftOffPtk, isListOriginRecord, planIsPast, planIsLive, planEndCompare, planDelayedLive, inspectorAllDone, hasLoadingSide} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
@@ -1160,22 +1160,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {/* V9.02: 카톡 물량 예보 붙여넣기 모달 — EDI 도착 전 규격별 개수 선등록 (사용자 확정 2026-07-17) */}
       {showForecast && (() => {
         const fc = fcText.trim() ? parseCargoForecast(fcText) : null;
-        const vv = fc && fc.voy ? fc.voy.toUpperCase() : '';
         // V9.57: 항차 매칭에 voyCore 비교 적용 — 0패딩·방향 표기 차이(0529W vs 529W)로 예보가
         //   등록 항차를 못 찾던 문제. 정확 일치 → 핵심번호 일치 순으로 본다.
         // 1.43: 항차번호가 없는 예보(연태훼리 등)는 **담당자로 추정한 선박 + 그 날짜**로 찾는다.
         //   검수사 지적: "판단할 근거가 있습니다. 일자와 담당자입니다."
         //   순서 — ① 항차번호 정확·핵심 일치 ② 선박코드 일치 ③ 선박코드 + planDate 날짜 일치.
         //   ③은 같은 배가 여러 항차로 떠 있을 때 그날 것을 고르기 위한 것이다.
-        const match = fc ? (voyagesWithPier.find(v =>
-          vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => x && voyCore(x) === voyCore(vv)))
-          || (fc.vsl ? (
-               // 같은 배가 둘 이상이면 예보 일자와 작업일이 같은 것을 먼저 본다
-               (fc.date ? voyagesWithPier.find(v =>
-                 (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl)
-                 && String(v.info.planDate || '').startsWith(fc.date)) : null)
-               || voyagesWithPier.find(v => (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl))
-             ) : null)) : null;
+        const match = fc ? forecastMatchOf(voyagesWithPier, fc) : null;   // 5.29: 고르는 규칙은 utils.forecastMatchOf 한 벌(수집기 카톡 읽기와 같은 답)
         const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join('  ');
         const totalTeu = fc ? (fc.teu ? fc.teu.total : fc.calc.full + fc.calc.empty + fc.calc.luggage) : 0;
         const save = async () => {

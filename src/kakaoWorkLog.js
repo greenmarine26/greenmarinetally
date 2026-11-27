@@ -96,15 +96,14 @@ const isCloseWord = (s) => /클로즈|크로즈|닫|CLOSE|H\s*\/\s*C\b/i.test(s)
  * @param {{baseDate?: Date}} opts baseDate = 날짜 전환선이 나오기 전 기준일(보통 작업 시작일)
  * @returns {{items: Array, skipped: number}} items = {ts, kind:'hatch'|'work_status', action, bays, panelCount, equip, mode, raw}
  */
-export function parseKakaoWorkLog(text, opts = {}) {
+//  ★ 5.29 — 카톡 글을 **메시지 단위**로 나누는 자리를 한 벌로 뺐다(작업 기록 읽기 · 수집기 카톡 방 읽기 kakaoLive 가 같이 쓴다).
+//    날짜 전환선·폰 내보내기 날짜·자정 넘김을 여기서 한 번만 푼다. 돌려주는 것 — [{ who, ts, ymd:'YYYY-MM-DD', hm:'HH:MM', body }].
+export function kakaoMessagesOf(text, opts = {}) {
   const lines = String(text || '').split(/\r?\n/);
   const base = opts.baseDate instanceof Date ? new Date(opts.baseDate) : new Date();
   let y = base.getFullYear(), mo = base.getMonth(), d = base.getDate();
   let prevMin = -1;                 // 자정 넘어감 감지용(날짜 전환선이 없을 때)
-  const items = [];
-  let skipped = 0;
-  let pending = null;               // 장비가 다음 줄에 오는 경우를 위해 직전 항목을 잡아둔다
-
+  let dated = false;                // 날짜 전환선(또는 폰 줄 날짜)을 한 번이라도 지났는가 — 그 앞 글은 날짜가 짐작이다(5.29 감사 중-8)
   // 앱 형식은 여러 줄이라 한 덩어리로 모은다.
   const blocks = [];
   for (const raw of lines) {
@@ -122,23 +121,53 @@ export function parseKakaoWorkLog(text, opts = {}) {
     if (RE_DATE.test(raw) && !/\d{1,2}\s*:\s*\d{2}/.test(raw)) { blocks.push({ dateLine: raw }); continue; }
     if (blocks.length && !blocks[blocks.length - 1].dateLine) blocks[blocks.length - 1].extra.push(raw);
   }
-
+  const out = [];
+  const p2 = (n) => String(n).padStart(2, '0');
   for (const b of blocks) {
     if (b.dateLine) {
       const dm = RE_DATE.exec(b.dateLine);
-      if (dm) { y = fullYear(dm[1]); mo = (+dm[2]) - 1; d = +dm[3]; prevMin = -1; }
+      if (dm) { y = fullYear(dm[1]); mo = (+dm[2]) - 1; d = +dm[3]; prevMin = -1; dated = true; }
       continue;
     }
     //  3.53-01: 폰 내보내기는 줄마다 날짜를 품는다 — 그 값이 기준일을 이긴다.
-    if (b.ymd) { [y, mo, d] = b.ymd; prevMin = -1; }
-    const body = [b.body, ...b.extra].join('\n').trim();
-    if (!body) { skipped += 1; continue; }
-
+    if (b.ymd) { [y, mo, d] = b.ymd; prevMin = -1; dated = true; }
     // 날짜 전환선이 없어도 시각이 되감기면 하루 넘긴 것으로 본다(카톡 복사본에 구분선이 빠질 때가 있다).
     const cur = b.hh * 60 + b.mm;
     if (prevMin >= 0 && cur + 120 < prevMin) { const nx = new Date(y, mo, d + 1); y = nx.getFullYear(); mo = nx.getMonth(); d = nx.getDate(); }
     prevMin = cur;
     const ts = new Date(y, mo, d, b.hh, b.mm).getTime();
+    //  카톡은 메시지 안 줄바꿈을 \n, 메시지 사이를 \r\n 으로 준다 — 끝 공백만 걷고 안쪽 줄은 그대로 둔다.
+    const body = [b.body, ...b.extra].join('\n').replace(/\s+$/, '').replace(/^\s+/, '');
+    out.push({ who: String(b.who || '').trim(), ts, ymd: `${y}-${p2(mo + 1)}-${p2(d)}`, hm: `${p2(b.hh)}:${p2(b.mm)}`, body, dated });
+  }
+  return out;
+}
+
+//  ★ 5.29 — **말한 시각**(«1호기 선적시작 01:03»)이 붙은 작업 줄은 보낸 시각이 아니라 그 시각으로 적는다(5.22 교대 «12:30 박진우 …» 와 같은 규칙).
+//    실측 연태 11/4 2026-11-28 01:09 박진우 «1호기 선적시작 01:03». 보낸 시각과 3시간 넘게 벌어지면 시각이 아니라고 보고 보낸 시각을 쓴다.
+//    보낸 시각보다 1시간 넘게 뒤면 전날 시각이다(00:05 에 보낸 «23:58 선적시작»).
+const RE_SAID_HM = /(?:^|[^\d])(\d{1,2})\s*[:：]\s*(\d{2})(?!\d)/;
+export function saidTimeOf(body, sentTs) {
+  const m = RE_SAID_HM.exec(String(body || ''));
+  if (!m) return null;
+  const hh = +m[1], mm = +m[2];
+  if (hh > 23 || mm > 59) return null;
+  const s = new Date(sentTs);
+  let t = new Date(s.getFullYear(), s.getMonth(), s.getDate(), hh, mm).getTime();
+  if (t > sentTs + 60 * 60000) t -= 24 * 3600000;
+  if (Math.abs(t - sentTs) > 3 * 3600000) return null;
+  return t;
+}
+
+export function parseKakaoWorkLog(text, opts = {}) {
+  const items = [];
+  let skipped = 0;
+  let pending = null;               // 장비가 다음 줄에 오는 경우를 위해 직전 항목을 잡아둔다
+
+  for (const msg of kakaoMessagesOf(text, opts)) {
+    const body = msg.body.trim();
+    if (!body) { skipped += 1; continue; }
+    const ts = msg.ts;
 
     const eq = RE_EQUIP.exec(body);
     const equip = eq ? `${eq[1]}호기` : '';
@@ -181,16 +210,29 @@ export function parseKakaoWorkLog(text, opts = {}) {
         const it = { ts, kind: 'work_status', action: 'resume', mode: md, equip, raw: seg.split('\n')[0].slice(0, 60) };
         items.push(it); pending = it; hit = true; continue;
       }
-      for (const [re, action, mode] of [
+      const ACTS = [
         [/양하\s*(시작|개시)/, 'discharge_start', 'discharge'],
         [/양하\s*(종료|완료|끝)/, 'discharge_done', 'discharge'],
         [/선적\s*(시작|개시)/, 'loading_start', 'loading'],
         [/선적\s*(종료|완료|끝)/, 'loading_done', 'loading'],
         [/(중단|중지|정지)/, 'pause', ''],
         [/(재개)/, 'resume', ''],
-      ]) {
+      ];
+      //  5.29(감사 중-2): 말한 시각은 **그 동작 뒤 · 다음 동작 앞** 에서만 찾는다 — «1호기 양하종료 00:59 선적시작 01:03» 은 각자 자기 시각.
+      const starts = ACTS.map(([re]) => { const m = re.exec(vbody); return m ? m.index : -1; }).filter((i) => i >= 0).sort((a, b2) => a - b2);
+      const timeFor = (re) => {
+        const m = re.exec(vbody); if (!m) return null;
+        const nx = starts.find((i) => i > m.index);
+        const after = saidTimeOf(vbody.slice(m.index, nx === undefined ? vbody.length : nx), ts);
+        if (after) return after;
+        //  동작 뒤에 없으면 앞(앞 동작 이후) — «01:03 1호기 선적시작» · 5.22 교대 형식 «12:30 박진우 1호기 양하시작»(감사 중-A)
+        const pv = starts.filter((i) => i < m.index);
+        return saidTimeOf(vbody.slice(pv.length ? pv[pv.length - 1] + 1 : 0, m.index).replace(/^[^\d]*?(양하|선적)\s*(시작|개시|종료|완료|끝)/, ''), ts);
+      };
+      for (const [re, action, mode] of ACTS) {
         if (!re.test(action === 'pause' ? seg : vbody)) continue;
-        const it = { ts, kind: 'work_status', action, mode, equip, raw: seg.split('\n')[0].slice(0, 60) };
+        const said = timeFor(re);   // 5.29 말한 시각
+        const it = { ts: said || ts, kind: 'work_status', action, mode, equip, raw: seg.split('\n')[0].slice(0, 60), ...(said ? { sentTs: ts } : {}) };
         items.push(it); pending = it; hit = true;
       }
     }

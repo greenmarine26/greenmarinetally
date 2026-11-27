@@ -106,6 +106,7 @@ import ReeferMemoModal from '../components/ReeferMemoModal.jsx';
 import { shipOpMapper, opFromListFileName } from '../data/tallyFormats.js';   // 3.60-21: 파일 이름 선사
 import PrintableCargoPlanV2 from '../components/PrintableCargoPlanV2.jsx';   // 2.87-01: 미르가 «카고플랜 보여줘» 하면 이것만 띄운다   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
+import KakaoLiveBox from '../components/KakaoLiveBox.jsx';   // 5.29: 수집기가 읽은 카톡 방 글
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null,
   /* ★ 2.87 (검수사 지시 2026-08-29) — «홈화면에서 물었으면 홈화면에서 보여주고 닫아도 홈화면이어야 합니다».
@@ -1740,6 +1741,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           </div>
         );
       })()}
+
+      {/* ★ 5.29: 카톡 방 글 — 수집기(MailPilot 2.56)가 열린 카톡 창에서 읽어 voyages/{키}/kakao 에 둔다. */}
+      <KakaoLiveBox voyage={voyage} />
 
       {/* ★ 5.18: 확정전 플랜 — 수집기(MailPilot 2.53)가 보낸메일함의 PRE PLAN 을 읽어 loading/prePlan 에 판정을 둔다.
            검수사 2026-11-21 «컨펌중인 플랜을 먼저 적용해서 예상을 할수있게 하고 받은 메일함에 확정 플랜이 오면 확정을 마무리» · «확정전으로 표기 바랍니다».

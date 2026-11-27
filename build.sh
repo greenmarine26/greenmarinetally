@@ -866,6 +866,7 @@ node tools/smoke_dischargepol.cjs || { echo "✗ 양하 PORT 칸 연막검사 �
 #  3.53-01: 카톡 작업기록 붙여넣기 — «[오후 10:16]» 이 한 줄도 안 읽혀 전량 0건이던 것(검수사 «여기에 왜 추가가 안되죠?»).
 #    실소스 파서를 불러 오전·오후·폰 내보내기·네 자리 연도를 동작으로 잰다(글자 검사 아님).
 node tools/smoke_kakaolog.cjs || { echo "✗ 카톡 작업기록 파서 연막검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_kakaolive529.cjs || { echo "✗ 카톡 방 읽기 연막검사 실패 — 배포 금지"; exit 1; }   # 5.29
 #  3.53: POD 확정 — 자료가 갈릴 때 수석·검수사가 고른 목적지가 EDI 를 이긴다(대수가 바뀐다).
 #    두 번째 번들은 src/firebase.js **실소스**에 SDK 만 스텁을 끼워 «누가 막히고 무엇이 써지는지» 를 잰다.
 SMOKE_PP=$(mktemp /dev/shm/hometmp/_smokepp_XXXXXX.js)
@@ -2044,6 +2045,18 @@ PRUNE
 #    **훅이 없어 아무도 안 지켰다** — 규칙을 사람 기억이 아니라 검사에 맡긴다.
 #    ⛔ merge_helper 는 여기서 굽지 않는다. 그쪽 GMmerge 는 수집기 계약이 정본이고,
 #       앱 mergeApi 로 갈아끼우면 merge.py 가 깨진다(지침서 «계약 필드 대조로 잡아 원복» 사건).
+echo ""
+echo "[+] 수집기 카톡 헬퍼 굽기(5.29)..."
+#  ★ 5.29 — 수집기 MailPilot 2.56 kakaoread 가 카톡 글 판정을 앱과 한 벌로 하려고 부르는 번들. 계약 GMkakaoPlan · 버전이 APP_VERSION 과 같아야 한다.
+#    autoreg 헬퍼와 따로 굽는다(autoreg 파서는 4.88 그대로 — 카톡 때문에 등록 파서를 바꾸지 않는다).
+if npx vite build --config vite.kakao.config.js >/dev/null 2>&1 && [ -f dist_kakao/gm_kakao.js ]; then
+  _KV=$(grep -o "TallyOne [0-9][0-9.-]*" dist_kakao/gm_kakao.js | head -1)
+  [ "$_KV" = "$APPVER" ] || { echo "  ✗ 카톡 헬퍼 버전 «$_KV» 가 APP_VERSION «$APPVER» 과 다르다 — 배포 금지"; exit 1; }
+  grep -q "GMkakaoPlan" dist_kakao/gm_kakao.js || { echo "  ✗ 카톡 헬퍼에 계약 GMkakaoPlan 이 없다 — 배포 금지"; exit 1; }
+  echo "  ✓ dist_kakao/gm_kakao.js ($_KV) — 카톡 판정을 고친 판이면 collector/kakao_helper.html 로 래핑해 기기에 올린다"
+else
+  echo "  ✗ 카톡 헬퍼 번들 실패 — 배포 금지"; exit 1
+fi
 echo ""
 echo "[+] 수집기 내장 헬퍼(autoreg) 굽기..."
 if npx vite build --config vite.helper.config.js >/dev/null 2>&1 && [ -f dist_helper/gm_helper.js ]; then
