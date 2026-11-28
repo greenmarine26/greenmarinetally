@@ -1255,6 +1255,8 @@ if npx esbuild tools/smoke_listbay52901.jsx --bundle --loader:.jsx=jsx --loader:
 else
   echo "✗ 5.29-01 리스트만 선적 빈 베이 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1
 fi
+#  5.29-05: 통계 시간대 정렬 · 마감 점검 갱 미기록 주의 · 운영 화면 개발용 글자 · 1안 설명(소스 단언).
+node tools/smoke_fix52905.cjs "$(pwd)" || { echo "✗ 5.29-05 연막검사 실패 — 배포 금지"; exit 1; }
 #  5.29-02: **선사 시프팅 목록에 있어도 양하 리스트 등록분은 양하분** — MAMP 646N 실자료(RTDB GET)로 양하 187 · 시프팅 1 · 배정표 일치 · 변이 넷 · 콘앱 두 자리.
 #    검수사 2026-11-28 12:48 «양하리스트에 양하로 등록되어 있다면 양하분입니다. 추후 재선적 하더라도».
 SMOKE_RL=$(mktemp /dev/shm/hometmp/_smokerl_XXXXXX.js)

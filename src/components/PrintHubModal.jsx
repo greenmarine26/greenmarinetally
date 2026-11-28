@@ -670,7 +670,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
                 })}
                 className="pop-btn pop-amber" style={{ flexDirection: 'column', gap: 0, minHeight: 56 }}
               >
-                <span className="text-sm2">📄 결제용</span>
+                <span className="text-sm2">📄 결재용</span>
                 <span className="text-2xs font-bold opacity-85">완료 가정</span>
               </button>
               <button

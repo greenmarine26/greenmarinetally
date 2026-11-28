@@ -33,9 +33,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(has(chief, '검수 리스트') && has(chief, ')PLAN') && has(chief, '베이 상세'), '수석도 같은 세 가지를 뽑는다');
 
   // 수석 전용
-  ok(has(chief, 'VGM') && has(chief, '결제용') && has(chief, '작업용'), '수석(소유자)에게는 VGM·결제용·작업용이 있다');
+  ok(has(chief, 'VGM') && has(chief, '결재용') && has(chief, '작업용'), '수석(소유자)에게는 VGM·결제용·작업용이 있다');
   ok(!has(insp, 'VGM'), '검수원에게는 VGM 리스트 단추가 없다');
-  ok(!has(insp, '결제용') && !has(insp, '작업용'), '검수원에게는 결제용·작업용 작업 보고서 단추가 없다');
+  ok(!has(insp, '결재용') && !has(insp, '작업용'), '검수원에게는 결제용·작업용 작업 보고서 단추가 없다');
   ok(!/FINAL WORKING REPORT/.test(insp.textContent), '검수원 화면에 FINAL WORKING REPORT 입력 칸이 없다');
   ok(!/VGM|작업 보고서/.test((insp.textContent.split('출력을 누르면')[1] || '')), '검수원 하단 안내에 VGM·작업 보고서 말이 없다');
 

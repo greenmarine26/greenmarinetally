@@ -205,17 +205,17 @@ function buildBuckets(voyage, mode = 'settlement') {
   //   각 section = { ediContainers: {cn: c, ...}, records: {cn: r, ...}, ... }
   if (voyage) {
     // 양하/선적 공통 처리 — LIST 기반 (records의 cn)
-    //   결제용(settlement): records 전체 (LIST 컨테이너 = 평택 대상)
+    //   결재용(settlement): records 전체 (LIST 컨테이너 = 평택 대상)
     //   작업용(actual): completed 또는 records 중 작업 완료된 것
     const processSection = (section, bucket, dlMode) => {
       if (!section) return;
       const ediCs = section.ediContainers || {};
       const recs = section.records || {};
       const completedCns = section.completed ? new Set(Object.keys(section.completed).map(k => String(k).toUpperCase())) : null;
-      //  ★ 4.20 감사(Fable 판정 상-3): 결제용 양하 대수 = 평택 양하분 한 벌(세관 목록 + 추가분 − 시프팅 — 마감텔리·수석 보드와 같은 수 · RZOR R106E 190). 선적은 종전 그대로.
+      //  ★ 4.20 감사(Fable 판정 상-3): 결재용 양하 대수 = 평택 양하분 한 벌(세관 목록 + 추가분 − 시프팅 — 마감텔리·수석 보드와 같은 수 · RZOR R106E 190). 선적은 종전 그대로.
       const _dU = (dlMode === 'disch' && mode !== 'actual' && voyage.discharge === section) ? ptkDischargeUnitsOf(voyage) : null;
 
-      // 결제용: records의 모든 cn (LIST 데이터). 작업용: completed의 cn (실제 작업)
+      // 결재용: records의 모든 cn (LIST 데이터). 작업용: completed의 cn (실제 작업)
       let targetCns;
       if (mode === 'actual') {
         // 작업용: completed 있으면 그것, 없으면 records
@@ -223,7 +223,7 @@ function buildBuckets(voyage, mode = 'settlement') {
           ? Object.keys(section.completed)
           : Object.keys(recs);
       } else {
-        // 결제용: records 전체 (LIST 평택 대상)
+        // 결재용: records 전체 (LIST 평택 대상)
         targetCns = _dU ? [..._dU.set] : Object.keys(recs);   // 4.20 감사: 양하는 평택 양하분 한 벌
         // records가 비어 있으면 ediContainers의 PTK 필터로 폴백
         if (!_dU && targetCns.length === 0) {

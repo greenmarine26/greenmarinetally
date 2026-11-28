@@ -38,7 +38,8 @@ export default function StatsTab({ containers, compMap, xrayMap, mode, voyage })
       {Object.keys(stats.byHour).length > 0 && (
         <Section title={`시간대별 처리량${stats.paceHour != null ? ` — 이 배 시간당 ${stats.paceHour}대 (${stats.paceSrc})` : (stats.paceNote ? ` — ${stats.paceNote}` : '')}`}>
           <div className="space-y-1">
-            {Object.entries(stats.byHour).slice(-12).map(([h, n]) => {
+            {/* 5.29-05 — 시간 순서로(«MM/DD HH시» 글자 순 = 시간 순) 놓고 끝 12칸 = 최근 12시간. 종전엔 기록이 들어온 순서라 14→13→11시처럼 뒤섞였다. */}
+            {Object.entries(stats.byHour).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).slice(-12).map(([h, n]) => {
               const max = Math.max(...Object.values(stats.byHour));
               return (
                 <div key={h} className="flex items-center gap-2 text-xs2">

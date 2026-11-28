@@ -238,8 +238,8 @@ export default function GeminiKeyModal({ onClose }) {
 
           {/* 설명 */}
           <div className="bg-ink-800/30 rounded p-2 text-2xs text-dim-400 leading-relaxed">
-            <b className="text-dim-300">🔒 보안:</b> 키는 본인 폰의 localStorage에만 저장됩니다. 다른 검수원과 공유되지 않습니다.<br/>
-            3.43부터 사진·PDF·선박 소개·검색패널 AI·미르는 공용 키(검수사 부담)로 돕니다. 본인 키는 공용 키가 비었을 때만 쓰입니다.
+            <b className="text-dim-300">🔒 보안:</b> 키는 이 기기(브라우저)에만 저장됩니다. 다른 검수원과 공유되지 않습니다.<br/>
+            사진·PDF·선박 소개·검색패널 AI·미르는 공용 키(검수사 부담)로 돕니다. 본인 키는 공용 키가 비었을 때만 쓰입니다.
           </div>
         </div>
       </div>

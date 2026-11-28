@@ -14,7 +14,7 @@ import { getBrightness, getTextSize } from './utils.js';
 
 export const SKIN_KEY = 'master_skin_v1';
 export const SKINS = [
-  { n: 1, label: '1안 어두운 고대비', hint: '지금 화면과 가장 비슷 · 배 안 · 야간', sw: ['#060a14', '#151f32', '#f1f5f9', '#7cf1c2'] },
+  { n: 1, label: '1안 어두운 고대비', hint: '어두운 바탕 · 배 안 · 야간', sw: ['#060a14', '#151f32', '#f1f5f9', '#7cf1c2'] },
   { n: 2, label: '2안 밝은 간결',     hint: '흰 바탕 · 그림자 없음 · 사무실 · 낮',   sw: ['#eef2f7', '#ffffff', '#0b1220', '#06603f'] },
   { n: 3, label: '3안 큰 글자 현장',   hint: '글자 · 단추 가장 큼 · 검정 바탕 · 노안', sw: ['#000000', '#141820', '#ffffff', '#7cf1c2'] },
 ];

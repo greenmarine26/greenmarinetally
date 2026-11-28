@@ -203,13 +203,14 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         label: gangs.length === 0
           ? '🔴 갱(호기) 기록 없음 — 갱별 대수 근거'
           : (equipDone.size === 0 ? '🔴 완료 대수에 갱이 없음 — 갱별 대수 근거' : '갱(호기)별 작업 대수'),
-        count: gangs.length === 0 ? doneN : (equipDone.size === 0 ? doneN : 0),
+        //  5.29-05 — 갱별 대수가 있어도 갱이 안 적힌 완료가 있으면 그 대수를 주의로 센다(종전엔 0 · 초록이라 «갱 미기록 11대» 가 정상처럼 보였다 — TNJP 실측). 마감은 막지 않는다(info).
+        count: gangs.length === 0 ? doneN : (equipDone.size === 0 ? doneN : doneNoEquip),
         desc: gangs.length === 0
           ? `${doneN}대 완료인데 ${mode === 'discharge' ? '양하' : '선적'} 갱 기록이 0건입니다. 이대로 제출하면 그 갱의 작업 기록이 통째로 빠집니다(아주 중요한 값) — [작업 보고]에서 남기세요.`
           : (equipDone.size > 0
             ? `${gangDoneTxt}${doneNoEquip > 0 ? ` · 갱 미기록 ${doneNoEquip}대` : ''}`
             : `${gangs.join(' · ')} 작업 보고 있음 · 완료 ${doneN}대는 갱이 안 적혀 있습니다 — 갱별 몇 대인지 근거가 없습니다`),
-        color: (gangs.length === 0 || equipDone.size === 0) ? 'red' : 'emerald',
+        color: (gangs.length === 0 || equipDone.size === 0) ? 'red' : (doneNoEquip > 0 ? 'amber' : 'emerald'),
         info: gangs.length > 0 && equipDone.size > 0,   // 갱별 대수까지 있으면 알림만 — 마감을 막지 않는다
         jumpTo: { tab: 'report' },
       }] : []),
@@ -293,7 +294,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
 
         {/* 푸터 */}
         <div className="px-4 py-2 border-t border-line bg-ink-950 text-2xs text-dim-400 text-center">
-          M5.1 · 검수 종료 전 최종 점검용 — 항목별 카운트는 실시간 갱신됩니다
+          검수 종료 전 최종 점검용 — 항목별 카운트는 실시간 갱신됩니다
         </div>
       </div>
     </div>

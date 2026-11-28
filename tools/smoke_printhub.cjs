@@ -126,7 +126,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   //    이 둘은 항차·BERTH 를 손으로 적어 배에 내는 대외 서류다. 카고플랜·베이 상세로 들어가면
   //    그 화면이 허브를 덮으므로 **여기서** 눌러 본다(뒤로 옮겼다가 단추를 못 찾은 실측이 있다).
   {
-    for (const key of ['결제용', '작업용']) {
+    for (const key of ['결재용', '작업용']) {
       const b = find(key);
       ok(!!b, `작업 보고 «${key}» 단추가 있다`);
       if (b) {
