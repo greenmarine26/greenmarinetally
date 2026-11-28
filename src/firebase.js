@@ -1331,6 +1331,44 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   _tallyInspector(voyageKey, mode, by);   // V9.16: 개인 누적 실적 (비차단 — 실패해도 완료 처리는 무관)
   return { ok: true };
 }
+//  ★ 5.29-01 리스트만 선적(선적 EDI 오기 전) 빈 칸 넣기 — **자리와 선적 완료를 한 번의 멀티패스 update 로**(둘 다 되거나 둘 다 안 되거나).
+//    감사 중1·하1 — 종전엔 fbSetActualPosition 을 await 한 뒤 fbCompleteContainer 를 불러, 신호가 약하면 자리 쓰기 서버 확인에 묶여 «적는 중…» 에서 멈추고
+//    완료가 안 불렸다(반쪽 쓰기). 문지기는 두 함수와 같다 — assertCanWork(자리 수정)·assertCanRecordWork(완료)·완료 직전 호기 묻기(4.85)·
+//    사람이 이미 완료한 컨은 덮지 않는다(3.60-09). 기다림은 4.86-02 _ackOrQueue(8초 뒤 놓고 화면은 반영). 자리 줄 모양은 fbSetActualPosition 과 같다(moves why:'actual' + _pos_src·assign 걷기).
+export async function fbPlaceAndCompleteLoading(voyageKey, cn, bay, row, tier, by, equip = '') {
+  assertCanWork('자리 수정');
+  assertCanRecordWork('완료');
+  if (!voyageKey || !cn || !bay || !row || !tier) throw new Error('자리 또는 컨 번호가 비었습니다');
+  equip = await askCraneBeforeComplete(voyageKey, 'loading', String(equip || '').trim(), cn);
+  const base = `voyages/${voyageKey}/loading`;
+  const prev = await _peekVal(ref(db, `${base}/completed/${cn}`));
+  if (prev && !isAutoDone(prev)) {
+    _writeNotice(`${String(cn || '').slice(-4)} 는 이미 완료돼 있어요${prev.by ? ` — ${prev.by}${prev.at ? ' ' + _hhmm(prev.at) : ''}` : ''} (덮지 않았어요)`);
+    return { ok: false, already: true, prev };
+  }
+  //  지나온 자리 — 못 읽으면(1.5초·통신) moves 를 덮지 않는다(3.60-08 과 같은 원칙)
+  const cur = await _peekVal(ref(db, `${base}/records/${cn}`));
+  const now = Date.now();
+  const to = `${bay}-${row}-${tier}`;
+  const R = `records/${cn}`;
+  const patch = {
+    [`${R}/cn`]: cn, [`${R}/bay_actual`]: bay, [`${R}/row_actual`]: row, [`${R}/tier_actual`]: tier,
+    [`${R}/actual_at`]: now, [`${R}/actual_by`]: by || '', [`${R}/_pos_src`]: null,
+    [`${R}/bay_assign`]: null, [`${R}/row_assign`]: null, [`${R}/tier_assign`]: null, [`${R}/assign_at`]: null, [`${R}/assign_by`]: null,
+  };
+  if (cur && typeof cur === 'object') {
+    const mv = Array.isArray(cur.moves) ? cur.moves : [];
+    const from = cur.bay_actual && !String(cur.bay_actual).startsWith('__') ? `${cur.bay_actual}-${cur.row_actual}-${cur.tier_actual}` : '';
+    patch[`${R}/moves`] = [...mv, { at: now, by: by || '', why: 'actual', from, to, byCn: '' }].slice(-40);
+  }
+  const rec = { by, at: now };
+  const eq = String(equip || '').trim();
+  if (eq) rec.equip = eq;
+  patch[`completed/${cn}`] = rec;
+  await _ackOrQueue(update(ref(db, base), patch), '빈 칸 넣기(자리 + 선적 완료)');
+  _tallyInspector(voyageKey, 'loading', by);
+  return { ok: true };
+}
 //  ★ 4.86-02 (정밀 검토 2026-11-10): 완료·보고 쓰기의 서버 확인을 끝없이 기다리지 않는다.
 //    SDK 의 set·update 약속은 서버가 받아 줘야 끝난다 — 신호가 약하면 화면의 «처리 중»(busy)이 안 풀려 다음 컨 확인이 막힌다.
 //    쓰기 자체는 SDK 가 화면에 바로 반영하고 연결되면 보낸다(종전과 같음). 여기서는 8초 뒤 «기다림»만 놓아 주고, 나중에 실패하면 띠로 알린다.

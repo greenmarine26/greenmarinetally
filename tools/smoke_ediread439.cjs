@@ -67,7 +67,7 @@ const B = process.argv[3];
   const NL = read('src/nlSearch.js');
   ok(/if \(isEdiApplied\(r\)\) \{ _ediSkip\+\+; continue; \}/.test(NL) && /if \(!byH\.size && !_ediSkip\)/.test(NL), '미르 시간대별 분포도 마감 EDI 적용을 뺀다(종전 그대로)');
   const code = noCmt(read('src/firebase.js'));
-  ok((code.match(/!isAutoDone\(prev\)/g) || []).length === 2 && !/!isTermApplied\(prev\)/.test(code), '사람 [완료]·초과 컨의 «이미 완료» 문지기는 isAutoDone 한 벌(마감 EDI 적용도 덮을 수 있다)');
+  ok((code.match(/!isAutoDone\(prev\)/g) || []).length === 3 && !/!isTermApplied\(prev\)/.test(code), '사람 [완료]·초과 컨·5.29-01 빈 칸 넣기(fbPlaceAndCompleteLoading)의 «이미 완료» 문지기는 isAutoDone 한 벌(마감 EDI 적용도 덮을 수 있다)');
   const CONE = read('public/cone.html');
   const m = CONE.match(/function ctIsTerm\(c\)\{[\s\S]*?\n\}/);
   ok(!!m, '콘앱 ctIsTerm 을 찾았다');

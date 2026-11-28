@@ -93,6 +93,7 @@ export const fbPeekCompleted = async () => false;
 export const fbPeekMirWorkCtx = async () => true;
 export const fbPickIso = async () => true;
 export const fbPickPod = async () => true;
+export const fbPlaceAndCompleteLoading = async () => true;
 export const fbPoolTakeCrane = async () => true;
 export const fbPromotePendingDamage = async () => true;
 export const fbRateFoodSpot = async () => true;

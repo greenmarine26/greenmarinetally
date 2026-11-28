@@ -1244,6 +1244,17 @@ if npx esbuild tools/smoke_keep448.jsx --bundle --loader:.jsx=jsx --loader:.png=
 else
   echo "✗ 4.48 본선 잔류 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_KP"; exit 1
 fi
+#  5.29-01: **선적 EDI 오기 전(리스트만) 빈 베이 고르기·빈 칸 넣기** — OBWH 2801E 보관본(RTDB GET) 리스트 279대를 선적 전으로 되돌린 사본으로 항차 화면 본체를 그린다(실 firebase.js · 메모리 DB).
+#    베이 칩 = 사전 해치 묶음 수 · 베이 탭/베이뷰 빈 그림 ＋ = 사전 칸 · ＋ → 끝 4자리 → 자리 + 선적 완료 · 20/40 짝홀 · 🅿 배치 후보 칸 · 실 EDI 배는 그대로. 검수사 2026-11-28 «선적 자료가 없다고 빈베이도 안보여준다는건 이해가 안됩니다».
+SMOKE_LB=$(mktemp /dev/shm/hometmp/_smokelb_XXXXXX.js)
+if npx esbuild tools/smoke_listbay52901.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_LB"; then
+  node tools/smoke_listbay52901.cjs "$(pwd)" "$SMOKE_LB" || { echo "✗ 5.29-01 리스트만 선적 빈 베이 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_LB"; exit 1; }
+  rm -f "$SMOKE_LB"
+else
+  echo "✗ 5.29-01 리스트만 선적 빈 베이 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1
+fi
 #  5.23: **시프팅 예정(◇에 더함) · 선적 예정 대 리스트 · 화면 글에 출처 이름 없음** — XTPG 550E 실자료(RTDB GET)로 실소스를 잰다.
 #    검수사 2026-11-23 21:45 «다만 예정입니다 확정이 아닙니다» · 22:07 «검수앱에선 카토스라는 문자가 노출되면 안됩니다. 그냥 예정으라고 해야 합니다».
 SMOKE_P523=$(mktemp /dev/shm/hometmp/_smokep523_XXXXXX.js)

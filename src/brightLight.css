@@ -238,7 +238,10 @@
 :root[data-bright="4"] .bg-rose-950\/60{background-color:rgb(255 241 242 / 0.60)}
 :root[data-bright="4"] .bg-rose-950\/70{background-color:rgb(255 241 242 / 0.70)}
 :root[data-bright="4"] .bg-sky-100{background-color:rgb(12 74 110)}
+:root[data-bright="4"] .bg-sky-300\/50{background-color:rgb(3 105 161 / 0.50)}
+:root[data-bright="4"] .bg-sky-400\/30{background-color:rgb(2 132 199 / 0.30)}
 :root[data-bright="4"] .bg-sky-500{background-color:rgb(14 165 233)}
+:root[data-bright="4"] .bg-sky-500\/10{background-color:rgb(14 165 233 / 0.10)}
 :root[data-bright="4"] .bg-sky-500\/15{background-color:rgb(14 165 233 / 0.15)}
 :root[data-bright="4"] .bg-sky-500\/20{background-color:rgb(14 165 233 / 0.20)}
 :root[data-bright="4"] .bg-sky-500\/25{background-color:rgb(14 165 233 / 0.25)}

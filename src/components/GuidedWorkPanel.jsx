@@ -32,6 +32,7 @@ import SealKnownLine from './SealKnownLine.jsx';   // 4.49: 다른 자료 실 ·
 import { activeHeldOf, HOLD_REASONS, bayPageSplitOf } from '../utils.js';   // 4.26-02: 지금 걸린 보류 한 벌(완료된 컨은 뺀다 — 미르·갱 배분 답과 같은 목록)
 import { loadingSlotOf, guideTwinOf, effectivePos } from '../utils.js';   // 4.23-01 2차(guideTwinOf 는 3차 — 맞교환 자리는 트윈 짝 짐작 안 함): 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리·규격 다른 맞교환)
 import PositionEditModal from './PositionEditModal.jsx';
+import { ListOnlyBayCard } from './ListPlaceModal.jsx';   // 5.29-01: 리스트만 선적 빈 베이 안내 카드(수동과 한 벌)
 import WorkFrame, { WorkBarInfo, bayGroupText } from './WorkFrame.jsx';   // ★ 4.27: 기존 자동 한 화면 틀(맨 위 한 줄 · 위 칸 카드·확인 · 아래 칸 변경 단추)   // 4.23-01 2차: 규격 다른 맞교환은 확인 대신 위치 지정(있는 흐름 그대로)
 import { termOpenedCover } from '../gangState.js';   // 4.81: 터미널 반영 홀드 기록 = 커버 열림 증거(열까요 물음을 건너뛴다)
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -87,7 +88,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
 //  4.25-02 — «다른 갱» 물음을 이미 한 장(항차·모드·장·두 호기). 모듈에 두어 탭을 옮기거나 자동↔수동을 바꿔도 앱을 다시 열기 전까지는 다시 묻지 않는다(감사 기록 — 컴포넌트에 두면 다시 그려질 때마다 물었다).
 const _askedGang = new Set();
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null, bayMini = false, onBayModeBays = null }) {   // 4.80-01 bayMini — 베이모드 켠 동안 카드를 작게(머리·순서·다음 예측·수동 전환 줄을 접고 카드 줄을 한데 모아 단추까지 폰 화면에 든다)   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null, workCtx = null, compact = false, suppressBayActivity = false, hatchAuto = false, mirGoto = null, bayPick = null, onBayPickCns = null, bayMini = false, onBayModeBays = null, listOnlyN = 0, onListPlaceBay = null }) {   // 5.29-01 listOnlyN·onListPlaceBay — 리스트만 선적(선적 EDI 아직 없음): 빈 베이 칩과 안내 카드(묶음은 SearchPanel manualGroups 의 listOnly 한 벌)   // 4.80-01 bayMini — 베이모드 켠 동안 카드를 작게(머리·순서·다음 예측·수동 전환 줄을 접고 카드 줄을 한데 모아 단추까지 폰 화면에 든다)   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(guideGoto.js · SearchPanel 이 넘긴다)   // 3.49 hatchAuto — 베이뷰 따라가기: 커버 여닫음을 터미널 실적으로 판정해 자동 기록하므로 «오픈→홀드 진행 / 클로즈» 물음을 띄우지 않는다(검수원 수동 보고는 그대로 남는다)   // 3.48 suppressBayActivity — 베이뷰 «따라가기»: 터미널이 준 베이를 «사람이 고른 자리»로 올리지 않는다   // 3.48 compact — 베이뷰 위 칸(폰 1/3): 설정 줄·«다음 예정» 을 접고 지금 컨 카드와 확인만 남긴다(동작은 같다)   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -453,6 +454,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }, [remaining, bayPairs]);
   //  ★ 4.26-02 (모의 작업 OBWH 1호기 — «B5·6·7» 이 6번 베이를 끝내자 «B5·7» 로 바뀌어 다른 묶음처럼 보였다) — 묶음 이름은 그 묶음의 **전체 작업분**(완료 포함)으로 짓는다.
   //    대수·단 집계(위 groups)는 종전대로 남은 컨이다. 이름만 고정한다(해치 보고 키·묶음 center 는 손대지 않는다).
+  //  ★ 5.29-01 리스트만 선적 — 남은 컨(좌표 있는 컨)으로 만든 groups 는 그대로 두고, 고르는 칩에만 사전 빈 베이를 더한다(groups 를 쓰는 다음 장·해치 판정은 종전 그대로).
+  //    묶음은 SearchPanel manualGroups(slotGroups) 의 listOnly 한 벌 — 같은 center 계산(bayGroupCenter·사전 짝).
+  const pickGroups = useMemo(() => {
+    if (!(listOnlyN > 0) || !Array.isArray(slotGroups)) return groups;
+    const have = new Set(groups.map((g) => g.center));
+    const extra = slotGroups.filter((x) => x && x.listOnly && !x.noBay && !have.has(x.center))
+      .map((x) => ({ center: x.center, bays: new Set(x.bays || []), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0, listOnly: true }));
+    return extra.length ? [...groups, ...extra].sort((a, b) => a.center - b.center) : groups;
+  }, [groups, slotGroups, listOnlyN]);
   const groupBaysAll = useMemo(() => {
     const m = new Map();
     for (const c of modeAll) {
@@ -493,13 +503,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //    오판해 비우면 방금 뜬 «양하 완료! 해치커버 클로즈» 카드가 한 프레임에 사라진다(소진 ≠ 이탈).
   const _snapArmedRef = useRef(true);   // 마운트 = 물려받는 순간
   useEffect(() => {
-    if (selectedGroup == null || !groups.length) return;
+    if (selectedGroup == null || !pickGroups.length) return;   // 5.29-01: 리스트만 선적의 빈 베이 칩도 물려받은 베이로 본다
     if (!_snapArmedRef.current) return;
     _snapArmedRef.current = false;
-    if (groups.some((g) => g.center === selectedGroup)) return;
-    const host = groups.find((g) => g.bays && g.bays.has(parseInt(selectedGroup, 10)));
+    if (pickGroups.some((g) => g.center === selectedGroup)) return;
+    const host = pickGroups.find((g) => g.bays && g.bays.has(parseInt(selectedGroup, 10)));
     if (host) setSelectedGroup(host.center); else setSelectedGroup(null);
-  }, [selectedGroup, groups]);
+  }, [selectedGroup, pickGroups]);
 
   // ── TallyOne 1.55: **베이 묶음을 바꿀 때 갱(호기)을 되묻는다.** (검수사 확정 2026-08-12)
   //   원문 — *"카톡 내용을 보면 장비를 바꿔서 해야 하는데 4호기로 다함.
@@ -1976,7 +1986,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         {!compact && mode === 'discharge' && orderOpen && orderSheet()}
         <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
           <div className="text-sm font-bold text-violet-300">작업할 베이를 선택하세요</div>
-          {groups.length === 0 && unassigned.length === 0 && <div className="text-xs text-dim-400 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
+          {pickGroups.length === 0 && unassigned.length === 0 && <div className="text-xs text-dim-400 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
           {/* V9.23-08: 좌표 없는 컨은 어느 베이 묶음에도 안 들어간다. 여기서 안 보여 주면
               "대기 N대"인데 고를 베이가 없어 작업이 막힌다(2658W 신고). */}
           {unassigned.length > 0 && (
@@ -2012,10 +2022,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
           <div className="grid grid-cols-3 gap-2">
-            {groups.map(g => (<div key={g.center} className="flex flex-col gap-1 min-w-0">
-              <button onClick={() => { pickGroup(g); }}
+            {pickGroups.map(g => (<div key={g.center} className="flex flex-col gap-1 min-w-0">
+              <button onClick={() => { pickGroup(g); }} data-gw-group={g.center}
                 className="w-full py-3 rounded-pill bg-ink-800 hover:bg-violet-800 border border-line text-dim-100">
                 <div className="font-bold text-base">B{groupLbl(g.center, g)}</div>
+                {/* 5.29-01: 리스트만 선적의 빈 베이 — 남은 컨 0 이라 수 대신 할 일을 적는다 */}
+                {g.listOnly && !g.count ? <div className="text-2xs text-sky-300" data-list-only-chip={g.center}><span className="whitespace-nowrap">자리 모름 {listOnlyN}대</span> · <span className="whitespace-nowrap">빈 칸에 넣기</span></div> : <>
                 {/* 1.95: 빈 칸(수동 기준·정본)을 앞에, 컨 머릿수를 뒤에 — 계산은 SearchPanel manualGroups 한 벌 */}
                 <div className="text-2xs text-dim-300">
                   {/* 4.87-10: 숫자와 단위가 줄에서 갈라지지 않게(«남은 컨 18» / «대») — 구절 단위로만 줄을 바꾼다 */}
@@ -2026,6 +2038,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   {g.deck > 0 && g.hold > 0 && <span className="text-dim-500">·</span>}
                   {g.hold > 0 && <span className="text-amber-300 whitespace-nowrap">홀드 {g.hold}</span>}
                 </div>
+                </>}
               </button>
               {/* ★ 4.42 «23번 / (24)25번» — 이 장을 베이사전 쪽으로 나눠 바로 고른다(그 베이 컨이 한 대씩 먼저) */}
               {(() => { const sp = splitOf(g.center); return sp.length ? (
@@ -2046,6 +2059,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         {hatchCountEl}
       </div>
     );
+  }
+
+  // ── 5.29-01: 리스트만 선적의 빈 베이 — 이 묶음에 좌표 있는 남은 컨이 없으면 단 고르기·예측 카드 대신 빈 칸 넣기 안내 ──
+  {
+    const lg = pickGroups.find((x) => x.center === selectedGroup);
+    if (lg && lg.listOnly && !groups.some((x) => x.center === selectedGroup)) {
+      return (
+        <div className="space-y-2">
+          {!compact && <SettingsBar/>}
+          <ListOnlyBayCard bayLbl={`B${groupLbl(selectedGroup, lg)}`} n={listOnlyN} onBack={() => setSelectedGroup(null)}
+            onOpenBay={!compact && onListPlaceBay ? () => onListPlaceBay(selectedGroup) : null} />
+          <ConfirmModal {...confirmState} />
+          {hatchCountEl}
+        </div>
+      );
+    }
   }
 
   // ── 3.5단계: 작업 단(홀드/데크) 선택 (V7.99-8 메모6) ──

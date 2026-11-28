@@ -18,7 +18,8 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isoShown } from '../utils.js';   // 4.21: 내부 풀·엠티 표식을 정본 규격 글자로 보여 준다
-import { isUserOwnedBayDict, isPtk as _isPtkOne, isPredShift, isKeepShift } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
+import { isUserOwnedBayDict, isPtk as _isPtkOne, isPredShift, isKeepShift } from '../utils.js';
+import { listOnlyCellKeysOf, listOnlyCellKey, unplacedTargetBayOf } from '../utils.js';   // 5.29-01: 선적 EDI 오기 전(리스트만) 빈 칸 넣기 — 칸·베이 판정 한 벌   // TallyOne 1.11-01: 정본 판정 단일 소스   // 3.60-19 (다수결 V1 · 진단 M1): 평택분 판정은 utils.isPtk 한 벌 — 3.14 «EDI 가 통과화물이라 하면 리스트 등재라도 평택 아님»(DJCF 0151S 24대: 종전 62 ↔ 화면 38)
 import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap, hatchEvenOf, widenBayDefForDrawing } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -50,7 +51,10 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   onlyLayout = 'col',
   //  ★ 3.48 «베이뷰 작업»(onlyBay 갈래에서만 쓴다) — brightTier: 'deck'|'hold' 면 그 단은 그대로, 다른 단은 흐리게(장 전체는 다 보인다 — 크레인 자리 대조용).
   //    warnCells: Map('bay-row-tier' → 'conflict'|'noterm') — 검수원 기록과 터미널 실적이 다른 칸(utils.bayViewOverlayOf 한 벌)에 빨간/회색 테두리.
-  brightTier = null, warnCells = null
+  brightTier = null, warnCells = null,
+  //  ★ 5.29-01 «리스트만» 선적(선적 EDI 가 아직 없음) — { onCell(page, row, tier) }. 있으면 사전 칸 중 빈 칸에 ＋ 단추가 서고, 🅿 배치(pendingMove) 후보 칸도 사전 칸으로 넓힌다.
+  //    VoyagePage 가 utils.listOnlyUnplacedOf 로 «자리 없는 리스트 컨이 남았다»일 때만 넘긴다(실 EDI 배·양하는 null — 종전 그대로).
+  listPlace = null
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
@@ -342,6 +346,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     catch (e) { console.warn('[5.24] 넓혀 그리기 실패 — 정본 그대로 그림', e); return null; }
   }, [_dictBayDefBase, viewContainers]);
   const dictBayDefObj = _gkWide ? _gkWide.def : _dictBayDefBase;
+  const listCellKeys = useMemo(() => (listPlace && mode === 'loading' ? listOnlyCellKeysOf(dictBayDefObj) : null), [listPlace ? 1 : 0, mode, dictBayDefObj]);   // 5.29-01
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   5.24: 넓힌 사본(dictBayDefObj)에서 만든다 — 격자와 단·칸 수가 갈리지 않게(enrichBayDef 는 위에서 한 번).
   const dictBaysSummary = useMemo(() => {
@@ -646,7 +651,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
               isMobile={isMobile} cellColor={cellColor} getOpColor={getOpColor} globalRowRange={globalRowRange} globalGridCols={globalGridCols}
               globalTiers={globalTiers} dictBaysSummary={dictBaysSummary} dictBayDef={dictBayDefObj} bayStructureMap={bayStructureMap}
               pendingMove={null} onEmptyCellClick={() => {}} selectionMode={false} selectedCns={selectedCns} mode={mode} compactCells hideTitle={titleOut}
-              brightTier={brightTier} warnCells={warnCells} />
+              brightTier={brightTier} warnCells={warnCells} listPlace={listCellKeys ? listPlace : null} listCellKeys={listCellKeys} />
           );
           //  row: BayPage 뿌리가 `min-w-full` 이라 flex 줄에서 장마다 줄 폭 전체로 늘어나 두 장이 2배 폭으로 겹쳤다(실렌더 1348×2=2700). 제 폭(max-content) 상자에 담는다.
           return onlyLayout === 'row' ? <div key={pg.title} className="shrink-0" style={{ width: 'max-content' }}>{page}</div> : page;
@@ -681,6 +686,12 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       {preGoneCns && (
         <div className="bg-sky-100 border border-sky-600 text-sky-900 rounded-pill p-2 text-xs">
           ⚓ 전항 양하 예정 {preGoneCns.size}대를 화면에서 숨겼습니다 — {preGoneInfo?.origin || '출항지'} 출항본의 {(preGoneInfo?.list || []).join('·')} 양하분(평택 도착 전 하선). 인쇄물에는 그대로 나옵니다.
+        </div>
+      )}
+      {/* 5.29-01: 리스트만 선적 — 사전 빈 칸 ＋ 로 넣는다는 것을 그림 위에 한 줄로 */}
+      {listCellKeys && !pendingMove && (
+        <div className="bg-sky-950/60 border border-sky-600 rounded-pill px-3 py-2 text-xxs text-sky-100 font-bold leading-snug" data-list-place-note="1">
+          선적 자료(EDI)가 아직 없습니다 — 빈 칸 ＋ 를 누르고 실은 컨 끝 4자리를 넣으면 그 자리로 선적 완료가 적힙니다{listPlace && listPlace.n ? ` · 자리 모르는 리스트 ${listPlace.n}대` : ''}.
         </div>
       )}
       {/* 4.87-10: 이동·맞교환 안내 띠 sticky top-0 → 도구줄과 같은 식(머리띠 + 공지 띠 + 독 + 4px) — top-0 이면 머리띠 뒤로 숨었다 */}
@@ -983,6 +994,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                   selectionMode={selectionMode}
                   selectedCns={selectedCns}
                   mode={mode}
+                  listPlace={listCellKeys ? listPlace : null} listCellKeys={listCellKeys}
                 />
               </div>
             ))}
@@ -1027,6 +1039,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             selectionMode={selectionMode}
             selectedCns={selectedCns}
             mode={mode}
+            listPlace={listCellKeys ? listPlace : null} listCellKeys={listCellKeys}
           />
         )}
       </div>
@@ -1077,7 +1090,8 @@ function BayPage({ hideTitle = false, gkWideCns = null, page, bayGroups, complet
   mode = 'discharge',
   //  3.48 베이뷰 — 고른 단만 밝게 · 불일치 칸 테두리(BayPlan 이 onlyBay 갈래에서만 넘긴다)
   brightTier = null, warnCells = null,
-  rfSkip = false   // 3.72-02: 리퍼 체크 안 하는 배(머스크 계열) — 셀의 «NO TEMP» 를 안 띄운다
+  rfSkip = false,   // 3.72-02: 리퍼 체크 안 하는 배(머스크 계열) — 셀의 «NO TEMP» 를 안 띄운다
+  listPlace = null, listCellKeys = null   // 5.29-01: 리스트만 선적 — 사전 빈 칸 ＋(BayPlan 이 넘길 때만)
 }) {
   //  3.48: 단 흐리기 — 라벨·해치커버는 그대로 두고 칸만. 데크 = 80단 이상(BayPlan 전체가 쓰는 같은 기준).
   const _dimStyle = (tier) => (brightTier && ((parseInt(tier, 10) >= 80 ? 'deck' : 'hold') !== brightTier)) ? { opacity: 0.32 } : undefined;
@@ -1490,11 +1504,9 @@ function BayPage({ hideTitle = false, gkWideCns = null, page, bayGroups, complet
   const moveTargetBay = (() => {
     if (!pendingMove) return null;
     if (!pendingMove.fromBay) {
-      // V9.28: 미배정 컨(본위치 없음) — 규격으로 짝/홀 판정 (40/45=짝수 베이, 20=홀수 베이)
-      const lbl = (isoToLabel ? isoToLabel(pendingMove.iso || '') : '') || '';
-      if (lbl.startsWith('40') || lbl.startsWith('45')) return page.evenBay || null;
-      if (lbl.startsWith('20')) return page.oddBay || (page.isStandalone ? page.evenBay : null);
-      return null;   // 규격 미상 — 안전측 (배치 불가)
+      // V9.28: 미배정 컨(본위치 없음) — 규격으로 짝/홀 판정 (40/45=짝수 베이, 20=홀수 베이). 규격 미상 — 안전측 (배치 불가)
+      //  5.29-01: 규칙은 utils.unplacedTargetBayOf 한 벌(리스트만 선적의 빈 칸 넣기 창이 같은 답을 본다)
+      return unplacedTargetBayOf(pendingMove.iso || '', page);
     }
     const fromN = parseInt(pendingMove.fromBay);
     if (!fromN) return null;
@@ -1593,7 +1605,8 @@ function BayPage({ hideTitle = false, gkWideCns = null, page, bayGroups, complet
       const _phyErr = isMoveActiveHere
         ? slotAdjacencyError({ cn: pendingMove.cn, iso: pendingMove.iso }, _tbN, row, tier, effAll)
         : 'off';
-      if (isMoveActiveHere && !_phyErr && occupiedTierSet.has(`${_tbN}-${tier}`)) {
+      //  5.29-01: 리스트만 선적(listCellKeys)이면 «컨이 쓰는 단»이 하나도 없다 — 사전 칸이면 후보로 켠다(칸은 drawableKeysOf 한 벌).
+      if (isMoveActiveHere && !_phyErr && (occupiedTierSet.has(`${_tbN}-${tier}`) || (listCellKeys && listCellKeys.has(listOnlyCellKey(_tbN, row, tier))))) {
         return (
           <button key={key}
             onClick={() => onEmptyCellClick?.(moveTargetBay, row, tier)}
@@ -1601,6 +1614,18 @@ function BayPage({ hideTitle = false, gkWideCns = null, page, bayGroups, complet
             style={{ width: cellW, height: cellH }}
             title={`${moveTargetBay}/${row}/${tier} 로 이동`}>
             <span className="text-amber-200 font-black" style={{ fontSize: Math.max(10, fontSize) }}>📦+</span>
+          </button>
+        );
+      }
+      //  ★ 5.29-01 리스트만 선적 — 사전 칸이면 ＋ 단추. 누르면 VoyagePage 가 끝 4자리 창(ListPlaceModal)을 연다 — 그 장의 어느 베이(짝/홀)에 놓을지는 고른 컨 규격으로 정한다.
+      if (listPlace && !pendingMove && listCellKeys && [page.evenBay, page.oddBay].some((b) => b && listCellKeys.has(listOnlyCellKey(b, row, tier)))) {
+        return (
+          <button key={key} data-list-place={`${page.evenBay || ''}|${page.oddBay || ''}|${row}|${tier}`}
+            onClick={() => listPlace.onCell({ evenBay: page.evenBay || null, oddBay: page.oddBay || null, isStandalone: !!page.isStandalone, title: page.title || '' }, row, tier)}
+            className="border-2 border-dashed border-sky-400 bg-sky-500/10 hover:bg-sky-400/30 active:bg-sky-300/50 flex-shrink-0 flex items-center justify-center cursor-pointer"
+            style={{ width: cellW, height: cellH }}
+            title={`${row}열 ${tier}단 — 실은 컨 끝 4자리로 넣기`}>
+            <span className="text-sky-200 font-black" style={{ fontSize: Math.max(10, fontSize) }}>＋</span>
           </button>
         );
       }

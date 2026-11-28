@@ -33,6 +33,8 @@ import { normalizeBay, unknownSlotAskOf, bayDefOfShipCode } from '../utils.js'; 
 import { loadingSlotOf, isSwapSlot } from '../utils.js';   // 4.23-01 2차: 선적확인 한 번에 저장될 자리 한 벌(맞교환 자리 — 수동 트윈 짝 짐작 막기) · 3차: isSwapSlot 한 벌
 import { bayGroupCenter } from '../swapGrade.js';   // 3.49: 장수 셈의 그룹 center(GuidedWorkPanel 과 같은 벌)
 import { getShipBayDictData } from '../shipStructure.js';   // 3.49: 장 목록·장수 사전
+import { listOnlyUnplacedOf, listOnlyBaysOf } from '../utils.js';   // 5.29-01: 리스트만 선적 — 빈 베이 칩(판정 한 벌)
+import { ListOnlyBayCard } from './ListPlaceModal.jsx';   // 5.29-01: 빈 베이 안내 카드
 import { buildBayPagesFromSummary } from '../cargoPlanCore.js';   // 3.49: 장 묶기(hatchEvenOf 가 받는 목록)
 import { recordHatchEvent } from '../hatchReport.js';   // 3.49: 따라가기 자동 기록
 import HatchAlertBanner from './HatchAlertBanner.jsx';   // 3.49: 비따라가기 알림
@@ -105,7 +107,7 @@ function narrowByFullCn(list, q) {
 //  3.49: 따라가기 자동 기록 «적는 중/적음» 표 — 모듈 수준(항차키|장|동작). 화면이 다시 마운트되거나(모드 전환 key) 언마운트 뒤에도 같은 사건을 두 번 적지 않는다(2차 감사). 실패하면 지워 다음 갱신에 다시.
 const _hatchInFlightAll = new Set();
 
-export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, relayQuery = '', bayView = null, mirGoto = null }) {   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(VoyagePage 가 꺼내 넘긴다)   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, relayQuery = '', bayView = null, mirGoto = null, onListPlaceBay = null }) {   // 5.29-01 onListPlaceBay(center) — 리스트만 선적 빈 베이 카드의 [베이 그림에서 빈 칸 넣기](기존 방식 · VoyagePage 가 베이 탭을 그 베이로 연다)   // 4.40 mirGoto — 미르 [이동] 요청 {seq, mode, bay}(VoyagePage 가 꺼내 넘긴다)   // 3.48 bayView — 베이뷰 덮개가 준다: { presetCtx:{seq,bay,tier,guide,twin}, onWorkCtxChange(fn), compact, suppressBayActivity }. 없으면 종전 그대로.   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -369,6 +371,15 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     if (p) return (b + parseInt(p, 10)) / 2;
     return b;
   };
+  //  ★ 5.29-01 리스트만 선적(선적 EDI 아직 없음) — 자리 모르는 리스트 컨이 남았으면 베이사전의 베이를 전부 칩으로 세운다(빈 베이도 고른다).
+  //    판정은 utils.listOnlyUnplacedOf · listOnlyBaysOf 한 벌(VoyagePage 베이 탭 빈 칸 넣기·베이뷰 장 칩과 같은 답).
+  //    LOLO 배(RZOR — 셀 베이 그림이 없다)는 덱플랜 길(3.70 빈자리 조회창)이 따로 있어 켜지 않는다.
+  const listOnlyN = useMemo(() => (isLoloShip ? 0 : listOnlyUnplacedOf(allContainers, workFilter).length), [allContainers, workFilter, isLoloShip]);
+  const _lbBays = useMemo(() => {
+    if (!listOnlyN) return [];
+    try { const d = getShipBayDictData(voyage?.info?.imo || '', voyage?.info?.vsl || ''); return listOnlyBaysOf(d && d.bayDef); }
+    catch (e) { console.warn('[5.29-01] 베이사전을 못 읽어 리스트만 선적 베이 칩을 못 만듭니다', e); return []; }
+  }, [listOnlyN > 0, voyage?.info?.imo, voyage?.info?.vsl]);   // eslint-disable-line react-hooks/exhaustive-deps
   const manualGroups = useMemo(() => {
     if (workFilter === 'completed') return [];
     const is40 = (c) => { const k = sizeLenKnown(c); return k === '40' || k === '45'; };   // 4.88: 규격 길이 한 벌(tallyReport.sizeLenKnown) — 종전 첫 글자 규칙은 «DC40»·«45HC» 를 못 읽었다
@@ -484,8 +495,15 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     /*  빈 칸 0 인 묶음은 카드에서 내린다 — 끝난 베이가 목록에 남아 "다음"을 가리지 않게.
         ★ 2.88-01: 단 **남은 컨이 있으면 남긴다.** 진짜 끝난 베이는 contLeft 도 0 이라 그대로 빠진다.
           이 한 줄이 B38·B26 을 수동에서 지우고 있었다(자동에는 남아 있어 «이중인격»으로 보였다). */
-    return Object.values(map).filter(g => g.count > 0 || (g.contLeft || 0) > 0 || g.noBay).sort((a, b) => a.center - b.center);
-  }, [allContainers, workFilter, manualBayPairs]);
+    //  5.29-01: 리스트만 선적 — 사전 베이마다 묶음(빈 베이 포함 · listOnly 표식). 남은 컨·빈 칸 수는 종전 축 그대로 0 이다(지어내지 않는다).
+    for (const b of _lbBays) {
+      const center = manualGroupCenterOf(String(b));
+      if (center == null) continue;
+      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+      g.bays.add(b); g.listOnly = true;
+    }
+    return Object.values(map).filter(g => g.count > 0 || (g.contLeft || 0) > 0 || g.noBay || g.listOnly).sort((a, b) => a.center - b.center);
+  }, [allContainers, workFilter, manualBayPairs, _lbBays]);
 
   /* ── TallyOne 2.93: **빈 칸이 있어도 갈 컨이 없으면 남은 작업이 아니다.** (검수사 지적 2026-08-31) ──
        실측 MCSC 635S — B38 홀드 20대를 다 싣자 화면이 «같은 베이 데크 26대 남았습니다 — 이어서 →» 를 띄웠다.
@@ -782,6 +800,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {guideMode && workFilter !== 'completed' && !isLoloShip ? (
         <GuidedWorkPanel
           slotGroups={manualGroups}
+          listOnlyN={listOnlyN} onListPlaceBay={onListPlaceBay}   /* 5.29-01: 리스트만 선적 — 빈 베이 칩·안내 카드 */
           workCtx={{ bay: manualBay, tier: manualTier, setBay: setManualBay, setTier: setManualTier, presetSeq: _presetApplied }}   // 3.48: presetSeq — 베이뷰 프리셋으로 온 그룹 변경인지 GuidedWorkPanel 이 가린다
           onPlaceUnassigned={onPlaceUnassigned}
           onOpenPlan={onOpenPlan}
@@ -822,17 +841,20 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
               <button key={g.center} onClick={() => setManualBay(g.center)}
                 className="py-3 rounded-pill bg-ink-800 hover:bg-amber-800 border border-line text-dim-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
-                <div className="text-2xs text-dim-300">
+                {/* 5.29-01 감사 하3: 리스트만 선적의 빈 베이는 «남은 컨 0대» 대신 아래 «자리 모름 N대» 한 줄만 */}
+                {!(g.listOnly && !g.count && !(g.contLeft > 0)) && <div className="text-2xs text-dim-300">
                   {/* 4.87-10: 숫자와 단위가 줄에서 갈라지지 않게 — 구절 단위로만 줄을 바꾼다 */}
                   {g.count > 0 ? <><span className="whitespace-nowrap">빈 칸 {g.count}</span>{' · '}</> : null}<span className="whitespace-nowrap">남은 컨 {g.contLeft || 0}대</span>
-                </div>
+                </div>}
                 {/* 2.88-01: 계획 칸이 없는 베이(시프팅으로 다시 싣는 자리 등)는 «남은 컨» 축으로 보여준다 */}
                 <div className="flex items-center justify-center gap-1.5 mt-0.5 text-2xs font-bold">
                   {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && <span className="text-sky-300 whitespace-nowrap">데크 {g.count > 0 ? g.deck : g.contDeck}</span>}
                   {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && (g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-dim-500">·</span>}
                   {(g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-amber-300 whitespace-nowrap">홀드 {g.count > 0 ? g.hold : g.contHold}</span>}
                 </div>
-                {g.count === 0 && <div className="text-2xs text-amber-400 mt-0.5">계획 칸 없음 — 실체 자리로 배치</div>}
+                {g.count === 0 && (g.listOnly && !(g.contLeft > 0)
+                  ? <div className="text-2xs text-sky-300 mt-0.5" data-list-only-chip={g.center}><span className="whitespace-nowrap">자리 모름 {listOnlyN}대</span> · <span className="whitespace-nowrap">빈 칸에 넣기</span></div>
+                  : <div className="text-2xs text-amber-400 mt-0.5">계획 칸 없음 — 실체 자리로 배치</div>)}
               </button>
             ))}
           </div>
@@ -841,6 +863,10 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         (() => {
           const g = manualGroups.find(x => x.center === manualBay);
           const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${manualBay}`;
+          //  5.29-01: 리스트만 선적의 빈 베이 — 고를 단(남은 컨)이 없으니 단 고르기 대신 빈 칸 넣기 안내
+          if (g && g.listOnly && tierLeftOf(g, 'deck') === 0 && tierLeftOf(g, 'hold') === 0) {
+            return <ListOnlyBayCard bayLbl={bayLbl} n={listOnlyN} accent="amber" onBack={() => setManualBay(null)} onOpenBay={onListPlaceBay ? () => onListPlaceBay(manualBay) : null} />;
+          }
           return (
             <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-3">
               <div className="flex items-center gap-2">

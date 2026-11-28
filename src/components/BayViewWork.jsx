@@ -42,7 +42,7 @@ function hatchTitleOf(bay, pages) {
 }
 
 export default function BayViewWork({ voyage, voyageKey, inspector, inspectors = null, mode, allEdiContainers, xrayMap, xraySeals, shiftingMap, preGoneInfo = null,
-  onOpenContainer, onClose, onOpenReport = null, searchPanelProps = {} }) {   // 4.63-02: onOpenReport — 베이뷰를 닫지 않고 작업 보고 창을 연다
+  onOpenContainer, onClose, onOpenReport = null, searchPanelProps = {}, listPlace = null }) {   // 5.29-01 listPlace — 리스트만 선적(선적 EDI 아직 없음): 아래 그림 빈 칸 ＋ · 그릴 베이가 없으면 사전 장 칩   // 4.63-02: onOpenReport — 베이뷰를 닫지 않고 작업 보고 창을 연다
   const sec = (voyage && voyage[mode]) || {};
   const info = (voyage && voyage.info) || {};
   const [step, setStep] = useState('pick');                    // 'pick' | 'view'
@@ -373,10 +373,23 @@ export default function BayViewWork({ voyage, voyageKey, inspector, inspectors =
             <BayPlan containers={gridContainers} compMap={overlay.compMap} xrayMap={xrayMap} xraySeals={xraySeals} restowMap={shiftingMap} mode={mode}
               preGoneInfo={preGoneInfo} onOpenContainer={bayMode ? onBayCellTap : onOpenContainer}
               shipImo={info.imo} shipName={info.vsl} voyageInfo={info} voyageKey={voyageKey} rfSkip={!!searchPanelProps.rfSkip}
-              onlyBay={String(gridBay)} onlyLayout={isWide || bayMode ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={gridWarn} />
+              onlyBay={String(gridBay)} onlyLayout={isWide || bayMode ? layoutPick : 'col'} compactZoom={0.5} titleOut onTitles={setTitles} brightTier={bright} warnCells={gridWarn} listPlace={bayMode ? null : listPlace} />
           </FitBox>
         ) : (
-          <div className="text-xs text-dim-400 text-center py-6">아직 그릴 베이가 없습니다 — 위 칸에서 베이를 고르거나 ◀ 에서 따라가기를 켜세요.</div>
+          <div className="text-xs text-dim-400 text-center py-6">아직 그릴 베이가 없습니다 — 위 칸에서 베이를 고르거나 ◀ 에서 따라가기를 켜세요.
+            {/* 5.29-01: 리스트만 선적 — 선적 자료가 없어도 사전 장(빈 베이)은 고른다. 누르면 위 칸(SearchPanel)이 그 베이 묶음으로 간다(프리셋 한 벌). */}
+            {listPlace && Array.isArray(pages) && pages.length > 0 && (
+              <div className="mt-3 space-y-1.5" data-bayview-listonly-pages="1">
+                <div className="text-xxs text-sky-300 font-bold">선적 자료(EDI)가 아직 없습니다 — 빈 베이를 골라 실은 칸 ＋ 에 넣으세요</div>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {pages.map((p) => { const b = p.even != null ? p.even : p.odd; return (
+                    <button key={p.bayKey} onClick={() => setPreset((o) => ({ seq: ((o && o.seq) || 0) + 1, bay: b, tier: null, guide: null, twin: null }))} data-bayview-listonly-page={p.bayKey}
+                      className="px-2.5 py-1.5 rounded-pill bg-ink-800 border border-sky-700 text-sky-100 text-xs font-black mono">{p.odd != null && p.even != null ? `(${pad2(p.even)})${pad2(p.odd)}` : pad2(b)}</button>
+                  ); })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
       </div>

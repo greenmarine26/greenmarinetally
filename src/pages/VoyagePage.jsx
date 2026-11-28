@@ -69,6 +69,11 @@ import { _foreLoloOf, isoShown, mergeUploadSeal } from '../utils.js';   // 4.49:
 import { mfnNote, mfnItemsOf, shiftCandidatesOf } from '../utils.js';   // 4.58: 전체 옆 «(리스트 234 + MFN 44)»
 import { withAssignOf, sealSameLoose } from '../utils.js';   // 4.88: sealSameLoose — 업로드 충돌 창 실번호 비교 한 벌 · 4.23-01 2차: 목록에서 연 컨에 그 기록의 맞교환·지정 자리 칸을 얹는다
 import { forecastLegendOf } from '../utils.js';
+import { listOnlyUnplacedOf, listOnlyCellTakenOf, canCompleteContainer } from '../utils.js';   // 5.29-01: 리스트만 선적 빈 칸 넣기 — 판정 한 벌(자동·수동 칩·베이뷰와 같은 답) · 통과분 문지기
+import { fbPlaceAndCompleteLoading } from '../firebase.js';   // 5.29-01: 빈 칸 넣기 = 자리 + 선적 완료(한 번의 update)
+import { canRecordWorkNow, equipGateText } from '../workChoice.js';   // 5.29-01: 완료 문지기(컨 상세 선적확인과 같은 순서)
+import { askRecordSwitch } from '../modeSwitch.js';
+import ListPlaceModal from '../components/ListPlaceModal.jsx';
 import { shiftWordOf, liveHoldOf } from '../utils.js';   // 5.23-05: 시프팅 상태 말 한 벌(확정이면 대수만)   // 5.12: 예보 카드를 플랜 별첨3·별첨2 모양으로
 import { voyCore } from '../utils.js';   // 4.87-10: 항차 핵심번호 비교 한 벌
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
@@ -838,6 +843,50 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const allEdiContainers = useMemo(
     () => tagForecastMarks(allEdiContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null, specSet),   // 2.08-07: 씰도 컨 실재 기준
     [allEdiContainersBase, urgentSet, luggSet, _fc, _fcApply]);
+  /* ★ 5.29-01 — **선적 EDI 오기 전(리스트만) 빈 칸 넣기.** 검수사 2026-11-28 «EDI가 없으면앱으로 선적을 할수 없다는게 베이선택이 되지 않습니다» ·
+       «선적 자료가 없다고 빈베이도 안보여준다는건 이해가 안됩니다». 자리 모르는 리스트 컨이 남아 있는 동안만 베이 그림의 사전 빈 칸에 ＋ 가 선다(utils 판정 한 벌).
+       ＋ 를 누르고 끝 4자리로 고르면 그 칸으로 자리와 선적 완료를 한 번에(firebase.fbPlaceAndCompleteLoading) — 컨 상세 선적확인과 같은 문지기를 지난다. */
+  const listOnlyLeft = useMemo(() => listOnlyUnplacedOf(allEdiContainers, mode, (c) => !!compMap[c.cn]), [allEdiContainers, mode, compMap]);
+  const [listCell, setListCell] = useState(null);
+  const [listBusy, setListBusy] = useState(false);
+  const listPlace = useMemo(() => (listOnlyLeft.length ? { n: listOnlyLeft.length, onCell: (page, row, tier) => setListCell({ page, row, tier }) } : null), [listOnlyLeft.length]);
+  useEffect(() => { if (!listPlace && listCell) setListCell(null); }, [listPlace, listCell]);
+  //  자리 쓰기 물리 문지기 한 벌 — 🅿 배치(pendingMove)와 빈 칸 넣기가 같은 세 검사를 지난다(V9.28·V9.28-04·V9.28-05). 막히면 알릴 글, 통과면 ''.
+  const placeGuardText = (cn, iso, bay, row, tier) => {
+    const _pe = bayParityError({ iso }, bay);
+    if (_pe) return '⛔ ' + _pe;
+    const _ae = slotAdjacencyError({ cn, iso }, bay, row, tier, allEdiContainers);
+    if (_ae) return '⛔ ' + _ae;
+    const _pm = allEdiContainers.find(x => x.cn === cn);
+    const _pz = podZoneMismatch({ cn, pod: _pm?.pod }, bay, tier, allEdiContainers);
+    if (_pz) return `⛔ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대). ${cn}의 포트는 ${_pz.pod}.\n계획에 없는 포트 섞임은 실을 수 없습니다 — 현장에서 막고 제 구역 빈자리로 보내세요.\n불가피한 변경은 수석검수사가 베이상세편집 또는 EDI 수정으로 처리합니다.`;
+    return '';
+  };
+  //  5.29-01: 빈 칸 넣기 — 자리 + 선적 완료. 완료 문지기는 컨 상세 선적확인과 같은 순서(조회만 → 호기 → 통과분), 다음 물리 문지기, 그다음 쓰기.
+  const placeListCn = async (c, bay) => {
+    const cell = listCell;
+    if (!cell || !c || !bay) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!canRecordWorkNow() && !(await askRecordSwitch('완료'))) return;
+    if (!getEquipNumber()) { alert(equipGateText()); return; }
+    if (!canCompleteContainer(c, 'loading')) { alert(`평택 선적 대상이 아닙니다 (POL ${c.pol || '?'}) — 통과화물은 선적확인할 수 없습니다.`); return; }
+    const B = String(parseInt(bay, 10)).padStart(2, '0'), R = String(cell.row).padStart(2, '0'), T = String(cell.tier).padStart(2, '0');
+    const g = placeGuardText(c.cn, c.iso || c.tp || '', bay, R, T);
+    if (g) { alert(g); return; }
+    //  감사 중2: 창을 연 사이 다른 호기가 이 칸에 넣었으면 막는다(한 칸 두 대)
+    const taken = listOnlyCellTakenOf(allEdiContainers, B, R, T, c.cn, (x) => !!compMap[x.cn]);
+    if (taken) { alert(`⛔ ${parseInt(B, 10)}-${R}-${T} 에는 이미 ${String(taken.cn).slice(-4)} 가 실려 있습니다${taken.actual_by ? ` (${taken.actual_by})` : ''}.\n다른 칸을 누르거나, 잘못 넣은 것이면 ${String(taken.cn).slice(-4)} 컨 상세에서 자리를 고치세요.`); return; }
+    setListBusy(true);
+    try {
+      //  감사 중1·하1: 자리 + 완료 한 번의 update(firebase.fbPlaceAndCompleteLoading — 두 함수의 문지기 그대로 · 8초 뒤 기다림을 놓는다)
+      const r = await fbPlaceAndCompleteLoading(voyageKey, c.cn, B, R, T, inspector, getEquipNumber());
+      if (r && r.already) { alert(`${String(c.cn).slice(-4)} 는 이미 완료돼 있어 아무것도 적지 않았습니다. 자리는 컨 상세의 «위치 지정»으로 넣으세요.`); return; }
+      setListCell(null);
+    } catch (e) {
+      console.error('[5.29-01] 빈 칸 넣기 실패', c.cn, e);
+      alert('빈 칸 넣기 저장 실패: ' + (e?.message || e) + '\n자리도 완료도 적히지 않았습니다 — 신호를 확인하고 이 칸을 다시 눌러 주세요.');
+    } finally { setListBusy(false); }
+  };
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
   // M3.5.4-fix2: EDI = 단일 진실 원칙 강화
@@ -2040,12 +2089,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         <button type="button" onClick={() => setShowSheetPhoto(true)} className="w-full mb-2 py-2 rounded-pill text-xs2 font-black border bg-ink-900 border-amber-500 text-amber-200">📷 기록지 사진으로 선적 자리 넣기</button>
       )}
       {showSheetPhoto && <SheetPhotoModal voyage={voyage} voyageKey={voyageKey} inspector={inspector} onClose={() => setShowSheetPhoto(false)} />}
+      {/* 5.29-01: 리스트만 선적 — 베이 그림(베이 탭·베이뷰) ＋ 칸을 누르면 끝 4자리 창 */}
+      {listCell && listPlace && <ListPlaceModal cell={listCell} unplaced={listOnlyLeft} busy={listBusy} onPlace={placeListCn} onClose={() => setListCell(null)} />}
       {!_sideCanc && tab === 'search' && workStyle === 'bayview' && !isLoloShip && (
         <BayViewWork key={`${voyageKey}|${mode}`} voyage={voyageUi} voyageKey={voyageKey} inspector={inspector} inspectors={inspectors} mode={mode}
           allEdiContainers={allEdiContainers} xrayMap={xrayMap} xraySeals={xraySeals} shiftingMap={shiftingMap} preGoneInfo={preGoneInfo}
           onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}
           onClose={() => setWorkStyle('classic')}
           onOpenReport={() => setShowWorkReport(true)}   /* 4.63-02: 베이뷰 안에서 작업 보고(자동 가이드를 끄지 않는다) */
+          listPlace={mode === 'loading' ? listPlace : null}   /* 5.29-01: 리스트만 선적 — 아래 그림 빈 칸 ＋ · 그릴 베이가 없을 때 장 칩 */
           searchPanelProps={{
             rfSkip: rfSkipShip,
             esealBrief: esealInfo ? { n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges, poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length } : null,
@@ -2093,6 +2145,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
              검수사 — «양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것» — 지금 탭 것을 열면 된다.
              ⚠ 카고플랜은 베이 탭 안(BayPlan)의 인쇄 메뉴에 있다. 그래서 탭을 먼저 열고 신호를 남긴다. */
           onOpenPlan={_mirOpenPlan}
+          onListPlaceBay={(center) => { try { window.__mirGoBay = center; } catch (e) { console.warn('[5.29-01] 베이 탭 이동 신호 실패 — 베이 탭만 엽니다', e); } setTab('bay'); }}   /* 5.29-01: 빈 베이 카드 → 베이 탭 그 베이(미르 «N번 베이 보여줘» 와 같은 길) */
           onPlaceUnassigned={(c) => {
             // V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸에 직접 배치 (사용자 확정:
             //   "앱이 빈자리를 보여주고 거기에 맞는 컨을 넣어야 한다. 수석 편집은 오입력 교정용")
@@ -2175,21 +2228,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               pendingSwap={pendingSwap}
               onCancelSwap={() => setPendingSwap(null)}
               pendingMove={pendingMove}
+              listPlace={mode === 'loading' && !isLoloShip ? listPlace : null}   /* 5.29-01: 리스트만 선적 — 사전 빈 칸 ＋ */
               onCancelMove={() => setPendingMove(null)}
               onCommitMove={async (bay, row, tier) => {
                 // M4.9f 5단계: 빈 셀 클릭 시 그 자리로 이동
                 if (!pendingMove) return;
                 if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-                // V9.28: 물리 불가 가드 — 이 경로도 좌표 기록처다 (V9.27와 동일 원칙)
-                const _pe = bayParityError({ iso: pendingMove.iso }, bay);
-                if (_pe) { alert('⛔ ' + _pe); return; }
-                // V9.28-04: 인접 슬롯 검사 — 40ft는 양옆 홀수 슬롯이 비어야 한다
-                const _ae = slotAdjacencyError({ cn: pendingMove.cn, iso: pendingMove.iso }, bay, row, tier, allEdiContainers);
-                if (_ae) { alert('⛔ ' + _ae); return; }
-                // V9.28-05: POD 구역 경고 — 오선적 맞바꿈의 세 번째 그물 (경고 후 허용)
-                const _pm = allEdiContainers.find(x => x.cn === pendingMove.cn);
-                const _pz = podZoneMismatch({ cn: pendingMove.cn, pod: _pm?.pod }, bay, tier, allEdiContainers);
-                if (_pz) { alert(`⛔ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대). ${pendingMove.cn}의 포트는 ${_pz.pod}.\n계획에 없는 포트 섞임은 실을 수 없습니다 — 현장에서 막고 제 구역 빈자리로 보내세요.\n불가피한 변경은 수석검수사가 베이상세편집 또는 EDI 수정으로 처리합니다.`); return; }
+                // V9.28: 물리 불가 가드 — 이 경로도 좌표 기록처다 (V9.27와 동일 원칙) · V9.28-04 인접 슬롯 · V9.28-05 POD 구역
+                //  5.29-01: 세 검사는 placeGuardText 한 벌(빈 칸 넣기와 같은 문지기)
+                const _g = placeGuardText(pendingMove.cn, pendingMove.iso, bay, row, tier);
+                if (_g) { alert(_g); return; }
                 try {
                   await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
                     String(bay).padStart(2,'0'),
