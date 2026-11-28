@@ -207,7 +207,7 @@ export default function MirFab({ voyages, inspector, isChief = false, portMisDat
         const ms = cr.length ? Math.min(...cr.map((x) => x.ms)) : parseSpokenTimeMs(parsed.startSet.raw || text || '');
         if (ms) {
           const key = `start|${voyageKey}|${ms}|${cr.map((x) => x.no + ':' + x.ms).join(',')}`;
-          if (sideRef.current !== key) { sideRef.current = key; fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[미르] 시작 시각 저장 실패', e)); }
+          if (sideRef.current !== key) { sideRef.current = key; fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr, { afterBreak: !!parsed.startSet.afterBreak }).catch((e) => console.warn('[미르] 시작 시각 저장 실패', e)); /* 5.29-04 쉼 끝 말은 앞선 시작을 덮지 않음 */ }
         }
       }
       //  ★ 5.13 작업보고 전달 — «2호기 양하 완료»·«14번 베이 해치 열었어»·«1호기 콘박스 20자 3개»·«취소». 바로 적고 되읽는다(검수사 «바로 적고 되읽기만»).

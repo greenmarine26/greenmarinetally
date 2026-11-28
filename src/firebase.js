@@ -292,8 +292,17 @@ export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
 //    호기별 시작을 받으면 ①호기마다 시각을 적고(info.craneStart) ②그중 **가장 이른 것**을
 //    항차 시작(workStartManual)으로 삼고 ③**호기 수 = 갱 수**를 그 시각이 속한 조에 적는다.
 //    ⛔ 수집기 workStartAt(터미널 정본)은 안 건드린다.
-export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
+//  ★ 5.29-04 재감사 5 — «강풍 끝나고 16:30 작업 시작»·«점심 끝나고 13시부터 작업» 은 쉼 뒤 다시 하는 말이다. 이미 항차 시작(말로 알린 시작·터미널 시작)이
+//    그 시각보다 앞에(24시간 안) 적혀 있으면 true(STMJ 2675E 2026-11-28 — 10:30 시작이 15:45 로 덮인 일과 같은 종류). 읽기만 한다 · 시간 초과는 _withTimeout 이 알린다.
+async function _startAlreadyBefore(voyageKey, ms) {
+  const cur = await _withTimeout(get(ref(db, `voyages/${voyageKey}/info`)), '항차 시작 읽기');
+  const ci = (cur && cur.val()) || {};
+  const toMs = (x) => { const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(x || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
+  return [toMs(ci.workStartManual), toMs(ci.workStartAt)].some((x) => x > 0 && x < ms && ms - x < 24 * 3600000);
+}
+export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null, opts = {}) {
   if (!voyageKey || !ms) return;
+  if (opts && opts.afterBreak && await _startAlreadyBefore(voyageKey, ms)) return null;   // ★ 5.29-04 재감사 5 — 쉼 끝 말은 앞선 항차 시작을 덮지 않는다(null)
   const p2 = (n) => String(n).padStart(2, '0');
   const fmt = (x) => { const d = new Date(x); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
   const list = Array.isArray(cranes) ? cranes.filter((c) => c && c.no && c.ms) : [];

@@ -216,7 +216,7 @@ export function parseNaturalQuery(text) {
       //    사유 낱말 없이 «대기» 만 있고 그 주어가 차·컨·야드면(«트럭 대기 중»·«차가 안 와서 대기 중»·«리퍼 작업 대기 중»·«야드 대기») 배 작업 멈춤이 아니다
       //    («구급차 와서 대기 중»·«아파트 앞 대기» 는 4.38 3·4차 감사대로 종전 멈춤 — smoke_mirbusy438).
       const _vehWait = !_wr && !/쉬고|쉬는|쉬어|멈|중단|스톱|스탑|작업\s*안|못\s*(?:해|하)/.test(t) && /트럭|차량|차가|리퍼|컨테이너|야드/.test(t);
-      if (!_vehWait && /대기|쉬고|쉬는|쉬어|멈|중단|스톱|스탑|작업\s*안|못\s*(?:해|하)/.test(t) && !/[?？]|왜|몇|언제|얼마|어디|누구|이유|재개|다시\s*시작|시작했|끝났|풀렸|걷혔|그쳤|그만/.test(t)
+      if (!_vehWait && /대기|쉬고|쉬는|쉬어|멈|중단|스톱|스탑|작업\s*안|못\s*(?:해|하)/.test(t) && !/[?？]|왜|몇|언제|얼마|어디|누구|이유|(?:사유|이유)\s*(?:가|는|이|를)?\s*(?:뭐|무엇|알려|말해)|뭐\s*때문|무슨\s*(?:사유|이유|일)|재개|다시\s*시작|시작했|끝났|풀렸|걷혔|그쳤|그만/.test(t)
           && !/연습|퀴즈|문제\s*(?:내|좀|세|두|한)|공부|외우|(?:이니까|니까|이라서|이라|인데|는데).{0,30}(?:내|보여|가르쳐|읽어|들려|불러)\s*(?:줘|줄래|주세요|주실)/.test(t)   // ★ 5.28-05: «쉬는 시간이니까 베이 위치 읽기 연습 문제 세 개 내줘» 는 부탁이지 멈춤 알림이 아니다(2026-11-27 22:33 클로드2 시험 — TMPZ 에 중단 보고가 적혔다). «작업 중단해 줘»·«강풍대기 알려줘»·«기록해줘» 같은 보고는 그대로(감사 상 1)
           && !/해제|풀림|풀렸|풀려(?!야)|풀리(?!면|길|기)|종료|끝\s*(?:났|남|나|이|$)|(?<!안\s?)잦아|시작\s*해(?![서야])|시작하자|싶|어떻게|방법|어제|내일|모레|\d\s*호기\s*만|(?:다른|옆)\s*(?:배|선박|터미널|부두|선석)/.test(t)
           && !(!_wr && /숨|가슴|아파(?!트)|아프|어지러|다쳤|다치|다쳐|쓰러|구급|119|살려|죽(?:고|을|겠|어)/.test(t) && !/작업|중단|스톱|스탑|대기|멈|비\s*(?:와|오|온)|바람/.test(t))) {   // 4.38 재감사: 멈춤 낱말이 «쉬어·쉬고» 뿐인 몸·위기 말(«숨이 안 쉬어져»·«어지러워서 쉬는 중»)은 작업 멈춤 알림이 아니다 — 생활회화(위기 신호 규칙)로 간다. «사람 다쳐서 작업 멈췄어» 처럼 작업 멈춤을 분명히 말하거나 아는 사유(강풍·우천·점심…)가 있으면 종전대로 적는다(3·4차 감사)
@@ -570,16 +570,27 @@ export function parseNaturalQuery(text) {
       //  3.60-03 (진단 T3): «10시부터 몇 대 했어»·«8시부터 12시까지 몇 대» 는 **진행을 묻는 말**인데 «N시 … 부터» 에 걸려
       //    startSet 이 서고 화면이 fbSetVoyageWorkStart 로 항차 시작 시각을 덮었다(실측). 대수·진행 어미가 있으면 묻는 말이다.
       const _asking = /몇\s*시|언제|몇\s*(?:대|개|건|컨)|얼마나|남았|남아|어디까지|퍼센트|%/.test(t);
-      const _startWord = !_asking && /시작|작업/.test(t);
-      const _hasTime = /(\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시)/.test(t);
+      //  ★ 5.29-04 — «15:45 4호기 작업중단 강풍대기» 의 «작업» 이 시작 낱말로 잡혀 STMJ 2675E 작업 시작이 15:45 로 덮였다(실측 2026-11-28 17:27 — 실제 시작 10:30).
+      //    멈춤·대기·정지·끝 낱말이 든 말은 시작 알림이 아니다(«시작» 이라는 낱말이 따로 있어도 «중단 후 재시작» 같은 말은 작업보고가 받는다).
+      //  5.29-04 재감사 5 — «점심 끝나고 13시부터 작업»·«휴식 후 22시부터 작업»·«대기 풀려서 15시부터 작업» 은 쉼이 끝났다는 말이다(멈춤 알림 아님).
+      //    쉼 끝 말(_brkCue)은 멈춤 낱말 판정에서 빼고, startSet 에 afterBreak 표시를 달아 이미 적힌 항차 시작을 덮지 않게 한다(firebase.fbSetVoyageWorkStart).
+      const _brkCue = /(?:[가-힣]+\s*)?(?:끝나고|끝나서|끝난\s*(?:뒤|후|다음)|풀려서|풀리고|풀린\s*(?:뒤|후)|해제\s*(?:되고|돼서|된\s*(?:뒤|후)))|(?:휴식|점심|식사|대기|중단|야식|쉬는\s*시간)\s*(?:후|뒤)에?/g;
+      const _afterBreak = /(?:끝나고|끝나서|끝난\s*(?:뒤|후|다음)|풀려서|풀리고|풀린\s*(?:뒤|후)|해제\s*(?:되고|돼서|된\s*(?:뒤|후)))|(?:휴식|점심|식사|대기|중단|야식|쉬는\s*시간)\s*(?:후|뒤)/.test(t);
+      const _stopWord = /중단|멈|정지|스톱|스탑|대기|쉬(?!프)|휴식|끝|완료|종료|철수/.test(t.replace(_brkCue, ' '));
+      //  감사 상 1·상 2 — «시작» 낱말이 있으면 멈춤 낱말이 있어도 시작 알림(«강풍대기 끝나고 15시 작업 시작»·«1호기 22시 쉬프팅 작업 시작») · 재계산 말은 그대로.
+      //    «재개»·«다시 시작» 은 항차 작업 시작이 아니다(호기 재개 작업보고가 받는다 — «16:30 3호기 4호기 작업 재개»).
+      const _resumeWord = /재개|다시\s*시작/.test(t);
+      const _startWord = !_asking && !_resumeWord && (/시작/.test(t) || (!_stopWord && /작업/.test(t)));
+      const _hasTime = /(\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시(?!간))/.test(t);
       //  ★ 2.74 (검수사 실측 «미르야 2호기는 23:15 3호기는 23:20 4호기는 23:25 에 시작했어»):
       //    호기마다 시각을 대면 그 자체가 시작 알림이다 — 호기+시각 짝이 둘 이상이면 «시작» 이란
       //    낱말이 없어도 잡는다(검수사 실제 말투). 하나뿐이면 종전대로 시작·재계산 낱말을 요구한다.
       const _cr = parseCraneStarts(t);
+      if ((_stopWord || _resumeWord) && !_reCalc && !_startWord) { /* 멈춤·재개 말 — 시작 알림 아님(5.29-04) */ } else
       if (!_asking && (_cr.length >= 2 || (_cr.length === 1 && (_reCalc || _startWord)))) {
-        result.startSet = { raw: t, cranes: _cr };
+        result.startSet = { raw: t, cranes: _cr, ...(_afterBreak ? { afterBreak: true } : {}) };
       } else if (!_asking && _hasTime && (_reCalc || _startWord || /(\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})\s*부터/.test(t))) {
-        result.startSet = { raw: t, cranes: [] };
+        result.startSet = { raw: t, cranes: [], ...(_afterBreak ? { afterBreak: true } : {}) };
       }
     }
     if (_isGangQ || _gset || _bareGang || result.startSet || (_gm && /배분|작업량/.test(t))) {
@@ -3666,7 +3677,7 @@ export function voyageReportSpan(voyage) {
       const r = rp[k];
       if (!r || typeof r !== 'object') continue;
       const a = String(r.action || '');
-      const ts = Number(r.ts) || Number(k) || 0;
+      const ts = Number(r.saidAt) || Number(r.ts) || Number(k) || 0;   // 5.29-04: 미르에게 «HH:MM 중단» 이라 말한 보고는 그 시각(saidAt)
       if (!(ts > 0)) continue;
       if (/_start$/.test(a)) { if (!st || ts < st) st = ts; }
       else if (/_done$/.test(a)) { if (ts > ed) ed = ts; }
@@ -3954,7 +3965,7 @@ export function recentPaceOf(voyage, now = Date.now()) {
   const rp = voyage.reports;
   if (rp && typeof rp === 'object') for (const k of Object.keys(rp)) {
     const r = rp[k]; if (!r || typeof r !== 'object') continue;
-    const ts = Number(r.ts) || Number(k) || 0; if (!ts || ts > now + 60000) continue;
+    const ts = Number(r.saidAt) || Number(r.ts) || Number(k) || 0; if (!ts || ts > now + 60000) continue;   // 5.29-04: 말한 시각(saidAt) 우선
     //  4.76 호기 이동 보고(type 'crane_move') — 철수 = 그 호기 멈춤 · 복귀·이동 도착 = 그 호기 시작. 배 전체 «작업 중단»이 아니라 호기 하나의 일이다.
     if (r.type === 'crane_move') {
       const kind = String(r.kind || ''); const eq = gangEquipNo(r.equip); const to = gangEquipNo(r.to);

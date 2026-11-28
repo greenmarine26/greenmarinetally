@@ -146,7 +146,7 @@ export function kakaoWorkPlanOf(voy, msgs, nowMs) {
   let aw = JSON.parse(JSON.stringify(voy.activeWork || {}));
   const patch = {}, said = [], notes = [];
   const done = new Set();   // 이 회차에 적은 (호기|동작) — 같은 회차에 같은 보고 두 번 금지(5.29 감사 중-1)
-  const laterDone = (equip, mode, ts) => Object.values(voy.reports || {}).some((x) => x && x.type === 'work_status' && x.equip === equip && x.action === `${mode}_done` && Number(x.ts) >= ts)
+  const laterDone = (equip, mode, ts) => Object.values(voy.reports || {}).some((x) => x && x.type === 'work_status' && x.equip === equip && x.action === `${mode}_done` && (Number(x.saidAt) || Number(x.ts)) >= ts)   /* 5.29-04 saidAt */
     || diff.some((x, j) => x.equip === equip && x.action === `${mode}_done` && x.ts >= ts && isKakaoClaim(rows[j].m.body));   // 물음 글의 완료는 세지 않는다(재감사 하-B)
   let lastKey = 0;
   diff.forEach((r, i) => {

@@ -1405,8 +1405,8 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     const key = `${voyageKey}|${ms}|${cr.map((c) => c.no + ':' + c.ms).join(',')}`;
     if (startSetRef.current === key) return;
     startSetRef.current = key;
-    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr)
-      .then((txt) => { try { speak(cr.length ? `${String(txt)} 시작으로 다시 계산했어요` : `${String(txt).slice(11)} 시작으로 다시 계산했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr, { afterBreak: !!parsed.startSet.afterBreak })   // 5.29-04 쉼 끝 말은 앞선 시작을 덮지 않음(null)
+      .then((txt) => { if (!txt) return; try { speak(cr.length ? `${String(txt)} 시작으로 다시 계산했어요` : `${String(txt).slice(11)} 시작으로 다시 계산했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
       .catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [parsed.startSet, voyageKey, inspector, query]);
 

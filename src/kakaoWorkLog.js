@@ -252,10 +252,10 @@ export function diffAgainstReports(items, reports, groupOf, deleted = null) {
   const ghostOf = (r, stale) => {
     if (!r) return null;
     if (r.type === 'hatch') return { stale, kind: 'hatch', action: r.action, ts: hatchReportTs(r), groups: (r.bays || []).map(groupOf).filter((g) => g != null) };
-    if (r.type === 'work_status') return { stale, kind: 'work_status', action: r.action, ts: Number(r.ts) || 0, equip: r.equip || '' };
+    if (r.type === 'work_status') return { stale, kind: 'work_status', action: r.action, ts: Number(r.saidAt) || Number(r.ts) || 0, equip: r.equip || '' };   // 5.29-04: 말한 시각(saidAt) 우선
     return null;
   };
-  for (const r of Object.values(reports || {})) if (r && r.orig) { const g = ghostOf({ ...r, ...r.orig, ts: r.ts, eventTs: r.eventTs, auto: r.auto }, 'edited'); if (g) ghosts.push(g); }
+  for (const r of Object.values(reports || {})) if (r && r.orig) { const g = ghostOf({ ...r, ...r.orig, ts: r.ts, saidAt: r.saidAt, eventTs: r.eventTs, auto: r.auto }, 'edited'); if (g) ghosts.push(g); }
   for (const r of Object.values(deleted || {})) { const g = ghostOf(r, 'deleted'); if (g) ghosts.push(g); }
   const sameVerb = (a, b) => { const x = String(a || ''), y = String(b || ''); if (x === y) return true; const vx = x.replace(/^(discharge|loading)_/, ''), vy = y.replace(/^(discharge|loading)_/, ''); return (vx === 'pause' || vx === 'resume') && vx === vy && (!x.includes('_') || !y.includes('_')); };
   const ghostHit = (it) => ghosts.find((g) => g.kind === it.kind && (it.kind === 'hatch' ? g.action === it.action : sameVerb(g.action, it.action)) && Math.abs(g.ts - it.ts) <= 20 * 60000
@@ -266,7 +266,7 @@ export function diffAgainstReports(items, reports, groupOf, deleted = null) {
     if (r.type === 'hatch') have.push({ key, kind: 'hatch', action: r.action, ts: hatchReportTs(r), groups: (r.bays || []).map(groupOf).filter(g => g != null) });   // 3.49: 자동 기록은 적힌 때가 아니라 사건 시각으로 대조
     //  ★ 3.53-01 — **호기를 같이 싣는다.** 안 실으면 아래 판정이 호기를 못 갈라
     //    «1호기 20:43 시작» 이 «2호기 20:44 시작» 과 같은 사건으로 접힌다(실측 ATPR 2642W).
-    else if (r.type === 'work_status') have.push({ key, kind: 'work_status', action: r.action, ts: r.ts, equip: r.equip || '', mode: r.mode || '' });
+    else if (r.type === 'work_status') have.push({ key, kind: 'work_status', action: r.action, ts: Number(r.saidAt) || r.ts,   /* 5.29-04 saidAt */ equip: r.equip || '', mode: r.mode || '' });
   }
 
   //  ★ 3.53-01 — **카톡이 정본이다**(검수사 2026-09-16 «일단은 카톡보고가 바로 등록되게하고

@@ -41,7 +41,42 @@ export function modeForEquip(voyage, activeWork, equip, said = '') {
 }
 
 /** 계획 — { ask } 이면 되묻는다(아무것도 안 쓴다) · { writes:[{aw:{equip,mode,val}} | {report} | {hatchDone:{center:action}}], readback, by }. */
-export function planMirWorkReport(p, { voyageKey, voyage, activeWork = {}, inspectors = {}, relayBy = '', nowMs = Date.now() }) {
+/** ★ 5.29-04 — 말한 시각(hh:mm)을 그날의 ms 로. 지금보다 5분 넘게 뒤면 어제 그 시각, 12시간 넘게 앞이면 쓰지 않는다(지금 시각). */
+export function saidAtMs(at, nowMs = Date.now()) {
+  if (!at || !(at.hh >= 0)) return 0;
+  //  «3시 반» 처럼 오전·오후를 안 붙인 시각은 지금에서 가장 가까운 지난 시각(03:30 · 15:30 중)으로 본다.
+  const cands = [at.hh];
+  if (at.hh >= 1 && at.hh <= 12) cands.push(at.hh === 12 ? 0 : at.hh + 12);
+  let best = 0;
+  for (const h of cands) {
+    const d = new Date(nowMs); d.setHours(h, at.mm || 0, 0, 0);
+    let ms = d.getTime();
+    if (ms > nowMs + 5 * 60000) ms -= 86400000;
+    if (nowMs - ms <= 12 * 3600000 && ms > best) best = ms;
+  }
+  return best;
+}
+
+export function planMirWorkReport(p, opts = {}) {
+  //  ★ 5.29-04 — 호기를 여럿 말한 작업 상태 보고(«3호기 4호기 작업중단 강풍대기»)는 호기마다 같은 보고를 적는다. 하나라도 되물으면 아무것도 안 적는다.
+  if (p && p.kind === 'status' && Array.isArray(p.equips) && p.equips.length > 1) {
+    const all = [], said = [];
+    let by = '', who = null;
+    for (const e of p.equips) {
+      const r = planMirWorkReport({ ...p, equip: e, equips: null }, opts);
+      if (r.ask) return { ask: `${p.equips.join('·')} 어느 호기도 아직 안 적었어요 — ${r.ask}` };   // 감사 중 2
+      all.push(...r.writes); said.push((r.said || '') + (r.by ? `(${r.by})` : '')); by = by || r.by; who = who || r.who;
+    }
+    const vsl = ((opts.voyage && opts.voyage.info) || {}).vsl || String(opts.voyageKey || '').split('_')[0];
+    return { writes: all, by, who, readback: `📝 ${vsl} ${said.filter(Boolean).join(' · ')} — 호기마다 적었어요. 틀렸으면 «보고 취소» 라고 하세요.` };
+  }
+  return _planOne(p, opts);
+}
+
+function _planOne(p, { voyageKey, voyage, activeWork = {}, inspectors = {}, relayBy = '', nowMs: nowReal = Date.now() }) {
+  //  말한 시각이 있으면 그 시각으로 적는다(«15:45 4호기 작업중단» 을 17:27 에 알려도 중단은 15:45 — 실측 2026-11-28 STMJ 2675E).
+  const _said = p && p.kind === 'status' ? saidAtMs(p.at, nowReal) : 0;
+  const nowMs = _said || nowReal;
   if (!p || p.kind === 'cancel') return { ask: '무슨 보고인지 못 알아들었어요 — «2호기 양하 완료» 처럼 말해 주세요.' };
   const info = (voyage && voyage.info) || {};
   const vsl = info.vsl || String(voyageKey || '').split('_')[0];
@@ -121,5 +156,7 @@ export function planMirWorkReport(p, { voyageKey, voyage, activeWork = {}, inspe
       message: buildConBoxMessage({ vsl, voy: voyOf(mode), type: p.type, count: p.count, time: nowMs, equip }) } });
     said.push(`${equip} 콘박스 ${p.type}자 ${p.count}개`);
   } else return { ask: '무슨 보고인지 못 알아들었어요.' };
-  return { writes, by, who, readback: `📝 ${vsl} ${said.join(' · ')} — ${by} 이름으로 적었어요(${who.src}). 틀렸으면 «보고 취소» 라고 하세요.` };
+  if (_said) for (const w of writes) if (w.report) w.report.saidAt = _said;   // 보고 키(ts)는 적은 때, 일어난 때는 saidAt
+  const _hm = _said ? ` ${String(new Date(_said).getHours()).padStart(2, '0')}:${String(new Date(_said).getMinutes()).padStart(2, '0')}부터` : (p && p.at ? ` (말한 ${String(p.at.hh).padStart(2, '0')}:${String(p.at.mm).padStart(2, '0')} 는 지금보다 늦거나 12시간 넘게 지나 지금 시각으로 적었어요)` : '');   // 감사 하 2
+  return { writes, by, who, said: said.join(' · ') + _hm, readback: `📝 ${vsl} ${said.join(' · ')}${_hm} — ${by} 이름으로 적었어요(${who.src}). 틀렸으면 «보고 취소» 라고 하세요.` };
 }

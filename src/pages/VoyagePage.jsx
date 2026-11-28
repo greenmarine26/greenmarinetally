@@ -2705,7 +2705,7 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
     const key = `${voyageKey}|${ms}|${q}`;
     if (startSetRef.current === key) return;
     startSetRef.current = key;
-    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr, { afterBreak: !!ss.afterBreak }).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));   // 5.29-04 쉼 끝 말은 앞선 시작을 덮지 않음
   }, [ask, voyageKey, inspector]);
   //  ★ 3.8: «주간 1호기 김판석 2호기 송제욱» — 호기–검수원을 이 항차의 그 조에 적는다(확인 글은 인라인 카드 본체가 낸다).
   const crewSetRef = useRef('');
@@ -3686,7 +3686,7 @@ function LoloTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, containe
     const key = `${voyageKey}|${ms}|${q}`;
     if (startSetRef.current === key) return;
     startSetRef.current = key;
-    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr, { afterBreak: !!ss.afterBreak }).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));   // 5.29-04 쉼 끝 말은 앞선 시작을 덮지 않음
   }, [ask, voyageKey, inspector]);
   //  ★ 3.8: «주간 1호기 김판석 2호기 송제욱» — 호기–검수원을 이 항차의 그 조에 적는다(확인 글은 인라인 카드 본체가 낸다).
   const crewSetRef = useRef('');
@@ -5280,7 +5280,7 @@ function WorkReportHistory({ voyageKey, voyage = null, inspector = '' }) {
             <div key={r.k} className="text-xs2 bg-ink-800/60 rounded px-2.5 py-1.5">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-dim-100">{({work_status:'작업',hold_event:'보류 기록',crane_move:'호기 이동',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${String(r.equip).endsWith('호기') ? r.equip : `${r.equip}호기`}` : ''}</span>
-                <span className="text-dim-400 mono">{(r.ts || r.at) ? new Date(r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                <span className="text-dim-400 mono">{(r.ts || r.at) ? new Date(Number(r.saidAt) || r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
               </div>
               {(r.text || r.message || r.summary) && (
                 <div className="text-dim-300 whitespace-pre-wrap mt-0.5 leading-snug">{String(r.text || r.message || r.summary).slice(0, 200)}</div>

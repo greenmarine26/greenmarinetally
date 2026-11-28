@@ -111,8 +111,8 @@ T((rd('src/pages/VoyagePage.jsx').match(/fbSetVoyageWorkStart\(voyageKey, ms, in
 }
 
 //  ── 배선(세 화면 한 벌) ──
-T(/fbSetVoyageWorkStart\(voyageKey, ms, inspector \|\| '', cr\)/.test(rd('src/components/SearchPanel.jsx')), '통합검색이 호기 목록을 안 넘긴다');
-T((rd('src/pages/VoyagePage.jsx').match(/fbSetVoyageWorkStart\(voyageKey, ms, inspector \|\| '', cr\)/g) || []).length === 2, '양하·선적 탭 두 곳이 호기 목록을 안 넘긴다');
+T(/fbSetVoyageWorkStart\(voyageKey, ms, inspector \|\| '', cr(?:, \{ afterBreak: [^}]*\})?\)/.test(rd('src/components/SearchPanel.jsx')), '통합검색이 호기 목록을 안 넘긴다');
+T((rd('src/pages/VoyagePage.jsx').match(/fbSetVoyageWorkStart\(voyageKey, ms, inspector \|\| '', cr(?:, \{ afterBreak: [^}]*\})?\)/g) || []).length === 2, '양하·선적 탭 두 곳이 호기 목록을 안 넘긴다');
 T(/patch\.craneStart = cs/.test(rd('src/firebase.js')), '호기별 시작을 저장하지 않는다');
 T(/craneStart/.test(rd('src/chiefAnswers.js')), '계산이 호기별 시작을 안 본다');
 

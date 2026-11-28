@@ -72,7 +72,7 @@ import { workOrderOf, workOrderText } from './workOrder.js';   // 4.09: 양하 �
 import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
 import { mirKnowledge, mirKnowledgeMulti } from './data/mirKnowledge.js';
-import { isoCheckDigit, isoFixLastDigit } from './utils.js';
+import { isoCheckDigit, isoFixLastDigit, parseSpokenTimeMs } from './utils.js';   // 5.29-04: 쉼 끝 시작 말의 시각
 import { isHiddenStaff, isTester } from './staffList.js';   // ★ 5.28-05: 테스터(«클로드»·«클로드2») 말은 사전에 익히지 않는다(검수사 2026-11-27 «테스터는 익히지 않음»)   // 5.27: 묶음 답의 컨번호 검산(nlSearch 가 쓰는 것과 같은 한 벌)
 import { PORT_CODE_KR } from './nlSearch.js';   // 5.27: POD별 답에 한국어 항구 이름
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
@@ -1561,8 +1561,8 @@ export function answerVoyageFacts(parsed, ctx) {
       if (!ats.length) for (const c of cs) { const cp = c._comp || c.comp; if (cp && typeof cp.at === 'number') ats.push(cp.at); }
       ats.sort((a, b) => a - b);
       const reps = Object.values((v && v.reports) || {}).filter((r) => r && r.type === 'work_status');
-      const starts = reps.filter((r) => /_start$/.test(S(r.action))).map((r) => r.ts).filter(Boolean).sort((a, b) => a - b);
-      const dones = reps.filter((r) => /_done$/.test(S(r.action))).map((r) => r.ts).filter(Boolean).sort((a, b) => a - b);
+      const starts = reps.filter((r) => /_start$/.test(S(r.action))).map((r) => Number(r.saidAt) || r.ts).filter(Boolean).sort((a, b) => a - b);
+      const dones = reps.filter((r) => /_done$/.test(S(r.action))).map((r) => Number(r.saidAt) || r.ts).filter(Boolean).sort((a, b) => a - b);
       const L = [];
       if (S(info.workStartAt)) L.push(`작업 시작 ${S(info.workStartAt).slice(5)}(터미널)`);
       if (S(info.workStartManual)) L.push(`말로 알린 시작 ${S(info.workStartManual)}`);
@@ -2618,6 +2618,14 @@ function _answerOneRawCore(query, ctx) {
       return '무엇을 취소할까요? 🐱 아무것도 바꾸지 않았어요. 방금 미르가 적은 작업보고면 «보고 취소», 호기 철수를 거두려면 «철수 취소» 라고 말해 주세요.';
     }
     //  ★ 5.13 작업보고 전달 — 적는 손은 화면(MirFab·통합검색)이다. 여기서는 받았다는 말만(실제 결과·되읽기·되묻기는 화면이 적은 뒤 붙인다).
+    //  ★ 5.29-04 — 미르를 부르지 않은 작업보고 말(검색창 «15:45 4호기 작업중단 강풍대기»)은 적지 않는다(5.13 — 부른 말만 적는다). 엉뚱한 답(«갱 배분 — 베이사전») 대신 그렇게 말한다.
+    if (p.workRep && p.workRep.kind === 'status' && /^(?:pause|resume)$/.test(p.workRep.verb) && !(p.mirCalled || c.mirBox) && app !== 'cone') {   // 감사 하 1 — 완료·시작·해치·콘박스 말은 종전 조회 답
+      _via('workReportHint');
+      const w = p.workRep;
+      const eqs = (w.equips && w.equips.length ? w.equips : [w.equip]).filter(Boolean).join('·');
+      const hm = w.at ? ` ${String(w.at.hh).padStart(2, '0')}:${String(w.at.mm).padStart(2, '0')}` : '';
+      return `📝 작업보고로 들었어요(${eqs}${hm} ${w.verb === 'pause' ? '작업 중단' : w.verb === 'done' ? '완료' : w.verb === 'resume' ? '재개' : w.verb === 'start' ? '시작' : '보고'}${w.reason ? ' · 사유 ' + w.reason : ''}) — 아직 안 적었어요. 앱에 적으려면 앞에 «미르야» 를 붙여 말하거나 미르 창(🐱)에서 말해 주세요.`;
+    }
     if (p.workRep && (p.mirCalled || c.mirBox)) {
       _via('workReport');
       if (p.workRep.kind === 'cancel') return app === 'cone' ? '콘앱 미르는 작업보고를 적지 않아요 🐱 검수앱 미르에서 해 주세요.' : '방금 미르가 적은 작업보고를 되돌릴게요 🐱';
@@ -2692,19 +2700,36 @@ function _answerOneRawCore(query, ctx) {
         return `알겠어요, ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}쉬는 걸로 들었어요 🐱 다만 어느 배인지 몰라 적지 못했어요. 배 이름을 붙여 주세요. (예: "미르야 MCAT ${R.replace(' ', '')}")`;
       }
       if (app === 'cone') return `알겠어요, ${p.pauseSet.known ? koJosa(R, '으로') + ' ' : ''}쉬는 걸로 들었어요 🐱 중단 기록은 검수앱 작업 보고 → 작업 중단에서 남겨 주세요 — 콘앱은 적는 손이 없어요.`;
-      const wp0 = workPauseOf(v, c._now || Date.now());
-      if (wp0 && (wp0.reason === R || !p.pauseSet.known)) return `알겠어요 🐱 앱에도 ${wp0.equip ? wp0.equip + ' ' : ''}${wp0.ko} ${_hm(wp0.ts)} 중단(사유 ${wp0.reason || R})으로 기록돼 있어요. 누가 왜 쉬냐고 물으면 그 사유를 알려 드릴게요.`;
+      const wp0 = workPauseOf(v, c._now || Date.now(), null, { perEquip: true });
+      if (wp0 && (wp0.reason === R || !p.pauseSet.known)) return `알겠어요 🐱 앱에도 ${wp0.equipKo ? wp0.equipKo + ' ' : ''}${wp0.ko} ${_hm(wp0.ts)} 중단(사유 ${wp0.reason || R})으로 기록돼 있어요. 누가 왜 쉬냐고 물으면 그 사유를 알려 드릴게요.`;
       return p.pauseSet.known
         ? `⏸ ${koJosa(R, '으로')} 작업이 멈춘 걸로 적을게요 🐱 작업 신호가 없어도 기다릴게요. 누가 왜 쉬냐고 물으면 이 사유를 알려 드려요.`   // 4.42-02: koJosa — «장비 고장으로»(종전 «장비 고장로»)
         : `⏸ 작업이 멈춘 걸로 적을게요 🐱 사유는 쉬는 중으로 남겨 둘게요 — 야드·강풍·안개·우천·장비 고장처럼 말씀해 주시면 사유를 바꿔 둘게요. 작업 신호가 없어도 기다릴게요.`;
     }
-    if (v && /왜|이유|어째서|어때서/.test(q) && /작업|일|양하|선적|하역|쉬|멈|중단/.test(q) && /안\s*해|안\s*하|안\s*돼|안\s*되|멈|쉬|중단|못|없|조용/.test(q) && !/느려|느린|늦|지연/.test(q)) {
-      const wp1 = workPauseOf(v, c._now || Date.now());
+    if (v && /왜|이유|어째서|어때서|(?:중단|멈춘|대기)\s*(?:사유|이유)|사유\s*(?:가|는|이)?\s*(?:뭐|무엇|알려)|무슨\s*사유|뭐\s*때문/.test(q) && /작업|일|양하|선적|하역|쉬|멈|중단/.test(q)   /* 5.29-04 재감사: «중단 사유 뭐야» 도 */ && /안\s*해|안\s*하|안\s*돼|안\s*되|멈|쉬|중단|못|없|조용/.test(q) && !/느려|느린|늦|지연/.test(q)) {
+      const wp1 = workPauseOf(v, c._now || Date.now(), null, { perEquip: true });
       if (wp1) {
         _via('workStop');
         const tail1 = wp1.resumeAt ? (( c._now || Date.now()) < wp1.resumeAt ? ` ${wp1.breakKo}과 겹쳐 보통 ${_hm(wp1.resumeAt)}에 재개돼요.` : ` 보통 ${_hm(wp1.resumeAt)} 재개인데 아직 재개·완료 기록이 없어요.`) : '';
-        return `${hasShip && ship ? ship + ' — ' : ''}${wp1.equip ? wp1.equip + ' ' : ''}${wp1.ko} 작업이 ${_hm(wp1.ts)}부터 중단 중이에요. 사유는 ${wp1.reason || '적혀 있지 않아요'}.${tail1}`;
+        return `${hasShip && ship ? ship + ' — ' : ''}${wp1.equipKo ? wp1.equipKo + ' ' : ''}${wp1.ko} 작업이 ${_hm(wp1.ts)}부터 중단 중이에요. 사유는 ${wp1.reason || '적혀 있지 않아요'}.${tail1}`;
       }
+    }
+    //  ★ 5.29-04 «작업이 멈춘 지 얼마나 됐지» — 멈춘 뒤 지난 시간. 종전엔 답이 없어 모델이 «얼마나 남았어»(잔여 대수)로 바꿨다(실측 2026-11-28 17:24 STMJ 2675E).
+    //    중단 보고(말한 시각 saidAt 포함)가 있으면 그때부터, 없으면 마지막 완료 기록 시각으로 말한다(중단 보고가 없다는 것도 말한다).
+    if (v && !/남았|남은|남아|남나|끝나|끝날|끝내|마칠|완료\s*예정/.test(q) && !/(?:바람|비|눈|소리|알림|화면|폰|앱|노래|음악|진동)\s*(?:이|가|은|는)?\s*(?:멈|그친|그쳤|중단)/.test(q) && /(?:멈춘|멈췄|멈춰|중단된|중단한|중단되|쉰|쉬기\s*시작한|작업\s*안\s*한)\s*(?:지|게|거|것)\s*(?:얼마|몇\s*(?:분|시간))|(?:멈춘|중단된|쉰)\s*지\s*(?:얼마|몇)|언제부터\s*(?:멈췄|멈춘|중단(?:됐|된|했)|쉬었|쉰|작업\s*안\s*했)/.test(q)) {   // 감사 중 4 — «멈춘 다음 얼마나 남았어»·«언제부터 쉬는 시간이야» 는 아니다
+      _via('pauseAgo');
+      const _n = c._now || Date.now();
+      const _dur = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`; };
+      const wp2 = workPauseOf(v, _n, null, { perEquip: true });
+      if (wp2) return `${hasShip && ship ? ship + ' — ' : ''}${wp2.equipKo ? wp2.equipKo + ' ' : ''}${wp2.ko} 작업이 ${_hm(wp2.ts)}부터 멈췄어요 — ${_dur(_n - wp2.ts)}째예요. 사유 ${wp2.reason || '적혀 있지 않아요'}.`;
+      let lastAt = 0, lastMode = '';
+      for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const x of Object.values(comp)) { const at = x && Number(x.at); if (at && at <= _n + 5 * MIN && at > lastAt) { lastAt = at; lastMode = m; } } }
+      let _rp = null;   // 감사 중 1 — 중단 보고는 있는데 뒤에 완료 기록이 있어 재개로 본 경우는 그렇게 말한다(«중단 보고는 없어요» 는 거짓)
+      try { for (const [k, r] of Object.entries(v.reports || {})) { if (!r || (r.type !== 'external_pause' && !(r.type === 'work_status' && /pause$/.test(String(r.action || ''))))) continue; const t0 = Number(r.saidAt) || Number(r.ts) || Number(k) || 0; if (t0 && _n - t0 < 12 * 3600000 && (!_rp || t0 > _rp.t0)) _rp = { t0, equip: String(r.equip || ''), reason: String(r.reason || '') }; } } catch (e) { console.warn('[미르] 중단 보고 읽기 실패:', e); }
+      if (_rp && lastAt > _rp.t0) return `${hasShip && ship ? ship + ' — ' : ''}${_rp.equip ? _rp.equip + ' ' : ''}${_hm(_rp.t0)} 중단 보고(사유 ${_rp.reason || '없음'})가 있지만 그 뒤 ${_hm(lastAt)}에 완료 기록이 있어 다시 일한 것으로 봐요 — 마지막 완료는 ${_dur(_n - lastAt)} 전이에요.`;
+      if (_rp) return `${hasShip && ship ? ship + ' — ' : ''}${_rp.equip ? _rp.equip + ' ' : ''}${_hm(_rp.t0)} 중단 보고(사유 ${_rp.reason || '없음'})가 있지만 그 뒤 재개·완료 보고가 있어 지금은 멈춘 상태로 보지 않아요${lastAt ? ` — 마지막 완료 기록은 ${lastMode === 'loading' ? '선적' : '양하'} ${_hm(lastAt)}(${_dur(_n - lastAt)} 전)이에요` : ''}.`;   // 5.29-04 재감사: 중단 보고가 있는데 «없어요» 라 하지 않는다
+      if (lastAt) return `${hasShip && ship ? ship + ' — ' : ''}앱에 중단 보고는 없어요. 마지막 완료 기록은 ${lastMode === 'loading' ? '선적' : '양하'} ${_hm(lastAt)} — ${_dur(_n - lastAt)} 전이에요. 멈췄으면 «미르야 15:45 3호기 4호기 작업중단 강풍대기» 처럼 시각·호기·사유를 붙여 알려 주세요.`;
+      return `${hasShip && ship ? ship + ' — ' : ''}앱에 중단 보고도 완료 기록도 없어 멈춘 때를 몰라요 🐱 «미르야 15:45 4호기 작업중단 강풍대기» 처럼 알려 주시면 그 시각으로 적어요.`;
     }
   }
 
@@ -2934,6 +2959,13 @@ function _answerOneRawCore(query, ctx) {
         if (isXrayShiftQ) return answerXrayShifts(_voyE, de, { shipName: ship, pier: info.pier, pace: workPaceOf(_voy, c.voyageKey || '', _mvGiven) });
         if (isShiftBriefQ) return answerShiftBriefing(_voyE, de, { shipName: ship, voyages: c.voyages || null, pace: workPaceOf(_voy, c.voyageKey || '', _mvGiven) });
         //  3.42: «2호기 11:15 시작했어» 는 적는 말이다 — 종전엔 gangQuery(n:null) 가 같이 켜져 «베이사전이 필요해요» 가 답을 가로챘다(판 B 시뮬). 저장은 화면(부수효과)이 한다.
+        if (p.startSet && p.startSet.afterBreak && app !== 'cone') {   // ★ 5.29-04 재감사 5 — 쉼 끝 말(«강풍 끝나고 16:30 작업 시작»)은 앞선 항차 시작을 덮지 않는다(firebase 한 벌과 같은 판정)
+          const _toMs = (x) => { const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(x || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
+          const _sm = parseSpokenTimeMs(p.startSet.raw || q, c._now || Date.now()) || 0;
+          const _had = [_toMs(info.workStartManual), _toMs(info.workStartAt)].filter((x) => x > 0 && (!_sm || x < _sm)).sort((x, y) => x - y)[0];
+          const _hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+          if (_had && (!_sm || _sm - _had < 24 * 3600000)) return `${ship} 작업 시작은 이미 ${_hm(_had)}로 적혀 있어 덮지 않아요 — 쉼 뒤 다시 하는 말로 들었어요. 호기 재개는 «미르야 16:30 3호기 작업 재개» 처럼 호기를 붙여 알려 주세요.`;
+        }
         if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length && app === 'cone') return '시작 시각은 검수앱(작업 시작 탭)에서 적어 주세요 — 콘앱은 적는 손이 없어요.';   // 감사: 콘앱엔 fbSetVoyageWorkStart 가 없다
         if (p.startSet && Array.isArray(p.startSet.cranes) && p.startSet.cranes.length) {
           const _fmt = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -3399,7 +3431,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
-  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip' || via === 'noBay') return false;   // 5.28-05: 없는 베이 답도 답이다   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
+  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip' || via === 'noBay' || via === 'pauseAgo' || via === 'workReportHint') return false;   // 5.29-04   // 5.28-05: 없는 베이 답도 답이다   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
@@ -4614,23 +4646,40 @@ const _WORK_ACT_RE = /(^|_)(start|pause|resume|done)$/;   // 4.06 감사: 카톡
 //  4.63-04 own = { inspector, equip } — «내 호기의 중단인가». 다른 호기가 계속 일하면 터미널 실적(src:'term')이 중단 뒤에도 찍혀
 //  종전엔 그것을 «재개»로 읽어 장비 고장 중단을 잊었다(검수사 2026-11-04 08:58 «장비고장으로 작업중단보고를 했는데 자꾸 해치커버를 열거냐고 물어보는데»
 //  — STSE 2685E: 2호기 고장 보고 22분 뒤에도 1호기 터미널 실적이 찍혀 재개로 읽힘). own 이 오면 내 완료(by·호기가 같은 것)만 재개로 본다.
-export function workPauseOf(v, now = Date.now(), own = null) {
+export function workPauseOf(v, now = Date.now(), own = null, o = {}) {   // 5.29-04 재감사(3차): o.perEquip — 답 문구에서만 호기별(재개 안 한 호기의 중단)을 본다. 배 단위 판정(사담·화남·5180)은 종전 그대로
   const reps = v && v.reports;
   if (!reps || typeof reps !== 'object') return null;
   let last = null;
   for (const k of Object.keys(reps)) {
     const r = reps[k]; if (!r || typeof r !== 'object') continue;
-    const ts = Number(r.ts) || Number(k) || 0;
+    const repTs = Number(r.ts) || Number(k) || 0;
+    const ts = Number(r.saidAt) || repTs;   // 5.29-04: 말한 시각(saidAt)이 있으면 그 시각이 멈춘 때(표시) — 재개 판정은 적은 때(repTs) 뒤 완료로(감사 중 1)
     if (!ts || ts > now + 5 * MIN || now - ts > 12 * 3600000) continue;
     const act = String(r.action || '');
     const isStatus = r.type === 'work_status' && _WORK_ACT_RE.test(act);
     const isExt = r.type === 'external_pause';
     if (!isStatus && !isExt) continue;
-    if (!last || ts > last.ts) last = { ts, act: isExt ? 'external_pause' : act, mode: String(r.mode || ''), reason: String(r.reason || ''), equip: String(r.equip || '') };
+    if (!last || ts > last.ts) last = { ts, repTs: Math.max(ts, repTs), act: isExt ? 'external_pause' : act, mode: String(r.mode || ''), reason: String(r.reason || ''), equip: String(r.equip || '') };
   }
-  if (!last || !/pause$/.test(last.act)) return null;
   //  재개 보고 없이 일을 다시 시작하는 일이 흔하다 — 중단 뒤에 완료 기록이 찍혔으면 재개로 본다(재감사 2).
-  for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const c of Object.values(comp)) { const at = c && Number(c.at); if (!(at && at > last.ts && at <= now + 5 * MIN)) continue; if (own && !((own.inspector && c.by === own.inspector) || (own.equip && c.equip === own.equip))) continue; return null; } }
+  const _doneAfter = (x, eqOnly) => { for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const c of Object.values(comp)) { const at = c && Number(c.at); if (!(at && at > (x.repTs || x.ts) && at <= now + 5 * MIN)) continue; if (eqOnly && c.equip !== eqOnly) continue; if (own && !((own.inspector && c.by === own.inspector) || (own.equip && c.equip === own.equip))) continue; return true; } } return false; };
+  if (!last || !/pause$/.test(last.act) || _doneAfter(last, '')) {
+    //  ★ 5.29-04 재감사(2차) 3 — «3·4호기 중단» 뒤 3호기만 재개하면 4호기는 아직 멈춤이다. 배 전체 마지막 보고가 재개라도 호기마다 마지막 상태가 중단이고
+    //    그 호기 완료 기록(equip 이 그 호기)이 뒤에 없으면 그 호기 중단을 돌려준다(호기 없는 완료로는 어느 호기가 재개했는지 몰라 종전대로 배 전체 판정).
+    let alt = null;
+    if (!own && o && o.perEquip) for (const k of Object.keys(reps)) {
+      const r = reps[k]; if (!r || r.type !== 'work_status' || !r.equip || !_WORK_ACT_RE.test(String(r.action || ''))) continue;
+      const rt = Number(r.ts) || Number(k) || 0; const t1 = Number(r.saidAt) || rt; if (!t1 || t1 > now + 5 * MIN || now - t1 > 12 * 3600000) continue;
+      const later = Object.keys(reps).some((k2) => { const r2 = reps[k2]; if (!r2 || r2.type !== 'work_status' || r2.equip !== r.equip || r2 === r || !_WORK_ACT_RE.test(String(r2.action || ''))) return false; const t2 = Number(r2.saidAt) || Number(r2.ts) || Number(k2) || 0; return t2 > t1 || (t2 === t1 && (Number(r2.ts) || 0) > rt); });
+      if (later || !/pause$/.test(String(r.action || ''))) continue;
+      const cand = { ts: t1, repTs: Math.max(t1, rt), act: String(r.action || ''), mode: String(r.mode || ''), reason: String(r.reason || ''), equip: String(r.equip || '') };
+      if (_doneAfter(cand, cand.equip)) continue;
+      { let _noEqDone = false; for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (comp && typeof comp === 'object') for (const x of Object.values(comp)) { const at = x && Number(x.at); if (at && !x.equip && at > cand.repTs && at <= now + 5 * MIN) { _noEqDone = true; break; } } } if (_noEqDone) continue; }   // 재감사 3차 3: 호기 칸 빈 완료가 뒤에 있으면 어느 호기가 일했는지 몰라 재개로 본다
+      if (!alt || cand.ts > alt.ts) alt = cand;
+    }
+    if (!alt || (last && _doneAfter(last, '') && !Object.values(v.discharge && v.discharge.completed || {}).concat(Object.values(v.loading && v.loading.completed || {})).some((c) => c && c.equip))) return null;
+    last = alt;
+  }
   //  재개 예상 — 검수사 2026-09-29 19:28 «보통 17시에 야드 혼잡이유로 작업 중단을 하면 19시에 작업이 재개됩니다» · «중단한 시간이 … 야드 혼잡 + 석식 시간이었습니다.
   //    그 시간대엔 작업자도 작업중인 장비도 없는상태». 중단 뒤 3시간 안에 쉬는 시간(근무표 창 사이)이 끝나면 그 창의 시작이 재개 예상 시각이다.
   let resumeAt = 0, breakKo = '';
@@ -4647,7 +4696,20 @@ export function workPauseOf(v, now = Date.now(), own = null) {
     }
     if (resumeAt) { const m = new Date(resumeAt).getHours() * 60 + new Date(resumeAt).getMinutes(); breakKo = (m >= 720 && m <= 810) ? '중식' : (m >= 1080 && m <= 1200) ? '석식' : (m >= 0 && m <= 90) ? '야식' : '쉬는 시간'; }
   } catch (e) { resumeAt = 0; }
-  return { mode: last.mode, reason: last.reason, equip: last.equip, ts: last.ts, resumeAt, breakKo, ko: last.mode === 'loading' ? '선적' : last.mode === 'discharge' ? '양하' : '작업' };
+  //  ★ 5.29-04 재감사 1 — «3호기 4호기 둘다 작업중단입니다. 같은 시간에»(검수사 2026-11-28 17:34). 같은 때(2분 안) 멈춘 다른 호기도 그 호기의 마지막 상태가 중단이면 함께 말한다.
+  const equips = [];
+  try {
+    const lastOf = new Map();
+    for (const k of Object.keys(reps)) {
+      const r = reps[k]; if (!r || r.type !== 'work_status' || !r.equip || !_WORK_ACT_RE.test(String(r.action || ''))) continue;
+      const t1 = Number(r.saidAt) || Number(r.ts) || Number(k) || 0; if (!t1 || t1 > now + 5 * MIN) continue;
+      const pv = lastOf.get(r.equip); if (!pv || t1 > pv.t1) lastOf.set(r.equip, { t1, act: String(r.action || '') });
+    }
+    for (const [eq, x] of lastOf) if (/pause$/.test(x.act) && Math.abs(x.t1 - last.ts) <= 2 * MIN) equips.push(eq);
+    equips.sort((x, y) => (parseInt(x, 10) || 0) - (parseInt(y, 10) || 0));
+  } catch (e) { console.warn('[미르] 함께 멈춘 호기 읽기 실패:', e); }
+  const equipKo = equips.length > 1 ? equips.join('·') : last.equip;
+  return { mode: last.mode, reason: last.reason, equip: last.equip, equips, equipKo, ts: last.ts, resumeAt, breakKo, ko: last.mode === 'loading' ? '선적' : last.mode === 'discharge' ? '양하' : '작업' };
 }
 /** 수집기 하트비트가 주기의 3배 넘게 끊긴 시간(ms). 안 끊겼거나 하트비트가 아직 없으면 0. 초조함(수집기 조용)과 화남(터미널 «작업 중» 을 믿어도 되나)이 이 한 벌을 본다. */
 function _collectorSilentMs(heartbeat, now) {
@@ -4769,7 +4831,7 @@ function _statusReportMarks(v, now) {
   if (!reps || typeof reps !== 'object') return { restartAt, allClosedAt: 0 };
   for (const k of Object.keys(reps)) {
     const r = reps[k]; if (!r || typeof r !== 'object') continue;
-    const ts = Number(r.ts) || Number(k) || 0;
+    const ts = Number(r.saidAt) || Number(r.ts) || Number(k) || 0;   // 5.29-04 재감사: workPauseOf 와 같은 시각(말한 시각 saidAt 우선)
     if (!ts || ts > now + 5 * MIN || now - ts > 12 * 3600000) continue;
     const act = String(r.action || '');
     if (!(r.type === 'work_status' && _WORK_ACT_RE.test(act))) continue;   // external_pause 는 workPauseOf 가 본다
@@ -5148,7 +5210,7 @@ function _ydPctc(kind, y, age, o, now) {
   if (wp) {
     const hm = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     const tail = wp.resumeAt ? (now < wp.resumeAt ? ` ${wp.breakKo}과 겹쳐 보통 ${hm(wp.resumeAt)}에 재개돼요.` : ` 보통 ${hm(wp.resumeAt)} 재개인데 아직 재개·완료 기록이 없어요.`) : '';
-    L.push(`앱 보고로는 ${wp.equip ? wp.equip + ' ' : ''}${wp.ko} ${hm(wp.ts)} 중단${wp.reason ? `(사유 ${wp.reason})` : ''} 중이에요.${tail}`);
+    L.push(`앱 보고로는 ${wp.equipKo ? wp.equipKo + ' ' : ''}${wp.ko} ${hm(wp.ts)} 중단${wp.reason ? `(사유 ${wp.reason})` : ''} 중이에요.${tail}`);
   }
   L.push(wait);
   if (locked.length) L.push(`본선 작업 때문에 반출이 막힌 블록이 ${locked.length}곳이에요.`);

@@ -872,7 +872,8 @@ export function buildShifting(voyage) {
  */
 export function buildTimeSheet(reports, opts = {}) {
   const rows = [];
-  const list = vals(reports || {}).filter((r) => r && r.ts && r.type !== 'hold_event').sort((a, b) => a.ts - b.ts);
+  const _sts = (r) => (r && r.type === 'work_status' && Number(r.saidAt) > 0) ? Number(r.saidAt) : Number(r && r.ts) || 0;   // 5.29-04: 미르에게 «HH:MM 중단» 이라 말한 보고는 그 시각(saidAt)
+  const list = vals(reports || {}).filter((r) => r && r.ts && r.type !== 'hold_event').sort((a, b) => _sts(a) - _sts(b));
   const t = (ms) => new Date(ms).toTimeString().slice(0, 5);
   const groupOf = typeof opts.groupOf === 'function' ? opts.groupOf : null;
   const doneModes = new Set(opts.doneModes || []);   // 'discharge' | 'loading'
@@ -944,7 +945,7 @@ export function buildTimeSheet(reports, opts = {}) {
       if (stLast.get(md) === word) { dupSt += 1; continue; }
       stLast.set(md, word);
       const extra = (word === 'SUSPENDED' && r.reason) ? ` (${r.reason})` : '';
-      rows.push({ ts: r.ts, time: `${t(r.ts)}    HRS`, remark: `${word} ${modeLbl}${extra}` });
+      rows.push({ ts: _sts(r), time: `${t(_sts(r))}    HRS`, remark: `${word} ${modeLbl}${extra}` });
     } else if (r.type === 'hatch') {
       const act = String(r.action || '').toLowerCase();
       const gs = groupOf ? [...new Set((r.bays || []).map(groupOf).filter((g) => g != null))] : [];

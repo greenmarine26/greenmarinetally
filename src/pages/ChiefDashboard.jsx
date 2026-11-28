@@ -1283,7 +1283,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               <InlineNotice notice={repNotice} onClose={() => setRepNotice(null)} />
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {recentReports.map((r, i) => {
-                  const time = r.ts ? new Date(r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                  const time = r.ts ? new Date(Number(r.saidAt) || r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
                   // V9.57(I2): external_pause(작업중단) 아이콘 누락 → 기본 '📋'로 묻히던 것. 사고성이라 ⛔ + 붉은 테두리.
                   const icon = r.type === 'crane_move' ? '🏗' : r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : r.type === 'external_pause' ? '⛔' : '📋';
                   // V9.57(I7): 피드 voy는 firebase 구독이 voy_l 고정으로 붙인다 — 보고의 mode를 보고 voy_d/voy_l 선택.

@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.29-03';
-const NOTE = '5.29-03 X-RAY 탭에서 봉인번호가 있으면 미등록 줄도 눌러 봉인자를 고르거나 이름을 칠 수 있습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.29-04';
+const NOTE = '5.29-04 미르에게 작업 중단을 시각과 호기를 붙여 알리면 그 시각으로 호기마다 적고, 멈춘 지 얼마나 됐는지 답합니다. 쉼이 끝났다는 말은 앞서 적힌 작업 시작을 덮지 않습니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
