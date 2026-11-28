@@ -264,6 +264,18 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //    저장은 fbSetXraySeal 한 벌을 컨마다 차례로 부른다 — 한 대가 실패해도 나머지는 남고, 실패한 컨번호는 화면에 적는다(3금지 ③).
   //    봉인자 판정(xraySealerOf)은 그대로다 — 이름을 저장하는 길만 하나 늘었다.
   const myName = String(inspector || '').trim();
+  //  5.29-03 봉인자 고르기 목록 — 조 등록(info.craneCrew) 이름 → 검수원 전체(나 포함) · 중복 없이.
+  const sealerChoices = useMemo(() => {
+    const out = [];
+    const add = (n) => { const v = String(n || '').trim(); if (v && !out.includes(v)) out.push(v); };
+    try {
+      const cc = (voyage && voyage.info && voyage.info.craneCrew) || {};
+      for (const shift of Object.values(cc)) for (const e of Object.values(shift || {})) add(e && e.name);
+    } catch (e) { console.warn('[X-RAY] 조 등록 이름을 못 읽어 검수원 목록만 보입니다', e); }
+    add(myName);
+    for (const n of partnerChoices('')) add(n);
+    return out;
+  }, [voyage && voyage.info && voyage.info.craneCrew, myName]);
   const mineCount = useMemo(() => rows.filter((r) => r.sealer && r.sealer === myName).length, [rows, myName]);
   const restRows = useMemo(() => rows.filter((r) => r.cSeal && !r.sealer), [rows]);
   const noNumCount = useMemo(() => rows.filter((r) => !r.cSeal && !r.sealer).length, [rows]);
@@ -452,6 +464,9 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
           onBlur={() => setPartnerName(partner)} placeholder="파트너 이름 (한 번만 입력)"
           className="w-full min-w-0 bg-ink-800 border border-line rounded-pill px-3 h-10 outline-none"/>
         <datalist id="xray-partner-list">{partnerChoices(inspector).map((n) => <option key={n} value={n}/>)}</datalist>
+        {/* ★ 5.29-03 — 봉인자 칸(미등록·등록자 고치기)에서 고르는 목록 — 이 항차 조 등록 근무자 먼저, 그다음 검수원 전체(나 포함). 목록에 없으면 이름을 친다.
+             검수사 2026-11-28 17:22 «제가 봉인자를 선택할수 있게 검수사 선택또는 이름을 할수 있게 만들어 주시면 됩니다». */}
+        <datalist id="xray-sealer-list">{sealerChoices.map((n) => <option key={n} value={n}/>)}</datalist>
         <button type="button" data-testid="xray-rest-btn" onClick={onRestClick}
           disabled={!canBulk || bulk.run || bulk.ask || !partner.trim() || !restRows.length}
           title={!canEdit ? '양하 화면에서만 등록할 수 있습니다' : viewOnly ? '조회만 로그인에서는 등록할 수 없습니다' : !partner.trim() ? '파트너 이름을 먼저 넣으십시오' : !restRows.length ? '봉인번호가 입력됐고 봉인자가 비어 있는 컨이 없습니다' : bulk.ask ? '아래 확인 상자에서 고르십시오' : ''}
@@ -596,14 +611,24 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
                           onKeyDown={(e) => { if (e.key === 'Enter') saveXray(r.cn, r.cSeal, r.eseal, { sealer: edit.val });
                                               if (e.key === 'Escape') setEdit(null); }}
                           onBlur={() => saveXray(r.cn, r.cSeal, r.eseal, { sealer: edit.val })}
-                          placeholder="봉인자"
+                          placeholder="봉인자" list="xray-sealer-list" data-testid="xray-sealer-input"
                           className="w-24 bg-ink-800 border border-emerald-500 rounded px-2 py-1 text-emerald-200 outline-none"/>
                       ) : r.sealer ? (
                         <button disabled={!canEdit || bulk.run} onClick={() => setEdit({ cn: r.cn, field: 'sealer', val: r.sealer })}
                           className="text-emerald-300 font-bold disabled:cursor-default">{r.sealer}</button>
                       ) : (
                         <>
-                          <span className="text-dim-500 italic whitespace-nowrap">미등록</span>
+                          {/* ★ 5.29-03 — 봉인번호가 있으면 «미등록» 도 눌러 이름을 바로 친다(등록자가 있을 때 이름을 눌러 고치는 것과 같은 칸).
+                               검수사 2026-11-28 17:20 «실번호가 들어가 있을떄 수정할수 있게 해주세요 미등록이든 등록자가 있던 수정 가능하게» ·
+                               사건 STMJ 2675E FFAU7280605 — 해제가 저장돼 빈칸이 굳었는데 파트너 이름을 넣기 전엔 이름을 넣을 길이 안 보였다. */}
+                          {canEdit && r.cSeal ? (
+                            <button disabled={bulk.run || busy === r.cn} data-testid="xray-sealer-blank"
+                              onClick={() => setEdit({ cn: r.cn, field: 'sealer', val: '' })}
+                              title="눌러서 봉인자 이름 입력"
+                              className="text-dim-400 italic whitespace-nowrap underline decoration-dotted disabled:cursor-default">미등록 ✏</button>
+                          ) : (
+                            <span className="text-dim-500 italic whitespace-nowrap">미등록</span>
+                          )}
                           {partner.trim() && (
                             <button disabled={!canEdit || bulk.run || busy === r.cn || !r.cSeal}
                               title={!r.cSeal ? '봉인번호를 먼저 입력하십시오' : `${partner.trim()} 이름으로 봉인자 등록`}

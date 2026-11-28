@@ -199,6 +199,31 @@ const apply = (cs) => cs.forEach((c) => { xraySeals[c.cn] = { ...xraySeals[c.cn]
   reset(); await render({ mode: 'loading' }); await setName('홍길동');
   ok(btn().disabled && /양하 화면에서만/.test(btn().title) && !doc().querySelector('[data-testid="xray-rest-viewonly"]'), '선적 모드의 단추 설명은 «양하 화면에서만 등록할 수 있습니다»');
 
+  //  ⑰ 5.29-03 — 봉인번호가 있으면 «미등록» 도 눌러 이름을 고르거나 친다(검수사 2026-11-28 17:20 «미등록이든 등록자가 있던 수정 가능하게» · 17:22 «검수사 선택또는 이름을 할수 있게» · STMJ 2675E FFAU7280605)
+  reset();
+  xraySeals[cns[0]] = { ...xraySeals[cns[0]], sealer: '', sealerAt: T3 };      // 해제가 저장된 줄(빈칸이 굳은 줄)
+  xraySeals[cns[1]] = { seal: '', eseal: '', sealer: '', sealerAt: 0 };          // 번호 없는 줄
+  xraySeals[cns[2]] = { ...xraySeals[cns[2]], sealer: '류청호', sealerAt: T1 };  // 등록자가 있는 줄
+  await render();
+  const rowOf = (cn) => screenRows().find((tr) => (tr.textContent || '').includes(cn.slice(-4)) && (tr.textContent || '').includes(cn.slice(0, 4)));
+  const nb = rowOf(cns[2]) && [...rowOf(cns[2]).querySelectorAll('button')].find((b) => b.textContent === '류청호');
+  ok(!!nb && !nb.disabled, '등록자가 있는 줄은 이름을 눌러 고친다(종전 그대로)');
+  ok(!(rowOf(cns[1]) && rowOf(cns[1]).querySelector('[data-testid="xray-sealer-blank"]')), '번호가 없는 줄은 단추 없이 «미등록»');
+  const b0 = rowOf(cns[0]) && rowOf(cns[0]).querySelector('[data-testid="xray-sealer-blank"]');
+  ok(!!b0, '번호가 있는 미등록 줄에 «미등록 ✏» 단추');
+  if (b0) {
+    b0.click(); await wait(80);
+    const inp = rowOf(cns[0]).querySelector('[data-testid="xray-sealer-input"]');
+    ok(!!inp && inp.getAttribute('list') === 'xray-sealer-list' && doc().querySelectorAll('#xray-sealer-list option').length > 0 && [...doc().querySelectorAll('#xray-sealer-list option')].some((o) => o.value === '김성일'), '누르면 이름 칸이 열리고 검수원 목록에서 고를 수 있다');
+    if (inp) {
+      const set = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+      set.call(inp, '최관식'); inp.dispatchEvent(new w.Event('input', { bubbles: true })); await wait(40);
+      inp.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await wait(150);
+      const c = calls().find((x) => x.cn === cns[0]);
+      ok(!!c && c.opt && c.opt.sealer === '최관식', `Enter 로 최관식 저장 ${JSON.stringify(c && c.opt)}`);
+    }
+  }
+
   console.log(fail ? `\n✗ 실패 ${fail}건` : '\n✓ X-RAY 봉인자 두 단계 등록 연막검사 통과');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('✗ 시험 중 오류 ' + (e && e.stack || e)); process.exit(1); });
