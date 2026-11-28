@@ -12,7 +12,7 @@ const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 //  ── 판정 규칙(소스) ──
 const S = rd('src/utils.js');
-T(/const _listSaysTS = \(r\) =>/.test(S), '리스트의 환적·시프팅 표시를 안 본다 — 리스트가 «환적»이라 하면 따라야 한다');
+T(/const _listSaysTS = listSaysTransship;/.test(S) && /export function listSaysTransship\(r\) \{[\s\S]{0,200}r\.tsport[\s\S]{0,200}T\\\/\?S\|환적\|시프팅\|SHIFT\|RESTOW\|재적/.test(S), '리스트의 환적·시프팅 표시를 안 본다 — 리스트가 «환적»이라 하면 따라야 한다(5.29-02 부터 listSaysTransship 한 벌 — 서류 경로도 같은 판정)');
 T(/if \(ediPod && rec && !isPyeongtaekPort\(ediPod\) && !_listSaysTS\(rec\)\)/.test(S),
   '아직 «리스트 POD 가 평택일 때»만 본다 — 리스트에 실려 있다는 것 자체가 근거다');
 T(/_podEdi: ediPod, _podList: recPod, _podFrom: 'list'/.test(S), '양쪽 값을 안 남긴다 — 앱이 틀린 게 아니라 자료가 다른 것이다');

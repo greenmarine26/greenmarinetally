@@ -155,7 +155,7 @@ console.warn = () => {};
   const deps = [['src/pages/VoyagePage.jsx', 3], ['src/components/SearchPanel.jsx', 1], ['src/components/PrintHubModal.jsx', 1]];
   for (const [f, min] of deps) { const t = read(f); const c = (t.match(/voyage\?\.shiftManual/g) || []).length; ok(`memo 의존성 — ${f} 에 voyage?.shiftManual ${min}곳 이상`, c >= min, c); }
   const vp = read('src/pages/VoyagePage.jsx');
-  ok('VoyagePage — shiftingConfirmed/dischUnits/shiftSplit/shiftingMap(예측 포함) memo 가 모두 shiftManual 에 반응', /voyage\?\.keepOnboard, voyage\?\.shiftManual\]\);   \/\/ 4\.82/.test(vp) && /dischUnits = useMemo\([^\n]*voyage\?\.shiftManual\]/.test(vp) && /shiftSplit = useMemo\([\s\S]{0,200}voyage\?\.shiftManual\]/.test(vp) && /voyage\?\.keepOnboard, voyage\?\.shiftManual,\s+\/\/ 4\.82/.test(vp));
+  ok('VoyagePage — shiftingConfirmed/dischUnits/shiftSplit/shiftingMap(예측 포함) memo 가 모두 shiftManual 에 반응', /voyage\?\.keepOnboard, voyage\?\.shiftManual(?:, restowDisSigOf\(voyage\))?\]\);   \/\/ 4\.82/.test(vp) && /dischUnits = useMemo\([^\n]*voyage\?\.shiftManual\]/.test(vp) && /shiftSplit = useMemo\([\s\S]{0,200}voyage\?\.shiftManual\]/.test(vp) && /voyage\?\.keepOnboard, voyage\?\.shiftManual,(?: restowDisSigOf\(voyage\),)?\s+\/\/ 4\.82/.test(vp));
   ok('VoyagePage — 진단 입력에서 수동 표기 컨을 뺀다(양하·선적 같은 줄)(voyage 가 의존성이라 표기가 바뀌면 다시 계산)', /shiftingConfirmed\[c\.cn\]\._manual\) return;/.test(vp) && /voyage, shipPolicy, rfSkipShip\]\);/.test(vp));
   const mir = read('src/mir.js');
   ok('mir — 양하 EDI↔리스트 대수 차이 답이 시프팅 Set 을 diffEdiList 셋째 인자로 넘긴다', /diffEdiList\(_sec, _raw, _mode === 'discharge' \? shiftSetOfVoyage\(v, c\.voyageKey \|\| '', null\) : undefined\)/.test(mir));

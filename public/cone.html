@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.06-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.06-02</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.29-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.06-01';   // ★ 3.06-01 (TallyOne 5.28-05) 미르 오답 일괄 수리(클로드2 시험 320문) — 엔진은 mir-core 한 벌이라 두 앱 같은 답.
+window.__APPV='TallyOne 5.29-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.06-02';   // ★ 3.06-02 (TallyOne 5.29-02) 선사 시프팅 목록에 있어도 양하 리스트에 양하로 등록된 컨은 양하분 — restowMapFromDoc 에 양하 리스트를 넘긴다(MAMP 646N).
+// (앞 판) window.__CONEV='ConeOne 3.06-01';   // ★ 3.06-01 (TallyOne 5.28-05) 미르 오답 일괄 수리(클로드2 시험 320문) — 엔진은 mir-core 한 벌이라 두 앱 같은 답.
 // (앞 판) window.__CONEV='ConeOne 3.06';   // ★ 3.06 (TallyOne 5.28) 미르 건의 1차 — loadMirCtx 가 EDI 받은·올린 시각(raw/edi uploadedAt·recvAt 값 넷)을 받아 📊 대수 답 «🗂 근거» 줄이 검수앱과 같다. 엔진은 mir-core 한 벌.
 //   // ★ 3.05-06 (TallyOne 5.23-05) PLAN 머리 시프팅은 «쉬프팅 N» 대수만 — 확정·예정·미확정 말을 빼고 «불일치»만(검수앱과 같은 PrintableCargoPlanV2 한 벌, 검수사 2026-11-25 07:54).
 // (앞 판) window.__CONEV='ConeOne 3.05-05';   // ★ 3.05-05 (TallyOne 5.23) 시프팅 예정(터미널 계획)도 카고플랜 ◇ 에 — 검수앱과 같은 판정 한 벌(predictedShiftingForDisplay) · 재료에 catosPlan/shift.
@@ -1463,7 +1464,7 @@ function ctShiftMap(dMap, lMap, opts){
   const P = (typeof window!=='undefined' && window.ConeParse) || {};
   let base = null;
   try{
-    const doc = P.restowMapFromDoc && P.restowMapFromDoc(state.restowList);
+    const doc = P.restowMapFromDoc && P.restowMapFromDoc(state.restowList, state.restowDisRecs, state.keepOnboard);   /* 3.06-02: 양하 리스트 등록분은 양하분 */
     if(doc) base = doc;
   }catch(e){ console.warn('[콘앱] 선사 시프팅 목록 판정 실패 — 추정으로 갑니다:', e); }
   if(!base) base = (P.computeShiftingMap ? (P.computeShiftingMap(dMap, lMap, opts||{}) || {}) : {});
@@ -1686,7 +1687,7 @@ async function selectVoyage(voyageKey){
   coneLogVoyage(v);   // ★ 3.04: 어느 배를 열었는지(부두 포함) 하루 한 번만 접속 기록 — 실패해도 이어 간다
   try{ coneMoodEvent('workPick', v.vsl+' 작업 시작이에요!'); }catch(e){}   // ★ 2.52: 검수사가 작업(배)을 골랐다 = 기쁨
   state._dischDoneAt=v.dischargeDoneAt||0;  // V7.90: 검수앱 양하 완료 기록 — 분리작업 자동 판정 근거
-  state.stow=null; state.disch=null; state.shipType=null; state.shipName=''; state.detected=false; state.swapFix=null; state.restowList=null; state.keepOnboard=null; state.shiftManual=null; state.mfnList=null;
+  state.stow=null; state.disch=null; state.shipType=null; state.shipName=''; state.detected=false; state.swapFix=null; state.restowList=null; state.restowDisRecs=null; state.keepOnboard=null; state.shiftManual=null; state.mfnList=null;
   const _tcode=_coneTypeKey(v.vsl), _tp=coneTypeShared(_tcode);   // ★ 2.70-04: 보관소 선종은 자료와 같이 받아 둔다(기다림을 늘리지 않게) — 이 호출 안에서만 쓴다
   state.vslCode=_tcode; state._sharedType=null;
   /*  ★ 2.50 — 선사 시프팅 목록(RESTOW LIST)이 있으면 그것이 정본이다(검수앱 3.44 와 같은 자료·같은 판정).
@@ -1695,6 +1696,15 @@ async function selectVoyage(voyageKey){
     const _r = await fbFetch(`voyages/${encodeURIComponent(voyageKey)}/restowList.json`);
     if(_r && _r.ok){ const _j = await _r.json(); if(_j && typeof _j==='object') state.restowList=_j; }
   }catch(e){ console.warn('[콘앱] 선사 시프팅 목록을 못 읽었습니다 — 추정으로 갑니다:', e); }
+  /*  ★ 3.06-02 (TallyOne 5.29-02) — 선사 시프팅 목록이 있으면 양하 리스트도 받는다. 리스트에 양하로 등록된 컨은 서류에 있어도 양하분이다(검수앱 restowMapFromDoc 둘째 인자 한 벌).
+      검수사 2026-11-28 «양하리스트에 양하로 등록되어 있다면 양하분입니다. 추후 재선적 하더라도». 못 받으면 콘솔에 남기고 서류 그대로 센다. */
+  if(state.restowList){
+    try{
+      const _rr = await fbFetch(`voyages/${encodeURIComponent(voyageKey)}/discharge/records.json`);
+      if(_rr && _rr.ok){ const _jr = await _rr.json(); if(_jr && typeof _jr==='object') state.restowDisRecs=_jr; }
+      else console.warn('[콘앱 3.06-02] 양하 리스트를 못 받아 선사 시프팅 서류를 그대로 셉니다:', _rr && _rr.status);
+    }catch(e){ console.warn('[콘앱 3.06-02] 양하 리스트를 못 받아 선사 시프팅 서류를 그대로 셉니다:', e); }
+  }
   /*  ★ 2.71 (TallyOne 4.48) — 선사 지시 «본선 잔류»(keepOnboard) — 평택에서 안 내리는 컨. 검수앱과 같은 자료(`voyages/{키}/keepOnboard`)·같은 판정(utils.keepOnboardOf·keepShiftForecastOf)으로
       평택 양하분에서 빼고, 아래 평택 컨을 막으면 카고플랜에 시프팅 예보(노란 ◆)로 그린다. 못 읽으면 콘솔에 남긴다(평택 양하에서 못 뺀다). */
   try{
@@ -4507,7 +4517,7 @@ async function mirAsk(q, opt){   // 2.79: opt.workOnly — 콘 질문바(작업�
       if(!shiftMap && state.keepOnboard){
         try{
           const _P=window.ConeParse||{};
-          const _conf=(_P.restowMapFromDoc && _P.restowMapFromDoc(state.restowList)) || {};
+          const _conf=(_P.restowMapFromDoc && _P.restowMapFromDoc(state.restowList, state.restowDisRecs, state.keepOnboard)) || {};   /* 3.06-02 */
           //  ★ 2.72 — 선적 EDI 가 확정한 본선 잔류도 미르 시프팅 지도에(검수앱 한 벌 — 확정이면 양하 315 · 시프팅 64). 서류가 이미 든 컨은 덮지 않는다.
           const _eAll=s2=>(s2 && (s2.ediRowsAll&&s2.ediRowsAll.length? s2.ediRowsAll : s2.ediRows)) || [];
           const _eCn=r=>String(r&&r.cn||'').replace(/[\s-]/g,'').toUpperCase();

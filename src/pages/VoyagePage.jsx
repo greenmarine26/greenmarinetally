@@ -27,7 +27,7 @@ import { Thermometer,
 import {
   parseBAPLIE, parseAscFile, parseListExcel, isCancelListName, cancelListKind, removeCancelledFromMap, parseXrayList, loadSheetJS,
   isoToLabel, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime, shiftSplitOf, isShiftOffPtk, ediShipVerdict} from '../utils.js';   // 4.55-02: ediShipVerdict — EDI 올리기 «다른 선박» 판정 한 벌   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, restowDisSigOf, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, predictShiftingFromVoyage, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate, thruCnSetOf, isReeferIso, isReeferContainer, applySpecialMarks, shiftingListOf, shiftEvidenceOf, restowActualExtra, fmtShiftPos, fmtShiftTime, shiftSplitOf, isShiftOffPtk, ediShipVerdict} from '../utils.js';   // 4.55-02: ediShipVerdict — EDI 올리기 «다른 선박» 판정 한 벌   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -411,7 +411,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
      voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
-     voyage?.info?.lane, dictTick, voyage?.keepOnboard, voyage?.shiftManual,   // 4.82: 수동 시프팅 표기 · 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도 · 4.48: 본선 잔류 예보
+     voyage?.info?.lane, dictTick, voyage?.keepOnboard, voyage?.shiftManual, restowDisSigOf(voyage),   // 4.82: 수동 시프팅 표기 · 1.45: 항로가 나중에 등록돼도 예측을 다시 계산 · 2.98-12: 사전 도착도 · 4.48: 본선 잔류 예보
      //  ★ 3.53-02(감사 지적 [중대]) — 배정표 이적·작업 상태가 되돌림 판정을 바꾼다. 이 둘이 의존성에
      //    없으면, 수집기가 berthShift 를 넣거나 planned→working 이 되는 **바로 그 순간** 베이플랜은
      //    되돌린 그림을 그리는데 시프팅 패널만 옛 값에 머문다(한 화면에서 두 판정이 갈린다).
@@ -492,7 +492,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { return {}; }
   }, [voyage?.restowList?._meta?.at, Object.keys(voyage?.restowList || {}).length,
       voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix, voyage?.keepOnboard, voyage?.shiftManual]);   // 4.82: 수동 시프팅 표기도 다시 · 4.53: 선사 지시 본선 잔류가 바뀌면(넣음·풀음) 선적 EDI 확정 판정도 다시
+      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix, voyage?.keepOnboard, voyage?.shiftManual, restowDisSigOf(voyage)]);   // 4.82: 수동 시프팅 표기도 다시 · 4.53: 선사 지시 본선 잔류가 바뀌면(넣음·풀음) 선적 EDI 확정 판정도 다시
 
   //  ★ 4.83: 양하 EDI 에는 있고 양하 리스트에 없는 컨 중 아직 시프팅·MFN·본선 잔류가 아닌 것 — 선적 화면 «＋ 시프팅 추가» 가 후보로 안내한다.
   const shiftCands = useMemo(() => shiftCandidatesOf(voyageKey, voyage),
@@ -3145,6 +3145,21 @@ export function ListTab({ onOpenPlan = null, bowStern = null, voyageKey, mode, c
                   </div>
                 ))}
                 {cf.length > 6 && <div className="text-2xs">… 외 {cf.length - 6}대</div>}
+              </div>
+            );
+          })()}
+          {/* ★ 5.29-02 — 선사 시프팅 서류에 있으나 양하 리스트에 양하로 등록된 컨 = 양하분(재선적은 선적 확정 뒤). 검수사 2026-11-28 «양하리스트에 양하로 등록되어 있다면 양하분입니다. 추후 재선적 하더라도». */}
+          {(shiftInfo?.meta?.reloadDis || []).length > 0 && (() => {
+            const rd = shiftInfo.meta.reloadDis;
+            return (
+              <div className="px-3 py-1.5 text-xxs space-y-0.5 border-b text-amber-100 bg-amber-950/40 border-amber-800/50" data-shift-reload={rd.length}>
+                <div>⚠ <b>선사 메일 불일치 {rd.length}대</b> — 선사 시프팅 목록은 시프팅인데 양하 리스트에는 양하로 등록돼 있습니다. 양하분으로 셉니다(재선적은 선적 확정 뒤).</div>
+                {rd.slice(0, 6).map(x => (
+                  <div key={x.cn} className="mono text-2xs opacity-80">
+                    · <CnText className="text-dim-100" cn={x.cn}/> <b>{fmtShiftPos(x.from)}</b> → {fmtShiftPos(x.to)} (서류) {isoShown(x.iso)}
+                  </div>
+                ))}
+                {rd.length > 6 && <div className="text-2xs">… 외 {rd.length - 6}대</div>}
               </div>
             );
           })()}

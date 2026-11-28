@@ -1,7 +1,7 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 5.29-01';
-const NOTE = '5.29-01 선적 EDI가 오기 전에도 빈 베이를 고르고, 베이 그림 빈 칸에 끝 4자리로 실은 컨을 넣어 선적 완료합니다.';   // build.sh 가 utils APP_NOTE 로 채운다
+const VERSION = 'TallyOne 5.29-02';
+const NOTE = '5.29-02 선사 시프팅 목록에 있어도 양하 리스트에 등록된 컨은 양하분으로 세고, 선사 메일 불일치로 따로 보입니다.';   // build.sh 가 utils APP_NOTE 로 채운다
 const CACHE_NAME = `tallyman-${VERSION}`;
 const NET_WAIT_MS = 3000;   // 4.82-02: 화면 뼈대 요청이 이 시간 안에 안 오면 저장본으로 연다 (4.87-04: 8초 → 3초)
 const cachedOf = (req) => caches.match(req).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));

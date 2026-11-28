@@ -20,7 +20,7 @@ import { exportCheckerPlanXlsx } from '../rzorPlanExcel.js';
 import { exportCarrierPlanXlsx } from '../rzorPlanExcelCarrier.js';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { keepShiftForecastOf, _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
+import { keepShiftForecastOf, _foreLoloOf, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isoPickOog, isPyeongtaekPort, computeShiftingMapCached, restowDisSigOf, shiftingMapForDisplay, isShiftOffPtk, shiftEvidenceOf, shiftingListOf, fullEdiMapOf, tagForecastMarks, effectivePos, plausibleListWtKg, applySwapFix, swapFixList, dropFilledBookingSlots, pickCarrierOp, pickDischargePol, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, ediByUnitCn, isSlotEntry } from '../utils.js';
 
 import { shipOpMapper } from '../data/tallyFormats.js';
 export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode = 'discharge', isLolo = false, inspector = '', viewDeckPlan = null, onXrayPrint = null, xrayPrintOk = false, autoAction = null, rfSkip = false }) {   // 5.19-01: rfSkip — 리퍼 체크 안 하는 배(머스크 · VoyagePage rfSkipShip 한 벌)
@@ -58,7 +58,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose, initialMode 
     () => computeShiftingMapCached(voyageKey, voyage),
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix,
-     voyage?.restowList?._meta?.at, voyage?.info?.berthShift, voyage?.shiftManual]   // 4.82: 수동 시프팅 표기 · 4.12-04: 선사 서류·배정표 이적이 나중에 와도 다시 센다(계산 자체는 computeShiftingMapCached 가 내용 서명으로 한 번 더 지킨다)
+     voyage?.restowList?._meta?.at, voyage?.info?.berthShift, voyage?.shiftManual, restowDisSigOf(voyage)]   // 4.82: 수동 시프팅 표기 · 4.12-04: 선사 서류·배정표 이적이 나중에 와도 다시 센다(계산 자체는 computeShiftingMapCached 가 내용 서명으로 한 번 더 지킨다)
   );
   //  ★ 4.16 (§7.8-② «그래야 준비 할수 있음(대신 확정아님 표기)») — **종이 카고플랜에도 예측 시프팅을 그린다.** 화면과 같은 지도(shiftingMapForDisplay 한 벌)이고
   //    예측 칸은 ◇ 로 «확정 아님»을 밝힌다(cargoPlanCore tagShift). ⚠ 그리기에만 쓴다 — 별첨2·베이 상세 베이 고르기·검수 리스트 대수는 확정 지도(shiftingMap) 그대로다.

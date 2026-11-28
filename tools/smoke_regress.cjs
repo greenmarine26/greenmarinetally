@@ -642,7 +642,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const sw = B.swapFixList({ swapFix: FXM.swapFix });
     const ssM = new Set(Object.keys(B.computeShiftingMap(B.applySwapFix(expand(SBM.d, 'pod'), sw), B.applySwapFix(expand(SBM.l, 'pol'), sw), { berthShift: SBM.bs }) || {}).filter((k) => !k.startsWith('_')));
     const pD = B.progressOf(FXM.discharge, 'discharge', ssM), pL = B.progressOf(FXM.loading, 'loading', ssM);
-    //  ⑤ 방향을 가린다(Fable 판정 2026-10-09) — 양하 리스트에 시프팅 컨이 실려 와도 양하 평택분에 넣지 않는다(규칙 ① 우선). 실자료에 사례가 없어 MCAP 양하 리스트 사본에 시프팅 한 대를 섞는다.
+    //  ⑤ ★ 5.29-02 뒤집힘 — 양하 리스트에 양하(POD 평택)로 등록된 컨은 선사 시프팅 서류에 있어도 양하분이다(재선적은 선적 확정 뒤).
+    //    검수사 2026-11-28 12:48 «양하리스트에 양하로 등록되어 있다면 양하분입니다. 추후 재선적 하더라도» — 실사례 MAMP 646N(smoke_reload52902).
+    //    종전(Fable 판정 2026-10-09 «시프팅으로만 센다»)은 실자료 없이 정한 것이라 검수사 원문이 이긴다. 작업량(리스트 + 시프팅)은 그대로다.
     {
       const vx = JSON.parse(JSON.stringify(v0)); vx.key = key + '_R16x';
       const sx = doc[0];
@@ -650,8 +652,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const Hx = JSON.parse(DOM0.W.__r416.homeTotals(JSON.stringify(vx), vx.key));
       const vcx = B.voyageCountsOf(vx, null, B.shiftCnSetOf(vx.key, vx));
       const px = B.progressOf(vx.discharge, 'discharge', B.shiftCnSetOf(vx.key, vx));
-      ok(`양하 리스트 사본에 시프팅 ${sx} 를 섞어도 양하 평택분 ${dPtk} 그대로(홈 카드 · 미르 분모 · 작업량 ${dPtk + doc.length}) — 시프팅으로만 센다(수정 전 ${dPtk + 1})`,
-        Hx.dis.total === dPtk && vcx.byMode.discharge.total === dPtk && px.ptk.total === dPtk && px.total === dPtk + doc.length, JSON.stringify({ home: Hx.dis, vc: vcx.byMode.discharge.total, ptk: px.ptk, total: px.total }));
+      ok(`양하 리스트 사본에 서류 시프팅 ${sx} 를 POD 평택으로 넣으면 양하분 ${dPtk + 1}(홈 카드 · 미르 분모) · 시프팅에서 빠짐 · 작업량 ${dPtk + doc.length} 그대로(5.29-02)`,
+        Hx.dis.total === dPtk + 1 && vcx.byMode.discharge.total === dPtk + 1 && px.ptk.total === dPtk + 1 && px.total === dPtk + doc.length && !B.shiftCnSetOf(vx.key, vx).has(sx), JSON.stringify({ home: Hx.dis, vc: vcx.byMode.discharge.total, ptk: px.ptk, total: px.total }));
     }
     ok(`MCSC — 양하 ${pD.ptk.total}+${pD.shift.total} · 선적 ${pL.ptk.total}+${pL.shift.total} = 검수사 원문 «279+95 214+95» (선적 리스트에 실린 시프팅 TGHU6154253 은 양쪽에 — 수정 전 213)`,
       pD.ptk.total === 279 && pL.ptk.total === 214 && pD.shift.total === 95 && pL.shift.total === 95, JSON.stringify({ d: pD.ptk, l: pL.ptk, s: pD.shift.total }));

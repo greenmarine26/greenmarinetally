@@ -1255,6 +1255,17 @@ if npx esbuild tools/smoke_listbay52901.jsx --bundle --loader:.jsx=jsx --loader:
 else
   echo "✗ 5.29-01 리스트만 선적 빈 베이 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_LB"; exit 1
 fi
+#  5.29-02: **선사 시프팅 목록에 있어도 양하 리스트 등록분은 양하분** — MAMP 646N 실자료(RTDB GET)로 양하 187 · 시프팅 1 · 배정표 일치 · 변이 넷 · 콘앱 두 자리.
+#    검수사 2026-11-28 12:48 «양하리스트에 양하로 등록되어 있다면 양하분입니다. 추후 재선적 하더라도».
+SMOKE_RL=$(mktemp /dev/shm/hometmp/_smokerl_XXXXXX.js)
+if npx esbuild tools/smoke_reload52902.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --loader:.json=json --jsx=automatic --external:fs --external:path --external:url \
+     --alias:firebase/app=./tools/stub_fbdb_mem.js --alias:firebase/database=./tools/stub_fbdb_mem.js --alias:firebase/storage=./tools/stub_fbdb_mem.js \
+     --alias:pdfjs-dist/build/pdf="$PWD/tools/stub_pdfjs.js" --platform=browser --format=iife --log-level=error --define:process.env.NODE_ENV='"development"' --outfile="$SMOKE_RL"; then
+  node tools/smoke_reload52902.cjs "$(pwd)" "$SMOKE_RL" || { echo "✗ 5.29-02 선사 메일 불일치 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_RL"; exit 1; }
+  rm -f "$SMOKE_RL"
+else
+  echo "✗ 5.29-02 선사 메일 불일치 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_RL"; exit 1
+fi
 #  5.23: **시프팅 예정(◇에 더함) · 선적 예정 대 리스트 · 화면 글에 출처 이름 없음** — XTPG 550E 실자료(RTDB GET)로 실소스를 잰다.
 #    검수사 2026-11-23 21:45 «다만 예정입니다 확정이 아닙니다» · 22:07 «검수앱에선 카토스라는 문자가 노출되면 안됩니다. 그냥 예정으라고 해야 합니다».
 SMOKE_P523=$(mktemp /dev/shm/hometmp/_smokep523_XXXXXX.js)

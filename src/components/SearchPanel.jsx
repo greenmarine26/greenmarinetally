@@ -15,7 +15,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, Check, S
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, pickSpeechAlternative, speakDone, spokenDigitsInText } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { deckCoordMap } from '../rzorPlan.js';   // 4.04-02: 덱플랜 좌표 «덱_줄_칸»
 import { isTransitContainer, canCompleteContainer, isoCheckDigit, isoFixLastDigit, dropFilledBookingSlots, isPtk, pickCarrierOp, pickDischargePol, EDI_PROTECTED_KEYS, EDI_EMPTY_FILL_KEYS, ediCoreEmpty, isReeferContainer, plausibleListWtKg, ediWtField, isoPickOog, ptkDischargeUnitsOf, markDischargeUnit, dischargeUnitBareRow, degText } from '../utils.js';   // 3.2-01: 통과분 판정 한 벌
-import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, computeShiftingMapCached, restowDisSigOf, shiftingMapForDisplay, isShiftOffPtk, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, gangKeyFromWords, parseSpokenTimeMs, crewShiftKey, resolveCrewSides, koJosa} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, briefingVoiceLines, needsModeChoice, voyageDoneAts, voyageReportSpan} from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { summonMirIfCalled } from '../faceDock.js';   // 4.89: 검색줄에서 «미르야» 하면 미르 시트를 부른다(호출어 없는 말은 검색 그대로)
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
@@ -142,7 +142,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const shiftMapAll = useMemo(() => {
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; }
     catch (e) { console.warn('[SearchPanel] 시프팅 확정 대조 실패 — 작업 카드에서 빠진다:', e); return {}; }
-  }, [voyageKey, _rawSig, voyage?.swapFix, voyage?.shiftManual]);   // 2.89: 맞교환 반영 · 4.82: 수동 시프팅 표기
+  }, [voyageKey, _rawSig, voyage?.swapFix, voyage?.shiftManual, restowDisSigOf(voyage)]);   // 2.89: 맞교환 반영 · 4.82: 수동 시프팅 표기
   // 시프팅 컨의 규격·POD 등 — 통과화물이라 ediContainers 에 없다. raw 전문 재파싱본에서 가져온다.
   const shiftInfoAll = useMemo(() => {
     if (!Object.keys(shiftMapAll || {}).length) return {};
