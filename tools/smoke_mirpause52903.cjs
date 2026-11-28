@@ -116,6 +116,19 @@ const _cw = console.warn; console.warn = (...a) => { if (/베이사전|미르 �
       const V5 = JSON.parse(JSON.stringify(V4)); const t2 = NOW + 60; V5.reports[t2] = { ts: t2, saidAt: Date.parse('2026-11-28T16:31:00+09:00'), type: 'work_status', action: 'discharge_resume', mode: 'discharge', equip: '4호기' };
       ok('⑦ 둘 다 재개 → 멈춤 아님', !B.workPauseOf(V5, NOW, null, { perEquip: true })); }
     { const a = String(B.answerOneRaw('4호기 작업 중단 사유 뭐야', ctx(V2)) || ''); ok('⑦ «4호기 작업 중단 사유 뭐야» → 실제 사유 강풍대기', /강풍대기/.test(a) && /15:45/.test(a), a); }
+
+    // ⑧ 라이브 확인(5.29-04 1차 라이브 부) — 중단 보고 없는 배 · 미르 칸
+    { const NOWL = Date.parse('2026-11-28T17:27:00+09:00'); const VW = JSON.parse(JSON.stringify(V)); VW.info.terminalStatus = 'working';   // 작업 중(터미널 work)·근무 창 안
+      const cl = (box) => Object.assign(ctx(VW), { _now: NOWL, mirBox: box });
+      { const cx = Object.assign(ctx(VW), { _now: Date.parse('2026-11-28T12:30:00+09:00') }); const VL = JSON.parse(JSON.stringify(VW)); for (const [k, x] of Object.entries(VL.discharge.completed)) if (x.at > Date.parse('2026-11-28T12:00:00+09:00')) delete VL.discharge.completed[k]; cx.voyages = { STMJ_2675E: VL }; cx.voyage = VL;
+        B.answerOneRaw('왜 작업 안 해', cx); ok('⑧ 중식 시간(12:30)에는 «중단 보고 없음» 으로 가로채지 않는다', !(cx._trace && cx._trace.via === 'workStopNone'), cx._trace && cx._trace.via); }
+      { const cx = Object.assign(ctx(V), { _now: Date.parse('2026-11-28T20:13:00+09:00') }); const a = String(B.answerOneRaw('작업 중단 사유 뭐야', cx) || ''); ok('⑧ 작업 시간 밖 «중단 사유 뭐야» → 중단 보고 없음 · 작업 시간 밖', /중단 보고는 없어 사유를 몰라요/.test(a) && /작업 중으로 잡혀 있지 않아요/.test(a), a.slice(0, 90)); }
+      { const cx = Object.assign(ctx(V), { _now: Date.parse('2026-11-28T20:13:00+09:00') }); B.answerOneRaw('왜 작업 안 해', cx); ok('⑧ 작업 시간 밖 «왜 작업 안 해» 는 종전 갈래(가로채지 않음)', !(cx._trace && cx._trace.via === 'workStopNone'), cx._trace && cx._trace.via); }
+      for (const q of ['미르야 왜 작업 안 해', '미르야 4호기 작업 중단 사유 뭐야', '작업 중단 사유 뭐야']) { const cx = cl(false); const a = String(B.answerOneRaw(q, cx) || ''); ok(`⑧ «${q}» → «중단 보고는 없어 사유를 몰라요 · 마지막 완료 양하 15:44»(인사·기능 설명 아님)`, /중단 보고는 없어 사유를 몰라요/.test(a) && /양하 15:44/.test(a) && !B.isWeakAnswer(q, a, cx._trace), a.slice(0, 80)); }
+      { const cx = cl(true); const q = '15:45 4호기 작업중단 강풍대기'; const a = String(B.answerOneRaw(q, cx) || ''); ok('⑧ 미르 칸 작업보고 답은 강한 답(모델 번역으로 «시작» 이 되지 않게)', !B.isWeakAnswer(q, a, cx._trace), cx._trace.via); }
+      const srcM = fs.readFileSync(path.join(ROOT, 'src/mir.js'), 'utf8'); const srcS = fs.readFileSync(path.join(ROOT, 'src/components/SearchPanel.jsx'), 'utf8');
+      ok('⑧ askMir 는 작업보고·호기 이동 말을 모델에 안 보낸다', /p\.gangSet \|\| p\.workRep \|\| p\.moveSet\)\)\) return \{ text: rulesText/.test(srcM));
+      ok('⑧ 통합검색 모델 부르기도 작업보고 말 제외', /parsed\.gangSet \|\| parsed\.workRep \|\| parsed\.moveSet\) return undefined;/.test(srcS)); }
   } catch (e) { bad += 1; console.log('  ✘ 연막 실행 실패 — ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' / ') : e)); }
   console.log(`5.29-04 작업 중단 알림·멈춘 지 얼마나 연막검사 — ${n - bad}/${n}`);
   process.exit(bad ? 1 : 0);

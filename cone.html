@@ -597,7 +597,7 @@ body.tw-on{overflow:hidden;}
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span><span id="coneVerBig" class="ver-big"></span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.06-03</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 3.06-04</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1072,8 +1072,9 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 5.29-05';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 3.06-03';   // ★ 3.06-03 (TallyOne 5.29-04) 미르 «멈춘 지 얼마나» 답·작업보고 시각 — mir-core 한 벌이라 두 앱 같은 답.
+window.__APPV='TallyOne 5.29-06';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 3.06-04';   // ★ 3.06-04 (TallyOne 5.29-06) 미르 «왜 작업 안 해»·«중단 사유» 답 · 작업보고 말 모델 번역 제외 — mir-core 한 벌.
+// (앞 판) window.__CONEV='ConeOne 3.06-03';   // ★ 3.06-03 (TallyOne 5.29-04) 미르 «멈춘 지 얼마나» 답·작업보고 시각 — mir-core 한 벌이라 두 앱 같은 답.
 // (앞 판) window.__CONEV='ConeOne 3.06-02';   // ★ 3.06-02 (TallyOne 5.29-02) 선사 시프팅 목록에 있어도 양하 리스트에 양하로 등록된 컨은 양하분 — restowMapFromDoc 에 양하 리스트를 넘긴다(MAMP 646N).
 // (앞 판) window.__CONEV='ConeOne 3.06-01';   // ★ 3.06-01 (TallyOne 5.28-05) 미르 오답 일괄 수리(클로드2 시험 320문) — 엔진은 mir-core 한 벌이라 두 앱 같은 답.
 // (앞 판) window.__CONEV='ConeOne 3.06';   // ★ 3.06 (TallyOne 5.28) 미르 건의 1차 — loadMirCtx 가 EDI 받은·올린 시각(raw/edi uploadedAt·recvAt 값 넷)을 받아 📊 대수 답 «🗂 근거» 줄이 검수앱과 같다. 엔진은 mir-core 한 벌.

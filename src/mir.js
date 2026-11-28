@@ -2713,6 +2713,18 @@ function _answerOneRawCore(query, ctx) {
         const tail1 = wp1.resumeAt ? (( c._now || Date.now()) < wp1.resumeAt ? ` ${wp1.breakKo}과 겹쳐 보통 ${_hm(wp1.resumeAt)}에 재개돼요.` : ` 보통 ${_hm(wp1.resumeAt)} 재개인데 아직 재개·완료 기록이 없어요.`) : '';
         return `${hasShip && ship ? ship + ' — ' : ''}${wp1.equipKo ? wp1.equipKo + ' ' : ''}${wp1.ko} 작업이 ${_hm(wp1.ts)}부터 중단 중이에요. 사유는 ${wp1.reason || '적혀 있지 않아요'}.${tail1}`;
       }
+      //  ★ 5.29-04 라이브 확인 — 중단 보고가 없으면 종전엔 아래로 흘려 «미르야 왜 작업 안 해» 가 인사로, «중단 사유 뭐야» 가 기능 설명으로 빠졌다.
+      //    마지막 완료가 20분 넘게 없으면 «중단 보고는 없어요 · 마지막 완료 HH:MM» 으로 답한다(20분 안이면 일하는 중 — 아래 갈래가 답한다).
+      {
+        const _n1 = c._now || Date.now();
+        let _la = 0, _lm = '';
+        for (const m of ['discharge', 'loading']) { const comp = v[m] && v[m].completed; if (!comp || typeof comp !== 'object') continue; for (const x of Object.values(comp)) { const at = x && Number(x.at); if (at && at <= _n1 + 5 * MIN && at > _la) { _la = at; _lm = m; } } }
+        const _d1 = (ms) => { const mm = Math.max(0, Math.round(ms / 60000)); return mm >= 60 ? `${Math.floor(mm / 60)}시간 ${mm % 60}분` : `${mm}분`; };
+        let _wk = false, _wn = false; try { _wn = !!isWorkingNow(v, _n1); _wk = _wn && _inWorkWindow(_n1, pierOf(v)); } catch (e) { console.warn('[미르] 작업 중·근무 창 판정 실패 — 가로채지 않음:', e); _wk = false; }   // 감사: 끝난 배·쉬는 시간(중식·석식)은 가로채지 않는다
+        if (_wk && _la && _n1 - _la > 20 * MIN && _n1 - _la < 12 * 3600000) { _via('workStopNone'); return `${hasShip && ship ? ship + ' — ' : ''}앱에 중단 보고는 없어 사유를 몰라요. 마지막 완료 기록은 ${_lm === 'loading' ? '선적' : '양하'} ${_hm(_la)} — ${_d1(_n1 - _la)} 전이에요. 멈췄으면 «미르야 15:45 3호기 4호기 작업중단 강풍대기» 처럼 시각·호기·사유를 붙여 알려 주세요.`; }
+        //  «중단 사유 뭐야» 처럼 사유를 콕 집어 물으면 작업 시간 밖이어도 «중단 보고 없음» 을 말한다(기능 설명으로 빠지지 않게). «왜 작업 안 해» 는 종전 아래 갈래.
+        if (!_wk && _la && _n1 - _la < 12 * 3600000 && /(?:중단|멈춘|대기)\s*(?:사유|이유)|사유\s*(?:가|는|이)?\s*(?:뭐|무엇|알려)|무슨\s*사유/.test(q)) { _via('workStopNone'); return `${hasShip && ship ? ship + ' — ' : ''}앱에 중단 보고는 없어 사유를 몰라요. 마지막 완료 기록은 ${_lm === 'loading' ? '선적' : '양하'} ${_hm(_la)}(${_d1(_n1 - _la)} 전)이고, ${_wn ? '지금은 작업 시간(근무표 일하는 창) 밖이에요' : '이 배는 지금 터미널에 작업 중으로 잡혀 있지 않아요'}.`; }
+      }
     }
     //  ★ 5.29-04 «작업이 멈춘 지 얼마나 됐지» — 멈춘 뒤 지난 시간. 종전엔 답이 없어 모델이 «얼마나 남았어»(잔여 대수)로 바꿨다(실측 2026-11-28 17:24 STMJ 2675E).
     //    중단 보고(말한 시각 saidAt 포함)가 있으면 그때부터, 없으면 마지막 완료 기록 시각으로 말한다(중단 보고가 없다는 것도 말한다).
@@ -2751,7 +2763,7 @@ function _answerOneRawCore(query, ctx) {
 
   //  ③ 인사 — «미르야» 단독. 뒤에 일이 붙은 부름은 인사가 아니다.
   //  ★ 5.28-02 — «미르야 TMPZ 몇 대야»·«미르야 몇 대야» 는 대수 물음이다(라이브 실측 2026-11-27 — 인사로 빠졌다). 부름을 떼면 «TMPZ 몇 대야» 와 같은 길로 간다.
-  const _bareCall = p.mirCalled && !BARE_COUNT_RE.test(q) && !RZOR_LEARN_RE.test(q) && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
+  const _bareCall = p.mirCalled && !/왜|이유|사유|멈춘|멈췄|중단|작업\s*안/.test(q) && !BARE_COUNT_RE.test(q) && !RZOR_LEARN_RE.test(q) && !hasAnyCondition(p) && !p.factQuery && !p.briefingQuery && !p.progressQuery && !p.etaQuery && !p.introQuery && !p.shipIntroQuery && !p.timeQuery && !p.asking && !WORK_ANALYSIS_RE.test(q) && !EXPECT_TIME_RE.test(q);   // 4.39-01: «미르야 작업 분석해줘» 를 인사로 받지 않는다(Q 는 아래에서 정해진다 — q 로 잰다)
   if (p.mirHello || _bareCall) {
     //  2차 시뮬 지적 — «미르 점심 먹었어?»·«미르 점심은?» 은 인사가 아니라 잡담(3.7-06)이다. 부름만 있어도 잡담 그물이 먼저 받는다.
     try { const st = mirSmallTalk(q); if (st) return st; } catch (e) { /* */ }
@@ -3431,7 +3443,7 @@ export function isWeakAnswer(q0, answer, trace) {
   if (via === 'workHint') return false;   // 4.89 감사 막음 2: 작업용 검색줄의 «"미르야" 하고 부르시면 …» 안내는 답이다(모델로 안 보낸다)
   if (via === 'thread') return false;   // 3.68: 대화 층이 직접 받은 말(응·아니·끝맺음·되물음) — 모델·miss 로 보내지 않는다
   if (via === 'coneRest') return false; // ConeOne 2.64-01: 콘앱 «N번 홀드 콘 몇 개 남았어» 는 완료 기록을 센 자료 답 — «몇개»·«콘이» 가 사전에 없어도 모델로 보내지 않는다(보내면 질문이 고쳐져 컨테이너 대수 답으로 덮인다)
-  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip' || via === 'noBay' || via === 'pauseAgo' || via === 'workReportHint') return false;   // 5.29-04   // 5.28-05: 없는 베이 답도 답이다   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
+  if (via === 'fieldQA' || via === 'fieldSplit' || via === 'unknownShip' || via === 'noBay' || via === 'pauseAgo' || via === 'workReportHint' || via === 'workReport' || via === 'workStopNone') return false;   // 5.29-04   // 5.28-05: 없는 베이 답도 답이다   // 5.28: 없는 배 «자료 없음» 도 답이다   // 5.27: 현장 문답 원장·묶음 대수 답은 답이다(모델로 덮지 않는다)
   if (via === 'termDef' || via === 'featureHelp') return false;   // 4.35-02: 사전·원장이 낸 뜻풀이 · 기능 이름이 질문에 든 매뉴얼 답
   if (via === 'pastDay' || via === 'collecting' || via === 'shipAsk') return false;   // 4.17 (§7.8-③⑫⑧): 지난 날 완료 기록 · 자료 수집중 · 같은 거리 두 배 되묻기는 자료 답이다
   if (via === 'defer') return false;   // 4.38: 작업 중 사담 미루기는 답이다(모델로 안 보낸다)
@@ -4095,7 +4107,7 @@ export async function askMir(q, ctx, rulesFn, opts = {}) {
   //  4.38 (감사 M1): «아까 미뤄 둔 이야기» 단추에 «응·네·sp» 로 답하면 대화 층이 그 질문으로 되쓴다(trace.rq) — 모델에는 원문 «응» 이 아니라 그 질문을 넘긴다.
   if (trace.rq && _norm(trace.rq) !== _norm(q) && mirIsDeferred(trace.rq, (ctx && ctx._now) || Date.now(), opts.who || (ctx && ctx.inspector) || '')) q = trace.rq;
   let p = null; try { p = parseNaturalQuery(q); } catch (e) { p = null; }
-  if (/^[\d\s.,-]+$/.test(String(q)) || !/[가-힣]{2,}|[A-Za-z]{3,}/.test(String(q)) || (p && (p.deviceCmd || p.crewSet || p.startSet || p.gangSet))) return { text: rulesText, via: rulesText ? 'rules' : null, weak, rulesText, trace };
+  if (/^[\d\s.,-]+$/.test(String(q)) || !/[가-힣]{2,}|[A-Za-z]{3,}/.test(String(q)) || (p && (p.deviceCmd || p.crewSet || p.startSet || p.gangSet || p.workRep || p.moveSet))) return { text: rulesText, via: rulesText ? 'rules' : null, weak, rulesText, trace };
   //  배운 별칭이 있으면 모델 없이 그것으로(nlSearch 의 되쓰기는 «못 알아들었을 때»만 도는데, 여기는 «약하게 알아들은 말»도 받는다)
   try {
     const rw = mirRewrite(q);

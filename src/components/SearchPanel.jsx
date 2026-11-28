@@ -1600,7 +1600,7 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     const _dq = (traceRef.current && traceRef.current.rq && mirIsDeferred(traceRef.current.rq, Date.now(), inspector || '')) ? traceRef.current.rq : (mirIsDeferred(q, Date.now(), inspector || '') ? q : '');   // 4.38: 미뤄 둔 질문(단추·«응») 은 짧아도 모델로(감사 M1·M2)
     if (!q || (q.length < 4 && !_dq) || !askedAt) { setModelState((m) => (m.q === q ? m : { q, pending: false, text: null, via: null })); return undefined; }
     if (/^[0-9\s]+$/.test(q)) return undefined;                 // 숫자(끝4자리)는 화면 카드가 답한다
-    if (parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet) return undefined;   // 조작·적는 말은 규칙이 다 한다
+    if (parsed.deviceCmd || parsed.crewSet || parsed.startSet || parsed.gangSet || parsed.workRep || parsed.moveSet) return undefined;   // 조작·적는 말은 규칙이 다 한다 · 5.29-04 라이브: 작업보고·호기 이동 말도 모델 번역에 안 보낸다(«중단» 을 «시작» 으로 번역)
     if (!isWeakAnswer(q, _localAnswerRaw, traceRef.current)) { setModelState((m) => (m.q === q && !m.pending ? m : { q, pending: false, text: null, via: null })); return undefined; }
     let alive = true;
     setModelState({ q, pending: true, text: null, via: null });
